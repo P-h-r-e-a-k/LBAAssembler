@@ -2155,7 +2155,9 @@ public partial class MainWindow : Window
             TerrainViewport.CaptureMouse();
         }
         // ... and the same in the isometric pictures (LBA2 interiors, LBA1 scenes and joined maps).
-        else if (interiorSceneActive && editMode != EditMode.Script) BeginInteriorActorDrag(index, e.GetPosition(ViewportHost));
+        else if (interiorSceneActive && editMode != EditMode.Script) { if (!BeginInteriorActorDrag(index, e.GetPosition(ViewportHost))) DebugLog.Log($"MainWindow: actor {index} can't be dragged here (interior view, joined view {lba2JoinedView})"); }
+        // Nothing armed: say why in the log, so "I clicked an actor and it wouldn't move" can be traced.
+        else DebugLog.Log($"MainWindow: actor {index} clicked, not draggable: native view {nativeViewActive}, interior {interiorSceneActive}, mode {editMode}, joined view {lba2JoinedView}, library {(nativeRenderer.RendererLibrary is not null)}");
     }
 
     // ---- dragging an actor in the isometric pictures (LBA2 interiors, LBA1 scenes and maps) ------------------------------------------------------------
