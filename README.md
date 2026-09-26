@@ -327,7 +327,11 @@ window), not a second, separately-maintained implementation of the same type-to-
   STL (bare triangles). Coordinates are converted to the right-handed, Y-up system of those formats; the default scale is 0.001 (about a metre for Twinsen).
 - **Limits:** bodies are in their neutral pose (no skeleton or animation), lighting other than the islands' baked light is dropped, and the block maps
   of interiors and LBA1 scenes are boxes in each brick's average colour (the bricks are pictures, so ramps and curves are boxes).
-- **Batch:** `LBAAssembler.exe --export <folder> [--format glb|obj|ply|stl] [--category text] [--only text] [--limit n] [--scale n] [--no-terrain] [--no-objects]`
+- **Preview and parts:** the window has a 3D preview (drag to turn, wheel to zoom, right drag to slide) of whatever is selected. Besides whole islands there
+  are single cubes ("ground by cube") and single buildings, trees or props where they stand ("one object at a time"; a ground margin takes some of the
+  island round it). "Stand on the origin" moves each model to the origin; "Combine the selected into one file" writes several items as one model, keeping
+  their places in the world or standing them in a row.
+- **Batch:** `LBAAssembler.exe --export <folder> [--format glb|obj|ply|stl] [--category text] [--only text] [--limit n] [--scale n] [--no-terrain] [--no-objects] [--ground-margin n] [--keep-places] [--combine --name file]`
   exports without a window and writes a summary to `<folder>/export.log`.
 
 ## Modes: Explore, Build, Script
