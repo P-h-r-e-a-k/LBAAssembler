@@ -60,7 +60,7 @@ internal sealed class DockGroup : Grid
     private readonly StackPanel tabStrip = new() { Orientation = Orientation.Horizontal };
     private readonly TextBlock soloTitle = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0), FontFamily = new FontFamily("Consolas"), FontSize = 10 };
     private readonly ToggleButton pinButton = new() { Width = 22, Height = 22, Margin = new Thickness(0, 0, 2, 0), ToolTip = "Auto-hide (collapse to a strip; click a tab to peek)" };
-    private readonly Button floatButton = new() { Width = 22, Height = 22, Margin = new Thickness(0, 0, 2, 0), Content = "◱", ToolTip = "Float (pop out to its own window)" };
+    private readonly Button floatButton = new() { Width = 22, Height = 22, Margin = new Thickness(0, 0, 2, 0), ToolTip = "Float (pop out to its own window)" };
     private readonly ContentControl body = new();
     private readonly Border headerBorder;
     private readonly RowDefinition bodyRow = new() { Height = new GridLength(1, GridUnitType.Star) };
@@ -88,7 +88,14 @@ internal sealed class DockGroup : Grid
         // reads `active` live (not captured), since RebuildHeader never re-subscribes this.
         soloTitle.MouseLeftButtonDown += (_, e) => { if (pinned && active is not null) ShowFlyout(active); e.Handled = true; };
 
-        pinButton.Content = "\U0001F4CC";
+        // Drawn as vector icons in the button's own foreground colour: the emoji pin and the box glyph they replace came out thin, greyish and
+        // theme-blind (a colour emoji ignores Foreground), which is what made them hard to see.
+        pinButton.Style = HeaderButtonStyle("ToggleButton");
+        floatButton.Style = HeaderButtonStyle("Button");
+        pinButton.Content = Icon(PinOutline, pinButton);
+        floatButton.Content = Icon(PopOut, floatButton);
+        pinButton.SetResourceReference(Control.ForegroundProperty, "ThemeTextBrush");
+        floatButton.SetResourceReference(Control.ForegroundProperty, "ThemeTextBrush");
         pinButton.Click += (_, _) => SetPinned(!pinned);
         floatButton.Click += (_, _) => { if (active is { CanFloat: true } a) Float(a); };
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0) };
@@ -107,6 +114,31 @@ internal sealed class DockGroup : Grid
         Grid.SetRow(body, 1);
         body.SetResourceReference(Control.BackgroundProperty, "ThemeWindowBrush");
         Children.Add(body);
+    }
+
+    private const string PinFilled = "M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z";
+    private const string PinOutline = "M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12M8.8,14L10,12.8V4H14V12.8L15.2,14H8.8Z";
+    private const string PopOut = "M14,3V5H17.59L7.76,14.83L9.17,16.24L19,6.41V10H21V3M19,19H5V5H12V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V12H19V19Z";
+
+    // A small flat header button: no chrome until the pointer is over it, no padding (the themed button's padding left a 22-pixel button
+    // 2 pixels of room for its icon), the icon's colour is the button's foreground.
+    private static Style HeaderButtonStyle(string targetType) => (Style)System.Windows.Markup.XamlReader.Parse(
+        $"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' TargetType='{targetType}'>" +
+        "<Setter Property='Padding' Value='0'/><Setter Property='Background' Value='Transparent'/><Setter Property='BorderThickness' Value='1'/>" +
+        "<Setter Property='BorderBrush' Value='Transparent'/><Setter Property='Cursor' Value='Hand'/>" +
+        $"<Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{targetType}'>" +
+        "<Border x:Name='B' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' Background='{TemplateBinding Background}' BorderBrush='{TemplateBinding BorderBrush}' BorderThickness='{TemplateBinding BorderThickness}' CornerRadius='2'>" +
+        "<ContentPresenter HorizontalAlignment='Center' VerticalAlignment='Center'/></Border><ControlTemplate.Triggers>" +
+        "<Trigger Property='IsMouseOver' Value='True'><Setter TargetName='B' Property='Background' Value='{DynamicResource ThemeHoverBrush}'/><Setter TargetName='B' Property='BorderBrush' Value='{DynamicResource ThemeBorderBrush}'/></Trigger>" +
+        "<Trigger Property='IsEnabled' Value='False'><Setter TargetName='B' Property='Opacity' Value='0.4'/></Trigger>" +
+        "</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>");
+
+    // A 14-pixel vector icon painted in the given button's foreground colour (so it follows the theme and the pinned accent).
+    private static System.Windows.Shapes.Path Icon(string data, Control owner)
+    {
+        var path = new System.Windows.Shapes.Path { Data = Geometry.Parse(data), Stretch = Stretch.Uniform, Width = 14, Height = 14, IsHitTestVisible = false };
+        path.SetBinding(System.Windows.Shapes.Shape.FillProperty, new System.Windows.Data.Binding(nameof(Control.Foreground)) { Source = owner });
+        return path;
     }
 
     public DockItem AddItem(string key, string title, FrameworkElement content, bool canClose = true, bool canFloat = true)
@@ -193,7 +225,8 @@ internal sealed class DockGroup : Grid
     public void SetPinned(bool value)
     {
         pinned = value;
-        pinButton.SetResourceReference(Control.ForegroundProperty, pinned ? "ThemeAccentBrush" : "ThemeTextMutedBrush");
+        pinButton.SetResourceReference(Control.ForegroundProperty, pinned ? "ThemeAccentBrush" : "ThemeTextBrush");
+        pinButton.Content = Icon(pinned ? PinFilled : PinOutline, pinButton);
         bodyRow.Height = pinned ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         body.Visibility = pinned ? Visibility.Collapsed : Visibility.Visible;
         Height = pinned ? CollapsedStripSize : double.NaN;
