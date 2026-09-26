@@ -48,6 +48,7 @@ internal static class Program
             "interiorall" => InteriorAllTest.Run(args),
             "audio" => AudioTests.Run(args),
             "decorprobe" => DecorProbe.Run(args),
+            "racetrack" => RaceTrackProbe.Run(args),
             "footprints" => IslandFootprintStudy.Run(args),
             "islandrender" => IslandRenderCommand.Run(args),
             "patches" => PatchStudy.Run(),
