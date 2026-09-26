@@ -11,6 +11,13 @@ internal static class RaceTrackProbe
     public static int Run(string[] args)
     {
         var dir = Environment.GetEnvironmentVariable("LBA2_DIR") ?? @"E:\GOG Games\Little Big Adventure 2 - Level viewer";
+        if (args.Length > 2 && args[1] == "island") return ListIsland(dir, int.Parse(args[2]));
+        if (args.Length > 2 && args[1] == "hexlife")
+        {
+            var st = new SceneStore(SceneGame.Lba2, dir); var m = st.Load(int.Parse(args[2]));
+            foreach (var q in m.Actors.Skip(1).Where(q => q.Entity == 152)) Console.WriteLine(BitConverter.ToString(q.Life, 0, Math.Min(40, q.Life.Length)));
+            return 0;
+        }
         int cx = args.Length > 1 && int.TryParse(args[1], out var a) ? a : 7, cz = args.Length > 2 && int.TryParse(args[2], out var b) ? b : 10;
         var scripts = args.Contains("--scripts");
         var store = new SceneStore(SceneGame.Lba2, dir);
@@ -46,6 +53,23 @@ internal static class RaceTrackProbe
                 Console.WriteLine($"  zone {i}: type {z.Type} num {z.Num} box ({z.X0},{z.Y0},{z.Z0})-({z.X1},{z.Y1},{z.Z1}) info [{string.Join(",", z.Info)}]");
             }
             for (var i = 0; i < model.TrackPoints.Count; i++) Console.WriteLine($"  point {i}: ({model.TrackPoints[i].X},{model.TrackPoints[i].Y},{model.TrackPoints[i].Z})");
+        }
+        return 0;
+    }
+
+    // One line per exterior scene of an island: which cube, how many actors, whether it has the buggy (entity 152), the zones' types.
+    private static int ListIsland(string dir, int island)
+    {
+        var store = new SceneStore(SceneGame.Lba2, dir);
+        var names = HqdDescriptions.Load("SCENE2.HQD", 0).Names;
+        for (var scene = 0; scene < 260; scene++)
+        {
+            if (!store.SceneExists(scene)) continue;
+            SceneModel model;
+            try { model = store.Load(scene); } catch { continue; }
+            if (model.Island != island) continue;
+            var kinds = string.Join(" ", model.Actors.Skip(1).Select((a, i) => $"{i + 1}:e{a.Entity}"));
+            Console.WriteLine($"scene {scene} \"{(scene + 1 < names.Count ? names[scene + 1] : "?")}\" cubeMode {model.CubeMode} cube ({model.CubeX},{model.CubeY}) hero ({model.Hero.X},{model.Hero.Y},{model.Hero.Z}) actors {model.Actors.Count - 1} [{kinds}] zones {model.Zones.Count} points {model.TrackPoints.Count}");
         }
         return 0;
     }
