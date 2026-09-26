@@ -93,7 +93,7 @@ internal sealed class ExportCatalog
     // The buggy is an ordinary body (BODY.HQR "Empty car", "Car with racer", Twinsen in the car ...; BUGGY.CPP draws the actor with GEN_BODY_NORMAL); the wheels turning
     // is an animation, and animations are not exported.
     private List<ExportItem> Lba2Cars() => BodiesOf(2, lba2!, "BODY.HQR", false, "LBA2/buggy_and_cars", "car", "BODY2.HQD",
-        name => name is not null && System.Text.RegularExpressions.Regex.IsMatch(name, @"(car|buggy)", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+        name => name is not null && System.Text.RegularExpressions.Regex.IsMatch(name, @"\b(car|buggy)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
 
     private List<ExportItem> Lba2Fixed() => BodiesOf(2, lba2!, "OBJFIX.HQR", true, "LBA2/fixed_objects", "objfix", null);
 
