@@ -2,7 +2,7 @@ using System.IO;
 
 namespace LBAAssembler.Export;
 
-// LBAAssembler.exe --export <folder> [--format glb|obj|ply|stl] [--category text] [--only text] [--limit n] [--scale n] [--no-terrain] [--no-objects]
+// LBAAssembler.exe --export <folder> [--format glb|obj|ply|stl] [--category text] [--only text] [--limit n] [--scale n] [--no-terrain] [--no-objects] [--ground-margin n] [--keep-places] [--combine --name file]
 // Exports without opening a window (the same catalog as Tools > Export 3D models): every category whose title contains --category (default all),
 // items whose label contains --only. A summary goes to <folder>\export.log; the exit code is 0 when nothing failed.
 internal static class ExportCli
@@ -24,7 +24,14 @@ internal static class ExportCli
             var category = Value("--category"); var only = Value("--only");
             var settings = EditorSettings.Current;
             var catalog = new ExportCatalog(settings.Lba1Directory, settings.GameDirectory);
-            var options = new ExportOptions { IslandTerrain = !args.Contains("--no-terrain"), IslandObjects = !args.Contains("--no-objects"), Log = message => log.WriteLine("  " + message) };
+            var options = new ExportOptions
+            {
+                IslandTerrain = !args.Contains("--no-terrain"), IslandObjects = !args.Contains("--no-objects"), Recentre = !args.Contains("--keep-places"),
+                GroundMargin = int.TryParse(Value("--ground-margin"), out var margin) ? margin : 0,
+                Combine = args.Contains("--combine"), CombinedName = Value("--name") ?? "combined",
+                KeepPlaces = args.Contains("--keep-places-together") ? true : args.Contains("--in-a-row") ? false : null,
+                Log = message => log.WriteLine("  " + message),
+            };
             int done = 0, failed = 0, skipped = 0;
             foreach (var c in catalog.Categories.Where(c => category is null || c.Title.Contains(category, StringComparison.OrdinalIgnoreCase)))
             {

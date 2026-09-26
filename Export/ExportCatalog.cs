@@ -1,5 +1,6 @@
 using System.IO;
 using LbaBodyStudio;
+using LBAAssembler.Terrain;
 using LBAAssembler.Lba1;
 
 namespace LBAAssembler.Export;
@@ -8,11 +9,21 @@ internal sealed class ExportOptions
 {
     public bool IslandTerrain { get; init; } = true;
     public bool IslandObjects { get; init; } = true;
+    // Ground cells kept round an object exported on its own (0: the object alone).
+    public int GroundMargin { get; init; } = 0;
+    // Stand every model on the origin (lowest point at height 0, middle over the origin) instead of where it lies in the game's world.
+    public bool Recentre { get; init; } = true;
+    // The selected items as one model (in a row, or where they stand in the world when they share one).
+    public bool Combine { get; init; }
+    public string CombinedName { get; init; } = "combined";
+    // Combined models: keep each item where it stands in the game's world (true), or stand them in a row (false); null = keep places only for items that share a world.
+    public bool? KeepPlaces { get; init; }
     public Action<string>? Log { get; init; }
 }
 
 // One thing that can be exported: it becomes one file (Folder / FileName + the format's extension).
-internal sealed record ExportItem(string Label, string Folder, string FileName, Func<ExportOptions, ExportScene?> Build);
+// Positioned: its geometry is in a world shared with other items (islands, cubes and objects of one island), so combining keeps their places.
+internal sealed record ExportItem(string Label, string Folder, string FileName, Func<ExportOptions, ExportScene?> Build, bool Positioned = false);
 
 internal sealed record ExportCategory(string Title, string Description, Func<List<ExportItem>> Load);
 
@@ -31,6 +42,8 @@ internal sealed class ExportCatalog
         if (lba2 is not null)
         {
             list.Add(new("LBA2 islands (ground and every object)", "Whole islands: the textured, lit terrain of every cube plus every building, tree and prop placed on it. The Desert island includes its race track.", Lba2Islands));
+            list.Add(new("LBA2 island: ground by cube", "One cube of an island at a time (the ground, and the objects on it if ticked).", Lba2IslandCubes));
+            list.Add(new("LBA2 island: one object at a time (placed)", "A single building, tree, rock or prop where it stands on an island, with its own turn. Give a ground margin to take some of the ground around it.", Lba2PlacedObjects));
             list.Add(new("LBA2 island objects (buildings, trees, props)", "The bodies of each island's .OBL file, one by one: houses, rocks, plants, furniture and the like, with the island's own textures.", Lba2IslandObjects));
             list.Add(new("LBA2 interiors (blocky maps)", "The block map of an interior scene as a model of boxes in each brick's colour (the bricks are pictures, so this is an outline of the room and its furniture).", Lba2Interiors));
             list.Add(new("LBA2 joined interiors (several rooms as one model)", "Rooms that connect (a factory's floors, the control tower and the palace ...) placed edge to edge in one model, as the joined maps show them.", Lba2JoinedInteriors));
@@ -153,8 +166,57 @@ internal sealed class ExportCatalog
         {
             var name = Path.GetFileNameWithoutExtension(file);
             return new ExportItem(name + (name.Equals("DESERT", StringComparison.OrdinalIgnoreCase) ? "  (Desert island: the race track)" : ""), "LBA2/islands", name.ToLowerInvariant(),
-                options => IslandMesher.Build(file, directory, options.IslandTerrain, options.IslandObjects, options.Log));
+                options => IslandMesher.Build(Island(file), options.IslandTerrain, options.IslandObjects, log: options.Log), Positioned: true);
         }).ToList();
+    }
+
+    private readonly Dictionary<string, IslandSource> islandSources = new(StringComparer.OrdinalIgnoreCase);
+
+    private IslandSource Island(string ilePath)
+    {
+        lock (islandSources)
+        {
+            if (!islandSources.TryGetValue(ilePath, out var source)) islandSources[ilePath] = source = IslandSource.Load(ilePath, lba2!);
+            return source;
+        }
+    }
+
+    private List<ExportItem> Lba2IslandCubes()
+    {
+        var items = new List<ExportItem>();
+        foreach (var file in Directory.GetFiles(lba2!, "*.ILE").Order(StringComparer.OrdinalIgnoreCase))
+        {
+            var name = Path.GetFileNameWithoutExtension(file);
+            foreach (var (cx, cz, cube) in IslandOps.CubeCells(Island(file).Island))
+            {
+                var (x, z, id) = (cx, cz, cube.Id);
+                items.Add(new($"{name}  cube ({x}, {z})  {cube.Decors.Count} objects", $"LBA2/island_cubes/{name.ToLowerInvariant()}", $"{name.ToLowerInvariant()}_cube_{x:D2}_{z:D2}", options =>
+                    IslandMesher.Build(Island(file), options.IslandTerrain, options.IslandObjects, new HashSet<int> { id }, o => o.CubeX == x && o.CubeZ == z,
+                        (gx, gz) => gx / IslandCube.Cells == x && gz / IslandCube.Cells == z, options.Log), Positioned: true));
+            }
+        }
+        return items;
+    }
+
+    private List<ExportItem> Lba2PlacedObjects()
+    {
+        var items = new List<ExportItem>();
+        foreach (var file in Directory.GetFiles(lba2!, "*.ILE").Order(StringComparer.OrdinalIgnoreCase))
+        {
+            var name = Path.GetFileNameWithoutExtension(file);
+            foreach (var obj in IslandMesher.PlacedObjects(Island(file).Island))
+            {
+                var o = obj;
+                var (wx, _, wz) = o.World;
+                var turn = (o.Decor.Beta & 0xFFFF) * 360 / 4096;
+                items.Add(new($"{name}  body {o.Body,3}  cube ({o.CubeX},{o.CubeZ})  at {wx / 512:0.#}, {wz / 512:0.#}  turn {turn}°",
+                    $"LBA2/placed_objects/{name.ToLowerInvariant()}", $"{name.ToLowerInvariant()}_body{o.Body}_c{o.CubeX}_{o.CubeZ}_{o.Index}", options =>
+                        IslandMesher.Build(Island(file), options.GroundMargin > 0, true, new HashSet<int> { o.CubeId },
+                            x => x.CubeX == o.CubeX && x.CubeZ == o.CubeZ && x.Index == o.Index,
+                            options.GroundMargin > 0 ? IslandMesher.CellsAround(new[] { o }, options.GroundMargin) : null, options.Log), Positioned: true));
+            }
+        }
+        return items;
     }
 
     private List<ExportItem> Lba2IslandObjects()
@@ -268,12 +330,34 @@ internal sealed class ExportCatalog
     }
 }
 
-// Runs a batch of exports, one file each; a failure of one item is logged and the rest go on.
+// Runs a batch of exports, one file each (or one file for the lot); a failure of one item is logged and the rest go on.
 internal static class ExportRunner
 {
+    // One item as it will be exported (turned to stand on the origin when asked); null when it has nothing to draw.
+    public static ExportScene? BuildOne(ExportItem item, ExportOptions options)
+    {
+        var scene = item.Build(options);
+        if (scene is null || scene.TriangleCount == 0) return scene;
+        if (options.Recentre) scene.RecentreOnOrigin();
+        return scene;
+    }
+
+    // Several items as one model (what a combined export writes, and what the preview shows).
+    public static ExportScene? BuildCombined(IReadOnlyList<ExportItem> items, ExportOptions options)
+    {
+        var scenes = new List<ExportScene>();
+        foreach (var item in items)
+            if (item.Build(options) is { TriangleCount: > 0 } scene) scenes.Add(scene);
+        if (scenes.Count == 0) return null;
+        var merged = ExportScene.Merge(options.CombinedName, scenes, keepPlaces: options.KeepPlaces ?? items.All(i => i.Positioned));
+        if (options.Recentre) merged.RecentreOnOrigin();
+        return merged;
+    }
+
     public static (int Done, int Failed, int Skipped) Run(IReadOnlyList<ExportItem> items, ExportFormat format, float scale, string outputDirectory, ExportOptions options,
         IProgress<(int Index, string Message)> progress, CancellationToken cancel)
     {
+        if (options.Combine && items.Count > 1) return RunCombined(items, format, scale, outputDirectory, options, progress);
         int done = 0, failed = 0, skipped = 0;
         for (var i = 0; i < items.Count; i++)
         {
@@ -281,8 +365,8 @@ internal static class ExportRunner
             var item = items[i];
             try
             {
-                var scene = item.Build(options);
-                if (scene is not null && scene.TriangleCount == 0 && scene.ExpectedTriangles == 0)
+                var scene = BuildOne(item, options);
+                if (scene is not null && scene.TriangleCount == 0 && (scene.ExpectedTriangles == 0 || scene.Nodes.Count > 0))
                 { progress.Report((i, $"{item.Label}: skipped, the game's own body is empty (points but no polygons).")); skipped++; continue; }
                 if (scene is null || scene.TriangleCount == 0) { progress.Report((i, $"{item.Label}: nothing to export (no geometry).")); failed++; continue; }
                 if (scene.Problem() is { } problem) { progress.Report((i, $"{item.Label}: NOT EXPORTED, the geometry is wrong ({problem}).")); failed++; continue; }
@@ -299,5 +383,25 @@ internal static class ExportRunner
             }
         }
         return (done, failed, skipped);
+    }
+
+    private static (int Done, int Failed, int Skipped) RunCombined(IReadOnlyList<ExportItem> items, ExportFormat format, float scale, string outputDirectory, ExportOptions options,
+        IProgress<(int Index, string Message)> progress)
+    {
+        try
+        {
+            var scene = BuildCombined(items, options);
+            if (scene is null) { progress.Report((items.Count - 1, "Nothing to export: none of the selected items has geometry.")); return (0, 1, 0); }
+            var path = Path.Combine(outputDirectory, SceneWriters.Safe(options.CombinedName) + SceneWriters.Extension(format));
+            SceneWriters.Write(scene, path, format, scale);
+            progress.Report((items.Count - 1, $"{items.Count} items as one model: {scene.TriangleCount:N0} triangles -> {Path.GetRelativePath(outputDirectory, path)}"));
+            return (1, 0, 0);
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or IndexOutOfRangeException or UnauthorizedAccessException or KeyNotFoundException or InvalidOperationException or OverflowException)
+        {
+            DebugLog.Log($"Export (combined): {error}");
+            progress.Report((items.Count - 1, $"Combined export failed ({error.Message})"));
+            return (0, 1, 0);
+        }
     }
 }

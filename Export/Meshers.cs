@@ -135,7 +135,49 @@ internal static class Meshing
     }
 }
 
-// A whole LBA2 island: the ground (every cube, textured with the ground atlas and lit with the baked light) and every object placed on it.
+// An island opened for export: its file, palette and the objects' body archive.
+internal sealed class IslandSource
+{
+    public required string Name { get; init; }
+    public required string IlePath { get; init; }
+    public required IslandFile Island { get; init; }
+    public required byte[] Palette { get; init; }
+    public HqrFile? Bodies { get; init; }
+
+    public static IslandSource Load(string ilePath, string gameDirectory)
+    {
+        var name = Path.GetFileNameWithoutExtension(ilePath);
+        var obl = Path.ChangeExtension(ilePath, ".OBL");
+        return new IslandSource
+        {
+            Name = name, IlePath = ilePath, Island = IslandFile.Load(ilePath),
+            Palette = IslandMapRenderer.LoadPalette(gameDirectory, name),
+            Bodies = File.Exists(obl) ? HqrFile.Parse(File.ReadAllBytes(obl)) : null,
+        };
+    }
+}
+
+// One object standing on an island (a building, a tree, a rock, a piece of furniture ...).
+internal sealed record PlacedObject(int CubeId, int CubeX, int CubeZ, int Index, IslandDecor Decor)
+{
+    public int Body => Decor.Body & 0xFFFF;
+    // The world position (island units) and the ground cells (island-wide, 512 units each) the object's bounding box covers.
+    public (double X, double Y, double Z) World => (CubeX * IslandFile.CubeSize + Decor.X, Decor.Y, CubeZ * IslandFile.CubeSize + Decor.Z);
+    public (int X0, int Z0, int X1, int Z1) Cells
+    {
+        get
+        {
+            double ox = CubeX * IslandFile.CubeSize, oz = CubeZ * IslandFile.CubeSize;
+            var (x0, x1, z0, z1) = (ox + Decor.XMin, ox + Decor.XMax, oz + Decor.ZMin, oz + Decor.ZMax);
+            if (x1 - x0 < IslandFile.CellSize) { var m = (x0 + x1) / 2; x0 = m - IslandFile.CellSize / 2; x1 = m + IslandFile.CellSize / 2; }
+            if (z1 - z0 < IslandFile.CellSize) { var m = (z0 + z1) / 2; z0 = m - IslandFile.CellSize / 2; z1 = m + IslandFile.CellSize / 2; }
+            return ((int)Math.Floor(x0 / IslandFile.CellSize), (int)Math.Floor(z0 / IslandFile.CellSize), (int)Math.Floor(x1 / IslandFile.CellSize), (int)Math.Floor(z1 / IslandFile.CellSize));
+        }
+    }
+}
+
+// A whole LBA2 island, or a part of it: the ground (every cube or only some, or only the cells around chosen objects), textured with the ground
+// atlas and lit with the baked light, and the objects placed on it (all of them, or only chosen ones).
 internal static class IslandMesher
 {
     // corner k of a cell: (x, z) offsets, and the three corners of each of the cell's four possible triangles
@@ -143,18 +185,35 @@ internal static class IslandMesher
     private static readonly int[][] Corners = { new[] { 0, 1, 2 }, new[] { 2, 3, 0 }, new[] { 3, 0, 1 }, new[] { 1, 2, 3 } };
 
     public static ExportScene Build(string ilePath, string gameDirectory, bool terrain, bool objects, Action<string>? log = null)
+        => Build(IslandSource.Load(ilePath, gameDirectory), terrain, objects, log: log);
+
+    // cubeIds: only the ground and objects of these cubes (null: all); objectFilter: which objects (null: all of the chosen cubes');
+    // cellFilter: which ground cells, in island-wide cell numbers (null: all of the chosen cubes').
+    public static ExportScene Build(IslandSource source, bool terrain, bool objects, ISet<int>? cubeIds = null, Func<PlacedObject, bool>? objectFilter = null,
+        Func<int, int, bool>? cellFilter = null, Action<string>? log = null)
     {
-        var island = IslandFile.Load(ilePath);
-        var name = Path.GetFileNameWithoutExtension(ilePath);
-        var palette = IslandMapRenderer.LoadPalette(gameDirectory, name);
-        var scene = new ExportScene { Name = name };
-        if (terrain) AddTerrain(scene, island, palette);
-        if (objects) AddObjects(scene, island, palette, Path.ChangeExtension(ilePath, ".OBL"), log);
+        var scene = new ExportScene { Name = source.Name };
+        if (terrain) AddTerrain(scene, source, cubeIds, cellFilter);
+        if (objects) AddObjects(scene, source, cubeIds, objectFilter, log);
         return scene;
     }
 
-    private static void AddTerrain(ExportScene scene, IslandFile island, byte[] palette)
+    public static IEnumerable<PlacedObject> PlacedObjects(IslandFile island)
     {
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            for (var i = 0; i < cube.Decors.Count; i++) yield return new PlacedObject(cube.Id, cx, cz, i, cube.Decors[i]);
+    }
+
+    // The ground around some objects: the cells their boxes cover plus `margin` cells all round.
+    public static Func<int, int, bool> CellsAround(IEnumerable<PlacedObject> objects, int margin)
+    {
+        var boxes = objects.Select(o => o.Cells).ToList();
+        return (x, z) => boxes.Any(b => x >= b.X0 - margin && x <= b.X1 + margin && z >= b.Z0 - margin && z <= b.Z1 + margin);
+    }
+
+    private static void AddTerrain(ExportScene scene, IslandSource source, ISet<int>? cubeIds, Func<int, int, bool>? cellFilter)
+    {
+        var island = source.Island; var palette = source.Palette;
         var ground = scene.Material("ground", () =>
         {
             var rgba = new byte[256 * 256 * 4];
@@ -168,11 +227,12 @@ internal static class IslandMesher
 
         foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
         {
-            if (!cube.HasPolygons) continue;
+            if (!cube.HasPolygons || (cubeIds is not null && !cubeIds.Contains(cube.Id))) continue;
             var mesh = new ExportMesh($"terrain_{cx}_{cz}", vertexColours: true);
             for (var z = 0; z < IslandCube.Cells; z++)
                 for (var x = 0; x < IslandCube.Cells; x++)
                 {
+                    if (cellFilter is not null && !cellFilter(cx * IslandCube.Cells + x, cz * IslandCube.Cells + z)) continue;
                     var polygons = new[] { new IslandPolygon(cube.Polygon(x, z, 0)), new IslandPolygon(cube.Polygon(x, z, 1)) };
                     var diagonal = polygons[0].Diagonal;
                     for (var half = 0; half < 2; half++)
@@ -213,38 +273,38 @@ internal static class IslandMesher
         }
     }
 
-    private static void AddObjects(ExportScene scene, IslandFile island, byte[] palette, string oblPath, Action<string>? log)
+    private static void AddObjects(ExportScene scene, IslandSource source, ISet<int>? cubeIds, Func<PlacedObject, bool>? filter, Action<string>? log)
     {
-        if (!File.Exists(oblPath)) { log?.Invoke($"{Path.GetFileName(oblPath)} not found: no objects exported."); return; }
-        var archive = HqrFile.Parse(File.ReadAllBytes(oblPath));
+        if (source.Bodies is not { } archive) { log?.Invoke($"{source.Name}.OBL not found: no objects exported."); return; }
         var meshes = new Dictionary<int, ExportMesh?>();
         var placed = 0;
-        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
-            for (var i = 0; i < cube.Decors.Count; i++)
+        foreach (var obj in PlacedObjects(source.Island))
+        {
+            if (cubeIds is not null && !cubeIds.Contains(obj.CubeId)) continue;
+            if (filter is not null && !filter(obj)) continue;
+            var bodyIndex = obj.Body;
+            if (!meshes.TryGetValue(bodyIndex, out var mesh))
             {
-                var decor = cube.Decors[i];
-                var bodyIndex = decor.Body & 0xFFFF;
-                if (!meshes.TryGetValue(bodyIndex, out var mesh))
+                mesh = null;
+                try
                 {
-                    mesh = null;
-                    try
-                    {
-                        var body = Body.Read(archive.Read(bodyIndex), 2, allowStatic: true);
-                        body.TexturePage = island.ObjectTexture;
-                        mesh = BodyMesher.Build(scene, body, palette, $"object_{bodyIndex}", $"obj{bodyIndex}_");
-                    }
-                    catch (Exception error) when (error is InvalidDataException or ArgumentException or IndexOutOfRangeException or KeyNotFoundException)
-                    {
-                        log?.Invoke($"Object body {bodyIndex} can't be read ({error.Message}): left out.");
-                    }
-                    meshes[bodyIndex] = mesh;
+                    var body = Body.Read(archive.Read(bodyIndex), 2, allowStatic: true);
+                    body.TexturePage = source.Island.ObjectTexture;
+                    mesh = BodyMesher.Build(scene, body, source.Palette, $"object_{bodyIndex}", $"obj{bodyIndex}_");
                 }
-                if (mesh is null) continue;
-                var angle = (float)((decor.Beta & 0xFFFF) * 2 * Math.PI / 4096);
-                var transform = Matrix4x4.CreateRotationY(angle) * Matrix4x4.CreateTranslation(cx * IslandFile.CubeSize + decor.X, decor.Y, cz * IslandFile.CubeSize + decor.Z);
-                scene.Add(mesh, transform, $"object_{bodyIndex}_cube{cube.Id}_{i}");
-                placed++;
+                catch (Exception error) when (error is InvalidDataException or ArgumentException or IndexOutOfRangeException or KeyNotFoundException)
+                {
+                    log?.Invoke($"Object body {bodyIndex} can't be read ({error.Message}): left out.");
+                }
+                meshes[bodyIndex] = mesh;
             }
+            if (mesh is null) continue;
+            var angle = (float)((obj.Decor.Beta & 0xFFFF) * 2 * Math.PI / 4096);
+            var (wx, wy, wz) = obj.World;
+            var transform = Matrix4x4.CreateRotationY(angle) * Matrix4x4.CreateTranslation((float)wx, (float)wy, (float)wz);
+            scene.Add(mesh, transform, $"object_{bodyIndex}_cube{obj.CubeId}_{obj.Index}");
+            placed++;
+        }
         log?.Invoke($"{placed} objects placed ({meshes.Count(m => m.Value is not null)} different bodies).");
     }
 }

@@ -118,6 +118,76 @@ internal sealed class ExportScene
         return materialIndex[key] = Materials.Count - 1;
     }
 
+    // The box round everything (game coordinates, node transforms applied), or null for an empty scene.
+    public (Vector3 Min, Vector3 Max)? Bounds()
+    {
+        var min = new Vector3(float.MaxValue); var max = new Vector3(float.MinValue);
+        var any = false;
+        foreach (var node in Nodes)
+        {
+            // (a mesh's own box is transformed corner by corner)
+            var (lo, hi) = MeshBounds(node.Mesh);
+            if (lo.X > hi.X) continue;
+            for (var i = 0; i < 8; i++)
+            {
+                var corner = Vector3.Transform(new Vector3((i & 1) == 0 ? lo.X : hi.X, (i & 2) == 0 ? lo.Y : hi.Y, (i & 4) == 0 ? lo.Z : hi.Z), node.Transform);
+                min = Vector3.Min(min, corner); max = Vector3.Max(max, corner); any = true;
+            }
+        }
+        return any ? (min, max) : null;
+    }
+
+    private readonly Dictionary<ExportMesh, (Vector3, Vector3)> meshBounds = new();
+    private (Vector3, Vector3) MeshBounds(ExportMesh mesh)
+    {
+        if (meshBounds.TryGetValue(mesh, out var known)) return known;
+        var min = new Vector3(float.MaxValue); var max = new Vector3(float.MinValue);
+        foreach (var p in mesh.Positions) { min = Vector3.Min(min, p); max = Vector3.Max(max, p); }
+        return meshBounds[mesh] = (min, max);
+    }
+
+    // Slides the whole scene so it stands on the ground (lowest point at height 0) with its middle over the origin.
+    public void RecentreOnOrigin()
+    {
+        if (Bounds() is not { } b) return;
+        var shift = Matrix4x4.CreateTranslation(-(b.Min.X + b.Max.X) / 2, -b.Min.Y, -(b.Min.Z + b.Max.Z) / 2);
+        foreach (var node in Nodes) node.Transform *= shift;
+    }
+
+    // Several scenes as one: `keepPlaces` leaves each where it is (islands, objects of one island); otherwise they stand in a row along X,
+    // each on the ground with a gap between.
+    public static ExportScene Merge(string name, IReadOnlyList<ExportScene> parts, bool keepPlaces)
+    {
+        var result = new ExportScene { Name = name };
+        var cursor = 0f;
+        foreach (var part in parts)
+        {
+            var place = Matrix4x4.Identity;
+            if (!keepPlaces && part.Bounds() is { } b)
+            {
+                var width = b.Max.X - b.Min.X;
+                place = Matrix4x4.CreateTranslation(cursor - b.Min.X, -b.Min.Y, -(b.Min.Z + b.Max.Z) / 2);
+                cursor += width + Math.Max(200f, width * 0.15f);
+            }
+            var offset = result.Materials.Count;
+            result.Materials.AddRange(part.Materials);
+            var copies = new Dictionary<ExportMesh, ExportMesh>();
+            foreach (var node in part.Nodes)
+            {
+                if (!copies.TryGetValue(node.Mesh, out var mesh))
+                {
+                    mesh = new ExportMesh(node.Mesh.Name, node.Mesh.Colors is not null);
+                    for (var i = 0; i < node.Mesh.Positions.Count; i++) mesh.AddVertex(node.Mesh.Positions[i], node.Mesh.Uvs[i], node.Mesh.Colors?[i]);
+                    foreach (var primitive in node.Mesh.Primitives)
+                        for (var i = 0; i + 2 < primitive.Indices.Count; i += 3) mesh.AddTriangle(primitive.Material + offset, primitive.Indices[i], primitive.Indices[i + 1], primitive.Indices[i + 2]);
+                    copies[node.Mesh] = mesh;
+                }
+                result.Nodes.Add(new ExportNode { Name = node.Name, Mesh = mesh, Transform = node.Transform * place });
+            }
+        }
+        return result;
+    }
+
     // The scene in the right-handed, Y-up coordinates of glTF / OBJ / PLY / STL, scaled (game units to metres by default): the
     // Z axis is mirrored, so every triangle changes its winding, and each node's matrix is conjugated by the mirror.
     public ExportScene ToRightHanded(float scale)
