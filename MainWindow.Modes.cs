@@ -176,6 +176,7 @@ public partial class MainWindow
     // The island's name in the header shows whether there are unsaved terrain edits.
     private void OnTerrainStateChanged()
     {
+        NoteTerrainHistory();
         if (terrainEditor?.CurrentName is not { } name || !terrainToolsActive) return;
         DocumentTitle.Text = Path.GetFileNameWithoutExtension(name) + (terrainEditor.Dirty ? "   ● unsaved" : "");
     }
@@ -354,6 +355,9 @@ public partial class MainWindow
             };
             if (wanted is { } mode) { SetMode(mode); e.Handled = true; return; }
         }
+        // Ctrl+Z / Ctrl+Y step the most recently changed history (see StepHistory), not always the terrain editor's own.
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key is Key.Z or Key.Y && Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
+        { StepHistory(undo: e.Key == Key.Z); e.Handled = true; return; }
         if (terrainToolsActive && terrainEditor is not null && terrainEditor.HandleKey(e)) e.Handled = true;
     }
 

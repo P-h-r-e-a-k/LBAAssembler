@@ -118,6 +118,7 @@ public partial class MainWindow : Window
             $"The undo cache is full ({used / (1024.0 * 1024.0):0.0} MB of a {limit / (1024.0 * 1024.0):0.0} MB limit).\n\nClear it to make room for this change? Choosing No just drops the oldest steps instead.",
             "Undo cache full", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
         Scenes.SceneHistory.Load();
+        Scenes.SceneHistory.Changed += (_, _) => lastSceneEditAt = Environment.TickCount64;
         modeReady = true;                 // the mode buttons raise Checked while the XAML loads; only real clicks count
         Focusable = true;
         JoinAreasCheck.IsChecked = lba1JoinAreas;
@@ -1457,18 +1458,47 @@ public partial class MainWindow : Window
 
     private void EditMenu_SubmenuOpened(object sender, RoutedEventArgs e)
     {
-        // With the terrain editor on screen Edit > Undo / Redo are its own history.
-        var undo = terrainToolsActive && terrainEditor is not null ? terrainEditor.UndoLabel : Scenes.SceneHistory.UndoDescription;
-        var redo = terrainToolsActive && terrainEditor is not null ? terrainEditor.RedoLabel : Scenes.SceneHistory.RedoDescription;
+        // Edit > Undo / Redo step whichever of the two histories (the terrain editor's, the saved scene changes) was changed last.
+        var undo = UndoIsTerrain(true) ? terrainEditor!.UndoLabel : Scenes.SceneHistory.UndoDescription;
+        var redo = UndoIsTerrain(false) ? terrainEditor!.RedoLabel : Scenes.SceneHistory.RedoDescription;
         UndoMenuItem.Header = undo is null ? "_Undo" : $"_Undo {undo}";
         UndoMenuItem.IsEnabled = undo is not null;
         RedoMenuItem.Header = redo is null ? "_Redo" : $"_Redo {redo}";
         RedoMenuItem.IsEnabled = redo is not null;
     }
 
-    private void Undo_Click(object sender, RoutedEventArgs e) { if (terrainToolsActive && terrainEditor is not null) terrainEditor.Undo(); else RunHistoryStep(undo: true); }
+    private void Undo_Click(object sender, RoutedEventArgs e) => StepHistory(undo: true);
 
-    private void Redo_Click(object sender, RoutedEventArgs e) { if (terrainToolsActive && terrainEditor is not null) terrainEditor.Redo(); else RunHistoryStep(undo: false); }
+    private void Redo_Click(object sender, RoutedEventArgs e) => StepHistory(undo: false);
+
+    // Two histories exist side by side: the terrain editor's own (unsaved island edits) and the log of saved scene changes (an actor dragged, a
+    // zone edited). Undo / Redo (menu, buttons, Ctrl+Z / Ctrl+Y) step whichever was changed last; with the terrain tools not showing, only the
+    // scene log applies. (Undo used to go to the terrain history whenever the Terrain view was open, so an actor dragged there could not be undone.)
+    private long lastSceneEditAt, lastTerrainEditAt;
+    private string? lastTerrainUndoLabel, lastTerrainRedoLabel;
+
+    private void NoteTerrainHistory()
+    {
+        if (terrainEditor is null) return;
+        if (terrainEditor.UndoLabel == lastTerrainUndoLabel && terrainEditor.RedoLabel == lastTerrainRedoLabel) return;
+        lastTerrainUndoLabel = terrainEditor.UndoLabel; lastTerrainRedoLabel = terrainEditor.RedoLabel;
+        lastTerrainEditAt = Environment.TickCount64;
+    }
+
+    private bool UndoIsTerrain(bool undo)
+    {
+        if (!terrainToolsActive || terrainEditor is null) return false;
+        var terrain = undo ? terrainEditor.UndoLabel : terrainEditor.RedoLabel;
+        if (terrain is null) return false;
+        var scene = undo ? Scenes.SceneHistory.UndoDescription : Scenes.SceneHistory.RedoDescription;
+        return scene is null || lastTerrainEditAt >= lastSceneEditAt;
+    }
+
+    private void StepHistory(bool undo)
+    {
+        if (UndoIsTerrain(undo)) { if (undo) terrainEditor!.Undo(); else terrainEditor!.Redo(); }
+        else RunHistoryStep(undo);
+    }
 
     private void RunHistoryStep(bool undo)
     {
@@ -1485,8 +1515,14 @@ public partial class MainWindow : Window
         }
         if (next.Game == Scenes.SceneGame.Lba2 && !interiorSceneActive && openAttributesWindows.Count > 0)
         {
-            MessageBox.Show(this, "Close the actor windows first: this reloads the island, which drops unsaved actor edits.", undo ? "Undo" : "Redo", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
+            // Undoing reloads the island, which would drop what an open actor window has not applied: close them (one with unsaved edits asks
+            // first, and can refuse) instead of refusing outright -- a double-click on an actor before dragging it leaves one open.
+            foreach (var window in openAttributesWindows.Values.ToList()) window.Close();
+            if (openAttributesWindows.Count > 0)
+            {
+                MessageBox.Show(this, "Close the actor windows first: this reloads the island, which drops unsaved actor edits.", undo ? "Undo" : "Redo", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
         }
 
         try
@@ -2091,13 +2127,10 @@ public partial class MainWindow : Window
         }
         if (editMode == EditMode.Script && ScriptTab.IsSelected) SyncScriptListSelection(index);
 
-        // Drag to reposition: only the LBA2 native exterior view for now (a screen point maps to a world
-        // point there via a simple ray-plane intersection, NativeCameraModel.RayToPlane -- the same one
-        // BeginPan3D/MovePan3D already use to drag the camera target). Interior scenes and LBA1's isometric
-        // overworld render through a fixed, baked camera projection with no such inverse today, so a drag
-        // there would need its own screen->world solution; left out of this pass rather than guessed at.
-        // A plain click still behaves exactly as above (ClickCount/the attributes window aren't affected by
-        // this, since a click that never crosses ActorDragThresholdPx never becomes a "drag" below).
+        // Drag to reposition. Outdoors (LBA2 native view) a screen point maps to a world point by a ray-plane intersection (NativeCameraModel.RayToPlane, the
+        // one BeginPan3D/MovePan3D use to drag the camera target); in the fixed isometric pictures (LBA2 interiors, LBA1) the picture is affine, so a
+        // pointer movement is a movement in the plane of the actor's height (BeginInteriorActorDrag). A plain click still behaves exactly as above: a
+        // click that never crosses ActorDragThresholdPx never becomes a "drag".
         if (nativeViewActive && !interiorSceneActive && editMode != EditMode.Script
             && nativeRenderer.RendererLibrary is { } dragLibrary
             && dragLibrary.GetActor(index, out var dax, out var day, out var daz, out _)
@@ -2109,11 +2142,117 @@ public partial class MainWindow : Window
             actorDragMoved = false;
             actorDragPlaneY = day;
             actorDragOriginal = new Lba2ActorPersistence.Snapshot(dax, day, daz, dbeta, dbody, danim, dlife, darmor, dhit, dmove, dflags);
+            actorDragKind = ActorDragKind.Exterior;
             TerrainViewport.CaptureMouse();
         }
+        // ... and the same in the isometric pictures (LBA2 interiors, LBA1 scenes and joined maps).
+        else if (interiorSceneActive && editMode != EditMode.Script) BeginInteriorActorDrag(index, e.GetPosition(ViewportHost));
     }
 
-    // ---- dragging an actor to reposition it (LBA2 native exterior view only -- see ActorMarker_MouseLeftButtonDown) ----
+    // ---- dragging an actor in the isometric pictures (LBA2 interiors, LBA1 scenes and maps) ------------------------------------------------------------
+    // The picture is affine, so a pointer movement on the picture is a movement in the plane of the actor's own height: the actor's new spot is its old
+    // one plus the difference between where the pointer is now and where it was picked up, both put onto that plane. A ring follows the pointer while
+    // dragging (the picture itself is redrawn from the saved file when the pointer is let go).
+    private enum ActorDragKind { Exterior, Lba2Interior, Lba1 }
+    private ActorDragKind actorDragKind;
+    private Point actorDragStartCanvas;
+    private (double X, double Y, double Z) actorDragStartWorld;
+    private (int X, int Y, int Z)? actorDragNew;
+    private int actorDragScene;
+    private Lba1AreaTile? actorDragTile;
+    private System.Windows.Shapes.Ellipse? actorDragGhost;
+
+    private Point InteriorCanvasOf(Point view)
+        => new((view.X - ViewportHost.ActualWidth / 2) / interiorZoom + interiorCenter.X, (view.Y - ViewportHost.ActualHeight / 2) / interiorZoom + interiorCenter.Y);
+
+    private bool BeginInteriorActorDrag(int index, Point view)
+    {
+        if (interiorZoom <= 0 || lba2JoinedView) return false;
+        if (currentGame == GameKind.Lba1)
+        {
+            var scene = index / 1000;
+            if (!lba1ViewScenes.TryGetValue(scene, out var model) || model.Actors.FirstOrDefault(a => a.Index == index % 1000) is not { } actor) return false;
+            if (lba1CurrentTiles?.FirstOrDefault(t => t.Scene == scene && t.HoldsPoint(actor.X, actor.Z)) is not { } tile) return false;
+            actorDragKind = ActorDragKind.Lba1; actorDragScene = scene; actorDragTile = tile;
+            actorDragStartWorld = (actor.X, actor.Y, actor.Z);
+        }
+        else
+        {
+            if (nativeRenderer.RendererLibrary is not { } library
+                || !library.GetActor(index, out var x, out var y, out var z, out _)
+                || !library.GetActorAttributes(index, out var beta, out var body, out var anim, out var life, out var armor, out var hit, out var move)
+                || !library.GetActorFlags(index, out var flags)) return false;
+            actorDragKind = ActorDragKind.Lba2Interior;
+            actorDragOriginal = new Lba2ActorPersistence.Snapshot(x, y, z, beta, body, anim, life, armor, hit, move, flags);
+            actorDragStartWorld = (x, y, z);
+        }
+        draggingActorIndex = index;
+        actorDragStartScreen = view;
+        actorDragStartCanvas = InteriorCanvasOf(view);
+        actorDragMoved = false;
+        actorDragNew = null;
+        ViewportHost.CaptureMouse();
+        return true;
+    }
+
+    private void UpdateInteriorActorDrag(Point view)
+    {
+        var now = InteriorCanvasOf(view);
+        var y = (int)Math.Round(actorDragStartWorld.Y);
+        double nx, nz;
+        Point? ring;
+        if (actorDragKind == ActorDragKind.Lba1)
+        {
+            double u = (now.X - actorDragStartCanvas.X) * 512 / 24, v = (now.Y - actorDragStartCanvas.Y) * 512 / 12;
+            nx = actorDragStartWorld.X + (u + v) / 2; nz = actorDragStartWorld.Z + (v - u) / 2;
+            nx = Math.Clamp(nx, 0, 32767); nz = Math.Clamp(nz, 0, 32767);
+            var tile = actorDragTile!;
+            ring = lba1ShownImage is { } image ? InteriorCanvasToView(image.Project(nx + tile.OffsetX, y + tile.OffsetY, nz + tile.OffsetZ)) : null;
+        }
+        else
+        {
+            var library = nativeRenderer.RendererLibrary;
+            if (library is null || !SolveInteriorGround(library, actorDragStartCanvas, y, out var sx, out var sz) || !SolveInteriorGround(library, now, y, out var px, out var pz)) return;
+            nx = Math.Clamp(actorDragStartWorld.X + (px - sx), 0, 32767); nz = Math.Clamp(actorDragStartWorld.Z + (pz - sz), 0, 32767);
+            ring = library.ProjectInteriorPoint((int)nx, y, (int)nz, out var cx, out var cy) ? InteriorCanvasToView(new Point(cx, cy)) : null;
+        }
+        actorDragNew = ((int)Math.Round(nx), y, (int)Math.Round(nz));
+        if (ring is not { } at) return;
+        if (actorDragGhost is null)
+        {
+            actorDragGhost = new System.Windows.Shapes.Ellipse { Width = 28, Height = 28, Stroke = Brushes.Yellow, StrokeThickness = 3, Fill = new SolidColorBrush(Color.FromArgb(70, 255, 255, 0)), IsHitTestVisible = false };
+            BrushOverlayCanvas.Children.Add(actorDragGhost);
+        }
+        Canvas.SetLeft(actorDragGhost, at.X - 14); Canvas.SetTop(actorDragGhost, at.Y - 14);
+    }
+
+    private void EndInteriorActorDrag(int index)
+    {
+        if (actorDragGhost is not null) { BrushOverlayCanvas.Children.Remove(actorDragGhost); actorDragGhost = null; }
+        if (!actorDragMoved || actorDragNew is not { } to) return;
+        if (actorDragKind == ActorDragKind.Lba1)
+        {
+            Lba1ActorData data;
+            try
+            {
+                var record = new Scenes.SceneStore(Scenes.SceneGame.Lba1, EditorSettings.Current.Lba1Directory).LoadRecord(actorDragScene);
+                data = Lba1ActorRecord.Read(record, index % 1000);
+            }
+            catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException) { FileLabel.Text = $"Couldn't move the actor: {error.Message}"; return; }
+            data.X = to.X; data.Y = to.Y; data.Z = to.Z;
+            var problem = SaveLba1Actor(actorDragScene, data);
+            FileLabel.Text = problem ?? "Actor moved and saved to the game's files.";
+            return;
+        }
+        var library = nativeRenderer.RendererLibrary;
+        if (library is null || actorDragOriginal is not { } original) return;
+        if (Lba2ActorPersistence.Locate(library, index) is not { } located) { FileLabel.Text = "Couldn't move the actor: its scene isn't the one currently loaded."; return; }
+        var error2 = Lba2ActorPersistence.Save(gameRoot, located.Scene, located.IndexInScene, original, original with { X = to.X, Y = to.Y, Z = to.Z }, out var note);
+        FileLabel.Text = error2 is not null ? $"Actor not moved: {error2}" : note is null ? "Actor moved and saved to the game's files." : $"Actor moved and saved, except: {note}";
+        if (error2 is null) ShowInteriorScene(interiorSceneNumber, keepView: true);
+    }
+
+    // ---- dragging an actor to reposition it (see ActorMarker_MouseLeftButtonDown) ----
     private int? draggingActorIndex;
     private Point actorDragStartScreen;
     private bool actorDragMoved;
@@ -2692,10 +2831,11 @@ public partial class MainWindow : Window
     {
         if (draggingActorIndex is int dragIndex)
         {
-            var screen = e.GetPosition(TerrainViewport);
+            var interiorDrag = actorDragKind != ActorDragKind.Exterior;
+            var screen = interiorDrag ? e.GetPosition(ViewportHost) : e.GetPosition(TerrainViewport);
             if (!actorDragMoved && (Math.Abs(screen.X - actorDragStartScreen.X) > ActorDragThresholdPx || Math.Abs(screen.Y - actorDragStartScreen.Y) > ActorDragThresholdPx))
                 actorDragMoved = true;
-            if (actorDragMoved) UpdateActorDrag(dragIndex, screen);
+            if (actorDragMoved) { if (interiorDrag) UpdateInteriorActorDrag(screen); else UpdateActorDrag(dragIndex, screen); }
             return;
         }
         if (interiorPanning)
@@ -2737,11 +2877,15 @@ public partial class MainWindow : Window
     {
         if (draggingActorIndex is int dragIndex)
         {
-            if (actorDragMoved) CommitActorDrag(dragIndex);
+            if (actorDragKind != ActorDragKind.Exterior) EndInteriorActorDrag(dragIndex);
+            else if (actorDragMoved) CommitActorDrag(dragIndex);
             draggingActorIndex = null;
             actorDragMoved = false;
             actorDragOriginal = null;
             Mouse.Capture(null);
+            // A scene or island box that still holds the keyboard focus keeps Ctrl+Z for its own text, so a move could not be undone from the keyboard: the view takes the focus.
+            ViewportHost.Focusable = true;
+            ViewportHost.Focus();
             return;
         }
         if (paintingTerrain && e.ChangedButton == MouseButton.Left) { terrainEditor?.PointerUp(); paintingTerrain = false; DrawTerrainOverlay(); }
@@ -3182,7 +3326,7 @@ public partial class MainWindow : Window
         // Ctrl+Z / Ctrl+Y undo and redo saved scene changes; text boxes keep their own undo.
         if (Keyboard.Modifiers == ModifierKeys.Control && e.Key is Key.Z or Key.Y && Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase)
         {
-            RunHistoryStep(undo: e.Key == Key.Z);
+            StepHistory(undo: e.Key == Key.Z);
             e.Handled = true;
             return;
         }
