@@ -32,7 +32,7 @@ internal static class RaceTrackProbe
             if (model.CubeMode != 1 || model.CubeX != cx || model.CubeY != cz) continue;
             Console.WriteLine($"=== scene {scene}: {(scene + 1 < names.Count ? names[scene + 1] : "?")}  island {model.Island} cube ({model.CubeX},{model.CubeY}) music {model.Music} light {model.AlphaLight}/{model.BetaLight}");
             Console.WriteLine($"  hero start ({model.Hero.X},{model.Hero.Y},{model.Hero.Z}) beta {model.Hero.Beta}");
-            for (var i = 1; i < model.Actors.Count; i++)
+            for (var i = args.Contains("--hero") ? 0 : 1; i < model.Actors.Count; i++)
             {
                 var actor = model.Actors[i];
                 string body = "-", anim = "-";

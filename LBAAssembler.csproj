@@ -78,6 +78,8 @@
           Condition="Exists('native\lba2-classic-community\out\build\windows_ucrt64_static\SOURCES\lba2cc.exe')"
           LogicalName="lba2cc.exe" />
     <EmbeddedResource Include="Assets\DummyBody.lm2" LogicalName="DummyBody.lm2" />
+    <!-- the Desert island race track plan (centre line in island cells, pit lane ends): Tools > LBA2: Desert island race track -->
+    <EmbeddedResource Include="docs/racetrack/track_plan.json" LogicalName="RaceTrackPlan.Desert.json" />
   </ItemGroup>
 
   <!--

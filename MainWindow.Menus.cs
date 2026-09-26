@@ -38,6 +38,7 @@ public partial class MainWindow
         Lba1PlayMenuItem.IsEnabled = Lba1Configured;
         Lba2PlayMenuItem.IsEnabled = Lba2Configured;
         Lba2FixScriptingMenuItem.IsEnabled = Lba2Configured;
+        Lba2RaceTrackMenuItem.IsEnabled = Lba2Configured;
         Lba1SurpriseMenuItem.IsEnabled = Lba1Configured;
         TestEditsStartMenuItem.IsEnabled = eitherConfigured && !TestEditsActive;
         TestEditsCommitMenuItem.IsEnabled = TestEditsActive;

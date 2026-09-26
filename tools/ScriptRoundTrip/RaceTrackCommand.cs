@@ -19,7 +19,7 @@ internal static class RaceTrackCommand
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var report = RaceTrackBuilder.Build(island, plan, options);
         island.Save(Path.Combine(game, "DESERT.ILE"));
-        var scenes = RaceTrackScenes.Apply(game, 2, report.StartLine.Count > 0 ? report.StartLine[0] : null, report.DistanceToRoad);
+        var scenes = RaceTrackScenes.Apply(game, report, options);
         foreach (var l in scenes.Log) Console.WriteLine("  " + l);
         Console.WriteLine($"  {scenes.ActorsRemoved} actors removed from {scenes.ScenesChanged} scenes");
         Console.WriteLine($"built in {watch.Elapsed.TotalSeconds:0.0}s: lap {report.Length:0} cells, {report.Vertices} vertices levelled, {report.Cells} cells painted, {report.DecorsRemoved} props and {report.SolidDecorsRemoved} solid decors removed");
@@ -63,6 +63,63 @@ internal static class RaceTrackCommand
             return 0;
         }
         Console.WriteLine("no scene holds that cell");
+        return 1;
+    }
+
+    // initbuggy <game folder> <scene>: the scene's buggy always exists (the car-quest test passes) and INIT_BUGGY(2) puts it at its own place.
+    public static int InitBuggy(string[] args)
+    {
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, args[1]);
+        var scene = int.Parse(args[2]);
+        var model = store.Load(scene);
+        foreach (var actor in model.Actors.Skip(1).Where(a => a.Entity == RaceTrackScenes.BuggyEntity))
+        {
+            var life = actor.Life;
+            if (life.Length > 10 && life[0] == 0x0C && life[1] == 0x0F && life[2] == 0x4A && life[4] == 0x03) life[4] = 0;
+            for (var i = 6; i < Math.Min(30, life.Length - 1); i++)
+                if (life[i] == 0x46 && life[i + 1] == 0x00) { life[i + 1] = 0x02; Console.WriteLine($"INIT_BUGGY(2) at byte {i}"); break; }
+        }
+        store.Save(scene, model, allowErrors: true);
+        return 0;
+    }
+
+    // scripttext <game folder> <scene> <actor> life|track: the script as the editor's C text.
+    public static int ScriptText(string[] args)
+    {
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, args[1]);
+        var scene = int.Parse(args[2]);
+        var scripts = LBAAssembler.LbaScript.SceneScripts.Load(store.LoadRecord(scene), scene);
+        Console.WriteLine(scripts.GetText(int.Parse(args[3]), args[4] == "life" ? LBAAssembler.LbaScript.ScriptKind.Life : LBAAssembler.LbaScript.ScriptKind.Track));
+        return 0;
+    }
+
+    // driveprep <game folder> <cell x> <cell z> <turn>: the buggy stands on the ground at that island cell facing `turn`, always there (INIT_BUGGY 2), Twinsen two cells
+    // behind it -- a place to start a test drive from.
+    public static int DrivePrep(string[] args)
+    {
+        var game = args[1];
+        var cellX = double.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture); var cellZ = double.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture);
+        var turn = int.Parse(args[4]);
+        var island = IslandFile.Load(Path.Combine(game, "DESERT.ILE"));
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, game);
+        var cx = (int)Math.Floor(cellX / 64); var cz = (int)Math.Floor(cellZ / 64);
+        for (var scene = 55; scene <= 73; scene++)
+        {
+            var model = store.Load(scene);
+            if (model.CubeMode != 1 || model.CubeX != cx || model.CubeY != cz) continue;
+            var y = (int)Math.Round(IslandOps.Altitude(island, cellX * 512, cellZ * 512) ?? 0);
+            var dx = Math.Sin(turn * 2 * Math.PI / 4096); var dz = Math.Cos(turn * 2 * Math.PI / 4096);
+            foreach (var actor in model.Actors.Skip(1).Where(a => a.Entity == RaceTrackScenes.BuggyEntity))
+            {
+                actor.X = (int)Math.Round(cellX * 512 - cx * 32768.0); actor.Z = (int)Math.Round(cellZ * 512 - cz * 32768.0); actor.Y = y; actor.Beta = turn;
+                var life = actor.Life;
+                for (var i = 6; i < Math.Min(30, life.Length - 1); i++) if (life[i] == 0x46 && life[i + 1] == 0x00) { life[i + 1] = 0x02; break; }
+                model.Hero.X = actor.X - (int)(dx * 1024); model.Hero.Z = actor.Z - (int)(dz * 1024); model.Hero.Y = y + 200; model.Hero.Beta = turn;
+            }
+            store.Save(scene, model, allowErrors: true);
+            Console.WriteLine($"scene {scene}: buggy at ({cellX},{cellZ}) turn {turn}");
+            return 0;
+        }
         return 1;
     }
 }

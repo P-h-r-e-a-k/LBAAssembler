@@ -1652,6 +1652,35 @@ public partial class MainWindow : Window
         RefreshZoneListIfVisible();
     }
 
+    // Tools > LBA2: Desert island race track (RaceTrackWindow): builds the track into the game folder, or puts the folder back.
+    private void Lba2RaceTrack_Click(object sender, RoutedEventArgs e)
+    {
+        if (!Lba2Engine.IsGameFolder(gameRoot))
+        {
+            MessageBox.Show(this, "The LBA2 game folder isn't set. Choose it under File > Settings.", "Desert island race track", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (scriptSession.EditedScenes.Any(s => s is >= 55 and <= 73))
+        {
+            MessageBox.Show(this, "Some of the Desert island's outside scenes (55-73) have unsaved script edits. Save or discard them first.", "Desert island race track", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (playing) StopPlay();
+        var window = new RaceTrackWindow(gameRoot, RaceTrackChanged) { Owner = this };
+        window.ShowDialog();
+    }
+
+    // DESERT.ILE and SCENE.HQR changed on disk: everything that read them is dropped and shown again.
+    private void RaceTrackChanged()
+    {
+        zoneCache.Clear();
+        for (var scene = 55; scene <= 73; scene++) scriptSession.ForgetScene(scene);
+        InvalidateNativeIsland();
+        if (!interiorSceneActive && string.Equals(activeFile, "DESERT.ILE", StringComparison.OrdinalIgnoreCase) && File.Exists(Path.Combine(gameRoot, activeFile))) LoadIsland(Path.Combine(gameRoot, activeFile));
+        else if (nativeViewActive) RenderNativeCamera();
+        RefreshZoneListIfVisible();
+    }
+
     // Tools > LBA2: edit a scene as data on a plan of it (Lba2SceneEditorWindow).
     private void Lba2Editor_Click(object sender, RoutedEventArgs e)
     {
