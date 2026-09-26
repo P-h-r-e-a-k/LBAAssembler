@@ -1504,6 +1504,15 @@ public partial class MainWindow : Window
     {
         var next = undo ? Scenes.SceneHistory.NextUndo : Scenes.SceneHistory.NextRedo;
         if (next is null) return;
+        // A step writes the files of the folder it was recorded in. The log outlives the session, so that can be another folder than the one open now --
+        // above all the real game folder while "Test edits" works on a scratch copy: undoing it would then change the real files behind the test's back.
+        static string Norm(string path) => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var openFolder = next.Game == Scenes.SceneGame.Lba1 ? EditorSettings.Current.Lba1Directory : gameRoot;
+        if (!string.Equals(Norm(next.Directory), Norm(openFolder), StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(this, $"\"{next.Description}\" was recorded in another game folder:\n\n{next.Directory}\n\nOpen that folder (File > Settings, or leave test edits) to {(undo ? "undo" : "redo")} it there.", undo ? "Undo" : "Redo", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
         var scenes = next.After.Select(s => s.Scene).ToList();
 
         // Same guards as saving a zone: an unsaved script edit or an open LBA2 actor window would be overwritten.
