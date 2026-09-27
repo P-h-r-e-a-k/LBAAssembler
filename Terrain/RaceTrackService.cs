@@ -36,7 +36,7 @@ internal static class RaceTrackService
             }
             File.Copy(Path.Combine(gameDirectory, "DESERT.OBL" + BackupSuffix), Path.Combine(gameDirectory, "DESERT.OBL"), overwrite: true);
             if (options.Crossing == CrossingStyle.Bridge)
-                options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, "DESERT.OBL"), options.VergeHalfWidth * 2 * 512, options.RoadBridgeTileLength * 512);
+                options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, "DESERT.OBL"), options.RoadBridgeTileLength * 512);
             var island = IslandFile.Load(Path.Combine(gameDirectory, "DESERT.ILE" + BackupSuffix));
             var report = RaceTrackBuilder.Build(island, plan, options);
             island.Save(Path.Combine(gameDirectory, "DESERT.ILE"));

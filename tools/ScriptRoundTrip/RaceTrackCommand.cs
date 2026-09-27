@@ -16,8 +16,10 @@ internal static class RaceTrackCommand
         var island = IslandFile.Load(Path.Combine(game, "DESERT.ILE"));
         var options = new RaceTrackOptions();
         options.Keep.Add((0, 195, 62, 252));
+        if (Environment.GetEnvironmentVariable("RT_CLEARANCE") is { } rc) options.RoadBridgeClearance = double.Parse(rc);
+        if (Environment.GetEnvironmentVariable("RT_TILELEN") is { } tl) options.RoadBridgeTileLength = double.Parse(tl);
         if (options.Crossing == CrossingStyle.Bridge)
-            options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(game, "DESERT.OBL"), options.VergeHalfWidth * 2 * 512, options.RoadBridgeTileLength * 512);
+            options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(game, "DESERT.OBL"), options.RoadBridgeTileLength * 512);
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var report = RaceTrackBuilder.Build(island, plan, options);
         island.Save(Path.Combine(game, "DESERT.ILE"));

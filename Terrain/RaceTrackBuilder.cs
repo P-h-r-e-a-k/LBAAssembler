@@ -78,14 +78,23 @@ internal sealed class RaceTrackOptions
     public bool JumpClearsRoad { get; set; }
     // A physical, walkable bridge deck (like Citadel Island's rope bridge at "the Cliffs of the Woodbridge"): the straighter road
     // is carried over the other, on a flat deck built of decor objects (RaceTrackDeckBody), while the ground underneath keeps
-    // the other road's own grade. How far above the lower road's own height the deck's walking surface sits.
-    public double RoadBridgeClearance { get; set; } = 900;
+    // the other road's own grade. How far above the lower road's own height the deck's walking surface sits. The engine's solid
+    // collision (WorldColBrickDecors) tests the car's whole ZV box against the deck's, so the deck's UNDERSIDE must clear the
+    // car's roof: the retail Desert arch keeps its deck 2260 units over the road it spans; measured in the engine, Twinsen walking the lower road
+    // is still stopped at 2300 (the lower road climbs under the deck's far end) and walks straight through at 2800.
+    public double RoadBridgeClearance { get; set; } = 2800;
+    // How deep the deck's collision box reaches below its own walking surface. Thin, so what passes underneath only has to
+    // clear RoadBridgeClearance - this.
+    public double RoadBridgeDeckThickness { get; set; } = 200;
+    // The crossing is re-shaped to meet at this angle (degrees) before the bridge is planned -- the concept picture's own
+    // crossing is a clean X of about 42 degrees, and a shallow crossing would need an absurdly long deck.
+    public double BridgeCrossingAngle { get; set; } = 42;
     // Extra clearance (cells) the deck's flat core must reach past the lower road's own verge, each side.
-    public double RoadBridgeMargin { get; set; } = 6;
+    public double RoadBridgeMargin { get; set; } = 2;
     // How many cells of deck each placed piece covers along the road (the deck is as wide as the upper road itself).
     public double RoadBridgeTileLength { get; set; } = 4;
     // How many cells of ramp lead up to (and down from) the deck's own flat core, each side.
-    public double RoadBridgeRampLength { get; set; } = 26;
+    public double RoadBridgeRampLength { get; set; } = 50;
     // The scene side (RaceTrackScenes): actors other than Twinsen, the buggy and the hidden Zoe slot removed; the buggy present from the start of any game (the
     // car quest no longer hides it); Twinsen and the buggy set at the start line; zones that would act on a car on the road (doors, hit, ladder ...) removed.
     public bool RemoveActors { get; set; } = true;
@@ -161,7 +170,12 @@ internal static class RaceTrackBuilder
         var main = MakeRoad("lap", plan, options, closed: true);
         roads.Add(main);
         report.Length = main.Length;
-        if (options.Crossing == CrossingStyle.Jump) SteepenCrossing(main, options, report);
+        if (options.Crossing == CrossingStyle.Jump) SteepenCrossing(main, options, report, options.JumpCrossingAngle);
+        if (options.Crossing == CrossingStyle.Bridge)
+        {
+            // straighten far enough that the whole deck AND the ramp mouths lie on the straightened line
+            SteepenCrossing(main, options, report, options.BridgeCrossingAngle, Math.Max(15, DeckHalfCells(options, options.BridgeCrossingAngle) + 3));
+        }
         Profile(main, field, options, report);
         var crossings = FindCrossings(main, options);
         if (crossings.Count > 1) report.Notes.Add($"WARNING: the route crosses itself {crossings.Count} times, not once -- only the first is treated as the intended crossing; check the plan, the others will paint as plain overlapping road.");
@@ -540,9 +554,10 @@ internal static class RaceTrackBuilder
             foreach (var (i, j) in pairs) { var m = (r.H[i] + r.H[j]) / 2; r.H[i] = m; r.H[j] = m; }
     }
 
-    // Turns the straighter of the two roads that cross so they meet at JumpCrossingAngle, with a straight run of about 15 cells either side of
-    // the crossing and a smooth blend back to the drawn course over the next 40.
-    private static void SteepenCrossing(TrackRoad r, RaceTrackOptions o, RaceTrackReport report)
+    // Turns the straighter of the two roads that cross so they meet at `angleDeg`, with a straight run of about 15 cells either side of
+    // the crossing and a smooth blend back to the drawn course over the next 40. The concept picture's crossing is a clean 42-degree X,
+    // but the extracted centre line collapsed it to a near-parallel 17 degrees, so both the jump and the bridge re-shape it here.
+    private static void SteepenCrossing(TrackRoad r, RaceTrackOptions o, RaceTrackReport report, double angleDeg, double straightCells = 15)
     {
         var found = FindCrossings(r, o);
         if (found.Count == 0) return;
@@ -557,14 +572,14 @@ internal static class RaceTrackBuilder
         if (ax * bx + az * bz < 0) { bx = -bx; bz = -bz; }
         var current = Math.Atan2(ax * bz - az * bx, ax * bx + az * bz);           // signed angle from A to B
         var side = current >= 0 ? -1 : 1;                                        // turn A away from B
-        var target = o.JumpCrossingAngle * Math.PI / 180;
+        var target = angleDeg * Math.PI / 180;
         var turn = side * target - (-current);                                   // rotation to apply to A: new angle from A to B = side * -target ...
         // new direction of A: B's direction turned by +-target, on the side A already lies on
         var sign = current >= 0 ? -1.0 : 1.0;
         var na = Math.Atan2(bz, bx) + sign * target;
         var nx = Math.Cos(na); var nz = Math.Sin(na);
         var px = r.X[ia]; var pz = r.Z[ia]; var s0 = r.S[ia];
-        const double straight = 15, blend = 40;
+        var straight = straightCells; const double blend = 40;
         var n = r.Count; var newX = (double[])r.X.Clone(); var newZ = (double[])r.Z.Clone();
         for (var k = 0; k < n; k++)
         {
@@ -588,13 +603,24 @@ internal static class RaceTrackBuilder
     // row of deck decors; the other road keeps its own profile untouched underneath. No terrain height is shared between them at
     // the crossing (unlike EqualiseCrossings, which is skipped for this style), so this needs no steepening of the crossing angle.
 
+    // Half the flat deck's length along the upper road. The ramp must start where nothing of the lower road reaches any more:
+    // the lower road's own shaping spreads VergeHalf + BlendWidth cells to each side of it, the ramp's rock-sided shoulders
+    // another CurbHalf + ~2, plus RoadBridgeMargin -- measured along the upper road that's that distance / sin(crossing angle).
+    // (With the deck any shorter the lower road's embankment pulled the first ramp cells ~1000 units under the deck: a car coming
+    // up the ramp would have hit the deck's edge.)
+    private static double DeckHalfCells(RaceTrackOptions o, double angleDeg)
+    {
+        var clear = o.VergeHalfWidth + o.BlendWidth + o.CurbHalfWidth + 2 + o.RoadBridgeMargin;
+        return Math.Clamp(clear / Math.Sin(Math.Max(angleDeg, 12) * Math.PI / 180), 8, 45);
+    }
+
     private static RoadBridgeInfo? PlanRoadBridge(TrackRoad r, Crossing c, RaceTrackOptions o, RaceTrackReport report)
     {
         double Bend(int i) { double sum = 0; var w = (int)(12 / o.Spacing); for (var k = -w; k <= w; k++) sum += Math.Abs(r.Kappa[At(r, i + k)]); return sum; }
         var (over, under) = Bend(c.I) <= Bend(c.J) ? (c.I, c.J) : (c.J, c.I);
         var angleDeg = Math.Max(c.Angle, 12);                                                 // never let a near-parallel crossing blow the deck length up
-        var underWidthCells = r.VergeHalf * 2 + o.RoadBridgeMargin * 2;
-        var coreHalfCells = Math.Clamp(underWidthCells / (2 * Math.Sin(angleDeg * Math.PI / 180)), 10, 60);
+        // the crossing was straightened over coreHalf+3 cells each side (see Build), so the straight deck matches the road under it
+        var coreHalfCells = DeckHalfCells(o, angleDeg);
         var rampCells = o.RoadBridgeRampLength;
         var s0 = r.S[over];
         var deckHeight = r.H[under] + o.RoadBridgeClearance;
@@ -607,6 +633,9 @@ internal static class RaceTrackBuilder
             var t = (ad - coreHalfCells) / rampCells; return 1 - t * t * (3 - 2 * t);
         }
         var n = r.Count;
+        // The natural profile is already grade-limited; the ramp is laid over it directly and NOT run through LimitGrade again,
+        // which would spread a 2800-unit climb over ~60 cells each way and sag the deck joint. With the smoothstep blend the
+        // steepest point of the ramp is 1.5 x clearance / ramp length (84 units per cell, about 9 degrees, at the defaults).
         for (var k = 0; k < n; k++)
         {
             var ds = r.S[k] - s0;
@@ -615,8 +644,10 @@ internal static class RaceTrackBuilder
             if (w <= 0) continue;
             r.H[k] = r.H[k] * (1 - w) + deckHeight * w;
             if (Math.Abs(ds) <= coreHalfCells) r.Deck[k] = true;
+            // the ramps get the water bridge's own narrow, rock-sided shoulders (ModifyGround: CurbHalf+0.5 wide) instead of the
+            // ordinary 13-cell earth skirt, which would otherwise spill a bulge across the road passing under the deck
+            else r.Bridge[k] = true;
         }
-        LimitGrade(r, o);
         var widthUnits = r.VergeHalf * 2 * 512;
         var lengthUnits = coreHalfCells * 2 * 512;
         report.Notes.Add($"road bridge: the straighter road climbs onto a deck over the other -- {coreHalfCells * 2:0} cells of flat deck ({widthUnits / 512:0.#} cells wide) plus {rampCells:0} cells of ramp each side, deck height {deckHeight:0} ({o.RoadBridgeClearance:0} above the road it crosses, at {angleDeg:0} degrees)");
@@ -963,34 +994,43 @@ internal static class RaceTrackBuilder
         if (o.DeckBodyIndex < 0) { report.Notes.Add("WARNING: no deck body was prepared (DESERT.OBL wasn't extended) -- the bridge has no physical deck."); return; }
         var ex = -rb.DirZ; var ez = rb.DirX;                              // across the bridge (local +X)
         var theta = Math.Atan2(-ez, ex);
-        var beta = (int)Math.Round(theta / (2 * Math.PI) * 4096); beta = ((beta % 4096) + 4096) % 4096;
+        int Beta(double t) { var b = (int)Math.Round(t / (2 * Math.PI) * 4096); return ((b % 4096) + 4096) % 4096; }
+        var beta = Beta(theta);
         var cos = Math.Cos(theta); var sin = Math.Sin(theta);
-        var tileLen = rb.Length / Math.Max(1, (int)Math.Round(rb.Length / (o.RoadBridgeTileLength * 512)));
-        var tiles = Math.Max(1, (int)Math.Round(rb.Length / tileLen));
+        // a grid of square tiles (see RaceTrackDeckBody.AppendTo for why): whole columns across the road, whole rows along it
+        var tile = o.RoadBridgeTileLength * 512;
+        var cols = Math.Max(1, (int)Math.Round(rb.Width / tile));
+        var rows = Math.Max(1, (int)Math.Ceiling(rb.Length / tile));
+        var width = cols * tile; var length = rows * tile;
         var y = (int)Math.Round(rb.Height);
-        var halfLenTotal = rb.Length / 2; var halfWidth = rb.Width / 2;
-        var placed = 0;
+        var placed = 0; var dropped = 0;
         (double X, double Z) ToWorld(double lx, double lz) => (lx * cos + lz * sin, -lx * sin + lz * cos);
-        for (var k = 0; k < tiles; k++)
+        for (var row = 0; row < rows; row++)
+        for (var col = 0; col < cols; col++)
         {
-            var alongLocal = -halfLenTotal + tileLen * (k + 0.5);           // local Z of this tile's centre (along the road)
-            var (ox, oz) = ToWorld(0, alongLocal);
+            var lx = -width / 2 + tile * (col + 0.5); var lz = -length / 2 + tile * (row + 0.5);
+            var (ox, oz) = ToWorld(lx, lz);
             var wx = rb.X * 512 + ox; var wz = rb.Z * 512 + oz;
-            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) continue;
-            var d = IslandDecors.Blank(o.DeckBodyIndex, at.X, y, at.Z, beta);
+            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { dropped++; continue; }
+            // edge columns carry the red rail on their outer side: the +X column as is, the -X column turned half round
+            var body = o.DeckBodyIndex; var b = beta;
+            if (col == cols - 1) body = o.DeckBodyIndex + 1;
+            else if (col == 0) { body = o.DeckBodyIndex + 1; b = (beta + 2048) % 4096; }
+            var d = IslandDecors.Blank(body, at.X, y, at.Z, b);
             double minX = 1e18, maxX = -1e18, minZ = 1e18, maxZ = -1e18;
-            foreach (var (lx, lz) in new[] { (-halfWidth, -tileLen / 2), (halfWidth, -tileLen / 2), (-halfWidth, tileLen / 2), (halfWidth, tileLen / 2) })
+            foreach (var (cx, cz) in new[] { (-tile / 2, -tile / 2), (tile / 2, -tile / 2), (-tile / 2, tile / 2), (tile / 2, tile / 2) })
             {
-                var (rx, rz) = ToWorld(lx, lz);
+                var (rx, rz) = ToWorld(cx, cz);
                 minX = Math.Min(minX, rx); maxX = Math.Max(maxX, rx); minZ = Math.Min(minZ, rz); maxZ = Math.Max(maxZ, rz);
             }
             d.XMin = at.X + (int)Math.Floor(minX); d.XMax = at.X + (int)Math.Ceiling(maxX);
             d.ZMin = at.Z + (int)Math.Floor(minZ); d.ZMax = at.Z + (int)Math.Ceiling(maxZ);
-            d.YMin = y - 300; d.YMax = y;
+            d.YMin = y - (int)o.RoadBridgeDeckThickness; d.YMax = y;
             at.Cube.Decors.Add(d);
             placed++;
         }
-        report.Placed.Add($"road bridge: {placed} deck tiles ({rb.Width / 512:0.#} x {rb.Length / 512:0.#} cells) at cell ({rb.X:0.0}, {rb.Z:0.0}), deck height {y}, turn {beta}, over road {rb.UnderRoad}");
+        if (dropped > 0) report.Notes.Add($"WARNING: {dropped} deck tiles could not be placed (off the island, or a cube already holds {IslandDecors.MaxPerCube} decors)");
+        report.Placed.Add($"road bridge: {placed} deck tiles ({cols} x {rows} of {o.RoadBridgeTileLength:0} cells, {width / 512:0.#} x {length / 512:0.#} cells) at cell ({rb.X:0.0}, {rb.Z:0.0}), deck height {y}, turn {beta}, over road {rb.UnderRoad}");
     }
 
     // The retail overpass of the Desert track (bodies 68 the arched deck, 69 and 70 the abutments), boxes relative to the piece's own origin.
