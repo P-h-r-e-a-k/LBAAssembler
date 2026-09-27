@@ -41,7 +41,7 @@ internal sealed class RaceTrackPlan
     }
 }
 
-internal enum CrossingStyle { Level, Viaduct, Jump }
+internal enum CrossingStyle { Level, Viaduct, Jump, Bridge }
 
 // Where a jump takes off and lands (island cell coordinates), what the scene needs to run it.
 internal sealed record JumpInfo(double StartX, double StartZ, double LandX, double LandZ, double DirX, double DirZ, int Beta, double Height,
@@ -66,7 +66,7 @@ internal sealed class RaceTrackOptions
     public double Spacing { get; set; } = 0.5;
     // What stands where the lap crosses itself: nothing (level crossing), a viaduct of retail arches over it, or a jump (the retail
     // Desert island's own "car jump": a scripted flight of the buggy, see RaceTrackScenes).
-    public CrossingStyle Crossing { get; set; } = CrossingStyle.Jump;
+    public CrossingStyle Crossing { get; set; } = CrossingStyle.Bridge;
     // How far the retail jump animation (ANIM.HQR 51: 8990 units of steps) carries the buggy, measured in the game: 17.5 cells from where the flight starts to where it lands.
     public double JumpDistance { get; set; } = 17.5;
     // The scenario zone number of the take-off strip and the labels the hero's track script gets.
@@ -76,6 +76,16 @@ internal sealed class RaceTrackOptions
     public double JumpCrossingAngle { get; set; } = 65;
     // Whether the road is left out (sand) under the flight. Off: the road runs on and the jump is an ordinary flight over a level junction.
     public bool JumpClearsRoad { get; set; }
+    // A physical, walkable bridge deck (like Citadel Island's rope bridge at "the Cliffs of the Woodbridge"): the straighter road
+    // is carried over the other, on a flat deck built of decor objects (RaceTrackDeckBody), while the ground underneath keeps
+    // the other road's own grade. How far above the lower road's own height the deck's walking surface sits.
+    public double RoadBridgeClearance { get; set; } = 900;
+    // Extra clearance (cells) the deck's flat core must reach past the lower road's own verge, each side.
+    public double RoadBridgeMargin { get; set; } = 6;
+    // How many cells of deck each placed piece covers along the road (the deck is as wide as the upper road itself).
+    public double RoadBridgeTileLength { get; set; } = 4;
+    // How many cells of ramp lead up to (and down from) the deck's own flat core, each side.
+    public double RoadBridgeRampLength { get; set; } = 26;
     // The scene side (RaceTrackScenes): actors other than Twinsen, the buggy and the hidden Zoe slot removed; the buggy present from the start of any game (the
     // car quest no longer hides it); Twinsen and the buggy set at the start line; zones that would act on a car on the road (doors, hit, ladder ...) removed.
     public bool RemoveActors { get; set; } = true;
@@ -83,6 +93,9 @@ internal sealed class RaceTrackOptions
     public bool StartAtLine { get; set; } = true;
     public bool RemoveRoadZones { get; set; } = true;
     public bool RemoveSolidDecors { get; set; } = true;
+    // The island OBL index of the flat deck body (RaceTrackDeckBody), appended by RaceTrackService before the build runs. -1 if
+    // no bridge deck body is available (the Bridge crossing style then falls back to a level crossing).
+    public int DeckBodyIndex { get; set; } = -1;
     // Decor bodies that are plants, posts, fences and small props: cleared where they stand on the road. Everything else is
     // a building or a rock.
     public HashSet<int> RemovableBodies { get; set; } = new()
@@ -110,6 +123,7 @@ internal sealed class RaceTrackReport
     public List<(double X0, double Z0, double X1, double Z1)> BridgeCoords { get; } = new();
     public List<string> Placed { get; } = new();
     public JumpInfo? Jump { get; set; }
+    public RoadBridgeInfo? RoadBridge { get; set; }
     // How far (cells) an island cell position is from the nearest road's centre line, 1e9 when far away.
     public Func<double, double, double> DistanceToRoad { get; set; } = (_, _) => 1e9;
 }
@@ -122,12 +136,16 @@ internal sealed class TrackRoad
     public double[] S = Array.Empty<double>(), Tx = Array.Empty<double>(), Tz = Array.Empty<double>(), Kappa = Array.Empty<double>();
     public double[] H = Array.Empty<double>();
     public bool[] Bridge = Array.Empty<bool>();
+    public bool[] Deck = Array.Empty<bool>();
     public double AsphaltHalf, CurbHalf, VergeHalf, Blend;
     public int Count => X.Length;
     public double Length;
 }
 
-internal readonly record struct RoadHit(int Road, double Dist, double Lat, double S, double H, double Bank, bool Bridge, double Kappa);
+internal readonly record struct RoadHit(int Road, double Dist, double Lat, double S, double H, double Bank, bool Bridge, double Kappa, bool Deck);
+
+// A road-over-road bridge: the straighter road's own flat deck core (island cell coordinates), oriented along its own heading.
+internal readonly record struct RoadBridgeInfo(double X, double Z, double Height, double DirX, double DirZ, double Width, double Length, int UnderRoad);
 
 internal static class RaceTrackBuilder
 {
@@ -146,9 +164,11 @@ internal static class RaceTrackBuilder
         if (options.Crossing == CrossingStyle.Jump) SteepenCrossing(main, options, report);
         Profile(main, field, options, report);
         var crossings = FindCrossings(main, options);
-        EqualiseCrossings(main, crossings, options);
+        if (crossings.Count > 1) report.Notes.Add($"WARNING: the route crosses itself {crossings.Count} times, not once -- only the first is treated as the intended crossing; check the plan, the others will paint as plain overlapping road.");
+        if (options.Crossing != CrossingStyle.Bridge) EqualiseCrossings(main, crossings, options);
         foreach (var c in crossings) report.Crossings.Add((c.X, c.Z, main.H[c.I], c.Angle));
         if (options.Crossing == CrossingStyle.Jump && crossings.Count > 0) report.Jump = PlanJump(main, crossings[0], options, report);
+        if (options.Crossing == CrossingStyle.Bridge && crossings.Count > 0) report.RoadBridge = PlanRoadBridge(main, crossings[0], options, report);
         foreach (var (a, b) in report.BridgeSpans) report.BridgeCoords.Add((main.X[a], main.Z[a], main.X[b], main.Z[b]));
 
         if (plan.PitA is { } pa && plan.PitB is { } pb) roads.Add(MakePit(main, plan, pa, pb, options, report));
@@ -299,7 +319,7 @@ internal static class RaceTrackBuilder
         }
         var smooth = Smooth(h, o.ProfileSmoothing / o.Spacing, r.Closed);
         for (var i = 0; i < n; i++) if (bridge[i]) smooth[i] = Math.Max(smooth[i], o.BridgeClearance);
-        r.H = smooth; r.Bridge = bridge;
+        r.H = smooth; r.Bridge = bridge; r.Deck = new bool[n];
         LimitGrade(r, o);
         for (var i = 0; i < n; i++) if (bridge[i] && r.H[i] < o.BridgeClearance) r.H[i] = o.BridgeClearance;
         LimitGrade(r, o);
@@ -355,7 +375,7 @@ internal static class RaceTrackBuilder
         var pit = Resample("pit", pts, o, closed: false);
         pit.AsphaltHalf = halfAsphalt; pit.CurbHalf = halfCurb; pit.VergeHalf = halfCurb + 1.0; pit.Blend = 4;
         // heights: follow the lap's profile at the same place
-        pit.H = new double[pit.Count]; pit.Bridge = new bool[pit.Count];
+        pit.H = new double[pit.Count]; pit.Bridge = new bool[pit.Count]; pit.Deck = new bool[pit.Count];
         for (var i = 0; i < pit.Count; i++)
         {
             var f = pit.Count <= 1 ? 0 : (double)i / (pit.Count - 1);
@@ -435,7 +455,7 @@ internal static class RaceTrackBuilder
         private static RoadHit Project(TrackRoad r, int ri, int i, double x, double z)
         {
             // exact distance to the two segments around the point
-            var best = new RoadHit(ri, double.MaxValue, 0, 0, 0, 0, false, 0);
+            var best = new RoadHit(ri, double.MaxValue, 0, 0, 0, 0, false, 0, false);
             for (var side = -1; side <= 0; side++)
             {
                 int a, b;
@@ -453,7 +473,7 @@ internal static class RaceTrackBuilder
                 var k = r.Kappa[a] * (1 - t) + r.Kappa[b] * t;
                 var s = r.S[a] + Math.Sqrt(len2) * t;
                 var h = r.H[a] * (1 - t) + r.H[b] * t;
-                best = new RoadHit(ri, d, lat, s, h, 0, r.Bridge[a] && r.Bridge[b], k);
+                best = new RoadHit(ri, d, lat, s, h, 0, r.Bridge[a] && r.Bridge[b], k, r.Deck[a] && r.Deck[b]);
             }
             return best;
         }
@@ -560,6 +580,47 @@ internal static class RaceTrackBuilder
         Geometry(r, o);
         var after = FindCrossings(r, o);
         report.Notes.Add($"crossing steepened from {c.Angle:0} to {(after.Count > 0 ? after[0].Angle : 0):0} degrees (the straighter road turned by {(Math.Atan2(nz, nx) - Math.Atan2(az, ax)) * 180 / Math.PI:0} degrees at the crossing)");
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------------
+    // a physical, walkable road-over-road bridge (Citadel Island's own "Cliffs of the Woodbridge" does this with a plank decor;
+    // see RaceTrackDeckBody). The straighter road climbs, on its own natural grade-limited profile, onto a flat deck carried by a
+    // row of deck decors; the other road keeps its own profile untouched underneath. No terrain height is shared between them at
+    // the crossing (unlike EqualiseCrossings, which is skipped for this style), so this needs no steepening of the crossing angle.
+
+    private static RoadBridgeInfo? PlanRoadBridge(TrackRoad r, Crossing c, RaceTrackOptions o, RaceTrackReport report)
+    {
+        double Bend(int i) { double sum = 0; var w = (int)(12 / o.Spacing); for (var k = -w; k <= w; k++) sum += Math.Abs(r.Kappa[At(r, i + k)]); return sum; }
+        var (over, under) = Bend(c.I) <= Bend(c.J) ? (c.I, c.J) : (c.J, c.I);
+        var angleDeg = Math.Max(c.Angle, 12);                                                 // never let a near-parallel crossing blow the deck length up
+        var underWidthCells = r.VergeHalf * 2 + o.RoadBridgeMargin * 2;
+        var coreHalfCells = Math.Clamp(underWidthCells / (2 * Math.Sin(angleDeg * Math.PI / 180)), 10, 60);
+        var rampCells = o.RoadBridgeRampLength;
+        var s0 = r.S[over];
+        var deckHeight = r.H[under] + o.RoadBridgeClearance;
+
+        double Weight(double ds)
+        {
+            var ad = Math.Abs(ds);
+            if (ad <= coreHalfCells) return 1;
+            if (ad >= coreHalfCells + rampCells) return 0;
+            var t = (ad - coreHalfCells) / rampCells; return 1 - t * t * (3 - 2 * t);
+        }
+        var n = r.Count;
+        for (var k = 0; k < n; k++)
+        {
+            var ds = r.S[k] - s0;
+            if (r.Closed) { if (ds > r.Length / 2) ds -= r.Length; else if (ds < -r.Length / 2) ds += r.Length; }
+            var w = Weight(ds);
+            if (w <= 0) continue;
+            r.H[k] = r.H[k] * (1 - w) + deckHeight * w;
+            if (Math.Abs(ds) <= coreHalfCells) r.Deck[k] = true;
+        }
+        LimitGrade(r, o);
+        var widthUnits = r.VergeHalf * 2 * 512;
+        var lengthUnits = coreHalfCells * 2 * 512;
+        report.Notes.Add($"road bridge: the straighter road climbs onto a deck over the other -- {coreHalfCells * 2:0} cells of flat deck ({widthUnits / 512:0.#} cells wide) plus {rampCells:0} cells of ramp each side, deck height {deckHeight:0} ({o.RoadBridgeClearance:0} above the road it crosses, at {angleDeg:0} degrees)");
+        return new RoadBridgeInfo(r.X[over], r.Z[over], deckHeight, r.Tx[over], r.Tz[over], widthUnits, lengthUnits, under);
     }
 
     // ---------------------------------------------------------------------------------------------------------------------
@@ -672,6 +733,7 @@ internal static class RaceTrackBuilder
             double keep = 1, num = 0, den = 0;
             foreach (var hit in hits)
             {
+                if (hit.Deck) continue;   // the deck (decor) carries the road here; the ground underneath is the other road's, untouched
                 var r = roads[hit.Road];
                 var verge = hit.Bridge ? r.CurbHalf + 0.5 : r.VergeHalf;
                 var blend = hit.Bridge ? 1.2 : r.Blend;
@@ -718,6 +780,7 @@ internal static class RaceTrackBuilder
             {
                 var r = roads[hit.Road]; var d = Math.Abs(hit.Lat);
                 Kind k;
+                if (hit.Deck) continue;   // the deck's own polygons draw the road here, not the ground
                 if (report.Jump is { } jump && hit.Road == 0 && hit.S > jump.GapS0 && hit.S < jump.GapS1) { if (d <= r.VergeHalf) k = Kind.Sand; else continue; }
                 else if (d <= r.AsphaltHalf) k = Kind.Asphalt;
                 else if (d <= r.CurbHalf) k = (int)Math.Floor(hit.S / 1.6) % 2 == 0 ? Kind.RedCurb : Kind.WhiteCurb;
@@ -886,6 +949,48 @@ internal static class RaceTrackBuilder
         }
         if (options.Crossing == CrossingStyle.Viaduct)
             foreach (var c in crossings) PlaceBridge(island, c.X, c.Z, main.H[c.I], c.BisX, c.BisZ, report);
+        if (options.Crossing == CrossingStyle.Bridge && report.RoadBridge is { } rb) PlaceDeck(island, rb, options, report);
+    }
+
+    // The flat deck of a road-over-road bridge: a row of RaceTrackDeckBody tiles, each as wide as the upper road and a few
+    // cells long, laid end to end along the bridge's own heading so the whole flat core (RoadBridgeInfo.Length) is covered.
+    // RaceTrackDeckBody's mesh has local X = width (across the road) and local Z = length (along it), top surface at local Y 0.
+    // The same rotation convention as PlaceGantry (whose body is authored the same way: local X the piece's long/across axis):
+    // ex,ez is the world direction local +X should point along (here, across the bridge's own heading), theta = atan2(-ez, ex)
+    // is the Beta the engine rotates the mesh by, and a local (lx, lz) offset lands at world (lx*cos + lz*sin, -lx*sin + lz*cos).
+    private static void PlaceDeck(IslandFile island, RoadBridgeInfo rb, RaceTrackOptions o, RaceTrackReport report)
+    {
+        if (o.DeckBodyIndex < 0) { report.Notes.Add("WARNING: no deck body was prepared (DESERT.OBL wasn't extended) -- the bridge has no physical deck."); return; }
+        var ex = -rb.DirZ; var ez = rb.DirX;                              // across the bridge (local +X)
+        var theta = Math.Atan2(-ez, ex);
+        var beta = (int)Math.Round(theta / (2 * Math.PI) * 4096); beta = ((beta % 4096) + 4096) % 4096;
+        var cos = Math.Cos(theta); var sin = Math.Sin(theta);
+        var tileLen = rb.Length / Math.Max(1, (int)Math.Round(rb.Length / (o.RoadBridgeTileLength * 512)));
+        var tiles = Math.Max(1, (int)Math.Round(rb.Length / tileLen));
+        var y = (int)Math.Round(rb.Height);
+        var halfLenTotal = rb.Length / 2; var halfWidth = rb.Width / 2;
+        var placed = 0;
+        (double X, double Z) ToWorld(double lx, double lz) => (lx * cos + lz * sin, -lx * sin + lz * cos);
+        for (var k = 0; k < tiles; k++)
+        {
+            var alongLocal = -halfLenTotal + tileLen * (k + 0.5);           // local Z of this tile's centre (along the road)
+            var (ox, oz) = ToWorld(0, alongLocal);
+            var wx = rb.X * 512 + ox; var wz = rb.Z * 512 + oz;
+            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) continue;
+            var d = IslandDecors.Blank(o.DeckBodyIndex, at.X, y, at.Z, beta);
+            double minX = 1e18, maxX = -1e18, minZ = 1e18, maxZ = -1e18;
+            foreach (var (lx, lz) in new[] { (-halfWidth, -tileLen / 2), (halfWidth, -tileLen / 2), (-halfWidth, tileLen / 2), (halfWidth, tileLen / 2) })
+            {
+                var (rx, rz) = ToWorld(lx, lz);
+                minX = Math.Min(minX, rx); maxX = Math.Max(maxX, rx); minZ = Math.Min(minZ, rz); maxZ = Math.Max(maxZ, rz);
+            }
+            d.XMin = at.X + (int)Math.Floor(minX); d.XMax = at.X + (int)Math.Ceiling(maxX);
+            d.ZMin = at.Z + (int)Math.Floor(minZ); d.ZMax = at.Z + (int)Math.Ceiling(maxZ);
+            d.YMin = y - 300; d.YMax = y;
+            at.Cube.Decors.Add(d);
+            placed++;
+        }
+        report.Placed.Add($"road bridge: {placed} deck tiles ({rb.Width / 512:0.#} x {rb.Length / 512:0.#} cells) at cell ({rb.X:0.0}, {rb.Z:0.0}), deck height {y}, turn {beta}, over road {rb.UnderRoad}");
     }
 
     // The retail overpass of the Desert track (bodies 68 the arched deck, 69 and 70 the abutments), boxes relative to the piece's own origin.

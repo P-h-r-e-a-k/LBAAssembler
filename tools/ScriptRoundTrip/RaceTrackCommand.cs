@@ -16,6 +16,8 @@ internal static class RaceTrackCommand
         var island = IslandFile.Load(Path.Combine(game, "DESERT.ILE"));
         var options = new RaceTrackOptions();
         options.Keep.Add((0, 195, 62, 252));
+        if (options.Crossing == CrossingStyle.Bridge)
+            options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(game, "DESERT.OBL"), options.VergeHalfWidth * 2 * 512, options.RoadBridgeTileLength * 512);
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var report = RaceTrackBuilder.Build(island, plan, options);
         island.Save(Path.Combine(game, "DESERT.ILE"));
@@ -31,6 +33,7 @@ internal static class RaceTrackCommand
         foreach (var b in report.BridgeCoords) Console.WriteLine($"  bridge from ({b.X0:0.0}, {b.Z0:0.0}) to ({b.X1:0.0}, {b.Z1:0.0})");
         foreach (var l in report.StartLine) Console.WriteLine($"  start line at cell ({l.X:0.0}, {l.Z:0.0}), height {l.Y:0}, heading ({l.DirX:0.00}, {l.DirZ:0.00})");
         foreach (var l in report.Placed) Console.WriteLine("  placed " + l);
+        if (report.RoadBridge is { } rb) Console.WriteLine($"  road bridge: cell ({rb.X:0.0},{rb.Z:0.0}) dir ({rb.DirX:0.00},{rb.DirZ:0.00}) height {rb.Height:0} size {rb.Width / 512:0.#}x{rb.Length / 512:0.#} cells, deck body {options.DeckBodyIndex}");
         if (args.Length > 4)
         {
             var dir = game;
@@ -121,5 +124,22 @@ internal static class RaceTrackCommand
             return 0;
         }
         return 1;
+    }
+
+    // bodyname <game> <index...>: BODY2.HQD names for a list of body indices.
+    public static int BodyName(string[] args)
+    {
+        var names = HqdDescriptions.Load("BODY2.HQD", 0).Names;
+        foreach (var a in args.Skip(1)) { var i=int.Parse(a); Console.WriteLine($"{i}: {(i+1<names.Count?names[i+1]:"?")}"); }
+        return 0;
+    }
+
+    // scenenames <game>: every SCENE2.HQD name containing a word.
+    public static int SceneNames(string[] args)
+    {
+        var names = HqdDescriptions.Load("SCENE2.HQD", 0).Names;
+        var word = args[1].ToLowerInvariant();
+        for (var i=0;i<names.Count;i++) if (names[i] is { } n && n.ToLowerInvariant().Contains(word)) Console.WriteLine($"{i-1}: {n}");
+        return 0;
     }
 }

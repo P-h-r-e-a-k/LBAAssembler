@@ -37,6 +37,7 @@ internal sealed class RaceTrackWindow : Window
         ResizeMode = ResizeMode.CanResize;
         SetResourceReference(BackgroundProperty, "ThemeWindowBrush");
         SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        crossing.Items.Add(new ComboBoxItem { Content = "A physical bridge (a walkable deck, like Citadel Island's rope bridge)", Tag = CrossingStyle.Bridge });
         crossing.Items.Add(new ComboBoxItem { Content = "A jump over the junction (the retail Desert island car jump)", Tag = CrossingStyle.Jump });
         crossing.Items.Add(new ComboBoxItem { Content = "A viaduct of arches over a level junction", Tag = CrossingStyle.Viaduct });
         crossing.Items.Add(new ComboBoxItem { Content = "A level junction, nothing over it", Tag = CrossingStyle.Level });
@@ -66,10 +67,10 @@ internal sealed class RaceTrackWindow : Window
         {
             TextWrapping = TextWrapping.Wrap,
             Text = "Builds the proposed race track on the White Leaf Desert island: the ground under the road is levelled and banked, the road is painted with the retail " +
-                   "track's asphalt, red and white curbs, arrows and red/gold hatching, with a pit lane, a start gantry and a bridge over the harbour. Where the lap crosses itself the " +
-                   "buggy jumps, the way it does at the island's own car jump.\n\n" +
-                   "It changes DESERT.ILE and SCENE.HQR in the LBA2 game folder. The first time, the originals are kept beside them as DESERT.ILE" + RaceTrackService.BackupSuffix +
-                   " and SCENE.HQR" + RaceTrackService.BackupSuffix + "; every build starts from those copies, and the button below puts them back. " +
+                   "track's asphalt, red and white curbs, arrows and red/gold hatching, with a pit lane, a start gantry and a bridge over the harbour. Where the lap crosses itself, " +
+                   "the choice below decides what carries the one road over the other.\n\n" +
+                   "It changes DESERT.ILE, DESERT.OBL and SCENE.HQR in the LBA2 game folder. The first time, the originals are kept beside them (as *" + RaceTrackService.BackupSuffix +
+                   "); every build starts from those copies, and the button below puts them back. " +
                    "Use Tools > Test edits first to try it on a scratch copy of the game folder.",
         };
         intro.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
@@ -127,7 +128,7 @@ internal sealed class RaceTrackWindow : Window
 
     private RaceTrackOptions Options() => new()
     {
-        Crossing = crossing.SelectedItem is ComboBoxItem { Tag: CrossingStyle style } ? style : CrossingStyle.Jump,
+        Crossing = crossing.SelectedItem is ComboBoxItem { Tag: CrossingStyle style } ? style : CrossingStyle.Bridge,
         RemoveActors = removeActors.IsChecked == true,
         BuggyAlways = buggyAlways.IsChecked == true,
         StartAtLine = startAtLine.IsChecked == true,
@@ -144,7 +145,7 @@ internal sealed class RaceTrackWindow : Window
             return;
         }
         var answer = MessageBox.Show(this,
-            $"Build the race track into\n{gameRoot}\n\nDESERT.ILE and SCENE.HQR will change. " +
+            $"Build the race track into\n{gameRoot}\n\nDESERT.ILE, DESERT.OBL and SCENE.HQR will change. " +
             (RaceTrackService.HasBackups(gameRoot) ? "The originals kept by the first build are used again." : "The originals are kept as *" + RaceTrackService.BackupSuffix + "."),
             Title, MessageBoxButton.OKCancel, MessageBoxImage.Question);
         if (answer != MessageBoxResult.OK) return;
@@ -162,7 +163,7 @@ internal sealed class RaceTrackWindow : Window
 
     private void Restore()
     {
-        var answer = MessageBox.Show(this, "Put the original DESERT.ILE and SCENE.HQR back? Anything else changed in them since the track was built is lost.", Title, MessageBoxButton.OKCancel, MessageBoxImage.Question);
+        var answer = MessageBox.Show(this, "Put the original DESERT.ILE, DESERT.OBL and SCENE.HQR back? Anything else changed in them since the track was built is lost.", Title, MessageBoxButton.OKCancel, MessageBoxImage.Question);
         if (answer != MessageBoxResult.OK) return;
         try
         {

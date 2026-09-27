@@ -54,6 +54,8 @@ internal static class Program
             "initbuggy" => RaceTrackCommand.InitBuggy(args),
             "scripttext" => RaceTrackCommand.ScriptText(args),
             "driveprep" => RaceTrackCommand.DrivePrep(args),
+            "bodyname" => RaceTrackCommand.BodyName(args),
+            "scenenames" => RaceTrackCommand.SceneNames(args),
             "footprints" => IslandFootprintStudy.Run(args),
             "islandrender" => IslandRenderCommand.Run(args),
             "patches" => PatchStudy.Run(),
