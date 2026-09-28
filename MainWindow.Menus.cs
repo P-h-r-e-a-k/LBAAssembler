@@ -183,7 +183,7 @@ public partial class MainWindow
             SceneCombo.SelectedItem = null;                        // so choosing the same scene again shows it again
             SceneCombo.SelectedItem = option;
         }
-        if (wasPlaying) StartPlay(GameKind.Lba2, askRaceCar: false);
+        if (wasPlaying) StartPlay(GameKind.Lba2, askRaceCar: false, raceStart: false);
     }
 
     // ---- LBA1 ------------------------------------------------------------------------------------------------------------------------------

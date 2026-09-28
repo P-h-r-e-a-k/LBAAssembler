@@ -23,6 +23,28 @@ internal static class RaceTrackJumpAnim
     public static double TimeScale(double forward) => 1 + (forward - 1) * 0.5;
     public static double Distance(double forward) => RetailForward * forward / 512;
     public static double EndDrop(double forward) => RetailEndDrop * ClimbScale(forward);
+    // The retail flight's keyframes: time (ms), the root's step forward and up (ANIM.HQR 51).
+    private static readonly (int Ms, int Forward, int Up)[] RetailSteps =
+    {
+        (100, 440, 0), (100, 564, 526), (100, 564, 131), (100, 564, 131), (100, 564, 263), (100, 564, 190), (100, 564, 190), (80, 450, 190), (100, 564, 190),
+        (100, 564, 55), (100, 564, 55), (100, 564, -244), (100, 564, -122), (100, 564, -122), (100, 333, -332), (100, 333, -506), (100, 333, -615), (100, 333, -181),
+    };
+
+    // How long a flight `forward` times the retail one takes, and how high above its start it is `cells` along (the steps are covered
+    // evenly over each keyframe).
+    public static double Seconds(double forward) => RetailSteps.Sum(f => f.Ms) * TimeScale(forward) / 1000;
+
+    public static double Climb(double forward, double cells)
+    {
+        var at = cells * 512 / forward; double gone = 0, up = 0;
+        foreach (var (_, f, u) in RetailSteps)
+        {
+            if (gone + f >= at) return (up + u * (at - gone) / f) * ClimbScale(forward);
+            gone += f; up += u;
+        }
+        return up * ClimbScale(forward);
+    }
+
     // The scale that flies `cells` (never shorter than the retail flight).
     public static double ForwardFor(double cells) => Math.Max(1, Math.Ceiling(cells * 512 / RetailForward * 100) / 100);
 

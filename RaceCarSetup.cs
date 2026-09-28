@@ -29,6 +29,13 @@ public sealed class RaceCarSetup
     public bool ShowDisplay { get; set; } = true;
     // Show the setup before each race-track play (Play on a folder with a race track).
     public bool AskBeforePlay { get; set; } = true;
+    // Race the opponent (the retail track's racer, driven round the lap by the race-track mode), and how fast it goes (percent of its
+    // line's speeds: a top speed of 31 km/h, slower in bends).
+    public bool Opponent { get; set; } = true;
+    public int OpponentPace { get; set; } = 100;
+    // Play starts on the start/finish straight, Twinsen beside his car, whatever scene is open (and with the zones and routes the editor
+    // draws over the game hidden).
+    public bool StartAtLine { get; set; } = true;
 
     public RaceCarSetup Clone()
     {
@@ -52,7 +59,7 @@ public sealed class RaceCarSetup
     public int TopKmh(int gear) => gear < GearTopKmh.Count ? GearTopKmh[gear] : GearTopKmh.LastOrDefault(27);
 
     // The engine's car setup file (RACEMOD.CPP's format), with the start line from the game folder's RACETRACK.JSON when it has one.
-    internal string EngineFile(RaceTrackService.TrackInfo? track)
+    internal string EngineFile(RaceTrackService.TrackInfo? track, string? pathFile = null)
     {
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
         var gears = Math.Clamp(Gears, 1, MaxGears);
@@ -67,8 +74,24 @@ public sealed class RaceCarSetup
         text.Append($"automatic={(Automatic ? 1 : 0)}\n");
         text.Append($"hud={(ShowDisplay ? 1 : 0)}\n");
         if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}\n");
+        foreach (var c in track?.Checkpoints ?? new()) text.Append($"checkpoint={c.CubeX} {c.CubeZ} {c.X0} {c.Z0} {c.X1} {c.Z1} {c.DirX} {c.DirZ}\n");
+        if (Opponent && pathFile is not null && track?.Path is { Count: > 0 } && track.Opponent is { Count: > 0 } actors)
+        {
+            text.Append($"opponent_path={pathFile}\nopponent_grid={track.PathGrid}\nopponent_pace={Math.Clamp(OpponentPace, 10, 300)}\n");
+            foreach (var (scene, actor) in actors) text.Append($"opponent_actor={scene} {actor}\n");
+        }
         return text.ToString();
     }
 
-    internal void WriteEngineFile(string path, RaceTrackService.TrackInfo? track) => File.WriteAllText(path, EngineFile(track));
+    // The engine's car setup file, and beside it the opponent's line (racepath.txt) when it races one.
+    internal void WriteEngineFile(string path, RaceTrackService.TrackInfo? track)
+    {
+        string? pathFile = null;
+        if (Opponent && track?.Path is { Count: > 0 } line)
+        {
+            pathFile = Path.Combine(Path.GetDirectoryName(path) ?? ".", "racepath.txt");
+            File.WriteAllLines(pathFile, line.Select(p => string.Join(' ', p)));
+        }
+        File.WriteAllText(path, EngineFile(track, pathFile));
+    }
 }

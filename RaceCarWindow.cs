@@ -15,6 +15,8 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox automatic = new() { Content = "Automatic gearbox (the gears change by themselves)" };
     private readonly CheckBox display = new() { Content = "Show the gear, the speed and the lap times on screen" };
     private readonly CheckBox askBeforePlay = new() { Content = "Show this before each race-track play" };
+    private readonly CheckBox opponent = new() { Content = "Race an opponent: the original track's racer, round your lap" };
+    private readonly CheckBox startAtLine = new() { Content = "Start beside the car on the start/finish straight, with the editor's markings hidden" };
     private readonly List<Action> refresh = new();
     private bool updating;
 
@@ -30,7 +32,8 @@ internal sealed class RaceCarWindow : Window
         var root = new StackPanel { Margin = new Thickness(16) };
         root.Children.Add(Text("How the buggy drives when you play a game folder that has a race track built. X shifts up a gear and Z down (unless the gearbox " +
                                "is automatic); each gear has its own top speed, and a low gear pulls harder than a high one. Speeds are as the game's display shows " +
-                               "them, a cell taken as a metre: the original buggy tops out at 27 km/h. Other game folders play the game as it is."));
+                               "them, a cell taken as a metre: the original buggy tops out at 27 km/h. A lap counts once you have crossed every checkpoint round the " +
+                               "track; the opponent sets off when you do. Other game folders play the game as it is."));
 
         root.Children.Add(Section("Start from"));
         foreach (var p in RaceCarSetup.Presets) preset.Items.Add(new ComboBoxItem { Content = p.Name, Tag = p });
@@ -69,6 +72,16 @@ internal sealed class RaceCarWindow : Window
         root.Children.Add(SliderRow("Steering", 50, 200, 5, " %", () => setup.SteeringPercent, v => setup.SteeringPercent = (int)v).Row);
         root.Children.Add(SliderRow("Top speed backwards", 5, 40, 1, " km/h", () => setup.ReverseKmh, v => setup.ReverseKmh = (int)v).Row);
 
+        root.Children.Add(Section("Race"));
+        opponent.Checked += (_, _) => setup.Opponent = true;
+        opponent.Unchecked += (_, _) => setup.Opponent = false;
+        root.Children.Add(opponent);
+        root.Children.Add(SliderRow("The opponent's pace", 50, 150, 5, " %", () => setup.OpponentPace, v => setup.OpponentPace = (int)v).Row);
+        startAtLine.Checked += (_, _) => setup.StartAtLine = true;
+        startAtLine.Unchecked += (_, _) => setup.StartAtLine = false;
+        startAtLine.Margin = new Thickness(0, 4, 0, 0);
+        root.Children.Add(startAtLine);
+
         root.Children.Add(Section("On screen"));
         display.Checked += (_, _) => setup.ShowDisplay = true;
         display.Unchecked += (_, _) => setup.ShowDisplay = false;
@@ -77,7 +90,7 @@ internal sealed class RaceCarWindow : Window
         root.Children.Add(display);
         askBeforePlay.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(askBeforePlay);
-        foreach (var c in new Control[] { automatic, display, askBeforePlay }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, startAtLine }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         var ok = new Button { Content = forPlay ? "Play" : "Save", Padding = new Thickness(18, 5, 18, 5), IsDefault = true, Margin = new Thickness(0, 0, 10, 0) };
         var cancel = new Button { Content = "Cancel", Padding = new Thickness(14, 5, 14, 5), IsCancel = true };
@@ -96,6 +109,8 @@ internal sealed class RaceCarWindow : Window
         automatic.IsChecked = setup.Automatic;
         display.IsChecked = setup.ShowDisplay;
         askBeforePlay.IsChecked = setup.AskBeforePlay;
+        opponent.IsChecked = setup.Opponent;
+        startAtLine.IsChecked = setup.StartAtLine;
         foreach (var r in refresh) r();
         ShowGearRows();
         preset.SelectedIndex = MatchingPreset();

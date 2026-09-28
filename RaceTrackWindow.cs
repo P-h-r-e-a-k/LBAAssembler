@@ -75,7 +75,8 @@ internal sealed class RaceTrackWindow : Window
                    "the choice below decides what carries the one road over the other.\n\n" +
                    "It changes DESERT.ILE, DESERT.OBL and SCENE.HQR in the LBA2 game folder (and, for a jump, ANIM.HQR and RESS.HQR: its flight). The first time, the originals are kept beside them (as *" + RaceTrackService.BackupSuffix +
                    "); every build starts from those copies, and the button below puts them back. When you play a folder with a race track built, the game " +
-                   "runs in its race-track mode: the car setup below (gears on X and Z, brakes, steering), the car staying level on the bridge, and the gear, speed and lap times on screen. " +
+                   "runs in its race-track mode: the car setup below (gears on X and Z, brakes, steering), the car staying level on the bridge, checkpoints round the lap, " +
+                   "an opponent (the retail track's racer), and the gear, speed, lap times and position on screen. " +
                    "Use Tools > Test edits first to try it on a scratch copy of the game folder.",
         };
         intro.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");

@@ -5367,6 +5367,7 @@ void AffScene(S32 flagflip) {
        this frame draws with, and turning the filter on must not let a frame
        sample tables that were never built. */
     Poly_EnsureBlendLUT();
+    { extern void RaceMod_Frame(void); RaceMod_Frame(); }                /* a race-track mod's opponent, put where it has got to (RACEMOD.CPP) */
 
     S32 n, c, cmpt;
     S32 dx, dy;

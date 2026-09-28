@@ -29,7 +29,7 @@ internal static class RaceTrackCommand
         island.Save(Path.Combine(game, "DESERT.ILE"));
         extra.AddRange(RaceTrackService.Finish(game, report));
         var scenes = RaceTrackScenes.Apply(game, report, options);
-        RaceTrackService.WriteInfo(game, report, options);
+        RaceTrackService.WriteInfo(game, report, options, scenes);
         if (Environment.GetEnvironmentVariable("RT_DUMP") is { Length: > 0 } dump)
             File.WriteAllLines(dump, report.LapX.Select((x, i) => FormattableString.Invariant($"{x:0.###},{report.LapZ[i]:0.###}")));
         foreach (var l in extra) Console.WriteLine("  " + l);
@@ -60,6 +60,17 @@ internal static class RaceTrackCommand
 
     // herostart <game folder> <cell x> <cell z> [turn]: puts Twinsen's start in the scene of the cube that holds an island cell, on the ground there
     // (for looking at a place of the track in the game).
+    // racecarfile <game folder> <out file> [pace]: the engine's car setup file Play would write for that folder (the default car, the
+    // folder's RACETRACK.JSON: start line, checkpoints, the opponent's line beside it as racepath.txt), for headless tests.
+    public static int RaceCarFile(string[] args)
+    {
+        var setup = new LBAAssembler.RaceCarSetup();
+        if (args.Length > 3) setup.OpponentPace = int.Parse(args[3]);
+        setup.WriteEngineFile(Path.GetFullPath(args[2]), RaceTrackService.ReadInfo(args[1]));
+        Console.WriteLine($"{args[2]}: {File.ReadAllLines(args[2]).Length} lines");
+        return 0;
+    }
+
     public static int HeroStart(string[] args)
     {
         var game = args[1]; var cellX = double.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture); var cellZ = double.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture);

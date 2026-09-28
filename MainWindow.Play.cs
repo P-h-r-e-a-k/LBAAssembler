@@ -61,7 +61,7 @@ public partial class MainWindow
     // Play pressed: the scene that is open is shown with Twinsen on it to be put where the game should start (unless that is switched
     // off), then the game starts. On an LBA2 folder with a race track built the race car's setup comes first (unless that is switched off,
     // and not when the game is only restarted).
-    private void StartPlay(GameKind game, bool askRaceCar = true)
+    private void StartPlay(GameKind game, bool askRaceCar = true, bool raceStart = true)
     {
         if (playing) StopPlay();
         if (placing) EndPlacement();
@@ -72,9 +72,22 @@ public partial class MainWindow
             if (currentGame != game) return;
         }
         if (game == GameKind.Lba2 && askRaceCar && !AskRaceCar()) return;
+        // a race track starts on its start/finish straight, Twinsen beside his car (the build puts him there in that scene)
+        if (game == GameKind.Lba2 && raceStart && RaceStartScene() is { } start) { LaunchPlay(game, null, start); return; }
         if (PlacementCheck.IsChecked == true && (game == GameKind.Lba2 ? BeginLba2Placement() : BeginLba1Placement())) return;
         LaunchPlay(game, null, null);
     }
+
+    // The scene a race-track play starts in, when the LBA2 folder has a race track and the car setup says to start on its straight.
+    private int? RaceStartScene()
+    {
+        if (!EditorSettings.Current.RaceCar.StartAtLine || !Terrain.RaceTrackService.HasBackups(gameRoot)) return null;
+        return Terrain.RaceTrackService.ReadInfo(gameRoot) is { StartScene: >= 0 } info ? info.StartScene : null;
+    }
+
+    // Set when a race-track play starts with the zones and routes the editor draws over the game hidden; the first change of those
+    // switches shows them as they are set.
+    private bool raceOverlayHidden;
 
     // The race car's setup before a race-track play: false when it is cancelled.
     private bool AskRaceCar()
@@ -151,6 +164,7 @@ public partial class MainWindow
     private void SyncPlayOverlay()
     {
         if (!playing) return;
+        raceOverlayHidden = false;
         if (playingGame == GameKind.Lba1) { lba1Play?.RefreshZones(); return; }
         if (Lba2Play.UserDirectory(out _) is { } user) Lba2Play.WriteOverlay(user, ZoneMask(), pathsVisible);
     }
@@ -202,6 +216,8 @@ public partial class MainWindow
         options.ListenPort = Lba2BreakpointsPort;
         options.FallbackMusic = ResolveLba2MusicFallback(scene);
         options.RaceCar = Terrain.RaceTrackService.HasBackups(gameRoot) ? EditorSettings.Current.RaceCar.Clone() : null;
+        raceOverlayHidden = options.RaceCar is { StartAtLine: true };
+        if (raceOverlayHidden) { options.ZoneMask = 0; options.Paths = false; }
 
         var label = allSceneEntries.FirstOrDefault(s => s.Option.Index == scene)?.Option.Display ?? $"scene {scene}";
         var host = new EmbeddedGameHost();

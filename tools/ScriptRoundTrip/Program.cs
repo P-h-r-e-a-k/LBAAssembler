@@ -51,6 +51,7 @@ internal static class Program
             "racetrack" => RaceTrackProbe.Run(args),
             "buildtrack" => RaceTrackCommand.Run(args),
             "herostart" => RaceTrackCommand.HeroStart(args),
+            "racecarfile" => RaceTrackCommand.RaceCarFile(args),
             "initbuggy" => RaceTrackCommand.InitBuggy(args),
             "scripttext" => RaceTrackCommand.ScriptText(args),
             "driveprep" => RaceTrackCommand.DrivePrep(args),

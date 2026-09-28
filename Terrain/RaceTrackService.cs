@@ -20,7 +20,12 @@ internal static class RaceTrackService
     // Where a lap is counted, in the terms the engine uses: the island cube the line is in, its ends in that cube's own world units, the way
     // a lap crosses it.
     public sealed record StartLineInfo(int CubeX, int CubeZ, int X0, int Z0, int X1, int Z1, int DirX, int DirZ);
-    public sealed record TrackInfo(string Crossing, StartLineInfo? StartLine);
+    // Checkpoints: the same kind of lines, in the order a lap crosses them. Path: the opponent's line from the start line round the lap,
+    // each point [x, z, y, speed] in world units (x and z counted from the island's corner, 32768 to a cube). PathGrid: how many points
+    // before the start line the opponent starts. Opponent: scene -> the index of that scene's copy of the racer. StartScene: the scene
+    // the start line is in.
+    public sealed record TrackInfo(string Crossing, StartLineInfo? StartLine, List<StartLineInfo>? Checkpoints = null, List<int[]>? Path = null,
+        int PathGrid = 0, Dictionary<int, int>? Opponent = null, int StartScene = -1);
 
     public static bool HasBackups(string gameDirectory) => Files.All(f => File.Exists(Path.Combine(gameDirectory, f + BackupSuffix)));
 
@@ -51,7 +56,7 @@ internal static class RaceTrackService
             island.Save(Path.Combine(gameDirectory, "DESERT.ILE"));
             extra.AddRange(Finish(gameDirectory, report));
             var scenes = RaceTrackScenes.Apply(gameDirectory, report, options);
-            WriteInfo(gameDirectory, report, options);
+            WriteInfo(gameDirectory, report, options, scenes);
 
             log.Add($"The lap is {report.Length:0} cells ({report.Length * 512:0} game units) long: {report.Vertices} ground points levelled, {report.Cells} cells painted, {report.DecorsRemoved + report.SolidDecorsRemoved} decor objects taken off the road.");
             log.AddRange(extra);
@@ -90,16 +95,18 @@ internal static class RaceTrackService
     }
 
     // RACETRACK.JSON: the crossing style and the start line, for Play.
-    public static void WriteInfo(string gameDirectory, RaceTrackReport report, RaceTrackOptions options)
+    public static void WriteInfo(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes)
     {
-        StartLineInfo? line = null;
-        if (report.LapLine is { } l)
+        static StartLineInfo Line((double X0, double Z0, double X1, double Z1, double DirX, double DirZ) l)
         {
             var cx = (int)Math.Floor((l.X0 + l.X1) / 2 / 64); var cz = (int)Math.Floor((l.Z0 + l.Z1) / 2 / 64);
             int Local(double cells, int cube) => (int)Math.Round((cells - cube * 64) * 512);
-            line = new StartLineInfo(cx, cz, Local(l.X0, cx), Local(l.Z0, cz), Local(l.X1, cx), Local(l.Z1, cz), (int)Math.Round(l.DirX * 1000), (int)Math.Round(l.DirZ * 1000));
+            return new StartLineInfo(cx, cz, Local(l.X0, cx), Local(l.Z0, cz), Local(l.X1, cx), Local(l.Z1, cz), (int)Math.Round(l.DirX * 1000), (int)Math.Round(l.DirZ * 1000));
         }
-        var info = new TrackInfo(options.Crossing.ToString(), line);
+        var line = report.LapLine is { } l ? Line(l) : null;
+        var checkpoints = report.Checkpoints.Select(Line).ToList();
+        var path = report.RacePath.Select(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512), (int)Math.Round(p.Y), (int)Math.Round(p.Speed) }).ToList();
+        var info = new TrackInfo(options.Crossing.ToString(), line, checkpoints, path.Count > 0 ? path : null, 4, scenes.Opponent.Count > 0 ? scenes.Opponent : null, scenes.StartScene);
         File.WriteAllText(Path.Combine(gameDirectory, InfoFile), JsonSerializer.Serialize(info, new JsonSerializerOptions { WriteIndented = true }));
     }
 

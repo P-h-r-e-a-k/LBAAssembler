@@ -11,7 +11,17 @@ internal static class RaceTrackScenes
     public const int BuggyEntity = 152;
     public const int ZoeEntity = 14;
 
-    public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved);
+    // Opponent: for each scene, the index of its copy of the racer's car (the race-track mode drives whichever the player's scene has);
+    // StartScene: the scene the start line is in.
+    public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, Dictionary<int, int> Opponent, int StartScene);
+
+    // The retail track's racer (scene 57, actor 4: "Car with racer", which drives the retail lap by its route points), copied into every
+    // outside scene as the opponent the race-track mode drives round the lap. The copies neither collide, fall, check zones nor react to
+    // hits (NO_CHOC), and are drawn with the depth buffer like the car (OBJ_ZBUFFER, NO_PRE_CLIP); their scripts are a single END. Each
+    // waits 20000 below the ground, except the one on the grid beside the player's car: without the race-track mode (the retail engine)
+    // that is all there is, a parked car.
+    public const int RacerEntity = 157, RacerScene = 57;
+    private const uint OpponentFlags = 0x1A0000;
 
     public const int DesertIsland = 2;
 
@@ -25,6 +35,11 @@ internal static class RaceTrackScenes
         var log = new List<string>();
         var changes = new List<SceneChange>();
         var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0;
+        var opponent = new Dictionary<int, int>(); var startScene = -1;
+        SceneActorModel? racer = null;
+        if (options.AddOpponent)
+            try { racer = store.Load(RacerScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == RacerEntity)?.Clone(); }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { log.Add($"no opponent: scene {RacerScene} could not be read ({e.Message})"); }
         for (var scene = 0; scene < store.SceneCount; scene++)
         {
             if (!store.SceneExists(scene)) continue;
@@ -34,6 +49,7 @@ internal static class RaceTrackScenes
             // the demo scenes are copies the game plays as films; they are left as they are
             if (scene >= 190) { log.Add($"scene {scene}: demo scene, left alone"); continue; }
             var count = 0;
+            (int X, int Z, int Beta)? grid = null;
             if (options.RemoveActors)
             {
                 // slot 1 of every scene is the engine's own placeholder for Zoe (entity 14, no body, parked at 0,0,0); the engine treats that slot
@@ -82,7 +98,13 @@ internal static class RaceTrackScenes
                     var buggy = model.Actors.Skip(1).FirstOrDefault(a => a.Entity == BuggyEntity);
                     var buggyIndex = buggy is null ? -1 : model.Actors.IndexOf(buggy);
                     if (buggy is not null) { buggy.X = At(4, 0, false); buggy.Z = At(4, 0, true); buggy.Y = Ground(buggy.X, buggy.Z); buggy.Beta = beta; }
-                    model.Hero.X = At(7, 3.2, false); model.Hero.Z = At(7, 3.2, true); model.Hero.Y = Ground(model.Hero.X, model.Hero.Z) + 100; model.Hero.Beta = beta;
+                    // Twinsen right behind his car: he comes into the scene facing the way the lap runs (the scene's start keeps no
+                    // facing), so he faces the car and the action key gets him in. (Beside it, 1.3 cells from its middle, the car's box
+                    // pushed him off and he faced away from it.)
+                    model.Hero.X = At(5.8, 0, false); model.Hero.Z = At(5.8, 0, true); model.Hero.Y = Ground(model.Hero.X, model.Hero.Z) + 100;
+                    model.Hero.Beta = beta;
+                    startScene = scene;
+                    grid = (At(4, -2.5, false), At(4, -2.5, true), beta);
                     log.Add($"scene {scene}: Twinsen at ({model.Hero.X},{model.Hero.Y},{model.Hero.Z}) turn {beta}, buggy at ({buggy?.X},{buggy?.Y},{buggy?.Z})");
                     if (buggyIndex > 0 && StartBuggyScript(model, scene, buggyIndex, log) is { } withBuggy) model = withBuggy;
                 }
@@ -113,6 +135,15 @@ internal static class RaceTrackScenes
                     SceneOps.DeleteZone(model, z);
                     if (camera) camerasRemoved++; else zonesRemoved++;
                 }
+            if (racer is not null)
+            {
+                var car = racer.Clone();
+                car.Flags = OpponentFlags; car.Move = 0; car.Anim = 0; car.Life = new byte[] { 0 }; car.Track = new byte[] { 0 };
+                car.X = IslandFile.CubeSize / 2; car.Z = IslandFile.CubeSize / 2; car.Y = -20000; car.Beta = 0;
+                if (grid is { } g) { car.X = g.X; car.Z = g.Z; car.Beta = g.Beta; car.Y = report.GroundAfter is { } ga ? (int)Math.Round(ga(model.CubeX * 64 + g.X / 512.0, model.CubeY * 64 + g.Z / 512.0)) : 0; }
+                opponent[scene] = SceneOps.AddActor(model, car);
+                grid = null;
+            }
             if (jump is not null && model.CubeX == jump.CubeX && model.CubeY == jump.CubeZ)
             {
                 var jumped = AddJump(model, scene, jump, log);
@@ -123,7 +154,8 @@ internal static class RaceTrackScenes
         if (changes.Count > 0) store.SaveMany(changes, allowErrors: true);
         log.Add($"{zonesRemoved} zones on the road removed");
         if (options.RemoveTrackCameras) log.Add($"{camerasRemoved} fixed camera zones along the track removed");
-        return new Result(log, changes.Count, removed);
+        if (opponent.Count > 0) log.Add($"the opponent: a copy of the retail track's racer in {opponent.Count} scenes");
+        return new Result(log, changes.Count, removed, opponent, startScene);
     }
 
     // Where the scripts that stay (Twinsen's own life script, mostly) refer to actors about to be removed -- "if Twinsen is near the
