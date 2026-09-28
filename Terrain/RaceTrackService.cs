@@ -12,8 +12,11 @@ namespace LBAAssembler.Terrain;
 internal static class RaceTrackService
 {
     public const string BackupSuffix = ".before-racetrack";
-    public static readonly string[] Files = { "DESERT.ILE", "SCENE.HQR", "DESERT.OBL" };
+    // What every build changes, whichever island it is on; the island's own ground and decor bodies are added to these (RaceTrackIsland).
+    public static readonly string[] Files = { "SCENE.HQR" };
     public static readonly string[] ExtraFiles = { "ANIM.HQR", "RESS.HQR", "BODY.HQR" };
+    public static string[] FilesFor(RaceTrackIsland island) => Files.Concat(island.IslandFiles).ToArray();
+    public static string[] AllFiles => Files.Concat(ExtraFiles).Concat(RaceTrackIsland.All.SelectMany(i => i.IslandFiles)).Distinct().ToArray();
     public const string InfoFile = "RACETRACK.JSON";
 
     public sealed record BuildResult(bool Ok, string Summary, List<string> Log, RaceTrackReport? Report);
@@ -29,7 +32,7 @@ internal static class RaceTrackService
     // the spots in the pit lane the opponents wait on while the player qualifies.
     public sealed record TrackInfo(string Crossing, StartLineInfo? StartLine, List<StartLineInfo>? Checkpoints = null, List<int[]>? Path = null,
         int PathGrid = 0, Dictionary<int, int>? Opponent = null, int StartScene = -1, List<RivalInfo>? Rivals = null, List<int[]>? Grid = null,
-        List<int[]>? Pits = null);
+        List<int[]>? Pits = null, string Island = "Desert island");
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
@@ -45,12 +48,29 @@ internal static class RaceTrackService
     // RACETRACK.JSON has no grid spots, or there is none. The race-track mode then starts the old way; building it again brings them.
     public static bool IsOutdated(string gameDirectory) => HasBackups(gameDirectory) && ReadInfo(gameDirectory)?.Grid is not { Count: > 0 };
 
-    public static bool HasBackups(string gameDirectory) => Files.All(f => File.Exists(Path.Combine(gameDirectory, f + BackupSuffix)));
+    // A folder has a race track when the files of the island its RACETRACK.JSON names were kept.
+    // A copy the build can then write to: a game folder taken off a disc (or from a reference set kept read-only) has read-only files, and
+    // File.Copy carries that to the copy, so the next build would fail on its own backup.
+    public static void CopyWritable(string from, string to)
+    {
+        File.Copy(from, to, overwrite: true);
+        var info = new FileInfo(to);
+        if (info.IsReadOnly) info.IsReadOnly = false;
+    }
+
+    public static bool HasBackups(string gameDirectory) => BuiltIsland(gameDirectory) is { } island && FilesFor(island).All(f => File.Exists(Path.Combine(gameDirectory, f + BackupSuffix)));
+
+    // The island the folder's track was built on (its RACETRACK.JSON says; a track built before there was a choice is the Desert island's).
+    public static RaceTrackIsland? BuiltIsland(string gameDirectory)
+    {
+        if (!File.Exists(Path.Combine(gameDirectory, InfoFile))) return null;
+        return RaceTrackIsland.ByName(ReadInfo(gameDirectory)?.Island ?? RaceTrackIsland.Desert.Name);
+    }
 
     public static string? Problem(string gameDirectory)
     {
         if (!Directory.Exists(gameDirectory)) return "The LBA2 game folder isn't set. Choose it under File > Settings.";
-        foreach (var f in Files.Concat(ExtraFiles)) if (!File.Exists(Path.Combine(gameDirectory, f))) return $"{f} isn't in the game folder.";
+        foreach (var f in AllFiles) if (!File.Exists(Path.Combine(gameDirectory, f))) return $"{f} isn't in the game folder.";
         return null;
     }
 
@@ -59,19 +79,23 @@ internal static class RaceTrackService
         if (Problem(gameDirectory) is { } problem) return new(false, problem, new(), null);
         try
         {
-            foreach (var f in Files.Concat(ExtraFiles))
+            var files = FilesFor(options.Island).Concat(ExtraFiles).ToArray();
+            foreach (var f in files)
             {
                 var backup = Path.Combine(gameDirectory, f + BackupSuffix);
-                if (!File.Exists(backup)) File.Copy(Path.Combine(gameDirectory, f), backup);
+                if (!File.Exists(backup)) CopyWritable(Path.Combine(gameDirectory, f), backup);
             }
-            // every build starts from the originals
-            foreach (var f in new[] { "DESERT.OBL", "SCENE.HQR" }.Concat(ExtraFiles))
-                File.Copy(Path.Combine(gameDirectory, f + BackupSuffix), Path.Combine(gameDirectory, f), overwrite: true);
+            // every build starts from the originals (the island's own ground is loaded from its copy below)
+            foreach (var f in files.Where(f => f != options.Island.IleFile))
+                CopyWritable(Path.Combine(gameDirectory, f + BackupSuffix), Path.Combine(gameDirectory, f));
             var log = new List<string>();
             var extra = Prepare(gameDirectory, options);
-            var island = IslandFile.Load(Path.Combine(gameDirectory, "DESERT.ILE" + BackupSuffix));
+            var island = IslandFile.Load(Path.Combine(gameDirectory, options.Island.IleFile + BackupSuffix));
+            var themed = RaceTrackTextures.Import(island, options.Island, gameDirectory);
+            options.Theme = themed.Theme;
+            if (themed.Log.Length > 0) extra.Add(themed.Log);
             var report = RaceTrackBuilder.Build(island, plan, options);
-            island.Save(Path.Combine(gameDirectory, "DESERT.ILE"));
+            island.Save(Path.Combine(gameDirectory, options.Island.IleFile));
             extra.AddRange(Finish(gameDirectory, report, options));
             var scenes = RaceTrackScenes.Apply(gameDirectory, report, options);
             WriteInfo(gameDirectory, report, options, scenes);
@@ -82,7 +106,7 @@ internal static class RaceTrackService
             foreach (var placed in report.Placed) log.Add(placed);
             log.AddRange(scenes.Log.Where(l => !l.Contains("actors removed,") && !l.Contains("no longer waits") && !l.Contains("demo scene")));
             log.Add($"{scenes.ActorsRemoved} actors removed from {scenes.ScenesChanged} scenes.");
-            var where = report.StartLine.Count > 0 ? "Scene 67 (Desert island, at the Temple of Bù) starts on the start line." : "";
+            var where = scenes.StartScene >= 0 ? $"Scene {scenes.StartScene} ({options.Island.Name}) starts on the grid." : "";
             return new(true, $"The race track is built. {where}".Trim(), log, report);
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or LBAAssembler.LbaScript.ScriptCompileException)
@@ -100,7 +124,7 @@ internal static class RaceTrackService
     {
         var log = new List<string>();
         if (options.Crossing == CrossingStyle.Bridge)
-            options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, "DESERT.OBL"), options);
+            options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, options.Island.OblFile), options);
         if (options.Crossing == CrossingStyle.Jump) options.JumpAnim = RaceTrackJumpAnim.Generic;
         return log;
     }
@@ -130,7 +154,7 @@ internal static class RaceTrackService
         var rivals = new List<RivalInfo>();
         if (report.BaldinoPath.Count > 0 && scenes.Baldino.Count > 0) rivals.Add(new RivalInfo("Baldino", Points(report.BaldinoPath), RaceTrackScenes.BaldinoGridBack, scenes.Baldino));
         var info = new TrackInfo(options.Crossing.ToString(), line, checkpoints, path.Count > 0 ? path : null, 4, scenes.Opponent.Count > 0 ? scenes.Opponent : null, scenes.StartScene,
-            rivals.Count > 0 ? rivals : null, scenes.Grid.Count > 0 ? scenes.Grid : null, scenes.Pits.Count > 0 ? scenes.Pits : null);
+            rivals.Count > 0 ? rivals : null, scenes.Grid.Count > 0 ? scenes.Grid : null, scenes.Pits.Count > 0 ? scenes.Pits : null, options.Island.Name);
         File.WriteAllText(Path.Combine(gameDirectory, InfoFile), JsonSerializer.Serialize(info, new JsonSerializerOptions { WriteIndented = true }));
     }
 
@@ -154,11 +178,11 @@ internal static class RaceTrackService
     {
         if (!HasBackups(gameDirectory)) return "There is no race track build to undo in this folder.";
         var back = new List<string>();
-        foreach (var f in Files.Concat(ExtraFiles))
+        foreach (var f in AllFiles)
         {
             var backup = Path.Combine(gameDirectory, f + BackupSuffix);
             if (!File.Exists(backup)) continue;
-            File.Copy(backup, Path.Combine(gameDirectory, f), overwrite: true);
+            CopyWritable(backup, Path.Combine(gameDirectory, f));
             back.Add(f);
         }
         foreach (var f in back) File.Delete(Path.Combine(gameDirectory, f + BackupSuffix));

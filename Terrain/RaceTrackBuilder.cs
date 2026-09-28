@@ -32,11 +32,11 @@ internal sealed class RaceTrackPlan
         catch (JsonException error) { throw new InvalidDataException($"The plan is not a race track plan: {error.Message}", error); }
     }
 
-    // The Desert island track that ships inside the program (docs/racetrack/track_plan.json).
-    public static RaceTrackPlan Desert()
+    // The track an island's route ships as inside the program (docs/racetrack/*_track_plan.json).
+    public static RaceTrackPlan Built(RaceTrackIsland island)
     {
-        using var stream = typeof(RaceTrackPlan).Assembly.GetManifestResourceStream("RaceTrackPlan.Desert.json")
-            ?? throw new InvalidDataException("This build of the program has no built-in track plan.");
+        using var stream = typeof(RaceTrackPlan).Assembly.GetManifestResourceStream(island.PlanResource)
+            ?? throw new InvalidDataException($"This build of the program has no built-in track plan for {island.Name}.");
         return Read(stream);
     }
 }
@@ -150,6 +150,9 @@ internal sealed class RaceTrackOptions
     // and its decor pieces (OldTrackBodies) -- is cleared before the new lap is laid, which now runs through the same ground.
     // null leaves the retail track as it was.
     public (int X, int Z)? OldTrackCube { get; set; } = (7, 10);
+    // Which island the track is built on, and how its road is painted (RaceTrackTextures.Import fills the theme in before the build).
+    public RaceTrackIsland Island { get; set; } = RaceTrackIsland.Desert;
+    public RaceTrackTheme Theme { get; set; } = RaceTrackTheme.Retail;
     // The retail track's own decor pieces: start gantry (64-66), billboard (67), arch and its abutments (68-70), wedge (71). The
     // garage's lamp (36) and the sphero's crystal (1) stay.
     public HashSet<int> OldTrackBodies { get; set; } = new() { 64, 65, 66, 67, 68, 69, 70, 71 };
@@ -263,12 +266,26 @@ internal static class RaceTrackBuilder
         report.Length = main.Length; // as built: re-shaping the crossing shortens the lap a little
         Profile(main, field, options, report);
         var crossings = FindCrossings(main, options);
-        if (crossings.Count > 1) report.Notes.Add($"WARNING: the route crosses itself {crossings.Count} times, not once -- only the first is treated as the intended crossing; check the plan, the others will paint as plain overlapping road.");
+        if (crossings.Count > 1)
+        {
+            // several crossings close together on the same road are one bridge (a loop that dips under the same road twice: Citadel Island's
+            // town circuit does it); any others really are a fault in the plan
+            var spanned = options.Crossing == CrossingStyle.Bridge ? BridgeSpan(main, crossings, options).Count : 1;
+            if (spanned > 1) report.Notes.Add($"the road crosses over the rest of the lap {spanned} times within one deck's length: one bridge spans them all");
+            if (crossings.Count > spanned)
+                report.Notes.Add($"WARNING: the route crosses itself {crossings.Count} times, not {(spanned > 1 ? spanned + " times" : "once")} -- only {(spanned > 1 ? "the first " + spanned + " are" : "the first is")} bridged; check the plan, the others will paint as plain overlapping road.");
+        }
         if (options.Crossing != CrossingStyle.Bridge) EqualiseCrossings(main, crossings, options);
         foreach (var c in crossings) report.Crossings.Add((c.X, c.Z, main.H[c.I], c.Angle));
+        if (crossings.Count > 1 && Environment.GetEnvironmentVariable("RT_XDEBUG") == "1")
+            foreach (var c in crossings)
+            {
+                var (ov, un) = OverUnder(main, c, options);
+                report.Notes.Add($"  crossing detail: I {c.I} (s {main.S[c.I]:0.0}) J {c.J} (s {main.S[c.J]:0.0}), over {ov} (s {main.S[ov]:0.0}), under {un}, angle {c.Angle:0}");
+            }
         report.Notes.Add("tightest turns: " + string.Join(", ", Tightest(main, options, 3).Select(t => $"radius {t.Radius:0.0} cells at cell ({t.X:0.0}, {t.Z:0.0})")));
         if (options.Crossing == CrossingStyle.Jump && crossings.Count > 0) report.Jump = PlanJump(main, crossings[0], options, report);
-        if (options.Crossing == CrossingStyle.Bridge && crossings.Count > 0) report.RoadBridge = PlanRoadBridge(main, crossings[0], options, report);
+        if (options.Crossing == CrossingStyle.Bridge && crossings.Count > 0) report.RoadBridge = PlanRoadBridge(main, BridgeSpan(main, crossings, options), options, report);
         foreach (var (a, b) in report.BridgeSpans) report.BridgeCoords.Add((main.X[a], main.Z[a], main.X[b], main.Z[b]));
 
         if (plan.PitA is { } pa && plan.PitB is { } pb) roads.Add(MakePit(main, plan, pa, pb, options, report));
@@ -809,16 +826,67 @@ internal static class RaceTrackBuilder
     // the deck's top that ground sits (out of sight under the tiles, and not fighting their top faces for the same depth).
     private const double DeckEndOverlap = 1.5, UnderDeckDepth = 40;
 
-    private static RoadBridgeInfo? PlanRoadBridge(TrackRoad r, Crossing c, RaceTrackOptions o, RaceTrackReport report)
+    // Which road of a crossing carries the other: the straighter one over the bendier.
+    private static (int Over, int Under) OverUnder(TrackRoad r, Crossing c, RaceTrackOptions o)
     {
         double Bend(int i) { double sum = 0; var w = (int)(12 / o.Spacing); for (var k = -w; k <= w; k++) sum += Math.Abs(r.Kappa[At(r, i + k)]); return sum; }
-        var (over, under) = Bend(c.I) <= Bend(c.J) ? (c.I, c.J) : (c.J, c.I);
+        return Bend(c.I) <= Bend(c.J) ? (c.I, c.J) : (c.J, c.I);
+    }
+
+    // The crossings one deck spans, each with the side of the road that goes over it. A stretch of road can cross the rest of the lap more
+    // than once (Citadel Island's town circuit runs over a loop that passes under it twice); one deck then carries that stretch over them
+    // all, as the plan draws it. Which of the first crossing's two sides is the carried one is decided by how many of the other crossings
+    // lie on the same stretch -- not by which road is straighter, which can pick a different road at each crossing and carry neither.
+    private static List<(Crossing C, int Over, int Under)> BridgeSpan(TrackRoad r, List<Crossing> crossings, RaceTrackOptions o)
+    {
+        var first = crossings[0];
+        var reach = DeckHalfCells(o, Math.Max(first.Angle, 12)) * 2;
+        List<(Crossing C, int Over, int Under)>? best = null;
+        foreach (var (over, under) in new[] { (first.I, first.J), (first.J, first.I) })
+        {
+            var list = new List<(Crossing, int, int)> { (first, over, under) };
+            foreach (var c in crossings.Skip(1))
+            {
+                double dI = Math.Abs(Along(r, r.S[c.I] - r.S[over])), dJ = Math.Abs(Along(r, r.S[c.J] - r.S[over]));
+                if (Math.Min(dI, dJ) > reach) continue;
+                list.Add(dI <= dJ ? (c, c.I, c.J) : (c, c.J, c.I));
+            }
+            if (best is null || list.Count > best.Count) best = list;
+        }
+        // one crossing to span: the straighter road goes over, as ever
+        if (best!.Count == 1) { var (ov, un) = OverUnder(r, first, o); return new() { (first, ov, un) }; }
+        return best;
+    }
+
+    // A distance along a closed road, taken the short way round.
+    private static double Along(TrackRoad r, double ds)
+    {
+        if (!r.Closed) return ds;
+        if (ds > r.Length / 2) ds -= r.Length;
+        else if (ds < -r.Length / 2) ds += r.Length;
+        return ds;
+    }
+
+    private static RoadBridgeInfo? PlanRoadBridge(TrackRoad r, List<(Crossing C, int Over, int Under)> group, RaceTrackOptions o, RaceTrackReport report)
+    {
+        var c = group[0].C;
+        var (over, under) = (group[0].Over, group[0].Under);
         var angleDeg = Math.Max(c.Angle, 12);                                                 // never let a near-parallel crossing blow the deck length up
         // the crossing was straightened over coreHalf+3 cells each side (see Build), so the straight deck matches the road under it
         var coreHalfCells = DeckHalfCells(o, angleDeg);
         var rampCells = o.RoadBridgeRampLength;
         var s0 = r.S[over];
         var deckHeight = r.H[under] + o.RoadBridgeClearance;
+        if (group.Count > 1)
+        {
+            // one deck over them all: centred between them, long enough for each one's own span, and high enough over the highest road it
+            // carries the lap above
+            var spans = group.Select(g => (At: Along(r, r.S[g.Over] - s0), Half: DeckHalfCells(o, Math.Max(g.C.Angle, 12)), Under: r.H[g.Under])).ToList();
+            var mid = (spans.Min(g => g.At - g.Half) + spans.Max(g => g.At + g.Half)) / 2;
+            s0 += mid;
+            coreHalfCells = spans.Max(g => Math.Abs(g.At - mid) + g.Half);
+            deckHeight = spans.Max(g => g.Under) + o.RoadBridgeClearance;
+        }
 
         // flat at the deck's height over the deck and its two landings, then the ramps
         var flatHalf = coreHalfCells + o.RoadBridgeLanding;
@@ -835,8 +903,7 @@ internal static class RaceTrackBuilder
         // steepest point of the ramp is 1.5 x clearance / ramp length (84 units per cell, about 9 degrees, at the defaults).
         for (var k = 0; k < n; k++)
         {
-            var ds = r.S[k] - s0;
-            if (r.Closed) { if (ds > r.Length / 2) ds -= r.Length; else if (ds < -r.Length / 2) ds += r.Length; }
+            var ds = Along(r, r.S[k] - s0);
             var w = Weight(ds);
             if (w <= 0) continue;
             r.H[k] = r.H[k] * (1 - w) + deckHeight * w;
@@ -853,8 +920,11 @@ internal static class RaceTrackBuilder
         }
         var widthUnits = r.VergeHalf * 2 * 512;
         var lengthUnits = coreHalfCells * 2 * 512;
+        // (the deck is centred on the group, which may be a little along the road from the first crossing)
+        var centre = r.Count > 0 ? Nearest(r, r.X[over], r.Z[over]) : over;
+        for (var k = 0; k < r.Count; k++) if (Math.Abs(Along(r, r.S[k] - s0)) < o.Spacing) { centre = k; break; }
         report.Notes.Add($"road bridge: the straighter road climbs onto a deck over the other -- {coreHalfCells * 2:0} cells of flat deck ({widthUnits / 512:0.#} cells wide) plus {o.RoadBridgeLanding:0.#} cells of level ground and {rampCells:0} cells of ramp each side, deck height {deckHeight:0} ({o.RoadBridgeClearance:0} above the road it crosses, at {angleDeg:0} degrees)");
-        return new RoadBridgeInfo(r.X[over], r.Z[over], deckHeight, r.Tx[over], r.Tz[over], widthUnits, lengthUnits, under);
+        return new RoadBridgeInfo(r.X[centre], r.Z[centre], deckHeight, r.Tx[centre], r.Tz[centre], widthUnits, lengthUnits, under);
     }
 
     // ---------------------------------------------------------------------------------------------------------------------
@@ -1614,7 +1684,7 @@ internal static class RaceTrackBuilder
         if (startIndex >= 0) MarkStartLine(roads[0], startIndex, kinds, report);
         var arrows = new Dictionary<(int, int), ArrowCell>();
         MarkArrows(island, roads[0], kinds, arrows, o, report);
-        var painter = new Painter(island);
+        var painter = new Painter(island, o.Theme);
         foreach (var ((gx, gz), kind) in kinds)
         {
             painter.Paint(gx, gz, kind, kind == Kind.Asphalt && arrows.TryGetValue((gx, gz), out var arrow) ? arrow : null);
@@ -1884,7 +1954,10 @@ internal static class RaceTrackBuilder
     private sealed class Painter
     {
         private readonly IslandFile island;
-        public Painter(IslandFile island) => this.island = island;
+        private readonly RaceTrackTheme theme;
+        public Painter(IslandFile island, RaceTrackTheme theme) { this.island = island; this.theme = theme; }
+
+        private static ushort[] Tile((int X, int Y, int W, int H) t, bool diagonal, int half) => IslandGround.TileDefinition(t.X, t.Y, t.W, t.H, diagonal, half);
 
         // sample words of the retail track's cells: (bank, texFlag, polyFlag, step)
         private static IslandPolygon Flat(int bank, int step) => new IslandPolygon(0).With(bank: bank, texFlag: 0, polyFlag: 3, sampleStep: step, codeJeu: 0);
@@ -1903,15 +1976,15 @@ internal static class RaceTrackBuilder
                 bool col = false;
                 switch (arrow is { } a && (half == 0 ? a.Half0 : a.Half1) ? Kind.Arrow : kind)
                 {
-                    case Kind.Asphalt: p = Textured(5).With(textureIndex: IslandGround.TextureIndexFor(cube, IslandGround.TileDefinition(96, 0, 32, 32, diagonal, half))); break;
+                    case Kind.Asphalt: p = Textured(5).With(textureIndex: IslandGround.TextureIndexFor(cube, Tile(theme.Asphalt, diagonal, half))); break;
                     case Kind.Start:
-                    case Kind.WhiteCurb: p = Textured(4).With(textureIndex: IslandGround.TextureIndexFor(cube, IslandGround.TileDefinition(180, 155, 1, 1, diagonal, half))); break;
-                    case Kind.RedCurb: p = Flat(4, 5); break;
-                    case Kind.Arrow: p = Flat(5, 5); break;
-                    case Kind.Hatch: p = Textured(1).With(textureIndex: IslandGround.TextureIndexFor(cube, IslandGround.TileDefinition(192, 48, 16, 16, diagonal, half))); break;
+                    case Kind.WhiteCurb: p = Textured(4).With(textureIndex: IslandGround.TextureIndexFor(cube, IslandGround.TileDefinition(theme.WhiteCurb.X, theme.WhiteCurb.Y, 1, 1, diagonal, half))); break;
+                    case Kind.RedCurb: p = Flat(theme.RedCurb.Bank, theme.RedCurb.Pos); break;
+                    case Kind.Arrow: p = Flat(theme.Arrow.Bank, theme.Arrow.Pos); break;
+                    case Kind.Hatch: p = Textured(1).With(textureIndex: IslandGround.TextureIndexFor(cube, Tile(theme.Hatch, diagonal, half))); break;
                     case Kind.Wall:
-                    case Kind.Rock: p = Textured(5).With(texFlag: 3, textureIndex: IslandGround.TextureIndexFor(cube, IslandGround.TileDefinition(0, 128, 32, 32, diagonal, half))); col = kind == Kind.Wall; break;
-                    default: p = Flat(2, 12); break;
+                    case Kind.Rock: p = Textured(5).With(texFlag: 3, textureIndex: IslandGround.TextureIndexFor(cube, Tile(theme.Rock, diagonal, half))); col = kind == Kind.Wall; break;
+                    default: p = Flat(theme.Sand.Bank, theme.Sand.Pos); break;
                 }
                 p = p.With(diagonal: diagonal, col: col);
                 cube.SetPolygon(x, z, half, p.Raw);

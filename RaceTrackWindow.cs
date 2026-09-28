@@ -6,23 +6,25 @@ using Microsoft.Win32;
 
 namespace LBAAssembler;
 
-// Tools > LBA2: Desert island race track: builds the proposed track (levelled, banked road with the retail track's own textures, pit lane, start gantry, a
-// bridge over the harbour, and a jump where the lap crosses itself) into the LBA2 game folder, or puts the folder back as it was.
+// Tools > LBA2: race track: builds a proposed track (levelled, banked road with the retail track's own textures, pit lane, start gantry,
+// and a bridge or a jump where the lap crosses itself) into the LBA2 game folder, or puts the folder back as it was. One island's track at
+// a time: the Desert island's, or Citadel Island's town circuit.
 internal sealed class RaceTrackWindow : Window
 {
     private readonly string gameRoot;
     private readonly Action changed;
-    private readonly RadioButton builtInPlan = new() { Content = "The Desert island track (built into the program)", IsChecked = true };
+    private readonly ComboBox islandBox = new() { MinWidth = 260 };
+    private readonly RadioButton builtInPlan = new() { Content = "The track built into the program", IsChecked = true };
     private readonly RadioButton filePlan = new() { Content = "A plan file:" };
     private readonly TextBox planPath = new() { Padding = new Thickness(3), IsEnabled = false };
     private readonly Button browseButton = new() { Content = "Browse…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0), IsEnabled = false };
     private readonly ComboBox crossing = new() { MinWidth = 420 };
-    private readonly CheckBox removeActors = new() { Content = "Remove the actors of the island's outside scenes, except Twinsen, the buggy and those the travel cutscenes need", IsChecked = true, ToolTip = "Scenes 55-73. The engine's hidden Zoe placeholder in slot 1 stays (the buggy needs that slot), and so do the ferry, the Dino-Fly and the actors Twinsen's own script waits on in the cutscenes of arriving, leaving and the game's ending." };
+    private readonly CheckBox removeActors = new() { Content = "Remove the actors of the island's outside scenes, except Twinsen, the buggy and those the travel cutscenes need", IsChecked = true, ToolTip = "The engine's hidden Zoe placeholder in slot 1 stays (the buggy needs that slot), and so do the ferry, the Dino-Fly and the actors Twinsen's own script waits on in the cutscenes of arriving, leaving and the game's ending." };
     private readonly CheckBox buggyAlways = new() { Content = "The buggy is there from the start of any game (skip the car quest)", IsChecked = true, ToolTip = "The island's scenes delete the buggy until game variable 74 reaches 3; this makes that test always pass" };
-    private readonly CheckBox startAtLine = new() { Content = "Twinsen and the buggy start on the start line (scene 67)", IsChecked = true };
+    private readonly CheckBox startAtLine = new() { Content = "Twinsen and the buggy start on the grid", IsChecked = true };
     private readonly CheckBox roadZones = new() { Content = "Remove zones that would act on a car on the road (doors, hit, ladder, escalator, grid, rail)", IsChecked = true };
     private readonly CheckBox trackCameras = new() { Content = "Remove the fixed camera angles along the track (the view keeps following the car)", IsChecked = true, ToolTip = "Camera zones (type 1) that reach the road or come within a few cells of it" };
-    private readonly CheckBox clearOldTrack = new() { Content = "Clear what's left of the original race track (its road paint, start gantry, arch, billboard)", IsChecked = true, ToolTip = "Cube (7,10), scene 57: its painted road becomes sand where the new track doesn't run over it. The garage and its lamp stay." };
+    private readonly CheckBox clearOldTrack = new() { Content = "Clear what's left of the original race track (its road paint, start gantry, arch, billboard)", IsChecked = true, ToolTip = "The Desert island only, cube (7,10), scene 57: its painted road becomes sand where the new track doesn't run over it. The garage and its lamp stay." };
     private readonly TextBox log = new() { IsReadOnly = true, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, FontFamily = new System.Windows.Media.FontFamily("Consolas"), FontSize = 11, Height = 190, TextWrapping = TextWrapping.NoWrap };
     private readonly Button buildButton = new() { Content = "Build the track", Padding = new Thickness(18, 5, 18, 5), IsDefault = true };
     private readonly Button restoreButton = new() { Content = "Put the original files back", Padding = new Thickness(14, 5, 14, 5) };
@@ -34,12 +36,18 @@ internal sealed class RaceTrackWindow : Window
     {
         this.gameRoot = gameRoot;
         this.changed = changed;
-        Title = "Desert island race track";
+        Title = "LBA2 race track";
         Width = 760; SizeToContent = SizeToContent.Height; MinWidth = 640;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResize;
         SetResourceReference(BackgroundProperty, "ThemeWindowBrush");
         SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var i in RaceTrackIsland.All) islandBox.Items.Add(new ComboBoxItem { Content = i.Name, Tag = i });
+        islandBox.SelectedIndex = 0;
+        // the island the folder's track is on, when it has one (building again keeps to it)
+        if (RaceTrackService.BuiltIsland(gameRoot) is { } builtOn)
+            islandBox.SelectedItem = islandBox.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is RaceTrackIsland s && s.Name == builtOn.Name) ?? islandBox.SelectedItem;
+        islandBox.SelectionChanged += (_, _) => IslandChanged();
         crossing.Items.Add(new ComboBoxItem { Content = "A physical bridge (a walkable deck, like Citadel Island's rope bridge)", Tag = CrossingStyle.Bridge });
         crossing.Items.Add(new ComboBoxItem { Content = "A jump: a ramp up, a gap over the other road, a ramp down (a longer retail car jump)", Tag = CrossingStyle.Jump });
         crossing.Items.Add(new ComboBoxItem { Content = "A viaduct of arches over a level junction", Tag = CrossingStyle.Viaduct });
@@ -55,6 +63,18 @@ internal sealed class RaceTrackWindow : Window
         buildButton.Click += async (_, _) => await BuildAsync();
         restoreButton.Click += (_, _) => Restore();
         carButton.Click += (_, _) => new RaceCarWindow(forPlay: false) { Owner = this }.ShowDialog();
+        IslandChanged();
+        UpdateStatus();
+    }
+
+    private RaceTrackIsland Island() => islandBox.SelectedItem is ComboBoxItem { Tag: RaceTrackIsland i } ? i : RaceTrackIsland.Desert;
+
+    // What only one island has: the retail race track to clear is the Desert island's own.
+    private void IslandChanged()
+    {
+        var desert = Island().IleFile == RaceTrackIsland.Desert.IleFile;
+        clearOldTrack.IsEnabled = desert;
+        if (!desert) clearOldTrack.IsChecked = false;
         UpdateStatus();
     }
 
@@ -73,10 +93,11 @@ internal sealed class RaceTrackWindow : Window
         var intro = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Text = "Builds the proposed race track on the White Leaf Desert island: the ground under the road is levelled and banked, the road is painted with the retail " +
-                   "track's asphalt, red and white curbs, arrows and red/gold hatching, with a pit lane, a start gantry and a bridge over the harbour. Where the lap crosses itself, " +
-                   "the choice below decides what carries the one road over the other.\n\n" +
-                   "It changes DESERT.ILE, DESERT.OBL and SCENE.HQR in the LBA2 game folder (and, for a jump, ANIM.HQR and RESS.HQR: its flight). The first time, the originals are kept beside them (as *" + RaceTrackService.BackupSuffix +
+            Text = "Builds a proposed race track on an island: the ground under the road is levelled and banked, the road is painted with the retail " +
+                   "track's asphalt, red and white curbs, arrows and red/gold hatching, with a pit lane and a start gantry. Where the lap crosses itself, " +
+                   "the choice below decides what carries the one road over the other. On an island other than the Desert one the road's tiles are copied " +
+                   "into its own spare texture space and matched to its palette, and its scenes are given a buggy.\n\n" +
+                   "It changes the island's ground and decor bodies and SCENE.HQR in the LBA2 game folder (and, for a jump, ANIM.HQR and RESS.HQR: its flight; BODY.HQR for Baldino's car). The first time, the originals are kept beside them (as *" + RaceTrackService.BackupSuffix +
                    "); every build starts from those copies, and the button below puts them back. When you play a folder with a race track built, the game " +
                    "runs in its race-track mode: the car setup below (gears on X and Z, brakes, steering), the car staying level on the bridge, checkpoints round the lap, " +
                    "an opponent (the retail track's racer), and the gear, speed, lap times and position on screen. " +
@@ -85,6 +106,9 @@ internal sealed class RaceTrackWindow : Window
         intro.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
         root.Children.Add(intro);
         root.Children.Add(new TextBlock { Text = $"Game folder: {gameRoot}", Margin = new Thickness(0, 8, 0, 8), TextWrapping = TextWrapping.Wrap, FontWeight = FontWeights.SemiBold, Foreground = (System.Windows.Media.Brush)FindResource("ThemeTextBrush") });
+
+        root.Children.Add(Section("The island"));
+        root.Children.Add(islandBox);
 
         root.Children.Add(Section("The track"));
         root.Children.Add(builtInPlan);
@@ -145,20 +169,21 @@ internal sealed class RaceTrackWindow : Window
         StartAtLine = startAtLine.IsChecked == true,
         RemoveRoadZones = roadZones.IsChecked == true,
         RemoveTrackCameras = trackCameras.IsChecked == true,
-        OldTrackCube = clearOldTrack.IsChecked == true ? (7, 10) : null,
+        OldTrackCube = clearOldTrack.IsChecked == true ? Island().OldTrackCube : null,
+        Island = Island(),
     };
 
     private async Task BuildAsync()
     {
         RaceTrackPlan plan;
-        try { plan = filePlan.IsChecked == true ? RaceTrackPlan.Load(planPath.Text.Trim()) : RaceTrackPlan.Desert(); }
+        try { plan = filePlan.IsChecked == true ? RaceTrackPlan.Load(planPath.Text.Trim()) : RaceTrackPlan.Built(Options().Island); }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
         {
             MessageBox.Show(this, $"The plan can't be read: {error.Message}", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         var answer = MessageBox.Show(this,
-            $"Build the race track into\n{gameRoot}\n\nDESERT.ILE, DESERT.OBL and SCENE.HQR will change. " +
+            $"Build {Island().Name}'s race track into\n{gameRoot}\n\n{string.Join(", ", RaceTrackService.FilesFor(Island()))} will change. " +
             (RaceTrackService.HasBackups(gameRoot) ? "The originals kept by the first build are used again." : "The originals are kept as *" + RaceTrackService.BackupSuffix + "."),
             Title, MessageBoxButton.OKCancel, MessageBoxImage.Question);
         if (answer != MessageBoxResult.OK) return;

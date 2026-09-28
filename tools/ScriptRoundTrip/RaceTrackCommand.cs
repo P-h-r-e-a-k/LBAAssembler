@@ -3,8 +3,8 @@ using LBAAssembler.Terrain;
 
 namespace ScriptRoundTrip;
 
-// Builds the Desert island race track into a copy of the island file and draws the result.
-//   buildtrack <plan.json> <pristine folder> <game folder> [png] [scale]
+// Builds a race track into a copy of an island file and draws the result.
+//   buildtrack <plan.json> <pristine folder> <game folder> [png] [scale]      RT_ISLAND=Desert island|Citadel Island picks the island
 // The files the track changes (DESERT.ILE, DESERT.OBL, SCENE.HQR, and for a jump ANIM.HQR and RESS.HQR) are copied from the pristine folder to the game
 // folder first, so a build always starts clean. RT_CROSSING=Bridge|Jump|Viaduct|Level picks the crossing style.
 internal static class RaceTrackCommand
@@ -13,20 +13,23 @@ internal static class RaceTrackCommand
     {
         var plan = RaceTrackPlan.Load(args[1]);
         var pristine = args[2]; var game = args[3];
-        foreach (var f in RaceTrackService.Files.Concat(RaceTrackService.ExtraFiles))
-            if (File.Exists(Path.Combine(pristine, f))) File.Copy(Path.Combine(pristine, f), Path.Combine(game, f), overwrite: true);
-        var island = IslandFile.Load(Path.Combine(game, "DESERT.ILE"));
-        var options = new RaceTrackOptions();
-        options.Keep.Add((0, 195, 62, 252));
+        var where = RaceTrackIsland.ByName(Environment.GetEnvironmentVariable("RT_ISLAND") ?? RaceTrackIsland.Desert.Name);
+        foreach (var f in RaceTrackService.AllFiles)
+            if (File.Exists(Path.Combine(pristine, f))) RaceTrackService.CopyWritable(Path.Combine(pristine, f), Path.Combine(game, f));
+        var island = IslandFile.Load(Path.Combine(game, where.IleFile));
+        var options = new RaceTrackOptions { Island = where, OldTrackCube = where.OldTrackCube };
         if (Environment.GetEnvironmentVariable("RT_CLEARANCE") is { } rc) options.RoadBridgeClearance = double.Parse(rc);
         if (Environment.GetEnvironmentVariable("RT_TILELEN") is { } tl) options.RoadBridgeTileLength = double.Parse(tl);
         if (Environment.GetEnvironmentVariable("RT_CROSSING") is { } cs) options.Crossing = Enum.Parse<CrossingStyle>(cs, ignoreCase: true);
         if (Environment.GetEnvironmentVariable("RT_JUMPANGLE") is { } ja) options.JumpCrossingAngle = double.Parse(ja, System.Globalization.CultureInfo.InvariantCulture);
         if (Environment.GetEnvironmentVariable("RT_JUMPGAP") is { } jg) options.JumpGap = double.Parse(jg, System.Globalization.CultureInfo.InvariantCulture);
+        var themed = RaceTrackTextures.Import(island, where, game);
+        options.Theme = themed.Theme;
         var extra = RaceTrackService.Prepare(game, options);
+        if (themed.Log.Length > 0) extra.Add(themed.Log);
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var report = RaceTrackBuilder.Build(island, plan, options);
-        island.Save(Path.Combine(game, "DESERT.ILE"));
+        island.Save(Path.Combine(game, where.IleFile));
         extra.AddRange(RaceTrackService.Finish(game, report, options));
         var scenes = RaceTrackScenes.Apply(game, report, options);
         RaceTrackService.WriteInfo(game, report, options, scenes);
@@ -50,7 +53,7 @@ internal static class RaceTrackCommand
         {
             var dir = game;
             var scale = args.Length > 5 ? int.Parse(args[5]) : 3;
-            var renderer = new IslandMapRenderer(island, IslandMapRenderer.LoadPalette(dir, "DESERT"), scale);
+            var renderer = new IslandMapRenderer(island, IslandMapRenderer.LoadPalette(dir, Path.GetFileNameWithoutExtension(where.IleFile)), scale);
             renderer.RenderAll(MapView.Terrain);
             PngWriter.Write(args[4], renderer.Pixels, renderer.PixelWidth, renderer.PixelHeight);
             Console.WriteLine($"{args[4]}: {renderer.PixelWidth}x{renderer.PixelHeight}");

@@ -17,6 +17,34 @@ internal static class RaceTrackScenes
     public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, Dictionary<int, int> Opponent, int StartScene, Dictionary<int, int> Baldino,
         List<int[]> Grid, List<int[]> Pits);
 
+    // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
+    //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
+    // and reads >= 0 with the 3 zeroed, so the buggy is there from the start of any game. True when it was that script.
+    private static bool BuggyAlwaysThere(SceneActorModel buggy)
+    {
+        if (buggy.Life.Length <= 6 || buggy.Life[0] != 0x0C || buggy.Life[1] != 0x0F || buggy.Life[2] != 0x4A || buggy.Life[3] != 0x03 || buggy.Life[4] != 0x03 || buggy.Life[5] != 0x00) return false;
+        buggy.Life[4] = 0x00;
+        return true;
+    }
+
+    // The Desert island's own buggy (scene 67), for an island whose scenes have none: the same actor, so its script and flags are the
+    // game's own. Null when that scene cannot be read.
+    private static SceneActorModel? BuggyTemplate(SceneStore store, List<string> log)
+    {
+        try
+        {
+            var buggy = store.Load(BuggyScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == BuggyEntity)?.Clone();
+            if (buggy is null) log.Add($"no buggy: scene {BuggyScene} has none");
+            else log.Add($"the buggy: a copy of the one in scene {BuggyScene} (this island has none of its own)");
+            return buggy;
+        }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException)
+        {
+            log.Add($"no buggy: scene {BuggyScene} could not be read ({e.Message})");
+            return null;
+        }
+    }
+
     // The retail track's racer (scene 57, actor 4: "Car with racer", which drives the retail lap by its route points), copied into every
     // outside scene as the opponent the race-track mode drives round the lap. The copies neither collide, fall, check zones nor react to
     // hits (NO_CHOC), and are drawn with the depth buffer like the car (OBJ_ZBUFFER, NO_PRE_CLIP); their scripts are a single END. Each
@@ -36,11 +64,14 @@ internal static class RaceTrackScenes
     private const uint OpponentFlags = 0x1A0000;
 
     public const int DesertIsland = 2;
+    // The buggy's own scene on the Desert island: an island with no buggy of its own (Citadel) gets a copy of that actor on the grid.
+    public const int BuggyScene = 67;
 
     // Edits the outside scenes of the Desert island as the options say, from what the build of the island found (start line, jump, road).
     public static Result Apply(string gameDirectory, RaceTrackReport report, RaceTrackOptions options)
     {
-        var island = DesertIsland;
+        var island = options.Island.IslandByte;
+        var demoFrom = 190;
         (double X, double Z, double Y, double DirX, double DirZ)? start = options.StartAtLine && report.StartLine.Count > 0 ? report.StartLine[0] : null;
         var distanceToRoad = report.DistanceToRoad; var roadReach = 6.5; var jump = report.Jump;
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
@@ -59,8 +90,12 @@ internal static class RaceTrackScenes
             SceneModel model;
             try { model = store.Load(scene); } catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { continue; }
             if (model.Island != island || model.CubeMode != 1) continue;
-            // the demo scenes are copies the game plays as films; they are left as they are
-            if (scene >= 190) { log.Add($"scene {scene}: demo scene, left alone"); continue; }
+            if (scene < options.Island.FirstScene || scene > options.Island.LastScene)
+            {
+                // the demo scenes are copies the game plays as films; they are left as they are
+                log.Add($"scene {scene}: {(scene >= demoFrom ? "demo scene" : "not one of the island's own outside scenes")}, left alone");
+                continue;
+            }
             var count = 0;
             (int X, int Z, int Beta)? grid = null, baldinoGrid = null;
             if (options.RemoveActors)
@@ -91,9 +126,9 @@ internal static class RaceTrackScenes
             // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
             //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
             // and reads >= 0 with the 3 zeroed, so the buggy is there from the start of any game.
-            foreach (var actor in model.Actors.Skip(1).Where(a => a.Entity == BuggyEntity && options.BuggyAlways))
-                if (actor.Life.Length > 6 && actor.Life[0] == 0x0C && actor.Life[1] == 0x0F && actor.Life[2] == 0x4A && actor.Life[3] == 0x03 && actor.Life[4] == 0x03 && actor.Life[5] == 0x00)
-                { actor.Life[4] = 0x00; log.Add($"scene {model.CubeX},{model.CubeY}: the buggy no longer waits for the car quest"); }
+            if (options.BuggyAlways)
+                foreach (var actor in model.Actors.Skip(1).Where(a => a.Entity == BuggyEntity))
+                    if (BuggyAlwaysThere(actor)) log.Add($"scene {model.CubeX},{model.CubeY}: the buggy no longer waits for the car quest");
             log.Add($"scene {scene} (cube {model.CubeX},{model.CubeY}): {count} actors removed, {model.Actors.Count - 1} left");
 
             if (start is { } s)
@@ -109,6 +144,14 @@ internal static class RaceTrackScenes
                     int At(double back, double side, bool z) => (int)Math.Round((z ? lz : lx) + (z ? (-s.DirZ * back + s.DirX * side) : (-s.DirX * back - s.DirZ * side)) * 512);
                     int Ground(int x, int z) => report.GroundAfter is { } g ? (int)Math.Round(g(cx * 64 + x / 512.0, cz * 64 + z / 512.0)) : y;
                     var buggy = model.Actors.Skip(1).FirstOrDefault(a => a.Entity == BuggyEntity);
+                    // an island with no buggy of its own (Citadel): a copy of the Desert island's own buggy actor, on the grid
+                    if (buggy is null && BuggyTemplate(store, log) is { } spare)
+                    {
+                        // (the quest patch above ran before this copy was here)
+                        if (options.BuggyAlways) BuggyAlwaysThere(spare);
+                        buggy = spare;
+                        SceneOps.AddActor(model, buggy);
+                    }
                     var buggyIndex = buggy is null ? -1 : model.Actors.IndexOf(buggy);
                     for (var k = 0; k < GridSpots; k++)
                     {
