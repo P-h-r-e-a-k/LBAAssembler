@@ -12,8 +12,8 @@ internal static class RaceTrackScenes
     public const int ZoeEntity = 14;
 
     // Opponent: for each scene, the index of its copy of the racer's car (the race-track mode drives whichever the player's scene has);
-    // StartScene: the scene the start line is in.
-    public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, Dictionary<int, int> Opponent, int StartScene);
+    // Baldino: the same for Baldino's car; StartScene: the scene the start line is in.
+    public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, Dictionary<int, int> Opponent, int StartScene, Dictionary<int, int> Baldino);
 
     // The retail track's racer (scene 57, actor 4: "Car with racer", which drives the retail lap by its route points), copied into every
     // outside scene as the opponent the race-track mode drives round the lap. The copies neither collide, fall, check zones nor react to
@@ -21,6 +21,8 @@ internal static class RaceTrackScenes
     // waits 20000 below the ground, except the one on the grid beside the player's car: without the race-track mode (the retail engine)
     // that is all there is, a parked car.
     public const int RacerEntity = 157, RacerScene = 57;
+    // how many cells behind the start line Baldino starts (the second row); his line's grid point (a point a cell)
+    public const int BaldinoGridBack = 8;
     private const uint OpponentFlags = 0x1A0000;
 
     public const int DesertIsland = 2;
@@ -35,7 +37,7 @@ internal static class RaceTrackScenes
         var log = new List<string>();
         var changes = new List<SceneChange>();
         var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0;
-        var opponent = new Dictionary<int, int>(); var startScene = -1;
+        var opponent = new Dictionary<int, int>(); var baldino = new Dictionary<int, int>(); var startScene = -1;
         SceneActorModel? racer = null;
         if (options.AddOpponent)
             try { racer = store.Load(RacerScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == RacerEntity)?.Clone(); }
@@ -49,7 +51,7 @@ internal static class RaceTrackScenes
             // the demo scenes are copies the game plays as films; they are left as they are
             if (scene >= 190) { log.Add($"scene {scene}: demo scene, left alone"); continue; }
             var count = 0;
-            (int X, int Z, int Beta)? grid = null;
+            (int X, int Z, int Beta)? grid = null, baldinoGrid = null;
             if (options.RemoveActors)
             {
                 // slot 1 of every scene is the engine's own placeholder for Zoe (entity 14, no body, parked at 0,0,0); the engine treats that slot
@@ -105,6 +107,8 @@ internal static class RaceTrackScenes
                     model.Hero.Beta = beta;
                     startScene = scene;
                     grid = (At(4, -2.5, false), At(4, -2.5, true), beta);
+                    // Baldino on the second row, on the other side (his line runs on that side: RaceTrackBuilder.BaldinoLine)
+                    baldinoGrid = (At(BaldinoGridBack, 2.5, false), At(BaldinoGridBack, 2.5, true), beta);
                     log.Add($"scene {scene}: Twinsen at ({model.Hero.X},{model.Hero.Y},{model.Hero.Z}) turn {beta}, buggy at ({buggy?.X},{buggy?.Y},{buggy?.Z})");
                     if (buggyIndex > 0 && StartBuggyScript(model, scene, buggyIndex, log) is { } withBuggy) model = withBuggy;
                 }
@@ -137,12 +141,19 @@ internal static class RaceTrackScenes
                 }
             if (racer is not null)
             {
-                var car = racer.Clone();
-                car.Flags = OpponentFlags; car.Move = 0; car.Anim = 0; car.Life = new byte[] { 0 }; car.Track = new byte[] { 0 };
-                car.X = IslandFile.CubeSize / 2; car.Z = IslandFile.CubeSize / 2; car.Y = -20000; car.Beta = 0;
-                if (grid is { } g) { car.X = g.X; car.Z = g.Z; car.Beta = g.Beta; car.Y = report.GroundAfter is { } ga ? (int)Math.Round(ga(model.CubeX * 64 + g.X / 512.0, model.CubeY * 64 + g.Z / 512.0)) : 0; }
-                opponent[scene] = SceneOps.AddActor(model, car);
-                grid = null;
+                SceneActorModel Car(int body, (int X, int Z, int Beta)? at)
+                {
+                    var car = racer.Clone();
+                    car.Body = body;
+                    car.Flags = OpponentFlags; car.Move = 0; car.Anim = 0; car.Life = new byte[] { 0 }; car.Track = new byte[] { 0 };
+                    car.X = IslandFile.CubeSize / 2; car.Z = IslandFile.CubeSize / 2; car.Y = -20000; car.Beta = 0;
+                    if (at is { } g) { car.X = g.X; car.Z = g.Z; car.Beta = g.Beta; car.Y = report.GroundAfter is { } ga ? (int)Math.Round(ga(model.CubeX * 64 + g.X / 512.0, model.CubeY * 64 + g.Z / 512.0)) : 0; }
+                    return car;
+                }
+                opponent[scene] = SceneOps.AddActor(model, Car(0, grid));
+                // Baldino's car: the racer's entity with its body 1 (RaceTrackBaldinoCar), so the racer's animations drive it
+                if (options.AddBaldino) baldino[scene] = SceneOps.AddActor(model, Car(RaceTrackBaldinoCar.Generic, baldinoGrid));
+                grid = null; baldinoGrid = null;
             }
             if (jump is not null && model.CubeX == jump.CubeX && model.CubeY == jump.CubeZ)
             {
@@ -155,7 +166,8 @@ internal static class RaceTrackScenes
         log.Add($"{zonesRemoved} zones on the road removed");
         if (options.RemoveTrackCameras) log.Add($"{camerasRemoved} fixed camera zones along the track removed");
         if (opponent.Count > 0) log.Add($"the opponent: a copy of the retail track's racer in {opponent.Count} scenes");
-        return new Result(log, changes.Count, removed, opponent, startScene);
+        if (baldino.Count > 0) log.Add($"Baldino: a copy of his car in {baldino.Count} scenes");
+        return new Result(log, changes.Count, removed, opponent, startScene, baldino);
     }
 
     // Where the scripts that stay (Twinsen's own life script, mostly) refer to actors about to be removed -- "if Twinsen is near the

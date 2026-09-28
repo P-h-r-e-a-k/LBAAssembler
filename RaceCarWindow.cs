@@ -16,6 +16,7 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox display = new() { Content = "Show the gear, the speed and the lap times on screen" };
     private readonly CheckBox askBeforePlay = new() { Content = "Show this before each race-track play" };
     private readonly CheckBox opponent = new() { Content = "Race an opponent: the original track's racer, round your lap" };
+    private readonly CheckBox baldino = new() { Content = "Race Baldino too, in his rocket car" };
     private readonly CheckBox startAtLine = new() { Content = "Start beside the car on the start/finish straight, with the editor's markings hidden" };
     private readonly List<Action> refresh = new();
     private bool updating;
@@ -33,7 +34,7 @@ internal sealed class RaceCarWindow : Window
         root.Children.Add(Text("How the buggy drives when you play a game folder that has a race track built. X shifts up a gear and Z down (unless the gearbox " +
                                "is automatic); each gear has its own top speed, and a low gear pulls harder than a high one. Speeds are as the game's display shows " +
                                "them, a cell taken as a metre: the original buggy tops out at 27 km/h. A lap counts once you have crossed every checkpoint round the " +
-                               "track; the opponent sets off when you do. Other game folders play the game as it is."));
+                               "track; the opponents (the original track's racer, and Baldino in his rocket car) set off when you do. Other game folders play the game as it is."));
 
         root.Children.Add(Section("Start from"));
         foreach (var p in RaceCarSetup.Presets) preset.Items.Add(new ComboBoxItem { Content = p.Name, Tag = p });
@@ -77,6 +78,11 @@ internal sealed class RaceCarWindow : Window
         opponent.Unchecked += (_, _) => setup.Opponent = false;
         root.Children.Add(opponent);
         root.Children.Add(SliderRow("The opponent's pace", 50, 150, 5, " %", () => setup.OpponentPace, v => setup.OpponentPace = (int)v).Row);
+        baldino.Checked += (_, _) => setup.Baldino = true;
+        baldino.Unchecked += (_, _) => setup.Baldino = false;
+        baldino.Margin = new Thickness(0, 4, 0, 0);
+        root.Children.Add(baldino);
+        root.Children.Add(SliderRow("Baldino's pace", 50, 150, 5, " %", () => setup.BaldinoPace, v => setup.BaldinoPace = (int)v).Row);
         startAtLine.Checked += (_, _) => setup.StartAtLine = true;
         startAtLine.Unchecked += (_, _) => setup.StartAtLine = false;
         startAtLine.Margin = new Thickness(0, 4, 0, 0);
@@ -90,7 +96,7 @@ internal sealed class RaceCarWindow : Window
         root.Children.Add(display);
         askBeforePlay.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(askBeforePlay);
-        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, startAtLine }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, baldino, startAtLine }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         var ok = new Button { Content = forPlay ? "Play" : "Save", Padding = new Thickness(18, 5, 18, 5), IsDefault = true, Margin = new Thickness(0, 0, 10, 0) };
         var cancel = new Button { Content = "Cancel", Padding = new Thickness(14, 5, 14, 5), IsCancel = true };
@@ -110,6 +116,7 @@ internal sealed class RaceCarWindow : Window
         display.IsChecked = setup.ShowDisplay;
         askBeforePlay.IsChecked = setup.AskBeforePlay;
         opponent.IsChecked = setup.Opponent;
+        baldino.IsChecked = setup.Baldino;
         startAtLine.IsChecked = setup.StartAtLine;
         foreach (var r in refresh) r();
         ShowGearRows();

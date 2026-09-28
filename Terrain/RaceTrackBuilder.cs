@@ -126,6 +126,8 @@ internal sealed class RaceTrackOptions
     public bool StartAtLine { get; set; } = true;
     // A copy of the retail track's racer in every outside scene, for the race-track mode to race against (RaceTrackScenes).
     public bool AddOpponent { get; set; } = true;
+    // A second opponent: Baldino in his rocket car (RaceTrackBaldinoCar), a body added to BODY.HQR for the racer's entity, with a line of his own.
+    public bool AddBaldino { get; set; } = true;
     public bool RemoveRoadZones { get; set; } = true;
     // Camera zones (type 1: while the hero is inside the box the view jumps to a fixed camera) that reach the road or within
     // CameraMargin cells of it are removed, so the view keeps following the car all the way round.
@@ -175,6 +177,8 @@ internal sealed class RaceTrackReport
     public List<(double X0, double Z0, double X1, double Z1, double DirX, double DirZ)> Checkpoints { get; } = new();
     // The opponent's line (PlanRacePath) from the start line round the lap: island cells, the height, the speed in world units a second.
     public List<(double X, double Z, double Y, double Speed)> RacePath { get; } = new();
+    // Baldino's line: the same, on the other side of the road and at his rocket car's speeds.
+    public List<(double X, double Z, double Y, double Speed)> BaldinoPath { get; } = new();
     // The lap's centre line as built (island cells), for checks.
     public double[] LapX { get; set; } = Array.Empty<double>();
     public double[] LapZ { get; set; } = Array.Empty<double>();
@@ -278,7 +282,8 @@ internal static class RaceTrackBuilder
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
         PlaceCheckpoints(roads, report, options);
-        PlanRacePath(main, report, options);
+        PlanRacePath(main, report, options, RacerLine, report.RacePath, "the opponent's line");
+        if (options.AddBaldino) PlanRacePath(main, report, options, BaldinoLine, report.BaldinoPath, "Baldino's line");
         ClearStaleCol(island, natural, field, index, painted, report);
         follow.Apply();
         report.GroundBefore = (x, z) => natural.Height(x, z);
@@ -1158,13 +1163,18 @@ internal static class RaceTrackBuilder
         report.Notes.Add($"{report.Checkpoints.Count} checkpoints round the lap (a lap counts once the car has crossed them all, in order)");
     }
 
-    // The opponent's line (the race-track mode drives a copy of the retail track's racer along it): a point a cell apart round the lap
-    // from the start line, two cells to the side the player's car doesn't start on (nearer the middle in tight bends), with the ground's
-    // height there (the deck on the bridge, the flight's arc over the jump) and a speed: a top speed, slower in bends (as fast as a
-    // sideways pull allows at the bend's radius), braking before them and speeding up after them no harder than a car could.
-    private const double RaceLineOffset = -2, RaceTopSpeed = 4400, RaceSideways = 2500, RaceAccel = 2200, RaceBrake = 4000;
+    // An opponent's line (the race-track mode drives a car along it): a point a cell apart round the lap from the start line, `Offset` cells
+    // to the side (nearer the middle in tight bends), with the ground's height there (the deck on the bridge, the flight's arc over the jump)
+    // and a speed: a top speed, slower in bends (as fast as a sideways pull allows at the bend's radius), braking before them and speeding
+    // up after them no harder than the car could (units a second, and a second squared).
+    private sealed record RacingLine(double Offset, double Top, double Sideways, double Accel, double Brake);
+    // The retail racer: two cells to the side the player's car doesn't start on. Baldino: two cells to the other side; his rocket car is the
+    // faster on the straights and pulls away harder, but takes the bends slower and brakes less well.
+    private static readonly RacingLine RacerLine = new(-2, 4400, 2500, 2200, 4000);
+    private static readonly RacingLine BaldinoLine = new(2, 4750, 2150, 2700, 3300);
 
-    private static void PlanRacePath(TrackRoad r, RaceTrackReport report, RaceTrackOptions o)
+    private static void PlanRacePath(TrackRoad r, RaceTrackReport report, RaceTrackOptions o, RacingLine line,
+        List<(double X, double Z, double Y, double Speed)> result, string name)
     {
         if (report.StartLine.Count == 0) return;
         var i0 = Nearest(r, report.StartLine[0].X, report.StartLine[0].Z);
@@ -1174,11 +1184,11 @@ internal static class RaceTrackBuilder
         {
             var k = (i0 + 2 * m) % r.Count;
             var radius = Math.Abs(r.Kappa[k]) > 1e-9 ? 1 / Math.Abs(r.Kappa[k]) : 1e9;
-            var off = RaceLineOffset * Math.Clamp((radius - 4) / 8, 0, 1);
+            var off = line.Offset * Math.Clamp((radius - 4) / 8, 0, 1);
             var x = r.X[k] - r.Tz[k] * off; var z = r.Z[k] + r.Tx[k] * off;
             var bank = r.Bridge[k] || r.Deck[k] ? 0 : Math.Clamp(-r.Kappa[k] * o.BankGain, -o.MaxBank, o.MaxBank);
             var y = r.H[k] + bank * off;
-            var speed = Math.Min(RaceTopSpeed, Math.Sqrt(RaceSideways * radius * 512));
+            var speed = Math.Min(line.Top, Math.Sqrt(line.Sideways * radius * 512));
             if (jump is not null)
             {
                 // over the jump: the flight's own arc and pace
@@ -1195,11 +1205,11 @@ internal static class RaceTrackBuilder
         var v = points.Select(p => p.Speed).ToArray(); var count = v.Length;
         for (var round = 0; round < 2; round++)
         {
-            for (var i = count - 1; i >= 0; i--) v[i] = Math.Min(v[i], Math.Sqrt(Sq(v[(i + 1) % count]) + 2 * RaceBrake * 512));
-            for (var i = 0; i < count; i++) v[i] = Math.Min(v[i], Math.Sqrt(Sq(v[(i - 1 + count) % count]) + 2 * RaceAccel * 512));
+            for (var i = count - 1; i >= 0; i--) v[i] = Math.Min(v[i], Math.Sqrt(Sq(v[(i + 1) % count]) + 2 * line.Brake * 512));
+            for (var i = 0; i < count; i++) v[i] = Math.Min(v[i], Math.Sqrt(Sq(v[(i - 1 + count) % count]) + 2 * line.Accel * 512));
         }
-        for (var i = 0; i < count; i++) report.RacePath.Add((points[i].X, points[i].Z, points[i].Y, v[i]));
-        report.Notes.Add($"the opponent's line: {count} points, {v.Min() * 3.6 / 512:0}-{v.Max() * 3.6 / 512:0} km/h");
+        for (var i = 0; i < count; i++) result.Add((points[i].X, points[i].Z, points[i].Y, v[i]));
+        report.Notes.Add($"{name}: {count} points, {v.Min() * 3.6 / 512:0}-{v.Max() * 3.6 / 512:0} km/h");
     }
 
     // ---------------------------------------------------------------------------------------------------------------------

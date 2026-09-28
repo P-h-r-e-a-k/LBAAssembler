@@ -245,12 +245,13 @@ public sealed class Body
             if(normalsOfPoints==null)w.Write(new byte[Vertices.Count*8]);
             else for(int j=0;j<Bones.Count;j++)for(int i=Bones[j].Start;i<Bones[j].Start+Bones[j].Count;i++){var n=normalsOfPoints[i];w.Write(Scaled(n.X,10240));w.Write(Scaled(n.Y,10240));w.Write(Scaled(n.Z,10240));w.Write((ushort)j);}
             int polys=(int)s.Position;
-            // blocks of triangles / quads, textured ones (type 8, or 10 = Gouraud lit when Lit) apart from the plain ones (type 0, or 4 = Gouraud)
-            foreach(var group in Faces.GroupBy(f=>(Quad:f.Points.Length==4,Textured:f.Texture!=null)))
+            // blocks of triangles / quads, textured ones (type 8, or 10 = Gouraud lit when Lit) apart from the plain ones (type 0, or 4 = Gouraud);
+            // a plain face whose Material is 0 stays flat and unlit (type 0) in a lit body too: drawn in its colour as it is (a flame, a shadow)
+            foreach(var group in Faces.GroupBy(f=>(Quad:f.Points.Length==4,Textured:f.Texture!=null,Flat:f.Texture==null&&f.Material==0)))
             {
                 if(group.Key.Quad==false&&group.First().Points.Length!=3)throw new InvalidDataException("LBA2 requires triangles or quads.");
                 bool quad=group.Key.Quad,textured=group.Key.Textured;int stride=textured?(quad?32:24):12;
-                w.Write((ushort)((quad?32768:0)|(textured?(Lit?10:8):(Lit?4:0))));w.Write((ushort)group.Count());w.Write(8+group.Count()*stride);
+                w.Write((ushort)((quad?32768:0)|(textured?(Lit?10:8):(Lit&&!group.Key.Flat?4:0))));w.Write((ushort)group.Count());w.Write(8+group.Count()*stride);
                 foreach(var f in group)
                 {
                     if(!textured){foreach(int i in f.Points)w.Write((ushort)i);if(!quad)w.Write((ushort)0);w.Write((ushort)f.Colour);w.Write((ushort)0);continue;}

@@ -1,8 +1,3 @@
-using System.Globalization;
-using System.IO;
-using System.Text;
-using LBAAssembler.Terrain;
-
 namespace LBAAssembler;
 
 // The buggy's setup for a race-track mod: what the engine's race-track mode (native RACEMOD.CPP) does with the car when Play runs a game folder that
@@ -33,6 +28,10 @@ public sealed class RaceCarSetup
     // line's speeds: a top speed of 31 km/h, slower in bends).
     public bool Opponent { get; set; } = true;
     public int OpponentPace { get; set; } = 100;
+    // Race Baldino too, in his rocket car (a second opponent, on a line of his own), and how fast (percent of his line's speeds: up to 33 km/h
+    // on the straights, slower than the racer in bends).
+    public bool Baldino { get; set; } = true;
+    public int BaldinoPace { get; set; } = 100;
     // Play starts on the start/finish straight, Twinsen beside his car, whatever scene is open (and with the zones and routes the editor
     // draws over the game hidden).
     public bool StartAtLine { get; set; } = true;
@@ -57,41 +56,4 @@ public sealed class RaceCarSetup
     public static double UnitsToKmh(double units) => units * 3.6 / 512;
 
     public int TopKmh(int gear) => gear < GearTopKmh.Count ? GearTopKmh[gear] : GearTopKmh.LastOrDefault(27);
-
-    // The engine's car setup file (RACEMOD.CPP's format), with the start line from the game folder's RACETRACK.JSON when it has one.
-    internal string EngineFile(RaceTrackService.TrackInfo? track, string? pathFile = null)
-    {
-        string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
-        var gears = Math.Clamp(Gears, 1, MaxGears);
-        var text = new StringBuilder("# LBA Assembler race car setup (read by the engine's race-track mode, RACEMOD.CPP)\n");
-        text.Append($"gears={gears}\n");
-        for (var g = 0; g < gears; g++) text.Append($"gear{g + 1}={KmhToUnits(Math.Clamp(TopKmh(g), 3, 150))}\n");
-        text.Append($"accel={N(OriginalAccel * Math.Clamp(AccelerationPercent, 10, 1000) / 100.0)}\n");
-        text.Append($"brake={N(OriginalBrake * Math.Clamp(BrakingPercent, 10, 1000) / 100.0)}\n");
-        text.Append($"coast={N(OriginalCoast * Math.Clamp(CoastingPercent, 0, 1000) / 100.0)}\n");
-        text.Append($"reverse={KmhToUnits(Math.Clamp(ReverseKmh, 1, 150))}\n");
-        text.Append($"steer={(int)Math.Round(OriginalSteer * Math.Clamp(SteeringPercent, 10, 1000) / 100.0)}\n");
-        text.Append($"automatic={(Automatic ? 1 : 0)}\n");
-        text.Append($"hud={(ShowDisplay ? 1 : 0)}\n");
-        if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}\n");
-        foreach (var c in track?.Checkpoints ?? new()) text.Append($"checkpoint={c.CubeX} {c.CubeZ} {c.X0} {c.Z0} {c.X1} {c.Z1} {c.DirX} {c.DirZ}\n");
-        if (Opponent && pathFile is not null && track?.Path is { Count: > 0 } && track.Opponent is { Count: > 0 } actors)
-        {
-            text.Append($"opponent_path={pathFile}\nopponent_grid={track.PathGrid}\nopponent_pace={Math.Clamp(OpponentPace, 10, 300)}\n");
-            foreach (var (scene, actor) in actors) text.Append($"opponent_actor={scene} {actor}\n");
-        }
-        return text.ToString();
-    }
-
-    // The engine's car setup file, and beside it the opponent's line (racepath.txt) when it races one.
-    internal void WriteEngineFile(string path, RaceTrackService.TrackInfo? track)
-    {
-        string? pathFile = null;
-        if (Opponent && track?.Path is { Count: > 0 } line)
-        {
-            pathFile = Path.Combine(Path.GetDirectoryName(path) ?? ".", "racepath.txt");
-            File.WriteAllLines(pathFile, line.Select(p => string.Join(' ', p)));
-        }
-        File.WriteAllText(path, EngineFile(track, pathFile));
-    }
 }

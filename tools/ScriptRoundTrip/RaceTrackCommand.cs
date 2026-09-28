@@ -13,7 +13,7 @@ internal static class RaceTrackCommand
     {
         var plan = RaceTrackPlan.Load(args[1]);
         var pristine = args[2]; var game = args[3];
-        foreach (var f in RaceTrackService.Files.Concat(RaceTrackService.JumpFiles))
+        foreach (var f in RaceTrackService.Files.Concat(RaceTrackService.ExtraFiles))
             if (File.Exists(Path.Combine(pristine, f))) File.Copy(Path.Combine(pristine, f), Path.Combine(game, f), overwrite: true);
         var island = IslandFile.Load(Path.Combine(game, "DESERT.ILE"));
         var options = new RaceTrackOptions();
@@ -27,7 +27,7 @@ internal static class RaceTrackCommand
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var report = RaceTrackBuilder.Build(island, plan, options);
         island.Save(Path.Combine(game, "DESERT.ILE"));
-        extra.AddRange(RaceTrackService.Finish(game, report));
+        extra.AddRange(RaceTrackService.Finish(game, report, options));
         var scenes = RaceTrackScenes.Apply(game, report, options);
         RaceTrackService.WriteInfo(game, report, options, scenes);
         if (Environment.GetEnvironmentVariable("RT_DUMP") is { Length: > 0 } dump)
@@ -62,6 +62,31 @@ internal static class RaceTrackCommand
     // (for looking at a place of the track in the game).
     // racecarfile <game folder> <out file> [pace]: the engine's car setup file Play would write for that folder (the default car, the
     // folder's RACETRACK.JSON: start line, checkpoints, the opponent's line beside it as racepath.txt), for headless tests.
+    // baldinocar <game folder> <scratch folder>: Baldino's car built from the game folder's BODY.HQR and installed into copies of its BODY.HQR and
+    // RESS.HQR in the scratch folder (for a look at it: BodyPipeline hqrpreview <scratch>\BODY.HQR <index>)
+    public static int BaldinoCar(string[] args)
+    {
+        Directory.CreateDirectory(args[2]);
+        foreach (var f in new[] { "BODY.HQR", "RESS.HQR" }) File.Copy(Path.Combine(args[1], f), Path.Combine(args[2], f), overwrite: true);
+        var (index, log) = RaceTrackBaldinoCar.Install(args[2]);
+        Console.WriteLine(log);
+        return index > 0 ? 0 : 1;
+    }
+
+    // actorbeta <game folder> <scene> <actor> <turn> [dx dz]: turns an actor (and moves it by dx, dz world units) in a (test) game folder's scene
+    public static int ActorBeta(string[] args)
+    {
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, args[1]);
+        var scene = int.Parse(args[2]);
+        var model = store.Load(scene);
+        var actor = model.Actors[int.Parse(args[3])];
+        actor.Beta = int.Parse(args[4]);
+        if (args.Length > 6) { actor.X += int.Parse(args[5]); actor.Z += int.Parse(args[6]); }
+        store.Save(scene, model, allowErrors: true);
+        Console.WriteLine($"scene {scene} actor {args[3]}: turn {actor.Beta} at ({actor.X},{actor.Y},{actor.Z})");
+        return 0;
+    }
+
     public static int RaceCarFile(string[] args)
     {
         var setup = new LBAAssembler.RaceCarSetup();

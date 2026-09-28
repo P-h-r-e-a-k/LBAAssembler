@@ -8,8 +8,8 @@
  *     scaled to the gear (a low gear pulls harder), braking, coasting, the speed backwards and the steering;
  *   - laps are counted at a start line, and only once the car has crossed every checkpoint round the lap in order (reversing back over
  *     the line and across it again is not a lap);
- *   - an opponent: a copy of a car the build put in every scene, driven along a line round the lap at the line's own speeds, placed in
- *     whichever scene the player is in;
+ *   - opponents (up to four): each a copy of a car the build put in every scene, driven along its own line round the lap at the line's
+ *     own speeds, placed in whichever scene the player is in;
  *   - a small display of the gear, the speed, the lap times, the checkpoints and the race position.
  *
  * The file is "key=value" lines ('#' starts a comment); anything missing keeps the original car's value. Speeds are world units per second
@@ -23,6 +23,7 @@
  *     opponent_grid=<points>     how many of the path's last points the opponent starts before the start line
  *     opponent_pace=<percent>    of the path's speeds
  *     opponent_actor=<scene> <actor>   the opponent's car in that scene (one line per scene)
+ *     opponent2_path=...  opponent2_grid=...  opponent2_pace=...  opponent2_actor=...   the second opponent, and so on up to opponent4
  */
 #include "C_EXTERN.H"
 #include "COMMON.H"
@@ -62,21 +63,23 @@ static int s_next = 0;
 static char s_message[64];
 static S32 s_messageUntil = 0;
 
-// the opponent: its line, where it is along it (world units from the start line), laps begun, the scenes' copies of its car
-static int s_oppCount = 0;
-static S32 *s_oppX = NULL, *s_oppZ = NULL, *s_oppY = NULL, *s_oppV = NULL;
-static double *s_oppCum = NULL;            // distance from the first point to each point
-static double s_oppLength = 0;             // the lap along the line
-static double s_oppS = 0;
-static int s_oppLaps = 0;
-static int s_oppStarted = 0;
-static int s_oppGrid = 4;
-static int s_oppPace = 100;
-static S32 s_oppLast = 0;
+// the opponents: each one's line, where it is along it (world units from the start line), laps begun, the scenes' copies of its car
+#define RACE_MAX_OPPONENTS 4
 #define RACE_MAX_OPPONENT_SCENES 64
-static int s_oppScene[RACE_MAX_OPPONENT_SCENES], s_oppActor[RACE_MAX_OPPONENT_SCENES];
-static int s_oppScenes = 0;
-static int s_playerIndex = -1;             // the line's point nearest the player, for the race position
+typedef struct {
+    int Count;                             // points on its line (0: no line, no opponent)
+    S32 *X, *Z, *Y, *V;
+    double *Cum;                           // distance from the first point to each point
+    double Length;                         // the lap along the line
+    double S;
+    int Laps, Grid, Pace;
+    int Scene[RACE_MAX_OPPONENT_SCENES], Actor[RACE_MAX_OPPONENT_SCENES];
+    int Scenes;
+} T_RACE_OPPONENT;
+static T_RACE_OPPONENT s_opp[RACE_MAX_OPPONENTS];
+static int s_oppStarted = 0;               // the race has started (the player drove off)
+static S32 s_oppLast = 0;
+static int s_playerIndex = -1;             // the first opponent's line point nearest the player, for the race position
 // The whole scene is redrawn while the opponent moves: with the camera standing still, only what moves is redrawn over a copy of the
 // scene, and the car, drawn into that copy while it waited on the grid, stayed there as a picture after it set off. Asked for while
 // drawing (RaceMod_Frame) and set from the buggy's move before the next frame's drawing (RaceMod_Lap): the main loop resets FirstTime
@@ -85,6 +88,8 @@ static int s_wantFlip = 0;
 
 static void Defaults(T_RACE_CAR *c) {
     memset(c, 0, sizeof(*c));
+    memset(s_opp, 0, sizeof(s_opp));
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) { s_opp[n].Grid = 4; s_opp[n].Pace = 100; }
     c->Gears = 1;
     c->GearTop[0] = RACE_REF_TOP;
     c->Accel = 4000;
@@ -101,7 +106,7 @@ static int ReadLine(const char *v, T_RACE_LINE *l) {
     return sscanf(v, "%d %d %d %d %d %d %d %d", &l->CubeX, &l->CubeZ, &l->X0, &l->Z0, &l->X1, &l->Z1, &l->DirX, &l->DirZ) == 8;
 }
 
-static void LoadPath(const char *path) {
+static void LoadPath(T_RACE_OPPONENT *o, const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) return;
     int capacity = 4096, count = 0;
@@ -116,14 +121,25 @@ static void LoadPath(const char *path) {
     }
     fclose(f);
     if (count < 3) { free(x); free(z); free(y); free(v); return; }
-    s_oppX = x; s_oppZ = z; s_oppY = y; s_oppV = v; s_oppCount = count;
-    s_oppCum = (double *)malloc((count + 1) * sizeof(double));
-    s_oppCum[0] = 0;
+    o->X = x; o->Z = z; o->Y = y; o->V = v; o->Count = count;
+    o->Cum = (double *)malloc((count + 1) * sizeof(double));
+    o->Cum[0] = 0;
     for (int i = 1; i <= count; i++) {
         const int a = i - 1, b = i % count;
-        s_oppCum[i] = s_oppCum[i - 1] + sqrt((double)(x[b] - x[a]) * (x[b] - x[a]) + (double)(z[b] - z[a]) * (z[b] - z[a]));
+        o->Cum[i] = o->Cum[i - 1] + sqrt((double)(x[b] - x[a]) * (x[b] - x[a]) + (double)(z[b] - z[a]) * (z[b] - z[a]));
     }
-    s_oppLength = s_oppCum[count];
+    o->Length = o->Cum[count];
+}
+
+// "opponent_..." is the first opponent, "opponent2_..." the second, and so on: which one, and the rest of the key after the '_'
+static T_RACE_OPPONENT *OpponentKey(const char *key, const char **rest) {
+    if (strncmp(key, "opponent", 8)) return NULL;
+    int n = 0;
+    const char *p = key + 8;
+    if (*p >= '2' && *p <= '0' + RACE_MAX_OPPONENTS) n = *p++ - '1';
+    if (*p != '_') return NULL;
+    *rest = p + 1;
+    return &s_opp[n];
 }
 
 static void Load(const char *path) {
@@ -161,13 +177,18 @@ static void Load(const char *path) {
             }
         } else if (!strcmp(key, "checkpoint")) {
             if (s_nbCheckpoints < RACE_MAX_CHECKPOINTS && ReadLine(v, &s_checkpoints[s_nbCheckpoints])) s_nbCheckpoints++;
-        } else if (!strcmp(key, "opponent_path")) LoadPath(v);
-        else if (!strcmp(key, "opponent_grid")) s_oppGrid = atoi(v);
-        else if (!strcmp(key, "opponent_pace")) s_oppPace = atoi(v);
-        else if (!strcmp(key, "opponent_actor")) {
-            int scene, actor;
-            if (s_oppScenes < RACE_MAX_OPPONENT_SCENES && sscanf(v, "%d %d", &scene, &actor) == 2) {
-                s_oppScene[s_oppScenes] = scene; s_oppActor[s_oppScenes] = actor; s_oppScenes++;
+        } else {
+            const char *rest;
+            T_RACE_OPPONENT *o = OpponentKey(key, &rest);
+            if (!o) continue;
+            if (!strcmp(rest, "path")) LoadPath(o, v);
+            else if (!strcmp(rest, "grid")) o->Grid = atoi(v);
+            else if (!strcmp(rest, "pace")) o->Pace = atoi(v);
+            else if (!strcmp(rest, "actor")) {
+                int scene, actor;
+                if (o->Scenes < RACE_MAX_OPPONENT_SCENES && sscanf(v, "%d %d", &scene, &actor) == 2) {
+                    o->Scene[o->Scenes] = scene; o->Actor[o->Scenes] = actor; o->Scenes++;
+                }
             }
         }
     }
@@ -180,12 +201,14 @@ static void Load(const char *path) {
     if (s_car.Brake < 100) s_car.Brake = 100;
     if (s_car.Coast < 0) s_car.Coast = 0;
     if (s_car.Reverse < 0) s_car.Reverse = 0;
-    if (s_oppPace < 10) s_oppPace = 10;
-    if (s_oppCount) {
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        T_RACE_OPPONENT *o = &s_opp[n];
+        if (o->Pace < 10) o->Pace = 10;
+        if (!o->Count) continue;
         // the grid: a few points before the start line
-        int grid = s_oppGrid < 0 ? 0 : s_oppGrid >= s_oppCount ? s_oppCount - 1 : s_oppGrid;
-        s_oppS = grid ? s_oppCum[s_oppCount - grid] : 0;
-        s_oppLaps = grid ? 0 : 1;
+        const int grid = o->Grid < 0 ? 0 : o->Grid >= o->Count ? o->Count - 1 : o->Grid;
+        o->S = grid ? o->Cum[o->Count - grid] : 0;
+        o->Laps = grid ? 0 : 1;
     }
 }
 
@@ -287,92 +310,105 @@ void RaceMod_Lap(S32 x, S32 z) {
     s_next = 0;
 }
 
-// The opponent's line at distance s: position (world units) and heading.
-static void PathAt(double s, double *x, double *z, double *y, double *v, double *dx, double *dz) {
-    while (s < 0) s += s_oppLength;
-    while (s >= s_oppLength) s -= s_oppLength;
-    int lo = 0, hi = s_oppCount;
-    while (hi - lo > 1) { const int mid = (lo + hi) / 2; if (s_oppCum[mid] <= s) lo = mid; else hi = mid; }
-    const int a = lo, b = (lo + 1) % s_oppCount;
-    const double span = s_oppCum[lo + 1] - s_oppCum[lo];
-    const double t = span > 0 ? (s - s_oppCum[lo]) / span : 0;
-    *x = s_oppX[a] + (s_oppX[b] - s_oppX[a]) * t;
-    *z = s_oppZ[a] + (s_oppZ[b] - s_oppZ[a]) * t;
-    *y = s_oppY[a] + (s_oppY[b] - s_oppY[a]) * t;
-    *v = s_oppV[a] + (s_oppV[b] - s_oppV[a]) * t;
-    *dx = s_oppX[b] - s_oppX[a];
-    *dz = s_oppZ[b] - s_oppZ[a];
+// An opponent's line at distance s: position (world units) and heading.
+static void PathAt(const T_RACE_OPPONENT *o, double s, double *x, double *z, double *y, double *v, double *dx, double *dz) {
+    while (s < 0) s += o->Length;
+    while (s >= o->Length) s -= o->Length;
+    int lo = 0, hi = o->Count;
+    while (hi - lo > 1) { const int mid = (lo + hi) / 2; if (o->Cum[mid] <= s) lo = mid; else hi = mid; }
+    const int a = lo, b = (lo + 1) % o->Count;
+    const double span = o->Cum[lo + 1] - o->Cum[lo];
+    const double t = span > 0 ? (s - o->Cum[lo]) / span : 0;
+    *x = o->X[a] + (o->X[b] - o->X[a]) * t;
+    *z = o->Z[a] + (o->Z[b] - o->Z[a]) * t;
+    *y = o->Y[a] + (o->Y[b] - o->Y[a]) * t;
+    *v = o->V[a] + (o->V[b] - o->V[a]) * t;
+    *dx = o->X[b] - o->X[a];
+    *dz = o->Z[b] - o->Z[a];
 }
 
-static int OpponentActor(void) {
-    for (int i = 0; i < s_oppScenes; i++)
-        if (s_oppScene[i] == NumCube && s_oppActor[i] > 0 && s_oppActor[i] < NbObjets) return s_oppActor[i];
+static int OpponentActor(const T_RACE_OPPONENT *o) {
+    for (int i = 0; i < o->Scenes; i++)
+        if (o->Scene[i] == NumCube && o->Actor[i] > 0 && o->Actor[i] < NbObjets) return o->Actor[i];
     return -1;
 }
 
+// the opponents racing: a line and cars in the scenes
+static int Opponents(void) {
+    int n = 0;
+    for (int i = 0; i < RACE_MAX_OPPONENTS; i++) if (s_opp[i].Count && s_opp[i].Scenes) n++;
+    return n;
+}
+
 void RaceMod_Frame(void) {
-    if (!RaceMod_Active() || !s_oppCount) return;
+    if (!RaceMod_Active() || !Opponents()) return;
     const S32 now = TimerRefHR;
     S32 dt = s_oppLast ? now - s_oppLast : 0;
     s_oppLast = now;
     if (dt < 0) dt = 0;
     if (dt > 100) dt = 100;
     const int driving = Comportement == C_BUGGY;
-    // the race starts when the player first drives off
+    // the race starts when the player first drives off; the opponents wait while he is out of his car
     if (!s_oppStarted && driving && (Input & I_UP)) s_oppStarted = 1;
-    double x, z, y, v, dx, dz;
-    PathAt(s_oppS, &x, &z, &y, &v, &dx, &dz);
     const int moving = s_oppStarted && driving;
-    if (moving) {
-        const double before = s_oppS;
-        s_oppS += v * s_oppPace / 100.0 * dt / 1000.0;
-        if (s_oppS >= s_oppLength) s_oppS -= s_oppLength;
-        if (s_oppS < before) s_oppLaps++;       // past the start line
-        PathAt(s_oppS, &x, &z, &y, &v, &dx, &dz);
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        T_RACE_OPPONENT *o = &s_opp[n];
+        if (!o->Count) continue;
+        double x, z, y, v, dx, dz;
+        PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
+        if (moving) {
+            const double before = o->S;
+            o->S += v * o->Pace / 100.0 * dt / 1000.0;
+            if (o->S >= o->Length) o->S -= o->Length;
+            if (o->S < before) o->Laps++;       // past the start line
+            PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
+        }
+        if (CubeMode != CUBE_EXTERIEUR) continue;
+        const int index = OpponentActor(o);
+        if (index < 0) continue;
+        T_OBJET *car = &ListObjet[index];
+        car->Obj.X = (S32)(x - CurrentCubeX * 32768.0);
+        car->Obj.Z = (S32)(z - CurrentCubeY * 32768.0);
+        car->Obj.Y = (S32)y;
+        S32 beta = (S32)(atan2(dx, dz) * 4096.0 / (2 * 3.14159265358979)) & 4095;
+        car->Obj.Beta = beta;
+        ClearRealAngle(car);
+        // the driving animation while it moves (its steps are undone every frame: the position is set here)
+        const U16 anim = moving ? 1 : 0;
+        if (car->GenAnim != anim) InitAnim(anim, ANIM_REPEAT, (U8)index);
+        if (moving) s_wantFlip = 1;
     }
-    if (CubeMode != CUBE_EXTERIEUR) return;
-    const int index = OpponentActor();
-    if (index < 0) return;
-    T_OBJET *car = &ListObjet[index];
-    car->Obj.X = (S32)(x - CurrentCubeX * 32768.0);
-    car->Obj.Z = (S32)(z - CurrentCubeY * 32768.0);
-    car->Obj.Y = (S32)y;
-    S32 beta = (S32)(atan2(dx, dz) * 4096.0 / (2 * 3.14159265358979)) & 4095;
-    car->Obj.Beta = beta;
-    ClearRealAngle(car);
-    // the driving animation while it moves (its steps are undone every frame: the position is set here)
-    const U16 anim = moving ? 1 : 0;
-    if (car->GenAnim != anim) InitAnim(anim, ANIM_REPEAT, (U8)index);
-    if (moving) s_wantFlip = 1;
 }
 
-// How far round the race the player is, and the opponent, in world units from the start of lap 1 (negative before it).
+// How far round the race the player is, and an opponent, in world units from the start of lap 1 (negative before it). The player is
+// placed on the first opponent's line (the lines run side by side round the same lap).
 static double PlayerProgress(void) {
-    if (!s_oppCount) return 0;
+    const T_RACE_OPPONENT *o = &s_opp[0];
+    if (!o->Count) return 0;
     const double wx = ListObjet[NUM_PERSO].Obj.X + CurrentCubeX * 32768.0, wz = ListObjet[NUM_PERSO].Obj.Z + CurrentCubeY * 32768.0;
     int best = -1;
     double bd = 1e30;
     if (s_playerIndex >= 0)
         for (int k = -150; k <= 150; k++) {
-            const int i = ((s_playerIndex + k) % s_oppCount + s_oppCount) % s_oppCount;
-            const double d = (s_oppX[i] - wx) * (s_oppX[i] - wx) + (s_oppZ[i] - wz) * (s_oppZ[i] - wz);
+            const int i = ((s_playerIndex + k) % o->Count + o->Count) % o->Count;
+            const double d = (o->X[i] - wx) * (o->X[i] - wx) + (o->Z[i] - wz) * (o->Z[i] - wz);
             if (d < bd) { bd = d; best = i; }
         }
     if (best < 0 || bd > 20.0 * 512 * 20 * 512)
-        for (int i = 0; i < s_oppCount; i++) {
-            const double d = (s_oppX[i] - wx) * (s_oppX[i] - wx) + (s_oppZ[i] - wz) * (s_oppZ[i] - wz);
+        for (int i = 0; i < o->Count; i++) {
+            const double d = (o->X[i] - wx) * (o->X[i] - wx) + (o->Z[i] - wz) * (o->Z[i] - wz);
             if (d < bd) { bd = d; best = i; }
         }
     s_playerIndex = best;
-    const double s = s_oppCum[best];
+    const double s = o->Cum[best];
     // before lap 1 the player is behind the line, near the line's end
-    if (s_laps == 0) return s > s_oppLength / 2 ? s - s_oppLength : s;
-    return (s_laps - 1) * s_oppLength + (s > s_oppLength * 0.9 && s_next == 0 ? s - s_oppLength : s);
+    if (s_laps == 0) return s > o->Length / 2 ? s - o->Length : s;
+    return (s_laps - 1) * o->Length + (s > o->Length * 0.9 && s_next == 0 ? s - o->Length : s);
 }
 
-static double OpponentProgress(void) {
-    if (s_oppLaps == 0) return s_oppS > s_oppLength / 2 ? s_oppS - s_oppLength : s_oppS;
-    return (s_oppLaps - 1) * s_oppLength + s_oppS;
+static double OpponentProgress(const T_RACE_OPPONENT *o) {
+    if (o->Laps == 0) return o->S > o->Length / 2 ? o->S - o->Length : o->S;
+    return (o->Laps - 1) * o->Length + o->S;
 }
 
 static void Time(char *out, size_t size, S32 ms) {
@@ -435,8 +471,16 @@ void RaceMod_Draw(void) {
             y += step;
         }
     }
-    if (s_oppCount && s_oppScenes) {
-        snprintf(text, sizeof(text), "Position %d/2", PlayerProgress() >= OpponentProgress() ? 1 : 2);
+    if (Opponents() && s_opp[0].Count) {
+        // (the player's place among the racers: one more for every opponent further round)
+        const double me = PlayerProgress();
+        int place = 1, racers = 1;
+        for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+            if (!s_opp[n].Count || !s_opp[n].Scenes) continue;
+            racers++;
+            if (OpponentProgress(&s_opp[n]) > me) place++;
+        }
+        snprintf(text, sizeof(text), "Position %d/%d", place, racers);
         Line(right, y, text, &left);
         y += step;
     }

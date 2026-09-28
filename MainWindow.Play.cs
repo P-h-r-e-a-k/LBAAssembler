@@ -215,8 +215,8 @@ public partial class MainWindow
         options.Paths = pathsVisible;
         options.ListenPort = Lba2BreakpointsPort;
         options.FallbackMusic = ResolveLba2MusicFallback(scene);
-        options.RaceCar = Terrain.RaceTrackService.HasBackups(gameRoot) ? EditorSettings.Current.RaceCar.Clone() : null;
-        raceOverlayHidden = options.RaceCar is { StartAtLine: true };
+        options.RaceCarFile = Terrain.RaceTrackService.CarFileWriter(gameRoot);
+        raceOverlayHidden = options.RaceCarFile is not null && EditorSettings.Current.RaceCar.StartAtLine;
         if (raceOverlayHidden) { options.ZoneMask = 0; options.Paths = false; }
 
         var label = allSceneEntries.FirstOrDefault(s => s.Option.Index == scene)?.Option.Display ?? $"scene {scene}";
