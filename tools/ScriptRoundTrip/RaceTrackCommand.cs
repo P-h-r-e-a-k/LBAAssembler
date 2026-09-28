@@ -21,12 +21,17 @@ internal static class RaceTrackCommand
         if (Environment.GetEnvironmentVariable("RT_CLEARANCE") is { } rc) options.RoadBridgeClearance = double.Parse(rc);
         if (Environment.GetEnvironmentVariable("RT_TILELEN") is { } tl) options.RoadBridgeTileLength = double.Parse(tl);
         if (Environment.GetEnvironmentVariable("RT_CROSSING") is { } cs) options.Crossing = Enum.Parse<CrossingStyle>(cs, ignoreCase: true);
+        if (Environment.GetEnvironmentVariable("RT_JUMPANGLE") is { } ja) options.JumpCrossingAngle = double.Parse(ja, System.Globalization.CultureInfo.InvariantCulture);
+        if (Environment.GetEnvironmentVariable("RT_JUMPGAP") is { } jg) options.JumpGap = double.Parse(jg, System.Globalization.CultureInfo.InvariantCulture);
         var extra = RaceTrackService.Prepare(game, options);
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var report = RaceTrackBuilder.Build(island, plan, options);
         island.Save(Path.Combine(game, "DESERT.ILE"));
+        extra.AddRange(RaceTrackService.Finish(game, report));
         var scenes = RaceTrackScenes.Apply(game, report, options);
         RaceTrackService.WriteInfo(game, report, options);
+        if (Environment.GetEnvironmentVariable("RT_DUMP") is { Length: > 0 } dump)
+            File.WriteAllLines(dump, report.LapX.Select((x, i) => FormattableString.Invariant($"{x:0.###},{report.LapZ[i]:0.###}")));
         foreach (var l in extra) Console.WriteLine("  " + l);
         foreach (var l in scenes.Log) Console.WriteLine("  " + l);
         Console.WriteLine($"  {scenes.ActorsRemoved} actors removed from {scenes.ScenesChanged} scenes");

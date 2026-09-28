@@ -52,6 +52,7 @@
     <Compile Include="..\..\Terrain\**\*.cs" Link="Terrain\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\LiveDataRoot.cs" Link="LiveDataRoot.cs" />
     <Compile Include="..\..\AudioLevels.cs" Link="AudioLevels.cs" />
+    <Compile Include="..\..\RaceCarSetup.cs" Link="RaceCarSetup.cs" />
     <Compile Include="..\..\EditorSettings.cs" Link="EditorSettings.cs" />
     <Compile Include="..\..\Assets\**\*.cs" Link="Assets\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\Grids\**\*.cs" Link="Grids\%(RecursiveDir)%(Filename)%(Extension)" />

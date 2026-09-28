@@ -49,6 +49,7 @@ internal static class RaceTrackService
             var island = IslandFile.Load(Path.Combine(gameDirectory, "DESERT.ILE" + BackupSuffix));
             var report = RaceTrackBuilder.Build(island, plan, options);
             island.Save(Path.Combine(gameDirectory, "DESERT.ILE"));
+            extra.AddRange(Finish(gameDirectory, report));
             var scenes = RaceTrackScenes.Apply(gameDirectory, report, options);
             WriteInfo(gameDirectory, report, options);
 
@@ -69,20 +70,22 @@ internal static class RaceTrackService
         }
     }
 
-    // What a crossing style needs in the files besides the island and the scenes (the files are the originals when this runs): the bridge
-    // deck's bodies in DESERT.OBL, or the jump's flight in ANIM.HQR and RESS.HQR. Returns lines for the build's log.
+    // What a crossing style needs in the files besides the island and the scenes (the files are the originals when these run): before the
+    // island is built, the bridge deck's bodies in DESERT.OBL; after it, the jump's flight in ANIM.HQR and RESS.HQR, as long as the layout
+    // made it. Return lines for the build's log.
     public static List<string> Prepare(string gameDirectory, RaceTrackOptions options)
     {
         var log = new List<string>();
         if (options.Crossing == CrossingStyle.Bridge)
             options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, "DESERT.OBL"), options);
-        if (options.Crossing == CrossingStyle.Jump)
-        {
-            log.Add(RaceTrackJumpAnim.Install(gameDirectory));
-            options.JumpAnim = RaceTrackJumpAnim.Generic;
-            options.JumpDistance = RaceTrackJumpAnim.Distance;
-            options.JumpEndDrop = RaceTrackJumpAnim.EndDrop;
-        }
+        if (options.Crossing == CrossingStyle.Jump) options.JumpAnim = RaceTrackJumpAnim.Generic;
+        return log;
+    }
+
+    public static List<string> Finish(string gameDirectory, RaceTrackReport report)
+    {
+        var log = new List<string>();
+        if (report.Jump is { } jump) log.Add(RaceTrackJumpAnim.Install(gameDirectory, jump.FlightScale));
         return log;
     }
 

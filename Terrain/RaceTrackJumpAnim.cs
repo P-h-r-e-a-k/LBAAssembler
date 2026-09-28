@@ -14,19 +14,26 @@ internal static class RaceTrackJumpAnim
     public const int Generic = 200;
     // Twinsen's entity while he drives (behaviour C_BUGGY = 12: the engine loads entity n for behaviour n).
     public const int BuggyEntity = 12;
-    public const double ForwardScale = 1.2, ClimbScale = 1.2, TimeScale = 1.1;
-    // What the copy does, from the retail flight's steps (measured in the game: 17.4-17.6 cells): 21.1 cells, ending 241 below the start.
-    public const double Distance = 8990 * ForwardScale / 512;
-    public const double EndDrop = -201 * ClimbScale;
+    // The retail flight's steps (measured in the game: 17.4-17.6 cells): 8990 units forward, ending 201 below where it starts.
+    public const double RetailForward = 8990, RetailEndDrop = -201;
 
-    // Adds the flight to the game folder's ANIM.HQR and RESS.HQR (the copies the build starts from are the originals, so this runs once
-    // per build). Returns a line for the build's log.
-    public static string Install(string gameDirectory)
+    // A copy `forward` times as long climbs a little less than that much higher and takes a little longer, so the arc keeps its look:
+    // x1.3 forward is x1.25 up and x1.15 the time.
+    public static double ClimbScale(double forward) => 1 + (forward - 1) * 0.85;
+    public static double TimeScale(double forward) => 1 + (forward - 1) * 0.5;
+    public static double Distance(double forward) => RetailForward * forward / 512;
+    public static double EndDrop(double forward) => RetailEndDrop * ClimbScale(forward);
+    // The scale that flies `cells` (never shorter than the retail flight).
+    public static double ForwardFor(double cells) => Math.Max(1, Math.Ceiling(cells * 512 / RetailForward * 100) / 100);
+
+    // Adds a flight `forward` times the retail one to the game folder's ANIM.HQR and RESS.HQR (the copies the build starts from are the
+    // originals, so this runs once per build). Returns a line for the build's log.
+    public static string Install(string gameDirectory, double forward)
     {
         var animPath = Path.Combine(gameDirectory, "ANIM.HQR");
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var retail = HqrArchive.Open(animPath).Read(RetailEntry);
-        var flight = Scale(retail);
+        var flight = Scale(retail, forward);
         var index = HqrArchive.CountEntries(animPath);
         File.WriteAllBytes(animPath, HqrWriter.AppendEntry(File.ReadAllBytes(animPath), HqrWriter.StoredEntry(flight)));
 
@@ -34,14 +41,15 @@ internal static class RaceTrackJumpAnim
         var table = HqrArchive.Open(ressPath).Read(44);
         table = WithAnim(table, BuggyEntity, Generic, index);
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(ress, 44, HqrWriter.StoredEntry(table)));
-        return $"jump flight: ANIM.HQR entry {index} (entry {RetailEntry} with the steps forward x{ForwardScale}, the climb x{ClimbScale} and the time x{TimeScale}: " +
-               $"{Distance:0.0} cells), played by Twinsen in the buggy as animation {Generic}";
+        return $"jump flight: ANIM.HQR entry {index} (entry {RetailEntry} with the steps forward x{forward:0.00}, the climb x{ClimbScale(forward):0.00} and the time x{TimeScale(forward):0.00}: " +
+               $"{Distance(forward):0.0} cells), played by Twinsen in the buggy as animation {Generic}";
     }
 
     // The retail flight with its keyframes' root steps and times scaled. Layout (ANIM.HQR): U16 keyframes, U16 bones, U16 loop frame, U16 0;
     // then per keyframe U16 time (ms), S16 step X, Y, Z, and 8 bytes per bone.
-    public static byte[] Scale(byte[] anim)
+    public static byte[] Scale(byte[] anim, double forward)
     {
+        double climb = ClimbScale(forward), time = TimeScale(forward);
         var copy = (byte[])anim.Clone();
         int frames = BinaryPrimitives.ReadUInt16LittleEndian(copy), bones = BinaryPrimitives.ReadUInt16LittleEndian(copy.AsSpan(2));
         for (var f = 0; f < frames; f++)
@@ -49,11 +57,10 @@ internal static class RaceTrackJumpAnim
             var p = 8 + f * (8 + bones * 8);
             if (p + 8 > copy.Length) throw new InvalidDataException("The jump animation is shorter than its header says.");
             void Put(int at, double value) => BinaryPrimitives.WriteInt16LittleEndian(copy.AsSpan(at), (short)Math.Clamp(Math.Round(value), short.MinValue, short.MaxValue));
-            var time = BinaryPrimitives.ReadUInt16LittleEndian(copy.AsSpan(p));
-            BinaryPrimitives.WriteUInt16LittleEndian(copy.AsSpan(p), (ushort)Math.Clamp(Math.Round(time * TimeScale), 1, ushort.MaxValue));
-            Put(p + 2, BinaryPrimitives.ReadInt16LittleEndian(copy.AsSpan(p + 2)) * ForwardScale);
-            Put(p + 4, BinaryPrimitives.ReadInt16LittleEndian(copy.AsSpan(p + 4)) * ClimbScale);
-            Put(p + 6, BinaryPrimitives.ReadInt16LittleEndian(copy.AsSpan(p + 6)) * ForwardScale);
+            BinaryPrimitives.WriteUInt16LittleEndian(copy.AsSpan(p), (ushort)Math.Clamp(Math.Round(BinaryPrimitives.ReadUInt16LittleEndian(copy.AsSpan(p)) * time), 1, ushort.MaxValue));
+            Put(p + 2, BinaryPrimitives.ReadInt16LittleEndian(copy.AsSpan(p + 2)) * forward);
+            Put(p + 4, BinaryPrimitives.ReadInt16LittleEndian(copy.AsSpan(p + 4)) * climb);
+            Put(p + 6, BinaryPrimitives.ReadInt16LittleEndian(copy.AsSpan(p + 6)) * forward);
         }
         return copy;
     }

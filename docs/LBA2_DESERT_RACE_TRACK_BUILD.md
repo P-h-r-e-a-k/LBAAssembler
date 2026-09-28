@@ -45,7 +45,7 @@ Pictures, all from the built copy:
   - The crossing is first re-shaped to about the picture's own angle: 41 degrees, where the fitted centre line had flattened it to 17.
   - The straighter road climbs a 50-cell ramp, then crosses 4 cells of level landing onto a flat deck 2800 units above the other road. The deck is 68 cells long and 12 wide, laid as a grid of 51 decor tiles with the road's red and white curb along both edges and low red and white railings outside them.
   - The other road keeps its own grade and passes underneath.
-  - Two other styles are still offered in the menu. A **jump**: the straighter road climbs a ramp to a lip, the car flies over a gap of sand, the other road and another gap, and lands on a down ramp (see "The jump"); it turns the crossing to 64 degrees first. A **viaduct** is three arched decks and two abutments (retail bodies 68-70) over a level junction.
+  - Two other styles are still offered in the menu. A **jump**: the straighter road climbs a ramp to a lip, the car flies over a gap of sand, the other road and another gap, and lands on a down ramp (see "The jump"); it turns the crossing to the steepest angle that keeps the rest of the lap clear (41 degrees on this track) first. A **viaduct** is three arched decks and two abutments (retail bodies 68-70) over a level junction.
 - **Decor**: 119 plants, posts, fences and small props on the road were removed. The set of body numbers is `RemovableBodies` in the code. Pieces placed at one origin go together, so a palm's trunk goes with its crown. The route was planned around every house. What was left of the retail Desert track (cube 7,10) is gone: its gantry, billboard, arch and wedge are removed, and its painted road is turned back to sand where the new lap doesn't run over it.
 - **Scenes** (55-73, every outside scene of the island):
   - 163 actors are removed: all except Twinsen, the buggy, slot 1 (see below) and the 10 that the ferry and Dino-Fly cutscenes need (see "The stand-in, and the actors that stay"). An inert stand-in takes the removed actors' script references.
@@ -197,6 +197,8 @@ The track's arrows do the same. Each arrow is turned to the nearest of the eight
 
 An arrow that would touch anything but plain asphalt is moved along its straight, or left out with a note in the log. Two were left out, both near the road bridge.
 
+**The start line** is one straight column of white cells across the road (`MarkStartLine`): where the road runs within 25 degrees of the cell grid's rows or columns, the line is the column through the cell the start point is in, and the gantry over it and the line laps are counted at are turned onto the grid with it. It used to be the cells within half a cell of the true line, which stepped sideways a cell where the road runs 5 degrees off the grid. The curb blocks either side of it are red, so a white one doesn't run into it. [From above](racetrack/build/start_line_top.png).
+
 **Checked in the engine** (2026-09-28): every arrow of a bridge build (12) and of a jump build (15-16) was photographed standing on it in the game, and all are clean. The engine reads a cell's cut from its first triangle only (TERRAIN.CPP), as the builder and the map assume. A jump build in the "Level viewer" install had broken arrows in the game: its diagonal arrows came out as two arrows pointing opposite ways over each other, and it was just as broken drawn top-down with the engine's rule. It came from an app instance started before the final arrow code, while that code was still being changed: the same build from the current app and from the command line is byte-identical, and clean. Rebuilding from a freshly started app fixes it.
 
 ## Fixed cameras
@@ -234,7 +236,7 @@ So the actors Twinsen's script waits on directly (`l_track_obj(n) == k`) or foll
 
 ![jump proposal](racetrack/build/jump_proposal.png)
 
-Still a proposal. Its way of making the flight longer, a scaled copy of the retail flight given to Twinsen as an animation of its own, is now built for the jump crossing style (x1.2; see "The jump"); the harbour leap would need a x1.3 copy of its own.
+Still a proposal. Its way of making the flight longer, a scaled copy of the retail flight given to Twinsen as an animation of its own, is now built for the jump crossing style (sized to the layout: x1.43 at this track's crossing; see "The jump"); the harbour leap would need a x1.3 copy of its own.
 
 The proposal is the **harbour leap**, in place of the water bridge (scene 65, cube 9,8). The lap crosses 19 cells of open harbour water there, and a jump 1.3 times the retail one clears it:
 
@@ -275,26 +277,28 @@ In the retail scene the two plateaus are 4400 to 5200 high with a canyon between
 
 ![the jump from above](racetrack/build/jump_top.png)
 
-The jump crossing style, like the retail car jump, is a scripted flight (previous section); what is new is the road around it. Before, the road ran on through the crossing as a level junction and the car flew over it, so from the ground the track still crossed itself. Now the jumping road leaves the ground:
+The jump crossing style, like the retail car jump, is a scripted flight (previous section); what is new is the road around it. Before, the road ran on through the crossing as a level junction and the car flew over it, so from the ground the track still crossed itself. Now the jumping road leaves the ground (numbers from the current build, at 41 degrees):
 
 | Along the road, from the crossing | What is there |
 |---|---|
-| -16 to -8 cells | **the up ramp**: 800 above the road at its top, 8 cells long, a straight climb with a rounded foot, asphalt and curbs with rock sides; its last cell is painted with the red/gold hatching as a lip |
-| -8 to -5 | **a gap**: sand, level with the other road |
-| -5 to +5 | **the other road** (its curbs; 9 cells across, 10 measured along the jumping road at 64 degrees) |
-| +5 to +8 | **a gap** |
-| +8 to +20 | **the down ramp**: 542 above the road at its top (hatched), down to the road over 12 cells |
+| -18.5 to -10.5 cells | **the up ramp**: 800 above the road at its top, 8 cells long, a straight climb with a rounded foot, asphalt and curbs with rock sides; its last cell of flat top is painted with the red/gold hatching |
+| -10.5 to -7.5 | **a gap**: sand, level with the other road |
+| -7.5 to +6.6 | **the other road** (its curbs; 9 cells across, more measured along the jumping road, and not the same either side: it bends) |
+| +6.6 to +9.6 | **a gap** |
+| +9.6 to +21.6 | **the down ramp**: 486 above the road at its top (hatched), down to the road over 12 cells |
 
-The ends of the ramps are a face of blocking rock. The whole jump sits on a level stretch at the crossing's height, which EqualiseCrossings gave both roads, blended into the road's own profile over the next 15 cells. That matters because the flight knows nothing of the ground: it ends a fixed distance on and a fixed height down from where it starts, so the down ramp must be where the flight ends. `RaceTrackBuilder.PlanJump` does the layout; the ramps get the bridges' narrow rock-sided shoulders (`TrackRoad.Bridge`), the gap is sand (`TrackRoad.Gap`), and no arrow is put on any of it (`TrackRoad.Jump`).
+The very end of each ramp is a face of blocking rock. Each gap is 3 cells (`JumpGap`) past where the jumping road's line actually leaves the other road's curbs, measured on the built road: the other road bends through the crossing, and a gap worked out from the crossing angle alone came out a cell wide on one side. The whole jump sits on a level stretch at the crossing's height, which EqualiseCrossings gave both roads, blended into the road's own profile over the next 15 cells. That matters because the flight knows nothing of the ground: it ends a fixed distance on and a fixed height down from where it starts, so the down ramp must be where the flight ends. `RaceTrackBuilder.PlanJump` does the layout; the ramps get the bridges' narrow rock-sided shoulders (`TrackRoad.Bridge`), the gap is sand (`TrackRoad.Gap`), and no arrow is put on any of it (`TrackRoad.Jump`).
 
-**A longer flight.** The retail flight (17.6 cells) would land on the down ramp's edge. `Terrain/RaceTrackJumpAnim.cs` adds a copy of ANIM.HQR entry 51 as a new entry (2083) with the steps forward x1.2, the climb x1.2 and the time x1.1: 21.1 cells, up to 2305 above the take-off, ending 241 below it, in 1.96 s. It gives the new entry to Twinsen's buggy entity (RESS.HQR entry 44, entity 12: the engine loads entity n for behaviour n, and driving is behaviour 12) as generic animation 200, the one record added to that entity; the retail jump in scene 62 keeps entry 51. The hero's track script plays `anim(200)`.
+**The crossing angle.** A jump clears the other road more easily the steeper it crosses it, but the crossing is re-shaped: the straighter road is turned and made straight over the whole jump, then bent back to the drawn course. At 64 degrees the stretch beyond the jump ran into the next part of the lap, 4.3 cells between centre lines (two 9-cell roads overlapping), which read as a second crossing. So `JumpAngle` tries 64 degrees down to 36, 2 at a time, and takes the steepest whose re-shaped stretch (the points that moved off the drawn road) keeps `JumpClearance` (12.5 cells) from every other part of the lap. The other road's own arm near the crossing is left out, being the one crossing there should be. On the Desert track that is 42 degrees (41 as built), keeping 13.2 cells, as the bridge build does there. A lap where no angle manages it gets the angle that keeps the most, and a `WARNING` in the log.
 
-**Where the flight starts.** The take-off strip (scenario zones numbered 40) starts 1.5 cells before the lip and is 1.25 cells deep, as wide as the curbs. The flight starts where the car enters it, whatever the speed: at full speed the car moves a fifth of a cell a frame. So the flight starts at a known place, 6.5 cells up the ramp (623 up), and ends 21.1 cells on, 3.6 cells down the far ramp, 30 units above its surface: the down ramp's height (542) is worked out from that.
+**A longer flight.** The retail flight (17.6 cells) would land in the gap. `Terrain/RaceTrackJumpAnim.cs` adds a copy of ANIM.HQR entry 51 as a new entry with its steps scaled, as long as the layout needs: from the take-off strip, over both gaps and the other road, to `JumpLandInto` (3.5) cells down the far ramp. At 41 degrees that is x1.43 forward, x1.37 up and x1.22 the time: 25.1 cells, up to about 2630 above the take-off, ending 275 below it, in 2.2 s. It is added after the island is built, since the layout decides its length. It gives the new entry to Twinsen's buggy entity (RESS.HQR entry 44, entity 12: the engine loads entity n for behaviour n, and driving is behaviour 12) as generic animation 200, the one record added to that entity; the retail jump in scene 62 keeps entry 51. The hero's track script plays `anim(200)`.
+
+**Where the flight starts.** The take-off strip (scenario zones numbered 40) starts 1.5 cells before the lip and is 1.25 cells deep, as wide as the curbs. The flight starts where the car enters it, whatever the speed: at full speed the car moves a fifth of a cell a frame. So the flight starts at a known place, 6.5 cells up the ramp (623 up), and ends 3.5 cells down the far ramp, 30 units above its surface: the down ramp's height (486) is worked out from that.
 
 **Verified in the engine** (headless, `tools/RaceTrackPlan/jumpdrive.py`):
-- Driving at full speed from 20 cells before the take-off, on the centre line, the car climbs the ramp and takes off at the strip. It flies 21.1 cells, at most 2330 above the take-off, drops the last 100 units onto the down ramp, and drives on down it.
-- Three cells either side of the centre line, the same: it lands on the down ramp and drives on.
-- [In the air](racetrack/build/h_jump.png); [from the other road](racetrack/build/h_jump_gap.png), with the gap and the down ramp's hatched top.
+- Driving at full speed from 20 cells before the take-off, on the centre line, the car climbs the ramp and takes off at the strip. It flies 24.7 cells, lands on the down ramp, and drives on down it.
+- Three cells either side of the centre line, the same.
+- [In the air](racetrack/build/h_jump.png); [from the other road](racetrack/build/h_jump_gap.png) (an earlier build), with the gap and the down ramp's hatched top.
 
 ### How the scene runs it
 
@@ -303,7 +307,7 @@ The ends of the ramps are a face of blocking rock. The whole jump sits on a leve
 - **The controller** (entity 16, invisible, no body) goes in the scene the take-off lies in (scene 66). It makes the retail script's three checks (`zone_obj(0)`, `beta_obj(0)` within 56 degrees of the road, `comportement_hero`), then does `set_dir_obj(0, 12)` and `set_track_obj(0, label_90)`. It gives the keys back when label 91 is reached.
 - **The hero's track script** gets `label(90); beta(<heading>); anim(200); wait_anim(); anim(0); label(91); stop();`. The `beta` sets the road's heading first, so the flight goes along the road whatever the car's heading was within the window.
 - **The take-off strip** is added at the end of the zone list, so it wins where zones overlap.
-- **The crossing**: `RaceTrackBuilder.SteepenCrossing` turns the road so the crossing is steep (64 degrees) and straight over the whole jump (23 cells either side), and `PlanJump` lays it out.
+- **The crossing**: `RaceTrackBuilder.SteepenCrossing` turns the road to the chosen angle and makes it straight over the whole jump (about 25 cells either side), and `PlanJump` lays it out.
 
 ## The engine's race-track mode (2026-09-28)
 
