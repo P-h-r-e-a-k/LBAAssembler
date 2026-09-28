@@ -28,6 +28,7 @@ internal static class RaceCarEngineFile
         foreach (var c in track?.Checkpoints ?? new()) text.Append($"checkpoint={c.CubeX} {c.CubeZ} {c.X0} {c.Z0} {c.X1} {c.Z1} {c.DirX} {c.DirZ}\n");
         // the grid spots, and whether a qualifying lap sets the order the cars line up in (RACEMOD.CPP)
         foreach (var g in track?.Grid ?? new()) text.Append($"grid={string.Join(' ', g)}\n");
+        foreach (var g in track?.Pits ?? new()) text.Append($"pit={string.Join(' ', g)}\n");
         if (track?.Grid is { Count: > 0 }) text.Append($"qualifying={(car.Qualifying ? 1 : 0)}\n");
         var opponents = car.Opponents(track);
         for (var i = 0; i < opponents.Count && pathFiles is not null && i < pathFiles.Count; i++)

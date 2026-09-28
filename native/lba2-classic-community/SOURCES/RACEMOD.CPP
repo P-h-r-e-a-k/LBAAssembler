@@ -13,9 +13,10 @@
  *     buggy turns at a fixed rate, so a bend of radius R is taken at up to that rate times R), its pull through the gears and its
  *     brakes -- as well as it can on its line, times its skill (the pace); a character makes one faster on the straights or in the
  *     bends; and one that has fallen behind the player pushes harder, up to its catch-up;
- *   - a grid and a start: the cars line up on grid spots (behind the start line, staggered), in the order a qualifying lap decides when
- *     the file asks for one (the player's timed lap against each opponent's lap at its skill, a few seconds either way at random),
- *     then a count-down, 3, 2, 1, GO, the player's car held until GO;
+ *   - a grid and a start: the opponents wait in the pit lane while the player drives his qualifying lap (on the grid they stand across
+ *     the start line he has to cross), then the cars line up on grid spots (behind the start line, staggered), in the order the
+ *     qualifying decides (the player's timed lap against each opponent's lap at its skill, a few seconds either way at random), then a
+ *     count-down, 3, 2, 1, GO, the player's car held until GO;
  *   - a small display of the gear, the speed, the lap times, the checkpoints, the qualifying and the grid, and the race position.
  *
  * The file is "key=value" lines ('#' starts a comment); anything missing keeps the original car's value. Speeds are world units per second
@@ -38,6 +39,7 @@
  *     opponent2_path=...  opponent2_grid=...  opponent2_pace=...  opponent2_actor=...   the second opponent, and so on up to opponent4
  *     grid=<cube x> <cube z> <x> <y> <z> <turn>   a grid spot, cube-local; one line per spot, pole first (with none, the old start:
  *                                the opponents set off when the player first drives)
+ *     pit=<the same>             a spot in the pit lane an opponent waits on while the player qualifies; one line per spot
  *     qualifying=1               a qualifying lap first (0: the grid is formed as soon as the player is in his car, he on pole)
  *     qualifying_seed=<n>        the opponents' qualifying times' randomness (default: the clock)
  *     hide_actor=<scene> <actor> a car in a scene that isn't racing (an opponent the player left out): kept out of sight
@@ -118,6 +120,8 @@ typedef struct {
 } T_RACE_SPOT;
 static T_RACE_SPOT s_spots[RACE_MAX_SPOTS];
 static int s_nbSpots = 0;
+static T_RACE_SPOT s_pits[RACE_MAX_SPOTS];
+static int s_nbPits = 0;
 enum { PHASE_RACE, PHASE_QUALIFYING, PHASE_WAIT, PHASE_GRID };
 static int s_phase = PHASE_RACE;
 static int s_qualifying = 1;
@@ -259,8 +263,8 @@ static double RaceRandom(void) {
     return ((s_seed >> 8) & 0xFFFFFF) / 16777216.0;
 }
 
-// An opponent on a grid spot: along its line at the line's point nearest the spot (behind the start line: its lap 1 is ahead), with the
-// way across to the spot kept (MergeX..) and faded out as it drives off.
+// An opponent on a spot (a grid spot, or a pit spot while the player qualifies): along its line at the line's point nearest the spot
+// (behind the start line: its lap 1 is ahead), with the way across to the spot kept (MergeX..) and faded out as it drives off.
 static void OnSpot(T_RACE_OPPONENT *o, const T_RACE_SPOT *spot) {
     const double wx = spot->CubeX * 32768.0 + spot->X, wz = spot->CubeZ * 32768.0 + spot->Z;
     int best = 0;
@@ -317,6 +321,9 @@ static void Load(const char *path) {
         } else if (!strcmp(key, "grid")) {
             T_RACE_SPOT *g = &s_spots[s_nbSpots];
             if (s_nbSpots < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbSpots++;
+        } else if (!strcmp(key, "pit")) {
+            T_RACE_SPOT *g = &s_pits[s_nbPits];
+            if (s_nbPits < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbPits++;
         } else if (!strcmp(key, "qualifying")) s_qualifying = atoi(v);
         else if (!strcmp(key, "qualifying_seed")) s_seed = (unsigned)strtoul(v, NULL, 10);
         else if (!strcmp(key, "hide_actor")) {
@@ -368,10 +375,13 @@ static void Load(const char *path) {
         o->Laps = grid ? 0 : 1;
     }
     if (s_nbSpots && s_car.HasLine) {
-        // the grid until qualifying decides it: the player on pole, the opponents in their order behind him
-        int spot = 1;
-        for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
-            if (s_opp[n].Count) OnSpot(&s_opp[n], &s_spots[spot < s_nbSpots ? spot++ : s_nbSpots - 1]);
+        // where they wait until the grid is formed: their pit spots, or (with no pit lane) the grid spots behind the player
+        int waiting = 0, spot = 1;
+        for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+            if (!s_opp[n].Count) continue;
+            if (waiting < s_nbPits) OnSpot(&s_opp[n], &s_pits[waiting++]);
+            else OnSpot(&s_opp[n], &s_spots[spot < s_nbSpots ? spot++ : s_nbSpots - 1]);
+        }
         s_phase = s_qualifying ? PHASE_QUALIFYING : PHASE_WAIT;
     }
 }

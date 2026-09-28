@@ -12,10 +12,10 @@ internal static class RaceTrackScenes
     public const int ZoeEntity = 14;
 
     // Opponent: for each scene, the index of its copy of the racer's car (the race-track mode drives whichever the player's scene has);
-    // Baldino: the same for Baldino's car; StartScene: the scene the start line is in; Grid: the grid spots, pole first, each
-    // [cube x, cube z, x, y, z, turn] in its cube's world units.
+    // Baldino: the same for Baldino's car; StartScene: the scene the start line is in; Grid: the grid spots, pole first, and Pits: the
+    // spots in the pit lane the opponents wait on while the player qualifies, each [cube x, cube z, x, y, z, turn] in its cube's world units.
     public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, Dictionary<int, int> Opponent, int StartScene, Dictionary<int, int> Baldino,
-        List<int[]> Grid);
+        List<int[]> Grid, List<int[]> Pits);
 
     // The retail track's racer (scene 57, actor 4: "Car with racer", which drives the retail lap by its route points), copied into every
     // outside scene as the opponent the race-track mode drives round the lap. The copies neither collide, fall, check zones nor react to
@@ -47,7 +47,8 @@ internal static class RaceTrackScenes
         var log = new List<string>();
         var changes = new List<SceneChange>();
         var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0;
-        var opponent = new Dictionary<int, int>(); var baldino = new Dictionary<int, int>(); var startScene = -1; var gridSpots = new List<int[]>();
+        var opponent = new Dictionary<int, int>(); var baldino = new Dictionary<int, int>(); var startScene = -1;
+        var gridSpots = new List<int[]>(); var pitSpots = new List<int[]>();
         SceneActorModel? racer = null;
         if (options.AddOpponent)
             try { racer = store.Load(RacerScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == RacerEntity)?.Clone(); }
@@ -115,6 +116,16 @@ internal static class RaceTrackScenes
                         int gx = At(back, side, false), gz = At(back, side, true);
                         gridSpots.Add(new[] { cx, cz, gx, Ground(gx, gz), gz, beta });
                     }
+                    // the pits: where the opponents' cars wait while the player qualifies (RaceTrackBuilder.PlacePits, in the pit lane
+                    // beside the start line). The build parks them there; the race-track mode puts them on the grid for the race.
+                    foreach (var p in report.Pits)
+                    {
+                        var wpx = p.X * 512; var wpz = p.Z * 512;
+                        if ((int)Math.Floor(wpx / IslandFile.CubeSize) != cx || (int)Math.Floor(wpz / IslandFile.CubeSize) != cz) continue;
+                        int px = (int)Math.Round(wpx - cx * (double)IslandFile.CubeSize), pz = (int)Math.Round(wpz - cz * (double)IslandFile.CubeSize);
+                        var pbeta = (int)Math.Round(Math.Atan2(p.DirX, p.DirZ) / (2 * Math.PI) * 4096); pbeta = ((pbeta % 4096) + 4096) % 4096;
+                        pitSpots.Add(new[] { cx, cz, px, Ground(px, pz), pz, pbeta });
+                    }
                     var pole = GridSpot(0);
                     if (buggy is not null) { buggy.X = At(pole.Back, pole.Side, false); buggy.Z = At(pole.Back, pole.Side, true); buggy.Y = Ground(buggy.X, buggy.Z); buggy.Beta = beta; }
                     // Twinsen right behind his car: he comes into the scene facing the way the lap runs (the scene's start keeps no
@@ -123,9 +134,12 @@ internal static class RaceTrackScenes
                     model.Hero.X = At(pole.Back + 1.8, pole.Side, false); model.Hero.Z = At(pole.Back + 1.8, pole.Side, true); model.Hero.Y = Ground(model.Hero.X, model.Hero.Z) + 100;
                     model.Hero.Beta = beta;
                     startScene = scene;
-                    // the racer on the second spot, Baldino on the third (the race-track mode puts them where the qualifying says)
-                    grid = (gridSpots[1][2], gridSpots[1][4], beta);
-                    baldinoGrid = (gridSpots[2][2], gridSpots[2][4], beta);
+                    // the opponents wait in the pit lane (the race-track mode puts them on the grid when the race is about to start); with
+                    // no pit lane they stand on the grid spots behind the player
+                    grid = Waiting(0); baldinoGrid = Waiting(1);
+                    (int X, int Z, int Beta)? Waiting(int k) =>
+                        pitSpots.Count > k ? (pitSpots[k][2], pitSpots[k][4], pitSpots[k][5])
+                        : gridSpots.Count > k + 1 ? (gridSpots[k + 1][2], gridSpots[k + 1][4], beta) : null;
                     log.Add($"scene {scene}: Twinsen at ({model.Hero.X},{model.Hero.Y},{model.Hero.Z}) turn {beta}, buggy at ({buggy?.X},{buggy?.Y},{buggy?.Z})");
                     if (buggyIndex > 0 && StartBuggyScript(model, scene, buggyIndex, log) is { } withBuggy) model = withBuggy;
                 }
@@ -185,7 +199,8 @@ internal static class RaceTrackScenes
         if (opponent.Count > 0) log.Add($"the opponent: a copy of the retail track's racer in {opponent.Count} scenes");
         if (baldino.Count > 0) log.Add($"Baldino: a copy of his car in {baldino.Count} scenes");
         if (gridSpots.Count > 0) log.Add($"the grid: {gridSpots.Count} spots, pole {GridFirst} cells behind the start line, each {GridStep} behind the last, {GridSide} either side of the middle");
-        return new Result(log, changes.Count, removed, opponent, startScene, baldino, gridSpots);
+        if (pitSpots.Count > 0) log.Add($"the pits: {pitSpots.Count} spots in the pit lane, where the opponents wait while the player qualifies");
+        return new Result(log, changes.Count, removed, opponent, startScene, baldino, gridSpots, pitSpots);
     }
 
     // Where the scripts that stay (Twinsen's own life script, mostly) refer to actors about to be removed -- "if Twinsen is near the

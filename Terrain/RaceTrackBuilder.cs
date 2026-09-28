@@ -168,6 +168,8 @@ internal sealed class RaceTrackReport
     // Where the lap crosses itself (island cell coordinates, the height there, the angle between the two roads in degrees).
     public List<(double X, double Z, double Y, double Angle)> Crossings { get; } = new();
     public List<(double X, double Z, double Y, double DirX, double DirZ)> StartLine { get; } = new();
+    // Where the opponents' cars wait in the pit lane while the player qualifies (island cells, the height and the way the lane runs there).
+    public List<(double X, double Z, double Y, double DirX, double DirZ)> Pits { get; } = new();
     // The way the start line's road runs as the line is painted: the road's heading turned onto the cell grid when it is close to it
     // (the gantry over the line and the line laps are counted at follow it), else the heading itself.
     public (double DirX, double DirZ)? StartLineSquare { get; set; }
@@ -283,6 +285,7 @@ internal static class RaceTrackBuilder
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
         PlaceCheckpoints(roads, report, options);
+        PlacePits(roads, report, options);
         PlanRacePath(main, report, options, RacerLine, report.RacePath, "the opponent's line");
         if (options.AddBaldino) PlanRacePath(main, report, options, BaldinoLine, report.BaldinoPath, "Baldino's line");
         ClearStaleCol(island, natural, field, index, painted, report);
@@ -1102,6 +1105,36 @@ internal static class RaceTrackBuilder
     // the bridge or the jump there), and the edges of the cubes (the engine only sees a car's moves within one cube). Each reaches past
     // the verge on both sides, but never half way to another part of the lap.
     private const int CheckpointCount = 8;
+
+    // Where the opponents' cars wait while the player drives his qualifying lap: in the pit lane beside the start line, PitStep cells
+    // apart, the first PitFirst cells before the line, each facing the way a car leaves the pits. On the grid they stand across the start
+    // line, which a qualifying lap has to cross. The spots are found by where they lie along the lap, not by counting points: the pit lane
+    // is its own road, and its points may run either way round the lap.
+    private const double PitFirst = 2, PitStep = 4;
+    private const int PitWaitSpots = 5;
+
+    private static void PlacePits(List<TrackRoad> roads, RaceTrackReport report, RaceTrackOptions o)
+    {
+        if (roads.Count < 2 || report.StartLine.Count == 0) return;
+        var pit = roads[1];
+        var s = report.StartLine[0];
+        double Along(int i) => (pit.X[i] - s.X) * s.DirX + (pit.Z[i] - s.Z) * s.DirZ;
+        double Across(int i) => -(pit.X[i] - s.X) * s.DirZ + (pit.Z[i] - s.Z) * s.DirX;
+        for (var k = 0; k < PitWaitSpots; k++)
+        {
+            var target = -(PitFirst + k * PitStep);
+            var best = -1; var bd = double.MaxValue;
+            for (var i = 2; i < pit.Count - 2; i++) { var d = Math.Abs(Along(i) - target); if (d < bd) { bd = d; best = i; } }
+            if (best < 0 || bd > PitStep) break;
+            // facing the way a car leaves the pits: the lane's own direction there, turned to agree with the lap's
+            var sign = pit.Tx[best] * s.DirX + pit.Tz[best] * s.DirZ < 0 ? -1 : 1;
+            report.Pits.Add((pit.X[best], pit.Z[best], pit.H[best], pit.Tx[best] * sign, pit.Tz[best] * sign));
+        }
+        if (report.Pits.Count == 0) return;
+        var side = Math.Abs(Across(Nearest(pit, report.Pits[0].X, report.Pits[0].Z)));
+        report.Notes.Add($"the pits: {report.Pits.Count} waiting spots in the pit lane, from {PitFirst:0.#} cells before the start line, {PitStep:0.#} apart, " +
+                         $"{side:0.#} cells to the side of the lap");
+    }
 
     private static int Nearest(TrackRoad road, double x, double z)
     {
