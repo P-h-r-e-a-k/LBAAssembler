@@ -95,6 +95,13 @@ internal static class AreaTests
             var forward = Lba2Areas.OffsetOf(link, interiors.LoadScene);
             var back = Lba2Areas.OffsetOf(new Lba2Areas.Link(link.Scene, link.Anchor), interiors.LoadScene);
             if (link == new Lba2Areas.Link(185, 187)) { Check(forward is not null && back is null, "LBA2: the wizards' scene (185) has a one-way zone down to the third scene (187), which has none back"); continue; }
+            if (link.Cells is { } cells)
+            {
+                // placed by hand: the zones still agree on where it is sideways, within two cells either way
+                Check(forward is { } hf && back is { } hb && Math.Abs(hf.X / 512 - cells.X) <= 2 && Math.Abs(hf.Z / 512 - cells.Z) <= 2 && Math.Abs(-hb.X / 512 - cells.X) <= 2 && Math.Abs(-hb.Z / 512 - cells.Z) <= 2,
+                    $"LBA2: scene {link.Scene}, placed by hand from {link.Anchor}, is where both zones between them put it sideways");
+                continue;
+            }
             Check(forward is { } f && back is { } b && Math.Abs(f.X + b.X) <= 2 * 512 && Math.Abs(f.Y + b.Y) <= 3 * 256 && Math.Abs(f.Z + b.Z) <= 3 * 512,
                 $"LBA2: scene {link.Scene}'s zone back to {link.Anchor} agrees with the zone forward to within a few cells");
         }
@@ -151,6 +158,18 @@ internal static class AreaTests
         var tileKeys = areas.SelectMany(a => a.Tiles.Select(t => t.Key)).ToHashSet();
         Check(Lba2Areas.Separations.Select(s => s.Scene).Distinct().Count() == Lba2Areas.Separations.Length && Lba2Areas.Separations.All(s => tileKeys.Contains(s.Scene) && Math.Abs(s.Dx) <= 60 && Math.Abs(s.Dz) <= 60 && (s.Dy == 0 || s.Scene is 185 or 186 or 187 or 192)),
             "LBA2: every separation is for one tile of a map and moves it sideways by at most 60 cells (the Dark Monk Statue's scenes are lifted instead)");
+        // the Temple of Bù: its two scenes, not the Esmer base, and placed where the flight of stairs both draw is the same stairs: the second scene's
+        // stairs (x 58-62, rows 2-4, above the floor under them) have the first scene's layers (x 12-16, rows 19-21) 16 layers up, column for column
+        var temple = areas.SingleOrDefault(a => a.Tiles.Any(t => t.Scene == 10));
+        Check(temple is not null && temple.Name == "Temple of Bù" && temple.Island == 2 && temple.Tiles.Select(t => t.Scene).Order().SequenceEqual(new[] { 10, 11 }) && !areas.Any(a => a.Tiles.Any(t => t.Scene == 12)),
+            "LBA2: the Temple of Bù is its two scenes, and the Esmer base (12) is a scene of its own");
+        if (temple is not null)
+        {
+            HashSet<(int, int, int)> Layers(int scene, int x0, int z0) => interiors.Placements(scene).Where(p => p.X >= x0 && p.X <= x0 + 4 && p.Z >= z0 && p.Z <= z0 + 2).Select(p => (p.X - x0, p.Y, p.Z - z0)).ToHashSet();
+            var (first, second) = (Layers(10, 12, 19), Layers(11, 58, 2));
+            Check(At(temple, 11) == (-46, -16, 17) && first.Count > 0 && first.SetEquals(second.Where(p => p.Item2 >= 16).Select(p => (p.Item1, p.Item2 - 16, p.Item3))),
+                $"LBA2: the temple's second scene is placed 46 cells west, 16 layers down and 17 cells south of the first, where the stairs both scenes draw are the same bricks ({first.Count} of them)");
+        }
         var stairs = tower.Tiles.Where(t => t.Scene == 177).ToList();
         Check(stairs.Count == 2 && stairs.Single(t => t.Window is not null).Window == new CellWindow(44, 44, 63, 63) && stairs.Single(t => t.Window is null).Without == new CellWindow(44, 44, 63, 63)
             && stairs.Single(t => t.Window is not null).OffsetY - stairs.Single(t => t.Window is null).OffsetY == 17 * 256,
