@@ -374,7 +374,9 @@ and the lower level (the room in the emperor's palace and the secret passage: pu
 disagree (the Esmer shuttle, the departure room's space port) are left out, and so is the Esmer base, whose door into the temple's second scene puts
 the two nowhere that fits. The temple's two scenes disagree on the height (by 4 layers) but draw the same flight of stairs where they meet, so that link
 gives its placement in cells (`Link.Cells`: the second scene 46 cells west, 16 layers down, 17 cells south, where the stairs coincide brick for brick);
-there the second scene lies under the first one's western rooms, so it is moved 18 cells west along its corridor, which still points at the stairwell. LBA2's scenes say nothing about which interiors
+there the second scene is a lower level under the first one's western rooms, and it is left there, as accurate rather than all in view (the first
+scene's rooms hide about a third of it on the picture): like the Dark Monk Statue it is a stacked map, checked for shared cells, not plan columns, and the
+only cells its two scenes share are the stairwell both draw (its stairs and wall). LBA2's scenes say nothing about which interiors
 belong together, so the links are written down (`Lba2Areas.Links`: the second scene of a link sits where the first one's cube-change zone to it puts it, zone
 corner minus arrival point). **No two scenes of a map share a plan column** (a brick in the same x, z at any height: one floor stood over another's rooms is an
 overlap on the picture as much as one in the same cells): `lba2overlaps` lists the pairs, `lba2separate` finds the smallest sideways move of one scene of each

@@ -45,8 +45,9 @@ internal static class Lba2Areas
         // scene's stairs go down westwards to its door (at x 16, rows 19-21) and the second's go up eastwards to its own (x 63, rows 2-4), and they
         // are the same stairs, brick for brick, with the second scene 46 cells west, 16 layers down and 17 cells south. The zones agree on x and z
         // but not on the height (9 and 13 layers down: the first scene's door zone starts below the stairs, and the second scene lands Twinsen on
-        // the floor under its stairs), so the stairs place it. The Esmer base (12) is left out: its door into the temple's second scene doesn't
-        // put the two anywhere that fits.
+        // the floor under its stairs), so the stairs place it. There the second scene lies under the first one's western rooms, which hide part of
+        // it on the picture; it is left where it is rather than moved clear (see IsStacked). The Esmer base (12) is left out: its door into the
+        // temple's second scene doesn't put the two anywhere that fits.
         new(10, 11, Cells: (-46, -16, 17)),
         new(29, 24), new(29, 25), new(29, 30), new(30, 32),
         new(27, 28), new(27, 33),
@@ -124,9 +125,6 @@ internal static class Lba2Areas
         (163, 0, 0, -12), (164, 4, 0, -12), (165, 8, 0, -12), (166, 12, 0, -12),
         (80, 0, 0, -16),      // the palace's last room, off the maze's fourth row
         // found by `lba2separate`: the smallest move of one tile of each pair that shares a plan column, until no two tiles of a map do
-        // Temple of Bù (its second scene lies under the first one's western rooms where their stairs meet: moved west along its corridor, which
-        // still points at the stairwell at the same height and row)
-        (11, -18, 0, 0),
         // Twinsen's house
         (1, -2, 0, 4),
         // Tralu
@@ -199,8 +197,9 @@ internal static class Lba2Areas
         (187, 0, 87, 0), (192, 0, 107, 0), (185, 0, 162, 0), (186, 0, 194, 0),
     };
 
-    // Maps whose scenes really stack one above another (the Dark Monk statue): their overlap is counted in cells, not in the plan view.
-    public static bool IsStacked(Lba1Area area) => area.Tiles.Any(t => t.Scene == 185);
+    // Maps whose scenes really stack one above another: their overlap is counted in cells, not in the plan view. The Dark Monk statue, and the
+    // Temple of Bù, whose second scene is a lower level under the first one's western rooms (the two share only the stairwell both of them draw).
+    public static bool IsStacked(Lba1Area area) => area.Tiles.Any(t => t.Scene is 185 or 10);
 
     private static int Round(int value, int unit) => (int)Math.Round(value / (double)unit) * unit;
 
