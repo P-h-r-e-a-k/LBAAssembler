@@ -243,6 +243,12 @@ static void RaceSpeed(S_BUGGY *ptb, S32 deltatimer, S32 flagattack) {
 
     ptb->SpeedRot = car->Steer;
 
+    // on the grid until the count-down's GO
+    if (RaceMod_Held()) {
+        ptb->Speed = 0;
+        return;
+    }
+
     if ((Input & I_UP) AND !flagattack) {
         if (ptb->Speed <= top) {
             double pull = (double)RACE_REF_TOP / top;

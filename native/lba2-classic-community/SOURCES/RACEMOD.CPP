@@ -13,7 +13,10 @@
  *     buggy turns at a fixed rate, so a bend of radius R is taken at up to that rate times R), its pull through the gears and its
  *     brakes -- as well as it can on its line, times its skill (the pace); a character makes one faster on the straights or in the
  *     bends; and one that has fallen behind the player pushes harder, up to its catch-up;
- *   - a small display of the gear, the speed, the lap times, the checkpoints and the race position.
+ *   - a grid and a start: the cars line up on grid spots (behind the start line, staggered), in the order a qualifying lap decides when
+ *     the file asks for one (the player's timed lap against each opponent's lap at its skill, a few seconds either way at random),
+ *     then a count-down, 3, 2, 1, GO, the player's car held until GO;
+ *   - a small display of the gear, the speed, the lap times, the checkpoints, the qualifying and the grid, and the race position.
  *
  * The file is "key=value" lines ('#' starts a comment); anything missing keeps the original car's value. Speeds are world units per second
  * (512 to a cell), rates the speed gained or lost per millisecond (decimals allowed), the steering in 4096ths of a turn per second:
@@ -31,13 +34,20 @@
  *     opponent_grip=<percent>
  *     opponent_catchup=<percent> how much harder it pushes when it has fallen behind the player (at most, 60 cells behind)
  *     opponent_actor=<scene> <actor>   the opponent's car in that scene (one line per scene)
+ *     opponent_name=<name>       for the grid's list
  *     opponent2_path=...  opponent2_grid=...  opponent2_pace=...  opponent2_actor=...   the second opponent, and so on up to opponent4
+ *     grid=<cube x> <cube z> <x> <y> <z> <turn>   a grid spot, cube-local; one line per spot, pole first (with none, the old start:
+ *                                the opponents set off when the player first drives)
+ *     qualifying=1               a qualifying lap first (0: the grid is formed as soon as the player is in his car, he on pole)
+ *     qualifying_seed=<n>        the opponents' qualifying times' randomness (default: the clock)
+ *     hide_actor=<scene> <actor> a car in a scene that isn't racing (an opponent the player left out): kept out of sight
  */
 #include "C_EXTERN.H"
 #include "COMMON.H"
 #include "INPUT.H"
 #include "RACEMOD.H"
 
+#include <SVGA/BOX.H>
 #include <SVGA/CLIP.H>
 #include <SYSTEM/LOG.H>
 #include <SVGA/FONT.H>
@@ -48,6 +58,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 
 static int s_checked = 0;
 static int s_active = 0;
@@ -87,9 +98,42 @@ typedef struct {
     S32 LapStart;
     int Scene[RACE_MAX_OPPONENT_SCENES], Actor[RACE_MAX_OPPONENT_SCENES];
     int Scenes;
+    char Name[32];
+    double PlannedLap;                     // seconds, at its skill
+    S32 QualTime;                          // its qualifying time, ms
+    // off its line on the grid: the way across from the line to its grid spot, which fades out over its first RACE_MERGE units of
+    // driving (it moves onto its line), and the way it faces there
+    double MergeX, MergeY, MergeZ, MergeLeft;
+    S32 SpotBeta;
+    double Speed;                          // how fast it is going (it starts from a standstill and pulls away as the car would)
 } T_RACE_OPPONENT;
 static T_RACE_OPPONENT s_opp[RACE_MAX_OPPONENTS];
-static int s_oppStarted = 0;               // the race has started (the player drove off)
+static int s_oppStarted = 0;               // (no grid: the race has started when the player first drove off)
+#define RACE_MERGE (12 * 512)
+
+// the grid and the start: a qualifying lap (when the file asks for one), then the grid and its count-down, then the race
+#define RACE_MAX_SPOTS 6
+typedef struct {
+    S32 CubeX, CubeZ, X, Y, Z, Beta;
+} T_RACE_SPOT;
+static T_RACE_SPOT s_spots[RACE_MAX_SPOTS];
+static int s_nbSpots = 0;
+enum { PHASE_RACE, PHASE_QUALIFYING, PHASE_WAIT, PHASE_GRID };
+static int s_phase = PHASE_RACE;
+static int s_qualifying = 1;
+static unsigned s_seed = 0;
+static S32 s_qualifyTime = 0;              // the player's, ms
+static int s_wantGrid = 0;                 // form the grid (asked for by the lap, done before the next drawing)
+static S32 s_gridAt = 0, s_goAt = 0;       // when the grid was formed, and when the count-down says GO
+static int s_order[RACE_MAX_OPPONENTS + 1]; // the grid, pole first: -1 the player, n the opponent n
+static S32 s_orderTime[RACE_MAX_OPPONENTS + 1];
+static int s_nbOrder = 0;
+static int s_forgetLap = 0;                // the player's car was moved: the lap check forgets its last position
+#define RACE_MAX_HIDDEN 64
+static int s_hideScene[RACE_MAX_HIDDEN], s_hideActor[RACE_MAX_HIDDEN];
+static int s_nbHidden = 0;
+#define RACE_RESULTS_MS 4000               // how long the qualifying's grid is shown before the count-down
+#define RACE_QUALIFY_SPREAD 3000           // an opponent's qualifying time: its lap at its skill, this many ms either way at random
 static S32 s_oppLast = 0;
 static int s_playerIndex = -1;             // the first opponent's line point nearest the player, for the race position
 // The whole scene is redrawn while the opponent moves: with the camera standing still, only what moves is redrawn over a copy of the
@@ -207,6 +251,34 @@ static void PlanSpeeds(T_RACE_OPPONENT *o) {
              o->Pace, lap * 100.0 / o->Pace);
 }
 
+static void PathAt(const T_RACE_OPPONENT *o, double s, double *x, double *z, double *y, double *v, double *dx, double *dz);
+
+// the qualifying times' randomness: 0..1
+static double RaceRandom(void) {
+    s_seed = s_seed * 1103515245u + 12345u;
+    return ((s_seed >> 8) & 0xFFFFFF) / 16777216.0;
+}
+
+// An opponent on a grid spot: along its line at the line's point nearest the spot (behind the start line: its lap 1 is ahead), with the
+// way across to the spot kept (MergeX..) and faded out as it drives off.
+static void OnSpot(T_RACE_OPPONENT *o, const T_RACE_SPOT *spot) {
+    const double wx = spot->CubeX * 32768.0 + spot->X, wz = spot->CubeZ * 32768.0 + spot->Z;
+    int best = 0;
+    double bd = 1e30;
+    for (int i = 0; i < o->Count; i++) {
+        const double d = (o->X[i] - wx) * (o->X[i] - wx) + (o->Z[i] - wz) * (o->Z[i] - wz);
+        if (d < bd) { bd = d; best = i; }
+    }
+    o->S = o->Cum[best];
+    o->Laps = o->S > o->Length / 2 ? 0 : 1;
+    double x, z, y, v, dx, dz;
+    PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
+    o->MergeX = wx - x; o->MergeZ = wz - z; o->MergeY = spot->Y - y;
+    o->MergeLeft = RACE_MERGE;
+    o->SpotBeta = spot->Beta;
+    o->Speed = 0;
+}
+
 static void Load(const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) return;
@@ -242,7 +314,15 @@ static void Load(const char *path) {
             }
         } else if (!strcmp(key, "checkpoint")) {
             if (s_nbCheckpoints < RACE_MAX_CHECKPOINTS && ReadLine(v, &s_checkpoints[s_nbCheckpoints])) s_nbCheckpoints++;
-        } else {
+        } else if (!strcmp(key, "grid")) {
+            T_RACE_SPOT *g = &s_spots[s_nbSpots];
+            if (s_nbSpots < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbSpots++;
+        } else if (!strcmp(key, "qualifying")) s_qualifying = atoi(v);
+        else if (!strcmp(key, "qualifying_seed")) s_seed = (unsigned)strtoul(v, NULL, 10);
+        else if (!strcmp(key, "hide_actor")) {
+            if (s_nbHidden < RACE_MAX_HIDDEN && sscanf(v, "%d %d", &s_hideScene[s_nbHidden], &s_hideActor[s_nbHidden]) == 2) s_nbHidden++;
+        }
+        else {
             const char *rest;
             T_RACE_OPPONENT *o = OpponentKey(key, &rest);
             if (!o) continue;
@@ -252,6 +332,7 @@ static void Load(const char *path) {
             else if (!strcmp(rest, "top")) o->Top = atoi(v);
             else if (!strcmp(rest, "grip")) o->Grip = atoi(v);
             else if (!strcmp(rest, "catchup")) o->Catchup = atoi(v);
+            else if (!strcmp(rest, "name")) snprintf(o->Name, sizeof(o->Name), "%s", v);
             else if (!strcmp(rest, "actor")) {
                 int scene, actor;
                 if (o->Scenes < RACE_MAX_OPPONENT_SCENES && sscanf(v, "%d %d", &scene, &actor) == 2) {
@@ -269,15 +350,29 @@ static void Load(const char *path) {
     if (s_car.Brake < 100) s_car.Brake = 100;
     if (s_car.Coast < 0) s_car.Coast = 0;
     if (s_car.Reverse < 0) s_car.Reverse = 0;
+    if (!s_seed) s_seed = (unsigned)time(NULL);
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
         T_RACE_OPPONENT *o = &s_opp[n];
         if (o->Pace < 10) o->Pace = 10;
+        if (!o->Name[0]) snprintf(o->Name, sizeof(o->Name), "Opponent %d", n + 1);
         if (!o->Count) continue;
         PlanSpeeds(o);
+        // its lap at its skill, and a qualifying time a few seconds either way of it
+        o->PlannedLap = 0;
+        for (int i = 0; i < o->Count; i++) o->PlannedLap += (o->Cum[i + 1] - o->Cum[i]) / (o->V[i] > 1 ? o->V[i] : 1);
+        o->PlannedLap *= 100.0 / o->Pace;
+        o->QualTime = (S32)(o->PlannedLap * 1000 + (RaceRandom() * 2 - 1) * RACE_QUALIFY_SPREAD);
         // the grid: a few points before the start line
         const int grid = o->Grid < 0 ? 0 : o->Grid >= o->Count ? o->Count - 1 : o->Grid;
         o->S = grid ? o->Cum[o->Count - grid] : 0;
         o->Laps = grid ? 0 : 1;
+    }
+    if (s_nbSpots && s_car.HasLine) {
+        // the grid until qualifying decides it: the player on pole, the opponents in their order behind him
+        int spot = 1;
+        for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
+            if (s_opp[n].Count) OnSpot(&s_opp[n], &s_spots[spot < s_nbSpots ? spot++ : s_nbSpots - 1]);
+        s_phase = s_qualifying ? PHASE_QUALIFYING : PHASE_WAIT;
     }
 }
 
@@ -344,9 +439,10 @@ static int CrossLine(const T_RACE_LINE *l, S32 x0, S32 z0, S32 x1, S32 z1) {
 }
 
 void RaceMod_Lap(S32 x, S32 z) {
-    // (the previous frame's position; forgotten when the car changes cube, where the coordinates jump)
+    // (the previous frame's position; forgotten when the car changes cube, where the coordinates jump, or is put on the grid)
     static S32 px = 0, pz = 0, pcx = -1, pcz = -1;
     if (s_wantFlip) { FirstTime = AFF_ALL_FLIP; s_wantFlip = 0; }
+    if (s_forgetLap) { pcx = -1; s_forgetLap = 0; }
     if (!s_active || !s_car.HasLine || CubeMode != CUBE_EXTERIEUR) { pcx = -1; return; }
     const S32 x0 = px, z0 = pz;
     const int same = pcx == CurrentCubeX && pcz == CurrentCubeY;
@@ -373,6 +469,13 @@ void RaceMod_Lap(S32 x, S32 z) {
     if (s_laps > 0) {
         s_lastLap = now - s_lapStart;
         if (!s_bestLap || s_lastLap < s_bestLap) s_bestLap = s_lastLap;
+        if (s_phase == PHASE_QUALIFYING) {
+            // the qualifying lap: its time decides the grid (formed before the next drawing, in the start line's scene)
+            s_qualifyTime = s_lastLap;
+            s_wantGrid = 1;
+            s_phase = PHASE_WAIT;
+            return;
+        }
     }
     s_laps++;
     s_lapStart = now;
@@ -412,17 +515,73 @@ static int Opponents(void) {
     return n;
 }
 
+// The player's car on a grid spot (in the start line's scene only), standing.
+static void PlayerOnSpot(const T_RACE_SPOT *spot) {
+    if (CurrentCubeX != spot->CubeX || CurrentCubeY != spot->CubeZ) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    hero->Obj.X = spot->X;
+    hero->Obj.Y = spot->Y;
+    hero->Obj.Z = spot->Z;
+    hero->Obj.Beta = spot->Beta;
+    ClearRealAngle(hero);
+    ListBuggy[0].Speed = 0;
+    ListBuggy[0].SpeedInc = 0;
+    s_forgetLap = 1;
+}
+
+// The grid: every racer by its time (the player's qualifying lap; without qualifying the player is on pole), each on its spot, the laps
+// counted afresh from the start line; then the grid is shown and the count-down runs.
+static void FormGrid(S32 now) {
+    s_nbOrder = 0;
+    s_order[s_nbOrder] = -1;
+    s_orderTime[s_nbOrder++] = s_qualifying ? s_qualifyTime : 0;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
+        if (s_opp[n].Count && s_opp[n].Scenes) { s_order[s_nbOrder] = n; s_orderTime[s_nbOrder++] = s_opp[n].QualTime; }
+    for (int i = 1; i < s_nbOrder; i++)
+        for (int j = i; j > 0 && s_orderTime[j] < s_orderTime[j - 1]; j--) {
+            const int t = s_order[j]; s_order[j] = s_order[j - 1]; s_order[j - 1] = t;
+            const S32 u = s_orderTime[j]; s_orderTime[j] = s_orderTime[j - 1]; s_orderTime[j - 1] = u;
+        }
+    for (int i = 0; i < s_nbOrder; i++) {
+        const T_RACE_SPOT *spot = &s_spots[i < s_nbSpots ? i : s_nbSpots - 1];
+        if (s_order[i] < 0) PlayerOnSpot(spot);
+        else OnSpot(&s_opp[s_order[i]], spot);
+    }
+    s_laps = 0; s_next = 0; s_lastLap = 0; s_bestLap = 0;
+    s_gridAt = now;
+    s_goAt = now + (s_qualifying ? RACE_RESULTS_MS : 1000) + 3000;
+    s_phase = PHASE_GRID;
+    s_wantFlip = 1;
+    char text[256];
+    int used = snprintf(text, sizeof(text), "[racemod] grid:");
+    for (int i = 0; i < s_nbOrder && used < (int)sizeof(text); i++)
+        used += snprintf(text + used, sizeof(text) - used, " %d %s %.2f s;", i + 1, s_order[i] < 0 ? "Twinsen" : s_opp[s_order[i]].Name, s_orderTime[i] / 1000.0);
+    Log_Info("%s", text);
+}
+
 void RaceMod_Frame(void) {
-    if (!RaceMod_Active() || !Opponents()) return;
+    if (!RaceMod_Active()) return;
     const S32 now = TimerRefHR;
     S32 dt = s_oppLast ? now - s_oppLast : 0;
     s_oppLast = now;
     if (dt < 0) dt = 0;
     if (dt > 100) dt = 100;
     const int driving = Comportement == C_BUGGY;
-    // the race starts when the player first drives off; the opponents wait while he is out of his car
-    if (!s_oppStarted && driving && (Input & I_UP)) s_oppStarted = 1;
-    const int moving = s_oppStarted && driving;
+    const int inStartScene = s_nbSpots && CubeMode == CUBE_EXTERIEUR && CurrentCubeX == s_spots[0].CubeX && CurrentCubeY == s_spots[0].CubeZ;
+    // the grid: after the qualifying lap, or (without qualifying) as soon as the player is in his car; formed in the start line's scene
+    if (inStartScene && driving && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
+    // the cars that aren't racing, out of sight
+    for (int i = 0; i < s_nbHidden; i++)
+        if (s_hideScene[i] == NumCube && s_hideActor[i] > 0 && s_hideActor[i] < NbObjets) ListObjet[s_hideActor[i]].Obj.Y = -20000;
+    if (s_phase == PHASE_GRID && now >= s_goAt) {
+        s_phase = PHASE_RACE;
+        for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_opp[n].LapStart = now;
+        Log_Info("[racemod] go");
+    }
+    if (!Opponents()) return;
+    // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car
+    if (!s_nbSpots && !s_oppStarted && driving && (Input & I_UP)) s_oppStarted = 1;
+    const int moving = driving && (s_nbSpots ? s_phase == PHASE_RACE : s_oppStarted);
     // (how far round the player is, for the opponents that push harder when they have fallen behind)
     const double me = moving && s_opp[0].Count ? PlayerProgress() : 0;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
@@ -436,8 +595,16 @@ void RaceMod_Frame(void) {
                 const double behind = me - OpponentProgress(o);
                 if (behind > 0) pace *= 1 + o->Catchup / 100.0 * (behind < 60 * 512 ? behind / (60 * 512) : 1);
             }
-            const double before = o->S;
-            o->S += v * pace / 100.0 * dt / 1000.0;
+            // its line's speed at its skill, reached from a standstill no faster than the car pulls away (the plan's braking is kept)
+            const double target = v * pace / 100.0;
+            if (o->Speed < target) {
+                o->Speed += s_car.Accel * Pull(o->Speed) * o->Top / 100.0 * pace / 100.0 * dt / 1000.0;
+                if (o->Speed > target) o->Speed = target;
+            } else
+                o->Speed = target;
+            const double before = o->S, step = o->Speed * dt / 1000.0;
+            o->S += step;
+            o->MergeLeft = o->MergeLeft > step ? o->MergeLeft - step : 0;
             if (o->S >= o->Length) o->S -= o->Length;
             if (o->S < before) {                 // past the start line
                 o->Laps++;
@@ -449,18 +616,25 @@ void RaceMod_Frame(void) {
         if (CubeMode != CUBE_EXTERIEUR) continue;
         const int index = OpponentActor(o);
         if (index < 0) continue;
+        // off its line while it moves onto it from its grid spot
+        const double f = o->MergeLeft / RACE_MERGE;
         T_OBJET *car = &ListObjet[index];
-        car->Obj.X = (S32)(x - CurrentCubeX * 32768.0);
-        car->Obj.Z = (S32)(z - CurrentCubeY * 32768.0);
-        car->Obj.Y = (S32)y;
+        car->Obj.X = (S32)(x + o->MergeX * f - CurrentCubeX * 32768.0);
+        car->Obj.Z = (S32)(z + o->MergeZ * f - CurrentCubeY * 32768.0);
+        car->Obj.Y = (S32)(y + o->MergeY * f);
         S32 beta = (S32)(atan2(dx, dz) * 4096.0 / (2 * 3.14159265358979)) & 4095;
-        car->Obj.Beta = beta;
+        car->Obj.Beta = f >= 1 ? o->SpotBeta : beta;
         ClearRealAngle(car);
         // the driving animation while it moves (its steps are undone every frame: the position is set here)
         const U16 anim = moving ? 1 : 0;
         if (car->GenAnim != anim) InitAnim(anim, ANIM_REPEAT, (U8)index);
         if (moving) s_wantFlip = 1;
     }
+}
+
+// The player's car stands on the grid until the count-down's GO (BUGGY.CPP RaceSpeed).
+S32 RaceMod_Held(void) {
+    return RaceMod_Active() && s_phase == PHASE_GRID;
 }
 
 // How far round the race the player is, and an opponent, in world units from the start of lap 1 (negative before it). The player is
@@ -511,6 +685,43 @@ static void Line(S32 x, S32 y, const char *text, S32 *left) {
     if (x - w < *left) *left = x - w;
 }
 
+// The count-down's big letters: 5 x 7 blocks each ('.' empty), drawn as filled boxes with a dark shadow.
+static const struct {
+    char C;
+    const char *Rows;
+} s_glyphs[] = {
+    {'1', "..#.." ".##.." "..#.." "..#.." "..#.." "..#.." ".###."},
+    {'2', ".###." "#...#" "....#" "...#." "..#.." ".#..." "#####"},
+    {'3', "####." "....#" "....#" ".###." "....#" "....#" "####."},
+    {'G', ".###." "#...#" "#...." "#.###" "#...#" "#...#" ".###."},
+    {'O', ".###." "#...#" "#...#" "#...#" "#...#" "#...#" ".###."},
+    {'!', "..#.." "..#.." "..#.." "..#.." "..#.." "....." "..#.."},
+};
+
+// The text centred on (cx, cy) in blocks of `k` pixels, in palette colour `colour`; returns nothing, marks the area to redraw.
+static void BigText(S32 cx, S32 cy, const char *text, S32 k, S32 colour) {
+    const S32 n = (S32)strlen(text), w = n * 6 * k - k, h = 7 * k;
+    const S32 x0 = cx - w / 2, y0 = cy - h / 2, shadow = k / 3 > 1 ? k / 3 : 1;
+    for (int pass = 0; pass < 2; pass++)
+        for (S32 i = 0; i < n; i++) {
+            const char *rows = NULL;
+            for (size_t g = 0; g < sizeof(s_glyphs) / sizeof(s_glyphs[0]); g++)
+                if (s_glyphs[g].C == text[i]) rows = s_glyphs[g].Rows;
+            if (!rows) continue;
+            for (S32 r = 0; r < 7; r++)
+                for (S32 c = 0; c < 5; c++) {
+                    if (rows[r * 5 + c] != '#') continue;
+                    const S32 x = x0 + (i * 6 + c) * k + (pass ? 0 : shadow), y = y0 + r * k + (pass ? 0 : shadow);
+                    Box(x, y, x + k - 1, y + k - 1, pass ? colour : 0);
+                }
+        }
+    BoxMovingAdd(x0 - 2, y0 - 2, x0 + w + shadow + 2, y0 + h + shadow + 2);
+}
+
+// palette colours for the count-down (the game palette, RESS.HQR entry 0): its strongest red and its brightest green (it has no vivid one)
+#define RACE_RED 72
+#define RACE_GREEN 141
+
 void RaceMod_Draw(void) {
     if (!RaceMod_Active() || !s_car.Hud || !LbaFont) return;
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
@@ -533,7 +744,36 @@ void RaceMod_Draw(void) {
     snprintf(text, sizeof(text), "%d km/h", (int)((abs(speed) * 36 + 2560) / 5120));
     Line(right, y, text, &left);
     y += step;
-    if (s_car.HasLine) {
+    const S32 now = TimerRefHR;
+    if (s_car.HasLine && s_phase == PHASE_QUALIFYING) {
+        if (s_laps > 0) {
+            Time(a, sizeof(a), now - s_lapStart);
+            snprintf(text, sizeof(text), "Qualifying lap  %s", a);
+        } else
+            snprintf(text, sizeof(text), "Qualifying: cross the start line");
+        Line(right, y, text, &left);
+        y += step;
+        if (s_laps > 0 && s_nbCheckpoints > 0) {
+            snprintf(text, sizeof(text), "Checkpoints %d/%d", s_next, s_nbCheckpoints);
+            Line(right, y, text, &left);
+            y += step;
+        }
+    } else if (s_car.HasLine && (s_phase == PHASE_WAIT || s_phase == PHASE_GRID)) {
+        // the grid, while it is shown before the count-down
+        if (s_phase == PHASE_GRID && s_qualifying && now < s_goAt - 3000) {
+            Line(right, y, "Grid", &left);
+            y += step;
+            for (int i = 0; i < s_nbOrder; i++) {
+                Time(a, sizeof(a), s_orderTime[i]);
+                snprintf(text, sizeof(text), "%d  %s  %s", i + 1, s_order[i] < 0 ? "Twinsen" : s_opp[s_order[i]].Name, a);
+                Line(right, y, text, &left);
+                y += step;
+            }
+        } else if (s_phase == PHASE_WAIT) {
+            Line(right, y, "Drive to the start line", &left);
+            y += step;
+        }
+    } else if (s_car.HasLine) {
         if (s_laps > 0) {
             Time(a, sizeof(a), TimerRefHR - s_lapStart);
             snprintf(text, sizeof(text), "Lap %d  %s", (int)s_laps, a);
@@ -554,7 +794,7 @@ void RaceMod_Draw(void) {
             y += step;
         }
     }
-    if (Opponents() && s_opp[0].Count) {
+    if (Opponents() && s_opp[0].Count && s_phase == PHASE_RACE) {
         // (the player's place among the racers: one more for every opponent further round)
         const double me = PlayerProgress();
         int place = 1, racers = 1;
@@ -572,6 +812,15 @@ void RaceMod_Draw(void) {
         y += step;
     }
     BoxMovingAdd(left - 4, top - 4, right + 6, y + 6);
+
+    // the count-down in the middle of the screen: 3, 2, 1 a second each, then GO for a second
+    const char *count = NULL;
+    if (s_phase == PHASE_GRID && now >= s_goAt - 3000) count = now < s_goAt - 2000 ? "3" : now < s_goAt - 1000 ? "2" : "1";
+    else if (s_nbSpots && s_phase == PHASE_RACE && s_goAt && now < s_goAt + 1000) count = "GO!";
+    if (count) {
+        const S32 k = (S32)ModeDesiredY / 48 > 3 ? (S32)ModeDesiredY / 48 : 3;
+        BigText((S32)ModeDesiredX / 2, (S32)ModeDesiredY / 3, count, k, count[0] == 'G' ? RACE_GREEN : RACE_RED);
+    }
 
     RestoreClipWindow();
     UnsetClip();

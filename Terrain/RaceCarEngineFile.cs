@@ -26,6 +26,9 @@ internal static class RaceCarEngineFile
         text.Append($"hud={(car.ShowDisplay ? 1 : 0)}\n");
         if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}\n");
         foreach (var c in track?.Checkpoints ?? new()) text.Append($"checkpoint={c.CubeX} {c.CubeZ} {c.X0} {c.Z0} {c.X1} {c.Z1} {c.DirX} {c.DirZ}\n");
+        // the grid spots, and whether a qualifying lap sets the order the cars line up in (RACEMOD.CPP)
+        foreach (var g in track?.Grid ?? new()) text.Append($"grid={string.Join(' ', g)}\n");
+        if (track?.Grid is { Count: > 0 }) text.Append($"qualifying={(car.Qualifying ? 1 : 0)}\n");
         var opponents = car.Opponents(track);
         for (var i = 0; i < opponents.Count && pathFiles is not null && i < pathFiles.Count; i++)
         {
@@ -34,9 +37,22 @@ internal static class RaceCarEngineFile
             var o = opponents[i];
             text.Append($"# {o.Name}\n{key}_path={pathFiles[i]}\n{key}_grid={o.Grid}\n{key}_pace={Math.Clamp(o.Pace, 10, 300)}\n");
             text.Append($"{key}_top={(int)Math.Round(o.Line.Top * 100)}\n{key}_grip={(int)Math.Round(o.Line.Grip * 100)}\n{key}_catchup={(car.OpponentsFightBack ? RaceCarSetup.CatchUpPercent : 0)}\n");
+            text.Append($"{key}_name={(o.Name == "the racer" ? "The racer" : o.Name)}\n");
             foreach (var (scene, actor) in o.Actors) text.Append($"{key}_actor={scene} {actor}\n");
         }
+        // the cars of the opponents the setup doesn't race: hidden, so they don't stand where a racing car lines up
+        foreach (var (scene, actor) in car.Parked(track)) text.Append($"hide_actor={scene} {actor}\n");
         return text.ToString();
+    }
+
+    // The scenes' copies of the cars of the opponents the track has and the setup doesn't race.
+    internal static List<(int Scene, int Actor)> Parked(this RaceCarSetup car, RaceTrackService.TrackInfo? track)
+    {
+        var list = new List<(int, int)>();
+        if (!car.Opponent && track?.Opponent is { } actors) list.AddRange(actors.Select(a => (a.Key, a.Value)));
+        foreach (var r in track?.Rivals ?? new())
+            if (r.Name == "Baldino" && !car.Baldino) list.AddRange(r.Actors.Select(a => (a.Key, a.Value)));
+        return list;
     }
 
     // The opponents the car setup races, in the engine's order: the retail track's racer, then Baldino (each when the track has it and the

@@ -31,6 +31,8 @@ public sealed class RaceCarSetup
     public int RacerSkill { get; set; } = 92;
     public bool Baldino { get; set; } = true;
     public int BaldinoSkill { get; set; } = 91;
+    // A qualifying lap before the race: its time against the opponents' sets the grid (off: Twinsen starts on pole).
+    public bool Qualifying { get; set; } = true;
     // An opponent that has fallen behind pushes harder (up to CatchUpPercent more, 60 cells behind).
     public bool OpponentsFightBack { get; set; } = true;
     public const int CatchUpPercent = 8;

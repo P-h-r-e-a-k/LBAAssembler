@@ -18,6 +18,7 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox opponent = new() { Content = "Race the original track's racer" };
     private readonly CheckBox baldino = new() { Content = "Race Baldino too, in his rocket car" };
     private readonly CheckBox fightBack = new() { Content = "They push harder when they fall behind you" };
+    private readonly CheckBox qualifying = new() { Content = "Drive a qualifying lap first: the times set the grid" };
     private readonly CheckBox startAtLine = new() { Content = "Start beside the car on the start/finish straight, with the editor's markings hidden" };
     private readonly List<Action> refresh = new();
     private bool updating;
@@ -35,7 +36,8 @@ internal sealed class RaceCarWindow : Window
         root.Children.Add(Text("How the buggy drives when you play a game folder that has a race track built. X shifts up a gear and Z down (unless the gearbox " +
                                "is automatic); each gear has its own top speed, and a low gear pulls harder than a high one. Speeds are as the game's display shows " +
                                "them, a cell taken as a metre: the original buggy tops out at 27 km/h. A lap counts once you have crossed every checkpoint round the " +
-                               "track; the opponents (the original track's racer, and Baldino in his rocket car) set off when you do. Other game folders play the game as it is."));
+                               "track; the opponents (the original track's racer, and Baldino in his rocket car) line up with you on the grid and start on the count-down. " +
+                               "Other game folders play the game as it is."));
 
         root.Children.Add(Section("Start from"));
         foreach (var p in RaceCarSetup.Presets) preset.Items.Add(new ComboBoxItem { Content = p.Name, Tag = p });
@@ -76,7 +78,8 @@ internal sealed class RaceCarWindow : Window
 
         root.Children.Add(Section("Race"));
         root.Children.Add(Text("The opponents drive this car, set up as above, on racing lines of their own: 100 % skill drives it perfectly, " +
-                               "faster than you can; a little less gives a close race.", new Thickness(0, 0, 0, 4)));
+                               "faster than you can; a little less gives a close race. The race starts with a count-down from the grid; with " +
+                               "qualifying, your first timed lap decides where you start.", new Thickness(0, 0, 0, 4)));
         opponent.Checked += (_, _) => setup.Opponent = true;
         opponent.Unchecked += (_, _) => setup.Opponent = false;
         root.Children.Add(opponent);
@@ -90,6 +93,10 @@ internal sealed class RaceCarWindow : Window
         fightBack.Unchecked += (_, _) => setup.OpponentsFightBack = false;
         fightBack.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(fightBack);
+        qualifying.Checked += (_, _) => setup.Qualifying = true;
+        qualifying.Unchecked += (_, _) => setup.Qualifying = false;
+        qualifying.Margin = new Thickness(0, 4, 0, 0);
+        root.Children.Add(qualifying);
         startAtLine.Checked += (_, _) => setup.StartAtLine = true;
         startAtLine.Unchecked += (_, _) => setup.StartAtLine = false;
         startAtLine.Margin = new Thickness(0, 4, 0, 0);
@@ -103,7 +110,7 @@ internal sealed class RaceCarWindow : Window
         root.Children.Add(display);
         askBeforePlay.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(askBeforePlay);
-        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, baldino, fightBack, startAtLine }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, baldino, fightBack, qualifying, startAtLine }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         var ok = new Button { Content = forPlay ? "Play" : "Save", Padding = new Thickness(18, 5, 18, 5), IsDefault = true, Margin = new Thickness(0, 0, 10, 0) };
         var cancel = new Button { Content = "Cancel", Padding = new Thickness(14, 5, 14, 5), IsCancel = true };
@@ -125,6 +132,7 @@ internal sealed class RaceCarWindow : Window
         opponent.IsChecked = setup.Opponent;
         baldino.IsChecked = setup.Baldino;
         fightBack.IsChecked = setup.OpponentsFightBack;
+        qualifying.IsChecked = setup.Qualifying;
         startAtLine.IsChecked = setup.StartAtLine;
         foreach (var r in refresh) r();
         ShowGearRows();

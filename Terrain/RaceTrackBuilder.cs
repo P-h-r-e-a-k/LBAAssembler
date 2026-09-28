@@ -1166,17 +1166,18 @@ internal static class RaceTrackBuilder
 
     // An opponent's racing line (the race-track mode drives a car along it): a point a cell apart round the lap from the start line, placed
     // across the road where the car is quickest -- wide into a bend, clipping its inside, wide out of it -- with each point kept within
-    // `Reach` cells of the middle of the road (the car's middle; its wheels then just reach the curb): first smoothed (each point moved
-    // to the middle of its neighbours over windows from 30 cells down to 2, then back within the road), then a local search for the lap
-    // time itself. On the inside of a bend a point stays far enough from the bend's centre that the line keeps a radius of `LineTightest`
-    // cells at least (the lap's tightest bends are 2.6 cells round the middle of the road, less than `Reach`: the line would fold there). Each opponent leans a little to its own side (`Side`, a weak pull),
-    // so the two lines don't lie on each other, and its grid spot and the start line are held at `Side` cells: it starts where the scene puts
-    // its car. With the ground's height there (the deck on the bridge, the flight's arc over the jump), the line's bend radius at each point
-    // (the circle through the points three cells either side), and speeds for a reference car, the race car setup's: as fast as its steering
-    // takes each bend (the buggy turns at a fixed rate, so a bend of radius R is taken at up to that rate times R) and its top gear, braking
-    // and pulling away as hard as it can. The engine plans the speeds again from the player's own car (RACEMOD.CPP PlanSpeeds).
-    // Side: the side of the road it leans to and starts on (cells); Grid: how many cells behind the start line it starts; Top and Grip: its
-    // character, its top speed and pull, and its cornering, as shares of the player's car's (the engine file passes them on, RaceCarEngineFile).
+    // `Reach` cells of the middle of the road (the car's middle; its wheels then just reach the curb): first smoothed (each point moved to
+    // the middle of its neighbours over windows from 30 cells down to 2, then back within the road), then a local search for the lap time
+    // itself. On the inside of a bend a point stays far enough from the bend's centre that the line keeps a radius of `LineTightest` cells
+    // at least (the lap's tightest bends are 2.6 cells round the middle of the road, less than `Reach`: the line would fold there). Each
+    // opponent leans a little to its own side (`Side`, a weak pull), so the two lines don't lie on each other. With the ground's height
+    // there (the deck on the bridge, the flight's arc over the jump), the line's bend radius at each point (the circle through the points
+    // three cells either side), and speeds for a reference car, the race car setup's: as fast as its steering takes each bend (the buggy
+    // turns at a fixed rate, so a bend of radius R is taken at up to that rate times R) and its top gear, braking and pulling away as hard
+    // as it can. The engine plans the speeds again from the player's own car (RACEMOD.CPP PlanSpeeds).
+    // Side: the side of the road it leans to (cells); Grid: how many cells behind the start line it started before there was a grid (an
+    // old engine's opponent_grid); Top and Grip: its character, its top speed and pull, and its cornering, as shares of the player's car's
+    // (the engine file passes them on, RaceCarEngineFile).
     internal sealed record RacingLine(double Side, double Grid, double Top, double Grip);
     internal static readonly RacingLine RacerLine = new(-2.5, 4, 1.0, 1.0);
     // Baldino's rocket car: a little quicker on the straights, a good deal slower in the bends
@@ -1223,14 +1224,9 @@ internal static class RaceTrackBuilder
             lo[m] = sharpest > 0 ? -Reach : -inside;
             hi[m] = sharpest > 0 ? inside : Reach;
         }
-        // the offsets across the road: held at the grid (from a few cells behind the opponent's grid spot to a few past the start line)
+        // the offsets across the road, from the middle of the road. (None is held: the race-track mode lines the cars up on grid spots in
+        // the qualifying's order and moves each from its spot onto its line over its first cells.)
         var off = new double[count]; var held = new bool[count];
-        for (var m = 0; m < count; m++)
-        {
-            var back = m == 0 ? 0 : count - m;
-            held[m] = m <= 3 || back <= line.Grid + 5;
-            off[m] = held[m] ? line.Side : 0;
-        }
         // the points over the jump's flight: no bend there (the car is in the air, on the flight's arc)
         var flight = new bool[count];
         if (jump is not null)

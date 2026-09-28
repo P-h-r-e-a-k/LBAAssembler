@@ -39,8 +39,12 @@ void RaceMod_UpdateGear(S32 speed);
 // crosses the start line the right way.
 void RaceMod_Lap(S32 x, S32 z);
 
-// Every frame before the scene is drawn: the opponent moves along its line and its car is put there, in the player's scene.
+// Every frame before the scene is drawn: the grid and the count-down, and the opponents moved along their lines and their cars put there,
+// in the player's scene.
 void RaceMod_Frame(void);
+
+// TRUE while the player's car stands on the grid, before the count-down's GO.
+S32 RaceMod_Held(void);
 
 // The display (gear, speed, lap times, checkpoints, race position), drawn over the scene while the hero drives.
 void RaceMod_Draw(void);

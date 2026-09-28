@@ -25,8 +25,9 @@ internal static class RaceTrackService
     // each point [x, z, y, speed, bend radius] in world units (x and z counted from the island's corner, 32768 to a cube). PathGrid: how many points
     // before the start line the opponent starts. Opponent: scene -> the index of that scene's copy of the racer. StartScene: the scene
     // the start line is in. Rivals: the other opponents (Baldino), each with a line, a grid and the scenes' copies of its car of its own.
+    // Grid: the grid spots, pole first, each [cube x, cube z, x, y, z, turn] (the race-track mode lines the cars up on them).
     public sealed record TrackInfo(string Crossing, StartLineInfo? StartLine, List<StartLineInfo>? Checkpoints = null, List<int[]>? Path = null,
-        int PathGrid = 0, Dictionary<int, int>? Opponent = null, int StartScene = -1, List<RivalInfo>? Rivals = null);
+        int PathGrid = 0, Dictionary<int, int>? Opponent = null, int StartScene = -1, List<RivalInfo>? Rivals = null, List<int[]>? Grid = null);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
@@ -123,7 +124,7 @@ internal static class RaceTrackService
         var rivals = new List<RivalInfo>();
         if (report.BaldinoPath.Count > 0 && scenes.Baldino.Count > 0) rivals.Add(new RivalInfo("Baldino", Points(report.BaldinoPath), RaceTrackScenes.BaldinoGridBack, scenes.Baldino));
         var info = new TrackInfo(options.Crossing.ToString(), line, checkpoints, path.Count > 0 ? path : null, 4, scenes.Opponent.Count > 0 ? scenes.Opponent : null, scenes.StartScene,
-            rivals.Count > 0 ? rivals : null);
+            rivals.Count > 0 ? rivals : null, scenes.Grid.Count > 0 ? scenes.Grid : null);
         File.WriteAllText(Path.Combine(gameDirectory, InfoFile), JsonSerializer.Serialize(info, new JsonSerializerOptions { WriteIndented = true }));
     }
 
