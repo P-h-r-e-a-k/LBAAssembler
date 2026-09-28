@@ -2,7 +2,7 @@ using System.IO;
 
 namespace LBAAssembler.Terrain;
 
-// Builds the Desert island race track into an LBA2 game folder, and puts the folder back. The two files it changes (DESERT.ILE, SCENE.HQR) are
+// Builds the Desert island race track into an LBA2 game folder, and puts the folder back. The three files it changes (DESERT.ILE, DESERT.OBL, SCENE.HQR) are
 // kept beside the originals as *.before-racetrack the first time; every later build starts from those copies, so building again never piles a
 // track on a track, and Restore puts them back.
 internal static class RaceTrackService
@@ -36,7 +36,7 @@ internal static class RaceTrackService
             }
             File.Copy(Path.Combine(gameDirectory, "DESERT.OBL" + BackupSuffix), Path.Combine(gameDirectory, "DESERT.OBL"), overwrite: true);
             if (options.Crossing == CrossingStyle.Bridge)
-                options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, "DESERT.OBL"), options.RoadBridgeTileLength * 512);
+                options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, "DESERT.OBL"), options);
             var island = IslandFile.Load(Path.Combine(gameDirectory, "DESERT.ILE" + BackupSuffix));
             var report = RaceTrackBuilder.Build(island, plan, options);
             island.Save(Path.Combine(gameDirectory, "DESERT.ILE"));
@@ -60,12 +60,12 @@ internal static class RaceTrackService
         }
     }
 
-    // Puts DESERT.ILE and SCENE.HQR back from the copies made by the first build and removes the copies.
+    // Puts DESERT.ILE, DESERT.OBL and SCENE.HQR back from the copies made by the first build and removes the copies.
     public static string Restore(string gameDirectory)
     {
         if (!HasBackups(gameDirectory)) return "There is no race track build to undo in this folder.";
         foreach (var f in Files) File.Copy(Path.Combine(gameDirectory, f + BackupSuffix), Path.Combine(gameDirectory, f), overwrite: true);
         foreach (var f in Files) File.Delete(Path.Combine(gameDirectory, f + BackupSuffix));
-        return "The original DESERT.ILE and SCENE.HQR are back.";
+        return "The original DESERT.ILE, DESERT.OBL and SCENE.HQR are back.";
     }
 }

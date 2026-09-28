@@ -61,6 +61,8 @@ internal sealed class RaceTrackOptions
     public double MaxBank { get; set; } = 70;
     // How far the ground height along the road is smoothed (cells).
     public double ProfileSmoothing { get; set; } = 6;
+    // How far the grade-limited profile is smoothed again (cells), so crests and dips are rounded rather than kinks.
+    public double VerticalSmoothing { get; set; } = 4;
     // Where the road is lowest above the sea when it crosses water.
     public double BridgeClearance { get; set; } = 700;
     public double Spacing { get; set; } = 0.5;
@@ -95,12 +97,24 @@ internal sealed class RaceTrackOptions
     public double RoadBridgeTileLength { get; set; } = 4;
     // How many cells of ramp lead up to (and down from) the deck's own flat core, each side.
     public double RoadBridgeRampLength { get; set; } = 50;
+    // How many cells of ground at the deck's own height lie between each end of the deck and the top of its ramp. A decor's
+    // collision box is axis-aligned, so a turned tile's box overhangs its mesh by up to (cos + sin - 1) / 2 of a tile (0.8 cells
+    // here, 2 cells at the edge tiles' outer corners), and a car carried by it reaches ~0.6 cells further: with the ground there
+    // level with the deck, driving onto the overhang is not a step (it was an 84-unit bump ~3 cells before the deck), and a car
+    // turning off the deck's last cells comes down on level ground, not over the ramp's rock shoulder (it fell 1000-3300).
+    public double RoadBridgeLanding { get; set; } = 4;
+    // Low red and white railings along both edges of the deck (solid: the car cannot drive off the side and drop 2800).
+    public bool DeckRailings { get; set; } = true;
     // The scene side (RaceTrackScenes): actors other than Twinsen, the buggy and the hidden Zoe slot removed; the buggy present from the start of any game (the
     // car quest no longer hides it); Twinsen and the buggy set at the start line; zones that would act on a car on the road (doors, hit, ladder ...) removed.
     public bool RemoveActors { get; set; } = true;
     public bool BuggyAlways { get; set; } = true;
     public bool StartAtLine { get; set; } = true;
     public bool RemoveRoadZones { get; set; } = true;
+    // Camera zones (type 1: while the hero is inside the box the view jumps to a fixed camera) that reach the road or within
+    // CameraMargin cells of it are removed, so the view keeps following the car all the way round.
+    public bool RemoveTrackCameras { get; set; } = true;
+    public double CameraMargin { get; set; } = 2;
     public bool RemoveSolidDecors { get; set; } = true;
     // The island OBL index of the flat deck body (RaceTrackDeckBody), appended by RaceTrackService before the build runs. -1 if
     // no bridge deck body is available (the Bridge crossing style then falls back to a level crossing).
@@ -114,6 +128,13 @@ internal sealed class RaceTrackOptions
     };
     // Decor bodies of the retail race track that are left alone (its gantry and arch).
     public HashSet<int> ProtectedBodies { get; set; } = new() { 64, 65, 66, 67, 68, 69, 70, 71 };
+    // The retail race track's cube (island cube coordinates): what is left of it -- its painted road, curbs, arrows and hatching,
+    // and its decor pieces (OldTrackBodies) -- is cleared before the new lap is laid, which now runs through the same ground.
+    // null leaves the retail track as it was.
+    public (int X, int Z)? OldTrackCube { get; set; } = (7, 10);
+    // The retail track's own decor pieces: start gantry (64-66), billboard (67), arch and its abutments (68-70), wedge (71). The
+    // garage's lamp (36) and the sphero's crystal (1) stay.
+    public HashSet<int> OldTrackBodies { get; set; } = new() { 64, 65, 66, 67, 68, 69, 70, 71 };
     // Cells (island cell coordinates, inclusive) the new track must not touch: the retail track.
     public List<(int X0, int Z0, int X1, int Z1)> Keep { get; set; } = new();
 }
@@ -135,6 +156,11 @@ internal sealed class RaceTrackReport
     public RoadBridgeInfo? RoadBridge { get; set; }
     // How far (cells) an island cell position is from the nearest road's centre line, 1e9 when far away.
     public Func<double, double, double> DistanceToRoad { get; set; } = (_, _) => 1e9;
+    // The ground's height at an island cell position before and after the build (the scenes re-seat what stood on reshaped ground).
+    public Func<double, double, double>? GroundBefore { get; set; }
+    public Func<double, double, double>? GroundAfter { get; set; }
+    // Whether an island cell position was drawn ground before the build (not the sea).
+    public Func<double, double, bool>? WasGround { get; set; }
 }
 
 internal sealed class TrackRoad
@@ -146,12 +172,18 @@ internal sealed class TrackRoad
     public double[] H = Array.Empty<double>();
     public bool[] Bridge = Array.Empty<bool>();
     public bool[] Deck = Array.Empty<bool>();
+    // The road-over-road bridge's heads: the ground level with the deck (under its last cells and on the landings beyond),
+    // shaped wider than the road so a turned deck tile's overhanging collision box always lies over ground at its height.
+    public bool[] Landing = Array.Empty<bool>();
+    // ... and of those, the ones under the deck's own last cells (hidden by the tiles from above; the ground there rises steeply
+    // from the other road's level, so it is painted as rock, not as road)
+    public bool[] UnderDeck = Array.Empty<bool>();
     public double AsphaltHalf, CurbHalf, VergeHalf, Blend;
     public int Count => X.Length;
     public double Length;
 }
 
-internal readonly record struct RoadHit(int Road, double Dist, double Lat, double S, double H, double Bank, bool Bridge, double Kappa, bool Deck);
+internal readonly record struct RoadHit(int Road, double Dist, double Lat, double S, double H, double Bank, bool Bridge, double Kappa, bool Deck, bool Landing = false, bool UnderDeck = false);
 
 // A road-over-road bridge: the straighter road's own flat deck core (island cell coordinates), oriented along its own heading.
 internal readonly record struct RoadBridgeInfo(double X, double Z, double Height, double DirX, double DirZ, double Width, double Length, int UnderRoad);
@@ -169,18 +201,19 @@ internal static class RaceTrackBuilder
 
         var main = MakeRoad("lap", plan, options, closed: true);
         roads.Add(main);
-        report.Length = main.Length;
         if (options.Crossing == CrossingStyle.Jump) SteepenCrossing(main, options, report, options.JumpCrossingAngle);
         if (options.Crossing == CrossingStyle.Bridge)
         {
-            // straighten far enough that the whole deck AND the ramp mouths lie on the straightened line
-            SteepenCrossing(main, options, report, options.BridgeCrossingAngle, Math.Max(15, DeckHalfCells(options, options.BridgeCrossingAngle) + 3));
+            // straighten far enough that the whole deck, its landings AND the ramp mouths lie on the straightened line
+            SteepenCrossing(main, options, report, options.BridgeCrossingAngle, Math.Max(15, DeckHalfCells(options, options.BridgeCrossingAngle) + options.RoadBridgeLanding + 1));
         }
+        report.Length = main.Length; // as built: re-shaping the crossing shortens the lap a little
         Profile(main, field, options, report);
         var crossings = FindCrossings(main, options);
         if (crossings.Count > 1) report.Notes.Add($"WARNING: the route crosses itself {crossings.Count} times, not once -- only the first is treated as the intended crossing; check the plan, the others will paint as plain overlapping road.");
         if (options.Crossing != CrossingStyle.Bridge) EqualiseCrossings(main, crossings, options);
         foreach (var c in crossings) report.Crossings.Add((c.X, c.Z, main.H[c.I], c.Angle));
+        report.Notes.Add("tightest turns: " + string.Join(", ", Tightest(main, options, 3).Select(t => $"radius {t.Radius:0.0} cells at cell ({t.X:0.0}, {t.Z:0.0})")));
         if (options.Crossing == CrossingStyle.Jump && crossings.Count > 0) report.Jump = PlanJump(main, crossings[0], options, report);
         if (options.Crossing == CrossingStyle.Bridge && crossings.Count > 0) report.RoadBridge = PlanRoadBridge(main, crossings[0], options, report);
         foreach (var (a, b) in report.BridgeSpans) report.BridgeCoords.Add((main.X[a], main.Z[a], main.X[b], main.Z[b]));
@@ -190,11 +223,17 @@ internal static class RaceTrackBuilder
         var index = new RoadIndex(roads);
         report.DistanceToRoad = (x, z) => { var h = index.Near(x, z, 14, 1); return h.Count == 0 ? 1e9 : h[0].Dist; };
         var startIndex = roads.Count > 1 ? PitMiddle : -1;
+        ClearOldTrack(island, options, report);
         var follow = new IslandOps.DecorFollow(island);
         ClearDecors(island, index, options, report);
+        var natural = new Field(island);
         ModifyGround(island, field, index, roads, options, report);
-        PaintRoad(island, field, index, roads, options, report, startIndex);
+        var painted = PaintRoad(island, field, index, roads, options, report, startIndex);
+        ClearStaleCol(island, natural, field, index, painted, report);
         follow.Apply();
+        report.GroundBefore = (x, z) => natural.Height(x, z);
+        report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
+        report.WasGround = (x, z) => natural.Drawn(x, z);
         PlaceStructures(island, main, crossings, startIndex, options, report);
         Relight(island, index, options);
         return report;
@@ -261,6 +300,31 @@ internal static class RaceTrackBuilder
             k[i] = d / ds;
         }
         r.Kappa = Smooth(k, 4 / o.Spacing, r.Closed);
+    }
+
+    // The lap's `count` tightest turns, each at least 20 cells from the others: the radius of the circle through points 3 cells either
+    // side of a point.
+    private static List<(double Radius, double X, double Z)> Tightest(TrackRoad r, RaceTrackOptions o, int count)
+    {
+        var k = Math.Max(1, (int)Math.Round(3 / o.Spacing));
+        var all = new List<(double Radius, double X, double Z, double S)>();
+        for (var i = 0; i < r.Count; i++)
+        {
+            int a = At(r, i - k), c = At(r, i + k);
+            if (!r.Closed && (i - k < 0 || i + k >= r.Count)) continue;
+            double abx = r.X[i] - r.X[a], abz = r.Z[i] - r.Z[a], acx = r.X[c] - r.X[a], acz = r.Z[c] - r.Z[a];
+            var area2 = Math.Abs(abx * acz - abz * acx);
+            if (area2 < 1e-9) continue;
+            all.Add((Math.Sqrt(abx * abx + abz * abz) * Math.Sqrt(acx * acx + acz * acz) * Math.Sqrt(Sq(r.X[c] - r.X[i]) + Sq(r.Z[c] - r.Z[i])) / (2 * area2), r.X[i], r.Z[i], r.S[i]));
+        }
+        var picked = new List<(double Radius, double X, double Z, double S)>();
+        foreach (var t in all.OrderBy(t => t.Radius))
+        {
+            if (picked.Any(p => Math.Min(Math.Abs(p.S - t.S), r.Length - Math.Abs(p.S - t.S)) < 20)) continue;
+            picked.Add(t);
+            if (picked.Count == count) break;
+        }
+        return picked.Select(t => (t.Radius, t.X, t.Z)).ToList();
     }
 
     private static int At(TrackRoad r, int i) => r.Closed ? ((i % r.Count) + r.Count) % r.Count : Math.Clamp(i, 0, r.Count - 1);
@@ -333,28 +397,45 @@ internal static class RaceTrackBuilder
         }
         var smooth = Smooth(h, o.ProfileSmoothing / o.Spacing, r.Closed);
         for (var i = 0; i < n; i++) if (bridge[i]) smooth[i] = Math.Max(smooth[i], o.BridgeClearance);
-        r.H = smooth; r.Bridge = bridge; r.Deck = new bool[n];
+        r.H = smooth; r.Bridge = bridge; r.Deck = new bool[n]; r.Landing = new bool[n]; r.UnderDeck = new bool[n];
         LimitGrade(r, o);
+        // round the crests and dips the limit leaves (a grade that changes all at once pitches the car all at once); smoothing a
+        // profile never makes it steeper, so the grade limit still holds
+        r.H = Smooth(r.H, o.VerticalSmoothing / o.Spacing, r.Closed);
+        // water bridges keep their clearance: raised where they fell short, and the approaches filled up to meet them at the limit
         for (var i = 0; i < n; i++) if (bridge[i] && r.H[i] < o.BridgeClearance) r.H[i] = o.BridgeClearance;
-        LimitGrade(r, o);
+        r.H = Envelope(r, o.MaxGrade, below: false);
     }
 
+    // The profile with no stretch steeper than MaxGrade that is closest to the road's own: the average of its two grade-limited
+    // envelopes -- the highest profile that nowhere rises above it (cut only) and the lowest that nowhere drops below it (fill
+    // only). Both climb at most MaxGrade, so their average does too, and it sits halfway between the cut and the fill everywhere.
+    // Exact in one go: the pairwise relaxation this replaces stopped after 60 passes, which on a hilly stretch (the retail
+    // track's bed) left climbs of 23% against a 9% limit -- converging would have taken tens of thousands.
     private static void LimitGrade(TrackRoad r, RaceTrackOptions o)
     {
-        var n = r.Count; var step = o.MaxGrade * 512 * o.Spacing;
-        for (var pass = 0; pass < 60; pass++)
+        var cut = Envelope(r, o.MaxGrade, below: true);
+        var fill = Envelope(r, o.MaxGrade, below: false);
+        for (var i = 0; i < r.Count; i++) r.H[i] = (cut[i] + fill[i]) / 2;
+    }
+
+    // below: the highest profile at or under H whose grade nowhere exceeds `grade` (H[i] = min over j of H[j] + grade * distance);
+    // otherwise the lowest at or over it (max over j of H[j] - grade * distance). Two sweeps each way (two laps round a closed road,
+    // so the limit carries across the start).
+    private static double[] Envelope(TrackRoad r, double grade, bool below)
+    {
+        var n = r.Count; var e = (double[])r.H.Clone();
+        var rise = new double[n];   // the most the height may change from point i to point i + 1
+        for (var i = 0; i < n; i++)
         {
-            var changed = false;
-            for (var i = 1; i < n * 2; i++)
-            {
-                var a = At(r, i - 1); var b = At(r, i);
-                if (!r.Closed && i >= n) break;
-                var d = r.H[b] - r.H[a];
-                if (d > step) { var m = (d - step) / 2; r.H[b] -= m; r.H[a] += m; changed = true; }
-                else if (d < -step) { var m = (-d - step) / 2; r.H[b] += m; r.H[a] -= m; changed = true; }
-            }
-            if (!changed) break;
+            var j = r.Closed ? (i + 1) % n : Math.Min(i + 1, n - 1);
+            rise[i] = Math.Sqrt(Sq(r.X[j] - r.X[i]) + Sq(r.Z[j] - r.Z[i])) * 512 * grade;
         }
+        void Relax(int i, int from, double limit) => e[i] = below ? Math.Min(e[i], e[from] + limit) : Math.Max(e[i], e[from] - limit);
+        var sweep = r.Closed ? 2 * n : n;
+        for (var k = 1; k < sweep; k++) Relax(k % n, (k - 1) % n, rise[(k - 1) % n]);
+        for (var k = sweep - 2; k >= 0; k--) Relax(k % n, (k + 1) % n, rise[k % n]);
+        return e;
     }
 
     // ---------------------------------------------------------------------------------------------------------------------
@@ -388,14 +469,20 @@ internal static class RaceTrackBuilder
         }
         var pit = Resample("pit", pts, o, closed: false);
         pit.AsphaltHalf = halfAsphalt; pit.CurbHalf = halfCurb; pit.VergeHalf = halfCurb + 1.0; pit.Blend = 4;
-        // heights: follow the lap's profile at the same place
-        pit.H = new double[pit.Count]; pit.Bridge = new bool[pit.Count]; pit.Deck = new bool[pit.Count];
+        // heights: the lap's own height at the nearest point of the stretch the pit lane runs beside -- where the two merge they
+        // are then one surface (taking the point a fixed fraction along instead put the merge several cells off, a 200-unit step
+        // on the bridge's ramp)
+        pit.H = new double[pit.Count]; pit.Bridge = new bool[pit.Count]; pit.Deck = new bool[pit.Count]; pit.Landing = new bool[pit.Count]; pit.UnderDeck = new bool[pit.Count];
         for (var i = 0; i < pit.Count; i++)
         {
-            var f = pit.Count <= 1 ? 0 : (double)i / (pit.Count - 1);
-            var src = f * count;
-            var lo = (int)Math.Floor(src); var hi = Math.Min(count, lo + 1); var tt = src - lo;
-            pit.H[i] = hs[lo] * (1 - tt) + hs[hi] * tt;
+            var best = 0; var bd = double.MaxValue;
+            for (var k = 0; k <= count; k++)
+            {
+                var j = At(main, ia + step * k);
+                var dd = Sq(main.X[j] - pit.X[i]) + Sq(main.Z[j] - pit.Z[i]);
+                if (dd < bd) { bd = dd; best = k; }
+            }
+            pit.H[i] = hs[best];
         }
         PitMiddle = mid;
         report.Notes.Add($"pit lane: {pit.Length:0} cells long, {(side > 0 ? "left" : "right")} of the lap (points {ia} to {At(main, ia + step * count)}, from cell ({main.X[ia]:0.0}, {main.Z[ia]:0.0}) to ({main.X[At(main, ia + step * count)]:0.0}, {main.Z[At(main, ia + step * count)]:0.0}))");
@@ -487,10 +574,27 @@ internal static class RaceTrackBuilder
                 var k = r.Kappa[a] * (1 - t) + r.Kappa[b] * t;
                 var s = r.S[a] + Math.Sqrt(len2) * t;
                 var h = r.H[a] * (1 - t) + r.H[b] * t;
-                best = new RoadHit(ri, d, lat, s, h, 0, r.Bridge[a] && r.Bridge[b], k, r.Deck[a] && r.Deck[b]);
+                best = new RoadHit(ri, d, lat, s, h, 0, r.Bridge[a] && r.Bridge[b], k, r.Deck[a] && r.Deck[b], r.Landing[a] || r.Landing[b], r.UnderDeck[a] || r.UnderDeck[b]);
             }
             return best;
         }
+    }
+
+    // How far a point is from the road, for its shaping and painting: the true distance to the nearest segment, not the sideways
+    // offset alone. Where the projection stops at a segment's end the sideways offset reads ~0 however far away the point lies:
+    // past the pit lane's open ends (it claimed a whole 13-cell circle round each end at its own height, a cliff across the lap
+    // where the circle stopped), and in tight bends, where the index's second hit on the same road -- a point 18 cells further
+    // round the bend -- got full weight and pulled the surface 500 units out of shape.
+    private static double Across(TrackRoad r, RoadHit hit) => Math.Max(Math.Abs(hit.Lat), hit.Dist);
+
+    // An open road (the pit lane) merges into the lap at both ends, so near its ends it hands the ground over to the lap: its weight
+    // fades from nothing at an end to full `PitFade` cells in.
+    private const double PitFade = 8;
+    private static double EndFade(TrackRoad r, RoadHit hit)
+    {
+        if (r.Closed) return 1;
+        var t = Math.Clamp(Math.Min(hit.S, r.Length - hit.S) / PitFade, 0, 1);
+        return t * t * (3 - 2 * t);
     }
 
     private static double BankOf(TrackRoad r, RoadHit hit, RaceTrackOptions o)
@@ -580,18 +684,42 @@ internal static class RaceTrackBuilder
         var nx = Math.Cos(na); var nz = Math.Sin(na);
         var px = r.X[ia]; var pz = r.Z[ia]; var s0 = r.S[ia];
         var straight = straightCells; const double blend = 40;
-        var n = r.Count; var newX = (double[])r.X.Clone(); var newZ = (double[])r.Z.Clone();
-        for (var k = 0; k < n; k++)
+        var n = r.Count;
+        double Ds(int k) { var ds = r.S[k] - s0; if (r.Closed) { if (ds > r.Length / 2) ds -= r.Length; else if (ds < -r.Length / 2) ds += r.Length; } return ds; }
+        // the drawn road's points where the re-shaped stretch rejoins it, one blend length past each end of the straight
+        int Join(double ds)
         {
-            var ds = r.S[k] - s0;
-            if (r.Closed) { if (ds > r.Length / 2) ds -= r.Length; else if (ds < -r.Length / 2) ds += r.Length; }
-            var ad = Math.Abs(ds);
-            double w = ad <= straight ? 1 : ad >= straight + blend ? 0 : 0.5 * (1 + Math.Cos(Math.PI * (ad - straight) / blend));
-            if (w <= 0) continue;
-            newX[k] = r.X[k] + w * ((px + nx * ds) - r.X[k]);
-            newZ[k] = r.Z[k] + w * ((pz + nz * ds) - r.Z[k]);
+            var best = ia; var bd = double.MaxValue; var reach = (int)((straight + blend) / o.Spacing) + 20;
+            for (var k = -reach; k <= reach; k++) { var j = At(r, ia + k); var d = Math.Abs(Ds(j) - ds); if (d < bd) { bd = d; best = j; } }
+            return best;
         }
-        r.X = newX; r.Z = newZ;
+        var kIn = Join(-(straight + blend)); var kOut = Join(straight + blend);
+        // The new stretch: straight through the crossing, joined to the drawn road at both ends by a cubic Hermite curve that
+        // matches the road's position and heading there; then the whole lap is resampled evenly. (Moving the old points towards
+        // the straight line point by point bunched them up where the drawn road curved away: a 103-degree turn in 4 cells on
+        // the bridge's south-east ramp, tighter than the car can drive.)
+        var raw = new List<(double X, double Z)>();
+        for (var k = kOut; k != kIn; k = (k + 1) % n) raw.Add((r.X[k], r.Z[k]));
+        void Hermite(double x0, double z0, double tx0, double tz0, double x1, double z1, double tx1, double tz1)
+        {
+            var len = Math.Sqrt(Sq(x1 - x0) + Sq(z1 - z0));
+            var steps = Math.Max(8, (int)Math.Ceiling(len / 0.25));
+            for (var i = 0; i < steps; i++)
+            {
+                var t = (double)i / steps; var t2 = t * t; var t3 = t2 * t;
+                double h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
+                raw.Add((h00 * x0 + h10 * tx0 * len + h01 * x1 + h11 * tx1 * len, h00 * z0 + h10 * tz0 * len + h01 * z1 + h11 * tz1 * len));
+            }
+        }
+        double sx0 = px - nx * straight, sz0 = pz - nz * straight, sx1 = px + nx * straight, sz1 = pz + nz * straight;
+        Hermite(r.X[kIn], r.Z[kIn], r.Tx[kIn], r.Tz[kIn], sx0, sz0, nx, nz);
+        Hermite(sx0, sz0, nx, nz, sx1, sz1, nx, nz);
+        Hermite(sx1, sz1, nx, nz, r.X[kOut], r.Z[kOut], r.Tx[kOut], r.Tz[kOut]);
+        // the lap still starts where it did (the pit lane, arrows and start line are found from it)
+        var first = raw.Select((p, i) => (I: i, D: Sq(p.X - r.X[0]) + Sq(p.Z - r.Z[0]))).MinBy(t => t.D).I;
+        raw = raw.Skip(first).Concat(raw.Take(first)).ToList();
+        var reshaped = Resample(r.Name, raw, o, closed: true);
+        r.X = reshaped.X; r.Z = reshaped.Z;
         Geometry(r, o);
         var after = FindCrossings(r, o);
         report.Notes.Add($"crossing steepened from {c.Angle:0} to {(after.Count > 0 ? after[0].Angle : 0):0} degrees (the straighter road turned by {(Math.Atan2(nz, nx) - Math.Atan2(az, ax)) * 180 / Math.PI:0} degrees at the crossing)");
@@ -608,11 +736,17 @@ internal static class RaceTrackBuilder
     // another CurbHalf + ~2, plus RoadBridgeMargin -- measured along the upper road that's that distance / sin(crossing angle).
     // (With the deck any shorter the lower road's embankment pulled the first ramp cells ~1000 units under the deck: a car coming
     // up the ramp would have hit the deck's edge.)
+    // Rounded up to whole deck tiles, so the deck laid by PlaceDeck ends exactly where the ground's own flat landing starts.
     private static double DeckHalfCells(RaceTrackOptions o, double angleDeg)
     {
-        var clear = o.VergeHalfWidth + o.BlendWidth + o.CurbHalfWidth + 2 + o.RoadBridgeMargin;
-        return Math.Clamp(clear / Math.Sin(Math.Max(angleDeg, 12) * Math.PI / 180), 8, 45);
+        var clear = o.VergeHalfWidth + o.BlendWidth + o.CurbHalfWidth + 2 + o.RoadBridgeMargin;   // (the landings add another 4 cells of room)
+        var half = Math.Clamp(clear / Math.Sin(Math.Max(angleDeg, 12) * Math.PI / 180), 8, 45);
+        return Math.Ceiling(2 * half / o.RoadBridgeTileLength - 1e-9) * o.RoadBridgeTileLength / 2;
     }
+
+    // How many cells of each deck end have ground shaped under them (to meet the landing without a crack), and how far below
+    // the deck's top that ground sits (out of sight under the tiles, and not fighting their top faces for the same depth).
+    private const double DeckEndOverlap = 1.5, UnderDeckDepth = 40;
 
     private static RoadBridgeInfo? PlanRoadBridge(TrackRoad r, Crossing c, RaceTrackOptions o, RaceTrackReport report)
     {
@@ -625,12 +759,14 @@ internal static class RaceTrackBuilder
         var s0 = r.S[over];
         var deckHeight = r.H[under] + o.RoadBridgeClearance;
 
+        // flat at the deck's height over the deck and its two landings, then the ramps
+        var flatHalf = coreHalfCells + o.RoadBridgeLanding;
         double Weight(double ds)
         {
             var ad = Math.Abs(ds);
-            if (ad <= coreHalfCells) return 1;
-            if (ad >= coreHalfCells + rampCells) return 0;
-            var t = (ad - coreHalfCells) / rampCells; return 1 - t * t * (3 - 2 * t);
+            if (ad <= flatHalf) return 1;
+            if (ad >= flatHalf + rampCells) return 0;
+            var t = (ad - flatHalf) / rampCells; return 1 - t * t * (3 - 2 * t);
         }
         var n = r.Count;
         // The natural profile is already grade-limited; the ramp is laid over it directly and NOT run through LimitGrade again,
@@ -643,14 +779,20 @@ internal static class RaceTrackBuilder
             var w = Weight(ds);
             if (w <= 0) continue;
             r.H[k] = r.H[k] * (1 - w) + deckHeight * w;
-            if (Math.Abs(ds) <= coreHalfCells) r.Deck[k] = true;
-            // the ramps get the water bridge's own narrow, rock-sided shoulders (ModifyGround: CurbHalf+0.5 wide) instead of the
+            var ad = Math.Abs(ds);
+            if (ad <= coreHalfCells - DeckEndOverlap) { r.Deck[k] = true; continue; }
+            // the ramps get the water bridge's own narrow, rock-sided shoulders (ModifyGround: level to CurbHalf + RampShoulder) instead of the
             // ordinary 13-cell earth skirt, which would otherwise spill a bulge across the road passing under the deck
-            else r.Bridge[k] = true;
+            r.Bridge[k] = true;
+            if (ad > flatHalf) continue;
+            // the bridge heads: the landings level with the deck, and the ground under the deck's last cells just below its top
+            // (hidden by the tiles, so there is no crack between the landing and the deck)
+            r.Landing[k] = true;
+            if (ad <= coreHalfCells) { r.H[k] = deckHeight - UnderDeckDepth; r.UnderDeck[k] = true; }
         }
         var widthUnits = r.VergeHalf * 2 * 512;
         var lengthUnits = coreHalfCells * 2 * 512;
-        report.Notes.Add($"road bridge: the straighter road climbs onto a deck over the other -- {coreHalfCells * 2:0} cells of flat deck ({widthUnits / 512:0.#} cells wide) plus {rampCells:0} cells of ramp each side, deck height {deckHeight:0} ({o.RoadBridgeClearance:0} above the road it crosses, at {angleDeg:0} degrees)");
+        report.Notes.Add($"road bridge: the straighter road climbs onto a deck over the other -- {coreHalfCells * 2:0} cells of flat deck ({widthUnits / 512:0.#} cells wide) plus {o.RoadBridgeLanding:0.#} cells of level ground and {rampCells:0} cells of ramp each side, deck height {deckHeight:0} ({o.RoadBridgeClearance:0} above the road it crosses, at {angleDeg:0} degrees)");
         return new RoadBridgeInfo(r.X[over], r.Z[over], deckHeight, r.Tx[over], r.Tz[over], widthUnits, lengthUnits, under);
     }
 
@@ -743,12 +885,94 @@ internal static class RaceTrackBuilder
                 report.Removed.Add((cx, cz, body, removable ? "prop" : "solid"));
                 if (removable) report.DecorsRemoved++; else report.SolidDecorsRemoved++;
             }
+            // pieces placed at one origin are one object (a palm is a trunk and a crown, the gantry a beam and two posts): the rest of
+            // an object goes with the piece that was on the road, or a bare trunk is left standing by the road
+            foreach (var d in cube.Decors.Where(e => !remove.Contains(e) && remove.Any(r => r.X == e.X && r.Y == e.Y && r.Z == e.Z)).ToList())
+            {
+                var body = d.Body & 0xFFFF;
+                if (o.ProtectedBodies.Contains(body)) continue;
+                remove.Add(d);
+                report.Removed.Add((cx, cz, body, "part"));
+                report.DecorsRemoved++;
+            }
             foreach (var d in remove) cube.Decors.Remove(d);
         }
     }
 
+    // The retail race track (see OldTrackCube): its decor pieces removed, and every triangle painted as road (the asphalt tile,
+    // the white curb texel, the red/gold hatch tile, flat red curb and orange arrow banks) turned into the plain sand of its own
+    // infield. Runs before the new lap is painted, so wherever the new road runs over the old one its own paint wins. The
+    // ground's shape is left as it is: the old road bed simply becomes a sand strip between its rock banks.
+    private static void ClearOldTrack(IslandFile island, RaceTrackOptions o, RaceTrackReport report)
+    {
+        if (o.OldTrackCube is not { } oc || island.CubeAt(oc.X, oc.Z) is not { } cube) return;
+        var pieces = cube.Decors.Where(d => o.OldTrackBodies.Contains(d.Body & 0xFFFF)).ToList();
+        foreach (var d in pieces) { cube.Decors.Remove(d); report.Removed.Add((oc.X, oc.Z, d.Body & 0xFFFF, "old track")); }
+        var halves = 0;
+        if (cube.HasPolygons)
+        {
+            var sand = new IslandPolygon(0).With(bank: 2, texFlag: 0, polyFlag: 3, sampleStep: 12, codeJeu: 0);
+            for (var z = 0; z < IslandCube.Cells; z++)
+            for (var x = 0; x < IslandCube.Cells; x++)
+            {
+                var diagonal = new IslandPolygon(cube.Polygon(x, z, 0)).Diagonal;
+                for (var half = 0; half < 2; half++)
+                {
+                    if (!IsTrackPaint(cube, new IslandPolygon(cube.Polygon(x, z, half)))) continue;
+                    cube.SetPolygon(x, z, half, sand.With(diagonal: diagonal).Raw);
+                    halves++;
+                }
+            }
+        }
+        report.Notes.Add($"the retail race track in cube ({oc.X},{oc.Z}) cleared: {pieces.Count} decor pieces removed, {halves} painted triangles turned back to sand");
+    }
+
+    // Whether a ground triangle carries one of the race track's own paints.
+    private static bool IsTrackPaint(IslandCube cube, IslandPolygon p)
+    {
+        if (p.TexFlag == 0) return p.PolyFlag != 0 && p.Bank is 4 or 5;   // red curb, orange arrow (flat)
+        var i = p.TextureIndex;
+        if (i * 6 + 6 > cube.TextureDefs.Length) return false;
+        int u0 = int.MaxValue, u1 = int.MinValue, v0 = int.MaxValue, v1 = int.MinValue;
+        for (var k = 0; k < 3; k++)
+        {
+            var u = cube.TextureDefs[i * 6 + k * 2] >> 8; var v = cube.TextureDefs[i * 6 + k * 2 + 1] >> 8;
+            u0 = Math.Min(u0, u); u1 = Math.Max(u1, u); v0 = Math.Min(v0, v); v1 = Math.Max(v1, v);
+        }
+        bool Inside(int x0, int y0, int x1, int y1) => u0 >= x0 && u1 <= x1 && v0 >= y0 && v1 <= y1;
+        return Inside(96, 0, 128, 32) || Inside(179, 154, 181, 156) || Inside(192, 48, 208, 64);   // asphalt, white curb / start line, hatch
+    }
+
     // ---------------------------------------------------------------------------------------------------------------------
     // the ground
+
+    // How much wider than the road's verge each bridge head's level top is (cells each side): a turned deck tile's collision box
+    // reaches up to ~0.8 cells past its mesh, and an edge tile's reaches 8 cells out from the centre line.
+    private const double LandingExtra = 2;
+
+    // How far past the curb a ramp's (or the water bridge's) level top reaches, cells. Its first cell is plain rock, the rest (and
+    // the bridge heads' wider tops past their first cell) the blocking rock wall: a car that drives into Col ground is held back
+    // like a wall, but one put onto it -- the engine moves a car up to 0.7 cells sideways when it crosses into the next cube --
+    // skates, and a car at the curb skated off the side. The wall is 1.5 cells wide: painted cell by cell, a narrower band had gaps.
+    private const double RampShoulder = 2.5;
+
+    // Whether a cell has a cell with no ground drawn (the sea) or no cube at all within `reach` cells.
+    private static bool NearSea(Field field, int gx, int gz, int reach)
+    {
+        for (var dz = -reach; dz <= reach; dz++)
+        for (var dx = -reach; dx <= reach; dx++)
+            if (!field.Drawn(gx + dx + 0.5, gz + dz + 0.5)) return true;
+        return false;
+    }
+
+    // Whether a vertex touches a cell with no ground drawn (the sea) or no cube at all (off the island).
+    private static bool BesideSea(Field field, int gx, int gz)
+    {
+        for (var dz = -1; dz <= 0; dz++)
+        for (var dx = -1; dx <= 0; dx++)
+            if (!field.Drawn(gx + dx + 0.5, gz + dz + 0.5)) return true;
+        return false;
+    }
 
     private static void ModifyGround(IslandFile island, Field field, RoadIndex index, List<TrackRoad> roads, RaceTrackOptions o, RaceTrackReport report)
     {
@@ -761,28 +985,35 @@ internal static class RaceTrackBuilder
             if (!island.HasVertex(gx, gz)) continue;
             var hits = index.Near(gx, gz, maxReach);
             if (hits.Count == 0) continue;
-            double keep = 1, num = 0, den = 0;
+            // the sea's edge: a vertex beside undrawn ground (or at the island's own edge) that is only in the embankment, not
+            // under the road (or a bridge head), keeps its natural height, so a fill ends in the island's own cliff instead of a
+            // slab in mid-air
+            if (!hits.Any(h => !h.Deck && Across(roads[h.Road], h) <= roads[h.Road].VergeHalf + (h.Landing ? LandingExtra : 0)) && BesideSea(field, gx, gz)) continue;
+            var layers = new List<(double Dist, double Weight, double Target)>();
             foreach (var hit in hits)
             {
                 if (hit.Deck) continue;   // the deck (decor) carries the road here; the ground underneath is the other road's, untouched
                 var r = roads[hit.Road];
-                var verge = hit.Bridge ? r.CurbHalf + 0.5 : r.VergeHalf;
+                var verge = hit.Landing ? r.VergeHalf + LandingExtra : hit.Bridge ? r.CurbHalf + RampShoulder : r.VergeHalf;
                 var blend = hit.Bridge ? 1.2 : r.Blend;
-                var d = Math.Abs(hit.Lat);
+                var d = Across(r, hit);
                 double w;
                 if (d <= verge) w = 1;
                 else if (d >= verge + blend) continue;
                 else { var t = (d - verge) / blend; w = 1 - t * t * (3 - 2 * t); }
+                w *= EndFade(r, hit);
+                if (w <= 0) continue;
                 var bank = BankOf(r, hit, o);
-                var target = hit.H + bank * Math.Clamp(hit.Lat, -r.CurbHalf - 1, r.CurbHalf + 1);
-                keep *= 1 - w; num += w * target; den += w;
+                layers.Add((d, w, hit.H + bank * Math.Clamp(hit.Lat, -r.CurbHalf - 1, r.CurbHalf + 1)));
             }
-            if (den <= 0) continue;
-            var total = 1 - keep;
-            var mixed = num / den;
-            var original = field.VertexHeight(gx, gz);
-            var value = original * (1 - total) + mixed * total;
-            updates.Add((gx, gz, value, total));
+            if (layers.Count == 0) continue;
+            // the nearest road on top: each road's shape is laid over the ground from the farthest to the nearest, so a road's own
+            // surface and verge always win over another piece's embankment. (Averaging them instead let a hairpin's other leg,
+            // 8-13 cells away, pull the road surface 100-500 units out of level, and kept the bridge heads from being level.)
+            var value = field.VertexHeight(gx, gz);
+            var keep = 1.0;
+            foreach (var (_, w, target) in layers.OrderByDescending(l => l.Dist)) { value = value * (1 - w) + target * w; keep *= 1 - w; }
+            updates.Add((gx, gz, value, 1 - keep));
         }
         foreach (var (gx, gz, height, _) in updates) island.SetHeight(gx, gz, (int)Math.Round(height));
         report.Vertices = updates.Count;
@@ -792,13 +1023,14 @@ internal static class RaceTrackBuilder
     // ---------------------------------------------------------------------------------------------------------------------
     // painting
 
-    private enum Kind { None, Asphalt, RedCurb, WhiteCurb, Sand, Hatch, Wall, Arrow, Start }
+    // Wall: rock that blocks (Col); Rock: the same rock look, passable
+    private enum Kind { None, Asphalt, RedCurb, WhiteCurb, Sand, Hatch, Wall, Rock, Arrow, Start }
 
-    private static void PaintRoad(IslandFile island, Field field, RoadIndex index, List<TrackRoad> roads, RaceTrackOptions o, RaceTrackReport report, int startIndex)
+    private static HashSet<(int, int)> PaintRoad(IslandFile island, Field field, RoadIndex index, List<TrackRoad> roads, RaceTrackOptions o, RaceTrackReport report, int startIndex)
     {
         var b = index.Bounds;
         var kinds = new Dictionary<(int, int), Kind>();
-        var maxReach = roads.Max(r => r.VergeHalf) + 0.8;
+        var maxReach = roads.Max(r => r.VergeHalf) + LandingExtra + 0.8;
         for (var gz = Math.Max(0, b.Z0); gz < Math.Min(Grid, b.Z1); gz++)
         for (var gx = Math.Max(0, b.X0); gx < Math.Min(Grid, b.X1); gx++)
         {
@@ -809,13 +1041,16 @@ internal static class RaceTrackBuilder
             RoadHit? chosen = null; var ck = Kind.None;
             foreach (var hit in hits)
             {
-                var r = roads[hit.Road]; var d = Math.Abs(hit.Lat);
+                var r = roads[hit.Road]; var d = Across(r, hit);
                 Kind k;
                 if (hit.Deck) continue;   // the deck's own polygons draw the road here, not the ground
                 if (report.Jump is { } jump && hit.Road == 0 && hit.S > jump.GapS0 && hit.S < jump.GapS1) { if (d <= r.VergeHalf) k = Kind.Sand; else continue; }
+                else if (hit.UnderDeck) { if (d <= r.VergeHalf + LandingExtra) k = Kind.Rock; else continue; }
                 else if (d <= r.AsphaltHalf) k = Kind.Asphalt;
                 else if (d <= r.CurbHalf) k = (int)Math.Floor(hit.S / 1.6) % 2 == 0 ? Kind.RedCurb : Kind.WhiteCurb;
-                else if (d <= r.VergeHalf) k = hit.Bridge ? Kind.Wall : Kind.Sand;
+                else if (hit.Landing) { if (d <= r.VergeHalf + LandingExtra) k = d <= r.CurbHalf + 1 ? Kind.Rock : Kind.Wall; else continue; }
+                else if (hit.Bridge) { if (d <= r.CurbHalf + RampShoulder) k = d <= r.CurbHalf + 1 ? Kind.Rock : Kind.Wall; else continue; }
+                else if (d <= r.VergeHalf) k = Kind.Sand;
                 else continue;
                 var rank = k == Kind.Asphalt ? 3 : k is Kind.RedCurb or Kind.WhiteCurb ? 2 : 1;
                 var crank = ck == Kind.Asphalt ? 3 : ck is Kind.RedCurb or Kind.WhiteCurb ? 2 : ck == Kind.None ? 0 : 1;
@@ -824,21 +1059,136 @@ internal static class RaceTrackBuilder
             if (chosen is null || ck == Kind.None) continue;
             // banked bends: the outside verge is hatched
             if (ck == Kind.Sand && Math.Abs(chosen.Value.Kappa) > 0.05 && chosen.Value.Lat * chosen.Value.Kappa < 0) ck = Kind.Hatch;
+            // a verge within 2 cells of the sea (or the island's edge) is a blocking rock wall: where the road runs along a cliff top
+            // (the west rim of the old track's cube, 8 cells from the edge) a car running wide stopped at the world's edge with its
+            // nose over the drop
+            if (ck is Kind.Sand or Kind.Hatch && NearSea(field, gx, gz, 2)) ck = Kind.Wall;
             kinds[(gx, gz)] = ck;
         }
-        MarkArrows(roads[0], kinds, o, report);
+        // the start line first, so the arrows (which only go where every cell is plain asphalt) keep clear of it
         if (startIndex >= 0) MarkStartLine(roads[0], startIndex, kinds, report);
+        var arrows = new Dictionary<(int, int), ArrowCell>();
+        MarkArrows(island, roads[0], kinds, arrows, o, report);
         var painter = new Painter(island);
         foreach (var ((gx, gz), kind) in kinds)
         {
-            painter.Paint(gx, gz, kind);
+            painter.Paint(gx, gz, kind, kind == Kind.Asphalt && arrows.TryGetValue((gx, gz), out var arrow) ? arrow : null);
             report.Cells++;
-            if (kind == Kind.Wall) report.BridgeCells++;
+            if (kind is Kind.Wall or Kind.Rock) report.BridgeCells++;
         }
+        return kinds.Keys.ToHashSet();
     }
 
-    // Orange arrow shapes on the straight before bends, like the retail ones: four cells long, pointing the way of the lap.
-    private static void MarkArrows(TrackRoad r, Dictionary<(int, int), Kind> kinds, RaceTrackOptions o, RaceTrackReport report)
+    // Triangles outside the painted road that still carry the retail rock's blocking bit (Col) although the shaping has left them
+    // nearly flat: invisible walls just past the verge (a car running wide at a corner stopped dead on a grey rock patch in the
+    // sand). Where the shaping moved a triangle's ground (a corner by 50 units or more) and it is now walkable, the bit is
+    // cleared, and a rock-textured triangle left nearly flat is painted as the sand around it.
+    private static void ClearStaleCol(IslandFile island, Field natural, Field field, RoadIndex index, HashSet<(int, int)> painted, RaceTrackReport report)
+    {
+        var b = index.Bounds;
+        var sand = new IslandPolygon(0).With(bank: 2, texFlag: 0, polyFlag: 3, sampleStep: 12, codeJeu: 0);
+        IslandPolygon? At(int gx, int gz, int half) =>
+            island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is { HasPolygons: true } c ? new IslandPolygon(c.Polygon(gx % IslandCube.Cells, gz % IslandCube.Cells, half)) : null;
+        // (neighbours are judged as they were before this pass, so the order of the cells doesn't matter)
+        var changes = new List<(IslandCube Cube, int X, int Z, int Half, uint Raw, bool Sand)>();
+        for (var gz = Math.Max(1, b.Z0); gz < Math.Min(Grid - 1, b.Z1); gz++)
+        for (var gx = Math.Max(1, b.X0); gx < Math.Min(Grid - 1, b.X1); gx++)
+        {
+            if (painted.Contains((gx, gz))) continue;
+            if (island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } cube) continue;
+            var x = gx % IslandCube.Cells; var z = gz % IslandCube.Cells;
+            var diagonal = new IslandPolygon(cube.Polygon(x, z, 0)).Diagonal;
+            for (var half = 0; half < 2; half++)
+            {
+                var p = new IslandPolygon(cube.Polygon(x, z, half));
+                if (!p.Col) continue;
+                var corners = TriangleCorners(diagonal, half);
+                var moved = corners.Max(c => Math.Abs(field.VertexHeight(gx + c.X, gz + c.Z) - natural.VertexHeight(gx + c.X, gz + c.Z)));
+                var slope = Slope(field, gx, gz, corners);
+                if (moved < 50 || slope >= 0.5) continue;
+                // a rock patch left on nearly flat ground in the middle of sand or road reads as the wall it was, so it becomes sand;
+                // next to a real outcrop or hillside it stays rock (just passable), or the sand would bite a sawtooth into the rock
+                var soft = 0;
+                for (var dz = -1; dz <= 1; dz++)
+                for (var dx = -1; dx <= 1; dx++)
+                    for (var h = 0; h < 2; h++)
+                        if ((dx != 0 || dz != 0) && (painted.Contains((gx + dx, gz + dz)) || At(gx + dx, gz + dz, h) is { TexFlag: 0, PolyFlag: not 0, Bank: 2 })) soft++;
+                var toSand = slope < 0.35 && IsRock(cube, p) && soft >= 10;
+                changes.Add((cube, x, z, half, (toSand ? sand.With(diagonal: diagonal) : p.With(col: false)).Raw, toSand));
+            }
+        }
+        foreach (var c in changes) c.Cube.SetPolygon(c.X, c.Z, c.Half, c.Raw);
+        var cleared = changes.Count; var repainted = changes.Count(c => c.Sand);
+        if (cleared > 0) report.Notes.Add($"{cleared} blocking rock triangles that the shaping left nearly flat made passable ({repainted} repainted as sand)");
+    }
+
+    // The corners (x, z offsets in the cell) of triangle `half` of a cell cut along `diagonal` (IslandGround's own HalfCorners).
+    private static (int X, int Z)[] TriangleCorners(bool diagonal, int half) => (diagonal, half) switch
+    {
+        (false, 0) => new[] { (0, 0), (0, 1), (1, 1) },
+        (false, _) => new[] { (1, 1), (1, 0), (0, 0) },
+        (true, 0) => new[] { (1, 0), (0, 0), (0, 1) },
+        _ => new[] { (0, 1), (1, 1), (1, 0) },
+    };
+
+    // Rise over run of a ground triangle.
+    private static double Slope(Field field, int gx, int gz, (int X, int Z)[] c)
+    {
+        double P(int k, int axis) => axis == 0 ? c[k].X * 512.0 : axis == 2 ? c[k].Z * 512.0 : field.VertexHeight(gx + c[k].X, gz + c[k].Z);
+        double ux = P(1, 0) - P(0, 0), uy = P(1, 1) - P(0, 1), uz = P(1, 2) - P(0, 2);
+        double vx = P(2, 0) - P(0, 0), vy = P(2, 1) - P(0, 1), vz = P(2, 2) - P(0, 2);
+        double nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        return Math.Abs(ny) < 1e-9 ? double.MaxValue : Math.Sqrt(nx * nx + nz * nz) / Math.Abs(ny);
+    }
+
+    // Whether a triangle is textured with one of the atlas's rock tiles (rows 128-191).
+    private static bool IsRock(IslandCube cube, IslandPolygon p)
+    {
+        if (p.TexFlag == 0) return false;
+        var i = p.TextureIndex;
+        if (i * 6 + 6 > cube.TextureDefs.Length) return false;
+        for (var k = 0; k < 3; k++) { var v = cube.TextureDefs[i * 6 + k * 2 + 1] >> 8; if (v < 128 || v > 192) return false; }
+        return true;
+    }
+
+    // Orange arrows, drawn at the resolution of the ground's own triangles (half cells) like the retail track's. A retail arrow
+    // (flat bank 5, 17 triangles) is 4.95 cells long -- a right-angled head 2.1 long and 4.2 wide on a shaft 1.4 wide -- and always
+    // points along a diagonal: then every edge of it lies on a cell side or a cell diagonal and the triangles draw it exactly. Ours
+    // do the same: each arrow is turned onto the nearest of the eight directions the triangles draw exactly and placed where the
+    // road runs that way, its tip on a cell corner. Outlines are in road-aligned cells, F forward (the tip at F = 0, the arrow
+    // behind it) and U across.
+    // Along a row or column: head 2 long and 4 wide on a shaft 2 wide, 6 long -- the retail proportions, and with the tip snapped to
+    // the nearest cell corner the head keeps a cell clear of the curbs (a 6-wide head touched them).
+    private static readonly (double F, double U)[] ArrowAxis =
+    {
+        (0, 0), (-2, 2), (-2, 1), (-6, 1), (-6, -1), (-2, -1), (-2, -2),
+    };
+    // Along a diagonal (steps of half a cell diagonal): the retail head (2.1 long, 4.2 wide) and shaft (1.4 wide), 6.4 long.
+    private static readonly (double F, double U)[] ArrowDiagonal = Steps(new (double, double)[]
+    {
+        (0, 0), (-3, 3), (-3, 1), (-9, 1), (-9, -1), (-3, -1), (-3, -3),
+    }, Math.Sqrt(0.5));
+    // At any other heading (only when no spot of the straight runs close enough to one of the eight): 6.5 long, a head 3 long and
+    // 5 wide on a shaft 1.7 wide. Its edges step by half cells.
+    private static readonly (double F, double U)[] ArrowFree =
+    {
+        (0, 0), (-3, 2.5), (-3, 0.85), (-6.5, 0.85), (-6.5, -0.85), (-3, -0.85), (-3, -2.5),
+    };
+    // How far the arrow may be turned off the road's own heading to land on one of the eight: first 5 degrees, then 8.
+    private static readonly double[] ArrowSnapDegrees = { 5, 8 };
+    // The stretch searched for the arrow's spot (cells after the bend's exit) and the usual spot within it.
+    private const double ArrowSearchFrom = 4, ArrowSearchTo = 36, ArrowUsual = 18;
+    // Over what length of road its heading is measured (the chord, so an arrow where the road still turns sits in its lane).
+    private const double ArrowChord = 7;
+
+    private static (double F, double U)[] Steps((double F, double U)[] outline, double step) => outline.Select(p => (p.F * step, p.U * step)).ToArray();
+    private static double OutlineLength((double F, double U)[] outline) => -outline.Min(p => p.F);
+
+    // One cell of an arrow: which way the cell is cut and which of its two triangles are orange.
+    private readonly record struct ArrowCell(bool Diagonal, bool Half0, bool Half1);
+
+    // Orange arrows on the straight after each bend (and every 150 cells of a long straight), pointing the way of the lap.
+    private static void MarkArrows(IslandFile island, TrackRoad r, Dictionary<(int, int), Kind> kinds, Dictionary<(int, int), ArrowCell> arrows, RaceTrackOptions o, RaceTrackReport report)
     {
         var n = r.Count;
         // find corner exits: where |kappa| drops below the threshold after a bend of at least 20 cells, plus every 140 cells on long straights
@@ -859,22 +1209,131 @@ internal static class RaceTrackBuilder
             }
         }
         foreach (var i in marks)
+            if (!PlaceArrow(island, r, i, kinds, arrows, o, report))
+                report.Notes.Add($"arrow {ArrowUsual:0} cells after cell ({r.X[i]:0.0}, {r.Z[i]:0.0}) left out: no spot near it lies wholly on plain asphalt");
+    }
+
+    // One arrow for the straight that starts at point i: at the spot nearest the usual one whose heading is within
+    // ArrowSnapDegrees of one of the eight exact directions, else at the usual spot at the road's own heading. The whole arrow
+    // or none of it: a spot where it would touch anything but plain asphalt (a curb, the start line, a bridge deck ...) is passed over.
+    private static bool PlaceArrow(IslandFile island, TrackRoad r, int i, Dictionary<(int, int), Kind> kinds, Dictionary<(int, int), ArrowCell> arrows, RaceTrackOptions o, RaceTrackReport report)
+    {
+        var usual = (int)(ArrowUsual / o.Spacing);
+        var from = (int)(ArrowSearchFrom / o.Spacing); var to = (int)(ArrowSearchTo / o.Spacing);
+        var candidates = Enumerable.Range(from, to - from + 1).OrderBy(k => Math.Abs(k - usual)).ToList();
+        // (not under the road bridge's deck either, where it can't be seen)
+        bool Fits(Dictionary<(int, int), ArrowCell> cells) => cells.Count > 0 && cells.Keys.All(c => kinds.TryGetValue(c, out var kind) && kind == Kind.Asphalt && !UnderBridgeDeck(report, c.Item1, c.Item2));
+        void Keep(Dictionary<(int, int), ArrowCell> cells, int j, double tx, double tz)
         {
-            var i2 = At(r, i + (int)(18 / o.Spacing));
-            var cx = r.X[i2]; var cz = r.Z[i2]; var tx = r.Tx[i2]; var tz = r.Tz[i2];
-            // an arrow in the local frame (forward f, sideways u), 4 cells long
-            for (var gz = (int)Math.Floor(cz - 3); gz <= (int)Math.Ceiling(cz + 3); gz++)
-            for (var gx = (int)Math.Floor(cx - 3); gx <= (int)Math.Ceiling(cx + 3); gx++)
-            {
-                var px = gx + 0.5 - cx; var pz = gz + 0.5 - cz;
-                var f = px * tx + pz * tz; var u = -px * tz + pz * tx;
-                var inShaft = f >= -2.0 && f <= 0.4 && Math.Abs(u) <= 0.75;
-                var inHead = f >= 0.0 && f <= 2.2 && Math.Abs(u) <= 2.0 * (1 - f / 2.2) + 0.15;
-                if (!(inShaft || inHead)) continue;
-                if (kinds.TryGetValue((gx, gz), out var k) && k == Kind.Asphalt) kinds[(gx, gz)] = Kind.Arrow;
-            }
-            report.Arrows.Add(new[] { cx, cz });
+            foreach (var (cell, arrow) in cells) arrows[cell] = arrow;
+            report.Arrows.Add(new[] { r.X[j], r.Z[j], tx, tz });
         }
+        foreach (var tolerance in ArrowSnapDegrees)
+        foreach (var k in candidates)
+        {
+            var j = At(r, i + k);
+            if (r.Bridge[j] || r.Deck[j]) continue;
+            var (cx, cz) = Chord(r, j, ArrowChord, o);
+            var angle = Math.Atan2(cz, cx);
+            var octant = (int)Math.Round(angle / (Math.PI / 4));
+            if (Math.Abs(angle - octant * Math.PI / 4) * 180 / Math.PI > tolerance) continue;
+            // (dx, dz) one of (1,0), (1,1), (0,1) ... ; the unit heading is (dx, dz) * scale
+            var dx = Math.Round(Math.Cos(octant * Math.PI / 4)); var dz = Math.Round(Math.Sin(octant * Math.PI / 4));
+            var diagonal = dx != 0 && dz != 0;
+            var outline = diagonal ? ArrowDiagonal : ArrowAxis;
+            var scale = diagonal ? Math.Sqrt(0.5) : 1;
+            var half = OutlineLength(outline) / 2;
+            // the tip on the cell corner nearest to where it falls with the arrow centred on the road point
+            var tipX = Math.Round(r.X[j] + dx * scale * half); var tipZ = Math.Round(r.Z[j] + dz * scale * half);
+            var cells = RasteriseArrow(island, outline, tipX, tipZ, dx * scale, dz * scale);
+            if (!Fits(cells)) continue;
+            Keep(cells, j, dx * scale, dz * scale);
+            return true;
+        }
+        {
+            var j = At(r, i + usual);
+            var (tx, tz) = Chord(r, j, OutlineLength(ArrowFree), o);
+            var half = OutlineLength(ArrowFree) / 2;
+            var cells = RasteriseArrow(island, ArrowFree, r.X[j] + tx * half, r.Z[j] + tz * half, tx, tz);
+            if (!Fits(cells)) return false;
+            Keep(cells, j, tx, tz);
+            return true;
+        }
+    }
+
+    // Whether a cell lies under the road bridge's deck (with a cell to spare).
+    private static bool UnderBridgeDeck(RaceTrackReport report, int gx, int gz)
+    {
+        if (report.RoadBridge is not { } rb) return false;
+        var dx = gx + 0.5 - rb.X; var dz = gz + 0.5 - rb.Z;
+        var along = dx * rb.DirX + dz * rb.DirZ; var across = -dx * rb.DirZ + dz * rb.DirX;
+        return Math.Abs(along) <= rb.Length / 1024 + 1 && Math.Abs(across) <= rb.Width / 1024 + 1;
+    }
+
+    // The road's unit heading at point j, measured over `length` cells of it.
+    private static (double X, double Z) Chord(TrackRoad r, int j, double length, RaceTrackOptions o)
+    {
+        var reach = Math.Max(1, (int)Math.Round(length / 2 / o.Spacing));
+        var a = At(r, j - reach); var b = At(r, j + reach);
+        var dx = r.X[b] - r.X[a]; var dz = r.Z[b] - r.Z[a]; var len = Math.Sqrt(dx * dx + dz * dz);
+        return len > 1e-6 ? (dx / len, dz / len) : (r.Tx[j], r.Tz[j]);
+    }
+
+    // Rasterises a polygon given in road-aligned cells (F along the heading (tx, tz), U across it), its origin placed at the island
+    // cell position (ox, oz), at the resolution of the ground's triangles. The engine cuts a cell one of two ways (MAPTOOLS.CPP
+    // GiveTriangle, read from the cell's first triangle): Sens 0 along corners 0-2 with triangle 0 where x < z, Sens 1 along
+    // corners 1-3 with triangle 0 where x + z < 1. Each cell is sampled on a grid, each triangle is orange when most of its
+    // samples are inside, and the cut is chosen whose triangles miss the fewest samples; a cell wholly inside, or one where both cuts
+    // do equally well, keeps its own cut. (An outline whose edges all lie on cell sides and diagonals comes out exact.) The cut also
+    // decides how the engine interpolates the cell's height, which is harmless here: the road is levelled flat across, so both cuts
+    // give the same surface to within a few units. Returns only cells with an orange triangle.
+    private static Dictionary<(int, int), ArrowCell> RasteriseArrow(IslandFile island, (double F, double U)[] outline, double ox, double oz, double tx, double tz)
+    {
+        const int Samples = 16;   // per cell side
+        var result = new Dictionary<(int, int), ArrowCell>();
+        var px = new double[outline.Length]; var pz = new double[outline.Length];
+        for (var k = 0; k < outline.Length; k++)
+        {
+            px[k] = ox + outline[k].F * tx - outline[k].U * tz;
+            pz[k] = oz + outline[k].F * tz + outline[k].U * tx;
+        }
+        var inside = new int[4]; var count = new int[4];   // per triangle, indexed Sens * 2 + half
+        for (var gz = (int)Math.Floor(pz.Min()); gz <= (int)Math.Floor(pz.Max()); gz++)
+        for (var gx = (int)Math.Floor(px.Min()); gx <= (int)Math.Floor(px.Max()); gx++)
+        {
+            Array.Clear(inside); Array.Clear(count);
+            var total = 0;
+            for (var j = 0; j < Samples; j++)
+            for (var i = 0; i < Samples; i++)
+            {
+                var u = (i + 0.5) / Samples; var v = (j + 0.5) / Samples;
+                var hit = PointInPolygon(px, pz, gx + u, gz + v) ? 1 : 0;
+                var t0 = u < v ? 0 : 1; var t1 = 2 + (u + v < 1 ? 0 : 1);
+                count[t0]++; inside[t0] += hit;
+                count[t1]++; inside[t1] += hit;
+                total += hit;
+            }
+            if (total == 0) continue;
+            if (island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } cube) continue;
+            var own = new IslandPolygon(cube.Polygon(gx % IslandCube.Cells, gz % IslandCube.Cells, 0)).Diagonal;
+            if (total == Samples * Samples) { result[(gx, gz)] = new ArrowCell(own, true, true); continue; }
+            int Miss(int t) => Math.Min(inside[t], count[t] - inside[t]);
+            bool Fill(int t) => inside[t] * 2 > count[t];
+            var miss0 = Miss(0) + Miss(1); var miss1 = Miss(2) + Miss(3);
+            var sens = miss0 == miss1 ? (own ? 1 : 0) : miss1 < miss0 ? 1 : 0;
+            var cell = new ArrowCell(sens == 1, Fill(sens * 2), Fill(sens * 2 + 1));
+            if (cell.Half0 || cell.Half1) result[(gx, gz)] = cell;
+        }
+        return result;
+    }
+
+    // Even-odd test of a point against a polygon.
+    private static bool PointInPolygon(double[] px, double[] pz, double x, double z)
+    {
+        var inside = false;
+        for (int a = 0, b = px.Length - 1; a < px.Length; b = a++)
+            if ((pz[a] > z) != (pz[b] > z) && x < (px[b] - px[a]) * (z - pz[a]) / (pz[b] - pz[a]) + px[a]) inside = !inside;
+        return inside;
     }
 
     private sealed class Painter
@@ -886,16 +1345,18 @@ internal static class RaceTrackBuilder
         private static IslandPolygon Flat(int bank, int step) => new IslandPolygon(0).With(bank: bank, texFlag: 0, polyFlag: 3, sampleStep: step, codeJeu: 0);
         private static IslandPolygon Textured(int step) => new IslandPolygon(0).With(bank: 2, texFlag: 1, polyFlag: 0, sampleStep: step, codeJeu: 0);
 
-        public void Paint(int gx, int gz, Kind kind)
+        // `arrow`: the cell carries part of an arrow -- its cut is set to the arrow's and its orange triangles painted as Kind.Arrow,
+        // the others as `kind` (the asphalt tile's corners follow the new cut).
+        public void Paint(int gx, int gz, Kind kind, ArrowCell? arrow = null)
         {
             var cube = island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells)!;
             var x = gx % IslandCube.Cells; var z = gz % IslandCube.Cells;
-            var diagonal = new IslandPolygon(cube.Polygon(x, z, 0)).Diagonal;
+            var diagonal = arrow?.Diagonal ?? new IslandPolygon(cube.Polygon(x, z, 0)).Diagonal;
             for (var half = 0; half < 2; half++)
             {
                 IslandPolygon p;
                 bool col = false;
-                switch (kind)
+                switch (arrow is { } a && (half == 0 ? a.Half0 : a.Half1) ? Kind.Arrow : kind)
                 {
                     case Kind.Asphalt: p = Textured(5).With(textureIndex: IslandGround.TextureIndexFor(cube, IslandGround.TileDefinition(96, 0, 32, 32, diagonal, half))); break;
                     case Kind.Start:
@@ -903,7 +1364,8 @@ internal static class RaceTrackBuilder
                     case Kind.RedCurb: p = Flat(4, 5); break;
                     case Kind.Arrow: p = Flat(5, 5); break;
                     case Kind.Hatch: p = Textured(1).With(textureIndex: IslandGround.TextureIndexFor(cube, IslandGround.TileDefinition(192, 48, 16, 16, diagonal, half))); break;
-                    case Kind.Wall: p = Textured(5).With(texFlag: 3, textureIndex: IslandGround.TextureIndexFor(cube, IslandGround.TileDefinition(0, 128, 32, 32, diagonal, half))); col = true; break;
+                    case Kind.Wall:
+                    case Kind.Rock: p = Textured(5).With(texFlag: 3, textureIndex: IslandGround.TextureIndexFor(cube, IslandGround.TileDefinition(0, 128, 32, 32, diagonal, half))); col = kind == Kind.Wall; break;
                     default: p = Flat(2, 12); break;
                 }
                 p = p.With(diagonal: diagonal, col: col);
@@ -989,6 +1451,14 @@ internal static class RaceTrackBuilder
     // The same rotation convention as PlaceGantry (whose body is authored the same way: local X the piece's long/across axis):
     // ex,ez is the world direction local +X should point along (here, across the bridge's own heading), theta = atan2(-ez, ex)
     // is the Beta the engine rotates the mesh by, and a local (lx, lz) offset lands at world (lx*cos + lz*sin, -lx*sin + lz*cos).
+    // A railing piece's collision square: its centre this far outside the deck's edge, and its half size (world units). With the
+    // car's own box (about 600 either way) the car's centre then stops about 5.1 cells from the centre line: wider than the
+    // ramp's rock walls allow, so there is no funnel where the road meets the deck, and wide enough that the engine's nudge at a
+    // cube border (a car crossing into the next cube is moved to half a brick inside it, up to 0.73 cells sideways on the
+    // diagonal deck) doesn't push a car on the curb into a square. The same on the landings, where a car still carried by a
+    // tile's overhang doesn't feel the rock paint either.
+    private const double RailBoxOutset = 700, RailBoxHalf = 180;
+
     private static void PlaceDeck(IslandFile island, RoadBridgeInfo rb, RaceTrackOptions o, RaceTrackReport report)
     {
         if (o.DeckBodyIndex < 0) { report.Notes.Add("WARNING: no deck body was prepared (DESERT.OBL wasn't extended) -- the bridge has no physical deck."); return; }
@@ -999,38 +1469,91 @@ internal static class RaceTrackBuilder
         var cos = Math.Cos(theta); var sin = Math.Sin(theta);
         // a grid of square tiles (see RaceTrackDeckBody.AppendTo for why): whole columns across the road, whole rows along it
         var tile = o.RoadBridgeTileLength * 512;
-        var cols = Math.Max(1, (int)Math.Round(rb.Width / tile));
-        var rows = Math.Max(1, (int)Math.Ceiling(rb.Length / tile));
+        var cols = RaceTrackDeckBody.Columns(o);   // the edge tiles' curb strip is placed for this many columns
+        var rows = Math.Max(1, (int)Math.Ceiling(rb.Length / tile - 1e-6));
         var width = cols * tile; var length = rows * tile;
         var y = (int)Math.Round(rb.Height);
-        var placed = 0; var dropped = 0;
+        int tiles = 0, rails = 0, copies = 0, full = 0;
         (double X, double Z) ToWorld(double lx, double lz) => (lx * cos + lz * sin, -lx * sin + lz * cos);
+        // one piece: its centre (lx, lz) and half sizes (hx, hz) in the deck's own frame; its collision box is the axis-aligned
+        // box round its turned corners, from yMin to yMax -- or, with `box`, a square of that half size round a point of the deck's frame
+        bool Put(int body, int b, double lx, double lz, double hx, double hz, int yMin, int yMax, (double Lx, double Lz, double Half)? box = null)
+        {
+            var (ox, oz) = ToWorld(lx, lz);
+            var wx = rb.X * 512 + ox; var wz = rb.Z * 512 + oz;
+            double minX = 1e18, maxX = -1e18, minZ = 1e18, maxZ = -1e18;
+            if (box is { } sq)
+            {
+                var (bx, bz) = ToWorld(sq.Lx, sq.Lz);
+                minX = bx - ox - sq.Half; maxX = bx - ox + sq.Half; minZ = bz - oz - sq.Half; maxZ = bz - oz + sq.Half;
+            }
+            else
+                foreach (var (cx, cz) in new[] { (-hx, -hz), (hx, -hz), (-hx, hz), (hx, hz) })
+                {
+                    var (rx, rz) = ToWorld(cx, cz);
+                    minX = Math.Min(minX, rx); maxX = Math.Max(maxX, rx); minZ = Math.Min(minZ, rz); maxZ = Math.Max(maxZ, rz);
+                }
+            var (n, f) = AddToCubes(island, body, b, wx, y, wz, wx + minX, wx + maxX, yMin, yMax, wz + minZ, wz + maxZ);
+            copies += n; full += f;
+            return n > 0;
+        }
         for (var row = 0; row < rows; row++)
         for (var col = 0; col < cols; col++)
         {
-            var lx = -width / 2 + tile * (col + 0.5); var lz = -length / 2 + tile * (row + 0.5);
-            var (ox, oz) = ToWorld(lx, lz);
-            var wx = rb.X * 512 + ox; var wz = rb.Z * 512 + oz;
-            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { dropped++; continue; }
             // edge columns carry the red rail on their outer side: the +X column as is, the -X column turned half round
             var body = o.DeckBodyIndex; var b = beta;
             if (col == cols - 1) body = o.DeckBodyIndex + 1;
             else if (col == 0) { body = o.DeckBodyIndex + 1; b = (beta + 2048) % 4096; }
-            var d = IslandDecors.Blank(body, at.X, y, at.Z, b);
-            double minX = 1e18, maxX = -1e18, minZ = 1e18, maxZ = -1e18;
-            foreach (var (cx, cz) in new[] { (-tile / 2, -tile / 2), (tile / 2, -tile / 2), (-tile / 2, tile / 2), (tile / 2, tile / 2) })
-            {
-                var (rx, rz) = ToWorld(cx, cz);
-                minX = Math.Min(minX, rx); maxX = Math.Max(maxX, rx); minZ = Math.Min(minZ, rz); maxZ = Math.Max(maxZ, rz);
-            }
-            d.XMin = at.X + (int)Math.Floor(minX); d.XMax = at.X + (int)Math.Ceiling(maxX);
-            d.ZMin = at.Z + (int)Math.Floor(minZ); d.ZMax = at.Z + (int)Math.Ceiling(maxZ);
-            d.YMin = y - (int)o.RoadBridgeDeckThickness; d.YMax = y;
-            at.Cube.Decors.Add(d);
+            if (Put(body, b, -width / 2 + tile * (col + 0.5), -length / 2 + tile * (row + 0.5), tile / 2, tile / 2, y - (int)o.RoadBridgeDeckThickness, y)) tiles++;
+        }
+        if (o.DeckRailings)
+        {
+            // Along both outer edges of the deck and its two landings. The deck runs diagonally and a decor's collision box is
+            // axis-aligned: a box round a whole 2-cell piece reached a cell inside the rail, and the row of them made a sawtooth
+            // that stopped a car dead 3 cells from the centre line (and head-on where the road meets the deck). The engine only
+            // tests the box (and uses it for nothing else but a far-distance cull), so each piece's box is a small square just
+            // outside the deck's edge instead: a car anywhere on the road never touches one; a car that runs onto the concrete
+            // strip is stopped before it can drive off (the gaps between the squares are narrower than the car). The boxes
+            // reach well above the step a car may climb (DEMI_BRICK_Y, 128), so they are walls, not floors.
+            var span = length + 2 * o.RoadBridgeLanding * 512;
+            var pieces = Math.Max(1, (int)Math.Round(span / RaceTrackDeckBody.RailLength));
+            var lateral = width / 2 - RaceTrackDeckBody.RailThickness / 2;
+            foreach (var side in new[] { -1, 1 })
+                for (var i = 0; i < pieces; i++)
+                {
+                    var lz = -span / 2 + (i + 0.5) * span / pieces;
+                    if (Put(o.DeckBodyIndex + 2, side > 0 ? beta : (beta + 2048) % 4096, side * lateral, lz, 0, 0,
+                            y - 100, y + (int)RaceTrackDeckBody.RailHeight + 100, (side * (width / 2 + RailBoxOutset), lz, RailBoxHalf))) rails++;
+                }
+        }
+        if (full > 0) report.Notes.Add($"WARNING: {full} deck pieces were left out of a cube that already holds {IslandDecors.MaxPerCube} decors");
+        report.Placed.Add($"road bridge: {tiles} deck tiles ({cols} x {rows} of {o.RoadBridgeTileLength:0} cells, {width / 512:0.#} x {length / 512:0.#} cells) and {rails} railing pieces ({copies} decors in all, counting the copies in each cube a piece reaches) at cell ({rb.X:0.0}, {rb.Z:0.0}), deck height {y}, turn {beta}, over road {rb.UnderRoad}");
+    }
+
+    // Adds one decor to every cube its collision box reaches into, each copy in that cube's own frame (its position may then lie
+    // outside 0..32767). The engine only knows the decors of the cube the hero is in (LOADISLE.CPP LoadCube: ListDecors is that
+    // cube's list alone), for drawing and for collision alike, so a deck tile kept only in the cube that holds its centre was
+    // neither seen nor solid from the next one: a car driving the deck over a cube border fell through it (Y 3436 to 388 in one
+    // frame). Returns how many copies went in, and how many cubes were too full to take one.
+    private static (int Placed, int Full) AddToCubes(IslandFile island, int body, int beta, double wx, int y, double wz,
+        double minX, double maxX, int yMin, int yMax, double minZ, double maxZ)
+    {
+        var size = (double)IslandFile.CubeSize;
+        int placed = 0, full = 0;
+        for (var cz = (int)Math.Floor(minZ / size); cz <= (int)Math.Floor(maxZ / size); cz++)
+        for (var cx = (int)Math.Floor(minX / size); cx <= (int)Math.Floor(maxX / size); cx++)
+        {
+            if (island.CubeAt(cx, cz) is not { } cube) continue;
+            if (cube.Decors.Count >= IslandDecors.MaxPerCube) { full++; continue; }
+            var ox = cx * size; var oz = cz * size;
+            var d = IslandDecors.Blank(body, (int)Math.Round(wx - ox), y, (int)Math.Round(wz - oz), beta);
+            d.XMin = (int)Math.Floor(minX - ox); d.XMax = (int)Math.Ceiling(maxX - ox);
+            d.ZMin = (int)Math.Floor(minZ - oz); d.ZMax = (int)Math.Ceiling(maxZ - oz);
+            d.YMin = yMin; d.YMax = yMax;
+            cube.Decors.Add(d);
             placed++;
         }
-        if (dropped > 0) report.Notes.Add($"WARNING: {dropped} deck tiles could not be placed (off the island, or a cube already holds {IslandDecors.MaxPerCube} decors)");
-        report.Placed.Add($"road bridge: {placed} deck tiles ({cols} x {rows} of {o.RoadBridgeTileLength:0} cells, {width / 512:0.#} x {length / 512:0.#} cells) at cell ({rb.X:0.0}, {rb.Z:0.0}), deck height {y}, turn {beta}, over road {rb.UnderRoad}");
+        return (placed, full);
     }
 
     // The retail overpass of the Desert track (bodies 68 the arched deck, 69 and 70 the abutments), boxes relative to the piece's own origin.
@@ -1098,6 +1621,9 @@ internal static class RaceTrackBuilder
             var hits = index.Near(gx, gz, 14, 1);
             if (hits.Count == 0) continue;
             var target = IslandBake.Compute(field, new List<(double, double, double, double, double, double)>(), gx, gz, bake);
+            // the steep ground under and beside the bridge's deck ends faces away from the light and baked almost black -- a dark
+            // hole below the deck seen from the road; it is kept at least mid-bright
+            if (hits[0].Deck || hits[0].Landing) target = Math.Max(target, 7);
             var current = island.LightAt(gx, gz) ?? 15;
             island.SetLight(gx, gz, (int)Math.Round(current + (target - current) * 0.9));
         }

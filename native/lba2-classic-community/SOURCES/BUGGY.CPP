@@ -137,6 +137,9 @@ void TakeBuggy(void) {
 
     // Passe Buggy Scenarique en NoBody
     InitBody(NO_BODY, NUM_BUGGY);
+    // A parked buggy is drawn into the static background copy, so that copy is
+    // rebuilt, or the empty car stays on screen where it stood.
+    FirstTime = AFF_ALL_FLIP;
 
     if (ptrobj->SampleAlways) {
         HQ_StopOneSample(ptrobj->SampleAlways);
@@ -430,6 +433,47 @@ void MoveBuggy(T_OBJET *ptrobj) {
 }
 
 //■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+// Floor height under one point of the buggy (x,z cube-local), for the body's
+// pitch/roll and the wheels. CalculAltitudeObjet() only knows the terrain, and
+// a car carried by a decor floor (a bridge deck, a plank) would take the slope
+// of whatever terrain lies underneath it. A decor top counts here by the same
+// rule ReajustPosDecors() uses to put the car on it (a top between the ground
+// and the car) plus the step DoCornerReajustDecors() lets it climb
+// (DEMI_BRICK_Y). With no decor over the point the result is the terrain.
+
+static S32 BuggyFloorY(T_OBJET *ptrobj, S32 x, S32 z) {
+    S32 y = CalculAltitudeObjet(x, z, -1);
+    S32 top = ptrobj->Obj.Y + DEMI_BRICK_Y;
+    S32 found = FALSE;
+    T_DECORS *ptrd = ListDecors;
+    S32 i;
+
+    for (i = 0; i < NbObjDecors; i++, ptrd++) {
+        if (ptrd->Body & DEC_INVISIBLE)
+            continue;
+        if (x < ptrd->XMin OR x > ptrd->XMax OR z < ptrd->ZMin OR z > ptrd->ZMax)
+            continue;
+        if (ptrd->YMax > top OR ptrd->YMax < y)
+            continue;
+
+        y = ptrd->YMax;
+        found = TRUE;
+    }
+
+    // Carried by a decor, the engine holds the car level on its top for as long
+    // as its ZV touches it (CheckCarryBy), so a point hanging over the edge must
+    // not drop to the ground far below.
+    if (!found
+            AND ptrobj->CarryBy != -1
+                AND(ptrobj->CarryBy & CARRY_BY_DECORS)
+                    AND y < ptrobj->Obj.Y - DEMI_BRICK_Y) {
+        y = ptrobj->Obj.Y;
+    }
+
+    return y;
+}
+
+//■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
 void DoAnimBuggy(T_OBJET *ptrobj) {
     S32 x1, y1, z1, yw;
@@ -460,7 +504,7 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
 
     // altitude ideal
     //	ny = CalculAltitudeObjet( ptb3d->X, ptb3d->Z ) ;	// ground y pour xz
-    yw = CalculAltitudeObjet(Nxw, Nzw, -1); // ground y pour xz
+    yw = BuggyFloorY(ptrobj, Nxw, Nzw); // ground y pour xz
 
     // test altitude #2: triangles interdits
 
@@ -479,7 +523,7 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
     y = yw;
 
     if (x >= 0 AND x < 32768 AND z >= 0 AND z < 32768) {
-        y += CalculAltitudeObjet(x, z, -1);
+        y += BuggyFloorY(ptrobj, x, z);
     }
 
     c = (260 * 31415) / 1000; // circonsference * 10
@@ -503,7 +547,7 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
     y = yw;
 
     if (x >= 0 AND x < 32768 AND z >= 0 AND z < 32768) {
-        y += CalculAltitudeObjet(x, z, -1);
+        y += BuggyFloorY(ptrobj, x, z);
     }
 
     c = (260 * 31415) / 1000; // circonsference * 10
@@ -527,7 +571,7 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
     y = yw;
 
     if (x >= 0 AND x < 32768 AND z >= 0 AND z < 32768) {
-        y += CalculAltitudeObjet(x, z, -1);
+        y += BuggyFloorY(ptrobj, x, z);
     }
 
     c = (360 * 31415) / 1000; // circonsference * 10
@@ -551,7 +595,7 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
     y = yw;
 
     if (x >= 0 AND x < 32768 AND z >= 0 AND z < 32768) {
-        y += CalculAltitudeObjet(x, z, -1);
+        y += BuggyFloorY(ptrobj, x, z);
     }
 
     c = (360 * 31415) / 1000; // circonsference * 10
@@ -585,12 +629,12 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
     LongRotate(0, -400, ptb3d->Beta);
 
     if (Nxw + x1 >= 0 AND Nxw + x1 < 32768 AND Nzw + z1 >= 0 AND Nzw + z1 < 32768) {
-        y = CalculAltitudeObjet(Nxw + x1, Nzw + z1, -1);
+        y = BuggyFloorY(ptrobj, Nxw + x1, Nzw + z1);
     } else
         y = yw;
 
     if (Nxw + X0 >= 0 AND Nxw + X0 < 32768 AND Nzw + Z0 >= 0 AND Nzw + Z0 < 32768) {
-        y1 = CalculAltitudeObjet(Nxw + X0, Nzw + Z0, -1);
+        y1 = BuggyFloorY(ptrobj, Nxw + X0, Nzw + Z0);
     } else
         y1 = yw;
 
@@ -604,12 +648,12 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
     LongRotate(-400, 0, ptb3d->Beta);
 
     if (Nxw + X0 >= 0 AND Nxw + X0 < 32768 AND Nzw + Z0 >= 0 AND Nzw + Z0 < 32768) {
-        y = CalculAltitudeObjet(Nxw + X0, Nzw + Z0, -1);
+        y = BuggyFloorY(ptrobj, Nxw + X0, Nzw + Z0);
     } else
         y = yw;
 
     if (Nxw + x1 >= 0 AND Nxw + x1 < 32768 AND Nzw + z1 >= 0 AND Nzw + z1 < 32768) {
-        y1 = CalculAltitudeObjet(Nxw + x1, Nzw + z1, -1);
+        y1 = BuggyFloorY(ptrobj, Nxw + x1, Nzw + z1);
     } else
         y1 = yw;
 

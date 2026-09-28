@@ -1,16 +1,21 @@
 param([int]$cube = 67, [string]$tp = '', [string]$out = 'E:\dump\TEMP\hshot.png', [int]$wait = 60, [string]$game = 'E:\dump\LBA2RaceTrackBuild\Game', [string]$vars = '')
 # Headless engine screenshot of a cube of the sandbox game (optionally with the hero teleported: "x y z").
-$eng = (Get-ChildItem E:\dump\LBAAssembler\bin\Debug\net10.0-windows\native\lba2cc.*.exe | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
-$a = @('--headless','--game-dir',$game,'--user-dir','E:\dump\TEMP\engine_user','--no-autosave','--resolution','640x480','--exec-at','4','skipmodals 1')
+# The engine: the freshly built one (native build output) if there is one, else the app's own extracted copy. Always muted, and
+# each run gets a user folder of its own.
+$built = 'E:\dump\LBAAssembler\native\lba2-classic-community\out\build\windows_ucrt64_static\SOURCES\lba2cc.exe'
+$eng = if (Test-Path $built) { $built } else { (Get-ChildItem E:\dump\LBAAssembler\bin\Debug\net10.0-windows\native\lba2cc.*.exe | Sort-Object LastWriteTime | Select-Object -Last 1).FullName }
+$user = "E:\dump\TEMP\engine_user_$([DateTime]::Now.ToString('yyyyMMddHHmmssfff'))"
+New-Item -ItemType Directory -Force $user | Out-Null
+$a = @('--headless','--no-audio','--game-dir',$game,'--user-dir',$user,'--no-autosave','--resolution','640x480','--exec-at','4','skipmodals 1')
 if ($vars -ne '') { $a += @('--exec-at','5',$vars) }
 $a += @('--exec-at','6',"cube $cube")
 if ($tp -ne '') { $a += @('--exec-at','30',"teleport $tp") }
 $a += @('--exec-at',"$wait","dumpstate",'--exec-at',"$($wait+1)","screenshot $out",'--tick',"$($wait+30)",'--exit')
 $ErrorActionPreference = 'Continue'
 $log = & $eng $a 2>&1 | ForEach-Object { "$_" }
-$shot = (Get-ChildItem E:\dump\TEMP\engine_user\save\shoot\shot_*.png | Sort-Object LastWriteTime | Select-Object -Last 1)
+$shot = (Get-ChildItem "$user\save\shoot\shot_*.png" | Sort-Object LastWriteTime | Select-Object -Last 1)
 Copy-Item $shot.FullName $out -Force
-$j = Get-ChildItem E:\dump\TEMP\engine_user\save\shoot\state_*.json | Sort-Object LastWriteTime | Select-Object -Last 1
+$j = Get-ChildItem "$user\save\shoot\state_*.json" | Sort-Object LastWriteTime | Select-Object -Last 1
 $d = Get-Content $j.FullName -Raw | ConvertFrom-Json
 $d.actors | ForEach-Object { "actor $($_.index): x=$($_.x) y=$($_.y) z=$($_.z) life=$($_.life) body=$($_.body) flags=$($_.flags)" }
 "saved $out"

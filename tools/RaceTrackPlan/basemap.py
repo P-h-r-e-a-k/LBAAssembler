@@ -4,7 +4,7 @@ from PIL import Image, ImageDraw
 G='E:/GOG Games/Little Big Adventure 2 - Level viewer/'
 X0,Z0,NX,NZ=7,7,4,5      # cube range of the Desert island
 S=4                        # px per cell
-m,ground,objtex,cubes=load_ile(G+'DESERT.ILE')
+m,ground,objtex,cubes=load_ile('E:/dump/LBA2RaceTrackBuild/Pristine/DESERT.ILE')   # the untouched island: the Level viewer install may have a track built into it
 pal=palette(G+'RESS.HQR',29)
 if pal.max()<=63: pal=(pal.astype(int)*4).clip(0,255).astype(np.uint8)
 W=NX*64; H=NZ*64

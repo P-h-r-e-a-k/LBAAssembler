@@ -17,10 +17,12 @@ internal sealed class RaceTrackWindow : Window
     private readonly TextBox planPath = new() { Padding = new Thickness(3), IsEnabled = false };
     private readonly Button browseButton = new() { Content = "Browse…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0), IsEnabled = false };
     private readonly ComboBox crossing = new() { MinWidth = 420 };
-    private readonly CheckBox removeActors = new() { Content = "Remove every actor of the island's outside scenes except Twinsen and the buggy", IsChecked = true, ToolTip = "Scenes 55-73. The engine's hidden Zoe placeholder in slot 1 stays: the buggy needs that slot to be there." };
+    private readonly CheckBox removeActors = new() { Content = "Remove the actors of the island's outside scenes, except Twinsen, the buggy and those the travel cutscenes need", IsChecked = true, ToolTip = "Scenes 55-73. The engine's hidden Zoe placeholder in slot 1 stays (the buggy needs that slot), and so do the ferry, the Dino-Fly and the actors Twinsen's own script waits on in the cutscenes of arriving, leaving and the game's ending." };
     private readonly CheckBox buggyAlways = new() { Content = "The buggy is there from the start of any game (skip the car quest)", IsChecked = true, ToolTip = "The island's scenes delete the buggy until game variable 74 reaches 3; this makes that test always pass" };
     private readonly CheckBox startAtLine = new() { Content = "Twinsen and the buggy start on the start line (scene 67)", IsChecked = true };
     private readonly CheckBox roadZones = new() { Content = "Remove zones that would act on a car on the road (doors, hit, ladder, escalator, grid, rail)", IsChecked = true };
+    private readonly CheckBox trackCameras = new() { Content = "Remove the fixed camera angles along the track (the view keeps following the car)", IsChecked = true, ToolTip = "Camera zones (type 1) that reach the road or come within a few cells of it" };
+    private readonly CheckBox clearOldTrack = new() { Content = "Clear what's left of the original race track (its road paint, start gantry, arch, billboard)", IsChecked = true, ToolTip = "Cube (7,10), scene 57: its painted road becomes sand where the new track doesn't run over it. The garage and its lamp stay." };
     private readonly TextBox log = new() { IsReadOnly = true, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, FontFamily = new System.Windows.Media.FontFamily("Consolas"), FontSize = 11, Height = 190, TextWrapping = TextWrapping.NoWrap };
     private readonly Button buildButton = new() { Content = "Build the track", Padding = new Thickness(18, 5, 18, 5), IsDefault = true };
     private readonly Button restoreButton = new() { Content = "Put the original files back", Padding = new Thickness(14, 5, 14, 5) };
@@ -60,7 +62,7 @@ internal sealed class RaceTrackWindow : Window
             box.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
             box.SetResourceReference(BorderBrushProperty, "ThemeBorderBrush");
         }
-        foreach (var c in new Control[] { builtInPlan, filePlan, removeActors, buggyAlways, startAtLine, roadZones }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { builtInPlan, filePlan, removeActors, buggyAlways, startAtLine, roadZones, trackCameras, clearOldTrack }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         var root = new StackPanel { Margin = new Thickness(16) };
         var intro = new TextBlock
@@ -84,11 +86,13 @@ internal sealed class RaceTrackWindow : Window
         fileRow.Children.Add(filePlan); fileRow.Children.Add(browseButton); fileRow.Children.Add(planPath);
         filePlan.Margin = new Thickness(0, 0, 8, 0);
         root.Children.Add(fileRow);
+        clearOldTrack.Margin = new Thickness(0, 6, 0, 0);
+        root.Children.Add(clearOldTrack);
 
         root.Children.Add(Section("Where the lap crosses itself"));
         root.Children.Add(crossing);
         root.Children.Add(Section("The scenes"));
-        foreach (var c in new CheckBox[] { removeActors, buggyAlways, startAtLine, roadZones }) { c.Margin = new Thickness(0, 2, 0, 2); root.Children.Add(c); }
+        foreach (var c in new CheckBox[] { removeActors, buggyAlways, startAtLine, roadZones, trackCameras }) { c.Margin = new Thickness(0, 2, 0, 2); root.Children.Add(c); }
 
         root.Children.Add(status);
         log.Margin = new Thickness(0, 10, 0, 0);
@@ -133,6 +137,8 @@ internal sealed class RaceTrackWindow : Window
         BuggyAlways = buggyAlways.IsChecked == true,
         StartAtLine = startAtLine.IsChecked == true,
         RemoveRoadZones = roadZones.IsChecked == true,
+        RemoveTrackCameras = trackCameras.IsChecked == true,
+        OldTrackCube = clearOldTrack.IsChecked == true ? (7, 10) : null,
     };
 
     private async Task BuildAsync()

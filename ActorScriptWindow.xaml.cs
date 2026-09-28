@@ -189,11 +189,17 @@ public partial class ActorScriptWindow : Window
     {
         checkTimer.Stop();
         string text;
-        if (IsCView)
+        if (IsCView && TryText(CurrentKind) is { } decompiled)
         {
-            text = sceneScripts!.GetText(source.Slot, CurrentKind);
+            text = decompiled;
             ScriptTextBox.IsReadOnly = false;
             HintLabel.Text = "C source — comments are kept in SCENE.HQR.comments.json; edits stay in memory until you Save · F9 sets a breakpoint (unedited script only)";
+        }
+        else if (IsCView)
+        {
+            text = "// This script can't be shown as C text: the decompiler couldn't turn its bytes into source that builds back to the same bytes.\n// The disassembly on the left is the only view.\n";
+            ScriptTextBox.IsReadOnly = true;
+            HintLabel.Text = "can't be shown as C text — read-only";
         }
         else
         {
@@ -501,14 +507,22 @@ public partial class ActorScriptWindow : Window
         if (SuggestionList.SelectedItem is not null) AcceptSelection();
     }
 
+    // The actor's script as C text, or null when the decompiler can't produce text that builds back to the same bytes (it
+    // throws then, e.g. for a life script that is only END bytes).
+    private string? TryText(ScriptKind kind)
+    {
+        try { return sceneScripts!.GetText(source.Slot, kind); }
+        catch (InvalidOperationException) { return null; }
+    }
+
     // ---- autocomplete -------------------------------------------------------------
 
     private void RefreshSuggestionPool()
     {
         if (!IsCView) { suggestionPool = new(); return; }
 
-        var life = view == ScriptView.Life ? EditorText : sceneScripts!.GetText(source.Slot, ScriptKind.Life);
-        var trk = view == ScriptView.Track ? EditorText : sceneScripts!.GetText(source.Slot, ScriptKind.Track);
+        var life = view == ScriptView.Life ? EditorText : TryText(ScriptKind.Life) ?? "";
+        var trk = view == ScriptView.Track ? EditorText : TryText(ScriptKind.Track) ?? "";
         suggestionPool = ScriptCompletions.For(CurrentKind, sceneScripts!.Dialect)
             .Concat(ScriptCompletions.Symbols(life, trk))
             .Select(c => new SuggestionItem(c.Signature, c.Description, c.InsertText))

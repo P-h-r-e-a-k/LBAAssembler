@@ -66,8 +66,8 @@ The red-white striped look on the arch and gantry comes from the object texture 
 **Zones**
 - 4: scenario zone (type 2, num 0) box (26624,1579,15360)-(30208,2603,18432): the start area, in front of the gantry.
 - 8: scenario zone (type 2, num 1) box (26624,1579,14336)-(30208,2603,14848): just past the start line.
-- 5: scene change (type 1) to scene 55 from (25600..30208, 16384..18432), the garage/pit.
-- 3: scene change (type 1) to scene 54 from (31232..31744, 19968..20480), the garage entrance.
+- 5: fixed camera (type 1, number 0, on and forced) over (25600..30208, 16384..18432), the start straight in front of the garage/pit. (Earlier versions of this page called zones 5 and 3 scene changes; in LBA2 type 1 is a camera zone.)
+- 3: fixed camera (type 1, number 1) over (31232..31744, 19968..20480), the garage entrance; message zone 7 names it.
 - 6 and 7: type 5 zones, num 228, flags 12/1/8 and 12/1/4, at the garage doors (31744..32256 and 30720..31232, 19728..20752).
 - 0, 1, 2: the island edge scene changes (type 0) to scenes 56, 58, 62.
 
