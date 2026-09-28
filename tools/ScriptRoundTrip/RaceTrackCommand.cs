@@ -90,7 +90,7 @@ internal static class RaceTrackCommand
     public static int RaceCarFile(string[] args)
     {
         var setup = new LBAAssembler.RaceCarSetup();
-        if (args.Length > 3) setup.OpponentPace = int.Parse(args[3]);
+        if (args.Length > 3) setup.RacerSkill = setup.BaldinoSkill = int.Parse(args[3]);
         setup.WriteEngineFile(Path.GetFullPath(args[2]), RaceTrackService.ReadInfo(args[1]));
         Console.WriteLine($"{args[2]}: {File.ReadAllLines(args[2]).Length} lines");
         return 0;

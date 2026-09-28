@@ -175,10 +175,11 @@ internal sealed class RaceTrackReport
     public (double X0, double Z0, double X1, double Z1, double DirX, double DirZ)? LapLine { get; set; }
     // Checkpoints round the lap, in order (PlaceCheckpoints): a line across the road (island cells) and the way the lap crosses it.
     public List<(double X0, double Z0, double X1, double Z1, double DirX, double DirZ)> Checkpoints { get; } = new();
-    // The opponent's line (PlanRacePath) from the start line round the lap: island cells, the height, the speed in world units a second.
-    public List<(double X, double Z, double Y, double Speed)> RacePath { get; } = new();
-    // Baldino's line: the same, on the other side of the road and at his rocket car's speeds.
-    public List<(double X, double Z, double Y, double Speed)> BaldinoPath { get; } = new();
+    // The opponent's line (PlanRacePath) from the start line round the lap: island cells, the height, the speed in world units a second (with
+    // the race car setup's reference car) and the line's bend radius there (world units; the engine plans the speeds from it and the car).
+    public List<(double X, double Z, double Y, double Speed, double Radius)> RacePath { get; } = new();
+    // Baldino's line: the same, keeping more to the other side of the road.
+    public List<(double X, double Z, double Y, double Speed, double Radius)> BaldinoPath { get; } = new();
     // The lap's centre line as built (island cells), for checks.
     public double[] LapX { get; set; } = Array.Empty<double>();
     public double[] LapZ { get; set; } = Array.Empty<double>();
@@ -1163,53 +1164,193 @@ internal static class RaceTrackBuilder
         report.Notes.Add($"{report.Checkpoints.Count} checkpoints round the lap (a lap counts once the car has crossed them all, in order)");
     }
 
-    // An opponent's line (the race-track mode drives a car along it): a point a cell apart round the lap from the start line, `Offset` cells
-    // to the side (nearer the middle in tight bends), with the ground's height there (the deck on the bridge, the flight's arc over the jump)
-    // and a speed: a top speed, slower in bends (as fast as a sideways pull allows at the bend's radius), braking before them and speeding
-    // up after them no harder than the car could (units a second, and a second squared).
-    private sealed record RacingLine(double Offset, double Top, double Sideways, double Accel, double Brake);
-    // The retail racer: two cells to the side the player's car doesn't start on. Baldino: two cells to the other side; his rocket car is the
-    // faster on the straights and pulls away harder, but takes the bends slower and brakes less well.
-    private static readonly RacingLine RacerLine = new(-2, 4400, 2500, 2200, 4000);
-    private static readonly RacingLine BaldinoLine = new(2, 4750, 2150, 2700, 3300);
+    // An opponent's racing line (the race-track mode drives a car along it): a point a cell apart round the lap from the start line, placed
+    // across the road where the car is quickest -- wide into a bend, clipping its inside, wide out of it -- with each point kept within
+    // `Reach` cells of the middle of the road (the car's middle; its wheels then just reach the curb): first smoothed (each point moved
+    // to the middle of its neighbours over windows from 30 cells down to 2, then back within the road), then a local search for the lap
+    // time itself. On the inside of a bend a point stays far enough from the bend's centre that the line keeps a radius of `LineTightest`
+    // cells at least (the lap's tightest bends are 2.6 cells round the middle of the road, less than `Reach`: the line would fold there). Each opponent leans a little to its own side (`Side`, a weak pull),
+    // so the two lines don't lie on each other, and its grid spot and the start line are held at `Side` cells: it starts where the scene puts
+    // its car. With the ground's height there (the deck on the bridge, the flight's arc over the jump), the line's bend radius at each point
+    // (the circle through the points three cells either side), and speeds for a reference car, the race car setup's: as fast as its steering
+    // takes each bend (the buggy turns at a fixed rate, so a bend of radius R is taken at up to that rate times R) and its top gear, braking
+    // and pulling away as hard as it can. The engine plans the speeds again from the player's own car (RACEMOD.CPP PlanSpeeds).
+    // Side: the side of the road it leans to and starts on (cells); Grid: how many cells behind the start line it starts; Top and Grip: its
+    // character, its top speed and pull, and its cornering, as shares of the player's car's (the engine file passes them on, RaceCarEngineFile).
+    internal sealed record RacingLine(double Side, double Grid, double Top, double Grip);
+    internal static readonly RacingLine RacerLine = new(-2.5, 4, 1.0, 1.0);
+    // Baldino's rocket car: a little quicker on the straights, a good deal slower in the bends
+    internal static readonly RacingLine BaldinoLine = new(2.5, RaceTrackScenes.BaldinoGridBack, 1.02, 0.92);
+    private const double Reach = 3.2, SideLean = 0.02, LineTightest = 1.2;
+    private static readonly int[] SmoothWindows = { 30, 15, 8, 4, 2 };
+    private const int SmoothRounds = 100, SearchSpacing = 4;
+    private static readonly double[] SearchSteps = { 1, 0.5, 0.25, 0.1 };
+    // the reference car (RaceCarSetup's "Race car"): top gear 34 km/h, steering 110 % (1126 of 4096 a second), acceleration 4000 and brakes
+    // 15600 units a second squared, gears topping out at 11, 16, 22, 28 and 34 km/h
+    private static readonly double[] ReferenceGears = { 1564, 2276, 3129, 3982, 4836 };
+    private const double ReferenceTurn = 1126 * 2 * Math.PI / 4096, ReferenceAccel = 4000, ReferenceBrake = 15600, ReferenceTop = 4836;
 
     private static void PlanRacePath(TrackRoad r, RaceTrackReport report, RaceTrackOptions o, RacingLine line,
-        List<(double X, double Z, double Y, double Speed)> result, string name)
+        List<(double X, double Z, double Y, double Speed, double Radius)> result, string name)
     {
         if (report.StartLine.Count == 0) return;
         var i0 = Nearest(r, report.StartLine[0].X, report.StartLine[0].Z);
         var jump = report.Jump;
-        var points = new List<(double X, double Z, double Y, double Speed)>();
-        for (var m = 0; m < r.Count / 2; m++)
+        var count = r.Count / 2;
+        var cx = new double[count]; var cz = new double[count]; var nx = new double[count]; var nz = new double[count]; var at = new int[count];
+        for (var m = 0; m < count; m++)
         {
             var k = (i0 + 2 * m) % r.Count;
-            var radius = Math.Abs(r.Kappa[k]) > 1e-9 ? 1 / Math.Abs(r.Kappa[k]) : 1e9;
-            var off = line.Offset * Math.Clamp((radius - 4) / 8, 0, 1);
-            var x = r.X[k] - r.Tz[k] * off; var z = r.Z[k] + r.Tx[k] * off;
-            var bank = r.Bridge[k] || r.Deck[k] ? 0 : Math.Clamp(-r.Kappa[k] * o.BankGain, -o.MaxBank, o.MaxBank);
-            var y = r.H[k] + bank * off;
-            var speed = Math.Min(line.Top, Math.Sqrt(line.Sideways * radius * 512));
-            if (jump is not null)
+            at[m] = k; cx[m] = r.X[k]; cz[m] = r.Z[k]; nx[m] = -r.Tz[k]; nz[m] = r.Tx[k];
+        }
+        // how far across the road each point may go: `Reach` either way, less on the inside of a bend (the middle of the road's own turn,
+        // measured over two cells either side, the sharpest of the five: its centre is on the side the road turns to)
+        var lo = new double[count]; var hi = new double[count];
+        double Turn(int m)
+        {
+            int a = (m - 1 + count) % count, b = (m + 1) % count;
+            double ax = cx[m] - cx[a], az = cz[m] - cz[a], bx = cx[b] - cx[m], bz = cz[b] - cz[m];
+            var angle = Math.Atan2(ax * bz - az * bx, ax * bx + az * bz);
+            return angle / Math.Max(1e-6, (Math.Sqrt(ax * ax + az * az) + Math.Sqrt(bx * bx + bz * bz)) / 2);
+        }
+        var turns = Enumerable.Range(0, count).Select(Turn).ToArray();
+        for (var m = 0; m < count; m++)
+        {
+            var sharpest = Enumerable.Range(-2, 5).Select(d => turns[(m + d + count) % count]).OrderByDescending(Math.Abs).First();
+            var inside = Math.Abs(sharpest) < 1e-6 ? Reach : Math.Clamp(1 / Math.Abs(sharpest) - LineTightest, 0, Reach);
+            // (the normal (-Tz, Tx) is the way the road runs turned a quarter turn the way a positive turn goes, so a positive turn has its
+            // centre on the normal's side)
+            lo[m] = sharpest > 0 ? -Reach : -inside;
+            hi[m] = sharpest > 0 ? inside : Reach;
+        }
+        // the offsets across the road: held at the grid (from a few cells behind the opponent's grid spot to a few past the start line)
+        var off = new double[count]; var held = new bool[count];
+        for (var m = 0; m < count; m++)
+        {
+            var back = m == 0 ? 0 : count - m;
+            held[m] = m <= 3 || back <= line.Grid + 5;
+            off[m] = held[m] ? line.Side : 0;
+        }
+        // the points over the jump's flight: no bend there (the car is in the air, on the flight's arc)
+        var flight = new bool[count];
+        if (jump is not null)
+            for (var m = 0; m < count; m++)
             {
-                // over the jump: the flight's own arc and pace
-                var along = (x - jump.StartX) * jump.DirX + (z - jump.StartZ) * jump.DirZ;
-                if (along >= 0 && along <= jump.FlightCells && Math.Abs(-(x - jump.StartX) * jump.DirZ + (z - jump.StartZ) * jump.DirX) < 8)
+                var along = (cx[m] - jump.StartX) * jump.DirX + (cz[m] - jump.StartZ) * jump.DirZ;
+                flight[m] = along >= -2 && along <= jump.FlightCells + 2 && Math.Abs(-(cx[m] - jump.StartX) * jump.DirZ + (cz[m] - jump.StartZ) * jump.DirX) < 8;
+            }
+
+        // 1. smoothed, wide windows first: each point moved to the middle of the points `w` either side of it, then back within the road;
+        //    a long bend's line is moved as a whole, which point-by-point curvature sweeps take tens of thousands of rounds to do
+        var px = new double[count]; var pz = new double[count];
+        var sumX = new double[3 * count + 1]; var sumZ = new double[3 * count + 1];
+        foreach (var w in SmoothWindows)
+            for (var round = 0; round < SmoothRounds; round++)
+            {
+                for (var m = 0; m < count; m++) { px[m] = cx[m] + nx[m] * off[m]; pz[m] = cz[m] + nz[m] * off[m]; }
+                for (var i = 0; i < 3 * count; i++) { sumX[i + 1] = sumX[i] + px[i % count]; sumZ[i + 1] = sumZ[i] + pz[i % count]; }
+                for (var m = 0; m < count; m++)
                 {
-                    y = jump.Height + RaceTrackJumpAnim.Climb(jump.FlightScale, along);
-                    speed = jump.FlightCells * 512 / RaceTrackJumpAnim.Seconds(jump.FlightScale);
+                    if (held[m]) continue;
+                    int from = count + m - w, to = count + m + w + 1;
+                    var ax = (sumX[to] - sumX[from]) / (2 * w + 1); var az = (sumZ[to] - sumZ[from]) / (2 * w + 1);
+                    var across = (ax - cx[m]) * nx[m] + (az - cz[m]) * nz[m];
+                    off[m] = Math.Clamp((across + SideLean * line.Side) / (1 + SideLean), lo[m], hi[m]);
                 }
             }
-            points.Add((x, z, y, speed));
-        }
-        // braking before bends and speeding up after them: two rounds each way, since the lap is a loop
-        var v = points.Select(p => p.Speed).ToArray(); var count = v.Length;
-        for (var round = 0; round < 2; round++)
+
+        // the lap time of a line (offsets across the road) for this opponent's car, and its speeds and bend radii
+        double LapTime(double[] offsets, double[]? speeds = null, double[]? bends = null)
         {
-            for (var i = count - 1; i >= 0; i--) v[i] = Math.Min(v[i], Math.Sqrt(Sq(v[(i + 1) % count]) + 2 * line.Brake * 512));
-            for (var i = 0; i < count; i++) v[i] = Math.Min(v[i], Math.Sqrt(Sq(v[(i - 1 + count) % count]) + 2 * line.Accel * 512));
+            var qx = new double[count]; var qz = new double[count];
+            for (var m = 0; m < count; m++) { qx[m] = cx[m] + nx[m] * offsets[m]; qz[m] = cz[m] + nz[m] * offsets[m]; }
+            var v = speeds ?? new double[count]; var ds = new double[count];
+            for (var m = 0; m < count; m++)
+            {
+                int a = (m - 3 + count) % count, c = (m + 3) % count, next = (m + 1) % count;
+                double abx = qx[m] - qx[a], abz = qz[m] - qz[a], bcx = qx[c] - qx[m], bcz = qz[c] - qz[m], cax = qx[a] - qx[c], caz = qz[a] - qz[c];
+                var cross = Math.Abs(abx * bcz - abz * bcx);
+                var bend = flight[m] || cross < 1e-9 ? 1e6 : Math.Min(1e6, Math.Sqrt((abx * abx + abz * abz) * (bcx * bcx + bcz * bcz) * (cax * cax + caz * caz)) / (2 * cross) * 512);
+                if (bends is not null) bends[m] = bend;
+                v[m] = Math.Max(400, Math.Min(ReferenceTop * line.Top, ReferenceTurn * line.Grip * bend));
+                ds[m] = Math.Sqrt(Sq(qx[next] - qx[m]) + Sq(qz[next] - qz[m])) * 512;
+            }
+            // braking before bends and pulling away after them, two rounds each way (the lap is a loop)
+            for (var round = 0; round < 2; round++)
+            {
+                for (var i = count - 1; i >= 0; i--) v[i] = Math.Min(v[i], Math.Sqrt(Sq(v[(i + 1) % count]) + 2 * ReferenceBrake * ds[i]));
+                for (var i = 0; i < count; i++) v[(i + 1) % count] = Math.Min(v[(i + 1) % count], Math.Sqrt(Sq(v[i]) + 2 * ReferenceAccel * line.Top * ReferencePull(v[i]) * ds[i]));
+            }
+            var time = 0.0;
+            for (var m = 0; m < count; m++) time += ds[m] / v[m];
+            return time;
         }
-        for (var i = 0; i < count; i++) result.Add((points[i].X, points[i].Z, points[i].Y, v[i]));
-        report.Notes.Add($"{name}: {count} points, {v.Min() * 3.6 / 512:0}-{v.Max() * 3.6 / 512:0} km/h");
+
+        // 2. then a local search for the lap time itself: the line held at points every few cells (straight between them), each moved in
+        //    and out by a step, a move kept when the lap is quicker, with smaller steps as it settles
+        var controls = Enumerable.Range(0, (count + SearchSpacing - 1) / SearchSpacing).Select(j => j * SearchSpacing).ToArray();
+        double[] Expand(double[] c)
+        {
+            var o = new double[count];
+            for (var j = 0; j < controls.Length; j++)
+            {
+                int m0 = controls[j], m1 = j + 1 < controls.Length ? controls[j + 1] : count;
+                var c1 = j + 1 < controls.Length ? c[j + 1] : c[0];
+                for (var m = m0; m < m1; m++) o[m] = c[j] + (c1 - c[j]) * (m - m0) / (m1 - m0);
+            }
+            for (var m = 0; m < count; m++) o[m] = held[m] ? line.Side : Math.Clamp(o[m], lo[m], hi[m]);
+            return o;
+        }
+        var smoothed = LapTime(off);
+        var ctrl = controls.Select(m => off[m]).ToArray();
+        var best = LapTime(Expand(ctrl));
+        foreach (var step in SearchSteps)
+            for (var round = 0; round < 3; round++)
+            {
+                var improved = false;
+                for (var j = 0; j < controls.Length; j++)
+                {
+                    if (held[controls[j]]) continue;
+                    foreach (var d in new[] { step, -step })
+                    {
+                        var saved = ctrl[j];
+                        ctrl[j] = saved + d;
+                        var t = LapTime(Expand(ctrl));
+                        if (t < best - 1e-4) { best = t; improved = true; break; }
+                        ctrl[j] = saved;
+                    }
+                }
+                if (!improved) break;
+            }
+        var searched = Expand(ctrl);
+        if (best < smoothed) off = searched;
+
+        var speeds = new double[count]; var radius = new double[count];
+        var lap = LapTime(off, speeds, radius);
+        for (var m = 0; m < count; m++)
+        {
+            var k = at[m];
+            double x = cx[m] + nx[m] * off[m], z = cz[m] + nz[m] * off[m];
+            var bank = r.Bridge[k] || r.Deck[k] ? 0 : Math.Clamp(-r.Kappa[k] * o.BankGain, -o.MaxBank, o.MaxBank);
+            var y = r.H[k] + bank * off[m];
+            if (jump is not null && flight[m])
+            {
+                // over the jump: the flight's own arc
+                var along = (x - jump.StartX) * jump.DirX + (z - jump.StartZ) * jump.DirZ;
+                if (along >= 0 && along <= jump.FlightCells) y = jump.Height + RaceTrackJumpAnim.Climb(jump.FlightScale, along);
+            }
+            result.Add((x, z, y, speeds[m], radius[m]));
+        }
+        report.Notes.Add($"{name}: {count} points, up to {off.Max(Math.Abs):0.0} cells from the middle of the road, bends down to {radius.Min() / 512:0.0} cells; " +
+                         $"with the race car driven perfectly {speeds.Min() * 3.6 / 512:0}-{speeds.Max() * 3.6 / 512:0} km/h, a lap in {lap:0.0} s " +
+                         $"(the middle of the road {LapTime(new double[count]):0.0} s)");
+    }
+
+    private static double ReferencePull(double v)
+    {
+        var g = 0;
+        while (g < ReferenceGears.Length - 1 && ReferenceGears[g] <= v) g++;
+        return Math.Clamp(3800 / ReferenceGears[g], 0.25, 4);
     }
 
     // ---------------------------------------------------------------------------------------------------------------------

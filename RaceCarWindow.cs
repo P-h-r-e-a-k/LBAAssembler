@@ -15,8 +15,9 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox automatic = new() { Content = "Automatic gearbox (the gears change by themselves)" };
     private readonly CheckBox display = new() { Content = "Show the gear, the speed and the lap times on screen" };
     private readonly CheckBox askBeforePlay = new() { Content = "Show this before each race-track play" };
-    private readonly CheckBox opponent = new() { Content = "Race an opponent: the original track's racer, round your lap" };
+    private readonly CheckBox opponent = new() { Content = "Race the original track's racer" };
     private readonly CheckBox baldino = new() { Content = "Race Baldino too, in his rocket car" };
+    private readonly CheckBox fightBack = new() { Content = "They push harder when they fall behind you" };
     private readonly CheckBox startAtLine = new() { Content = "Start beside the car on the start/finish straight, with the editor's markings hidden" };
     private readonly List<Action> refresh = new();
     private bool updating;
@@ -74,15 +75,21 @@ internal sealed class RaceCarWindow : Window
         root.Children.Add(SliderRow("Top speed backwards", 5, 40, 1, " km/h", () => setup.ReverseKmh, v => setup.ReverseKmh = (int)v).Row);
 
         root.Children.Add(Section("Race"));
+        root.Children.Add(Text("The opponents drive this car, set up as above, on racing lines of their own: 100 % skill drives it perfectly, " +
+                               "faster than you can; a little less gives a close race.", new Thickness(0, 0, 0, 4)));
         opponent.Checked += (_, _) => setup.Opponent = true;
         opponent.Unchecked += (_, _) => setup.Opponent = false;
         root.Children.Add(opponent);
-        root.Children.Add(SliderRow("The opponent's pace", 50, 150, 5, " %", () => setup.OpponentPace, v => setup.OpponentPace = (int)v).Row);
+        root.Children.Add(SliderRow("The racer's skill", 50, 120, 1, " %", () => setup.RacerSkill, v => setup.RacerSkill = (int)v).Row);
         baldino.Checked += (_, _) => setup.Baldino = true;
         baldino.Unchecked += (_, _) => setup.Baldino = false;
         baldino.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(baldino);
-        root.Children.Add(SliderRow("Baldino's pace", 50, 150, 5, " %", () => setup.BaldinoPace, v => setup.BaldinoPace = (int)v).Row);
+        root.Children.Add(SliderRow("Baldino's skill", 50, 120, 1, " %", () => setup.BaldinoSkill, v => setup.BaldinoSkill = (int)v).Row);
+        fightBack.Checked += (_, _) => setup.OpponentsFightBack = true;
+        fightBack.Unchecked += (_, _) => setup.OpponentsFightBack = false;
+        fightBack.Margin = new Thickness(0, 4, 0, 0);
+        root.Children.Add(fightBack);
         startAtLine.Checked += (_, _) => setup.StartAtLine = true;
         startAtLine.Unchecked += (_, _) => setup.StartAtLine = false;
         startAtLine.Margin = new Thickness(0, 4, 0, 0);
@@ -96,7 +103,7 @@ internal sealed class RaceCarWindow : Window
         root.Children.Add(display);
         askBeforePlay.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(askBeforePlay);
-        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, baldino, startAtLine }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, baldino, fightBack, startAtLine }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         var ok = new Button { Content = forPlay ? "Play" : "Save", Padding = new Thickness(18, 5, 18, 5), IsDefault = true, Margin = new Thickness(0, 0, 10, 0) };
         var cancel = new Button { Content = "Cancel", Padding = new Thickness(14, 5, 14, 5), IsCancel = true };
@@ -117,6 +124,7 @@ internal sealed class RaceCarWindow : Window
         askBeforePlay.IsChecked = setup.AskBeforePlay;
         opponent.IsChecked = setup.Opponent;
         baldino.IsChecked = setup.Baldino;
+        fightBack.IsChecked = setup.OpponentsFightBack;
         startAtLine.IsChecked = setup.StartAtLine;
         foreach (var r in refresh) r();
         ShowGearRows();

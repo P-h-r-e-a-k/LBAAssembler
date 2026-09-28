@@ -8,8 +8,11 @@
  *     scaled to the gear (a low gear pulls harder), braking, coasting, the speed backwards and the steering;
  *   - laps are counted at a start line, and only once the car has crossed every checkpoint round the lap in order (reversing back over
  *     the line and across it again is not a lap);
- *   - opponents (up to four): each a copy of a car the build put in every scene, driven along its own line round the lap at the line's
- *     own speeds, placed in whichever scene the player is in;
+ *   - opponents (up to four): each a copy of a car the build put in every scene, driven along its own racing line round the lap, placed
+ *     in whichever scene the player is in. Each drives the player's own car as the setup makes it -- its top gear, its steering (the
+ *     buggy turns at a fixed rate, so a bend of radius R is taken at up to that rate times R), its pull through the gears and its
+ *     brakes -- as well as it can on its line, times its skill (the pace); a character makes one faster on the straights or in the
+ *     bends; and one that has fallen behind the player pushes harder, up to its catch-up;
  *   - a small display of the gear, the speed, the lap times, the checkpoints and the race position.
  *
  * The file is "key=value" lines ('#' starts a comment); anything missing keeps the original car's value. Speeds are world units per second
@@ -19,9 +22,14 @@
  *     accel=4  brake=12  coast=7  reverse=2000  steer=1024  automatic=0  hud=1
  *     startline=<cube x> <cube z> <x0> <z0> <x1> <z1> <dir x> <dir z>     cube-local ends, and the way a lap crosses it
  *     checkpoint=<the same>                                                  one per line, in the order a lap crosses them
- *     opponent_path=<file>       lines "x z y speed": world units from the island's corner (32768 to a cube), from the start line round
+ *     opponent_path=<file>       lines "x z y speed [radius]": world units from the island's corner (32768 to a cube), from the start
+ *                                line round; with the line's bend radius at each point the speeds are planned from the player's car,
+ *                                without it the file's speeds are driven
  *     opponent_grid=<points>     how many of the path's last points the opponent starts before the start line
- *     opponent_pace=<percent>    of the path's speeds
+ *     opponent_pace=<percent>    its skill: of the speeds planned (100: the player's car driven perfectly on the line)
+ *     opponent_top=<percent>     its character: the top speed and pull, and the cornering, as a share of the player's car's
+ *     opponent_grip=<percent>
+ *     opponent_catchup=<percent> how much harder it pushes when it has fallen behind the player (at most, 60 cells behind)
  *     opponent_actor=<scene> <actor>   the opponent's car in that scene (one line per scene)
  *     opponent2_path=...  opponent2_grid=...  opponent2_pace=...  opponent2_actor=...   the second opponent, and so on up to opponent4
  */
@@ -31,6 +39,7 @@
 #include "RACEMOD.H"
 
 #include <SVGA/CLIP.H>
+#include <SYSTEM/LOG.H>
 #include <SVGA/FONT.H>
 #include <SVGA/SCREEN.H>
 #include <SYSTEM/KEYBOARD.H>
@@ -73,6 +82,9 @@ typedef struct {
     double Length;                         // the lap along the line
     double S;
     int Laps, Grid, Pace;
+    S32 *R;                                // the line's bend radius at each point (NULL: drive the file's speeds)
+    int Top, Grip, Catchup;                // its character (percent) and how much harder it pushes when behind
+    S32 LapStart;
     int Scene[RACE_MAX_OPPONENT_SCENES], Actor[RACE_MAX_OPPONENT_SCENES];
     int Scenes;
 } T_RACE_OPPONENT;
@@ -89,7 +101,7 @@ static int s_wantFlip = 0;
 static void Defaults(T_RACE_CAR *c) {
     memset(c, 0, sizeof(*c));
     memset(s_opp, 0, sizeof(s_opp));
-    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) { s_opp[n].Grid = 4; s_opp[n].Pace = 100; }
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) { s_opp[n].Grid = 4; s_opp[n].Pace = 100; s_opp[n].Top = 100; s_opp[n].Grip = 100; }
     c->Gears = 1;
     c->GearTop[0] = RACE_REF_TOP;
     c->Accel = 4000;
@@ -112,16 +124,21 @@ static void LoadPath(T_RACE_OPPONENT *o, const char *path) {
     int capacity = 4096, count = 0;
     S32 *x = (S32 *)malloc(capacity * sizeof(S32)), *z = (S32 *)malloc(capacity * sizeof(S32));
     S32 *y = (S32 *)malloc(capacity * sizeof(S32)), *v = (S32 *)malloc(capacity * sizeof(S32));
+    S32 *r = (S32 *)malloc(capacity * sizeof(S32));
+    int radii = 1;
     char line[128];
     while (fgets(line, sizeof(line), f) && count < capacity) {
-        int a, b, c, d;
-        if (sscanf(line, "%d %d %d %d", &a, &b, &c, &d) != 4) continue;
+        int a, b, c, d, e;
+        const int n = sscanf(line, "%d %d %d %d %d", &a, &b, &c, &d, &e);
+        if (n < 4) continue;
         x[count] = a; z[count] = b; y[count] = c; v[count] = d;
+        if (n == 5) r[count] = e; else radii = 0;
         count++;
     }
     fclose(f);
-    if (count < 3) { free(x); free(z); free(y); free(v); return; }
-    o->X = x; o->Z = z; o->Y = y; o->V = v; o->Count = count;
+    if (count < 3) { free(x); free(z); free(y); free(v); free(r); return; }
+    if (!radii) { free(r); r = NULL; }
+    o->X = x; o->Z = z; o->Y = y; o->V = v; o->R = r; o->Count = count;
     o->Cum = (double *)malloc((count + 1) * sizeof(double));
     o->Cum[0] = 0;
     for (int i = 1; i <= count; i++) {
@@ -140,6 +157,54 @@ static T_RACE_OPPONENT *OpponentKey(const char *key, const char **rest) {
     if (*p != '_') return NULL;
     *rest = p + 1;
     return &s_opp[n];
+}
+
+// How hard the player's car pulls at a speed: in the gear the automatic gearbox would be in, the gear's pull (RaceSpeed in BUGGY.CPP).
+static double Pull(double speed) {
+    S32 g = 0;
+    while (g < s_car.Gears - 1 && s_car.GearTop[g] <= speed) g++;
+    double pull = (double)RACE_REF_TOP / s_car.GearTop[g];
+    return pull > 4.0 ? 4.0 : pull < 0.25 ? 0.25 : pull;
+}
+
+// An opponent's speeds along its line, from the player's car: as fast as the car's steering takes each bend (the buggy turns at a fixed
+// rate, SpeedRot a second, so a bend of radius R is taken at up to that rate times R) and no faster than its top gear, braking before
+// the bends as hard as its brakes and pulling away after them as hard as its gears; the opponent's character scales the top speed and
+// pull, and the cornering. Two rounds each way, since the lap is a loop.
+static void PlanSpeeds(T_RACE_OPPONENT *o) {
+    if (!o->R) return;
+    const int count = o->Count;
+    const double top = (double)s_car.GearTop[s_car.Gears - 1] * o->Top / 100.0;
+    const double turn = s_car.Steer * 2 * 3.14159265358979 / 4096.0 * o->Grip / 100.0;
+    const double brake = s_car.Brake, accel = s_car.Accel * o->Top / 100.0;
+    double *v = (double *)malloc(count * sizeof(double));
+    for (int i = 0; i < count; i++) {
+        double limit = turn * o->R[i];
+        v[i] = limit < top ? limit : top;
+        if (v[i] < 400) v[i] = 400;
+    }
+    for (int round = 0; round < 2; round++) {
+        for (int i = count - 1; i >= 0; i--) {
+            const int next = (i + 1) % count;
+            const double ds = o->Cum[i + 1] - o->Cum[i];
+            const double reach = sqrt(v[next] * v[next] + 2 * brake * ds);
+            if (v[i] > reach) v[i] = reach;
+        }
+        for (int i = 0; i < count; i++) {
+            const int next = (i + 1) % count;
+            const double ds = o->Cum[i + 1] - o->Cum[i];
+            const double reach = sqrt(v[i] * v[i] + 2 * accel * Pull(v[i]) * ds);
+            if (v[next] > reach) v[next] = reach;
+        }
+    }
+    double lap = 0;
+    for (int i = 0; i < count; i++) {
+        o->V[i] = (S32)v[i];
+        lap += (o->Cum[i + 1] - o->Cum[i]) / v[i];
+    }
+    free(v);
+    Log_Info("[racemod] opponent line of %d points planned from the car: a perfect lap %.1f s (skill %d%%: %.1f s)", count, lap,
+             o->Pace, lap * 100.0 / o->Pace);
 }
 
 static void Load(const char *path) {
@@ -184,6 +249,9 @@ static void Load(const char *path) {
             if (!strcmp(rest, "path")) LoadPath(o, v);
             else if (!strcmp(rest, "grid")) o->Grid = atoi(v);
             else if (!strcmp(rest, "pace")) o->Pace = atoi(v);
+            else if (!strcmp(rest, "top")) o->Top = atoi(v);
+            else if (!strcmp(rest, "grip")) o->Grip = atoi(v);
+            else if (!strcmp(rest, "catchup")) o->Catchup = atoi(v);
             else if (!strcmp(rest, "actor")) {
                 int scene, actor;
                 if (o->Scenes < RACE_MAX_OPPONENT_SCENES && sscanf(v, "%d %d", &scene, &actor) == 2) {
@@ -205,6 +273,7 @@ static void Load(const char *path) {
         T_RACE_OPPONENT *o = &s_opp[n];
         if (o->Pace < 10) o->Pace = 10;
         if (!o->Count) continue;
+        PlanSpeeds(o);
         // the grid: a few points before the start line
         const int grid = o->Grid < 0 ? 0 : o->Grid >= o->Count ? o->Count - 1 : o->Grid;
         o->S = grid ? o->Cum[o->Count - grid] : 0;
@@ -333,6 +402,9 @@ static int OpponentActor(const T_RACE_OPPONENT *o) {
     return -1;
 }
 
+static double PlayerProgress(void);
+static double OpponentProgress(const T_RACE_OPPONENT *o);
+
 // the opponents racing: a line and cars in the scenes
 static int Opponents(void) {
     int n = 0;
@@ -351,16 +423,27 @@ void RaceMod_Frame(void) {
     // the race starts when the player first drives off; the opponents wait while he is out of his car
     if (!s_oppStarted && driving && (Input & I_UP)) s_oppStarted = 1;
     const int moving = s_oppStarted && driving;
+    // (how far round the player is, for the opponents that push harder when they have fallen behind)
+    const double me = moving && s_opp[0].Count ? PlayerProgress() : 0;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
         T_RACE_OPPONENT *o = &s_opp[n];
         if (!o->Count) continue;
         double x, z, y, v, dx, dz;
         PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
         if (moving) {
+            double pace = o->Pace;
+            if (o->Catchup > 0 && s_opp[0].Count && s_laps > 0) {
+                const double behind = me - OpponentProgress(o);
+                if (behind > 0) pace *= 1 + o->Catchup / 100.0 * (behind < 60 * 512 ? behind / (60 * 512) : 1);
+            }
             const double before = o->S;
-            o->S += v * o->Pace / 100.0 * dt / 1000.0;
+            o->S += v * pace / 100.0 * dt / 1000.0;
             if (o->S >= o->Length) o->S -= o->Length;
-            if (o->S < before) o->Laps++;       // past the start line
+            if (o->S < before) {                 // past the start line
+                o->Laps++;
+                if (o->Laps > 1) Log_Info("[racemod] opponent %d: lap %d in %.2f s", n + 1, o->Laps - 1, (now - o->LapStart) / 1000.0);
+                o->LapStart = now;
+            }
             PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
         }
         if (CubeMode != CUBE_EXTERIEUR) continue;

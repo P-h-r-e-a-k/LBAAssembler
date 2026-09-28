@@ -24,14 +24,16 @@ public sealed class RaceCarSetup
     public bool ShowDisplay { get; set; } = true;
     // Show the setup before each race-track play (Play on a folder with a race track).
     public bool AskBeforePlay { get; set; } = true;
-    // Race the opponent (the retail track's racer, driven round the lap by the race-track mode), and how fast it goes (percent of its
-    // line's speeds: a top speed of 31 km/h, slower in bends).
+    // Race the opponents: the retail track's racer and Baldino in his rocket car, driven round the lap by the race-track mode on racing lines
+    // of their own. Each drives this car as the setup makes it (its top gear, steering, pull and brakes; Baldino's is a little quicker on the
+    // straights and slower in the bends) as well as its skill says: 100 % drives it perfectly on its line, faster than a player can.
     public bool Opponent { get; set; } = true;
-    public int OpponentPace { get; set; } = 100;
-    // Race Baldino too, in his rocket car (a second opponent, on a line of his own), and how fast (percent of his line's speeds: up to 33 km/h
-    // on the straights, slower than the racer in bends).
+    public int RacerSkill { get; set; } = 92;
     public bool Baldino { get; set; } = true;
-    public int BaldinoPace { get; set; } = 100;
+    public int BaldinoSkill { get; set; } = 91;
+    // An opponent that has fallen behind pushes harder (up to CatchUpPercent more, 60 cells behind).
+    public bool OpponentsFightBack { get; set; } = true;
+    public const int CatchUpPercent = 8;
     // Play starts on the start/finish straight, Twinsen beside his car, whatever scene is open (and with the zones and routes the editor
     // draws over the game hidden).
     public bool StartAtLine { get; set; } = true;

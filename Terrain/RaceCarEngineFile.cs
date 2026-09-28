@@ -33,19 +33,24 @@ internal static class RaceCarEngineFile
             var key = i == 0 ? "opponent" : $"opponent{i + 1}";
             var o = opponents[i];
             text.Append($"# {o.Name}\n{key}_path={pathFiles[i]}\n{key}_grid={o.Grid}\n{key}_pace={Math.Clamp(o.Pace, 10, 300)}\n");
+            text.Append($"{key}_top={(int)Math.Round(o.Line.Top * 100)}\n{key}_grip={(int)Math.Round(o.Line.Grip * 100)}\n{key}_catchup={(car.OpponentsFightBack ? RaceCarSetup.CatchUpPercent : 0)}\n");
             foreach (var (scene, actor) in o.Actors) text.Append($"{key}_actor={scene} {actor}\n");
         }
         return text.ToString();
     }
 
     // The opponents the car setup races, in the engine's order: the retail track's racer, then Baldino (each when the track has it and the
-    // setup races it), with its line, how many points before the start line it starts, its pace and the scenes' copies of its car.
-    internal static List<(string Name, List<int[]> Path, int Grid, int Pace, Dictionary<int, int> Actors)> Opponents(this RaceCarSetup car, RaceTrackService.TrackInfo? track)
+    // setup races it), with its line, how many points before the start line it starts, its skill (the engine's pace), its character (the
+    // share of the car's top speed and cornering it drives with, as the build planned its line: RaceTrackBuilder) and the scenes' copies of
+    // its car.
+    internal static List<(string Name, List<int[]> Path, int Grid, int Pace, RaceTrackBuilder.RacingLine Line, Dictionary<int, int> Actors)> Opponents(this RaceCarSetup car, RaceTrackService.TrackInfo? track)
     {
-        var list = new List<(string, List<int[]>, int, int, Dictionary<int, int>)>();
-        if (car.Opponent && track?.Path is { Count: > 0 } path && track.Opponent is { Count: > 0 } actors) list.Add(("the racer", path, track.PathGrid, car.OpponentPace, actors));
+        var list = new List<(string, List<int[]>, int, int, RaceTrackBuilder.RacingLine, Dictionary<int, int>)>();
+        if (car.Opponent && track?.Path is { Count: > 0 } path && track.Opponent is { Count: > 0 } actors)
+            list.Add(("the racer", path, track.PathGrid, car.RacerSkill, RaceTrackBuilder.RacerLine, actors));
         foreach (var r in track?.Rivals ?? new())
-            if (r.Name == "Baldino" && car.Baldino && r.Path.Count > 0 && r.Actors.Count > 0) list.Add((r.Name, r.Path, r.Grid, car.BaldinoPace, r.Actors));
+            if (r.Name == "Baldino" && car.Baldino && r.Path.Count > 0 && r.Actors.Count > 0)
+                list.Add((r.Name, r.Path, r.Grid, car.BaldinoSkill, RaceTrackBuilder.BaldinoLine, r.Actors));
         return list;
     }
 

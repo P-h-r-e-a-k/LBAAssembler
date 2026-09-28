@@ -22,7 +22,7 @@ internal static class RaceTrackService
     // a lap crosses it.
     public sealed record StartLineInfo(int CubeX, int CubeZ, int X0, int Z0, int X1, int Z1, int DirX, int DirZ);
     // Checkpoints: the same kind of lines, in the order a lap crosses them. Path: the opponent's line from the start line round the lap,
-    // each point [x, z, y, speed] in world units (x and z counted from the island's corner, 32768 to a cube). PathGrid: how many points
+    // each point [x, z, y, speed, bend radius] in world units (x and z counted from the island's corner, 32768 to a cube). PathGrid: how many points
     // before the start line the opponent starts. Opponent: scene -> the index of that scene's copy of the racer. StartScene: the scene
     // the start line is in. Rivals: the other opponents (Baldino), each with a line, a grid and the scenes' copies of its car of its own.
     public sealed record TrackInfo(string Crossing, StartLineInfo? StartLine, List<StartLineInfo>? Checkpoints = null, List<int[]>? Path = null,
@@ -117,8 +117,8 @@ internal static class RaceTrackService
         }
         var line = report.LapLine is { } l ? Line(l) : null;
         var checkpoints = report.Checkpoints.Select(Line).ToList();
-        static List<int[]> Points(List<(double X, double Z, double Y, double Speed)> line)
-            => line.Select(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512), (int)Math.Round(p.Y), (int)Math.Round(p.Speed) }).ToList();
+        static List<int[]> Points(List<(double X, double Z, double Y, double Speed, double Radius)> line)
+            => line.Select(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512), (int)Math.Round(p.Y), (int)Math.Round(p.Speed), (int)Math.Round(Math.Min(p.Radius, 1e6)) }).ToList();
         var path = Points(report.RacePath);
         var rivals = new List<RivalInfo>();
         if (report.BaldinoPath.Count > 0 && scenes.Baldino.Count > 0) rivals.Add(new RivalInfo("Baldino", Points(report.BaldinoPath), RaceTrackScenes.BaldinoGridBack, scenes.Baldino));
