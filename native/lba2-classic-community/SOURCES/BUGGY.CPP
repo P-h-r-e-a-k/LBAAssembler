@@ -8,6 +8,7 @@
 
 #include "INPUT.H"
 #include "AMBIANCE.H"
+#include "RACEMOD.H"
 
 #define MAX_SAMPLE_PITCH 11000
 #define MIN_SAMPLE_PITCH2 5000
@@ -137,9 +138,13 @@ void TakeBuggy(void) {
 
     // Passe Buggy Scenarique en NoBody
     InitBody(NO_BODY, NUM_BUGGY);
-    // A parked buggy is drawn into the static background copy, so that copy is
-    // rebuilt, or the empty car stays on screen where it stood.
-    FirstTime = AFF_ALL_FLIP;
+    if (RaceMod_Active()) {
+        // A parked buggy is drawn into the static background copy, so that copy is
+        // rebuilt, or the empty car stays on screen where it stood (a race track
+        // parks it on the start line).
+        FirstTime = AFF_ALL_FLIP;
+        RaceMod_ResetGear();
+    }
 
     if (ptrobj->SampleAlways) {
         HQ_StopOneSample(ptrobj->SampleAlways);
@@ -227,6 +232,47 @@ void LeaveBuggy(U8 newcomportement) {
 
 //■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
+// The speed of a race-track mod's car (RACEMOD.CPP), in place of the fixed rates below: the gear's top speed, and the
+// acceleration scaled to the gear the way a gearbox does it (the pull goes with the gear ratio, the top speed against it, so a
+// low gear pulls harder). Above the gear's top speed -- just after a shift down -- the car slows as it does off the throttle.
+static void RaceSpeed(S_BUGGY *ptb, S32 deltatimer, S32 flagattack) {
+    const T_RACE_CAR *car = RaceMod_Car();
+    RaceMod_UpdateGear(ptb->Speed);
+    const S32 top = car->GearTop[RaceMod_Gear() - 1];
+    const S32 coast = deltatimer * car->Coast / 1000;
+
+    ptb->SpeedRot = car->Steer;
+
+    if ((Input & I_UP) AND !flagattack) {
+        if (ptb->Speed <= top) {
+            double pull = (double)RACE_REF_TOP / top;
+            if (pull > 4.0)
+                pull = 4.0;
+            if (pull < 0.25)
+                pull = 0.25;
+            ptb->Speed += (S32)(deltatimer * car->Accel * pull / 1000.0);
+            if (ptb->Speed > top)
+                ptb->Speed = top;
+        } else {
+            ptb->Speed -= coast;
+            if (ptb->Speed < top)
+                ptb->Speed = top;
+        }
+    } else if ((Input & I_DOWN) AND !flagattack) {
+        ptb->Speed -= deltatimer * car->Brake / 1000;
+        if (ptb->Speed < -car->Reverse)
+            ptb->Speed = -car->Reverse;
+    } else if (ptb->Speed > 0) {
+        ptb->Speed -= coast;
+        if (ptb->Speed < 0)
+            ptb->Speed = 0;
+    } else if (ptb->Speed < 0) {
+        ptb->Speed += coast;
+        if (ptb->Speed > 0)
+            ptb->Speed = 0;
+    }
+}
+
 void MoveBuggy(T_OBJET *ptrobj) {
     S_BUGGY *ptb = &ListBuggy[0];
     T_OBJ_3D *ptb3d = &ptrobj->Obj;
@@ -309,8 +355,11 @@ void MoveBuggy(T_OBJET *ptrobj) {
 
     if (!(ptrobj->WorkFlags & (FALLING | ANIM_MASTER_GRAVITY))) {
         // check speed command
-        if ((Input & I_UP) // j'accelere
-            AND !flagattack) {
+        if (RaceMod_Active()) // a race-track mod's car (RACEMOD.CPP)
+        {
+            RaceSpeed(ptb, deltatimer, flagattack);
+        } else if ((Input & I_UP) // j'accelere
+                   AND !flagattack) {
             ptb->Speed += deltatimer * 4;
 
             if (!TimerGear)
@@ -348,10 +397,12 @@ void MoveBuggy(T_OBJET *ptrobj) {
             TimerGear = 0;
         }
 
-        if (ptb->Speed < -2000)
-            ptb->Speed = -2000;
-        if (ptb->Speed > MAX_SPEED)
-            ptb->Speed = MAX_SPEED;
+        if (!RaceMod_Active()) {
+            if (ptb->Speed < -2000)
+                ptb->Speed = -2000;
+            if (ptb->Speed > MAX_SPEED)
+                ptb->Speed = MAX_SPEED;
+        }
 
         speedinc = ptb->Speed * deltatimer / 1000;
     } else {
@@ -405,10 +456,20 @@ void MoveBuggy(T_OBJET *ptrobj) {
     ptb->LastTimer = timerhr;
     ptb->SpeedInc = speedinc;
 
+    if (RaceMod_Active()) {
+        RaceMod_Lap(ptb3d->X, ptb3d->Z);
+    }
+
     if (ptrobj->SampleAlways
             AND IsSamplePlaying(ptrobj->SampleAlways)) {
         S32 pitch;
 
+        if (RaceMod_Active()) {
+            // the engine revs up through each gear
+            const T_RACE_CAR *car = RaceMod_Car();
+            S32 top = ptb->Speed < 0 ? car->Reverse : car->GearTop[RaceMod_Gear() - 1];
+            pitch = BoundRegleTrois(3000, MAX_SAMPLE_PITCH, top > 0 ? top : 1, abs(ptb->Speed));
+        } else
         switch (Gear) {
         case -1:
             pitch = BoundRegleTrois(3000, MAX_SAMPLE_PITCH2, MAX_SPEED, abs(ptb->Speed));
@@ -440,9 +501,12 @@ void MoveBuggy(T_OBJET *ptrobj) {
 // rule ReajustPosDecors() uses to put the car on it (a top between the ground
 // and the car) plus the step DoCornerReajustDecors() lets it climb
 // (DEMI_BRICK_Y). With no decor over the point the result is the terrain.
+// Only for a race-track mod (RACEMOD.CPP); otherwise the terrain, as ever.
 
 static S32 BuggyFloorY(T_OBJET *ptrobj, S32 x, S32 z) {
     S32 y = CalculAltitudeObjet(x, z, -1);
+    if (!RaceMod_Active())
+        return y;
     S32 top = ptrobj->Obj.Y + DEMI_BRICK_Y;
     S32 found = FALSE;
     T_DECORS *ptrd = ListDecors;

@@ -57,6 +57,9 @@ internal sealed class EditorSettings
     public AudioLevels Lba1Audio { get; set; } = new();
     public AudioLevels Lba2Audio { get; set; } = new();
 
+    // The buggy's setup when Play runs an LBA2 folder with a race track built (the engine's race-track mode; RaceCarWindow).
+    public RaceCarSetup RaceCar { get; set; } = new();
+
     // Where each kind of window last was (see WindowPlacement), keyed by a name for that kind ("MainWindow",
     // "ActorAttributesWindow", ...) rather than per window instance: several windows of the same kind opened
     // at once (one actor attributes window per actor, say) all restore to this one remembered spot and then

@@ -5,25 +5,29 @@ namespace ScriptRoundTrip;
 
 // Builds the Desert island race track into a copy of the island file and draws the result.
 //   buildtrack <plan.json> <pristine folder> <game folder> [png] [scale]
-// The three files the track changes (DESERT.ILE, DESERT.OBL, SCENE.HQR) are copied from the pristine folder to the game folder first, so a build always starts clean.
+// The files the track changes (DESERT.ILE, DESERT.OBL, SCENE.HQR, and for a jump ANIM.HQR and RESS.HQR) are copied from the pristine folder to the game
+// folder first, so a build always starts clean. RT_CROSSING=Bridge|Jump|Viaduct|Level picks the crossing style.
 internal static class RaceTrackCommand
 {
     public static int Run(string[] args)
     {
         var plan = RaceTrackPlan.Load(args[1]);
         var pristine = args[2]; var game = args[3];
-        foreach (var f in new[] { "DESERT.ILE", "DESERT.OBL", "SCENE.HQR" }) File.Copy(Path.Combine(pristine, f), Path.Combine(game, f), overwrite: true);
+        foreach (var f in RaceTrackService.Files.Concat(RaceTrackService.JumpFiles))
+            if (File.Exists(Path.Combine(pristine, f))) File.Copy(Path.Combine(pristine, f), Path.Combine(game, f), overwrite: true);
         var island = IslandFile.Load(Path.Combine(game, "DESERT.ILE"));
         var options = new RaceTrackOptions();
         options.Keep.Add((0, 195, 62, 252));
         if (Environment.GetEnvironmentVariable("RT_CLEARANCE") is { } rc) options.RoadBridgeClearance = double.Parse(rc);
         if (Environment.GetEnvironmentVariable("RT_TILELEN") is { } tl) options.RoadBridgeTileLength = double.Parse(tl);
-        if (options.Crossing == CrossingStyle.Bridge)
-            options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(game, "DESERT.OBL"), options);
+        if (Environment.GetEnvironmentVariable("RT_CROSSING") is { } cs) options.Crossing = Enum.Parse<CrossingStyle>(cs, ignoreCase: true);
+        var extra = RaceTrackService.Prepare(game, options);
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var report = RaceTrackBuilder.Build(island, plan, options);
         island.Save(Path.Combine(game, "DESERT.ILE"));
         var scenes = RaceTrackScenes.Apply(game, report, options);
+        RaceTrackService.WriteInfo(game, report, options);
+        foreach (var l in extra) Console.WriteLine("  " + l);
         foreach (var l in scenes.Log) Console.WriteLine("  " + l);
         Console.WriteLine($"  {scenes.ActorsRemoved} actors removed from {scenes.ScenesChanged} scenes");
         Console.WriteLine($"built in {watch.Elapsed.TotalSeconds:0.0}s: lap {report.Length:0} cells, {report.Vertices} vertices levelled, {report.Cells} cells painted, {report.DecorsRemoved} props and {report.SolidDecorsRemoved} solid decors removed");
@@ -31,6 +35,7 @@ internal static class RaceTrackCommand
         foreach (var r in report.Removed.Where(r => r.Kind == "solid")) Console.WriteLine($"  removed solid decor: body {r.Body} in cube ({r.CubeX},{r.CubeZ})");
         foreach (var note in report.Notes) Console.WriteLine("  " + note);
         Console.WriteLine($"  {report.Arrows.Count} arrows");
+        if (Environment.GetEnvironmentVariable("RT_ARROWS") == "1") foreach (var a in report.Arrows) Console.WriteLine($"  arrow at cell ({a[0]:0.0}, {a[1]:0.0}) heading ({a[2]:0.00}, {a[3]:0.00})");
         foreach (var c in report.Crossings) Console.WriteLine($"  crossing at cell ({c.X:0.0}, {c.Z:0.0}), height {c.Y:0}, angle {c.Angle:0} degrees");
         foreach (var b in report.BridgeCoords) Console.WriteLine($"  bridge from ({b.X0:0.0}, {b.Z0:0.0}) to ({b.X1:0.0}, {b.Z1:0.0})");
         foreach (var l in report.StartLine) Console.WriteLine($"  start line at cell ({l.X:0.0}, {l.Z:0.0}), height {l.Y:0}, heading ({l.DirX:0.00}, {l.DirZ:0.00})");

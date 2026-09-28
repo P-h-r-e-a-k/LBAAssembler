@@ -6123,6 +6123,7 @@ startaffscene:
 
     /*------------------------------------------------------------------------*/
     { extern void EditorOverlay_Draw(void); EditorOverlay_Draw(); }      /* the level editor's zone boxes and actor paths (EDITOR_OVERLAY.CPP) */
+    { extern void RaceMod_Draw(void); RaceMod_Draw(); }                  /* a race-track mod's gear, speed and lap times (RACEMOD.CPP) */
     //DrawZonesDec()	;
 
     //	if ( FlagNoFlip )	return	;//	Cf DoFoundObj()

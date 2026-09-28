@@ -45,7 +45,7 @@ internal enum CrossingStyle { Level, Viaduct, Jump, Bridge }
 
 // Where a jump takes off and lands (island cell coordinates), what the scene needs to run it.
 internal sealed record JumpInfo(double StartX, double StartZ, double LandX, double LandZ, double DirX, double DirZ, int Beta, double Height,
-    int CubeX, int CubeZ, List<(int X0, int Z0, int X1, int Z1)> Boxes, double GapS0, double GapS1, int Zone);
+    int CubeX, int CubeZ, List<(int X0, int Z0, int X1, int Z1)> Boxes, int Zone, int Anim);
 
 internal sealed class RaceTrackOptions
 {
@@ -69,15 +69,25 @@ internal sealed class RaceTrackOptions
     // What stands where the lap crosses itself: nothing (level crossing), a viaduct of retail arches over it, or a jump (the retail
     // Desert island's own "car jump": a scripted flight of the buggy, see RaceTrackScenes).
     public CrossingStyle Crossing { get; set; } = CrossingStyle.Bridge;
-    // How far the retail jump animation (ANIM.HQR 51: 8990 units of steps) carries the buggy, measured in the game: 17.5 cells from where the flight starts to where it lands.
-    public double JumpDistance { get; set; } = 17.5;
+    // The jump's flight (RaceTrackJumpAnim): how far it carries the buggy (cells, from where it starts to where it ends), how much lower
+    // than it starts it ends, and the hero's animation number that plays it. The race track's own flight is a longer copy of the retail
+    // one (ANIM.HQR 51, animation 67: 17.6 cells, ending 201 lower), so the car clears the other road with a gap on either side.
+    public double JumpDistance { get; set; } = RaceTrackJumpAnim.Distance;
+    public double JumpEndDrop { get; set; } = RaceTrackJumpAnim.EndDrop;
+    public int JumpAnim { get; set; } = RaceTrackJumpAnim.Generic;
     // The scenario zone number of the take-off strip and the labels the hero's track script gets.
     public int JumpZone { get; set; } = 40;
-    // A jump flies about 14 cells, so the road it clears must be crossed steeply: near the crossing the straighter road is turned until the two
+    // A jump flies about 21 cells, so the road it clears must be crossed steeply: near the crossing the straighter road is turned until the two
     // meet at this angle (degrees), and bent back to the drawn course over the next cells.
     public double JumpCrossingAngle { get; set; } = 65;
-    // Whether the road is left out (sand) under the flight. Off: the road runs on and the jump is an ordinary flight over a level junction.
-    public bool JumpClearsRoad { get; set; }
+    // The ramps. The up ramp climbs this high above the road over this many cells, to a lip; between the lip and the other road's curbs
+    // lies a gap of sand this many cells long (measured along the road), and as much again between the other road and the down ramp,
+    // which runs back down to the road over this many cells. The down ramp's top is lower than the lip: the flight ends lower than it
+    // starts, and it lands a few cells down the ramp.
+    public double JumpRampHeight { get; set; } = 800;
+    public double JumpRampLength { get; set; } = 8;
+    public double JumpGap { get; set; } = 3;
+    public double JumpLandingLength { get; set; } = 12;
     // A physical, walkable bridge deck (like Citadel Island's rope bridge at "the Cliffs of the Woodbridge"): the straighter road
     // is carried over the other, on a flat deck built of decor objects (RaceTrackDeckBody), while the ground underneath keeps
     // the other road's own grade. How far above the lower road's own height the deck's walking surface sits. The engine's solid
@@ -150,6 +160,8 @@ internal sealed class RaceTrackReport
     // Where the lap crosses itself (island cell coordinates, the height there, the angle between the two roads in degrees).
     public List<(double X, double Z, double Y, double Angle)> Crossings { get; } = new();
     public List<(double X, double Z, double Y, double DirX, double DirZ)> StartLine { get; } = new();
+    // Where a lap is counted: the start line's ends (island cells), across the road and the pit lane beside it, and the way the lap runs.
+    public (double X0, double Z0, double X1, double Z1, double DirX, double DirZ)? LapLine { get; set; }
     public List<(double X0, double Z0, double X1, double Z1)> BridgeCoords { get; } = new();
     public List<string> Placed { get; } = new();
     public JumpInfo? Jump { get; set; }
@@ -178,12 +190,16 @@ internal sealed class TrackRoad
     // ... and of those, the ones under the deck's own last cells (hidden by the tiles from above; the ground there rises steeply
     // from the other road's level, so it is painted as rock, not as road)
     public bool[] UnderDeck = Array.Empty<bool>();
+    // The jump: its ramps and the gap between them (Jump), the gap alone, where the car is in the air and the road gives way to sand
+    // (Gap), and the last cell of each ramp's top, painted as a warning stripe (Lip).
+    public bool[] Jump = Array.Empty<bool>(), Gap = Array.Empty<bool>(), Lip = Array.Empty<bool>();
     public double AsphaltHalf, CurbHalf, VergeHalf, Blend;
     public int Count => X.Length;
     public double Length;
 }
 
-internal readonly record struct RoadHit(int Road, double Dist, double Lat, double S, double H, double Bank, bool Bridge, double Kappa, bool Deck, bool Landing = false, bool UnderDeck = false);
+internal readonly record struct RoadHit(int Road, double Dist, double Lat, double S, double H, double Bank, bool Bridge, double Kappa, bool Deck, bool Landing = false, bool UnderDeck = false,
+    bool Jump = false, bool Gap = false, bool Lip = false);
 
 // A road-over-road bridge: the straighter road's own flat deck core (island cell coordinates), oriented along its own heading.
 internal readonly record struct RoadBridgeInfo(double X, double Z, double Height, double DirX, double DirZ, double Width, double Length, int UnderRoad);
@@ -201,7 +217,8 @@ internal static class RaceTrackBuilder
 
         var main = MakeRoad("lap", plan, options, closed: true);
         roads.Add(main);
-        if (options.Crossing == CrossingStyle.Jump) SteepenCrossing(main, options, report, options.JumpCrossingAngle);
+        if (options.Crossing == CrossingStyle.Jump)
+            SteepenCrossing(main, options, report, options.JumpCrossingAngle, Math.Max(15, JumpLip(options, options.JumpCrossingAngle) + Math.Max(options.JumpRampLength, options.JumpLandingLength) + 3));
         if (options.Crossing == CrossingStyle.Bridge)
         {
             // straighten far enough that the whole deck, its landings AND the ramp mouths lie on the straightened line
@@ -229,6 +246,7 @@ internal static class RaceTrackBuilder
         var natural = new Field(island);
         ModifyGround(island, field, index, roads, options, report);
         var painted = PaintRoad(island, field, index, roads, options, report, startIndex);
+        report.LapLine = LapLine(roads, report);
         ClearStaleCol(island, natural, field, index, painted, report);
         follow.Apply();
         report.GroundBefore = (x, z) => natural.Height(x, z);
@@ -397,7 +415,7 @@ internal static class RaceTrackBuilder
         }
         var smooth = Smooth(h, o.ProfileSmoothing / o.Spacing, r.Closed);
         for (var i = 0; i < n; i++) if (bridge[i]) smooth[i] = Math.Max(smooth[i], o.BridgeClearance);
-        r.H = smooth; r.Bridge = bridge; r.Deck = new bool[n]; r.Landing = new bool[n]; r.UnderDeck = new bool[n];
+        r.H = smooth; r.Bridge = bridge; r.Deck = new bool[n]; r.Landing = new bool[n]; r.UnderDeck = new bool[n]; r.Jump = new bool[n]; r.Gap = new bool[n]; r.Lip = new bool[n];
         LimitGrade(r, o);
         // round the crests and dips the limit leaves (a grade that changes all at once pitches the car all at once); smoothing a
         // profile never makes it steeper, so the grade limit still holds
@@ -472,7 +490,7 @@ internal static class RaceTrackBuilder
         // heights: the lap's own height at the nearest point of the stretch the pit lane runs beside -- where the two merge they
         // are then one surface (taking the point a fixed fraction along instead put the merge several cells off, a 200-unit step
         // on the bridge's ramp)
-        pit.H = new double[pit.Count]; pit.Bridge = new bool[pit.Count]; pit.Deck = new bool[pit.Count]; pit.Landing = new bool[pit.Count]; pit.UnderDeck = new bool[pit.Count];
+        pit.H = new double[pit.Count]; pit.Bridge = new bool[pit.Count]; pit.Deck = new bool[pit.Count]; pit.Landing = new bool[pit.Count]; pit.UnderDeck = new bool[pit.Count]; pit.Jump = new bool[pit.Count]; pit.Gap = new bool[pit.Count]; pit.Lip = new bool[pit.Count];
         for (var i = 0; i < pit.Count; i++)
         {
             var best = 0; var bd = double.MaxValue;
@@ -574,7 +592,8 @@ internal static class RaceTrackBuilder
                 var k = r.Kappa[a] * (1 - t) + r.Kappa[b] * t;
                 var s = r.S[a] + Math.Sqrt(len2) * t;
                 var h = r.H[a] * (1 - t) + r.H[b] * t;
-                best = new RoadHit(ri, d, lat, s, h, 0, r.Bridge[a] && r.Bridge[b], k, r.Deck[a] && r.Deck[b], r.Landing[a] || r.Landing[b], r.UnderDeck[a] || r.UnderDeck[b]);
+                best = new RoadHit(ri, d, lat, s, h, 0, r.Bridge[a] && r.Bridge[b], k, r.Deck[a] && r.Deck[b], r.Landing[a] || r.Landing[b], r.UnderDeck[a] || r.UnderDeck[b],
+                    r.Jump[a] || r.Jump[b], r.Gap[a] && r.Gap[b], t < 0.5 ? r.Lip[a] : r.Lip[b]);
             }
             return best;
         }
@@ -799,9 +818,29 @@ internal static class RaceTrackBuilder
     // ---------------------------------------------------------------------------------------------------------------------
     // the jump where the lap crosses itself
 
-    // One of the two roads that meet (the straighter) takes off some way before the crossing, flies over the other road and lands beyond it.
-    // The flight is the retail buggy jump: a strip of scenario zones across the road at the take-off (the hero's script starts the jump
-    // when the buggy is in it and heads roughly the right way), no road for the stretch it is in the air.
+    // How far each ramp's end -- the lip, and the down ramp's top -- is from the crossing, cells along the road: the other road's curbs,
+    // measured along this one, and the gap.
+    private static double JumpLip(RaceTrackOptions o, double angleDeg) => o.CurbHalfWidth / Math.Sin(Math.Clamp(angleDeg, 30, 90) * Math.PI / 180) + o.JumpGap;
+
+    // The take-off strip: it starts this many cells before the lip and is this deep. The flight starts where the car enters it (the
+    // hero's script looks every frame; a car at full speed moves a fifth of a cell a frame), so a strip ending short of the lip leaves the
+    // car a cell of ramp to rise from.
+    private const double JumpZoneBefore = 1.5, JumpZoneDepth = 1.25;
+
+    // A ramp's shape, 0 at its foot to 1 at its top: a straight climb with a rounded foot, so the car doesn't pitch up all at once.
+    private static double Rise(double t)
+    {
+        const double foot = 0.3;
+        t = Math.Clamp(t, 0, 1);
+        return (t < foot ? t * t / (2 * foot) : t - foot / 2) / (1 - foot / 2);
+    }
+
+    // One of the two roads that meet (the straighter) climbs a ramp before the crossing, flies over the other road and lands on a down
+    // ramp beyond it; between each ramp and the other road lies a gap of sand, so the road visibly doesn't cross itself. The flight is the
+    // retail buggy jump's mechanism with a longer flight (RaceTrackJumpAnim): a strip of scenario zones across the ramp (the hero's script
+    // starts the flight when the buggy is in it and heads roughly the right way), and the flight's steps carry the car along the road's
+    // heading from where it entered the strip. The whole jump sits on a level stretch at the crossing's height, so the flight, which
+    // knows nothing of the ground, ends where the down ramp is.
     private static JumpInfo? PlanJump(TrackRoad r, Crossing c, RaceTrackOptions o, RaceTrackReport report)
     {
         double Bend(int i)
@@ -814,19 +853,59 @@ internal static class RaceTrackBuilder
         double hx = 0, hz = 0; var span = (int)(6 / o.Spacing);
         for (var k = -span; k <= span; k++) { var i = At(r, ia + k); hx += r.Tx[i]; hz += r.Tz[i]; }
         var hl = Math.Sqrt(hx * hx + hz * hz) + 1e-9; hx /= hl; hz /= hl;
-        var d = o.JumpDistance;
-        var px = r.X[ia]; var pz = r.Z[ia];
-        var sx = px - hx * d / 2; var sz = pz - hz * d / 2;            // where the flight starts
-        var lx = px + hx * d / 2; var lz = pz + hz * d / 2;            // where it ends
+        var n = r.Count; var s0 = r.S[ia];
+        double Ds(int k) { var ds = r.S[k] - s0; if (r.Closed) { if (ds > r.Length / 2) ds -= r.Length; else if (ds < -r.Length / 2) ds += r.Length; } return ds; }
+
+        // along the road from the crossing: the up ramp's foot, its lip, the gap, the other road, the gap, the down ramp's top and foot
+        var lip = JumpLip(o, c.Angle);
+        var upFoot = -lip - o.JumpRampLength; var downFoot = lip + o.JumpLandingLength;
+        var start = -lip - JumpZoneBefore;
+        var land = start + o.JumpDistance;
+        var up = o.JumpRampHeight;
+        var takeoff = up * Rise((start - upFoot) / o.JumpRampLength);
+        // the down ramp is as high as puts its surface, where the flight ends, just under the flight's end
+        var landT = (land - lip) / o.JumpLandingLength;
+        var down = Math.Clamp((takeoff + o.JumpEndDrop - 30) / Math.Max(0.05, Rise(1 - landT)), 150, up);
+        if (land < lip + 1.5)
+            report.Notes.Add($"WARNING: the flight ({o.JumpDistance:0.0} cells) ends only {land - lip:0.0} cells past the down ramp's edge: a car lands on its edge or in the gap");
+
+        // a level stretch at the crossing's height (EqualiseCrossings made the two roads meet there) over the whole jump, blended into the
+        // road's own profile over the next cells, then the ramps on it
+        var level = r.H[ia];
+        const double blendCells = 15;
+        for (var k = 0; k < n; k++)
+        {
+            var ds = Ds(k);
+            var outside = ds < upFoot - 2 ? upFoot - 2 - ds : ds > downFoot + 2 ? ds - downFoot - 2 : 0;
+            if (outside >= blendCells) continue;
+            var t = outside / blendCells;
+            var w = 1 - t * t * (3 - 2 * t);
+            r.H[k] = r.H[k] * (1 - w) + level * w;
+            if (ds >= upFoot && ds <= -lip)
+            {
+                r.H[k] = level + up * Rise((ds - upFoot) / o.JumpRampLength);
+                r.Bridge[k] = true; r.Jump[k] = true; r.Lip[k] = ds > -lip - 1;
+            }
+            else if (ds > -lip && ds < lip) { r.Jump[k] = true; r.Gap[k] = true; }
+            else if (ds >= lip && ds <= downFoot)
+            {
+                r.H[k] = level + down * Rise(1 - (ds - lip) / o.JumpLandingLength);
+                r.Bridge[k] = true; r.Jump[k] = true; r.Lip[k] = ds < lip + 1;
+            }
+        }
+
+        // (the road is straight here: SteepenCrossing made it so over the whole jump)
+        var sx = r.X[ia] + hx * start; var sz = r.Z[ia] + hz * start;       // where the flight starts
+        var lx = r.X[ia] + hx * land; var lz = r.Z[ia] + hz * land;         // where it ends
         var beta = (int)Math.Round(Math.Atan2(hx, hz) / (2 * Math.PI) * 4096); beta = ((beta % 4096) + 4096) % 4096;
-        // the strip across the road: cells whose centre is 0..3 cells past the start and within the curbs
+        // the strip across the ramp: cells whose centre is 0..JumpZoneDepth cells past the start and within the curbs
         var cells = new HashSet<(int, int)>();
         for (var gz = (int)Math.Floor(sz) - 8; gz <= (int)Math.Ceiling(sz) + 8; gz++)
         for (var gx = (int)Math.Floor(sx) - 8; gx <= (int)Math.Ceiling(sx) + 8; gx++)
         {
             var qx = gx + 0.5 - sx; var qz = gz + 0.5 - sz;
             var f = qx * hx + qz * hz; var u = -qx * hz + qz * hx;
-            if (f >= 0 && f <= 3 && Math.Abs(u) <= r.CurbHalf) cells.Add((gx, gz));
+            if (f >= 0 && f <= JumpZoneDepth && Math.Abs(u) <= r.CurbHalf) cells.Add((gx, gz));
         }
         // rows of cells become boxes; equal runs in neighbouring rows join
         var rows = cells.GroupBy(q => q.Item2).OrderBy(g => g.Key).ToList();
@@ -835,9 +914,9 @@ internal static class RaceTrackBuilder
         foreach (var row in rows)
         {
             var xs = row.Select(q => q.Item1).OrderBy(x => x).ToList();
-            var runs = new List<(int, int)>(); var start = xs[0]; var prev = xs[0];
-            foreach (var x in xs.Skip(1)) { if (x != prev + 1) { runs.Add((start, prev + 1)); start = x; } prev = x; }
-            runs.Add((start, prev + 1));
+            var runs = new List<(int, int)>(); var first = xs[0]; var prev = xs[0];
+            foreach (var x in xs.Skip(1)) { if (x != prev + 1) { runs.Add((first, prev + 1)); first = x; } prev = x; }
+            runs.Add((first, prev + 1));
             var next = new List<(int X0, int Z0, int X1, int Z1)>();
             foreach (var (x0, x1) in runs)
             {
@@ -848,13 +927,14 @@ internal static class RaceTrackBuilder
             boxes.AddRange(open); open = next;
         }
         boxes.AddRange(open);
-        var height = r.H[ia];
+        var height = level + takeoff;
         var cube = ((int)Math.Floor(sx / 64), (int)Math.Floor(sz / 64));
         if ((int)Math.Floor(lx / 64) != cube.Item1 || (int)Math.Floor(lz / 64) != cube.Item2)
             report.Notes.Add("WARNING: the jump lands in another cube than it starts in; the game changes scene at the cube's edge and the flight would break");
-        var jump = new JumpInfo(sx, sz, lx, lz, hx, hz, beta, height, cube.Item1, cube.Item2, boxes, o.JumpClearsRoad ? r.S[ia] - d / 2 + 3.5 : 1e18, o.JumpClearsRoad ? r.S[ia] + d / 2 - 5 : -1e18, o.JumpZone);
-        report.Notes.Add($"jump: starts at cell ({sx:0.0}, {sz:0.0}), lands at ({lx:0.0}, {lz:0.0}), heading turn {beta}, height {height:0}, {boxes.Count} zone boxes");
-        return jump;
+        report.Notes.Add($"jump: a ramp {up:0} high over {o.JumpRampLength:0} cells to a lip {lip:0.0} cells before the crossing, a gap of sand, the other road, " +
+                         $"a gap and a down ramp {down:0} high over {o.JumpLandingLength:0} cells; the flight ({o.JumpDistance:0.0} cells) starts at cell ({sx:0.0}, {sz:0.0}), " +
+                         $"{JumpZoneBefore:0.#} cells before the lip, and lands {land - lip:0.0} cells down the far ramp at ({lx:0.0}, {lz:0.0}); heading turn {beta}, {boxes.Count} zone boxes");
+        return new JumpInfo(sx, sz, lx, lz, hx, hz, beta, height, cube.Item1, cube.Item2, boxes, o.JumpZone, o.JumpAnim);
     }
 
     // ---------------------------------------------------------------------------------------------------------------------
@@ -965,6 +1045,15 @@ internal static class RaceTrackBuilder
         return false;
     }
 
+    // How far a cell's highest corner is above its lowest.
+    private static double CellRise(Field field, int gx, int gz)
+    {
+        double lo = double.MaxValue, hi = double.MinValue;
+        for (var dz = 0; dz <= 1; dz++)
+        for (var dx = 0; dx <= 1; dx++) { var h = field.VertexHeight(gx + dx, gz + dz); lo = Math.Min(lo, h); hi = Math.Max(hi, h); }
+        return hi - lo;
+    }
+
     // Whether a vertex touches a cell with no ground drawn (the sea) or no cube at all (off the island).
     private static bool BesideSea(Field field, int gx, int gz)
     {
@@ -1044,7 +1133,8 @@ internal static class RaceTrackBuilder
                 var r = roads[hit.Road]; var d = Across(r, hit);
                 Kind k;
                 if (hit.Deck) continue;   // the deck's own polygons draw the road here, not the ground
-                if (report.Jump is { } jump && hit.Road == 0 && hit.S > jump.GapS0 && hit.S < jump.GapS1) { if (d <= r.VergeHalf) k = Kind.Sand; else continue; }
+                if (hit.Gap) { if (d <= r.VergeHalf) k = Kind.Sand; else continue; }
+                else if (hit.Lip && d <= r.AsphaltHalf) k = Kind.Hatch;
                 else if (hit.UnderDeck) { if (d <= r.VergeHalf + LandingExtra) k = Kind.Rock; else continue; }
                 else if (d <= r.AsphaltHalf) k = Kind.Asphalt;
                 else if (d <= r.CurbHalf) k = (int)Math.Floor(hit.S / 1.6) % 2 == 0 ? Kind.RedCurb : Kind.WhiteCurb;
@@ -1057,6 +1147,8 @@ internal static class RaceTrackBuilder
                 if (rank > crank) { chosen = hit; ck = k; }
             }
             if (chosen is null || ck == Kind.None) continue;
+            // the jump's ends, where a ramp drops to the gap, are a face of blocking rock
+            if (chosen.Value.Jump && CellRise(field, gx, gz) > 250) ck = Kind.Wall;
             // banked bends: the outside verge is hatched
             if (ck == Kind.Sand && Math.Abs(chosen.Value.Kappa) > 0.05 && chosen.Value.Lat * chosen.Value.Kappa < 0) ck = Kind.Hatch;
             // a verge within 2 cells of the sea (or the island's edge) is a blocking rock wall: where the road runs along a cliff top
@@ -1196,7 +1288,7 @@ internal static class RaceTrackBuilder
         var lastMark = -1000.0;
         for (var i = 0; i < n; i++)
         {
-            if (r.Bridge[i]) continue;
+            if (r.Bridge[i] || r.Jump[i]) continue;
             var straight = Math.Abs(r.Kappa[i]) < 0.02;
             var prevBend = false;
             for (var k = 1; k <= (int)(14 / o.Spacing); k++) if (Math.Abs(r.Kappa[At(r, i - k)]) > 0.06) { prevBend = true; break; }
@@ -1232,7 +1324,7 @@ internal static class RaceTrackBuilder
         foreach (var k in candidates)
         {
             var j = At(r, i + k);
-            if (r.Bridge[j] || r.Deck[j]) continue;
+            if (r.Bridge[j] || r.Deck[j] || r.Jump[j]) continue;
             var (cx, cz) = Chord(r, j, ArrowChord, o);
             var angle = Math.Atan2(cz, cx);
             var octant = (int)Math.Round(angle / (Math.PI / 4));
@@ -1377,6 +1469,24 @@ internal static class RaceTrackBuilder
                 foreach (var (c, vx, vz) in island.Owners(gx + dx, gz + dz))
                     if (c.HasIntensity) c.Intensity[vz * IslandCube.Vertices + vx] &= 0x0F;
         }
+    }
+
+    // The line a lap is counted at: across the lap at the start line, from its verge on one side to past the pit lane on the other (a car
+    // coming out of the pits crosses it too).
+    private static (double, double, double, double, double, double)? LapLine(List<TrackRoad> roads, RaceTrackReport report)
+    {
+        if (report.StartLine.Count == 0) return null;
+        var (x, z, _, dx, dz) = report.StartLine[0];
+        var nx = -dz; var nz = dx;
+        double left = roads[0].VergeHalf, right = roads[0].VergeHalf;
+        if (roads.Count > 1)
+        {
+            var pit = roads[1];
+            var best = Enumerable.Range(0, pit.Count).MinBy(i => Sq(pit.X[i] - x) + Sq(pit.Z[i] - z));
+            var across = (pit.X[best] - x) * nx + (pit.Z[best] - z) * nz;
+            if (across > 0) right = Math.Max(right, across + pit.VergeHalf); else left = Math.Max(left, -across + pit.VergeHalf);
+        }
+        return (x - nx * left, z - nz * left, x + nx * right, z + nz * right, dx, dz);
     }
 
     private static void MarkStartLine(TrackRoad r, int i, Dictionary<(int, int), Kind> kinds, RaceTrackReport report)

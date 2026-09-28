@@ -5,9 +5,9 @@ The picture the track came from is [racetrack/concept_track.png](racetrack/conce
 | | |
 |---|---|
 | Where the copy is | `E:\dump\LBA2RaceTrackBuild\Game` (a plain copy of the "Level viewer" install without the CD images, `DOSBOX`, `DRIVERS` and the intro video except `VIDEO\VIDEO.HQR`, which the engine needs) |
-| The originals of the files that change | `E:\dump\LBA2RaceTrackBuild\Pristine` (`DESERT.ILE`, `DESERT.OBL`, `SCENE.HQR`); a build always starts from them, so it can be repeated |
-| Files the build changes | `DESERT.ILE` (heights, ground triangles, decor objects), `DESERT.OBL` (three new decor bodies for the road bridge: a plain deck tile, an edge tile with the curb, and a railing), `SCENE.HQR` (scenes 55-73) |
-| The game engine | the road bridge needs the patched engine that LBA Assembler's Play runs (see "The car on the deck"); in the retail engine the car drives across it, but its body tilts over |
+| The originals of the files that change | `E:\dump\LBA2RaceTrackBuild\Pristine` (`DESERT.ILE`, `DESERT.OBL`, `SCENE.HQR`, `ANIM.HQR`, `RESS.HQR`); a build always starts from them, so it can be repeated |
+| Files the build changes | `DESERT.ILE` (heights, ground triangles, decor objects), `DESERT.OBL` (three new decor bodies for the road bridge: a plain deck tile, an edge tile with the curb, and a railing), `SCENE.HQR` (scenes 55-73); for the jump also `ANIM.HQR` and `RESS.HQR` (its longer flight, see "The jump"). It writes `RACETRACK.JSON` beside them: the crossing style and the start line, for Play's lap times |
+| The game engine | LBA Assembler's Play runs the engine in its race-track mode on a folder with a race track built, and only then (see "The engine's race-track mode"): the car stays level on the bridge deck, has gears and the car setup, and the gear, speed and lap times are on screen. In the retail engine, or the community engine without that mode, the track and the jump work, but the car's body tilts over on the deck |
 | To look at it | LBAAssembler > File > Settings > LBA2 folder = the copy, then Desert island (Explore), or Play any of scenes 55-73; scene 67 starts on the start line |
 | To rebuild | `ScriptRoundTrip buildtrack docs\racetrack\track_plan.json E:\dump\LBA2RaceTrackBuild\Pristine E:\dump\LBA2RaceTrackBuild\Game out.png 4` |
 
@@ -22,7 +22,10 @@ Pictures, all from the built copy:
   - [on the deck](racetrack/build/h_deck_test.png)
   - [the deck's end: curbs, railings and the landing beyond](racetrack/build/h_deck_end.png)
   - [the pit lane entry](racetrack/build/h_pit_entry.png) and [its exit](racetrack/build/h_pit_exit.png)
-- The other two crossing styles, kept as options: [the jump](racetrack/build/h_jump.png) and [the level crossing](racetrack/build/h_cross.png).
+  - [the race-track mode's display](racetrack/build/h_race_display.png) (gear, speed, lap times) and [the car level on the deck with it, tipping without it](racetrack/build/deck_race_mode.png)
+- The jump crossing style: [the car in the air over the gap](racetrack/build/h_jump.png), [the gap and the down ramp from the other road](racetrack/build/h_jump_gap.png), [from above](racetrack/build/jump_top.png).
+- The level crossing style (an old picture): [the level crossing](racetrack/build/h_cross.png).
+- [The race car setup](racetrack/build/car_setup.png).
 
 ## What was built
 
@@ -42,7 +45,7 @@ Pictures, all from the built copy:
   - The crossing is first re-shaped to about the picture's own angle: 41 degrees, where the fitted centre line had flattened it to 17.
   - The straighter road climbs a 50-cell ramp, then crosses 4 cells of level landing onto a flat deck 2800 units above the other road. The deck is 68 cells long and 12 wide, laid as a grid of 51 decor tiles with the road's red and white curb along both edges and low red and white railings outside them.
   - The other road keeps its own grade and passes underneath.
-  - Two other styles are still offered in the menu. A **jump** is a scripted flight, the way the retail Desert car jump works; it turns the crossing to 65 degrees first. A **viaduct** is three arched decks and two abutments (retail bodies 68-70) over a level junction.
+  - Two other styles are still offered in the menu. A **jump**: the straighter road climbs a ramp to a lip, the car flies over a gap of sand, the other road and another gap, and lands on a down ramp (see "The jump"); it turns the crossing to 64 degrees first. A **viaduct** is three arched decks and two abutments (retail bodies 68-70) over a level junction.
 - **Decor**: 119 plants, posts, fences and small props on the road were removed. The set of body numbers is `RemovableBodies` in the code. Pieces placed at one origin go together, so a palm's trunk goes with its crown. The route was planned around every house. What was left of the retail Desert track (cube 7,10) is gone: its gantry, billboard, arch and wedge are removed, and its painted road is turned back to sand where the new lap doesn't run over it.
 - **Scenes** (55-73, every outside scene of the island):
   - 163 actors are removed: all except Twinsen, the buggy, slot 1 (see below) and the 10 that the ferry and Dino-Fly cutscenes need (see "The stand-in, and the actors that stay"). An inert stand-in takes the removed actors' script references.
@@ -81,7 +84,9 @@ Pictures, all from the built copy:
 - **The tightest turns** are radius 2.6 cells (the north-west hairpin at cell 483, 534, straight from the picture, whose two legs are 9 cells apart), 3.8 cells (625, 643) and 4.4 cells (574, 556). Widening the hairpin means moving one leg, which changes the drawn shape.
 - **The pit lane's second end** joins the lap on the road bridge's south-east ramp, where the road climbs 13-18 %.
 - **On foot, Twinsen can pass between the railing squares** at the deck's edge. The gaps are narrower than the car, not than Twinsen.
-- **The deck tile nearest the camera** is sometimes clipped by the near plane in the engine's view.
+- **The deck tile nearest the camera** is sometimes clipped by the near plane in the engine's view. Likewise, when the camera sits right beside a jump ramp's steep rock side, the engine fills the ground that crosses its near plane with black spikes (TERRAIN.CPP `FillBlackPolyZBuf`, the original engine's handling); it wasn't seen while driving.
+- **The jump runs one way.** Driving the lap backwards, the car climbs the down ramp and drops off its top into the gap; from the gap it can drive on along the other road.
+- **The gears, the car setup, the display and the level car on the deck** are the community engine's race-track mode, which only LBA Assembler's Play turns on. In the retail game the track, the bridge and the jump work, with the original car, and the car's body tilts over on the deck.
 
 ## Where it goes (how the picture became coordinates)
 
@@ -92,7 +97,7 @@ Pictures, all from the built copy:
 
 ## Checking it without the editor
 
-`tools/RaceTrackPlan/hshot.ps1 -cube 67 -tp "x y z"` starts the engine without a window, muted, on the sandbox copy. It teleports Twinsen and saves a screenshot and a state dump (the actors' positions and life). `tools/RaceTrackPlan/drive.ps1` drives the buggy the same way. The pictures above and the bridge faults were found with these. `ScriptRoundTrip racetrack island 2` lists the island's scenes, and `racetrack 9 10 --scripts` lists a cube's actors and scripts.
+`tools/RaceTrackPlan/hshot.ps1 -cube 67 -tp "x y z"` starts the engine without a window, muted, on the sandbox copy. It teleports Twinsen and saves a screenshot and a state dump (the actors' positions and life). `tools/RaceTrackPlan/drive.ps1` drives the buggy the same way. Both take `-car <file>` to run the engine's race-track mode with a car setup file, as Play does on a folder with a race track built; without it they run the plain engine. The pictures above and the bridge faults were found with these. `gears.ps1` puts Twinsen in the buggy on the start line and prints its speed while it shifts gear at set ticks (`-keys '200:27,280:27'`, 27 being X's scancode and 29 Z's). `jumpdrive.py` drives a jump build over the jump and prints the car's path; build with `RT_CROSSING=Jump` and keep the build's output as `jumplog.txt` in the game folder. `ScriptRoundTrip racetrack island 2` lists the island's scenes, and `racetrack 9 10 --scripts` lists a cube's actors and scripts. `buildtrack` takes `RT_CROSSING=Bridge|Jump|Viaduct|Level`, and `RT_ARROWS=1` lists the arrows.
 
 ## The road bridge
 
@@ -150,6 +155,8 @@ The fix is in the engine that LBA Assembler's Play runs (`native/lba2-classic-co
 
 With no decor near, nothing changes. Measured on the whole deck, pitch is at most 11 (1 degree) and roll 1, against 875 and 579 before. Positions are frame for frame the same as before, and plain ground is unchanged. Both native targets (`lba2cc`, `lba2_renderer`) are rebuilt with it.
 
+This is part of the engine's race-track mode: without it (any game folder with no race track built) `BuggyFloorY` is the terrain as ever. Checked by driving onto the deck both ways with the same car: [level with the mode, tipping without it](racetrack/build/deck_race_mode.png).
+
 ## The retail track's area
 
 The lap runs through the ground the retail Desert track used (cube 7,10, scene 57), and what was left of the retail track is removed.
@@ -190,6 +197,8 @@ The track's arrows do the same. Each arrow is turned to the nearest of the eight
 
 An arrow that would touch anything but plain asphalt is moved along its straight, or left out with a note in the log. Two were left out, both near the road bridge.
 
+**Checked in the engine** (2026-09-28): every arrow of a bridge build (12) and of a jump build (15-16) was photographed standing on it in the game, and all are clean. The engine reads a cell's cut from its first triangle only (TERRAIN.CPP), as the builder and the map assume. A jump build in the "Level viewer" install had broken arrows in the game: its diagonal arrows came out as two arrows pointing opposite ways over each other, and it was just as broken drawn top-down with the engine's rule. It came from an app instance started before the final arrow code, while that code was still being changed: the same build from the current app and from the command line is byte-identical, and clean. Rebuilding from a freshly started app fixes it.
+
 ## Fixed cameras
 
 Camera zones (type 1) switch the view to a fixed camera while Twinsen is inside the box. "Forced" ones re-aim it every frame and switch off the view's recentring, which is why the car could drive out of the picture.
@@ -224,6 +233,8 @@ So the actors Twinsen's script waits on directly (`l_track_obj(n) == k`) or foll
 ## A longer jump (proposal)
 
 ![jump proposal](racetrack/build/jump_proposal.png)
+
+Still a proposal. Its way of making the flight longer, a scaled copy of the retail flight given to Twinsen as an animation of its own, is now built for the jump crossing style (x1.2; see "The jump"); the harbour leap would need a x1.3 copy of its own.
 
 The proposal is the **harbour leap**, in place of the water bridge (scene 65, cube 9,8). The lap crosses 19 cells of open harbour water there, and a jump 1.3 times the retail one clears it:
 
@@ -260,22 +271,74 @@ Measured in the engine (headless, `tools/RaceTrackPlan/drive.ps1`): the flight r
 
 In the retail scene the two plateaus are 4400 to 5200 high with a canyon between them (heights down to 200). Zone 1 is a 4 x 3 cell box on the west plateau's edge, and zone 2 is the same on the east one. The buggy's own script (actor 5) sets game variable 168 while the buggy is in zones 2-5, so the tour garage (scene 57) takes the buggy back when you leave it there.
 
-### How the track does it
+## The jump (2026-09-28)
+
+![the jump from above](racetrack/build/jump_top.png)
+
+The jump crossing style, like the retail car jump, is a scripted flight (previous section); what is new is the road around it. Before, the road ran on through the crossing as a level junction and the car flew over it, so from the ground the track still crossed itself. Now the jumping road leaves the ground:
+
+| Along the road, from the crossing | What is there |
+|---|---|
+| -16 to -8 cells | **the up ramp**: 800 above the road at its top, 8 cells long, a straight climb with a rounded foot, asphalt and curbs with rock sides; its last cell is painted with the red/gold hatching as a lip |
+| -8 to -5 | **a gap**: sand, level with the other road |
+| -5 to +5 | **the other road** (its curbs; 9 cells across, 10 measured along the jumping road at 64 degrees) |
+| +5 to +8 | **a gap** |
+| +8 to +20 | **the down ramp**: 542 above the road at its top (hatched), down to the road over 12 cells |
+
+The ends of the ramps are a face of blocking rock. The whole jump sits on a level stretch at the crossing's height, which EqualiseCrossings gave both roads, blended into the road's own profile over the next 15 cells. That matters because the flight knows nothing of the ground: it ends a fixed distance on and a fixed height down from where it starts, so the down ramp must be where the flight ends. `RaceTrackBuilder.PlanJump` does the layout; the ramps get the bridges' narrow rock-sided shoulders (`TrackRoad.Bridge`), the gap is sand (`TrackRoad.Gap`), and no arrow is put on any of it (`TrackRoad.Jump`).
+
+**A longer flight.** The retail flight (17.6 cells) would land on the down ramp's edge. `Terrain/RaceTrackJumpAnim.cs` adds a copy of ANIM.HQR entry 51 as a new entry (2083) with the steps forward x1.2, the climb x1.2 and the time x1.1: 21.1 cells, up to 2305 above the take-off, ending 241 below it, in 1.96 s. It gives the new entry to Twinsen's buggy entity (RESS.HQR entry 44, entity 12: the engine loads entity n for behaviour n, and driving is behaviour 12) as generic animation 200, the one record added to that entity; the retail jump in scene 62 keeps entry 51. The hero's track script plays `anim(200)`.
+
+**Where the flight starts.** The take-off strip (scenario zones numbered 40) starts 1.5 cells before the lip and is 1.25 cells deep, as wide as the curbs. The flight starts where the car enters it, whatever the speed: at full speed the car moves a fifth of a cell a frame. So the flight starts at a known place, 6.5 cells up the ramp (623 up), and ends 21.1 cells on, 3.6 cells down the far ramp, 30 units above its surface: the down ramp's height (542) is worked out from that.
+
+**Verified in the engine** (headless, `tools/RaceTrackPlan/jumpdrive.py`):
+- Driving at full speed from 20 cells before the take-off, on the centre line, the car climbs the ramp and takes off at the strip. It flies 21.1 cells, at most 2330 above the take-off, drops the last 100 units onto the down ramp, and drives on down it.
+- Three cells either side of the centre line, the same: it lands on the down ramp and drives on.
+- [In the air](racetrack/build/h_jump.png); [from the other road](racetrack/build/h_jump_gap.png), with the gap and the down ramp's hatched top.
+
+### How the scene runs it
 
 `Terrain/RaceTrackScenes.cs` (`AddJump`) adds a small controller actor instead of editing each scene's long hero script:
 
-- **The controller** (entity 16, invisible, no body) goes in the scene the take-off lies in. It makes the same three checks (`zone_obj(0)`, `beta_obj(0)`, `comportement_hero`), then does `set_dir_obj(0, 12)` and `set_track_obj(0, label_90)`. It gives the keys back when label 91 is reached.
-- **The hero's track script** gets `label(90); beta(<heading>); anim(67); wait_anim(); anim(0); label(91); stop();`. The `beta` sets the road's heading first, so the flight goes along the road whatever the car's heading was within the window.
-- **The take-off strip** is a set of scenario zones numbered 40, 3 cells deep and as wide as the road, cut to boxes from the road's own cells. They are added at the end of the zone list, so they win where zones overlap.
-- **The crossing**: `RaceTrackBuilder.SteepenCrossing` turns the road so the crossing is steep, and `PlanJump` places the strip so the flight's middle is over the crossing.
+- **The controller** (entity 16, invisible, no body) goes in the scene the take-off lies in (scene 66). It makes the retail script's three checks (`zone_obj(0)`, `beta_obj(0)` within 56 degrees of the road, `comportement_hero`), then does `set_dir_obj(0, 12)` and `set_track_obj(0, label_90)`. It gives the keys back when label 91 is reached.
+- **The hero's track script** gets `label(90); beta(<heading>); anim(200); wait_anim(); anim(0); label(91); stop();`. The `beta` sets the road's heading first, so the flight goes along the road whatever the car's heading was within the window.
+- **The take-off strip** is added at the end of the zone list, so it wins where zones overlap.
+- **The crossing**: `RaceTrackBuilder.SteepenCrossing` turns the road so the crossing is steep (64 degrees) and straight over the whole jump (23 cells either side), and `PlanJump` lays it out.
+
+## The engine's race-track mode (2026-09-28)
+
+The engine changes a race track needs are in one place, `native/lba2-classic-community/SOURCES/RACEMOD.CPP`, and are on only when the environment names a car setup file (`LBA2_RACETRACK_FILE`). LBA Assembler's Play sets it only when the LBA2 folder it plays has a race track built (`RaceTrackService.HasBackups`). Every other game plays exactly as before: the code paths are the original ones.
+
+With it on:
+- **The car stays level on the bridge deck** (BUGGY.CPP `BuggyFloorY`, "The car on the deck"), and the parked car doesn't stay on screen as a ghost when Twinsen gets in (`TakeBuggy`).
+- **The car setup**, from the file, replaces the buggy's fixed rates (BUGGY.CPP `RaceSpeed`):
+  - a **gearbox**: X shifts up and Z down, on the key's press. Each gear has its own top speed; it can also be automatic (up at a gear's top speed, down below 70 % of the gear below's);
+  - the **acceleration**, scaled to the gear as a gearbox does it. The pull goes with the gear ratio and the top speed against it, so a gear whose top speed is the original car's pulls like the original car, and a lower one harder (at most 4 times);
+  - above a gear's top speed, just after a shift down, the car slows as it does off the throttle;
+  - the **braking**, the **rolling to a stop**, the **top speed backwards** and the **steering**;
+  - the engine's sound revs up through each gear.
+- **A display** in the top right corner, in the game's font: the gear, the speed and the lap times. Speeds are in km/h with a cell taken as a metre, so the original car's top speed is 27 km/h.
+- **Laps are counted** at the start line (from RACETRACK.JSON: its ends in its cube's coordinates, across the lap and the pit lane, and the way a lap crosses it). Crossing it the right way starts lap 1; each crossing after that shows the last lap's time and the best. The timer is the game's own clock (`TimerRefHR`).
+
+The file is `key=value` lines: `gears`, `gear1`..`gear8` (top speeds, world units a second), `accel`, `brake`, `coast` (speed gained or lost per millisecond; the original car's are 4, 12 and 7), `reverse`, `steer` (4096ths of a turn a second; the original 1024), `automatic`, `hud` and `startline=<cube x> <cube z> <x0> <z0> <x1> <z1> <dir x> <dir z>`. Anything missing keeps the original car's value. X is otherwise the dodge key, which does nothing while driving.
+
+**The race car setup** (`RaceCarWindow.cs`, `RaceCarSetup.cs`, kept in the settings): presets (the original buggy, a 5-gear race car, a fast 6-gear one), the number of gears and each one's top speed in km/h, and the acceleration, braking, rolling to a stop and steering as percentages of the original car. It appears when Play starts on a folder with a race track (it can be switched off there; it doesn't appear when the game is only restarted), and from the race track dialog's "Race car setup…" button. Play writes it for the engine as `racecar.txt` in its user folder.
+
+![car setup](racetrack/build/car_setup.png)
+
+**Verified**:
+- Headless, with no car file, the car tops out at 3800 as ever.
+- With a 3-gear car (1500/2500/3500), first gear holds at 1500, and each X press lifts the top speed to the next gear's.
+- The display shows the gear and the speed. The first crossing of the start line starts lap 1; the car taken back and across again shows lap 2, and the last and best times.
+- In the app: Play on the built folder showed the car setup, then the game with the display; the car file had the start line from RACETRACK.JSON. Play on the same folder restored showed neither.
 
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The crossing style (bridge, jump, viaduct or a plain level junction), clearing the old track, and the scene options are choices in the dialog.
 
-The first build keeps `DESERT.ILE.before-racetrack`, `DESERT.OBL.before-racetrack` and `SCENE.HQR.before-racetrack` beside the originals, and every build starts from those. "Put the original files back" restores all three and removes the copies. The editor's views are refreshed afterwards.
+The first build keeps `DESERT.ILE`, `DESERT.OBL`, `SCENE.HQR`, `ANIM.HQR` and `RESS.HQR` as `*.before-racetrack` beside the originals (a folder built before the jump used the last two keeps them from its next build on, while they are still the originals), and every build starts from those. "Put the original files back" restores them all and removes the copies and RACETRACK.JSON. "Race car setup…" opens the car setup. The editor's views are refreshed afterwards.
 
-It was tested on a fresh copy of the game folder with the final build: the result is byte-identical to the command-line build, and restoring gives back the original files' hashes.
+It was tested on a fresh copy of the game folder, with the bridge and with the jump: the result is byte-identical to the command-line build (all five files and RACETRACK.JSON), and restoring gives back the original files' hashes.
 
 ![dialog](racetrack/build/menu_dialog.png)
 

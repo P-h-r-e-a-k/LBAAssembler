@@ -49,6 +49,7 @@ internal sealed class Lba2PlayHostWindow : Window
         await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Render);
         (options.Width, options.Height) = host.FitSize();
         options.ListenPort = ListenPort;
+        options.RaceCar = Terrain.RaceTrackService.HasBackups(gameDirectory) ? EditorSettings.Current.RaceCar.Clone() : null;
         string? problem = null;
         var process = await Task.Run(() => Lba2Play.Launch(gameDirectory, options, out problem, embedded: true));
         if (process is null) { status.Text = problem ?? "The game didn't start."; return; }

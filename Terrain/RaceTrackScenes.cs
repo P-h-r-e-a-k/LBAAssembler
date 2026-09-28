@@ -341,7 +341,7 @@ void comportement_2()
 
 label({startLabel});
 beta({jump.Beta});
-anim(67);
+anim({jump.Anim});
 wait_anim();
 anim(0);
 

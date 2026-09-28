@@ -82,6 +82,7 @@ internal sealed class Lba2PlayOptions
     public string? LoadSave;                            // a save (in the user folder's save\) that the game loads instead of starting a new game
     public int? ListenPort;                             // --listen <port>: the script-breakpoints control socket (Lba2ControlClient), bound to 127.0.0.1 only
     public int? FallbackMusic;                          // a jingle to force (playmusic N 1) when the scene's own is 255 (see MainWindow.ResolveLba2MusicFallback)
+    public RaceCarSetup? RaceCar;                       // the engine's race-track mode with this car (a folder with a race track built); null = the game as it is
 
     public Lba2PlayOptions WithScene(int scene)
     {
@@ -303,6 +304,14 @@ internal static class Lba2Play
         // Embedded, its window starts hidden as well, so the editor can take it over before anything is seen of it.
         var start = new ProcessStartInfo(engine) { WorkingDirectory = gameDirectory, UseShellExecute = false, CreateNoWindow = true };
         start.Environment["LBA2_OVERLAY_FILE"] = OverlayFile(user);      // zone boxes and actor paths drawn by the engine (EDITOR_OVERLAY.CPP); an all-zero file draws nothing
+        // the race-track mode (RACEMOD.CPP): on only when a car file is named, so any other game plays exactly as it is
+        start.Environment.Remove("LBA2_RACETRACK_FILE");
+        if (options.RaceCar is { } car)
+        {
+            var carFile = Path.Combine(user, "racecar.txt");
+            car.WriteEngineFile(carFile, LBAAssembler.Terrain.RaceTrackService.ReadInfo(gameDirectory));
+            start.Environment["LBA2_RACETRACK_FILE"] = carFile;
+        }
         if (embedded)
         {
             start.WindowStyle = ProcessWindowStyle.Hidden;

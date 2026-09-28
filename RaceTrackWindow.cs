@@ -27,6 +27,7 @@ internal sealed class RaceTrackWindow : Window
     private readonly Button buildButton = new() { Content = "Build the track", Padding = new Thickness(18, 5, 18, 5), IsDefault = true };
     private readonly Button restoreButton = new() { Content = "Put the original files back", Padding = new Thickness(14, 5, 14, 5) };
     private readonly Button closeButton = new() { Content = "Close", Padding = new Thickness(14, 5, 14, 5), IsCancel = true };
+    private readonly Button carButton = new() { Content = "Race car setup…", Padding = new Thickness(14, 5, 14, 5), ToolTip = "The buggy's gears, acceleration, brakes and steering when you play a folder with a race track built" };
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
 
     public RaceTrackWindow(string gameRoot, Action changed)
@@ -40,7 +41,7 @@ internal sealed class RaceTrackWindow : Window
         SetResourceReference(BackgroundProperty, "ThemeWindowBrush");
         SetResourceReference(ForegroundProperty, "ThemeTextBrush");
         crossing.Items.Add(new ComboBoxItem { Content = "A physical bridge (a walkable deck, like Citadel Island's rope bridge)", Tag = CrossingStyle.Bridge });
-        crossing.Items.Add(new ComboBoxItem { Content = "A jump over the junction (the retail Desert island car jump)", Tag = CrossingStyle.Jump });
+        crossing.Items.Add(new ComboBoxItem { Content = "A jump: a ramp up, a gap over the other road, a ramp down (a longer retail car jump)", Tag = CrossingStyle.Jump });
         crossing.Items.Add(new ComboBoxItem { Content = "A viaduct of arches over a level junction", Tag = CrossingStyle.Viaduct });
         crossing.Items.Add(new ComboBoxItem { Content = "A level junction, nothing over it", Tag = CrossingStyle.Level });
         crossing.SelectedIndex = 0;
@@ -50,6 +51,7 @@ internal sealed class RaceTrackWindow : Window
         browseButton.Click += (_, _) => Browse();
         buildButton.Click += async (_, _) => await BuildAsync();
         restoreButton.Click += (_, _) => Restore();
+        carButton.Click += (_, _) => new RaceCarWindow(forPlay: false) { Owner = this }.ShowDialog();
         UpdateStatus();
     }
 
@@ -71,8 +73,9 @@ internal sealed class RaceTrackWindow : Window
             Text = "Builds the proposed race track on the White Leaf Desert island: the ground under the road is levelled and banked, the road is painted with the retail " +
                    "track's asphalt, red and white curbs, arrows and red/gold hatching, with a pit lane, a start gantry and a bridge over the harbour. Where the lap crosses itself, " +
                    "the choice below decides what carries the one road over the other.\n\n" +
-                   "It changes DESERT.ILE, DESERT.OBL and SCENE.HQR in the LBA2 game folder. The first time, the originals are kept beside them (as *" + RaceTrackService.BackupSuffix +
-                   "); every build starts from those copies, and the button below puts them back. " +
+                   "It changes DESERT.ILE, DESERT.OBL and SCENE.HQR in the LBA2 game folder (and, for a jump, ANIM.HQR and RESS.HQR: its flight). The first time, the originals are kept beside them (as *" + RaceTrackService.BackupSuffix +
+                   "); every build starts from those copies, and the button below puts them back. When you play a folder with a race track built, the game " +
+                   "runs in its race-track mode: the car setup below (gears on X and Z, brakes, steering), the car staying level on the bridge, and the gear, speed and lap times on screen. " +
                    "Use Tools > Test edits first to try it on a scratch copy of the game folder.",
         };
         intro.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
@@ -98,8 +101,8 @@ internal sealed class RaceTrackWindow : Window
         log.Margin = new Thickness(0, 10, 0, 0);
         root.Children.Add(log);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
-        restoreButton.Margin = new Thickness(0, 0, 10, 0); buildButton.Margin = new Thickness(0, 0, 10, 0);
-        buttons.Children.Add(restoreButton); buttons.Children.Add(buildButton); buttons.Children.Add(closeButton);
+        restoreButton.Margin = new Thickness(0, 0, 10, 0); buildButton.Margin = new Thickness(0, 0, 10, 0); carButton.Margin = new Thickness(0, 0, 10, 0);
+        buttons.Children.Add(carButton); buttons.Children.Add(restoreButton); buttons.Children.Add(buildButton); buttons.Children.Add(closeButton);
         root.Children.Add(buttons);
         Content = root;
     }
