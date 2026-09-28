@@ -71,6 +71,7 @@ public partial class MainWindow
             SwitchGame(game);
             if (currentGame != game) return;
         }
+        if (game == GameKind.Lba2 && askRaceCar && !RaceTrackUpToDate()) return;
         if (game == GameKind.Lba2 && askRaceCar && !AskRaceCar()) return;
         // a race track starts on its start/finish straight, Twinsen beside his car (the build puts him there in that scene)
         if (game == GameKind.Lba2 && raceStart && RaceStartScene() is { } start) { LaunchPlay(game, null, start); return; }
@@ -88,6 +89,21 @@ public partial class MainWindow
     // Set when a race-track play starts with the zones and routes the editor draws over the game hidden; the first change of those
     // switches shows them as they are set.
     private bool raceOverlayHidden;
+
+    // A race track built before the grid, the qualifying lap and the count-down (RaceTrackService.IsOutdated) plays the old way: say so,
+    // once a session for a folder, and offer the race track dialog to build it again. False when the play should not go ahead.
+    private readonly HashSet<string> outdatedTrackWarned = new(StringComparer.OrdinalIgnoreCase);
+    private bool RaceTrackUpToDate()
+    {
+        if (!Terrain.RaceTrackService.IsOutdated(gameRoot) || !outdatedTrackWarned.Add(gameRoot)) return true;
+        var answer = MessageBox.Show(this,
+            "The race track in this game folder was built by an older version of LBA Assembler, before the grid, the qualifying lap and the " +
+            "count-down start. It plays the old way until it is built again (Tools > LBA2: Desert island race track > Build the track).\n\n" +
+            "Open the race track dialog now? No plays the track as it is.",
+            "Race track", MessageBoxButton.YesNoCancel, MessageBoxImage.Information);
+        if (answer == MessageBoxResult.Yes) { Lba2RaceTrack_Click(this, new RoutedEventArgs()); return false; }
+        return answer == MessageBoxResult.No;
+    }
 
     // The race car's setup before a race-track play: false when it is cancelled.
     private bool AskRaceCar()

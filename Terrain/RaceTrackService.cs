@@ -39,6 +39,10 @@ internal static class RaceTrackService
         return path => car.WriteEngineFile(path, ReadInfo(gameDirectory));
     }
 
+    // A race track built by an older version of the editor, before the grid (and with it the qualifying lap and the count-down): its
+    // RACETRACK.JSON has no grid spots, or there is none. The race-track mode then starts the old way; building it again brings them.
+    public static bool IsOutdated(string gameDirectory) => HasBackups(gameDirectory) && ReadInfo(gameDirectory)?.Grid is not { Count: > 0 };
+
     public static bool HasBackups(string gameDirectory) => Files.All(f => File.Exists(Path.Combine(gameDirectory, f + BackupSuffix)));
 
     public static string? Problem(string gameDirectory)

@@ -404,6 +404,7 @@ void RaceMod_ResetGear(void) {
 
 void RaceMod_UpdateGear(S32 speed) {
     const int x = CheckKey(K_X) ? 1 : 0, z = CheckKey(K_Z) ? 1 : 0;
+    const S32 was = s_gear;
     if (s_car.Automatic) {
         // up at the gear's top speed, down when the car has slowed well into the gear below's range
         if (s_gear < s_car.Gears && speed >= s_car.GearTop[s_gear - 1] - 40) s_gear++;
@@ -414,6 +415,8 @@ void RaceMod_UpdateGear(S32 speed) {
     }
     s_lastX = x;
     s_lastZ = z;
+    // (every change in the log, with what made it: the keys are the game window's keyboard, so a key typed while it has the focus counts)
+    if (s_gear != was) Log_Info("[racemod] gear %d (%s)", (int)s_gear, s_car.Automatic ? "automatic" : s_gear > was ? "X" : "Z");
 }
 
 static void Message(const char *text) {

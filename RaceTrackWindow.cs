@@ -44,7 +44,10 @@ internal sealed class RaceTrackWindow : Window
         crossing.Items.Add(new ComboBoxItem { Content = "A jump: a ramp up, a gap over the other road, a ramp down (a longer retail car jump)", Tag = CrossingStyle.Jump });
         crossing.Items.Add(new ComboBoxItem { Content = "A viaduct of arches over a level junction", Tag = CrossingStyle.Viaduct });
         crossing.Items.Add(new ComboBoxItem { Content = "A level junction, nothing over it", Tag = CrossingStyle.Level });
+        // the style the folder's track was built with, when it has one (building it again keeps it), else the bridge
         crossing.SelectedIndex = 0;
+        if (Terrain.RaceTrackService.ReadInfo(gameRoot)?.Crossing is { } built && Enum.TryParse<CrossingStyle>(built, out var builtStyle))
+            crossing.SelectedItem = crossing.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is CrossingStyle s && s == builtStyle) ?? crossing.SelectedItem;
         BuildLayout();
         builtInPlan.Checked += (_, _) => PlanChoiceChanged();
         filePlan.Checked += (_, _) => PlanChoiceChanged();
