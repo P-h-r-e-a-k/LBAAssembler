@@ -215,6 +215,9 @@ internal sealed class RaceTrackReport
     // The way the start line's road runs as the line is painted: the road's heading turned onto the cell grid when it is close to it
     // (the gantry over the line and the line laps are counted at follow it), else the heading itself.
     public (double DirX, double DirZ)? StartLineSquare { get; set; }
+    // How far the outer curbs reach either side of the start line's middle (cells, to its left and right across the way the lap runs):
+    // the lap's own, or on the pit lane's side the pit lane's, where it runs beside the start line. The gantry stands outside them.
+    public (double Left, double Right)? StartCurbs { get; set; }
     // Where a lap is counted: the start line's ends (island cells), across the road and the pit lane beside it, and the way the lap runs.
     public (double X0, double Z0, double X1, double Z1, double DirX, double DirZ)? LapLine { get; set; }
     // Checkpoints round the lap, in order (PlaceCheckpoints): a line across the road (island cells) and the way the lap crosses it.
@@ -2185,13 +2188,18 @@ internal static class RaceTrackBuilder
             if (chosen.Value.Jump && CellRise(field, gx, gz) > 250) ck = Kind.Wall;
             // (a planned lap's verge that holds a step -- the edge of a terrace, where the next part of the lap lies far below or above -- is
             // blocking rock too: the engine lifts a car onto any higher ground it drives into, so a sand step was a ramp up the cliff)
-            if (planned && ck is Kind.Sand or Kind.Hatch && CellRise(field, gx, gz) > SteepVerge) ck = Kind.Wall;
+            // (A jump's warning stripe is hatched but it is road -- the car drives over it to the lip -- so neither of these makes it a wall:
+            // Citadel Island's storm track, reversed, has its take-off ramp built over the harbour's basin, and the stripe's cells within
+            // two cells of that water became blocking rock across the ramp. A car taking off hit it mid-flight, the engine started Twinsen
+            // skating back down the ramp -- an animation nothing interrupts -- and the flight was dropped until the skid ended.)
+            var stripe = chosen.Value.Lip && ck == Kind.Hatch;
+            if (planned && !stripe && ck is Kind.Sand or Kind.Hatch && CellRise(field, gx, gz) > SteepVerge) ck = Kind.Wall;
             // banked bends: the outside verge is hatched
             if (ck == Kind.Sand && Math.Abs(chosen.Value.Kappa) > 0.05 && chosen.Value.Lat * chosen.Value.Kappa < 0) ck = Kind.Hatch;
             // a verge within 2 cells of the sea (or the island's edge) is a blocking rock wall: where the road runs along a cliff top
             // (the west rim of the old track's cube, 8 cells from the edge) a car running wide stopped at the world's edge with its
             // nose over the drop
-            if (ck is Kind.Sand or Kind.Hatch && NearSea(field, gx, gz, 2)) ck = Kind.Wall;
+            if (!stripe && ck is Kind.Sand or Kind.Hatch && NearSea(field, gx, gz, 2)) ck = Kind.Wall;
             kinds[(gx, gz)] = ck;
         }
         // the start line first, so the arrows (which only go where every cell is plain asphalt) keep clear of it
@@ -2569,13 +2577,16 @@ internal static class RaceTrackBuilder
         if (report.StartLineSquare is { } square) (dx, dz) = square;
         var nx = -dz; var nz = dx;
         double left = roads[0].VergeHalf, right = roads[0].VergeHalf;
+        double leftCurb = roads[0].CurbHalf, rightCurb = roads[0].CurbHalf;
         if (roads.Count > 1)
         {
             var pit = roads[1];
             var best = Enumerable.Range(0, pit.Count).MinBy(i => Sq(pit.X[i] - x) + Sq(pit.Z[i] - z));
             var across = (pit.X[best] - x) * nx + (pit.Z[best] - z) * nz;
             if (across > 0) right = Math.Max(right, across + pit.VergeHalf); else left = Math.Max(left, -across + pit.VergeHalf);
+            if (across > 0) rightCurb = Math.Max(rightCurb, across + pit.CurbHalf); else leftCurb = Math.Max(leftCurb, -across + pit.CurbHalf);
         }
+        report.StartCurbs = (leftCurb, rightCurb);
         return (x - nx * left, z - nz * left, x + nx * right, z + nz * right, dx, dz);
     }
 
@@ -2635,32 +2646,72 @@ internal static class RaceTrackBuilder
         (66, new[] { -5519, -512, -397, -5236, 3141, -114 }),
     };
     private const double GantryCentreOffset = 2830;      // the origin is this far from the middle of the gantry, along its beam
+    private const double GantryBeam = 5378;              // the beam's length (body 64's box), post to post
+    private const double GantryMargin = 0.4;             // cells between an outer curb and the post outside it
 
-    private static void PlaceGantry(IslandFile island, double cx, double cz, double height, double bisX, double bisZ, string what, RaceTrackReport report, RaceTrackOptions o)
+    // The gantry across the start line. One beam spans a road and its curbs; where the pit lane runs beside the start line (every track's
+    // start is in the pit lane's middle) as many beams end to end as reach over both, centred on them, with the posts only at the two outer
+    // ends -- a single gantry over the lap put its post on the strip between the lap and the pit lane, in the middle of the straight as a
+    // driver sees it (Citadel Island's storm track). `curbs`: how far the outer curbs reach either side of the line (RaceTrackReport.StartCurbs).
+    private static void PlaceGantry(IslandFile island, double cx, double cz, double height, double bisX, double bisZ, string what, RaceTrackReport report, RaceTrackOptions o,
+        (double Left, double Right)? curbs = null)
     {
-        // the beam runs across the road, i.e. at right angles to the way the road runs
+        // the beam runs across the road, i.e. at right angles to the way the road runs (local +X along e, to the line's right)
         var ex = -bisZ; var ez = bisX;
         var theta = Math.Atan2(-ez, ex);
         var beta = (int)Math.Round(theta / (2 * Math.PI) * 4096); beta = ((beta % 4096) + 4096) % 4096;
         var cos = Math.Cos(theta); var sin = Math.Sin(theta);
-        var originX = (cx + ex * GantryCentreOffset / 512) * 512; var originZ = (cz + ez * GantryCentreOffset / 512) * 512;
         var y = (int)Math.Round(height);
-        if (IslandDecors.Locate(island, originX, originZ) is not { } at) { report.Placed.Add($"{what}: off the island"); return; }
-        foreach (var (body, box) in Gantry)
+        var beam = GantryBeam / 512;
+        var (left, right) = curbs ?? (0, 0);
+        var beams = curbs is null ? 1 : Math.Max(1, (int)Math.Ceiling((left + right + 2 * GantryMargin) / beam - 1e-9));
+        var middle = beams == 1 && curbs is not null && left + right + 2 * GantryMargin <= beam ? 0 : (right - left) / 2;
+        if (beams > 1)
         {
-            var d = IslandDecors.Blank(o.RetailBody(body), at.X, y, at.Z, beta);
-            double minX = 1e18, maxX = -1e18, minZ = 1e18, maxZ = -1e18;
-            foreach (var (bx, bz) in new[] { (box[0], box[2]), (box[3], box[2]), (box[0], box[5]), (box[3], box[5]) })
+            // Beams end to end come out longer than the road and the pit lane need; the spare goes where both posts have ground under
+            // them -- beyond the pit lane first, then either side evenly, then beyond the lap. Evenly, Mosquibees Island's lap-side post
+            // stood past the plateau's edge, over the sea. (The ground under a post: no lower than a post's length under the road.)
+            var total = beams * beam;
+            bool Grounded(double across)
             {
-                var wx = bx * cos + bz * sin; var wz = -bx * sin + bz * cos;
-                minX = Math.Min(minX, wx); maxX = Math.Max(maxX, wx); minZ = Math.Min(minZ, wz); maxZ = Math.Max(maxZ, wz);
+                var g = IslandOps.Altitude(island, (cx + ex * across) * 512, (cz + ez * across) * 512);
+                return g is { } h && h >= height - 1000;
             }
-            d.XMin = at.X + (int)Math.Floor(minX); d.XMax = at.X + (int)Math.Ceiling(maxX);
-            d.ZMin = at.Z + (int)Math.Floor(minZ); d.ZMax = at.Z + (int)Math.Ceiling(maxZ);
-            d.YMin = y + box[1]; d.YMax = y + box[4];
-            if (at.Cube.Decors.Count < IslandDecors.MaxPerCube) at.Cube.Decors.Add(d);
+            var pitRight = right >= left;
+            var choices = new[]
+            {
+                pitRight ? -(left + GantryMargin) + total / 2 : right + GantryMargin - total / 2,      // the spare beyond the pit lane
+                (right - left) / 2,                                                                    // evenly
+                pitRight ? right + GantryMargin - total / 2 : -(left + GantryMargin) + total / 2,      // beyond the lap
+            };
+            middle = choices.FirstOrDefault(m => Grounded(m - total / 2) && Grounded(m + total / 2), (right - left) / 2);
         }
-        report.Placed.Add($"{what}: gantry at cell ({cx:0.0}, {cz:0.0}), height {y}, turn {beta}");
+        var placed = 0;
+        for (var k = 0; k < beams; k++)
+        {
+            var along = middle + (k + 0.5 - beams / 2.0) * beam;             // this beam's middle, across the line
+            var originX = (cx + ex * (along + GantryCentreOffset / 512)) * 512; var originZ = (cz + ez * (along + GantryCentreOffset / 512)) * 512;
+            if (IslandDecors.Locate(island, originX, originZ) is not { } at) continue;
+            foreach (var (body, box) in Gantry)
+            {
+                // (body 66 is the post at the beam's left end, 65 at its right: only the outermost ones stand)
+                if (body == 66 && k != 0 || body == 65 && k != beams - 1) continue;
+                var d = IslandDecors.Blank(o.RetailBody(body), at.X, y, at.Z, beta);
+                double minX = 1e18, maxX = -1e18, minZ = 1e18, maxZ = -1e18;
+                foreach (var (bx, bz) in new[] { (box[0], box[2]), (box[3], box[2]), (box[0], box[5]), (box[3], box[5]) })
+                {
+                    var wx = bx * cos + bz * sin; var wz = -bx * sin + bz * cos;
+                    minX = Math.Min(minX, wx); maxX = Math.Max(maxX, wx); minZ = Math.Min(minZ, wz); maxZ = Math.Max(maxZ, wz);
+                }
+                d.XMin = at.X + (int)Math.Floor(minX); d.XMax = at.X + (int)Math.Ceiling(maxX);
+                d.ZMin = at.Z + (int)Math.Floor(minZ); d.ZMax = at.Z + (int)Math.Ceiling(maxZ);
+                d.YMin = y + box[1]; d.YMax = y + box[4];
+                if (at.Cube.Decors.Count < IslandDecors.MaxPerCube) { at.Cube.Decors.Add(d); placed++; }
+            }
+        }
+        if (placed == 0) { report.Placed.Add($"{what}: off the island"); return; }
+        var span = beams == 1 ? "" : $", {beams} beams end to end over the lap and the pit lane beside it, posts {middle - beams * beam / 2:0.0} and {middle + beams * beam / 2:+0.0} cells across";
+        report.Placed.Add($"{what}: gantry at cell ({cx:0.0}, {cz:0.0}), height {y}, turn {beta}{span}");
     }
 
     private static void PlaceStructures(IslandFile island, TrackRoad main, List<Crossing> crossings, int startIndex, RaceTrackOptions options, RaceTrackReport report, bool planned = false)
@@ -2669,7 +2720,7 @@ internal static class RaceTrackBuilder
         {
             var d = report.StartLine[0];
             var (dx, dz) = report.StartLineSquare ?? (d.DirX, d.DirZ);
-            PlaceGantry(island, d.X, d.Z, d.Y, dx, dz, "start line", report, options);
+            PlaceGantry(island, d.X, d.Z, d.Y, dx, dz, "start line", report, options, report.StartCurbs);
         }
         if (options.Crossing == CrossingStyle.Viaduct && !planned)
             foreach (var c in crossings) PlaceBridge(island, c.X, c.Z, main.H[c.I], c.BisX, c.BisZ, report, options);

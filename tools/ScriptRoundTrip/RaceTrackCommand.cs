@@ -69,6 +69,45 @@ internal static class RaceTrackCommand
         return 0;
     }
 
+    // buildtwice <pristine> <game folder> <island 1> <island 2>: two builds of the built-in plans in one process, as the race track window
+    // does when one track is built after another, each from the pristine files; prints each build's start lines.
+    // (RT_MENU=1: the way the menu builds -- RaceTrackService.Build, keeping the originals beside the files and building from them -- the
+    // game folder given its pristine files once, first)
+    public static int BuildTwice(string[] args)
+    {
+        var pristine = args[1]; var game = args[2];
+        var menu = Environment.GetEnvironmentVariable("RT_MENU") == "1";
+        if (menu)
+        {
+            foreach (var f in Directory.GetFiles(game, "*" + RaceTrackService.BackupSuffix)) File.Delete(f);
+            foreach (var f in RaceTrackService.AllFiles.Append("LBA2.HQR"))
+                if (File.Exists(Path.Combine(pristine, f))) RaceTrackService.CopyWritable(Path.Combine(pristine, f), Path.Combine(game, f));
+        }
+        foreach (var name in args.Skip(3))
+        {
+            var where = RaceTrackIsland.ByName(name);
+            var options = new RaceTrackOptions { Island = where, OldTrackCube = where.OldTrackCube };
+            RaceTrackReport report;
+            if (menu)
+            {
+                var result = RaceTrackService.Build(game, RaceTrackPlan.Built(where), options);
+                Console.WriteLine($"{where.Name}: {result.Summary} {result.Log.FirstOrDefault()}");
+                report = result.Report!;
+            }
+            else
+            {
+                foreach (var f in RaceTrackService.AllFiles)
+                    if (File.Exists(Path.Combine(pristine, f))) RaceTrackService.CopyWritable(Path.Combine(pristine, f), Path.Combine(game, f));
+                report = RaceTrackService.BuildFiles(game, Path.Combine(game, where.IleFile), RaceTrackPlan.Built(where), options).Report;
+            }
+            var info = RaceTrackService.ReadInfo(game)!;
+            Console.WriteLine($"{where.Name}: start {info.StartLine}");
+            Console.WriteLine($"  twin start {info.Twin?.StartLine}");
+            foreach (var l in report.StartLine) Console.WriteLine($"  report start line ({l.X:0.00}, {l.Z:0.00}) dir ({l.DirX:0.000}, {l.DirZ:0.000}), square {report.StartLineSquare}");
+        }
+        return 0;
+    }
+
     // herostart <game folder> <cell x> <cell z> [turn]: puts Twinsen's start in the scene of the cube that holds an island cell, on the ground there
     // (for looking at a place of the track in the game).
     // racecarfile <game folder> <out file> [pace]: the engine's car setup file Play would write for that folder (the default car, the

@@ -52,6 +52,7 @@ internal static class Program
             "buildtrack" => RaceTrackCommand.Run(args),
             "herostart" => RaceTrackCommand.HeroStart(args),
             "racecarfile" => RaceTrackCommand.RaceCarFile(args),
+            "buildtwice" => RaceTrackCommand.BuildTwice(args),
             "baldinocar" => RaceTrackCommand.BaldinoCar(args),
             "actorbeta" => RaceTrackCommand.ActorBeta(args),
             "initbuggy" => RaceTrackCommand.InitBuggy(args),
