@@ -20,7 +20,7 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox biker = new() { Content = "Race the motorbike Rabbibunny too (quicker in the bends, slower on the straights)" };
     private readonly CheckBox fightBack = new() { Content = "They push harder when they fall behind you" };
     private readonly CheckBox qualifying = new() { Content = "Drive a qualifying lap first: the times set the grid" };
-    private readonly CheckBox fineWeather = new() { Content = "Stop the rain on Citadel Island (the weather after the lighthouse, when the aliens land)", ToolTip = "No rain or thunder, the brighter island with its own light and sky. Only the weather changes: the story stays where it is." };
+    private readonly CheckBox fineWeather = new() { Content = "Stop the rain on Citadel Island: race the town circuit (in the rain, the storm track)", ToolTip = "The weather after the lighthouse, when the aliens land: no rain or thunder, the brighter island with its own light and sky, and its town circuit with the opponents. Left raining, Citadel Island is its storm file, with the storm track round the town and its jump. Only the weather changes: the story stays where it is." };
     private readonly CheckBox startAtLine = new() { Content = "Start beside the car on the start/finish straight, with the editor's markings hidden" };
     private readonly List<Action> refresh = new();
     private bool updating;

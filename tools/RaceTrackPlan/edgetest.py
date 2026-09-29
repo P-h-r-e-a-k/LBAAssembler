@@ -7,6 +7,8 @@ the hero at the edge), so every crossing should end OK.
       Citadel Island: 0 42 50 (the default); the Desert island: 2 55 73
     EDGE_WALK=<ticks>  how long each walk is (360); a crossing next to a cube corner can take a long walk over two edges
     EDGE_ONLY=4,7,..   only those crossings
+    EDGE_TWIN=1        the track of the island's other-weather file (RACETRACK.JSON's Twin: Citadel Island's town circuit), with
+                       LBA2_RACETRACK_FILE naming a car file that has weather=fine
 
 Loading a scene cold starts Twinsen at its own start point, which in Citadel scene 48 is inside a scripted arrival (scenario zone 7)
 that holds him: walk into such a scene from a neighbour first (as a car arrives) before testing its departures."""
@@ -30,6 +32,8 @@ BACK = 4.0          # cells before the edge the walk starts
 WALK = int(os.environ.get("EDGE_WALK", "360"))   # ticks of walking
 
 j = json.load(open(os.path.join(game, 'RACETRACK.JSON')))
+# EDGE_TWIN=1: the other-weather file's own track (Citadel Island's town circuit; run with LBA2_RACETRACK_FILE naming a car file with weather=fine)
+if os.environ.get('EDGE_TWIN') == '1': j = j['Twin']
 pts = [(p[0] / 512.0, p[1] / 512.0, p[2]) for p in j['Path']]
 n = len(pts)
 tests = []

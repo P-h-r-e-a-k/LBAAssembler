@@ -48,10 +48,17 @@ internal sealed class RaceTrackPlan
     }
 
     // The track an island's route ships as inside the program (docs/racetrack/*_track_plan.json).
-    public static RaceTrackPlan Built(RaceTrackIsland island)
+    public static RaceTrackPlan Built(RaceTrackIsland island) => Resource(island.PlanResource, island.Name);
+
+    // The track of the island's other-weather file, when it has one of its own (Citadel Island's town circuit, in CITABAU); null when
+    // that file is built with the same track as the island's own.
+    public static RaceTrackPlan? BuiltTwin(RaceTrackIsland island) =>
+        island.TwinPlanResource is { } name ? Resource(name, $"{island.Name} in its other weather") : null;
+
+    private static RaceTrackPlan Resource(string name, string what)
     {
-        using var stream = typeof(RaceTrackPlan).Assembly.GetManifestResourceStream(island.PlanResource)
-            ?? throw new InvalidDataException($"This build of the program has no built-in track plan for {island.Name}.");
+        using var stream = typeof(RaceTrackPlan).Assembly.GetManifestResourceStream(name)
+            ?? throw new InvalidDataException($"This build of the program has no built-in track plan for {what}.");
         return Read(stream);
     }
 }

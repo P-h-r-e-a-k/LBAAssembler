@@ -56,15 +56,16 @@ internal static class RaceTrackHolomap
         }
     }
 
-    // Draws the report's roads into the island's pictures in HOLOMAP.HQR (in the game folder), for the island file just built. Returns a
+    // Draws the report's roads into the island's pictures in HOLOMAP.HQR (in the game folder), for the island file just built -- all of its
+    // pictures, or those of `pictures` (Citadel Island with a track in each weather: each file's on its own weather's picture). Returns a
     // line for the log.
-    public static string Draw(string gameDirectory, RaceTrackIsland island, IslandFile built, RaceTrackReport report)
+    public static string Draw(string gameDirectory, RaceTrackIsland island, IslandFile built, RaceTrackReport report, int[]? pictures = null)
     {
         var path = Path.Combine(gameDirectory, File);
         var hqr = System.IO.File.ReadAllBytes(path);
         var archive = HqrArchive.Open(path);
         var drawn = new List<string>();
-        foreach (var entry in Pictures(island))
+        foreach (var entry in pictures ?? Pictures(island))
         {
             var picture = archive.Read(entry);
             var record = archive.Read(entry + 1);

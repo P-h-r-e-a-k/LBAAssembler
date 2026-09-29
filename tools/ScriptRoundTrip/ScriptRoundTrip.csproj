@@ -51,6 +51,11 @@
     <Compile Include="..\..\Lba1\Lba1BlankScene.cs" Link="Lba1\Lba1BlankScene.cs" />
     <Compile Include="..\..\Lba2Engine.cs" Link="Lba2Engine.cs" />
     <Compile Include="..\..\Terrain\**\*.cs" Link="Terrain\%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- the routes built into the program (RaceTrackPlan.Built / BuiltTwin), as the app has them -->
+    <EmbeddedResource Include="..\..\docs\racetrack\track_plan.json" LogicalName="RaceTrackPlan.Desert.json" />
+    <EmbeddedResource Include="..\..\docs\racetrack\citadel_track_plan.json" LogicalName="RaceTrackPlan.Citadel.json" />
+    <EmbeddedResource Include="..\..\docs\racetrack\citadel_storm_track_plan.json" LogicalName="RaceTrackPlan.CitadelStorm.json" />
+    <EmbeddedResource Include="..\..\docs\racetrack\mosquibe_track_plan.json" LogicalName="RaceTrackPlan.Mosquibe.json" />
     <Compile Include="..\..\LiveDataRoot.cs" Link="LiveDataRoot.cs" />
     <Compile Include="..\..\AudioLevels.cs" Link="AudioLevels.cs" />
     <Compile Include="..\..\RaceCarSetup.cs" Link="RaceCarSetup.cs" />

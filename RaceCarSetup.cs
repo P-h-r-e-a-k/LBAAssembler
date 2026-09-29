@@ -37,7 +37,8 @@ public sealed class RaceCarSetup
     // A qualifying lap before the race: its time against the opponents' sets the grid (off: Twinsen starts on pole).
     public bool Qualifying { get; set; } = true;
     // Citadel Island's weather once the storm is over -- as after the lighthouse keeper is freed and the aliens land: no rain, the
-    // brighter island file, its light and its sky. Only the weather: the story stays where the game is.
+    // brighter island file, its light and its sky. Only the weather: the story stays where the game is. It also says which of Citadel
+    // Island's tracks is raced: the town circuit (CITABAU) in fine weather, the storm track (CITADEL) in the rain.
     public bool FineWeather { get; set; } = true;
     // An opponent that has fallen behind pushes harder (up to CatchUpPercent more, 60 cells behind).
     public bool OpponentsFightBack { get; set; } = true;

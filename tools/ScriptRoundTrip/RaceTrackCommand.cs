@@ -6,7 +6,9 @@ namespace ScriptRoundTrip;
 // Builds a race track into a copy of an island file and draws the result.
 //   buildtrack <plan.json> <pristine folder> <game folder> [png] [scale]      RT_ISLAND=Desert island|Citadel Island picks the island
 // The files the track changes (DESERT.ILE, DESERT.OBL, SCENE.HQR, and for a jump ANIM.HQR and RESS.HQR) are copied from the pristine folder to the game
-// folder first, so a build always starts clean. RT_CROSSING=Bridge|Jump|Viaduct|Level picks the crossing style.
+// folder first, so a build always starts clean. RT_CROSSING=Bridge|Jump|Viaduct|Level picks the crossing style. For Citadel Island the plan is
+// the storm file's (CITADEL: citadel_storm_track_plan.json) and CITABAU gets the town circuit built into the program (RT_TWINPLAN=<plan> for
+// another); RT_DUMP / RT_TWINDUMP write each lap's centre line.
 internal static class RaceTrackCommand
 {
     public static int Run(string[] args)
@@ -16,28 +18,21 @@ internal static class RaceTrackCommand
         var where = RaceTrackIsland.ByName(Environment.GetEnvironmentVariable("RT_ISLAND") ?? RaceTrackIsland.Desert.Name);
         foreach (var f in RaceTrackService.AllFiles)
             if (File.Exists(Path.Combine(pristine, f))) RaceTrackService.CopyWritable(Path.Combine(pristine, f), Path.Combine(game, f));
-        var island = IslandFile.Load(Path.Combine(game, where.IleFile));
         var options = new RaceTrackOptions { Island = where, OldTrackCube = where.OldTrackCube };
         if (Environment.GetEnvironmentVariable("RT_CLEARANCE") is { } rc) options.RoadBridgeClearance = double.Parse(rc);
         if (Environment.GetEnvironmentVariable("RT_TILELEN") is { } tl) options.RoadBridgeTileLength = double.Parse(tl);
         if (Environment.GetEnvironmentVariable("RT_CROSSING") is { } cs) options.Crossing = Enum.Parse<CrossingStyle>(cs, ignoreCase: true);
         if (Environment.GetEnvironmentVariable("RT_JUMPANGLE") is { } ja) options.JumpCrossingAngle = double.Parse(ja, System.Globalization.CultureInfo.InvariantCulture);
         if (Environment.GetEnvironmentVariable("RT_JUMPGAP") is { } jg) options.JumpGap = double.Parse(jg, System.Globalization.CultureInfo.InvariantCulture);
-        var themed = RaceTrackTextures.Import(island, where, game);
-        options.Theme = themed.Theme;
-        RaceTrackService.FollowPlan(plan, options);
-        var extra = RaceTrackService.Prepare(game, options);
-        if (themed.Log.Length > 0) extra.Add(themed.Log);
+        // (RT_TWINPLAN: a plan file for the island's other-weather file instead of the one built into the program)
+        var twinPlan = Environment.GetEnvironmentVariable("RT_TWINPLAN") is { Length: > 0 } tp ? RaceTrackPlan.Load(tp) : null;
         var watch = System.Diagnostics.Stopwatch.StartNew();
-        var report = RaceTrackBuilder.Build(island, plan, options);
-        island.Save(Path.Combine(game, where.IleFile));
-        if (RaceTrackService.BuildTwin(game, plan, options, report) is { } twinLog) Console.WriteLine("  " + twinLog);
-        extra.AddRange(RaceTrackService.Finish(game, report, options));
-        var scenes = RaceTrackScenes.Apply(game, report, options);
-        extra.AddRange(RaceTrackService.Story(game, report, options));
-        RaceTrackService.WriteInfo(game, report, options, scenes);
+        var built = RaceTrackService.BuildFiles(game, Path.Combine(game, where.IleFile), plan, options, twinPlan);
+        var (report, scenes, extra) = (built.Report, built.Scenes, built.Log);
         if (Environment.GetEnvironmentVariable("RT_DUMP") is { Length: > 0 } dump)
             File.WriteAllLines(dump, report.LapX.Select((x, i) => FormattableString.Invariant($"{x:0.###},{report.LapZ[i]:0.###}")));
+        if (Environment.GetEnvironmentVariable("RT_TWINDUMP") is { Length: > 0 } twinDump && built.Twin is { Own: true } own)
+            File.WriteAllLines(twinDump, own.Report.LapX.Select((x, i) => FormattableString.Invariant($"{x:0.###},{own.Report.LapZ[i]:0.###}")));
         foreach (var l in extra) Console.WriteLine("  " + l);
         foreach (var l in scenes.Log) Console.WriteLine("  " + l);
         Console.WriteLine($"  {scenes.ActorsRemoved} actors removed from {scenes.ScenesChanged} scenes");
@@ -52,10 +47,20 @@ internal static class RaceTrackCommand
         foreach (var l in report.StartLine) Console.WriteLine($"  start line at cell ({l.X:0.0}, {l.Z:0.0}), height {l.Y:0}, heading ({l.DirX:0.00}, {l.DirZ:0.00})");
         foreach (var l in report.Placed) Console.WriteLine("  placed " + l);
         if (report.RoadBridge is { } rb) Console.WriteLine($"  road bridge: cell ({rb.X:0.0},{rb.Z:0.0}) dir ({rb.DirX:0.00},{rb.DirZ:0.00}) height {rb.Height:0} size {rb.Width / 512:0.#}x{rb.Length / 512:0.#} cells, deck body {options.DeckBodyIndex}");
+        if (built.Twin is { Own: true } twin)
+        {
+            var t = twin.Report;
+            Console.WriteLine($"{where.TwinIleFile}'s own track: lap {t.Length:0} cells, {t.Vertices} vertices levelled, {t.Cells} cells painted, {t.DecorsRemoved} props and {t.SolidDecorsRemoved} solid decors removed");
+            foreach (var note in t.Notes) Console.WriteLine("  " + note);
+            foreach (var l in t.StartLine) Console.WriteLine($"  start line at cell ({l.X:0.0}, {l.Z:0.0}), height {l.Y:0}, heading ({l.DirX:0.00}, {l.DirZ:0.00})");
+            foreach (var l in t.Placed) Console.WriteLine("  placed " + l);
+            if (t.RoadBridge is { } trb) Console.WriteLine($"  road bridge: cell ({trb.X:0.0},{trb.Z:0.0}) dir ({trb.DirX:0.00},{trb.DirZ:0.00}) height {trb.Height:0} size {trb.Width / 512:0.#}x{trb.Length / 512:0.#} cells, deck body {twin.Options.DeckBodyIndex}");
+        }
         if (args.Length > 4)
         {
             var dir = game;
             var scale = args.Length > 5 ? int.Parse(args[5]) : 3;
+            var island = IslandFile.Load(Path.Combine(game, where.IleFile));
             var renderer = new IslandMapRenderer(island, IslandMapRenderer.LoadPalette(dir, Path.GetFileNameWithoutExtension(where.IleFile)), scale);
             renderer.RenderAll(MapView.Terrain);
             PngWriter.Write(args[4], renderer.Pixels, renderer.PixelWidth, renderer.PixelHeight);
@@ -67,7 +72,8 @@ internal static class RaceTrackCommand
     // herostart <game folder> <cell x> <cell z> [turn]: puts Twinsen's start in the scene of the cube that holds an island cell, on the ground there
     // (for looking at a place of the track in the game).
     // racecarfile <game folder> <out file> [pace]: the engine's car setup file Play would write for that folder (the default car, the
-    // folder's RACETRACK.JSON: start line, checkpoints, the opponent's line beside it as racepath.txt), for headless tests.
+    // folder's RACETRACK.JSON: start line, checkpoints, the opponent's line beside it as racepath.txt), for headless tests. RT_WEATHER=rain:
+    // Citadel Island left raining (its storm track).
     // baldinocar <game folder> <scratch folder>: Baldino's car built from the game folder's BODY.HQR and installed into copies of its BODY.HQR and
     // RESS.HQR in the scratch folder (for a look at it: BodyPipeline hqrpreview <scratch>\BODY.HQR <index>)
     public static int BaldinoCar(string[] args)
@@ -97,6 +103,8 @@ internal static class RaceTrackCommand
     {
         var setup = new LBAAssembler.RaceCarSetup();
         if (args.Length > 3) setup.RacerSkill = setup.BaldinoSkill = int.Parse(args[3]);
+        // (RT_WEATHER=rain: Citadel Island left raining -- its storm track)
+        if (Environment.GetEnvironmentVariable("RT_WEATHER") == "rain") setup.FineWeather = false;
         setup.WriteEngineFile(Path.GetFullPath(args[2]), RaceTrackService.ReadInfo(args[1]));
         Console.WriteLine($"{args[2]}: {File.ReadAllLines(args[2]).Length} lines");
         return 0;

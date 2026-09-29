@@ -180,9 +180,17 @@ internal static class Lba2Play
         }
     }
 
+    // The race-track mode's car file for an engine run (or none: the game as it is).
+    private static void RaceCarEnvironment(ProcessStartInfo start, string? carFile)
+    {
+        start.Environment.Remove("LBA2_RACETRACK_FILE");
+        if (carFile is not null) start.Environment["LBA2_RACETRACK_FILE"] = carFile;
+    }
+
     // Enters `scene` in a short run of the engine that has no window (a few seconds) and saves the game there, as a save the visible
-    // run can load. Returns the save's name, or null when it couldn't be made.
-    public static string? PrepareSceneSave(string engine, string gameDirectory, string user, int scene)
+    // run can load -- with the visible run's race car file (`carFile`), so the island is the one it will play. Returns the save's name,
+    // or null when it couldn't be made.
+    public static string? PrepareSceneSave(string engine, string gameDirectory, string user, int scene, string? carFile = null)
     {
         var saves = Path.Combine(user, "save");
         var made = Path.Combine(saves, "bugs", "editorplay.lba");
@@ -193,6 +201,7 @@ internal static class Lba2Play
             if (File.Exists(made)) File.Delete(made);
             if (File.Exists(target)) File.Delete(target);
             var start = new ProcessStartInfo(engine) { WorkingDirectory = gameDirectory, UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            RaceCarEnvironment(start, carFile);
             // skipmodals: this headless probe run has no window and never dismisses a dialogue, so a scene whose
             // entering actor triggers one (e.g. cube 128's own greeting) would otherwise sit blocked in the engine's
             // own frame-present call until the 40s timeout below kills it -- a real, if minor, "Play scene" delay
@@ -224,7 +233,7 @@ internal static class Lba2Play
                 return null;
             }
             File.Copy(made, target, overwrite: true);
-            if (!VerifySaveLoads(engine, gameDirectory, user, scene))
+            if (!VerifySaveLoads(engine, gameDirectory, user, scene, carFile))
             {
                 try { File.Delete(target); } catch (IOException) { }
                 return null;
@@ -250,11 +259,12 @@ internal static class Lba2Play
     // engine doesn't come back cleanly -- a crash's own exit code is never 0 (see LIB386/SYSTEM/CRASH_WIN.CPP's
     // own comment: the crash handler writes its log block, then hands the exception on to end the process with
     // its code), so that alone is the check; no log-file parsing needed.
-    private static bool VerifySaveLoads(string engine, string gameDirectory, string user, int scene)
+    private static bool VerifySaveLoads(string engine, string gameDirectory, string user, int scene, string? carFile = null)
     {
         try
         {
             var start = new ProcessStartInfo(engine) { WorkingDirectory = gameDirectory, UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            RaceCarEnvironment(start, carFile);
             foreach (var arg in new[] { "--headless", "--game-dir", gameDirectory, "--user-dir", user, "--no-autosave", "--resolution", "640x480",
                                         "--load", SaveName, "--exec-at", "30", "status", "--tick", "60", "--exit" })
                 start.ArgumentList.Add(arg);
@@ -297,21 +307,25 @@ internal static class Lba2Play
         WriteAudioConfig(user, audio);
         WriteOverlay(user, options.ZoneMask, options.Paths);
 
-        options.LoadSave = PrepareSceneSave(engine, gameDirectory, user, options.Scene);
+        // the race-track mode (RACEMOD.CPP): on only when a car file is named, so any other game plays exactly as it is. Written before
+        // the scene's save is made, which is made with it: the car file can change the island itself -- Citadel Island's weather, and with
+        // it which of its files the engine draws, each with a track of its own -- and a save made in the storm put Twinsen where the
+        // fine weather's start line is on the storm's ground, by Twinsen's house, and he played on inside it.
+        string? carFile = null;
+        if (options.RaceCarFile is { } writeCarFile)
+        {
+            carFile = Path.Combine(user, "racecar.txt");
+            writeCarFile(carFile);
+        }
+
+        options.LoadSave = PrepareSceneSave(engine, gameDirectory, user, options.Scene, carFile);
         if (options.LoadSave is null) DebugLog.Log($"Lba2Play: no save for scene {options.Scene}; falling back to the cube command");
 
         // The engine is a console program: without CreateNoWindow Windows opens a console (a terminal window) beside the game.
         // Embedded, its window starts hidden as well, so the editor can take it over before anything is seen of it.
         var start = new ProcessStartInfo(engine) { WorkingDirectory = gameDirectory, UseShellExecute = false, CreateNoWindow = true };
         start.Environment["LBA2_OVERLAY_FILE"] = OverlayFile(user);      // zone boxes and actor paths drawn by the engine (EDITOR_OVERLAY.CPP); an all-zero file draws nothing
-        // the race-track mode (RACEMOD.CPP): on only when a car file is named, so any other game plays exactly as it is
-        start.Environment.Remove("LBA2_RACETRACK_FILE");
-        if (options.RaceCarFile is { } writeCarFile)
-        {
-            var carFile = Path.Combine(user, "racecar.txt");
-            writeCarFile(carFile);
-            start.Environment["LBA2_RACETRACK_FILE"] = carFile;
-        }
+        RaceCarEnvironment(start, carFile);
         if (embedded)
         {
             start.WindowStyle = ProcessWindowStyle.Hidden;

@@ -9,9 +9,11 @@ namespace LBAAssembler.Terrain;
 internal static class RaceCarEngineFile
 {
     // The engine's car setup file (RACEMOD.CPP's format), with the start line, the checkpoints and the opponents from the game folder's
-    // RACETRACK.JSON when it has one (each opponent's line in the file named in `pathFiles`, in the order of Opponents).
-    internal static string EngineFile(this RaceCarSetup car, RaceTrackService.TrackInfo? track, IReadOnlyList<string>? pathFiles = null)
+    // RACETRACK.JSON when it has one (each opponent's line in the file named in `pathFiles`, in the order of Opponents). Of an island with
+    // a track in each weather file, the one the car setup's weather shows (RaceTrackService.Raced); the other's cars are kept out of sight.
+    internal static string EngineFile(this RaceCarSetup car, RaceTrackService.TrackInfo? info, IReadOnlyList<string>? pathFiles = null)
     {
+        var track = info is null ? null : RaceTrackService.Raced(info, car.FineWeather);
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
         var gears = Math.Clamp(car.Gears, 1, RaceCarSetup.MaxGears);
         var text = new StringBuilder("# LBA Assembler race car setup (read by the engine's race-track mode, RACEMOD.CPP)\n");
@@ -46,9 +48,16 @@ internal static class RaceCarEngineFile
             foreach (var (scene, actor) in o.Actors) text.Append($"{key}_actor={scene} {actor}\n");
         }
         // the cars of the opponents the setup doesn't race: hidden, so they don't stand where a racing car lines up
-        foreach (var (scene, actor) in car.Parked(track)) text.Append($"hide_actor={scene} {actor}\n");
+        // (and all of the other weather's track's: that isn't the island the game draws)
+        var parked = car.Parked(track);
+        if (info?.Twin is { } fine) parked.AddRange(AllCars(ReferenceEquals(track, fine) ? info : fine));
+        foreach (var (scene, actor) in parked) text.Append($"hide_actor={scene} {actor}\n");
         return text.ToString();
     }
+
+    // The scenes' copies of every opponent's car a track has.
+    private static IEnumerable<(int Scene, int Actor)> AllCars(RaceTrackService.TrackInfo track) =>
+        (track.Opponent ?? new()).Select(a => (a.Key, a.Value)).Concat((track.Rivals ?? new()).SelectMany(r => r.Actors.Select(a => (a.Key, a.Value))));
 
     // The scenes' copies of the cars of the opponents the track has and the setup doesn't race.
     internal static List<(int Scene, int Actor)> Parked(this RaceCarSetup car, RaceTrackService.TrackInfo? track)
@@ -82,15 +91,16 @@ internal static class RaceCarEngineFile
     public const string BikerName = "The biker";
 
     // The engine's car setup file, and beside it each opponent's line (racepath.txt, racepath2.txt ...).
-    internal static void WriteEngineFile(this RaceCarSetup car, string path, RaceTrackService.TrackInfo? track)
+    internal static void WriteEngineFile(this RaceCarSetup car, string path, RaceTrackService.TrackInfo? info)
     {
         var files = new List<string>();
+        var track = info is null ? null : RaceTrackService.Raced(info, car.FineWeather);
         foreach (var (o, i) in car.Opponents(track).Select((o, i) => (o, i)))
         {
             var file = Path.Combine(Path.GetDirectoryName(path) ?? ".", i == 0 ? "racepath.txt" : $"racepath{i + 1}.txt");
             File.WriteAllLines(file, o.Path.Select(p => string.Join(' ', p)));
             files.Add(file);
         }
-        File.WriteAllText(path, car.EngineFile(track, files));
+        File.WriteAllText(path, car.EngineFile(info, files));
     }
 }

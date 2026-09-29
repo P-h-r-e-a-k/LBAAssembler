@@ -83,7 +83,8 @@ public partial class MainWindow
     private int? RaceStartScene()
     {
         if (!EditorSettings.Current.RaceCar.StartAtLine || !Terrain.RaceTrackService.HasBackups(gameRoot)) return null;
-        return Terrain.RaceTrackService.ReadInfo(gameRoot) is { StartScene: >= 0 } info ? info.StartScene : null;
+        // (Citadel Island has a track in each weather: the car setup's weather says which one's start)
+        return Terrain.RaceTrackService.RacedIn(gameRoot) is { StartScene: >= 0 } info ? info.StartScene : null;
     }
 
     // Set when a race-track play starts with the zones and routes the editor draws over the game hidden; the first change of those

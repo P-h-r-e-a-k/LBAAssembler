@@ -57,7 +57,9 @@ internal sealed class RaceTrackWindow : Window
         crossing.Items.Add(new ComboBoxItem { Content = "A level junction, nothing over it", Tag = CrossingStyle.Level });
         // the style the folder's track was built with, when it has one (building it again keeps it), else the bridge
         crossing.SelectedIndex = 0;
-        if (Terrain.RaceTrackService.ReadInfo(gameRoot)?.Crossing is { } built && Enum.TryParse<CrossingStyle>(built, out var builtStyle))
+        // (Citadel Island's: its town circuit's, in the fine-weather file -- the storm track draws its own jump)
+        var info = Terrain.RaceTrackService.ReadInfo(gameRoot);
+        if ((info?.Twin ?? info)?.Crossing is { } built && Enum.TryParse<CrossingStyle>(built, out var builtStyle))
             crossing.SelectedItem = crossing.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is CrossingStyle s && s == builtStyle) ?? crossing.SelectedItem;
         BuildLayout();
         builtInPlan.Checked += (_, _) => PlanChoiceChanged();
@@ -86,22 +88,29 @@ internal sealed class RaceTrackWindow : Window
         UpdateStatus();
     }
 
-    // A built-in plan that draws its own bridge and jump (RaceTrackPlan.Heights: Mosquibees Island's) takes no crossing style.
+    // A built-in plan that draws its own bridge and jump (RaceTrackPlan.Heights: Mosquibees Island's) takes no crossing style. Citadel
+    // Island's storm track is one, but the style still goes to its town circuit (the fine-weather file's own track).
     private void CrossingChoice()
     {
         RaceTrackPlan? plan = null;
-        try { if (builtInPlan.IsChecked == true && RaceTrackPlan.Built(Island()) is { Planned: true } p) plan = p; }
+        var twinChooses = false;
+        try
+        {
+            if (builtInPlan.IsChecked == true && RaceTrackPlan.Built(Island()) is { Planned: true } p) plan = p;
+            twinChooses = RaceTrackPlan.BuiltTwin(Island()) is { Planned: false };
+        }
         catch (InvalidDataException) { plan = null; }
-        var planned = plan is not null;
+        var planned = plan is not null && !twinChooses;
         // (the box shows what the build will use: RaceTrackService.FollowPlan)
-        if (plan is not null)
+        if (planned)
         {
             var style = new RaceTrackOptions();
-            RaceTrackService.FollowPlan(plan, style);
+            RaceTrackService.FollowPlan(plan!, style);
             crossing.SelectedItem = crossing.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is CrossingStyle s && s == style.Crossing) ?? crossing.SelectedItem;
         }
         crossing.IsEnabled = !planned;
-        crossing.ToolTip = planned ? "This track's plan draws its own bridge and jump" : null;
+        crossing.ToolTip = planned ? "This track's plan draws its own bridge and jump"
+            : twinChooses ? $"For {Island().Name}'s town circuit ({Island().TwinIleFile}, once the storm is over); its storm track ({Island().IleFile}) draws its own jump" : null;
     }
 
     private void BuildLayout()
