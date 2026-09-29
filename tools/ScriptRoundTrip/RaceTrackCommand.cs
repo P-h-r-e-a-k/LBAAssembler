@@ -30,6 +30,7 @@ internal static class RaceTrackCommand
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var report = RaceTrackBuilder.Build(island, plan, options);
         island.Save(Path.Combine(game, where.IleFile));
+        if (RaceTrackService.BuildTwin(game, plan, options, report) is { } twinLog) Console.WriteLine("  " + twinLog);
         extra.AddRange(RaceTrackService.Finish(game, report, options));
         var scenes = RaceTrackScenes.Apply(game, report, options);
         RaceTrackService.WriteInfo(game, report, options, scenes);

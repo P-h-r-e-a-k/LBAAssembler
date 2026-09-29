@@ -40,6 +40,7 @@
  *     grid=<cube x> <cube z> <x> <y> <z> <turn>   a grid spot, cube-local; one line per spot, pole first (with none, the old start:
  *                                the opponents set off when the player first drives)
  *     pit=<the same>             a spot in the pit lane an opponent waits on while the player qualifies; one line per spot
+ *     weather=fine               Citadel Island's weather once the storm is over (RaceMod_FineWeather), whatever the chapter
  *     qualifying=1               a qualifying lap first (0: the grid is formed as soon as the player is in his car, he on pole)
  *     qualifying_seed=<n>        the opponents' qualifying times' randomness (default: the clock)
  *     hide_actor=<scene> <actor> a car in a scene that isn't racing (an opponent the player left out): kept out of sight
@@ -125,6 +126,7 @@ static int s_nbPits = 0;
 enum { PHASE_RACE, PHASE_QUALIFYING, PHASE_WAIT, PHASE_GRID };
 static int s_phase = PHASE_RACE;
 static int s_qualifying = 1;
+static int s_fineWeather = 0;
 static unsigned s_seed = 0;
 static S32 s_qualifyTime = 0;              // the player's, ms
 static int s_wantGrid = 0;                 // form the grid (asked for by the lap, done before the next drawing)
@@ -325,6 +327,7 @@ static void Load(const char *path) {
             T_RACE_SPOT *g = &s_pits[s_nbPits];
             if (s_nbPits < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbPits++;
         } else if (!strcmp(key, "qualifying")) s_qualifying = atoi(v);
+        else if (!strcmp(key, "weather")) s_fineWeather = !strcmp(v, "fine");
         else if (!strcmp(key, "qualifying_seed")) s_seed = (unsigned)strtoul(v, NULL, 10);
         else if (!strcmp(key, "hide_actor")) {
             if (s_nbHidden < RACE_MAX_HIDDEN && sscanf(v, "%d %d", &s_hideScene[s_nbHidden], &s_hideActor[s_nbHidden]) == 2) s_nbHidden++;
@@ -397,6 +400,13 @@ S32 RaceMod_Active(void) {
         }
     }
     return s_active;
+}
+
+// weather=fine: Citadel Island as it is once the storm is over (the chapter-2 weather: no rain or thunder, the CITABAU island file with
+// its own light and palette, the clear sky). Asked by COMMON.H's storm macros whenever the island loads -- which can be before anything
+// else has asked for the race file, so this reads it too.
+S32 RaceMod_FineWeather(void) {
+    return RaceMod_Active() && s_fineWeather;
 }
 
 const T_RACE_CAR *RaceMod_Car(void) {

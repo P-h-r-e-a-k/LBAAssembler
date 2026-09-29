@@ -19,6 +19,7 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox baldino = new() { Content = "Race Baldino too, in his rocket car" };
     private readonly CheckBox fightBack = new() { Content = "They push harder when they fall behind you" };
     private readonly CheckBox qualifying = new() { Content = "Drive a qualifying lap first: the times set the grid" };
+    private readonly CheckBox fineWeather = new() { Content = "Stop the rain on Citadel Island (the weather after the lighthouse, when the aliens land)", ToolTip = "No rain or thunder, the brighter island with its own light and sky. Only the weather changes: the story stays where it is." };
     private readonly CheckBox startAtLine = new() { Content = "Start beside the car on the start/finish straight, with the editor's markings hidden" };
     private readonly List<Action> refresh = new();
     private bool updating;
@@ -97,6 +98,10 @@ internal sealed class RaceCarWindow : Window
         qualifying.Unchecked += (_, _) => setup.Qualifying = false;
         qualifying.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(qualifying);
+        fineWeather.Checked += (_, _) => setup.FineWeather = true;
+        fineWeather.Unchecked += (_, _) => setup.FineWeather = false;
+        fineWeather.Margin = new Thickness(0, 4, 0, 0);
+        root.Children.Add(fineWeather);
         startAtLine.Checked += (_, _) => setup.StartAtLine = true;
         startAtLine.Unchecked += (_, _) => setup.StartAtLine = false;
         startAtLine.Margin = new Thickness(0, 4, 0, 0);
@@ -110,7 +115,7 @@ internal sealed class RaceCarWindow : Window
         root.Children.Add(display);
         askBeforePlay.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(askBeforePlay);
-        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, baldino, fightBack, qualifying, startAtLine }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, baldino, fightBack, qualifying, fineWeather, startAtLine }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         var ok = new Button { Content = forPlay ? "Play" : "Save", Padding = new Thickness(18, 5, 18, 5), IsDefault = true, Margin = new Thickness(0, 0, 10, 0) };
         var cancel = new Button { Content = "Cancel", Padding = new Thickness(14, 5, 14, 5), IsCancel = true };
@@ -133,6 +138,7 @@ internal sealed class RaceCarWindow : Window
         baldino.IsChecked = setup.Baldino;
         fightBack.IsChecked = setup.OpponentsFightBack;
         qualifying.IsChecked = setup.Qualifying;
+        fineWeather.IsChecked = setup.FineWeather;
         startAtLine.IsChecked = setup.StartAtLine;
         foreach (var r in refresh) r();
         ShowGearRows();

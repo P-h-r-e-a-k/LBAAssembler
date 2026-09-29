@@ -98,7 +98,7 @@ public partial class MainWindow
         if (!Terrain.RaceTrackService.IsOutdated(gameRoot) || !outdatedTrackWarned.Add(gameRoot)) return true;
         var answer = MessageBox.Show(this,
             "The race track in this game folder was built by an older version of LBA Assembler, before the grid, the qualifying lap and the " +
-            "count-down start. It plays the old way until it is built again (Tools > LBA2: Desert island race track > Build the track).\n\n" +
+            "count-down start. It plays the old way until it is built again (Tools > LBA2: race track > Build the track).\n\n" +
             "Open the race track dialog now? No plays the track as it is.",
             "Race track", MessageBoxButton.YesNoCancel, MessageBoxImage.Information);
         if (answer == MessageBoxResult.Yes) { Lba2RaceTrack_Click(this, new RoutedEventArgs()); return false; }

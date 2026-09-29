@@ -18,9 +18,15 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Desert = new("Desert island", "DESERT.ILE", "DESERT.OBL", 2, 55, 73, 29,
         "RaceTrackPlan.Desert.json", (7, 10));
 
-    // Citadel Island: a town circuit, no retail track to clear, and no buggy in its scenes (the build puts one on the grid).
+    // Citadel Island: a town circuit, no retail track to clear, and no buggy in its scenes (the build puts one on the grid). Once the storm
+    // is over (chapter 2, after the lighthouse) the engine draws it from CITABAU instead -- the same ground with its own light, palette and
+    // decor bodies -- so the track is built into both, or it would vanish when the rain stops.
     public static readonly RaceTrackIsland Citadel = new("Citadel Island", "CITADEL.ILE", "CITADEL.OBL", 0, 42, 50, 27,
-        "RaceTrackPlan.Citadel.json", null);
+        "RaceTrackPlan.Citadel.json", null) { TwinIleFile = "CITABAU.ILE", TwinOblFile = "CITABAU.OBL" };
+
+    // The island's other file for other weather (EXTFUNC.CPP loads it instead once the storm is over), built with the same track.
+    public string? TwinIleFile { get; init; }
+    public string? TwinOblFile { get; init; }
 
     public static readonly RaceTrackIsland[] All = { Desert, Citadel };
 
@@ -28,5 +34,5 @@ internal sealed record RaceTrackIsland(
 
     // The files a build of this island changes, besides the ones every build does (SCENE.HQR, and BODY.HQR / ANIM.HQR / RESS.HQR for the
     // cars and the jump).
-    public string[] IslandFiles => new[] { IleFile, OblFile };
+    public string[] IslandFiles => TwinIleFile is { } ti && TwinOblFile is { } to ? new[] { IleFile, OblFile, ti, to } : new[] { IleFile, OblFile };
 }

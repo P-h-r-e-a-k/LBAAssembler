@@ -1652,17 +1652,18 @@ public partial class MainWindow : Window
         RefreshZoneListIfVisible();
     }
 
-    // Tools > LBA2: Desert island race track (RaceTrackWindow): builds the track into the game folder, or puts the folder back.
+    // Tools > LBA2: race track (RaceTrackWindow): builds an island's track into the game folder, or puts the folder back.
     private void Lba2RaceTrack_Click(object sender, RoutedEventArgs e)
     {
         if (!Lba2Engine.IsGameFolder(gameRoot))
         {
-            MessageBox.Show(this, "The LBA2 game folder isn't set. Choose it under File > Settings.", "Desert island race track", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, "The LBA2 game folder isn't set. Choose it under File > Settings.", "Race track", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        if (scriptSession.EditedScenes.Any(s => s is >= 55 and <= 73))
+        // (a build rewrites the outside scenes of the island it is on; any island's, as the dialog picks the island)
+        if (Terrain.RaceTrackIsland.All.FirstOrDefault(i => scriptSession.EditedScenes.Any(s => s >= i.FirstScene && s <= i.LastScene)) is { } edited)
         {
-            MessageBox.Show(this, "Some of the Desert island's outside scenes (55-73) have unsaved script edits. Save or discard them first.", "Desert island race track", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, $"Some of {edited.Name}'s outside scenes ({edited.FirstScene}-{edited.LastScene}) have unsaved script edits. Save or discard them first.", "Race track", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         if (playing) StopPlay();

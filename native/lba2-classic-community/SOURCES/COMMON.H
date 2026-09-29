@@ -293,12 +293,15 @@ typedef	struct	{
 #define FLAG_PLANETE_ESMER      254
 #define	FLAG_DONT_USE		255 	// Pour l'inventaire
 
+// The storm over Citadel Island (rain, thunder, the CITADEL island file and its sky) lasts until chapter 2, when the aliens land after
+// the lighthouse. A race-track mod's file can ask for the weather after it without moving the story on (RACEMOD.CPP: weather=fine).
+S32 RaceMod_FineWeather(void);
 #ifdef	LBA_EDITOR
-#define	TEMPETE_ACTIVE	(ListVarGame[FLAG_CHAPTER].Value<2 OR FlagRain)
-#define	TEMPETE_FINIE	(ListVarGame[FLAG_CHAPTER].Value>=2 AND !FlagRain)
+#define	TEMPETE_ACTIVE	(!RaceMod_FineWeather() AND (ListVarGame[FLAG_CHAPTER].Value<2 OR FlagRain))
+#define	TEMPETE_FINIE	(RaceMod_FineWeather() OR (ListVarGame[FLAG_CHAPTER].Value>=2 AND !FlagRain))
 #else
-#define	TEMPETE_ACTIVE	(ListVarGame[FLAG_CHAPTER]<2 OR FlagRain)
-#define	TEMPETE_FINIE	(ListVarGame[FLAG_CHAPTER]>=2 AND !FlagRain)
+#define	TEMPETE_ACTIVE	(!RaceMod_FineWeather() AND (ListVarGame[FLAG_CHAPTER]<2 OR FlagRain))
+#define	TEMPETE_FINIE	(RaceMod_FineWeather() OR (ListVarGame[FLAG_CHAPTER]>=2 AND !FlagRain))
 #endif
 
 #define	INV_MAX_VALUE	100	// Capacité des objets inventaires VALUE (conque)

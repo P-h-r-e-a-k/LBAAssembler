@@ -4,7 +4,7 @@ using LBAAssembler.Scenes;
 
 namespace LBAAssembler.Terrain;
 
-// The scene side of the Desert island race track: every exterior scene of the island loses its actors except Twinsen and the buggy,
+// The scene side of a race track (the Desert island's or Citadel Island's): every exterior scene of the island loses its actors except Twinsen and the buggy,
 // and the scene the start line lies in starts Twinsen and the buggy on the line.
 internal static class RaceTrackScenes
 {
@@ -25,6 +25,104 @@ internal static class RaceTrackScenes
         if (buggy.Life.Length <= 6 || buggy.Life[0] != 0x0C || buggy.Life[1] != 0x0F || buggy.Life[2] != 0x4A || buggy.Life[3] != 0x03 || buggy.Life[4] != 0x03 || buggy.Life[5] != 0x00) return false;
         buggy.Life[4] = 0x00;
         return true;
+    }
+
+    // ---- cube edges ----
+    // An island's outside is one scene per cube, and the engine holds the hero at a cube's edge (EXTFUNC: Nxw clamped to the cube, with
+    // FlagHeroOut set) unless a cube-change zone (type 0) to the next cube's scene covers the spot, at his height, on that edge
+    // (GereZoneChangeCube: the arrival value 512 / 31744 names the edge). The retail zones only cover the edges where the retail paths
+    // cross them -- scene 42's south edge has none for 14 cells where there was a cliff -- so wherever the lap crosses an edge the road
+    // is checked, both ways, and given a zone of its own where the island's don't reach all of it: an invisible wall otherwise.
+    private sealed record EdgeCrossing(int FromScene, int ToScene, int CubeX, int CubeZ, char Side, double Along, double Height);
+
+    // the half width of road a crossing zone covers either side of where the lap's middle crosses (the road and its curbs), and how far
+    // below and above the road it reaches
+    private const double EdgeHalfCells = 8;
+    private const int EdgeBelow = 2048, EdgeAbove = 4096;
+
+    private static List<EdgeCrossing> EdgeCrossings(SceneStore store, RaceTrackReport report, RaceTrackOptions options, int island)
+    {
+        var result = new List<EdgeCrossing>();
+        if (report.LapX.Length < 2 || report.GroundAfter is not { } ground) return result;
+        var sceneOf = new Dictionary<(int, int), int>();
+        for (var scene = options.Island.FirstScene; scene <= options.Island.LastScene; scene++)
+        {
+            if (!store.SceneExists(scene)) continue;
+            try
+            {
+                var m = store.Load(scene);
+                if (m.Island == island && m.CubeMode == 1) sceneOf.TryAdd((m.CubeX, m.CubeY), scene);
+            }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
+        }
+        var n = report.LapX.Length;
+        for (var i = 0; i < n; i++)
+        {
+            var j = (i + 1) % n;
+            double x0 = report.LapX[i], z0 = report.LapZ[i], x1 = report.LapX[j], z1 = report.LapZ[j];
+            int ax = (int)Math.Floor(x0 / 64), az = (int)Math.Floor(z0 / 64), bx = (int)Math.Floor(x1 / 64), bz = (int)Math.Floor(z1 / 64);
+            if (ax == bx && az == bz) continue;
+            if (!sceneOf.TryGetValue((ax, az), out var from) || !sceneOf.TryGetValue((bx, bz), out var to)) continue;
+            // (where the segment meets the edge: an x edge, a z edge, or -- through a corner -- both, each taken at its own point)
+            if (ax != bx)
+            {
+                var ex = Math.Max(ax, bx) * 64.0; var t = (ex - x0) / (x1 - x0); var z = z0 + (z1 - z0) * t;
+                var h = ground(ex, z);
+                result.Add(new EdgeCrossing(from, to, ax, az, bx > ax ? 'E' : 'W', z - az * 64.0, h));
+                result.Add(new EdgeCrossing(to, from, bx, bz, bx > ax ? 'W' : 'E', z - bz * 64.0, h));
+            }
+            if (az != bz)
+            {
+                var ez = Math.Max(az, bz) * 64.0; var t = (ez - z0) / (z1 - z0); var x = x0 + (x1 - x0) * t;
+                var h = ground(x, ez);
+                result.Add(new EdgeCrossing(from, to, ax, az, bz > az ? 'S' : 'N', x - ax * 64.0, h));
+                result.Add(new EdgeCrossing(to, from, bx, bz, bz > az ? 'N' : 'S', x - bx * 64.0, h));
+            }
+        }
+        return result;
+    }
+
+    // Gives `model` a crossing zone for each place the lap leaves its cube that no zone of its own to the next scene covers (the whole
+    // road's width, at the road's height). Its box and arrival are the retail edge zones' own: the last cell before the edge, the arrival
+    // naming the edge (512 into the next cube's near side, 32768 - 1024 its far side), the other coordinate and the height carried over.
+    private static int CoverEdges(SceneModel model, int scene, List<EdgeCrossing> edges, List<string> log)
+    {
+        var added = 0;
+        const int Cube = IslandFile.CubeSize, Cell = 512, Near = 512, Far = Cube - 1024;
+        foreach (var e in edges.Where(e => e.FromScene == scene))
+        {
+            int lo = (int)Math.Round((e.Along - EdgeHalfCells) * Cell), hi = (int)Math.Round((e.Along + EdgeHalfCells) * Cell);
+            int y0 = Math.Max(0, (int)Math.Round(e.Height) - EdgeBelow), y1 = (int)Math.Round(e.Height) + EdgeAbove;
+            var road = (int)Math.Round(e.Height);
+            bool Covers(SceneZoneModel z)
+            {
+                if (z.Type != 0 || z.Num != e.ToScene || z.Info.Length < 3) return false;
+                if (road < Math.Min(z.Y0, z.Y1) || road > Math.Max(z.Y0, z.Y1)) return false;
+                int a0, a1; bool edge;
+                switch (e.Side)
+                {
+                    case 'S': edge = z.Info[2] == Near && Math.Max(z.Z0, z.Z1) >= Cube - Cell; a0 = Math.Min(z.X0, z.X1); a1 = Math.Max(z.X0, z.X1); break;
+                    case 'N': edge = z.Info[2] == Far && Math.Min(z.Z0, z.Z1) <= Cell; a0 = Math.Min(z.X0, z.X1); a1 = Math.Max(z.X0, z.X1); break;
+                    case 'E': edge = z.Info[0] == Near && Math.Max(z.X0, z.X1) >= Cube - Cell; a0 = Math.Min(z.Z0, z.Z1); a1 = Math.Max(z.Z0, z.Z1); break;
+                    default: edge = z.Info[0] == Far && Math.Min(z.X0, z.X1) <= Cell; a0 = Math.Min(z.Z0, z.Z1); a1 = Math.Max(z.Z0, z.Z1); break;
+                }
+                return edge && a0 <= lo && a1 >= hi;
+            }
+            if (model.Zones.Any(Covers)) continue;
+            var zone = new SceneZoneModel { Type = 0, Num = e.ToScene, Info = new int[8], Y0 = y0, Y1 = y1 };
+            zone.Info[1] = y0; zone.Info[7] = 1;
+            switch (e.Side)
+            {
+                case 'S': zone.X0 = lo; zone.X1 = hi; zone.Z0 = Cube - Cell; zone.Z1 = Cube; zone.Info[0] = lo; zone.Info[2] = Near; break;
+                case 'N': zone.X0 = lo; zone.X1 = hi; zone.Z0 = 0; zone.Z1 = Cell; zone.Info[0] = lo; zone.Info[2] = Far; break;
+                case 'E': zone.Z0 = lo; zone.Z1 = hi; zone.X0 = Cube - Cell; zone.X1 = Cube; zone.Info[2] = lo; zone.Info[0] = Near; break;
+                default: zone.Z0 = lo; zone.Z1 = hi; zone.X0 = 0; zone.X1 = Cell; zone.Info[2] = lo; zone.Info[0] = Far; break;
+            }
+            SceneOps.AddZone(model, zone);
+            added++;
+            log.Add($"scene {scene}: the road leaves the cube over its {e.Side} edge where no crossing zone reached it -- one added to scene {e.ToScene} ({EdgeHalfCells * 2:0} cells of edge, height {y0}..{y1})");
+        }
+        return added;
     }
 
     // The Desert island's own buggy (scene 67), for an island whose scenes have none: the same actor, so its script and flags are the
@@ -84,6 +182,8 @@ internal static class RaceTrackScenes
         if (options.AddOpponent)
             try { racer = store.Load(RacerScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == RacerEntity)?.Clone(); }
             catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { log.Add($"no opponent: scene {RacerScene} could not be read ({e.Message})"); }
+        var edges = EdgeCrossings(store, report, options, island);
+        var edgeZonesAdded = 0;
         for (var scene = 0; scene < store.SceneCount; scene++)
         {
             if (!store.SceneExists(scene)) continue;
@@ -195,7 +295,10 @@ internal static class RaceTrackScenes
                 {
                     var zone = model.Zones[z];
                     var kind = zone.Type;
-                    var door = kind == 0 && (zone.Num < 55 || zone.Num > 73);
+                    // (a change to another of the island's own outside scenes is the way across a cube edge: the engine holds the hero at the
+                    // edge unless such a zone takes him over, so removing one walls the road off -- which is what happened on Citadel Island
+                    // while this was the Desert island's scene numbers)
+                    var door = kind == 0 && (zone.Num < options.Island.FirstScene || zone.Num > options.Island.LastScene);
                     // (only cameras that are on from the start: one that starts off is switched on only by a cutscene's script -- the
                     // ferry's arrival, a call of the car -- which then needs it, and the car never meets it)
                     var camera = kind == 1 && options.RemoveTrackCameras && zone.Info.Length > 7 && (zone.Info[7] & 1) != 0;
@@ -234,8 +337,10 @@ internal static class RaceTrackScenes
                 var jumped = AddJump(model, scene, jump, log);
                 if (jumped is not null) model = jumped;
             }
+            edgeZonesAdded += CoverEdges(model, scene, edges, log);
             changes.Add(new SceneChange(scene, model, null));
         }
+        if (edges.Count > 0) log.Add($"the lap crosses {edges.Count / 2} cube edges; {edgeZonesAdded} crossing zones added where the island's own did not cover the road");
         if (changes.Count > 0) store.SaveMany(changes, allowErrors: true);
         log.Add($"{zonesRemoved} zones on the road removed");
         if (options.RemoveTrackCameras) log.Add($"{camerasRemoved} fixed camera zones along the track removed");

@@ -24,14 +24,16 @@ internal static class RaceTrackTextures
     // The road's tiles on `island`: the Desert island's own, or, for another island, copied into its texture page. The copies go where no
     // cube's polygon reads (Free), their palette indices turned into the nearest colour of the island's own palette. Returns the theme the
     // painter then uses, and a line for the build's log.
-    public static (RaceTrackTheme Theme, string Log) Import(IslandFile island, RaceTrackIsland where, string gameDirectory)
+    // (`ileFile`: which of the island's files this is -- its fine-weather twin has a palette of its own)
+    public static (RaceTrackTheme Theme, string Log) Import(IslandFile island, RaceTrackIsland where, string gameDirectory, string? ileFile = null)
     {
-        if (where.IleFile == RaceTrackIsland.Desert.IleFile) return (RaceTrackTheme.Retail, "");
+        var file = ileFile ?? where.IleFile;
+        if (file == RaceTrackIsland.Desert.IleFile) return (RaceTrackTheme.Retail, "");
 
         var desertPath = Path.Combine(gameDirectory, RaceTrackIsland.Desert.IleFile);
         var desert = IslandFile.Load(File.Exists(desertPath) ? desertPath : Path.Combine(gameDirectory, RaceTrackIsland.Desert.IleFile + RaceTrackService.BackupSuffix));
         var from = IslandMapRenderer.LoadPalette(gameDirectory, "DESERT");
-        var to = IslandMapRenderer.LoadPalette(gameDirectory, Path.GetFileNameWithoutExtension(where.IleFile));
+        var to = IslandMapRenderer.LoadPalette(gameDirectory, Path.GetFileNameWithoutExtension(file));
 
         // the nearest colour of the island's palette to each of the Desert's (index 0 is the transparent one on both)
         var map = new byte[256];
@@ -51,7 +53,7 @@ internal static class RaceTrackTextures
         var placed = new List<string>();
         (int X, int Y, int W, int H) Copy(string what, (int X, int Y, int W, int H) tile)
         {
-            if (Place(free, tile.W, tile.H) is not { } at) throw new InvalidDataException($"{where.Name}'s ground texture has no room for the road's {what}.");
+            if (Place(free, tile.W, tile.H) is not { } at) throw new InvalidDataException($"{file}'s ground texture has no room for the road's {what}.");
             for (var y = 0; y < tile.H; y++)
             for (var x = 0; x < tile.W; x++)
                 island.GroundTexture[(at.Y + y) * 256 + at.X + x] = map[desert.GroundTexture[(tile.Y + y) * 256 + tile.X + x]];
@@ -83,7 +85,7 @@ internal static class RaceTrackTextures
 
         var theme = new RaceTrackTheme(asphalt, (white.X + 3, white.Y + 3), hatch, rock,
             Near(RaceTrackTheme.Retail.RedCurb), Near(RaceTrackTheme.Retail.Arrow), Near(RaceTrackTheme.Retail.Sand));
-        var log = $"the road's look on {where.Name}: the Desert track's tiles copied into its spare texture space ({string.Join(", ", placed)}), " +
+        var log = $"the road's look on {where.Name} ({file}): the Desert track's tiles copied into its spare texture space ({string.Join(", ", placed)}), " +
                   $"their colours matched in its own palette; the red curb is colour {theme.RedCurb.Bank * 16 + theme.RedCurb.Pos}, the arrows {theme.Arrow.Bank * 16 + theme.Arrow.Pos}";
         return (theme, log);
     }

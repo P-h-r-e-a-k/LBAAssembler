@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace LBAAssembler.Terrain;
 
-// Builds the Desert island race track into an LBA2 game folder, and puts the folder back. The files it changes are kept beside the originals as
+// Builds an island's race track (RaceTrackIsland) into an LBA2 game folder, and puts the folder back. The files it changes are kept beside the originals as
 // *.before-racetrack the first time; every later build starts from those copies, so building again never piles a track on a track, and Restore
 // puts them back. DESERT.ILE, DESERT.OBL and SCENE.HQR always change; ANIM.HQR and RESS.HQR for a jump (its flight, RaceTrackJumpAnim), BODY.HQR
 // and RESS.HQR for Baldino's car (RaceTrackBaldinoCar); they are kept from the first build on too (a folder built before one of them changed keeps
@@ -96,6 +96,7 @@ internal static class RaceTrackService
             if (themed.Log.Length > 0) extra.Add(themed.Log);
             var report = RaceTrackBuilder.Build(island, plan, options);
             island.Save(Path.Combine(gameDirectory, options.Island.IleFile));
+            if (BuildTwin(gameDirectory, plan, options, report) is { } twin) extra.Add(twin);
             extra.AddRange(Finish(gameDirectory, report, options));
             var scenes = RaceTrackScenes.Apply(gameDirectory, report, options);
             WriteInfo(gameDirectory, report, options, scenes);
@@ -117,12 +118,58 @@ internal static class RaceTrackService
         }
     }
 
+    // The island's fine-weather file (Citadel Island's CITABAU), built with the same plan after the main one: the ground is the same, so
+    // the road comes out the same, but its decors, its texture page and palette and its decor bodies are its own -- the tiles are copied
+    // in its own palette, the deck gets a body in its own OBL, and whatever of its own decor is on the road is cleared. The scenes are
+    // shared and were given the main build's cars, grid and zones. Returns a line for the log, or null for an island with no twin.
+    public static string? BuildTwin(string gameDirectory, RaceTrackPlan plan, RaceTrackOptions options, RaceTrackReport main)
+    {
+        if (options.Island.TwinIleFile is not { } ile || options.Island.TwinOblFile is not { } obl) return null;
+        var source = Path.Combine(gameDirectory, ile + BackupSuffix);
+        var twin = IslandFile.Load(File.Exists(source) ? source : Path.Combine(gameDirectory, ile));
+        var twinOptions = options.Copy();
+        twinOptions.RetailBodies = new();
+        CopyRetailBodies(gameDirectory, obl, twinOptions);
+        if (twinOptions.Crossing == CrossingStyle.Bridge)
+            twinOptions.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, obl), twinOptions);
+        twinOptions.Theme = RaceTrackTextures.Import(twin, options.Island, gameDirectory, ile).Theme;
+        var report = RaceTrackBuilder.Build(twin, plan, twinOptions);
+        twin.Save(Path.Combine(gameDirectory, ile));
+        var same = Math.Abs(report.Length - main.Length) < 0.01 && report.StartLine.SequenceEqual(main.StartLine) && report.Pits.SequenceEqual(main.Pits) && report.Checkpoints.Count == main.Checkpoints.Count;
+        return $"{ile} (the island once the storm is over) built with the same track: lap {report.Length:0} cells, {report.DecorsRemoved + report.SolidDecorsRemoved} of its own decors taken off the road" +
+               (same ? "" : " -- WARNING: its road came out different from the main build's");
+    }
+
+    // The retail race track's gantry (64-66) and viaduct arch (68-70) are bodies of DESERT.OBL; on another island those numbers are that
+    // island's own objects, so the Desert's are copied to the end of its OBL (as they are: the island palettes put the same colours at
+    // those indices -- Citadel's fine-weather one exactly, its storm one a shade darker, as its whole island is) and options.RetailBodies
+    // maps each to its copy. Nothing for the Desert island itself. Returns a line for the log.
+    public static readonly int[] RetailBodyNumbers = { 64, 65, 66, 68, 69, 70 };
+
+    public static string? CopyRetailBodies(string gameDirectory, string oblFile, RaceTrackOptions options)
+    {
+        if (string.Equals(oblFile, RaceTrackIsland.Desert.OblFile, StringComparison.OrdinalIgnoreCase)) return null;
+        var desertPath = Path.Combine(gameDirectory, RaceTrackIsland.Desert.OblFile);
+        var desert = HqrArchive.Open(File.Exists(desertPath + BackupSuffix) ? desertPath + BackupSuffix : desertPath);
+        var path = Path.Combine(gameDirectory, oblFile);
+        var index = HqrArchive.CountEntries(path);
+        var hqr = File.ReadAllBytes(path);
+        foreach (var body in RetailBodyNumbers)
+        {
+            hqr = HqrWriter.AppendEntry(hqr, HqrWriter.StoredEntry(desert.Read(body)));
+            options.RetailBodies[body] = index++;
+        }
+        File.WriteAllBytes(path, hqr);
+        return $"the start gantry and the viaduct arch: the Desert track's own bodies copied into {oblFile} (as {options.RetailBodies[64]}-{options.RetailBodies[70]})";
+    }
+
     // What a crossing style needs in the files besides the island and the scenes (the files are the originals when these run): before the
     // island is built, the bridge deck's bodies in DESERT.OBL; after it, the jump's flight in ANIM.HQR and RESS.HQR, as long as the layout
     // made it, and Baldino's car in BODY.HQR and RESS.HQR. Return lines for the build's log.
     public static List<string> Prepare(string gameDirectory, RaceTrackOptions options)
     {
         var log = new List<string>();
+        if (CopyRetailBodies(gameDirectory, options.Island.OblFile, options) is { } copied) log.Add(copied);
         if (options.Crossing == CrossingStyle.Bridge)
             options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, options.Island.OblFile), options);
         if (options.Crossing == CrossingStyle.Jump) options.JumpAnim = RaceTrackJumpAnim.Generic;

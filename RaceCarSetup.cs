@@ -1,7 +1,7 @@
 namespace LBAAssembler;
 
 // The buggy's setup for a race-track mod: what the engine's race-track mode (native RACEMOD.CPP) does with the car when Play runs a game folder that
-// has a race track built (Tools > LBA2: Desert island race track). Kept in the settings; RaceCarWindow edits it.
+// has a race track built (Tools > LBA2: race track). Kept in the settings; RaceCarWindow edits it.
 //
 // Speeds are km/h as the engine's own display shows them, a cell (512 world units) taken as a metre: the original buggy's top speed, 3800 units a
 // second, is 27 km/h. The rates are percentages of the original car's (it gains 4 units a second every millisecond of throttle, loses 12 braking
@@ -33,6 +33,9 @@ public sealed class RaceCarSetup
     public int BaldinoSkill { get; set; } = 91;
     // A qualifying lap before the race: its time against the opponents' sets the grid (off: Twinsen starts on pole).
     public bool Qualifying { get; set; } = true;
+    // Citadel Island's weather once the storm is over -- as after the lighthouse keeper is freed and the aliens land: no rain, the
+    // brighter island file, its light and its sky. Only the weather: the story stays where the game is.
+    public bool FineWeather { get; set; } = true;
     // An opponent that has fallen behind pushes harder (up to CatchUpPercent more, 60 cells behind).
     public bool OpponentsFightBack { get; set; } = true;
     public const int CatchUpPercent = 8;
