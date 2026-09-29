@@ -89,9 +89,17 @@ internal sealed class RaceTrackWindow : Window
     // A built-in plan that draws its own bridge and jump (RaceTrackPlan.Heights: Mosquibees Island's) takes no crossing style.
     private void CrossingChoice()
     {
-        bool planned;
-        try { planned = builtInPlan.IsChecked == true && RaceTrackPlan.Built(Island()).Planned; }
-        catch (InvalidDataException) { planned = false; }
+        RaceTrackPlan? plan = null;
+        try { if (builtInPlan.IsChecked == true && RaceTrackPlan.Built(Island()) is { Planned: true } p) plan = p; }
+        catch (InvalidDataException) { plan = null; }
+        var planned = plan is not null;
+        // (the box shows what the build will use: RaceTrackService.FollowPlan)
+        if (plan is not null)
+        {
+            var style = new RaceTrackOptions();
+            RaceTrackService.FollowPlan(plan, style);
+            crossing.SelectedItem = crossing.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is CrossingStyle s && s == style.Crossing) ?? crossing.SelectedItem;
+        }
         crossing.IsEnabled = !planned;
         crossing.ToolTip = planned ? "This track's plan draws its own bridge and jump" : null;
     }

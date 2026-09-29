@@ -25,6 +25,7 @@ internal static class RaceTrackCommand
         if (Environment.GetEnvironmentVariable("RT_JUMPGAP") is { } jg) options.JumpGap = double.Parse(jg, System.Globalization.CultureInfo.InvariantCulture);
         var themed = RaceTrackTextures.Import(island, where, game);
         options.Theme = themed.Theme;
+        RaceTrackService.FollowPlan(plan, options);
         var extra = RaceTrackService.Prepare(game, options);
         if (themed.Log.Length > 0) extra.Add(themed.Log);
         var watch = System.Diagnostics.Stopwatch.StartNew();

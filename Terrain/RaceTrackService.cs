@@ -90,6 +90,7 @@ internal static class RaceTrackService
             foreach (var f in files.Where(f => f != options.Island.IleFile))
                 CopyWritable(Path.Combine(gameDirectory, f + BackupSuffix), Path.Combine(gameDirectory, f));
             var log = new List<string>();
+            FollowPlan(plan, options);
             var extra = Prepare(gameDirectory, options);
             var island = IslandFile.Load(Path.Combine(gameDirectory, options.Island.IleFile + BackupSuffix));
             var themed = RaceTrackTextures.Import(island, options.Island, gameDirectory);
@@ -163,6 +164,15 @@ internal static class RaceTrackService
         }
         File.WriteAllBytes(path, hqr);
         return $"the start gantry and the viaduct arch: the Desert track's own bodies copied into {oblFile} (as {options.RetailBodies[64]}-{options.RetailBodies[70]})";
+    }
+
+    // A plan that draws its own bridge and jump (RaceTrackPlan.Planned: Mosquibees Island's) takes no crossing style -- the window greys
+    // the choice out -- but the style still decides whether the deck gets a body (Prepare, BuildTwin), so it follows the plan: a bridge
+    // when the plan draws one. Not whatever the window last showed: that is read back from the folder's previous build, and a Jump left
+    // there built the lap with no deck under its bridge. Before Prepare.
+    public static void FollowPlan(RaceTrackPlan plan, RaceTrackOptions options)
+    {
+        if (plan.Planned) options.Crossing = plan.Deck is not null ? CrossingStyle.Bridge : CrossingStyle.Level;
     }
 
     // What a crossing style needs in the files besides the island and the scenes (the files are the originals when these run): before the
