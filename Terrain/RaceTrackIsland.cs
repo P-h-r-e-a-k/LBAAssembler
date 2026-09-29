@@ -24,11 +24,18 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Citadel = new("Citadel Island", "CITADEL.ILE", "CITADEL.OBL", 0, 42, 50, 27,
         "RaceTrackPlan.Citadel.json", null) { TwinIleFile = "CITABAU.ILE", TwinOblFile = "CITABAU.OBL" };
 
+    // Mosquibees Island: a mountain lap from a drawing -- two loops winding up round the Mosquibees' mountain from the shore, a bridge
+    // from its top over the first loop and the channel to the plateau's ridge, a jump over the plateau's west bay, the start line on its
+    // north edge, and the long way down its east side. The plan carries its own heights, bridge and jump (RaceTrackPlan.Heights). Its
+    // outside scenes are 102, 103 and 105; 104 between them is the Queen's throne, an inside scene.
+    public static readonly RaceTrackIsland Mosquibe = new("Mosquibees Island", "MOSQUIBE.ILE", "MOSQUIBE.OBL", 7, 102, 105, 34,
+        "RaceTrackPlan.Mosquibe.json", null);
+
     // The island's other file for other weather (EXTFUNC.CPP loads it instead once the storm is over), built with the same track.
     public string? TwinIleFile { get; init; }
     public string? TwinOblFile { get; init; }
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, Mosquibe };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

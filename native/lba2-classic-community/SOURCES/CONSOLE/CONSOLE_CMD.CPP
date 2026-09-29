@@ -4,6 +4,7 @@
 #include "CONSOLE_STATE.H"
 #include "CONSOLE_GIVE.H"
 #include "../C_EXTERN.H"
+#include <SVGA/CLIP.H>     /* SetClipWindow: the cube jump clears a cutscene letterbox */
 #include "../COMMON.H"
 #include "../CHEATCOD.H"  // TryExecuteCheatByName, the one verb claim the console offers
 #include "../ZONE_GEOM.H" // ZonePointInBox (zonelist shares the engine's zone box test)
@@ -116,6 +117,11 @@ static void cmd_cube(int argc, const char *argv[]) {
     }
     Console_Close();
     NewCube = target;
+    /* A jump leaves whatever cutscene the old scene was in (a harness's `cube` straight after boot lands mid-way through the
+       new game's opening, whose cinema_mode(1) then stayed on for the whole run: letterbox bars, and the Auto camera never ran
+       -- PERSO.CPP runs it only outside CinemaMode). As the --load path does (CONTROL.CPP). */
+    CinemaMode = FALSE;
+    SetClipWindow(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
     Console_Print("Cube %d (change on next frame)", NewCube);
 }
 
@@ -349,12 +355,15 @@ static void unique_shoot_path(const char *prefix, const char *ext, T_CAPTURE_SEQ
 }
 
 static void cmd_screenshot(int argc, const char *argv[]) {
-    (void)argc;
-    (void)argv;
     static T_CAPTURE_SEQ seq = {0, 0};
     char path[ADELINE_MAX_PATH];
 
-    unique_shoot_path("shot", "png", &seq, path, ADELINE_MAX_PATH);
+    /* screenshot [path]: to that file when one is named (a harness taking a series of shots names them itself), else the next
+       free shot_<time>.png in the save folder's shoot directory */
+    if (argc >= 2 && argv[1][0])
+        snprintf(path, sizeof(path), "%s", argv[1]);
+    else
+        unique_shoot_path("shot", "png", &seq, path, ADELINE_MAX_PATH);
     Console_RequestScreenshot(path, 1); /* 1 = PNG via SavePNG in game */
     Console_Print("Screenshot (no console): %s", path);
 }
@@ -2407,6 +2416,17 @@ static int parse_and_schedule_seq(const char *spec, int frameBased) {
      input seq 0:up:60/60:up+throw:30  walk 60 ticks, then walk+fire 30 ticks
      input fseq 3:action:4           press action on rendered frames 3-6 (a skip frame at high refresh)
      input trace 1                   log injected mask + hero anim/pos each sim tick */
+/* autodrive <0|1> [look cells]: a race-track mod's test pilot drives the player's car along the first opponent's line (RACEMOD.CPP). */
+static void cmd_autodrive(int argc, const char *argv[]) {
+    extern void RaceMod_AutoDrive(int on, double lookCells);
+    if (argc < 2) {
+        Console_Print("Usage: autodrive <0|1> [look ahead, cells]");
+        return;
+    }
+    RaceMod_AutoDrive(atoi(argv[1]), argc >= 3 ? atof(argv[2]) : 0);
+    Console_Print("autodrive: %s", atoi(argv[1]) ? "on" : "off");
+}
+
 static void cmd_input(int argc, const char *argv[]) {
     if (argc < 2) {
         Console_Print("Usage: input <flags> [ticks] | input seq <t:flags:dur[/...]>");
@@ -2569,8 +2589,8 @@ void Console_RegisterAll(void) {
     Console_RegisterCommandEx("timer", cmd_timer, "Advance timer by N ms (default 200)", "timer [ms]", "Advances high-res timer.");
     Console_RegisterCommandEx("status", cmd_status, "Print island, cube, chapter, objs, FPS, pos", "(no args)",
                               "Snapshot of current game state.");
-    Console_RegisterCommandEx("screenshot", cmd_screenshot, "Save next frame as PNG (no console)", "(no args)",
-                              "PNG under shoot/; console closes first.");
+    Console_RegisterCommandEx("screenshot", cmd_screenshot, "Save next frame as PNG (no console)", "screenshot [path]",
+                              "PNG to the path given, else under shoot/; console closes first.");
 #ifdef ENABLE_POLY_RECORDING
     Console_RegisterCommandEx("polyrec", cmd_polyrec, "Record the next frame's polygon draw calls",
                               "polyrec [path]",
@@ -2641,6 +2661,10 @@ void Console_RegisterAll(void) {
                               "lifetrace <objN> | lifetrace off",
                               "Logs the object's comportement/track/zone each frame and every LF_ "
                               "condition it evaluates.");
+    Console_RegisterCommandEx("autodrive", cmd_autodrive, "Race-track test pilot: drive the player's car along the racing line",
+                              "autodrive <0|1> [look cells]",
+                              "With a race-track mod running (LBA2_RACETRACK_FILE), steers and pedals the player's "
+                              "car along the first opponent's line while he drives. For headless lap tests.");
     Console_RegisterCommandEx("objtrace", cmd_objtrace, "Trace an object's position each frame",
                               "objtrace <objN> | objtrace off",
                               "Logs the object's X/Y/Z, animation and track offset every simulated "

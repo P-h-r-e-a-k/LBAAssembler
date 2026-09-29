@@ -156,15 +156,25 @@ internal static class RaceTrackCommand
         var game = args[1];
         var cellX = double.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture); var cellZ = double.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture);
         var turn = int.Parse(args[4]);
-        var island = IslandFile.Load(Path.Combine(game, "DESERT.ILE"));
+        var where = RaceTrackIsland.ByName(Environment.GetEnvironmentVariable("RT_ISLAND") ?? RaceTrackIsland.Desert.Name);
+        var island = IslandFile.Load(Path.Combine(game, where.IleFile));
         var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, game);
         var cx = (int)Math.Floor(cellX / 64); var cz = (int)Math.Floor(cellZ / 64);
-        for (var scene = 55; scene <= 73; scene++)
+        for (var scene = where.FirstScene; scene <= where.LastScene; scene++)
         {
             var model = store.Load(scene);
             if (model.CubeMode != 1 || model.CubeX != cx || model.CubeY != cz) continue;
             var y = (int)Math.Round(IslandOps.Altitude(island, cellX * 512, cellZ * 512) ?? 0);
             var dx = Math.Sin(turn * 2 * Math.PI / 4096); var dz = Math.Cos(turn * 2 * Math.PI / 4096);
+            // (a scene with no buggy of its own -- only the start line's scene has one -- gets a copy of the island's)
+            if (!model.Actors.Skip(1).Any(a => a.Entity == RaceTrackScenes.BuggyEntity))
+                for (var other = where.FirstScene; other <= where.LastScene; other++)
+                    if (other != scene && store.SceneExists(other) && store.Load(other).Actors.Skip(1).FirstOrDefault(a => a.Entity == RaceTrackScenes.BuggyEntity) is { } buggy)
+                    {
+                        LBAAssembler.Scenes.SceneOps.AddActor(model, buggy.Clone());
+                        Console.WriteLine($"scene {scene}: a copy of scene {other}'s buggy added");
+                        break;
+                    }
             foreach (var actor in model.Actors.Skip(1).Where(a => a.Entity == RaceTrackScenes.BuggyEntity))
             {
                 actor.X = (int)Math.Round(cellX * 512 - cx * 32768.0); actor.Z = (int)Math.Round(cellZ * 512 - cz * 32768.0); actor.Y = y; actor.Beta = turn;

@@ -484,7 +484,7 @@ void RaceMod_Lap(S32 x, S32 z) {
     if (s_laps > 0)
         for (int i = 0; i < s_nbCheckpoints; i++) {
             const int way = CrossLine(&s_checkpoints[i], x0, z0, x, z);
-            if (way > 0 && i == s_next) s_next++;
+            if (way > 0 && i == s_next) { s_next++; Log_Info("[racemod] checkpoint %d of %d", s_next, s_nbCheckpoints); }
             else if (way < 0 && i == s_next - 1) { s_next--; Message("Wrong way"); }
         }
 
@@ -495,11 +495,13 @@ void RaceMod_Lap(S32 x, S32 z) {
         char text[64];
         snprintf(text, sizeof(text), "Missed checkpoint %d: no lap", s_next + 1);
         Message(text);
+        Log_Info("[racemod] %s", text);
         return;
     }
     if (s_laps > 0) {
         s_lastLap = now - s_lapStart;
         if (!s_bestLap || s_lastLap < s_bestLap) s_bestLap = s_lastLap;
+        Log_Info("[racemod] lap %d in %.2f s%s", (int)s_laps, s_lastLap / 1000.0, s_phase == PHASE_QUALIFYING ? " (qualifying)" : "");
         if (s_phase == PHASE_QUALIFYING) {
             // the qualifying lap: its time decides the grid (formed before the next drawing, in the start line's scene)
             s_qualifyTime = s_lastLap;
@@ -511,6 +513,55 @@ void RaceMod_Lap(S32 x, S32 z) {
     s_laps++;
     s_lapStart = now;
     s_next = 0;
+}
+
+// A test pilot (the console's `autodrive`): while the player drives, the pedals and the steering that keep his car on the first opponent's
+// line -- the bearing to a point s_autoLook ahead of the car's place on the line, steered to when the heading is more than a little off it,
+// and the line's own speed (the build planned it for the reference car), braked down to when the car is quicker. For headless tests of a
+// whole lap; nothing turns it on in play.
+static int s_auto = 0, s_autoIndex = -1;
+static double s_autoLook = 5 * 512;
+
+void RaceMod_AutoDrive(int on, double lookCells) {
+    s_auto = on;
+    s_autoIndex = -1;
+    if (lookCells > 0) s_autoLook = lookCells * 512;
+    Log_Info("[racemod] autodrive %s (looking %.1f cells ahead)", on ? "on" : "off", s_autoLook / 512);
+}
+
+U32 RaceMod_AutoInput(void) {
+    if (!s_auto || !s_active || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return 0;
+    const T_RACE_OPPONENT *o = &s_opp[0];
+    if (!o->Count) return 0;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    int best = -1;
+    double bd = 1e30;
+    if (s_autoIndex >= 0)
+        for (int k = -40; k <= 80; k++) {
+            const int i = ((s_autoIndex + k) % o->Count + o->Count) % o->Count;
+            const double d = (o->X[i] - wx) * (o->X[i] - wx) + (o->Z[i] - wz) * (o->Z[i] - wz);
+            if (d < bd) { bd = d; best = i; }
+        }
+    if (best < 0 || bd > 12.0 * 512 * 12 * 512)
+        for (int i = 0; i < o->Count; i++) {
+            const double d = (o->X[i] - wx) * (o->X[i] - wx) + (o->Z[i] - wz) * (o->Z[i] - wz);
+            if (d < bd) { bd = d; best = i; }
+        }
+    s_autoIndex = best;
+    double x, z, y, v, dx, dz;
+    PathAt(o, o->Cum[best] + s_autoLook, &x, &z, &y, &v, &dx, &dz);
+    const double want = atan2(x - wx, z - wz) * 4096.0 / (2 * 3.14159265358979);
+    double err = want - (hero->Obj.Beta & 4095);
+    while (err >= 2048) err -= 4096;
+    while (err < -2048) err += 4096;
+    U32 bits = 0;
+    if (err > 24) bits |= I_LEFT;
+    else if (err < -24) bits |= I_RIGHT;
+    // the line's speed here (the reference car's), and the car's own
+    const double here = o->V[best], speed = ListBuggy[0].Speed;
+    bits |= speed > here * 1.05 + 150 ? I_DOWN : I_UP;
+    return bits;
 }
 
 // An opponent's line at distance s: position (world units) and heading.

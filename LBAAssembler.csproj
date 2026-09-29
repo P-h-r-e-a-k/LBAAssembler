@@ -81,6 +81,7 @@
     <!-- the race track plans (centre line in island cells, pit lane ends): Tools > LBA2: race track -->
     <EmbeddedResource Include="docs/racetrack/track_plan.json" LogicalName="RaceTrackPlan.Desert.json" />
     <EmbeddedResource Include="docs/racetrack/citadel_track_plan.json" LogicalName="RaceTrackPlan.Citadel.json" />
+    <EmbeddedResource Include="docs/racetrack/mosquibe_track_plan.json" LogicalName="RaceTrackPlan.Mosquibe.json" />
   </ItemGroup>
 
   <!--

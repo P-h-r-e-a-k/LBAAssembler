@@ -8,7 +8,8 @@ namespace LBAAssembler;
 
 // Tools > LBA2: race track: builds a proposed track (levelled, banked road with the retail track's own textures, pit lane, start gantry,
 // and a bridge or a jump where the lap crosses itself) into the LBA2 game folder, or puts the folder back as it was. One island's track at
-// a time: the Desert island's, or Citadel Island's town circuit.
+// a time: the Desert island's, Citadel Island's town circuit, or Mosquibees Island's mountain lap (whose plan draws its own bridge and
+// jump, so it takes no crossing style).
 internal sealed class RaceTrackWindow : Window
 {
     private readonly string gameRoot;
@@ -81,7 +82,18 @@ internal sealed class RaceTrackWindow : Window
         var citadel = Island().IleFile == RaceTrackIsland.Citadel.IleFile;
         story.IsEnabled = citadel;
         story.IsChecked = citadel;
+        CrossingChoice();
         UpdateStatus();
+    }
+
+    // A built-in plan that draws its own bridge and jump (RaceTrackPlan.Heights: Mosquibees Island's) takes no crossing style.
+    private void CrossingChoice()
+    {
+        bool planned;
+        try { planned = builtInPlan.IsChecked == true && RaceTrackPlan.Built(Island()).Planned; }
+        catch (InvalidDataException) { planned = false; }
+        crossing.IsEnabled = !planned;
+        crossing.ToolTip = planned ? "This track's plan draws its own bridge and jump" : null;
     }
 
     private void BuildLayout()
@@ -152,6 +164,7 @@ internal sealed class RaceTrackWindow : Window
     {
         var file = filePlan.IsChecked == true;
         planPath.IsEnabled = file; browseButton.IsEnabled = file;
+        CrossingChoice();
     }
 
     private void Browse()

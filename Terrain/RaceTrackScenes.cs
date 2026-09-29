@@ -207,6 +207,15 @@ internal static class RaceTrackScenes
             catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { log.Add($"no opponent: scene {RacerScene} could not be read ({e.Message})"); }
         var edges = EdgeCrossings(store, report, options, island);
         var edgeZonesAdded = 0;
+        // the island's own outside scenes: a cube change to any other scene is a door (Mosquibees Island's inside scene 104, the Queen's
+        // throne, is numbered between its outside ones)
+        var outside = new HashSet<int>();
+        for (var scene = options.Island.FirstScene; scene <= options.Island.LastScene; scene++)
+        {
+            if (!store.SceneExists(scene)) continue;
+            try { var m = store.Load(scene); if (m.Island == island && m.CubeMode == 1) outside.Add(scene); }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
+        }
         for (var scene = 0; scene < store.SceneCount; scene++)
         {
             if (!store.SceneExists(scene)) continue;
@@ -324,7 +333,7 @@ internal static class RaceTrackScenes
                     // (a change to another of the island's own outside scenes is the way across a cube edge: the engine holds the hero at the
                     // edge unless such a zone takes him over, so removing one walls the road off -- which is what happened on Citadel Island
                     // while this was the Desert island's scene numbers)
-                    var door = kind == 0 && (zone.Num < options.Island.FirstScene || zone.Num > options.Island.LastScene);
+                    var door = kind == 0 && !outside.Contains(zone.Num);
                     // (only cameras that are on from the start: one that starts off is switched on only by a cutscene's script -- the
                     // ferry's arrival, a call of the car -- which then needs it, and the car never meets it)
                     var camera = kind == 1 && options.RemoveTrackCameras && zone.Info.Length > 7 && (zone.Info[7] & 1) != 0;

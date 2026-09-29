@@ -78,6 +78,83 @@ internal static class PlanProbeCommand
     }
 }
 
+// islandheights <ISLAND> <out.csv>: the island's ground height at every grid point of its present cubes ("x,z,height", blank where no cube
+// is), so a route drawn on a picture can be fitted and planned against the real ground.
+internal static class IslandHeightsCommand
+{
+    public static int Run(string[] args)
+    {
+        var dir = Environment.GetEnvironmentVariable("LBA2_DIR") ?? @"E:\GOG Games\Little Big Adventure 2 - Level viewer";
+        var island = IslandFile.Load(Path.Combine(dir, args[1].ToUpperInvariant() + ".ILE"));
+        var (minX, minZ, maxX, maxZ) = island.PresentBounds();
+        using var w = new StreamWriter(args[2]);
+        w.WriteLine("x,z,height");
+        for (var z = minZ * IslandCube.Cells; z <= (maxZ + 1) * IslandCube.Cells; z++)
+        for (var x = minX * IslandCube.Cells; x <= (maxX + 1) * IslandCube.Cells; x++)
+            w.WriteLine($"{x},{z},{island.HeightAt(x, z)?.ToString() ?? ""}");
+        Console.WriteLine($"{args[2]}: cells {minX * IslandCube.Cells}..{(maxX + 1) * IslandCube.Cells} x {minZ * IslandCube.Cells}..{(maxZ + 1) * IslandCube.Cells}");
+        return 0;
+    }
+}
+
+// cellprobe <ISLAND> <x0> <z0> <x1> <z1>: each cell's two ground triangles (texture flag, polygon flag, game code, blocking bit) and its
+// highest corner, one row of cells a line: "tp" per triangle ('.' for undrawn: texture and polygon flags 0), '#' when blocking.
+internal static class CellProbeCommand
+{
+    public static int Run(string[] args)
+    {
+        var dir = Environment.GetEnvironmentVariable("LBA2_DIR") ?? @"E:\GOG Games\Little Big Adventure 2 - Level viewer";
+        var island = IslandFile.Load(Path.Combine(dir, args[1].ToUpperInvariant() + ".ILE"));
+        int x0 = int.Parse(args[2]), z0 = int.Parse(args[3]), x1 = int.Parse(args[4]), z1 = int.Parse(args[5]);
+        foreach (var (cx, cz, c) in IslandOps.CubeCells(island))
+            Console.WriteLine($"cube ({cx},{cz}): sea squares {Convert.ToString(c.BitField, 2).PadLeft(16, '0')}, texture definitions {c.TextureDefs.Length / 6}, decors {c.Decors.Count}");
+        for (var z = z0; z <= z1; z++)
+        {
+            var line = $"{z,4} ";
+            for (var x = x0; x <= x1; x++)
+            {
+                var cube = island.CubeAt(x / IslandCube.Cells, z / IslandCube.Cells);
+                if (cube is null) { line += "  ----  "; continue; }
+                var s = "";
+                for (var h = 0; h < 2; h++)
+                {
+                    var p = new IslandPolygon(cube.Polygon(x % IslandCube.Cells, z % IslandCube.Cells, h));
+                    s += p.TexFlag == 0 && p.PolyFlag == 0 ? ".." : $"{p.TexFlag}{p.PolyFlag}";
+                    s += p.Col ? "#" : " ";
+                }
+                var hi = Enumerable.Range(0, 4).Max(k => island.HeightAt(x + k % 2, z + k / 2) ?? 0);
+                var lit = island.LightAt(x, z) ?? -1;
+                line += s + $"{hi / 100,3}/{lit,-2} ";
+            }
+            Console.WriteLine(line);
+        }
+        return 0;
+    }
+}
+
+// holopic <game folder> <entry> <out.png>: a holomap island picture (HOLOMAP.HQR entry 18 + 2 x island: 640 x 480 in the game's
+// palette, RESS.HQR entry 0), to look at.
+internal static class HoloPicCommand
+{
+    public static int Run(string[] args)
+    {
+        var pic = LBAAssembler.HqrArchive.Open(Path.Combine(args[1], "HOLOMAP.HQR")).Read(int.Parse(args[2]));
+        var pal = LBAAssembler.HqrArchive.Open(Path.Combine(args[1], "RESS.HQR")).Read(0);
+        const int w = 640, h = 480;
+        var six = pal.Take(768).Max() <= 63;
+        var pixels = new byte[w * h * 4];
+        for (var i = 0; i < w * h && i < pic.Length; i++)
+        {
+            var c = pic[i];
+            byte C(int k) => (byte)(six ? pal[c * 3 + k] * 4 : pal[c * 3 + k]);
+            pixels[i * 4] = C(2); pixels[i * 4 + 1] = C(1); pixels[i * 4 + 2] = C(0); pixels[i * 4 + 3] = 255;
+        }
+        PngWriter.Write(args[3], pixels, w, h);
+        Console.WriteLine($"{args[3]}: HOLOMAP.HQR entry {args[2]}, {pic.Length} bytes");
+        return 0;
+    }
+}
+
 // islandfreetex <ISLAND> [out.png]: which 8 x 8 blocks of the island's ground texture page no cube's polygon reads, so a new tile can be
 // put there. Every cube's texture definitions give the (u, v) corners its polygons sample; the page is 256 x 256.
 internal static class IslandFreeTextureCommand

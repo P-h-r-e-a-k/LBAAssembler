@@ -49,4 +49,9 @@ S32 RaceMod_Held(void);
 // The display (gear, speed, lap times, checkpoints, race position), drawn over the scene while the hero drives.
 void RaceMod_Draw(void);
 
+// A test pilot for headless runs (the console's `autodrive`): on, the player's car is driven along the first opponent's line. Its input,
+// ORed into the frame's own.
+void RaceMod_AutoDrive(int on, double lookCells);
+U32 RaceMod_AutoInput(void);
+
 #endif

@@ -114,11 +114,12 @@ void FollowCamTrace(void) {
     primed = TRUE;
 
     Log_Info("[cam] heroBeta %4d add %4d beta %4d target %4d step %5d delay %3d orbit %d moving %d "
-             "zone %d forced %d cine %d follow %d ext %d vue %d alpha %4d dist %6d",
+             "zone %d forced %d cine %d follow %d ext %d vue %d alpha %4d dist %6d eye %d,%d,%d",
              (int)ptr3d->Beta, (int)AddBetaCam, (int)BetaCam, (int)FollowCamTargetBeta,
              (int)step, (int)FollowCamReengageDelay, (int)ManualCameraOrbitActive, (int)moving,
              (int)CameraZone, (int)FlagCameraForcee, (int)CinemaMode, (int)FollowCamera,
-             (int)(CubeMode == CUBE_EXTERIEUR), (int)VueCamera, (int)AlphaCam, (int)VueDistance);
+             (int)(CubeMode == CUBE_EXTERIEUR), (int)VueCamera, (int)AlphaCam, (int)VueDistance,
+             (int)CameraX, (int)CameraY, (int)CameraZ);
 
     prevBeta = BetaCam;
     prevX = ptr3d->X;

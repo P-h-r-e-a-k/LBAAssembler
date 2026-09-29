@@ -623,6 +623,8 @@ restartloop:
             Input |= Control_InputCurrentMask();
             Control_InputFrameTick();
         }
+        // a race-track mod's test pilot, when a harness turned it on (RACEMOD.CPP RaceMod_AutoInput)
+        { extern U32 RaceMod_AutoInput(void); Input |= RaceMod_AutoInput(); }
 
         ManageTime();
 
