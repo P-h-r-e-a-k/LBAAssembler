@@ -1899,7 +1899,14 @@ internal static class RaceTrackBuilder
     // touch are one structure; where one lost pieces to the road and all that is left of it are small parts -- no whole building among
     // them -- those parts go too, as far as RuinReach cells from the road. A whole building that only touched a prop on the road keeps
     // everything. (Pieces are compared in island units: a piece that reaches into a second cube is kept in both, and goes from both.)
+    //
+    // Pieces that stand a little apart are one structure too, as long as they sit at much the same height: Mosquibees Island's plank
+    // walkway over a gully is a row of deck slabs half a cell apart with a handrail along each side a thousand units higher, and with
+    // touching boxes alone every slab was its own structure -- so the road went through the middle of it and left both halves standing.
+    // The gap is kept small: reaching further merged whole hillsides of separate objects into one structure, which then kept a big
+    // piece and nothing of it was cleared at all.
     private const double RuinTouch = 0.25, RuinReach = 14, RuinBigPiece = 12;
+    private const double RuinGap = 0.6, RuinRise = 1200;
 
     private static void ClearRuins(IslandFile island, RoadIndex index, List<(int Cx, int Cz, IslandDecor D)> taken, RaceTrackOptions o, RaceTrackReport report)
     {
@@ -1920,7 +1927,10 @@ internal static class RaceTrackBuilder
         bool Touch(int i, int j)
         {
             var a = pieces[i].B; var b = pieces[j].B;
-            return a.X0 <= b.X1 + RuinTouch && b.X0 <= a.X1 + RuinTouch && a.Z0 <= b.Z1 + RuinTouch && b.Z0 <= a.Z1 + RuinTouch && a.Y0 <= b.Y1 + 64 && b.Y0 <= a.Y1 + 64;
+            // touching, or standing a little apart at much the same height (a row of planks, a rail over a deck)
+            var gap = a.X0 <= b.X1 + RuinTouch && b.X0 <= a.X1 + RuinTouch && a.Z0 <= b.Z1 + RuinTouch && b.Z0 <= a.Z1 + RuinTouch ? 64.0
+                : a.X0 <= b.X1 + RuinGap && b.X0 <= a.X1 + RuinGap && a.Z0 <= b.Z1 + RuinGap && b.Z0 <= a.Z1 + RuinGap ? RuinRise : -1;
+            return gap >= 0 && a.Y0 <= b.Y1 + gap && b.Y0 <= a.Y1 + gap;
         }
         for (var i = 0; i < pieces.Count; i++)
         for (var j = i + 1; j < pieces.Count; j++)

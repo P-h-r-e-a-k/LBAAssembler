@@ -243,6 +243,8 @@ internal static class RaceTrackScenes
                     log.Add($"scene {scene}: the bike taxi goes (he races now), though Twinsen's script rides with him in a cutscene");
                 needed.RemoveWhere(i => bikerTemplate is not null && i < model.Actors.Count && model.Actors[i].Entity == BikerEntity);
                 if (needed.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", needed.Order())} kept -- Twinsen's own script waits on them in its travel cutscenes (the ferry, the Dino-Fly), which would never end without them");
+                foreach (var i in needed.Order())
+                    if (i < model.Actors.Count) ShiftOffRoad(model.Actors[i], model, i, distanceToRoad, report.GroundBefore, report.GroundAfter, report.WasGround, roadReach, scene, log);
                 var standIn = AddStandIn(model, doomed);
                 foreach (var i in doomed.OrderByDescending(i => i))
                 {
@@ -496,6 +498,40 @@ internal static class RaceTrackScenes
     // road, and a buggy put there by its script showed only as a shadow. Only what stood on drawn ground, and only actors that
     // fall onto the ground (OBJ_FALLABLE): the sea is height 0 too, and the harbour ferry and its route, which the water
     // bridge's causeway now crosses, were lifted 1300 above the water.
+    // A kept actor standing where the road now runs (Mosquibees Island's mountain lap took the second loop straight through a
+    // Mosquibee's nest, which then sat on the asphalt) is moved to the nearest place clear of it, on the new ground: the actors kept
+    // are the ones Twinsen's own script waits on in a cutscene, so they stay in the scene rather than being deleted with the rest.
+    // Searched outwards from where it stood, in its own cube.
+    private static void ShiftOffRoad(SceneActorModel actor, SceneModel model, int index, Func<double, double, double> distanceToRoad,
+        Func<double, double, double>? groundBefore, Func<double, double, double>? ground, Func<double, double, bool>? wasGround,
+        double roadReach, int scene, List<string> log)
+    {
+        var ox = model.CubeX * 64.0; var oz = model.CubeY * 64.0;
+        var clear = roadReach + 2;
+        double fromX = ox + actor.X / 512.0, fromZ = oz + actor.Z / 512.0;
+        // only what stands on land: the harbour ferry waits on the water and sails a route of its own (Reseat leaves it alone too),
+        // while a prop that doesn't fall -- a nest on the hillside -- stays the height above the ground it had
+        var stood = groundBefore is null ? 0 : groundBefore(fromX, fromZ);
+        if ((actor.Flags & Fallable) == 0 && stood <= 0) return;
+        if (wasGround is not null && !wasGround(fromX, fromZ)) return;
+        if (distanceToRoad(fromX, fromZ) > clear) return;
+        var offset = (actor.Flags & Fallable) != 0 || groundBefore is null ? 0 : actor.Y - stood;
+        for (var out_ = 1.0; out_ <= 24; out_ += 0.5)
+        for (var turn = 0; turn < 24; turn++)
+        {
+            var angle = turn * Math.PI / 12;
+            int x = (int)Math.Round(actor.X + Math.Cos(angle) * out_ * 512), z = (int)Math.Round(actor.Z + Math.Sin(angle) * out_ * 512);
+            if (x < 512 || z < 512 || x > IslandFile.CubeSize - 512 || z > IslandFile.CubeSize - 512) continue;   // stay in its own cube
+            if (distanceToRoad(ox + x / 512.0, oz + z / 512.0) <= clear) continue;
+            if (wasGround is not null && !wasGround(ox + x / 512.0, oz + z / 512.0)) continue;   // not out onto the sea
+            var y = ground is null ? actor.Y : (int)Math.Round(ground(ox + x / 512.0, oz + z / 512.0) + offset);
+            log.Add($"scene {scene}: actor {index} (entity {actor.Entity}) stood on the road and is moved {out_:0.#} cells aside, to ({x},{y},{z})");
+            actor.X = x; actor.Z = z; actor.Y = y;
+            return;
+        }
+        log.Add($"scene {scene}: WARNING: actor {index} (entity {actor.Entity}) stands on the road and no clear place was found near it");
+    }
+
     private static void Reseat(SceneModel model, Func<double, double, double> before, Func<double, double, double> after, Func<double, double, bool> wasGround, int scene, List<string> log)
     {
         var ox = model.CubeX * 64.0; var oz = model.CubeY * 64.0;

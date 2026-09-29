@@ -70,6 +70,7 @@ internal static class Program
             "trackzones" => TrackZoneProbe.Run(args),
             "islandtwin" => IslandTwinCommand.Run(args),
             "leftovers" => LeftoverProbe.Run(args),
+            "trackleftovers" => TrackLeftoverProbe.Run(args),
             "zonedump" => ZoneDumpCommand.Run(args),
             "lba2text" => Lba2TextCommand.Run(args),
             "holopos" => HoloPosCommand.Run(args),
