@@ -10,10 +10,11 @@ internal static class RaceCarEngineFile
 {
     // The engine's car setup file (RACEMOD.CPP's format), with the start line, the checkpoints and the opponents from the game folder's
     // RACETRACK.JSON when it has one (each opponent's line in the file named in `pathFiles`, in the order of Opponents). Of an island with
-    // a track in each weather file, the one the car setup's weather shows (RaceTrackService.Raced); the other's cars are kept out of sight.
+    // a track in each weather file, the one the folder was built to race (RaceTrackService.Raced), in its weather; the other's cars are
+    // kept out of sight.
     internal static string EngineFile(this RaceCarSetup car, RaceTrackService.TrackInfo? info, IReadOnlyList<string>? pathFiles = null)
     {
-        var track = info is null ? null : RaceTrackService.Raced(info, car.FineWeather);
+        var track = info is null ? null : RaceTrackService.Raced(info);
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
         var gears = Math.Clamp(car.Gears, 1, RaceCarSetup.MaxGears);
         var text = new StringBuilder("# LBA Assembler race car setup (read by the engine's race-track mode, RACEMOD.CPP)\n");
@@ -32,7 +33,7 @@ internal static class RaceCarEngineFile
         foreach (var g in track?.Grid ?? new()) text.Append($"grid={string.Join(' ', g)}\n");
         foreach (var g in track?.Pits ?? new()) text.Append($"pit={string.Join(' ', g)}\n");
         if (track?.Grid is { Count: > 0 }) text.Append($"qualifying={(car.Qualifying ? 1 : 0)}\n");
-        if (car.FineWeather) text.Append("weather=fine\n");
+        if (RaceTrackService.FineWeather(info, car.FineWeather)) text.Append("weather=fine\n");
         if (track?.StoryArrow is >= 0 and var arrow) text.Append($"holo_arrow={arrow}\n");
         var opponents = car.Opponents(track);
         for (var i = 0; i < opponents.Count && pathFiles is not null && i < pathFiles.Count; i++)
@@ -94,7 +95,7 @@ internal static class RaceCarEngineFile
     internal static void WriteEngineFile(this RaceCarSetup car, string path, RaceTrackService.TrackInfo? info)
     {
         var files = new List<string>();
-        var track = info is null ? null : RaceTrackService.Raced(info, car.FineWeather);
+        var track = info is null ? null : RaceTrackService.Raced(info);
         foreach (var (o, i) in car.Opponents(track).Select((o, i) => (o, i)))
         {
             var file = Path.Combine(Path.GetDirectoryName(path) ?? ".", i == 0 ? "racepath.txt" : $"racepath{i + 1}.txt");

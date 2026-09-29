@@ -40,6 +40,40 @@ internal static class TrackLeftoverProbe
             return Math.Sqrt(best);
         }
 
+        // RT_ADRIFT=1: instead, every decor whose underside (YMin: for many decors Y is 0, the body's own heights are YMin..YMax) is more than
+        // RT_FLOAT above the highest ground anywhere under its footprint -- held up by nothing -- and, with RT_BEFORE, whether it was so before
+        if (Environment.GetEnvironmentVariable("RT_ADRIFT") == "1")
+        {
+            double? Highest(IslandFile isl, double ox, double oz, IslandDecor d)
+            {
+                double? best = null;
+                for (var z = d.ZMin; z <= d.ZMax; z += 128)
+                for (var x = d.XMin; x <= d.XMax; x += 128)
+                    if (IslandOps.Altitude(isl, ox + x, oz + z) is { } g && (best is null || g > best)) best = g;
+                return best;
+            }
+            var pristine = before is null ? null : IslandOps.CubeCells(before).ToDictionary(c => (c.Item1, c.Item2), c => c.Item3);
+            Console.WriteLine($"decors held up by nothing (underside more than {floatBy:0} above the highest ground under them):");
+            foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+                for (var k = 0; k < cube.Decors.Count; k++)
+                {
+                    var d = cube.Decors[k];
+                    double ox = cx * (double)IslandFile.CubeSize, oz = cz * (double)IslandFile.CubeSize;
+                    if (Highest(island, ox, oz, d) is not { } top || d.YMin - top <= floatBy) continue;
+                    string was = "";
+                    if (pristine is not null && pristine.TryGetValue((cx, cz), out var old))
+                    {
+                        var same = old.Decors.FirstOrDefault(o => o.Body == d.Body && o.XMin == d.XMin && o.ZMin == d.ZMin);
+                        was = same is null ? ", not in the original (moved or added)"
+                            : Highest(before!, ox, oz, same) is { } otop && same.YMin - otop > floatBy ? $", was adrift before too (underside {same.YMin}, ground {otop:0})"
+                            : $", NOT before: it stood at {same.YMin} on ground up to {Highest(before!, ox, oz, same):0}";
+                    }
+                    var near = BoxToLap((ox + d.XMin) / 512, (oz + d.ZMin) / 512, (ox + d.XMax) / 512, (oz + d.ZMax) / 512);
+                    Console.WriteLine($"  body {d.Body & 0xFFFF,3} cube ({cx},{cz}) decor {k} at cell ({(ox + (d.XMin + d.XMax) / 2.0) / 512:0.0}, {(oz + (d.ZMin + d.ZMax) / 2.0) / 512:0.0}): " +
+                                      $"underside {d.YMin}, top {d.YMax}, highest ground under it {top:0} ({d.YMin - top:+0}), box {(d.XMax - d.XMin) / 512.0:0.0} x {(d.ZMax - d.ZMin) / 512.0:0.0} cells, {near:0.0} cells from the lap{was}");
+                }
+            return 0;
+        }
         Console.WriteLine($"lap of {lap.Count} points; decors within {reach:0.#} cells of it, and decors more than {floatBy:0} off the ground:");
         foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
         foreach (var d in cube.Decors)

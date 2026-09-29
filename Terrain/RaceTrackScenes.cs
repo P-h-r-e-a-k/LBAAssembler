@@ -647,7 +647,9 @@ internal static class RaceTrackScenes
             zone.Type = 2; zone.Num = jump.Zone; zone.Info = new int[8]; zone.Info[7] = 1;
             zone.X0 = (int)((b.X0 - ox) * 512); zone.X1 = (int)((b.X1 - ox) * 512) - 1;
             zone.Z0 = (int)((b.Z0 - oz) * 512); zone.Z1 = (int)((b.Z1 - oz) * 512) - 1;
-            zone.Y0 = y - 300; zone.Y1 = y + 900;
+            // (a car on the ramp is within a couple of hundred of it; 900 above reached the deck of Citadel Island's town circuit, whose
+            // bridge runs the same way over the storm track's jump, 890 higher -- the zones are the scene's in either weather)
+            zone.Y0 = y - 300; zone.Y1 = y + 500;
             model.Zones.Add(zone);
         }
         var controller = SceneOps.BlankActor(SceneGame.Lba2, (int)((jump.StartX - ox) * 512), y, (int)((jump.StartZ - oz) * 512), entity: 16);

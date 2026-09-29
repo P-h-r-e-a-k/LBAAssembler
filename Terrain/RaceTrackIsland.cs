@@ -23,9 +23,19 @@ internal sealed record RaceTrackIsland(
     // round the harbour and back up through a double hairpin -- with no opponents yet. Once the storm is over (chapter 2, after the
     // lighthouse; in Play, the car setup's fine weather) the engine draws the island from CITABAU instead -- the same ground with its own
     // light, palette and decor bodies -- and that carries the town circuit, with its opponents and the story. The two share the island's
-    // scenes (RaceTrackScenes applies both).
+    // scenes (RaceTrackScenes applies both), so the island is built with both whichever one is chosen: the two entries, the town circuit
+    // and the storm track, differ only in which one Play races (RacesTwin) -- and with it the weather it plays in.
     public static readonly RaceTrackIsland Citadel = new("Citadel Island", "CITADEL.ILE", "CITADEL.OBL", 0, 42, 50, 27,
-        "RaceTrackPlan.CitadelStorm.json", null) { TwinIleFile = "CITABAU.ILE", TwinOblFile = "CITABAU.OBL", TwinPlanResource = "RaceTrackPlan.Citadel.json" };
+        "RaceTrackPlan.CitadelStorm.json", null)
+    {
+        TwinIleFile = "CITABAU.ILE", TwinOblFile = "CITABAU.OBL", TwinPlanResource = "RaceTrackPlan.Citadel.json", RacesTwin = true,
+        Title = "Citadel Island: the town circuit (once the storm is over)",
+    };
+
+    public static readonly RaceTrackIsland CitadelStorm = Citadel with
+    {
+        Name = "Citadel Island, storm track", RacesTwin = false, Title = "Citadel Island: the storm track (in the rain)",
+    };
 
     // Mosquibees Island: a mountain lap from a drawing -- two loops winding up round the Mosquibees' mountain from the shore, a bridge
     // from its top over the first loop and the channel to the plateau's ridge, a jump over the plateau's west bay, the start line on its
@@ -39,8 +49,14 @@ internal sealed record RaceTrackIsland(
     public string? TwinIleFile { get; init; }
     public string? TwinOblFile { get; init; }
     public string? TwinPlanResource { get; init; }
+    // For an island with a track in each file: whether Play races the twin's (Citadel Island's town circuit, in fine weather) or the
+    // island's own file's (its storm track, in the rain).
+    public bool RacesTwin { get; init; }
+    // As the race track window lists it (the name, unless the island has two entries).
+    public string? Title { get; init; }
+    public string Shown => Title ?? Name;
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, Mosquibe };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

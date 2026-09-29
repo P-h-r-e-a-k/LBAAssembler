@@ -110,7 +110,7 @@ public partial class MainWindow
     private bool AskRaceCar()
     {
         if (!Terrain.RaceTrackService.HasBackups(gameRoot) || !EditorSettings.Current.RaceCar.AskBeforePlay) return true;
-        return new RaceCarWindow(forPlay: true) { Owner = this }.ShowDialog() == true;
+        return new RaceCarWindow(forPlay: true, gameRoot) { Owner = this }.ShowDialog() == true;
     }
 
     // `spawn` is where the hero starts (in the scene's own coordinates), `scene` overrides the scene that is open.

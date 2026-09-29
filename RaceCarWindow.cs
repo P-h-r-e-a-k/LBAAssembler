@@ -20,14 +20,26 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox biker = new() { Content = "Race the motorbike Rabbibunny too (quicker in the bends, slower on the straights)" };
     private readonly CheckBox fightBack = new() { Content = "They push harder when they fall behind you" };
     private readonly CheckBox qualifying = new() { Content = "Drive a qualifying lap first: the times set the grid" };
-    private readonly CheckBox fineWeather = new() { Content = "Stop the rain on Citadel Island: race the town circuit (in the rain, the storm track)", ToolTip = "The weather after the lighthouse, when the aliens land: no rain or thunder, the brighter island with its own light and sky, and its town circuit with the opponents. Left raining, Citadel Island is its storm file, with the storm track round the town and its jump. Only the weather changes: the story stays where it is." };
+    private readonly CheckBox fineWeather = new() { Content = "Stop the rain on Citadel Island (the weather after the lighthouse, when the aliens land)", ToolTip = "No rain or thunder, the brighter island with its own light and sky. Only the weather changes: the story stays where it is." };
+    // Citadel Island built with a track in each of its files: the weather is the raced track's (the town circuit's is the fine weather's,
+    // the storm track's the rain's), chosen in the race track window -- null for any other folder, where the setup says
+    private readonly bool? trackWeather;
     private readonly CheckBox startAtLine = new() { Content = "Start beside the car on the start/finish straight, with the editor's markings hidden" };
     private readonly List<Action> refresh = new();
     private bool updating;
 
-    public RaceCarWindow(bool forPlay)
+    public RaceCarWindow(bool forPlay, string? gameDirectory = null)
     {
         Title = "Race car setup";
+        if (gameDirectory is not null && Terrain.RaceTrackService.ReadInfo(gameDirectory) is { Twin: not null } info)
+        {
+            trackWeather = Terrain.RaceTrackService.FineWeather(info, setup.FineWeather);
+            fineWeather.IsEnabled = false;
+            fineWeather.Content = trackWeather == true
+                ? "Citadel Island without the rain: its town circuit is raced"
+                : "Citadel Island in the rain: its storm track is raced";
+            fineWeather.ToolTip = "This folder has a Citadel Island track in each weather: the one chosen in Tools > LBA2: race track is raced, in its own weather (build the other one there to race it).";
+        }
         Width = 560; SizeToContent = SizeToContent.Height; MinWidth = 480;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -104,8 +116,8 @@ internal sealed class RaceCarWindow : Window
         qualifying.Unchecked += (_, _) => setup.Qualifying = false;
         qualifying.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(qualifying);
-        fineWeather.Checked += (_, _) => setup.FineWeather = true;
-        fineWeather.Unchecked += (_, _) => setup.FineWeather = false;
+        fineWeather.Checked += (_, _) => { if (trackWeather is null) setup.FineWeather = true; };
+        fineWeather.Unchecked += (_, _) => { if (trackWeather is null) setup.FineWeather = false; };
         fineWeather.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(fineWeather);
         startAtLine.Checked += (_, _) => setup.StartAtLine = true;
@@ -145,7 +157,7 @@ internal sealed class RaceCarWindow : Window
         biker.IsChecked = setup.Biker;
         fightBack.IsChecked = setup.OpponentsFightBack;
         qualifying.IsChecked = setup.Qualifying;
-        fineWeather.IsChecked = setup.FineWeather;
+        fineWeather.IsChecked = trackWeather ?? setup.FineWeather;
         startAtLine.IsChecked = setup.StartAtLine;
         foreach (var r in refresh) r();
         ShowGearRows();

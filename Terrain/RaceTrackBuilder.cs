@@ -374,6 +374,7 @@ internal static class RaceTrackBuilder
         report.DistanceToRoad = (x, z) => { var h = index.Near(x, z, 14, 1); return h.Count == 0 ? 1e9 : h[0].Dist; };
         var startIndex = roads.Count > 1 ? PitMiddle : -1;
         ClearOldTrack(island, options, report);
+        var adrift = AdriftDecors(island);
         var follow = new IslandOps.DecorFollow(island);
         ClearDecors(island, index, options, report);
         var natural = new Field(island);
@@ -390,6 +391,7 @@ internal static class RaceTrackBuilder
         ClearStaleCol(island, natural, field, index, painted, report);
         if (planned) WallSteepBanks(island, natural, field, index, painted, options, report);
         follow.Apply();
+        ClearAdrift(island, adrift, report);
         report.GroundBefore = (x, z) => natural.Height(x, z);
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
         report.WasGround = (x, z) => natural.Drawn(x, z);
@@ -1914,6 +1916,41 @@ internal static class RaceTrackBuilder
     // piece and nothing of it was cleared at all.
     private const double RuinTouch = 0.25, RuinReach = 14, RuinBigPiece = 12;
     private const double RuinGap = 0.6, RuinRise = 1200;
+
+    // A decor held up by nothing: its underside (YMin -- for many decors Y is 0, the body's own heights are YMin..YMax) more than AdriftBy
+    // above the highest ground anywhere under its footprint. The island has some of its own -- a roof on its walls, a sign on its post, a
+    // plank over a gully, each held up by other decors -- and those stay; what goes is one that rested on the ground before the build and is
+    // held up by nothing after it (ClearAdrift). A decor follows the ground under its origin (IslandOps.DecorFollow), and on Citadel Island's
+    // fine-weather file a rock whose corner stood where the road's embankment rose was lifted 2,057 units, 1,132 clear of everything under
+    // the rest of it, and a sign whose ground the road cut away was left 2,392 up: from the road they looked like loose ground in the air.
+    private const int AdriftBy = 400;
+
+    private static bool Adrift(IslandFile island, int cx, int cz, IslandDecor d)
+    {
+        double ox = cx * (double)IslandFile.CubeSize, oz = cz * (double)IslandFile.CubeSize;
+        double? top = null;
+        for (var z = d.ZMin; z <= d.ZMax; z += 128)
+        for (var x = d.XMin; x <= d.XMax; x += 128)
+            if (IslandOps.Altitude(island, ox + x, oz + z) is { } g && (top is null || g > top)) top = g;
+        return top is { } t && d.YMin - t > AdriftBy;
+    }
+
+    private static HashSet<IslandDecor> AdriftDecors(IslandFile island) =>
+        IslandOps.CubeCells(island).SelectMany(c => c.Item3.Decors.Where(d => Adrift(island, c.Item1, c.Item2, d))).ToHashSet();
+
+    private static void ClearAdrift(IslandFile island, HashSet<IslandDecor> before, RaceTrackReport report)
+    {
+        var gone = 0;
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            foreach (var d in cube.Decors.Where(d => !before.Contains(d) && Adrift(island, cx, cz, d)).ToList())
+            {
+                cube.Decors.Remove(d);
+                report.Removed.Add((cx, cz, d.Body & 0xFFFF, "adrift"));
+                report.DecorsRemoved++;
+                gone++;
+            }
+        if (gone > 0) report.Notes.Add($"{gone} decor objects that rested on the ground and were left held up by nothing once it was reshaped (lifted with it by a corner, or with their ground cut away from under them) removed");
+    }
 
     private static void ClearRuins(IslandFile island, RoadIndex index, List<(int Cx, int Cz, IslandDecor D)> taken, RaceTrackOptions o, RaceTrackReport report)
     {

@@ -53,12 +53,17 @@ internal static class RaceTrackService
     // (an island with a track in each weather file has its grid in the one that carries the race)
     public static bool IsOutdated(string gameDirectory) => HasBackups(gameDirectory) && ReadInfo(gameDirectory) is var info && (info?.Twin ?? info)?.Grid is not { Count: > 0 };
 
-    // The track Play races: for an island whose two files carry different tracks, the one the car setup's weather shows (Citadel Island's
-    // town circuit once the storm is over, its storm track in the rain); else the one there is.
-    public static TrackInfo Raced(TrackInfo info, bool fineWeather) => fineWeather && info.Twin is { } fine ? fine : info;
+    // The track Play races: for an island whose two files carry different tracks, the one the race track window was built with (Citadel
+    // Island's town circuit, raced once the storm is over, or its storm track, raced in the rain: RaceTrackIsland.RacesTwin); else the one
+    // there is.
+    public static TrackInfo Raced(TrackInfo info) => info.Twin is { } twin && RaceTrackIsland.ByName(info.Island).RacesTwin ? twin : info;
 
-    // The track the race car setup would race in the folder, or null when it has none.
-    public static TrackInfo? RacedIn(string gameDirectory) => ReadInfo(gameDirectory) is { } info ? Raced(info, EditorSettings.Current.RaceCar.FineWeather) : null;
+    // Whether the race needs the weather once the storm is over: for an island with a track in each file, the one of the file raced (the
+    // twin's is the fine weather's); for any other, as the car setup says.
+    public static bool FineWeather(TrackInfo? info, bool setup) => info?.Twin is { } twin ? ReferenceEquals(Raced(info), twin) : setup;
+
+    // The track the folder's race is on, or null when it has none.
+    public static TrackInfo? RacedIn(string gameDirectory) => ReadInfo(gameDirectory) is { } info ? Raced(info) : null;
 
     // A folder has a race track when the files of the island its RACETRACK.JSON names were kept.
     // A copy the build can then write to: a game folder taken off a disc (or from a reference set kept read-only) has read-only files, and
@@ -86,7 +91,7 @@ internal static class RaceTrackService
         return null;
     }
 
-    public static BuildResult Build(string gameDirectory, RaceTrackPlan plan, RaceTrackOptions options)
+    public static BuildResult Build(string gameDirectory, RaceTrackPlan plan, RaceTrackOptions options, RaceTrackPlan? twinPlan = null)
     {
         if (Problem(gameDirectory) is { } problem) return new(false, problem, new(), null);
         try
@@ -100,7 +105,7 @@ internal static class RaceTrackService
             // every build starts from the originals (the island's own ground is loaded from its copy below)
             foreach (var f in files.Where(f => f != options.Island.IleFile))
                 CopyWritable(Path.Combine(gameDirectory, f + BackupSuffix), Path.Combine(gameDirectory, f));
-            var built = BuildFiles(gameDirectory, Path.Combine(gameDirectory, options.Island.IleFile + BackupSuffix), plan, options);
+            var built = BuildFiles(gameDirectory, Path.Combine(gameDirectory, options.Island.IleFile + BackupSuffix), plan, options, twinPlan);
             var (report, scenes) = (built.Report, built.Scenes);
 
             var log = new List<string>();

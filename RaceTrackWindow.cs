@@ -45,7 +45,7 @@ internal sealed class RaceTrackWindow : Window
         ResizeMode = ResizeMode.CanResize;
         SetResourceReference(BackgroundProperty, "ThemeWindowBrush");
         SetResourceReference(ForegroundProperty, "ThemeTextBrush");
-        foreach (var i in RaceTrackIsland.All) islandBox.Items.Add(new ComboBoxItem { Content = i.Name, Tag = i });
+        foreach (var i in RaceTrackIsland.All) islandBox.Items.Add(new ComboBoxItem { Content = i.Shown, Tag = i });
         islandBox.SelectedIndex = 0;
         // the island the folder's track is on, when it has one (building again keeps to it)
         if (RaceTrackService.BuiltIsland(gameRoot) is { } builtOn)
@@ -67,7 +67,7 @@ internal sealed class RaceTrackWindow : Window
         browseButton.Click += (_, _) => Browse();
         buildButton.Click += async (_, _) => await BuildAsync();
         restoreButton.Click += (_, _) => Restore();
-        carButton.Click += (_, _) => new RaceCarWindow(forPlay: false) { Owner = this }.ShowDialog();
+        carButton.Click += (_, _) => new RaceCarWindow(forPlay: false, gameRoot) { Owner = this }.ShowDialog();
         IslandChanged();
         UpdateStatus();
     }
@@ -110,7 +110,7 @@ internal sealed class RaceTrackWindow : Window
         }
         crossing.IsEnabled = !planned;
         crossing.ToolTip = planned ? "This track's plan draws its own bridge and jump"
-            : twinChooses ? $"For {Island().Name}'s town circuit ({Island().TwinIleFile}, once the storm is over); its storm track ({Island().IleFile}) draws its own jump" : null;
+            : twinChooses ? $"For the town circuit ({Island().TwinIleFile}, once the storm is over); the storm track ({Island().IleFile}) draws its own jump" : null;
     }
 
     private void BuildLayout()
@@ -214,14 +214,24 @@ internal sealed class RaceTrackWindow : Window
     private async Task BuildAsync()
     {
         RaceTrackPlan plan;
-        try { plan = filePlan.IsChecked == true ? RaceTrackPlan.Load(planPath.Text.Trim()) : RaceTrackPlan.Built(Options().Island); }
+        // (a plan file is the track of the entry chosen: for Citadel Island's town circuit, its fine-weather file's, the storm track built in)
+        RaceTrackPlan? twinPlan = null;
+        try
+        {
+            plan = RaceTrackPlan.Built(Options().Island);
+            if (filePlan.IsChecked == true)
+            {
+                if (Island().RacesTwin) twinPlan = RaceTrackPlan.Load(planPath.Text.Trim());
+                else plan = RaceTrackPlan.Load(planPath.Text.Trim());
+            }
+        }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
         {
             MessageBox.Show(this, $"The plan can't be read: {error.Message}", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         var answer = MessageBox.Show(this,
-            $"Build {Island().Name}'s race track into\n{gameRoot}\n\n{string.Join(", ", RaceTrackService.FilesFor(Island()))} will change. " +
+            $"Build {Island().Shown} into\n{gameRoot}\n\n{string.Join(", ", RaceTrackService.FilesFor(Island()))} will change{(Island().TwinPlanResource is not null ? " (both of the island's tracks are built: they share its scenes)" : "")}. " +
             (RaceTrackService.HasBackups(gameRoot) ? "The originals kept by the first build are used again." : "The originals are kept as *" + RaceTrackService.BackupSuffix + "."),
             Title, MessageBoxButton.OKCancel, MessageBoxImage.Question);
         if (answer != MessageBoxResult.OK) return;
@@ -229,7 +239,7 @@ internal sealed class RaceTrackWindow : Window
         buildButton.IsEnabled = false; restoreButton.IsEnabled = false;
         log.Text = "Building…";
         var root = gameRoot;
-        var result = await Task.Run(() => RaceTrackService.Build(root, plan, options));
+        var result = await Task.Run(() => RaceTrackService.Build(root, plan, options, twinPlan));
         buildButton.IsEnabled = true;
         log.Text = string.Join("\n", result.Log);
         status.Text = result.Summary;

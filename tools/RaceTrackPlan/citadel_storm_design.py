@@ -4,7 +4,8 @@ designed by hand on the ground it runs over. The west side runs along the town's
 its end, where the drawing's two pink dots are; the lap comes down to the harbour's level round the south-west corner, runs along the
 south and up the east side past the pit lane (the drawing's orange line) and the start line, and climbs back onto the north rampart
 through the drawing's wiggle, made a double hairpin -- the drawing's three roads there were 7 cells apart, less than one road's width.
-Laid anticlockwise on the map (south down the rampart), so the jump goes off the rampart's end rather than up onto it."""
+Designed anticlockwise on the map (south down the rampart, off its end) and built the other way round at the user's asking (REVERSE):
+clockwise, north up the rampart's street, the jump from the harbour side onto the rampart's end."""
 import json
 import numpy as np
 from PIL import Image, ImageDraw
@@ -16,7 +17,7 @@ OX, OZ = 384, 448
 CP = [
     ('NW1', 523, 526.5), ('NW2', 519, 532),
     ('W1', 519, 545), ('W2', 519, 560),
-    ('J0', 519, 573), ('J1', 519, 583), ('J2', 519, 594), ('J3', 519, 608),
+    ('J0', 519, 570), ('J1', 519, 583), ('J2', 519, 594), ('J3', 519, 608),
     ('W3', 519, 616), ('SW1', 520.5, 623), ('SW2', 527, 626),
     ('S1', 537, 625.5), ('S2', 546, 622.5),
     ('SE1', 552, 616), ('SE2', 555, 606),
@@ -155,20 +156,28 @@ def inside(i):
     return [round(float(X[i] + 3 * nx - OX), 3), round(float(Z[i] + 3 * nz - OZ), 3)]
 
 
-PIT_A, PIT_B = pidx('SE2', 2), pidx('E4', -4)
+PIT_A, PIT_B = pidx('SE2', 2), pidx('E3', -2)
+pits = [inside(PIT_A), inside(PIT_B)]
+# The lap is laid out above the way it was first built (south down the rampart, off its end); the user asked for it the other way round
+# (2026-09-29): clockwise on the map, north up the rampart's street, so the jump takes off on the harbour side (J2's lip) and lands on the
+# rampart's end (J1's), the start line on the east straight faces south, and the switchback comes down from the north rampart.
+REVERSE = True
+order = np.arange(n)[::-1].copy() if REVERSE else np.arange(n)
+at_of = np.empty(n, int); at_of[order] = np.arange(n)          # a point's index in the lap as it runs
+Xr, Zr, Hr = X[order], Z[order], H_road[order]
 plan = {
     'originCellX': OX, 'originCellZ': OZ,
-    'points': [[round(float(x - OX), 3), round(float(z - OZ), 3)] for x, z in zip(X, Z)],
-    'heights': [round(float(h), 1) for h in H_road],
+    'points': [[round(float(x - OX), 3), round(float(z - OZ), 3)] for x, z in zip(Xr, Zr)],
+    'heights': [round(float(h), 1) for h in Hr],
     'maxGrade': round(float(max(grade.max(), -grade.min()) + 0.01), 3),
-    'gapJump': [pidx('J1'), pidx('J2')],
-    'pitA': inside(PIT_A),
-    'pitB': inside(PIT_B),
+    'gapJump': [int(at_of[pidx('J2')]), int(at_of[pidx('J1')])] if REVERSE else [pidx('J1'), pidx('J2')],
+    'pitA': pits[1] if REVERSE else pits[0],
+    'pitB': pits[0] if REVERSE else pits[1],
     'pitTaper': 7,
 }
 json.dump(plan, open('E:/dump/LBAAssembler/docs/racetrack/citadel_storm_track_plan.json', 'w'))
-json.dump({'plan': plan, 'marks': {nm: pidx(nm) for nm in names}}, open('design.json', 'w'))
-np.save('design_lap.npy', np.stack([X, Z], 1))
+json.dump({'plan': plan, 'marks': {nm: int(at_of[pidx(nm)]) for nm in names}}, open('design.json', 'w'))
+np.save('design_lap.npy', np.stack([Xr, Zr], 1))
 print('plan written: jump points %s, pit %s..%s, max grade %.3f' % (plan['gapJump'], plan['pitA'], plan['pitB'], plan['maxGrade']))
 
 # ---- pictures ----
