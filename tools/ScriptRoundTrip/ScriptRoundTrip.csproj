@@ -18,6 +18,7 @@
     <Compile Include="..\..\LbaScript\**\*.cs" Link="LbaScript\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\HqrArchive.cs" Link="HqrArchive.cs" />
     <Compile Include="..\..\HqrWriter.cs" Link="HqrWriter.cs" />
+    <Compile Include="..\..\Lba2TextBank.cs" Link="Lba2TextBank.cs" />
     <Compile Include="..\..\ScriptSession.cs" Link="ScriptSession.cs" />
     <Compile Include="..\..\DebugLog.cs" Link="DebugLog.cs" />
     <Compile Include="..\..\RendererLibraryApi.cs" Link="RendererLibraryApi.cs" />

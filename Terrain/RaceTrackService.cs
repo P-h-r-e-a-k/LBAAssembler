@@ -14,7 +14,8 @@ internal static class RaceTrackService
     public const string BackupSuffix = ".before-racetrack";
     // What every build changes, whichever island it is on; the island's own ground and decor bodies are added to these (RaceTrackIsland).
     public static readonly string[] Files = { "SCENE.HQR" };
-    public static readonly string[] ExtraFiles = { "ANIM.HQR", "RESS.HQR", "BODY.HQR" };
+    // (and the holomap's pictures and arrows, and the texts the story adds to)
+    public static readonly string[] ExtraFiles = { "ANIM.HQR", "RESS.HQR", "BODY.HQR", RaceTrackHolomap.File, "TEXT.HQR", "OBJFIX.HQR" };
     public static string[] FilesFor(RaceTrackIsland island) => Files.Concat(island.IslandFiles).ToArray();
     public static string[] AllFiles => Files.Concat(ExtraFiles).Concat(RaceTrackIsland.All.SelectMany(i => i.IslandFiles)).Distinct().ToArray();
     public const string InfoFile = "RACETRACK.JSON";
@@ -32,7 +33,7 @@ internal static class RaceTrackService
     // the spots in the pit lane the opponents wait on while the player qualifies.
     public sealed record TrackInfo(string Crossing, StartLineInfo? StartLine, List<StartLineInfo>? Checkpoints = null, List<int[]>? Path = null,
         int PathGrid = 0, Dictionary<int, int>? Opponent = null, int StartScene = -1, List<RivalInfo>? Rivals = null, List<int[]>? Grid = null,
-        List<int[]>? Pits = null, string Island = "Desert island");
+        List<int[]>? Pits = null, string Island = "Desert island", int StoryArrow = -1);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
@@ -99,6 +100,7 @@ internal static class RaceTrackService
             if (BuildTwin(gameDirectory, plan, options, report) is { } twin) extra.Add(twin);
             extra.AddRange(Finish(gameDirectory, report, options));
             var scenes = RaceTrackScenes.Apply(gameDirectory, report, options);
+            extra.AddRange(Story(gameDirectory, report, options));
             WriteInfo(gameDirectory, report, options, scenes);
 
             log.Add($"The lap is {report.Length:0} cells ({report.Length * 512:0} game units) long: {report.Vertices} ground points levelled, {report.Cells} cells painted, {report.DecorsRemoved + report.SolidDecorsRemoved} decor objects taken off the road.");
@@ -176,9 +178,18 @@ internal static class RaceTrackService
         return log;
     }
 
+    // The mod's story, on the island that has one (Citadel Island: RaceTrackStory). After the scenes, which it adds to.
+    public static List<string> Story(string gameDirectory, RaceTrackReport report, RaceTrackOptions options) =>
+        options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile ? RaceTrackStory.Apply(gameDirectory, report) : new List<string>();
+
     public static List<string> Finish(string gameDirectory, RaceTrackReport report, RaceTrackOptions options)
     {
         var log = new List<string>();
+        if (options.DrawOnHolomap && File.Exists(Path.Combine(gameDirectory, RaceTrackHolomap.File)))
+        {
+            RaceTrackHolomap.UsePalette(HqrArchive.Open(Path.Combine(gameDirectory, "RESS.HQR")).Read(0));
+            log.Add(RaceTrackHolomap.Draw(gameDirectory, options.Island, IslandFile.Load(Path.Combine(gameDirectory, options.Island.IleFile)), report));
+        }
         if (report.Jump is { } jump) log.Add(RaceTrackJumpAnim.Install(gameDirectory, jump.FlightScale));
         if (options.AddOpponent && options.AddBaldino) log.Add(RaceTrackBaldinoCar.Install(gameDirectory).Log);
         return log;
@@ -200,8 +211,10 @@ internal static class RaceTrackService
         var path = Points(report.RacePath);
         var rivals = new List<RivalInfo>();
         if (report.BaldinoPath.Count > 0 && scenes.Baldino.Count > 0) rivals.Add(new RivalInfo("Baldino", Points(report.BaldinoPath), RaceTrackScenes.BaldinoGridBack, scenes.Baldino));
+        if (report.BikerPath.Count > 0 && scenes.Biker is { Count: > 0 } bikes) rivals.Add(new RivalInfo(RaceCarEngineFile.BikerName, Points(report.BikerPath), RaceTrackScenes.BikerGridBack, bikes));
         var info = new TrackInfo(options.Crossing.ToString(), line, checkpoints, path.Count > 0 ? path : null, 4, scenes.Opponent.Count > 0 ? scenes.Opponent : null, scenes.StartScene,
-            rivals.Count > 0 ? rivals : null, scenes.Grid.Count > 0 ? scenes.Grid : null, scenes.Pits.Count > 0 ? scenes.Pits : null, options.Island.Name);
+            rivals.Count > 0 ? rivals : null, scenes.Grid.Count > 0 ? scenes.Grid : null, scenes.Pits.Count > 0 ? scenes.Pits : null, options.Island.Name,
+            options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile ? RaceTrackStory.StartArrow : -1);
         File.WriteAllText(Path.Combine(gameDirectory, InfoFile), JsonSerializer.Serialize(info, new JsonSerializerOptions { WriteIndented = true }));
     }
 

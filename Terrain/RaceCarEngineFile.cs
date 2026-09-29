@@ -31,6 +31,7 @@ internal static class RaceCarEngineFile
         foreach (var g in track?.Pits ?? new()) text.Append($"pit={string.Join(' ', g)}\n");
         if (track?.Grid is { Count: > 0 }) text.Append($"qualifying={(car.Qualifying ? 1 : 0)}\n");
         if (car.FineWeather) text.Append("weather=fine\n");
+        if (track?.StoryArrow is >= 0 and var arrow) text.Append($"holo_arrow={arrow}\n");
         var opponents = car.Opponents(track);
         for (var i = 0; i < opponents.Count && pathFiles is not null && i < pathFiles.Count; i++)
         {
@@ -40,6 +41,8 @@ internal static class RaceCarEngineFile
             text.Append($"# {o.Name}\n{key}_path={pathFiles[i]}\n{key}_grid={o.Grid}\n{key}_pace={Math.Clamp(o.Pace, 10, 300)}\n");
             text.Append($"{key}_top={(int)Math.Round(o.Line.Top * 100)}\n{key}_grip={(int)Math.Round(o.Line.Grip * 100)}\n{key}_catchup={(car.OpponentsFightBack ? RaceCarSetup.CatchUpPercent : 0)}\n");
             text.Append($"{key}_name={(o.Name == "the racer" ? "The racer" : o.Name)}\n");
+            // (the animations it stands and drives with: the cars' are the racer entity's 0 and 1, the bike's his own)
+            if (o.Name == BikerName) text.Append($"{key}_anim={RaceTrackScenes.BikerIdleAnim} {RaceTrackScenes.BikerRideAnim}\n");
             foreach (var (scene, actor) in o.Actors) text.Append($"{key}_actor={scene} {actor}\n");
         }
         // the cars of the opponents the setup doesn't race: hidden, so they don't stand where a racing car lines up
@@ -53,7 +56,7 @@ internal static class RaceCarEngineFile
         var list = new List<(int, int)>();
         if (!car.Opponent && track?.Opponent is { } actors) list.AddRange(actors.Select(a => (a.Key, a.Value)));
         foreach (var r in track?.Rivals ?? new())
-            if (r.Name == "Baldino" && !car.Baldino) list.AddRange(r.Actors.Select(a => (a.Key, a.Value)));
+            if (r.Name == "Baldino" && !car.Baldino || r.Name == BikerName && !car.Biker) list.AddRange(r.Actors.Select(a => (a.Key, a.Value)));
         return list;
     }
 
@@ -67,10 +70,16 @@ internal static class RaceCarEngineFile
         if (car.Opponent && track?.Path is { Count: > 0 } path && track.Opponent is { Count: > 0 } actors)
             list.Add(("the racer", path, track.PathGrid, car.RacerSkill, RaceTrackBuilder.RacerLine, actors));
         foreach (var r in track?.Rivals ?? new())
+        {
             if (r.Name == "Baldino" && car.Baldino && r.Path.Count > 0 && r.Actors.Count > 0)
                 list.Add((r.Name, r.Path, r.Grid, car.BaldinoSkill, RaceTrackBuilder.BaldinoLine, r.Actors));
+            if (r.Name == BikerName && car.Biker && r.Path.Count > 0 && r.Actors.Count > 0)
+                list.Add((r.Name, r.Path, r.Grid, car.BikerSkill, RaceTrackBuilder.BikerLine, r.Actors));
+        }
         return list;
     }
+
+    public const string BikerName = "The biker";
 
     // The engine's car setup file, and beside it each opponent's line (racepath.txt, racepath2.txt ...).
     internal static void WriteEngineFile(this RaceCarSetup car, string path, RaceTrackService.TrackInfo? track)

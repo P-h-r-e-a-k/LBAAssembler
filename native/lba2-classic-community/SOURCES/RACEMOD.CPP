@@ -41,6 +41,7 @@
  *                                the opponents set off when the player first drives)
  *     pit=<the same>             a spot in the pit lane an opponent waits on while the player qualifies; one line per spot
  *     weather=fine               Citadel Island's weather once the storm is over (RaceMod_FineWeather), whatever the chapter
+ *     holo_arrow=<n>             the holomap arrow the mod's story points at the start line: cleared once Twinsen drives
  *     qualifying=1               a qualifying lap first (0: the grid is formed as soon as the player is in his car, he on pole)
  *     qualifying_seed=<n>        the opponents' qualifying times' randomness (default: the clock)
  *     hide_actor=<scene> <actor> a car in a scene that isn't racing (an opponent the player left out): kept out of sight
@@ -49,6 +50,7 @@
 #include "COMMON.H"
 #include "INPUT.H"
 #include "RACEMOD.H"
+extern void ClrHoloPos(S32 num);   // HOLOGLOB.CPP (HOLO.H itself clashes with C_EXTERN.H)
 
 #include <SVGA/BOX.H>
 #include <SVGA/CLIP.H>
@@ -102,6 +104,7 @@ typedef struct {
     int Scene[RACE_MAX_OPPONENT_SCENES], Actor[RACE_MAX_OPPONENT_SCENES];
     int Scenes;
     char Name[32];
+    int AnimIdle, AnimDrive, HasAnims;   // opponentN_anim: the generic animations it stands and drives with (else 0 and 1, the racer car's)
     double PlannedLap;                     // seconds, at its skill
     S32 QualTime;                          // its qualifying time, ms
     // off its line on the grid: the way across from the line to its grid spot, which fades out over its first RACE_MERGE units of
@@ -127,6 +130,7 @@ enum { PHASE_RACE, PHASE_QUALIFYING, PHASE_WAIT, PHASE_GRID };
 static int s_phase = PHASE_RACE;
 static int s_qualifying = 1;
 static int s_fineWeather = 0;
+static int s_holoArrow = -1;
 static unsigned s_seed = 0;
 static S32 s_qualifyTime = 0;              // the player's, ms
 static int s_wantGrid = 0;                 // form the grid (asked for by the lap, done before the next drawing)
@@ -328,6 +332,7 @@ static void Load(const char *path) {
             if (s_nbPits < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbPits++;
         } else if (!strcmp(key, "qualifying")) s_qualifying = atoi(v);
         else if (!strcmp(key, "weather")) s_fineWeather = !strcmp(v, "fine");
+        else if (!strcmp(key, "holo_arrow")) s_holoArrow = atoi(v);
         else if (!strcmp(key, "qualifying_seed")) s_seed = (unsigned)strtoul(v, NULL, 10);
         else if (!strcmp(key, "hide_actor")) {
             if (s_nbHidden < RACE_MAX_HIDDEN && sscanf(v, "%d %d", &s_hideScene[s_nbHidden], &s_hideActor[s_nbHidden]) == 2) s_nbHidden++;
@@ -343,6 +348,7 @@ static void Load(const char *path) {
             else if (!strcmp(rest, "grip")) o->Grip = atoi(v);
             else if (!strcmp(rest, "catchup")) o->Catchup = atoi(v);
             else if (!strcmp(rest, "name")) snprintf(o->Name, sizeof(o->Name), "%s", v);
+            else if (!strcmp(rest, "anim")) { int idle, drive; if (sscanf(v, "%d %d", &idle, &drive) == 2) { o->AnimIdle = idle; o->AnimDrive = drive; o->HasAnims = 1; } }
             else if (!strcmp(rest, "actor")) {
                 int scene, actor;
                 if (o->Scenes < RACE_MAX_OPPONENT_SCENES && sscanf(v, "%d %d", &scene, &actor) == 2) {
@@ -467,6 +473,8 @@ void RaceMod_Lap(S32 x, S32 z) {
     if (s_wantFlip) { FirstTime = AFF_ALL_FLIP; s_wantFlip = 0; }
     if (s_forgetLap) { pcx = -1; s_forgetLap = 0; }
     if (!s_active || !s_car.HasLine || CubeMode != CUBE_EXTERIEUR) { pcx = -1; return; }
+    // the story's arrow to the start line (holo_arrow): Twinsen is at the wheel, so he has found it
+    if (s_holoArrow >= 0) { ClrHoloPos(s_holoArrow); Log_Info("[racemod] holomap arrow %d cleared", s_holoArrow); s_holoArrow = -1; }
     const S32 x0 = px, z0 = pz;
     const int same = pcx == CurrentCubeX && pcz == CurrentCubeY;
     px = x; pz = z; pcx = CurrentCubeX; pcz = CurrentCubeY;
@@ -649,7 +657,7 @@ void RaceMod_Frame(void) {
         car->Obj.Beta = f >= 1 ? o->SpotBeta : beta;
         ClearRealAngle(car);
         // the driving animation while it moves (its steps are undone every frame: the position is set here)
-        const U16 anim = moving ? 1 : 0;
+        const U16 anim = (U16)(o->HasAnims ? (moving ? o->AnimDrive : o->AnimIdle) : (moving ? 1 : 0));
         if (car->GenAnim != anim) InitAnim(anim, ANIM_REPEAT, (U8)index);
         if (moving) s_wantFlip = 1;
     }

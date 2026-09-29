@@ -25,6 +25,8 @@ internal sealed class RaceTrackWindow : Window
     private readonly CheckBox roadZones = new() { Content = "Remove zones that would act on a car on the road (doors, hit, ladder, escalator, grid, rail)", IsChecked = true };
     private readonly CheckBox trackCameras = new() { Content = "Remove the fixed camera angles along the track (the view keeps following the car)", IsChecked = true, ToolTip = "Camera zones (type 1) that reach the road or come within a few cells of it" };
     private readonly CheckBox clearOldTrack = new() { Content = "Clear what's left of the original race track (its road paint, start gantry, arch, billboard)", IsChecked = true, ToolTip = "The Desert island only, cube (7,10), scene 57: its painted road becomes sand where the new track doesn't run over it. The garage and its lamp stay." };
+    private readonly CheckBox holomap = new() { Content = "Draw the track on the island's holomap picture", IsChecked = true, ToolTip = "The pre-rendered island picture the holomap zooms into (HOLOMAP.HQR): the road, curbs and start line drawn through the holomap's own camera, hidden behind hills. Citadel Island's storm and fine-weather pictures both." };
+    private readonly CheckBox story = new() { Content = "Story: Zoe sends Twinsen to the start line, and he finds racing gloves in the attic (Citadel Island)", IsChecked = true, ToolTip = "The game's opening: Zoe's line (in all six languages), a holomap arrow on the start line instead of the pharmacy's, and a pair of racing gloves where the darts lay in Twinsen's attic -- a new inventory model and texts in the slot of the car part the mod has no use for." };
     private readonly TextBox log = new() { IsReadOnly = true, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, FontFamily = new System.Windows.Media.FontFamily("Consolas"), FontSize = 11, Height = 190, TextWrapping = TextWrapping.NoWrap };
     private readonly Button buildButton = new() { Content = "Build the track", Padding = new Thickness(18, 5, 18, 5), IsDefault = true };
     private readonly Button restoreButton = new() { Content = "Put the original files back", Padding = new Thickness(14, 5, 14, 5) };
@@ -75,6 +77,10 @@ internal sealed class RaceTrackWindow : Window
         var desert = Island().IleFile == RaceTrackIsland.Desert.IleFile;
         clearOldTrack.IsEnabled = desert;
         if (!desert) clearOldTrack.IsChecked = false;
+        // the story is Citadel Island's own opening
+        var citadel = Island().IleFile == RaceTrackIsland.Citadel.IleFile;
+        story.IsEnabled = citadel;
+        story.IsChecked = citadel;
         UpdateStatus();
     }
 
@@ -87,7 +93,7 @@ internal sealed class RaceTrackWindow : Window
             box.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
             box.SetResourceReference(BorderBrushProperty, "ThemeBorderBrush");
         }
-        foreach (var c in new Control[] { builtInPlan, filePlan, removeActors, buggyAlways, startAtLine, roadZones, trackCameras, clearOldTrack }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { builtInPlan, filePlan, removeActors, buggyAlways, startAtLine, roadZones, trackCameras, clearOldTrack, holomap, story }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         var root = new StackPanel { Margin = new Thickness(16) };
         var intro = new TextBlock
@@ -123,7 +129,7 @@ internal sealed class RaceTrackWindow : Window
         root.Children.Add(Section("Where the lap crosses itself"));
         root.Children.Add(crossing);
         root.Children.Add(Section("The scenes"));
-        foreach (var c in new CheckBox[] { removeActors, buggyAlways, startAtLine, roadZones, trackCameras }) { c.Margin = new Thickness(0, 2, 0, 2); root.Children.Add(c); }
+        foreach (var c in new CheckBox[] { removeActors, buggyAlways, startAtLine, roadZones, trackCameras, holomap, story }) { c.Margin = new Thickness(0, 2, 0, 2); root.Children.Add(c); }
 
         root.Children.Add(status);
         log.Margin = new Thickness(0, 10, 0, 0);
@@ -171,6 +177,8 @@ internal sealed class RaceTrackWindow : Window
         RemoveTrackCameras = trackCameras.IsChecked == true,
         OldTrackCube = clearOldTrack.IsChecked == true ? Island().OldTrackCube : null,
         Island = Island(),
+        DrawOnHolomap = holomap.IsChecked == true,
+        Story = story.IsChecked == true,
     };
 
     private async Task BuildAsync()

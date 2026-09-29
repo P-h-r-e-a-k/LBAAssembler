@@ -105,6 +105,8 @@ internal static class Program
             "ress" => Ress(game, int.Parse(args[2])),
             "header" => Header(args[1], int.Parse(args[2])),
             "bodyinfo" => BodyInfo(args[1], int.Parse(args[2])),
+            // renderhqr <file.hqr> <index> <game folder for the palette> <out.png> [yaw]: any LBA2 body (OBJFIX, BODY, an OBL) rendered
+            "renderhqr" => RenderHqr(args[1], int.Parse(args[2]), args[3], args[4], args.Length > 5 ? float.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture) : 0.7f),
             // hqrentry <file.hqr> <index> <out>: one entry, uncompressed, to a file
             "hqrentry" => HqrEntry(args[1], int.Parse(args[2]), args[3]),
             "lba1lit" => Lba1Lit(args.Length > 1 ? int.Parse(args[1]) : 0),
@@ -114,6 +116,15 @@ internal static class Program
     }
 
     private static string Folder(int game) => Folders[game - 1];
+    private static int RenderHqr(string hqr, int index, string folder, string output, float yaw)
+    {
+        var model = Body.Read(new Hqr(hqr).Read(index), 2, allowStatic: true);
+        using var bmp = Renderer.Render(model, Generator.Palette(folder), 600, 600, yaw, false, background: Color.FromArgb(40, 60, 90));
+        bmp.Save(output, ImageFormat.Png);
+        Console.WriteLine($"{output}: {hqr}[{index}]");
+        return 0;
+    }
+
     private static byte[] PaletteBytes(int game) => new Hqr(Path.Combine(Folder(game), "RESS.HQR")).Read(0);
 
     private static IEnumerable<(int Index, byte[] Data)> AllBodies(int game)

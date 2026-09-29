@@ -1142,6 +1142,19 @@ static void control_dump_state(const char *path) {
     }
     fprintf(f, " } },\n");
 
+    /* The holomap arrows switched on (set_holo_pos: TabArrow[MAX_OBJECTIF + n].FlagHolo bit 0), by position number. */
+    fprintf(f, "  \"holo_active\": [");
+    {
+        int i, first = 1;
+        for (i = 0; i < MAX_CUBE; i++) {
+            if (TabArrow[MAX_OBJECTIF + i].FlagHolo & 1) {
+                fprintf(f, "%s%d", first ? "" : ",", i);
+                first = 0;
+            }
+        }
+    }
+    fprintf(f, "],\n");
+
     fprintf(f, "  \"log\": [");
     {
         const char *lines[16];

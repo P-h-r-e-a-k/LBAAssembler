@@ -15,7 +15,7 @@ internal static class RaceTrackScenes
     // Baldino: the same for Baldino's car; StartScene: the scene the start line is in; Grid: the grid spots, pole first, and Pits: the
     // spots in the pit lane the opponents wait on while the player qualifies, each [cube x, cube z, x, y, z, turn] in its cube's world units.
     public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, Dictionary<int, int> Opponent, int StartScene, Dictionary<int, int> Baldino,
-        List<int[]> Grid, List<int[]> Pits);
+        List<int[]> Grid, List<int[]> Pits, Dictionary<int, int>? Biker = null);
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
     //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
@@ -125,6 +125,23 @@ internal static class RaceTrackScenes
         return added;
     }
 
+    // The motorbike Rabbibunny to copy: the first of Citadel Island's outside scenes that has him (SCENE.HQR holds every island's scenes, so
+    // the Desert island's track gets him too). Null when none can be read.
+    private static SceneActorModel? BikerTemplate(SceneStore store, RaceTrackOptions options, int island, List<string> log)
+    {
+        foreach (var scene in Enumerable.Range(RaceTrackIsland.Citadel.FirstScene, RaceTrackIsland.Citadel.LastScene - RaceTrackIsland.Citadel.FirstScene + 1))
+        {
+            try
+            {
+                if (!store.SceneExists(scene)) continue;
+                if (store.Load(scene).Actors.Skip(1).FirstOrDefault(a => a.Entity == BikerEntity) is { } bike) return bike.Clone();
+            }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
+        }
+        log.Add("no biker: no outside scene of Citadel Island has the motorbike Rabbibunny");
+        return null;
+    }
+
     // The Desert island's own buggy (scene 67), for an island whose scenes have none: the same actor, so its script and flags are the
     // game's own. Null when that scene cannot be read.
     private static SceneActorModel? BuggyTemplate(SceneStore store, List<string> log)
@@ -151,6 +168,11 @@ internal static class RaceTrackScenes
     public const int RacerEntity = 157, RacerScene = 57;
     // how many cells behind the start line Baldino starts (the second row); his line's grid point (a point a cell)
     public const int BaldinoGridBack = 8;
+    // The motorbike Rabbibunny: Citadel Island's bike taxi (entity 100: body 0 the bunny on his bike; animation 0 standing astride it, 317
+    // riding -- ANIM.HQR 764 and 766), the island's own actor copied into every outside scene as the third opponent. The taxi's own copies go
+    // from the outside scenes: he races now (one stood on the road under the bridge). His line's grid point, as Baldino's.
+    public const int BikerEntity = 100, BikerIdleAnim = 0, BikerRideAnim = 317;
+    public const int BikerGridBack = 12;
 
     // The grid: spots staggered either side of the road's middle, pole GridFirst cells behind the start line and each GridStep behind the one
     // before, GridSide cells to its side -- so two cars side by side are 2 x GridSide apart across (the cars are 2.6 cells wide: 0.9 cells
@@ -176,7 +198,8 @@ internal static class RaceTrackScenes
         var log = new List<string>();
         var changes = new List<SceneChange>();
         var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0;
-        var opponent = new Dictionary<int, int>(); var baldino = new Dictionary<int, int>(); var startScene = -1;
+        var opponent = new Dictionary<int, int>(); var baldino = new Dictionary<int, int>(); var biker = new Dictionary<int, int>(); var startScene = -1;
+        var bikerTemplate = options.AddBiker ? BikerTemplate(store, options, island, log) : null;
         var gridSpots = new List<int[]>(); var pitSpots = new List<int[]>();
         SceneActorModel? racer = null;
         if (options.AddOpponent)
@@ -197,7 +220,7 @@ internal static class RaceTrackScenes
                 continue;
             }
             var count = 0;
-            (int X, int Z, int Beta)? grid = null, baldinoGrid = null;
+            (int X, int Z, int Beta)? grid = null, baldinoGrid = null, bikerGrid = null;
             if (options.RemoveActors)
             {
                 // slot 1 of every scene is the engine's own placeholder for Zoe (entity 14, no body, parked at 0,0,0); the engine treats that slot
@@ -205,8 +228,11 @@ internal static class RaceTrackScenes
                 var needed = CutsceneActors(model);
                 var doomed = Enumerable.Range(1, model.Actors.Count - 1)
                     .Where(i => model.Actors[i].Entity != BuggyEntity && !(i == 1 && model.Actors[i].Entity == ZoeEntity && model.Actors[i].X == 0 && model.Actors[i].Z == 0))
-                    .Where(i => !needed.Contains(i))
+                    .Where(i => !needed.Contains(i) || bikerTemplate is not null && model.Actors[i].Entity == BikerEntity)
                     .ToList();
+                if (bikerTemplate is not null && needed.Any(i => i < model.Actors.Count && model.Actors[i].Entity == BikerEntity))
+                    log.Add($"scene {scene}: the bike taxi goes (he races now), though Twinsen's script rides with him in a cutscene");
+                needed.RemoveWhere(i => bikerTemplate is not null && i < model.Actors.Count && model.Actors[i].Entity == BikerEntity);
                 if (needed.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", needed.Order())} kept -- Twinsen's own script waits on them in its travel cutscenes (the ferry, the Dino-Fly), which would never end without them");
                 var standIn = AddStandIn(model, doomed);
                 foreach (var i in doomed.OrderByDescending(i => i))
@@ -279,7 +305,7 @@ internal static class RaceTrackScenes
                     startScene = scene;
                     // the opponents wait in the pit lane (the race-track mode puts them on the grid when the race is about to start); with
                     // no pit lane they stand on the grid spots behind the player
-                    grid = Waiting(0); baldinoGrid = Waiting(1);
+                    grid = Waiting(0); baldinoGrid = Waiting(1); bikerGrid = Waiting(2);
                     (int X, int Z, int Beta)? Waiting(int k) =>
                         pitSpots.Count > k ? (pitSpots[k][2], pitSpots[k][4], pitSpots[k][5])
                         : gridSpots.Count > k + 1 ? (gridSpots[k + 1][2], gridSpots[k + 1][4], beta) : null;
@@ -332,6 +358,16 @@ internal static class RaceTrackScenes
                 if (options.AddBaldino) baldino[scene] = SceneOps.AddActor(model, Car(RaceTrackBaldinoCar.Generic, baldinoGrid));
                 grid = null; baldinoGrid = null;
             }
+            if (bikerTemplate is not null)
+            {
+                // the same flags and empty scripts as the cars, standing astride his bike until the race-track mode moves him
+                var bike = bikerTemplate.Clone();
+                bike.Body = 0; bike.Flags = OpponentFlags; bike.Move = 0; bike.Anim = BikerIdleAnim; bike.Life = new byte[] { 0 }; bike.Track = new byte[] { 0 };
+                bike.X = IslandFile.CubeSize / 2; bike.Z = IslandFile.CubeSize / 2; bike.Y = -20000; bike.Beta = 0;
+                if (bikerGrid is { } g) { bike.X = g.X; bike.Z = g.Z; bike.Beta = g.Beta; bike.Y = report.GroundAfter is { } ga ? (int)Math.Round(ga(model.CubeX * 64 + g.X / 512.0, model.CubeY * 64 + g.Z / 512.0)) : 0; }
+                biker[scene] = SceneOps.AddActor(model, bike);
+                bikerGrid = null;
+            }
             if (jump is not null && model.CubeX == jump.CubeX && model.CubeY == jump.CubeZ)
             {
                 var jumped = AddJump(model, scene, jump, log);
@@ -346,9 +382,10 @@ internal static class RaceTrackScenes
         if (options.RemoveTrackCameras) log.Add($"{camerasRemoved} fixed camera zones along the track removed");
         if (opponent.Count > 0) log.Add($"the opponent: a copy of the retail track's racer in {opponent.Count} scenes");
         if (baldino.Count > 0) log.Add($"Baldino: a copy of his car in {baldino.Count} scenes");
+        if (biker.Count > 0) log.Add($"the biker: a copy of the motorbike Rabbibunny in {biker.Count} scenes");
         if (gridSpots.Count > 0) log.Add($"the grid: {gridSpots.Count} spots, pole {GridFirst} cells behind the start line, each {GridStep} behind the last, {GridSide} either side of the middle");
         if (pitSpots.Count > 0) log.Add($"the pits: {pitSpots.Count} spots in the pit lane, where the opponents wait while the player qualifies");
-        return new Result(log, changes.Count, removed, opponent, startScene, baldino, gridSpots, pitSpots);
+        return new Result(log, changes.Count, removed, opponent, startScene, baldino, gridSpots, pitSpots, biker);
     }
 
     // Where the scripts that stay (Twinsen's own life script, mostly) refer to actors about to be removed -- "if Twinsen is near the

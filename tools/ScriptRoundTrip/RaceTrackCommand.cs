@@ -33,6 +33,7 @@ internal static class RaceTrackCommand
         if (RaceTrackService.BuildTwin(game, plan, options, report) is { } twinLog) Console.WriteLine("  " + twinLog);
         extra.AddRange(RaceTrackService.Finish(game, report, options));
         var scenes = RaceTrackScenes.Apply(game, report, options);
+        extra.AddRange(RaceTrackService.Story(game, report, options));
         RaceTrackService.WriteInfo(game, report, options, scenes);
         if (Environment.GetEnvironmentVariable("RT_DUMP") is { Length: > 0 } dump)
             File.WriteAllLines(dump, report.LapX.Select((x, i) => FormattableString.Invariant($"{x:0.###},{report.LapZ[i]:0.###}")));

@@ -128,12 +128,18 @@ internal sealed class RaceTrackOptions
     public bool AddOpponent { get; set; } = true;
     // A second opponent: Baldino in his rocket car (RaceTrackBaldinoCar), a body added to BODY.HQR for the racer's entity, with a line of his own.
     public bool AddBaldino { get; set; } = true;
+    // The motorbike Rabbibunny (Citadel Island's bike taxi, entity 100) races too, on a line of his own.
+    public bool AddBiker { get; set; } = true;
     public bool RemoveRoadZones { get; set; } = true;
     // Camera zones (type 1: while the hero is inside the box the view jumps to a fixed camera) that reach the road or within
     // CameraMargin cells of it are removed, so the view keeps following the car all the way round.
     public bool RemoveTrackCameras { get; set; } = true;
     public double CameraMargin { get; set; } = 2;
     public bool RemoveSolidDecors { get; set; } = true;
+    // The track drawn into the island's holomap picture(s) (RaceTrackHolomap).
+    public bool DrawOnHolomap { get; set; } = true;
+    // Citadel Island's opening sends Twinsen to the start line (RaceTrackStory): Zoe's line and a holomap arrow.
+    public bool Story { get; set; } = true;
     // The island OBL index of the flat deck body (RaceTrackDeckBody), appended by RaceTrackService before the build runs. -1 if
     // no bridge deck body is available (the Bridge crossing style then falls back to a level crossing).
     public int DeckBodyIndex { get; set; } = -1;
@@ -182,6 +188,8 @@ internal sealed class RaceTrackReport
     public List<(double X, double Z, double Y, double DirX, double DirZ)> StartLine { get; } = new();
     // Where the opponents' cars wait in the pit lane while the player qualifies (island cells, the height and the way the lane runs there).
     public List<(double X, double Z, double Y, double DirX, double DirZ)> Pits { get; } = new();
+    // The roads as built (the lap first, then the pit lane): their shape, heights, widths and deck, for drawing them elsewhere (the holomap).
+    public List<TrackRoad> Roads { get; } = new();
     // The way the start line's road runs as the line is painted: the road's heading turned onto the cell grid when it is close to it
     // (the gantry over the line and the line laps are counted at follow it), else the heading itself.
     public (double DirX, double DirZ)? StartLineSquare { get; set; }
@@ -194,6 +202,7 @@ internal sealed class RaceTrackReport
     public List<(double X, double Z, double Y, double Speed, double Radius)> RacePath { get; } = new();
     // Baldino's line: the same, keeping more to the other side of the road.
     public List<(double X, double Z, double Y, double Speed, double Radius)> BaldinoPath { get; } = new();
+    public List<(double X, double Z, double Y, double Speed, double Radius)> BikerPath { get; } = new();
     // The lap's centre line as built (island cells), for checks.
     public double[] LapX { get; set; } = Array.Empty<double>();
     public double[] LapZ { get; set; } = Array.Empty<double>();
@@ -334,8 +343,10 @@ internal static class RaceTrackBuilder
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
         PlaceCheckpoints(roads, report, options);
         PlacePits(roads, report, options);
+        report.Roads.AddRange(roads);
         PlanRacePath(main, report, options, RacerLine, report.RacePath, "the opponent's line");
         if (options.AddBaldino) PlanRacePath(main, report, options, BaldinoLine, report.BaldinoPath, "Baldino's line");
+        if (options.AddBiker) PlanRacePath(main, report, options, BikerLine, report.BikerPath, "the biker's line");
         ClearStaleCol(island, natural, field, index, painted, report);
         follow.Apply();
         report.GroundBefore = (x, z) => natural.Height(x, z);
@@ -1451,6 +1462,8 @@ internal static class RaceTrackBuilder
     internal static readonly RacingLine RacerLine = new(-2.5, 4, 1.0, 1.0);
     // Baldino's rocket car: a little quicker on the straights, a good deal slower in the bends
     internal static readonly RacingLine BaldinoLine = new(2.5, RaceTrackScenes.BaldinoGridBack, 1.02, 0.92);
+    // the motorbike: a little slower on the straights, quicker through the bends, down the middle of the road
+    internal static readonly RacingLine BikerLine = new(0, RaceTrackScenes.BikerGridBack, 0.97, 1.06);
     private const double Reach = 3.2, SideLean = 0.02, LineTightest = 1.2;
     private static readonly int[] SmoothWindows = { 30, 15, 8, 4, 2 };
     private const int SmoothRounds = 100, SearchSpacing = 4;

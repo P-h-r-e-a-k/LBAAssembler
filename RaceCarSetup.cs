@@ -31,6 +31,9 @@ public sealed class RaceCarSetup
     public int RacerSkill { get; set; } = 92;
     public bool Baldino { get; set; } = true;
     public int BaldinoSkill { get; set; } = 91;
+    // and the motorbike Rabbibunny: slower than the car on the straights, quicker through the bends
+    public bool Biker { get; set; } = true;
+    public int BikerSkill { get; set; } = 90;
     // A qualifying lap before the race: its time against the opponents' sets the grid (off: Twinsen starts on pole).
     public bool Qualifying { get; set; } = true;
     // Citadel Island's weather once the storm is over -- as after the lighthouse keeper is freed and the aliens land: no rain, the

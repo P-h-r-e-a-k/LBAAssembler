@@ -17,6 +17,7 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox askBeforePlay = new() { Content = "Show this before each race-track play" };
     private readonly CheckBox opponent = new() { Content = "Race the original track's racer" };
     private readonly CheckBox baldino = new() { Content = "Race Baldino too, in his rocket car" };
+    private readonly CheckBox biker = new() { Content = "Race the motorbike Rabbibunny too (quicker in the bends, slower on the straights)" };
     private readonly CheckBox fightBack = new() { Content = "They push harder when they fall behind you" };
     private readonly CheckBox qualifying = new() { Content = "Drive a qualifying lap first: the times set the grid" };
     private readonly CheckBox fineWeather = new() { Content = "Stop the rain on Citadel Island (the weather after the lighthouse, when the aliens land)", ToolTip = "No rain or thunder, the brighter island with its own light and sky. Only the weather changes: the story stays where it is." };
@@ -37,7 +38,7 @@ internal sealed class RaceCarWindow : Window
         root.Children.Add(Text("How the buggy drives when you play a game folder that has a race track built. X shifts up a gear and Z down (unless the gearbox " +
                                "is automatic); each gear has its own top speed, and a low gear pulls harder than a high one. Speeds are as the game's display shows " +
                                "them, a cell taken as a metre: the original buggy tops out at 27 km/h. A lap counts once you have crossed every checkpoint round the " +
-                               "track; the opponents (the original track's racer, and Baldino in his rocket car) line up with you on the grid and start on the count-down. " +
+                               "track; the opponents (the original track's racer, Baldino in his rocket car and the motorbike Rabbibunny) line up with you on the grid and start on the count-down. " +
                                "Other game folders play the game as it is."));
 
         root.Children.Add(Section("Start from"));
@@ -90,6 +91,11 @@ internal sealed class RaceCarWindow : Window
         baldino.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(baldino);
         root.Children.Add(SliderRow("Baldino's skill", 50, 120, 1, " %", () => setup.BaldinoSkill, v => setup.BaldinoSkill = (int)v).Row);
+        biker.Checked += (_, _) => setup.Biker = true;
+        biker.Unchecked += (_, _) => setup.Biker = false;
+        biker.Margin = new Thickness(0, 4, 0, 0);
+        root.Children.Add(biker);
+        root.Children.Add(SliderRow("The biker's skill", 50, 120, 1, " %", () => setup.BikerSkill, v => setup.BikerSkill = (int)v).Row);
         fightBack.Checked += (_, _) => setup.OpponentsFightBack = true;
         fightBack.Unchecked += (_, _) => setup.OpponentsFightBack = false;
         fightBack.Margin = new Thickness(0, 4, 0, 0);
@@ -115,7 +121,7 @@ internal sealed class RaceCarWindow : Window
         root.Children.Add(display);
         askBeforePlay.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(askBeforePlay);
-        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, baldino, fightBack, qualifying, fineWeather, startAtLine }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, baldino, biker, fightBack, qualifying, fineWeather, startAtLine }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         var ok = new Button { Content = forPlay ? "Play" : "Save", Padding = new Thickness(18, 5, 18, 5), IsDefault = true, Margin = new Thickness(0, 0, 10, 0) };
         var cancel = new Button { Content = "Cancel", Padding = new Thickness(14, 5, 14, 5), IsCancel = true };
@@ -136,6 +142,7 @@ internal sealed class RaceCarWindow : Window
         askBeforePlay.IsChecked = setup.AskBeforePlay;
         opponent.IsChecked = setup.Opponent;
         baldino.IsChecked = setup.Baldino;
+        biker.IsChecked = setup.Biker;
         fightBack.IsChecked = setup.OpponentsFightBack;
         qualifying.IsChecked = setup.Qualifying;
         fineWeather.IsChecked = setup.FineWeather;
