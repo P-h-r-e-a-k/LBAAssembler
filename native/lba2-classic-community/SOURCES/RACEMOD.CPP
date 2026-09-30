@@ -48,6 +48,8 @@
  *     raised=<file>              a raised road: lines "x z y half", its middle point by point in lap order and half its width, world
  *                                units from the island's corner. A floor of its own over the ground, at any grade (see "the raised road")
  *     statue=1                   Celebration Island drawn from its file with the statue (CELEBRA2), whatever game variable 79 says
+ *     jump_speed=<lo> <hi>       a jump's flight flown at the car's speed at the take-off (RaceMod_JumpClock): its clock that many times
+ *                                as fast as the flight's own speed, kept between lo and hi (default 0.6 4; 0: the flight in its own time)
  *   A startline or checkpoint line may end in a ninth number, the road's height there: the line then only counts for a car within
  *   RACE_LINE_REACH of that height (a lap that passes over itself crosses a line's place at other heights too).
  */
@@ -572,6 +574,70 @@ void RaceMod_Floor(S32 ox, S32 oy, S32 oz, S32 nx, S32 *ny, S32 nz) {
     if (*ny < f) *ny = f;
 }
 
+// ---- a jump flown at the car's speed ------------------------------------------------------------------------------------------------
+// A jump is a scripted flight: the hero's track script plays RACE_JUMP_ANIM (the build's copy of the retail flight, sized to the gap), and
+// the animation's own steps carry him along its arc in its own time, whatever speed the car came to the take-off at. Here the flight's
+// clock runs as many times as fast as the car's speed at the take-off is over the flight's own speed (its keyframes' steps along the
+// ground over their time): the same arc, so the same landing on the far ramp, flown faster by a faster car and slower by a slower one,
+// within jump_speed's bounds (a car crawling onto the take-off still jumps, not in slow motion). The car keeps its speed through the air
+// (BUGGY.CPP leaves it alone while the animation carries the car), so it lands going as fast as it took off.
+// The animation moves on a keyframe at most per frame, and the engine drops the time it ran past a keyframe's end (LastTimer = Time):
+// that time is carried into the next keyframe here, or a flight flown fast would lose a good part of its rate to it (at 60 frames a
+// second, twice as fast, a third of it).
+#define RACE_JUMP_ANIM 200                 // the flight's generic animation (Terrain/RaceTrackJumpAnim.cs Generic)
+static double s_jumpLo = 0.6, s_jumpHi = 4.0; // jump_speed=<lo> <hi>: the bounds of the rate (0: the flight in its own time)
+static double s_jumpRate = 0;              // the flight's clock rate (0: not flying)
+static double s_jumpFrac = 0;              // the part of a millisecond of the flight's clock carried to the next frame
+static U32 s_jumpOver = 0;                 // how far the flight's clock ran past a keyframe's end this frame
+
+// The flight's own speed along the ground, world units a second: its keyframes' root steps (X and Z) over their times.
+static double FlightSpeed(const T_OBJ_3D *obj) {
+    const U8 *anim = (const U8 *)obj->Anim.Ptr;
+    if (TransFctAnim) anim = (const U8 *)TransFctAnim(obj->Anim.Num);
+    if (!anim) return 0;
+    const S32 frames = ((const U16 *)anim)[0], groups = ((const U16 *)anim)[1];
+    double along = 0, ms = 0;
+    for (S32 k = 1; k < frames; k++) {
+        const S16 *f = (const S16 *)(anim + 8 + k * (groups + 1) * 8); // time, step X, Y, Z, ...
+        ms += (U16)f[0];
+        along += sqrt((double)f[1] * f[1] + (double)f[3] * f[3]);
+    }
+    return ms > 0 ? along * 1000.0 / ms : 0;
+}
+
+// Before the hero's animation is moved on (OBJECT.CPP GereObjAnim): while he flies a jump, the keyframe's start and end are brought nearer
+// by the extra time the flight's clock runs this frame (or put back, flown slower), so ObjectSetInterDep finds it that much further on.
+void RaceMod_JumpClock(T_OBJ_3D *obj, S32 genAnim, S32 move) {
+    if (!s_active || s_jumpHi <= 0 || genAnim != RACE_JUMP_ANIM || move != MOVE_BUGGY) { s_jumpRate = 0; return; }
+    if ((S32)(TimerRefHR - obj->Time) <= 0) return; // no time has passed (or the clock went back: ObjectSetInterDep's own case)
+    if (!s_jumpRate) {
+        const double own = FlightSpeed(obj), car = ListBuggy[0].Speed;
+        double rate = own > 0 ? car / own : 1;
+        if (rate < s_jumpLo) rate = s_jumpLo;
+        if (rate > s_jumpHi) rate = s_jumpHi;
+        s_jumpRate = rate; s_jumpFrac = 0;
+        Log_Info("[racemod] jump: the car at %.0f km/h, the flight's own speed %.0f km/h: flown x%.2f", car * 3.6 / 512, own * 3.6 / 512, rate);
+    }
+    const U32 dt = TimerRefHR - obj->Time;
+    const double run = s_jumpRate * dt + s_jumpFrac;
+    const U32 step = (U32)run;
+    s_jumpFrac = run - step;
+    obj->LastTimer += dt - step; // (modulo 2^32: brought nearer when the step is longer than the frame)
+    obj->NextTimer += dt - step;
+    s_jumpOver = (S32)(TimerRefHR - obj->NextTimer) > 0 ? TimerRefHR - obj->NextTimer : 0;
+}
+
+// ... and after it: a keyframe just reached, the time run past its end goes into the next one (no more than the whole of it).
+void RaceMod_JumpClockAfter(T_OBJ_3D *obj, S32 flag) {
+    if (!s_jumpRate || !(flag & FLAG_FRAME) || (flag & FLAG_LAST_FRAME) || !s_jumpOver) return;
+    U32 over = s_jumpOver;
+    const U32 whole = obj->NextTimer - obj->LastTimer;
+    if (over > whole) over = whole;
+    obj->LastTimer -= over;
+    obj->NextTimer -= over;
+    s_jumpOver = 0;
+}
+
 static void LoadRaised(const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) { Log_Info("[racemod] raised road: %s could not be read", path); return; }
@@ -840,6 +906,9 @@ static void Load(const char *path) {
         else if (!strcmp(key, "raised")) LoadRaised(v);
         else if (!strcmp(key, "statue")) s_statue = atoi(v);
         else if (!strcmp(key, "gravity")) s_gravity = atof(v);
+        else if (!strcmp(key, "jump_speed")) {
+            if (sscanf(v, "%lf %lf", &s_jumpLo, &s_jumpHi) != 2) s_jumpHi = 0;
+        }
         else if (!strcmp(key, "railcam")) {
             if (sscanf(v, "%lf %lf %lf", &s_railBack, &s_railUp, &s_railLead) != 3) s_railBack = 0;
         }

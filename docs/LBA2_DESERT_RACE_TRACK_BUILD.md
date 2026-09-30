@@ -902,6 +902,33 @@ The rail and a new floor (`RaceMod_Floor`: not under the surface of the road he 
 
 `tools/RaceTrackPlan/builtviews.py <game> <ISLAND> <scratch> <first new body> [views]` draws a built island from its sides, from above and at a slant; `pilottrace.py <engine log> <raised road file>` tabulates the speed along the lap from a headless run of the test pilot with `objtrace 0`.
 
+## A jump flown at the car's speed (2026-09-30)
+
+![the storm track's jump, the fast car and the default car at the same moments after the take-off](racetrack/build/jump_speed.png)
+
+The user asked whether a jump, a scripted flight, could go faster when the car comes to it faster. It does now. The flight is Twinsen's animation 200 (see "The jump"): its keyframes' steps carry him along its arc in the animation's own time, so until now every car flew every jump in the same time, about 2 s -- a car at 80 km/h slowed at the take-off to the flight's own speed (36 km/h; 32 as flown, see below), and the default car (34 km/h) went on at about its own.
+
+**How.** The engine's race-track mode now runs the flight's clock faster or slower (`RACEMOD.CPP` `RaceMod_JumpClock`, around the hero's `ObjectSetInterDep` in `OBJECT.CPP` `GereObjAnim`): as many times as fast as the car's speed at the take-off is over the flight's own speed, which it works out from the animation (its keyframes' steps along the ground over their times: 36 km/h on the storm track, 41 on Mosquibees Island's longer flight). Each frame the keyframe's start and end times are brought nearer by the extra time, so the animation finds itself that much further on. The arc is the same, so the landing is too: the car comes down on the far ramp whatever its speed, and keeps its speed through the air (the buggy's speed is left alone while the animation carries it), so it lands going as fast as it took off.
+
+The engine drops the time an animation runs past a keyframe's end (the next keyframe starts from the frame's time). At the flight's own speed that cost little, but flown twice as fast at 60 frames a second it would lose a third of the rate; the time run past is carried into the next keyframe instead.
+
+**The limits.** The rate is kept between 0.6 and 4: a car that crawls onto the take-off still jumps (in 3 s at most on the storm track), not in slow motion. The car file's `jump_speed=<lo> <hi>` sets them, and `jump_speed=0` turns it off (the flight in its own time, as before). The app doesn't write the key; the engine's defaults apply.
+
+**Verified** (headless, the test pilot, `tools/RaceTrackPlan/jumptrace.py`, which now reports each flight's time, length and speed and the car's speed down the far ramp, and reads any track's log):
+
+| | Take-off | Flight | In the air | Down the far ramp | Lap |
+|---|---|---|---|---|---|
+| Storm track, the user's fast car, before | 80 km/h | 32 km/h | 2.00 s | 78 km/h | 13.97 s |
+| Storm track, the user's fast car, now | 80 km/h | 78 km/h (x2.24) | 0.82 s | 77 km/h | 12.78 s |
+| Storm track, the default car, now | 34 km/h | 33 km/h (x0.95) | 1.90 s (2.00 before) | 32 km/h | 28.29 s (28.38) |
+| Storm track, a slow car (12 km/h) | 12 km/h | 21 km/h (x0.6, the limit) | 2.99 s | 12 km/h | |
+| Mosquibees Island, the default car | 34 km/h | 34 km/h (x0.84) | 2.50 s | 34 km/h | 47.81 s (47.60) |
+| Mosquibees Island, the fast car | 80 km/h | 79 km/h (x1.97) | 1.07 s | 81 km/h | 20.54 s |
+
+The same peak (2,022 over the take-off on the storm track, 2,579 on Mosquibees Island) and the same landing in every run; the fast car's flight is the same at 10 and 16 ms a frame. The default car's flight on Mosquibees Island takes 0.4 s longer than before: that flight was drawn out for a longer gap and flew faster than the car (41 km/h), and now keeps to the car's 34. The tracks without a jump are unchanged (the Elevator Platform's pilot lap 34.02 s).
+
+Found on the way, and not changed: with the simulation stepped at 33 ms a frame (`--fixed-timestep 0 --fixed-dt 33`; the engine steps at 16 ms whatever the frame rate unless its `FixedTimestep` setting is changed), the fast car stalls at the cube edge just past the storm track's far ramp, with or without this change -- 375 units a step overshoots the edge.
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The crossing style (bridge, jump, viaduct or a plain level junction), clearing the old track, and the scene options are choices in the dialog.

@@ -3247,11 +3247,17 @@ S32 GereCodesJeu(U8 numobj) {
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 /*──────────────────────────────────────────────────────────────────────────*/
 
+// A race-track jump's flight flown at the car's speed: around the hero's ObjectSetInterDep (RACEMOD.CPP, RACEMOD.H).
+extern void RaceMod_JumpClock(T_OBJ_3D *obj, S32 genAnim, S32 move);
+extern void RaceMod_JumpClockAfter(T_OBJ_3D *obj, S32 flag);
+
 void GereObjAnim(U8 numobj) {
     S32 numanim;
 
     if (APtObj->Obj.Anim.Num != -1) {
+        if (numobj == NUM_PERSO) RaceMod_JumpClock(&APtObj->Obj, APtObj->GenAnim, APtObj->Move); // a race-track jump flown at the car's speed (RACEMOD.CPP)
         S32 flag = ObjectSetInterDep(&APtObj->Obj);
+        if (numobj == NUM_PERSO) RaceMod_JumpClockAfter(&APtObj->Obj, flag);
 
         if (APtObj->Obj.Master & 1)
             APtObj->WorkFlags |= ANIM_MASTER_ROT;
