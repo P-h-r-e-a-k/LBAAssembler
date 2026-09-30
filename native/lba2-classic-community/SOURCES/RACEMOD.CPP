@@ -575,7 +575,8 @@ void RaceMod_Floor(S32 ox, S32 oy, S32 oz, S32 nx, S32 *ny, S32 nz) {
 }
 
 // ---- a jump flown at the car's speed ------------------------------------------------------------------------------------------------
-// A jump is a scripted flight: the hero's track script plays RACE_JUMP_ANIM (the build's copy of the retail flight, sized to the gap), and
+// A jump is a scripted flight: the hero's track script plays one of RACE_JUMP_ANIM_FIRST..LAST (the build's copy of the retail flight,
+// sized to the gap: each island's own, so the tracks of several islands can be built into one folder), and
 // the animation's own steps carry him along its arc in its own time, whatever speed the car came to the take-off at. Here the flight's
 // clock runs as many times as fast as the car's speed at the take-off is over the flight's own speed (its keyframes' steps along the
 // ground over their time): the same arc, so the same landing on the far ramp, flown faster by a faster car and slower by a slower one,
@@ -584,7 +585,8 @@ void RaceMod_Floor(S32 ox, S32 oy, S32 oz, S32 nx, S32 *ny, S32 nz) {
 // The animation moves on a keyframe at most per frame, and the engine drops the time it ran past a keyframe's end (LastTimer = Time):
 // that time is carried into the next keyframe here, or a flight flown fast would lose a good part of its rate to it (at 60 frames a
 // second, twice as fast, a third of it).
-#define RACE_JUMP_ANIM 200                 // the flight's generic animation (Terrain/RaceTrackJumpAnim.cs Generic)
+#define RACE_JUMP_ANIM_FIRST 200           // the flights' generic animations (Terrain/RaceTrackJumpAnim.cs Generic..Last: 200 + the island's
+#define RACE_JUMP_ANIM_LAST 223            // number, 12 more for Citadel Island's town circuit)
 static double s_jumpLo = 0.6, s_jumpHi = 4.0; // jump_speed=<lo> <hi>: the bounds of the rate (0: the flight in its own time)
 static double s_jumpRate = 0;              // the flight's clock rate (0: not flying)
 static double s_jumpFrac = 0;              // the part of a millisecond of the flight's clock carried to the next frame
@@ -608,7 +610,7 @@ static double FlightSpeed(const T_OBJ_3D *obj) {
 // Before the hero's animation is moved on (OBJECT.CPP GereObjAnim): while he flies a jump, the keyframe's start and end are brought nearer
 // by the extra time the flight's clock runs this frame (or put back, flown slower), so ObjectSetInterDep finds it that much further on.
 void RaceMod_JumpClock(T_OBJ_3D *obj, S32 genAnim, S32 move) {
-    if (!s_active || s_jumpHi <= 0 || genAnim != RACE_JUMP_ANIM || move != MOVE_BUGGY) { s_jumpRate = 0; return; }
+    if (!s_active || s_jumpHi <= 0 || genAnim < RACE_JUMP_ANIM_FIRST || genAnim > RACE_JUMP_ANIM_LAST || move != MOVE_BUGGY) { s_jumpRate = 0; return; }
     if ((S32)(TimerRefHR - obj->Time) <= 0) return; // no time has passed (or the clock went back: ObjectSetInterDep's own case)
     if (!s_jumpRate) {
         const double own = FlightSpeed(obj), car = ListBuggy[0].Speed;

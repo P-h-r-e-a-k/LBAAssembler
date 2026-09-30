@@ -12,6 +12,11 @@ internal static class RaceTrackJumpAnim
     public const int RetailEntry = 51;
     // The generic animation number the hero's track script plays (ANIM(200)); the retail entities use numbers up to 83.
     public const int Generic = 200;
+    // Each island's jump has a flight of its own, sized to its gap, so several tracks can be built into one folder: 200 plus the island's
+    // number (a scene's island byte), and 12 more for the track of its other-weather file (Citadel Island's town circuit) -- 200 to 223, the
+    // numbers the engine's race-track mode flies at the car's speed (RACEMOD.CPP RACE_JUMP_ANIM_FIRST..LAST).
+    public const int TwinOffset = 12, Last = Generic + 2 * TwinOffset - 1;
+    public static int GenericFor(RaceTrackIsland island, bool twin = false) => Generic + island.IslandByte + (twin ? TwinOffset : 0);
     // Twinsen's entity while he drives (behaviour C_BUGGY = 12: the engine loads entity n for behaviour n).
     public const int BuggyEntity = 12;
     // The retail flight's steps (measured in the game: 17.4-17.6 cells): 8990 units forward, ending 201 below where it starts.
@@ -48,9 +53,9 @@ internal static class RaceTrackJumpAnim
     // The scale that flies `cells` (never shorter than the retail flight).
     public static double ForwardFor(double cells) => Math.Max(1, Math.Ceiling(cells * 512 / RetailForward * 100) / 100);
 
-    // Adds a flight `forward` times the retail one to the game folder's ANIM.HQR and RESS.HQR (the copies the build starts from are the
-    // originals, so this runs once per build). Returns a line for the build's log.
-    public static string Install(string gameDirectory, double forward)
+    // Adds a flight `forward` times the retail one to the game folder's ANIM.HQR and RESS.HQR, as Twinsen's generic animation `generic` in
+    // the buggy (the copies the build starts from are the originals, so this runs once per jump a build has). Returns a line for the build's log.
+    public static string Install(string gameDirectory, double forward, int generic = Generic)
     {
         var animPath = Path.Combine(gameDirectory, "ANIM.HQR");
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
@@ -61,10 +66,10 @@ internal static class RaceTrackJumpAnim
 
         var ress = File.ReadAllBytes(ressPath);
         var table = HqrArchive.Open(ressPath).Read(44);
-        table = WithAnim(table, BuggyEntity, Generic, index);
+        table = WithAnim(table, BuggyEntity, generic, index);
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(ress, 44, HqrWriter.StoredEntry(table)));
         return $"jump flight: ANIM.HQR entry {index} (entry {RetailEntry} with the steps forward x{forward:0.00}, the climb x{ClimbScale(forward):0.00} and the time x{TimeScale(forward):0.00}: " +
-               $"{Distance(forward):0.0} cells), played by Twinsen in the buggy as animation {Generic}";
+               $"{Distance(forward):0.0} cells), played by Twinsen in the buggy as animation {generic}";
     }
 
     // The retail flight with its keyframes' root steps and times scaled. Layout (ANIM.HQR): U16 keyframes, U16 bones, U16 loop frame, U16 0;

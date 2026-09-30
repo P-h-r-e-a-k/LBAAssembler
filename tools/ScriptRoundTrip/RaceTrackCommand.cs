@@ -108,9 +108,33 @@ internal static class RaceTrackCommand
         return 0;
     }
 
+    // buildtogether <pristine> <game folder> <island>...: the islands' tracks (their built-in plans) built into one folder by one build, as
+    // the race track window does with several islands ticked -- the game folder given its pristine files first, its backups removed -- and
+    // for each track the start scene and line RACETRACK.JSON has. RT_CROSSING picks the crossing style of the ones that take it.
+    public static int BuildTogether(string[] args)
+    {
+        var pristine = args[1]; var game = args[2];
+        foreach (var f in Directory.GetFiles(game, "*" + RaceTrackService.BackupSuffix)) File.Delete(f);
+        foreach (var f in RaceTrackService.AllFiles.Append("LBA2.HQR"))
+            if (File.Exists(Path.Combine(pristine, f))) RaceTrackService.CopyWritable(Path.Combine(pristine, f), Path.Combine(game, f));
+        var tracks = args.Skip(3).Select(RaceTrackIsland.ByName).Select(where =>
+        {
+            var options = new RaceTrackOptions { Island = where, OldTrackCube = where.OldTrackCube };
+            if (Environment.GetEnvironmentVariable("RT_CROSSING") is { } cs) options.Crossing = Enum.Parse<CrossingStyle>(cs, ignoreCase: true);
+            return new RaceTrackService.TrackBuild(RaceTrackPlan.Built(where), options);
+        }).ToList();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var result = RaceTrackService.Build(game, tracks);
+        Console.WriteLine($"{result.Summary} ({watch.Elapsed.TotalSeconds:0.0} s)");
+        if (Environment.GetEnvironmentVariable("RT_LOG") == "1") foreach (var l in result.Log) Console.WriteLine("  " + l);
+        foreach (var t in RaceTrackService.Tracks(RaceTrackService.ReadInfo(game)))
+            Console.WriteLine($"  {t.Island}: start scene {t.StartScene}, line {t.StartLine}" + (t.Twin is { } tw ? $"; twin start scene {tw.StartScene}" : ""));
+        return result.Ok ? 0 : 1;
+    }
+
     // herostart <game folder> <cell x> <cell z> [turn]: puts Twinsen's start in the scene of the cube that holds an island cell, on the ground there
     // (for looking at a place of the track in the game).
-    // racecarfile <game folder> <out file> [pace]: the engine's car setup file Play would write for that folder (the default car, the
+    // racecarfile <game folder> <out file> [pace]: (RT_RACE=<island file>: the track of that island, of a folder with several) the engine's car setup file Play would write for that folder (the default car, the
     // folder's RACETRACK.JSON: start line, checkpoints, the opponent's line beside it as racepath.txt), for headless tests. RT_WEATHER=rain:
     // Citadel Island left raining (its storm track).
     // baldinocar <game folder> <scratch folder>: Baldino's car built from the game folder's BODY.HQR and installed into copies of its BODY.HQR and
@@ -229,7 +253,9 @@ internal static class RaceTrackCommand
         if (args.Length > 3) setup.RacerSkill = setup.BaldinoSkill = int.Parse(args[3]);
         // (RT_WEATHER=rain: Citadel Island left raining -- its storm track)
         if (Environment.GetEnvironmentVariable("RT_WEATHER") == "rain") setup.FineWeather = false;
-        setup.WriteEngineFile(Path.GetFullPath(args[2]), RaceTrackService.ReadInfo(args[1]));
+        // (RT_RACE=<island file>: of a folder with several tracks, the one Play races with that island open in the editor, as RaceFor picks it)
+        var track = Environment.GetEnvironmentVariable("RT_RACE") is { Length: > 0 } race ? RaceTrackService.RaceFor(args[1], race) : RaceTrackService.ReadInfo(args[1]);
+        setup.WriteEngineFile(Path.GetFullPath(args[2]), track);
         Console.WriteLine($"{args[2]}: {File.ReadAllLines(args[2]).Length} lines");
         return 0;
     }

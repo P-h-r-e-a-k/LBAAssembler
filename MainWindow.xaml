@@ -183,7 +183,7 @@
                     <MenuItem x:Name="Lba2FixScriptingMenuItem" Header="LBA2: Fi_x scripting errors…" Click="Lba2FixScriptingErrors_Click"/>
                     <MenuItem x:Name="Lba1SurpriseMenuItem" Header="LBA1: _Make surprise changes…" Click="Lba1SurpriseChanges_Click"/>
                 </MenuItem>
-                <MenuItem x:Name="Lba2RaceTrackMenuItem" Header="LBA2: _race track…" Click="Lba2RaceTrack_Click" ToolTip="Builds a race track on the Desert island or Citadel Island (levelled, banked road, pit lane, start gantry, a bridge or a jump where the lap crosses itself), or puts the folder back"/>
+                <MenuItem x:Name="Lba2RaceTrackMenuItem" Header="LBA2: _race track…" Click="Lba2RaceTrack_Click" ToolTip="Builds race tracks, one island&apos;s or several at once (levelled, banked road, pit lane, start gantry, a bridge or a jump where the lap crosses itself), or puts the folder back. Play races the track of the island that is open"/>
                 <Separator/>
                 <MenuItem Header="_Test edits" ToolTip="Try changes against a scratch copy of the game folder before any of them touch your real files">
                     <MenuItem x:Name="TestEditsStartMenuItem" Header="_Start testing…" Click="TestEditsStart_Click"/>

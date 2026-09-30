@@ -71,6 +71,8 @@ public partial class MainWindow
             SwitchGame(game);
             if (currentGame != game) return;
         }
+        // (of a folder with several race tracks, the one of the island the editor has open)
+        raceToPlay = game == GameKind.Lba2 ? RaceTrackToPlay() : null;
         if (game == GameKind.Lba2 && askRaceCar && !RaceTrackUpToDate()) return;
         if (game == GameKind.Lba2 && askRaceCar && !AskRaceCar()) return;
         // a race track starts on its start/finish straight, Twinsen beside his car (the build puts him there in that scene)
@@ -79,12 +81,25 @@ public partial class MainWindow
         LaunchPlay(game, null, null);
     }
 
+    // The race track Play races, when the LBA2 folder has one or more: the one of the island the editor has open -- the island file on
+    // screen (Citadel Island's CITADEL.ILE its storm track, CITABAU.ILE its town circuit), else the island of the scene that is open --
+    // else the first built (RaceTrackService.RaceFor). Set when Play is pressed.
+    private Terrain.RaceTrackService.TrackInfo? raceToPlay;
+
+    private Terrain.RaceTrackService.TrackInfo? RaceTrackToPlay()
+    {
+        if (!Lba2Configured || !Terrain.RaceTrackService.HasBackups(gameRoot)) return null;
+        var shown = currentGame == GameKind.Lba2 && !interiorSceneActive && currentIsland is not null ? activeFile : null;
+        var sceneIsland = allSceneEntries.FirstOrDefault(s => s.Option.Index == Lba2SceneToPlay())?.IslandFile;
+        return Terrain.RaceTrackService.RaceFor(gameRoot, shown, sceneIsland is null ? null : sceneIsland + ".ILE");
+    }
+
     // The scene a race-track play starts in, when the LBA2 folder has a race track and the car setup says to start on its straight.
     private int? RaceStartScene()
     {
-        if (!EditorSettings.Current.RaceCar.StartAtLine || !Terrain.RaceTrackService.HasBackups(gameRoot)) return null;
-        // (Citadel Island has a track in each weather: the car setup's weather says which one's start)
-        return Terrain.RaceTrackService.RacedIn(gameRoot) is { StartScene: >= 0 } info ? info.StartScene : null;
+        if (!EditorSettings.Current.RaceCar.StartAtLine || raceToPlay is null) return null;
+        // (Citadel Island has a track in each weather: the one raced, as the island file open says)
+        return Terrain.RaceTrackService.Raced(raceToPlay) is { StartScene: >= 0 } info ? info.StartScene : null;
     }
 
     // Set when a race-track play starts with the zones and routes the editor draws over the game hidden; the first change of those
@@ -96,7 +111,7 @@ public partial class MainWindow
     private readonly HashSet<string> outdatedTrackWarned = new(StringComparer.OrdinalIgnoreCase);
     private bool RaceTrackUpToDate()
     {
-        if (!Terrain.RaceTrackService.IsOutdated(gameRoot) || !outdatedTrackWarned.Add(gameRoot)) return true;
+        if (!Terrain.RaceTrackService.IsOutdated(gameRoot, raceToPlay) || !outdatedTrackWarned.Add(gameRoot)) return true;
         var answer = MessageBox.Show(this,
             "The race track in this game folder was built by an older version of LBA Assembler, before the grid, the qualifying lap and the " +
             "count-down start. It plays the old way until it is built again (Tools > LBA2: race track > Build the track).\n\n" +
@@ -110,7 +125,7 @@ public partial class MainWindow
     private bool AskRaceCar()
     {
         if (!Terrain.RaceTrackService.HasBackups(gameRoot) || !EditorSettings.Current.RaceCar.AskBeforePlay) return true;
-        return new RaceCarWindow(forPlay: true, gameRoot) { Owner = this }.ShowDialog() == true;
+        return new RaceCarWindow(forPlay: true, gameRoot, raceToPlay) { Owner = this }.ShowDialog() == true;
     }
 
     // `spawn` is where the hero starts (in the scene's own coordinates), `scene` overrides the scene that is open.
@@ -232,7 +247,7 @@ public partial class MainWindow
         options.Paths = pathsVisible;
         options.ListenPort = Lba2BreakpointsPort;
         options.FallbackMusic = ResolveLba2MusicFallback(scene);
-        options.RaceCarFile = Terrain.RaceTrackService.CarFileWriter(gameRoot);
+        options.RaceCarFile = Terrain.RaceTrackService.CarFileWriter(gameRoot, raceToPlay);
         raceOverlayHidden = options.RaceCarFile is not null && EditorSettings.Current.RaceCar.StartAtLine;
         if (raceOverlayHidden) { options.ZoneMask = 0; options.Paths = false; }
 

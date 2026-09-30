@@ -406,6 +406,15 @@ public partial class MainWindow
         if (placing) return;
         if (currentGame != GameKind.Lba2 || !Lba2Configured) { PlayButton.Content = "▶  Play scene"; PlayButton.ToolTip = "Play the selected scene in the LBA1 play mode"; return; }
         var scene = Lba2SceneToPlay();
+        // (a folder with race tracks built starts the one of the island that is open, on its grid: RaceTrackToPlay)
+        if (EditorSettings.Current.RaceCar.StartAtLine && RaceTrackToPlay() is { } race && Terrain.RaceTrackService.Raced(race) is { StartScene: >= 0 } raced)
+        {
+            var island = Terrain.RaceTrackIsland.ByName(race.Island);
+            PlayButton.Content = $"▶  Race: {island.Name}{(race.Twin is not null && island.RacesTwin ? ", town circuit" : "")}";
+            PlayButton.ToolTip = $"{island.Shown}: starts on its grid, in scene {raced.StartScene}.\nOf the race tracks built into the game folder, the one of the island that is open" +
+                                 (race.Twin is not null ? " (CITADEL.ILE: the storm track, CITABAU.ILE: the town circuit)" : "") + ". Plays what is saved on disk.";
+            return;
+        }
         PlayButton.Content = $"▶  Play scene {scene}";
         PlayButton.ToolTip = (allSceneEntries.FirstOrDefault(s => s.Option.Index == scene)?.Option.Display ?? $"Scene {scene}") + "\nThe scene that is open (for an island: the cube the camera is over). Plays what is saved on disk.";
     }

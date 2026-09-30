@@ -49,7 +49,8 @@ internal sealed class Lba2PlayHostWindow : Window
         await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Render);
         (options.Width, options.Height) = host.FitSize();
         options.ListenPort = ListenPort;
-        options.RaceCarFile = Terrain.RaceTrackService.CarFileWriter(gameDirectory);
+        // (of a folder with several race tracks, the one of the scene's island)
+        options.RaceCarFile = Terrain.RaceTrackService.CarFileWriter(gameDirectory, Terrain.RaceTrackService.RaceForScene(gameDirectory, options.Scene));
         string? problem = null;
         var process = await Task.Run(() => Lba2Play.Launch(gameDirectory, options, out problem, embedded: true));
         if (process is null) { status.Text = problem ?? "The game didn't start."; return; }

@@ -5,7 +5,8 @@ how far and how fast along the ground -- and the car's speed down the far ramp.
     python jumptrace.py <dt ms> [car file] [look cells]
     python jumptrace.py <engine log>      the same report from another track's run (a log with `autodrive` and `objtrace 0`)
 The engine still simulates in its own 16 ms steps whatever the clock does (FixedTimestep); SIMSTEP=<ms> in the environment sets that too
-(SIMSTEP=0: one step a frame, so the frame time is the simulation's). JT_LOG=<file> keeps the engine's whole log; JT_SHOTS=<tick>,...
+(SIMSTEP=0: one step a frame, so the frame time is the simulation's). JT_LOG=<file> keeps the engine's whole log; JT_GAME=<folder> drives another
+build of the storm track (one with several tracks); JT_SHOTS=<tick>,...
 takes screenshots at those ticks, into E:\\dump\\TEMP\\cstorm\\user_jt_<dt>."""
 import re, subprocess, sys, os
 if not sys.argv[1].isdigit():
@@ -20,7 +21,7 @@ else:
     os.makedirs(user, exist_ok=True)
     ticks = int(40000 / dt) + 100          # two laps' worth
     env = dict(os.environ, LBA2_RACETRACK_FILE=car)
-    args = [ENG, '--headless', '--no-audio', '--game-dir', r'E:\dump\TEMP\rt_cstorm', '--user-dir', user, '--no-autosave', '--resolution', '640x480',
+    args = [ENG, '--headless', '--no-audio', '--game-dir', os.environ.get('JT_GAME', r'E:\dump\TEMP\rt_cstorm'), '--user-dir', user, '--no-autosave', '--resolution', '640x480',
             '--fixed-dt', str(dt), '--exec-at', '4', 'skipmodals 1', '--exec-at', '5', 'vargame 74 3', '--exec-at', '6', 'cube 42',
             '--exec-at', '40', 'teleport 24897 352 2540 4013', '--exec-at', '60', 'input action 5', '--exec-at', '90', 'autodrive 1 ' + look,
             '--exec-at', '91', 'objtrace 0', '--tick', str(ticks), '--exit']
@@ -32,6 +33,7 @@ else:
 rx = re.compile(r'\[obj\] t=(\d+) obj=0 pos=(-?\d+),(-?\d+),(-?\d+) .*? anim=(-?\d+) genanim=(-?\d+) flaganim=(-?\d+) frame=(-?\d+) track=(-?\d+) label=(-?\d+) comport=(-?\d+) move=(-?\d+) flags=(\d+)')
 rows = [tuple(int(v) for v in m.groups()) for m in rx.finditer(out)]
 seen = set()
+FLIGHT = lambda anim: 200 <= anim <= 223   # the flights: each island's own (RaceTrackJumpAnim.GenericFor)
 rows = sorted(r for r in rows if not (r[0] in seen or seen.add(r[0])))   # (a log with two copies of each line, out of step: each frame once)
 laps = list(dict.fromkeys(re.findall(r'\[racemod\] lap (\d+) in ([\d.]+) s', out)))
 print(f'dt {dt}: {len(rows)} traced frames; laps {laps}')
@@ -42,7 +44,7 @@ while i < len(rows):
         start = i
         while i < len(rows) and rows[i][11] == 12: i += 1
         seg = rows[start:i]
-        first200 = next((k for k, r in enumerate(seg) if r[5] == 200), None)
+        first200 = next((k for k, r in enumerate(seg) if FLIGHT(r[5])), None)
         held = seg[:first200] if first200 is not None else seg
         holders = sorted({(r[5], r[6]) for r in held})
         t0 = seg[0][0]
@@ -50,7 +52,7 @@ while i < len(rows):
               f'flight anim after {first200 if first200 is not None else "never"} frames ({(seg[first200][0] - t0) if first200 is not None else "-"} ms); '
               f'held by (genanim, flaganim) {holders}; ends at ({seg[-1][1]},{seg[-1][2]},{seg[-1][3]})')
         # the flight itself: how long, how far along the ground, how high over its start; and the car's speed coming down the far ramp
-        flight = [r for r in seg if r[5] == 200]
+        flight = [r for r in seg if FLIGHT(r[5])]
         if flight:
             a, b = flight[0], flight[-1]
             ms = b[0] - a[0]

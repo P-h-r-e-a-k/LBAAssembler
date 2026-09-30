@@ -31,8 +31,9 @@ internal static class RaceTrackTextures
         var file = ileFile ?? where.IleFile;
         if (file == RaceTrackIsland.Desert.IleFile) return (RaceTrackTheme.Retail, "");
 
+        // (the original, kept beside it by a build: the Desert island's own track, built before this one in the same build, has changed the file)
         var desertPath = Path.Combine(gameDirectory, RaceTrackIsland.Desert.IleFile);
-        var desert = IslandFile.Load(File.Exists(desertPath) ? desertPath : Path.Combine(gameDirectory, RaceTrackIsland.Desert.IleFile + RaceTrackService.BackupSuffix));
+        var desert = IslandFile.Load(File.Exists(desertPath + RaceTrackService.BackupSuffix) ? desertPath + RaceTrackService.BackupSuffix : desertPath);
         var from = IslandMapRenderer.LoadPalette(gameDirectory, "DESERT");
         var to = IslandMapRenderer.LoadPalette(gameDirectory, Path.GetFileNameWithoutExtension(file));
 

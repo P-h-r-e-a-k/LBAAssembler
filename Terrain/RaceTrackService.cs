@@ -9,6 +9,10 @@ namespace LBAAssembler.Terrain;
 // and RESS.HQR for Baldino's car (RaceTrackBaldinoCar); they are kept from the first build on too (a folder built before one of them changed keeps
 // it from its next build on, while it is still the original), so every build starts from the originals. RACETRACK.JSON, beside them, tells Play
 // where the start line, the checkpoints and the opponents' lines are (what the engine's race-track mode uses).
+// A build can carry the tracks of several islands at once (each island's scenes, ground and decor bodies are its own; what they share --
+// SCENE.HQR's other scenes, the cars, the holomap -- each adds to): they are built one after another from the originals, and
+// RACETRACK.JSON has the first as its own record and the others under Others. Play races the one of the island the editor has open
+// (RaceFor).
 internal static class RaceTrackService
 {
     public const string BackupSuffix = ".before-racetrack";
@@ -46,22 +50,75 @@ internal static class RaceTrackService
         // fifth number, its banking in ten-thousandths).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] double? Gravity = null,
         // RailCamera: the camera rides the raised road behind the car (RaceTrackPlan.RailCamera: cells behind, units up, cells ahead).
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] double[]? RailCamera = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] double[]? RailCamera = null,
+        // Others: the tracks of the other islands built into the folder with this one, each a record of its own (with no Others).
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<TrackInfo>? Others = null);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
-    // start line, checkpoints and opponents from RACETRACK.JSON); null for any other folder, which plays the game as it is.
-    public static Action<string>? CarFileWriter(string gameDirectory)
+    // start line, checkpoints and opponents from RACETRACK.JSON: `track`, one of the folder's tracks as RaceFor picks it, or else the
+    // first); null for any other folder, which plays the game as it is.
+    public static Action<string>? CarFileWriter(string gameDirectory, TrackInfo? track = null)
     {
         if (!HasBackups(gameDirectory)) return null;
         var car = EditorSettings.Current.RaceCar.Clone();
-        return path => car.WriteEngineFile(path, ReadInfo(gameDirectory));
+        return path => car.WriteEngineFile(path, track ?? ReadInfo(gameDirectory));
     }
 
     // A race track built by an older version of the editor, before the grid (and with it the qualifying lap and the count-down): its
     // RACETRACK.JSON has no grid spots, or there is none. The race-track mode then starts the old way; building it again brings them.
-    // (an island with a track in each weather file has its grid in the one that carries the race)
-    public static bool IsOutdated(string gameDirectory) => HasBackups(gameDirectory) && ReadInfo(gameDirectory) is var info && (info?.Twin ?? info)?.Grid is not { Count: > 0 };
+    // (an island with a track in each weather file has its grid in the one that carries the race; `track`: the one to be raced, else the first)
+    public static bool IsOutdated(string gameDirectory, TrackInfo? track = null) =>
+        HasBackups(gameDirectory) && (track ?? ReadInfo(gameDirectory)) is var info && (info?.Twin ?? info)?.Grid is not { Count: > 0 };
+
+    // The folder's tracks: the first built, then the others (each with no Others of its own).
+    public static List<TrackInfo> Tracks(TrackInfo? info) =>
+        info is null ? new() : new List<TrackInfo> { info with { Others = null } }.Concat(info.Others ?? new()).ToList();
+
+    // The islands the folder has tracks on, in the order they were built.
+    public static List<RaceTrackIsland> BuiltIslands(string gameDirectory) =>
+        File.Exists(Path.Combine(gameDirectory, InfoFile)) ? Tracks(ReadInfo(gameDirectory)).Select(t => RaceTrackIsland.ByName(t.Island)).ToList() : new();
+
+    // The track Play races, of the folder's: the one on the island file the editor has open (`shownFile`, e.g. MOSQUIBE.ILE; for an island
+    // with a track in each of its files -- Citadel Island -- that file's: CITADEL.ILE the storm track, CITABAU.ILE the town circuit), else
+    // the one on the island of the scene that is open (`sceneIslandFile`, for an inside scene: the file its island byte names; that island's
+    // track as it was built to be raced), else the first built. Null when the folder has none. (Celebration Island's track is on CELEBRA2,
+    // the island with the statue; the editor lists its scenes under CELEBRAT, the same island before the statue rises.)
+    public static TrackInfo? RaceFor(string gameDirectory, string? shownFile, string? sceneIslandFile = null)
+    {
+        var tracks = Tracks(ReadInfo(gameDirectory));
+        if (tracks.Count == 0) return null;
+        static bool Same(string? a, string? b) => a is not null && b is not null && string.Equals(Path.GetFileNameWithoutExtension(a), Path.GetFileNameWithoutExtension(b), StringComparison.OrdinalIgnoreCase);
+        static bool Island(RaceTrackIsland i, string? file) => Same(file, i.IleFile) || Same(file, i.TwinIleFile) || i.Statue && Same(file, "CELEBRAT");
+        foreach (var t in tracks)
+        {
+            var island = RaceTrackIsland.ByName(t.Island);
+            if (t.Twin is not null && (Same(shownFile, island.IleFile) || Same(shownFile, island.TwinIleFile)))
+            {
+                // (the entry of the island that races the file shown: RacesTwin for the twin's)
+                var twin = Same(shownFile, island.TwinIleFile);
+                var entry = RaceTrackIsland.All.FirstOrDefault(i => i.IleFile == island.IleFile && i.RacesTwin == twin) ?? island;
+                return t with { Island = entry.Name };
+            }
+            if (Island(island, shownFile)) return t;
+        }
+        return tracks.FirstOrDefault(t => Island(RaceTrackIsland.ByName(t.Island), sceneIslandFile)) ?? tracks[0];
+    }
+
+    // The same for a scene played on its own (the scene editor's Play): the track of the scene's island (its record's island byte), else
+    // the first built.
+    public static TrackInfo? RaceForScene(string gameDirectory, int scene)
+    {
+        var tracks = Tracks(ReadInfo(gameDirectory));
+        if (tracks.Count == 0) return null;
+        try
+        {
+            var record = HqrArchive.Open(Path.Combine(gameDirectory, "SCENE.HQR")).Read(scene + 1);
+            if (record.Length > 0 && tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island).IslandByte == record[0]) is { } own) return own;
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException) { }
+        return tracks[0];
+    }
 
     // The track Play races: for an island whose two files carry different tracks, the one the race track window was built with (Citadel
     // Island's town circuit, raced once the storm is over, or its storm track, raced in the rain: RaceTrackIsland.RacesTwin); else the one
@@ -72,10 +129,6 @@ internal static class RaceTrackService
     // twin's is the fine weather's); for any other, as the car setup says.
     public static bool FineWeather(TrackInfo? info, bool setup) => info?.Twin is { } twin ? ReferenceEquals(Raced(info), twin) : setup;
 
-    // The track the folder's race is on, or null when it has none.
-    public static TrackInfo? RacedIn(string gameDirectory) => ReadInfo(gameDirectory) is { } info ? Raced(info) : null;
-
-    // A folder has a race track when the files of the island its RACETRACK.JSON names were kept.
     // A copy the build can then write to: a game folder taken off a disc (or from a reference set kept read-only) has read-only files, and
     // File.Copy carries that to the copy, so the next build would fail on its own backup.
     public static void CopyWritable(string from, string to)
@@ -85,6 +138,7 @@ internal static class RaceTrackService
         if (info.IsReadOnly) info.IsReadOnly = false;
     }
 
+    // A folder has a race track when the files of the island its RACETRACK.JSON names (the first, of several) were kept.
     public static bool HasBackups(string gameDirectory) => BuiltIsland(gameDirectory) is { } island && FilesFor(island).All(f => File.Exists(Path.Combine(gameDirectory, f + BackupSuffix)));
 
     // The island the folder's track was built on (its RACETRACK.JSON says; a track built before there was a choice is the Desert island's).
@@ -101,40 +155,65 @@ internal static class RaceTrackService
         return null;
     }
 
-    public static BuildResult Build(string gameDirectory, RaceTrackPlan plan, RaceTrackOptions options, RaceTrackPlan? twinPlan = null)
+    // One island's track for Build: its plan, the options it is built with (an object of its own: the build fills it in), and for an
+    // island with a track in each of its files, the other file's plan when it isn't the one built into the program.
+    public sealed record TrackBuild(RaceTrackPlan Plan, RaceTrackOptions Options, RaceTrackPlan? TwinPlan = null);
+
+    public static BuildResult Build(string gameDirectory, RaceTrackPlan plan, RaceTrackOptions options, RaceTrackPlan? twinPlan = null) =>
+        Build(gameDirectory, new[] { new TrackBuild(plan, options, twinPlan) });
+
+    // Builds the tracks into the folder, in the order given, all from the originals: what the folder had before -- any island's track,
+    // this build's or another's -- goes. (Two entries for one island -- Citadel Island's town circuit and its storm track, which build the
+    // same files -- build it once, as the first of them.)
+    public static BuildResult Build(string gameDirectory, IReadOnlyList<TrackBuild> tracks)
     {
         if (Problem(gameDirectory) is { } problem) return new(false, problem, new(), null);
+        tracks = tracks.DistinctBy(t => t.Options.Island.IleFile, StringComparer.OrdinalIgnoreCase).ToList();
+        if (tracks.Count == 0) return new(false, "No island is chosen: nothing was changed.", new(), null);
         try
         {
-            var files = FilesFor(options.Island).Concat(ExtraFiles).ToArray();
+            var files = tracks.SelectMany(t => FilesFor(t.Options.Island)).Concat(ExtraFiles).Distinct().ToArray();
             foreach (var f in files)
             {
                 var backup = Path.Combine(gameDirectory, f + BackupSuffix);
                 if (!File.Exists(backup)) CopyWritable(Path.Combine(gameDirectory, f), backup);
             }
-            // every build starts from the originals (the island's own ground is loaded from its copy below)
-            foreach (var f in files.Where(f => f != options.Island.IleFile))
+            // every build starts from the originals: this build's files and whatever an earlier build changed (another island's track that
+            // this build leaves out goes); each island's own ground is loaded from its copy below
+            var grounds = tracks.Select(t => t.Options.Island.IleFile).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var f in AllFiles.Where(f => !grounds.Contains(f) && File.Exists(Path.Combine(gameDirectory, f + BackupSuffix))))
                 CopyWritable(Path.Combine(gameDirectory, f + BackupSuffix), Path.Combine(gameDirectory, f));
-            var built = BuildFiles(gameDirectory, Path.Combine(gameDirectory, options.Island.IleFile + BackupSuffix), plan, options, twinPlan);
-            var (report, scenes) = (built.Report, built.Scenes);
 
+            var session = new BuildSession();
             var log = new List<string>();
-            log.Add($"The lap is {report.Length:0} cells ({report.Length * 512:0} game units) long: {report.Vertices} ground points levelled, {report.Cells} cells painted, {report.DecorsRemoved + report.SolidDecorsRemoved} decor objects taken off the road.");
-            log.AddRange(built.Log);
-            log.AddRange(report.Notes);
-            foreach (var placed in report.Placed) log.Add(placed);
-            if (built.Twin is { Own: true } twin)
+            var starts = new List<string>();
+            RaceTrackReport? first = null;
+            foreach (var track in tracks)
             {
-                log.Add($"{options.Island.TwinIleFile}'s own track:");
-                log.AddRange(twin.Report.Notes.Select(n => "  " + n));
-                log.AddRange(twin.Report.Placed.Select(p => "  " + p));
+                var options = track.Options;
+                var built = BuildFiles(gameDirectory, Path.Combine(gameDirectory, options.Island.IleFile + BackupSuffix), track.Plan, options, track.TwinPlan, session);
+                var (report, scenes) = (built.Report, built.Scenes);
+                first ??= report;
+                if (tracks.Count > 1) log.Add($"==== {options.Island.Shown} ====");
+                log.Add($"The lap is {report.Length:0} cells ({report.Length * 512:0} game units) long: {report.Vertices} ground points levelled, {report.Cells} cells painted, {report.DecorsRemoved + report.SolidDecorsRemoved} decor objects taken off the road.");
+                log.AddRange(built.Log);
+                log.AddRange(report.Notes);
+                foreach (var placed in report.Placed) log.Add(placed);
+                if (built.Twin is { Own: true } twin)
+                {
+                    log.Add($"{options.Island.TwinIleFile}'s own track:");
+                    log.AddRange(twin.Report.Notes.Select(n => "  " + n));
+                    log.AddRange(twin.Report.Placed.Select(p => "  " + p));
+                }
+                log.AddRange(scenes.Log.Where(l => !l.Contains("actors removed,") && !l.Contains("no longer waits") && !l.Contains("demo scene")));
+                log.Add($"{scenes.ActorsRemoved} actors removed from {scenes.ScenesChanged} scenes.");
+                var where = scenes.StartScene >= 0 ? $"Scene {scenes.StartScene} ({options.Island.Name}) starts on the grid." : "";
+                if (built.Twin is { Own: true } && scenes.Twin is { StartScene: >= 0 } fine)
+                    where = $"{options.Island.Name}'s track in the storm ({options.Island.IleFile}) starts in scene {scenes.StartScene}, its track once the storm is over ({options.Island.TwinIleFile}) in scene {fine.StartScene}.";
+                if (where.Length > 0) starts.Add(where);
             }
-            log.AddRange(scenes.Log.Where(l => !l.Contains("actors removed,") && !l.Contains("no longer waits") && !l.Contains("demo scene")));
-            log.Add($"{scenes.ActorsRemoved} actors removed from {scenes.ScenesChanged} scenes.");
-            var where = scenes.StartScene >= 0 ? $"Scene {scenes.StartScene} ({options.Island.Name}) starts on the grid." : "";
-            if (built.Twin is { Own: true } && scenes.Twin is { StartScene: >= 0 } fine)
-                where = $"{options.Island.Name}'s track in the storm ({options.Island.IleFile}) starts in scene {scenes.StartScene}, its track once the storm is over ({options.Island.TwinIleFile}) in scene {fine.StartScene}.";
-            return new(true, $"The race track is built. {where}".Trim(), log, report);
+            var built1 = tracks.Count == 1 ? "The race track is built." : $"{tracks.Count} race tracks are built ({string.Join(", ", tracks.Select(t => t.Options.Island.Name))}); Play races the one of the island the editor has open.";
+            return new(true, $"{built1} {string.Join(" ", starts)}".Trim(), log, first);
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or LBAAssembler.LbaScript.ScriptCompileException)
         {
@@ -149,12 +228,22 @@ internal static class RaceTrackService
     public sealed record TwinTrack(RaceTrackReport Report, RaceTrackOptions Options, bool Own, string Log);
     public sealed record Built(RaceTrackReport Report, RaceTrackOptions Options, TwinTrack? Twin, RaceTrackScenes.Result Scenes, List<string> Log);
 
+    // What the tracks of one build share: the cars made after the game's characters and Baldino's, put into BODY.HQR and RESS.HQR once for
+    // all of them, and each track's record for RACETRACK.JSON, in the order built.
+    public sealed class BuildSession
+    {
+        public bool CharacterCars, Baldino;
+        public List<TrackInfo> Tracks { get; } = new();
+    }
+
     // Builds the track into the game folder's files, which are the originals when this runs (the island's own ground is read from
-    // `islandSource`: the original kept beside it, or the file itself). The menu's Build and the command line's buildtrack both come here.
+    // `islandSource`: the original kept beside it, or the file itself) -- or, for the second and later tracks of a `session`, the originals
+    // with the tracks before it built in. The menu's Build and the command line's buildtrack both come here.
     // An island whose other-weather file has a track of its own (Citadel Island: RaceTrackIsland.TwinPlanResource, or `twinPlan`) gets
     // both: `plan` in its own file, with no opponents, and the other in the twin, which carries the race -- the opponents and the story.
-    public static Built BuildFiles(string gameDirectory, string islandSource, RaceTrackPlan plan, RaceTrackOptions options, RaceTrackPlan? twinPlan = null)
+    public static Built BuildFiles(string gameDirectory, string islandSource, RaceTrackPlan plan, RaceTrackOptions options, RaceTrackPlan? twinPlan = null, BuildSession? session = null)
     {
+        session ??= new BuildSession();
         twinPlan ??= RaceTrackPlan.BuiltTwin(options.Island);
         // (the twin's options as they were chosen, before this file's plan settles its crossing style and bodies)
         var twinOptions = options.Copy();
@@ -170,11 +259,11 @@ internal static class RaceTrackService
         AppendBodies(Path.Combine(gameDirectory, options.Island.OblFile), report, options);
         var twin = BuildTwin(gameDirectory, twinPlan ?? plan, twinPlan is not null, twinOptions, options, report);
         if (twin is not null) extra.Add(twin.Log);
-        extra.AddRange(Finish(gameDirectory, report, options, twin));
+        extra.AddRange(Finish(gameDirectory, report, options, twin, session));
         var own = twin is { Own: true } ? twin : null;
         var scenes = RaceTrackScenes.Apply(gameDirectory, report, options, own is null ? null : (own.Report, own.Options));
         extra.AddRange(own is null ? Story(gameDirectory, report, options) : Story(gameDirectory, own.Report, own.Options));
-        WriteInfo(gameDirectory, report, options, scenes, own);
+        WriteInfo(gameDirectory, report, options, scenes, own, session);
         return new Built(report, options, twin, scenes, extra);
     }
 
@@ -190,6 +279,8 @@ internal static class RaceTrackService
         var twin = IslandFile.Load(File.Exists(source) ? source : Path.Combine(gameDirectory, ile));
         twinOptions = own ? twinOptions.Copy() : options.Copy();
         if (own) FollowPlan(plan, twinOptions);
+        // (a track of its own has a jump of its own: a flight of its own too)
+        if (own) twinOptions.JumpAnim = RaceTrackJumpAnim.GenericFor(options.Island, twin: true);
         twinOptions.RetailBodies = new();
         CopyRetailBodies(gameDirectory, obl, twinOptions);
         if (twinOptions.Crossing == CrossingStyle.Bridge)
@@ -262,7 +353,8 @@ internal static class RaceTrackService
         if (CopyRetailBodies(gameDirectory, options.Island.OblFile, options) is { } copied) log.Add(copied);
         if (options.Crossing == CrossingStyle.Bridge)
             options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, options.Island.OblFile), options);
-        if (options.Crossing == CrossingStyle.Jump) options.JumpAnim = RaceTrackJumpAnim.Generic;
+        // (the island's own flight, for a jump its plan draws or its crossing makes)
+        options.JumpAnim = RaceTrackJumpAnim.GenericFor(options.Island);
         // (where a raised road's own bodies go: after whatever was appended above)
         options.NewBodyBase = HqrArchive.CountEntries(Path.Combine(gameDirectory, options.Island.OblFile));
         options.SceneryObl = Path.Combine(gameDirectory, options.Island.OblFile);
@@ -274,10 +366,11 @@ internal static class RaceTrackService
         options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile ? RaceTrackStory.Apply(gameDirectory, report) : new List<string>();
 
     // After the island's files: the track on the holomap's pictures (a twin with a track of its own on its own picture, the fine weather's),
-    // the jump's flight (one flight for the game: a second jump of another length would need an animation of its own), Baldino's car and
-    // the characters' cars (RaceTrackCharacterCars).
-    public static List<string> Finish(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? twin = null)
+    // the jump's flight (each jump its own: RaceTrackJumpAnim.GenericFor), Baldino's car and the characters' cars (RaceTrackCharacterCars) --
+    // the cars once for all the tracks of a build (`session`).
+    public static List<string> Finish(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? twin = null, BuildSession? session = null)
     {
+        session ??= new BuildSession();
         var log = new List<string>();
         var own = twin is { Own: true } ? twin : null;
         if (options.DrawOnHolomap && File.Exists(Path.Combine(gameDirectory, RaceTrackHolomap.File)))
@@ -292,20 +385,24 @@ internal static class RaceTrackService
                 log.Add(RaceTrackHolomap.Draw(gameDirectory, options.Island, IslandFile.Load(Path.Combine(gameDirectory, options.Island.TwinIleFile!)), own.Report, pictures[1..]));
             }
         }
-        var jump = report.Jump ?? own?.Report.Jump;
-        if (report.Jump is { } a && own?.Report.Jump is { } b && Math.Abs(a.FlightScale - b.FlightScale) > 0.001)
-            log.Add($"WARNING: both files' tracks have a jump, of different lengths; the game has one flight, made for {options.Island.IleFile}'s");
-        if (jump is not null) log.Add(RaceTrackJumpAnim.Install(gameDirectory, jump.FlightScale));
+        if (report.Jump is { } a) log.Add(RaceTrackJumpAnim.Install(gameDirectory, a.FlightScale, a.Anim));
+        if (own?.Report.Jump is { } b)
+        {
+            if (report.Jump is null || b.Anim != report.Jump.Anim) log.Add(RaceTrackJumpAnim.Install(gameDirectory, b.FlightScale, b.Anim));
+            else if (Math.Abs(report.Jump.FlightScale - b.FlightScale) > 0.001)
+                log.Add($"WARNING: both files' tracks have a jump, of different lengths, with one flight, made for {options.Island.IleFile}'s");
+        }
         var racing = own?.Options ?? options;
-        if (racing.AddOpponent && racing.AddBaldino) log.Add(RaceTrackBaldinoCar.Install(gameDirectory).Log);
+        if (racing.AddOpponent && racing.AddBaldino && !session.Baldino) { log.Add(RaceTrackBaldinoCar.Install(gameDirectory).Log); session.Baldino = true; }
         // the cars after the game's characters, three or more for each island: in the game's files for whoever is to drive them (no actor
         // has one yet)
-        log.AddRange(RaceTrackCharacterCars.Install(gameDirectory).Log);
+        if (!session.CharacterCars) { log.AddRange(RaceTrackCharacterCars.Install(gameDirectory).Log); session.CharacterCars = true; }
         return log;
     }
 
-    // RACETRACK.JSON: the crossing style and the start line, for Play; and, for a twin with a track of its own, that track as Twin.
-    public static void WriteInfo(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes, TwinTrack? twin = null)
+    // RACETRACK.JSON: the crossing style and the start line, for Play; and, for a twin with a track of its own, that track as Twin. The
+    // tracks built before this one in `session` stay in it: the first is the file's own record, the rest its Others.
+    public static void WriteInfo(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes, TwinTrack? twin = null, BuildSession? session = null)
     {
         var info = Info(report, options, scenes);
         if (twin is { Own: true } && scenes.Twin is { } twinScenes)
@@ -314,7 +411,10 @@ internal static class RaceTrackService
             var fine = Info(twin.Report, twin.Options, twinScenes);
             info = info with { Twin = fine, StoryArrow = fine.StoryArrow };
         }
-        File.WriteAllText(Path.Combine(gameDirectory, InfoFile), JsonSerializer.Serialize(info, new JsonSerializerOptions { WriteIndented = true }));
+        session ??= new BuildSession();
+        session.Tracks.Add(info);
+        var all = session.Tracks[0] with { Others = session.Tracks.Count > 1 ? session.Tracks.Skip(1).ToList() : null };
+        File.WriteAllText(Path.Combine(gameDirectory, InfoFile), JsonSerializer.Serialize(all, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     private static TrackInfo Info(RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes)
@@ -343,12 +443,25 @@ internal static class RaceTrackService
     }
 
     // The folder's RACETRACK.JSON, or null when there is none (or it can't be read: a track built before the file existed).
+    // (kept while the file is the same -- its time and length -- as the Play button asks for it whenever the view moves, and a folder with
+    // every island's track has a file of a megabyte and a half)
+    private static (string Path, DateTime Time, long Length, TrackInfo? Info)? readCache;
+    private static readonly object readLock = new();
+
     public static TrackInfo? ReadInfo(string gameDirectory)
     {
         try
         {
             var path = Path.Combine(gameDirectory, InfoFile);
-            return File.Exists(path) ? JsonSerializer.Deserialize<TrackInfo>(File.ReadAllText(path)) : null;
+            var file = new FileInfo(path);
+            if (!file.Exists) return null;
+            lock (readLock)
+            {
+                if (readCache is { } c && c.Path == file.FullName && c.Time == file.LastWriteTimeUtc && c.Length == file.Length) return c.Info;
+                var info = JsonSerializer.Deserialize<TrackInfo>(File.ReadAllText(path));
+                readCache = (file.FullName, file.LastWriteTimeUtc, file.Length, info);
+                return info;
+            }
         }
         catch (Exception error) when (error is IOException or JsonException or UnauthorizedAccessException)
         {

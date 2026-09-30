@@ -74,7 +74,7 @@ double RaceMod_Gravity(double *slope, double *bank);
 double RaceMod_ClimbShare(double gravity, double slope);
 S32 RaceMod_RailTouched(void);
 
-// A jump's flight (the hero's animation 200, played by his track script) flown at the car's speed at the take-off: the flight's clock run
+// A jump's flight (the hero's animation 200-223, each island's own, played by his track script) flown at the car's speed at the take-off: the flight's clock run
 // that many times as fast as its own speed, the same arc (jump_speed=<lo> <hi>: the bounds; 0: off). RaceMod_JumpClock before the hero's
 // animation is moved on, RaceMod_JumpClockAfter after; declared where they are called, OBJECT.CPP (they take the engine's T_OBJ_3D).
 

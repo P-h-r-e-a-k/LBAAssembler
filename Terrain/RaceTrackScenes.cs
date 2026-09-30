@@ -228,14 +228,17 @@ internal static class RaceTrackScenes
         Func<double, double, double>? groundAfter = tracks.Count == 1 ? report.GroundAfter
             : report.GroundAfter is null ? null : (x, z) => (tracks.MinBy(t => t.Report.DistanceToRoad(x, z))!.Report.GroundAfter ?? report.GroundAfter)(x, z);
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
+        // the actors copied from other islands' scenes (the racer, the biker, the buggy) are taken from the original scenes: another island's
+        // track built before this one in the same build has changed its own (RaceTrackService.Build)
+        var originals = File.Exists(store.ScenePath + RaceTrackService.BackupSuffix) ? new SceneStore(SceneGame.Lba2, gameDirectory, "SCENE.HQR" + RaceTrackService.BackupSuffix) : store;
         var log = new List<string>();
         var changes = new List<SceneChange>();
         var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0;
         foreach (var t in tracks)
         {
-            if (t.Options.AddBiker) t.BikerTemplate = BikerTemplate(store, t.Options, island, log);
+            if (t.Options.AddBiker) t.BikerTemplate = BikerTemplate(originals, t.Options, island, log);
             if (t.Options.AddOpponent)
-                try { t.Racer = store.Load(RacerScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == RacerEntity)?.Clone(); }
+                try { t.Racer = originals.Load(RacerScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == RacerEntity)?.Clone(); }
                 catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { log.Add($"no opponent: scene {RacerScene} could not be read ({e.Message})"); }
             t.Edges = EdgeCrossings(store, t.Report, t.Options, island);
         }
@@ -319,7 +322,7 @@ internal static class RaceTrackScenes
                     log.Add($"scene {scene}: WARNING: both files' tracks start in this scene; the buggy and Twinsen are put at the last one's start line");
                 var buggy = model.Actors.Skip(1).FirstOrDefault(a => a.Entity == BuggyEntity);
                 // an island with no buggy of its own (Citadel): a copy of the Desert island's own buggy actor, on the grid
-                if (buggy is null && BuggyTemplate(store, log) is { } spare)
+                if (buggy is null && BuggyTemplate(originals, log) is { } spare)
                 {
                     // (the quest patch above ran before this copy was here)
                     if (options.BuggyAlways) BuggyAlwaysThere(spare);

@@ -142,7 +142,8 @@ internal sealed class RaceTrackOptions
     public CrossingStyle Crossing { get; set; } = CrossingStyle.Bridge;
     // The hero's animation number that plays the jump's flight (RaceTrackJumpAnim: a longer copy of the retail flight, ANIM.HQR 51, which
     // Twinsen plays as 67). How much longer is decided by the layout (PlanJump): the flight carries the car from the take-off strip over
-    // the gaps and the other road to JumpLandInto cells down the far ramp.
+    // the gaps and the other road to JumpLandInto cells down the far ramp. Each island's own (RaceTrackJumpAnim.GenericFor, set by
+    // RaceTrackService.Prepare), so the tracks of several islands built together each fly their own.
     public int JumpAnim { get; set; } = RaceTrackJumpAnim.Generic;
     public double JumpLandInto { get; set; } = 3.5;
     // The scenario zone number of the take-off strip and the labels the hero's track script gets.

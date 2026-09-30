@@ -22,23 +22,24 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox qualifying = new() { Content = "Drive a qualifying lap first: the times set the grid" };
     private readonly CheckBox fineWeather = new() { Content = "Stop the rain on Citadel Island (the weather after the lighthouse, when the aliens land)", ToolTip = "No rain or thunder, the brighter island with its own light and sky. Only the weather changes: the story stays where it is." };
     // Citadel Island built with a track in each of its files: the weather is the raced track's (the town circuit's is the fine weather's,
-    // the storm track's the rain's), chosen in the race track window -- null for any other folder, where the setup says
+    // the storm track's the rain's) -- the one of the island file open in the editor (`track`, RaceTrackService.RaceFor), or else the one
+    // the race track window built it to race -- null for any other track, where the setup says
     private readonly bool? trackWeather;
     private readonly CheckBox startAtLine = new() { Content = "Start beside the car on the start/finish straight, with the editor's markings hidden" };
     private readonly List<Action> refresh = new();
     private bool updating;
 
-    public RaceCarWindow(bool forPlay, string? gameDirectory = null)
+    public RaceCarWindow(bool forPlay, string? gameDirectory = null, Terrain.RaceTrackService.TrackInfo? track = null)
     {
         Title = "Race car setup";
-        if (gameDirectory is not null && Terrain.RaceTrackService.ReadInfo(gameDirectory) is { Twin: not null } info)
+        if (gameDirectory is not null && (track ?? Terrain.RaceTrackService.ReadInfo(gameDirectory)) is { Twin: not null } info)
         {
             trackWeather = Terrain.RaceTrackService.FineWeather(info, setup.FineWeather);
             fineWeather.IsEnabled = false;
             fineWeather.Content = trackWeather == true
                 ? "Citadel Island without the rain: its town circuit is raced"
                 : "Citadel Island in the rain: its storm track is raced";
-            fineWeather.ToolTip = "This folder has a Citadel Island track in each weather: the one chosen in Tools > LBA2: race track is raced, in its own weather (build the other one there to race it).";
+            fineWeather.ToolTip = "This folder has a Citadel Island track in each weather: Play races the one of the island file open in the editor (CITADEL.ILE the storm track, CITABAU.ILE the town circuit), in its own weather.";
         }
         Width = 560; SizeToContent = SizeToContent.Height; MinWidth = 480;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
