@@ -25,7 +25,7 @@ internal static class RaceTrackHolomap
     // The game's palette's ramps (RESS.HQR entry 0): the greys (48-63) for asphalt and the white curb, the reds (64-79) for the red curb.
     private const int GreyRamp = 48, RedRamp = 64;
 
-    private sealed class Camera
+    internal sealed class Camera
     {
         private readonly double[,] m = new double[3, 3];
         private readonly double camX, camY, camZ, clip;

@@ -427,6 +427,9 @@ public partial class MainWindow : Window
         else if (name == "KNARTAS") paletteIndex = 35;
         else if (name == "ILOTCX") paletteIndex = 36;
         else if (name == "ASCENCE") paletteIndex = 37;
+        // island 1 (Sendell's Well, cut from the retail game: a SENDELL.ILE made for it), and the old copy of the Emerald Moon
+        else if (name == "SENDELL") paletteIndex = 28;
+        else if (name == "MOON") paletteIndex = 30;
         lastExteriorPaletteIndex = paletteIndex;
         return LoadPaletteEntry(paletteIndex);
     }
