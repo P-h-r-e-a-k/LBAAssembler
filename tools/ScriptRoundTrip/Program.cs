@@ -56,6 +56,8 @@ internal static class Program
             "baldinocar" => RaceTrackCommand.BaldinoCar(args),
             "charactercars" => RaceTrackCommand.CharacterCars(args),
             "carshow" => RaceTrackCommand.CarShow(args),
+            "islandcast" => IslandCast.Run(args),
+            "driverinfo" => RaceTrackCommand.DriverInfo(args),
             "actorbeta" => RaceTrackCommand.ActorBeta(args),
             "initbuggy" => RaceTrackCommand.InitBuggy(args),
             "scripttext" => RaceTrackCommand.ScriptText(args),

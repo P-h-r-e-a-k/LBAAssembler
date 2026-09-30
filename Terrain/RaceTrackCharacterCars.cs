@@ -23,14 +23,18 @@ namespace LBAAssembler.Terrain;
 // take a part of the light instead (CarMesh.Light, Body.LightScale: a shorter normal), so they shade over those few colours only.
 internal static partial class RaceTrackCharacterCars
 {
-    public sealed record Car(string Name, string Driver, int Character, int Generic, Func<Body, Body, Body> Build);
+    // Island: where its driver belongs (the track it is to race on, once every island has one).
+    public sealed record Car(string Name, string Driver, int Character, int Generic, Func<Body, Body, Body> Build, string Island = "");
 
     public const int QueenBody = 196, EmperorBody = 453, ZoeBody = 26;      // BODY.HQR
-    public static readonly Car Queen = new("The Queen's car", "the Queen of the Mosquibees", QueenBody, 2, BuildQueen);
-    public static readonly Car Emperor = new("The Emperor's car", "the Emperor", EmperorBody, 3, BuildEmperor);
-    public static readonly Car Zoe = new("Zoe's car", "Zoe", ZoeBody, 4, BuildZoe);
+    public const string Citadel = "Citadel Island", Desert = "Desert Island", Moon = "Emerald Moon", Otringal = "Otringal", Celebration = "Celebration Island",
+        Wannies = "Island of the Wannies", Mosquibees = "Island of the Mosquibees", Francos = "Island of the Francos", IslandCX = "Island CX",
+        Elevator = "Elevator Platform Island", UnderCelebration = "Island under Celebration";
+    public static readonly Car Queen = new("The Queen's car", "the Queen of the Mosquibees", QueenBody, 2, BuildQueen, Mosquibees);
+    public static readonly Car Emperor = new("The Emperor's car", "the Emperor", EmperorBody, 3, BuildEmperor, Otringal);
+    public static readonly Car Zoe = new("Zoe's car", "Zoe", ZoeBody, 4, BuildZoe, Citadel);
     // (a property: the cars of the other file are not made yet when this file's fields are)
-    public static Car[] All => new[] { Queen, Emperor, Zoe, WeatherWizard, Raph, Dean, Spaceman, Johnny, DarkMonk, Wannie, OldFranco, Survivor };
+    public static Car[] All => new[] { Queen, Emperor, Zoe, WeatherWizard, Raph, Dean, Spaceman, Johnny, DarkMonk, Wannie, OldFranco, Survivor }.Concat(More).ToArray();
 
     // Palette ramp starts (the engine adds the light), and the colours drawn as they are (spheres, lines, unlit polygons).
     private const int Blue = 192, Orange = 82, Gold = 102, Grey = 48, Red = 66;
@@ -124,7 +128,8 @@ internal static partial class RaceTrackCharacterCars
     }
 
     // What the four wheels are made of: the struts, the tyres (tread and wall), the wheel inside the tyre and the cap on its hub.
-    private sealed record WheelLook(int Strut, float StrutThickness, int Tyre, float TyreLight, int Rim, float RimLight, int Cap, int Sides = 6);
+    // (Lean: five-sided, the wall and the wheel sharing their points -- for a car whose driver takes most of the body's points)
+    private sealed record WheelLook(int Strut, float StrutThickness, int Tyre, float TyreLight, int Rim, float RimLight, int Cap, int Sides = 6, bool Lean = false);
     // An axle's right-hand wheel (the left one mirrored): where its strut leaves the hull, the wheel's middle, its radius and width.
     private sealed record Axle(Vector3 Mount, Vector3 Hub, float Radius, float Width);
 
@@ -150,7 +155,7 @@ internal static partial class RaceTrackCharacterCars
             else m.Pivot(wheelBone, strutEnd);
 
             // the tyre: its tread and its outer wall (the inner one is hardly ever seen); inside the wall the wheel, out to its cap
-            var s = look.Sides;
+            var s = look.Lean ? 5 : look.Sides;
             var outer = new int[s]; var innerRing = new int[s]; var wall = new int[s]; var rim = new int[s];
             var face = centre + new Vector3(side * width / 2, 0, 0);
             Vector3 Offset(int k, float r) { var a = k * MathF.Tau / s + MathF.PI / s; return new Vector3(0, r * MathF.Cos(a), r * MathF.Sin(a)); }
@@ -159,10 +164,11 @@ internal static partial class RaceTrackCharacterCars
             {
                 outer[k] = m.P(wheelBone, face + Offset(k, radius));
                 innerRing[k] = m.P(wheelBone, inner + Offset(k, radius));
-                wall[k] = m.P(wheelBone, face + new Vector3(side * 6, 0, 0) + Offset(k, radius * 0.62f));
+                if (!look.Lean) wall[k] = m.P(wheelBone, face + new Vector3(side * 6, 0, 0) + Offset(k, radius * 0.62f));
             }
-            m.Light = look.RimLight;
+            m.Light = look.Lean ? look.TyreLight : look.RimLight;
             for (var k = 0; k < s; k++) rim[k] = m.P(wheelBone, face + new Vector3(side * 6, 0, 0) + Offset(k, radius * 0.62f));
+            if (look.Lean) wall = rim;
             var cap = m.P(wheelBone, face + new Vector3(side * 16, 0, 0));
             m.Light = 1;
             for (var k = 0; k < s; k++)
@@ -494,13 +500,14 @@ internal static partial class RaceTrackCharacterCars
 
     // Adds the cars to a game folder: each body at the end of BODY.HQR and, in the entity table (RESS.HQR entry 44), a body record giving it
     // to the racer's entity as its body 2, 3 or 4 (as RaceTrackBaldinoCar.Install). Returns the BODY.HQR indices and lines for the build's log.
-    public static (Dictionary<string, int> Index, List<string> Log) Install(string gameDirectory)
+    // (`only`: some of the cars, for a look at them while they are being made)
+    public static (Dictionary<string, int> Index, List<string> Log) Install(string gameDirectory, IReadOnlyCollection<Car>? only = null)
     {
         var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var bodies = HqrArchive.Open(bodyPath);
         var racer = Body.Read(bodies.Read(RaceTrackBaldinoCar.RacerBody), 2);
-        var cars = All.Select(c => (Car: c, Body: c.Build(Body.Read(bodies.Read(c.Character), 2), racer))).ToList();
+        var cars = (only ?? All).Select(c => (Car: c, Body: c.Build(Body.Read(bodies.Read(c.Character), 2), racer))).ToList();
 
         var index = new Dictionary<string, int>(); var log = new List<string>();
         var bodyFile = File.ReadAllBytes(bodyPath);
@@ -512,7 +519,7 @@ internal static partial class RaceTrackCharacterCars
             table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, car.Generic, next);
             index[car.Name] = next;
             log.Add($"{car.Name}: BODY.HQR entry {next} ({body.Faces.Count} polygons, {body.Lines.Count} lines, {body.Spheres.Count} spheres, {body.Vertices.Count} points), " +
-                    $"the racer's entity ({RaceTrackBaldinoCar.RacerEntity}) body {car.Generic}, {car.Driver} driving");
+                    $"the racer's entity ({RaceTrackBaldinoCar.RacerEntity}) body {car.Generic}, {car.Driver} driving ({car.Island})");
             next++;
         }
         File.WriteAllBytes(bodyPath, bodyFile);

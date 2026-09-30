@@ -177,6 +177,14 @@ internal sealed class CarDriver
     public CarDriver(Body body) { this.body = body; world = body.World(); posed = (Vector3[])world.Clone(); }
 
     public int BoneOf(int point) => body.Bones.FindIndex(b => point >= b.Start && point < b.Start + b.Count);
+    public int Bones => body.Bones.Count;
+    // every bone but these and all that hangs from them
+    public HashSet<int> AllBut(IEnumerable<int>? drop)
+    {
+        var gone = new HashSet<int>(drop ?? Array.Empty<int>());
+        for (var b = 0; b < body.Bones.Count; b++) if (gone.Contains(body.Bones[b].Parent)) gone.Add(b);
+        return Enumerable.Range(0, body.Bones.Count).Where(b => !gone.Contains(b)).ToHashSet();
+    }
     // where a bone turns, as the body stands (before any posing)
     public Vector3 PivotOf(int bone) => world[body.Bones[bone].Pivot];
     public void Turn(IEnumerable<int> bones, Vector3 pivot, Quaternion q)
@@ -188,6 +196,36 @@ internal sealed class CarDriver
     public Vector3 Far(int bone, Vector3 from) => Far(new[] { bone }, from);
     public Vector3 Far(IEnumerable<int> bones, Vector3 from)
         => bones.SelectMany(b => Enumerable.Range(body.Bones[b].Start, body.Bones[b].Count)).Select(i => posed[i]).OrderByDescending(p => Vector3.DistanceSquared(p, from)).First();
+
+    // The body's arms, found from its bones: on each side the bone that turns at shoulder height, well out from the middle, with the most
+    // hanging from it -- and what hangs from it (the forearm first, then the hand and whatever it holds). Null for a side without one.
+    public ((int Upper, int[] Fore)? Right, (int Upper, int[] Fore)? Left) FindArms(ISet<int>? not = null)
+    {
+        float height = world.Max(v => v.Y) - world.Min(v => v.Y), floor = world.Min(v => v.Y);
+        var children = Enumerable.Range(0, body.Bones.Count).ToDictionary(b => b, b => Enumerable.Range(0, body.Bones.Count).Where(c => body.Bones[c].Parent == b).ToList());
+        List<int> Below(int b) { var list = new List<int>(); foreach (var c in children[b]) { if (not is not null && not.Contains(c)) continue; list.Add(c); list.AddRange(Below(c)); } return list; }
+        IEnumerable<Vector3> Points(int b) => Enumerable.Range(body.Bones[b].Start, body.Bones[b].Count).Select(i => world[i]);
+        (int Upper, int[] Fore)? Side(float side)
+        {
+            (int Upper, int[] Fore, float Drop)? best = null;
+            for (var b = 1; b < body.Bones.Count; b++)
+            {
+                if (not is not null && not.Contains(b)) continue;
+                var pivot = PivotOf(b);
+                if (pivot.X * side < 40 || pivot.Y - floor < height * 0.5f) continue;
+                var below = Below(b).ToArray();
+                var points = Points(b).Concat(below.SelectMany(Points)).ToList();
+                if (points.Count == 0 || points.Count > world.Length * 0.4f) continue;
+                var drop = pivot.Y - points.Min(v => v.Y);
+                if (drop < height * 0.12f) continue;
+                // (the shoulder, not the elbow: a bone whose parent is already a candidate on this side hangs from the arm)
+                if (best is { } found && (found.Upper == body.Bones[b].Parent || found.Fore.Contains(body.Bones[b].Parent))) continue;
+                if (best is null || drop > best.Value.Drop) best = (b, below, drop);
+            }
+            return best is { } arm ? (arm.Upper, arm.Fore) : null;
+        }
+        return (Side(1), Side(-1));
+    }
 
     // An arm turned so its hand is at `target` (in the body's own coordinates): the elbow bent out to the side and a little down, the upper
     // arm and forearm keeping their lengths (two-bone reach: the elbow on the circle both lengths allow, towards the side). `fore` is the
@@ -212,9 +250,11 @@ internal sealed class CarDriver
     public delegate (int Colour, float Light, int Material)? Painter(Face face, int[] bones);
 
     // The posed driver's kept bones added to the car's bone 13, through `place` (the body's coordinates to the car's); polygons wholly below
-    // `rim` (inside the car) are left out. Returns the car's point for any of the body's points (made when the car has none yet).
-    public Func<int, int> Seat(CarMesh m, HashSet<int> keep, Func<Vector3, Vector3> place, float rim, float scale, Painter? paint = null)
+    // `rim` (inside the car) are left out, and with `cut` lines and spheres below it too. Returns the car's point for any of the body's
+    // points (made when the car has none yet).
+    public Func<int, int> Seat(CarMesh m, HashSet<int> keep, Func<Vector3, Vector3> place, float rim, float scale, Painter? paint = null, bool cut = false)
     {
+        bool Inside(int p) => cut && place(posed[p]).Y < rim - 20;
         if (body.Faces.Any(f => f.Texture is not null)) m.Textures = body.Textures;
         var map = new Dictionary<(int Point, float Light), int>();
         int Point(int i, float light)
@@ -235,8 +275,8 @@ internal sealed class CarDriver
             if (colour < 0) continue;
             m.Raw(f.Points.Select(p => Point(p, light)).ToArray(), colour, material, f.Texture);
         }
-        foreach (var l in body.Lines) if (keep.Contains(BoneOf(l.A)) && keep.Contains(BoneOf(l.B))) m.Line(Point(l.A, Own), Point(l.B, Own), l.Colour);
-        foreach (var s in body.Spheres) if (keep.Contains(BoneOf(s.Point))) m.Sphere(Point(s.Point, Own), (int)(s.Radius * scale), s.Colour);
+        foreach (var l in body.Lines) if (keep.Contains(BoneOf(l.A)) && keep.Contains(BoneOf(l.B)) && !(Inside(l.A) && Inside(l.B))) m.Line(Point(l.A, Own), Point(l.B, Own), l.Colour);
+        foreach (var s in body.Spheres) if (keep.Contains(BoneOf(s.Point)) && !Inside(s.Point)) m.Sphere(Point(s.Point, Own), (int)(s.Radius * scale), s.Colour);
         return i => Point(i, Own);
     }
 

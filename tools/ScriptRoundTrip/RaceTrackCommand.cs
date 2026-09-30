@@ -131,9 +131,23 @@ internal static class RaceTrackCommand
     {
         Directory.CreateDirectory(args[2]);
         CopyWritable(args[1], args[2], "BODY.HQR", "RESS.HQR");
-        var (_, log) = RaceTrackCharacterCars.Install(args[2]);
+        // each car on its own first, so that one that does not fit the engine's limits says so and the others can still be looked at
+        var bodies = HqrArchive.Open(Path.Combine(args[1], "BODY.HQR"));
+        var racer = LbaBodyStudio.Body.Read(bodies.Read(RaceTrackBaldinoCar.RacerBody), 2);
+        var good = new List<RaceTrackCharacterCars.Car>(); var failed = 0;
+        foreach (var car in RaceTrackCharacterCars.All)
+        {
+            try { car.Build(LbaBodyStudio.Body.Read(bodies.Read(car.Character), 2), racer); good.Add(car); }
+            catch (Exception e)
+            {
+                failed++;
+                var counts = "";
+                Console.WriteLine($"FAILED {car.Name} (body {car.Generic}): {e.Message}{counts}");
+            }
+        }
+        var (_, log) = RaceTrackCharacterCars.Install(args[2], good);
         foreach (var line in log) Console.WriteLine(line);
-        return 0;
+        return failed;
     }
 
     // carshow <game folder> <scene> <x> <y> <z> <turn> <dx> <dz> <body>...: stands cars of the racer's entity (its bodies: 0 its own, 1
@@ -155,6 +169,31 @@ internal static class RaceTrackCommand
             Console.WriteLine($"scene {scene}: actor {LBAAssembler.Scenes.SceneOps.AddActor(model, car)} = body {car.Body} at ({car.X}, {car.Y}, {car.Z}) turn {turn}");
         }
         store.Save(scene, model, allowErrors: true);
+        return 0;
+    }
+
+    // driverinfo <game folder> <body>...: what seating a character of BODY.HQR as a car's driver needs to know -- its size, the arms found
+    // from its bones, and its bones (where each turns, what it spans, how many points)
+    public static int DriverInfo(string[] args)
+    {
+        var bodies = HqrArchive.Open(Path.Combine(args[1], "BODY.HQR"));
+        foreach (var index in args.Skip(2).Select(int.Parse))
+        {
+            LbaBodyStudio.Body body;
+            try { body = LbaBodyStudio.Body.Read(bodies.Read(index), 2); } catch (Exception e) { Console.WriteLine($"=== {index}: {e.Message}"); continue; }
+            var world = body.World();
+            var driver = new CarDriver(body);
+            var (right, left) = driver.FindArms();
+            string Arm((int Upper, int[] Fore)? a) => a is { } arm ? $"{arm.Upper} -> [{string.Join(",", arm.Fore)}]" : "none";
+            Console.WriteLine($"=== {index}: {body.Vertices.Count} points, {body.Faces.Count} polygons, {body.Lines.Count} lines, {body.Spheres.Count} spheres; x {world.Min(v => v.X):0}..{world.Max(v => v.X):0} y {world.Min(v => v.Y):0}..{world.Max(v => v.Y):0} z {world.Min(v => v.Z):0}..{world.Max(v => v.Z):0}; arms right {Arm(right)} left {Arm(left)}");
+            for (var b = 0; b < body.Bones.Count; b++)
+            {
+                var bone = body.Bones[b];
+                var pts = Enumerable.Range(bone.Start, bone.Count).Select(i => world[i]).ToList();
+                var pivot = bone.Parent < 0 ? System.Numerics.Vector3.Zero : world[bone.Pivot];
+                Console.WriteLine($"   {b,2} <- {bone.Parent,2} at ({pivot.X:0},{pivot.Y:0},{pivot.Z:0}) {bone.Count,2} pts x {pts.Min(v => v.X):0}..{pts.Max(v => v.X):0} y {pts.Min(v => v.Y):0}..{pts.Max(v => v.Y):0} z {pts.Min(v => v.Z):0}..{pts.Max(v => v.Z):0}");
+            }
+        }
         return 0;
     }
 

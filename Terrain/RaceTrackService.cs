@@ -268,7 +268,8 @@ internal static class RaceTrackService
         if (jump is not null) log.Add(RaceTrackJumpAnim.Install(gameDirectory, jump.FlightScale));
         var racing = own?.Options ?? options;
         if (racing.AddOpponent && racing.AddBaldino) log.Add(RaceTrackBaldinoCar.Install(gameDirectory).Log);
-        // the Queen's, the Emperor's and Zoe's cars: in the game's files for whoever is to drive them (no actor has one yet)
+        // the cars after the game's characters, three or more for each island: in the game's files for whoever is to drive them (no actor
+        // has one yet)
         log.AddRange(RaceTrackCharacterCars.Install(gameDirectory).Log);
         return log;
     }

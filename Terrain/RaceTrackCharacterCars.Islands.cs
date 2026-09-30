@@ -12,21 +12,21 @@ namespace LBAAssembler.Terrain;
 //   Otringal                    Johnny Rocket in a guitar with rocket engines
 //   Celebration Island          the Dark Monk in a car of temple stone
 //   Island of the Wannies       a Wannie in a mine cart of gems
-//   Island of the Francos       the old Franco in his Leontine, the boat under a balloon
+//   Otringal again              the old Franco in his Leontine, the boat under a balloon (he waits with it in Otringal's harbour)
 //   Island CX                   the Franco survivor on a raft
 //
-// (The Island of the Mosquibees has its Queen; the Elevator's island has nobody to speak of.)
+// (The Island of the Mosquibees has its Queen. RaceTrackCharacterCars.More.cs brings every island to three drivers or more.)
 internal static partial class RaceTrackCharacterCars
 {
-    public static readonly Car WeatherWizard = new("The weather wizard's car", "the weather wizard", 111, 5, BuildWeatherWizard);
-    public static readonly Car Raph = new("Raph's car", "Raph the lighthouse keeper", 32, 6, BuildRaph);
-    public static readonly Car Dean = new("The Dean's car", "the Dean of the School of Magic", 123, 7, BuildDean);
-    public static readonly Car Spaceman = new("The moon rover", "an Esmer in his space suit", 255, 8, BuildSpaceman);
-    public static readonly Car Johnny = new("Johnny Rocket's car", "Johnny Rocket", 154, 9, BuildJohnny);
-    public static readonly Car DarkMonk = new("The Dark Monk's car", "the Dark Monk", 311, 10, BuildDarkMonk);
-    public static readonly Car Wannie = new("The Wannie's mine cart", "a Wannie", 194, 11, BuildWannie);
-    public static readonly Car OldFranco = new("The Leontine", "the old Franco", 276, 12, BuildOldFranco);
-    public static readonly Car Survivor = new("The survivor's raft", "the Franco survivor of Island CX", 90, 13, BuildSurvivor);
+    public static readonly Car WeatherWizard = new("The weather wizard's car", "the weather wizard", 111, 5, BuildWeatherWizard, Citadel);
+    public static readonly Car Raph = new("Raph's car", "Raph the lighthouse keeper", 32, 6, BuildRaph, Citadel);
+    public static readonly Car Dean = new("The Dean's car", "the Dean of the School of Magic", 123, 7, BuildDean, Desert);
+    public static readonly Car Spaceman = new("The moon rover", "an Esmer in his space suit", 255, 8, BuildSpaceman, Moon);
+    public static readonly Car Johnny = new("Johnny Rocket's car", "Johnny Rocket", 154, 9, BuildJohnny, Otringal);
+    public static readonly Car DarkMonk = new("The Dark Monk's car", "the Dark Monk", 311, 10, BuildDarkMonk, Celebration);
+    public static readonly Car Wannie = new("The Wannie's mine cart", "a Wannie", 194, 11, BuildWannie, Wannies);
+    public static readonly Car OldFranco = new("The Leontine", "the old Franco", 276, 12, BuildOldFranco, Otringal);
+    public static readonly Car Survivor = new("The survivor's raft", "the Franco survivor of Island CX", 90, 13, BuildSurvivor, IslandCX);
 
     // More ramp starts (lit), soft-lit starts (with SoftShare) and colours drawn as they are.
     private const int Brown = 18, BrownDark = 16, Wood = 20, Cloud = 181, Stone = 210, Iron = 226, Cream = 37, Green = 130, Steel = 52;
