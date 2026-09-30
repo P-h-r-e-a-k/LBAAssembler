@@ -132,7 +132,7 @@ internal sealed class RaceTrackWindow : Window
                    "track's asphalt, red and white curbs, arrows and red/gold hatching, with a pit lane and a start gantry. Where the lap crosses itself, " +
                    "the choice below decides what carries the one road over the other. On an island other than the Desert one the road's tiles are copied " +
                    "into its own spare texture space and matched to its palette, and its scenes are given a buggy.\n\n" +
-                   "It changes the island's ground and decor bodies and SCENE.HQR in the LBA2 game folder (and, for a jump, ANIM.HQR and RESS.HQR: its flight; BODY.HQR and RESS.HQR for the cars made after the game's characters: Baldino's, and fifty-seven more nobody drives yet, three or more for each island). The first time, the originals are kept beside them (as *" + RaceTrackService.BackupSuffix +
+                   "It changes the island's ground and decor bodies and SCENE.HQR in the LBA2 game folder (and, for a jump, ANIM.HQR and RESS.HQR: its flight; BODY.HQR and RESS.HQR for the cars made after the game's characters: Baldino's, and fifty-eight more nobody drives yet, three or more for each island). The first time, the originals are kept beside them (as *" + RaceTrackService.BackupSuffix +
                    "); every build starts from those copies, and the button below puts them back. When you play a folder with a race track built, the game " +
                    "runs in its race-track mode: the car setup below (gears on X and Z, brakes, steering), the car staying level on the bridge, checkpoints round the lap, " +
                    "an opponent (the retail track's racer), and the gear, speed, lap times and position on screen. " +

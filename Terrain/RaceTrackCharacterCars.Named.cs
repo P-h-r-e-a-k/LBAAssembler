@@ -8,7 +8,8 @@ namespace LBAAssembler.Terrain;
 //   Citadel Island   Luc the tavern's boss in a beer barrel; Tim his waiter on a serving tray; Mr. Paul in a tugboat; Mrs. Brune of the
 //                    Inter-Islands ferries in a suitcase; Mr. Bazoo the shopkeeper in a brass cash register; Miss Bloop in a show case of
 //                    her museum; Bob in a rowing boat and Felix with his rod on the fish he caught; Zed in a sandcastle; Dino-Fly himself;
-//                    Rosa the cow in a milk float; the Tralu in a piece of his cave; Raph's band, Pat on the drums and Fab at the keyboards
+//                    Rosa the cow in a milk float; the Tralu in a piece of his cave; Raph's band, Pat on the drums and Fab at the keyboards;
+//                    the thief in a getaway car under the umbrella he stole
 //   Desert Island    Joe the Elf in the green shell; Ker'aooc the healer in his cauldron; Tabata the wizard on a spell book; Moya the turtle
 //   Otringal         the heavy metal guitarist of Rick's in a guitar; Rick at a grand piano; Stan in a time machine; the Emperor's wife in
 //                    a royal coach
@@ -38,10 +39,11 @@ internal static partial class RaceTrackCharacterCars
     public static readonly Car Rick = new("Rick's piano", "Rick", 425, 56, BuildRick, Otringal);
     public static readonly Car Stan = new("Stan's time machine", "Stan", 439, 57, BuildStan, Otringal);
     public static readonly Car Empress = new("The Empress's coach", "the Emperor's wife", 454, 58, BuildEmpress, Otringal);
+    public static readonly Car Thief = new("The thief's getaway car", "the Citadel Island thief", 117, 59, BuildThief, Citadel);
 
     private static Car[] Named => new[]
     {
-        Guitarist, Luc, Tim, Paul, Brune, Bazoo, Bloop, Bob, Felix, Zed, DinoFly, Rosa, Tralu, Pat, Fab, Joe, Keraooc, Tabata, Moya, Rick, Stan, Empress,
+        Guitarist, Luc, Tim, Paul, Brune, Bazoo, Bloop, Bob, Felix, Zed, DinoFly, Rosa, Tralu, Pat, Fab, Joe, Keraooc, Tabata, Moya, Rick, Stan, Empress, Thief,
     };
 
     private const int Sand = 34, GreenSoft = 136;
@@ -804,5 +806,59 @@ internal static partial class RaceTrackCharacterCars
         }
         _ = moya;
         return m.ToBody(racer.Header);
+    }
+
+    // The Citadel Island thief, who makes off with the pharmacy customer's umbrella: a getaway car in a burglar's black and white hoops,
+    // a mask across its nose -- and the umbrella, open, planted in the back of it and leaning in the wind: its gores in the two creams of
+    // the game's own, its grey shaft and crook, its ribs underneath. His sack of loot beside it, coins spilling.
+    public static Body BuildThief(Body thief, Body racer)
+    {
+        var m = new CarMesh(Thief.Name);
+        Roots(m);
+        m.Light = SoftShare;
+        var hull = new Hull(m, 300, 12, 5, 0.5f,
+            (600, 215, 110, 108), (540, 268, 140, 125), (400, 280, 150, 130), (250, 282, 152, 130), (100, 282, 152, 130), (-50, 282, 152, 130), (-200, 282, 152, 130), (-350, 280, 150, 130), (-500, 268, 140, 125),
+            (-565, 215, 110, 108));
+        hull.Skin(m, (band, _) => band % 2 == 0 ? Black : White);
+        hull.Nose(m, 612, Black);
+        hull.Tail(m, -577, Black);
+        m.Light = 1;
+        foreach (var side in Sides) m.Ball(2, new(side * 120, hull.Cy + 25, 606), 44, Yellow);      // the eyes in the mask
+
+        // the umbrella
+        {
+            var foot = hull.OnTop(0, -330, -6); var apex = foot + new Vector3(0, 640, -150);
+            var axis = Vector3.Normalize(apex - foot); var u = Vector3.UnitX; var v = Vector3.Normalize(Vector3.Cross(axis, u));
+            const int Gores = 8;
+            var shoulder = m.Loop(2, apex - axis * 70, u * 215, v * 215, Gores);
+            var rim = m.Loop(2, apex - axis * 230, u * 390, v * 390, Gores);
+            var top = m.P(2, apex);
+            for (var k = 0; k < Gores; k++)
+            {
+                var colour = k % 2 == 0 ? 32 : 35;
+                m.Both(new[] { shoulder[k], shoulder[(k + 1) % Gores], top }, colour);
+                m.Both(new[] { rim[k], rim[(k + 1) % Gores], shoulder[(k + 1) % Gores], shoulder[k] }, colour);
+            }
+            // the shaft and the ferrule, the runner and the ribs from it to the rim, the crook lying on the deck
+            m.Strut(2, foot, apex - axis * 10, 26, Stone - 2);
+            m.Strut(2, apex, apex + axis * 70, 16, Stone);
+            var runner = m.P(2, apex - axis * 300);
+            for (var k = 0; k < Gores; k++) m.Line(runner, rim[k], Dark + 3);
+            var bend = foot + new Vector3(0, 12, 110);
+            m.Strut(2, foot + new Vector3(0, 12, 0), bend, 30, Stone - 2);
+            m.Strut(2, bend, bend + new Vector3(90, 0, 70), 30, Stone - 2);
+            m.Strut(2, bend + new Vector3(90, 0, 70), bend + new Vector3(160, 0, 10), 30, Stone - 2);
+        }
+        // the sack, its neck tied, and what is falling out of it
+        {
+            var sack = hull.OnTop(-150, -140, 85);
+            m.Ball(2, sack, 112, 40); m.Ball(2, sack + new Vector3(10, 95, 5), 50, 40); m.Ball(2, sack + new Vector3(16, 150, 8), 30, 42);
+            m.Ball(2, sack + new Vector3(8, 118, 40), 16, RedFlat + 2);
+            foreach (var (x, z, r) in new[] { (-40f, 40f, 26), (-250f, -30f, 22), (-90f, -300f, 24), (-230f, -260f, 20), (20f, -40f, 18) }) m.Ball(2, hull.OnTop(x, z, 8), r, GoldFlat);
+        }
+        return Finish(m, hull, thief, racer, Rabbibunny(),
+            new Cabin(140, 215, 185, Rim: Steel - 2, Screen: 420, ScreenHalf: 185),
+            new WheelLook(Steel, 24, Black, SoftLight, White, SoftShare, Yellow),
+            new Axle(new Vector3(250, 262, 430), new Vector3(440, 155, 430), 155, 105), new Axle(new Vector3(255, 262, -360), new Vector3(465, 175, -360), 175, 125));
     }
 }
