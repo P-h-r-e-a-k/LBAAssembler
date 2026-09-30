@@ -212,7 +212,8 @@ internal static class RaceTrackService
                     where = $"{options.Island.Name}'s track in the storm ({options.Island.IleFile}) starts in scene {scenes.StartScene}, its track once the storm is over ({options.Island.TwinIleFile}) in scene {fine.StartScene}.";
                 if (where.Length > 0) starts.Add(where);
             }
-            var built1 = tracks.Count == 1 ? "The race track is built." : $"{tracks.Count} race tracks are built ({string.Join(", ", tracks.Select(t => t.Options.Island.Name))}); Play races the one of the island the editor has open.";
+            var count = tracks.Sum(t => t.Options.Island.Tracks);
+            var built1 = count == 1 ? "The race track is built." : $"{count} race tracks are built ({string.Join(", ", tracks.Select(t => t.Options.Island.Built))}); Play races the one of the island the editor has open.";
             return new(true, $"{built1} {string.Join(" ", starts)}".Trim(), log, first);
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or LBAAssembler.LbaScript.ScriptCompileException)

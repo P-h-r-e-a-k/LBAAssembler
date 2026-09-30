@@ -246,6 +246,10 @@ internal sealed class RaceTrackOptions
     public int RetailBody(int body) => RetailBodies.TryGetValue(body, out var copy) ? copy : body;
     // (the same options for the island's fine-weather twin, which differs in its deck body and its theme)
     public RaceTrackOptions Copy() => (RaceTrackOptions)MemberwiseClone();
+
+    // An island's track as it is always built: its crossing (RaceTrackIsland.Crossing) and, on the Desert island, the retail track's
+    // leftovers cleared (the race track window and the command line's builds both start from this).
+    public static RaceTrackOptions For(RaceTrackIsland island) => new() { Island = island, OldTrackCube = island.OldTrackCube, Crossing = island.Crossing };
     public RaceTrackTheme Theme { get; set; } = RaceTrackTheme.Retail;
     // The retail track's own decor pieces: start gantry (64-66), billboard (67), arch and its abutments (68-70), wedge (71). The
     // garage's lamp (36) and the sphero's crystal (1) stay.

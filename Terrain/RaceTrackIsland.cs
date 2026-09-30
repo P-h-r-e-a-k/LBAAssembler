@@ -14,9 +14,12 @@ internal sealed record RaceTrackIsland(
     string PlanResource,            // the route built into the program
     (int X, int Z)? OldTrackCube)   // a retail race track to clear first (the Desert island's own)
 {
-    // The Desert island: the retail race track's own island, and the first track built.
+    // The Desert island: the retail race track's own island, and the first track built. Its lap jumps over itself.
     public static readonly RaceTrackIsland Desert = new("Desert island", "DESERT.ILE", "DESERT.OBL", 2, 55, 73, 29,
-        "RaceTrackPlan.Desert.json", (7, 10));
+        "RaceTrackPlan.Desert.json", (7, 10))
+    {
+        Crossing = CrossingStyle.Jump,
+    };
 
     // Citadel Island: two tracks, one for each of its files, no retail track to clear, and no buggy in its scenes (the build puts one at each
     // start line). The storm's file, CITADEL, carries a short lap round the town -- along the west rampart and off its end over a jump,
@@ -24,7 +27,8 @@ internal sealed record RaceTrackIsland(
     // lighthouse; in Play, the car setup's fine weather) the engine draws the island from CITABAU instead -- the same ground with its own
     // light, palette and decor bodies -- and that carries the town circuit, with its opponents and the story. The two share the island's
     // scenes (RaceTrackScenes applies both), so the island is built with both whichever one is chosen: the two entries, the town circuit
-    // and the storm track, differ only in which one Play races (RacesTwin) -- and with it the weather it plays in.
+    // and the storm track, differ only in which one Play races (RacesTwin) -- and with it the weather it plays in -- when the editor has
+    // neither file open (the race track window lists the island once, as this entry). The town circuit crosses itself on a bridge.
     public static readonly RaceTrackIsland Citadel = new("Citadel Island", "CITADEL.ILE", "CITADEL.OBL", 0, 42, 50, 27,
         "RaceTrackPlan.CitadelStorm.json", null)
     {
@@ -67,6 +71,11 @@ internal sealed record RaceTrackIsland(
         Title = "The Elevator Platform: the rollercoaster",
     };
 
+    // What carries the lap over itself where its plan doesn't draw that itself (RaceTrackPlan.Planned: Mosquibees Island's, Celebration
+    // Island's, the Elevator Platform's and Citadel Island's storm track draw their own): the Desert island's jumps, Citadel Island's town
+    // circuit (its twin's plan) has a bridge.
+    public CrossingStyle Crossing { get; init; } = CrossingStyle.Bridge;
+
     // The island's other file for other weather (EXTFUNC.CPP loads it instead once the storm is over), built with the same track -- or,
     // with TwinPlanResource, with a track of its own (the route built into the program for it).
     public string? TwinIleFile { get; init; }
@@ -81,6 +90,10 @@ internal sealed record RaceTrackIsland(
     // is told to draw that one (the car file's statue=1).
     public bool Statue { get; init; }
     public string Shown => Title ?? Name;
+    // How many tracks a build of the island makes: Citadel Island's two files each carry one (its storm track and its town circuit).
+    public int Tracks => TwinPlanResource is not null ? 2 : 1;
+    // As a list of the tracks built names it.
+    public string Built => TwinPlanResource is not null ? $"{Name.Split(',')[0]} (the storm track and the town circuit)" : Name;
 
     public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, Elevator };
 

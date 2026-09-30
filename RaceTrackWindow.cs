@@ -8,29 +8,27 @@ namespace LBAAssembler;
 
 // Tools > LBA2: race track: builds a proposed track (levelled, banked road with the retail track's own textures, pit lane, start gantry,
 // and a bridge or a jump where the lap crosses itself) into the LBA2 game folder, or puts the folder back as it was. The tracks of any of
-// the islands, built together (each one ticked): the Desert island's, Citadel Island's town circuit or its storm track (the island's two
-// files get both either way; the entry says which one Play races when the editor has neither file open), Mosquibees Island's mountain
-// lap (whose plan draws its own bridge and jump, so it takes no crossing style), Celebration Island's lap round the statue (a raised road
-// on piers, all of it its plan's), or the Elevator Platform's rollercoaster (all of it raised road, banked, with the slopes pulling at
-// the car). Play races the track of the island the editor has open (RaceTrackService.RaceFor).
+// the islands, built together (each one ticked): the Desert island's (with a jump, and the retail track's leftovers cleared), Citadel
+// Island's two (its storm track in CITADEL, with its own jump, and its town circuit in CITABAU, with a bridge: one tick, as they share the
+// island's scenes), Mosquibees Island's mountain lap (whose plan draws its own bridge and jump), Celebration Island's lap round the statue
+// (a raised road on piers, all of it its plan's), or the Elevator Platform's rollercoaster (all of it raised road, banked, with the slopes
+// pulling at the car). What carries each lap over itself is the island's own (RaceTrackIsland.Crossing), and every track is drawn on its
+// island's holomap picture. Play races the track of the island the editor has open (RaceTrackService.RaceFor).
 internal sealed class RaceTrackWindow : Window
 {
     private readonly string gameRoot;
     private readonly Action changed;
-    // one box for each island's track: those ticked are built, together (Citadel Island's two entries build the same files: one or the other)
+    // one box for each island: those ticked are built, together (Citadel Island's box builds both its tracks)
     private readonly List<CheckBox> islandChecks = new();
     private readonly RadioButton builtInPlan = new() { Content = "The track built into the program", IsChecked = true };
     private readonly RadioButton filePlan = new() { Content = "A plan file:" };
     private readonly TextBox planPath = new() { Padding = new Thickness(3), IsEnabled = false };
     private readonly Button browseButton = new() { Content = "Browse…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0), IsEnabled = false };
-    private readonly ComboBox crossing = new() { MinWidth = 420 };
     private readonly CheckBox removeActors = new() { Content = "Remove the actors of the island's outside scenes, except Twinsen, the buggy and those the travel cutscenes need", IsChecked = true, ToolTip = "The engine's hidden Zoe placeholder in slot 1 stays (the buggy needs that slot), and so do the ferry, the Dino-Fly and the actors Twinsen's own script waits on in the cutscenes of arriving, leaving and the game's ending." };
     private readonly CheckBox buggyAlways = new() { Content = "The buggy is there from the start of any game (skip the car quest)", IsChecked = true, ToolTip = "The island's scenes delete the buggy until game variable 74 reaches 3; this makes that test always pass" };
     private readonly CheckBox startAtLine = new() { Content = "Twinsen and the buggy start on the grid", IsChecked = true };
     private readonly CheckBox roadZones = new() { Content = "Remove zones that would act on a car on the road (doors, hit, ladder, escalator, grid, rail)", IsChecked = true };
     private readonly CheckBox trackCameras = new() { Content = "Remove the fixed camera angles along the track (the view keeps following the car)", IsChecked = true, ToolTip = "Camera zones (type 1) that reach the road or come within a few cells of it" };
-    private readonly CheckBox clearOldTrack = new() { Content = "Clear what's left of the original race track (its road paint, start gantry, arch, billboard)", IsChecked = true, ToolTip = "The Desert island only, cube (7,10), scene 57: its painted road becomes sand where the new track doesn't run over it. The garage and its lamp stay." };
-    private readonly CheckBox holomap = new() { Content = "Draw the track on the island's holomap picture", IsChecked = true, ToolTip = "The pre-rendered island picture the holomap zooms into (HOLOMAP.HQR): the road, curbs and start line drawn through the holomap's own camera, hidden behind hills. Citadel Island's storm and fine-weather pictures both." };
     private readonly CheckBox story = new() { Content = "Story: Zoe sends Twinsen to the start line, and he finds racing gloves in the attic (Citadel Island)", IsChecked = true, ToolTip = "The game's opening: Zoe's line (in all six languages), a holomap arrow on the start line instead of the pharmacy's, and a pair of racing gloves where the darts lay in Twinsen's attic -- a new inventory model and texts in the slot of the car part the mod has no use for." };
     private readonly TextBox log = new() { IsReadOnly = true, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, FontFamily = new System.Windows.Media.FontFamily("Consolas"), FontSize = 11, Height = 190, TextWrapping = TextWrapping.NoWrap };
     private readonly Button buildButton = new() { Content = "Build the track", Padding = new Thickness(18, 5, 18, 5), IsDefault = true };
@@ -51,26 +49,16 @@ internal sealed class RaceTrackWindow : Window
         ResizeMode = ResizeMode.CanResize;
         SetResourceReference(BackgroundProperty, "ThemeWindowBrush");
         SetResourceReference(ForegroundProperty, "ThemeTextBrush");
-        // the islands the folder has tracks on, ticked (building again keeps them), else the Desert island's
-        var builtOn = RaceTrackService.BuiltIslands(gameRoot).Select(i => i.Name).ToHashSet();
-        // (two to a row: Citadel Island's two entries side by side)
-        foreach (var i in new[] { RaceTrackIsland.Desert, RaceTrackIsland.Mosquibe, RaceTrackIsland.Citadel, RaceTrackIsland.CitadelStorm, RaceTrackIsland.Celebration, RaceTrackIsland.Elevator }.Concat(RaceTrackIsland.All).Distinct())
+        // the islands the folder has tracks on, ticked (building again keeps them), else the Desert island's; Citadel Island once, for both
+        // its tracks (its entry that races the town circuit when neither of its files is open: the one that carries the opponents and the story)
+        var builtOn = RaceTrackService.BuiltIslands(gameRoot).Select(i => i.IleFile).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var (island, label, tip) in Listed)
         {
-            var box = new CheckBox { Content = i.Shown, Tag = i, IsChecked = builtOn.Count == 0 ? i == RaceTrackIsland.Desert : builtOn.Contains(i.Name), Margin = new Thickness(0, 2, 0, 2) };
-            box.Checked += (_, _) => { OneCitadel(box); IslandChanged(); };
+            var box = new CheckBox { Content = label, Tag = island, ToolTip = tip, IsChecked = builtOn.Count == 0 ? island == RaceTrackIsland.Desert : builtOn.Contains(island.IleFile), Margin = new Thickness(0, 2, 0, 2) };
+            box.Checked += (_, _) => IslandChanged();
             box.Unchecked += (_, _) => IslandChanged();
             islandChecks.Add(box);
         }
-        crossing.Items.Add(new ComboBoxItem { Content = "A physical bridge (a walkable deck, like Citadel Island's rope bridge)", Tag = CrossingStyle.Bridge });
-        crossing.Items.Add(new ComboBoxItem { Content = "A jump: a ramp up, a gap over the other road, a ramp down (a longer retail car jump)", Tag = CrossingStyle.Jump });
-        crossing.Items.Add(new ComboBoxItem { Content = "A viaduct of arches over a level junction", Tag = CrossingStyle.Viaduct });
-        crossing.Items.Add(new ComboBoxItem { Content = "A level junction, nothing over it", Tag = CrossingStyle.Level });
-        // the style the folder's track was built with, when it has one (building it again keeps it), else the bridge
-        crossing.SelectedIndex = 0;
-        // (Citadel Island's: its town circuit's, in the fine-weather file -- the storm track draws its own jump)
-        var info = Terrain.RaceTrackService.ReadInfo(gameRoot);
-        if ((info?.Twin ?? info)?.Crossing is { } built && Enum.TryParse<CrossingStyle>(built, out var builtStyle))
-            crossing.SelectedItem = crossing.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is CrossingStyle s && s == builtStyle) ?? crossing.SelectedItem;
         BuildLayout();
         builtInPlan.Checked += (_, _) => PlanChoiceChanged();
         filePlan.Checked += (_, _) => PlanChoiceChanged();
@@ -82,25 +70,24 @@ internal sealed class RaceTrackWindow : Window
         UpdateStatus();
     }
 
+    // The islands the window lists, two to a row, each with what its track is: the box's label and its tooltip.
+    private static readonly (RaceTrackIsland Island, string Label, string Tip)[] Listed =
+    {
+        (RaceTrackIsland.Desert, "Desert island", "A jump where the lap crosses itself; what is left of the original race track (its road paint, start gantry, arch and billboard in cube 7,10) is cleared"),
+        (RaceTrackIsland.Mosquibe, "Mosquibees Island", "Round the mountain: its plan draws its own bridge and jump"),
+        (RaceTrackIsland.Citadel, "Citadel Island: the storm track and the town circuit", "Both of the island's tracks: the storm track in CITADEL.ILE (in the rain, with its own jump) and the town circuit in CITABAU.ILE (once the storm is over, with a bridge where it crosses itself). Play races the one of the file the editor has open."),
+        (RaceTrackIsland.Celebration, "Celebration Island: round the statue", "A raised road on piers up round the statue: its plan draws it all"),
+        (RaceTrackIsland.Elevator, "The Elevator Platform: the rollercoaster", "All of it a raised road, banked, with the slopes pulling at the car: its plan draws it all"),
+    };
+
     // The islands ticked, in the order the list has them: the order they are built in, the first the one Play races when the editor has none
     // of their islands open.
     private List<RaceTrackIsland> Islands() => islandChecks.Where(c => c.IsChecked == true).Select(c => (RaceTrackIsland)c.Tag).ToList();
 
-    // Citadel Island's two entries build the same files (both its tracks) and differ only in the one Play races by default: one at a time.
-    private void OneCitadel(CheckBox ticked)
-    {
-        var island = (RaceTrackIsland)ticked.Tag;
-        foreach (var other in islandChecks.Where(c => c != ticked && c.IsChecked == true && ((RaceTrackIsland)c.Tag).IleFile == island.IleFile)) other.IsChecked = false;
-    }
-
-    // What only one island has: the retail race track to clear is the Desert island's own, the story Citadel Island's; and a plan file is
-    // one island's track.
+    // What only one island has: the story is Citadel Island's; and a plan file is one island's track.
     private void IslandChanged()
     {
         var islands = Islands();
-        var desert = islands.Any(i => i.IleFile == RaceTrackIsland.Desert.IleFile);
-        if (clearOldTrack.IsEnabled != desert) clearOldTrack.IsChecked = desert;
-        clearOldTrack.IsEnabled = desert;
         // the story is Citadel Island's own opening
         var citadel = islands.Any(i => i.IleFile == RaceTrackIsland.Citadel.IleFile);
         if (story.IsEnabled != citadel) story.IsChecked = citadel;
@@ -109,47 +96,10 @@ internal sealed class RaceTrackWindow : Window
         filePlan.IsEnabled = one;
         filePlan.ToolTip = one ? null : "A plan file is one island's track: tick that island alone";
         if (!one && filePlan.IsChecked == true) builtInPlan.IsChecked = true;
-        buildButton.Content = islands.Count > 1 ? $"Build the {islands.Count} tracks" : "Build the track";
+        var tracks = islands.Sum(i => i.Tracks);
+        buildButton.Content = tracks > 1 ? $"Build the {tracks} tracks" : "Build the track";
         buildButton.IsEnabled = islands.Count > 0;
-        CrossingChoice();
         UpdateStatus();
-    }
-
-    // A built-in plan that draws its own bridge and jump (RaceTrackPlan.Heights: Mosquibees Island's) takes no crossing style. Citadel
-    // Island's storm track is one, but the style still goes to its town circuit (the fine-weather file's own track). With several islands
-    // ticked, the style goes to each of their tracks that takes one.
-    private void CrossingChoice()
-    {
-        var islands = Islands();
-        var takers = new List<string>();
-        RaceTrackPlan? planned = null;
-        foreach (var island in islands)
-        {
-            RaceTrackPlan? plan = null;
-            var twinChooses = false;
-            try
-            {
-                if (builtInPlan.IsChecked == true && RaceTrackPlan.Built(island) is { Planned: true } p) plan = p;
-                twinChooses = RaceTrackPlan.BuiltTwin(island) is { Planned: false };
-            }
-            catch (InvalidDataException) { plan = null; }
-            if (plan is not null && !twinChooses) planned ??= plan;
-            else if (twinChooses) takers.Add($"the town circuit ({island.TwinIleFile}, once the storm is over; the storm track ({island.IleFile}) draws its own jump)");
-            else takers.Add(island.Name);
-        }
-        // (the box shows what the build will use: RaceTrackService.FollowPlan)
-        if (takers.Count == 0 && planned is not null && islands.Count == 1)
-        {
-            var style = new RaceTrackOptions();
-            RaceTrackService.FollowPlan(planned, style);
-            crossing.SelectedItem = crossing.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is CrossingStyle s && s == style.Crossing) ?? crossing.SelectedItem;
-        }
-        crossing.IsEnabled = takers.Count > 0;
-        crossing.ToolTip = takers.Count > 0 ? (takers.Count == 1 && planned is null && islands.Count == 1 && !takers[0].StartsWith("the town circuit") ? null
-                                               : "For " + string.Join("; and ", takers) + (planned is not null ? ". The other tracks' plans draw their own crossings" : ""))
-            : islands.Count > 1 ? "These tracks' plans draw their own crossings"
-            : planned?.Raised is not null ? "This track's plan draws its own road over itself: a raised road on piers"
-            : "This track's plan draws its own bridge and jump";
     }
 
     private void BuildLayout()
@@ -161,15 +111,16 @@ internal sealed class RaceTrackWindow : Window
             box.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
             box.SetResourceReference(BorderBrushProperty, "ThemeBorderBrush");
         }
-        foreach (var c in new Control[] { builtInPlan, filePlan, removeActors, buggyAlways, startAtLine, roadZones, trackCameras, clearOldTrack, holomap, story }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { builtInPlan, filePlan, removeActors, buggyAlways, startAtLine, roadZones, trackCameras, story }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         var root = new StackPanel { Margin = new Thickness(16) };
         var intro = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             Text = "Builds proposed race tracks on the islands ticked below, one or several at once: the ground under the road is levelled and banked, the road is painted with the retail " +
-                   "track's asphalt, red and white curbs, arrows and red/gold hatching, with a pit lane and a start gantry. Where the lap crosses itself, " +
-                   "the choice below decides what carries the one road over the other. On an island other than the Desert one the road's tiles are copied " +
+                   "track's asphalt, red and white curbs, arrows and red/gold hatching, with a pit lane and a start gantry, and drawn on the island's holomap picture. " +
+                   "Where a lap crosses itself, the Desert island's jumps (and what is left of the original race track there is cleared) and Citadel Island's " +
+                   "town circuit has a bridge; the other tracks' plans draw their own. On an island other than the Desert one the road's tiles are copied " +
                    "into its own spare texture space and matched to its palette, and its scenes are given a buggy.\n\n" +
                    "It changes the island's ground and decor bodies and SCENE.HQR in the LBA2 game folder (and, for a jump, ANIM.HQR and RESS.HQR: its flight; BODY.HQR and RESS.HQR for the cars made after the game's characters: Baldino's, and fifty-eight more nobody drives yet, three or more for each island). The first time, the originals are kept beside them (as *" + RaceTrackService.BackupSuffix +
                    "); every build starts from those copies, and the button below puts them back. When you play a folder with a race track built, the game " +
@@ -186,7 +137,7 @@ internal sealed class RaceTrackWindow : Window
         root.Children.Add(new TextBlock { Text = $"Game folder: {gameRoot}", Margin = new Thickness(0, 8, 0, 8), TextWrapping = TextWrapping.Wrap, FontWeight = FontWeights.SemiBold, Foreground = (System.Windows.Media.Brush)FindResource("ThemeTextBrush") });
 
         root.Children.Add(Section("The islands"));
-        var islandsHint = new TextBlock { Text = "The tracks ticked are built together. Play races the one of the island the editor has open (for Citadel Island: CITADEL.ILE the storm track, CITABAU.ILE the town circuit).", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) };
+        var islandsHint = new TextBlock { Text = "The islands ticked get their tracks, built together. Play races the one of the island the editor has open (for Citadel Island: CITADEL.ILE the storm track, CITABAU.ILE the town circuit).", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) };
         islandsHint.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
         root.Children.Add(islandsHint);
         var islandGrid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2 };
@@ -200,13 +151,9 @@ internal sealed class RaceTrackWindow : Window
         fileRow.Children.Add(filePlan); fileRow.Children.Add(browseButton); fileRow.Children.Add(planPath);
         filePlan.Margin = new Thickness(0, 0, 8, 0);
         root.Children.Add(fileRow);
-        clearOldTrack.Margin = new Thickness(0, 6, 0, 0);
-        root.Children.Add(clearOldTrack);
 
-        root.Children.Add(Section("Where the lap crosses itself"));
-        root.Children.Add(crossing);
         root.Children.Add(Section("The scenes"));
-        foreach (var c in new CheckBox[] { removeActors, buggyAlways, startAtLine, roadZones, trackCameras, holomap, story }) { c.Margin = new Thickness(0, 2, 0, 2); root.Children.Add(c); }
+        foreach (var c in new CheckBox[] { removeActors, buggyAlways, startAtLine, roadZones, trackCameras, story }) { c.Margin = new Thickness(0, 2, 0, 2); root.Children.Add(c); }
 
         root.Children.Add(status);
         log.Margin = new Thickness(0, 10, 0, 0);
@@ -229,7 +176,6 @@ internal sealed class RaceTrackWindow : Window
     {
         var file = filePlan.IsChecked == true;
         planPath.IsEnabled = file; browseButton.IsEnabled = file;
-        CrossingChoice();
     }
 
     private void Browse()
@@ -243,25 +189,26 @@ internal sealed class RaceTrackWindow : Window
         var has = RaceTrackService.HasBackups(gameRoot);
         restoreButton.IsEnabled = has;
         var built = has ? RaceTrackService.BuiltIslands(gameRoot) : new();
+        var count = built.Sum(i => i.Tracks);
         status.Text = !has ? "No race track is built in this folder yet."
-            : built.Count > 1 ? $"This folder has {built.Count} race tracks built: {string.Join(", ", built.Select(i => i.Name))} (the originals are kept)."
-            : $"A race track is built in this folder: {built.FirstOrDefault()?.Name ?? "the Desert island's"} (the originals are kept).";
+            : count > 1 ? $"This folder has {count} race tracks built: {string.Join(", ", built.Select(i => i.Built))}. The originals are kept."
+            : $"A race track is built in this folder: {built.FirstOrDefault()?.Built ?? "the Desert island's"}. The originals are kept.";
     }
 
-    // The options an island's track is built with (each track its own: the build fills them in).
-    private RaceTrackOptions Options(RaceTrackIsland island) => new()
+    // The options an island's track is built with (each track its own: the build fills them in): its crossing, the Desert island's retail
+    // track cleared and the holomap picture drawn on as always (RaceTrackOptions.For), and the scene choices.
+    private RaceTrackOptions Options(RaceTrackIsland island)
     {
-        Crossing = crossing.SelectedItem is ComboBoxItem { Tag: CrossingStyle style } ? style : CrossingStyle.Bridge,
-        RemoveActors = removeActors.IsChecked == true,
-        BuggyAlways = buggyAlways.IsChecked == true,
-        StartAtLine = startAtLine.IsChecked == true,
-        RemoveRoadZones = roadZones.IsChecked == true,
-        RemoveTrackCameras = trackCameras.IsChecked == true,
-        OldTrackCube = clearOldTrack.IsChecked == true ? island.OldTrackCube : null,
-        Island = island,
-        DrawOnHolomap = holomap.IsChecked == true,
-        Story = story.IsChecked == true && island.IleFile == RaceTrackIsland.Citadel.IleFile,
-    };
+        var options = RaceTrackOptions.For(island);
+        options.RemoveActors = removeActors.IsChecked == true;
+        options.BuggyAlways = buggyAlways.IsChecked == true;
+        options.StartAtLine = startAtLine.IsChecked == true;
+        options.RemoveRoadZones = roadZones.IsChecked == true;
+        options.RemoveTrackCameras = trackCameras.IsChecked == true;
+        options.DrawOnHolomap = true;
+        options.Story = story.IsChecked == true && island.IleFile == RaceTrackIsland.Citadel.IleFile;
+        return options;
+    }
 
     private async Task BuildAsync()
     {
@@ -273,7 +220,7 @@ internal sealed class RaceTrackWindow : Window
             foreach (var island in islands)
             {
                 var plan = RaceTrackPlan.Built(island);
-                // (a plan file is the track of the one entry ticked: for Citadel Island's town circuit, its fine-weather file's, the storm track built in)
+                // (a plan file is the track of the one island ticked: for Citadel Island, its town circuit's -- the fine-weather file's -- the storm track built in)
                 RaceTrackPlan? twinPlan = null;
                 if (filePlan.IsChecked == true && islands.Count == 1)
                 {
@@ -290,15 +237,15 @@ internal sealed class RaceTrackWindow : Window
         }
         var files = islands.SelectMany(RaceTrackService.FilesFor).Distinct();
         // (a track built before on an island left unticked goes: every build starts from the originals)
-        var gone = RaceTrackService.BuiltIslands(gameRoot).Where(b => !islands.Any(i => i.IleFile == b.IleFile)).Select(b => b.Name).Distinct().ToList();
+        var gone = RaceTrackService.BuiltIslands(gameRoot).Where(b => !islands.Any(i => i.IleFile == b.IleFile)).Select(b => b.IleFile == RaceTrackIsland.Citadel.IleFile ? "Citadel Island" : b.Name).Distinct().ToList();
         var answer = MessageBox.Show(this,
-            $"Build {string.Join(", ", islands.Select(i => i.Shown))} into\n{gameRoot}\n\n{string.Join(", ", files)} will change{(islands.Any(i => i.TwinPlanResource is not null) ? " (both of Citadel Island's tracks are built: they share its scenes)" : "")}. " +
+            $"Build {string.Join(", ", islands.Select(i => Listed.FirstOrDefault(l => l.Island == i).Label ?? i.Shown))} into\n{gameRoot}\n\n{string.Join(", ", files)} will change. " +
             (RaceTrackService.HasBackups(gameRoot) ? "The originals kept by the first build are used again." : "The originals are kept as *" + RaceTrackService.BackupSuffix + ".") +
             (gone.Count > 0 ? $"\n\nThe track{(gone.Count > 1 ? "s" : "")} built before on {string.Join(" and ", gone)} will be taken out: tick {(gone.Count > 1 ? "them" : "it")} to keep {(gone.Count > 1 ? "them" : "it")}." : ""),
             Title, MessageBoxButton.OKCancel, MessageBoxImage.Question);
         if (answer != MessageBoxResult.OK) return;
         buildButton.IsEnabled = false; restoreButton.IsEnabled = false;
-        log.Text = islands.Count > 1 ? $"Building {islands.Count} tracks…" : "Building…";
+        log.Text = islands.Sum(i => i.Tracks) > 1 ? $"Building {islands.Sum(i => i.Tracks)} tracks…" : "Building…";
         var root = gameRoot;
         var result = await Task.Run(() => RaceTrackService.Build(root, tracks));
         buildButton.IsEnabled = true;

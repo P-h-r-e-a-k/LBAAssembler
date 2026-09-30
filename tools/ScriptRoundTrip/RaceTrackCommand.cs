@@ -6,7 +6,8 @@ namespace ScriptRoundTrip;
 // Builds a race track into a copy of an island file and draws the result.
 //   buildtrack <plan.json> <pristine folder> <game folder> [png] [scale]      RT_ISLAND=Desert island|Citadel Island picks the island
 // The files the track changes (DESERT.ILE, DESERT.OBL, SCENE.HQR, and for a jump ANIM.HQR and RESS.HQR) are copied from the pristine folder to the game
-// folder first, so a build always starts clean. RT_CROSSING=Bridge|Jump|Viaduct|Level picks the crossing style. For Citadel Island the plan is
+// folder first, so a build always starts clean. RT_CROSSING=Bridge|Jump|Viaduct|Level picks another crossing style than the island's own
+// (RaceTrackIsland.Crossing: the Desert island's jump, the town circuit's bridge). For Citadel Island the plan is
 // the storm file's (CITADEL: citadel_storm_track_plan.json) and CITABAU gets the town circuit built into the program (RT_TWINPLAN=<plan> for
 // another); RT_DUMP / RT_TWINDUMP write each lap's centre line.
 internal static class RaceTrackCommand
@@ -18,7 +19,7 @@ internal static class RaceTrackCommand
         var where = RaceTrackIsland.ByName(Environment.GetEnvironmentVariable("RT_ISLAND") ?? RaceTrackIsland.Desert.Name);
         foreach (var f in RaceTrackService.AllFiles)
             if (File.Exists(Path.Combine(pristine, f))) RaceTrackService.CopyWritable(Path.Combine(pristine, f), Path.Combine(game, f));
-        var options = new RaceTrackOptions { Island = where, OldTrackCube = where.OldTrackCube };
+        var options = RaceTrackOptions.For(where);
         if (Environment.GetEnvironmentVariable("RT_CLEARANCE") is { } rc) options.RoadBridgeClearance = double.Parse(rc);
         if (Environment.GetEnvironmentVariable("RT_TILELEN") is { } tl) options.RoadBridgeTileLength = double.Parse(tl);
         if (Environment.GetEnvironmentVariable("RT_CROSSING") is { } cs) options.Crossing = Enum.Parse<CrossingStyle>(cs, ignoreCase: true);
@@ -86,7 +87,7 @@ internal static class RaceTrackCommand
         foreach (var name in args.Skip(3))
         {
             var where = RaceTrackIsland.ByName(name);
-            var options = new RaceTrackOptions { Island = where, OldTrackCube = where.OldTrackCube };
+            var options = RaceTrackOptions.For(where);
             RaceTrackReport report;
             if (menu)
             {
@@ -119,7 +120,7 @@ internal static class RaceTrackCommand
             if (File.Exists(Path.Combine(pristine, f))) RaceTrackService.CopyWritable(Path.Combine(pristine, f), Path.Combine(game, f));
         var tracks = args.Skip(3).Select(RaceTrackIsland.ByName).Select(where =>
         {
-            var options = new RaceTrackOptions { Island = where, OldTrackCube = where.OldTrackCube };
+            var options = RaceTrackOptions.For(where);
             if (Environment.GetEnvironmentVariable("RT_CROSSING") is { } cs) options.Crossing = Enum.Parse<CrossingStyle>(cs, ignoreCase: true);
             return new RaceTrackService.TrackBuild(RaceTrackPlan.Built(where), options);
         }).ToList();

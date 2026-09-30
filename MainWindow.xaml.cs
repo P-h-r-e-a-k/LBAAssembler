@@ -1671,13 +1671,17 @@ public partial class MainWindow : Window
         window.ShowDialog();
     }
 
-    // DESERT.ILE and SCENE.HQR changed on disk: everything that read them is dropped and shown again.
+    // A race track build (or putting the files back) changed islands' ground and decor bodies and SCENE.HQR on disk -- several islands'
+    // at once, and some of Citadel Island's inside scenes for its story: everything that read them is dropped and shown again (a scene
+    // with unsaved script edits is kept: ForgetScene).
     private void RaceTrackChanged()
     {
         zoneCache.Clear();
-        for (var scene = 55; scene <= 73; scene++) scriptSession.ForgetScene(scene);
+        foreach (var entry in allSceneEntries) scriptSession.ForgetScene(entry.Option.Index);
         InvalidateNativeIsland();
-        if (!interiorSceneActive && string.Equals(activeFile, "DESERT.ILE", StringComparison.OrdinalIgnoreCase) && File.Exists(Path.Combine(gameRoot, activeFile))) LoadIsland(Path.Combine(gameRoot, activeFile));
+        var shownChanged = Terrain.RaceTrackService.AllFiles.Contains(activeFile, StringComparer.OrdinalIgnoreCase);
+        if (interiorSceneActive) ShowInteriorScene(interiorSceneNumber, keepView: true);
+        else if (shownChanged && File.Exists(Path.Combine(gameRoot, activeFile))) LoadIsland(Path.Combine(gameRoot, activeFile));
         else if (nativeViewActive) RenderNativeCamera();
         RefreshZoneListIfVisible();
     }
