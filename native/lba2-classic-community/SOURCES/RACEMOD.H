@@ -49,6 +49,16 @@ S32 RaceMod_Held(void);
 // The display (gear, speed, lap times, checkpoints, race position), drawn over the scene while the hero drives.
 void RaceMod_Draw(void);
 
+// A raised road (the car file's raised=<file>): a floor of its own, over the ground. While an object is moved the ground's height under
+// it is the road's where the road passes (RaceMod_FloorFor: for something at height y; RaceMod_FloorForNothing afterwards: the ground
+// alone again), and the hero is kept inside its edges (RaceMod_Rail: moving from (ox, oy, oz) to (*nx, *nz), cube-local).
+void RaceMod_FloorFor(S32 y);
+void RaceMod_FloorForNothing(void);
+void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
+
+// statue=1: Celebration Island drawn from its file with the statue (CELEBRA2), whatever the game's own variable says.
+S32 RaceMod_Statue(void);
+
 // A test pilot for headless runs (the console's `autodrive`): on, the player's car is driven along the first opponent's line. Its input,
 // ORed into the frame's own.
 void RaceMod_AutoDrive(int on, double lookCells);

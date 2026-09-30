@@ -24,7 +24,9 @@ internal static class RaceTrackService
 
     // Where a lap is counted, in the terms the engine uses: the island cube the line is in, its ends in that cube's own world units, the way
     // a lap crosses it.
-    public sealed record StartLineInfo(int CubeX, int CubeZ, int X0, int Z0, int X1, int Z1, int DirX, int DirZ);
+    // Y: the road's height at the line, for a lap that passes over itself (the line only counts for a car near that height).
+    public sealed record StartLineInfo(int CubeX, int CubeZ, int X0, int Z0, int X1, int Z1, int DirX, int DirZ,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? Y = null);
     // Checkpoints: the same kind of lines, in the order a lap crosses them. Path: the opponent's line from the start line round the lap,
     // each point [x, z, y, speed, bend radius] in world units (x and z counted from the island's corner, 32768 to a cube). PathGrid: how many points
     // before the start line the opponent starts. Opponent: scene -> the index of that scene's copy of the racer. StartScene: the scene
@@ -36,7 +38,10 @@ internal static class RaceTrackService
     public sealed record TrackInfo(string Crossing, StartLineInfo? StartLine, List<StartLineInfo>? Checkpoints = null, List<int[]>? Path = null,
         int PathGrid = 0, Dictionary<int, int>? Opponent = null, int StartScene = -1, List<RivalInfo>? Rivals = null, List<int[]>? Grid = null,
         List<int[]>? Pits = null, string Island = "Desert island", int StoryArrow = -1,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] TrackInfo? Twin = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] TrackInfo? Twin = null,
+        // Raised: a raised road's middle, point by point in lap order, [x, z, y, half width] in world units from the island's corner:
+        // the race-track mode's floor there (RACEMOD.CPP).
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Raised = null);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
@@ -157,6 +162,7 @@ internal static class RaceTrackService
         if (themed.Log.Length > 0) extra.Add(themed.Log);
         var report = RaceTrackBuilder.Build(island, plan, options);
         island.Save(Path.Combine(gameDirectory, options.Island.IleFile));
+        AppendBodies(Path.Combine(gameDirectory, options.Island.OblFile), report, options);
         var twin = BuildTwin(gameDirectory, twinPlan ?? plan, twinPlan is not null, twinOptions, options, report);
         if (twin is not null) extra.Add(twin.Log);
         extra.AddRange(Finish(gameDirectory, report, options, twin));
@@ -184,8 +190,10 @@ internal static class RaceTrackService
         if (twinOptions.Crossing == CrossingStyle.Bridge)
             twinOptions.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, obl), twinOptions);
         twinOptions.Theme = RaceTrackTextures.Import(twin, options.Island, gameDirectory, ile).Theme;
+        twinOptions.NewBodyBase = HqrArchive.CountEntries(Path.Combine(gameDirectory, obl));
         var report = RaceTrackBuilder.Build(twin, plan, twinOptions);
         twin.Save(Path.Combine(gameDirectory, ile));
+        AppendBodies(Path.Combine(gameDirectory, obl), report, twinOptions);
         if (own)
             return new TwinTrack(report, twinOptions, true, $"{ile} (the island once the storm is over) built with its own track: lap {report.Length:0} cells, " +
                                                             $"{report.DecorsRemoved + report.SolidDecorsRemoved} of its own decors taken off the road");
@@ -224,6 +232,19 @@ internal static class RaceTrackService
     public static void FollowPlan(RaceTrackPlan plan, RaceTrackOptions options)
     {
         if (plan.Planned) options.Crossing = plan.Deck is not null ? CrossingStyle.Bridge : CrossingStyle.Level;
+        if (plan.Planned) plan.ApplyTo(options);
+    }
+
+    // The decor bodies a build made (a raised road's pieces and piers: RaceTrackReport.NewBodies) go on the end of the island's OBL, where
+    // the build's decors expect them (from RaceTrackOptions.NewBodyBase on).
+    private static void AppendBodies(string oblPath, RaceTrackReport report, RaceTrackOptions options)
+    {
+        if (report.NewBodies.Count == 0) return;
+        if (HqrArchive.CountEntries(oblPath) != options.NewBodyBase)
+            throw new InvalidDataException($"{Path.GetFileName(oblPath)} has {HqrArchive.CountEntries(oblPath)} bodies, not the {options.NewBodyBase} the raised road's pieces were numbered from.");
+        var hqr = File.ReadAllBytes(oblPath);
+        foreach (var body in report.NewBodies) hqr = HqrWriter.AppendEntry(hqr, HqrWriter.StoredEntry(body));
+        File.WriteAllBytes(oblPath, hqr);
     }
 
     // What a crossing style needs in the files besides the island and the scenes (the files are the originals when these run): before the
@@ -236,6 +257,8 @@ internal static class RaceTrackService
         if (options.Crossing == CrossingStyle.Bridge)
             options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, options.Island.OblFile), options);
         if (options.Crossing == CrossingStyle.Jump) options.JumpAnim = RaceTrackJumpAnim.Generic;
+        // (where a raised road's own bodies go: after whatever was appended above)
+        options.NewBodyBase = HqrArchive.CountEntries(Path.Combine(gameDirectory, options.Island.OblFile));
         return log;
     }
 
@@ -289,14 +312,17 @@ internal static class RaceTrackService
 
     private static TrackInfo Info(RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes)
     {
-        static StartLineInfo Line((double X0, double Z0, double X1, double Z1, double DirX, double DirZ) l)
+        static StartLineInfo Line((double X0, double Z0, double X1, double Z1, double DirX, double DirZ) l, double? height = null)
         {
             var cx = (int)Math.Floor((l.X0 + l.X1) / 2 / 64); var cz = (int)Math.Floor((l.Z0 + l.Z1) / 2 / 64);
             int Local(double cells, int cube) => (int)Math.Round((cells - cube * 64) * 512);
-            return new StartLineInfo(cx, cz, Local(l.X0, cx), Local(l.Z0, cz), Local(l.X1, cx), Local(l.Z1, cz), (int)Math.Round(l.DirX * 1000), (int)Math.Round(l.DirZ * 1000));
+            return new StartLineInfo(cx, cz, Local(l.X0, cx), Local(l.Z0, cz), Local(l.X1, cx), Local(l.Z1, cz), (int)Math.Round(l.DirX * 1000), (int)Math.Round(l.DirZ * 1000),
+                height is { } h ? (int)Math.Round(h) : null);
         }
-        var line = report.LapLine is { } l ? Line(l) : null;
-        var checkpoints = report.Checkpoints.Select(Line).ToList();
+        // (the lines' heights only for a lap that passes over itself: a raised road's)
+        var raised = report.Raised.Count > 0;
+        var line = report.LapLine is { } l ? Line(l, raised ? report.LapLineHeight : null) : null;
+        var checkpoints = report.Checkpoints.Select((c, i) => Line(c, raised && i < report.CheckpointHeights.Count ? report.CheckpointHeights[i] : null)).ToList();
         static List<int[]> Points(List<(double X, double Z, double Y, double Speed, double Radius)> line)
             => line.Select(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512), (int)Math.Round(p.Y), (int)Math.Round(p.Speed), (int)Math.Round(Math.Min(p.Radius, 1e6)) }).ToList();
         var path = Points(report.RacePath);
@@ -305,7 +331,8 @@ internal static class RaceTrackService
         if (report.BikerPath.Count > 0 && scenes.Biker is { Count: > 0 } bikes) rivals.Add(new RivalInfo(RaceCarEngineFile.BikerName, Points(report.BikerPath), RaceTrackScenes.BikerGridBack, bikes));
         return new TrackInfo(options.Crossing.ToString(), line, checkpoints, path.Count > 0 ? path : null, 4, scenes.Opponent.Count > 0 ? scenes.Opponent : null, scenes.StartScene,
             rivals.Count > 0 ? rivals : null, scenes.Grid.Count > 0 ? scenes.Grid : null, scenes.Pits.Count > 0 ? scenes.Pits : null, options.Island.Name,
-            options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile ? RaceTrackStory.StartArrow : -1);
+            options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile ? RaceTrackStory.StartArrow : -1,
+            Raised: raised ? report.Raised : null);
     }
 
     // The folder's RACETRACK.JSON, or null when there is none (or it can't be read: a track built before the file existed).

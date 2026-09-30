@@ -15,8 +15,12 @@ internal static class RaceTrackHolomap
     public const int FirstMap = 18;             // HOLO.H HQR_BEGIN_MAP
     public const int Width = 640, Height = 480;
 
-    // The picture (and camera) entries of an island: its own, and for Citadel Island the fine-weather one (HOLOPLAN: island 12's slot).
-    public static int[] Pictures(RaceTrackIsland island) => island.IslandByte == 0 ? new[] { FirstMap, FirstMap + 2 * 12 } : new[] { FirstMap + 2 * island.IslandByte };
+    // The picture (and camera) entries of an island: its own, and for Citadel Island the fine-weather one (HOLOPLAN: island 12's slot);
+    // Celebration Island with the statue has a picture of its own too (island 13's slot), which the race-track mode shows.
+    public static int[] Pictures(RaceTrackIsland island) =>
+        island.IslandByte == 0 ? new[] { FirstMap, FirstMap + 2 * 12 }
+        : island.Statue ? new[] { FirstMap + 2 * 13 }
+        : new[] { FirstMap + 2 * island.IslandByte };
 
     // The game's palette's ramps (RESS.HQR entry 0): the greys (48-63) for asphalt and the white curb, the reds (64-79) for the red curb.
     private const int GreyRamp = 48, RedRamp = 64;

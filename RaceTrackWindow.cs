@@ -8,8 +8,8 @@ namespace LBAAssembler;
 
 // Tools > LBA2: race track: builds a proposed track (levelled, banked road with the retail track's own textures, pit lane, start gantry,
 // and a bridge or a jump where the lap crosses itself) into the LBA2 game folder, or puts the folder back as it was. One island's track at
-// a time: the Desert island's, Citadel Island's town circuit, or Mosquibees Island's mountain lap (whose plan draws its own bridge and
-// jump, so it takes no crossing style).
+// a time: the Desert island's, Citadel Island's town circuit, Mosquibees Island's mountain lap (whose plan draws its own bridge and
+// jump, so it takes no crossing style), or Celebration Island's lap round the statue (a raised road on piers, all of it its plan's).
 internal sealed class RaceTrackWindow : Window
 {
     private readonly string gameRoot;
@@ -109,7 +109,8 @@ internal sealed class RaceTrackWindow : Window
             crossing.SelectedItem = crossing.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is CrossingStyle s && s == style.Crossing) ?? crossing.SelectedItem;
         }
         crossing.IsEnabled = !planned;
-        crossing.ToolTip = planned ? "This track's plan draws its own bridge and jump"
+        crossing.ToolTip = planned && plan!.Raised is not null ? "This track's plan draws its own road over itself: a raised road on piers"
+            : planned ? "This track's plan draws its own bridge and jump"
             : twinChooses ? $"For the town circuit ({Island().TwinIleFile}, once the storm is over); the storm track ({Island().IleFile}) draws its own jump" : null;
     }
 
@@ -136,6 +137,8 @@ internal sealed class RaceTrackWindow : Window
                    "); every build starts from those copies, and the button below puts them back. When you play a folder with a race track built, the game " +
                    "runs in its race-track mode: the car setup below (gears on X and Z, brakes, steering), the car staying level on the bridge, checkpoints round the lap, " +
                    "an opponent (the retail track's racer), and the gear, speed, lap times and position on screen. " +
+                   "Celebration Island's lap winds up round the statue on a raised road and comes back down a bridge: only that race-track mode can drive it " +
+                   "(it is the statue's island there, whatever the story has reached, and the camera follows the car). " +
                    "Use Tools > Test edits first to try it on a scratch copy of the game folder.",
         };
         intro.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
@@ -249,7 +252,7 @@ internal sealed class RaceTrackWindow : Window
 
     private void Restore()
     {
-        var answer = MessageBox.Show(this, "Put the original DESERT.ILE, DESERT.OBL and SCENE.HQR back? Anything else changed in them since the track was built is lost.", Title, MessageBoxButton.OKCancel, MessageBoxImage.Question);
+        var answer = MessageBox.Show(this, "Put the original files back (the island's ground and decor bodies, SCENE.HQR and the others the build changed)? Anything else changed in them since the track was built is lost.", Title, MessageBoxButton.OKCancel, MessageBoxImage.Question);
         if (answer != MessageBoxResult.OK) return;
         try
         {

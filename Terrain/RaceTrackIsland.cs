@@ -44,6 +44,17 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Mosquibe = new("Mosquibees Island", "MOSQUIBE.ILE", "MOSQUIBE.OBL", 7, 102, 105, 34,
         "RaceTrackPlan.Mosquibe.json", null);
 
+    // Celebration Island with the statue (CELEBRA2: the file the engine draws once the statue has risen, game variable 79; before that
+    // it is CELEBRAT, the same island with its lava lake empty): from the dock where the taxi lands, round the island and up round the
+    // statue in a spiral to its shoulders, a ring round its head, and a bridge straight back down to the dock. All of it but the dock is
+    // a raised road on piers (RaceTrackPlan.Raised), which only the engine's race-track mode can drive; that mode draws the island with
+    // the statue whatever the game variable says (Statue). One outside scene, 95, and one cube.
+    public static readonly RaceTrackIsland Celebration = new("Celebration Island", "CELEBRA2.ILE", "CELEBRA2.OBL", 5, 95, 95, 32,
+        "RaceTrackPlan.Celebration.json", null)
+    {
+        Statue = true, Title = "Celebration Island: round the statue",
+    };
+
     // The island's other file for other weather (EXTFUNC.CPP loads it instead once the storm is over), built with the same track -- or,
     // with TwinPlanResource, with a track of its own (the route built into the program for it).
     public string? TwinIleFile { get; init; }
@@ -54,9 +65,12 @@ internal sealed record RaceTrackIsland(
     public bool RacesTwin { get; init; }
     // As the race track window lists it (the name, unless the island has two entries).
     public string? Title { get; init; }
+    // The track is in the file the engine draws only while game variable 79 is set (Celebration Island's statue): the race-track mode
+    // is told to draw that one (the car file's statue=1).
+    public bool Statue { get; init; }
     public string Shown => Title ?? Name;
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

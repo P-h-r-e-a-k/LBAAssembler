@@ -12,7 +12,7 @@ internal static class RaceCarEngineFile
     // RACETRACK.JSON when it has one (each opponent's line in the file named in `pathFiles`, in the order of Opponents). Of an island with
     // a track in each weather file, the one the folder was built to race (RaceTrackService.Raced), in its weather; the other's cars are
     // kept out of sight.
-    internal static string EngineFile(this RaceCarSetup car, RaceTrackService.TrackInfo? info, IReadOnlyList<string>? pathFiles = null)
+    internal static string EngineFile(this RaceCarSetup car, RaceTrackService.TrackInfo? info, IReadOnlyList<string>? pathFiles = null, string? raisedFile = null)
     {
         var track = info is null ? null : RaceTrackService.Raced(info);
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
@@ -27,8 +27,14 @@ internal static class RaceCarEngineFile
         text.Append($"steer={(int)Math.Round(RaceCarSetup.OriginalSteer * Math.Clamp(car.SteeringPercent, 10, 1000) / 100.0)}\n");
         text.Append($"automatic={(car.Automatic ? 1 : 0)}\n");
         text.Append($"hud={(car.ShowDisplay ? 1 : 0)}\n");
-        if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}\n");
-        foreach (var c in track?.Checkpoints ?? new()) text.Append($"checkpoint={c.CubeX} {c.CubeZ} {c.X0} {c.Z0} {c.X1} {c.Z1} {c.DirX} {c.DirZ}\n");
+        // (a line's height, when it has one: a lap that passes over itself crosses the line's place at other heights too)
+        static string Height(RaceTrackService.StartLineInfo line) => line.Y is { } y ? $" {y}" : "";
+        if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}{Height(l)}\n");
+        foreach (var c in track?.Checkpoints ?? new()) text.Append($"checkpoint={c.CubeX} {c.CubeZ} {c.X0} {c.Z0} {c.X1} {c.Z1} {c.DirX} {c.DirZ}{Height(c)}\n");
+        // a raised road: the file with its middle, point by point (the engine's floor there)
+        if (raisedFile is not null) text.Append($"raised={raisedFile}\n");
+        // the island's file with the statue (Celebration Island), whatever the game's own variable says
+        if (info is not null && RaceTrackIsland.ByName(info.Island).Statue) text.Append("statue=1\n");
         // the grid spots, and whether a qualifying lap sets the order the cars line up in (RACEMOD.CPP)
         foreach (var g in track?.Grid ?? new()) text.Append($"grid={string.Join(' ', g)}\n");
         foreach (var g in track?.Pits ?? new()) text.Append($"pit={string.Join(' ', g)}\n");
@@ -102,6 +108,12 @@ internal static class RaceCarEngineFile
             File.WriteAllLines(file, o.Path.Select(p => string.Join(' ', p)));
             files.Add(file);
         }
-        File.WriteAllText(path, car.EngineFile(info, files));
+        string? raised = null;
+        if (track?.Raised is { Count: > 1 } road)
+        {
+            raised = Path.Combine(Path.GetDirectoryName(path) ?? ".", "raceraised.txt");
+            File.WriteAllLines(raised, road.Select(p => string.Join(' ', p)));
+        }
+        File.WriteAllText(path, car.EngineFile(info, files, raised));
     }
 }

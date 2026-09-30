@@ -13,7 +13,8 @@ internal sealed record RaceTrackTheme(
     (int X, int Y, int W, int H) Rock,
     (int Bank, int Pos) RedCurb,
     (int Bank, int Pos) Arrow,
-    (int Bank, int Pos) Sand)
+    (int Bank, int Pos) Sand,
+    (int Bank, int Pos)? FlatHatch = null)   // the hatching as a flat colour, where the island has no room for its tile
 {
     // What the Desert island's own ground has, where the retail race track is painted from.
     public static readonly RaceTrackTheme Retail = new((96, 0, 32, 32), (180, 155), (192, 48, 16, 16), (0, 128, 32, 32), (4, 5), (5, 5), (2, 12));
@@ -50,6 +51,9 @@ internal static class RaceTrackTextures
         }
 
         var free = FreeBlocks(island);
+        // (an island whose page every block of is used -- Celebration Island's is five big tiles, edge to edge -- has no room for copies:
+        // the road is painted with what the page already has)
+        if (!HasRoom(free)) return Borrowed(island, where, file, from, to);
         var placed = new List<string>();
         (int X, int Y, int W, int H) Copy(string what, (int X, int Y, int W, int H) tile)
         {
@@ -88,6 +92,92 @@ internal static class RaceTrackTextures
         var log = $"the road's look on {where.Name} ({file}): the Desert track's tiles copied into its spare texture space ({string.Join(", ", placed)}), " +
                   $"their colours matched in its own palette; the red curb is colour {theme.RedCurb.Bank * 16 + theme.RedCurb.Pos}, the arrows {theme.Arrow.Bank * 16 + theme.Arrow.Pos}";
         return (theme, log);
+    }
+
+    // Whether the page has free blocks for all four of the road's tiles.
+    private static bool HasRoom(bool[,] free)
+    {
+        var copy = (bool[,])free.Clone();
+        return Place(copy, 32, 32) is not null && Place(copy, 32, 32) is not null && Place(copy, 16, 16) is not null && Place(copy, 8, 8) is not null;
+    }
+
+    // The road's look from the island's own page, where it is full: for the asphalt its flattest dark grey patch (16 x 16, repeated cell
+    // by cell it is an even dark surface), for the white curb and the start line a pixel in the middle of its whitest 3 x 3, for the
+    // blocking rock and the shoulders its own cliff (the tile most of its blocking triangles are drawn with), and the hatching as the
+    // arrows' flat colour. The flat colours are matched as ever.
+    private static (RaceTrackTheme Theme, string Log) Borrowed(IslandFile island, RaceTrackIsland where, string file, byte[] from, byte[] to)
+    {
+        var page = island.GroundTexture;
+        int R(int x, int y) => to[page[y * 256 + x] * 3]; int G(int x, int y) => to[page[y * 256 + x] * 3 + 1]; int B(int x, int y) => to[page[y * 256 + x] * 3 + 2];
+        (int X, int Y) asphalt = (0, 0); var best = double.MaxValue;
+        const int size = 16;
+        for (var y = 0; y + size <= 256; y += 4)
+        for (var x = 0; x + size <= 256; x += 4)
+        {
+            double sum = 0, sq = 0, sat = 0; var n = size * size;
+            for (var v = y; v < y + size; v++)
+            for (var u = x; u < x + size; u++)
+            {
+                int r = R(u, v), g = G(u, v), b = B(u, v);
+                var l = (r + g + b) / 3.0; sum += l; sq += l * l;
+                sat += Math.Max(r, Math.Max(g, b)) - Math.Min(r, Math.Min(g, b));
+            }
+            var mean = sum / n; var spread = Math.Sqrt(Math.Max(0, sq / n - mean * mean));
+            // an even, dark, colourless patch: about the Desert asphalt's own grey
+            var score = spread * 2 + Math.Abs(mean - 62) + sat / n * 2.5;
+            if (score < best) { best = score; asphalt = (x, y); }
+        }
+        (int X, int Y) white = (0, 0); var whitest = double.MinValue;
+        for (var y = 1; y < 255; y++)
+        for (var x = 1; x < 255; x++)
+        {
+            double score = 0;
+            for (var v = y - 1; v <= y + 1; v++)
+            for (var u = x - 1; u <= x + 1; u++)
+            {
+                int r = R(u, v), g = G(u, v), b = B(u, v);
+                score += r + g + b - 3 * (Math.Max(r, Math.Max(g, b)) - Math.Min(r, Math.Min(g, b)));
+            }
+            if (score > whitest) { whitest = score; white = (x, y); }
+        }
+        // the cliff: the 32 x 32 tile square most blocking triangles read from
+        var counts = new Dictionary<(int, int), int>();
+        foreach (var cube in island.Cubes.Values)
+        {
+            if (!cube.HasPolygons) continue;
+            var t = cube.TextureDefs;
+            for (var z = 0; z < IslandCube.Cells; z++)
+            for (var x = 0; x < IslandCube.Cells; x++)
+                for (var half = 0; half < 2; half++)
+                {
+                    var p = new IslandPolygon(cube.Polygon(x, z, half));
+                    if (!p.Col || p.TexFlag == 0 || p.TextureIndex * 6 + 6 > t.Length) continue;
+                    int u0 = int.MaxValue, v0 = int.MaxValue;
+                    for (var k = 0; k < 3; k++) { u0 = Math.Min(u0, t[p.TextureIndex * 6 + k * 2] >> 8); v0 = Math.Min(v0, t[p.TextureIndex * 6 + k * 2 + 1] >> 8); }
+                    var key = (Math.Min(224, u0 / 32 * 32), Math.Min(224, v0 / 32 * 32));
+                    counts[key] = counts.GetValueOrDefault(key) + 1;
+                }
+        }
+        var rock = counts.Count > 0 ? counts.MaxBy(c => c.Value).Key : asphalt;
+        (int Bank, int Pos) Near((int Bank, int Pos) colour)
+        {
+            var i = colour.Bank * 16 + colour.Pos;
+            int r = from[i * 3], g = from[i * 3 + 1], b = from[i * 3 + 2];
+            var pick = i; var bd = int.MaxValue;
+            for (var bank = 0; bank < 16; bank++)
+            {
+                var j = bank * 16 + colour.Pos;
+                var d = (to[j * 3] - r) * (to[j * 3] - r) + (to[j * 3 + 1] - g) * (to[j * 3 + 1] - g) + (to[j * 3 + 2] - b) * (to[j * 3 + 2] - b);
+                if (d < bd) { bd = d; pick = j; }
+            }
+            return (pick / 16, pick % 16);
+        }
+        var arrow = Near(RaceTrackTheme.Retail.Arrow);
+        var theme = new RaceTrackTheme((asphalt.X, asphalt.Y, size, size), white, (0, 0, 0, 0), (rock.Item1, rock.Item2, 32, 32),
+            Near(RaceTrackTheme.Retail.RedCurb), arrow, Near(RaceTrackTheme.Retail.Sand), arrow);
+        return (theme, $"the road's look on {where.Name} ({file}): its ground texture has no spare space, so the road is painted with its own tiles -- " +
+                       $"the asphalt from its darkest even patch at ({asphalt.X},{asphalt.Y}), white from the pixel at ({white.X},{white.Y}), its own cliff at ({rock.Item1},{rock.Item2}) " +
+                       $"for the shoulders and walls, the hatching as the arrows' flat colour");
     }
 
     // The 8 x 8 blocks of the island's texture page no cube's polygon reads: every texture definition gives the (u, v) corners of a

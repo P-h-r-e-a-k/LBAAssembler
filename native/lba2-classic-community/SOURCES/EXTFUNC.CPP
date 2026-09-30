@@ -247,7 +247,7 @@ void InitGrilleExt(char *defpathname) {
         LastIsland = 1;
         numskysea = RESS_SKYSEA00;
     } else {
-        if (Island == 5 AND ListVarGame[FLAG_CELEBRATION].Value) {
+        if (Island == 5 AND (ListVarGame[FLAG_CELEBRATION].Value OR RaceMod_Statue())) {
             strcpy(IslandName, GetRessName("celebra2"));
             LastIsland = 1;
         }
@@ -323,7 +323,7 @@ void InitGrilleExt(U32 numcube) {
         break;
 
     case 5:
-        if (ListVarGame[FLAG_CELEBRATION]) {
+        if (ListVarGame[FLAG_CELEBRATION] OR RaceMod_Statue()) {
             if (!strstr(IslandName, "celebra2"))
                 LastIsland = 1; // pour que le chargement s'effectue
 
@@ -1124,6 +1124,7 @@ void AffGrilleExt() {
     SetFollowCamera(VueOffsetX, VueOffsetY, VueOffsetZ,
                     AlphaCam, BetaCam, GammaCam,
                     VueDistance);
+    FollowCamReapplyLift();
 
     SetLightVector(AlphaLight, BetaLight, 0);
 
@@ -1221,7 +1222,10 @@ void GetShadowExt(S32 xw, S32 yw, S32 zw) {
     }
 
     ShadowX = xw;
+    // (a race-track mod's raised road is the floor under what stands on it: RACEMOD.CPP)
+    RaceMod_FloorFor(yw);
     ShadowY = CalculAltitudeObjet(xw, zw, cj);
+    RaceMod_FloorForNothing();
     ShadowZ = zw;
 
     // peut-etre faut-il rajouter ces deux lignes pour etre plus exact dans le tri
@@ -1942,7 +1946,17 @@ S32 GetSkateBeta(S32 nx, S32 nz) {
 /*──────────────────────────────────────────────────────────────────────────*/
 // Gestion de l'animation de l'objet scénarique passé (numobj) en mode
 // extérieur. Fait appel à certaines fonctions utilisées aussi en intérieur
+static void DoAnimExtGround(U8 numobj);
+
+// (A race-track mod's raised road, RACEMOD.CPP: while the object is moved, the ground under it is the road's floor where the road
+// passes at its height.)
 void DoAnimExt(U8 numobj) {
+    RaceMod_FloorFor(ListObjet[numobj].Obj.Y);
+    DoAnimExtGround(numobj);
+    RaceMod_FloorForNothing();
+}
+
+static void DoAnimExtGround(U8 numobj) {
 #ifndef COMPILATOR
     T_OBJET *ptrobj;
     S32 n;
@@ -2070,6 +2084,11 @@ void DoAnimExt(U8 numobj) {
                           AND GiveTerrainCol(Nxw, Nzw)) {
             validepos = FALSE;
         }
+    }
+
+    // a race-track mod's raised road has a rail: the hero stays inside its edges
+    if (numobj == NUM_PERSO) {
+        RaceMod_Rail(OldX, OldY, OldZ, &Nxw, &Nzw);
     }
 
     /* test/reajuste pos */

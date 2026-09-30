@@ -83,6 +83,7 @@
     <EmbeddedResource Include="docs/racetrack/citadel_track_plan.json" LogicalName="RaceTrackPlan.Citadel.json" />
     <EmbeddedResource Include="docs/racetrack/citadel_storm_track_plan.json" LogicalName="RaceTrackPlan.CitadelStorm.json" />
     <EmbeddedResource Include="docs/racetrack/mosquibe_track_plan.json" LogicalName="RaceTrackPlan.Mosquibe.json" />
+    <EmbeddedResource Include="docs/racetrack/celebration_track_plan.json" LogicalName="RaceTrackPlan.Celebration.json" />
   </ItemGroup>
 
   <!--

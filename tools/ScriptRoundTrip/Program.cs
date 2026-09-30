@@ -69,6 +69,8 @@ internal static class Program
             "islandtexture" => IslandTextureCommand.Run(args),
             "islandfreetex" => IslandFreeTextureCommand.Run(args),
             "islandheights" => IslandHeightsCommand.Run(args),
+            "decorpoints" => DecorPointsCommand.Run(args),
+            "sceneactors" => SceneActorsCommand.Run(args),
             "cellprobe" => CellProbeCommand.Run(args),
             "holopic" => HoloPicCommand.Run(args),
             "planprobe" => PlanProbeCommand.Run(args),
