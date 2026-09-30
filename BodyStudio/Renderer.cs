@@ -77,9 +77,13 @@ public static class Renderer
         {
             var normals=model.VertexNormals();var toLight=Vector3.Normalize(new Vector3(-0.35f,0.55f,-0.75f));float max=LightModel.Max(model.Game);
             previewLight=normals.Select(n=>{var r=new Vector3(n.X*MathF.Cos(yaw)+n.Z*MathF.Sin(yaw),n.Y,-n.X*MathF.Sin(yaw)+n.Z*MathF.Cos(yaw));return Math.Clamp(Vector3.Dot(r,toLight),0,1)*max;}).ToArray();
+            if(model.LightScale is{}scales)for(int i=0;i<previewLight.Length&&i<scales.Length;i++)previewLight[i]*=scales[i];
         }
+        // LBA2's see-through polygons (type 2) are drawn last, over what is behind them
+        bool SeeThrough(Face f)=>model.Game==2&&f.Material==2&&f.Texture==null;
         foreach(var f in model.Faces)
         {
+            if(SeeThrough(f))continue;
             int colour=palette[Math.Clamp(f.Colour,0,255)].ToArgb();
             bool faceLit=previewLight!=null&&LightModel.IsLit(f,model.Game,model.Lit);
             // the game's lighting: flat faces take one intensity, Gouraud faces one per corner (blended below)
@@ -147,6 +151,30 @@ public static class Renderer
             {
                 float dx=x+.5f-p.X,dy=y+.5f-p.Y,d2=dx*dx+dy*dy;if(d2>r*r)continue;
                 Plot(x,y,c.Z-MathF.Sqrt(r*r-d2)/scale,colour);
+            }
+        }
+        // as the game fills them: what is behind keeps its place in its ramp and takes the polygon's ramp (here: its brightness picks the step)
+        int backdrop=(background??KeyBackground).ToArgb();
+        foreach(var f in model.Faces)
+        {
+            if(!SeeThrough(f))continue;
+            for(int t=1;t<f.Points.Length-1;t++)
+            {
+                var a=rotated[f.Points[0]];var b=rotated[f.Points[t]];var c=rotated[f.Points[t+1]];
+                var pa=Screen(a);var pb=Screen(b);var pc=Screen(c);float area=Edge(pa,pb,pc.X,pc.Y);
+                if(Math.Abs(area)<.001f)continue;
+                int x0=Math.Max(0,(int)MathF.Floor(Math.Min(pa.X,Math.Min(pb.X,pc.X)))),x1=Math.Min(width-1,(int)MathF.Ceiling(Math.Max(pa.X,Math.Max(pb.X,pc.X))));
+                int y0=Math.Max(0,(int)MathF.Floor(Math.Min(pa.Y,Math.Min(pb.Y,pc.Y)))),y1=Math.Min(height-1,(int)MathF.Ceiling(Math.Max(pa.Y,Math.Max(pb.Y,pc.Y))));
+                for(int y=y0;y<=y1;y++)for(int x=x0;x<=x1;x++)
+                {
+                    float wa=Edge(pb,pc,x+.5f,y+.5f)/area,wb=Edge(pc,pa,x+.5f,y+.5f)/area,wc=1-wa-wb;
+                    if(wa<-.0001f||wb<-.0001f||wc<-.0001f)continue;
+                    float z=wa*a.Z+wb*b.Z+wc*c.Z;int index=y*width+x;
+                    if(z>depth[index])continue;
+                    var under=Color.FromArgb(pixels[index]==0?backdrop:pixels[index]);
+                    int step=Math.Clamp((int)MathF.Round((under.R*0.30f+under.G*0.59f+under.B*0.11f)*15/255f),0,15);
+                    pixels[index]=palette[(f.Colour&0xF0)|step].ToArgb();
+                }
             }
         }
         using(var layer=new Bitmap(width,height,PixelFormat.Format32bppArgb))

@@ -186,7 +186,10 @@ internal static class RaceTrackScenes
     public const double GridFirst = 3, GridStep = 3.5, GridSide = 1.75;
     public const int GridSpots = 5;
     public static (double Back, double Side) GridSpot(int k) => (GridFirst + GridStep * k, k % 2 == 0 ? -GridSide : GridSide);
-    private const uint OpponentFlags = 0x1A0000;
+    // The opponents' actors: no shock animation, not clipped before drawing, drawn against the depth buffer (so the bridge and the hills hide
+    // them as they should) and, as every actor the game itself draws that way (Twinsen's buggy: BUGGY.CPP), without a shadow -- the engine
+    // draws a depth-buffered actor's shadow over it, a dark patch across the car.
+    internal const uint OpponentFlags = 0x1A1000;
 
     public const int DesertIsland = 2;
     // The buggy's own scene on the Desert island: an island with no buggy of its own (Citadel) gets a copy of that actor on the grid.

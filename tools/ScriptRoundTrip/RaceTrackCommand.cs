@@ -118,10 +118,56 @@ internal static class RaceTrackCommand
     public static int BaldinoCar(string[] args)
     {
         Directory.CreateDirectory(args[2]);
-        foreach (var f in new[] { "BODY.HQR", "RESS.HQR" }) File.Copy(Path.Combine(args[1], f), Path.Combine(args[2], f), overwrite: true);
+        CopyWritable(args[1], args[2], "BODY.HQR", "RESS.HQR");
         var (index, log) = RaceTrackBaldinoCar.Install(args[2]);
         Console.WriteLine(log);
         return index > 0 ? 0 : 1;
+    }
+
+    // charactercars <game folder> <scratch folder>: the Queen's, the Emperor's and Zoe's cars (RaceTrackCharacterCars) built from the game
+    // folder's BODY.HQR and installed into copies of its BODY.HQR and RESS.HQR in the scratch folder (for a look at them: BodyPipeline
+    // carviews <scratch>\BODY.HQR <index> <game folder> <png>)
+    public static int CharacterCars(string[] args)
+    {
+        Directory.CreateDirectory(args[2]);
+        CopyWritable(args[1], args[2], "BODY.HQR", "RESS.HQR");
+        var (_, log) = RaceTrackCharacterCars.Install(args[2]);
+        foreach (var line in log) Console.WriteLine(line);
+        return 0;
+    }
+
+    // carshow <game folder> <scene> <x> <y> <z> <turn> <dx> <dz> <body>...: stands cars of the racer's entity (its bodies: 0 its own, 1
+    // Baldino's, 2-4 RaceTrackCharacterCars) in a row in a (test) game folder's scene, from (x, y, z) on by (dx, dz) a car, each turned `turn`;
+    // y "ground": on the island's ground there (RT_ILE names its file, DESERT.ILE unless given); RT_FLAGS: the actors' flags (hex)
+    public static int CarShow(string[] args)
+    {
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, args[1]);
+        var scene = int.Parse(args[2]);
+        var model = store.Load(scene);
+        int x = int.Parse(args[3]), z = int.Parse(args[5]), turn = int.Parse(args[6]), dx = int.Parse(args[7]), dz = int.Parse(args[8]);
+        var island = args[4] == "ground" ? IslandFile.Load(Path.Combine(args[1], Environment.GetEnvironmentVariable("RT_ILE") ?? "DESERT.ILE")) : null;
+        for (var i = 9; i < args.Length; i++)
+        {
+            int carX = x + (i - 9) * dx, carZ = z + (i - 9) * dz;
+            var y = island is null ? int.Parse(args[4]) : (int)Math.Round(IslandOps.Altitude(island, model.CubeX * 32768.0 + carX, model.CubeY * 32768.0 + carZ) ?? 0);
+            var car = LBAAssembler.Scenes.SceneOps.BlankActor(LBAAssembler.Scenes.SceneGame.Lba2, carX, y, carZ, RaceTrackBaldinoCar.RacerEntity);
+            car.Body = int.Parse(args[i]); car.Flags = Environment.GetEnvironmentVariable("RT_FLAGS") is { Length: > 0 } fl ? Convert.ToUInt32(fl, 16) : RaceTrackScenes.OpponentFlags; car.Beta = turn; car.Life = new byte[] { 0 }; car.Track = new byte[] { 0 };
+            Console.WriteLine($"scene {scene}: actor {LBAAssembler.Scenes.SceneOps.AddActor(model, car)} = body {car.Body} at ({car.X}, {car.Y}, {car.Z}) turn {turn}");
+        }
+        store.Save(scene, model, allowErrors: true);
+        return 0;
+    }
+
+    // Copies of a game folder's files that can be written (the pristine folder's are read-only, and a copy keeps that).
+    private static void CopyWritable(string from, string to, params string[] files)
+    {
+        foreach (var f in files)
+        {
+            var target = Path.Combine(to, f);
+            if (File.Exists(target)) File.SetAttributes(target, FileAttributes.Normal);
+            File.Copy(Path.Combine(from, f), target, overwrite: true);
+            File.SetAttributes(target, FileAttributes.Normal);
+        }
     }
 
     // actorbeta <game folder> <scene> <actor> <turn> [dx dz]: turns an actor (and moves it by dx, dz world units) in a (test) game folder's scene

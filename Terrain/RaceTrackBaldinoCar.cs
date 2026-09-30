@@ -35,7 +35,7 @@ internal static class RaceTrackBaldinoCar
     // The car, built round the Baldino of the game's own BODY.HQR.
     public static Body Build(Body baldino, Body racer)
     {
-        var m = new Mesh();
+        var m = new CarMesh("Baldino's car");
         var root0 = m.P(0, new(0, 0, 0)); var root1 = m.P(0, new(0, 66, 0));
         var bounce = m.P(1, new(0, 199, 0));
 
@@ -210,72 +210,32 @@ internal static class RaceTrackBaldinoCar
     // Baldino from his own body: his torso, head, trunk, ears (with their rings) and arms, his legs and hips left out (they are in the car).
     // His arms are turned to hold a wheel in front of him and his trunk raised forward (hanging, it would go through the dashboard); then he is
     // made a little smaller (0.8) and sat in the hole, his waist at the rim, facing the way the car goes (+z, as he does in his body).
-    private static Hands AddBaldino(Mesh m, Body baldino)
+    private static Hands AddBaldino(CarMesh m, Body baldino)
     {
-        var world = baldino.World();
+        var driver = new CarDriver(baldino);
         var keep = new HashSet<int> { 3, 4, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20 };
-        int BoneOf(int point) => baldino.Bones.FindIndex(b => point >= b.Start && point < b.Start + b.Count);
-        Vector3 PivotOf(int bone) => world[baldino.Bones[bone].Pivot];
-        var posed = (Vector3[])world.Clone();
-        void Turn(IEnumerable<int> bones, Vector3 pivot, Quaternion q)
-        {
-            foreach (var b in bones)
-                for (var i = baldino.Bones[b].Start; i < baldino.Bones[b].Start + baldino.Bones[b].Count; i++) posed[i] = Vector3.Transform(posed[i] - pivot, q) + pivot;
-        }
-        Vector3 Far(int bone, Vector3 from) => Enumerable.Range(baldino.Bones[bone].Start, baldino.Bones[bone].Count).Select(i => posed[i]).OrderByDescending(p => Vector3.DistanceSquared(p, from)).First();
 
         // smaller, and sat in the car: his waist (y 433 in his body) at the car's waist height, over the seat
         var origin = new Vector3(0, 433, 0);
         Vector3 Place(Vector3 p) => (p - origin) * BaldinoScale + new Vector3(0, Waist, SeatZ);
         Vector3 Unplace(Vector3 p) => (p - new Vector3(0, Waist, SeatZ)) / BaldinoScale + origin;
 
-        // the arms: each hand on the wheel (Grip, in the car), the elbow bent out to the side and a little down, the upper arm and forearm
-        // keeping their lengths (two-bone reach: the elbow on the circle both lengths allow, towards the side)
-        (Vector3 Shoulder, Vector3 Hand) Arm(int upper, int fore, float side)
-        {
-            var shoulder = PivotOf(upper); var elbow = PivotOf(fore); var hand = Far(fore, elbow);
-            float l1 = Vector3.Distance(shoulder, elbow), l2 = Vector3.Distance(elbow, hand);
-            var target = Unplace(new Vector3(side * Grip.X, Grip.Y, Grip.Z));
-            var reach = target - shoulder; var d = Math.Clamp(reach.Length(), Math.Abs(l1 - l2) + 1, l1 + l2 - 1); var u = Vector3.Normalize(reach);
-            var along = (l1 * l1 - l2 * l2 + d * d) / (2 * d); var height = MathF.Sqrt(MathF.Max(0, l1 * l1 - along * along));
-            var hint = new Vector3(side, -0.45f, 0); hint -= u * Vector3.Dot(hint, u); hint = Vector3.Normalize(hint);
-            var newElbow = shoulder + u * along + hint * height;
-            Turn(new[] { upper, fore }, shoulder, Between(elbow - shoulder, newElbow - shoulder));
-            Turn(new[] { fore }, newElbow, Between(Far(fore, newElbow) - newElbow, shoulder + u * d - newElbow));
-            return (shoulder, Far(fore, newElbow));
-        }
-        var right = Arm(9, 10, 1); var left = Arm(11, 12, -1);
+        // the arms: each hand on the wheel (Grip, in the car)
+        var right = driver.Reach(9, new[] { 10 }, Unplace(new Vector3(Grip.X, Grip.Y, Grip.Z)), 1);
+        var left = driver.Reach(11, new[] { 12 }, Unplace(new Vector3(-Grip.X, Grip.Y, Grip.Z)), -1);
 
         // the trunk raised forward and to his left, as if he were trumpeting (and so as not to hide his face), its tip curled up a little more
-        var trunkBase = PivotOf(14);
-        var trunkTip = Far(16, trunkBase);
-        var raised = Between(trunkTip - trunkBase, TrunkDirection);
-        Turn(new[] { 14, 15, 16 }, trunkBase, raised);
-        var curlAt = Vector3.Transform(PivotOf(16) - trunkBase, raised) + trunkBase;
-        Turn(new[] { 16 }, curlAt, Quaternion.CreateFromAxisAngle(Vector3.UnitX, -0.45f));
+        var trunkBase = driver.PivotOf(14);
+        var trunkTip = driver.Far(16, trunkBase);
+        var raised = CarDriver.Between(trunkTip - trunkBase, TrunkDirection);
+        driver.Turn(new[] { 14, 15, 16 }, trunkBase, raised);
+        var curlAt = Vector3.Transform(driver.PivotOf(16) - trunkBase, raised) + trunkBase;
+        driver.Turn(new[] { 16 }, curlAt, Quaternion.CreateFromAxisAngle(Vector3.UnitX, -0.45f));
 
         // the points his kept polygons, lines and spheres use; polygons wholly below the rim (inside the car) are left out
         const float Rim = 560;
-        var map = new Dictionary<int, int>();
-        int Point(int i) { if (!map.TryGetValue(i, out var h)) map[i] = h = m.P(13, Place(posed[i])); return h; }
-        foreach (var f in baldino.Faces)
-        {
-            if (!f.Points.All(p => keep.Contains(BoneOf(p)))) continue;
-            if (f.Points.All(p => Place(posed[p]).Y < Rim - 20)) continue;
-            m.Raw(f.Points.Select(Point).ToArray(), f.Colour, unlit: f.Material == 0);
-        }
-        foreach (var l in baldino.Lines) if (keep.Contains(BoneOf(l.A)) && keep.Contains(BoneOf(l.B))) m.Line(Point(l.A), Point(l.B), l.Colour);
-        foreach (var s in baldino.Spheres) if (keep.Contains(BoneOf(s.Point))) m.Sphere(Point(s.Point), (int)(s.Radius * BaldinoScale), s.Colour);
-        return new Hands(Place(right.Hand), Place(left.Hand), Point(baldino.Bones[9].Pivot), Point(baldino.Bones[11].Pivot));
-    }
-
-    // The rotation that turns direction a into direction b.
-    private static Quaternion Between(Vector3 a, Vector3 b)
-    {
-        a = Vector3.Normalize(a); b = Vector3.Normalize(b);
-        var axis = Vector3.Cross(a, b); var s = axis.Length(); var c = Vector3.Dot(a, b);
-        if (s < 1e-6f) return c > 0 ? Quaternion.Identity : Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI);
-        return Quaternion.CreateFromAxisAngle(axis / s, MathF.Atan2(s, c));
+        var point = driver.Seat(m, keep, Place, Rim, BaldinoScale);
+        return new Hands(Place(right.Hand), Place(left.Hand), point(baldino.Bones[9].Pivot), point(baldino.Bones[11].Pivot));
     }
 
     // Adds the car to a game folder: the body at the end of BODY.HQR and, in the entity table (RESS.HQR entry 44), a body record giving it to the
@@ -330,104 +290,5 @@ internal static class RaceTrackBaldinoCar
             if (offset >= p) BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(at), offset + record.Length);
         }
         return result;
-    }
-
-    // The body being built: points in the car's own coordinates per bone (handles), faces turned so they face out (the engine draws a polygon
-    // only from the side its points go round anticlockwise, as the retail bodies do), lines and spheres; ToBody makes the bones' points
-    // relative to their pivots.
-    private sealed class Mesh
-    {
-        private const int Bones = 18;
-        private static readonly int[] Parents = { -1, 0, 1, 2, 3, 4, 2, 6, 7, 2, 9, 2, 11, 2, 13, 14, 13, 16 };
-        private readonly List<Vector3>[] points = Enumerable.Range(0, Bones).Select(_ => new List<Vector3>()).ToArray();
-        private readonly List<(int Bone, int Index)> handles = new();
-        private readonly int[] pivots = Enumerable.Repeat(-1, Bones).ToArray();
-        private readonly List<(int[] Points, int Colour, bool Unlit)> faces = new();
-        private readonly List<(int A, int B, int Colour)> lines = new();
-        private readonly List<(int Point, int Radius, int Colour)> spheres = new();
-
-        public int P(int bone, Vector3 v) { points[bone].Add(v); handles.Add((bone, points[bone].Count - 1)); return handles.Count - 1; }
-        public Vector3 At(int handle) { var (b, i) = handles[handle]; return points[b][i]; }
-        public void Pivot(int bone, int handle) => pivots[bone] = handle;
-        public void Line(int a, int b, int colour) => lines.Add((a, b, colour));
-        public void Sphere(int point, int radius, int colour) => spheres.Add((point, radius, colour));
-        public void Raw(int[] hs, int colour, bool unlit) => faces.Add((hs, colour, unlit));
-
-        private Vector3 Normal(int[] hs)
-        {
-            var n = Vector3.Zero;
-            for (var i = 0; i < hs.Length; i++)
-            {
-                var a = At(hs[i]); var b = At(hs[(i + 1) % hs.Length]);
-                n += new Vector3((a.Y - b.Y) * (a.Z + b.Z), (a.Z - b.Z) * (a.X + b.X), (a.X - b.X) * (a.Y + b.Y));
-            }
-            return n;
-        }
-        private Vector3 Centre(int[] hs) => hs.Aggregate(Vector3.Zero, (s, h) => s + At(h)) / hs.Length;
-        // facing away from `inside`
-        public void Out(int[] hs, int colour, Vector3 inside, bool unlit = false)
-        {
-            if (Vector3.Dot(Normal(hs), Centre(hs) - inside) < 0) hs = hs.Reverse().ToArray();
-            faces.Add((hs, colour, unlit));
-        }
-        // facing `towards`
-        public void In(int[] hs, int colour, Vector3 towards, bool unlit = false)
-        {
-            if (Vector3.Dot(Normal(hs), towards - Centre(hs)) < 0) hs = hs.Reverse().ToArray();
-            faces.Add((hs, colour, unlit));
-        }
-        public void Up(int[] hs, int colour, bool unlit = false) => In(hs, colour, Centre(hs) + Vector3.UnitY, unlit);
-        // a thin plate seen from both sides
-        public void Both(int[] hs, int colour) { faces.Add((hs, colour, false)); faces.Add((hs.Reverse().ToArray(), colour, false)); }
-
-        // points round an ellipse: across x and y at a z (alongZ), or across y and z at an x
-        public int[] Ring(int bone, Vector3 centre, float rx, float ry, int n, bool alongZ)
-            => Enumerable.Range(0, n).Select(k =>
-            {
-                var a = k * MathF.Tau / n;
-                return P(bone, alongZ ? centre + new Vector3(rx * MathF.Sin(a), ry * MathF.Cos(a), 0) : centre + new Vector3(0, ry * MathF.Cos(a), rx * MathF.Sin(a)));
-            }).ToArray();
-
-        // a square bar from a to b (on `bone`), thickness t; returns a point at b's end (for the next bone's pivot)
-        public int Strut(int bone, Vector3 a, Vector3 b, float t, int colour)
-        {
-            var d = Vector3.Normalize(b - a);
-            var u = Vector3.Normalize(Vector3.Cross(d, Math.Abs(d.Y) > 0.9f ? Vector3.UnitX : Vector3.UnitY)) * t / 2; var v = Vector3.Normalize(Vector3.Cross(d, u)) * t / 2;
-            var corners = new[] { u + v, u - v, -u - v, -u + v };
-            var ea = corners.Select(c => P(bone, a + c)).ToArray(); var eb = corners.Select(c => P(bone, b + c)).ToArray();
-            for (var k = 0; k < 4; k++) Out(new[] { ea[k], ea[(k + 1) % 4], eb[(k + 1) % 4], eb[k] }, colour, (a + b) / 2);
-            return eb[0];
-        }
-
-        public Body ToBody(byte[] header)
-        {
-            // bones 4 and 7 have no points of their own but the hub; every bone needs at least its pivot's worth of order
-            var offsets = new int[Bones];
-            for (int b = 0, next = 0; b < Bones; b++) { offsets[b] = next; next += points[b].Count; }
-            int Global(int h) => offsets[handles[h].Bone] + handles[h].Index;
-            var body = new Body { Game = 2, Lit = true, Header = (byte[])header.Clone() };
-            var world = new List<Vector3>();
-            for (var b = 0; b < Bones; b++)
-            {
-                if (points[b].Count == 0) throw new InvalidOperationException($"Baldino's car: bone {b} has no points.");
-                if (b > 0 && pivots[b] < 0) throw new InvalidOperationException($"Baldino's car: bone {b} has no pivot.");
-                var pivot = b == 0 ? 0 : Global(pivots[b]);
-                if (b > 0 && handles[pivots[b]].Bone != Parents[b]) throw new InvalidOperationException($"Baldino's car: bone {b}'s pivot isn't a point of bone {Parents[b]}.");
-                body.Bones.Add(new Bone(offsets[b], points[b].Count, pivot, Parents[b], new byte[8]));
-                world.AddRange(points[b]);
-            }
-            body.Vertices.AddRange(world);
-            body.SetWorld(world.ToArray());
-            foreach (var (hs, colour, unlit) in faces)
-            {
-                var ids = hs.Select(Global).ToArray();
-                if (ids.Length == 4 || ids.Length == 3) body.Faces.Add(new Face(ids, colour, Material: unlit ? 0 : -1));
-                else throw new InvalidOperationException("Baldino's car: a polygon that isn't a triangle or a quad.");
-            }
-            foreach (var (a, b, colour) in lines) body.Lines.Add(new BodyLine(Global(a), Global(b), colour));
-            foreach (var (p, r, colour) in spheres) body.Spheres.Add(new BodySphere(Global(p), r, colour));
-            body.Validate();
-            return body;
-        }
     }
 }

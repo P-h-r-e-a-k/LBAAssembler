@@ -107,6 +107,14 @@ internal static class Program
             "bodyinfo" => BodyInfo(args[1], int.Parse(args[2])),
             // renderhqr <file.hqr> <index> <game folder for the palette> <out.png> [yaw]: any LBA2 body (OBJFIX, BODY, an OBL) rendered
             "renderhqr" => RenderHqr(args[1], int.Parse(args[2]), args[3], args[4], args.Length > 5 ? float.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture) : 0.7f),
+            // carviews <file.hqr> <index> <game folder for the palette> <out.png>: an LBA2 body from six sides (three-quarter views from above,
+            // the side, the front, the back and the top) on one sheet -- what a car needs, where renderhqr's level view suits a figure
+            // (a fifth argument: an island's palette instead of the game's main one -- its RESS.HQR entry, 27 Citadel Island in the storm, 34 the
+            // Island of the Mosquibees...)
+            "carviews" => CarViews(args[1], int.Parse(args[2]), args[3], args[4], args.Length > 5 ? int.Parse(args[5]) : 0),
+            // lightscales <file.hqr>: the LBA2 bodies whose points do not all take the whole of the light (Body.LightScale: normals shorter or
+            // longer than the usual 10240)
+            "lightscales" => LightScales(args[1]),
             // hqrentry <file.hqr> <index> <out>: one entry, uncompressed, to a file
             "hqrentry" => HqrEntry(args[1], int.Parse(args[2]), args[3]),
             "lba1lit" => Lba1Lit(args.Length > 1 ? int.Parse(args[1]) : 0),
@@ -116,9 +124,64 @@ internal static class Program
     }
 
     private static string Folder(int game) => Folders[game - 1];
+    private static int LightScales(string hqr)
+    {
+        var archive = new Hqr(hqr); var found = 0;
+        for (var i = 0; i < archive.Count; i++)
+        {
+            Body body;
+            try { body = Body.Read(archive.Read(i), 2, allowStatic: true); } catch (Exception) { continue; }
+            if (body.LightScale is not { } scales) continue;
+            found++;
+            var odd = scales.Where(v => v != 1).ToArray();
+            Console.WriteLine($"  [{i}]: {odd.Length} of {scales.Length} points, {odd.Min():0.00}..{odd.Max():0.00}");
+        }
+        Console.WriteLine($"{hqr}: {found} of {archive.Count} bodies");
+        return 0;
+    }
+    private static int CarViews(string hqr, int index, string folder, string output, int islandPalette = 0)
+    {
+        var model = Body.Read(new Hqr(hqr).Read(index), 2, allowStatic: true);
+        model.TexturePage = new Hqr(Path.Combine(folder, "RESS.HQR")).Read(6);
+        var palette = Generator.Palette(folder);
+        if (islandPalette > 0)
+        {
+            // an island's palette: 768 bytes at the offset its entry's header gives, and outside the game shows each colour through the
+            // island's table for the usual light (every ramp's last colour becomes the one before it)
+            var xpl = new Hqr(Path.Combine(folder, "RESS.HQR")).Read(islandPalette);
+            int at = BitConverter.ToInt32(xpl, 4), table = BitConverter.ToInt32(xpl, 12) + BitConverter.ToInt32(xpl, 24) * 256;
+            palette = Enumerable.Range(0, 256).Select(i => { var k = at + xpl[table + i] * 3; return Color.FromArgb(xpl[k], xpl[k + 1], xpl[k + 2]); }).ToArray();
+        }
+        // (turn, tilt): the body turned about its vertical, then tipped towards the viewer
+        var views = new (float Yaw, float Pitch)[] { (0.65f, 0.45f), (-0.65f, 0.45f), (2.5f, 0.45f), (MathF.PI / 2, 0.08f), (0, 0.12f), (0, 1.35f) };
+        const int W = 560, H = 440;
+        using var sheet = new Bitmap(W * 3, H * 2);
+        using var g = Graphics.FromImage(sheet);
+        var world = model.World();
+        for (var v = 0; v < views.Length; v++)
+        {
+            var (yaw, pitch) = views[v];
+            var turned = world.Select(p =>
+            {
+                var q = new System.Numerics.Vector3(p.X * MathF.Cos(yaw) + p.Z * MathF.Sin(yaw), p.Y, -p.X * MathF.Sin(yaw) + p.Z * MathF.Cos(yaw));
+                return new System.Numerics.Vector3(q.X, q.Y * MathF.Cos(pitch) + q.Z * MathF.Sin(pitch), -q.Y * MathF.Sin(pitch) + q.Z * MathF.Cos(pitch));
+            }).ToArray();
+            var lowest = turned.Min(p => p.Y);
+            var copy = new Body { Game = 2, Lit = model.Lit, Static = model.Static, Header = model.Header, Textures = model.Textures, TexturePage = model.TexturePage, LightScale = model.LightScale };
+            copy.Bones.AddRange(model.Bones); copy.Faces.AddRange(model.Faces); copy.Lines.AddRange(model.Lines); copy.Spheres.AddRange(model.Spheres);
+            copy.Vertices.AddRange(turned);
+            copy.SetWorld(turned.Select(p => p with { Y = p.Y - lowest }).ToArray());
+            using var bmp = Renderer.Render(copy, palette, W, H, 0, false, background: Color.FromArgb(40, 60, 90), gridLine: Color.FromArgb(40, 60, 90));
+            g.DrawImageUnscaled(bmp, v % 3 * W, v / 3 * H);
+        }
+        sheet.Save(output, ImageFormat.Png);
+        Console.WriteLine($"{output}: {hqr}[{index}] {model.Vertices.Count} points, {model.Faces.Count} polygons, {model.Lines.Count} lines, {model.Spheres.Count} spheres");
+        return 0;
+    }
     private static int RenderHqr(string hqr, int index, string folder, string output, float yaw)
     {
         var model = Body.Read(new Hqr(hqr).Read(index), 2, allowStatic: true);
+        model.TexturePage = new Hqr(Path.Combine(folder, "RESS.HQR")).Read(6);
         using var bmp = Renderer.Render(model, Generator.Palette(folder), 600, 600, yaw, false, background: Color.FromArgb(40, 60, 90));
         bmp.Save(output, ImageFormat.Png);
         Console.WriteLine($"{output}: {hqr}[{index}]");

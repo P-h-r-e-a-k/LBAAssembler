@@ -244,7 +244,8 @@ internal static class RaceTrackService
         options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile ? RaceTrackStory.Apply(gameDirectory, report) : new List<string>();
 
     // After the island's files: the track on the holomap's pictures (a twin with a track of its own on its own picture, the fine weather's),
-    // the jump's flight (one flight for the game: a second jump of another length would need an animation of its own) and Baldino's car.
+    // the jump's flight (one flight for the game: a second jump of another length would need an animation of its own), Baldino's car and
+    // the characters' cars (RaceTrackCharacterCars).
     public static List<string> Finish(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? twin = null)
     {
         var log = new List<string>();
@@ -267,6 +268,8 @@ internal static class RaceTrackService
         if (jump is not null) log.Add(RaceTrackJumpAnim.Install(gameDirectory, jump.FlightScale));
         var racing = own?.Options ?? options;
         if (racing.AddOpponent && racing.AddBaldino) log.Add(RaceTrackBaldinoCar.Install(gameDirectory).Log);
+        // the Queen's, the Emperor's and Zoe's cars: in the game's files for whoever is to drive them (no actor has one yet)
+        log.AddRange(RaceTrackCharacterCars.Install(gameDirectory).Log);
         return log;
     }
 
