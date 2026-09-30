@@ -33,6 +33,10 @@ internal static class RaceCarEngineFile
         foreach (var c in track?.Checkpoints ?? new()) text.Append($"checkpoint={c.CubeX} {c.CubeZ} {c.X0} {c.Z0} {c.X1} {c.Z1} {c.DirX} {c.DirZ}{Height(c)}\n");
         // a raised road: the file with its middle, point by point (the engine's floor there)
         if (raisedFile is not null) text.Append($"raised={raisedFile}\n");
+        // ... and how much its grade changes a car's speed (a rollercoaster of a lap)
+        if (raisedFile is not null && track?.Gravity is { } gravity and > 0) text.Append($"gravity={N(gravity)}\n");
+        // ... and the camera that rides the road behind the car: how far behind (units), how high, how far ahead it looks
+        if (raisedFile is not null && track?.RailCamera is { Length: 3 } cam) text.Append($"railcam={N(cam[0] * 512)} {N(cam[1])} {N(cam[2] * 512)}\n");
         // the island's file with the statue (Celebration Island), whatever the game's own variable says
         if (info is not null && RaceTrackIsland.ByName(info.Island).Statue) text.Append("statue=1\n");
         // the grid spots, and whether a qualifying lap sets the order the cars line up in (RACEMOD.CPP)

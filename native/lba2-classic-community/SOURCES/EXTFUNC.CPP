@@ -2105,6 +2105,10 @@ static void DoAnimExtGround(U8 numobj) {
 
         if (APtObj->Flags & CHECK_OBJ_COL) {
             CheckObjCol(numobj);
+            // (an actor's box pushes the hero aside -- an opponent's car sideswiping his: the rail holds him on the raised road still)
+            if (numobj == NUM_PERSO) {
+                RaceMod_Rail(OldX, OldY, OldZ, &Nxw, &Nzw);
+            }
         }
 
         /*		if( numobj==NUM_PERSO )

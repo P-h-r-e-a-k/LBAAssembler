@@ -715,6 +715,8 @@ void UseOneClover(void) {
             }
 
             // reajuste altitude au cas ou l'on soit sur un penché
+            // (on a race-track mod's raised road, the road's own height: the ground under it may be the sea)
+            RaceMod_FloorFor(ptrobj->Obj.Y);
             y = CalculAltitudeObjet(x, z, -1);
         } else {
             x += (SIZE_BRICK_XZ / 2);
@@ -733,6 +735,7 @@ void UseOneClover(void) {
         Nzw = z;
 
         PtrReajustPos(PtrWorldColBrick(Nxw, Nyw, Nzw));
+        RaceMod_FloorForNothing();
 
         ptrobj->Obj.X = Nxw;
         ptrobj->Obj.Y = Nyw;
@@ -1304,6 +1307,8 @@ void ChangeCube() {
         // Recale Twinsen pour eviter de rentrer dans une collision
         if (CubeMode == CUBE_EXTERIEUR) {
             ShadowX = SceneStartX;
+            // (a scene that starts on a race-track mod's raised road starts on it, not on the ground under it)
+            RaceMod_FloorFor(SceneStartY);
             ShadowY = CalculAltitudeObjet(SceneStartX, SceneStartZ, 0);
             ShadowZ = SceneStartZ;
         } else
@@ -1314,6 +1319,7 @@ void ChangeCube() {
         Nzw = ShadowZ;
 
         PtrReajustPos(PtrWorldColBrick(Nxw, Nyw, Nzw));
+        RaceMod_FloorForNothing();
 
         ptrobj->Obj.X = Nxw;
         ptrobj->Obj.Y = Nyw;

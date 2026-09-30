@@ -208,7 +208,7 @@ internal static class RaceTrackScenes
         public int StartScene = -1;
         public List<int[]> Grid = new(), Pits = new();
         // the spots the opponents' cars wait on in the start line's scene (null elsewhere)
-        public (int X, int Z, int Beta)? RacerAt, BaldinoAt, BikerAt;
+        public (int X, int Z, int Beta, int Y)? RacerAt, BaldinoAt, BikerAt;
         public Result Result(List<string> log, int changed, int removed, Result? twin = null) => new(log, changed, removed, Opponent, StartScene, Baldino, Grid, Pits, Biker, twin);
     }
 
@@ -312,7 +312,9 @@ internal static class RaceTrackScenes
                 var y = (int)Math.Round(s.Y);
                 // the buggy stands a few cells before the line, Twinsen beside it; each on the ground at its own spot (the road climbs there)
                 int At(double back, double side, bool z) => (int)Math.Round((z ? lz : lx) + (z ? (-s.DirZ * back + s.DirX * side) : (-s.DirX * back - s.DirZ * side)) * 512);
-                int Ground(int x, int z) => t.Report.GroundAfter is { } g ? (int)Math.Round(g(cx * 64 + x / 512.0, cz * 64 + z / 512.0)) : y;
+                // (on a raised road -- a start line in the air -- the road's own surface, at the start line's level)
+                int Ground(int x, int z) => t.Report.RaisedFloor?.Invoke(cx * 64 + x / 512.0, cz * 64 + z / 512.0, s.Y) is { } floor ? (int)Math.Round(floor)
+                    : t.Report.GroundAfter is { } g ? (int)Math.Round(g(cx * 64 + x / 512.0, cz * 64 + z / 512.0)) : y;
                 if (tracks.Any(o => o != t && o.StartScene == scene))
                     log.Add($"scene {scene}: WARNING: both files' tracks start in this scene; the buggy and Twinsen are put at the last one's start line");
                 var buggy = model.Actors.Skip(1).FirstOrDefault(a => a.Entity == BuggyEntity);
@@ -343,7 +345,8 @@ internal static class RaceTrackScenes
                         if ((int)Math.Floor(wpx / IslandFile.CubeSize) != cx || (int)Math.Floor(wpz / IslandFile.CubeSize) != cz) continue;
                         int px = (int)Math.Round(wpx - cx * (double)IslandFile.CubeSize), pz = (int)Math.Round(wpz - cz * (double)IslandFile.CubeSize);
                         var pbeta = (int)Math.Round(Math.Atan2(p.DirX, p.DirZ) / (2 * Math.PI) * 4096); pbeta = ((pbeta % 4096) + 4096) % 4096;
-                        t.Pits.Add(new[] { cx, cz, px, Ground(px, pz), pz, pbeta });
+                        // (a spot whose height the plan gives stands on a deck of decor, which the ground knows nothing of)
+                        t.Pits.Add(new[] { cx, cz, px, t.Report.PitHeights ? (int)Math.Round(p.Y) : Ground(px, pz), pz, pbeta });
                     }
                 var pole = GridSpot(0);
                 if (buggy is not null) { buggy.X = At(pole.Back, pole.Side, false); buggy.Z = At(pole.Back, pole.Side, true); buggy.Y = Ground(buggy.X, buggy.Z); buggy.Beta = beta; }
@@ -357,9 +360,9 @@ internal static class RaceTrackScenes
                 // no pit lane they stand on the grid spots behind the player
                 var grid = t.Grid; var pits = t.Pits;
                 t.RacerAt = Waiting(0); t.BaldinoAt = Waiting(1); t.BikerAt = Waiting(2);
-                (int X, int Z, int Beta)? Waiting(int k) =>
-                    pits.Count > k ? (pits[k][2], pits[k][4], pits[k][5])
-                    : grid.Count > k + 1 ? (grid[k + 1][2], grid[k + 1][4], beta) : null;
+                (int X, int Z, int Beta, int Y)? Waiting(int k) =>
+                    pits.Count > k ? (pits[k][2], pits[k][4], pits[k][5], pits[k][3])
+                    : grid.Count > k + 1 ? (grid[k + 1][2], grid[k + 1][4], beta, grid[k + 1][3]) : null;
                 log.Add($"scene {scene}: Twinsen at ({model.Hero.X},{model.Hero.Y},{model.Hero.Z}) turn {beta}, buggy at ({buggy?.X},{buggy?.Y},{buggy?.Z})" +
                         (tracks.Count > 1 ? $" -- the start of {(t == tracks[0] ? options.Island.IleFile : options.Island.TwinIleFile)}'s track" : ""));
                 if (buggyIndex > 0 && StartBuggyScript(model, scene, buggyIndex, log) is { } withBuggy) model = withBuggy;
@@ -397,13 +400,13 @@ internal static class RaceTrackScenes
             {
                 if (t.Racer is { } racer)
                 {
-                    SceneActorModel Car(int body, (int X, int Z, int Beta)? at)
+                    SceneActorModel Car(int body, (int X, int Z, int Beta, int Y)? at)
                     {
                         var car = racer.Clone();
                         car.Body = body;
                         car.Flags = OpponentFlags; car.Move = 0; car.Anim = 0; car.Life = new byte[] { 0 }; car.Track = new byte[] { 0 };
                         car.X = IslandFile.CubeSize / 2; car.Z = IslandFile.CubeSize / 2; car.Y = -20000; car.Beta = 0;
-                        if (at is { } g) { car.X = g.X; car.Z = g.Z; car.Beta = g.Beta; car.Y = t.Report.GroundAfter is { } ga ? (int)Math.Round(ga(model.CubeX * 64 + g.X / 512.0, model.CubeY * 64 + g.Z / 512.0)) : 0; }
+                        if (at is { } g) { car.X = g.X; car.Z = g.Z; car.Beta = g.Beta; car.Y = g.Y; }
                         return car;
                     }
                     t.Opponent[scene] = SceneOps.AddActor(model, Car(0, t.RacerAt));
@@ -417,7 +420,7 @@ internal static class RaceTrackScenes
                     var bike = template.Clone();
                     bike.Body = 0; bike.Flags = OpponentFlags; bike.Move = 0; bike.Anim = BikerIdleAnim; bike.Life = new byte[] { 0 }; bike.Track = new byte[] { 0 };
                     bike.X = IslandFile.CubeSize / 2; bike.Z = IslandFile.CubeSize / 2; bike.Y = -20000; bike.Beta = 0;
-                    if (t.BikerAt is { } g) { bike.X = g.X; bike.Z = g.Z; bike.Beta = g.Beta; bike.Y = t.Report.GroundAfter is { } ga ? (int)Math.Round(ga(model.CubeX * 64 + g.X / 512.0, model.CubeY * 64 + g.Z / 512.0)) : 0; }
+                    if (t.BikerAt is { } g) { bike.X = g.X; bike.Z = g.Z; bike.Beta = g.Beta; bike.Y = g.Y; }
                     t.Biker[scene] = SceneOps.AddActor(model, bike);
                     t.BikerAt = null;
                 }

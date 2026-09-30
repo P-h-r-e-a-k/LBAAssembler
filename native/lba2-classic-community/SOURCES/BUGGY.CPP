@@ -9,6 +9,7 @@
 #include "INPUT.H"
 #include "AMBIANCE.H"
 #include "RACEMOD.H"
+#include <math.h> // sqrt: RaceSpeedOnSlope
 
 #define MAX_SAMPLE_PITCH 11000
 #define MIN_SAMPLE_PITCH2 5000
@@ -235,7 +236,77 @@ void LeaveBuggy(U8 newcomportement) {
 // The speed of a race-track mod's car (RACEMOD.CPP), in place of the fixed rates below: the gear's top speed, and the
 // acceleration scaled to the gear the way a gearbox does it (the pull goes with the gear ratio, the top speed against it, so a
 // low gear pulls harder). Above the gear's top speed -- just after a shift down -- the car slows as it does off the throttle.
+// ... on a rollercoaster of a lap (the car file's gravity=, on the raised road): the slope pulls at the car. Down a drop it gathers
+// speed, past its top gear's -- that excess is lost again to drag, over a second or two, so it is carried over the next hill -- and
+// up a climb the engine holds a share of the gear's top speed only. The gears change as on the level: by the speed the car would
+// have there. The road's rail, while it holds the car, slows it.
+static void RaceSpeedOnSlope(S_BUGGY *ptb, S32 deltatimer, S32 flagattack, double gravity, double slope, double bank) {
+    const T_RACE_CAR *car = RaceMod_Car();
+    const double share = RaceMod_ClimbShare(gravity, slope);
+    RaceMod_UpdateGear((S32)(ptb->Speed / share));
+    const double gearTop = car->GearTop[RaceMod_Gear() - 1], engineTop = gearTop * share;
+    const double dt = deltatimer / 1000.0;
+    const double coast = dt * car->Coast;
+    double v = ptb->Speed;
+
+    // (over the top gear's speed the car steers as much quicker as it goes faster: its tightest turn stays what it is; and a banked
+    // bend turns it)
+    const double fastest = car->GearTop[car->Gears - 1];
+    ptb->SpeedRot = (S32)(car->Steer * (v > fastest ? v / fastest : 1) * (1 + RACE_BANK_STEER * bank));
+    const S32 touched = RaceMod_RailTouched();
+
+    if (RaceMod_Held()) {
+        ptb->Speed = 0;
+        return;
+    }
+
+    // the slope's own pull, the way the car faces
+    v -= dt * gravity * RACE_GRAVITY * slope / sqrt(1 + slope * slope);
+
+    if ((Input & I_UP) AND !flagattack) {
+        if (v <= engineTop) {
+            double pull = (double)RACE_REF_TOP / gearTop;
+            if (pull > 4.0)
+                pull = 4.0;
+            if (pull < 0.25)
+                pull = 0.25;
+            v += dt * car->Accel * pull;
+            if (v > engineTop)
+                v = engineTop;
+        }
+    } else if ((Input & I_DOWN) AND !flagattack) {
+        v -= dt * car->Brake;
+        if (v < -car->Reverse)
+            v = -car->Reverse;
+    } else if (v > 0) {
+        v -= coast;
+        if (v < 0)
+            v = 0;
+    } else if (v < 0) {
+        v += coast;
+        if (v > 0)
+            v = 0;
+    }
+
+    if (v > gearTop) {
+        v -= dt * RACE_OVERSPEED_DRAG * (v - gearTop);
+        // (the rail takes what the slopes gave: a car it holds loses its speed over the gear's top)
+        if (touched) {
+            v -= dt * RACE_RAIL_DRAG;
+            if (v < gearTop)
+                v = gearTop;
+        }
+    }
+    ptb->Speed = (S32)v;
+}
+
 static void RaceSpeed(S_BUGGY *ptb, S32 deltatimer, S32 flagattack) {
+    double slope, bank;
+    const double gravity = RaceMod_Gravity(&slope, &bank);
+    if (gravity > 0) {
+        RaceSpeedOnSlope(ptb, deltatimer, flagattack, gravity, slope, bank);
+        return;
+    }
     const T_RACE_CAR *car = RaceMod_Car();
     RaceMod_UpdateGear(ptb->Speed);
     const S32 top = car->GearTop[RaceMod_Gear() - 1];

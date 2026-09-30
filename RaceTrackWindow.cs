@@ -9,7 +9,8 @@ namespace LBAAssembler;
 // Tools > LBA2: race track: builds a proposed track (levelled, banked road with the retail track's own textures, pit lane, start gantry,
 // and a bridge or a jump where the lap crosses itself) into the LBA2 game folder, or puts the folder back as it was. One island's track at
 // a time: the Desert island's, Citadel Island's town circuit, Mosquibees Island's mountain lap (whose plan draws its own bridge and
-// jump, so it takes no crossing style), or Celebration Island's lap round the statue (a raised road on piers, all of it its plan's).
+// jump, so it takes no crossing style), Celebration Island's lap round the statue (a raised road on piers, all of it its plan's), or the
+// Elevator Platform's rollercoaster (all of it raised road, banked, with the slopes pulling at the car).
 internal sealed class RaceTrackWindow : Window
 {
     private readonly string gameRoot;
@@ -139,6 +140,8 @@ internal sealed class RaceTrackWindow : Window
                    "an opponent (the retail track's racer), and the gear, speed, lap times and position on screen. " +
                    "Celebration Island's lap winds up round the statue on a raised road and comes back down a bridge: only that race-track mode can drive it " +
                    "(it is the statue's island there, whatever the story has reached, and the camera follows the car). " +
+                   "The Elevator Platform's is a rollercoaster: a helix up round the elevator's tower, a drop, hills and banked bends, all of it in the air, " +
+                   "where the slopes slow the car and speed it up and the camera rides the road behind it -- also that mode's alone. " +
                    "Use Tools > Test edits first to try it on a scratch copy of the game folder.",
         };
         intro.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");

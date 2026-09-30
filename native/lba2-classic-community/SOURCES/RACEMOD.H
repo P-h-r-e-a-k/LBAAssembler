@@ -56,6 +56,21 @@ void RaceMod_FloorFor(S32 y);
 void RaceMod_FloorForNothing(void);
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
 
+// gravity=<k>, a rollercoaster of a lap: k where the hero is on the raised road (0 anywhere else and without the key), and the road's
+// slope the way he faces and its banking. The slope pulls at his car k x RACE_GRAVITY x its sine; up a climb the engine holds RaceMod_ClimbShare of the
+// gear's top speed; speed over the gear's top is lost at RACE_OVERSPEED_DRAG of the excess a second, and RACE_RAIL_DRAG a second
+// more of that excess while the road's rail holds the car (RaceMod_RailTouched: since it was last asked). Over its top gear's speed the car
+// steers as much quicker as it goes faster, and a banked bend turns it (RACE_BANK_STEER): what it gathers down a drop it can take
+// through the bend at the foot of it.
+#define RACE_GRAVITY 5000.0          // world units a second squared: a cell is about a metre
+#define RACE_CLIMB 0.6               // the share of the top speed lost up a climb, per unit of slope (and of k)
+#define RACE_OVERSPEED_DRAG 0.5
+#define RACE_RAIL_DRAG 2000.0
+#define RACE_BANK_STEER 2.2          // a banked bend turns the car: its steering is quicker by this much per unit of banking
+double RaceMod_Gravity(double *slope, double *bank);
+double RaceMod_ClimbShare(double gravity, double slope);
+S32 RaceMod_RailTouched(void);
+
 // statue=1: Celebration Island drawn from its file with the statue (CELEBRA2), whatever the game's own variable says.
 S32 RaceMod_Statue(void);
 

@@ -55,6 +55,18 @@ internal sealed record RaceTrackIsland(
         Statue = true, Title = "Celebration Island: round the statue",
     };
 
+    // The Elevator Platform (ASCENCE: the foot of the elevator from Otringal, a few decks on legs over the sea with the elevator's tower
+    // in the middle and an airship moored beside it -- 28 cells by 24, all of it decor, the ground under it nothing but sea). Too small
+    // for a road on it, so the lap is built upwards, a rollercoaster: all of it a raised road (RaceTrackPlan.Raised, the whole lap),
+    // banked in its bends (Bank), from a station in front of the elevator's door up a helix round the tower, down a drop, over hills and
+    // the airship and back. Only the engine's race-track mode can drive it, and there the grade changes the car's speed (Gravity).
+    // One outside scene, 120, and one cube.
+    public static readonly RaceTrackIsland Elevator = new("Elevator Platform", "ASCENCE.ILE", "ASCENCE.OBL", 10, 120, 120, 37,
+        "RaceTrackPlan.Elevator.json", null)
+    {
+        Title = "The Elevator Platform: the rollercoaster",
+    };
+
     // The island's other file for other weather (EXTFUNC.CPP loads it instead once the storm is over), built with the same track -- or,
     // with TwinPlanResource, with a track of its own (the route built into the program for it).
     public string? TwinIleFile { get; init; }
@@ -70,7 +82,7 @@ internal sealed record RaceTrackIsland(
     public bool Statue { get; init; }
     public string Shown => Title ?? Name;
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, Elevator };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

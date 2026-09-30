@@ -2,7 +2,9 @@
 # headless run of the engine's race-track mode, holds some keys, and checks from the engine's own trace of his position that he stays on
 # the road -- at its height, inside its rails -- whatever he steers.
 #   raisedtest.py <game folder> <car file> <scratch folder> [scenario ...]
-# The car file is the race-track mode's (ScriptRoundTrip racecarfile); the raised road is read from the file its raised= line names.
+# The car file is the race-track mode's (ScriptRoundTrip racecarfile); the raised road is read from the file its raised= line names (its
+# points "x z y half [bank]", the banking in ten-thousandths). RAISED_SCENE: the scene to test in (95, Celebration Island's; 120 the
+# Elevator Platform's). A banked road gets two more scenarios, on its most banked point.
 import math, os, re, subprocess, sys
 
 ENGINE = 'E:/dump/LBAAssembler/native/lba2-classic-community/out/build/windows_ucrt64_static/SOURCES/lba2cc.exe'
@@ -11,7 +13,7 @@ only = sys.argv[4:]
 os.makedirs(scratch, exist_ok=True)
 
 info = dict(line.strip().split('=', 1) for line in open(car) if '=' in line and not line.startswith('#'))
-road = [tuple(int(v) for v in line.split()) for line in open(info['raised']) if line.strip()]
+road = [tuple(int(v) for v in line.split()) + (0,) * (5 - len(line.split())) for line in open(info['raised']) if line.strip()]
 cube = [int(v) for v in info['startline'].split()[:2]]
 scene = int(os.environ.get('RAISED_SCENE', '95'))
 INSET = 640
@@ -20,24 +22,25 @@ def floor_at(wx, wz, ref):
     """the road's height at a world position for something at height ref, how far to the side of its middle, the point before"""
     best = None
     for i in range(len(road) - 1):
-        ax, az, ay, ah = road[i]; bx, bz, by, bh = road[i + 1]
+        ax, az, ay, ah, ab = road[i]; bx, bz, by, bh, bb = road[i + 1]
         sx, sz = bx - ax, bz - az; l2 = sx * sx + sz * sz
         if l2 == 0: continue
         t = max(0.0, min(1.0, ((wx - ax) * sx + (wz - az) * sz) / l2))
         px, pz = ax + sx * t, az + sz * t
         d = math.hypot(wx - px, wz - pz)
         if d > ah + 96: continue
-        y = ay + (by - ay) * t
-        if y > ref + 700: continue
         lat = (sx * (wz - pz) - sz * (wx - px)) / math.sqrt(l2)
+        y = ay + (by - ay) * t + lat * (ab + (bb - ab) * t) / 10000
+        if y > ref + 700: continue
         if best is None or y > best[0] + 1200 or (y > best[0] - 1200 and d < best[3]): best = (y, lat, i, d, ah)
     return best
 
 def point(index, side=0.0, up=0):
     """a place on the road: point `index`, `side` units to the left of its middle; and the way the lap runs there (the engine's turn)"""
-    ax, az, ay, ah = road[index]; bx, bz, by, bh = road[index + 1]
+    ax, az, ay, ah, ab = road[index]; bx, bz, by, bh, bb = road[index + 1]
     sx, sz = bx - ax, bz - az; l = math.hypot(sx, sz)
     x, z = ax - sz / l * side, az + sx / l * side
+    ay += side * ab / 10000
     beta = int(round(math.atan2(sx, sz) * 4096 / (2 * math.pi))) % 4096
     return int(x - cube[0] * 32768), int(ay + up), int(z - cube[1] * 32768), beta
 
@@ -103,5 +106,11 @@ scenario('foot-across', spiral, 'up', driving=False, up=300, turn=1024)
 scenario('foot-across-right', upper, 'up', driving=False, up=300, turn=3072)
 # (walking down the bridge he is a step behind the floor: each frame's step forward takes it a little further down than he comes)
 scenario('foot-bridge', bridge, 'up', driving=False, up=300, ticks=150, slack=150)
+# a banked road: the car steered into and away from its most banked bend, and Twinsen walking across it
+banked = max(range(n - 1), key=lambda i: abs(road[i][4]))
+if road[banked][4]:
+    scenario('car-banked-left', banked, 'up+left')
+    scenario('car-banked-right', banked, 'up+right')
+    scenario('foot-banked-across', banked, 'up', driving=False, up=300, turn=1024)
 print()
 print(sum(r.startswith('ok') for r in results), 'of', len(results), 'ok')

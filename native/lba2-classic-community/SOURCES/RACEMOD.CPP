@@ -193,7 +193,9 @@ static int ReadLine(const char *v, T_RACE_LINE *l) {
 // its edges (RaceMod_Rail), a rail that needs no collision boxes. The build's decor pieces are only what it looks like.
 typedef struct {
     S32 X, Z, Y, Half;
+    S32 Bank;                              // its banking: the height gained across it, per RAISED_BANK_UNITS to the left of the way it runs
 } T_RACE_RAISED;
+#define RAISED_BANK_UNITS 10000.0
 static T_RACE_RAISED *s_raised = NULL;
 static int s_nbRaised = 0;
 #define RAISED_BUCKET 2048                 // the road's points are kept in squares of four cells
@@ -207,19 +209,34 @@ static int *s_rbStart = NULL, *s_rbItem = NULL;
 static S32 s_floorRef = RAISED_NOREF;      // the height of what the ground is being asked for (nothing: the ground alone)
 static int s_onlyNear = -1;                // RaisedAt looks only at the road's points within RAISED_SIGHT of this one (-1: all of it)
 #define RAISED_SIGHT 70                    // 35 cells either way: the stretch of road round the hero that can hide him from the camera
+#define RAISED_OWN 24                      // twelve cells either way: the stretch of road a place on it belongs to (RaisedBetween)
+#define RAISED_STACK 12                    // six cells either way: a level over the road all that way runs with it (a helix)
+#define RAIL_CAMERA_CLEAR 500               // the rail camera's line to the car passes this far over the road between them
+#define RAIL_CAMERA_AIM 300                 // ... and it looks at a point this far over the road ahead of the car
+#define RAIL_CAMERA_LOOK 0.6                // ... that far of the way from the car to the road railcam's lead ahead
+#define RAIL_CAMERA_SIDE 50                 // the rail camera's eye comes nearer round a bend until it looks this near the car's way (degrees)
+#define RAIL_CAMERA_NEAREST 2560            // ... but no nearer than this
+#define RAISED_UNDER 650                   // how far under such a level's surface the following camera's eye stays (its slab is 200)
 static int s_statue = 0;
+static int s_raisedLoop = 0;               // the road is a whole lap: its last point is its first
+static double s_gravity = 0;               // gravity=<k>: a car on the raised road is pulled down its slopes (RaceMod_Gravity), k times as hard as RACE_GRAVITY
+// railcam=<back> <up> <lead>: the camera that follows the car rides the raised road behind it (RailCamera)
+static double s_railBack = 0, s_railUp = 0, s_railLead = 0;
+static int s_railTouch = 0;                // the rail held the hero back since RaceMod_RailTouched was last asked
 
 extern S32 (*AltitudeHook)(S32 x, S32 z, S32 y);         // 3DEXT/MAPTOOLS.CPP
 extern S32 (*TerrainColHook)(S32 x, S32 z, S32 col);
 extern S32 (*SightFloorHook)(S32 x, S32 z, S32 y);
 extern S32 FollowCamera;                                 // FOLLOWCAM.CPP
 extern S32 (*FollowCamArmHook)(S32 base);
+extern S32 (*FollowCamEyeHook)(S32 *eye, S32 *target);
 extern S32 CalculAltitudeTerrain(S32 x, S32 z, S32 cj);
 
 // The road at an island position (world units) for something at height `ref`, looked for `pad` past its edges: its height there, the
 // segment (from point *seg to the next), how far along it (*t, 0..1) and how far to the side of its middle (*lat, to the left of the way
 // the lap runs positive). Of the parts of the road in reach -- each no more than RAISED_STEP above `ref` -- the highest level, and of
-// that level's segments the nearest. 0 when the road isn't there.
+// that level's segments the nearest. 0 when the road isn't there. A banked road's height is its surface's at that place, not its
+// middle's.
 static int RaisedAt(double wx, double wz, S32 ref, double pad, S32 *y, int *seg, double *lat, double *t) {
     if (!s_nbRaised) return 0;
     const int bx = (int)floor(wx / RAISED_BUCKET) - s_rbX0, bz = (int)floor(wz / RAISED_BUCKET) - s_rbZ0;
@@ -236,7 +253,11 @@ static int RaisedAt(double wx, double wz, S32 ref, double pad, S32 *y, int *seg,
                 for (int k = s_rbStart[b]; k < s_rbStart[b + 1]; k++) {
                     const int i = s_rbItem[k];
                     if (i >= s_nbRaised - 1) continue;
-                    if (s_onlyNear >= 0 && abs(i - s_onlyNear) > RAISED_SIGHT) continue;
+                    if (s_onlyNear >= 0) {
+                        int apart = abs(i - s_onlyNear);
+                        if (s_raisedLoop && apart > (s_nbRaised - 1) / 2) apart = s_nbRaised - 1 - apart;
+                        if (apart > RAISED_SIGHT) continue;
+                    }
                     const T_RACE_RAISED *a = &s_raised[i], *c = a + 1;
                     const double sx = c->X - a->X, sz = c->Z - a->Z, len2 = sx * sx + sz * sz;
                     if (len2 <= 0) continue;
@@ -246,7 +267,8 @@ static int RaisedAt(double wx, double wz, S32 ref, double pad, S32 *y, int *seg,
                     const double d2 = (wx - px) * (wx - px) + (wz - pz) * (wz - pz);
                     const double half = a->Half + (c->Half - a->Half) * tt + pad;
                     if (d2 > half * half) continue;
-                    const double yy = a->Y + (c->Y - a->Y) * tt;
+                    const double side = (sx * (wz - pz) - sz * (wx - px)) / sqrt(len2);
+                    const double yy = a->Y + (c->Y - a->Y) * tt + side * (a->Bank + (c->Bank - a->Bank) * tt) / RAISED_BANK_UNITS;
                     if (yy > ref + RAISED_STEP) continue;
                     if (!pass) { if (yy > top) top = yy; continue; }
                     if (yy < top - RAISED_LEVEL || d2 >= bestD) continue;
@@ -255,7 +277,7 @@ static int RaisedAt(double wx, double wz, S32 ref, double pad, S32 *y, int *seg,
                     *y = (S32)floor(yy + 0.5);
                     *seg = i;
                     *t = tt;
-                    *lat = (sx * (wz - pz) - sz * (wx - px)) / sqrt(len2);
+                    *lat = side;
                 }
             }
         if (pass) return found;
@@ -298,6 +320,172 @@ static S32 RaisedSight(S32 x, S32 z, S32 y) {
     return found && f > y ? f : y;
 }
 
+// The road's slope at a segment for something facing `beta`: the height it gains per unit that way (over a cell or two of road).
+static double RaisedSlope(int seg, S32 beta) {
+    int a = seg - 2, b = seg + 3;
+    if (s_raisedLoop) {
+        const int n = s_nbRaised - 1;
+        a = ((a % n) + n) % n; b = b % n;
+    } else {
+        if (a < 0) a = 0;
+        if (b > s_nbRaised - 1) b = s_nbRaised - 1;
+    }
+    const double sx = s_raised[b].X - s_raised[a].X, sz = s_raised[b].Z - s_raised[a].Z, len = sqrt(sx * sx + sz * sz);
+    if (len < 1) return 0;
+    const double grade = (s_raised[b].Y - s_raised[a].Y) / len;
+    const double angle = (beta & 4095) * 2 * 3.14159265358979 / 4096.0;
+    return grade * (sin(angle) * sx + cos(angle) * sz) / len;
+}
+
+// gravity=<k>: a rollercoaster of a lap. A car on the raised road is pulled down its slopes and held back up them (BUGGY.CPP
+// RaceSpeedOnSlope): it gathers speed down a drop, past what its gears give, and carries it over the next hill. The key's value (k
+// times RACE_GRAVITY) where the hero is on the raised road, with the road's slope the way he faces (the height gained per unit
+// forwards) and how much it is banked there (the height across it per unit, either way); 0 anywhere else and without the key.
+double RaceMod_Gravity(double *slope, double *bank) {
+    *slope = 0;
+    *bank = 0;
+    if (s_gravity <= 0 || !s_nbRaised || CubeMode != CUBE_EXTERIEUR) return 0;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    S32 f;
+    int seg;
+    double lat, t;
+    if (!RaisedAt(hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Z + CurrentCubeY * 32768.0, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t)
+            || abs(f - hero->Obj.Y) > 300) return 0;
+    *slope = RaisedSlope(seg, hero->Obj.Beta);
+    *bank = fabs(s_raised[seg].Bank + (s_raised[seg + 1].Bank - s_raised[seg].Bank) * t) / RAISED_BANK_UNITS;
+    return s_gravity;
+}
+
+// The share of a gear's top speed the engine can hold up a slope (RACE_CLIMB of it lost per unit of slope, a half at least).
+double RaceMod_ClimbShare(double gravity, double slope) {
+    if (slope <= 0 || gravity <= 0) return 1;
+    const double share = 1 - gravity * RACE_CLIMB * slope;
+    return share < 0.5 ? 0.5 : share;
+}
+
+S32 RaceMod_RailTouched(void) {
+    const int touched = s_railTouch;
+    s_railTouch = 0;
+    return touched;
+}
+
+// The lowest part of the road over a place between two heights: 1 and its height there, or 0. Not the stretch of road round point
+// `own` (RAISED_OWN points either way): on a steep slope the road a few cells further up it is "over" a place on it too.
+static int RaisedBetween(double wx, double wz, double lo, double hi, int own, double *at) {
+    if (!s_nbRaised) return 0;
+    const int bx = (int)floor(wx / RAISED_BUCKET) - s_rbX0, bz = (int)floor(wz / RAISED_BUCKET) - s_rbZ0;
+    int found = 0;
+    for (int dz = -1; dz <= 1; dz++)
+        for (int dx = -1; dx <= 1; dx++) {
+            const int x = bx + dx, z = bz + dz;
+            if (x < 0 || z < 0 || x >= s_rbW || z >= s_rbH) continue;
+            const int b = z * s_rbW + x;
+            for (int k = s_rbStart[b]; k < s_rbStart[b + 1]; k++) {
+                const int i = s_rbItem[k];
+                if (i >= s_nbRaised - 1) continue;
+                if (own >= 0) {
+                    int apart = abs(i - own);
+                    if (s_raisedLoop && apart > (s_nbRaised - 1) / 2) apart = s_nbRaised - 1 - apart;
+                    if (apart <= RAISED_OWN) continue;
+                }
+                const T_RACE_RAISED *a = &s_raised[i], *c = a + 1;
+                const double sx = c->X - a->X, sz = c->Z - a->Z, len2 = sx * sx + sz * sz;
+                if (len2 <= 0) continue;
+                double tt = ((wx - a->X) * sx + (wz - a->Z) * sz) / len2;
+                if (tt < 0) tt = 0; else if (tt > 1) tt = 1;
+                const double px = a->X + sx * tt, pz = a->Z + sz * tt;
+                const double half = a->Half + (c->Half - a->Half) * tt;
+                if ((wx - px) * (wx - px) + (wz - pz) * (wz - pz) > half * half) continue;
+                const double yy = a->Y + (c->Y - a->Y) * tt;
+                if (yy <= lo || yy >= hi || (found && yy >= *at)) continue;
+                found = 1;
+                *at = yy;
+            }
+        }
+    return found;
+}
+
+// The road's place `distance` along it from a point of it (segment `seg`, `t` along it), forwards or (negative) backwards: its middle
+// there, at the road's own height. Round a loop's seam; stopped at an open road's ends.
+static int RaisedAlong(int seg, double t, double distance, double *x, double *y, double *z) {
+    const int n = s_nbRaised - 1;                       // its segments
+    int i = seg;
+    double at = t;
+    for (int guard = 0; guard < 2 * n + 8; guard++) {
+        const T_RACE_RAISED *a = &s_raised[i], *c = a + 1;
+        const double len = sqrt((double)(c->X - a->X) * (c->X - a->X) + (double)(c->Z - a->Z) * (c->Z - a->Z));
+        const int forward = distance >= 0;
+        const double room = forward ? (1 - at) * len : at * len;      // what is left of this segment that way
+        if (len > 1e-6 && fabs(distance) <= room) { at += distance / len; break; }
+        distance += forward ? -room : room;
+        if (forward) {
+            if (i + 1 >= n) { if (!s_raisedLoop) { at = 1; break; } i = 0; } else i++;
+            at = 0;
+        } else {
+            if (i == 0) { if (!s_raisedLoop) { at = 0; break; } i = n - 1; } else i--;
+            at = 1;
+        }
+    }
+    const T_RACE_RAISED *a = &s_raised[i], *c = a + 1;
+    *x = a->X + (c->X - a->X) * at;
+    *y = a->Y + (c->Y - a->Y) * at;
+    *z = a->Z + (c->Z - a->Z) * at;
+    return i;
+}
+
+// railcam=: the camera that follows the car on a rollercoaster of a road. An arm behind the car does badly there -- the road's other
+// levels are over it, a drop's crest between it and the car, a bend swings it out over nothing -- so the eye rides the road itself:
+// over its middle s_railBack behind the car (behind the way the car faces), s_railUp over it, looking at the road s_railLead ahead of
+// the car. Kept under a level of the road that passes over it, and high enough to see the car over a crest between them.
+static S32 RailCamera(S32 *eye, S32 *target) {
+    if (s_railBack <= 0 || !s_nbRaised || CubeMode != CUBE_EXTERIEUR || Comportement != C_BUGGY) return FALSE;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    S32 f;
+    int seg;
+    double lat, t;
+    if (!RaisedAt(hero->Obj.X + cx, hero->Obj.Z + cz, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t) || abs(f - hero->Obj.Y) > 300) return FALSE;
+    // which way along the road the car faces
+    const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
+    const double angle = (hero->Obj.Beta & 4095) * 2 * 3.14159265358979 / 4096.0;
+    const double way = sin(angle) * (c->X - a->X) + cos(angle) * (c->Z - a->Z) >= 0 ? 1 : -1;
+    double ex, ey, ez, tx, ty, tz;
+    const double hx = hero->Obj.X + cx, hy = hero->Obj.Y, hz = hero->Obj.Z + cz;
+    // (round a tight bend the road s_railBack behind the car is off to its side: the eye comes nearer, until it looks along the way
+    // the car faces within RAIL_CAMERA_SIDE)
+    const double fx = sin(angle), fz = cos(angle);
+    double back = s_railBack;
+    int behind = RaisedAlong(seg, t, -way * back, &ex, &ey, &ez);
+    while (back > RAIL_CAMERA_NEAREST) {
+        const double dx = hx - ex, dz = hz - ez, d = sqrt(dx * dx + dz * dz);
+        if (d < 1 || (dx * fx + dz * fz) / d >= cos(RAIL_CAMERA_SIDE * 3.14159265358979 / 180)) break;
+        back -= 256;
+        behind = RaisedAlong(seg, t, -way * back, &ex, &ey, &ez);
+    }
+    RaisedAlong(seg, t, way * s_railLead, &tx, &ty, &tz);
+    // (it looks between the car and the road ahead of it: the car stays in the middle of the view, the road ahead above it)
+    tx = hx + (tx - hx) * RAIL_CAMERA_LOOK; ty = hy + (ty - hy) * RAIL_CAMERA_LOOK; tz = hz + (tz - hz) * RAIL_CAMERA_LOOK;
+    // (lower too when nearer, so the view is no steeper)
+    const double up = s_railUp * sqrt(back / s_railBack);
+    ey += up;
+    // over a crest between the eye and the car: the line to the car clears the road by RAIL_CAMERA_CLEAR all the way
+    double lift = 0;
+    for (int k = 1; k < 8; k++) {
+        double mx, my, mz;
+        RaisedAlong(seg, t, -way * back * k / 8.0, &mx, &my, &mz);
+        const double line = hy + (ey - hy) * k / 8.0;
+        const double need = (my + RAIL_CAMERA_CLEAR - line) * 8.0 / k;      // what the eye has to rise for the line to clear this point
+        if (need > lift) lift = need;
+    }
+    ey += lift;
+    // under a level of the road over the eye
+    double over;
+    if (RaisedBetween(ex, ez, ey - up - lift + 800.0, ey + RAISED_UNDER, behind, &over) && ey > over - RAISED_UNDER) ey = over - RAISED_UNDER;
+    eye[0] = (S32)(ex - cx); eye[1] = (S32)ey; eye[2] = (S32)(ez - cz);
+    target[0] = (S32)(tx - cx); target[1] = (S32)(ty + RAIL_CAMERA_AIM); target[2] = (S32)(tz - cz);
+    return TRUE;
+}
+
 // For the camera that follows the hero: how long its arm may be while he is on the raised road. Behind a car coming down a steep
 // stretch the road rises: an eye out at the arm's usual length would have to stand as high above the car as the road climbs in that
 // length to see it over the road -- 10,000 and more behind a car on Celebration Island's bridge -- which is above the lap's other
@@ -313,15 +501,28 @@ static S32 RaisedArm(S32 base) {
     if (!RaisedAt(hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Z + CurrentCubeY * 32768.0, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t)
             || abs(f - hero->Obj.Y) > 300) return base;
     // the road's rise over a cell or two, the way the lap runs, and whether the car faces that way
-    const int a = seg > 2 ? seg - 2 : 0, b = seg + 3 < s_nbRaised ? seg + 3 : s_nbRaised - 1;
-    const double sx = s_raised[b].X - s_raised[a].X, sz = s_raised[b].Z - s_raised[a].Z, len = sqrt(sx * sx + sz * sz);
-    if (len < 1) return base;
-    const double grade = (s_raised[b].Y - s_raised[a].Y) / len;
-    const double beta = (hero->Obj.Beta & 4095) * 2 * 3.14159265358979 / 4096.0;
-    const double facing = (sin(beta) * sx + cos(beta) * sz) / len;
-    const double behind = -grade * facing;                // how steeply the road rises behind the car
-    if (behind < 0.3) return base;
-    const double arm = 2800 / behind + 1200;
+    const double behind = -RaisedSlope(seg, hero->Obj.Beta);   // how steeply the road rises behind the car
+    double arm = behind < 0.3 ? base : 2800 / behind + 1200;
+    // Under another level of the road that runs with this one -- a helix, its levels one over the other -- the eye has to stay under
+    // that level: over the car, and over the road a few cells before or after it. (A level that only crosses overhead hides the car
+    // for a moment and is let pass.)
+    double ceiling = 1e18;
+    int over[3] = {0, 0, 0};
+    for (int k = 0; k < 3; k++) {
+        int i = seg + (k - 1) * RAISED_STACK;
+        if (s_raisedLoop) { const int n = s_nbRaised - 1; i = ((i % n) + n) % n; }
+        else if (i < 0 || i > s_nbRaised - 1) continue;
+        double level;
+        if (!RaisedBetween(s_raised[i].X, s_raised[i].Z, s_raised[i].Y + 800.0, s_raised[i].Y + 9000.0, i, &level)) continue;
+        over[k] = 1;
+        if (level - s_raised[i].Y < ceiling) ceiling = level - s_raised[i].Y;
+    }
+    if (over[1] && (over[0] || over[2])) {
+        double up = sin((AlphaCam & 4095) * 2 * 3.14159265358979 / 4096.0);
+        if (up < 0.2) up = 0.2;
+        const double under = (ceiling - RAISED_UNDER) / up;     // the arm whose eye is RAISED_UNDER below the level overhead
+        if (under < arm) arm = under;
+    }
     return arm < 3000 ? 3000 : arm > base ? base : (S32)arm;
 }
 
@@ -340,14 +541,15 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     if (!RaisedAt(ox + cx, oz + cz, oy + 64, RAISED_PAD, &f, &seg, &lat, &t)) return;
     if (oy < f - 200 || oy > f + 1500) return;
     if (f - CalculAltitudeTerrain(ox, oz, 0) < 300) return;
-    if (!RaisedAt(*nx + cx, *nz + cz, oy + 64, 4 * 512, &f, &seg, &lat, &t)) { *nx = ox; *nz = oz; return; }
+    if (!RaisedAt(*nx + cx, *nz + cz, oy + 64, 4 * 512, &f, &seg, &lat, &t)) { *nx = ox; *nz = oz; s_railTouch = 1; return; }
     // (past the road's own end: onto the ground it comes down to)
-    if ((seg == 0 && t <= 0) || (seg == s_nbRaised - 2 && t >= 1)) return;
+    if (!s_raisedLoop && ((seg == 0 && t <= 0) || (seg == s_nbRaised - 2 && t >= 1))) return;
     const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
     const double limit = a->Half + (c->Half - a->Half) * t - RAISED_INSET;
     if (fabs(lat) <= limit) return;
     const double sx = c->X - a->X, sz = c->Z - a->Z, len = sqrt(sx * sx + sz * sz);
     const double px = a->X + sx * t, pz = a->Z + sz * t, side = lat > 0 ? limit : -limit;
+    s_railTouch = 1;
     *nx = (S32)floor(px - sz / len * side - cx + 0.5);
     *nz = (S32)floor(pz + sx / len * side - cz + 0.5);
 }
@@ -359,10 +561,10 @@ static void LoadRaised(const char *path) {
     T_RACE_RAISED *r = (T_RACE_RAISED *)malloc(capacity * sizeof(T_RACE_RAISED));
     char line[128];
     while (fgets(line, sizeof(line), f)) {
-        int a, b, c, d;
-        if (sscanf(line, "%d %d %d %d", &a, &b, &c, &d) != 4) continue;
+        int a, b, c, d, e = 0;
+        if (sscanf(line, "%d %d %d %d %d", &a, &b, &c, &d, &e) < 4) continue;
         if (count == capacity) { capacity *= 2; r = (T_RACE_RAISED *)realloc(r, capacity * sizeof(T_RACE_RAISED)); }
-        r[count].X = a; r[count].Z = b; r[count].Y = c; r[count].Half = d;
+        r[count].X = a; r[count].Z = b; r[count].Y = c; r[count].Half = d; r[count].Bank = e;
         count++;
     }
     fclose(f);
@@ -390,17 +592,19 @@ static void LoadRaised(const char *path) {
     free(fill);
     s_raised = r;
     s_nbRaised = count;
+    s_raisedLoop = count > 3 && r[0].X == r[count - 1].X && r[0].Z == r[count - 1].Z && r[0].Y == r[count - 1].Y;
     AltitudeHook = RaisedAltitude;
     TerrainColHook = RaisedCol;
     SightFloorHook = RaisedSight;
     FollowCamArmHook = RaisedArm;
+    FollowCamEyeHook = RailCamera;
     // (the camera that follows the car is turned on with the first frame: RaceMod_Frame)
     int lowest = r[0].Y, highest = r[0].Y;
     for (int i = 1; i < count; i++) {
         if (r[i].Y < lowest) lowest = r[i].Y;
         if (r[i].Y > highest) highest = r[i].Y;
     }
-    Log_Info("[racemod] raised road: %d points, heights %d to %d", count, lowest, highest);
+    Log_Info("[racemod] raised road: %d points, heights %d to %d%s", count, lowest, highest, s_raisedLoop ? ", a loop" : "");
 }
 
 S32 RaceMod_Statue(void) { return RaceMod_Active() && s_statue; }
@@ -465,23 +669,68 @@ static void PlanSpeeds(T_RACE_OPPONENT *o) {
     const double turn = s_car.Steer * 2 * 3.14159265358979 / 4096.0 * o->Grip / 100.0;
     const double brake = s_car.Brake, accel = s_car.Accel * o->Top / 100.0;
     double *v = (double *)malloc(count * sizeof(double));
-    for (int i = 0; i < count; i++) {
-        double limit = turn * o->R[i];
-        v[i] = limit < top ? limit : top;
-        if (v[i] < 400) v[i] = 400;
-    }
-    for (int round = 0; round < 2; round++) {
-        for (int i = count - 1; i >= 0; i--) {
-            const int next = (i + 1) % count;
-            const double ds = o->Cum[i + 1] - o->Cum[i];
-            const double reach = sqrt(v[next] * v[next] + 2 * brake * ds);
-            if (v[i] > reach) v[i] = reach;
-        }
+    if (s_gravity > 0 && s_nbRaised) {
+        // A rollercoaster of a lap (gravity=): the line's slopes pull at the car as they do at the player's (BUGGY.CPP
+        // RaceSpeedOnSlope) -- the engine only up to the share of its top speed it holds on a climb, the slope's own pull, and the drag
+        // that takes a car's speed over its top gear's back off it. Braking for a bend, the slope counts too.
+        double *pullBySlope = (double *)malloc(count * sizeof(double)), *share = (double *)malloc(count * sizeof(double));
         for (int i = 0; i < count; i++) {
             const int next = (i + 1) % count;
             const double ds = o->Cum[i + 1] - o->Cum[i];
-            const double reach = sqrt(v[i] * v[i] + 2 * accel * Pull(v[i]) * ds);
-            if (v[next] > reach) v[next] = reach;
+            const double slope = ds > 1 ? (o->Y[next] - o->Y[i]) / ds : 0;
+            pullBySlope[i] = -s_gravity * RACE_GRAVITY * slope / sqrt(1 + slope * slope);
+            share[i] = RaceMod_ClimbShare(s_gravity, slope);
+        }
+        // (over its top gear's speed the car steers as much quicker as it goes faster -- BUGGY.CPP -- so a bend it can take at that
+        // speed it can take at any; and a banked bend turns it: the line's radii come with the banking counted in)
+        for (int i = 0; i < count; i++) {
+            const double limit = turn * o->R[i];
+            v[i] = limit < top ? limit : 4 * top;
+            if (v[i] < 400) v[i] = 400;
+        }
+        for (int round = 0; round < 3; round++) {
+            for (int i = 0; i < count; i++) {
+                const int next = (i + 1) % count;
+                const double ds = o->Cum[i + 1] - o->Cum[i];
+                double a = pullBySlope[i];
+                if (v[i] < top * share[i]) a += accel * Pull(v[i] / share[i]);
+                if (v[i] > top) a -= RACE_OVERSPEED_DRAG * (v[i] - top);
+                double reach2 = v[i] * v[i] + 2 * a * ds;
+                // (the engine holds the car at its share of the top speed up a climb: the slope does not slow it further)
+                if (a < 0 && v[i] >= top * share[i] && reach2 < top * share[i] * top * share[i]) reach2 = top * share[i] * top * share[i];
+                const double reach = reach2 > 400.0 * 400.0 ? sqrt(reach2) : 400;
+                if (v[next] > reach) v[next] = reach;
+            }
+            for (int i = count - 1; i >= 0; i--) {
+                const int next = (i + 1) % count;
+                const double ds = o->Cum[i + 1] - o->Cum[i];
+                double slowing = brake - pullBySlope[i];
+                if (slowing < brake / 4) slowing = brake / 4;
+                const double reach = sqrt(v[next] * v[next] + 2 * slowing * ds);
+                if (v[i] > reach) v[i] = reach;
+            }
+        }
+        free(pullBySlope);
+        free(share);
+    } else {
+        for (int i = 0; i < count; i++) {
+            double limit = turn * o->R[i];
+            v[i] = limit < top ? limit : top;
+            if (v[i] < 400) v[i] = 400;
+        }
+        for (int round = 0; round < 2; round++) {
+            for (int i = count - 1; i >= 0; i--) {
+                const int next = (i + 1) % count;
+                const double ds = o->Cum[i + 1] - o->Cum[i];
+                const double reach = sqrt(v[next] * v[next] + 2 * brake * ds);
+                if (v[i] > reach) v[i] = reach;
+            }
+            for (int i = 0; i < count; i++) {
+                const int next = (i + 1) % count;
+                const double ds = o->Cum[i + 1] - o->Cum[i];
+                const double reach = sqrt(v[i] * v[i] + 2 * accel * Pull(v[i]) * ds);
+                if (v[next] > reach) v[next] = reach;
+            }
         }
     }
     double lap = 0;
@@ -504,12 +753,16 @@ static double RaceRandom(void) {
 
 // An opponent on a spot (a grid spot, or a pit spot while the player qualifies): along its line at the line's point nearest the spot
 // (behind the start line: its lap 1 is ahead), with the way across to the spot kept (MergeX..) and faded out as it drives off.
+static double LineDistance(const T_RACE_OPPONENT *o, int i, double wx, double wy, double wz);
+
 static void OnSpot(T_RACE_OPPONENT *o, const T_RACE_SPOT *spot) {
     const double wx = spot->CubeX * 32768.0 + spot->X, wz = spot->CubeZ * 32768.0 + spot->Z;
     int best = 0;
     double bd = 1e30;
+    // (the line's nearest point at the spot's height: a road that winds up over its own start has points of its other levels over
+    // the grid, and a car put on one of those started the race a third of a lap ahead)
     for (int i = 0; i < o->Count; i++) {
-        const double d = (o->X[i] - wx) * (o->X[i] - wx) + (o->Z[i] - wz) * (o->Z[i] - wz);
+        const double d = LineDistance(o, i, wx, spot->Y, wz);
         if (d < bd) { bd = d; best = i; }
     }
     o->S = o->Cum[best];
@@ -568,6 +821,10 @@ static void Load(const char *path) {
         else if (!strcmp(key, "weather")) s_fineWeather = !strcmp(v, "fine");
         else if (!strcmp(key, "raised")) LoadRaised(v);
         else if (!strcmp(key, "statue")) s_statue = atoi(v);
+        else if (!strcmp(key, "gravity")) s_gravity = atof(v);
+        else if (!strcmp(key, "railcam")) {
+            if (sscanf(v, "%lf %lf %lf", &s_railBack, &s_railUp, &s_railLead) != 3) s_railBack = 0;
+        }
         else if (!strcmp(key, "holo_arrow")) s_holoArrow = atoi(v);
         else if (!strcmp(key, "qualifying_seed")) s_seed = (unsigned)strtoul(v, NULL, 10);
         else if (!strcmp(key, "hide_actor")) {
@@ -795,7 +1052,10 @@ U32 RaceMod_AutoInput(void) {
         }
     s_autoIndex = best;
     double x, z, y, v, dx, dz;
-    PathAt(o, o->Cum[best] + s_autoLook, &x, &z, &y, &v, &dx, &dz);
+    // (looking further ahead the faster the car goes over its top gear's speed: a rollercoaster of a lap, gravity=)
+    const double fastest = s_car.GearTop[s_car.Gears - 1];
+    const double look = ListBuggy[0].Speed > fastest ? s_autoLook * ListBuggy[0].Speed / fastest : s_autoLook;
+    PathAt(o, o->Cum[best] + look, &x, &z, &y, &v, &dx, &dz);
     const double want = atan2(x - wx, z - wz) * 4096.0 / (2 * 3.14159265358979);
     double err = want - (hero->Obj.Beta & 4095);
     while (err >= 2048) err -= 4096;

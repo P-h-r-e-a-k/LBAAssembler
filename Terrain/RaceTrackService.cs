@@ -41,7 +41,12 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] TrackInfo? Twin = null,
         // Raised: a raised road's middle, point by point in lap order, [x, z, y, half width] in world units from the island's corner:
         // the race-track mode's floor there (RACEMOD.CPP).
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Raised = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Raised = null,
+        // Gravity: how much a raised road's grade changes a car's speed there (RaceTrackPlan.Gravity; a banked road's points carry a
+        // fifth number, its banking in ten-thousandths).
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] double? Gravity = null,
+        // RailCamera: the camera rides the raised road behind the car (RaceTrackPlan.RailCamera: cells behind, units up, cells ahead).
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] double[]? RailCamera = null);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
@@ -191,6 +196,7 @@ internal static class RaceTrackService
             twinOptions.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, obl), twinOptions);
         twinOptions.Theme = RaceTrackTextures.Import(twin, options.Island, gameDirectory, ile).Theme;
         twinOptions.NewBodyBase = HqrArchive.CountEntries(Path.Combine(gameDirectory, obl));
+        twinOptions.SceneryObl = Path.Combine(gameDirectory, obl);
         var report = RaceTrackBuilder.Build(twin, plan, twinOptions);
         twin.Save(Path.Combine(gameDirectory, ile));
         AppendBodies(Path.Combine(gameDirectory, obl), report, twinOptions);
@@ -259,6 +265,7 @@ internal static class RaceTrackService
         if (options.Crossing == CrossingStyle.Jump) options.JumpAnim = RaceTrackJumpAnim.Generic;
         // (where a raised road's own bodies go: after whatever was appended above)
         options.NewBodyBase = HqrArchive.CountEntries(Path.Combine(gameDirectory, options.Island.OblFile));
+        options.SceneryObl = Path.Combine(gameDirectory, options.Island.OblFile);
         return log;
     }
 
@@ -332,7 +339,7 @@ internal static class RaceTrackService
         return new TrackInfo(options.Crossing.ToString(), line, checkpoints, path.Count > 0 ? path : null, 4, scenes.Opponent.Count > 0 ? scenes.Opponent : null, scenes.StartScene,
             rivals.Count > 0 ? rivals : null, scenes.Grid.Count > 0 ? scenes.Grid : null, scenes.Pits.Count > 0 ? scenes.Pits : null, options.Island.Name,
             options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile ? RaceTrackStory.StartArrow : -1,
-            Raised: raised ? report.Raised : null);
+            Raised: raised ? report.Raised : null, Gravity: raised ? report.Gravity : null, RailCamera: raised ? report.RailCamera : null);
     }
 
     // The folder's RACETRACK.JSON, or null when there is none (or it can't be read: a track built before the file existed).

@@ -218,6 +218,8 @@ The difference from the classic path is that the lift **eases** toward its targe
 - The higher the lift, the less of the forward lean the aim keeps (down to a third), so the hero stays in the frame under a steep view.
 - `SightFloorHook` (3DEXT/MAPTOOLS.CPP) lets a mod add floors of its own to what counts as ground in front of the eye, and `FollowCamArmHook` lets it ask for a shorter arm than the zoom chosen (reached a fifth of the way a frame). The race-track mode uses both for its raised road (SOURCES/RACEMOD.CPP `RaisedSight`, `RaisedArm`).
 
+**An eye of a mod's own** (`FollowCamEyeHook`, 2026-09-30): a hook that gives the eye's place and the point to look at, cube-local, for where the hero is -- the race-track mode's rail camera on a rollercoaster of a road (RACEMOD.CPP `RailCamera`: the eye rides the road a few cells behind the car). While it gives one, the arm's eye moves onto it over `FOLLOW_CAM_OWN_EYE_STEPS` updates and then is it, placed and aimed by `FollowCamPlaceEye` (again after `AffGrilleExt`'s reset, like the lift); the ground clearance does nothing then. A mod's road with levels one over another also shortens the arm through `FollowCamArmHook`: the eye stays under a level that runs over the hero's stretch of road (a helix), `RAISED_UNDER` below its surface, by `AlphaCam`'s sine.
+
 **Eased state is self-correcting; latched state is not.** The distinction decides what a discontinuity
 (a scene change, a camera zone, a recentre) has to reset. `FollowCamEyeLift` and the spring arm converge on
 whatever the new situation asks for a frame at a time, so carrying a stale value across costs a short glide
