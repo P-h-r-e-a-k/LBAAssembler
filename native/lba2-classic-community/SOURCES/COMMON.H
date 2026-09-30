@@ -301,6 +301,7 @@ S32 RaceMod_Statue(void);
 void RaceMod_FloorFor(S32 y);
 void RaceMod_FloorForNothing(void);
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
+void RaceMod_Floor(S32 ox, S32 oy, S32 oz, S32 nx, S32 *ny, S32 nz);
 #ifdef	LBA_EDITOR
 #define	TEMPETE_ACTIVE	(!RaceMod_FineWeather() AND (ListVarGame[FLAG_CHAPTER].Value<2 OR FlagRain))
 #define	TEMPETE_FINIE	(RaceMod_FineWeather() OR (ListVarGame[FLAG_CHAPTER].Value>=2 AND !FlagRain))

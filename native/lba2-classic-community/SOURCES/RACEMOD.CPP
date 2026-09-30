@@ -554,6 +554,24 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     *nz = (S32)floor(pz + sx / len * side - cz + 0.5);
 }
 
+// The hero is not let under the surface of the road he stood on. The engine lowers an object that nothing of the ground holds up by half
+// a brick to see whether it stands on another object, and leaves it lowered when that finds one: with an opponent's car against his --
+// their boxes overlapping -- he rode half a brick into the road. Called with the rail (RaceMod_Rail) after everything else in his move:
+// the same car's box also pushed him sideways in places after the rail had had its say, past the road's edge, and he fell to the level
+// below. Baldino's car, the widest of the opponents' (its box 1,396 across, the racer's 1,266, the bike's 894), did it the most.
+void RaceMod_Floor(S32 ox, S32 oy, S32 oz, S32 nx, S32 *ny, S32 nz) {
+    if (!s_nbRaised || CubeMode != CUBE_EXTERIEUR) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    S32 f;
+    int seg;
+    double lat, t;
+    // (standing on the road -- or a little over it, a jump on foot -- where he was)
+    if (!RaisedAt(ox + cx, oz + cz, oy + 64, RAISED_PAD, &f, &seg, &lat, &t) || oy < f - 200 || oy > f + 1500) return;
+    if (f - CalculAltitudeTerrain(ox, oz, 0) < 300) return;
+    if (!RaisedAt(nx + cx, nz + cz, oy + 64, RAISED_PAD, &f, &seg, &lat, &t)) return;
+    if (*ny < f) *ny = f;
+}
+
 static void LoadRaised(const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) { Log_Info("[racemod] raised road: %s could not be read", path); return; }

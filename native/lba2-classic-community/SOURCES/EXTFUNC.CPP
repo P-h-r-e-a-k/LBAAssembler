@@ -2333,6 +2333,13 @@ static void DoAnimExtGround(U8 numobj) {
     if (Col1 != 0)
         ptrobj->Col |= 128;
 
+    // a race-track mod's raised road: whatever moved the hero this frame -- actors' boxes push him aside, and lower him to see whether he
+    // stands on one, in more than one place above -- still inside its rail, and not through the road he stood on
+    if (numobj == NUM_PERSO) {
+        RaceMod_Rail(OldX, OldY, OldZ, &Nxw, &Nzw);
+        RaceMod_Floor(OldX, OldY, OldZ, Nxw, &Nyw, Nzw);
+    }
+
     /* protege sortie du cube */
 
     // à virer puisqu'on pourra descendre en dessous de 0
