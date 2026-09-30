@@ -9,7 +9,7 @@ namespace LBAAssembler.Terrain;
 //   Citadel Island              the weather wizard in a thundercloud; Raph the lighthouse keeper in a lighthouse boat
 //   Desert Island               the Dean of the School of Magic in a wizard's hat
 //   Emerald Moon                an Esmer in his space suit in a moon rover
-//   Otringal                    Johnny Rocket in a guitar with rocket engines
+//   Otringal                    Johnny Rocket, the first explorer to set foot on Twinsun, in his rocket
 //   Celebration Island          the Dark Monk in a car of temple stone
 //   Island of the Wannies       a Wannie in a mine cart of gems
 //   Otringal again              the old Franco in his Leontine, the boat under a balloon (he waits with it in Otringal's harbour)
@@ -22,7 +22,7 @@ internal static partial class RaceTrackCharacterCars
     public static readonly Car Raph = new("Raph's car", "Raph the lighthouse keeper", 32, 6, BuildRaph, Citadel);
     public static readonly Car Dean = new("The Dean's car", "the Dean of the School of Magic", 123, 7, BuildDean, Desert);
     public static readonly Car Spaceman = new("The moon rover", "an Esmer in his space suit", 255, 8, BuildSpaceman, Moon);
-    public static readonly Car Johnny = new("Johnny Rocket's car", "Johnny Rocket", 154, 9, BuildJohnny, Otringal);
+    public static readonly Car Johnny = new("Johnny Rocket's rocket", "Johnny Rocket", 154, 9, BuildRocket, Otringal);
     public static readonly Car DarkMonk = new("The Dark Monk's car", "the Dark Monk", 311, 10, BuildDarkMonk, Celebration);
     public static readonly Car Wannie = new("The Wannie's mine cart", "a Wannie", 194, 11, BuildWannie, Wannies);
     public static readonly Car OldFranco = new("The Leontine", "the old Franco", 276, 12, BuildOldFranco, Otringal);
@@ -245,52 +245,48 @@ internal static partial class RaceTrackCharacterCars
 
     // ---------------------------------------------------------------------------------------------------------------- Otringal
 
-    // Johnny Rocket's car: a red electric guitar -- its neck the bonnet, strings and all, the pegs on its head -- with an amplifier on the back
-    // and two rocket engines under it.
-    public static Body BuildJohnny(Body johnny, Body racer)
+    // Johnny Rocket's car -- "Zeelich's brightest star, the first explorer to set foot on Twinsun": the rocket he did it in, silver with a
+    // green nose and fins and a red band, a star on each side, its engine lit.
+    public static Body BuildRocket(Body johnny, Body racer)
     {
         var m = new CarMesh(Johnny.Name);
         Roots(m);
-        var hull = new Hull(m, 300, 10, 2, 0,
-            (650, 75, 50, 48), (600, 95, 58, 52), (300, 100, 62, 56), (225, 210, 125, 105), (110, 305, 162, 128), (-70, 345, 176, 136), (-250, 348, 176, 136), (-420, 300, 160, 126), (-530, 190, 112, 100));
-        hull.Skin(m, (band, k) => band == 1 ? Brown : band == 0 ? Red : k is 9 or 0 ? Cream : Red);
-        hull.Tail(m, -560, Red);
-        // the head of the guitar, its six pegs; the strings down the neck and on to the bridge behind the cockpit
+        var hull = new Hull(m, 320, 10, 2, 0,
+            (590, 105, 95, 92), (450, 195, 170, 155), (230, 250, 212, 178), (-120, 262, 220, 182), (-380, 230, 198, 170), (-510, 170, 150, 138));
+        hull.Skin(m, (band, _) => band == 0 ? Green : band == 2 ? Red : Steel);
+        hull.Nose(m, 800, Green);
+        // the engine's bell and its flame, three fins round it
         {
-            m.Plate(2, Red, new(-85, hull.Cy + 22, 640), new(85, hull.Cy + 22, 640), new(105, hull.Cy + 50, 800), new(-60, hull.Cy + 50, 775));
-            foreach (var side in new[] { 1f, -1f })
-                foreach (var z in new[] { 670f, 715, 760 }) m.Ball(2, new(side * (95 + (z - 670) * 0.1f), hull.Cy + 40, z), 17, WhiteFlat);
-            foreach (var x in new[] { -42f, -14, 14, 42 })
+            var bell = m.Loop(2, new Vector3(0, hull.Cy, -600), new Vector3(0, 205, 0), new Vector3(205, 0, 0), 10);
+            m.Skin(hull.Rings[^1], bell, _ => Steel - 2, new Vector3(0, hull.Cy, -555));
+            var throat = m.P(2, new(0, hull.Cy, -520));
+            for (var k = 0; k < 10; k++) m.In(new[] { bell[k], bell[(k + 1) % 10], throat }, HoleDark, new Vector3(0, hull.Cy, -700), unlit: true);
+            Flame(m, new Vector3(0, hull.Cy, -575), 130, 260);
+            foreach (var (dx, dy) in new[] { (1f, 0.25f), (-1f, 0.25f), (0f, 1f) })
             {
-                m.Rod(2, new(x, hull.Cy + 50, 770), hull.OnTop(x, 210, 14), WhiteFlat);
-                m.Rod(2, hull.OnTop(x, -300, 12), hull.OnTop(x, -440, 12), WhiteFlat);
+                var o = new Vector3(dx, dy, 0); var root = new Vector3(dx * 215, hull.Cy + dy * 200, 0);
+                m.Plate(2, Green, root + new Vector3(0, 0, -250), root + o * 280 + new Vector3(0, 0, -520), root + o * 290 + new Vector3(0, 0, -680), root + new Vector3(0, 0, -500) - o * 40);
             }
-            m.Box(2, hull.OnTop(0, -445, 14), new Vector3(150, 24, 30), Steel);
-        }
-        // the amplifier on the tail, its two speakers looking back; the rockets
-        {
-            var at = hull.OnTop(0, -490, 75);
-            m.Light = SoftLight;
-            m.Box(2, at, new Vector3(300, 150, 110), Black);
-            m.Light = 1;
-            foreach (var side in new[] { 1f, -1f }) { m.Ball(2, at + new Vector3(side * 75, 0, -60), 52, Steel + 3); m.Ball(2, at + new Vector3(side * 75, 0, -66), 20, Dark); }
         }
         foreach (var side in new[] { 1f, -1f })
         {
-            var mouth = new Vector3(side * 120, hull.Cy - 40, -575);
-            var a = m.Loop(2, mouth + new Vector3(0, 0, 90), new Vector3(60, 0, 0), new Vector3(0, 60, 0), 6);
-            var b = m.Loop(2, mouth, new Vector3(82, 0, 0), new Vector3(0, 82, 0), 6);
-            m.Skin(a, b, _ => Steel, mouth + new Vector3(0, 0, 45));
-            Flame(m, mouth + new Vector3(0, 0, 10), 60, 190);
-            m.Ball(2, new(side * 130, hull.Cy + 30, 225), 40, Yellow);
+            // a porthole, and his star
+            m.Ball(2, new(side * (hull.Side(hull.Cy + 60, 330) + 4), hull.Cy + 60, 330), 50, Cyan);
+            var star = new Vector3(side * (hull.Side(hull.Cy + 30, -250) + 8), hull.Cy + 30, -250);
+            m.Ball(2, star, 40, Yellow);
+            for (var i = 0; i < 5; i++)
+            {
+                var a = i * MathF.Tau / 5 + 0.3f;
+                m.Flat(2, Yellow, star + new Vector3(0, MathF.Cos(a - 0.45f), MathF.Sin(a - 0.45f)) * 36, star + new Vector3(0, MathF.Cos(a + 0.45f), MathF.Sin(a + 0.45f)) * 36, star + new Vector3(0, MathF.Cos(a), MathF.Sin(a)) * 105);
+            }
         }
 
-        const float SeatZ = -110;
+        const float SeatZ = -90;
         var rimTop = hull.Top(0, SeatZ) + 26;
-        Cockpit(m, hull, SeatZ, 210, 175, rimTop, 10, Cream);
-        Windscreen(m, hull, 190, 185, 95, WhiteFlat);
-        Wheels(m, new WheelLook(Steel, 24, Grey, 1, Steel, 1, RedFlat + 2),
-            new Axle(new Vector3(95, 268, 430), new Vector3(400, 150, 430), 150, 105), new Axle(new Vector3(285, 270, -300), new Vector3(520, 195, -300), 195, 140));
+        Cockpit(m, hull, SeatZ, 200, 175, rimTop, 10, Green + 2);
+        Windscreen(m, hull, 210, 170, 95, WhiteFlat);
+        Wheels(m, new WheelLook(Steel, 24, Grey, 1, Green, 1, RedFlat + 2),
+            new Axle(new Vector3(200, 268, 400), new Vector3(410, 150, 400), 150, 105), new Axle(new Vector3(215, 270, -300), new Vector3(470, 185, -300), 185, 130));
         var hands = Sit(m, johnny, hull, SeatZ, rimTop, new[] { 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 19, 20, 21, 22, 23, 24, 25 }, (7, new[] { 8, 9 }), (10, new[] { 11, 12 }), new Vector3(0, 605, 0), 0.8f);
         SteeringWheel(m, hull, hands.Right, hands.Left, Steel, WhiteFlat);
         return m.ToBody(racer.Header);

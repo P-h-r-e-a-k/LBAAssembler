@@ -27,7 +27,7 @@ internal static partial class RaceTrackCharacterCars
     public static readonly Car HoneyPot = new("The honey pot", "a Mosquibee", 192, 20, BuildHoneyPot, Mosquibees);
     public static readonly Car FanBoat = new("The fan boat", "the Queen's ventilation guy", 197, 21, BuildFanBoat, Mosquibees);
     public static readonly Car Tanker = new("The gazogem tanker", "De La Fontaine", 450, 22, BuildTanker, Francos);
-    public static readonly Car Laboratory = new("The laboratory", "the old Franco scientist", 446, 23, BuildLaboratory, Francos);
+    public static readonly Car Laboratory = new("Mr. Kurtz's laboratory", "Mr. Kurtz, the old Franco scientist", 446, 23, BuildLaboratory, Francos);
     public static readonly Car Pram = new("The nurse's pram", "the Franco nurse", 447, 24, BuildPram, Francos);
     public static readonly Car Tank = new("The trooper's tank", "a Franco trooper", 290, 25, BuildTank, IslandCX);
     public static readonly Car Launcher = new("The rocket launcher", "one of the Emperor's soldiers", 260, 26, BuildLauncher, IslandCX);
@@ -52,7 +52,10 @@ internal static partial class RaceTrackCharacterCars
 
     // A driver out of its body: where its waist is (in its own body), how much smaller it sits, its arms (the one at +x first; none: it keeps
     // its hands to itself) and the bones left out with all that hangs from them (what it holds, a boat it stands in).
-    private sealed record Driver(Vector3 Origin, float Scale, (int, int[])? Right = null, (int, int[])? Left = null, int[]? Drop = null, float Reach = 215, float GripHeight = 95, float GripX = 64);
+    // (Keep: only these bones, for a body that is not cut at a waist -- a cow's neck and head, a Dino-Fly's. Held: bones of the arms that are
+    // things in the hands, turned with them but not taken for the hand.)
+    private sealed record Driver(Vector3 Origin, float Scale, (int, int[])? Right = null, (int, int[])? Left = null, int[]? Drop = null, float Reach = 215, float GripHeight = 95, float GripX = 64,
+        int[]? Keep = null, int[]? Held = null);
     // The cockpit: where along the car, how big, how high its rim stands and in what colour; a windscreen at Screen (none: NaN).
     private sealed record Cabin(float Z, float Rx = 215, float Rz = 185, float Up = 26, int Rim = Steel, float Screen = float.NaN, float ScreenHalf = 190, int Rail = WhiteFlat,
         int Wheel = Steel, int WheelLine = Dark, int Sides = 10);
@@ -72,10 +75,13 @@ internal static partial class RaceTrackCharacterCars
         Vector3 Place(Vector3 p) => (p - d.Origin) * d.Scale + seat;
         Vector3 Unplace(Vector3 p) => (p - seat) / d.Scale + d.Origin;
         var grip = new Vector3(d.GripX, rimTop - 6 + d.GripHeight, c.Z + d.Reach);
-        Vector3? right = d.Right is { } r ? Place(driver.Reach(r.Item1, r.Item2, Unplace(grip), 1).Hand) : null;
-        Vector3? left = d.Left is { } l ? Place(driver.Reach(l.Item1, l.Item2, Unplace(grip with { X = -grip.X }), -1).Hand) : null;
+        // (an arm given without its forearm's bones: all that hangs from the upper arm, less what is dropped)
+        int[] Fore((int, int[]) arm) => arm.Item2.Length > 0 ? arm.Item2 : driver.Below(arm.Item1).Where(b => d.Drop is null || !d.Drop.Contains(b)).ToArray();
+        int[]? Hand((int, int[]) arm) => d.Held is null ? null : Fore(arm).Where(b => !d.Held.Contains(b)).ToArray();
+        Vector3? right = d.Right is { } r && Fore(r).Length > 0 ? Place(driver.Reach(r.Item1, Fore(r), Unplace(grip), 1, Hand(r)).Hand) : null;
+        Vector3? left = d.Left is { } l && Fore(l).Length > 0 ? Place(driver.Reach(l.Item1, Fore(l), Unplace(grip with { X = -grip.X }), -1, Hand(l)).Hand) : null;
         m.Pivot(13, m.P(2, seat));
-        var point = driver.Seat(m, driver.AllBut(d.Drop), Place, rimTop, d.Scale, paint, cut: true);
+        var point = driver.Seat(m, d.Keep is { } kept ? new HashSet<int>(kept) : driver.AllBut(d.Drop), Place, rimTop, d.Scale, paint, cut: true);
         Arms(m, d.Right is { } ra ? point(character.Bones[ra.Item1].Pivot) : m.P(13, seat + new Vector3(60, 120, 0)),
                 d.Left is { } la ? point(character.Bones[la.Item1].Pivot) : m.P(13, seat + new Vector3(-60, 120, 0)));
         if (right is not null || left is not null)
@@ -415,7 +421,7 @@ internal static partial class RaceTrackCharacterCars
             new Axle(new Vector3(245, 275, 430), new Vector3(440, 160, 430), 160, 110), new Axle(new Vector3(260, 280, -300), new Vector3(500, 190, -300), 190, 140));
     }
 
-    // The old Franco scientist: his laboratory on wheels -- a flask of something green bubbling at the back, a coil throwing sparks beside
+    // Mr. Kurtz ("Retired Colonel - Specializing in non-scientific sciences", says his door), the old Franco scientist: his laboratory on wheels -- a flask of something green bubbling at the back, a coil throwing sparks beside
     // it, dials on the bonnet.
     public static Body BuildLaboratory(Body franco, Body racer)
     {

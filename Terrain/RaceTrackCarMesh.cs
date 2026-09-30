@@ -178,6 +178,13 @@ internal sealed class CarDriver
 
     public int BoneOf(int point) => body.Bones.FindIndex(b => point >= b.Start && point < b.Start + b.Count);
     public int Bones => body.Bones.Count;
+    // the bones hanging from one, nearest first
+    public int[] Below(int bone)
+    {
+        var list = new List<int>();
+        for (var b = bone + 1; b < body.Bones.Count; b++) if (body.Bones[b].Parent == bone || list.Contains(body.Bones[b].Parent)) list.Add(b);
+        return list.ToArray();
+    }
     // every bone but these and all that hangs from them
     public HashSet<int> AllBut(IEnumerable<int>? drop)
     {
@@ -229,18 +236,20 @@ internal sealed class CarDriver
 
     // An arm turned so its hand is at `target` (in the body's own coordinates): the elbow bent out to the side and a little down, the upper
     // arm and forearm keeping their lengths (two-bone reach: the elbow on the circle both lengths allow, towards the side). `fore` is the
-    // forearm and what hangs on it (a hand of its own bone). Returns the shoulder and where the hand is now.
-    public (Vector3 Shoulder, Vector3 Hand) Reach(int upper, int[] fore, Vector3 target, float side)
+    // forearm and what hangs on it (a hand of its own bone). `handOf`: the bones the hand is looked for in, when what hangs on the forearm
+    // includes something held that reaches further than the hand (a fishing rod). Returns the shoulder and where the hand is now.
+    public (Vector3 Shoulder, Vector3 Hand) Reach(int upper, int[] fore, Vector3 target, float side, int[]? handOf = null)
     {
-        var shoulder = PivotOf(upper); var elbow = PivotOf(fore[0]); var hand = Far(fore, elbow);
+        handOf ??= fore;
+        var shoulder = PivotOf(upper); var elbow = PivotOf(fore[0]); var hand = Far(handOf, elbow);
         float l1 = Vector3.Distance(shoulder, elbow), l2 = Vector3.Distance(elbow, hand);
         var reach = target - shoulder; var d = Math.Clamp(reach.Length(), Math.Abs(l1 - l2) + 1, l1 + l2 - 1); var u = Vector3.Normalize(reach);
         var along = (l1 * l1 - l2 * l2 + d * d) / (2 * d); var height = MathF.Sqrt(MathF.Max(0, l1 * l1 - along * along));
         var hint = new Vector3(side, -0.45f, 0); hint -= u * Vector3.Dot(hint, u); hint = Vector3.Normalize(hint);
         var newElbow = shoulder + u * along + hint * height;
         Turn(fore.Prepend(upper), shoulder, Between(elbow - shoulder, newElbow - shoulder));
-        Turn(fore, newElbow, Between(Far(fore, newElbow) - newElbow, shoulder + u * d - newElbow));
-        return (shoulder, Far(fore, newElbow));
+        Turn(fore, newElbow, Between(Far(handOf, newElbow) - newElbow, shoulder + u * d - newElbow));
+        return (shoulder, Far(handOf, newElbow));
     }
 
     // What a polygon of the driver becomes in the car: its colour, how much light its points take (CarMesh.Light; Own: what each takes in the
