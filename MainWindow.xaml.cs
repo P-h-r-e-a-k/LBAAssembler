@@ -270,8 +270,10 @@ public partial class MainWindow : Window
     // -- the exact same field RENDERER_ACTORS.CPP's PeekSceneCube already
     // reads (as p[0]) to match a scene against a target island index when
     // scanning cubes. RENDERER_API.CPP's own kIslandNames[] gives the order
-    // that ID indexes into (0=citadel, 1=sendell [MOON.ILE's internal/lore
-    // name], 2=desert, 3=emeraude, 4=otringal, 5=celebrat, 6=platform,
+    // that ID indexes into (0=citadel, 1=sendell -- "Puits de Sendell", an
+    // outside island that was cut: no SENDELL.ILE ships and no scene has
+    // island 1 -- 2=desert, 3=emeraude [the Emerald Moon; MOON.ILE is an
+    // older copy of it, February 1997, that no executable names], 4=otringal, 5=celebrat, 6=platform,
     // 7=mosquibe, 8=knartas, 9=ilotcx, 10=ascence, 11=souscelb) -- mirrored
     // here rather than exported from native, since it's plain static data
     // and every byte needed to compute it (SCENE.HQR itself) is already
@@ -285,7 +287,7 @@ public partial class MainWindow : Window
     // empty rather than guess.
     private static readonly string[] IslandNameByRawSceneId =
     {
-        "CITADEL", "MOON", "DESERT", "EMERAUDE", "OTRINGAL",
+        "CITADEL", "SENDELL", "DESERT", "EMERAUDE", "OTRINGAL",
         "CELEBRAT", "PLATFORM", "MOSQUIBE", "KNARTAS", "ILOTCX",
         "ASCENCE", "SOUSCELB",
     };
