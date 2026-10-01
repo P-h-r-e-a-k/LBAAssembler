@@ -1127,6 +1127,17 @@ The user liked the second version's basics, but its last corner was too tight an
 
 **Verified**, on copies of the game: the test pilot, qualifying 27.0 s, a race lap 29.5 s with the three opponents (their qualifying 26.7-32.0 s), no checkpoint missed, no rescue; down the ramp at up to 43 km/h. Built with the other six tracks into one folder: theirs keep the 3.5 grid. Built and raced from the app on a sandbox folder.
 
+### The start/finish area: ground under the deck's ends, and footings for the gantry (2026-10-01)
+
+![the user's picture, and the fixes](racetrack/build/lava3_start_fixes.png)
+
+The user found the ground showing through the road at the foot of the ramp (cars rode up over the rail there), a slit under the start of the north shore's raised road, and the start gantry's post standing in the sea.
+
+- **The raised road's ends** (`FlushRaisedEnds`, part of `raisedCut`): the engine takes the higher of the deck and the ground under it, so where the hill's toe stood up through the deck's edge a car rode up onto it and over the rail. Under each end of the raised road, as far as the deck stays within 600 of the ground under its middle (and stops where it runs into the hill: that is the cutting's), the ground is now the deck's own surface, 50 under it (15 under showed through the asphalt at a distance), out to its rails; beside it, ground below is filled up towards it and ground above brought down to it out to a cell past the rail (the engine's floor reaches a fifth of a cell past it), then banked up. The cutting leaves that ground alone. Checked over the whole lap, across the deck and that fifth of a cell past each rail: no ground above the deck anywhere.
+- **Gantry footings** (`gantryFootings`, a plan option, only this lap's): the dock is narrower than the start line's gantry, and both posts stood in the sea. Under a post over a hole the ground is raised to the gantry's foot out to 0.9 cells from it and eased down over 1.6 more -- never on the road or its verge -- and the sea's cells there are drawn as rock (29 vertices, 27 cells). Tried on every track first, it would also have put a rock mound by the Desert island's pit lane and drawn rock under the statue track's west post (the same hole as here): left to the plans that ask for it.
+
+**Verified**: the test pilot, three race runs in this folder and one in the folder with all seven tracks, qualifying 27.0 s, race laps 29.5-30.2 s, no checkpoint missed; one rescue in one run (an opponent's bump on the north shore, far from these changes; the other three runs had none).
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

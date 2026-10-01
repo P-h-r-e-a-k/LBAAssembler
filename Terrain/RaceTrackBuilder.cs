@@ -58,6 +58,9 @@ internal sealed class RaceTrackPlan
     // How far behind each other the grid's spots are (RaceTrackScenes.GridSpot), when not the usual 3.5: the lava lake's lap comes down a
     // ramp onto its dock just behind the grid, which stands two abreast there (1.75).
     public double? GridStep { get; set; }
+    // A footing of ground under a start gantry's post that stands over a hole (RaceTrackBuilder.PostFootings): the lava lake's dock is
+    // narrower than its gantry.
+    public bool GantryFootings { get; set; }
     // The ground cut down where it comes near the raised road's deck (RaceTrackBuilder.CutUnderRaised: the lava lake's lap, which runs
     // along cliffs and the crater's rim; the statue track's was left as it was built).
     public bool RaisedCut { get; set; }
@@ -110,6 +113,7 @@ internal sealed class RaceTrackPlan
         if (JumpLandingLength is { } jl) o.JumpLandingLength = jl;
         if (JumpMinScale is { } js) o.JumpMinScale = js;
         if (GridStep is { } gs) o.GridStep = gs;
+        o.GantryFootings = GantryFootings;
         o.PierBodies = PierBodies?.ToHashSet();
     }
 
@@ -205,6 +209,8 @@ internal sealed class RaceTrackOptions
     public double JumpMinScale { get; set; } = 1;
     // How far behind each other the grid's spots are (RaceTrackScenes.GridSpot; RaceTrackPlan.GridStep).
     public double GridStep { get; set; } = RaceTrackScenes.DefaultGridStep;
+    // A footing under a gantry's post that stands over a hole (RaceTrackPlan.GantryFootings).
+    public bool GantryFootings { get; set; }
     // A physical, walkable bridge deck (like Citadel Island's rope bridge at "the Cliffs of the Woodbridge"): the straighter road
     // is carried over the other, on a flat deck built of decor objects (RaceTrackDeckBody), while the ground underneath keeps
     // the other road's own grade. How far above the lower road's own height the deck's walking surface sits. The engine's solid
@@ -2532,12 +2538,20 @@ internal static class RaceTrackBuilder
     // RaisedCutReach cells past its edge, then a bank back up to the ground as it is -- a cutting the road runs along. Not near the ends
     // of the raised road where it rises from the ground road (RaisedCutFromEnd cells): there the deck starts on the ground.
     private const double RaisedClearance = 450, RaisedCutReach = 1, RaisedCutBank = 1.5, RaisedCutFromEnd = 8;
+    // And the ends themselves (later on 2026-10-01): the deck there is only a little over the ground, and the ground under it was the
+    // island's own -- at the lava lake's dock the deck's first cells hovered over the slope down to the sea (a slit under its end), and
+    // at its ramp's foot the hill's toe stood up through the deck (the engine takes the higher of deck and ground: cars rode up it and
+    // over the rail). Under each end, as far as the deck stays within RaisedFlush of the ground under its middle, the ground is made the
+    // deck's own surface (RaisedFlushUnder beneath it) out to its rails, and eased back to the ground as it is over RaisedFlushBlend
+    // cells beyond them; the cutting leaves that ground alone.
+    private const double RaisedFlush = 600, RaisedFlushUnder = 50, RaisedFlushBlend = 1.5;    // (15 under: the ground showed through the asphalt at a distance)
 
     private static void CutUnderRaised(IslandFile island, Field field, TrackRoad r, RaceTrackOptions o, RaceTrackReport report)
     {
         var up = r.Raised!; var n = r.Count;
         var inner = o.RaisedHalfWidth + RaisedCutReach;
         const double reach = 6;                                    // cells past the deck's middle the bank may reach
+        var flushed = FlushRaisedEnds(island, r, o, report);
         // how far along the raised road each point is from where it meets the ground road
         var fromEnd = new double[n];
         for (var i = 0; i < n; i++)
@@ -2578,14 +2592,16 @@ internal static class RaceTrackBuilder
         int cut = 0; double deepest = 0;
         foreach (var ((gx, gz), allowed) in limit)
         {
+            if (flushed.Contains((gx, gz))) continue;
             if (island.HeightAt(gx, gz) is not { } h || h <= allowed) continue;
             if (ground.Any(i => Sq(r.X[i] - gx) + Sq(r.Z[i] - gz) < Sq(clearOfRoad))) continue;
             var to = Math.Max(0, (int)Math.Floor(allowed));
             deepest = Math.Max(deepest, h - to);
             island.SetHeight(gx, gz, to); cut++;
         }
-        if (cut == 0) return;
+        if (cut == 0 && flushed.Count == 0) return;
         field.Refresh(island);
+        if (cut == 0) return;
         report.Vertices += cut;
         report.Notes.Add($"the raised road: the ground cut down under and beside it at {cut} vertices, {deepest:0} at the most, to stand {RaisedClearance:0} under the deck");
     }
@@ -3159,11 +3175,13 @@ internal static class RaceTrackBuilder
             middle = choices.FirstOrDefault(m => Grounded(m - total / 2) && Grounded(m + total / 2), (right - left) / 2);
         }
         var placed = 0;
+        var posts = new List<(double X0, double Z0, double X1, double Z1)>();
         for (var k = 0; k < beams; k++)
         {
             var along = middle + (k + 0.5 - beams / 2.0) * beam;             // this beam's middle, across the line
             var originX = (cx + ex * (along + GantryCentreOffset / 512)) * 512; var originZ = (cz + ez * (along + GantryCentreOffset / 512)) * 512;
             if (IslandDecors.Locate(island, originX, originZ) is not { } at) continue;
+            double cubeX = Math.Floor(originX / IslandFile.CubeSize) * IslandFile.CubeSize, cubeZ = Math.Floor(originZ / IslandFile.CubeSize) * IslandFile.CubeSize;
             foreach (var (body, box) in Gantry)
             {
                 // (body 66 is the post at the beam's left end, 65 at its right: only the outermost ones stand)
@@ -3179,11 +3197,120 @@ internal static class RaceTrackBuilder
                 d.ZMin = at.Z + (int)Math.Floor(minZ); d.ZMax = at.Z + (int)Math.Ceiling(maxZ);
                 d.YMin = y + box[1]; d.YMax = y + box[4];
                 if (at.Cube.Decors.Count < IslandDecors.MaxPerCube) { at.Cube.Decors.Add(d); placed++; }
+                if (body != 64) posts.Add(((cubeX + d.XMin) / 512, (cubeZ + d.ZMin) / 512, (cubeX + d.XMax) / 512, (cubeZ + d.ZMax) / 512));
             }
         }
         if (placed == 0) { report.Placed.Add($"{what}: off the island"); return; }
+        if (o.GantryFootings) PostFootings(island, o, posts, y, what, report);
         var span = beams == 1 ? "" : $", {beams} beams end to end over the lap and the pit lane beside it, posts {middle - beams * beam / 2:0.0} and {middle + beams * beam / 2:+0.0} cells across";
         report.Placed.Add($"{what}: gantry at cell ({cx:0.0}, {cz:0.0}), height {y}, turn {beta}{span}");
+    }
+
+    // The ground under the raised road's ends (CutUnderRaised): returns the vertices it set.
+    private static HashSet<(int, int)> FlushRaisedEnds(IslandFile island, TrackRoad r, RaceTrackOptions o, RaceTrackReport report)
+    {
+        var up = r.Raised!; var n = r.Count;
+        var half = o.RaisedHalfWidth;
+        // the points of each end's stretch: from where the road comes off the ground road, while the deck is still near the ground
+        var end = new bool[n];
+        for (var i = 0; i < n; i++)
+        {
+            if (!up[i] || r.Gap[i]) continue;
+            for (var way = -1; way <= 1; way += 2)
+            {
+                var j = At(r, i + way);
+                if (up[j] || r.Gap[j]) continue;
+                for (var k = 0; k < n; k++)
+                {
+                    var p = At(r, i - way * k);
+                    if (!up[p] || r.Gap[p]) break;
+                    // (on until the deck is well over the ground -- or under it: there the road runs in a cutting, the cutting's)
+                    var over = r.H[p] - (IslandOps.Altitude(island, r.X[p] * 512, r.Z[p] * 512) ?? 0);
+                    if (over > RaisedFlush || over < -RaisedClearance) break;
+                    end[p] = true;
+                }
+            }
+        }
+        // the nearest such stretch's surface for every vertex in reach: (the ground it should be, how much of it, how far it is)
+        var want = new Dictionary<(int, int), (double H, double W, double D)>();
+        for (var a = 0; a < n; a++)
+        {
+            var b = At(r, a + 1);
+            if (!(end[a] || end[b]) || !up[a] || !up[b] || r.Gap[a] || r.Gap[b]) continue;
+            double sx = r.X[b] - r.X[a], sz = r.Z[b] - r.Z[a], len2 = sx * sx + sz * sz;
+            if (len2 < 1e-12) continue;
+            var reach = half + RaisedFlushBlend;
+            for (var gz = (int)Math.Floor(Math.Min(r.Z[a], r.Z[b]) - reach); gz <= (int)Math.Ceiling(Math.Max(r.Z[a], r.Z[b]) + reach); gz++)
+            for (var gx = (int)Math.Floor(Math.Min(r.X[a], r.X[b]) - reach); gx <= (int)Math.Ceiling(Math.Max(r.X[a], r.X[b]) + reach); gx++)
+            {
+                var t = Math.Clamp(((gx - r.X[a]) * sx + (gz - r.Z[a]) * sz) / len2, 0, 1);
+                var d = Math.Sqrt(Sq(gx - r.X[a] - sx * t) + Sq(gz - r.Z[a] - sz * t));
+                if (d > reach) continue;
+                var u = Math.Clamp((d - half) / RaisedFlushBlend, 0, 1);
+                var w = 1 - u * u * (3 - 2 * u);
+                var surface = r.H[a] + (r.H[b] - r.H[a]) * t - RaisedFlushUnder;
+                if (!want.TryGetValue((gx, gz), out var was) || d < was.D) want[(gx, gz)] = (surface, w, d);
+            }
+        }
+        var set = new HashSet<(int, int)>();
+        double raised = 0, lowered = 0;
+        foreach (var ((gx, gz), (surface, w, d)) in want)
+        {
+            if (w <= 0 || island.HeightAt(gx, gz) is not { } h) continue;
+            // (under the deck its surface; beside it, ground below it filled up towards it, ground above it brought down to it out to the
+            // cutting's reach past the rail -- the engine's floor reaches a little past it -- and banked up from there)
+            var to = d <= half || h < surface ? h + (surface - h) * w : Math.Min(h, surface + Math.Max(0, d - half - RaisedCutReach) * 512 * RaisedCutBank);
+            if (Math.Abs(to - h) < 1) continue;
+            raised = Math.Max(raised, to - h); lowered = Math.Max(lowered, h - to);
+            island.SetHeight(gx, gz, (int)Math.Round(to)); set.Add((gx, gz));
+        }
+        if (set.Count > 0)
+            report.Notes.Add($"the raised road's ends: the ground under {end.Count(e => e) * o.Spacing:0} cells of them made the deck's own surface ({set.Count} vertices, " +
+                             $"raised {raised:0} and lowered {lowered:0} at the most)");
+        return set;
+    }
+
+    // A gantry's post standing over a hole gets a footing (2026-10-01: the lava lake's dock is narrower than its start line's gantry, and
+    // both posts stood in the sea beside it; a plan's choice, RaceTrackPlan.GantryFootings): the ground round it raised to the gantry's
+    // foot out to FootingTop cells from the post, eased down to the ground as it is over FootingBlend more -- never on the road or its
+    // verge -- and the cells of it that weren't drawn (the sea) drawn as rock.
+    private const double FootingTop = 0.9, FootingBlend = 1.6, FootingHole = 100;
+
+    private static void PostFootings(IslandFile island, RaceTrackOptions o, List<(double X0, double Z0, double X1, double Z1)> posts, int y, string what, RaceTrackReport report)
+    {
+        var painter = new Painter(island, o.Theme);
+        int raised = 0, drawn = 0, footed = 0;
+        foreach (var (x0, z0, x1, z1) in posts)
+        {
+            var under = new[] { (x0, z0), (x1, z0), (x0, z1), (x1, z1), ((x0 + x1) / 2, (z0 + z1) / 2) }.Min(p => IslandOps.Altitude(island, p.Item1 * 512, p.Item2 * 512) ?? 0);
+            if (under >= y - FootingHole) continue;
+            footed++;
+            var reach = FootingTop + FootingBlend;
+            var changed = new List<(int, int)>();
+            for (var gz = (int)Math.Floor(z0 - reach); gz <= (int)Math.Ceiling(z1 + reach); gz++)
+            for (var gx = (int)Math.Floor(x0 - reach); gx <= (int)Math.Ceiling(x1 + reach); gx++)
+            {
+                if (island.HeightAt(gx, gz) is not { } h) continue;
+                var d = Math.Sqrt(Sq(Math.Max(0, Math.Max(x0 - gx, gx - x1))) + Sq(Math.Max(0, Math.Max(z0 - gz, gz - z1))));
+                if (d > reach) continue;
+                if (report.DistanceToRoad is { } road && road(gx, gz) < o.VergeHalfWidth) continue;
+                var t = Math.Clamp((d - FootingTop) / FootingBlend, 0, 1);
+                var want = h + (y - h) * (1 - t * t * (3 - 2 * t));
+                if (want <= h + 1) continue;                                    // (only ever raised)
+                island.SetHeight(gx, gz, (int)Math.Round(want)); raised++; changed.Add((gx, gz));
+            }
+            var cells = changed.SelectMany(v => new[] { (v.Item1 - 1, v.Item2 - 1), (v.Item1, v.Item2 - 1), (v.Item1 - 1, v.Item2), v }).Distinct();
+            foreach (var (gx, gz) in cells)
+            {
+                if (island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } cube || gx < 0 || gz < 0) continue;
+                var x = gx % IslandCube.Cells; var z = gz % IslandCube.Cells;
+                var any = false;
+                for (var half = 0; half < 2; half++) { var p = new IslandPolygon(cube.Polygon(x, z, half)); if (p.TexFlag != 0 || p.PolyFlag != 0) any = true; }
+                if (any) continue;
+                painter.Paint(gx, gz, Kind.Rock); drawn++;
+            }
+        }
+        if (footed > 0) report.Notes.Add($"{what}: {footed} of the gantry's posts stood over a hole -- a footing of ground under each ({raised} vertices raised, {drawn} cells of the sea drawn as rock)");
     }
 
     private static void PlaceStructures(IslandFile island, TrackRoad main, List<Crossing> crossings, int startIndex, RaceTrackOptions options, RaceTrackReport report, bool planned = false)

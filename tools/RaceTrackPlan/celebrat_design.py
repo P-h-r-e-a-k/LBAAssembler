@@ -206,6 +206,7 @@ plan = {
     'start': int(iStart),
     'pitSpots': PIT_SPOTS,
     'gridStep': 1.75,
+    'gantryFootings': True,
     'gravity': 0.8,
     # the temple (its hall, its west tower and its roofs) stays where it is
     'keepBodies': [0, 1, 6, 7],
