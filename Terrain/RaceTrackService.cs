@@ -52,7 +52,10 @@ internal static class RaceTrackService
         // RailCamera: the camera rides the raised road behind the car (RaceTrackPlan.RailCamera: cells behind, units up, cells ahead).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] double[]? RailCamera = null,
         // Others: the tracks of the other islands built into the folder with this one, each a record of its own (with no Others).
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<TrackInfo>? Others = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<TrackInfo>? Others = null,
+        // Loops: the vertical loops (RaceTrackPlan.Loops), each [cube x, cube z, x, y, z (the ring's foot, cube-local), the lap's way there
+        // (x and z, a thousand long), the ring's radius, how far across the car comes out (world units), the gap at its top (degrees)].
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Loops = null);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
@@ -67,9 +70,11 @@ internal static class RaceTrackService
 
     // A race track built by an older version of the editor, before the grid (and with it the qualifying lap and the count-down): its
     // RACETRACK.JSON has no grid spots, or there is none. The race-track mode then starts the old way; building it again brings them.
-    // (an island with a track in each weather file has its grid in the one that carries the race; `track`: the one to be raced, else the first)
+    // (an island with a track in each weather file has its grid in the one that carries the race; `track`: the one to be raced, else the
+    // first. A track with no opponents -- the old moon's loops -- has no grid to line them up on.)
     public static bool IsOutdated(string gameDirectory, TrackInfo? track = null) =>
-        HasBackups(gameDirectory) && (track ?? ReadInfo(gameDirectory)) is var info && (info?.Twin ?? info)?.Grid is not { Count: > 0 };
+        HasBackups(gameDirectory) && (track ?? ReadInfo(gameDirectory)) is var info && (info?.Twin ?? info)?.Grid is not { Count: > 0 }
+        && !(info is not null && RaceTrackIsland.ByName(info.Island).NoOpponents);
 
     // The folder's tracks: the first built, then the others (each with no Others of its own).
     public static List<TrackInfo> Tracks(TrackInfo? info) =>
@@ -115,11 +120,11 @@ internal static class RaceTrackService
     {
         var tracks = Tracks(ReadInfo(gameDirectory));
         if (tracks.Count == 0) return null;
-        if (tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island) is var i && i.CopiesScene is not null && scene >= i.FirstScene && scene <= i.LastScene) is { } its) return its;
+        if (tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island) is var i && (i.CopiesScene is not null || i.CopiesScenes is not null) && scene >= i.FirstScene && scene <= i.LastScene) is { } its) return its;
         try
         {
             var record = HqrArchive.Open(Path.Combine(gameDirectory, "SCENE.HQR")).Read(scene + 1);
-            if (record.Length > 0 && tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island) is var i && i.IslandByte == record[0] && i.CopiesScene is null) is { } own) return own;
+            if (record.Length > 0 && tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island) is var i && i.IslandByte == record[0] && i.CopiesScene is null && i.CopiesScenes is null) is { } own) return own;
         }
         catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException) { }
         return tracks[0];
@@ -454,7 +459,18 @@ internal static class RaceTrackService
         return new TrackInfo(options.Crossing.ToString(), line, checkpoints, path.Count > 0 ? path : null, 4, scenes.Opponent.Count > 0 ? scenes.Opponent : null, scenes.StartScene,
             rivals.Count > 0 ? rivals : null, scenes.Grid.Count > 0 ? scenes.Grid : null, scenes.Pits.Count > 0 ? scenes.Pits : null, options.Island.Name,
             options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile ? RaceTrackStory.StartArrow : -1,
-            Raised: raised ? report.Raised : null, Gravity: raised ? report.Gravity : null, RailCamera: raised ? report.RailCamera : null);
+            Raised: raised ? report.Raised : null, Gravity: raised ? report.Gravity : null, RailCamera: raised ? report.RailCamera : null,
+            Loops: report.Loops.Count > 0 ? report.Loops.Select(LoopRecord).ToList() : null);
+    }
+
+    private static int[] LoopRecord(LoopInfo l)
+    {
+        int cx = (int)Math.Floor(l.X / 64), cz = (int)Math.Floor(l.Z / 64);
+        return new[]
+        {
+            cx, cz, (int)Math.Round((l.X - cx * 64) * 512), (int)Math.Round(l.Y), (int)Math.Round((l.Z - cz * 64) * 512),
+            (int)Math.Round(l.DirX * 1000), (int)Math.Round(l.DirZ * 1000), (int)Math.Round(l.Radius * 512), (int)Math.Round(l.Shift * 512), (int)Math.Round(l.Gap),
+        };
     }
 
     // The folder's RACETRACK.JSON, or null when there is none (or it can't be read: a track built before the file existed).

@@ -89,6 +89,13 @@ S32 RaceMod_Rescue(void);
 // non-zero when it is such a hit.
 S32 RaceMod_CarHit(void);
 
+// While racing, an island drawn from another file than its own (the car file's island_file=): that file's name, or NULL.
+const char *RaceMod_IslandFile(S32 island);
+
+// While racing, the hero's car carried round a vertical loop (the car file's loop=): non-zero when it is, with its new place in
+// *nx..*nz (DoAnimExt). Stands the car level again whenever nothing pitches it.
+S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);
+
 // A test pilot for headless runs (the console's `autodrive`): on, the player's car is driven along the first opponent's line. Its input,
 // ORed into the frame's own.
 void RaceMod_AutoDrive(int on, double lookCells);

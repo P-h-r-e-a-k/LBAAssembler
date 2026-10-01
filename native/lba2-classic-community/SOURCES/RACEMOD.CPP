@@ -224,6 +224,21 @@ static int s_onlyNear = -1;                // RaisedAt looks only at the road's 
 #define RAIL_CAMERA_NEAREST 2560            // ... but no nearer than this
 #define RAISED_UNDER 650                   // how far under such a level's surface the following camera's eye stays (its slab is 200)
 static int s_rescueOn = 1;                 // rescue=: a car in the lava or the sea is put back on the road (RaceMod_Rescue)
+// island_file=<island> <name>: while racing, that island is drawn from the file <name> instead of its own -- a track on an island file the
+// game never loads (MOON.ILE, the Emerald Moon's older copy, raced as island 3's)
+static int s_fileIsland = -1;
+static char s_fileName[32] = "";
+// Vertical loops (loop=, RaceMod_Loop): a ring standing on the road, its foot at the lap's point there (X, Y, Z, cube-local) and its plane
+// along the lap's way (DirX, DirZ, a unit vector). R: from the ring's middle to its road surface. Shift: how far across the car comes
+// down from where it went in (+ to the right of the way, as the builder's lanes are: in on the left, out on the right, past the ring's
+// own foot). Gap: the part of its top that is missing (radians, 0 none), which the car is carried over upside down.
+#define RACE_MAX_LOOPS 4
+typedef struct {
+    int CubeX, CubeZ;
+    double X, Y, Z, DirX, DirZ, R, Shift, Gap;
+} T_RACE_LOOP;
+static T_RACE_LOOP s_loops[RACE_MAX_LOOPS];
+static int s_nbLoops = 0;
 static int s_statue = -1;                // statue=: 1 with the statue, 0 without it, -1 (not given) as the game says
 static int s_raisedLoop = 0;               // the road is a whole lap: its last point is its first
 static double s_gravity = 0;               // gravity=<k>: a car on the raised road is pulled down its slopes (RaceMod_Gravity), k times as hard as RACE_GRAVITY
@@ -866,6 +881,8 @@ static void OnSpot(T_RACE_OPPONENT *o, const T_RACE_SPOT *spot) {
     o->Speed = 0;
 }
 
+static S32 RaceCameraEye(S32 *eye, S32 *target);
+
 static void Load(const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) return;
@@ -921,6 +938,22 @@ static void Load(const char *path) {
             if (sscanf(v, "%lf %lf %lf", &s_railBack, &s_railUp, &s_railLead) != 3) s_railBack = 0;
         }
         else if (!strcmp(key, "holo_arrow")) s_holoArrow = atoi(v);
+        else if (!strcmp(key, "island_file")) {
+            if (sscanf(v, "%d %31s", &s_fileIsland, s_fileName) != 2) s_fileIsland = -1;
+        }
+        else if (!strcmp(key, "loop")) {
+            T_RACE_LOOP *l = &s_loops[s_nbLoops];
+            double dx, dz, gap;
+            if (s_nbLoops < RACE_MAX_LOOPS
+                    && sscanf(v, "%d %d %lf %lf %lf %lf %lf %lf %lf %lf", &l->CubeX, &l->CubeZ, &l->X, &l->Y, &l->Z, &dx, &dz, &l->R, &l->Shift, &gap) == 10) {
+                const double len = sqrt(dx * dx + dz * dz);
+                if (len > 0 && l->R > 0) {
+                    l->DirX = dx / len; l->DirZ = dz / len;
+                    l->Gap = gap * 3.14159265358979 / 180;
+                    s_nbLoops++;
+                }
+            }
+        }
         else if (!strcmp(key, "qualifying_seed")) s_seed = (unsigned)strtoul(v, NULL, 10);
         else if (!strcmp(key, "hide_actor")) {
             if (s_nbHidden < RACE_MAX_HIDDEN && sscanf(v, "%d %d", &s_hideScene[s_nbHidden], &s_hideActor[s_nbHidden]) == 2) s_nbHidden++;
@@ -946,6 +979,8 @@ static void Load(const char *path) {
         }
     }
     fclose(f);
+    // (a lap with loops: the camera that follows the car looks at a loop from its side while the car goes round it)
+    if (s_nbLoops) FollowCamEyeHook = RaceCameraEye;
     if (s_car.Gears < 1) s_car.Gears = 1;
     if (s_car.Gears > RACE_MAX_GEARS) s_car.Gears = RACE_MAX_GEARS;
     for (S32 g = 0; g < s_car.Gears; g++)
@@ -1260,16 +1295,33 @@ static void FormGrid(S32 now) {
 // gets him in. A scene's start keeps no facing -- he comes in facing whatever way he last did -- and the car takes him only when he
 // faces it. Once, in the start line's scene.
 static int s_faced = 0;
+// (a track with no grid -- no opponents to line up: the old moon's loops -- has the car itself to go by, and Twinsen is brought up to its
+// side, where the action key reaches it: the build leaves him a couple of cells behind it)
 static void FaceTheCar(void) {
-    if (s_faced || !s_nbSpots || CubeMode != CUBE_EXTERIEUR) return;
-    const T_RACE_SPOT *pole = &s_spots[0];
-    if (CurrentCubeX != pole->CubeX || CurrentCubeY != pole->CubeZ) return;
-    s_faced = 1;
+    if (s_faced || CubeMode != CUBE_EXTERIEUR) return;
     T_OBJET *hero = &ListObjet[NUM_PERSO];
+    double dx, dz;
+    S32 y;
+    int own = 0;
+    if (s_nbSpots) {
+        const T_RACE_SPOT *pole = &s_spots[0];
+        if (CurrentCubeX != pole->CubeX || CurrentCubeY != pole->CubeZ) return;
+        dx = pole->X - hero->Obj.X; dz = pole->Z - hero->Obj.Z; y = pole->Y;
+    } else {
+        if (!s_car.HasLine || !IsBuggyPresent() || CurrentCubeX != s_car.LineCubeX || CurrentCubeY != s_car.LineCubeZ) return;
+        const T_OBJET *buggy = &ListObjet[NUM_BUGGY];
+        dx = buggy->Obj.X - hero->Obj.X; dz = buggy->Obj.Z - hero->Obj.Z; y = buggy->Obj.Y;
+        own = 1;
+    }
+    s_faced = 1;
     if (Comportement == C_BUGGY) return;
-    const double dx = pole->X - hero->Obj.X, dz = pole->Z - hero->Obj.Z;
-    if (dx * dx + dz * dz > 3.0 * 512 * 3.0 * 512 || abs(pole->Y - hero->Obj.Y) > 600) return;
+    if (dx * dx + dz * dz > 3.0 * 512 * 3.0 * 512 || abs(y - hero->Obj.Y) > 600) return;
     hero->Obj.Beta = (S32)(atan2(dx, dz) * 4096.0 / (2 * 3.14159265358979)) & 4095;
+    if (own) {
+        // (a cell short of the car's middle: within the action key's reach, outside its box)
+        const double d = sqrt(dx * dx + dz * dz), step = d - 512;
+        if (d > 0 && step > 0) { hero->Obj.X += (S32)(dx / d * step); hero->Obj.Z += (S32)(dz / d * step); }
+    }
     ClearRealAngle(hero);
     Log_Info("[racemod] Twinsen turned to face his car (turn %d)", (int)hero->Obj.Beta);
 }
@@ -1325,6 +1377,184 @@ S32 RaceMod_CarHit(void) {
     return 1;
 }
 
+// ---- vertical loops ----
+// The car rides round a loop's ring instead of over the ground: up from its foot, over the top upside down and down again, its speed
+// changed by the climb and the drop as a real car's would be. Going round a ring of radius R it stays on while v^2/R + g cos(theta)
+// is positive (theta 0 at the foot, half a turn at the top), which over the top takes an entry speed of sqrt(5 g R) with nothing pushing
+// it on. RACE_LOOP_G is that g (units/s^2): at full speed, 34 km/h (4836 units/s), a car goes round a ring of 4 cells (2048) with room
+// to spare; under about 28 km/h it doesn't -- 21 km/h with the throttle held, which pushes it on with RACE_LOOP_PUSH as far as the
+// ring presses back on its wheels (all of it at the foot, nothing at the top of a loop taken at the least speed it can be); the brakes
+// slow it as far too. Too slow, it falls off -- or, below the quarter, where nothing throws it off, it rolls back down and out
+// backwards. A ring with a gap at its top is the other kind: the car is carried round it at the speed it came in with (RACE_LOOP_CARRY
+// at the least), the jump over the gap upside down as well (RACE_LOOP_DIP inside the ring's line at its middle) -- it never falls.
+#define RACE_PI 3.14159265358979
+#define RACE_LOOP_G 1600.0
+#define RACE_LOOP_PUSH 600.0
+#define RACE_LOOP_DIP 300.0
+#define RACE_LOOP_CARRY 2500.0
+#define RACE_LOOP_ENTRY 1100.0     // how far past either lane across the road the ring's foot still takes a car in (units)
+#define RACE_LOOP_FALL_HOLD 900
+enum { LOOP_NONE, LOOP_RIDE, LOOP_GAP, LOOP_FALL };
+static int s_loopOn = -1, s_loopState = LOOP_NONE;
+static double s_theta = 0, s_loopV = 0, s_loopErr = 0, s_gapOmega = 0;
+static double s_fallX, s_fallY, s_fallZ, s_fallVX, s_fallVY, s_fallVZ, s_fallSpin, s_fallTheta;
+static S32 s_loopBeta = 0, s_loopTime = 0;
+
+const char *RaceMod_IslandFile(S32 island) {
+    return RaceMod_Active() && s_fileName[0] && s_fileIsland == island ? s_fileName : NULL;
+}
+
+// Where the car is `theta` round the ring, `radius` from its middle: across the road it goes from Shift/2 left of the middle at the foot
+// round to Shift/2 right of it, and the place across it went in at fades into that over the first quarter.
+static void LoopPlace(const T_RACE_LOOP *l, double theta, double radius, double *x, double *y, double *z) {
+    const double fade = theta < RACE_PI / 2 ? 1 - theta / (RACE_PI / 2) : 0;
+    const double across = -l->Shift / 2 + l->Shift * theta / (2 * RACE_PI) + s_loopErr * fade;
+    const double along = radius * sin(theta);
+    *x = l->X + l->DirX * along - l->DirZ * across;
+    *z = l->Z + l->DirZ * along + l->DirX * across;
+    *y = l->Y + l->R - radius * cos(theta);
+}
+
+static S32 LoopAlpha(double theta) { return (S32)floor(-theta * 4096 / (2 * RACE_PI) + 0.5) & 4095; }
+
+static void LoopEnd(T_OBJ_3D *obj, double v, const char *how) {
+    obj->Alpha = 0;
+    ListBuggy[0].Speed = (S32)v;
+    Log_Info("[racemod] loop %d: %s at %.0f units/s", s_loopOn + 1, how, v);
+    s_loopOn = -1; s_loopState = LOOP_NONE;
+    s_forgetLap = 1;
+}
+
+// For DoAnimExt (EXTFUNC.CPP), on the hero, after his car's move from (ox,oy,oz) towards (*nx,*ny,*nz): non-zero when a loop carries
+// the car this frame -- the new place is in *nx..*nz, and nothing else is to move it (no ground, no collisions: the ring has none).
+// Also stands the car level again whenever neither a loop nor a flight's master rotation pitches it (a flight cut short left it so).
+S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    T_OBJ_3D *obj = &hero->Obj;
+    if (!RaceMod_Active() || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) { s_loopOn = -1; s_loopState = LOOP_NONE; return 0; }
+    if (s_loopState == LOOP_NONE) {
+        if (!(obj->Master & 1) && obj->Alpha) obj->Alpha = 0;
+        if (!s_nbLoops || (hero->WorkFlags & (FALLING | ANIM_MASTER_GRAVITY)) || ListBuggy[0].Speed <= 0) return 0;
+        for (int i = 0; i < s_nbLoops; i++) {
+            const T_RACE_LOOP *l = &s_loops[i];
+            if (l->CubeX != CurrentCubeX || l->CubeZ != CurrentCubeY || fabs(oy - l->Y) > 600) continue;
+            // (the line across the road at the ring's foot, crossed the lap's way)
+            const double a0 = (ox - l->X) * l->DirX + (oz - l->Z) * l->DirZ;
+            const double a1 = (*nx - l->X) * l->DirX + (*nz - l->Z) * l->DirZ;
+            if (!(a0 < 0 && a1 >= 0)) continue;
+            const double t = a0 / (a0 - a1);
+            const double cx = ox + (*nx - ox) * t, cz = oz + (*nz - oz) * t;
+            const double across = -(cx - l->X) * l->DirZ + (cz - l->Z) * l->DirX;
+            if (fabs(across) > l->Shift / 2 + RACE_LOOP_ENTRY) continue;
+            s_loopOn = i; s_loopState = LOOP_RIDE;
+            s_theta = 0; s_loopV = ListBuggy[0].Speed; s_loopErr = across + l->Shift / 2;
+            if (l->Gap > 0 && s_loopV < RACE_LOOP_CARRY) s_loopV = RACE_LOOP_CARRY;
+            s_loopBeta = (S32)floor(atan2(l->DirX, l->DirZ) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+            s_loopTime = TimerRefHR;
+            Log_Info("[racemod] loop %d: in at %d units/s, %.0f across", i + 1, (int)ListBuggy[0].Speed, s_loopErr);
+            break;
+        }
+        if (s_loopState == LOOP_NONE) return 0;
+    }
+    const T_RACE_LOOP *l = &s_loops[s_loopOn];
+    double dt = (TimerRefHR - s_loopTime) / 1000.0;
+    s_loopTime = TimerRefHR;
+    if (dt < 0) dt = 0;
+    if (dt > 0.1) dt = 0.1;
+    double x = obj->X, y = obj->Y, z = obj->Z;
+    if (s_loopState == LOOP_FALL) {
+        s_fallVY -= RACE_LOOP_G * dt;
+        s_fallX += s_fallVX * dt; s_fallY += s_fallVY * dt; s_fallZ += s_fallVZ * dt;
+        s_fallTheta += s_fallSpin * dt;
+        if (s_fallX < 600) s_fallX = 600;
+        if (s_fallX > 32168) s_fallX = 32168;
+        if (s_fallZ < 600) s_fallZ = 600;
+        if (s_fallZ > 32168) s_fallZ = 32168;
+        const S32 ground = CalculAltitudeObjet((S32)s_fallX, (S32)s_fallZ, -1);
+        x = s_fallX; y = s_fallY; z = s_fallZ;
+        obj->Alpha = LoopAlpha(s_fallTheta);
+        if (y <= ground) {
+            y = ground;
+            s_hitUntil = TimerRefHR + RACE_LOOP_FALL_HOLD;
+            Message("Fell off the loop");
+            LoopEnd(obj, 0, "fell off, landed");
+        }
+    } else {
+        if (s_loopState == LOOP_RIDE && l->Gap > 0) {
+            // (carried round: the same speed all the way)
+            s_theta += s_loopV * dt / l->R;
+            if (s_theta >= RACE_PI - l->Gap / 2 && s_theta < RACE_PI + l->Gap / 2) {
+                s_loopState = LOOP_GAP;
+                s_gapOmega = s_loopV / l->R;
+                Log_Info("[racemod] loop %d: over the gap at %.0f units/s", s_loopOn + 1, s_loopV);
+            }
+        } else if (s_loopState == LOOP_RIDE) {
+            const double press = s_loopV * s_loopV / l->R + RACE_LOOP_G * cos(s_theta);
+            if (press < 0) {
+                // off the ring: thrown along it, still turning as it was
+                LoopPlace(l, s_theta, l->R, &s_fallX, &s_fallY, &s_fallZ);
+                s_fallVX = l->DirX * s_loopV * cos(s_theta); s_fallVZ = l->DirZ * s_loopV * cos(s_theta);
+                s_fallVY = s_loopV * sin(s_theta);
+                s_fallSpin = s_loopV / l->R; s_fallTheta = s_theta;
+                s_loopState = LOOP_FALL;
+                Log_Info("[racemod] loop %d: falls off at %.0f degrees, %.0f units/s", s_loopOn + 1, s_theta * 180 / RACE_PI, s_loopV);
+                obj->Alpha = LoopAlpha(s_theta);
+                *nx = (S32)s_fallX; *ny = (S32)s_fallY; *nz = (S32)s_fallZ;
+                return 1;
+            }
+            const double grip = press >= RACE_LOOP_G ? 1 : press / RACE_LOOP_G;
+            double a = -RACE_LOOP_G * sin(s_theta);
+            const double top = s_car.GearTop[s_car.Gears - 1];
+            if ((Input & I_UP) && s_loopV < top) a += RACE_LOOP_PUSH * grip;
+            if ((Input & I_DOWN) && s_loopV > 0) a -= s_car.Brake * grip;
+            s_loopV += a * dt;
+            s_theta += s_loopV * dt / l->R;
+        } else {
+            s_theta += s_gapOmega * dt;
+            if (s_theta >= RACE_PI + l->Gap / 2) { s_loopState = LOOP_RIDE; s_loopV = s_gapOmega * l->R; }
+        }
+        if (s_theta >= 2 * RACE_PI) {
+            LoopPlace(l, 2 * RACE_PI, l->R, &x, &y, &z);
+            y = l->Y;
+            LoopEnd(obj, s_loopV, "round");
+        } else if (s_theta < 0) {
+            LoopPlace(l, 0, l->R, &x, &y, &z);
+            y = l->Y;
+            LoopEnd(obj, s_loopV, "rolled back out");
+        } else {
+            double radius = l->R;
+            if (s_loopState == LOOP_GAP) {
+                const double u = (s_theta - (RACE_PI - l->Gap / 2)) / l->Gap;
+                radius -= RACE_LOOP_DIP * sin(RACE_PI * (u < 0 ? 0 : u > 1 ? 1 : u));
+            }
+            LoopPlace(l, s_theta, radius, &x, &y, &z);
+            obj->Alpha = LoopAlpha(s_theta);
+            ListBuggy[0].Speed = (S32)s_loopV;
+        }
+    }
+    obj->Beta = s_loopBeta;
+    *nx = (S32)floor(x + 0.5); *ny = (S32)floor(y + 0.5); *nz = (S32)floor(z + 0.5);
+    return 1;
+}
+
+// The camera while the car goes round a loop: an arm behind the car would look into the ring's own back -- the part of it coming down
+// behind its foot, between the arm's eye and the car -- so the eye stands out to the ring's side, RACE_LOOP_CAM_FAR radii from its
+// middle on the side the car goes in on and a little over it, looking at the ring's middle drawn a little towards the car.
+#define RACE_LOOP_CAM_FAR 3.2
+static S32 LoopCamera(S32 *eye, S32 *target) {
+    if (s_loopOn < 0 || s_loopState == LOOP_NONE) return FALSE;
+    const T_RACE_LOOP *l = &s_loops[s_loopOn];
+    const T_OBJ_3D *car = &ListObjet[NUM_PERSO].Obj;
+    const double nx = -l->DirZ, nz = l->DirX;
+    const double mx = l->X, my = l->Y + l->R, mz = l->Z;
+    const double far = l->R * RACE_LOOP_CAM_FAR + l->Shift / 2;
+    eye[0] = (S32)(mx - nx * far); eye[1] = (S32)(l->Y + l->R * 1.2); eye[2] = (S32)(mz - nz * far);
+    target[0] = (S32)(mx + (car->X - mx) * 0.3); target[1] = (S32)(my + (car->Y - my) * 0.3); target[2] = (S32)(mz + (car->Z - mz) * 0.3);
+    return TRUE;
+}
+
+static S32 RaceCameraEye(S32 *eye, S32 *target) { return LoopCamera(eye, target) || RailCamera(eye, target); }
+
 S32 RaceMod_Rescue(void) {
     if (!RaceMod_Active() || !s_rescueOn || Comportement != C_BUGGY || !s_opp[0].Count || s_safeIndex < 0) return 0;
     s_rescue = 1;
@@ -1362,6 +1592,7 @@ void RaceMod_Frame(void) {
     // is turned on -- once, with the first frame (the settings have been read by then), and the console's cam_follow can still turn it off.
     static int followed = 0;
     if (!followed && s_nbRaised) { FollowCamera = TRUE; followed = 1; Log_Info("[racemod] raised road: the camera follows the car"); }
+    if (!followed && s_nbLoops) { FollowCamera = TRUE; followed = 1; Log_Info("[racemod] loops: the camera follows the car"); }
     FaceTheCar();
     const S32 now = TimerRefHR;
     S32 dt = s_oppLast ? now - s_oppLast : 0;

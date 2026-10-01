@@ -348,6 +348,9 @@ void InitGrilleExt(U32 numcube) {
             *(char *)strchr(IslandName, ';') = '\0';
 
         numskysea = RESS_SKYSEA0 + Island;
+        // a race-track mod's track on an island file the game never loads (MOON.ILE, the Emerald Moon's older copy): raced as this
+        // island's, with its sky and palette (RACEMOD.CPP RaceMod_IslandFile)
+        if (const char *raced = RaceMod_IslandFile(Island)) strcpy(IslandName, raced);
     }
 
     if (NumCube != NUM_CUBE_PHANTOM) {
@@ -2020,6 +2023,17 @@ static void DoAnimExtGround(U8 numobj) {
         if (APtObj->Move == MOVE_BUGGY_MANUAL) {
             DoAnimBuggy(APtObj);
         }
+    }
+
+    // a race-track mod's vertical loop carries the car round its ring (RACEMOD.CPP RaceMod_Loop): nothing else moves it -- no ground,
+    // no collisions -- and up there is no place to be put back to
+    if (numobj == NUM_PERSO AND RaceMod_Loop(OldX, OldY, OldZ, &Nxw, &Nyw, &Nzw)) {
+        APtObj->WorkFlags &= ~(FALLING | SKATING);
+        APtObj->Obj.X = Nxw;
+        APtObj->Obj.Y = Nyw;
+        APtObj->Obj.Z = Nzw;
+        validepos = FALSE;
+        goto findoanimext;
     }
 
     if (!(APtObj->WorkFlags & FALLING)

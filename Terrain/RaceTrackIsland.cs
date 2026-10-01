@@ -122,11 +122,36 @@ internal sealed record RaceTrackIsland(
     // As a list of the tracks built names it.
     public string Built => TwinPlanResource is not null ? $"{Name.Split(',')[0]} (the storm track and the town circuit)" : Name;
 
+    // The Emerald Moon's older copy (MOON.ILE and MOON.OBL, 14 February 1997): the same moon as EMERAUDE.ILE, island 3, its heights all
+    // but the same and its texturing different, which no version of the game loads -- free ground for a test track. The race-track mode
+    // draws island 3 from it (the car file's island_file=: RaceFile), in scenes of its own, 225-228, copies of the Emerald Moon's four
+    // outside scenes 74-77 (CopiesScenes). Its lap runs round the moon base on the crater's floor, through two vertical loops (the plan's
+    // Loops: RACEMOD.CPP carries the car round them), one with a gap at its top that the car is carried over upside down. No opponents
+    // (their cars don't go round loops) and nothing drawn on the holomap (island 3's picture is the Emerald Moon's).
+    public static readonly RaceTrackIsland Moon = new("The old moon", "MOON.ILE", "MOON.OBL", 3, 225, 228, 30, "RaceTrackPlan.Moon.json", null)
+    {
+        CopiesScenes = (74, 4), RaceFile = "moon", NoOpponents = true, NoHolomap = true,
+        Title = "The old moon (MOON.ILE): two vertical loops",
+    };
+
     // The island isn't in the game: the build makes its files and its scene (Sendell's Well). They have no originals to keep, so the
     // build's backups leave them out (KeptFiles); it makes them afresh every time, and putting the folder back deletes them.
     public bool Created { get; init; }
+    // Scenes the track races in that the game hasn't got: copies of `Count` original scenes from `First` on, numbered from FirstScene
+    // (RaceTrackScenes.AddScene; CopiesScene is one).
+    public (int First, int Count)? CopiesScenes { get; init; }
+    // The file the race-track mode draws the island from instead of its own (the car file's island_file=): an island file no version of
+    // the game loads (MOON).
+    public string? RaceFile { get; init; }
+    // No opponents' cars in its scenes; nothing drawn on the holomap.
+    public bool NoOpponents { get; init; }
+    public bool NoHolomap { get; init; }
+    // The scenes the build adds, as (original, copy) pairs.
+    public IEnumerable<(int From, int To)> AddedScenes =>
+        CopiesScenes is { } many ? Enumerable.Range(0, many.Count).Select(k => (many.First + k, FirstScene + k))
+        : CopiesScene is { } one ? new[] { (one, FirstScene) } : Enumerable.Empty<(int, int)>();
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

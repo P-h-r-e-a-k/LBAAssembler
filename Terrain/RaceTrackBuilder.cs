@@ -83,6 +83,12 @@ internal sealed class RaceTrackPlan
     // Land mines: [cell x, cell z] each (from the origin), off the road where a car could go round part of the lap -- Mosquibees Island's
     // way round its jump. Each is a copy of the retail Desert island's mine (RaceTrackScenes.AddMine).
     public double[][]? Mines { get; set; }
+    // Vertical loops (with Heights): each [the point at the ring's foot, the ring's radius to its road surface (cells), how far across the
+    // car comes down from where it went in (cells), the gap at its top (degrees, 0: none)]. A ring stands on the road there, in the plane
+    // of the lap's way (RaceTrackLoopBody), and the engine's race-track mode carries the car round it (RACEMOD.CPP RaceMod_Loop): round a
+    // whole ring as a real car would go, falling off if too slow; round a ring with a gap at its top at the speed it came in with, over
+    // the gap upside down. The road must run straight and level for the radius and more either side of the foot.
+    public double[][]? Loops { get; set; }
     public bool Planned => Heights is { Length: > 0 } h && h.Length == Points.Length;
 
     // The plan's own road widths and sea clearance, onto the options a build uses.
@@ -134,6 +140,10 @@ internal enum CrossingStyle { Level, Viaduct, Jump, Bridge }
 // Where a jump takes off and lands (island cell coordinates), what the scene needs to run it. Index: which of the lap's jumps (its zone,
 // its flight and its labels in the hero's track script are its own); S0, S1: where its flight starts and ends along the lap (cells, the
 // lap's own distance from its first point: the flight is over that stretch of it, and no other).
+// A vertical loop as built (RaceTrackPlan.Loops): its foot (island cells), the road's height there, the lap's way, the ring's radius and
+// how far across the car comes out of it (cells), its top's gap (degrees), and the lap's point at the foot.
+internal sealed record LoopInfo(double X, double Z, double Y, double DirX, double DirZ, double Radius, double Shift, double Gap, int Point);
+
 internal sealed record JumpInfo(double StartX, double StartZ, double LandX, double LandZ, double DirX, double DirZ, int Beta, double Height,
     int CubeX, int CubeZ, List<(int X0, int Z0, int X1, int Z1)> Boxes, int Zone, int Anim, double FlightScale, double FlightCells,
     int Index = 0, double S0 = 0, double S1 = 0);
@@ -271,7 +281,11 @@ internal sealed class RaceTrackOptions
 
     // An island's track as it is always built: its crossing (RaceTrackIsland.Crossing) and, on the Desert island, the retail track's
     // leftovers cleared (the race track window and the command line's builds both start from this).
-    public static RaceTrackOptions For(RaceTrackIsland island) => new() { Island = island, OldTrackCube = island.OldTrackCube, Crossing = island.Crossing };
+    public static RaceTrackOptions For(RaceTrackIsland island) => new()
+    {
+        Island = island, OldTrackCube = island.OldTrackCube, Crossing = island.Crossing,
+        AddOpponent = !island.NoOpponents, AddBaldino = !island.NoOpponents, AddBiker = !island.NoOpponents, DrawOnHolomap = !island.NoHolomap,
+    };
     public RaceTrackTheme Theme { get; set; } = RaceTrackTheme.Retail;
     // The retail track's own decor pieces: start gantry (64-66), billboard (67), arch and its abutments (68-70), wedge (71). The
     // garage's lamp (36) and the sphero's crystal (1) stay.
@@ -336,6 +350,8 @@ internal sealed class RaceTrackReport
     public List<string> Placed { get; } = new();
     // The lap's jumps (a plan's gap jumps, in the plan's order; the crossing's jump).
     public List<JumpInfo> Jumps { get; } = new();
+    // The plan's vertical loops (RaceTrackPlan.Loops).
+    public List<LoopInfo> Loops { get; } = new();
     public JumpInfo? Jump => Jumps.Count > 0 ? Jumps[0] : null;
     public RoadBridgeInfo? RoadBridge { get; set; }
     // How far (cells) an island cell position is from the nearest road's centre line, 1e9 when far away.
@@ -499,6 +515,13 @@ internal static class RaceTrackBuilder
             if (options.Crossing == CrossingStyle.Bridge && crossings.Count > 0) report.RoadBridge = PlanRoadBridge(main, BridgeSpan(main, crossings, options), options, report);
         }
         foreach (var (a, b) in report.BridgeSpans) report.BridgeCoords.Add((main.X[a], main.Z[a], main.X[b], main.Z[b]));
+        if (planned)
+            foreach (var l in plan.Loops ?? Array.Empty<double[]>())
+            {
+                if (l.Length < 4) continue;
+                var k = PlanPoint(plan, main, (int)l[0]);
+                report.Loops.Add(new LoopInfo(main.X[k], main.Z[k], main.H[k], main.Tx[k], main.Tz[k], l[1], l[2], l[3], k));
+            }
 
         if (plan.PitA is { } pa && plan.PitB is { } pb) roads.Add(MakePit(main, plan, pa, pb, options, report));
 
@@ -536,6 +559,7 @@ internal static class RaceTrackBuilder
         PlanRacePath(main, report, options, RacerLine, report.RacePath, "the opponent's line");
         if (options.AddBaldino) PlanRacePath(main, report, options, BaldinoLine, report.BaldinoPath, "Baldino's line");
         if (options.AddBiker) PlanRacePath(main, report, options, BikerLine, report.BikerPath, "the biker's line");
+        if (report.Loops.Count > 0) { LaneIntoLoops(report, report.RacePath); LaneIntoLoops(report, report.BaldinoPath); LaneIntoLoops(report, report.BikerPath); }
         ClearStaleCol(island, natural, field, index, painted, report);
         if (planned) WallSteepBanks(island, natural, field, index, painted, options, report);
         follow.Apply();
@@ -1845,6 +1869,14 @@ internal static class RaceTrackBuilder
             if (from < 0) avoid.Add((from + r.Length, r.Length));
             if (to > r.Length) avoid.Add((0, to - r.Length));
         }
+        // (a loop: the car is in the air round its ring, a radius either side of its foot, and lines' heights don't reach it there)
+        foreach (var l in report.Loops)
+        {
+            var a = Ahead(l.Point);
+            avoid.Add((a - l.Radius - 6, a + l.Radius + 6));
+            if (a - l.Radius - 6 < 0) avoid.Add((a - l.Radius - 6 + r.Length, r.Length));
+            if (a + l.Radius + 6 > r.Length) avoid.Add((0, a + l.Radius + 6 - r.Length));
+        }
         foreach (var c in FindCrossings(r, o))
         {
             // (where both roads leap over the crossing -- the lava lake's -- the jumps keep the lines off it)
@@ -3072,6 +3104,55 @@ internal static class RaceTrackBuilder
             foreach (var c in crossings) PlaceBridge(island, c.X, c.Z, main.H[c.I], c.BisX, c.BisZ, report, options);
         if ((options.Crossing == CrossingStyle.Bridge || planned) && report.RoadBridge is { } rb) PlaceDeck(island, rb, options, report);
         if (main.Raised is not null) PlaceRaised(island, main, options, report, startIndex);
+        if (report.Loops.Count > 0) PlaceLoops(island, options, report);
+    }
+
+    // Each loop's ring (RaceTrackLoopBody): a decor of its own at its foot, its box -- the ring's footprint on the road, its top far
+    // under it -- touching nothing (the engine carries the car round the ring; the box's corners decide whether the ring is drawn).
+    private static void PlaceLoops(IslandFile island, RaceTrackOptions o, RaceTrackReport report)
+    {
+        if (o.NewBodyBase < 0) { report.Notes.Add("WARNING: no place for the loops' rings was prepared (the island's OBL wasn't counted) -- no rings."); return; }
+        foreach (var l in report.Loops)
+        {
+            var wx = l.X * 512; var wz = l.Z * 512;
+            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { report.Notes.Add($"WARNING: the loop at cell ({l.X:0.0}, {l.Z:0.0}): no room for its ring"); continue; }
+            var along = new System.Numerics.Vector3((float)l.DirX, 0, (float)l.DirZ);
+            var radius = l.Radius * 512; var shift = l.Shift * 512; var half = LoopBandHalf * 512;
+            var body = RaceTrackLoopBody.Ring(along, radius, shift, half, l.Gap * Math.PI / 180);
+            var y = (int)Math.Round(l.Y);
+            var d = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, at.X, y, at.Z, 0);
+            var reach = (int)Math.Ceiling(radius + RaceTrackLoopBody.Thickness + 2 * RaceTrackLoopBody.LegHalf);
+            var wide = (int)Math.Ceiling(shift / 2 + half + RaceTrackLoopBody.RailWidth);
+            int ex = (int)Math.Ceiling(Math.Abs(l.DirX) * reach + Math.Abs(l.DirZ) * wide), ez = (int)Math.Ceiling(Math.Abs(l.DirZ) * reach + Math.Abs(l.DirX) * wide);
+            d.XMin = at.X - ex; d.XMax = at.X + ex; d.ZMin = at.Z - ez; d.ZMax = at.Z + ez; d.YMin = y - 200; d.YMax = NoBoxTop;
+            at.Cube.Decors.Add(d);
+            report.NewBodies.Add(body);
+            report.Placed.Add($"loop at cell ({l.X:0.0}, {l.Z:0.0}): a ring of {l.Radius:0.0} cells, {l.Shift:0.0} across{(l.Gap > 0 ? $", a gap of {l.Gap:0} degrees at its top" : "")}, height {y}");
+        }
+    }
+
+    // a loop ring's band: from its middle to its rails (cells)
+    private const double LoopBandHalf = 1.3;
+
+    // The racing lines past a loop (only the test pilot drives them on a lap with loops: the opponents don't go round loops) run into
+    // its ring on its own lane -- left of the road's middle by half the loop's shift -- and away from it on the other.
+    private static void LaneIntoLoops(RaceTrackReport report, List<(double X, double Z, double Y, double Speed, double Radius)> line)
+    {
+        foreach (var l in report.Loops)
+        {
+            double nx = -l.DirZ, nz = l.DirX;
+            for (var i = 0; i < line.Count; i++)
+            {
+                var p = line[i];
+                double a = (p.X - l.X) * l.DirX + (p.Z - l.Z) * l.DirZ, s = (p.X - l.X) * nx + (p.Z - l.Z) * nz;
+                if (Math.Abs(a) > 16 || Math.Abs(s) > 6) continue;
+                var lane = a < 0 ? -l.Shift / 2 : l.Shift / 2;
+                var w = a < 0 ? Smooth((a + 16) / 8) : Smooth((16 - a) / 8);
+                var t = s + (lane - s) * w;
+                line[i] = (l.X + l.DirX * a + nx * t, l.Z + l.DirZ * a + nz * t, p.Y, p.Speed, p.Radius);
+            }
+        }
+        static double Smooth(double u) { u = Math.Clamp(u, 0, 1); return u * u * (3 - 2 * u); }
     }
 
     // The raised road (RaceTrackPlan.Raised): its pieces, a decor body each (RaceTrackRaisedBody.Tile) RaisedPiece cells long, and a pier

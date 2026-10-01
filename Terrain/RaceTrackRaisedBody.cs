@@ -20,7 +20,7 @@ internal static class RaceTrackRaisedBody
     // the slab's thickness and the rail's height (world units)
     public const double Thickness = 200, Rail = 220;
 
-    private sealed class Mesh
+    internal sealed class Mesh
     {
         public readonly List<Vector3> Points = new();
         public readonly List<Face> Faces = new();

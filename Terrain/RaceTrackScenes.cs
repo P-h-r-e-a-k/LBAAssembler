@@ -548,8 +548,9 @@ void comportement_1()
     // one outside scene carries the statue's track) gets it: a copy of the original scene it copies, numbered as the island's FirstScene
     // (the numbers between the game's last scene and it left empty: 222 is the holomap position of the story's arrow), and on the holomap
     // that scene's place (HOLOMAP.HQR entry 12, record 50 + the scene: where "Twinsen is here" goes). An island the build makes (Sendell's
-    // Well) gets one of its own (SendellWell.AddScene). Before Apply, which then edits it as the island's own. Returns a line for the
-    // build's log, or null for an island with scenes of its own.
+    // Well) gets one of its own (SendellWell.AddScene). Several scenes copied (the old moon's, RaceTrackIsland.CopiesScenes: the Emerald
+    // Moon's four outside scenes) have their cube changes to one another pointed at one another's copies. Before Apply, which then edits
+    // them as the island's own. Returns a line for the build's log, or null for an island with scenes of its own.
     public static string? AddScene(string gameDirectory, RaceTrackIsland island)
     {
         if (island.Created)
@@ -557,25 +558,42 @@ void comportement_1()
             SendellWell.AddScene(gameDirectory, island.FirstScene);
             return $"scene {island.FirstScene}: {island.Name}'s own, made from scene 44's (island {island.IslandByte}), with its place on the holomap";
         }
-        if (island.CopiesScene is not { } from) return null;
+        var pairs = island.AddedScenes.ToList();
+        if (pairs.Count == 0) return null;
         var path = Path.Combine(gameDirectory, "SCENE.HQR");
-        var original = File.Exists(path + RaceTrackService.BackupSuffix) ? path + RaceTrackService.BackupSuffix : path;
-        var record = HqrArchive.Open(original).Read(from + 1);
+        var original = HqrArchive.Open(File.Exists(path + RaceTrackService.BackupSuffix) ? path + RaceTrackService.BackupSuffix : path);
         var hqr = HqrFile.Parse(File.ReadAllBytes(path));
-        var entry = island.FirstScene + 1;
-        if (entry < hqr.Count && !hqr.IsEmpty(entry))
-            throw new InvalidDataException($"The game already has a scene {island.FirstScene}: {island.Shown} races in a copy of scene {from} numbered {island.FirstScene}.");
-        while (hqr.Count < entry) hqr.Slots.Add(new HqrFile.Slot());
-        if (hqr.Count == entry) hqr.Add(record); else hqr.SetStored(entry, record);
-        File.WriteAllBytes(path, hqr.ToBytes());
         var holoPath = Path.Combine(gameDirectory, RaceTrackHolomap.File);
         var arrows = HqrArchive.Open(holoPath).Read(12);
         const int size = 32;
-        int at = (50 + from) * size, to = (50 + island.FirstScene) * size;
-        if (arrows.Length < Math.Max(at, to) + size) throw new InvalidDataException("The holomap's position table is shorter than the game's own.");
-        arrows.AsSpan(at, size).CopyTo(arrows.AsSpan(to));
+        var copyOf = pairs.ToDictionary(p => p.From, p => p.To);
+        var retargeted = 0;
+        foreach (var (from, to) in pairs)
+        {
+            var record = original.Read(from + 1);
+            if (pairs.Count > 1)
+            {
+                var model = SceneSerializer.Parse(SceneGame.Lba2, record);
+                foreach (var zone in model.Zones.Where(z => z.Type == 0 && copyOf.ContainsKey(z.Num))) { zone.Num = copyOf[zone.Num]; retargeted++; }
+                // (and Twinsen's own life script goes: the Emerald Moon's scenes put him in his space suit whenever he comes in -- out of
+                // his car, as he drove into the next cube)
+                model.Hero.Life = new byte[] { 0 };
+                record = SceneSerializer.Write(model);
+            }
+            var entry = to + 1;
+            if (entry < hqr.Count && !hqr.IsEmpty(entry))
+                throw new InvalidDataException($"The game already has a scene {to}: {island.Shown} races in a copy of scene {from} numbered {to}.");
+            while (hqr.Count < entry) hqr.Slots.Add(new HqrFile.Slot());
+            if (hqr.Count == entry) hqr.Add(record); else hqr.SetStored(entry, record);
+            int at = (50 + from) * size, mine = (50 + to) * size;
+            if (arrows.Length < Math.Max(at, mine) + size) throw new InvalidDataException("The holomap's position table is shorter than the game's own.");
+            arrows.AsSpan(at, size).CopyTo(arrows.AsSpan(mine));
+        }
+        File.WriteAllBytes(path, hqr.ToBytes());
         File.WriteAllBytes(holoPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(holoPath), 12, HqrWriter.StoredEntry(arrows)));
-        return $"scene {island.FirstScene}: a copy of scene {from} for {island.Shown}, with its place on the holomap";
+        return pairs.Count == 1
+            ? $"scene {island.FirstScene}: a copy of scene {pairs[0].From} for {island.Shown}, with its place on the holomap"
+            : $"scenes {pairs[0].To}-{pairs[^1].To}: copies of scenes {pairs[0].From}-{pairs[^1].From} for {island.Shown}, with their places on the holomap ({retargeted} cube changes between them pointed at the copies, Twinsen's own life scripts emptied)";
     }
 
     // Where the scripts that stay (Twinsen's own life script, mostly) refer to actors about to be removed -- "if Twinsen is near the
