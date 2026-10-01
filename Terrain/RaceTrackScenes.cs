@@ -442,6 +442,9 @@ internal static class RaceTrackScenes
             foreach (var t in tracks)
                 foreach (var jump in t.Report.Jumps)
                     if (model.CubeX == jump.CubeX && model.CubeY == jump.CubeZ && AddJump(model, scene, jump, log) is { } jumped) model = jumped;
+            foreach (var t in tracks)
+                foreach (var mine in t.Report.Mines)
+                    if ((int)Math.Floor(mine.X / 64) == model.CubeX && (int)Math.Floor(mine.Z / 64) == model.CubeY && AddMine(model, scene, mine, t.Report, originals, log) is { } mined) model = mined;
             foreach (var t in tracks) edgeZonesAdded += CoverEdges(model, scene, t.Edges, log);
             changes.Add(new SceneChange(scene, model, null));
         }
@@ -492,13 +495,68 @@ internal static class RaceTrackScenes
         }
     }
 
+    // A land mine: a copy of the retail Desert island's own (scene 66, the minefield the story arms in chapter 4: entity 16, body 30),
+    // where the plan puts it, with its own track point. The retail one beeps when Twinsen comes within 1,250 and goes off half a second
+    // later (impact 15, at its point), then is gone; a car is 4 cells past it by then, so this one goes off as a car comes within
+    // MineReach, with no beep. Gone for the rest of the scene -- the lap's next cube change brings it back.
+    public const int MineScene = 66, MineActor = 7, MineImpact = 15, MineReach = 900;
+
+    private static SceneModel? AddMine(SceneModel model, int scene, (double X, double Z) mine, RaceTrackReport report, SceneStore originals, List<string> log)
+    {
+        SceneActorModel? template;
+        try { template = originals.Load(MineScene).Actors.ElementAtOrDefault(MineActor)?.Clone(); }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { log.Add($"scene {scene}: no land mine: scene {MineScene} could not be read ({e.Message})"); return null; }
+        if (template is null) { log.Add($"scene {scene}: no land mine: scene {MineScene} has no actor {MineActor}"); return null; }
+        int x = (int)Math.Round((mine.X - model.CubeX * 64) * 512), z = (int)Math.Round((mine.Z - model.CubeY * 64) * 512);
+        var y = (int)Math.Round(report.GroundAfter?.Invoke(mine.X, mine.Z) ?? 0);
+        var point = SceneOps.AddTrackPoint(model, new SceneTrackPoint(x, y, z));
+        template.X = x; template.Y = y; template.Z = z; template.Beta = 0;
+        var index = SceneOps.AddActor(model, template);
+        var life = $@"void comportement_0()
+{{
+    pos_point({point});
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    if ({MineReach} > distance(0))
+    {{
+        impact_point({point}, {MineImpact});
+        suicide();
+    }}
+}}
+";
+        try
+        {
+            var scripts = LBAAssembler.LbaScript.SceneScripts.Load(SceneSerializer.Write(model), scene);
+            scripts.SetText(index, LBAAssembler.LbaScript.ScriptKind.Life, life);
+            scripts.SetText(index, LBAAssembler.LbaScript.ScriptKind.Track, "label(0);\nstop();\n");
+            var built = scripts.Build();
+            if (!built.Ok) { foreach (var e in built.Errors) log.Add($"scene {scene}: land mine script: {e}"); return null; }
+            log.Add($"scene {scene}: a land mine at cell ({mine.X:0.0}, {mine.Z:0.0}), actor {index}, track point {point}");
+            return SceneSerializer.Parse(SceneGame.Lba2, built.Record!);
+        }
+        catch (Exception error) when (error is LBAAssembler.LbaScript.ScriptCompileException or InvalidDataException or ArgumentException)
+        {
+            log.Add($"scene {scene}: the land mine could not be built: {error.Message}");
+            return null;
+        }
+    }
+
     // An island whose track races in a scene the game hasn't got (Celebration Island's lava lake, RaceTrackIsland.CopiesScene: the island's
     // one outside scene carries the statue's track) gets it: a copy of the original scene it copies, numbered as the island's FirstScene
     // (the numbers between the game's last scene and it left empty: 222 is the holomap position of the story's arrow), and on the holomap
-    // that scene's place (HOLOMAP.HQR entry 12, record 50 + the scene: where "Twinsen is here" goes). Before Apply, which then edits it as
-    // the island's own. Returns a line for the build's log, or null for an island with scenes of its own.
+    // that scene's place (HOLOMAP.HQR entry 12, record 50 + the scene: where "Twinsen is here" goes). An island the build makes (Sendell's
+    // Well) gets one of its own (SendellWell.AddScene). Before Apply, which then edits it as the island's own. Returns a line for the
+    // build's log, or null for an island with scenes of its own.
     public static string? AddScene(string gameDirectory, RaceTrackIsland island)
     {
+        if (island.Created)
+        {
+            SendellWell.AddScene(gameDirectory, island.FirstScene);
+            return $"scene {island.FirstScene}: {island.Name}'s own, made from scene 44's (island {island.IslandByte}), with its place on the holomap";
+        }
         if (island.CopiesScene is not { } from) return null;
         var path = Path.Combine(gameDirectory, "SCENE.HQR");
         var original = File.Exists(path + RaceTrackService.BackupSuffix) ? path + RaceTrackService.BackupSuffix : path;

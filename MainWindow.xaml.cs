@@ -84,6 +84,8 @@ public partial class MainWindow : Window
     private int shadeLevel;
     private int lastExteriorPaletteIndex = 27; // RESS_XPL0 (Citadel), COMMON.H -- same fallback LoadIslandPalette itself uses
     private IReadOnlyList<FilterableComboBox.Option> islandOptions = Array.Empty<FilterableComboBox.Option>();
+    // SCENE.HQR's entries when the scene list was made (a race track build can add scenes: RaceTrackChanged)
+    private int sceneSlotsListed;
     private IReadOnlyList<FilterableComboBox.Option> sceneOptions = Array.Empty<FilterableComboBox.Option>();
     private FilterableComboBox? islandFilter;
     private FilterableComboBox? sceneFilter;
@@ -247,6 +249,7 @@ public partial class MainWindow : Window
         if (!File.Exists(scenePath)) return new List<SceneEntry>();
 
         var hqrCount = HqrArchive.CountEntries(scenePath);
+        sceneSlotsListed = hqrCount;
         var descriptions = HqdDescriptions.Load("SCENE2.HQD", hqrCount);
         var archive = HqrArchive.Open(scenePath);
 
@@ -1684,11 +1687,31 @@ public partial class MainWindow : Window
         zoneCache.Clear();
         foreach (var entry in allSceneEntries) scriptSession.ForgetScene(entry.Option.Index);
         InvalidateNativeIsland();
-        var shownChanged = Terrain.RaceTrackService.AllFiles.Contains(activeFile, StringComparer.OrdinalIgnoreCase);
+        // (a build can make an island -- Sendell's Well -- and scenes of their own, and putting the folder back takes them away: then the
+        // lists are made again, which loads the island shown, or the first there is when it has gone)
+        if (IslandsOrScenesChanged())
+        {
+            PopulateAssetLists();
+            RefreshZoneListIfVisible();
+            return;
+        }
+        var shownChanged = Terrain.RaceTrackIsland.All.SelectMany(i => i.IslandFiles).Contains(activeFile, StringComparer.OrdinalIgnoreCase);
         if (interiorSceneActive) ShowInteriorScene(interiorSceneNumber, keepView: true);
         else if (shownChanged && File.Exists(Path.Combine(gameRoot, activeFile))) LoadIsland(Path.Combine(gameRoot, activeFile));
         else if (nativeViewActive) RenderNativeCamera();
         RefreshZoneListIfVisible();
+    }
+
+    // Whether the game folder's islands or scenes are not the ones the lists show.
+    private bool IslandsOrScenesChanged()
+    {
+        if (currentGame != GameKind.Lba2 || !Directory.Exists(gameRoot)) return false;
+        var files = Directory.EnumerateFiles(gameRoot, "*.ILE").Select(p => Path.GetFileName(p)).Where(n => !n.StartsWith("_", StringComparison.OrdinalIgnoreCase));
+        var listed = islandOptions.Select(o => o.Display).Where(d => d != OtherIslandLabel);
+        if (!files.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(listed)) return true;
+        var scenePath = Path.Combine(gameRoot, "SCENE.HQR");
+        try { return File.Exists(scenePath) && HqrArchive.CountEntries(scenePath) != sceneSlotsListed; }
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException) { return false; }
     }
 
     // Tools > LBA2: edit a scene as data on a plan of it (Lba2SceneEditorWindow).

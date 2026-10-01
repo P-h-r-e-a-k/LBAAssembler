@@ -46,6 +46,15 @@ on the new picture; stepping onto the sign in scene 47 lands him on the island, 
 Assembler lists `SENDELL.ILE` with scene 222 under it and draws it in its 3D view, with island 1's palette (`LoadIslandPalette`,
 `IslandMapRenderer.LoadPalette`: `SENDELL` 28, and `MOON` 30, the Emerald Moon's).
 
+## Since 2026-10-01: in the race track window, scene 224
+
+The island's making moved into the program (`Terrain/SendellWell.cs`): the race track window builds a track on it (see "Walls, mines,
+checkpoints, Sendell's Well and a loop" in `LBA2_DESERT_RACE_TRACK_BUILD.md`), and the `sendell build` test command calls the same code.
+Its scene is now **224**, not 222: 222 is the race track story's holomap arrow (a position the game's scripts never use, which a scene of
+that number would take for its own) and 223 the lava lake's scene. `SCENE.HQR` is padded with empty entries up to it, and the scene's
+holomap record puts it at island 1's place on the globe (the "Well of Sendell" label's, record 1). The test command's portals now lead to
+224. What follows describes the first version.
+
 ## For a real island
 
 The test island is the plumbing. A real Sendell's Well needs a design: its shape and size (more cubes, and scenes for each), its decors

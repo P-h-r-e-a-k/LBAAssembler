@@ -55,6 +55,7 @@ internal static class Program
             "buildtwice" => RaceTrackCommand.BuildTwice(args),
             "buildtogether" => RaceTrackCommand.BuildTogether(args),
             "sendell" => SendellIsland.Run(args),
+            "loopanim" => LoopAnimCommand.Run(args),
             "baldinocar" => RaceTrackCommand.BaldinoCar(args),
             "charactercars" => RaceTrackCommand.CharacterCars(args),
             "carshow" => RaceTrackCommand.CarShow(args),

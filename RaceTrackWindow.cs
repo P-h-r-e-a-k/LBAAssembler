@@ -79,6 +79,7 @@ internal sealed class RaceTrackWindow : Window
         (RaceTrackIsland.Celebration, "Celebration Island: round the statue", "A raised road on piers up round the statue: its plan draws it all"),
         (RaceTrackIsland.CelebrationLava, "Celebration Island: the lava lake", "Before the statue rises: a figure of eight on the plateau, two causeways across the lava lake whose leaps cross in its middle, and a bridge over a lava channel. It races in a scene of its own (223, a copy of the island's scene 95) and Play races it with CELEBRAT.ILE open"),
         (RaceTrackIsland.Elevator, "The Elevator Platform: the rollercoaster", "All of it a raised road, banked, with the slopes pulling at the car: its plan draws it all"),
+        (RaceTrackIsland.Sendell, "Sendell's Well: the cut island", "Island 1, which the game never shipped: the build makes it (SENDELL.ILE, a round island with a well in its middle, made from Citadel Island's files) and a scene for it (224), and a lap round the well, up from the beach onto the plateau and back down. Putting the folder back deletes the island's files"),
     };
 
     // The islands ticked, in the order the list has them: the order they are built in, the first the one Play races when the editor has none
@@ -132,6 +133,8 @@ internal sealed class RaceTrackWindow : Window
                    "before the statue rises, in a scene of its own: two leaps across the lake that cross over one hole of lava. " +
                    "The Elevator Platform's is a rollercoaster: a helix up round the elevator's tower, a drop, hills and banked bends, all of it in the air, " +
                    "where the slopes slow the car and speed it up and the camera rides the road behind it -- also that mode's alone. " +
+                   "Sendell's Well is the island the game never shipped: the build makes it (SENDELL.ILE and SENDELL.OBL, its sky, palette and holomap " +
+                   "picture, and scene 224), and putting the folder back deletes it. " +
                    "Use Tools > Test edits first to try it on a scratch copy of the game folder.",
         };
         intro.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");

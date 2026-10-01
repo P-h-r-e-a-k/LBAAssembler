@@ -43,7 +43,7 @@ void RaceMod_Lap(S32 x, S32 z);
 // in the player's scene.
 void RaceMod_Frame(void);
 
-// TRUE while the player's car stands on the grid, before the count-down's GO.
+// TRUE while the player's car stands on the grid, before the count-down's GO, and for a moment after a hit (RaceMod_CarHit).
 S32 RaceMod_Held(void);
 
 // The display (gear, speed, lap times, checkpoints, race position), drawn over the scene while the hero drives.
@@ -85,6 +85,9 @@ S32 RaceMod_StatueShown(S32 risen);
 // While racing, a car that goes into the lava or the sea is put back on the road behind where it was (rescue=0: as in the game, it
 // burns or drowns Twinsen). GereCodesJeu asks: non-zero, and Twinsen is not to die there.
 S32 RaceMod_Rescue(void);
+// While racing, a hit on Twinsen in his car (a land mine) stops the car dead and holds it for a moment, and costs him no life:
+// non-zero when it is such a hit.
+S32 RaceMod_CarHit(void);
 
 // A test pilot for headless runs (the console's `autodrive`): on, the player's car is driven along the first opponent's line. Its input,
 // ORed into the frame's own.

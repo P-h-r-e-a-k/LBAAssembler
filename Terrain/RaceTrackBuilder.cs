@@ -80,6 +80,9 @@ internal sealed class RaceTrackPlan
     // shapes (RaceTrackScenery) -- on the sea, the ground or one of these, clear of everything else, beside the road where they cannot
     // stand under it. Without it they stand on the ground under the road's middle or are left out.
     public int[]? PierBodies { get; set; }
+    // Land mines: [cell x, cell z] each (from the origin), off the road where a car could go round part of the lap -- Mosquibees Island's
+    // way round its jump. Each is a copy of the retail Desert island's mine (RaceTrackScenes.AddMine).
+    public double[][]? Mines { get; set; }
     public bool Planned => Heights is { Length: > 0 } h && h.Length == Points.Length;
 
     // The plan's own road widths and sea clearance, onto the options a build uses.
@@ -290,6 +293,8 @@ internal sealed class RaceTrackReport
     public List<(double X, double Z, double Y, double DirX, double DirZ)> StartLine { get; } = new();
     // Where the opponents' cars wait in the pit lane while the player qualifies (island cells, the height and the way the lane runs there).
     public List<(double X, double Z, double Y, double DirX, double DirZ)> Pits { get; } = new();
+    // The plan's land mines (island cells).
+    public List<(double X, double Z)> Mines { get; } = new();
     // ... their heights are the plan's own (spots on a deck of decor), not the ground's.
     public bool PitHeights { get; set; }
     // The roads as built (the lap first, then the pit lane): their shape, heights, widths and deck, for drawing them elsewhere (the holomap).
@@ -511,6 +516,9 @@ internal static class RaceTrackBuilder
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
         PlaceCheckpoints(roads, report, options, planned);
         PlacePits(roads, report, options, planned);
+        foreach (var mine in plan.Mines ?? Array.Empty<double[]>())
+            if (mine.Length >= 2) report.Mines.Add((mine[0] + plan.OriginCellX, mine[1] + plan.OriginCellZ));
+        if (report.Mines.Count > 0) report.Notes.Add($"{report.Mines.Count} land mines off the road (the plan's)");
         if (report.Pits.Count == 0 && plan.PitSpots is { Length: > 0 } spots)
         {
             foreach (var p in spots.Where(p => p.Length >= 4))
@@ -1748,7 +1756,13 @@ internal static class RaceTrackBuilder
     // line unfair or unseen: the stretch the pit lane runs beside (a car in the pits skips it), the crossing (the other road passes under
     // the bridge or the jump there), and the edges of the cubes (the engine only sees a car's moves within one cube). Each reaches past
     // the verge on both sides, but never half way to another part of the lap.
-    private const int CheckpointCount = 8;
+    // (2026-10-01) One line about every CheckpointSpacing cells round the lap, CheckpointCount at the least and MaxCheckpoints at the most
+    // (the engine takes 32): Citadel Island's town circuit, a thousand cells, had 8, and its hairpin loop under the bridge -- 120 cells --
+    // had none, so a car could cut across its neck. Each line reaches CheckpointReach past the verge, where no other part of the lap at
+    // its height comes near (a car running wide or cutting a bend went round the ends of the old ones), and stands where the road runs
+    // straightest near its place.
+    private const int CheckpointCount = 8, MaxCheckpoints = 24;
+    private const double CheckpointSpacing = 60, CheckpointReach = 6;
 
     // Where the opponents' cars wait while the player drives his qualifying lap: in the pit lane beside the start line, PitStep cells
     // apart, the first PitFirst cells before the line, each facing the way a car leaves the pits. On the grid they stand across the start
@@ -1815,14 +1829,13 @@ internal static class RaceTrackBuilder
             avoid.Add((from - 6, r.Length)); avoid.Add((0, to + 6));
         }
         else avoid.Add((r.Length - 10, r.Length));
-        var crossingClear = r.Raised is null ? 45 : 8;
-        // (a lap that is all raised road -- the Elevator Platform's, a helix over its own start -- has levels over and under a line's place
-        // all round it)
-        var allRaised = r.Closed && r.Raised is { } up && up.All(u => u);
-        // (a planned gap jump: a line there would be crossed in the air, or not at all by a car that missed the jump -- 20 cells either side
-        // of the flight, or 4 on a short lap with several jumps, where 20 would leave no room for any line. Where its flight is along the
-        // lap: the point nearest the flight's middle may be the other road's, where the lap crosses itself under it.)
-        var jumps = planned ? report.Jumps : new List<JumpInfo>();
+        // (every line has its height, so near a bridge's crossing the road over it and the road under it each have their own lines; only a
+        // level crossing, where both roads are at one height, keeps them away)
+        var crossingClear = !planned && o.Crossing == CrossingStyle.Level ? 45 : 8;
+        // (a jump: a line there would be crossed in the air -- out of its height's reach -- or not at all by a car that missed the jump; 20
+        // cells either side of the flight, or 4 on a short lap with several jumps, where 20 would leave no room for any line. Where its
+        // flight is along the lap: the point nearest the flight's middle may be the other road's, where the lap crosses itself under it.)
+        var jumps = report.Jumps;
         var jumpClear = jumps.Sum(j => j.FlightCells + 40) > r.Length / 2 ? 4 : 20;
         foreach (var jump in jumps)
         {
@@ -1840,38 +1853,70 @@ internal static class RaceTrackBuilder
         }
         bool Clear(int k) => !avoid.Any(v => Ahead(k) >= v.From && Ahead(k) <= v.To);
         bool InsideCube(double x, double z) { var fx = x - Math.Floor(x / 64) * 64; var fz = z - Math.Floor(z / 64) * 64; return fx >= 2 && fx <= 62 && fz >= 2 && fz <= 62; }
-        for (var j = 1; j <= CheckpointCount; j++)
+        var count = Math.Clamp((int)Math.Round(r.Length / CheckpointSpacing), CheckpointCount, MaxCheckpoints);
+        // how much the road bends over 6 cells either way: a line goes where it is least, near its place (a cell of bend counts as 10 of
+        // distance from the place)
+        double Bend(int k)
         {
-            var target = j * r.Length / (CheckpointCount + 1);
-            var order = Enumerable.Range(0, n).Where(Clear).OrderBy(k => Math.Abs(Ahead(k) - target)).Take(400);
+            double sum = 0; var w = (int)Math.Round(6 / o.Spacing);
+            for (var m = -w; m <= w; m++) sum += Math.Abs(r.Kappa[At(r, k + m)]);
+            return sum * o.Spacing;
+        }
+        // (each line after the one before it; where no place near its own will do, one up to twice as far from it)
+        var last = 0.0;
+        for (var j = 1; j <= count; j++)
+        {
+            var target = j * r.Length / (count + 1);
+            var window = r.Length / (2.0 * (count + 1));
+            bool Near(int k, double w) => Clear(k) && Ahead(k) > last + 4 && Math.Abs(Ahead(k) - target) <= w;
+            double Cost(int k) => Math.Abs(Ahead(k) - target) + 10 * Bend(k);
+            var order = Enumerable.Range(0, n).Where(k => Near(k, window)).OrderBy(Cost).Take(400)
+                .Concat(Enumerable.Range(0, n).Where(k => !Near(k, window) && Near(k, 2 * window)).OrderBy(Cost).Take(400));
             foreach (var k in order)
             {
-                if (Math.Abs(Ahead(k) - target) > r.Length / (2.0 * (CheckpointCount + 1))) break;
                 var x = r.X[k]; var z = r.Z[k]; var nx = -r.Tz[k]; var nz = r.Tx[k];
                 var cx = Math.Floor(x / 64); var cz = Math.Floor(z / 64);
                 if (!InsideCube(x, z)) continue;
-                var half = r.VergeHalf + 1;
-                for (; half >= r.CurbHalf; half -= 0.5)
+                // each side of the line as far as it reaches -- the verge and CheckpointReach more -- in the line's own cube, and short of any
+                // other part of the lap at its height by that part's verge (a car there, even on its verge, never crosses it). Other: further
+                // along the lap from the line's point than the verge and 3 cells -- on a short lap the next straight round a corner is a few cells along it
+                // (the lava lake's line at the end of its first causeway reached across the start straight, 14 cells along, and a car cutting
+                // the corner went past it), and on a tight bend the road itself comes back round, so the line goes where the road is straighter.
+                // (what stops it there: 0 nothing, 1 the cube's edge, 2 another part of the lap)
+                int Stop(double t)
                 {
-                    double x0 = x - nx * half, z0 = z - nz * half, x1 = x + nx * half, z1 = z + nz * half;
-                    if (Math.Floor(x0 / 64) != cx || Math.Floor(z0 / 64) != cz || Math.Floor(x1 / 64) != cx || Math.Floor(z1 / 64) != cz) continue;
-                    // no other part of the lap nearer the line than half the way to it
-                    var alone = true;
-                    for (var t = -half; t <= half && alone; t += 0.5)
+                    var px = x + nx * t; var pz = z + nz * t;
+                    if (Math.Floor(px / 64) != cx || Math.Floor(pz / 64) != cz) return 1;
+                    var own = r.VergeHalf + 3;
+                    for (var m = 0; m < n; m += 2)
                     {
-                        var px = x + nx * t; var pz = z + nz * t;
-                        for (var m = 0; m < n && alone; m += 2)
-                        {
-                            var sep = Math.Abs(r.S[m] - r.S[k]); sep = Math.Min(sep, r.Length - sep);
-                            if (allRaised && Math.Abs(r.H[m] - r.H[k]) > RaisedLevelApart) continue;
-                            if (sep > 20 && Sq(r.X[m] - px) + Sq(r.Z[m] - pz) < Sq(r.CurbHalf + 1)) alone = false;
-                        }
+                        var sep = Math.Abs(r.S[m] - r.S[k]); if (r.Closed) sep = Math.Min(sep, r.Length - sep);
+                        // (another level -- a bridge over the line's place, a raised road's helix -- doesn't count: the line has its height)
+                        if (sep <= own || Math.Abs(r.H[m] - r.H[k]) > RaisedLevelApart) continue;
+                        if (Sq(r.X[m] - px) + Sq(r.Z[m] - pz) < Sq(r.VergeHalf)) return 2;
                     }
-                    if (alone) break;
+                    return 0;
                 }
-                if (half < r.CurbHalf) continue;
-                report.Checkpoints.Add((x - nx * half, z - nz * half, x + nx * half, z + nz * half, r.Tx[k], r.Tz[k]));
+                // how far a side reaches, and whether it reaches far enough: past the verge (a car anywhere on the road crosses it), or, where
+                // another part of the lap stops it -- the road coming back round a tight bend, another running alongside -- past the curb (the
+                // car there is on the other road's verge; the engine counts the line a little past its ends anyway, RACEMOD.CPP
+                // RACE_CHECKPOINT_SLACK). Stopped short by the cube's edge it must reach the verge: past that edge no line is crossed.
+                (double Reach, bool Enough) Side(int way)
+                {
+                    var reach = 0.0; var stop = 0;
+                    for (var t = 0.5; t <= r.VergeHalf + CheckpointReach + 1e-9; t += 0.5)
+                    {
+                        stop = Stop(way * t);
+                        if (stop != 0) break;
+                        reach = t;
+                    }
+                    return (reach, reach >= r.VergeHalf || stop == 2 && reach >= r.CurbHalf);
+                }
+                var (left, leftEnough) = Side(-1); var (right, rightEnough) = Side(1);
+                if (!leftEnough || !rightEnough) continue;
+                report.Checkpoints.Add((x - nx * left, z - nz * left, x + nx * right, z + nz * right, r.Tx[k], r.Tz[k]));
                 report.CheckpointHeights.Add(r.H[k]);
+                last = Ahead(k);
                 break;
             }
         }
@@ -2467,7 +2512,10 @@ internal static class RaceTrackBuilder
             // two cells of that water became blocking rock across the ramp. A car taking off hit it mid-flight, the engine started Twinsen
             // skating back down the ramp -- an animation nothing interrupts -- and the flight was dropped until the skid ended.)
             var stripe = chosen.Value.Lip && ck == Kind.Hatch;
-            if (planned && !stripe && ck is Kind.Sand or Kind.Hatch && CellRise(field, gx, gz) > SteepVerge) ck = Kind.Wall;
+            // (and a rock shoulder that holds one: under each end of a bridge's deck the ground is raised to the deck and drops straight
+            // to the ground under its middle, and on Mosquibees Island a car on the road beneath drove up that 5,000-high face onto the
+            // landing. A ramp's shoulders rise far less than SteepVerge a cell.)
+            if (planned && !stripe && ck is Kind.Sand or Kind.Hatch or Kind.Rock && CellRise(field, gx, gz) > SteepVerge) ck = Kind.Wall;
             // banked bends: the outside verge is hatched
             if (ck == Kind.Sand && Math.Abs(chosen.Value.Kappa) > 0.05 && chosen.Value.Lat * chosen.Value.Kappa < 0) ck = Kind.Hatch;
             // a verge within 2 cells of the sea (or the island's edge) is a blocking rock wall: where the road runs along a cliff top

@@ -83,6 +83,15 @@ internal sealed record RaceTrackIsland(
         Title = "The Elevator Platform: the rollercoaster",
     };
 
+    // Sendell's Well (island 1, cut from the game: no SENDELL.ILE ships and no scene is on it): the build makes the island first --
+    // one round cube, a beach, grassy slopes up to a plateau and a paved rim round the well -- and a scene for it, 224 (SendellWell).
+    // The lap runs round the well, up from the beach onto the plateau and back down.
+    public static readonly RaceTrackIsland Sendell = new("Sendell's Well", SendellWell.IleFile, SendellWell.OblFile, SendellWell.IslandByte,
+        SendellWell.Scene, SendellWell.Scene, SendellWell.PaletteEntry, "RaceTrackPlan.Sendell.json", null)
+    {
+        Created = true, Title = "Sendell's Well: the cut island, made by the build",
+    };
+
     // What carries the lap over itself where its plan doesn't draw that itself (RaceTrackPlan.Planned: Mosquibees Island's, Celebration
     // Island's, the Elevator Platform's and Citadel Island's storm track draw their own): the Desert island's jumps, Citadel Island's town
     // circuit (its twin's plan) has a bridge.
@@ -113,11 +122,17 @@ internal sealed record RaceTrackIsland(
     // As a list of the tracks built names it.
     public string Built => TwinPlanResource is not null ? $"{Name.Split(',')[0]} (the storm track and the town circuit)" : Name;
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator };
+    // The island isn't in the game: the build makes its files and its scene (Sendell's Well). They have no originals to keep, so the
+    // build's backups leave them out (KeptFiles); it makes them afresh every time, and putting the folder back deletes them.
+    public bool Created { get; init; }
+
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 
     // The files a build of this island changes, besides the ones every build does (SCENE.HQR, and BODY.HQR / ANIM.HQR / RESS.HQR for the
     // cars and the jump).
     public string[] IslandFiles => TwinIleFile is { } ti && TwinOblFile is { } to ? new[] { IleFile, OblFile, ti, to } : new[] { IleFile, OblFile };
+    // Those the game has, whose originals a build keeps (none of an island the build makes).
+    public string[] KeptFiles => Created ? Array.Empty<string>() : IslandFiles;
 }

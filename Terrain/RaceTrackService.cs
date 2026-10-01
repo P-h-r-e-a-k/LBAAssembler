@@ -20,8 +20,8 @@ internal static class RaceTrackService
     public static readonly string[] Files = { "SCENE.HQR" };
     // (and the holomap's pictures and arrows, and the texts the story adds to)
     public static readonly string[] ExtraFiles = { "ANIM.HQR", "RESS.HQR", "BODY.HQR", RaceTrackHolomap.File, "TEXT.HQR", "OBJFIX.HQR" };
-    public static string[] FilesFor(RaceTrackIsland island) => Files.Concat(island.IslandFiles).ToArray();
-    public static string[] AllFiles => Files.Concat(ExtraFiles).Concat(RaceTrackIsland.All.SelectMany(i => i.IslandFiles)).Distinct().ToArray();
+    public static string[] FilesFor(RaceTrackIsland island) => Files.Concat(island.KeptFiles).ToArray();
+    public static string[] AllFiles => Files.Concat(ExtraFiles).Concat(RaceTrackIsland.All.SelectMany(i => i.KeptFiles)).Distinct().ToArray();
     public const string InfoFile = "RACETRACK.JSON";
 
     public sealed record BuildResult(bool Ok, string Summary, List<string> Log, RaceTrackReport? Report);
@@ -188,6 +188,11 @@ internal static class RaceTrackService
             var grounds = tracks.Select(t => t.Options.Island.IleFile).ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var f in AllFiles.Where(f => !grounds.Contains(f) && File.Exists(Path.Combine(gameDirectory, f + BackupSuffix))))
                 CopyWritable(Path.Combine(gameDirectory, f + BackupSuffix), Path.Combine(gameDirectory, f));
+            // (an island the build makes -- Sendell's Well -- is made afresh, its files and its scene, from those originals; one this
+            // build leaves out goes)
+            var made = new List<string>();
+            if (tracks.Any(t => t.Options.Island.Created)) made.AddRange(SendellWell.Install(gameDirectory));
+            else SendellWell.Remove(gameDirectory);
 
             var session = new BuildSession();
             var log = new List<string>();
@@ -196,11 +201,13 @@ internal static class RaceTrackService
             foreach (var track in tracks)
             {
                 var options = track.Options;
-                var built = BuildFiles(gameDirectory, Path.Combine(gameDirectory, options.Island.IleFile + BackupSuffix), track.Plan, options, track.TwinPlan, session);
+                var source = Path.Combine(gameDirectory, options.Island.IleFile + (options.Island.Created ? "" : BackupSuffix));
+                var built = BuildFiles(gameDirectory, source, track.Plan, options, track.TwinPlan, session);
                 var (report, scenes) = (built.Report, built.Scenes);
                 first ??= report;
                 if (tracks.Count > 1) log.Add($"==== {options.Island.Shown} ====");
                 log.Add($"The lap is {report.Length:0} cells ({report.Length * 512:0} game units) long: {report.Vertices} ground points levelled, {report.Cells} cells painted, {report.DecorsRemoved + report.SolidDecorsRemoved} decor objects taken off the road.");
+                if (options.Island.Created) log.AddRange(made);
                 log.AddRange(built.Log);
                 log.AddRange(report.Notes);
                 foreach (var placed in report.Placed) log.Add(placed);
@@ -433,10 +440,11 @@ internal static class RaceTrackService
             return new StartLineInfo(cx, cz, Local(l.X0, cx), Local(l.Z0, cz), Local(l.X1, cx), Local(l.Z1, cz), (int)Math.Round(l.DirX * 1000), (int)Math.Round(l.DirZ * 1000),
                 height is { } h ? (int)Math.Round(h) : null);
         }
-        // (the lines' heights only for a lap that passes over itself: a raised road's)
+        // (every line with its height: the engine counts it only for a car near that height, so a line under a bridge, or a raised road's
+        // other levels, is not crossed from the road over it; since 2026-10-01 for every lap, not only a raised road's)
         var raised = report.Raised.Count > 0;
-        var line = report.LapLine is { } l ? Line(l, raised ? report.LapLineHeight : null) : null;
-        var checkpoints = report.Checkpoints.Select((c, i) => Line(c, raised && i < report.CheckpointHeights.Count ? report.CheckpointHeights[i] : null)).ToList();
+        var line = report.LapLine is { } l ? Line(l, report.LapLineHeight) : null;
+        var checkpoints = report.Checkpoints.Select((c, i) => Line(c, i < report.CheckpointHeights.Count ? report.CheckpointHeights[i] : null)).ToList();
         static List<int[]> Points(List<(double X, double Z, double Y, double Speed, double Radius)> line)
             => line.Select(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512), (int)Math.Round(p.Y), (int)Math.Round(p.Speed), (int)Math.Round(Math.Min(p.Radius, 1e6)) }).ToList();
         var path = Points(report.RacePath);
@@ -490,8 +498,10 @@ internal static class RaceTrackService
             back.Add(f);
         }
         foreach (var f in back) File.Delete(Path.Combine(gameDirectory, f + BackupSuffix));
+        // (an island the build made has no originals: it goes)
+        var gone = SendellWell.Remove(gameDirectory) ? $" {SendellWell.IleFile} and {SendellWell.OblFile}, which the build made, are gone." : "";
         var info = Path.Combine(gameDirectory, InfoFile);
         if (File.Exists(info)) File.Delete(info);
-        return $"The original {string.Join(", ", back)} are back.";
+        return $"The original {string.Join(", ", back)} are back.{gone}";
     }
 }

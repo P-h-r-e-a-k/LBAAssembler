@@ -86,6 +86,7 @@
     <EmbeddedResource Include="docs/racetrack/celebration_track_plan.json" LogicalName="RaceTrackPlan.Celebration.json" />
     <EmbeddedResource Include="docs/racetrack/celebrat_track_plan.json" LogicalName="RaceTrackPlan.CelebrationLava.json" />
     <EmbeddedResource Include="docs/racetrack/elevator_track_plan.json" LogicalName="RaceTrackPlan.Elevator.json" />
+    <EmbeddedResource Include="docs/racetrack/sendell_track_plan.json" LogicalName="RaceTrackPlan.Sendell.json" />
   </ItemGroup>
 
   <!--

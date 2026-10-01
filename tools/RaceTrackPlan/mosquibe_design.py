@@ -161,6 +161,9 @@ plan = {
     'pitA': [round(float(X[PIT_A] - O), 3), round(float(Z[PIT_A] - O), 3)],
     'pitB': [round(float(X[PIT_B] - O), 3), round(float(Z[PIT_B] - O), 3)],
     'pitTaper': 7,
+    # (2026-10-01) land mines on the way round the jump: three staggered rows of two across the corridor between the jump's east walls
+    # and the lap's other road, each at least 7 cells from the road (4 from the flight's line)
+    'mines': [[89.5, 33.5], [92.5, 33.5], [88.5, 37.5], [91.5, 37.5], [87.5, 41.5], [90.5, 41.5]],
 }
 json.dump(plan, open('E:/dump/LBAAssembler/docs/racetrack/mosquibe_track_plan.json', 'w'))
 json.dump({'plan': plan, 'marks': {nm: pidx(nm) for nm in names}}, open('design.json', 'w'))

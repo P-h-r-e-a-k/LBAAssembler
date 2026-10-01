@@ -1507,6 +1507,7 @@ void HitObj(U8 numhitter, U8 num, S32 hitforce, S32 beta) {
     if (ptrobjt->Armure <= hitforce
                                AND ptrobjt->Armure < 51) {
         hitforce -= ptrobjt->Armure;
+        const S32 raceCar = num == NUM_PERSO && RaceMod_CarHit(); // a race-track mod's car is stopped dead instead (RACEMOD.CPP)
 
         if ((ptrobjt->GenAnim == GEN_ANIM_CHOC)
                 OR(ptrobjt->GenAnim == GEN_ANIM_CHOC2)) {
@@ -1543,6 +1544,7 @@ void HitObj(U8 numhitter, U8 num, S32 hitforce, S32 beta) {
             LastJoyFlag = TRUE;
         }
 
+        if (raceCar) hitforce = 0;
         ptrobjt->LifePoint -= hitforce;
 
         /* attention dans l'outil LifePoint est un word

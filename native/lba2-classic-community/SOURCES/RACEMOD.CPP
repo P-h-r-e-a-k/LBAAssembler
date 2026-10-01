@@ -1050,13 +1050,26 @@ static int Crosses(double x0, double z0, double x1, double z1, double ax, double
 }
 
 // +1 when the move crosses the line the lap's way, -1 the other way, 0 when it doesn't cross it (or the line is in another cube).
-static int CrossLine(const T_RACE_LINE *l, S32 x0, S32 z0, S32 x1, S32 z1) {
+// slack: how far past each of its ends the line counts too.
+static int CrossLine(const T_RACE_LINE *l, S32 x0, S32 z0, S32 x1, S32 z1, S32 slack = 0) {
     if (CurrentCubeX != l->CubeX || CurrentCubeY != l->CubeZ) return 0;
     // (a line with a height: only for a car on the road it lies across, not one passing over or under that place)
     if (l->HasY && abs(ListObjet[NUM_PERSO].Obj.Y - l->Y) > RACE_LINE_REACH) return 0;
-    if (!Crosses(x0, z0, x1, z1, l->X0, l->Z0, l->X1, l->Z1)) return 0;
+    double ax = l->X0, az = l->Z0, bx = l->X1, bz = l->Z1;
+    const double len = sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az));
+    if (slack > 0 && len > 0) {
+        const double ux = (bx - ax) / len * slack, uz = (bz - az) / len * slack;
+        ax -= ux; az -= uz; bx += ux; bz += uz;
+    }
+    if (!Crosses(x0, z0, x1, z1, ax, az, bx, bz)) return 0;
     return (double)(x1 - x0) * l->DirX + (double)(z1 - z0) * l->DirZ > 0 ? 1 : -1;
 }
+
+// A checkpoint is taken going the lap's way RACE_CHECKPOINT_SLACK past either end of its line: the builder stops a line short of any
+// other part of the lap (a car there must not cross it), so on a tight bend, where the road comes back round, its inner end is little
+// past the verge -- and a car cutting the bend went round it (the lava lake's first loop, 2026-10-01). Crossed backwards it counts only
+// on its own length: past its ends lies the road coming back the other way.
+#define RACE_CHECKPOINT_SLACK 768
 
 void RaceMod_Lap(S32 x, S32 z) {
     // (the previous frame's position; forgotten when the car changes cube, where the coordinates jump, or is put on the grid)
@@ -1074,9 +1087,10 @@ void RaceMod_Lap(S32 x, S32 z) {
     // the checkpoints: the next one crossed the lap's way moves on; the last one crossed backwards moves back
     if (s_laps > 0)
         for (int i = 0; i < s_nbCheckpoints; i++) {
-            const int way = CrossLine(&s_checkpoints[i], x0, z0, x, z);
-            if (way > 0 && i == s_next) { s_next++; Log_Info("[racemod] checkpoint %d of %d", s_next, s_nbCheckpoints); }
-            else if (way < 0 && i == s_next - 1) { s_next--; Message("Wrong way"); }
+            if (i == s_next && CrossLine(&s_checkpoints[i], x0, z0, x, z, RACE_CHECKPOINT_SLACK) > 0) {
+                s_next++;
+                Log_Info("[racemod] checkpoint %d of %d", s_next, s_nbCheckpoints);
+            } else if (i == s_next - 1 && CrossLine(&s_checkpoints[i], x0, z0, x, z) < 0) { s_next--; Message("Wrong way"); }
         }
 
     T_RACE_LINE line = {s_car.LineCubeX, s_car.LineCubeZ, s_car.LineX0, s_car.LineZ0, s_car.LineX1, s_car.LineZ1, s_car.LineDirX, s_car.LineDirZ, s_lineY, s_lineHasY};
@@ -1296,6 +1310,21 @@ static void TrackSafePlace(void) {
     if (dx * dx + dz * dz < 3.5 * 512 * 3.5 * 512) s_safeIndex = best;
 }
 
+// A hit -- a land mine going off under the car (Mosquibees Island's way round its jump) -- stops the car dead and holds it for
+// RACE_HIT_HOLD ms (through RaceMod_Held): the mines are a penalty, and a hit that let the car drive on at full speed was none. It costs
+// Twinsen no life: held in the blast the car takes a dozen pieces of it, and one pass through a minefield took 70 of his 100 -- a race
+// is not to end in his death (HitObj, OBJECT.CPP, which asks). Non-zero: the hit was the race car's.
+#define RACE_HIT_HOLD 600
+static S32 s_hitUntil = 0;
+
+S32 RaceMod_CarHit(void) {
+    if (!RaceMod_Active() || Comportement != C_BUGGY) return 0;
+    ListBuggy[0].Speed = 0;
+    s_hitUntil = TimerRefHR + RACE_HIT_HOLD;
+    Log_Info("[racemod] the car is hit: stopped");
+    return 1;
+}
+
 S32 RaceMod_Rescue(void) {
     if (!RaceMod_Active() || !s_rescueOn || Comportement != C_BUGGY || !s_opp[0].Count || s_safeIndex < 0) return 0;
     s_rescue = 1;
@@ -1407,7 +1436,7 @@ void RaceMod_Frame(void) {
 
 // The player's car stands on the grid until the count-down's GO (BUGGY.CPP RaceSpeed).
 S32 RaceMod_Held(void) {
-    return RaceMod_Active() && s_phase == PHASE_GRID;
+    return RaceMod_Active() && (s_phase == PHASE_GRID || TimerRefHR < s_hitUntil);
 }
 
 // How far round the race the player is, and an opponent, in world units from the start of lap 1 (negative before it). The player is
