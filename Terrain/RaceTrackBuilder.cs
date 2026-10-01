@@ -55,6 +55,9 @@ internal sealed class RaceTrackPlan
     // rail), and the engine's race-track mode drives on it (RACEMOD.CPP: the raised road is a floor of its own).
     public int[]? Raised { get; set; }
     public double? RaisedHalf { get; set; }
+    // How far behind each other the grid's spots are (RaceTrackScenes.GridSpot), when not the usual 3.5: the lava lake's lap comes down a
+    // ramp onto its dock just behind the grid, which stands two abreast there (1.75).
+    public double? GridStep { get; set; }
     // The ground cut down where it comes near the raised road's deck (RaceTrackBuilder.CutUnderRaised: the lava lake's lap, which runs
     // along cliffs and the crater's rim; the statue track's was left as it was built).
     public bool RaisedCut { get; set; }
@@ -106,6 +109,7 @@ internal sealed class RaceTrackPlan
         if (JumpRampLength is { } jr) o.JumpRampLength = jr;
         if (JumpLandingLength is { } jl) o.JumpLandingLength = jl;
         if (JumpMinScale is { } js) o.JumpMinScale = js;
+        if (GridStep is { } gs) o.GridStep = gs;
         o.PierBodies = PierBodies?.ToHashSet();
     }
 
@@ -199,6 +203,8 @@ internal sealed class RaceTrackOptions
     public double JumpLandingLength { get; set; } = 12;
     // The shortest flight a jump has, as a share of the retail one (17.6 cells): a plan's short leaps fly less (RaceTrackPlan.JumpMinScale).
     public double JumpMinScale { get; set; } = 1;
+    // How far behind each other the grid's spots are (RaceTrackScenes.GridSpot; RaceTrackPlan.GridStep).
+    public double GridStep { get; set; } = RaceTrackScenes.DefaultGridStep;
     // A physical, walkable bridge deck (like Citadel Island's rope bridge at "the Cliffs of the Woodbridge"): the straighter road
     // is carried over the other, on a flat deck built of decor objects (RaceTrackDeckBody), while the ground underneath keeps
     // the other road's own grade. How far above the lower road's own height the deck's walking surface sits. The engine's solid

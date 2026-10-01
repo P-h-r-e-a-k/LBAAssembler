@@ -1,22 +1,26 @@
-# Celebration Island before the statue (CELEBRAT): the lava lake lap, round the whole island. (2026-10-01, second version: the first,
-# a figure of eight on the plateau, was 92 cells and too small, and its causeways paved the lava lake over.)
+# Celebration Island before the statue (CELEBRAT): the lava lake lap, round the whole island. (2026-10-01, third version: the first, a
+# figure of eight on the plateau, was 92 cells and too small; the second went round the whole island but its last corner was a tight
+# hairpin and it ended in a drop off the mesa. The user's sketch over the second: the corners onto the lake's causeway turned back more on
+# themselves into the lake's jump, the inner part of the lap shifted over, the last turn opened up, and the drop a ramp instead.)
 #
 # The island is one cube: a dock along its west side (x 4-10, z 6-33, 420 high), a mesa over the rest of it -- a plateau 5,700-6,500 high
-# round a lake of lava level with it (x 26-44, z 24-41), the temple on its west rim, two lava channels cutting its north side down to the
-# sea, steep slopes all round down to the sea. The lap uses all of it, clockwise on the map, all of it a raised road on piers but the dock:
+# round a lake of lava level with it (x 26-44, z 24-41), the temple on its west rim (its roofs 11,140 high: nothing goes over it), two lava
+# channels cutting its north side down to the sea, steep slopes all round down to the sea. The lap, clockwise on the map, all of it a
+# raised road on piers but the dock:
 #   - the dock, heading north: the start line, the grid behind it;
 #   - round onto the north shore, a low causeway over the sea in front of the lava falls: the first jump, over a gap in it;
 #   - the long climb, 900 to 6,300: along the shore, round the north-east corner, down the east coast and round onto the south rim;
-#   - north across the lava lake on a causeway over the lava: the second jump, over a gap in its middle;
-#   - west along the north rim, over the west lava channel, round the north-west corner and south down the west cliffs behind the
-#     temple: the third jump, over a gap beside the temple;
-#   - a hairpin over the sea at the south-west corner, and the drop: off the end of the road, over the south-west hill and down onto
-#     the dock, 5,900 below.
-# The lake stays lava (a raised road leaves the ground as it is). Its jumps are gaps in the raised road (no road and no floor there), the
-# drop a jump whose landing is lower than its take-off.
+#   - a hook back on itself, 120 degrees, onto a causeway north-east across the lava lake: the second jump, over a gap in its middle;
+#   - round to the west onto the north rim, round its corner and south down the west cliffs beside the temple: the third jump;
+#   - the last turn, a question mark: a kink left, then round to the right over the south-west corner, wide, and back north down a
+#     ramp -- 6,300 to the dock's 420 -- through a cutting in the south-west hill onto the dock.
+# The lake stays lava (a raised road leaves the ground as it is). Its jumps are gaps in the raised road (no road and no floor there).
+#
+# The lap is drawn as circles it turns round, joined by the lines that touch them (each circle: its middle, radius, and which way the
+# lap goes round it), so a turn can go round more than a half circle (the last one does).
 #
 # Run with E:\dump\TEMP\celebrat holding H.npy and code.npy (the untouched island's heights and game codes). Writes
-# docs/racetrack/celebrat_track_plan.json; --pictures draws the lap over the island and its height profile.
+# docs/racetrack/celebrat_track_plan.json; --pictures draws the lap over the island.
 import json, math, os, sys
 import numpy as np
 
@@ -35,52 +39,56 @@ def lava(x, z): return CODE[min(63, max(0, int(z))), min(63, max(0, int(x)))] in
 ASPHALT, CURB, VERGE, BLEND = 2.3, 2.8, 3.8, 2.0
 RAISED_HALF = 3.05
 STEP = 0.5
-# the corners, clockwise on the map from the dock's north end, and their radii
-V = [(7.2, 7.5),       # the dock's north end: onto the north shore
-     (56.5, 7.5),      # the north-east corner: onto the east coast
-     (57.0, 50.5),     # the south-east corner: onto the south rim
-     (35.0, 50.5),     # onto the causeway north across the middle of the lake (and on up the west lava channel)
-     (35.0, 17.0),     # onto the north rim, west
-     (13.6, 17.0),     # the north-west corner: south down the west cliffs
-     (13.6, 55.5),     # the hairpin's first half, west
-     (7.2, 55.5)]      # its second half: north, to the drop
-R = [3.5, 6.0, 6.0, 5.0, 4.0, 5.0, 3.0, 3.0]
+# the circles the lap turns round, in its order from the dock's north end: (x, z) middle, radius, +1 the lap goes round it clockwise on the
+# map (as round the island), -1 the other way
+C = [((10.7, 11.0), 3.5, +1),     # the dock's north end: onto the north shore
+     ((50.5, 13.5), 6.0, +1),     # the north-east corner: onto the east coast
+     ((51.0, 44.5), 6.0, +1),     # the south-east corner: onto the south rim
+     ((37.0, 45.0), 5.5, +1),     # the hook, 120 degrees, back north-east onto the lake's causeway
+     ((37.4, 22.2), 5.5, -1),     # off the causeway, round to the west onto the north rim
+     ((19.6, 22.7), 6.0, -1),     # the north rim's west corner: south down the west cliffs, beside the temple
+     ((16.6, 42.0), 3.0, -1),     # the last turn: a kink left ...
+     ((10.4, 51.5), 5.8, +1)]     # ... and round to the right, wide, back north onto the ramp down to the dock, along the island's west
+                                  # shore (x 4.6: the south-west hill is lowest there; the island's edge is 4.3 cells off at the least)
 START_Z = 13.5                     # the start line, on the dock heading north
-FIRST = (7.2, 20.0)                # the lap's first point (on the dock, between the start line and the drop's landing)
+FIRST = (7.2, 20.0)                # the lap's first point (on the dock, between the start line and the ramp's foot)
 
 # heights along the lap's stretches (set by where a point is), then smoothed and kept level over each jump
 DOCK = 420.0
 SHORE = 900.0                      # the north shore's causeway
-TOP = 6300.0                       # the mesa: the south rim, the lake's causeway, the north rim, the west cliffs, the hairpin
-NORTH_TOP = 6300.0                 # the north rim (the plateau stands up to 6,300 under it there: the road on it)
-# the jumps: (name, the gap's middle, its length in cells): the gap is the road's own straight there, its lips half that either side
-JUMPS = [('north shore', (34.5, 7.5), 7.0), ('lake', (35.0, 32.5), 8.0), ('temple', (13.6, 38.5), 7.0)]
-DROP_LIP = (7.2, 45.5)             # the drop's take-off lip, heading north
-DROP_LAND = (7.2, 33.0)            # ... and its landing lip, on the dock
+TOP = 6300.0                       # the mesa: the south rim, the lake's causeway, the north rim, the west cliffs
+# the jumps: (name, the gap's middle, its length in cells -- the second version's): the gap is the road's own straight there, its lips
+# half that either side
+JUMPS = [('north shore', (34.5, 7.5), 7.0), ('lake', (37.2, 33.6), 8.0), ('temple', (13.6, 32.2), 7.0)]
 RAMP, LANDING = 5.0, 5.0           # the ramps' lengths either side of a gap (RaceTrackOptions.JumpRampLength, JumpLandingLength)
 
-def fillet(V, R):
-    n = len(V); V = [np.array(v, float) for v in V]; tang = []
+def circles(C):
+    """The lap round circles C: on each an arc, between them the line touching both (math frame x, z: +1 is counter-clockwise there,
+    which the map, z down, shows clockwise)."""
+    n = len(C); legs = []
     for i in range(n):
-        a, v, b = V[i - 1], V[i], V[(i + 1) % n]
-        d1 = (v - a) / np.linalg.norm(v - a); d2 = (b - v) / np.linalg.norm(b - v)
-        ang = math.acos(np.clip(d1 @ d2, -1, 1)); t = R[i] * math.tan(ang / 2)
-        tang.append((v - d1 * t, v + d2 * t, d1, d2, ang, t))
+        (c1, r1, d1), (c2, r2, d2) = C[i], C[(i + 1) % n]
+        c1, c2 = np.array(c1, float), np.array(c2, float); D = c2 - c1; dist = np.linalg.norm(D)
+        rho1, rho2 = d1 * r1, d2 * r2
+        if abs(rho2 - rho1) >= dist: sys.exit(f'circles {i} and {(i + 1) % n}: no line touches both')
+        al = math.atan2(D[1], D[0]) - math.asin((rho2 - rho1) / dist)
+        u = np.array([math.cos(al), math.sin(al)]); L = np.array([-u[1], u[0]])
+        legs.append((c1 - rho1 * L, c2 - rho2 * L))
     pts = []
     for i in range(n):
-        p1, p2, d1, d2, ang, t = tang[i]
-        if ang > 1e-6:
-            side = np.sign(d1[0] * d2[1] - d1[1] * d2[0]); n1 = np.array([-d1[1], d1[0]]) * side; c = p1 + n1 * R[i]
-            a0 = math.atan2(p1[1] - c[1], p1[0] - c[0]); a1 = a0 + side * ang
-            m = max(2, int(round(R[i] * ang / 0.02)))
-            pts += [c + R[i] * np.array([math.cos(a0 + (a1 - a0) * k / m), math.sin(a0 + (a1 - a0) * k / m)]) for k in range(m)]
-        q1, q2 = tang[i][1], tang[(i + 1) % n][0]
-        if np.dot(q2 - q1, tang[(i + 1) % n][2]) < -1e-6: sys.exit(f'corners {i} and {(i + 1) % n} overlap')
+        c, r, d = C[i]; c = np.array(c, float)
+        p_in, p_out = legs[i - 1][1], legs[i][0]
+        a0 = math.atan2(p_in[1] - c[1], p_in[0] - c[0]); a1 = math.atan2(p_out[1] - c[1], p_out[0] - c[0])
+        sweep = (a1 - a0) % (2 * math.pi) if d > 0 else -((a0 - a1) % (2 * math.pi))
+        m = max(2, int(round(r * abs(sweep) / 0.02)))
+        pts += [c + r * np.array([math.cos(a0 + sweep * k / m), math.sin(a0 + sweep * k / m)]) for k in range(m)]
+        q1, q2 = legs[i]
         m = max(1, int(round(np.linalg.norm(q2 - q1) / 0.02)))
         pts += [q1 + (q2 - q1) * k / m for k in range(m)]
+        print(f'  circle {i}: turns {math.degrees(sweep):+.0f} degrees; then a line {np.linalg.norm(q2 - q1):.1f} cells')
     return np.array(pts)
 
-fine = fillet(V, R)
+fine = circles(C)
 # (the lap starts at FIRST: the fine line rolled round to its nearest point)
 k0 = int(np.argmin(np.hypot(fine[:, 0] - FIRST[0], fine[:, 1] - FIRST[1])))
 fine = np.roll(fine, -k0, axis=0)
@@ -97,27 +105,33 @@ def nearest(p, heading=None):
 def ahead(a, b): return ((b - a) % N) * STEP
 
 # ---- the stretches
-iDockEnd = nearest((7.2, 11.0), (0, -1))          # the dock's road ends here, round its corner the raised road begins
 iRaise = nearest((11.0, 7.5), (1, 0))             # the raised road's first point: off the dock, onto the shore
 iClimb0 = nearest((47.0, 7.5), (1, 0))            # the climb from the shore's height ...
 iClimb1 = nearest((42.0, 50.5), (-1, 0))          # ... to the mesa's
-iNorth0 = nearest((31.0, 17.0), (-1, 0))          # the north rim
-iNorth1 = nearest((18.5, 17.0), (-1, 0))
-iLip = nearest(DROP_LIP, (0, -1)); iLand = nearest(DROP_LAND, (0, -1))
+iDown0 = nearest((13.6, 42.0), (0, 1))            # the ramp down to the dock: from the end of the third jump's landing ...
+iFoot = nearest((6.3, 26.0), (0, -1))             # ... to the dock's height
+iEnd = nearest((6.4, 24.6), (0, -1))              # the raised road ends on the dock, just behind the grid (two abreast)
 iStart = nearest((7.2, START_Z), (0, -1))
 
+def mix(f): return f * f * (3 - 2 * f) * 0.3 + f * 0.7   # a climb's shape: mostly straight, eased at its ends
+# The ramp down: its grade rising evenly from level over its first 15 %, back to level over its last 15 % (trap), and LATER times as steep
+# near its foot as at its top (the south-west hill stands beside its last stretch: it keeps high until it is past most of it). (A grade
+# that jumped from level to the ramp's at its top, smoothed, dipped there to 50 %.)
+LATER = 1.6
+def trap(t, q=0.15): return min(1, t / q, (1 - t) / q) if 0 < t < 1 else 0.0
+def descent(f, n=400):
+    fs = np.linspace(0, 1, n + 1); w = np.array([trap(t) * (1 + (LATER - 1) * t) for t in fs])
+    acc = np.concatenate([[0], np.cumsum((w[1:] + w[:-1]) / 2)]); acc /= acc[-1]
+    return float(np.interp(min(max(f, 0), 1), fs, acc))
 target = np.zeros(N)
 for k in range(N):
     a = ahead(iRaise, k)
-    if ahead(iRaise, k) > ahead(iRaise, iLip) or k == iLand: target[k] = DOCK          # the dock (and the drop's gap, which is the dock's level after it)
+    if a > ahead(iRaise, iEnd): target[k] = DOCK                                     # the dock
     elif a <= ahead(iRaise, iClimb0): target[k] = DOCK + (SHORE - DOCK) * min(1, a / 8)
     elif a <= ahead(iRaise, iClimb1):
-        f = (a - ahead(iRaise, iClimb0)) / (ahead(iRaise, iClimb1) - ahead(iRaise, iClimb0))
-        target[k] = SHORE + (TOP - SHORE) * (f * f * (3 - 2 * f) * 0.3 + f * 0.7)
-    else: target[k] = TOP
-    if ahead(iRaise, iNorth0) - 6 <= a <= ahead(iRaise, iNorth1) + 6:
-        edge = min(a - (ahead(iRaise, iNorth0) - 6), ahead(iRaise, iNorth1) + 6 - a)
-        target[k] = TOP + (NORTH_TOP - TOP) * min(1, edge / 6)
+        target[k] = SHORE + (TOP - SHORE) * mix((a - ahead(iRaise, iClimb0)) / (ahead(iRaise, iClimb1) - ahead(iRaise, iClimb0)))
+    elif a <= ahead(iRaise, iDown0): target[k] = TOP
+    else: target[k] = TOP + (DOCK - TOP) * descent((a - ahead(iRaise, iDown0)) / (ahead(iRaise, iFoot) - ahead(iRaise, iDown0)))
 Y = target.copy()
 # the jumps' level stretches: a ramp's length before the take-off lip to a landing ramp's length after the landing lip
 jumps = []
@@ -133,10 +147,6 @@ for name, mid, gap in JUMPS:
         Y[k] = lvl; fixed[k] = True
         if k == b: break
         k = (k + 1) % N
-jumps.append(('drop', iLip, iLand))
-# the drop: level at the top from a ramp's length before its lip, at the dock's after its landing lip
-for k in range((iLip - int(round((RAMP + 1) / STEP))) % N, iLip + 1): Y[k % N] = TOP; fixed[k % N] = True
-for k in range(iLip + 1, iLand): Y[k] = DOCK; fixed[k] = True
 # smoothing (but not the level stretches), the raised road's own grade is free
 w = int(round(4 / STEP))
 for _ in range(3):
@@ -146,43 +156,30 @@ for _ in range(3):
 grade = (np.roll(Y, -1) - Y) / (STEP * 512)
 raised = np.zeros(N, bool)
 for k in range(N):
-    raised[k] = ahead(iRaise, k) <= ahead(iRaise, iLip)
-
-# ---- the drop's flight: from 2.5 cells before the lip to 3.5 past the landing lip, a hop then the dive (RaceTrackJumpAnim.DropAt)
-# (the builder's: a hop as steep as the retail flight's first climb, clear of the take-off ramp's lip, then a smooth dive from a fifth of
-# the way; the flight starts on the take-off ramp, RAMP_UP * Rise(0.5) up it, and ends 30 over the landing ramp, DROP_RAMP high)
-HOP, DIVE_FROM, RAMP_UP, DROP_RAMP = 1200.0, 0.2, 800.0, 200.0
-def rise(t):
-    t = min(max(t, 0), 1); return (t * t / 0.6 if t < 0.3 else t - 0.15) / 0.85
-def drop_at(u, drop):
-    v = min(max((u - DIVE_FROM) / (1 - DIVE_FROM), 0), 1)
-    return 4 * HOP * u * (1 - u) - drop * v * v * (3 - 2 * v)
+    raised[k] = ahead(iRaise, k) <= ahead(iRaise, iEnd)
 
 # ---- checks
-out = [f'lap {total:.1f} cells, {N} points; raised from point {iRaise} to {iLip} ({ahead(iRaise, iLip):.1f} cells), the dock {ahead(iLip, iRaise):.1f}']
+out = [f'lap {total:.1f} cells, {N} points; raised from point {iRaise} to {iEnd} ({ahead(iRaise, iEnd):.1f} cells), the dock {ahead(iEnd, iRaise):.1f}; '
+       f'the ramp down {ahead(iDown0, iEnd):.1f} cells']
 edge = np.minimum.reduce([X, Z, 64 - X, 64 - Z])
-out.append(f'  nearest the cube edge {edge.min():.1f} cells (the road needs 6.5)')
+out.append(f'  nearest the cube edge {edge.min():.1f} cells (the road needs 4.3: its verge and half a cell)')
 clear = [(Y[k] - ground(X[k], Z[k]), k) for k in range(N) if raised[k]]
 low = min(clear)
 out.append(f'  the raised road over the ground: {low[0]:.0f} at the least (point {low[1]}, ({X[low[1]]:.1f}, {Z[low[1]]:.1f}))')
-gr = grade[raised & (np.arange(N) != iLip)]
+gr = grade[raised]
 out.append(f'  steepest {gr.max() * 100:.1f} % up, {-gr.min() * 100:.1f} % down on the raised road; heights {Y.min():.0f} to {Y.max():.0f}')
-for c, k in sorted(clear)[:3]: out.append(f'    low over the ground: {c:.0f} at ({X[k]:.1f}, {Z[k]:.1f})')
+# (across the deck's whole width, not only its middle: what the cutting under it has to take away)
+wide = []
+for k in range(N):
+    if not raised[k]: continue
+    g = max(ground(X[k] + Nn[k, 0] * o, Z[k] + Nn[k, 1] * o) for o in np.linspace(-RAISED_HALF - 1, RAISED_HALF + 1, 9))
+    wide.append((Y[k] - g, k))
+for c, k in sorted(wide)[:4]: out.append(f'    the ground across the deck {-c:.0f} over it at ({X[k]:.1f}, {Z[k]:.1f}), road {Y[k]:.0f}' if c < 0 else f'    low over the ground: {c:.0f} at ({X[k]:.1f}, {Z[k]:.1f})')
 for name, lip, land in jumps:
     gap = ahead(lip, land)
-    before = (lip - int(round(RAMP / STEP))) % N
-    turn = math.degrees(math.acos(np.clip(T[before] @ T[land], -1, 1)))
-    out.append(f'  jump {name}: lips {gap:.1f} cells apart at ({X[lip]:.1f}, {Z[lip]:.1f}) -> ({X[land]:.1f}, {Z[land]:.1f}), level {Y[lip]:.0f} -> {Y[land]:.0f}, the road turns {turn:.0f} degrees over it')
-    if name == 'drop':
-        f0 = (lip - 5) % N; flight = gap + 2.5 + 3.5
-        takeoff = RAMP_UP * rise(0.5); dropH = Y[lip] + takeoff - (Y[land] + DROP_RAMP * rise(1 - 3.5 / LANDING) + 30)
-        worst = 1e9
-        for k in range(-5, int(round((gap + 3.5) / STEP)) + 1):
-            i = (lip + k) % N; u = (k * STEP + 2.5) / flight
-            y = Y[lip] + takeoff + drop_at(u, dropH); g = ground(X[i], Z[i])
-            worst = min(worst, y - g)
-        lipClear = takeoff + drop_at(2.5 / flight, dropH) - RAMP_UP
-        out.append(f'    the drop {dropH:.0f}, its flight {flight:.1f} cells: at the least {worst:.0f} over the ground under it, {lipClear:.0f} over the take-off lip')
+    before = (lip - int(round(RAMP / STEP))) % N; after = (land + int(round(LANDING / STEP))) % N
+    turn = math.degrees(math.acos(np.clip(T[before] @ T[after], -1, 1)))
+    out.append(f'  jump {name}: lips {gap:.1f} cells apart at ({X[lip]:.1f}, {Z[lip]:.1f}) -> ({X[land]:.1f}, {Z[land]:.1f}), level {Y[lip]:.0f}, the road turns {turn:.0f} degrees over its ramps')
 # two parts of the lap side by side at one level
 idx = np.arange(N); close = []
 for i in range(0, N, 2):
@@ -201,19 +198,20 @@ plan = {
     'originCellX': ORIGIN, 'originCellZ': ORIGIN,
     'points': [[round(float(x), 3), round(float(z), 3)] for x, z in zip(X, Z)],
     'heights': [round(float(y), 1) for y in Y],
-    'maxGrade': round(float(max(grade[raised & (np.arange(N) != iLip)].max(), -grade[raised & (np.arange(N) != iLip)].min())) + 0.01, 3),
+    'maxGrade': round(float(max(grade[raised].max(), -grade[raised].min())) + 0.01, 3),
     'asphaltHalf': ASPHALT, 'curbHalf': CURB, 'vergeHalf': VERGE, 'blend': BLEND,
-    'raised': [int(iRaise), int(iLip)], 'raisedHalf': RAISED_HALF, 'raisedCut': True,
+    'raised': [int(iRaise), int(iEnd)], 'raisedHalf': RAISED_HALF, 'raisedCut': True,
     'gapJumps': [[int(lip), int(land)] for name, lip, land in jumps],
     'jumpRampLength': RAMP, 'jumpLandingLength': LANDING, 'jumpMinScale': 0.6,
     'start': int(iStart),
     'pitSpots': PIT_SPOTS,
+    'gridStep': 1.75,
     'gravity': 0.8,
     # the temple (its hall, its west tower and its roofs) stays where it is
     'keepBodies': [0, 1, 6, 7],
 }
 json.dump(plan, open(OUT, 'w'))
-np.savez(D + 'lap2.npz', X=X, Z=Z, Y=Y, T=T, raised=raised)
+np.savez(D + 'lap3.npz', X=X, Z=Z, Y=Y, T=T, raised=raised)
 print('wrote', OUT)
 
 if '--pictures' in sys.argv:
@@ -241,4 +239,4 @@ if '--pictures' in sys.argv:
     d.line([a, b], fill=(255, 255, 255), width=4)
     for i in range(0, N, 24):
         d.text(px(X[i] + 0.6, Z[i] + 0.6), f'{int(Y[i])}', fill=(230, 230, 230))
-    im.save(D + 'lap2.png'); print('picture', D + 'lap2.png')
+    im.save(D + 'lap3.png'); print('picture', D + 'lap3.png')

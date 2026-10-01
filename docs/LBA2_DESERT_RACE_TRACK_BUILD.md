@@ -1077,6 +1077,8 @@ The user asked for two vertical loops on `MOON.ILE` (which no version of the gam
 
 ## The lava lake, round the whole island (2026-10-01)
 
+*Reshaped later the same day from the user's sketch: see "The lava lake, third version" below. The drop, the drop camera and the cutting stay in the builder and engine for any track.*
+
 ![the lap on the built island](racetrack/build/lava2_map.png)
 
 The first lava lake lap (above) was far too small: about 70 cells on the crater's plateau. The user asked for as much of the island's footprint as possible, perhaps more jumps, the start and finish where the statue track's are, and height used in a way unlike the statue track's helix. The new lap (`tools/RaceTrackPlan/celebrat_design.py`, `docs/racetrack/celebrat_track_plan.json`) is 247 cells, clockwise, raised road everywhere except the dock:
@@ -1105,6 +1107,25 @@ The first lava lake lap (above) was far too small: about 70 cells on the crater'
 **Verified**, on copies of the game: the test pilot round the lap, qualifying 26.1-26.3 s, race laps 26.1-29.7 s with the three opponents (their qualifying 24.7-28.8 s), no checkpoint missed, no rescue. The drop: up to 7,440 off the lip, down to 431 on the dock's landing ramp and away at speed. All seven tracks of the joint build raced again with the new engine and builder: every lap completed, no checkpoint missed, no rescue (the Desert island's stall at checkpoint 7 is the known one). The old moon's loops re-shot: the car now pitches round both.
 
 **Known limitations**: the first moment of the drop is hidden from its camera by the take-off ramp, and the camera swings out to its place over 12 frames rather than cutting. The cuttings under the deck are plain rock.
+
+## The lava lake, third version: the user's sketch (2026-10-01)
+
+![the user's sketch over the second version, and the new lap turned the same way](racetrack/build/lava3_sketch.png)
+
+The user liked the second version's basics, but its last corner was too tight and the drop would be better as a ramp. Their sketch, drawn over the editor's minimap (which turns with the 3D view: up was east there), kept the start, made the third and fourth corners turn back more on themselves into the lake's jump, shifted the inner part of the lap over, and opened up the last turn; the jumps keep their lengths. The design (`tools/RaceTrackPlan/celebrat_design.py`) now draws the lap as circles it turns round joined by the lines that touch them, so a turn can go round more than half a circle:
+
+- **The hook**: from the south rim the lap turns 120 degrees back on itself onto a causeway north-east across the lava lake; jump 2 (8 cells) is in its middle, heading 30 degrees east of north.
+- **The S**: off the causeway round to the west onto the north rim (z 16.7), and round its corner south beside the temple.
+- **Jump 3** (7 cells) stays just west of the temple: its roofs are 11,140 high, nearly 5,000 over the road, so the sketched line across the temple can't be flown. The road there is the plateau's west edge.
+- **The last turn**: a kink left, then round to the right 204 degrees on a radius of 5.8 (the hairpin was 3), over the south-west corner.
+- **The ramp** instead of the drop: from the end of jump 3's landing round the last turn and north along the island's west shore (x 4.6: the island's edge must be 4.3 cells off, the verge and half a cell -- not the 6.5 the design script had assumed) onto the dock, 6,300 down to 420 over 55 cells, its grade eased in and out and steepest near its foot (28 %). The south-west hill is the mesa's west flank and stands across the whole dock's width; every way onto the dock from the south crosses it, so the ramp runs through a cutting there (`raisedCut`: 427 vertices, 3,300 at the most at the cutting's uphill edge): a rock face beside the road.
+- **The grid** stands two abreast (`gridStep` 1.75, a new plan option; 3.5 elsewhere), so it ends at z 23.5 and the ramp comes down just behind it.
+
+![the new lap](racetrack/build/lava3_map.png)
+![a qualifying lap](racetrack/build/lava3_tour.png)
+![the last turn and the ramp](racetrack/build/lava3_ramp.png)
+
+**Verified**, on copies of the game: the test pilot, qualifying 27.0 s, a race lap 29.5 s with the three opponents (their qualifying 26.7-32.0 s), no checkpoint missed, no rescue; down the ramp at up to 43 km/h. Built with the other six tracks into one folder: theirs keep the 3.5 grid. Built and raced from the app on a sandbox folder.
 
 ## The menu command
 
