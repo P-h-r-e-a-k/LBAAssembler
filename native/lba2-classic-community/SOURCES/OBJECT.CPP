@@ -3086,6 +3086,8 @@ S32 GereCodesJeu(U8 numobj) {
         case CJ_ANIMATED_LAVE:
             switch (numobj) {
             case NUM_PERSO:
+                // (a race-track mod's car: put back on the road instead, RACEMOD.CPP RaceMod_Rescue)
+                if (RaceMod_Rescue()) break;
                 validepos = FALSE;
 
                 if (!FlagWater) {

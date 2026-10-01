@@ -313,8 +313,19 @@ internal static class RaceTrackScenes
                 var lx = (int)Math.Round(wx - cx * (double)IslandFile.CubeSize); var lz = (int)Math.Round(wz - cz * (double)IslandFile.CubeSize);
                 var beta = (int)Math.Round(Math.Atan2(s.DirX, s.DirZ) / (2 * Math.PI) * 4096); beta = ((beta % 4096) + 4096) % 4096;
                 var y = (int)Math.Round(s.Y);
-                // the buggy stands a few cells before the line, Twinsen beside it; each on the ground at its own spot (the road climbs there)
-                int At(double back, double side, bool z) => (int)Math.Round((z ? lz : lx) + (z ? (-s.DirZ * back + s.DirX * side) : (-s.DirX * back - s.DirZ * side)) * 512);
+                // the buggy stands a few cells before the line, Twinsen beside it; each on the ground at its own spot (the road climbs there).
+                // Straight back from the line, or, where the lap bends behind it (the lava lake's line is just out of a corner), on the lap.
+                var curved = Behind(t.Report, s, GridSpot(GridSpots - 1).Back + 2, 0) is { } far && Math.Abs((far.X - s.X) * -s.DirZ + (far.Z - s.Z) * s.DirX) > 0.25;
+                int At(double back, double side, bool z)
+                {
+                    if (curved && Behind(t.Report, s, back, side) is { } on) return (int)Math.Round(((z ? on.Z : on.X) - (z ? cz : cx) * 64.0) * 512);
+                    return (int)Math.Round((z ? lz : lx) + (z ? (-s.DirZ * back + s.DirX * side) : (-s.DirX * back - s.DirZ * side)) * 512);
+                }
+                int Facing(double back)
+                {
+                    if (!curved || Behind(t.Report, s, back, 0) is not { } on) return beta;
+                    var b = (int)Math.Round(Math.Atan2(on.DirX, on.DirZ) / (2 * Math.PI) * 4096); return ((b % 4096) + 4096) % 4096;
+                }
                 // (on a raised road -- a start line in the air -- the road's own surface, at the start line's level)
                 int Ground(int x, int z) => t.Report.RaisedFloor?.Invoke(cx * 64 + x / 512.0, cz * 64 + z / 512.0, s.Y) is { } floor ? (int)Math.Round(floor)
                     : t.Report.GroundAfter is { } g ? (int)Math.Round(g(cx * 64 + x / 512.0, cz * 64 + z / 512.0)) : y;
@@ -337,7 +348,7 @@ internal static class RaceTrackScenes
                     {
                         var (back, side) = GridSpot(k);
                         int gx = At(back, side, false), gz = At(back, side, true);
-                        t.Grid.Add(new[] { cx, cz, gx, Ground(gx, gz), gz, beta });
+                        t.Grid.Add(new[] { cx, cz, gx, Ground(gx, gz), gz, Facing(back) });
                     }
                 // the pits: where the opponents' cars wait while the player qualifies (RaceTrackBuilder.PlacePits, in the pit lane
                 // beside the start line). The build parks them there; the race-track mode puts them on the grid for the race.
@@ -352,7 +363,7 @@ internal static class RaceTrackScenes
                         t.Pits.Add(new[] { cx, cz, px, t.Report.PitHeights ? (int)Math.Round(p.Y) : Ground(px, pz), pz, pbeta });
                     }
                 var pole = GridSpot(0);
-                if (buggy is not null) { buggy.X = At(pole.Back, pole.Side, false); buggy.Z = At(pole.Back, pole.Side, true); buggy.Y = Ground(buggy.X, buggy.Z); buggy.Beta = beta; }
+                if (buggy is not null) { buggy.X = At(pole.Back, pole.Side, false); buggy.Z = At(pole.Back, pole.Side, true); buggy.Y = Ground(buggy.X, buggy.Z); buggy.Beta = Facing(pole.Back); }
                 // Twinsen right behind his car: he comes into the scene facing the way the lap runs (the scene's start keeps no
                 // facing), so he faces the car and the action key gets him in. (Beside it, 1.3 cells from its middle, the car's box
                 // pushed him off and he faced away from it.) The next car is on the other side, clear of him.
@@ -429,11 +440,8 @@ internal static class RaceTrackScenes
                 }
             }
             foreach (var t in tracks)
-                if (t.Report.Jump is { } jump && model.CubeX == jump.CubeX && model.CubeY == jump.CubeZ)
-                {
-                    var jumped = AddJump(model, scene, jump, log);
-                    if (jumped is not null) model = jumped;
-                }
+                foreach (var jump in t.Report.Jumps)
+                    if (model.CubeX == jump.CubeX && model.CubeY == jump.CubeZ && AddJump(model, scene, jump, log) is { } jumped) model = jumped;
             foreach (var t in tracks) edgeZonesAdded += CoverEdges(model, scene, t.Edges, log);
             changes.Add(new SceneChange(scene, model, null));
         }
@@ -453,6 +461,63 @@ internal static class RaceTrackScenes
         }
         var main = tracks[0];
         return main.Result(log, changes.Count, removed, tracks.Count > 1 ? tracks[1].Result(log, changes.Count, removed) : null);
+    }
+
+    // The place `back` cells behind the start line along the lap's centre line (the built one: RaceTrackReport.LapX/LapZ), `side` cells
+    // across it as GridSpot's side is, and the lap's heading there (the way it runs). Null without the lap.
+    private static (double X, double Z, double DirX, double DirZ)? Behind(RaceTrackReport report, (double X, double Z, double Y, double DirX, double DirZ) line, double back, double side)
+    {
+        var xs = report.LapX; var zs = report.LapZ; var n = xs.Length;
+        if (n < 3) return null;
+        var i = Enumerable.Range(0, n).MinBy(k => (xs[k] - line.X) * (xs[k] - line.X) + (zs[k] - line.Z) * (zs[k] - line.Z));
+        // (a start line in a pit lane is not on the lap: its grid is straight back along the lane)
+        if ((xs[i] - line.X) * (xs[i] - line.X) + (zs[i] - line.Z) * (zs[i] - line.Z) > 1) return null;
+        // (the way the lap's points run, against the line's direction)
+        var way = (xs[(i + 1) % n] - xs[i]) * line.DirX + (zs[(i + 1) % n] - zs[i]) * line.DirZ >= 0 ? 1 : -1;
+        double x = line.X, z = line.Z, left = back;
+        var k = i;
+        while (true)
+        {
+            var j = ((k - way) % n + n) % n;
+            var step = Math.Sqrt((xs[j] - x) * (xs[j] - x) + (zs[j] - z) * (zs[j] - z));
+            if (step >= left || step < 1e-9 && left <= 0)
+            {
+                var f = step < 1e-9 ? 0 : left / step;
+                var px = x + (xs[j] - x) * f; var pz = z + (zs[j] - z) * f;
+                double dx = xs[k] - xs[j], dz = zs[k] - zs[j]; var dl = Math.Sqrt(dx * dx + dz * dz) + 1e-12; dx /= dl; dz /= dl;
+                return (px - dz * side, pz + dx * side, dx, dz);
+            }
+            left -= step; x = xs[j]; z = zs[j]; k = j;
+            if (k == i) return null;
+        }
+    }
+
+    // An island whose track races in a scene the game hasn't got (Celebration Island's lava lake, RaceTrackIsland.CopiesScene: the island's
+    // one outside scene carries the statue's track) gets it: a copy of the original scene it copies, numbered as the island's FirstScene
+    // (the numbers between the game's last scene and it left empty: 222 is the holomap position of the story's arrow), and on the holomap
+    // that scene's place (HOLOMAP.HQR entry 12, record 50 + the scene: where "Twinsen is here" goes). Before Apply, which then edits it as
+    // the island's own. Returns a line for the build's log, or null for an island with scenes of its own.
+    public static string? AddScene(string gameDirectory, RaceTrackIsland island)
+    {
+        if (island.CopiesScene is not { } from) return null;
+        var path = Path.Combine(gameDirectory, "SCENE.HQR");
+        var original = File.Exists(path + RaceTrackService.BackupSuffix) ? path + RaceTrackService.BackupSuffix : path;
+        var record = HqrArchive.Open(original).Read(from + 1);
+        var hqr = HqrFile.Parse(File.ReadAllBytes(path));
+        var entry = island.FirstScene + 1;
+        if (entry < hqr.Count && !hqr.IsEmpty(entry))
+            throw new InvalidDataException($"The game already has a scene {island.FirstScene}: {island.Shown} races in a copy of scene {from} numbered {island.FirstScene}.");
+        while (hqr.Count < entry) hqr.Slots.Add(new HqrFile.Slot());
+        if (hqr.Count == entry) hqr.Add(record); else hqr.SetStored(entry, record);
+        File.WriteAllBytes(path, hqr.ToBytes());
+        var holoPath = Path.Combine(gameDirectory, RaceTrackHolomap.File);
+        var arrows = HqrArchive.Open(holoPath).Read(12);
+        const int size = 32;
+        int at = (50 + from) * size, to = (50 + island.FirstScene) * size;
+        if (arrows.Length < Math.Max(at, to) + size) throw new InvalidDataException("The holomap's position table is shorter than the game's own.");
+        arrows.AsSpan(at, size).CopyTo(arrows.AsSpan(to));
+        File.WriteAllBytes(holoPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(holoPath), 12, HqrWriter.StoredEntry(arrows)));
+        return $"scene {island.FirstScene}: a copy of scene {from} for {island.Shown}, with its place on the holomap";
     }
 
     // Where the scripts that stay (Twinsen's own life script, mostly) refer to actors about to be removed -- "if Twinsen is near the
@@ -644,7 +709,8 @@ internal static class RaceTrackScenes
     // roughly the right way, then sets the hero's movement to 12 (MOVE_BUGGY, moved by its animation alone) and starts a track that plays
     // animation 67 (ANIM.HQR 51: about 14 cells forward, up and down), and when the track reaches its last label gives the controls back
     // (movement 13). Here a small actor does what the retail hero script does, so no scene's own hero script has to be edited; the hero's
-    // track script only gets the two labels.
+    // track script only gets the two labels -- each of a lap's jumps its own pair (90 and 91, then 92 and 93), its own zone number and
+    // controller, and its own flight.
     private static SceneModel? AddJump(SceneModel model, int scene, JumpInfo jump, List<string> log)
     {
         var ox = jump.CubeX * 64.0; var oz = jump.CubeZ * 64.0;
@@ -669,7 +735,7 @@ internal static class RaceTrackScenes
         // the turn window: 640 units (56 degrees) either side of the road's heading
         var lo = ((jump.Beta - 640) % 4096 + 4096) % 4096; var hi = (jump.Beta + 640) % 4096;
         var window = lo < hi ? $"{lo} < beta_obj(0) && {hi} > beta_obj(0)" : $"{lo} < beta_obj(0) || {hi} > beta_obj(0)";
-        const int startLabel = 90, endLabel = 91;
+        int startLabel = 90 + 2 * jump.Index, endLabel = startLabel + 1;
         var life = $@"void comportement_0()
 {{
     set_comportement(comportement_1);

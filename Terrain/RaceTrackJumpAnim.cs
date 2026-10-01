@@ -13,10 +13,12 @@ internal static class RaceTrackJumpAnim
     // The generic animation number the hero's track script plays (ANIM(200)); the retail entities use numbers up to 83.
     public const int Generic = 200;
     // Each island's jump has a flight of its own, sized to its gap, so several tracks can be built into one folder: 200 plus the island's
-    // number (a scene's island byte), and 12 more for the track of its other-weather file (Citadel Island's town circuit) -- 200 to 223, the
-    // numbers the engine's race-track mode flies at the car's speed (RACEMOD.CPP RACE_JUMP_ANIM_FIRST..LAST).
-    public const int TwinOffset = 12, Last = Generic + 2 * TwinOffset - 1;
-    public static int GenericFor(RaceTrackIsland island, bool twin = false) => Generic + island.IslandByte + (twin ? TwinOffset : 0);
+    // number (a scene's island byte), 12 more for the track of its other file (Citadel Island's town circuit; Celebration Island's lava
+    // lake, RaceTrackIsland.OtherFile), and 24 more for each of a track's jumps after its first (the lava lake has two) -- up to four a
+    // track, 200 to 295, the numbers the engine's race-track mode flies at the car's speed (RACEMOD.CPP RACE_JUMP_ANIM_FIRST..LAST).
+    public const int TwinOffset = 12, JumpOffset = 24, MaxJumps = 4, Last = Generic + MaxJumps * JumpOffset - 1;
+    public static int GenericFor(RaceTrackIsland island, bool twin = false, int jump = 0) =>
+        Generic + island.IslandByte + (twin || island.OtherFile ? TwinOffset : 0) + JumpOffset * jump;
     // Twinsen's entity while he drives (behaviour C_BUGGY = 12: the engine loads entity n for behaviour n).
     public const int BuggyEntity = 12;
     // The retail flight's steps (measured in the game: 17.4-17.6 cells): 8990 units forward, ending 201 below where it starts.
@@ -50,8 +52,8 @@ internal static class RaceTrackJumpAnim
         return up * ClimbScale(forward);
     }
 
-    // The scale that flies `cells` (never shorter than the retail flight).
-    public static double ForwardFor(double cells) => Math.Max(1, Math.Ceiling(cells * 512 / RetailForward * 100) / 100);
+    // The scale that flies `cells` (never shorter than the retail flight, or than `least` of it: a plan's short hops, RaceTrackPlan.JumpMinScale).
+    public static double ForwardFor(double cells, double least = 1) => Math.Max(least, Math.Ceiling(cells * 512 / RetailForward * 100) / 100);
 
     // Adds a flight `forward` times the retail one to the game folder's ANIM.HQR and RESS.HQR, as Twinsen's generic animation `generic` in
     // the buggy (the copies the build starts from are the originals, so this runs once per jump a build has). Returns a line for the build's log.

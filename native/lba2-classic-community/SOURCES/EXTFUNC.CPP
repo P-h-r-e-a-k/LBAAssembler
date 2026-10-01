@@ -247,7 +247,7 @@ void InitGrilleExt(char *defpathname) {
         LastIsland = 1;
         numskysea = RESS_SKYSEA00;
     } else {
-        if (Island == 5 AND (ListVarGame[FLAG_CELEBRATION].Value OR RaceMod_Statue())) {
+        if (Island == 5 AND RaceMod_StatueShown(ListVarGame[FLAG_CELEBRATION].Value)) {
             strcpy(IslandName, GetRessName("celebra2"));
             LastIsland = 1;
         }
@@ -323,7 +323,7 @@ void InitGrilleExt(U32 numcube) {
         break;
 
     case 5:
-        if (ListVarGame[FLAG_CELEBRATION] OR RaceMod_Statue()) {
+        if (RaceMod_StatueShown(ListVarGame[FLAG_CELEBRATION])) {
             if (!strstr(IslandName, "celebra2"))
                 LastIsland = 1; // pour que le chargement s'effectue
 

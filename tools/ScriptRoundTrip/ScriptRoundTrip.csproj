@@ -57,6 +57,7 @@
     <EmbeddedResource Include="..\..\docs\racetrack\citadel_storm_track_plan.json" LogicalName="RaceTrackPlan.CitadelStorm.json" />
     <EmbeddedResource Include="..\..\docs\racetrack\mosquibe_track_plan.json" LogicalName="RaceTrackPlan.Mosquibe.json" />
     <EmbeddedResource Include="..\..\docs\racetrack\celebration_track_plan.json" LogicalName="RaceTrackPlan.Celebration.json" />
+    <EmbeddedResource Include="..\..\docs\racetrack\celebrat_track_plan.json" LogicalName="RaceTrackPlan.CelebrationLava.json" />
     <EmbeddedResource Include="..\..\docs\racetrack\elevator_track_plan.json" LogicalName="RaceTrackPlan.Elevator.json" />
     <Compile Include="..\..\LiveDataRoot.cs" Link="LiveDataRoot.cs" />
     <Compile Include="..\..\AudioLevels.cs" Link="AudioLevels.cs" />

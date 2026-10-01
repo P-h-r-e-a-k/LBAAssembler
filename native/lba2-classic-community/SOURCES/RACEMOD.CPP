@@ -47,7 +47,10 @@
  *     hide_actor=<scene> <actor> a car in a scene that isn't racing (an opponent the player left out): kept out of sight
  *     raised=<file>              a raised road: lines "x z y half", its middle point by point in lap order and half its width, world
  *                                units from the island's corner. A floor of its own over the ground, at any grade (see "the raised road")
- *     statue=1                   Celebration Island drawn from its file with the statue (CELEBRA2), whatever game variable 79 says
+ *     statue=1                   Celebration Island drawn from its file with the statue (CELEBRA2), whatever game variable 79 says;
+ *                                statue=0 from its file before the statue rises (CELEBRAT, the lava lake)
+ *     rescue=0                   a car that goes into the lava or the sea burns or drowns Twinsen as in the game (default 1: it is put
+ *                                back on the road, RaceMod_Rescue)
  *     jump_speed=<lo> <hi>       a jump's flight flown at the car's speed at the take-off (RaceMod_JumpClock): its clock that many times
  *                                as fast as the flight's own speed, kept between lo and hi (default 0.6 4; 0: the flight in its own time)
  *   A startline or checkpoint line may end in a ninth number, the road's height there: the line then only counts for a car within
@@ -154,6 +157,7 @@ static int s_hideScene[RACE_MAX_HIDDEN], s_hideActor[RACE_MAX_HIDDEN];
 static int s_nbHidden = 0;
 #define RACE_RESULTS_MS 4000               // how long the qualifying's grid is shown before the count-down
 #define RACE_QUALIFY_SPREAD 3000           // an opponent's qualifying time: its lap at its skill, this many ms either way at random
+#define RACE_QUALIFY_SHARE 0.1             // ... or this share of that lap, if less (a short lap: the lava lake's is 10 s)
 static S32 s_oppLast = 0;
 static int s_playerIndex = -1;             // the first opponent's line point nearest the player, for the race position
 // The whole scene is redrawn while the opponent moves: with the camera standing still, only what moves is redrawn over a copy of the
@@ -219,7 +223,8 @@ static int s_onlyNear = -1;                // RaisedAt looks only at the road's 
 #define RAIL_CAMERA_SIDE 50                 // the rail camera's eye comes nearer round a bend until it looks this near the car's way (degrees)
 #define RAIL_CAMERA_NEAREST 2560            // ... but no nearer than this
 #define RAISED_UNDER 650                   // how far under such a level's surface the following camera's eye stays (its slab is 200)
-static int s_statue = 0;
+static int s_rescueOn = 1;                 // rescue=: a car in the lava or the sea is put back on the road (RaceMod_Rescue)
+static int s_statue = -1;                // statue=: 1 with the statue, 0 without it, -1 (not given) as the game says
 static int s_raisedLoop = 0;               // the road is a whole lap: its last point is its first
 static double s_gravity = 0;               // gravity=<k>: a car on the raised road is pulled down its slopes (RaceMod_Gravity), k times as hard as RACE_GRAVITY
 // railcam=<back> <up> <lead>: the camera that follows the car rides the raised road behind it (RailCamera)
@@ -586,7 +591,7 @@ void RaceMod_Floor(S32 ox, S32 oy, S32 oz, S32 nx, S32 *ny, S32 nz) {
 // that time is carried into the next keyframe here, or a flight flown fast would lose a good part of its rate to it (at 60 frames a
 // second, twice as fast, a third of it).
 #define RACE_JUMP_ANIM_FIRST 200           // the flights' generic animations (Terrain/RaceTrackJumpAnim.cs Generic..Last: 200 + the island's
-#define RACE_JUMP_ANIM_LAST 223            // number, 12 more for Citadel Island's town circuit)
+#define RACE_JUMP_ANIM_LAST 295            // number, 12 more for a track in the island's other file, 24 more for each of a track's jumps after its first)
 static double s_jumpLo = 0.6, s_jumpHi = 4.0; // jump_speed=<lo> <hi>: the bounds of the rate (0: the flight in its own time)
 static double s_jumpRate = 0;              // the flight's clock rate (0: not flying)
 static double s_jumpFrac = 0;              // the part of a millisecond of the flight's clock carried to the next frame
@@ -693,7 +698,7 @@ static void LoadRaised(const char *path) {
     Log_Info("[racemod] raised road: %d points, heights %d to %d%s", count, lowest, highest, s_raisedLoop ? ", a loop" : "");
 }
 
-S32 RaceMod_Statue(void) { return RaceMod_Active() && s_statue; }
+S32 RaceMod_StatueShown(S32 risen) { return RaceMod_Active() && s_statue >= 0 ? s_statue != 0 : risen != 0; }
 
 static void LoadPath(T_RACE_OPPONENT *o, const char *path) {
     FILE *f = fopen(path, "r");
@@ -907,6 +912,7 @@ static void Load(const char *path) {
         else if (!strcmp(key, "weather")) s_fineWeather = !strcmp(v, "fine");
         else if (!strcmp(key, "raised")) LoadRaised(v);
         else if (!strcmp(key, "statue")) s_statue = atoi(v);
+        else if (!strcmp(key, "rescue")) s_rescueOn = atoi(v);
         else if (!strcmp(key, "gravity")) s_gravity = atof(v);
         else if (!strcmp(key, "jump_speed")) {
             if (sscanf(v, "%lf %lf", &s_jumpLo, &s_jumpHi) != 2) s_jumpHi = 0;
@@ -959,7 +965,8 @@ static void Load(const char *path) {
         o->PlannedLap = 0;
         for (int i = 0; i < o->Count; i++) o->PlannedLap += (o->Cum[i + 1] - o->Cum[i]) / (o->V[i] > 1 ? o->V[i] : 1);
         o->PlannedLap *= 100.0 / o->Pace;
-        o->QualTime = (S32)(o->PlannedLap * 1000 + (RaceRandom() * 2 - 1) * RACE_QUALIFY_SPREAD);
+        const double spread = o->PlannedLap * 1000 * RACE_QUALIFY_SHARE < RACE_QUALIFY_SPREAD ? o->PlannedLap * 1000 * RACE_QUALIFY_SHARE : RACE_QUALIFY_SPREAD;
+        o->QualTime = (S32)(o->PlannedLap * 1000 + (RaceRandom() * 2 - 1) * spread);
         // the grid: a few points before the start line
         const int grid = o->Grid < 0 ? 0 : o->Grid >= o->Count ? o->Count - 1 : o->Grid;
         o->S = grid ? o->Cum[o->Count - grid] : 0;
@@ -1253,8 +1260,74 @@ static void FaceTheCar(void) {
     Log_Info("[racemod] Twinsen turned to face his car (turn %d)", (int)hero->Obj.Beta);
 }
 
+// ---- back on the road -------------------------------------------------------------------------------------------------------------
+// A car that goes into the lava or the sea (the ground's deadly codes) would burn or drown Twinsen, and the game would start again from
+// his last save -- on Celebration Island's lava lake, after a leap that fell short or a wheel off a causeway. While he races it is put back
+// on the road instead (OBJECT.CPP GereCodesJeu asks RaceMod_Rescue, and RaceMod_Frame does it): on the first opponent's line, a couple
+// of cells behind the last place the car was on the ground beside it, facing the way the lap runs, stopped. The lap's count doesn't see
+// the move. A track with no opponent has no line: there the game's own death stands.
+#define RACE_RESCUE_BACK 2                 // line points (a cell each) behind the last safe place
+static int s_safeIndex = -1;               // the first opponent's line point the car was last on the ground beside
+static int s_rescue = 0;                   // asked for by GereCodesJeu, done by the next RaceMod_Frame
+
+// A point of the line on the ground, in the cube the player is in: not over a jump's gap, where the line is the flight's arc.
+static int LineOnGround(const T_RACE_OPPONENT *o, int i) {
+    if (o->X[i] / 32768 != CurrentCubeX || o->Z[i] / 32768 != CurrentCubeY) return 0;
+    if (s_nbRaised) return 1;
+    return abs(o->Y[i] - CalculAltitudeTerrain(o->X[i] - CurrentCubeX * 32768, o->Z[i] - CurrentCubeY * 32768, 0)) < 400;
+}
+
+static void TrackSafePlace(void) {
+    const T_RACE_OPPONENT *o = &s_opp[0];
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    if (!o->Count || CubeMode != CUBE_EXTERIEUR || hero->Move == MOVE_BUGGY || (hero->WorkFlags & FALLING)) return;
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0, wy = hero->Obj.Y;
+    int best = -1;
+    double bd = 1e30;
+    // (near the last safe place: where the lap crosses itself the other road's points are as near)
+    const int window = s_safeIndex >= 0 ? 40 : o->Count;
+    for (int k = -window; k <= window; k++) {
+        const int i = ((s_safeIndex >= 0 ? s_safeIndex : 0) + k + 2 * o->Count) % o->Count;
+        const double d = LineDistance(o, i, wx, wy, wz);
+        if (d < bd) { bd = d; best = i; }
+    }
+    if (best < 0 || !LineOnGround(o, best) || abs(o->Y[best] - hero->Obj.Y) > 600) return;
+    const double dx = o->X[best] - wx, dz = o->Z[best] - wz;
+    if (dx * dx + dz * dz < 3.5 * 512 * 3.5 * 512) s_safeIndex = best;
+}
+
+S32 RaceMod_Rescue(void) {
+    if (!RaceMod_Active() || !s_rescueOn || Comportement != C_BUGGY || !s_opp[0].Count || s_safeIndex < 0) return 0;
+    s_rescue = 1;
+    return 1;
+}
+
+static void Rescue(void) {
+    const T_RACE_OPPONENT *o = &s_opp[0];
+    int i = ((s_safeIndex - RACE_RESCUE_BACK) % o->Count + o->Count) % o->Count;
+    for (int k = 0; k < 40 && !LineOnGround(o, i); k++) i = (i - 1 + o->Count) % o->Count;
+    if (!LineOnGround(o, i)) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const int j = (i + 1) % o->Count;
+    const S32 lx = o->X[i] - CurrentCubeX * 32768, lz = o->Z[i] - CurrentCubeY * 32768;
+    hero->Obj.X = lx;
+    hero->Obj.Z = lz;
+    hero->Obj.Y = s_nbRaised ? o->Y[i] : CalculAltitudeTerrain(lx, lz, 0);
+    hero->Obj.Beta = (S32)(atan2((double)(o->X[j] - o->X[i]), (double)(o->Z[j] - o->Z[i])) * 4096.0 / (2 * 3.14159265358979)) & 4095;
+    ClearRealAngle(hero);
+    hero->WorkFlags &= ~FALLING;
+    hero->CodeJeu = 0;
+    ListBuggy[0].Speed = 0;
+    s_forgetLap = 1;
+    s_safeIndex = i;
+    Message("Back on the road");
+    Log_Info("[racemod] back on the road: line point %d (%d,%d,%d)", i, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z);
+}
+
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
+    if (Comportement == C_BUGGY) TrackSafePlace();
+    if (s_rescue) { s_rescue = 0; Rescue(); }
     // A raised road winds round itself in the air: the classic camera, which stands still until the hero leaves the screen, would watch
     // the car go out of sight behind the road's other levels without its ever leaving the screen. So the camera that follows the car
     // is turned on -- once, with the first frame (the settings have been read by then), and the console's cam_follow can still turn it off.

@@ -59,6 +59,18 @@ internal sealed record RaceTrackIsland(
         Statue = true, Title = "Celebration Island: round the statue",
     };
 
+    // Celebration Island before the statue rises (CELEBRAT: the mesa's top a plateau round a lake of lava level with it, the temple on its
+    // west edge, lava channels pouring off its north side): a figure of eight on the plateau, a loop over the north (a causeway over the
+    // north channel's mouth) and one over the south, joined by two causeways that cross in the middle of the lake -- and both jump there, their
+    // leaps crossing over one hole of lava (RaceTrackPlan.GapJumps). The island's one outside scene, 95, carries the statue's track, so
+    // this one races in a scene of its own: 223, a copy of 95 the build adds (CopiesScene), which the race-track mode draws without the
+    // statue (the car file's statue=0). Its jumps' flights are numbered as an other file's (OtherFile), clear of the statue's track's.
+    public static readonly RaceTrackIsland CelebrationLava = new("Celebration Island, lava lake", "CELEBRAT.ILE", "CELEBRAT.OBL", 5, 223, 223, 32,
+        "RaceTrackPlan.CelebrationLava.json", null)
+    {
+        OtherFile = true, CopiesScene = 95, Title = "Celebration Island: the lava lake",
+    };
+
     // The Elevator Platform (ASCENCE: the foot of the elevator from Otringal, a few decks on legs over the sea with the elevator's tower
     // in the middle and an airship moored beside it -- 28 cells by 24, all of it decor, the ground under it nothing but sea). Too small
     // for a road on it, so the lap is built upwards, a rollercoaster: all of it a raised road (RaceTrackPlan.Raised, the whole lap),
@@ -89,13 +101,19 @@ internal sealed record RaceTrackIsland(
     // The track is in the file the engine draws only while game variable 79 is set (Celebration Island's statue): the race-track mode
     // is told to draw that one (the car file's statue=1).
     public bool Statue { get; init; }
+    // The file is the island's other one, raced on its own (Celebration Island's CELEBRAT, beside the statue's CELEBRA2): the race-track
+    // mode is told to draw it (statue=0), and its jumps' flights are numbered as an other file's (RaceTrackJumpAnim.GenericFor).
+    public bool OtherFile { get; init; }
+    // The scene its track races in is not in the game: the build adds it, a copy of this one (CelebrationLava's 223, of 95), as
+    // FirstScene (RaceTrackScenes.AddScene).
+    public int? CopiesScene { get; init; }
     public string Shown => Title ?? Name;
     // How many tracks a build of the island makes: Citadel Island's two files each carry one (its storm track and its town circuit).
     public int Tracks => TwinPlanResource is not null ? 2 : 1;
     // As a list of the tracks built names it.
     public string Built => TwinPlanResource is not null ? $"{Name.Split(',')[0]} (the storm track and the town circuit)" : Name;
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, Elevator };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

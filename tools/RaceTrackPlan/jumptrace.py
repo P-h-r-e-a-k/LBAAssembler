@@ -33,7 +33,7 @@ else:
 rx = re.compile(r'\[obj\] t=(\d+) obj=0 pos=(-?\d+),(-?\d+),(-?\d+) .*? anim=(-?\d+) genanim=(-?\d+) flaganim=(-?\d+) frame=(-?\d+) track=(-?\d+) label=(-?\d+) comport=(-?\d+) move=(-?\d+) flags=(\d+)')
 rows = [tuple(int(v) for v in m.groups()) for m in rx.finditer(out)]
 seen = set()
-FLIGHT = lambda anim: 200 <= anim <= 223   # the flights: each island's own (RaceTrackJumpAnim.GenericFor)
+FLIGHT = lambda anim: 200 <= anim <= 295   # the flights: each island's and each jump's own (RaceTrackJumpAnim.GenericFor)
 rows = sorted(r for r in rows if not (r[0] in seen or seen.add(r[0])))   # (a log with two copies of each line, out of step: each frame once)
 laps = list(dict.fromkeys(re.findall(r'\[racemod\] lap (\d+) in ([\d.]+) s', out)))
 print(f'dt {dt}: {len(rows)} traced frames; laps {laps}')

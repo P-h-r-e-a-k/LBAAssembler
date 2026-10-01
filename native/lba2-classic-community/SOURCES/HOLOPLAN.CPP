@@ -428,7 +428,7 @@ void InitHoloPlan() {
 #ifdef LBA_EDITOR
     else if ((ZoomedIsland == 5) AND(ListVarGame[FLAG_CELEBRATION].Value))
 #else
-    else if ((ZoomedIsland == 5) AND(ListVarGame[FLAG_CELEBRATION] OR RaceMod_Statue()))
+    else if ((ZoomedIsland == 5) AND RaceMod_StatueShown(ListVarGame[FLAG_CELEBRATION]))
 #endif
     {
         id = HQR_BEGIN_MAP + (2 * 13); //	Celebra2

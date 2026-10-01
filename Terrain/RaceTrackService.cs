@@ -82,14 +82,16 @@ internal static class RaceTrackService
     // The track Play races, of the folder's: the one on the island file the editor has open (`shownFile`, e.g. MOSQUIBE.ILE; for an island
     // with a track in each of its files -- Citadel Island -- that file's: CITADEL.ILE the storm track, CITABAU.ILE the town circuit), else
     // the one on the island of the scene that is open (`sceneIslandFile`, for an inside scene: the file its island byte names; that island's
-    // track as it was built to be raced), else the first built. Null when the folder has none. (Celebration Island's track is on CELEBRA2,
-    // the island with the statue; the editor lists its scenes under CELEBRAT, the same island before the statue rises.)
+    // track as it was built to be raced), else the first built. Null when the folder has none. (Celebration Island's statue track is on
+    // CELEBRA2, the island with the statue, and its lava lake's on CELEBRAT, the island before it rises, under which the editor lists the
+    // island's scenes: with no lava lake track built, CELEBRAT races the statue's.)
     public static TrackInfo? RaceFor(string gameDirectory, string? shownFile, string? sceneIslandFile = null)
     {
         var tracks = Tracks(ReadInfo(gameDirectory));
         if (tracks.Count == 0) return null;
         static bool Same(string? a, string? b) => a is not null && b is not null && string.Equals(Path.GetFileNameWithoutExtension(a), Path.GetFileNameWithoutExtension(b), StringComparison.OrdinalIgnoreCase);
-        static bool Island(RaceTrackIsland i, string? file) => Same(file, i.IleFile) || Same(file, i.TwinIleFile) || i.Statue && Same(file, "CELEBRAT");
+        static bool Island(RaceTrackIsland i, string? file) => Same(file, i.IleFile) || Same(file, i.TwinIleFile);
+        static bool Statue(RaceTrackIsland i, string? file) => i.Statue && Same(file, RaceTrackIsland.CelebrationLava.IleFile);
         foreach (var t in tracks)
         {
             var island = RaceTrackIsland.ByName(t.Island);
@@ -102,19 +104,22 @@ internal static class RaceTrackService
             }
             if (Island(island, shownFile)) return t;
         }
-        return tracks.FirstOrDefault(t => Island(RaceTrackIsland.ByName(t.Island), sceneIslandFile)) ?? tracks[0];
+        return tracks.FirstOrDefault(t => Statue(RaceTrackIsland.ByName(t.Island), shownFile))
+               ?? tracks.FirstOrDefault(t => Island(RaceTrackIsland.ByName(t.Island), sceneIslandFile))
+               ?? tracks.FirstOrDefault(t => Statue(RaceTrackIsland.ByName(t.Island), sceneIslandFile)) ?? tracks[0];
     }
 
-    // The same for a scene played on its own (the scene editor's Play): the track of the scene's island (its record's island byte), else
-    // the first built.
+    // The same for a scene played on its own (the scene editor's Play): the track that races in that scene (Celebration Island's lava lake
+    // has a scene of its own), else the track of the scene's island (its record's island byte), else the first built.
     public static TrackInfo? RaceForScene(string gameDirectory, int scene)
     {
         var tracks = Tracks(ReadInfo(gameDirectory));
         if (tracks.Count == 0) return null;
+        if (tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island) is var i && i.CopiesScene is not null && scene >= i.FirstScene && scene <= i.LastScene) is { } its) return its;
         try
         {
             var record = HqrArchive.Open(Path.Combine(gameDirectory, "SCENE.HQR")).Read(scene + 1);
-            if (record.Length > 0 && tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island).IslandByte == record[0]) is { } own) return own;
+            if (record.Length > 0 && tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island) is var i && i.IslandByte == record[0] && i.CopiesScene is null) is { } own) return own;
         }
         catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException) { }
         return tracks[0];
@@ -262,6 +267,7 @@ internal static class RaceTrackService
         if (twin is not null) extra.Add(twin.Log);
         extra.AddRange(Finish(gameDirectory, report, options, twin, session));
         var own = twin is { Own: true } ? twin : null;
+        if (RaceTrackScenes.AddScene(gameDirectory, options.Island) is { } added) extra.Add(added);
         var scenes = RaceTrackScenes.Apply(gameDirectory, report, options, own is null ? null : (own.Report, own.Options));
         extra.AddRange(own is null ? Story(gameDirectory, report, options) : Story(gameDirectory, own.Report, own.Options));
         WriteInfo(gameDirectory, report, options, scenes, own, session);
@@ -386,11 +392,11 @@ internal static class RaceTrackService
                 log.Add(RaceTrackHolomap.Draw(gameDirectory, options.Island, IslandFile.Load(Path.Combine(gameDirectory, options.Island.TwinIleFile!)), own.Report, pictures[1..]));
             }
         }
-        if (report.Jump is { } a) log.Add(RaceTrackJumpAnim.Install(gameDirectory, a.FlightScale, a.Anim));
-        if (own?.Report.Jump is { } b)
+        foreach (var a in report.Jumps) log.Add(RaceTrackJumpAnim.Install(gameDirectory, a.FlightScale, a.Anim));
+        foreach (var b in own?.Report.Jumps ?? new())
         {
-            if (report.Jump is null || b.Anim != report.Jump.Anim) log.Add(RaceTrackJumpAnim.Install(gameDirectory, b.FlightScale, b.Anim));
-            else if (Math.Abs(report.Jump.FlightScale - b.FlightScale) > 0.001)
+            if (report.Jumps.FirstOrDefault(a => a.Anim == b.Anim) is not { } a) log.Add(RaceTrackJumpAnim.Install(gameDirectory, b.FlightScale, b.Anim));
+            else if (Math.Abs(a.FlightScale - b.FlightScale) > 0.001)
                 log.Add($"WARNING: both files' tracks have a jump, of different lengths, with one flight, made for {options.Island.IleFile}'s");
         }
         var racing = own?.Options ?? options;

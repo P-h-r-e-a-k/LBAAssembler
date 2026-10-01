@@ -37,8 +37,8 @@ internal static class RaceCarEngineFile
         if (raisedFile is not null && track?.Gravity is { } gravity and > 0) text.Append($"gravity={N(gravity)}\n");
         // ... and the camera that rides the road behind the car: how far behind (units), how high, how far ahead it looks
         if (raisedFile is not null && track?.RailCamera is { Length: 3 } cam) text.Append($"railcam={N(cam[0] * 512)} {N(cam[1])} {N(cam[2] * 512)}\n");
-        // the island's file with the statue (Celebration Island), whatever the game's own variable says
-        if (info is not null && RaceTrackIsland.ByName(info.Island).Statue) text.Append("statue=1\n");
+        // Celebration Island's file with the statue, or (the lava lake's track) the one before it rises, whatever the game's own variable says
+        if (info is not null && RaceTrackIsland.ByName(info.Island) is { } raced && (raced.Statue || raced.OtherFile)) text.Append($"statue={(raced.Statue ? 1 : 0)}\n");
         // the grid spots, and whether a qualifying lap sets the order the cars line up in (RACEMOD.CPP)
         foreach (var g in track?.Grid ?? new()) text.Append($"grid={string.Join(' ', g)}\n");
         foreach (var g in track?.Pits ?? new()) text.Append($"pit={string.Join(' ', g)}\n");

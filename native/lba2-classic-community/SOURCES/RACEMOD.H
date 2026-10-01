@@ -74,12 +74,17 @@ double RaceMod_Gravity(double *slope, double *bank);
 double RaceMod_ClimbShare(double gravity, double slope);
 S32 RaceMod_RailTouched(void);
 
-// A jump's flight (the hero's animation 200-223, each island's own, played by his track script) flown at the car's speed at the take-off: the flight's clock run
+// A jump's flight (the hero's animation 200-295, each island's and each jump's own, played by his track script) flown at the car's speed at the take-off: the flight's clock run
 // that many times as fast as its own speed, the same arc (jump_speed=<lo> <hi>: the bounds; 0: off). RaceMod_JumpClock before the hero's
 // animation is moved on, RaceMod_JumpClockAfter after; declared where they are called, OBJECT.CPP (they take the engine's T_OBJ_3D).
 
-// statue=1: Celebration Island drawn from its file with the statue (CELEBRA2), whatever the game's own variable says.
-S32 RaceMod_Statue(void);
+// Whether Celebration Island is drawn from its file with the statue (CELEBRA2) rather than the one before it rises (CELEBRAT), given
+// whether it has risen in the game (variable 79): a race-track mod's file says which (statue=1, statue=0), else the game does.
+S32 RaceMod_StatueShown(S32 risen);
+
+// While racing, a car that goes into the lava or the sea is put back on the road behind where it was (rescue=0: as in the game, it
+// burns or drowns Twinsen). GereCodesJeu asks: non-zero, and Twinsen is not to die there.
+S32 RaceMod_Rescue(void);
 
 // A test pilot for headless runs (the console's `autodrive`): on, the player's car is driven along the first opponent's line. Its input,
 // ORed into the frame's own.

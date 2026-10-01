@@ -297,7 +297,8 @@ typedef	struct	{
 // the lighthouse. A race-track mod's file can ask for the weather after it without moving the story on (RACEMOD.CPP: weather=fine).
 S32 RaceMod_FineWeather(void);
 // A race-track mod's raised road and the island file with Celebration Island's statue (RACEMOD.CPP, RACEMOD.H).
-S32 RaceMod_Statue(void);
+S32 RaceMod_StatueShown(S32 risen);
+S32 RaceMod_Rescue(void);
 void RaceMod_FloorFor(S32 y);
 void RaceMod_FloorForNothing(void);
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
