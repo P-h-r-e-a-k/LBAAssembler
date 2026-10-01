@@ -42,6 +42,8 @@ internal static class RaceCarEngineFile
         // an island drawn from a file the game never loads (the old moon's MOON.ILE, as island 3), and the lap's vertical loops
         if (info is not null && RaceTrackIsland.ByName(info.Island) is { RaceFile: { } raceFile } fileIsland) text.Append($"island_file={fileIsland.IslandByte} {raceFile}\n");
         foreach (var loop in track?.Loops ?? new()) text.Append($"loop={string.Join(' ', loop)}\n");
+        // where the camera stands while the car flies a drop
+        foreach (var dropCam in track?.JumpCameras ?? new()) text.Append($"jumpcam={string.Join(' ', dropCam)}\n");
         // the grid spots, and whether a qualifying lap sets the order the cars line up in (RACEMOD.CPP)
         foreach (var g in track?.Grid ?? new()) text.Append($"grid={string.Join(' ', g)}\n");
         foreach (var g in track?.Pits ?? new()) text.Append($"pit={string.Join(' ', g)}\n");

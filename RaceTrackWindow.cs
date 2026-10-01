@@ -11,7 +11,8 @@ namespace LBAAssembler;
 // the islands, built together (each one ticked): the Desert island's (with a jump, and the retail track's leftovers cleared), Citadel
 // Island's two (its storm track in CITADEL, with its own jump, and its town circuit in CITABAU, with a bridge: one tick, as they share the
 // island's scenes), Mosquibees Island's mountain lap (whose plan draws its own bridge and jump), Celebration Island's lap round the statue
-// (a raised road on piers, all of it its plan's) and its lava lake's (a figure of eight with two leaps that cross), or the Elevator Platform's rollercoaster (all of it raised road, banked, with the slopes
+// (a raised road on piers, all of it its plan's) and its lava lake's (round the whole island from the same dock, raised over the crater with four
+// jumps, the last a drop off the mesa onto the dock), or the Elevator Platform's rollercoaster (all of it raised road, banked, with the slopes
 // pulling at the car). What carries each lap over itself is the island's own (RaceTrackIsland.Crossing), and every track is drawn on its
 // island's holomap picture. Play races the track of the island the editor has open (RaceTrackService.RaceFor).
 internal sealed class RaceTrackWindow : Window
@@ -77,7 +78,7 @@ internal sealed class RaceTrackWindow : Window
         (RaceTrackIsland.Mosquibe, "Mosquibees Island", "Round the mountain: its plan draws its own bridge and jump"),
         (RaceTrackIsland.Citadel, "Citadel Island: the storm track and the town circuit", "Both of the island's tracks: the storm track in CITADEL.ILE (in the rain, with its own jump) and the town circuit in CITABAU.ILE (once the storm is over, with a bridge where it crosses itself). Play races the one of the file the editor has open."),
         (RaceTrackIsland.Celebration, "Celebration Island: round the statue", "A raised road on piers up round the statue: its plan draws it all"),
-        (RaceTrackIsland.CelebrationLava, "Celebration Island: the lava lake", "Before the statue rises: a figure of eight on the plateau, two causeways across the lava lake whose leaps cross in its middle, and a bridge over a lava channel. It races in a scene of its own (223, a copy of the island's scene 95) and Play races it with CELEBRAT.ILE open"),
+        (RaceTrackIsland.CelebrationLava, "Celebration Island: the lava lake", "Before the statue rises: from the statue track's dock round the whole island -- along the north shore, up the east coast to the crater's rim, across the lava lake on a causeway, behind the temple -- with four jumps over gaps in the raised road, the last a drop off the mesa down onto the dock. It races in a scene of its own (223, a copy of the island's scene 95) and Play races it with CELEBRAT.ILE open"),
         (RaceTrackIsland.Elevator, "The Elevator Platform: the rollercoaster", "All of it a raised road, banked, with the slopes pulling at the car: its plan draws it all"),
         (RaceTrackIsland.Moon, "The old moon (MOON.ILE): two vertical loops", "The Emerald Moon's older copy, which the game never loads: a lap round the moon base on the crater's floor through two vertical loops -- one the car is carried over the top of upside down, across a gap, and one it drives round as a real car would, falling off if too slow. It races in scenes of its own (225-228, copies of the Emerald Moon's 74-77), with no opponents"),
         (RaceTrackIsland.Sendell, "Sendell's Well: the cut island", "Island 1, which the game never shipped: the build makes it (SENDELL.ILE, a round island with a well in its middle, made from Citadel Island's files) and a scene for it (224), and a lap round the well, up from the beach onto the plateau and back down. Putting the folder back deletes the island's files"),
@@ -131,7 +132,7 @@ internal sealed class RaceTrackWindow : Window
                    "an opponent (the retail track's racer), and the gear, speed, lap times and position on screen. " +
                    "Celebration Island's lap winds up round the statue on a raised road and comes back down a bridge: only that race-track mode can drive it " +
                    "(it is the statue's island there, whatever the story has reached, and the camera follows the car). Its lava lake's lap is the island " +
-                   "before the statue rises, in a scene of its own: two leaps across the lake that cross over one hole of lava. " +
+                   "before the statue rises, in a scene of its own: round the whole island on a raised road from the same dock, with four jumps -- the last a drop off the mesa onto the dock, which the camera watches from the side. " +
                    "The Elevator Platform's is a rollercoaster: a helix up round the elevator's tower, a drop, hills and banked bends, all of it in the air, " +
                    "where the slopes slow the car and speed it up and the camera rides the road behind it -- also that mode's alone. " +
                    "Sendell's Well is the island the game never shipped: the build makes it (SENDELL.ILE and SENDELL.OBL, its sky, palette and holomap " +

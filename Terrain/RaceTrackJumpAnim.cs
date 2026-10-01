@@ -94,6 +94,93 @@ internal static class RaceTrackJumpAnim
         return copy;
     }
 
+    // ---- a drop: a flight of its own, off a raised road's end and down onto ground far below (Celebration Island's lava lake: off the
+    // mesa's rim, 6300 up, onto the dock, 2026-10-01). The retail flight's arc can't reach that far down, so it is drawn: a hop as steep
+    // as the retail one's first climb (clear of the take-off ramp's lip), then from DiveFrom of the way a smooth dive of `drop`, the nose
+    // pitched down along the arc and level again at both ends (the engine stands the car level when a flight ends, RACEMOD.CPP).
+    public const double DropHop = 1200, DiveFrom = 0.2;
+
+    // How far above its start the drop's flight is, `u` of the way along it (0 to 1), diving `drop` in all.
+    public static double DropAt(double u, double drop)
+    {
+        var v = Math.Clamp((u - DiveFrom) / (1 - DiveFrom), 0, 1);
+        return 4 * DropHop * u * (1 - u) - drop * v * v * (3 - 2 * v);
+    }
+
+    // Adds a drop's flight -- `cells` long, diving `drop`, flown at heading `beta` -- to the game folder's ANIM.HQR and RESS.HQR as
+    // Twinsen's generic animation `generic` in the buggy. Its keyframes are equal steps along the ground; each keyframe's slot 0 carries
+    // the master bits (1 the angles are the whole car's, 2 no gravity) and the change of the car's three angles over it, and its step is
+    // in the car's own pitched frame. The engine turns a body and its step by M = M(Alpha) M(Gamma) M(Beta) (LIB386/3D/IMATSTDF.CPP:
+    // the heading, then Gamma and Alpha about the world's Z and X axes), so a pitch in the car's own frame takes all three angles at a
+    // heading that isn't along Z -- the ones RACEMOD.CPP CarPitch gives a loop's car (Alpha alone rolls a car heading along X).
+    public static string InstallDrop(string gameDirectory, double cells, double drop, int beta, int generic)
+    {
+        var animPath = Path.Combine(gameDirectory, "ANIM.HQR");
+        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
+        var flight = Drop(HqrArchive.Open(animPath).Read(RetailEntry), cells, drop, beta, out var frames, out var pitch);
+        var index = HqrArchive.CountEntries(animPath);
+        File.WriteAllBytes(animPath, HqrWriter.AppendEntry(File.ReadAllBytes(animPath), HqrWriter.StoredEntry(flight)));
+        var table = WithAnim(HqrArchive.Open(ressPath).Read(44), BuggyEntity, generic, index);
+        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        return $"drop flight: ANIM.HQR entry {index}, {frames} keyframes over {cells:0.0} cells diving {drop:0} (the nose down {pitch:0} degrees at the most), " +
+               $"played by Twinsen in the buggy as animation {generic}";
+    }
+
+    // The engine's three angles (4096 a turn) of a car heading `beta` pitched `phi` radians nose down in its own frame: M(Alpha) M(Gamma)
+    // M(Beta) = M(beta) M_x(phi).
+    public static (int Alpha, int Beta, int Gamma) Pitched(int beta, double phi)
+    {
+        double b = beta * 2 * Math.PI / 4096, sb = Math.Sin(b), cb = Math.Cos(b), sp = Math.Sin(phi), cp = Math.Cos(phi);
+        int Units(double radians) => (int)Math.Round(radians * 4096 / (2 * Math.PI));
+        return (Units(Math.Atan2(cb * sp, cp)), Units(Math.Atan2(sb * cp, cb)), Units(Math.Asin(Math.Clamp(-sb * sp, -1, 1))));
+    }
+
+    public static byte[] Drop(byte[] retail, double cells, double drop, int beta, out int frames, out double steepest)
+    {
+        int bones = BinaryPrimitives.ReadUInt16LittleEndian(retail.AsSpan(2));
+        var frameSize = 8 + bones * 8;
+        var pose = retail.AsSpan(8 + frameSize + 16, (bones - 1) * 8).ToArray();      // (the retail flight's second keyframe's)
+        frames = Math.Max(16, (int)Math.Round(cells * 1.5));
+        var length = cells * 512;
+        double Smooth(double t) { t = Math.Clamp(t, 0, 1); return t * t * (3 - 2 * t); }
+        // the pitch, nose down positive: along the arc, eased in from level and back to it over the ends
+        double Down(double u)
+        {
+            const double e = 1e-3;
+            var slope = (DropAt(Math.Min(1, u + e), drop) - DropAt(Math.Max(0, u - e), drop)) / ((Math.Min(1, u + e) - Math.Max(0, u - e)) * length);
+            return -Math.Atan(slope) * Smooth(u / 0.15) * Smooth((1 - u) / 0.15);
+        }
+        static short Turn(int from, int to) => (short)((((to - from) % 4096) + 4096 + 2048) % 4096 - 2048);
+        var anim = new byte[8 + frames * frameSize];
+        BinaryPrimitives.WriteUInt16LittleEndian(anim, (ushort)frames);
+        BinaryPrimitives.WriteUInt16LittleEndian(anim.AsSpan(2), (ushort)bones);
+        BinaryPrimitives.WriteUInt16LittleEndian(anim.AsSpan(4), (ushort)(frames - 1));
+        steepest = 0;
+        for (var f = 0; f < frames; f++)
+        {
+            double u0 = (double)f / frames, u1 = (double)(f + 1) / frames, phi = Down((u0 + u1) / 2);
+            double fw = length / frames, up = DropAt(u1, drop) - DropAt(u0, drop);
+            steepest = Math.Max(steepest, phi * 180 / Math.PI);
+            // the arc's step (forward fw along the heading, up) in the car's own frame, pitched phi nose down
+            double cp = Math.Cos(phi), sp = Math.Sin(phi);
+            double y = cp * up + sp * fw, z = -sp * up + cp * fw;
+            var (a0, b0, g0) = Pitched(beta, Down(u0));
+            var (a1, b1, g1) = Pitched(beta, Down(u1));
+            var p = 8 + f * frameSize;
+            // (the retail flight's pace: 564 units of its arc in 100 ms)
+            BinaryPrimitives.WriteUInt16LittleEndian(anim.AsSpan(p), (ushort)Math.Max(1, Math.Round(Math.Sqrt(fw * fw + up * up) * 100 / 564)));
+            BinaryPrimitives.WriteInt16LittleEndian(anim.AsSpan(p + 2), 0);
+            BinaryPrimitives.WriteInt16LittleEndian(anim.AsSpan(p + 4), (short)Math.Round(y));
+            BinaryPrimitives.WriteInt16LittleEndian(anim.AsSpan(p + 6), (short)Math.Round(z));
+            BinaryPrimitives.WriteInt16LittleEndian(anim.AsSpan(p + 8), 3);
+            BinaryPrimitives.WriteInt16LittleEndian(anim.AsSpan(p + 10), Turn(a0, a1));
+            BinaryPrimitives.WriteInt16LittleEndian(anim.AsSpan(p + 12), Turn(b0, b1));
+            BinaryPrimitives.WriteInt16LittleEndian(anim.AsSpan(p + 14), Turn(g0, g1));
+            pose.CopyTo(anim.AsSpan(p + 16));
+        }
+        return anim;
+    }
+
     // The entity table (see Lba2EntityTable) with an animation record -- 3, generic number (U16), size 4, ANIM.HQR index (S16), no actions --
     // added to one entity just before its end mark (255), or its index changed when the entity already has that generic number. The entities
     // after it move, so their offsets do too.

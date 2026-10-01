@@ -53,6 +53,8 @@
  *                                back on the road, RaceMod_Rescue)
  *     jump_speed=<lo> <hi>       a jump's flight flown at the car's speed at the take-off (RaceMod_JumpClock): its clock that many times
  *                                as fast as the flight's own speed, kept between lo and hi (default 0.6 4; 0: the flight in its own time)
+ *     jumpcam=<anim> <cube x> <cube z> <x> <y> <z>   while the hero flies the jump whose flight is generic animation <anim>, and a moment
+ *                                after it lands, the camera that follows the car stands there (cube-local) and looks at the car (JumpCamera)
  *   A startline or checkpoint line may end in a ninth number, the road's height there: the line then only counts for a car within
  *   RACE_LINE_REACH of that height (a lap that passes over itself crosses a line's place at other heights too).
  */
@@ -197,6 +199,8 @@ static int ReadLine(const char *v, T_RACE_LINE *l) {
 // road's wherever the road passes within its width and no more than RAISED_STEP above the object -- the lap's other levels lie
 // thousands over or under it -- and the ground's blocking triangles far below don't count there. The hero is kept RAISED_INSET inside
 // its edges (RaceMod_Rail), a rail that needs no collision boxes. The build's decor pieces are only what it looks like.
+// A point with no width (Half 0) is in a gap of the road -- a jump's, between its take-off lip and its landing lip (the lava lake's
+// causeways, 2026-10-01): a segment that touches one has no floor, no rail and hides nothing.
 typedef struct {
     S32 X, Z, Y, Half;
     S32 Bank;                              // its banking: the height gained across it, per RAISED_BANK_UNITS to the left of the way it runs
@@ -239,6 +243,18 @@ typedef struct {
 } T_RACE_LOOP;
 static T_RACE_LOOP s_loops[RACE_MAX_LOOPS];
 static int s_nbLoops = 0;
+// Jump cameras (jumpcam=, JumpCamera): a drop -- a flight off a raised road's end and down a hillside onto the ground far below (the lava
+// lake's, 2026-10-01) -- took the camera behind the car down into the hill, and the landing was never seen. While the hero flies such a
+// jump, and RACE_JUMPCAM_HOLD after he lands, the camera stands at a place of its own beside the flight (the builder's, with the whole
+// flight and the landing in sight) and looks at the car.
+#define RACE_MAX_JUMPCAMS 4
+#define RACE_JUMPCAM_HOLD 1500
+typedef struct { int Anim, CubeX, CubeZ, X, Y, Z; } T_RACE_JUMPCAM;
+static T_RACE_JUMPCAM s_jumpCams[RACE_MAX_JUMPCAMS];
+static int s_nbJumpCams = 0;
+static S32 s_flying = -1;                  // the flight the hero is flying (its generic animation), -1 none
+static S32 s_landed = -1;                  // the flight he last landed from ...
+static U32 s_landedAt = 0;                 // ... and when (TimerRefHR)
 static int s_statue = -1;                // statue=: 1 with the statue, 0 without it, -1 (not given) as the game says
 static int s_raisedLoop = 0;               // the road is a whole lap: its last point is its first
 static double s_gravity = 0;               // gravity=<k>: a car on the raised road is pulled down its slopes (RaceMod_Gravity), k times as hard as RACE_GRAVITY
@@ -253,6 +269,15 @@ extern S32 FollowCamera;                                 // FOLLOWCAM.CPP
 extern S32 (*FollowCamArmHook)(S32 base);
 extern S32 (*FollowCamEyeHook)(S32 *eye, S32 *target);
 extern S32 CalculAltitudeTerrain(S32 x, S32 z, S32 cj);
+
+// Whether a place `tt` along segment i (its projection, unclamped) is past an open end of the road -- the road's own last point, or a
+// jump's take-off lip, where a gap (Half 0) follows: there is no floor out there (a segment's ends are otherwise round, so the deck
+// reached a half-width past the lava lake's drop lip and held the car up over the gap, 2026-10-01).
+static int RaisedOpenEnd(int i, double tt) {
+    if (tt > 1) return i + 2 >= s_nbRaised ? !s_raisedLoop : s_raised[i + 2].Half <= 0;
+    if (tt < 0) return i == 0 ? !s_raisedLoop : s_raised[i - 1].Half <= 0;
+    return 0;
+}
 
 // The road at an island position (world units) for something at height `ref`, looked for `pad` past its edges: its height there, the
 // segment (from point *seg to the next), how far along it (*t, 0..1) and how far to the side of its middle (*lat, to the left of the way
@@ -281,9 +306,11 @@ static int RaisedAt(double wx, double wz, S32 ref, double pad, S32 *y, int *seg,
                         if (apart > RAISED_SIGHT) continue;
                     }
                     const T_RACE_RAISED *a = &s_raised[i], *c = a + 1;
+                    if (a->Half <= 0 || c->Half <= 0) continue;
                     const double sx = c->X - a->X, sz = c->Z - a->Z, len2 = sx * sx + sz * sz;
                     if (len2 <= 0) continue;
                     double tt = ((wx - a->X) * sx + (wz - a->Z) * sz) / len2;
+                    if (RaisedOpenEnd(i, tt)) continue;
                     if (tt < 0) tt = 0; else if (tt > 1) tt = 1;
                     const double px = a->X + sx * tt, pz = a->Z + sz * tt;
                     const double d2 = (wx - px) * (wx - px) + (wz - pz) * (wz - pz);
@@ -411,9 +438,11 @@ static int RaisedBetween(double wx, double wz, double lo, double hi, int own, do
                     if (apart <= RAISED_OWN) continue;
                 }
                 const T_RACE_RAISED *a = &s_raised[i], *c = a + 1;
+                if (a->Half <= 0 || c->Half <= 0) continue;
                 const double sx = c->X - a->X, sz = c->Z - a->Z, len2 = sx * sx + sz * sz;
                 if (len2 <= 0) continue;
                 double tt = ((wx - a->X) * sx + (wz - a->Z) * sz) / len2;
+                if (RaisedOpenEnd(i, tt)) continue;
                 if (tt < 0) tt = 0; else if (tt > 1) tt = 1;
                 const double px = a->X + sx * tt, pz = a->Z + sz * tt;
                 const double half = a->Half + (c->Half - a->Half) * tt;
@@ -612,17 +641,27 @@ static double s_jumpRate = 0;              // the flight's clock rate (0: not fl
 static double s_jumpFrac = 0;              // the part of a millisecond of the flight's clock carried to the next frame
 static U32 s_jumpOver = 0;                 // how far the flight's clock ran past a keyframe's end this frame
 
-// The flight's own speed along the ground, world units a second: its keyframes' root steps (X and Z) over their times.
+// The flight's own speed along the ground, world units a second: its keyframes' root steps over their times, each as the engine moves
+// the car by it (LIB386/ANIM/INTERDEP.CPP: by M = M(Alpha) M(Gamma) M(Beta) of the car's angles, which a flight that pitches the car --
+// the lava lake's drop -- turns as it goes: its steps are in the car's own pitched frame).
 static double FlightSpeed(const T_OBJ_3D *obj) {
     const U8 *anim = (const U8 *)obj->Anim.Ptr;
     if (TransFctAnim) anim = (const U8 *)TransFctAnim(obj->Anim.Num);
     if (!anim) return 0;
     const S32 frames = ((const U16 *)anim)[0], groups = ((const U16 *)anim)[1];
-    double along = 0, ms = 0;
+    const double unit = 2 * 3.14159265358979 / 4096;
+    double along = 0, ms = 0, alpha = obj->Alpha, beta = obj->Beta, gamma = obj->Gamma;
     for (S32 k = 1; k < frames; k++) {
-        const S16 *f = (const S16 *)(anim + 8 + k * (groups + 1) * 8); // time, step X, Y, Z, ...
+        const S16 *f = (const S16 *)(anim + 8 + k * (groups + 1) * 8); // time, step X, Y, Z, master bits, Alpha, Beta, Gamma, ...
+        double da = 0, db = 0, dg = 0;
+        if (f[4] & 1) { da = (S16)(f[5] << 4) / 16; db = (S16)(f[6] << 4) / 16; dg = (S16)(f[7] << 4) / 16; }
+        const double a = (alpha + da / 2) * unit, b = (beta + db / 2) * unit, g = (gamma + dg / 2) * unit;
+        alpha += da; beta += db; gamma += dg;
+        const double sa = sin(a), ca = cos(a), sb = sin(b), cb = cos(b), sg = sin(g), cg = cos(g);
+        const double wx = cg * cb * f[1] - sg * f[2] + cg * sb * f[3];
+        const double wz = (sa * sg * cb - ca * sb) * f[1] + sa * cg * f[2] + (sa * sg * sb + ca * cb) * f[3];
         ms += (U16)f[0];
-        along += sqrt((double)f[1] * f[1] + (double)f[3] * f[3]);
+        along += sqrt(wx * wx + wz * wz);
     }
     return ms > 0 ? along * 1000.0 / ms : 0;
 }
@@ -630,7 +669,13 @@ static double FlightSpeed(const T_OBJ_3D *obj) {
 // Before the hero's animation is moved on (OBJECT.CPP GereObjAnim): while he flies a jump, the keyframe's start and end are brought nearer
 // by the extra time the flight's clock runs this frame (or put back, flown slower), so ObjectSetInterDep finds it that much further on.
 void RaceMod_JumpClock(T_OBJ_3D *obj, S32 genAnim, S32 move) {
-    if (!s_active || s_jumpHi <= 0 || genAnim < RACE_JUMP_ANIM_FIRST || genAnim > RACE_JUMP_ANIM_LAST || move != MOVE_BUGGY) { s_jumpRate = 0; return; }
+    if (!s_active || genAnim < RACE_JUMP_ANIM_FIRST || genAnim > RACE_JUMP_ANIM_LAST || move != MOVE_BUGGY) {
+        if (s_flying >= 0) { s_landed = s_flying; s_landedAt = TimerRefHR; s_flying = -1; }
+        s_jumpRate = 0;
+        return;
+    }
+    s_flying = genAnim;
+    if (s_jumpHi <= 0) { s_jumpRate = 0; return; }
     if ((S32)(TimerRefHR - obj->Time) <= 0) return; // no time has passed (or the clock went back: ObjectSetInterDep's own case)
     if (!s_jumpRate) {
         const double own = FlightSpeed(obj), car = ListBuggy[0].Speed;
@@ -954,6 +999,10 @@ static void Load(const char *path) {
                 }
             }
         }
+        else if (!strcmp(key, "jumpcam")) {
+            T_RACE_JUMPCAM *c = &s_jumpCams[s_nbJumpCams];
+            if (s_nbJumpCams < RACE_MAX_JUMPCAMS && sscanf(v, "%d %d %d %d %d %d", &c->Anim, &c->CubeX, &c->CubeZ, &c->X, &c->Y, &c->Z) == 6) s_nbJumpCams++;
+        }
         else if (!strcmp(key, "qualifying_seed")) s_seed = (unsigned)strtoul(v, NULL, 10);
         else if (!strcmp(key, "hide_actor")) {
             if (s_nbHidden < RACE_MAX_HIDDEN && sscanf(v, "%d %d", &s_hideScene[s_nbHidden], &s_hideActor[s_nbHidden]) == 2) s_nbHidden++;
@@ -979,8 +1028,9 @@ static void Load(const char *path) {
         }
     }
     fclose(f);
-    // (a lap with loops: the camera that follows the car looks at a loop from its side while the car goes round it)
-    if (s_nbLoops) FollowCamEyeHook = RaceCameraEye;
+    // (a lap with loops: the camera that follows the car looks at a loop from its side while the car goes round it; and at a drop from
+    // its own place beside it)
+    if (s_nbLoops || s_nbJumpCams) FollowCamEyeHook = RaceCameraEye;
     if (s_car.Gears < 1) s_car.Gears = 1;
     if (s_car.Gears > RACE_MAX_GEARS) s_car.Gears = RACE_MAX_GEARS;
     for (S32 g = 0; g < s_car.Gears; g++)
@@ -1415,10 +1465,22 @@ static void LoopPlace(const T_RACE_LOOP *l, double theta, double radius, double 
     *y = l->Y + l->R - radius * cos(theta);
 }
 
-static S32 LoopAlpha(double theta) { return (S32)floor(-theta * 4096 / (2 * RACE_PI) + 0.5) & 4095; }
+// The car pitched `phi` (radians, nose down positive) in its own frame while heading `beta`. The engine turns a body (and an animation's
+// step) by M = M(Alpha) M(Gamma) M(Beta) (LIB386/3D/IMATSTDF.CPP): the heading first, then Gamma about the world's Z axis and Alpha about
+// its X axis -- so Alpha alone pitches only a car heading along Z, and rolls one heading along X (the old moon's loops, 2026-10-01: the
+// car went round them on its side). Here the three angles that make M the heading times the pitch, Mb(beta) Ma(phi):
+// Alpha = atan2(cos b sin p, cos p), Beta = atan2(sin b cos p, cos b), Gamma = asin(-sin b sin p).
+static void CarPitch(T_OBJ_3D *obj, S32 beta, double phi) {
+    const double b = beta * 2 * RACE_PI / 4096, sb = sin(b), cb = cos(b), sp = sin(phi), cp = cos(phi);
+    double g = -sb * sp;
+    if (g > 1) g = 1; else if (g < -1) g = -1;
+    obj->Alpha = (S32)floor(atan2(cb * sp, cp) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    obj->Beta = (S32)floor(atan2(sb * cp, cb) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    obj->Gamma = (S32)floor(asin(g) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+}
 
 static void LoopEnd(T_OBJ_3D *obj, double v, const char *how) {
-    obj->Alpha = 0;
+    obj->Alpha = 0; obj->Gamma = 0; obj->Beta = s_loopBeta;
     ListBuggy[0].Speed = (S32)v;
     Log_Info("[racemod] loop %d: %s at %.0f units/s", s_loopOn + 1, how, v);
     s_loopOn = -1; s_loopState = LOOP_NONE;
@@ -1433,7 +1495,7 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
     T_OBJ_3D *obj = &hero->Obj;
     if (!RaceMod_Active() || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) { s_loopOn = -1; s_loopState = LOOP_NONE; return 0; }
     if (s_loopState == LOOP_NONE) {
-        if (!(obj->Master & 1) && obj->Alpha) obj->Alpha = 0;
+        if (!(obj->Master & 1) && (obj->Alpha || obj->Gamma)) { obj->Alpha = 0; obj->Gamma = 0; }
         if (!s_nbLoops || (hero->WorkFlags & (FALLING | ANIM_MASTER_GRAVITY)) || ListBuggy[0].Speed <= 0) return 0;
         for (int i = 0; i < s_nbLoops; i++) {
             const T_RACE_LOOP *l = &s_loops[i];
@@ -1472,7 +1534,7 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
         if (s_fallZ > 32168) s_fallZ = 32168;
         const S32 ground = CalculAltitudeObjet((S32)s_fallX, (S32)s_fallZ, -1);
         x = s_fallX; y = s_fallY; z = s_fallZ;
-        obj->Alpha = LoopAlpha(s_fallTheta);
+        CarPitch(obj, s_loopBeta, -s_fallTheta);
         if (y <= ground) {
             y = ground;
             s_hitUntil = TimerRefHR + RACE_LOOP_FALL_HOLD;
@@ -1498,7 +1560,7 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
                 s_fallSpin = s_loopV / l->R; s_fallTheta = s_theta;
                 s_loopState = LOOP_FALL;
                 Log_Info("[racemod] loop %d: falls off at %.0f degrees, %.0f units/s", s_loopOn + 1, s_theta * 180 / RACE_PI, s_loopV);
-                obj->Alpha = LoopAlpha(s_theta);
+                CarPitch(obj, s_loopBeta, -s_theta);
                 *nx = (S32)s_fallX; *ny = (S32)s_fallY; *nz = (S32)s_fallZ;
                 return 1;
             }
@@ -1528,11 +1590,10 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
                 radius -= RACE_LOOP_DIP * sin(RACE_PI * (u < 0 ? 0 : u > 1 ? 1 : u));
             }
             LoopPlace(l, s_theta, radius, &x, &y, &z);
-            obj->Alpha = LoopAlpha(s_theta);
+            CarPitch(obj, s_loopBeta, -s_theta);
             ListBuggy[0].Speed = (S32)s_loopV;
         }
     }
-    obj->Beta = s_loopBeta;
     *nx = (S32)floor(x + 0.5); *ny = (S32)floor(y + 0.5); *nz = (S32)floor(z + 0.5);
     return 1;
 }
@@ -1553,7 +1614,22 @@ static S32 LoopCamera(S32 *eye, S32 *target) {
     return TRUE;
 }
 
-static S32 RaceCameraEye(S32 *eye, S32 *target) { return LoopCamera(eye, target) || RailCamera(eye, target); }
+static S32 JumpCamera(S32 *eye, S32 *target) {
+    if (!s_nbJumpCams) return FALSE;
+    const S32 anim = s_flying >= 0 ? s_flying : (S32)(TimerRefHR - s_landedAt) < RACE_JUMPCAM_HOLD ? s_landed : -1;
+    if (anim < 0) return FALSE;
+    for (int i = 0; i < s_nbJumpCams; i++) {
+        const T_RACE_JUMPCAM *c = &s_jumpCams[i];
+        if (c->Anim != anim || c->CubeX != CurrentCubeX || c->CubeZ != CurrentCubeY) continue;
+        const T_OBJ_3D *car = &ListObjet[NUM_PERSO].Obj;
+        eye[0] = c->X; eye[1] = c->Y; eye[2] = c->Z;
+        target[0] = car->X; target[1] = car->Y + 300; target[2] = car->Z;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static S32 RaceCameraEye(S32 *eye, S32 *target) { return JumpCamera(eye, target) || LoopCamera(eye, target) || RailCamera(eye, target); }
 
 S32 RaceMod_Rescue(void) {
     if (!RaceMod_Active() || !s_rescueOn || Comportement != C_BUGGY || !s_opp[0].Count || s_safeIndex < 0) return 0;

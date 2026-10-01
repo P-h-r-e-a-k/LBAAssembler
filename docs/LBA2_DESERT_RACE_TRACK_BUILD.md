@@ -967,6 +967,8 @@ The command line: `buildtogether <pristine> <game> <island>...` builds several t
 
 ## Celebration Island: the lava lake (2026-10-01)
 
+*Replaced later the same day by a lap round the whole island: see "The lava lake, round the whole island" below.*
+
 ![the lap over the island, and the island's holomap picture as built](racetrack/build/celebrat_plan.png)
 
 The user asked for a track on `CELEBRAT.ILE` -- Celebration Island before the statue rises -- "perhaps a track with a few jumps", that feels different from the statue's lap but is still fun to drive. The statue's lap is long (429 cells, 42 s), all of it a raised road winding up round the statue; this one is short and on the ground, and its jumps go over lava.
@@ -1068,6 +1070,41 @@ The user asked for two vertical loops on `MOON.ILE` (which no version of the gam
 **Verified**, on copies of the game: the test pilot at full speed, laps of 22.1 s. Every lap, the jump loop: in at 4,836 units/s, over the gap, round. Every lap, the whole loop: in at 4,836, round at about 5,050, its speed dropping to 29 km/h over the top. With the car's top speed cut to 2,700 (19 km/h): the jump loop is carried round, and on the whole loop the car falls off at 120 degrees, lands, and rolls back out of each slow try after it. From the app, on a sandbox folder: built, `MOON.ILE` picked ("Race: The old moon", scene 228), Play starts on the start line with Twinsen at the car. All seven earlier tracks raced again with the new engine: the same laps, no checkpoint missed.
 
 **Known limitations**: no opponents on this lap. A car that falls off the whole loop lands near its foot and has to back up for a run-up. The rings are seen side-on only while the car is in them.
+
+**Correction (later on 2026-10-01): the car rolled instead of pitching.** The engine turns a body -- and an animation's step -- by `M = M(Alpha) M(Gamma) M(Beta)` (`LIB386/3D/IMATSTDF.CPP`): the heading first, then Gamma about the world's Z axis and Alpha about its X axis. So Alpha alone pitches only a car heading along Z; both moon loops run along +X, where Alpha rolled the car round its own long axis (in the pictures above, the rear wheels stacked one over the other at the ring's side). `RACEMOD.CPP CarPitch` now sets all three angles for a pitch `phi` in the car's own frame at heading `beta`: Alpha = atan2(cos b sin p, cos p), Beta = atan2(sin b cos p, cos b), Gamma = asin(-sin b sin p). When neither a loop nor a flight's master rotation turns the car, Gamma is put back to 0 along with Alpha. Nothing in the built files changes; the engine does it.
+
+![before and after: the car round the whole loop](racetrack/build/moon_loop_pitch.png)
+
+## The lava lake, round the whole island (2026-10-01)
+
+![the lap on the built island](racetrack/build/lava2_map.png)
+
+The first lava lake lap (above) was far too small: about 70 cells on the crater's plateau. The user asked for as much of the island's footprint as possible, perhaps more jumps, the start and finish where the statue track's are, and height used in a way unlike the statue track's helix. The new lap (`tools/RaceTrackPlan/celebrat_design.py`, `docs/racetrack/celebrat_track_plan.json`) is 247 cells, clockwise, raised road everywhere except the dock:
+
+- **The dock** (420): the start line at (7.2, 13.5) heading north, the pits beside it, the statue track's area.
+- **The north shore** (900, along the sea at the foot of the crater's cliffs): jump 1, a 7-cell gap over a lava channel.
+- **The east coast**: a long climb from 900 to 6,300 (19 % at the steepest) round the north-east corner and down the coast to the south rim.
+- **The south rim** at 6,300, then north across the middle of the lava lake on a causeway: jump 2, an 8-cell gap over the lava.
+- **The north rim**, west, then south behind the temple: jump 3, a 7-cell gap, then a hairpin at the south-west corner.
+- **The drop** (jump 4): north from the hairpin, the road ends at a lip on the mesa's west edge at 6,300 and the car flies 18.6 cells down the hillside onto the dock, 6,112 below.
+
+![a qualifying lap](racetrack/build/lava2_tour.png)
+![jumps 1-3](racetrack/build/lava2_jumps.png)
+![the drop](racetrack/build/lava2_drop.png)
+
+**Gaps in a raised road.** A gap jump on a raised road leaves a hole in the deck between its lips. `report.Raised` points in the gap have no width (Half 0); the engine skips any segment that touches one (`RaisedAt`, `RaisedBetween`), and no longer rounds off a segment's end where the road stops -- at its last point or a lip (`RaisedOpenEnd`; a segment's round end held the car up half a road's width past the drop's lip). The pieces and piers are laid along each stretch between gaps.
+
+**The drop.** A gap jump whose landing lip is more than 600 below its take-off lip (`DropFrom`) is a drop: its landing ramp is 200 high, and its flight is drawn instead of scaled from the retail one (`RaceTrackJumpAnim.Drop`, `InstallDrop`). Its arc is `DropAt(u, drop) = 4·1200·u(1-u) - drop·s((u-0.2)/0.8)` (s the smoothstep): a hop as steep as the retail flight's first climb, clear of the take-off lip, then a smooth dive. The car's pitch follows the arc, eased in from level and back to it at both ends (53° nose down at the most), set in each keyframe as the change of all three angles (`Pitched`, the same decomposition as `CarPitch`) with the step in the car's own pitched frame. The opponents' lines fly the same arc. The engine's estimate of a flight's own speed (`FlightSpeed`, which sets the rate the flight is flown at) now turns each step by the whole of M, as the engine moves the car.
+
+**The camera for the drop.** The camera that follows the car went down the hillside behind it and into the hill, and the landing was never seen. The builder now picks a place beside a drop's flight (`PlaceJumpCameras`: either side, 12-18 cells out, from the landing's height to a little over the take-off's) that sees the most of the car's places along the flight and past the landing -- each line clear of the ground and of the raised road's slabs and rails -- and writes it to the car file (`jumpcam=<anim> <cube x> <cube z> <x> <y> <z>`). While the hero flies that animation, and 1.5 s after he lands, the follow camera's eye moves there and looks at the car (`JumpCamera`). For the lava lake: 12 cells out over the sea to the west, 7,814 up, seeing 14 of its 15 places.
+
+**Cutting under the deck.** The lap runs along cliffs and the crater's rim, where the rock beside the road came above the deck: the test pilot, cutting a corner on the north rim, stopped dead against it. With the plan's `raisedCut` (only this lap's), the builder lowers the ground to 450 under the deck out to a cell past its edge, then banks back up to the ground as it is (`CutUnderRaised`): 279 vertices, 2,330 at the most. Never within 8 cells of where the deck rises from the ground road, nor near the ground road itself. (Tried on every raised road first, it cut a 300-deep hole in the statue track's dock.)
+
+**Test tools.** `--exec-at` takes 128 commands a run (16 before), so one run can screenshot a whole lap; `teleport <x> <y> <z> [beta [alpha [gamma]]]` sets the hero's angles too.
+
+**Verified**, on copies of the game: the test pilot round the lap, qualifying 26.1-26.3 s, race laps 26.1-29.7 s with the three opponents (their qualifying 24.7-28.8 s), no checkpoint missed, no rescue. The drop: up to 7,440 off the lip, down to 431 on the dock's landing ramp and away at speed. All seven tracks of the joint build raced again with the new engine and builder: every lap completed, no checkpoint missed, no rescue (the Desert island's stall at checkpoint 7 is the known one). The old moon's loops re-shot: the car now pitches round both.
+
+**Known limitations**: the first moment of the drop is hidden from its camera by the take-off ramp, and the camera swings out to its place over 12 frames rather than cutting. The cuttings under the deck are plain rock.
 
 ## The menu command
 

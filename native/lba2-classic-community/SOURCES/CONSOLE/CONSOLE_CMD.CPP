@@ -1813,6 +1813,11 @@ static void cmd_teleport(int argc, const char *argv[]) {
         hero->Obj.Z = atoi(argv[3]);
         if (argc >= 5)
             hero->Obj.Beta = (S16)atoi(argv[4]);
+        // (and his pitch and roll: how the engine turns a body by its three angles can be looked at)
+        if (argc >= 6)
+            hero->Obj.Alpha = atoi(argv[5]) & 4095;
+        if (argc >= 7)
+            hero->Obj.Gamma = atoi(argv[6]) & 4095;
         SetAnim(NUM_PERSO, GEN_ANIM_RIEN);
         Console_Print("teleport: hero -> (%d,%d,%d) beta=%d", (int)hero->Obj.X, (int)hero->Obj.Y,
                       (int)hero->Obj.Z, (int)hero->Obj.Beta);
@@ -2638,7 +2643,7 @@ void Console_RegisterAll(void) {
                               "Default on; persists to lba2.cfg (FixedTimestep key).");
 
     Console_RegisterCommandEx("teleport", cmd_teleport, "Reposition the hero in the current cube",
-                              "teleport <x> <y> <z> [beta] | teleport actor <n>",
+                              "teleport <x> <y> <z> [beta [alpha [gamma]]] | teleport actor <n>",
                               "Sets the hero's coords directly; next frame re-runs zones/collision. "
                               "'actor <n>' jumps onto actor n. Within-cube only.");
     Console_RegisterCommandEx("behaviour", cmd_behaviour, "Read/set hero behaviour (comportement)",

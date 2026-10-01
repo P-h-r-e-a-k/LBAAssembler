@@ -61,7 +61,7 @@ static char s_exec[CONTROL_EXEC_MAX];
    --exec cannot express "after the scene has settled": it fires on the first tick, and a
    `cube` change only applies on the NEXT frame, so `--exec "cube 154; teleport actor 3"`
    teleports the hero in the OLD cube and the pending change then resets him. Silently. */
-#define CONTROL_EXEC_AT_MAX 16
+#define CONTROL_EXEC_AT_MAX 128 /* (16 was too few for a lap of screenshots: the race-track pictures) */
 typedef struct {
     long tick;
     int fired;

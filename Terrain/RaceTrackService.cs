@@ -55,7 +55,10 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<TrackInfo>? Others = null,
         // Loops: the vertical loops (RaceTrackPlan.Loops), each [cube x, cube z, x, y, z (the ring's foot, cube-local), the lap's way there
         // (x and z, a thousand long), the ring's radius, how far across the car comes out (world units), the gap at its top (degrees)].
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Loops = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Loops = null,
+        // JumpCameras: where the camera stands while the car flies a drop (RaceTrackBuilder.PlaceJumpCameras), each [the flight's generic
+        // animation, cube x, cube z, x, y, z (cube-local)].
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? JumpCameras = null);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
@@ -404,7 +407,7 @@ internal static class RaceTrackService
                 log.Add(RaceTrackHolomap.Draw(gameDirectory, options.Island, IslandFile.Load(Path.Combine(gameDirectory, options.Island.TwinIleFile!)), own.Report, pictures[1..]));
             }
         }
-        foreach (var a in report.Jumps) log.Add(RaceTrackJumpAnim.Install(gameDirectory, a.FlightScale, a.Anim));
+        foreach (var a in report.Jumps) log.Add(a.Drop > 0 ? RaceTrackJumpAnim.InstallDrop(gameDirectory, a.FlightCells, a.Drop, a.Beta, a.Anim) : RaceTrackJumpAnim.Install(gameDirectory, a.FlightScale, a.Anim));
         foreach (var b in own?.Report.Jumps ?? new())
         {
             if (report.Jumps.FirstOrDefault(a => a.Anim == b.Anim) is not { } a) log.Add(RaceTrackJumpAnim.Install(gameDirectory, b.FlightScale, b.Anim));
@@ -460,7 +463,10 @@ internal static class RaceTrackService
             rivals.Count > 0 ? rivals : null, scenes.Grid.Count > 0 ? scenes.Grid : null, scenes.Pits.Count > 0 ? scenes.Pits : null, options.Island.Name,
             options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile ? RaceTrackStory.StartArrow : -1,
             Raised: raised ? report.Raised : null, Gravity: raised ? report.Gravity : null, RailCamera: raised ? report.RailCamera : null,
-            Loops: report.Loops.Count > 0 ? report.Loops.Select(LoopRecord).ToList() : null);
+            Loops: report.Loops.Count > 0 ? report.Loops.Select(LoopRecord).ToList() : null,
+            JumpCameras: report.JumpCameras.Count > 0
+                ? report.JumpCameras.Select(c => new[] { c.Anim, c.CubeX, c.CubeZ, (int)Math.Round((c.X - c.CubeX * 64) * 512), (int)Math.Round(c.Y), (int)Math.Round((c.Z - c.CubeZ * 64) * 512) }).ToList()
+                : null);
     }
 
     private static int[] LoopRecord(LoopInfo l)

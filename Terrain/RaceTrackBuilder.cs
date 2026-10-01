@@ -55,6 +55,9 @@ internal sealed class RaceTrackPlan
     // rail), and the engine's race-track mode drives on it (RACEMOD.CPP: the raised road is a floor of its own).
     public int[]? Raised { get; set; }
     public double? RaisedHalf { get; set; }
+    // The ground cut down where it comes near the raised road's deck (RaceTrackBuilder.CutUnderRaised: the lava lake's lap, which runs
+    // along cliffs and the crater's rim; the statue track's was left as it was built).
+    public bool RaisedCut { get; set; }
     // The start line's point, for a lap with no pit lane (with one, the line is in the pit lane's middle).
     public int? Start { get; set; }
     // The lowest the road is laid over the sea, when not the usual 700.
@@ -146,7 +149,7 @@ internal sealed record LoopInfo(double X, double Z, double Y, double DirX, doubl
 
 internal sealed record JumpInfo(double StartX, double StartZ, double LandX, double LandZ, double DirX, double DirZ, int Beta, double Height,
     int CubeX, int CubeZ, List<(int X0, int Z0, int X1, int Z1)> Boxes, int Zone, int Anim, double FlightScale, double FlightCells,
-    int Index = 0, double S0 = 0, double S1 = 0);
+    int Index = 0, double S0 = 0, double S1 = 0, double Drop = 0);
 
 internal sealed class RaceTrackOptions
 {
@@ -352,6 +355,8 @@ internal sealed class RaceTrackReport
     public List<JumpInfo> Jumps { get; } = new();
     // The plan's vertical loops (RaceTrackPlan.Loops).
     public List<LoopInfo> Loops { get; } = new();
+    // A drop's camera (RACEMOD.CPP jumpcam=): its flight's animation and the place the camera stands while the car flies it (cells, units up).
+    public List<(int Anim, int CubeX, int CubeZ, double X, double Y, double Z)> JumpCameras { get; } = new();
     public JumpInfo? Jump => Jumps.Count > 0 ? Jumps[0] : null;
     public RoadBridgeInfo? RoadBridge { get; set; }
     // How far (cells) an island cell position is from the nearest road's centre line, 1e9 when far away.
@@ -534,6 +539,7 @@ internal static class RaceTrackBuilder
         ClearDecors(island, index, options, report, roads, plan.KeepBodies);
         var natural = new Field(island);
         ModifyGround(island, field, index, roads, options, report);
+        if (main.Raised is not null && plan.RaisedCut) CutUnderRaised(island, field, main, options, report);
         var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned);
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
@@ -1672,15 +1678,24 @@ internal static class RaceTrackBuilder
             var i = At(r, lip + k);
             off = Math.Max(off, Math.Abs(-(r.X[i] - r.X[lip]) * hz + (r.Z[i] - r.Z[lip]) * hx));
         }
-        report.Notes.Add($"gap jump: {len:0.0} cells from the take-off lip at ({r.X[lip]:0.0}, {r.Z[lip]:0.0}) to the landing lip at ({r.X[landing]:0.0}, {r.Z[landing]:0.0}), level at {r.H[ia]:0}; " +
+        // (a landing lower than the take-off by more than a ramp's height: a drop -- the lava lake's, off the mesa onto the dock)
+        double? landLevel = r.H[lip] - r.H[landing] > DropFrom ? r.H[landing] : null;
+        report.Notes.Add($"gap jump: {len:0.0} cells from the take-off lip at ({r.X[lip]:0.0}, {r.Z[lip]:0.0}) to the landing lip at ({r.X[landing]:0.0}, {r.Z[landing]:0.0}), " +
+                         (landLevel is { } low ? $"from {r.H[lip]:0} down to {low:0} (a drop); " : $"level at {r.H[ia]:0}; ") +
                          $"the road runs within {off:0.0} cells of the flight's line over it" + (off > 1 ? " -- WARNING: the plan's road bends over the gap" : ""));
-        return LayJump(r, ia, hx, hz, lipUp, lipDown, openGap: true, o, report, index);
+        return LayJump(r, ia, hx, hz, lipUp, lipDown, openGap: true, o, report, index, landLevel is null ? null : (r.H[lip], landLevel.Value));
     }
+
+    // A gap jump whose landing lip is this much lower than its take-off lip, or more, is a drop: its flight is one of its own, diving down
+    // (RaceTrackJumpAnim.Drop), and its landing ramp a low one.
+    private const double DropFrom = 600, DropRamp = 200;
 
     // The ramps, the gap and the flight of a jump through point `ia` along (hx, hz): the take-off lip lipUp cells before it, the landing
     // lip lipDown cells after. `openGap`: a gap jump -- the gap is left as the ground is (Void), and the road's own profile is already level
     // there, so it is not blended.
-    private static JumpInfo? LayJump(TrackRoad r, int ia, double hx, double hz, double lipUp, double lipDown, bool openGap, RaceTrackOptions o, RaceTrackReport report, int index = 0)
+    // `levels`: a drop's take-off and landing levels (the plan's heights at its lips; the jump is level at its middle's height otherwise).
+    private static JumpInfo? LayJump(TrackRoad r, int ia, double hx, double hz, double lipUp, double lipDown, bool openGap, RaceTrackOptions o, RaceTrackReport report, int index = 0,
+        (double Up, double Down)? levels = null)
     {
         var n = r.Count; var s0 = r.S[ia];
         double Ds(int k) { var ds = r.S[k] - s0; if (r.Closed) { if (ds > r.Length / 2) ds -= r.Length; else if (ds < -r.Length / 2) ds += r.Length; } return ds; }
@@ -1697,10 +1712,18 @@ internal static class RaceTrackBuilder
         // the down ramp is as high as puts its surface, where the flight ends, just under the flight's end
         var landT = (land - lipDown) / o.JumpLandingLength;
         var down = Math.Clamp((takeoff + RaceTrackJumpAnim.EndDrop(scale) - 30) / Math.Max(0.05, Rise(1 - landT)), 150, up);
+        // (a drop: a low landing ramp, and the flight ends just over it, however far below the take-off that is)
+        var drop = 0.0;
+        if (levels is { } lv)
+        {
+            down = DropRamp;
+            drop = lv.Up + takeoff - (lv.Down + down * Rise(Math.Clamp(1 - landT, 0, 1)) + 30);
+        }
 
         // a level stretch at the crossing's height (EqualiseCrossings made the two roads meet there) over the whole jump, blended into the
-        // road's own profile over the next cells, then the ramps on it
-        var level = r.H[ia];
+        // road's own profile over the next cells, then the ramps on it (a drop: its take-off side at its own level, its landing side at its)
+        var level = levels?.Up ?? r.H[ia];
+        var landLevel = levels?.Down ?? level;
         const double blendCells = 15;
         for (var k = 0; k < n; k++)
         {
@@ -1709,7 +1732,7 @@ internal static class RaceTrackBuilder
             if (outside >= (openGap ? 1e-9 : blendCells)) continue;
             var t = outside / blendCells;
             var w = 1 - t * t * (3 - 2 * t);
-            r.H[k] = r.H[k] * (1 - w) + level * w;
+            r.H[k] = r.H[k] * (1 - w) + (ds > 0 ? landLevel : level) * w;
             // (the warning stripe on each ramp's last cell of flat top: the cell at the very end holds the drop, and is rock)
             if (ds >= upFoot && ds <= -lipUp)
             {
@@ -1719,7 +1742,7 @@ internal static class RaceTrackBuilder
             else if (ds > -lipUp && ds < lipDown) { r.Jump[k] = true; r.Gap[k] = true; if (openGap) r.Void[k] = true; }
             else if (ds >= lipDown && ds <= downFoot)
             {
-                r.H[k] = level + down * Rise(1 - (ds - lipDown) / o.JumpLandingLength);
+                r.H[k] = landLevel + down * Rise(1 - (ds - lipDown) / o.JumpLandingLength);
                 r.Bridge[k] = true; r.Jump[k] = true; r.Lip[k] = ds > lipDown + 0.75 && ds <= lipDown + 2;
             }
         }
@@ -1762,14 +1785,14 @@ internal static class RaceTrackBuilder
         if ((int)Math.Floor(lx / 64) != cube.Item1 || (int)Math.Floor(lz / 64) != cube.Item2)
             report.Notes.Add("WARNING: the jump lands in another cube than it starts in; the game changes scene at the cube's edge and the flight would break");
         report.Notes.Add((openGap
-                             ? $"jump: a ramp {up:0} high over {o.JumpRampLength:0} cells to the lip, a gap of {lipUp + lipDown:0.0} cells the car flies over, and a down ramp {down:0} high over {o.JumpLandingLength:0} cells; "
+                             ? $"jump: a ramp {up:0} high over {o.JumpRampLength:0} cells to the lip, a gap of {lipUp + lipDown:0.0} cells the car flies over{(drop > 0 ? $", diving {drop:0} down" : "")}, and a down ramp {down:0} high over {o.JumpLandingLength:0} cells; "
                              : $"jump: a ramp {up:0} high over {o.JumpRampLength:0} cells to a lip {lipUp:0.0} cells before the crossing, a gap of sand, the other road, " +
                                $"a gap and a down ramp {down:0} high over {o.JumpLandingLength:0} cells from {lipDown:0.0} cells past it (the gaps {o.JumpGap:0.#} cells past the other road's curbs); ") +
                          $"the flight ({flight:0.0} cells, the retail one x{scale:0.00}) starts at cell ({sx:0.0}, {sz:0.0}), " +
                          $"{JumpZoneBefore:0.#} cells before the lip, and lands {land - lipDown:0.0} cells down the far ramp at ({lx:0.0}, {lz:0.0}); heading turn {beta}, {boxes.Count} zone boxes");
         double OnLap(double ds) { var v = (s0 + ds) % r.Length; return v < 0 ? v + r.Length : v; }
         return new JumpInfo(sx, sz, lx, lz, hx, hz, beta, height, cube.Item1, cube.Item2, boxes, o.JumpZone + index, o.JumpAnim + RaceTrackJumpAnim.JumpOffset * index,
-            scale, flight, index, OnLap(start), OnLap(land));
+            scale, flight, index, OnLap(start), OnLap(land), drop);
     }
 
     // ---------------------------------------------------------------------------------------------------------------------
@@ -2171,7 +2194,8 @@ internal static class RaceTrackBuilder
             {
                 // over the jump: the flight's own arc
                 var along = (x - jump.StartX) * jump.DirX + (z - jump.StartZ) * jump.DirZ;
-                if (along >= 0 && along <= jump.FlightCells) y = jump.Height + RaceTrackJumpAnim.Climb(jump.FlightScale, along);
+                if (along >= 0 && along <= jump.FlightCells)
+                    y = jump.Height + (jump.Drop > 0 ? RaceTrackJumpAnim.DropAt(along / jump.FlightCells, jump.Drop) : RaceTrackJumpAnim.Climb(jump.FlightScale, along));
             }
             result.Add((x, z, y, speeds[m], radius[m]));
         }
@@ -2493,6 +2517,71 @@ internal static class RaceTrackBuilder
         foreach (var (gx, gz, height, _) in updates) island.SetHeight(gx, gz, (int)Math.Round(height));
         report.Vertices = updates.Count;
         field.Refresh(island);
+    }
+
+    // The ground under a raised road is the island's own, but where it comes up near the deck -- a coast road at a cliff's foot, a road
+    // along a rim -- the car meets rock beside the road, and the engine's floor is the deck only where it stands well over the ground
+    // (RACEMOD.CPP RaisedAt: 300). The lava lake's lap (2026-10-01) ran along its north rim with the rock beside the road above the deck,
+    // and the test pilot, cutting a corner, stopped dead against it. There the ground is cut down: RaisedClearance under the deck out to
+    // RaisedCutReach cells past its edge, then a bank back up to the ground as it is -- a cutting the road runs along. Not near the ends
+    // of the raised road where it rises from the ground road (RaisedCutFromEnd cells): there the deck starts on the ground.
+    private const double RaisedClearance = 450, RaisedCutReach = 1, RaisedCutBank = 1.5, RaisedCutFromEnd = 8;
+
+    private static void CutUnderRaised(IslandFile island, Field field, TrackRoad r, RaceTrackOptions o, RaceTrackReport report)
+    {
+        var up = r.Raised!; var n = r.Count;
+        var inner = o.RaisedHalfWidth + RaisedCutReach;
+        const double reach = 6;                                    // cells past the deck's middle the bank may reach
+        // how far along the raised road each point is from where it meets the ground road
+        var fromEnd = new double[n];
+        for (var i = 0; i < n; i++)
+        {
+            fromEnd[i] = double.MaxValue;
+            if (!up[i]) continue;
+            for (var way = -1; way <= 1; way += 2)
+                for (var k = 1; k < n; k++)
+                {
+                    var j = At(r, i + way * k);
+                    if (up[j]) continue;
+                    if (!r.Gap[j]) fromEnd[i] = Math.Min(fromEnd[i], k * o.Spacing);
+                    break;
+                }
+        }
+        var limit = new Dictionary<(int, int), double>();
+        for (var a = 0; a < n; a++)
+        {
+            var b = At(r, a + 1);
+            if (!up[a] || !up[b] || Math.Min(fromEnd[a], fromEnd[b]) < RaisedCutFromEnd || Math.Abs(r.H[a] - r.H[b]) > DropFrom) continue;
+            double sx = r.X[b] - r.X[a], sz = r.Z[b] - r.Z[a], len2 = sx * sx + sz * sz;
+            if (len2 < 1e-12) continue;
+            for (var gz = (int)Math.Floor(Math.Min(r.Z[a], r.Z[b]) - reach); gz <= (int)Math.Ceiling(Math.Max(r.Z[a], r.Z[b]) + reach); gz++)
+            for (var gx = (int)Math.Floor(Math.Min(r.X[a], r.X[b]) - reach); gx <= (int)Math.Ceiling(Math.Max(r.X[a], r.X[b]) + reach); gx++)
+            {
+                var t = Math.Clamp(((gx - r.X[a]) * sx + (gz - r.Z[a]) * sz) / len2, 0, 1);
+                var d = Math.Sqrt(Sq(gx - r.X[a] - sx * t) + Sq(gz - r.Z[a] - sz * t));
+                if (d > reach) continue;
+                var deck = r.H[a] + (r.H[b] - r.H[a]) * t;
+                if (r.RoadBank is { } rb) deck -= Math.Abs(rb[a]) * o.RaisedHalfWidth * 512;
+                var allowed = deck - RaisedClearance + Math.Max(0, d - inner) * 512 * RaisedCutBank;
+                limit[(gx, gz)] = limit.TryGetValue((gx, gz), out var was) ? Math.Min(was, allowed) : allowed;
+            }
+        }
+        // (never near the road on the ground: the ground there is the road's own)
+        var ground = Enumerable.Range(0, n).Where(i => !up[i] && !r.Gap[i]).ToList();
+        var clearOfRoad = r.VergeHalf + r.Blend + 1;
+        int cut = 0; double deepest = 0;
+        foreach (var ((gx, gz), allowed) in limit)
+        {
+            if (island.HeightAt(gx, gz) is not { } h || h <= allowed) continue;
+            if (ground.Any(i => Sq(r.X[i] - gx) + Sq(r.Z[i] - gz) < Sq(clearOfRoad))) continue;
+            var to = Math.Max(0, (int)Math.Floor(allowed));
+            deepest = Math.Max(deepest, h - to);
+            island.SetHeight(gx, gz, to); cut++;
+        }
+        if (cut == 0) return;
+        field.Refresh(island);
+        report.Vertices += cut;
+        report.Notes.Add($"the raised road: the ground cut down under and beside it at {cut} vertices, {deepest:0} at the most, to stand {RaisedClearance:0} under the deck");
     }
 
     // ---------------------------------------------------------------------------------------------------------------------
@@ -3105,6 +3194,78 @@ internal static class RaceTrackBuilder
         if ((options.Crossing == CrossingStyle.Bridge || planned) && report.RoadBridge is { } rb) PlaceDeck(island, rb, options, report);
         if (main.Raised is not null) PlaceRaised(island, main, options, report, startIndex);
         if (report.Loops.Count > 0) PlaceLoops(island, options, report);
+        if (report.Jumps.Any(j => j.Drop > 0)) PlaceJumpCameras(island, report);
+    }
+
+    // A drop's camera (RACEMOD.CPP jumpcam=): the camera that follows the car would go down the hillside behind it and into the hill, and
+    // the landing would not be seen. Instead the camera stands beside the flight: of the places to either side of it, DropCamFar cells out
+    // from a little past its middle, between the landing's height and a little over the take-off's, the one that sees the most of the
+    // car's places along the flight and the road past the landing -- its line to each clear of the ground and of the raised road's decks
+    // (through a slab, or past a rail) -- then the one whose lines pass highest over the ground, a little of that given up for each cell
+    // farther out.
+    private static readonly double[] DropCamFar = { 12, 15, 18 }, DropCamUp = { 0.6, 0.85, 1.05, 1.2 };
+
+    private static void PlaceJumpCameras(IslandFile island, RaceTrackReport report)
+    {
+        double Ground(double x, double z) => IslandOps.Altitude(island, x * 512, z * 512) ?? 0;
+        // the deck's pieces: segments between points that both have a width (a jump's gap has none)
+        var points = report.Raised.Select(p => (X: p[0] / 512.0, Z: p[1] / 512.0, Y: (double)p[2], Half: p[3] / 512.0)).ToList();
+        var decks = Enumerable.Range(0, Math.Max(0, points.Count - 1)).Where(i => points[i].Half > 0 && points[i + 1].Half > 0).Select(i => (A: points[i], B: points[i + 1])).ToList();
+        bool Hidden(double px, double py, double pz)
+        {
+            foreach (var (a, b) in decks)
+            {
+                double sx = b.X - a.X, sz = b.Z - a.Z, l2 = sx * sx + sz * sz;
+                if (l2 < 1e-9) continue;
+                var t = ((px - a.X) * sx + (pz - a.Z) * sz) / l2;
+                if (t < 0 || t > 1) continue;
+                var lat = Math.Sqrt(Sq(px - a.X - sx * t) + Sq(pz - a.Z - sz * t));
+                if (lat > a.Half + 0.3) continue;
+                var y = a.Y + (b.Y - a.Y) * t;
+                if (py > y - 300 && py < y - 20) return true;                          // (through the slab)
+                if (lat > a.Half - 0.4 && py > y - 300 && py < y + 150) return true;    // (past a rail)
+            }
+            return false;
+        }
+        foreach (var j in report.Jumps.Where(j => j.Drop > 0))
+        {
+            double fx = j.LandX - j.StartX, fz = j.LandZ - j.StartZ, len = Math.Sqrt(fx * fx + fz * fz);
+            if (len < 1) continue;
+            fx /= len; fz /= len;
+            var landY = j.Height - j.Drop;
+            var sights = new List<(double X, double Y, double Z)>();
+            // (the car's body, a little over the road it is on)
+            const double body = 250;
+            for (var u = 0.0; u <= 1.0001; u += 0.1) sights.Add((j.StartX + fx * len * u, j.Height + RaceTrackJumpAnim.DropAt(u, j.Drop) + body, j.StartZ + fz * len * u));
+            for (var a = 1.0; a <= 4; a += 1) sights.Add((j.LandX + fx * a, landY + body, j.LandZ + fz * a));
+            (double X, double Y, double Z, int Seen, double Clear, double Score)? best = null;
+            foreach (var side in new[] { -1, 1 })
+            foreach (var far in DropCamFar)
+            foreach (var up in DropCamUp)
+            {
+                double mx = j.StartX + fx * len * 0.55, mz = j.StartZ + fz * len * 0.55;
+                double ex = mx - fz * far * side, ez = mz + fx * far * side, ey = landY + (j.Height - landY) * up;
+                if (ey < Ground(ex, ez) + 600) continue;
+                int seen = 0; var clear = double.MaxValue;
+                foreach (var (sx, sy, sz) in sights)
+                {
+                    var lowest = double.MaxValue; var open = true;
+                    for (var t = 0.05; t < 0.97 && open; t += 0.03)
+                    {
+                        double px = ex + (sx - ex) * t, py = ey + (sy - ey) * t, pz = ez + (sz - ez) * t;
+                        lowest = Math.Min(lowest, py - Ground(px, pz));
+                        open = lowest > 0 && !Hidden(px, py, pz);
+                    }
+                    if (open) { seen++; clear = Math.Min(clear, lowest); }
+                }
+                var score = seen * 1000 + Math.Min(clear, 900) - far * 40;
+                if (best is null || score > best.Value.Score) best = (ex, ey, ez, seen, clear, score);
+            }
+            if (best is not { Seen: > 0 } b) { report.Notes.Add("WARNING: no place for the drop's camera: the camera follows the car down"); continue; }
+            report.JumpCameras.Add((j.Anim, j.CubeX, j.CubeZ, b.X, b.Y, b.Z));
+            report.Notes.Add($"the drop's camera: at cell ({b.X:0.0}, {b.Z:0.0}), {b.Y:0} up; it sees {b.Seen} of {sights.Count} of the car's places along the flight and past the landing, " +
+                             $"its lines to them {b.Clear:0} over the ground at the least");
+        }
     }
 
     // Each loop's ring (RaceTrackLoopBody): a decor of its own at its foot, its box -- the ring's footprint on the road, its top far
@@ -3184,10 +3345,14 @@ internal static class RaceTrackBuilder
         report.RaisedLoop = loop;
         var half = o.RaisedHalfWidth * 512;
         var banks = r.RoadBank;
+        // (a jump's gap in it -- between the lips, r.Gap -- has no width: the engine's floor isn't there)
         foreach (var k in span)
+        {
+            var width = r.Gap[k] ? 0 : (int)Math.Round(half);
             report.Raised.Add(banks is null
-                ? new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), (int)Math.Round(half) }
-                : new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), (int)Math.Round(half), (int)Math.Round(banks[k] * RaisedBankUnits) });
+                ? new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width }
+                : new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width, (int)Math.Round(banks[k] * RaisedBankUnits) });
+        }
         if (o.NewBodyBase < 0) { report.Notes.Add("WARNING: no place for the raised road's bodies was prepared (the island's OBL wasn't counted) -- the raised road has no pieces."); return; }
 
         System.Numerics.Vector3 World(int k) => new((float)(r.X[k] * 512), (float)r.H[k], (float)(r.Z[k] * 512));
@@ -3203,15 +3368,18 @@ internal static class RaceTrackBuilder
             return true;
         }
 
-        // the pieces: cross-sections a cell apart
+        // the pieces: cross-sections a cell apart, along each stretch of the road between its jumps' gaps (each ends at a lip)
         var per = Math.Max(1, (int)Math.Round(1 / o.Spacing));                    // lap points to a cell
         var cells = Math.Max(1, (int)Math.Round(RaisedPiece));
         int pieces = 0, left = 0;
-        for (var t = 0; t + per < span.Count + per - 1 && t < span.Count - 1; t += cells * per)
+        var runs = new List<List<int>> { new() };
+        foreach (var k in span) { if (r.Gap[k]) { if (runs[^1].Count > 0) runs.Add(new()); } else runs[^1].Add(k); }
+        foreach (var run in runs.Where(u => u.Count >= 2))
+        for (var t = 0; t + per < run.Count + per - 1 && t < run.Count - 1; t += cells * per)
         {
             var ids = new List<int>();
-            for (var j = 0; j <= cells && t + j * per < span.Count; j++) ids.Add(span[t + j * per]);
-            if (ids[^1] != span[^1] && t + cells * per >= span.Count - 1) ids.Add(span[^1]);      // (the last piece reaches the road's end)
+            for (var j = 0; j <= cells && t + j * per < run.Count; j++) ids.Add(run[t + j * per]);
+            if (ids[^1] != run[^1] && t + cells * per >= run.Count - 1) ids.Add(run[^1]);      // (the last piece reaches the stretch's end)
             if (ids.Count < 2) break;
             var origin = World(ids[ids.Count / 2]);
             origin = new((float)Math.Round(origin.X), (float)Math.Round(origin.Y), (float)Math.Round(origin.Z));
@@ -3286,6 +3454,7 @@ internal static class RaceTrackBuilder
                 var at = t + shift;
                 if (at < 1 || at >= span.Count - 1) continue;
                 var k = span[at];
+                if (r.Gap[k] || r.Gap[span[at - 1]] || r.Gap[span[at + 1]]) continue;      // (not in a jump's gap)
                 var ground = IslandOps.Altitude(island, r.X[k] * 512, r.Z[k] * 512) ?? 0;
                 var road = Math.Min(r.H[k], Math.Min(r.H[span[at - 1]], r.H[span[at + 1]]));
                 var height = road - RaceTrackRaisedBody.Thickness - ground;
