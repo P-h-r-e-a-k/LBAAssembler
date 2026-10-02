@@ -355,6 +355,26 @@ the View menu). The window title shows the game folder the editor is working in.
 - **Script** is for the actors' scripts: click an actor, or double-click it in the **SCRIPT** tab's list of the actors in view,
   to open its script window (right-click an actor in Build mode also offers *Edit Script...*, which switches to this mode).
 
+**Nuke this scene...** (at the foot of the BUILD tab, in every Build view) blows up everything in the scene that is open and leaves a
+flat, empty scene (`Scenes/SceneNuke.cs`). After a question that says what goes, every actor, zone and track point is removed except
+Twinsen and the **exits** (the cube-change zones, type 0: without them the game could not leave the scene; on an island the engine's
+Zoe stand-in in slot 1, entity 14 at 0,0, stays too), and the scripts of what stays are emptied. The ground: an LBA1 scene or an
+LBA2 interior gets one layer of its own most walked-on floor block (the one-layer, solid, plain block with the most uncovered cells,
+of any size: a room's tiles are often 2 x 2 blocks) under every column it had anything in, holes those enclose filled; an island
+cube loses its buildings and objects, its land is levelled to the middle of its heights and eased into the neighbouring cubes over
+four cells, painted with its most common flat ground, its water, lava and blocking ground drained, and its light baked again (the sea,
+the low ground the cube's edge reaches, stays sea). An island cube can be **several scenes** (the same place at other points of the
+story: Desert cube 8,9 is scenes 61 and 201) and the 3D view draws one of them: they share the ground, so they are all emptied. In a
+joined map the scene in the middle of the view goes. Twinsen is put where he stood if there is floor there, else on the nearest
+floored cell (the engines find the cell under a point as (x + 256) / 512). Everything is saved at once as **one undo step** (Edit >
+Undo brings back the scene records, the grid in `LBA_GRI.HQR` / `LBA_BKG.HQR` and the island's records exactly). An interior whose
+grid other scenes share says so in the question. The **animation** (`NukeOverlay.cs`) holds a picture of the view, draws the emptied
+scene underneath, compares the two pictures per 8-pixel tile and blows up only what changed: shards of the old picture flung from a wave
+of fireballs that runs out from the middle, sparks, smoke, a shake, a white flash and a shockwave, then the smoke clears over the new
+ground (about four seconds; a click or Esc skips it). Commands: `nuke <lba1|lba2> <game folder> <scene> [island .ILE] [--dry]` (the
+same without the window; for a copy of the game), `store nuke` (tests), `store nukesweep` (every LBA1 scene, every LBA2 interior and
+island cube nuked, stood on and undone).
+
 **Colours and text.** The interface uses a light blue scheme shared with a sister project (windows #E8F0FA, surfaces #F3F8FF, inputs and
 lists #FFFFFF, alternate rows #EAF3FD, buttons #D6E6F7 with hover #C3DBF5 and border #9FBEE0, headers #D2E3F6, menus #DCEAFA, borders
 #A9C3E0, text #10243E, muted text #4E6B8A, disabled #7C93AC, selection and accent #1B6EC2 with white text). Windows' own title bars stay the

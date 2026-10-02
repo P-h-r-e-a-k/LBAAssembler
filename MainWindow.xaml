@@ -388,7 +388,12 @@
                                         </ScrollViewer>
                                     </Grid>
                                 <Grid x:Name="BuildPanelContent" Background="{DynamicResource ThemeWindowBrush}">
-                                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                        <Border Grid.Row="2" BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="0,1,0,0" Padding="16,10,16,12">
+                                            <Button x:Name="NukeButton" Content="☢  Nuke this scene…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6"
+                                                    Foreground="{DynamicResource ThemeWarningBrush}" BorderBrush="{DynamicResource ThemeWarningBrush}" Click="Nuke_Click"
+                                                    ToolTip="Blow up everything in the scene that is open -- its actors, zones, points, buildings and decor -- and leave a flat, empty scene with Twinsen standing on it. The scene's exits to other scenes are kept. Saved straight away; Edit > Undo brings it all back"/>
+                                        </Border>
                                         <StackPanel x:Name="BuildViewBar" Grid.Row="0" Margin="16,12,16,2">
                                             <TextBlock Text="What to edit" Style="{StaticResource Eyebrow}" Margin="0,0,0,6"/>
                                             <WrapPanel Orientation="Horizontal">

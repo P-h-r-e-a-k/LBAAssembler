@@ -57,6 +57,7 @@ internal static class Program
             "sendell" => SendellIsland.Run(args),
             "loopanim" => LoopAnimCommand.Run(args),
             "sceneinfo" => SceneInfoCommand.Run(args),
+            "nuke" => NukeCommand.Run(args),
             "baldinocar" => RaceTrackCommand.BaldinoCar(args),
             "charactercars" => RaceTrackCommand.CharacterCars(args),
             "carshow" => RaceTrackCommand.CarShow(args),

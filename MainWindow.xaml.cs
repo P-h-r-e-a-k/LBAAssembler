@@ -1530,6 +1530,9 @@ public partial class MainWindow : Window
             MessageBox.Show(this, "That scene has unsaved script edits. Save or discard them first, so they aren't overwritten.", undo ? "Undo" : "Redo", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
+        // A step that rewrites the open island (a nuke) would leave unsaved terrain edits on a file that changed under them: ask first.
+        var islandStep = next.Game == Scenes.SceneGame.Lba2 && next.Entries.Any(e => e.RelativePath.EndsWith(".ILE", StringComparison.OrdinalIgnoreCase));
+        if (islandStep && !ConfirmTerrainDiscard()) return;
         if (next.Game == Scenes.SceneGame.Lba2 && !interiorSceneActive && openAttributesWindows.Count > 0)
         {
             // Undoing reloads the island, which would drop what an open actor window has not applied: close them (one with unsaved edits asks
@@ -1565,6 +1568,7 @@ public partial class MainWindow : Window
             if (currentGame == GameKind.Lba2)
             {
                 if (interiorSceneActive) ShowInteriorScene(interiorSceneNumber, keepView: true);
+                else if (islandStep) ReloadIslandFromDisk();
                 else
                 {
                     InvalidateNativeIsland();
