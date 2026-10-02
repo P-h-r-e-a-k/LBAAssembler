@@ -106,6 +106,7 @@ public partial class MainWindow
         else
         {
             foreach (var scene in nuke.Scenes) scriptSession.ForgetScene(scene);
+            ResetLba2Areas();          // (the joined interior maps are drawn from their own copy of the scenes and grids)
             if (interiorSceneActive) ShowInteriorScene(interiorSceneNumber, keepView: true);
             else if (nuke.ChangesIsland) ReloadIslandFromDisk();
             else

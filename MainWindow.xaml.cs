@@ -1565,9 +1565,11 @@ public partial class MainWindow : Window
         else
         {
             foreach (var scene in scenes) scriptSession.ForgetScene(scene);
+            ResetLba2Areas();          // (the joined interior maps are drawn from their own copy of the scenes and grids)
             if (currentGame == GameKind.Lba2)
             {
-                if (interiorSceneActive) ShowInteriorScene(interiorSceneNumber, keepView: true);
+                if (lba2JoinedView) RedrawLba2JoinedMap();          // (ShowInteriorScene would swap the map for its first scene alone)
+                else if (interiorSceneActive) ShowInteriorScene(interiorSceneNumber, keepView: true);
                 else if (islandStep) ReloadIslandFromDisk();
                 else
                 {
