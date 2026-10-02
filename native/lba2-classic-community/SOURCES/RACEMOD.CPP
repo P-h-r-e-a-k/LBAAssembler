@@ -588,22 +588,36 @@ void RaceMod_FloorForNothing(void) { s_floorRef = RAISED_NOREF; }
 #define RAISED_GROUNDED 300                // a road no higher than this over the ground under it lies on the ground
 #define RAISED_BESIDE 384                  // how far past the floor's edge the ground beside the road is looked at
 
-// Whether a place (world units) is past the road's own first or last point -- off its end, near it -- on a road that isn't a loop.
-// (RaisedAt then finds the segment before the open last one, clamped to its end, and that is no edge to be held at: a car against the
-// ramp's left rail where it came down onto the dock was pulled back to it at every step, 2026-10-02.)
-static int RaisedPastEnd(double wx, double wz) {
-    if (s_raisedLoop || s_nbRaised < 2) return 0;
-    for (int end = 0; end < 2; end++) {
-        const T_RACE_RAISED *tip = end ? &s_raised[s_nbRaised - 1] : &s_raised[0], *in = end ? tip - 1 : tip + 1;
-        const double ox = tip->X - in->X, oz = tip->Z - in->Z, reach = tip->Half + 4 * 512.0;    // (out of the road at that end)
-        const double dx = wx - tip->X, dz = wz - tip->Z;
-        if (dx * ox + dz * oz > 0 && dx * dx + dz * dz < reach * reach) return 1;
+// Whether a place (world units, at height wy) is past one of the road's open ends -- its own first or last point (a road that isn't a
+// loop), or a jump's lip, where its gap begins -- beyond the end, within the road's width there and level with it: no edge to be held at.
+// (RaisedAt finds the segment before the open one, clamped to its end: a car against a rail there was pulled back beside that point at
+// every step -- at the foot of the lava lake's ramp, and at a jump's lip, where the car on the rail then went nowhere and dropped into
+// the lava, 2026-10-02. The first version of this looked at any place within seven cells of the road's last point, at any height: it
+// let go of the rail on the lava lap's third jump, 6,000 above the ramp's foot, and a car on its right dropped onto the track below.)
+static int RaisedPastEnd(double wx, double wz, double wy) {
+    for (int i = 0; i < s_nbRaised; i++) {
+        const T_RACE_RAISED *tip = &s_raised[i];
+        if (tip->Half <= 0) continue;
+        for (int end = 0; end < 2; end++) {
+            // (end 1: the last point before a gap or the road's end; end 0: the first point after one)
+            const int open = end ? (i + 1 >= s_nbRaised ? !s_raisedLoop : s_raised[i + 1].Half <= 0)
+                                 : (i == 0 ? !s_raisedLoop : s_raised[i - 1].Half <= 0);
+            const int j = end ? i - 1 : i + 1;
+            if (!open || j < 0 || j >= s_nbRaised) continue;
+            double ox = tip->X - s_raised[j].X, oz = tip->Z - s_raised[j].Z;
+            const double len = sqrt(ox * ox + oz * oz);
+            if (len <= 0) continue;
+            ox /= len; oz /= len;                                           // (out of the road at that end)
+            const double dx = wx - tip->X, dz = wz - tip->Z, along = dx * ox + dz * oz, side = fabs(dx * oz - dz * ox);
+            if (along > 0 && along < 4 * 512.0 && side < tip->Half + RAISED_PAD && fabs(wy - tip->Y) < RAISED_LEVEL) return 1;
+        }
     }
     return 0;
 }
 
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     if (!s_nbRaised || CubeMode != CUBE_EXTERIEUR) return;
+    if (s_flying >= 0) return;             // (a jump's flight is scripted: the rail held a car on it back at the lip, and the flight went nowhere)
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     S32 f;
     int seg;
@@ -616,7 +630,7 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
         *nx = ox; *nz = oz; s_railTouch = 1; return;
     }
     // (past the road's own end: onto the ground it comes down to)
-    if (!s_raisedLoop && ((seg == 0 && t <= 0) || (seg == s_nbRaised - 2 && t >= 1) || RaisedPastEnd(*nx + cx, *nz + cz))) return;
+    if ((!s_raisedLoop && ((seg == 0 && t <= 0) || (seg == s_nbRaised - 2 && t >= 1))) || RaisedPastEnd(*nx + cx, *nz + cz, oy)) return;
     const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
     const double half = a->Half + (c->Half - a->Half) * t, limit = half - RAISED_INSET;
     if (fabs(lat) <= limit) return;
