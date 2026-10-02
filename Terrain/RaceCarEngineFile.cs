@@ -44,6 +44,10 @@ internal static class RaceCarEngineFile
         foreach (var loop in track?.Loops ?? new()) text.Append($"loop={string.Join(' ', loop)}\n");
         // where the camera stands while the car flies a drop
         foreach (var dropCam in track?.JumpCameras ?? new()) text.Append($"jumpcam={string.Join(' ', dropCam)}\n");
+        // the jumps the engine carries the car over (places in the raised road's file), and the island's scenes by cube for the cube
+        // changes their flights make
+        if (raisedFile is not null) foreach (var arc in track?.ArcJumps ?? new()) text.Append($"arcjump={string.Join(' ', arc)}\n");
+        if (raisedFile is not null && track?.ArcJumps is { Count: > 0 }) foreach (var c in track.CubeScenes ?? new()) text.Append($"cube_scene={string.Join(' ', c)}\n");
         // the grid spots, and whether a qualifying lap sets the order the cars line up in (RACEMOD.CPP)
         foreach (var g in track?.Grid ?? new()) text.Append($"grid={string.Join(' ', g)}\n");
         foreach (var g in track?.Pits ?? new()) text.Append($"pit={string.Join(' ', g)}\n");

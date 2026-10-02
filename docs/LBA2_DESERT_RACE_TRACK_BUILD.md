@@ -1156,6 +1156,77 @@ The user found the car going through the right side of jump 3 and dropping to th
 
 **Verified** (the lava lap, `rt_lava`): whole laps with the pilot 2.2 and 2.5 cells left and 1.9, 2.2, 2.6 and 3.0 cells right of its line: no rescue (before, 1.9 and 2.6 right fell at jump 2); the ramp's foot against the left rail still holds; the jump-3 rail test holds at x 11.80. Every track's ordinary pilot laps as before.
 
+## The Emerald Moon: over the reactor (2026-10-02)
+
+The user drew a lap for `EMERAUDE.ILE` (the Emerald Moon, island 3) over the editor's minimap:
+- a jump on either side of the reactor (the large pink dots), the road there as wide as the top of the reactor, and wider coming into it;
+- large, banked curves (red) into the jump and after it;
+- a straight along the middle of the moon base's building, with a pit lane on its right;
+- the vertical loops tested on the old moon (blue), each twice the road's width, the road coming out of a loop offset sideways from where it went in;
+- two arrows for the way round.
+
+Asked how the jumps and the straight should work, the user chose one jump right over the reactor, the pink dots being its take-off and landing, and a road on the building's roof.
+
+**The island.**
+- **The terrain.** Four cubes, (7,7)-(8,8), cells 448-576 both ways. A crater floor about 325 high is ringed by a rim 4,000-7,150 high.
+- **The moon base** stands on the crater floor: a cross of tube-roofed buildings. The long arm runs north-south along x 57-64, its roof 4,538 high at the middle. The short arm runs east-west along z 56-64.
+- **The reactor** is on the north rim (body 6): a plateau 6,695 high, then a cylinder 26 cells across up to 12,000, then a dish 17.3 cells across up to 18,716. Its middle is on the border between the cubes, at x 64, z 13.
+- **The sketch** was fitted to the island by landmarks with a projective fit, because the minimap is tilted. Up on the minimap was east, right was south.
+
+![the sketch and the lap](racetrack/build/emerald_plan.png)
+
+**The lap** (`tools/RaceTrackPlan/emerald_design.py`, `docs/racetrack/emerald_track_plan.json`): 540 cells, all of it a raised road. Rounded corners join straight runs (every 0.5 cells), the way the sketch's arrows go:
+- **The straight** runs south along the long arm's roof, 5,000 high. The race lanes' middle is on the roof's middle (x 60.5). One deck carries both the race lanes and a pit lane 3.5 cells wide on their right (west), with a white stripe between them (`pitStripe`). The start line and its gantry are on the straight.
+- **The inner U**: a hairpin at the south end, then back north over the short arm, still at 5,000. Then east along z 42, climbing to the outer ring's 7,700 (grades eased in and out, 15 % at the most).
+- **The rim**: south down the east rim through the first loop (whole), west along the south side through the second (a 70-degree gap at its top), and north up the west rim through the third (whole). The outer ring is at 7,700 because the west rim reaches 7,150.
+- **The red curves** are a wide banked turn onto the reactor's line (z 13, radius 10) and, after the jump, a banked U-turn (radius 11), banked up to 0.32. Through both, the road widens to 8.5 cells from its middle to its rail, the width of the reactor's dish, and narrows again after the U-turn.
+- **The way back**: west along z 35, past the reactor's south side, coming down to 5,000 and onto the straight.
+
+**The loops**: each has a radius of 4. The deck is 6.1 cells from its middle to its rail for 10 cells either side of the foot, twice the road's width, and narrows back over 8 more. The ring's band is as wide as the road (the plan's loops gain a fifth number, the band's half width: 3.05). The band drifts 6.1 cells across, a whole road width, so the car goes in on the left half and comes out on the right. Each ring is within one cube.
+
+**The jump: one leap over the whole reactor** (the plan's `arcJumps`: [ramp foot, lip, landing lip, hill foot]).
+- **The ramp** curves up from the deck, 6 cells long, to 60 degrees at its lip: a circle's arc, from x 33 to the lip at x 39, 9,474 high.
+- **The flight** is a parabola from the lip to the landing lip at x 90, with the lip's slope at both ends. It tops out at 20,780, 2,000 over the dish, clearing the reactor's top across the whole deck's width by 900 at least. The design script picks the gentlest ramp angle that clears it.
+- **The landing hill** curves back down, 6 cells, to the deck at x 96.
+
+The plan's heights from the ramp's foot to the hill's foot are that path. The road has no deck between the lips.
+
+![the jump from the side](racetrack/build/emerald_jump_side.png)
+
+No flight animation could fly this jump. An animation moves the hero in his cube's own units, and this flight crosses from cube (7,7) into (8,7) high over the reactor. So the race-track mode carries the car itself (`RACEMOD.CPP RaceArc`, called first by `RaceMod_Loop`):
+- **Taking the car on.** A car that crosses the line across the road at the ramp's foot, going the lap's way and level with the deck, is taken onto the jump. It is carried along the plan's path at its speed along the ground (4,500 units/s at least), at the same distance across the road as it came in, and pitched with the path (`CarPitch`).
+- **The cube change.** Where the path crosses into another cube, the engine changes the scene itself: `NewCube` is set from the car file's `cube_scene=` lines, along with the place in the new cube's units, `FlagChgCube` 1 and no re-seating. In the new scene the car is carried on. The builder makes no crossing zone at a carried jump's edge.
+- **The landing.** The car is set down on the landing hill's foot, level, going as fast as it was carried, and its lap check forgets its last place.
+- **The camera** flies beside the car, 18 cells out to the south, a little behind it and 1,800 over it, looking at the car with the reactor passing under it. It stays there half a second after the landing.
+- **The rail** stays out of the carried flight.
+- **The car file** gets `arcjump=<foot> <lip> <land> <land foot> [side]` (places in the raised road's file) and `cube_scene=<cube x> <cube z> <scene>`.
+
+At full speed the jump takes about 6.6 s from the ramp's foot to the hill's foot.
+
+![over the reactor](racetrack/build/emerald_jump.png)
+
+**What else the builder does for it:**
+- **Widths point by point** (the plan's `raisedHalfs`). They go to the engine's raised road file, the deck pieces (`RaceTrackRaisedBody.Tile` widens the asphalt and moves the curbs and rails out), the start gantry, the piers, the raised floor and decor clearing.
+- **The engine looks further** for the road's points: by the widest half width in squares of four cells (`s_rbExtra`). The 8.5-cell road was wider than the one square either way that it searched.
+- **The cube edges' crossing zones** stand at the raised road's own height, not the ground's. The straight crosses z 64 at 5,000, over a crater floor at 325.
+- **Decor under the jump is left alone.** Under a carried jump's gap, nothing is cleared or cut down: the reactor stays as it is. The other decor bodies are kept (`keepBodies`). The egg-shaped building beside the west rim had its box cut down under the road (the road keeps clear of the building itself).
+- **Checkpoints** keep 6 cells clear of a carried jump.
+
+The track races in scenes of its own, **229-232**, copies of the moon's outside scenes 74-77 (Twinsen's own life script emptied, as on the old moon), with no opponents and nothing drawn on the holomap. Nine piers were left out where there was no clear ground under the road. On the straight, the deck lies 260 over the long arm's roof.
+
+![loops](racetrack/build/emerald_loops.png)
+![the straight and the red curves](racetrack/build/emerald_road.png)
+![Play in the app](racetrack/build/emerald_app.png)
+
+**Verified**:
+- **Headless pilot** (`rt_emer`): a lap of 64.05 s, all 9 checkpoints, no rescue. All three loops round (in at 4,836 units/s). The jump: carried at 4,836, into scene 231 at the top (20,777 high), down on the hill's foot. The car's place, dumped every 25 ticks against the road, stays on the deck all the way round, banking included, apart from the loops.
+- **Other tracks unchanged**: the eight other tracks built together are byte-identical to the last commit's build (38 files). The elevator and lava laps raced with the new engine qualify in the same times as before.
+- **From the app**, on a sandbox folder: the Emerald Moon ticked and built in the race track window. With `EMERAUDE.ILE` open, the Play button reads "Race: The Emerald Moon". Play starts in scene 229 on the grid under the start gantry, muted.
+
+**Limits**:
+- The pit lane is only a lane: there are no opponents to wait in it.
+- A car driven backwards up the landing hill would fall off its lip onto the reactor's plateau (not tried).
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

@@ -81,6 +81,7 @@ internal sealed class RaceTrackWindow : Window
         (RaceTrackIsland.CelebrationLava, "Celebration Island: the lava lake", "Before the statue rises: from the statue track's dock round the whole island -- along the north shore, up the east coast to the crater's rim, across the lava lake on a causeway, behind the temple -- with three jumps over gaps in the raised road, a wide last turn and a ramp back down to the dock. It races in a scene of its own (223, a copy of the island's scene 95) and Play races it with CELEBRAT.ILE open"),
         (RaceTrackIsland.Elevator, "The Elevator Platform: the rollercoaster", "All of it a raised road, banked, with the slopes pulling at the car: its plan draws it all"),
         (RaceTrackIsland.Moon, "The old moon (MOON.ILE): two vertical loops", "The Emerald Moon's older copy, which the game never loads: a lap round the moon base on the crater's floor through two vertical loops -- one the car is carried over the top of upside down, across a gap, and one it drives round as a real car would, falling off if too slow. It races in scenes of its own (225-228, copies of the Emerald Moon's 74-77), with no opponents"),
+        (RaceTrackIsland.Emerald, "The Emerald Moon: over the reactor", "From the user's sketch, all of it a raised road: along the moon base's roof (the straight, a pit lane beside it), up onto the crater's rim and round it through three vertical loops twice the road's width, and one jump over the whole reactor -- a curved ramp, a flight over its dish 20,000 up and a curved hill down, the road as wide as the dish there and banked hard through the turns either side. It races in scenes of its own (229-232, copies of the moon's 74-77), with no opponents"),
         (RaceTrackIsland.Sendell, "Sendell's Well: the cut island", "Island 1, which the game never shipped: the build makes it (SENDELL.ILE, a round island with a well in its middle, made from Citadel Island's files) and a scene for it (224), and a lap round the well, up from the beach onto the plateau and back down. Putting the folder back deletes the island's files"),
     };
 
@@ -139,6 +140,8 @@ internal sealed class RaceTrackWindow : Window
                    "picture, and scene 224), and putting the folder back deletes it. " +
                    "The old moon (MOON.ILE, the Emerald Moon's older copy, which the game never loads) has two vertical loops, that mode's too: one the " +
                    "car is carried round and over a gap at its top upside down, one it drives round as a real car would -- too slow and it falls off. " +
+                   "The Emerald Moon's lap (EMERAUDE.ILE, in scenes of its own, 229-232) is all in the air too: along the moon base's roof, round the " +
+                   "crater's rim through three loops, and over the whole reactor in one jump that mode carries the car over, into the next cube. " +
                    "Use Tools > Test edits first to try it on a scratch copy of the game folder.",
         };
         intro.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");

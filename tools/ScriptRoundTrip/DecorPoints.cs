@@ -7,7 +7,8 @@ using LbaBodyStudio;
 namespace ScriptRoundTrip;
 
 // decorpoints <ISLAND> <out.csv> [body ...]: every point of the island's decor bodies where it stands in the island (cube-local units:
-// "decor,body,x,y,z"), so that a big object's real shape -- a statue's, at each height -- can be planned round instead of its box.
+// "decor,body,x,y,z,cx,cz", cx/cz the island map cell of the cube -- an island of several cubes numbers each cube's decors from 0),
+// so that a big object's real shape -- a statue's, at each height -- can be planned round instead of its box.
 // LBA2_DIR is the game folder.
 internal static class DecorPointsCommand
 {
@@ -19,9 +20,9 @@ internal static class DecorPointsCommand
         var bodies = HqrArchive.Open(Path.Combine(dir, name + ".OBL"));
         var only = args.Skip(3).Select(int.Parse).ToHashSet();
         using var w = new StreamWriter(args[2]);
-        w.WriteLine("decor,body,x,y,z");
+        w.WriteLine("decor,body,x,y,z,cx,cz");
         using var faces = Path.ChangeExtension(args[2], ".faces.csv") is { } fp ? new StreamWriter(fp) : null;
-        faces?.WriteLine("decor,body,x1,y1,z1,x2,y2,z2,x3,y3,z3");
+        faces?.WriteLine("decor,body,x1,y1,z1,x2,y2,z2,x3,y3,z3,cx,cz");
         var read = new Dictionary<int, Body?>();
         foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
         {
@@ -45,7 +46,7 @@ internal static class DecorPointsCommand
                 {
                     var v = Vector3.Transform(body.Vertices[p], turn);
                     lo = Vector3.Min(lo, v); hi = Vector3.Max(hi, v);
-                    w.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{k},{index},{v.X:0},{v.Y:0},{v.Z:0}"));
+                    w.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{k},{index},{v.X:0},{v.Y:0},{v.Z:0},{cx},{cz}"));
                 }
                 // (every face as a fan of triangles, for clearance checks against the real shape)
                 if (faces is not null)
@@ -53,9 +54,9 @@ internal static class DecorPointsCommand
                         for (var t = 1; t + 1 < f.Points.Length; t++)
                         {
                             var tri = new[] { f.Points[0], f.Points[t], f.Points[t + 1] }.Select(q => Vector3.Transform(body.Vertices[q], turn)).ToArray();
-                            faces.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{k},{index},{tri[0].X:0},{tri[0].Y:0},{tri[0].Z:0},{tri[1].X:0},{tri[1].Y:0},{tri[1].Z:0},{tri[2].X:0},{tri[2].Y:0},{tri[2].Z:0}"));
+                            faces.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{k},{index},{tri[0].X:0},{tri[0].Y:0},{tri[0].Z:0},{tri[1].X:0},{tri[1].Y:0},{tri[1].Z:0},{tri[2].X:0},{tri[2].Y:0},{tri[2].Z:0},{cx},{cz}"));
                         }
-                Console.WriteLine($"decor {k}: body {index} at ({d.X},{d.Y},{d.Z}) turn {d.Beta & 0xFFFF}: {used.Count} points, {body.Faces.Count} faces, x {lo.X:0}..{hi.X:0} y {lo.Y:0}..{hi.Y:0} z {lo.Z:0}..{hi.Z:0}; box x {d.XMin}..{d.XMax} y {d.YMin}..{d.YMax} z {d.ZMin}..{d.ZMax}");
+                Console.WriteLine($"cube ({cx},{cz}) decor {k}: body {index} at ({d.X},{d.Y},{d.Z}) turn {d.Beta & 0xFFFF}: {used.Count} points, {body.Faces.Count} faces, x {lo.X:0}..{hi.X:0} y {lo.Y:0}..{hi.Y:0} z {lo.Z:0}..{hi.Z:0}; box x {d.XMin}..{d.XMax} y {d.YMin}..{d.YMax} z {d.ZMin}..{d.ZMax}");
             }
         }
         return 0;

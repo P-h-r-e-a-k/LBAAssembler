@@ -45,6 +45,25 @@ internal static class RaceTrackScenes
     // 48 starts exactly at the street's height, 250 -- the car on the storm track's road there stood at 245 and was held at the edge
     private const int CoverBelow = 512, CoverAbove = 1024;
 
+    // The island's outside scenes by cube, each [cube x, cube z, scene]: for the race-track mode's carried jumps, which change the cube
+    // themselves where their flight crosses an edge (RACEMOD.CPP cube_scene=).
+    public static List<int[]> CubeScenes(string gameDirectory, RaceTrackIsland island)
+    {
+        var store = new SceneStore(SceneGame.Lba2, gameDirectory);
+        var list = new List<int[]>();
+        for (var scene = island.FirstScene; scene <= island.LastScene; scene++)
+        {
+            if (!store.SceneExists(scene)) continue;
+            try
+            {
+                var m = store.Load(scene);
+                if (m.Island == island.IslandByte && m.CubeMode == 1 && !list.Any(c => c[0] == m.CubeX && c[1] == m.CubeY)) list.Add(new[] { m.CubeX, m.CubeY, scene });
+            }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
+        }
+        return list;
+    }
+
     private static List<EdgeCrossing> EdgeCrossings(SceneStore store, RaceTrackReport report, RaceTrackOptions options, int island)
     {
         var result = new List<EdgeCrossing>();
@@ -61,25 +80,30 @@ internal static class RaceTrackScenes
             catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
         }
         var n = report.LapX.Length;
+        // (where the lap is a raised road, at the road's own height -- the Emerald Moon's, 5,000 over the base's roof, 7,700 over the rim --
+        // and nowhere in a carried jump's flight: the race-track mode changes the cube itself there, RACEMOD.CPP)
+        var up = report.LapRaised is { } r && r.Length == n && report.LapY.Length == n ? r : null;
         for (var i = 0; i < n; i++)
         {
             var j = (i + 1) % n;
             double x0 = report.LapX[i], z0 = report.LapZ[i], x1 = report.LapX[j], z1 = report.LapZ[j];
             int ax = (int)Math.Floor(x0 / 64), az = (int)Math.Floor(z0 / 64), bx = (int)Math.Floor(x1 / 64), bz = (int)Math.Floor(z1 / 64);
             if (ax == bx && az == bz) continue;
+            if (report.LapArc is { } arc && arc.Length == n && (arc[i] || arc[j])) continue;
             if (!sceneOf.TryGetValue((ax, az), out var from) || !sceneOf.TryGetValue((bx, bz), out var to)) continue;
+            double Height(double x, double z, double t) => up is not null && up[i] && up[j] ? report.LapY[i] + (report.LapY[j] - report.LapY[i]) * t : ground(x, z);
             // (where the segment meets the edge: an x edge, a z edge, or -- through a corner -- both, each taken at its own point)
             if (ax != bx)
             {
                 var ex = Math.Max(ax, bx) * 64.0; var t = (ex - x0) / (x1 - x0); var z = z0 + (z1 - z0) * t;
-                var h = ground(ex, z);
+                var h = Height(ex, z, t);
                 result.Add(new EdgeCrossing(from, to, ax, az, bx > ax ? 'E' : 'W', z - az * 64.0, h));
                 result.Add(new EdgeCrossing(to, from, bx, bz, bx > ax ? 'W' : 'E', z - bz * 64.0, h));
             }
             if (az != bz)
             {
                 var ez = Math.Max(az, bz) * 64.0; var t = (ez - z0) / (z1 - z0); var x = x0 + (x1 - x0) * t;
-                var h = ground(x, ez);
+                var h = Height(x, ez, t);
                 result.Add(new EdgeCrossing(from, to, ax, az, bz > az ? 'S' : 'N', x - ax * 64.0, h));
                 result.Add(new EdgeCrossing(to, from, bx, bz, bz > az ? 'N' : 'S', x - bx * 64.0, h));
             }

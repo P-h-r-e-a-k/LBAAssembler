@@ -56,7 +56,12 @@ internal static class RaceTrackRaisedBody
     // seam of missing pixels there).
     // `line`: the cell (from that section to the next) that is the start line, its asphalt white and its curbs red. A section's Across
     // need not be level: a banked road's has the height it gains per unit across as its y.
-    public static byte[] Tile(IReadOnlyList<(Vector3 Mid, Vector3 Across)> sections, int firstBlock, double asphalt, double curb, double edge, bool arrow = false, int line = -1)
+    // `wider`: how much wider than `edge` the road is at each section (world units, either side: its asphalt widens, its curbs and rails
+    // move out -- the Emerald Moon's road widens for its jump, its loops and its pit lane). `stripe`: a white stripe along the asphalt this
+    // far across (world units, the way Across points) on the cells `striped` says.
+    public const double StripeHalf = 50;
+    public static byte[] Tile(IReadOnlyList<(Vector3 Mid, Vector3 Across)> sections, int firstBlock, double asphalt, double curb, double edge, bool arrow = false, int line = -1,
+        IReadOnlyList<double>? wider = null, double stripe = double.NaN, IReadOnlyList<bool>? striped = null)
     {
         var m = new Mesh();
         // across each section, from one edge to the other: the offset and the height over the road's surface
@@ -68,7 +73,10 @@ internal static class RaceTrackRaisedBody
         var at = new int[sections.Count, profile.Length];
         for (var j = 0; j < sections.Count; j++)
             for (var k = 0; k < profile.Length; k++)
-                at[j, k] = m.P(sections[j].Mid + sections[j].Across * (float)profile[k].U + new Vector3(0, (float)profile[k].Y, 0));
+            {
+                var u = profile[k].U + Math.Sign(profile[k].U) * (wider?[j] ?? 0);
+                at[j, k] = m.P(sections[j].Mid + sections[j].Across * (float)u + new Vector3(0, (float)profile[k].Y, 0));
+            }
         var up = Vector3.UnitY;
         for (var j = 0; j + 1 < sections.Count; j++)
         {
@@ -79,7 +87,16 @@ internal static class RaceTrackRaisedBody
             Strip(1, RailTop, up);
             Strip(2, RailSide, across);       // the rail's inner face
             Strip(3, block, up);              // the curb
-            if (!(arrow && sections.Count == 5)) Strip(4, j == line ? White : Asphalt, up);
+            if (!double.IsNaN(stripe) && striped is { } st && j < st.Count && st[j] && j != line)
+            {
+                // (the asphalt either side of the stripe, and the stripe)
+                int On(int i, double u) => m.P(sections[i].Mid + sections[i].Across * (float)u);
+                int a0 = On(j, stripe - StripeHalf), b0 = On(j, stripe + StripeHalf), a1 = On(j + 1, stripe - StripeHalf), b1 = On(j + 1, stripe + StripeHalf);
+                m.Quad(at[j, 4], a0, a1, at[j + 1, 4], Asphalt, up);
+                m.Quad(a0, b0, b1, a1, White, up);
+                m.Quad(b0, at[j, 5], at[j + 1, 5], b1, Asphalt, up);
+            }
+            else if (!(arrow && sections.Count == 5)) Strip(4, j == line ? White : Asphalt, up);
             Strip(5, block, up);
             Strip(6, RailSide, -across);
             Strip(7, RailTop, up);

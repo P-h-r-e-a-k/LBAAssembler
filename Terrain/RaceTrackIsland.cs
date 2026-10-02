@@ -134,6 +134,20 @@ internal sealed record RaceTrackIsland(
         Title = "The old moon (MOON.ILE): two vertical loops",
     };
 
+    // The Emerald Moon itself (EMERAUDE.ILE, island 3), from the user's sketch: all of it a raised road -- along the middle of the moon
+    // base's long arm on its roof (the straight, its pit lane beside it on one deck), up onto the crater's rim and round it through three
+    // vertical loops (the plan's Loops: the deck there twice the road's width, the car going in on one half and coming out on the other),
+    // and one jump over the whole reactor on the north rim (ArcJumps: the race-track mode carries the car up a curved ramp, over the
+    // reactor's dish and down a curved hill, from one cube into the next), the road as wide as the dish there and banked hard through the
+    // turns either side. It races in scenes of its own, 229-232, copies of the moon's four outside scenes 74-77 (CopiesScenes): the
+    // story's scenes put Twinsen in his space suit, out of his car. No opponents (their cars don't go round loops, or over the reactor)
+    // and nothing drawn on the holomap.
+    public static readonly RaceTrackIsland Emerald = new("The Emerald Moon", "EMERAUDE.ILE", "EMERAUDE.OBL", 3, 229, 232, 30, "RaceTrackPlan.Emerald.json", null)
+    {
+        CopiesScenes = (74, 4), NoOpponents = true, NoHolomap = true,
+        Title = "The Emerald Moon: over the reactor, round the base",
+    };
+
     // The island isn't in the game: the build makes its files and its scene (Sendell's Well). They have no originals to keep, so the
     // build's backups leave them out (KeptFiles); it makes them afresh every time, and putting the folder back deletes them.
     public bool Created { get; init; }
@@ -151,7 +165,7 @@ internal sealed record RaceTrackIsland(
         CopiesScenes is { } many ? Enumerable.Range(0, many.Count).Select(k => (many.First + k, FirstScene + k))
         : CopiesScene is { } one ? new[] { (one, FirstScene) } : Enumerable.Empty<(int, int)>();
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

@@ -61,6 +61,7 @@
     <EmbeddedResource Include="..\..\docs\racetrack\elevator_track_plan.json" LogicalName="RaceTrackPlan.Elevator.json" />
     <EmbeddedResource Include="..\..\docs\racetrack\sendell_track_plan.json" LogicalName="RaceTrackPlan.Sendell.json" />
     <EmbeddedResource Include="..\..\docs\racetrack\moon_track_plan.json" LogicalName="RaceTrackPlan.Moon.json" />
+    <EmbeddedResource Include="..\..\docs\racetrack\emerald_track_plan.json" LogicalName="RaceTrackPlan.Emerald.json" />
     <Compile Include="..\..\LiveDataRoot.cs" Link="LiveDataRoot.cs" />
     <Compile Include="..\..\AudioLevels.cs" Link="AudioLevels.cs" />
     <Compile Include="..\..\RaceCarSetup.cs" Link="RaceCarSetup.cs" />

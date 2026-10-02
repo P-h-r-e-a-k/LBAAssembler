@@ -55,6 +55,9 @@
  *                                as fast as the flight's own speed, kept between lo and hi (default 0.6 4; 0: the flight in its own time)
  *     jumpcam=<anim> <cube x> <cube z> <x> <y> <z>   while the hero flies the jump whose flight is generic animation <anim>, and a moment
  *                                after it lands, the camera that follows the car stands there (cube-local) and looks at the car (JumpCamera)
+ *     arcjump=<foot> <lip> <land> <land foot> [side]   a jump the car is carried over (RaceArc): places in the raised road's file, its
+ *                                ramp's foot, its lip, the landing lip and the landing hill's foot; the camera beside it on `side` (1 or -1)
+ *     cube_scene=<cube x> <cube z> <scene>   the island's outside scene of that cube, for the cube changes a carried jump makes
  *   A startline or checkpoint line may end in a ninth number, the road's height there: the line then only counts for a car within
  *   RACE_LINE_REACH of that height (a lap that passes over itself crosses a line's place at other heights too).
  */
@@ -215,6 +218,7 @@ static int s_nbRaised = 0;
 #define RAISED_INSET 640                   // how far inside the edge the hero's middle is kept: a car's half width
 #define RAISED_NOREF 0x7FFFFFFF
 static int s_rbX0 = 0, s_rbZ0 = 0, s_rbW = 0, s_rbH = 0;
+static int s_rbExtra = 0;                  // squares more to look in for a road wider than one (the Emerald Moon's, as wide as the reactor's dish)
 static int *s_rbStart = NULL, *s_rbItem = NULL;
 static S32 s_floorRef = RAISED_NOREF;      // the height of what the ground is being asked for (nothing: the ground alone)
 static int s_onlyNear = -1;                // RaisedAt looks only at the road's points within RAISED_SIGHT of this one (-1: all of it)
@@ -252,6 +256,39 @@ static int s_nbLoops = 0;
 typedef struct { int Anim, CubeX, CubeZ, X, Y, Z; } T_RACE_JUMPCAM;
 static T_RACE_JUMPCAM s_jumpCams[RACE_MAX_JUMPCAMS];
 static int s_nbJumpCams = 0;
+// Carried jumps (arcjump=, RaceArc: see "a jump the car is carried over").
+#define RACE_MAX_ARCS 4
+#define RACE_MAX_CUBE_SCENES 64
+#define RACE_ARC_LEAST 4500.0
+#define RACE_ARC_ENTRY 600.0       // how far over or under the ramp's foot a car is still taken onto it
+#define RACE_ARC_CAM_FAR 18.0      // the camera beside the flight: cells out to the side ...
+#define RACE_ARC_CAM_BACK 5.0      // ... and back along the way from the car ...
+#define RACE_ARC_CAM_UP 1800.0     // ... and over it
+#define RACE_ARC_CAM_HOLD 500      // ms it stays there after the car lands
+typedef struct {
+    int Foot, Lip, Land, LandFoot, Side;
+    double *S;                     // the way's distance along the ground from the foot, point by point
+} T_RACE_ARC;
+static T_RACE_ARC s_arcs[RACE_MAX_ARCS];
+static int s_nbArcs = 0;
+static int s_cubeScenes[RACE_MAX_CUBE_SCENES][3];
+static int s_nbCubeScenes = 0;
+static int s_arcOn = -1, s_arcLast = -1;
+static double s_arcS = 0, s_arcV = 0, s_arcAcross = 0;
+static S32 s_arcTime = 0, s_arcLandedAt = 0;
+
+static int ArcPrepare(T_RACE_ARC *a) {
+    if (a->Foot < 0 || a->LandFoot >= s_nbRaised || !(a->Foot < a->Lip && a->Lip < a->Land && a->Land < a->LandFoot)) return 0;
+    const int n = a->LandFoot - a->Foot + 1;
+    a->S = (double *)malloc(n * sizeof(double));
+    a->S[0] = 0;
+    for (int k = 1; k < n; k++) {
+        const T_RACE_RAISED *p = &s_raised[a->Foot + k - 1], *q = p + 1;
+        a->S[k] = a->S[k - 1] + sqrt((double)(q->X - p->X) * (q->X - p->X) + (double)(q->Z - p->Z) * (q->Z - p->Z));
+    }
+    return 1;
+}
+
 static S32 s_flying = -1;                  // the flight the hero is flying (its generic animation), -1 none
 static S32 s_landed = -1;                  // the flight he last landed from ...
 static U32 s_landedAt = 0;                 // ... and when (TimerRefHR)
@@ -287,7 +324,7 @@ static int RaisedOpenEnd(int i, double tt) {
 static int RaisedAt(double wx, double wz, S32 ref, double pad, S32 *y, int *seg, double *lat, double *t) {
     if (!s_nbRaised) return 0;
     const int bx = (int)floor(wx / RAISED_BUCKET) - s_rbX0, bz = (int)floor(wz / RAISED_BUCKET) - s_rbZ0;
-    const int reach = 1 + (int)(pad / RAISED_BUCKET);
+    const int reach = 1 + (int)(pad / RAISED_BUCKET) + s_rbExtra;
     double top = -1e18;
     for (int pass = 0; pass < 2; pass++) {
         double bestD = 1e30;
@@ -424,8 +461,8 @@ static int RaisedBetween(double wx, double wz, double lo, double hi, int own, do
     if (!s_nbRaised) return 0;
     const int bx = (int)floor(wx / RAISED_BUCKET) - s_rbX0, bz = (int)floor(wz / RAISED_BUCKET) - s_rbZ0;
     int found = 0;
-    for (int dz = -1; dz <= 1; dz++)
-        for (int dx = -1; dx <= 1; dx++) {
+    for (int dz = -1 - s_rbExtra; dz <= 1 + s_rbExtra; dz++)
+        for (int dx = -1 - s_rbExtra; dx <= 1 + s_rbExtra; dx++) {
             const int x = bx + dx, z = bz + dz;
             if (x < 0 || z < 0 || x >= s_rbW || z >= s_rbH) continue;
             const int b = z * s_rbW + x;
@@ -617,7 +654,7 @@ static int RaisedPastEnd(double wx, double wz, double wy) {
 
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     if (!s_nbRaised || CubeMode != CUBE_EXTERIEUR) return;
-    if (s_flying >= 0) return;             // (a jump's flight is scripted: the rail held a car on it back at the lip, and the flight went nowhere)
+    if (s_flying >= 0 || s_arcOn >= 0) return; // (a jump's flight is scripted: the rail held a car on it back at the lip, and the flight went nowhere)
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     S32 f;
     int seg;
@@ -772,6 +809,9 @@ static void LoadRaised(const char *path) {
         if (bz > z1) z1 = bz;
     }
     s_rbX0 = x0; s_rbZ0 = z0; s_rbW = x1 - x0 + 1; s_rbH = z1 - z0 + 1;
+    int widest = 0;
+    for (int i = 0; i < count; i++) if (r[i].Half > widest) widest = r[i].Half;
+    s_rbExtra = widest / RAISED_BUCKET;
     s_rbStart = (int *)calloc(s_rbW * s_rbH + 1, sizeof(int));
     s_rbItem = (int *)malloc(count * sizeof(int));
     for (int i = 0; i < count; i++)
@@ -1041,6 +1081,15 @@ static void Load(const char *path) {
                 }
             }
         }
+        else if (!strcmp(key, "arcjump")) {
+            T_RACE_ARC *a = &s_arcs[s_nbArcs];
+            a->Side = 1;
+            if (s_nbArcs < RACE_MAX_ARCS && sscanf(v, "%d %d %d %d %d", &a->Foot, &a->Lip, &a->Land, &a->LandFoot, &a->Side) >= 4) s_nbArcs++;
+        }
+        else if (!strcmp(key, "cube_scene")) {
+            int *c = s_cubeScenes[s_nbCubeScenes];
+            if (s_nbCubeScenes < RACE_MAX_CUBE_SCENES && sscanf(v, "%d %d %d", &c[0], &c[1], &c[2]) == 3) s_nbCubeScenes++;
+        }
         else if (!strcmp(key, "jumpcam")) {
             T_RACE_JUMPCAM *c = &s_jumpCams[s_nbJumpCams];
             if (s_nbJumpCams < RACE_MAX_JUMPCAMS && sscanf(v, "%d %d %d %d %d %d", &c->Anim, &c->CubeX, &c->CubeZ, &c->X, &c->Y, &c->Z) == 6) s_nbJumpCams++;
@@ -1072,7 +1121,10 @@ static void Load(const char *path) {
     fclose(f);
     // (a lap with loops: the camera that follows the car looks at a loop from its side while the car goes round it; and at a drop from
     // its own place beside it)
-    if (s_nbLoops || s_nbJumpCams) FollowCamEyeHook = RaceCameraEye;
+    for (int i = 0; i < s_nbArcs; i++)
+        if (!ArcPrepare(&s_arcs[i])) { Log_Info("[racemod] carried jump %d: not along the raised road -- left out", i + 1); s_arcs[i--] = s_arcs[--s_nbArcs]; }
+    if (s_nbArcs) Log_Info("[racemod] %d carried jump(s), %d cube scenes", s_nbArcs, s_nbCubeScenes);
+    if (s_nbLoops || s_nbJumpCams || s_nbArcs) FollowCamEyeHook = RaceCameraEye;
     if (s_car.Gears < 1) s_car.Gears = 1;
     if (s_car.Gears > RACE_MAX_GEARS) s_car.Gears = RACE_MAX_GEARS;
     for (S32 g = 0; g < s_car.Gears; g++)
@@ -1533,13 +1585,134 @@ static void LoopEnd(T_OBJ_3D *obj, double v, const char *how) {
     s_forgetLap = 1;
 }
 
+// ---- a jump the car is carried over (arcjump=, RaceArc) -----------------------------------------------------------------------------
+// The Emerald Moon's leap over its reactor (2026-10-02): a ramp curving up to 60 degrees, a flight over the reactor's dish 20,000 up, and
+// a hill curving back down, 64 cells from foot to foot. No flight animation of the hero's could fly it: an animation moves him in his
+// cube's own units, and this flight crosses into the next cube over the reactor, whose middle is on the cubes' border. The raised road's
+// own points from the ramp's foot to the hill's foot are the way -- the deck's heights on the ramp and the hill, the flight's over the gap
+// between the lips (Half 0, no floor). A car that drives onto the ramp's foot is carried along it at its speed along the ground (at least
+// RACE_ARC_LEAST), as far across the road as it came in, pitched with the way (CarPitch), and set down on the hill's foot going as fast.
+// Where the way crosses into another cube, the scene is changed here (cube_scene= names each cube's) and the car carried on in the new
+// one. The camera meanwhile flies beside the car (ArcCamera).
+// The place `s` along an arc's way (world units along the ground from its foot), `across` to the side of its middle (the builder's Across:
+// the way turned a quarter, (-dz, dx)), and the way's heading and slope there.
+static void ArcPlace(const T_RACE_ARC *a, double s, double across, double *x, double *y, double *z, double *dx, double *dz, double *slope) {
+    const int n = a->LandFoot - a->Foot + 1;
+    int k = 0;
+    while (k < n - 2 && a->S[k + 1] < s) k++;
+    const T_RACE_RAISED *p = &s_raised[a->Foot + k], *q = p + 1;
+    const double len = a->S[k + 1] - a->S[k];
+    double t = len > 0 ? (s - a->S[k]) / len : 0;
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    double ux = q->X - p->X, uz = q->Z - p->Z;
+    const double ul = sqrt(ux * ux + uz * uz);
+    if (ul > 0) { ux /= ul; uz /= ul; } else { ux = 1; uz = 0; }
+    *x = p->X + (q->X - p->X) * t - uz * across;
+    *z = p->Z + (q->Z - p->Z) * t + ux * across;
+    *y = p->Y + (q->Y - p->Y) * t;
+    *dx = ux; *dz = uz;
+    *slope = len > 0 ? (q->Y - p->Y) / len : 0;
+}
+
+// For RaceMod_Loop: non-zero when a carried jump carries the car this frame (its new place, cube-local, in *nx..*nz).
+static S32 RaceArc(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    T_OBJ_3D *obj = &hero->Obj;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    if (s_arcOn < 0) {
+        if (!s_nbArcs || ListBuggy[0].Speed <= 0 || (hero->WorkFlags & ANIM_MASTER_GRAVITY)) return 0;
+        for (int i = 0; i < s_nbArcs; i++) {
+            const T_RACE_ARC *a = &s_arcs[i];
+            const T_RACE_RAISED *f = &s_raised[a->Foot], *g = f + 1;
+            double ux = g->X - f->X, uz = g->Z - f->Z;
+            const double ul = sqrt(ux * ux + uz * uz);
+            if (ul <= 0 || fabs(oy - f->Y) > RACE_ARC_ENTRY) continue;
+            ux /= ul; uz /= ul;
+            // (the line across the road at the ramp's foot, crossed the lap's way)
+            const double a0 = (ox + cx - f->X) * ux + (oz + cz - f->Z) * uz, a1 = (*nx + cx - f->X) * ux + (*nz + cz - f->Z) * uz;
+            if (!(a0 < 0 && a1 >= 0)) continue;
+            const double t = a0 / (a0 - a1);
+            const double px = ox + cx + (*nx - ox) * t, pz = oz + cz + (*nz - oz) * t;
+            const double across = -(px - f->X) * uz + (pz - f->Z) * ux;
+            if (fabs(across) > f->Half) continue;
+            s_arcOn = i; s_arcLast = i; s_arcS = 0; s_arcAcross = across;
+            s_arcV = ListBuggy[0].Speed > RACE_ARC_LEAST ? ListBuggy[0].Speed : RACE_ARC_LEAST;
+            s_arcTime = TimerRefHR;
+            Log_Info("[racemod] carried jump %d: on at %d units/s (carried at %.0f), %.0f across", i + 1, (int)ListBuggy[0].Speed, s_arcV, across);
+            break;
+        }
+        if (s_arcOn < 0) return 0;
+    }
+    const T_RACE_ARC *a = &s_arcs[s_arcOn];
+    double dt = (TimerRefHR - s_arcTime) / 1000.0;
+    s_arcTime = TimerRefHR;
+    if (dt < 0) dt = 0;
+    if (dt > 0.1) dt = 0.1;
+    s_arcS += s_arcV * dt;
+    const double end = a->S[a->LandFoot - a->Foot];
+    const int done = s_arcS >= end;
+    double x, y, z, dx, dz, slope;
+    ArcPlace(a, done ? end : s_arcS, s_arcAcross, &x, &y, &z, &dx, &dz, &slope);
+    const S32 beta = (S32)floor(atan2(dx, dz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    ListBuggy[0].Speed = (S32)s_arcV;
+    if (done) {
+        obj->Alpha = 0; obj->Gamma = 0; obj->Beta = beta;
+        Log_Info("[racemod] carried jump %d: down at (%.0f,%.0f,%.0f)", s_arcOn + 1, x, y, z);
+        s_arcOn = -1;
+        s_arcLandedAt = TimerRefHR;
+        s_forgetLap = 1;
+    } else
+        CarPitch(obj, beta, -atan(slope));
+    // (into another cube: its scene, the car carried on in it; this frame at the old cube's edge)
+    const int qx = (int)floor(x / 32768.0), qz = (int)floor(z / 32768.0);
+    if (qx != CurrentCubeX || qz != CurrentCubeY) {
+        int scene = -1;
+        for (int c = 0; c < s_nbCubeScenes; c++)
+            if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) scene = s_cubeScenes[c][2];
+        if (scene >= 0 && NewCube == -1) {
+            NewCube = scene;
+            NewPosX = (S32)floor(x - qx * 32768.0 + 0.5); NewPosY = (S32)floor(y + 0.5); NewPosZ = (S32)floor(z - qz * 32768.0 + 0.5);
+            FlagChgCube = 1;
+            FlagReajustPosTwinsen = FALSE;
+            Log_Info("[racemod] carried jump: into cube (%d,%d), scene %d, at (%d,%d,%d)", qx, qz, scene, (int)NewPosX, (int)NewPosY, (int)NewPosZ);
+        } else if (scene < 0)
+            Log_Info("[racemod] carried jump: no scene for cube (%d,%d)", qx, qz);
+        x = x - cx < 1 ? cx + 1 : x - cx > 32767 ? cx + 32767 : x;
+        z = z - cz < 1 ? cz + 1 : z - cz > 32767 ? cz + 32767 : z;
+    }
+    *nx = (S32)floor(x - cx + 0.5); *ny = (S32)floor(y + 0.5); *nz = (S32)floor(z - cz + 0.5);
+    return 1;
+}
+
+// The camera while the car is carried over a jump: an arm behind it would swing up and down with the way and look at the ramp's face,
+// so the eye flies beside the car, RACE_ARC_CAM_FAR cells out to the jump's side (arcjump='s fifth number: the side the builder's Across
+// points to, or -1 the other) and a little behind and over it, looking at it -- the reactor passing under the car between them.
+static S32 ArcCamera(S32 *eye, S32 *target) {
+    const int on = s_arcOn >= 0 ? s_arcOn : s_arcLast >= 0 && (S32)(TimerRefHR - s_arcLandedAt) < RACE_ARC_CAM_HOLD ? s_arcLast : -1;
+    if (on < 0) return FALSE;
+    const T_RACE_ARC *a = &s_arcs[on];
+    const T_OBJ_3D *car = &ListObjet[NUM_PERSO].Obj;
+    const T_RACE_RAISED *f = &s_raised[a->Foot], *g = &s_raised[a->LandFoot];
+    double ux = g->X - f->X, uz = g->Z - f->Z;
+    const double ul = sqrt(ux * ux + uz * uz);
+    if (ul <= 0) return FALSE;
+    ux /= ul; uz /= ul;
+    const double side = a->Side < 0 ? -1 : 1, far = RACE_ARC_CAM_FAR * 512, back = RACE_ARC_CAM_BACK * 512;
+    eye[0] = (S32)(car->X - uz * far * side - ux * back);
+    eye[1] = (S32)(car->Y + RACE_ARC_CAM_UP);
+    eye[2] = (S32)(car->Z + ux * far * side - uz * back);
+    target[0] = car->X; target[1] = car->Y + 300; target[2] = car->Z;
+    return TRUE;
+}
+
 // For DoAnimExt (EXTFUNC.CPP), on the hero, after his car's move from (ox,oy,oz) towards (*nx,*ny,*nz): non-zero when a loop carries
 // the car this frame -- the new place is in *nx..*nz, and nothing else is to move it (no ground, no collisions: the ring has none).
 // Also stands the car level again whenever neither a loop nor a flight's master rotation pitches it (a flight cut short left it so).
 S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     T_OBJ_3D *obj = &hero->Obj;
-    if (!RaceMod_Active() || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) { s_loopOn = -1; s_loopState = LOOP_NONE; return 0; }
+    if (!RaceMod_Active() || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) { s_loopOn = -1; s_loopState = LOOP_NONE; s_arcOn = -1; return 0; }
+    if (s_loopState == LOOP_NONE && RaceArc(ox, oy, oz, nx, ny, nz)) return 1;
     if (s_loopState == LOOP_NONE) {
         if (!(obj->Master & 1) && (obj->Alpha || obj->Gamma)) { obj->Alpha = 0; obj->Gamma = 0; }
         if (!s_nbLoops || (hero->WorkFlags & (FALLING | ANIM_MASTER_GRAVITY)) || ListBuggy[0].Speed <= 0) return 0;
@@ -1675,7 +1848,7 @@ static S32 JumpCamera(S32 *eye, S32 *target) {
     return FALSE;
 }
 
-static S32 RaceCameraEye(S32 *eye, S32 *target) { return JumpCamera(eye, target) || LoopCamera(eye, target) || RailCamera(eye, target); }
+static S32 RaceCameraEye(S32 *eye, S32 *target) { return ArcCamera(eye, target) || JumpCamera(eye, target) || LoopCamera(eye, target) || RailCamera(eye, target); }
 
 S32 RaceMod_Rescue(void) {
     if (!RaceMod_Active() || !s_rescueOn || Comportement != C_BUGGY || !s_opp[0].Count || s_safeIndex < 0) return 0;

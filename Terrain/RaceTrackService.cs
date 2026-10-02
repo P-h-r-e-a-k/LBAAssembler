@@ -58,7 +58,12 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Loops = null,
         // JumpCameras: where the camera stands while the car flies a drop (RaceTrackBuilder.PlaceJumpCameras), each [the flight's generic
         // animation, cube x, cube z, x, y, z (cube-local)].
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? JumpCameras = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? JumpCameras = null,
+        // ArcJumps: the jumps the race-track mode carries the car over (RaceTrackPlan.ArcJumps), each [its ramp's foot, its lip, the
+        // landing lip, the landing hill's foot] as places in Raised; CubeScenes: the island's outside scenes, each [cube x, cube z, scene],
+        // for the cube changes such a flight makes itself.
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? ArcJumps = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? CubeScenes = null);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
@@ -427,6 +432,7 @@ internal static class RaceTrackService
     public static void WriteInfo(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes, TwinTrack? twin = null, BuildSession? session = null)
     {
         var info = Info(report, options, scenes);
+        if (info.ArcJumps is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
         if (twin is { Own: true } && scenes.Twin is { } twinScenes)
         {
             // (the story belongs to the twin's track, which carries the race; either race clears its arrow once Twinsen drives)
@@ -466,7 +472,8 @@ internal static class RaceTrackService
             Loops: report.Loops.Count > 0 ? report.Loops.Select(LoopRecord).ToList() : null,
             JumpCameras: report.JumpCameras.Count > 0
                 ? report.JumpCameras.Select(c => new[] { c.Anim, c.CubeX, c.CubeZ, (int)Math.Round((c.X - c.CubeX * 64) * 512), (int)Math.Round(c.Y), (int)Math.Round((c.Z - c.CubeZ * 64) * 512) }).ToList()
-                : null);
+                : null,
+            ArcJumps: raised && report.ArcRaised.Count > 0 ? report.ArcRaised.ToList() : null);
     }
 
     private static int[] LoopRecord(LoopInfo l)
