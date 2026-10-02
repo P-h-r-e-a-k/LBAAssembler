@@ -1138,6 +1138,14 @@ The user found the ground showing through the road at the foot of the ramp (cars
 
 **Verified**: the test pilot, three race runs in this folder and one in the folder with all seven tracks, qualifying 27.0 s, race laps 29.5-30.2 s, no checkpoint missed; one rescue in one run (an opponent's bump on the north shore, far from these changes; the other three runs had none).
 
+### Over the cliff at the foot of the ramp (2026-10-02)
+
+The user found a place on the left of the ramp down to the start/finish line where the car went out of the track and died. The ramp's last 11 cells run along the island's west cliff (x 2: the ground falls from the deck's height to the sea), and there the deck lies on the ground (the flush ends above): the engine let go of the rail wherever the road was less than 300 over the ground under the car (`RaceMod_Rail`), so that a car can drive off the road where it comes down onto the ground. A car against the left rail there slid off the deck, over the cliff, into the sea, and was put back on the road ("back on the road: line point 251").
+
+- **The engine** (`RACEMOD.CPP`, `RaceMod_Rail`): where the road lies on the ground, the rail now still holds on a side where the ground just past the floor's edge (`RAISED_BESIDE` 384 out) is 300 or more below the road; where it is about as high (the dock beside the ramp's right, any road ending on flat ground) the car drives off as before. Past the road's own first or last point it is always free (`RaisedPastEnd`: otherwise the segment before the open last one, clamped to its end, held a car at the ramp's end).
+- **The test pilot** has a sideways offset (`autodrive 1 5 <cells>`: to the left of the line, x east and z south), to drive a lap against a rail. Against the left rail down the ramp (2.2 and 2.5 cells): the old engine slides off at x 2.8 and is rescued or stuck on the cliff; the new one stays on the deck (x 3.6 and over), rolls off the end onto the dock and finishes the lap (29.15 s). On the ordinary line nothing changed: lava 27.04 / 30.18-30.19 s, statue track 41.82 / 41.86 s, storm, mosquibees, elevator and town identical (desert's checkpoint-7 stall and sendell's crash are older).
+- **Not changed, found on the way**: taken from the far right of the road (1.9 and 2.6 cells right of the line, either engine), the causeway jump over the lake (jump 2, line point 128) can fall short into the lava.
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

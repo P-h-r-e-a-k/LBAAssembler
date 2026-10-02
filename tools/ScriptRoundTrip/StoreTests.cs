@@ -209,6 +209,17 @@ internal static class StoreTests
                 tested++;
             }
             Console.WriteLine($"  LBA1: {tested} scenes nuked, stood on and undone");
+
+            // several at once (Citadel's outside, a joined map): all emptied in one step, in the order given, one undo
+            var joined = new[] { 3, 1, 2, 6, 4 };
+            var before = joined.ToDictionary(s => s, s => (Record: store.LoadRecord(s), Grid: store.LoadGrid(s)));
+            var chain = SceneNuke.ForLba1(dir, joined, "Citadel Island");
+            Check(chain.Stages.Select(st => st.Scenes[0]).SequenceEqual(joined) && chain.Stages.Select(st => st.Ring).SequenceEqual(Enumerable.Range(0, joined.Length)), "LBA1 chain: the scenes go off in the order given, a ring each");
+            chain.Commit();
+            Check(joined.All(s => Empty(store.Load(s), 1)), "LBA1 chain: every scene of the map keeps only Twinsen and the exits");
+            Check(SceneHistory.UndoDescription == "Nuke 5 scenes, from scene 3", $"LBA1 chain: one undo step ({SceneHistory.UndoDescription})");
+            SceneHistory.Undo();
+            Check(joined.All(s => store.LoadRecord(s).AsSpan().SequenceEqual(before[s].Record) && store.LoadGrid(s).AsSpan().SequenceEqual(before[s].Grid)), "LBA1 chain: one undo brings every scene and grid back");
         }
         finally { Cleanup(dir); }
 
@@ -251,6 +262,40 @@ internal static class StoreTests
             var original = HqrFile.Parse(island);
             Check(Enumerable.Range(0, original.Count).All(i => original.IsEmpty(i) ? back.IsEmpty(i) : back.Read(i).AsSpan().SequenceEqual(original.Read(i))), "LBA2 nuke 61: undo brings the island back");
             Check(records.All(r => store.LoadRecord(r.Key).AsSpan().SequenceEqual(r.Value)), "LBA2 nuke 61: undo brings both scenes back");
+
+            // a joined map's interiors (the School of Magic)
+            var school = new[] { 27, 28, 33 };
+            var schoolBefore = school.ToDictionary(s => s, s => store.LoadRecord(s));
+            var bkgBefore = File.ReadAllBytes(bkg);
+            var magic = SceneNuke.ForLba2Interiors(dir2, school, "School of Magic");
+            magic.Commit();
+            Check(school.All(s => Empty(store.Load(s), 1)), "LBA2 chain: every interior of the map keeps only Twinsen and the exits");
+            SceneHistory.Undo();
+            var bkgBack = HqrFile.Parse(File.ReadAllBytes(bkg));
+            var bkgOriginal = HqrFile.Parse(bkgBefore);
+            Check(school.All(s => store.LoadRecord(s).AsSpan().SequenceEqual(schoolBefore[s]))
+                  && Enumerable.Range(0, bkgOriginal.Count).All(i => bkgOriginal.IsEmpty(i) ? bkgBack.IsEmpty(i) : bkgBack.Read(i).AsSpan().SequenceEqual(bkgOriginal.Read(i))), "LBA2 chain: one undo brings the interiors and their grids back");
+
+            // a whole island: every cube with a scene, in rings out from the focus's cube, levelled to one height
+            var desertScenes = Enumerable.Range(0, store.SceneCount).Where(s => store.Load(s) is { CubeMode: not 0, Island: 2 }).ToList();
+            var desertBefore = desertScenes.ToDictionary(s => s, s => store.LoadRecord(s));
+            var whole = SceneNuke.ForLba2Island(dir2, "DESERT.ILE", 61, wholeIsland: true);
+            Check(whole.Scenes.Order().SequenceEqual(desertScenes), $"LBA2 island: all {desertScenes.Count} of the island's scenes go ({whole.Scenes.Count})");
+            Check(whole.Stages[0].Scenes.Contains(61) && whole.Stages[0].Ring == 0 && whole.Stages.Zip(whole.Stages.Skip(1)).All(p => p.First.Ring <= p.Second.Ring), "LBA2 island: the chain starts at the focus's cube and goes out in rings");
+            Check(whole.Stages.Skip(1).All(st => whole.Stages.Any(o => o.Ring == st.Ring - 1 && Math.Abs(o.CubeX - st.CubeX) + Math.Abs(o.CubeY - st.CubeY) == 1)), "LBA2 island: each ring's cubes touch the ring before");
+            whole.Commit();
+            Check(desertScenes.All(s => Empty(store.Load(s), 2)), "LBA2 island: every scene keeps only Twinsen, Zoe's stand-in and the exits");
+            var levelled = IslandFile.Load(ile);
+            var cubesLevel = whole.Stages.All(st =>
+            {
+                var c = levelled.CubeAt(st.CubeX, st.CubeY)!;
+                return c.Decors.Count == 0 && c.Heights.Where(h => h > 0).All(h => h == whole.Level);
+            });
+            Check(cubesLevel, $"LBA2 island: every cube's objects are gone and its land is at one height, {whole.Level}");
+            SceneHistory.Undo();
+            var islandBack = HqrFile.Parse(File.ReadAllBytes(ile));
+            Check(Enumerable.Range(0, original.Count).All(i => original.IsEmpty(i) ? islandBack.IsEmpty(i) : islandBack.Read(i).AsSpan().SequenceEqual(original.Read(i)))
+                  && desertScenes.All(s => store.LoadRecord(s).AsSpan().SequenceEqual(desertBefore[s])), "LBA2 island: one undo brings the island and all its scenes back");
         }
         finally { Cleanup(dir2); }
     }

@@ -2421,14 +2421,15 @@ static int parse_and_schedule_seq(const char *spec, int frameBased) {
      input seq 0:up:60/60:up+throw:30  walk 60 ticks, then walk+fire 30 ticks
      input fseq 3:action:4           press action on rendered frames 3-6 (a skip frame at high refresh)
      input trace 1                   log injected mask + hero anim/pos each sim tick */
-/* autodrive <0|1> [look cells]: a race-track mod's test pilot drives the player's car along the first opponent's line (RACEMOD.CPP). */
+/* autodrive <0|1> [look cells] [side cells]: a race-track mod's test pilot drives the player's car along the first opponent's line
+   (RACEMOD.CPP), or that far to one side of it (to the left of the way it runs, x east and z south: a pilot against a rail). */
 static void cmd_autodrive(int argc, const char *argv[]) {
-    extern void RaceMod_AutoDrive(int on, double lookCells);
+    extern void RaceMod_AutoDrive(int on, double lookCells, double sideCells);
     if (argc < 2) {
-        Console_Print("Usage: autodrive <0|1> [look ahead, cells]");
+        Console_Print("Usage: autodrive <0|1> [look ahead, cells] [to the side, cells]");
         return;
     }
-    RaceMod_AutoDrive(atoi(argv[1]), argc >= 3 ? atof(argv[2]) : 0);
+    RaceMod_AutoDrive(atoi(argv[1]), argc >= 3 ? atof(argv[2]) : 0, argc >= 4 ? atof(argv[3]) : 0);
     Console_Print("autodrive: %s", atoi(argv[1]) ? "on" : "off");
 }
 

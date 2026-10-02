@@ -364,16 +364,23 @@ of any size: a room's tiles are often 2 x 2 blocks) under every column it had an
 cube loses its buildings and objects, its land is levelled to the middle of its heights and eased into the neighbouring cubes over
 four cells, painted with its most common flat ground, its water, lava and blocking ground drained, and its light baked again (the sea,
 the low ground the cube's edge reaches, stays sea). An island cube can be **several scenes** (the same place at other points of the
-story: Desert cube 8,9 is scenes 61 and 201) and the 3D view draws one of them: they share the ground, so they are all emptied. In a
-joined map the scene in the middle of the view goes. Twinsen is put where he stood if there is floor there, else on the nearest
+story: Desert cube 8,9 is scenes 61 and 201) and the 3D view draws one of them: they share the ground, so they are all emptied.
+**Everything connected goes with it** while *Join connected areas* is ticked: a joined map (LBA1's outside maps, LBA2's joined
+interiors -- Build mode works on a joined LBA2 map for this, though nothing else in it can be edited there) loses every one of its
+scenes, and an LBA2 island every cube that has a scene, all levelled to one height, in a **chain reaction** out from the scene in focus
+(the one in the middle of the view; on an island, the cube under it, then its neighbours ring by ring; in a map, the scenes by how far
+they are from it). Unticked, it is the one scene (on an island, the cube under the middle of the view). Twinsen is put where he stood if there is floor there, else on the nearest
 floored cell (the engines find the cell under a point as (x + 256) / 512). Everything is saved at once as **one undo step** (Edit >
 Undo brings back the scene records, the grid in `LBA_GRI.HQR` / `LBA_BKG.HQR` and the island's records exactly). An interior whose
 grid other scenes share says so in the question. The **animation** (`NukeOverlay.cs`) holds a picture of the view, draws the emptied
 scene underneath, compares the two pictures per 8-pixel tile and blows up only what changed: shards of the old picture flung from a wave
 of fireballs that runs out from the middle, sparks, smoke, a shake, a white flash and a shockwave, then the smoke clears over the new
-ground (about four seconds; a click or Esc skips it). Commands: `nuke <lba1|lba2> <game folder> <scene> [island .ILE] [--dry]` (the
-same without the window; for a copy of the game), `store nuke` (tests), `store nukesweep` (every LBA1 scene, every LBA2 interior and
-island cube nuked, stood on and undone).
+ground (about four seconds; a click or Esc skips it). A chain reaction places a charge on each scene or cube (its filled grid columns'
+middle, or the cube's middle through the 3D view's camera): each part of the picture goes off with its nearest charge, a ring of the chain
+at a time (the whole chain within about 2.6 seconds), each charge with a shockwave of its own, the flash after the last. Commands:
+`nuke <lba1|lba2> <game folder> <scene> [island .ILE] [--whole] [--scenes a,b,...] [--dry]` (the same without the window, for a copy
+of the game: `--whole` the scene's whole island, `--scenes` a joined map's other scenes in the order they go off), `store nuke` (tests),
+`store nukesweep` (every LBA1 scene, every LBA2 interior and island cube nuked, stood on and undone).
 
 **Colours and text.** The interface uses a light blue scheme shared with a sister project (windows #E8F0FA, surfaces #F3F8FF, inputs and
 lists #FFFFFF, alternate rows #EAF3FD, buttons #D6E6F7 with hover #C3DBF5 and border #9FBEE0, headers #D2E3F6, menus #DCEAFA, borders

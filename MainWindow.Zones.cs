@@ -228,7 +228,7 @@ public partial class MainWindow
 
     private void ZoneApply_Click(object sender, RoutedEventArgs e)
     {
-        if (zoneOriginal is null || editMode != EditMode.Build) return;
+        if (zoneOriginal is null || editMode != EditMode.Build || lba2JoinedView) return;
         var edited = zoneOriginal.Clone();
 
         // A bound is only rewritten when it was changed, so a zone stored "backwards" keeps its order.

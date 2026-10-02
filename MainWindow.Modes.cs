@@ -54,10 +54,10 @@ public partial class MainWindow
 
     private void SetMode(EditMode next)
     {
-        if (lba2JoinedView && next != EditMode.Explore)
+        if (lba2JoinedView && next == EditMode.Script)
         {
-            next = EditMode.Explore;      // (a joined LBA2 map is drawn by the editor, not the engine: nothing in it can be edited)
-            FileLabel.Text = "A joined map is view only. Double-click an actor to open its scene on its own, or pick a single scene, to edit.";
+            next = EditMode.Explore;      // (a joined LBA2 map is drawn by the editor, not the engine: nothing in it can be edited -- but Build's Nuke works on it)
+            FileLabel.Text = "A joined map's scripts are edited a scene at a time. Double-click an actor to open its scene on its own, or pick a single scene.";
         }
         var changed = next != editMode;
         editMode = next;
@@ -70,7 +70,9 @@ public partial class MainWindow
         }
         finally { modeSyncing = false; }
         ApplyMode(selectTab: changed);
-        if (changed) FileLabel.Text = next switch
+        if (changed) FileLabel.Text = next == EditMode.Build && lba2JoinedView
+            ? "Build: a joined map isn't edited here (double-click an actor to open its scene on its own); Nuke this scene... blows up every scene of it."
+            : next switch
         {
             EditMode.Explore => "Explore: move around the scene. Nothing is changed in this mode.",
             EditMode.Build => terrainToolsActive && buildDecorView ? "Build: click a building or object to select it, drag to move it, drag with the Rotate tool (or press Q and E) to turn it. Add object places a copy of the selected one. The view shows your edits live." : terrainToolsActive ? "Build: pick a terrain tool in the Build tab and paint on the view; the view shows your edits live. Right drag orbits while a tool is chosen, middle drag pans." : "Build: right-click the view to add an actor, double-click an actor to edit it, change zones under Details.",
@@ -128,6 +130,8 @@ public partial class MainWindow
 
     private string BuildHelpText()
     {
+        if (currentGame == GameKind.Lba2 && lba2JoinedView)
+            return "A joined map is not edited here: double-click an actor to open its scene on its own and edit it there. Nuke this scene... below blows up every scene of the map, in a chain reaction from the one in the middle of the view.";
         if (currentGame == GameKind.Lba1)
             return "Right-click an actor for its attributes; double-click it to edit. Change zones under Details. The scene editor opens the scene as data (add, move, delete, duplicate, undo, save). Buildings and other blocks are placed and moved in the interior map (grid editor). Scripts are edited in Script mode.";
         if (interiorSceneActive)
@@ -205,7 +209,7 @@ public partial class MainWindow
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
         {
             SetStatus($"Saved, but couldn't reload the view: {error.Message}", StatusKind.Warning);
-            DebugLog.Log($"MainWindow: reloading {activeFile} after a terrain save failed: {error.Message}");
+            DebugLog.Log($"MainWindow: reloading {activeFile} after a terrain save failed: {error}");
         }
         if (nativeViewActive) RenderNativeCamera();
         else RenderSoftwareTerrain();
@@ -237,7 +241,7 @@ public partial class MainWindow
 
     private void UpdateZoneEditability()
     {
-        var edit = editMode == EditMode.Build;
+        var edit = editMode == EditMode.Build && !lba2JoinedView;      // (a joined LBA2 map's zones are changed in their own scene)
         foreach (var box in new[] { MinXBox, MinYBox, MinZBox, MaxXBox, MaxYBox, MaxZBox }) box.IsEnabled = edit;
         foreach (var (_, box) in zoneFieldBoxes) box.IsEnabled = edit;
         ZoneApplyButton.IsEnabled = edit;

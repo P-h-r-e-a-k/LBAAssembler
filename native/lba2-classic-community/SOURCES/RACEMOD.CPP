@@ -580,9 +580,28 @@ static S32 RaisedArm(S32 base) {
 void RaceMod_FloorFor(S32 y) { s_floorRef = s_nbRaised ? y : RAISED_NOREF; }
 void RaceMod_FloorForNothing(void) { s_floorRef = RAISED_NOREF; }
 
-// The hero kept on the raised road: standing on it at (ox, oy, oz) (cube-local) -- not under it, and not where it lies on the ground,
-// at its ends -- a move to (*nx, *nz) that would take his middle nearer than RAISED_INSET to an edge ends on that line instead, beside
-// the same point of the road; a move that leaves the road altogether is not made.
+// The hero kept on the raised road: standing on it at (ox, oy, oz) (cube-local) -- not under it -- a move to (*nx, *nz) that would take
+// his middle nearer than RAISED_INSET to an edge ends on that line instead, beside the same point of the road; a move that leaves the
+// road altogether is not made. Where the road lies on the ground (its ends, coming down onto it) he may drive off it to the side -- but
+// not on a side where the ground beside it falls away: the lava lake's ramp comes down onto the dock along the island's west cliff, and
+// a car against its left rail, there where the road met the ground, went over the cliff into the sea (2026-10-02).
+#define RAISED_GROUNDED 300                // a road no higher than this over the ground under it lies on the ground
+#define RAISED_BESIDE 384                  // how far past the floor's edge the ground beside the road is looked at
+
+// Whether a place (world units) is past the road's own first or last point -- off its end, near it -- on a road that isn't a loop.
+// (RaisedAt then finds the segment before the open last one, clamped to its end, and that is no edge to be held at: a car against the
+// ramp's left rail where it came down onto the dock was pulled back to it at every step, 2026-10-02.)
+static int RaisedPastEnd(double wx, double wz) {
+    if (s_raisedLoop || s_nbRaised < 2) return 0;
+    for (int end = 0; end < 2; end++) {
+        const T_RACE_RAISED *tip = end ? &s_raised[s_nbRaised - 1] : &s_raised[0], *in = end ? tip - 1 : tip + 1;
+        const double ox = tip->X - in->X, oz = tip->Z - in->Z, reach = tip->Half + 4 * 512.0;    // (out of the road at that end)
+        const double dx = wx - tip->X, dz = wz - tip->Z;
+        if (dx * ox + dz * oz > 0 && dx * dx + dz * dz < reach * reach) return 1;
+    }
+    return 0;
+}
+
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     if (!s_nbRaised || CubeMode != CUBE_EXTERIEUR) return;
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
@@ -591,15 +610,24 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     double lat, t;
     if (!RaisedAt(ox + cx, oz + cz, oy + 64, RAISED_PAD, &f, &seg, &lat, &t)) return;
     if (oy < f - 200 || oy > f + 1500) return;
-    if (f - CalculAltitudeTerrain(ox, oz, 0) < 300) return;
-    if (!RaisedAt(*nx + cx, *nz + cz, oy + 64, 4 * 512, &f, &seg, &lat, &t)) { *nx = ox; *nz = oz; s_railTouch = 1; return; }
+    const int grounded = f - CalculAltitudeTerrain(ox, oz, 0) < RAISED_GROUNDED;
+    if (!RaisedAt(*nx + cx, *nz + cz, oy + 64, 4 * 512, &f, &seg, &lat, &t)) {
+        if (grounded) return;
+        *nx = ox; *nz = oz; s_railTouch = 1; return;
+    }
     // (past the road's own end: onto the ground it comes down to)
-    if (!s_raisedLoop && ((seg == 0 && t <= 0) || (seg == s_nbRaised - 2 && t >= 1))) return;
+    if (!s_raisedLoop && ((seg == 0 && t <= 0) || (seg == s_nbRaised - 2 && t >= 1) || RaisedPastEnd(*nx + cx, *nz + cz))) return;
     const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
-    const double limit = a->Half + (c->Half - a->Half) * t - RAISED_INSET;
+    const double half = a->Half + (c->Half - a->Half) * t, limit = half - RAISED_INSET;
     if (fabs(lat) <= limit) return;
     const double sx = c->X - a->X, sz = c->Z - a->Z, len = sqrt(sx * sx + sz * sz);
     const double px = a->X + sx * t, pz = a->Z + sz * t, side = lat > 0 ? limit : -limit;
+    if (grounded) {
+        // the ground just past the floor on the side he is going: about as high as the road, he drives off onto it
+        const double out = (lat > 0 ? 1 : -1) * (half + RAISED_PAD + RAISED_BESIDE);
+        const S32 bx = (S32)floor(px - sz / len * out - cx + 0.5), bz = (S32)floor(pz + sx / len * out - cz + 0.5);
+        if (f - CalculAltitudeTerrain(bx, bz, 0) < RAISED_GROUNDED) return;
+    }
     s_railTouch = 1;
     *nx = (S32)floor(px - sz / len * side - cx + 0.5);
     *nz = (S32)floor(pz + sx / len * side - cz + 0.5);
@@ -1211,6 +1239,7 @@ void RaceMod_Lap(S32 x, S32 z) {
 // whole lap; nothing turns it on in play.
 static int s_auto = 0, s_autoIndex = -1;
 static double s_autoLook = 5 * 512;
+static double s_autoSide = 0;              // how far to the side of the line it drives (to the left of the way it runs, x east, z south)
 
 // How far (squared) a place is from point i of an opponent's line. With a raised road the lap passes over itself, so the height counts
 // too, and twice: the line's point on another level is then never the nearest.
@@ -1219,11 +1248,12 @@ static double LineDistance(const T_RACE_OPPONENT *o, int i, double wx, double wy
     return s_nbRaised ? d + 4.0 * (o->Y[i] - wy) * (o->Y[i] - wy) : d;
 }
 
-void RaceMod_AutoDrive(int on, double lookCells) {
+void RaceMod_AutoDrive(int on, double lookCells, double sideCells) {
     s_auto = on;
     s_autoIndex = -1;
     if (lookCells > 0) s_autoLook = lookCells * 512;
-    Log_Info("[racemod] autodrive %s (looking %.1f cells ahead)", on ? "on" : "off", s_autoLook / 512);
+    s_autoSide = sideCells * 512;
+    Log_Info("[racemod] autodrive %s (looking %.1f cells ahead, %.1f to the side)", on ? "on" : "off", s_autoLook / 512, s_autoSide / 512);
 }
 
 U32 RaceMod_AutoInput(void) {
@@ -1251,6 +1281,8 @@ U32 RaceMod_AutoInput(void) {
     const double fastest = s_car.GearTop[s_car.Gears - 1];
     const double look = ListBuggy[0].Speed > fastest ? s_autoLook * ListBuggy[0].Speed / fastest : s_autoLook;
     PathAt(o, o->Cum[best] + look, &x, &z, &y, &v, &dx, &dz);
+    const double dl = sqrt(dx * dx + dz * dz);
+    if (s_autoSide != 0 && dl > 0) { x += dz / dl * s_autoSide; z -= dx / dl * s_autoSide; }
     const double want = atan2(x - wx, z - wz) * 4096.0 / (2 * 3.14159265358979);
     double err = want - (hero->Obj.Beta & 4095);
     while (err >= 2048) err -= 4096;

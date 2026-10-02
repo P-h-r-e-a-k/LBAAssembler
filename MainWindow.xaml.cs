@@ -410,6 +410,7 @@ public partial class MainWindow : Window
         catch (Exception error)
         {
             nativeViewActive = false;
+            DebugLog.Log($"MainWindow: opening {path} failed: {error}");
             MessageBox.Show(this, error.Message, "Unable to open island", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

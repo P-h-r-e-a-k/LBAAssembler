@@ -11,8 +11,12 @@ namespace LBAAssembler;
 // top of it, the scene is emptied and drawn again underneath, and Detonate then compares the two pictures -- what changed is what was
 // there and is gone -- and blows it apart: the changed parts of the old picture break into shards that fly from a wave of explosions
 // across the scene, a flash and a shockwave go off at its middle, and the smoke clears on the empty scene. A click or Esc skips it.
+// Several scenes at once go off as a chain reaction: a charge for each (where it is in the view, and when it goes off), each part of the
+// picture blowing up with the charge nearest to it, each charge with a shockwave of its own, the flash after the last.
 internal sealed class NukeOverlay : FrameworkElement
 {
+    public readonly record struct Charge(Point At, double Delay);
+
     private const double Gravity = 1500;           // DIPs a second, squared
     private const double FlashAfter = 0.25;        // seconds after the last explosion
     private const int MaxShards = 2600;
@@ -28,6 +32,7 @@ internal sealed class NukeOverlay : FrameworkElement
     private readonly List<Spark> sparks = new();
     private Point epicentre;
     private double flashAt, endAt, lastFrame;
+    private readonly List<(Point At, double Time, double Radius)> rings = new();        // the chain's shockwaves, one a charge
     private TaskCompletionSource<bool>? done;
 
     private sealed class Shard
@@ -87,13 +92,13 @@ internal sealed class NukeOverlay : FrameworkElement
     }
 
     // Blows up what is in `before` and not in `after` (the view drawn again, the same size; null: the cover just lifts), then removes
-    // itself. Completes when the animation ends or is skipped.
-    public Task Detonate(BitmapSource? afterPicture)
+    // itself; `charges` (two or more): a chain reaction. Completes when the animation ends or is skipped.
+    public Task Detonate(BitmapSource? afterPicture, IReadOnlyList<Charge>? charges = null)
     {
         done = new TaskCompletionSource<bool>();
         after = afterPicture;
         if (after is null || ActualWidth < 4 || ActualHeight < 4) { Finish(); return done.Task; }
-        Prepare();
+        Prepare(charges is { Count: > 1 } ? charges : null);
         if (blasts.Count == 0) { Finish(); return done.Task; }
         MouseDown += (_, _) => Finish();
         KeyDown += (_, e) => { if (e.Key == Key.Escape) Finish(); };
@@ -105,7 +110,7 @@ internal sealed class NukeOverlay : FrameworkElement
 
     // ---- what blows up ------------------------------------------------------------------------------------------------------------
 
-    private void Prepare()
+    private void Prepare(IReadOnlyList<Charge>? charges)
     {
         double w = ActualWidth, h = ActualHeight;
         int pw = before.PixelWidth, ph = before.PixelHeight;
@@ -155,18 +160,31 @@ internal sealed class NukeOverlay : FrameworkElement
         }
         if (shards.Count == 0) return;
 
-        // the explosions: one where each patch of the scene stood (a coarse grid of the shards), in a wave out from the middle
+        // the explosions: one where each patch of the scene stood (a coarse grid of the shards), in a wave out from the middle -- or, in a
+        // chain reaction, out from the middle of each charge's part, when that charge goes off
         epicentre = new Point(centres.Average(c => c.X), centres.Average(c => c.Y));
         var cell = Math.Max(w, h) / 7;
         var patches = centres.GroupBy(c => ((int)(c.X / cell), (int)(c.Y / cell)))
             .Select(g => (At: new Point(g.Average(c => c.X), g.Average(c => c.Y)), Count: g.Count())).ToList();
-        var far = patches.Max(p => (p.At - epicentre).Length) + 1;
-        foreach (var (at, n) in patches)
+        var view = new Rect(0, 0, w, h);
+        if (charges is not null && view.Contains(charges[0].At)) epicentre = charges[0].At;
+        var mine = patches.Select(p => charges is null ? -1 : Enumerable.Range(0, charges.Count).MinBy(k => (charges[k].At - p.At).LengthSquared)).ToList();
+        for (var i = 0; i < patches.Count; i++)
         {
+            var (at, n) = patches[i];
+            var (from, delay, wave) = mine[i] < 0 ? (epicentre, 0.0, 1.1) : (charges![mine[i]].At, charges[mine[i]].Delay, 0.9);
+            var far = Enumerable.Range(0, patches.Count).Where(j => mine[j] == mine[i]).Max(j => (patches[j].At - from).Length) + 1;
             var jittered = new Point(at.X + (random.NextDouble() - 0.5) * cell * 0.4, at.Y + (random.NextDouble() - 0.5) * cell * 0.4);
             var radius = Math.Clamp(Math.Sqrt(n) * size * sx * 1.1, cell * 0.35, cell * 0.9);
-            blasts.Add(new Blast(jittered, radius, 0.15 + 1.1 * (at - epicentre).Length / far + random.NextDouble() * 0.15));
+            blasts.Add(new Blast(jittered, radius, delay + 0.15 + wave * (at - from).Length / far + random.NextDouble() * 0.15));
         }
+        // each charge that blows something up here: its shockwave, as it goes off
+        if (charges is not null)
+            foreach (var k in mine.Distinct())
+            {
+                var reach = Enumerable.Range(0, patches.Count).Where(j => mine[j] == k).Max(j => (patches[j].At - charges[k].At).Length);
+                rings.Add((charges[k].At, charges[k].Delay + 0.12, Math.Clamp(reach * 1.4, cell * 0.8, Math.Max(w, h) * 0.6)));
+            }
         var last = blasts.Max(x => x.Time);
         flashAt = last + FlashAfter;
 
@@ -285,6 +303,7 @@ internal sealed class NukeOverlay : FrameworkElement
         // the shaking: every explosion shakes the view for a moment, the flash most
         var shake = 0.0;
         foreach (var b in blasts) if (t >= b.Time) shake += 7 * Math.Exp(-(t - b.Time) * 7);
+        foreach (var r in rings) if (t >= r.Time) shake += 6 * Math.Exp(-(t - r.Time) * 6);
         if (t >= flashAt) shake += 16 * Math.Exp(-(t - flashAt) * 4);
         shake = Math.Min(shake, 18);
         dc.PushTransform(new TranslateTransform((random.NextDouble() - 0.5) * 2 * shake, (random.NextDouble() - 0.5) * 2 * shake));
@@ -335,6 +354,14 @@ internal sealed class NukeOverlay : FrameworkElement
             dc.PushOpacity(1 - age / p.Life);
             dc.DrawEllipse(SparkBrush, null, p.At, 2.2, 2.2);
             dc.Pop();
+        }
+        // the chain's shockwaves, a charge at a time
+        foreach (var (at, time, reach) in rings)
+        {
+            var age = (t - time) / 0.7;
+            if (age < 0 || age >= 1) continue;
+            var r = reach * (1 - Math.Pow(1 - age, 2));
+            dc.DrawEllipse(null, new Pen(new SolidColorBrush(Color.FromArgb((byte)(200 * (1 - age)), 255, 236, 190)), 9 * (1 - age) + 1.5), at, r, r * 0.7);
         }
         // the flash and the shockwave from the middle, as the last of it goes up
         var since = t - flashAt;
