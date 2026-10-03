@@ -204,6 +204,9 @@ static T_RACE_OPPONENT s_opp[RACE_MAX_OPPONENTS];
 // With no opponent raced, the line of the one to beat all the same (guide_path=, guide_top=, guide_grip=: the builder writes it then),
 // for what follows a line -- the jet-pack's driving, the penguins' walks, the laps, the rescue. The first opponent's when there is one.
 static T_RACE_OPPONENT s_guide;
+// this scene's actor of each opponent's car, as placed this frame (-1 none), and the scene (RaceMod_FreeOfCube)
+static int s_carActor[RACE_MAX_OPPONENTS] = {-1, -1, -1, -1, -1, -1};
+static S32 s_carsScene = -1;
 static const T_RACE_OPPONENT *Guide(void) { return s_opp[0].Count ? &s_opp[0] : s_guide.Count ? &s_guide : NULL; }
 static int s_oppStarted = 0;               // (no grid: the race has started when the player first drove off)
 #define RACE_MERGE (12 * 512)
@@ -285,10 +288,13 @@ static int s_nbPenguinActors = 0;
 typedef struct {
     double X, Y, Z; S32 At; int On;
     double S, Side, SideTo, HomeX, HomeZ, Heading; int Dir; S32 NextTurn, Dropped;
+    int Dropper;                           // the car that dropped it: -1 Twinsen's, else the opponent's
 } T_RACE_PENGUIN;
 static int s_penguinWalk = 1;              // penguin_mode=walk (1) or fuse (0)
-#define RACE_PENGUIN_ARM 1000              // a walker can go off this long after it is dropped (its dropper is away by then) ...
-#define RACE_PENGUIN_TRIGGER 1100          // ... when a car's middle comes this near it
+#define RACE_PENGUIN_ARM 1000              // the car that dropped it can't set it off for this long (it is away by then); any other car at once ...
+#define RACE_PENGUIN_TRIGGER 1100          // ... when its middle comes this near it
+#define RACE_PENGUIN_BUMP 500              // another penguin or a mushroom this near: it has run into it
+#define RACE_PENGUIN_WALL 512              // the ground this much higher than it stands: a wall it has walked into
 #define RACE_PENGUIN_WALK 450.0            // how fast it walks (units a second)
 #define RACE_PENGUIN_SIDE (1.5 * 512)      // how far to either side of the line it wanders
 #define RACE_PENGUIN_HOME (3 * 512)        // ... or, with no line, round where it was dropped
@@ -306,14 +312,15 @@ static int s_shiftWas = 0, s_shiftBlock = 0, s_qWas = 0;
 static int s_oilIcon = -1;                 // oil_icon=: the oil's model in OBJFIX.HQR, for the item box (the builder adds it)
 static S32 s_autoDrop = 1000;              // autodrop_ms=<ms> (tests): how long after its roulette the test pilot uses an item (0: never)
 static T_RACE_PENGUIN s_penguins[RACE_MAX_PENGUINS];
-enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_CLOVER, PU_HEALTH, PU_PENGUIN, PU_JETPACK, PU_OIL, PU_COUNT };
-static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Clover!", "Health!", "Nitro penguin!", "Super jet-pack!", "Oil slick!"};
-static const int s_puWeight[PU_COUNT] = {24, 12, 12, 8, 16, 16, 12, 14};
+// (health and clovers were power-ups too: no one dies in a race, so they did nothing -- out since 2026-10-03)
+enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_PENGUIN, PU_JETPACK, PU_OIL, PU_COUNT };
+static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Nitro penguin!", "Super jet-pack!", "Oil slick!"};
+static const int s_puWeight[PU_COUNT] = {24, 12, 12, 16, 12, 14};
 // how strong each is (0 weak, 1 middling, 2 strong): the cars at the back draw the strong ones, the leader the weak (RandomPowerUp)
-static const int s_puTier[PU_COUNT] = {1, 1, 2, 0, 0, 1, 2, 0};
-// what the item box shows (OBJFIX.HQR, the inventory's own: the Gazogem, the protection spell, the lightning ring, the clover, the
-// meca-penguin, the super jet-pack; -1 the heart sprite of the game's bonuses; -2 the oil's, oil_icon=)
-static const int s_puModel[PU_COUNT] = {15, 39, 19, BODY_3D_CLOVER, -1, 14, 48, -2};
+static const int s_puTier[PU_COUNT] = {0, 1, 2, 1, 2, 0};
+// what the item box shows (OBJFIX.HQR, the inventory's own: the Gazogem, the protection spell, the lightning ring, the meca-penguin,
+// the super jet-pack; -2 the oil's, oil_icon=)
+static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2};
 // oil: the slicks on the road (world units; until when), and the scenes' copies of the slick that show them
 #define RACE_MAX_SLICKS 6
 #define RACE_MAX_OIL_ACTORS 256
@@ -2532,7 +2539,7 @@ static void DropOil(double x, double y, double z) {
 // off first.
 static double LineDistance(const T_RACE_OPPONENT *o, int i, double wx, double wy, double wz);
 static void PenguinOff(int i, S32 now);
-static void DropPenguin(double x, double y, double z) {
+static void DropPenguin(double x, double y, double z, int dropper) {
     const S32 now = TimerRefHR;
     int k = -1;
     for (int i = 0; i < RACE_MAX_PENGUINS && k < 0; i++) if (!s_penguins[i].On) k = i;
@@ -2543,7 +2550,7 @@ static void DropPenguin(double x, double y, double z) {
     }
     T_RACE_PENGUIN *pg = &s_penguins[k];
     memset(pg, 0, sizeof(*pg));
-    pg->X = x; pg->Y = y; pg->Z = z; pg->HomeX = x; pg->HomeZ = z; pg->On = 1; pg->Dropped = now;
+    pg->X = x; pg->Y = y; pg->Z = z; pg->HomeX = x; pg->HomeZ = z; pg->On = 1; pg->Dropped = now; pg->Dropper = dropper;
     pg->At = now + (s_penguinWalk ? RACE_PENGUIN_ARM : RACE_PENGUIN_FUSE);
     pg->Dir = RaceRandom() < 0.5 ? 1 : -1;
     pg->NextTurn = now + 2000 + (S32)(RaceRandom() * 3000);
@@ -2584,14 +2591,12 @@ static void UseItem(int pu, S32 now) {
         Log_Info("[racemod] the other cars shrunk for %d s; magic full (%d)", RACE_SHRINK_MS / 1000, (int)MagicPoint);
         break;
     }
-    case PU_CLOVER: hero->LifePoint = MAX_LIFE_POINTS; MagicPoint = (U8)(MagicLevel * 20); break;
-    case PU_HEALTH: { const S32 l = hero->LifePoint + MAX_LIFE_POINTS / 4; hero->LifePoint = (S16)(l > MAX_LIFE_POINTS ? MAX_LIFE_POINTS : l); break; }
     case PU_PENGUIN:
     case PU_OIL: {
         // dropped behind the car
         const double b = hero->Obj.Beta * 2 * 3.14159265358979 / 4096;
         const double x = hero->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1300, z = hero->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1300;
-        if (pu == PU_OIL) DropOil(x, hero->Obj.Y, z); else DropPenguin(x, hero->Obj.Y, z);
+        if (pu == PU_OIL) DropOil(x, hero->Obj.Y, z); else DropPenguin(x, hero->Obj.Y, z, -1);
         break;
     }
     case PU_JETPACK: s_jetUntil = now + RACE_JETPACK_MS; s_autoIndex = -1; break;
@@ -2636,7 +2641,7 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
         if (pu == PU_PENGUIN || pu == PU_OIL) {
             const double b = car->Obj.Beta * 2 * 3.14159265358979 / 4096;
             const double x = car->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1300, z = car->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1300;
-            if (pu == PU_OIL) DropOil(x, car->Obj.Y, z); else DropPenguin(x, car->Obj.Y, z);
+            if (pu == PU_OIL) DropOil(x, car->Obj.Y, z); else DropPenguin(x, car->Obj.Y, z, n);
         } else if (pu == PU_LIGHTNING && now >= s_protectUntil) {
             s_shrunkUntil = now + RACE_SHRINK_MS;
             char text[64];
@@ -2765,6 +2770,7 @@ static void PenguinOff(int i, S32 now) {
             ListBuggy[0].Speed = 0;
             if (s_hitUntil < now + RACE_PENGUIN_HOLD) s_hitUntil = now + RACE_PENGUIN_HOLD;
             Message("Blown up by a penguin!");
+            Log_Info("[racemod] Twinsen's car blown up by a penguin: stopped");
         }
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
             T_RACE_OPPONENT *o = &s_opp[n];
@@ -2783,9 +2789,54 @@ static void PenguinOff(int i, S32 now) {
     }
 }
 
+// Whether a penguin has run into something: a car (the one that dropped it not for its first RACE_PENGUIN_ARM; every other at once: a car
+// right behind the one that dropped it drove through it), another penguin (`other`: which), a mushroom standing on the road (taken with
+// it), or a wall -- the ground higher than it stands.
+static int PenguinHits(int i, S32 now, int driving, int *other) {
+    const T_RACE_PENGUIN *pg = &s_penguins[i];
+    const int fresh = now < pg->Dropped + RACE_PENGUIN_ARM;
+    *other = -1;
+    const S32 lx = (S32)(pg->X - CurrentCubeX * 32768.0), lz = (S32)(pg->Z - CurrentCubeY * 32768.0);
+    const int here = CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768;
+    if (driving && CubeMode == CUBE_EXTERIEUR && !(fresh && pg->Dropper < 0) && Near(&ListObjet[NUM_PERSO], lx, (S32)pg->Y, lz, RACE_PENGUIN_TRIGGER)) return 1;   // (the codes: what it ran into, for the log)
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        const T_RACE_OPPONENT *o = &s_opp[n];
+        if (!o->Count || !o->Scenes || (fresh && pg->Dropper == n)) continue;
+        double x, z, y, v, dx, dz;
+        PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
+        if ((x - pg->X) * (x - pg->X) + (z - pg->Z) * (z - pg->Z) < (double)RACE_PENGUIN_TRIGGER * RACE_PENGUIN_TRIGGER && fabs(y - pg->Y) < 900) return 2 + n;
+    }
+    for (int j = 0; j < RACE_MAX_PENGUINS; j++) {
+        const T_RACE_PENGUIN *b = &s_penguins[j];
+        if (j == i || !b->On || (pg->X - b->X) * (pg->X - b->X) + (pg->Z - b->Z) * (pg->Z - b->Z) >= (double)RACE_PENGUIN_BUMP * RACE_PENGUIN_BUMP || fabs(pg->Y - b->Y) > 900) continue;
+        *other = j;
+        return 10;
+    }
+    if (!here) return 0;
+    for (int m = 0; m < s_nbMush; m++) {
+        T_RACE_MUSHROOM *mu = &s_mush[m];
+        const int a = MushroomActor(mu);
+        if (a < 0 || mu->Back) continue;
+        const double dx = ListObjet[a].Obj.X - lx, dz = ListObjet[a].Obj.Z - lz;
+        if (dx * dx + dz * dz >= (double)RACE_PENGUIN_BUMP * RACE_PENGUIN_BUMP || fabs(mu->Y - pg->Y) > 900) continue;
+        mu->Back = now + RACE_MUSHROOM_BACK;
+        ListObjet[a].Obj.Y = -20000;
+        return 11;
+    }
+    return CalculAltitudeTerrain(lx, lz, 0) > pg->Y + RACE_PENGUIN_WALL ? 12 : 0;
+}
+
+static void PenguinHitLog(int code) {
+    if (code == 1) Log_Info("[racemod] a nitro penguin runs into Twinsen's car");
+    else if (code >= 2 && code < 2 + RACE_MAX_OPPONENTS) Log_Info("[racemod] a nitro penguin runs into %s's car", s_opp[code - 2].Name);
+    else if (code == 10) Log_Info("[racemod] two nitro penguins run into each other");
+    else if (code == 11) Log_Info("[racemod] a nitro penguin runs into a mushroom");
+    else if (code == 12) Log_Info("[racemod] a nitro penguin walks into a wall");
+}
+
 // Every frame: each penguin walking (along the first opponent's line, this way and that, a little to one side or the other; with no line,
-// round where it was dropped), going off when a car comes near once it is armed (or when its fuse is out), and shown by this scene's
-// penguins, facing the way it walks.
+// round where it was dropped), going off at whatever it runs into (or when its fuse is out), and shown by this scene's penguins, facing
+// the way it walks.
 static void Penguins(S32 now, int driving) {
     static S32 last = 0;
     S32 ms = last ? now - last : 0;
@@ -2793,15 +2844,21 @@ static void Penguins(S32 now, int driving) {
     if (ms < 0) ms = 0;
     if (ms > 100) ms = 100;
     const double dt = ms / 1000.0;
-    T_OBJET *hero = &ListObjet[NUM_PERSO];
     static const T_RACE_OPPONENT none = {0};
     const T_RACE_OPPONENT *line = Guide() ? Guide() : &none;
     int k = 0;
     for (int i = 0; i < RACE_MAX_PENGUINS; i++) {
         T_RACE_PENGUIN *pg = &s_penguins[i];
         if (!pg->On) continue;
+        int other;
         if (!s_penguinWalk) {
-            if (now >= pg->At) { PenguinOff(i, now); continue; }
+            const int hit = now >= pg->At ? 0 : PenguinHits(i, now, driving, &other);
+            if (now >= pg->At || hit) {
+                PenguinHitLog(hit);
+                if (now < pg->At && other >= 0) PenguinOff(other, now);
+                PenguinOff(i, now);
+                continue;
+            }
         } else {
             // a turn now and then: the other way, or another side
             if (now >= pg->NextTurn) {
@@ -2827,19 +2884,19 @@ static void Penguins(S32 now, int driving) {
                     pg->Heading = atan2(pg->HomeX - pg->X, pg->HomeZ - pg->Z);
                 pg->X += sin(pg->Heading) * RACE_PENGUIN_WALK * dt;
                 pg->Z += cos(pg->Heading) * RACE_PENGUIN_WALK * dt;
-            }
-            // a car near it, once it is armed
-            if (now >= pg->At) {
-                const S32 lx = (S32)(pg->X - CurrentCubeX * 32768.0), lz = (S32)(pg->Z - CurrentCubeY * 32768.0);
-                int near = driving && CubeMode == CUBE_EXTERIEUR && Near(hero, lx, (S32)pg->Y, lz, RACE_PENGUIN_TRIGGER);
-                for (int n = 0; n < RACE_MAX_OPPONENTS && !near; n++) {
-                    const T_RACE_OPPONENT *o = &s_opp[n];
-                    if (!o->Count || !o->Scenes) continue;
-                    double x, z, y, v, dx, dz;
-                    PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
-                    near = (x - pg->X) * (x - pg->X) + (z - pg->Z) * (z - pg->Z) < (double)RACE_PENGUIN_TRIGGER * RACE_PENGUIN_TRIGGER && fabs(y - pg->Y) < 900;
+                // (on the ground as it walks, up a slope and down -- a step higher than RACE_PENGUIN_WALL is a wall: PenguinHits)
+                const S32 gx = (S32)(pg->X - CurrentCubeX * 32768.0), gz = (S32)(pg->Z - CurrentCubeY * 32768.0);
+                if (CubeMode == CUBE_EXTERIEUR && gx >= 0 && gx < 32768 && gz >= 0 && gz < 32768) {
+                    const S32 ground = CalculAltitudeTerrain(gx, gz, 0);
+                    if (ground <= pg->Y + RACE_PENGUIN_WALL) pg->Y = ground;
                 }
-                if (near) { PenguinOff(i, now); continue; }
+            }
+            // whatever it has run into
+            if (const int hit = PenguinHits(i, now, driving, &other)) {
+                PenguinHitLog(hit);
+                if (other >= 0) PenguinOff(other, now);
+                PenguinOff(i, now);
+                continue;
             }
         }
         // shown by the next of this scene's penguins
@@ -2857,6 +2914,13 @@ static void Penguins(S32 now, int driving) {
     }
     for (; k < s_nbPenguinActors; k++)
         if (s_penguinScene[k] == NumCube && s_penguinActor[k] > 0 && s_penguinActor[k] < NbObjets) ListObjet[s_penguinActor[k]].Obj.Y = -20000;
+}
+
+// EXTFUNC.CPP DoAnimExt: an opponent's car, placed where it is on the lap, not kept inside the player's cube.
+S32 RaceMod_FreeOfCube(S32 numobj) {
+    if (!RaceMod_Active() || numobj <= 0 || s_carsScene != (S32)NumCube) return 0;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) if (s_carActor[n] == numobj) return 1;
+    return 0;
 }
 
 // PERSO.CPP: Shift is the game's inventory key -- while Twinsen has an item, and until the key is let go after he used one, it doesn't
@@ -2924,6 +2988,8 @@ void RaceMod_Frame(void) {
     const int moving = driving && (s_nbSpots ? s_phase == PHASE_RACE : s_oppStarted);
     // (how far round the player is, for the opponents that push harder when they have fallen behind)
     const double me = moving && s_opp[0].Count ? PlayerProgress() : 0;
+    s_carsScene = NumCube;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
         T_RACE_OPPONENT *o = &s_opp[n];
         if (!o->Count) continue;
@@ -2988,6 +3054,7 @@ void RaceMod_Frame(void) {
         if (CubeMode != CUBE_EXTERIEUR) continue;
         const int index = OpponentActor(o);
         if (index < 0) continue;
+        s_carActor[n] = index;
         // off its line while it moves onto it from its grid spot
         const double f = o->MergeLeft / RACE_MERGE;
         T_OBJET *car = &ListObjet[index];
@@ -3015,10 +3082,10 @@ void RaceMod_Frame(void) {
                 const double run = sqrt((x2 - x) * (x2 - x) + (z2 - z) * (z2 - z));
                 if (run > 1) CarPose(&car->Obj, beta, -atan2(y2 - y, run), 0);
             }
-        // (in another cube than the player's: out of sight and out of the way -- the engine keeps every object of a scene within its cube,
-        // DoAnimExt, so a car waiting just over the edge stood on the edge itself, a wall the player's car was stopped at: the old moon's
-        // grid, 2026-10-03)
-        if (car->Obj.X < 0 || car->Obj.X >= 32768 || car->Obj.Z < 0 || car->Obj.Z >= 32768) car->Obj.Y = -20000;
+        // (in another cube than the player's it stands where it is all the same, in sight: the engine keeps every object of a scene within
+        // its cube, DoAnimExt, so a car waiting just over the edge stood on the edge itself, a wall the player's car was stopped at (the old
+        // moon's grid) -- these cars are let out of it, RaceMod_FreeOfCube. Hidden instead, as they were for a while (2026-10-03), the cars
+        // ahead vanished at every cube edge of the lap and came back.)
         ClearRealAngle(car);
         // skidding on oil: the car turning round as it slides on along its line
         if (now < o->SkidUntil) {
@@ -3110,7 +3177,7 @@ static int ShownItem(int k, S32 now) {
 #define RACE_GOLD 244                      // the palette's gold, round the selected slot
 
 // A slot of the item box: black in the game's own frame, as the found-object display is (OBJECT.CPP, INCRUST_OBJ), and in it the item
-// turning as it does there (the heart, a sprite, beats); `size` pixels across, the selected one ringed in gold.
+// turning as it does there; `size` pixels across, the selected one ringed in gold.
 static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int selected, S32 now) {
     const S32 x1 = x0 + size - 1, y1 = y0 + size - 1;
     if (selected)
@@ -3143,15 +3210,6 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int selected, S32 now) {
         PtrInit3DView();
         RestoreCamera();
         SetLightVector(alphaLight, betaLight, 0);
-    } else if (pu == PU_HEALTH) {
-        // (the sprite's own header: its width and height, and where its hot spot is)
-        U8 *bank = (U8 *)HQR_Get(HQRPtrSpriteRaw, SPRITE_COEUR);
-        const U8 *sprite = bank + ((const U32 *)bank)[0];
-        const S32 dx = sprite[0] ? sprite[0] : 1, dy = sprite[1] ? sprite[1] : 1, hx = (S8)sprite[2], hy = (S8)sprite[3];
-        const double beat = 1 + 0.08 * sin(now * 2 * 3.14159265358979 / 700);
-        const double scale = size * 0.55 / (dx > dy ? dx : dy) * beat;
-        const S32 w = (S32)(dx * scale), h = (S32)(dy * scale);
-        ScaleSprite(0, x0 + (size - w) / 2 - (S32)(hx * scale), y0 + (size - h) / 2 - (S32)(hy * scale), (S32)(DEF_SCALE_FACTOR * scale), (S32)(DEF_SCALE_FACTOR * scale), bank);
     }
     DrawCadre(ClipXMin, ClipYMin, ClipXMax, ClipYMax, ALL_ANGLES);
     RestoreAngles(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
@@ -3301,6 +3359,7 @@ static void ResetTrack(void) {
     s_nbGates = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_powerups = 0; s_powerupOnly = -1; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks)); s_skidUntil = 0;
+    s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     s_penguinWalk = 1; s_item[0] = s_item[1] = -1; s_sel = 0; s_takeAt = 0; s_shiftBlock = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrinkOthersUntil = s_shrunkUntil = s_jetUntil = 0;
     s_ownTrack = 0; s_loaded[0] = 0;

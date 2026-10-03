@@ -1698,6 +1698,53 @@ The user's asks:
   - Mosquibees Island: qualifying 46.72 s, race lap 50.11 s.
   - The Emerald Moon (loops, the carried jump): 60.87 s (61.29 s before).
   - Celebration Island's raised road: 40.67 s.
+
+### Opponents in sight over cube edges, no health or clovers, penguins that go off at what they hit (2026-10-03, night)
+
+The user's report from a test lap on Desert island:
+- The opponents kept going invisible and coming back. They should always be visible.
+- Health and clovers are meaningless as pickups in a race.
+- Twinsen drove into a penguin standing on the track and it didn't explode. Penguins should blow up when they hit something.
+
+**The opponents vanishing.**
+- *The cause:* the engine keeps every object of a scene inside its cube (EXTFUNC.CPP DoAnimExt, half a cell from each edge). An opponent's car placed in the next cube stood on the edge itself, a wall Twinsen's car stopped at. That was the old moon's grid and Desert's checkpoint-7 stall.
+- *The earlier fix* (2026-10-03, "Driving the loops") hid such a car instead. On a lap that crosses cube edges as often as Desert's, the cars just ahead vanished at every edge until Twinsen's car crossed it too.
+- *Now:* the cars the race-track mode places this frame are let out of the cube (`RaceMod_FreeOfCube`). They stand where they are on the lap, over the edge too, in sight and in their true place, so they make no wall.
+- They have no shadow and no ground or wall checks of their own (flags 0x1A1000: NO_SHADOW, NO_CHOC, NO_PRE_CLIP, OBJ_ZBUFFER), so nothing about them reads past the cube's map.
+
+**Health and clovers** are no longer power-ups. No one dies in a race, so they did nothing.
+- The six left, with their weights and strengths:
+
+  | Power-up | Weight | Strength |
+  |---|---|---|
+  | Gazogem fuel | 24 | weak |
+  | protection spell | 12 | middling |
+  | lightning spell | 12 | strong |
+  | nitro penguin | 16 | middling |
+  | super jet-pack | 12 | strong |
+  | oil | 14 | weak |
+
+- Gazogem fuel moved from middling to weak, so the leader still has something besides oil.
+- `powerup_only=` numbers changed: 0 Gazogem, 1 protection, 2 lightning, 3 penguin, 4 jet-pack, 5 oil.
+
+**Penguins that go off at what they hit** (`PenguinHits`).
+- *The cause:* a walking penguin could go off only a second after it was dropped, for every car. The second was meant for the car that dropped it, to get away. But a car right behind the one that dropped it reached it inside that second and drove through it.
+- *Now that second is the dropper's alone* (`T_RACE_PENGUIN.Dropper`). Any other car's middle within 1,100 units sets it off at once.
+- It also goes off at:
+  - another penguin within 500 units (both go off);
+  - a mushroom standing on the road within 500 (the mushroom is taken, and grows back);
+  - a wall: the ground where it stands more than 512 units higher than the penguin. With no line, a penguin now walks on the ground up and down slopes, so only a real step counts.
+- On the fuse (`penguin_mode=fuse`) it goes off at what it runs into too, or when its second is out.
+- The log says what it ran into.
+
+![the field in the next cube, in sight](racetrack/build/opponents_next_cube.png)
+
+**Verified** (headless, muted):
+- *Desert, the opponents faster (skill 115), no qualifying:* six times a car stood in the next cube within 20 cells of Twinsen's, and the engine drew every one (its WAS_DRAWN flag; the field ahead is in the screenshots).
+- *Desert, qualifying with the opponents waiting in the pit lane:* 132.14 s (132.04 s before), with no wall at any cube edge.
+- *Mosquibees Island, every mushroom a penguin, the opponents faster:*
+  - Penguins the Queen dropped blew up the monkey monster right behind her, four times.
+  - One she dropped ran into Twinsen's car: "Twinsen's car blown up by a penguin: stopped".
 - *The draw by place:* in the Mosquibees race the leader drew Gazogem, oil, penguins, clovers, protection and health; the opponents took 15 mushrooms.
 
 ## The menu command

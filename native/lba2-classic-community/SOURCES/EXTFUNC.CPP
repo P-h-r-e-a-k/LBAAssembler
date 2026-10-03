@@ -2369,7 +2369,9 @@ static void DoAnimExtGround(U8 numobj) {
     FlagHeroOutX = FlagHeroOutZ = FALSE;
     PhantomX = PhantomY = 0; // peut etre sorti ailleurs
 
-    if (!NumBuggy OR numobj != NUM_BUGGY OR !IsBuggyPresent()) {
+    // (a race-track mod's opponent cars stand where they are on the lap, over the cube's edge too: kept inside it, a car just over the
+    // edge stood on the edge itself, a wall in the player's way -- RACEMOD.CPP)
+    if ((!NumBuggy OR numobj != NUM_BUGGY OR !IsBuggyPresent()) AND !RaceMod_FreeOfCube(numobj)) {
         S32 flagchgcube = TRUE;
         S32 marge = DEMI_BRICK_XZ;
 
