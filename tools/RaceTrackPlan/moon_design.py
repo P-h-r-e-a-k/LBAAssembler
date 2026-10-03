@@ -29,7 +29,7 @@ V = [(24.0, 92.0), (90.0, 92.0), (88.0, 54.0), (42.0, 56.0)]
 R = [7.0, 8.0, 8.0, 8.0]
 # the loops: where on its side the foot is (cells), the ring's radius, the shift across, the gap at the top (degrees)
 LOOPS = [
-    ('jump', (44.0, 92.0), 4.0, 3.0, 70.0),    # the loop with the jump over its top: the car carried round at its own speed
+    ('jump', (44.0, 92.0), 4.0, 3.0, 35.0),    # the loop with a gap at its top, leapt upside down (35 degrees: from 22 km/h to 43, 2026-10-03; it was 70, too fast over 24)
     ('whole', (74.0, 92.0), 4.0, 3.0, 0.0),    # the whole ring, driven round as a real car would go, after a long run-up
 ]
 LEVEL = 6.0                       # level road this far past the ring's radius either side of its foot (cells)

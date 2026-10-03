@@ -368,10 +368,13 @@ internal static class RaceTrackScenes
                 var buggyIndex = buggy is null ? -1 : model.Actors.IndexOf(buggy);
                 // the grid and the pits, for a track that races opponents (the race-track mode lines the cars up there)
                 var racing = t.Racer is not null || t.BikerTemplate is not null;
+                // (moved across onto the race lanes, where the plan says: the Emerald Moon's pit lane shares its deck)
+                var shift = t.Options.GridShift;
                 if (racing)
                     for (var k = 0; k < GridSpots; k++)
                     {
                         var (back, side) = GridSpot(k, t.Options.GridStep);
+                        side += shift;
                         int gx = At(back, side, false), gz = At(back, side, true);
                         t.Grid.Add(new[] { cx, cz, gx, Ground(gx, gz), gz, Facing(back) });
                     }
@@ -388,11 +391,11 @@ internal static class RaceTrackScenes
                         t.Pits.Add(new[] { cx, cz, px, t.Report.PitHeights ? (int)Math.Round(p.Y) : Ground(px, pz), pz, pbeta });
                     }
                 var pole = GridSpot(0);
-                if (buggy is not null) { buggy.X = At(pole.Back, pole.Side, false); buggy.Z = At(pole.Back, pole.Side, true); buggy.Y = Ground(buggy.X, buggy.Z); buggy.Beta = Facing(pole.Back); }
+                if (buggy is not null) { buggy.X = At(pole.Back, pole.Side + shift, false); buggy.Z = At(pole.Back, pole.Side + shift, true); buggy.Y = Ground(buggy.X, buggy.Z); buggy.Beta = Facing(pole.Back); }
                 // Twinsen right behind his car: he comes into the scene facing the way the lap runs (the scene's start keeps no
                 // facing), so he faces the car and the action key gets him in. (Beside it, 1.3 cells from its middle, the car's box
                 // pushed him off and he faced away from it.) The next car is on the other side, clear of him.
-                model.Hero.X = At(pole.Back + 1.8, pole.Side, false); model.Hero.Z = At(pole.Back + 1.8, pole.Side, true); model.Hero.Y = Ground(model.Hero.X, model.Hero.Z) + 100;
+                model.Hero.X = At(pole.Back + 1.8, pole.Side + shift, false); model.Hero.Z = At(pole.Back + 1.8, pole.Side + shift, true); model.Hero.Y = Ground(model.Hero.X, model.Hero.Z) + 100;
                 model.Hero.Beta = beta;
                 t.StartScene = scene;
                 // the opponents wait in the pit lane (the race-track mode puts them on the grid when the race is about to start); with

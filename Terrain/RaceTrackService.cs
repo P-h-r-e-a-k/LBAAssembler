@@ -332,6 +332,8 @@ internal static class RaceTrackService
     // those indices -- Citadel's fine-weather one exactly, its storm one a shade darker, as its whole island is) and options.RetailBodies
     // maps each to its copy. Nothing for the Desert island itself. Returns a line for the log.
     public static readonly int[] RetailBodyNumbers = { 64, 65, 66, 68, 69, 70 };
+    // Citadel Island's white fence: a section a thousand units long, its post at its start, and the post that ends a run of them
+    public const int FenceSectionBody = 53, FencePostBody = 54;
 
     public static string? CopyRetailBodies(string gameDirectory, string oblFile, RaceTrackOptions options)
     {
@@ -383,6 +385,15 @@ internal static class RaceTrackService
             options.DeckBodyIndex = RaceTrackDeckBody.AppendTo(Path.Combine(gameDirectory, options.Island.OblFile), options);
         // (the island's own flight, for a jump its plan draws or its crossing makes)
         options.JumpAnim = RaceTrackJumpAnim.GenericFor(options.Island);
+        // (a fence along the pit lane: Citadel Island's white one -- a section and its end post -- as they are: the island palettes share
+        // their colours)
+        if (options.PitFence)
+        {
+            var citadel = Path.Combine(gameDirectory, RaceTrackIsland.Citadel.OblFile);
+            var bodies = HqrArchive.Open(File.Exists(citadel + BackupSuffix) ? citadel + BackupSuffix : citadel);
+            options.FenceSection = bodies.Read(FenceSectionBody); options.FencePost = bodies.Read(FencePostBody);
+            log.Add($"the pit lane's fence: Citadel Island's white fence (CITADEL.OBL bodies {FenceSectionBody} and {FencePostBody})");
+        }
         // (where a raised road's own bodies go: after whatever was appended above)
         options.NewBodyBase = HqrArchive.CountEntries(Path.Combine(gameDirectory, options.Island.OblFile));
         options.SceneryObl = Path.Combine(gameDirectory, options.Island.OblFile);

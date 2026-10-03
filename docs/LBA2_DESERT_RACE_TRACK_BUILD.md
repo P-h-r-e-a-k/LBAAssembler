@@ -1283,6 +1283,67 @@ A ring with a gap is taken at about third gear's speed. Coming up to one, 15–3
 - **The other tracks:** the seven others build byte-identical (38 files). With the new engine their solo qualifying laps are identical (lava 27.04, storm 28.30, Mosquibees 47.80, statue 41.86, elevator 34.02, town 99.02 s); Sendell's Well's crash is older.
 - **From the app**, on a sandbox folder: both moons built in the race track window. With `EMERAUDE.ILE` open, Play starts on the grid with the opponents in the pit lane, muted.
 
+### The Emerald Moon, second round: the cut-out loop, holes, borders, the pit lane, a wider road (2026-10-03, later)
+
+The user found five things on the Emerald Moon:
+- Twinsen couldn't drive the cut-out loop: he was sent flying into the air.
+- Parts of the track showed as holes, though they could be driven over.
+- The track's border was much wider than on other tracks.
+- The pit lane should be a separate strip or have a fence, perhaps Citadel Island's white one.
+- The track was too narrow in places.
+
+**The cut-out loop.** With a 70-degree gap at its top, only entry speeds of 21-24 km/h got the car over cleanly. Anything faster sailed past the far edge ("Overshot the loop") -- and a player comes in at full speed. The engine's own step, run over the gap's size (radius 4 cells, throttle held), gives:
+
+| Gap | Clean entry speeds | Above that |
+|---|---|---|
+| 70 degrees | 21–24 km/h | overshoots |
+| 40 degrees | 22–37 km/h | overshoots |
+| 35 degrees | 22–43 km/h | still gets round |
+| 30 degrees | 22–46 km/h | still gets round |
+
+Both moons' cut-out loops are now 35 degrees. They are taken at full speed (34 km/h), still a real leap upside down over the gap: off the ring at 162 degrees, over the gap, round at 5,386 units/s. The display's "how fast" hint, the opponents' braking for such a loop and the test pilot's now apply only where the car's top speed would overshoot it.
+
+![the cut-out at full speed](racetrack/build/emerald_cutout_full_speed.png)
+
+**The border.** The plan never set the asphalt's and the curbs' widths. The road was drawn with the ground tracks' own (asphalt 3.5 cells, curbs 4.5) inside a rail at 3.05. So the curb and the rail top folded back outside the rail: a grey band a cell and a half wide along both edges, and faces turned the wrong way. The plan now gives them like the other raised roads: the rail at the road's half width, the curb a quarter cell inside it, the asphalt a cell inside it.
+
+**A wider road.**
+- **Base road:** the rails are now at 4.5 cells from the middle (they were at 3.05), where the ground tracks' curbs are. A car's middle can go 3.25 cells either side of the road's middle (it was 1.8).
+- **Loops:** the decks are twice that, 9 cells, and their rings' bands are as wide as the road.
+- **Layout room:** three moves keep the wider road clear of itself.
+  - The leg past the reactor's south side moves to z 33 and starts down after the rim's crest, not on it.
+  - The inner U moves to z 43, and the U-turn after the jump narrows over its first half.
+  - The east and west loops move along their straights: the west one's wider deck had reached the egg-shaped building.
+
+**The pit lane.**
+- **The fence:** Citadel Island's white fence (CITADEL.OBL's body 53, a section a thousand units long, and 54, its end post) is copied into EMERAUDE.OBL as it is; the island palettes share its colours. It stands solid along the line between the race lanes and the pit lane, 18 sections and an end post over 34 cells (the plan's `pitFence`). The pit lane is 4.5 cells wide behind it, open at both ends where the deck widens and narrows.
+- **Tested:** the test pilot steered 4 cells towards the pit lane is stopped with its middle a car's half width from the fence, and slides along it to the straight's end.
+- **The racing lines** keep 1.6 cells on the race lanes' side of it.
+- **The grid** is moved onto the race lanes (the plan's `gridShift`, half the pit lane's width).
+- **The opponents** wait in the pit lane behind the fence while the player qualifies.
+
+![the road, the fence, the rings](racetrack/build/emerald_v2_road.png)
+![Play in the app](racetrack/build/emerald_fence_app.png)
+
+**The holes.** There were three causes:
+- **The engine leaves out a polygon any point of which is behind the camera's near plane.** The road was one quad from rail to rail per cell, 17 cells across at its widest. Now the asphalt and the underside are strips, as many across as the widest asphalt needs, the same number for every piece of a road (`RaceTrackRaisedBody.StripsFor`). The rings' road and outsides are strips too. A ring is too many points for one body then (the engine takes 550 a body), so each ring is four quarter rings, a decor each at its foot.
+- **The engine leaves out a whole decor whose middle is behind the camera** (`3DEXT/DECORS.CPP`): a piece of road whose middle had just passed under a close camera went whole. Now a decor whose box touches nothing (its top under its bottom, as only the race tracks' pieces have) is still drawn while any corner of its box is in front of the camera. The road pieces' boxes now cover their footprint, still touching nothing.
+- **Pieces only meeting left a crack of a pixel between them**, the background through a dotted line across the road, because each body is projected on its own. Now each piece runs 24 units into the next, and each ring quarter into the next.
+
+**Arrows.** The strips' points, the same on both sides of every joint, leave no room for an arrow cut into the asphalt; an arrow drawn over it flickered with it. An arrow is now the strips' own quads coloured, halved along their diagonals at its edges: a triangle 4 cells long, its base about the old arrow's width (2 strips either side on a wide deck).
+
+![a crack between pieces, and none](racetrack/build/emerald_seams.png)
+
+**Verified**:
+- **The Emerald Moon** (`rt_emer`), the pilot and three opponents:
+  - qualifying 61.52 s;
+  - race laps 61.52 and 61.54 s, the opponents' 65.2–69.7 s;
+  - the cut-out loop at full speed every lap, and every loop by every car.
+- **The old moon:** qualifying 22.47 s, race laps 22.44 s.
+- **The other tracks:** built again, the seven others' files are byte-identical but for the three raised roads' island and decor files (Celebration Island's two, the Elevator Platform's), whose road pieces are now strips. Their solo qualifying laps are unchanged (27.04, 41.86, 34.02 s), and the statue track was looked at too.
+- **From the app**, on a sandbox folder: both moons built in the race track window. Play on the Emerald Moon shows the grid, the fence and the opponents in the pit lane, muted.
+- **The body tool** (`tools/BodyPipeline`) builds again: it now leaves out `Scenes/SceneNuke.cs`, which needs the editor's own island code. It has a new `oblsheet <island .OBL> <palette> <out.png>` to look at an island's decor bodies, which is how Citadel's fence was found.
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

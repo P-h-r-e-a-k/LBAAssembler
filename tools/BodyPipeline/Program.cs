@@ -87,6 +87,8 @@ internal static class Program
             "animdump" => AnimDump(args[1], int.Parse(args[2])),
             "hqrpreview" => HqrPreview(args[1], int.Parse(args[2]), args.Length > 3 ? args[3] : Path.GetTempPath(), args.Length > 4 ? int.Parse(args[4]) : 2),
             "hqrpreviewress" => HqrPreviewRess(args[1], int.Parse(args[2]), int.Parse(args[3]), args[4], args.Length > 5 ? int.Parse(args[5]) : 2),
+            // oblsheet <island .OBL> <RESS palette entry> <out.png>: every decor body of an island (static bodies) in a grid, numbered
+            "oblsheet" => OblSheet(args[1], int.Parse(args[2]), args[3]),
             "testappend" => TestAppend(game),
             "normals" => Normals(game, int.Parse(args[2])),
             "enginebody" => EngineBody(args[1], args[2], args.Skip(3).DefaultIfEmpty("humanoid unlit").ToArray()),
@@ -1352,6 +1354,38 @@ internal static class Program
             render.Save(Path.Combine(outDir, $"hqrpreviewress_{index}_ress{ressEntry}_{name}.png"), ImageFormat.Png);
         }
         Console.WriteLine($"  entry {index} under RESS entry {ressEntry}: {body.Faces.Count} polygons -> {outDir}");
+        return 0;
+    }
+
+    private static int OblSheet(string oblPath, int ressEntry, string outPng)
+    {
+        var hqr = new Hqr(oblPath);
+        var xpl = new Hqr(Path.Combine(Folder(2), "RESS.HQR")).Read(ressEntry);
+        var paletteOffset = BitConverter.ToInt32(xpl, 4);
+        var palette = new Color[256];
+        for (var i = 0; i < 256; i++) palette[i] = Color.FromArgb(xpl[paletteOffset + i * 3], xpl[paletteOffset + i * 3 + 1], xpl[paletteOffset + i * 3 + 2]);
+        var tiles = new List<(int Index, Bitmap Picture)>();
+        for (var i = 0; ; i++)
+        {
+            byte[] data;
+            try { data = hqr.Read(i); } catch { break; }
+            if (data.Length == 0) continue;
+            try { tiles.Add((i, Renderer.Render(Body.Read(data, 2, allowStatic: true), palette, 200, 160, 0.7f, false, background: Color.FromArgb(40, 60, 90)))); }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException) { }
+        }
+        const int cols = 10;
+        using var sheet = new Bitmap(cols * 200, (tiles.Count + cols - 1) / cols * 160);
+        using (var g = Graphics.FromImage(sheet))
+        {
+            for (var k = 0; k < tiles.Count; k++)
+            {
+                g.DrawImage(tiles[k].Picture, k % cols * 200, k / cols * 160);
+                g.DrawString(tiles[k].Index.ToString(), SystemFonts.DefaultFont, Brushes.Yellow, k % cols * 200 + 4, k / cols * 160 + 4);
+                tiles[k].Picture.Dispose();
+            }
+        }
+        sheet.Save(outPng, ImageFormat.Png);
+        Console.WriteLine($"{tiles.Count} bodies -> {outPng}");
         return 0;
     }
 

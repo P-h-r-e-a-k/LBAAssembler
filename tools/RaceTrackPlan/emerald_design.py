@@ -35,16 +35,17 @@ def ground(x, z):
     return H[zi, xi] * (1 - fx) * (1 - fz) + H[zi, xi + 1] * fx * (1 - fz) + H[zi + 1, xi] * (1 - fx) * fz + H[zi + 1, xi + 1] * fx * fz
 
 STEP = 0.5
-H0, HJ, HL = 3.05, 8.5, 6.1            # the deck's half width (to the rail): the usual, the reactor's jump (its dish), at a loop (twice)
-PIT = 3.5                              # the pit lane's width beside the straight (cells)
+H0, HJ, HL = 4.5, 8.5, 9.0             # the deck's half width (to the rail): the usual (the ground tracks' curbs), the reactor's jump (its dish), at a loop (twice)
+ASPHALT, CURB = H0 - 1.0, H0 - 0.25    # the asphalt's edge and the curb's (from them to the rail: the curb, a cell's three quarters, and the rail's top)
+PIT = 4.5                              # the pit lane's width beside the straight (cells), past a fence
 INNER, OUTER = 5000.0, 7700.0          # the inner part's height (over the base's roof) and the outer ring's (over the west rim, 7,150)
 SX = 60.5 - PIT / 2                    # the straight's middle line (the race lanes' middle stays on the roof's middle, x 60.5)
 JZ = 13.0                              # the jump's line (through the reactor's middle)
 # the corners in the lap's order, each (x, z) and the radius it is rounded with
 K = [((SX, 92.0), 6.0),               # the straight's south end: the hairpin, east ...
      ((72.5, 92.0), 6.0),             # ... and back north
-     ((72.5, 42.0), 5.5),             # north over the short arm, then east (the inner U), climbing
-     ((104.0, 42.0), 5.0),            # south down the east rim: the first loop
+     ((72.5, 43.0), 5.5),             # north over the short arm, then east (the inner U), climbing
+     ((104.0, 43.0), 5.0),            # south down the east rim: the first loop
      ((104.0, 74.0), 8.0),            # a kink south-west ...
      ((92.0, 86.0), 8.0),             # ... and south again
      ((92.0, 114.0), 9.0),            # west along the south side: the second loop
@@ -53,10 +54,10 @@ K = [((SX, 92.0), 6.0),               # the straight's south end: the hairpin, e
      ((33.0, 77.0), 7.0),
      ((18.0, 67.0), 7.0),             # ... north through the third loop
      ((18.0, JZ), 10.0),              # the wide banked turn east onto the reactor's line
-     ((112.0, JZ), 11.0),             # past the reactor, the wide banked U-turn: south ...
-     ((112.0, 35.0), 11.0),           # ... and west, past the reactor's south side, coming down
-     ((SX, 35.0), 5.5)]               # south onto the base's roof: the straight
-LOOPS = [((104.0, 57.5), 4.0, 0.0), ((54.0, 114.0), 4.0, 70.0), ((18.0, 52.0), 4.0, 0.0)]   # foot, radius, gap (degrees)
+     ((112.0, JZ), 10.0),             # past the reactor, the wide banked U-turn: south ...
+     ((112.0, 33.0), 10.0),           # ... and west, past the reactor's south side, coming down (10 cells from the inner U: both 9 wide)
+     ((SX, 33.0), 5.5)]               # south onto the base's roof: the straight
+LOOPS = [((104.0, 59.0), 4.0, 0.0), ((54.0, 114.0), 4.0, 35.0), ((18.0, 54.5), 4.0, 0.0)]   # foot, radius, gap (degrees: 35 is leapt from 22 km/h to 43)
 LOOP_RUN, LOOP_EASE = 10.0, 8.0        # straight and level either side of a loop's foot, then the deck narrowing back (cells)
 KICK = 6.0                             # the jump's ramp and landing hill: their length along the road (cells)
 LIP_X, LAND_X = 39.0, 90.0             # the take-off lip and the landing lip
@@ -137,7 +138,7 @@ if theta is None: sys.exit('no ramp clears the reactor')
 
 # ---- heights: the inner part, the outer ring, the climb and the descent between them; the jump
 iUp0 = nearest((72.5, 54.0), (0, -1)); iUp1 = nearest((104.0, 48.0), (0, 1))
-iDown0 = nearest((101.0, 35.0), (-1, 0)); iDown1 = nearest((SX, 48.0), (0, 1))
+iDown0 = nearest((88.0, 33.0), (-1, 0)); iDown1 = nearest((SX, 48.0), (0, 1))
 Y = np.zeros(N)
 for k in range(N):
     if between(k, iDown1, iUp0): Y[k] = INNER
@@ -155,7 +156,7 @@ loops = [(nearest(foot), R, gp) for foot, R, gp in LOOPS]
 def ramp(a, b, k): return ease(ahead(a, k) / ahead(a, b))
 HALF = np.full(N, H0)
 iWide0 = nearest((18.0, 32.0), (0, -1)); iWide1 = nearest((28.0, JZ), (1, 0))          # widening over the first banked turn
-iWide2 = nearest((101.0, JZ), (1, 0)); iWide3 = nearest((101.0, 35.0), (-1, 0))        # narrowing over the U-turn
+iWide2 = nearest((102.0, JZ), (1, 0)); iWide3 = nearest((112.0, 23.0), (0, 1))        # narrowing over the U-turn's first half (wide off the jump, back to the road's width before it runs beside the inner U)
 for k in range(N):
     if between(k, iWide0, iWide1): HALF[k] = H0 + (HJ - H0) * ramp(iWide0, iWide1, k)
     elif between(k, iWide1, iWide2): HALF[k] = HJ
@@ -226,7 +227,7 @@ for dmin, i, j in sorted(close)[:3]:
     out.append(f'  WARNING: two parts of the lap {dmin:.1f} cells apart at one level: ({X[i]:.1f}, {Z[i]:.1f}) {Y[i]:.0f} and ({X[j]:.1f}, {Z[j]:.1f}) {Y[j]:.0f}')
 for c, R, gp in loops:
     cx, cz = int(X[c] // 64), int(Z[c] // 64)
-    ends = [(X[c] + T[c, 0] * a * R, Z[c] + T[c, 1] * a * R) for a in (-1.3, 1.3)]
+    ends = [(X[c] + T[c, 0] * a * (R + 0.75), Z[c] + T[c, 1] * a * (R + 0.75)) for a in (-1, 1)]   # (the ring: its radius, its band's thickness and its legs)
     same = all(int(x // 64) == cx and int(z // 64) == cz for x, z in ends)
     w = int(LOOP_RUN / STEP); run = [(c + j) % N for j in range(-w, w + 1)]
     out.append(f'  loop at ({X[c]:.1f}, {Z[c]:.1f}) {Y[c]:.0f}: cube ({cx + 7}, {cz + 7}) {"whole" if same else "ACROSS A CUBE EDGE"}, its run bends {max(abs(kappa[j]) for j in run):.4f}, '
@@ -242,7 +243,7 @@ plan = {
     'points': [[round(float(x), 3), round(float(z), 3)] for x, z in zip(X, Z)],
     'heights': [round(float(y), 1) for y in Y],
     'maxGrade': round(float(np.abs(grade).max()) + 0.05, 3),
-    'raised': [0, N - 1], 'raisedHalf': H0,
+    'raised': [0, N - 1], 'raisedHalf': H0, 'asphaltHalf': ASPHALT, 'curbHalf': CURB,
     'raisedHalfs': [round(float(h), 3) for h in HALF],
     'bank': [round(float(b), 4) for b in bank],
     'loops': [[int(c), R, 2 * H0, gp, H0] for c, R, gp in loops],
@@ -252,6 +253,9 @@ plan = {
     'pitStripe': [int(iPit1), int(iPit2), round(float(PIT_HALF - PIT), 3)],
     # (the opponents' waiting spots, in the pit lane's middle, facing down the straight, on the deck)
     'pitSpots': [[round(SX - (PIT_HALF - PIT / 2), 3), z, 0.0, 1.0, INNER] for z in PIT_WAIT],
+    # (a fence along the stripe, Citadel Island's white one; the grid on the race lanes, whose middle is half the pit lane's width over)
+    'pitFence': True,
+    'gridShift': -PIT / 2,
     'keepBodies': sorted(set(int(b) for b in np.unique(WHO[WHO >= 0]))),
 }
 json.dump(plan, open(OUT, 'w'))

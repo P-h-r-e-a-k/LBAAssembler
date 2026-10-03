@@ -59,11 +59,28 @@ internal static class RaceTrackRaisedBody
     // `wider`: how much wider than `edge` the road is at each section (world units, either side: its asphalt widens, its curbs and rails
     // move out -- the Emerald Moon's road widens for its jump, its loops and its pit lane). `stripe`: a white stripe along the asphalt this
     // far across (world units, the way Across points) on the cells `striped` says.
-    public const double StripeHalf = 50;
+    // The asphalt (and the underside) are drawn in strips: the engine leaves out a polygon any point of which is behind the camera's near
+    // plane, and the Emerald Moon's road, 17 cells across at its widest, was one quad from rail to rail -- the road under a close camera
+    // showed a hole the width of the road (2026-10-03). `strips`: how many across, the same for every piece of a road (its widest asphalt
+    // over StripWidth, an even number and ArrowStrips at the least), so two pieces meet on the same points -- where they don't, the engine
+    // leaves a seam of missing pixels. For the same reason an arrow is the strips' own quads coloured, halved along their diagonals at its
+    // edges (a triangle four cells long, ArrowStrips wide at its base), not cut into them; drawn over them it flickered with them.
+    public const double StripeHalf = 50, StripWidth = 512, PieceOverlap = 24, ArrowHalfWidth = 896;
+    public const int ArrowStrips = 8;
+    public static int StripsFor(double widestAsphalt)
+    {
+        var n = Math.Max(ArrowStrips + 2, (int)Math.Ceiling(2 * widestAsphalt / StripWidth));
+        return n % 2 == 0 ? n : n + 1;
+    }
+
     public static byte[] Tile(IReadOnlyList<(Vector3 Mid, Vector3 Across)> sections, int firstBlock, double asphalt, double curb, double edge, bool arrow = false, int line = -1,
-        IReadOnlyList<double>? wider = null, double stripe = double.NaN, IReadOnlyList<bool>? striped = null)
+        IReadOnlyList<double>? wider = null, double stripe = double.NaN, IReadOnlyList<bool>? striped = null, int strips = 0)
     {
         var m = new Mesh();
+        double Wider(int j) => wider?[j] ?? 0;
+        arrow = arrow && sections.Count == 5;
+        if (strips < 1) strips = StripsFor(Enumerable.Range(0, sections.Count).Max(j => asphalt + Wider(j)));
+        // (the stripe: its strip of the asphalt coloured -- the one its middle is in)
         // across each section, from one edge to the other: the offset and the height over the road's surface
         var profile = new (double U, double Y)[]
         {
@@ -71,12 +88,21 @@ internal static class RaceTrackRaisedBody
             (asphalt, 0), (curb, 0), (curb, Rail), (edge, Rail), (edge, -Thickness),
         };
         var at = new int[sections.Count, profile.Length];
+        int On(int j, double u, double y = 0) => m.P(sections[j].Mid + sections[j].Across * (float)u + new Vector3(0, (float)y, 0));
         for (var j = 0; j < sections.Count; j++)
             for (var k = 0; k < profile.Length; k++)
-            {
-                var u = profile[k].U + Math.Sign(profile[k].U) * (wider?[j] ?? 0);
-                at[j, k] = m.P(sections[j].Mid + sections[j].Across * (float)u + new Vector3(0, (float)profile[k].Y, 0));
-            }
+                at[j, k] = On(j, profile[k].U + Math.Sign(profile[k].U) * Wider(j), profile[k].Y);
+        // the asphalt's strips, their edges evenly across it at every section; and the underside's, two to each of them
+        var edges = new int[sections.Count, strips + 1];
+        var below = Math.Max(1, (strips + 1) / 2);
+        var under = new int[sections.Count, below + 1];
+        for (var j = 0; j < sections.Count; j++)
+        {
+            edges[j, 0] = at[j, 4]; edges[j, strips] = at[j, 5];
+            for (var i = 1; i < strips; i++) edges[j, i] = On(j, (-1 + 2.0 * i / strips) * (asphalt + Wider(j)));
+            under[j, 0] = at[j, 9]; under[j, below] = at[j, 0];
+            for (var i = 1; i < below; i++) under[j, i] = On(j, (1 - 2.0 * i / below) * (edge + Wider(j)), -Thickness);
+        }
         var up = Vector3.UnitY;
         for (var j = 0; j + 1 < sections.Count; j++)
         {
@@ -87,35 +113,26 @@ internal static class RaceTrackRaisedBody
             Strip(1, RailTop, up);
             Strip(2, RailSide, across);       // the rail's inner face
             Strip(3, block, up);              // the curb
-            if (!double.IsNaN(stripe) && striped is { } st && j < st.Count && st[j] && j != line)
+            for (var i = 0; i < strips; i++)
             {
-                // (the asphalt either side of the stripe, and the stripe)
-                int On(int i, double u) => m.P(sections[i].Mid + sections[i].Across * (float)u);
-                int a0 = On(j, stripe - StripeHalf), b0 = On(j, stripe + StripeHalf), a1 = On(j + 1, stripe - StripeHalf), b1 = On(j + 1, stripe + StripeHalf);
-                m.Quad(at[j, 4], a0, a1, at[j + 1, 4], Asphalt, up);
-                m.Quad(a0, b0, b1, a1, White, up);
-                m.Quad(b0, at[j, 5], at[j + 1, 5], b1, Asphalt, up);
+                int qa = edges[j, i], qb = edges[j, i + 1], qc = edges[j + 1, i + 1], qd = edges[j + 1, i];
+                // (an arrow over the strips from the section's middle, w0 - j either side of it at section j, to its point: w0 strips about
+                // ArrowHalfWidth, ArrowStrips / 2 at the most -- on a wide deck its strips are wide, and its arrow shorter)
+                var c = strips / 2;
+                var w0 = Math.Clamp((int)Math.Round(ArrowHalfWidth / (2 * (asphalt + Wider(0)) / strips)), 1, ArrowStrips / 2);
+                var w = w0 - j;
+                if (arrow && w > 0 && i == c - w) { m.Tri(qa, qb, qc, Arrow, up); m.Tri(qa, qc, qd, Asphalt, up); continue; }
+                if (arrow && w > 0 && i == c + w - 1) { m.Tri(qa, qb, qd, Arrow, up); m.Tri(qb, qc, qd, Asphalt, up); continue; }
+                var white = j == line || !double.IsNaN(stripe) && striped is { } st && j < st.Count && st[j]
+                            && i == Math.Clamp((int)Math.Floor((stripe / (asphalt + Wider(j)) + 1) / 2 * strips), 0, strips - 1);
+                var colour = white ? White : arrow && w > 0 && i > c - w && i < c + w - 1 ? Arrow : Asphalt;
+                m.Quad(qa, qb, qc, qd, colour, up);
             }
-            else if (!(arrow && sections.Count == 5)) Strip(4, j == line ? White : Asphalt, up);
             Strip(5, block, up);
             Strip(6, RailSide, -across);
             Strip(7, RailTop, up);
             Strip(8, Side, across);
-            m.Quad(at[j, 9], at[j, 0], at[j + 1, 0], at[j + 1, 9], Under, -up);   // the underside
-        }
-        if (arrow && sections.Count == 5)
-        {
-            int L(int j) => at[j, 4]; int R(int j) => at[j, 5];
-            int On(int j, double u) => m.P(sections[j].Mid + sections[j].Across * (float)u);
-            var h = asphalt * 0.5;
-            int a1 = On(1, -h), b1 = On(1, h), a2 = On(2, -h / 2), b2 = On(2, h / 2), tip = On(3, 0);
-            // the cell before the arrow, meeting the corners of its base
-            m.Quad(L(0), R(0), b1, a1, Asphalt, up); m.Tri(L(0), a1, L(1), Asphalt, up); m.Tri(R(0), R(1), b1, Asphalt, up);
-            // the head: its wide half, then its point
-            m.Quad(a1, b1, b2, a2, Arrow, up); m.Quad(L(1), a1, a2, L(2), Asphalt, up); m.Quad(b1, R(1), R(2), b2, Asphalt, up);
-            m.Tri(a2, b2, tip, Arrow, up); m.Quad(L(2), a2, tip, L(3), Asphalt, up); m.Quad(b2, R(2), R(3), tip, Asphalt, up);
-            // the cell after it, meeting its point
-            m.Tri(L(3), tip, L(4), Asphalt, up); m.Tri(tip, R(3), R(4), Asphalt, up); m.Tri(tip, R(4), L(4), Asphalt, up);
+            for (var i = 0; i < below; i++) m.Quad(under[j, i], under[j, i + 1], under[j + 1, i + 1], under[j + 1, i], Under, -up);   // the underside
         }
         return m.Write();
     }

@@ -28,7 +28,7 @@
     <Compile Include="..\..\EditorSettings.cs" Link="EditorSettings.cs" />
     <Compile Include="..\..\AudioLevels.cs" Link="AudioLevels.cs" />
     <Compile Include="..\..\RaceCarSetup.cs" Link="RaceCarSetup.cs" />
-    <Compile Include="..\..\Scenes\**\*.cs" Link="Scenes\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\..\Scenes\**\*.cs" Exclude="..\..\Scenes\SceneNuke.cs" Link="Scenes\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\Lba1\Lba1GridEdit.cs" Link="Lba1\Lba1GridEdit.cs" />
     <Compile Include="..\..\Lba1\Lba1GridCodec.cs" Link="Lba1\Lba1GridCodec.cs" />
     <Compile Include="..\..\Lba1\Lba1GridValidator.cs" Link="Lba1\Lba1GridValidator.cs" />

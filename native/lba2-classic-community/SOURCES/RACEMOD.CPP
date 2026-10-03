@@ -1395,7 +1395,7 @@ U32 RaceMod_AutoInput(void) {
     // and no brakes in the last cell, which a car carries into the ring)
     for (int k = 0; k < s_nbLoops; k++) {
         const T_RACE_LOOP *l = &s_loops[k];
-        if (l->Gap <= 0 || l->Hi <= l->Lo || l->CubeX != CurrentCubeX || l->CubeZ != CurrentCubeY || fabs(wy - l->Y) > 600) continue;
+        if (l->Gap <= 0 || l->Hi <= l->Lo || l->Hi >= s_car.GearTop[s_car.Gears - 1] || l->CubeX != CurrentCubeX || l->CubeZ != CurrentCubeY || fabs(wy - l->Y) > 600) continue;
         const double a = (hero->Obj.X - l->X) * l->DirX + (hero->Obj.Z - l->Z) * l->DirZ;
         const double c = -(hero->Obj.X - l->X) * l->DirZ + (hero->Obj.Z - l->Z) * l->DirX;
         if (a < -15 * 512 || a >= 0 || fabs(c) > l->Shift / 2 + l->Band + 1024) continue;
@@ -1579,9 +1579,9 @@ S32 RaceMod_CarHit(void) {
 // the top at the speed it came in with, whatever it was). Off the ring -- too slow over the top, or at a gap's edge -- it flies: inside the
 // ring it comes down on it again further round (a hard landing costs most of its speed) or, falling through the middle, onto the road at
 // the ring's foot, "fell off"; over a gap it leaps to the far edge, caught there by the ring if no more than RACE_LOOP_CATCH over it, or
-// overshoots and falls outside the ring. With the throttle held a whole ring of 4 cells takes 19 km/h at its foot; one with a gap of 70
-// degrees at its top 19-24 km/h (LoopWindow works it out for each, the opponents brake to it, and the display says it as the car comes up
-// to it). Under the quarter, where nothing throws it off, a car that is too slow rolls back down and out backwards. The opponents go
+// overshoots and falls outside the ring. With the throttle held a whole ring of 4 cells takes 22 km/h at its foot; one with a gap of 35
+// degrees at its top 22-43 km/h, of 70 degrees only 21-24 (LoopWindow works it out for each; where the car's top speed would overshoot
+// it, the opponents brake to it and the display says it as the car comes up to it). Under the quarter, where nothing throws it off, a car that is too slow rolls back down and out backwards. The opponents go
 // round the same way, never falling (OpponentRide).
 #define RACE_PI 3.14159265358979
 #define RACE_LOOP_G 1600.0
@@ -1861,11 +1861,12 @@ static void OpponentLoops(T_RACE_OPPONENT *o) {
     }
 }
 
-// The opponents' speeds are planned to take each loop with a gap at the speed it is leapt at (the test pilot brakes to it too).
+// The opponents' speeds are planned to take each loop with a gap at the speed it is leapt at, where the car's top speed would overshoot it
+// (the test pilot brakes to it too).
 static void LoopCaps(const T_RACE_OPPONENT *o, double *v) {
     for (int k = 0; k < s_nbLoops; k++) {
         const T_RACE_LOOP *l = &s_loops[k];
-        if (o->LoopAt[k] < 0 || l->Gap <= 0 || l->Hi <= l->Lo) continue;
+        if (o->LoopAt[k] < 0 || l->Gap <= 0 || l->Hi <= l->Lo || l->Hi >= s_car.GearTop[s_car.Gears - 1]) continue;
         const double want = LoopAim(l);
         for (int d = -1; d <= 1; d++) {
             const int i = (o->LoopAt[k] + d + o->Count) % o->Count;
@@ -2028,8 +2029,8 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
             const double a1 = (*nx - l->X) * l->DirX + (*nz - l->Z) * l->DirZ;
             const double c1 = -(*nx - l->X) * l->DirZ + (*nz - l->Z) * l->DirX;
             if (fabs(c1) > l->Shift / 2 + l->Band + 1024) continue;            // (another road, beside this one)
-            // (coming up to a ring with a gap: how fast to take it)
-            if (l->Gap > 0 && l->Hi > l->Lo && a1 > -RACE_LOOP_HINT * 512 && a1 < -RACE_LOOP_HINT * 256 && s_hinted != i) {
+            // (coming up to a ring with a gap that the car's top speed would overshoot: how fast to take it)
+            if (l->Gap > 0 && l->Hi > l->Lo && l->Hi < s_car.GearTop[s_car.Gears - 1] && a1 > -RACE_LOOP_HINT * 512 && a1 < -RACE_LOOP_HINT * 256 && s_hinted != i) {
                 char text[64];
                 snprintf(text, sizeof(text), "Jump loop: %.0f-%.0f km/h", l->Lo * 3.6 / 512 + 0.5, l->Hi * 3.6 / 512 - 0.5);
                 Message(text);

@@ -111,6 +111,12 @@ internal sealed class RaceTrackPlan
     // A white stripe along a raised road (with Raised): [first point, last point, how far across from the road's middle (cells, the way
     // the builder's Across points)] -- between the Emerald Moon's straight and the pit lane beside it on the same deck.
     public double[]? PitStripe { get; set; }
+    // A fence along that stripe (with PitStripe): Citadel Island's white fence (CITADEL.OBL's bodies 53 and 54), solid, between the race
+    // lanes and the pit lane. The racing lines keep off the pit lane's side of it.
+    public bool PitFence { get; set; }
+    // The grid's spots moved across the road by this much (cells, the way the builder's Across points): onto the Emerald Moon's race lanes,
+    // beside its pit lane on the same deck (RaceTrackScenes.GridSpot).
+    public double? GridShift { get; set; }
     public bool Planned => Heights is { Length: > 0 } h && h.Length == Points.Length;
 
     // The plan's own road widths and sea clearance, onto the options a build uses.
@@ -126,6 +132,8 @@ internal sealed class RaceTrackPlan
         if (JumpLandingLength is { } jl) o.JumpLandingLength = jl;
         if (JumpMinScale is { } js) o.JumpMinScale = js;
         if (GridStep is { } gs) o.GridStep = gs;
+        if (GridShift is { } gsh) o.GridShift = gsh;
+        o.PitFence = PitFence && PitStripe is { Length: 3 };
         o.GantryFootings = GantryFootings;
         o.PierBodies = PierBodies?.ToHashSet();
     }
@@ -225,6 +233,13 @@ internal sealed class RaceTrackOptions
     public double GridStep { get; set; } = RaceTrackScenes.DefaultGridStep;
     // A footing under a gantry's post that stands over a hole (RaceTrackPlan.GantryFootings).
     public bool GantryFootings { get; set; }
+    // The grid moved across the road (RaceTrackPlan.GridShift, cells).
+    public double GridShift { get; set; }
+    // A fence along a raised road's stripe (RaceTrackPlan.PitFence), and its bodies -- a section and its end post, copied from Citadel
+    // Island's own (RaceTrackService.Prepare).
+    public bool PitFence { get; set; }
+    public byte[]? FenceSection { get; set; }
+    public byte[]? FencePost { get; set; }
     // A physical, walkable bridge deck (like Citadel Island's rope bridge at "the Cliffs of the Woodbridge"): the straighter road
     // is carried over the other, on a flat deck built of decor objects (RaceTrackDeckBody), while the ground underneath keeps
     // the other road's own grade. How far above the lower road's own height the deck's walking surface sits. The engine's solid
@@ -2090,6 +2105,9 @@ internal static class RaceTrackBuilder
     // how far inside a raised road's edge its rail keeps a car's middle, cells (RACEMOD.CPP RAISED_INSET, 640 units)
     private const double RailInset = 1.25, RailMargin = 0.6;
 
+    // (how far a racing line keeps from a stripe beside the pit lane: a car's half width and some)
+    private const double StripeClear = 1.6;
+
     private static void PlanRacePath(TrackRoad r, RaceTrackReport report, RaceTrackOptions o, RacingLine line,
         List<(double X, double Z, double Y, double Speed, double Radius)> result, string name)
     {
@@ -2125,6 +2143,12 @@ internal static class RaceTrackBuilder
             // centre on the normal's side)
             lo[m] = sharpest > 0 ? -reach : -inside;
             hi[m] = sharpest > 0 ? inside : reach;
+            // (beside a stripe -- the Emerald Moon's pit lane -- no further than a car's width from it, on the road's side of it)
+            if (r.Stripe is { } st && (st.From <= st.To ? at[m] >= st.From - 12 && at[m] <= st.To + 12 : at[m] >= st.From - 12 || at[m] <= st.To + 12))
+            {
+                if (st.Offset > 0) hi[m] = Math.Min(hi[m], st.Offset - StripeClear); else lo[m] = Math.Max(lo[m], st.Offset + StripeClear);
+                if (lo[m] > hi[m]) lo[m] = hi[m];
+            }
         }
         // the offsets across the road, from the middle of the road. (None is held: the race-track mode lines the cars up on grid spots in
         // the qualifying's order and moves each from its spot onto its line over its first cells.)
@@ -3484,15 +3508,20 @@ internal static class RaceTrackBuilder
             if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { report.Notes.Add($"WARNING: the loop at cell ({l.X:0.0}, {l.Z:0.0}): no room for its ring"); continue; }
             var along = new System.Numerics.Vector3((float)l.DirX, 0, (float)l.DirZ);
             var radius = l.Radius * 512; var shift = l.Shift * 512; var half = l.Band * 512;
-            var body = RaceTrackLoopBody.Ring(along, radius, shift, half, l.Gap * Math.PI / 180);
+            var bodies = RaceTrackLoopBody.Ring(along, radius, shift, half, l.Gap * Math.PI / 180);
+            if (at.Cube.Decors.Count + bodies.Count > IslandDecors.MaxPerCube) { report.Notes.Add($"WARNING: the loop at cell ({l.X:0.0}, {l.Z:0.0}): no room for its ring"); continue; }
             var y = (int)Math.Round(l.Y);
-            var d = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, at.X, y, at.Z, 0);
             var reach = (int)Math.Ceiling(radius + RaceTrackLoopBody.Thickness + 2 * RaceTrackLoopBody.LegHalf);
             var wide = (int)Math.Ceiling(shift / 2 + half + RaceTrackLoopBody.RailWidth);
             int ex = (int)Math.Ceiling(Math.Abs(l.DirX) * reach + Math.Abs(l.DirZ) * wide), ez = (int)Math.Ceiling(Math.Abs(l.DirZ) * reach + Math.Abs(l.DirX) * wide);
-            d.XMin = at.X - ex; d.XMax = at.X + ex; d.ZMin = at.Z - ez; d.ZMax = at.Z + ez; d.YMin = y - 200; d.YMax = NoBoxTop;
-            at.Cube.Decors.Add(d);
-            report.NewBodies.Add(body);
+            // (the ring in quarters, a decor each at its foot, each with the ring's whole footprint as its box)
+            foreach (var body in bodies)
+            {
+                var d = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, at.X, y, at.Z, 0);
+                d.XMin = at.X - ex; d.XMax = at.X + ex; d.ZMin = at.Z - ez; d.ZMax = at.Z + ez; d.YMin = y - 200; d.YMax = NoBoxTop;
+                at.Cube.Decors.Add(d);
+                report.NewBodies.Add(body);
+            }
             report.Placed.Add($"loop at cell ({l.X:0.0}, {l.Z:0.0}): a ring of {l.Radius:0.0} cells, {l.Shift:0.0} across, its band {2 * half / 512:0.0} wide{(l.Gap > 0 ? $", a gap of {l.Gap:0} degrees at its top" : "")}, height {y}");
         }
     }
@@ -3583,7 +3612,9 @@ internal static class RaceTrackBuilder
 
         bool Striped(int k) => r.Stripe is { } st && (st.From <= st.To ? k >= st.From && k <= st.To : k >= st.From || k <= st.To);
 
-        // the pieces: cross-sections a cell apart, along each stretch of the road between its jumps' gaps (each ends at a lip)
+        // the pieces: cross-sections a cell apart, along each stretch of the road between its jumps' gaps (each ends at a lip), every one
+        // with as many strips across its asphalt as the widest needs (RaceTrackRaisedBody.Tile: they meet on the same points)
+        var strips = RaceTrackRaisedBody.StripsFor(span.Max(k => (r.AsphaltHalf - o.RaisedHalfWidth) * 512 + Half(k)));
         var per = Math.Max(1, (int)Math.Round(1 / o.Spacing));                    // lap points to a cell
         var cells = Math.Max(1, (int)Math.Round(RaisedPiece));
         int pieces = 0, left = 0;
@@ -3599,6 +3630,11 @@ internal static class RaceTrackBuilder
             var origin = World(ids[ids.Count / 2]);
             origin = new((float)Math.Round(origin.X), (float)Math.Round(origin.Y), (float)Math.Round(origin.Z));
             var sections = ids.Select(k => (World(k) - origin, Across(k))).ToList();
+            // (its last cross-section a little into the next piece's first cell: two pieces' bodies projected each on its own leave a
+            // crack of a pixel between them where they only meet -- the background through a dotted line across the road)
+            var (endMid, endAcross) = sections[^1];
+            var onward = System.Numerics.Vector3.Normalize(endMid - sections[^2].Item1);
+            sections[^1] = (endMid + onward * (float)RaceTrackRaisedBody.PieceOverlap, endAcross);
             // (the start line, where it is on a lap that is all raised road: the cell after its point painted white)
             var line = -1;
             for (var j = 0; j + 1 < ids.Count && startIndex >= 0 && loop; j++) if (ids[j] == startIndex) line = j;
@@ -3607,8 +3643,13 @@ internal static class RaceTrackBuilder
             // (an arrow on every third piece, the way the lap runs; none across the stripe)
             var arrow = pieces % RaisedArrowEvery == 1 && ids.Count == cells + 1 && line < 0 && !striped.Any(b => b);
             var body = RaceTrackRaisedBody.Tile(sections, t / per, r.AsphaltHalf * 512, r.CurbHalf * 512, half, arrow, line,
-                r.RaisedHalfs is null ? null : ids.Select(k => Half(k) - half).ToArray(), r.Stripe is { } st ? st.Offset * 512 : double.NaN, striped);
-            if (Add(body, origin.X, origin.Y, origin.Z, -16, -(int)RaceTrackRaisedBody.Thickness - 80, -16, 16, 0, 16, untouchable: true)) pieces++; else left++;
+                r.RaisedHalfs is null ? null : ids.Select(k => Half(k) - half).ToArray(),
+                r.Stripe is { } st && !o.PitFence ? st.Offset * 512 : double.NaN, striped, strips);   // (under a fence, no stripe)
+            // (its box over its footprint, touching nothing: the engine leaves out a decor whose middle is behind the camera unless a corner
+            // of its box is in front of it -- 3DEXT/DECORS.CPP -- and a piece whose middle had just passed under the camera was a hole)
+            var corners = ids.SelectMany(k => new[] { -1, 1 }.Select(side => World(k) + new System.Numerics.Vector3((float)-r.Tz[k], 0, (float)r.Tx[k]) * (float)(side * (Half(k) + 64)) - origin)).ToList();
+            int x0 = (int)Math.Floor(corners.Min(c => c.X)), x1 = (int)Math.Ceiling(corners.Max(c => c.X)), z0 = (int)Math.Floor(corners.Min(c => c.Z)), z1 = (int)Math.Ceiling(corners.Max(c => c.Z));
+            if (Add(body, origin.X, origin.Y, origin.Z, x0, -(int)RaceTrackRaisedBody.Thickness - 80, z0, x1, 0, z1, untouchable: true)) pieces++; else left++;
         }
 
         // the gantry over a start line that is on the raised road: one body, its posts on the rails (nothing collides with it)
@@ -3621,6 +3662,8 @@ internal static class RaceTrackBuilder
             else left++;
         }
 
+        if (o.PitFence && r.Stripe is { } fenced && o.FenceSection is { } section && o.FencePost is { } post) left += PlaceFence(island, r, o, report, fenced, section, post);
+
         var (piers, none) = o.PierBodies is { } stand && o.SceneryObl is { } obl && RaceTrackScenery.Load(island, obl) is { } scenery
             ? PlacePiersOnScenery(island, r, o, report, span, loop, scenery, stand, Across, Add, ref left)
             : PlacePiers(island, r, o, report, span, Across, Add, ref left);
@@ -3632,6 +3675,70 @@ internal static class RaceTrackBuilder
 
     // A raised road's banking in the engine's file: this many to one (RACEMOD.CPP RAISED_BANK_UNITS).
     public const double RaisedBankUnits = 10000;
+
+    // The fence along a raised road's stripe (RaceTrackPlan.PitFence): Citadel Island's white fence, a section every FenceStep along the
+    // stripe from its first point to its last, turned along the road, and its end post after the last; solid, its box the section's own
+    // (the road beside the Emerald Moon's pit lane runs straight along the island's grid, so a box fits it). Returns how many were left out.
+    private const double FenceStep = 1000;
+
+    private static int PlaceFence(IslandFile island, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, (int From, int To, double Offset) stripe,
+        byte[] section, byte[] post)
+    {
+        // the stripe's line, point by point (world units), and the fence's two bodies' shapes
+        var line = new List<(double X, double Z, double Y)>();
+        for (var k = stripe.From; ; k = At(r, k + 1))
+        {
+            line.Add(((r.X[k] - r.Tz[k] * stripe.Offset) * 512, (r.Z[k] + r.Tx[k] * stripe.Offset) * 512, r.H[k]));
+            if (k == stripe.To || line.Count > r.Count) break;
+        }
+        static (float X0, float X1, float Y1, float Z0, float Z1) Bounds(byte[] body)
+        {
+            var b = LbaBodyStudio.Body.Read(body, 2, allowStatic: true);
+            return (b.Vertices.Min(v => v.X), b.Vertices.Max(v => v.X), b.Vertices.Max(v => v.Y), b.Vertices.Min(v => v.Z), b.Vertices.Max(v => v.Z));
+        }
+        var sb = Bounds(section); var pb = Bounds(post);
+        int sectionBody = o.NewBodyBase + report.NewBodies.Count; report.NewBodies.Add(section);
+        int postBody = o.NewBodyBase + report.NewBodies.Count; report.NewBodies.Add(post);
+        var cum = new List<double> { 0 };
+        for (var i = 1; i < line.Count; i++) cum.Add(cum[^1] + Math.Sqrt(Sq(line[i].X - line[i - 1].X) + Sq(line[i].Z - line[i - 1].Z)));
+        (double X, double Z, double Y, double DX, double DZ) Along(double s)
+        {
+            var i = 0;
+            while (i < line.Count - 2 && cum[i + 1] < s) i++;
+            var len = Math.Max(1e-6, cum[i + 1] - cum[i]); var t = Math.Clamp((s - cum[i]) / len, 0, 1);
+            return (line[i].X + (line[i + 1].X - line[i].X) * t, line[i].Z + (line[i + 1].Z - line[i].Z) * t, line[i].Y + (line[i + 1].Y - line[i].Y) * t,
+                (line[i + 1].X - line[i].X) / len, (line[i + 1].Z - line[i].Z) / len);
+        }
+        int placed = 0, left = 0;
+        bool Put(int body, (float X0, float X1, float Y1, float Z0, float Z1) b, double wx, double wy, double wz, int turn)
+        {
+            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) return false;
+            var d = IslandDecors.Blank(body, at.X, (int)Math.Round(wy), at.Z, turn);
+            // (the box: the body's own, turned as the engine turns it -- x' = x cos + z sin, z' = -x sin + z cos)
+            var a = turn * 2 * Math.PI / 4096; double c = Math.Cos(a), sn = Math.Sin(a);
+            var xs = new[] { b.X0, b.X1 }.SelectMany(x => new[] { b.Z0, b.Z1 }.Select(z => (X: x * c + z * sn, Z: -x * sn + z * c))).ToList();
+            d.XMin = at.X + (int)Math.Floor(xs.Min(p => p.X)); d.XMax = at.X + (int)Math.Ceiling(xs.Max(p => p.X));
+            d.ZMin = at.Z + (int)Math.Floor(xs.Min(p => p.Z)); d.ZMax = at.Z + (int)Math.Ceiling(xs.Max(p => p.Z));
+            d.YMin = d.Y; d.YMax = d.Y + (int)Math.Ceiling(b.Y1);
+            at.Cube.Decors.Add(d);
+            return true;
+        }
+        // (the section's length along its own x: from its post to where the next one's begins)
+        double s0 = -sb.X0;
+        for (var s = s0; s + sb.X1 <= cum[^1] + 1; s += FenceStep)
+        {
+            var p = Along(s);
+            // (turned so its own x runs the way the road does: the engine turns a body's x towards (cos b, -sin b))
+            var turn = ((int)Math.Round(Math.Atan2(-p.DZ, p.DX) / (2 * Math.PI) * 4096) % 4096 + 4096) % 4096;
+            if (Put(sectionBody, sb, p.X, p.Y, p.Z, turn)) placed++; else left++;
+            s0 = s;
+        }
+        var end = Along(s0 + FenceStep);
+        var endTurn = (((int)Math.Round(Math.Atan2(-end.DZ, end.DX) / (2 * Math.PI) * 4096) + 2048) % 4096 + 4096) % 4096;
+        if (Put(postBody, pb, end.X, end.Y, end.Z, endTurn)) placed++; else left++;
+        report.Placed.Add($"pit lane fence: {placed} pieces of Citadel Island's white fence along the stripe, {cum[^1] / 512:0.0} cells, {(left > 0 ? $"{left} left out (the cube's decors are full)" : "solid")}");
+        return left;
+    }
 
     private delegate bool AddDecor(byte[] body, double wx, double wy, double wz, int x0, int y0, int z0, int x1, int y1, int z1, bool untouchable = false);
 
