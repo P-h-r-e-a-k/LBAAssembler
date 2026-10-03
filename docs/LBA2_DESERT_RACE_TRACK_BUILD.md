@@ -1529,12 +1529,32 @@ New variables: 203 (seller beaten; 2 once told), 204 (his race run). The three l
 | Health | 16 | a quarter of the life back |
 | Nitro penguin | 16 | dropped behind the car; 2 s later it goes off (the land mines' blast) and stops every car within 4 cells for 1.5 s |
 | Super jet-pack | 12 | the game drives for 10 s, faster (× 1.35): the test pilot's steering, the player's keys left out |
+| Oil (since the same evening) | 14 | dropped behind the car: a slick on the road for 25 s, and any car that drives over it skids for 2 s |
 
 - **Opponents take them too:** a boost, a penguin dropped, or Twinsen shrunk (unless protected).
 - **The shrunk cars:** the engine can't scale a body as it draws it, so every car of the racer's entity gets a copy at half its size as its body 100 + its own (`Terrain/RaceTrackSmallCars.cs`). The copy is the body's own bytes with its points, spheres and bounding box halved. The engine switches a shrunk opponent to it (`opponent_small=`).
 - **The penguin seen** is the shop's nitro penguin (scene 14, entity 46): a copy of it waits out of sight in each scene and stands where the newest one was dropped.
 - **The display** shows what is on and for how long ("Protected 27").
 - **The setting:** the race car setup's "Power-ups in the mushrooms along the track", on by default. A test key, `powerup_only=<n>`, puts one power-up in every mushroom.
+
+**Oil, from the user the same evening** ("we may need to create an object for this").
+
+*The slick* (`Terrain/RaceTrackOil.cs`) is a new body:
+- a black puddle two cells across, irregular round its edge, with an oily blue and violet sheen on it, drawn flat (no light);
+- made the mushroom's entity's body 1 (entity 112, whose body 0 is the mushroom: a fixed object of one bone, as the slick is), so a slick is a copy of the mushroom's actor with another body;
+- three copies in each scene, out of sight until oil is dropped. The race-track mode keeps up to six slicks on the lap and shows a scene's with its copies, 20 units over the road.
+- *A bug on the way:* its triangles were first wound facing down, and the engine left them out, seen from above.
+
+*The skid:*
+- **Twinsen's car:** for 2 s his keys are left out (as the jet-pack does), the car turns round three times as quickly as it steers, and slows only a third as fast, so it slides on, spinning (`RaceMod_SkidSteer`, `RaceMod_SkidCoast` in BUGGY.CPP's RaceSpeed).
+- **An opponent's car:** it turns round one and a half times as it slows to under half its pace.
+- **Who:** an opponent that takes oil drops it behind itself. The protection spell keeps Twinsen's car off a slick.
+
+*Verified* (Mosquibees Island, every mushroom oil):
+- Twinsen dropped a slick, and reversed back over it: he skidded, his heading swinging through a full turn in under a second.
+- In the race, the Queen and the monkey monster skidded on his slicks, three and one times in a lap.
+
+![an oil slick on the road](racetrack/build/powerup_oil.png)
 
 **Later the same day, two changes from the user:**
 - **The lightning spell fills Twinsen's magic.** The game's own lightning spell takes all of his magic, so picking it up now fills it too, as a clover does (magic level × 20). It also shows the game's own lightning flash (INCRUST_ECLAIR, 0.7 s). With no magic level yet (the start of a game) there is nothing to fill.

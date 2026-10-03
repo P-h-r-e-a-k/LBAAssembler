@@ -86,6 +86,9 @@
  *   nitro penguin (dropped behind the car, it goes off 2 s later and stops every car near it) and the super jet-pack (the game drives for
  *   10 s, faster). It grows back a while later. An opponent that drives over one gets a boost, drops a penguin or shrinks Twinsen.
  *   The lightning spell fills Twinsen's magic too (the game's own spell takes it all), with the game's lightning flash.
+ *   Oil (oil=<scene> <actor>: the slicks' copies in each scene): dropped behind the car, a slick lies on the road for RACE_OIL_MS, and any
+ *   car that drives over it skids for RACE_SKID_MS -- Twinsen's slides on, turning round, his keys left out; an opponent's slows and
+ *   spins. The protection spell keeps a car off it.
  *   No one dies in a race (RaceMod_NoHarm): a car a penguin blows up stops with the game's own hit reaction, as Twinsen's does on a land
  *   mine (HitObj: the hit animation and the stars, no life lost; an opponent's car its own hit animation), and a long fall or a lightning
  *   strike stops Twinsen's car the same way instead of killing him.
@@ -189,6 +192,7 @@ typedef struct {
     double ArcS0[RACE_MAX_ARCS], ArcS1[RACE_MAX_ARCS]; // each carried jump along its line, foot to foot (-1: none)
     int PaceLo, PaceHi;                    // its skill drawn between these when the track loads (opponent_pace=<lo> <hi>; 0: Pace as given)
     S32 BoostUntil, HitUntil;              // a power-up's boost, and a penguin's blast that stopped it, until when
+    S32 SkidUntil, SkidStart; int SkidDir; // skidding on oil: until when, since when, and which way it spins
     int Small, Normal;                     // its car's shrunk generic body (-1 none) and its own (-1: not seen yet)
 } T_RACE_OPPONENT;
 static T_RACE_OPPONENT s_opp[RACE_MAX_OPPONENTS];
@@ -269,9 +273,24 @@ static int s_nbPenguinActors = 0;
 #define RACE_PENGUIN_HOLD 1500
 typedef struct { double X, Y, Z; S32 At; int On; } T_RACE_PENGUIN;  // world units; when it goes off
 static T_RACE_PENGUIN s_penguins[RACE_MAX_PENGUINS];
-enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_CLOVER, PU_HEALTH, PU_PENGUIN, PU_JETPACK, PU_COUNT };
-static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Clover!", "Health!", "Nitro penguin!", "Super jet-pack!"};
-static const int s_puWeight[PU_COUNT] = {24, 12, 12, 8, 16, 16, 12};
+enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_CLOVER, PU_HEALTH, PU_PENGUIN, PU_JETPACK, PU_OIL, PU_COUNT };
+static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Clover!", "Health!", "Nitro penguin!", "Super jet-pack!", "Oil slick!"};
+static const int s_puWeight[PU_COUNT] = {24, 12, 12, 8, 16, 16, 12, 14};
+// oil: the slicks on the road (world units; until when), and the scenes' copies of the slick that show them
+#define RACE_MAX_SLICKS 6
+#define RACE_MAX_OIL_ACTORS 256
+#define RACE_OIL_MS 25000                  // how long a slick lies on the road
+#define RACE_OIL_REACH 760                 // how near a car's middle comes to a slick's to drive over it
+#define RACE_SKID_MS 2000                  // how long a car skids
+#define RACE_SKID_STEER 3.0                // Twinsen's car turns this much quicker while it skids (its keys are not its own) ...
+#define RACE_SKID_COAST 0.3                // ... and slows only this much as fast: it slides on
+#define RACE_SKID_TURNS 1.5                // an opponent's car turns round this many times
+typedef struct { double X, Y, Z; S32 Until; int On; } T_RACE_SLICK;
+static T_RACE_SLICK s_slicks[RACE_MAX_SLICKS];
+static int s_oilScene[RACE_MAX_OIL_ACTORS], s_oilActor[RACE_MAX_OIL_ACTORS];
+static int s_nbOilActors = 0;
+static S32 s_skidUntil = 0;
+static int s_skidDir = 1;
 #define RACE_BOOST_MS 4000
 #define RACE_PROTECT_MS 30000
 #define RACE_SHRINK_MS 20000
@@ -1262,6 +1281,9 @@ static void Load(const char *path, int carOnly = 0) {
             T_RACE_MUSHROOM *m = &s_mush[s_nbMush];
             if (s_nbMush < RACE_MAX_MUSHROOMS && sscanf(v, "%d %d", &m->Scene, &m->Actor) == 2) { m->HasY = 0; m->Back = 0; s_nbMush++; }
         }
+        else if (!strcmp(key, "oil")) {
+            if (s_nbOilActors < RACE_MAX_OIL_ACTORS && sscanf(v, "%d %d", &s_oilScene[s_nbOilActors], &s_oilActor[s_nbOilActors]) == 2) s_nbOilActors++;
+        }
         else if (!strcmp(key, "penguin")) {
             if (s_nbPenguinActors < RACE_MAX_PENGUIN_ACTORS && sscanf(v, "%d %d", &s_penguinScene[s_nbPenguinActors], &s_penguinActor[s_nbPenguinActors]) == 2) s_nbPenguinActors++;
         }
@@ -1590,6 +1612,8 @@ void RaceMod_AutoDrive(int on, double lookCells, double sideCells) {
 }
 
 U32 RaceMod_AutoInput(void) {
+    // (skidding on oil: the car turns round, no throttle and no brake)
+    if (s_active && Comportement == C_BUGGY && TimerRefHR < s_skidUntil) return s_skidDir > 0 ? I_LEFT : I_RIGHT;
     if (!(s_auto || TimerRefHR < s_jetUntil) || !s_active || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return 0;
     if (s_loopState != LOOP_NONE) return I_UP;
     const T_RACE_OPPONENT *o = &s_opp[0];
@@ -2424,6 +2448,16 @@ static int RandomPowerUp(void) {
     return PU_FUEL;
 }
 
+// An oil slick dropped at (x, y, z) (world units): on the road for RACE_OIL_MS (the oldest goes when there are too many).
+static void DropOil(double x, double y, double z) {
+    int k = 0;
+    for (int i = 0; i < RACE_MAX_SLICKS; i++) {
+        if (!s_slicks[i].On) { k = i; break; }
+        if (s_slicks[i].Until < s_slicks[k].Until) k = i;
+    }
+    s_slicks[k].X = x; s_slicks[k].Y = y; s_slicks[k].Z = z; s_slicks[k].Until = TimerRefHR + RACE_OIL_MS; s_slicks[k].On = 1;
+}
+
 // A nitro penguin dropped at (x, y, z) (world units): it goes off RACE_PENGUIN_FUSE later.
 static void DropPenguin(double x, double y, double z) {
     int k = 0;
@@ -2454,6 +2488,12 @@ static void PlayerPowerUp(int pu, S32 now) {
         break;
     }
     case PU_JETPACK: s_jetUntil = now + RACE_JETPACK_MS; s_autoIndex = -1; break;
+    case PU_OIL: {
+        // behind the car, on the road
+        const double b = hero->Obj.Beta * 2 * 3.14159265358979 / 4096;
+        DropOil(hero->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1300, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1300);
+        break;
+    }
     }
     Message(s_puName[pu]);
     Log_Info("[racemod] power-up: %s", s_puName[pu]);
@@ -2481,9 +2521,10 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
         m->Back = now + RACE_MUSHROOM_BACK;
         T_RACE_OPPONENT *o = &s_opp[n];
         const int pu = RandomPowerUp();
-        if (pu == PU_PENGUIN) {
+        if (pu == PU_PENGUIN || pu == PU_OIL) {
             const double b = car->Obj.Beta * 2 * 3.14159265358979 / 4096;
-            DropPenguin(car->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1200, car->Obj.Y, car->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1200);
+            const double x = car->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1300, z = car->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1300;
+            if (pu == PU_OIL) DropOil(x, car->Obj.Y, z); else DropPenguin(x, car->Obj.Y, z);
         } else if (pu == PU_LIGHTNING && now >= s_protectUntil) {
             s_shrunkUntil = now + RACE_SHRINK_MS;
             char text[64];
@@ -2493,6 +2534,48 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
             o->BoostUntil = now + RACE_BOOST_MS;
         Log_Info("[racemod] %s takes a mushroom's power-up: %s", o->Name, s_puName[pu]);
     }
+}
+
+// Every frame: the oil slicks -- gone once dried up, shown by this scene's copies of the slick, and any car over one skidding.
+static void Slicks(S32 now, int driving) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    int k = 0;
+    for (int i = 0; i < RACE_MAX_SLICKS; i++) {
+        T_RACE_SLICK *sl = &s_slicks[i];
+        if (!sl->On) continue;
+        if (now >= sl->Until) { sl->On = 0; continue; }
+        const S32 lx = (S32)(sl->X - CurrentCubeX * 32768.0), lz = (S32)(sl->Z - CurrentCubeY * 32768.0);
+        if (lx < 0 || lx >= 32768 || lz < 0 || lz >= 32768) continue;
+        // (shown by the next of this scene's slicks; its box a point, as the mushrooms': no car is stopped by it)
+        for (; k < s_nbOilActors; k++) {
+            if (s_oilScene[k] != NumCube || s_oilActor[k] <= 0 || s_oilActor[k] >= NbObjets) continue;
+            T_OBJET *a = &ListObjet[s_oilActor[k]];
+            a->Obj.X = lx; a->Obj.Y = (S32)sl->Y + 20; a->Obj.Z = lz;   // (a little over the road: no fight with it in the depth buffer)
+            a->XMin = a->XMax = a->ZMin = a->ZMax = 0;
+            k++;
+            break;
+        }
+        // Twinsen's car over it: it skids, unless the protection spell is on
+        if (driving && CubeMode == CUBE_EXTERIEUR && now >= s_skidUntil && now >= s_protectUntil && Near(hero, lx, (S32)sl->Y, lz, RACE_OIL_REACH)) {
+            s_skidUntil = now + RACE_SKID_MS;
+            s_skidDir = RaceRandom() < 0.5 ? 1 : -1;
+            Message("Skidding on oil!");
+            Log_Info("[racemod] Twinsen skids on oil");
+        }
+        // an opponent's
+        for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+            T_RACE_OPPONENT *o = &s_opp[n];
+            if (!o->Count || !o->Scenes || now < o->SkidUntil) continue;
+            double x, z, y, v, dx, dz;
+            PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
+            if ((x - sl->X) * (x - sl->X) + (z - sl->Z) * (z - sl->Z) >= (double)RACE_OIL_REACH * RACE_OIL_REACH || fabs(y - sl->Y) > 900) continue;
+            o->SkidUntil = now + RACE_SKID_MS; o->SkidStart = now; o->SkidDir = RaceRandom() < 0.5 ? 1 : -1;
+            Log_Info("[racemod] %s skids on oil", o->Name);
+        }
+    }
+    // the scene's slicks not on the road, out of sight
+    for (; k < s_nbOilActors; k++)
+        if (s_oilScene[k] == NumCube && s_oilActor[k] > 0 && s_oilActor[k] < NbObjets) ListObjet[s_oilActor[k]].Obj.Y = -20000;
 }
 
 // Every frame: the mushrooms of this scene (gone while taken, grown back after), the player's car over one, the penguins going off.
@@ -2558,6 +2641,7 @@ static void PowerUps(S32 now, int driving) {
         break;
     }
     if (now >= s_jetUntil && s_jetUntil) { s_jetUntil = 0; s_autoIndex = -1; }
+    Slicks(now, driving);
 }
 
 // BUGGY.CPP RaceSpeed: how much faster or slower the player's car is than its setup (its top speed and pull): Gazogem fuel and the
@@ -2574,8 +2658,13 @@ double RaceMod_SpeedFactor(void) {
 
 // PERSO.CPP: the jet-pack has the controls (the player's own keys are left out while it lasts).
 S32 RaceMod_Takeover(void) {
-    return RaceMod_Active() && Comportement == C_BUGGY && TimerRefHR < s_jetUntil;
+    return RaceMod_Active() && Comportement == C_BUGGY && (TimerRefHR < s_jetUntil || TimerRefHR < s_skidUntil);
 }
+
+// BUGGY.CPP: Twinsen's car skidding on oil -- it turns RACE_SKID_STEER times as quickly (the turn is the skid's, not his) and slows
+// RACE_SKID_COAST as fast (it slides on). 1 when it isn't.
+double RaceMod_SkidSteer(void) { return RaceMod_Active() && TimerRefHR < s_skidUntil ? RACE_SKID_STEER : 1; }
+double RaceMod_SkidCoast(void) { return RaceMod_Active() && TimerRefHR < s_skidUntil ? RACE_SKID_COAST : 1; }
 
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
@@ -2628,6 +2717,7 @@ void RaceMod_Frame(void) {
             if (now < o->BoostUntil) pace *= RACE_BOOST * 0.9;
             if (now < s_shrinkOthersUntil) pace *= RACE_SHRUNK;
             if (now < o->HitUntil) { pace = 0; o->Speed = 0; }
+            if (now < o->SkidUntil) pace *= 0.45;
             // its line's speed at its skill, reached from a standstill no faster than the car pulls away (the plan's braking is kept)
             const double target = v * pace / 100.0;
             if (o->Speed < target) {
@@ -2708,6 +2798,11 @@ void RaceMod_Frame(void) {
         // grid, 2026-10-03)
         if (car->Obj.X < 0 || car->Obj.X >= 32768 || car->Obj.Z < 0 || car->Obj.Z >= 32768) car->Obj.Y = -20000;
         ClearRealAngle(car);
+        // skidding on oil: the car turning round as it slides on along its line
+        if (now < o->SkidUntil) {
+            const double turn = (now - o->SkidStart) * RACE_SKID_TURNS * 4096.0 / RACE_SKID_MS;
+            car->Obj.Beta = (car->Obj.Beta + o->SkidDir * (S32)turn) & 4095;
+        }
         // shrunk by the lightning spell: its car's half-size body while it lasts (the build's, opponent_small=)
         if (o->Small >= 0) {
             if (o->Normal < 0 && now >= s_shrinkOthersUntil) o->Normal = car->GenBody;
@@ -2927,7 +3022,7 @@ void RaceMod_Draw(void) {
     // the power-ups on, and how long for
     struct { S32 Until; const char *Name; } on[] = {
         {s_boostUntil, "Gazogem boost"}, {s_jetUntil, "Jet-pack"}, {s_protectUntil, "Protected"},
-        {s_shrinkOthersUntil, "Opponents shrunk"}, {s_shrunkUntil, "Shrunk"},
+        {s_shrinkOthersUntil, "Opponents shrunk"}, {s_shrunkUntil, "Shrunk"}, {s_skidUntil, "Skidding"},
     };
     for (size_t i = 0; i < sizeof(on) / sizeof(on[0]); i++) {
         if (now >= on[i].Until) continue;
@@ -2991,7 +3086,7 @@ static void ResetTrack(void) {
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0; s_hinted = -1;
     s_nbGates = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
-    s_powerups = 0; s_powerupOnly = -1; s_nbMush = 0; s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
+    s_powerups = 0; s_powerupOnly = -1; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks)); s_skidUntil = 0; s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrinkOthersUntil = s_shrunkUntil = s_jetUntil = 0;
     s_ownTrack = 0; s_loaded[0] = 0;
     FollowCamEyeHook = NULL;

@@ -73,7 +73,9 @@ internal static class RaceTrackService
         // Mushrooms, Penguins: the power-ups' mushrooms along the lap and the nitro penguin of each scene, each [scene, actor]
         // (RaceTrackScenes.MushroomSpots; RACEMOD.CPP's power-ups).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Mushrooms = null,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Penguins = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Penguins = null,
+        // Oil: the oil slicks of each scene, out of sight until a car drops oil, each [scene, actor] (RaceTrackOil)
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Oil = null);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
     // A driver: its name, its line ([x, z, y, speed, bend radius] as Path's), how many points before the start line it starts without a
     // grid, the scenes' copies of its car (none for a time to beat: Ghost), its character (Top, Grip: shares of the player's car's top
@@ -279,7 +281,7 @@ internal static class RaceTrackService
     // all of them, and each track's record for RACETRACK.JSON, in the order built.
     public sealed class BuildSession
     {
-        public bool CharacterCars, Baldino, SmallCars;
+        public bool CharacterCars, Baldino, SmallCars, Oil;
         public List<TrackInfo> Tracks { get; } = new();
     }
 
@@ -470,6 +472,8 @@ internal static class RaceTrackService
         if (!session.CharacterCars) { log.AddRange(RaceTrackCharacterCars.Install(gameDirectory).Log); session.CharacterCars = true; }
         // ... and each of the racer entity's cars shrunk to half its size, for the lightning spell (RaceTrackSmallCars)
         if (!session.SmallCars) { log.Add(RaceTrackSmallCars.Install(gameDirectory)); session.SmallCars = true; }
+        // ... and the oil slick the power-ups' oil leaves on the road (RaceTrackOil)
+        if (!session.Oil) { log.Add(RaceTrackOil.Install(gameDirectory)); session.Oil = true; }
         return log;
     }
 
@@ -530,7 +534,8 @@ internal static class RaceTrackService
                 ? report.JumpCameras.Select(c => new[] { c.Anim, c.CubeX, c.CubeZ, (int)Math.Round((c.X - c.CubeX * 64) * 512), (int)Math.Round(c.Y), (int)Math.Round((c.Z - c.CubeZ * 64) * 512) }).ToList()
                 : null,
             ArcJumps: raised && report.ArcRaised.Count > 0 ? report.ArcRaised.ToList() : null, Drivers: drivers.Count > 0 ? drivers : null,
-            Mushrooms: scenes.Mushrooms is { Count: > 0 } mushrooms ? mushrooms : null, Penguins: scenes.Penguins is { Count: > 0 } penguins ? penguins : null);
+            Mushrooms: scenes.Mushrooms is { Count: > 0 } mushrooms ? mushrooms : null, Penguins: scenes.Penguins is { Count: > 0 } penguins ? penguins : null,
+            Oil: scenes.Oil is { Count: > 0 } oil ? oil : null);
     }
 
     private static int[] LoopRecord(LoopInfo l)

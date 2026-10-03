@@ -87,6 +87,7 @@ internal static class RaceCarEngineFile
             text.Append("powerups=1\n");
             foreach (var m in mushrooms) text.Append($"mushroom={m[0]} {m[1]}\n");
             foreach (var pg in track.Penguins ?? new()) text.Append($"penguin={pg[0]} {pg[1]}\n");
+            foreach (var oil in track.Oil ?? new()) text.Append($"oil={oil[0]} {oil[1]}\n");
         }
         if (ghost >= 0) text.Append($"beat={ghost + 1}{(storm ? $" {RaceTrackStory.BeatVar} 1" : "")}\n");
         // the story's gates and the town circuit's race: Mr. Paul lets no one race without racing gloves; the aliens' track is ready the day
@@ -127,7 +128,7 @@ internal static class RaceCarEngineFile
     // The scenes' copies of every opponent's car a track has.
     private static IEnumerable<(int Scene, int Actor)> AllCars(RaceTrackService.TrackInfo track) =>
         (track.Drivers ?? new()).SelectMany(d => d.Actors.Select(a => (a.Key, a.Value)))
-            .Concat((track.Mushrooms ?? new()).Concat(track.Penguins ?? new()).Select(m => (m[0], m[1])))
+            .Concat((track.Mushrooms ?? new()).Concat(track.Penguins ?? new()).Concat(track.Oil ?? new()).Select(m => (m[0], m[1])))
             .Concat((track.Opponent ?? new()).Select(a => (a.Key, a.Value)))
             .Concat((track.Rivals ?? new()).SelectMany(r => r.Actors.Select(a => (a.Key, a.Value))));
 
@@ -137,7 +138,7 @@ internal static class RaceCarEngineFile
         if (track is null) return new();
         var raced = car.Opponents(track).SelectMany(o => o.Actors.Select(a => (a.Key, a.Value))).ToHashSet();
         // (the power-ups' mushrooms and penguins: the race-track mode's when they are on, out of sight when they are off)
-        if (car.PowerUps) foreach (var m in (track.Mushrooms ?? new()).Concat(track.Penguins ?? new())) raced.Add((m[0], m[1]));
+        if (car.PowerUps) foreach (var m in (track.Mushrooms ?? new()).Concat(track.Penguins ?? new()).Concat(track.Oil ?? new())) raced.Add((m[0], m[1]));
         return AllCars(track).Where(a => !raced.Contains(a)).ToList();
     }
 

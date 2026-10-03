@@ -248,13 +248,13 @@ static void RaceSpeedOnSlope(S_BUGGY *ptb, S32 deltatimer, S32 flagattack, doubl
     const double factor = RaceMod_SpeedFactor();
     const double gearTop = car->GearTop[RaceMod_Gear() - 1] * factor, engineTop = gearTop * share;
     const double dt = deltatimer / 1000.0;
-    const double coast = dt * car->Coast;
+    const double coast = dt * car->Coast * RaceMod_SkidCoast();
     double v = ptb->Speed;
 
     // (over the top gear's speed the car steers as much quicker as it goes faster: its tightest turn stays what it is; and a banked
-    // bend turns it)
+    // bend turns it; and skidding on oil it turns round -- RACEMOD.CPP)
     const double fastest = car->GearTop[car->Gears - 1];
-    ptb->SpeedRot = (S32)(car->Steer * (v > fastest ? v / fastest : 1) * (1 + RACE_BANK_STEER * bank));
+    ptb->SpeedRot = (S32)(car->Steer * (v > fastest ? v / fastest : 1) * (1 + RACE_BANK_STEER * bank) * RaceMod_SkidSteer());
     const S32 touched = RaceMod_RailTouched();
 
     if (RaceMod_Held()) {
@@ -314,9 +314,10 @@ static void RaceSpeed(S_BUGGY *ptb, S32 deltatimer, S32 flagattack) {
     // (a power-up's boost, or shrunk: RACEMOD.CPP RaceMod_SpeedFactor)
     const double factor = RaceMod_SpeedFactor();
     const S32 top = (S32)(car->GearTop[RaceMod_Gear() - 1] * factor);
-    const S32 coast = deltatimer * car->Coast / 1000;
+    // (skidding on oil the car slides on and turns round: RACEMOD.CPP)
+    const S32 coast = (S32)(deltatimer * car->Coast * RaceMod_SkidCoast() / 1000);
 
-    ptb->SpeedRot = car->Steer;
+    ptb->SpeedRot = (S32)(car->Steer * RaceMod_SkidSteer());
 
     // on the grid until the count-down's GO
     if (RaceMod_Held()) {
