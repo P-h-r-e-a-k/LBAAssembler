@@ -20,7 +20,8 @@ internal sealed class RaceCarWindow : Window
     private readonly WrapPanel drivers = new() { Margin = new Thickness(18, 2, 0, 0) };
     private readonly CheckBox newGame = new() { Content = "Play the story from a new game, every track raced where and when the game is", ToolTip = "Twinsen starts in his house. Citadel Island's storm track is raced in the rain, its town circuit once the storm is over and Twinsen has slept; each other island's track on its island." };
     private readonly CheckBox fightBack = new() { Content = "They push harder when they fall behind you" };
-    private readonly CheckBox powerUps = new() { Content = "Power-ups in the mushrooms along the track", ToolTip = "Small brown mushrooms on the road, each with a power-up inside for the first car over it: Gazogem fuel, the protection spell, the lightning spell, a clover, health, a nitro penguin, the super jet-pack or oil (dropped behind the car: whoever drives over it skids). They grow back." };
+    private readonly CheckBox penguinsWalk = new() { Content = "Penguins walk the track until a car comes near (off: they go off a second after they are dropped)", Margin = new Thickness(18, 2, 0, 0) };
+    private readonly CheckBox powerUps = new() { Content = "Power-ups in the mushrooms along the track", ToolTip = "Small brown mushrooms on the road, each with a power-up inside for the first car over it: Gazogem fuel, the protection spell, the lightning spell, a clover, health, a nitro penguin, the super jet-pack or oil (whoever drives over it skids). They grow back. Oil and penguins wait until you drop them with Shift." };
     private readonly CheckBox qualifying = new() { Content = "Drive a qualifying lap first: the times set the grid" };
     private readonly CheckBox fineWeather = new() { Content = "Stop the rain on Citadel Island (the weather after the lighthouse, when the aliens land)", ToolTip = "No rain or thunder, the brighter island with its own light and sky. Only the weather changes: the story stays where it is." };
     // Citadel Island built with a track in each of its files: the weather is the raced track's (the town circuit's is the fine weather's,
@@ -121,6 +122,9 @@ internal sealed class RaceCarWindow : Window
         powerUps.Unchecked += (_, _) => setup.PowerUps = false;
         powerUps.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(powerUps);
+        penguinsWalk.Checked += (_, _) => setup.PenguinsWalk = true;
+        penguinsWalk.Unchecked += (_, _) => setup.PenguinsWalk = false;
+        root.Children.Add(penguinsWalk);
         qualifying.Checked += (_, _) => setup.Qualifying = true;
         qualifying.Unchecked += (_, _) => setup.Qualifying = false;
         qualifying.Margin = new Thickness(0, 4, 0, 0);
@@ -146,7 +150,7 @@ internal sealed class RaceCarWindow : Window
         root.Children.Add(display);
         askBeforePlay.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(askBeforePlay);
-        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, fightBack, powerUps, qualifying, fineWeather, startAtLine, newGame }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, fightBack, powerUps, penguinsWalk, qualifying, fineWeather, startAtLine, newGame }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         var ok = new Button { Content = forPlay ? "Play" : "Save", Padding = new Thickness(18, 5, 18, 5), IsDefault = true, Margin = new Thickness(0, 0, 10, 0) };
         var cancel = new Button { Content = "Cancel", Padding = new Thickness(14, 5, 14, 5), IsCancel = true };
@@ -168,6 +172,7 @@ internal sealed class RaceCarWindow : Window
         opponent.IsChecked = setup.Opponent;
         newGame.IsChecked = setup.NewGame;
         powerUps.IsChecked = setup.PowerUps;
+        penguinsWalk.IsChecked = setup.PenguinsWalk;
         fightBack.IsChecked = setup.OpponentsFightBack;
         qualifying.IsChecked = setup.Qualifying;
         fineWeather.IsChecked = trackWeather ?? setup.FineWeather;

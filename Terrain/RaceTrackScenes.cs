@@ -499,10 +499,14 @@ internal static class RaceTrackScenes
                         mushroom.Y = (int)Math.Round(y); mushroom.Beta = 0;
                         t.Mushrooms.Add(new[] { scene, SceneOps.AddActor(model, mushroom) });
                     }
-                    var penguin = penguinTemplate.Clone();
-                    penguin.Flags = OpponentFlags; penguin.Move = 0; penguin.Life = new byte[] { 0 }; penguin.Track = new byte[] { 0 };
-                    penguin.X = IslandFile.CubeSize / 2; penguin.Z = IslandFile.CubeSize / 2; penguin.Y = -20000; penguin.Beta = 0;
-                    t.Penguins.Add(new[] { scene, SceneOps.AddActor(model, penguin) });
+                    // (a few: the penguins dropped walk the track, several in one scene at once)
+                    for (var k = 0; k < PenguinsPerScene; k++)
+                    {
+                        var penguin = penguinTemplate.Clone();
+                        penguin.Flags = OpponentFlags; penguin.Move = 0; penguin.Life = new byte[] { 0 }; penguin.Track = new byte[] { 0 };
+                        penguin.X = IslandFile.CubeSize / 2; penguin.Z = IslandFile.CubeSize / 2; penguin.Y = -20000; penguin.Beta = 0;
+                        t.Penguins.Add(new[] { scene, SceneOps.AddActor(model, penguin) });
+                    }
                     // the oil slicks: the mushroom's entity with the slick's body
                     for (var k = 0; k < OilPerScene; k++)
                     {
@@ -530,7 +534,7 @@ internal static class RaceTrackScenes
         foreach (var t in tracks)
         {
             var whose = tracks.Count > 1 ? $" ({(t == tracks[0] ? options.Island.IleFile : options.Island.TwinIleFile)}'s track)" : "";
-            if (t.Mushrooms.Count > 0) log.Add($"the power-ups: {t.Mushrooms.Count} mushrooms along the lap (the game's own, scene {MushroomScene}), a nitro penguin and {OilPerScene} oil slicks in each of {t.Penguins.Count} scenes{whose}");
+            if (t.Mushrooms.Count > 0) log.Add($"the power-ups: {t.Mushrooms.Count} mushrooms along the lap (the game's own, scene {MushroomScene}), {PenguinsPerScene} nitro penguins and {OilPerScene} oil slicks in each of {t.Penguins.Count / PenguinsPerScene} scenes{whose}");
             for (var k = 0; k < t.Drivers.Count; k++)
                 if (t.Cars[k].Count > 0) log.Add($"{t.Drivers[k].Name}: a copy of {(t.Drivers[k].Bike ? "the motorbike Rabbibunny" : $"the car (the racer's body {t.Drivers[k].Body})")} in {t.Cars[k].Count} scenes{whose}");
             if (t.Grid.Count > 0) log.Add($"the grid: {t.Grid.Count} spots, pole {GridFirst} cells behind the start line, each {t.Options.GridStep} behind the last, {GridSide} either side of the middle{whose}");
@@ -575,7 +579,7 @@ internal static class RaceTrackScenes
     // jump; the race-track mode hides a power-up in each. And the nitro penguin a car drops: the shop's (scene 14, actor 5: entity 46).
     public const int MushroomScene = 45, MushroomActor = 7, PenguinScene = 14, PenguinActor = 5;
     // (the oil slicks one scene can show at once: RACEMOD.CPP keeps six on the whole lap)
-    private const int OilPerScene = 3;
+    private const int OilPerScene = 3, PenguinsPerScene = 3;
     private const double MushroomSpacing = 40, MushroomFirst = 30, MushroomClear = 14;
     private static readonly double[] MushroomSide = { -1.2, 1.2, 0 };
 

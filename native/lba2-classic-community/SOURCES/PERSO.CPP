@@ -626,6 +626,8 @@ restartloop:
         // a race-track mod's test pilot, when a harness turned it on (RACEMOD.CPP RaceMod_AutoInput)
         // ... or a power-up's jet-pack, which has the controls while it lasts
         { extern U32 RaceMod_AutoInput(void); if (RaceMod_Takeover()) Input &= ~(U32)(I_UP | I_DOWN | I_LEFT | I_RIGHT); Input |= RaceMod_AutoInput(); }
+        // ... and Shift drops what Twinsen holds instead of opening the inventory (RACEMOD.CPP)
+        if (RaceMod_BlocksInventory()) Input &= ~(U32)I_INVENTORY;
 
         ManageTime();
 

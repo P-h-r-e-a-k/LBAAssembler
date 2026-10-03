@@ -1529,7 +1529,7 @@ New variables: 203 (seller beaten; 2 once told), 204 (his race run). The three l
 | Health | 16 | a quarter of the life back |
 | Nitro penguin | 16 | dropped behind the car; 2 s later it goes off (the land mines' blast) and stops every car within 4 cells for 1.5 s |
 | Super jet-pack | 12 | the game drives for 10 s, faster (× 1.35): the test pilot's steering, the player's keys left out |
-| Oil (since the same evening) | 14 | dropped behind the car: a slick on the road for 25 s, and any car that drives over it skids for 2 s |
+| Oil (since the same evening) | 14 | dropped behind the car: a slick on the road until a car drives over it, and that car skids for 2 s |
 
 - **Opponents take them too:** a boost, a penguin dropped, or Twinsen shrunk (unless protected).
 - **The shrunk cars:** the engine can't scale a body as it draws it, so every car of the racer's entity gets a copy at half its size as its body 100 + its own (`Terrain/RaceTrackSmallCars.cs`). The copy is the body's own bytes with its points, spheres and bounding box halved. The engine switches a shrunk opponent to it (`opponent_small=`).
@@ -1555,6 +1555,22 @@ New variables: 203 (seller beaten; 2 once told), 204 (his race run). The three l
 - In the race, the Queen and the monkey monster skidded on his slicks, three and one times in a lap.
 
 ![an oil slick on the road](racetrack/build/powerup_oil.png)
+
+**Oil, penguins and a key to drop them** (the user, the same evening):
+- **Slicks last until a car drives over one,** and that car takes it with it. With no time limit, the oldest of six goes when a seventh is dropped.
+- **Twinsen holds the oil or a penguin** until he drops it with Shift (either). The display says "Oil: Shift drops it".
+  - The left Shift is the game's inventory key. While he holds something, and until the key is let go after a drop, the race-track mode keeps it from opening the inventory (`RaceMod_BlocksInventory`, PERSO.CPP's input).
+  - The test pilot drops what it holds a second on (`autodrop_ms=`, 0: never).
+  - Opponents still drop theirs at once.
+- **A penguin dropped walks the track** (`penguin_mode=walk`, the default):
+  - It walks at about a cell a second along the first opponent's racing line, this way or that, wandering up to a cell and a half to either side, turning now and then. With no line, it wanders round where it was dropped.
+  - From a second after it is dropped, it goes off when any car comes within two cells.
+  - Three penguin copies wait in each scene, so several can walk in one at once.
+- **The setting** "Penguins walk the track until a car comes near", on by default. Off: a penguin goes off a second after it is dropped (`penguin_mode=fuse`).
+- **Verified** (Mosquibees Island):
+  - Holding oil, two presses of Shift (scancode 225 held from the console) dropped it twice, and the race went on with no inventory opened.
+  - Walking penguins moved about 450 units a second and turned round now and then; after the start both opponents walked into some and were blown up and stopped.
+  - On the fuse, each penguin went off within the second after it was dropped.
 
 **Later the same day, two changes from the user:**
 - **The lightning spell fills Twinsen's magic.** The game's own lightning spell takes all of his magic, so picking it up now fills it too, as a clover does (magic level × 20). It also shows the game's own lightning flash (INCRUST_ECLAIR, 0.7 s). With no magic level yet (the start of a game) there is nothing to fill.

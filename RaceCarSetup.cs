@@ -37,6 +37,8 @@ public sealed class RaceCarSetup
     public int RacerSkill { get; set; } = 92;
     // Power-ups hidden in small brown mushrooms along the lap (RACEMOD.CPP): a car that drives over one gets it.
     public bool PowerUps { get; set; } = true;
+    // A nitro penguin dropped walks the track until a car comes near it, and goes off; off: it goes off a second after it is dropped.
+    public bool PenguinsWalk { get; set; } = true;
     public List<string> LeftOut { get; set; } = new();
     // A qualifying lap before the race: its time against the opponents' sets the grid (off: Twinsen starts on pole).
     public bool Qualifying { get; set; } = true;

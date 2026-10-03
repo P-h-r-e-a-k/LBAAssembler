@@ -305,6 +305,7 @@ void RaceMod_Island(S32 island);
 double RaceMod_SpeedFactor(void);
 S32 RaceMod_Takeover(void);
 S32 RaceMod_NoHarm(void);
+S32 RaceMod_BlocksInventory(void);
 double RaceMod_SkidSteer(void);
 double RaceMod_SkidCoast(void);
 S32 RaceMod_Dial(S32 num);

@@ -85,6 +85,7 @@ internal static class RaceCarEngineFile
         if (car.PowerUps && track?.Mushrooms is { Count: > 0 } mushrooms)
         {
             text.Append("powerups=1\n");
+            text.Append($"penguin_mode={(car.PenguinsWalk ? "walk" : "fuse")}\n");
             foreach (var m in mushrooms) text.Append($"mushroom={m[0]} {m[1]}\n");
             foreach (var pg in track.Penguins ?? new()) text.Append($"penguin={pg[0]} {pg[1]}\n");
             foreach (var oil in track.Oil ?? new()) text.Append($"oil={oil[0]} {oil[1]}\n");
