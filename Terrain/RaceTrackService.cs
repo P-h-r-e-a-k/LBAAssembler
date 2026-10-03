@@ -75,7 +75,9 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Mushrooms = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Penguins = null,
         // Oil: the oil slicks of each scene, out of sight until a car drops oil, each [scene, actor] (RaceTrackOil)
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Oil = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Oil = null,
+        // OilIcon: the oil's model in OBJFIX.HQR, which the item box shows (RaceTrackOil.InstallIcon)
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? OilIcon = null);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
     // A driver: its name, its line ([x, z, y, speed, bend radius] as Path's), how many points before the start line it starts without a
     // grid, the scenes' copies of its car (none for a time to beat: Ghost), its character (Top, Grip: shares of the player's car's top
@@ -282,6 +284,7 @@ internal static class RaceTrackService
     public sealed class BuildSession
     {
         public bool CharacterCars, Baldino, SmallCars, Oil;
+        public int? OilIcon;
         public List<TrackInfo> Tracks { get; } = new();
     }
 
@@ -473,7 +476,15 @@ internal static class RaceTrackService
         // ... and each of the racer entity's cars shrunk to half its size, for the lightning spell (RaceTrackSmallCars)
         if (!session.SmallCars) { log.Add(RaceTrackSmallCars.Install(gameDirectory)); session.SmallCars = true; }
         // ... and the oil slick the power-ups' oil leaves on the road (RaceTrackOil)
-        if (!session.Oil) { log.Add(RaceTrackOil.Install(gameDirectory)); session.Oil = true; }
+        if (!session.Oil)
+        {
+            log.Add(RaceTrackOil.Install(gameDirectory));
+            // (and its drum in the item box)
+            var (icon, iconLog) = RaceTrackOil.InstallIcon(gameDirectory);
+            log.Add(iconLog);
+            session.OilIcon = icon;
+            session.Oil = true;
+        }
         return log;
     }
 
@@ -482,7 +493,8 @@ internal static class RaceTrackService
     public static void WriteInfo(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes, TwinTrack? twin = null, BuildSession? session = null,
         StoryInfo? story = null)
     {
-        var info = Info(report, options, scenes) with { Story = story };
+        session ??= new BuildSession();
+        var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon };
         if (info.ArcJumps is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
         if (twin is { Own: true } && scenes.Twin is { } twinScenes)
         {
@@ -490,9 +502,8 @@ internal static class RaceTrackService
             var fine = Info(twin.Report, twin.Options, twinScenes);
             // (the town circuit's own arrow, which the bed switches on)
             if (story is not null) fine = fine with { StoryArrow = story.TownArrow };
-            info = info with { Twin = fine };
+            info = info with { Twin = fine with { OilIcon = session.OilIcon } };
         }
-        session ??= new BuildSession();
         session.Tracks.Add(info);
         var all = session.Tracks[0] with { Others = session.Tracks.Count > 1 ? session.Tracks.Skip(1).ToList() : null };
         File.WriteAllText(Path.Combine(gameDirectory, InfoFile), JsonSerializer.Serialize(all, new JsonSerializerOptions { WriteIndented = true }));

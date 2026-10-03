@@ -306,6 +306,9 @@ double RaceMod_SpeedFactor(void);
 S32 RaceMod_Takeover(void);
 S32 RaceMod_NoHarm(void);
 S32 RaceMod_BlocksInventory(void);
+// The protection spell a race's power-up casts (EXTRA.CPP): it takes no magic while it lasts, and blinks as it runs out.
+S32 RaceMod_ProtectionFree(void);
+S32 RaceMod_ProtectionEnding(void);
 double RaceMod_SkidSteer(void);
 double RaceMod_SkidCoast(void);
 S32 RaceMod_Dial(S32 num);

@@ -21,7 +21,7 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox newGame = new() { Content = "Play the story from a new game, every track raced where and when the game is", ToolTip = "Twinsen starts in his house. Citadel Island's storm track is raced in the rain, its town circuit once the storm is over and Twinsen has slept; each other island's track on its island." };
     private readonly CheckBox fightBack = new() { Content = "They push harder when they fall behind you" };
     private readonly CheckBox penguinsWalk = new() { Content = "Penguins walk the track until a car comes near (off: they go off a second after they are dropped)", Margin = new Thickness(18, 2, 0, 0) };
-    private readonly CheckBox powerUps = new() { Content = "Power-ups in the mushrooms along the track", ToolTip = "Small brown mushrooms on the road, each with a power-up inside for the first car over it: Gazogem fuel, the protection spell, the lightning spell, a clover, health, a nitro penguin, the super jet-pack or oil (whoever drives over it skids). They grow back. Oil and penguins wait until you drop them with Shift." };
+    private readonly CheckBox powerUps = new() { Content = "Power-ups in the mushrooms along the track", ToolTip = "Rows of small brown mushrooms across the road, each with a power-up inside: Gazogem fuel, the protection spell, the lightning spell, a clover, health, a nitro penguin, the super jet-pack or oil (whoever drives over it skids). A car takes one from a row; the cars at the back get the strong ones. They grow back. Yours go into the item box at the top left (two slots, a roulette picks each): Shift uses the selected one, Q selects the other." };
     private readonly CheckBox qualifying = new() { Content = "Drive a qualifying lap first: the times set the grid" };
     private readonly CheckBox fineWeather = new() { Content = "Stop the rain on Citadel Island (the weather after the lighthouse, when the aliens land)", ToolTip = "No rain or thunder, the brighter island with its own light and sky. Only the weather changes: the story stays where it is." };
     // Citadel Island built with a track in each of its files: the weather is the raced track's (the town circuit's is the fine weather's,
@@ -53,8 +53,8 @@ internal sealed class RaceCarWindow : Window
         var root = new StackPanel { Margin = new Thickness(16) };
         root.Children.Add(Text("How the buggy drives when you play a game folder that has a race track built. X shifts up a gear and Z down (unless the gearbox " +
                                "is automatic); each gear has its own top speed, and a low gear pulls harder than a high one. Speeds are as the game's display shows " +
-                               "them, a cell taken as a metre: the original buggy tops out at 27 km/h. A lap counts once you have crossed every checkpoint round the " +
-                               "track; the opponents (each track's own drivers in the cars made after them, or the original track's racer, Baldino and the motorbike Rabbibunny) line up with you on the grid and start on the count-down. " +
+                               "them, a cell taken as a metre: the original buggy tops out at 27 km/h. A lap counts once you have been halfway round the track " +
+                               "and cross the start line again; the opponents (each track's own drivers in the cars made after them, or the original track's racer, Baldino and the motorbike Rabbibunny) line up with you on the grid and start on the count-down. " +
                                "Other game folders play the game as it is."));
 
         root.Children.Add(Section("Start from"));

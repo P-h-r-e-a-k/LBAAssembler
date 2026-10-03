@@ -267,7 +267,7 @@ internal static class RaceTrackScenes
         var originals = File.Exists(store.ScenePath + RaceTrackService.BackupSuffix) ? new SceneStore(SceneGame.Lba2, gameDirectory, "SCENE.HQR" + RaceTrackService.BackupSuffix) : store;
         var log = new List<string>();
         var changes = new List<SceneChange>();
-        var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0;
+        var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0; var mushroomsLeftOut = 0;
         foreach (var t in tracks)
         {
             t.Drivers = t.Options.Racers().Where(d => !d.Ghost).ToList();
@@ -277,7 +277,7 @@ internal static class RaceTrackScenes
                 try { t.Racer = originals.Load(RacerScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == RacerEntity)?.Clone(); }
                 catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { log.Add($"no opponent: scene {RacerScene} could not be read ({e.Message})"); }
             t.Edges = EdgeCrossings(store, t.Report, t.Options, island);
-            t.MushroomSpots = MushroomSpots(t.Report);
+            t.MushroomSpots = MushroomSpots(t.Report, t.Options.RaisedHalfWidth);
         }
         // the mushrooms' and the penguin's actors to copy: the game's own (Citadel Island's mushroom by the weather wizard's tent, the
         // nitro penguin in its shop)
@@ -493,6 +493,9 @@ internal static class RaceTrackScenes
                     foreach (var (x, z, y) in t.MushroomSpots)
                     {
                         if ((int)Math.Floor(x / 64) != model.CubeX || (int)Math.Floor(z / 64) != model.CubeY) continue;
+                        // (the scene's actors run out at the engine's hundred: the penguins and the slicks keep their room, and a row
+                        // that doesn't fit is shorter)
+                        if (model.Actors.Count + PenguinsPerScene + OilPerScene >= SceneValidator.MaxObjects) { mushroomsLeftOut++; continue; }
                         var mushroom = mushroomTemplate.Clone();
                         mushroom.Flags = OpponentFlags; mushroom.Move = 0; mushroom.Life = new byte[] { 0 }; mushroom.Track = new byte[] { 0 };
                         mushroom.X = (int)Math.Round((x - model.CubeX * 64) * 512); mushroom.Z = (int)Math.Round((z - model.CubeY * 64) * 512);
@@ -534,7 +537,8 @@ internal static class RaceTrackScenes
         foreach (var t in tracks)
         {
             var whose = tracks.Count > 1 ? $" ({(t == tracks[0] ? options.Island.IleFile : options.Island.TwinIleFile)}'s track)" : "";
-            if (t.Mushrooms.Count > 0) log.Add($"the power-ups: {t.Mushrooms.Count} mushrooms along the lap (the game's own, scene {MushroomScene}), {PenguinsPerScene} nitro penguins and {OilPerScene} oil slicks in each of {t.Penguins.Count / PenguinsPerScene} scenes{whose}");
+            if (t.Mushrooms.Count > 0) log.Add($"the power-ups: {t.Mushrooms.Count} mushrooms in rows across the road (the game's own, scene {MushroomScene}), {PenguinsPerScene} nitro penguins and {OilPerScene} oil slicks in each of {t.Penguins.Count / PenguinsPerScene} scenes{whose}");
+            if (mushroomsLeftOut > 0) log.Add($"{mushroomsLeftOut} mushrooms left out: their scenes had no room for more actors");
             for (var k = 0; k < t.Drivers.Count; k++)
                 if (t.Cars[k].Count > 0) log.Add($"{t.Drivers[k].Name}: a copy of {(t.Drivers[k].Bike ? "the motorbike Rabbibunny" : $"the car (the racer's body {t.Drivers[k].Body})")} in {t.Cars[k].Count} scenes{whose}");
             if (t.Grid.Count > 0) log.Add($"the grid: {t.Grid.Count} spots, pole {GridFirst} cells behind the start line, each {t.Options.GridStep} behind the last, {GridSide} either side of the middle{whose}");
@@ -574,16 +578,28 @@ internal static class RaceTrackScenes
     }
 
     // The power-ups' mushrooms: the game's small brown mushroom (Citadel Island's by the weather wizard's tent, scene 45 actor 7: entity
-    // 112, BODY.HQR 171, which gives a bonus when Twinsen walks into it), copied onto the road every MushroomSpacing cells round the lap from
-    // MushroomFirst after the start line, a little to one side or the other of its middle, not on or near a jump, a loop or a carried
-    // jump; the race-track mode hides a power-up in each. And the nitro penguin a car drops: the shop's (scene 14, actor 5: entity 46).
+    // 112, BODY.HQR 171, which gives a bonus when Twinsen walks into it), copied onto the road in a row across it every MushroomSpacing
+    // cells round the lap from MushroomFirst after the start line -- three side by side where the road is wide enough, else two (or one),
+    // MushroomGap apart and MushroomEdge in from its edges -- not on or near a jump, a loop or a carried jump; the race-track mode hides a
+    // power-up in each (a car takes one from a row: the others it passes give way). And the nitro penguin a car drops: the shop's (scene
+    // 14, actor 5: entity 46).
     public const int MushroomScene = 45, MushroomActor = 7, PenguinScene = 14, PenguinActor = 5;
     // (the oil slicks one scene can show at once: RACEMOD.CPP keeps six on the whole lap)
     private const int OilPerScene = 3, PenguinsPerScene = 3;
     private const double MushroomSpacing = 40, MushroomFirst = 30, MushroomClear = 14;
-    private static readonly double[] MushroomSide = { -1.2, 1.2, 0 };
+    // (the gap is more than the engine's reach for taking one, RACEMOD.CPP RACE_MUSHROOM_REACH: 2 cells; a car down the middle of one takes
+    // only that one)
+    private const double MushroomGap = 2.4, MushroomEdge = 1.0;
 
-    private static List<(double X, double Z, double Y)> MushroomSpots(RaceTrackReport report)
+    // How many mushrooms a row across a road this wide (half its width, cells) has, and how far apart.
+    internal static (int Count, double Gap) MushroomRow(double half)
+    {
+        var room = half - MushroomEdge;
+        var n = room >= 2.0 ? 3 : room >= 0.9 ? 2 : 1;
+        return (n, n > 1 ? Math.Min(MushroomGap, 2 * room / (n - 1)) : 0);
+    }
+
+    private static List<(double X, double Z, double Y)> MushroomSpots(RaceTrackReport report, double raisedHalf)
     {
         var spots = new List<(double, double, double)>();
         var xs = report.LapX; var zs = report.LapZ; var ys = report.LapY; var n = xs.Length;
@@ -601,7 +617,14 @@ internal static class RaceTrackScenes
             bool Near(double ax, double az) => (ax - x) * (ax - x) + (az - z) * (az - z) < MushroomClear * MushroomClear;
         }
         double along = 0, next = MushroomFirst;
-        var k = 0;
+        // (the road's half width at a point of the lap: the asphalt's, or a raised road's to its rail)
+        var road = report.Roads.FirstOrDefault();
+        double Half(int i)
+        {
+            if (road is null || road.Count != n) return road?.AsphaltHalf ?? 3.5;
+            if (road.Raised is { } up && up[i]) return road.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : raisedHalf;
+            return road.AsphaltHalf;
+        }
         for (var step = 1; step < n; step++)
         {
             int a = ((i0 + way * (step - 1)) % n + n) % n, b = ((i0 + way * step) % n + n) % n;
@@ -610,10 +633,14 @@ internal static class RaceTrackScenes
             if (along > report.Length - 20) break;
             next = along + MushroomSpacing;
             if (report.LapArc is { } arc && b < arc.Length && arc[b] || !Clear(xs[b], zs[b])) continue;
-            // a little to one side of the middle (the road's left: the lap's way turned a quarter)
+            // the row: across the road (the lap's way turned a quarter), its middle on the road's
             double dx = xs[b] - xs[a], dz = zs[b] - zs[a], d = Math.Sqrt(dx * dx + dz * dz) + 1e-9;
-            var side = MushroomSide[k++ % MushroomSide.Length];
-            spots.Add((xs[b] - dz / d * side, zs[b] + dx / d * side, ys[b]));
+            var (count, gap) = MushroomRow(Half(b));
+            for (var j = 0; j < count; j++)
+            {
+                var side = (j - (count - 1) / 2.0) * gap;
+                spots.Add((xs[b] - dz / d * side, zs[b] + dx / d * side, ys[b]));
+            }
         }
         return spots;
     }

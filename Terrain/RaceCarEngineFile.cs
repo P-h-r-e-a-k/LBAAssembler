@@ -5,7 +5,8 @@ using System.Text;
 namespace LBAAssembler.Terrain;
 
 // The race car's setup (RaceCarSetup, kept in the settings) written as the engine's car file for its race-track mode (native RACEMOD.CPP), with
-// what the game folder's RACETRACK.JSON says about the track: the start line, the checkpoints and the opponents' lines.
+// what the game folder's RACETRACK.JSON says about the track: the start line and the opponents' lines. (Its checkpoints are no longer
+// written: a lap counts once the car has been halfway round its line.)
 internal static class RaceCarEngineFile
 {
     // An opponent as the engine is told of it: its name, its line, how many points before the start line it starts without a grid, its
@@ -23,7 +24,8 @@ internal static class RaceCarEngineFile
     // a track in each weather file, the one the folder was built to race (RaceTrackService.Raced), in its weather; the other's cars are
     // kept out of sight. `story`: the game played as a game, not a race started on its line -- the story's gates and results (Citadel
     // Island's, RaceTrackStory) are written too.
-    internal static string EngineFile(this RaceCarSetup car, RaceTrackService.TrackInfo? info, IReadOnlyList<string>? pathFiles = null, string? raisedFile = null, bool story = false)
+    internal static string EngineFile(this RaceCarSetup car, RaceTrackService.TrackInfo? info, IReadOnlyList<string>? pathFiles = null, string? raisedFile = null, bool story = false,
+        string? guideFile = null)
     {
         var track = info is null ? null : RaceTrackService.Raced(info);
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
@@ -32,7 +34,6 @@ internal static class RaceCarEngineFile
         // (a line's height, when it has one: a lap that passes over itself crosses the line's place at other heights too)
         static string Height(RaceTrackService.StartLineInfo line) => line.Y is { } y ? $" {y}" : "";
         if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}{Height(l)}\n");
-        foreach (var c in track?.Checkpoints ?? new()) text.Append($"checkpoint={c.CubeX} {c.CubeZ} {c.X0} {c.Z0} {c.X1} {c.Z1} {c.DirX} {c.DirZ}{Height(c)}\n");
         // a raised road: the file with its middle, point by point (the engine's floor there)
         if (raisedFile is not null) text.Append($"raised={raisedFile}\n");
         // ... and how much its grade changes a car's speed (a rollercoaster of a lap)
@@ -78,7 +79,10 @@ internal static class RaceCarEngineFile
         var storm = story && info?.Story is not null && track is not null && ReferenceEquals(track, info) && info.Twin is not null;
         var town = story && info?.Story is not null && track is not null && ReferenceEquals(track, info.Twin);
         var lava = story && info?.Story is { Seller: true };
-        // the one to beat, with a car (the display says whether Twinsen is ahead of him; a race's win is finishing ahead of him)
+        // no opponent raced: the one to beat's line all the same, for what follows a line (the jet-pack, the penguins, the laps, the rescue)
+        if (opponents.Count == 0 && guideFile is not null && Guide(track) is { } guide)
+            text.Append($"# no opponent raced: {guide.Name}'s line, to drive by\nguide_path={guideFile}\nguide_top={(int)Math.Round(guide.Top * 100)}\nguide_grip={(int)Math.Round(guide.Grip * 100)}\n");
+        // the one to beat, with a car (a race's win is finishing ahead of him)
         var main = opponents.FindIndex(o => o.Main && !o.Ghost);
         if (main >= 0) text.Append($"main={main + 1}\n");
         // the power-ups: the mushrooms along the lap and the penguin of each scene
@@ -89,6 +93,8 @@ internal static class RaceCarEngineFile
             foreach (var m in mushrooms) text.Append($"mushroom={m[0]} {m[1]}\n");
             foreach (var pg in track.Penguins ?? new()) text.Append($"penguin={pg[0]} {pg[1]}\n");
             foreach (var oil in track.Oil ?? new()) text.Append($"oil={oil[0]} {oil[1]}\n");
+            // (the oil's drum, which the item box shows)
+            if (track.OilIcon is { } icon) text.Append($"oil_icon={icon}\n");
         }
         if (ghost >= 0) text.Append($"beat={ghost + 1}{(storm ? $" {RaceTrackStory.BeatVar} 1" : "")}\n");
         // the story's gates and the town circuit's race: Mr. Paul lets no one race without racing gloves; the aliens' track is ready the day
@@ -175,6 +181,15 @@ internal static class RaceCarEngineFile
 
     public const string BikerName = "The biker";
 
+    // The line to drive by when no opponent is raced: the one to beat's (a car's before a time to beat's), or the racer's of a track built
+    // before the line-ups.
+    internal static (string Name, List<int[]> Path, double Top, double Grip)? Guide(RaceTrackService.TrackInfo? track)
+    {
+        if (track?.Drivers?.Where(d => d.Path.Count > 2).OrderByDescending(d => d.Main && !d.Ghost).ThenBy(d => d.Ghost).FirstOrDefault() is { } d) return (d.Name, d.Path, d.Top, d.Grip);
+        if (track?.Path is { Count: > 2 } path) return (RaceDriver.Racer.Name, path, RaceTrackBuilder.RacerLine.Top, RaceTrackBuilder.RacerLine.Grip);
+        return null;
+    }
+
     // The engine's car setup file, and beside it each opponent's line (racepath.txt, racepath2.txt ...; `prefix` before each name: a set's
     // tracks each have their own).
     internal static void WriteEngineFile(this RaceCarSetup car, string path, RaceTrackService.TrackInfo? info, bool story = false, string prefix = "")
@@ -188,13 +203,20 @@ internal static class RaceCarEngineFile
             File.WriteAllLines(file, o.Path.Select(p => string.Join(' ', p)));
             files.Add(file);
         }
+        // (no opponent raced: the line to drive by)
+        string? guide = null;
+        if (files.Count == 0 && Guide(track) is { } g)
+        {
+            guide = Path.Combine(folder, prefix + "raceguide.txt");
+            File.WriteAllLines(guide, g.Path.Select(p => string.Join(' ', p)));
+        }
         string? raised = null;
         if (track?.Raised is { Count: > 1 } road)
         {
             raised = Path.Combine(folder, prefix + "raceraised.txt");
             File.WriteAllLines(raised, road.Select(p => string.Join(' ', p)));
         }
-        File.WriteAllText(path, car.EngineFile(info, files, raised, story));
+        File.WriteAllText(path, car.EngineFile(info, files, raised, story, guide));
     }
 
     // The game played as a game (RaceTrackService.CarFileWriter's story): every track of the folder in a car file of its own beside `path`,

@@ -1608,6 +1608,98 @@ New variables: 203 (seller beaten; 2 once told), 204 (his race run). The three l
 
 *From the app:* the race car setup shows the one to beat's skill (86 %), the random range and the power-ups box, and Play starts.
 
+### The item box, rows of mushrooms, a lighter display (2026-10-03, night)
+
+The user's asks:
+- The jet-pack froze Twinsen in place when he raced no opponents.
+- Pickups go in an item box in the top left corner, with the retail game's spinning item display, and Twinsen can hold a second item, with a key to choose between them.
+- The display was too much: drop it, drop the checkpoints totally, put the speed and gear bottom right and the lap time bottom left.
+- Rows of two or three mushrooms side by side, depending on the road's width, and a pseudo-random pick shown as an animation, the more powerful items for the cars further behind.
+- The game's own protection spell animation while Twinsen is protected.
+
+**The jet-pack freeze.**
+- *The cause:* the jet-pack drives by the first opponent's racing line, and the player's keys are left out while it lasts (`RaceMod_Takeover`). With no opponent raced the car file had no line at all, so the jet-pack gave no keys back and the car stood still until it ran out.
+- *The guide line:* when no opponent is raced, the car file now carries the one to beat's line all the same (`guide_path=`, `guide_top=`, `guide_grip=`; `RaceCarEngineFile.Guide`, written as `raceguide.txt`). Everything that follows a line uses it: the jet-pack, the walking penguins, the laps, and the "back on the road" rescue, which also had nothing to go by with no opponents.
+- *With no line anywhere* (an old car file), the jet-pack is only a boost and the keys stay the player's.
+
+**The item box** (`RaceMod_Draw`, `ItemBox`):
+- *Two slots, top left,* each the retail found-object display (OBJECT.CPP's INCRUST_OBJ): black in the game's own frame, the item's OBJFIX model turning about once a second. They are 1/8 of the screen's height across (60 pixels at least, the retail size). The selected slot is ringed in the palette's gold (244).
+- *The models* are the inventory's own:
+
+  | Power-up | Shown as |
+  |---|---|
+  | Gazogem fuel | OBJFIX 15, the Gazogem can |
+  | Protection spell | 39, the spell's ring of beads |
+  | Lightning spell | 19, the lightning ring |
+  | Clover | 60, the clover |
+  | Nitro penguin | 14, the meca-penguin |
+  | Super jet-pack | 48, the protopack's second look |
+  | Health | the heart sprite of the game's bonuses (a sprite, not a model), beating |
+  | Oil | a new model: a blue oil drum with two grey hoops, its lid and bung, a black drop over it (`RaceTrackOil.BuildIcon`), appended to OBJFIX.HQR by the build (`oil_icon=`) |
+
+- *Lit as the inventory lights them:* the light is set with the camera level (`SetAngleCamera(0,0,0)`), not with the scene's camera as the found-object display does. The box is drawn without the outside's fog filler and depth buffer, with the colour table of things near (`SetCLUT(PalLevel)`; outside, the fog is the colour table of each object's distance, and the box would have the last object's). The protection spell's beads and the clover are dark in the retail inventory too.
+- *The roulette:* an item taken goes into the first free slot and the items go by in it, slowing down over 1.5 s to the one drawn, which can't be used until it stops.
+- *Keys:* Shift uses the selected item (the other slot's if that one is empty), and Q selects the other slot. Every item is held now, not only oil and penguins, so while Twinsen has one, Shift doesn't open the inventory. With both slots full the mushrooms still give way to the car, empty. The test pilot uses each item `autodrop_ms` after its roulette stops (default 1 s, 0 never).
+
+**Who draws what** (`RandomPowerUp`, `BackShare`):
+- Each power-up has a strength:
+  - weak: the clover, health, oil
+  - middling: Gazogem fuel, the protection spell, the nitro penguin
+  - strong: the lightning spell, the super jet-pack
+- Each weight is multiplied by a factor running from the leader to the last car:
+
+  | Strength | The leader | The last car |
+  |---|---|---|
+  | weak | × 1.6 | × 0.4 |
+  | middling | × 1.0 | × 1.2 |
+  | strong | × 0.05 | × 2.4 |
+
+- Opponents draw by their own place.
+- Outside a race (qualifying, alone, before GO) the plain weights.
+- A car takes one item from a row: the others it passes in the next 0.7 s give way, empty.
+
+**The rows** (`RaceTrackScenes.MushroomRow`): every 40 cells as before, now a row across the road.
+- Three mushrooms where the road is 6 cells wide or more (the default asphalt, 7 wide, has three), two where it is 3.8 or more, else one; each row keeps a cell from the road's edges.
+- They are 2.4 cells apart, more than the 2 cells a car's middle takes one from, so a car down the middle of one takes only that one.
+- On a raised road the width is its own, rail to rail.
+- A scene keeps room for its penguins and slicks under the engine's 100 actors, and a row that doesn't fit is shorter.
+- Engine limit: 512 mushrooms a lap (was 128).
+- Desert island has 93 now, the Citadel town circuit 75, Mosquibees Island 33.
+
+**The protection spell's animation** is the game's own: the power-up casts `ToggleSortProtection`, the 16 orbiting sprites and the hum.
+- The spell takes magic as it lasts, and ends when the magic runs out. While it is the power-up's, EXTRA.CPP takes none (`RaceMod_ProtectionFree`), and the sprites blink for its last 3 s (`RaceMod_ProtectionEnding`).
+- It goes off after its 30 s, or when a new track loads.
+- A spell Twinsen cast himself is left alone.
+
+**The display:** bottom right the gear and the speed; bottom left the lap and its time. On Raph's storm track that line adds his time to beat. Before the start it shows the start line's text or the story's gate, and after the race the place. Everything else is gone: position, ahead of or behind the one to beat, last/best laps, the grid list, power-up timers, messages. The count-down stays.
+
+**No checkpoints.**
+- The build still finds them, but the car file no longer has them, and the engine reads none.
+- A lap counts when the car crosses the start line after being halfway round the line it follows: a third to two thirds along the line, the first opponent's or the guide. So backing over the line and driving on again is no lap.
+- With no line at all, any crossing the right way counts.
+- At the line itself, the line's nearest point can be either end of it. Once the car has been halfway round, a point near the start reads as the lap's end (`PlayerProgress`).
+
+![the item box, a row of mushrooms, the new display](racetrack/build/item_box_hud.png)
+![the roulette going by: Gazogem, the jet-pack, the lightning ring](racetrack/build/item_box_roulette.png)
+![held: protection, clover, health, penguin, oil, Gazogem, jet-pack](racetrack/build/item_box_items.png)
+![two held, Q, Shift](racetrack/build/item_box_slots.png)
+![the protection spell round the car](racetrack/build/powerup_protection_spell.png)
+
+**Verified** (headless, muted, `E:\dump\TEMP\story`, rebuilt with `buildtogether`):
+- *No opponents, the jet-pack in every mushroom:*
+  - With the guide line, the pilot drove on through every jet-pack.
+  - With no line at all and no pilot (up held, Shift pressed from the console), "Super jet-pack! (no line: a boost, the keys his)" and the car went on at 46 km/h under the player's own keys.
+  - Before, the car stood still until the jet-pack ran out.
+- *Two slots:* lightning in slot 1 and oil in slot 2; Q selected slot 2, Shift dropped the oil, and the selection went back to the lightning.
+- *Each item's picture* is as in the screenshots above.
+- *The protection spell:* its 16 sprites orbit the car for the 30 s.
+- *Laps without checkpoints:*
+  - The lava lake: qualifying 27.20 s, race lap 1 27.62 s.
+  - Mosquibees Island: qualifying 46.72 s, race lap 50.11 s.
+  - The Emerald Moon (loops, the carried jump): 60.87 s (61.29 s before).
+  - Celebration Island's raised road: 40.67 s.
+- *The draw by place:* in the Mosquibees race the leader drew Gazogem, oil, penguins, clovers, protection and health; the opponents took 15 mushrooms.
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

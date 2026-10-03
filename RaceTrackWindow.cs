@@ -129,7 +129,7 @@ internal sealed class RaceTrackWindow : Window
                    "into its own spare texture space and matched to its palette, and its scenes are given a buggy.\n\n" +
                    "It changes the island's ground and decor bodies and SCENE.HQR in the LBA2 game folder (and, for a jump, ANIM.HQR and RESS.HQR: its flight; BODY.HQR and RESS.HQR for the cars made after the game's characters: Baldino's, and fifty-eight more, three or more for each island). The first time, the originals are kept beside them (as *" + RaceTrackService.BackupSuffix +
                    "); every build starts from those copies, and the button below puts them back. When you play a folder with a race track built, the game " +
-                   "runs in its race-track mode: the car setup below (gears on X and Z, brakes, steering), the car staying level on the bridge, checkpoints round the lap, " +
+                   "runs in its race-track mode: the car setup below (gears on X and Z, brakes, steering), the car staying level on the bridge, laps counted at the start line, " +
                    "the track's own drivers in the cars made after them (Moya, the Dino-Fly, the Dean, the racer and Baldino on the Desert island; Raph, Zoe, Mr. Paul, the Tralu and " +
                    "the thief on Citadel Island's town circuit, and Raph's time to beat on its storm track; the Queen and the monkey monster on Mosquibees Island; Baldino in his lander on the " +
                    "Emerald Moon; the retail track's racer, Baldino and the biker elsewhere), and the gear, speed, lap times and position on screen. " +
