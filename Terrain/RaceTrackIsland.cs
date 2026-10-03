@@ -18,7 +18,7 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Desert = new("Desert island", "DESERT.ILE", "DESERT.OBL", 2, 55, 73, 29,
         "RaceTrackPlan.Desert.json", (7, 10))
     {
-        Crossing = CrossingStyle.Jump,
+        Crossing = CrossingStyle.Jump, Roster = RaceDriver.Desert,
     };
 
     // Citadel Island: two tracks, one for each of its files, no retail track to clear, and no buggy in its scenes (the build puts one at each
@@ -33,7 +33,7 @@ internal sealed record RaceTrackIsland(
         "RaceTrackPlan.CitadelStorm.json", null)
     {
         TwinIleFile = "CITABAU.ILE", TwinOblFile = "CITABAU.OBL", TwinPlanResource = "RaceTrackPlan.Citadel.json", RacesTwin = true,
-        Title = "Citadel Island: the town circuit (once the storm is over)",
+        Title = "Citadel Island: the town circuit (once the storm is over)", Roster = RaceDriver.CitadelStorm, TwinRoster = RaceDriver.CitadelTown,
     };
 
     public static readonly RaceTrackIsland CitadelStorm = Citadel with
@@ -46,7 +46,10 @@ internal sealed record RaceTrackIsland(
     // north edge, and the long way down its east side. The plan carries its own heights, bridge and jump (RaceTrackPlan.Heights). Its
     // outside scenes are 102, 103 and 105; 104 between them is the Queen's throne, an inside scene.
     public static readonly RaceTrackIsland Mosquibe = new("Mosquibees Island", "MOSQUIBE.ILE", "MOSQUIBE.OBL", 7, 102, 105, 34,
-        "RaceTrackPlan.Mosquibe.json", null);
+        "RaceTrackPlan.Mosquibe.json", null)
+    {
+        Roster = RaceDriver.Mosquibe,
+    };
 
     // Celebration Island with the statue (CELEBRA2: the file the engine draws once the statue has risen, game variable 79; before that
     // it is CELEBRAT, the same island with its lava lake empty): from the dock where the taxi lands, round the island and up round the
@@ -97,6 +100,11 @@ internal sealed record RaceTrackIsland(
     // circuit (its twin's plan) has a bridge.
     public CrossingStyle Crossing { get; init; } = CrossingStyle.Bridge;
 
+    // Who races there (RaceDriver: the user's line-up for the track), and on the twin's track (Citadel Island's town circuit). Null: the
+    // retail track's racer, Baldino and the biker.
+    public List<RaceDriver>? Roster { get; init; }
+    public List<RaceDriver>? TwinRoster { get; init; }
+
     // The island's other file for other weather (EXTFUNC.CPP loads it instead once the storm is over), built with the same track -- or,
     // with TwinPlanResource, with a track of its own (the route built into the program for it).
     public string? TwinIleFile { get; init; }
@@ -144,7 +152,7 @@ internal sealed record RaceTrackIsland(
     // the reactor), waiting in the pit lane while the player qualifies. Nothing is drawn on the holomap.
     public static readonly RaceTrackIsland Emerald = new("The Emerald Moon", "EMERAUDE.ILE", "EMERAUDE.OBL", 3, 229, 232, 30, "RaceTrackPlan.Emerald.json", null)
     {
-        CopiesScenes = (74, 4), NoHolomap = true,
+        CopiesScenes = (74, 4), NoHolomap = true, Roster = RaceDriver.Emerald,
         Title = "The Emerald Moon: over the reactor, round the base",
     };
 

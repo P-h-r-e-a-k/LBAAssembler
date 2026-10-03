@@ -535,7 +535,7 @@ A third kind of leftover: a building is several decor pieces placed apart, and c
 
 **The holomap pictures** (`Terrain/RaceTrackHolomap.cs`). When the holomap zooms in on an island it shows a pre-rendered 640 x 480 picture of it -- HOLOMAP.HQR entry 18 + 2 x island, in the game's palette (RESS.HQR entry 0) -- and draws the arrows and Twinsen over it through a camera the next entry gives: the island's target point, two angles and a distance (HOLOPLAN.CPP InitHoloPlan, `SetProjection(320, 240, 1024, 700, 700)`, `SetFollowCamera`). That camera is reproduced exactly (LIB386's `InitMatrixStdF`, `LongWorldRotatePoint` -- a rotation only, the camera being the rotated target pushed back by the distance -- and `LongProjectPoint3D`); projecting the island's own heights lands on the island in each picture, islets included. The built road is drawn through it: asphalt taking its shade from the picture's own light, red and white curbs every 1.6 cells as on the ground, the start line, all hidden where the built ground stands between it and the camera (a depth buffer of every ground triangle), and the bridge deck drawn after the roads it passes over. Citadel Island has two pictures, the storm's (18) and, once it is over, its own slot 12's (42); the Desert island's is 22. The retail Desert picture's own little race track sits under the new one but for a few pixels of its gantry.
 
-**Zoe's line** (`Terrain/RaceTrackStory.cs`, Citadel Island only). The game opens with Zoe walking up to Twinsen in their house (scene 0, actor 4) to say text 0 of Citadel's texts -- "rush to the downtown pharmacy" -- and switch on the pharmacy's holomap arrow (`set_holo_pos(22)`). Her walk stays; she says a new text instead: "Twinsen, the new race track is finally built, head to the start line behind the house to qualify. Don't forget your racing gloves.", in all six languages the game has (English, French, German, Spanish, Italian, Portuguese; code page 850, as the game's own texts). TEXT.HQR's language files are 15 per language, each an id list and a table of offsets and texts (an attribute byte, the characters, a 0: MESSAGE.CPP); the CD version speaks a text by its place in the list, so a new text goes at the end, past the last recorded voice, and is shown, not spoken (`Speak`: `num >= MaxVoice`). Her later reminder ("did you find something to cure the Dino-Fly?") keeps the pharmacy's arrow.
+**Zoe's line** (`Terrain/RaceTrackStory.cs`, Citadel Island only; replaced on 2026-10-03 by the user's story -- see "The story and each track's drivers"). The game opens with Zoe walking up to Twinsen in their house (scene 0, actor 4) to say text 0 of Citadel's texts -- "rush to the downtown pharmacy" -- and switch on the pharmacy's holomap arrow (`set_holo_pos(22)`). Her walk stays; she says a new text instead: "Twinsen, the new race track is finally built, head to the start line behind the house to qualify. Don't forget your racing gloves.", in all six languages the game has (English, French, German, Spanish, Italian, Portuguese; code page 850, as the game's own texts). TEXT.HQR's language files are 15 per language, each an id list and a table of offsets and texts (an attribute byte, the characters, a 0: MESSAGE.CPP); the CD version speaks a text by its place in the list, so a new text goes at the end, past the last recorded voice, and is shown, not spoken (`Speak`: `num >= MaxVoice`). Her later reminder ("did you find something to cure the Dino-Fly?") keeps the pharmacy's arrow.
 
 **The arrow.** Holomap positions are scene numbers: record 50 + n of HOLOMAP.HQR entry 12 is where scene n lies on its island, used for its arrow and for "Twinsen is here" when he is inside it. The game has 222 scenes and every number 0-99 is one, so the start line's arrow is position 222 -- no scene's, no script's, and the island view's arrow loop runs to 254. Its label is a new text in the holomap's text file (2): "Race track start line.". The race-track mode clears it once Twinsen is at the wheel (`holo_arrow=` in the car file). Fixed in the engine on the way: the arrows' spin was only set up for positions below 100, and the game's own 104-188 started still. The engine's `dumpstate` now lists the arrows switched on (`holo_active`): a new game shows `[22]` after Zoe's line on the untouched data and `[222]` on the mod's.
 
@@ -1343,6 +1343,123 @@ Both moons' cut-out loops are now 35 degrees. They are taken at full speed (34 k
 - **The other tracks:** built again, the seven others' files are byte-identical but for the three raised roads' island and decor files (Celebration Island's two, the Elevator Platform's), whose road pieces are now strips. Their solo qualifying laps are unchanged (27.04, 41.86, 34.02 s), and the statue track was looked at too.
 - **From the app**, on a sandbox folder: both moons built in the race track window. Play on the Emerald Moon shows the grid, the fence and the opponents in the pit lane, muted.
 - **The body tool** (`tools/BodyPipeline`) builds again: it now leaves out `Scenes/SceneNuke.cs`, which needs the editor's own island code. It has a new `oblsheet <island .OBL> <palette> <out.png>` to look at an island's decor bodies, which is how Citadel's fence was found.
+
+## The story and each track's drivers (2026-10-03)
+
+The user's two notes, in the repository's folder (not committed):
+- **StoryNotes.txt:** Zoe is sick of the rain and sends Twinsen to the Weather Wizard. The wizard would clear it from the top of the lighthouse, but Raph is too busy at the track and won't let him. Raph: beat my time and I'll come to the lighthouse. Mr. Paul runs the track and wants racing gloves. The aliens thank Twinsen for the rain: they'll build an even better race track, ready tomorrow. Twinsen has to go home and sleep (everyone tells him he looks tired) and uses his bed.
+- **CharactersForTrack.txt:** who races each track.
+
+Their follow-up: the story isn't fully worked out yet, so implement what can be.
+
+### The drivers
+
+`Terrain/RaceTrackDrivers.cs` (`RaceDriver`). A driver is one of the racer entity's car bodies (0 the retail racer, 1 Baldino's rocket car, 2-59 the character cars) or the motorbike. It has a racing line of its own, planned with its character (side of the road, top speed, cornering), and its skill a few points either side of the car setup's. An island's `Roster` replaces the racer, Baldino and the biker; an island with none keeps them.
+
+| Track | Drivers |
+|---|---|
+| Citadel Island, storm track | Raph: his lap at the setup's skill less 6 is the time to beat (no car on the track) |
+| Citadel Island, town circuit | Raph, Zoe, Mr. Paul, the Tralu, the thief |
+| Desert island | Moya, the Dino-Fly, the Dean, the retail racer, Baldino |
+| The Emerald Moon | Baldino in his lander (space suit) |
+| Mosquibees Island | the Queen, the monkey monster with the sword (war cart) |
+| Otringal palace | (no track yet: Stan, the pighead with the broom, the two-headed monster) |
+| the others | the retail racer, Baldino, the biker, as before |
+
+- **The engine** races up to six opponents (`RACE_MAX_OPPONENTS`, keys `opponent2_` to `opponent6_`), and every grid has six spots.
+- **The race car setup** lists the drivers of the track Play races, each with its own box, and one skill slider for all of them. This replaces the racer's, Baldino's and the biker's own boxes and sliders (`RaceCarSetup.LeftOut`).
+- **RACETRACK.JSON** keeps the drivers as `Drivers`. A folder built before this still races its racer, Baldino and biker.
+
+### The story
+
+`Terrain/RaceTrackStory.cs` tells it through the game's own storm plot, which already has the lighthouse, the spell and the aliens:
+
+| Game variable | Meaning |
+|---|---|
+| 51 | storm plot: 1 the wizard spoken to, 2 Raph spoken to, 3 Raph freed, 4 the storm over |
+| 56 | the keeper: 3 back at the lighthouse |
+| 70 | the aliens' landing done |
+| 253 | chapter: 2 once the storm is over |
+| 200-202 | new (variables no script uses): the day (1 tired, 2 slept), the town circuit won (1, 2 once paid), Raph's time beaten (1, 2 once Raph has said so) |
+
+1. **Zoe** (scene 0, actor 4). She walks up to Twinsen as ever and says: "Twinsen, I am sick of all this rain! Go and find the Weather Wizard and get him to fix it!" She switches on the game's own arrow to his tent (holomap 21, which his script clears).
+2. **The Weather Wizard** (scene 21). In place of "I can't find the keeper", he says the notes' line about Raph, and an arrow (222) points to the storm track's start line. Once Raph is back at the lighthouse he says to meet him there. Twinsen's own next line (he had seen the keeper held in a cave) is gone.
+3. **At the start line** (scene 42, in the storm): Raph and Mr. Paul, copies of the game's own (Raph from the Tralu's cave, scene 2; Mr. Paul from his house, scene 7). They stand off the road and the pit lane, and both are gone once the storm is over.
+   - Raph says the notes' line (variable 51 goes to 2, as talking to him in the cave did).
+   - Mr. Paul: "Sorry Twinsen, for safety reasons you'll need some racing gloves to take part", or, with the gloves, to beat Raph's time.
+   - The start line itself stays shut without gloves (`gate=`): crossing it says "Mr. Paul: racing gloves first!". The gloves are in the attic as before.
+   - Raph is no longer held in the Tralu's cave, and Zoe no longer comes to fetch Twinsen there.
+
+   ![Raph and Mr. Paul by the storm track's gantry](racetrack/build/story_raph_paul.png)
+4. **Raph's time.** The display shows it ("Raph's time 0:33.90"), and a lap under it beats it (`beat=`). Raph says "You beat my time, Twinsen! A deal is a deal: I'm off to the lighthouse. Bring the Weather Wizard!" and goes. Variables 51 and 56 go to 3, as when he was freed in the game, so the game's own lighthouse scene follows: the wizard at the door, "We are ready, Master", the spell, chapter 2.
+5. **The aliens.** The game then takes Twinsen to the tavern square (scene 42) in a cutscene that waits for an alien to speak. The island's actors who played it were taken off the road by the track's build (the cutscene would have waited forever). One alien, a copy of the game's own, now stands off the town circuit's road by Twinsen and says: "People from the planet Twinsun, we come to you in a spirit of peace. Thank you for clearing the rain which was preventing us from landing. As a thank you, we'll build you an even better race track. It should be ready tomorrow." That ends the cutscene, and variable 200 goes to 1.
+
+   ![after the spell: fine weather, the town circuit](racetrack/build/story_after_spell.png)
+6. **Tired.** While variable 200 is 1, anyone Twinsen talks to on Citadel Island (anyone but Twinsen himself) says "You look tired, Twinsen. You should go home and have a nap." instead of their own line. The engine swaps the text (`tired=`; GERELIFE.CPP's four message opcodes ask `RaceMod_Dial`).
+7. **The bed** (scene 0). It has a zone of its own (scenaric zone 5). Action there while tired: "What a day! A good night's sleep... Morning already! The aliens' new race track should be ready by now." Variable 200 goes to 2, and an arrow (223) points to the town circuit's start line.
+8. **The town circuit.** It is shut until then ("The new track opens tomorrow"). Afterwards it races Raph, Zoe, Mr. Paul, the Tralu and the thief over three laps; the display shows "Lap 1/3" and, at the end, "Finished 1st of 6".
+   - A win sets variable 201.
+   - Once Twinsen is out of his car anywhere on the island, Mr. Paul says "Well raced, Twinsen! You've won the prize: a ferry ticket." and gives it (inventory slot 13: the game's own ticket, for its ferry to the Desert island).
+
+   ![the grid](racetrack/build/story_town_grid.png)
+   ![three laps](racetrack/build/story_town_race.png)
+
+**The texts.** Eleven new lines at the end of Citadel Island's texts and two holomap labels, in all six languages, using the game's own names: the Mage Météo, the Wettermagier, the Mago Meteo, the Mago Metereologo, the Mago do Tempo. They are shown, not spoken (see the 2026-09-29 section). Zoe's race-track line of 2026-09-29 is replaced. The gloves stay as they were.
+
+![the wizard's new line in the engine](racetrack/build/story_wizard_line.png)
+
+### Playing it
+
+- **A track set.** The race-track mode used to load one track. A game played as a game now loads a set:
+  - The car file Play writes holds the car and `track=<island> <when> <first scene> <last scene> <file>` lines, one per track. Each track's own file sits beside it.
+  - When the game enters an island's outside scene, the engine loads the track raced there now (`RaceMod_Island`, EXTFUNC.CPP `InitGrilleExt`, before the island's file is chosen).
+  - On Citadel Island that is the storm track while it rains (chapter below 2) and the town circuit once the storm is over; the weather is the game's own.
+  - Celebration Island's two tracks go by the statue, and the moons' by their scenes. An island with no track keeps the car alone.
+  - Everything one track set up is undone before the next loads (`ResetTrack`).
+- **The new keys** (RACEMOD.CPP's description): `track=`, `gate=<var> <least> <text>`, `beat=<n> <var> <value>...`, `race_laps=`, `win=<var> <value>...`, `tired=<var> <value> <text>`.
+- **The race car setup** has a new box: "Play the story from a new game".
+  - Play then starts a new game, Twinsen in his house, every track raced where and when the game is. The engine's command harness starts it past the menu.
+  - A Play that doesn't start on the start line is played the same way (the set, with the story's gates).
+  - A race started on its line is that track alone, as before, with no gates. Its time to beat is still shown.
+
+![a new game from the app](racetrack/build/story_new_game_app.png)
+
+### Verified
+
+All runs below were headless and muted, on a sandbox game folder built with the Desert island, Citadel Island, Mosquibees Island and the Emerald Moon (`E:\dump\TEMP\story`). The test pilot drove where there was driving.
+
+**The story, step by step:**
+- **A new game:** scene 0, chapter 1, Zoe's line. The engine loads the storm track for Citadel Island ("island 0 (storm): its track").
+- **The storm track without gloves:** "start line crossed, but the race is closed: Mr. Paul: racing gloves first!".
+- **With the gloves:** lap 1 in 28.44 s against Raph's 33.90 s. Variable 202 went to 1; then Raph's script set 51 = 3, 56 = 3 and 202 = 2.
+- **The lighthouse:** with 51 and 56 at 3, Action by the wizard at the door ran the game's spell. That gave chapter 2 and scene 42, and the engine switched to the town circuit ("island 0 (fine weather)"). The alien's thanks set 70 = 1 and 200 = 1; Twinsen is back with his body and free to walk.
+- **Tired:** the alien's second line came out as the tired line ("text 388 said as the tired line 1004").
+- **The bed:** variable 200 went to 2, and arrow 223 is on.
+- **The town circuit on day 1:** "the race is closed: The new track opens tomorrow".
+
+**The town circuit on day 2,** with the setup's skill at 70 so the pilot would win:
+- qualifying 99.17 s, a grid of six;
+- laps 98.48, 98.42 and 99.06 s, the opponents' 133-140 s;
+- "race over after 3 laps: 1st of 6" set variable 201.
+- Out of the car, Mr. Paul's ticket: 201 went to 2 and 13 to 1.
+- At the normal skill the opponents' qualifying laps were 107.6-115.0 s.
+
+**The other tracks,** raced alone as Play's start on the line does:
+- **Desert island:** qualifying 132.04 s (unchanged), the race with Moya, the Dino-Fly, the Dean, the racer and Baldino.
+- **Mosquibees Island:** 47.87 s, with the Queen and the monkey monster.
+- **The Emerald Moon:** 61.29 s, with Baldino's lander.
+- **The old moon** (no line-up: the racer, Baldino and the biker): 22.47 s, unchanged.
+
+**From the app** (sandbox settings):
+- Desert and Citadel built from the race track window.
+- The race car setup shows the town circuit's five drivers and the new box.
+- Play started a new game in the editor's window, Zoe saying her new line.
+
+**Not done** (the notes leave these open):
+- Otringal's palace has no track, so its drivers aren't raced yet, and the two-headed monster (BODY.HQR 259) has no car.
+- What the ferry ticket leads to beyond the game's own ferry is for the story to say.
+- Mr. Paul is "in charge of the track": in the game Raph is the lighthouse keeper (Mr. Paul's house is scene 7), and the story reads right that way.
+- Zoe ("Zoe?" in the notes) races on the town circuit, and can be left out in the setup.
 
 ## The menu command
 

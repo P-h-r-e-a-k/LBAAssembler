@@ -251,12 +251,14 @@ internal static class RaceTrackCommand
     public static int RaceCarFile(string[] args)
     {
         var setup = new LBAAssembler.RaceCarSetup();
-        if (args.Length > 3) setup.RacerSkill = setup.BaldinoSkill = int.Parse(args[3]);
+        if (args.Length > 3) setup.RacerSkill = int.Parse(args[3]);
         // (RT_WEATHER=rain: Citadel Island left raining -- its storm track)
         if (Environment.GetEnvironmentVariable("RT_WEATHER") == "rain") setup.FineWeather = false;
         // (RT_RACE=<island file>: of a folder with several tracks, the one Play races with that island open in the editor, as RaceFor picks it)
         var track = Environment.GetEnvironmentVariable("RT_RACE") is { Length: > 0 } race ? RaceTrackService.RaceFor(args[1], race) : RaceTrackService.ReadInfo(args[1]);
-        setup.WriteEngineFile(Path.GetFullPath(args[2]), track);
+        // (RT_STORY=1: the game played as a game -- every track in a set, raced where and when the game is, with the story's keys)
+        if (Environment.GetEnvironmentVariable("RT_STORY") == "1") setup.WriteStorySet(Path.GetFullPath(args[2]), RaceTrackService.ReadInfo(args[1])!);
+        else setup.WriteEngineFile(Path.GetFullPath(args[2]), track);
         Console.WriteLine($"{args[2]}: {File.ReadAllLines(args[2]).Length} lines");
         return 0;
     }

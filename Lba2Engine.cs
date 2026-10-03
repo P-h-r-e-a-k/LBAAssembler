@@ -83,6 +83,7 @@ internal sealed class Lba2PlayOptions
     public int? ListenPort;                             // --listen <port>: the script-breakpoints control socket (Lba2ControlClient), bound to 127.0.0.1 only
     public int? FallbackMusic;                          // a jingle to force (playmusic N 1) when the scene's own is 255 (see MainWindow.ResolveLba2MusicFallback)
     public Action<string>? RaceCarFile;                 // the engine's race-track mode: writes its car file to the path given (a folder with a race track built); null = the game as it is
+    public bool NewGame;                                // a new game from its start (Twinsen in his house), not the scene: no save made, no `cube`
 
     public Lba2PlayOptions WithScene(int scene)
     {
@@ -102,8 +103,10 @@ internal sealed class Lba2PlayOptions
             "--no-autosave",
             "--resolution", $"{Width}x{Height}",
         };
-        // the save puts the game in the scene; without one (it couldn't be made) the console command is the fallback
-        if (LoadSave is not null) { args.Add("--load"); args.Add(LoadSave); }
+        // the save puts the game in the scene; without one (it couldn't be made) the console command is the fallback; a new game is neither
+        // (the command harness, armed by any --exec-at, starts a new game itself, past the game's menu: the headless runs' way)
+        if (NewGame) { args.Add("--exec-at"); args.Add("1"); args.Add("status"); }
+        else if (LoadSave is not null) { args.Add("--load"); args.Add(LoadSave); }
         else { args.Add("--exec-at"); args.Add("5"); args.Add($"cube {Scene}"); }
         // where the player put the hero: moved there once the scene is running
         if (Spawn is { } spawn) { args.Add("--exec-at"); args.Add("40"); args.Add($"teleport {spawn.X} {spawn.Y} {spawn.Z}"); }
@@ -318,8 +321,8 @@ internal static class Lba2Play
             writeCarFile(carFile);
         }
 
-        options.LoadSave = PrepareSceneSave(engine, gameDirectory, user, options.Scene, carFile);
-        if (options.LoadSave is null) DebugLog.Log($"Lba2Play: no save for scene {options.Scene}; falling back to the cube command");
+        options.LoadSave = options.NewGame ? null : PrepareSceneSave(engine, gameDirectory, user, options.Scene, carFile);
+        if (options.LoadSave is null && !options.NewGame) DebugLog.Log($"Lba2Play: no save for scene {options.Scene}; falling back to the cube command");
 
         // The engine is a console program: without CreateNoWindow Windows opens a console (a terminal window) beside the game.
         // Embedded, its window starts hidden as well, so the editor can take it over before anything is seen of it.

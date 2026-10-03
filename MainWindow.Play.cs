@@ -75,7 +75,9 @@ public partial class MainWindow
         raceToPlay = game == GameKind.Lba2 ? RaceTrackToPlay() : null;
         if (game == GameKind.Lba2 && askRaceCar && !RaceTrackUpToDate()) return;
         if (game == GameKind.Lba2 && askRaceCar && !AskRaceCar()) return;
-        // a race track starts on its start/finish straight, Twinsen beside his car (the build puts him there in that scene)
+        // the story from a new game (every track raced where and when the game is), or a race track on its start/finish straight, Twinsen
+        // beside his car (the build puts him there in that scene)
+        if (game == GameKind.Lba2 && raceStart && raceToPlay is not null && EditorSettings.Current.RaceCar.NewGame) { newGame = true; LaunchPlay(game, null, null); return; }
         if (game == GameKind.Lba2 && raceStart && RaceStartScene() is { } start) { LaunchPlay(game, null, start); return; }
         if (PlacementCheck.IsChecked == true && (game == GameKind.Lba2 ? BeginLba2Placement() : BeginLba1Placement())) return;
         LaunchPlay(game, null, null);
@@ -85,6 +87,8 @@ public partial class MainWindow
     // screen (Citadel Island's CITADEL.ILE its storm track, CITABAU.ILE its town circuit), else the island of the scene that is open --
     // else the first built (RaceTrackService.RaceFor). Set when Play is pressed.
     private Terrain.RaceTrackService.TrackInfo? raceToPlay;
+    // the play is the story's new game (RaceCarSetup.NewGame), once
+    private bool newGame;
 
     private Terrain.RaceTrackService.TrackInfo? RaceTrackToPlay()
     {
@@ -247,11 +251,16 @@ public partial class MainWindow
         options.Paths = pathsVisible;
         options.ListenPort = Lba2BreakpointsPort;
         options.FallbackMusic = ResolveLba2MusicFallback(scene);
-        options.RaceCarFile = Terrain.RaceTrackService.CarFileWriter(gameRoot, raceToPlay);
-        raceOverlayHidden = options.RaceCarFile is not null && EditorSettings.Current.RaceCar.StartAtLine;
+        // (a race started on its line races that track alone; the game played as a game -- a new game, or the scene as it is -- every track,
+        // where and when the game is, with the story)
+        options.NewGame = newGame;
+        newGame = false;
+        var story = options.NewGame || !EditorSettings.Current.RaceCar.StartAtLine;
+        options.RaceCarFile = Terrain.RaceTrackService.CarFileWriter(gameRoot, raceToPlay, story);
+        raceOverlayHidden = options.RaceCarFile is not null && (EditorSettings.Current.RaceCar.StartAtLine || options.NewGame);
         if (raceOverlayHidden) { options.ZoneMask = 0; options.Paths = false; }
 
-        var label = allSceneEntries.FirstOrDefault(s => s.Option.Index == scene)?.Option.Display ?? $"scene {scene}";
+        var label = options.NewGame ? "a new game" : allSceneEntries.FirstOrDefault(s => s.Option.Index == scene)?.Option.Display ?? $"scene {scene}";
         var host = new EmbeddedGameHost();
         gameHost = host;
         playingGame = GameKind.Lba2;

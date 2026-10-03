@@ -64,16 +64,31 @@ internal static class RaceTrackService
         // landing lip, the landing hill's foot] as places in Raised; CubeScenes: the island's outside scenes, each [cube x, cube z, scene],
         // for the cube changes such a flight makes itself.
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? ArcJumps = null,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? CubeScenes = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? CubeScenes = null,
+        // Drivers: who races (RaceDriver, the track's line-up), in the engine's order, each with its line and the scenes' copies of its car
+        // (since 2026-10-03; a track built before has its racer in Path and Opponent and the others in Rivals).
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<DriverInfo>? Drivers = null,
+        // Story: the story's texts the race-track mode needs (Citadel Island's: RaceTrackStory).
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] StoryInfo? Story = null);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
+    // A driver: its name, its line ([x, z, y, speed, bend radius] as Path's), how many points before the start line it starts without a
+    // grid, the scenes' copies of its car (none for a time to beat: Ghost), its character (Top, Grip: shares of the player's car's top
+    // speed and cornering), its skill against the car setup's (SkillShift), and whether it is the motorbike.
+    public sealed record DriverInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors, double Top, double Grip, int SkillShift, bool Bike, bool Ghost);
+    // The story's: the tired line everyone says until Twinsen sleeps (a text of Citadel Island's), and the holomap arrow to the town
+    // circuit's start line.
+    public sealed record StoryInfo(int TiredText, int TownArrow);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
     // start line, checkpoints and opponents from RACETRACK.JSON: `track`, one of the folder's tracks as RaceFor picks it, or else the
     // first); null for any other folder, which plays the game as it is.
-    public static Action<string>? CarFileWriter(string gameDirectory, TrackInfo? track = null)
+    // `story`: the game played as a game (a new game, or a scene entered as it is, not a race started on its line): every track of the
+    // folder in a set, each raced where and when the game is, with the story's gates and results (RaceCarEngineFile.WriteStorySet).
+    public static Action<string>? CarFileWriter(string gameDirectory, TrackInfo? track = null, bool story = false)
     {
         if (!HasBackups(gameDirectory)) return null;
         var car = EditorSettings.Current.RaceCar.Clone();
+        if (story && ReadInfo(gameDirectory) is { } all) return path => car.WriteStorySet(path, all);
         return path => car.WriteEngineFile(path, track ?? ReadInfo(gameDirectory));
     }
 
@@ -274,6 +289,8 @@ internal static class RaceTrackService
         twinPlan ??= RaceTrackPlan.BuiltTwin(options.Island);
         // (the twin's options as they were chosen, before this file's plan settles its crossing style and bodies)
         var twinOptions = options.Copy();
+        // (the twin's line-up is its own: Citadel Island's town circuit's)
+        if (options.Island.TwinRoster is { } town && options.Drivers is not null) twinOptions.Drivers = town;
         if (twinPlan is not null) { options.AddOpponent = false; options.AddBaldino = false; options.AddBiker = false; }
         FollowPlan(plan, options);
         var extra = Prepare(gameDirectory, options);
@@ -290,8 +307,9 @@ internal static class RaceTrackService
         var own = twin is { Own: true } ? twin : null;
         if (RaceTrackScenes.AddScene(gameDirectory, options.Island) is { } added) extra.Add(added);
         var scenes = RaceTrackScenes.Apply(gameDirectory, report, options, own is null ? null : (own.Report, own.Options));
-        extra.AddRange(own is null ? Story(gameDirectory, report, options) : Story(gameDirectory, own.Report, own.Options));
-        WriteInfo(gameDirectory, report, options, scenes, own, session);
+        var story = Story(gameDirectory, report, options, own, scenes);
+        extra.AddRange(story.Log);
+        WriteInfo(gameDirectory, report, options, scenes, own, session, story.Info);
         return new Built(report, options, twin, scenes, extra);
     }
 
@@ -400,9 +418,12 @@ internal static class RaceTrackService
         return log;
     }
 
-    // The mod's story, on the island that has one (Citadel Island: RaceTrackStory). After the scenes, which it adds to.
-    public static List<string> Story(string gameDirectory, RaceTrackReport report, RaceTrackOptions options) =>
-        options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile ? RaceTrackStory.Apply(gameDirectory, report) : new List<string>();
+    // The mod's story, on the island that has one (Citadel Island: RaceTrackStory, its storm track and its town circuit). After the scenes,
+    // which it adds to.
+    public static (List<string> Log, StoryInfo? Info) Story(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? town, RaceTrackScenes.Result scenes) =>
+        options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile && town is { Own: true } && scenes.Twin is { } townScenes
+            ? RaceTrackStory.Apply(gameDirectory, report, town.Report, scenes, townScenes)
+            : (new List<string>(), null);
 
     // After the island's files: the track on the holomap's pictures (a twin with a track of its own on its own picture, the fine weather's),
     // the jump's flight (each jump its own: RaceTrackJumpAnim.GenericFor), Baldino's car and the characters' cars (RaceTrackCharacterCars) --
@@ -431,8 +452,9 @@ internal static class RaceTrackService
             else if (Math.Abs(a.FlightScale - b.FlightScale) > 0.001)
                 log.Add($"WARNING: both files' tracks have a jump, of different lengths, with one flight, made for {options.Island.IleFile}'s");
         }
-        var racing = own?.Options ?? options;
-        if (racing.AddOpponent && racing.AddBaldino && !session.Baldino) { log.Add(RaceTrackBaldinoCar.Install(gameDirectory).Log); session.Baldino = true; }
+        // (Baldino's rocket car, when a track's line-up races it)
+        var racers = options.Racers().Concat(own?.Options.Racers() ?? new List<RaceDriver>());
+        if (racers.Any(d => !d.Bike && !d.Ghost && d.Body == RaceTrackBaldinoCar.Generic) && !session.Baldino) { log.Add(RaceTrackBaldinoCar.Install(gameDirectory).Log); session.Baldino = true; }
         // the cars after the game's characters, three or more for each island: in the game's files for whoever is to drive them (no actor
         // has one yet)
         if (!session.CharacterCars) { log.AddRange(RaceTrackCharacterCars.Install(gameDirectory).Log); session.CharacterCars = true; }
@@ -441,15 +463,18 @@ internal static class RaceTrackService
 
     // RACETRACK.JSON: the crossing style and the start line, for Play; and, for a twin with a track of its own, that track as Twin. The
     // tracks built before this one in `session` stay in it: the first is the file's own record, the rest its Others.
-    public static void WriteInfo(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes, TwinTrack? twin = null, BuildSession? session = null)
+    public static void WriteInfo(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes, TwinTrack? twin = null, BuildSession? session = null,
+        StoryInfo? story = null)
     {
-        var info = Info(report, options, scenes);
+        var info = Info(report, options, scenes) with { Story = story };
         if (info.ArcJumps is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
         if (twin is { Own: true } && scenes.Twin is { } twinScenes)
         {
             // (the story belongs to the twin's track, which carries the race; either race clears its arrow once Twinsen drives)
             var fine = Info(twin.Report, twin.Options, twinScenes);
-            info = info with { Twin = fine, StoryArrow = fine.StoryArrow };
+            // (the town circuit's own arrow, which the bed switches on)
+            if (story is not null) fine = fine with { StoryArrow = story.TownArrow };
+            info = info with { Twin = fine };
         }
         session ??= new BuildSession();
         session.Tracks.Add(info);
@@ -474,18 +499,25 @@ internal static class RaceTrackService
         static List<int[]> Points(List<(double X, double Z, double Y, double Speed, double Radius)> line)
             => line.Select(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512), (int)Math.Round(p.Y), (int)Math.Round(p.Speed), (int)Math.Round(Math.Min(p.Radius, 1e6)) }).ToList();
         var path = Points(report.RacePath);
-        var rivals = new List<RivalInfo>();
-        if (report.BaldinoPath.Count > 0 && scenes.Baldino.Count > 0) rivals.Add(new RivalInfo("Baldino", Points(report.BaldinoPath), RaceTrackScenes.BaldinoGridBack, scenes.Baldino));
-        if (report.BikerPath.Count > 0 && scenes.Biker is { Count: > 0 } bikes) rivals.Add(new RivalInfo(RaceCarEngineFile.BikerName, Points(report.BikerPath), RaceTrackScenes.BikerGridBack, bikes));
-        return new TrackInfo(options.Crossing.ToString(), line, checkpoints, path.Count > 0 ? path : null, 4, scenes.Opponent.Count > 0 ? scenes.Opponent : null, scenes.StartScene,
-            rivals.Count > 0 ? rivals : null, scenes.Grid.Count > 0 ? scenes.Grid : null, scenes.Pits.Count > 0 ? scenes.Pits : null, options.Island.Name,
+        // the drivers: each one's line, and its car's copies (a time to beat has none)
+        var drivers = new List<DriverInfo>();
+        var racers = options.Racers();
+        for (var k = 0; k < racers.Count && k < report.DriverPaths.Count; k++)
+        {
+            var d = racers[k];
+            var actors = d.Ghost ? new Dictionary<int, int>() : scenes.Drivers.FirstOrDefault(c => c.Driver == d).Actors;
+            if (actors is null || !d.Ghost && actors.Count == 0 || report.DriverPaths[k].Count == 0) continue;
+            drivers.Add(new DriverInfo(d.Name, Points(report.DriverPaths[k]), 4 * (k + 1), actors, d.Line.Top, d.Line.Grip, d.SkillShift, d.Bike, d.Ghost));
+        }
+        return new TrackInfo(options.Crossing.ToString(), line, checkpoints, path.Count > 0 ? path : null, 4, null, scenes.StartScene,
+            null, scenes.Grid.Count > 0 ? scenes.Grid : null, scenes.Pits.Count > 0 ? scenes.Pits : null, options.Island.Name,
             options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile ? RaceTrackStory.StartArrow : -1,
             Raised: raised ? report.Raised : null, Gravity: raised ? report.Gravity : null, RailCamera: raised ? report.RailCamera : null,
             Loops: report.Loops.Count > 0 ? report.Loops.Select(LoopRecord).ToList() : null,
             JumpCameras: report.JumpCameras.Count > 0
                 ? report.JumpCameras.Select(c => new[] { c.Anim, c.CubeX, c.CubeZ, (int)Math.Round((c.X - c.CubeX * 64) * 512), (int)Math.Round(c.Y), (int)Math.Round((c.Z - c.CubeZ * 64) * 512) }).ToList()
                 : null,
-            ArcJumps: raised && report.ArcRaised.Count > 0 ? report.ArcRaised.ToList() : null);
+            ArcJumps: raised && report.ArcRaised.Count > 0 ? report.ArcRaised.ToList() : null, Drivers: drivers.Count > 0 ? drivers : null);
     }
 
     private static int[] LoopRecord(LoopInfo l)

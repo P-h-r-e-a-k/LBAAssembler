@@ -8,25 +8,22 @@ namespace LBAAssembler.Terrain;
 // what the game folder's RACETRACK.JSON says about the track: the start line, the checkpoints and the opponents' lines.
 internal static class RaceCarEngineFile
 {
+    // An opponent as the engine is told of it: its name, its line, how many points before the start line it starts without a grid, its
+    // skill (the engine's pace), its character (Top, Grip: shares of the car's top speed and cornering, as its line was planned with:
+    // RaceTrackBuilder), the scenes' copies of its car, whether it is the motorbike, and whether it is only a time to beat (no car).
+    internal sealed record Racing(string Name, List<int[]> Path, int Grid, int Pace, double Top, double Grip, Dictionary<int, int> Actors, bool Bike, bool Ghost);
+
     // The engine's car setup file (RACEMOD.CPP's format), with the start line, the checkpoints and the opponents from the game folder's
     // RACETRACK.JSON when it has one (each opponent's line in the file named in `pathFiles`, in the order of Opponents). Of an island with
     // a track in each weather file, the one the folder was built to race (RaceTrackService.Raced), in its weather; the other's cars are
-    // kept out of sight.
-    internal static string EngineFile(this RaceCarSetup car, RaceTrackService.TrackInfo? info, IReadOnlyList<string>? pathFiles = null, string? raisedFile = null)
+    // kept out of sight. `story`: the game played as a game, not a race started on its line -- the story's gates and results (Citadel
+    // Island's, RaceTrackStory) are written too.
+    internal static string EngineFile(this RaceCarSetup car, RaceTrackService.TrackInfo? info, IReadOnlyList<string>? pathFiles = null, string? raisedFile = null, bool story = false)
     {
         var track = info is null ? null : RaceTrackService.Raced(info);
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
-        var gears = Math.Clamp(car.Gears, 1, RaceCarSetup.MaxGears);
         var text = new StringBuilder("# LBA Assembler race car setup (read by the engine's race-track mode, RACEMOD.CPP)\n");
-        text.Append($"gears={gears}\n");
-        for (var g = 0; g < gears; g++) text.Append($"gear{g + 1}={RaceCarSetup.KmhToUnits(Math.Clamp(car.TopKmh(g), 3, 150))}\n");
-        text.Append($"accel={N(RaceCarSetup.OriginalAccel * Math.Clamp(car.AccelerationPercent, 10, 1000) / 100.0)}\n");
-        text.Append($"brake={N(RaceCarSetup.OriginalBrake * Math.Clamp(car.BrakingPercent, 10, 1000) / 100.0)}\n");
-        text.Append($"coast={N(RaceCarSetup.OriginalCoast * Math.Clamp(car.CoastingPercent, 0, 1000) / 100.0)}\n");
-        text.Append($"reverse={RaceCarSetup.KmhToUnits(Math.Clamp(car.ReverseKmh, 1, 150))}\n");
-        text.Append($"steer={(int)Math.Round(RaceCarSetup.OriginalSteer * Math.Clamp(car.SteeringPercent, 10, 1000) / 100.0)}\n");
-        text.Append($"automatic={(car.Automatic ? 1 : 0)}\n");
-        text.Append($"hud={(car.ShowDisplay ? 1 : 0)}\n");
+        text.Append(car.CarKeys());
         // (a line's height, when it has one: a lap that passes over itself crosses the line's place at other heights too)
         static string Height(RaceTrackService.StartLineInfo line) => line.Y is { } y ? $" {y}" : "";
         if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}{Height(l)}\n");
@@ -52,7 +49,8 @@ internal static class RaceCarEngineFile
         foreach (var g in track?.Grid ?? new()) text.Append($"grid={string.Join(' ', g)}\n");
         foreach (var g in track?.Pits ?? new()) text.Append($"pit={string.Join(' ', g)}\n");
         if (track?.Grid is { Count: > 0 }) text.Append($"qualifying={(car.Qualifying ? 1 : 0)}\n");
-        if (RaceTrackService.FineWeather(info, car.FineWeather)) text.Append("weather=fine\n");
+        // (in the story the weather is the game's own: the set picks the track that goes with it)
+        if (!story && RaceTrackService.FineWeather(info, car.FineWeather)) text.Append("weather=fine\n");
         if (track?.StoryArrow is >= 0 and var arrow) text.Append($"holo_arrow={arrow}\n");
         var opponents = car.Opponents(track);
         for (var i = 0; i < opponents.Count && pathFiles is not null && i < pathFiles.Count; i++)
@@ -61,11 +59,24 @@ internal static class RaceCarEngineFile
             var key = i == 0 ? "opponent" : $"opponent{i + 1}";
             var o = opponents[i];
             text.Append($"# {o.Name}\n{key}_path={pathFiles[i]}\n{key}_grid={o.Grid}\n{key}_pace={Math.Clamp(o.Pace, 10, 300)}\n");
-            text.Append($"{key}_top={(int)Math.Round(o.Line.Top * 100)}\n{key}_grip={(int)Math.Round(o.Line.Grip * 100)}\n{key}_catchup={(car.OpponentsFightBack ? RaceCarSetup.CatchUpPercent : 0)}\n");
-            text.Append($"{key}_name={(o.Name == "the racer" ? "The racer" : o.Name)}\n");
+            text.Append($"{key}_top={(int)Math.Round(o.Top * 100)}\n{key}_grip={(int)Math.Round(o.Grip * 100)}\n{key}_catchup={(car.OpponentsFightBack ? RaceCarSetup.CatchUpPercent : 0)}\n");
+            text.Append($"{key}_name={o.Name}\n");
             // (the animations it stands and drives with: the cars' are the racer entity's 0 and 1, the bike's his own)
-            if (o.Name == BikerName) text.Append($"{key}_anim={RaceTrackScenes.BikerIdleAnim} {RaceTrackScenes.BikerRideAnim}\n");
+            if (o.Bike) text.Append($"{key}_anim={RaceTrackScenes.BikerIdleAnim} {RaceTrackScenes.BikerRideAnim}\n");
             foreach (var (scene, actor) in o.Actors) text.Append($"{key}_actor={scene} {actor}\n");
+        }
+        // a time to beat (a driver with no car: Raph's on Citadel Island's storm track), and in the story what beating it does
+        var ghost = opponents.FindIndex(o => o.Ghost);
+        var storm = story && info?.Story is not null && track is not null && ReferenceEquals(track, info) && info.Twin is not null;
+        var town = story && info?.Story is not null && track is not null && ReferenceEquals(track, info.Twin);
+        if (ghost >= 0) text.Append($"beat={ghost + 1}{(storm ? $" {RaceTrackStory.BeatVar} 1" : "")}\n");
+        // the story's gates and the town circuit's race: Mr. Paul lets no one race without racing gloves; the aliens' track is ready the day
+        // after the storm, once Twinsen has slept; three laps, and a win is Mr. Paul's ferry ticket
+        if (storm) text.Append($"gate={RaceTrackStory.GlovesSlot} 1 Mr. Paul: racing gloves first!\n");
+        if (town)
+        {
+            text.Append($"gate={RaceTrackStory.DayVar} {RaceTrackStory.Rested} The new track opens tomorrow\n");
+            text.Append($"race_laps={RaceTrackStory.RaceLaps}\nwin={RaceTrackStory.WonVar} 1\n");
         }
         // the cars of the opponents the setup doesn't race: hidden, so they don't stand where a racing car lines up
         // (and all of the other weather's track's: that isn't the island the game draws)
@@ -75,58 +86,113 @@ internal static class RaceCarEngineFile
         return text.ToString();
     }
 
+    // The car's handling, as the setup makes it.
+    private static string CarKeys(this RaceCarSetup car)
+    {
+        string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
+        var gears = Math.Clamp(car.Gears, 1, RaceCarSetup.MaxGears);
+        var text = new StringBuilder($"gears={gears}\n");
+        for (var g = 0; g < gears; g++) text.Append($"gear{g + 1}={RaceCarSetup.KmhToUnits(Math.Clamp(car.TopKmh(g), 3, 150))}\n");
+        text.Append($"accel={N(RaceCarSetup.OriginalAccel * Math.Clamp(car.AccelerationPercent, 10, 1000) / 100.0)}\n");
+        text.Append($"brake={N(RaceCarSetup.OriginalBrake * Math.Clamp(car.BrakingPercent, 10, 1000) / 100.0)}\n");
+        text.Append($"coast={N(RaceCarSetup.OriginalCoast * Math.Clamp(car.CoastingPercent, 0, 1000) / 100.0)}\n");
+        text.Append($"reverse={RaceCarSetup.KmhToUnits(Math.Clamp(car.ReverseKmh, 1, 150))}\n");
+        text.Append($"steer={(int)Math.Round(RaceCarSetup.OriginalSteer * Math.Clamp(car.SteeringPercent, 10, 1000) / 100.0)}\n");
+        text.Append($"automatic={(car.Automatic ? 1 : 0)}\n");
+        text.Append($"hud={(car.ShowDisplay ? 1 : 0)}\n");
+        return text.ToString();
+    }
+
     // The scenes' copies of every opponent's car a track has.
     private static IEnumerable<(int Scene, int Actor)> AllCars(RaceTrackService.TrackInfo track) =>
-        (track.Opponent ?? new()).Select(a => (a.Key, a.Value)).Concat((track.Rivals ?? new()).SelectMany(r => r.Actors.Select(a => (a.Key, a.Value))));
+        (track.Drivers ?? new()).SelectMany(d => d.Actors.Select(a => (a.Key, a.Value)))
+            .Concat((track.Opponent ?? new()).Select(a => (a.Key, a.Value)))
+            .Concat((track.Rivals ?? new()).SelectMany(r => r.Actors.Select(a => (a.Key, a.Value))));
 
     // The scenes' copies of the cars of the opponents the track has and the setup doesn't race.
     internal static List<(int Scene, int Actor)> Parked(this RaceCarSetup car, RaceTrackService.TrackInfo? track)
     {
-        var list = new List<(int, int)>();
-        if (!car.Opponent && track?.Opponent is { } actors) list.AddRange(actors.Select(a => (a.Key, a.Value)));
-        foreach (var r in track?.Rivals ?? new())
-            if (r.Name == "Baldino" && !car.Baldino || r.Name == BikerName && !car.Biker) list.AddRange(r.Actors.Select(a => (a.Key, a.Value)));
-        return list;
+        if (track is null) return new();
+        var raced = car.Opponents(track).SelectMany(o => o.Actors.Select(a => (a.Key, a.Value))).ToHashSet();
+        return AllCars(track).Where(a => !raced.Contains(a)).ToList();
     }
 
-    // The opponents the car setup races, in the engine's order: the retail track's racer, then Baldino (each when the track has it and the
-    // setup races it), with its line, how many points before the start line it starts, its skill (the engine's pace), its character (the
-    // share of the car's top speed and cornering it drives with, as the build planned its line: RaceTrackBuilder) and the scenes' copies of
-    // its car.
-    internal static List<(string Name, List<int[]> Path, int Grid, int Pace, RaceTrackBuilder.RacingLine Line, Dictionary<int, int> Actors)> Opponents(this RaceCarSetup car, RaceTrackService.TrackInfo? track)
+    // The opponents the car setup races, in the engine's order: the track's line-up (RaceDriver: each when the setup races opponents and
+    // doesn't leave that one out; a time to beat always), each with its line, how many points before the start line it starts, its skill
+    // (the setup's, a few points either way for its driver), its character and the scenes' copies of its car. A track built before the
+    // line-ups: the retail track's racer, Baldino and the biker.
+    internal static List<Racing> Opponents(this RaceCarSetup car, RaceTrackService.TrackInfo? track)
     {
-        var list = new List<(string, List<int[]>, int, int, RaceTrackBuilder.RacingLine, Dictionary<int, int>)>();
-        if (car.Opponent && track?.Path is { Count: > 0 } path && track.Opponent is { Count: > 0 } actors)
-            list.Add(("the racer", path, track.PathGrid, car.RacerSkill, RaceTrackBuilder.RacerLine, actors));
+        var list = new List<Racing>();
+        int Skill(int shift) => Math.Clamp(car.RacerSkill + shift, 10, 300);
+        if (track?.Drivers is { Count: > 0 } drivers)
+        {
+            foreach (var d in drivers)
+                if (d.Ghost || car.Opponent && !car.LeftOut.Contains(d.Name))
+                    list.Add(new(d.Name, d.Path, d.Grid, Skill(d.SkillShift), d.Top, d.Grip, d.Actors, d.Bike, d.Ghost));
+            return list;
+        }
+        if (car.Opponent && track?.Path is { Count: > 0 } path && track.Opponent is { Count: > 0 } actors && !car.LeftOut.Contains(RaceDriver.Racer.Name))
+            list.Add(new(RaceDriver.Racer.Name, path, track.PathGrid, Skill(0), RaceTrackBuilder.RacerLine.Top, RaceTrackBuilder.RacerLine.Grip, actors, false, false));
         foreach (var r in track?.Rivals ?? new())
         {
-            if (r.Name == "Baldino" && car.Baldino && r.Path.Count > 0 && r.Actors.Count > 0)
-                list.Add((r.Name, r.Path, r.Grid, car.BaldinoSkill, RaceTrackBuilder.BaldinoLine, r.Actors));
-            if (r.Name == BikerName && car.Biker && r.Path.Count > 0 && r.Actors.Count > 0)
-                list.Add((r.Name, r.Path, r.Grid, car.BikerSkill, RaceTrackBuilder.BikerLine, r.Actors));
+            if (!car.Opponent || r.Path.Count == 0 || r.Actors.Count == 0 || car.LeftOut.Contains(r.Name)) continue;
+            var d = r.Name == BikerName ? RaceDriver.Biker : RaceDriver.Baldino;
+            list.Add(new(r.Name, r.Path, r.Grid, Skill(d.SkillShift), d.Line.Top, d.Line.Grip, r.Actors, d.Bike, false));
         }
         return list;
     }
 
     public const string BikerName = "The biker";
 
-    // The engine's car setup file, and beside it each opponent's line (racepath.txt, racepath2.txt ...).
-    internal static void WriteEngineFile(this RaceCarSetup car, string path, RaceTrackService.TrackInfo? info)
+    // The engine's car setup file, and beside it each opponent's line (racepath.txt, racepath2.txt ...; `prefix` before each name: a set's
+    // tracks each have their own).
+    internal static void WriteEngineFile(this RaceCarSetup car, string path, RaceTrackService.TrackInfo? info, bool story = false, string prefix = "")
     {
         var files = new List<string>();
         var track = info is null ? null : RaceTrackService.Raced(info);
+        var folder = Path.GetDirectoryName(path) ?? ".";
         foreach (var (o, i) in car.Opponents(track).Select((o, i) => (o, i)))
         {
-            var file = Path.Combine(Path.GetDirectoryName(path) ?? ".", i == 0 ? "racepath.txt" : $"racepath{i + 1}.txt");
+            var file = Path.Combine(folder, prefix + (i == 0 ? "racepath.txt" : $"racepath{i + 1}.txt"));
             File.WriteAllLines(file, o.Path.Select(p => string.Join(' ', p)));
             files.Add(file);
         }
         string? raised = null;
         if (track?.Raised is { Count: > 1 } road)
         {
-            raised = Path.Combine(Path.GetDirectoryName(path) ?? ".", "raceraised.txt");
+            raised = Path.Combine(folder, prefix + "raceraised.txt");
             File.WriteAllLines(raised, road.Select(p => string.Join(' ', p)));
         }
-        File.WriteAllText(path, car.EngineFile(info, files, raised));
+        File.WriteAllText(path, car.EngineFile(info, files, raised, story));
+    }
+
+    // The game played as a game (RaceTrackService.CarFileWriter's story): every track of the folder in a car file of its own beside `path`,
+    // and `path` the set (RACEMOD.CPP track=) -- the car's handling, which of them is raced where and when (the engine loads the one of the
+    // island it enters: Citadel Island's storm track in the storm, its town circuit once the storm is over), and the story's tired line.
+    internal static void WriteStorySet(this RaceCarSetup car, string path, RaceTrackService.TrackInfo info)
+    {
+        var folder = Path.GetDirectoryName(path) ?? ".";
+        var text = new StringBuilder("# LBA Assembler race car setup: the folder's tracks, each raced where and when the game is (RACEMOD.CPP track=)\n");
+        text.Append(car.CarKeys());
+        var n = 0;
+        foreach (var t in RaceTrackService.Tracks(info))
+        {
+            var island = RaceTrackIsland.ByName(t.Island);
+            // (an island with a track in each file: each its own, the storm's while it rains, the other's once the storm is over)
+            var members = t.Twin is not null
+                ? new[] { (Info: t with { Island = RaceTrackIsland.CitadelStorm.Name }, When: 1), (Info: t with { Island = RaceTrackIsland.Citadel.Name }, When: 2) }
+                : new[] { (Info: t, When: island.Statue ? 3 : island.OtherFile ? 4 : 0) };
+            foreach (var (member, when) in members)
+            {
+                var file = Path.Combine(folder, $"racecar_track{++n}.txt");
+                car.WriteEngineFile(file, member, story: true, prefix: $"track{n}_");
+                // (the scenes it is raced in: an island's own outside scenes, or the copies a track of its own races in)
+                var (first, last) = island.CopiesScene is not null || island.CopiesScenes is not null ? (island.FirstScene, island.LastScene) : (-1, -1);
+                text.Append($"track={island.IslandByte} {when} {first} {last} {file}\n");
+            }
+            if (t.Story is { } s) text.Append($"tired={RaceTrackStory.DayVar} {RaceTrackStory.Tired} {s.TiredText}\n");
+        }
+        File.WriteAllText(path, text.ToString());
     }
 }

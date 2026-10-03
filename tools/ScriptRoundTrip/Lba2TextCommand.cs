@@ -20,6 +20,17 @@ internal static class Lba2TextCommand
                     Console.WriteLine($"file {file} id {t.Id} attr {t.Attribute}: {t.Value}");
             return 0;
         }
+        if (args[1] == "en")
+        {
+            // lba2text en <game folder> <file> <id>...: several texts, English only, with their place in the file
+            var bank = Lba2TextBank.Load(hqr, english, int.Parse(args[3]));
+            foreach (var id in args.Skip(4).Select(int.Parse))
+            {
+                var t = bank.Find(id);
+                Console.WriteLine($"{id} (#{(t is null ? -1 : bank.Texts.IndexOf(t))}): {t?.Value}");
+            }
+            return 0;
+        }
         if (args[1] == "show")
         {
             int file = int.Parse(args[3]), id = int.Parse(args[4]);

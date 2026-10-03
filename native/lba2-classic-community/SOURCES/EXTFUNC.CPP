@@ -302,6 +302,9 @@ void InitGrilleExt(U32 numcube) {
         Island = PhantomIsland;
     }
 
+    // a race-track mod's set of tracks: the one raced on this island now, before its weather and file are chosen (RACEMOD.CPP)
+    RaceMod_Island(Island);
+
     // GROSSE Rustine pour charger la citadelle quand il fait beau ou
     // quand il pleut
     switch (Island) {

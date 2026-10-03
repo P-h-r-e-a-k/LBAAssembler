@@ -8,7 +8,7 @@
  *     scaled to the gear (a low gear pulls harder), braking, coasting, the speed backwards and the steering;
  *   - laps are counted at a start line, and only once the car has crossed every checkpoint round the lap in order (reversing back over
  *     the line and across it again is not a lap);
- *   - opponents (up to four): each a copy of a car the build put in every scene, driven along its own racing line round the lap, placed
+ *   - opponents (up to six): each a copy of a car the build put in every scene, driven along its own racing line round the lap, placed
  *     in whichever scene the player is in. Each drives the player's own car as the setup makes it -- its top gear, its steering (the
  *     buggy turns at a fixed rate, so a bend of radius R is taken at up to that rate times R), its pull through the gears and its
  *     brakes -- as well as it can on its line, times its skill (the pace); a character makes one faster on the straights or in the
@@ -36,7 +36,7 @@
  *     opponent_catchup=<percent> how much harder it pushes when it has fallen behind the player (at most, 60 cells behind)
  *     opponent_actor=<scene> <actor>   the opponent's car in that scene (one line per scene)
  *     opponent_name=<name>       for the grid's list
- *     opponent2_path=...  opponent2_grid=...  opponent2_pace=...  opponent2_actor=...   the second opponent, and so on up to opponent4
+ *     opponent2_path=...  opponent2_grid=...  opponent2_pace=...  opponent2_actor=...   the second opponent, and so on up to opponent6
  *     grid=<cube x> <cube z> <x> <y> <z> <turn>   a grid spot, cube-local; one line per spot, pole first (with none, the old start:
  *                                the opponents set off when the player first drives)
  *     pit=<the same>             a spot in the pit lane an opponent waits on while the player qualifies; one line per spot
@@ -58,6 +58,23 @@
  *     arcjump=<foot> <lip> <land> <land foot> [side]   a jump the car is carried over (RaceArc): places in the raised road's file, its
  *                                ramp's foot, its lip, the landing lip and the landing hill's foot; the camera beside it on `side` (1 or -1)
  *     cube_scene=<cube x> <cube z> <scene>   the island's outside scene of that cube, for the cube changes a carried jump makes
+ *   The story (the race-track mod's, on Citadel Island; the editor writes these only for a game played as a game, not for a race
+ *   started on the line):
+ *     track=<island> <when> <first scene> <last scene> <file>   one of the folder's tracks (a car file of its own) and when it is
+ *                                raced: when the game enters an outside scene of that island (between those scenes; -1 -1 any) -- <when>
+ *                                0 always, 1 in the storm (chapter < 2), 2 in fine weather, 3 with Celebration Island's statue risen, 4
+ *                                before it rises -- that file's track is loaded instead of the one before (RaceMod_Island). The first
+ *                                that fits is raced. A file with track= lines and no start line of its own is a set: its car's
+ *                                handling is kept on an island with no track. (track= and tired= are the set's: they stay through the
+ *                                tracks' changes)
+ *     gate=<var> <least> <text>  the start line counts no lap until game variable <var> is at least <least>; until then crossing it
+ *                                shows <text> (Mr. Paul's racing gloves, the aliens' track ready the next day). Up to four
+ *     beat=<n> <var> <value> [<var> <value>]...  opponent n (1 the first) has no car on the track: its lap, at its skill, is the time to
+ *                                beat (shown with its name); a lap under it sets the variables, once
+ *     race_laps=<n>              the race (after the grid's GO) is n laps long: the player's place is shown when he finishes ...
+ *     win=<var> <value> [<var> <value>]...   ... and a win sets these variables
+ *     tired=<var> <value> <text> while game variable <var> is <value>, on Citadel Island everyone Twinsen talks to says <text> (of the
+ *                                island's texts) instead of their own line (RaceMod_Dial)
  *   A startline or checkpoint line may end in a ninth number, the road's height there: the line then only counts for a car within
  *   RACE_LINE_REACH of that height (a lap that passes over itself crosses a line's place at other heights too).
  */
@@ -122,7 +139,7 @@ enum { STEP_ON, STEP_ROUND, STEP_BACK, STEP_FELL };
 static int s_loopOn = -1, s_loopState = LOOP_NONE;
 
 // the opponents: each one's line, where it is along it (world units from the start line), laps begun, the scenes' copies of its car
-#define RACE_MAX_OPPONENTS 4
+#define RACE_MAX_OPPONENTS 6
 #define RACE_MAX_OPPONENT_SCENES 64
 typedef struct {
     int Count;                             // points on its line (0: no line, no opponent)
@@ -190,6 +207,27 @@ static int s_playerIndex = -1;             // the first opponent's line point ne
 // drawing (RaceMod_Frame) and set from the buggy's move before the next frame's drawing (RaceMod_Lap): the main loop resets FirstTime
 // right after drawing, so setting it while drawing had no effect.
 static int s_wantFlip = 0;
+
+// The story's keys (see the file's description): the gates, the time to beat, the race's length and its result, the tired Twinsen, and
+// the folder's tracks.
+#define RACE_MAX_GATES 4
+#define RACE_MAX_SETS 4
+#define RACE_MAX_TRACKS 16
+typedef struct { int Var, Least; char Text[64]; } T_RACE_GATE;
+static T_RACE_GATE s_gates[RACE_MAX_GATES];
+static int s_nbGates = 0;
+static int s_beatOpp = -1;                 // the opponent whose lap is the time to beat (-1 none)
+static int s_beatSet[2 * RACE_MAX_SETS], s_nbBeatSet = 0;
+static int s_raceLaps = 0;                 // the race's laps (0: laps go on being counted, no finish)
+static int s_winSet[2 * RACE_MAX_SETS], s_nbWinSet = 0;
+static int s_place = 0, s_racers = 0;      // the player's place when he finished the race (0: not finished)
+static int s_tiredVar = -1, s_tiredValue = 0, s_tiredText = -1;
+typedef struct { int Island, When, First, Last; char Path[260]; } T_RACE_TRACK;
+static T_RACE_TRACK s_tracks[RACE_MAX_TRACKS];
+static int s_nbTracks = 0;
+static char s_loaded[260] = "";            // the car file loaded ("": none yet)
+static int s_ownTrack = 0;                 // it has a track of its own (a start line), not only the car and the set
+static void ResetTrack(void);
 
 static void Defaults(T_RACE_CAR *c) {
     memset(c, 0, sizeof(*c));
@@ -1038,9 +1076,26 @@ static void OnSpot(T_RACE_OPPONENT *o, const T_RACE_SPOT *spot) {
 
 static S32 RaceCameraEye(S32 *eye, S32 *target);
 
-static void Load(const char *path) {
+// The keys an island with no track keeps from the set (Load's carOnly): the car's handling, and the set's own.
+static int CarKey(const char *key) {
+    static const char *const keys[] = {"gears", "accel", "brake", "coast", "reverse", "steer", "automatic", "hud", "track", "tired"};
+    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) if (!strcmp(key, keys[i])) return 1;
+    return !strncmp(key, "gear", 4) && key[4] >= '1' && key[4] <= '0' + RACE_MAX_GEARS && !key[5];
+}
+
+// "<var> <value> [<var> <value>]...": the game variables a result sets, as pairs in `sets`; how many numbers were read.
+static int ReadSets(const char *v, int *sets) {
+    int n = 0, used = 0, a, b;
+    while (n < 2 * RACE_MAX_SETS && sscanf(v, "%d %d%n", &a, &b, &used) == 2) { sets[n++] = a; sets[n++] = b; v += used; }
+    return n;
+}
+
+static void Load(const char *path, int carOnly = 0) {
     FILE *f = fopen(path, "r");
     if (!f) return;
+    snprintf(s_loaded, sizeof(s_loaded), "%s", path);
+    // (the set's own keys are read once: a track's file loaded later doesn't add to them)
+    const int setRead = s_nbTracks > 0 || s_tiredVar >= 0;
     char line[512];
     while (fgets(line, sizeof(line), f)) {
         char *hash = strchr(line, '#');
@@ -1054,6 +1109,7 @@ static void Load(const char *path) {
         char *end = v + strlen(v);
         while (end > v && (end[-1] == '\n' || end[-1] == '\r' || end[-1] == ' ')) *--end = 0;
         while (*v == ' ') v++;
+        if (carOnly && !CarKey(key)) continue;
         if (!strcmp(key, "gears")) s_car.Gears = atoi(v);
         else if (!strncmp(key, "gear", 4) && key[4] >= '1' && key[4] <= '0' + RACE_MAX_GEARS && !key[5]) s_car.GearTop[key[4] - '1'] = atoi(v);
         else if (!strcmp(key, "accel")) s_car.Accel = Milli(v);
@@ -1124,6 +1180,31 @@ static void Load(const char *path) {
             if (s_nbJumpCams < RACE_MAX_JUMPCAMS && sscanf(v, "%d %d %d %d %d %d", &c->Anim, &c->CubeX, &c->CubeZ, &c->X, &c->Y, &c->Z) == 6) s_nbJumpCams++;
         }
         else if (!strcmp(key, "qualifying_seed")) s_seed = (unsigned)strtoul(v, NULL, 10);
+        else if (!strcmp(key, "gate")) {
+            T_RACE_GATE *g = &s_gates[s_nbGates];
+            int used = 0;
+            if (s_nbGates < RACE_MAX_GATES && sscanf(v, "%d %d %n", &g->Var, &g->Least, &used) == 2 && used > 0) {
+                snprintf(g->Text, sizeof(g->Text), "%s", v + used);
+                s_nbGates++;
+            }
+        }
+        else if (!strcmp(key, "beat")) {
+            int n, used = 0;
+            if (sscanf(v, "%d%n", &n, &used) == 1 && n >= 1 && n <= RACE_MAX_OPPONENTS) { s_beatOpp = n - 1; s_nbBeatSet = ReadSets(v + used, s_beatSet); }
+        }
+        else if (!strcmp(key, "race_laps")) s_raceLaps = atoi(v);
+        else if (!strcmp(key, "win")) s_nbWinSet = ReadSets(v, s_winSet);
+        else if (!strcmp(key, "tired")) {
+            if (!setRead && sscanf(v, "%d %d %d", &s_tiredVar, &s_tiredValue, &s_tiredText) != 3) s_tiredVar = -1;
+        }
+        else if (!strcmp(key, "track")) {
+            T_RACE_TRACK *t = &s_tracks[s_nbTracks];
+            int used = 0;
+            if (!setRead && s_nbTracks < RACE_MAX_TRACKS && sscanf(v, "%d %d %d %d %n", &t->Island, &t->When, &t->First, &t->Last, &used) == 4 && used > 0 && v[used]) {
+                snprintf(t->Path, sizeof(t->Path), "%s", v + used);
+                s_nbTracks++;
+            }
+        }
         else if (!strcmp(key, "hide_actor")) {
             if (s_nbHidden < RACE_MAX_HIDDEN && sscanf(v, "%d %d", &s_hideScene[s_nbHidden], &s_hideActor[s_nbHidden]) == 2) s_nbHidden++;
         }
@@ -1187,12 +1268,13 @@ static void Load(const char *path) {
         // where they wait until the grid is formed: their pit spots, or (with no pit lane) the grid spots behind the player
         int waiting = 0, spot = 1;
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
-            if (!s_opp[n].Count) continue;
+            if (!s_opp[n].Count || !s_opp[n].Scenes) continue;      // (a time to beat has no car)
             if (waiting < s_nbPits) OnSpot(&s_opp[n], &s_pits[waiting++]);
             else OnSpot(&s_opp[n], &s_spots[spot < s_nbSpots ? spot++ : s_nbSpots - 1]);
         }
         s_phase = s_qualifying ? PHASE_QUALIFYING : PHASE_WAIT;
     }
+    s_ownTrack = s_car.HasLine;
 }
 
 S32 RaceMod_Active(void) {
@@ -1282,6 +1364,35 @@ static int CrossLine(const T_RACE_LINE *l, S32 x0, S32 z0, S32 x1, S32 z1, S32 s
 // on its own length: past its ends lies the road coming back the other way.
 #define RACE_CHECKPOINT_SLACK 768
 
+// The story's results: a gate not yet open (gate=), a result's variables set (beat=, win=), and whether they are all set already.
+static const T_RACE_GATE *ClosedGate(void) {
+    for (int i = 0; i < s_nbGates; i++)
+        if (s_gates[i].Var >= 0 && s_gates[i].Var < 256 && ListVarGame[s_gates[i].Var] < s_gates[i].Least) return &s_gates[i];
+    return NULL;
+}
+
+static int SetsDone(const int *sets, int n) {
+    for (int i = 0; i + 1 < n; i += 2)
+        if (sets[i] >= 0 && sets[i] < 256 && ListVarGame[sets[i]] != sets[i + 1]) return 0;
+    return n > 0;
+}
+
+static void ApplySets(const int *sets, int n) {
+    for (int i = 0; i + 1 < n; i += 2)
+        if (sets[i] >= 0 && sets[i] < 256) {
+            ListVarGame[sets[i]] = (S16)sets[i + 1];
+            Log_Info("[racemod] game variable %d = %d", sets[i], sets[i + 1]);
+        }
+}
+
+static const char *Ordinal(int n) { return n % 100 / 10 == 1 ? "th" : n % 10 == 1 ? "st" : n % 10 == 2 ? "nd" : n % 10 == 3 ? "rd" : "th"; }
+
+// The time to beat (beat=): its opponent's lap at its skill, ms (0: none).
+static S32 BeatTime(void) {
+    if (s_beatOpp < 0 || !s_opp[s_beatOpp].Count) return 0;
+    return (S32)(s_opp[s_beatOpp].PlannedLap * 1000 + 0.5);
+}
+
 void RaceMod_Lap(S32 x, S32 z) {
     // (the previous frame's position; forgotten when the car changes cube, where the coordinates jump, or is put on the grid)
     static S32 px = 0, pz = 0, pcx = -1, pcz = -1;
@@ -1307,6 +1418,14 @@ void RaceMod_Lap(S32 x, S32 z) {
     T_RACE_LINE line = {s_car.LineCubeX, s_car.LineCubeZ, s_car.LineX0, s_car.LineZ0, s_car.LineX1, s_car.LineZ1, s_car.LineDirX, s_car.LineDirZ, s_lineY, s_lineHasY};
     if (CrossLine(&line, x0, z0, x, z) <= 0) return;
     const S32 now = TimerRefHR;
+    // (the story's gate: the race isn't open yet -- no lap begins)
+    if (s_laps == 0) {
+        if (const T_RACE_GATE *gate = ClosedGate()) {
+            Message(gate->Text);
+            Log_Info("[racemod] start line crossed, but the race is closed: %s", gate->Text);
+            return;
+        }
+    }
     if (s_laps > 0 && s_next < s_nbCheckpoints) {
         char text[64];
         snprintf(text, sizeof(text), "Missed checkpoint %d: no lap", s_next + 1);
@@ -1318,6 +1437,36 @@ void RaceMod_Lap(S32 x, S32 z) {
         s_lastLap = now - s_lapStart;
         if (!s_bestLap || s_lastLap < s_bestLap) s_bestLap = s_lastLap;
         Log_Info("[racemod] lap %d in %.2f s%s", (int)s_laps, s_lastLap / 1000.0, s_phase == PHASE_QUALIFYING ? " (qualifying)" : "");
+        // the time to beat: under it, the story moves on (once)
+        if (const S32 target = BeatTime()) {
+            char text[64];
+            if (s_lastLap < target && !SetsDone(s_beatSet, s_nbBeatSet)) {
+                ApplySets(s_beatSet, s_nbBeatSet);
+                snprintf(text, sizeof(text), "You beat %s's time!", s_opp[s_beatOpp].Name);
+                Message(text);
+                Log_Info("[racemod] %s (%.2f s against %.2f s)", text, s_lastLap / 1000.0, target / 1000.0);
+            } else if (s_lastLap >= target) {
+                snprintf(text, sizeof(text), "%s's time not beaten", s_opp[s_beatOpp].Name);
+                Message(text);
+            }
+        }
+        // the race's last lap: the player's place, and a win's variables
+        if (s_raceLaps > 0 && s_phase == PHASE_RACE && s_nbOrder > 0 && !s_place && s_laps == s_raceLaps) {
+            int place = 1, racers = 1;
+            for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+                if (!s_opp[n].Count || !s_opp[n].Scenes) continue;
+                racers++;
+                if (s_opp[n].Laps > s_raceLaps) place++;
+            }
+            s_place = place; s_racers = racers;
+            char text[64];
+            if (place == 1) snprintf(text, sizeof(text), "You win!");
+            else snprintf(text, sizeof(text), "You finished %d%s", place, Ordinal(place));
+            Message(text);
+            s_messageUntil = now + 6000;
+            Log_Info("[racemod] race over after %d laps: %d%s of %d", s_raceLaps, place, Ordinal(place), racers);
+            if (place == 1) ApplySets(s_winSet, s_nbWinSet);
+        }
         if (s_phase == PHASE_QUALIFYING) {
             // the qualifying lap: its time decides the grid (formed before the next drawing, in the start line's scene)
             s_qualifyTime = s_lastLap;
@@ -1473,6 +1622,7 @@ static void FormGrid(S32 now) {
         else OnSpot(&s_opp[s_order[i]], spot);
     }
     s_laps = 0; s_next = 0; s_lastLap = 0; s_bestLap = 0;
+    s_place = 0;
     s_gridAt = now;
     s_goAt = now + (s_qualifying ? RACE_RESULTS_MS : 1000) + 3000;
     s_phase = PHASE_GRID;
@@ -2182,7 +2332,7 @@ void RaceMod_Frame(void) {
     const int driving = Comportement == C_BUGGY;
     const int inStartScene = s_nbSpots && CubeMode == CUBE_EXTERIEUR && CurrentCubeX == s_spots[0].CubeX && CurrentCubeY == s_spots[0].CubeZ;
     // the grid: after the qualifying lap, or (without qualifying) as soon as the player is in his car; formed in the start line's scene
-    if (inStartScene && driving && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
+    if (inStartScene && driving && !ClosedGate() && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
     // the cars that aren't racing, out of sight
     for (int i = 0; i < s_nbHidden; i++)
         if (s_hideScene[i] == NumCube && s_hideActor[i] > 0 && s_hideActor[i] < NbObjets) ListObjet[s_hideActor[i]].Obj.Y = -20000;
@@ -2415,7 +2565,9 @@ void RaceMod_Draw(void) {
         if (s_laps > 0) {
             Time(a, sizeof(a), now - s_lapStart);
             snprintf(text, sizeof(text), "Qualifying lap  %s", a);
-        } else
+        } else if (const T_RACE_GATE *gate = ClosedGate())
+            snprintf(text, sizeof(text), "%s", gate->Text);
+        else
             snprintf(text, sizeof(text), "Qualifying: cross the start line");
         Line(right, y, text, &left);
         y += step;
@@ -2442,8 +2594,11 @@ void RaceMod_Draw(void) {
     } else if (s_car.HasLine) {
         if (s_laps > 0) {
             Time(a, sizeof(a), TimerRefHR - s_lapStart);
-            snprintf(text, sizeof(text), "Lap %d  %s", (int)s_laps, a);
-        } else
+            if (s_raceLaps > 0 && s_nbOrder > 0 && s_laps <= s_raceLaps) snprintf(text, sizeof(text), "Lap %d/%d  %s", (int)s_laps, s_raceLaps, a);
+            else snprintf(text, sizeof(text), "Lap %d  %s", (int)s_laps, a);
+        } else if (const T_RACE_GATE *gate = ClosedGate())
+            snprintf(text, sizeof(text), "%s", gate->Text);
+        else
             snprintf(text, sizeof(text), "Cross the start line");
         Line(right, y, text, &left);
         y += step;
@@ -2460,7 +2615,19 @@ void RaceMod_Draw(void) {
             y += step;
         }
     }
-    if (Opponents() && s_opp[0].Count && s_phase == PHASE_RACE) {
+    // the time to beat, and whether it is beaten
+    if (const S32 target = BeatTime()) {
+        Time(a, sizeof(a), target);
+        snprintf(text, sizeof(text), SetsDone(s_beatSet, s_nbBeatSet) ? "%s's time %s  beaten" : "%s's time %s", s_opp[s_beatOpp].Name, a);
+        Line(right, y, text, &left);
+        y += step;
+    }
+    if (s_place) {
+        // the race is over: the player's place
+        snprintf(text, sizeof(text), "Finished %d%s of %d", s_place, Ordinal(s_place), s_racers);
+        Line(right, y, text, &left);
+        y += step;
+    } else if (Opponents() && s_opp[0].Count && s_phase == PHASE_RACE) {
         // (the player's place among the racers: one more for every opponent further round)
         const double me = PlayerProgress();
         int place = 1, racers = 1;
@@ -2493,4 +2660,72 @@ void RaceMod_Draw(void) {
     PtrFont = font;
     InterLeave = leave;
     InterSpace = space;
+}
+
+// ---- the story's tracks -----------------------------------------------------------------------------------------------------------
+// Everything a track's file set up, back to how the engine starts (the car's handling too: the next file gives it again). The set's own
+// keys (track=, tired=) stay. The memory the old track's lines and road took is given back.
+static void ResetTrack(void) {
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        T_RACE_OPPONENT *o = &s_opp[n];
+        free(o->X); free(o->Z); free(o->Y); free(o->V); free(o->R); free(o->Cum);
+    }
+    for (int i = 0; i < s_nbArcs; i++) free(s_arcs[i].S);
+    free(s_raised); free(s_rbStart); free(s_rbItem);
+    s_raised = NULL; s_rbStart = NULL; s_rbItem = NULL;
+    s_nbRaised = 0; s_rbX0 = s_rbZ0 = s_rbW = s_rbH = s_rbExtra = 0;
+    s_floorRef = RAISED_NOREF; s_onlyNear = -1;
+    Defaults(&s_car);                       // (the opponents too)
+    s_gear = 1;
+    s_laps = 0; s_lapStart = s_lastLap = s_bestLap = 0;
+    s_lineY = s_lineHasY = 0; s_nbCheckpoints = 0; s_next = 0;
+    s_messageUntil = 0;
+    s_loopOn = -1; s_loopState = LOOP_NONE;
+    s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0;
+    s_phase = PHASE_RACE; s_qualifying = 1; s_fineWeather = 0; s_holoArrow = -1;
+    s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
+    s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
+    s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0;
+    s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0;
+    s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = 0; s_arcTime = s_arcLandedAt = 0;
+    s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
+    s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0;
+    s_jumpLo = 0.6; s_jumpHi = 4.0; s_jumpRate = 0; s_jumpFrac = 0; s_jumpOver = 0;
+    s_autoIndex = -1;
+    s_faced = 0; s_safeIndex = -1; s_rescue = 0; s_hitUntil = 0;
+    memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0; s_hinted = -1;
+    s_nbGates = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
+    s_ownTrack = 0; s_loaded[0] = 0;
+    FollowCamEyeHook = NULL;
+}
+
+// An outside scene of `island` is loading (EXTFUNC.CPP InitGrilleExt, before the island's file is chosen): with a set of tracks (track=),
+// the one raced there now -- in this weather, with the statue or without it -- is loaded in place of the one before; on an island with
+// none, the car alone.
+void RaceMod_Island(S32 island) {
+    if (!RaceMod_Active() || !s_nbTracks) return;
+    const int fine = ListVarGame[FLAG_CHAPTER] >= 2, risen = ListVarGame[FLAG_CELEBRATION] != 0;
+    const char *want = NULL;
+    for (int i = 0; i < s_nbTracks && !want; i++) {
+        const T_RACE_TRACK *t = &s_tracks[i];
+        if (t->Island != island || (t->First >= 0 && ((S32)NumCube < t->First || (S32)NumCube > t->Last))) continue;
+        if (t->When == 0 || (t->When == 1 && !fine) || (t->When == 2 && fine) || (t->When == 3 && risen) || (t->When == 4 && !risen)) want = t->Path;
+    }
+    if (want ? s_ownTrack && !strcmp(want, s_loaded) : !s_ownTrack) return;
+    const char *base = getenv("LBA2_RACETRACK_FILE");
+    char path[260];
+    snprintf(path, sizeof(path), "%s", want ? want : base ? base : "");
+    ResetTrack();
+    Load(path, want ? 0 : 1);
+    if (want) Log_Info("[racemod] island %d%s: its track, %s", (int)island, island == 0 ? (fine ? " (fine weather)" : " (storm)") : "", path);
+    else Log_Info("[racemod] island %d: no track -- the car alone", (int)island);
+}
+
+// tired=: on Citadel Island, while the story's variable says so, anyone but Twinsen says the tired line instead of their own (GERELIFE.CPP,
+// the life scripts' messages: NumObjDial is the one speaking).
+S32 RaceMod_Dial(S32 num) {
+    if (!RaceMod_Active() || s_tiredVar < 0 || s_tiredVar > 255 || Island != 0 || NumObjDial == NUM_PERSO) return num;
+    if (ListVarGame[s_tiredVar] != s_tiredValue) return num;
+    Log_Info("[racemod] text %d said as the tired line %d", (int)num, s_tiredText);
+    return s_tiredText;
 }

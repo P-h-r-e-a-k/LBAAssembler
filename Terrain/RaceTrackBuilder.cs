@@ -278,6 +278,12 @@ internal sealed class RaceTrackOptions
     public bool AddBaldino { get; set; } = true;
     // The motorbike Rabbibunny (Citadel Island's bike taxi, entity 100) races too, on a line of his own.
     public bool AddBiker { get; set; } = true;
+    // The track's own line-up (RaceTrackIsland.Roster) in place of the three above; null: those three, as they say.
+    public List<RaceDriver>? Drivers { get; set; }
+    // Who races, in the engine's order: the line-up, or the racer, Baldino and the biker as the three above say (Baldino rides on the
+    // racer's entity: only with it).
+    public List<RaceDriver> Racers() => Drivers?.ToList()
+        ?? new[] { RaceDriver.Racer, RaceDriver.Baldino, RaceDriver.Biker }.Where(d => d.Bike ? AddBiker : AddOpponent && (d == RaceDriver.Racer || AddBaldino)).ToList();
     public bool RemoveRoadZones { get; set; } = true;
     // Camera zones (type 1: while the hero is inside the box the view jumps to a fixed camera) that reach the road or within
     // CameraMargin cells of it are removed, so the view keeps following the car all the way round.
@@ -329,6 +335,7 @@ internal sealed class RaceTrackOptions
     {
         Island = island, OldTrackCube = island.OldTrackCube, Crossing = island.Crossing,
         AddOpponent = !island.NoOpponents, AddBaldino = !island.NoOpponents, AddBiker = !island.NoOpponents, DrawOnHolomap = !island.NoHolomap,
+        Drivers = island.NoOpponents ? new() : island.Roster,
     };
     public RaceTrackTheme Theme { get; set; } = RaceTrackTheme.Retail;
     // The retail track's own decor pieces: start gantry (64-66), billboard (67), arch and its abutments (68-70), wedge (71). The
@@ -385,8 +392,8 @@ internal sealed class RaceTrackReport
     // the race car setup's reference car) and the line's bend radius there (world units; the engine plans the speeds from it and the car).
     public List<(double X, double Z, double Y, double Speed, double Radius)> RacePath { get; } = new();
     // Baldino's line: the same, keeping more to the other side of the road.
-    public List<(double X, double Z, double Y, double Speed, double Radius)> BaldinoPath { get; } = new();
-    public List<(double X, double Z, double Y, double Speed, double Radius)> BikerPath { get; } = new();
+    // ... and each driver's (RaceTrackOptions.Racers, in that order; the first is RacePath)
+    public List<List<(double X, double Z, double Y, double Speed, double Radius)>> DriverPaths { get; } = new();
     // The lap's centre line as built (island cells), for checks.
     public double[] LapX { get; set; } = Array.Empty<double>();
     public double[] LapZ { get; set; } = Array.Empty<double>();
@@ -624,10 +631,16 @@ internal static class RaceTrackBuilder
         report.Gravity = planned && main.Raised is not null ? plan.Gravity : null;
         report.RailCamera = planned && main.Raised is not null && plan.RailCamera is { Length: 3 } ? plan.RailCamera : null;
         if (main.Raised is not null) report.RaisedFloor = (x, z, near) => RaisedFloor(main, options, x, z, near);
-        PlanRacePath(main, report, options, RacerLine, report.RacePath, "the opponent's line");
-        if (options.AddBaldino) PlanRacePath(main, report, options, BaldinoLine, report.BaldinoPath, "Baldino's line");
-        if (options.AddBiker) PlanRacePath(main, report, options, BikerLine, report.BikerPath, "the biker's line");
-        if (report.Loops.Count > 0) { LaneIntoLoops(report, report.RacePath); LaneIntoLoops(report, report.BaldinoPath); LaneIntoLoops(report, report.BikerPath); }
+        // each driver's racing line (with none, the retail racer's: the test pilot and the rescue go by it)
+        var drivers = options.Racers();
+        foreach (var d in drivers.Count > 0 ? drivers : new List<RaceDriver> { RaceDriver.Racer })
+        {
+            var line = new List<(double X, double Z, double Y, double Speed, double Radius)>();
+            PlanRacePath(main, report, options, d.Line, line, $"{d.Name}'s line");
+            if (report.Loops.Count > 0) LaneIntoLoops(report, line);
+            report.DriverPaths.Add(line);
+        }
+        report.RacePath.AddRange(report.DriverPaths[0]);
         ClearStaleCol(island, natural, field, index, painted, report);
         if (planned) WallSteepBanks(island, natural, field, index, painted, options, report);
         follow.Apply();

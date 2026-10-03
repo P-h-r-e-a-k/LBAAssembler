@@ -11,12 +11,13 @@ internal static class RaceTrackScenes
     public const int BuggyEntity = 152;
     public const int ZoeEntity = 14;
 
-    // Opponent: for each scene, the index of its copy of the racer's car (the race-track mode drives whichever the player's scene has);
-    // Baldino: the same for Baldino's car; StartScene: the scene the start line is in; Grid: the grid spots, pole first, and Pits: the
-    // spots in the pit lane the opponents wait on while the player qualifies, each [cube x, cube z, x, y, z, turn] in its cube's world units.
-    // Twin: the same for the track of the island's other-weather file, when it has one of its own (the scenes carry both).
-    public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, Dictionary<int, int> Opponent, int StartScene, Dictionary<int, int> Baldino,
-        List<int[]> Grid, List<int[]> Pits, Dictionary<int, int>? Biker = null, Result? Twin = null);
+    // Drivers: the track's drivers that have a car (RaceTrackOptions.Racers, less a time to beat's), each with, for each scene, the index of
+    // its copy of the car (the race-track mode drives whichever the player's scene has); StartScene: the scene the start line is in; Grid:
+    // the grid spots, pole first, and Pits: the spots in the pit lane the opponents wait on while the player qualifies, each [cube x, cube z,
+    // x, y, z, turn] in its cube's world units. Twin: the same for the track of the island's other-weather file, when it has one of its own
+    // (the scenes carry both).
+    public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, List<(RaceDriver Driver, Dictionary<int, int> Actors)> Drivers, int StartScene,
+        List<int[]> Grid, List<int[]> Pits, Result? Twin = null);
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
     //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
@@ -209,7 +210,7 @@ internal static class RaceTrackScenes
     // qualifying decides; the build puts Twinsen's buggy on pole, the racer on the second spot and Baldino on the third.
     // (A plan may stand them nearer: RaceTrackOptions.GridStep.)
     public const double GridFirst = 3, DefaultGridStep = 3.5, GridSide = 1.75;
-    public const int GridSpots = 5;
+    public const int GridSpots = 6;
     public static (double Back, double Side) GridSpot(int k, double step = DefaultGridStep) => (GridFirst + step * k, k % 2 == 0 ? -GridSide : GridSide);
     // The opponents' actors: no shock animation, not clipped before drawing, drawn against the depth buffer (so the bridge and the hills hide
     // them as they should) and, as every actor the game itself draws that way (Twinsen's buggy: BUGGY.CPP), without a shadow -- the engine
@@ -229,12 +230,15 @@ internal static class RaceTrackScenes
         public (double X, double Z, double Y, double DirX, double DirZ)? Start => Options.StartAtLine && Report.StartLine.Count > 0 ? Report.StartLine[0] : null;
         public SceneActorModel? Racer, BikerTemplate;
         public List<EdgeCrossing> Edges = new();
-        public Dictionary<int, int> Opponent = new(), Baldino = new(), Biker = new();
+        // the drivers with a car, and each one's copies of it, scene by scene
+        public List<RaceDriver> Drivers = new();
+        public List<Dictionary<int, int>> Cars = new();
         public int StartScene = -1;
         public List<int[]> Grid = new(), Pits = new();
         // the spots the opponents' cars wait on in the start line's scene (null elsewhere)
-        public (int X, int Z, int Beta, int Y)? RacerAt, BaldinoAt, BikerAt;
-        public Result Result(List<string> log, int changed, int removed, Result? twin = null) => new(log, changed, removed, Opponent, StartScene, Baldino, Grid, Pits, Biker, twin);
+        public List<(int X, int Z, int Beta, int Y)?> CarAt = new();
+        public Result Result(List<string> log, int changed, int removed, Result? twin = null) =>
+            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin);
     }
 
     // Edits the outside scenes of the island as the options say, from what the build of the island found (start line, jump, road). With
@@ -261,8 +265,10 @@ internal static class RaceTrackScenes
         var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0;
         foreach (var t in tracks)
         {
-            if (t.Options.AddBiker) t.BikerTemplate = BikerTemplate(originals, t.Options, island, log);
-            if (t.Options.AddOpponent)
+            t.Drivers = t.Options.Racers().Where(d => !d.Ghost).ToList();
+            t.Cars = t.Drivers.Select(_ => new Dictionary<int, int>()).ToList();
+            if (t.Drivers.Any(d => d.Bike)) t.BikerTemplate = BikerTemplate(originals, t.Options, island, log);
+            if (t.Drivers.Any(d => !d.Bike))
                 try { t.Racer = originals.Load(RacerScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == RacerEntity)?.Clone(); }
                 catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { log.Add($"no opponent: scene {RacerScene} could not be read ({e.Message})"); }
             t.Edges = EdgeCrossings(store, t.Report, t.Options, island);
@@ -367,7 +373,7 @@ internal static class RaceTrackScenes
                 }
                 var buggyIndex = buggy is null ? -1 : model.Actors.IndexOf(buggy);
                 // the grid and the pits, for a track that races opponents (the race-track mode lines the cars up there)
-                var racing = t.Racer is not null || t.BikerTemplate is not null;
+                var racing = t.Drivers.Count > 0 && (t.Racer is not null || t.BikerTemplate is not null);
                 // (moved across onto the race lanes, where the plan says: the Emerald Moon's pit lane shares its deck)
                 var shift = t.Options.GridShift;
                 if (racing)
@@ -401,7 +407,7 @@ internal static class RaceTrackScenes
                 // the opponents wait in the pit lane (the race-track mode puts them on the grid when the race is about to start); with
                 // no pit lane they stand on the grid spots behind the player
                 var grid = t.Grid; var pits = t.Pits;
-                t.RacerAt = Waiting(0); t.BaldinoAt = Waiting(1); t.BikerAt = Waiting(2);
+                t.CarAt = Enumerable.Range(0, t.Drivers.Count).Select(Waiting).ToList();
                 (int X, int Z, int Beta, int Y)? Waiting(int k) =>
                     pits.Count > k ? (pits[k][2], pits[k][4], pits[k][5], pits[k][3])
                     : grid.Count > k + 1 ? (grid[k + 1][2], grid[k + 1][4], beta, grid[k + 1][3]) : null;
@@ -440,32 +446,22 @@ internal static class RaceTrackScenes
                 }
             foreach (var t in tracks)
             {
-                if (t.Racer is { } racer)
+                // each driver's car: the racer's entity with the driver's body (Baldino's rocket car, RaceTrackBaldinoCar, and the cars made
+                // after the characters, RaceTrackCharacterCars), so the racer's animations drive it; or the motorbike Rabbibunny -- the same
+                // flags and empty scripts, standing astride his bike until the race-track mode moves him
+                for (var k = 0; k < t.Drivers.Count; k++)
                 {
-                    SceneActorModel Car(int body, (int X, int Z, int Beta, int Y)? at)
-                    {
-                        var car = racer.Clone();
-                        car.Body = body;
-                        car.Flags = OpponentFlags; car.Move = 0; car.Anim = 0; car.Life = new byte[] { 0 }; car.Track = new byte[] { 0 };
-                        car.X = IslandFile.CubeSize / 2; car.Z = IslandFile.CubeSize / 2; car.Y = -20000; car.Beta = 0;
-                        if (at is { } g) { car.X = g.X; car.Z = g.Z; car.Beta = g.Beta; car.Y = g.Y; }
-                        return car;
-                    }
-                    t.Opponent[scene] = SceneOps.AddActor(model, Car(0, t.RacerAt));
-                    // Baldino's car: the racer's entity with its body 1 (RaceTrackBaldinoCar), so the racer's animations drive it
-                    if (t.Options.AddBaldino) t.Baldino[scene] = SceneOps.AddActor(model, Car(RaceTrackBaldinoCar.Generic, t.BaldinoAt));
-                    t.RacerAt = null; t.BaldinoAt = null;
+                    var d = t.Drivers[k];
+                    var template = d.Bike ? t.BikerTemplate : t.Racer;
+                    if (template is null) continue;
+                    var car = template.Clone();
+                    car.Body = d.Bike ? 0 : d.Body;
+                    car.Flags = OpponentFlags; car.Move = 0; car.Anim = d.Bike ? BikerIdleAnim : 0; car.Life = new byte[] { 0 }; car.Track = new byte[] { 0 };
+                    car.X = IslandFile.CubeSize / 2; car.Z = IslandFile.CubeSize / 2; car.Y = -20000; car.Beta = 0;
+                    if (k < t.CarAt.Count && t.CarAt[k] is { } g) { car.X = g.X; car.Z = g.Z; car.Beta = g.Beta; car.Y = g.Y; }
+                    t.Cars[k][scene] = SceneOps.AddActor(model, car);
                 }
-                if (t.BikerTemplate is { } template)
-                {
-                    // the same flags and empty scripts as the cars, standing astride his bike until the race-track mode moves him
-                    var bike = template.Clone();
-                    bike.Body = 0; bike.Flags = OpponentFlags; bike.Move = 0; bike.Anim = BikerIdleAnim; bike.Life = new byte[] { 0 }; bike.Track = new byte[] { 0 };
-                    bike.X = IslandFile.CubeSize / 2; bike.Z = IslandFile.CubeSize / 2; bike.Y = -20000; bike.Beta = 0;
-                    if (t.BikerAt is { } g) { bike.X = g.X; bike.Z = g.Z; bike.Beta = g.Beta; bike.Y = g.Y; }
-                    t.Biker[scene] = SceneOps.AddActor(model, bike);
-                    t.BikerAt = null;
-                }
+                t.CarAt.Clear();
             }
             foreach (var t in tracks)
                 foreach (var jump in t.Report.Jumps)
@@ -484,9 +480,8 @@ internal static class RaceTrackScenes
         foreach (var t in tracks)
         {
             var whose = tracks.Count > 1 ? $" ({(t == tracks[0] ? options.Island.IleFile : options.Island.TwinIleFile)}'s track)" : "";
-            if (t.Opponent.Count > 0) log.Add($"the opponent: a copy of the retail track's racer in {t.Opponent.Count} scenes{whose}");
-            if (t.Baldino.Count > 0) log.Add($"Baldino: a copy of his car in {t.Baldino.Count} scenes{whose}");
-            if (t.Biker.Count > 0) log.Add($"the biker: a copy of the motorbike Rabbibunny in {t.Biker.Count} scenes{whose}");
+            for (var k = 0; k < t.Drivers.Count; k++)
+                if (t.Cars[k].Count > 0) log.Add($"{t.Drivers[k].Name}: a copy of {(t.Drivers[k].Bike ? "the motorbike Rabbibunny" : $"the car (the racer's body {t.Drivers[k].Body})")} in {t.Cars[k].Count} scenes{whose}");
             if (t.Grid.Count > 0) log.Add($"the grid: {t.Grid.Count} spots, pole {GridFirst} cells behind the start line, each {t.Options.GridStep} behind the last, {GridSide} either side of the middle{whose}");
             if (t.Pits.Count > 0) log.Add($"the pits: {t.Pits.Count} spots in the pit lane, where the opponents wait while the player qualifies{whose}");
         }

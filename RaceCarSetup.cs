@@ -24,16 +24,14 @@ public sealed class RaceCarSetup
     public bool ShowDisplay { get; set; } = true;
     // Show the setup before each race-track play (Play on a folder with a race track).
     public bool AskBeforePlay { get; set; } = true;
-    // Race the opponents: the retail track's racer and Baldino in his rocket car, driven round the lap by the race-track mode on racing lines
-    // of their own. Each drives this car as the setup makes it (its top gear, steering, pull and brakes; Baldino's is a little quicker on the
-    // straights and slower in the bends) as well as its skill says: 100 % drives it perfectly on its line, faster than a player can.
+    // Race the opponents: the track's drivers (Terrain.RaceDriver: each track's own line-up, or the retail track's racer, Baldino in his
+    // rocket car and the motorbike Rabbibunny), driven round the lap by the race-track mode on racing lines of their own. Each drives this
+    // car as the setup makes it (its top gear, steering, pull and brakes, a little quicker on the straights or in the bends as its driver
+    // is) as well as its skill says: 100 % drives it perfectly on its line, faster than a player can. RacerSkill is the drivers' skill,
+    // each a few points either side of it; LeftOut the drivers (by name) not raced.
     public bool Opponent { get; set; } = true;
     public int RacerSkill { get; set; } = 92;
-    public bool Baldino { get; set; } = true;
-    public int BaldinoSkill { get; set; } = 91;
-    // and the motorbike Rabbibunny: slower than the car on the straights, quicker through the bends
-    public bool Biker { get; set; } = true;
-    public int BikerSkill { get; set; } = 90;
+    public List<string> LeftOut { get; set; } = new();
     // A qualifying lap before the race: its time against the opponents' sets the grid (off: Twinsen starts on pole).
     public bool Qualifying { get; set; } = true;
     // Citadel Island's weather once the storm is over -- as after the lighthouse keeper is freed and the aliens land: no rain, the
@@ -46,11 +44,15 @@ public sealed class RaceCarSetup
     // Play starts on the start/finish straight, Twinsen beside his car, whatever scene is open (and with the zones and routes the editor
     // draws over the game hidden).
     public bool StartAtLine { get; set; } = true;
+    // Play starts a new game -- the story from its start, Twinsen in his house -- instead (the folder's tracks each raced where and when the
+    // game is: RaceCarEngineFile.WriteStorySet).
+    public bool NewGame { get; set; }
 
     public RaceCarSetup Clone()
     {
         var copy = (RaceCarSetup)MemberwiseClone();
         copy.GearTopKmh = new List<int>(GearTopKmh);
+        copy.LeftOut = new List<string>(LeftOut);
         return copy;
     }
 
