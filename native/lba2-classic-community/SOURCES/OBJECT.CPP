@@ -1580,6 +1580,12 @@ void FoudroieObj(U8 numhitter, U8 num, S32 armure) {
         return;
     if (num == NUM_PERSO AND GodMode) // GOD cheat: ignore combat damage
         return;
+    // a race-track mod's race: lightning stops Twinsen's car as a land mine does, and kills no one (RACEMOD.CPP)
+    if (num == NUM_PERSO AND RaceMod_NoHarm()) {
+        RaceMod_CarHit();
+        InitHitExtraPof(ptrobjt->Obj.X, ptrobjt->Obj.Y + ptrobjt->YMax + 1, ptrobjt->Obj.Z, armure);
+        return;
+    }
 
     ptrobjt->HitBy = numhitter;
 
@@ -2663,7 +2669,8 @@ void ReceptionObj() {
             return;
         }
 
-        if (StartYFalling - Nyw >= 16 * SIZE_BRICK_Y) { // trop haut mort directe
+        // (a race-track mod's race: no fall kills or hurts Twinsen in his car -- it stops a moment, as on a land mine: RACEMOD.CPP)
+        if (StartYFalling - Nyw >= 16 * SIZE_BRICK_Y AND !RaceMod_NoHarm()) { // trop haut mort directe
             InitHitExtraPof(APtObj->Obj.X,
                             APtObj->Obj.Y + APtObj->YMax + 1,
                             APtObj->Obj.Z,
@@ -2677,7 +2684,8 @@ void ReceptionObj() {
                             APtObj->Obj.Z,
                             5);
 
-            APtObj->LifePoint -= 5;
+            if (RaceMod_NoHarm()) RaceMod_CarHit();
+            else APtObj->LifePoint -= 5;
             InitAnim(GEN_ANIM_RECEPTION_2, ANIM_ALL_THEN, NUM_PERSO);
         } else if (StartYFalling - Nyw > 1) { // reception normale
             InitAnim(GEN_ANIM_RECEPTION, ANIM_ALL_THEN, NUM_PERSO);

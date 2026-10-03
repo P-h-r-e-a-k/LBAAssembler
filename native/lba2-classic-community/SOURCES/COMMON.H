@@ -304,6 +304,7 @@ const char *RaceMod_IslandFile(S32 island);
 void RaceMod_Island(S32 island);
 double RaceMod_SpeedFactor(void);
 S32 RaceMod_Takeover(void);
+S32 RaceMod_NoHarm(void);
 S32 RaceMod_Dial(S32 num);
 S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);
 void RaceMod_FloorFor(S32 y);

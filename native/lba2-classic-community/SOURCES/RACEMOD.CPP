@@ -85,6 +85,10 @@
  *   lightning hurts the car), the lightning spell (the other cars shrunk and slowed for 20 s), a clover (life and magic full), health, a
  *   nitro penguin (dropped behind the car, it goes off 2 s later and stops every car near it) and the super jet-pack (the game drives for
  *   10 s, faster). It grows back a while later. An opponent that drives over one gets a boost, drops a penguin or shrinks Twinsen.
+ *   The lightning spell fills Twinsen's magic too (the game's own spell takes it all), with the game's lightning flash.
+ *   No one dies in a race (RaceMod_NoHarm): a car a penguin blows up stops with the game's own hit reaction, as Twinsen's does on a land
+ *   mine (HitObj: the hit animation and the stars, no life lost; an opponent's car its own hit animation), and a long fall or a lightning
+ *   strike stops Twinsen's car the same way instead of killing him.
  *   A startline or checkpoint line may end in a ninth number, the road's height there: the line then only counts for a car within
  *   RACE_LINE_REACH of that height (a lap that passes over itself crosses a line's place at other heights too).
  */
@@ -95,6 +99,9 @@
 extern void ClrHoloPos(S32 num);   // HOLOGLOB.CPP (HOLO.H itself clashes with C_EXTERN.H)
 extern void DoImpact(S32 num, S32 x, S32 y, S32 z, U8 owner);   // IMPACT.CPP
 extern void InitBody(U8 gennewbody, U8 numobj);                  // OBJECT.CPP
+extern void HitObj(U8 numhitter, U8 num, S32 hitforce, S32 beta); // OBJECT.CPP
+extern void InitHitExtraPof(S32 x, S32 y, S32 z, S32 hitforce);   // OBJECT.CPP
+extern S32 InitIncrustDisp(S16 type, S16 num, S32 x, S32 y, S16 info, S16 move, S32 timeout);   // INCRUST.CPP
 #define RACE_PENGUIN_IMPACT 15             // the impact a nitro penguin goes off with (the land mines')
 
 #include <SVGA/BOX.H>
@@ -272,6 +279,8 @@ static const int s_puWeight[PU_COUNT] = {24, 12, 12, 8, 16, 16, 12};
 #define RACE_BOOST 1.5                     // the top speed and the pull with Gazogem fuel
 #define RACE_JET_BOOST 1.35                // ... with the jet-pack
 #define RACE_SHRUNK 0.7                    // a shrunk car's
+#define RACE_FLASH_MS 700                  // the lightning spell's flash
+#define RACE_BLAST_FORCE 20                // a penguin's blast, as HitObj takes it
 static S32 s_boostUntil = 0, s_protectUntil = 0, s_shrinkOthersUntil = 0, s_shrunkUntil = 0, s_jetUntil = 0;
 static int s_tiredVar = -1, s_tiredValue = 0, s_tiredText = -1;
 typedef struct { int Island, When, First, Last; char Path[260]; } T_RACE_TRACK;
@@ -2427,7 +2436,15 @@ static void PlayerPowerUp(int pu, S32 now) {
     switch (pu) {
     case PU_FUEL: s_boostUntil = now + RACE_BOOST_MS; break;
     case PU_PROTECT: s_protectUntil = now + RACE_PROTECT_MS; s_shrunkUntil = 0; break;
-    case PU_LIGHTNING: s_shrinkOthersUntil = now + RACE_SHRINK_MS; Log_Info("[racemod] the other cars shrunk for %d s", RACE_SHRINK_MS / 1000); break;
+    case PU_LIGHTNING: {
+        // (the game's own lightning spell takes all of Twinsen's magic: it is filled, as it is for the spell; and its flash)
+        s_shrinkOthersUntil = now + RACE_SHRINK_MS;
+        MagicPoint = (U8)(MagicLevel * 20);
+        const S32 flash = InitIncrustDisp(INCRUST_ECLAIR, 0, 0, 0, 0, 0, 1);
+        if (flash != -1) ListIncrustDisp[flash].TimerEnd = now + RACE_FLASH_MS;
+        Log_Info("[racemod] the other cars shrunk for %d s; magic full (%d)", RACE_SHRINK_MS / 1000, (int)MagicPoint);
+        break;
+    }
     case PU_CLOVER: hero->LifePoint = MAX_LIFE_POINTS; MagicPoint = (U8)(MagicLevel * 20); break;
     case PU_HEALTH: { const S32 l = hero->LifePoint + MAX_LIFE_POINTS / 4; hero->LifePoint = (S16)(l > MAX_LIFE_POINTS ? MAX_LIFE_POINTS : l); break; }
     case PU_PENGUIN: {
@@ -2440,6 +2457,18 @@ static void PlayerPowerUp(int pu, S32 now) {
     }
     Message(s_puName[pu]);
     Log_Info("[racemod] power-up: %s", s_puName[pu]);
+}
+
+// The penguin that goes off, as HitObj's hitter: this scene's (not Twinsen: HitObj spares him his own hits, the meca-penguin's armour).
+static U8 PenguinHitter(void) {
+    for (int k = 0; k < s_nbPenguinActors; k++)
+        if (s_penguinScene[k] == NumCube && s_penguinActor[k] > 0 && s_penguinActor[k] < NbObjets) return (U8)s_penguinActor[k];
+    return (U8)(NbObjets > 1 ? NbObjets - 1 : NUM_PERSO);
+}
+
+// Twinsen races: nothing is to kill him -- a long fall or a lightning strike stops his car as a land mine does (OBJECT.CPP).
+S32 RaceMod_NoHarm(void) {
+    return RaceMod_Active() && Comportement == C_BUGGY;
 }
 
 // An opponent's car (actor `car`) over a mushroom of this scene: it takes it -- a boost, a penguin dropped, or Twinsen shrunk.
@@ -2495,10 +2524,13 @@ static void PowerUps(S32 now, int driving) {
         Log_Info("[racemod] a nitro penguin goes off");
         if (!here) continue;
         DoImpact(RACE_PENGUIN_IMPACT, lx, (S32)pg->Y, lz, NUM_PERSO);
-        // every car near it stopped for a moment (Twinsen's unless the protection spell is on)
+        // every car near it stopped for a moment, with the hit reaction a land mine gives Twinsen's (Twinsen's unless the protection spell is
+        // on): HitObj -- the hit animation, the stars, the car stopped and no life lost (RaceMod_CarHit); an opponent's car its own hit
+        // animation (the racer entity's 6) and the stars
         if (driving && now >= s_protectUntil && Near(hero, lx, (S32)pg->Y, lz, RACE_PENGUIN_REACH)) {
+            HitObj(PenguinHitter(), NUM_PERSO, RACE_BLAST_FORCE, -1);
             ListBuggy[0].Speed = 0;
-            s_hitUntil = now + RACE_PENGUIN_HOLD;
+            if (s_hitUntil < now + RACE_PENGUIN_HOLD) s_hitUntil = now + RACE_PENGUIN_HOLD;
             Message("Blown up by a penguin!");
         }
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
@@ -2506,7 +2538,14 @@ static void PowerUps(S32 now, int driving) {
             if (!o->Count) continue;
             double x, z, y2, v, dx, dz;
             PathAt(o, o->S, &x, &z, &y2, &v, &dx, &dz);
-            if ((x - pg->X) * (x - pg->X) + (z - pg->Z) * (z - pg->Z) < (double)RACE_PENGUIN_REACH * RACE_PENGUIN_REACH) o->HitUntil = now + RACE_PENGUIN_HOLD;
+            if ((x - pg->X) * (x - pg->X) + (z - pg->Z) * (z - pg->Z) >= (double)RACE_PENGUIN_REACH * RACE_PENGUIN_REACH) continue;
+            o->HitUntil = now + RACE_PENGUIN_HOLD;
+            const int index = OpponentActor(o);
+            if (index < 0) continue;
+            T_OBJET *car = &ListObjet[index];
+            InitAnim(GEN_ANIM_CHOC, ANIM_ALL_THEN, (U8)index);
+            InitHitExtraPof(car->Obj.X, car->Obj.Y + car->YMax + 1, car->Obj.Z, RACE_BLAST_FORCE);
+            Log_Info("[racemod] %s blown up by a penguin: stopped", o->Name);
         }
     }
     for (int k = 0; k < s_nbPenguinActors; k++) {
@@ -2679,7 +2718,7 @@ void RaceMod_Frame(void) {
         if (s_powerups && moving) OpponentMushrooms(n, car);
         // the driving animation while it moves (its steps are undone every frame: the position is set here)
         const U16 anim = (U16)(o->HasAnims ? (moving ? o->AnimDrive : o->AnimIdle) : (moving ? 1 : 0));
-        if (car->GenAnim != anim) InitAnim(anim, ANIM_REPEAT, (U8)index);
+        if (now >= o->HitUntil && car->GenAnim != anim) InitAnim(anim, ANIM_REPEAT, (U8)index);   // (a penguin's blast: its hit reaction plays)
         if (moving) s_wantFlip = 1;
     }
 }

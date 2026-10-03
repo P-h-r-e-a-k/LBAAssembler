@@ -1536,6 +1536,18 @@ New variables: 203 (seller beaten; 2 once told), 204 (his race run). The three l
 - **The display** shows what is on and for how long ("Protected 27").
 - **The setting:** the race car setup's "Power-ups in the mushrooms along the track", on by default. A test key, `powerup_only=<n>`, puts one power-up in every mushroom.
 
+**Later the same day, two changes from the user:**
+- **The lightning spell fills Twinsen's magic.** The game's own lightning spell takes all of his magic, so picking it up now fills it too, as a clover does (magic level × 20). It also shows the game's own lightning flash (INCRUST_ECLAIR, 0.7 s). With no magic level yet (the start of a game) there is nothing to fill.
+- **No one dies in a race** (`RaceMod_NoHarm`: the race-track mode is on and Twinsen is driving).
+  - *Penguins.* A car a penguin blows up stops with the hit reaction a land mine gives Twinsen's car: for his, the game's own `HitObj` (the hit animation, the stars, the car stopped, no life lost, as `RaceMod_CarHit` already made it for the mines). An opponent's car plays its own hit animation (the racer entity has one: its generic 6) under the stars, and its driving animation waits until it is over.
+  - *Falls.* A fall long enough to kill Twinsen (16 bricks: OBJECT.CPP's "trop haut mort directe") or to hurt him (8) now stops his car a moment, as a mine does, with the landing animation and no life lost.
+  - *Lightning strikes.* A strike stops his car with the stars instead of killing him (FoudroieObj).
+  - *Already safe:* the sea and the lava put the car back on the road (`RaceMod_Rescue`), and the opponents are never hurt (NO_CHOC).
+- **Verified** (Mosquibees Island, every mushroom a penguin):
+  - Both opponents were blown up and stopped with their hit animation.
+  - Braked and reversed back over his own penguin, Twinsen's car played generic animation 22 (the second of the game's two hit animations) and stopped, his life still 200.
+  - The lightning pickup logs the magic filled.
+
 ![a mushroom on the lava lake's road](racetrack/build/powerup_mushroom.png)
 ![a nitro penguin dropped](racetrack/build/powerup_penguin.png)
 
