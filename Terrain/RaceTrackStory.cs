@@ -52,6 +52,8 @@ internal static class RaceTrackStory
     // (1; 2 once Raph has said so). 200-202 are game variables nothing in the game uses.
     public const int GlovesSlot = 7, FerryTicket = 13;
     public const int DayVar = 200, Tired = 1, Rested = 2, WonVar = 201, BeatVar = 202;
+    // Celebration Island's lava lake: the souvenir seller beaten (1; 2 once he has told what he saw) and his race run (won or not), 203-204
+    public const int SellerBeaten = 203, SellerRaced = 204;
     public const int RaceLaps = 3;
     // the game's storm plot (51: 1 the wizard spoken to, 2 Raph spoken to, 3 Raph freed, 4 the storm over), the lighthouse keeper's
     // (56: 3 back at the lighthouse), the aliens' landing (70) and the behaviour Twinsen drives in (12)
@@ -298,6 +300,168 @@ internal static class RaceTrackStory
                 return (x, z, g, ((beta % 4096) + 4096) % 4096);
             }
         return null;
+    }
+
+    // ---- Celebration Island: the souvenir seller -------------------------------------------------------------------------------------
+    // The user's (2026-10-03, later): Twinsen has to beat the souvenir seller to get the information he needs. In the game the seller (scene
+    // 95, actor 5: the Franco who came back from Island CX, BODY.HQR 307) tells it when Twinsen walks up to him: what he saw there (171),
+    // and to "How can I get there?" Rick's gang, at the bar by Otringal's harbour (172, with its holomap arrow, 136; game variable 124 goes
+    // to 1). Now, until Twinsen has beaten him, he answers with a challenge instead and takes him to the lava lake's race (its scene, 223:
+    // the lava lake is the island before the statue rises, as it is when Twinsen meets him). There he races as the one to beat, three laps.
+    // Out of his car after the race, the seller tells him what he saw if he won, or laughs at him if not, and he is back by the dock (scene
+    // 95's start); a race lost, the challenge stands.
+    private enum Seller { Challenge, Beaten, Rematch }
+    private static readonly string[][] SellerLines =
+    {
+        new[]
+        {
+            "What I saw over there? That'll cost you more than a statuette, mister. Race me round the lava lake, and if you beat me I'll tell you everything. Come on, the cars are waiting!",
+            "Ce que j'ai vu là-bas ? Ça vous coûtera plus qu'une statuette, monsieur. Faites-moi la course autour du lac de lave, et si vous me battez je vous dirai tout. Venez, les voitures attendent !",
+            "Was ich dort gesehen habe? Das kostet dich mehr als eine Statuette, mein Freund. Fahr mit mir ein Rennen um den Lavasee, und wenn du mich schlägst, erzähle ich dir alles. Komm, die Wagen warten!",
+            "¿Lo que vi allí? Eso te costará más que una estatuilla, amigo. Échame una carrera alrededor del lago de lava, y si me ganas te lo contaré todo. ¡Vamos, los coches esperan!",
+            "Quello che ho visto laggiù? Ti costerà più di una statuetta, amico. Sfidami in una corsa intorno al lago di lava, e se mi batti ti racconterò tutto. Vieni, le auto aspettano!",
+            "O que eu vi lá? Isso vai custar-te mais do que uma estatueta, amigo. Corre contra mim à volta do lago de lava, e se me venceres conto-te tudo. Anda, os carros estão à espera!",
+        },
+        new[]
+        {
+            "You beat me fair and square, mister! A deal's a deal: here's what I saw on Island CX.",
+            "Vous m'avez battu à la régulière, monsieur ! Marché conclu : voici ce que j'ai vu sur l'île CX.",
+            "Du hast mich ehrlich geschlagen, mein Freund! Abgemacht ist abgemacht: Das habe ich auf der Insel CX gesehen.",
+            "¡Me has ganado limpiamente, amigo! Lo prometido es deuda: esto es lo que vi en la isla CX.",
+            "Mi hai battuto lealmente, amico! Un patto è un patto: ecco cosa ho visto sull'isola CX.",
+            "Venceste-me com justiça, amigo! O prometido é devido: eis o que vi na ilha CX.",
+        },
+        new[]
+        {
+            "Ha! Not fast enough, mister. Come and find me at my stall when you want a rematch.",
+            "Ha ! Pas assez rapide, monsieur. Revenez me voir à mon étal si vous voulez une revanche.",
+            "Ha! Nicht schnell genug, mein Freund. Komm zu meinem Stand, wenn du eine Revanche willst.",
+            "¡Ja! No eres lo bastante rápido, amigo. Ven a buscarme a mi puesto si quieres la revancha.",
+            "Ah! Non abbastanza veloce, amico. Vieni a trovarmi alla mia bancarella se vuoi la rivincita.",
+            "Ah! Não foste rápido que chegue, amigo. Vem ter comigo à minha banca se quiseres a desforra.",
+        },
+    };
+    // (the seller is the game's actor 5 of scene 95, entity 213; a track's build that took the others off the road renumbered him)
+    public const int SellerEntity = 213;
+    private const int CelebrationScene = 95, CelebrationTexts = 3 + 5;
+    private const int Told = 124, RickArrow = 136;
+
+    // `scenes`: what the lava lake's scenes were given (its start scene, 223, is its race's). Returns lines for the log.
+    public static List<string> ApplyCelebration(string gameDirectory, RaceTrackScenes.Result scenes)
+    {
+        var log = new List<string>();
+        if (scenes.StartScene < 0) { log.Add("no story: the lava lake's track has no start scene"); return log; }
+        // the lines, at the end of Celebration Island's texts
+        var textPath = Path.Combine(gameDirectory, "TEXT.HQR");
+        var text = HqrArchive.Open(textPath);
+        var languages = Lba2TextBank.Languages(textPath);
+        var first = Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, CelebrationTexts).Texts.Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
+        int Id(Seller line) => first + (int)line;
+        var hqr = File.ReadAllBytes(textPath);
+        for (var lang = 0; lang < languages; lang++)
+        {
+            var words = lang < SellerLines[0].Length ? lang : 0;
+            var lines = Lba2TextBank.Load(text, lang, CelebrationTexts);
+            var attribute = lines.Find(170)?.Attribute ?? Lba2TextBank.NormalAttribute;
+            for (var k = 0; k < SellerLines.Length; k++)
+                lines.Texts.Add(new Lba2TextBank.Text { Id = first + k, Attribute = attribute, Bytes = Dos.GetBytes(SellerLines[k][words]) });
+            hqr = lines.WriteInto(hqr);
+        }
+        File.WriteAllBytes(textPath, hqr);
+        log.Add($"the souvenir seller's {SellerLines.Length} lines are texts {first}-{first + SellerLines.Length - 1} of Celebration Island's, in all {languages} languages");
+
+        var store = new SceneStore(SceneGame.Lba2, gameDirectory);
+        var changes = new List<SceneChange>();
+        // the seller: a challenge before he is beaten, what he knows after
+        try
+        {
+            var model = store.Load(CelebrationScene);
+            var sellerActor = model.Actors.FindIndex(a => a.Entity == SellerEntity);
+            if (sellerActor < 1) throw new NotTheGames($"no souvenir seller (entity {SellerEntity})");
+            var scripts = SceneScripts.Load(SceneSerializer.Write(model), CelebrationScene);
+            var seller = scripts.GetText(sellerActor, ScriptKind.Life);
+            int from = seller.IndexOf($"set_var_game({Told}, 1);", StringComparison.Ordinal), to = seller.IndexOf($"set_holo_pos({RickArrow});", StringComparison.Ordinal);
+            if (from < 0 || to < from) throw new NotTheGames("the seller's lines");
+            to += $"set_holo_pos({RickArrow});".Length;
+            seller = seller[..from] + $@"if (0 == var_game({SellerBeaten}))
+            {{
+                message(170);
+                message_obj(0, 6);
+                message({Id(Seller.Challenge)});
+                set_var_cube(0, 0);
+                change_cube({scenes.StartScene});
+            }}
+            else
+            {{
+                set_var_game({Told}, 1);
+                message(170);
+                message_obj(0, 6);
+                message(171);
+                message_obj(0, 7);
+                message(172);
+                set_holo_pos({RickArrow});
+            }}" + seller[to..];
+            scripts.SetText(sellerActor, ScriptKind.Life, seller);
+            var built = scripts.Build();
+            if (!built.Ok) throw new NotTheGames(string.Join("; ", built.Errors));
+            changes.Add(new(CelebrationScene, SceneSerializer.Parse(SceneGame.Lba2, built.Record!), null));
+            log.Add($"scene {CelebrationScene}: the souvenir seller challenges Twinsen to the lava lake's race (scene {scenes.StartScene}) until he is beaten (variable {SellerBeaten})");
+        }
+        catch (Exception e) when (e is NotTheGames or ScriptCompileException or InvalidDataException or ArgumentException)
+        {
+            log.Add($"scene {CelebrationScene}: the souvenir seller left as he was: {e.Message}");
+            return log;
+        }
+        // the race's scene: once Twinsen is out of his car after the race, what the seller says, and back to the dock
+        try
+        {
+            var model = store.Load(scenes.StartScene);
+            var colour = store.Load(CelebrationScene).Actors.FirstOrDefault(a => a.Entity == SellerEntity)?.CoulObj ?? 4;
+            var voice = SceneOps.BlankActor(SceneGame.Lba2, IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, entity: 16);
+            voice.Life = new byte[] { 0 }; voice.Track = new byte[] { 0 };
+            voice.Flags = InvisibleNoShadow; voice.Body = -1; voice.Armor = 51; voice.LifePoints = -1; voice.CoulObj = colour;
+            var index = SceneOps.AddActor(model, voice);
+            var scripts = SceneScripts.Load(SceneSerializer.Write(model), scenes.StartScene);
+            scripts.SetText(index, ScriptKind.Life, $@"void comportement_0()
+{{
+    set_comportement(comportement_1);
+}}
+
+void comportement_1()
+{{
+    if (1 == var_game({SellerRaced}) && {Driving} != comportement_hero())
+    {{
+        set_var_game({SellerRaced}, 0);
+        if (1 == var_game({SellerBeaten}))
+        {{
+            message({Id(Seller.Beaten)});
+            message(171);
+            message_obj(0, 7);
+            message(172);
+            set_holo_pos({RickArrow});
+            set_var_game({Told}, 1);
+            set_var_game({SellerBeaten}, 2);
+        }}
+        else
+        {{
+            message({Id(Seller.Rematch)});
+        }}
+        change_cube({CelebrationScene});
+    }}
+}}
+");
+            scripts.SetText(index, ScriptKind.Track, "label(0);\nstop();\n");
+            var built = scripts.Build();
+            if (!built.Ok) throw new NotTheGames(string.Join("; ", built.Errors));
+            changes.Add(new(scenes.StartScene, SceneSerializer.Parse(SceneGame.Lba2, built.Record!), null));
+            log.Add($"scene {scenes.StartScene}: after the race the seller tells Twinsen what he saw if he won (variable {SellerBeaten}), or offers a rematch, and Twinsen is back at scene {CelebrationScene}");
+        }
+        catch (Exception e) when (e is NotTheGames or ScriptCompileException or InvalidDataException or ArgumentException)
+        {
+            log.Add($"scene {scenes.StartScene}: the race's end left out: {e.Message}");
+        }
+        store.SaveMany(changes, allowErrors: true);
+        return log;
     }
 
     // Returns lines for the log and what the race-track mode needs (the tired line's text). `storm`: the storm track's build (CITADEL),

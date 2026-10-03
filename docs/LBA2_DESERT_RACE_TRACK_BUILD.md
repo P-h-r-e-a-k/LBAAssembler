@@ -1461,6 +1461,105 @@ All runs below were headless and muted, on a sandbox game folder built with the 
 - Mr. Paul is "in charge of the track": in the game Raph is the lighthouse keeper (Mr. Paul's house is scene 7), and the story reads right that way.
 - Zoe ("Zoe?" in the notes) races on the town circuit, and can be left out in the setup.
 
+### Celebration Island's drivers, the one to beat, and power-ups (2026-10-03, later)
+
+The user asked for three things:
+- On the lava lake (CELEBRAT), the drivers a kangaroo, the souvenir seller Twinsen talks to, and a policeman. Twinsen has to beat the seller to get the information he needs to progress.
+- On each track, random speeds for the opponents, except the main one Twinsen has to beat, who should be beatable but a slight challenge.
+- The power-ups of powerupNotes.txt, hidden in the game's small brown mushrooms until a car drives over them.
+
+**The lava lake's drivers.** They are three new cars of the racer's entity (`Terrain/RaceTrackCharacterCars.Celebration.cs`):
+
+| Body | Driver | Car |
+|---|---|---|
+| 60 | a kangaroo (BODY.HQR 308, a tourist with a camera) | a khaki safari car with a roll bar, the camera on the bonnet, a spring under its tail and the kangaroo's own tail off the back |
+| 61 | the souvenir seller (BODY.HQR 307: the Franco who came back from Island CX, his head still bandaged) | a stall on wheels, a red and white striped awning over little Dark Monks for sale, and a price tag |
+| 62 | a policeman (BODY.HQR 80: one of the island's Franco guards, green helmet and spear) | a green and white car with a red light, the spear's blade on its nose |
+
+The seller's case and its straps are left out of the seated driver: a car takes the engine's 30 bones at most.
+
+![the three cars](racetrack/build/celebration_drivers_cars.png)
+![on the lava lake's grid](racetrack/build/celebration_lava_pit.png)
+
+**The one to beat** (`RaceDriver.Main`):
+
+| Track | The one to beat |
+|---|---|
+| Citadel storm track | Raph (his time) |
+| Citadel town circuit | Mr. Paul |
+| Desert island | the retail racer |
+| The Emerald Moon | Baldino |
+| Mosquibees Island | the Queen |
+| Celebration lava lake | the souvenir seller |
+| the others | the racer |
+
+- **His skill** is a setting of its own: the race car setup's "The one to beat's skill", 86 % by default. At 92 % the test pilot, a better driver than most, lost the lava lake to the seller by half a second.
+- **The others' skills** are drawn at random each time the track loads, 14 under to 12 over his (`opponent_pace=<lo> <hi>`).
+- **The display** says "Ahead of …" or "Behind …" him through the race.
+- **A race's result** (the town circuit's ferry ticket, the seller's information) is finishing ahead of him (`main=`), not first. The end says "You beat the souvenir seller!" or "The souvenir seller beat you".
+
+**The souvenir seller's information.** In the game he is scene 95's actor 5 (entity 213). Asked what he saw on Island CX and how to get there, he tells of the fortress and of Rick's gang at the bar by Otringal's harbour (texts 171 and 172, Rick's holomap arrow 136, variable 124).
+1. Until Twinsen has beaten him, after "What did you see over there?" he says: "That'll cost you more than a statuette, mister. Race me round the lava lake, and if you beat me I'll tell you everything." He takes Twinsen to the lava lake's race scene (223), on the grid by the buggy.
+2. Three laps follow (story only), against him, the kangaroo and the policeman.
+3. Out of his car after the race, Twinsen hears one of two things:
+   - won: "You beat me fair and square, mister! A deal's a deal: here's what I saw on Island CX." The game's own information follows, with its arrow and variable.
+   - lost: "Ha! Not fast enough, mister. Come and find me at my stall when you want a rematch."
+4. Either way he is back in scene 95, by the dock.
+
+New variables: 203 (seller beaten; 2 once told), 204 (his race run). The three lines are in all six languages.
+
+- **The seller stays on the island.** The statue track's build took everyone off scene 95, the seller too. Now the people the story needs stay where the game has them (`RaceTrackIsland.StoryEntities`). He isn't moved out of the statue track's way either: he only exists before the statue rises, and moved, he stood in the lava.
+- **A race over and come back to** is a race afresh (`RaceMod_Island`): a lost challenge can be raced again.
+
+**Power-ups** (RACEMOD.CPP, `powerups=`).
+
+*The mushrooms.* The game's small brown mushroom (entity 112, BODY.HQR 171; Citadel Island's by the weather wizard's tent, scene 45) is copied onto every track's road every 40 cells from 30 after the start line (`RaceTrackScenes.MushroomSpots`).
+- Each sits a little left of, right of or on the middle of the road, and never on or near a jump, a loop or a carried jump.
+- Any car that comes within 1,000 units of one takes it, and it grows back 15 s later.
+- Its box is made a point, and the reach is longer than a car's own box: the engine stops a car at any object's box (CheckObjCol), and the first test pilot sat jammed against one.
+
+*The seven power-ups,* from powerupNotes.txt, chosen at random by weight:
+
+| Power-up | Weight | What it does |
+|---|---|---|
+| Gazogem fuel | 24 | a boost: the car's top speed and pull × 1.5 for 4 s |
+| Protection spell | 12 | 30 s in which no mine, penguin or lightning hurts the car |
+| Lightning spell | 12 | the other cars shrunk and slowed (× 0.7) for 20 s |
+| Clover | 8 | life and magic full |
+| Health | 16 | a quarter of the life back |
+| Nitro penguin | 16 | dropped behind the car; 2 s later it goes off (the land mines' blast) and stops every car within 4 cells for 1.5 s |
+| Super jet-pack | 12 | the game drives for 10 s, faster (× 1.35): the test pilot's steering, the player's keys left out |
+
+- **Opponents take them too:** a boost, a penguin dropped, or Twinsen shrunk (unless protected).
+- **The shrunk cars:** the engine can't scale a body as it draws it, so every car of the racer's entity gets a copy at half its size as its body 100 + its own (`Terrain/RaceTrackSmallCars.cs`). The copy is the body's own bytes with its points, spheres and bounding box halved. The engine switches a shrunk opponent to it (`opponent_small=`).
+- **The penguin seen** is the shop's nitro penguin (scene 14, entity 46): a copy of it waits out of sight in each scene and stands where the newest one was dropped.
+- **The display** shows what is on and for how long ("Protected 27").
+- **The setting:** the race car setup's "Power-ups in the mushrooms along the track", on by default. A test key, `powerup_only=<n>`, puts one power-up in every mushroom.
+
+![a mushroom on the lava lake's road](racetrack/build/powerup_mushroom.png)
+![a nitro penguin dropped](racetrack/build/powerup_penguin.png)
+
+**Verified** (headless, muted, `E:\dump\TEMP\story`, the test pilot driving):
+
+*The souvenir seller:*
+- Talking to him in scene 95 took Twinsen to scene 223, where the engine loaded the lava lake.
+- **Lost** (one-to-beat skill 92): "3rd of 4, behind the main opponent". Out of the car, the rematch line; back in scene 95 with variable 203 at 0.
+- **Won** (skill 86): qualifying 27.23 s; laps 27.22, 26.80 and 26.80 s against the seller's 28.1-29.6 s; "1st of 4, ahead of the main opponent". Out of the car: variable 203 = 2, 124 = 1, Rick's arrow on, back in scene 95.
+
+*Each power-up* (one at a time with `powerup_only`):
+- **Clover:** life 200 to 255.
+- **Lightning:** the opponents' cars switched to their half-size bodies.
+- **Jet-pack:** with the pilot switched off just after the pickup, the car drove on through three cubes.
+- **Penguin:** dropped behind the car, it went off 2 s later.
+- **In the random mix:** Gazogem fuel's lap 26.80 s against 27.22 s; the kangaroo took penguins, jet-packs, protection and health.
+
+*The other tracks*, with mushrooms on and no car jammed:
+- Desert: qualifying 132.23 s (132.04 before).
+- The Emerald Moon: 61.29 s.
+- Mosquibees Island: laps complete.
+
+*From the app:* the race car setup shows the one to beat's skill (86 %), the random range and the power-ups box, and Play starts.
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

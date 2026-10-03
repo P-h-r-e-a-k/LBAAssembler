@@ -244,7 +244,9 @@ static void RaceSpeedOnSlope(S_BUGGY *ptb, S32 deltatimer, S32 flagattack, doubl
     const T_RACE_CAR *car = RaceMod_Car();
     const double share = RaceMod_ClimbShare(gravity, slope);
     RaceMod_UpdateGear((S32)(ptb->Speed / share));
-    const double gearTop = car->GearTop[RaceMod_Gear() - 1], engineTop = gearTop * share;
+    // (a power-up's boost, or shrunk: RACEMOD.CPP RaceMod_SpeedFactor)
+    const double factor = RaceMod_SpeedFactor();
+    const double gearTop = car->GearTop[RaceMod_Gear() - 1] * factor, engineTop = gearTop * share;
     const double dt = deltatimer / 1000.0;
     const double coast = dt * car->Coast;
     double v = ptb->Speed;
@@ -270,7 +272,7 @@ static void RaceSpeedOnSlope(S_BUGGY *ptb, S32 deltatimer, S32 flagattack, doubl
                 pull = 4.0;
             if (pull < 0.25)
                 pull = 0.25;
-            v += dt * car->Accel * pull;
+            v += dt * car->Accel * pull * factor;
             if (v > engineTop)
                 v = engineTop;
         }
@@ -309,7 +311,9 @@ static void RaceSpeed(S_BUGGY *ptb, S32 deltatimer, S32 flagattack) {
     }
     const T_RACE_CAR *car = RaceMod_Car();
     RaceMod_UpdateGear(ptb->Speed);
-    const S32 top = car->GearTop[RaceMod_Gear() - 1];
+    // (a power-up's boost, or shrunk: RACEMOD.CPP RaceMod_SpeedFactor)
+    const double factor = RaceMod_SpeedFactor();
+    const S32 top = (S32)(car->GearTop[RaceMod_Gear() - 1] * factor);
     const S32 coast = deltatimer * car->Coast / 1000;
 
     ptb->SpeedRot = car->Steer;
@@ -327,7 +331,7 @@ static void RaceSpeed(S_BUGGY *ptb, S32 deltatimer, S32 flagattack) {
                 pull = 4.0;
             if (pull < 0.25)
                 pull = 0.25;
-            ptb->Speed += (S32)(deltatimer * car->Accel * pull / 1000.0);
+            ptb->Speed += (S32)(deltatimer * car->Accel * pull * factor / 1000.0);
             if (ptb->Speed > top)
                 ptb->Speed = top;
         } else {

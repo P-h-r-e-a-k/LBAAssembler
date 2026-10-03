@@ -30,7 +30,13 @@ public sealed class RaceCarSetup
     // is) as well as its skill says: 100 % drives it perfectly on its line, faster than a player can. RacerSkill is the drivers' skill,
     // each a few points either side of it; LeftOut the drivers (by name) not raced.
     public bool Opponent { get; set; } = true;
+    // The skill of the one to beat on each track (the others' are drawn at random round it each race): beatable, with a little challenge
+    // (2026-10-03: at 92 the test pilot, a better driver than most, lost the lava lake to the souvenir seller by half a second). RacerSkill is
+    // the opponents' skill as it was before there was one to beat, kept for the settings already saved.
+    public int MainSkill { get; set; } = 86;
     public int RacerSkill { get; set; } = 92;
+    // Power-ups hidden in small brown mushrooms along the lap (RACEMOD.CPP): a car that drives over one gets it.
+    public bool PowerUps { get; set; } = true;
     public List<string> LeftOut { get; set; } = new();
     // A qualifying lap before the race: its time against the opponents' sets the grid (off: Twinsen starts on pole).
     public bool Qualifying { get; set; } = true;

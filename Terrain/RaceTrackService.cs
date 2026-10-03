@@ -69,15 +69,20 @@ internal static class RaceTrackService
         // (since 2026-10-03; a track built before has its racer in Path and Opponent and the others in Rivals).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<DriverInfo>? Drivers = null,
         // Story: the story's texts the race-track mode needs (Citadel Island's: RaceTrackStory).
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] StoryInfo? Story = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] StoryInfo? Story = null,
+        // Mushrooms, Penguins: the power-ups' mushrooms along the lap and the nitro penguin of each scene, each [scene, actor]
+        // (RaceTrackScenes.MushroomSpots; RACEMOD.CPP's power-ups).
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Mushrooms = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Penguins = null);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
     // A driver: its name, its line ([x, z, y, speed, bend radius] as Path's), how many points before the start line it starts without a
     // grid, the scenes' copies of its car (none for a time to beat: Ghost), its character (Top, Grip: shares of the player's car's top
-    // speed and cornering), its skill against the car setup's (SkillShift), and whether it is the motorbike.
-    public sealed record DriverInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors, double Top, double Grip, int SkillShift, bool Bike, bool Ghost);
+    // speed and cornering), whether it is the one to beat (Main), the motorbike, and its car's body (the racer entity's generic body).
+    public sealed record DriverInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors, double Top, double Grip, bool Main, bool Bike, bool Ghost, int Body = -1);
     // The story's: the tired line everyone says until Twinsen sleeps (a text of Citadel Island's), and the holomap arrow to the town
     // circuit's start line.
-    public sealed record StoryInfo(int TiredText, int TownArrow);
+    // (Seller: Celebration Island's lava lake, whose race the souvenir seller has to lose: RaceTrackStory.ApplyCelebration)
+    public sealed record StoryInfo(int TiredText, int TownArrow, bool Seller = false);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
     // start line, checkpoints and opponents from RACETRACK.JSON: `track`, one of the folder's tracks as RaceFor picks it, or else the
@@ -274,7 +279,7 @@ internal static class RaceTrackService
     // all of them, and each track's record for RACETRACK.JSON, in the order built.
     public sealed class BuildSession
     {
-        public bool CharacterCars, Baldino;
+        public bool CharacterCars, Baldino, SmallCars;
         public List<TrackInfo> Tracks { get; } = new();
     }
 
@@ -420,10 +425,15 @@ internal static class RaceTrackService
 
     // The mod's story, on the island that has one (Citadel Island: RaceTrackStory, its storm track and its town circuit). After the scenes,
     // which it adds to.
-    public static (List<string> Log, StoryInfo? Info) Story(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? town, RaceTrackScenes.Result scenes) =>
-        options.Story && options.Island.IleFile == RaceTrackIsland.Citadel.IleFile && town is { Own: true } && scenes.Twin is { } townScenes
-            ? RaceTrackStory.Apply(gameDirectory, report, town.Report, scenes, townScenes)
-            : (new List<string>(), null);
+    // Celebration Island's lava lake has one too: the souvenir seller tells what he knows once Twinsen has beaten him there.
+    public static (List<string> Log, StoryInfo? Info) Story(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? town, RaceTrackScenes.Result scenes)
+    {
+        if (!options.Story) return (new List<string>(), null);
+        if (options.Island.IleFile == RaceTrackIsland.Citadel.IleFile && town is { Own: true } && scenes.Twin is { } townScenes)
+            return RaceTrackStory.Apply(gameDirectory, report, town.Report, scenes, townScenes);
+        if (options.Island == RaceTrackIsland.CelebrationLava) return (RaceTrackStory.ApplyCelebration(gameDirectory, scenes), new StoryInfo(-1, -1, true));
+        return (new List<string>(), null);
+    }
 
     // After the island's files: the track on the holomap's pictures (a twin with a track of its own on its own picture, the fine weather's),
     // the jump's flight (each jump its own: RaceTrackJumpAnim.GenericFor), Baldino's car and the characters' cars (RaceTrackCharacterCars) --
@@ -458,6 +468,8 @@ internal static class RaceTrackService
         // the cars after the game's characters, three or more for each island: in the game's files for whoever is to drive them (no actor
         // has one yet)
         if (!session.CharacterCars) { log.AddRange(RaceTrackCharacterCars.Install(gameDirectory).Log); session.CharacterCars = true; }
+        // ... and each of the racer entity's cars shrunk to half its size, for the lightning spell (RaceTrackSmallCars)
+        if (!session.SmallCars) { log.Add(RaceTrackSmallCars.Install(gameDirectory)); session.SmallCars = true; }
         return log;
     }
 
@@ -507,7 +519,7 @@ internal static class RaceTrackService
             var d = racers[k];
             var actors = d.Ghost ? new Dictionary<int, int>() : scenes.Drivers.FirstOrDefault(c => c.Driver == d).Actors;
             if (actors is null || !d.Ghost && actors.Count == 0 || report.DriverPaths[k].Count == 0) continue;
-            drivers.Add(new DriverInfo(d.Name, Points(report.DriverPaths[k]), 4 * (k + 1), actors, d.Line.Top, d.Line.Grip, d.SkillShift, d.Bike, d.Ghost));
+            drivers.Add(new DriverInfo(d.Name, Points(report.DriverPaths[k]), 4 * (k + 1), actors, d.Line.Top, d.Line.Grip, d.Main, d.Bike, d.Ghost, d.Bike ? -1 : d.Body));
         }
         return new TrackInfo(options.Crossing.ToString(), line, checkpoints, path.Count > 0 ? path : null, 4, null, scenes.StartScene,
             null, scenes.Grid.Count > 0 ? scenes.Grid : null, scenes.Pits.Count > 0 ? scenes.Pits : null, options.Island.Name,
@@ -517,7 +529,8 @@ internal static class RaceTrackService
             JumpCameras: report.JumpCameras.Count > 0
                 ? report.JumpCameras.Select(c => new[] { c.Anim, c.CubeX, c.CubeZ, (int)Math.Round((c.X - c.CubeX * 64) * 512), (int)Math.Round(c.Y), (int)Math.Round((c.Z - c.CubeZ * 64) * 512) }).ToList()
                 : null,
-            ArcJumps: raised && report.ArcRaised.Count > 0 ? report.ArcRaised.ToList() : null, Drivers: drivers.Count > 0 ? drivers : null);
+            ArcJumps: raised && report.ArcRaised.Count > 0 ? report.ArcRaised.ToList() : null, Drivers: drivers.Count > 0 ? drivers : null,
+            Mushrooms: scenes.Mushrooms is { Count: > 0 } mushrooms ? mushrooms : null, Penguins: scenes.Penguins is { Count: > 0 } penguins ? penguins : null);
     }
 
     private static int[] LoopRecord(LoopInfo l)

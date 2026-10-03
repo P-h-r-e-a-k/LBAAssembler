@@ -93,8 +93,8 @@ internal sealed class RaceTrackWindow : Window
     private void IslandChanged()
     {
         var islands = Islands();
-        // the story is Citadel Island's own opening
-        var citadel = islands.Any(i => i.IleFile == RaceTrackIsland.Citadel.IleFile);
+        // the story is Citadel Island's own opening, and the souvenir seller's race on Celebration Island's lava lake
+        var citadel = islands.Any(i => i.IleFile == RaceTrackIsland.Citadel.IleFile || i == RaceTrackIsland.CelebrationLava);
         if (story.IsEnabled != citadel) story.IsChecked = citadel;
         story.IsEnabled = citadel;
         var one = islands.Count == 1;

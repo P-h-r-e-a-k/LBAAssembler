@@ -45,6 +45,9 @@ internal static class IslandCast
             {
                 if ((actor.Flags & (1u << 10)) != 0) continue;       // a sprite
                 if (!bodies.TryGetValue((actor.Entity, actor.Body), out var body)) continue;
+                // (BODYOF=<n>: where each actor with that BODY.HQR entry is)
+                if (Environment.GetEnvironmentVariable("BODYOF") is { } of && int.Parse(of) == body)
+                    Console.WriteLine($"body {body}: scene {scene} actor {model.Actors.IndexOf(actor)} entity {actor.Entity} at ({actor.X},{actor.Y},{actor.Z}) flags 0x{actor.Flags:X}");
                 if (!island.Cast.TryGetValue(body, out var where)) island.Cast[body] = where = new SortedSet<int>();
                 where.Add(scene);
             }

@@ -59,7 +59,7 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Celebration = new("Celebration Island", "CELEBRA2.ILE", "CELEBRA2.OBL", 5, 95, 95, 32,
         "RaceTrackPlan.Celebration.json", null)
     {
-        Statue = true, Title = "Celebration Island: round the statue",
+        Statue = true, Title = "Celebration Island: round the statue", StoryEntities = new[] { RaceTrackStory.SellerEntity },
     };
 
     // Celebration Island before the statue rises (CELEBRAT: the mesa's top a plateau round a lake of lava level with it, the temple on its
@@ -71,7 +71,7 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland CelebrationLava = new("Celebration Island, lava lake", "CELEBRAT.ILE", "CELEBRAT.OBL", 5, 223, 223, 32,
         "RaceTrackPlan.CelebrationLava.json", null)
     {
-        OtherFile = true, CopiesScene = 95, Title = "Celebration Island: the lava lake",
+        OtherFile = true, CopiesScene = 95, Title = "Celebration Island: the lava lake", Roster = RaceDriver.CelebrationLava,
     };
 
     // The Elevator Platform (ASCENCE: the foot of the elevator from Otringal, a few decks on legs over the sea with the elevator's tower
@@ -103,6 +103,9 @@ internal sealed record RaceTrackIsland(
     // Who races there (RaceDriver: the user's line-up for the track), and on the twin's track (Citadel Island's town circuit). Null: the
     // retail track's racer, Baldino and the biker.
     public List<RaceDriver>? Roster { get; init; }
+    // The game's own people the story needs, by entity, kept in the island's scenes when the build takes the others off the road (the
+    // souvenir seller on Celebration Island: RaceTrackStory.ApplyCelebration).
+    public int[]? StoryEntities { get; init; }
     public List<RaceDriver>? TwinRoster { get; init; }
 
     // The island's other file for other weather (EXTFUNC.CPP loads it instead once the storm is over), built with the same track -- or,

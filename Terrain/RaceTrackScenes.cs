@@ -16,8 +16,10 @@ internal static class RaceTrackScenes
     // the grid spots, pole first, and Pits: the spots in the pit lane the opponents wait on while the player qualifies, each [cube x, cube z,
     // x, y, z, turn] in its cube's world units. Twin: the same for the track of the island's other-weather file, when it has one of its own
     // (the scenes carry both).
+    // Mushrooms: the small brown mushrooms along the lap with the power-ups in them, and Penguins: a nitro penguin in each scene, out of
+    // sight until one is dropped, each [scene, actor] (RACEMOD.CPP's power-ups).
     public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, List<(RaceDriver Driver, Dictionary<int, int> Actors)> Drivers, int StartScene,
-        List<int[]> Grid, List<int[]> Pits, Result? Twin = null);
+        List<int[]> Grid, List<int[]> Pits, Result? Twin = null, List<int[]>? Mushrooms = null, List<int[]>? Penguins = null);
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
     //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
@@ -237,8 +239,11 @@ internal static class RaceTrackScenes
         public List<int[]> Grid = new(), Pits = new();
         // the spots the opponents' cars wait on in the start line's scene (null elsewhere)
         public List<(int X, int Z, int Beta, int Y)?> CarAt = new();
+        // the power-ups: where the mushrooms go along the lap (island cells, the road's height), and the scenes' copies of them and of the penguin
+        public List<(double X, double Z, double Y)> MushroomSpots = new();
+        public List<int[]> Mushrooms = new(), Penguins = new();
         public Result Result(List<string> log, int changed, int removed, Result? twin = null) =>
-            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin);
+            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins);
     }
 
     // Edits the outside scenes of the island as the options say, from what the build of the island found (start line, jump, road). With
@@ -272,7 +277,18 @@ internal static class RaceTrackScenes
                 try { t.Racer = originals.Load(RacerScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == RacerEntity)?.Clone(); }
                 catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { log.Add($"no opponent: scene {RacerScene} could not be read ({e.Message})"); }
             t.Edges = EdgeCrossings(store, t.Report, t.Options, island);
+            t.MushroomSpots = MushroomSpots(t.Report);
         }
+        // the mushrooms' and the penguin's actors to copy: the game's own (Citadel Island's mushroom by the weather wizard's tent, the
+        // nitro penguin in its shop)
+        SceneActorModel? Template(int scene, int actor)
+        {
+            try { return originals.Load(scene).Actors.ElementAtOrDefault(actor)?.Clone(); }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { return null; }
+        }
+        var mushroomTemplate = Template(MushroomScene, MushroomActor);
+        var penguinTemplate = Template(PenguinScene, PenguinActor);
+        if (mushroomTemplate is null || penguinTemplate is null) log.Add($"no power-ups: the game's mushroom (scene {MushroomScene}) or nitro penguin (scene {PenguinScene}) could not be read");
         var biking = tracks.Any(t => t.BikerTemplate is not null);
         var edgeZonesAdded = 0;
         // the island's own outside scenes: a cube change to any other scene is a door (Mosquibees Island's inside scene 104, the Queen's
@@ -302,14 +318,20 @@ internal static class RaceTrackScenes
                 // slot 1 of every scene is the engine's own placeholder for Zoe (entity 14, no body, parked at 0,0,0); the engine treats that slot
                 // specially -- a buggy that took its place came up with no life -- so it stays
                 var needed = CutsceneActors(model);
+                // (and the people the story needs, where the game has them: Celebration Island's souvenir seller stands on its lava lake's
+                // rim, before the statue rises -- the statue's track, in the other file, is not his to make room for)
+                var storyKept = new HashSet<int>();
+                if (options.Story && options.Island.StoryEntities is { } story)
+                    for (var i = 1; i < model.Actors.Count; i++) if (story.Contains(model.Actors[i].Entity)) storyKept.Add(i);
                 var doomed = Enumerable.Range(1, model.Actors.Count - 1)
                     .Where(i => model.Actors[i].Entity != BuggyEntity && !(i == 1 && model.Actors[i].Entity == ZoeEntity && model.Actors[i].X == 0 && model.Actors[i].Z == 0))
-                    .Where(i => !needed.Contains(i) || biking && model.Actors[i].Entity == BikerEntity)
+                    .Where(i => !needed.Contains(i) && !storyKept.Contains(i) || biking && model.Actors[i].Entity == BikerEntity)
                     .ToList();
                 if (biking && needed.Any(i => i < model.Actors.Count && model.Actors[i].Entity == BikerEntity))
                     log.Add($"scene {scene}: the bike taxi goes (he races now), though Twinsen's script rides with him in a cutscene");
                 needed.RemoveWhere(i => biking && i < model.Actors.Count && model.Actors[i].Entity == BikerEntity);
                 if (needed.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", needed.Order())} kept -- Twinsen's own script waits on them in its travel cutscenes (the ferry, the Dino-Fly), which would never end without them");
+                if (storyKept.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", storyKept.Order())} kept where they are -- the story needs them");
                 foreach (var i in needed.Order())
                     if (i < model.Actors.Count) ShiftOffRoad(model.Actors[i], model, i, distanceToRoad, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
                 var standIn = AddStandIn(model, doomed);
@@ -463,6 +485,25 @@ internal static class RaceTrackScenes
                 }
                 t.CarAt.Clear();
             }
+            // the power-ups: the mushrooms of the lap in this scene's cube, on the road, and a penguin out of sight
+            if (mushroomTemplate is not null && penguinTemplate is not null)
+                foreach (var t in tracks)
+                {
+                    if (t.MushroomSpots.Count == 0) continue;
+                    foreach (var (x, z, y) in t.MushroomSpots)
+                    {
+                        if ((int)Math.Floor(x / 64) != model.CubeX || (int)Math.Floor(z / 64) != model.CubeY) continue;
+                        var mushroom = mushroomTemplate.Clone();
+                        mushroom.Flags = OpponentFlags; mushroom.Move = 0; mushroom.Life = new byte[] { 0 }; mushroom.Track = new byte[] { 0 };
+                        mushroom.X = (int)Math.Round((x - model.CubeX * 64) * 512); mushroom.Z = (int)Math.Round((z - model.CubeY * 64) * 512);
+                        mushroom.Y = (int)Math.Round(y); mushroom.Beta = 0;
+                        t.Mushrooms.Add(new[] { scene, SceneOps.AddActor(model, mushroom) });
+                    }
+                    var penguin = penguinTemplate.Clone();
+                    penguin.Flags = OpponentFlags; penguin.Move = 0; penguin.Life = new byte[] { 0 }; penguin.Track = new byte[] { 0 };
+                    penguin.X = IslandFile.CubeSize / 2; penguin.Z = IslandFile.CubeSize / 2; penguin.Y = -20000; penguin.Beta = 0;
+                    t.Penguins.Add(new[] { scene, SceneOps.AddActor(model, penguin) });
+                }
             foreach (var t in tracks)
                 foreach (var jump in t.Report.Jumps)
                     if (model.CubeX == jump.CubeX && model.CubeY == jump.CubeZ && AddJump(model, scene, jump, log) is { } jumped) model = jumped;
@@ -480,6 +521,7 @@ internal static class RaceTrackScenes
         foreach (var t in tracks)
         {
             var whose = tracks.Count > 1 ? $" ({(t == tracks[0] ? options.Island.IleFile : options.Island.TwinIleFile)}'s track)" : "";
+            if (t.Mushrooms.Count > 0) log.Add($"the power-ups: {t.Mushrooms.Count} mushrooms along the lap (the game's own, scene {MushroomScene}), a nitro penguin in each of {t.Penguins.Count} scenes{whose}");
             for (var k = 0; k < t.Drivers.Count; k++)
                 if (t.Cars[k].Count > 0) log.Add($"{t.Drivers[k].Name}: a copy of {(t.Drivers[k].Bike ? "the motorbike Rabbibunny" : $"the car (the racer's body {t.Drivers[k].Body})")} in {t.Cars[k].Count} scenes{whose}");
             if (t.Grid.Count > 0) log.Add($"the grid: {t.Grid.Count} spots, pole {GridFirst} cells behind the start line, each {t.Options.GridStep} behind the last, {GridSide} either side of the middle{whose}");
@@ -516,6 +558,49 @@ internal static class RaceTrackScenes
             left -= step; x = xs[j]; z = zs[j]; k = j;
             if (k == i) return null;
         }
+    }
+
+    // The power-ups' mushrooms: the game's small brown mushroom (Citadel Island's by the weather wizard's tent, scene 45 actor 7: entity
+    // 112, BODY.HQR 171, which gives a bonus when Twinsen walks into it), copied onto the road every MushroomSpacing cells round the lap from
+    // MushroomFirst after the start line, a little to one side or the other of its middle, not on or near a jump, a loop or a carried
+    // jump; the race-track mode hides a power-up in each. And the nitro penguin a car drops: the shop's (scene 14, actor 5: entity 46).
+    public const int MushroomScene = 45, MushroomActor = 7, PenguinScene = 14, PenguinActor = 5;
+    private const double MushroomSpacing = 40, MushroomFirst = 30, MushroomClear = 14;
+    private static readonly double[] MushroomSide = { -1.2, 1.2, 0 };
+
+    private static List<(double X, double Z, double Y)> MushroomSpots(RaceTrackReport report)
+    {
+        var spots = new List<(double, double, double)>();
+        var xs = report.LapX; var zs = report.LapZ; var ys = report.LapY; var n = xs.Length;
+        if (n < 10 || ys.Length != n || report.StartLine.Count == 0) return spots;
+        var s = report.StartLine[0];
+        var i0 = Enumerable.Range(0, n).MinBy(k => (xs[k] - s.X) * (xs[k] - s.X) + (zs[k] - s.Z) * (zs[k] - s.Z));
+        // (the way the lap runs from the line)
+        var way = (xs[(i0 + 1) % n] - xs[i0]) * s.DirX + (zs[(i0 + 1) % n] - zs[i0]) * s.DirZ >= 0 ? 1 : -1;
+        bool Clear(double x, double z)
+        {
+            foreach (var j in report.Jumps)
+                if (Near(j.StartX, j.StartZ) || Near(j.LandX, j.LandZ) || Near((j.StartX + j.LandX) / 2, (j.StartZ + j.LandZ) / 2)) return false;
+            foreach (var l in report.Loops) if (Math.Sqrt((l.X - x) * (l.X - x) + (l.Z - z) * (l.Z - z)) < l.Radius * 2 + MushroomClear) return false;
+            return true;
+            bool Near(double ax, double az) => (ax - x) * (ax - x) + (az - z) * (az - z) < MushroomClear * MushroomClear;
+        }
+        double along = 0, next = MushroomFirst;
+        var k = 0;
+        for (var step = 1; step < n; step++)
+        {
+            int a = ((i0 + way * (step - 1)) % n + n) % n, b = ((i0 + way * step) % n + n) % n;
+            along += Math.Sqrt((xs[b] - xs[a]) * (xs[b] - xs[a]) + (zs[b] - zs[a]) * (zs[b] - zs[a]));
+            if (along < next) continue;
+            if (along > report.Length - 20) break;
+            next = along + MushroomSpacing;
+            if (report.LapArc is { } arc && b < arc.Length && arc[b] || !Clear(xs[b], zs[b])) continue;
+            // a little to one side of the middle (the road's left: the lap's way turned a quarter)
+            double dx = xs[b] - xs[a], dz = zs[b] - zs[a], d = Math.Sqrt(dx * dx + dz * dz) + 1e-9;
+            var side = MushroomSide[k++ % MushroomSide.Length];
+            spots.Add((xs[b] - dz / d * side, zs[b] + dx / d * side, ys[b]));
+        }
+        return spots;
     }
 
     // A land mine: a copy of the retail Desert island's own (scene 66, the minefield the story arms in chapter 4: entity 16, body 30),

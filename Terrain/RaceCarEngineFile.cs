@@ -9,9 +9,14 @@ namespace LBAAssembler.Terrain;
 internal static class RaceCarEngineFile
 {
     // An opponent as the engine is told of it: its name, its line, how many points before the start line it starts without a grid, its
-    // skill (the engine's pace), its character (Top, Grip: shares of the car's top speed and cornering, as its line was planned with:
-    // RaceTrackBuilder), the scenes' copies of its car, whether it is the motorbike, and whether it is only a time to beat (no car).
-    internal sealed record Racing(string Name, List<int[]> Path, int Grid, int Pace, double Top, double Grip, Dictionary<int, int> Actors, bool Bike, bool Ghost);
+    // skill (the engine's pace: the one to beat's the setup's, Pace; the others' drawn between Pace and PaceHi each race), its character
+    // (Top, Grip: shares of the car's top speed and cornering, as its line was planned with: RaceTrackBuilder), the scenes' copies of its
+    // car, whether it is the motorbike, only a time to beat (no car) or the one to beat, and its car's body (-1: not one of the racer's).
+    internal sealed record Racing(string Name, List<int[]> Path, int Grid, int Pace, double Top, double Grip, Dictionary<int, int> Actors, bool Bike, bool Ghost,
+        bool Main = false, int PaceHi = 0, int Body = -1);
+
+    // The others' skills, against the car setup's (the one to beat's): drawn at random between these, each race.
+    public const int RandomBelow = 14, RandomAbove = 12;
 
     // The engine's car setup file (RACEMOD.CPP's format), with the start line, the checkpoints and the opponents from the game folder's
     // RACETRACK.JSON when it has one (each opponent's line in the file named in `pathFiles`, in the order of Opponents). Of an island with
@@ -58,7 +63,10 @@ internal static class RaceCarEngineFile
             // (the engine's first opponent is "opponent_", the next "opponent2_" and so on)
             var key = i == 0 ? "opponent" : $"opponent{i + 1}";
             var o = opponents[i];
-            text.Append($"# {o.Name}\n{key}_path={pathFiles[i]}\n{key}_grid={o.Grid}\n{key}_pace={Math.Clamp(o.Pace, 10, 300)}\n");
+            var pace = o.PaceHi > 0 ? $"{Math.Clamp(o.Pace, 10, 300)} {Math.Clamp(o.PaceHi, 10, 300)}" : $"{Math.Clamp(o.Pace, 10, 300)}";
+            text.Append($"# {o.Name}{(o.Main ? " (the one to beat)" : "")}\n{key}_path={pathFiles[i]}\n{key}_grid={o.Grid}\n{key}_pace={pace}\n");
+            // (its car at half its size, for the lightning spell: RaceTrackSmallCars)
+            if (!o.Bike && o.Body >= 0 && !o.Ghost) text.Append($"{key}_small={RaceTrackSmallCars.SmallOf(o.Body)}\n");
             text.Append($"{key}_top={(int)Math.Round(o.Top * 100)}\n{key}_grip={(int)Math.Round(o.Grip * 100)}\n{key}_catchup={(car.OpponentsFightBack ? RaceCarSetup.CatchUpPercent : 0)}\n");
             text.Append($"{key}_name={o.Name}\n");
             // (the animations it stands and drives with: the cars' are the racer entity's 0 and 1, the bike's his own)
@@ -69,6 +77,17 @@ internal static class RaceCarEngineFile
         var ghost = opponents.FindIndex(o => o.Ghost);
         var storm = story && info?.Story is not null && track is not null && ReferenceEquals(track, info) && info.Twin is not null;
         var town = story && info?.Story is not null && track is not null && ReferenceEquals(track, info.Twin);
+        var lava = story && info?.Story is { Seller: true };
+        // the one to beat, with a car (the display says whether Twinsen is ahead of him; a race's win is finishing ahead of him)
+        var main = opponents.FindIndex(o => o.Main && !o.Ghost);
+        if (main >= 0) text.Append($"main={main + 1}\n");
+        // the power-ups: the mushrooms along the lap and the penguin of each scene
+        if (car.PowerUps && track?.Mushrooms is { Count: > 0 } mushrooms)
+        {
+            text.Append("powerups=1\n");
+            foreach (var m in mushrooms) text.Append($"mushroom={m[0]} {m[1]}\n");
+            foreach (var pg in track.Penguins ?? new()) text.Append($"penguin={pg[0]} {pg[1]}\n");
+        }
         if (ghost >= 0) text.Append($"beat={ghost + 1}{(storm ? $" {RaceTrackStory.BeatVar} 1" : "")}\n");
         // the story's gates and the town circuit's race: Mr. Paul lets no one race without racing gloves; the aliens' track is ready the day
         // after the storm, once Twinsen has slept; three laps, and a win is Mr. Paul's ferry ticket
@@ -78,6 +97,8 @@ internal static class RaceCarEngineFile
             text.Append($"gate={RaceTrackStory.DayVar} {RaceTrackStory.Rested} The new track opens tomorrow\n");
             text.Append($"race_laps={RaceTrackStory.RaceLaps}\nwin={RaceTrackStory.WonVar} 1\n");
         }
+        // Celebration Island's lava lake: three laps against the souvenir seller; ahead of him he tells what he knows (RaceTrackStory)
+        if (lava) text.Append($"race_laps={RaceTrackStory.RaceLaps}\nwin={RaceTrackStory.SellerBeaten} 1\nfinish={RaceTrackStory.SellerRaced} 1\n");
         // the cars of the opponents the setup doesn't race: hidden, so they don't stand where a racing car lines up
         // (and all of the other weather's track's: that isn't the island the game draws)
         var parked = car.Parked(track);
@@ -106,6 +127,7 @@ internal static class RaceCarEngineFile
     // The scenes' copies of every opponent's car a track has.
     private static IEnumerable<(int Scene, int Actor)> AllCars(RaceTrackService.TrackInfo track) =>
         (track.Drivers ?? new()).SelectMany(d => d.Actors.Select(a => (a.Key, a.Value)))
+            .Concat((track.Mushrooms ?? new()).Concat(track.Penguins ?? new()).Select(m => (m[0], m[1])))
             .Concat((track.Opponent ?? new()).Select(a => (a.Key, a.Value)))
             .Concat((track.Rivals ?? new()).SelectMany(r => r.Actors.Select(a => (a.Key, a.Value))));
 
@@ -114,6 +136,8 @@ internal static class RaceCarEngineFile
     {
         if (track is null) return new();
         var raced = car.Opponents(track).SelectMany(o => o.Actors.Select(a => (a.Key, a.Value))).ToHashSet();
+        // (the power-ups' mushrooms and penguins: the race-track mode's when they are on, out of sight when they are off)
+        if (car.PowerUps) foreach (var m in (track.Mushrooms ?? new()).Concat(track.Penguins ?? new())) raced.Add((m[0], m[1]));
         return AllCars(track).Where(a => !raced.Contains(a)).ToList();
     }
 
@@ -124,21 +148,25 @@ internal static class RaceCarEngineFile
     internal static List<Racing> Opponents(this RaceCarSetup car, RaceTrackService.TrackInfo? track)
     {
         var list = new List<Racing>();
-        int Skill(int shift) => Math.Clamp(car.RacerSkill + shift, 10, 300);
+        // (the one to beat at the setup's skill; the others at random, RandomBelow under it to RandomAbove over)
+        Racing Of(string name, List<int[]> path, int grid, double top, double grip, Dictionary<int, int> actors, bool bike, bool ghost, bool main, int body) =>
+            main || ghost
+                ? new(name, path, grid, Math.Clamp(car.MainSkill, 10, 300), top, grip, actors, bike, ghost, main, 0, body)
+                : new(name, path, grid, Math.Clamp(car.MainSkill - RandomBelow, 10, 300), top, grip, actors, bike, ghost, main, Math.Clamp(car.MainSkill + RandomAbove, 10, 300), body);
         if (track?.Drivers is { Count: > 0 } drivers)
         {
             foreach (var d in drivers)
                 if (d.Ghost || car.Opponent && !car.LeftOut.Contains(d.Name))
-                    list.Add(new(d.Name, d.Path, d.Grid, Skill(d.SkillShift), d.Top, d.Grip, d.Actors, d.Bike, d.Ghost));
+                    list.Add(Of(d.Name, d.Path, d.Grid, d.Top, d.Grip, d.Actors, d.Bike, d.Ghost, d.Main, d.Body));
             return list;
         }
         if (car.Opponent && track?.Path is { Count: > 0 } path && track.Opponent is { Count: > 0 } actors && !car.LeftOut.Contains(RaceDriver.Racer.Name))
-            list.Add(new(RaceDriver.Racer.Name, path, track.PathGrid, Skill(0), RaceTrackBuilder.RacerLine.Top, RaceTrackBuilder.RacerLine.Grip, actors, false, false));
+            list.Add(Of(RaceDriver.Racer.Name, path, track.PathGrid, RaceTrackBuilder.RacerLine.Top, RaceTrackBuilder.RacerLine.Grip, actors, false, false, true, -1));
         foreach (var r in track?.Rivals ?? new())
         {
             if (!car.Opponent || r.Path.Count == 0 || r.Actors.Count == 0 || car.LeftOut.Contains(r.Name)) continue;
             var d = r.Name == BikerName ? RaceDriver.Biker : RaceDriver.Baldino;
-            list.Add(new(r.Name, r.Path, r.Grid, Skill(d.SkillShift), d.Line.Top, d.Line.Grip, r.Actors, d.Bike, false));
+            list.Add(Of(r.Name, r.Path, r.Grid, d.Line.Top, d.Line.Grip, r.Actors, d.Bike, false, false, -1));
         }
         return list;
     }
@@ -191,7 +219,7 @@ internal static class RaceCarEngineFile
                 var (first, last) = island.CopiesScene is not null || island.CopiesScenes is not null ? (island.FirstScene, island.LastScene) : (-1, -1);
                 text.Append($"track={island.IslandByte} {when} {first} {last} {file}\n");
             }
-            if (t.Story is { } s) text.Append($"tired={RaceTrackStory.DayVar} {RaceTrackStory.Tired} {s.TiredText}\n");
+            if (t.Story is { TiredText: >= 0 } s) text.Append($"tired={RaceTrackStory.DayVar} {RaceTrackStory.Tired} {s.TiredText}\n");
         }
         File.WriteAllText(path, text.ToString());
     }

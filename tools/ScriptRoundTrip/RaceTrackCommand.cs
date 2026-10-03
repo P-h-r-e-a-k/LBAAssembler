@@ -251,7 +251,7 @@ internal static class RaceTrackCommand
     public static int RaceCarFile(string[] args)
     {
         var setup = new LBAAssembler.RaceCarSetup();
-        if (args.Length > 3) setup.RacerSkill = int.Parse(args[3]);
+        if (args.Length > 3) setup.MainSkill = int.Parse(args[3]);
         // (RT_WEATHER=rain: Citadel Island left raining -- its storm track)
         if (Environment.GetEnvironmentVariable("RT_WEATHER") == "rain") setup.FineWeather = false;
         // (RT_RACE=<island file>: of a folder with several tracks, the one Play races with that island open in the editor, as RaceFor picks it)
