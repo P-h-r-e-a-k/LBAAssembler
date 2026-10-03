@@ -1698,6 +1698,7 @@ The user's asks:
   - Mosquibees Island: qualifying 46.72 s, race lap 50.11 s.
   - The Emerald Moon (loops, the carried jump): 60.87 s (61.29 s before).
   - Celebration Island's raised road: 40.67 s.
+- *The draw by place:* in the Mosquibees race the leader drew Gazogem, oil, penguins, clovers, protection and health; the opponents took 15 mushrooms.
 
 ### Opponents in sight over cube edges, no health or clovers, penguins that go off at what they hit (2026-10-03, night)
 
@@ -1745,7 +1746,91 @@ The user's report from a test lap on Desert island:
 - *Mosquibees Island, every mushroom a penguin, the opponents faster:*
   - Penguins the Queen dropped blew up the monkey monster right behind her, four times.
   - One she dropped ran into Twinsen's car: "Twinsen's car blown up by a penguin: stopped".
-- *The draw by place:* in the Mosquibees race the leader drew Gazogem, oil, penguins, clovers, protection and health; the opponents took 15 mushrooms.
+
+### Checkpoints at the corners, two jet-packs, oil and penguins to the front (2026-10-03, night)
+
+The user's asks:
+- *Checkpoints.* "Remove checkpoints" had meant the display's text, not the checkpoints themselves. Bring them back, one in the middle of every corner, for now drawn as a solid red line (to be made unseen later). Each should reach a little past the road's edge: a car half off the road still counts. The aim is to stop cutting the track on purpose without penalising a car on the edge, overtaking.
+- *The super jet-pack* doubles the car's speed while the game drives, and goes to the cars at the back of the pack. A plain jet-pack does the same at one and a half times.
+- *Oil and penguins* are more common the nearer a car is to the front.
+
+Then four reports from the user's play:
+- On Ascence, Twinsen's car sank through the deck, only part of him showing (the protection spell on).
+- A protected car hit an oil slick as if it were a wall.
+- The automatic gearbox stuck in first gear for no clear reason.
+
+**The checkpoints** (`RaceTrackBuilder.PlaceCheckpoints`, RACEMOD.CPP).
+- *Where they go:* a corner is a stretch of the lap bending one way tighter than a 40-cell radius, its bend smoothed over 3 cells, through 0.5 rad (29°) at the least. Two such stretches 8 cells apart or less are one corner. Its line goes where the corner has turned half its turn. A corner of more than a half circle gets a line in the middle of each half circle.
+- *Where they don't:* clear of the pit lane's stretch, the jumps, the carried jumps, the loops, the crossings and the cubes' edges, as before. In the corner, the line goes as near its middle as is clear.
+- *How far they reach:* 2 cells past the road's edge on both sides (its curbs, 4.5 cells from the middle by default, or a raised road's rail). Where another part of the lap comes near, a line stops short, but never inside the road's edge. The engine counts exactly that line (no slack past its ends).
+- *How many:*
+
+  | Track | Checkpoints |
+  |---|---|
+  | Desert island | 22, of 26 corners |
+  | Citadel Island's two tracks | 5 and 15 |
+  | Mosquibees Island | 8 of 9 |
+  | The Emerald Moon | 12 |
+  | Celebration Island | 9 |
+  | the lava lake | 5 |
+  | the Elevator Platform | 8 |
+
+- *The rule:* a lap counts once they have all been crossed, in order. A track with none counts a lap halfway round, as since the item box.
+- *The red lines* (`checkpoint_lines=1`; the race car setup's "Show the checkpoints as red lines across the road (for testing)", on): the engine follows each line of this cube along the ground (or a raised road's deck), and draws it 1/128 of the screen's height thick over the scene.
+- *The display* still says nothing about them. A lap with a checkpoint missed doesn't count, and the log says which.
+
+**The jet-packs** (`PU_SUPERJET`, `PU_JETPACK`):
+
+| | Speed while the game drives | Item box shows | Who gets it |
+|---|---|---|---|
+| Super jet-pack | × 2 | OBJFIX 48 | the back of the pack |
+| Jet-pack | × 1.5 | OBJFIX 12, the protopack | the back half |
+
+- *The car's top speed and pull* scale by the factor, and so does the speed the game drives the line at. On the level the car also steers as much quicker over its top gear's speed (BUGGY.CPP, as it already did on a rollercoaster's slopes), so it takes the line's bends at twice the speed.
+- *The look-ahead:* the test pilot's look-ahead grows only over the jet-pack's own top speed. Grown with the car's speed, it cut inside the corners' checkpoints and into a wall on Mosquibees Island.
+- *Measured:* 9,672 and 7,254 units a second against the top gear's 4,836.
+- *Opponents* that take one go at their pace times its factor for 10 s.
+
+**Who draws what** (`s_puLead`, `s_puLast`: each weight's factor for the leader and for the last car; between them by place):
+
+| Power-up | Weight | Leader | Last |
+|---|---|---|---|
+| Gazogem | 20 | 1.0 | 1.0 |
+| protection | 12 | 0.8 | 1.2 |
+| lightning | 10 | 0.05 | 2.0 |
+| penguin | 16 | 1.8 | 0.4 |
+| super jet-pack | 8 | 0 | 2.5 |
+| jet-pack | 12 | 0.3 | 1.6 |
+| oil | 16 | 2.0 | 0.4 |
+
+- *The leader* draws oil or a penguin about two times in three.
+- *The last car* draws a jet-pack or lightning more than half the time (56 %).
+- `powerup_only=` takes several now, one at random: 0 Gazogem, 1 protection, 2 lightning, 3 penguin, 4 super jet-pack, 5 jet-pack, 6 oil.
+
+**The oil slick a protected car hit.**
+- *The cause:* the engine stops a car at any object's box (OBJECT.CPP CheckObjCol), and the race's props had boxes made only points across. A mushroom has to vanish before a car's box reaches it. But a slick a protected car drives over stays on the road for the next car, and was a post in its way.
+- *Now* this scene's mushrooms, penguins and slicks are left out of CheckObjCol (`RaceMod_NoCollide`, a per-scene table).
+- *Verified* on Mosquibees Island, protected the whole race with every mushroom oil: Twinsen drove over the Queen's slicks 14 times, never stopped, with a normal lap (47.71 s); the monkey monster skidded on them 11 times.
+
+**Twinsen sunk into Ascence's deck.**
+- *Suspected cause:* the same box. CheckObjCol also stands a car on an object's box it comes down on, lowering the car to see whether it stands on one. Lowered more than 200 units under the deck, the raised road's floor (`RaceMod_Floor`) no longer took the car as on it, and it drove on inside the deck.
+- *The fix* is the same: the race's props are not in a car's way.
+
+**First gear.**
+- *The cause:* the automatic gearbox changes up at the gear's top speed. Shrunk by an opponent's lightning (× 0.7 for 20 s), a car slowed to first gear never reached first gear's top, so it stayed in first. Since the item box, nothing on screen says the car is shrunk.
+- *Now* the gears change by the speed the car would have without a boost, a jet-pack or the shrinking (`speed / RaceMod_SpeedFactor()`, as a climb already did).
+
+![two corners' checkpoints on Mosquibees Island](racetrack/build/checkpoint_lines.png)
+
+**Verified** (headless, muted, the folder rebuilt with the Elevator Platform's track too):
+- *Desert, alone, every mushroom a jet-pack:*
+  - The pilot crossed all 22 checkpoints in order, the lap counting at 78.24 s (132 s without).
+  - Before the look-ahead fix it missed the third; on Mosquibees Island it drove into a wall.
+- *Mosquibees Island:* all 8 checkpoints, twice, in a race.
+- *Shrunk from the start* (`shrunk_ms=`, a test key, as is `protect_ms=`): the automatic gearbox went up through all five gears.
+- *Ascence, protected, every mushroom oil, opponents ahead:*
+  - With the props in the car's way (switched back for the test), Twinsen drove over 3 slicks, and once his car stood 124 units under the deck against a slick's box.
+  - Out of the way: 20 slicks, never under the deck, laps 34.26 and 34.02 s.
 
 ## The menu command
 

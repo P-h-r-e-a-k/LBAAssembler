@@ -1698,7 +1698,8 @@ S32 CheckObjCol(U8 numobj) {
         if ((n != numobj)
                 AND(ptrobjt->Obj.Body.Num != -1)
             //		AND (!(ptrobj->Flags&INVISIBLE))
-            AND(ptrobjt->CarryBy != numobj)) {
+            AND(ptrobjt->CarryBy != numobj)
+                AND !RaceMod_NoCollide(n)) {      /* a race-track mod's mushrooms, penguins and oil slicks (RACEMOD.CPP) */
             xt0 = ptrobjt->Obj.X + ptrobjt->XMin;
             xt1 = ptrobjt->Obj.X + ptrobjt->XMax;
             yt0 = ptrobjt->Obj.Y + ptrobjt->YMin;

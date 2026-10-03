@@ -309,6 +309,8 @@ S32 RaceMod_BlocksInventory(void);
 // An opponent's car, which the race-track mode places wherever it is on the lap -- in the next cube too (EXTFUNC.CPP: not kept inside
 // the player's cube).
 S32 RaceMod_FreeOfCube(S32 numobj);
+// The race's mushrooms, penguins and oil slicks: no car is stopped by them, or stands on them (OBJECT.CPP CheckObjCol).
+S32 RaceMod_NoCollide(S32 numobj);
 // The protection spell a race's power-up casts (EXTRA.CPP): it takes no magic while it lasts, and blinks as it runs out.
 S32 RaceMod_ProtectionFree(void);
 S32 RaceMod_ProtectionEnding(void);

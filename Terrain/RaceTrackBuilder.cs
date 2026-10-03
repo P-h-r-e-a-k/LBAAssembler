@@ -1902,13 +1902,13 @@ internal static class RaceTrackBuilder
     // line unfair or unseen: the stretch the pit lane runs beside (a car in the pits skips it), the crossing (the other road passes under
     // the bridge or the jump there), and the edges of the cubes (the engine only sees a car's moves within one cube). Each reaches past
     // the verge on both sides, but never half way to another part of the lap.
-    // (2026-10-01) One line about every CheckpointSpacing cells round the lap, CheckpointCount at the least and MaxCheckpoints at the most
-    // (the engine takes 32): Citadel Island's town circuit, a thousand cells, had 8, and its hairpin loop under the bridge -- 120 cells --
-    // had none, so a car could cut across its neck. Each line reaches CheckpointReach past the verge, where no other part of the lap at
-    // its height comes near (a car running wide or cutting a bend went round the ends of the old ones), and stands where the road runs
-    // straightest near its place.
-    private const int CheckpointCount = 8, MaxCheckpoints = 24;
-    private const double CheckpointSpacing = 60, CheckpointReach = 6;
+    // (2026-10-03) One line in the middle of every corner -- what a car cutting a corner skips -- reaching CheckpointPastEdge past the road's
+    // edge (its curbs, or a raised road's rail) on both sides: a car half off the road, running wide or overtaking on the edge, still
+    // crosses it; one cutting across the inside goes round its end. A corner is a stretch bending one way tighter than CornerRadius cells,
+    // through CornerTurn at the least (two such stretches a few cells apart are one corner); one turning further than half a circle has a
+    // line in the middle of each half-circle of it. (Before: one about every 60 cells, where the road ran straightest.)
+    private const int MaxCheckpoints = 64;      // (the engine's RACE_MAX_CHECKPOINTS)
+    private const double CheckpointPastEdge = 2, CornerRadius = 40, CornerTurn = 0.5, CornerJoin = 8;
 
     // Where the opponents' cars wait while the player drives his qualifying lap: in the pit lane beside the start line, PitStep cells
     // apart, the first PitFirst cells before the line, each facing the way a car leaves the pits. On the grid they stand across the start
@@ -2015,36 +2015,54 @@ internal static class RaceTrackBuilder
         }
         bool Clear(int k) => !avoid.Any(v => Ahead(k) >= v.From && Ahead(k) <= v.To);
         bool InsideCube(double x, double z) { var fx = x - Math.Floor(x / 64) * 64; var fz = z - Math.Floor(z / 64) * 64; return fx >= 2 && fx <= 62 && fz >= 2 && fz <= 62; }
-        var count = Math.Clamp((int)Math.Round(r.Length / CheckpointSpacing), CheckpointCount, MaxCheckpoints);
-        // how much the road bends over 6 cells either way: a line goes where it is least, near its place (a cell of bend counts as 10 of
-        // distance from the place)
-        double Bend(int k)
+        // the corners: the road's bend, smoothed over 3 cells either way; runs of it tighter than CornerRadius one way, from a straight point
+        var w = Math.Max(1, (int)Math.Round(3 / o.Spacing));
+        var bend = new double[n];
+        for (var k = 0; k < n; k++) { double sum = 0; for (var m = -w; m <= w; m++) sum += r.Kappa[At(r, k + m)]; bend[k] = sum / (2 * w + 1); }
+        var startAt = Enumerable.Range(0, n).FirstOrDefault(k => Math.Abs(bend[k]) < 1 / CornerRadius);
+        var runs = new List<(int From, int Count, int Sign)>();
+        for (var j = 0; j < n; j++)
         {
-            double sum = 0; var w = (int)Math.Round(6 / o.Spacing);
-            for (var m = -w; m <= w; m++) sum += Math.Abs(r.Kappa[At(r, k + m)]);
-            return sum * o.Spacing;
+            var k = (startAt + j) % n;
+            var sign = Math.Abs(bend[k]) >= 1 / CornerRadius ? Math.Sign(bend[k]) : 0;
+            if (sign == 0) continue;
+            if (runs.Count > 0 && runs[^1].Sign == sign && j - (runs[^1].From + runs[^1].Count) <= CornerJoin / o.Spacing)
+                runs[^1] = (runs[^1].From, j - runs[^1].From + 1, sign);
+            else runs.Add((j, 1, sign));
         }
-        // (each line after the one before it; where no place near its own will do, one up to twice as far from it)
-        var last = 0.0;
-        for (var j = 1; j <= count; j++)
+        // each corner's middle -- where it has turned half of its whole turn -- or the middles of its half-circles
+        var targets = new List<(int Point, int From, int Count)>();
+        foreach (var (from, count, _) in runs)
         {
-            var target = j * r.Length / (count + 1);
-            var window = r.Length / (2.0 * (count + 1));
-            bool Near(int k, double w) => Clear(k) && Ahead(k) > last + 4 && Math.Abs(Ahead(k) - target) <= w;
-            double Cost(int k) => Math.Abs(Ahead(k) - target) + 10 * Bend(k);
-            var order = Enumerable.Range(0, n).Where(k => Near(k, window)).OrderBy(Cost).Take(400)
-                .Concat(Enumerable.Range(0, n).Where(k => !Near(k, window) && Near(k, 2 * window)).OrderBy(Cost).Take(400));
+            var turn = Enumerable.Range(from, count).Sum(j => Math.Abs(r.Kappa[(startAt + j) % n]) * o.Spacing);
+            if (turn < CornerTurn) continue;
+            var pieces = Math.Max(1, (int)Math.Round(turn / Math.PI));
+            for (var q = 0; q < pieces; q++)
+            {
+                double want = turn * (q + 0.5) / pieces, sum = 0;
+                var j = from;
+                for (; j < from + count - 1; j++) { sum += Math.Abs(r.Kappa[(startAt + j) % n]) * o.Spacing; if (sum >= want) break; }
+                targets.Add(((startAt + j) % n, from, count));
+            }
+        }
+        // the road's edge at a point: its curbs, or a raised road's rail
+        double Edge(int k) => r.Raised is { } up && up[k] ? r.RaisedHalfs is { } halfs && k < halfs.Length ? halfs[k] : o.RaisedHalfWidth : r.CurbHalf;
+        var placed = new List<int>();
+        foreach (var (point, from, count) in targets.OrderBy(t => Ahead(t.Point)))
+        {
+            if (report.Checkpoints.Count >= MaxCheckpoints) break;
+            // the corner's middle, or the nearest place in the corner a line will do (clear of the pits, the jumps, the crossings and the
+            // cubes' edges, and reaching past the road's edge on both sides)
+            var order = Enumerable.Range(from, count).Select(j => (startAt + j) % n).Where(Clear).OrderBy(k => Math.Abs(r.S[k] - r.S[point]));
             foreach (var k in order)
             {
                 var x = r.X[k]; var z = r.Z[k]; var nx = -r.Tz[k]; var nz = r.Tx[k];
                 var cx = Math.Floor(x / 64); var cz = Math.Floor(z / 64);
                 if (!InsideCube(x, z)) continue;
-                // each side of the line as far as it reaches -- the verge and CheckpointReach more -- in the line's own cube, and short of any
-                // other part of the lap at its height by that part's verge (a car there, even on its verge, never crosses it). Other: further
-                // along the lap from the line's point than the verge and 3 cells -- on a short lap the next straight round a corner is a few cells along it
-                // (the lava lake's line at the end of its first causeway reached across the start straight, 14 cells along, and a car cutting
-                // the corner went past it), and on a tight bend the road itself comes back round, so the line goes where the road is straighter.
-                // (what stops it there: 0 nothing, 1 the cube's edge, 2 another part of the lap)
+                if (placed.Any(p => Math.Abs(Ahead(p) - Ahead(k)) < 6)) break;
+                var full = Edge(k) + CheckpointPastEdge;
+                // (what stops a side short: 0 nothing, 1 the cube's edge, 2 another part of the lap at its height -- the road coming back
+                // round a hairpin, another running alongside -- by that part's verge)
                 int Stop(double t)
                 {
                     var px = x + nx * t; var pz = z + nz * t;
@@ -2059,30 +2077,27 @@ internal static class RaceTrackBuilder
                     }
                     return 0;
                 }
-                // how far a side reaches, and whether it reaches far enough: past the verge (a car anywhere on the road crosses it), or, where
-                // another part of the lap stops it -- the road coming back round a tight bend, another running alongside -- past the curb (the
-                // car there is on the other road's verge; the engine counts the line a little past its ends anyway, RACEMOD.CPP
-                // RACE_CHECKPOINT_SLACK). Stopped short by the cube's edge it must reach the verge: past that edge no line is crossed.
+                // (a side reaches far enough when it is past the road's edge -- or, stopped by another part of the lap, at least to the edge)
                 (double Reach, bool Enough) Side(int way)
                 {
                     var reach = 0.0; var stop = 0;
-                    for (var t = 0.5; t <= r.VergeHalf + CheckpointReach + 1e-9; t += 0.5)
+                    for (var t = 0.5; t <= full + 1e-9; t += 0.5)
                     {
                         stop = Stop(way * t);
                         if (stop != 0) break;
                         reach = t;
                     }
-                    return (reach, reach >= r.VergeHalf || stop == 2 && reach >= r.CurbHalf);
+                    return (reach, reach >= full - 0.5 || stop == 2 && reach >= Edge(k));
                 }
                 var (left, leftEnough) = Side(-1); var (right, rightEnough) = Side(1);
                 if (!leftEnough || !rightEnough) continue;
                 report.Checkpoints.Add((x - nx * left, z - nz * left, x + nx * right, z + nz * right, r.Tx[k], r.Tz[k]));
                 report.CheckpointHeights.Add(r.H[k]);
-                last = Ahead(k);
+                placed.Add(k);
                 break;
             }
         }
-        report.Notes.Add($"{report.Checkpoints.Count} checkpoints round the lap (a lap counts once the car has crossed them all, in order)");
+        report.Notes.Add($"{report.Checkpoints.Count} checkpoints round the lap, in the middle of {targets.Count} corners (a lap counts once the car has crossed them all, in order)");
     }
 
     // An opponent's racing line (the race-track mode drives a car along it): a point a cell apart round the lap from the start line, placed

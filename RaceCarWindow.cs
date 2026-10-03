@@ -21,8 +21,9 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox newGame = new() { Content = "Play the story from a new game, every track raced where and when the game is", ToolTip = "Twinsen starts in his house. Citadel Island's storm track is raced in the rain, its town circuit once the storm is over and Twinsen has slept; each other island's track on its island." };
     private readonly CheckBox fightBack = new() { Content = "They push harder when they fall behind you" };
     private readonly CheckBox penguinsWalk = new() { Content = "Penguins walk the track until a car comes near (off: they go off a second after they are dropped)", Margin = new Thickness(18, 2, 0, 0) };
-    private readonly CheckBox powerUps = new() { Content = "Power-ups in the mushrooms along the track", ToolTip = "Rows of small brown mushrooms across the road, each with a power-up inside: Gazogem fuel, the protection spell, the lightning spell, a nitro penguin (it goes off at whatever it runs into), the super jet-pack or oil (whoever drives over it skids). A car takes one from a row; the cars at the back get the strong ones. They grow back. Yours go into the item box at the top left (two slots, a roulette picks each): Shift uses the selected one, Q selects the other." };
+    private readonly CheckBox powerUps = new() { Content = "Power-ups in the mushrooms along the track", ToolTip = "Rows of small brown mushrooms across the road, each with a power-up inside: Gazogem fuel, the protection spell, the lightning spell, a nitro penguin (it goes off at whatever it runs into), the super jet-pack (the game drives, at twice the speed), the jet-pack (the game drives, at one and a half times it) or oil (whoever drives over it skids). A car takes one from a row; the cars at the back get the jet-packs and lightning, the ones in front penguins and oil. They grow back. Yours go into the item box at the top left (two slots, a roulette picks each): Shift uses the selected one, Q selects the other." };
     private readonly CheckBox qualifying = new() { Content = "Drive a qualifying lap first: the times set the grid" };
+    private readonly CheckBox showCheckpoints = new() { Content = "Show the checkpoints as red lines across the road (for testing)", ToolTip = "One checkpoint in the middle of every corner, reaching a little past the road's edges: a lap counts once you have crossed them all, so cutting a corner doesn't pay, and running wide or overtaking on the edge still counts." };
     private readonly CheckBox fineWeather = new() { Content = "Stop the rain on Citadel Island (the weather after the lighthouse, when the aliens land)", ToolTip = "No rain or thunder, the brighter island with its own light and sky. Only the weather changes: the story stays where it is." };
     // Citadel Island built with a track in each of its files: the weather is the raced track's (the town circuit's is the fine weather's,
     // the storm track's the rain's) -- the one of the island file open in the editor (`track`, RaceTrackService.RaceFor), or else the one
@@ -53,8 +54,8 @@ internal sealed class RaceCarWindow : Window
         var root = new StackPanel { Margin = new Thickness(16) };
         root.Children.Add(Text("How the buggy drives when you play a game folder that has a race track built. X shifts up a gear and Z down (unless the gearbox " +
                                "is automatic); each gear has its own top speed, and a low gear pulls harder than a high one. Speeds are as the game's display shows " +
-                               "them, a cell taken as a metre: the original buggy tops out at 27 km/h. A lap counts once you have been halfway round the track " +
-                               "and cross the start line again; the opponents (each track's own drivers in the cars made after them, or the original track's racer, Baldino and the motorbike Rabbibunny) line up with you on the grid and start on the count-down. " +
+                               "them, a cell taken as a metre: the original buggy tops out at 27 km/h. A lap counts once you have crossed every checkpoint (one " +
+                               "in the middle of each corner) and the start line again; the opponents (each track's own drivers in the cars made after them, or the original track's racer, Baldino and the motorbike Rabbibunny) line up with you on the grid and start on the count-down. " +
                                "Other game folders play the game as it is."));
 
         root.Children.Add(Section("Start from"));
@@ -148,9 +149,13 @@ internal sealed class RaceCarWindow : Window
         askBeforePlay.Checked += (_, _) => setup.AskBeforePlay = true;
         askBeforePlay.Unchecked += (_, _) => setup.AskBeforePlay = false;
         root.Children.Add(display);
+        showCheckpoints.Checked += (_, _) => setup.ShowCheckpoints = true;
+        showCheckpoints.Unchecked += (_, _) => setup.ShowCheckpoints = false;
+        showCheckpoints.Margin = new Thickness(0, 4, 0, 0);
+        root.Children.Add(showCheckpoints);
         askBeforePlay.Margin = new Thickness(0, 4, 0, 0);
         root.Children.Add(askBeforePlay);
-        foreach (var c in new Control[] { automatic, display, askBeforePlay, opponent, fightBack, powerUps, penguinsWalk, qualifying, fineWeather, startAtLine, newGame }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { automatic, display, showCheckpoints, askBeforePlay, opponent, fightBack, powerUps, penguinsWalk, qualifying, fineWeather, startAtLine, newGame }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         var ok = new Button { Content = forPlay ? "Play" : "Save", Padding = new Thickness(18, 5, 18, 5), IsDefault = true, Margin = new Thickness(0, 0, 10, 0) };
         var cancel = new Button { Content = "Cancel", Padding = new Thickness(14, 5, 14, 5), IsCancel = true };
@@ -168,6 +173,7 @@ internal sealed class RaceCarWindow : Window
         gears.SelectedItem = Math.Clamp(setup.Gears, 1, RaceCarSetup.MaxGears);
         automatic.IsChecked = setup.Automatic;
         display.IsChecked = setup.ShowDisplay;
+        showCheckpoints.IsChecked = setup.ShowCheckpoints;
         askBeforePlay.IsChecked = setup.AskBeforePlay;
         opponent.IsChecked = setup.Opponent;
         newGame.IsChecked = setup.NewGame;

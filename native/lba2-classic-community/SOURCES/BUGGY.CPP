@@ -243,9 +243,10 @@ void LeaveBuggy(U8 newcomportement) {
 static void RaceSpeedOnSlope(S_BUGGY *ptb, S32 deltatimer, S32 flagattack, double gravity, double slope, double bank) {
     const T_RACE_CAR *car = RaceMod_Car();
     const double share = RaceMod_ClimbShare(gravity, slope);
-    RaceMod_UpdateGear((S32)(ptb->Speed / share));
-    // (a power-up's boost, or shrunk: RACEMOD.CPP RaceMod_SpeedFactor)
+    // (a power-up's boost, or shrunk: RACEMOD.CPP RaceMod_SpeedFactor -- the gears change by the speed the car would have without it:
+    // shrunk by an opponent's lightning, it never reached first gear's top and the automatic gearbox stayed in first)
     const double factor = RaceMod_SpeedFactor();
+    RaceMod_UpdateGear((S32)(ptb->Speed / (share * factor)));
     const double gearTop = car->GearTop[RaceMod_Gear() - 1] * factor, engineTop = gearTop * share;
     const double dt = deltatimer / 1000.0;
     const double coast = dt * car->Coast * RaceMod_SkidCoast();
@@ -310,14 +311,18 @@ static void RaceSpeed(S_BUGGY *ptb, S32 deltatimer, S32 flagattack) {
         return;
     }
     const T_RACE_CAR *car = RaceMod_Car();
-    RaceMod_UpdateGear(ptb->Speed);
-    // (a power-up's boost, or shrunk: RACEMOD.CPP RaceMod_SpeedFactor)
+    // (a power-up's boost, or shrunk: RACEMOD.CPP RaceMod_SpeedFactor -- the gears change by the speed the car would have without it, as
+    // on a slope)
     const double factor = RaceMod_SpeedFactor();
+    RaceMod_UpdateGear((S32)(ptb->Speed / factor));
     const S32 top = (S32)(car->GearTop[RaceMod_Gear() - 1] * factor);
     // (skidding on oil the car slides on and turns round: RACEMOD.CPP)
     const S32 coast = (S32)(deltatimer * car->Coast * RaceMod_SkidCoast() / 1000);
 
-    ptb->SpeedRot = (S32)(car->Steer * RaceMod_SkidSteer());
+    // (over the top gear's speed -- Gazogem fuel, a jet-pack -- it steers as much quicker as it goes faster: its tightest turn stays what
+    // it is, as on a slope, RaceSpeedOnSlope; the jet-pack drives the line at twice the speed round its bends)
+    const double fastest = car->GearTop[car->Gears - 1];
+    ptb->SpeedRot = (S32)(car->Steer * (ptb->Speed > fastest ? ptb->Speed / fastest : 1) * RaceMod_SkidSteer());
 
     // on the grid until the count-down's GO
     if (RaceMod_Held()) {

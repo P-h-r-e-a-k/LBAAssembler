@@ -5,8 +5,7 @@ using System.Text;
 namespace LBAAssembler.Terrain;
 
 // The race car's setup (RaceCarSetup, kept in the settings) written as the engine's car file for its race-track mode (native RACEMOD.CPP), with
-// what the game folder's RACETRACK.JSON says about the track: the start line and the opponents' lines. (Its checkpoints are no longer
-// written: a lap counts once the car has been halfway round its line.)
+// what the game folder's RACETRACK.JSON says about the track: the start line, the checkpoints and the opponents' lines.
 internal static class RaceCarEngineFile
 {
     // An opponent as the engine is told of it: its name, its line, how many points before the start line it starts without a grid, its
@@ -34,6 +33,9 @@ internal static class RaceCarEngineFile
         // (a line's height, when it has one: a lap that passes over itself crosses the line's place at other heights too)
         static string Height(RaceTrackService.StartLineInfo line) => line.Y is { } y ? $" {y}" : "";
         if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}{Height(l)}\n");
+        foreach (var c in track?.Checkpoints ?? new()) text.Append($"checkpoint={c.CubeX} {c.CubeZ} {c.X0} {c.Z0} {c.X1} {c.Z1} {c.DirX} {c.DirZ}{Height(c)}\n");
+        // (the checkpoints seen: red lines across the road, for testing)
+        if (track?.Checkpoints is { Count: > 0 }) text.Append($"checkpoint_lines={(car.ShowCheckpoints ? 1 : 0)}\n");
         // a raised road: the file with its middle, point by point (the engine's floor there)
         if (raisedFile is not null) text.Append($"raised={raisedFile}\n");
         // ... and how much its grade changes a car's speed (a rollercoaster of a lap)

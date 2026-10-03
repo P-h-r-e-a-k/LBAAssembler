@@ -136,14 +136,21 @@ static int s_lastX = 0, s_lastZ = 0;       // the shift keys' state last frame
 static S32 s_laps = 0;                     // laps started (0: the start line not crossed yet)
 static S32 s_lapStart = 0, s_lastLap = 0, s_bestLap = 0;
 
-// a line across the road: the start line
+// a line across the road: the start line, the checkpoints
 typedef struct {
     S32 CubeX, CubeZ, X0, Z0, X1, Z1, DirX, DirZ;
     S32 Y, HasY;                           // the road's height at the line, when the file gives it
 } T_RACE_LINE;
 #define RACE_LINE_REACH 1200
 static S32 s_lineY = 0, s_lineHasY = 0;    // the start line's
-// (no checkpoints: a lap counts once the car has been halfway round the line it follows -- the first opponent's, or the guide)
+// the checkpoints, one in the middle of each corner (the builder's), and the next one the car has to cross: a lap counts once the car
+// has crossed them all in order -- cutting a corner, it goes round the line's inner end. Drawn as red lines across the road while
+// checkpoint_lines=1 (for now: they are to be unseen).
+#define RACE_MAX_CHECKPOINTS 64
+static T_RACE_LINE s_checkpoints[RACE_MAX_CHECKPOINTS];
+static int s_nbCheckpoints = 0, s_next = 0, s_showCheckpoints = 0;
+// ... and whether the car has been halfway round the line it follows (the first opponent's, or the guide): with no checkpoints a lap
+// counts then; and where the car is along the lap (PlayerProgress)
 static int s_halfway = 0;
 
 // a short message on the display ("Missed checkpoint 3") and until when
@@ -197,6 +204,7 @@ typedef struct {
     int PaceLo, PaceHi;                    // its skill drawn between these when the track loads (opponent_pace=<lo> <hi>; 0: Pace as given)
     S32 BoostUntil, HitUntil;              // a power-up's boost, and a penguin's blast that stopped it, until when
     S32 TakeAt;                            // when it last took a mushroom's power-up (one a row)
+    S32 JetUntil; double JetFactor;        // a jet-pack: its pace times JetFactor until then
     S32 SkidUntil, SkidStart; int SkidDir; // skidding on oil: until when, since when, and which way it spins
     int Small, Normal;                     // its car's shrunk generic body (-1 none) and its own (-1: not seen yet)
 } T_RACE_OPPONENT;
@@ -275,7 +283,8 @@ typedef struct { int Scene, Actor; S32 Y; int HasY; S32 Back; } T_RACE_MUSHROOM;
 static T_RACE_MUSHROOM s_mush[RACE_MAX_MUSHROOMS];
 static int s_nbMush = 0;
 static int s_powerups = 0;
-static int s_powerupOnly = -1;             // powerup_only=<n> (tests): every mushroom has that one
+static int s_powerupOnly = -1;             // powerup_only=<n> [<n>...] (tests): every mushroom has that one -- or one of those, at random
+static int s_onlyList[8], s_nbOnly = 0;
 #define RACE_MAX_PENGUIN_ACTORS 192
 static int s_penguinScene[RACE_MAX_PENGUIN_ACTORS], s_penguinActor[RACE_MAX_PENGUIN_ACTORS];
 static int s_nbPenguinActors = 0;
@@ -313,14 +322,18 @@ static int s_oilIcon = -1;                 // oil_icon=: the oil's model in OBJF
 static S32 s_autoDrop = 1000;              // autodrop_ms=<ms> (tests): how long after its roulette the test pilot uses an item (0: never)
 static T_RACE_PENGUIN s_penguins[RACE_MAX_PENGUINS];
 // (health and clovers were power-ups too: no one dies in a race, so they did nothing -- out since 2026-10-03)
-enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_PENGUIN, PU_JETPACK, PU_OIL, PU_COUNT };
-static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Nitro penguin!", "Super jet-pack!", "Oil slick!"};
-static const int s_puWeight[PU_COUNT] = {24, 12, 12, 16, 12, 14};
-// how strong each is (0 weak, 1 middling, 2 strong): the cars at the back draw the strong ones, the leader the weak (RandomPowerUp)
-static const int s_puTier[PU_COUNT] = {0, 1, 2, 1, 2, 0};
+// (the super jet-pack and the jet-pack: the game drives, at twice the car's speed or one and a half times it)
+enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_PENGUIN, PU_SUPERJET, PU_JETPACK, PU_OIL, PU_COUNT };
+static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Nitro penguin!", "Super jet-pack!", "Jet-pack!", "Oil slick!"};
+static const int s_puWeight[PU_COUNT] = {20, 12, 10, 16, 8, 12, 16};
+static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 1.5, 0};
+// each one's weight times these for the leader and for the last car (between them by the car's place: RandomPowerUp) -- the ones to
+// drop behind (penguins, oil) for the cars in front, the ones to catch up with (the jet-packs, lightning) for the cars at the back
+static const double s_puLead[PU_COUNT] = {1.0, 0.8, 0.05, 1.8, 0.0, 0.3, 2.0};
+static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 1.6, 0.4};
 // what the item box shows (OBJFIX.HQR, the inventory's own: the Gazogem, the protection spell, the lightning ring, the meca-penguin,
-// the super jet-pack; -2 the oil's, oil_icon=)
-static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2};
+// the super jet-pack, the protopack; -2 the oil's, oil_icon=)
+static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, 12, -2};
 // oil: the slicks on the road (world units; until when), and the scenes' copies of the slick that show them
 #define RACE_MAX_SLICKS 6
 #define RACE_MAX_OIL_ACTORS 256
@@ -340,11 +353,11 @@ static int s_skidDir = 1;
 #define RACE_SHRINK_MS 20000
 #define RACE_JETPACK_MS 10000
 #define RACE_BOOST 1.5                     // the top speed and the pull with Gazogem fuel
-#define RACE_JET_BOOST 1.35                // ... with the jet-pack
 #define RACE_SHRUNK 0.7                    // a shrunk car's
 #define RACE_FLASH_MS 700                  // the lightning spell's flash
 #define RACE_BLAST_FORCE 20                // a penguin's blast, as HitObj takes it
 static S32 s_boostUntil = 0, s_protectUntil = 0, s_shrinkOthersUntil = 0, s_shrunkUntil = 0, s_jetUntil = 0;
+static double s_jetFactor = 1;             // the jet-pack on: the car's speed times this (s_puJet)
 static int s_protectSpell = 0;             // the game's protection spell is on for the power-up (it goes off with it)
 #define RACE_PROTECT_ENDING 3000           // ... and blinks this long before
 static int s_tiredVar = -1, s_tiredValue = 0, s_tiredText = -1;
@@ -1257,7 +1270,10 @@ static void Load(const char *path, int carOnly = 0) {
                 s_car.LineDirX = l.DirX; s_car.LineDirZ = l.DirZ;
                 s_lineY = l.Y; s_lineHasY = l.HasY;
             }
-        } else if (!strcmp(key, "grid")) {
+        } else if (!strcmp(key, "checkpoint")) {
+            if (s_nbCheckpoints < RACE_MAX_CHECKPOINTS && ReadLine(v, &s_checkpoints[s_nbCheckpoints])) s_nbCheckpoints++;
+        } else if (!strcmp(key, "checkpoint_lines")) s_showCheckpoints = atoi(v);
+        else if (!strcmp(key, "grid")) {
             T_RACE_SPOT *g = &s_spots[s_nbSpots];
             if (s_nbSpots < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbSpots++;
         } else if (!strcmp(key, "pit")) {
@@ -1323,9 +1339,16 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "main")) s_main = atoi(v) - 1;
         else if (!strcmp(key, "finish")) s_nbFinishSet = ReadSets(v, s_finishSet);
         else if (!strcmp(key, "powerups")) s_powerups = atoi(v);
-        else if (!strcmp(key, "powerup_only")) s_powerupOnly = atoi(v);
+        else if (!strcmp(key, "powerup_only")) {
+            int used = 0, value;
+            s_nbOnly = 0;
+            for (const char *p = v; s_nbOnly < 8 && sscanf(p, "%d%n", &value, &used) == 1; p += used) s_onlyList[s_nbOnly++] = value;
+            s_powerupOnly = s_nbOnly ? s_onlyList[0] : -1;
+        }
         else if (!strcmp(key, "penguin_mode")) s_penguinWalk = strcmp(v, "fuse") != 0;
         else if (!strcmp(key, "autodrop_ms")) s_autoDrop = atoi(v);
+        else if (!strcmp(key, "protect_ms")) s_protectUntil = TimerRefHR + atoi(v);   // (tests: protected from the start, without the spell's sprites)
+        else if (!strcmp(key, "shrunk_ms")) s_shrunkUntil = TimerRefHR + atoi(v);     // (tests: shrunk from the start)
         else if (!strcmp(key, "oil_icon")) s_oilIcon = atoi(v);
         else if (!strcmp(key, "mushroom")) {
             T_RACE_MUSHROOM *m = &s_mush[s_nbMush];
@@ -1572,6 +1595,18 @@ void RaceMod_Lap(S32 x, S32 z) {
         }
     }
 
+    // the checkpoints: the next one crossed the lap's way moves on; the last one crossed backwards moves back
+    if (s_laps > 0)
+        for (int i = 0; i < s_nbCheckpoints; i++) {
+            if (i == s_next && CrossLine(&s_checkpoints[i], x0, z0, x, z) > 0) {
+                s_next++;
+                Log_Info("[racemod] checkpoint %d of %d", s_next, s_nbCheckpoints);
+            } else if (i == s_next - 1 && CrossLine(&s_checkpoints[i], x0, z0, x, z) < 0) {
+                s_next--;
+                Log_Info("[racemod] checkpoint %d crossed backwards", s_next + 1);
+            }
+        }
+
     T_RACE_LINE line = {s_car.LineCubeX, s_car.LineCubeZ, s_car.LineX0, s_car.LineZ0, s_car.LineX1, s_car.LineZ1, s_car.LineDirX, s_car.LineDirZ, s_lineY, s_lineHasY};
     if (CrossLine(&line, x0, z0, x, z) <= 0) return;
     const S32 now = TimerRefHR;
@@ -1583,8 +1618,12 @@ void RaceMod_Lap(S32 x, S32 z) {
             return;
         }
     }
-    // (the start line crossed again before the car has been round: backwards over it and on again -- no lap)
-    if (s_laps > 0 && !s_halfway && Guide()) {
+    // (a checkpoint missed -- a corner cut -- or, with none, the start line crossed again before the car has been round: no lap)
+    if (s_laps > 0 && s_nbCheckpoints && s_next < s_nbCheckpoints) {
+        Log_Info("[racemod] missed checkpoint %d of %d: no lap", s_next + 1, s_nbCheckpoints);
+        return;
+    }
+    if (s_laps > 0 && !s_nbCheckpoints && !s_halfway && Guide()) {
         Log_Info("[racemod] start line crossed before halfway round: no lap");
         return;
     }
@@ -1639,6 +1678,7 @@ void RaceMod_Lap(S32 x, S32 z) {
     s_laps++;
     s_lapStart = now;
     s_halfway = 0;
+    s_next = 0;
 }
 
 // A test pilot (the console's `autodrive`): while the player drives, the pedals and the steering that keep his car on the first opponent's
@@ -1688,8 +1728,10 @@ U32 RaceMod_AutoInput(void) {
         }
     s_autoIndex = best;
     double x, z, y, v, dx, dz;
-    // (looking further ahead the faster the car goes over its top gear's speed: a rollercoaster of a lap, gravity=)
-    const double fastest = s_car.GearTop[s_car.Gears - 1];
+    // (looking further ahead the faster the car goes over its top gear's speed: a rollercoaster of a lap, gravity= -- over the jet-pack's
+    // own top speed: the jet-pack steers the car as much quicker, BUGGY.CPP, and looking further ahead at its speed it cut inside the
+    // corners' checkpoints, and into a wall on Mosquibees Island)
+    const double fastest = s_car.GearTop[s_car.Gears - 1] * (TimerRefHR < s_jetUntil ? s_jetFactor : 1);
     const double look = ListBuggy[0].Speed > fastest ? s_autoLook * ListBuggy[0].Speed / fastest : s_autoLook;
     PathAt(o, o->Cum[best] + look, &x, &z, &y, &v, &dx, &dz);
     const double dl = sqrt(dx * dx + dz * dz);
@@ -1701,8 +1743,8 @@ U32 RaceMod_AutoInput(void) {
     U32 bits = 0;
     if (err > 24) bits |= I_LEFT;
     else if (err < -24) bits |= I_RIGHT;
-    // the line's speed here (the reference car's), and the car's own
-    const double here = o->V[best], speed = ListBuggy[0].Speed;
+    // the line's speed here (the reference car's; the jet-pack's times its factor), and the car's own
+    const double here = o->V[best] * (TimerRefHR < s_jetUntil ? s_jetFactor : 1), speed = ListBuggy[0].Speed;
     // (coming up to a ring with a gap: held close to the speed it is leapt at -- coasting a little over it, braking only well over it --
     // and no brakes in the last cell, which a car carries into the ring)
     for (int k = 0; k < s_nbLoops; k++) {
@@ -1784,7 +1826,7 @@ static void FormGrid(S32 now) {
         if (s_order[i] < 0) PlayerOnSpot(spot);
         else OnSpot(&s_opp[s_order[i]], spot);
     }
-    s_laps = 0; s_halfway = 0; s_lastLap = 0; s_bestLap = 0;
+    s_laps = 0; s_halfway = 0; s_next = 0; s_lastLap = 0; s_bestLap = 0;
     s_place = 0;
     s_gridAt = now;
     s_goAt = now + (s_qualifying ? RACE_RESULTS_MS : 1000) + 3000;
@@ -2512,12 +2554,11 @@ static double BackShare(int me) {
 // A mushroom's power-up, at random -- the weights by how far back the car is (`back`, BackShare: -1 the plain weights): the strong ones
 // go to the cars at the back and hardly ever to the leader, who draws the weak ones.
 static int RandomPowerUp(double back) {
+    if (s_nbOnly > 1) { const int pick = s_onlyList[(int)(RaceRandom() * s_nbOnly) % s_nbOnly]; if (pick >= 0 && pick < PU_COUNT) return pick; }
     if (s_powerupOnly >= 0 && s_powerupOnly < PU_COUNT) return s_powerupOnly;
-    static const double lead[3] = {1.6, 1.0, 0.05}, last[3] = {0.4, 1.2, 2.4};
     double w[PU_COUNT], total = 0;
     for (int i = 0; i < PU_COUNT; i++) {
-        const int t = s_puTier[i];
-        w[i] = s_puWeight[i] * (back < 0 ? 1 : lead[t] + (last[t] - lead[t]) * back);
+        w[i] = s_puWeight[i] * (back < 0 ? 1 : s_puLead[i] + (s_puLast[i] - s_puLead[i]) * back);
         total += w[i];
     }
     double r = RaceRandom() * total;
@@ -2599,10 +2640,11 @@ static void UseItem(int pu, S32 now) {
         if (pu == PU_OIL) DropOil(x, hero->Obj.Y, z); else DropPenguin(x, hero->Obj.Y, z, -1);
         break;
     }
-    case PU_JETPACK: s_jetUntil = now + RACE_JETPACK_MS; s_autoIndex = -1; break;
+    case PU_SUPERJET:
+    case PU_JETPACK: s_jetUntil = now + RACE_JETPACK_MS; s_jetFactor = s_puJet[pu]; s_autoIndex = -1; break;
     }
     Message(s_puName[pu]);
-    Log_Info("[racemod] Twinsen uses %s%s", s_puName[pu], pu == PU_JETPACK && !Guide() ? " (no line: a boost, the keys his)" : "");
+    Log_Info("[racemod] Twinsen uses %s%s", s_puName[pu], s_puJet[pu] > 0 && !Guide() ? " (no line: a boost, the keys his)" : "");
 }
 
 // EXTRA.CPP: the protection spell is the power-up's -- no magic taken while it lasts; it blinks for its last seconds.
@@ -2647,6 +2689,10 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
             char text[64];
             snprintf(text, sizeof(text), "%s's lightning: shrunk!", o->Name);
             Message(text);
+            Log_Info("[racemod] Twinsen's car shrunk by %s's lightning for %d s", o->Name, RACE_SHRINK_MS / 1000);
+        } else if (s_puJet[pu] > 0) {
+            o->JetUntil = now + RACE_JETPACK_MS;
+            o->JetFactor = s_puJet[pu];
         } else
             o->BoostUntil = now + RACE_BOOST_MS;
         Log_Info("[racemod] %s takes a mushroom's power-up: %s", o->Name, s_puName[pu]);
@@ -2680,6 +2726,10 @@ static void Slicks(S32 now, int driving) {
             Message("Skidding on oil!");
             Log_Info("[racemod] Twinsen skids on oil");
             sl->On = 0;                     // (the car took it with it: a slick is one car's)
+        } else if (driving && CubeMode == CUBE_EXTERIEUR && now < s_protectUntil && Near(hero, lx, (S32)sl->Y, lz, RACE_OIL_REACH)) {
+            // (protected: over it unharmed -- it stays for the next car)
+            static S32 said = 0;
+            if (now > said) { said = now + 1000; Log_Info("[racemod] Twinsen drives over oil, protected"); }
         }
         // an opponent's
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
@@ -2916,6 +2966,24 @@ static void Penguins(S32 now, int driving) {
         if (s_penguinScene[k] == NumCube && s_penguinActor[k] > 0 && s_penguinActor[k] < NbObjets) ListObjet[s_penguinActor[k]].Obj.Y = -20000;
 }
 
+// OBJECT.CPP CheckObjCol: this scene's mushrooms, penguins and oil slicks are not in a car's way. Their boxes were only made points
+// across (the engine stops a car at any object's box, and stands it on one it comes down on): a mushroom had to be gone before a car
+// came within its box's reach, and a slick a protected car drives over -- left on the road for the next car -- was a wall, and lowered
+// the car into Ascence's deck as it stood it on the slick's box. (Which actors they are, cached for the scene.)
+static U8 s_noCollide[MAX_OBJETS];
+static S32 s_noCollideScene = -1;
+S32 RaceMod_NoCollide(S32 numobj) {
+    if (!RaceMod_Active() || !s_powerups || numobj <= 0 || numobj >= MAX_OBJETS) return 0;
+    if (s_noCollideScene != (S32)NumCube) {
+        memset(s_noCollide, 0, sizeof(s_noCollide));
+        for (int i = 0; i < s_nbMush; i++) if (s_mush[i].Scene == NumCube && s_mush[i].Actor > 0 && s_mush[i].Actor < MAX_OBJETS) s_noCollide[s_mush[i].Actor] = 1;
+        for (int i = 0; i < s_nbPenguinActors; i++) if (s_penguinScene[i] == NumCube && s_penguinActor[i] > 0 && s_penguinActor[i] < MAX_OBJETS) s_noCollide[s_penguinActor[i]] = 1;
+        for (int i = 0; i < s_nbOilActors; i++) if (s_oilScene[i] == NumCube && s_oilActor[i] > 0 && s_oilActor[i] < MAX_OBJETS) s_noCollide[s_oilActor[i]] = 1;
+        s_noCollideScene = NumCube;
+    }
+    return s_noCollide[numobj];
+}
+
 // EXTFUNC.CPP DoAnimExt: an opponent's car, placed where it is on the lap, not kept inside the player's cube.
 S32 RaceMod_FreeOfCube(S32 numobj) {
     if (!RaceMod_Active() || numobj <= 0 || s_carsScene != (S32)NumCube) return 0;
@@ -2936,7 +3004,7 @@ double RaceMod_SpeedFactor(void) {
     const S32 now = TimerRefHR;
     double f = 1;
     if (now < s_boostUntil) f *= RACE_BOOST;
-    else if (now < s_jetUntil) f *= RACE_JET_BOOST;
+    else if (now < s_jetUntil) f *= s_jetFactor;
     if (now < s_shrunkUntil && now >= s_protectUntil) f *= RACE_SHRUNK;
     return f;
 }
@@ -3002,7 +3070,8 @@ void RaceMod_Frame(void) {
                 if (behind > 0) pace *= 1 + o->Catchup / 100.0 * (behind < 60 * 512 ? behind / (60 * 512) : 1);
             }
             // (a power-up's boost, shrunk by Twinsen's lightning, stopped by a penguin's blast)
-            if (now < o->BoostUntil) pace *= RACE_BOOST * 0.9;
+            if (now < o->JetUntil) pace *= o->JetFactor;
+            else if (now < o->BoostUntil) pace *= RACE_BOOST * 0.9;
             if (now < s_shrinkOthersUntil) pace *= RACE_SHRUNK;
             if (now < o->HitUntil) { pace = 0; o->Speed = 0; }
             if (now < o->SkidUntil) pace *= 0.45;
@@ -3156,7 +3225,7 @@ static void Time(char *out, size_t size, S32 ms) {
 // One line of the display at y: starting at x (align < 0) or ending there (align > 0), with a dark shadow so it reads on sand and on
 // asphalt alike; its place marked to redraw.
 #define RACE_LINE_STEP 34
-static void Line(S32 x, S32 y, const char *text, int align) {
+static void HudLine(S32 x, S32 y, const char *text, int align) {
     char buf[96];
     snprintf(buf, sizeof(buf), "%s", text);
     const S32 w = SizeFont(buf), x0 = align > 0 ? x - w : x;
@@ -3165,6 +3234,43 @@ static void Line(S32 x, S32 y, const char *text, int align) {
     ColorFont(LBAWHITE);
     Font(x0, y, buf);
     BoxMovingAdd(x0 - 4, y - 4, x0 + w + 6, y + RACE_LINE_STEP + 4);
+}
+
+// The checkpoints of this cube as red lines on the road (checkpoint_lines=1, for now): each followed along its length -- the raised
+// road's height where it crosses that, else the ground's, or the line's own where the ground is far from it (a deck) -- and drawn over
+// the scene a few pixels thick.
+static void DrawCheckpoints(S32 height) {
+    if (!s_showCheckpoints || CubeMode != CUBE_EXTERIEUR) return;
+    const S32 thick = height / 128 > 3 ? height / 128 : 3;
+    for (int c = 0; c < s_nbCheckpoints; c++) {
+        const T_RACE_LINE *l = &s_checkpoints[c];
+        if (l->CubeX != CurrentCubeX || l->CubeZ != CurrentCubeY) continue;
+        const double len = sqrt((double)(l->X1 - l->X0) * (l->X1 - l->X0) + (double)(l->Z1 - l->Z0) * (l->Z1 - l->Z0));
+        const int steps = (int)(len / 256) + 1;
+        S32 px = 0, py = 0;
+        int had = 0;
+        for (int i = 0; i <= steps; i++) {
+            const double t = (double)i / steps;
+            const S32 x = (S32)(l->X0 + (l->X1 - l->X0) * t), z = (S32)(l->Z0 + (l->Z1 - l->Z0) * t);
+            S32 y = CalculAltitudeTerrain(x, z, 0);
+            if (l->HasY && abs(y - l->Y) > 400) y = l->Y;
+            S32 ry; int seg; double lat, tt;
+            if (s_nbRaised && RaisedAt(x + CurrentCubeX * 32768.0, z + CurrentCubeY * 32768.0, l->HasY ? l->Y : y, 0, &ry, &seg, &lat, &tt)) y = ry;
+            const int seen = PtrProjectPoint(x, y + 30, z);
+            const S32 sx = Xp, sy = Yp;
+            if (seen && had) {
+                ScreenXMin = (px < sx ? px : sx) - 1; ScreenXMax = (px < sx ? sx : px) + 1;
+                ScreenYMin = (py < sy ? py : sy) - 1; ScreenYMax = (py < sy ? sy : py) + thick + 1;
+                SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
+                if (ClipXMin <= ClipXMax && ClipYMin <= ClipYMax) {
+                    for (S32 k = 0; k < thick; k++) Line(px, py + k, sx, sy + k, 72);   // (the count-down's red, RACE_RED)
+                    BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
+                }
+            }
+            px = sx; py = sy; had = seen;
+        }
+    }
+    UnsetClip();
 }
 
 // The item box (top left): a slot's item, or the roulette going by -- the items turning over, slowing to the one drawn.
@@ -3269,6 +3375,7 @@ void RaceMod_Draw(void) {
     UnsetClipWindow();
 
     const S32 now = TimerRefHR, width = (S32)ModeDesiredX, height = (S32)ModeDesiredY;
+    DrawCheckpoints(height);
     // the item box, top left: its two slots
     if (items) {
         const S32 size = height / 8 > 60 ? height / 8 : 60, gap = size / 5;
@@ -3281,10 +3388,10 @@ void RaceMod_Draw(void) {
         // the gear and the speed, bottom right
         if (speed < 0) snprintf(text, sizeof(text), "Gear R");
         else snprintf(text, sizeof(text), s_car.Automatic ? "Gear %d/%d auto" : "Gear %d/%d", (int)s_gear, (int)s_car.Gears);
-        Line(width - 16, bottom - RACE_LINE_STEP, text, 1);
+        HudLine(width - 16, bottom - RACE_LINE_STEP, text, 1);
         // (a cell taken as a metre: the original buggy's top speed, 3800 units a second, is 27 km/h)
         snprintf(text, sizeof(text), "%d km/h", (int)((abs(speed) * 36 + 2560) / 5120));
-        Line(width - 16, bottom, text, 1);
+        HudLine(width - 16, bottom, text, 1);
         // the lap and its time, bottom left -- before the start what the start line wants, after the race the place
         text[0] = 0;
         if (s_car.HasLine) {
@@ -3305,7 +3412,7 @@ void RaceMod_Draw(void) {
             else
                 snprintf(text, sizeof(text), "Cross the start line");
         }
-        if (text[0]) Line(16, bottom, text, -1);
+        if (text[0]) HudLine(16, bottom, text, -1);
 
         // the count-down in the middle of the screen: 3, 2, 1 a second each, then GO for a second
         const char *count = NULL;
@@ -3340,7 +3447,7 @@ static void ResetTrack(void) {
     Defaults(&s_car);                       // (the opponents too)
     s_gear = 1;
     s_laps = 0; s_lapStart = s_lastLap = s_bestLap = 0;
-    s_lineY = s_lineHasY = 0; s_halfway = 0;
+    s_lineY = s_lineHasY = 0; s_halfway = 0; s_nbCheckpoints = 0; s_next = 0; s_showCheckpoints = 0;
     s_messageUntil = 0;
     s_loopOn = -1; s_loopState = LOOP_NONE;
     s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0;
@@ -3358,10 +3465,11 @@ static void ResetTrack(void) {
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0; s_hinted = -1;
     s_nbGates = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
-    s_powerups = 0; s_powerupOnly = -1; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks)); s_skidUntil = 0;
+    s_powerups = 0; s_powerupOnly = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks)); s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
+    s_noCollideScene = -1;
     s_penguinWalk = 1; s_item[0] = s_item[1] = -1; s_sel = 0; s_takeAt = 0; s_shiftBlock = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
-    s_boostUntil = s_protectUntil = s_shrinkOthersUntil = s_shrunkUntil = s_jetUntil = 0;
+    s_boostUntil = s_protectUntil = s_shrinkOthersUntil = s_shrunkUntil = s_jetUntil = 0; s_jetFactor = 1;
     s_ownTrack = 0; s_loaded[0] = 0;
     FollowCamEyeHook = NULL;
 }
