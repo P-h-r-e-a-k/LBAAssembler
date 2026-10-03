@@ -1224,8 +1224,64 @@ The track races in scenes of its own, **229-232**, copies of the moon's outside 
 - **From the app**, on a sandbox folder: the Emerald Moon ticked and built in the race track window. With `EMERAUDE.ILE` open, the Play button reads "Race: The Emerald Moon". Play starts in scene 229 on the grid under the start gantry, muted.
 
 **Limits**:
-- The pit lane is only a lane: there are no opponents to wait in it.
+- The pit lane was only a lane: there were no opponents to wait in it. (Since 2026-10-03 they race it and wait there: below.)
 - A car driven backwards up the landing hill would fall off its lip onto the reactor's plateau (not tried).
+
+## Driving the loops, and opponents round them (2026-10-03)
+
+The user asked for two changes. Opponent cars should be able to do the loops. The car should be driven upside down, instead of the top of a loop being scripted. Until now the engine carried the car along the middle of the ring's band, and the player had only the throttle and the brakes. On a ring with a gap, the car was carried round at the speed it came in with and over the gap on a fixed path, whatever that speed was. Neither moon track had opponents.
+
+**The ride** (`RACEMOD.CPP LoopStep`, the same for the player's car and for every opponent's): the car is driven round the ring as it is on a road bent into a circle.
+- **On the ring.** The speed changes with the climb and the drop. The throttle pushes the car on, as far as the ring presses back on its wheels; the brakes slow it as far. The steering turns the car across the band: up to 20 degrees, at the car's own steering rate. The rails keep its middle a car's half width inside the band. While steering, the car yaws on the ring's surface: `CarPose` adds a yaw about the car's own up axis to the heading and the pitch. A car that came in wide of its lane is pushed onto the band over the first part of the ring.
+- **Off the ring.** A car that is too slow over the top leaves the ring and flies inside it, as a falling body. It comes down on the ring again further round and rides on with its speed along the ring; a landing into the ring at more than 2,400 units/s keeps only a third of that speed ("Hard landing"). If it falls through the middle onto the road at the ring's foot, it has fallen off: the car is held for 0.9 s ("Fell off the loop").
+- **A ring with a gap** is now a real leap. At the gap's edge the car flies on as it was going, upside down, and lands on the far side. The far edge catches a car up to 500 over it ("Over the gap"). A car that is too fast sails over the far edge and falls outside the ring ("Overshot the loop"); it lands on the road or the deck, held for 0.9 s. A car that is a little too slow loses the ring just before the gap and comes down hard further round the far side, but still gets round.
+- **Under a quarter turn**, a car that is too slow rolls back down and out backwards, as before.
+- **The camera** stays beside the ring, as before.
+
+**The speeds.** For each ring the engine works out, at load, the speeds at its foot that a car with the throttle held gets cleanly round at (`LoopWindow`): every entry speed is tried with the same step at the engine's 16 ms frame. Cleanly means on the ring all the way to a gap, and no hard landing.
+
+| Ring (radius 4 cells) | Clean entry speeds | Falls off below | Overshoots above |
+|---|---|---|---|
+| Whole | 22 km/h and over | about 19 km/h | n/a |
+| 70-degree gap at its top | 21–24 km/h (3,000–3,375 units/s) | about 19.5 km/h | 24 km/h |
+
+A ring with a gap is taken at about third gear's speed. Coming up to one, 15–30 cells before its foot, the display says how fast to take it ("Jump loop: 22-23 km/h", rounded inwards).
+
+![a race through the jump loop](racetrack/build/loops_opponents.png)
+
+**Steering, tested.** On the Emerald Moon's first loop the test pilot came in on the right rail of the band. Holding left for 40 ticks over the top took the car from that rail (+922 across the band's middle) to the band's middle, its heading yawed 20 degrees while steering. Holding right against the rail changed nothing.
+
+**The road before a ring** (`RaceMod_Loop`): its right half closes over the RACE_LOOP_FUNNEL (8) cells before the ring, down to the entry lane. The ring's way down stands there, and a car on the right half used to drive past under it and skip the loop.
+
+**The opponents** are driven round the same way (`RaceMod_Frame`):
+- **Entry.** Each opponent's line has each loop's foot on it (`OpponentLoops`). When an opponent crosses the foot, its line waits there while it goes round. It takes the ring at a speed inside the clean ones (`LoopEntry`), with the throttle held, and its car is placed and pitched by the ride.
+- **No falls.** An opponent never falls off: too slow over the top, it is held on.
+- **Planned speeds.** Their speeds are planned to brake to the middle of a gap ring's speeds (`LoopCaps`). The time round the rings is added to their planned laps, which set their qualifying times.
+- **The reactor jump.** Over the Emerald Moon's reactor jump, an opponent follows its line's own arc (the plan's heights), pitched with its slope. It disappears from the player's scene as it crosses into the next cube.
+
+**Opponents in other cubes.** The engine keeps every object of a scene within its cube (`DoAnimExt`). An opponent's car standing in the next cube was therefore pinned to the cube's edge, an invisible wall. The old moon's grid is just over the border from the lap's crossing, and the player's car was stopped there, jittering over a checkpoint line. An opponent outside the player's cube is now kept out of sight and out of the way. This was also the Desert island test pilot's old stall at checkpoint 7: its qualifying lap now completes (132.6 s).
+
+**The tracks.**
+- **The old moon:** opponents now race it. They wait beside the start line's straight, inside the oval on the crater floor (the plan's new `pitSpots`). On the grid behind the line they stood on the lap's last bend, in the player's way.
+- **The Emerald Moon:** opponents now race it too, waiting in the pit lane beside the start while the player qualifies (the plan's `pitSpots`). The start line moved to z 62 so that its grid stands on the level part of the straight.
+- **The loop record** (`RACETRACK.JSON` `Loops`, the car file's `loop=`) gains an eleventh number, the band's half width, for the steering.
+- **The test pilot** holds the throttle round a ring. Coming up to a ring with a gap, it keeps close to the middle of its speeds (coasting a little over them, braking well over them).
+
+![the Emerald Moon in the app: the opponents in the pit lane](racetrack/build/loops_emerald_pits.png)
+
+**Verified**:
+- **The old moon** (`rt_moon`), the pilot and three opponents:
+  - qualifying 25.34 s, the grid, the count-down;
+  - race laps 25.53 and 25.62 s, the opponents' 27.1–28.3 s;
+  - every lap, all four cars round both rings, the opponents taking the jump loop at 22 km/h.
+  - The pilot leapt the gap cleanly ("Over the gap") or a little slow (off at 145 degrees, down further round); it never fell.
+- **The Emerald Moon** (`rt_emer`):
+  - qualifying 67.77 s; the opponents waited in the pit lane, then the grid;
+  - race laps 67.13 and 67.76 s, the opponents' 68.9–71.5 s;
+  - all three loops every lap by every car;
+  - the opponents over the reactor: up from 7,700 to 20,725, out of the player's scene at the cubes' border.
+- **The other tracks:** the seven others build byte-identical (38 files). With the new engine their solo qualifying laps are identical (lava 27.04, storm 28.30, Mosquibees 47.80, statue 41.86, elevator 34.02, town 99.02 s); Sendell's Well's crash is older.
+- **From the app**, on a sandbox folder: both moons built in the race track window. With `EMERAUDE.ILE` open, Play starts on the grid with the opponents in the pit lane, muted.
 
 ## The menu command
 

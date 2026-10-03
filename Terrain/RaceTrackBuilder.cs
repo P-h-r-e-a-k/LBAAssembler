@@ -166,7 +166,7 @@ internal enum CrossingStyle { Level, Viaduct, Jump, Bridge }
 // lap's own distance from its first point: the flight is over that stretch of it, and no other).
 // A vertical loop as built (RaceTrackPlan.Loops): its foot (island cells), the road's height there, the lap's way, the ring's radius and
 // how far across the car comes out of it (cells), its top's gap (degrees), and the lap's point at the foot.
-// Band: the ring's band from its middle to its rails (cells; 0: RaceTrackBuilder's own).
+// Band: the ring's band from its middle to its rails (cells).
 internal sealed record LoopInfo(double X, double Z, double Y, double DirX, double DirZ, double Radius, double Shift, double Gap, int Point, double Band = 0);
 
 internal sealed record JumpInfo(double StartX, double StartZ, double LandX, double LandZ, double DirX, double DirZ, int Beta, double Height,
@@ -568,7 +568,7 @@ internal static class RaceTrackBuilder
             {
                 if (l.Length < 4) continue;
                 var k = PlanPoint(plan, main, (int)l[0]);
-                report.Loops.Add(new LoopInfo(main.X[k], main.Z[k], main.H[k], main.Tx[k], main.Tz[k], l[1], l[2], l[3], k, l.Length > 4 ? l[4] : 0));
+                report.Loops.Add(new LoopInfo(main.X[k], main.Z[k], main.H[k], main.Tx[k], main.Tz[k], l[1], l[2], l[3], k, l.Length > 4 ? l[4] : LoopBandHalf));
             }
         if (planned && main.Raised is not null) PlanArcJumps(plan, main, report);
         if (planned && main.Raised is not null && plan.PitStripe is [var stripeFrom, var stripeTo, var stripeAt])
@@ -3483,7 +3483,7 @@ internal static class RaceTrackBuilder
             var wx = l.X * 512; var wz = l.Z * 512;
             if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { report.Notes.Add($"WARNING: the loop at cell ({l.X:0.0}, {l.Z:0.0}): no room for its ring"); continue; }
             var along = new System.Numerics.Vector3((float)l.DirX, 0, (float)l.DirZ);
-            var radius = l.Radius * 512; var shift = l.Shift * 512; var half = (l.Band > 0 ? l.Band : LoopBandHalf) * 512;
+            var radius = l.Radius * 512; var shift = l.Shift * 512; var half = l.Band * 512;
             var body = RaceTrackLoopBody.Ring(along, radius, shift, half, l.Gap * Math.PI / 180);
             var y = (int)Math.Round(l.Y);
             var d = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, at.X, y, at.Z, 0);
@@ -3497,11 +3497,11 @@ internal static class RaceTrackBuilder
         }
     }
 
-    // a loop ring's band: from its middle to its rails (cells)
+    // a loop ring's band: from its middle to its rails (cells), when the plan doesn't say
     private const double LoopBandHalf = 1.3;
 
-    // The racing lines past a loop (only the test pilot drives them on a lap with loops: the opponents don't go round loops) run into
-    // its ring on its own lane -- left of the road's middle by half the loop's shift -- and away from it on the other.
+    // The racing lines past a loop (the opponents' and the test pilot's: the race-track mode takes them round it as it does the player's
+    // car) run into its ring on its own lane -- left of the road's middle by half the loop's shift -- and away from it on the other.
     private static void LaneIntoLoops(RaceTrackReport report, List<(double X, double Z, double Y, double Speed, double Radius)> line)
     {
         foreach (var l in report.Loops)

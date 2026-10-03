@@ -54,7 +54,8 @@ internal static class RaceTrackService
         // Others: the tracks of the other islands built into the folder with this one, each a record of its own (with no Others).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<TrackInfo>? Others = null,
         // Loops: the vertical loops (RaceTrackPlan.Loops), each [cube x, cube z, x, y, z (the ring's foot, cube-local), the lap's way there
-        // (x and z, a thousand long), the ring's radius, how far across the car comes out (world units), the gap at its top (degrees)].
+        // (x and z, a thousand long), the ring's radius, how far across the car comes out (world units), the gap at its top (degrees), and
+        // the ring's band from its middle to its rails (world units: the car is steered across it)].
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Loops = null,
         // JumpCameras: where the camera stands while the car flies a drop (RaceTrackBuilder.PlaceJumpCameras), each [the flight's generic
         // animation, cube x, cube z, x, y, z (cube-local)].
@@ -483,6 +484,7 @@ internal static class RaceTrackService
         {
             cx, cz, (int)Math.Round((l.X - cx * 64) * 512), (int)Math.Round(l.Y), (int)Math.Round((l.Z - cz * 64) * 512),
             (int)Math.Round(l.DirX * 1000), (int)Math.Round(l.DirZ * 1000), (int)Math.Round(l.Radius * 512), (int)Math.Round(l.Shift * 512), (int)Math.Round(l.Gap),
+            (int)Math.Round(l.Band * 512),
         };
     }
 

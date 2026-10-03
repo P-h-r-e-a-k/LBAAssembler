@@ -17,7 +17,7 @@
 #     the engine carries the car along it, over the cubes' border); a wide banked U-turn back west past the reactor's south side, down
 #     onto the base's roof.
 # The loops: the deck twice the track's width there, the ring as wide as the track drifting across it (the car goes in on one half and
-# comes out on the other, RaceTrackLoopBody).
+# comes out on the other, RaceTrackLoopBody). The opponents race it (2026-10-03): they wait in the pit lane while the player qualifies.
 #
 # Run with E:\dump\TEMP\emer holding H.npy (the island's heights, H[z, x], cells 0..128 from 448) and obstacles.npz (the decor's tops
 # and bottoms every quarter cell, `who` their body); --pictures draws the lap. Writes docs/racetrack/emerald_track_plan.json.
@@ -61,7 +61,8 @@ LOOP_RUN, LOOP_EASE = 10.0, 8.0        # straight and level either side of a loo
 KICK = 6.0                             # the jump's ramp and landing hill: their length along the road (cells)
 LIP_X, LAND_X = 39.0, 90.0             # the take-off lip and the landing lip
 CLEAR = 900                            # the flight over the reactor's top, at the least (a car's height and some)
-START_Z = 54.0                         # the start line on the straight
+START_Z = 62.0                         # the start line on the straight (its grid behind it on the level, not the way down)
+PIT_WAIT = (49.0, 53.0, 57.0)          # where the opponents wait in the pit lane while the player qualifies (z: before the line, in its cube)
 
 def rounded_polyline(K):
     """the closed lap through corners K, each rounded with its radius: points every 0.02 cells"""
@@ -249,6 +250,8 @@ plan = {
     'start': int(iStart),
     # the stripe between the pit lane and the race lanes: across the road (the builder's Across, cells from the middle), first and last point
     'pitStripe': [int(iPit1), int(iPit2), round(float(PIT_HALF - PIT), 3)],
+    # (the opponents' waiting spots, in the pit lane's middle, facing down the straight, on the deck)
+    'pitSpots': [[round(SX - (PIT_HALF - PIT / 2), 3), z, 0.0, 1.0, INNER] for z in PIT_WAIT],
     'keepBodies': sorted(set(int(b) for b in np.unique(WHO[WHO >= 0]))),
 }
 json.dump(plan, open(OUT, 'w'))

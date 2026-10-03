@@ -126,11 +126,11 @@ internal sealed record RaceTrackIsland(
     // but the same and its texturing different, which no version of the game loads -- free ground for a test track. The race-track mode
     // draws island 3 from it (the car file's island_file=: RaceFile), in scenes of its own, 225-228, copies of the Emerald Moon's four
     // outside scenes 74-77 (CopiesScenes). Its lap runs round the moon base on the crater's floor, through two vertical loops (the plan's
-    // Loops: RACEMOD.CPP carries the car round them), one with a gap at its top that the car is carried over upside down. No opponents
-    // (their cars don't go round loops) and nothing drawn on the holomap (island 3's picture is the Emerald Moon's).
+    // Loops: RACEMOD.CPP has the cars driven round them, upside down over the top), one with a gap at its top that a car has to leap. The
+    // opponents go round them too (since 2026-10-03). Nothing is drawn on the holomap (island 3's picture is the Emerald Moon's).
     public static readonly RaceTrackIsland Moon = new("The old moon", "MOON.ILE", "MOON.OBL", 3, 225, 228, 30, "RaceTrackPlan.Moon.json", null)
     {
-        CopiesScenes = (74, 4), RaceFile = "moon", NoOpponents = true, NoHolomap = true,
+        CopiesScenes = (74, 4), RaceFile = "moon", NoHolomap = true,
         Title = "The old moon (MOON.ILE): two vertical loops",
     };
 
@@ -140,11 +140,11 @@ internal sealed record RaceTrackIsland(
     // and one jump over the whole reactor on the north rim (ArcJumps: the race-track mode carries the car up a curved ramp, over the
     // reactor's dish and down a curved hill, from one cube into the next), the road as wide as the dish there and banked hard through the
     // turns either side. It races in scenes of its own, 229-232, copies of the moon's four outside scenes 74-77 (CopiesScenes): the
-    // story's scenes put Twinsen in his space suit, out of his car. No opponents (their cars don't go round loops, or over the reactor)
-    // and nothing drawn on the holomap.
+    // story's scenes put Twinsen in his space suit, out of his car. The opponents race it too (since 2026-10-03: round the loops and over
+    // the reactor), waiting in the pit lane while the player qualifies. Nothing is drawn on the holomap.
     public static readonly RaceTrackIsland Emerald = new("The Emerald Moon", "EMERAUDE.ILE", "EMERAUDE.OBL", 3, 229, 232, 30, "RaceTrackPlan.Emerald.json", null)
     {
-        CopiesScenes = (74, 4), NoOpponents = true, NoHolomap = true,
+        CopiesScenes = (74, 4), NoHolomap = true,
         Title = "The Emerald Moon: over the reactor, round the base",
     };
 

@@ -131,6 +131,10 @@ plan = {
     'asphaltHalf': ASPHALT, 'curbHalf': CURB, 'vergeHalf': VERGE, 'blend': BLEND,
     'start': int(START),
     'loops': [[int(k), rad, shift, gap] for name, k, rad, shift, gap, level in loops],
+    # (2026-10-03: opponents race it, round the loops; they wait here while the player qualifies -- inside the oval on the crater's
+    # floor, beside the start line's straight and clear of it, facing up it: on the grid behind the line they stood on the lap's last
+    # bend, in the player's way)
+    'pitSpots': [[80.0, z, 0.0, -1.0] for z in (66.0, 70.0, 74.0)],
 }
 json.dump(plan, open(OUT, 'w'))
 print('wrote', OUT)
