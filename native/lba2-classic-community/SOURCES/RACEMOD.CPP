@@ -3143,7 +3143,7 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int selected, S32 now) {
         PtrInit3DView();
         RestoreCamera();
         SetLightVector(alphaLight, betaLight, 0);
-    } else if (pu >= 0) {
+    } else if (pu == PU_HEALTH) {
         // (the sprite's own header: its width and height, and where its hot spot is)
         U8 *bank = (U8 *)HQR_Get(HQRPtrSpriteRaw, SPRITE_COEUR);
         const U8 *sprite = bank + ((const U32 *)bank)[0];
