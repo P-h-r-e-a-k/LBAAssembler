@@ -2562,10 +2562,29 @@ static int Near(const T_OBJET *a, S32 x, S32 y, S32 z, S32 reach) {
     return dx * dx + dz * dz < (double)reach * reach && abs(a->Obj.Y - y) < 900;
 }
 
+// Whether a race is on: other cars on the lap, after the grid's GO (not qualifying, nor the others waiting in the pits).
+static int RaceOn(void) {
+    return Opponents() && s_opp[0].Count && s_phase == PHASE_RACE && (s_nbSpots ? s_goAt && TimerRefHR >= s_goAt : s_oppStarted);
+}
+
+// The player's place in the race as it stands (1 leading) and how many race (a time to beat has no car: not one of them); 0 with no race.
+static int RacePlace(int *racers) {
+    if (!RaceOn()) return 0;
+    const double mine = PlayerProgress();
+    int ahead = 0, count = 1;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        if (!s_opp[n].Count || !s_opp[n].Scenes) continue;
+        count++;
+        if (OpponentProgress(&s_opp[n]) > mine) ahead++;
+    }
+    *racers = count;
+    return count > 1 ? ahead + 1 : 0;
+}
+
 // How far back in the race a car is: 0 leading, 1 last; -1 with no race (no other car on the lap, or not racing yet: qualifying, the
 // others waiting in the pits). `me`: -1 the player, else an opponent.
 static double BackShare(int me) {
-    if (!Opponents() || !s_opp[0].Count || s_phase != PHASE_RACE || (s_nbSpots ? !s_goAt || TimerRefHR < s_goAt : !s_oppStarted)) return -1;
+    if (!RaceOn()) return -1;
     const double player = PlayerProgress();
     const double mine = me < 0 ? player : OpponentProgress(&s_opp[me]);
     int ahead = 0, racers = 1;
@@ -3583,6 +3602,12 @@ void RaceMod_Draw(void) {
                 snprintf(text, sizeof(text), "Cross the start line");
         }
         if (text[0]) HudLine(16, bottom, text, -1);
+        // the place as the race stands, over the lap
+        int racers = 0;
+        if (s_car.HasLine && !s_place) if (const int place = RacePlace(&racers)) {
+            snprintf(text, sizeof(text), "Position %d%s of %d", place, Ordinal(place), racers);
+            HudLine(16, bottom - RACE_LINE_STEP, text, -1);
+        }
 
         // the count-down in the middle of the screen: 3, 2, 1 a second each, then GO for a second
         const char *count = NULL;

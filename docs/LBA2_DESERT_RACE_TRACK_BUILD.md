@@ -717,6 +717,7 @@ Who belongs where was read from the game's scenes: `ScriptRoundTrip islandcast` 
 | Emerald Moon | 8 | an Esmer in his space suit (255) | A moon rover: a white box wrapped in gold foil, solar panels either side, a dish and a whip aerial, four wheels alike. [views](racetrack/build/cars/moon_rover.png) |
 |  | 14 | Baldino in his space suit (93) | A lunar lander: a capsule in gold foil with portholes, a flag, the engine's bell and its flame behind. [views](racetrack/build/cars/lander.png) |
 |  | 15 | a Franco guard of the moon base (95) | One of the Esmers' flying saucers: a grey disc with a red rim and lights all round it. [views](racetrack/build/cars/saucer.png) |
+|  | 63 | HAL, the moon base's computer (no body of its own: the room's bricks and screen sprites 228-230) | Itself, driving itself: the dark slate cabinet with the round green screen, the screen's grid and a red eye in it; a coil bottle with a white cap at each front corner; the red pipes arched over the top. It stands on the lilac-grey stand, which has rivets, the red grille and the teal horn. [views](racetrack/build/cars/hal.png) |
 | Otringal | 3 | the Emperor (453) | A long black staff car: his coat's two rows of gold buttons down the bonnet, a gold radiator with his hat's red cockade, gold epaulettes over the front wheels, a red pennant on each wing, a throne's red seat back, and his two-cornered hat as the wing at the back. [views](racetrack/build/cars/emperor.png) |
 |  | 58 | the Emperor's wife (454) | A coach in the red of her gown: gold down its edges, a crown over the back of her seat, a lantern on each side, gold wheels. [views](racetrack/build/cars/empress.png) |
 |  | 9 | Johnny Rocket (154) | "Zeelich's brightest star, the first explorer to set foot on Twinsun": his rocket, silver with a green nose and fins and a red band, a star on each side, its engine lit. [views](racetrack/build/cars/johnny_rocket.png) |
@@ -1354,14 +1355,14 @@ Their follow-up: the story isn't fully worked out yet, so implement what can be.
 
 ### The drivers
 
-`Terrain/RaceTrackDrivers.cs` (`RaceDriver`). A driver is one of the racer entity's car bodies (0 the retail racer, 1 Baldino's rocket car, 2-59 the character cars) or the motorbike. It has a racing line of its own, planned with its character (side of the road, top speed, cornering), and its skill a few points either side of the car setup's. An island's `Roster` replaces the racer, Baldino and the biker; an island with none keeps them.
+`Terrain/RaceTrackDrivers.cs` (`RaceDriver`). A driver is one of the racer entity's car bodies (0 the retail racer, 1 Baldino's rocket car, 2-63 the character cars) or the motorbike. It has a racing line of its own, planned with its character (side of the road, top speed, cornering), and its skill a few points either side of the car setup's. An island's `Roster` replaces the racer, Baldino and the biker; an island with none keeps them.
 
 | Track | Drivers |
 |---|---|
 | Citadel Island, storm track | Raph: his lap at the setup's skill less 6 is the time to beat (no car on the track) |
 | Citadel Island, town circuit | Raph, Zoe, Mr. Paul, the Tralu, the thief |
 | Desert island | Moya, the Dino-Fly, the Dean, the retail racer, Baldino |
-| The Emerald Moon | Baldino in his lander (space suit) |
+| The Emerald Moon | Baldino in his lander (space suit), HAL |
 | Mosquibees Island | the Queen, the monkey monster with the sword (war cart) |
 | Otringal palace | (no track yet: Stan, the pighead with the broom, the two-headed monster) |
 | the others | the retail racer, Baldino, the biker, as before |
@@ -1968,6 +1969,50 @@ An opponent on a super jet-pack drives over oil too.
   - the factor went 2.00 → 1.85 → 1.65 → 1.44 → 1.23 → 1.02 over the last 2.5 s, the speed 9,672 → 4,952 (his top 4,836);
   - frames 80 ms apart show the jet-pack and the car in turn;
   - the jet-pack lay flat, nozzles trailing, at every heading round the lap.
+
+### HAL on the Emerald Moon; the place in the race on the display (2026-10-04, night)
+
+The user's asks:
+- In the moon base there is a computer Twinsen can break, and then its mechanics worship it and call it HAL: turn it into a vehicle for the Emerald Moon.
+- Show the current position, to see how a race is going.
+
+**What HAL is in the game.**
+- *Where:* scene 23, "Emerald Moon, next to outside Baldino's cell".
+- *Actor 4, the screen:* a sprite actor, sprites 228 and 229 flickering while it works and 230 once cracked. The cabinet, the bottles and the stand are the room's bricks.
+- *When it is broken* (hit, or `var_cube(2)`): the mechanics drop what they are doing. They are actors 12-15, the base's grey Franco guards with tools (BODY.HQR 98). One of them cries "HAL!!" (TEXT.HQR file 6, 546) with the translator, "ZX81!!" (545) without.
+- *So there is no body to reuse:* the car is made after the room's look (`lba2sprite` renders the sprites and the palette, to match its colours).
+
+**The car** (`RaceTrackCharacterCars.Hal`, body 63 of the racer's entity; `.Hal.cs`).
+- *The stand* is the hull, in the lilac grey (ramp 208), with:
+  - rivets down its sides;
+  - the round red grille at the front on the left;
+  - the dark pipe with its teal horn on the right.
+- *The cabinet* is dark slate (ramp 176) with its top edges rounded. On its front:
+  - the round green screen (ramp 144) bulging out of its bezel;
+  - a grid over the screen, and a red eye in its middle (the other HAL's);
+  - the red knobs under the screen.
+- *Round the cabinet:*
+  - a bottle at each front corner, dark, its coils glowing cyan, a white cap on top;
+  - the red pipes arched over the top at the back, and the grey pipe out behind;
+  - the gauge on the right with its red cable down to the stand.
+- *It drives itself:* bone 13, where a driver sits, holds only the eye. The racer's animations turn that bone up to 40° (measured in ANIM.HQR 1071-1077), which would swing a screen out of its cabinet; a ball turns in place.
+- *Size:* 509 points and 386 polygons, 7 lines, 22 spheres (the engine's limits are 550 and 550).
+- *Line-up:* it races the Emerald Moon with Baldino, who stays the one to beat.
+
+![HAL's car](racetrack/build/cars/hal.png)
+
+![HAL racing, behind Twinsen on the Emerald Moon](racetrack/build/hal_racing.png)
+
+**The place in the race** (RACEMOD.CPP `RacePlace`, drawn over the lap line, bottom left).
+- *What it shows:* "Position 2nd of 3", from the moment the grid's GO starts the race until Twinsen finishes; after that, "Finished ..." as before.
+- *How it is counted:* by the same measure as the item box's "how far back" (`BackShare`): the player's progress round the lap against each opponent's.
+- *Not counted:* a time to beat with no car (Raph's on the storm track), so a race against the clock shows no position.
+
+![the position as the opponents pass and are passed](racetrack/build/race_position.png)
+
+**Verified** (headless, muted):
+- *The Emerald Moon:* the grid was Twinsen, HAL, Baldino; HAL drove the lap with the others.
+- *At opponent skill 130:* the display went 2nd → 1st → 2nd → 3rd of 3 as the cars passed each other.
 
 ## The menu command
 

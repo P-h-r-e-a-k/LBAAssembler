@@ -50,10 +50,11 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Baldino,
     };
 
-    // The Emerald Moon: Baldino in his space suit, in his lander
+    // The Emerald Moon: Baldino in his space suit, in his lander (the one to beat), and HAL, the moon base's computer, driving itself
     public static readonly List<RaceDriver> Emerald = new()
     {
         Of(RaceTrackCharacterCars.Lander, "Baldino", 0, 1.02, 0.95, main: true),
+        Of(RaceTrackCharacterCars.Hal, "HAL", 2.0, 1.0, 1.01),
     };
 
     // Mosquibees Island: the Queen (the one to beat), and the monkey monster with the sword in his war cart
