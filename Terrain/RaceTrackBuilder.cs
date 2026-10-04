@@ -598,6 +598,8 @@ internal static class RaceTrackBuilder
 
         if (plan.PitA is { } pa && plan.PitB is { } pb) roads.Add(MakePit(main, plan, pa, pb, options, report));
 
+        // (a raised road as wide as there is room for, where the plan doesn't say how wide: overtaking room on the Elevator Platform's lap)
+        if (planned && main.Raised is not null && plan.RaisedHalfs is null) WidenRaised(island, main, plan, options, report);
         var index = new RoadIndex(roads);
         report.DistanceToRoad = (x, z) => { var h = index.Near(x, z, 14, 1); return h.Count == 0 ? 1e9 : h[0].Dist; };
         var startIndex = roads.Count > 1 ? PitMiddle : planned && plan.Start is { } startPoint ? PlanPoint(plan, main, startPoint) : -1;
@@ -2340,6 +2342,101 @@ internal static class RaceTrackBuilder
         var g = 0;
         while (g < ReferenceGears.Length - 1 && ReferenceGears[g] <= v) g++;
         return Math.Clamp(3800 / ReferenceGears[g], 0.25, 4);
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------------
+    // a raised road widened
+
+    // (2026-10-04) A raised road too narrow to overtake on -- the Elevator Platform's, 6.5 cells rail to rail -- is widened to WidenedHalf
+    // from its middle to its rail wherever there is room, point by point (its RaisedHalfs, as the Emerald Moon's plan gives its own): no
+    // further than its bend lets its inside edge go (BendShare of the radius), clear by WidenedClear of every other part of the lap at a
+    // height near its own (another level of a road that winds over itself, a road alongside -- half of the gap each) and of every decor
+    // object its space would newly reach (no building the plan's road missed is cleared for a wider one), and over the ground. It keeps
+    // the plan's width where it meets the ground road (its ends, WidenKeep cells), at the start line (its gantry) and over a jump's gap,
+    // and changes width by WidenRate a cell along at the most, so it widens and narrows evenly.
+    private const double WidenedHalf = 4.75, WidenedClear = 0.75, WidenRate = 0.2, BendShare = 0.8, WidenKeep = 8, WidenStartKeep = 10, WidenJumpKeep = 3, WidenLevel = 1800;
+
+    private static void WidenRaised(IslandFile island, TrackRoad r, RaceTrackPlan plan, RaceTrackOptions o, RaceTrackReport report)
+    {
+        var n = r.Count; var up = r.Raised!; var plain = o.RaisedHalfWidth;
+        if (plain >= WidenedHalf) return;
+        double Apart(int a, int b) { var d = Math.Abs(r.S[a] - r.S[b]); return r.Closed ? Math.Min(d, r.Length - d) : d; }
+        var limit = new double[n];
+        var why = new string[n];
+        for (var i = 0; i < n; i++) limit[i] = up[i] ? WidenedHalf : plain;
+        void Limit(int i, double to, string reason) { if (to < limit[i] - 1e-9) { limit[i] = to; why[i] = reason; } }
+        // the plan's width at its ends, its start line and its jumps
+        var keepAt = new List<(double S, double Reach)>();
+        for (var i = 0; i < n; i++) if (!up[i]) keepAt.Add((r.S[i], WidenKeep));
+        if (plan.Start is { } start) keepAt.Add((r.S[PlanPoint(plan, r, start)], WidenStartKeep));
+        foreach (var j in report.Jumps) keepAt.Add((j.S0 + j.FlightCells / 2, j.FlightCells / 2 + WidenJumpKeep));
+        for (var i = 0; i < n; i++)
+            foreach (var (s, reach) in keepAt)
+            {
+                var d = Math.Abs(r.S[i] - s); if (r.Closed) d = Math.Min(d, r.Length - d);
+                if (d <= reach) { Limit(i, plain, "kept"); break; }
+            }
+        // the bend: the inside edge no further in than BendShare of its radius
+        for (var i = 0; i < n; i++)
+            if (Math.Abs(r.Kappa[i]) > 1e-6) Limit(i, Math.Max(plain, BendShare / Math.Abs(r.Kappa[i])), "bend");
+        // the rest of the lap at a height near its own: each side gets half of the gap between them
+        for (var i = 0; i < n; i++)
+        {
+            if (limit[i] <= plain) continue;
+            for (var j = 0; j < n; j += 2)
+            {
+                if (Apart(i, j) <= 2 * WidenedHalf + 4 || Math.Abs(r.H[i] - r.H[j]) > WidenLevel) continue;
+                var d = Math.Sqrt(Sq(r.X[i] - r.X[j]) + Sq(r.Z[i] - r.Z[j]));
+                var room = up[j] ? (d - WidenedClear) / 2 : d - r.VergeHalf - WidenedClear;
+                if (room < limit[i]) Limit(i, Math.Max(plain, room), up[j] ? "level" : "road");
+            }
+        }
+        // decor objects its space would newly reach (those the plan's road reaches are cleared anyway), and the ground over its slab
+        var boxes = new List<(double X0, double Z0, double X1, double Z1, double Y0, double Y1, int Body)>();
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            foreach (var d in cube.Decors)
+                boxes.Add(((cx * (double)IslandFile.CubeSize + d.XMin) / 512, (cz * (double)IslandFile.CubeSize + d.ZMin) / 512,
+                           (cx * (double)IslandFile.CubeSize + d.XMax) / 512, (cz * (double)IslandFile.CubeSize + d.ZMax) / 512, d.YMin, d.YMax, d.Body & 0xFFFF));
+        var byBody = new Dictionary<int, int>();
+        for (var i = 0; i < n; i++)
+        {
+            if (limit[i] <= plain) continue;
+            var lean = Math.Abs(r.RoadBank?[i] ?? 0) * limit[i] * 512;
+            double y0 = r.H[i] - lean - RaisedBelow, y1 = r.H[i] + lean + RaisedAbove;
+            foreach (var b in boxes)
+            {
+                if (b.Y1 < y0 || b.Y0 > y1) continue;
+                var dx = Math.Max(0, Math.Max(b.X0 - r.X[i], r.X[i] - b.X1)); var dz = Math.Max(0, Math.Max(b.Z0 - r.Z[i], r.Z[i] - b.Z1));
+                var dist = Math.Sqrt(dx * dx + dz * dz);
+                if (dist <= plain + WidenedClear || dist > limit[i] + WidenedClear) continue;
+                Limit(i, Math.Max(plain, dist - WidenedClear - 0.25), "decor");
+                byBody[b.Body] = byBody.GetValueOrDefault(b.Body) + 1;
+            }
+            if (!plan.RaisedCut)
+                for (var side = -1; side <= 1; side += 2)
+                    for (var w = plain + 0.5; w <= limit[i]; w += 0.5)
+                    {
+                        var gx = r.X[i] - r.Tz[i] * side * w; var gz = r.Z[i] + r.Tx[i] * side * w;
+                        if (IslandOps.Altitude(island, gx * 512, gz * 512) is { } ground && ground > r.H[i] - lean - RaisedBelow) { Limit(i, Math.Max(plain, w - 0.5), "ground"); break; }
+                    }
+        }
+        // evenly: no faster than WidenRate a cell along
+        var half = new double[n];
+        for (var i = 0; i < n; i++)
+        {
+            var h = limit[i];
+            for (var j = 0; j < n; j++) h = Math.Min(h, limit[j] + WidenRate * Apart(i, j));
+            half[i] = Math.Max(plain, h);
+        }
+        r.RaisedHalfs = half;
+        if (Environment.GetEnvironmentVariable("RT_WIDEN_DEBUG") == "1")
+            report.Notes.Add("  widening held by decor bodies: " + string.Join(", ", byBody.OrderByDescending(kv => kv.Value).Take(12).Select(kv => $"{kv.Key} x{kv.Value}")));
+        var raised = Enumerable.Range(0, n).Where(i => up[i]).ToList();
+        var wide = raised.Count(i => half[i] >= WidenedHalf - 0.01);
+        report.Notes.Add($"the raised road widened from {plain:0.##} to {WidenedHalf:0.##} cells either side of its middle along {100.0 * wide / Math.Max(1, raised.Count):0}% of it" +
+                         $" ({raised.Average(i => half[i]):0.##} on average, {raised.Min(i => half[i]):0.##} at the least); held narrower by: " +
+                         string.Join(", ", raised.Where(i => why[i] is not null && limit[i] < WidenedHalf - 0.01).GroupBy(i => why[i]).OrderByDescending(g => g.Count())
+                             .Select(g => $"{g.Key} {100.0 * g.Count() / raised.Count:0}%")));
     }
 
     // ---------------------------------------------------------------------------------------------------------------------

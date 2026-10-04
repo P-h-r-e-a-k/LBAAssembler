@@ -63,4 +63,18 @@ internal static class RaceTrackSmallCars
         for (var i = 0; i < spheres; i++, q += 8) BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(q + 6), (ushort)(BinaryPrimitives.ReadUInt16LittleEndian(b.AsSpan(q + 6)) / 2));
         return b;
     }
+
+    // The same at any size (the super jet-pack the car turns into: RaceTrackSuperJet).
+    public static byte[] Scaled(byte[] body, double factor)
+    {
+        var b = (byte[])body.Clone();
+        int I(int at) => BinaryPrimitives.ReadInt32LittleEndian(b.AsSpan(at));
+        void Scale16(int at) => BinaryPrimitives.WriteInt16LittleEndian(b.AsSpan(at), (short)Math.Round(BinaryPrimitives.ReadInt16LittleEndian(b.AsSpan(at)) * factor));
+        for (var at = 8; at < 32; at += 4) BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(at), (int)Math.Round(I(at) * factor));
+        int points = I(40), p = I(44);
+        for (var i = 0; i < points; i++, p += 8) { Scale16(p); Scale16(p + 2); Scale16(p + 4); }
+        int spheres = I(80), q = I(84);
+        for (var i = 0; i < spheres; i++, q += 8) BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(q + 6), (ushort)Math.Round(BinaryPrimitives.ReadUInt16LittleEndian(b.AsSpan(q + 6)) * factor));
+        return b;
+    }
 }

@@ -97,6 +97,8 @@ internal static class RaceCarEngineFile
             foreach (var oil in track.Oil ?? new()) text.Append($"oil={oil[0]} {oil[1]}\n");
             // (the oil's drum, which the item box shows)
             if (track.OilIcon is { } icon) text.Append($"oil_icon={icon}\n");
+            // (the super jet-pack the car turns into while it drives it)
+            if (track.SuperJetModel is { } jetModel) text.Append($"superjet_model={jetModel}\n");
         }
         if (ghost >= 0) text.Append($"beat={ghost + 1}{(storm ? $" {RaceTrackStory.BeatVar} 1" : "")}\n");
         // the story's gates and the town circuit's race: Mr. Paul lets no one race without racing gloves; the aliens' track is ready the day

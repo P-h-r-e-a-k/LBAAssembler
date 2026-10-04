@@ -1857,6 +1857,64 @@ At 200 frames a second, the car stayed on the deck in every frame.
 
 **The red lines on Ascence** leapt up and down: a line's points took another level of the road, or the ground far under the deck. Now a raised road's line follows the deck at its own level (`RaisedAt`, within 600 of the line's height), and past the deck's edge carries on at the edge's height.
 
+### Wider raised roads, the super jet-pack as the car, through the cars in its way (2026-10-04, later)
+
+The user's asks:
+- Some raised tracks, like the Elevator Platform's (ASCENCE.ILE), are too tight to overtake on: widen them, where they can be if not everywhere.
+- Remove the jet-pack power-up, keeping the super jet-pack.
+- While the super jet-pack is on, the car turns into a model of it, tilted forwards and about the car's size.
+- A car with it got stuck behind an opponent on the same line: it should push any car in its way aside, or pass through it.
+
+**Wider raised roads** (`RaceTrackBuilder.WidenRaised`).
+- *Which:* a raised road whose plan doesn't give its own widths (`RaisedHalfs`). That is the Elevator Platform, Celebration Island's statue track and the lava lake; the Emerald Moon's plan sets its own.
+- *How wide:* `WidenedHalf`, 4.75 cells from the middle to the rail, point by point (into the road's RaisedHalfs, which the deck pieces, the rails, the piers, the racing lines and the engine's floor already follow).
+- *How far it can go* at each point:
+  - no further than its bend lets the inside edge go (0.8 of the radius);
+  - clear by 0.75 cells of every other part of the lap within 1,800 units of its height (half the gap each), and of a ground road beside it by its verge;
+  - clear of every decor object its space would newly reach, so no building the plan's road missed is cleared for the wider one;
+  - over the ground (unless the plan cuts the ground away under the deck).
+- *Kept at the plan's width:* 8 cells into each end where it meets the ground road, 10 cells either side of the start line (its gantry) and over a jump's gap with 3 cells either side.
+- *Smoothing:* the width changes by 0.2 cells a cell along at the most, so it widens and narrows evenly.
+- *The build says how much, and what held it back:*
+
+  | Track | Width before | Average now | At the full 4.75 | Held back mostly by |
+  |---|---|---|---|---|
+  | Elevator Platform | 3.25 | 4.11 | 38% | the elevator tower (OBL body 0, a box 7 cells across that the road spirals round) and the platform's buildings, 30%; its own other levels, 6% |
+  | Celebration's statue track | 3.75 | 4.47 | 58% | other levels, 12% |
+  | Lava lake | 3.05 | 3.61 | 13% | its many ends and jumps, 30% |
+
+- `RT_WIDEN_DEBUG=1` lists the decor bodies that held it back.
+
+**The super jet-pack only.** The plain jet-pack (× 1.5) is out. The super jet-pack (× 2) takes its place in the draw: weight 12, never to the leader, 2.5 times its weight to the last car.
+
+**The car turned into the super jet-pack** (RACEMOD.CPP `DrawSuperJet`, `superjet_model=`; `RaceTrackSuperJet`).
+- *The model:* the build appends the inventory's super jet-pack (OBJFIX.HQR 48) at 0.45 of its size to OBJFIX.HQR. It is 3,000 units wide and 2,800 tall; the racer's car is 1,270 and 900 (`RaceTrackSmallCars.Scaled`).
+- *Twinsen's car* is hidden while it lasts (INVISIBLE, set every frame: the game sets the car's flags again as it drives).
+- *The jet-pack drawn in its place:*
+  - 560 units over the road, bobbing a little, leaning forward 0.6 rad (34°) along the car's heading, its exhausts trailing;
+  - depth-tested against the ground and the decor, in the colours of things near;
+  - its place on the screen marked to be drawn over next frame.
+- *Test keys:* `superjet_lean=`, `superjet_turn=`. The lean's sign was found by drawing it at 1.2 rad: the first way round, it leant backwards.
+
+![the car turned into the super jet-pack, the racer pushed aside](racetrack/build/superjet_car.png)
+
+**Through the cars in its way.**
+- *Passing through:* while Twinsen's super jet-pack is on, every opponent's car is left out of his car's collisions (`RaceMod_NoCollide`), and an opponent with one passes through Twinsen's.
+- *Pushing aside:* a car whose middle comes within 1,400 units of the jet-pack is pushed 2 cells aside, away from the jet-pack's way (right ahead: to its right). It goes out over 0.3 s and back onto its line over 1.2 s, at half its speed.
+
+**Verified** (headless, muted):
+- *Desert, super jet-packs only:* the car hidden and the jet-pack drawn in its place, the size of the car.
+- *Ascence, every mushroom a super jet-pack, the opponents faster (skill 125):*
+  - 14 cars pushed aside in four laps, Twinsen never stuck behind one.
+  - His laps 22.8, 18.6 and 16.5 s, every checkpoint crossed.
+- *The widened tracks, the test pilot's qualifying laps:*
+  - Elevator Platform: 30.9 s (34.0 before, its line using the room).
+  - Celebration's statue track: 40.2 s (40.7).
+  - The lava lake: 26.9 s (27.2).
+  - In each the race's laps complete too.
+
+![the Elevator Platform's road widened](racetrack/build/ascence_widened.png)
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

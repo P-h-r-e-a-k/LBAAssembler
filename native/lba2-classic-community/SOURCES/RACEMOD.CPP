@@ -209,6 +209,8 @@ typedef struct {
     S32 BoostUntil, HitUntil;              // a power-up's boost, and a penguin's blast that stopped it, until when
     S32 TakeAt;                            // when it last took a mushroom's power-up (one a row)
     S32 JetUntil; double JetFactor;        // a jet-pack: its pace times JetFactor until then
+    S32 ShoveStart, ShoveUntil;            // pushed aside by Twinsen's super jet-pack: since when, until when ...
+    double ShoveX, ShoveZ;                 // ... and which way (world, a unit long)
     S32 SkidUntil, SkidStart; int SkidDir; // skidding on oil: until when, since when, and which way it spins
     int Small, Normal;                     // its car's shrunk generic body (-1 none) and its own (-1: not seen yet)
 } T_RACE_OPPONENT;
@@ -326,18 +328,18 @@ static int s_oilIcon = -1;                 // oil_icon=: the oil's model in OBJF
 static S32 s_autoDrop = 1000;              // autodrop_ms=<ms> (tests): how long after its roulette the test pilot uses an item (0: never)
 static T_RACE_PENGUIN s_penguins[RACE_MAX_PENGUINS];
 // (health and clovers were power-ups too: no one dies in a race, so they did nothing -- out since 2026-10-03)
-// (the super jet-pack and the jet-pack: the game drives, at twice the car's speed or one and a half times it)
-enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_PENGUIN, PU_SUPERJET, PU_JETPACK, PU_OIL, PU_COUNT };
-static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Nitro penguin!", "Super jet-pack!", "Jet-pack!", "Oil slick!"};
-static const int s_puWeight[PU_COUNT] = {20, 12, 10, 16, 8, 12, 16};
-static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 1.5, 0};
+// (the super jet-pack: the game drives, at twice the car's speed; the plain jet-pack, one and a half times it, is out since 2026-10-04)
+enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_PENGUIN, PU_SUPERJET, PU_OIL, PU_COUNT };
+static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Nitro penguin!", "Super jet-pack!", "Oil slick!"};
+static const int s_puWeight[PU_COUNT] = {20, 12, 10, 16, 12, 16};
+static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 0};
 // each one's weight times these for the leader and for the last car (between them by the car's place: RandomPowerUp) -- the ones to
-// drop behind (penguins, oil) for the cars in front, the ones to catch up with (the jet-packs, lightning) for the cars at the back
-static const double s_puLead[PU_COUNT] = {1.0, 0.8, 0.05, 1.8, 0.0, 0.3, 2.0};
-static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 1.6, 0.4};
+// drop behind (penguins, oil) for the cars in front, the ones to catch up with (the super jet-pack, lightning) for the cars at the back
+static const double s_puLead[PU_COUNT] = {1.0, 0.8, 0.05, 1.8, 0.0, 2.0};
+static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 0.4};
 // what the item box shows (OBJFIX.HQR, the inventory's own: the Gazogem, the protection spell, the lightning ring, the meca-penguin,
-// the super jet-pack, the protopack; -2 the oil's, oil_icon=)
-static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, 12, -2};
+// the super jet-pack; -2 the oil's, oil_icon=)
+static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2};
 // oil: the slicks on the road (world units; until when), and the scenes' copies of the slick that show them
 #define RACE_MAX_SLICKS 6
 #define RACE_MAX_OIL_ACTORS 256
@@ -362,6 +364,17 @@ static int s_skidDir = 1;
 #define RACE_BLAST_FORCE 20                // a penguin's blast, as HitObj takes it
 static S32 s_boostUntil = 0, s_protectUntil = 0, s_shrinkOthersUntil = 0, s_shrunkUntil = 0, s_jetUntil = 0;
 static double s_jetFactor = 1;             // the jet-pack on: the car's speed times this (s_puJet)
+// ... and the car turned into it: the super jet-pack's model at about the car's size (superjet_model=, OBJFIX.HQR: the builder adds it),
+// drawn in the car's place leaning forward while Twinsen's car is hidden
+static int s_superModel = -1, s_heroHidden = 0;
+#define RACE_SUPERJET_LEAN 0.6             // radians it leans forward (about 34 degrees)
+static double s_superLean = RACE_SUPERJET_LEAN;          // superjet_lean= (radians, tests)
+static S32 s_superTurn = 0;                // superjet_turn= (the model turned on the car's heading, 4096 a turn; tests)
+#define RACE_SUPERJET_LIFT 560             // its middle over the road (its foot about a hundred over)
+// ... and a car in its way pushed aside, the super jet-pack driving through it: how near, how far aside, for how long
+#define RACE_SHOVE_REACH 1400
+#define RACE_SHOVE_SIDE (2 * 512)
+#define RACE_SHOVE_MS 1500
 static int s_protectSpell = 0;             // the game's protection spell is on for the power-up (it goes off with it)
 #define RACE_PROTECT_ENDING 3000           // ... and blinks this long before
 static int s_tiredVar = -1, s_tiredValue = 0, s_tiredText = -1;
@@ -1354,6 +1367,9 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "protect_ms")) s_protectUntil = TimerRefHR + atoi(v);   // (tests: protected from the start, without the spell's sprites)
         else if (!strcmp(key, "shrunk_ms")) s_shrunkUntil = TimerRefHR + atoi(v);     // (tests: shrunk from the start)
         else if (!strcmp(key, "oil_icon")) s_oilIcon = atoi(v);
+        else if (!strcmp(key, "superjet_model")) s_superModel = atoi(v);
+        else if (!strcmp(key, "superjet_lean")) s_superLean = atof(v);
+        else if (!strcmp(key, "superjet_turn")) s_superTurn = atoi(v);
         else if (!strcmp(key, "mushroom")) {
             T_RACE_MUSHROOM *m = &s_mush[s_nbMush];
             if (s_nbMush < RACE_MAX_MUSHROOMS && sscanf(v, "%d %d", &m->Scene, &m->Actor) == 2) { m->HasY = 0; m->Back = 0; s_nbMush++; }
@@ -2644,8 +2660,7 @@ static void UseItem(int pu, S32 now) {
         if (pu == PU_OIL) DropOil(x, hero->Obj.Y, z); else DropPenguin(x, hero->Obj.Y, z, -1);
         break;
     }
-    case PU_SUPERJET:
-    case PU_JETPACK: s_jetUntil = now + RACE_JETPACK_MS; s_jetFactor = s_puJet[pu]; s_autoIndex = -1; break;
+    case PU_SUPERJET: s_jetUntil = now + RACE_JETPACK_MS; s_jetFactor = s_puJet[pu]; s_autoIndex = -1; break;
     }
     Message(s_puName[pu]);
     Log_Info("[racemod] Twinsen uses %s%s", s_puName[pu], s_puJet[pu] > 0 && !Guide() ? " (no line: a boost, the keys his)" : "");
@@ -2797,6 +2812,11 @@ static void PowerUps(S32 now, int driving) {
     if (!shift) s_shiftBlock = 0;
     s_shiftWas = shift;
     s_qWas = q;
+    // the super jet-pack: the car turned into it -- hidden, the jet-pack drawn in its place (DrawSuperJet)
+    const int superJet = driving && now < s_jetUntil && s_superModel >= 0 && CubeMode == CUBE_EXTERIEUR;
+    // (every frame: the game sets the car's flags again as it drives -- hidden once, it showed under the jet-pack)
+    if (superJet) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
+    else if (!superJet && s_heroHidden) { hero->Flags &= ~INVISIBLE; s_heroHidden = 0; }
     // the protection spell's time up
     if (s_protectSpell && now >= s_protectUntil) { ProtectionOff(); Log_Info("[racemod] the protection spell is over"); }
     // the penguins: walking the track until a car comes near (or on their fuse), shown by this scene's penguins
@@ -2978,6 +2998,11 @@ static U8 s_noCollide[MAX_OBJETS];
 static S32 s_noCollideScene = -1;
 S32 RaceMod_NoCollide(S32 numobj) {
     if (!RaceMod_Active() || !s_powerups || numobj <= 0 || numobj >= MAX_OBJETS) return 0;
+    // (a super jet-pack goes through the cars: Twinsen's through any in its way -- it pushes them aside, RACE_SHOVE_* -- and an
+    // opponent's through Twinsen's; on the same line, the jet-pack sat stuck behind the car in front)
+    if (s_carsScene == (S32)NumCube)
+        for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
+            if (s_carActor[n] == numobj && (TimerRefHR < s_jetUntil || TimerRefHR < s_opp[n].JetUntil)) return 1;
     if (s_noCollideScene != (S32)NumCube) {
         memset(s_noCollide, 0, sizeof(s_noCollide));
         for (int i = 0; i < s_nbMush; i++) if (s_mush[i].Scene == NumCube && s_mush[i].Actor > 0 && s_mush[i].Actor < MAX_OBJETS) s_noCollide[s_mush[i].Actor] = 1;
@@ -3128,11 +3153,32 @@ void RaceMod_Frame(void) {
         const int index = OpponentActor(o);
         if (index < 0) continue;
         s_carActor[n] = index;
+        // Twinsen's super jet-pack coming through: pushed aside, away from its way, and slowed
+        if (driving && now < s_jetUntil && now >= o->ShoveUntil && CubeMode == CUBE_EXTERIEUR) {
+            const T_OBJET *h = &ListObjet[NUM_PERSO];
+            const double hx = h->Obj.X + CurrentCubeX * 32768.0, hz = h->Obj.Z + CurrentCubeY * 32768.0;
+            const double ox = x - hx, oz = z - hz;
+            if (ox * ox + oz * oz < (double)RACE_SHOVE_REACH * RACE_SHOVE_REACH && fabs(y - h->Obj.Y) < 900) {
+                const double hb = h->Obj.Beta * 2 * RACE_PI / 4096, fx = sin(hb), fz = cos(hb), along = ox * fx + oz * fz;
+                double px = ox - along * fx, pz = oz - along * fz, pl = sqrt(px * px + pz * pz);
+                if (pl < 50) { px = fz; pz = -fx; pl = 1; }   // (right ahead: to the right)
+                o->ShoveX = px / pl; o->ShoveZ = pz / pl;
+                o->ShoveStart = now; o->ShoveUntil = now + RACE_SHOVE_MS;
+                o->Speed *= 0.5;
+                Log_Info("[racemod] Twinsen's super jet-pack pushes %s aside", o->Name);
+            }
+        }
         // off its line while it moves onto it from its grid spot
         const double f = o->MergeLeft / RACE_MERGE;
         T_OBJET *car = &ListObjet[index];
         car->Obj.X = (S32)(x + o->MergeX * f - CurrentCubeX * 32768.0);
         car->Obj.Z = (S32)(z + o->MergeZ * f - CurrentCubeY * 32768.0);
+        // (pushed aside: out quickly, back onto its line slowly)
+        if (now < o->ShoveUntil) {
+            const double t = (double)(now - o->ShoveStart) / RACE_SHOVE_MS, out = t < 0.2 ? t / 0.2 : 1 - (t - 0.2) / 0.8;
+            car->Obj.X += (S32)(o->ShoveX * RACE_SHOVE_SIDE * out);
+            car->Obj.Z += (S32)(o->ShoveZ * RACE_SHOVE_SIDE * out);
+        }
         car->Obj.Y = (S32)(y + o->MergeY * f);
         S32 beta = (S32)(atan2(dx, dz) * 4096.0 / (2 * 3.14159265358979)) & 4095;
         car->Obj.Beta = f >= 1 ? o->SpotBeta : beta;
@@ -3238,6 +3284,28 @@ static void HudLine(S32 x, S32 y, const char *text, int align) {
     ColorFont(LBAWHITE);
     Font(x0, y, buf);
     BoxMovingAdd(x0 - 4, y - 4, x0 + w + 6, y + RACE_LINE_STEP + 4);
+}
+
+// The super jet-pack in the car's place (Twinsen's car hidden: PowerUps): the model at the car's size, leaning forward and a little over the
+// road, drawn after the scene's objects as they are drawn -- tested against the depth of the ground and the decor, in the colours of
+// things near -- its place on the screen marked to be drawn over next frame.
+static void DrawSuperJet(S32 now) {
+    if (!s_heroHidden || s_superModel < 0 || CubeMode != CUBE_EXTERIEUR) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    T_OBJ_3D pose = hero->Obj;
+    CarPose(&pose, (hero->Obj.Beta + s_superTurn) & 4095, s_superLean, 0);
+    const int fog = Fill_Flag_Fog, depth = Fill_Flag_ZBuffer, keep = Fill_Flag_NZW;
+    const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
+    Switch_Fillers(FILL_POLY_FOG_NZW);
+    SetCLUT(PalLevel);
+    const S32 bob = (S32)(40 * sin(now * 2 * RACE_PI / 600));
+    if (BodyDisplay(hero->Obj.X, hero->Obj.Y + RACE_SUPERJET_LIFT + bob, hero->Obj.Z, pose.Alpha, pose.Beta, pose.Gamma, (U8 *)GivePtrObjFix(s_superModel))) {
+        SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
+        if (ClipXMin <= ClipXMax && ClipYMin <= ClipYMax) BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
+        UnsetClip();
+    }
+    SetCLUT(clut);
+    Switch_Fillers(depth ? (keep ? (fog ? FILL_POLY_FOG_NZW : FILL_POLY_NZW) : (fog ? FILL_POLY_FOG_ZBUFFER : FILL_POLY_ZBUFFER)) : fog ? FILL_POLY_FOG : FILL_POLY_TEXTURES);
 }
 
 // The checkpoints of this cube as red lines on the road (checkpoint_lines=1, for now): each followed along its length -- the raised
@@ -3434,6 +3502,7 @@ void RaceMod_Draw(void) {
     UnsetClipWindow();
 
     const S32 now = TimerRefHR, width = (S32)ModeDesiredX, height = (S32)ModeDesiredY;
+    DrawSuperJet(now);
     DrawCheckpoints(height);
     // the item box, top left: its two slots
     if (items) {
@@ -3527,6 +3596,8 @@ static void ResetTrack(void) {
     s_powerups = 0; s_powerupOnly = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks)); s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     s_noCollideScene = -1;
+    if (s_heroHidden) { ListObjet[NUM_PERSO].Flags &= ~INVISIBLE; s_heroHidden = 0; }
+    s_superModel = -1; s_superLean = RACE_SUPERJET_LEAN; s_superTurn = 0;
     s_penguinWalk = 1; s_item[0] = s_item[1] = -1; s_sel = 0; s_takeAt = 0; s_shiftBlock = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrinkOthersUntil = s_shrunkUntil = s_jetUntil = 0; s_jetFactor = 1;
     s_ownTrack = 0; s_loaded[0] = 0;
