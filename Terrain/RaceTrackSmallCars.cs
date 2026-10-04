@@ -11,6 +11,10 @@ namespace LBAAssembler.Terrain;
 internal static class RaceTrackSmallCars
 {
     public const int First = 100;
+    // Twinsen's own car (2026-10-04): the buggy behaviour's entity (C_BUGGY, 12) -- its body while he drives, GEN_BODY_TUNIQUE (1) -- gets
+    // the same, its generic body HeroSmall; the race-track mode switches him to it when an opponent's lightning has him shrunk
+    // (twinsen_small=).
+    public const int HeroEntity = 12, HeroBody = 1, HeroSmall = First + HeroBody;
 
     public static int SmallOf(int body) => First + body;
 
@@ -29,9 +33,16 @@ internal static class RaceTrackSmallCars
             file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(Halved(bodies.Read(index))));
             table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, SmallOf(generic), next++);
         }
+        var hero = BodiesOf(table, HeroEntity).Where(b => b.Generic == HeroBody).Select(b => (int?)b.Index).FirstOrDefault();
+        if (hero is { } heroIndex)
+        {
+            file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(Halved(bodies.Read(heroIndex))));
+            table = RaceTrackBaldinoCar.WithBody(table, HeroEntity, HeroSmall, next++);
+        }
         File.WriteAllBytes(bodyPath, file);
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
-        return $"the race cars at half their size (the lightning spell): {own.Count} bodies of the racer's entity ({RaceTrackBaldinoCar.RacerEntity}), its bodies {First}-{First + own.Max(o => o.Generic)}";
+        return $"the race cars at half their size (the lightning spell): {own.Count} bodies of the racer's entity ({RaceTrackBaldinoCar.RacerEntity}), its bodies {First}-{First + own.Max(o => o.Generic)}" +
+               (hero is not null ? $"; Twinsen's buggy too, entity {HeroEntity}'s body {HeroSmall}" : "; Twinsen's buggy's body not found");
     }
 
     // An entity's bodies in the entity table (RESS.HQR 44): its generic body numbers and their BODY.HQR entries.

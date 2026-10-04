@@ -1915,6 +1915,60 @@ The user's asks:
 
 ![the Elevator Platform's road widened](racetrack/build/ascence_widened.png)
 
+### The super jet-pack flat out and untouchable, its end slowed and flashing; one turn on oil; Twinsen shrunk too (2026-10-04, evening)
+
+The user's asks:
+- Tilt the super jet-pack further, so it is fully horizontal.
+- While the super jet-pack is on, nothing should affect it (it still skidded on oil).
+- Before it ends, slow the car gradually back to its normal top speed, with a slow flashing to warn that it is about to end.
+- Spinning a car round three times on oil is too much of a penalty: once round, then a complete stop.
+- (Added) A small car for Twinsen, so an opponent's lightning shrinks him as it does the other cars.
+
+**The jet-pack lying flat** (`RaceTrackSuperJet.LaidFlat`).
+- *Why the build turns it:* the engine leaning the model a quarter turn as it draws it (`CarPose`) is the decomposition's singular case. The heading folds into the other angles, and at some headings the jet-pack flew backwards.
+- *What the build does:* it turns every point and normal of the 0.45-scale copy a quarter turn about x, (x, y, z) to (x, −z, y), and its box with them. The tanks' tops point the way the car goes and the yellow nozzles trail; the HUD's upright icon shows the nozzles at the bottom.
+- *In the engine:* `RACE_SUPERJET_LEAN` is now 0 (`superjet_lean=` adds to it, for tests). It is drawn 560 units over the road, the underside about 100 over.
+
+![the super jet-pack lying flat, nozzles trailing](racetrack/build/superjet_flat.png)
+
+**Nothing touches the super jet-pack.** While Twinsen's is on:
+- he drives over oil (logged "Twinsen drives over oil, on the super jet-pack");
+- penguins and opponents' lightning pass him by, and `RaceMod_CarHit` lets nothing knock him;
+- using it clears a skid, a hit or a shrink he was in.
+
+An opponent on a super jet-pack drives over oil too.
+
+**Its end: slowed and flashing** (`JetFactor`, `RACE_JET_EASE_MS` 2,500, `RACE_JET_FLASH_MS` 250).
+- *Slowing:* over its last 2.5 s the speed factor falls evenly from 2 to 1. That covers Twinsen's speed, the pilot's look-ahead speeds and an opponent's pace, so the car comes back to its own top speed rather than dropping to it.
+- *Flashing:* over the same 2.5 s the jet-pack and the car take turns, 250 ms each.
+
+![the last 2.5 s: the jet-pack and the car in turn, 80 ms a frame](racetrack/build/superjet_flash.png)
+
+**Oil: once round, then a standstill** (`RACE_SKID_MS` 1,400; `RaceMod_Skid`, `RaceMod_MoveBeta` in BUGGY.CPP).
+- *Turning:* the car turns one full turn, quickly at first and easing out: 4096 × (1 − (1 − p)²).
+- *Slowing:* its speed falls as (1 − p)² to 0.
+- *Sliding:* it slides on along the heading it hit the oil with, while the body turns.
+- *Control:* no steering or throttle until it stops.
+- *Opponents:* the same, their pace taken down the same way (the old 0.45 pace and three turns are out).
+
+**Twinsen's small car** (`RaceTrackSmallCars.HeroSmall`, `twinsen_small=`).
+- *The body:* the build halves Twinsen's buggy too (entity 12's generic body 1) into generic body 101.
+- *When it is used:* while an opponent's lightning has him shrunk, unless the protection spell or the super jet-pack is on. Before, his car only slowed.
+- *The shadow* shrinks with it. The engine sizes a shadow from the average of the box's width and length, so a small car's shadow still shows a little round it, as the opponents' small cars' shadows do.
+
+![Twinsen's car on the line, then shrunk](racetrack/build/twinsen_small_car.png)
+
+**Verified** (headless, muted):
+- *Mosquibees, oil and lightning only, the opponents faster (skill 125):*
+  - each of Twinsen's three skids ended at speed 0 one full turn round (heading 3183, 1133, 1159 from 3182, 1132, 1158);
+  - the opponents skidded too;
+  - each lightning hit switched his car to body 101.
+- *Mosquibees, super jet-packs and oil only:* Twinsen drove over oil three times on the jet-pack and never skidded while it was on.
+- *Desert, super jet-packs only:*
+  - the factor went 2.00 → 1.85 → 1.65 → 1.44 → 1.23 → 1.02 over the last 2.5 s, the speed 9,672 → 4,952 (his top 4,836);
+  - frames 80 ms apart show the jet-pack and the car in turn;
+  - the jet-pack lay flat, nozzles trailing, at every heading round the lap.
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

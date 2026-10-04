@@ -79,7 +79,9 @@ internal static class RaceTrackService
         // OilIcon: the oil's model in OBJFIX.HQR, which the item box shows (RaceTrackOil.InstallIcon)
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? OilIcon = null,
         // SuperJetModel: the super jet-pack the car turns into while it drives it, in OBJFIX.HQR (RaceTrackSuperJet)
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? SuperJetModel = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? SuperJetModel = null,
+        // TwinsenSmall: Twinsen's buggy at half its size, its generic body (RaceTrackSmallCars.HeroSmall), for an opponent's lightning
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? TwinsenSmall = null);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
     // A driver: its name, its line ([x, z, y, speed, bend radius] as Path's), how many points before the start line it starts without a
     // grid, the scenes' copies of its car (none for a time to beat: Ghost), its character (Top, Grip: shares of the player's car's top
@@ -286,7 +288,7 @@ internal static class RaceTrackService
     public sealed class BuildSession
     {
         public bool CharacterCars, Baldino, SmallCars, Oil;
-        public int? OilIcon, SuperJetModel;
+        public int? OilIcon, SuperJetModel, TwinsenSmall;
         public List<TrackInfo> Tracks { get; } = new();
     }
 
@@ -476,7 +478,13 @@ internal static class RaceTrackService
         // has one yet)
         if (!session.CharacterCars) { log.AddRange(RaceTrackCharacterCars.Install(gameDirectory).Log); session.CharacterCars = true; }
         // ... and each of the racer entity's cars shrunk to half its size, for the lightning spell (RaceTrackSmallCars)
-        if (!session.SmallCars) { log.Add(RaceTrackSmallCars.Install(gameDirectory)); session.SmallCars = true; }
+        if (!session.SmallCars)
+        {
+            var small = RaceTrackSmallCars.Install(gameDirectory);
+            log.Add(small);
+            if (!small.Contains("not found")) session.TwinsenSmall = RaceTrackSmallCars.HeroSmall;
+            session.SmallCars = true;
+        }
         // ... and the oil slick the power-ups' oil leaves on the road (RaceTrackOil)
         if (!session.Oil)
         {
@@ -500,7 +508,7 @@ internal static class RaceTrackService
         StoryInfo? story = null)
     {
         session ??= new BuildSession();
-        var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon, SuperJetModel = session.SuperJetModel };
+        var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall };
         if (info.ArcJumps is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
         if (twin is { Own: true } && scenes.Twin is { } twinScenes)
         {
@@ -508,7 +516,7 @@ internal static class RaceTrackService
             var fine = Info(twin.Report, twin.Options, twinScenes);
             // (the town circuit's own arrow, which the bed switches on)
             if (story is not null) fine = fine with { StoryArrow = story.TownArrow };
-            info = info with { Twin = fine with { OilIcon = session.OilIcon, SuperJetModel = session.SuperJetModel } };
+            info = info with { Twin = fine with { OilIcon = session.OilIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall } };
         }
         session.Tracks.Add(info);
         var all = session.Tracks[0] with { Others = session.Tracks.Count > 1 ? session.Tracks.Skip(1).ToList() : null };

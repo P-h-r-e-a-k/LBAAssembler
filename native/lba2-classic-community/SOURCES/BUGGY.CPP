@@ -445,6 +445,7 @@ void MoveBuggy(T_OBJET *ptrobj) {
         if (RaceMod_Active()) // a race-track mod's car (RACEMOD.CPP)
         {
             RaceSpeed(ptb, deltatimer, flagattack);
+            RaceMod_Skid(&ptb3d->Beta, &ptb->Speed);
         } else if ((Input & I_UP) // j'accelere
                    AND !flagattack) {
             ptb->Speed += deltatimer * 4;
@@ -649,7 +650,7 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
         return;
     }
 
-    LongRotate(0, ptb->SpeedInc * 1024, ptb3d->Beta);
+    LongRotate(0, ptb->SpeedInc * 1024, RaceMod_MoveBeta(ptb3d->Beta));   // (skidding on oil it slides on the way it was going: RACEMOD.CPP)
     Nxw = ptb3d->X + X0 / 1024;
     Nzw = ptb3d->Z + Z0 / 1024;
 

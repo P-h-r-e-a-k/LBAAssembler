@@ -99,6 +99,8 @@ internal static class RaceCarEngineFile
             if (track.OilIcon is { } icon) text.Append($"oil_icon={icon}\n");
             // (the super jet-pack the car turns into while it drives it)
             if (track.SuperJetModel is { } jetModel) text.Append($"superjet_model={jetModel}\n");
+            // (Twinsen's buggy at half its size, for an opponent's lightning)
+            if (track.TwinsenSmall is { } small) text.Append($"twinsen_small={small}\n");
         }
         if (ghost >= 0) text.Append($"beat={ghost + 1}{(storm ? $" {RaceTrackStory.BeatVar} 1" : "")}\n");
         // the story's gates and the town circuit's race: Mr. Paul lets no one race without racing gloves; the aliens' track is ready the day

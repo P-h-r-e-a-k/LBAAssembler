@@ -315,6 +315,10 @@ S32 RaceMod_NoCollide(S32 numobj);
 S32 RaceMod_ProtectionFree(void);
 S32 RaceMod_ProtectionEnding(void);
 double RaceMod_SkidSteer(void);
+// BUGGY.CPP MoveBuggy: Twinsen's car skidding on oil -- turned round once and run down to a standstill (its heading and speed), sliding on
+// the way it was going (the heading it moves along).
+void RaceMod_Skid(S32 *beta, S32 *speed);
+S32 RaceMod_MoveBeta(S32 beta);
 double RaceMod_SkidCoast(void);
 S32 RaceMod_Dial(S32 num);
 S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);
