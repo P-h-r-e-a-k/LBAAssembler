@@ -1812,9 +1812,7 @@ Then four reports from the user's play:
 - *Now* this scene's mushrooms, penguins and slicks are left out of CheckObjCol (`RaceMod_NoCollide`, a per-scene table).
 - *Verified* on Mosquibees Island, protected the whole race with every mushroom oil: Twinsen drove over the Queen's slicks 14 times, never stopped, with a normal lap (47.71 s); the monkey monster skidded on them 11 times.
 
-**Twinsen sunk into Ascence's deck.**
-- *Suspected cause:* the same box. CheckObjCol also stands a car on an object's box it comes down on, lowering the car to see whether it stands on one. Lowered more than 200 units under the deck, the raised road's floor (`RaceMod_Floor`) no longer took the car as on it, and it drove on inside the deck.
-- *The fix* is the same: the race's props are not in a car's way.
+**Twinsen sunk into Ascence's deck.** The props' boxes were not the cause (left out of a car's way all the same); the item box was. See the next section.
 
 **First gear.**
 - *The cause:* the automatic gearbox changes up at the gear's top speed. Shrunk by an opponent's lightning (× 0.7 for 20 s), a car slowed to first gear never reached first gear's top, so it stayed in first. Since the item box, nothing on screen says the car is shrunk.
@@ -1831,6 +1829,33 @@ Then four reports from the user's play:
 - *Ascence, protected, every mushroom oil, opponents ahead:*
   - With the props in the car's way (switched back for the test), Twinsen drove over 3 slicks, and once his car stood 124 units under the deck against a slick's box.
   - Out of the way: 20 slicks, never under the deck, laps 34.26 and 34.02 s.
+
+### Twinsen sinking into Ascence's deck: the item box's view (2026-10-04)
+
+The user, after the fix above: "Twinsen still seems to be getting pushed into the ground both with and without other racers, it seems to be when Twinsen gets to the first lot of mushrooms."
+
+**Finding it.**
+- *The user's own log* (`release/lba2-play/adeline.log`): the first mushroom's item, then the automatic gearbox down from fifth to first, the car slowing to a stop.
+- *Headless, it never showed.* A height log every quarter second had the car on the deck to the unit, through:
+  - the user's car setup (fifth gear 11,378);
+  - Play's own start (a save made in the scene, then loaded);
+  - the protection spell;
+  - driving through the outer mushrooms;
+  - longer frame steps.
+- *What headless never draws:* a frame that draws only the objects over the last drawn ground (AFF_OBJETS_FLIP). At its fixed 50 frames a second, every frame while driving was a full redraw. At 200 frames a second (`--fixed-dt 5`) two thirds of them were objects only, and there the car sank to Twinsen's shoulders, or was hidden, from the first item on.
+
+**The cause.** The item box drew each item as the game's found-object display does, then reset the view with PtrInit3DView. That resets the plain follow camera without the race-track mode's own eye and lift (FOLLOWCAM.CPP FollowCamReapplyLift: Ascence's rail camera). A full redraw sets the camera again before it draws anything. An objects-only frame draws the cars with the camera it finds, so from another eye than the deck under them, with their depth tested against the deck's. A real frame rate higher than the redraws makes most frames objects only.
+
+![before: an objects-only frame at 200 frames a second, the car sunk to Twinsen's shoulders](racetrack/build/ascence_sunk_before.png)
+
+**The fix.** The item box saves the library's whole 3D view before drawing an item and puts it back exactly after (`SaveView`, `RestoreView`):
+- the projection (centre, near clip, factors, ratios, the projection functions);
+- the camera (angles, position, rotated position, clip, MatriceWorld);
+- the light (angles, normal, camera-space vector).
+
+At 200 frames a second, the car stayed on the deck in every frame.
+
+**The red lines on Ascence** leapt up and down: a line's points took another level of the road, or the ground far under the deck. Now a raised road's line follows the deck at its own level (`RaisedAt`, within 600 of the line's height), and past the deck's edge carries on at the edge's height.
 
 ## The menu command
 

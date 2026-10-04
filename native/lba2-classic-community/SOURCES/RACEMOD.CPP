@@ -113,6 +113,10 @@ extern S32 InitIncrustDisp(S16 type, S16 num, S32 x, S32 y, S16 info, S16 move, 
 #define RACE_PENGUIN_IMPACT 15             // the impact a nitro penguin goes off with (the land mines')
 
 #include <POLYGON/POLY.H>
+#include <3D/CAMERA.H>
+#include <3D/DATAMAT.H>
+#include <3D/LIGHT.H>
+#include <3D/LPROJ.H>
 #include <SVGA/BOX.H>
 #include <SVGA/CLIP.H>
 #include <SYSTEM/LOG.H>
@@ -3246,16 +3250,33 @@ static void DrawCheckpoints(S32 height) {
         const T_RACE_LINE *l = &s_checkpoints[c];
         if (l->CubeX != CurrentCubeX || l->CubeZ != CurrentCubeY) continue;
         const double len = sqrt((double)(l->X1 - l->X0) * (l->X1 - l->X0) + (double)(l->Z1 - l->Z0) * (l->Z1 - l->Z0));
-        const int steps = (int)(len / 256) + 1;
+        const int steps = (int)(len / 256) + 1 > 255 ? 255 : (int)(len / 256) + 1;
+        // the height along it: on a raised road the deck's at the line's own level (another level of a road that winds over itself, or
+        // the ground far under the deck, made the lines on Ascence leap up and down), past the deck's edge the edge's; elsewhere the
+        // ground's where it is near the line's height, else the line's height
+        S32 ys[256];
+        int deck[256], any = 0;
+        for (int i = 0; i <= steps; i++) {
+            const double t = (double)i / steps;
+            const S32 x = (S32)(l->X0 + (l->X1 - l->X0) * t), z = (S32)(l->Z0 + (l->Z1 - l->Z0) * t);
+            ys[i] = CalculAltitudeTerrain(x, z, 0);
+            if (l->HasY && abs(ys[i] - l->Y) > 400) ys[i] = l->Y;
+            S32 ry; int seg; double lat, tt;
+            deck[i] = s_nbRaised && l->HasY && RaisedAt(x + CurrentCubeX * 32768.0, z + CurrentCubeY * 32768.0, l->Y + 64, 0, &ry, &seg, &lat, &tt) && abs(ry - l->Y) < 600;
+            if (deck[i]) { ys[i] = ry; any = 1; }
+        }
+        if (any)
+            for (int i = 0; i <= steps; i++) {
+                if (deck[i]) continue;
+                int j = -1;
+                for (int d = 1; d <= steps && j < 0; d++) { if (i - d >= 0 && deck[i - d]) j = i - d; else if (i + d <= steps && deck[i + d]) j = i + d; }
+                if (j >= 0) ys[i] = ys[j];
+            }
         S32 px = 0, py = 0;
         int had = 0;
         for (int i = 0; i <= steps; i++) {
             const double t = (double)i / steps;
-            const S32 x = (S32)(l->X0 + (l->X1 - l->X0) * t), z = (S32)(l->Z0 + (l->Z1 - l->Z0) * t);
-            S32 y = CalculAltitudeTerrain(x, z, 0);
-            if (l->HasY && abs(y - l->Y) > 400) y = l->Y;
-            S32 ry; int seg; double lat, tt;
-            if (s_nbRaised && RaisedAt(x + CurrentCubeX * 32768.0, z + CurrentCubeY * 32768.0, l->HasY ? l->Y : y, 0, &ry, &seg, &lat, &tt)) y = ry;
+            const S32 x = (S32)(l->X0 + (l->X1 - l->X0) * t), z = (S32)(l->Z0 + (l->Z1 - l->Z0) * t), y = ys[i];
             const int seen = PtrProjectPoint(x, y + 30, z);
             const S32 sx = Xp, sy = Yp;
             if (seen && had) {
@@ -3271,6 +3292,39 @@ static void DrawCheckpoints(S32 height) {
         }
     }
     UnsetClip();
+}
+
+// The 3D view the library draws with (LIB386 3D: CAMERA.CPP, PROJ.CPP, LIGHT.CPP), saved whole and put back.
+typedef struct {
+    S32 XCentre, YCentre, NearClip, LFactorX, LFactorY, TypeProj;
+    Func_LongProjectPoint *Project;
+    Func_ProjectList *ProjectList;
+    float FRatioX, FRatioY;
+    S32 CameraAlpha, CameraBeta, CameraGamma, CameraX, CameraY, CameraZ, CameraXr, CameraYr, CameraZr, CameraZrClip;
+    TYPE_MAT World;
+    S32 AlphaLight, BetaLight, GammaLight, NormalXLight, NormalYLight, NormalZLight, CameraXLight, CameraYLight, CameraZLight;
+} T_RACE_VIEW;
+static void SaveView(T_RACE_VIEW *v) {
+    v->XCentre = XCentre; v->YCentre = YCentre; v->NearClip = NearClip; v->LFactorX = LFactorX; v->LFactorY = LFactorY; v->TypeProj = TypeProj;
+    v->Project = LongProjectPoint; v->ProjectList = ProjectList; v->FRatioX = FRatioX; v->FRatioY = FRatioY;
+    v->CameraAlpha = CameraAlpha; v->CameraBeta = CameraBeta; v->CameraGamma = CameraGamma;
+    v->CameraX = CameraX; v->CameraY = CameraY; v->CameraZ = CameraZ; v->CameraXr = CameraXr; v->CameraYr = CameraYr; v->CameraZr = CameraZr;
+    v->CameraZrClip = CameraZrClip;
+    v->World = MatriceWorld;
+    v->AlphaLight = AlphaLight; v->BetaLight = BetaLight; v->GammaLight = GammaLight;
+    v->NormalXLight = NormalXLight; v->NormalYLight = NormalYLight; v->NormalZLight = NormalZLight;
+    v->CameraXLight = CameraXLight; v->CameraYLight = CameraYLight; v->CameraZLight = CameraZLight;
+}
+static void RestoreView(const T_RACE_VIEW *v) {
+    XCentre = v->XCentre; YCentre = v->YCentre; NearClip = v->NearClip; LFactorX = v->LFactorX; LFactorY = v->LFactorY; TypeProj = v->TypeProj;
+    LongProjectPoint = v->Project; ProjectList = v->ProjectList; FRatioX = v->FRatioX; FRatioY = v->FRatioY;
+    CameraAlpha = v->CameraAlpha; CameraBeta = v->CameraBeta; CameraGamma = v->CameraGamma;
+    CameraX = v->CameraX; CameraY = v->CameraY; CameraZ = v->CameraZ; CameraXr = v->CameraXr; CameraYr = v->CameraYr; CameraZr = v->CameraZr;
+    CameraZrClip = v->CameraZrClip;
+    MatriceWorld = v->World;
+    AlphaLight = v->AlphaLight; BetaLight = v->BetaLight; GammaLight = v->GammaLight;
+    NormalXLight = v->NormalXLight; NormalYLight = v->NormalYLight; NormalZLight = v->NormalZLight;
+    CameraXLight = v->CameraXLight; CameraYLight = v->CameraYLight; CameraZLight = v->CameraZLight;
 }
 
 // The item box (top left): a slot's item, or the roulette going by -- the items turning over, slowing to the one drawn.
@@ -3293,10 +3347,16 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int selected, S32 now) {
     Box(ClipXMin, ClipYMin, ClipXMax, ClipYMax, 0);
     const int model = pu < 0 ? -1 : s_puModel[pu] == -2 ? s_oilIcon : s_puModel[pu];
     if (model >= 0) {
+        // (the scene's view kept whole -- its projection, its camera and its light -- and put back exactly as it was after the item is
+        // drawn. The game's own found-object display resets the view instead (PtrInit3DView): the plain follow camera, without the
+        // race-track mode's own eye or lift (FOLLOWCAM.CPP FollowCamReapplyLift), so a frame that drew only the objects over the last
+        // drawn ground -- most of them at a high frame rate -- drew the cars from another eye than the road's, and Twinsen's car sank
+        // into Ascence's deck, or was hidden by it, from the first mushroom on)
+        T_RACE_VIEW view;
+        SaveView(&view);
+        SaveCamera();
         // (lit as the inventory lights its objects: the light set with the camera level, so it stays where it is on the screen -- set with
         // the scene's camera, as the found-object display does, it came from behind some and left them dark)
-        const S32 alphaLight = AlphaLight, betaLight = BetaLight;
-        SaveCamera();
         SetAngleCamera(0, 0, 0);
         SetLightVector(OBJ_ALPHA_LIGHT, OBJ_BETA_LIGHT, 0);
         const S32 lf = 200 * size / 60;
@@ -3313,9 +3373,8 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int selected, S32 now) {
         BodyDisplay(0, 0, 0, 0, (now * 4) & 4095, 0, (U8 *)GivePtrObjFix(model));
         if (CubeMode == CUBE_EXTERIEUR) SetCLUT(clut);
         Switch_Fillers(depth ? (keep ? (fog ? FILL_POLY_FOG_NZW : FILL_POLY_NZW) : (fog ? FILL_POLY_FOG_ZBUFFER : FILL_POLY_ZBUFFER)) : fog ? FILL_POLY_FOG : FILL_POLY_TEXTURES);
-        PtrInit3DView();
         RestoreCamera();
-        SetLightVector(alphaLight, betaLight, 0);
+        RestoreView(&view);
     }
     DrawCadre(ClipXMin, ClipYMin, ClipXMax, ClipYMax, ALL_ANGLES);
     RestoreAngles(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
