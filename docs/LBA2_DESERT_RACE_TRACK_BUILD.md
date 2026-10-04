@@ -1246,7 +1246,7 @@ The user asked for two changes. Opponent cars should be able to do the loops. Th
 | Whole | 22 km/h and over | about 19 km/h | n/a |
 | 70-degree gap at its top | 21–24 km/h (3,000–3,375 units/s) | about 19.5 km/h | 24 km/h |
 
-A ring with a gap is taken at about third gear's speed. Coming up to one, 15–30 cells before its foot, the display says how fast to take it ("Jump loop: 22-23 km/h", rounded inwards).
+A ring with a gap is taken at about third gear's speed. Coming up to one, 15–30 cells before its foot, the display says how fast to take it ("Jump loop: 22-23 km/h", rounded inwards). (Since 2026-10-04 a car that is too fast is slowed to it, and the display gives only the least: see "Oil slicks on the road; the open loop slows a car that is too fast".)
 
 ![a race through the jump loop](racetrack/build/loops_opponents.png)
 
@@ -2013,6 +2013,50 @@ The user's asks:
 **Verified** (headless, muted):
 - *The Emerald Moon:* the grid was Twinsen, HAL, Baldino; HAL drove the lap with the others.
 - *At opponent skill 130:* the display went 2nd → 1st → 2nd → 3rd of 3 as the cars passed each other.
+
+### Oil slicks on the road; the open loop slows a car that is too fast (2026-10-04, night)
+
+The user's asks:
+- Oil slicks seem to be either invisible or half buried in the track.
+- The open loop on EMERAUDE.ILE sends Twinsen flying into the air if he hits it too fast.
+
+**Why the slicks were buried.** A slick was laid 1,300 units behind the car that dropped it, at that car's own height (and 20 over).
+- *On a slope* the road back there is higher or lower. Going downhill the slick was inside the road: half of it, or all of it (unseen). Going uphill it floated.
+- *Logged on Mosquibees:* road heights 150-240 units off the drop height were common (12125 against 11884).
+- *Even at the right height,* a flat puddle 1,240 across on a slope of 0.13-0.2 has its uphill half under the road.
+
+**The fix** (RACEMOD.CPP `PoseSlick`, `SlickGround`). Once a slick is in the scene in sight:
+- *Height:* it takes the road's height under its middle: a raised road's in reach of where it was dropped, else the ground's.
+- *Tilt:* it is tilted to the road's slope.
+  - The slope comes from the heights 256 either side, along x and along z.
+  - With no heading, the engine's M(Alpha) M(Gamma) M(Beta) turns its up by Gamma = asin(-nx) and Alpha = atan2(nz, ny).
+  - A step over 0.6, like a deck's edge, counts as no slope.
+- *Lift:* it rises by as much as the road anywhere under its rim (12 places, 620 out) stands over the tilted plane, plus 14. A crest or a banked deck's curve no longer covers an edge.
+- *Collisions:* its new height is what the cars are checked against too.
+- *Dropped in the air:* off a jump, it lands on the ground below.
+
+**Verified:**
+- *Desert, only oil:* the slicks behind Twinsen lie whole on the road, slopes 0.09-0.13.
+- *Elevator Platform, on the banked spiral deck:* the slicks find the deck (432 below the car on the climb), with slopes up to 0.41 and lifts of 49-88.
+
+![an oil slick lying on a sloping road behind Twinsen](racetrack/build/oil_on_slope.png)
+
+**The open loop.**
+- *The problem:* the Emerald Moon's second loop has a 35° gap at its top. It is leapt cleanly only from 22 to 43 km/h (`LoopWindow`).
+- *Who it threw:* the car's own top, 34 km/h, is inside that window, but the super jet-pack (68 km/h) and a boost are not. Faster, the leap carried the car high over the far edge and it fell outside the ring.
+- *The opponents* were already kept inside the window (`LoopEntry`).
+
+**The fix** (`LoopCap`, `RACE_LOOP_SLOW`). Before a ring with a gap:
+- *Braking:* over the road up to its foot, Twinsen's car is held to sqrt(cap² + 2 × 8000 × distance). That brakes it smoothly, no harder than 8,000 units/s², down to the cap at the foot.
+- *The cap* is the window's top less a fifth of its width: 39 km/h on the Emerald Moon.
+- *Clamped:* its speed into the ring is clamped to the cap as well.
+- *The hint* now gives only the least to take it at ("Jump loop: over 22 km/h"). Slower than that the car still falls off: that is the driver's to get right.
+- *Whole rings* are untouched.
+
+**Verified** (Emerald Moon, only super jet-packs):
+- Twinsen came up to loop 2 at 9,672 units/s and was slowed to about 5,500.
+- He left the ring at the gap's edge, was caught "Over the gap" and came round, on both laps.
+- Loops 1 and 3, whole, he took at the full 9,672.
 
 ## The menu command
 

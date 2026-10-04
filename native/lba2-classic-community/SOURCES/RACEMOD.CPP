@@ -347,7 +347,9 @@ static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2};
 #define RACE_OIL_REACH 760                 // how near a car's middle comes to a slick's to drive over it
 // (2026-10-04: once round and to a standstill -- it slid on spinning three times, too much of a penalty)
 #define RACE_SKID_MS 1400                  // how long a car skids: it turns round once, quickly at first, and runs down to a stop
-typedef struct { double X, Y, Z; S32 Dropped; int On; } T_RACE_SLICK;
+// (Y: the road's height under it once it is in sight -- PoseSlick -- before that the dropping car's; Posed: the scene it was posed in,
+// -1 not yet; Alpha, Gamma: tilted to the road's slope; Lift: its middle over the road, so that no part of it is under the road)
+typedef struct { double X, Y, Z; S32 Dropped; int On; S32 Posed, Alpha, Gamma; double Lift; } T_RACE_SLICK;
 static T_RACE_SLICK s_slicks[RACE_MAX_SLICKS];
 static int s_oilScene[RACE_MAX_OIL_ACTORS], s_oilActor[RACE_MAX_OIL_ACTORS];
 static int s_nbOilActors = 0;
@@ -2207,6 +2209,12 @@ static double LoopEntry(const T_RACE_LOOP *l, double v) {
     return v < l->Least * 1.05 ? l->Least * 1.05 : v;
 }
 
+// The most a car takes a ring with a gap at: well inside the speeds it is cleanly leapt at (faster -- a boost, the super jet-pack -- it
+// leapt high over the far edge and fell off outside the ring, 2026-10-04). Twinsen's car is slowed to it over the road before the ring,
+// braking no harder than RACE_LOOP_SLOW (units/s^2), as the opponents are (LoopEntry).
+#define RACE_LOOP_SLOW 8000.0
+static double LoopCap(const T_RACE_LOOP *l) { return l->Hi - 0.2 * (l->Hi - l->Lo); }
+
 // The speed to take a ring with a gap at: the middle of the speeds it is cleanly leapt at.
 static double LoopAim(const T_RACE_LOOP *l) { return l->Lo + 0.5 * (l->Hi - l->Lo); }
 
@@ -2413,12 +2421,21 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
             const double a1 = (*nx - l->X) * l->DirX + (*nz - l->Z) * l->DirZ;
             const double c1 = -(*nx - l->X) * l->DirZ + (*nz - l->Z) * l->DirX;
             if (fabs(c1) > l->Shift / 2 + l->Band + 1024) continue;            // (another road, beside this one)
-            // (coming up to a ring with a gap that the car's top speed would overshoot: how fast to take it)
-            if (l->Gap > 0 && l->Hi > l->Lo && l->Hi < s_car.GearTop[s_car.Gears - 1] && a1 > -RACE_LOOP_HINT * 512 && a1 < -RACE_LOOP_HINT * 256 && s_hinted != i) {
+            // (coming up to a ring with a gap: the least to take it at -- too fast, the car is slowed, below)
+            if (l->Gap > 0 && l->Hi > l->Lo && a1 > -RACE_LOOP_HINT * 512 && a1 < -RACE_LOOP_HINT * 256 && s_hinted != i) {
                 char text[64];
-                snprintf(text, sizeof(text), "Jump loop: %.0f-%.0f km/h", l->Lo * 3.6 / 512 + 0.5, l->Hi * 3.6 / 512 - 0.5);
+                snprintf(text, sizeof(text), "Jump loop: over %.0f km/h", l->Lo * 3.6 / 512 + 0.5);
                 Message(text);
                 s_hinted = i;
+            }
+            // (and faster than its gap is cleanly leapt at: slowed to that by the ring's foot)
+            if (l->Gap > 0 && l->Hi > l->Lo && a1 > -RACE_LOOP_HINT * 512 && a1 < 0) {
+                const double cap = LoopCap(l), allowed = sqrt(cap * cap + 2.0 * RACE_LOOP_SLOW * -a1);
+                if (ListBuggy[0].Speed > allowed) {
+                    static int said = -1;
+                    if (said != i) { said = i; Log_Info("[racemod] loop %d: slowed from %d to the %d it is leapt at", i + 1, (int)ListBuggy[0].Speed, (int)cap); }
+                    ListBuggy[0].Speed = (S32)allowed;
+                }
             }
             // (the road's right half closes before the ring: its way down comes down onto the road there)
             const double funnel = l->R + RACE_LOOP_FUNNEL * 512;
@@ -2439,6 +2456,7 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
             s_loopOn = i; s_loopState = LOOP_RIDE;
             memset(&s_ride, 0, sizeof(s_ride));
             s_ride.State = LOOP_RIDE; s_ride.V = ListBuggy[0].Speed; s_ride.Lat = across - Lane(l, 0);
+            if (l->Gap > 0 && l->Hi > l->Lo && s_ride.V > LoopCap(l)) s_ride.V = LoopCap(l);
             s_loopBeta = LoopBeta(l);
             s_loopTime = TimerRefHR;
             s_hinted = -1;
@@ -2619,7 +2637,58 @@ static void DropOil(double x, double y, double z) {
         if (!s_slicks[i].On) { k = i; break; }
         if (s_slicks[i].Dropped < s_slicks[k].Dropped) k = i;
     }
-    s_slicks[k].X = x; s_slicks[k].Y = y; s_slicks[k].Z = z; s_slicks[k].Dropped = TimerRefHR; s_slicks[k].On = 1;
+    s_slicks[k].X = x; s_slicks[k].Y = y; s_slicks[k].Z = z; s_slicks[k].Dropped = TimerRefHR; s_slicks[k].On = 1; s_slicks[k].Posed = -1;
+}
+
+// The road's height under a place of this scene (cube-local) for something at height `ref`: a raised road's there if it is in reach of
+// `ref` and over the ground, else the ground's. 0 in *ok when neither is there (off this scene's ground, no road).
+static S32 SlickGround(S32 lx, S32 lz, S32 ref, int *ok) {
+    const S32 ground = CalculAltitudeTerrain(lx, lz, 0);
+    S32 f;
+    int seg;
+    double lat, t;
+    const int deck = RaisedAt(lx + CurrentCubeX * 32768.0, lz + CurrentCubeY * 32768.0, ref + 64, 0, &f, &seg, &lat, &t);
+    *ok = deck || ground != -1;
+    return deck && f > ground ? f : ground;
+}
+
+// A slick laid on the road where it is (cube-local), once it is in this scene: at the road's height there -- it was dropped at the car's,
+// 1300 behind it, and on a slope that is in the road or over it -- tilted to the road's slope (the engine turns a body by
+// M(Alpha) M(Gamma) M(Beta): with no heading, Gamma tips its up towards -x, Alpha towards +z), and lifted so that the road under its rim
+// is nowhere over it (a flat puddle on a slope or a crest had half of it under the road, 2026-10-04).
+#define RACE_SLICK_RADIUS 620
+static void PoseSlick(T_RACE_SLICK *sl, S32 lx, S32 lz) {
+    const S32 ref = (S32)sl->Y;
+    int ok, okA, okB;
+    sl->Posed = NumCube; sl->Alpha = sl->Gamma = 0; sl->Lift = 20;
+    const S32 h0 = SlickGround(lx, lz, ref, &ok);
+    if (!ok) return;
+    const S32 d = 256;
+    double sx = 0, sz = 0;
+    {
+        const S32 a = SlickGround(lx + d, lz, ref, &okA), b = SlickGround(lx - d, lz, ref, &okB);
+        if (okA && okB) sx = (a - b) / (2.0 * d);
+    }
+    {
+        const S32 a = SlickGround(lx, lz + d, ref, &okA), b = SlickGround(lx, lz - d, ref, &okB);
+        if (okA && okB) sz = (a - b) / (2.0 * d);
+    }
+    // (a step -- a deck's edge to the ground under it -- is no slope)
+    if (fabs(sx) > 0.6) sx = 0;
+    if (fabs(sz) > 0.6) sz = 0;
+    const double n = sqrt(sx * sx + 1 + sz * sz), nx = -sx / n, ny = 1 / n, nz = -sz / n;
+    sl->Gamma = (S32)floor(asin(-nx) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    sl->Alpha = (S32)floor(atan2(nz, ny) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    double lift = 0;
+    for (int k = 0; k < 12; k++) {
+        const double a = k * RACE_PI / 6, rx = sin(a) * RACE_SLICK_RADIUS, rz = cos(a) * RACE_SLICK_RADIUS;
+        const S32 h = SlickGround(lx + (S32)rx, lz + (S32)rz, ref, &okA);
+        if (!okA) continue;
+        const double over = h - (h0 + sx * rx + sz * rz);
+        if (over > lift && over < 300) lift = over;
+    }
+    sl->Y = h0;
+    sl->Lift = 14 + lift;
 }
 
 // A nitro penguin dropped at (x, y, z) (world units): a walker, or on its fuse (RACE_PENGUIN_FUSE). With all of them out, the oldest goes
@@ -2767,11 +2836,13 @@ static void Slicks(S32 now, int driving) {
         if (!sl->On) continue;
         const S32 lx = (S32)(sl->X - CurrentCubeX * 32768.0), lz = (S32)(sl->Z - CurrentCubeY * 32768.0);
         if (lx < 0 || lx >= 32768 || lz < 0 || lz >= 32768) continue;
+        if (sl->Posed != (S32)NumCube && CubeMode == CUBE_EXTERIEUR) PoseSlick(sl, lx, lz);
         // (shown by the next of this scene's slicks; its box a point, as the mushrooms': no car is stopped by it)
         for (; k < s_nbOilActors; k++) {
             if (s_oilScene[k] != NumCube || s_oilActor[k] <= 0 || s_oilActor[k] >= NbObjets) continue;
             T_OBJET *a = &ListObjet[s_oilActor[k]];
-            a->Obj.X = lx; a->Obj.Y = (S32)sl->Y + 20; a->Obj.Z = lz;   // (a little over the road: no fight with it in the depth buffer)
+            a->Obj.X = lx; a->Obj.Y = (S32)(sl->Y + sl->Lift); a->Obj.Z = lz;   // (a little over the road: no fight with it in the depth buffer)
+            a->Obj.Beta = 0; a->Obj.Alpha = sl->Alpha; a->Obj.Gamma = sl->Gamma;
             a->XMin = a->XMax = a->ZMin = a->ZMax = 0;
             k++;
             break;
