@@ -249,6 +249,7 @@ public partial class ActorAttributesWindow : Window
         // window opened for a freshly-added actor" separately in C#.
         Closed += (_, _) => nativeRenderer.RendererLibrary?.RemoveActor(actorIndex);
         Closed += (_, _) => previewTimer?.Stop();
+        Closed += (_, _) => DebugLog.Log($"ActorAttributesWindow[{actorIndex}]: closed");
         // Explicit Normal priority, not the parameterless constructor's default (Background): confirmed this
         // round that a plain Background timer can go quiet for minutes at a time under heavy external UI
         // Automation traffic against this window (its own COM/RPC property queries appear to keep outrunning

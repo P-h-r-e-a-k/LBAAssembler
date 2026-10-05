@@ -630,6 +630,8 @@ static bool g_previewFreezeArmed = false;
 // why the actual restart is deferred to the *next* call's very start
 // instead of happening immediately, right where it's noticed.
 static bool g_previewNeedsAnimRestart = false;
+// (the restart logged once a body/animation: a short animation restarts every few frames, and its two lines a restart filled the log)
+static bool g_previewRestartLogged = false;
 
 static S32 ComputeBodyBoundingRadius(const void *bodyPtr)
 {
@@ -726,6 +728,7 @@ int AffichageBodyPreview(int body, int anim, int cameraBeta, int cameraDistance)
         // forces exactly the one call that needs forcing.
         ptrobj->Obj.Status |= FLAG_BODY;
         g_previewNeedsAnimRestart = false; // a real body/anim change already starts fresh at frame 0
+        g_previewRestartLogged = false;
     } else if (g_previewNeedsAnimRestart) {
         // Deferred from the *previous* call's own ObjectSetInterDep hitting
         // FLAG_LAST_FRAME (see that call site's own comment for why a
@@ -743,7 +746,9 @@ int AffichageBodyPreview(int body, int anim, int cameraBeta, int cameraDistance)
         // body/anim-change branch above -- the one call shape already
         // proven safe by every other test this session.
         void *animPtr = GivePtrAnim(anim); // resolved only to null-check below; NOT what gets passed to ObjectInitAnim -- see its own comment just below
-        NativeDebugLog("AffichageBodyPreview: deferred anim restart body=%d anim=%d (animPtr=%p)", body, anim, animPtr);
+        const bool logRestart = !g_previewRestartLogged;
+        g_previewRestartLogged = true;
+        if (logRestart) NativeDebugLog("AffichageBodyPreview: deferred anim restart body=%d anim=%d (animPtr=%p; logged once a body)", body, anim, animPtr);
         if (animPtr) {
             ptrobj->Obj.Anim.Num = -1; // force re-init -- see ObjectInitAnim's own Anim.Ptr==anim check
             // The actual crash (confirmed by bisecting via NativeDebugLog
@@ -780,7 +785,7 @@ int AffichageBodyPreview(int body, int anim, int cameraBeta, int cameraDistance)
             // change branch above already uses correctly.
             ptrobj->Obj.LastOfsFrame = 0; // loop restart wants a hard cut to frame 0, not ObjectInitAnim's cross-fade-from-current-pose path -- see LastOfsFrame's own note in ANIM.CPP if this ever needs revisiting
             ObjectInitAnim(&ptrobj->Obj, (void *)(uintptr_t)(U32)anim);
-            NativeDebugLog("AffichageBodyPreview: deferred restart -- ObjectInitAnim returned");
+            if (logRestart) NativeDebugLog("AffichageBodyPreview: deferred restart -- ObjectInitAnim returned");
             ptrobj->Obj.Status |= FLAG_BODY; // matches the real-change branch: force ObjectSetInterDep to run even though TimerRefHR still equals the freshly-reset Time
         }
         g_previewNeedsAnimRestart = false;
@@ -902,9 +907,9 @@ int AffichageBodyPreview(int body, int anim, int cameraBeta, int cameraDistance)
     // needing any special-cased "frozen" rendering path of its own.
     if (!g_previewAnimationPaused) {
         S32 savedX = ptrobj->Obj.X, savedY = ptrobj->Obj.Y, savedZ = ptrobj->Obj.Z;
-        NativeDebugLog("AffichageBodyPreview: calling ObjectSetInterDep");
+        // (2026-10-05: the per-frame "calling/returned" breadcrumbs that were here -- four lines a frame, which rotated the log away
+        // within the hour -- are gone; a native fault now leaves its stack in native-crash.log, LBA2_RENDERER_CRASHLOG)
         ObjectSetInterDep(&ptrobj->Obj);
-        NativeDebugLog("AffichageBodyPreview: ObjectSetInterDep returned, Status=0x%x", (unsigned)ptrobj->Obj.Status);
         ptrobj->Obj.X = savedX;
         ptrobj->Obj.Y = savedY;
         ptrobj->Obj.Z = savedZ;
@@ -937,9 +942,7 @@ int AffichageBodyPreview(int body, int anim, int cameraBeta, int cameraDistance)
         if (zr <= ClipZFar) {
             SetCLUT(PalLevel + 16 * BoundRegleTrois(0, 15, ClipZFar - StartZFog, zr - StartZFog));
             if (!(ptrobj->WorkFlags & MANUAL_INTER_FRAME)) {
-                NativeDebugLog("AffichageBodyPreview: calling ObjectSetInterFrame");
                 ObjectSetInterFrame(&ptrobj->Obj);
-                NativeDebugLog("AffichageBodyPreview: ObjectSetInterFrame returned");
             }
             UnsetClip();
             // Real bug (confirmed via temporary logging, since removed): the preview is a single isolated
@@ -965,9 +968,7 @@ int AffichageBodyPreview(int body, int anim, int cameraBeta, int cameraDistance)
             // would otherwise render with entire groups missing.
             g_disableBackfaceCulling = true;
             g_previewFlattenTransparent = true;
-            NativeDebugLog("AffichageBodyPreview: calling ObjectDisplay");
             ObjectDisplay(&ptrobj->Obj);
-            NativeDebugLog("AffichageBodyPreview: ObjectDisplay returned");
             g_disableBackfaceCulling = false;
             g_previewFlattenTransparent = false;
         }
