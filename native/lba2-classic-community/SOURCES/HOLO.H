@@ -35,7 +35,7 @@
 #define SCE 32768           //	SizeXZ Cube Exterieur
 
 #define MAX_OBJECTIF 50
-#define MAX_ISLAND 12
+#define MAX_ISLAND 13 // the retail twelve and Polar Island (12, POLAR.ILE: the LBA Assembler's port of LBA1's)
 #define MAX_CUBE 255
 
 #define SIZE_ARROW_ISLAND 10000

@@ -289,6 +289,9 @@ const char *IleLst[] = {
     "ilotcx",
     "ascence",
     "souscelb",
+    // island 12: Polar Island, ported from LBA1 (POLAR.ILE: LBA Assembler's Terrain/Polar), its sky RESS_SKYSEA0 + 12 (23) and palette
+    // RESS_XPL0 + 12 (39), two of the retail file's empty slots
+    "polar",
 };
 
 void InitGrilleExt(U32 numcube) {

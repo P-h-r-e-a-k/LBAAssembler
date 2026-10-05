@@ -253,6 +253,9 @@ public partial class MainWindow : Window
         // (the 1996 demo, converted: its scenes named after the retail scenes they became -- MainWindow.Demo96)
         var demoMap = Demo96.Demo96Converter.SceneMap(gameRoot);
         var descriptions = HqdDescriptions.Load("SCENE2.HQD", hqrCount);
+        // (the folder's own SCENE.HQD names the scenes the editor added -- Polar Island's: HqdWriter -- over the game's descriptions)
+        var folderNames = File.Exists(Path.Combine(gameRoot, HqdWriter.SidecarName("SCENE.HQR")))
+            ? File.ReadAllLines(Path.Combine(gameRoot, HqdWriter.SidecarName("SCENE.HQR")), System.Text.Encoding.Latin1).Skip(1).ToArray() : Array.Empty<string>();
         var archive = HqrArchive.Open(scenePath);
 
         var entries = new List<SceneEntry>();
@@ -263,6 +266,7 @@ public partial class MainWindow : Window
             // (the descriptions say "White Leaf Desert"; LBA2 itself calls that island Desert Island)
             var isInterior = IsInteriorScene(archive, hqrIndex);
             var name = (demoMap is not null ? Demo96SceneName(demoMap, numscene, descriptions.Names, ResolveSceneIsland(archive, hqrIndex), isInterior)
+                : hqrIndex < folderNames.Length && folderNames[hqrIndex].Length > 0 ? folderNames[hqrIndex]
                 : hqrIndex < descriptions.Names.Count ? descriptions.Names[hqrIndex] : null)?.Replace("White Leaf Desert", "Desert Island");
             var option = new FilterableComboBox.Option(numscene, name is null ? $"{numscene}" : $"{numscene}: {name}");
             var header = archive.Read(hqrIndex);
@@ -295,7 +299,7 @@ public partial class MainWindow : Window
     {
         "CITADEL", "SENDELL", "DESERT", "EMERAUDE", "OTRINGAL",
         "CELEBRAT", "PLATFORM", "MOSQUIBE", "KNARTAS", "ILOTCX",
-        "ASCENCE", "SOUSCELB",
+        "ASCENCE", "SOUSCELB", "POLAR",
     };
 
     private static string? ResolveSceneIsland(HqrArchive archive, int hqrIndex)
@@ -365,7 +369,8 @@ public partial class MainWindow : Window
             targetX = 8 * 32768 + 16384;
             targetZ = 9 * 32768 + 16384;
             targetY = 10000;
-            if (!IsWorldPositionOnIsland(targetX, targetZ) && FindFirstPresentCube() is (int cubeX, int cubeY))
+            // (else the present cube nearest the middle of the island's cubes: the first one in the map can be a corner of open sea)
+            if (!IsWorldPositionOnIsland(targetX, targetZ) && FindCentralPresentCube() is (int cubeX, int cubeY))
             {
                 targetX = cubeX * 32768 + 16384;
                 targetZ = cubeY * 32768 + 16384;
@@ -437,6 +442,8 @@ public partial class MainWindow : Window
         // island 1 (Sendell's Well, cut from the retail game: a SENDELL.ILE made for it), and the old copy of the Emerald Moon
         else if (name == "SENDELL") paletteIndex = 28;
         else if (name == "MOON") paletteIndex = 30;
+        // island 12, Polar Island (Terrain/Polar): its own slot once installed, else the palette its ground was made in
+        else if (name == "POLAR") paletteIndex = Terrain.IslandMapRenderer.PolarPaletteEntryFor(gameRoot);
         lastExteriorPaletteIndex = paletteIndex;
         return LoadPaletteEntry(paletteIndex);
     }
@@ -2485,6 +2492,18 @@ public partial class MainWindow : Window
         var cubeZ = (int)Math.Floor(worldZ / 32768.0);
         if (cubeX < 0 || cubeX > 15 || cubeZ < 0 || cubeZ > 15) return false;
         return (currentIsland.CubeAt(cubeX, cubeZ) & 0x7F) != 0;
+    }
+
+    private (int, int)? FindCentralPresentCube()
+    {
+        if (currentIsland is null) return null;
+        var present = new List<(int X, int Y)>();
+        for (var y = 0; y < 16; y++)
+            for (var x = 0; x < 16; x++)
+                if ((currentIsland.CubeAt(x, y) & 0x7F) != 0) present.Add((x, y));
+        if (present.Count == 0) return null;
+        double mx = present.Average(c => c.X), my = present.Average(c => c.Y);
+        return present.MinBy(c => (c.X - mx) * (c.X - mx) + (c.Y - my) * (c.Y - my));
     }
 
     private (int, int)? FindFirstPresentCube()

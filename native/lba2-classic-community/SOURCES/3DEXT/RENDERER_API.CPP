@@ -243,7 +243,7 @@ void lba2_renderer_shutdown(void)
 static const char *kIslandNames[] = {
     "citadel", "sendell", "desert", "emeraude", "otringal",
     "celebrat", "platform", "mosquibe", "knartas", "ilotcx",
-    "ascence", "souscelb",
+    "ascence", "souscelb", "polar",
 };
 
 // Bumped on every successful lba2_renderer_load_island() call so

@@ -50,8 +50,25 @@ internal sealed class IslandMapRenderer
             "CITABAU" => 42, "DESERT" => 29, "EMERAUDE" => 30, "OTRINGAL" => 31, "CELEBRAT" or "CELEBRA2" => 32, "PLATFORM" => 33,
             "MOSQUIBE" => 34, "KNARTAS" => 35, "ILOTCX" => 36, "ASCENCE" => 37,
             // island 1 (Sendell's Well, cut from the retail game: a SENDELL.ILE made for it), and the old copy of the Emerald Moon
-            "SENDELL" => 28, "MOON" => 30, _ => 27,
+            "SENDELL" => 28, "MOON" => 30,
+            // island 12, Polar Island (ported from LBA1: Terrain.Polar), its own slot -- an empty one in the retail file, filled when it is
+            // installed; until then the palette its ground was made in
+            "POLAR" => PolarPaletteEntry(gameDirectory), _ => 27,
         };
+        return LoadPaletteEntry(gameDirectory, index);
+    }
+
+    public const int PolarPaletteSlot = 39;
+    public static int PolarPaletteEntryFor(string gameDirectory) => PolarPaletteEntry(gameDirectory);
+    private static int PolarPaletteEntry(string gameDirectory)
+    {
+        try { return HqrArchive.Open(Path.Combine(gameDirectory, "RESS.HQR")).Read(PolarPaletteSlot).Length >= 768 + 44 ? PolarPaletteSlot : Polar.PolarTerrain.ChosenPalette; }
+        catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException) { return Polar.PolarTerrain.ChosenPalette; }
+    }
+
+    // The 768-byte palette of a RESS.HQR "XPL" entry (at the offset its header gives).
+    public static byte[] LoadPaletteEntry(string gameDirectory, int index)
+    {
         try
         {
             var xpl = HqrArchive.Open(Path.Combine(gameDirectory, "RESS.HQR")).Read(index);

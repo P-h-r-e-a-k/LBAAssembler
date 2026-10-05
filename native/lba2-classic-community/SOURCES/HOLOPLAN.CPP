@@ -30,7 +30,8 @@ S32 BodyFactorScale[MAX_ISLAND] =
         ZOOM_B, //  8	Knartas
         ZOOM_C, //  9	Island CX
         ZOOM_C, // 10	Elevator
-        ZOOM_B  // 11	Under Celebration
+        ZOOM_B, // 11	Under Celebration
+        ZOOM_A  // 12	Polar Island (POLAR.ILE)
 };
 
 S32 ArrowFactorScale[MAX_ISLAND] =
@@ -46,7 +47,8 @@ S32 ArrowFactorScale[MAX_ISLAND] =
         ZOOM_E, //  8	Knartas
         ZOOM_F, //  9	Island CX
         ZOOM_F, // 10	Elevator
-        ZOOM_E  // 11	Under Celebration
+        ZOOM_E, // 11	Under Celebration
+        ZOOM_D  // 12	Polar Island (POLAR.ILE)
 };
 //----------------------------------------------------------------------------
 void DrawTwinsenPlan(T_SORT *ptt) {
@@ -432,6 +434,10 @@ void InitHoloPlan() {
 #endif
     {
         id = HQR_BEGIN_MAP + (2 * 13); //	Celebra2
+    } else if (ZoomedIsland == 12) {
+        /* Polar Island (POLAR.ILE): its picture and camera are entries appended after the retail maps (HQR_BEGIN_MAP + 2 * 12 is
+           the fine-weather Citadel's, 2 * 13 the Celebration's with its statue) */
+        id = HQR_BEGIN_MAP + (2 * 14);
     } else
         id = HQR_BEGIN_MAP + (2 * ZoomedIsland);
 
