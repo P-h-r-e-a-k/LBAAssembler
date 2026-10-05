@@ -2837,6 +2837,8 @@ internal static class RaceTrackBuilder
     {
         var b = index.Bounds;
         var kinds = new Dictionary<(int, int), Kind>();
+        // (the cells on one road alone, plain road -- no deck, jump, bridge or landing -- for the smooth kerbs: KerbCells)
+        var plain = new Dictionary<(int, int), RoadHit>();
         var maxReach = roads.Max(r => r.VergeHalf) + LandingExtra + 0.8;
         for (var gz = Math.Max(0, b.Z0); gz < Math.Min(Grid, b.Z1); gz++)
         for (var gx = Math.Max(0, b.X0); gx < Math.Min(Grid, b.X1); gx++)
@@ -2887,19 +2889,156 @@ internal static class RaceTrackBuilder
             // nose over the drop
             if (!stripe && ck is Kind.Sand or Kind.Hatch && NearSea(field, gx, gz, 2)) ck = Kind.Wall;
             kinds[(gx, gz)] = ck;
+            if (ck is Kind.Asphalt or Kind.RedCurb or Kind.WhiteCurb or Kind.Sand or Kind.Hatch && Plain(chosen.Value)
+                && hits.Count(h => !h.Deck && Across(roads[h.Road], h) <= roads[h.Road].CurbHalf + 1.5) == 1)
+                plain[(gx, gz)] = chosen.Value;
         }
         // the start line first, so the arrows (which only go where every cell is plain asphalt) keep clear of it
         if (startIndex >= 0) MarkStartLine(roads[0], startIndex, kinds, report);
         var arrows = new Dictionary<(int, int), ArrowCell>();
         MarkArrows(island, roads[0], kinds, arrows, o, report);
+        // the kerbs drawn smooth: a texture of their own in the island's page, mapped onto the triangles along them (KerbCells)
+        var kerbCells = new Dictionary<(int, int), KerbCell>();
+        if (plain.Count > 0)
+        {
+            if (RaceTrackTextures.KerbTexture(island, o.Theme) is { } kerbAt)
+            {
+                kerbCells = KerbCells(island, index, roads, kinds, arrows, plain, kerbAt, o.Theme);
+                var triangles = kerbCells.Values.Sum(c => c.Uvs.Count(u => u is not null));
+                report.Notes.Add($"the kerbs drawn smooth: {triangles} triangles along them carry a kerb texture of their own (at ({kerbAt.X},{kerbAt.Y}) in the ground's page, " +
+                                 $"mapped by the road's own coordinates), {kerbCells.Count} cells cut the way the road runs");
+            }
+            else report.Notes.Add("the kerbs are painted cell by cell: the island's ground texture has no free block for the kerb texture");
+        }
         var painter = new Painter(island, o.Theme);
         foreach (var ((gx, gz), kind) in kinds)
         {
-            painter.Paint(gx, gz, kind, kind == Kind.Asphalt && arrows.TryGetValue((gx, gz), out var arrow) ? arrow : null);
+            if (kerbCells.TryGetValue((gx, gz), out var kerb)) painter.PaintKerb(gx, gz, kerb);
+            else painter.Paint(gx, gz, kind, kind == Kind.Asphalt && arrows.TryGetValue((gx, gz), out var arrow) ? arrow : null);
             report.Cells++;
             if (kind is Kind.Wall or Kind.Rock) report.BridgeCells++;
         }
         return kinds.Keys.ToHashSet();
+    }
+
+    // Plain road: not a deck's, a jump's or a landing's (a walled road -- Bridge: over water or a valley, or cut into a cliff -- is, its
+    // verge rock).
+    private static bool Plain(RoadHit h) => !h.Deck && !h.Void && !h.Gap && !h.Lip && !h.UnderDeck && !h.Landing && !h.Jump && !h.Raised && !h.Arc;
+
+    // A cell along a kerb, drawn triangle by triangle: cut the way the road runs (Diagonal), and each of its two triangles either plain
+    // paint (Kinds: the asphalt, or the verge -- sand, or a banked bend's hatching) or, reaching the kerb, its kerb texture's corners
+    // (Uvs) over the verge's flat colour (Under: the texture's colour 0 lets it show).
+    private sealed record KerbCell(bool Diagonal, Kind[] Kinds, ushort[]?[] Uvs, (int Bank, int Pos) Under);
+
+    private static readonly (int X, int Z)[] CellCorners = { (0, 0), (0, 1), (1, 1), (1, 0) };
+    private static readonly int[][] CellHalves = { new[] { 0, 1, 2 }, new[] { 2, 3, 0 }, new[] { 3, 0, 1 }, new[] { 1, 2, 3 } };
+
+    // The kerbs drawn smooth (2026-10-05: painted cell by cell, a kerb a cell wide stepped along every bend). Each cell near a kerb on
+    // one plain road gets the road's coordinates at its four corners -- how far across it (from its middle) and how far along it -- and
+    // is cut along whichever diagonal keeps both its triangles within a cell across the road (a cell cut against the road's way reaches
+    // 1.4 cells across). A triangle short of the kerb is asphalt, one past it the verge; one that reaches it is drawn as the verge's flat
+    // colour with the kerb texture over it (RaceTrackTextures.KerbTexture: asphalt, the kerb's red and white blocks, and nothing past
+    // it), mapped corner by corner from the road's coordinates -- so the kerb's edges and the blocks' ends run where the road says, to a
+    // tenth of a cell, not along the cells.
+    private static Dictionary<(int, int), KerbCell> KerbCells(IslandFile island, RoadIndex index, List<TrackRoad> roads, Dictionary<(int, int), Kind> kinds,
+        Dictionary<(int, int), ArrowCell> arrows, Dictionary<(int, int), RoadHit> plain, (int X, int Y) texture, RaceTrackTheme theme)
+    {
+        const int T = RaceTrackTextures.KerbTexels;
+        var cells = new Dictionary<(int, int), KerbCell>();
+        var rockFlat = Common(island, theme, theme.Rock, theme.Sand);
+        double Sep(TrackRoad r, double a, double b)
+        {
+            var d = a - b;
+            if (r.Closed) { d = (d % r.Length + r.Length) % r.Length; if (d > r.Length / 2) d -= r.Length; }
+            return d;
+        }
+        foreach (var ((gx, gz), hit) in plain)
+        {
+            if (!kinds.TryGetValue((gx, gz), out var kind) || kind is Kind.Start or Kind.Arrow or Kind.Wall || arrows.ContainsKey((gx, gz))) continue;
+            var r = roads[hit.Road];
+            double inner = r.AsphaltHalf, outer = r.CurbHalf;
+            if (Math.Abs(outer - inner - 1) > 0.05) continue;
+            var across = Across(r, hit);
+            if (across < inner - 1.25 || across > outer + 1.25) continue;
+            // the corners in the road's coordinates (the same stretch of it as the cell's middle, on the same side)
+            var d = new double[4]; var s = new double[4]; var ok = true;
+            for (var k = 0; k < 4 && ok; k++)
+            {
+                var (ox, oz) = CellCorners[k];
+                RoadHit? best = null; var bestSep = 6.0;
+                foreach (var n in index.Near(gx + ox, gz + oz, outer + 3, 4))
+                {
+                    if (n.Road != hit.Road) continue;
+                    var sep = Math.Abs(Sep(r, n.S, hit.S));
+                    if (sep < bestSep) { bestSep = sep; best = n; }
+                }
+                if (best is not { } c || (c.Lat >= 0) != (hit.Lat >= 0)) { ok = false; break; }
+                d[k] = Across(r, c);
+                s[k] = hit.S + Sep(r, c.S, hit.S);
+            }
+            if (!ok) continue;
+            double Spread(int[] t) => t.Max(c => d[c]) - t.Min(c => d[c]);
+            double Reach(bool diagonal) => Math.Max(Spread(CellHalves[diagonal ? 2 : 0]), Spread(CellHalves[diagonal ? 3 : 1]));
+            var cut = Reach(true) < Reach(false);
+            // (a walled road's verge is rock -- its wall, further out, keeps its own cells)
+            var verge = hit.Bridge ? Kind.Rock : kind == Kind.Hatch || Math.Abs(hit.Kappa) > 0.05 && hit.Lat * hit.Kappa < 0 ? Kind.Hatch : Kind.Sand;
+            var halves = new Kind[2]; var uvs = new ushort[]?[2];
+            for (var half = 0; half < 2 && ok; half++)
+            {
+                var t = CellHalves[(cut ? 2 : 0) + half];
+                double lo = t.Min(c => d[c]), hi = t.Max(c => d[c]);
+                if (hi <= inner) { halves[half] = Kind.Asphalt; continue; }
+                if (lo >= outer) { halves[half] = verge; continue; }
+                // (reaching further across than the texture: the cell keeps its own paint)
+                if (lo < inner - 1.02 || hi > outer + 1.02) { ok = false; break; }
+                halves[half] = Kind.RedCurb;
+                var s0 = t.Min(c => s[c]);
+                var period = 2 * RaceTrackTextures.KerbBlock;
+                var phase = (s0 % period + period) % period;
+                var uv = new ushort[6];
+                for (var i = 0; i < 3; i++)
+                {
+                    var c = t[i];
+                    double x = (s[c] - s0 + phase) * T, y = (d[c] - (inner - 1)) * T;
+                    uv[i * 2] = (ushort)Math.Clamp((int)Math.Round((texture.X + x) * 256), texture.X * 256 + 24, (texture.X + RaceTrackTextures.KerbWide) * 256 - 24);
+                    uv[i * 2 + 1] = (ushort)Math.Clamp((int)Math.Round((texture.Y + y) * 256), texture.Y * 256 + 24, (texture.Y + 3 * T) * 256 - 24);
+                }
+                uvs[half] = uv;
+            }
+            if (!ok) continue;
+            // (beside a banked bend's hatching the kerb's edge is sand, the hatching from the next triangle out: the hatching's own colour
+            // there read as the kerb's red running on round its white blocks)
+            cells[(gx, gz)] = new KerbCell(cut, halves, uvs, verge == Kind.Rock ? rockFlat : theme.Sand);
+        }
+        return cells;
+    }
+
+    // A flat colour for a textured verge (a walled road's rock), where the kerb texture shows the verge's colour beside it: the ramp whose colour at the ground's usual light (its 9th: a flat colour shows its ramp from the 11th, less the light,
+    // as the red kerb shows 73) is nearest the tile's average -- the tile's most common colour's ramp without the palette. (Mosquibees
+    // Island's rock by its most common colour was a dark brown band beside the lighter rock.)
+    private static (int Bank, int Pos) Common(IslandFile island, RaceTrackTheme theme, (int X, int Y, int W, int H) h, (int Bank, int Pos) none)
+    {
+        if (h.W == 0) return none;
+        var counts = new int[256];
+        for (var y = h.Y; y < h.Y + h.H; y++)
+        for (var x = h.X; x < h.X + h.W; x++) counts[island.GroundTexture[y * 256 + x]]++;
+        if (theme.Palette is not { } pal)
+        {
+            var common = Array.IndexOf(counts, counts.Max());
+            return (common / 16, common % 16);
+        }
+        double r = 0, g = 0, b = 0, n = 0;
+        for (var i = 1; i < 256; i++) { r += counts[i] * pal[i * 3]; g += counts[i] * pal[i * 3 + 1]; b += counts[i] * pal[i * 3 + 2]; n += counts[i]; }
+        if (n == 0) return none;
+        r /= n; g /= n; b /= n;
+        var best = 0; var bd = double.MaxValue;
+        for (var bank = 1; bank < 15; bank++)
+        {
+            var j = bank * 16 + 9;
+            var d = Sq(pal[j * 3] - r) + Sq(pal[j * 3 + 1] - g) + Sq(pal[j * 3 + 2] - b);
+            if (d < bd) { bd = d; best = bank; }
+        }
+        return (best, 11);
     }
 
     // Triangles outside the painted road that still carry the retail rock's blocking bit (Col) although the shaping has left them
@@ -3231,9 +3370,33 @@ internal static class RaceTrackBuilder
             var diagonal = arrow?.Diagonal ?? new IslandPolygon(cube.Polygon(x, z, 0)).Diagonal;
             for (var half = 0; half < 2; half++)
             {
+                var p = Polygon(cube, arrow is { } a && (half == 0 ? a.Half0 : a.Half1) ? Kind.Arrow : kind, diagonal, half);
+                cube.SetPolygon(x, z, half, p.Raw);
+            }
+            NoWater(gx, gz);
+        }
+
+        // A cell along a kerb (KerbCells): cut the road's way, each triangle its own paint -- or the verge's flat colour with the kerb
+        // texture over it.
+        public void PaintKerb(int gx, int gz, KerbCell kerb)
+        {
+            var cube = island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells)!;
+            var x = gx % IslandCube.Cells; var z = gz % IslandCube.Cells;
+            for (var half = 0; half < 2; half++)
+            {
+                var p = kerb.Uvs[half] is { } uv
+                    ? Flat(kerb.Under.Bank, kerb.Under.Pos).With(texFlag: 1, textureIndex: IslandGround.TextureIndexFor(cube, uv), diagonal: kerb.Diagonal, col: false)
+                    : Polygon(cube, kerb.Kinds[half], kerb.Diagonal, half);
+                cube.SetPolygon(x, z, half, p.Raw);
+            }
+            NoWater(gx, gz);
+        }
+
+        private IslandPolygon Polygon(IslandCube cube, Kind kind, bool diagonal, int half)
+        {
                 IslandPolygon p;
                 bool col = false;
-                switch (arrow is { } a && (half == 0 ? a.Half0 : a.Half1) ? Kind.Arrow : kind)
+                switch (kind)
                 {
                     case Kind.Asphalt: p = Textured(5).With(textureIndex: IslandGround.TextureIndexFor(cube, Tile(theme.Asphalt, diagonal, half))); break;
                     case Kind.Start:
@@ -3247,10 +3410,12 @@ internal static class RaceTrackBuilder
                     case Kind.Rock: p = Textured(5).With(texFlag: 3, textureIndex: IslandGround.TextureIndexFor(cube, Tile(theme.Rock, diagonal, half))); col = kind == Kind.Wall; break;
                     default: p = Flat(theme.Sand.Bank, theme.Sand.Pos); break;
                 }
-                p = p.With(diagonal: diagonal, col: col);
-                cube.SetPolygon(x, z, half, p.Raw);
-            }
-            // no water code, no water depth under the road
+                return p.With(diagonal: diagonal, col: col);
+        }
+
+        // no water code, no water depth under the road
+        private void NoWater(int gx, int gz)
+        {
             for (var dz = 0; dz <= 1; dz++)
             for (var dx = 0; dx <= 1; dx++)
                 foreach (var (c, vx, vz) in island.Owners(gx + dx, gz + dz))

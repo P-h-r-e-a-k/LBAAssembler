@@ -73,6 +73,8 @@ internal static class HolomapPicture
                     var tu = (int)Math.Clamp(w0 * u[0] + w1 * u[1] + w2 * u[2], 0, 255);
                     var tv = (int)Math.Clamp(w0 * v[0] + w1 * v[1] + w2 * v[2], 0, 255);
                     var c = island.GroundTexture[tv * 256 + tu];
+                    // (a texture over a flat colour -- the engine's incrust, the race track's kerbs: its colour 0 is see-through)
+                    if (c == 0 && polygon.PolyFlag != 0) c = (byte)((polygon.Bank << 4) + 11);
                     // (the engine's light ramps run a colour from dark to bright: brightness 0..15 taken as 0.3..1.25 of the atlas colour)
                     var shade = 0.3 + 0.95 * (w0 * light[0] + w1 * light[1] + w2 * light[2]);
                     pixels[i] = ToGame(islandPalette[c * 3] * shade, islandPalette[c * 3 + 1] * shade, islandPalette[c * 3 + 2] * shade);

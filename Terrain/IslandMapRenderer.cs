@@ -218,7 +218,10 @@ internal sealed class IslandMapRenderer
             var t = cube.TextureDefs.AsSpan(index * 6, 6);
             var tu = (t[0] * w0 + t[2] * w1 + t[4] * w2) / 256.0; var tv = (t[1] * w0 + t[3] * w1 + t[5] * w2) / 256.0;
             var tx = Math.Clamp((int)Math.Round(tu), 0, 255); var ty = Math.Clamp((int)Math.Round(tv), 0, 255);
-            return Shade(island.GroundTexture[ty * 256 + tx], factor);
+            var texel = island.GroundTexture[ty * 256 + tx];
+            // (a texture over a flat colour -- the engine's incrust, the race track's kerbs: its colour 0 is see-through)
+            if (texel == 0 && poly.PolyFlag != 0) return Shade((poly.Bank << 4) + 11, factor);
+            return Shade(texel, factor);
         }
         if (poly.PolyFlag == 0) return ((byte)(28 * factor + 10), (byte)(70 * factor + 12), (byte)(120 * factor + 20));   // nothing drawn: the sea shows through
         return Shade((poly.Bank << 4) + 11, factor);

@@ -2058,6 +2058,62 @@ The user's asks:
 - He left the ring at the gap's edge, was caught "Over the gap" and came round, on both laps.
 - Loops 1 and 3, whole, he took at the full 9,672.
 
+### Smooth kerbs (2026-10-05)
+
+The user's ask: the red and white markings on some tracks, Desert Island's and Citadel Island's, are jagged in places instead of one long smooth curve.
+
+**Why they were jagged.** `PaintRoad` gave each 512-unit cell one paint (asphalt, red or white kerb, sand, hatching), chosen by how far the cell's middle is from the road's, and painted both its triangles alike. A kerb one cell wide therefore stepped along every bend and every road not square to the grid.
+
+![before: the kerb and the hatching in cell-sized steps](racetrack/build/kerbs_before.png)
+
+**What the engine allows** (3DEXT/TERRAIN.CPP).
+- *Texture corners:* a ground triangle's texture corners are its own (8.8 fixed point into the island's 256 x 256 page, up to 8,192 definitions a cube). Any triangle can show any part of the page, stretched any way.
+- *Flat colour plus texture:* a triangle with both draws the flat, lit colour first, then the texture over it with colour 0 see-through (`POLY_TEXTURE_INCRUST`). The verge's own sand shows through the texture's empty part, shaded exactly as the sand next to it.
+
+**The fix** (`RaceTrackTextures.KerbTexture`, `RaceTrackBuilder.KerbCells`, `Painter.PaintKerb`).
+- *The kerb texture:* a 48 x 32 block of the island's page, 10 texels a cell, in free space.
+  - Along the road (x), red and white blocks 1.6 cells long, as before.
+  - Across it (y), from one cell inside the asphalt's edge to one past the kerb:
+    - asphalt (the asphalt tile's own pixels, at this scale);
+    - the kerb: the red is the colour the flat red kerb shows at the ground's usual light (its ramp's 9th, Desert island's 73), the white the white curb's pixel;
+    - nothing (colour 0).
+- *The cut:* every cell near a kerb gets the road's coordinates at its four corners (across, from the road's middle, and along). It is cut along whichever diagonal keeps both its triangles within one cell across the road; cut against the road's way, a triangle reaches 1.4 cells.
+- *Each triangle:*
+  - short of the kerb: asphalt;
+  - past it: the verge;
+  - reaching it: the verge's flat colour with the kerb texture over it, mapped corner by corner from the road's coordinates.
+- *Result:* the kerb's edges and the blocks' ends run where the road says, to a tenth of a cell, whatever the grid.
+- *The verge's colour under the texture:*
+  - sand on an open verge;
+  - also sand beside a banked bend's hatching, which starts from the next triangle out. The hatching's average colour there read as the kerb's red running on round its white blocks.
+  - On a walled road (over water or a valley, or cut into a cliff: `Bridge`), whose verge is rock, the ramp whose colour at the usual light is nearest the rock tile's average colour.
+- *Where it is not used:*
+  - cells near a second road's kerb (a pit lane alongside, a crossing);
+  - jumps, landings, decks, the start line and the arrows;
+  - roads whose kerb isn't one cell wide.
+  - An island whose page has no free 48 x 32 block keeps the cell-by-cell kerbs: Celebration Island's two tracks.
+- *The editor's map and holomap pictures* now take colour 0 of a texture over a flat colour as see-through too.
+
+| Track | Triangles with the kerb texture | Where in the page |
+|---|---|---|
+| Desert island | 10,390 | (208, 32) |
+| Citadel Island, storm track | 2,140 | (16, 160) |
+| Citadel Island, town circuit | 7,153 | (16, 160) |
+| Mosquibees Island | 2,677 | (16, 40) |
+
+![after: the same bend](racetrack/build/kerbs_after.png)
+
+![Citadel Island and Mosquibees Island](racetrack/build/kerbs_citadel_mosquibees.png)
+
+**What is still stepped:**
+- the hatching's edges, and the edge between a rock verge's flat colour and the rock texture: they are their own tiles, painted cell by cell;
+- a kerb right beside another road's.
+
+**Verified:**
+- *The sandbox, all seven islands:* it builds.
+- *Desert's qualifying lap:* 126.7 s on fuel only, 119.8 s with every power-up. A first run with every power-up lost the lap after checkpoint 8, in a pile-up of its own penguins and oil; it went round in the rerun.
+- *Mosquibees and the Citadel town circuit:* their qualifying laps complete.
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").
