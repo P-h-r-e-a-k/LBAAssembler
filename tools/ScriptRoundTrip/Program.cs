@@ -86,6 +86,7 @@ internal static class Program
             "zonedump" => ZoneDumpCommand.Run(args),
             "lba2text" => Lba2TextCommand.Run(args),
             "lba2sprite" => Lba2SpriteCommand.Run(args),
+            "demo96" => Demo96Command.Run(args),
             "holopos" => HoloPosCommand.Run(args),
             "lba2scriptgrep" => ScriptGrepCommand.Run(args),
             "gloves" => GlovesCommand.Run(args),

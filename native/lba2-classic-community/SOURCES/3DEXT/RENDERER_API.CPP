@@ -184,6 +184,11 @@ int lba2_renderer_initialize(void)
     // be non-trivial; it doesn't need to match the full game's limits.
     if (!BoxInit(256)) return 0;
 
+    // (the island palette last loaded is remembered across a shutdown, but the buffer it was loaded into is not: after the editor
+    // switches folders -- another game folder, the converted 1996 demo -- ChoicePalette() would skip loading its palette into the new
+    // buffer and every frame drew with empty shading tables, black)
+    extern S32 LastIdxPalette;
+    LastIdxPalette = -1;
     if (!RendererBootAssets()) return 0;
 
     // The flow table (RESS.HQR) and the per-slot dot pointers into ListFlowDots are set up by the game's boot (PERSO.CPP) and by

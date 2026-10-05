@@ -250,6 +250,8 @@ public partial class MainWindow : Window
 
         var hqrCount = HqrArchive.CountEntries(scenePath);
         sceneSlotsListed = hqrCount;
+        // (the 1996 demo, converted: its scenes named after the retail scenes they became -- MainWindow.Demo96)
+        var demoMap = Demo96.Demo96Converter.SceneMap(gameRoot);
         var descriptions = HqdDescriptions.Load("SCENE2.HQD", hqrCount);
         var archive = HqrArchive.Open(scenePath);
 
@@ -259,8 +261,9 @@ public partial class MainWindow : Window
             if (!archive.IsValid(hqrIndex)) continue;
             var numscene = hqrIndex - 1;
             // (the descriptions say "White Leaf Desert"; LBA2 itself calls that island Desert Island)
-            var name = (hqrIndex < descriptions.Names.Count ? descriptions.Names[hqrIndex] : null)?.Replace("White Leaf Desert", "Desert Island");
             var isInterior = IsInteriorScene(archive, hqrIndex);
+            var name = (demoMap is not null ? Demo96SceneName(demoMap, numscene, descriptions.Names, ResolveSceneIsland(archive, hqrIndex), isInterior)
+                : hqrIndex < descriptions.Names.Count ? descriptions.Names[hqrIndex] : null)?.Replace("White Leaf Desert", "Desert Island");
             var option = new FilterableComboBox.Option(numscene, name is null ? $"{numscene}" : $"{numscene}: {name}");
             var header = archive.Read(hqrIndex);
             entries.Add(new SceneEntry(ResolveSceneIsland(archive, hqrIndex), isInterior, option, header.Length > 2 ? header[1] : 0, header.Length > 2 ? header[2] : 0));
@@ -3326,7 +3329,7 @@ public partial class MainWindow : Window
     // frame is actually on screen, not just laid out), covers both without the complexity of trying to
     // find one exact root cause for what's fundamentally a racy OS mechanism.
     private void Window_Loaded(object sender, RoutedEventArgs e) => ForceForegroundRetrying(this);
-    private void Window_ContentRendered(object? sender, EventArgs e) => ForceForegroundRetrying(this);
+    private void Window_ContentRendered(object? sender, EventArgs e) { ForceForegroundRetrying(this); OpenDemo96FromCommandLine(); }
 
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
