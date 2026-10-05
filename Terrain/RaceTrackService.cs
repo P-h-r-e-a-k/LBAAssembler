@@ -289,7 +289,7 @@ internal static class RaceTrackService
     // all of them, and each track's record for RACETRACK.JSON, in the order built.
     public sealed class BuildSession
     {
-        public bool CharacterCars, Baldino, SmallCars, Oil;
+        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars;
         public int? OilIcon, SuperJetModel, TwinsenSmall;
         public List<TrackInfo> Tracks { get; } = new();
     }
@@ -487,6 +487,9 @@ internal static class RaceTrackService
             if (!small.Contains("not found")) session.TwinsenSmall = RaceTrackSmallCars.HeroSmall;
             session.SmallCars = true;
         }
+        // ... and the cars of the rest of the game's characters, each with its half-size copy, and RACECARS.JSON with every car
+        // (RaceTrackCharacterCars.InstallCast: the car setup's "drive as" goes by it)
+        if (!session.CastCars) { log.AddRange(RaceTrackCharacterCars.InstallCast(gameDirectory)); session.CastCars = true; }
         // ... and the oil slick the power-ups' oil leaves on the road (RaceTrackOil)
         if (!session.Oil)
         {
@@ -604,7 +607,7 @@ internal static class RaceTrackService
         }
     }
 
-    // Puts the changed files back from the copies made by the first build and removes the copies (and RACETRACK.JSON).
+    // Puts the changed files back from the copies made by the first build and removes the copies (and RACETRACK.JSON, RACECARS.JSON).
     public static string Restore(string gameDirectory)
     {
         if (!HasBackups(gameDirectory)) return "There is no race track build to undo in this folder.";
@@ -619,8 +622,8 @@ internal static class RaceTrackService
         foreach (var f in back) File.Delete(Path.Combine(gameDirectory, f + BackupSuffix));
         // (an island the build made has no originals: it goes)
         var gone = SendellWell.Remove(gameDirectory) ? $" {SendellWell.IleFile} and {SendellWell.OblFile}, which the build made, are gone." : "";
-        var info = Path.Combine(gameDirectory, InfoFile);
-        if (File.Exists(info)) File.Delete(info);
+        foreach (var made in new[] { InfoFile, RaceTrackCharacterCars.CatalogueFile })
+            if (File.Exists(Path.Combine(gameDirectory, made))) File.Delete(Path.Combine(gameDirectory, made));
         return $"The original {string.Join(", ", back)} are back.{gone}";
     }
 }

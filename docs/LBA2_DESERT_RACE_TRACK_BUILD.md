@@ -903,6 +903,32 @@ The rail and a new floor (`RaceMod_Floor`: not under the surface of the road he 
 
 `tools/RaceTrackPlan/builtviews.py <game> <ISLAND> <scratch> <first new body> [views]` draws a built island from its sides, from above and at a slant; `pilottrace.py <engine log> <raised road file>` tabulates the speed along the lap from a headless run of the test pilot with `objtrace 0`.
 
+### A car for every character (2026-10-05)
+
+The user's: "Generate a vehicle for every unique character in LBA2 then produce an image that displays all of them along with a description and number".
+
+![every race car, numbered](racetrack/cars/all_cars.png)
+
+(Pages of 48: [1](racetrack/cars/all_cars_1.png), [2](racetrack/cars/all_cars_2.png), [3](racetrack/cars/all_cars_3.png), [4](racetrack/cars/all_cars_4.png), [5](racetrack/cars/all_cars_5.png).)
+
+**The cast.** 154 more characters, numbered 64-217 after the 64 cars before them (0 the racer's, 1 Baldino's, 2-63 made by hand): one body for each character of BODY.HQR -- a character's variants with something in its hand or in another pose are one -- less Twinsen (his buggy), the characters that already had a car, and what isn't a character (props, vehicles, doors, silhouettes; "Dot", 29, is a static model). `RaceTrackCharacterCars.Cast` (Terrain/RaceTrackCharacterCars.Cast.cs) lists them with their island (from the scenes each body stands in) and kind.
+
+**Made by steps, not by hand.** Each car is the style its kind drives -- Sups roadsters, Francos jeeps (police and guards with a light bar), grobos trucks, rabbibunnies and children karts, quetches bubble cars, spheros ball cars, Wannies mine carts, Mosquibees and flyers gliders, glooms and bathers swamp boats, pigheads and monsters monster trucks, robots robot cars, animals basket cars, ghosts and gas clouds see-through ghost cars -- in the colours its driver's body covers most (by area; each a ramp start the light keeps in its ramp), with the driver:
+- *with arms* (CarDriver.FindArms): cut at its waist (the hips its legs hang from), sized to show about as much as a Sup does in the cars made by hand (narrower than the cockpit), its hands on the wheel;
+- *grobos*: the hand-made grobo cars' seat (arms 9 and 11 -- FindArms takes their ears -- waist and size for the grobo's height);
+- *without* (animals, creatures, robots on legs -- FindArms takes the legs -- clouds): sat whole on the cockpit's floor;
+- *too big for the engine together* (550 points, 550 polygons, lines and spheres): leaner cars in steps (fewer sides, five-sided wheels, no trimmings), then the driver's smallest polygons left out.
+
+The sheet showed what the first steps got wrong -- creatures cut away under the rim or the cockpit's floor (the snake, the flying rat, the dogs), grobos holding the wheel by the ears, robots seated by the legs, spheros buried in their ball -- and the rules above are what put them right.
+
+**In the game's files.** Bodies of two new entities (345 and 346 in the sandbox), copies of the racer's animations, a hundred cars each -- an entity's body numbers are one byte and each car has its half-size copy beside it (+100). The build installs them once per build (`InstallCast`, after the cars made by hand and their small copies; +0.8 s; BODY.HQR 7.6 MB). **RACECARS.JSON** in the game folder lists every car by number: name, driver, island, entity, body number, BODY.HQR body and small copy. "Put the original files back" removes it.
+
+**Driving them.** Race car setup > Your car lists all 218 (by number, name and driver) from RACECARS.JSON; `drive_as=` takes the car's BODY.HQR bodies from it. They aren't raced by anyone yet: every one is a body of an entity, so a line-up can use it.
+
+**Tools:** `ScriptRoundTrip castcars <built folder> <scratch> [numbers]` (the cast installed into a copy of BODY.HQR and RESS.HQR, each car's counts); `BodyPipeline castsheet <built folder> <out.png> [columns] [per page]` (the sheet and its pages, from RACECARS.JSON).
+
+**Verified:** all 154 made (none over the engine's limits); the sandbox's seven islands rebuilt with them; the Desert track driven as the baggage grobo's truck (76) and the camel's monster truck (124); the race car window lists 219 choices (the buggy and 218 cars).
+
 ## A jump flown at the car's speed (2026-09-30)
 
 ![the storm track's jump, the fast car and the default car at the same moments after the take-off](racetrack/build/jump_speed.png)

@@ -204,6 +204,12 @@ internal sealed class RaceCarWindow : Window
     private static List<(int Generic, string Name)> DrivableCars(string? gameDirectory)
     {
         var list = new List<(int, string)> { (-1, "Twinsen's buggy") };
+        // (a folder built since 2026-10-05: every car by its number, the cast's too -- RACECARS.JSON)
+        if (gameDirectory is not null && Terrain.RaceTrackCharacterCars.Catalogue(gameDirectory) is { Count: > 0 } listed)
+        {
+            list.AddRange(listed.Select(e => (e.Number, $"{e.Number}: {e.Name} ({e.Driver})")));
+            return list;
+        }
         var racer = gameDirectory is null ? null : Lba2EntityTable.Load(gameDirectory)?.Entities.FirstOrDefault(e => e.Id == Terrain.RaceTrackScenes.RacerEntity);
         if (racer is null) return list;
         var has = racer.Bodies.Select(b => b.Generic).ToHashSet();

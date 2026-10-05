@@ -141,20 +141,24 @@ internal static class RaceCarEngineFile
         return text.ToString();
     }
 
-    // The engine's drive_as= line for driving as the racer entity's body `generic` (RaceCarSetup.DriveAs) in a game folder: its BODY.HQR
-    // body, the entity's driving animation (generic 1, as the opponents drive: RaceTrackScenes) and its shrunk body for an opponent's
-    // lightning (RaceTrackSmallCars) where the folder has one. Null when the folder's entity table hasn't that body (a folder built before
-    // that car was made).
-    internal static string? DriveAsLine(string gameDirectory, int generic)
+    // The engine's drive_as= line for driving as race car `number` (RaceCarSetup.DriveAs) in a game folder: its BODY.HQR body, the racer
+    // entity's driving animation (generic 1, as the opponents drive: RaceTrackScenes) and its shrunk body for an opponent's lightning
+    // (RaceTrackSmallCars) where the folder has one. The number is the racer entity's body for the cars made by hand, on from
+    // RaceTrackCharacterCars.CastFirst the cast's, as the folder's RACECARS.JSON lists them (a folder built before it: the entity table).
+    // Null when the folder hasn't that car (built before it was made).
+    internal static string? DriveAsLine(string gameDirectory, int number)
     {
-        if (generic < 0) return null;
+        if (number < 0) return null;
         var racer = Lba2EntityTable.Load(gameDirectory)?.Entities.FirstOrDefault(e => e.Id == RaceTrackScenes.RacerEntity);
         if (racer is null) return null;
-        var body = racer.Bodies.Where(b => b.Generic == generic).Select(b => (int?)b.Body).FirstOrDefault();
         var anim = racer.Anims.Where(a => a.Generic == 1).Select(a => (int?)a.Anim).FirstOrDefault();
-        if (body is null || anim is null) return null;
-        var small = racer.Bodies.Where(b => b.Generic == RaceTrackSmallCars.SmallOf(generic)).Select(b => b.Body).DefaultIfEmpty(-1).First();
-        return $"# driving as the racer's car body {generic}\ndrive_as={body} {anim} {small}\n";
+        if (anim is null) return null;
+        if (RaceTrackCharacterCars.Catalogue(gameDirectory).FirstOrDefault(e => e.Number == number) is { } listed)
+            return $"# driving as car {number}, {listed.Name}\ndrive_as={listed.Body} {anim} {listed.Small}\n";
+        var body = racer.Bodies.Where(b => b.Generic == number).Select(b => (int?)b.Body).FirstOrDefault();
+        if (body is null) return null;
+        var small = racer.Bodies.Where(b => b.Generic == RaceTrackSmallCars.SmallOf(number)).Select(b => b.Body).DefaultIfEmpty(-1).First();
+        return $"# driving as the racer's car body {number}\ndrive_as={body} {anim} {small}\n";
     }
 
     // The scenes' copies of every opponent's car a track has.

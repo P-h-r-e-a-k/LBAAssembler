@@ -175,6 +175,24 @@ internal static class RaceTrackCommand
         return failed;
     }
 
+    // castcars <game folder> <scratch folder> [car number...]: the cast's cars (RaceTrackCharacterCars.Cast) installed into a copy of the
+    // folder's BODY.HQR and RESS.HQR (a folder whose race tracks are built: the cars made by hand are in it), with RACECARS.JSON; each car's
+    // points and polygons, and any not made.
+    public static int CastCars(string[] args)
+    {
+        Directory.CreateDirectory(args[2]);
+        CopyWritable(args[1], args[2], "BODY.HQR", "RESS.HQR");
+        var only = args.Length > 3 ? args.Skip(3).Select(int.Parse).ToList() : null;
+        foreach (var line in RaceTrackCharacterCars.InstallCast(args[2], only)) Console.WriteLine(line);
+        var bodies = HqrArchive.Open(Path.Combine(args[2], "BODY.HQR"));
+        foreach (var e in RaceTrackCharacterCars.Catalogue(args[2]).Where(e => e.Number >= RaceTrackCharacterCars.CastFirst))
+        {
+            var body = LbaBodyStudio.Body.Read(bodies.Read(e.Body), 2);
+            Console.WriteLine($"  {e.Number,3} {e.Name}: body {e.Body} (small {e.Small}), entity {e.Entity} body {e.Generic}; {body.Vertices.Count} points, {body.Faces.Count + body.Lines.Count + body.Spheres.Count} primitives");
+        }
+        return 0;
+    }
+
     // carshow <game folder> <scene> <x> <y> <z> <turn> <dx> <dz> <body>...: stands cars of the racer's entity (its bodies: 0 its own, 1
     // Baldino's, 2-4 RaceTrackCharacterCars) in a row in a (test) game folder's scene, from (x, y, z) on by (dx, dz) a car, each turned `turn`;
     // y "ground": on the island's ground there (RT_ILE names its file, DESERT.ILE unless given); RT_FLAGS: the actors' flags (hex)
