@@ -110,7 +110,7 @@ internal static class TopDownMapRenderer
             {
                 var u = verts[0].U * w0 + verts[1].U * w1 + verts[2].U * w2;
                 var v = verts[0].V * w0 + verts[1].V * w1 + verts[2].V * w2;
-                color = island.ColorAtSmooth(u, v, light);
+                color = island.ColorAtSmooth(u, v, light, island.PageOf((int)((polygon >> 19) & 0x1FFF)));
             }
             else
             {

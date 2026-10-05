@@ -64,6 +64,16 @@ internal static class PolarScenes
         var source = SceneSerializer.Parse(SceneGame.Lba2, HqrArchive.Open(scenePath).Read(SourceScene + 1));
         var hqr = HqrFile.Parse(File.ReadAllBytes(scenePath));
         var lba1Hero = game.LoadScene(DockScene).Actors[0];
+        var buggy = HqrArchive.Open(scenePath) is var archive && SceneSerializer.Parse(SceneGame.Lba2, archive.Read(RaceTrackScenes.BuggyScene + 1)) is var desert
+            ? desert.Actors.Skip(1).FirstOrDefault(a => a.Entity == RaceTrackScenes.BuggyEntity)?.Clone() : null;
+        if (buggy is not null)
+        {
+            RaceTrackScenes.BuggyAlwaysThere(buggy);
+            // (its INIT_BUGGY, 46 xx after the quest's IF, with mode 0 only puts back a car the game already has -- the Desert's, once the
+            // quest is done; mode 1 makes it here the first time, and leaves one the player has elsewhere where it is: GERELIFE.CPP, BUGGY.CPP)
+            if (buggy.Life.Length > 9 && buggy.Life[8] == 0x46 && buggy.Life[9] == 0) buggy.Life[9] = 1;
+        }
+        (int Scene, (int X, int Y, int Z) Place)? carAt = null;
         var start = OnIsland(layout, terrain, DockScene, lba1Hero.X, lba1Hero.Y, lba1Hero.Z);
         // (the cubes with land: one of open sea has no scene, nor a zone into it -- Twinsen would drown before he got there)
         var cubes = terrain.Columns.Where(c => !c.Value.Water).Select(c => (Cx: (c.Key.X + terrain.OffsetX) / 64, Cz: (c.Key.Z + terrain.OffsetZ) / 64)).ToHashSet();
@@ -78,7 +88,19 @@ internal static class PolarScenes
             model.Zones.Clear(); model.TrackPoints.Clear();
             foreach (var a in model.Actors) { a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 }; }
             var hero = model.Hero;
-            if ((cx, cz) == (start.Cx, start.Cz)) { hero.X = start.X; hero.Y = start.Y; hero.Z = start.Z; }
+            if ((cx, cz) == (start.Cx, start.Cz))
+            {
+                hero.X = start.X; hero.Y = start.Y; hero.Z = start.Z;
+                // Twinsen's car beside him (the island is to have a race track): the Desert island's own buggy (RaceTrackScenes.BuggyScene),
+                // there from the start of any game (its script waits for the car quest: BuggyAlwaysThere)
+                if (buggy is not null && CarPlace(layout, terrain, cx, cz, (start.X, start.Z)) is { } car)
+                {
+                    var copy = buggy.Clone();
+                    copy.X = car.X; copy.Y = car.Y; copy.Z = car.Z; copy.Beta = 0;
+                    SceneOps.AddActor(model, copy);
+                    carAt = (SceneOf(cx, cz), car);
+                }
+            }
             else { var (x, y, z) = StandingPlace(layout, terrain, cx, cz); hero.X = x; hero.Y = y; hero.Z = z; }
             hero.Beta = 0;
             // the edges it shares: east (x + 1), west, south (z + 1), north
@@ -114,6 +136,7 @@ internal static class PolarScenes
         foreach (var (cx, cz) in cubes.OrderBy(c => SceneOf(c.Cx, c.Cz)))
             names = HqdWriter.Describe(gameDirectory, "SCENE.HQR", SceneGame.Lba2, SceneOf(cx, cz) + 1, NameOf(cx, cz, terrain), names);
         if (names is not null) File.WriteAllText(Path.Combine(gameDirectory, HqdWriter.SidecarName("SCENE.HQR")), names, System.Text.Encoding.Latin1);
+        log.Add(carAt is { } c ? $"Twinsen's car (scene {RaceTrackScenes.BuggyScene}'s buggy) in scene {c.Scene} at {c.Place}" : "no car: scene 67 has no buggy, or no room beside Twinsen");
         log.Add($"SCENE.HQR: scenes {string.Join(", ", cubes.Select(c => SceneOf(c.Item1, c.Item2)).Order())} (a scene to a cube with land, {zones} cube-change zones); Twinsen starts in scene {SceneOf(start.Cx, start.Cz)} at ({start.X}, {start.Y}, {start.Z}), LBA1's start on the dock");
 
         // the holomap's records
@@ -173,6 +196,32 @@ internal static class PolarScenes
             if (layout.Cells.ContainsKey((x, c.Top + 1, z)) || layout.Cells.ContainsKey((x, c.Top + 2, z))) continue;
             double dx = gx % 64 + 0.5 - 32, dz = gz % 64 + 0.5 - 32, d = dx * dx + dz * dz;
             if (d < bestD) { bestD = d; best = ((gx % 64) * 512 + 256, surface, (gz % 64) * 512 + 256); }
+        }
+        return best;
+    }
+
+    // Where Twinsen's car stands (cube-local, the ground's height): the land cell nearest `near` (cube-local) but two cells and more from
+    // it, flat and clear in the 3 x 3 cells round it (the car is about two cells long).
+    public static (int X, int Y, int Z)? CarPlace(PolarLayout layout, PolarTerrain.Result terrain, int cx, int cz, (int X, int Z) near)
+    {
+        (int X, int Y, int Z)? best = null; var bestD = double.MaxValue;
+        bool Clear(int gx, int gz, int surface)
+        {
+            if (!terrain.Columns.TryGetValue((gx - terrain.OffsetX, gz - terrain.OffsetZ), out var c) || c.Water || PolarTerrain.SurfaceOf(c) != surface) return false;
+            if (terrain.Island.HeightAt(gx, gz) != surface || terrain.Island.HeightAt(gx + 1, gz) != surface || terrain.Island.HeightAt(gx, gz + 1) != surface || terrain.Island.HeightAt(gx + 1, gz + 1) != surface) return false;
+            return !layout.Cells.ContainsKey((gx - terrain.OffsetX, c.Top + 1, gz - terrain.OffsetZ)) && !layout.Cells.ContainsKey((gx - terrain.OffsetX, c.Top + 2, gz - terrain.OffsetZ));
+        }
+        foreach (var ((x, z), c) in terrain.Columns)
+        {
+            int gx = x + terrain.OffsetX, gz = z + terrain.OffsetZ;
+            if (c.Water || gx / 64 != cx || gz / 64 != cz || gx % 64 < 1 || gx % 64 > 62 || gz % 64 < 1 || gz % 64 > 62) continue;
+            double dx = (gx % 64 + 0.5) * 512 - near.X, dz = (gz % 64 + 0.5) * 512 - near.Z, d = Math.Sqrt(dx * dx + dz * dz);
+            if (d < 2 * 512 || d >= bestD) continue;
+            var surface = PolarTerrain.SurfaceOf(c);
+            var clear = true;
+            for (var oz = -1; oz <= 1 && clear; oz++) for (var ox = -1; ox <= 1 && clear; ox++) clear = Clear(gx + ox, gz + oz, surface);
+            if (!clear) continue;
+            bestD = d; best = ((gx % 64) * 512 + 256, surface, (gz % 64) * 512 + 256);
         }
         return best;
     }

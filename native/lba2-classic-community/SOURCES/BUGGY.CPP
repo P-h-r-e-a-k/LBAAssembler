@@ -139,11 +139,11 @@ void TakeBuggy(void) {
 
     // Passe Buggy Scenarique en NoBody
     InitBody(NO_BODY, NUM_BUGGY);
+    // A parked buggy is drawn into the static background copy, so that copy is
+    // rebuilt, or the empty car stays on screen where it stood until the camera
+    // moves (a race track parks it on the start line; Polar Island on its dock).
+    FirstTime = AFF_ALL_FLIP;
     if (RaceMod_Active()) {
-        // A parked buggy is drawn into the static background copy, so that copy is
-        // rebuilt, or the empty car stays on screen where it stood (a race track
-        // parks it on the start line).
-        FirstTime = AFF_ALL_FLIP;
         RaceMod_ResetGear();
     }
 

@@ -42,7 +42,7 @@ public partial class MainWindow
                 "Add LBA1's Polar Island to LBA2 as a new island (island 12)?\n\n" +
                 "Its outside scenes are joined into one island you can turn round: the dock, the mines, the huts, the crystal mountain with the plateau of pillars on top " +
                 "(the rocky peak's scene is left out: the third scene has the same mountain), and a causeway from the gate. " +
-                $"It has a scene for each of its cubes with land ({PolarScenes.FirstScene + 1}-{PolarScenes.FirstScene + PolarScenes.Count - 1}); Twinsen starts on the dock. No characters yet.\n\n" +
+                $"It has a scene for each of its cubes with land ({PolarScenes.FirstScene + 1}-{PolarScenes.FirstScene + PolarScenes.Count - 1}); Twinsen starts on the dock beside his car. No characters yet.\n\n" +
                 "Only the LBA Assembler's own engine (Play) knows island 12: the original game doesn't load it.\n\n" +
                 $"Folder: {gameRoot}\nNew: POLAR.ILE, POLAR.OBL\nChanged: {string.Join(", ", PolarIsland.SharedFiles)} (first copied to *{PolarIsland.BackupSuffix}; " +
                 "this menu takes the island out again)",

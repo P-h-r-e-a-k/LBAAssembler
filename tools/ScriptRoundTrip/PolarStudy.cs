@@ -380,6 +380,194 @@ internal static class PolarStudy
         return 0;
     }
 
+    // polartiles <LBA1 folder>: how many distinct top bricks the island's ground uses, how many cells each, and per cube.
+    public static int Tiles(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var layout = PolarLayout.Build(game);
+        var columns = PolarTerrain.Columns(game, layout);
+        int minX = columns.Keys.Min(k => k.X), maxX = columns.Keys.Max(k => k.X), minZ = columns.Keys.Min(k => k.Z), maxZ = columns.Keys.Max(k => k.Z);
+        var offsetX = PolarTerrain.CubeX0 * 64 + (PolarTerrain.CubesX * 64 - (maxX - minX + 1)) / 2 - minX;
+        var offsetZ = PolarTerrain.CubeZ0 * 64 + (PolarTerrain.CubesZ * 64 - (maxZ - minZ + 1)) / 2 - minZ;
+        var land = columns.Where(c => !c.Value.Water).ToList();
+        var byBrick = land.GroupBy(c => c.Value.Cell.Brick).OrderByDescending(g => g.Count()).ToList();
+        Console.WriteLine($"{land.Count} land columns, {byBrick.Count} distinct top bricks");
+        var total = 0; var k = 0;
+        foreach (var g in byBrick) { total += g.Count(); k++; if (k is 16 or 32 or 48 or 64 or 96 or 128) Console.WriteLine($"  top {k} bricks cover {100.0 * total / land.Count:0.0}%"); }
+        foreach (var g in land.GroupBy(c => ((c.Key.X + offsetX) / 64, (c.Key.Z + offsetZ) / 64)).OrderBy(g => g.Key))
+            Console.WriteLine($"cube {g.Key}: {g.Count()} land columns, {g.Select(c => c.Value.Cell.Brick).Distinct().Count()} top bricks");
+        Console.WriteLine("most used: " + string.Join(", ", byBrick.Take(24).Select(g => $"{g.Key} x{g.Count()} ({g.First().Value.Cell.Code:X2})")));
+        return 0;
+    }
+
+    // polarpalette <LBA1 folder> <game folder>: for each retail island palette (RESS.HQR's XPL entries), whether its normal light row
+    // (ShadeNormalLevel) leaves colours as they are, and how far its nearest colours are from LBA1's on the island's ground and objects
+    // (the mean RGB distance over every drawn pixel of the bricks used, by how often).
+    public static int Palette(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var layout = PolarLayout.Build(game);
+        var weights = new Dictionary<int, long>();
+        foreach (var c in layout.Cells.Values)
+        {
+            var sprite = PolarTextures.Sprite.Decode(game.ReadBrick(c.Brick));
+            foreach (var px in sprite.Pixels) if (px >= 0) weights[px] = weights.GetValueOrDefault(px) + 1;
+        }
+        var ress = HqrArchive.Open(Path.Combine(args[2], "RESS.HQR"));
+        foreach (var entry in new[] { 27, 29, 30, 31, 32, 33, 34, 35, 36, 37, 42 })
+        {
+            if (!ress.IsValid(entry)) continue;
+            var xpl = ress.Read(entry);
+            int offPal = BitConverter.ToInt32(xpl, 4), offFog = BitConverter.ToInt32(xpl, 12), normal = BitConverter.ToInt32(xpl, 24);
+            var pal = xpl[offPal..(offPal + 768)];
+            var identity = Enumerable.Range(0, 256).Count(t => xpl[offFog + normal * 256 + t] == t);
+            var colours = new PolarTextures.Colours(game.Palette, pal);
+            double err = 0; long n = 0;
+            foreach (var (c, w) in weights)
+            {
+                var (r, g, b) = PolarTextures.Colours.Rgb(game.Palette, c);
+                var (pr, pg, pb) = PolarTextures.Colours.Rgb(pal, colours.Nearest[c]);
+                err += Math.Sqrt((r - pr) * (r - pr) + (g - pg) * (g - pg) + (b - pb) * (b - pb)) * w; n += w;
+            }
+            Console.WriteLine($"palette {entry}: normal row {normal} keeps {identity}/256 colours; mean distance to LBA1's {err / n:0.0}");
+        }
+        return 0;
+    }
+
+    // polarwater <LBA1 folder>: the palette colours LBA1's water bricks are drawn in, and how much of the crystal's and of the rocks in the
+    // water's bricks are those colours.
+    public static int Water(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var layout = PolarLayout.Build(game);
+        Dictionary<int, long> Count(IEnumerable<int> bricks)
+        {
+            var counts = new Dictionary<int, long>();
+            foreach (var b in bricks.Distinct())
+                foreach (var px in PolarTextures.Sprite.Decode(game.ReadBrick(b)).Pixels) if (px >= 0) counts[px] = counts.GetValueOrDefault(px) + 1;
+            return counts;
+        }
+        var water = Count(layout.Cells.Values.Where(c => c.Water).Select(c => c.Brick));
+        var crystal = Count(layout.Cells.Values.Where(c => (c.Code & 0xF0) == 0xA0).Select(c => c.Brick));
+        var total = water.Values.Sum();
+        Console.WriteLine($"water bricks: {water.Count} colours: " + string.Join(" ", water.OrderByDescending(k => k.Value).Select(k => $"{k.Key}:{100.0 * k.Value / total:0.0}%")));
+        Console.WriteLine($"crystal bricks: {crystal.Values.Sum()} pixels, {crystal.Where(k => water.ContainsKey(k.Key)).Sum(k => k.Value)} in water colours; colours " + string.Join(" ", crystal.OrderByDescending(k => k.Value).Take(20).Select(k => $"{k.Key}")));
+        return 0;
+    }
+
+    // polarview <game folder> <out.png> <x> <z> [alpha beta distance wide]: the island (POLAR.ILE) as the native renderer draws it, looking
+    // at world (x, z) -- island cells x 512 -- at its ground's height, from the camera's angles (4096 to a turn) and distance; `wide` cubes
+    // round it drawn too. LBA1's view: alpha 341 (30 degrees down), a far distance.
+    public static int View(string[] args)
+    {
+        var game = args[1];
+        var dll = Environment.GetEnvironmentVariable("LBA2_RENDERER_DLL") ??
+                  @"E:\dump\LBAAssembler\native\lba2-classic-community\out\build\windows_ucrt64_static\SOURCES\3DEXT\liblba2_renderer.dll";
+        int x = int.Parse(args[3]), z = int.Parse(args[4]);
+        int alpha = args.Length > 5 ? int.Parse(args[5]) : 341, beta = args.Length > 6 ? int.Parse(args[6]) : 512, distance = args.Length > 7 ? int.Parse(args[7]) : 40000;
+        var wide = args.Length > 8 ? int.Parse(args[8]) : 1;
+        var island = LBAAssembler.Terrain.IslandFile.Load(Path.Combine(game, "POLAR.ILE"));
+        var y = LBAAssembler.Terrain.IslandOps.Altitude(island, x, z) ?? 0;
+        using var lib = new RendererLibraryApi(dll);
+        if (!lib.IsLoaded || !lib.SetDataRoot(game) || !lib.Initialize()) { Console.WriteLine("native init failed"); return 2; }
+        if (lib.LoadIsland("polar") == 0) { Console.WriteLine("LoadIsland failed"); return 2; }
+        lib.SetDrawSky(true); lib.SetDrawSea(true);
+        lib.SetViewTarget(x, (int)y, z);
+        lib.SetCamera(alpha, beta, 0, distance);
+        if ((wide > 0 ? lib.RenderFrameWide(wide) : lib.RenderFrame()) == 0) { Console.WriteLine("render failed"); return 2; }
+        var p = lib.GetFramebuffer(out var w, out var h, out var pitch);
+        var palette = LBAAssembler.Terrain.IslandMapRenderer.LoadPalette(game, "POLAR");
+        var six = palette.Take(768).Max() <= 63;
+        var px = new byte[w * h * 4];
+        var row = new byte[w];
+        for (var r = 0; r < h; r++)
+        {
+            System.Runtime.InteropServices.Marshal.Copy(p + r * pitch, row, 0, w);
+            for (var c = 0; c < w; c++)
+            {
+                var i = (r * w + c) * 4; var k = row[c] * 3;
+                px[i] = (byte)(palette[k + 2] * (six ? 4 : 1)); px[i + 1] = (byte)(palette[k + 1] * (six ? 4 : 1)); px[i + 2] = (byte)(palette[k] * (six ? 4 : 1)); px[i + 3] = 255;
+            }
+        }
+        PngWriter.Write(args[2], px, w, h);
+        Console.WriteLine($"{args[2]}: {w}x{h}, target ({x}, {y}, {z}), alpha {alpha} beta {beta} distance {distance}");
+        return 0;
+    }
+
+    // polarprobe <LBA1 folder> <x0> <x1> <z0> <z1>: the layout's columns there -- each cell from the top down: layer, scene, brick, code.
+    public static int Probe(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var layout = PolarLayout.Build(game);
+        int x0 = int.Parse(args[2]), x1 = int.Parse(args[3]), z0 = int.Parse(args[4]), z1 = int.Parse(args[5]);
+        for (var z = z0; z <= z1; z++)
+            for (var x = x0; x <= x1; x++)
+            {
+                var cells = layout.Cells.Where(c => c.Key.X == x && c.Key.Z == z).OrderByDescending(c => c.Key.Y).Take(4)
+                    .Select(c => $"{c.Key.Y}:{c.Value.Scene}/{c.Value.Brick}/{c.Value.Code:X2}");
+                Console.WriteLine($"({x},{z}) " + string.Join("  ", cells));
+            }
+        return 0;
+    }
+
+    // polarregion <LBA1 folder> <out.png> <scene|joined> <x0> <x1> <z0> <z1>: a region of one scene's own grid (its cells x, z), or of the
+    // joined island (the layout's), drawn as LBA1 draws it.
+    public static int Region(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        int x0 = int.Parse(args[4]), x1 = int.Parse(args[5]), z0 = int.Parse(args[6]), z1 = int.Parse(args[7]);
+        List<Lba1Placement> cells;
+        if (args[3] == "joined")
+            cells = PolarLayout.Build(game).Cells.Where(c => c.Key.X >= x0 && c.Key.X <= x1 && c.Key.Z >= z0 && c.Key.Z <= z1)
+                .Select(c => new Lba1Placement(c.Key.X - x0, c.Key.Y, c.Key.Z - z0, c.Value.Brick)).ToList();
+        else
+            cells = PolarLayout.Bricks(game, int.Parse(args[3])).Where(c => c.X >= x0 && c.X <= x1 && c.Z >= z0 && c.Z <= z1)
+                .Select(c => new Lba1Placement(c.X - x0, c.Y, c.Z - z0, c.Brick)).ToList();
+        var image = Lba1GridRenderer.Render(new[] { new Lba1Tile(cells, 0, 0, 0) }, game.ReadBrick, game.Palette);
+        PngWriter.Write(args[2], image.Bgra, image.Width, image.Height);
+        Console.WriteLine($"{args[2]}: {cells.Count} cells, {image.Width} x {image.Height}");
+        return 0;
+    }
+
+    // polardark <LBA1 folder> <out.png>: the ground's top bricks by how much of their top is dark (r+g+b under 150), with a sheet of the
+    // darkest 64 (their numbers and shares printed in that order).
+    public static int Dark(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var layout = PolarLayout.Build(game);
+        var columns = PolarTerrain.Columns(game, layout);
+        var counts = columns.Values.Where(c => !c.Water).GroupBy(c => c.Cell.Brick).ToDictionary(g => g.Key, g => g.Count());
+        var shares = counts.Keys.Select(b =>
+        {
+            var tile = PolarTextures.Sprite.Decode(game.ReadBrick(b)).Tile(PolarTextures.Face.Top);
+            var dark = tile.Count(c => c >= 0 && PolarTextures.Colours.Rgb(game.Palette, c) is var (r, g, bl) && r + g + bl < 150);
+            return (Brick: b, Share: (double)dark / tile.Length);
+        }).OrderByDescending(t => t.Share).ToList();
+        foreach (var bucket in new[] { 0.4, 0.3, 0.2, 0.15, 0.1, 0.05 })
+            Console.WriteLine($"share >= {bucket}: {shares.Count(t => t.Share >= bucket)} bricks, {shares.Where(t => t.Share >= bucket).Sum(t => counts[t.Brick])} cells");
+        var top = shares.Take(64).ToList();
+        Console.WriteLine(string.Join(" ", top.Select(t => $"{t.Brick}:{t.Share:0.00}")));
+        const int k = 2;
+        var w = 8 * 34 * k; var h = 8 * 34 * k;
+        var px = new byte[w * h * 4];
+        for (var n = 0; n < top.Count; n++)
+        {
+            var tile = PolarTextures.Sprite.Decode(game.ReadBrick(top[n].Brick)).Tile(PolarTextures.Face.Top);
+            int ox = n % 8 * 34, oy = n / 8 * 34;
+            for (var j = 0; j < 32; j++) for (var i = 0; i < 32; i++)
+            {
+                var (r, g, b) = PolarTextures.Colours.Rgb(game.Palette, Math.Max(0, tile[j * 32 + i]));
+                for (var dy = 0; dy < k; dy++) for (var dx = 0; dx < k; dx++)
+                {
+                    var o = (((oy + j) * k + dy) * w + (ox + i) * k + dx) * 4;
+                    px[o] = (byte)b; px[o + 1] = (byte)g; px[o + 2] = (byte)r; px[o + 3] = 255;
+                }
+            }
+        }
+        PngWriter.Write(args[2], px, w, h);
+        return 0;
+    }
+
     // polarzones <LBA1 folder> <scene>...: each scene's cube-change zones (type 0) in cells (x, layer, z) and where they lead.
     public static int Zones(string[] args)
     {

@@ -18,8 +18,10 @@ internal static class PolarTextures
         public bool IsFull => this == Full;
     }
 
-    // A face's tile size in pixels (u along the face, v down it).
-    public static (int W, int H) Size(Face face) => face == Face.Top ? (16, 16) : (16, 8);
+    // A face's tile size in pixels (u along the face, v down it): 32 across a cell (LBA1 draws a cell's edge some 27 pixels long; the retail
+    // islands' tiles are 32 to a cell), a side 16 down a layer.
+    public const int TileSize = 32;
+    public static (int W, int H) Size(Face face) => face == Face.Top ? (TileSize, TileSize) : (TileSize, TileSize / 2);
 
     // A brick's sprite as LBA1 palette indices (-1 where it draws nothing), and its hot spot.
     public sealed class Sprite
@@ -265,74 +267,56 @@ internal static class PolarTextures
         }
     }
 
-    // An atlas of tiles in a 256 x 256 page: tiles of a few sizes packed in rows, those too many for the page merged with the most alike
-    // of their size first (each key then shares its group's tile: the group's first face, not a blend).
-    public sealed class Atlas
+    // Texture pages of tiles: each page 256 x 256 in slots of 32 x 32, a slot holding one 32 x 32 tile or two 32 x 16 (a side a layer
+    // tall) one over the other. Tiles go into the first page with room; a page is added when none has (up to the most pages there may
+    // be). Place: each tile's page and corner.
+    public sealed class Pages
     {
-        public readonly Dictionary<object, (int X, int Y)> Place = new();
-        public int Tiles, Groups;
+        public const int Slot = TileSize, SlotsPerRow = 256 / Slot, Halves = SlotsPerRow * SlotsPerRow * 2;
+        public readonly List<byte[]> List = new();
+        public readonly Dictionary<object, (int Page, int X, int Y)> Place = new();
+        private readonly List<bool[]> used = new();
+        private readonly Colours colours;
+        private readonly int max;
 
-        public static Atlas Build(IReadOnlyDictionary<object, (int[] Tile, int W, int H)> tiles, byte[] page, Colours colours, int top = 0)
+        // `first`: the page to fill first (the island's own: its ground or object atlas); `max`: how many pages there may be in all
+        public Pages(byte[] first, Colours colours, int max)
         {
-            var atlas = new Atlas { Tiles = tiles.Count };
-            // the groups: one per key, merged by size until they fit
-            var groups = tiles.GroupBy(t => (t.Value.W, t.Value.H)).ToDictionary(g => g.Key, g => g.Select(t => new List<object> { t.Key }).ToList());
-            double[] Mean(List<object> keys)
+            this.colours = colours; this.max = max;
+            Array.Clear(first);
+            List.Add(first); used.Add(new bool[Halves]);
+        }
+
+        // Half-slots free on a page.
+        public int Free(int page) => page < used.Count ? used[page].Count(u => !u) : Halves;
+        public int Count => List.Count;
+
+        // How many half-slots a tile takes.
+        public static int HalvesOf(int h) => h > Slot / 2 ? 2 : 1;
+
+        // Puts a tile on a page (`page`, or the first with room). False when no page may take it.
+        public bool Add(object key, int[] tile, int w, int h, int? page = null)
+        {
+            if (Place.ContainsKey(key)) return true;
+            var need = HalvesOf(h);
+            for (var p = page ?? 0; p < (page is null ? max : page.Value + 1); p++)
             {
-                var (_, w, h) = tiles[keys[0]];
-                var sum = new double[w * h * 3];
-                foreach (var key in keys)
+                while (p >= List.Count) { if (List.Count >= max) return false; List.Add(new byte[256 * 256]); used.Add(new bool[Halves]); }
+                var slots = used[p];
+                for (var i = 0; i < Halves; i += need == 2 ? 2 : 1)
                 {
-                    var tile = tiles[key].Tile;
-                    for (var i = 0; i < w * h; i++)
-                    {
-                        var (r, g, b) = Colours.Rgb(colours.Lba1, tile[i]);
-                        sum[i * 3] += r; sum[i * 3 + 1] += g; sum[i * 3 + 2] += b;
-                    }
+                    if (slots[i] || (need == 2 && slots[i + 1])) continue;
+                    slots[i] = true; if (need == 2) slots[i + 1] = true;
+                    int slot = i / 2, x = slot % SlotsPerRow * Slot, y = slot / SlotsPerRow * Slot + (i % 2) * (Slot / 2);
+                    var pixels = List[p];
+                    for (var j = 0; j < h; j++)
+                        for (var k = 0; k < w; k++)
+                            pixels[(y + j) * 256 + x + k] = (byte)colours.Nearest[tile[j * w + k]];
+                    Place[key] = (p, x, y);
+                    return true;
                 }
-                for (var i = 0; i < sum.Length; i++) sum[i] /= keys.Count;
-                return sum;
             }
-            int Area() => groups.Sum(g => g.Value.Count * g.Key.W * g.Key.H);
-            var capacity = 256 * (256 - top);
-            var means = groups.ToDictionary(g => g.Key, g => g.Value.Select(Mean).ToList());
-            while (Area() > capacity * 0.97)
-            {
-                // the closest pair of any size, its cost by pixel
-                var best = (Size: (W: 0, H: 0), I: -1, J: -1, D: double.MaxValue);
-                foreach (var (size, list) in groups)
-                {
-                    var m = means[size];
-                    for (var i = 0; i < list.Count; i++)
-                        for (var j = i + 1; j < list.Count; j++)
-                        {
-                            double d = 0;
-                            for (var k = 0; k < m[i].Length && d < best.D * m[i].Length; k++) d += (m[i][k] - m[j][k]) * (m[i][k] - m[j][k]);
-                            d /= m[i].Length;
-                            if (d < best.D) best = (size, i, j, d);
-                        }
-                }
-                if (best.I < 0) break;
-                var g0 = groups[best.Size];
-                g0[best.I].AddRange(g0[best.J]); g0.RemoveAt(best.J); means[best.Size].RemoveAt(best.J);
-                means[best.Size][best.I] = Mean(g0[best.I]);
-            }
-            // packing: the tallest first, row by row
-            int x = 0, y = top, rowHeight = 0;
-            foreach (var (size, list) in groups.OrderByDescending(g => g.Key.H))
-                foreach (var group in list)
-                {
-                    if (x + size.W > 256) { x = 0; y += rowHeight; rowHeight = 0; }
-                    if (y + size.H > 256) throw new InvalidOperationException("The atlas is full.");
-                    var tile = tiles[group[0]].Tile;
-                    for (var j = 0; j < size.H; j++)
-                        for (var i = 0; i < size.W; i++)
-                            page[(y + j) * 256 + x + i] = (byte)colours.Nearest[tile[j * size.W + i]];
-                    foreach (var key in group) atlas.Place[key] = (x, y);
-                    atlas.Groups++;
-                    x += size.W; rowHeight = Math.Max(rowHeight, size.H);
-                }
-            return atlas;
+            return false;
         }
     }
 }

@@ -49,8 +49,9 @@ internal static class HolomapPicture
                 var polygon = new IslandPolygon(cube.Polygon(x, z, half));
                 if (polygon.CodeJeu == 1 && cube.Height(x, z) == 0 && cube.Height(x + 1, z + 1) == 0) continue;
                 if (polygon.TexFlag == 0) continue;
-                var index = polygon.TextureIndex;
+                var (page, index) = island.GroundTextureOf(polygon.TextureIndex);
                 if (index * 6 + 6 > cube.TextureDefs.Length) continue;
+                var texture = island.GroundPage(page);
                 var diagonal = new IslandPolygon(cube.Polygon(x, z, 0)).Diagonal;
                 var corners = HalfCorners[(diagonal ? 2 : 0) + half];
                 var p = new (double X, double Y, double Depth)[3];
@@ -72,7 +73,7 @@ internal static class HolomapPicture
                     depth[i] = (float)d;
                     var tu = (int)Math.Clamp(w0 * u[0] + w1 * u[1] + w2 * u[2], 0, 255);
                     var tv = (int)Math.Clamp(w0 * v[0] + w1 * v[1] + w2 * v[2], 0, 255);
-                    var c = island.GroundTexture[tv * 256 + tu];
+                    var c = texture[tv * 256 + tu];
                     // (a texture over a flat colour -- the engine's incrust, the race track's kerbs: its colour 0 is see-through)
                     if (c == 0 && polygon.PolyFlag != 0) c = (byte)((polygon.Bank << 4) + 11);
                     // (the engine's light ramps run a colour from dark to bright: brightness 0..15 taken as 0.3..1.25 of the atlas colour)

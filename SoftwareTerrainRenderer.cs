@@ -129,7 +129,7 @@ internal static class SoftwareTerrainRenderer
             var u = projected[0].U * w0 + projected[1].U * w1 + projected[2].U * w2;
             var v = projected[0].V * w0 + projected[1].V * w1 + projected[2].V * w2;
             var light = (int)Math.Clamp(Math.Round(projected[0].Light * w0 + projected[1].Light * w1 + projected[2].Light * w2), 0, 15);
-            var color = textured ? island.ColorAt(u, v, light) : FlatColor((int)(polygon & 15), light);
+            var color = textured ? island.ColorAt(u, v, light, island.PageOf((int)((polygon >> 19) & 0x1FFF))) : FlatColor((int)(polygon & 15), light);
             pixels[offset * 4] = color.B; pixels[offset * 4 + 1] = color.G; pixels[offset * 4 + 2] = color.R; pixels[offset * 4 + 3] = 255;
         }
 

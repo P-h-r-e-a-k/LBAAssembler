@@ -124,7 +124,7 @@ internal static class PolarIsland
         var game = new Lba1Game(lba1Directory);
         var layout = PolarLayout.Build(game);
         var terrain = PolarTerrain.Build(game, layout, gameDirectory);
-        var objects = PolarObjects.Build(game, layout, terrain.Columns, terrain.Island, terrain.OffsetX, terrain.OffsetZ, terrain.Colours);
+        var objects = PolarObjects.Build(game, layout, terrain.Columns, terrain.Rocks, terrain.Island, terrain.OffsetX, terrain.OffsetZ, terrain.Colours);
         return new Built(game, layout, terrain, objects, layout.Log.Concat(terrain.Log).Concat(objects.Log).ToList());
     }
 

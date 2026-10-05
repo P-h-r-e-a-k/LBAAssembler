@@ -229,13 +229,14 @@ internal sealed class IslandMapRenderer
         var w2 = 1 - w0 - w1;
         var l = Math.Clamp(light[corners[0]] * w0 + light[corners[1]] * w1 + light[corners[2]] * w2, 0, 15);
         var factor = 0.48 + l / 15.0 * 0.72;
-        var index = poly.TextureIndex;
+        // (an island with more ground pages: the page in the index's top bits -- IslandFile.GroundTextureOf)
+        var (page, index) = island.GroundTextureOf(poly.TextureIndex);
         if (poly.TexFlag != 0 && index * 6 + 6 <= cube.TextureDefs.Length)
         {
             var t = cube.TextureDefs.AsSpan(index * 6, 6);
             var tu = (t[0] * w0 + t[2] * w1 + t[4] * w2) / 256.0; var tv = (t[1] * w0 + t[3] * w1 + t[5] * w2) / 256.0;
             var tx = Math.Clamp((int)Math.Round(tu), 0, 255); var ty = Math.Clamp((int)Math.Round(tv), 0, 255);
-            var texel = island.GroundTexture[ty * 256 + tx];
+            var texel = island.GroundPage(page)[ty * 256 + tx];
             // (a texture over a flat colour -- the engine's incrust, the race track's kerbs: its colour 0 is see-through)
             if (texel == 0 && poly.PolyFlag != 0) return Shade((poly.Bank << 4) + 11, factor);
             return Shade(texel, factor);

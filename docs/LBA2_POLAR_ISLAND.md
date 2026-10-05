@@ -15,6 +15,8 @@ scenes; Twinsen starts on the dock.
 
 ![LBA1's Polar Island, joined](polar/lba1_layout.png)
 
+![Before the rocky peak: LBA1 (top) and the port from LBA1's angle (bottom)](polar/lba1_and_port.png)
+
 The outside scenes are joined where their cube-change zones say they meet (`Terrain/Polar/PolarLayout.cs`):
 
 ```
@@ -43,20 +45,37 @@ An LBA1 scene is bricks in 64 × 25 × 64 cells. An LBA2 island is a height map 
     grey).
   * Not ground: grey 00 (concrete walls, crates), metal (22: huts, barrels, pipes), wood (33) and F0 (posts, fences, gates, pillars).
     These become objects.
-* **Heights:** each column's ground is its highest ground cell. Each corner of the height map takes the highest of its four cells, so a
-  ledge keeps its edge and the cell below it slopes up to it.
-* **Textures:** a ground cell is textured with its brick's top face, unskewed from the sprite's diamond into a 16 × 16 tile of the
-  island's ground atlas. Colours map to the nearest of the palette's lit colours; the palette is the fine-weather Citadel's.
-* **Cliffs:** a cell that climbs two layers or more takes the side face of the column it climbs to, turned so its top runs along the
-  slope's high edge. Slopes steeper than 40° get the engine's own collision bit, so they are walls; one-layer steps stay walkable.
-* **Banks:** water next to land is drawn as a bank sloping down into LBA2's sea, in the land's side texture. It is still water to
-  Twinsen. Isolated rocks in the lake become small mounds instead of floating plates.
+* **Heights:** each column's ground is its highest ground cell. A height map has no walls, so where two cells of different heights meet,
+  one of them becomes a slope. Each corner of the height map takes the height of the cells round it that keep theirs, in this order:
+  1. car tracks (dirt whose top is tyre tread);
+  2. other dirt, the paths;
+  3. water;
+  4. rock: the brown rock of the cliffs' rims and foot, and the crystal.
+
+  So a cliff's slope is its rocky rim, not the track at its foot. The water stays flat up to the rock that slopes into it. A step beside
+  a track is on the other side. Of the 2,033 track cells, none loses its tread; 93 tilt where the ground itself climbs a layer.
+* **Textures:** a ground cell is textured with its brick's top face, unskewed from the sprite's diamond into a **32 × 32** tile. That is
+  the retail islands' size; LBA1 draws a cell's edge about 27 pixels long. The 507 faces this takes don't fit one 256 × 256 page, so
+  the island has 8 (see *Texture pages*).
+* **Colours:** colours map to the nearest of the palette's lit colours. The palette is the fine-weather Citadel's (RESS 42), as near to
+  LBA1's browns as any island's.
+* **Light:** the engine shades textured ground through the palette's light table, and level 12 (`ShadeNormalLevel`) leaves a colour as
+  it is. Baking the cubes' sun put flat ground at 8, a third darker than LBA1. LBA1's bricks have their light drawn in, so flat ground
+  is now at 12, and slopes keep 0.6 of the bake's difference round it.
+* **Cliffs:** a cell whose corners are two layers or more apart shows a column's side, two bricks of it, turned so its top runs along
+  the slope's high edge. A rim dropping to the path below shows its own column; a cell climbing to a higher one shows that one's. Slopes
+  steeper than 40° get the engine's own collision bit, so they are walls; one-layer steps stay walkable.
+* **Banks:** water next to dirt is drawn as a bank sloping down into LBA2's sea, in the land's side texture. It is still water to
+  Twinsen.
+* **Rocks in the water:** a piece of land of 40 cells or fewer with the sea all round it is built as an object instead (139 columns).
+  Its sides go straight up out of the water. LBA1 draws these rocks with the water round them on the same brick, so the water's own
+  colours are taken off their bricks first, and the sea shows round the stones.
 * **Enclosed water:** water with land on all four corners is drawn flat with LBA1's own water texture.
 * **Open water:** everything else is left undrawn, so the engine's sea shows through.
 
 ## The objects (`PolarObjects.cs`, `PolarTextures.cs`)
 
-What isn't ground is built as island objects: 285 bodies in `POLAR.OBL`, one decor each.
+What isn't ground is built as island objects: 497 bodies in `POLAR.OBL`, one decor each.
 
 * **Boxes:** each piece of touching object cells, in chunks of up to 8 × 8 columns, is a body of boxes, one box per cell.
 * **Faces:** every face of a box that something else doesn't cover is drawn, including the sides LBA1 never drew (−x and −z). Those take
@@ -68,11 +87,36 @@ What isn't ground is built as island objects: 285 bodies in `POLAR.OBL`, one dec
   * Bricks that draw little of their cell get their nearest box even when the fit is poor. LBA1 splits a post's picture among the bricks
     of every cell it crosses *on the screen*, so a brick may hold just one piece of a post, or the roots of another.
 * **Mist:** the plateau's mist is dithered sparkle, mostly lone pixels. No solid object can show that, so those bricks are left out.
-* **Textures:** each face is textured with its brick's face. Where the sprite hardly draws that face, it uses the face the brick draws
-  most of; failing that, the brick's commonest colour.
-* **Gotcha:** each atlas tile needs its own entry in the body's texture table (its place in the page plus a 16-pixel repeat mask). One
+* **Textures:** each face is textured with its brick's face, 32 pixels to a cell. Where the sprite hardly draws that face, it uses the
+  face the brick draws most of; failing that, the brick's commonest colour.
+* **Pages:** the 570 faces fill 6 object pages. A body draws from one page, so each brick's faces are all on one page, filled in the
+  order the chunks first use the bricks. A chunk whose bricks ended up on two pages becomes a body for each.
+* **Gotcha:** each atlas tile needs its own entry in the body's texture table (its place in the page plus a 32-pixel repeat mask). One
   entry for the whole page, `0xFFFF0000`, is what the engine takes for a placeholder: it draws the polygon in its flat colour instead,
   which came out black (`AFF_OBJ.CPP`).
+
+## Texture pages
+
+A retail island has one 256 × 256 page for its ground and one for its objects. At 32 pixels to a cell, Polar Island needs 8 ground
+pages and 6 object pages, so the engine reads more pages for an island that has them. A retail island has none and draws as before.
+
+* **In the file:** after the last cube's records, `POLAR.ILE` has a header entry (`PAGE`, then how many more ground pages and object
+  pages), then those pages. Retail islands end exactly at their last cube's records.
+* **Ground:** a ground triangle's texture index (13 bits) holds its page in the top 3 bits and its texture definition in the cube's list
+  in the low 10 (up to 1,024 a cube; Polar uses at most 351).
+* **Objects:** a decor's body field holds its page in bits 18–21. The body number is the low 16 bits and the engine's two decor flags
+  the next two, so the page bits are free.
+
+## Twinsen's car
+
+The island is to have a race track, so the dock scene (239) has Twinsen's car beside him. It is the Desert island's own buggy (scene
+67), copied with two changes:
+
+* its script's wait for the car quest is zeroed, as the race track builder does;
+* its `INIT_BUGGY` uses mode 1, not 0. Mode 0 only puts back a car the game already has; mode 1 makes it here the first time and
+  leaves a car the player has elsewhere where it is.
+
+Twinsen gets in and drives it.
 
 ## The scenes (`PolarScenes.cs`)
 
@@ -82,7 +126,7 @@ he got there.
 
 * **Numbers:** they start after the retail game's scenes (up to 221) and the race track builder's (222–228).
 * **Contents:** each is a copy of scene 44's header with island 12 and its own cube. Nobody is in it but Twinsen and the engine's Zoe
-  placeholder.
+  placeholder, plus Twinsen's car in the dock scene.
 * **Cube changes:** a cube-change zone runs along every edge a cube shares with another (`OBJECT.CPP` `GereZoneChangeCube`: the arrival
   edge in Info0/Info2, 512 or 31744).
 * **Start:** Twinsen starts where LBA1 starts him on the island: on the dock (LBA1 scene 115), in scene 239. In the other scenes he
@@ -111,6 +155,10 @@ he got there.
 | `MESSAGE.CPP` `TextEntry` | Island 12's text file (file 15, one past the retail 15 per language) is a pair of `TEXT.HQR` entries per language after the retail block: entries 180–191. |
 | `MESSAGE.CPP` `ListFileText` | Gains `"012"`. Island 12 read past its end when building a voice file name. |
 | `DISKFUNC.CPP` | A scene's planet is read only for an island the holomap table has. |
+| `3DEXT/LOADISLE.CPP`, `VAR_EXT` | An island's more texture pages: read after its cubes' records when their header is there (8 ground pages at most, 16 object pages). |
+| `3DEXT/TERRAIN.CPP` `GroundTexDef` | A ground triangle's page, from its texture index, when the island has more ground pages. |
+| `3DEXT/DECORS.CPP` | Each decor's object page, from its body field, when the island has more object pages; back to the first page after the decors. |
+| `BUGGY.CPP` `TakeBuggy` | The parked car is drawn into the cached background, so taking it rebuilds that background. Only race mode did that before; elsewhere the empty car stayed on screen until the camera moved. |
 | `SAVEGAME.CPP` | Loading a save first tries the old 64-bit record layout and accepts it only if every actor's body index is in range. A Polar scene has just Twinsen and the Zoe placeholder, mostly zeros, so its saves passed that check, were misread, and crashed in `ObjectSetInterDep`. Now the old layout is accepted only if Twinsen's animation state also reads whole (1–30 groups, frames inside the animation). The 13 LBA2 saves on this PC still load. |
 
 ## What the build changes in the game folder
@@ -131,6 +179,14 @@ he got there.
 * **Race track builder:** its "put the folder back" restores its own copies of `SCENE.HQR`, `RESS.HQR`, `HOLOMAP.HQR` and `TEXT.HQR`. A
   track built *before* Polar Island was added would take the island's scenes out with it. Add the island again afterwards.
 
+## LBA Assembler's own readers
+
+* `IslandFile` and `IslandDocument` stop reading cubes at the page header. Before that, they took the pages for extra cubes and read past
+  the end of the entry table ("Unsupported HQR compression method").
+* The island map and minimap, the holomap picture and the 3D export draw from a triangle's own page.
+* The export puts the pages one under another in one texture.
+* The terrain editor's atlas shows the first page only.
+
 ## Testing
 
 `tools/ScriptRoundTrip`:
@@ -146,6 +202,13 @@ he got there.
 | `polarcubes` | Which LBA1 scenes fill each cube. |
 | `polartall` | The tall columns. |
 | `polaratlas` | The atlases. |
+| `polarview <game> <png> <x> <z> [alpha beta distance wide]` | The island through the native renderer from any angle. LBA1's angle is alpha 341, beta 3584. |
+| `polarregion <LBA1> <png> <scene or joined> <x0> <x1> <z0> <z1>` | A region as LBA1 draws it, to compare with `polarview`. |
+| `polarprobe` | The cells of some columns. |
+| `polartiles` | The ground bricks overall and per cube. |
+| `polarpalette` | Each palette's fit to LBA1's colours, and its normal light level. |
+| `polarwater` | The water's and the crystal's colours. |
+| `polardark` | The ground bricks by tread darkness, with a picture sheet. |
 
 Headless engine checks (sandbox copy of the game):
 
@@ -161,4 +224,5 @@ Headless engine checks (sandbox copy of the game):
 * **Characters:** none yet. LBA1's actors and their scripts aren't ported.
 * **Getting there:** no way in from the story: Play, or `cube 239`.
 * **Shapes:** objects are boxes, so the huts' curved roofs are square, and a post split over several bricks is a few small boxes.
+* **Tall cliffs:** a cliff higher than two layers stretches its two-layer rock texture over the whole slope.
 * **Missing scene:** the rocky peak's own scene (110) isn't a separate place: its mountain is 107's.

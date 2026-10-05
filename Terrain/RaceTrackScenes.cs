@@ -24,7 +24,7 @@ internal static class RaceTrackScenes
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
     //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
     // and reads >= 0 with the 3 zeroed, so the buggy is there from the start of any game. True when it was that script.
-    private static bool BuggyAlwaysThere(SceneActorModel buggy)
+    internal static bool BuggyAlwaysThere(SceneActorModel buggy)
     {
         if (buggy.Life.Length <= 6 || buggy.Life[0] != 0x0C || buggy.Life[1] != 0x0F || buggy.Life[2] != 0x4A || buggy.Life[3] != 0x03 || buggy.Life[4] != 0x03 || buggy.Life[5] != 0x00) return false;
         buggy.Life[4] = 0x00;

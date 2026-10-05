@@ -18,22 +18,28 @@ internal static class PolarObjects
     // the engine's limits for a body (550 points, 550 polygons), with some room
     private const int MaxPoints = 500, MaxFaces = 500;
     // A face's texture: its tile's entry in the body's texture table -- the tile's place in the page (row * 256 + column) and a repeat mask
-    // of 16 pixels each way (0x0F0F) -- and UVs inside the tile. (Not one entry for the whole page, 0xFFFF0000: the engine takes that for
-    // the placeholder some retail bodies have and draws an unlit textured polygon in its flat colour instead -- AFF_OBJ.CPP.)
-    private static uint TileEntry(int x, int y) => 0x0F0F0000u | (uint)(y * 256 + x);
+    // of 32 pixels each way (0x1F1F) -- and UVs inside the tile. (Not one entry for the whole page, 0xFFFF0000: the engine takes that for
+    // the placeholder some retail bodies have and draws an unlit textured polygon in its flat colour instead -- AFF_OBJ.CPP.) A body's
+    // textures are all on one page of the island's object pages, the decor's (IslandFile.DecorPageShift).
+    private static uint TileEntry(int x, int y) => 0x1F1F0000u | (uint)(y * 256 + x);
 
     public sealed record Built(List<byte[]> Bodies, int Decors, List<string> Log);
 
-    public static Built Build(Lba1Game game, PolarLayout layout, IReadOnlyDictionary<(int X, int Z), PolarTerrain.Column> columns, IslandFile island,
-        int offsetX, int offsetZ, PolarTextures.Colours colours)
+    public static Built Build(Lba1Game game, PolarLayout layout, IReadOnlyDictionary<(int X, int Z), PolarTerrain.Column> columns, IReadOnlySet<(int X, int Z)> rocks,
+        IslandFile island, int offsetX, int offsetZ, PolarTextures.Colours colours)
     {
         var log = new List<string>();
-        // the object cells: not ground, above their column's ground, and not a wisp of mist (dithered: Sprite.Scattered)
+        // the object cells: not ground, above their column's ground, and not a wisp of mist (dithered: Sprite.Scattered); and the rocks in
+        // the water (PolarTerrain.RockCells), whole, from the water's surface up
         var mist = new Dictionary<int, bool>();
         bool Mist(int brick) => mist.TryGetValue(brick, out var m) ? m : mist[brick] = PolarTextures.Sprite.Decode(game.ReadBrick(brick)).Scattered >= MistScattered;
-        var cells = layout.Cells.Where(c => !PolarTerrain.IsGround(game, c.Value) && (!columns.TryGetValue((c.Key.X, c.Key.Z), out var col) || c.Key.Y > col.Top) && !Mist(c.Value.Brick))
+        bool Rock(KeyValuePair<(int X, int Y, int Z), PolarLayout.Cell> c) => rocks.Contains((c.Key.X, c.Key.Z)) && !c.Value.Water && c.Key.Y >= 1;
+        var cells = layout.Cells.Where(c => (Rock(c) || !PolarTerrain.IsGround(game, c.Value) && (!columns.TryGetValue((c.Key.X, c.Key.Z), out var col) || c.Key.Y > col.Top)) && !Mist(c.Value.Brick))
             .ToDictionary(c => c.Key, c => c.Value);
         log.Add($"{mist.Count(m => m.Value)} bricks of mist (dithered) left out");
+        // (objects standing on the car tracks: as LBA1 has them, but worth a look)
+        var onTracks = cells.Keys.Where(k => PolarTerrain.TrackCells.Contains((k.X, k.Z)) && columns.TryGetValue((k.X, k.Z), out var col) && k.Y == col.Top + 1).ToList();
+        log.Add($"{onTracks.Count} object cells stand on car track cells" + (onTracks.Count > 0 ? ": " + string.Join(" ", onTracks.Take(40).Select(k => $"({k.X},{k.Z}){cells[k].Brick}/{cells[k].Code:X2}")) : ""));
 
         // the pieces, in chunks
         var chunks = new List<List<(int X, int Y, int Z)>>();
@@ -57,8 +63,19 @@ internal static class PolarObjects
         // the faces each chunk shows, and the tiles they need: a face is hidden where it lies on its cell's side and what is beyond covers
         // it -- ground, or an object's box as wide
         bool Solid((int X, int Y, int Z) c) => layout.Cells.ContainsKey(c) || columns.TryGetValue((c.X, c.Z), out var col) && c.Y <= col.Top;
+        // (a rock in the water is drawn in LBA1 with the water round it on its brick: the water's own colours -- those most of LBA1's water
+        // bricks are drawn in, the crystal's left out -- are taken off the rocks' bricks, so their boxes are the stones and the sea shows
+        // round them)
+        var water = WaterColours(game, layout);
+        var rockBricks = cells.Where(c => rocks.Contains((c.Key.X, c.Key.Z))).Select(c => c.Value.Brick).ToHashSet();
         var sprites = new Dictionary<int, PolarTextures.Sprite>();
-        PolarTextures.Sprite Sprite(int brick) => sprites.TryGetValue(brick, out var s) ? s : sprites[brick] = PolarTextures.Sprite.Decode(game.ReadBrick(brick));
+        PolarTextures.Sprite Sprite(int brick)
+        {
+            if (sprites.TryGetValue(brick, out var s)) return s;
+            s = PolarTextures.Sprite.Decode(game.ReadBrick(brick));
+            if (rockBricks.Contains(brick)) for (var i = 0; i < s.Pixels.Length; i++) if (water.Contains(s.Pixels[i])) s.Pixels[i] = -1;
+            return sprites[brick] = s;
+        }
         var boxes = new Dictionary<int, PolarTextures.Box>();
         PolarTextures.Box BoxOf(int brick) => boxes.TryGetValue(brick, out var b) ? b : boxes[brick] = Sprite(brick).Footprint();
         bool Hidden((int X, int Y, int Z) c, int dir)
@@ -96,8 +113,22 @@ internal static class PolarObjects
                 }
             faces.Add(list);
         }
-        var atlas = PolarTextures.Atlas.Build(tiles, island.ObjectTexture, colours);
-        log.Add($"the object atlas: {atlas.Tiles} brick faces in {atlas.Groups} tiles");
+        // (the pages: each brick's faces on one, the pages filled in the order the chunks first use the bricks -- a chunk's bricks mostly
+        // together; a chunk whose bricks are on more than one page is a body for each)
+        var pages = new PolarTextures.Pages(island.ObjectTexture, colours, IslandFile.MaxObjectPages);
+        var pageOf = new Dictionary<int, int>();
+        var filling = 0;
+        foreach (var list in faces)
+            foreach (var brick in list.Select(f => cells[f.Cell].Brick).Distinct())
+            {
+                if (pageOf.ContainsKey(brick)) continue;
+                var keys = tiles.Keys.Where(k => k is ValueTuple<int, PolarTextures.Face> t && t.Item1 == brick).ToList();
+                var need = keys.Sum(k => PolarTextures.Pages.HalvesOf(tiles[k].H));
+                if (need > pages.Free(filling)) filling++;
+                if (filling >= IslandFile.MaxObjectPages) throw new InvalidOperationException($"The objects' textures take more than {IslandFile.MaxObjectPages} pages.");
+                foreach (var k in keys) { var (t, w, h) = tiles[k]; pages.Add(k, t, w, h, filling); }
+                pageOf[brick] = filling;
+            }
         var thin = cells.Values.Select(c => c.Brick).Distinct().Count(b => !BoxOf(b).IsFull);
         log.Add($"{thin} of the {cells.Values.Select(c => c.Brick).Distinct().Count()} object bricks fill part of their cell (posts, poles, fences): thinner boxes");
 
@@ -109,7 +140,15 @@ internal static class PolarObjects
         {
             var (chunk, shown) = queue2.Dequeue();
             if (shown.Count == 0) continue;
-            var body = Mesh(chunk, shown, cells, atlas, BoxOf, out var origin);
+            // (bricks on more than one page: a body for each page's cells)
+            var byPage = chunk.GroupBy(c => pageOf.TryGetValue(cells[c].Brick, out var pg) ? pg : 0).ToList();
+            if (byPage.Count > 1)
+            {
+                foreach (var g in byPage) { var set = g.ToHashSet(); queue2.Enqueue((g.ToList(), shown.Where(f => set.Contains(f.Cell)).ToList())); }
+                continue;
+            }
+            var page = byPage[0].Key;
+            var body = Mesh(chunk, shown, cells, key => { var (_, x, y) = pages.Place[key]; return (x, y); }, BoxOf, out var origin);
             if (body is null)
             {
                 // too big: halves along x or z
@@ -127,7 +166,7 @@ internal static class PolarObjects
             if (cube.Decors.Count >= IslandDecors.MaxPerCube) { log.Add($"cube ({gx0 / 64}, {gz0 / 64}) has its {IslandDecors.MaxPerCube} objects: a chunk left out"); continue; }
             int cubeX = gx0 / 64 * IslandFile.CubeSize, cubeZ = gz0 / 64 * IslandFile.CubeSize;
             // (the origin is in the layout's cells and layers: to world units)
-            var decor = IslandDecors.Blank(bodies.Count, (int)Math.Round((origin.X + offsetX) * 512) - cubeX, (int)Math.Round(origin.Y * 256), (int)Math.Round((origin.Z + offsetZ) * 512) - cubeZ);
+            var decor = IslandDecors.Blank(bodies.Count | (page << IslandFile.DecorPageShift), (int)Math.Round((origin.X + offsetX) * 512) - cubeX, (int)Math.Round(origin.Y * 256), (int)Math.Round((origin.Z + offsetZ) * 512) - cubeZ);
             decor.XMin = (chunk.Min(c => c.X) + offsetX) * 512 - cubeX; decor.XMax = (chunk.Max(c => c.X) + 1 + offsetX) * 512 - cubeX;
             decor.ZMin = (chunk.Min(c => c.Z) + offsetZ) * 512 - cubeZ; decor.ZMax = (chunk.Max(c => c.Z) + 1 + offsetZ) * 512 - cubeZ;
             decor.YMin = (chunk.Min(c => c.Y) - 1) * 256; decor.YMax = chunk.Max(c => c.Y) * 256;
@@ -135,8 +174,34 @@ internal static class PolarObjects
             bodies.Add(body.Write());
             decors++;
         }
-        log.Add($"{cells.Count} object cells in {chunks.Count} chunks: {decors} objects, {bodies.Count} bodies");
+        island.ObjectPages.Clear();
+        island.ObjectPages.AddRange(pages.List.Skip(1));
+        log.Add($"the objects' textures: {tiles.Count} faces of bricks at {PolarTextures.TileSize} pixels to a cell, on {pages.Count} pages");
+        log.Add($"{cells.Count} object cells ({cells.Keys.Count(c => rocks.Contains((c.X, c.Z)))} of rocks in the water) in {chunks.Count} chunks: {decors} objects, {bodies.Count} bodies");
         return new Built(bodies, decors, log);
+    }
+
+    // LBA1's water colours: those that make up 85 % of its water bricks' pixels, less any the crystal's bricks are much drawn in.
+    private static HashSet<int> WaterColours(Lba1Game game, PolarLayout layout)
+    {
+        Dictionary<int, long> Count(IEnumerable<int> bricks)
+        {
+            var counts = new Dictionary<int, long>();
+            foreach (var b in bricks.Distinct())
+                foreach (var px in PolarTextures.Sprite.Decode(game.ReadBrick(b)).Pixels) if (px >= 0) counts[px] = counts.GetValueOrDefault(px) + 1;
+            return counts;
+        }
+        var water = Count(layout.Cells.Values.Where(c => c.Water).Select(c => c.Brick));
+        var crystal = Count(layout.Cells.Values.Where(c => (c.Code & 0xF0) == 0xA0).Select(c => c.Brick));
+        long total = water.Values.Sum(), crystalTotal = Math.Max(1, crystal.Values.Sum()), sum = 0;
+        var result = new HashSet<int>();
+        foreach (var (colour, n) in water.OrderByDescending(k => k.Value))
+        {
+            if (sum >= total * 0.85) break;
+            sum += n;
+            if (crystal.GetValueOrDefault(colour) * 200 < crystalTotal) result.Add(colour);
+        }
+        return result;
     }
 
     private static readonly (int, int, int)[] Neighbours = { (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1) };
@@ -147,7 +212,7 @@ internal static class PolarObjects
     // A chunk's body: its faces as textured quads, its points relative to the origin (the middle of its footprint, at the foot of its
     // lowest cell, island-wide world units). Null when it is too big for a body.
     private static Body? Mesh(List<(int X, int Y, int Z)> chunk, List<((int X, int Y, int Z) Cell, int Dir)> shown, Dictionary<(int X, int Y, int Z), PolarLayout.Cell> cells,
-        PolarTextures.Atlas atlas, Func<int, PolarTextures.Box> boxOf, out Vector3 origin)
+        Func<object, (int X, int Y)> place, Func<int, PolarTextures.Box> boxOf, out Vector3 origin)
     {
         int x0 = chunk.Min(c => c.X), x1 = chunk.Max(c => c.X) + 1, z0 = chunk.Min(c => c.Z), z1 = chunk.Max(c => c.Z) + 1, y0 = chunk.Min(c => c.Y) - 1;
         // (island-wide world coordinates come later: here the layout's, the origin in cells)
@@ -173,7 +238,7 @@ internal static class PolarObjects
             double x = c.X + b.U0, xe = c.X + b.U1, z = c.Z + b.V0, ze = c.Z + b.V1;
             var y = c.Y;
             var face = FaceOf(dir);
-            var (tx, ty) = atlas.Place[(cells[c].Brick, face)];
+            var (tx, ty) = place((cells[c].Brick, face));
             var (w, h) = PolarTextures.Size(face);
             // corners in order (outward winding) with their (u, v) in the tile
             (double X, int Y, double Z, double U, double V)[] corners = dir switch
