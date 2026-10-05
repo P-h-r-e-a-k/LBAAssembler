@@ -28,9 +28,10 @@ internal static class PolarTerrain
     // a piece of land no bigger than this, the sea all round it, is a rock in the water: built as an object (PolarObjects), its sides
     // straight up out of the water -- ground would slope down into the sea all round it
     public const int RockCells = 40;
-    // the light: the palette's normal level (XPL ShadeNormalLevel: its colours as they are) on flat ground -- LBA1's bricks have their
-    // light drawn in -- and the bake's slopes a little lighter or darker round it
-    public const int NormalLight = 12;
+    // the light: two levels over the palette's normal one (XPL ShadeNormalLevel, 12: its colours as they are) on flat ground -- LBA1's
+    // bricks have their light drawn in, and at 12 the ground still looked darker than LBA1's -- and the bake's slopes a little lighter or
+    // darker round it
+    public const int NormalLight = 14;
     public const double SlopeLight = 0.6;
 
     // Columns: the ground's (the rocks in the water left out); Rocks: the columns of the rocks in the water (the layout's x, z).
@@ -70,12 +71,13 @@ internal static class PolarTerrain
         public bool Water => Top >= 0 && Cell.Water;
     }
 
+    // (the rocky peak's columns and 111's plateau on it are objects: PolarObjects)
     public static Dictionary<(int X, int Z), Column> Columns(Lba1Game game, PolarLayout layout)
     {
         var columns = new Dictionary<(int, int), Column>();
         foreach (var ((x, y, z), cell) in layout.Cells)
         {
-            if (!IsGround(game, cell)) continue;
+            if (!IsGround(game, cell) || cell.Scene == PolarLayout.PlateauScene || layout.Peak.Contains((x, z))) continue;
             if (!columns.TryGetValue((x, z), out var c) || y > c.Top) columns[(x, z)] = new Column(y, cell);
         }
         return columns;

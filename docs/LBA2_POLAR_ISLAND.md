@@ -17,7 +17,7 @@ scenes; Twinsen starts on the dock.
 
 ![Before the rocky peak: LBA1 (top) and the port from LBA1's angle (bottom)](polar/lba1_and_port.png)
 
-The outside scenes are joined where their cube-change zones say they meet (`Terrain/Polar/PolarLayout.cs`):
+The outside scenes are joined where their car tracks meet (`Terrain/Polar/PolarLayout.cs`):
 
 ```
 115 1st scene (the dock) -- 106 2nd scene -- 107 3rd scene -- 108 before the rocky peak (west of 107)
@@ -26,14 +26,33 @@ The outside scenes are joined where their cube-change zones say they meet (`Terr
 
 The scenes don't fit together exactly:
 
+* **The joins:** the cube-change zones put each scene nearly in place, but a cell or two out. LBA1 sets Twinsen down at one point of
+  the next scene wherever he crossed the zone, so a zone gives a scene's place only roughly, and the zones overlapped grids that meet
+  edge to edge. Comparing where the tracks reach each edge (`polarexits`) and which bricks the grids share (`polarfit`) gave the real
+  places:
+  * 106, 108 and 109 meet 107 edge to edge, each where its tracks run on from 107's at the same height. 106 is one cell west of the
+    zones' place and 108 one cell south.
+  * The dock (115) shares a strip of ground with 106 (228 columns, 132 of them the same top brick at the same height), so it lies over
+    106 there, one cell south of the zones' place.
+
+  Where two scenes cover the same column, the whole column comes from the scene it lies deeper inside, never half from each. The car
+  drives straight across all four joins.
+
 * **The rocky peak (110):** 108's gate leads to 110, the crystal mountain. Put where its zones say, 110 lands on top of 107. 107's north
   corner already holds the same mountain, only cut off at the grid's edge and in a slightly different place. So 110 is left out. Its
-  mountain is matched against 107's (the offset where most of its tall columns stand equally high in 107) and used to make 107's
-  mountain whole.
-* **The plateau (111):** "On the rocky peak", the plateau of twisted pillars, goes on top of that mountain, at the offset the 110 ↔ 111
-  zones give. Its own teal floor far below the plateau is a backdrop and is left out.
-* **The gate:** across the water from 108's gate, a causeway of the gate's own ground leads onto 107's path to the mountain. It is four
-  cells long.
+  mountain is matched against 107's (the offset where most of its tall columns stand equally high in 107) and placed there whole.
+  * 107 and 109 also draw parts of the mountain, a few cells from 110's. Those copies are replaced by what 110 has at those places
+    (36 columns), so there is one mountain, LBA1's shape.
+  * LBA1 leaves columns hollow where its camera never looks, under a tier or behind the front ones. Seen from all round, each column is
+    filled down to the sea.
+  * The peak is **twice as high** as LBA1's: every layer becomes two, from the sea up (its top was at layer 23, now 46). It is built as
+    objects with straight crystal walls; a height map would turn its tiers into slopes.
+![The rocky peak: LBA1's scene 110 (left) and the port, twice as high with the plateau on top (right)](polar/rocky_peak.png)
+
+* **The plateau (111):** "On the rocky peak", the plateau of twisted pillars, goes on top of the peak: at the offset the 110 ↔ 111 zones
+  give, lifted as much as the peak grew. Its own teal floor far below the plateau is a backdrop and is left out.
+* **The gate:** across the water from 108's gate, a causeway of the gate's own ground leads onto 107's path to the mountain. It is 14
+  cells long now that 108 sits where its tracks meet 107's.
 
 ## The ground (`PolarTerrain.cs`)
 
@@ -61,7 +80,7 @@ An LBA1 scene is bricks in 64 × 25 × 64 cells. An LBA2 island is a height map 
   LBA1's browns as any island's.
 * **Light:** the engine shades textured ground through the palette's light table, and level 12 (`ShadeNormalLevel`) leaves a colour as
   it is. Baking the cubes' sun put flat ground at 8, a third darker than LBA1. LBA1's bricks have their light drawn in, so flat ground
-  is now at 12, and slopes keep 0.6 of the bake's difference round it.
+  is now at 14, two shades lighter than the palette's own colours, and slopes keep 0.6 of the bake's difference round it.
 * **Cliffs:** a cell whose corners are two layers or more apart shows a column's side, two bricks of it, turned so its top runs along
   the slope's high edge. A rim dropping to the path below shows its own column; a cell climbing to a higher one shows that one's. Slopes
   steeper than 40° get the engine's own collision bit, so they are walls; one-layer steps stay walkable.
@@ -75,9 +94,12 @@ An LBA1 scene is bricks in 64 × 25 × 64 cells. An LBA2 island is a height map 
 
 ## The objects (`PolarObjects.cs`, `PolarTextures.cs`)
 
-What isn't ground is built as island objects: 497 bodies in `POLAR.OBL`, one decor each.
+What isn't ground is built as island objects: 719 bodies in `POLAR.OBL`, one decor each. So are the rocky peak and its plateau.
 
 * **Boxes:** each piece of touching object cells, in chunks of up to 8 × 8 columns, is a body of boxes, one box per cell.
+* **Collision:** the engine's collision for an object is its decor's box, the whole rectangle round it. A chunk whose rectangle would
+  take in ground that it doesn't cover (a track between two fence posts) is split until it doesn't. No track cell is inside an object's
+  box any more; before, 27 were, invisible walls across the tracks.
 * **Faces:** every face of a box that something else doesn't cover is drawn, including the sides LBA1 never drew (−x and −z). Those take
   the opposite side's texture, so nothing is see-through when you turn round.
 * **Thin objects:** a box is the part of its cell the brick fills, read from the brick's outline. A post is a thin box; a wall fills its
@@ -89,7 +111,7 @@ What isn't ground is built as island objects: 497 bodies in `POLAR.OBL`, one dec
 * **Mist:** the plateau's mist is dithered sparkle, mostly lone pixels. No solid object can show that, so those bricks are left out.
 * **Textures:** each face is textured with its brick's face, 32 pixels to a cell. Where the sprite hardly draws that face, it uses the
   face the brick draws most of; failing that, the brick's commonest colour.
-* **Pages:** the 570 faces fill 6 object pages. A body draws from one page, so each brick's faces are all on one page, filled in the
+* **Pages:** the faces fill 7 object pages. A body draws from one page, so each brick's faces are all on one page, filled in the
   order the chunks first use the bricks. A chunk whose bricks ended up on two pages becomes a body for each.
 * **Gotcha:** each atlas tile needs its own entry in the body's texture table (its place in the page plus a 32-pixel repeat mask). One
   entry for the whole page, `0xFFFF0000`, is what the engine takes for a placeholder: it draws the polygon in its flat colour instead,
@@ -110,7 +132,8 @@ pages and 6 object pages, so the engine reads more pages for an island that has 
 ## Twinsen's car
 
 The island is to have a race track, so the dock scene (239) has Twinsen's car beside him. It is the Desert island's own buggy (scene
-67), copied with two changes:
+67). Every other scene of the island has it too, as on the Desert island: the engine hands the car on to the next scene's copy at a cube
+change (`BUGGY.CPP` `InitBuggy`), and without one there the car stopped at the first cube edge. The copies are changed in two ways:
 
 * its script's wait for the car quest is zeroed, as the race track builder does;
 * its `INIT_BUGGY` uses mode 1, not 0. Mode 0 only puts back a car the game already has; mode 1 makes it here the first time and
@@ -140,7 +163,8 @@ he got there.
 
 * **Map entries:** the retail `HOLOMAP.HQR` has map pairs up to entry 45, and slot 12's pair is already taken (the fine-weather
   Citadel's). Polar Island's picture and camera are appended as entries 46 and 47.
-* **Picture:** the island's ground drawn through its camera over a calm sea in the Citadel picture's colours (`HolomapPicture`).
+* **Picture:** the island's ground drawn through its camera over a calm sea in the Citadel picture's colours (`HolomapPicture`). The
+  rocky peak and its plateau are objects, so they are added as solid columns in their bricks' colours.
 * **Globe:** position record 12 puts the island on the planet near its north pole. Its label is text 620 of the game text file
   ("Polar Island"), added in every language.
 * **Scene records:** each scene's record (50 + scene) marks it as an outside scene of island 12. The cube-change zones test this flag.
@@ -225,4 +249,5 @@ Headless engine checks (sandbox copy of the game):
 * **Getting there:** no way in from the story: Play, or `cube 239`.
 * **Shapes:** objects are boxes, so the huts' curved roofs are square, and a post split over several bricks is a few small boxes.
 * **Tall cliffs:** a cliff higher than two layers stretches its two-layer rock texture over the whole slope.
-* **Missing scene:** the rocky peak's own scene (110) isn't a separate place: its mountain is 107's.
+* **Missing scene:** the rocky peak's own scene (110) isn't a separate place: its mountain stands in 107's water.
+* **The peak's sides:** they are LBA1's crystal blocks, so they look like stacked blocks rather than rock.

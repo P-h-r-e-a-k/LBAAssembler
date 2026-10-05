@@ -33,7 +33,9 @@ internal static class PolarObjects
         // the water (PolarTerrain.RockCells), whole, from the water's surface up
         var mist = new Dictionary<int, bool>();
         bool Mist(int brick) => mist.TryGetValue(brick, out var m) ? m : mist[brick] = PolarTextures.Sprite.Decode(game.ReadBrick(brick)).Scattered >= MistScattered;
-        bool Rock(KeyValuePair<(int X, int Y, int Z), PolarLayout.Cell> c) => rocks.Contains((c.Key.X, c.Key.Z)) && !c.Value.Water && c.Key.Y >= 1;
+        // (and the rocky peak, its columns whole, and 111's plateau on it)
+        bool Rock(KeyValuePair<(int X, int Y, int Z), PolarLayout.Cell> c) => (rocks.Contains((c.Key.X, c.Key.Z)) || layout.Peak.Contains((c.Key.X, c.Key.Z))) && !c.Value.Water && c.Key.Y >= 1
+            || c.Value.Scene == PolarLayout.PlateauScene;
         var cells = layout.Cells.Where(c => (Rock(c) || !PolarTerrain.IsGround(game, c.Value) && (!columns.TryGetValue((c.Key.X, c.Key.Z), out var col) || c.Key.Y > col.Top)) && !Mist(c.Value.Brick))
             .ToDictionary(c => c.Key, c => c.Value);
         log.Add($"{mist.Count(m => m.Value)} bricks of mist (dithered) left out");
@@ -62,7 +64,9 @@ internal static class PolarObjects
 
         // the faces each chunk shows, and the tiles they need: a face is hidden where it lies on its cell's side and what is beyond covers
         // it -- ground, or an object's box as wide
-        bool Solid((int X, int Y, int Z) c) => layout.Cells.ContainsKey(c) || columns.TryGetValue((c.X, c.Z), out var col) && c.Y <= col.Top;
+        // (what the island has there: ground up to its column's top -- water only below the sea's level -- not just any LBA1 brick: the water
+        // bricks round the rocky peak hid its sides)
+        bool Solid((int X, int Y, int Z) c) => columns.TryGetValue((c.X, c.Z), out var col) && (col.Water ? c.Y <= 0 : c.Y <= col.Top);
         // (a rock in the water is drawn in LBA1 with the water round it on its brick: the water's own colours -- those most of LBA1's water
         // bricks are drawn in, the crystal's left out -- are taken off the rocks' bricks, so their boxes are the stones and the sea shows
         // round them)
@@ -77,7 +81,9 @@ internal static class PolarObjects
             return sprites[brick] = s;
         }
         var boxes = new Dictionary<int, PolarTextures.Box>();
-        PolarTextures.Box BoxOf(int brick) => boxes.TryGetValue(brick, out var b) ? b : boxes[brick] = Sprite(brick).Footprint();
+        // (the rocky peak's bricks are whole blocks of crystal, as LBA1 draws the mountain: never thinned)
+        var peakBricks = cells.Where(c => layout.Peak.Contains((c.Key.X, c.Key.Z)) && c.Value.Scene != PolarLayout.PlateauScene).Select(c => c.Value.Brick).ToHashSet();
+        PolarTextures.Box BoxOf(int brick) => boxes.TryGetValue(brick, out var b) ? b : boxes[brick] = peakBricks.Contains(brick) ? PolarTextures.Box.Full : Sprite(brick).Footprint();
         bool Hidden((int X, int Y, int Z) c, int dir)
         {
             var (dx, dy, dz) = Dirs[dir];
@@ -135,6 +141,21 @@ internal static class PolarObjects
         // a body and a decor for each chunk (split in two along its longer side while it is too big for a body)
         var bodies = new List<byte[]>();
         var decors = 0;
+        bool WalksInto(List<(int X, int Y, int Z)> chunk)
+        {
+            int x0 = chunk.Min(c => c.X), x1 = chunk.Max(c => c.X), z0 = chunk.Min(c => c.Z), z1 = chunk.Max(c => c.Z);
+            if (x0 == x1 && z0 == z1) return false;
+            int yMin = (chunk.Min(c => c.Y) - 1) * 256, yMax = chunk.Max(c => c.Y) * 256;
+            var own = chunk.Select(c => (c.X, c.Z)).ToHashSet();
+            for (var x = x0; x <= x1; x++)
+                for (var z = z0; z <= z1; z++)
+                {
+                    if (own.Contains((x, z)) || !columns.TryGetValue((x, z), out var col)) continue;
+                    var surface = PolarTerrain.SurfaceOf(col);
+                    if (yMin < surface + 512 && yMax > surface) return true;
+                }
+            return false;
+        }
         var queue2 = new Queue<(List<(int X, int Y, int Z)> Cells, List<((int X, int Y, int Z) Cell, int Dir)> Faces)>(chunks.Zip(faces));
         while (queue2.Count > 0)
         {
@@ -148,12 +169,17 @@ internal static class PolarObjects
                 continue;
             }
             var page = byPage[0].Key;
-            var body = Mesh(chunk, shown, cells, key => { var (_, x, y) = pages.Place[key]; return (x, y); }, BoxOf, out var origin);
+            // (its box -- the decor's collision -- may not take in ground the chunk doesn't cover, where one walks or drives: split until it
+            // doesn't)
+            var walkedThrough = WalksInto(chunk);
+            System.Numerics.Vector3 origin = default;
+            var body = walkedThrough ? null : Mesh(chunk, shown, cells, key => { var (_, x, y) = pages.Place[key]; return (x, y); }, BoxOf, out origin);
             if (body is null)
             {
-                // too big: halves along x or z
+                // too big, or its box over ground it doesn't cover: halves along x or z
                 var alongX = chunk.Max(c => c.X) - chunk.Min(c => c.X) >= chunk.Max(c => c.Z) - chunk.Min(c => c.Z);
-                var mid = alongX ? (chunk.Min(c => c.X) + chunk.Max(c => c.X)) / 2 : (chunk.Min(c => c.Z) + chunk.Max(c => c.Z)) / 2;
+                // (rounded down, not toward 0: with the layout's negative cells a two-cell chunk "halved" into itself, for ever)
+                var mid = (int)Math.Floor(alongX ? (chunk.Min(c => c.X) + chunk.Max(c => c.X)) / 2.0 : (chunk.Min(c => c.Z) + chunk.Max(c => c.Z)) / 2.0);
                 bool First((int X, int Y, int Z) c) => (alongX ? c.X : c.Z) <= mid;
                 queue2.Enqueue((chunk.Where(First).ToList(), shown.Where(f => First(f.Cell)).ToList()));
                 queue2.Enqueue((chunk.Where(c => !First(c)).ToList(), shown.Where(f => !First(f.Cell)).ToList()));
@@ -174,6 +200,20 @@ internal static class PolarObjects
             bodies.Add(body.Write());
             decors++;
         }
+        // (a decor's collision is its box: the car track cells inside one, at the height a car drives through -- invisible walls)
+        var blocked = new HashSet<(int, int)>();
+        var objectColumns = cells.Keys.Select(k => (k.X, k.Z)).ToHashSet();
+        foreach (var (cx, cz, cube) in PolarTerrain.Cubes(island))
+            foreach (var d in cube.Decors)
+                for (var gx = (cx * IslandFile.CubeSize + d.XMin) / 512; gx < (cx * IslandFile.CubeSize + d.XMax) / 512; gx++)
+                    for (var gz = (cz * IslandFile.CubeSize + d.ZMin) / 512; gz < (cz * IslandFile.CubeSize + d.ZMax) / 512; gz++)
+                    {
+                        var at = (gx - offsetX, gz - offsetZ);
+                        if (!PolarTerrain.TrackCells.Contains(at) || !columns.TryGetValue(at, out var col)) continue;
+                        var surface = PolarTerrain.SurfaceOf(col);
+                        if (d.YMin < surface + 256 && d.YMax > surface && !objectColumns.Contains(at)) blocked.Add(at);
+                    }
+        log.Add($"{blocked.Count} car track cells inside an object's box with nothing of the object on them" + (blocked.Count > 0 ? ": " + string.Join(" ", blocked.Take(30)) : ""));
         island.ObjectPages.Clear();
         island.ObjectPages.AddRange(pages.List.Skip(1));
         log.Add($"the objects' textures: {tiles.Count} faces of bricks at {PolarTextures.TileSize} pixels to a cell, on {pages.Count} pages");

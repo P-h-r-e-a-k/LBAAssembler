@@ -16,7 +16,9 @@ internal static class PolarHolomap
     // the camera: the middle of the island's cubes (6..8 x 5..8: x 7.5 cubes, z 7), looking down as the retail maps do
     public static readonly int[] Camera = { 7, 7, 16384, 0, 453, 1600, 150000, 309, 3368 };
 
-    public static List<string> Install(string gameDirectory, IslandFile island)
+    // `solids`: what the ground doesn't show, drawn as boxes (the rocky peak's columns: PolarScenes)
+    public static List<string> Install(string gameDirectory, IslandFile island,
+        IEnumerable<(double X0, double Z0, double X1, double Z1, double Y0, double Y1, (double R, double G, double B) Colour)>? solids = null)
     {
         var log = new List<string>();
         var holoPath = Path.Combine(gameDirectory, RaceTrackHolomap.File);
@@ -25,7 +27,7 @@ internal static class PolarHolomap
         var camera = new byte[Camera.Length * 4];
         for (var i = 0; i < Camera.Length; i++) BinaryPrimitives.WriteInt32LittleEndian(camera.AsSpan(i * 4), Camera[i]);
         var sea = HolomapPicture.SeaBackground(holo.Read(CitadelMap), ress0, 300, 435, 639, 479);
-        var picture = HolomapPicture.Draw(island, IslandMapRenderer.LoadPalette(gameDirectory, "POLAR"), ress0[..768], camera, sea);
+        var picture = HolomapPicture.Draw(island, IslandMapRenderer.LoadPalette(gameDirectory, "POLAR"), ress0[..768], camera, sea, solids);
         var file = HqrFile.Parse(File.ReadAllBytes(holoPath));
         foreach (var (entry, data) in new[] { (PictureEntry, picture), (CameraEntry, camera) })
         {

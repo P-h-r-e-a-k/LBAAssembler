@@ -101,6 +101,13 @@ internal static class Program
             "polarprobe" => PolarStudy.Probe(args),
             "polarregion" => PolarStudy.Region(args),
             "polardark" => PolarStudy.Dark(args),
+            "polarseams" => PolarStudy.Seams(args),
+            "polarseams2" => PolarStudy.Seams2(args),
+            "polaredges" => PolarStudy.Edges(args),
+            "polarexits" => PolarStudy.Exits(args),
+            "polarfit" => PolarStudy.Fit(args),
+            "polarmap" => PolarStudy.Map(args),
+            "polarjoined" => PolarStudy.Joined(args),
             // bodynames <game folder> [first] [count]: every BODY.HQR entry's name as the actor attributes window shows it (Lba2BodyNames)
             "bodynames" => BodyNamesCommand.Run(args),
             "islandtexture" => IslandTextureCommand.Run(args),

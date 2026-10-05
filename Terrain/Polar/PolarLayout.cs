@@ -21,19 +21,28 @@ internal sealed class PolarLayout
     // Where a scene's grid lies in the island's frame (its cell 0,0,0), in cells and layers.
     public sealed record Placed(int Scene, int X, int Y, int Z, string Name);
 
-    // the scenes placed by their zones (the joined map the editor already shows: Lba1Areas, plus the dock, 115)
+    // the scenes placed by where their car tracks meet (ScriptRoundTrip polarexits / polarfit). The cube-change zones put them nearly
+    // there, but a few cells out: LBA1 sets Twinsen down at one point of the next scene wherever he crossed the zone, so a zone and its
+    // arrival give a scene's place only within a cell or two, and they overlapped grids that meet edge to edge. 106, 108 and 109 meet 107
+    // edge to edge (the rows the zones overlapped have nothing in common), each where its tracks run on from 107's at the same height --
+    // 106 a cell west of the zones' place, 108 a cell south; 115, the dock, shares a strip of ground with 106 (228 columns, 132 of them
+    // the same top brick and layer), so it lies over it there, a cell south of the zones' place.
     public static readonly Placed[] Zoned =
     {
-        new(107, 0, 0, 0, "3rd scene"), new(106, -15, 0, 62, "2nd scene"), new(108, -62, 0, -1, "Before the rocky peak"),
-        new(109, -6, 1, -62, "4th scene"), new(115, 10, 0, 88, "1st scene (the dock)"),
+        new(107, 0, 0, 0, "3rd scene"), new(106, -16, 0, 64, "2nd scene"), new(108, -64, 0, 0, "Before the rocky peak"),
+        new(109, -6, 1, -64, "4th scene"), new(115, 9, 0, 91, "1st scene (the dock)"),
     };
     public const int PeakScene = 110, PlateauScene = 111, GateScene = 108;
     // 111's grid from 110's, by their zones (LinkStudy: 110 <-> 111 (-21, 8, -9), both ways agree)
     public static readonly (int X, int Y, int Z) PlateauFromPeak = (-21, 8, -9);
-    // 111's own floor (layers 0-1, a teal backdrop seen far below the plateau) is not ground: left out
+    // 111's own floor (layers 0-1, a teal backdrop seen far below the plateau) is not ground: left out (111 is added after the peak is
+    // built, on top of it)
     public const int PlateauFloorTop = 1;
     // a column of 110 this high and more is its crystal mountain
     public const int MountainTop = 8;
+    // the rocky peak twice as high as LBA1 has it (the user's: "stretch it upwards" -- LBA2 has the height LBA1's 25 layers didn't): its
+    // every layer two, from the sea up; 111's plateau lifted as much, onto its top
+    public const int PeakStretch = 2;
 
     // A cell of the island: the scene its brick comes from (-1: a cell the layout made, the causeway), the brick (LBA_BRK entry), and from
     // the scene's block library its shape (1 solid, 2-13 the slopes and steps) and its code (high nibble F: a game code -- F1 water to
@@ -76,6 +85,8 @@ internal sealed class PolarLayout
     public required (int X, int Y, int Z) PeakCopyOffset { get; init; }
     public required (int Matched, int Of) PeakMatch { get; init; }
     public required List<(int X, int Z)> Bridge { get; init; }
+    // the rocky peak's columns: built as objects with straight walls (PolarObjects), the sea under them, not ground
+    public required HashSet<(int X, int Z)> Peak { get; init; }
     public List<string> Log { get; } = new();
 
     public static PolarLayout Build(Lba1Game game)
@@ -102,13 +113,22 @@ internal sealed class PolarLayout
         var plateau = (X: best.X + PlateauFromPeak.X, Y: best.Y + PlateauFromPeak.Y, Z: best.Z + PlateauFromPeak.Z);
         placements.Add(new(PlateauScene, plateau.X, plateau.Y, plateau.Z, "On the rocky peak (on 107's mountain)"));
 
-        // the island's cells: each scene's bricks moved into place, the first scene to fill a cell keeping it (107 first: the scenes' shared
-        // edge rows are the same bricks)
+        // the island's cells: each scene's bricks moved into place. Where two scenes' grids cover the same column (the dock's strip shared
+        // with 106), the whole column is the scene it lies deepest in -- a column's bricks never from two scenes, one's ground under the
+        // other's wall. 111's plateau, on the peak, is added over them.
         var cells = new Dictionary<(int, int, int), Cell>();
-        foreach (var p in placements)
+        var owner = new Dictionary<(int X, int Z), (int Scene, int Depth)>();
+        foreach (var p in placements.Where(p => p.Scene != PlateauScene))
+            foreach (var (x, z) in Of(p.Scene).Select(c => (c.X, c.Z)).Distinct())
+            {
+                var depth = Math.Min(Math.Min(x, 63 - x), Math.Min(z, 63 - z));
+                var at = (x + p.X, z + p.Z);
+                if (!owner.TryGetValue(at, out var o) || depth > o.Depth) owner[at] = (p.Scene, depth);
+            }
+        foreach (var p in placements.Where(p => p.Scene != PlateauScene))
             foreach (var c in Of(p.Scene))
             {
-                if (p.Scene == PlateauScene && c.Y <= PlateauFloorTop) continue;
+                if (owner[(c.X + p.X, c.Z + p.Z)].Scene != p.Scene) continue;
                 cells.TryAdd((c.X + p.X, c.Y + p.Y, c.Z + p.Z), new Cell(p.Scene, c.Brick, c.Shape, c.Code, c.Block));
             }
 
@@ -119,7 +139,7 @@ internal sealed class PolarLayout
         var filled = 0;
         var peakTopsAll = Tops(Of(PeakScene));
         var mountain = peakTopsAll.Where(t => t.Value >= MountainTop).Select(t => t.Key).ToHashSet();
-        var islandTops = cells.Where(c => c.Value.Scene != PlateauScene).GroupBy(c => (c.Key.Item1, c.Key.Item3)).ToDictionary(g => g.Key, g => g.Max(c => c.Key.Item2));
+        var islandTops = cells.GroupBy(c => (c.Key.Item1, c.Key.Item3)).ToDictionary(g => g.Key, g => g.Max(c => c.Key.Item2));
         foreach (var (x, z) in mountain)
         {
             var at = (X: x + best.X, Z: z + best.Z);
@@ -130,10 +150,58 @@ internal sealed class PolarLayout
                 if (cells.TryAdd((at.X, c.Y + best.Y, at.Z), new Cell(PeakScene, c.Brick, c.Shape, c.Code, c.Block))) filled++;
         }
 
+        var peak = mountain.Select(m => (X: m.X + best.X, Z: m.Z + best.Z)).ToHashSet();
+        // (107 and 109 each draw part of the mountain too, a few cells from where 110 has it: their teal columns above MountainTop near the
+        // peak are 110's there instead -- its water or its path -- or, past 110's grid, gone down to MountainTop)
+        var copies = 0;
+        var nearPeak = peak.SelectMany(q => Enumerable.Range(-8, 17).SelectMany(dx => Enumerable.Range(-8, 17).Select(dz => (X: q.X + dx, Z: q.Z + dz)))).Where(q => !peak.Contains(q)).ToHashSet();
+        var tops110 = Tops(Of(PeakScene));
+        foreach (var (x, z) in nearPeak)
+        {
+            var column = cells.Where(c => c.Key.Item1 == x && c.Key.Item3 == z).ToList();
+            if (column.Count == 0) continue;
+            var top = column.MaxBy(c => c.Key.Item2);
+            var teal = (top.Value.Code & 0xF0) == 0xA0 || top.Value.Code == 0x00 && BrickColour(game, top.Value.Brick) is var (r, _, bl) && bl > r;
+            if (!teal || top.Key.Item2 <= MountainTop) continue;
+            copies++;
+            if (tops110.ContainsKey((x - best.X, z - best.Z)))
+            {
+                foreach (var c in column) cells.Remove(c.Key);
+                foreach (var c in Of(PeakScene).Where(c => c.X == x - best.X && c.Z == z - best.Z))
+                    cells[(x, c.Y + best.Y, z)] = new Cell(PeakScene, c.Brick, c.Shape, c.Code, c.Block);
+            }
+            else foreach (var c in column.Where(c => c.Key.Item2 > MountainTop)) cells.Remove(c.Key);
+        }
+
+        // the rocky peak: its columns (the mountain's, made whole) twice as high -- each layer two of the same brick -- and 111's plateau
+        // on it, lifted as much as the peak's top rose (over the peak's own bricks where they meet)
+        // (LBA1 leaves a column hollow where its camera never looks -- under a tier, behind the front ones: a peak seen from all round is
+        // filled from the sea to its lowest brick, with that brick)
+        foreach (var (px, pz) in peak)
+        {
+            var column = cells.Where(c => c.Key.Item1 == px && c.Key.Item3 == pz && c.Value.Scene != PlateauScene && c.Key.Item2 >= 1).OrderBy(c => c.Key.Item2).ToList();
+            if (column.Count == 0) continue;
+            for (var i = column.Count - 1; i >= 0; i--)
+            {
+                var below = i > 0 ? column[i - 1].Key.Item2 : 0;
+                for (var y = column[i].Key.Item2 - 1; y > below; y--) cells.TryAdd((px, y, pz), column[i].Value);
+            }
+        }
+        var peakCells = cells.Where(c => peak.Contains((c.Key.Item1, c.Key.Item3)) && c.Value.Scene != PlateauScene && c.Key.Item2 >= 1).ToList();
+        var peakTop = peakCells.Max(c => c.Key.Item2);
+        foreach (var c in peakCells) cells.Remove(c.Key);
+        foreach (var ((x, y, z), cell) in peakCells)
+            for (var k = 0; k < PeakStretch; k++)
+                cells[(x, PeakStretch * y - k, z)] = cell;
+        var lift = (PeakStretch - 1) * peakTop;
+        foreach (var c in Of(PlateauScene).Where(c => c.Y > PlateauFloorTop))
+            cells[(c.X + plateau.X, c.Y + plateau.Y + lift, c.Z + plateau.Z)] = new Cell(PlateauScene, c.Brick, c.Shape, c.Code, c.Block);
+
         var layout = new PolarLayout
         {
-            Placements = placements, Cells = cells, PeakCopyOffset = best, PeakMatch = (bestScore, peakTops.Count), Bridge = new(),
+            Placements = placements, Cells = cells, PeakCopyOffset = best, PeakMatch = (bestScore, peakTops.Count), Bridge = new(), Peak = peak,
         };
+        layout.Log.Add($"the rocky peak: {peak.Count} columns, {PeakStretch} times as high (its top layer {peakTop} now {PeakStretch * peakTop}); 111's plateau lifted {lift} layers onto it; {copies} columns of the other scenes' copies of the mountain made 110's");
         layout.Log.Add($"the mountain made whole from 110's: {filled} cells where the scenes had it lower or not at all");
         layout.Log.Add($"110's mountain ({peakTops.Count} columns of 10 layers and more) matches 107 at {best} ({bestScore} columns as high); the zones put 110 at (-4, 0, -11)");
         layout.Log.Add($"111 on it at {plateau}");

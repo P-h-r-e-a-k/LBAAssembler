@@ -568,6 +568,220 @@ internal static class PolarStudy
         return 0;
     }
 
+    // polarseams <LBA1 folder> [range]: for each pair of the layout's scenes whose grids overlap or touch, how many cells hold the same
+    // brick at the same place in both, at the layout's offset and at each offset round it (x, z within range, y within 2) -- the best ones.
+    public static int Seams(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var range = args.Length > 2 ? int.Parse(args[2]) : 4;
+        var placed = PolarLayout.Zoned.ToList();
+        var bricks = placed.ToDictionary(p => p.Scene, p => PolarLayout.Bricks(game, p.Scene).ToDictionary(b => (b.X, b.Y, b.Z), b => b.Brick));
+        foreach (var a in placed)
+            foreach (var b in placed.Where(b => b.Scene > a.Scene))
+            {
+                // b's grid in a's: b's cell (x, y, z) is a's (x + rx, y + ry, z + rz)
+                int rx = b.X - a.X, ry = b.Y - a.Y, rz = b.Z - a.Z;
+                if (Math.Abs(rx) > 64 + range || Math.Abs(rz) > 64 + range) continue;
+                var results = new List<(int Dx, int Dy, int Dz, int Same, int Both)>();
+                for (var dx = -range; dx <= range; dx++)
+                    for (var dz = -range; dz <= range; dz++)
+                        for (var dy = -2; dy <= 2; dy++)
+                        {
+                            int same = 0, both = 0;
+                            foreach (var ((x, y, z), brick) in bricks[b.Scene])
+                            {
+                                var at = (x + rx + dx, y + ry + dy, z + rz + dz);
+                                if (!bricks[a.Scene].TryGetValue(at, out var other)) continue;
+                                both++; if (other == brick) same++;
+                            }
+                            if (both > 0) results.Add((dx, dy, dz, same, both));
+                        }
+                if (results.Count == 0) continue;
+                var current = results.FirstOrDefault(r => r.Dx == 0 && r.Dy == 0 && r.Dz == 0);
+                var best = results.OrderByDescending(r => r.Same).Take(3).ToList();
+                Console.WriteLine($"{a.Scene}-{b.Scene}: placed at ({rx},{ry},{rz}); same/overlap there {current.Same}/{current.Both}; best: " +
+                    string.Join("  ", best.Select(r => $"({r.Dx},{r.Dy},{r.Dz}) {r.Same}/{r.Both}")));
+            }
+        return 0;
+    }
+
+    // polarseams2 <LBA1 folder> [range]: for each pair of scenes, by column tops: at each offset, the columns both grids have whose top
+    // brick is the same (and at the same layer), and the track columns among them -- and where the grids only touch, the columns across the
+    // seam whose tops are at the same layer.
+    public static int Seams2(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var range = args.Length > 2 ? int.Parse(args[2]) : 6;
+        var placed = PolarLayout.Zoned.ToList();
+        var trackBricks = new Dictionary<int, bool>();
+        bool Track(int brick) => trackBricks.TryGetValue(brick, out var t) ? t : trackBricks[brick] = PolarTerrain.IsTrackBrick(PolarTextures.Sprite.Decode(game.ReadBrick(brick)), game.Palette);
+        var tops = placed.ToDictionary(p => p.Scene, p => PolarLayout.Bricks(game, p.Scene).GroupBy(b => (b.X, b.Z)).ToDictionary(g => g.Key, g => g.OrderByDescending(b => b.Y).First()));
+        foreach (var a in placed)
+            foreach (var b in placed.Where(b => b.Scene > a.Scene))
+            {
+                int rx = b.X - a.X, ry = b.Y - a.Y, rz = b.Z - a.Z;
+                if (Math.Abs(rx) > 64 + range || Math.Abs(rz) > 64 + range) continue;
+                var results = new List<(int Dx, int Dy, int Dz, int Same, int Tracks, int Both)>();
+                for (var dx = -range; dx <= range; dx++)
+                    for (var dz = -range; dz <= range; dz++)
+                        for (var dy = -2; dy <= 2; dy++)
+                        {
+                            int same = 0, tracks = 0, both = 0;
+                            foreach (var ((x, z), t) in tops[b.Scene])
+                            {
+                                if (!tops[a.Scene].TryGetValue((x + rx + dx, z + rz + dz), out var o)) continue;
+                                both++;
+                                if (o.Brick == t.Brick && o.Y == t.Y + ry + dy) { same++; if (Track(t.Brick)) tracks++; }
+                            }
+                            if (both > 0) results.Add((dx, dy, dz, same, tracks, both));
+                        }
+                if (results.Count == 0) continue;
+                var current = results.FirstOrDefault(r => r.Dx == 0 && r.Dy == 0 && r.Dz == 0);
+                Console.WriteLine($"{a.Scene}-{b.Scene}: placed at ({rx},{ry},{rz}); same tops there {current.Same} ({current.Tracks} tracks) of {current.Both}; best: " +
+                    string.Join("  ", results.OrderByDescending(r => r.Same).Take(4).Select(r => $"({r.Dx},{r.Dy},{r.Dz}) {r.Same} ({r.Tracks}t)/{r.Both}")));
+            }
+        return 0;
+    }
+
+    // polaredges <LBA1 folder> <scene>...: each scene's four border rows (and the one inside each): along it, a letter a column -- T a
+    // track top, . other ground, # rock, ~ water, o an object top, space nothing -- and its top layer as a digit/letter (0-9, a-o).
+    public static int Edges(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var trackBricks = new Dictionary<int, bool>();
+        bool Track(int brick) => trackBricks.TryGetValue(brick, out var t) ? t : trackBricks[brick] = PolarTerrain.IsTrackBrick(PolarTextures.Sprite.Decode(game.ReadBrick(brick)), game.Palette);
+        foreach (var scene in args.Skip(2).Select(int.Parse))
+        {
+            var bricks = PolarLayout.Bricks(game, scene);
+            var tops = bricks.GroupBy(b => (b.X, b.Z)).ToDictionary(g => g.Key, g => g.OrderByDescending(b => b.Y).First());
+            char Kind(PolarLayout.SceneBrick b)
+            {
+                var cell = new PolarLayout.Cell(scene, b.Brick, b.Shape, b.Code, b.Block);
+                if (cell.Water) return '~';
+                if (!PolarTerrain.IsGround(game, cell)) return 'o';
+                if (((b.Code & 0xF0) == 0x60 || b.Code == 0x06) && Track(b.Brick)) return 'T';
+                return b.Code == 0x00 || (b.Code & 0xF0) == 0xA0 ? '#' : '.';
+            }
+            string Row(Func<int, (int X, int Z)> at)
+            {
+                var kinds = new char[64]; var heights = new char[64];
+                for (var i = 0; i < 64; i++)
+                {
+                    if (!tops.TryGetValue(at(i), out var t)) { kinds[i] = ' '; heights[i] = ' '; continue; }
+                    kinds[i] = Kind(t); heights[i] = "0123456789abcdefghijklmno"[t.Y];
+                }
+                return new string(kinds) + "\n            " + new string(heights);
+            }
+            Console.WriteLine($"scene {scene}");
+            foreach (var (name, f) in new (string, Func<int, int, (int X, int Z)>)[] { ("z=0  ", (i, k) => (i, k)), ("z=63 ", (i, k) => (i, 63 - k)), ("x=0  ", (i, k) => (k, i)), ("x=63 ", (i, k) => (63 - k, i)) })
+                for (var k = 0; k < 2; k++)
+                    Console.WriteLine($"  {name}{(k == 0 ? "edge " : "in 1 ")} {Row(i => f(i, k))}");
+        }
+        return 0;
+    }
+
+    // polarexits <LBA1 folder> <scene>...: where car tracks reach each edge of a scene's grid (within its outer 3 rows): along the edge,
+    // the track columns and their top layer.
+    public static int Exits(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var trackBricks = new Dictionary<int, bool>();
+        bool Track(int brick) => trackBricks.TryGetValue(brick, out var t) ? t : trackBricks[brick] = PolarTerrain.IsTrackBrick(PolarTextures.Sprite.Decode(game.ReadBrick(brick)), game.Palette);
+        foreach (var scene in args.Skip(2).Select(int.Parse))
+        {
+            var tops = PolarLayout.Bricks(game, scene).GroupBy(b => (b.X, b.Z)).ToDictionary(g => g.Key, g => g.OrderByDescending(b => b.Y).First());
+            bool IsTrack((int X, int Z) at, out int y)
+            {
+                y = -1;
+                if (!tops.TryGetValue(at, out var t) || !((t.Code & 0xF0) == 0x60 || t.Code == 0x06) || !Track(t.Brick)) return false;
+                y = t.Y; return true;
+            }
+            foreach (var (name, f) in new (string, Func<int, int, (int X, int Z)>)[] { ("z=0", (i, k) => (i, k)), ("z=63", (i, k) => (i, 63 - k)), ("x=0", (i, k) => (k, i)), ("x=63", (i, k) => (63 - k, i)) })
+            {
+                var found = new List<string>();
+                for (var i = 0; i < 64; i++)
+                    for (var k = 0; k < 3; k++)
+                        if (IsTrack(f(i, k), out var y)) { found.Add($"{i}@{y}" + (k > 0 ? $"(in {k})" : "")); break; }
+                Console.WriteLine($"scene {scene} {name}: " + string.Join(" ", found));
+            }
+        }
+        return 0;
+    }
+
+    // polarfit <LBA1 folder> <scene a> <scene b> <bx,by,bz>...: scene b placed at each offset from scene a (b's cell 0 at a's (bx, by, bz)):
+    // the columns both grids have, and how many have the same top brick at the same layer.
+    public static int Fit(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        int a = int.Parse(args[2]), b = int.Parse(args[3]);
+        var topsA = PolarLayout.Bricks(game, a).GroupBy(c => (c.X, c.Z)).ToDictionary(g => g.Key, g => g.OrderByDescending(c => c.Y).First());
+        var topsB = PolarLayout.Bricks(game, b).GroupBy(c => (c.X, c.Z)).ToDictionary(g => g.Key, g => g.OrderByDescending(c => c.Y).First());
+        foreach (var o in args.Skip(4))
+        {
+            var v = o.Split(',').Select(int.Parse).ToArray();
+            int both = 0, same = 0, heights = 0;
+            foreach (var ((x, z), t) in topsB)
+            {
+                if (!topsA.TryGetValue((x + v[0], z + v[2]), out var u)) continue;
+                both++;
+                if (u.Y == t.Y + v[1]) { heights++; if (u.Brick == t.Brick) same++; }
+            }
+            Console.WriteLine($"{b} at ({o}) from {a}: {both} columns in both, {heights} the same height, {same} the same top brick");
+        }
+        return 0;
+    }
+
+    // polarmap <LBA1 folder> <scene> [x0 x1 z0 z1]: a scene's columns as a map, a row per z: each its top layer (0-9, a-o) in a colour
+    // class -- upper case letters for crystal (A + layer), digits / lower case for the rest; ~ water, space none.
+    public static int Map(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var scene = int.Parse(args[2]);
+        int x0 = args.Length > 3 ? int.Parse(args[3]) : 0, x1 = args.Length > 4 ? int.Parse(args[4]) : 63, z0 = args.Length > 5 ? int.Parse(args[5]) : 0, z1 = args.Length > 6 ? int.Parse(args[6]) : 63;
+        var tops = PolarLayout.Bricks(game, scene).GroupBy(b => (b.X, b.Z)).ToDictionary(g => g.Key, g => g.OrderByDescending(b => b.Y).First());
+        const string digits = "0123456789abcdefghijklmnop", upper = "0123456789ABCDEFGHIJKLMNOP";
+        Console.WriteLine("     " + string.Concat(Enumerable.Range(x0, x1 - x0 + 1).Select(x => (x % 10).ToString())));
+        for (var z = z0; z <= z1; z++)
+        {
+            var row = new System.Text.StringBuilder();
+            for (var x = x0; x <= x1; x++)
+            {
+                if (!tops.TryGetValue((x, z), out var t)) { row.Append(' '); continue; }
+                if (t.Code == 0xF1) { row.Append('~'); continue; }
+                row.Append((t.Code & 0xF0) == 0xA0 ? upper[t.Y] : digits[t.Y]);
+            }
+            Console.WriteLine($"{z,3}  {row}");
+        }
+        return 0;
+    }
+
+    // polarjoined <LBA1 folder> <x0> <x1> <z0> <z1>: the joined layout's columns there as a map of top layers (0-9, a-z): upper case
+    // where the column is the rocky peak's (PolarLayout.Peak), * where a column outside it holds teal rock or crystal above layer 8.
+    public static int Joined(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var layout = PolarLayout.Build(game);
+        int x0 = int.Parse(args[2]), x1 = int.Parse(args[3]), z0 = int.Parse(args[4]), z1 = int.Parse(args[5]);
+        var tops = layout.Cells.Where(c => c.Value.Scene != PolarLayout.PlateauScene).GroupBy(c => (c.Key.X, c.Key.Z)).ToDictionary(g => g.Key, g => g.OrderByDescending(c => c.Key.Y).First());
+        const string digits = "0123456789abcdefghijklmnopqrstuvwxyz", upper = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        Console.WriteLine("      " + string.Concat(Enumerable.Range(x0, x1 - x0 + 1).Select(x => ((x % 10 + 10) % 10).ToString())));
+        for (var z = z0; z <= z1; z++)
+        {
+            var row = new System.Text.StringBuilder();
+            for (var x = x0; x <= x1; x++)
+            {
+                if (!tops.TryGetValue((x, z), out var t)) { row.Append(' '); continue; }
+                var y = Math.Min(35, t.Key.Y);
+                if (layout.Peak.Contains((x, z))) { row.Append(upper[y]); continue; }
+                if (t.Value.Water) { row.Append('~'); continue; }
+                var teal = PolarLayout.BrickColour(game, t.Value.Brick) is var (r, g, b) && b > r;
+                row.Append(teal && t.Key.Y > 8 ? '*' : digits[y]);
+            }
+            Console.WriteLine($"{z,4}  {row}");
+        }
+        return 0;
+    }
+
     // polarzones <LBA1 folder> <scene>...: each scene's cube-change zones (type 0) in cells (x, layer, z) and where they lead.
     public static int Zones(string[] args)
     {

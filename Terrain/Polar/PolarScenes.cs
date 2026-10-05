@@ -74,6 +74,7 @@ internal static class PolarScenes
             if (buggy.Life.Length > 9 && buggy.Life[8] == 0x46 && buggy.Life[9] == 0) buggy.Life[9] = 1;
         }
         (int Scene, (int X, int Y, int Z) Place)? carAt = null;
+        var cars = 0;
         var start = OnIsland(layout, terrain, DockScene, lba1Hero.X, lba1Hero.Y, lba1Hero.Z);
         // (the cubes with land: one of open sea has no scene, nor a zone into it -- Twinsen would drown before he got there)
         var cubes = terrain.Columns.Where(c => !c.Value.Water).Select(c => (Cx: (c.Key.X + terrain.OffsetX) / 64, Cz: (c.Key.Z + terrain.OffsetZ) / 64)).ToHashSet();
@@ -88,20 +89,21 @@ internal static class PolarScenes
             model.Zones.Clear(); model.TrackPoints.Clear();
             foreach (var a in model.Actors) { a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 }; }
             var hero = model.Hero;
-            if ((cx, cz) == (start.Cx, start.Cz))
-            {
-                hero.X = start.X; hero.Y = start.Y; hero.Z = start.Z;
-                // Twinsen's car beside him (the island is to have a race track): the Desert island's own buggy (RaceTrackScenes.BuggyScene),
-                // there from the start of any game (its script waits for the car quest: BuggyAlwaysThere)
-                if (buggy is not null && CarPlace(layout, terrain, cx, cz, (start.X, start.Z)) is { } car)
-                {
-                    var copy = buggy.Clone();
-                    copy.X = car.X; copy.Y = car.Y; copy.Z = car.Z; copy.Beta = 0;
-                    SceneOps.AddActor(model, copy);
-                    carAt = (SceneOf(cx, cz), car);
-                }
-            }
+            if ((cx, cz) == (start.Cx, start.Cz)) { hero.X = start.X; hero.Y = start.Y; hero.Z = start.Z; }
             else { var (x, y, z) = StandingPlace(layout, terrain, cx, cz); hero.X = x; hero.Y = y; hero.Z = z; }
+            // Twinsen's car (the island is to have a race track): the Desert island's own buggy (RaceTrackScenes.BuggyScene), there from
+            // the start of any game (its script waits for the car quest: BuggyAlwaysThere), in every scene as on the Desert island -- the
+            // engine hands the car on to the next scene's at a cube change (BUGGY.CPP InitBuggy: without one there, the car stopped at the
+            // first edge). In the scene Twinsen first comes to on the island it stands beside him (INIT_BUGGY 1); after that the car is where
+            // he left it.
+            if (buggy is not null && CarPlace(layout, terrain, cx, cz, (hero.X, hero.Z)) is { } car)
+            {
+                var copy = buggy.Clone();
+                copy.X = car.X; copy.Y = car.Y; copy.Z = car.Z; copy.Beta = 0;
+                SceneOps.AddActor(model, copy);
+                cars++;
+                if ((cx, cz) == (start.Cx, start.Cz)) carAt = (SceneOf(cx, cz), car);
+            }
             hero.Beta = 0;
             // the edges it shares: east (x + 1), west, south (z + 1), north
             void Zone(int dx, int dz, int x0, int z0, int x1, int z1, int info0, int info2)
@@ -136,7 +138,7 @@ internal static class PolarScenes
         foreach (var (cx, cz) in cubes.OrderBy(c => SceneOf(c.Cx, c.Cz)))
             names = HqdWriter.Describe(gameDirectory, "SCENE.HQR", SceneGame.Lba2, SceneOf(cx, cz) + 1, NameOf(cx, cz, terrain), names);
         if (names is not null) File.WriteAllText(Path.Combine(gameDirectory, HqdWriter.SidecarName("SCENE.HQR")), names, System.Text.Encoding.Latin1);
-        log.Add(carAt is { } c ? $"Twinsen's car (scene {RaceTrackScenes.BuggyScene}'s buggy) in scene {c.Scene} at {c.Place}" : "no car: scene 67 has no buggy, or no room beside Twinsen");
+        log.Add(carAt is { } c ? $"Twinsen's car (scene {RaceTrackScenes.BuggyScene}'s buggy) in {cars} scenes; in the dock's, {c.Scene}, at {c.Place}" : "no car: scene 67 has no buggy, or no room beside Twinsen");
         log.Add($"SCENE.HQR: scenes {string.Join(", ", cubes.Select(c => SceneOf(c.Item1, c.Item2)).Order())} (a scene to a cube with land, {zones} cube-change zones); Twinsen starts in scene {SceneOf(start.Cx, start.Cz)} at ({start.X}, {start.Y}, {start.Z}), LBA1's start on the dock");
 
         // the holomap's records
@@ -177,7 +179,15 @@ internal static class PolarScenes
         }
         File.WriteAllBytes(textPath, text.ToBytes());
         log.Add($"TEXT.HQR: island 12's text file, entries {TextEntry(0)}..{TextEntry(Languages - 1) + 1}");
-        log.AddRange(PolarHolomap.Install(gameDirectory, terrain.Island));
+        // (the rocky peak and its plateau on the holomap's picture: each column a box, from the sea to its top, in its top brick's colour)
+        var solids = layout.Cells.Where(c => layout.Peak.Contains((c.Key.X, c.Key.Z)) || c.Value.Scene == PolarLayout.PlateauScene)
+            .GroupBy(c => (c.Key.X, c.Key.Z)).Select(g =>
+            {
+                var top = g.MaxBy(c => c.Key.Y);
+                double x0 = (g.Key.X + terrain.OffsetX) * 512.0, z0 = (g.Key.Z + terrain.OffsetZ) * 512.0;
+                return (x0, z0, x0 + 512, z0 + 512, 0.0, top.Key.Y * 256.0, PolarLayout.BrickColour(game, top.Value.Brick));
+            }).ToList();
+        log.AddRange(PolarHolomap.Install(gameDirectory, terrain.Island, solids));
         return log;
     }
 
