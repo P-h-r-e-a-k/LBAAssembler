@@ -70,7 +70,8 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<DriverInfo>? Drivers = null,
         // Story: the story's texts the race-track mode needs (Citadel Island's: RaceTrackStory).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] StoryInfo? Story = null,
-        // Mushrooms, Penguins: the power-ups' mushrooms along the lap and the nitro penguin of each scene, each [scene, actor]
+        // Mushrooms, Penguins: the power-ups' mushrooms along the lap and the nitro penguin of each scene, each [scene, actor] -- a
+        // mushroom [scene, actor, y], the height the race-track mode stands it at, out of sight until then (since 2026-10-05)
         // (RaceTrackScenes.MushroomSpots; RACEMOD.CPP's power-ups).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Mushrooms = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Penguins = null,
@@ -101,6 +102,7 @@ internal static class RaceTrackService
     {
         if (!HasBackups(gameDirectory)) return null;
         var car = EditorSettings.Current.RaceCar.Clone();
+        car.DriveAsKey = RaceCarEngineFile.DriveAsLine(gameDirectory, car.DriveAs);
         if (story && ReadInfo(gameDirectory) is { } all) return path => car.WriteStorySet(path, all);
         return path => car.WriteEngineFile(path, track ?? ReadInfo(gameDirectory));
     }

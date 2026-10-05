@@ -57,6 +57,12 @@ public sealed class RaceCarSetup
     // Play starts a new game -- the story from its start, Twinsen in his house -- instead (the folder's tracks each raced where and when the
     // game is: RaceCarEngineFile.WriteStorySet).
     public bool NewGame { get; set; }
+    // The car Twinsen drives: -1 his own buggy, else one of the opponents' cars -- the racer entity's body (RaceTrackScenes.RacerEntity:
+    // the retail racer's car 0, Baldino's rocket car 1, the cars made after the characters 2 on, Terrain.RaceTrackCharacterCars) -- for a
+    // test drive of a track in it (the engine's drive_as=: RaceCarEngineFile.DriveAsLine). It handles as this setup makes the car.
+    public int DriveAs { get; set; } = -1;
+    // (that car as the folder's files have it, worked out when the car file is written: RaceTrackService.CarFileWriter)
+    [System.Text.Json.Serialization.JsonIgnore] internal string? DriveAsKey { get; set; }
 
     public RaceCarSetup Clone()
     {

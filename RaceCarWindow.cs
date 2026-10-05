@@ -10,6 +10,8 @@ internal sealed class RaceCarWindow : Window
     private readonly RaceCarSetup setup = EditorSettings.Current.RaceCar.Clone();
     private readonly ComboBox preset = new() { MinWidth = 320 };
     private readonly ComboBox gears = new() { Width = 70 };
+    // the car Twinsen drives: his buggy, or one of the opponents' cars the folder has (RaceCarSetup.DriveAs)
+    private readonly ComboBox driveAs = new() { MinWidth = 320 };
     private readonly StackPanel gearRows = new();
     private readonly List<(FrameworkElement Row, Slider Slider)> gearSliders = new();
     private readonly CheckBox automatic = new() { Content = "Automatic gearbox (the gears change by themselves)" };
@@ -57,6 +59,13 @@ internal sealed class RaceCarWindow : Window
                                "them, a cell taken as a metre: the original buggy tops out at 27 km/h. A lap counts once you have crossed every checkpoint (one " +
                                "in the middle of each corner) and the start line again; the opponents (each track's own drivers in the cars made after them, or the original track's racer, Baldino and the motorbike Rabbibunny) line up with you on the grid and start on the count-down. " +
                                "Other game folders play the game as it is."));
+
+        root.Children.Add(Section("Your car"));
+        root.Children.Add(Text("Drive the track in Twinsen's buggy, or in any of the opponents' cars the folder has -- to try a track in it. " +
+                               "It handles as this setup makes the car.", new Thickness(0, 0, 0, 4)));
+        foreach (var (generic, name) in DrivableCars(gameDirectory)) driveAs.Items.Add(new ComboBoxItem { Content = name, Tag = generic });
+        driveAs.SelectionChanged += (_, _) => { if (!updating && driveAs.SelectedItem is ComboBoxItem { Tag: int generic }) setup.DriveAs = generic; };
+        root.Children.Add(driveAs);
 
         root.Children.Add(Section("Start from"));
         foreach (var p in RaceCarSetup.Presets) preset.Items.Add(new ComboBoxItem { Content = p.Name, Tag = p });
@@ -183,10 +192,26 @@ internal sealed class RaceCarWindow : Window
         qualifying.IsChecked = setup.Qualifying;
         fineWeather.IsChecked = trackWeather ?? setup.FineWeather;
         startAtLine.IsChecked = setup.StartAtLine;
+        driveAs.SelectedItem = driveAs.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is int g && g == setup.DriveAs) ?? driveAs.Items.OfType<ComboBoxItem>().FirstOrDefault();
         foreach (var r in refresh) r();
         ShowGearRows();
         preset.SelectedIndex = MatchingPreset();
         updating = false;
+    }
+
+    // The cars Twinsen can drive (RaceCarSetup.DriveAs): his buggy, and the racer entity's cars the folder's entity table has -- the
+    // retail racer's, Baldino's rocket car and the cars made after the characters (Terrain.RaceTrackCharacterCars) -- by name.
+    private static List<(int Generic, string Name)> DrivableCars(string? gameDirectory)
+    {
+        var list = new List<(int, string)> { (-1, "Twinsen's buggy") };
+        var racer = gameDirectory is null ? null : Lba2EntityTable.Load(gameDirectory)?.Entities.FirstOrDefault(e => e.Id == Terrain.RaceTrackScenes.RacerEntity);
+        if (racer is null) return list;
+        var has = racer.Bodies.Select(b => b.Generic).ToHashSet();
+        var names = new Dictionary<int, string> { [0] = "The racer's car (the original track's racer)", [1] = "Baldino's rocket car" };
+        foreach (var c in Terrain.RaceTrackCharacterCars.All) names.TryAdd(c.Generic, $"{c.Name} ({c.Driver})");
+        foreach (var (generic, name) in names.OrderBy(n => n.Key))
+            if (has.Contains(generic)) list.Add((generic, $"{generic}: {name}"));
+        return list;
     }
 
     // The drivers of a track that have a car (a time to beat has none): its line-up, or (a track built before the line-ups) the retail

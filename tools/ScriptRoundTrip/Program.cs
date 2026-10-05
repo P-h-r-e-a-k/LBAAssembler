@@ -71,6 +71,7 @@ internal static class Program
             "scenenames" => RaceTrackCommand.SceneNames(args),
             "footprints" => IslandFootprintStudy.Run(args),
             "islandrender" => IslandRenderCommand.Run(args),
+            "trackmaps" => TrackMapsCommand.Run(args),
             "islandtexture" => IslandTextureCommand.Run(args),
             "islandfreetex" => IslandFreeTextureCommand.Run(args),
             "islandheights" => IslandHeightsCommand.Run(args),

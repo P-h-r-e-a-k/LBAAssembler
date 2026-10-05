@@ -256,6 +256,8 @@ internal static class RaceTrackCommand
         if (Environment.GetEnvironmentVariable("RT_WEATHER") == "rain") setup.FineWeather = false;
         // (RT_NO_OPPONENTS=1: Twinsen alone on the track -- the car file then has the one to beat's line as its guide)
         if (Environment.GetEnvironmentVariable("RT_NO_OPPONENTS") == "1") setup.Opponent = false;
+        // (RT_DRIVE=<racer body>: driving as that opponent's car)
+        if (int.TryParse(Environment.GetEnvironmentVariable("RT_DRIVE"), out var drive)) { setup.DriveAs = drive; setup.DriveAsKey = RaceCarEngineFile.DriveAsLine(args[1], drive); }
         // (RT_RACE=<island file>: of a folder with several tracks, the one Play races with that island open in the editor, as RaceFor picks it)
         var track = Environment.GetEnvironmentVariable("RT_RACE") is { Length: > 0 } race ? RaceTrackService.RaceFor(args[1], race) : RaceTrackService.ReadInfo(args[1]);
         // (RT_STORY=1: the game played as a game -- every track in a set, raced where and when the game is, with the story's keys)

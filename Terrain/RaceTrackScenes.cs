@@ -496,11 +496,16 @@ internal static class RaceTrackScenes
                         // (the scene's actors run out at the engine's hundred: the penguins and the slicks keep their room, and a row
                         // that doesn't fit is shorter)
                         if (model.Actors.Count + PenguinsPerScene + OilPerScene >= SceneValidator.MaxObjects) { mushroomsLeftOut++; continue; }
+                        // (out of sight, as the penguins and the slicks are, its height on the road kept with it: the race-track mode stands
+                        // it there. A scene can be drawn with another island file than its track's -- Celebration Island's 95 is the statue's
+                        // track's, and before the statue rises the game draws it without the raised road, as the editor draws the island's
+                        // other file with it; Citadel Island's scenes carry both weathers' tracks -- and a mushroom standing on a road that
+                        // isn't there hung in the air)
                         var mushroom = mushroomTemplate.Clone();
                         mushroom.Flags = OpponentFlags; mushroom.Move = 0; mushroom.Life = new byte[] { 0 }; mushroom.Track = new byte[] { 0 };
                         mushroom.X = (int)Math.Round((x - model.CubeX * 64) * 512); mushroom.Z = (int)Math.Round((z - model.CubeY * 64) * 512);
-                        mushroom.Y = (int)Math.Round(y); mushroom.Beta = 0;
-                        t.Mushrooms.Add(new[] { scene, SceneOps.AddActor(model, mushroom) });
+                        mushroom.Y = -20000; mushroom.Beta = 0;
+                        t.Mushrooms.Add(new[] { scene, SceneOps.AddActor(model, mushroom), (int)Math.Round(y) });
                     }
                     // (a few: the penguins dropped walk the track, several in one scene at once)
                     for (var k = 0; k < PenguinsPerScene; k++)

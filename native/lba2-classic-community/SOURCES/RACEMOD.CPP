@@ -80,9 +80,10 @@
  *     finish=<var> <value>...    what the race's end sets, won or not
  *   The opponents (2026-10-03, later): opponent_pace=<lo> <hi> draws its skill between the two each time the track is loaded (the main
  *   opponent's is one number); opponent_small=<generic body> its car shrunk to half its size (the lightning spell).
- *   Power-ups (powerups=1, mushroom=<scene> <actor>, penguin=<scene> <actor>): small brown mushrooms along the lap, the game's own,
+ *   Power-ups (powerups=1, mushroom=<scene> <actor> [<y>], penguin=<scene> <actor>): small brown mushrooms along the lap, the game's own
+ *   (built out of sight, stood on the road at <y> here),
  *   each with a power-up inside that a car driving over it gets -- Gazogem fuel (a boost), the protection spell (30 s: no mine, penguin or
- *   lightning hurts the car), the lightning spell (the other cars shrunk and slowed for 20 s), a clover (life and magic full), health, a
+ *   lightning hurts the car), the lightning spell (the other cars shrunk and slowed, 15-25 s: longer the further ahead), a clover (life and magic full), health, a
  *   nitro penguin (dropped behind the car, it goes off 2 s later and stops every car near it) and the super jet-pack (the game drives for
  *   10 s, faster). It grows back a while later. An opponent that drives over one gets a boost, drops a penguin or shrinks Twinsen.
  *   The lightning spell fills Twinsen's magic too (the game's own spell takes it all), with the game's lightning flash.
@@ -102,12 +103,15 @@
  */
 #include "C_EXTERN.H"
 #include "COMMON.H"
+#include "AMBIANCE.H"
 #include "INPUT.H"
 #include "RACEMOD.H"
 extern void ClrHoloPos(S32 num);   // HOLOGLOB.CPP (HOLO.H itself clashes with C_EXTERN.H)
 extern void DoImpact(S32 num, S32 x, S32 y, S32 z, U8 owner);   // IMPACT.CPP
 extern void InitBody(U8 gennewbody, U8 numobj);                  // OBJECT.CPP
 extern void HitObj(U8 numhitter, U8 num, S32 hitforce, S32 beta); // OBJECT.CPP
+extern void *GivePtrBody(S32 index);                              // OBJECT.CPP
+extern void *GivePtrAnim(S32 index);                              // OBJECT.CPP
 extern void InitHitExtraPof(S32 x, S32 y, S32 z, S32 hitforce);   // OBJECT.CPP
 extern S32 InitIncrustDisp(S16 type, S16 num, S32 x, S32 y, S16 info, S16 move, S32 timeout);   // INCRUST.CPP
 #define RACE_PENGUIN_IMPACT 15             // the impact a nitro penguin goes off with (the land mines')
@@ -214,6 +218,7 @@ typedef struct {
     S32 SkidUntil, SkidStart; int SkidDir; // skidding on oil: until when, since when, and which way it spins ...
     double SkidSpeed;                      // ... and how fast it was going
     int Small, Normal;                     // its car's shrunk generic body (-1 none) and its own (-1: not seen yet)
+    S32 ShrunkUntil;                       // shrunk by Twinsen's lightning until when (ShrinkMs: longer the further ahead it is)
 } T_RACE_OPPONENT;
 static T_RACE_OPPONENT s_opp[RACE_MAX_OPPONENTS];
 // With no opponent raced, the line of the one to beat all the same (guide_path=, guide_top=, guide_grip=: the builder writes it then),
@@ -358,17 +363,27 @@ static int s_skidDir = 1;
 #define RACE_BOOST_MS 4000
 #define RACE_PROTECT_MS 30000
 #define RACE_SHRINK_MS 20000
+#define RACE_SHRINK_SPREAD 0.25            // ... longer for a car ahead, shorter for one behind: the leader's x1.25, the last's x0.75
 #define RACE_JETPACK_MS 10000
 #define RACE_BOOST 1.5                     // the top speed and the pull with Gazogem fuel
 #define RACE_SHRUNK 0.7                    // a shrunk car's
 #define RACE_FLASH_MS 700                  // the lightning spell's flash
+#define RACE_BOLT_MS 600                   // ... and its bolts onto the cars it strikes
+#define RACE_GOLD_EDGE 244                 // (the palette's gold: the bolts' edges)
 #define RACE_BLAST_FORCE 20                // a penguin's blast, as HitObj takes it
-static S32 s_boostUntil = 0, s_protectUntil = 0, s_shrinkOthersUntil = 0, s_shrunkUntil = 0, s_jetUntil = 0;
+static S32 s_boostUntil = 0, s_protectUntil = 0, s_shrunkUntil = 0, s_jetUntil = 0;
 static double s_jetFactor = 1;             // the jet-pack on: the car's speed times this (s_puJet) -- easing back to 1 at its end (JetFactor)
 static double JetFactor(S32 until, double full);
 // ... and the car turned into it: the super jet-pack's model at about the car's size (superjet_model=, OBJFIX.HQR: the builder adds it),
 // drawn in the car's place, lying flat (the build lays it so), while Twinsen's car is hidden
-static int s_superModel = -1, s_heroHidden = 0;
+static int s_superModel = -1, s_heroHidden = 0, s_superShown = 0;
+// Driving as another car (drive_as=<BODY.HQR body> <ANIM.HQR animation> [<BODY.HQR shrunk body>]: a test drive in one of the opponents'
+// cars): Twinsen's car hidden as it is under the super jet-pack, that car drawn in its place with the opponents' driving animation,
+// pitched with the way the car climbs or falls (DrawDriveAs) -- and its shrunk body while an opponent's lightning has him shrunk.
+static int s_driveBody = -1, s_driveAnim = -1, s_driveSmall = -1, s_driveShown = -1, s_driveSmallNow = 0;
+static T_OBJ_3D s_driveObj;
+static double s_drivePitch = 0;
+static S32 s_drivePrevX, s_drivePrevY, s_drivePrevZ;
 // Twinsen's car at half its size, while an opponent's lightning has him shrunk (twinsen_small=: the buggy's own body -- the buggy
 // behaviour's entity's GEN_BODY_TUNIQUE -- halved, its generic body; the builder adds it)
 static int s_heroSmall = -1, s_heroIsSmall = 0;
@@ -1376,11 +1391,20 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "oil_icon")) s_oilIcon = atoi(v);
         else if (!strcmp(key, "superjet_model")) s_superModel = atoi(v);
         else if (!strcmp(key, "twinsen_small")) s_heroSmall = atoi(v);
+        else if (!strcmp(key, "drive_as")) {
+            s_driveSmall = -1;
+            if (sscanf(v, "%d %d %d", &s_driveBody, &s_driveAnim, &s_driveSmall) < 2) s_driveBody = s_driveAnim = -1;
+        }
         else if (!strcmp(key, "superjet_lean")) s_superLean = atof(v);
         else if (!strcmp(key, "superjet_turn")) s_superTurn = atoi(v);
         else if (!strcmp(key, "mushroom")) {
+            // (the height it stands at: built out of sight since 2026-10-05, so another island file's scene never shows it in the air;
+            // without one, an older build's, where its actor stands)
             T_RACE_MUSHROOM *m = &s_mush[s_nbMush];
-            if (s_nbMush < RACE_MAX_MUSHROOMS && sscanf(v, "%d %d", &m->Scene, &m->Actor) == 2) { m->HasY = 0; m->Back = 0; s_nbMush++; }
+            int y = 0, got = 0;
+            if (s_nbMush < RACE_MAX_MUSHROOMS && (got = sscanf(v, "%d %d %d", &m->Scene, &m->Actor, &y)) >= 2) {
+                m->Y = got == 3 ? y : 0; m->HasY = got == 3; m->Back = 0; s_nbMush++;
+            }
         }
         else if (!strcmp(key, "oil")) {
             if (s_nbOilActors < RACE_MAX_OIL_ACTORS && sscanf(v, "%d %d", &s_oilScene[s_nbOilActors], &s_oilActor[s_nbOilActors]) == 2) s_nbOilActors++;
@@ -2615,6 +2639,12 @@ static double BackShare(int me) {
     return racers > 1 ? (double)ahead / (racers - 1) : -1;
 }
 
+// How long the lightning spell shrinks a car `back` of the way back in the race (BackShare: 0 leading, 1 last, -1 no race): longer for
+// the cars ahead, shorter for the ones behind -- RACE_SHRINK_MS either way by RACE_SHRINK_SPREAD -- to keep the cars together.
+static S32 ShrinkMs(double back) {
+    return back < 0 ? RACE_SHRINK_MS : (S32)(RACE_SHRINK_MS * (1 + RACE_SHRINK_SPREAD * (1 - 2 * back)));
+}
+
 // A mushroom's power-up, at random -- the weights by how far back the car is (`back`, BackShare: -1 the plain weights): the strong ones
 // go to the cars at the back and hardly ever to the leader, who draws the weak ones.
 static int RandomPowerUp(double back) {
@@ -2728,6 +2758,22 @@ static void DropPenguin(double x, double y, double z, int dropper) {
     }
 }
 
+// The lightning spell striking cars (`actors`, this scene's): the game's flash and thunder (EXTRA.CPP InvoqueFoudre's), and a bolt from
+// the sky onto each of them while RACE_BOLT_MS lasts (DrawBolts) -- Twinsen's spell on the other cars, or another car's on Twinsen's.
+static int s_boltActor[RACE_MAX_OPPONENTS + 1], s_nbBolts = 0;
+static S32 s_boltUntil = 0;
+
+static void Strike(S32 now, const int *actors, int count) {
+    const S32 flash = InitIncrustDisp(INCRUST_ECLAIR, 0, 0, 0, 0, 0, 1);
+    if (flash != -1) ListIncrustDisp[flash].TimerEnd = now + RACE_FLASH_MS;
+    s_nbBolts = 0;
+    for (int i = 0; i < count && s_nbBolts < RACE_MAX_OPPONENTS + 1; i++)
+        if (actors[i] >= 0 && actors[i] < NbObjets) s_boltActor[s_nbBolts++] = actors[i];
+    s_boltUntil = now + RACE_BOLT_MS;
+    const T_OBJET *at = &ListObjet[s_nbBolts ? s_boltActor[0] : NUM_PERSO];
+    HQ_3D_MixSample(SAMPLE_FOUDRE_STEP3, 0x1000, 500, 1, at->Obj.X, at->Obj.Y + 1000, at->Obj.Z);
+}
+
 // Twinsen uses an item (Shift).
 static void UseItem(int pu, S32 now) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -2739,12 +2785,21 @@ static void UseItem(int pu, S32 now) {
         if (!ProtectActif) { ToggleSortProtection(); s_protectSpell = 1; }
         break;
     case PU_LIGHTNING: {
-        // (the game's own lightning spell takes all of Twinsen's magic: it is filled, as it is for the spell; and its flash)
-        s_shrinkOthersUntil = now + RACE_SHRINK_MS;
+        // (the game's own lightning spell takes all of Twinsen's magic: it is filled, as it is for the spell; and its strike on the
+        // other cars in sight)
+        // (each car for longer the further ahead it is: ShrinkMs)
         MagicPoint = (U8)(MagicLevel * 20);
-        const S32 flash = InitIncrustDisp(INCRUST_ECLAIR, 0, 0, 0, 0, 0, 1);
-        if (flash != -1) ListIncrustDisp[flash].TimerEnd = now + RACE_FLASH_MS;
-        Log_Info("[racemod] the other cars shrunk for %d s; magic full (%d)", RACE_SHRINK_MS / 1000, (int)MagicPoint);
+        int hit[RACE_MAX_OPPONENTS], struck = 0;
+        for (int k = 0; k < RACE_MAX_OPPONENTS; k++) {
+            if (!s_opp[k].Count || !s_opp[k].Scenes) continue;
+            const S32 ms = ShrinkMs(BackShare(k));
+            s_opp[k].ShrunkUntil = now + ms;
+            Log_Info("[racemod] %s's car shrunk for %.1f s", s_opp[k].Name, ms / 1000.0);
+            const int a = OpponentActor(&s_opp[k]);
+            if (a > 0) hit[struck++] = a;
+        }
+        Strike(now, hit, struck);
+        Log_Info("[racemod] the other cars shrunk (%d struck in this scene); magic full (%d)", struck, (int)MagicPoint);
         break;
     }
     case PU_PENGUIN:
@@ -2810,12 +2865,19 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
             const double b = car->Obj.Beta * 2 * 3.14159265358979 / 4096;
             const double x = car->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1300, z = car->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1300;
             if (pu == PU_OIL) DropOil(x, car->Obj.Y, z); else DropPenguin(x, car->Obj.Y, z, n);
-        } else if (pu == PU_LIGHTNING && now >= s_protectUntil && now >= s_jetUntil) {
-            s_shrunkUntil = now + RACE_SHRINK_MS;
+        } else if (pu == PU_LIGHTNING && now >= s_jetUntil) {
+            // (struck as Twinsen's spell strikes the others: the flash, the thunder and a bolt onto his car -- which the protection spell
+            // shrugs off)
+            const int me = NUM_PERSO;
+            Strike(now, &me, 1);
+            const int protect = now < s_protectUntil;
+            const S32 ms = ShrinkMs(BackShare(-1));
+            if (!protect) s_shrunkUntil = now + ms;
             char text[64];
-            snprintf(text, sizeof(text), "%s's lightning: shrunk!", o->Name);
+            snprintf(text, sizeof(text), protect ? "%s's lightning: protected!" : "%s's lightning: shrunk!", o->Name);
             Message(text);
-            Log_Info("[racemod] Twinsen's car shrunk by %s's lightning for %d s", o->Name, RACE_SHRINK_MS / 1000);
+            if (protect) Log_Info("[racemod] %s's lightning strikes Twinsen's car: the protection spell holds", o->Name);
+            else Log_Info("[racemod] Twinsen's car struck and shrunk by %s's lightning for %.1f s", o->Name, ms / 1000.0);
         } else if (s_puJet[pu] > 0) {
             o->JetUntil = now + RACE_JETPACK_MS;
             o->JetFactor = s_puJet[pu];
@@ -2927,11 +2989,15 @@ static void PowerUps(S32 now, int driving) {
     const S32 jetLeft = s_jetUntil - now;
     const int superJet = driving && jetLeft > 0 && s_superModel >= 0 && CubeMode == CUBE_EXTERIEUR
                          && (jetLeft >= RACE_JET_EASE_MS || (jetLeft / RACE_JET_FLASH_MS) % 2 == 0);
-    // (every frame: the game sets the car's flags again as it drives -- hidden once, it showed under the jet-pack)
-    if (superJet) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
-    else if (!superJet && s_heroHidden) { hero->Flags &= ~INVISIBLE; s_heroHidden = 0; }
+    // (every frame: the game sets the car's flags again as it drives -- hidden once, it showed under the jet-pack; and hidden while it is
+    // driven as another car, drawn in its place: DrawDriveAs)
+    const int driveAs = driving && s_driveBody >= 0 && s_driveAnim >= 0 && CubeMode == CUBE_EXTERIEUR;
+    s_superShown = superJet;
+    if (superJet || driveAs) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
+    else if (s_heroHidden) { hero->Flags &= ~INVISIBLE; s_heroHidden = 0; }
     // shrunk by an opponent's lightning: Twinsen's car at half its size while it lasts
     const int small = driving && s_heroSmall >= 0 && now < s_shrunkUntil && now >= s_protectUntil && now >= s_jetUntil;
+    s_driveSmallNow = driving && now < s_shrunkUntil && now >= s_protectUntil && now >= s_jetUntil;
     if (small && hero->GenBody != s_heroSmall) { InitBody((U8)s_heroSmall, NUM_PERSO); s_heroIsSmall = 1; }
     else if (!small && s_heroIsSmall) { if (driving) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO); s_heroIsSmall = 0; }
     // the protection spell's time up
@@ -3231,7 +3297,7 @@ void RaceMod_Frame(void) {
             // (a power-up's boost, shrunk by Twinsen's lightning, stopped by a penguin's blast)
             if (now < o->JetUntil) pace *= JetFactor(o->JetUntil, o->JetFactor);
             else if (now < o->BoostUntil) pace *= RACE_BOOST * 0.9;
-            if (now < s_shrinkOthersUntil) pace *= RACE_SHRUNK;
+            if (now < o->ShrunkUntil) pace *= RACE_SHRUNK;
             if (now < o->HitUntil) { pace = 0; o->Speed = 0; }
 
             // its line's speed at its skill, reached from a standstill no faster than the car pulls away (the plan's braking is kept)
@@ -3345,8 +3411,8 @@ void RaceMod_Frame(void) {
         }
         // shrunk by the lightning spell: its car's half-size body while it lasts (the build's, opponent_small=)
         if (o->Small >= 0) {
-            if (o->Normal < 0 && now >= s_shrinkOthersUntil) o->Normal = car->GenBody;
-            const int want = now < s_shrinkOthersUntil ? o->Small : o->Normal;
+            if (o->Normal < 0 && now >= o->ShrunkUntil) o->Normal = car->GenBody;
+            const int want = now < o->ShrunkUntil ? o->Small : o->Normal;
             if (want >= 0 && car->GenBody != want) InitBody((U8)want, (U8)index);
         }
         // a mushroom it drives over
@@ -3422,7 +3488,7 @@ static void HudLine(S32 x, S32 y, const char *text, int align) {
 // road, drawn after the scene's objects as they are drawn -- tested against the depth of the ground and the decor, in the colours of
 // things near -- its place on the screen marked to be drawn over next frame.
 static void DrawSuperJet(S32 now) {
-    if (!s_heroHidden || s_superModel < 0 || CubeMode != CUBE_EXTERIEUR) return;
+    if (!s_superShown || s_superModel < 0 || CubeMode != CUBE_EXTERIEUR) return;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     T_OBJ_3D pose = hero->Obj;
     CarPose(&pose, (hero->Obj.Beta + s_superTurn) & 4095, s_superLean, 0);
@@ -3438,6 +3504,57 @@ static void DrawSuperJet(S32 now) {
     }
     SetCLUT(clut);
     Switch_Fillers(depth ? (keep ? (fog ? FILL_POLY_FOG_NZW : FILL_POLY_NZW) : (fog ? FILL_POLY_FOG_ZBUFFER : FILL_POLY_ZBUFFER)) : fog ? FILL_POLY_FOG : FILL_POLY_TEXTURES);
+}
+
+// The car Twinsen drives as (drive_as=), in his car's place -- hidden: the frame's update -- with the opponents' driving animation, facing
+// his car's way and pitched with the way it climbs or falls (the slope it has just driven, smoothed), drawn after the scene's objects
+// as the super jet-pack is.
+static void DrawDriveAs(S32 now) {
+    if (!s_heroHidden || s_superShown || s_driveBody < 0 || s_driveAnim < 0 || CubeMode != CUBE_EXTERIEUR) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const int body = s_driveSmallNow && s_driveSmall >= 0 ? s_driveSmall : s_driveBody;
+    if (s_driveShown != body) {
+        if (!GivePtrBody(body) || !GivePtrAnim(s_driveAnim)) { Log_Info("[racemod] drive_as: no body %d or animation %d", body, s_driveAnim); s_driveBody = -1; return; }
+        if (s_driveShown < 0) { s_drivePrevX = hero->Obj.X; s_drivePrevY = hero->Obj.Y; s_drivePrevZ = hero->Obj.Z; s_drivePitch = 0; }
+        ObjectClear(&s_driveObj);
+        s_driveObj.Body.Num = -1;
+        ObjectInitBody(&s_driveObj, (void *)(uintptr_t)(U32)body);
+        s_driveObj.Texture = BufferTexture; s_driveObj.NextTexture = BufferTexture;
+        s_driveObj.Anim.Num = -1;
+        ObjectInitAnim(&s_driveObj, (void *)(uintptr_t)(U32)s_driveAnim);
+        s_driveObj.Status |= FLAG_BODY;
+        s_driveShown = body;
+        Log_Info("[racemod] driving as body %d (animation %d)", body, s_driveAnim);
+    }
+    // the pitch: the height it has gained over the way it has gone along its heading (backwards too), smoothed
+    const double b = hero->Obj.Beta * 2 * RACE_PI / 4096;
+    const double along = (hero->Obj.X - s_drivePrevX) * sin(b) + (hero->Obj.Z - s_drivePrevZ) * cos(b);
+    if (fabs(along) > 48) {
+        const double slope = (hero->Obj.Y - s_drivePrevY) / along;
+        s_drivePitch += (-atan(slope) - s_drivePitch) * 0.35;
+        s_drivePrevX = hero->Obj.X; s_drivePrevY = hero->Obj.Y; s_drivePrevZ = hero->Obj.Z;
+    } else if (abs(hero->Obj.X - s_drivePrevX) + abs(hero->Obj.Z - s_drivePrevZ) > 600) {
+        s_drivePrevX = hero->Obj.X; s_drivePrevY = hero->Obj.Y; s_drivePrevZ = hero->Obj.Z;
+    }
+    // (its animation stepped -- in place: the opponents' cars are moved by their lines, not by it)
+    s_driveObj.X = hero->Obj.X; s_driveObj.Y = hero->Obj.Y; s_driveObj.Z = hero->Obj.Z;
+    ObjectSetInterDep(&s_driveObj);
+    if (s_driveObj.Status & FLAG_LAST_FRAME) { s_driveObj.Anim.Num = -1; ObjectInitAnim(&s_driveObj, (void *)(uintptr_t)(U32)s_driveAnim); }
+    s_driveObj.X = hero->Obj.X; s_driveObj.Y = hero->Obj.Y; s_driveObj.Z = hero->Obj.Z;
+    CarPitch(&s_driveObj, hero->Obj.Beta, s_drivePitch);
+    ObjectSetInterFrame(&s_driveObj);
+    const int fog = Fill_Flag_Fog, depth = Fill_Flag_ZBuffer, keep = Fill_Flag_NZW;
+    const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
+    Switch_Fillers(FILL_POLY_FOG_NZW);
+    SetCLUT(PalLevel);
+    if (ObjectDisplay(&s_driveObj)) {
+        SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
+        if (ClipXMin <= ClipXMax && ClipYMin <= ClipYMax) BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
+        UnsetClip();
+    }
+    SetCLUT(clut);
+    Switch_Fillers(depth ? (keep ? (fog ? FILL_POLY_FOG_NZW : FILL_POLY_NZW) : (fog ? FILL_POLY_FOG_ZBUFFER : FILL_POLY_ZBUFFER)) : fog ? FILL_POLY_FOG : FILL_POLY_TEXTURES);
+    (void)now;
 }
 
 // The checkpoints of this cube as red lines on the road (checkpoint_lines=1, for now): each followed along its length -- the raised
@@ -3490,6 +3607,46 @@ static void DrawCheckpoints(S32 height) {
             }
             px = sx; py = sy; had = seen;
         }
+    }
+    UnsetClip();
+}
+
+// The lightning's bolts (Strike): from high over each car struck -- the top of the view where that is out of it -- down onto the car,
+// a jagged white line edged in gold with a branch off it, jagged anew every frame (it flickers), over the scene until s_boltUntil.
+static void DrawBolts(S32 now, S32 height) {
+    if (now >= s_boltUntil || !s_nbBolts || CubeMode != CUBE_EXTERIEUR) return;
+    const S32 thick = height / 200 > 2 ? height / 200 : 2;
+    for (int b = 0; b < s_nbBolts; b++) {
+        const T_OBJET *car = &ListObjet[s_boltActor[b]];
+        if (car->Obj.Y < -10000 || !PtrProjectPoint(car->Obj.X, car->Obj.Y + 300, car->Obj.Z)) continue;
+        const S32 ex = Xp, ey = Yp;
+        S32 sx = ex, sy = 0;
+        if (PtrProjectPoint(car->Obj.X, car->Obj.Y + 9000, car->Obj.Z) && Yp < ey) { sx = Xp; sy = Yp > 0 ? Yp : 0; }
+        if (ey - sy < 8) continue;
+        // the bolt's corners: STEPS pieces, each corner pushed aside at random (none at its ends), and a branch from one of them
+        enum { STEPS = 7 };
+        S32 px[STEPS + 1], py[STEPS + 1];
+        const S32 jag = (ey - sy) / 7 + 2;
+        for (int i = 0; i <= STEPS; i++) {
+            px[i] = sx + (ex - sx) * i / STEPS + (i && i < STEPS ? rand() % (2 * jag + 1) - jag : 0);
+            py[i] = sy + (ey - sy) * i / STEPS;
+        }
+        const int from = 2 + rand() % 3;
+        const S32 bx = px[from] + (rand() % 2 ? 1 : -1) * (jag + rand() % (jag + 1)), by = py[from] + (ey - sy) / 5;
+        S32 x0 = ex, x1 = ex, y0 = sy, y1 = ey;
+        for (int i = 0; i <= STEPS; i++) { if (px[i] < x0) x0 = px[i]; if (px[i] > x1) x1 = px[i]; }
+        if (bx < x0) x0 = bx;
+        if (bx > x1) x1 = bx;
+        SetClip(x0 - thick - 2, y0 - 2, x1 + thick + 2, y1 + 2);
+        if (ClipXMin > ClipXMax || ClipYMin > ClipYMax) continue;
+        for (int i = 0; i < STEPS; i++) {
+            Line(px[i] - thick / 2 - 1, py[i], px[i + 1] - thick / 2 - 1, py[i + 1], RACE_GOLD_EDGE);
+            Line(px[i] + thick - thick / 2, py[i], px[i + 1] + thick - thick / 2, py[i + 1], RACE_GOLD_EDGE);
+            for (S32 k = 0; k < thick; k++) Line(px[i] + k - thick / 2, py[i], px[i + 1] + k - thick / 2, py[i + 1], LBAWHITE);
+        }
+        Line(px[from], py[from], bx, by, LBAWHITE);
+        Line(px[from] + 1, py[from], bx + 1, by, RACE_GOLD_EDGE);
+        BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
     }
     UnsetClip();
 }
@@ -3635,7 +3792,9 @@ void RaceMod_Draw(void) {
 
     const S32 now = TimerRefHR, width = (S32)ModeDesiredX, height = (S32)ModeDesiredY;
     DrawSuperJet(now);
+    DrawDriveAs(now);
     DrawCheckpoints(height);
+    DrawBolts(now, height);
     // the item box, top left: its two slots
     if (items) {
         const S32 size = height / 8 > 60 ? height / 8 : 60, gap = size / 5;
@@ -3735,11 +3894,12 @@ static void ResetTrack(void) {
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     s_noCollideScene = -1;
     if (s_heroHidden) { ListObjet[NUM_PERSO].Flags &= ~INVISIBLE; s_heroHidden = 0; }
-    s_superModel = -1; s_superLean = RACE_SUPERJET_LEAN; s_superTurn = 0;
+    s_superModel = -1; s_superLean = RACE_SUPERJET_LEAN; s_superTurn = 0; s_superShown = 0;
+    s_driveBody = s_driveAnim = s_driveSmall = s_driveShown = -1; s_driveSmallNow = 0;
     if (s_heroIsSmall && Comportement == C_BUGGY) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroSmall = -1; s_heroIsSmall = 0;
     s_penguinWalk = 1; s_item[0] = s_item[1] = -1; s_sel = 0; s_takeAt = 0; s_shiftBlock = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
-    s_boostUntil = s_protectUntil = s_shrinkOthersUntil = s_shrunkUntil = s_jetUntil = 0; s_jetFactor = 1;
+    s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_opp[n].ShrunkUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
     s_ownTrack = 0; s_loaded[0] = 0;
     FollowCamEyeHook = NULL;
 }
