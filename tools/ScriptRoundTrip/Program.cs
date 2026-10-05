@@ -73,6 +73,8 @@ internal static class Program
             "islandrender" => IslandRenderCommand.Run(args),
             "trackmaps" => TrackMapsCommand.Run(args),
             "castcars" => RaceTrackCommand.CastCars(args),
+            // bodynames <game folder> [first] [count]: every BODY.HQR entry's name as the actor attributes window shows it (Lba2BodyNames)
+            "bodynames" => BodyNamesCommand.Run(args),
             "islandtexture" => IslandTextureCommand.Run(args),
             "islandfreetex" => IslandFreeTextureCommand.Run(args),
             "islandheights" => IslandHeightsCommand.Run(args),
@@ -368,6 +370,18 @@ internal static class Show
         var syms = new SceneSymbols(rec);
         if (kind == "track") Console.Write(TrackText.Decompile(rec.Track(a).ToArray(), $"scene {scene}, actor {actor} - track script"));
         else Console.Write(LifeText.Decompile(rec.Life(a).ToArray(), actor, syms, $"scene {scene}, actor {actor} - life script"));
+        return 0;
+    }
+}
+
+internal static class BodyNamesCommand
+{
+    public static int Run(string[] args)
+    {
+        var result = LBAAssembler.Lba2BodyNames.For(args[1]);
+        int first = args.Length > 2 ? int.Parse(args[2]) : 0, count = args.Length > 3 ? int.Parse(args[3]) : result.Names.Count;
+        for (var i = first; i < Math.Min(result.Names.Count, first + count); i++) Console.WriteLine($"{i}: {result.Names[i] ?? "(no name)"}");
+        Console.WriteLine($"{result.Names.Count} bodies, {result.Names.Count(n => n is null)} without a name; warning: {result.Warning ?? "none"}");
         return 0;
     }
 }

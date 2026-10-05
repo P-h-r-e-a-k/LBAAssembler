@@ -62,7 +62,7 @@ internal static class RaceTrackStory
     private const int WizardTent = 21, Wizard = 2, TraluCave = 2, CaveRaph = 2, CaveZoe = 9, PaulHouse = 7, PaulActor = 2;
     private const int AliensScene = 42, Alien = 6, AlienGreeting = 388, ArrivalPoint = 20;
     // the gloves: the attic, its shelf actor, and the darts' display entity and its body
-    private const int Attic = 1, Shelf = 8, DartsEntity = 18, DartsBody = 31, CarScene = 49;
+    internal const int Attic = 1, Shelf = 8, DartsEntity = 18, DartsBody = 31, CarScene = 49;
     private const int CitadelTexts = 3, HolomapTexts = 2;
     private const byte LabelAttribute = 17;          // the holomap labels' own (text 501 "Downtown Pharmacy.")
     private const int ArrowRecordSize = 32;

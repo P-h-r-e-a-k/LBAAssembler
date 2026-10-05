@@ -48,6 +48,7 @@
     <Compile Include="..\..\Lba1\Lba1Game.cs" Link="Lba1\Lba1Game.cs" />
     <Compile Include="..\..\HqdDescriptions.cs" Link="HqdDescriptions.cs" />
     <Compile Include="..\..\HqdWriter.cs" Link="HqdWriter.cs" />
+    <Compile Include="..\..\Lba2BodyNames.cs" Link="Lba2BodyNames.cs" />
     <Compile Include="..\..\SceneMenuNames.cs" Link="SceneMenuNames.cs" />
     <Compile Include="..\..\Lba1\Lba1BlankScene.cs" Link="Lba1\Lba1BlankScene.cs" />
     <Compile Include="..\..\Lba2Engine.cs" Link="Lba2Engine.cs" />
