@@ -577,9 +577,14 @@ internal static class RaceTrackScenes
                         t.Oil.Add(new[] { scene, SceneOps.AddActor(model, oil) });
                     }
                 }
+            // (an island with a track in each weather: each jump only in its own file's -- the scenes are both's, and Citadel Island's
+            // storm jump, at the rampart's height since 2026-10-06, reached the town circuit's bridge over it in the fine weather)
             foreach (var t in tracks)
                 foreach (var jump in t.Report.Jumps)
-                    if (model.CubeX == jump.CubeX && model.CubeY == jump.CubeZ && AddJump(model, scene, jump, log) is { } jumped) model = jumped;
+                {
+                    int? weather = tracks.Count > 1 && options.Island.OwnWeather is { } own ? (t == tracks[0] ? own : 1 - own) : null;
+                    if (model.CubeX == jump.CubeX && model.CubeY == jump.CubeZ && AddJump(model, scene, jump, log, weather) is { } jumped) model = jumped;
+                }
             foreach (var t in tracks)
                 foreach (var mine in t.Report.Mines)
                     if ((int)Math.Floor(mine.X / 64) == model.CubeX && (int)Math.Floor(mine.Z / 64) == model.CubeY && AddMine(model, scene, mine, t.Report, originals, log) is { } mined) model = mined;
@@ -1005,7 +1010,8 @@ void comportement_1()
     // (movement 13). Here a small actor does what the retail hero script does, so no scene's own hero script has to be edited; the hero's
     // track script only gets the two labels -- each of a lap's jumps its own pair (90 and 91, then 92 and 93), its own zone number and
     // controller, and its own flight.
-    private static SceneModel? AddJump(SceneModel model, int scene, JumpInfo jump, List<string> log)
+    // (`weather`: the value game variable 206 has when the jump's file is shown -- RACEMOD.CPP RaceMod_CitadelWeather -- or null for any)
+    private static SceneModel? AddJump(SceneModel model, int scene, JumpInfo jump, List<string> log, int? weather = null)
     {
         var ox = jump.CubeX * 64.0; var oz = jump.CubeZ * 64.0;
         var y = (int)Math.Round(jump.Height);
@@ -1037,7 +1043,7 @@ void comportement_1()
 
 void comportement_1()
 {{
-    if (12 == comportement_hero() && {jump.Zone} == zone_obj(0))
+    if (12 == comportement_hero() && {jump.Zone} == zone_obj(0){(weather is { } w ? $" && {w} == var_game(206)" : "")})
     {{
         if ({window})
         {{

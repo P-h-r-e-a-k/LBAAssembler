@@ -58,6 +58,8 @@ internal static class RaceTrackStory
     // Island -- he has his car (207, set by every outside scene's controller) -- and Raph has stopped lapping to talk to him (208: his car
     // stands parked by the start line, RACEMOD.CPP parade=)
     public const int HasCar = 207, RaphHere = 208;
+    // the race-track mode's: 1 while a gate of the track is shut (RACEMOD.CPP RACE_GATE_VAR) -- the story's race, not one started on its line
+    public const int GateShut = 209;
     // the game's own people at the lighthouse (scene 46), kept by the build (RaceTrackIsland.StoryEntities): Raph by its door, his fiancee,
     // and Twinsen and Zoe on its top in the spell's last shot (BODY 175); and the behaviour of Twinsen and Zoe walking together (entity 5)
     public const int LighthouseRaph = 19, Fiancee = 113, CoupleOnTop = 116;
@@ -767,7 +769,7 @@ void comportement_2()
 
 void comportement_1()
 {{
-    if ({Driving} == comportement_hero() && 0 == var_game({GlovesSlot}) && {startZone} == zone_obj(0))
+    if ({Driving} == comportement_hero() && 0 == var_game({GlovesSlot}) && 1 == var_game({GateShut}) && {startZone} == zone_obj(0))
     {{
         set_dir_obj(0, MOVE_MANUAL);
         message({Id(Line.PaulStop)});

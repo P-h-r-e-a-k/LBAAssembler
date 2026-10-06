@@ -3594,8 +3594,13 @@ S32 RaceMod_MoveBeta(S32 beta) {
     return RaceMod_Active() && Comportement == C_BUGGY && TimerRefHR < s_skidUntil ? s_skidBeta : beta;
 }
 
+// Game variable RACE_GATE_VAR: 1 while one of the track's gates (gate=) is shut -- the story's start line until Twinsen has his gloves --
+// so the scenes' scripts can tell a story's race from one started on its line, which has none (Mr. Paul stops a car only then:
+// RaceTrackStory). 0 with no track, or none shut.
+#define RACE_GATE_VAR 209
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
+    ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
     if (Comportement == C_BUGGY) TrackSafePlace();
     if (s_rescue) { s_rescue = 0; Rescue(); }
     // A raised road winds round itself in the air: the classic camera, which stands still until the hero leaves the screen, would watch
@@ -4273,6 +4278,7 @@ static void ResetTrack(void) {
     s_faced = 0; s_safeIndex = -1; s_rescue = 0; s_hitUntil = 0;
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0; s_hinted = -1;
     s_nbGates = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
+    ListVarGame[209] = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;

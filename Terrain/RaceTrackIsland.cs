@@ -38,7 +38,7 @@ internal sealed record RaceTrackIsland(
         // house, flat at 250 in both files; the town circuit's, scene 49, in the storm -- its start line is CITADEL's sea -- under the
         // carport, where the island's own car stands: that one, a decor that can't be driven, goes from both files)
         ParkOwn = (540.5, 637.5, 1024, 1), ParkTwin = (544.125, 654.75, 1024, 0),
-        DropDecors = new[] { (8, 10, 16448, 7552) },
+        DropDecors = new[] { (8, 10, 16448, 7552) }, OwnWeather = 0,
         // (the lighthouse, scene 46, where the storm ends: the game's own Raph by its door, his fiancee and Twinsen and Zoe on its top, whom
         // the Weather Wizard's spell needs -- RaceTrackStory -- and the door's people and track points on the storm file's ground: the town
         // circuit, in the fine weather's file, cut the hill there by 2,000)
@@ -197,6 +197,9 @@ internal sealed record RaceTrackIsland(
     // cube) and a turn, for the own file's start and the twin's, and the value of game variable 206 the engine sets for the weather the
     // car parks in (RACEMOD.CPP RaceMod_CitadelWeather: 1 fine, 0 the storm).
     public (double X, double Z, int Beta, int When)? ParkOwn { get; init; }
+    // The value of game variable 206 while the island's own file is shown (the twin's is the other: 0 and 1) -- Citadel Island's storm, 0.
+    // Each file's jump acts only in its own weather (RaceTrackScenes.AddJump).
+    public int? OwnWeather { get; init; }
     public (double X, double Z, int Beta, int When)? ParkTwin { get; init; }
 
     // Decors of the island's own that every build takes away, wherever the road is: each the cube and the origin (cube units) of the
