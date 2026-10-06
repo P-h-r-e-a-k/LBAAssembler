@@ -77,6 +77,11 @@ internal sealed class RaceTrackPlan
     // side -- as it was (RaceTrackBuilder.TrimKept): the user's way with Citadel Island's buildings, "not quite as deep so they don't
     // interfere with the track" -- the pharmacy against the town circuit's bridge ramp.
     public bool TrimKept { get; set; }
+    // Kept pieces cut down to a wall (RaceTrackBuilder.ThinKept): each squeezed toward one side of its own box (Toward: west, east, north or
+    // south) until it is Cells deep, so its far face -- the building's own wall -- stands against that side. A building is several pieces
+    // that share their inner sides, open there: one piece kept between two roads (Citadel Island's shop, the piece with its door, under the
+    // town circuit's bridge and between its two streets) has its neighbours kept as its walls (2026-10-06).
+    public ThinKeptPiece[]? ThinKept { get; set; }
     // The road bridge's deck at least this high (RaceTrackOptions.RoadBridgeLeast): over a building the plan keeps under it -- the town
     // circuit's deck over Citadel Island's shop, whose top is 3500.
     public double? DeckLeast { get; set; }
@@ -195,6 +200,13 @@ internal sealed class RaceTrackPlan
 }
 
 internal enum CrossingStyle { Level, Viaduct, Jump, Bridge }
+
+internal sealed class ThinKeptPiece
+{
+    public int Body { get; set; }
+    public string? Toward { get; set; }
+    public double Cells { get; set; } = 0.25;
+}
 
 // Where a jump takes off and lands (island cell coordinates), what the scene needs to run it. Index: which of the lap's jumps (its zone,
 // its flight and its labels in the hero's track script are its own); S0, S1: where its flight starts and ends along the lap (cells, the
@@ -652,7 +664,8 @@ internal static class RaceTrackBuilder
         var follow = new IslandOps.DecorFollow(island);
         var keepBodies = plan.KeepBodies;
         ClearDecors(island, index, options, report, roads, keepBodies, plan.KeepAbove);
-        // (a kept building made shallower has bodies of its own, kept as the ones they copy)
+        // (a kept building made shallower has bodies of its own, kept as the ones they copy; and so has a piece cut down to a wall)
+        if (plan.ThinKept is { Length: > 0 } thin) { keepBodies = (keepBodies ?? Array.Empty<int>()).Concat(ThinKept(island, thin, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
         if (plan.TrimKept && keepBodies is { Length: > 0 }) { keepBodies = keepBodies.Concat(TrimKept(island, roads, keepBodies, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
         var natural = new Field(island);
         ModifyGround(island, field, index, roads, options, report, plan.KeepGroundUnder ? KeptGround(island, keptBoxes) : null);
@@ -2877,6 +2890,50 @@ internal static class RaceTrackBuilder
                     report.Notes.Add($"a kept building in cube ({cx},{cz}) made {cut + 0.25:0.0} cells shallower on its {new[] { "west", "east", "north", "south" }[side]} side, where the road runs into it ({string.Join(", ", made)})");
                 }
             }
+        return madeBodies;
+    }
+
+    // The plan's kept pieces cut down to walls (RaceTrackPlan.ThinKept): every decor of each body squeezed toward the side named until it is
+    // that many cells deep, as TrimKept squeezes a building -- a copy of its body with its points moved, at the end of the island's OBL --
+    // so the face on its far side stands where that side was.
+    private static List<int> ThinKept(IslandFile island, ThinKeptPiece[] pieces, RaceTrackOptions o, RaceTrackReport report)
+    {
+        var madeBodies = new List<int>();
+        if (o.SceneryObl is not { } obl || o.NewBodyBase < 0) { report.Notes.Add("WARNING: the island's OBL wasn't counted -- no kept piece cut down to a wall"); return madeBodies; }
+        var hqr = HqrArchive.Open(obl);
+        var sides = new[] { "west", "east", "north", "south" };
+        foreach (var piece in pieces)
+        {
+            var side = Array.IndexOf(sides, piece.Toward?.ToLowerInvariant());
+            if (side < 0 || piece.Cells <= 0) { report.Notes.Add($"WARNING: kept piece {piece.Body} to cut down toward \"{piece.Toward}\": not a side (west, east, north, south) or no depth"); continue; }
+            var alongX = side < 2;
+            foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+                foreach (var d in cube.Decors.Where(d => (d.Body & 0xFFFF) == piece.Body && IslandFile.ObjectPageOf(d) == 0).ToList())
+                {
+                    // (world units from the decor's origin: the side that stays, and the squeeze)
+                    double lo = alongX ? d.XMin - d.X : d.ZMin - d.Z, hi = alongX ? d.XMax - d.X : d.ZMax - d.Z;
+                    var depth = (hi - lo) / 512;
+                    if (depth <= piece.Cells) continue;
+                    var anchor = side % 2 == 1 ? hi : lo;
+                    var k = piece.Cells / depth;
+                    var body = Squeezed(hqr.Read(piece.Body), d, alongX, anchor, k);
+                    if (body is null) { report.Notes.Add($"kept piece {piece.Body} in cube ({cx},{cz}): not a body of one bone, left as it is"); continue; }
+                    d.Body = o.NewBodyBase + report.NewBodies.Count;
+                    madeBodies.Add(d.Body);
+                    report.NewBodies.Add(body);
+                    if (alongX)
+                    {
+                        d.XMin = (int)Math.Round(d.X + anchor + (d.XMin - d.X - anchor) * k); d.XMax = (int)Math.Round(d.X + anchor + (d.XMax - d.X - anchor) * k);
+                        if (d.XMin > d.XMax) (d.XMin, d.XMax) = (d.XMax, d.XMin);
+                    }
+                    else
+                    {
+                        d.ZMin = (int)Math.Round(d.Z + anchor + (d.ZMin - d.Z - anchor) * k); d.ZMax = (int)Math.Round(d.Z + anchor + (d.ZMax - d.Z - anchor) * k);
+                        if (d.ZMin > d.ZMax) (d.ZMin, d.ZMax) = (d.ZMax, d.ZMin);
+                    }
+                    report.Notes.Add($"kept piece {piece.Body} in cube ({cx},{cz}) cut down to a wall {piece.Cells:0.##} cells deep against its {sides[side]} side (body {d.Body})");
+                }
+        }
         return madeBodies;
     }
 

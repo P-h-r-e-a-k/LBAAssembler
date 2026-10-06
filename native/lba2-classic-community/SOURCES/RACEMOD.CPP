@@ -3196,11 +3196,10 @@ static void ProtectionOff(void) {
 // jet-pack taken after that save then ran on, unseen, until the clock caught up with it -- the spell's sparkles gone with the load, but
 // Twinsen's car untouched by a penguin's blast, the jet-pack's hand on the wheel (the user, 2026-10-06: "Twinsen can get hit by a penguin
 // and not get affected by the blast"). They belong to the moment they were taken, so a loaded game has none: the item box empty, the
-// spells and the jet-pack over, every car's boost, skid, shrinking and stop over, the penguins and the oil slicks gone. (So does a clock
-// that has gone back for any other reason: RaceMod_Frame.)
-static S32 s_clockWas = 0;
+// spells and the jet-pack over, every car's boost, skid, shrinking and stop over, the penguins and the oil slicks gone. (Not on any clock
+// that goes back: the game pauses its clock for a dialog, a menu or a scene's loading by setting it back to where it was -- TIMER.CPP
+// RestoreTimer -- and the power-ups wait with it.)
 static void ForgetPowerUps(const char *why) {
-    s_clockWas = 0;
     ProtectionOff();
     // (a protection spell the save had on while Twinsen drives: the race's is the power-up's, gone with it)
     if (ProtectActif && Comportement == C_BUGGY) ToggleSortProtection();
@@ -3400,6 +3399,20 @@ static void PowerUps(S32 now, int driving) {
     else if (!small && s_heroIsSmall) { if (driving) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO); s_heroIsSmall = 0; }
     // the protection spell's time up
     if (s_protectSpell && now >= s_protectUntil) { ProtectionOff(); Log_Info("[racemod] the protection spell is over"); }
+    // ... or the game's spell gone before it: the game ends it whenever a script takes Twinsen's moves (GERELIFE.CPP SET_DIR) -- a jump's
+    // flight, at its take-off and its landing -- or at the spell's own key, and a scene's change clears its bubbles after putting it
+    // back (OBJECT.CPP ClearExtra, with the hero's anim kept). The race's protection lasts its time all the same (the blasts, the oil,
+    // the lightning leave the car alone), so the spell is put back while he drives: the bubbles round the car say so. (They went with
+    // the jump, and a penguin's blast after it seemed to do nothing: the user, 2026-10-06.)
+    else if (s_protectSpell && driving) {
+        int shown = 0;
+        for (int e = 0; e < MAX_EXTRAS && !shown; e++) shown = ListExtra[e].Sprite != -1 && (ListExtra[e].Flags & EXTRA_PROTECT);
+        if (!ProtectActif || !shown) {
+            if (ProtectActif) ToggleSortProtection();
+            ToggleSortProtection();
+            Log_Info("[racemod] the protection spell put back: %d ms of it left", (int)(s_protectUntil - now));
+        }
+    }
     // the penguins: walking the track until a car comes near (or on their fuse), shown by this scene's penguins
     Penguins(now, driving);
     if (now >= s_jetUntil && s_jetUntil) { s_jetUntil = 0; s_autoIndex = -1; }
@@ -3654,9 +3667,6 @@ S32 RaceMod_MoveBeta(S32 beta) {
 #define RACE_GATE_VAR 209
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
-    // (the clock gone back -- a save loaded some other way: the power-ups' times with it)
-    if (s_clockWas && TimerRefHR + 1000 < s_clockWas) ForgetPowerUps("the game clock went back");
-    s_clockWas = TimerRefHR;
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
     if (Comportement == C_BUGGY) TrackSafePlace();
     if (s_rescue) { s_rescue = 0; Rescue(); }
