@@ -70,6 +70,9 @@ internal static class PolarIsland
         var scene = HqrFile.Parse(File.ReadAllBytes(At("SCENE.HQR")));
         var sceneBackup = Backup("SCENE.HQR");
         for (var n = PolarScenes.FirstScene; n < PolarScenes.FirstScene + PolarScenes.Count; n++) Put(scene, sceneBackup, n + 1);
+        // (and the scenes an earlier version numbered 229-232, where they are still the island's)
+        var oldScenes = PolarScenes.OldScenes.Where(n => PolarScenes.OldScene(scene, n)).ToList();
+        foreach (var n in oldScenes) Put(scene, sceneBackup, n + 1);
         Trim(scene, sceneBackup, 223);
         File.WriteAllBytes(At("SCENE.HQR"), scene.ToBytes());
         PolarScenes.ForgetNames(gameDirectory);
@@ -80,8 +83,10 @@ internal static class PolarIsland
         Put(holo, holoBackup, PolarHolomap.PictureEntry); Put(holo, holoBackup, PolarHolomap.CameraEntry);
         var positions = holo.Read(PolarScenes.PositionsEntry);
         var before = holoBackup?.Read(PolarScenes.PositionsEntry);
-        foreach (var record in PolarScenes.Records())
+        foreach (var record in PolarScenes.Records().Concat(PolarScenes.OldScenes.Select(n => PolarScenes.MaxObjectif + n)))
         {
+            if (record >= PolarScenes.MaxObjectif + PolarScenes.OldFirstScene && record < PolarScenes.MaxObjectif + PolarScenes.FirstScene
+                && (record * PolarScenes.PositionSize + PolarScenes.PositionSize > positions.Length || positions[record * PolarScenes.PositionSize + 31] != IslandByte)) continue;
             var at = record * PolarScenes.PositionSize;
             if (at + PolarScenes.PositionSize > positions.Length) continue;
             if (before is not null && at + PolarScenes.PositionSize <= before.Length) before.AsSpan(at, PolarScenes.PositionSize).CopyTo(positions.AsSpan(at));

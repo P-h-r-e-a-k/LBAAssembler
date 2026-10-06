@@ -21,6 +21,11 @@ internal static class PolarScenes
     // past the retail game's 0..221 and the race track builder's 222..232 (the story's holomap arrow, the lava lake, Sendell's Well, the
     // old moon's four, the Emerald Moon's four)
     public const int FirstScene = 233;
+    // The island's scenes before 2026-10-06 were 229-240, and four of those, 229-232, are the Emerald Moon race track's: any of them still
+    // on island 12 goes when the island is added or taken out, and its holomap record with it (OldScene).
+    public const int OldFirstScene = 229;
+    public static IEnumerable<int> OldScenes => Enumerable.Range(OldFirstScene, FirstScene - OldFirstScene);
+    public static bool OldScene(HqrFile scenes, int n) => n + 1 < scenes.Count && !scenes.IsEmpty(n + 1) && scenes.Read(n + 1) is { Length: > 0 } r && r[0] == PolarIsland.IslandByte;
     public const int DockScene = 115;
     private const int SourceScene = 44;
     public const int PositionsEntry = 12, PositionSize = 32, MaxObjectif = 50, FlagExterior = 4;
@@ -128,6 +133,9 @@ internal static class PolarScenes
         // (a scene an earlier build of the island had for a cube that has none now goes)
         for (var n = FirstScene; n < FirstScene + Count; n++)
             if (!cubes.Any(c => SceneOf(c.Cx, c.Cz) == n) && n + 1 < hqr.Count && !hqr.IsEmpty(n + 1)) hqr.Clear(n + 1);
+        var old = OldScenes.Where(n => OldScene(hqr, n)).ToList();
+        foreach (var n in old) hqr.Clear(n + 1);
+        if (old.Count > 0) log.Add($"SCENE.HQR: the island's scenes as an earlier version numbered them, {string.Join(", ", old)}, taken out");
         var size = new byte[4];
         BinaryPrimitives.WriteInt32LittleEndian(size, largest);
         hqr.SetStored(0, size);
@@ -160,6 +168,12 @@ internal static class PolarScenes
             Record(MaxObjectif + SceneOf(cx, cz), cx * Side + Side / 2, 0, cz * Side + Side / 2, -1, FlagExterior);
         foreach (var (cx, cz, _) in PolarTerrain.Cubes(terrain.Island).Where(c => !cubes.Contains((c.Cx, c.Cz))))
             RetailRecord(MaxObjectif + SceneOf(cx, cz)).CopyTo(positions.AsSpan((MaxObjectif + SceneOf(cx, cz)) * PositionSize));
+        // (an earlier version's scenes' records, where they are still island 12's)
+        foreach (var n in OldScenes)
+        {
+            var at = (MaxObjectif + n) * PositionSize;
+            if (at + PositionSize <= positions.Length && positions[at + 31] == PolarIsland.IslandByte) RetailRecord(MaxObjectif + n).CopyTo(positions.AsSpan(at));
+        }
         File.WriteAllBytes(holoPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(holoPath), PositionsEntry, HqrWriter.StoredEntry(positions)));
         log.Add($"HOLOMAP.HQR: island 12's place on the planet (record 12) and its scenes' records (outside scenes of island 12)");
 

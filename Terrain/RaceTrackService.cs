@@ -660,10 +660,18 @@ internal static class RaceTrackService
             var count = HqrArchive.CountEntries(path);
             var scenes = HqrArchive.Open(path);
             var island = RaceTrackIsland.Polar;
+            // (as this version numbers its scenes, each the scene of its own cube; an earlier version's, 229-240, is added again)
+            for (var n = LBAAssembler.Terrain.Polar.PolarScenes.OldFirstScene; n < island.FirstScene && n + 1 < count; n++)
+            {
+                var old = scenes.Read(n + 1);
+                if (old.Length > 0 && old[0] == island.IslandByte) return false;
+            }
             for (var n = island.FirstScene; n <= island.LastScene && n + 1 < count; n++)
             {
                 var record = scenes.Read(n + 1);
-                if (record.Length > 0 && record[0] == island.IslandByte) return true;
+                if (record.Length == 0 || record[0] != island.IslandByte) continue;
+                var model = LBAAssembler.Scenes.SceneSerializer.Parse(LBAAssembler.Scenes.SceneGame.Lba2, record);
+                return LBAAssembler.Terrain.Polar.PolarScenes.SceneOf(model.CubeX, model.CubeY) == n;
             }
         }
         catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException) { }
