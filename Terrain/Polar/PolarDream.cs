@@ -1,5 +1,7 @@
 using System.IO;
 using System.Text;
+using LBAAssembler.LbaScript;
+using LBAAssembler.Scenes;
 
 namespace LBAAssembler.Terrain.Polar;
 
@@ -9,12 +11,18 @@ namespace LBAAssembler.Terrain.Polar;
 // the second game's first scene (scene 0); lost, the race is run again. The race-track mode does it (RACEMOD.CPP sprint=, wake=):
 //   - the intro, said by Twinsen as the grid forms, and the loss's line: texts 1 and 2 of the island's own text file (island 12's,
 //     PolarScenes.WriteTexts), next to its name;
-//   - the wake line, said by Zoe (scene 0's actor 4) a moment after Twinsen wakes up: a text at the end of Citadel Island's file, where
-//     scene 0's texts are (no recorded voice: shown, not spoken), before her own opening line.
+//   - Twinsen wakes up lying in his bed (2026-10-06, later): scene 0's own opening, changed for the dream's end (ApplyOpening) -- won,
+//     the race sets DreamVar, and in scene 0 Twinsen lies asleep on his bed (Twinsen's own animation 56, scene 101's: the Wannies' bed
+//     he sleeps in after their firefly tart), Zoe walks round to the bedside and says the wake line (a text at the end of Citadel
+//     Island's file, where scene 0's texts are: no recorded voice, shown not spoken), he sits up and gets out of bed (57 and 58, as in
+//     scene 101), and her own opening line follows.
 // The texts are in every language the game has, in its own order (English, French, German, Spanish, Italian, Portuguese) and code page.
 internal static class PolarDream
 {
     public const int IntroText = 1, LoseText = 2;
+    // the game variable a win sets (the race-track mode's win=): 1, Twinsen wakes up in his bed; 2 once Zoe has woken him (200-204 are
+    // the race track story's, nothing in the game uses 205)
+    public const int DreamVar = 205;
     // Twinsen wakes up in the game's first scene, at its own start (the foot of his bed), and Zoe says the wake line
     public const int WakeScene = 0, WakeActor = 4;
     // the car's top speed for the race (km/h): the race car setup's gears scaled to it (its normal top is 80)
@@ -60,8 +68,9 @@ internal static class PolarDream
     }
 
     // The race's texts into a game folder: the island's (its text file written again with them) and the wake line at the end of Citadel
-    // Island's texts. Returns lines for the log and the wake line's text.
-    public static (List<string> Log, int WakeText) Apply(string gameDirectory)
+    // Island's texts; and scene 0's opening for the dream's end (ApplyOpening). Returns lines for the log, the wake line's text, and
+    // whether the opening says it (else the race-track mode does, before Zoe's first line).
+    public static (List<string> Log, int WakeText, bool InOpening) Apply(string gameDirectory)
     {
         var log = new List<string> { PolarScenes.WriteTexts(gameDirectory) };
         var textPath = Path.Combine(gameDirectory, "TEXT.HQR");
@@ -78,7 +87,130 @@ internal static class PolarDream
         }
         File.WriteAllBytes(textPath, hqr);
         log.Add($"the dream's end: Zoe's wake line is text {id} of Citadel Island's, in all {languages} languages; Twinsen wakes up in scene {WakeScene}");
-        return (log, id);
+        var opening = ApplyOpening(gameDirectory, id);
+        log.Add(opening.Log);
+        return (log, id, opening.Ok);
+    }
+
+    // Scene 0's places for the dream's end (its track points from 8 on): Twinsen on his bed (cells 9-11 x 1-4, its head to the north, its
+    // top at 3,072: four layers over the floor), facing as he lies on the Wannies' bed in scene 101 (turn 0), his head on the pillow
+    // and all of him on the mattress (found by trying places: the animation's root is not its middle) -- and Zoe's way round the bed's
+    // foot to its east side.
+    public static readonly (int X, int Y, int Z) Bed = (5900, 3072, 2000);
+    // (where getting out of bed leaves him: on the floor beside it, at the bed's west side -- the animation lowers him there, his place
+    // has to follow)
+    private static readonly (int X, int Y, int Z) Up = (4352, 2048, 2518);
+    public const int BedBeta = 0;
+    private static readonly (int X, int Y, int Z)[] ZoeWay = { (4100, 2048, 2900), (6400, 2048, 2900), (6400, 2048, 1900) };
+    // Twinsen's animations in scene 101: asleep in the bed, sitting up, getting out of it (the hero's generic animations)
+    private const int Asleep = 56, SitUp = 57, GetUp = 58;
+    private const int Zoe = 4, OpeningVar = 40;
+
+    // Scene 0's opening, for the dream's end: when DreamVar is 1 (and the opening hasn't run: game variable 40 is 0), Twinsen starts asleep
+    // on his bed in place of walking in; Zoe walks round to the bedside instead of turning to him, says the wake line (`wake`), DreamVar
+    // goes to 2, he sits up and gets out of bed and stops where the game's opening has him stop (his track's label 2) -- and her own
+    // opening goes on from there, as it always does. Returns whether the scene was changed, and a line for the log.
+    public static (bool Ok, string Log) ApplyOpening(string gameDirectory, int wake)
+    {
+        try
+        {
+            var store = new SceneStore(SceneGame.Lba2, gameDirectory);
+            var model = store.Load(WakeScene);
+            var first = model.TrackPoints.Count;
+            // (POLAR_BED="x y z beta": another place on the bed, for trying it out)
+            var (bedX, bedY, bedZ, bedBeta) = (Bed.X, Bed.Y, Bed.Z, BedBeta);
+            if (Environment.GetEnvironmentVariable("POLAR_BED")?.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToArray() is [var tx, var ty, var tz, var tb])
+                (bedX, bedY, bedZ, bedBeta) = (tx, ty, tz, tb);
+            model.TrackPoints.Add(new SceneTrackPoint(bedX, bedY, bedZ));
+            foreach (var p in ZoeWay) model.TrackPoints.Add(new SceneTrackPoint(p.X, p.Y, p.Z));
+            model.TrackPoints.Add(new SceneTrackPoint(Up.X, Up.Y, Up.Z));
+            int bed = first, way = first + 1, up = first + 1 + ZoeWay.Length;
+            var scripts = SceneScripts.Load(SceneSerializer.Write(model), WakeScene);
+
+            var heroLife = scripts.GetText(0, ScriptKind.Life);
+            heroLife = Once(heroLife, $"if (0 == var_game({OpeningVar}))", $@"if (1 == var_game({DreamVar}) && 0 == var_game({OpeningVar}))
+    {{
+        set_var_game(94, 1);
+        set_var_game(253, 1);
+        cinema_mode(1);
+        pos_point({bed});
+        beta({bedBeta});
+        shadow_obj(0, 0);
+        set_dir(NO_MOVE);
+        anim({Asleep});
+        set_track(label_150);
+        set_comportement(comportement_3);
+    }}
+    else if (0 == var_game({OpeningVar}))");
+            scripts.SetText(0, ScriptKind.Life, heroLife);
+            scripts.SetText(0, ScriptKind.Track, scripts.GetText(0, ScriptKind.Track).TrimEnd() + $@"
+
+label(150);
+anim({Asleep});
+stop();
+
+label(151);
+anim({SitUp});
+wait_anim();
+anim({GetUp});
+wait_anim();
+pos_point({up});
+anim(0);
+
+label(2);
+stop();
+");
+
+            var zoeLife = scripts.GetText(Zoe, ScriptKind.Life);
+            zoeLife = Once(zoeLife, "set_track(label_0);", $@"if (1 == var_game({DreamVar}))
+                {{
+                    set_track(label_160);
+                }}
+                else
+                {{
+                    set_track(label_0);
+                }}");
+            zoeLife = Once(zoeLife, "void comportement_1()\n{\n", $@"void comportement_1()
+{{
+    if (1 == var_game({DreamVar}) && 100 == l_track())
+    {{
+        message({wake});
+        set_var_game({DreamVar}, 2);
+        shadow_obj(0, 1);
+        set_track_obj(0, label_151);
+    }}
+");
+            scripts.SetText(Zoe, ScriptKind.Life, zoeLife);
+            scripts.SetText(Zoe, ScriptKind.Track, scripts.GetText(Zoe, ScriptKind.Track).TrimEnd() + $@"
+
+label(160);
+anim(1);
+goto_point({way});
+goto_point({way + 1});
+goto_point({way + 2});
+anim(0);
+face_twinsen(-1);
+
+label(100);
+stop();
+");
+            var built = scripts.Build();
+            if (!built.Ok) return (false, $"scene {WakeScene}: the dream's waking up left out, its scripts would not compile: {string.Join("; ", built.Errors)}");
+            store.SaveMany(new List<SceneChange> { new(WakeScene, SceneSerializer.Parse(SceneGame.Lba2, built.Record!), null) }, allowErrors: true);
+            return (true, $"scene {WakeScene}: won, Twinsen wakes up asleep in his bed (track point {bed}, animation {Asleep}), Zoe comes round to the bedside " +
+                          $"(points {way}-{way + 2}) and wakes him (text {wake}), he sits up and gets out of bed ({SitUp}, {GetUp}) before her own opening line");
+        }
+        catch (Exception e) when (e is InvalidOperationException or ScriptCompileException or InvalidDataException or ArgumentException or IOException)
+        {
+            return (false, $"scene {WakeScene}: the dream's waking up left out ({e.Message}): Zoe says the wake line before her own, the race-track mode's");
+        }
+    }
+
+    private static string Once(string text, string what, string with)
+    {
+        var at = text.IndexOf(what, StringComparison.Ordinal);
+        if (at < 0) throw new InvalidOperationException($"scene {WakeScene}'s scripts aren't the game's own (no \"{what.Split('\n')[0]}\")");
+        return text[..at] + with + text[(at + what.Length)..];
     }
 
     internal static Encoding Dos

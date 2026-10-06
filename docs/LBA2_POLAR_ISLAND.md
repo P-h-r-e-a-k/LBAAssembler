@@ -231,9 +231,11 @@ is lost.
   80 km/h.
 * **FunFrock** races him in his own car (the racer's body 17, made after the character), and he is the one to beat.
 * **The end:** cross the finish line before FunFrock and the car stops on the peak, "You beat FunFrock!". Three and a half seconds later
-  Twinsen wakes up at home, in the second game's first scene (scene 0). As Zoe comes up to him in the game's own opening, she first shakes
-  him awake ("Twinsen! Twinsen, wake up! You were tossing and turning all night. Were you dreaming about FunFrock again?"), then says
-  her own line. If FunFrock gets there first, Twinsen says so and the race starts again from the grid.
+  Twinsen wakes up at home, in the second game's first scene (scene 0), lying asleep in his bed (his own animations from scene 101, the
+  Wannies' bed). Zoe comes round to the bedside and shakes him awake ("Twinsen! Twinsen, wake up! You were tossing and turning all
+  night. Were you dreaming about FunFrock again?"), he sits up and gets out of bed, and the game's own opening goes on with her line.
+  If FunFrock gets there first, Twinsen says so and the race starts again from the grid.
+* **The kerbs** are drawn smooth, as the other tracks' are (a kerb a cell wide, its own texture over the triangles along it).
 * **A new game** played as a game (the race car setup's "new game") starts in the dream, on the dock beside the car, instead of in
   Twinsen's house.
 * **Texts:** Twinsen's intro (said as the grid forms) and his line after a loss are texts 1 and 2 of the island's own text file, next to

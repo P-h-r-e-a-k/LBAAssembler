@@ -168,7 +168,7 @@ plan = {
     'heights': [round(float(v), 1) for v in h],
     'open': True, 'start': start, 'finish': fin,
     'maxGrade': 1.8,
-    'asphaltHalf': 3.0, 'curbHalf': 3.75, 'vergeHalf': 5.0, 'blend': 4.0,
+    'asphaltHalf': 3.0, 'curbHalf': 4.0, 'vergeHalf': 5.0, 'blend': 4.0,
     'raised': [cross[0], cross[3], arc[0], n - 1], 'raisedHalf': 3.25,
     'arcJumps': [cross, arc],
 }

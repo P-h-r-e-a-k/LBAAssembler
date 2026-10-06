@@ -106,7 +106,7 @@
  *                                loses it. An opponent stops at it. The player's car stops there too (RaceMod_Held)
  *     intro=<text>               said by Twinsen as the grid forms, before the count-down (of the race's island's texts)
  *     wake=<scene> <text> [<actor>]   a win: RACE_SPRINT_END_MS after the line, Twinsen is out of his car and wakes up in <scene>, at its
- *                                own start; <actor> says <text> there (of that scene's island's texts) before the first line it says --
+ *                                own start (the scene started afresh: its opening can lay him on his bed); <actor> says <text> there (of that scene's island's texts) before the first line it says --
  *                                Zoe shakes him awake as she comes up to him in the game's own opening -- or, if it says none, a while
  *                                after he woke. A loss: the race is run again from the grid (lose=<text>: said first, of the race's
  *                                island's texts)
@@ -1881,10 +1881,16 @@ void RaceMod_Story(void) {
     if (s_endWon && s_wakeScene >= 0) {
         // the dream is over: Twinsen wakes up, out of his car (the car is no one's: a new game's)
         if (Comportement == C_BUGGY) LeaveBuggy(C_NORMAL);
+        // (and on foot: LeaveBuggy leaves his move the car's, and a change of scene puts a hero whose move is the car's back in it --
+        // OBJECT.CPP ChangeCube, MemoMove -- where he drove off his bed at the race's speed)
+        ListObjet[NUM_PERSO].Move = MOVE_MANUAL;
+        ListBuggy[0].Speed = 0;
         ResetBuggy();
         s_pendWakeScene = s_wakeScene; s_pendWakeText = s_wakeText; s_pendWakeActor = s_wakeActor; s_pendWakeAt = 0;
+        // (a fresh start of the scene, at its own start, as a new game's or the console's `cube`: FlagChgCube 2 carries the hero's animation
+        // over the change -- FlagReinit, ChangeCube -- and the scene's own opening, which lays him on his bed, lost its animation to it)
         NewCube = s_wakeScene;
-        FlagChgCube = 2;
+        FlagChgCube = 0;
         Log_Info("[racemod] the dream is over: Twinsen wakes up in scene %d", s_wakeScene);
         return;
     }

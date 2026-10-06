@@ -732,7 +732,7 @@ Who belongs where was read from the game's scenes: `ScriptRoundTrip islandcast` 
 |  | 16 | a Sup priest (292) | A car like his robe, black with the red sash round it: a lectern with the book open on the bonnet, a candle on each front corner, censers swinging at the back. [views](racetrack/build/cars/priest.png) |
 |  | 17 | FunFrock (313) | The Dark Monk unmasked: a blood-red car with a sabre down each flank and, behind him, the gold ring of one of his teleporters, glowing. [views](racetrack/build/cars/funfrock.png) |
 | Island of the Wannies | 11 | a Wannie (194) | A mine cart off its rails: riveted iron plates, four small iron wheels, buffers, a heap of gems behind him, his lantern on a pole and his pick across the back. [views](racetrack/build/cars/wannie.png) |
-|  | 18 | the old Wannie (386) | One of the family's firefly tarts: round, its crust crimped all the way round, the fireflies still flying over it. [views](racetrack/build/cars/tart.png) |
+|  | 18 | the old Wannie (386) | A slice of the family's firefly tart, as the game's own slice is (the inventory's): a wedge, its point forward, the red filling over its dark edge, a pink layer and the pastry, the crust standing up along its wide end at the back, three cream domes on top (the whole round tart until 2026-10-06). [views](racetrack/build/cars/tart.png) |
 |  | 19 | the Wannie miner (342) | The mine's bulldozer: yellow, its blade out in front, an exhaust stack puffing, a bar over his head. [views](racetrack/build/cars/bulldozer.png) |
 | Island of the Mosquibees | 2 | the Queen of the Mosquibees (196) | Herself on wheels: a fat abdomen in her blue and orange bands ending in a sting, see-through veined wings swept back over it, thin blue legs down to honey-gold hubs, and her own head (crown, red eyes, antennae, trumpet) looking out of a collar made like her crown. [views](racetrack/build/cars/queen.png) |
 |  | 20 | a Mosquibee (192) | A honey pot on its side: an earthen pot, honey at its mouth and running over the lip, the dipper standing behind. [views](racetrack/build/cars/honey_pot.png) |
@@ -2126,6 +2126,7 @@ The user's ask: the red and white markings on some tracks, Desert Island's and C
 | Citadel Island, storm track | 2,140 | (16, 160) |
 | Citadel Island, town circuit | 7,153 | (16, 160) |
 | Mosquibees Island | 2,677 | (16, 40) |
+| Polar Island (2026-10-06) | 3,818 | (88, 224) |
 
 ![after: the same bend](racetrack/build/kerbs_after.png)
 
@@ -2193,11 +2194,13 @@ pillars and comes down a short hill onto the pad, 46 layers up.
   loses it. The player's car stops there (`RaceMod_Held`);
 - `RaceMod_Story`, called once a frame from the main loop before the scene is drawn (`PERSO.CPP`), where a dialog can open as a life
   script's does. It shows the intro (said by Twinsen as the grid forms, the count-down starting once it is read). 3.5 s after a win it
-  takes Twinsen out of his car (`LeaveBuggy`, `ResetBuggy`: the car is no one's yet, as in a new game) and changes to the waking scene at
-  its own start (`FlagChgCube` 2). 3.5 s after a loss it takes the car back to the grid in the start line's scene (`cube_scene=`), where
-  the grid forms again with the loss's line;
+  takes Twinsen out of his car (`LeaveBuggy`, `ResetBuggy`: the car is no one's yet, as in a new game; and his move put back to on foot,
+  which `LeaveBuggy` leaves the car's -- a change of scene puts a hero whose move is the car's back in it, `ChangeCube`'s `MemoMove`, and
+  he drove off his bed at the race's speed) and starts the waking scene afresh at its own start (`FlagChgCube` 0, as the console's `cube`
+  does: 2 carries his animation over the change). 3.5 s after a loss it takes the car back to the grid in the start line's scene
+  (`cube_scene=`), where the grid forms again with the loss's line;
 - `RaceMod_Dial`: in the waking scene, the actor `wake=` names (Zoe, actor 4 of scene 0) says the wake line before her first line. If she
-  says nothing, `RaceMod_Story` says it 15 s after he woke;
+  says nothing, `RaceMod_Story` says it 15 s after he woke. (Since the bed, below, scene 0's own opening says it: `wake=0 -1 4`.)
 - `dream=<scene>`, a set's key: a new game starts there instead of in Twinsen's house (`RaceMod_NewGameScene`, from `InitGame`).
 
 **The editor.** `RaceTrackIsland.Polar` (`Dream`), with its line-up `RaceDriver.Polar`: FunFrock, the one to beat. The track's record in
@@ -2209,14 +2212,36 @@ scene. `RaceTrackService.EnsurePolar` adds the island when the originals the bui
 with more pages. The holomap picture is the island's own (entry 46). The dock scene's buggy has `INIT_BUGGY 1`, and the start line's
 script edit takes it as well as 0.
 
+**The kerbs, smooth (2026-10-06, later).** The plan's kerb was 0.75 cells wide (asphalt to 3.0, kerb to 3.75), and the smooth kerbs
+(above) are made for a kerb a cell wide: Polar Island's had stayed in cell-sized steps. It is a cell wide now (to 4.0), and 3,818 of its
+triangles carry the kerb texture. An island with more texture pages has room for 1,024 texture definitions in a cube (a page and a
+definition share the index), and the kerbs take one a triangle: the busiest cube has 994 with the road, and a build that would need
+more stops with that said. What is still in steps is the sand verge's outer edge against the island's brown ground, and the rock
+walls: they are painted cell by cell, as on every track.
+
+**Waking up in bed (2026-10-06, later).** Won, Twinsen wakes up lying in his bed. Scene 101 (the Wannies' house, where the firefly tart
+sends him to sleep) has his own animations for it: 56 asleep in a bed, 57 sitting up, 58 getting out. The race's `win=` sets game
+variable 205 (`PolarDream.DreamVar`: nothing in the game uses it), and the build changes scene 0's opening for it (`ApplyOpening`):
+- Twinsen starts asleep on his bed (a new track point, the bed's cells 9-11 x 1-4 at 3,072, four layers over the floor; turn 0, as he
+  lies on the Wannies' bed, which is the same size with its head the same way; the place found by trying, his head on the pillow), no
+  shadow, in cinema mode;
+- Zoe walks round the bed's foot to its side (three new points) instead of turning to him, and says the wake line; 205 goes to 2;
+- he sits up and gets out of bed, and is put on the floor where that leaves him (the animation lowers him; his place has to follow);
+  his track stops at a label 2 of its own, which is what her own opening waits for -- her line, the Weather Wizard's arrow and the rest
+  of the game's opening follow as ever.
+Citadel Island's story edits the same scene (Zoe's line, the bed's zone): built together, scene 0 has both.
+
 **Checked** (sandbox `E:\dump\TEMP\ptrack\game`, muted):
 - `buildtogether` with the six other islands' tracks gives the same 56 files as the previous version, byte for byte.
 - The test pilot (`autodrive`) from the grid to the peak: both jumps carry the car (the first changes cube at the top of its flight), the
-  finish ends the race won in 36-40 s, Twinsen wakes up in scene 0, and Zoe says the wake line before her own. With FunFrock's skill at
+  finish ends the race won in 36-40 s, Twinsen wakes up asleep in his bed in scene 0, Zoe comes to the bedside and wakes him, he gets up
+  onto the floor and her own line follows (later: the kerbs smooth, the bed). With FunFrock's skill at
   300 % he gets there first, the race is lost and runs again from the grid.
 - A new game with the story set starts in scene 243, on the dock beside the car.
 - From the app: `POLAR.ILE` opens with the road, and Play ("Race: Polar Island") starts on the grid, or in the dream as a new game.
 - Putting the track back leaves the island as it was before the track.
+- Later: the six other islands built again give the same files but BODY.HQR, whose only changes are the firefly tart car and its
+  half-size copy; Citadel Island and Polar Island built together give scene 0 both their edits.
 
 ## The menu command
 

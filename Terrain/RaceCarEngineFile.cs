@@ -64,6 +64,8 @@ internal static class RaceCarEngineFile
             var f = dream.Finish;
             text.Append($"sprint=1\nrace_laps=1\nfinishline={f.CubeX} {f.CubeZ} {f.X0} {f.Z0} {f.X1} {f.Z1} {f.DirX} {f.DirZ}{Height(f)}\n");
             text.Append($"intro={dream.IntroText}\nlose={dream.LoseText}\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n");
+            // (won: scene 0's opening wakes Twinsen up in his bed)
+            if (dream.WinVar >= 0) text.Append($"win={dream.WinVar} 1\n");
         }
         // (in the story the weather is the game's own: the set picks the track that goes with it)
         if (!story && RaceTrackService.FineWeather(info, car.FineWeather)) text.Append("weather=fine\n");
