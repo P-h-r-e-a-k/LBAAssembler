@@ -29,7 +29,8 @@ internal static class RaceCarEngineFile
         var track = info is null ? null : RaceTrackService.Raced(info);
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
         var text = new StringBuilder("# LBA Assembler race car setup (read by the engine's race-track mode, RACEMOD.CPP)\n");
-        text.Append(car.CarKeys());
+        // (a dreamt sprint: the car's gears scaled to its own top speed -- Twinsen's car is a lot faster in his dream)
+        text.Append(car.CarKeys(track?.Dream?.TopKmh));
         // (a line's height, when it has one: a lap that passes over itself crosses the line's place at other heights too)
         static string Height(RaceTrackService.StartLineInfo line) => line.Y is { } y ? $" {y}" : "";
         if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}{Height(l)}\n");
@@ -56,7 +57,14 @@ internal static class RaceCarEngineFile
         // the grid spots, and whether a qualifying lap sets the order the cars line up in (RACEMOD.CPP)
         foreach (var g in track?.Grid ?? new()) text.Append($"grid={string.Join(' ', g)}\n");
         foreach (var g in track?.Pits ?? new()) text.Append($"pit={string.Join(' ', g)}\n");
-        if (track?.Grid is { Count: > 0 }) text.Append($"qualifying={(car.Qualifying ? 1 : 0)}\n");
+        if (track?.Grid is { Count: > 0 }) text.Append($"qualifying={(car.Qualifying && track.Dream is null ? 1 : 0)}\n");
+        // a dreamt sprint (Polar Island's): start line to finish line once, its intro, and a win's waking up (a loss runs it again)
+        if (track?.Dream is { } dream)
+        {
+            var f = dream.Finish;
+            text.Append($"sprint=1\nrace_laps=1\nfinishline={f.CubeX} {f.CubeZ} {f.X0} {f.Z0} {f.X1} {f.Z1} {f.DirX} {f.DirZ}{Height(f)}\n");
+            text.Append($"intro={dream.IntroText}\nlose={dream.LoseText}\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n");
+        }
         // (in the story the weather is the game's own: the set picks the track that goes with it)
         if (!story && RaceTrackService.FineWeather(info, car.FineWeather)) text.Append("weather=fine\n");
         if (track?.StoryArrow is >= 0 and var arrow) text.Append($"holo_arrow={arrow}\n");
@@ -122,13 +130,15 @@ internal static class RaceCarEngineFile
         return text.ToString();
     }
 
-    // The car's handling, as the setup makes it.
-    private static string CarKeys(this RaceCarSetup car)
+    // The car's handling, as the setup makes it -- with `topKmh`, every gear's top speed scaled so the top gear's is that (Polar Island's
+    // dream race: 140 km/h).
+    private static string CarKeys(this RaceCarSetup car, int? topKmh = null)
     {
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
         var gears = Math.Clamp(car.Gears, 1, RaceCarSetup.MaxGears);
         var text = new StringBuilder($"gears={gears}\n");
-        for (var g = 0; g < gears; g++) text.Append($"gear{g + 1}={RaceCarSetup.KmhToUnits(Math.Clamp(car.TopKmh(g), 3, 150))}\n");
+        var scale = topKmh is { } top && car.TopKmh(gears - 1) > 0 ? (double)top / car.TopKmh(gears - 1) : 1;
+        for (var g = 0; g < gears; g++) text.Append($"gear{g + 1}={RaceCarSetup.KmhToUnits(Math.Clamp(car.TopKmh(g) * scale, 3, 150))}\n");
         text.Append($"accel={N(RaceCarSetup.OriginalAccel * Math.Clamp(car.AccelerationPercent, 10, 1000) / 100.0)}\n");
         text.Append($"brake={N(RaceCarSetup.OriginalBrake * Math.Clamp(car.BrakingPercent, 10, 1000) / 100.0)}\n");
         text.Append($"coast={N(RaceCarSetup.OriginalCoast * Math.Clamp(car.CoastingPercent, 0, 1000) / 100.0)}\n");
@@ -273,6 +283,8 @@ internal static class RaceCarEngineFile
                 text.Append($"track={island.IslandByte} {when} {first} {last} {file}\n");
             }
             if (t.Story is { TiredText: >= 0 } s) text.Append($"tired={RaceTrackStory.DayVar} {RaceTrackStory.Tired} {s.TiredText}\n");
+            // (a dreamt sprint: a new game starts in it, where its race starts -- Polar Island's dock -- and wakes up at home once it is won)
+            if (t.Dream is not null && t.StartScene >= 0) text.Append($"dream={t.StartScene}\n");
         }
         File.WriteAllText(path, text.ToString());
     }

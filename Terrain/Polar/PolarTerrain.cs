@@ -211,6 +211,7 @@ internal static class PolarTerrain
             wanted[key] = (top.Concat(under).ToArray(), w, 2 * h);
         }
         var pages = new PolarTextures.Pages(island.GroundTexture, colours, IslandFile.MaxGroundPages);
+        pages.Reserve(PolarTextures.Pages.SlotsPerRow - 1);
         foreach (var (key, (tile, w, h)) in wanted.OrderByDescending(k => k.Value.H))
             if (!pages.Add(key, tile, w, h)) throw new InvalidOperationException($"The ground's textures take more than {IslandFile.MaxGroundPages} pages.");
         island.GroundPages.Clear();

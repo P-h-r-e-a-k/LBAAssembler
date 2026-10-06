@@ -89,6 +89,7 @@
     <EmbeddedResource Include="docs/racetrack/sendell_track_plan.json" LogicalName="RaceTrackPlan.Sendell.json" />
     <EmbeddedResource Include="docs/racetrack/moon_track_plan.json" LogicalName="RaceTrackPlan.Moon.json" />
     <EmbeddedResource Include="docs/racetrack/emerald_track_plan.json" LogicalName="RaceTrackPlan.Emerald.json" />
+    <EmbeddedResource Include="docs/racetrack/polar_track_plan.json" LogicalName="RaceTrackPlan.Polar.json" />
   </ItemGroup>
 
   <!--

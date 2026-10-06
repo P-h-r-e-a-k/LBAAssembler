@@ -53,6 +53,8 @@ internal sealed class RaceTrackPlan
     // winds up round the statue and comes back down over itself, and the engine's ground is one height map. The ground under it is left
     // as it is; the road is a row of decor pieces following the plan's heights at any grade (RaisedHalf cells from its middle to its
     // rail), and the engine's race-track mode drives on it (RACEMOD.CPP: the raised road is a floor of its own).
+    // A sprint (Open) may have several raised stretches, each its first and last point in turn: [from, to, from, to ...] -- Polar Island's
+    // has its carried jump over the main straight and its jump onto the rocky peak, with the ground road between them.
     public int[]? Raised { get; set; }
     public double? RaisedHalf { get; set; }
     // How far behind each other the grid's spots are (RaceTrackScenes.GridSpot), when not the usual 3.5: the lava lake's lap comes down a
@@ -66,6 +68,11 @@ internal sealed class RaceTrackPlan
     public bool RaisedCut { get; set; }
     // The start line's point, for a lap with no pit lane (with one, the line is in the pit lane's middle).
     public int? Start { get; set; }
+    // A sprint, not a lap (Polar Island's dream race): the route runs from its first point to its last and doesn't come back round, so
+    // the road has two ends; the race starts at Start and ends at the finish line, at the point Finish. No checkpoints: the racing
+    // lines run from the start line to the finish.
+    public bool Open { get; set; }
+    public int? Finish { get; set; }
     // The lowest the road is laid over the sea, when not the usual 700.
     public double? SeaClearance { get; set; }
     // Where the opponents' cars wait while the player qualifies, for a lap with no pit lane: [x, z, heading x, heading z] each.
@@ -374,6 +381,11 @@ internal sealed class RaceTrackReport
     public (double X0, double Z0, double X1, double Z1, double DirX, double DirZ)? LapLine { get; set; }
     // Checkpoints round the lap, in order (PlaceCheckpoints): a line across the road (island cells) and the way the lap crosses it.
     public List<(double X0, double Z0, double X1, double Z1, double DirX, double DirZ)> Checkpoints { get; } = new();
+    // A sprint's (RaceTrackPlan.Open): the route has two ends, and the race is over at the finish line (the plan's Finish point: across
+    // the road there, as the lap line is), at its height.
+    public bool Open { get; set; }
+    public (double X0, double Z0, double X1, double Z1, double DirX, double DirZ)? FinishLine { get; set; }
+    public double? FinishLineHeight { get; set; }
     // The road's height at each checkpoint and at the lap line: a lap that passes over itself crosses a line's place at several heights.
     public List<double> CheckpointHeights { get; } = new();
     public double? LapLineHeight { get; set; }
@@ -498,15 +510,19 @@ internal static class RaceTrackBuilder
         if (planned) plan.ApplyTo(options);
         if (planned && plan.MaxGrade is { } planGrade && planGrade > options.MaxGrade) { options = options.Copy(); options.MaxGrade = planGrade; }
 
-        var main = MakeRoad("lap", plan, options, closed: true);
+        var main = MakeRoad("lap", plan, options, closed: !plan.Open);
+        report.Open = plan.Open;
         roads.Add(main);
         double EdgeDistance(double x, double z) => DistanceToMissingCube(island, x, z);
         KeepOnIsland(main, EdgeDistance, options, report);
-        if (planned && plan.Raised is [var raisedFrom, var raisedTo])
+        if (planned && plan.Raised is { Length: >= 2 } raisedStretches && (raisedStretches.Length == 2 || plan.Open && raisedStretches.Length % 2 == 0))
         {
-            int a = PlanPoint(plan, main, raisedFrom), b = PlanPoint(plan, main, raisedTo);
             main.Raised = new bool[main.Count];
-            for (var k = a; ; k = At(main, k + 1)) { main.Raised[k] = true; if (k == b) break; }
+            for (var s = 0; s + 1 < raisedStretches.Length; s += 2)
+            {
+                int a = PlanPoint(plan, main, raisedStretches[s]), b = PlanPoint(plan, main, raisedStretches[s + 1]);
+                for (var k = a; ; k = At(main, k + 1)) { main.Raised[k] = true; if (k == b || !main.Closed && k == main.Count - 1) break; }
+            }
             // (no banking on the ground such a lap has: its ends meet the raised road, which is level across, and a bend of the raised
             // road just beyond an end -- Celebration Island's hairpin onto the dock -- tilted the dock's first cells 70 a cell)
             options = options.Copy(); options.BankGain = 0;
@@ -614,7 +630,8 @@ internal static class RaceTrackBuilder
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
         report.LapY = (double[])main.H.Clone(); report.LapRaised = (bool[]?)main.Raised?.Clone(); report.LapArc = (bool[]?)main.Arc?.Clone();
-        PlaceCheckpoints(roads, report, options, planned);
+        if (!plan.Open) PlaceCheckpoints(roads, report, options, planned);
+        else if (plan.Finish is { } finish) FinishLine(main, PlanPoint(plan, main, finish), options, report);
         PlacePits(roads, report, options, planned);
         foreach (var mine in plan.Mines ?? Array.Empty<double[]>())
             if (mine.Length >= 2) report.Mines.Add((mine[0] + plan.OriginCellX, mine[1] + plan.OriginCellZ));
@@ -1962,6 +1979,18 @@ internal static class RaceTrackBuilder
     // engine counts a line within 1200 of its height, RACEMOD.CPP RACE_LINE_REACH).
     private const double RaisedLevelApart = 2400;
 
+    // A sprint's finish line (RaceTrackPlan.Finish): across the road at point k, a cell past its rail or verge either side, the way the
+    // route runs there, at the road's height. No checkpoints: the route is driven once, start to finish.
+    private static void FinishLine(TrackRoad r, int k, RaceTrackOptions o, RaceTrackReport report)
+    {
+        double x = r.X[k], z = r.Z[k], dx = r.Tx[k], dz = r.Tz[k];
+        var half = (r.Raised is { } up && up[k] ? r.RaisedHalfs?[k] ?? o.RaisedHalfWidth : r.VergeHalf) + 1;
+        double nx = -dz, nz = dx;
+        report.FinishLine = (x - nx * half, z - nz * half, x + nx * half, z + nz * half, dx, dz);
+        report.FinishLineHeight = r.H[k];
+        report.Notes.Add($"a sprint: the finish line at cell ({x:0.0}, {z:0.0}), height {r.H[k]:0}, {r.S[k] - (report.StartLine.Count > 0 ? r.S[Nearest(r, report.StartLine[0].X, report.StartLine[0].Z)] : 0):0} cells from the start line; no checkpoints");
+    }
+
     private static void PlaceCheckpoints(List<TrackRoad> roads, RaceTrackReport report, RaceTrackOptions o, bool planned = false)
     {
         if (report.StartLine.Count == 0) return;
@@ -2143,7 +2172,11 @@ internal static class RaceTrackBuilder
     {
         if (report.StartLine.Count == 0) return;
         var i0 = Nearest(r, report.StartLine[0].X, report.StartLine[0].Z);
-        var count = r.Count / 2;
+        // (a sprint's line runs from the start line to the route's end, and its ends are its own: W holds an index there instead of
+        // going round)
+        var open = !r.Closed;
+        var count = open ? (r.Count - 1 - i0) / 2 + 1 : r.Count / 2;
+        int W(int m) => open ? Math.Clamp(m, 0, count - 1) : ((m % count) + count) % count;
         var cx = new double[count]; var cz = new double[count]; var nx = new double[count]; var nz = new double[count]; var at = new int[count];
         for (var m = 0; m < count; m++)
         {
@@ -2159,7 +2192,7 @@ internal static class RaceTrackBuilder
         if (report.Gravity is > 0) reach = Math.Min(reach, o.RaisedHalfWidth - RailInset - RailMargin);
         double Turn(int m)
         {
-            int a = (m - 1 + count) % count, b = (m + 1) % count;
+            int a = W(m - 1), b = W(m + 1);
             double ax = cx[m] - cx[a], az = cz[m] - cz[a], bx = cx[b] - cx[m], bz = cz[b] - cz[m];
             var angle = Math.Atan2(ax * bz - az * bx, ax * bx + az * bz);
             return angle / Math.Max(1e-6, (Math.Sqrt(ax * ax + az * az) + Math.Sqrt(bx * bx + bz * bz)) / 2);
@@ -2167,7 +2200,7 @@ internal static class RaceTrackBuilder
         var turns = Enumerable.Range(0, count).Select(Turn).ToArray();
         for (var m = 0; m < count; m++)
         {
-            var sharpest = Enumerable.Range(-2, 5).Select(d => turns[(m + d + count) % count]).OrderByDescending(Math.Abs).First();
+            var sharpest = Enumerable.Range(-2, 5).Select(d => turns[W(m + d)]).OrderByDescending(Math.Abs).First();
             var inside = Math.Abs(sharpest) < 1e-6 ? reach : Math.Clamp(1 / Math.Abs(sharpest) - LineTightest, 0, reach);
             // (the normal (-Tz, Tx) is the way the road runs turned a quarter turn the way a positive turn goes, so a positive turn has its
             // centre on the normal's side)
@@ -2198,7 +2231,7 @@ internal static class RaceTrackBuilder
             for (var round = 0; round < SmoothRounds; round++)
             {
                 for (var m = 0; m < count; m++) { px[m] = cx[m] + nx[m] * off[m]; pz[m] = cz[m] + nz[m] * off[m]; }
-                for (var i = 0; i < 3 * count; i++) { sumX[i + 1] = sumX[i] + px[i % count]; sumZ[i + 1] = sumZ[i] + pz[i % count]; }
+                for (var i = 0; i < 3 * count; i++) { sumX[i + 1] = sumX[i] + px[W(i - count)]; sumZ[i + 1] = sumZ[i] + pz[W(i - count)]; }
                 for (var m = 0; m < count; m++)
                 {
                     if (held[m]) continue;
@@ -2215,7 +2248,7 @@ internal static class RaceTrackBuilder
         var slopePull = new double[count]; var share = new double[count];
         for (var m = 0; m < count; m++)
         {
-            int a = at[m], b = at[(m + 1) % count];
+            int a = at[m], b = at[W(m + 1)];
             var run = Math.Sqrt(Sq(r.X[b] - r.X[a]) + Sq(r.Z[b] - r.Z[a])) * 512;
             var slope = gravity > 0 && run > 1 ? (r.H[b] - r.H[a]) / run : 0;
             slopePull[m] = -gravity * EngineGravity * slope / Math.Sqrt(1 + slope * slope);
@@ -2234,7 +2267,7 @@ internal static class RaceTrackBuilder
             var v = speeds ?? new double[count]; var ds = new double[count];
             for (var m = 0; m < count; m++)
             {
-                int a = (m - 3 + count) % count, c = (m + 3) % count, next = (m + 1) % count;
+                int a = W(m - 3), c = W(m + 3), next = W(m + 1);
                 double abx = qx[m] - qx[a], abz = qz[m] - qz[a], bcx = qx[c] - qx[m], bcz = qz[c] - qz[m], cax = qx[a] - qx[c], caz = qz[a] - qz[c];
                 var cross = Math.Abs(abx * bcz - abz * bcx);
                 var bend = flight[m] || cross < 1e-9 ? 1e6 : Math.Min(1e6, Math.Sqrt((abx * abx + abz * abz) * (bcx * bcx + bcz * bcz) * (cax * cax + caz * caz)) / (2 * cross) * 512);
@@ -2247,27 +2280,29 @@ internal static class RaceTrackBuilder
                 ds[m] = Math.Sqrt(Sq(qx[next] - qx[m]) + Sq(qz[next] - qz[m])) * 512;
             }
             // braking before bends and pulling away after them, two rounds each way (the lap is a loop)
+            // (a sprint's from its start to its end, once each way)
+            var last = open ? count - 1 : count;
             for (var round = 0; round < 2 && gravity <= 0; round++)
             {
-                for (var i = count - 1; i >= 0; i--) v[i] = Math.Min(v[i], Math.Sqrt(Sq(v[(i + 1) % count]) + 2 * ReferenceBrake * ds[i]));
-                for (var i = 0; i < count; i++) v[(i + 1) % count] = Math.Min(v[(i + 1) % count], Math.Sqrt(Sq(v[i]) + 2 * ReferenceAccel * line.Top * ReferencePull(v[i]) * ds[i]));
+                for (var i = last - 1; i >= 0; i--) v[i] = Math.Min(v[i], Math.Sqrt(Sq(v[W(i + 1)]) + 2 * ReferenceBrake * ds[i]));
+                for (var i = 0; i < last; i++) v[W(i + 1)] = Math.Min(v[W(i + 1)], Math.Sqrt(Sq(v[i]) + 2 * ReferenceAccel * line.Top * ReferencePull(v[i]) * ds[i]));
             }
             // ... on a rollercoaster of a lap, with the slopes: the engine up to its share of the top speed, the slope's pull, the drag on
             // speed over the top gear's; and the slope counted when braking
             var top = ReferenceTop * line.Top;
             for (var round = 0; round < 3 && gravity > 0; round++)
             {
-                for (var i = 0; i < count; i++)
+                for (var i = 0; i < last; i++)
                 {
                     var a = slopePull[i];
                     if (v[i] < top * share[i]) a += ReferenceAccel * line.Top * ReferencePull(v[i] / share[i]);
                     if (v[i] > top) a -= EngineOverspeedDrag * (v[i] - top);
                     var reach2 = Sq(v[i]) + 2 * a * ds[i];
                     if (a < 0 && v[i] >= top * share[i] && reach2 < Sq(top * share[i])) reach2 = Sq(top * share[i]);
-                    v[(i + 1) % count] = Math.Min(v[(i + 1) % count], reach2 > 400.0 * 400.0 ? Math.Sqrt(reach2) : 400);
+                    v[W(i + 1)] = Math.Min(v[W(i + 1)], reach2 > 400.0 * 400.0 ? Math.Sqrt(reach2) : 400);
                 }
-                for (var i = count - 1; i >= 0; i--)
-                    v[i] = Math.Min(v[i], Math.Sqrt(Sq(v[(i + 1) % count]) + 2 * Math.Max(ReferenceBrake / 4, ReferenceBrake - slopePull[i]) * ds[i]));
+                for (var i = last - 1; i >= 0; i--)
+                    v[i] = Math.Min(v[i], Math.Sqrt(Sq(v[W(i + 1)]) + 2 * Math.Max(ReferenceBrake / 4, ReferenceBrake - slopePull[i]) * ds[i]));
             }
             var time = 0.0;
             for (var m = 0; m < count; m++) time += ds[m] / v[m];
@@ -2283,7 +2318,7 @@ internal static class RaceTrackBuilder
             for (var j = 0; j < controls.Length; j++)
             {
                 int m0 = controls[j], m1 = j + 1 < controls.Length ? controls[j + 1] : count;
-                var c1 = j + 1 < controls.Length ? c[j + 1] : c[0];
+                var c1 = j + 1 < controls.Length ? c[j + 1] : open ? c[j] : c[0];
                 for (var m = m0; m < m1; m++) o[m] = c[j] + (c1 - c[j]) * (m - m0) / (m1 - m0);
             }
             for (var m = 0; m < count; m++) o[m] = held[m] ? line.Side : Math.Clamp(o[m], lo[m], hi[m]);
@@ -3864,7 +3899,10 @@ internal static class RaceTrackBuilder
         for (var i = 0; i < n && first < 0; i++) if (up[i] && !up[At(r, i - 1)]) first = i;
         if (first < 0) return;
         var span = new List<int>();
-        for (var k = first; up[k] && span.Count < n; k = At(r, k + 1)) span.Add(k);
+        // (a sprint's road ends where its route does: At holds the last point there. Its raised stretches -- it may have several -- are
+        // one list for the engine, the ground road between them points with no width: no floor of the raised road's there)
+        if (!r.Closed) { var last = Enumerable.Range(0, n).Last(i => up[i]); for (var k = first; k <= last; k++) span.Add(k); }
+        else for (var k = first; up[k] && span.Count < n; k = At(r, k + 1)) span.Add(k);
         if (loop) span.Add(first);
         report.RaisedLoop = loop;
         var half = o.RaisedHalfWidth * 512;
@@ -3873,7 +3911,7 @@ internal static class RaceTrackBuilder
         // (a jump's gap in it -- between the lips, r.Gap -- has no width: the engine's floor isn't there)
         foreach (var k in span)
         {
-            var width = r.Gap[k] ? 0 : (int)Math.Round(Half(k));
+            var width = r.Gap[k] || !up[k] ? 0 : (int)Math.Round(Half(k));
             report.Raised.Add(banks is null
                 ? new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width }
                 : new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width, (int)Math.Round(banks[k] * RaisedBankUnits) });
@@ -3909,7 +3947,7 @@ internal static class RaceTrackBuilder
         var cells = Math.Max(1, (int)Math.Round(RaisedPiece));
         int pieces = 0, left = 0;
         var runs = new List<List<int>> { new() };
-        foreach (var k in span) { if (r.Gap[k]) { if (runs[^1].Count > 0) runs.Add(new()); } else runs[^1].Add(k); }
+        foreach (var k in span) { if (r.Gap[k] || !up[k]) { if (runs[^1].Count > 0) runs.Add(new()); } else runs[^1].Add(k); }
         foreach (var run in runs.Where(u => u.Count >= 2))
         for (var t = 0; t + per < run.Count + per - 1 && t < run.Count - 1; t += cells * per)
         {
@@ -3958,7 +3996,7 @@ internal static class RaceTrackBuilder
             ? PlacePiersOnScenery(island, r, o, report, span, loop, scenery, stand, Across, Add, ref left)
             : PlacePiers(island, r, o, report, span, Across, Add, ref left);
         if (left > 0) report.Notes.Add($"WARNING: {left} pieces of the raised road were left out: the cube already holds {IslandDecors.MaxPerCube} decors");
-        report.Placed.Add($"raised road: {(span.Count - (loop ? 1 : 0)) * o.Spacing:0} cells in {pieces} pieces of {RaisedPiece:0} cells and {piers} piers" +
+        report.Placed.Add($"raised road: {(span.Count(k => up[k]) - (loop ? 1 : 0)) * o.Spacing:0} cells in {pieces} pieces of {RaisedPiece:0} cells and {piers} piers" +
                           (none > 0 ? $" ({none} more left out: no clear ground under the road there)" : "") +
                           $", {report.NewBodies.Count} new decor bodies from {o.NewBodyBase} on");
     }
@@ -4062,6 +4100,7 @@ internal static class RaceTrackBuilder
         var every = (int)Math.Round(RaisedPier / o.Spacing);
         for (var t = every / 2; t < span.Count; t += every)
         {
+            if (!up[span[t]]) continue;                                                      // (a sprint's ground road between its stretches)
             var placed = false;
             foreach (var shift in new[] { 0, 2, -2, 4, -4, 6, -6, 8, -8 })
             {
@@ -4069,6 +4108,7 @@ internal static class RaceTrackBuilder
                 if (at < 1 || at >= span.Count - 1) continue;
                 var k = span[at];
                 if (r.Gap[k] || r.Gap[span[at - 1]] || r.Gap[span[at + 1]]) continue;      // (not in a jump's gap)
+                if (!up[k] || !up[span[at - 1]] || !up[span[at + 1]]) continue;
                 var ground = IslandOps.Altitude(island, r.X[k] * 512, r.Z[k] * 512) ?? 0;
                 var road = Math.Min(r.H[k], Math.Min(r.H[span[at - 1]], r.H[span[at + 1]]));
                 var height = road - RaceTrackRaisedBody.Thickness - ground;

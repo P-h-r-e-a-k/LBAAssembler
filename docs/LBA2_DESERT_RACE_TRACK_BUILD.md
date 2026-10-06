@@ -1,6 +1,6 @@
-# The proposed race tracks, built on the Desert island, Citadel Island, Mosquibees Island, Celebration Island, the Elevator Platform, Sendell's Well and the old moon (2026-09-27, reworked 2026-09-30 and 2026-10-01)
+# The proposed race tracks, built on the Desert island, Citadel Island, Mosquibees Island, Celebration Island, the Elevator Platform, Sendell's Well, the moons and Polar Island (2026-09-27, reworked up to 2026-10-06)
 
-Nine tracks are built by the same code: the Desert island's (this document's main subject), Citadel Island's town circuit (see "Citadel Island's town circuit") and its storm track (see "Citadel Island in the storm: a track of its own") -- one in each of the island's two files -- Mosquibees Island's mountain lap (see "Mosquibees Island's mountain lap") Celebration Island's lap up round the statue on a raised road (see "Celebration Island: round the statue") and its lava lake's (see "Celebration Island: the lava lake"), the Elevator Platform's rollercoaster (see "The Elevator Platform: a rollercoaster") a lap round Sendell's Well, the cut island the build makes (see "Walls, mines, checkpoints, Sendell's Well and a loop"), and two vertical loops on the old moon, MOON.ILE (see "The old moon: two vertical loops"). What differs between islands is `Terrain/RaceTrackIsland.cs`. Any of them can be built into one game folder together, and Play races the one of the island the editor has open (see "Several tracks in one game folder").
+Nine tracks are built by the same code: the Desert island's (this document's main subject), Citadel Island's town circuit (see "Citadel Island's town circuit") and its storm track (see "Citadel Island in the storm: a track of its own") -- one in each of the island's two files -- Mosquibees Island's mountain lap (see "Mosquibees Island's mountain lap") Celebration Island's lap up round the statue on a raised road (see "Celebration Island: round the statue") and its lava lake's (see "Celebration Island: the lava lake"), the Elevator Platform's rollercoaster (see "The Elevator Platform: a rollercoaster") a lap round Sendell's Well, the cut island the build makes (see "Walls, mines, checkpoints, Sendell's Well and a loop"), two vertical loops on the old moon, MOON.ILE (see "The old moon: two vertical loops"), the Emerald Moon's lap over its reactor (see "The Emerald Moon: over the reactor") and Polar Island's dream race, a sprint rather than a lap (see "Polar Island: the dream race to Sendell"). What differs between islands is `Terrain/RaceTrackIsland.cs`. Any of them can be built into one game folder together, and Play races the one of the island the editor has open (see "Several tracks in one game folder").
 
 The picture the track came from is [racetrack/concept_track.png](racetrack/concept_track.png). It is built on a **copy** of the game, so nothing in the real game folders is touched.
 
@@ -2157,6 +2157,66 @@ The user's ask: the red and white markings on some tracks, Desert Island's and C
 **Checkpoint maps.** `ScriptRoundTrip trackmaps <game> <out>` then `trackmaps_paint.ps1 <out>`: a map of each built track (the island from above, a raised road's deck drawn over it, markers and arrows round the lap, the start line, the checkpoints placed), to draw checkpoints on. A lap that winds over itself gets a map per level (Celebration's statue 3, the Elevator Platform 4). `maps.txt` keeps how each map's pixels turn back into island cells.
 
 **Verified:** the sandbox's seven islands rebuilt (mushrooms at -20000, heights in RACETRACK.JSON); the statue track raced with lightning-only mushrooms (mushrooms on the deck and taken; Twinsen struck, the bolt in the screenshots; shrink times 25/21.7/18.3/15 s by place); the Desert track driven as the Dean's car.
+
+## Polar Island: the dream race to Sendell (2026-10-06)
+
+The user drew a route over a picture of Polar Island (LBA1's island, made into LBA2's island 12: [LBA2_POLAR_ISLAND.md](LBA2_POLAR_ISLAND.md)).
+The track picks up from the end of the first game: Twinsen dreams he is racing FunFrock to Sendell. It starts at a red dot on the dock, runs
+down the island, loops round, has one jump over itself (two pink marks) and finishes with a jump onto the top of the rocky peak. Then Zoe
+shakes Twinsen awake at home, in the second game's first scene.
+
+**From the drawing to a plan.** A 3 x 4 camera (a DLT from seven landmark corners: the dock's end, the arm, 107's corners, the peak) maps the
+island's columns onto the drawing. The drawn route's control points, read off the drawing, were put back on the ground through it and
+traced on the island seen from above, keeping to the car tracks where the drawing follows them. `tools/RaceTrackPlan/polar_design.py`
+turns them into the plan (`docs/racetrack/polar_track_plan.json`): a Catmull-Rom line every half cell, heights from the ground under it
+(the highest of a small cross round each point, smoothed, grade-limited to 14 %, at least 600 over the sea), and the two jumps' ways.
+
+**A sprint.** New plan keys: `open` (the route has two ends: the road isn't closed, `TrackRoad.Closed` false) and `finish` (the finish
+line's point). An open plan gets no checkpoints. Its finish line is across the road there, like the lap line, at the road's height
+(`RaceTrackReport.FinishLine`). Its racing lines run from the start line to the route's end (`PlanRacePath`: the same planner, with ends
+of its own instead of going round). The scenes' edge crossings, the grid's places behind the start line and the mushroom rows don't wrap
+round from the last point to the first.
+
+**Two raised stretches.** A sprint's `raised` may give several stretches, each its first and last point. The engine's raised road
+file is then one list from the first stretch's start to the last one's end, and the ground road between them is points with no width:
+no floor there, as in a jump's gap. Pieces and piers are only under the stretches.
+
+**The jumps.** Both are carried jumps (`arcJumps`). The one over the main straight (from cell 521 to 498.5 along z 456, its top at 2,728,
+the straight under it at 603) crosses from cube (8, 7) to cube (7, 7). The straight is four cells from that edge, and a gap jump (the car's
+own flight animation) breaks at a cube change. The one onto the peak climbs 700 up its ramp, tops out at 15,200 over the plateau's
+pillars and comes down a short hill onto the pad, 46 layers up.
+
+**The engine: `sprint=1`, `finishline=`, `intro=`, `lose=`, `wake=`, `dream=`** (`RACEMOD.CPP`):
+- an opponent's line has ends: `PathAt` holds it there, and the opponent stops where its line crosses the finish line (`FinishS`). It
+  then counts as finished: ahead of the player, who hasn't;
+- the player crossing the finish line ends the race (`SprintOver`), and so does the one to beat (`main=`) getting there first, which
+  loses it. The player's car stops there (`RaceMod_Held`);
+- `RaceMod_Story`, called once a frame from the main loop before the scene is drawn (`PERSO.CPP`), where a dialog can open as a life
+  script's does. It shows the intro (said by Twinsen as the grid forms, the count-down starting once it is read). 3.5 s after a win it
+  takes Twinsen out of his car (`LeaveBuggy`, `ResetBuggy`: the car is no one's yet, as in a new game) and changes to the waking scene at
+  its own start (`FlagChgCube` 2). 3.5 s after a loss it takes the car back to the grid in the start line's scene (`cube_scene=`), where
+  the grid forms again with the loss's line;
+- `RaceMod_Dial`: in the waking scene, the actor `wake=` names (Zoe, actor 4 of scene 0) says the wake line before her first line. If she
+  says nothing, `RaceMod_Story` says it 15 s after he woke;
+- `dream=<scene>`, a set's key: a new game starts there instead of in Twinsen's house (`RaceMod_NewGameScene`, from `InitGame`).
+
+**The editor.** `RaceTrackIsland.Polar` (`Dream`), with its line-up `RaceDriver.Polar`: FunFrock, the one to beat. The track's record in
+`RACETRACK.JSON` has `Dream`: the finish line, the top speed (140), the texts and where Twinsen wakes up. The car file scales every gear
+of the setup so the top one is 140 km/h, turns qualifying off and writes the sprint's keys. A story set writes `dream=` with the start
+scene. `RaceTrackService.EnsurePolar` adds the island when the originals the build starts from haven't got it (`PolarInOriginals`), and
+`Problem` no longer asks for the island's files. The road's tiles go on the ground's first page: the island build keeps its last row of
+32 x 32 slots free (`PolarTextures.Pages.Reserve`), and `RaceTrackTextures.FreeBlocks` counts only the first page's triangles on an island
+with more pages. The holomap picture is the island's own (entry 46). The dock scene's buggy has `INIT_BUGGY 1`, and the start line's
+script edit takes it as well as 0.
+
+**Checked** (sandbox `E:\dump\TEMP\ptrack\game`, muted):
+- `buildtogether` with the six other islands' tracks gives the same 56 files as the previous version, byte for byte.
+- The test pilot (`autodrive`) from the grid to the peak: both jumps carry the car (the first changes cube at the top of its flight), the
+  finish ends the race won in 36-40 s, Twinsen wakes up in scene 0, and Zoe says the wake line before her own. With FunFrock's skill at
+  300 % he gets there first, the race is lost and runs again from the grid.
+- A new game with the story set starts in scene 243, on the dock beside the car.
+- From the app: `POLAR.ILE` opens with the road, and Play ("Race: Polar Island") starts on the grid, or in the dream as a new game.
+- Putting the track back leaves the island as it was before the track.
 
 ## The menu command
 

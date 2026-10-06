@@ -159,6 +159,23 @@ internal sealed record RaceTrackIsland(
         Title = "The Emerald Moon: over the reactor, round the base",
     };
 
+    // Polar Island (LBA1's, made into LBA2's island 12: Terrain/Polar, POLAR.ILE and POLAR.OBL, scenes 233-244) and the dream that picks
+    // up from the end of the first game: Twinsen dreams he is racing FunFrock to Sendell. From the dock down the arm and up the island,
+    // round a hairpin at its top, back down its east side, over a jump across the main straight, up a serpentine through the terraces
+    // under the rocky peak, and a carried jump onto the peak's top -- a sprint, not a lap (the plan's Open: a start line and a finish
+    // line), in Twinsen's car at 140 km/h at the most (Dream.TopKmh: the setup's gears, scaled). A win wakes him up: Zoe shakes him
+    // awake at home, in the second game's first scene. A loss runs the race again. The island is added by the build when the folder
+    // hasn't got it (Polar.PolarIsland, from the LBA1 folder in the settings), and stays when the track is put back.
+    public static readonly RaceTrackIsland Polar = new("Polar Island", LBAAssembler.Terrain.Polar.PolarTerrain.IleFile, LBAAssembler.Terrain.Polar.PolarTerrain.OblFile,
+        LBAAssembler.Terrain.Polar.PolarIsland.IslandByte, LBAAssembler.Terrain.Polar.PolarScenes.FirstScene,
+        LBAAssembler.Terrain.Polar.PolarScenes.FirstScene + LBAAssembler.Terrain.Polar.PolarScenes.Count - 1, LBAAssembler.Terrain.Polar.PolarIsland.PaletteEntry, "RaceTrackPlan.Polar.json", null)
+    {
+        Roster = RaceDriver.Polar, Dream = true, Title = "Polar Island: the dream race to Sendell (LBA1's island, added when missing)",
+    };
+
+    // A sprint dreamt at the start of the game (Polar Island's): won, Twinsen wakes up at home (RaceTrackService.DreamInfo).
+    public bool Dream { get; init; }
+
     // The island isn't in the game: the build makes its files and its scene (Sendell's Well). They have no originals to keep, so the
     // build's backups leave them out (KeptFiles); it makes them afresh every time, and putting the folder back deletes them.
     public bool Created { get; init; }
@@ -176,7 +193,7 @@ internal sealed record RaceTrackIsland(
         CopiesScenes is { } many ? Enumerable.Range(0, many.Count).Select(k => (many.First + k, FirstScene + k))
         : CopiesScene is { } one ? new[] { (one, FirstScene) } : Enumerable.Empty<(int, int)>();
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

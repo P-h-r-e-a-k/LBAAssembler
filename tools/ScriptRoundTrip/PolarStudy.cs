@@ -782,6 +782,34 @@ internal static class PolarStudy
         return 0;
     }
 
+    // polarcolumns <LBA1 folder> <out.csv>: every column of the joined island in island cells (layout + the terrain's offset): its highest
+    // cell's top (units: (layer + 1) * 256 in LBA1's terms, the island's layer * 256), its ground's surface (PolarTerrain.SurfaceOf, -1
+    // none), whether it is water, the rocky peak, an object or ground, and whether its ground is a car track.
+    public static int ColumnsCsv(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var layout = PolarLayout.Build(game);
+        var columns = PolarTerrain.Columns(game, layout);
+        int minX = columns.Keys.Min(k => k.X), maxX = columns.Keys.Max(k => k.X), minZ = columns.Keys.Min(k => k.Z), maxZ = columns.Keys.Max(k => k.Z);
+        var offsetX = PolarTerrain.CubeX0 * 64 + (PolarTerrain.CubesX * 64 - (maxX - minX + 1)) / 2 - minX;
+        var offsetZ = PolarTerrain.CubeZ0 * 64 + (PolarTerrain.CubesZ * 64 - (maxZ - minZ + 1)) / 2 - minZ;
+        var tracks = columns.Values.Where(c => (c.Cell.Code & 0xF0) == 0x60 || c.Cell.Code == 0x06).Select(c => c.Cell.Brick).Distinct()
+            .Where(b => PolarTerrain.IsTrackBrick(PolarTextures.Sprite.Decode(game.ReadBrick(b)), game.Palette)).ToHashSet();
+        using var w = new StreamWriter(args[2]);
+        w.WriteLine("x,z,top,ground,water,peak,object,track");
+        foreach (var g in layout.Cells.GroupBy(c => (c.Key.X, c.Key.Z)))
+        {
+            var top = g.Max(c => c.Key.Y);
+            var has = columns.TryGetValue(g.Key, out var col);
+            var water = has && col.Water;
+            var peak = layout.Peak.Contains(g.Key) || g.Any(c => c.Value.Scene == PolarLayout.PlateauScene);
+            var obj = !peak && (!has || top > col.Top);
+            w.WriteLine($"{g.Key.X + offsetX},{g.Key.Z + offsetZ},{top * 256},{(has ? PolarTerrain.SurfaceOf(col) : -1)},{(water ? 1 : 0)},{(peak ? 1 : 0)},{(obj ? 1 : 0)},{(has && !water && tracks.Contains(col.Cell.Brick) ? 1 : 0)}");
+        }
+        Console.WriteLine($"{args[2]}: offset ({offsetX}, {offsetZ})");
+        return 0;
+    }
+
     // polarzones <LBA1 folder> <scene>...: each scene's cube-change zones (type 0) in cells (x, layer, z) and where they lead.
     public static int Zones(string[] args)
     {

@@ -218,15 +218,30 @@ internal static class RaceTrackTextures
     }
 
     // The 8 x 8 blocks of the island's texture page no cube's polygon reads: every texture definition gives the (u, v) corners of a
-    // triangle, 256 to a pixel.
+    // triangle, 256 to a pixel. (An island with more ground pages -- POLAR.ILE: IslandFile.GroundPages -- has the definitions of all of
+    // them in its cubes' lists; only those the first page's triangles read count, the page the road's are on.)
     private static bool[,] FreeBlocks(IslandFile island)
     {
         var used = new bool[256, 256];
         foreach (var cube in island.Cubes.Values)
         {
             var t = cube.TextureDefs;
+            HashSet<int>? read = null;
+            if (island.GroundPages.Count > 0)
+            {
+                read = new HashSet<int>();
+                if (cube.HasPolygons)
+                    for (var z = 0; z < IslandCube.Cells; z++)
+                    for (var x = 0; x < IslandCube.Cells; x++)
+                    for (var half = 0; half < 2; half++)
+                    {
+                        var p = new IslandPolygon(cube.Polygon(x, z, half));
+                        if (p.TexFlag != 0 && island.GroundTextureOf(p.TextureIndex) is (0, var definition)) read.Add(definition * 6);
+                    }
+            }
             for (var i = 0; i + 5 < t.Length; i += 6)
             {
+                if (read is not null && !read.Contains(i)) continue;
                 int u0 = 65535, v0 = 65535, u1 = 0, v1 = 0;
                 for (var k = 0; k < 3; k++)
                 {

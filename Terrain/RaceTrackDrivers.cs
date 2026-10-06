@@ -73,5 +73,12 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Of(RaceTrackCharacterCars.Guard, "The policeman", 2.5, 1.01, 0.98),
     };
 
+    // Polar Island's dream race (2026-10-06): Twinsen dreams he is racing FunFrock to Sendell, from the dock to the top of the rocky peak --
+    // FunFrock in his car, the one to beat, a shade quicker on the straights than Twinsen's car would be and a shade slower in the bends
+    public static readonly List<RaceDriver> Polar = new()
+    {
+        Of(RaceTrackCharacterCars.FunFrock, "FunFrock", 1.5, 1.01, 0.97, main: true),
+    };
+
     // Otringal's palace has no track yet; its drivers are Stan, the pighead with the broom and the two-headed monster (CharactersForTrack.txt)
 }

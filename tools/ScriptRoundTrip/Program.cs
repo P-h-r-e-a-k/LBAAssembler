@@ -54,6 +54,8 @@ internal static class Program
             "racecarfile" => RaceTrackCommand.RaceCarFile(args),
             "buildtwice" => RaceTrackCommand.BuildTwice(args),
             "buildtogether" => RaceTrackCommand.BuildTogether(args),
+            // trackrestore <game folder>: the race track window's "Put the original files back"
+            "trackrestore" => Echo(LBAAssembler.Terrain.RaceTrackService.Restore(args[1])),
             "sendell" => SendellIsland.Run(args),
             "loopanim" => LoopAnimCommand.Run(args),
             "sceneinfo" => SceneInfoCommand.Run(args),
@@ -108,6 +110,7 @@ internal static class Program
             "polarfit" => PolarStudy.Fit(args),
             "polarmap" => PolarStudy.Map(args),
             "polarjoined" => PolarStudy.Joined(args),
+            "polarcolumns" => PolarStudy.ColumnsCsv(args),
             // bodynames <game folder> [first] [count]: every BODY.HQR entry's name as the actor attributes window shows it (Lba2BodyNames)
             "bodynames" => BodyNamesCommand.Run(args),
             "islandtexture" => IslandTextureCommand.Run(args),
@@ -211,6 +214,12 @@ internal static class Program
             "testedits" => TestEditsSessionTest.Run(args),
             _ => Usage(),
         };
+    }
+
+    private static int Echo(string line)
+    {
+        Console.WriteLine(line);
+        return 0;
     }
 
     private static int Usage()

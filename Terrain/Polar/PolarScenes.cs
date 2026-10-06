@@ -18,9 +18,9 @@ namespace LBAAssembler.Terrain.Polar;
 // retail ones; its one text so far is the island's name.
 internal static class PolarScenes
 {
-    // past the retail game's 0..221 and the race track builder's 222..228 (the story's holomap arrow, the lava lake, Sendell's Well, the
-    // old moon's four)
-    public const int FirstScene = 229;
+    // past the retail game's 0..221 and the race track builder's 222..232 (the story's holomap arrow, the lava lake, Sendell's Well, the
+    // old moon's four, the Emerald Moon's four)
+    public const int FirstScene = 233;
     public const int DockScene = 115;
     private const int SourceScene = 44;
     public const int PositionsEntry = 12, PositionSize = 32, MaxObjectif = 50, FlagExterior = 4;
@@ -163,22 +163,7 @@ internal static class PolarScenes
         File.WriteAllBytes(holoPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(holoPath), PositionsEntry, HqrWriter.StoredEntry(positions)));
         log.Add($"HOLOMAP.HQR: island 12's place on the planet (record 12) and its scenes' records (outside scenes of island 12)");
 
-        // the island's text file
-        var textPath = Path.Combine(gameDirectory, "TEXT.HQR");
-        var text = HqrFile.Parse(File.ReadAllBytes(textPath));
-        if (text.Count < Languages * RetailFiles * 2) throw new InvalidDataException($"TEXT.HQR has {text.Count} entries, fewer than the game's {Languages * RetailFiles * 2}.");
-        for (var lang = 0; lang < Languages; lang++)
-        {
-            var (ids, data) = Bank(new[] { (0, "Polar Island") });
-            foreach (var (k, payload) in new[] { (0, ids), (1, data) })
-            {
-                var at = TextEntry(lang) + k;
-                while (text.Count < at) text.Slots.Add(new HqrFile.Slot());
-                if (text.Count == at) text.Add(payload); else text.SetStored(at, payload);
-            }
-        }
-        File.WriteAllBytes(textPath, text.ToBytes());
-        log.Add($"TEXT.HQR: island 12's text file, entries {TextEntry(0)}..{TextEntry(Languages - 1) + 1}");
+        log.Add(WriteTexts(gameDirectory));
         // (the rocky peak and its plateau on the holomap's picture: each column a box, from the sea to its top, in its top brick's colour)
         var solids = layout.Cells.Where(c => layout.Peak.Contains((c.Key.X, c.Key.Z)) || c.Value.Scene == PolarLayout.PlateauScene)
             .GroupBy(c => (c.Key.X, c.Key.Z)).Select(g =>
@@ -265,7 +250,28 @@ internal static class PolarScenes
         File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", System.Text.Encoding.Latin1);
     }
 
-    // A text file's two entries: the ids, then the offsets and texts (Lba2TextBank's layout).
+    // The island's text file (TEXT.HQR, island 12's: TextEntry), in every language: its name, and the dream race's lines (PolarDream: the
+    // race track's intro and its loss's line). Returns a line for the log.
+    public static string WriteTexts(string gameDirectory)
+    {
+        var textPath = Path.Combine(gameDirectory, "TEXT.HQR");
+        var text = HqrFile.Parse(File.ReadAllBytes(textPath));
+        if (text.Count < Languages * RetailFiles * 2) throw new InvalidDataException($"TEXT.HQR has {text.Count} entries, fewer than the game's {Languages * RetailFiles * 2}.");
+        for (var lang = 0; lang < Languages; lang++)
+        {
+            var (ids, data) = Bank(PolarDream.IslandTexts(lang).Prepend((0, "Polar Island")).ToList());
+            foreach (var (k, payload) in new[] { (0, ids), (1, data) })
+            {
+                var at = TextEntry(lang) + k;
+                while (text.Count < at) text.Slots.Add(new HqrFile.Slot());
+                if (text.Count == at) text.Add(payload); else text.SetStored(at, payload);
+            }
+        }
+        File.WriteAllBytes(textPath, text.ToBytes());
+        return $"TEXT.HQR: island 12's text file, entries {TextEntry(0)}..{TextEntry(Languages - 1) + 1}: its name and the dream race's lines";
+    }
+
+    // A text file's two entries: the ids, then the offsets and texts (Lba2TextBank's layout; the game's code page, 850).
     private static (byte[] Ids, byte[] Data) Bank(IReadOnlyList<(int Id, string Text)> texts)
     {
         var ids = new byte[texts.Count * 2];
@@ -277,7 +283,7 @@ internal static class PolarScenes
             BinaryPrimitives.WriteUInt16LittleEndian(ids.AsSpan(i * 2), (ushort)texts[i].Id);
             offsets.Add(table + (int)body.Length);
             body.WriteByte(Lba2TextBank.NormalAttribute);
-            body.Write(System.Text.Encoding.Latin1.GetBytes(texts[i].Text));
+            body.Write(PolarDream.Dos.GetBytes(texts[i].Text));
             body.WriteByte(0);
         }
         offsets.Add(table + (int)body.Length);

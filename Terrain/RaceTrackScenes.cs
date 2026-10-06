@@ -86,7 +86,8 @@ internal static class RaceTrackScenes
         // (where the lap is a raised road, at the road's own height -- the Emerald Moon's, 5,000 over the base's roof, 7,700 over the rim --
         // and nowhere in a carried jump's flight: the race-track mode changes the cube itself there, RACEMOD.CPP)
         var up = report.LapRaised is { } r && r.Length == n && report.LapY.Length == n ? r : null;
-        for (var i = 0; i < n; i++)
+        // (a sprint's route has two ends: its last point doesn't lead back to its first)
+        for (var i = 0; i < (report.Open ? n - 1 : n); i++)
         {
             var j = (i + 1) % n;
             double x0 = report.LapX[i], z0 = report.LapZ[i], x1 = report.LapX[j], z1 = report.LapZ[j];
@@ -568,6 +569,7 @@ internal static class RaceTrackScenes
         var k = i;
         while (true)
         {
+            if (report.Open && (k - way < 0 || k - way >= n)) return null;
             var j = ((k - way) % n + n) % n;
             var step = Math.Sqrt((xs[j] - x) * (xs[j] - x) + (zs[j] - z) * (zs[j] - z));
             if (step >= left || step < 1e-9 && left <= 0)
@@ -632,6 +634,7 @@ internal static class RaceTrackScenes
         }
         for (var step = 1; step < n; step++)
         {
+            if (report.Open && (i0 + way * step < 0 || i0 + way * step >= n)) break;
             int a = ((i0 + way * (step - 1)) % n + n) % n, b = ((i0 + way * step) % n + n) % n;
             along += Math.Sqrt((xs[b] - xs[a]) * (xs[b] - xs[a]) + (zs[b] - zs[a]) * (zs[b] - zs[a]));
             if (along < next) continue;
@@ -919,9 +922,10 @@ void comportement_1()
         {
             var scripts = SceneScripts.Load(SceneSerializer.Write(model), scene);
             var text = scripts.GetText(buggy, ScriptKind.Life);
-            var pattern = new System.Text.RegularExpressions.Regex(@"init_buggy\(0\);\s*if \(12 == comportement_hero\(\)\)\s*\{\s*set_comportement\(comportement_2\);\s*\}\s*else\s*\{\s*set_comportement\(comportement_1\);\s*\}");
+            // (Polar Island's buggy has INIT_BUGGY 1, which makes the car the first time: Polar.PolarScenes)
+            var pattern = new System.Text.RegularExpressions.Regex(@"init_buggy\(([01])\);\s*if \(12 == comportement_hero\(\)\)\s*\{\s*set_comportement\(comportement_2\);\s*\}\s*else\s*\{\s*set_comportement\(comportement_1\);\s*\}");
             if (!pattern.IsMatch(text)) { log.Add($"scene {scene}: the buggy's script isn't the expected one; it is left to show the buggy where it is"); return null; }
-            text = pattern.Replace(text, "if (12 == comportement_hero())\n        {\n            init_buggy(0);\n            set_comportement(comportement_2);\n        }\n        else\n        {\n            init_buggy(2);\n            set_comportement(comportement_1);\n        }", 1);
+            text = pattern.Replace(text, "if (12 == comportement_hero())\n        {\n            init_buggy($1);\n            set_comportement(comportement_2);\n        }\n        else\n        {\n            init_buggy(2);\n            set_comportement(comportement_1);\n        }", 1);
             scripts.SetText(buggy, ScriptKind.Life, text);
             var built = scripts.Build();
             if (!built.Ok) { foreach (var e in built.Errors) log.Add($"scene {scene}: buggy script: {e}"); return null; }

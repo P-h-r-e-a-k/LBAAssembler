@@ -287,6 +287,13 @@ internal static class PolarTextures
             List.Add(first); used.Add(new bool[Halves]);
         }
 
+        // Keeps a row of slots of the first page empty: the ground's last row, where a race track's road tiles go (RaceTrackTextures
+        // copies them into the blocks of page 0 that no triangle reads).
+        public void Reserve(int row)
+        {
+            for (var s = row * SlotsPerRow; s < (row + 1) * SlotsPerRow; s++) used[0][2 * s] = used[0][2 * s + 1] = true;
+        }
+
         // Half-slots free on a page.
         public int Free(int page) => page < used.Count ? used[page].Count(u => !u) : Halves;
         public int Count => List.Count;

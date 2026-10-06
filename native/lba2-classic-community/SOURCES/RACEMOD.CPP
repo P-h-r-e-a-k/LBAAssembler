@@ -100,6 +100,17 @@
  *   strike stops Twinsen's car the same way instead of killing him.
  *   A startline or checkpoint line may end in a ninth number, the road's height there: the line then only counts for a car within
  *   RACE_LINE_REACH of that height (a lap that passes over itself crosses a line's place at other heights too).
+ *   A sprint (2026-10-06, Polar Island's dream race: the route has two ends and is driven once):
+ *     sprint=1                   the opponents' lines run from the start line to the route's end, not round a lap
+ *     finishline=<as startline>  the race is over when the player crosses it -- or when the one to beat (main=) gets there first, which
+ *                                loses it. An opponent stops at it. The player's car stops there too (RaceMod_Held)
+ *     intro=<text>               said by Twinsen as the grid forms, before the count-down (of the race's island's texts)
+ *     wake=<scene> <text> [<actor>]   a win: RACE_SPRINT_END_MS after the line, Twinsen is out of his car and wakes up in <scene>, at its
+ *                                own start; <actor> says <text> there (of that scene's island's texts) before the first line it says --
+ *                                Zoe shakes him awake as she comes up to him in the game's own opening -- or, if it says none, a while
+ *                                after he woke. A loss: the race is run again from the grid (lose=<text>: said first, of the race's
+ *                                island's texts)
+ *     dream=<scene>              (a set's key) a new game starts in <scene> instead of Twinsen's house (RaceMod_NewGameScene)
  */
 #include "C_EXTERN.H"
 #include "COMMON.H"
@@ -114,6 +125,9 @@ extern void *GivePtrBody(S32 index);                              // OBJECT.CPP
 extern void *GivePtrAnim(S32 index);                              // OBJECT.CPP
 extern void InitHitExtraPof(S32 x, S32 y, S32 z, S32 hitforce);   // OBJECT.CPP
 extern S32 InitIncrustDisp(S16 type, S16 num, S32 x, S32 y, S16 info, S16 move, S32 timeout);   // INCRUST.CPP
+extern void Dial(S32 text, S32 drawscene);                       // MESSAGE.CPP
+extern void LeaveBuggy(U8 newcomportement);                      // BUGGY.CPP
+extern void ResetBuggy(void);                                    // BUGGY.CPP
 #define RACE_PENGUIN_IMPACT 15             // the impact a nitro penguin goes off with (the land mines')
 
 #include <POLYGON/POLY.H>
@@ -219,6 +233,7 @@ typedef struct {
     double SkidSpeed;                      // ... and how fast it was going
     int Small, Normal;                     // its car's shrunk generic body (-1 none) and its own (-1: not seen yet)
     S32 ShrunkUntil;                       // shrunk by Twinsen's lightning until when (ShrinkMs: longer the further ahead it is)
+    double FinishS;                        // a sprint's: where its line crosses the finish line (it stops there)
 } T_RACE_OPPONENT;
 static T_RACE_OPPONENT s_opp[RACE_MAX_OPPONENTS];
 // With no opponent raced, the line of the one to beat all the same (guide_path=, guide_top=, guide_grip=: the builder writes it then),
@@ -283,6 +298,21 @@ static int s_place = 0, s_racers = 0;      // the player's place when he finishe
 static int s_main = -1;                    // the opponent to beat (main=; -1 none) ...
 static int s_beatMain = 0;                 // ... and whether the player finished ahead of him
 static int s_finishSet[2 * RACE_MAX_SETS], s_nbFinishSet = 0;
+// A sprint (sprint=, finishline=): the race from the start line to the finish line, once. Each opponent's line ends where it crosses the
+// finish (FinishS); the race's end -- the player over the line, or the one to beat there first -- is followed, RACE_SPRINT_END_MS later,
+// by the dream's waking up (wake=) or the race run again (a loss).
+#define RACE_SPRINT_END_MS 3500
+#define RACE_WAKE_DIAL_MS 15000            // the wake line: before the waking scene's actor's first line, or this long after Twinsen wakes up
+static int s_sprint = 0, s_hasFinish = 0;
+static T_RACE_LINE s_finishLine;
+static S32 s_endAt = 0;                    // when the race's end is followed up (0: not yet)
+static int s_endWon = 0;
+static int s_wakeScene = -1, s_wakeText = -1, s_wakeActor = -1, s_introText = -1, s_loseText = -1, s_introShown = 0;
+// ... and once Twinsen is on his way to the waking scene: kept through a change of track (the set's island loads another)
+static int s_pendWakeScene = -1, s_pendWakeText = -1, s_pendWakeActor = -1;
+static S32 s_pendWakeAt = 0;
+static int s_pendLose = -1;
+static int s_dreamScene = -1;              // dream=: the scene a new game starts in (-1: Twinsen's house, the game's own)
 
 // Power-ups (powerups=): the mushrooms along the lap, scene by scene, each with the height it stands at and when it grows back after a car
 // took its power-up; the penguins dropped; and what the player has on.
@@ -1413,6 +1443,15 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_nbPenguinActors < RACE_MAX_PENGUIN_ACTORS && sscanf(v, "%d %d", &s_penguinScene[s_nbPenguinActors], &s_penguinActor[s_nbPenguinActors]) == 2) s_nbPenguinActors++;
         }
         else if (!strcmp(key, "win")) s_nbWinSet = ReadSets(v, s_winSet);
+        else if (!strcmp(key, "sprint")) s_sprint = atoi(v);
+        else if (!strcmp(key, "finishline")) s_hasFinish = ReadLine(v, &s_finishLine);
+        else if (!strcmp(key, "intro")) s_introText = atoi(v);
+        else if (!strcmp(key, "lose")) s_loseText = atoi(v);
+        else if (!strcmp(key, "wake")) {
+            s_wakeActor = -1;
+            if (sscanf(v, "%d %d %d", &s_wakeScene, &s_wakeText, &s_wakeActor) < 2) s_wakeScene = s_wakeText = -1;
+        }
+        else if (!strcmp(key, "dream")) { if (!setRead) s_dreamScene = atoi(v); }
         else if (!strcmp(key, "tired")) {
             if (!setRead && sscanf(v, "%d %d %d", &s_tiredVar, &s_tiredValue, &s_tiredText) != 3) s_tiredVar = -1;
         }
@@ -1468,6 +1507,25 @@ static void Load(const char *path, int carOnly = 0) {
     if (s_car.Coast < 0) s_car.Coast = 0;
     if (s_car.Reverse < 0) s_car.Reverse = 0;
     if (!s_seed) s_seed = (unsigned)time(NULL);
+    // (a sprint's line has two ends: no way back from its last point to its first -- LoadPath measured one -- and it ends for the
+    // opponent where it crosses the finish line, the point nearest the line's middle)
+    for (int n = 0; n <= RACE_MAX_OPPONENTS && s_sprint; n++) {
+        T_RACE_OPPONENT *o = n < RACE_MAX_OPPONENTS ? &s_opp[n] : &s_guide;
+        if (!o->Count) continue;
+        o->Cum[o->Count] = o->Cum[o->Count - 1];
+        o->Length = o->Cum[o->Count - 1];
+        o->FinishS = o->Length;
+        if (!s_hasFinish) continue;
+        const double fx = s_finishLine.CubeX * 32768.0 + (s_finishLine.X0 + s_finishLine.X1) / 2.0;
+        const double fz = s_finishLine.CubeZ * 32768.0 + (s_finishLine.Z0 + s_finishLine.Z1) / 2.0;
+        double bd = 1e30;
+        for (int i = 0; i < o->Count; i++) {
+            const double d = (o->X[i] - fx) * (o->X[i] - fx) + (o->Z[i] - fz) * (o->Z[i] - fz)
+                             + (s_finishLine.HasY ? 4.0 * (o->Y[i] - s_finishLine.Y) * (double)(o->Y[i] - s_finishLine.Y) : 0);
+            if (d < bd) { bd = d; o->FinishS = o->Cum[i]; }
+        }
+    }
+    if (s_sprint) Log_Info("[racemod] a sprint: %s%s", s_hasFinish ? "to the finish line" : "to the line's end", s_wakeScene >= 0 ? ", a win wakes Twinsen up" : "");
     for (int i = 0; i < s_nbLoops; i++) LoopWindow(&s_loops[i]);
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
         T_RACE_OPPONENT *o = &s_opp[n];
@@ -1625,6 +1683,7 @@ static S32 BeatTime(void) {
 }
 
 static double PlayerProgress(void);
+static void SprintOver(S32 now, int crossed);
 void RaceMod_Lap(S32 x, S32 z) {
     // (the previous frame's position; forgotten when the car changes cube, where the coordinates jump, or is put on the grid)
     static S32 px = 0, pz = 0, pcx = -1, pcz = -1;
@@ -1659,8 +1718,15 @@ void RaceMod_Lap(S32 x, S32 z) {
             }
         }
 
+    // a sprint's finish line, once the race is on
+    if (s_sprint && s_hasFinish && s_laps > 0 && !s_place && s_phase == PHASE_RACE && CrossLine(&s_finishLine, x0, z0, x, z) > 0) {
+        SprintOver(TimerRefHR, 1);
+        return;
+    }
     T_RACE_LINE line = {s_car.LineCubeX, s_car.LineCubeZ, s_car.LineX0, s_car.LineZ0, s_car.LineX1, s_car.LineZ1, s_car.LineDirX, s_car.LineDirZ, s_lineY, s_lineHasY};
     if (CrossLine(&line, x0, z0, x, z) <= 0) return;
+    // (a sprint's start line counts once: its race begins there)
+    if (s_sprint && s_laps > 0) return;
     const S32 now = TimerRefHR;
     // (the story's gate: the race isn't open yet -- no lap begins)
     if (s_laps == 0) {
@@ -1731,6 +1797,119 @@ void RaceMod_Lap(S32 x, S32 z) {
     s_lapStart = now;
     s_halfway = 0;
     s_next = 0;
+}
+
+// A sprint is over (`crossed`: the player crossed the finish line; else the one to beat got there first): the player's place, the result,
+// what a win and the end set, and -- RACE_SPRINT_END_MS later, RaceMod_Story -- the dream's waking up or the race again.
+static void SprintOver(S32 now, int crossed) {
+    if (s_place) return;
+    int place = 1, racers = 1;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        if (!s_opp[n].Count || !s_opp[n].Scenes) continue;
+        racers++;
+        if (s_opp[n].Laps > 1) place++;
+    }
+    if (!crossed) place = racers;          // (not there yet: last, whoever else is still on the way)
+    s_place = place; s_racers = racers;
+    const int mainOn = s_main >= 0 && s_main < RACE_MAX_OPPONENTS && s_opp[s_main].Count && s_opp[s_main].Scenes;
+    s_beatMain = crossed && (mainOn ? s_opp[s_main].Laps <= 1 : place == 1);
+    char text[64];
+    if (s_beatMain && mainOn) snprintf(text, sizeof(text), "You beat %s!", s_opp[s_main].Name);
+    else if (s_beatMain) snprintf(text, sizeof(text), "You win!");
+    else if (mainOn) snprintf(text, sizeof(text), "%s got there first", s_opp[s_main].Name);
+    else snprintf(text, sizeof(text), "You finished %d%s", place, Ordinal(place));
+    Message(text);
+    s_messageUntil = now + RACE_SPRINT_END_MS;
+    Log_Info("[racemod] sprint over in %.2f s: %d%s of %d%s", (now - s_lapStart) / 1000.0, place, Ordinal(place), racers, s_beatMain ? ", won" : ", lost");
+    if (s_beatMain) ApplySets(s_winSet, s_nbWinSet);
+    ApplySets(s_finishSet, s_nbFinishSet);
+    s_endAt = now + RACE_SPRINT_END_MS;
+    s_endWon = s_beatMain;
+}
+
+// The scene the start line is in (cube_scene=), -1 when the file doesn't say.
+static int StartScene(void) {
+    if (!s_nbSpots) return -1;
+    for (int c = 0; c < s_nbCubeScenes; c++)
+        if (s_cubeScenes[c][0] == s_spots[0].CubeX && s_cubeScenes[c][1] == s_spots[0].CubeZ) return s_cubeScenes[c][2];
+    return -1;
+}
+
+// Called once a frame from the main loop, before the scene is drawn (PERSO.CPP), where a dialog can be opened as the life scripts do:
+// the intro as the grid forms, a sprint's end followed up -- a win wakes Twinsen up (out of the car, in the waking scene), a loss runs
+// the race again from the grid -- and the wake line said a moment after he has woken up.
+void RaceMod_Story(void) {
+    if (!RaceMod_Active()) return;
+    const S32 now = TimerRefHR;
+    // (the wake line, if the waking scene's actor has said nothing since Twinsen woke up: RaceMod_Dial says it before her first line)
+    if (s_pendWakeScene >= 0 && NewCube == -1) {
+        if ((S32)NumCube != s_pendWakeScene) { if (s_pendWakeAt && now - s_pendWakeAt > 20000) s_pendWakeScene = -1; }
+        else if (!s_pendWakeAt) s_pendWakeAt = now;
+        else if (now - s_pendWakeAt >= RACE_WAKE_DIAL_MS) {
+            const int text = s_pendWakeText, actor = s_pendWakeActor;
+            s_pendWakeScene = -1;
+            if (text >= 0) {
+                NumObjDial = (U8)(actor > 0 && actor < NbObjets ? actor : NUM_PERSO);
+                Log_Info("[racemod] awake: text %d said by actor %d", text, (int)NumObjDial);
+                Dial(text, TRUE);
+            }
+        }
+    }
+    if (!s_sprint || CubeMode != CUBE_EXTERIEUR) return;
+    // the intro, as the grid forms (the count-down from when it is read)
+    if (s_introText >= 0 && !s_introShown && s_phase == PHASE_GRID) {
+        s_introShown = 1;
+        NumObjDial = NUM_PERSO;
+        Log_Info("[racemod] the race's intro: text %d", s_introText);
+        Dial(s_introText, TRUE);
+        s_goAt = TimerRefHR + 4000;
+        s_wantFlip = 1;
+        return;
+    }
+    // a loss's line, before the race again
+    if (s_pendLose >= 0 && s_phase == PHASE_GRID) {
+        const int text = s_pendLose;
+        s_pendLose = -1;
+        NumObjDial = NUM_PERSO;
+        Dial(text, TRUE);
+        s_goAt = TimerRefHR + 4000;
+        s_wantFlip = 1;
+        return;
+    }
+    if (!s_place || !s_endAt || now < s_endAt || NewCube != -1) return;
+    s_endAt = 0;
+    if (s_endWon && s_wakeScene >= 0) {
+        // the dream is over: Twinsen wakes up, out of his car (the car is no one's: a new game's)
+        if (Comportement == C_BUGGY) LeaveBuggy(C_NORMAL);
+        ResetBuggy();
+        s_pendWakeScene = s_wakeScene; s_pendWakeText = s_wakeText; s_pendWakeActor = s_wakeActor; s_pendWakeAt = 0;
+        NewCube = s_wakeScene;
+        FlagChgCube = 2;
+        Log_Info("[racemod] the dream is over: Twinsen wakes up in scene %d", s_wakeScene);
+        return;
+    }
+    if (s_endWon) return;
+    // a loss: the race again, from the grid in the start line's scene (the car taken there)
+    const int scene = StartScene();
+    if (s_loseText >= 0) s_pendLose = s_loseText;
+    s_place = 0; s_laps = 0; s_halfway = 0; s_next = 0; s_beatMain = 0;
+    s_phase = PHASE_WAIT; s_wantGrid = 1;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) if (s_opp[n].Count) { s_opp[n].Laps = 1; s_opp[n].S = 0; s_opp[n].Speed = 0; }
+    if (scene >= 0 && !(CurrentCubeX == s_spots[0].CubeX && CurrentCubeY == s_spots[0].CubeZ)) {
+        NewCube = scene;
+        NewPosX = s_spots[0].X; NewPosY = s_spots[0].Y; NewPosZ = s_spots[0].Z;
+        FlagChgCube = 1;
+        FlagReajustPosTwinsen = FALSE;
+    }
+    s_forgetLap = 1;
+    Log_Info("[racemod] the race again, from the grid in scene %d", scene);
+}
+
+// A new game (PERSO.CPP InitGame): the scene it starts in -- a set's dream= (Polar Island's dream race), else `scene`, the game's own.
+S32 RaceMod_NewGameScene(S32 scene) {
+    if (!RaceMod_Active() || s_dreamScene < 0) return scene;
+    Log_Info("[racemod] a new game starts in the dream: scene %d", s_dreamScene);
+    return s_dreamScene;
 }
 
 // A test pilot (the console's `autodrive`): while the player drives, the pedals and the steering that keep his car on the first opponent's
@@ -1815,6 +1994,8 @@ U32 RaceMod_AutoInput(void) {
 
 // An opponent's line at distance s: position (world units) and heading.
 static void PathAt(const T_RACE_OPPONENT *o, double s, double *x, double *z, double *y, double *v, double *dx, double *dz) {
+    // (a sprint's line has ends: held at them)
+    if (s_sprint) { if (s < 0) s = 0; if (s > o->Length - 1) s = o->Length - 1 > 0 ? o->Length - 1 : 0; }
     while (s < 0) s += o->Length;
     while (s >= o->Length) s -= o->Length;
     int lo = 0, hi = o->Count;
@@ -2570,11 +2751,11 @@ S32 RaceMod_Rescue(void) {
 static void Rescue(void) {
     const T_RACE_OPPONENT *o = Guide();
     if (!o) return;
-    int i = ((s_safeIndex - RACE_RESCUE_BACK) % o->Count + o->Count) % o->Count;
-    for (int k = 0; k < 40 && !LineOnGround(o, i); k++) i = (i - 1 + o->Count) % o->Count;
+    int i = s_sprint ? (s_safeIndex > RACE_RESCUE_BACK ? s_safeIndex - RACE_RESCUE_BACK : 0) : ((s_safeIndex - RACE_RESCUE_BACK) % o->Count + o->Count) % o->Count;
+    for (int k = 0; k < 40 && !LineOnGround(o, i); k++) i = s_sprint ? (i > 0 ? i - 1 : 0) : (i - 1 + o->Count) % o->Count;
     if (!LineOnGround(o, i)) return;
     T_OBJET *hero = &ListObjet[NUM_PERSO];
-    const int j = (i + 1) % o->Count;
+    const int j = s_sprint ? (i + 1 < o->Count ? i + 1 : i - 1) : (i + 1) % o->Count;
     const S32 lx = o->X[i] - CurrentCubeX * 32768, lz = o->Z[i] - CurrentCubeY * 32768;
     hero->Obj.X = lx;
     hero->Obj.Z = lz;
@@ -3322,8 +3503,19 @@ void RaceMod_Frame(void) {
                 const double before = o->S, step = o->Speed * dt / 1000.0;
                 o->S += step;
                 o->MergeLeft = o->MergeLeft > step ? o->MergeLeft - step : 0;
-                if (o->S >= o->Length) o->S -= o->Length;
-                if (o->S < before) {                 // past the start line
+                if (s_sprint) {
+                    // (a sprint: at the finish line it stops, finished -- ahead of the player, who hasn't; the one to beat there first
+                    // has won)
+                    if (o->S >= o->FinishS) {
+                        o->S = o->FinishS; o->Speed = 0;
+                        if (o->Laps <= 1) {
+                            o->Laps = 2;
+                            Log_Info("[racemod] %s finished in %.2f s", o->Name, (now - o->LapStart) / 1000.0);
+                            if (n == s_main && !s_place) SprintOver(now, 0);
+                        }
+                    }
+                } else if (o->S >= o->Length) o->S -= o->Length;
+                if (!s_sprint && o->S < before) {    // past the start line
                     o->Laps++;
                     if (o->Laps > 1) Log_Info("[racemod] opponent %d: lap %d in %.2f s", n + 1, o->Laps - 1, (now - o->LapStart) / 1000.0);
                     o->LapStart = now;
@@ -3426,7 +3618,7 @@ void RaceMod_Frame(void) {
 
 // The player's car stands on the grid until the count-down's GO (BUGGY.CPP RaceSpeed).
 S32 RaceMod_Held(void) {
-    return RaceMod_Active() && (s_phase == PHASE_GRID || TimerRefHR < s_hitUntil);
+    return RaceMod_Active() && (s_phase == PHASE_GRID || TimerRefHR < s_hitUntil || (s_sprint && s_place));
 }
 
 // How far round the race the player is, and an opponent, in world units from the start of lap 1 (negative before it). The player is
@@ -3453,6 +3645,7 @@ static double PlayerProgress(void) {
         }
     s_playerIndex = best;
     const double s = o->Cum[best];
+    if (s_sprint) return s;
     // before lap 1 the player is behind the line, near the line's end
     if (s_laps == 0) return s > o->Length / 2 ? s - o->Length : s;
     // (by the start line the line's nearest point can be either end of it: halfway round, the car is at its end, not back at its start)
@@ -3820,6 +4013,7 @@ void RaceMod_Draw(void) {
             else if (s_laps > 0) {
                 Time(a, sizeof(a), now - s_lapStart);
                 if (s_phase == PHASE_QUALIFYING) snprintf(text, sizeof(text), "Qualifying lap  %s", a);
+                else if (s_sprint) snprintf(text, sizeof(text), "Race  %s", a);
                 else if (s_raceLaps > 0 && s_nbOrder > 0 && s_laps <= s_raceLaps) snprintf(text, sizeof(text), "Lap %d/%d  %s", (int)s_laps, s_raceLaps, a);
                 else if (const S32 target = BeatTime()) {
                     // (a time to beat: Raph's)
@@ -3890,6 +4084,7 @@ static void ResetTrack(void) {
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0; s_hinted = -1;
     s_nbGates = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
+    s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_powerups = 0; s_powerupOnly = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks)); s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     s_noCollideScene = -1;
@@ -3929,7 +4124,19 @@ void RaceMod_Island(S32 island) {
 
 // tired=: on Citadel Island, while the story's variable says so, anyone but Twinsen says the tired line instead of their own (GERELIFE.CPP,
 // the life scripts' messages: NumObjDial is the one speaking).
+// wake=: a dream won, the waking scene's actor -- Zoe -- says the wake line before her first line there: she shakes Twinsen awake.
 S32 RaceMod_Dial(S32 num) {
+    if (RaceMod_Active() && s_pendWakeScene >= 0 && (S32)NumCube == s_pendWakeScene && NewCube == -1
+            && (s_pendWakeActor <= 0 || NumObjDial == s_pendWakeActor)) {
+        const int text = s_pendWakeText;
+        const U8 speaker = NumObjDial;
+        s_pendWakeScene = -1;
+        if (text >= 0) {
+            Log_Info("[racemod] awake: text %d said by actor %d, before its own line %d", text, (int)speaker, (int)num);
+            Dial(text, TRUE);
+            NumObjDial = speaker;
+        }
+    }
     if (!RaceMod_Active() || s_tiredVar < 0 || s_tiredVar > 255 || Island != 0 || NumObjDial == NUM_PERSO) return num;
     if (ListVarGame[s_tiredVar] != s_tiredValue) return num;
     Log_Info("[racemod] text %d said as the tired line %d", (int)num, s_tiredText);

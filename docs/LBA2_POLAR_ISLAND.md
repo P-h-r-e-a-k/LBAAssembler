@@ -131,7 +131,7 @@ pages and 6 object pages, so the engine reads more pages for an island that has 
 
 ## Twinsen's car
 
-The island is to have a race track, so the dock scene (239) has Twinsen's car beside him. It is the Desert island's own buggy (scene
+The island is to have a race track, so the dock scene (243) has Twinsen's car beside him. It is the Desert island's own buggy (scene
 67). Every other scene of the island has it too, as on the Desert island: the engine hands the car on to the next scene's copy at a cube
 change (`BUGGY.CPP` `InitBuggy`), and without one there the car stopped at the first cube edge. The copies are changed in two ways:
 
@@ -143,16 +143,17 @@ Twinsen gets in and drives it.
 
 ## The scenes (`PolarScenes.cs`)
 
-An LBA2 outside scene is one cube of its island. The island has twelve cubes (6–8 × 5–8), numbered as scenes 229–240. The ten with land
-have scenes: **230–237, 239 and 240**. The two of open sea (229, 238) have none, and no zone leads into them; Twinsen would drown before
-he got there.
+An LBA2 outside scene is one cube of its island. The island has twelve cubes (6–8 × 5–8), numbered as scenes 233–244. The ten with
+land have scenes: **234–241, 243 and 244**. The two of open sea (233, 242) have none, and no zone leads into them; Twinsen would drown
+before he got there.
 
-* **Numbers:** they start after the retail game's scenes (up to 221) and the race track builder's (222–228).
+* **Numbers:** they start after the retail game's scenes (up to 221) and the race track builder's (222–232: the last four are the
+  Emerald Moon's, which the island's first build clashed with).
 * **Contents:** each is a copy of scene 44's header with island 12 and its own cube. Nobody is in it but Twinsen and the engine's Zoe
   placeholder, plus Twinsen's car in the dock scene.
 * **Cube changes:** a cube-change zone runs along every edge a cube shares with another (`OBJECT.CPP` `GereZoneChangeCube`: the arrival
   edge in Info0/Info2, 512 or 31744).
-* **Start:** Twinsen starts where LBA1 starts him on the island: on the dock (LBA1 scene 115), in scene 239. In the other scenes he
+* **Start:** Twinsen starts where LBA1 starts him on the island: on the dock (LBA1 scene 115), in scene 243. In the other scenes he
   starts on the flat, clear land cell nearest the cube's middle, so Play from any scene puts him on his feet.
 * **Names:** each scene is named in the game folder's `SCENE.HQD` after the LBA1 scenes its land comes from (for example "Polar Island:
   1st scene, 2nd scene"). The editor's scene list reads that file over the game's own descriptions.
@@ -191,7 +192,7 @@ he got there.
 | --- | --- |
 | `POLAR.ILE`, `POLAR.OBL` | New. |
 | `RESS.HQR` | Entries 23 (island 12's sky, the fine-weather Citadel's) and 39 (its palette). Both are empty in the retail file. |
-| `SCENE.HQR` | Scenes 230–237, 239, 240. The slots before them are padded empty. |
+| `SCENE.HQR` | Scenes 234–241, 243, 244. The slots before them are padded empty. |
 | `HOLOMAP.HQR` | Entries 46 and 47; position records 12 and those of the scenes (280–287, 289, 290). |
 | `TEXT.HQR` | Entries 180–191; text 620 of file 2 in each language. |
 | `SCENE.HQD` | The scenes' names. |
@@ -210,6 +211,42 @@ he got there.
 * The island map and minimap, the holomap picture and the 3D export draw from a triangle's own page.
 * The export puts the pages one under another in one texture.
 * The terrain editor's atlas shows the first page only.
+
+## The race track: a dream (2026-10-06)
+
+The island has a race track of its own, built from the race track window like the other islands' (Tools > LBA2 race tracks, "Polar
+Island: the dream race to Sendell"). The user drew it over a picture of the island. It picks up from the end of the first game: Twinsen
+is dreaming he is back on Polar Island, and FunFrock has escaped and is racing him to Sendell. If FunFrock gets to her first, the planet
+is lost.
+
+* **The route** is a sprint, not a lap. It runs from a start line on the dock (scene 243), north up the arm and the main straight through
+  107 into 109, round a hairpin at its top and back down 107's east side. Then west along 107's south strip, over a jump across the main
+  straight, into 108 and up a serpentine through its terraces, along its north edge, and a jump high over the plateau's pillars onto the
+  top of the rocky peak, where the finish line is. It is 606 cells from the start line to the finish.
+* **The jumps** are both carried jumps: the race-track mode carries the car along the plan's heights, from cube to cube where the flight
+  crosses an edge. The one over the main straight takes off in cube (8, 7) and lands in cube (7, 7), because the straight is four cells
+  from that edge. The track builder's other kind of jump is the car's own animation, and it can't change cube in mid-air. Each jump has
+  a raised stretch of its own (a ramp, the flight, a landing hill); the ground road runs between them.
+* **The car** is Twinsen's buggy, with the race car setup's gears scaled so its top gear is **140 km/h**. The user's setup tops out at
+  80 km/h.
+* **FunFrock** races him in his own car (the racer's body 17, made after the character), and he is the one to beat.
+* **The end:** cross the finish line before FunFrock and the car stops on the peak, "You beat FunFrock!". Three and a half seconds later
+  Twinsen wakes up at home, in the second game's first scene (scene 0). As Zoe comes up to him in the game's own opening, she first shakes
+  him awake ("Twinsen! Twinsen, wake up! You were tossing and turning all night. Were you dreaming about FunFrock again?"), then says
+  her own line. If FunFrock gets there first, Twinsen says so and the race starts again from the grid.
+* **A new game** played as a game (the race car setup's "new game") starts in the dream, on the dock beside the car, instead of in
+  Twinsen's house.
+* **Texts:** Twinsen's intro (said as the grid forms) and his line after a loss are texts 1 and 2 of the island's own text file, next to
+  its name (`PolarScenes.WriteTexts`, `PolarDream`). Zoe's wake line is a new text at the end of Citadel Island's file, where scene 0's
+  texts are. All three are in the game's six languages, shown and not spoken: the island has no voice file, and Citadel's new text has no
+  sample.
+* **The island first:** a folder without Polar Island gets it before the track is built, from the LBA1 folder in the settings. The
+  folder is put back to its originals first (when an earlier build kept copies), so the copies kept from then on have the island.
+  Putting the track back leaves the island.
+* **The road's tiles** go on the ground's first texture page, in its last row, which the island build now leaves empty for them.
+
+How it was made, and how the engine runs it, is in [LBA2_DESERT_RACE_TRACK_BUILD.md](LBA2_DESERT_RACE_TRACK_BUILD.md), "Polar Island: the
+dream race to Sendell".
 
 ## Testing
 
@@ -236,9 +273,9 @@ he got there.
 
 Headless engine checks (sandbox copy of the game):
 
-* `cube 239` loads island 12 with Twinsen standing on the dock. Every scene starts with Twinsen standing at full life.
+* `cube 243` loads island 12 with Twinsen standing on the dock. Every scene starts with Twinsen standing at full life.
 * A save made on the island loads.
-* Walking north across the cube edge changes to scene 236.
+* Walking north across the cube edge changes to scene 240.
 * `ui holoplan 12` and `ui holomap` show the new map and the label.
 * LBA Assembler's menu adds the island in a sandbox: `POLAR.ILE` is listed, its ten named scenes appear, and Play starts them inside the
   window.
@@ -246,7 +283,8 @@ Headless engine checks (sandbox copy of the game):
 ## Not yet
 
 * **Characters:** none yet. LBA1's actors and their scripts aren't ported.
-* **Getting there:** no way in from the story: Play, or `cube 239`.
+* **Getting there:** no way in from the story's islands: Play, `cube 243`, or a new game in a folder with the island's race track built
+  (the dream: see above).
 * **Shapes:** objects are boxes, so the huts' curved roofs are square, and a post split over several bricks is a few small boxes.
 * **Tall cliffs:** a cliff higher than two layers stretches its two-layer rock texture over the whole slope.
 * **Missing scene:** the rocky peak's own scene (110) isn't a separate place: its mountain stands in 107's water.
