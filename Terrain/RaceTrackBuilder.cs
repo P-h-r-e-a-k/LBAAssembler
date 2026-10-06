@@ -80,6 +80,10 @@ internal sealed class RaceTrackPlan
     // Decor bodies that stay where they are under the raised road (a statue the road winds round): where one's collision box reaches
     // into the road's space the box is cut down under the road instead of the object being cleared.
     public int[]? KeepBodies { get; set; }
+    // Decors whose top is this high or higher stay, whatever their body, as KeepBodies' do (their collision boxes cut down under a raised
+    // road that passes over them): Polar Island's rocky peak and its plateau are decors, and its jump lands on the peak's top -- the
+    // build took the peak's columns away under the road, down to the sea, and left the road on its piers in mid-air (2026-10-06).
+    public int? KeepAbove { get; set; }
     // A raised road's banking (with Raised), one number for each point: how much the road's surface rises across it, per unit of the way
     // to the left of the way the lap runs (so a bend to the left, its inside the lower, has it negative). The Elevator Platform's lap is
     // a rollercoaster: it leans into its bends.
@@ -113,7 +117,9 @@ internal sealed class RaceTrackPlan
     // Jumps the engine carries the car over (with Raised), each [the take-off ramp's foot, its lip, the landing lip, the landing hill's
     // foot]: the plan's heights from foot to foot are the car's way -- a ramp curving up, the flight, a hill curving down -- and the road
     // has no deck between the lips. The race-track mode (RACEMOD.CPP arcjump=) takes the car at the ramp's foot and carries it along that
-    // way, from one cube into the next if it crosses one: the Emerald Moon's leap over the whole reactor.
+    // way, from one cube into the next if it crosses one: the Emerald Moon's leap over the whole reactor. A fifth number: where
+    // the camera is while the car is carried -- 1 or -1 beside the jump, on the side the builder's Across points to or the other (the
+    // default, 1), 0 behind the car as on the road (Polar Island's jump over its main straight).
     public int[][]? ArcJumps { get; set; }
     // A white stripe along a raised road (with Raised): [first point, last point, how far across from the road's middle (cells, the way
     // the builder's Across points)] -- between the Emerald Moon's straight and the pit lane beside it on the same deck.
@@ -419,6 +425,8 @@ internal sealed class RaceTrackReport
     // foot, the lap's distance at the two feet (from its first point), and -- once the raised road is placed -- the same four as indices
     // into Raised (the engine's arcjump=).
     public List<(int Foot, int Lip, int Land, int LandFoot, double S0, double S1)> ArcJumps { get; } = new();
+    // ... and where the camera is while the car is carried over each (the plan's fifth number; null: the engine's own, beside it)
+    public List<int?> ArcCameras { get; } = new();
     public List<int[]> ArcRaised { get; } = new();
     // The lap's heights as built, and whether each point is on the raised road and in a carried jump's gap (the cube edges' crossing zones
     // stand at the raised road's height).
@@ -622,7 +630,7 @@ internal static class RaceTrackBuilder
         ClearOldTrack(island, options, report);
         var adrift = AdriftDecors(island);
         var follow = new IslandOps.DecorFollow(island);
-        ClearDecors(island, index, options, report, roads, plan.KeepBodies);
+        ClearDecors(island, index, options, report, roads, plan.KeepBodies, plan.KeepAbove);
         var natural = new Field(island);
         ModifyGround(island, field, index, roads, options, report);
         if (main.Raised is not null && plan.RaisedCut) CutUnderRaised(island, field, main, options, report);
@@ -1906,6 +1914,7 @@ internal static class RaceTrackBuilder
             var top = r.H[lip];
             for (var k = At(r, lip + 1); k != land; k = At(r, k + 1)) { r.Gap[k] = true; r.Void[k] = true; r.Arc[k] = true; top = Math.Max(top, r.H[k]); }
             report.ArcJumps.Add((foot, lip, land, landFoot, r.S[foot], r.S[landFoot]));
+            report.ArcCameras.Add(j.Length > 4 ? j[4] : null);
             double Cells(int a, int b) { var d = r.S[b] - r.S[a]; return d < 0 ? d + r.Length : d; }
             report.Notes.Add($"carried jump: a ramp from cell ({r.X[foot]:0.0}, {r.Z[foot]:0.0}) up {r.H[lip] - r.H[foot]:0} over {Cells(foot, lip):0.0} cells to its lip, a flight of " +
                              $"{Cells(lip, land):0.0} cells topping out at {top:0}, a hill down {r.H[land] - r.H[landFoot]:0} over {Cells(land, landFoot):0.0} cells to cell ({r.X[landFoot]:0.0}, {r.Z[landFoot]:0.0}) " +
@@ -2480,11 +2489,13 @@ internal static class RaceTrackBuilder
     // A raised road's own space: from under its slab to over a car's roof.
     private const double RaisedBelow = 320, RaisedAbove = 1400;
 
-    private static void ClearDecors(IslandFile island, RoadIndex index, RaceTrackOptions o, RaceTrackReport report, List<TrackRoad>? roads = null, int[]? keepBodies = null)
+    private static void ClearDecors(IslandFile island, RoadIndex index, RaceTrackOptions o, RaceTrackReport report, List<TrackRoad>? roads = null, int[]? keepBodies = null,
+        int? keepAbove = null)
     {
         var taken = new List<(int Cx, int Cz, IslandDecor D)>();
         bool Protected(int body) => o.Island.OldTrackCube is not null && o.ProtectedBodies.Contains(body);
-        var keep = keepBodies?.ToHashSet() ?? new HashSet<int>();
+        var keepSet = keepBodies?.ToHashSet() ?? new HashSet<int>();
+        bool Kept(IslandDecor d) => keepSet.Contains(d.Body & 0xFFFF) || keepAbove is { } high && d.YMax >= high;
         var raised = roads is { Count: > 0 } && roads[0].Raised is not null;
         // (a raised road wider than a ground road's verge -- the Emerald Moon's, as wide as the reactor's dish -- is looked for further out)
         var look = raised ? Math.Max(8, (roads![0].RaisedHalfs is { Length: > 0 } wide ? wide.Max() : o.RaisedHalfWidth) + 1.5) : 8;
@@ -2519,7 +2530,7 @@ internal static class RaceTrackBuilder
                         else if (h.Dist <= (h.Road == 0 ? 6.5 : 4.5)) hit = true;
                     }
                 if (!hit) continue;
-                if (keep.Contains(body))
+                if (Kept(d))
                 {
                     // it stays: its collision box is cut down to end under the road (the box is a box, a statue isn't: the plan keeps
                     // the road clear of the statue itself)
@@ -2538,7 +2549,7 @@ internal static class RaceTrackBuilder
             foreach (var d in cube.Decors.Where(e => !remove.Contains(e) && remove.Any(r => r.X == e.X && r.Y == e.Y && r.Z == e.Z)).ToList())
             {
                 var body = d.Body & 0xFFFF;
-                if (Protected(body) || keep.Contains(body)) continue;
+                if (Protected(body) || Kept(d)) continue;
                 remove.Add(d);
                 report.Removed.Add((cx, cz, body, "part"));
                 report.DecorsRemoved++;
@@ -2546,7 +2557,7 @@ internal static class RaceTrackBuilder
             foreach (var d in remove) { cube.Decors.Remove(d); taken.Add((cx, cz, d)); }
         }
         if (cut > 0) report.Notes.Add($"{cut} kept decor objects' collision boxes cut down to end under the raised road that passes over them");
-        ClearRuins(island, index, taken, o, report);
+        ClearRuins(island, index, taken, o, report, Kept);
     }
 
     // The rest of a structure the road ran through. A building is several decor pieces placed apart (walls, pillars, a roof beam), so
@@ -2598,7 +2609,8 @@ internal static class RaceTrackBuilder
         if (gone > 0) report.Notes.Add($"{gone} decor objects that rested on the ground and were left held up by nothing once it was reshaped (lifted with it by a corner, or with their ground cut away from under them) removed");
     }
 
-    private static void ClearRuins(IslandFile island, RoadIndex index, List<(int Cx, int Cz, IslandDecor D)> taken, RaceTrackOptions o, RaceTrackReport report)
+    private static void ClearRuins(IslandFile island, RoadIndex index, List<(int Cx, int Cz, IslandDecor D)> taken, RaceTrackOptions o, RaceTrackReport report,
+        Func<IslandDecor, bool>? kept = null)
     {
         if (taken.Count == 0) return;
         (double X0, double Z0, double X1, double Z1, double Y0, double Y1) Box(int cx, int cz, IslandDecor d) =>
@@ -2643,7 +2655,7 @@ internal static class RaceTrackBuilder
         if (ruins.Count == 0) return;
         foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
         {
-            var gone = cube.Decors.Where(d => ruins.Contains(Id(cx, cz, d))).ToList();
+            var gone = cube.Decors.Where(d => ruins.Contains(Id(cx, cz, d)) && kept?.Invoke(d) != true).ToList();
             foreach (var d in gone) { cube.Decors.Remove(d); report.Removed.Add((cx, cz, d.Body & 0xFFFF, "ruin")); report.DecorsRemoved++; }
         }
         report.Notes.Add($"{ruins.Count} pieces left of structures the road ran through (a wall, a pillar, a beam whose supports were on the road) removed too");
@@ -2792,7 +2804,11 @@ internal static class RaceTrackBuilder
     // (RACEMOD.CPP RaisedAt: 300). The lava lake's lap (2026-10-01) ran along its north rim with the rock beside the road above the deck,
     // and the test pilot, cutting a corner, stopped dead against it. There the ground is cut down: RaisedClearance under the deck out to
     // RaisedCutReach cells past its edge, then a bank back up to the ground as it is -- a cutting the road runs along. Not near the ends
-    // of the raised road where it rises from the ground road (RaisedCutFromEnd cells): there the deck starts on the ground.
+    // of the raised road where it rises from the ground road (RaisedCutFromEnd cells): there the deck starts on the ground. There only
+    // ground standing over the deck is brought down, to just under it (RaisedFlushUnder) -- 2026-10-06: Polar Island's ramp up to the
+    // peak rises from a dip beside a ledge of LBA1's terrain, and the ledge stood through the ramp's left half; neither the cutting (too
+    // near the end) nor the ends' flush (the deck well over the dip under its middle) reached it. Not where the ground road is nearer:
+    // the ground there is the road's own.
     private const double RaisedClearance = 450, RaisedCutReach = 1, RaisedCutBank = 1.5, RaisedCutFromEnd = 8;
     // And the ends themselves (later on 2026-10-01): the deck there is only a little over the ground, and the ground under it was the
     // island's own -- at the lava lake's dock the deck's first cells hovered over the slope down to the sea (a slit under its end), and
@@ -2824,10 +2840,14 @@ internal static class RaceTrackBuilder
                 }
         }
         var limit = new Dictionary<(int, int), double>();
+        // (near the ends the nearest stretch of deck's, as the ends' flush: a ramp rises fast, and the lowest deck in reach was its foot)
+        var endLimit = new Dictionary<(int, int), (double Allowed, double D)>();
         for (var a = 0; a < n; a++)
         {
             var b = At(r, a + 1);
-            if (!up[a] || !up[b] || Math.Min(fromEnd[a], fromEnd[b]) < RaisedCutFromEnd || Math.Abs(r.H[a] - r.H[b]) > DropFrom) continue;
+            if (!up[a] || !up[b] || Math.Abs(r.H[a] - r.H[b]) > DropFrom) continue;
+            var nearEnd = Math.Min(fromEnd[a], fromEnd[b]) < RaisedCutFromEnd;
+            if (nearEnd && (r.Gap[a] || r.Gap[b])) continue;
             double sx = r.X[b] - r.X[a], sz = r.Z[b] - r.Z[a], len2 = sx * sx + sz * sz;
             if (len2 < 1e-12) continue;
             for (var gz = (int)Math.Floor(Math.Min(r.Z[a], r.Z[b]) - reach); gz <= (int)Math.Ceiling(Math.Max(r.Z[a], r.Z[b]) + reach); gz++)
@@ -2838,8 +2858,12 @@ internal static class RaceTrackBuilder
                 if (d > reach) continue;
                 var deck = r.H[a] + (r.H[b] - r.H[a]) * t;
                 if (r.RoadBank is { } rb) deck -= Math.Abs(rb[a]) * o.RaisedHalfWidth * 512;
-                var allowed = deck - RaisedClearance + Math.Max(0, d - inner) * 512 * RaisedCutBank;
-                limit[(gx, gz)] = limit.TryGetValue((gx, gz), out var was) ? Math.Min(was, allowed) : allowed;
+                var allowed = deck - (nearEnd ? RaisedFlushUnder : RaisedClearance) + Math.Max(0, d - inner) * 512 * RaisedCutBank;
+                if (nearEnd)
+                {
+                    if (!endLimit.TryGetValue((gx, gz), out var near) || d < near.D) endLimit[(gx, gz)] = (allowed, d);
+                }
+                else limit[(gx, gz)] = limit.TryGetValue((gx, gz), out var was) ? Math.Min(was, allowed) : allowed;
             }
         }
         // (never near the road on the ground: the ground there is the road's own)
@@ -2855,7 +2879,25 @@ internal static class RaceTrackBuilder
             deepest = Math.Max(deepest, h - to);
             island.SetHeight(gx, gz, to); cut++;
         }
-        if (cut == 0 && flushed.Count == 0) return;
+        // (near the ends: the ground over the deck, where the deck's points are nearer than the ground road's)
+        var deckPoints = Enumerable.Range(0, n).Where(i => up[i] && !r.Gap[i]).ToList();
+        double Nearest(List<int> points, int gx, int gz) => points.Count == 0 ? double.MaxValue : points.Min(i => Sq(r.X[i] - gx) + Sq(r.Z[i] - gz));
+        int endCut = 0; double endDeepest = 0;
+        foreach (var ((gx, gz), (allowed, _)) in endLimit)
+        {
+            if (flushed.Contains((gx, gz))) continue;
+            if (island.HeightAt(gx, gz) is not { } h || h <= allowed) continue;
+            if (Nearest(ground, gx, gz) <= Nearest(deckPoints, gx, gz)) continue;
+            var to = Math.Max(0, (int)Math.Floor(allowed));
+            endDeepest = Math.Max(endDeepest, h - to);
+            island.SetHeight(gx, gz, to); endCut++;
+        }
+        if (endCut > 0)
+        {
+            report.Vertices += endCut;
+            report.Notes.Add($"the raised road's ends: the ground standing over the deck brought down under it at {endCut} vertices, {endDeepest:0} at the most");
+        }
+        if (cut == 0 && endCut == 0 && flushed.Count == 0) return;
         field.Refresh(island);
         if (cut == 0) return;
         report.Vertices += cut;
@@ -3917,10 +3959,12 @@ internal static class RaceTrackBuilder
                 : new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width, (int)Math.Round(banks[k] * RaisedBankUnits) });
         }
         // (the carried jumps' feet and lips as places in that list: the engine's way over each)
-        foreach (var arc in report.ArcJumps)
+        foreach (var (arc, which) in report.ArcJumps.Select((a, i) => (a, i)))
         {
             var ids = new[] { arc.Foot, arc.Lip, arc.Land, arc.LandFoot }.Select(k => span.IndexOf(k)).ToArray();
-            if (ids.All(i => i >= 0) && ids[0] < ids[1] && ids[1] < ids[2] && ids[2] < ids[3]) report.ArcRaised.Add(ids);
+            // (the camera's side, when the plan gives it: the engine's arcjump= fifth number)
+            if (ids.All(i => i >= 0) && ids[0] < ids[1] && ids[1] < ids[2] && ids[2] < ids[3])
+                report.ArcRaised.Add(which < report.ArcCameras.Count && report.ArcCameras[which] is int side ? ids.Append(side).ToArray() : ids);
             else report.Notes.Add($"WARNING: the carried jump from cell ({r.X[arc.Foot]:0.0}, {r.Z[arc.Foot]:0.0}) is not along the raised road in one piece: the engine won't carry the car over it");
         }
         if (o.NewBodyBase < 0) { report.Notes.Add("WARNING: no place for the raised road's bodies was prepared (the island's OBL wasn't counted) -- the raised road has no pieces."); return; }

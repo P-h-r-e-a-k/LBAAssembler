@@ -1,5 +1,6 @@
 using LBAAssembler;
 using LBAAssembler.Lba1;
+using LBAAssembler.Terrain;
 using LBAAssembler.Terrain.Polar;
 
 namespace ScriptRoundTrip;
@@ -8,6 +9,26 @@ namespace ScriptRoundTrip;
 // layers they reach -- to size a port of them to an LBA2 island (Polar Island, 2026-10-05).
 internal static class PolarStudy
 {
+    // decordiff <island file A> <island file B> <x0> <x1> <z0> <z1>: the decors of A (a box reaching into those island cells) that B hasn't
+    // got -- by cube, place and body -- and B's that A hasn't: what a build took away and added there.
+    public static int DecorDiff(string[] args)
+    {
+        var a = IslandFile.Load(args[1]); var b = IslandFile.Load(args[2]);
+        double x0 = double.Parse(args[3]), x1 = double.Parse(args[4]), z0 = double.Parse(args[5]), z1 = double.Parse(args[6]);
+        IEnumerable<(int Cx, int Cz, IslandDecor D)> In(IslandFile f) => LBAAssembler.Terrain.IslandOps.CubeCells(f).SelectMany(c => c.Item3.Decors.Select(d => (c.Item1, c.Item2, d)))
+            .Where(t => (t.Item1 * 32768.0 + t.d.XMax) / 512 >= x0 && (t.Item1 * 32768.0 + t.d.XMin) / 512 <= x1 && (t.Item2 * 32768.0 + t.d.ZMax) / 512 >= z0 && (t.Item2 * 32768.0 + t.d.ZMin) / 512 <= z1);
+        static (int, int, int, int, int, int) Key((int Cx, int Cz, IslandDecor D) t) => (t.Cx, t.Cz, t.D.X, t.D.Y, t.D.Z, t.D.Body);
+        var inA = In(a).ToList(); var inB = In(b).ToList();
+        var keysB = inB.Select(Key).ToHashSet(); var keysA = inA.Select(Key).ToHashSet();
+        string Show((int Cx, int Cz, IslandDecor D) t) => FormattableString.Invariant(
+            $"cube ({t.Cx},{t.Cz}) body {t.D.Body & 0xFFFF} page {t.D.Body >> IslandFile.DecorPageShift}: cells x {(t.Cx * 32768.0 + t.D.XMin) / 512:0.0}..{(t.Cx * 32768.0 + t.D.XMax) / 512:0.0} z {(t.Cz * 32768.0 + t.D.ZMin) / 512:0.0}..{(t.Cz * 32768.0 + t.D.ZMax) / 512:0.0} y {t.D.YMin}..{t.D.YMax}");
+        var gone = inA.Where(t => !keysB.Contains(Key(t))).ToList(); var added = inB.Where(t => !keysA.Contains(Key(t))).ToList();
+        Console.WriteLine($"{inA.Count} decors in A there, {inB.Count} in B; {gone.Count} of A's not in B, {added.Count} of B's not in A");
+        foreach (var t in gone.OrderByDescending(t => t.D.YMax)) Console.WriteLine("  gone  " + Show(t));
+        foreach (var t in added.OrderByDescending(t => t.D.YMax)) Console.WriteLine("  added " + Show(t));
+        return 0;
+    }
+
     public static int Stats(string[] args)
     {
         var game = new Lba1Game(args[1]);

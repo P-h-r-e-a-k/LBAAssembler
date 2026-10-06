@@ -170,7 +170,11 @@ plan = {
     'maxGrade': 1.8,
     'asphaltHalf': 3.0, 'curbHalf': 4.0, 'vergeHalf': 5.0, 'blend': 4.0,
     'raised': [cross[0], cross[3], arc[0], n - 1], 'raisedHalf': 3.25,
-    'arcJumps': [cross, arc],
+    # (the jump over the straight with the camera behind the car, as on the road: 0; the one onto the peak with it beside the flight)
+    'arcJumps': [cross + [0], arc],
+    # (the ground made the ramps' own surface under their ends: it stood through the peak jump's ramp; and the rocky peak and its plateau,
+    # decors standing that high, kept where the road lands on them)
+    'raisedCut': True, 'keepAbove': 6000,
 }
 out = sys.argv[1] if len(sys.argv) > 1 else r'E:\dump\LBAAssembler\docs\racetrack\polar_track_plan.json'
 json.dump(plan, open(out, 'w'))

@@ -226,7 +226,9 @@ is lost.
 * **The jumps** are both carried jumps: the race-track mode carries the car along the plan's heights, from cube to cube where the flight
   crosses an edge. The one over the main straight takes off in cube (8, 7) and lands in cube (7, 7), because the straight is four cells
   from that edge. The track builder's other kind of jump is the car's own animation, and it can't change cube in mid-air. Each jump has
-  a raised stretch of its own (a ramp, the flight, a landing hill); the ground road runs between them.
+  a raised stretch of its own (a ramp, the flight, a landing hill); the ground road runs between them. Over the main straight the camera
+  stays behind the car; up to the peak it watches from the side. The ledge of LBA1's terrain beside the second ramp is cut down under it.
+* **The rocky peak** stays whole: the build keeps every decor standing 6,000 or higher (`keepAbove`), where the road lands on it.
 * **The car** is Twinsen's buggy, with the race car setup's gears scaled so its top gear is **140 km/h**. The user's setup tops out at
   80 km/h.
 * **FunFrock** races him in his own car (the racer's body 17, made after the character), and he is the one to beat.
@@ -234,6 +236,8 @@ is lost.
   Twinsen wakes up at home, in the second game's first scene (scene 0), lying asleep in his bed (his own animations from scene 101, the
   Wannies' bed). Zoe comes round to the bedside and shakes him awake ("Twinsen! Twinsen, wake up! You were tossing and turning all
   night. Were you dreaming about FunFrock again?"), he sits up and gets out of bed, and the game's own opening goes on with her line.
+  The dream's race is put away as he wakes: outside it is Citadel Island in the storm, as in the game, and his car drives with the
+  setup's own gears, no race holding it and no power-up left on.
   If FunFrock gets there first, Twinsen says so and the race starts again from the grid.
 * **The kerbs** are drawn smooth, as the other tracks' are (a kerb a cell wide, its own texture over the triangles along it).
 * **A new game** played as a game (the race car setup's "new game") starts in the dream, on the dock beside the car, instead of in

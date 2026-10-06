@@ -66,9 +66,13 @@ internal static class RaceCarEngineFile
             text.Append($"intro={dream.IntroText}\nlose={dream.LoseText}\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n");
             // (won: scene 0's opening wakes Twinsen up in his bed)
             if (dream.WinVar >= 0) text.Append($"win={dream.WinVar} 1\n");
+            // (and awake, the car's own gears again: the dream's are scaled to its top speed)
+            var gears = Math.Clamp(car.Gears, 1, RaceCarSetup.MaxGears);
+            text.Append($"after_gears={string.Join(' ', Enumerable.Range(0, gears).Select(g => RaceCarSetup.KmhToUnits(Math.Clamp(car.TopKmh(g), 3, 150))))}\n");
         }
         // (in the story the weather is the game's own: the set picks the track that goes with it)
-        if (!story && RaceTrackService.FineWeather(info, car.FineWeather)) text.Append("weather=fine\n");
+        // (and not for a dreamt race, which picks up the story: Twinsen wakes up in the game's own weather)
+        if (!story && track?.Dream is null && RaceTrackService.FineWeather(info, car.FineWeather)) text.Append("weather=fine\n");
         if (track?.StoryArrow is >= 0 and var arrow) text.Append($"holo_arrow={arrow}\n");
         var opponents = car.Opponents(track);
         for (var i = 0; i < opponents.Count && pathFiles is not null && i < pathFiles.Count; i++)

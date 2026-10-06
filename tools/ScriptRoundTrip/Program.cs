@@ -92,6 +92,7 @@ internal static class Program
             "polarfoot" => PolarStudy.Foot(args),
             "polarsheet" => PolarStudy.Sheet(args),
             "polartall" => PolarStudy.Tall(args),
+            "decordiff" => PolarStudy.DecorDiff(args),
             "polaradd" => PolarStudy.Add(args),
             "polarremove" => PolarStudy.Remove(args),
             "polarsame" => PolarStudy.Same(args),

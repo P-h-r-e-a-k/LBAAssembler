@@ -56,7 +56,8 @@
  *     jumpcam=<anim> <cube x> <cube z> <x> <y> <z>   while the hero flies the jump whose flight is generic animation <anim>, and a moment
  *                                after it lands, the camera that follows the car stands there (cube-local) and looks at the car (JumpCamera)
  *     arcjump=<foot> <lip> <land> <land foot> [side]   a jump the car is carried over (RaceArc): places in the raised road's file, its
- *                                ramp's foot, its lip, the landing lip and the landing hill's foot; the camera beside it on `side` (1 or -1)
+ *                                ramp's foot, its lip, the landing lip and the landing hill's foot; the camera beside it on `side` (1 or -1),
+ *                                or with 0 behind the car as on the road (the follow camera)
  *     cube_scene=<cube x> <cube z> <scene>   the island's outside scene of that cube, for the cube changes a carried jump makes
  *   The story (the race-track mod's, on Citadel Island; the editor writes these only for a game played as a game, not for a race
  *   started on the line):
@@ -111,6 +112,9 @@
  *                                after he woke. A loss: the race is run again from the grid (lose=<text>: said first, of the race's
  *                                island's texts)
  *     dream=<scene>              (a set's key) a new game starts in <scene> instead of Twinsen's house (RaceMod_NewGameScene)
+ *     after_gears=<top>...       the gears' top speeds once Twinsen has woken up (the race's own are faster: a dream's car): at the wake
+ *                                the race's track is put away -- its finished race, the power-ups' effects, its weather -- and the car
+ *                                keeps its handling with these gears
  */
 #include "C_EXTERN.H"
 #include "COMMON.H"
@@ -312,6 +316,7 @@ static int s_wakeScene = -1, s_wakeText = -1, s_wakeActor = -1, s_introText = -1
 static int s_pendWakeScene = -1, s_pendWakeText = -1, s_pendWakeActor = -1;
 static S32 s_pendWakeAt = 0;
 static int s_pendLose = -1;
+static int s_afterGears[RACE_MAX_GEARS], s_nbAfterGears = 0;   // after_gears=
 static int s_dreamScene = -1;              // dream=: the scene a new game starts in (-1: Twinsen's house, the game's own)
 
 // Power-ups (powerups=): the mushrooms along the lap, scene by scene, each with the height it stands at and when it grows back after a car
@@ -1452,6 +1457,11 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %d %d", &s_wakeScene, &s_wakeText, &s_wakeActor) < 2) s_wakeScene = s_wakeText = -1;
         }
         else if (!strcmp(key, "dream")) { if (!setRead) s_dreamScene = atoi(v); }
+        else if (!strcmp(key, "after_gears")) {
+            int used = 0, top;
+            s_nbAfterGears = 0;
+            for (const char *q = v; s_nbAfterGears < RACE_MAX_GEARS && sscanf(q, "%d%n", &top, &used) == 1; q += used) s_afterGears[s_nbAfterGears++] = top;
+        }
         else if (!strcmp(key, "tired")) {
             if (!setRead && sscanf(v, "%d %d %d", &s_tiredVar, &s_tiredValue, &s_tiredText) != 3) s_tiredVar = -1;
         }
@@ -1887,11 +1897,29 @@ void RaceMod_Story(void) {
         ListBuggy[0].Speed = 0;
         ResetBuggy();
         s_pendWakeScene = s_wakeScene; s_pendWakeText = s_wakeText; s_pendWakeActor = s_wakeActor; s_pendWakeAt = 0;
+        const int wakeScene = s_wakeScene;
+        // (and the race's track is put away: its finished race held the car still wherever Twinsen drove next, a power-up still on -- the
+        // super jet-pack -- came back with the next car, and its weather stayed. The car keeps its handling: a story set's own, or the
+        // race file's, with the gears Twinsen drives with once awake.)
+        char path[260];
+        const char *set = getenv("LBA2_RACETRACK_FILE");
+        snprintf(path, sizeof(path), "%s", s_nbTracks && set ? set : s_loaded);
+        int after[RACE_MAX_GEARS];
+        const int nbAfter = s_nbAfterGears;
+        for (int g = 0; g < nbAfter; g++) after[g] = s_afterGears[g];
+        ResetTrack();
+        Load(path, 1);
+        s_fineWeather = 0;                  // (awake in the game's own weather, whatever the dream's)
+        if (nbAfter > 0) {
+            s_car.Gears = nbAfter;
+            for (int g = 0; g < nbAfter; g++) s_car.GearTop[g] = after[g];
+        }
+        Log_Info("[racemod] the dream's race put away: the car alone, %d gears to %d", (int)s_car.Gears, (int)s_car.GearTop[s_car.Gears - 1]);
         // (a fresh start of the scene, at its own start, as a new game's or the console's `cube`: FlagChgCube 2 carries the hero's animation
         // over the change -- FlagReinit, ChangeCube -- and the scene's own opening, which lays him on his bed, lost its animation to it)
-        NewCube = s_wakeScene;
+        NewCube = wakeScene;
         FlagChgCube = 0;
-        Log_Info("[racemod] the dream is over: Twinsen wakes up in scene %d", s_wakeScene);
+        Log_Info("[racemod] the dream is over: Twinsen wakes up in scene %d", wakeScene);
         return;
     }
     if (s_endWon) return;
@@ -2601,6 +2629,7 @@ static S32 ArcCamera(S32 *eye, S32 *target) {
     const int on = s_arcOn >= 0 ? s_arcOn : s_arcLast >= 0 && (S32)(TimerRefHR - s_arcLandedAt) < RACE_ARC_CAM_HOLD ? s_arcLast : -1;
     if (on < 0) return FALSE;
     const T_RACE_ARC *a = &s_arcs[on];
+    if (a->Side == 0) return FALSE;      // (behind the car: the follow camera's own)
     const T_OBJ_3D *car = &ListObjet[NUM_PERSO].Obj;
     const T_RACE_RAISED *f = &s_raised[a->Foot], *g = &s_raised[a->LandFoot];
     double ux = g->X - f->X, uz = g->Z - f->Z;
@@ -4091,6 +4120,7 @@ static void ResetTrack(void) {
     s_nbGates = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
+    s_nbAfterGears = 0;
     s_powerups = 0; s_powerupOnly = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks)); s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     s_noCollideScene = -1;
