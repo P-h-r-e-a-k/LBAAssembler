@@ -2460,6 +2460,18 @@ The race mode's own 30 seconds ran on regardless, so the car came out of the jum
 
 Checked (sandbox `E:\dump\TEMP\pbig2`, Citadel built with `buildingprobe`): the shop from its door, from the south street and the west; the door's zone where it was.
 
+## The super jet-pack off Polar Island's terraces, and back on the road from the sea (2026-10-06, night)
+
+The user: on Polar Island, with the super jet-pack, Twinsen sometimes leaves the track and ends up in the water.
+
+**Where.** The dream sprint driven by the test pilot with a super jet-pack every 11 seconds (the user's own race file, a sandbox with their built files; `E:\dump\TEMP\pjet`, `run.sh`, `trace.py`): at 31 s the car is on the road up LBA1's tower 108, 8,200 up, coming to the hairpin at the terraces' west end, where the road turns from west to north at x 326.5; a second later the engine has it in its phantom cube (94) -- the sea round the island, where no scene is -- at sea level. It never made the turn: it turned at its steady rate all the way, on a circle of about 9 cells, and ran up the bank beside the road and over the island's map edge at x 320.
+
+**Why.** The jet-pack drives the car along the line at twice the line's own speed (the speed planned for the car's own steering), and BUGGY.CPP only quickened the steering above the top gear's speed. The dream car's top is 120 km/h; through the hairpin the jet-pack had it at about 100 -- twice the line's speed, still under the top -- so it steered as slowly as ever and turned a circle twice as wide.
+
+**The fix.** While the jet-pack drives, the car steers as much quicker as the jet-pack makes it go (`RaceMod_JetSteer`, used by both of BUGGY.CPP's speed functions: the larger of it and the over-the-top factor): the line's own circles, at its speed. Polar's sprint under jet-packs every 11 s, at two timings and with the pilot's own items too: the car keeps to the line through the hairpin and up the terraces, wins (33-50 s) and wakes up. The same under jet-packs on the other tracks, old engine against new: the storm track, the lava lake, Mosquibees Island, the Elevator Platform and the Desert lap as many laps, as fast or a little faster, and nothing is put back on the road.
+
+**Back on the road from the sea.** A car that goes into the sea or the lava is put back on the road (`RaceMod_Rescue`) -- but only at a line point in the scene it is in, so a car out of that scene (into the phantom cube, or a neighbour's sea) had the drowning put off and was never put back: it stayed in the water. The race mode now remembers the scene the car was last safe in, and a car out of it is taken back to it: the scene changes and, once it is in, the car is put at the safe place on the line (`RescueArrive`; the scene change's own place can't be used -- asked for from inside AffScene, the frame's end clears FlagChgCube first). Checked by pushing the car out of scene 242 into scene 241's sea and out of scene 243 off the island's map: "off the road out of scene 243 (in 94): back to it", "back on the road in scene 243: line point 1206", and the pilot drove on up the terraces.
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

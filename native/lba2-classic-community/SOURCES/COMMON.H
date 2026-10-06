@@ -315,6 +315,8 @@ S32 RaceMod_NoCollide(S32 numobj);
 S32 RaceMod_ProtectionFree(void);
 S32 RaceMod_ProtectionEnding(void);
 double RaceMod_SkidSteer(void);
+// BUGGY.CPP RaceSpeed: while the super jet-pack drives the car, its steering quickened by the jet-pack's factor (1 otherwise).
+double RaceMod_JetSteer(void);
 // BUGGY.CPP MoveBuggy: Twinsen's car skidding on oil -- turned round once and run down to a standstill (its heading and speed), sliding on
 // the way it was going (the heading it moves along).
 void RaceMod_Skid(S32 *beta, S32 *speed);

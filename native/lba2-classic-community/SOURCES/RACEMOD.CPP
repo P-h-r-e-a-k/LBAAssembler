@@ -2280,7 +2280,9 @@ static void FaceTheCar(void) {
 // the move. A track with no opponent has no line: there the game's own death stands.
 #define RACE_RESCUE_BACK 2                 // line points (a cell each) behind the last safe place
 static int s_safeIndex = -1;               // the first opponent's line point the car was last on the ground beside
+static int s_safeScene = -1;               // ... the scene it was in then
 static int s_rescue = 0;                   // asked for by GereCodesJeu, done by the next RaceMod_Frame
+static int s_rescueArrive = -1;            // a rescue into the safe place's scene: the line point, finished once the scene is in (RescueArrive)
 
 // A point of the line on the ground, in the cube the player is in: not over a jump's gap, where the line is the flight's arc.
 static int LineOnGround(const T_RACE_OPPONENT *o, int i) {
@@ -2305,7 +2307,7 @@ static void TrackSafePlace(void) {
     }
     if (best < 0 || !LineOnGround(o, best) || abs(o->Y[best] - hero->Obj.Y) > 600) return;
     const double dx = o->X[best] - wx, dz = o->Z[best] - wz;
-    if (dx * dx + dz * dz < 3.5 * 512 * 3.5 * 512) s_safeIndex = best;
+    if (dx * dx + dz * dz < 3.5 * 512 * 3.5 * 512) { s_safeIndex = best; s_safeScene = NumCube; }
 }
 
 // A hit -- a land mine going off under the car (Mosquibees Island's way round its jump) -- stops the car dead and holds it for
@@ -2914,18 +2916,10 @@ S32 RaceMod_Rescue(void) {
     return 1;
 }
 
-static void Rescue(void) {
-    const T_RACE_OPPONENT *o = Guide();
-    if (!o) return;
-    int i = s_sprint ? (s_safeIndex > RACE_RESCUE_BACK ? s_safeIndex - RACE_RESCUE_BACK : 0) : ((s_safeIndex - RACE_RESCUE_BACK) % o->Count + o->Count) % o->Count;
-    for (int k = 0; k < 40 && !LineOnGround(o, i); k++) i = s_sprint ? (i > 0 ? i - 1 : 0) : (i - 1 + o->Count) % o->Count;
-    if (!LineOnGround(o, i)) return;
+// The car put on the line at point i, facing the way the line runs, stopped.
+static void RescuePlace(const T_RACE_OPPONENT *o, int i) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     const int j = s_sprint ? (i + 1 < o->Count ? i + 1 : i - 1) : (i + 1) % o->Count;
-    const S32 lx = o->X[i] - CurrentCubeX * 32768, lz = o->Z[i] - CurrentCubeY * 32768;
-    hero->Obj.X = lx;
-    hero->Obj.Z = lz;
-    hero->Obj.Y = s_nbRaised ? o->Y[i] : CalculAltitudeTerrain(lx, lz, 0);
     hero->Obj.Beta = (S32)(atan2((double)(o->X[j] - o->X[i]), (double)(o->Z[j] - o->Z[i])) * 4096.0 / (2 * 3.14159265358979)) & 4095;
     ClearRealAngle(hero);
     hero->WorkFlags &= ~FALLING;
@@ -2934,6 +2928,47 @@ static void Rescue(void) {
     s_forgetLap = 1;
     s_safeIndex = i;
     Message("Back on the road");
+}
+
+// A rescue into another scene (Rescue): once it is in -- the car at the scene's own start (asked for from RaceMod_Frame, inside AffScene,
+// the scene change's place is lost: the frame's end clears FlagChgCube before the next frame changes the scene) -- the car is put at
+// the place on the line, facing the way it runs, stopped.
+static void RescueArrive(void) {
+    const T_RACE_OPPONENT *o = Guide();
+    if (s_rescueArrive < 0 || NewCube != -1 || (S32)NumCube != s_safeScene) return;
+    const int i = s_rescueArrive;
+    s_rescueArrive = -1;
+    if (!o || i >= o->Count || !LineOnGround(o, i)) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const S32 lx = o->X[i] - CurrentCubeX * 32768, lz = o->Z[i] - CurrentCubeY * 32768;
+    hero->Obj.X = lx;
+    hero->Obj.Z = lz;
+    hero->Obj.Y = s_nbRaised ? o->Y[i] : CalculAltitudeTerrain(lx, lz, 0);
+    RescuePlace(o, i);
+    Log_Info("[racemod] back on the road in scene %d: line point %d (%d,%d,%d)", s_safeScene, i, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z);
+}
+
+static void Rescue(void) {
+    const T_RACE_OPPONENT *o = Guide();
+    if (!o) return;
+    // (out of the scene the car was last safe in -- over the island's edge, where the engine has its sea of no scene, the phantom cube:
+    // under the super jet-pack, off the end of a road that turned, 2026-10-06 -- back into it, at that place)
+    if (s_safeScene >= 0 && (S32)NumCube != s_safeScene) {
+        if (NewCube != -1 || s_rescueArrive >= 0 || s_safeIndex < 0 || s_safeIndex >= o->Count) return;
+        NewCube = s_safeScene;
+        s_rescueArrive = s_safeIndex;
+        Log_Info("[racemod] off the road out of scene %d (in %d): back to it", s_safeScene, (int)NumCube);
+        return;
+    }
+    int i = s_sprint ? (s_safeIndex > RACE_RESCUE_BACK ? s_safeIndex - RACE_RESCUE_BACK : 0) : ((s_safeIndex - RACE_RESCUE_BACK) % o->Count + o->Count) % o->Count;
+    for (int k = 0; k < 40 && !LineOnGround(o, i); k++) i = s_sprint ? (i > 0 ? i - 1 : 0) : (i - 1 + o->Count) % o->Count;
+    if (!LineOnGround(o, i)) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const S32 lx = o->X[i] - CurrentCubeX * 32768, lz = o->Z[i] - CurrentCubeY * 32768;
+    hero->Obj.X = lx;
+    hero->Obj.Z = lz;
+    hero->Obj.Y = s_nbRaised ? o->Y[i] : CalculAltitudeTerrain(lx, lz, 0);
+    RescuePlace(o, i);
     Log_Info("[racemod] back on the road: line point %d (%d,%d,%d)", i, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z);
 }
 
@@ -3637,6 +3672,15 @@ double RaceMod_SpeedFactor(void) {
     return f;
 }
 
+// BUGGY.CPP RaceSpeed: the jet-pack drives the car along the line at its factor times the line's own speed (RaceMod_AutoInput), and the
+// line was planned for the car's own steering: through a hairpin at twice its speed the car turned on a circle twice as wide -- off the
+// side of Polar Island's 108 terraces, where the road turns north at their west end, and over the island's edge into the sea (the user,
+// 2026-10-06). So while it drives, the car steers as much quicker as the jet-pack makes it go: the same circles, at its speed.
+double RaceMod_JetSteer(void) {
+    if (!RaceMod_Takeover() || TimerRefHR >= s_jetUntil) return 1;
+    return JetFactor(s_jetUntil, s_jetFactor);
+}
+
 // PERSO.CPP: the jet-pack has the controls (the player's own keys are left out while it lasts) -- when there is a line for it to drive
 // by (with none it is only a boost: it had the keys and gave none back, and the car stood still until it ran out); skidding on oil too.
 S32 RaceMod_Takeover(void) {
@@ -3670,6 +3714,7 @@ void RaceMod_Frame(void) {
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
     if (Comportement == C_BUGGY) TrackSafePlace();
     if (s_rescue) { s_rescue = 0; Rescue(); }
+    RescueArrive();
     // A raised road winds round itself in the air: the classic camera, which stands still until the hero leaves the screen, would watch
     // the car go out of sight behind the road's other levels without its ever leaving the screen. So the camera that follows the car
     // is turned on -- once, with the first frame (the settings have been read by then), and the console's cam_follow can still turn it off.
@@ -4342,7 +4387,7 @@ static void ResetTrack(void) {
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0;
     s_jumpLo = 0.6; s_jumpHi = 4.0; s_jumpRate = 0; s_jumpFrac = 0; s_jumpOver = 0;
     s_autoIndex = -1;
-    s_faced = 0; s_safeIndex = -1; s_rescue = 0; s_hitUntil = 0;
+    s_faced = 0; s_safeIndex = -1; s_safeScene = -1; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0;
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0; s_hinted = -1;
     s_nbGates = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     ListVarGame[209] = 0;
