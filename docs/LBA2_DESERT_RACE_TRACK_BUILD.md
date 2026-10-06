@@ -2432,6 +2432,18 @@ The user: the pharmacy and the storage building float; the museum and the shop a
 
 Checked (sandbox `E:\dump\TEMP\pbig2`, muted): the storm lap with the test pilot, the jump off the deck and onto it; the buildings in both weathers (pictures above); Raph lapping, stopping, his lines; Mr. Paul in the story, and not on a race started on the line; the beaten time to the lighthouse, the spell and chapter 2; the town circuit's qualifying and race over its bridge.
 
+## A penguin's blast that left Twinsen alone: power-ups and a loaded game (2026-10-06, late)
+
+The user: Twinsen can be hit by a penguin and not feel the blast -- are we resetting him properly once the protection spell or the super jet-pack wears off?
+
+**When they wear off: yes.** Checked with two new console commands that make the case without a race's chance in it -- `raceitem <0..5>` uses a power-up (0 fuel, 1 protection, 2 lightning, 3 penguin, 4 super jet-pack, 5 oil) and `raceblast [cells]` sets off a penguin's blast that many cells ahead of Twinsen's car (1.5 if left out) -- on the storm track with the test pilot driving and taking no items itself (`autodrop_ms=0`): a blast stops the car; under the protection spell it doesn't; when the spell is over (30 s) it stops the car again; under the super jet-pack it doesn't; when that is over (10 s) it stops the car again. Across cube borders too. His armour is 0 in every scene (`heroarmor <game folder> 0 242`), so a blast's force of 20 always gets through.
+
+**After loading a game: no.** The race mode keeps each power-up's end as a time on the game clock, and loading a game sets the clock back to the save's (`SetTimerHR(savetimerrefhr)`, SAVEGAME.CPP). A protection spell or a super jet-pack taken after the save then ran on, unseen, until the clock had caught up again -- its sparkles gone with the load, but Twinsen's car left alone by every blast (the log: "the blast leaves Twinsen's car as it is: the protection spell", in a game with no spell on), and the jet-pack's hand still on the wheel. A save made under the spell came back with the game's own spell on (the save keeps the protection's extras, the game turns the spell on from them) and nothing to turn it off.
+
+**The fix.** A loaded game has no power-up from before it (`ForgetPowerUps`, called by SAVEGAME.CPP once the save's clock is set, `RaceMod_GameLoaded`): the spell and the jet-pack over (a protection spell the save had on while Twinsen drives with them), the item box empty, every car's boost, skid, shrinking and stop over, the penguins and oil slicks gone, the mushrooms back, Twinsen visible and his own size. A game clock that goes back by more than a second for any other reason does the same (`RaceMod_Frame`).
+
+Checked (sandbox `E:\dump\TEMP\pbig2`, muted, `--fixed-dt 20`): save, protection and super jet-pack, load, blast -- the car stops; protection, save, load, blast -- the car stops, the hero's NO_CHOC off; the wear-off run above unchanged.
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

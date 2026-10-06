@@ -3072,7 +3072,7 @@ static void PoseSlick(T_RACE_SLICK *sl, S32 lx, S32 lz) {
 // off first.
 static double LineDistance(const T_RACE_OPPONENT *o, int i, double wx, double wy, double wz);
 static void PenguinOff(int i, S32 now);
-static void DropPenguin(double x, double y, double z, int dropper) {
+static int DropPenguin(double x, double y, double z, int dropper) {
     const S32 now = TimerRefHR;
     int k = -1;
     for (int i = 0; i < RACE_MAX_PENGUINS && k < 0; i++) if (!s_penguins[i].On) k = i;
@@ -3103,6 +3103,23 @@ static void DropPenguin(double x, double y, double z, int dropper) {
         if (pg->Side < -RACE_PENGUIN_SIDE) pg->Side = -RACE_PENGUIN_SIDE;
         pg->SideTo = pg->Side;
     }
+    return k;
+}
+
+// Console (tests): Twinsen uses power-up `pu` now, as from his item box (raceitem); a nitro penguin goes off `cells` ahead of his car
+// (raceblast), as if dropped by another car -- the blast's own rules decide what it does to him.
+static void UseItem(int pu, S32 now);
+void RaceMod_TestItem(int pu) {
+    if (!RaceMod_Active() || pu < 0 || pu >= PU_COUNT) return;
+    UseItem(pu, TimerRefHR);
+}
+void RaceMod_TestBlast(double cells) {
+    if (!RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double b = hero->Obj.Beta * 2 * 3.14159265358979 / 4096;
+    const int k = DropPenguin(hero->Obj.X + CurrentCubeX * 32768.0 + sin(b) * cells * 512, hero->Obj.Y,
+                              hero->Obj.Z + CurrentCubeY * 32768.0 + cos(b) * cells * 512, 0);
+    PenguinOff(k, TimerRefHR);
 }
 
 // The lightning spell striking cars (`actors`, this scene's): the game's flash and thunder (EXTRA.CPP InvoqueFoudre's), and a bolt from
@@ -3173,6 +3190,40 @@ S32 RaceMod_ProtectionEnding(void) { return s_protectUntil - TimerRefHR < RACE_P
 static void ProtectionOff(void) {
     if (s_protectSpell && ProtectActif) ToggleSortProtection();
     s_protectSpell = 0;
+}
+
+// The power-ups' times are the game clock's, and a loaded game sets the clock to the save's (SAVEGAME.CPP): a protection spell or a super
+// jet-pack taken after that save then ran on, unseen, until the clock caught up with it -- the spell's sparkles gone with the load, but
+// Twinsen's car untouched by a penguin's blast, the jet-pack's hand on the wheel (the user, 2026-10-06: "Twinsen can get hit by a penguin
+// and not get affected by the blast"). They belong to the moment they were taken, so a loaded game has none: the item box empty, the
+// spells and the jet-pack over, every car's boost, skid, shrinking and stop over, the penguins and the oil slicks gone. (So does a clock
+// that has gone back for any other reason: RaceMod_Frame.)
+static S32 s_clockWas = 0;
+static void ForgetPowerUps(const char *why) {
+    s_clockWas = 0;
+    ProtectionOff();
+    // (a protection spell the save had on while Twinsen drives: the race's is the power-up's, gone with it)
+    if (ProtectActif && Comportement == C_BUGGY) ToggleSortProtection();
+    s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0;
+    s_skidUntil = s_hitUntil = 0; s_autoIndex = -1; s_boltUntil = 0; s_nbBolts = 0;
+    for (int k = 0; k < RACE_ITEM_SLOTS; k++) s_item[k] = -1;
+    s_sel = 0; s_takeAt = 0;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        T_RACE_OPPONENT *o = &s_opp[n];
+        o->BoostUntil = o->HitUntil = o->JetUntil = o->ShoveUntil = o->SkidUntil = o->ShrunkUntil = 0;
+    }
+    for (int i = 0; i < RACE_MAX_PENGUINS; i++) s_penguins[i].On = 0;
+    for (int i = 0; i < RACE_MAX_SLICKS; i++) s_slicks[i].On = 0;
+    for (int i = 0; i < s_nbMush; i++) s_mush[i].Back = 0;
+    if (s_heroHidden) { ListObjet[NUM_PERSO].Flags &= ~INVISIBLE; s_heroHidden = 0; }
+    if (s_heroIsSmall && Comportement == C_BUGGY) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
+    s_heroIsSmall = 0;
+    Log_Info("[racemod] %s: no power-up from before it lasts", why);
+}
+
+// SAVEGAME.CPP, once a saved game is loaded (its clock set).
+void RaceMod_GameLoaded(void) {
+    if (RaceMod_Active()) ForgetPowerUps("a saved game loaded");
 }
 
 // A jet-pack's factor now (`until`: when it ends, `full`: its factor): full, then over its last RACE_JET_EASE_MS back down to 1 -- the car
@@ -3369,6 +3420,9 @@ static void PenguinOff(int i, S32 now) {
         // every car near it stopped for a moment, with the hit reaction a land mine gives Twinsen's (Twinsen's unless the protection spell is
         // on): HitObj -- the hit animation, the stars, the car stopped and no life lost (RaceMod_CarHit); an opponent's car its own hit
         // animation (the racer entity's 6) and the stars
+        if (driving && Near(hero, lx, (S32)pg->Y, lz, RACE_PENGUIN_REACH) && (now < s_protectUntil || now < s_jetUntil || (hero->Flags & NO_CHOC) || hero->Armure > RACE_BLAST_FORCE))
+            Log_Info("[racemod] the blast leaves Twinsen's car as it is: %s", now < s_protectUntil ? "the protection spell" : now < s_jetUntil ? "the super jet-pack"
+                     : (hero->Flags & NO_CHOC) ? (ProtectActif ? "the game's protection spell is on" : "he can't be hit (NO_CHOC)") : "his armour");
         if (driving && now >= s_protectUntil && now >= s_jetUntil && Near(hero, lx, (S32)pg->Y, lz, RACE_PENGUIN_REACH)) {
             HitObj(PenguinHitter(), NUM_PERSO, RACE_BLAST_FORCE, -1);
             ListBuggy[0].Speed = 0;
@@ -3600,6 +3654,9 @@ S32 RaceMod_MoveBeta(S32 beta) {
 #define RACE_GATE_VAR 209
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
+    // (the clock gone back -- a save loaded some other way: the power-ups' times with it)
+    if (s_clockWas && TimerRefHR + 1000 < s_clockWas) ForgetPowerUps("the game clock went back");
+    s_clockWas = TimerRefHR;
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
     if (Comportement == C_BUGGY) TrackSafePlace();
     if (s_rescue) { s_rescue = 0; Rescue(); }

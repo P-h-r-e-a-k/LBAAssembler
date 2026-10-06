@@ -89,3 +89,25 @@ internal static class BuildingProbe
         }
     }
 }
+
+// heroarmor <game folder> <first scene> <last scene>: Twinsen's armour in each scene (a blast whose force is no more than it does nothing:
+// OBJECT.CPP HitObj), and any scene where it is 20 or more (the race-track mode's penguin blast, RACE_BLAST_FORCE).
+internal static class HeroArmor
+{
+    public static int Run(string[] args)
+    {
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, args[1]);
+        var counts = new SortedDictionary<int, int>();
+        for (var s = int.Parse(args[2]); s <= int.Parse(args[3]); s++)
+        {
+            if (!store.SceneExists(s)) continue;
+            LBAAssembler.Scenes.SceneModel m;
+            try { m = store.Load(s); } catch { continue; }
+            var a = m.Actors[0].Armor;
+            counts[a] = counts.GetValueOrDefault(a) + 1;
+            if (a >= 20) Console.WriteLine($"scene {s} (island {m.Island}, mode {m.CubeMode}): Twinsen's armour {a}");
+        }
+        Console.WriteLine("armour: scenes -- " + string.Join(", ", counts.Select(kv => $"{kv.Key}: {kv.Value}")));
+        return 0;
+    }
+}

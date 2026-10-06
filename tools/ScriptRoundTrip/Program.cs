@@ -198,6 +198,7 @@ internal static class Program
             "scriptgrep" => ScriptGrep.Run(args),
             "scriptgrep2" => ScriptGrep2.Run(args),
             "buildingprobe" => BuildingProbe.Run(args),
+            "heroarmor" => HeroArmor.Run(args),
             "doortrace" => DoorTrace.Run(args),
             "scenezones" => SceneZoneDump.Run(args),
             "doorwalk" => DoorWalk.Run(args),

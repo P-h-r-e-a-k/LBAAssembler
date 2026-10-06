@@ -747,6 +747,8 @@ S32 LoadGame(void) {
 
     CameraCenter(0);
     SetTimerHR(savetimerrefhr);
+    // (a race-track mod's power-ups belong to the moment they were taken: RACEMOD.CPP)
+    { extern void RaceMod_GameLoaded(void); RaceMod_GameLoaded(); }
 
     /* Put the hero's animation on the clock the rest of the scene is on.
      *
