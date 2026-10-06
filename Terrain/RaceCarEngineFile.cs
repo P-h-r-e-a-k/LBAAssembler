@@ -122,7 +122,20 @@ internal static class RaceCarEngineFile
         if (ghost >= 0) text.Append($"beat={ghost + 1}{(storm ? $" {RaceTrackStory.BeatVar} 1" : "")}\n");
         // the story's gates and the town circuit's race: Mr. Paul lets no one race without racing gloves; the aliens' track is ready the day
         // after the storm, once Twinsen has slept; three laps, and a win is Mr. Paul's ferry ticket
-        if (storm) text.Append($"gate={RaceTrackStory.GlovesSlot} 1 Mr. Paul: racing gloves first!\n");
+        if (storm) text.Append($"gate={RaceTrackStory.GlovesSlot} 1 Mr. Paul: driving gloves first!\n");
+        // the storm track's story: Raph laps it in his car -- the town circuit's copies of it, out of sight in the storm -- until Twinsen comes
+        // to talk to him, then it stands parked by the start line; and his line that tells the time to beat has it in
+        if (storm && ghost >= 0 && info!.Story is { } st)
+        {
+            if (st.RaphTime >= 0) text.Append($"beat_text={st.RaphTime}\n");
+            var laps = info.Twin?.Drivers?.FirstOrDefault(d => d.Name == opponents[ghost].Name && !d.Ghost && d.Actors.Count > 0);
+            if (laps is not null)
+            {
+                text.Append($"parade={ghost + 1} {RaceTrackStory.RaphHere} 1\n");
+                foreach (var (scene, actor) in laps.Actors) text.Append($"parade_actor={scene} {actor}\n");
+                if (st.RaphPark is [var ps, var px, var py, var pz, var pb]) text.Append($"parade_park={ps} {px} {py} {pz} {pb}\n");
+            }
+        }
         if (town)
         {
             text.Append($"gate={RaceTrackStory.DayVar} {RaceTrackStory.Rested} The new track opens tomorrow\n");

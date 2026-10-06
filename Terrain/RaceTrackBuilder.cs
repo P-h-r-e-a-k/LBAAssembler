@@ -628,6 +628,7 @@ internal static class RaceTrackBuilder
         report.DistanceToRoad = (x, z) => { var h = index.Near(x, z, 14, 1); return h.Count == 0 ? 1e9 : h[0].Dist; };
         var startIndex = roads.Count > 1 ? PitMiddle : planned && plan.Start is { } startPoint ? PlanPoint(plan, main, startPoint) : -1;
         ClearOldTrack(island, options, report);
+        DropDecors(island, options, report);
         var adrift = AdriftDecors(island);
         var follow = new IslandOps.DecorFollow(island);
         ClearDecors(island, index, options, report, roads, plan.KeepBodies, plan.KeepAbove);
@@ -2492,6 +2493,22 @@ internal static class RaceTrackBuilder
 
     // A raised road's own space: from under its slab to over a car's roof.
     private const double RaisedBelow = 320, RaisedAbove = 1400;
+
+    // The island's own decors its record says go whatever the road does (RaceTrackIsland.DropDecors): the pieces placed at each origin.
+    private static void DropDecors(IslandFile island, RaceTrackOptions o, RaceTrackReport report)
+    {
+        foreach (var (cx, cz, x, z) in o.Island.DropDecors ?? Array.Empty<(int, int, int, int)>())
+        {
+            if (island.CubeAt(cx, cz) is not { } cube) continue;
+            foreach (var d in cube.Decors.Where(d => d.X == x && d.Z == z).ToList())
+            {
+                cube.Decors.Remove(d);
+                report.Removed.Add((cx, cz, d.Body & 0xFFFF, "dropped"));
+                report.DecorsRemoved++;
+                report.Notes.Add($"decor body {d.Body & 0xFFFF} at ({x}, {z}) in cube ({cx},{cz}) taken away (the island's record says so)");
+            }
+        }
+    }
 
     private static void ClearDecors(IslandFile island, RoadIndex index, RaceTrackOptions o, RaceTrackReport report, List<TrackRoad>? roads = null, int[]? keepBodies = null,
         int? keepAbove = null)

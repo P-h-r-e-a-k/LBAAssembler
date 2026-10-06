@@ -22,9 +22,9 @@ CP = [
     ('S1', 537, 625.5), ('S2', 546, 622.5),
     ('SE1', 552, 616), ('SE2', 555, 606),
     ('E1', 557, 595), ('E2', 559, 580), ('E3', 560.5, 566), ('E4', 561, 557.5),
-    ('A0', 558, 551), ('A1', 550, 549), ('A2', 543, 548.5),
-    ('H1', 537, 546.5), ('H2', 535.5, 542), ('H3', 538.5, 537.5),
-    ('B1', 545, 537), ('B2', 552, 537),
+    ('A0', 558, 551), ('A1', 551, 549.2),
+    ('H1', 544.5, 547.2), ('H2', 541.5, 542.3), ('H3', 544.5, 537.5),
+    ('B1', 551, 537),
     ('H4', 558, 535), ('H5', 559.5, 530.5), ('H6', 556, 526.5),
     ('N1', 547, 526), ('N2', 537, 526), ('N3', 529, 526),
 ]
@@ -61,11 +61,11 @@ sOf = {nm: S[np.argmax(owner == i)] for i, nm in enumerate(names)}
 
 # ---- heights: keys, straight between, each kink rounded by a vertical curve (a parabola tangent to both grades, R cells either side);
 # the jump's stretch exactly level from 10 cells before the take-off lip to 14 after the landing lip (the ramps go on top of it) ----
-TOP, JUMP, LOW = 2500, 2000, 250
+TOP, JUMP, LOW = 2500, 2500, 250
 R = 5.0
 key = [(sOf['N3'], TOP), (sOf['W1'], TOP),
        (sOf['J0'] - R, JUMP), (sOf['J3'] + R, JUMP),
-       (sOf['S1'] + 4, LOW), (sOf['E4'], LOW),
+       (sOf['S2'], LOW), (sOf['E4'], LOW), (sOf['H2'], LOW),
        (sOf['N1'], TOP)]
 key = sorted(((k % L), v) for k, v in key)
 kx = [k for k, _ in key]; kv = [v for _, v in key]
@@ -174,6 +174,11 @@ plan = {
     'pitA': pits[1] if REVERSE else pits[0],
     'pitB': pits[0] if REVERSE else pits[1],
     'pitTaper': 7,
+    # (the climb from the harbour to the take-off lip on a deck: the street under it, the way from the town into the docks, stays open)
+    'raised': [int(at_of[pidx('S2')]), int(at_of[pidx('J2')])] if REVERSE else [pidx('J2'), pidx('S2')],
+    'raisedHalf': 4.5,
+    # (the pharmacy and the baggage claim, one building of two bodies by the rampart, its doors on the switchback's street)
+    'keepBodies': [32, 33],
 }
 json.dump(plan, open('E:/dump/LBAAssembler/docs/racetrack/citadel_storm_track_plan.json', 'w'))
 json.dump({'plan': plan, 'marks': {nm: int(at_of[pidx(nm)]) for nm in names}}, open('design.json', 'w'))

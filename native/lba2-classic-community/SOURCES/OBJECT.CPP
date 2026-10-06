@@ -5554,6 +5554,11 @@ startaffscene:
         y = ptrobj->Obj.Y;
         z = ptrobj->Obj.Z;
 
+        // (a race-track mod keeps its mushrooms, penguins, oil slicks and spare cars out of sight at Y -20000, RACEMOD.CPP: drawn, each
+        // put its shadow on the ground above it -- three dots of a mushroom row on a road whose mushrooms weren't there)
+        if (y <= -10000)
+            continue;
+
         if (ptrobj->Flags & CHECK_CODE_JEU
                                     AND y > 256) {
             if (ModeLabyrinthe) {

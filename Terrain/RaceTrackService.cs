@@ -103,7 +103,9 @@ internal static class RaceTrackService
     // The story's: the tired line everyone says until Twinsen sleeps (a text of Citadel Island's), and the holomap arrow to the town
     // circuit's start line.
     // (Seller: Celebration Island's lava lake, whose race the souvenir seller has to lose: RaceTrackStory.ApplyCelebration)
-    public sealed record StoryInfo(int TiredText, int TownArrow, bool Seller = false);
+    // (RaphTime: Raph's line with the time to beat in it, RACEMOD.CPP beat_text=; RaphPark: where his car stands once he has stopped lapping
+    // the storm track, [scene, x, y, z, turn] -- RaceTrackStory)
+    public sealed record StoryInfo(int TiredText, int TownArrow, bool Seller = false, int RaphTime = -1, int[]? RaphPark = null);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
     // start line, checkpoints and opponents from RACETRACK.JSON: `track`, one of the folder's tracks as RaceFor picks it, or else the

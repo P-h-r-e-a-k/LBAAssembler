@@ -1567,6 +1567,14 @@ S32 GetText(S32 text) {
 
     SizeText = offset1 - offset0 - 1; // -1 pour virer octet d'attribut
 
+    // (a race-track mod's text with the time to beat in it: RACEMOD.CPP RaceMod_Text)
+    {
+        extern S32 RaceMod_Text(S32 text, U8 **pt, S32 *size);
+        U8 *pt = PtText;
+        S32 size = SizeText;
+        if (RaceMod_Text(text, &pt, &size)) { PtText = pt; SizeText = size; }
+    }
+
     return (1L);
 }
 /*-------------------------------------------------------------------------*/

@@ -34,9 +34,16 @@ internal sealed record RaceTrackIsland(
     {
         TwinIleFile = "CITABAU.ILE", TwinOblFile = "CITABAU.OBL", TwinPlanResource = "RaceTrackPlan.Citadel.json", RacesTwin = true,
         Title = "Citadel Island: the town circuit (once the storm is over)", Roster = RaceDriver.CitadelStorm, TwinRoster = RaceDriver.CitadelTown,
-        // (the yard north of Twinsen's house, flat at 250 in both files: the storm track's car, scene 42, when it is fine -- its start line
-        // is under CITABAU's ground -- and the town circuit's, scene 49, in the storm -- its start line is CITADEL's sea)
-        ParkOwn = (540.5, 637.5, 1024, 1), ParkTwin = (540.5, 643.5, 1024, 0),
+        // (the storm track's car, scene 42, when it is fine -- its start line is under CITABAU's ground -- in the yard north of Twinsen's
+        // house, flat at 250 in both files; the town circuit's, scene 49, in the storm -- its start line is CITADEL's sea -- under the
+        // carport, where the island's own car stands: that one, a decor that can't be driven, goes from both files)
+        ParkOwn = (540.5, 637.5, 1024, 1), ParkTwin = (544.125, 654.75, 1024, 0),
+        DropDecors = new[] { (8, 10, 16448, 7552) },
+        // (the lighthouse, scene 46, where the storm ends: the game's own Raph by its door, his fiancee and Twinsen and Zoe on its top, whom
+        // the Weather Wizard's spell needs -- RaceTrackStory -- and the door's people and track points on the storm file's ground: the town
+        // circuit, in the fine weather's file, cut the hill there by 2,000)
+        StoryEntities = new[] { RaceTrackStory.LighthouseRaph, RaceTrackStory.Fiancee, RaceTrackStory.CoupleOnTop },
+        OwnGroundAt = new[] { (46, 481.5, 661.8, 10.0), (46, 463.0, 665.0, 3.0) },
     };
 
     public static readonly RaceTrackIsland CitadelStorm = Citadel with
@@ -109,6 +116,10 @@ internal sealed record RaceTrackIsland(
     // The game's own people the story needs, by entity, kept in the island's scenes when the build takes the others off the road (the
     // souvenir seller on Celebration Island: RaceTrackStory.ApplyCelebration).
     public int[]? StoryEntities { get; init; }
+    // For an island with a track in each weather: places whose scene's people and track points belong to the own file's story (the storm's,
+    // gone once it is over), each the scene, the island cell and a reach in cells -- the build seats them on the own file's reshaped ground,
+    // not on the ground of whichever file's road is nearer (RaceTrackScenes.Reseat).
+    public (int Scene, double X, double Z, double Reach)[]? OwnGroundAt { get; init; }
     public List<RaceDriver>? TwinRoster { get; init; }
 
     // The island's other file for other weather (EXTFUNC.CPP loads it instead once the storm is over), built with the same track -- or,
@@ -187,6 +198,11 @@ internal sealed record RaceTrackIsland(
     // car parks in (RACEMOD.CPP RaceMod_CitadelWeather: 1 fine, 0 the storm).
     public (double X, double Z, int Beta, int When)? ParkOwn { get; init; }
     public (double X, double Z, int Beta, int When)? ParkTwin { get; init; }
+
+    // Decors of the island's own that every build takes away, wherever the road is: each the cube and the origin (cube units) of the
+    // pieces placed there (RaceTrackBuilder.DropDecors) -- Citadel Island's car under Twinsen's carport, a model that can't be driven,
+    // where the build parks the real one (2026-10-06: the user found two cars by the house, the island's and the build's).
+    public (int CubeX, int CubeZ, int X, int Z)[]? DropDecors { get; init; }
 
     // The island isn't in the game: the build makes its files and its scene (Sendell's Well). They have no originals to keep, so the
     // build's backups leave them out (KeptFiles); it makes them afresh every time, and putting the folder back deletes them.

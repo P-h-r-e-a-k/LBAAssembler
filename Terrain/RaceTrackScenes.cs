@@ -291,7 +291,23 @@ internal static class RaceTrackScenes
         var penguinTemplate = Template(PenguinScene, PenguinActor);
         if (mushroomTemplate is null || penguinTemplate is null) log.Add($"no power-ups: the game's mushroom (scene {MushroomScene}) or nitro penguin (scene {PenguinScene}) could not be read");
         var biking = tracks.Any(t => t.BikerTemplate is not null);
-        var edgeZonesAdded = 0;
+        var edgeZonesAdded = 0; var doorsKept = 0;
+        // Whether any track's road surface (asphalt and curbs; a raised road's deck at its own height) covers part of a zone's box at the
+        // zone's height -- a car there stands in it. (A jump's gap has no surface.)
+        bool Paved(SceneZoneModel zone, int cubeX, int cubeZ)
+        {
+            double x0 = cubeX * 64 + zone.X0 / 512.0, x1 = cubeX * 64 + zone.X1 / 512.0, z0 = cubeZ * 64 + zone.Z0 / 512.0, z1 = cubeZ * 64 + zone.Z1 / 512.0;
+            foreach (var t in tracks)
+                foreach (var r in t.Report.Roads)
+                    for (var i = 0; i < r.Count; i++)
+                    {
+                        if (r.Void.Length > i && r.Void[i]) continue;
+                        var dx = Math.Max(Math.Max(x0 - r.X[i], 0), r.X[i] - x1); var dz = Math.Max(Math.Max(z0 - r.Z[i], 0), r.Z[i] - z1);
+                        if (dx * dx + dz * dz > r.CurbHalf * r.CurbHalf) continue;
+                        if (r.H[i] >= zone.Y0 - 256 && r.H[i] <= zone.Y1) return true;
+                    }
+            return false;
+        }
         // the island's own outside scenes: a cube change to any other scene is a door (Mosquibees Island's inside scene 104, the Queen's
         // throne, is numbered between its outside ones)
         var outside = new HashSet<int>();
@@ -349,7 +365,14 @@ internal static class RaceTrackScenes
             }
             removed += count;
             if (report.GroundBefore is { } groundBefore && groundAfter is not null && report.WasGround is { } wasGround)
-                Reseat(model, groundBefore, groundAfter, wasGround, scene, log);
+            {
+                // (the own file's story places: on its ground -- Citadel Island's lighthouse door, scene 46)
+                var own = options.Island.OwnGroundAt?.Where(o => o.Scene == scene).ToList();
+                var after = own is { Count: > 0 } && report.GroundAfter is { } ownGround
+                    ? (x, z) => own.Any(o => (x - o.X) * (x - o.X) + (z - o.Z) * (z - o.Z) <= o.Reach * o.Reach) ? ownGround(x, z) : groundAfter(x, z)
+                    : groundAfter;
+                Reseat(model, groundBefore, after, wasGround, scene, log);
+            }
             // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
             //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
             // and reads >= 0 with the 3 zeroed, so the buggy is there from the start of any game.
@@ -476,6 +499,20 @@ internal static class RaceTrackScenes
                     for (var cx = (int)Math.Floor((ox + zone.X0) / 512); cx <= (int)Math.Floor((ox + zone.X1) / 512) && !hit; cx++)
                         if (distanceToRoad(cx + 0.5, cz + 0.5) <= reach) hit = true;
                     if (!hit) continue;
+                    // A door into a building stays (2026-10-06: the user wanted every entrance kept whose building is still there). The engine
+                    // never takes the car through one (OBJECT.CPP GereZoneChangeCube: from the buggy only into an outside scene), and most
+                    // need Twinsen to walk into the building's wall too (Info5 bit 0, ZONE_TEST_BRICK) -- with the building gone it does
+                    // nothing. Only a door without that, a hole in the ground (a sewer's grate), goes where a road's surface now covers it
+                    // at its height: a walker on the road would drop through it.
+                    if (door)
+                    {
+                        var wall = zone.Info.Length > 5 && (zone.Info[5] & 1) != 0;
+                        if (wall || !Paved(zone, model.CubeX, model.CubeY)) { doorsKept++; continue; }
+                        log.Add($"scene {scene}: door zone {z} (into scene {zone.Num}, no wall to walk into) lies under the road's surface and is removed");
+                        SceneOps.DeleteZone(model, z);
+                        zonesRemoved++;
+                        continue;
+                    }
                     log.Add(camera ? $"scene {scene}: fixed camera zone {z} (number {zone.Num}) reaches the track and is removed"
                                    : $"scene {scene}: zone {z} (type {kind}, number {zone.Num}) lies on the road and is removed");
                     SceneOps.DeleteZone(model, z);
@@ -553,6 +590,7 @@ internal static class RaceTrackScenes
         if (edges > 0) log.Add($"the lap{(tracks.Count > 1 ? "s cross" : " crosses")} {edges / 2} cube edges; {edgeZonesAdded} crossing zones added where the island's own did not cover the road");
         if (changes.Count > 0) store.SaveMany(changes, allowErrors: true);
         log.Add($"{zonesRemoved} zones on the road removed");
+        if (doorsKept > 0) log.Add($"{doorsKept} doors into buildings near the road kept (the car is never taken through one; a building's needs its wall)");
         if (options.RemoveTrackCameras) log.Add($"{camerasRemoved} fixed camera zones along the track removed");
         foreach (var t in tracks)
         {

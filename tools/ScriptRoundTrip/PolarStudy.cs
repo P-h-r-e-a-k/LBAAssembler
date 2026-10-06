@@ -21,7 +21,7 @@ internal static class PolarStudy
         var inA = In(a).ToList(); var inB = In(b).ToList();
         var keysB = inB.Select(Key).ToHashSet(); var keysA = inA.Select(Key).ToHashSet();
         string Show((int Cx, int Cz, IslandDecor D) t) => FormattableString.Invariant(
-            $"cube ({t.Cx},{t.Cz}) body {t.D.Body & 0xFFFF} page {t.D.Body >> IslandFile.DecorPageShift}: cells x {(t.Cx * 32768.0 + t.D.XMin) / 512:0.0}..{(t.Cx * 32768.0 + t.D.XMax) / 512:0.0} z {(t.Cz * 32768.0 + t.D.ZMin) / 512:0.0}..{(t.Cz * 32768.0 + t.D.ZMax) / 512:0.0} y {t.D.YMin}..{t.D.YMax}");
+            $"cube ({t.Cx},{t.Cz}) body {t.D.Body & 0xFFFF} page {t.D.Body >> IslandFile.DecorPageShift}: cells x {(t.Cx * 32768.0 + t.D.XMin) / 512:0.0}..{(t.Cx * 32768.0 + t.D.XMax) / 512:0.0} z {(t.Cz * 32768.0 + t.D.ZMin) / 512:0.0}..{(t.Cz * 32768.0 + t.D.ZMax) / 512:0.0} y {t.D.YMin}..{t.D.YMax}; origin ({t.D.X},{t.D.Y},{t.D.Z}) turn {t.D.Beta}");
         var gone = inA.Where(t => !keysB.Contains(Key(t))).ToList(); var added = inB.Where(t => !keysA.Contains(Key(t))).ToList();
         Console.WriteLine($"{inA.Count} decors in A there, {inB.Count} in B; {gone.Count} of A's not in B, {added.Count} of B's not in A");
         foreach (var t in gone.OrderByDescending(t => t.D.YMax)) Console.WriteLine("  gone  " + Show(t));
