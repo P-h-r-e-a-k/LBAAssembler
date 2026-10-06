@@ -257,10 +257,14 @@ is lost.
 * **FunFrock** races him in his own car (the racer's body 17, made after the character), and he is the one to beat.
 * **The end:** take off from the ramp before FunFrock and "You beat FunFrock!": the car flies on at the peak, the picture fades to white
   in mid-flight, and Twinsen wakes up at home, in the second game's first scene (scene 0), lying asleep in his bed (his own animations
-  from scene 101, the Wannies' bed), the room fading in from white. Zoe comes round to the bedside and shakes him awake ("Twinsen! Twinsen, wake up! You were tossing and turning all
-  night. Were you dreaming about FunFrock again?"), he sits up and gets out of bed, and the game's own opening goes on with her line.
+  from scene 101, the Wannies' bed), the room fading in from white. Zoe, beside the bed, wakes him at once ("Twinsen! Twinsen, wake
+  up! You were tossing and turning all night. Were you dreaming about FunFrock again?") and steps back out of his way; he sits up, gets
+  out of bed and turns to her; she comes round to him and kisses him (her own kiss, the one the game plays when Twinsen walks into her
+  at home), and the game's own opening goes on with her line (where the race track story is built, the one about the rain and the
+  Weather Wizard).
   The dream's race is put away as he wakes: outside it is Citadel Island in the storm, as in the game, and his car drives with the
-  setup's own gears, no race holding it and no power-up left on.
+  setup's own gears, no race holding it and no power-up left on. Where Citadel Island's tracks are built, the car waits in the yard
+  north of the house (the town circuit's start line, where it stands in fine weather, is the sea in the storm).
   If FunFrock gets there first, Twinsen says so and the race starts again from the grid.
 * **The kerbs** are drawn smooth, as the other tracks' are (a kerb a cell wide, its own texture over the triangles along it).
 * **A new game** played as a game (the race car setup's "new game") starts in the dream, on the dock beside the car, instead of in

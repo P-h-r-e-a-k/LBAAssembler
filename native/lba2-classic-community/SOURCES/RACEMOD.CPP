@@ -3681,6 +3681,16 @@ S32 RaceMod_Held(void) {
     return RaceMod_Active() && (s_phase == PHASE_GRID || TimerRefHR < s_hitUntil || (s_sprint && s_place && !(s_endWon && s_wakeFlight > 0)));
 }
 
+// Citadel Island's weather, for the scenes' scripts (2026-10-06): game variable RACE_WEATHER_VAR is 1 while its fine-weather file
+// (CITABAU) is shown, 0 in the storm (CITADEL) -- set as the island's file is chosen (EXTFUNC.CPP InitGrilleExt), before the scene's
+// scripts run, in any game. A race track's start car on an island with a track in each weather parks where the other weather's ground
+// has room for it (RaceTrackScenes: the town circuit's start, scene 49, is the sea in the storm -- the car stood in the water after the
+// dream's waking up).
+#define RACE_WEATHER_VAR 206
+void RaceMod_CitadelWeather(S32 fine) {
+    ListVarGame[RACE_WEATHER_VAR] = (S16)(fine ? 1 : 0);
+}
+
 // Whether the scene now fading in comes from white (the dream's end: wake_flight=), once: the picture is held white, and fades in
 // RACE_WHITE_HOLD_MS later (RaceMod_Story) -- the scene's first picture is Twinsen at its start, before its opening lays him in bed.
 S32 RaceMod_FadeFromWhite(void) {

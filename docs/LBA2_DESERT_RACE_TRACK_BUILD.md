@@ -2306,6 +2306,30 @@ the white fade, Twinsen asleep in bed with Zoe beside him); the window's build o
 (put back, the big island added, scenes 233-253 its own and none left over); the seven other tracks built again are the same files, byte
 for byte; the island round trip.
 
+**Round 4 (2026-10-06, later): barrels on the road, waking up, the car outside the house.**
+- *Two of LBA1's barrels on the road* where it leaves 108's top for the raised road round the peak. They stood 7,000 below the road,
+  at the terrace's foot, when the road was cleared; then the raised road's end had its ground filled up to the deck (`FlushRaisedEnds`)
+  and decors follow the ground under them (`IslandOps.DecorFollow`), so they rode up onto the road. The decors are now cleared again
+  once they have followed the ground (`ClearDecors` a second time, after `follow.Apply()`); the other tracks' files are unchanged by it.
+- *Waking up* (the user: Zoe took a long time walking round the bed): she starts where the game's opening has her, beside the bed's
+  head, and says the wake line two seconds after the room has faded in; steps back out of his way; he sits up, gets out and turns to
+  her; she comes round by the open floor south of the bed and kisses him (her animation 84, the game's own when Twinsen walks into her
+  at home: she hugs him, hearts float up); then her opening line (the race track story's about the rain, where it is built). Game
+  variable 205 counts the steps (1 asleep, 2 the line said, 3 getting up, 4 the kiss). Two things learnt: a track's `goto_point` counts
+  an actor there 500 short of the point (GERETRAK.CPP), so the points lie 500 past where she stops; and an actor whose way runs into
+  Twinsen's box walks on the spot for ever -- her route keeps a cell from him, and the kiss happens on his south side, so her own opening
+  walk afterwards leads away from him (from his west side it passed him, and walking into him is the game's kiss again, over and over
+  while he stood still).
+- *The car outside the house* (the user: undrivable after the dream): the town circuit's start, scene 49, puts the car on its start
+  line whenever the scene starts on foot, and in the storm -- the dream wakes Twinsen up in it -- that line is CITADEL.ILE's sea. The
+  engine now tells the scripts which weather's file is shown (game variable 206: 1 fine, CITABAU; 0 the storm, CITADEL -- set in
+  EXTFUNC.CPP `InitGrilleExt` as it chooses the file, `RaceMod_CitadelWeather`, in any game), and each of Citadel Island's two start
+  cars parks, in the other weather, in the yard north of Twinsen's house (`RaceTrackIsland.ParkOwn` / `ParkTwin`: flat at 250 in both
+  files): the storm track's in scene 42 when it is fine (its line is under CITABAU's ground), the town circuit's in scene 49 in the
+  storm. Checked: in the storm the car stands in the yard and drives off (behaviour 12, 5,000 units east); racing the town circuit
+  (`weather=fine`) it stands on its start line.
+- *Commands:* `entityanims <game> <entity>...` (an entity's animations and bodies), `gametext <game> <file> <id>...`.
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

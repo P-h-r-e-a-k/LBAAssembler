@@ -34,6 +34,9 @@ internal sealed record RaceTrackIsland(
     {
         TwinIleFile = "CITABAU.ILE", TwinOblFile = "CITABAU.OBL", TwinPlanResource = "RaceTrackPlan.Citadel.json", RacesTwin = true,
         Title = "Citadel Island: the town circuit (once the storm is over)", Roster = RaceDriver.CitadelStorm, TwinRoster = RaceDriver.CitadelTown,
+        // (the yard north of Twinsen's house, flat at 250 in both files: the storm track's car, scene 42, when it is fine -- its start line
+        // is under CITABAU's ground -- and the town circuit's, scene 49, in the storm -- its start line is CITADEL's sea)
+        ParkOwn = (540.5, 637.5, 1024, 1), ParkTwin = (540.5, 643.5, 1024, 0),
     };
 
     public static readonly RaceTrackIsland CitadelStorm = Citadel with
@@ -176,6 +179,14 @@ internal sealed record RaceTrackIsland(
 
     // A sprint dreamt at the start of the game (Polar Island's): won, Twinsen wakes up at home (RaceTrackService.DreamInfo).
     public bool Dream { get; init; }
+
+    // An island with a track in each weather (Citadel Island): where a start scene's car parks when the other weather's file is shown --
+    // the start line's ground in one file can be the sea, or under the ground, in the other (2026-10-06: the town circuit's car stood in
+    // the sea in the storm, where the dream's race wakes Twinsen up, and couldn't be driven). Island cells (in the start scene's own
+    // cube) and a turn, for the own file's start and the twin's, and the value of game variable 206 the engine sets for the weather the
+    // car parks in (RACEMOD.CPP RaceMod_CitadelWeather: 1 fine, 0 the storm).
+    public (double X, double Z, int Beta, int When)? ParkOwn { get; init; }
+    public (double X, double Z, int Beta, int When)? ParkTwin { get; init; }
 
     // The island isn't in the game: the build makes its files and its scene (Sendell's Well). They have no originals to keep, so the
     // build's backups leave them out (KeptFiles); it makes them afresh every time, and putting the folder back deletes them.

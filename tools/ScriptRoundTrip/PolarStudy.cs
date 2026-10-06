@@ -64,6 +64,34 @@ internal static class PolarStudy
         return 0;
     }
 
+    // entityanims <game> <entity>...: each entity's animations (generic number -> ANIM.HQR entry, its keyframes and length) and bodies.
+    public static int EntityAnims(string[] args)
+    {
+        var table = LBAAssembler.Lba2EntityTable.Load(args[1]) ?? throw new InvalidDataException("no entity table");
+        var anims = HqrArchive.Open(Path.Combine(args[1], "ANIM.HQR"));
+        foreach (var id in args.Skip(2).Select(int.Parse))
+        {
+            var e = table.Entities[id];
+            Console.WriteLine($"entity {id}: bodies {string.Join(", ", e.Bodies.Select(b => $"{b.Generic}->{b.Body}"))}");
+            foreach (var (g, a) in e.Anims)
+            {
+                var data = anims.Read(a);
+                int frames = data.Length >= 2 ? BitConverter.ToUInt16(data, 0) : 0;
+                Console.WriteLine($"  anim {g,3} -> ANIM.HQR {a,4}: {frames} keyframes, {data.Length} bytes");
+            }
+        }
+        return 0;
+    }
+
+    // gametext <game> <file> <id>...: texts of a text file of TEXT.HQR, in English.
+    public static int Lba2Text(string[] args)
+    {
+        var bank = Lba2TextBank.Load(HqrArchive.Open(Path.Combine(args[1], "TEXT.HQR")), 0, int.Parse(args[2]));
+        foreach (var id in args.Skip(3).Select(int.Parse))
+            Console.WriteLine($"{id}: {(bank.Find(id) is { } t ? LBAAssembler.Terrain.Polar.PolarDream.Dos.GetString(t.Bytes) : "(none)")}");
+        return 0;
+    }
+
     public static int Stats(string[] args)
     {
         var game = new Lba1Game(args[1]);

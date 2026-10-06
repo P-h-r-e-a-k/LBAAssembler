@@ -436,7 +436,21 @@ internal static class RaceTrackScenes
                     : grid.Count > k + 1 ? (grid[k + 1][2], grid[k + 1][4], beta, grid[k + 1][3]) : null;
                 log.Add($"scene {scene}: Twinsen at ({model.Hero.X},{model.Hero.Y},{model.Hero.Z}) turn {beta}, buggy at ({buggy?.X},{buggy?.Y},{buggy?.Z})" +
                         (tracks.Count > 1 ? $" -- the start of {(t == tracks[0] ? options.Island.IleFile : options.Island.TwinIleFile)}'s track" : ""));
-                if (buggyIndex > 0 && StartBuggyScript(model, scene, buggyIndex, log) is { } withBuggy) model = withBuggy;
+                // (an island with a track in each weather: in the other weather the car parks where that file's ground has room for it)
+                (int X, int Y, int Z, int Beta, int When)? park = null;
+                if (tracks.Count > 1 && (t == tracks[0] ? options.Island.ParkOwn : options.Island.ParkTwin) is { } pk)
+                {
+                    if ((int)Math.Floor(pk.X / 64) != cx || (int)Math.Floor(pk.Z / 64) != cz)
+                        log.Add($"scene {scene}: the car's parking place for the other weather, cell ({pk.X}, {pk.Z}), is not in this scene's cube: left out");
+                    else
+                    {
+                        int px = (int)Math.Round((pk.X - cx * 64) * 512), pz = (int)Math.Round((pk.Z - cz * 64) * 512);
+                        var otherTrack = tracks.First(o => o != t);
+                        var py = otherTrack.Report.GroundAfter is { } og ? (int)Math.Round(og(pk.X, pk.Z)) : Ground(px, pz);
+                        park = (px, py, pz, pk.Beta, pk.When);
+                    }
+                }
+                if (buggyIndex > 0 && StartBuggyScript(model, scene, buggyIndex, log, park) is { } withBuggy) model = withBuggy;
             }
             // zones that would act on a car driving along the road: doors into buildings (cube changes to scenes that are not part of the island's
             // outside), hit, ladder, escalator, grid and rail zones; and, with RemoveTrackCameras, the fixed cameras (type 1) the car would
@@ -916,20 +930,27 @@ void comportement_1()
     // buggy at the actor's own place; the island's scenes run INIT_BUGGY 0, which only shows it where it already is) -- but not
     // when Twinsen drives back into the scene on the next lap: forcing it then parked a second, solid buggy on the start line
     // for the car to crash into.
-    private static SceneModel? StartBuggyScript(SceneModel model, int scene, int buggy, List<string> log)
+    // `park`: in the other weather (game variable 206 is When: RACEMOD.CPP RaceMod_CitadelWeather), the car stands there instead (a track
+    // point of its own).
+    private static SceneModel? StartBuggyScript(SceneModel model, int scene, int buggy, List<string> log, (int X, int Y, int Z, int Beta, int When)? park = null)
     {
         try
         {
+            var parkPoint = -1;
+            if (park is { } pk) { parkPoint = model.TrackPoints.Count; model.TrackPoints.Add(new SceneTrackPoint(pk.X, pk.Y, pk.Z)); }
             var scripts = SceneScripts.Load(SceneSerializer.Write(model), scene);
             var text = scripts.GetText(buggy, ScriptKind.Life);
             // (Polar Island's buggy has INIT_BUGGY 1, which makes the car the first time: Polar.PolarScenes)
             var pattern = new System.Text.RegularExpressions.Regex(@"init_buggy\(([01])\);\s*if \(12 == comportement_hero\(\)\)\s*\{\s*set_comportement\(comportement_2\);\s*\}\s*else\s*\{\s*set_comportement\(comportement_1\);\s*\}");
             if (!pattern.IsMatch(text)) { log.Add($"scene {scene}: the buggy's script isn't the expected one; it is left to show the buggy where it is"); return null; }
-            text = pattern.Replace(text, "if (12 == comportement_hero())\n        {\n            init_buggy($1);\n            set_comportement(comportement_2);\n        }\n        else\n        {\n            init_buggy(2);\n            set_comportement(comportement_1);\n        }", 1);
+            var parked = park is { } p ? $"            if ({p.When} == var_game(206))\n            {{\n                pos_point({parkPoint});\n                beta({p.Beta});\n            }}\n" : "";
+            text = pattern.Replace(text, "if (12 == comportement_hero())\n        {\n            init_buggy($1);\n            set_comportement(comportement_2);\n        }\n        else\n        {\n" + parked +
+                "            init_buggy(2);\n            set_comportement(comportement_1);\n        }", 1);
             scripts.SetText(buggy, ScriptKind.Life, text);
             var built = scripts.Build();
             if (!built.Ok) { foreach (var e in built.Errors) log.Add($"scene {scene}: buggy script: {e}"); return null; }
-            log.Add($"scene {scene}: the buggy is put on the start line whenever the scene starts on foot (INIT_BUGGY 2), not when Twinsen drives in");
+            log.Add($"scene {scene}: the buggy is put on the start line whenever the scene starts on foot (INIT_BUGGY 2), not when Twinsen drives in" +
+                    (park is { } q ? $"; in the other weather (game variable 206 = {q.When}) it parks at ({q.X}, {q.Y}, {q.Z}) turn {q.Beta}, track point {parkPoint}" : ""));
             return SceneSerializer.Parse(SceneGame.Lba2, built.Record!);
         }
         catch (Exception error) when (error is ScriptCompileException or InvalidDataException or ArgumentException or InvalidOperationException)

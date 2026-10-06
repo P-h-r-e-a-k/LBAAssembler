@@ -671,6 +671,10 @@ internal static class RaceTrackBuilder
         ClearStaleCol(island, natural, field, index, painted, report);
         if (planned) WallSteepBanks(island, natural, field, index, painted, options, report);
         follow.Apply();
+        // (and what the ground carried up into the road's way: the decors stood clear of it when they were cleared, and ground filled
+        // under a raised road's end lifts what stood there -- 2026-10-06: two of LBA1's barrels at the foot of Polar Island's 108, lifted
+        // 7,000 onto the start of the raised road round the rocky peak)
+        ClearDecors(island, index, options, report, roads, plan.KeepBodies, plan.KeepAbove);
         ClearAdrift(island, adrift, report);
         report.GroundBefore = (x, z) => natural.Height(x, z);
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);

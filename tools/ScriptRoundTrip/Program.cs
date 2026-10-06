@@ -95,6 +95,8 @@ internal static class Program
             "polartall" => PolarStudy.Tall(args),
             "decordiff" => PolarStudy.DecorDiff(args),
             "defsuse" => PolarStudy.DefsUse(args),
+            "entityanims" => PolarStudy.EntityAnims(args),
+            "gametext" => PolarStudy.Lba2Text(args),
             "polaradd" => PolarStudy.Add(args),
             "polarremove" => PolarStudy.Remove(args),
             "polarsame" => PolarStudy.Same(args),

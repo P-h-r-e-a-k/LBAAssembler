@@ -326,6 +326,8 @@ void InitGrilleExt(U32 numcube) {
 
             numskysea = RESS_SKYSEA0;
         }
+        // (the weather shown, for the scene's scripts: RACEMOD.CPP RaceMod_CitadelWeather)
+        RaceMod_CitadelWeather(TEMPETE_FINIE ? 1 : 0);
         break;
 
     case 5:
