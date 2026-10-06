@@ -93,7 +93,9 @@ static inline const T_HALF_TEX *GroundTexDef(const T_HALF_POLY *ptrh) {
     if (NbGroundPages > 1) {
         U32 page = ptrh->IndexTex >> GROUND_PAGE_SHIFT;
         PtrMap = (page AND page < (U32)NbGroundPages) ? GroundPageBuf + (page - 1) * 256 * 256 : GroundTexture;
-        return &ListTexDef[ptrh->IndexTex & ((1 << GROUND_PAGE_SHIFT) - 1)];
+        // (and the definition's eleventh bit the triangle's Dummy, unused by the retail islands: a cube of such an island has room for
+        // 2048 -- 2026-10-06, Polar Island at twice LBA1's size, its road's smooth kerbs)
+        return &ListTexDef[(ptrh->IndexTex & ((1 << GROUND_PAGE_SHIFT) - 1)) | (ptrh->Dummy << GROUND_PAGE_SHIFT)];
     }
     return &ListTexDef[ptrh->IndexTex];
 }

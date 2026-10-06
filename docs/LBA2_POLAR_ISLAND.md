@@ -1,4 +1,4 @@
-# Polar Island: LBA1's Polar Island as a new LBA2 island (2026-10-05)
+# Polar Island: LBA1's Polar Island as a new LBA2 island (2026-10-05, twice its size since 2026-10-06)
 
 ![Polar Island in the game](polar/in_game.png)
 
@@ -10,6 +10,15 @@ reads LBA1's scenes). The same menu builds the island again or takes it out. The
 scenes; Twinsen starts on the dock.
 
 **Only LBA Assembler's own engine loads island 12.** The engine changes are listed below; the original `LBA2.EXE` doesn't load it.
+
+**Twice LBA1's size (since 2026-10-06, later).** The island is LBA1's at twice its size every way (`PolarLayout.Scale`): a cell of
+LBA1's is two by two of the island's, a layer two. The user asked for it to make room for the race track: 108's car tracks wind back and
+forth up its terraces five times, their ways six to eight cells apart, and the race track's road, eight cells wide, could only follow
+three of them. At twice the size they are twelve to sixteen cells apart. The ground's heights are LBA1's corners scaled (between them
+the island's vertices follow each LBA1 cell's slope), so its slopes are as steep as LBA1's; the objects are the same boxes, twice as big
+(their textures stretched); LBA1's places (the dock's start, the zones' joins) are scaled. Each LBA1 scene's grid is then two cubes by two
+or a little more: the island is in cubes 5–9 × 4–10, and 21 of them have land. Twinsen and his car are the size they were, so the huts,
+walls and crates are twice as big round them.
 
 ## The layout
 
@@ -125,13 +134,16 @@ pages and 6 object pages, so the engine reads more pages for an island that has 
 * **In the file:** after the last cube's records, `POLAR.ILE` has a header entry (`PAGE`, then how many more ground pages and object
   pages), then those pages. Retail islands end exactly at their last cube's records.
 * **Ground:** a ground triangle's texture index (13 bits) holds its page in the top 3 bits and its texture definition in the cube's list
-  in the low 10 (up to 1,024 a cube; Polar uses at most 351).
+  in the low 10, and the triangle's next bit down -- the engine's `Dummy`, unused by every retail island -- is the definition's
+  eleventh: up to 2,048 a cube (`IslandFile.GroundTextureOf`, `WithGroundTexture`; `TERRAIN.CPP` `GroundTexDef`). The island's own
+  ground uses at most 249 a cube; it is the race track's road that needs more (its smooth kerbs: a definition a triangle on a bend --
+  1,425 in its busiest cube).
 * **Objects:** a decor's body field holds its page in bits 18–21. The body number is the low 16 bits and the engine's two decor flags
   the next two, so the page bits are free.
 
 ## Twinsen's car
 
-The island is to have a race track, so the dock scene (243) has Twinsen's car beside him. It is the Desert island's own buggy (scene
+The island is to have a race track, so the dock scene (252) has Twinsen's car beside him. It is the Desert island's own buggy (scene
 67). Every other scene of the island has it too, as on the Desert island: the engine hands the car on to the next scene's copy at a cube
 change (`BUGGY.CPP` `InitBuggy`), and without one there the car stopped at the first cube edge. The copies are changed in two ways:
 
@@ -143,17 +155,22 @@ Twinsen gets in and drives it.
 
 ## The scenes (`PolarScenes.cs`)
 
-An LBA2 outside scene is one cube of its island. The island has twelve cubes (6–8 × 5–8), numbered as scenes 233–244. The ten with
-land have scenes: **234–241, 243 and 244**. The two of open sea (233, 242) have none, and no zone leads into them; Twinsen would drown
+An LBA2 outside scene is one cube of its island. The island has 35 cubes (5–9 × 4–10); the 21 with land have scenes, **233–253**, in
+the order of `PolarScenes.SceneCubes` (row by row). The cubes of open sea have none, and no zone leads into them; Twinsen would drown
 before he got there.
 
 * **Numbers:** they start after the retail game's scenes (up to 221) and the race track builder's (222–232: the last four are the
-  Emerald Moon's, which the island's first build clashed with).
+  Emerald Moon's, which the island's first build clashed with). The holomap and saved games have room for scenes up to 254 (`HOLO.H`
+  `MAX_CUBE` 255: an arrow record a scene), so the island can have 22. At LBA1's size its scenes were the twelve cubes 6–8 × 5–8
+  (233–244); adding the island again, or the race track build, takes out any of those that are left.
+* **Placement:** LBA1's grids line up with the cubes' edges (the placement with the fewest cubes of land). Its tracks up the arm from
+  the dock run along one, x 512, so the race track's road runs ten cells east of them there: a car driving along an edge would change
+  scene back and forth.
 * **Contents:** each is a copy of scene 44's header with island 12 and its own cube. Nobody is in it but Twinsen and the engine's Zoe
   placeholder, plus Twinsen's car in the dock scene.
 * **Cube changes:** a cube-change zone runs along every edge a cube shares with another (`OBJECT.CPP` `GereZoneChangeCube`: the arrival
   edge in Info0/Info2, 512 or 31744).
-* **Start:** Twinsen starts where LBA1 starts him on the island: on the dock (LBA1 scene 115), in scene 243. In the other scenes he
+* **Start:** Twinsen starts where LBA1 starts him on the island: on the dock (LBA1 scene 115), in scene 252. In the other scenes he
   starts on the flat, clear land cell nearest the cube's middle, so Play from any scene puts him on his feet.
 * **Names:** each scene is named in the game folder's `SCENE.HQD` after the LBA1 scenes its land comes from (for example "Polar Island:
   1st scene, 2nd scene"). The editor's scene list reads that file over the game's own descriptions.
@@ -165,7 +182,8 @@ before he got there.
 * **Map entries:** the retail `HOLOMAP.HQR` has map pairs up to entry 45, and slot 12's pair is already taken (the fine-weather
   Citadel's). Polar Island's picture and camera are appended as entries 46 and 47.
 * **Picture:** the island's ground drawn through its camera over a calm sea in the Citadel picture's colours (`HolomapPicture`). The
-  rocky peak and its plateau are objects, so they are added as solid columns in their bricks' colours.
+  rocky peak and its plateau are objects, so they are added as solid columns in their bricks' colours. The camera looks at the middle
+  of the cubes (7.5, 7.5) from 280,000 away (150,000 at LBA1's size).
 * **Globe:** position record 12 puts the island on the planet near its north pole. Its label is text 620 of the game text file
   ("Polar Island"), added in every language.
 * **Scene records:** each scene's record (50 + scene) marks it as an outside scene of island 12. The cube-change zones test this flag.
@@ -181,7 +199,7 @@ before he got there.
 | `MESSAGE.CPP` `ListFileText` | Gains `"012"`. Island 12 read past its end when building a voice file name. |
 | `DISKFUNC.CPP` | A scene's planet is read only for an island the holomap table has. |
 | `3DEXT/LOADISLE.CPP`, `VAR_EXT` | An island's more texture pages: read after its cubes' records when their header is there (8 ground pages at most, 16 object pages). |
-| `3DEXT/TERRAIN.CPP` `GroundTexDef` | A ground triangle's page, from its texture index, when the island has more ground pages. |
+| `3DEXT/TERRAIN.CPP` `GroundTexDef` | A ground triangle's page, from its texture index, when the island has more ground pages; and its definition's eleventh bit, the triangle's `Dummy` (since the island was made twice its size). |
 | `3DEXT/DECORS.CPP` | Each decor's object page, from its body field, when the island has more object pages; back to the first page after the decors. |
 | `BUGGY.CPP` `TakeBuggy` | The parked car is drawn into the cached background, so taking it rebuilds that background. Only race mode did that before; elsewhere the empty car stayed on screen until the camera moved. |
 | `SAVEGAME.CPP` | Loading a save first tries the old 64-bit record layout and accepts it only if every actor's body index is in range. A Polar scene has just Twinsen and the Zoe placeholder, mostly zeros, so its saves passed that check, were misread, and crashed in `ObjectSetInterDep`. Now the old layout is accepted only if Twinsen's animation state also reads whole (1–30 groups, frames inside the animation). The 13 LBA2 saves on this PC still load. |
@@ -192,8 +210,8 @@ before he got there.
 | --- | --- |
 | `POLAR.ILE`, `POLAR.OBL` | New. |
 | `RESS.HQR` | Entries 23 (island 12's sky, the fine-weather Citadel's) and 39 (its palette). Both are empty in the retail file. |
-| `SCENE.HQR` | Scenes 234–241, 243, 244. The slots before them are padded empty. |
-| `HOLOMAP.HQR` | Entries 46 and 47; position records 12 and those of the scenes (280–287, 289, 290). |
+| `SCENE.HQR` | Scenes 233–253. The slots before them are padded empty. |
+| `HOLOMAP.HQR` | Entries 46 and 47; position records 12 and those of the scenes (283–303). |
 | `TEXT.HQR` | Entries 180–191; text 620 of file 2 in each language. |
 | `SCENE.HQD` | The scenes' names. |
 
@@ -219,22 +237,27 @@ Island: the dream race to Sendell"). The user drew it over a picture of the isla
 is dreaming he is back on Polar Island, and FunFrock has escaped and is racing him to Sendell. If FunFrock gets to her first, the planet
 is lost.
 
-* **The route** is a sprint, not a lap. It runs from a start line on the dock (scene 243), north up the arm and the main straight through
+* **The route** is a sprint, not a lap. It runs from a start line on the dock (scene 252), north up the arm and the main straight through
   107 into 109, round a hairpin at its top and back down 107's east side. Then west along 107's south strip, over a jump across the main
-  straight, into 108 and up a serpentine through its terraces, along its north edge, and a jump high over the plateau's pillars onto the
-  top of the rocky peak, where the finish line is. It is 606 cells from the start line to the finish.
+  straight, into 108 and up its terraces along LBA1's own car tracks -- north, a jog east and north again, then back and forth west:
+  south, north, south (a jog west on the way) and north, a terrace higher each time, from 1,200 to 9,216 -- and east along 108's top
+  towards the rocky peak. There it leaves the ground on a raised road on piers, round the peak at about 9,000 to 10,000: its north side
+  over the sea, its east side, a half circle over the lake on its south side, and in to a straight and a ramp aimed at the peak's south
+  face. It is 1,642 cells from the start line to the finish (606 at LBA1's size); a win takes a little over a minute.
 * **The jumps** are both carried jumps: the race-track mode carries the car along the plan's heights, from cube to cube where the flight
-  crosses an edge. The one over the main straight takes off in cube (8, 7) and lands in cube (7, 7), because the straight is four cells
-  from that edge. The track builder's other kind of jump is the car's own animation, and it can't change cube in mid-air. Each jump has
-  a raised stretch of its own (a ramp, the flight, a landing hill); the ground road runs between them. Over the main straight the camera
-  stays behind the car; up to the peak it watches from the side. The ledge of LBA1's terrain beside the second ramp is cut down under it.
-* **The rocky peak** stays whole: the build keeps every decor standing 6,000 or higher (`keepAbove`), where the road lands on it.
-* **The car** is Twinsen's buggy, with the race car setup's gears scaled so its top gear is **140 km/h**. The user's setup tops out at
-  80 km/h.
+  crosses an edge. The one over the main straight takes off in cube (8, 7) and lands in cube (7, 7). The track builder's other kind of
+  jump is the car's own animation, and it can't change cube in mid-air. Each jump has a raised stretch of its own; the ground road runs
+  between them. The camera stays behind the car over both.
+* **The jump into the peak** has no landing anyone reaches: the route ends a few cells inside the peak. The finish line is the ramp's
+  lip, and Twinsen never lands.
+* **The rocky peak** stays whole: the build keeps every decor standing 15,000 or higher (`keepAbove`). At twice the size it is 23,552
+  high, 27,136 with the plateau on top.
+* **The car** is Twinsen's buggy, with the race car setup's gears scaled so its top gear is **120 km/h** (140 at LBA1's size). The
+  user's setup tops out at 80 km/h.
 * **FunFrock** races him in his own car (the racer's body 17, made after the character), and he is the one to beat.
-* **The end:** cross the finish line before FunFrock and the car stops on the peak, "You beat FunFrock!". Three and a half seconds later
-  Twinsen wakes up at home, in the second game's first scene (scene 0), lying asleep in his bed (his own animations from scene 101, the
-  Wannies' bed). Zoe comes round to the bedside and shakes him awake ("Twinsen! Twinsen, wake up! You were tossing and turning all
+* **The end:** take off from the ramp before FunFrock and "You beat FunFrock!": the car flies on at the peak, the picture fades to white
+  in mid-flight, and Twinsen wakes up at home, in the second game's first scene (scene 0), lying asleep in his bed (his own animations
+  from scene 101, the Wannies' bed), the room fading in from white. Zoe comes round to the bedside and shakes him awake ("Twinsen! Twinsen, wake up! You were tossing and turning all
   night. Were you dreaming about FunFrock again?"), he sits up and gets out of bed, and the game's own opening goes on with her line.
   The dream's race is put away as he wakes: outside it is Citadel Island in the storm, as in the game, and his car drives with the
   setup's own gears, no race holding it and no power-up left on.
@@ -279,17 +302,18 @@ dream race to Sendell".
 
 Headless engine checks (sandbox copy of the game):
 
-* `cube 243` loads island 12 with Twinsen standing on the dock. Every scene starts with Twinsen standing at full life.
+* `cube 252` loads island 12 with Twinsen standing on the dock. Every scene starts with Twinsen standing at full life.
 * A save made on the island loads.
-* Walking north across the cube edge changes to scene 240.
+* Walking across a cube edge changes to the next cube's scene (at LBA1's size, from the dock north into scene 240; at twice its size the
+  race car crosses 27 edges, cube-change zones added where the road crosses).
 * `ui holoplan 12` and `ui holomap` show the new map and the label.
-* LBA Assembler's menu adds the island in a sandbox: `POLAR.ILE` is listed, its ten named scenes appear, and Play starts them inside the
+* LBA Assembler's menu adds the island in a sandbox: `POLAR.ILE` is listed, its named scenes appear, and Play starts them inside the
   window.
 
 ## Not yet
 
 * **Characters:** none yet. LBA1's actors and their scripts aren't ported.
-* **Getting there:** no way in from the story's islands: Play, `cube 243`, or a new game in a folder with the island's race track built
+* **Getting there:** no way in from the story's islands: Play, `cube 252`, or a new game in a folder with the island's race track built
   (the dream: see above).
 * **Shapes:** objects are boxes, so the huts' curved roofs are square, and a post split over several bricks is a few small boxes.
 * **Tall cliffs:** a cliff higher than two layers stretches its two-layer rock texture over the whole slope.

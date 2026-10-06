@@ -69,23 +69,25 @@ internal static class PolarIsland
         foreach (var f in SharedFiles) Writable(At(f));
         var scene = HqrFile.Parse(File.ReadAllBytes(At("SCENE.HQR")));
         var sceneBackup = Backup("SCENE.HQR");
-        for (var n = PolarScenes.FirstScene; n < PolarScenes.FirstScene + PolarScenes.Count; n++) Put(scene, sceneBackup, n + 1);
+        // (every number the island's scenes may have -- this version's and an earlier one's -- where the scene is island 12's)
+        foreach (var n in PolarScenes.AllScenes.Where(n => PolarScenes.OldScene(scene, n))) Put(scene, sceneBackup, n + 1);
         // (and the scenes an earlier version numbered 229-232, where they are still the island's)
         var oldScenes = PolarScenes.OldScenes.Where(n => PolarScenes.OldScene(scene, n)).ToList();
         foreach (var n in oldScenes) Put(scene, sceneBackup, n + 1);
         Trim(scene, sceneBackup, 223);
         File.WriteAllBytes(At("SCENE.HQR"), scene.ToBytes());
         PolarScenes.ForgetNames(gameDirectory);
-        log.Add($"SCENE.HQR: scenes {PolarScenes.FirstScene}..{PolarScenes.FirstScene + PolarScenes.Count - 1} taken out (and their names from SCENE.HQD)");
+        log.Add($"SCENE.HQR: the island's scenes ({PolarScenes.FirstScene}..{PolarScenes.LastPossibleScene}) taken out (and their names from SCENE.HQD)");
 
         var holo = HqrFile.Parse(File.ReadAllBytes(At("HOLOMAP.HQR")));
         var holoBackup = Backup("HOLOMAP.HQR");
         Put(holo, holoBackup, PolarHolomap.PictureEntry); Put(holo, holoBackup, PolarHolomap.CameraEntry);
         var positions = holo.Read(PolarScenes.PositionsEntry);
         var before = holoBackup?.Read(PolarScenes.PositionsEntry);
-        foreach (var record in PolarScenes.Records().Concat(PolarScenes.OldScenes.Select(n => PolarScenes.MaxObjectif + n)))
+        foreach (var record in PolarScenes.Records().Concat(PolarScenes.OldScenes.Concat(PolarScenes.AllScenes).Select(n => PolarScenes.MaxObjectif + n)).Distinct())
         {
-            if (record >= PolarScenes.MaxObjectif + PolarScenes.OldFirstScene && record < PolarScenes.MaxObjectif + PolarScenes.FirstScene
+            // (a scene's record only where it is island 12's)
+            if (record >= PolarScenes.MaxObjectif + PolarScenes.OldFirstScene
                 && (record * PolarScenes.PositionSize + PolarScenes.PositionSize > positions.Length || positions[record * PolarScenes.PositionSize + 31] != IslandByte)) continue;
             var at = record * PolarScenes.PositionSize;
             if (at + PolarScenes.PositionSize > positions.Length) continue;

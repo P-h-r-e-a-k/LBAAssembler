@@ -66,6 +66,8 @@ internal static class RaceCarEngineFile
             text.Append($"intro={dream.IntroText}\nlose={dream.LoseText}\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n");
             // (won: scene 0's opening wakes Twinsen up in his bed)
             if (dream.WinVar >= 0) text.Append($"win={dream.WinVar} 1\n");
+            // (and the finish line a jump's lip: he wakes up in mid-flight)
+            if (dream.WakeFlight > 0) text.Append($"wake_flight={dream.WakeFlight}\n");
             // (and awake, the car's own gears again: the dream's are scaled to its top speed)
             var gears = Math.Clamp(car.Gears, 1, RaceCarSetup.MaxGears);
             text.Append($"after_gears={string.Join(' ', Enumerable.Range(0, gears).Select(g => RaceCarSetup.KmhToUnits(Math.Clamp(car.TopKmh(g), 3, 150))))}\n");
@@ -137,7 +139,7 @@ internal static class RaceCarEngineFile
     }
 
     // The car's handling, as the setup makes it -- with `topKmh`, every gear's top speed scaled so the top gear's is that (Polar Island's
-    // dream race: 140 km/h).
+    // dream race: 120 km/h).
     private static string CarKeys(this RaceCarSetup car, int? topKmh = null)
     {
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);

@@ -247,7 +247,7 @@ internal static class IslandMesher
                         var poly = polygons[half];
                         if (poly.TexFlag == 0 && poly.PolyFlag == 0) continue;      // nothing drawn: the sea shows through
                         var corners = Corners[(diagonal ? 2 : 0) + half];
-                        var (page, definition) = island.GroundTextureOf(poly.TextureIndex);
+                        var (page, definition) = island.GroundTextureOf(poly);
                         var textured = poly.TexFlag != 0 && definition * 6 + 6 <= cube.TextureDefs.Length;
                         int material;
                         if (textured) material = ground;

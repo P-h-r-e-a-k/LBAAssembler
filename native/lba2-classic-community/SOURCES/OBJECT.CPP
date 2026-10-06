@@ -6259,7 +6259,9 @@ startaffscene:
     }
 
     if (FlagFade) {
-        FadeToPalAndSamples(PtrPal);
+        // (from white: a dream's end, RACEMOD.CPP wake_flight= -- held white till its opening has run, RaceMod_Story fading it in)
+        if (RaceMod_FadeFromWhite()) FadePal(255, 255, 255, PtrPal, 0);
+        else FadeToPalAndSamples(PtrPal);
         FlagFade = FALSE;
     } else if (FlagLoadGame)
         PaletteSync(PtrPal);

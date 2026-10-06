@@ -236,7 +236,7 @@ internal static class RaceTrackTextures
                     for (var half = 0; half < 2; half++)
                     {
                         var p = new IslandPolygon(cube.Polygon(x, z, half));
-                        if (p.TexFlag != 0 && island.GroundTextureOf(p.TextureIndex) is (0, var definition)) read.Add(definition * 6);
+                        if (p.TexFlag != 0 && island.GroundTextureOf(p) is (0, var definition)) read.Add(definition * 6);
                     }
             }
             for (var i = 0; i + 5 < t.Length; i += 6)

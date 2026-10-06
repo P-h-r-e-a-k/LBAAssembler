@@ -54,6 +54,7 @@ internal static class Program
             "racecarfile" => RaceTrackCommand.RaceCarFile(args),
             "buildtwice" => RaceTrackCommand.BuildTwice(args),
             "buildtogether" => RaceTrackCommand.BuildTogether(args),
+            "buildhere" => RaceTrackCommand.BuildHere(args),
             // trackrestore <game folder>: the race track window's "Put the original files back"
             "trackrestore" => Echo(LBAAssembler.Terrain.RaceTrackService.Restore(args[1])),
             "sendell" => SendellIsland.Run(args),
@@ -93,6 +94,7 @@ internal static class Program
             "polarsheet" => PolarStudy.Sheet(args),
             "polartall" => PolarStudy.Tall(args),
             "decordiff" => PolarStudy.DecorDiff(args),
+            "defsuse" => PolarStudy.DefsUse(args),
             "polaradd" => PolarStudy.Add(args),
             "polarremove" => PolarStudy.Remove(args),
             "polarsame" => PolarStudy.Same(args),

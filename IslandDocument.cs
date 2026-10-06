@@ -72,12 +72,16 @@ internal sealed class IslandDocument
     public uint PolygonAt(int cubeId, int x, int z, int half = 0) => groundPolygons.TryGetValue(cubeId, out var polygons) ? polygons[z * 128 + x * 2 + half] : 0;
     // (an island with more ground pages -- POLAR.ILE -- has a triangle's page in its texture index's top bits: TextureAt takes the
     // definition, PageOf the page, which ColorAt / ColorAtSmooth sample -- Terrain.IslandFile.GroundTextureOf)
-    public ushort[]? TextureAt(int cubeId, int index)
+    // (`key`: the triangle's bits 18 on, TextureKey -- its texture index and, below it, the Wide bit, a definition's eleventh with more
+    // ground pages)
+    public static int TextureKey(uint polygon) => (int)((polygon >> 18) & 0x3FFF);
+    public ushort[]? TextureAt(int cubeId, int key)
     {
-        if (groundPages.Count > 0) index &= (1 << Terrain.IslandFile.GroundPageShift) - 1;
+        var index = key >> 1;
+        if (groundPages.Count > 0) index = (index & ((1 << Terrain.IslandFile.GroundPageShift) - 1)) | ((key & 1) << Terrain.IslandFile.GroundPageShift);
         return textureDefinitions.TryGetValue(cubeId, out var textures) && index * 6 + 5 < textures.Length ? textures[(index * 6)..(index * 6 + 6)] : null;
     }
-    public int PageOf(int index) => groundPages.Count > 0 ? index >> Terrain.IslandFile.GroundPageShift : 0;
+    public int PageOf(int key) => groundPages.Count > 0 ? (key >> 1) >> Terrain.IslandFile.GroundPageShift : 0;
     private byte[] Page(int page) => page > 0 && page <= groundPages.Count ? groundPages[page - 1] : GroundTexture;
     public byte IntensityAt(int cubeId, int x, int y) => intensities.TryGetValue(cubeId, out var values) ? (byte)(values[y * 65 + x] & 15) : (byte)15;
     public Color ColorAt(double u, double v, int lightLevel, int page = 0)

@@ -115,6 +115,9 @@
  *     after_gears=<top>...       the gears' top speeds once Twinsen has woken up (the race's own are faster: a dream's car): at the wake
  *                                the race's track is put away -- its finished race, the power-ups' effects, its weather -- and the car
  *                                keeps its handling with these gears
+ *     wake_flight=<ms>           a win wakes Twinsen up <ms> after the line instead, the car not held there -- the finish line at a carried
+ *                                jump's lip: he never lands -- the picture fading to white (WhiteFade) and the waking scene fading in
+ *                                from white (RaceMod_FadeFromWhite: Polar Island's jump into the rocky peak, 2026-10-06)
  */
 #include "C_EXTERN.H"
 #include "COMMON.H"
@@ -311,6 +314,10 @@ static int s_sprint = 0, s_hasFinish = 0;
 static T_RACE_LINE s_finishLine;
 static S32 s_endAt = 0;                    // when the race's end is followed up (0: not yet)
 static int s_endWon = 0;
+static int s_wakeFlight = 0;                // wake_flight= (ms; 0: RACE_SPRINT_END_MS, the car held at the line)
+static int s_fadeFromWhite = 0;             // the waking scene fades in from white (set by the wake; RaceMod_FadeFromWhite takes it)
+static S32 s_whiteUntil = 0;                // ... once its opening has laid Twinsen in his bed: the picture held white till then (RaceMod_Story)
+#define RACE_WHITE_HOLD_MS 400
 static int s_wakeScene = -1, s_wakeText = -1, s_wakeActor = -1, s_introText = -1, s_loseText = -1, s_introShown = 0;
 // ... and once Twinsen is on his way to the waking scene: kept through a change of track (the set's island loads another)
 static int s_pendWakeScene = -1, s_pendWakeText = -1, s_pendWakeActor = -1;
@@ -1355,6 +1362,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_nbPits < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbPits++;
         } else if (!strcmp(key, "qualifying")) s_qualifying = atoi(v);
         else if (!strcmp(key, "weather")) s_fineWeather = !strcmp(v, "fine");
+        else if (!strcmp(key, "wake_flight")) s_wakeFlight = atoi(v);
         else if (!strcmp(key, "raised")) LoadRaised(v);
         else if (!strcmp(key, "statue")) s_statue = atoi(v);
         else if (!strcmp(key, "rescue")) s_rescueOn = atoi(v);
@@ -1829,11 +1837,13 @@ static void SprintOver(S32 now, int crossed) {
     else if (mainOn) snprintf(text, sizeof(text), "%s got there first", s_opp[s_main].Name);
     else snprintf(text, sizeof(text), "You finished %d%s", place, Ordinal(place));
     Message(text);
-    s_messageUntil = now + RACE_SPRINT_END_MS;
+    // (a won dream with wake_flight=: Twinsen wakes up in mid-flight, the car not held at the line)
+    const S32 after = s_beatMain && s_wakeFlight > 0 && s_wakeScene >= 0 ? s_wakeFlight : RACE_SPRINT_END_MS;
+    s_messageUntil = now + after;
     Log_Info("[racemod] sprint over in %.2f s: %d%s of %d%s", (now - s_lapStart) / 1000.0, place, Ordinal(place), racers, s_beatMain ? ", won" : ", lost");
     if (s_beatMain) ApplySets(s_winSet, s_nbWinSet);
     ApplySets(s_finishSet, s_nbFinishSet);
-    s_endAt = now + RACE_SPRINT_END_MS;
+    s_endAt = now + after;
     s_endWon = s_beatMain;
 }
 
@@ -1849,6 +1859,11 @@ static int StartScene(void) {
 // the intro as the grid forms, a sprint's end followed up -- a win wakes Twinsen up (out of the car, in the waking scene), a loss runs
 // the race again from the grid -- and the wake line said a moment after he has woken up.
 void RaceMod_Story(void) {
+    // (the waking scene held white: now it fades in)
+    if (s_whiteUntil && TimerRefHR >= s_whiteUntil && NewCube == -1) {
+        s_whiteUntil = 0;
+        FadeWhiteToPalAndSamples(PtrPal);
+    }
     if (!RaceMod_Active()) return;
     const S32 now = TimerRefHR;
     // (the wake line, if the waking scene's actor has said nothing since Twinsen woke up: RaceMod_Dial says it before her first line)
@@ -1889,7 +1904,16 @@ void RaceMod_Story(void) {
     if (!s_place || !s_endAt || now < s_endAt || NewCube != -1) return;
     s_endAt = 0;
     if (s_endWon && s_wakeScene >= 0) {
-        // the dream is over: Twinsen wakes up, out of his car (the car is no one's: a new game's)
+        // the dream is over: Twinsen wakes up, out of his car (the car is no one's: a new game's) -- in mid-flight with wake_flight=, the
+        // picture fading to white there and the waking scene fading in from it
+        if (s_wakeFlight > 0) {
+            Log_Info("[racemod] the dream fades to white in mid-flight");
+            // (the picture as it is to white -- WhiteFade fades from black)
+            U8 white[768];
+            memset(white, 255, sizeof(white));
+            FadePalToPal(PtrPal, white);
+            s_fadeFromWhite = 1;
+        }
         if (Comportement == C_BUGGY) LeaveBuggy(C_NORMAL);
         // (and on foot: LeaveBuggy leaves his move the car's, and a change of scene puts a hero whose move is the car's back in it --
         // OBJECT.CPP ChangeCube, MemoMove -- where he drove off his bed at the race's speed)
@@ -3653,7 +3677,17 @@ void RaceMod_Frame(void) {
 
 // The player's car stands on the grid until the count-down's GO (BUGGY.CPP RaceSpeed).
 S32 RaceMod_Held(void) {
-    return RaceMod_Active() && (s_phase == PHASE_GRID || TimerRefHR < s_hitUntil || (s_sprint && s_place));
+    // (not a won dream's car over its jump: wake_flight=)
+    return RaceMod_Active() && (s_phase == PHASE_GRID || TimerRefHR < s_hitUntil || (s_sprint && s_place && !(s_endWon && s_wakeFlight > 0)));
+}
+
+// Whether the scene now fading in comes from white (the dream's end: wake_flight=), once: the picture is held white, and fades in
+// RACE_WHITE_HOLD_MS later (RaceMod_Story) -- the scene's first picture is Twinsen at its start, before its opening lays him in bed.
+S32 RaceMod_FadeFromWhite(void) {
+    if (!s_fadeFromWhite) return 0;
+    s_fadeFromWhite = 0;
+    s_whiteUntil = TimerRefHR + RACE_WHITE_HOLD_MS;
+    return 1;
 }
 
 // How far round the race the player is, and an opponent, in world units from the start of lap 1 (negative before it). The player is
@@ -4120,7 +4154,7 @@ static void ResetTrack(void) {
     s_nbGates = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
-    s_nbAfterGears = 0;
+    s_nbAfterGears = 0; s_wakeFlight = 0;
     s_powerups = 0; s_powerupOnly = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks)); s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     s_noCollideScene = -1;

@@ -13,8 +13,9 @@ internal static class PolarHolomap
     public const int PictureEntry = RaceTrackHolomap.FirstMap + 2 * 14, CameraEntry = PictureEntry + 1;
     public const int LabelText = 620, GameTextFile = 2;
     private const int CitadelMap = RaceTrackHolomap.FirstMap + 2 * 12;
-    // the camera: the middle of the island's cubes (6..8 x 5..8: x 7.5 cubes, z 7), looking down as the retail maps do
-    public static readonly int[] Camera = { 7, 7, 16384, 0, 453, 1600, 150000, 309, 3368 };
+    // the camera: the middle of the island's cubes (5..9 x 4..10: x 7.5 cubes, z 7.5), looking down as the retail maps do, as far off as
+    // the island is big (at LBA1's size, in cubes 6..8 x 5..8, it was 150,000 away)
+    public static readonly int[] Camera = { 7, 7, 16384, 16384, 453, 1600, 280000, 309, 3368 };
 
     // `solids`: what the ground doesn't show, drawn as boxes (the rocky peak's columns: PolarScenes)
     public static List<string> Install(string gameDirectory, IslandFile island,

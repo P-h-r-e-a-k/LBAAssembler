@@ -324,6 +324,8 @@ S32 RaceMod_Dial(S32 num);
 S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);
 void RaceMod_FloorFor(S32 y);
 void RaceMod_FloorForNothing(void);
+// OBJECT.CPP ChangeCube's fade-in: from white, once, at a dream's end (RACEMOD.CPP wake_flight=)
+S32 RaceMod_FadeFromWhite(void);
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
 void RaceMod_Floor(S32 ox, S32 oy, S32 oz, S32 nx, S32 *ny, S32 nz);
 #ifdef	LBA_EDITOR

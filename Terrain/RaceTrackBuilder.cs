@@ -2980,7 +2980,9 @@ internal static class RaceTrackBuilder
         {
             if (RaceTrackTextures.KerbTexture(island, o.Theme) is { } kerbAt)
             {
-                kerbCells = KerbCells(island, index, roads, kinds, arrows, plain, kerbAt, o.Theme);
+                // (on an island with more ground pages -- POLAR.ILE -- a cube has room for 1024 texture definitions: the road's coordinates
+                // snapped, so a straight kerb's triangles share theirs)
+                kerbCells = KerbCells(island, index, roads, kinds, arrows, plain, kerbAt, o.Theme, island.GroundPages.Count > 0 ? KerbSnap : null);
                 var triangles = kerbCells.Values.Sum(c => c.Uvs.Count(u => u is not null));
                 report.Notes.Add($"the kerbs drawn smooth: {triangles} triangles along them carry a kerb texture of their own (at ({kerbAt.X},{kerbAt.Y}) in the ground's page, " +
                                  $"mapped by the road's own coordinates), {kerbCells.Count} cells cut the way the road runs");
@@ -3017,8 +3019,15 @@ internal static class RaceTrackBuilder
     // colour with the kerb texture over it (RaceTrackTextures.KerbTexture: asphalt, the kerb's red and white blocks, and nothing past
     // it), mapped corner by corner from the road's coordinates -- so the kerb's edges and the blocks' ends run where the road says, to a
     // tenth of a cell, not along the cells.
+    // `snap`: the road's coordinates at the corners rounded to it (cells), and the kerb's blocks KerbSnapBlock cells long -- its red and
+    // white a whole number of cells -- so a kerb's triangles share texture definitions wherever the road runs straight, every
+    // 2 * KerbSnapBlock cells (2026-10-06: Polar Island, twice LBA1's size, the curve through the plan's points wavering by a hundredth of a
+    // cell and the blocks 1.6 cells long, had a definition a triangle -- 1,815 for 1,871 in its busiest cube -- and an island with more
+    // ground pages has room for 1,024)
+    private const double KerbSnap = 1.0 / 16, KerbSnapBlock = 2;
+
     private static Dictionary<(int, int), KerbCell> KerbCells(IslandFile island, RoadIndex index, List<TrackRoad> roads, Dictionary<(int, int), Kind> kinds,
-        Dictionary<(int, int), ArrowCell> arrows, Dictionary<(int, int), RoadHit> plain, (int X, int Y) texture, RaceTrackTheme theme)
+        Dictionary<(int, int), ArrowCell> arrows, Dictionary<(int, int), RoadHit> plain, (int X, int Y) texture, RaceTrackTheme theme, double? snap = null)
     {
         const int T = RaceTrackTextures.KerbTexels;
         var cells = new Dictionary<(int, int), KerbCell>();
@@ -3052,6 +3061,7 @@ internal static class RaceTrackBuilder
                 if (best is not { } c || (c.Lat >= 0) != (hit.Lat >= 0)) { ok = false; break; }
                 d[k] = Across(r, c);
                 s[k] = hit.S + Sep(r, c.S, hit.S);
+                if (snap is { } q) { d[k] = Math.Round(d[k] / q) * q; s[k] = Math.Round(s[k] / q) * q; }
             }
             if (!ok) continue;
             double Spread(int[] t) => t.Max(c => d[c]) - t.Min(c => d[c]);
@@ -3070,13 +3080,16 @@ internal static class RaceTrackBuilder
                 if (lo < inner - 1.02 || hi > outer + 1.02) { ok = false; break; }
                 halves[half] = Kind.RedCurb;
                 var s0 = t.Min(c => s[c]);
-                var period = 2 * RaceTrackTextures.KerbBlock;
+                // (the texture's blocks are KerbBlock cells long at T texels a cell; snapped, KerbSnapBlock)
+                var block = snap is null ? RaceTrackTextures.KerbBlock : KerbSnapBlock;
+                var along = T * RaceTrackTextures.KerbBlock / block;
+                var period = 2 * block;
                 var phase = (s0 % period + period) % period;
                 var uv = new ushort[6];
                 for (var i = 0; i < 3; i++)
                 {
                     var c = t[i];
-                    double x = (s[c] - s0 + phase) * T, y = (d[c] - (inner - 1)) * T;
+                    double x = (s[c] - s0 + phase) * along, y = (d[c] - (inner - 1)) * T;
                     uv[i * 2] = (ushort)Math.Clamp((int)Math.Round((texture.X + x) * 256), texture.X * 256 + 24, (texture.X + RaceTrackTextures.KerbWide) * 256 - 24);
                     uv[i * 2 + 1] = (ushort)Math.Clamp((int)Math.Round((texture.Y + y) * 256), texture.Y * 256 + 24, (texture.Y + 3 * T) * 256 - 24);
                 }
@@ -3448,7 +3461,7 @@ internal static class RaceTrackBuilder
             for (var half = 0; half < 2; half++)
             {
                 var p = Polygon(cube, arrow is { } a && (half == 0 ? a.Half0 : a.Half1) ? Kind.Arrow : kind, diagonal, half);
-                cube.SetPolygon(x, z, half, p.Raw);
+                cube.SetPolygon(x, z, half, Paged(p).Raw);
             }
             NoWater(gx, gz);
         }
@@ -3464,10 +3477,15 @@ internal static class RaceTrackBuilder
                 var p = kerb.Uvs[half] is { } uv
                     ? Flat(kerb.Under.Bank, kerb.Under.Pos).With(texFlag: 1, textureIndex: IslandGround.TextureIndexFor(cube, uv), diagonal: kerb.Diagonal, col: false)
                     : Polygon(cube, kerb.Kinds[half], kerb.Diagonal, half);
-                cube.SetPolygon(x, z, half, p.Raw);
+                cube.SetPolygon(x, z, half, Paged(p).Raw);
             }
             NoWater(gx, gz);
         }
+
+        // (the road's textures are on the ground's first page: on an island with more pages its definition is the page's and the triangle's
+        // Wide bit -- IslandFile.WithGroundTexture; a flat triangle has neither)
+        private IslandPolygon Paged(IslandPolygon p) =>
+            island.GroundPages.Count == 0 ? p : p.TexFlag == 0 ? p.With(textureIndex: 0, wide: false) : island.WithGroundTexture(p, 0, p.TextureIndex);
 
         private IslandPolygon Polygon(IslandCube cube, Kind kind, bool diagonal, int half)
         {

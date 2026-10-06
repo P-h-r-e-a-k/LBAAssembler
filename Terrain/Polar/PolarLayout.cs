@@ -43,6 +43,11 @@ internal sealed class PolarLayout
     // the rocky peak twice as high as LBA1 has it (the user's: "stretch it upwards" -- LBA2 has the height LBA1's 25 layers didn't): its
     // every layer two, from the sea up; 111's plateau lifted as much, onto its top
     public const int PeakStretch = 2;
+    // The island twice LBA1's size, every way (2026-10-06, the user's: "widen the island and make the whole thing bigger" -- 108's car
+    // tracks go back and forth up its terraces five times, their ways six to eight cells apart, and the race track's road, eight cells
+    // wide, could only take three of them): a cell of the layout is Scale x Scale cells of the island, a layer Scale layers. The ground's
+    // heights are the layout's corners' scaled (its slopes as steep as LBA1's), the objects' boxes scaled, LBA1's places scaled.
+    public const int Scale = 2;
 
     // A cell of the island: the scene its brick comes from (-1: a cell the layout made, the causeway), the brick (LBA_BRK entry), and from
     // the scene's block library its shape (1 solid, 2-13 the slopes and steps) and its code (high nibble F: a game code -- F1 water to

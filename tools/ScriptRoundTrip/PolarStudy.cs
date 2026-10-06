@@ -29,6 +29,41 @@ internal static class PolarStudy
         return 0;
     }
 
+    // defsuse <ILE> <cube x> <cube z>: a cube's texture definitions -- how many, how many its triangles use, and by what kind of triangle
+    // (texture flag, polygon flag, bank), each kind's triangles and distinct definitions.
+    public static int DefsUse(string[] args)
+    {
+        var island = IslandFile.Load(args[1]);
+        var cube = island.CubeAt(int.Parse(args[2]), int.Parse(args[3]))!;
+        var used = new Dictionary<(int Tex, int Poly, int Bank), (int Triangles, HashSet<int> Defs)>();
+        for (var z = 0; z < 64; z++)
+            for (var x = 0; x < 64; x++)
+                for (var h = 0; h < 2; h++)
+                {
+                    var p = new IslandPolygon(cube.Polygon(x, z, h));
+                    if (p.TexFlag == 0) continue;
+                    var key = (p.TexFlag, p.PolyFlag, p.Bank);
+                    if (!used.TryGetValue(key, out var u)) used[key] = u = (0, new HashSet<int>());
+                    used[key] = (u.Triangles + 1, u.Defs);
+                    var (page, def) = island.GroundTextureOf(p);
+                    u.Defs.Add(def | page << 16);
+                }
+        // (DEFS_CELLS="x0 x1 z0 z1": each smooth-kerb triangle's definition in those cells, cube-local)
+        if (Environment.GetEnvironmentVariable("DEFS_CELLS") is { } box && box.Split(' ').Select(int.Parse).ToArray() is { Length: 4 } b)
+            for (var z = b[2]; z <= b[3]; z++)
+                for (var x = b[0]; x <= b[1]; x++)
+                    for (var h = 0; h < 2; h++)
+                    {
+                        var p = new IslandPolygon(cube.Polygon(x, z, h));
+                        if (p.TexFlag != 1 || p.PolyFlag != 3) continue;
+                        var i = island.GroundTextureOf(p).Definition;
+                        Console.WriteLine($"  ({x},{z}) half {h} diag {(p.Diagonal ? 1 : 0)}: def {i} = {string.Join(' ', cube.TextureDefs.AsSpan(i * 6, 6).ToArray())}");
+                    }
+        Console.WriteLine($"{cube.TextureDefs.Length / 6} definitions; used: {used.Values.SelectMany(u => u.Defs).Distinct().Count()}");
+        foreach (var (k, (t, d)) in used.OrderByDescending(u => u.Value.Defs.Count)) Console.WriteLine($"  tex {k.Tex} poly {k.Poly} bank {k.Bank}: {t} triangles, {d.Count} definitions");
+        return 0;
+    }
+
     public static int Stats(string[] args)
     {
         var game = new Lba1Game(args[1]);
@@ -394,9 +429,7 @@ internal static class PolarStudy
         var layout = PolarLayout.Build(game);
         var columns = PolarTerrain.Columns(game, layout);
         int minX = columns.Keys.Min(k => k.X), maxX = columns.Keys.Max(k => k.X), minZ = columns.Keys.Min(k => k.Z), maxZ = columns.Keys.Max(k => k.Z);
-        var offsetX = PolarTerrain.CubeX0 * 64 + (PolarTerrain.CubesX * 64 - (maxX - minX + 1)) / 2 - minX;
-        var offsetZ = PolarTerrain.CubeZ0 * 64 + (PolarTerrain.CubesZ * 64 - (maxZ - minZ + 1)) / 2 - minZ;
-        foreach (var g in columns.Where(c => !c.Value.Water).GroupBy(c => ((c.Key.X + offsetX) / 64, (c.Key.Z + offsetZ) / 64)).OrderBy(g => PolarScenes.SceneOf(g.Key.Item1, g.Key.Item2)))
+        foreach (var g in columns.Where(c => !c.Value.Water).GroupBy(c => (PolarTerrain.IslandX(c.Key.X) / 64, PolarTerrain.IslandZ(c.Key.Z) / 64)).OrderBy(g => PolarScenes.SceneOf(g.Key.Item1, g.Key.Item2)))
             Console.WriteLine($"scene {PolarScenes.SceneOf(g.Key.Item1, g.Key.Item2)} cube {g.Key}: {string.Join(", ", g.GroupBy(c => c.Value.Cell.Scene).OrderByDescending(h => h.Count()).Select(h => $"{h.Key} x{h.Count()}"))}");
         return 0;
     }
@@ -408,14 +441,12 @@ internal static class PolarStudy
         var layout = PolarLayout.Build(game);
         var columns = PolarTerrain.Columns(game, layout);
         int minX = columns.Keys.Min(k => k.X), maxX = columns.Keys.Max(k => k.X), minZ = columns.Keys.Min(k => k.Z), maxZ = columns.Keys.Max(k => k.Z);
-        var offsetX = PolarTerrain.CubeX0 * 64 + (PolarTerrain.CubesX * 64 - (maxX - minX + 1)) / 2 - minX;
-        var offsetZ = PolarTerrain.CubeZ0 * 64 + (PolarTerrain.CubesZ * 64 - (maxZ - minZ + 1)) / 2 - minZ;
         var land = columns.Where(c => !c.Value.Water).ToList();
         var byBrick = land.GroupBy(c => c.Value.Cell.Brick).OrderByDescending(g => g.Count()).ToList();
         Console.WriteLine($"{land.Count} land columns, {byBrick.Count} distinct top bricks");
         var total = 0; var k = 0;
         foreach (var g in byBrick) { total += g.Count(); k++; if (k is 16 or 32 or 48 or 64 or 96 or 128) Console.WriteLine($"  top {k} bricks cover {100.0 * total / land.Count:0.0}%"); }
-        foreach (var g in land.GroupBy(c => ((c.Key.X + offsetX) / 64, (c.Key.Z + offsetZ) / 64)).OrderBy(g => g.Key))
+        foreach (var g in land.GroupBy(c => (PolarTerrain.IslandX(c.Key.X) / 64, PolarTerrain.IslandZ(c.Key.Z) / 64)).OrderBy(g => g.Key))
             Console.WriteLine($"cube {g.Key}: {g.Count()} land columns, {g.Select(c => c.Value.Cell.Brick).Distinct().Count()} top bricks");
         Console.WriteLine("most used: " + string.Join(", ", byBrick.Take(24).Select(g => $"{g.Key} x{g.Count()} ({g.First().Value.Cell.Code:X2})")));
         return 0;
@@ -812,8 +843,6 @@ internal static class PolarStudy
         var layout = PolarLayout.Build(game);
         var columns = PolarTerrain.Columns(game, layout);
         int minX = columns.Keys.Min(k => k.X), maxX = columns.Keys.Max(k => k.X), minZ = columns.Keys.Min(k => k.Z), maxZ = columns.Keys.Max(k => k.Z);
-        var offsetX = PolarTerrain.CubeX0 * 64 + (PolarTerrain.CubesX * 64 - (maxX - minX + 1)) / 2 - minX;
-        var offsetZ = PolarTerrain.CubeZ0 * 64 + (PolarTerrain.CubesZ * 64 - (maxZ - minZ + 1)) / 2 - minZ;
         var tracks = columns.Values.Where(c => (c.Cell.Code & 0xF0) == 0x60 || c.Cell.Code == 0x06).Select(c => c.Cell.Brick).Distinct()
             .Where(b => PolarTerrain.IsTrackBrick(PolarTextures.Sprite.Decode(game.ReadBrick(b)), game.Palette)).ToHashSet();
         using var w = new StreamWriter(args[2]);
@@ -825,9 +854,12 @@ internal static class PolarStudy
             var water = has && col.Water;
             var peak = layout.Peak.Contains(g.Key) || g.Any(c => c.Value.Scene == PolarLayout.PlateauScene);
             var obj = !peak && (!has || top > col.Top);
-            w.WriteLine($"{g.Key.X + offsetX},{g.Key.Z + offsetZ},{top * 256},{(has ? PolarTerrain.SurfaceOf(col) : -1)},{(water ? 1 : 0)},{(peak ? 1 : 0)},{(obj ? 1 : 0)},{(has && !water && tracks.Contains(col.Cell.Brick) ? 1 : 0)}");
+            // (each of the island's cells of the column: PolarTerrain.Scale x Scale)
+            for (var j = 0; j < PolarTerrain.Scale; j++)
+                for (var i = 0; i < PolarTerrain.Scale; i++)
+                    w.WriteLine($"{PolarTerrain.IslandX(g.Key.X) + i},{PolarTerrain.IslandZ(g.Key.Z) + j},{PolarTerrain.LayerY(top)},{(has ? PolarTerrain.SurfaceOf(col) : -1)},{(water ? 1 : 0)},{(peak ? 1 : 0)},{(obj ? 1 : 0)},{(has && !water && tracks.Contains(col.Cell.Brick) ? 1 : 0)}");
         }
-        Console.WriteLine($"{args[2]}: offset ({offsetX}, {offsetZ})");
+        Console.WriteLine($"{args[2]}: island cells = layout x {PolarTerrain.Scale} + ({PolarTerrain.OffsetX}, {PolarTerrain.OffsetZ})");
         return 0;
     }
 

@@ -122,9 +122,18 @@ internal sealed class IslandFile
     public byte[] ObjectPage(int page) => page > 0 && page <= ObjectPages.Count ? ObjectPages[page - 1] : ObjectTexture;
     public static int ObjectPageOf(IslandDecor decor) => (decor.Body >> DecorPageShift) & 15;
 
-    // A ground triangle's texture index as its page and its definition in the cube's list.
-    public (int Page, int Definition) GroundTextureOf(int textureIndex) =>
-        GroundPages.Count > 0 ? (textureIndex >> GroundPageShift, textureIndex & ((1 << GroundPageShift) - 1)) : (0, textureIndex);
+    // A ground triangle's texture as its page and its definition in the cube's list. With more ground pages a definition has an eleventh
+    // bit, the triangle's Wide (the engine's Dummy: 2026-10-06, Polar Island at twice LBA1's size had cubes of road needing more than
+    // 1,024 -- the index's other ten bits -- and the page takes the index's top three).
+    public (int Page, int Definition) GroundTextureOf(IslandPolygon polygon) =>
+        GroundPages.Count > 0 ? (polygon.TextureIndex >> GroundPageShift, (polygon.TextureIndex & ((1 << GroundPageShift) - 1)) | (polygon.Wide ? 1 << GroundPageShift : 0))
+            : (0, polygon.TextureIndex);
+    // ... and a triangle given one (a definition of a cube's list, on a page)
+    public IslandPolygon WithGroundTexture(IslandPolygon polygon, int page, int definition) =>
+        GroundPages.Count > 0 ? polygon.With(textureIndex: (page << GroundPageShift) | (definition & ((1 << GroundPageShift) - 1)), wide: definition >> GroundPageShift != 0)
+            : polygon.With(textureIndex: definition);
+    // how many texture definitions a cube may have
+    public int MaxGroundDefinitions => GroundPages.Count > 0 ? 2 << GroundPageShift : 0x2000;
 
     // A ground texture page (0: GroundTexture).
     public byte[] GroundPage(int page) => page > 0 && page <= GroundPages.Count ? GroundPages[page - 1] : GroundTexture;

@@ -109,6 +109,18 @@ internal static class RaceTrackCommand
         return 0;
     }
 
+    // buildhere <game folder> <island>...: the islands' tracks built into the folder as it is -- as the race track window's Build does, its
+    // backups and all (2026-10-06: Polar Island at twice its size over a folder with the earlier island and its track)
+    public static int BuildHere(string[] args)
+    {
+        var game = args[1];
+        var tracks = args.Skip(2).Select(RaceTrackIsland.ByName).Select(where => new RaceTrackService.TrackBuild(RaceTrackPlan.Built(where), RaceTrackOptions.For(where))).ToList();
+        var result = RaceTrackService.Build(game, tracks);
+        Console.WriteLine(result.Summary);
+        foreach (var l in result.Log) Console.WriteLine("  " + l);
+        return result.Ok ? 0 : 1;
+    }
+
     // buildtogether <pristine> <game folder> <island>...: the islands' tracks (their built-in plans) built into one folder by one build, as
     // the race track window does with several islands ticked -- the game folder given its pristine files first, its backups removed -- and
     // for each track the start scene and line RACETRACK.JSON has. RT_CROSSING picks the crossing style of the ones that take it.

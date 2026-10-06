@@ -159,13 +159,14 @@ internal sealed record RaceTrackIsland(
         Title = "The Emerald Moon: over the reactor, round the base",
     };
 
-    // Polar Island (LBA1's, made into LBA2's island 12: Terrain/Polar, POLAR.ILE and POLAR.OBL, scenes 233-244) and the dream that picks
-    // up from the end of the first game: Twinsen dreams he is racing FunFrock to Sendell. From the dock down the arm and up the island,
-    // round a hairpin at its top, back down its east side, over a jump across the main straight, up a serpentine through the terraces
-    // under the rocky peak, and a carried jump onto the peak's top -- a sprint, not a lap (the plan's Open: a start line and a finish
-    // line), in Twinsen's car at 140 km/h at the most (Dream.TopKmh: the setup's gears, scaled). A win wakes him up: Zoe shakes him
-    // awake at home, in the second game's first scene. A loss runs the race again. The island is added by the build when the folder
-    // hasn't got it (Polar.PolarIsland, from the LBA1 folder in the settings), and stays when the track is put back.
+    // Polar Island (LBA1's at twice its size, made into LBA2's island 12: Terrain/Polar, POLAR.ILE and POLAR.OBL, scenes 233-253) and the
+    // dream that picks up from the end of the first game: Twinsen dreams he is racing FunFrock to Sendell. From the dock down the arm and up
+    // the island, round a hairpin at its top, back down its east side, over a jump across the main straight, up the terraces under the
+    // rocky peak along LBA1's car tracks, round the peak on a raised road and a carried jump into it -- a sprint, not a lap (the plan's
+    // Open: a start line and a finish line, the jump's lip), in Twinsen's car at 120 km/h at the most (Dream.TopKmh: the setup's gears,
+    // scaled). A win wakes him up in mid-flight (Dream.WakeFlight): Zoe shakes him awake at home, in the second game's first scene. A loss
+    // runs the race again. The island is added by the build when the folder hasn't got it (Polar.PolarIsland, from the LBA1 folder in the
+    // settings), and stays when the track is put back.
     public static readonly RaceTrackIsland Polar = new("Polar Island", LBAAssembler.Terrain.Polar.PolarTerrain.IleFile, LBAAssembler.Terrain.Polar.PolarTerrain.OblFile,
         LBAAssembler.Terrain.Polar.PolarIsland.IslandByte, LBAAssembler.Terrain.Polar.PolarScenes.FirstScene,
         LBAAssembler.Terrain.Polar.PolarScenes.FirstScene + LBAAssembler.Terrain.Polar.PolarScenes.Count - 1, LBAAssembler.Terrain.Polar.PolarIsland.PaletteEntry, "RaceTrackPlan.Polar.json", null)

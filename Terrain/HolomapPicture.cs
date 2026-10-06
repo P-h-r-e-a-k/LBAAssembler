@@ -52,7 +52,7 @@ internal static class HolomapPicture
                 var polygon = new IslandPolygon(cube.Polygon(x, z, half));
                 if (polygon.CodeJeu == 1 && cube.Height(x, z) == 0 && cube.Height(x + 1, z + 1) == 0) continue;
                 if (polygon.TexFlag == 0) continue;
-                var (page, index) = island.GroundTextureOf(polygon.TextureIndex);
+                var (page, index) = island.GroundTextureOf(polygon);
                 if (index * 6 + 6 > cube.TextureDefs.Length) continue;
                 var texture = island.GroundPage(page);
                 var diagonal = new IslandPolygon(cube.Polygon(x, z, 0)).Diagonal;

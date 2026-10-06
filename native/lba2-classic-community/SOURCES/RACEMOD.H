@@ -45,6 +45,7 @@ void RaceMod_Frame(void);
 
 // TRUE while the player's car stands on the grid, before the count-down's GO, and for a moment after a hit (RaceMod_CarHit).
 S32 RaceMod_Held(void);
+S32 RaceMod_FadeFromWhite(void);
 
 // The display (gear, speed, lap times, checkpoints, race position), drawn over the scene while the hero drives.
 void RaceMod_Draw(void);

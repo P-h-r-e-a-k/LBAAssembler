@@ -59,7 +59,8 @@ internal static class PolarObjects
                     if (cells.ContainsKey(n) && seen.Add(n)) queue.Enqueue(n);
                 }
             }
-            foreach (var g in piece.GroupBy(c => (Math.DivRem(c.X + offsetX, Chunk, out _), Math.DivRem(c.Z + offsetZ, Chunk, out _)))) chunks.Add(g.ToList());
+            // (in the island's cells: a chunk Chunk cells of the layout, the island's Scale times as many -- the cubes' edges among its edges)
+            foreach (var g in piece.GroupBy(c => (PolarTerrain.IslandX(c.X) / (Chunk * PolarTerrain.Scale), PolarTerrain.IslandZ(c.Z) / (Chunk * PolarTerrain.Scale)))) chunks.Add(g.ToList());
         }
 
         // the faces each chunk shows, and the tiles they need: a face is hidden where it lies on its cell's side and what is beyond covers
@@ -145,14 +146,14 @@ internal static class PolarObjects
         {
             int x0 = chunk.Min(c => c.X), x1 = chunk.Max(c => c.X), z0 = chunk.Min(c => c.Z), z1 = chunk.Max(c => c.Z);
             if (x0 == x1 && z0 == z1) return false;
-            int yMin = (chunk.Min(c => c.Y) - 1) * 256, yMax = chunk.Max(c => c.Y) * 256;
+            int yMin = PolarTerrain.LayerY(chunk.Min(c => c.Y) - 1), yMax = PolarTerrain.LayerY(chunk.Max(c => c.Y));
             var own = chunk.Select(c => (c.X, c.Z)).ToHashSet();
             for (var x = x0; x <= x1; x++)
                 for (var z = z0; z <= z1; z++)
                 {
                     if (own.Contains((x, z)) || !columns.TryGetValue((x, z), out var col)) continue;
                     var surface = PolarTerrain.SurfaceOf(col);
-                    if (yMin < surface + 512 && yMax > surface) return true;
+                    if (yMin < surface + 512 * PolarTerrain.Scale && yMax > surface) return true;
                 }
             return false;
         }
@@ -186,16 +187,17 @@ internal static class PolarObjects
                 continue;
             }
             // the decor: in the cube of the chunk's first column, at the body's origin, its box the chunk's cells' (cube-local)
-            int gx0 = chunk.Min(c => c.X) + offsetX, gz0 = chunk.Min(c => c.Z) + offsetZ;
+            int gx0 = PolarTerrain.IslandX(chunk.Min(c => c.X)), gz0 = PolarTerrain.IslandZ(chunk.Min(c => c.Z));
             var cube = island.CubeAt(gx0 / 64, gz0 / 64);
             if (cube is null) { log.Add($"a chunk at cell ({gx0}, {gz0}) is outside the island's cubes: left out"); continue; }
             if (cube.Decors.Count >= IslandDecors.MaxPerCube) { log.Add($"cube ({gx0 / 64}, {gz0 / 64}) has its {IslandDecors.MaxPerCube} objects: a chunk left out"); continue; }
             int cubeX = gx0 / 64 * IslandFile.CubeSize, cubeZ = gz0 / 64 * IslandFile.CubeSize;
-            // (the origin is in the layout's cells and layers: to world units)
-            var decor = IslandDecors.Blank(bodies.Count | (page << IslandFile.DecorPageShift), (int)Math.Round((origin.X + offsetX) * 512) - cubeX, (int)Math.Round(origin.Y * 256), (int)Math.Round((origin.Z + offsetZ) * 512) - cubeZ);
-            decor.XMin = (chunk.Min(c => c.X) + offsetX) * 512 - cubeX; decor.XMax = (chunk.Max(c => c.X) + 1 + offsetX) * 512 - cubeX;
-            decor.ZMin = (chunk.Min(c => c.Z) + offsetZ) * 512 - cubeZ; decor.ZMax = (chunk.Max(c => c.Z) + 1 + offsetZ) * 512 - cubeZ;
-            decor.YMin = (chunk.Min(c => c.Y) - 1) * 256; decor.YMax = chunk.Max(c => c.Y) * 256;
+            // (the origin is in the layout's cells and layers: to the island's world units)
+            var decor = IslandDecors.Blank(bodies.Count | (page << IslandFile.DecorPageShift), (int)Math.Round((origin.X * PolarTerrain.Scale + offsetX) * 512) - cubeX, PolarTerrain.LayerY(origin.Y),
+                (int)Math.Round((origin.Z * PolarTerrain.Scale + offsetZ) * 512) - cubeZ);
+            decor.XMin = PolarTerrain.IslandX(chunk.Min(c => c.X)) * 512 - cubeX; decor.XMax = PolarTerrain.IslandX(chunk.Max(c => c.X) + 1) * 512 - cubeX;
+            decor.ZMin = PolarTerrain.IslandZ(chunk.Min(c => c.Z)) * 512 - cubeZ; decor.ZMax = PolarTerrain.IslandZ(chunk.Max(c => c.Z) + 1) * 512 - cubeZ;
+            decor.YMin = PolarTerrain.LayerY(chunk.Min(c => c.Y) - 1); decor.YMax = PolarTerrain.LayerY(chunk.Max(c => c.Y));
             cube.Decors.Add(decor);
             bodies.Add(body.Write());
             decors++;
@@ -208,10 +210,10 @@ internal static class PolarObjects
                 for (var gx = (cx * IslandFile.CubeSize + d.XMin) / 512; gx < (cx * IslandFile.CubeSize + d.XMax) / 512; gx++)
                     for (var gz = (cz * IslandFile.CubeSize + d.ZMin) / 512; gz < (cz * IslandFile.CubeSize + d.ZMax) / 512; gz++)
                     {
-                        var at = (gx - offsetX, gz - offsetZ);
+                        var at = (PolarTerrain.LayoutX(gx), PolarTerrain.LayoutZ(gz));
                         if (!PolarTerrain.TrackCells.Contains(at) || !columns.TryGetValue(at, out var col)) continue;
                         var surface = PolarTerrain.SurfaceOf(col);
-                        if (d.YMin < surface + 256 && d.YMax > surface && !objectColumns.Contains(at)) blocked.Add(at);
+                        if (d.YMin < surface + 256 * PolarTerrain.Scale && d.YMax > surface && !objectColumns.Contains(at)) blocked.Add(at);
                     }
         log.Add($"{blocked.Count} car track cells inside an object's box with nothing of the object on them" + (blocked.Count > 0 ? ": " + string.Join(" ", blocked.Take(30)) : ""));
         island.ObjectPages.Clear();
@@ -265,7 +267,8 @@ internal static class PolarObjects
             // (the same point to 1/64 of a cell)
             var key = ((int)Math.Round(x * 64), y, (int)Math.Round(z * 64));
             if (index.TryGetValue(key, out var i)) return i;
-            points.Add(new Vector3((float)((x - o.X) * 512), (y - o.Y) * 256, (float)((z - o.Z) * 512)));
+            // (the island's: the layout's cells Scale times as big)
+            points.Add(new Vector3((float)((x - o.X) * 512 * PolarTerrain.Scale), (y - o.Y) * 256 * PolarTerrain.Scale, (float)((z - o.Z) * 512 * PolarTerrain.Scale)));
             return index[key] = points.Count - 1;
         }
         var faces = new List<Face>();

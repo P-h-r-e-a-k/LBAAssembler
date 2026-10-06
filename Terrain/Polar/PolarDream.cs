@@ -25,18 +25,22 @@ internal static class PolarDream
     public const int DreamVar = 205;
     // Twinsen wakes up in the game's first scene, at its own start (the foot of his bed), and Zoe says the wake line
     public const int WakeScene = 0, WakeActor = 4;
-    // the car's top speed for the race (km/h): the race car setup's gears scaled to it (its normal top is 80)
-    public const int TopKmh = 140;
+    // the car's top speed for the race (km/h): the race car setup's gears scaled to it (its normal top is 80; 140 until the island was made
+    // twice its size, 2026-10-06)
+    public const int TopKmh = 120;
+    // the race ends at the lip of the jump into the rocky peak, and Twinsen wakes up this long after it, in mid-flight: he never lands
+    // (the engine's wake_flight=)
+    public const int WakeFlightMs = 450;
     private const int CitadelTexts = 3;
 
     private static readonly string[] Intro =
     {
-        "Polar Island? FunFrock has escaped, and he's racing to Sendell! If he gets to her first, the whole planet is lost. I have to beat him to the top of the rocky peak!",
-        "L'île Polaire ? FunFrock s'est échappé et il file vers Sendell ! S'il l'atteint le premier, toute la planète est perdue. Je dois arriver avant lui au sommet du pic rocheux !",
-        "Die Polarinsel? FunFrock ist entkommen und rast zu Sendell! Wenn er sie zuerst erreicht, ist der ganze Planet verloren. Ich muss vor ihm oben auf dem Felsgipfel sein!",
-        "¿La Isla Polar? ¡FunFrock ha escapado y corre hacia Sendell! Si llega a ella primero, todo el planeta estará perdido. ¡Tengo que llegar antes que él a la cima del pico rocoso!",
-        "L'Isola Polare? FunFrock è fuggito e corre verso Sendell! Se arriva da lei per primo, l'intero pianeta è perduto. Devo arrivare in cima al picco roccioso prima di lui!",
-        "A Ilha Polar? O FunFrock fugiu e corre para Sendell! Se chegar primeiro, o planeta inteiro está perdido. Tenho de chegar ao cimo do pico rochoso antes dele!",
+        "Polar Island? FunFrock has escaped, and he's racing to Sendell! If he gets to her first, the whole planet is lost. I have to beat him to the rocky peak!",
+        "L'île Polaire ? FunFrock s'est échappé et il file vers Sendell ! S'il l'atteint le premier, toute la planète est perdue. Je dois arriver avant lui au pic rocheux !",
+        "Die Polarinsel? FunFrock ist entkommen und rast zu Sendell! Wenn er sie zuerst erreicht, ist der ganze Planet verloren. Ich muss vor ihm am Felsgipfel sein!",
+        "¿La Isla Polar? ¡FunFrock ha escapado y corre hacia Sendell! Si llega a ella primero, todo el planeta estará perdido. ¡Tengo que llegar antes que él al pico rocoso!",
+        "L'Isola Polare? FunFrock è fuggito e corre verso Sendell! Se arriva da lei per primo, l'intero pianeta è perduto. Devo arrivare al picco roccioso prima di lui!",
+        "A Ilha Polar? O FunFrock fugiu e corre para Sendell! Se chegar primeiro, o planeta inteiro está perdido. Tenho de chegar ao pico rochoso antes dele!",
     };
 
     private static readonly string[] Lose =

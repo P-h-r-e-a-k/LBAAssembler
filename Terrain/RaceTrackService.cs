@@ -91,7 +91,10 @@ internal static class RaceTrackService
     public sealed record DreamInfo(StartLineInfo Finish, int TopKmh, int IntroText, int LoseText, int WakeScene, int WakeText, int WakeActor,
         // (since 2026-10-06, later: the game variable a win sets, which scene 0's opening wakes Twinsen up in his bed by -- it says the
         // wake line itself then, and WakeText is -1)
-        int WinVar = -1);
+        int WinVar = -1,
+        // (since the island was made twice its size: how long after the finish line -- a jump's lip -- Twinsen wakes up, in mid-flight; 0, the
+        // car stops at the line and he wakes up 3.5 s later)
+        int WakeFlight = 0);
     public sealed record RivalInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors);
     // A driver: its name, its line ([x, z, y, speed, bend radius] as Path's), how many points before the start line it starts without a
     // grid, the scenes' copies of its car (none for a time to beat: Ghost), its character (Top, Grip: shares of the player's car's top
@@ -330,14 +333,15 @@ internal static class RaceTrackService
         options.Theme = themed.Theme;
         if (themed.Log.Length > 0) extra.Add(themed.Log);
         var report = RaceTrackBuilder.Build(island, plan, options);
-        // (an island with more ground pages -- POLAR.ILE -- has a texture index of a page and a definition, IslandFile.GroundPageShift:
-        // the road's definitions, the smooth kerbs' a triangle each, must fit in a cube's share of it)
+        // (an island with more ground pages -- POLAR.ILE -- has a texture index of a page and a definition, IslandFile.GroundPageShift, and
+        // the triangle's Wide bit: the road's definitions, the smooth kerbs' a triangle each on a bend, must fit in a cube's 2,048)
         if (island.GroundPages.Count > 0)
         {
-            var most = island.Cubes.Values.Max(c => c.TextureDefs.Length / 6);
-            if (most > 1 << IslandFile.GroundPageShift)
-                throw new InvalidDataException($"{options.Island.IleFile}: a cube needs {most} ground texture definitions with the road, more than the {1 << IslandFile.GroundPageShift} an island with more texture pages has room for.");
-            extra.Add($"{options.Island.IleFile}: at most {most} ground texture definitions in a cube with the road (room for {1 << IslandFile.GroundPageShift})");
+            var full = IslandOps.CubeCells(island).MaxBy(c => c.Item3.TextureDefs.Length);
+            var most = full.Item3.TextureDefs.Length / 6;
+            if (most > island.MaxGroundDefinitions)
+                throw new InvalidDataException($"{options.Island.IleFile}: cube ({full.Item1}, {full.Item2}) needs {most} ground texture definitions with the road, more than the {island.MaxGroundDefinitions} an island with more texture pages has room for.");
+            extra.Add($"{options.Island.IleFile}: at most {most} ground texture definitions in a cube with the road (room for {island.MaxGroundDefinitions})");
         }
         island.Save(Path.Combine(gameDirectory, options.Island.IleFile));
         AppendBodies(Path.Combine(gameDirectory, options.Island.OblFile), report, options);
@@ -357,7 +361,7 @@ internal static class RaceTrackService
             extra.AddRange(dreamLog);
             dream = new DreamInfo(LineInfo(finish, report.FinishLineHeight), LBAAssembler.Terrain.Polar.PolarDream.TopKmh, LBAAssembler.Terrain.Polar.PolarDream.IntroText,
                 LBAAssembler.Terrain.Polar.PolarDream.LoseText, LBAAssembler.Terrain.Polar.PolarDream.WakeScene, inOpening ? -1 : wake, LBAAssembler.Terrain.Polar.PolarDream.WakeActor,
-                inOpening ? LBAAssembler.Terrain.Polar.PolarDream.DreamVar : -1);
+                inOpening ? LBAAssembler.Terrain.Polar.PolarDream.DreamVar : -1, LBAAssembler.Terrain.Polar.PolarDream.WakeFlightMs);
         }
         WriteInfo(gameDirectory, report, options, scenes, own, session, story.Info, dream);
         return new Built(report, options, twin, scenes, extra);

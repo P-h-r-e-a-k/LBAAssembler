@@ -21,8 +21,19 @@ namespace LBAAssembler.Terrain.Polar;
 internal static class PolarTerrain
 {
     public const string IleFile = "POLAR.ILE", OblFile = "POLAR.OBL", SourceIle = "MOON.ILE", SourceObl = "MOON.OBL";
-    // the island's place in the cube map: the layout's cells from 107's corner, moved to cubes (6..8, 5..8) with the island in their middle
-    public const int CubeX0 = 6, CubeZ0 = 5, CubesX = 3, CubesZ = 4;
+    // the island's place in the cube map, twice LBA1's size (PolarLayout.Scale): a cell of the layout at (Scale * x + OffsetX, Scale * z +
+    // OffsetZ) in the island's cells, so each LBA1 scene's grid (64 x 64 cells, at whole grids from 107's but for 106, 109 and the dock) is
+    // two cubes by two or a little over -- 21 cubes have land, the fewest any placement gives -- and the island in cubes (5..9, 4..10), 107's
+    // grid in cubes (7..8, 6..7)
+    public const int CubeX0 = 5, CubeZ0 = 4, CubesX = 5, CubesZ = 7;
+    public const int Scale = PolarLayout.Scale, OffsetX = 7 * 64, OffsetZ = 6 * 64;
+    // a cell of the layout's first cell of the island (it has Scale x Scale), and an island cell's of the layout
+    public static int IslandX(int x) => x * Scale + OffsetX;
+    public static int IslandZ(int z) => z * Scale + OffsetZ;
+    public static int LayoutX(int gx) => (int)Math.Floor((gx - OffsetX) / (double)Scale);
+    public static int LayoutZ(int gz) => (int)Math.Floor((gz - OffsetZ) / (double)Scale);
+    // a layer of the layout's height in world units, on the island
+    public static int LayerY(double layer) => (int)Math.Round(layer * 256 * Scale);
     // the size of a tile in the ground atlas (32 x 32 pixels, as the retail islands': LBA1 draws a cell's edge some 27 pixels long)
     public const int Tile = PolarTextures.TileSize;
     // a piece of land no bigger than this, the sea all round it, is a rock in the water: built as an object (PolarObjects), its sides
@@ -34,7 +45,8 @@ internal static class PolarTerrain
     public const int NormalLight = 14;
     public const double SlopeLight = 0.6;
 
-    // Columns: the ground's (the rocks in the water left out); Rocks: the columns of the rocks in the water (the layout's x, z).
+    // Columns: the ground's (the rocks in the water left out); Rocks: the columns of the rocks in the water (the layout's x, z). OffsetX and
+    // OffsetZ: the island's cell of the layout's (x, z) is (Scale * x + OffsetX, Scale * z + OffsetZ).
     public sealed record Result(IslandFile Island, int OffsetX, int OffsetZ, Dictionary<(int X, int Z), Column> Columns, HashSet<(int X, int Z)> Rocks,
         PolarTextures.Colours Colours, List<string> Log);
 
@@ -83,18 +95,19 @@ internal static class PolarTerrain
         return columns;
     }
 
-    // The surface height of a column (world units, the sea at 0).
-    public static int SurfaceOf(Column c) => c.Water ? 0 : Math.Max(0, c.Top * 256);
+    // The surface height of a column (world units on the island, the sea at 0), and as LBA1 has it (the layout's units: a layer 256).
+    public static int SurfaceOf(Column c) => c.Water ? 0 : Math.Max(0, LayerY(c.Top));
+    private static int LayoutSurface(Column c) => c.Water ? 0 : Math.Max(0, c.Top * 256);
 
     public static Result Build(Lba1Game game, PolarLayout layout, string gameDirectory)
     {
         var log = new List<string>();
         var columns = Columns(game, layout);
         int minX = columns.Keys.Min(k => k.X), maxX = columns.Keys.Max(k => k.X), minZ = columns.Keys.Min(k => k.Z), maxZ = columns.Keys.Max(k => k.Z);
-        // the island's cells from the layout's: its middle in the middle of the cubes
-        var offsetX = CubeX0 * 64 + (CubesX * 64 - (maxX - minX + 1)) / 2 - minX;
-        var offsetZ = CubeZ0 * 64 + (CubesZ * 64 - (maxZ - minZ + 1)) / 2 - minZ;
-        log.Add($"{columns.Count} columns of ground, layout x {minX}..{maxX} z {minZ}..{maxZ}; island cells = layout + ({offsetX}, {offsetZ})");
+        const int offsetX = OffsetX, offsetZ = OffsetZ;
+        if (IslandX(minX) < CubeX0 * 64 || IslandX(maxX + 1) > (CubeX0 + CubesX) * 64 || IslandZ(minZ) < CubeZ0 * 64 || IslandZ(maxZ + 1) > (CubeZ0 + CubesZ) * 64)
+            throw new InvalidOperationException($"The island's ground (layout x {minX}..{maxX}, z {minZ}..{maxZ}) is past its cubes.");
+        log.Add($"{columns.Count} columns of ground, layout x {minX}..{maxX} z {minZ}..{maxZ}; island cells = layout x {Scale} + ({offsetX}, {offsetZ})");
 
         // the island file: MOON.ILE's, its map down to the new cubes. The cubes' settings are a sea cube's of the fine-weather Citadel
         // (CITABAU (6, 8)): the moon's have no sea (CubeBitField: the sea is drawn in none of a cube's 16 patches), no sky height and
@@ -131,28 +144,42 @@ internal static class PolarTerrain
         var tracks = columns.Values.Where(c => (c.Cell.Code & 0xF0) == 0x60 || c.Cell.Code == 0x06).Select(c => c.Cell.Brick).Distinct()
             .Where(b => IsTrackBrick(PolarTextures.Sprite.Decode(game.ReadBrick(b)), game.Palette)).ToHashSet();
 
-        // the heights: each vertex the height of the cells round it that keep theirs (Priority), the highest of them
-        Column? ColumnAt(int gx, int gz) => columns.TryGetValue((gx - offsetX, gz - offsetZ), out var c) ? c : null;
+        // the heights, on the layout's grid first: each corner the height of the cells round it that keep theirs (Priority), the highest
+        // of them (LBA1's units: a layer 256)
+        Column? ColumnAt(int x, int z) => columns.TryGetValue((x, z), out var c) ? c : null;
+        var cornerHeights = new Dictionary<(int, int), int>();
+        int Corner(int vx, int vz)
+        {
+            if (cornerHeights.TryGetValue((vx, vz), out var known)) return known;
+            var round = new[] { ColumnAt(vx - 1, vz - 1), ColumnAt(vx, vz - 1), ColumnAt(vx - 1, vz), ColumnAt(vx, vz) };
+            var first = round.Max(c => Priority(c, tracks));
+            return cornerHeights[(vx, vz)] = round.Where(c => Priority(c, tracks) == first).Max(c => c is { } k ? LayoutSurface(k) : 0);
+        }
+        // ... and the island's: its vertices among the layout's corners, between them as the layout's cell slopes (bilinear), all of it
+        // Scale times as high -- so its slopes are LBA1's
         foreach (var (cx, cz, cube) in Cubes(island))
             for (var vz = 0; vz <= 64; vz++)
             for (var vx = 0; vx <= 64; vx++)
             {
-                int gx = cx * 64 + vx, gz = cz * 64 + vz;
-                var round = new[] { ColumnAt(gx - 1, gz - 1), ColumnAt(gx, gz - 1), ColumnAt(gx - 1, gz), ColumnAt(gx, gz) };
-                var first = round.Max(c => Priority(c, tracks));
-                var h = round.Where(c => Priority(c, tracks) == first).Max(c => c is { } k ? SurfaceOf(k) : 0);
-                cube.Heights[vz * IslandCube.Vertices + vx] = (short)h;
+                double u = (cx * 64 + vx - offsetX) / (double)Scale, w = (cz * 64 + vz - offsetZ) / (double)Scale;
+                int x0 = (int)Math.Floor(u), z0 = (int)Math.Floor(w);
+                double fx = u - x0, fz = w - z0;
+                var h = (Corner(x0, z0) * (1 - fx) + Corner(x0 + 1, z0) * fx) * (1 - fz) + (Corner(x0, z0 + 1) * (1 - fx) + Corner(x0 + 1, z0 + 1) * fx) * fz;
+                cube.Heights[vz * IslandCube.Vertices + vx] = (short)Math.Round(h * Scale);
             }
 
-        // what each cell is: land (its brick's top); a cliff (land whose corners are two layers and more apart: the side of the column the
-        // slope belongs to -- its own, a rim dropping to the path below, or the higher one it climbs to -- two bricks of it); a bank (water
-        // that land's edge slopes down into: the land's side); water shut in by land on every corner (LBA1's water, flat at the land's
-        // height); or sea (undrawn)
+        // what each cell of the layout is: land (its brick's top); a cliff (land whose corners are two layers and more apart: the side of the
+        // column the slope belongs to -- its own, a rim dropping to the path below, or the higher one it climbs to -- two bricks of it); a
+        // bank (water that land's edge slopes down into: the land's side); water shut in by land on every corner (LBA1's water, flat at the
+        // land's height); or sea (undrawn). Each of the island's Scale x Scale cells of it is what it is.
         var all = new List<(int Gx, int Gz)>();
         foreach (var (cx, cz, _) in Cubes(island))
             for (var z = 0; z < 64; z++) for (var x = 0; x < 64; x++) all.Add((cx * 64 + x, cz * 64 + z));
         IslandGround.OptimiseDiagonals(island, new Cells(all));
-        var kinds = new Dictionary<(int Gx, int Gz), (Kind Kind, object Key, int Up)>();
+        var layoutCells = new List<(int X, int Z)>();
+        for (var z = LayoutZ(CubeZ0 * 64); z <= LayoutZ((CubeZ0 + CubesZ) * 64 - 1); z++)
+            for (var x = LayoutX(CubeX0 * 64); x <= LayoutX((CubeX0 + CubesX) * 64 - 1); x++) layoutCells.Add((x, z));
+        var layoutKinds = new Dictionary<(int X, int Z), (Kind Kind, object Key, int Up)>();
         var waterBrick = columns.Values.Where(c => c.Water).GroupBy(c => c.Cell.Brick).OrderByDescending(g => g.Count()).Select(g => g.Key).DefaultIfEmpty(-1).First();
         // (a column's side: its top brick and, two layers, the one under it)
         object Side((int X, int Z) at, Column c, int layers, int up)
@@ -160,10 +187,9 @@ internal static class PolarTerrain
             var below = layers > 1 && layout.Cells.TryGetValue((at.X, c.Top - 1, at.Z), out var b) && IsGround(game, b) ? b.Brick : -1;
             return (c.Cell.Brick, layers > 1 ? below : -2, up < 2 ? 0 : 1);
         }
-        foreach (var (gx, gz) in all)
+        foreach (var at in layoutCells)
         {
-            var corners = new[] { island.HeightAt(gx, gz) ?? 0, island.HeightAt(gx, gz + 1) ?? 0, island.HeightAt(gx + 1, gz + 1) ?? 0, island.HeightAt(gx + 1, gz) ?? 0 };
-            var at = (X: gx - offsetX, Z: gz - offsetZ);
+            var corners = new[] { Corner(at.X, at.Z), Corner(at.X, at.Z + 1), Corner(at.X + 1, at.Z + 1), Corner(at.X + 1, at.Z) };
             var hasOwn = columns.TryGetValue(at, out var own);
             var land = hasOwn && !own.Water;
             var rise = corners.Max() - corners.Min();
@@ -178,18 +204,22 @@ internal static class PolarTerrain
             var layers = rise >= 512 ? 2 : 1;
             if (land)
             {
-                if (rise < 512) kinds[(gx, gz)] = (Kind.Land, own.Cell.Brick, 0);
+                if (rise < 512) layoutKinds[at] = (Kind.Land, own.Cell.Brick, 0);
                 // (dropping from its own height: its own side; climbing to a neighbour's: that one's)
-                else if (SurfaceOf(own) >= corners.Max() || high is not { } h) kinds[(gx, gz)] = (Kind.Cliff, Side(at, own, layers, up), up);
-                else kinds[(gx, gz)] = (Kind.Cliff, Side(highAt, h, layers, up), up);
+                else if (LayoutSurface(own) >= corners.Max() || high is not { } h) layoutKinds[at] = (Kind.Cliff, Side(at, own, layers, up), up);
+                else layoutKinds[at] = (Kind.Cliff, Side(highAt, h, layers, up), up);
             }
             else if (corners.Max() > 0 && high is { } h)
             {
                 var brick = hasOwn && own.Water ? own.Cell.Brick : waterBrick;
-                if (corners.Min() > 0 && brick >= 0) kinds[(gx, gz)] = (Kind.ShutWater, brick, 0);
-                else kinds[(gx, gz)] = (Kind.Bank, Side(highAt, h, layers, up), up);
+                if (corners.Min() > 0 && brick >= 0) layoutKinds[at] = (Kind.ShutWater, brick, 0);
+                else layoutKinds[at] = (Kind.Bank, Side(highAt, h, layers, up), up);
             }
         }
+        var kinds = new Dictionary<(int Gx, int Gz), (Kind Kind, object Key, int Up)>();
+        foreach (var ((x, z), kind) in layoutKinds)
+            for (var j = 0; j < Scale; j++)
+                for (var i = 0; i < Scale; i++) kinds[(IslandX(x) + i, IslandZ(z) + j)] = kind;
 
         // the ground's textures, on as many pages as they take: the land's and the shut-in water's bricks' top faces, and the sides the
         // cliffs and banks show (a layer of a column's side, or two)
@@ -240,24 +270,24 @@ internal static class PolarTerrain
             {
                 var definition = kind is Kind.Cliff or Kind.Bank ? SlopeDefinition(tx, ty, w, h, diagonal, half, up) : IslandGround.TileDefinition(tx, ty, w, h, diagonal, half);
                 var index = IslandGround.TextureIndexFor(cube, definition);
-                if (index >= 1 << IslandFile.GroundPageShift) throw new InvalidOperationException($"Cube {cube.Id} needs more than {1 << IslandFile.GroundPageShift} texture definitions.");
+                if (index >= island.MaxGroundDefinitions) throw new InvalidOperationException($"Cube {cube.Id} needs more than {island.MaxGroundDefinitions} texture definitions.");
                 mostDefinitions = Math.Max(mostDefinitions, index + 1);
                 var p = new IslandPolygon(cube.Polygon(lx, lz, half));
-                cube.SetPolygon(lx, lz, half, p.With(bank: LandTemplate.Bank, texFlag: LandTemplate.TexFlag, polyFlag: LandTemplate.PolyFlag, sampleStep: LandTemplate.SampleStep,
-                    codeJeu: kind is Kind.Land or Kind.Cliff ? 0 : 1, textureIndex: (page << IslandFile.GroundPageShift) | index).Raw);
+                cube.SetPolygon(lx, lz, half, island.WithGroundTexture(p.With(bank: LandTemplate.Bank, texFlag: LandTemplate.TexFlag, polyFlag: LandTemplate.PolyFlag, sampleStep: LandTemplate.SampleStep,
+                    codeJeu: kind is Kind.Land or Kind.Cliff ? 0 : 1), page, index).Raw);
             }
         }
         // (the car tracks: ground cells whose top is a track brick -- a fifth of its top face the tracks' dark brown and more; any that
         // isn't flat land is a track the port changed)
         var trackBricks = tracks;
-        var trackCells = kinds.Where(k => columns.TryGetValue((k.Key.Gx - offsetX, k.Key.Gz - offsetZ), out var c) && !c.Water && trackBricks.Contains(c.Cell.Brick)).ToList();
-        var bentTracks = trackCells.Where(k => k.Value.Kind != Kind.Land || new[] { island.HeightAt(k.Key.Gx, k.Key.Gz), island.HeightAt(k.Key.Gx + 1, k.Key.Gz), island.HeightAt(k.Key.Gx, k.Key.Gz + 1), island.HeightAt(k.Key.Gx + 1, k.Key.Gz + 1) }.Distinct().Count() > 1).ToList();
-        log.Add($"the car tracks: {trackBricks.Count} track bricks, {trackCells.Count} cells; {bentTracks.Count} of them not flat land ({string.Join(", ", bentTracks.GroupBy(k => k.Value.Kind).Select(g => $"{g.Count()} {g.Key}"))})" +
-            (bentTracks.Count > 0 ? ": " + string.Join(" ", bentTracks.Take(40).Select(k => $"({k.Key.Gx - offsetX},{k.Key.Gz - offsetZ}){k.Value.Kind}")) : ""));
-        TrackCells = trackCells.Select(k => (k.Key.Gx - offsetX, k.Key.Gz - offsetZ)).ToHashSet();
+        var trackCells = layoutKinds.Where(k => columns.TryGetValue(k.Key, out var c) && !c.Water && trackBricks.Contains(c.Cell.Brick)).ToList();
+        var bentTracks = trackCells.Where(k => k.Value.Kind != Kind.Land || new[] { Corner(k.Key.X, k.Key.Z), Corner(k.Key.X + 1, k.Key.Z), Corner(k.Key.X, k.Key.Z + 1), Corner(k.Key.X + 1, k.Key.Z + 1) }.Distinct().Count() > 1).ToList();
+        log.Add($"the car tracks: {trackBricks.Count} track bricks, {trackCells.Count} cells of the layout; {bentTracks.Count} of them not flat land ({string.Join(", ", bentTracks.GroupBy(k => k.Value.Kind).Select(g => $"{g.Count()} {g.Key}"))})" +
+            (bentTracks.Count > 0 ? ": " + string.Join(" ", bentTracks.Take(40).Select(k => $"({k.Key.X},{k.Key.Z}){k.Value.Kind}")) : ""));
+        TrackCells = trackCells.Select(k => k.Key).ToHashSet();
         var counts = kinds.Values.GroupBy(k => k.Kind).ToDictionary(g => g.Key, g => g.Count());
         int Of(Kind k) => counts.TryGetValue(k, out var n) ? n : 0;
-        log.Add($"{Of(Kind.Land)} cells of land, {Of(Kind.Cliff)} of cliff, {Of(Kind.Bank)} of bank, {Of(Kind.ShutWater)} of water shut in by land; {all.Count - kinds.Count} of open water and sea (the engine's sea under them); at most {mostDefinitions} texture definitions in a cube");
+        log.Add($"{Of(Kind.Land)} cells of land, {Of(Kind.Cliff)} of cliff, {Of(Kind.Bank)} of bank, {Of(Kind.ShutWater)} of water shut in by land (the island's: {Scale} x {Scale} to a cell of LBA1's); {all.Count - kinds.Count} of open water and sea (the engine's sea under them); at most {mostDefinitions} texture definitions in a cube");
         // (a slope steeper than LBA1's one-layer steps is a wall to Twinsen: the triangles' own collision flag)
         var walls = IslandGround.SetSteepCollision(island, new Cells(all), SteepestWalk);
         log.Add($"{walls} triangles steeper than {SteepestWalk} degrees are walls");
