@@ -87,6 +87,12 @@ internal sealed class RaceTrackPlan
     // Pipes over the road (RaceTrackPipes): gantries along stretches of the lap, steam from their tops and oil dripping onto the road -- the
     // Island of the Francos' refinery. From and To are the plan's points.
     public PipeRun[]? Pipes { get; set; }
+    // Steam jets out of the road (RaceTrackPipes.PlaceJets): along stretches of the lap, every so many cells, one side of the road and then
+    // the other -- the Gazogem factory's steam, blowing in bursts that hit a car in them. From and To are the plan's points.
+    public SteamJetRun[]? SteamJets { get; set; }
+    // The raised road's colours stretch by stretch (DeckTheme by name: "dock", "refinery", "village"), From and To the plan's points;
+    // elsewhere the standard greys, red and white.
+    public ThemeRun[]? Themes { get; set; }
     // The road bridge's deck at least this high (RaceTrackOptions.RoadBridgeLeast): over a building the plan keeps under it -- the town
     // circuit's deck over Citadel Island's shop, whose top is 3500.
     public double? DeckLeast { get; set; }
@@ -399,6 +405,8 @@ internal sealed class RaceTrackReport
     // island's corner; RACEMOD.CPP steam= and drip=)
     public List<int[]> Steam { get; } = new();
     public List<int[]> Drips { get; } = new();
+    // ... and the steam jets out of the road, [x, y, z, reach, blowing (ms), not (ms), phase (ms)] (RACEMOD.CPP jet=)
+    public List<int[]> Jets { get; } = new();
     public int Vertices, Cells, DecorsRemoved, SolidDecorsRemoved, BridgeCells;
     public double Length;
     public List<string> Notes { get; } = new();
@@ -507,6 +515,8 @@ internal sealed class TrackRoad
     public bool[] Void = Array.Empty<bool>();
     // The plan's own heights, point by point (RaceTrackPlan.Heights), or null.
     public double[]? Planned;
+    // The raised road's colours point by point (RaceTrackPlan.Themes), or null: the standard ones.
+    public DeckTheme?[]? Themes;
     // A raised road's points (RaceTrackPlan.Raised), or null: they keep the plan's heights at any grade and are Deck, so the ground under
     // them is neither shaped nor painted.
     public bool[]? Raised;
@@ -651,6 +661,18 @@ internal static class RaceTrackBuilder
             if (options.Crossing == CrossingStyle.Bridge && crossings.Count > 0) report.RoadBridge = PlanRoadBridge(main, BridgeSpan(main, crossings, options), options, report);
         }
         foreach (var (a, b) in report.BridgeSpans) report.BridgeCoords.Add((main.X[a], main.Z[a], main.X[b], main.Z[b]));
+        // (the raised road's colours, stretch by stretch)
+        if (planned && plan.Themes is { Length: > 0 } themes)
+        {
+            main.Themes = new DeckTheme?[main.Count];
+            foreach (var t in themes)
+            {
+                if (DeckTheme.ByName(t.Theme) is not { } theme) { report.Notes.Add($"WARNING: no deck theme \"{t.Theme}\""); continue; }
+                int a = PlanPoint(plan, main, t.From), b = PlanPoint(plan, main, t.To);
+                for (var k = a; ; k = (k + 1) % main.Count) { main.Themes[k] = theme; if (k == b) break; }
+            }
+            report.Notes.Add($"the raised road's colours: {string.Join(", ", themes.Select(t => $"{t.Theme} from the plan's point {t.From} to {t.To}"))}");
+        }
         if (planned)
             foreach (var l in plan.Loops ?? Array.Empty<double[]>())
             {
@@ -730,6 +752,8 @@ internal static class RaceTrackBuilder
         // (the pipes after the clearing: they stand over the road, out of its way)
         if (planned && plan.Pipes is { Length: > 0 } pipes)
             RaceTrackPipes.Place(island, main, pipes.Select(p => (PlanPoint(plan, main, p.From), PlanPoint(plan, main, p.To), p)).ToList(), options, report);
+        if (planned && plan.SteamJets is { Length: > 0 } jets)
+            RaceTrackPipes.PlaceJets(main, jets.Select(j => (PlanPoint(plan, main, j.From), PlanPoint(plan, main, j.To), j)).ToList(), options, report);
         report.GroundBefore = (x, z) => natural.Height(x, z);
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
         report.WasGround = (x, z) => natural.Drawn(x, z);
@@ -4382,7 +4406,7 @@ internal static class RaceTrackBuilder
             var arrow = pieces % RaisedArrowEvery == 1 && ids.Count == cells + 1 && line < 0 && !striped.Any(b => b);
             var body = RaceTrackRaisedBody.Tile(sections, t / per, r.AsphaltHalf * 512, r.CurbHalf * 512, half, arrow, line,
                 r.RaisedHalfs is null ? null : ids.Select(k => Half(k) - half).ToArray(),
-                r.Stripe is { } st && !o.PitFence ? st.Offset * 512 : double.NaN, striped, strips);   // (under a fence, no stripe)
+                r.Stripe is { } st && !o.PitFence ? st.Offset * 512 : double.NaN, striped, strips, r.Themes?[ids[ids.Count / 2]]);   // (under a fence, no stripe)
             // (its box over its footprint, touching nothing: the engine leaves out a decor whose middle is behind the camera unless a corner
             // of its box is in front of it -- 3DEXT/DECORS.CPP -- and a piece whose middle had just passed under the camera was a hole)
             var corners = ids.SelectMany(k => new[] { -1, 1 }.Select(side => World(k) + new System.Numerics.Vector3((float)-r.Tz[k], 0, (float)r.Tx[k]) * (float)(side * (Half(k) + 64)) - origin)).ToList();
@@ -4526,7 +4550,7 @@ internal static class RaceTrackBuilder
                 var lowest = Enumerable.Range(-PierClear, 2 * PierClear + 1).Where(j => at + j >= 0 && at + j < span.Count).Min(j => r.H[span[at + j]]);
                 if (height < RaisedPierFrom) { placed = true; break; }        // low enough to need none
                 if (!Clear(k, ground)) continue;
-                var body = RaceTrackRaisedBody.Pier(height, PierHalf, across(k), (r.RaisedHalfs?[k] ?? o.RaisedHalfWidth) * 512 - 150, PierBeam, PierHalf);
+                var body = RaceTrackRaisedBody.Pier(height, PierHalf, across(k), (r.RaisedHalfs?[k] ?? o.RaisedHalfWidth) * 512 - 150, PierBeam, PierHalf, r.Themes?[k]);
                 var top = (int)Math.Round(Math.Min(height - PierBeam - 60, lowest - ground - 420));
                 if (add(body, r.X[k] * 512, ground, r.Z[k] * 512, -(int)PierHalf, 0, -(int)PierHalf, (int)PierHalf, Math.Max(1, top), (int)PierHalf)) piers++; else left++;
                 placed = true;
@@ -4605,7 +4629,7 @@ internal static class RaceTrackBuilder
                     if (blocked || scenery.Touches(wx - PierHalf - 40, foot + 80, wz - PierHalf - 40, wx + PierHalf + 40, top - 40, wz + PierHalf + 40)) continue;
                     // the beam: under the road from rail to rail, and out to the column when that stands beside it
                     double lo = Math.Min(-(half - 150) - lateral, -PierHalf), hi = Math.Max(half - 150 - lateral, PierHalf);
-                    var body = RaceTrackRaisedBody.Pier(height, PierHalf, a, lo, hi, PierBeam, PierHalf);
+                    var body = RaceTrackRaisedBody.Pier(height, PierHalf, a, lo, hi, PierBeam, PierHalf, r.Themes?[k]);
                     var lowest = Enumerable.Range(-PierClear, 2 * PierClear + 1).Min(j => r.H[Point(at + j)]) - Math.Abs(bank) * half;
                     var box = (int)Math.Round(Math.Min(height - PierBeam - 60, lowest - foot - 420));
                     if (add(body, wx, foot, wz, -(int)PierHalf, 0, -(int)PierHalf, (int)PierHalf, Math.Max(1, box), (int)PierHalf)) piers++; else left++;

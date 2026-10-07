@@ -278,6 +278,41 @@ internal static class RaceTrackCommand
         return 0;
     }
 
+    // scaleisland <game>: the island (RT_ISLAND, the Island of the Francos when not given) made bigger in the folder as a race build makes
+    // it (IslandScaler: its ground, its OBL's bodies, its scenes) -- the folder's own files, which must be the originals.
+    public static int ScaleIsland(string[] args)
+    {
+        var game = args[1];
+        var where = RaceTrackIsland.ByName(Environment.GetEnvironmentVariable("RT_ISLAND") ?? RaceTrackIsland.Knartas.Name);
+        var island = IslandFile.Load(Path.Combine(game, where.IleFile));
+        var anchor = IslandScaler.Anchor(island);
+        var log = new List<string>();
+        var scaled = IslandScaler.Scale(island, Math.Max(2, where.Scale), log);
+        scaled.Save(Path.Combine(game, where.IleFile));
+        log.Add(IslandScaler.ScaleObl(Path.Combine(game, where.OblFile), Math.Max(2, where.Scale)));
+        log.AddRange(IslandScaler.ScaleScenes(game, where, scaled, anchor, Math.Max(2, where.Scale)));
+        log.Add(IslandScaler.ScaleHolomap(game, where, anchor, Math.Max(2, where.Scale)));
+        foreach (var line in log) Console.WriteLine(line);
+        return 0;
+    }
+
+    // palettechart <game> <RESS palette entry> <out.png>: the palette's 256 colours, 16 a row, 32 px squares (picking body colours)
+    public static int PaletteChart(string[] args)
+    {
+        var palette = IslandMapRenderer.LoadPaletteEntry(args[1], int.Parse(args[2]));
+        var six = palette.Take(768).Max() <= 63;
+        var px = new byte[512 * 512 * 4];
+        for (var y = 0; y < 512; y++)
+            for (var x = 0; x < 512; x++)
+            {
+                var c = (y / 32) * 16 + x / 32; var i = (y * 512 + x) * 4;
+                px[i] = (byte)(palette[c * 3 + 2] * (six ? 4 : 1)); px[i + 1] = (byte)(palette[c * 3 + 1] * (six ? 4 : 1)); px[i + 2] = (byte)(palette[c * 3] * (six ? 4 : 1)); px[i + 3] = 255;
+            }
+        PngWriter.Write(args[3], px, 512, 512);
+        Console.WriteLine(args[3]);
+        return 0;
+    }
+
     public static int RaceCarFile(string[] args)
     {
         var setup = new LBAAssembler.RaceCarSetup();
@@ -356,7 +391,7 @@ internal static class RaceTrackCommand
         var island = IslandFile.Load(Path.Combine(game, where.IleFile));
         var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, game);
         var cx = (int)Math.Floor(cellX / 64); var cz = (int)Math.Floor(cellZ / 64);
-        for (var scene = where.FirstScene; scene <= where.LastScene; scene++)
+        foreach (var scene in where.Scenes)
         {
             var model = store.Load(scene);
             if (model.CubeMode != 1 || model.CubeX != cx || model.CubeY != cz) continue;
@@ -364,7 +399,7 @@ internal static class RaceTrackCommand
             var dx = Math.Sin(turn * 2 * Math.PI / 4096); var dz = Math.Cos(turn * 2 * Math.PI / 4096);
             // (a scene with no buggy of its own -- only the start line's scene has one -- gets a copy of the island's)
             if (!model.Actors.Skip(1).Any(a => a.Entity == RaceTrackScenes.BuggyEntity))
-                for (var other = where.FirstScene; other <= where.LastScene; other++)
+                foreach (var other in where.Scenes)
                     if (other != scene && store.SceneExists(other) && store.Load(other).Actors.Skip(1).FirstOrDefault(a => a.Entity == RaceTrackScenes.BuggyEntity) is { } buggy)
                     {
                         LBAAssembler.Scenes.SceneOps.AddActor(model, buggy.Clone());

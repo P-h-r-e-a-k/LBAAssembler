@@ -100,6 +100,10 @@ typedef struct
 extern T_ARROW TabArrow[MAX_OBJECTIF + MAX_CUBE];
 
 extern U32 DecalTimerRef[MAX_OBJECTIF + MAX_CUBE];
+// A scene's holomap arrow flags (bit 2: an exterior scene): the scenes past MAX_CUBE have no arrow -- the scenes a race track adds to
+// an island made bigger (the Island of the Francos twice its size, 2026-10-07: scenes 255 on) -- and are exterior cubes, never shown
+// on the holomap. (The arrows' table is in the saves: it can't grow.)
+static inline U8 CubeArrowFlags(S32 num) { return num >= 0 && num < MAX_CUBE ? TabArrow[MAX_OBJECTIF + num].FlagHolo : 4; }
 
 /*-------------------------------------------------------------------------*/
 

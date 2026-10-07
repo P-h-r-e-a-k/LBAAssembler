@@ -89,7 +89,18 @@ internal static class RaceTrackDriveThrough
                         lz0 = Math.Min(lz0, pts[p][2]); lz1 = Math.Max(lz1, pts[p][2]);
                     }
                     if (k < 2) ClampOutOfPassage(road, near, cx, cz, half, k, ref x0, ref x1, ref z0, ref z1);
-                    if (k == 2) y0 = Math.Max(y0, Nearest(road, near, ox, oz).Deck + Clearance);
+                    if (k == 2)
+                    {
+                        // (over the road all its length: Clearance over the deck's highest point under it -- the road can slope through
+                        // the hut: twice its size, the Island of the Francos' cluster of huts has the road climbing out of it 1,400)
+                        var top = Nearest(road, near, ox, oz).Deck;
+                        foreach (var i in near)
+                        {
+                            double px = (road.X[i] - cx * 64) * 512, pz = (road.Z[i] - cz * 64) * 512;
+                            if (px >= x0 - half * 512 && px <= x1 + half * 512 && pz >= z0 - half * 512 && pz <= z1 + half * 512) top = Math.Max(top, road.H[i]);
+                        }
+                        y0 = Math.Max(y0, top + Clearance);
+                    }
                     SetBox(body, lx0, lx1, ly0, ly1, lz0, lz1);
                     var nd = d.Clone();
                     nd.Body = o.NewBodyBase + report.NewBodies.Count;

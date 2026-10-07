@@ -14,6 +14,23 @@ internal sealed class PipeRun
     public int To { get; set; }
     public double Every { get; set; } = 10;
     public bool Drip { get; set; } = true;
+    // (every so many gantries drip: 2 every other one, 1 every one)
+    public int DripsEvery { get; set; } = 2;
+}
+
+// Steam jets along a stretch of the road (RaceTrackPlan.SteamJets): every Every cells from its first point to its last, a jet out of the
+// deck a share of the way to one rail (Across) and then the other, blowing On ms in every On + Off, each a little after the one before
+// (Wave ms): a burst runs down the road ahead of a car.
+internal sealed class SteamJetRun
+{
+    public int From { get; set; }
+    public int To { get; set; }
+    public double Every { get; set; } = 6;
+    public double Across { get; set; } = 0.5;
+    public int On { get; set; } = 1100;
+    public int Off { get; set; } = 2400;
+    public int Wave { get; set; } = 450;
+    public double Reach { get; set; } = 1.9;
 }
 
 internal static class RaceTrackPipes
@@ -94,8 +111,9 @@ internal static class RaceTrackPipes
                     var sign = s == 0 ? -1 : 1;
                     report.Steam.Add(new[] { (int)Math.Round((x + across.X * sign * half) * 512), (int)Math.Round(y + Top + 80), (int)Math.Round((z + across.Z * sign * half) * 512), SteamEvery });
                 }
-                // (in places: every other gantry of the stretch drips, onto one side of the road and then the other -- a car can keep clear)
-                if (run.Drip && placed++ % 2 == 0)
+                // (in places: every other gantry of the stretch drips -- or every one, DripsEvery -- onto one side of the road and then the
+                // other: a car can keep clear)
+                if (run.Drip && placed++ % Math.Max(1, run.DripsEvery) == 0)
                 {
                     var side = (report.Drips.Count % 2 == 0 ? 1 : -1) * (half - Out) * DripAcross;
                     report.Drips.Add(new[] { (int)Math.Round((x + across.X * side) * 512), (int)Math.Round(y + CrossHigh - Cross - 40),
@@ -106,6 +124,35 @@ internal static class RaceTrackPipes
         report.Notes.Add($"pipes: {gantries} gantries over the road ({skipped} left out: another part of the lap in an upright's way, or the ground over the road), " +
                          $"{report.Steam.Count} steam vents, {report.Drips.Count} oil drips{(why.Count > 0 ? " -- left out: " + string.Join(", ", why) : "")}");
         return made;
+    }
+
+    // Places the steam jets; `runs` with their points the road's.
+    public static void PlaceJets(TrackRoad r, IReadOnlyList<(int From, int To, SteamJetRun Run)> runs, RaceTrackOptions o, RaceTrackReport report)
+    {
+        var n = r.Count;
+        var count = 0;
+        foreach (var (from, to, run) in runs)
+        {
+            var span = ((to - from) % n + n) % n;
+            var step = Math.Max(2, (int)Math.Round(run.Every / o.Spacing));
+            var k = 0;
+            for (var at = step / 2; at <= span; at += step, k++)
+            {
+                var i = (from + at) % n;
+                int a = (i + n - 1) % n, b = (i + 1) % n;
+                double tx = r.X[b] - r.X[a], tz = r.Z[b] - r.Z[a];
+                var len = Math.Sqrt(tx * tx + tz * tz);
+                if (len < 1e-6) continue;
+                tx /= len; tz /= len;
+                var half = r.Raised is { } up && up[i] ? r.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : o.RaisedHalfWidth : r.CurbHalf;
+                var side = (k % 2 == 0 ? 1 : -1) * half * run.Across;
+                double x = r.X[i] - tz * side, z = r.Z[i] + tx * side;
+                report.Jets.Add(new[] { (int)Math.Round(x * 512), (int)Math.Round(r.H[i]), (int)Math.Round(z * 512), (int)Math.Round(run.Reach * 512),
+                    run.On, run.Off, ((-k * run.Wave) % (run.On + run.Off) + run.On + run.Off) % (run.On + run.Off) });
+                count++;
+            }
+        }
+        report.Notes.Add($"steam jets: {count} out of the road (the Gazogem factory's steam, hitting a car in a burst)");
     }
 
     // One gantry, from its origin on the road's middle at the deck: `along` the road's way, `across` to its left; the uprights at `half`

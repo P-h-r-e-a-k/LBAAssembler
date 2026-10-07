@@ -6437,7 +6437,7 @@ void GereZoneMessage(T_OBJET *ptrobj, T_ZONE *ptrz) {
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 S32 GereZoneChangeCube(T_OBJET *ptrobj, T_ZONE *ptrz) {
     if (((ptrobj->Move != MOVE_BUGGY_MANUAL AND ptrobj->Move != MOVE_BUGGY)
-             OR(TabArrow[MAX_OBJECTIF + ptrz->Num].FlagHolo & 4)) // Exterieur
+             OR(CubeArrowFlags(ptrz->Num) & 4)) // Exterieur
         AND(ptrz->Info7 & ZONE_ON)) {
         // protection meurt dans un autre cube
         if (ptrobj->LifePoint > 0) {
@@ -6468,7 +6468,7 @@ S32 GereZoneChangeCube(T_OBJET *ptrobj, T_ZONE *ptrz) {
                     return FALSE;
                 }
             } else if (CubeMode == CUBE_EXTERIEUR
-                                       AND(TabArrow[MAX_OBJECTIF + ptrz->Num].FlagHolo & 4)) {
+                                       AND(CubeArrowFlags(ptrz->Num) & 4)) {
                 if (ptrz->Info2 == (32768 - 1024)) // ZONE_NORD
                 {
                     if (!FlagHeroOutZ)

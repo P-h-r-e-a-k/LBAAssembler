@@ -219,23 +219,35 @@ internal sealed record RaceTrackIsland(
     // No opponents' cars in its scenes; nothing drawn on the holomap.
     public bool NoOpponents { get; init; }
     public bool NoHolomap { get; init; }
+    // An island made bigger for its track (IslandScaler): Scale times each way, everything on it with it, its new cubes' scenes numbered
+    // from MoreScenes (past 254: no holomap arrow -- the engine's CubeArrowFlags).
+    public int Scale { get; init; } = 1;
+    public int[] MoreScenes { get; init; } = Array.Empty<int>();
+    // The island's outside scenes: FirstScene..LastScene, and MoreScenes when it is made bigger.
+    public IEnumerable<int> Scenes => Enumerable.Range(FirstScene, LastScene - FirstScene + 1).Concat(Scale > 1 ? MoreScenes : Array.Empty<int>());
+    public bool HasScene(int scene) => scene >= FirstScene && scene <= LastScene || Scale > 1 && MoreScenes.Contains(scene);
     // The scenes the build adds, as (original, copy) pairs.
     public IEnumerable<(int From, int To)> AddedScenes =>
         CopiesScenes is { } many ? Enumerable.Range(0, many.Count).Select(k => (many.First + k, FirstScene + k))
         : CopiesScene is { } one ? new[] { (one, FirstScene) } : Enumerable.Empty<(int, int)>();
 
     // The Island of the Francos (KNARTAS.ILE, the game's island 8, scenes 107-109): its dock, its gazogem refinery and its village of furry
-    // dome huts -- three cubes, too little flat ground for a long lap, so most of it is a raised road at three levels that passes over
-    // itself (the user, 2026-10-07: "loads of height ... lots of loops and jumps"): the start straight down the dock's east arm, a loop on
-    // its north arm, a jump over the inlet's mouth and the island's rocket, up over the start straight and the channel onto the high road
-    // over the refinery, a loop over its tanks, past its machine houses among pipes and steam, a leap down over the cracking tower into the
-    // village, through its huts at their floors, a loop on the south shore, a leap up over the refinery's fence and the climb to the top road
-    // over the rocks (two loops, the second with a gap at its top), and down the channel between the dock and the refinery onto the start.
+    // dome huts, made twice its size each way for its track (Scale: IslandScaler -- 12 cubes, scenes 255-263 besides) and raced on a raised
+    // road that passes over itself, in three looks (the user, 2026-10-07: "drop all the vertical loops ... more height ... more loops, but
+    // not vertical ones ... 4 times its original size ... 3 distinctly themed sections"): the dock's -- the start up the dock's east arm, a
+    // loop out over the sea that climbs over its own way in, a jump over the inlet's mouth and the island's rocket, the south arm; the
+    // refinery's -- a loop over its south fence up onto the high road at 14,000, past its tanks and machine houses under pipes that puff
+    // steam and drip oil, the factory's steam blowing out of the road, and a leap over the cracking tower down into the village; the
+    // village's -- through its huts half way up their domes, a loop over the hills, the south shore, a leap past the refinery's fence and
+    // the climb to the top road over the rocks; then down the channel between the dock and the refinery onto the start.
     // The plan: tools/RaceTrackPlan/knartas_design.py.
     public static readonly RaceTrackIsland Knartas = new("Island of the Francos", "KNARTAS.ILE", "KNARTAS.OBL", 8, 107, 109, 35, "RaceTrackPlan.Knartas.json", null)
     {
         Roster = RaceDriver.Knartas,
         Title = "The Island of the Francos: over the dock, the refinery and the village",
+        // (twice its size each way, its 3 cubes 12: scenes 107-109 and 255-263 -- the user, 2026-10-07)
+        Scale = 2,
+        MoreScenes = Enumerable.Range(255, 9).ToArray(),
     };
 
     public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas };

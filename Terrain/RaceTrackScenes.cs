@@ -54,7 +54,7 @@ internal static class RaceTrackScenes
     {
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
         var list = new List<int[]>();
-        for (var scene = island.FirstScene; scene <= island.LastScene; scene++)
+        foreach (var scene in island.Scenes)
         {
             if (!store.SceneExists(scene)) continue;
             try
@@ -72,7 +72,7 @@ internal static class RaceTrackScenes
         var result = new List<EdgeCrossing>();
         if (report.LapX.Length < 2 || report.GroundAfter is not { } ground) return result;
         var sceneOf = new Dictionary<(int, int), int>();
-        for (var scene = options.Island.FirstScene; scene <= options.Island.LastScene; scene++)
+        foreach (var scene in options.Island.Scenes)
         {
             if (!store.SceneExists(scene)) continue;
             try
@@ -311,7 +311,7 @@ internal static class RaceTrackScenes
         // the island's own outside scenes: a cube change to any other scene is a door (Mosquibees Island's inside scene 104, the Queen's
         // throne, is numbered between its outside ones)
         var outside = new HashSet<int>();
-        for (var scene = options.Island.FirstScene; scene <= options.Island.LastScene; scene++)
+        foreach (var scene in options.Island.Scenes)
         {
             if (!store.SceneExists(scene)) continue;
             try { var m = store.Load(scene); if (m.Island == island && m.CubeMode == 1) outside.Add(scene); }
@@ -323,7 +323,7 @@ internal static class RaceTrackScenes
             SceneModel model;
             try { model = store.Load(scene); } catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { continue; }
             if (model.Island != island || model.CubeMode != 1) continue;
-            if (scene < options.Island.FirstScene || scene > options.Island.LastScene)
+            if (!options.Island.HasScene(scene))
             {
                 // the demo scenes are copies the game plays as films; they are left as they are
                 log.Add($"scene {scene}: {(scene >= demoFrom ? "demo scene" : "not one of the island's own outside scenes")}, left alone");
@@ -649,7 +649,7 @@ internal static class RaceTrackScenes
     // 14, actor 5: entity 46).
     public const int MushroomScene = 45, MushroomActor = 7, PenguinScene = 14, PenguinActor = 5;
     // (the oil slicks one scene can show at once: RACEMOD.CPP keeps six on the whole lap)
-    private const int OilPerScene = 3, PenguinsPerScene = 3;
+    private const int OilPerScene = 5, PenguinsPerScene = 3;   // (oil 3 until 2026-10-07: the refinery's drips lie in slicks too)
     private const double MushroomSpacing = 40, MushroomFirst = 30, MushroomClear = 14;
     // (the gap is more than the engine's reach for taking one, RACEMOD.CPP RACE_MUSHROOM_REACH: 2 cells; a car down the middle of one takes
     // only that one)

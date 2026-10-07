@@ -142,7 +142,7 @@ void DrawDynoPlan(T_SORT *ptt) {
 S32 RecupCoorTwinsen(S32 *xt, S32 *yt, S32 *zt) {
     S32 mode = 0;
 
-    if (TabArrow[MAX_OBJECTIF + NumCube].FlagHolo & 4) // Exterieur
+    if (CubeArrowFlags(NumCube) & 4) // Exterieur
     {
         mode = 1;
     }
@@ -605,7 +605,7 @@ void InitObjectifIsland() {
                 NumObjectif = 1000; // Twinsen
         } else                      // 	Inside
         {
-            if (TabArrow[MAX_OBJECTIF + NumCube].FlagHolo & 1) {
+            if (CubeArrowFlags(NumCube) & 1) {
                 NumObjectif = MAX_OBJECTIF + NumCube;
                 TwinsenLinkArrow = NumObjectif;
             } else {

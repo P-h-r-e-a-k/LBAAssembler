@@ -1686,7 +1686,7 @@ public partial class MainWindow : Window
             return;
         }
         // (a build rewrites the outside scenes of the island it is on; any island's, as the dialog picks the island)
-        if (Terrain.RaceTrackIsland.All.FirstOrDefault(i => scriptSession.EditedScenes.Any(s => s >= i.FirstScene && s <= i.LastScene)) is { } edited)
+        if (Terrain.RaceTrackIsland.All.FirstOrDefault(i => scriptSession.EditedScenes.Any(i.HasScene)) is { } edited)
         {
             MessageBox.Show(this, $"Some of {edited.Name}'s outside scenes ({edited.FirstScene}-{edited.LastScene}) have unsaved script edits. Save or discard them first.", "Race track", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;

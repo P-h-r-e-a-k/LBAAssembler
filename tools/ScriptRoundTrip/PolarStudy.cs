@@ -546,17 +546,18 @@ internal static class PolarStudy
         int x = int.Parse(args[3]), z = int.Parse(args[4]);
         int alpha = args.Length > 5 ? int.Parse(args[5]) : 341, beta = args.Length > 6 ? int.Parse(args[6]) : 512, distance = args.Length > 7 ? int.Parse(args[7]) : 40000;
         var wide = args.Length > 8 ? int.Parse(args[8]) : 1;
-        var island = LBAAssembler.Terrain.IslandFile.Load(Path.Combine(game, "POLAR.ILE"));
+        var name = Environment.GetEnvironmentVariable("VIEW_ISLAND") ?? "POLAR";   // (another island: VIEW_ISLAND=KNARTAS)
+        var island = LBAAssembler.Terrain.IslandFile.Load(Path.Combine(game, name + ".ILE"));
         var y = LBAAssembler.Terrain.IslandOps.Altitude(island, x, z) ?? 0;
         using var lib = new RendererLibraryApi(dll);
         if (!lib.IsLoaded || !lib.SetDataRoot(game) || !lib.Initialize()) { Console.WriteLine("native init failed"); return 2; }
-        if (lib.LoadIsland("polar") == 0) { Console.WriteLine("LoadIsland failed"); return 2; }
+        if (lib.LoadIsland(name.ToLowerInvariant()) == 0) { Console.WriteLine("LoadIsland failed"); return 2; }
         lib.SetDrawSky(true); lib.SetDrawSea(true);
         lib.SetViewTarget(x, (int)y, z);
         lib.SetCamera(alpha, beta, 0, distance);
         if ((wide > 0 ? lib.RenderFrameWide(wide) : lib.RenderFrame()) == 0) { Console.WriteLine("render failed"); return 2; }
         var p = lib.GetFramebuffer(out var w, out var h, out var pitch);
-        var palette = LBAAssembler.Terrain.IslandMapRenderer.LoadPalette(game, "POLAR");
+        var palette = LBAAssembler.Terrain.IslandMapRenderer.LoadPalette(game, name);
         var six = palette.Take(768).Max() <= 63;
         var px = new byte[w * h * 4];
         var row = new byte[w];

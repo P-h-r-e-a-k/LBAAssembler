@@ -407,7 +407,7 @@ static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 0.4};
 // the super jet-pack; -2 the oil's, oil_icon=)
 static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2};
 // oil: the slicks on the road (world units; until when), and the scenes' copies of the slick that show them
-#define RACE_MAX_SLICKS 10                 // (6 until 2026-10-07: the pipes' drips have slicks too)
+#define RACE_MAX_SLICKS 16                 // (6 until 2026-10-07: the pipes' drips have slicks too)
 #define RACE_MAX_OIL_ACTORS 256
 #define RACE_OIL_REACH 760                 // how near a car's middle comes to a slick's to drive over it
 // (2026-10-04: once round and to a standstill -- it slid on spinning three times, too much of a penalty)
@@ -555,7 +555,7 @@ static int s_nbLoops = 0;
 #define RACE_MAX_DRIPS 32
 #define RACE_VENT_NEAR (26 * 512)          // how near Twinsen a pipe puffs and drips (further off, out of sight)
 #define RACE_MAX_PUFFS 16                  // the extras the steam takes at most (the game has 50 for everything: penguins, bolts...)
-#define RACE_DRIP_SLICK_MS 9000            // how long a drip's slick lies on the road if no car takes it
+#define RACE_DRIP_SLICK_MS 7000            // how long a drip's slick lies on the road if no car takes it
 typedef struct { double X, Y, Z; S32 Every, Next; } T_RACE_VENT;
 typedef struct { double X, Y, Z, RoadY; S32 Every, Next, LandAt; } T_RACE_DRIP;
 static T_RACE_VENT s_vents[RACE_MAX_VENTS];
@@ -563,6 +563,17 @@ static T_RACE_DRIP s_drips[RACE_MAX_DRIPS];
 static int s_nbVents = 0, s_nbDrips = 0;
 static S32 s_puffEnd[RACE_MAX_PUFFS];
 static unsigned s_ventSeed = 20261007u;   // (their own dice: the race's, RaceRandom, stay as they were)
+// Steam jets out of the road (jet=; the Island of the Francos' refinery, 2026-10-07): the Gazogem factory's own steam -- its impact 37,
+// played where its scripts turn their hit zones on -- blowing out of the deck in bursts, each its own time (On ms blowing, Off ms not,
+// from Phase). A car in one while it blows (within Reach of it) is hit as by a penguin's blast, held a shorter while -- once a burst.
+#define RACE_MAX_JETS 48
+#define RACE_STEAM_IMPACT 37
+#define RACE_STEAM_HOLD 900                // how long a jet's blast holds a car
+#define RACE_STEAM_PUFF 260                // how often a blowing jet's steam is played again
+#define RACE_STEAM_FORCE 10                // the blast, as HitObj takes it (the factory's hit zones: 10)
+typedef struct { double X, Y, Z; S32 Reach, On, Off, Phase, Puff, Burst; U32 HitOpp; int HitHero; } T_RACE_JET;
+static T_RACE_JET s_jets[RACE_MAX_JETS];
+static int s_nbJets = 0;
 // Jump cameras (jumpcam=, JumpCamera): a drop -- a flight off a raised road's end and down a hillside onto the ground far below (the lava
 // lake's, 2026-10-01) -- took the camera behind the car down into the hill, and the landing was never seen. While the hero flies such a
 // jump, and RACE_JUMPCAM_HOLD after he lands, the camera stands at a place of its own beside the flight (the builder's, with the whole
@@ -1439,6 +1450,15 @@ static void Load(const char *path, int carOnly = 0) {
             int x, y, z, every;
             if (s_nbVents < RACE_MAX_VENTS && sscanf(v, "%d %d %d %d", &x, &y, &z, &every) == 4 && every > 0) {
                 p->X = x; p->Y = y; p->Z = z; p->Every = every; p->Next = 0; s_nbVents++;
+            }
+        }
+        else if (!strcmp(key, "jet")) {
+            T_RACE_JET *p = &s_jets[s_nbJets];
+            int x, y, z, reach, on, off, phase;
+            if (s_nbJets < RACE_MAX_JETS && sscanf(v, "%d %d %d %d %d %d %d", &x, &y, &z, &reach, &on, &off, &phase) == 7 && on > 0 && off >= 0 && reach > 0) {
+                memset(p, 0, sizeof(*p));
+                p->X = x; p->Y = y; p->Z = z; p->Reach = reach; p->On = on; p->Off = off; p->Phase = phase; p->Burst = -1;
+                s_nbJets++;
             }
         }
         else if (!strcmp(key, "drip")) {
@@ -3811,6 +3831,58 @@ static void Vents(S32 now) {
     }
 }
 
+// Every frame: the steam jets (jet=). Blowing: the factory's steam played over it every RACE_STEAM_PUFF ms (near Twinsen, in his scene),
+// and a car in it hit -- Twinsen's as by a penguin (HitObj: the hit animation and the stars, the car stopped a moment; not with the
+// protection spell or on the super jet-pack), an opponent's stopped with its own hit animation -- once a burst.
+static void Jets(S32 now, int driving) {
+    if (CubeMode != CUBE_EXTERIEUR || !s_nbJets) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const double hx = hero->Obj.X + cx, hz = hero->Obj.Z + cz;
+    const double near2 = (double)RACE_VENT_NEAR * RACE_VENT_NEAR;
+    for (int i = 0; i < s_nbJets; i++) {
+        T_RACE_JET *j = &s_jets[i];
+        const S32 cycle = j->On + j->Off;
+        const S32 t = (S32)(((S64)now + j->Phase) % cycle);
+        const S32 burst = (S32)(((S64)now + j->Phase) / cycle);
+        if (t >= j->On) continue;
+        if (burst != j->Burst) { j->Burst = burst; j->HitOpp = 0; j->HitHero = 0; j->Puff = 0; }
+        const S32 lx = (S32)(j->X - cx), lz = (S32)(j->Z - cz);
+        const int here = (j->X - hx) * (j->X - hx) + (j->Z - hz) * (j->Z - hz) <= near2;
+        if (here && now >= j->Puff) { j->Puff = now + RACE_STEAM_PUFF; DoImpact(RACE_STEAM_IMPACT, lx, (S32)j->Y, lz, 255); }
+        // Twinsen's car in it
+        const double dx = hero->Obj.X - lx, dz = hero->Obj.Z - lz;
+        if (driving && !j->HitHero && dx * dx + dz * dz < (double)j->Reach * j->Reach && hero->Obj.Y > j->Y - 600 && hero->Obj.Y < j->Y + 1600) {
+            j->HitHero = 1;
+            if (now < s_protectUntil || now < s_jetUntil || (hero->Flags & NO_CHOC))
+                Log_Info("[racemod] through the steam unharmed: %s", now < s_protectUntil ? "the protection spell" : now < s_jetUntil ? "the super jet-pack" : "he can't be hit");
+            else {
+                HitObj(PenguinHitter(), NUM_PERSO, RACE_STEAM_FORCE, -1);
+                ListBuggy[0].Speed = 0;
+                if (s_hitUntil < now + RACE_STEAM_HOLD) s_hitUntil = now + RACE_STEAM_HOLD;
+                Message("Scalded by steam!");
+                Log_Info("[racemod] Twinsen's car hit by a steam jet");
+            }
+        }
+        // an opponent's
+        for (int n = 0; n < RACE_MAX_OPPONENTS && n < 32; n++) {
+            T_RACE_OPPONENT *o = &s_opp[n];
+            if (!o->Count || (j->HitOpp & (1u << n)) || now < o->JetUntil) continue;
+            double x, z, y, v, ddx, ddz;
+            PathAt(o, o->S, &x, &z, &y, &v, &ddx, &ddz);
+            if ((x - j->X) * (x - j->X) + (z - j->Z) * (z - j->Z) >= (double)j->Reach * j->Reach || fabs(y - j->Y) > 1600) continue;
+            j->HitOpp |= 1u << n;
+            if (o->HitUntil < now + RACE_STEAM_HOLD) o->HitUntil = now + RACE_STEAM_HOLD;
+            Log_Info("[racemod] %s hit by a steam jet", o->Name);
+            const int index = OpponentActor(o);
+            if (index < 0) continue;
+            T_OBJET *car = &ListObjet[index];
+            InitAnim(GEN_ANIM_CHOC, ANIM_ALL_THEN, (U8)index);
+            InitHitExtraPof(car->Obj.X, car->Obj.Y + car->YMax + 1, car->Obj.Z, RACE_STEAM_FORCE);
+        }
+    }
+}
+
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
@@ -3846,6 +3918,7 @@ void RaceMod_Frame(void) {
     // the power-ups: the mushrooms in this scene, the player's car over one, the penguins' fuses
     if (s_powerups) PowerUps(now, driving);
     Vents(now);
+    Jets(now, driving);
     if (!Opponents()) return;
     // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car
     if (!s_nbSpots && !s_oppStarted && driving && (Input & I_UP)) s_oppStarted = 1;
@@ -4486,6 +4559,7 @@ static void ResetTrack(void) {
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0;
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
+    s_nbJets = 0;
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0;
