@@ -3050,6 +3050,40 @@ static void Rescue(void) {
     Log_Info("[racemod] back on the road: line point %d (%d,%d,%d)", i, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z);
 }
 
+// A car fallen off a raised road onto what is under it or beside it -- the ground, a roof -- with the lap high over it: off the lap, and
+// no way back up. Once it has stood there RACE_BELOW_MS it is put back on the road (Rescue), as from the sea. (The user, 2026-10-07:
+// Twinsen through the track on the Island of the Francos, off the high road where it turns by the refinery, 10,800 below it on the
+// ground inside the bend, stuck there for the rest of the race -- the rescue was only for lava and the sea.) Off the lap: no point of
+// the line (Guide) within RACE_BELOW_LAP of him at about his height; the lap high over him: the line's nearest point within
+// RACE_BELOW_REACH at least RACE_BELOW_DROP above him. (The line, not the raised road: where the lap runs on the ground beside a raised
+// part -- the Desert island's -- the ground is the lap.) Not in a jump's flight, a loop, the super jet-pack's flight or a fall still going on.
+#define RACE_BELOW_MS 1500
+#define RACE_BELOW_DROP 1500
+#define RACE_BELOW_LAP 4500.0
+#define RACE_BELOW_REACH (16 * 512.0)
+static S32 s_belowSince = 0;
+static void FallenBelow(S32 now) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const T_RACE_OPPONENT *o = Guide();
+    if (!s_nbRaised || !s_rescueOn || !o || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || s_flying >= 0 || s_arcOn >= 0 || s_loopOn >= 0
+            || now < s_jetUntil || s_rescue || s_rescueArrive >= 0 || (hero->WorkFlags & FALLING) || s_safeIndex < 0) { s_belowSince = 0; return; }
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    double near2 = 1e30;
+    S32 nearY = 0;
+    for (int i = 0; i < o->Count; i++) {
+        const double dx = o->X[i] - wx, dz = o->Z[i] - wz, d2 = dx * dx + dz * dz;
+        if (d2 < RACE_BELOW_LAP * RACE_BELOW_LAP && abs(o->Y[i] - hero->Obj.Y) < 900) { s_belowSince = 0; return; }   // (on the lap)
+        if (d2 < near2) { near2 = d2; nearY = o->Y[i]; }
+    }
+    if (near2 > RACE_BELOW_REACH * RACE_BELOW_REACH || nearY < hero->Obj.Y + RACE_BELOW_DROP) { s_belowSince = 0; return; }
+    if (!s_belowSince) { s_belowSince = now; return; }
+    if (now - s_belowSince < RACE_BELOW_MS) return;
+    s_belowSince = 0;
+    Log_Info("[racemod] fallen off the road to (%.0f,%d,%.0f), %d below the lap %.0f away: put back on it", wx, (int)hero->Obj.Y, wz,
+             (int)(nearY - hero->Obj.Y), sqrt(near2));
+    s_rescue = 1;
+}
+
 // ---- power-ups ---------------------------------------------------------------------------------------------------------------
 // A mushroom of this scene: its actor (-1 not here) -- the scene's copy, standing where it does (its height kept the first time it is
 // seen, as it is moved out of sight while gone).
@@ -3999,6 +4033,7 @@ void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
     if (Comportement == C_BUGGY) TrackSafePlace();
+    FallenBelow(TimerRefHR);
     if (s_rescue) { s_rescue = 0; Rescue(); }
     RescueArrive();
     // A raised road winds round itself in the air: the classic camera, which stands still until the hero leaves the screen, would watch
@@ -4677,7 +4712,7 @@ static void ResetTrack(void) {
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0;
     s_jumpLo = 0.6; s_jumpHi = 4.0; s_jumpRate = 0; s_jumpFrac = 0; s_jumpOver = 0;
     s_autoIndex = -1;
-    s_faced = 0; s_safeIndex = -1; s_safeScene = -1; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0;
+    s_faced = 0; s_safeIndex = -1; s_safeScene = -1; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0; s_hinted = -1;
     s_nbGates = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     ListVarGame[209] = 0;
