@@ -709,6 +709,11 @@ void RaceMod_Floor(S32 ox, S32 oy, S32 oz, S32 nx, S32 *ny, S32 nz);
 
 #define	EXTRA_MIRROR		(1L<<30L)	// the sprite drawn mirrored left to right (the race-track mode's steam jets, 2026-10-07)
 void *MirroredRawSprite(S32 num, void *bank);	// (OBJECT.CPP)
+// (in an extra's Scale, not its Flags -- they are all taken: the sprite laid on its side, its root -- the middle of its bottom, where its
+// hot spot is -- on the extra's place and its tip towards Pos + (Vx, Vy, Vz) as the screen shows that way, its thickness the Scale's;
+// an animated sprite's V is otherwise unused. The race-track mode's steam jets out of the gantries' uprights, 2026-10-07.)
+#define	EXTRA_SCALE_TURNED	(1L<<24L)
+void *TurnedRawSprite(S32 num, void *bank, S32 left);	// (OBJECT.CPP)
 #define	EXTRA_NO_SHADOW		(1L<<31L)	// Ne pas Afficher l'ombre de l'extra
 
 // En masquant le champ Flags des Extras avec EXTRA_MASK_WEAPON,

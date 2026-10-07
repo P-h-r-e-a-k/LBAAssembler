@@ -576,9 +576,10 @@ static unsigned s_ventSeed = 20261007u;   // (their own dice: the race's, RaceRa
 #define RACE_MAX_JETS 48
 #define RACE_STEAM_IMPACT 37
 #define RACE_STEAM_SAMPLE 17               // impact 38's -- the factory's jets out of its walls, across its rooms -- its hiss
-#define RACE_STEAM_SPRITE 110              // ... its jet, sprites 110-118 (blowing to the screen's right: mirrored for the left)
-#define RACE_STEAM_FRAMES 8
-#define RACE_STEAM_SCALE 22               // its size (smaller, bigger: the factory's 35 is for its rooms' close cameras -- the jet across the road's band)
+#define RACE_JET_FIRST 100                 // the factory's jet straight up (impact 37): sprites 100 and 101 growing into 102, laid on its side
+#define RACE_JET_SPRITE 102
+#define RACE_JET_HIGH 71                   // ... 102's height (its length laid on its side: drawn as long as the jet's reach)
+#define RACE_JET_GROW 240                  // ... how long it grows at a burst's start (ms)
 #define RACE_STEAM_FLOW 76                 // ... its sparks, a flow blowing on the level the way it is turned
 #define RACE_STEAM_HOLD 900                // how long a jet's blast holds a car
 #define RACE_STEAM_PUFF 180                // how often a blowing jet puffs again
@@ -3925,29 +3926,25 @@ static void Jets(S32 now, int driving) {
             j->Puff = now + RACE_STEAM_PUFF;
             if (!across) DoImpact(RACE_STEAM_IMPACT, lx, (S32)j->Y, lz, 255);
             else {
-                // the factory's own horizontal jet, as its rooms' walls blow it (impact 38): its hiss at the burst's start; its jet --
-                // sprites drawn blowing to the screen's right, mirrored when the jet blows to its left from where the camera is -- at the
-                // rail and a third and two thirds of the way over; its sparks, a flow on the level, blown across
+                // the factory's hiss (impact 38's) at the burst's start; its jet straight up (impact 37's sprites 100-102) laid on its
+                // side out of the nozzle's mouth (OBJECT.CPP DrawTurnedExtra), as long as the band it hits -- growing at the burst's
+                // start; its sparks, a flow on the level, blown across. (Impact 38's own jet, sprites 110-118, is drawn on a slant for
+                // the factory's rooms' cameras and blows to the screen's left from its right edge: drawn the wrong way round, it blew
+                // out of the left upright away from the road -- the user, with pictures, 2026-10-07.)
                 if (j->Stage == 0) { ParmSampleVolume = 40; HQ_3D_MixSample(RACE_STEAM_SAMPLE, 4096, 1000, 1, (S32)(nozX - cx), (S32)nozY, (S32)(nozZ - cz)); }
                 const double bx = -leftX * j->Side, bz = -leftZ * j->Side;   // (the way it blows)
-                int mirror = 0;
-                {
-                    PtrProjectPoint((S32)(nozX - cx), (S32)nozY, (S32)(nozZ - cz));
-                    const S32 x0 = Xp;
-                    PtrProjectPoint((S32)(nozX - cx + bx * 1000), (S32)nozY, (S32)(nozZ - cz + bz * 1000));
-                    mirror = Xp < x0;
-                }
-                for (int k = 0; k < 3; k++) {
-                    if (k > 0 && (j->Stage + k) % 2) continue;   // (the far ones every other time)
-                    int puffs = 0;
-                    for (int q = 0; q < RACE_MAX_PUFFS; q++) if (s_puffEnd[q] > now) puffs++;
-                    if (puffs >= RACE_MAX_PUFFS) break;
-                    const double d = 120.0 + j->Reach * k / 3.0;
-                    const double px = nozX + bx * d, pz = nozZ + bz * d;
-                    const S32 e = InitExtraAnimSprite(255, (S32)(px - cx), (S32)nozY, (S32)(pz - cz), RACE_STEAM_SPRITE, RACE_STEAM_SPRITE + RACE_STEAM_FRAMES, 800, RACE_STEAM_SCALE, 1, 0);
-                    if (e < 0) break;
-                    if (mirror) ListExtra[e].Flags |= EXTRA_MIRROR;
-                    for (int q = 0; q < RACE_MAX_PUFFS; q++) if (s_puffEnd[q] <= now) { s_puffEnd[q] = now + 900; break; }
+                int puffs = 0;
+                for (int q = 0; q < RACE_MAX_PUFFS; q++) if (s_puffEnd[q] > now) puffs++;
+                if (puffs < RACE_MAX_PUFFS) {
+                    const S32 life = j->Stage == 0 ? RACE_JET_GROW : RACE_STEAM_PUFF + 40;
+                    const S32 scale = j->Reach > 0 ? RACE_JET_HIGH * 1000 / j->Reach : 70;
+                    const S32 e = InitExtraAnimSprite(255, (S32)(nozX - cx), (S32)nozY, (S32)(nozZ - cz),
+                                                      j->Stage == 0 ? RACE_JET_FIRST : RACE_JET_SPRITE, RACE_JET_SPRITE, life, scale, 1, 0);
+                    if (e >= 0) {
+                        ListExtra[e].Vx = (S16)(bx * 1000); ListExtra[e].Vy = 0; ListExtra[e].Vz = (S16)(bz * 1000);
+                        ListExtra[e].Scale |= EXTRA_SCALE_TURNED;
+                        for (int q = 0; q < RACE_MAX_PUFFS; q++) if (s_puffEnd[q] <= now) { s_puffEnd[q] = now + life; break; }
+                    }
                 }
                 if (j->Stage % 2 == 0) {
                     const S32 beta = (S32)(atan2(bx, bz) * 4096.0 / (2 * 3.14159265358979)) & 4095;

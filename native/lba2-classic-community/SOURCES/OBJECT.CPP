@@ -4,6 +4,7 @@
 
 #include "DEMO_SEED.H"
 #include "FOLLOWCAM.H" /* FollowCamera: camera zones re-aim the Auto camera */
+#include <math.h> /* sqrt, fabs: DrawTurnedExtra */
 #include "RECORD.H"    /* Record_SeedHook: the boot scene load's seed on a replay */
 #include "SAVEGAME.H"
 #include "ZONE_GEOM.H" // ZonePointInBox -- single source of truth for the zone box test
@@ -98,6 +99,7 @@ char DefSysText[4][MULTI_TEXT_MAX] = {
 extern S32 XMap, YMap, ZMap;
 extern S16 M_XMin, M_XMax, M_YMin, M_YMax, M_ZMin, M_ZMax;
 extern U8 *SearchPtrAnimAction;
+static S32 DrawTurnedExtra(T_EXTRA *e, S32 num); // (an extra with EXTRA_SCALE_TURNED: below, by MirroredRawSprite)
 
 /*══════════════════════════════════════════════════════════════════════════*/
 #define HashLine(x0, y0, x1, y1, coul, ep) Line(x0, y0, x1, y1, coul)
@@ -5252,13 +5254,15 @@ S32 AffOneObject(T_SORT *pt) {
         if (num & 32768) /// effet spécial
         {
             AffSpecial(numobj);
+        } else if ((ptrextra->Scale & EXTRA_SCALE_TURNED) AND DrawTurnedExtra(ptrextra, num)) {
+            // (drawn laid on its side: DrawTurnedExtra)
         } else // sprite
         {
             SpriteX = Xp + PtrZvExtraRaw[num * 8 + 0]; // Add Hot Spot
             SpriteY = Yp + PtrZvExtraRaw[num * 8 + 1];
 
             // Toujours des sprites Raw
-            CalculeScaleFactorSprite(ptrextra->PosX, ptrextra->PosY, ptrextra->PosZ, ptrextra->Scale);
+            CalculeScaleFactorSprite(ptrextra->PosX, ptrextra->PosY, ptrextra->PosZ, ptrextra->Scale & ~EXTRA_SCALE_TURNED);
 
             void *bank = HQR_Get(HQRPtrSpriteRaw, num);
             if (ptrextra->Flags & EXTRA_MIRROR) {
@@ -6469,6 +6473,65 @@ void *MirroredRawSprite(S32 num, void *bank) {
         }
     MirroredSprites[num] = copy;
     return copy;
+}
+
+// A raw sprite laid on its side, made the first time it is asked for and kept: its bottom (its root, where its hot spot is) to the left
+// and its top to the right -- or, `left`, its bottom to the right and its top to the left -- its right side up either way (steam rises).
+// Its hot spot 0, 0: DrawTurnedExtra places it.
+static U8 *TurnedSprites[2][MAX_MIRRORED_SPRITES];
+void *TurnedRawSprite(S32 num, void *bank, S32 left) {
+    left = left ? 1 : 0;
+    if (num < 0 || num >= MAX_MIRRORED_SPRITES || !bank) return NULL;
+    if (TurnedSprites[left][num]) return TurnedSprites[left][num];
+    const U32 at = *(const U32 *)bank;
+    const U8 *head = (const U8 *)bank + at;
+    const S32 w = head[0], h = head[1];
+    const U8 *src = head + 4;
+    U8 *copy = (U8 *)malloc(4 + 4 + (U32)(w * h));
+    if (!copy) return NULL;
+    *(U32 *)copy = 4;
+    U8 *out = copy + 4;
+    out[0] = (U8)h; out[1] = (U8)w; out[2] = 0; out[3] = 0;
+    U8 *pixels = out + 4;
+    for (S32 y = 0; y < w; y++)          // (its rows: the sprite's columns, its right one first)
+        for (S32 x = 0; x < h; x++)      // (its columns: the sprite's rows, from its bottom -- or, left, from its top)
+            pixels[y * h + x] = src[(left ? x : h - 1 - x) * w + (w - 1 - y)];
+    TurnedSprites[left][num] = copy;
+    return copy;
+}
+
+// An extra with EXTRA_SCALE_TURNED drawn: its sprite laid on its side (TurnedRawSprite), its root on the extra's place, as thick as its
+// Scale makes it there, and as long as the way to Pos + V is on the screen for a sprite of that size seen side on -- shorter where the way
+// runs towards the camera or away from it -- to the screen's left or right as that way goes. FALSE when it couldn't be (drawn as usual).
+static S32 DrawTurnedExtra(T_EXTRA *e, S32 num) {
+    const S32 vx = e->Vx, vy = e->Vy, vz = e->Vz;
+    const double v = sqrt((double)vx * vx + (double)vy * vy + (double)vz * vz);
+    if (v < 1) return FALSE;
+    if (!PtrProjectPoint(e->PosX, e->PosY, e->PosZ)) return FALSE;
+    const S32 x0 = Xp, y0 = Yp;
+    if (!PtrProjectPoint(e->PosX + vx, e->PosY + vy, e->PosZ + vz)) return FALSE;
+    const S32 x1 = Xp;
+    const S32 scale = e->Scale & ~EXTRA_SCALE_TURNED;
+    CalculeScaleFactorSprite(e->PosX, e->PosY, e->PosZ, scale);
+    void *bank = HQR_Get(HQRPtrSpriteRaw, num);
+    const S32 left = x1 < x0;
+    U8 *turned = (U8 *)TurnedRawSprite(num, bank, left);
+    if (!turned) return FALSE;
+    const U8 *head = (const U8 *)bank + *(const U32 *)bank;
+    const S32 w = head[0], h = head[1], root = w - 1 + (S8)head[2];   // (the root's row: its hot spot's column, counted from the right)
+    // (the screen's pixels for 1000 units up there, as CalculeScaleFactorSprite had them; the way's, side on, the same per unit)
+    const double up = (double)ScaleFactorSprite * (scale > 0 ? scale : 70) / DEF_SCALE_FACTOR;
+    const double side = fabs((double)(x1 - x0)) * 1000.0 / v;
+    if (up <= 0) return FALSE;
+    const S32 fy = ScaleFactorSprite;
+    const S32 fx = (S32)(fy * (side / up));
+    if (fx <= 0 || fy <= 0) return FALSE;
+    const S32 length = (S32)(((S64)h * fx) >> 16);
+    SpriteX = left ? x0 - length : x0;
+    SpriteY = y0 - (S32)(((S64)root * fy) >> 16);
+    if (e->Flags & EXTRA_TRANSPARENT) ScaleSpriteTransp(0, SpriteX, SpriteY, fx, fy, turned, PtrTransPal);
+    else ScaleSprite(0, SpriteX, SpriteY, fx, fy, turned);
+    return TRUE;
 }
 
 S32 GereZoneChangeCube(T_OBJET *ptrobj, T_ZONE *ptrz) {
