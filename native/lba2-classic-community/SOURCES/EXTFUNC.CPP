@@ -1032,7 +1032,10 @@ extern void DrawOneSea(S32 y);
 // should reserve it for when the camera is pulled back enough that a
 // single cube's worth of terrain visibly runs out before the horizon does,
 // not use it for every frame regardless of zoom.
-void AffGrilleExtWide(int radiusCubes) {
+// The cubes from (x0, z0) to (x1, z1), all of them, whichever the camera's: the editor's view of a whole island (its cubes and a ring of
+// sea round them) -- a square round the camera's own cube moved the sea under the island as the view moved, and left out an island's
+// far cubes when it was wider than the square (the user, 2026-10-07: the Island of the Francos twice its size, four cubes across).
+void AffGrilleExtArea(int x0, int z0, int x1, int z1) {
     S32 centerCubeX = CurrentCubeX, centerCubeY = CurrentCubeY;
     S32 centerWorldX = centerCubeX * WIDE_WORLD_CUBE_SIZE + VueOffsetX;
     S32 centerWorldY = VueOffsetY;
@@ -1058,9 +1061,8 @@ void AffGrilleExtWide(int radiusCubes) {
 
     ManageSystem();
 
-    for (S32 dy = -radiusCubes; dy <= radiusCubes; dy++) {
-        for (S32 dx = -radiusCubes; dx <= radiusCubes; dx++) {
-            S32 cx = centerCubeX + dx, cy = centerCubeY + dy;
+    for (S32 cy = z0; cy <= z1; cy++) {
+        for (S32 cx = x0; cx <= x1; cx++) {
             if (cx < 0 || cx > 15 || cy < 0 || cy > 15) continue;
 
             S32 localOffsetX = centerWorldX - cx * WIDE_WORLD_CUBE_SIZE;
@@ -1128,6 +1130,11 @@ void AffGrilleExtWide(int radiusCubes) {
     Switch_Fillers(FILL_POLY_TEXTURES);
 
     CopyScreen(Log, Screen);
+}
+
+// The square of cubes `radiusCubes` round the camera's own.
+void AffGrilleExtWide(int radiusCubes) {
+    AffGrilleExtArea(CurrentCubeX - radiusCubes, CurrentCubeY - radiusCubes, CurrentCubeX + radiusCubes, CurrentCubeY + radiusCubes);
 }
 
 #endif // LBA2_RENDERER_HOST

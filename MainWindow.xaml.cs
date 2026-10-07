@@ -2494,6 +2494,18 @@ public partial class MainWindow : Window
         return (currentIsland.CubeAt(cubeX, cubeZ) & 0x7F) != 0;
     }
 
+    // The cubes the native view draws (RenderFrameArea): the island's own -- all those with land -- and a ring of sea two cubes wide round
+    // them, and the camera's cube whatever it is; the whole 16 x 16 map's edge at the most.
+    private (int X0, int Z0, int X1, int Z1) IslandCubeArea(int cameraCubeX, int cameraCubeZ)
+    {
+        int x0 = cameraCubeX, z0 = cameraCubeZ, x1 = cameraCubeX, z1 = cameraCubeZ;
+        if (currentIsland is not null)
+            for (var y = 0; y < 16; y++)
+                for (var x = 0; x < 16; x++)
+                    if ((currentIsland.CubeAt(x, y) & 0x7F) != 0) { x0 = Math.Min(x0, x); z0 = Math.Min(z0, y); x1 = Math.Max(x1, x); z1 = Math.Max(z1, y); }
+        return (Math.Max(0, x0 - 2), Math.Max(0, z0 - 2), Math.Min(15, x1 + 2), Math.Min(15, z1 + 2));
+    }
+
     private (int, int)? FindCentralPresentCube()
     {
         if (currentIsland is null) return null;
@@ -3070,6 +3082,11 @@ public partial class MainWindow : Window
             var wideRadius = 2;
             var currentCubeX = (int)Math.Floor(targetX / 32768.0);
             var currentCubeY = (int)Math.Floor(targetZ / 32768.0);
+            // (2026-10-07, the user: moving the view moved the island over the sea and could leave part of it off -- the square of 2 cubes
+            // round the camera's cube is all the renderer drew, the sea with it: the Island of the Francos made twice its size is four cubes
+            // across. Now the whole island's cubes and a ring of sea two cubes wide round them, whatever the camera is over.)
+            var area = IslandCubeArea(currentCubeX, currentCubeY);
+            bool InArea(int cx, int cz) => cx >= area.X0 && cx <= area.X1 && cz >= area.Z0 && cz <= area.Z1;
             List<(int, double, double, double, double)>? projected = null;
             List<(int ActorIndex, List<Point> ScreenPoints)>? projectedRoutes = null;
             HashSet<int>? projectedInvisible = null;
@@ -3078,6 +3095,7 @@ public partial class MainWindow : Window
             int camX = (int)targetX, camY = (int)targetY, camZ = (int)targetZ, camDistance = nativeDistance;
             var bitmap = nativeRenderer.RenderIslandDirect(islandName, palette, camX, camY, camZ, nativeAlpha, nativeBeta, nativeGamma, camDistance,
                 wideRadiusCubes: wideRadius,
+                cubeArea: area,
                 drawSky: desiredSkyEnabled,
                 drawActors: !hideAllActors,
                 afterRenderBeforeUnlock: () =>
@@ -3094,7 +3112,7 @@ public partial class MainWindow : Window
                     for (var i = 0; i < count; i++)
                     {
                         if (!library.GetActor(i, out var x, out var y, out var z, out var waypointCount)) continue;
-                        if (Math.Abs((int)Math.Floor(x / 32768.0) - currentCubeX) > wideRadius || Math.Abs((int)Math.Floor(z / 32768.0) - currentCubeY) > wideRadius) continue;
+                        if (!InArea((int)Math.Floor(x / 32768.0), (int)Math.Floor(z / 32768.0))) continue;
                         if (!library.ProjectPoint(x, y, z, out var sx, out var sy)) continue;
 
                         // Click target centred on the body's vertical middle
@@ -3137,7 +3155,7 @@ public partial class MainWindow : Window
                             // as un-pinned as an actor would be -- truncate the
                             // route there rather than drawing a segment into
                             // empty space.
-                            if (Math.Abs((int)Math.Floor(wx / 32768.0) - currentCubeX) > wideRadius || Math.Abs((int)Math.Floor(wz / 32768.0) - currentCubeY) > wideRadius) break;
+                            if (!InArea((int)Math.Floor(wx / 32768.0), (int)Math.Floor(wz / 32768.0))) break;
                             if (!library.ProjectPoint(wx, wy, wz, out var wsx, out var wsy)) continue;
                             points.Add(new Point(wsx, wsy));
                         }
@@ -3172,7 +3190,7 @@ public partial class MainWindow : Window
                         if (!library.GetZone(zi, out var zx0, out var zy0, out var zz0, out var zx1, out var zy1, out var zz1, out var ztype, out var znum)) continue;
                         var zcubeX = (int)Math.Floor((zx0 + zx1) / 2 / 32768.0);
                         var zcubeZ = (int)Math.Floor((zz0 + zz1) / 2 / 32768.0);
-                        if (Math.Abs(zcubeX - currentCubeX) > wideRadius || Math.Abs(zcubeZ - currentCubeY) > wideRadius) continue;
+                        if (!InArea(zcubeX, zcubeZ)) continue;
                         var world = ZoneStyle.Corners(zx0, zy0, zz0, zx1, zy1, zz1);
                         var corners = new Point[8];
                         var visible = true;

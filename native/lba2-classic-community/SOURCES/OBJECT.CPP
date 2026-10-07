@@ -5260,15 +5260,26 @@ S32 AffOneObject(T_SORT *pt) {
             // Toujours des sprites Raw
             CalculeScaleFactorSprite(ptrextra->PosX, ptrextra->PosY, ptrextra->PosZ, ptrextra->Scale);
 
+            void *bank = HQR_Get(HQRPtrSpriteRaw, num);
+            if (ptrextra->Flags & EXTRA_MIRROR) {
+                // (mirrored about the extra's place: its rows' pixels the other way round, its left edge where its right one was)
+                void *mirrored = MirroredRawSprite(num, bank);
+                if (mirrored) {
+                    const U8 *head = (const U8 *)bank + *(const U32 *)bank;
+                    const S32 w = head[0], hot = (S8)head[2];
+                    SpriteX = Xp - PtrZvExtraRaw[num * 8 + 0] - (S32)(((S64)(2 * hot + w) * ScaleFactorSprite) >> 16);
+                    bank = mirrored;
+                }
+            }
             if (ptrextra->Flags & EXTRA_TRANSPARENT) {
                 ScaleSpriteTransp(0, SpriteX, SpriteY,
                                   ScaleFactorSprite, ScaleFactorSprite,
-                                  HQR_Get(HQRPtrSpriteRaw, num),
+                                  bank,
                                   PtrTransPal);
             } else {
                 ScaleSprite(0, SpriteX, SpriteY,
                             ScaleFactorSprite, ScaleFactorSprite,
-                            HQR_Get(HQRPtrSpriteRaw, num));
+                            bank);
             }
         }
 
@@ -6435,6 +6446,31 @@ void GereZoneMessage(T_OBJET *ptrobj, T_ZONE *ptrz) {
 }
 
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+// A raw sprite (SPRIRAW.HQR, a bank of one) mirrored left to right, made the first time it is asked for and kept: for an extra with
+// EXTRA_MIRROR (the race-track mode's steam jets, 2026-10-07 -- the Gazogem factory's jet blows one way only, to the screen's right).
+#define MAX_MIRRORED_SPRITES 1024
+static U8 *MirroredSprites[MAX_MIRRORED_SPRITES];
+void *MirroredRawSprite(S32 num, void *bank) {
+    if (num < 0 || num >= MAX_MIRRORED_SPRITES || !bank) return NULL;
+    if (MirroredSprites[num]) return MirroredSprites[num];
+    const U32 at = *(const U32 *)bank;
+    const U8 *head = (const U8 *)bank + at;
+    const S32 w = head[0], h = head[1];
+    const U32 size = at + 4 + (U32)(w * h);
+    U8 *copy = (U8 *)malloc(size);
+    if (!copy) return NULL;
+    memcpy(copy, bank, size);
+    U8 *pixels = copy + at + 4;
+    for (S32 y = 0; y < h; y++)
+        for (S32 x = 0; x < w / 2; x++) {
+            const U8 t = pixels[y * w + x];
+            pixels[y * w + x] = pixels[y * w + w - 1 - x];
+            pixels[y * w + w - 1 - x] = t;
+        }
+    MirroredSprites[num] = copy;
+    return copy;
+}
+
 S32 GereZoneChangeCube(T_OBJET *ptrobj, T_ZONE *ptrz) {
     if (((ptrobj->Move != MOVE_BUGGY_MANUAL AND ptrobj->Move != MOVE_BUGGY)
              OR(CubeArrowFlags(ptrz->Num) & 4)) // Exterieur

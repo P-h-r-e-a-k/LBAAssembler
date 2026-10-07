@@ -451,6 +451,16 @@ int lba2_renderer_render_frame(void)
 }
 
 extern void AffGrilleExtWide(int radiusCubes);
+extern void AffGrilleExtArea(int x0, int z0, int x1, int z1);
+
+// The cubes from (cubeX0, cubeZ0) to (cubeX1, cubeZ1) drawn into the frame whichever the camera is over (AffGrilleExtArea): the editor's
+// whole island and the sea round it, the same under the island wherever the view is.
+int lba2_renderer_render_frame_area(int cubeX0, int cubeZ0, int cubeX1, int cubeZ1)
+{
+    if (cubeX1 < cubeX0 || cubeZ1 < cubeZ0) return 0;
+    AffGrilleExtArea(cubeX0, cubeZ0, cubeX1, cubeZ1);
+    return 1;
+}
 
 int lba2_renderer_render_frame_wide(int radiusCubes)
 {

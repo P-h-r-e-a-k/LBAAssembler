@@ -355,6 +355,7 @@ typedef struct { int Scene, Actor; S32 Y; int HasY; S32 Back; } T_RACE_MUSHROOM;
 static T_RACE_MUSHROOM s_mush[RACE_MAX_MUSHROOMS];
 static int s_nbMush = 0;
 static int s_powerups = 0;
+static int s_fuelAlways = 0;               // fuel_always=1: every car on Gazogem fuel all race, and no mushroom gives it (the Island of the Francos', 2026-10-07)
 static int s_powerupOnly = -1;             // powerup_only=<n> [<n>...] (tests): every mushroom has that one -- or one of those, at random
 static int s_onlyList[8], s_nbOnly = 0;
 #define RACE_MAX_PENGUIN_ACTORS 192
@@ -572,9 +573,11 @@ static unsigned s_ventSeed = 20261007u;   // (their own dice: the race's, RaceRa
 // penguin's blast, held a shorter while -- once a burst. (A jet with no way, jet='s first form, blows up out of the deck as before.)
 #define RACE_MAX_JETS 48
 #define RACE_STEAM_IMPACT 37
-#define RACE_STEAM_SAMPLE 16               // impact 37's: the hiss
-#define RACE_STEAM_SPRITE 100              // ... its puff, sprites 100-109
-#define RACE_STEAM_FLOW 16                 // ... its sparks
+#define RACE_STEAM_SAMPLE 17               // impact 38's -- the factory's jets out of its walls, across its rooms -- its hiss
+#define RACE_STEAM_SPRITE 110              // ... its jet, sprites 110-118 (blowing to the screen's right: mirrored for the left)
+#define RACE_STEAM_FRAMES 8
+#define RACE_STEAM_SCALE 22               // its size (smaller, bigger: the factory's 35 is for its rooms' close cameras -- the jet across the road's band)
+#define RACE_STEAM_FLOW 76                 // ... its sparks, a flow blowing on the level the way it is turned
 #define RACE_STEAM_HOLD 900                // how long a jet's blast holds a car
 #define RACE_STEAM_PUFF 180                // how often a blowing jet puffs again
 #define RACE_STEAM_BAND 700                // the band's half depth along the road
@@ -1505,6 +1508,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "main")) s_main = atoi(v) - 1;
         else if (!strcmp(key, "finish")) s_nbFinishSet = ReadSets(v, s_finishSet);
         else if (!strcmp(key, "powerups")) s_powerups = atoi(v);
+        else if (!strcmp(key, "fuel_always")) s_fuelAlways = atoi(v);
         else if (!strcmp(key, "powerup_only")) {
             int used = 0, value;
             s_nbOnly = 0;
@@ -2131,7 +2135,8 @@ U32 RaceMod_AutoInput(void) {
     if (err > 24) bits |= I_LEFT;
     else if (err < -24) bits |= I_RIGHT;
     // the line's speed here (the reference car's; the jet-pack's times its factor), and the car's own
-    const double here = o->V[best] * JetFactor(s_jetUntil, s_jetFactor), speed = ListBuggy[0].Speed;
+    // (on Gazogem fuel all race, fuel_always=: the line's speed times its boost, as the car's own top speed is)
+    const double here = o->V[best] * JetFactor(s_jetUntil, s_jetFactor) * (s_fuelAlways && (S32)TimerRefHR >= s_jetUntil ? RACE_BOOST : 1.0), speed = ListBuggy[0].Speed;
     // (coming up to a ring with a gap: held close to the speed it is leapt at -- coasting a little over it, braking only well over it --
     // and no brakes in the last cell, which a car carries into the ring)
     for (int k = 0; k < s_nbLoops; k++) {
@@ -3101,11 +3106,12 @@ static int RandomPowerUp(double back) {
     double w[PU_COUNT], total = 0;
     for (int i = 0; i < PU_COUNT; i++) {
         w[i] = s_puWeight[i] * (back < 0 ? 1 : s_puLead[i] + (s_puLast[i] - s_puLead[i]) * back);
+        if (i == PU_FUEL && s_fuelAlways) w[i] = 0;   // (every car has it all race)
         total += w[i];
     }
     double r = RaceRandom() * total;
     for (int i = 0; i < PU_COUNT; i++) { if (r < w[i]) return i; r -= w[i]; }
-    return PU_FUEL;
+    return s_fuelAlways ? PU_PROTECT : PU_FUEL;
 }
 
 // An oil slick dropped at (x, y, z) (world units): on the road until a car drives over it (the oldest goes when there are too many).
@@ -3173,18 +3179,26 @@ static void PoseSlick(T_RACE_SLICK *sl, S32 lx, S32 lz) {
         double lat, t;
         const double wx = lx + CurrentCubeX * 32768.0, wz = lz + CurrentCubeY * 32768.0;
         if (RaisedAt(wx, wz, ref + 64, RACE_SLICK_ONTO, &f, &seg, &lat, &t) && abs(f - ref) < RACE_SLICK_FALL) {
-            // onto the deck: across to it, its edge a slick's width in
+            // onto the deck: to the nearest place on it -- across to it, its edge a slick's width in, and along to the end of it where
+            // the slick lay past one (a jump's lip: a car that has just landed drops its oil 1,300 behind it, over the jump's gap, where
+            // there is no deck -- the sea or the ground far below, 2026-10-07)
             const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
             const double sx = c->X - a->X, sz = c->Z - a->Z, len = sqrt(sx * sx + sz * sz);
             const double half = a->Half + (c->Half - a->Half) * t - RACE_SLICK_RADIUS;
-            if (len > 0 && half > 0 && fabs(lat) > half) {
-                const double move = (fabs(lat) - half) * (lat > 0 ? 1 : -1), nx = -sz / len, nz = sx / len;
-                // (lat is measured to the left of the segment's way: sx * (wz - pz) - sz * (wx - px), over len)
-                lx -= (S32)(nx * move); lz -= (S32)(nz * move);
-                sl->X -= nx * move; sl->Z -= nz * move;
+            if (len > 0) {
+                const double nx = -sz / len, nz = sx / len, side = half > 0 ? (lat > half ? half : lat < -half ? -half : lat) : 0;
+                // (lat is measured to the left of the segment's way: sx * (wz - pz) - sz * (wx - px), over len; t is where along it)
+                const double px = a->X + sx * t + nx * side, pz = a->Z + sz * t + nz * side;
+                lx = (S32)(px - CurrentCubeX * 32768.0); lz = (S32)(pz - CurrentCubeY * 32768.0);
+                sl->X = px; sl->Z = pz;
             }
             h0 = SlickGround(lx, lz, ref, &ok);
-            Log_Info("[racemod] a slick off the deck's edge moved onto it (%.0f across), %d", fabs(lat), (int)h0);
+            if (!ok || ref - h0 > RACE_SLICK_FALL) {
+                Log_Info("[racemod] a slick dropped at %d with no road under it or near it: gone", (int)ref);
+                sl->On = 0;
+                return;
+            }
+            Log_Info("[racemod] a slick off the deck moved onto it (%.0f across), at %d", fabs(lat), (int)h0);
         } else {
             Log_Info("[racemod] a slick dropped at %d with no road under it (the ground %d below): gone", (int)ref, (int)(ref - h0));
             sl->On = 0;
@@ -3783,7 +3797,8 @@ double RaceMod_SpeedFactor(void) {
     if (!RaceMod_Active()) return 1;
     const S32 now = TimerRefHR;
     double f = 1;
-    if (now < s_boostUntil) f *= RACE_BOOST;
+    // (Gazogem fuel all race, fuel_always=: but the super jet-pack's own speed while it drives)
+    if (now < s_boostUntil || (s_fuelAlways && now >= s_jetUntil)) f *= RACE_BOOST;
     else if (now < s_jetUntil) f *= JetFactor(s_jetUntil, s_jetFactor);
     if (now < s_shrunkUntil && now >= s_protectUntil && now >= s_jetUntil) f *= RACE_SHRUNK;
     return f;
@@ -3904,37 +3919,34 @@ static void Jets(S32 now, int driving) {
             j->Puff = now + RACE_STEAM_PUFF;
             if (!across) DoImpact(RACE_STEAM_IMPACT, lx, (S32)j->Y, lz, 255);
             else {
-                // the hiss, at the burst's start; puffs in a row from the rail across the road, one more each time; the sparks blown across
-                if (j->Stage == 0) { ParmSampleVolume = 35; HQ_3D_MixSample(RACE_STEAM_SAMPLE, 4500, 1000, 1, (S32)(nozX - cx), (S32)nozY, (S32)(nozZ - cz)); }
-                const int rows = 1 + j->Reach / 650;
-                for (int k = 0; k < 2; k++) {
+                // the factory's own horizontal jet, as its rooms' walls blow it (impact 38): its hiss at the burst's start; its jet --
+                // sprites drawn blowing to the screen's right, mirrored when the jet blows to its left from where the camera is -- at the
+                // rail and a third and two thirds of the way over; its sparks, a flow on the level, blown across
+                if (j->Stage == 0) { ParmSampleVolume = 40; HQ_3D_MixSample(RACE_STEAM_SAMPLE, 4096, 1000, 1, (S32)(nozX - cx), (S32)nozY, (S32)(nozZ - cz)); }
+                const double bx = -leftX * j->Side, bz = -leftZ * j->Side;   // (the way it blows)
+                int mirror = 0;
+                {
+                    PtrProjectPoint((S32)(nozX - cx), (S32)nozY, (S32)(nozZ - cz));
+                    const S32 x0 = Xp;
+                    PtrProjectPoint((S32)(nozX - cx + bx * 1000), (S32)nozY, (S32)(nozZ - cz + bz * 1000));
+                    mirror = Xp < x0;
+                }
+                for (int k = 0; k < 3; k++) {
+                    if (k > 0 && (j->Stage + k) % 2) continue;   // (the far ones every other time)
                     int puffs = 0;
                     for (int q = 0; q < RACE_MAX_PUFFS; q++) if (s_puffEnd[q] > now) puffs++;
                     if (puffs >= RACE_MAX_PUFFS) break;
-                    const double d = k == 0 ? 220.0 : 220.0 + 650.0 * (1 + j->Stage % rows);
-                    if (d > j->Reach + 200) continue;
-                    const double px = nozX - leftX * j->Side * d, pz = nozZ - leftZ * j->Side * d;
-                    if (InitExtraAnimSprite(255, (S32)(px - cx), (S32)(nozY + 120 * k), (S32)(pz - cz), RACE_STEAM_SPRITE, RACE_STEAM_SPRITE + 9, 800, 35, 1, 0) < 0) break;
+                    const double d = 120.0 + j->Reach * k / 3.0;
+                    const double px = nozX + bx * d, pz = nozZ + bz * d;
+                    const S32 e = InitExtraAnimSprite(255, (S32)(px - cx), (S32)nozY, (S32)(pz - cz), RACE_STEAM_SPRITE, RACE_STEAM_SPRITE + RACE_STEAM_FRAMES, 800, RACE_STEAM_SCALE, 1, 0);
+                    if (e < 0) break;
+                    if (mirror) ListExtra[e].Flags |= EXTRA_MIRROR;
                     for (int q = 0; q < RACE_MAX_PUFFS; q++) if (s_puffEnd[q] <= now) { s_puffEnd[q] = now + 900; break; }
                 }
-                {
-                    // a puff blown across the road from the rail, growing as it goes (a pof's scale is how far off it looks: smaller is bigger)
-                    int puffs = 0;
-                    for (int q = 0; q < RACE_MAX_PUFFS; q++) if (s_puffEnd[q] > now) puffs++;
-                    const S32 life = j->Reach * 1000 / 2400;   // (40 units a tick: 2,000 a second -- over the band in its time)
-                    const S32 beta = (S32)(atan2(-leftX * j->Side, -leftZ * j->Side) * 4096.0 / (2 * 3.14159265358979)) & 4095;
-                    if (puffs < RACE_MAX_PUFFS
-                        && InitExtraPof((S32)(nozX - cx), (S32)nozY, (S32)(nozZ - cz), 1, 110, beta, 48, 0, 520, 150, life, 0, life) >= 0)
-                        for (int q = 0; q < RACE_MAX_PUFFS; q++) if (s_puffEnd[q] <= now) { s_puffEnd[q] = now + life; break; }
-                }
-                if (j->Stage % 3 == 0) {
-                    // (the factory's sparks, turned from up to across: the flow's own angle up taken down for this one spray)
+                if (j->Stage % 2 == 0) {
+                    const S32 beta = (S32)(atan2(bx, bz) * 4096.0 / (2 * 3.14159265358979)) & 4095;
                     T_FLOW *flow = TabPartFlow + RACE_STEAM_FLOW;
-                    const S16 alpha = flow->Alpha;
-                    flow->Alpha = 140;
-                    const S32 beta = (S32)(atan2(-leftX * j->Side, -leftZ * j->Side) * 4096.0 / (2 * 3.14159265358979)) & 4095;
                     CreateParticleFlow(0, 255, 0, (S32)(nozX - cx), (S32)nozY, (S32)(nozZ - cz), (beta - flow->Beta) & 4095, RACE_STEAM_FLOW);
-                    flow->Alpha = alpha;
                 }
             }
             j->Stage++;
@@ -4037,7 +4049,7 @@ void RaceMod_Frame(void) {
             }
             // (a power-up's boost, shrunk by Twinsen's lightning, stopped by a penguin's blast)
             if (now < o->JetUntil) pace *= JetFactor(o->JetUntil, o->JetFactor);
-            else if (now < o->BoostUntil) pace *= RACE_BOOST * 0.9;
+            else if (now < o->BoostUntil || s_fuelAlways) pace *= RACE_BOOST * 0.9;
             if (now < o->ShrunkUntil) pace *= RACE_SHRUNK;
             if (now < o->HitUntil) { pace = 0; o->Speed = 0; }
 
@@ -4670,7 +4682,7 @@ static void ResetTrack(void) {
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
-    s_powerups = 0; s_powerupOnly = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks)); s_skidUntil = 0;
+    s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks)); s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     s_noCollideScene = -1;
     if (s_heroHidden) { ListObjet[NUM_PERSO].Flags &= ~INVISIBLE; s_heroHidden = 0; }

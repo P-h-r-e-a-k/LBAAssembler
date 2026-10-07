@@ -707,6 +707,8 @@ void RaceMod_Floor(S32 ox, S32 oy, S32 oz, S32 nx, S32 *ny, S32 nz);
 #define	EXTRA_FOUDRE_STEP2	(1L<<28L)	// Foudre etape 2
 #define	EXTRA_FOUDRE_STEP3	(1L<<29L)	// Foudre etape 3
 
+#define	EXTRA_MIRROR		(1L<<30L)	// the sprite drawn mirrored left to right (the race-track mode's steam jets, 2026-10-07)
+void *MirroredRawSprite(S32 num, void *bank);	// (OBJECT.CPP)
 #define	EXTRA_NO_SHADOW		(1L<<31L)	// Ne pas Afficher l'ombre de l'extra
 
 // En masquant le champ Flags des Extras avec EXTRA_MASK_WEAPON,

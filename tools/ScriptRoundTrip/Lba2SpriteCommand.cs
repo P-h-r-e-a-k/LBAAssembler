@@ -9,7 +9,7 @@ internal static class Lba2SpriteCommand
 {
     public static int Run(string[] args)
     {
-        var library = GphLibrary.Lba2Sprites(args[1]);
+        var library = Environment.GetEnvironmentVariable("RAW") == "1" ? GphLibrary.Lba2RawSprites(args[1]) : GphLibrary.Lba2Sprites(args[1]);   // (RAW=1: SPRIRAW.HQR, the effects')
         var palette = library.LoadPalette();
         if (args[3] == "palette")
         {

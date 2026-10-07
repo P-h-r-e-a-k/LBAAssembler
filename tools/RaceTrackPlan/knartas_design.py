@@ -127,7 +127,7 @@ MARK = {
     'refOut':   nearest((622, 545), N_),       # ... and out over its way in
     'north1':   nearest((622, 500), N_),
     'east1':    nearest((645, 486), E),
-    'towerFoot': nearest((657, 508), S_),     # (level to the leap's ramp)
+    'towerFoot': nearest((657, 526), S_),     # (level to the leap's ramp, over the factory's roof)
     'hut88':    nearest((657, 603), S_),       # (through it half way up its dome: the leap's landing comes down to it)
     'vilIn':    nearest((657, 612), S_),       # the village's loop: in ...
     'vilOut':   nearest((652, 623.5), W_),     # ... and out over its way in
@@ -174,11 +174,11 @@ def flight_heights(iFoot, iLip, iLand, iLandFoot, theta, top_needed, land_at=Non
     land_y = max(y3 + 300, min(yl, top_needed)) if land_at is None else land_at
     return at, yl, land_y
 
-# (the user's next round, 2026-10-07: the tower's and the fence's far too long -- 76 and 60 cells: now 42 and 30 -- and the boat's
-# landing a little closer -- 35 cells: 32)
+# (the user's next rounds, 2026-10-07: the tower's and the fence's far too long -- 76 and 60 cells: 42 and 30, then still too long: 24
+# and 18, the tower's ramp now over the factory's roof -- and the boat's landing a little closer -- 35 cells: 32)
 JUMPS = [('inlet', (486, 486.0, S_), (486, 496.0, S_), (486, 528.0, S_), (486, 538.0, S_), 40.0, None),
-         ('tower', (657, 510.0, S_), (657, 518.0, S_), (657, 560.0, S_), (657, 570.0, S_), 22.0, (5600.0, 7600.0)),
-         ('fence', (XE, 610.0, N_), (XE, 600.0, N_), (XE, 570.0, N_), (XE, 560.0, N_), 30.0, None)]
+         ('tower', (657, 528.0, S_), (657, 536.0, S_), (657, 560.0, S_), (657, 570.0, S_), 22.0, (5600.0, 7600.0)),
+         ('fence', (XE, 604.0, N_), (XE, 594.0, N_), (XE, 576.0, N_), (XE, 566.0, N_), 30.0, None)]
 gap = np.zeros(N, bool); arcs = []
 for name, f, l, ld, lf, deg, landing in JUMPS:
     iF, iL, iD, iDF = nearest(f[:2], f[2]), nearest(l[:2], l[2]), nearest(ld[:2], ld[2]), nearest(lf[:2], lf[2])

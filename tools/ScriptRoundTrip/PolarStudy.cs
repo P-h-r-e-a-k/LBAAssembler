@@ -553,9 +553,12 @@ internal static class PolarStudy
         if (!lib.IsLoaded || !lib.SetDataRoot(game) || !lib.Initialize()) { Console.WriteLine("native init failed"); return 2; }
         if (lib.LoadIsland(name.ToLowerInvariant()) == 0) { Console.WriteLine("LoadIsland failed"); return 2; }
         lib.SetDrawSky(true); lib.SetDrawSea(true);
+        if (Environment.GetEnvironmentVariable("FAR") is { } far) { var f = int.Parse(far); lib.SetViewDistance(f * 4 / 5, f); }
         lib.SetViewTarget(x, (int)y, z);
         lib.SetCamera(alpha, beta, 0, distance);
-        if ((wide > 0 ? lib.RenderFrameWide(wide) : lib.RenderFrame()) == 0) { Console.WriteLine("render failed"); return 2; }
+        // (AREA=x0,z0,x1,z1: those cubes whichever the camera is over, as the editor's view draws them)
+        var areaCubes = Environment.GetEnvironmentVariable("AREA")?.Split(',').Select(int.Parse).ToArray();
+        if ((areaCubes is { Length: 4 } a ? lib.RenderFrameArea(a[0], a[1], a[2], a[3]) : wide > 0 ? lib.RenderFrameWide(wide) : lib.RenderFrame()) == 0) { Console.WriteLine("render failed"); return 2; }
         var p = lib.GetFramebuffer(out var w, out var h, out var pitch);
         var palette = LBAAssembler.Terrain.IslandMapRenderer.LoadPalette(game, name);
         var six = palette.Take(768).Max() <= 63;

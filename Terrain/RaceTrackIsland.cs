@@ -222,6 +222,9 @@ internal sealed record RaceTrackIsland(
     // An island made bigger for its track (IslandScaler): Scale times each way, everything on it with it, its new cubes' scenes numbered
     // from MoreScenes (past 254: no holomap arrow -- the engine's CubeArrowFlags).
     public int Scale { get; init; } = 1;
+    // Every car on Gazogem fuel all race, and no mushroom gives it (the race-track mode's fuel_always=): the Island of the Francos', where
+    // the fuel is made (the user, 2026-10-07).
+    public bool FuelAlways { get; init; }
     public int[] MoreScenes { get; init; } = Array.Empty<int>();
     // The island's outside scenes: FirstScene..LastScene, and MoreScenes when it is made bigger.
     public IEnumerable<int> Scenes => Enumerable.Range(FirstScene, LastScene - FirstScene + 1).Concat(Scale > 1 ? MoreScenes : Array.Empty<int>());
@@ -248,6 +251,7 @@ internal sealed record RaceTrackIsland(
         // (twice its size each way, its 3 cubes 12: scenes 107-109 and 255-263 -- the user, 2026-10-07)
         Scale = 2,
         MoreScenes = Enumerable.Range(255, 9).ToArray(),
+        FuelAlways = true,
     };
 
     public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas };
