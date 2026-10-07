@@ -313,6 +313,15 @@ internal static class RaceTrackCommand
         return 0;
     }
 
+    // hqrentry <file.HQR> <entry> <out>: one entry of an HQR, unpacked, to a file (looking into the game's resources)
+    public static int HqrEntry(string[] args)
+    {
+        var bytes = HqrArchive.Open(args[1]).Read(int.Parse(args[2]));
+        File.WriteAllBytes(args[3], bytes);
+        Console.WriteLine($"{args[3]}: {bytes.Length} bytes");
+        return 0;
+    }
+
     public static int RaceCarFile(string[] args)
     {
         var setup = new LBAAssembler.RaceCarSetup();

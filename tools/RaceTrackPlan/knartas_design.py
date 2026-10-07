@@ -127,6 +127,7 @@ MARK = {
     'refOut':   nearest((622, 545), N_),       # ... and out over its way in
     'north1':   nearest((622, 500), N_),
     'east1':    nearest((645, 486), E),
+    'towerFoot': nearest((657, 508), S_),     # (level to the leap's ramp)
     'hut88':    nearest((657, 603), S_),       # (through it half way up its dome: the leap's landing comes down to it)
     'vilIn':    nearest((657, 612), S_),       # the village's loop: in ...
     'vilOut':   nearest((652, 623.5), W_),     # ... and out over its way in
@@ -140,9 +141,9 @@ MARK = {
 }
 MIDWAY = 1000.0                         # the village's huts driven through half way up their domes (they are twice their size)
 KEYS = [('dock0', DOCK), ('start', DOCK), ('nArm1', DOCK), ('loopOut', DOCK + LOOP_RISE), ('sArm0', DOCK + 200), ('over', OVER - 200),
-        ('refIn', OVER + 800), ('refOut', OVER + 800 + LOOP_RISE), ('north1', HIGH), ('east1', HIGH),
-        ('hut88', floor(657, 603) + 2000), ('vilIn', floor(657, 603) + 2100), ('vilOut', floor(657, 603) + 2300 + LOOP_RISE),
-        ('mid', floor(612, 621) + MIDWAY), ('hut81', floor(594, 650) + MIDWAY), ('south0', 2700.0), ('south1', 2700.0),
+        ('refIn', OVER + 800), ('refOut', OVER + 800 + LOOP_RISE), ('north1', HIGH), ('east1', HIGH), ('towerFoot', HIGH),
+        ('hut88', floor(657, 603) + 2700), ('vilIn', floor(657, 603) + 2800), ('vilOut', floor(657, 603) + 3000 + LOOP_RISE),
+        ('mid', floor(612, 621) + 2000), ('hut81', floor(594, 650) + MIDWAY), ('south0', 2700.0), ('south1', 2700.0),
         ('hut84', floor(XE, 662) + MIDWAY), ('up1', TOPL), ('top1', TOPL), ('down1', DOCK + 100)]
 KEYS = sorted(((MARK[m], h) for m, h in KEYS), key=lambda t: t[0])
 Y = np.zeros(N)
@@ -156,7 +157,7 @@ for i in range(len(KEYS)):
         k = (k + 1) % N
 
 # ---- the jumps the engine carries the car over: (name, foot, lip, landing lip, landing foot as (x, z, heading)) and the ramp's angle
-def flight_heights(iFoot, iLip, iLand, iLandFoot, theta, top_needed):
+def flight_heights(iFoot, iLip, iLand, iLandFoot, theta, top_needed, land_at=None):
     """the car's way from the ramp's foot to the landing hill's foot: a ramp curving up (a circle's arc, level at its foot) to the lip, a
     parabola to the landing lip, a hill curving down to its foot -- the heights at its ends the road's own there"""
     y0, y3 = Y[iFoot], Y[iLandFoot]
@@ -170,17 +171,21 @@ def flight_heights(iFoot, iLip, iLand, iLandFoot, theta, top_needed):
             return yl + sl * u + a * u * u
         u = d - k1 - L_; f = u / k2
         return land_y + (y3 - land_y) * ease(f)
-    land_y = max(y3 + 300, min(yl, top_needed))
+    land_y = max(y3 + 300, min(yl, top_needed)) if land_at is None else land_at
     return at, yl, land_y
 
-JUMPS = [('inlet', (486, 486.0, S_), (486, 496.0, S_), (486, 531.0, S_), (486, 541.0, S_), 40.0, None),
-         ('tower', (657, 496.0, S_), (657, 504.0, S_), (657, 580.0, S_), (657, 590.0, S_), 22.0, 4400.0),
-         ('fence', (XE, 622.0, N_), (XE, 612.0, N_), (XE, 552.0, N_), (XE, 542.0, N_), 30.0, None)]
+# (the user's next round, 2026-10-07: the tower's and the fence's far too long -- 76 and 60 cells: now 42 and 30 -- and the boat's
+# landing a little closer -- 35 cells: 32)
+JUMPS = [('inlet', (486, 486.0, S_), (486, 496.0, S_), (486, 528.0, S_), (486, 538.0, S_), 40.0, None),
+         ('tower', (657, 510.0, S_), (657, 518.0, S_), (657, 560.0, S_), (657, 570.0, S_), 22.0, (5600.0, 7600.0)),
+         ('fence', (XE, 610.0, N_), (XE, 600.0, N_), (XE, 570.0, N_), (XE, 560.0, N_), 30.0, None)]
 gap = np.zeros(N, bool); arcs = []
-for name, f, l, ld, lf, deg, foot_y in JUMPS:
+for name, f, l, ld, lf, deg, landing in JUMPS:
     iF, iL, iD, iDF = nearest(f[:2], f[2]), nearest(l[:2], l[2]), nearest(ld[:2], ld[2]), nearest(lf[:2], lf[2])
+    # (a landing given: the landing hill's foot and its lip -- the hill is carried with the flight, so it may be steeper than a road)
+    foot_y, land_at = landing if landing is not None else (None, None)
     if foot_y is not None: Y[iDF] = foot_y
-    at, yl, land_y = flight_heights(iF, iL, iD, iDF, math.radians(deg), Y[iDF] + 600)
+    at, yl, land_y = flight_heights(iF, iL, iD, iDF, math.radians(deg), Y[iDF] + 600, land_at)
     k = iF
     while True:
         Y[k] = at(ahead(iF, k) * 512)
@@ -211,6 +216,12 @@ jets = [(nearest(pa, ha), nearest(pb, hb)) for pa, ha, pb, hb in JETS]
 for i0, i1 in pipes + jets:
     for name, iF, iL, iD, iDF in arcs:
         if between(iF, i0, i1) or between(i0, iF, iDF): sys.exit(f'pipes or jets {i0}-{i1}: in jump {name}')
+
+# ---- the pipeline from the Gazogem factory (its west wall) to the air-boat in the inlet (its deck between its hulls), over the channel road
+# and the start straight -- where it drips -- and under the high road: [x, z, height]
+PIPE_Y = 12000.0
+PIPELINE = [(648.0, 528.0, 7500.0), (641.0, 528.0, 7500.0), (636.0, 516.0, PIPE_Y), (526.0, 516.0, PIPE_Y), (517.0, 513.0, 9500.0), (511.5, 511.0, 3400.0)]
+PIPE_R = 700.0
 
 HALF = np.full(N, H0)
 grade = (np.roll(Y, -1) - Y) / (STEP * 512)
@@ -296,6 +307,16 @@ out.append('  the lap over itself: ' + ', '.join(f'({X[i] + ORIGIN:.0f}, {Z[i] +
 for m, k in MARK.items():
     out.append(f'    {m:8s} point {k:4d} ({X[k] + ORIGIN:6.1f}, {Z[k] + ORIGIN:6.1f}) {Y[k]:6.0f} (ground {ground(X[k], Z[k]):5.0f})')
 for nm, a, b in SECTIONS: out.append(f'  {nm}: points {a}..{b}, {ahead(a, b):.0f} cells')
+# (the pipeline over and under the lap: where a part of the lap passes within its width of it, the gap between them)
+reported = []
+for (x0, z0, y0), (x1, z1, y1) in zip(PIPELINE, PIPELINE[1:]):
+    for f in np.linspace(0, 1, 400):
+        px, pz, py = x0 + (x1 - x0) * f - ORIGIN, z0 + (z1 - z0) * f - ORIGIN, y0 + (y1 - y0) * f
+        d = np.hypot(X - px, Z - pz); k = int(d.argmin())
+        if d[k] < HALF[k] + 1.2 and all(min(abs(k - q), N - abs(k - q)) > 30 for q in reported):
+            reported.append(k)
+            gap_ = (py - PIPE_R * 1.3 - Y[k] - 1100) if Y[k] < py else (Y[k] - 200 - py - PIPE_R * 1.3)
+            out.append(f'    pipeline at ({px + ORIGIN:.0f}, {pz + ORIGIN:.0f}) {py:.0f}: the lap {"under" if Y[k] < py else "over"} it at {Y[k]:.0f}, {gap_:.0f} to spare')
 print('\n'.join(out))
 
 plan = {
@@ -316,6 +337,7 @@ plan = {
     'themes': [{'from': int(a), 'to': int(b), 'theme': nm} for nm, a, b in SECTIONS],
     'pipes': [{'from': int(i0), 'to': int(i1), 'every': 6.0, 'drip': True, 'dripsEvery': 1} for i0, i1 in pipes],
     'steamJets': [{'from': int(i0), 'to': int(i1), 'every': 7.0} for i0, i1 in jets],
+    'pipeline': {'points': [[x - ORIGIN, z - ORIGIN, y] for x, z, y in PIPELINE], 'radius': PIPE_R, 'supportEvery': 12.0, 'dripEvery': 2.5, 'dripMs': 4500},
 }
 if '--write' in sys.argv:
     json.dump(plan, open(OUT, 'w'))

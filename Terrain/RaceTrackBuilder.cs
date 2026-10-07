@@ -90,6 +90,8 @@ internal sealed class RaceTrackPlan
     // Steam jets out of the road (RaceTrackPipes.PlaceJets): along stretches of the lap, every so many cells, one side of the road and then
     // the other -- the Gazogem factory's steam, blowing in bursts that hit a car in them. From and To are the plan's points.
     public SteamJetRun[]? SteamJets { get; set; }
+    // A pipeline over the lap (RaceTrackPipes.PlacePipeline): the Island of the Francos' from the Gazogem factory to the air-boat.
+    public PipeLine? Pipeline { get; set; }
     // The raised road's colours stretch by stretch (DeckTheme by name: "dock", "refinery", "village"), From and To the plan's points;
     // elsewhere the standard greys, red and white.
     public ThemeRun[]? Themes { get; set; }
@@ -405,7 +407,8 @@ internal sealed class RaceTrackReport
     // island's corner; RACEMOD.CPP steam= and drip=)
     public List<int[]> Steam { get; } = new();
     public List<int[]> Drips { get; } = new();
-    // ... and the steam jets out of the road, [x, y, z, reach, blowing (ms), not (ms), phase (ms)] (RACEMOD.CPP jet=)
+    // ... and the steam jets across the road, [x, y, z (its middle), half width, reach, blowing (ms), not (ms), phase (ms), way x, way z]
+    // (RACEMOD.CPP jet=)
     public List<int[]> Jets { get; } = new();
     public int Vertices, Cells, DecorsRemoved, SolidDecorsRemoved, BridgeCells;
     public double Length;
@@ -754,6 +757,8 @@ internal static class RaceTrackBuilder
             RaceTrackPipes.Place(island, main, pipes.Select(p => (PlanPoint(plan, main, p.From), PlanPoint(plan, main, p.To), p)).ToList(), options, report);
         if (planned && plan.SteamJets is { Length: > 0 } jets)
             RaceTrackPipes.PlaceJets(main, jets.Select(j => (PlanPoint(plan, main, j.From), PlanPoint(plan, main, j.To), j)).ToList(), options, report);
+        if (planned && plan.Pipeline is { } pipeline)
+            RaceTrackPipes.PlacePipeline(island, main, pipeline, plan.OriginCellX, plan.OriginCellZ, options, report);
         report.GroundBefore = (x, z) => natural.Height(x, z);
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
         report.WasGround = (x, z) => natural.Drawn(x, z);

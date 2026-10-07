@@ -18,19 +18,33 @@ internal sealed class PipeRun
     public int DripsEvery { get; set; } = 2;
 }
 
-// Steam jets along a stretch of the road (RaceTrackPlan.SteamJets): every Every cells from its first point to its last, a jet out of the
-// deck a share of the way to one rail (Across) and then the other, blowing On ms in every On + Off, each a little after the one before
-// (Wave ms): a burst runs down the road ahead of a car.
+// Steam jets along a stretch of the road (RaceTrackPlan.SteamJets): every Every cells from its first point to its last, a jet blowing out
+// of the road's rail across it, Reach cells over (the race-track mode blows it out of the left rail on the player's odd laps, the
+// right on his even ones: RACEMOD.CPP jet=), On ms in every On + Off, each a little after the one before (Wave ms): a burst runs down
+// the road ahead of a car. (Until the user's next round, 2026-10-07: up out of the deck, one side of the road and then the other.)
 internal sealed class SteamJetRun
 {
     public int From { get; set; }
     public int To { get; set; }
     public double Every { get; set; } = 6;
-    public double Across { get; set; } = 0.5;
     public int On { get; set; } = 1100;
     public int Off { get; set; } = 2400;
     public int Wave { get; set; } = 450;
-    public double Reach { get; set; } = 1.9;
+    public double Reach { get; set; } = 5.5;
+}
+
+// A pipeline over the lap (RaceTrackPlan.Pipeline): a big pipe through Points ([x, z, height]: island cells from the plan's origin, world
+// units up) on supports standing on the ground clear of the road, dripping oil where it passes over the road, every DripEvery cells
+// along it there, each drip on its own time (the race-track mode's drip=: a slick where it lands) -- the Island of the Francos' pipe from
+// the Gazogem factory to the air-boat (the user, 2026-10-07: "a massive pipe above the track coming out of the gazogem factory to the
+// air ship ... random oil drips from the pipe at fixed intervals where it's over the track").
+internal sealed class PipeLine
+{
+    public double[][] Points { get; set; } = Array.Empty<double[]>();
+    public double Radius { get; set; } = 700;
+    public double SupportEvery { get; set; } = 12;
+    public double DripEvery { get; set; } = 2.5;
+    public int DripMs { get; set; } = 4500;
 }
 
 internal static class RaceTrackPipes
@@ -144,16 +158,204 @@ internal static class RaceTrackPipes
                 var len = Math.Sqrt(tx * tx + tz * tz);
                 if (len < 1e-6) continue;
                 tx /= len; tz /= len;
-                var half = r.Raised is { } up && up[i] ? r.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : o.RaisedHalfWidth : r.CurbHalf;
-                var side = (k % 2 == 0 ? 1 : -1) * half * run.Across;
-                double x = r.X[i] - tz * side, z = r.Z[i] + tx * side;
-                report.Jets.Add(new[] { (int)Math.Round(x * 512), (int)Math.Round(r.H[i]), (int)Math.Round(z * 512), (int)Math.Round(run.Reach * 512),
-                    run.On, run.Off, ((-k * run.Wave) % (run.On + run.Off) + run.On + run.Off) % (run.On + run.Off) });
+                var half = HalfAt(r, i, o);
+                // [x y z (the road's middle), its half width, the reach across, on, off, phase, its way (a thousand long)]
+                report.Jets.Add(new[] { (int)Math.Round(r.X[i] * 512), (int)Math.Round(r.H[i]), (int)Math.Round(r.Z[i] * 512), (int)Math.Round(half * 512),
+                    (int)Math.Round(Math.Min(run.Reach, 2 * half - 0.5) * 512), run.On, run.Off, ((-k * run.Wave) % (run.On + run.Off) + run.On + run.Off) % (run.On + run.Off),
+                    (int)Math.Round(tx * 1000), (int)Math.Round(tz * 1000) });
                 count++;
             }
         }
-        report.Notes.Add($"steam jets: {count} out of the road (the Gazogem factory's steam, hitting a car in a burst)");
+        report.Notes.Add($"steam jets: {count} blowing across the road from its rail -- the left on the player's odd laps, the right on his even ones (the Gazogem factory's steam, hitting a car in a burst)");
     }
+
+    private static double HalfAt(TrackRoad r, int i, RaceTrackOptions o) =>
+        r.Raised is { } up && up[i] ? r.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : o.RaisedHalfWidth : r.CurbHalf;
+
+    // The pipeline: its pipe in pieces of PipePiece cells at most (a decor each, in the cube its middle is in; its box the pipe's), its
+    // supports, and its drips over the road. Returns the bodies made.
+    public const double PipePiece = 6;
+    public const int PipeColour = 144, FlangeColour = 64, SupportLight = 57, SupportDark = 54, SupportTop = 55;
+    public static List<int> PlacePipeline(IslandFile island, TrackRoad r, PipeLine line, double originX, double originZ, RaceTrackOptions o, RaceTrackReport report)
+    {
+        var made = new List<int>();
+        if (o.NewBodyBase < 0 || line.Points.Length < 2) return made;
+        var pts = line.Points.Select(p => new Vector3((float)((p[0] + originX) * 512), (float)p[2], (float)((p[1] + originZ) * 512))).ToList();
+        var radius = (float)line.Radius;
+        int pieces = 0, supports = 0, skipped = 0;
+        bool Add(byte[] body, Vector3 at, Vector3 lo, Vector3 hi)
+        {
+            if (IslandDecors.Locate(island, at.X, at.Z) is not { } where || where.Cube.Decors.Count >= IslandDecors.MaxPerCube) return false;
+            var (cube, lx, lz) = where;
+            var d = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, lx, (int)Math.Round(at.Y), lz, 0);
+            report.NewBodies.Add(body);
+            d.XMin = (int)Math.Floor(lx + lo.X); d.XMax = (int)Math.Ceiling(lx + hi.X);
+            d.YMin = (int)Math.Floor(at.Y + lo.Y); d.YMax = (int)Math.Ceiling(at.Y + hi.Y);
+            d.ZMin = (int)Math.Floor(lz + lo.Z); d.ZMax = (int)Math.Ceiling(lz + hi.Z);
+            cube.Decors.Add(d);
+            made.Add(d.Body);
+            return true;
+        }
+        // the pipe
+        for (var k = 0; k + 1 < pts.Count; k++)
+        {
+            var a = pts[k]; var b = pts[k + 1];
+            var cells = Math.Sqrt(Math.Pow((b.X - a.X) / 512, 2) + Math.Pow((b.Z - a.Z) / 512, 2) + Math.Pow((b.Y - a.Y) / 512, 2));
+            var n = Math.Max(1, (int)Math.Ceiling(cells / PipePiece));
+            for (var c = 0; c < n; c++)
+            {
+                var p0 = Vector3.Lerp(a, b, (float)c / n); var p1 = Vector3.Lerp(a, b, (float)(c + 1) / n);
+                var mid = (p0 + p1) / 2;
+                var mesh = new List<Vector3>(); var faces = new List<Face>();
+                var axis = Vector3.Normalize(p1 - p0);
+                // (each piece a little into the next: no crack between them; its flange at its start, a wider one at a bend)
+                Cylinder(mesh, faces, p0 - mid - axis * 40, p1 - mid + axis * 40, radius, PipeColour, 12);
+                var flange = c == 0 && k > 0 ? 1.3f : 1.18f;
+                Cylinder(mesh, faces, p0 - mid - axis * 110, p0 - mid + axis * 110, radius * flange, FlangeColour, 12);
+                var body = Write(mesh, faces, lit: true);
+                var lo = Vector3.Min(p0, p1) - mid - new Vector3(radius); var hi = Vector3.Max(p0, p1) - mid + new Vector3(radius);
+                if (Add(body, mid, lo, hi)) pieces++; else skipped++;
+            }
+        }
+        // the supports: every SupportEvery cells along it, from the ground up into the pipe, none where the road passes through its way up
+        var length = 0.0;
+        for (var k = 0; k + 1 < pts.Count; k++) length += Horizontal(pts[k], pts[k + 1]);
+        for (var s = line.SupportEvery / 2; s < length - 1; s += line.SupportEvery)
+        {
+            var p = AlongPipe(pts, s);
+            var ground = IslandOps.Altitude(island, p.X, p.Z) ?? 0;
+            var bottom = p.Y - radius;
+            if (bottom - ground < 1500) continue;
+            var blocked = false;
+            for (var j = 0; j < r.Count && !blocked; j++)
+            {
+                var dd = Math.Sqrt(Math.Pow(r.X[j] * 512 - p.X, 2) + Math.Pow(r.Z[j] * 512 - p.Z, 2)) / 512;
+                if (dd < HalfAt(r, j, o) + 1.6 && r.H[j] > ground - 400 && r.H[j] < p.Y + 1500) blocked = true;
+            }
+            if (blocked) { skipped++; continue; }
+            var mesh = new List<Vector3>(); var faces = new List<Face>();
+            var w = radius * 0.8f;
+            Box(mesh, faces, Vector3.Zero, new Vector3(w, 0, 0), new Vector3(0, 0, w), 0, (float)(bottom - ground + radius * 0.4), SupportLight, SupportDark, SupportTop);
+            var dir = Vector3.Normalize(new Vector3(AlongPipe(pts, s + 0.5).X - AlongPipe(pts, s - 0.5).X, 0, AlongPipe(pts, s + 0.5).Z - AlongPipe(pts, s - 0.5).Z));
+            var across = new Vector3(-dir.Z, 0, dir.X);
+            Box(mesh, faces, Vector3.Zero, across * (radius * 1.3f), dir * (w * 0.9f), (float)(bottom - ground - 260), (float)(bottom - ground + 60), SupportLight, SupportDark, SupportTop);
+            var at = new Vector3(p.X, (float)ground, p.Z);
+            if (Add(Write(mesh, faces, lit: false), at, new Vector3(-w, 0, -w), new Vector3(w, (float)(bottom - ground), w))) supports++; else skipped++;
+        }
+        // the drips: where it is over the road (a part of the lap within the road's width under it, well below it), every DripEvery cells
+        var stretches = new List<(double From, double To)>();
+        double? open = null;
+        for (var s = 0.0; s <= length; s += 0.25)
+        {
+            var p = AlongPipe(pts, s);
+            var over = NearestUnder(r, o, p, radius) is not null;
+            if (over && open is null) open = s;
+            if (!over && open is { } from) { stretches.Add((from, s - 0.25)); open = null; }
+        }
+        if (open is { } last) stretches.Add((last, length));
+        var drips = 0;
+        foreach (var (from, to) in stretches)
+            for (var s = from + 0.6; s <= to - 0.3; s += line.DripEvery)
+            {
+                var p = AlongPipe(pts, s);
+                if (NearestUnder(r, o, p, radius) is not { } deck) continue;
+                report.Drips.Add(new[] { (int)Math.Round(p.X), (int)Math.Round(p.Y - radius - 30), (int)Math.Round(p.Z), (int)Math.Round(deck), line.DripMs });
+                drips++;
+            }
+        report.Notes.Add($"the pipeline: {pieces} pieces of pipe, {supports} supports ({skipped} left out: the road in a support's way, or a cube full), " +
+                         $"{drips} drips over the road in {stretches.Count} places it passes over it");
+        return made;
+    }
+
+    // the road's deck under a place of the pipe (a part of the lap within its width less a cell, at least 1,600 below the pipe), or null
+    private static double? NearestUnder(TrackRoad r, RaceTrackOptions o, Vector3 p, float radius)
+    {
+        double best = double.MaxValue; double? deck = null;
+        for (var j = 0; j < r.Count; j++)
+        {
+            var dd = Math.Sqrt(Math.Pow(r.X[j] * 512 - p.X, 2) + Math.Pow(r.Z[j] * 512 - p.Z, 2)) / 512;
+            if (dd < HalfAt(r, j, o) - 0.9 && r.H[j] < p.Y - radius - 1600 && dd < best) { best = dd; deck = r.H[j]; }
+        }
+        return deck;
+    }
+
+    private static double Horizontal(Vector3 a, Vector3 b) => Math.Sqrt(Math.Pow((b.X - a.X) / 512, 2) + Math.Pow((b.Z - a.Z) / 512, 2));
+
+    // the pipe's middle `s` cells along it (measured on the level)
+    private static Vector3 AlongPipe(List<Vector3> pts, double s)
+    {
+        s = Math.Max(0, s);
+        for (var k = 0; k + 1 < pts.Count; k++)
+        {
+            var l = Horizontal(pts[k], pts[k + 1]);
+            if (s <= l || k + 2 == pts.Count) return Vector3.Lerp(pts[k], pts[k + 1], (float)Math.Clamp(l > 1e-9 ? s / l : 0, 0, 1));
+            s -= l;
+        }
+        return pts[^1];
+    }
+
+    // a cylinder from a to b, its sides and its caps facing out
+    private static void Cylinder(List<Vector3> pts, List<Face> faces, Vector3 a, Vector3 b, float radius, int colour, int sides = 8)
+    {
+        var axis = Vector3.Normalize(b - a);
+        var u = Vector3.Normalize(Math.Abs(axis.Y) > 0.9 ? Vector3.Cross(axis, Vector3.UnitX) : Vector3.Cross(axis, Vector3.UnitY));
+        var v = Vector3.Cross(axis, u);
+        var ring0 = new int[sides]; var ring1 = new int[sides];
+        for (var k = 0; k < sides; k++)
+        {
+            var t = 2 * Math.PI * k / sides;
+            var off = (u * (float)Math.Cos(t) + v * (float)Math.Sin(t)) * radius;
+            ring0[k] = pts.Count; pts.Add(a + off);
+            ring1[k] = pts.Count; pts.Add(b + off);
+        }
+        for (var k = 0; k < sides; k++)
+        {
+            var k2 = (k + 1) % sides;
+            int p0 = ring0[k], p1 = ring0[k2], p2 = ring1[k2], p3 = ring1[k];
+            var mid = (pts[p0] + pts[p1] + pts[p2] + pts[p3]) / 4;
+            var outward = mid - (a + axis * Vector3.Dot(mid - a, axis));
+            var nrm = Vector3.Cross(pts[p1] - pts[p0], pts[p2] - pts[p0]);
+            faces.Add(Vector3.Dot(nrm, outward) >= 0 ? new Face(new[] { p0, p1, p2, p3 }, colour) : new Face(new[] { p3, p2, p1, p0 }, colour));
+        }
+        foreach (var (ring, end, sign) in new[] { (ring0, a, -1f), (ring1, b, 1f) })
+        {
+            var c = pts.Count; pts.Add(end);
+            for (var k = 0; k < sides; k++)
+            {
+                int p0 = ring[k], p1 = ring[(k + 1) % sides];
+                var nrm = Vector3.Cross(pts[p0] - pts[c], pts[p1] - pts[c]);
+                faces.Add(Vector3.Dot(nrm, axis * sign) >= 0 ? new Face(new[] { c, p0, p1 }, colour) : new Face(new[] { p1, p0, c }, colour));
+            }
+        }
+    }
+
+    // a box round `centre`, `u` and `v` its half sides on the level, from y0 to y1
+    private static void Box(List<Vector3> pts, List<Face> faces, Vector3 centre, Vector3 u, Vector3 v, float y0, float y1, int light, int dark, int top)
+    {
+        var c = new[] { centre - u - v, centre + u - v, centre + u + v, centre - u + v };
+        var lo = c.Select(p => { pts.Add(p + new Vector3(0, y0, 0)); return pts.Count - 1; }).ToArray();
+        var hi = c.Select(p => { pts.Add(p + new Vector3(0, y1, 0)); return pts.Count - 1; }).ToArray();
+        void Quad(int a, int b, int cc, int d, int colour, Vector3 outward)
+        {
+            var n = Vector3.Cross(pts[b] - pts[a], pts[cc] - pts[a]);
+            faces.Add(Vector3.Dot(n, outward) >= 0 ? new Face(new[] { a, b, cc, d }, colour) : new Face(new[] { d, cc, b, a }, colour));
+        }
+        for (var k = 0; k < 4; k++)
+        {
+            var n = (k + 1) % 4;
+            Quad(lo[k], lo[n], hi[n], hi[k], k % 2 == 0 ? light : dark, (c[k] + c[n]) / 2 - centre);
+        }
+        Quad(hi[0], hi[1], hi[2], hi[3], top, Vector3.UnitY);
+        Quad(lo[0], lo[1], lo[2], lo[3], dark, -Vector3.UnitY);
+    }
+
+    private static byte[] Write(List<Vector3> pts, List<Face> faces, bool lit) => new Body
+    {
+        Game = 2, Static = true, Lit = lit, Header = new byte[96],
+        Vertices = pts,
+        Bones = new List<Bone> { new(0, pts.Count, 0, -1, new byte[8]) },
+        Faces = faces,
+    }.Write();
 
     // One gantry, from its origin on the road's middle at the deck: `along` the road's way, `across` to its left; the uprights at `half`
     // either side (world units) from their feet (`down0`, `down1`: the ground under them, from the deck) to Top; the cross pipe between

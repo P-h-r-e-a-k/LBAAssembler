@@ -552,9 +552,9 @@ static int s_nbLoops = 0;
 // time, and oil dripping from them onto the road, where it lies a while as a slick a car skids on (Vents, DripOil). World units from the
 // island's corner; only near Twinsen, in the scene he is in.
 #define RACE_MAX_VENTS 64
-#define RACE_MAX_DRIPS 32
+#define RACE_MAX_DRIPS 48                  // (32 until 2026-10-07: the pipeline from the factory drips too)
 #define RACE_VENT_NEAR (26 * 512)          // how near Twinsen a pipe puffs and drips (further off, out of sight)
-#define RACE_MAX_PUFFS 16                  // the extras the steam takes at most (the game has 50 for everything: penguins, bolts...)
+#define RACE_MAX_PUFFS 24                  // the extras the steam takes at most (the game has 50 for everything: penguins, bolts...)
 #define RACE_DRIP_SLICK_MS 7000            // how long a drip's slick lies on the road if no car takes it
 typedef struct { double X, Y, Z; S32 Every, Next; } T_RACE_VENT;
 typedef struct { double X, Y, Z, RoadY; S32 Every, Next, LandAt; } T_RACE_DRIP;
@@ -563,15 +563,24 @@ static T_RACE_DRIP s_drips[RACE_MAX_DRIPS];
 static int s_nbVents = 0, s_nbDrips = 0;
 static S32 s_puffEnd[RACE_MAX_PUFFS];
 static unsigned s_ventSeed = 20261007u;   // (their own dice: the race's, RaceRandom, stay as they were)
-// Steam jets out of the road (jet=; the Island of the Francos' refinery, 2026-10-07): the Gazogem factory's own steam -- its impact 37,
-// played where its scripts turn their hit zones on -- blowing out of the deck in bursts, each its own time (On ms blowing, Off ms not,
-// from Phase). A car in one while it blows (within Reach of it) is hit as by a penguin's blast, held a shorter while -- once a burst.
+// Steam jets across the road (jet=; the Island of the Francos' refinery, 2026-10-07): the Gazogem factory's own steam -- its impact 37,
+// a hiss, a puff of steam (sprites 100-109) and a spray of sparks (flow 16), played where its scripts turn their hit zones on --
+// blowing in bursts, each its own time (On ms blowing, Off ms not, from Phase). Since the user's next round (2026-10-07: "make it
+// sideways ... out of the left side on one lap, then the right on the other"): out of the road's rail, across it -- the left rail
+// on the player's odd laps, the right on his even ones -- Reach of the way over (Half: the road's half width; Dir: its way, a thousand
+// long), puffs in a row across the road and the sparks blown sideways. A car in that band of the road while it blows is hit as by a
+// penguin's blast, held a shorter while -- once a burst. (A jet with no way, jet='s first form, blows up out of the deck as before.)
 #define RACE_MAX_JETS 48
 #define RACE_STEAM_IMPACT 37
+#define RACE_STEAM_SAMPLE 16               // impact 37's: the hiss
+#define RACE_STEAM_SPRITE 100              // ... its puff, sprites 100-109
+#define RACE_STEAM_FLOW 16                 // ... its sparks
 #define RACE_STEAM_HOLD 900                // how long a jet's blast holds a car
-#define RACE_STEAM_PUFF 260                // how often a blowing jet's steam is played again
+#define RACE_STEAM_PUFF 180                // how often a blowing jet puffs again
+#define RACE_STEAM_BAND 700                // the band's half depth along the road
 #define RACE_STEAM_FORCE 10                // the blast, as HitObj takes it (the factory's hit zones: 10)
-typedef struct { double X, Y, Z; S32 Reach, On, Off, Phase, Puff, Burst; U32 HitOpp; int HitHero; } T_RACE_JET;
+typedef struct { double X, Y, Z, DirX, DirZ, Half; S32 Reach, On, Off, Phase, Puff, Burst; U32 HitOpp; int HitHero, Stage, Side; } T_RACE_JET;
+extern T_FLOW *TabPartFlow;
 static T_RACE_JET s_jets[RACE_MAX_JETS];
 static int s_nbJets = 0;
 // Jump cameras (jumpcam=, JumpCamera): a drop -- a flight off a raised road's end and down a hillside onto the ground far below (the lava
@@ -1454,10 +1463,17 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "jet")) {
             T_RACE_JET *p = &s_jets[s_nbJets];
-            int x, y, z, reach, on, off, phase;
-            if (s_nbJets < RACE_MAX_JETS && sscanf(v, "%d %d %d %d %d %d %d", &x, &y, &z, &reach, &on, &off, &phase) == 7 && on > 0 && off >= 0 && reach > 0) {
-                memset(p, 0, sizeof(*p));
-                p->X = x; p->Y = y; p->Z = z; p->Reach = reach; p->On = on; p->Off = off; p->Phase = phase; p->Burst = -1;
+            int x, y, z, a, b, c, d, e, f, g;
+            const int n = s_nbJets < RACE_MAX_JETS ? sscanf(v, "%d %d %d %d %d %d %d %d %d %d", &x, &y, &z, &a, &b, &c, &d, &e, &f, &g) : 0;
+            memset(p, 0, sizeof(*p));
+            p->X = x; p->Y = y; p->Z = z; p->Burst = -1;
+            // (x y z half reach on off phase dirx dirz: across the road; x y z reach on off phase: up out of it)
+            if (n == 10 && a > 0 && b > 0 && c > 0 && d >= 0 && (f || g)) {
+                const double len = sqrt((double)f * f + (double)g * g);
+                p->Half = a; p->Reach = b; p->On = c; p->Off = d; p->Phase = e; p->DirX = f / len; p->DirZ = g / len;
+                s_nbJets++;
+            } else if (n == 7 && a > 0 && b > 0 && c >= 0) {
+                p->Reach = a; p->On = b; p->Off = c; p->Phase = d;
                 s_nbJets++;
             }
         }
@@ -3139,12 +3155,42 @@ static S32 SlickGround(S32 lx, S32 lz, S32 ref, int *ok) {
 // M(Alpha) M(Gamma) M(Beta): with no heading, Gamma tips its up towards -x, Alpha towards +z), and lifted so that the road under its rim
 // is nowhere over it (a flat puddle on a slope or a crest had half of it under the road, 2026-10-04).
 #define RACE_SLICK_RADIUS 620
+// (2026-10-07, the user: "oil at certain points close to the ground passing through the track and landing on the floor below" -- a
+// slick dropped behind a car where that is just off the deck, on a bend's outside or past a jump's lip, or by a car in the air, found no
+// deck under it and lay on the ground there: now one that misses the deck but has it within RACE_SLICK_ONTO of it at its height is moved
+// onto it, and one with no deck near that would lie far under where it was dropped is gone.)
+#define RACE_SLICK_ONTO 1100
+#define RACE_SLICK_FALL 900
 static void PoseSlick(T_RACE_SLICK *sl, S32 lx, S32 lz) {
     const S32 ref = (S32)sl->Y;
     int ok, okA, okB;
     sl->Posed = NumCube; sl->Alpha = sl->Gamma = 0; sl->Lift = 20;
-    const S32 h0 = SlickGround(lx, lz, ref, &ok);
+    S32 h0 = SlickGround(lx, lz, ref, &ok);
     if (!ok) return;
+    if (s_nbRaised && ref - h0 > RACE_SLICK_FALL) {
+        S32 f;
+        int seg;
+        double lat, t;
+        const double wx = lx + CurrentCubeX * 32768.0, wz = lz + CurrentCubeY * 32768.0;
+        if (RaisedAt(wx, wz, ref + 64, RACE_SLICK_ONTO, &f, &seg, &lat, &t) && abs(f - ref) < RACE_SLICK_FALL) {
+            // onto the deck: across to it, its edge a slick's width in
+            const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
+            const double sx = c->X - a->X, sz = c->Z - a->Z, len = sqrt(sx * sx + sz * sz);
+            const double half = a->Half + (c->Half - a->Half) * t - RACE_SLICK_RADIUS;
+            if (len > 0 && half > 0 && fabs(lat) > half) {
+                const double move = (fabs(lat) - half) * (lat > 0 ? 1 : -1), nx = -sz / len, nz = sx / len;
+                // (lat is measured to the left of the segment's way: sx * (wz - pz) - sz * (wx - px), over len)
+                lx -= (S32)(nx * move); lz -= (S32)(nz * move);
+                sl->X -= nx * move; sl->Z -= nz * move;
+            }
+            h0 = SlickGround(lx, lz, ref, &ok);
+            Log_Info("[racemod] a slick off the deck's edge moved onto it (%.0f across), %d", fabs(lat), (int)h0);
+        } else {
+            Log_Info("[racemod] a slick dropped at %d with no road under it (the ground %d below): gone", (int)ref, (int)(ref - h0));
+            sl->On = 0;
+            return;
+        }
+    }
     const S32 d = 256;
     double sx = 0, sz = 0;
     {
@@ -3427,7 +3473,7 @@ static void Slicks(S32 now, int driving) {
         // an opponent's
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
             T_RACE_OPPONENT *o = &s_opp[n];
-            if (!o->Count || !o->Scenes || now < o->SkidUntil) continue;
+            if (!o->Count || !o->Scenes || now < o->SkidUntil || !RaceOn()) continue;   // (none waiting on its spot)
             double x, z, y, v, dx, dz;
             PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
             if ((x - sl->X) * (x - sl->X) + (z - sl->Z) * (z - sl->Z) >= (double)RACE_OIL_REACH * RACE_OIL_REACH || fabs(y - sl->Y) > 900) continue;
@@ -3845,14 +3891,61 @@ static void Jets(S32 now, int driving) {
         const S32 cycle = j->On + j->Off;
         const S32 t = (S32)(((S64)now + j->Phase) % cycle);
         const S32 burst = (S32)(((S64)now + j->Phase) / cycle);
-        if (t >= j->On) continue;
-        if (burst != j->Burst) { j->Burst = burst; j->HitOpp = 0; j->HitHero = 0; j->Puff = 0; }
+        if (t >= j->On) { j->Stage = 0; continue; }
+        if (burst != j->Burst) { j->Burst = burst; j->HitOpp = 0; j->HitHero = 0; j->Puff = 0; j->Stage = 0; }
         const S32 lx = (S32)(j->X - cx), lz = (S32)(j->Z - cz);
         const int here = (j->X - hx) * (j->X - hx) + (j->Z - hz) * (j->Z - hz) <= near2;
-        if (here && now >= j->Puff) { j->Puff = now + RACE_STEAM_PUFF; DoImpact(RACE_STEAM_IMPACT, lx, (S32)j->Y, lz, 255); }
-        // Twinsen's car in it
+        const int across = j->Half > 0;
+        // (across the road: out of the left rail on the player's odd laps, the right on his even ones -- a burst keeps the side it began on)
+        if (j->Stage == 0) j->Side = across && !(s_laps & 1) ? -1 : 1;
+        const double leftX = j->DirZ, leftZ = -j->DirX;   // (the driver's left: x east, z south -- facing south, his left is east)
+        const double nozX = j->X + leftX * j->Side * j->Half, nozZ = j->Z + leftZ * j->Side * j->Half, nozY = j->Y + 380;
+        if (here && now >= j->Puff) {
+            j->Puff = now + RACE_STEAM_PUFF;
+            if (!across) DoImpact(RACE_STEAM_IMPACT, lx, (S32)j->Y, lz, 255);
+            else {
+                // the hiss, at the burst's start; puffs in a row from the rail across the road, one more each time; the sparks blown across
+                if (j->Stage == 0) { ParmSampleVolume = 35; HQ_3D_MixSample(RACE_STEAM_SAMPLE, 4500, 1000, 1, (S32)(nozX - cx), (S32)nozY, (S32)(nozZ - cz)); }
+                const int rows = 1 + j->Reach / 650;
+                for (int k = 0; k < 2; k++) {
+                    int puffs = 0;
+                    for (int q = 0; q < RACE_MAX_PUFFS; q++) if (s_puffEnd[q] > now) puffs++;
+                    if (puffs >= RACE_MAX_PUFFS) break;
+                    const double d = k == 0 ? 220.0 : 220.0 + 650.0 * (1 + j->Stage % rows);
+                    if (d > j->Reach + 200) continue;
+                    const double px = nozX - leftX * j->Side * d, pz = nozZ - leftZ * j->Side * d;
+                    if (InitExtraAnimSprite(255, (S32)(px - cx), (S32)(nozY + 120 * k), (S32)(pz - cz), RACE_STEAM_SPRITE, RACE_STEAM_SPRITE + 9, 800, 35, 1, 0) < 0) break;
+                    for (int q = 0; q < RACE_MAX_PUFFS; q++) if (s_puffEnd[q] <= now) { s_puffEnd[q] = now + 900; break; }
+                }
+                {
+                    // a puff blown across the road from the rail, growing as it goes (a pof's scale is how far off it looks: smaller is bigger)
+                    int puffs = 0;
+                    for (int q = 0; q < RACE_MAX_PUFFS; q++) if (s_puffEnd[q] > now) puffs++;
+                    const S32 life = j->Reach * 1000 / 2400;   // (40 units a tick: 2,000 a second -- over the band in its time)
+                    const S32 beta = (S32)(atan2(-leftX * j->Side, -leftZ * j->Side) * 4096.0 / (2 * 3.14159265358979)) & 4095;
+                    if (puffs < RACE_MAX_PUFFS
+                        && InitExtraPof((S32)(nozX - cx), (S32)nozY, (S32)(nozZ - cz), 1, 110, beta, 48, 0, 520, 150, life, 0, life) >= 0)
+                        for (int q = 0; q < RACE_MAX_PUFFS; q++) if (s_puffEnd[q] <= now) { s_puffEnd[q] = now + life; break; }
+                }
+                if (j->Stage % 3 == 0) {
+                    // (the factory's sparks, turned from up to across: the flow's own angle up taken down for this one spray)
+                    T_FLOW *flow = TabPartFlow + RACE_STEAM_FLOW;
+                    const S16 alpha = flow->Alpha;
+                    flow->Alpha = 140;
+                    const S32 beta = (S32)(atan2(-leftX * j->Side, -leftZ * j->Side) * 4096.0 / (2 * 3.14159265358979)) & 4095;
+                    CreateParticleFlow(0, 255, 0, (S32)(nozX - cx), (S32)nozY, (S32)(nozZ - cz), (beta - flow->Beta) & 4095, RACE_STEAM_FLOW);
+                    flow->Alpha = alpha;
+                }
+            }
+            j->Stage++;
+        }
+        // the cars in it: within Reach of it (up out of the deck), or (across) in the band from its rail Reach across the road
         const double dx = hero->Obj.X - lx, dz = hero->Obj.Z - lz;
-        if (driving && !j->HitHero && dx * dx + dz * dz < (double)j->Reach * j->Reach && hero->Obj.Y > j->Y - 600 && hero->Obj.Y < j->Y + 1600) {
+        double along = 0, side = 0;
+        if (across) { along = dx * j->DirX + dz * j->DirZ; side = (dx * leftX + dz * leftZ) * j->Side; }
+        const int heroIn = across ? fabs(along) < RACE_STEAM_BAND && side > j->Half - j->Reach && side < j->Half + 300
+                                  : dx * dx + dz * dz < (double)j->Reach * j->Reach;
+        if (driving && !j->HitHero && heroIn && hero->Obj.Y > j->Y - 600 && hero->Obj.Y < j->Y + 1600) {
             j->HitHero = 1;
             if (now < s_protectUntil || now < s_jetUntil || (hero->Flags & NO_CHOC))
                 Log_Info("[racemod] through the steam unharmed: %s", now < s_protectUntil ? "the protection spell" : now < s_jetUntil ? "the super jet-pack" : "he can't be hit");
@@ -3867,10 +3960,14 @@ static void Jets(S32 now, int driving) {
         // an opponent's
         for (int n = 0; n < RACE_MAX_OPPONENTS && n < 32; n++) {
             T_RACE_OPPONENT *o = &s_opp[n];
-            if (!o->Count || (j->HitOpp & (1u << n)) || now < o->JetUntil) continue;
+            if (!o->Count || (j->HitOpp & (1u << n)) || now < o->JetUntil || !RaceOn()) continue;   // (none waiting on its spot)
             double x, z, y, v, ddx, ddz;
             PathAt(o, o->S, &x, &z, &y, &v, &ddx, &ddz);
-            if ((x - j->X) * (x - j->X) + (z - j->Z) * (z - j->Z) >= (double)j->Reach * j->Reach || fabs(y - j->Y) > 1600) continue;
+            if (fabs(y - j->Y) > 1600) continue;
+            if (across) {
+                const double ox = x - j->X, oz = z - j->Z, oa = ox * j->DirX + oz * j->DirZ, os = (ox * leftX + oz * leftZ) * j->Side;
+                if (fabs(oa) >= RACE_STEAM_BAND || os <= j->Half - j->Reach || os >= j->Half + 300) continue;
+            } else if ((x - j->X) * (x - j->X) + (z - j->Z) * (z - j->Z) >= (double)j->Reach * j->Reach) continue;
             j->HitOpp |= 1u << n;
             if (o->HitUntil < now + RACE_STEAM_HOLD) o->HitUntil = now + RACE_STEAM_HOLD;
             Log_Info("[racemod] %s hit by a steam jet", o->Name);
