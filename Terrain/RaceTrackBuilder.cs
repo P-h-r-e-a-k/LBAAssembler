@@ -87,8 +87,9 @@ internal sealed class RaceTrackPlan
     // Pipes over the road (RaceTrackPipes): gantries along stretches of the lap, steam from their tops and oil dripping onto the road -- the
     // Island of the Francos' refinery. From and To are the plan's points.
     public PipeRun[]? Pipes { get; set; }
-    // Steam jets out of the road (RaceTrackPipes.PlaceJets): along stretches of the lap, every so many cells, one side of the road and then
-    // the other -- the Gazogem factory's steam, blowing in bursts that hit a car in them. From and To are the plan's points.
+    // Steam jets across the road (RaceTrackPipes.Place): along stretches of the lap, out of the gantries' uprights there (out of the rail
+    // where a stretch has none: PlaceJets), one side of the road and then the other -- the Gazogem factory's steam, blowing in bursts that
+    // hit a car in them. From and To are the plan's points.
     public SteamJetRun[]? SteamJets { get; set; }
     // A pipeline over the lap (RaceTrackPipes.PlacePipeline): the Island of the Francos' from the Gazogem factory to the air-boat.
     public PipeLine? Pipeline { get; set; }
@@ -753,10 +754,13 @@ internal static class RaceTrackBuilder
         ClearDecors(island, index, options, report, roads, keepBodies, plan.KeepAbove, through);
         ClearAdrift(island, adrift, report, through);
         // (the pipes after the clearing: they stand over the road, out of its way)
+        // (the steam jets out of the gantries' uprights where there are some: with them)
+        var jetRuns = planned && plan.SteamJets is { Length: > 0 } jets
+            ? jets.Select(j => (PlanPoint(plan, main, j.From), PlanPoint(plan, main, j.To), j)).ToList() : new List<(int, int, SteamJetRun)>();
         if (planned && plan.Pipes is { Length: > 0 } pipes)
-            RaceTrackPipes.Place(island, main, pipes.Select(p => (PlanPoint(plan, main, p.From), PlanPoint(plan, main, p.To), p)).ToList(), options, report);
-        if (planned && plan.SteamJets is { Length: > 0 } jets)
-            RaceTrackPipes.PlaceJets(main, jets.Select(j => (PlanPoint(plan, main, j.From), PlanPoint(plan, main, j.To), j)).ToList(), options, report);
+            RaceTrackPipes.Place(island, main, pipes.Select(p => (PlanPoint(plan, main, p.From), PlanPoint(plan, main, p.To), p)).ToList(), jetRuns, options, report);
+        else if (jetRuns.Count > 0)
+            RaceTrackPipes.PlaceJets(main, jetRuns, options, report);
         if (planned && plan.Pipeline is { } pipeline)
             RaceTrackPipes.PlacePipeline(island, main, pipeline, plan.OriginCellX, plan.OriginCellZ, options, report);
         report.GroundBefore = (x, z) => natural.Height(x, z);

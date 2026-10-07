@@ -381,8 +381,11 @@ public partial class MainWindow : Window
             // it, so a fixed full-grid range left most of each scrollbar's
             // travel mapped to open sea the camera can never actually reach --
             // dragging to the visible end of the track landed on an invalid
-            // cube and snapped back well short of the real edge.
-            var (presentMinX, presentMinY, presentMaxX, presentMaxY) = currentIsland.PresentCubeBounds;
+            // cube and snapped back well short of the real edge. (Since
+            // 2026-10-07 a cube of the sea the view draws round them too -- the
+            // view's middle may be moved out over it, IsWorldPositionInView --
+            // so that the island's edges can be brought to the middle.)
+            var (presentMinX, presentMinY, presentMaxX, presentMaxY) = IslandArea(PanRing) ?? currentIsland.PresentCubeBounds;
             PanHorizontalScrollBar.Minimum = presentMinX * 32768;
             PanHorizontalScrollBar.Maximum = (presentMaxX + 1) * 32768 - 1;
             PanVerticalScrollBar.Minimum = presentMinY * 32768;
@@ -2498,12 +2501,39 @@ public partial class MainWindow : Window
     // them, and the camera's cube whatever it is; the whole 16 x 16 map's edge at the most.
     private (int X0, int Z0, int X1, int Z1) IslandCubeArea(int cameraCubeX, int cameraCubeZ)
     {
-        int x0 = cameraCubeX, z0 = cameraCubeZ, x1 = cameraCubeX, z1 = cameraCubeZ;
-        if (currentIsland is not null)
-            for (var y = 0; y < 16; y++)
-                for (var x = 0; x < 16; x++)
-                    if ((currentIsland.CubeAt(x, y) & 0x7F) != 0) { x0 = Math.Min(x0, x); z0 = Math.Min(z0, y); x1 = Math.Max(x1, x); z1 = Math.Max(z1, y); }
-        return (Math.Max(0, x0 - 2), Math.Max(0, z0 - 2), Math.Min(15, x1 + 2), Math.Min(15, z1 + 2));
+        if (IslandArea() is not { } area) return (Math.Max(0, cameraCubeX - 2), Math.Max(0, cameraCubeZ - 2), Math.Min(15, cameraCubeX + 2), Math.Min(15, cameraCubeZ + 2));
+        return (Math.Min(area.X0, cameraCubeX), Math.Min(area.Z0, cameraCubeZ), Math.Max(area.X1, cameraCubeX), Math.Max(area.Z1, cameraCubeZ));
+    }
+
+    // The island's cubes -- all those with land -- and a ring of sea `ring` cubes wide round them (the whole 16 x 16 map's edge at the
+    // most); null with no island, or one with no cubes. (The view draws a ring of 2; its middle may go 1 cube out, PanRing.)
+    private (int X0, int Z0, int X1, int Z1)? IslandArea(int ring = 2)
+    {
+        if (currentIsland is null) return null;
+        int x0 = 16, z0 = 16, x1 = -1, z1 = -1;
+        for (var y = 0; y < 16; y++)
+            for (var x = 0; x < 16; x++)
+                if ((currentIsland.CubeAt(x, y) & 0x7F) != 0) { x0 = Math.Min(x0, x); z0 = Math.Min(z0, y); x1 = Math.Max(x1, x); z1 = Math.Max(z1, y); }
+        if (x1 < 0) return null;
+        return (Math.Max(0, x0 - ring), Math.Max(0, z0 - ring), Math.Min(15, x1 + ring), Math.Min(15, z1 + ring));
+    }
+
+    // How far past the island's cubes the view's middle may go: a cube -- the view looks at a point 10,000 up (targetY), so the ground in
+    // the middle of the view lies past it, some 20,000 at the usual tilt, and an island's edge on the camera's side needs the point that far
+    // out over the sea; further, at the drawn sea's own edge (IslandArea's ring of 2), the view was mostly empty sky.
+    private const int PanRing = 1;
+
+    // Where the view may be moved to (its middle): anywhere over the island's cubes and a cube of the sea drawn round them (PanRing), so that any
+    // part of the island -- its far edges too -- can be brought to the middle of the view and zoomed in on (the user, 2026-10-07: "allow the
+    // entire thing to be moved within the editor so we can bring any part of an island into the centre of the viewport"). Until then the
+    // middle had to stay over a cube with land (IsWorldPositionOnIsland): the renderer could not place its camera over the open sea.
+    private bool IsWorldPositionInView(double worldX, double worldZ)
+    {
+        if (currentIsland is null) return true;
+        if (IslandArea(PanRing) is not { } area) return IsWorldPositionOnIsland(worldX, worldZ);
+        var cubeX = (int)Math.Floor(worldX / 32768.0);
+        var cubeZ = (int)Math.Floor(worldZ / 32768.0);
+        return cubeX >= area.X0 && cubeX <= area.X1 && cubeZ >= area.Z0 && cubeZ <= area.Z1;
     }
 
     private (int, int)? FindCentralPresentCube()
@@ -2534,8 +2564,8 @@ public partial class MainWindow : Window
     {
         var newX = targetX + dx;
         var newZ = targetZ + dz;
-        if (IsWorldPositionOnIsland(newX, targetZ)) targetX = newX;
-        if (IsWorldPositionOnIsland(targetX, newZ)) targetZ = newZ;
+        if (IsWorldPositionInView(newX, targetZ)) targetX = newX;
+        if (IsWorldPositionInView(targetX, newZ)) targetZ = newZ;
         UpdateMinimapMarker();
         SyncPanScrollBars();
     }
@@ -2555,7 +2585,7 @@ public partial class MainWindow : Window
     {
         if (interiorSceneActive) { interiorCenter = new Point(e.NewValue + ViewportHost.ActualWidth / interiorZoom / 2, interiorCenter.Y); ApplyInteriorView(); return; }
         if (currentIsland is null) return;
-        if (IsWorldPositionOnIsland(e.NewValue, targetZ)) targetX = e.NewValue;
+        if (IsWorldPositionInView(e.NewValue, targetZ)) targetX = e.NewValue;
         else PanHorizontalScrollBar.Value = targetX;
         UpdateMinimapMarker();
         if (nativeViewActive) RenderNativeCamera(); else RenderSoftwareTerrain();
@@ -2565,7 +2595,7 @@ public partial class MainWindow : Window
     {
         if (interiorSceneActive) { interiorCenter = new Point(interiorCenter.X, e.NewValue + ViewportHost.ActualHeight / interiorZoom / 2); ApplyInteriorView(); return; }
         if (currentIsland is null) return;
-        if (IsWorldPositionOnIsland(targetX, e.NewValue)) targetZ = e.NewValue;
+        if (IsWorldPositionInView(targetX, e.NewValue)) targetZ = e.NewValue;
         else PanVerticalScrollBar.Value = targetZ;
         UpdateMinimapMarker();
         if (nativeViewActive) RenderNativeCamera(); else RenderSoftwareTerrain();
@@ -2744,7 +2774,7 @@ public partial class MainWindow : Window
         if (interiorSceneActive || currentIsland is null || MinimapImage.Source is null) return;
         var worldX = (minimapCropOffsetXPixels + point.X) * MinimapWorldUnitsPerPixel;
         var worldZ = (minimapCropOffsetYPixels + point.Y) * MinimapWorldUnitsPerPixel;
-        if (!IsWorldPositionOnIsland(worldX, worldZ)) return;
+        if (!IsWorldPositionInView(worldX, worldZ)) return;
         targetX = worldX;
         targetZ = worldZ;
         UpdateMinimapMarker();
@@ -3460,7 +3490,7 @@ public partial class MainWindow : Window
             return;
         }
         // TryPan/tilt below assumes the outdoor island's own coordinate space
-        // (IsWorldPositionOnIsland, SyncPanScrollBars writing targetX/Z) --
+        // (IsWorldPositionInView, SyncPanScrollBars writing targetX/Z) --
         // arrow-key panning isn't wired up for interior scenes (only the
         // scrollbars are, via RenderInteriorPan), and letting this run
         // anyway would silently overwrite the pan scrollbars' interior-mode

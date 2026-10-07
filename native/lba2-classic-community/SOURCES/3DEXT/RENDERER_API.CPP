@@ -379,16 +379,40 @@ int lba2_renderer_set_view_target(int worldX, int worldY, int worldZ)
     if (cubeX < 0) cubeX = 0; else if (cubeX > 15) cubeX = 15;
     if (cubeY < 0) cubeY = 0; else if (cubeY > 15) cubeY = 15;
 
+    // The cube the camera is placed in (CurrentCubeX/Y, the frame of reference of VueOffset and of
+    // lba2_renderer_project_point): the one under the target -- or, where that is open sea with no
+    // data to load, the nearest cube that has some. The editor's view of a whole island
+    // (lba2_renderer_render_frame_area) draws the sea round it whichever cube that is, and the
+    // view may be moved out over it to bring an island's edge to the middle (the user, 2026-10-07:
+    // "allow the entire thing to be moved ... so we can bring any part of an island into the centre
+    // of the viewport"); before, a target over the sea failed here and the editor stopped the view
+    // at the island's own cubes.
+    static S32 refCubeX = -1;
+    static S32 refCubeY = -1;
     if (cubeX != lastViewCubeX || cubeY != lastViewCubeY || islandGeneration != lastViewIslandGeneration) {
-        if (!lba2_renderer_load_cube(cubeX, cubeY)) return 0;
+        if (lba2_renderer_load_cube(cubeX, cubeY)) {
+            refCubeX = cubeX;
+            refCubeY = cubeY;
+        } else {
+            S32 found = 0;
+            for (S32 r = 1; r < 16 && !found; r++)
+                for (S32 dy = -r; dy <= r && !found; dy++)
+                    for (S32 dx = -r; dx <= r && !found; dx++) {
+                        if (dx != -r && dx != r && dy != -r && dy != r) continue; // (the ring r out only)
+                        S32 x = cubeX + dx, y = cubeY + dy;
+                        if (x < 0 || x > 15 || y < 0 || y > 15) continue;
+                        if (lba2_renderer_load_cube(x, y)) { refCubeX = x; refCubeY = y; found = 1; }
+                    }
+            if (!found) return 0;
+        }
         lastViewCubeX = cubeX;
         lastViewCubeY = cubeY;
         lastViewIslandGeneration = islandGeneration;
     }
 
-    VueOffsetX = worldX - cubeX * WORLD_CUBE_SIZE;
+    VueOffsetX = worldX - refCubeX * WORLD_CUBE_SIZE;
     VueOffsetY = worldY;
-    VueOffsetZ = worldZ - cubeY * WORLD_CUBE_SIZE;
+    VueOffsetZ = worldZ - refCubeY * WORLD_CUBE_SIZE;
     return 1;
 }
 

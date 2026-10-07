@@ -556,6 +556,8 @@ static int s_nbLoops = 0;
 #define RACE_MAX_DRIPS 48                  // (32 until 2026-10-07: the pipeline from the factory drips too)
 #define RACE_VENT_NEAR (26 * 512)          // how near Twinsen a pipe puffs and drips (further off, out of sight)
 #define RACE_MAX_PUFFS 24                  // the extras the steam takes at most (the game has 50 for everything: penguins, bolts...)
+#define RACE_VENT_PUFFS 12                 // ... of them the pipes' tops (the rest the jets': nine gantries in reach, eighteen tops, took them all
+                                           // and the jets out of their uprights blew nothing to be seen, 2026-10-07)
 #define RACE_DRIP_SLICK_MS 7000            // how long a drip's slick lies on the road if no car takes it
 typedef struct { double X, Y, Z; S32 Every, Next; } T_RACE_VENT;
 typedef struct { double X, Y, Z, RoadY; S32 Every, Next, LandAt; } T_RACE_DRIP;
@@ -582,7 +584,10 @@ static unsigned s_ventSeed = 20261007u;   // (their own dice: the race's, RaceRa
 #define RACE_STEAM_PUFF 180                // how often a blowing jet puffs again
 #define RACE_STEAM_BAND 700                // the band's half depth along the road
 #define RACE_STEAM_FORCE 10                // the blast, as HitObj takes it (the factory's hit zones: 10)
-typedef struct { double X, Y, Z, DirX, DirZ, Half; S32 Reach, On, Off, Phase, Puff, Burst; U32 HitOpp; int HitHero, Stage, Side; } T_RACE_JET;
+// (High: how far over the deck it blows -- out of a gantry's upright, a car's height up, since the user's round after: "coming out of the
+// vertical pipes on the track fully horizontally", 2026-10-07; out of the rail, near the deck, before)
+#define RACE_STEAM_HIGH 380
+typedef struct { double X, Y, Z, DirX, DirZ, Half; S32 Reach, On, Off, Phase, Puff, Burst, High; U32 HitOpp; int HitHero, Stage, Side; } T_RACE_JET;
 extern T_FLOW *TabPartFlow;
 static T_RACE_JET s_jets[RACE_MAX_JETS];
 static int s_nbJets = 0;
@@ -1466,12 +1471,13 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "jet")) {
             T_RACE_JET *p = &s_jets[s_nbJets];
-            int x, y, z, a, b, c, d, e, f, g;
-            const int n = s_nbJets < RACE_MAX_JETS ? sscanf(v, "%d %d %d %d %d %d %d %d %d %d", &x, &y, &z, &a, &b, &c, &d, &e, &f, &g) : 0;
+            int x, y, z, a, b, c, d, e, f, g, h = RACE_STEAM_HIGH;
+            const int n = s_nbJets < RACE_MAX_JETS ? sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d", &x, &y, &z, &a, &b, &c, &d, &e, &f, &g, &h) : 0;
             memset(p, 0, sizeof(*p));
-            p->X = x; p->Y = y; p->Z = z; p->Burst = -1;
-            // (x y z half reach on off phase dirx dirz: across the road; x y z reach on off phase: up out of it)
-            if (n == 10 && a > 0 && b > 0 && c > 0 && d >= 0 && (f || g)) {
+            p->X = x; p->Y = y; p->Z = z; p->Burst = -1; p->High = h;
+            // (x y z half reach on off phase dirx dirz [high]: across the road, from Half out of its middle, High over the deck; x y z reach
+            // on off phase: up out of it)
+            if ((n == 10 || n == 11) && a > 0 && b > 0 && c > 0 && d >= 0 && (f || g)) {
                 const double len = sqrt((double)f * f + (double)g * g);
                 p->Half = a; p->Reach = b; p->On = c; p->Off = d; p->Phase = e; p->DirX = f / len; p->DirZ = g / len;
                 s_nbJets++;
@@ -3863,7 +3869,7 @@ static void Vents(S32 now) {
         if (!p->Next) { p->Next = now + (S32)(VentRandom() * p->Every); continue; }
         if (now < p->Next) continue;
         p->Next = now + p->Every * 3 / 4 + (S32)(VentRandom() * p->Every / 2);
-        if (puffs >= RACE_MAX_PUFFS) continue;
+        if (puffs >= RACE_VENT_PUFFS) continue;
         // up and a little to one side, growing (a pof's scale is how far off it looks: down from 420 to 140, three times as big)
         const S32 life = 1500 + (S32)(VentRandom() * 600);
         const S32 alpha = 1024 + (S32)(VentRandom() * 240) - 120, beta = (S32)(VentRandom() * 4096);
@@ -3914,7 +3920,7 @@ static void Jets(S32 now, int driving) {
         // (across the road: out of the left rail on the player's odd laps, the right on his even ones -- a burst keeps the side it began on)
         if (j->Stage == 0) j->Side = across && !(s_laps & 1) ? -1 : 1;
         const double leftX = j->DirZ, leftZ = -j->DirX;   // (the driver's left: x east, z south -- facing south, his left is east)
-        const double nozX = j->X + leftX * j->Side * j->Half, nozZ = j->Z + leftZ * j->Side * j->Half, nozY = j->Y + 380;
+        const double nozX = j->X + leftX * j->Side * j->Half, nozZ = j->Z + leftZ * j->Side * j->Half, nozY = j->Y + j->High;
         if (here && now >= j->Puff) {
             j->Puff = now + RACE_STEAM_PUFF;
             if (!across) DoImpact(RACE_STEAM_IMPACT, lx, (S32)j->Y, lz, 255);

@@ -18,10 +18,12 @@ internal sealed class PipeRun
     public int DripsEvery { get; set; } = 2;
 }
 
-// Steam jets along a stretch of the road (RaceTrackPlan.SteamJets): every Every cells from its first point to its last, a jet blowing out
-// of the road's rail across it, Reach cells over (the race-track mode blows it out of the left rail on the player's odd laps, the
-// right on his even ones: RACEMOD.CPP jet=), On ms in every On + Off, each a little after the one before (Wave ms): a burst runs down
-// the road ahead of a car. (Until the user's next round, 2026-10-07: up out of the deck, one side of the road and then the other.)
+// Steam jets along a stretch of the road (RaceTrackPlan.SteamJets): out of the gantries' uprights there (RaceTrackPipes.Place: a nozzle on
+// each, High over the deck), blowing level across the road, Reach cells into it from its rail (the race-track mode blows it out of the
+// left upright on the player's odd laps, the right on his even ones: RACEMOD.CPP jet=), On ms in every On + Off, each a little after the
+// one before (Wave ms): a burst runs down the road ahead of a car. (Every: how far apart where the stretch has no gantries -- out of the
+// rail there, near the deck, as the round before. The user, 2026-10-07: "The steam looks like it's coming out of the track, let's have
+// it coming out of the vertical pipes on the track fully horizontally". Before that, up out of the deck.)
 internal sealed class SteamJetRun
 {
     public int From { get; set; }
@@ -31,6 +33,7 @@ internal sealed class SteamJetRun
     public int Off { get; set; } = 2400;
     public int Wave { get; set; } = 450;
     public double Reach { get; set; } = 5.5;
+    public int High { get; set; } = 700;
 }
 
 // A pipeline over the lap (RaceTrackPlan.Pipeline): a big pipe through Points ([x, z, height]: island cells from the plan's origin, world
@@ -52,19 +55,35 @@ internal static class RaceTrackPipes
     // the pipes' sizes (world units): the uprights' and the cross pipe's radius, the side pipes', how far out the uprights stand past the
     // road's rails (cells), the cross pipe's height over the deck, the uprights' over it, the side pipes' over it
     public const double Upright = 220, Cross = 200, Side = 130, Out = 1.3, CrossHigh = 2200, Top = 2900, SideHigh = 350;
+    // a steam jet's nozzle on an upright: how far it stands out of the pipe towards the road, its radius, its mouth's (world units)
+    public const double Nozzle = 200, NozzleRadius = 95, NozzleMouth = 140;
     // colours: the shared ramps' starts (greys, reds), lit
     public const int Grey = 48, Red = 64;
     public const int SteamEvery = 900, DripEvery = 5000;
     // how far to one side of the road's middle the oil drips, as a share of the way to its rail
     public const double DripAcross = 0.45;
 
-    // Places the gantries; `runs` with their points the road's. Returns the bodies made.
-    public static List<int> Place(IslandFile island, TrackRoad r, IReadOnlyList<(int From, int To, PipeRun Run)> runs, RaceTrackOptions o, RaceTrackReport report)
+    // Places the gantries; `runs` with their points the road's -- and the steam jets of `jets` out of those of them in their stretches
+    // (a jet stretch with none there: out of the rail, PlaceJets). Returns the bodies made.
+    public static List<int> Place(IslandFile island, TrackRoad r, IReadOnlyList<(int From, int To, PipeRun Run)> runs,
+        IReadOnlyList<(int From, int To, SteamJetRun Run)> jets, RaceTrackOptions o, RaceTrackReport report)
     {
         var made = new List<int>();
         if (o.NewBodyBase < 0) { report.Notes.Add("WARNING: no place for the pipes' bodies was prepared -- no pipes"); return made; }
-        int gantries = 0, skipped = 0;
+        int gantries = 0, skipped = 0, blowing = 0;
         var why = new List<string>();
+        var nRoad = r.Count;
+        // the jet stretch a point is in (its index in `jets`, -1 none); how many of its gantries came before (the bursts' wave)
+        int JetRunAt(int i)
+        {
+            for (var q = 0; q < jets.Count; q++)
+            {
+                var (f, t, _) = jets[q];
+                if (((i - f) % nRoad + nRoad) % nRoad <= ((t - f) % nRoad + nRoad) % nRoad) return q;
+            }
+            return -1;
+        }
+        var jetsSoFar = new int[jets.Count];
         foreach (var (from, to, run) in runs)
         {
             var n = r.Count;
@@ -105,7 +124,8 @@ internal static class RaceTrackPipes
                 }
                 if (blocked || feet.Any(f => f > y + 600)) { skipped++; why.Add($"({x:0.#}, {z:0.#}): {(blocked ? "the lap" : "the ground")}"); continue; }
                 var len = (float)(run.Every * 512);
-                var body = Gantry(along, across, half * 512, feet[0] - y, feet[1] - y, len);
+                var jetRun = JetRunAt(i);
+                var body = Gantry(along, across, half * 512, feet[0] - y, feet[1] - y, len, jetRun >= 0 ? jets[jetRun].Run.High : -1);
                 if (IslandDecors.Locate(island, x * 512, z * 512) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { skipped++; why.Add($"({x:0.#}, {z:0.#}): its cube full"); continue; }
                 var (cube, lx, lz) = at;
                 var d = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, lx, (int)Math.Round(y), lz, 0);
@@ -133,8 +153,29 @@ internal static class RaceTrackPipes
                     report.Drips.Add(new[] { (int)Math.Round((x + across.X * side) * 512), (int)Math.Round(y + CrossHigh - Cross - 40),
                         (int)Math.Round((z + across.Z * side) * 512), (int)Math.Round(y), DripEvery });
                 }
+                // the steam jet out of its uprights' nozzles: from the nozzle's mouth across the road, into it Reach from its rail
+                if (jetRun >= 0)
+                {
+                    var jr = jets[jetRun].Run;
+                    var road = half - Out;
+                    var mouth = half * 512 - Upright - Nozzle;
+                    var blows = mouth - (road - Math.Min(jr.Reach, 2 * road - 0.5)) * 512;
+                    // (each a Wave before the one before it: the burst runs back up the road at a car. Each a Wave after it, the burst ran
+                    // ahead of the car at its own speed -- a gantry's 6 cells in 450 ms, a Gazogem-fuelled car's in 420 -- and a car that came
+                    // between two bursts was never met by one)
+                    var nth = jetsSoFar[jetRun]++;
+                    report.Jets.Add(new[] { (int)Math.Round(x * 512), (int)Math.Round(y), (int)Math.Round(z * 512), (int)Math.Round(mouth), (int)Math.Round(blows),
+                        jr.On, jr.Off, nth * jr.Wave % (jr.On + jr.Off),
+                        (int)Math.Round(along.X * 1000), (int)Math.Round(along.Z * 1000), jr.High });
+                    blowing++;
+                }
             }
         }
+        // (a jet stretch with no gantry in it: its jets out of the rail, as before there were gantries to blow them)
+        var bare = Enumerable.Range(0, jets.Count).Where(q => jetsSoFar[q] == 0).Select(q => jets[q]).ToList();
+        if (bare.Count > 0) PlaceJets(r, bare, o, report);
+        if (blowing > 0) report.Notes.Add($"steam jets: {blowing} out of the gantries' uprights, blowing level across the road -- " +
+                                          "the left upright on the player's odd laps, the right on his even ones");
         report.Notes.Add($"pipes: {gantries} gantries over the road ({skipped} left out: another part of the lap in an upright's way, or the ground over the road), " +
                          $"{report.Steam.Count} steam vents, {report.Drips.Count} oil drips{(why.Count > 0 ? " -- left out: " + string.Join(", ", why) : "")}");
         return made;
@@ -359,8 +400,9 @@ internal static class RaceTrackPipes
 
     // One gantry, from its origin on the road's middle at the deck: `along` the road's way, `across` to its left; the uprights at `half`
     // either side (world units) from their feet (`down0`, `down1`: the ground under them, from the deck) to Top; the cross pipe between
-    // them at CrossHigh; a side pipe along each, `len` long, at SideHigh outside the rails; a red band round each upright under its vent.
-    private static byte[] Gantry(Vector3 along, Vector3 across, double half, double down0, double down1, float len)
+    // them at CrossHigh; a side pipe along each, `len` long, at SideHigh outside the rails; a red band round each upright under its vent;
+    // and with `jetHigh` (0 or more), a steam jet's nozzle out of each upright towards the road, that high over the deck.
+    private static byte[] Gantry(Vector3 along, Vector3 across, double half, double down0, double down1, float len, int jetHigh = -1)
     {
         var pts = new List<Vector3>();
         var faces = new List<Face>();
@@ -410,6 +452,16 @@ internal static class RaceTrackPipes
         Cylinder(left * 1.08f + up * (float)CrossHigh, right * 1.08f + up * (float)CrossHigh, (float)Cross, Grey);
         foreach (var side in new[] { across * (float)(half - 420), -across * (float)(half - 420) })
             Cylinder(side + up * (float)SideHigh - along * (len / 2), side + up * (float)SideHigh + along * (len / 2), (float)Side, Grey, 6);
+        if (jetHigh >= 0)
+            foreach (var s in new[] { 1f, -1f })
+            {
+                // (from the upright's middle out past its side, and a wider red mouth at its end: the steam comes out of that)
+                var inward = -across * s;
+                var root = across * s * (float)half + up * jetHigh;
+                var tip = root + inward * (float)(Upright + Nozzle);
+                Cylinder(root, tip - inward * 60, (float)NozzleRadius, Grey, 6);
+                Cylinder(tip - inward * 60, tip, (float)NozzleMouth, Red, 6);
+            }
         var body = new Body
         {
             Game = 2, Static = true, Lit = true, Header = new byte[96],
