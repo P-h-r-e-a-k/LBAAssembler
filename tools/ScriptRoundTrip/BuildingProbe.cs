@@ -111,3 +111,27 @@ internal static class HeroArmor
         return 0;
     }
 }
+
+// bodyfaces <OBL or HQR> <body> [x0 x1 y0 y1 z0 z1]: one body's polygons in the order they are stored (the engine's polygon blocks, a
+// type each): type, points (the body's own coordinates), colour, texture handle and UVs -- only those with a point inside the box, if
+// given. (Citadel Island's shop door: which polygons share its window, and in what order they come.)
+internal static class BodyFaces
+{
+    public static int Run(string[] args)
+    {
+        var bytes = LBAAssembler.HqrArchive.Open(args[1]).Read(int.Parse(args[2]));
+        var body = LbaBodyStudio.Body.Read(bytes, 2, allowStatic: true);
+        double[]? box = args.Length >= 9 ? args.Skip(3).Take(6).Select(double.Parse).ToArray() : null;
+        Console.WriteLine($"body {args[2]}: {body.Vertices.Count} points, {body.Faces.Count} polygons, textures [{string.Join(", ", body.Textures.Select(t => $"0x{t:X8}"))}]");
+        var k = 0;
+        foreach (var f in body.Faces)
+        {
+            var pts = f.Points.Select(i => body.Vertices[i]).ToArray();
+            if (box is null || pts.Any(p => p.X >= box[0] && p.X <= box[1] && p.Y >= box[2] && p.Y <= box[3] && p.Z >= box[4] && p.Z <= box[5]))
+                Console.WriteLine($"  #{k} type {f.Material} colour {f.Colour}: {string.Join(" ", pts.Select(p => $"({p.X:0},{p.Y:0},{p.Z:0})"))}" +
+                    (f.Texture is { } t ? $" tex {t.Handle} uv [{string.Join(",", t.UV.Select(v => (v / 256.0).ToString("0.#")))}]" : ""));
+            k++;
+        }
+        return 0;
+    }
+}

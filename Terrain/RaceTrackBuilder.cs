@@ -669,7 +669,7 @@ internal static class RaceTrackBuilder
         if (plan.TrimKept && keepBodies is { Length: > 0 }) { keepBodies = keepBodies.Concat(TrimKept(island, roads, keepBodies, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
         var natural = new Field(island);
         ModifyGround(island, field, index, roads, options, report, plan.KeepGroundUnder ? KeptGround(island, keptBoxes) : null);
-        if (main.Raised is not null && plan.RaisedCut) CutUnderRaised(island, field, main, options, report);
+        if (main.Raised is not null && plan.RaisedCut) CutUnderRaised(island, field, main, options, report, plan.KeepGroundUnder ? KeptGround(island, keptBoxes) : null);
         var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned);
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
@@ -3137,12 +3137,14 @@ internal static class RaceTrackBuilder
     // cells beyond them; the cutting leaves that ground alone.
     private const double RaisedFlush = 600, RaisedFlushUnder = 50, RaisedFlushBlend = 1.5;    // (15 under: the ground showed through the asphalt at a distance)
 
-    private static void CutUnderRaised(IslandFile island, Field field, TrackRoad r, RaceTrackOptions o, RaceTrackReport report)
+    // `keep`: the ground under the plan's kept buildings (KeepGroundUnder), left as it is -- but where it stands up through the deck, brought
+    // down to just under it (Citadel Island's storm track, 2026-10-07: the cutting raised the baggage claim's floor 231 at the north end).
+    private static void CutUnderRaised(IslandFile island, Field field, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, HashSet<(int, int)>? keep = null)
     {
         var up = r.Raised!; var n = r.Count;
         var inner = o.RaisedHalfWidth + RaisedCutReach;
         const double reach = 6;                                    // cells past the deck's middle the bank may reach
-        var flushed = FlushRaisedEnds(island, r, o, report);
+        var flushed = FlushRaisedEnds(island, r, o, report, keep);
         // how far along the raised road each point is from where it meets the ground road
         var fromEnd = new double[n];
         for (var i = 0; i < n; i++)
@@ -3194,7 +3196,9 @@ internal static class RaceTrackBuilder
             if (flushed.Contains((gx, gz))) continue;
             if (island.HeightAt(gx, gz) is not { } h || h <= allowed) continue;
             if (ground.Any(i => Sq(r.X[i] - gx) + Sq(r.Z[i] - gz) < Sq(clearOfRoad))) continue;
-            var to = Math.Max(0, (int)Math.Floor(allowed));
+            var kept = keep?.Contains((gx, gz)) == true;
+            if (kept && h <= allowed + RaisedClearance - RaisedFlushUnder) continue;
+            var to = Math.Max(0, (int)Math.Floor(kept ? allowed + RaisedClearance - RaisedFlushUnder : allowed));
             deepest = Math.Max(deepest, h - to);
             island.SetHeight(gx, gz, to); cut++;
         }
@@ -3207,6 +3211,7 @@ internal static class RaceTrackBuilder
             if (flushed.Contains((gx, gz))) continue;
             if (island.HeightAt(gx, gz) is not { } h || h <= allowed) continue;
             if (Nearest(ground, gx, gz) <= Nearest(deckPoints, gx, gz)) continue;
+            if (keep?.Contains((gx, gz)) == true && h <= allowed) continue;
             var to = Math.Max(0, (int)Math.Floor(allowed));
             endDeepest = Math.Max(endDeepest, h - to);
             island.SetHeight(gx, gz, to); endCut++;
@@ -4007,7 +4012,7 @@ internal static class RaceTrackBuilder
     }
 
     // The ground under the raised road's ends (CutUnderRaised): returns the vertices it set.
-    private static HashSet<(int, int)> FlushRaisedEnds(IslandFile island, TrackRoad r, RaceTrackOptions o, RaceTrackReport report)
+    private static HashSet<(int, int)> FlushRaisedEnds(IslandFile island, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, HashSet<(int, int)>? keep = null)
     {
         var up = r.Raised!; var n = r.Count;
         var half = o.RaisedHalfWidth;
@@ -4057,6 +4062,8 @@ internal static class RaceTrackBuilder
         foreach (var ((gx, gz), (surface, w, d)) in want)
         {
             if (w <= 0 || island.HeightAt(gx, gz) is not { } h) continue;
+            // (a kept building's ground: only where it stands up through the deck)
+            if (keep?.Contains((gx, gz)) == true && !(d <= half && h > surface)) continue;
             // (under the deck its surface; beside it, ground below it filled up towards it, ground above it brought down to it out to the
             // cutting's reach past the rail -- the engine's floor reaches a little past it -- and banked up from there)
             var to = d <= half || h < surface ? h + (surface - h) * w : Math.Min(h, surface + Math.Max(0, d - half - RaisedCutReach) * 512 * RaisedCutBank);
