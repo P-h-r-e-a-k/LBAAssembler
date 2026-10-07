@@ -135,3 +135,55 @@ internal static class BodyFaces
         return 0;
     }
 }
+
+// decorlist <ILE> [x0 x1 z0 z1]: every decor piece of an island (or those whose box reaches into the cells given), grouped by the origin
+// the pieces of a building share: cube, bodies, box in cells, heights, origin and turn.
+internal static class DecorList
+{
+    public static int Run(string[] args)
+    {
+        var island = IslandFile.Load(args[1]);
+        double[]? r = args.Length >= 6 ? args.Skip(2).Take(4).Select(double.Parse).ToArray() : null;
+        var all = IslandOps.CubeCells(island).SelectMany(c => c.Item3.Decors.Select(d => (Cx: c.Item1, Cz: c.Item2, D: d))).ToList();
+        var groups = all.GroupBy(t => (t.Cx, t.Cz, t.D.X, t.D.Z)).ToList();
+        foreach (var g in groups.OrderBy(g => g.Key.Cz).ThenBy(g => g.Key.Cx).ThenBy(g => g.Key.Z).ThenBy(g => g.Key.X))
+        {
+            double x0 = g.Min(t => (t.Cx * 32768.0 + t.D.XMin) / 512), x1 = g.Max(t => (t.Cx * 32768.0 + t.D.XMax) / 512);
+            double z0 = g.Min(t => (t.Cz * 32768.0 + t.D.ZMin) / 512), z1 = g.Max(t => (t.Cz * 32768.0 + t.D.ZMax) / 512);
+            if (r is not null && (x1 < r[0] || x0 > r[1] || z1 < r[2] || z0 > r[3])) continue;
+            int y0 = g.Min(t => t.D.YMin), y1 = g.Max(t => t.D.YMax);
+            var d = g.First().D;
+            Console.WriteLine(FormattableString.Invariant($"cube ({g.Key.Cx},{g.Key.Cz}) origin ({d.X},{d.Y},{d.Z}) turn {d.Beta & 4095} bodies {string.Join(",", g.Select(t => t.D.Body & 0xFFFF))}: cells x {x0:0.0}..{x1:0.0} z {z0:0.0}..{z1:0.0} y {y0}..{y1}"));
+        }
+        return 0;
+    }
+}
+
+// bodyroundtrip <OBL> <body>...: each body read into the body model and written back -- same bytes, or what differs (points, polygons,
+// textures, size): whether the model can carry an island's decor body through an edit.
+internal static class BodyRoundTrip
+{
+    public static int Run(string[] args)
+    {
+        var hqr = LBAAssembler.HqrArchive.Open(args[1]);
+        foreach (var a in args.Skip(2))
+        {
+            var bytes = hqr.Read(int.Parse(a));
+            var body = LbaBodyStudio.Body.Read(bytes, 2, allowStatic: true);
+            var back = body.Write();
+            var again = LbaBodyStudio.Body.Read(back, 2, allowStatic: true);
+            var same = bytes.AsSpan().SequenceEqual(back);
+            Console.WriteLine($"body {a}: {bytes.Length} bytes, {body.Vertices.Count} points, {body.Faces.Count} polygons, lit {body.Lit}, static {body.Static}, textures {body.Textures.Length}; " +
+                $"written {back.Length} bytes, {(same ? "IDENTICAL" : "different")}; read back {again.Vertices.Count} points, {again.Faces.Count} polygons, " +
+                $"types {string.Join(",", body.Faces.GroupBy(f => f.Material).Select(g => $"{g.Key}x{g.Count()}"))} -> {string.Join(",", again.Faces.GroupBy(f => f.Material).Select(g => $"{g.Key}x{g.Count()}"))}");
+            if (!same)
+            {
+                int first = -1;
+                for (var i = 0; i < Math.Min(bytes.Length, back.Length); i++) if (bytes[i] != back[i]) { first = i; break; }
+                Console.WriteLine($"  first difference at byte {first}; header words orig {string.Join(" ", Enumerable.Range(0, 24).Select(k => BitConverter.ToInt32(bytes, k * 4)))}");
+                Console.WriteLine($"  header words back {string.Join(" ", Enumerable.Range(0, 24).Select(k => BitConverter.ToInt32(back, k * 4)))}");
+            }
+        }
+        return 0;
+    }
+}

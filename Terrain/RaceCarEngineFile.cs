@@ -48,6 +48,9 @@ internal static class RaceCarEngineFile
         // an island drawn from a file the game never loads (the old moon's MOON.ILE, as island 3), and the lap's vertical loops
         if (info is not null && RaceTrackIsland.ByName(info.Island) is { RaceFile: { } raceFile } fileIsland) text.Append($"island_file={fileIsland.IslandByte} {raceFile}\n");
         foreach (var loop in track?.Loops ?? new()) text.Append($"loop={string.Join(' ', loop)}\n");
+        // the pipes over the road: their steam and the oil they drip onto it
+        foreach (var steam in track?.Steam ?? new()) text.Append($"steam={string.Join(' ', steam)}\n");
+        foreach (var drip in track?.Drips ?? new()) text.Append($"drip={string.Join(' ', drip)}\n");
         // where the camera stands while the car flies a drop
         foreach (var dropCam in track?.JumpCameras ?? new()) text.Append($"jumpcam={string.Join(' ', dropCam)}\n");
         // the jumps the engine carries the car over (places in the raised road's file), and the island's scenes by cube for the cube

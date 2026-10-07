@@ -82,6 +82,11 @@ internal sealed class RaceTrackPlan
     // that share their inner sides, open there: one piece kept between two roads (Citadel Island's shop, the piece with its door, under the
     // town circuit's bridge and between its two streets) has its neighbours kept as its walls (2026-10-06).
     public ThinKeptPiece[]? ThinKept { get; set; }
+    // Huts the road drives through (RaceTrackDriveThrough): made bigger and cut open where it runs -- the Island of the Francos' village.
+    public DriveThroughHut[]? DriveThrough { get; set; }
+    // Pipes over the road (RaceTrackPipes): gantries along stretches of the lap, steam from their tops and oil dripping onto the road -- the
+    // Island of the Francos' refinery. From and To are the plan's points.
+    public PipeRun[]? Pipes { get; set; }
     // The road bridge's deck at least this high (RaceTrackOptions.RoadBridgeLeast): over a building the plan keeps under it -- the town
     // circuit's deck over Citadel Island's shop, whose top is 3500.
     public double? DeckLeast { get; set; }
@@ -388,6 +393,12 @@ internal sealed class RaceTrackOptions
 
 internal sealed class RaceTrackReport
 {
+    // the huts the road drives through: each its cube, its origin (cube units) and how much bigger it was made (RaceTrackDriveThrough)
+    public List<(int CubeX, int CubeZ, int X, int Z, double Scale)> DriveThroughs { get; } = new();
+    // the pipes' steam vents, [x, y, z, every (ms)], and oil drips, [x, y, z, the road's y under it, every (ms)] (world units from the
+    // island's corner; RACEMOD.CPP steam= and drip=)
+    public List<int[]> Steam { get; } = new();
+    public List<int[]> Drips { get; } = new();
     public int Vertices, Cells, DecorsRemoved, SolidDecorsRemoved, BridgeCells;
     public double Length;
     public List<string> Notes { get; } = new();
@@ -663,7 +674,11 @@ internal static class RaceTrackBuilder
         var adrift = AdriftDecors(island);
         var follow = new IslandOps.DecorFollow(island);
         var keepBodies = plan.KeepBodies;
-        ClearDecors(island, index, options, report, roads, keepBodies, plan.KeepAbove);
+        // (the huts the road drives through, made after the ground's followers are counted: their parts keep their heights -- the road's
+        // middle, where the ground is cut, is their origin -- and kept by the clearing)
+        var through = new HashSet<int>();
+        if (plan.DriveThrough is { Length: > 0 } huts) { through.UnionWith(RaceTrackDriveThrough.Make(island, main, huts, options, report)); keepBodies = (keepBodies ?? Array.Empty<int>()).Concat(through).ToArray(); }
+        ClearDecors(island, index, options, report, roads, keepBodies, plan.KeepAbove, through);
         // (a kept building made shallower has bodies of its own, kept as the ones they copy; and so has a piece cut down to a wall)
         if (plan.ThinKept is { Length: > 0 } thin) { keepBodies = (keepBodies ?? Array.Empty<int>()).Concat(ThinKept(island, thin, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
         if (plan.TrimKept && keepBodies is { Length: > 0 }) { keepBodies = keepBodies.Concat(TrimKept(island, roads, keepBodies, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
@@ -710,8 +725,11 @@ internal static class RaceTrackBuilder
         // (and what the ground carried up into the road's way: the decors stood clear of it when they were cleared, and ground filled
         // under a raised road's end lifts what stood there -- 2026-10-06: two of LBA1's barrels at the foot of Polar Island's 108, lifted
         // 7,000 onto the start of the raised road round the rocky peak)
-        ClearDecors(island, index, options, report, roads, keepBodies, plan.KeepAbove);
-        ClearAdrift(island, adrift, report);
+        ClearDecors(island, index, options, report, roads, keepBodies, plan.KeepAbove, through);
+        ClearAdrift(island, adrift, report, through);
+        // (the pipes after the clearing: they stand over the road, out of its way)
+        if (planned && plan.Pipes is { Length: > 0 } pipes)
+            RaceTrackPipes.Place(island, main, pipes.Select(p => (PlanPoint(plan, main, p.From), PlanPoint(plan, main, p.To), p)).ToList(), options, report);
         report.GroundBefore = (x, z) => natural.Height(x, z);
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
         report.WasGround = (x, z) => natural.Drawn(x, z);
@@ -2546,8 +2564,10 @@ internal static class RaceTrackBuilder
         }
     }
 
+    // `asIs`: bodies kept with their boxes as they are -- a drive-through hut's parts (RaceTrackDriveThrough), its walls beside the road and
+    // its roof over it, whose boxes the build made itself
     private static void ClearDecors(IslandFile island, RoadIndex index, RaceTrackOptions o, RaceTrackReport report, List<TrackRoad>? roads = null, int[]? keepBodies = null,
-        int? keepAbove = null)
+        int? keepAbove = null, HashSet<int>? asIs = null)
     {
         var taken = new List<(int Cx, int Cz, IslandDecor D)>();
         bool Protected(int body) => o.Island.OldTrackCube is not null && o.ProtectedBodies.Contains(body);
@@ -2587,6 +2607,7 @@ internal static class RaceTrackBuilder
                         else if (h.Dist <= (h.Road == 0 ? 6.5 : 4.5)) hit = true;
                     }
                 if (!hit) continue;
+                if (asIs?.Contains(body) == true) continue;
                 if (Kept(d))
                 {
                     // it stays: its collision box is cut down to end under the road (the box is a box, a statue isn't: the plan keeps
@@ -2652,11 +2673,12 @@ internal static class RaceTrackBuilder
     private static HashSet<IslandDecor> AdriftDecors(IslandFile island) =>
         IslandOps.CubeCells(island).SelectMany(c => c.Item3.Decors.Where(d => Adrift(island, c.Item1, c.Item2, d))).ToHashSet();
 
-    private static void ClearAdrift(IslandFile island, HashSet<IslandDecor> before, RaceTrackReport report)
+    // (`asIs`: bodies the build put in the air on purpose -- a drive-through hut's roof over the road -- left where they are)
+    private static void ClearAdrift(IslandFile island, HashSet<IslandDecor> before, RaceTrackReport report, HashSet<int>? asIs = null)
     {
         var gone = 0;
         foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
-            foreach (var d in cube.Decors.Where(d => !before.Contains(d) && Adrift(island, cx, cz, d)).ToList())
+            foreach (var d in cube.Decors.Where(d => !before.Contains(d) && asIs?.Contains(d.Body & 0xFFFF) != true && Adrift(island, cx, cz, d)).ToList())
             {
                 cube.Decors.Remove(d);
                 report.Removed.Add((cx, cz, d.Body & 0xFFFF, "adrift"));

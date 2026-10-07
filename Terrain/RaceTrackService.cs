@@ -84,7 +84,12 @@ internal static class RaceTrackService
         // TwinsenSmall: Twinsen's buggy at half its size, its generic body (RaceTrackSmallCars.HeroSmall), for an opponent's lightning
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? TwinsenSmall = null,
         // Dream: a sprint dreamt at the start of the game (Polar Island's: RaceTrackIsland.Dream, Polar.PolarDream), since 2026-10-06
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DreamInfo? Dream = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] DreamInfo? Dream = null,
+        // Steam, Drips: the pipes over the road (RaceTrackPipes, the Island of the Francos' refinery): steam puffing from their tops, each
+        // [x, y, z, every (ms)], and oil dripping onto the road, each [x, y, z, the road's y under it, every (ms)] -- world units from the
+        // island's corner (RACEMOD.CPP steam= and drip=), since 2026-10-07
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Steam = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Drips = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -608,7 +613,8 @@ internal static class RaceTrackService
                 : null,
             ArcJumps: raised && report.ArcRaised.Count > 0 ? report.ArcRaised.ToList() : null, Drivers: drivers.Count > 0 ? drivers : null,
             Mushrooms: scenes.Mushrooms is { Count: > 0 } mushrooms ? mushrooms : null, Penguins: scenes.Penguins is { Count: > 0 } penguins ? penguins : null,
-            Oil: scenes.Oil is { Count: > 0 } oil ? oil : null);
+            Oil: scenes.Oil is { Count: > 0 } oil ? oil : null,
+            Steam: report.Steam.Count > 0 ? report.Steam.ToList() : null, Drips: report.Drips.Count > 0 ? report.Drips.ToList() : null);
     }
 
     private static int[] LoopRecord(LoopInfo l)

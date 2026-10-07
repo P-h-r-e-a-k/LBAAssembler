@@ -192,7 +192,7 @@ static char s_message[64];
 static S32 s_messageUntil = 0;
 
 // A car going round a vertical loop (LoopStep): the player's, and each opponent's.
-#define RACE_MAX_LOOPS 4
+#define RACE_MAX_LOOPS 8                   // (4 until 2026-10-07: the Island of the Francos has five)
 #define RACE_MAX_ARCS 4
 typedef struct {
     int State;                             // LOOP_RIDE on the ring, LOOP_AIR flying inside it or over its gap, LOOP_FALL off it, outside it
@@ -407,14 +407,15 @@ static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 0.4};
 // the super jet-pack; -2 the oil's, oil_icon=)
 static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2};
 // oil: the slicks on the road (world units; until when), and the scenes' copies of the slick that show them
-#define RACE_MAX_SLICKS 6
+#define RACE_MAX_SLICKS 10                 // (6 until 2026-10-07: the pipes' drips have slicks too)
 #define RACE_MAX_OIL_ACTORS 256
 #define RACE_OIL_REACH 760                 // how near a car's middle comes to a slick's to drive over it
 // (2026-10-04: once round and to a standstill -- it slid on spinning three times, too much of a penalty)
 #define RACE_SKID_MS 1400                  // how long a car skids: it turns round once, quickly at first, and runs down to a stop
 // (Y: the road's height under it once it is in sight -- PoseSlick -- before that the dropping car's; Posed: the scene it was posed in,
 // -1 not yet; Alpha, Gamma: tilted to the road's slope; Lift: its middle over the road, so that no part of it is under the road)
-typedef struct { double X, Y, Z; S32 Dropped; int On; S32 Posed, Alpha, Gamma; double Lift; } T_RACE_SLICK;
+// Until: when it dries up (a drip's), 0 never
+typedef struct { double X, Y, Z; S32 Dropped; int On; S32 Posed, Alpha, Gamma; double Lift; S32 Until; } T_RACE_SLICK;
 static T_RACE_SLICK s_slicks[RACE_MAX_SLICKS];
 static int s_oilScene[RACE_MAX_OIL_ACTORS], s_oilActor[RACE_MAX_OIL_ACTORS];
 static int s_nbOilActors = 0;
@@ -547,6 +548,21 @@ typedef struct {
 } T_RACE_LOOP;
 static T_RACE_LOOP s_loops[RACE_MAX_LOOPS];
 static int s_nbLoops = 0;
+// The pipes over the road (steam=, drip=; the Island of the Francos' refinery, 2026-10-07): steam puffing from their tops, each on its own
+// time, and oil dripping from them onto the road, where it lies a while as a slick a car skids on (Vents, DripOil). World units from the
+// island's corner; only near Twinsen, in the scene he is in.
+#define RACE_MAX_VENTS 64
+#define RACE_MAX_DRIPS 32
+#define RACE_VENT_NEAR (26 * 512)          // how near Twinsen a pipe puffs and drips (further off, out of sight)
+#define RACE_MAX_PUFFS 16                  // the extras the steam takes at most (the game has 50 for everything: penguins, bolts...)
+#define RACE_DRIP_SLICK_MS 9000            // how long a drip's slick lies on the road if no car takes it
+typedef struct { double X, Y, Z; S32 Every, Next; } T_RACE_VENT;
+typedef struct { double X, Y, Z, RoadY; S32 Every, Next, LandAt; } T_RACE_DRIP;
+static T_RACE_VENT s_vents[RACE_MAX_VENTS];
+static T_RACE_DRIP s_drips[RACE_MAX_DRIPS];
+static int s_nbVents = 0, s_nbDrips = 0;
+static S32 s_puffEnd[RACE_MAX_PUFFS];
+static unsigned s_ventSeed = 20261007u;   // (their own dice: the race's, RaceRandom, stay as they were)
 // Jump cameras (jumpcam=, JumpCamera): a drop -- a flight off a raised road's end and down a hillside onto the ground far below (the lava
 // lake's, 2026-10-01) -- took the camera behind the car down into the hill, and the landing was never seen. While the hero flies such a
 // jump, and RACE_JUMPCAM_HOLD after he lands, the camera stands at a place of its own beside the flight (the builder's, with the whole
@@ -1417,6 +1433,20 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "cube_scene")) {
             int *c = s_cubeScenes[s_nbCubeScenes];
             if (s_nbCubeScenes < RACE_MAX_CUBE_SCENES && sscanf(v, "%d %d %d", &c[0], &c[1], &c[2]) == 3) s_nbCubeScenes++;
+        }
+        else if (!strcmp(key, "steam")) {
+            T_RACE_VENT *p = &s_vents[s_nbVents];
+            int x, y, z, every;
+            if (s_nbVents < RACE_MAX_VENTS && sscanf(v, "%d %d %d %d", &x, &y, &z, &every) == 4 && every > 0) {
+                p->X = x; p->Y = y; p->Z = z; p->Every = every; p->Next = 0; s_nbVents++;
+            }
+        }
+        else if (!strcmp(key, "drip")) {
+            T_RACE_DRIP *p = &s_drips[s_nbDrips];
+            int x, y, z, road, every;
+            if (s_nbDrips < RACE_MAX_DRIPS && sscanf(v, "%d %d %d %d %d", &x, &y, &z, &road, &every) == 5 && every > 0 && y > road) {
+                p->X = x; p->Y = y; p->Z = z; p->RoadY = road; p->Every = every; p->Next = p->LandAt = 0; s_nbDrips++;
+            }
         }
         else if (!strcmp(key, "jumpcam")) {
             T_RACE_JUMPCAM *c = &s_jumpCams[s_nbJumpCams];
@@ -3050,6 +3080,26 @@ static void DropOil(double x, double y, double z) {
         if (s_slicks[i].Dropped < s_slicks[k].Dropped) k = i;
     }
     s_slicks[k].X = x; s_slicks[k].Y = y; s_slicks[k].Z = z; s_slicks[k].Dropped = TimerRefHR; s_slicks[k].On = 1; s_slicks[k].Posed = -1;
+    s_slicks[k].Until = 0;
+}
+
+// A drip's slick (drip=) at (x, y, z), lying RACE_DRIP_SLICK_MS unless a car takes it first -- only where there is room for it: a free
+// slick (never a car's dropped oil taken for it), one of its scene's slicks free to show it (none on the road unseen: each scene has as
+// many as this one), and none already under the drip. 1 if it lies there.
+static int DripOil(double x, double y, double z, S32 now) {
+    int free = -1, shown = 0, actors = 0;
+    for (int k = 0; k < s_nbOilActors; k++) if (s_oilScene[k] == NumCube && s_oilActor[k] > 0 && s_oilActor[k] < NbObjets) actors++;
+    const int cubeX = (int)floor(x / 32768.0), cubeZ = (int)floor(z / 32768.0);
+    for (int i = 0; i < RACE_MAX_SLICKS; i++) {
+        const T_RACE_SLICK *sl = &s_slicks[i];
+        if (!sl->On) { if (free < 0) free = i; continue; }
+        if ((sl->X - x) * (sl->X - x) + (sl->Z - z) * (sl->Z - z) < 1200.0 * 1200.0) return 0;
+        if ((int)floor(sl->X / 32768.0) == cubeX && (int)floor(sl->Z / 32768.0) == cubeZ) shown++;
+    }
+    if (free < 0 || shown >= actors) return 0;
+    T_RACE_SLICK *sl = &s_slicks[free];
+    sl->X = x; sl->Y = y; sl->Z = z; sl->Dropped = now; sl->On = 1; sl->Posed = -1; sl->Until = now + RACE_DRIP_SLICK_MS;
+    return 1;
 }
 
 // The road's height under a place of this scene (cube-local) for something at height `ref`: a raised road's there if it is in reach of
@@ -3328,6 +3378,7 @@ static void Slicks(S32 now, int driving) {
     for (int i = 0; i < RACE_MAX_SLICKS; i++) {
         T_RACE_SLICK *sl = &s_slicks[i];
         if (!sl->On) continue;
+        if (sl->Until && now >= sl->Until) { sl->On = 0; continue; }   // (a drip's, dried up)
         const S32 lx = (S32)(sl->X - CurrentCubeX * 32768.0), lz = (S32)(sl->Z - CurrentCubeY * 32768.0);
         if (lx < 0 || lx >= 32768 || lz < 0 || lz >= 32768) continue;
         if (sl->Posed != (S32)NumCube && CubeMode == CUBE_EXTERIEUR) PoseSlick(sl, lx, lz);
@@ -3709,6 +3760,57 @@ S32 RaceMod_MoveBeta(S32 beta) {
 // so the scenes' scripts can tell a story's race from one started on its line, which has none (Mr. Paul stops a car only then:
 // RaceTrackStory). 0 with no track, or none shut.
 #define RACE_GATE_VAR 209
+// Every frame: the pipes over the road near Twinsen (steam=, drip=). A puff of steam from a pipe's top every so often, rising and
+// growing as it fades; a drop of oil falling from a pipe onto the road, and where it lands, a slick (DripOil; drawn and skidded on
+// with the power-ups' oil, Slicks).
+static double VentRandom(void) {
+    s_ventSeed = s_ventSeed * 1103515245u + 12345u;
+    return ((s_ventSeed >> 8) & 0xFFFFFF) / 16777216.0;
+}
+static void Vents(S32 now) {
+    if (CubeMode != CUBE_EXTERIEUR || (!s_nbVents && !s_nbDrips)) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const double hx = hero->Obj.X + cx, hz = hero->Obj.Z + cz;
+    const double near2 = (double)RACE_VENT_NEAR * RACE_VENT_NEAR;
+    int puffs = 0;
+    for (int k = 0; k < RACE_MAX_PUFFS; k++) if (s_puffEnd[k] > now) puffs++;
+    for (int i = 0; i < s_nbVents; i++) {
+        T_RACE_VENT *p = &s_vents[i];
+        if ((p->X - hx) * (p->X - hx) + (p->Z - hz) * (p->Z - hz) > near2) { p->Next = 0; continue; }
+        // (each on its own time from when it comes in sight: never all of them at once)
+        if (!p->Next) { p->Next = now + (S32)(VentRandom() * p->Every); continue; }
+        if (now < p->Next) continue;
+        p->Next = now + p->Every * 3 / 4 + (S32)(VentRandom() * p->Every / 2);
+        if (puffs >= RACE_MAX_PUFFS) continue;
+        // up and a little to one side, growing (a pof's scale is how far off it looks: down from 420 to 140, three times as big)
+        const S32 life = 1500 + (S32)(VentRandom() * 600);
+        const S32 alpha = 1024 + (S32)(VentRandom() * 240) - 120, beta = (S32)(VentRandom() * 4096);
+        if (InitExtraPof((S32)(p->X - cx), (S32)p->Y, (S32)(p->Z - cz), 1, alpha, beta, 16, 0, 420, 140, life, 0, life) < 0) continue;
+        for (int k = 0; k < RACE_MAX_PUFFS; k++) if (s_puffEnd[k] <= now) { s_puffEnd[k] = now + life; break; }
+        puffs++;
+    }
+    // (the pipes drip wherever Twinsen is -- a slick may be lying under one when he comes to it -- the drop seen only near him)
+    for (int i = 0; i < s_nbDrips; i++) {
+        T_RACE_DRIP *p = &s_drips[i];
+        if (p->LandAt) {
+            // landed: a slick where it fell (with the power-ups' oil: their slicks show it)
+            if (now < p->LandAt) continue;
+            p->LandAt = 0;
+            if (s_powerups && s_nbOilActors && DripOil(p->X, p->RoadY, p->Z, now)) Log_Info("[racemod] oil dripped onto the road at %.0f %.0f", p->X, p->Z);
+            continue;
+        }
+        if (!p->Next) { p->Next = now + (S32)(VentRandom() * p->Every); continue; }
+        if (now < p->Next) continue;
+        p->Next = now + p->Every * 3 / 4 + (S32)(VentRandom() * p->Every / 2);
+        // a drop falling from a standstill (weight 16: down t*t in t 20 ms ticks), gone when it reaches the road
+        const S32 ms = (S32)(sqrt(p->Y - p->RoadY) * 20);
+        p->LandAt = now + ms;
+        if ((p->X - hx) * (p->X - hx) + (p->Z - hz) * (p->Z - hz) <= near2)
+            InitExtraPof((S32)(p->X - cx), (S32)p->Y, (S32)(p->Z - cz), 1, 1024, 0, 0, 16, 2600, 2601, ms, 0, ms);
+    }
+}
+
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
@@ -3743,6 +3845,7 @@ void RaceMod_Frame(void) {
     }
     // the power-ups: the mushrooms in this scene, the player's car over one, the penguins' fuses
     if (s_powerups) PowerUps(now, driving);
+    Vents(now);
     if (!Opponents()) return;
     // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car
     if (!s_nbSpots && !s_oppStarted && driving && (Input & I_UP)) s_oppStarted = 1;
@@ -4382,6 +4485,7 @@ static void ResetTrack(void) {
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0;
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0;
+    s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0;

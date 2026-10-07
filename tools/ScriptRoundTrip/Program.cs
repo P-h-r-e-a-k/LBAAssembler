@@ -200,6 +200,8 @@ internal static class Program
             "buildingprobe" => BuildingProbe.Run(args),
             "heroarmor" => HeroArmor.Run(args),
             "bodyfaces" => BodyFaces.Run(args),
+            "decorlist" => DecorList.Run(args),
+            "bodyroundtrip" => BodyRoundTrip.Run(args),
             "doortrace" => DoorTrace.Run(args),
             "scenezones" => SceneZoneDump.Run(args),
             "doorwalk" => DoorWalk.Run(args),

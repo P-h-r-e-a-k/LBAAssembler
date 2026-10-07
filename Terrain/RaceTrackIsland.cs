@@ -224,7 +224,21 @@ internal sealed record RaceTrackIsland(
         CopiesScenes is { } many ? Enumerable.Range(0, many.Count).Select(k => (many.First + k, FirstScene + k))
         : CopiesScene is { } one ? new[] { (one, FirstScene) } : Enumerable.Empty<(int, int)>();
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar };
+    // The Island of the Francos (KNARTAS.ILE, the game's island 8, scenes 107-109): its dock, its gazogem refinery and its village of furry
+    // dome huts -- three cubes, too little flat ground for a long lap, so most of it is a raised road at three levels that passes over
+    // itself (the user, 2026-10-07: "loads of height ... lots of loops and jumps"): the start straight down the dock's east arm, a loop on
+    // its north arm, a jump over the inlet's mouth and the island's rocket, up over the start straight and the channel onto the high road
+    // over the refinery, a loop over its tanks, past its machine houses among pipes and steam, a leap down over the cracking tower into the
+    // village, through its huts at their floors, a loop on the south shore, a leap up over the refinery's fence and the climb to the top road
+    // over the rocks (two loops, the second with a gap at its top), and down the channel between the dock and the refinery onto the start.
+    // The plan: tools/RaceTrackPlan/knartas_design.py.
+    public static readonly RaceTrackIsland Knartas = new("Island of the Francos", "KNARTAS.ILE", "KNARTAS.OBL", 8, 107, 109, 35, "RaceTrackPlan.Knartas.json", null)
+    {
+        Roster = RaceDriver.Knartas,
+        Title = "The Island of the Francos: over the dock, the refinery and the village",
+    };
+
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

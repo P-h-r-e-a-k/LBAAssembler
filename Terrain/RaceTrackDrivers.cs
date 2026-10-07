@@ -80,5 +80,14 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Of(RaceTrackCharacterCars.FunFrock, "FunFrock", 1.5, 1.01, 0.97, main: true),
     };
 
+    // The Island of the Francos (2026-10-07): its own -- De La Fontaine in the refinery's gazogem tanker (the one to beat), Mr. Kurtz in his
+    // laboratory and the Franco nurse with her pram
+    public static readonly List<RaceDriver> Knartas = new()
+    {
+        Of(RaceTrackCharacterCars.Tanker, "De La Fontaine", 0, 1.0, 1.0, main: true),
+        Of(RaceTrackCharacterCars.Laboratory, "Mr. Kurtz", -2.0, 0.99, 1.02),
+        Of(RaceTrackCharacterCars.Pram, "The nurse", 2.0, 1.02, 0.97),
+    };
+
     // Otringal's palace has no track yet; its drivers are Stan, the pighead with the broom and the two-headed monster (CharactersForTrack.txt)
 }
