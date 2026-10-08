@@ -104,7 +104,9 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? LavaBalls = null,
         // Fakes: the scenes' copies of the mushroom that show the fake mushrooms cars drop, each [scene, actor] (RACEMOD.CPP fake=), since
         // 2026-10-08
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Fakes = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Fakes = null,
+        // LaserModels: the laser cars' bolts in OBJFIX.HQR, [green, red] (RaceTrackLasers; RACEMOD.CPP laser_models=), since 2026-10-08
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? LaserModels = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -331,6 +333,7 @@ internal static class RaceTrackService
     {
         public bool CharacterCars, Baldino, SmallCars, Oil, CastCars;
         public int? OilIcon, SuperJetModel, TwinsenSmall;
+        public int[]? LaserModels;
         public List<TrackInfo> Tracks { get; } = new();
     }
 
@@ -576,6 +579,10 @@ internal static class RaceTrackService
             var (jet, jetLog) = RaceTrackSuperJet.Install(gameDirectory);
             log.Add(jetLog);
             session.SuperJetModel = jet;
+            // ... and the laser cars' bolts
+            var (green, red, laserLog) = RaceTrackLasers.Install(gameDirectory);
+            log.Add(laserLog);
+            session.LaserModels = new[] { green, red };
             session.Oil = true;
         }
         return log;
@@ -587,7 +594,8 @@ internal static class RaceTrackService
         StoryInfo? story = null, DreamInfo? dream = null)
     {
         session ??= new BuildSession();
-        var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, Dream = dream };
+        var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, Dream = dream,
+            LaserModels = session.LaserModels };
         if (info.ArcJumps is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
         if (Shuttles(gameDirectory, report, options) is { Count: > 0 } shuttles) info = info with { Shuttles = shuttles };
         if (twin is { Own: true } && scenes.Twin is { } twinScenes)
@@ -596,7 +604,7 @@ internal static class RaceTrackService
             var fine = Info(twin.Report, twin.Options, twinScenes);
             // (the town circuit's own arrow, which the bed switches on)
             if (story is not null) fine = fine with { StoryArrow = story.TownArrow };
-            info = info with { Twin = fine with { OilIcon = session.OilIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall } };
+            info = info with { Twin = fine with { OilIcon = session.OilIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, LaserModels = session.LaserModels } };
         }
         session.Tracks.Add(info);
         var all = session.Tracks[0] with { Others = session.Tracks.Count > 1 ? session.Tracks.Skip(1).ToList() : null };

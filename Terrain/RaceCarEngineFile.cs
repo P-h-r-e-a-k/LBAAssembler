@@ -126,6 +126,8 @@ internal static class RaceCarEngineFile
             foreach (var pg in track.Penguins ?? new()) text.Append($"penguin={pg[0]} {pg[1]}\n");
             foreach (var oil in track.Oil ?? new()) text.Append($"oil={oil[0]} {oil[1]}\n");
             foreach (var fake in track.Fakes ?? new()) text.Append($"fake={fake[0]} {fake[1]}\n");
+            // (the laser cars' bolts)
+            if (track.LaserModels is [var green, var red]) text.Append($"laser_models={green} {red}\n");
             // (the oil's drum, which the item box shows)
             if (track.OilIcon is { } icon) text.Append($"oil_icon={icon}\n");
             // (the super jet-pack the car turns into while it drives it)
@@ -199,7 +201,9 @@ internal static class RaceCarEngineFile
         var anim = racer.Anims.Where(a => a.Generic == 1).Select(a => (int?)a.Anim).FirstOrDefault();
         if (anim is null) return null;
         if (RaceTrackCharacterCars.Catalogue(gameDirectory).FirstOrDefault(e => e.Number == number) is { } listed)
-            return $"# driving as car {number}, {listed.Name}\ndrive_as={listed.Body} {anim} {listed.Small}\n";
+            // (Twinsen's laser cars: the throw key fires their bolts)
+            return $"# driving as car {number}, {listed.Name}\ndrive_as={listed.Body} {anim} {listed.Small}\n" +
+                   (listed.Name == RaceTrackCharacterCars.LaserGreenName ? "drive_laser=1\n" : listed.Name == RaceTrackCharacterCars.LaserRedName ? "drive_laser=2\n" : "");
         var body = racer.Bodies.Where(b => b.Generic == number).Select(b => (int?)b.Body).FirstOrDefault();
         if (body is null) return null;
         var small = racer.Bodies.Where(b => b.Generic == RaceTrackSmallCars.SmallOf(number)).Select(b => b.Body).DefaultIfEmpty(-1).First();

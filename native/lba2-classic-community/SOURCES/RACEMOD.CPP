@@ -449,7 +449,16 @@ static T_RACE_SLICK s_slicks[RACE_MAX_SLICKS];
 #define RACE_HOME_SPEED 10500.0            // the red and the fire: along the track after its car, this fast ...
 #define RACE_HOME_DIRECT 3500.0            // ... straight at it once this near
 #define RACE_HOME_MS 15000                 // ... and gone after this long
-enum { SHOT_YELLOW, SHOT_GREEN, SHOT_RED, SHOT_FIRE };
+enum { SHOT_YELLOW, SHOT_GREEN, SHOT_RED, SHOT_FIRE, SHOT_LASER_GREEN, SHOT_LASER_RED };
+// Twinsen's laser cars (drive_laser=1 green, 2 red, while he drives as one: drive_as=): the throw key fires their bolts -- the laser cars'
+// models (laser_models=<green> <red>, OBJFIX.HQR: the builder adds them) flown straight ahead, one every RACE_LASER_EVERY ms while it is held
+#define RACE_LASER_SPEED 17000.0
+#define RACE_LASER_RANGE (34 * 512.0)
+#define RACE_LASER_EVERY 260
+#define RACE_LASER_REACH 1050
+static int s_driveLaser = 0, s_laserModel[2] = {-1, -1};
+static S32 s_laserAt = 0;
+static int LaserExtra(int model, S32 x, S32 y, S32 z);
 typedef struct { int On, Kind, Owner, Target, Extra; double X, Y, Z, Hx, Hz, S, Side, SideV, Travelled; S32 T0, Trail; } T_RACE_SHOT;
 static T_RACE_SHOT s_shots[RACE_MAX_SHOTS];
 static void LaunchShot(int kind, int owner, int target, double x, double y, double z, double hx, double hz, S32 now);
@@ -1694,6 +1703,8 @@ static void Load(const char *path, int carOnly = 0) {
                 m->Y = got == 3 ? y : 0; m->HasY = got == 3; m->Back = 0; s_nbMush++;
             }
         }
+        else if (!strcmp(key, "drive_laser")) s_driveLaser = atoi(v);
+        else if (!strcmp(key, "laser_models")) sscanf(v, "%d %d", &s_laserModel[0], &s_laserModel[1]);
         else if (!strcmp(key, "fake")) {
             if (s_nbFakeActors < RACE_MAX_FAKE_ACTORS && sscanf(v, "%d %d", &s_fakeScene[s_nbFakeActors], &s_fakeActor[s_nbFakeActors]) == 2) s_nbFakeActors++;
         }
@@ -3911,18 +3922,19 @@ static void Shots(S32 now, int driving) {
     last = now;
     if (dt < 0) dt = 0;
     if (dt > 0.1) dt = 0.1;
-    static const char *const names[] = {"yellow magic ball", "green magic ball", "red magic ball", "fire ball"};
+    static const char *const names[] = {"yellow magic ball", "green magic ball", "red magic ball", "fire ball", "green laser", "red laser"};
     for (int i = 0; i < RACE_MAX_SHOTS; i++) {
         T_RACE_SHOT *sh = &s_shots[i];
         if (!sh->On) continue;
         const S32 age = now - sh->T0;
         int done = 0;
-        if (sh->Kind == SHOT_YELLOW || (sh->Kind == SHOT_RED && sh->Target == -2) || !o) {
+        const int laser = sh->Kind == SHOT_LASER_GREEN || sh->Kind == SHOT_LASER_RED;
+        if (sh->Kind == SHOT_YELLOW || (sh->Kind == SHOT_RED && sh->Target == -2) || laser || !o) {
             // straight ahead, over the road
-            const double step = RACE_DART_SPEED * dt;
+            const double step = (laser ? RACE_LASER_SPEED : RACE_DART_SPEED) * dt;
             sh->X += sh->Hx * step; sh->Z += sh->Hz * step; sh->Travelled += step;
             if (o) { double side, y, x2, z2, hx, hz; sh->S = GuideS(o, sh->X, sh->Y, sh->Z, sh->S, &side); GuideAt(o, sh->S, side, &x2, &y, &z2, &hx, &hz); sh->Y = y + RACE_SHOT_RISE; }
-            if (sh->Travelled >= RACE_DART_RANGE * (sh->Kind == SHOT_RED ? 2 : 1)) done = 1;
+            if (sh->Travelled >= (laser ? RACE_LASER_RANGE : RACE_DART_RANGE * (sh->Kind == SHOT_RED ? 2 : 1))) done = 1;
         } else if (sh->Kind == SHOT_GREEN) {
             // along the track, from rail to rail, hopping
             sh->S += RACE_ROLL_SPEED * dt;
@@ -3967,29 +3979,67 @@ static void Shots(S32 now, int driving) {
                 double x, y, z;
                 if (!CarAt(who, &x, &y, &z)) continue;
                 const double dx = x - sh->X, dz = z - sh->Z;
-                if (dx * dx + dz * dz > (double)RACE_SHOT_REACH * RACE_SHOT_REACH || fabs(y + RACE_SHOT_RISE - sh->Y) > 1400) continue;
+                const double reach = laser ? RACE_LASER_REACH : RACE_SHOT_REACH;
+                if (dx * dx + dz * dz > reach * reach || fabs(y + RACE_SHOT_RISE - sh->Y) > 1400) continue;
                 const S32 lx = (S32)(sh->X - cx), lz = (S32)(sh->Z - cz);
-                if (CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768) MagicBallExplo(lx, (S32)sh->Y, lz, 0);
+                if (CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768) {
+                    if (laser) InitHitExtraPof(lx, (S32)sh->Y, lz, RACE_SHOT_FORCE); else MagicBallExplo(lx, (S32)sh->Y, lz, 0);
+                }
                 CarStruck(who, now, names[sh->Kind], CarName(sh->Owner));
                 done = 1;
             }
         // shown: its sprite in this scene, moved; a trail behind it
         const S32 lx = (S32)(sh->X - cx), lz = (S32)(sh->Z - cz);
         const int here = !done && CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768;
-        const int sprite = 8 + sh->Kind;
+        const S16 sprite = laser ? (S16)(3 + 32768) : (S16)(8 + sh->Kind);
         if (sh->Extra >= 0 && (sh->Extra >= MAX_EXTRAS || ListExtra[sh->Extra].Sprite != sprite)) sh->Extra = -1;
         if (!here) {
             if (sh->Extra >= 0) { ListExtra[sh->Extra].Sprite = -1; sh->Extra = -1; }
         } else {
-            if (sh->Extra < 0) sh->Extra = InitExtraAnimSprite(255, lx, (S32)sh->Y, lz, sprite, sprite, RACE_HOME_MS + 1000, RACE_SHOT_SCALE, 0, 0);
-            if (sh->Extra >= 0) { ListExtra[sh->Extra].PosX = lx; ListExtra[sh->Extra].PosY = (S32)sh->Y; ListExtra[sh->Extra].PosZ = lz; }
-            if (now - sh->Trail >= 60) {
+            if (sh->Extra < 0) sh->Extra = laser ? LaserExtra(s_laserModel[sh->Kind == SHOT_LASER_RED], lx, (S32)sh->Y, lz)
+                                                 : InitExtraAnimSprite(255, lx, (S32)sh->Y, lz, sprite, sprite, RACE_HOME_MS + 1000, RACE_SHOT_SCALE, 0, 0);
+            if (sh->Extra >= 0) {
+                ListExtra[sh->Extra].PosX = lx; ListExtra[sh->Extra].PosY = (S32)sh->Y; ListExtra[sh->Extra].PosZ = lz;
+                if (laser) ListExtra[sh->Extra].Beta = (S16)((S32)(atan2(sh->Hx, sh->Hz) * 4096 / (2 * 3.14159265358979)) & 4095);
+            }
+            if (!laser && now - sh->Trail >= 60) {
                 sh->Trail = now;
                 InitExtraAnimSprite(255, lx, (S32)sh->Y, lz, 15, 17, 360, RACE_SHOT_SCALE + 6, 1, 0);
             }
         }
         if (done) sh->On = 0;
     }
+}
+
+// A laser's bolt in this scene: the model as a 3D extra (EXTRA.CPP AffSpecial's case 3 draws it, its Scale the pitch), moved by Shots
+// rather than flown by the extras' own code.
+static int LaserExtra(int model, S32 x, S32 y, S32 z) {
+    if (model < 0) return -1;
+    for (int n = 0; n < MAX_EXTRAS; n++) {
+        T_EXTRA *e = &ListExtra[n];
+        if (e->Sprite != -1) continue;
+        e->Body = (S16)model; e->PtrBody = (U8 *)GivePtrObjFix(model);
+        e->Sprite = (S16)(3 + 32768); e->Scale = 0; e->Flags = EXTRA_NO_SHADOW;
+        e->PosX = x; e->PosY = y; e->PosZ = z; e->Vx = e->Vy = e->Vz = 0;
+        e->Beta = 0; e->Owner = 255; e->Timer = TimerRefHR; e->TimeOut = 0; e->Divers = 0; e->HitForce = 0; e->Poids = 0; e->Info = 0;
+        return n;
+    }
+    return -1;
+}
+
+// BUGGY.CPP: Twinsen drives one of his laser cars -- the throw key fires its bolts, not his magic ball.
+S32 RaceMod_LaserCar(void) {
+    return RaceMod_Active() && s_driveLaser > 0 && s_driveBody >= 0 && s_laserModel[s_driveLaser == 2] >= 0 && Comportement == C_BUGGY;
+}
+
+// ... the throw key held: a bolt out of the front of the car every RACE_LASER_EVERY ms.
+void RaceMod_FireLaser(void) {
+    const S32 now = TimerRefHR;
+    if (!RaceMod_LaserCar() || CubeMode != CUBE_EXTERIEUR || now - s_laserAt < RACE_LASER_EVERY) return;
+    s_laserAt = now;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double b = hero->Obj.Beta * 2 * 3.14159265358979 / 4096;
+    LaunchShot(s_driveLaser == 2 ? SHOT_LASER_RED : SHOT_LASER_GREEN, -1, -2, hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0, sin(b), cos(b), now);
 }
 
 static void DropFake(double x, double y, double z, int dropper, S32 now) {
@@ -5438,7 +5488,8 @@ static void ResetTrack(void) {
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
     s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
-    s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes)); memset(s_shots, 0, sizeof(s_shots)); s_skidUntil = 0;
+    s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes)); memset(s_shots, 0, sizeof(s_shots));
+    s_driveLaser = 0; s_laserModel[0] = s_laserModel[1] = -1; s_laserAt = 0; s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     s_noCollideScene = -1;
     if (s_heroHidden) { ListObjet[NUM_PERSO].Flags &= ~INVISIBLE; s_heroHidden = 0; }

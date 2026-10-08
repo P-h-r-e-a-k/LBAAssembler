@@ -381,7 +381,11 @@ void MoveBuggy(T_OBJET *ptrobj) {
     // (a race-track mod's car fires as it drives: the throw doesn't stop it, nor take its steering for aiming -- RACEMOD.CPP; the user,
     // 2026-10-08: "Currently Twinsen's car can shoot small balls but only when he's stationary")
     const S32 raceFires = RaceMod_Active();
-    if ((Input & I_THROW)
+    // (one of Twinsen's laser cars: the throw key fires its bolts -- RACEMOD.CPP RaceMod_FireLaser -- not his magic ball)
+    const S32 laserCar = raceFires AND RaceMod_LaserCar();
+    if (laserCar AND (Input & I_THROW)) {
+        RaceMod_FireLaser();
+    } else if ((Input & I_THROW)
             AND(PtrComportement->Flags & CF_WEAPON)) {
         // est-on en mage ?
         if (TabInv[FLAG_TUNIQUE].IdObj3D == 0) {
@@ -404,7 +408,7 @@ void MoveBuggy(T_OBJET *ptrobj) {
         LastJoyFlag = TRUE;
         flagattack = TRUE;
     } else {
-        if (LastInput & I_THROW) {
+        if ((LastInput & I_THROW) AND !laserCar) {
             // on a fini de tirer avec le buggy,
             // on referme le capot
             InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
