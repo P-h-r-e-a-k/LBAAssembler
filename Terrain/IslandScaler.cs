@@ -179,7 +179,7 @@ internal static class IslandScaler
 
     // A new island file with `cubes` (in that order, ids 1..): the source's atlases; each cube's records blank (settings, no objects, cells,
     // one texture definition, heights 0, light 10) for Scale to fill.
-    private static byte[] NewFile(IslandFile source, List<(int X, int Z)> cubes)
+    internal static byte[] NewFile(IslandFile source, List<(int X, int Z)> cubes)
     {
         var entries = new List<byte[]>();
         var map = new byte[IslandFile.MapSize * IslandFile.MapSize];
