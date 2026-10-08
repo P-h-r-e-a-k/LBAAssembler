@@ -95,6 +95,9 @@ internal sealed class RaceTrackPlan
     public PipeLine? Pipeline { get; set; }
     // Tunnels over the raised road (RaceTrackTunnel): Otringal's over the bridge to its square island. From and To are the plan's points.
     public TunnelRun[]? Tunnels { get; set; }
+    // Lava balls (RACEMOD.CPP lavaball=): balls of fire shot up out of the lava at Source (plan cells) and raining onto the stretch of the
+    // lap From..To (the plan's points), one every Every ms or so -- Volcano Island's (the user, 2026-10-08).
+    public LavaBallRun[]? LavaBalls { get; set; }
     // Decor bodies that stay where they are when the ground under them is cut or raised (IslandOps.DecorFollow): Otringal's gatehouse,
     // which the race track's tunnel runs under -- the cutting beyond the tunnel's mouth reaches the ground under its origin (2026-10-08).
     public int[]? StayPut { get; set; }
@@ -424,6 +427,9 @@ internal sealed class RaceTrackReport
     public List<int[]> Jets { get; } = new();
     // the tunnels over the raised road (RaceTrackTunnel): each one's first and last point (the lap's) and its roof's height over the deck
     public List<(int From, int To, double Roof)> Tunnels { get; } = new();
+    // the lava balls (RaceTrackPlan.LavaBalls): each one's source (island units, on the ground there), the lap's points of the stretch it
+    // rains on, every (ms) and phase (ms)
+    public List<(double X, double Y, double Z, int From, int To, int Every, int Phase)> LavaBalls { get; } = new();
     // the lap's point of each of Raised's (PlaceRaised): where a point of the lap is in the engine's list
     public List<int> RaisedSpan { get; } = new();
     public int Vertices, Cells, DecorsRemoved, SolidDecorsRemoved, BridgeCells;
@@ -788,6 +794,17 @@ internal static class RaceTrackBuilder
             RaceTrackTunnel.Place(island, main, tunnels.Select(t => (PlanPoint(plan, main, t.From), PlanPoint(plan, main, t.To), t)).ToList(), options, report);
         if (planned && plan.Pipeline is { } pipeline)
             RaceTrackPipes.PlacePipeline(island, main, pipeline, plan.OriginCellX, plan.OriginCellZ, options, report);
+        if (planned && plan.LavaBalls is { Length: > 0 } lava)
+        {
+            var nth = 0;
+            foreach (var b in lava.Where(b => b.Source is { Length: >= 2 } && b.Every > 0))
+            {
+                double sx = b.Source[0] + plan.OriginCellX, sz = b.Source[1] + plan.OriginCellZ;
+                var y = IslandOps.Altitude(island, sx * 512, sz * 512) ?? 0;
+                report.LavaBalls.Add((sx * 512, y, sz * 512, PlanPoint(plan, main, b.From), PlanPoint(plan, main, b.To), b.Every, nth++ * 1733 % b.Every));
+            }
+            report.Notes.Add($"{report.LavaBalls.Count} places the lava shoots balls of fire from onto the road");
+        }
         report.GroundBefore = (x, z) => natural.Height(x, z);
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
         report.WasGround = (x, z) => natural.Drawn(x, z);

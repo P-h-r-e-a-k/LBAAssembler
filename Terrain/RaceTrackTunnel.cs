@@ -22,6 +22,16 @@ internal sealed class TunnelRun
     public double Eave { get; set; }
 }
 
+// A place in the lava that shoots balls of fire onto a stretch of the lap (RaceTrackPlan.LavaBalls, RACEMOD.CPP lavaball=): Source in the
+// plan's cells, From and To the plan's points, about one every Every ms.
+internal sealed class LavaBallRun
+{
+    public double[] Source { get; set; } = System.Array.Empty<double>();
+    public int From { get; set; }
+    public int To { get; set; }
+    public int Every { get; set; } = 5000;
+}
+
 // The tunnel's pieces, every Piece cells along the road, a decor each: a wall just outside each rail, from under the deck up to the roof,
 // a light strip along its inside, and the roof over the road from wall to wall -- each a box with its faces outwards (the walls' inner
 // faces and the roof's underside are what the car sees from inside). Their boxes are ones nothing can touch (the raised road's rail keeps

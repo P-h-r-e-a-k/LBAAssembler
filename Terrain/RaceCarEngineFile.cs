@@ -59,6 +59,8 @@ internal static class RaceCarEngineFile
         foreach (var tunnel in track?.Tunnels ?? new()) text.Append($"tunnel={string.Join(' ', tunnel)}\n");
         // the spaceships it flies over their pads on the road (Otringal's square island)
         foreach (var shuttle in track?.Shuttles ?? new()) text.Append($"shuttle={string.Join(' ', shuttle)}\n");
+        // the lava's balls of fire (Volcano Island)
+        foreach (var ball in track?.LavaBalls ?? new()) text.Append($"lavaball={string.Join(' ', ball)}\n");
         // where the camera stands while the car flies a drop
         foreach (var dropCam in track?.JumpCameras ?? new()) text.Append($"jumpcam={string.Join(' ', dropCam)}\n");
         // the jumps the engine carries the car over (places in the raised road's file), and the island's scenes by cube for the cube

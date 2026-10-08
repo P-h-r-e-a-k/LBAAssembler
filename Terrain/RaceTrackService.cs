@@ -98,7 +98,10 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Tunnels = null,
         // Shuttles: the scenes' actors the race-track mode flies (RaceTrackIsland.Shuttles), each [scene, actor (the built scene's), the pad
         // it lands on: x, y (the road's surface there), z, cube-local] (RACEMOD.CPP shuttle=), since 2026-10-08
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Shuttles = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Shuttles = null,
+        // LavaBalls: the lava's balls of fire (RaceTrackPlan.LavaBalls), each [x, y, z of the source (island units), the raised road's first
+        // and last point of the stretch they rain on, every (ms), phase (ms)] (RACEMOD.CPP lavaball=), since 2026-10-08
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? LavaBalls = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -679,6 +682,10 @@ internal static class RaceTrackService
             Jets: report.Jets.Count > 0 ? report.Jets.ToList() : null,
             Tunnels: raised && report.Tunnels.Count > 0
                 ? report.Tunnels.Select(t => new[] { report.RaisedSpan.IndexOf(t.From), report.RaisedSpan.IndexOf(t.To), (int)Math.Round(t.Roof) }).Where(t => t[0] >= 0 && t[1] >= 0).ToList()
+                : null,
+            LavaBalls: raised && report.LavaBalls.Count > 0
+                ? report.LavaBalls.Select(b => new[] { (int)Math.Round(b.X), (int)Math.Round(b.Y), (int)Math.Round(b.Z), report.RaisedSpan.IndexOf(b.From), report.RaisedSpan.IndexOf(b.To), b.Every, b.Phase })
+                    .Where(b => b[3] >= 0 && b[4] >= 0).ToList()
                 : null);
     }
 

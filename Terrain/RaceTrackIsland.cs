@@ -284,7 +284,17 @@ internal sealed record RaceTrackIsland(
         Shuttles = new[] { (92, 2, 47, 19200, 9472), (92, 3, 47, 19104, 17632) },
     };
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal };
+    // Volcano Island (SOUSCELB.ILE, the game's island 11 under Celebration Island, scenes 130-132; cube (7,8) isn't there), from the user's
+    // sketch (2026-10-08): round the sand plateau on the volcano's top, the start and the pit lane on its north straight; down off its east end
+    // over a jump across the main lava channel, a jump over the second onto the island's east edge, south along it and a jump down to the
+    // south shore; along the shore and back up the volcano's flank. Balls of fire shot up out of the lava rain onto the road (LavaBalls).
+    // The plan: tools/RaceTrackPlan/volcano_design.py.
+    public static readonly RaceTrackIsland Volcano = new("Volcano Island", "SOUSCELB.ILE", "SOUSCELB.OBL", 11, 130, 132, 38, "RaceTrackPlan.Volcano.json", null)
+    {
+        Title = "Volcano Island: over the lava", Roster = RaceDriver.Volcano,
+    };
+
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 
