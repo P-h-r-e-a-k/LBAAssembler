@@ -444,6 +444,7 @@ public partial class MainWindow : Window
         else if (name == "ASCENCE") paletteIndex = 37;
         else if (name == "SOUSCELB") paletteIndex = 38;
         else if (name == "PALACE") paletteIndex = 31;          // (the Palace island: Otringal's palace made an island, Terrain/Palace)
+        else if (name == "CXTOWER") paletteIndex = 36;         // (Island CX with its control tower's lower level in 3D, Terrain/ControlTower)
         // island 1 (Sendell's Well, cut from the retail game: a SENDELL.ILE made for it), and the old copy of the Emerald Moon
         else if (name == "SENDELL") paletteIndex = 28;
         else if (name == "MOON") paletteIndex = 30;

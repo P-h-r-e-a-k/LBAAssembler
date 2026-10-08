@@ -204,6 +204,7 @@ internal static class Program
             "heroarmor" => HeroArmor.Run(args),
             "bodyfaces" => BodyFaces.Run(args),
             "palace" => PalaceCommand.Run(args),
+            "cxtower" => ControlTowerCommand.Run(args),
             "decorlist" => DecorList.Run(args),
             "bodyroundtrip" => BodyRoundTrip.Run(args),
             "doortrace" => DoorTrace.Run(args),

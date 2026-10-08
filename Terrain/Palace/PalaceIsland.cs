@@ -31,16 +31,9 @@ internal static class PalaceIsland
     public const int Floor = 2200;                      // the rooms' bottom layer's foot, over the island's zero
     public const int Margin = 28;                       // cells of paved ground round the palace
     public const int Slope = 10;                        // ... the last of them falling to the sea
-    public const int MaxFaces = 540, MaxPoints = 540;   // a body's polygons and points at the most (the engine's 550: Body.Limit)
-    public const int MaxRun = 12;                       // a merged rectangle's cells along a side at the most ...
-    public const float MaxSpan = 56000;                 // ... and a body's extent (its points within a signed 16-bit of its origin)
     public const int FirstCube = 6;                     // the island's cubes from (6, 6) on
-    private const int NoBoxTop = -32000;
     // Otringal's paved palace courtyard, whose ground the plateau is painted with (an island cell)
     private static readonly (int Gx, int Gz) PavingCell = (494, 474);
-    // the faces' shades, as the exporter's: top, bottom, east and west, south and north
-    private static readonly (int Dx, int Dy, int Dz, float Shade)[] Directions =
-        { (0, 1, 0, 1.00f), (0, -1, 0, 0.50f), (1, 0, 0, 0.84f), (-1, 0, 0, 0.84f), (0, 0, 1, 0.70f), (0, 0, -1, 0.70f) };
     private static readonly (float R, float G, float B) RoofColour = (176, 78, 52), RoofEdge = (120, 50, 36);
 
     public sealed record Built(int Rooms, int Cells, int Bodies, int Faces, int Boxes, int Roofs, (int X, int Z) FirstCube, (int X, int Z) Cubes, string Log);
@@ -93,50 +86,15 @@ internal static class PalaceIsland
         var islandPalette = IslandMapRenderer.LoadPaletteEntry(gameDirectory, PaletteEntry);
         var averages = new Dictionary<int, (float R, float G, float B)>();
         var matched = new Dictionary<(float, float, float), int>();
-        int Nearest((float R, float G, float B) c)
-        {
-            if (matched.TryGetValue(c, out var known)) return known;
-            var best = 1; var bd = double.MaxValue;
-            for (var i = 1; i < 255; i++)
-            {
-                var p = Colour(islandPalette, i);
-                double d = (p.R - c.R) * (p.R - c.R) * 0.3 + (p.G - c.G) * (p.G - c.G) * 0.59 + (p.B - c.B) * (p.B - c.B) * 0.11;
-                if (d < bd) { bd = d; best = i; }
-            }
-            return matched[c] = best;
-        }
+        int Nearest((float R, float G, float B) c) => BrickBuilding.Nearest(islandPalette, c, matched);
         int ColourOf(int brick, float shade)
         {
-            if (!averages.TryGetValue(brick, out var a)) averages[brick] = a = BrickAverage(interiors.ReadBrick(brick), palette);
+            if (!averages.TryGetValue(brick, out var a)) averages[brick] = a = BrickBuilding.BrickAverage(interiors.ReadBrick(brick), palette);
             return Nearest((MathF.Round(a.R * shade), MathF.Round(a.G * shade), MathF.Round(a.B * shade)));
         }
 
         // ---- the faces that show, merged into rectangles of one colour, room by room
-        // (each face: its room, which way it faces, the plane it is in, and its two coordinates in that plane)
-        var planes = new Dictionary<(int Tile, int Dir, int Plane), Dictionary<(int U, int V), int>>();
-        foreach (var ((x, y, z), (brick, ti)) in cells)
-            for (var d = 0; d < Directions.Length; d++)
-            {
-                var (dx, dy, dz, shade) = Directions[d];
-                if (cells.ContainsKey((x + dx, y + dy, z + dz))) continue;
-                var key = (ti, d, dy != 0 ? y : dx != 0 ? x : z);
-                if (!planes.TryGetValue(key, out var plane)) planes[key] = plane = new();
-                plane[dy != 0 ? (x, z) : dx != 0 ? (z, y) : (x, y)] = ColourOf(brick, shade);
-            }
-        var roomFaces = new Dictionary<int, List<(Vector3[] Quad, int Colour, Vector3 Normal)>>();
-        foreach (var ((ti, d, at), plane) in planes)
-        {
-            var (dx, dy, dz, _) = Directions[d];
-            var list = roomFaces.TryGetValue(ti, out var l) ? l : roomFaces[ti] = new();
-            foreach (var (u0, v0, u1, v1, colour) in Rectangles(plane))
-            {
-                // (the rectangle's corners in the world: the plane at the cells' face on that side)
-                Vector3 P(int u, int v) => dy != 0 ? new((float)WX(u), (float)WY(at + (dy > 0 ? 1 : 0)), (float)WZ(v))
-                                       : dx != 0 ? new((float)WX(at + (dx > 0 ? 1 : 0)), (float)WY(v), (float)WZ(u))
-                                                 : new((float)WX(u), (float)WY(v), (float)WZ(at + (dz > 0 ? 1 : 0)));
-                list.Add((new[] { P(u0, v0), P(u1 + 1, v0), P(u1 + 1, v1 + 1), P(u0, v1 + 1) }, colour, new Vector3(dx, dy, dz)));
-            }
-        }
+        var roomFaces = BrickBuilding.Faces(cells, ColourOf, (x, y, z) => new Vector3((float)WX(x), (float)WY(y), (float)WZ(z)));
 
         // ---- the roofs: over each room, level with the top of its walls
         var roofs = 0;
@@ -152,18 +110,12 @@ internal static class PalaceIsland
             double ya = WY(top), yb = ya + V * 0.4;
             int roofTop = Nearest(RoofColour), roofSide = Nearest(RoofEdge);
             var list = roomFaces[ti];
-            void Q(Vector3 a, Vector3 b, Vector3 c, Vector3 e, int colour, Vector3 n) => list.Add((new[] { a, b, c, e }, colour, n));
             // (in slabs of MaxRun cells at the most: a body holds no more)
-            for (var sx = rx0; sx <= rx1; sx += MaxRun)
-            for (var sz = rz0; sz <= rz1; sz += MaxRun)
+            for (var sx = rx0; sx <= rx1; sx += BrickBuilding.MaxRun)
+            for (var sz = rz0; sz <= rz1; sz += BrickBuilding.MaxRun)
             {
-            double xa = WX(sx), xb = WX(Math.Min(rx1, sx + MaxRun - 1) + 1), za = WZ(sz), zb = WZ(Math.Min(rz1, sz + MaxRun - 1) + 1);
-            Q(new((float)xa, (float)yb, (float)za), new((float)xb, (float)yb, (float)za), new((float)xb, (float)yb, (float)zb), new((float)xa, (float)yb, (float)zb), roofTop, Vector3.UnitY);
-            Q(new((float)xa, (float)ya, (float)za), new((float)xb, (float)ya, (float)za), new((float)xb, (float)ya, (float)zb), new((float)xa, (float)ya, (float)zb), roofSide, -Vector3.UnitY);
-            Q(new((float)xa, (float)ya, (float)za), new((float)xb, (float)ya, (float)za), new((float)xb, (float)yb, (float)za), new((float)xa, (float)yb, (float)za), roofSide, -Vector3.UnitZ);
-            Q(new((float)xa, (float)ya, (float)zb), new((float)xb, (float)ya, (float)zb), new((float)xb, (float)yb, (float)zb), new((float)xa, (float)yb, (float)zb), roofSide, Vector3.UnitZ);
-            Q(new((float)xa, (float)ya, (float)za), new((float)xa, (float)ya, (float)zb), new((float)xa, (float)yb, (float)zb), new((float)xa, (float)yb, (float)za), roofSide, -Vector3.UnitX);
-            Q(new((float)xb, (float)ya, (float)za), new((float)xb, (float)ya, (float)zb), new((float)xb, (float)yb, (float)zb), new((float)xb, (float)yb, (float)za), roofSide, Vector3.UnitX);
+            double xa = WX(sx), xb = WX(Math.Min(rx1, sx + BrickBuilding.MaxRun - 1) + 1), za = WZ(sz), zb = WZ(Math.Min(rz1, sz + BrickBuilding.MaxRun - 1) + 1);
+            BrickBuilding.AddBox(list, new((float)xa, (float)ya, (float)za), new((float)xb, (float)yb, (float)zb), roofTop, roofSide);
             roofBoxes.Add((xa, ya, za, xb, yb, zb));
             }
             roofs++;
@@ -173,59 +125,23 @@ internal static class PalaceIsland
         var oblBytes = File.ReadAllBytes(Path.Combine(sourceDirectory, SourceObl));
         var next = HqrArchive.CountEntries(Path.Combine(sourceDirectory, SourceObl));
         var newBodies = new List<byte[]>();
-        int faceCount = 0, bodyCount = 0, decorsLeft = 0;
-        foreach (var (ti, faces) in roomFaces)
-            foreach (var chunk in Chunks(faces))
-            {
-                var lo = new Vector3(float.MaxValue); var hi = new Vector3(float.MinValue);
-                foreach (var f in chunk) foreach (var p in f.Quad) { lo = Vector3.Min(lo, p); hi = Vector3.Max(hi, p); }
-                // (the origin at the middle of the chunk, at its foot: every point within what a body holds)
-                var origin = new Vector3((lo.X + hi.X) / 2, (lo.Y + hi.Y) / 2, (lo.Z + hi.Z) / 2);
-                var pts = new List<Vector3>(); var bodyFaces = new List<Face>();
-                var shared = new Dictionary<Vector3, int>();
-                foreach (var (quad, colour, normal) in chunk)
-                {
-                    var ids = quad.Select(p => { if (!shared.TryGetValue(p, out var i)) { pts.Add(p - origin); shared[p] = i = pts.Count - 1; } return i; }).ToArray();
-                    // (wound so the plain cross product points the way it faces: outwards)
-                    var n = Vector3.Cross(quad[1] - quad[0], quad[2] - quad[0]);
-                    if (Vector3.Dot(n, normal) < 0) Array.Reverse(ids);
-                    bodyFaces.Add(new Face(ids, colour, Material: 0));
-                }
-                var body = next + newBodies.Count;
-                if (pts.Any(p => Math.Abs(p.X) > 32767 || Math.Abs(p.Y) > 32767 || Math.Abs(p.Z) > 32767))
-                    throw new InvalidDataException($"room {area.Tiles[ti].Scene}: a body of {chunk.Count} faces from {lo} to {hi} is bigger than a body holds");
-                newBodies.Add(RaceTrackPipes.Write(pts, bodyFaces, lit: false));
-                faceCount += chunk.Count; bodyCount++;
-                if (IslandDecors.Locate(island, origin.X, origin.Z) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { decorsLeft++; continue; }
-                var d = IslandDecors.Blank(body, at.X, (int)Math.Round(origin.Y), at.Z);
-                d.XMin = (int)Math.Floor(at.X + lo.X - origin.X); d.XMax = (int)Math.Ceiling(at.X + hi.X - origin.X);
-                d.ZMin = (int)Math.Floor(at.Z + lo.Z - origin.Z); d.ZMax = (int)Math.Ceiling(at.Z + hi.Z - origin.Z);
-                d.YMin = (int)Math.Floor(lo.Y); d.YMax = NoBoxTop;     // (its Y the middle of its points: the body is drawn round it)
-                at.Cube.Decors.Add(d);
-            }
+        var (bodyCount, faceCount, decorsLeft) = BrickBuilding.AddBodies(island, roomFaces, newBodies, next, ti => $"room {area.Tiles[ti].Scene}");
 
         // ---- the collision: the filled cells merged into boxes, and the roofs, each a decor with an empty body
         var empty = next + newBodies.Count;
         newBodies.Add(RaceTrackPipes.Write(new List<Vector3> { Vector3.Zero }, new List<Face>(), lit: false));
-        var boxes = Boxes(cells.Keys.ToHashSet())
+        var boxes = BrickBuilding.Boxes(cells.Keys.ToHashSet())
             .Select(b => (WX(b.X0), WY(b.Y0), WZ(b.Z0), WX(b.X1 + 1), WY(b.Y1 + 1), WZ(b.Z1 + 1))).Concat(roofBoxes).ToList();
-        var boxCount = 0;
-        foreach (var (bx0, by0, bz0, bx1, by1, bz1) in boxes)
-        {
-            double cx = (bx0 + bx1) / 2, cz = (bz0 + bz1) / 2;
-            if (IslandDecors.Locate(island, cx, cz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { decorsLeft++; continue; }
-            var d = IslandDecors.Blank(empty, at.X, (int)Math.Round(by0), at.Z);
-            d.XMin = (int)Math.Floor(at.X + bx0 - cx); d.XMax = (int)Math.Ceiling(at.X + bx1 - cx);
-            d.ZMin = (int)Math.Floor(at.Z + bz0 - cz); d.ZMax = (int)Math.Ceiling(at.Z + bz1 - cz);
-            d.YMin = (int)Math.Floor(by0); d.YMax = (int)Math.Ceiling(by1);
-            at.Cube.Decors.Add(d);
-            boxCount++;
-        }
+        var (boxCount, boxesLeft) = BrickBuilding.AddBoxes(island, empty, boxes);
+        decorsLeft += boxesLeft;
         foreach (var cube in island.Cubes.Values) cube.Info[IslandCube.InfoNbDecors] = cube.Decors.Count;
 
         // ---- written
         Directory.CreateDirectory(outDirectory);
-        island.Save(Path.Combine(outDirectory, IleFile));
+        // (a build's own file replaced: no .bak of it left beside it)
+        var ilePath = Path.Combine(outDirectory, IleFile);
+        if (File.Exists(ilePath)) File.Delete(ilePath);
+        island.Save(ilePath);
         foreach (var b in newBodies) oblBytes = HqrWriter.AppendEntry(oblBytes, HqrWriter.StoredEntry(b));
         File.WriteAllBytes(Path.Combine(outDirectory, OblFile), oblBytes);
         log.Add($"{IleFile}: {cubesX} x {cubesZ} cubes from cube ({FirstCube}, {FirstCube}), a paved plateau at {Floor} round the palace, the sea round it; " +
@@ -235,133 +151,18 @@ internal static class PalaceIsland
         return new Built(area.Tiles.Count, cells.Count, bodyCount, faceCount, boxCount, roofs, (FirstCube, FirstCube), (cubesX, cubesZ), string.Join("\n", log));
     }
 
-    private static readonly Dictionary<byte[], bool> SixBit = new(ReferenceEqualityComparer.Instance);
     // Tools > LBA2: Palace island -- into the game folder (its own new files: no backups), from the folder's own palace scenes and Otringal.
     public static bool IsInstalled(string gameDirectory) => File.Exists(Path.Combine(gameDirectory, IleFile));
     public static List<string> Add(string gameDirectory) => new() { Build(gameDirectory, gameDirectory).Log };
     public static List<string> Remove(string gameDirectory)
     {
         var log = new List<string>();
-        foreach (var f in new[] { IleFile, OblFile })
+        foreach (var f in new[] { IleFile, OblFile, IleFile + ".bak" })
         {
             var path = Path.Combine(gameDirectory, f);
             if (File.Exists(path)) { File.Delete(path); log.Add($"{f} deleted"); }
         }
         return log;
-    }
-
-    // A colour of a 256-entry palette (6-bit, as the islands' are, or 8-bit), as the exporter reads them (Export/Palettes).
-    private static (byte R, byte G, byte B) Colour(byte[] palette, int index)
-    {
-        var i = index * 3;
-        if (i + 2 >= palette.Length) return (200, 200, 200);
-        if (!SixBit.TryGetValue(palette, out var six)) SixBit[palette] = six = palette.Take(Math.Min(768, palette.Length)).All(v => v < 64);
-        byte S(byte v) => (byte)Math.Min(255, six ? v * 4 : v);
-        return (S(palette[i]), S(palette[i + 1]), S(palette[i + 2]));
-    }
-
-    // The mean colour of a brick's drawn pixels (LBA_BKG's run-length pictures: width, lines, hot spot, then per line its runs), as the
-    // exporter's blocky maps colour their boxes (Export/Meshers GridMesher).
-    private static (float R, float G, float B) BrickAverage(byte[]? data, byte[] palette)
-    {
-        if (data is null || data.Length < 4) return (150, 150, 150);
-        double r = 0, g = 0, b = 0; var n = 0;
-        var src = 4;
-        int lines = data[1];
-        for (var line = 0; line < lines && src < data.Length; line++)
-        {
-            int runs = data[src++];
-            for (var run = 0; run < runs && src < data.Length; run++)
-            {
-                var control = data[src++];
-                var count = (control & 0x3F) + 1;
-                switch (control >> 6)
-                {
-                    case 0: break;
-                    case 1:
-                        for (var k = 0; k < count && src < data.Length; k++) { var c = Colour(palette, data[src++]); r += c.R; g += c.G; b += c.B; n++; }
-                        break;
-                    default:
-                        if (src >= data.Length) break;
-                        var colour = Colour(palette, data[src++]);
-                        r += colour.R * count; g += colour.G * count; b += colour.B * count; n += count;
-                        break;
-                }
-            }
-        }
-        return n == 0 ? (150, 150, 150) : ((float)(r / n), (float)(g / n), (float)(b / n));
-    }
-
-    // A room's faces in bodies the engine takes: as many as fit under MaxFaces polygons and MaxPoints points (the corners they share counted
-    // once), in the order they come.
-    private static IEnumerable<List<(Vector3[] Quad, int Colour, Vector3 Normal)>> Chunks(List<(Vector3[] Quad, int Colour, Vector3 Normal)> faces)
-    {
-        var chunk = new List<(Vector3[] Quad, int Colour, Vector3 Normal)>();
-        var points = new HashSet<Vector3>();
-        var lo = new Vector3(float.MaxValue); var hi = new Vector3(float.MinValue);
-        // (in order across the room: a body's faces near one another)
-        foreach (var f in faces.OrderBy(f => Math.Floor(f.Quad[0].Z / 20000)).ThenBy(f => f.Quad[0].X).ThenBy(f => f.Quad[0].Z))
-        {
-            var fresh = f.Quad.Count(p => !points.Contains(p));
-            var flo = f.Quad.Aggregate(lo, Vector3.Min); var fhi = f.Quad.Aggregate(hi, Vector3.Max);
-            var span = fhi - flo;
-            if (chunk.Count > 0 && (chunk.Count + 1 > MaxFaces || points.Count + fresh > MaxPoints || span.X > MaxSpan || span.Z > MaxSpan || span.Y > MaxSpan))
-            {
-                yield return chunk;
-                chunk = new(); points.Clear();
-                lo = new Vector3(float.MaxValue); hi = new Vector3(float.MinValue);
-                flo = f.Quad.Aggregate(lo, Vector3.Min); fhi = f.Quad.Aggregate(hi, Vector3.Max);
-            }
-            chunk.Add(f);
-            lo = flo; hi = fhi;
-            foreach (var p in f.Quad) points.Add(p);
-        }
-        if (chunk.Count > 0) yield return chunk;
-    }
-
-    // A plane's faces merged into rectangles of one colour (u0, v0, u1, v1 inclusive): grown along u, then along v as far as the whole row
-    // matches.
-    private static IEnumerable<(int U0, int V0, int U1, int V1, int Colour)> Rectangles(Dictionary<(int U, int V), int> plane)
-    {
-        var done = new HashSet<(int, int)>();
-        foreach (var (u, v) in plane.Keys.OrderBy(k => k.V).ThenBy(k => k.U))
-        {
-            if (done.Contains((u, v))) continue;
-            var colour = plane[(u, v)];
-            var u1 = u;
-            while (u1 - u + 1 < MaxRun && plane.TryGetValue((u1 + 1, v), out var c) && c == colour && !done.Contains((u1 + 1, v))) u1++;
-            var v1 = v;
-            while (v1 - v + 1 < MaxRun)
-            {
-                var row = v1 + 1; var ok = true;
-                for (var k = u; k <= u1 && ok; k++) ok = plane.TryGetValue((k, row), out var c) && c == colour && !done.Contains((k, row));
-                if (!ok) break;
-                v1 = row;
-            }
-            for (var j = v; j <= v1; j++) for (var k = u; k <= u1; k++) done.Add((k, j));
-            yield return (u, v, u1, v1, colour);
-        }
-    }
-
-    // The filled cells merged into boxes (x0, y0, z0, x1, y1, z1 inclusive): grown along x, then z, then y while every cell is filled.
-    private static List<(int X0, int Y0, int Z0, int X1, int Y1, int Z1)> Boxes(HashSet<(int X, int Y, int Z)> filled)
-    {
-        var done = new HashSet<(int, int, int)>();
-        var result = new List<(int, int, int, int, int, int)>();
-        bool Free((int, int, int) c) => filled.Contains(c) && !done.Contains(c);
-        foreach (var (x, y, z) in filled.OrderBy(c => c.Y).ThenBy(c => c.Z).ThenBy(c => c.X))
-        {
-            if (done.Contains((x, y, z))) continue;
-            var x1 = x;
-            while (Free((x1 + 1, y, z))) x1++;
-            var z1 = z;
-            while (Enumerable.Range(x, x1 - x + 1).All(k => Free((k, y, z1 + 1)))) z1++;
-            var y1 = y;
-            while (Enumerable.Range(x, x1 - x + 1).All(k => Enumerable.Range(z, z1 - z + 1).All(j => Free((k, y1 + 1, j))))) y1++;
-            for (var a = x; a <= x1; a++) for (var b = y; b <= y1; b++) for (var c = z; c <= z1; c++) done.Add((a, b, c));
-            result.Add((x, y, z, x1, y1, z1));
-        }
-        return result;
     }
 
     // The ground: every cell painted with Otringal's courtyard paving, its cubes' settings Otringal's palace cube's; flat at the floor round
@@ -385,20 +186,8 @@ internal static class PalaceIsland
                     cube.Intensity[vz * IslandCube.Vertices + vx] = 10;
                 }
             if (sample is null) continue;
-            var region = new CubeCells(cx, cz);
+            var region = new BrickBuilding.CubeCells(cx, cz);
             IslandGround.Paint(island, region, sample, PolygonFields.Texture | PolygonFields.GameCode);
         }
-    }
-
-    // A cube's cells, as a region to paint.
-    private sealed class CubeCells : IslandRegion
-    {
-        private readonly int cx, cz;
-        public CubeCells(int cx, int cz) { this.cx = cx; this.cz = cz; }
-        public override IEnumerable<(int Gx, int Gz, double Weight)> Vertices(IslandFile island)
-        {
-            for (var z = 0; z < 64; z++) for (var x = 0; x < 64; x++) yield return (cx * 64 + x, cz * 64 + z, 1.0);
-        }
-        public override (double Gx, double Gz) Center => (cx * 64 + 32, cz * 64 + 32);
     }
 }
