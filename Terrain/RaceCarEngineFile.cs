@@ -126,8 +126,8 @@ internal static class RaceCarEngineFile
             foreach (var pg in track.Penguins ?? new()) text.Append($"penguin={pg[0]} {pg[1]}\n");
             foreach (var oil in track.Oil ?? new()) text.Append($"oil={oil[0]} {oil[1]}\n");
             foreach (var fake in track.Fakes ?? new()) text.Append($"fake={fake[0]} {fake[1]}\n");
-            // (the laser cars' bolts)
-            if (track.LaserModels is [var green, var red]) text.Append($"laser_models={green} {red}\n");
+            // (the laser cars' bolts: the game's own, whatever a track built before them noted -- RaceTrackLasers)
+            text.Append($"laser_models={RaceTrackLasers.Green} {RaceTrackLasers.Red}\n");
             // (the oil's drum, which the item box shows)
             if (track.OilIcon is { } icon) text.Append($"oil_icon={icon}\n");
             // (the super jet-pack the car turns into while it drives it)

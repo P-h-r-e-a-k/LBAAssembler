@@ -571,6 +571,8 @@ internal static class RaceTrackService
         if (!session.Oil)
         {
             log.Add(RaceTrackOil.Install(gameDirectory));
+            // (and the power-ups' mushroom made bigger, beside it in the mushroom's entity)
+            log.Add(RaceTrackOil.InstallBigMushroom(gameDirectory));
             // (and its drum in the item box)
             var (icon, iconLog) = RaceTrackOil.InstallIcon(gameDirectory);
             log.Add(iconLog);

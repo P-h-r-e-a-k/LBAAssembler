@@ -439,16 +439,22 @@ static T_RACE_SLICK s_slicks[RACE_MAX_SLICKS];
 #define RACE_MAX_SHOTS 16
 #define RACE_SHOT_REACH 950                // a car this near a ball is hit
 #define RACE_SHOT_FORCE 20
-#define RACE_SHOT_SCALE 22                 // the ball's sprite (bigger: smaller, about 700 across)
+// (the ball's sprite as the game draws Twinsen's magic ball (ThrowExtra: the sprites' own size, -1) -- until 2026-10-08 three times
+// that, 22, with a trail of sparkles: "It looks like we're using a different model for the magic ball to the in-game one, let's switch
+// to Twinsen's normal ball")
+#define RACE_SHOT_SCALE -1
 #define RACE_SHOT_RISE 450                 // over the road
-#define RACE_DART_SPEED 11000.0            // the yellow: straight ahead, this fast, ...
-#define RACE_DART_RANGE (14 * 512.0)       // ... this far
-#define RACE_ROLL_SPEED 9500.0             // the green: along the track, this fast (twice a car's), ...
+// (the speeds since 2026-10-08, the user: "it moves too slowly to catch up with the car in front ... especially for the red and fire
+// balls so they home in on their target" -- 11,000, 9,500 and 10,500 before; a car's top speed is about 4,800, the super jet-pack's
+// twice that)
+#define RACE_DART_SPEED 15000.0            // the yellow: straight ahead, this fast, ...
+#define RACE_DART_RANGE (20 * 512.0)       // ... this far
+#define RACE_ROLL_SPEED 12500.0            // the green: along the track, this fast, ...
 #define RACE_ROLL_MS 6000                  // ... this long, ...
 #define RACE_ROLL_SIDE (2.6 * 512)         // ... from side to side of the road ...
 #define RACE_ROLL_ACROSS 2600.0            // ... this fast
-#define RACE_HOME_SPEED 10500.0            // the red and the fire: along the track after its car, this fast ...
-#define RACE_HOME_DIRECT 3500.0            // ... straight at it once this near
+#define RACE_HOME_SPEED 16000.0            // the red and the fire: along the track after its car, this fast ...
+#define RACE_HOME_DIRECT 5000.0            // ... straight at it once this near
 #define RACE_HOME_MS 15000                 // ... and gone after this long
 enum { SHOT_YELLOW, SHOT_GREEN, SHOT_RED, SHOT_FIRE, SHOT_LASER_GREEN, SHOT_LASER_RED };
 // Twinsen's laser cars (drive_laser=1 green, 2 red): his own car, its gun firing laser bolts instead of its magic balls -- the bolts' models
@@ -3987,6 +3993,7 @@ static void Shots(S32 now, int driving) {
                     if (laser) InitHitExtraPof(lx, (S32)sh->Y, lz, RACE_SHOT_FORCE); else MagicBallExplo(lx, (S32)sh->Y, lz, 0);
                 }
                 CarStruck(who, now, names[sh->Kind], CarName(sh->Owner));
+                Log_Info("[racemod] (the %s hit after %.1f s)", names[sh->Kind], age / 1000.0);
                 done = 1;
             }
         // shown: its sprite in this scene, moved; a trail behind it
@@ -4002,10 +4009,6 @@ static void Shots(S32 now, int driving) {
             if (sh->Extra >= 0) {
                 ListExtra[sh->Extra].PosX = lx; ListExtra[sh->Extra].PosY = (S32)sh->Y; ListExtra[sh->Extra].PosZ = lz;
                 if (laser) ListExtra[sh->Extra].Beta = (S16)((S32)(atan2(sh->Hx, sh->Hz) * 4096 / (2 * 3.14159265358979)) & 4095);
-            }
-            if (!laser && now - sh->Trail >= 60) {
-                sh->Trail = now;
-                InitExtraAnimSprite(255, lx, (S32)sh->Y, lz, 15, 17, 360, RACE_SHOT_SCALE + 6, 1, 0);
             }
         }
         if (done) sh->On = 0;

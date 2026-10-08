@@ -5257,8 +5257,9 @@ S32 AffOneObject(T_SORT *pt) {
         if (num & 32768) /// effet spécial
         {
             AffSpecial(numobj);
-        } else if ((ptrextra->Scale & EXTRA_SCALE_TURNED) AND DrawTurnedExtra(ptrextra, num)) {
-            // (drawn laid on its side: DrawTurnedExtra)
+        } else if (ptrextra->Scale > 0 AND (ptrextra->Scale & EXTRA_SCALE_TURNED) AND DrawTurnedExtra(ptrextra, num)) {
+            // (drawn laid on its side: DrawTurnedExtra -- a scale of its own with the flag; the game's -1, its sprites' own size, has every
+            // bit set, and every sprite thrown at it -- Twinsen's magic ball among them -- was drawn laid on its side, 2026-10-07..08)
         } else // sprite
         {
             SpriteX = Xp + PtrZvExtraRaw[num * 8 + 0]; // Add Hot Spot

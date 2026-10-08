@@ -130,6 +130,25 @@ internal static class RaceTrackOil
         return (index, $"the oil's drum for the item box: OBJFIX.HQR entry {index}");
     }
 
+    // The power-ups' mushroom made bigger (the user, 2026-10-08: "The mushroom pick up is far too small to see, let's make this bigger"):
+    // the game's small brown mushroom, 246 across and 307 tall -- a quarter of a car's length -- MushroomScale times its size, as the
+    // mushroom's entity's body BigMushroom; the lap's mushrooms and the fakes are it (RaceTrackScenes).
+    public const int BigMushroom = 2;
+    public const double MushroomScale = 3;
+
+    public static string InstallBigMushroom(string gameDirectory)
+    {
+        var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
+        var clipped = 0;
+        var big = IslandScaler.ScaledBody(HqrArchive.Open(bodyPath).Read(MushroomBody), MushroomScale, ref clipped);
+        var index = HqrArchive.CountEntries(bodyPath);
+        File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(big)));
+        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
+        var table = RaceTrackBaldinoCar.WithBody(HqrArchive.Open(ressPath).Read(44), Entity, BigMushroom, index);
+        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        return $"the power-ups' mushroom {MushroomScale} times its size: BODY.HQR entry {index}, the mushroom's entity ({Entity}) body {BigMushroom}";
+    }
+
     // Into the game folder: the slick appended to BODY.HQR as the mushroom's entity's body 1 (the mushroom's own header: a fixed object).
     // Returns a line for the log.
     public static string Install(string gameDirectory)
