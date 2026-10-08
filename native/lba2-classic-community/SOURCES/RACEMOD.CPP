@@ -390,7 +390,11 @@ static int s_penguinWalk = 1;              // penguin_mode=walk (1) or fuse (0)
 // (Q selects the other); when he last took a mushroom's item (a car takes one from a row: the mushrooms beside it give way, empty); and
 // Shift and Q last frame
 #define RACE_ITEM_SLOTS 2
-#define RACE_ROLL_MS 1500                  // the item box's roulette
+// the item box's roulette: this long, this many items going by, fast at first and slowing to the one drawn (the user, 2026-10-08: "let's
+// have this go through them a lot faster so it only takes 4-5 seconds to decide on a powerup" -- 20 items; and RACE_ROLL_MS, 1,500,
+// was the green ball's 6,000 from its define on, that name's second: six seconds)
+#define RACE_ITEM_ROLL_MS 4500
+#define RACE_ITEM_ROLL_STEPS 45
 #define RACE_ROW_MS 700                    // one item a row
 static int s_item[RACE_ITEM_SLOTS] = {-1, -1};
 static S32 s_itemAt[RACE_ITEM_SLOTS];
@@ -439,22 +443,24 @@ static T_RACE_SLICK s_slicks[RACE_MAX_SLICKS];
 #define RACE_MAX_SHOTS 16
 #define RACE_SHOT_REACH 950                // a car this near a ball is hit
 #define RACE_SHOT_FORCE 20
-// (the ball's sprite as the game draws Twinsen's magic ball (ThrowExtra: the sprites' own size, -1) -- until 2026-10-08 three times
-// that, 22, with a trail of sparkles: "It looks like we're using a different model for the magic ball to the in-game one, let's switch
-// to Twinsen's normal ball")
-#define RACE_SHOT_SCALE -1
+// (the ball's sprite: Twinsen's magic ball, without a trail -- "It looks like we're using a different model for the magic ball to the
+// in-game one, let's switch to Twinsen's normal ball" -- at 16, four and a half times the game's own size (70: ThrowExtra's -1), since
+// "The magic ball powerup when thrown seems very small, let's make this a lot bigger and faster"; 22 with a trail until 2026-10-08, then
+// -1 for a while)
+#define RACE_SHOT_SCALE 16
 #define RACE_SHOT_RISE 450                 // over the road
 // (the speeds since 2026-10-08, the user: "it moves too slowly to catch up with the car in front ... especially for the red and fire
 // balls so they home in on their target" -- 11,000, 9,500 and 10,500 before; a car's top speed is about 4,800, the super jet-pack's
 // twice that)
-#define RACE_DART_SPEED 15000.0            // the yellow: straight ahead, this fast, ...
-#define RACE_DART_RANGE (20 * 512.0)       // ... this far
-#define RACE_ROLL_SPEED 12500.0            // the green: along the track, this fast, ...
-#define RACE_ROLL_MS 6000                  // ... this long, ...
+// (and faster again the same evening: 15,000, 20 cells, 12,500, 16,000 and 5,000 for a while)
+#define RACE_DART_SPEED 22000.0            // the yellow: straight ahead, this fast, ...
+#define RACE_DART_RANGE (28 * 512.0)       // ... this far
+#define RACE_ROLL_SPEED 18000.0            // the green: along the track, this fast, ...
+#define RACE_GREEN_MS 6000                 // ... this long, ...
 #define RACE_ROLL_SIDE (2.6 * 512)         // ... from side to side of the road ...
 #define RACE_ROLL_ACROSS 2600.0            // ... this fast
-#define RACE_HOME_SPEED 16000.0            // the red and the fire: along the track after its car, this fast ...
-#define RACE_HOME_DIRECT 5000.0            // ... straight at it once this near
+#define RACE_HOME_SPEED 24000.0            // the red and the fire: along the track after its car, this fast ...
+#define RACE_HOME_DIRECT 6000.0            // ... straight at it once this near
 #define RACE_HOME_MS 15000                 // ... and gone after this long
 enum { SHOT_YELLOW, SHOT_GREEN, SHOT_RED, SHOT_FIRE, SHOT_LASER_GREEN, SHOT_LASER_RED };
 // Twinsen's laser cars (drive_laser=1 green, 2 red): his own car, its gun firing laser bolts instead of its magic balls -- the bolts' models
@@ -3934,6 +3940,7 @@ static void Shots(S32 now, int driving) {
         T_RACE_SHOT *sh = &s_shots[i];
         if (!sh->On) continue;
         const S32 age = now - sh->T0;
+        const double fromX = sh->X, fromZ = sh->Z;      // (where it was: a car hit anywhere along its way since -- fast, it can pass one in a frame)
         int done = 0;
         const int laser = sh->Kind == SHOT_LASER_GREEN || sh->Kind == SHOT_LASER_RED;
         if (sh->Kind == SHOT_YELLOW || (sh->Kind == SHOT_RED && sh->Target == -2) || laser || !o) {
@@ -3951,7 +3958,7 @@ static void Shots(S32 now, int driving) {
             double y, hx, hz;
             GuideAt(o, sh->S, sh->Side, &sh->X, &y, &sh->Z, &hx, &hz);
             sh->Y = y + 250 + 650 * fabs(sin(age * 3.14159265358979 / 450.0));
-            if (age >= RACE_ROLL_MS) done = 1;
+            if (age >= RACE_GREEN_MS) done = 1;
         } else {
             // after its car: along the track (forwards or back, whichever is nearer round the lap), straight at it once near
             double tx, ty, tz;
@@ -3985,7 +3992,11 @@ static void Shots(S32 now, int driving) {
                 if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes || now < s_opp[who].HitUntil)) continue;
                 double x, y, z;
                 if (!CarAt(who, &x, &y, &z)) continue;
-                const double dx = x - sh->X, dz = z - sh->Z;
+                const double wx = sh->X - fromX, wz = sh->Z - fromZ, w2 = wx * wx + wz * wz;
+                double along = w2 > 0 ? ((x - fromX) * wx + (z - fromZ) * wz) / w2 : 1;
+                if (along < 0) along = 0;
+                if (along > 1) along = 1;
+                const double dx = x - (fromX + wx * along), dz = z - (fromZ + wz * along);
                 const double reach = laser ? RACE_LASER_REACH : RACE_SHOT_REACH;
                 if (dx * dx + dz * dz > reach * reach || fabs(y + RACE_SHOT_RISE - sh->Y) > 1400) continue;
                 const S32 lx = (S32)(sh->X - cx), lz = (S32)(sh->Z - cz);
@@ -4128,7 +4139,7 @@ static void PowerUps(S32 now, int driving) {
         s_takeAt = now;
         const double back = BackShare(-1);
         s_item[slot] = RandomPowerUp(back);
-        s_itemAt[slot] = now + RACE_ROLL_MS;
+        s_itemAt[slot] = now + RACE_ITEM_ROLL_MS;
         if (s_item[s_sel] < 0 || s_sel == slot) s_sel = slot;
         Log_Info("[racemod] Twinsen takes %s (slot %d; %.2f of the way back)", s_puName[s_item[slot]], slot + 1, back);
     }
@@ -5284,8 +5295,8 @@ static void RestoreView(const T_RACE_VIEW *v) {
 // The item box (top left): a slot's item, or the roulette going by -- the items turning over, slowing to the one drawn.
 static int ShownItem(int k, S32 now) {
     if (s_item[k] < 0 || now >= s_itemAt[k]) return s_item[k];
-    const double t = 1.0 - (double)(s_itemAt[k] - now) / RACE_ROLL_MS, p = 20.0 * (1 - (1 - t) * (1 - t));
-    return ((s_item[k] + (int)floor(p) - 20) % PU_COUNT + 3 * PU_COUNT) % PU_COUNT;
+    const double t = 1.0 - (double)(s_itemAt[k] - now) / RACE_ITEM_ROLL_MS, p = RACE_ITEM_ROLL_STEPS * (1 - (1 - t) * (1 - t));
+    return ((s_item[k] + (int)floor(p) - RACE_ITEM_ROLL_STEPS) % PU_COUNT + 6 * PU_COUNT) % PU_COUNT;
 }
 
 #define RACE_GOLD 244                      // the palette's gold, round the selected slot
@@ -5316,7 +5327,20 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int selected, S32 now) {
         SetLightVector(OBJ_ALPHA_LIGHT, OBJ_BETA_LIGHT, 0);
         const S32 lf = 200 * size / 60;
         SetProjection(x0 + size / 2, y0 + size / 2, 128, lf, lf);
-        SetFollowCamera(0, 0, 0, 60 * MUL_ANGLE, 0, 0, 16000);
+        // (an object much smaller than the inventory's, round about 4,000 tall -- the fake mushroom, the lap's own, a few hundred -- drawn
+        // nearer, round its middle, to fill the box as they do: the user, 2026-10-08, of the item box, "The mushroom pick up is far too
+        // small to see". Its box: the body header's x, y and z extents, 8-31)
+        S32 lookY = 0, lookFrom = 16000;
+        {
+            S32 box[6];
+            memcpy(box, shape + 8, sizeof(box));
+            S32 half = box[1] - box[0];
+            if (box[3] - box[2] > half) half = box[3] - box[2];
+            if (box[5] - box[4] > half) half = box[5] - box[4];
+            half /= 2;
+            if (half > 0 && half < 1200) { lookY = (box[2] + box[3]) / 2; lookFrom = 16000 * half / 1900; }
+        }
+        SetFollowCamera(0, lookY, 0, 60 * MUL_ANGLE, 0, 0, lookFrom);
         // (drawn without the outside's fog -- 16,000 away it darkened the meca-penguin to a shadow -- and without its depth buffer,
         // which the scene's ground nearer than that would hide it behind; then the outside's way of drawing back)
         // ... and in the colours of things near: outside, the fog is the colour table each object is drawn with (OBJECT.CPP: SetCLUT,

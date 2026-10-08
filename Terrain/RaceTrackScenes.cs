@@ -556,7 +556,7 @@ internal static class RaceTrackScenes
                         // other file with it; Citadel Island's scenes carry both weathers' tracks -- and a mushroom standing on a road that
                         // isn't there hung in the air)
                         var mushroom = mushroomTemplate.Clone();
-                        mushroom.Body = RaceTrackOil.BigMushroom;      // (the game's mushroom three times its size: RaceTrackOil)
+                        mushroom.Body = RaceTrackOil.BigMushroom;      // (the game's mushroom half again its size: RaceTrackOil)
                         mushroom.Flags = OpponentFlags; mushroom.Move = 0; mushroom.Life = new byte[] { 0 }; mushroom.Track = new byte[] { 0 };
                         mushroom.X = (int)Math.Round((x - model.CubeX * 64) * 512); mushroom.Z = (int)Math.Round((z - model.CubeY * 64) * 512);
                         mushroom.Y = -20000; mushroom.Beta = 0;

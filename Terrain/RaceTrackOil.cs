@@ -130,11 +130,13 @@ internal static class RaceTrackOil
         return (index, $"the oil's drum for the item box: OBJFIX.HQR entry {index}");
     }
 
-    // The power-ups' mushroom made bigger (the user, 2026-10-08: "The mushroom pick up is far too small to see, let's make this bigger"):
-    // the game's small brown mushroom, 246 across and 307 tall -- a quarter of a car's length -- MushroomScale times its size, as the
-    // mushroom's entity's body BigMushroom; the lap's mushrooms and the fakes are it (RaceTrackScenes).
+    // The power-ups' mushroom made bigger: the game's small brown mushroom, 246 across and 307 tall -- a quarter of a car's length --
+    // MushroomScale times its size, as the mushroom's entity's body BigMushroom; the lap's mushrooms and the fakes are it
+    // (RaceTrackScenes). (The user, 2026-10-08: "The mushroom pick up is far too small to see" -- three times its size for a while, but
+    // that was of the item box, whose fake mushroom RACEMOD.CPP now draws nearer: "make them smaller again, but a little bigger than they
+    // were but not as much".)
     public const int BigMushroom = 2;
-    public const double MushroomScale = 3;
+    public const double MushroomScale = 1.5;
 
     public static string InstallBigMushroom(string gameDirectory)
     {
