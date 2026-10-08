@@ -1482,6 +1482,9 @@ void HitObj(U8 numhitter, U8 num, S32 hitforce, S32 beta) {
 
     ptrobjt = &ListObjet[num];
 
+    // a race-track mod's opponent hit by Twinsen (his magic ball from the car): stopped as the race's own balls stop it (RACEMOD.CPP)
+    { extern S32 RaceMod_OpponentStruck(U8 num, U8 hitter); if (RaceMod_OpponentStruck(num, numhitter)) return; }
+
     if (ptrobjt->Flags & NO_CHOC)
         return;
     if (ptrobjt->LifePoint <= 0)

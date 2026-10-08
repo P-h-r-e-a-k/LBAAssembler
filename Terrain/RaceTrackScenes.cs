@@ -17,9 +17,11 @@ internal static class RaceTrackScenes
     // x, y, z, turn] in its cube's world units. Twin: the same for the track of the island's other-weather file, when it has one of its own
     // (the scenes carry both).
     // Mushrooms: the small brown mushrooms along the lap with the power-ups in them, Penguins: a nitro penguin in each scene, and Oil: a few
-    // oil slicks in each (RaceTrackOil), out of sight until dropped, each [scene, actor] (RACEMOD.CPP's power-ups).
+    // oil slicks in each (RaceTrackOil), out of sight until dropped, each [scene, actor] (RACEMOD.CPP's power-ups); Fakes: a few copies of the
+    // mushroom in each, the fake mushrooms a car drops (since 2026-10-08).
     public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, List<(RaceDriver Driver, Dictionary<int, int> Actors)> Drivers, int StartScene,
-        List<int[]> Grid, List<int[]> Pits, Result? Twin = null, List<int[]>? Mushrooms = null, List<int[]>? Penguins = null, List<int[]>? Oil = null);
+        List<int[]> Grid, List<int[]> Pits, Result? Twin = null, List<int[]>? Mushrooms = null, List<int[]>? Penguins = null, List<int[]>? Oil = null,
+        List<int[]>? Fakes = null);
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
     //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
@@ -242,9 +244,9 @@ internal static class RaceTrackScenes
         public List<(int X, int Z, int Beta, int Y)?> CarAt = new();
         // the power-ups: where the mushrooms go along the lap (island cells, the road's height), and the scenes' copies of them and of the penguin
         public List<(double X, double Z, double Y)> MushroomSpots = new();
-        public List<int[]> Mushrooms = new(), Penguins = new(), Oil = new();
+        public List<int[]> Mushrooms = new(), Penguins = new(), Oil = new(), Fakes = new();
         public Result Result(List<string> log, int changed, int removed, Result? twin = null) =>
-            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil);
+            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes);
     }
 
     // Edits the outside scenes of the island as the options say, from what the build of the island found (start line, jump, road). With
@@ -547,7 +549,7 @@ internal static class RaceTrackScenes
                         if ((int)Math.Floor(x / 64) != model.CubeX || (int)Math.Floor(z / 64) != model.CubeY) continue;
                         // (the scene's actors run out at the engine's hundred: the penguins and the slicks keep their room, and a row
                         // that doesn't fit is shorter)
-                        if (model.Actors.Count + PenguinsPerScene + OilPerScene >= SceneValidator.MaxObjects) { mushroomsLeftOut++; continue; }
+                        if (model.Actors.Count + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { mushroomsLeftOut++; continue; }
                         // (out of sight, as the penguins and the slicks are, its height on the road kept with it: the race-track mode stands
                         // it there. A scene can be drawn with another island file than its track's -- Celebration Island's 95 is the statue's
                         // track's, and before the statue rises the game draws it without the raised road, as the editor draws the island's
@@ -575,6 +577,14 @@ internal static class RaceTrackScenes
                         oil.Flags = OpponentFlags; oil.Move = 0; oil.Life = new byte[] { 0 }; oil.Track = new byte[] { 0 };
                         oil.X = IslandFile.CubeSize / 2; oil.Z = IslandFile.CubeSize / 2; oil.Y = -20000; oil.Beta = 0;
                         t.Oil.Add(new[] { scene, SceneOps.AddActor(model, oil) });
+                    }
+                    // the fake mushrooms: copies of the mushroom itself -- a fake looks just as a real one does
+                    for (var k = 0; k < FakesPerScene; k++)
+                    {
+                        var fake = mushroomTemplate.Clone();
+                        fake.Flags = OpponentFlags; fake.Move = 0; fake.Life = new byte[] { 0 }; fake.Track = new byte[] { 0 };
+                        fake.X = IslandFile.CubeSize / 2; fake.Z = IslandFile.CubeSize / 2; fake.Y = -20000; fake.Beta = 0;
+                        t.Fakes.Add(new[] { scene, SceneOps.AddActor(model, fake) });
                     }
                 }
             // (an island with a track in each weather: each jump only in its own file's -- the scenes are both's, and Citadel Island's
@@ -649,7 +659,7 @@ internal static class RaceTrackScenes
     // 14, actor 5: entity 46).
     public const int MushroomScene = 45, MushroomActor = 7, PenguinScene = 14, PenguinActor = 5;
     // (the oil slicks one scene can show at once: RACEMOD.CPP keeps six on the whole lap)
-    private const int OilPerScene = 5, PenguinsPerScene = 3;   // (oil 3 until 2026-10-07: the refinery's drips lie in slicks too)
+    private const int OilPerScene = 5, PenguinsPerScene = 3, FakesPerScene = 3;   // (oil 3 until 2026-10-07: the refinery's drips lie in slicks too)
     private const double MushroomSpacing = 40, MushroomFirst = 30, MushroomClear = 14;
     // (the gap is more than the engine's reach for taking one, RACEMOD.CPP RACE_MUSHROOM_REACH: 2 cells; a car down the middle of one takes
     // only that one)

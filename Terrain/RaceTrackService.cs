@@ -101,7 +101,10 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Shuttles = null,
         // LavaBalls: the lava's balls of fire (RaceTrackPlan.LavaBalls), each [x, y, z of the source (island units), the raised road's first
         // and last point of the stretch they rain on, every (ms), phase (ms)] (RACEMOD.CPP lavaball=), since 2026-10-08
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? LavaBalls = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? LavaBalls = null,
+        // Fakes: the scenes' copies of the mushroom that show the fake mushrooms cars drop, each [scene, actor] (RACEMOD.CPP fake=), since
+        // 2026-10-08
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Fakes = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -677,7 +680,7 @@ internal static class RaceTrackService
                 : null,
             ArcJumps: raised && report.ArcRaised.Count > 0 ? report.ArcRaised.ToList() : null, Drivers: drivers.Count > 0 ? drivers : null,
             Mushrooms: scenes.Mushrooms is { Count: > 0 } mushrooms ? mushrooms : null, Penguins: scenes.Penguins is { Count: > 0 } penguins ? penguins : null,
-            Oil: scenes.Oil is { Count: > 0 } oil ? oil : null,
+            Oil: scenes.Oil is { Count: > 0 } oil ? oil : null, Fakes: scenes.Fakes is { Count: > 0 } fakes ? fakes : null,
             Steam: report.Steam.Count > 0 ? report.Steam.ToList() : null, Drips: report.Drips.Count > 0 ? report.Drips.ToList() : null,
             Jets: report.Jets.Count > 0 ? report.Jets.ToList() : null,
             Tunnels: raised && report.Tunnels.Count > 0

@@ -378,6 +378,9 @@ void MoveBuggy(T_OBJET *ptrobj) {
     timerhr = TimerRefHR;
     deltatimer = timerhr - ptb->LastTimer;
 
+    // (a race-track mod's car fires as it drives: the throw doesn't stop it, nor take its steering for aiming -- RACEMOD.CPP; the user,
+    // 2026-10-08: "Currently Twinsen's car can shoot small balls but only when he's stationary")
+    const S32 raceFires = RaceMod_Active();
     if ((Input & I_THROW)
             AND(PtrComportement->Flags & CF_WEAPON)) {
         // est-on en mage ?
@@ -390,7 +393,7 @@ void MoveBuggy(T_OBJET *ptrobj) {
         InitAnim(GEN_ANIM_LANCE, ANIM_REPEAT, NUM_PERSO);
 
         /* control direction pendant visée */
-        if (!(ptrobj->WorkFlags & ANIM_MASTER_ROT)) {
+        if (!(ptrobj->WorkFlags & ANIM_MASTER_ROT) AND !raceFires) {
             ptb3d->Beta += GetDeltaMove(&ptrobj->BoundAngle.Move);
             ptb3d->Beta &= 4095;
 
@@ -448,7 +451,7 @@ void MoveBuggy(T_OBJET *ptrobj) {
         // check speed command
         if (RaceMod_Active()) // a race-track mod's car (RACEMOD.CPP)
         {
-            RaceSpeed(ptb, deltatimer, flagattack);
+            RaceSpeed(ptb, deltatimer, flagattack AND !raceFires);
             RaceMod_Skid(&ptb3d->Beta, &ptb->Speed);
         } else if ((Input & I_UP) // j'accelere
                    AND !flagattack) {
@@ -503,7 +506,7 @@ void MoveBuggy(T_OBJET *ptrobj) {
 
     // check dir
 
-    if (!flagattack) {
+    if (!flagattack OR raceFires) {
         if (Input & I_RIGHT) {
             ptb->BetaWheel = -300;
             if (ptb->Speed) {

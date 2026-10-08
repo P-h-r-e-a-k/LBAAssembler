@@ -402,17 +402,25 @@ static S32 s_autoDrop = 1000;              // autodrop_ms=<ms> (tests): how long
 static T_RACE_PENGUIN s_penguins[RACE_MAX_PENGUINS];
 // (health and clovers were power-ups too: no one dies in a race, so they did nothing -- out since 2026-10-03)
 // (the super jet-pack: the game drives, at twice the car's speed; the plain jet-pack, one and a half times it, is out since 2026-10-04)
-enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_PENGUIN, PU_SUPERJET, PU_OIL, PU_COUNT };
-static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Nitro penguin!", "Super jet-pack!", "Oil slick!"};
-static const int s_puWeight[PU_COUNT] = {20, 12, 10, 16, 12, 16};
-static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 0};
+// (2026-10-08, the user: "an attacking powerup for cars to hit other drivers with utilising Twinsen's magic ball and it's different
+// colours with different behaviours" -- the yellow ball darts a short way straight ahead, the green rolls along the track bouncing from
+// rail to rail for a few seconds, the red homes in on the car in front, the fire ball splits into one for each of the other cars, each
+// hunting its own down (Shots); and "a fake powerup mushroom ... identical to the real powerup mushrooms, the car can drop this powerup
+// anywhere, and when another car drives into it the fake mushroom explodes" (Fakes))
+enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_PENGUIN, PU_SUPERJET, PU_OIL, PU_BALL_YELLOW, PU_BALL_GREEN, PU_BALL_RED, PU_BALL_FIRE, PU_FAKE, PU_COUNT };
+static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Nitro penguin!", "Super jet-pack!", "Oil slick!",
+                                               "Yellow magic ball!", "Green magic ball!", "Red magic ball!", "Fire ball!", "Fake mushroom!"};
+static const int s_puWeight[PU_COUNT] = {20, 12, 10, 16, 12, 16, 12, 10, 9, 5, 10};
+static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 0, 0, 0, 0, 0, 0};
 // each one's weight times these for the leader and for the last car (between them by the car's place: RandomPowerUp) -- the ones to
-// drop behind (penguins, oil) for the cars in front, the ones to catch up with (the super jet-pack, lightning) for the cars at the back
-static const double s_puLead[PU_COUNT] = {1.0, 0.8, 0.05, 1.8, 0.0, 2.0};
-static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 0.4};
+// drop behind (penguins, oil, a fake mushroom) for the cars in front, the ones to catch up with (the super jet-pack, lightning, the red
+// ball and the fire ball) for the cars at the back
+static const double s_puLead[PU_COUNT] = {1.0, 0.8, 0.05, 1.8, 0.0, 2.0, 1.2, 1.0, 0.3, 0.0, 1.8};
+static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 0.4, 0.8, 1.0, 1.8, 2.4, 0.5};
 // what the item box shows (OBJFIX.HQR, the inventory's own: the Gazogem, the protection spell, the lightning ring, the meca-penguin,
-// the super jet-pack; -2 the oil's, oil_icon=)
-static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2};
+// the super jet-pack, the magic ball in each of its colours (0-3: INVENT.CPP's MagicLevel - 1); -2 the oil's, oil_icon=; -3 the
+// mushroom's own body)
+static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2, 0, 1, 2, 3, -3};
 // oil: the slicks on the road (world units; until when), and the scenes' copies of the slick that show them
 #define RACE_MAX_SLICKS 16                 // (6 until 2026-10-07: the pipes' drips have slicks too)
 #define RACE_MAX_OIL_ACTORS 256
@@ -424,6 +432,40 @@ static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2};
 // Until: when it dries up (a drip's), 0 never
 typedef struct { double X, Y, Z; S32 Dropped; int On; S32 Posed, Alpha, Gamma; double Lift; S32 Until; } T_RACE_SLICK;
 static T_RACE_SLICK s_slicks[RACE_MAX_SLICKS];
+// The magic balls in flight (Shots): each one's kind (its colour), whose (-1 Twinsen's, else the opponent's), what it is after (-1
+// Twinsen, an opponent, -2 none), where it is (world units) and which way it goes; the guide line's S and how far to its side for those
+// that follow the track; its sprite in this scene (-1 none) and when it last left a trail
+#define RACE_MAX_SHOTS 16
+#define RACE_SHOT_REACH 950                // a car this near a ball is hit
+#define RACE_SHOT_FORCE 20
+#define RACE_SHOT_SCALE 22                 // the ball's sprite (bigger: smaller, about 700 across)
+#define RACE_SHOT_RISE 450                 // over the road
+#define RACE_DART_SPEED 11000.0            // the yellow: straight ahead, this fast, ...
+#define RACE_DART_RANGE (14 * 512.0)       // ... this far
+#define RACE_ROLL_SPEED 9500.0             // the green: along the track, this fast (twice a car's), ...
+#define RACE_ROLL_MS 6000                  // ... this long, ...
+#define RACE_ROLL_SIDE (2.6 * 512)         // ... from side to side of the road ...
+#define RACE_ROLL_ACROSS 2600.0            // ... this fast
+#define RACE_HOME_SPEED 10500.0            // the red and the fire: along the track after its car, this fast ...
+#define RACE_HOME_DIRECT 3500.0            // ... straight at it once this near
+#define RACE_HOME_MS 15000                 // ... and gone after this long
+enum { SHOT_YELLOW, SHOT_GREEN, SHOT_RED, SHOT_FIRE };
+typedef struct { int On, Kind, Owner, Target, Extra; double X, Y, Z, Hx, Hz, S, Side, SideV, Travelled; S32 T0, Trail; } T_RACE_SHOT;
+static T_RACE_SHOT s_shots[RACE_MAX_SHOTS];
+static void LaunchShot(int kind, int owner, int target, double x, double y, double z, double hx, double hz, S32 now);
+static void Attack(int pu, int owner, double x, double y, double z, double beta, S32 now);
+// The fake mushrooms (Fakes): where each lies (world units), who dropped it and when (it can't go off under that car for a moment), the
+// scene its height was found in; shown by the scenes' copies of the mushroom (fake=), the box a point; the mushroom's body for the item box
+#define RACE_MAX_FAKES 8
+#define RACE_MAX_FAKE_ACTORS 256
+#define RACE_FAKE_ARM 1200
+typedef struct { int On, Dropper; double X, Y, Z; S32 Dropped, Posed; } T_RACE_FAKE;
+static T_RACE_FAKE s_fakes[RACE_MAX_FAKES];
+static int s_fakeScene[RACE_MAX_FAKE_ACTORS], s_fakeActor[RACE_MAX_FAKE_ACTORS];
+static int s_nbFakeActors = 0, s_fakeIconBody = -1;
+static void DropFake(double x, double y, double z, int dropper, S32 now);
+extern void MagicBallExplo(S32 x, S32 y, S32 z, S32 beta);  // EXTRA.CPP
+extern void SampleMagicBall(S32 x, S32 y, S32 z);           // FICHE.CPP
 static int s_oilScene[RACE_MAX_OIL_ACTORS], s_oilActor[RACE_MAX_OIL_ACTORS];
 static int s_nbOilActors = 0;
 static S32 s_skidUntil = 0, s_skidStart = 0, s_skidBeta = 0, s_skidSpeed = 0;
@@ -1651,6 +1693,9 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_nbMush < RACE_MAX_MUSHROOMS && (got = sscanf(v, "%d %d %d", &m->Scene, &m->Actor, &y)) >= 2) {
                 m->Y = got == 3 ? y : 0; m->HasY = got == 3; m->Back = 0; s_nbMush++;
             }
+        }
+        else if (!strcmp(key, "fake")) {
+            if (s_nbFakeActors < RACE_MAX_FAKE_ACTORS && sscanf(v, "%d %d", &s_fakeScene[s_nbFakeActors], &s_fakeActor[s_nbFakeActors]) == 2) s_nbFakeActors++;
         }
         else if (!strcmp(key, "oil")) {
             if (s_nbOilActors < RACE_MAX_OIL_ACTORS && sscanf(v, "%d %d", &s_oilScene[s_nbOilActors], &s_oilActor[s_nbOilActors]) == 2) s_nbOilActors++;
@@ -3218,6 +3263,7 @@ static void FallenBelow(S32 now) {
 static int MushroomActor(T_RACE_MUSHROOM *m) {
     if (m->Scene != NumCube || m->Actor <= 0 || m->Actor >= NbObjets) return -1;
     if (!m->HasY && ListObjet[m->Actor].Obj.Y > -10000) { m->Y = ListObjet[m->Actor].Obj.Y; m->HasY = 1; }
+    if (s_fakeIconBody < 0 && ListObjet[m->Actor].Obj.Body.Num >= 0) s_fakeIconBody = ListObjet[m->Actor].Obj.Body.Num;
     return m->HasY ? m->Actor : -1;
 }
 
@@ -3276,6 +3322,7 @@ static int RandomPowerUp(double back) {
     for (int i = 0; i < PU_COUNT; i++) {
         w[i] = s_puWeight[i] * (back < 0 ? 1 : s_puLead[i] + (s_puLast[i] - s_puLead[i]) * back);
         if (i == PU_FUEL && s_fuelAlways) w[i] = 0;   // (every car has it all race)
+        if (i == PU_FAKE && !s_nbFakeActors) w[i] = 0;  // (a track built before them has no copies of the mushroom to show one)
         total += w[i];
     }
     double r = RaceRandom() * total;
@@ -3508,6 +3555,18 @@ static void UseItem(int pu, S32 now) {
         if (pu == PU_OIL) DropOil(x, hero->Obj.Y, z); else DropPenguin(x, hero->Obj.Y, z, -1);
         break;
     }
+    case PU_BALL_YELLOW:
+    case PU_BALL_GREEN:
+    case PU_BALL_RED:
+    case PU_BALL_FIRE:
+        Attack(pu, -1, hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0, hero->Obj.Beta * 2 * 3.14159265358979 / 4096, now);
+        break;
+    case PU_FAKE: {
+        // dropped behind the car, where it is now
+        const double b = hero->Obj.Beta * 2 * 3.14159265358979 / 4096;
+        DropFake(hero->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1300, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1300, -1, now);
+        break;
+    }
     case PU_SUPERJET:
         // (nothing touches it: a skid, a blast's stop, a shrinking are over)
         s_jetUntil = now + RACE_JETPACK_MS; s_jetFactor = s_puJet[pu]; s_autoIndex = -1;
@@ -3547,6 +3606,8 @@ static void ForgetPowerUps(const char *why) {
     }
     for (int i = 0; i < RACE_MAX_PENGUINS; i++) s_penguins[i].On = 0;
     for (int i = 0; i < RACE_MAX_SLICKS; i++) s_slicks[i].On = 0;
+    for (int i = 0; i < RACE_MAX_FAKES; i++) s_fakes[i].On = 0;
+    for (int i = 0; i < RACE_MAX_SHOTS; i++) s_shots[i].On = 0;
     for (int i = 0; i < s_nbMush; i++) s_mush[i].Back = 0;
     if (s_heroHidden) { ListObjet[NUM_PERSO].Flags &= ~INVISIBLE; s_heroHidden = 0; }
     if (s_heroIsSmall && Comportement == C_BUGGY) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
@@ -3592,7 +3653,12 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
         if (now - o->TakeAt < RACE_ROW_MS) continue;
         o->TakeAt = now;
         const int pu = RandomPowerUp(BackShare(n));
-        if (pu == PU_PENGUIN || pu == PU_OIL) {
+        if (pu >= PU_BALL_YELLOW && pu <= PU_BALL_FIRE) {
+            Attack(pu, n, car->Obj.X + CurrentCubeX * 32768.0, car->Obj.Y, car->Obj.Z + CurrentCubeY * 32768.0, car->Obj.Beta * 2 * 3.14159265358979 / 4096, now);
+        } else if (pu == PU_FAKE) {
+            const double b = car->Obj.Beta * 2 * 3.14159265358979 / 4096;
+            DropFake(car->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1300, car->Obj.Y, car->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1300, n, now);
+        } else if (pu == PU_PENGUIN || pu == PU_OIL) {
             const double b = car->Obj.Beta * 2 * 3.14159265358979 / 4096;
             const double x = car->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1300, z = car->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1300;
             if (pu == PU_OIL) DropOil(x, car->Obj.Y, z); else DropPenguin(x, car->Obj.Y, z, n);
@@ -3671,6 +3737,313 @@ static void Slicks(S32 now, int driving) {
     // the scene's slicks not on the road, out of sight
     for (; k < s_nbOilActors; k++)
         if (s_oilScene[k] == NumCube && s_oilActor[k] > 0 && s_oilActor[k] < NbObjets) ListObjet[s_oilActor[k]].Obj.Y = -20000;
+}
+
+// ---- the magic ball's attacks and the fake mushrooms -------------------------------------------------------------------------------
+
+// A car where it is (world units): -1 Twinsen's, else an opponent's -- its car where this scene has it in sight, else where its line has
+// it in the race. 0 when it isn't anywhere (an opponent waiting out of sight, no race).
+static int CarAt(int who, double *x, double *y, double *z) {
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    if (who < 0) {
+        if (CubeMode != CUBE_EXTERIEUR) return 0;
+        const T_OBJET *h = &ListObjet[NUM_PERSO];
+        *x = h->Obj.X + cx; *y = h->Obj.Y; *z = h->Obj.Z + cz;
+        return 1;
+    }
+    T_RACE_OPPONENT *op = &s_opp[who];
+    if (!op->Count || !op->Scenes) return 0;
+    const int a = OpponentActor(op);
+    if (a >= 0 && ListObjet[a].Obj.Y > -10000) { *x = ListObjet[a].Obj.X + cx; *y = ListObjet[a].Obj.Y; *z = ListObjet[a].Obj.Z + cz; return 1; }
+    if (!RaceOn()) return 0;
+    double v, dx, dz;
+    PathAt(op, op->S, x, z, y, &v, &dx, &dz);
+    return 1;
+}
+
+static const char *CarName(int who) { return who < 0 ? "Twinsen" : s_opp[who].Name; }
+
+// The car nearest ahead of `who` in the race (-2 none: it leads), by how far round each is.
+static int CarInFront(int who) {
+    const double mine = who < 0 ? PlayerProgress() : OpponentProgress(&s_opp[who]);
+    int best = -2;
+    double gap = 1e30;
+    if (who >= 0) { const double p = PlayerProgress(); if (p > mine && p - mine < gap) { gap = p - mine; best = -1; } }
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        if (n == who || !s_opp[n].Count || !s_opp[n].Scenes) continue;
+        const double p = OpponentProgress(&s_opp[n]);
+        if (p > mine && p - mine < gap) { gap = p - mine; best = n; }
+    }
+    return best;
+}
+
+// Where a place is along the guide line (its S) and to the side of it -- the nearest point within `window` points of `hint` (a fresh
+// search with no hint).
+static double GuideS(const T_RACE_OPPONENT *o, double x, double y, double z, double hint, double *side) {
+    int best = -1;
+    double bd = 1e30;
+    if (hint >= 0) {
+        int i0 = 0;
+        while (i0 < o->Count - 1 && o->Cum[i0 + 1] < hint) i0++;
+        for (int k = -120; k <= 120; k++) {
+            const int i = ((i0 + k) % o->Count + o->Count) % o->Count;
+            const double d = LineDistance(o, i, x, y, z);
+            if (d < bd) { bd = d; best = i; }
+        }
+    }
+    if (best < 0 || bd > 12.0 * 512 * 12 * 512)
+        for (int i = 0; i < o->Count; i++) { const double d = LineDistance(o, i, x, y, z); if (d < bd) { bd = d; best = i; } }
+    const double s = o->Cum[best];
+    double lx, lz, ly, v, dx, dz;
+    PathAt(o, s, &lx, &lz, &ly, &v, &dx, &dz);
+    const double len = sqrt(dx * dx + dz * dz);
+    if (side) *side = len > 0 ? ((x - lx) * dz - (z - lz) * dx) / len : 0;
+    return s;
+}
+
+// A point of the guide line and to its side (the inverse of GuideS), its height the line's.
+static void GuideAt(const T_RACE_OPPONENT *o, double s, double side, double *x, double *y, double *z, double *hx, double *hz) {
+    double lx, lz, ly, v, dx, dz;
+    s = fmod(s, o->Length); if (s < 0) s += o->Length;
+    PathAt(o, s, &lx, &lz, &ly, &v, &dx, &dz);
+    const double len = sqrt(dx * dx + dz * dz);
+    *hx = len > 0 ? dx / len : 0; *hz = len > 0 ? dz / len : 1;
+    *x = lx + side * *hz; *z = lz - side * *hx; *y = ly;
+}
+
+// A car struck (a ball's hit, a fake mushroom's blast): -1 Twinsen's -- stopped as by a penguin's blast unless the protection spell or the
+// super jet-pack is on -- else an opponent's, stopped with its hit animation unless it is on a super jet-pack.
+static void CarStruck(int who, S32 now, const char *what, const char *by) {
+    if (who < 0) {
+        T_OBJET *hero = &ListObjet[NUM_PERSO];
+        if (now < s_protectUntil || now < s_jetUntil || (hero->Flags & NO_CHOC)) {
+            Log_Info("[racemod] %s hits Twinsen's car: %s", what, now < s_protectUntil ? "the protection spell holds" : now < s_jetUntil ? "the super jet-pack" : "he can't be hit");
+            return;
+        }
+        HitObj(PenguinHitter(), NUM_PERSO, RACE_SHOT_FORCE, -1);
+        ListBuggy[0].Speed = 0;
+        if (s_hitUntil < now + RACE_PENGUIN_HOLD) s_hitUntil = now + RACE_PENGUIN_HOLD;
+        char text[80];
+        if (by) snprintf(text, sizeof(text), "Hit by %s's %s!", by, what); else snprintf(text, sizeof(text), "Hit by %s!", what);
+        Message(text);
+        Log_Info("[racemod] Twinsen's car hit by %s%s%s", by ? by : "", by ? "'s " : "", what);
+        return;
+    }
+    T_RACE_OPPONENT *op = &s_opp[who];
+    if (now < op->JetUntil) return;
+    if (op->HitUntil < now + RACE_PENGUIN_HOLD) op->HitUntil = now + RACE_PENGUIN_HOLD;
+    Log_Info("[racemod] %s hit by %s%s%s", op->Name, by ? by : "", by ? "'s " : "", what);
+    const int index = OpponentActor(op);
+    if (index < 0 || ListObjet[index].Obj.Y < -10000) return;
+    T_OBJET *car = &ListObjet[index];
+    InitAnim(GEN_ANIM_CHOC, ANIM_ALL_THEN, (U8)index);
+    InitHitExtraPof(car->Obj.X, car->Obj.Y + car->YMax + 1, car->Obj.Z, RACE_SHOT_FORCE);
+}
+
+// OBJECT.CPP HitObj: an opponent's car hit by Twinsen -- his own magic ball thrown from the car -- is stopped as the power-ups' balls stop
+// it (its armour took the game's hits without a flinch). 1 when it was one.
+S32 RaceMod_OpponentStruck(U8 num, U8 hitter) {
+    if (!RaceMod_Active() || hitter != NUM_PERSO || num == NUM_PERSO) return 0;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        if (!s_opp[n].Count || !s_opp[n].Scenes || OpponentActor(&s_opp[n]) != num) continue;
+        const S32 now = TimerRefHR;
+        if (now >= s_opp[n].HitUntil) CarStruck(n, now, "magic ball", "Twinsen");
+        return 1;
+    }
+    return 0;
+}
+
+static void LaunchShot(int kind, int owner, int target, double x, double y, double z, double hx, double hz, S32 now) {
+    int k = -1;
+    for (int i = 0; i < RACE_MAX_SHOTS && k < 0; i++) if (!s_shots[i].On) k = i;
+    if (k < 0) {
+        k = 0;
+        for (int i = 1; i < RACE_MAX_SHOTS; i++) if (s_shots[i].T0 < s_shots[k].T0) k = i;
+        if (s_shots[k].Extra >= 0 && s_shots[k].Extra < MAX_EXTRAS) ListExtra[s_shots[k].Extra].Sprite = -1;
+    }
+    T_RACE_SHOT *sh = &s_shots[k];
+    memset(sh, 0, sizeof(*sh));
+    sh->On = 1; sh->Kind = kind; sh->Owner = owner; sh->Target = target; sh->Extra = -1;
+    sh->Hx = hx; sh->Hz = hz;
+    sh->X = x + hx * 900; sh->Y = y + RACE_SHOT_RISE; sh->Z = z + hz * 900;      // (out in front of the car)
+    sh->T0 = now; sh->Trail = now;
+    const T_RACE_OPPONENT *o = Guide();
+    if (o) sh->S = GuideS(o, sh->X, y, sh->Z, -1, &sh->Side);
+    sh->SideV = RaceRandom() < 0.5 ? RACE_ROLL_ACROSS : -RACE_ROLL_ACROSS;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    if (CubeMode == CUBE_EXTERIEUR && sh->X >= cx && sh->X < cx + 32768 && sh->Z >= cz && sh->Z < cz + 32768)
+        SampleMagicBall((S32)(sh->X - cx), (S32)sh->Y, (S32)(sh->Z - cz));
+}
+
+// A ball power-up used by a car (`owner` -1 Twinsen, else an opponent) at (x, y, z) facing `beta` (radians): the yellow darts ahead, the
+// green rolls ahead, the red goes after the car in front (with none, it darts ahead as far again), the fire ball one after every other
+// car.
+static void Attack(int pu, int owner, double x, double y, double z, double beta, S32 now) {
+    const double hx = sin(beta), hz = cos(beta);
+    switch (pu) {
+    case PU_BALL_YELLOW: LaunchShot(SHOT_YELLOW, owner, -2, x, y, z, hx, hz, now); break;
+    case PU_BALL_GREEN: LaunchShot(SHOT_GREEN, owner, -2, x, y, z, hx, hz, now); break;
+    case PU_BALL_RED: {
+        const int target = CarInFront(owner);
+        LaunchShot(SHOT_RED, owner, target, x, y, z, hx, hz, now);
+        Log_Info("[racemod] %s's red ball goes after %s", CarName(owner), target == -2 ? "no one (in the lead)" : CarName(target));
+        break;
+    }
+    case PU_BALL_FIRE: {
+        int count = 0;
+        if (owner >= 0) { LaunchShot(SHOT_FIRE, owner, -1, x, y, z, hx, hz, now); count++; }
+        for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
+            if (n != owner && s_opp[n].Count && s_opp[n].Scenes) { LaunchShot(SHOT_FIRE, owner, n, x, y, z, hx, hz, now); count++; }
+        Log_Info("[racemod] %s's fire ball splits in %d", CarName(owner), count);
+        break;
+    }
+    }
+    if (owner >= 0) Log_Info("[racemod] %s uses %s", s_opp[owner].Name, s_puName[pu]);
+}
+
+// Every frame: the balls in flight -- moved, shown where they are in this scene (a sprite each, a trail behind it), and any car they reach
+// stopped.
+static void Shots(S32 now, int driving) {
+    const T_RACE_OPPONENT *o = Guide();
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    static S32 last = 0;
+    double dt = last ? (now - last) / 1000.0 : 0;
+    last = now;
+    if (dt < 0) dt = 0;
+    if (dt > 0.1) dt = 0.1;
+    static const char *const names[] = {"yellow magic ball", "green magic ball", "red magic ball", "fire ball"};
+    for (int i = 0; i < RACE_MAX_SHOTS; i++) {
+        T_RACE_SHOT *sh = &s_shots[i];
+        if (!sh->On) continue;
+        const S32 age = now - sh->T0;
+        int done = 0;
+        if (sh->Kind == SHOT_YELLOW || (sh->Kind == SHOT_RED && sh->Target == -2) || !o) {
+            // straight ahead, over the road
+            const double step = RACE_DART_SPEED * dt;
+            sh->X += sh->Hx * step; sh->Z += sh->Hz * step; sh->Travelled += step;
+            if (o) { double side, y, x2, z2, hx, hz; sh->S = GuideS(o, sh->X, sh->Y, sh->Z, sh->S, &side); GuideAt(o, sh->S, side, &x2, &y, &z2, &hx, &hz); sh->Y = y + RACE_SHOT_RISE; }
+            if (sh->Travelled >= RACE_DART_RANGE * (sh->Kind == SHOT_RED ? 2 : 1)) done = 1;
+        } else if (sh->Kind == SHOT_GREEN) {
+            // along the track, from rail to rail, hopping
+            sh->S += RACE_ROLL_SPEED * dt;
+            sh->Side += sh->SideV * dt;
+            if (sh->Side > RACE_ROLL_SIDE) { sh->Side = RACE_ROLL_SIDE; sh->SideV = -fabs(sh->SideV); }
+            if (sh->Side < -RACE_ROLL_SIDE) { sh->Side = -RACE_ROLL_SIDE; sh->SideV = fabs(sh->SideV); }
+            double y, hx, hz;
+            GuideAt(o, sh->S, sh->Side, &sh->X, &y, &sh->Z, &hx, &hz);
+            sh->Y = y + 250 + 650 * fabs(sin(age * 3.14159265358979 / 450.0));
+            if (age >= RACE_ROLL_MS) done = 1;
+        } else {
+            // after its car: along the track (forwards or back, whichever is nearer round the lap), straight at it once near
+            double tx, ty, tz;
+            if (!CarAt(sh->Target, &tx, &ty, &tz) || age >= RACE_HOME_MS) done = 1;
+            else {
+                const double dx = tx - sh->X, dz = tz - sh->Z, d = sqrt(dx * dx + dz * dz), step = RACE_HOME_SPEED * dt;
+                if (d < RACE_HOME_DIRECT) {
+                    const double dy = ty + RACE_SHOT_RISE - sh->Y;
+                    const double f = d > step ? step / d : 1;
+                    sh->X += dx * f; sh->Z += dz * f; sh->Y += dy * (d > 1 ? (f < 1 ? f : 1) : 1);
+                    sh->S = GuideS(o, sh->X, sh->Y, sh->Z, sh->S, NULL);
+                } else {
+                    double side;
+                    const double ts = GuideS(o, tx, ty, tz, -1, &side);
+                    double gap = fmod(ts - sh->S, o->Length);
+                    if (gap > o->Length / 2) gap -= o->Length;
+                    if (gap < -o->Length / 2) gap += o->Length;
+                    sh->S += (gap > 0 ? 1 : -1) * (fabs(gap) < step ? fabs(gap) : step);
+                    sh->Side += (side - sh->Side) * (dt * 2 < 1 ? dt * 2 : 1);
+                    double y, hx, hz;
+                    GuideAt(o, sh->S, sh->Side, &sh->X, &y, &sh->Z, &hx, &hz);
+                    sh->Y = y + RACE_SHOT_RISE;
+                }
+            }
+        }
+        // a car it reaches (not its own: the red and the fire only their own targets)
+        if (!done && (age > 150 || sh->Kind >= SHOT_RED))
+            for (int who = -1; who < RACE_MAX_OPPONENTS && !done; who++) {
+                if (who == sh->Owner || (sh->Kind >= SHOT_RED && sh->Target != -2 && who != sh->Target)) continue;
+                if (who < 0 && !driving) continue;
+                if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes || now < s_opp[who].HitUntil)) continue;
+                double x, y, z;
+                if (!CarAt(who, &x, &y, &z)) continue;
+                const double dx = x - sh->X, dz = z - sh->Z;
+                if (dx * dx + dz * dz > (double)RACE_SHOT_REACH * RACE_SHOT_REACH || fabs(y + RACE_SHOT_RISE - sh->Y) > 1400) continue;
+                const S32 lx = (S32)(sh->X - cx), lz = (S32)(sh->Z - cz);
+                if (CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768) MagicBallExplo(lx, (S32)sh->Y, lz, 0);
+                CarStruck(who, now, names[sh->Kind], CarName(sh->Owner));
+                done = 1;
+            }
+        // shown: its sprite in this scene, moved; a trail behind it
+        const S32 lx = (S32)(sh->X - cx), lz = (S32)(sh->Z - cz);
+        const int here = !done && CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768;
+        const int sprite = 8 + sh->Kind;
+        if (sh->Extra >= 0 && (sh->Extra >= MAX_EXTRAS || ListExtra[sh->Extra].Sprite != sprite)) sh->Extra = -1;
+        if (!here) {
+            if (sh->Extra >= 0) { ListExtra[sh->Extra].Sprite = -1; sh->Extra = -1; }
+        } else {
+            if (sh->Extra < 0) sh->Extra = InitExtraAnimSprite(255, lx, (S32)sh->Y, lz, sprite, sprite, RACE_HOME_MS + 1000, RACE_SHOT_SCALE, 0, 0);
+            if (sh->Extra >= 0) { ListExtra[sh->Extra].PosX = lx; ListExtra[sh->Extra].PosY = (S32)sh->Y; ListExtra[sh->Extra].PosZ = lz; }
+            if (now - sh->Trail >= 60) {
+                sh->Trail = now;
+                InitExtraAnimSprite(255, lx, (S32)sh->Y, lz, 15, 17, 360, RACE_SHOT_SCALE + 6, 1, 0);
+            }
+        }
+        if (done) sh->On = 0;
+    }
+}
+
+static void DropFake(double x, double y, double z, int dropper, S32 now) {
+    int k = -1;
+    for (int i = 0; i < RACE_MAX_FAKES && k < 0; i++) if (!s_fakes[i].On) k = i;
+    if (k < 0) { k = 0; for (int i = 1; i < RACE_MAX_FAKES; i++) if (s_fakes[i].Dropped < s_fakes[k].Dropped) k = i; }
+    T_RACE_FAKE *f = &s_fakes[k];
+    f->On = 1; f->Dropper = dropper; f->X = x; f->Y = y; f->Z = z; f->Dropped = now; f->Posed = -1;
+    Log_Info("[racemod] %s drops a fake mushroom", CarName(dropper));
+}
+
+// Every frame: the fake mushrooms -- shown by this scene's copies of the mushroom, on the road where they lie; a car that drives into one
+// (not the one that dropped it, for a moment) sets it off: a blast, the car stopped.
+static void Fakes(S32 now, int driving) {
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    int k = 0;
+    for (int i = 0; i < RACE_MAX_FAKES; i++) {
+        T_RACE_FAKE *f = &s_fakes[i];
+        if (!f->On) continue;
+        const S32 lx = (S32)(f->X - cx), lz = (S32)(f->Z - cz);
+        const int here = CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768;
+        if (here && f->Posed != (S32)NumCube) {
+            int ok;
+            const S32 ground = SlickGround(lx, lz, (S32)f->Y, &ok);
+            if (ok) f->Y = ground;
+            f->Posed = NumCube;
+        }
+        if (here)
+            for (; k < s_nbFakeActors; k++) {
+                if (s_fakeScene[k] != NumCube || s_fakeActor[k] <= 0 || s_fakeActor[k] >= NbObjets) continue;
+                T_OBJET *a = &ListObjet[s_fakeActor[k]];
+                a->Obj.X = lx; a->Obj.Y = (S32)f->Y; a->Obj.Z = lz;
+                a->XMin = a->XMax = a->ZMin = a->ZMax = 0;
+                k++;
+                break;
+            }
+        // a car into it
+        int hit = -3;
+        for (int who = -1; who < RACE_MAX_OPPONENTS && hit == -3; who++) {
+            if (who == f->Dropper && now - f->Dropped < RACE_FAKE_ARM) continue;
+            if (who < 0 && !driving) continue;
+            if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes || !RaceOn())) continue;
+            double x, y, z;
+            if (!CarAt(who, &x, &y, &z)) continue;
+            if ((x - f->X) * (x - f->X) + (z - f->Z) * (z - f->Z) < (double)RACE_MUSHROOM_REACH * RACE_MUSHROOM_REACH && fabs(y - f->Y) < 900) hit = who;
+        }
+        if (hit == -3) continue;
+        if (here) DoImpact(RACE_PENGUIN_IMPACT, lx, (S32)f->Y, lz, 255);
+        CarStruck(hit, now, "a fake mushroom", NULL);
+        f->On = 0;
+    }
+    // the scene's copies not in use, out of sight
+    for (; k < s_nbFakeActors; k++)
+        if (s_fakeScene[k] == NumCube && s_fakeActor[k] > 0 && s_fakeActor[k] < NbObjets) ListObjet[s_fakeActor[k]].Obj.Y = -20000;
 }
 
 // Every frame: the mushrooms of this scene (gone while taken, grown back after), the player's car over one, the penguins going off.
@@ -3752,6 +4125,8 @@ static void PowerUps(S32 now, int driving) {
     Penguins(now, driving);
     if (now >= s_jetUntil && s_jetUntil) { s_jetUntil = 0; s_autoIndex = -1; }
     Slicks(now, driving);
+    Fakes(now, driving);
+    Shots(now, driving);
 }
 
 // A penguin goes off: the blast (where the player is) and every car near it stopped.
@@ -4866,8 +5241,9 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int selected, S32 now) {
     SetClip(x0, y0, x1, y1);
     BackupAngles(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
     Box(ClipXMin, ClipYMin, ClipXMax, ClipYMax, 0);
-    const int model = pu < 0 ? -1 : s_puModel[pu] == -2 ? s_oilIcon : s_puModel[pu];
-    if (model >= 0) {
+    const int model = pu < 0 ? -1 : s_puModel[pu] == -2 ? s_oilIcon : s_puModel[pu] == -3 ? -1 : s_puModel[pu];
+    U8 *shape = model >= 0 ? (U8 *)GivePtrObjFix(model) : pu >= 0 && s_puModel[pu] == -3 && s_fakeIconBody >= 0 ? (U8 *)GivePtrBody(s_fakeIconBody) : NULL;
+    if (shape) {
         // (the scene's view kept whole -- its projection, its camera and its light -- and put back exactly as it was after the item is
         // drawn. The game's own found-object display resets the view instead (PtrInit3DView): the plain follow camera, without the
         // race-track mode's own eye or lift (FOLLOWCAM.CPP FollowCamReapplyLift), so a frame that drew only the objects over the last
@@ -4891,7 +5267,7 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int selected, S32 now) {
         const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
         Switch_Fillers(FILL_POLY_TEXTURES);
         if (CubeMode == CUBE_EXTERIEUR) SetCLUT(PalLevel);
-        BodyDisplay(0, 0, 0, 0, (now * 4) & 4095, 0, (U8 *)GivePtrObjFix(model));
+        BodyDisplay(0, 0, 0, 0, (now * 4) & 4095, 0, shape);
         if (CubeMode == CUBE_EXTERIEUR) SetCLUT(clut);
         Switch_Fillers(depth ? (keep ? (fog ? FILL_POLY_FOG_NZW : FILL_POLY_NZW) : (fog ? FILL_POLY_FOG_ZBUFFER : FILL_POLY_ZBUFFER)) : fog ? FILL_POLY_FOG : FILL_POLY_TEXTURES);
         RestoreCamera();
@@ -5061,7 +5437,8 @@ static void ResetTrack(void) {
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
-    s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks)); s_skidUntil = 0;
+    s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
+    s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes)); memset(s_shots, 0, sizeof(s_shots)); s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     s_noCollideScene = -1;
     if (s_heroHidden) { ListObjet[NUM_PERSO].Flags &= ~INVISIBLE; s_heroHidden = 0; }
