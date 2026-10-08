@@ -418,9 +418,10 @@ static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 0, 0, 0, 0, 0, 0};
 static const double s_puLead[PU_COUNT] = {1.0, 0.8, 0.05, 1.8, 0.0, 2.0, 1.2, 1.0, 0.3, 0.0, 1.8};
 static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 0.4, 0.8, 1.0, 1.8, 2.4, 0.5};
 // what the item box shows (OBJFIX.HQR, the inventory's own: the Gazogem, the protection spell, the lightning ring, the meca-penguin,
-// the super jet-pack, the magic ball in each of its colours (0-3: INVENT.CPP's MagicLevel - 1); -2 the oil's, oil_icon=; -3 the
-// mushroom's own body)
-static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2, 0, 1, 2, 3, -3};
+// the super jet-pack, the magic ball in each of its colours -- INVENT.CPP's TabObj3D for FLAG_BALLE_MAGIQUE, {1, 40, 41, 42}, picked by
+// MagicLevel - 1: until 2026-10-08 the balls had 0-3 here, OBJFIX's own 0-3, the holomap, the yellow ball, the dart and Sendell's ball;
+// -2 the oil's, oil_icon=; -3 the mushroom's own body)
+static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2, 1, 40, 41, 42, -3};
 // oil: the slicks on the road (world units; until when), and the scenes' copies of the slick that show them
 #define RACE_MAX_SLICKS 16                 // (6 until 2026-10-07: the pipes' drips have slicks too)
 #define RACE_MAX_OIL_ACTORS 256
@@ -5321,7 +5322,18 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int selected, S32 now) {
         const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
         Switch_Fillers(FILL_POLY_TEXTURES);
         if (CubeMode == CUBE_EXTERIEUR) SetCLUT(PalLevel);
+        // (from the objects' own texture page, as the inventory and the scene's objects are drawn (OBJECT.CPP), and back after)
+        // (the animated textures, as the inventory animates them while it shows its objects: the fire ball's faces are the fire, and the
+        // protection spell's its sparkles, which start black and move only while something animates them -- the scene does only with
+        // animated textures of its own or the protection spell on: in the item box both were black on black, empty boxes, 2026-10-08)
+        DoTextureAnimation();
+        const PTR_U8 map = PtrMap;
+        U8 *const objMap = ObjPtrMap;
+        const S32 rep = RepMask;
+        PtrMap = ObjPtrMap = BufferTexture;
+        RepMask = 0xFFFF;
         BodyDisplay(0, 0, 0, 0, (now * 4) & 4095, 0, shape);
+        PtrMap = map; ObjPtrMap = objMap; RepMask = rep;
         if (CubeMode == CUBE_EXTERIEUR) SetCLUT(clut);
         Switch_Fillers(depth ? (keep ? (fog ? FILL_POLY_FOG_NZW : FILL_POLY_NZW) : (fog ? FILL_POLY_FOG_ZBUFFER : FILL_POLY_ZBUFFER)) : fog ? FILL_POLY_FOG : FILL_POLY_TEXTURES);
         RestoreCamera();
