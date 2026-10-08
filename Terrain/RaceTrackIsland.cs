@@ -225,10 +225,17 @@ internal sealed record RaceTrackIsland(
     // Every car on Gazogem fuel all race, and no mushroom gives it (the race-track mode's fuel_always=): the Island of the Francos', where
     // the fuel is made (the user, 2026-10-07).
     public bool FuelAlways { get; init; }
+    // Game variables the race-track mode holds at a value while it runs (the car file's vargame=): travel cutscenes kept from playing --
+    // Otringal's square island's Dino-Fly landing, which holds Twinsen at its pad while variable 83 is under 2 (2026-10-08).
+    public (int Var, int Value)[] HeldVars { get; init; } = Array.Empty<(int, int)>();
     public int[] MoreScenes { get; init; } = Array.Empty<int>();
-    // The island's outside scenes: FirstScene..LastScene, and MoreScenes when it is made bigger.
-    public IEnumerable<int> Scenes => Enumerable.Range(FirstScene, LastScene - FirstScene + 1).Concat(Scale > 1 ? MoreScenes : Array.Empty<int>());
-    public bool HasScene(int scene) => scene >= FirstScene && scene <= LastScene || Scale > 1 && MoreScenes.Contains(scene);
+    // Cubes of the island's ground the game has no scene for, that the lap drives over: a scene the build makes for each (IslandScaler
+    // .AddCubeScenes), numbered Scene, from a copy of Template (its actors inert stand-ins, cube changes to and from its neighbours) --
+    // Otringal's south-west islets, cube (6,9) (2026-10-08).
+    public (int CubeX, int CubeZ, int Scene, int Template)[] NewCubes { get; init; } = Array.Empty<(int, int, int, int)>();
+    // The island's outside scenes: FirstScene..LastScene, MoreScenes when it is made bigger, and its new cubes'.
+    public IEnumerable<int> Scenes => Enumerable.Range(FirstScene, LastScene - FirstScene + 1).Concat(Scale > 1 ? MoreScenes : Array.Empty<int>()).Concat(NewCubes.Select(c => c.Scene));
+    public bool HasScene(int scene) => scene >= FirstScene && scene <= LastScene || Scale > 1 && MoreScenes.Contains(scene) || NewCubes.Any(c => c.Scene == scene);
     // The scenes the build adds, as (original, copy) pairs.
     public IEnumerable<(int From, int To)> AddedScenes =>
         CopiesScenes is { } many ? Enumerable.Range(0, many.Count).Select(k => (many.First + k, FirstScene + k))
@@ -254,7 +261,21 @@ internal sealed record RaceTrackIsland(
         FuelAlways = true,
     };
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas };
+    // Otringal (OTRINGAL.ILE, the game's island 4, scenes 87-92), from the user's sketch (2026-10-08): one raised road round the island --
+    // round the square island south-east of the town, west over the bridge through a tunnel, up through the town over its roofs onto the
+    // straight along the palace's east side at 14,000 (the start line, the pit lane on its left between the race lanes and the palace),
+    // west along the island's north edge, south down its west side and a jump over the inlet, an S over the town's tanks, down past the west
+    // pier over the sea to the south-west islets (cube (6,9): the game has its ground but no scene there -- NewCubes, scene 264), east along
+    // the south coast and a jump over the sea back onto the square island. The plan: tools/RaceTrackPlan/otringal_design.py.
+    public static readonly RaceTrackIsland Otringal = new("Otringal", "OTRINGAL.ILE", "OTRINGAL.OBL", 4, 87, 92, 31, "RaceTrackPlan.Otringal.json", null)
+    {
+        Title = "Otringal: through the tunnel, over the town and round the palace",
+        NewCubes = new[] { (6, 9, 264, 87) },
+        // (Twinsen has arrived on Otringal: the square island's Dino-Fly landing doesn't play when the car flies into it off the jump)
+        HeldVars = new[] { (83, 3) },
+    };
+
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

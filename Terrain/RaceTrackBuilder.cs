@@ -93,6 +93,8 @@ internal sealed class RaceTrackPlan
     public SteamJetRun[]? SteamJets { get; set; }
     // A pipeline over the lap (RaceTrackPipes.PlacePipeline): the Island of the Francos' from the Gazogem factory to the air-boat.
     public PipeLine? Pipeline { get; set; }
+    // Tunnels over the raised road (RaceTrackTunnel): Otringal's over the bridge to its square island. From and To are the plan's points.
+    public TunnelRun[]? Tunnels { get; set; }
     // The raised road's colours stretch by stretch (DeckTheme by name: "dock", "refinery", "village"), From and To the plan's points;
     // elsewhere the standard greys, red and white.
     public ThemeRun[]? Themes { get; set; }
@@ -163,6 +165,9 @@ internal sealed class RaceTrackPlan
     // The grid's spots moved across the road by this much (cells, the way the builder's Across points): onto the Emerald Moon's race lanes,
     // beside its pit lane on the same deck (RaceTrackScenes.GridSpot).
     public double? GridShift { get; set; }
+    // The raised road's pieces this many cells long, not 4: an island whose cubes are full of decors -- each piece is one, and a cube holds
+    // 200 (Otringal's town and palace, 2026-10-08).
+    public double? RaisedPiece { get; set; }
     public bool Planned => Heights is { Length: > 0 } h && h.Length == Points.Length;
 
     // The plan's own road widths and sea clearance, onto the options a build uses.
@@ -179,6 +184,7 @@ internal sealed class RaceTrackPlan
         if (JumpMinScale is { } js) o.JumpMinScale = js;
         if (GridStep is { } gs) o.GridStep = gs;
         if (GridShift is { } gsh) o.GridShift = gsh;
+        if (RaisedPiece is { } rp && rp >= 1) o.RaisedPiece = rp;
         o.PitFence = PitFence && PitStripe is { Length: 3 };
         o.GantryFootings = GantryFootings;
         o.PierBodies = PierBodies?.ToHashSet();
@@ -288,6 +294,8 @@ internal sealed class RaceTrackOptions
     public bool GantryFootings { get; set; }
     // The grid moved across the road (RaceTrackPlan.GridShift, cells).
     public double GridShift { get; set; }
+    // How long each of the raised road's pieces is, cells (RaceTrackPlan.RaisedPiece; a decor body each).
+    public double RaisedPiece { get; set; } = 4;
     // A fence along a raised road's stripe (RaceTrackPlan.PitFence), and its bodies -- a section and its end post, copied from Citadel
     // Island's own (RaceTrackService.Prepare).
     public bool PitFence { get; set; }
@@ -411,6 +419,10 @@ internal sealed class RaceTrackReport
     // ... and the steam jets across the road, [x, y, z (its middle), half width, reach, blowing (ms), not (ms), phase (ms), way x, way z]
     // (RACEMOD.CPP jet=)
     public List<int[]> Jets { get; } = new();
+    // the tunnels over the raised road (RaceTrackTunnel): each one's first and last point (the lap's) and its roof's height over the deck
+    public List<(int From, int To, double Roof)> Tunnels { get; } = new();
+    // the lap's point of each of Raised's (PlaceRaised): where a point of the lap is in the engine's list
+    public List<int> RaisedSpan { get; } = new();
     public int Vertices, Cells, DecorsRemoved, SolidDecorsRemoved, BridgeCells;
     public double Length;
     public List<string> Notes { get; } = new();
@@ -761,6 +773,8 @@ internal static class RaceTrackBuilder
             RaceTrackPipes.Place(island, main, pipes.Select(p => (PlanPoint(plan, main, p.From), PlanPoint(plan, main, p.To), p)).ToList(), jetRuns, options, report);
         else if (jetRuns.Count > 0)
             RaceTrackPipes.PlaceJets(main, jetRuns, options, report);
+        if (planned && plan.Tunnels is { Length: > 0 } tunnels)
+            RaceTrackTunnel.Place(island, main, tunnels.Select(t => (PlanPoint(plan, main, t.From), PlanPoint(plan, main, t.To), t)).ToList(), options, report);
         if (planned && plan.Pipeline is { } pipeline)
             RaceTrackPipes.PlacePipeline(island, main, pipeline, plan.OriginCellX, plan.OriginCellZ, options, report);
         report.GroundBefore = (x, z) => natural.Height(x, z);
@@ -4327,7 +4341,7 @@ internal static class RaceTrackBuilder
     // dropped the car. So a piece's box has its top far under its own bottom (the engine's tests all need the top at or over something;
     // its bottom corners, at the piece's real place, are what decides whether the piece is drawn). A pier's box is its column, ending
     // well under the road all the way along the car's length.
-    private const double RaisedPiece = 4, RaisedPier = 10, RaisedPierFrom = 900, PierHalf = 230, PierBeam = 260;
+    private const double RaisedPier = 10, RaisedPierFrom = 900, PierHalf = 230, PierBeam = 260;
     private const int NoBoxTop = -32000, PierClear = 5, RaisedArrowEvery = 3;
     private const double RaisedGantryClear = 2300, RaisedGantryBeam = 640;
 
@@ -4346,6 +4360,7 @@ internal static class RaceTrackBuilder
         else for (var k = first; up[k] && span.Count < n; k = At(r, k + 1)) span.Add(k);
         if (loop) span.Add(first);
         report.RaisedLoop = loop;
+        report.RaisedSpan.Clear(); report.RaisedSpan.AddRange(span);
         var half = o.RaisedHalfWidth * 512;
         double Half(int k) => (r.RaisedHalfs?[k] ?? o.RaisedHalfWidth) * 512;
         var banks = r.RoadBank;
@@ -4387,7 +4402,7 @@ internal static class RaceTrackBuilder
         // with as many strips across its asphalt as the widest needs (RaceTrackRaisedBody.Tile: they meet on the same points)
         var strips = RaceTrackRaisedBody.StripsFor(span.Max(k => (r.AsphaltHalf - o.RaisedHalfWidth) * 512 + Half(k)));
         var per = Math.Max(1, (int)Math.Round(1 / o.Spacing));                    // lap points to a cell
-        var cells = Math.Max(1, (int)Math.Round(RaisedPiece));
+        var cells = Math.Max(1, (int)Math.Round(o.RaisedPiece));
         int pieces = 0, left = 0;
         var runs = new List<List<int>> { new() };
         foreach (var k in span) { if (r.Gap[k] || !up[k]) { if (runs[^1].Count > 0) runs.Add(new()); } else runs[^1].Add(k); }
@@ -4439,7 +4454,7 @@ internal static class RaceTrackBuilder
             ? PlacePiersOnScenery(island, r, o, report, span, loop, scenery, stand, Across, Add, ref left)
             : PlacePiers(island, r, o, report, span, Across, Add, ref left);
         if (left > 0) report.Notes.Add($"WARNING: {left} pieces of the raised road were left out: the cube already holds {IslandDecors.MaxPerCube} decors");
-        report.Placed.Add($"raised road: {(span.Count(k => up[k]) - (loop ? 1 : 0)) * o.Spacing:0} cells in {pieces} pieces of {RaisedPiece:0} cells and {piers} piers" +
+        report.Placed.Add($"raised road: {(span.Count(k => up[k]) - (loop ? 1 : 0)) * o.Spacing:0} cells in {pieces} pieces of {o.RaisedPiece:0} cells and {piers} piers" +
                           (none > 0 ? $" ({none} more left out: no clear ground under the road there)" : "") +
                           $", {report.NewBodies.Count} new decor bodies from {o.NewBodyBase} on");
     }

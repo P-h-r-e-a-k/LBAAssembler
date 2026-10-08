@@ -302,6 +302,12 @@ static int s_wantFlip = 0;
 typedef struct { int Var, Least; char Text[64]; } T_RACE_GATE;
 static T_RACE_GATE s_gates[RACE_MAX_GATES];
 static int s_nbGates = 0;
+// Game variables held while the race-track mode runs (vargame=<n> <value>): an island's travel cutscenes kept from playing in a race --
+// Otringal's square island plays the Dino-Fly's landing (Twinsen held at its pad while the Dino-Fly comes in) whenever variable 83 is
+// under 2, and the car flew into it off the jump over the sea and stood there 11 s (2026-10-08).
+#define RACE_MAX_HELD 16
+static int s_held[RACE_MAX_HELD][2];
+static int s_nbHeld = 0;
 static int s_beatOpp = -1;                 // the opponent whose lap is the time to beat (-1 none)
 // beat_text=: the text (the island's) that tells the time to beat -- its "##" is that time, as the display shows it (RaceMod_Text)
 static int s_beatText = -1;
@@ -592,6 +598,21 @@ typedef struct { double X, Y, Z, DirX, DirZ, Half; S32 Reach, On, Off, Phase, Pu
 extern T_FLOW *TabPartFlow;
 static T_RACE_JET s_jets[RACE_MAX_JETS];
 static int s_nbJets = 0;
+// Tunnels over the raised road (tunnel=<from> <to> <roof>: its first and last point, its roof's height over the deck; Otringal's over the
+// bridge to its square island, 2026-10-08): the camera that follows the car rides the road behind it under the roof from RACE_TUNNEL_LEAD
+// points before the tunnel's mouth to its end (TunnelCamera) -- out at the arm's usual length the eye stood over the roof, which hid the
+// car; and the follow camera's own, its arm only shortened, looks at a point well ahead of the car (DISTANCE_VISEE): the car went out of
+// the bottom of the view.
+#define RACE_MAX_TUNNELS 8
+#define RACE_TUNNEL_LEAD 40
+#define RACE_TUNNEL_TAIL 16                // ... and this many past its end (the car out from under the roof before the eye rises)
+#define RACE_TUNNEL_EYE 900                // the eye this far under the roof at the most
+#define RACE_TUNNEL_BACK 4200              // ... and this far behind the car along the road (TunnelCamera)
+#define RACE_TUNNEL_UP 1500
+#define RACE_TUNNEL_AHEAD 3000
+typedef struct { int From, To; double Roof; } T_RACE_TUNNEL;
+static T_RACE_TUNNEL s_tunnels[RACE_MAX_TUNNELS];
+static int s_nbTunnels = 0;
 // Jump cameras (jumpcam=, JumpCamera): a drop -- a flight off a raised road's end and down a hillside onto the ground far below (the lava
 // lake's, 2026-10-01) -- took the camera behind the car down into the hill, and the landing was never seen. While the hero flies such a
 // jump, and RACE_JUMPCAM_HOLD after he lands, the camera stands at a place of its own beside the flight (the builder's, with the whole
@@ -956,6 +977,18 @@ static S32 RaisedArm(S32 base) {
         if (under < arm) arm = under;
     }
     return arm < 3000 ? 3000 : arm > base ? base : (S32)arm;
+}
+
+// The tunnel the car is in, or coming up to (RACE_TUNNEL_LEAD points before its mouth): -1 none. `seg` a raised road segment.
+static int InTunnel(int seg) {
+    const int n = s_raisedLoop ? s_nbRaised - 1 : s_nbRaised;
+    for (int k = 0; k < s_nbTunnels && n > 0; k++) {
+        const T_RACE_TUNNEL *tn = &s_tunnels[k];
+        const int from = ((tn->From - RACE_TUNNEL_LEAD) % n + n) % n;
+        const int span = ((tn->To + RACE_TUNNEL_TAIL - from) % n + n) % n, at = ((seg - from) % n + n) % n;
+        if (at <= span) return k;
+    }
+    return -1;
 }
 
 void RaceMod_FloorFor(S32 y) { s_floorRef = s_nbRaised ? y : RAISED_NOREF; }
@@ -1470,6 +1503,13 @@ static void Load(const char *path, int carOnly = 0) {
                 p->X = x; p->Y = y; p->Z = z; p->Every = every; p->Next = 0; s_nbVents++;
             }
         }
+        else if (!strcmp(key, "tunnel")) {
+            T_RACE_TUNNEL *t = &s_tunnels[s_nbTunnels];
+            int from, to, roof;
+            if (s_nbTunnels < RACE_MAX_TUNNELS && sscanf(v, "%d %d %d", &from, &to, &roof) == 3 && roof > 0) {
+                t->From = from; t->To = to; t->Roof = roof; s_nbTunnels++;
+            }
+        }
         else if (!strcmp(key, "jet")) {
             T_RACE_JET *p = &s_jets[s_nbJets];
             int x, y, z, a, b, c, d, e, f, g, h = RACE_STEAM_HIGH;
@@ -1499,6 +1539,10 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_nbJumpCams < RACE_MAX_JUMPCAMS && sscanf(v, "%d %d %d %d %d %d", &c->Anim, &c->CubeX, &c->CubeZ, &c->X, &c->Y, &c->Z) == 6) s_nbJumpCams++;
         }
         else if (!strcmp(key, "qualifying_seed")) s_seed = (unsigned)strtoul(v, NULL, 10);
+        else if (!strcmp(key, "vargame")) {
+            int n, value;
+            if (s_nbHeld < RACE_MAX_HELD && sscanf(v, "%d %d", &n, &value) == 2 && n >= 0 && n < 256) { s_held[s_nbHeld][0] = n; s_held[s_nbHeld][1] = value; s_nbHeld++; }
+        }
         else if (!strcmp(key, "gate")) {
             T_RACE_GATE *g = &s_gates[s_nbGates];
             int used = 0;
@@ -1622,7 +1666,7 @@ static void Load(const char *path, int carOnly = 0) {
     for (int i = 0; i < s_nbArcs; i++)
         if (!ArcPrepare(&s_arcs[i])) { Log_Info("[racemod] carried jump %d: not along the raised road -- left out", i + 1); s_arcs[i--] = s_arcs[--s_nbArcs]; }
     if (s_nbArcs) Log_Info("[racemod] %d carried jump(s), %d cube scenes", s_nbArcs, s_nbCubeScenes);
-    if (s_nbLoops || s_nbJumpCams || s_nbArcs) FollowCamEyeHook = RaceCameraEye;
+    if (s_nbLoops || s_nbJumpCams || s_nbArcs || s_nbTunnels) FollowCamEyeHook = RaceCameraEye;
     if (s_car.Gears < 1) s_car.Gears = 1;
     if (s_car.Gears > RACE_MAX_GEARS) s_car.Gears = RACE_MAX_GEARS;
     for (S32 g = 0; g < s_car.Gears; g++)
@@ -2986,7 +3030,26 @@ static S32 JumpCamera(S32 *eye, S32 *target) {
     return FALSE;
 }
 
-static S32 RaceCameraEye(S32 *eye, S32 *target) { return ArcCamera(eye, target) || JumpCamera(eye, target) || LoopCamera(eye, target) || RailCamera(eye, target); }
+// In a tunnel (InTunnel): the rail camera's eye -- behind the car along the road, looking at it -- low enough to be under the roof.
+static S32 TunnelCamera(S32 *eye, S32 *target) {
+    if (!s_nbTunnels || !s_nbRaised || CubeMode != CUBE_EXTERIEUR || Comportement != C_BUGGY) return FALSE;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    S32 f;
+    int seg;
+    double lat, t;
+    if (!RaisedAt(hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Z + CurrentCubeY * 32768.0, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t) || abs(f - hero->Obj.Y) > 300) return FALSE;
+    const int k = InTunnel(seg);
+    if (k < 0) return FALSE;
+    const double back = s_railBack, upKept = s_railUp, lead = s_railLead;
+    s_railBack = RACE_TUNNEL_BACK;
+    s_railUp = s_tunnels[k].Roof - RACE_TUNNEL_EYE < RACE_TUNNEL_UP ? s_tunnels[k].Roof - RACE_TUNNEL_EYE : RACE_TUNNEL_UP;
+    s_railLead = RACE_TUNNEL_AHEAD;
+    const S32 done = RailCamera(eye, target);
+    s_railBack = back; s_railUp = upKept; s_railLead = lead;
+    return done;
+}
+
+static S32 RaceCameraEye(S32 *eye, S32 *target) { return ArcCamera(eye, target) || JumpCamera(eye, target) || LoopCamera(eye, target) || TunnelCamera(eye, target) || RailCamera(eye, target); }
 
 S32 RaceMod_Rescue(void) {
     if (!RaceMod_Active() || !s_rescueOn || Comportement != C_BUGGY || !Guide() || s_safeIndex < 0) return 0;
@@ -4032,6 +4095,11 @@ static void Jets(S32 now, int driving) {
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
+    for (int i = 0; i < s_nbHeld; i++)
+        if (ListVarGame[s_held[i][0]] != s_held[i][1]) {
+            ListVarGame[s_held[i][0]] = (S16)s_held[i][1];
+            Log_Info("[racemod] game variable %d held at %d", s_held[i][0], s_held[i][1]);
+        }
     if (Comportement == C_BUGGY) TrackSafePlace();
     FallenBelow(TimerRefHR);
     if (s_rescue) { s_rescue = 0; Rescue(); }
@@ -4706,7 +4774,7 @@ static void ResetTrack(void) {
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0;
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
-    s_nbJets = 0;
+    s_nbJets = 0; s_nbTunnels = 0;
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0;
@@ -4714,7 +4782,7 @@ static void ResetTrack(void) {
     s_autoIndex = -1;
     s_faced = 0; s_safeIndex = -1; s_safeScene = -1; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0; s_hinted = -1;
-    s_nbGates = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
+    s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     ListVarGame[209] = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;

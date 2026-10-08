@@ -50,10 +50,13 @@ internal static class RaceCarEngineFile
         foreach (var loop in track?.Loops ?? new()) text.Append($"loop={string.Join(' ', loop)}\n");
         // (the Island of the Francos: every car on Gazogem fuel all race, none from a mushroom)
         if (info is not null && RaceTrackIsland.ByName(info.Island) is { FuelAlways: true }) text.Append("fuel_always=1\n");
+        // (game variables held while it races: travel cutscenes kept from playing -- Otringal's Dino-Fly landing)
+        if (info is not null) foreach (var (n, value) in RaceTrackIsland.ByName(info.Island).HeldVars) text.Append($"vargame={n} {value}\n");
         // the pipes over the road: their steam and the oil they drip onto it
         foreach (var steam in track?.Steam ?? new()) text.Append($"steam={string.Join(' ', steam)}\n");
         foreach (var drip in track?.Drips ?? new()) text.Append($"drip={string.Join(' ', drip)}\n");
         foreach (var jet in track?.Jets ?? new()) text.Append($"jet={string.Join(' ', jet)}\n");
+        foreach (var tunnel in track?.Tunnels ?? new()) text.Append($"tunnel={string.Join(' ', tunnel)}\n");
         // where the camera stands while the car flies a drop
         foreach (var dropCam in track?.JumpCameras ?? new()) text.Append($"jumpcam={string.Join(' ', dropCam)}\n");
         // the jumps the engine carries the car over (places in the raised road's file), and the island's scenes by cube for the cube

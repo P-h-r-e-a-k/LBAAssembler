@@ -92,7 +92,10 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Drips = null,
         // Jets: steam jets across the road (RaceTrackPipes.PlaceJets), each [x, y, z (the road's middle), its half width, the reach across,
         // blowing (ms), not (ms), phase (ms), its way x and z (a thousand long)] (RACEMOD.CPP jet=)
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Jets = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Jets = null,
+        // Tunnels: tunnels over the raised road (RaceTrackTunnel), each [its first point, its last (the raised road's), its roof's height over
+        // the deck] (RACEMOD.CPP tunnel=), since 2026-10-08
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Tunnels = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -349,6 +352,8 @@ internal static class RaceTrackService
             scaled.AddRange(IslandScaler.ScaleScenes(gameDirectory, options.Island, island, anchor, options.Island.Scale));
             scaled.Add(IslandScaler.ScaleHolomap(gameDirectory, options.Island, anchor, options.Island.Scale));
         }
+        // (cubes of its ground the game has no scene for, that the lap drives over: a scene each -- Otringal's south-west islets)
+        if (options.Island.NewCubes.Length > 0) scaled.AddRange(IslandScaler.AddCubeScenes(gameDirectory, options.Island, island));
         var extra = Prepare(gameDirectory, options);
         extra.InsertRange(0, scaled);
         var themed = RaceTrackTextures.Import(island, options.Island, gameDirectory);
@@ -630,7 +635,10 @@ internal static class RaceTrackService
             Mushrooms: scenes.Mushrooms is { Count: > 0 } mushrooms ? mushrooms : null, Penguins: scenes.Penguins is { Count: > 0 } penguins ? penguins : null,
             Oil: scenes.Oil is { Count: > 0 } oil ? oil : null,
             Steam: report.Steam.Count > 0 ? report.Steam.ToList() : null, Drips: report.Drips.Count > 0 ? report.Drips.ToList() : null,
-            Jets: report.Jets.Count > 0 ? report.Jets.ToList() : null);
+            Jets: report.Jets.Count > 0 ? report.Jets.ToList() : null,
+            Tunnels: raised && report.Tunnels.Count > 0
+                ? report.Tunnels.Select(t => new[] { report.RaisedSpan.IndexOf(t.From), report.RaisedSpan.IndexOf(t.To), (int)Math.Round(t.Roof) }).Where(t => t[0] >= 0 && t[1] >= 0).ToList()
+                : null);
     }
 
     private static int[] LoopRecord(LoopInfo l)
