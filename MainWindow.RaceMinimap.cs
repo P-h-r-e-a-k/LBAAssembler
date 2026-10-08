@@ -26,7 +26,7 @@ public partial class MainWindow
     private bool raceMinimapOn, raceMinimapBusy;
     private double raceMinimapScale = 1;
     private Rect raceMinimapArea;                            // the part of the minimap image shown (its pixels)
-    private readonly Canvas raceMinimapLayer = new() { IsHitTestVisible = false };
+    private readonly Canvas raceMinimapLayer = new();          // (hit-testable: the cars' dots show their names; a click still reaches the minimap)
     private readonly Dictionary<int, Ellipse> raceMinimapCars = new();
     private Terrain.RaceTrackService.TrackInfo? raceMinimapTrack;
 
