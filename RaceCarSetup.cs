@@ -39,8 +39,10 @@ public sealed class RaceCarSetup
     public bool PowerUps { get; set; } = true;
     // A nitro penguin dropped walks the track until a car comes near it, and goes off; off: it goes off a second after it is dropped.
     public bool PenguinsWalk { get; set; } = true;
-    // The checkpoints drawn as red lines across the road (RACEMOD.CPP checkpoint_lines=), for testing where they are; off: unseen.
-    public bool ShowCheckpoints { get; set; } = true;
+    // The checkpoints drawn as red lines across the road (RACEMOD.CPP checkpoint_lines=), for testing where they are; off: unseen. Off
+    // unless asked for, since 2026-10-08 (in pictures of a race they read as something wrong with the track; the race log says when each
+    // is crossed).
+    public bool ShowCheckpoints { get; set; }
     public List<string> LeftOut { get; set; } = new();
     // A qualifying lap before the race: its time against the opponents' sets the grid (off: Twinsen starts on pole).
     public bool Qualifying { get; set; } = true;
