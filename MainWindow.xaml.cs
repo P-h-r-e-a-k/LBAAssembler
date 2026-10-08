@@ -2616,7 +2616,7 @@ public partial class MainWindow : Window
 
     private void UpdateMinimapMarker()
     {
-        if (sceneMinimapActive) return;
+        if (sceneMinimapActive || raceMinimapOn) return;
         MinimapMarkerCanvas.Children.Clear();
         if (currentIsland is null || MinimapImage.Source is null) return;
         var px = targetX / MinimapWorldUnitsPerPixel - minimapCropOffsetXPixels;
@@ -2642,7 +2642,7 @@ public partial class MainWindow : Window
     // jumping via a minimap click doesn't leave the marker scrolled off screen.
     private void CenterMinimapOnMarker()
     {
-        if (MinimapImage.Source is null) return;
+        if (MinimapImage.Source is null || raceMinimapOn) return;
         var px = targetX / MinimapWorldUnitsPerPixel - minimapCropOffsetXPixels;
         var pz = targetZ / MinimapWorldUnitsPerPixel - minimapCropOffsetYPixels;
         MinimapScrollViewer.ScrollToHorizontalOffset(px - MinimapScrollViewer.ViewportWidth / 2);
@@ -2734,6 +2734,7 @@ public partial class MainWindow : Window
                 MinimapImage.Source = task.Result;
                 UpdateMinimapMarker();
                 CenterMinimapOnMarker();
+                if (raceMinimapOn) FitRaceMinimap();
                 // Re-draw with the fresh crop offsets in case this finished
                 // after RenderNativeCamera() already drew actors using the
                 // previous island's (now stale) offsets.

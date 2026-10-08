@@ -4336,6 +4336,33 @@ static void Shuttles(S32 now, int driving) {
     }
 }
 
+// Where the cars are, for the editor's minimap while it plays a race (the console's racecars, asked over the control socket a few times a
+// second): Twinsen's, then each opponent's that races in a car -- "car <n> <x> <z> <beta> <name>", island units, n -1 for Twinsen, else
+// the opponent's number. An opponent's own car where this scene has it in sight, else where its line has it in the race; one waiting
+// out of sight (in another scene's pits, or a race not on) is left out. Returns how many lines.
+int RaceMod_Cars(char lines[][96], int most) {
+    if (!RaceMod_Active() || CubeMode != CUBE_EXTERIEUR || most <= 0) return 0;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    int n = 0;
+    snprintf(lines[n++], 96, "car -1 %d %d %d Twinsen", (int)(hero->Obj.X + cx), (int)(hero->Obj.Z + cz), (int)(hero->Obj.Beta & 4095));
+    for (int o = 0; o < RACE_MAX_OPPONENTS && n < most; o++) {
+        T_RACE_OPPONENT *op = &s_opp[o];
+        if (!op->Count || !op->Scenes) continue;
+        double x, z, y, v, dx, dz;
+        S32 beta = 0;
+        const int index = OpponentActor(op);
+        if (index >= 0 && ListObjet[index].Obj.Y > -10000) {
+            x = ListObjet[index].Obj.X + cx; z = ListObjet[index].Obj.Z + cz; beta = ListObjet[index].Obj.Beta & 4095;
+        } else if (RaceOn()) {
+            PathAt(op, op->S, &x, &z, &y, &v, &dx, &dz);
+            beta = (S32)(atan2(dx, dz) * 4096 / (2 * 3.14159265358979)) & 4095;
+        } else continue;
+        snprintf(lines[n++], 96, "car %d %d %d %d %s", o, (int)x, (int)z, (int)beta, op->Name);
+    }
+    return n;
+}
+
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
