@@ -25,9 +25,7 @@ internal static partial class RaceTrackCharacterCars
 
     // A character of the cast: its body (BODY.HQR), the car's name ("<Short>'s <its style>"), who drives, its island and kind -- and where the
     // automatic seat went wrong, its own (Seat) or another style.
-    // (Name: its own name, not "<Short>'s <style>"; Laser: a laser cannon on its bonnet, its muzzle in that colour -- Twinsen's laser cars)
-    public sealed record CastMember(int Character, string Short, string Driver, string Island, Kind Kind, Style? Style = null, CastSeat? Seat = null,
-        string? Name = null, int Laser = 0);
+    public sealed record CastMember(int Character, string Short, string Driver, string Island, Kind Kind, Style? Style = null, CastSeat? Seat = null);
     // A driver's seat put right by hand: its waist (in its own body), its size in the car, its arms (none: NoArms), bones left out.
     public sealed record CastSeat(Vector3? Origin = null, float? Scale = null, bool NoArms = false, bool? Whole = null, int[]? Drop = null, (int, int[])? Right = null, (int, int[])? Left = null,
         float? Reach = null, float? GripHeight = null, float? GripX = null);
@@ -200,12 +198,10 @@ internal static partial class RaceTrackCharacterCars
         new(459, "The grey mechanic", "the grey mechanic grobo", Otringal, Kind.Grobo, Style.Robot),
         new(460, "The green mechanic", "the green mechanic grobo with the missiles", Otringal, Kind.Grobo, Style.Robot),
         new(468, "The mechanic rabbibunny", "the mechanic rabbibunny", Otringal, Kind.Rabbibunny, Style.Robot),
-        // Twinsen's laser cars (the user, 2026-10-08: "Create extra car models for Twinsen, one that fires green lasers, and one that fires
-        // red"): a roadster in his tunic's colours, a laser cannon on the bonnet; driven as (the car setup's "drive as"), the throw key fires
-        // its bolts (RACEMOD.CPP drive_laser=)
-        new(0, "Twinsen", "Twinsen", Citadel, Kind.Sup, Style.Roadster, Name: LaserGreenName, Laser: GreenFlat),
-        new(0, "Twinsen", "Twinsen", Citadel, Kind.Sup, Style.Roadster, Name: LaserRedName, Laser: RedFlat),
     };
+    // Twinsen's laser cars as folders built on 2026-10-08 list them (cars 218 and 219 of RACECARS.JSON: a roadster with a laser cannon on
+    // its bonnet). Since then they are his own buggy, its gun firing the lasers (the user: "let's keep the look of his original car, it
+    // already has an animation for firing bullets"): RaceCarSetup.DriveAs LaserGreen/LaserRed, which those two stand for in such a folder.
     public const string LaserGreenName = "Twinsen's green laser car", LaserRedName = "Twinsen's red laser car";
 
     public static Style StyleOf(CastMember c) => c.Style ?? c.Kind switch
@@ -223,7 +219,7 @@ internal static partial class RaceTrackCharacterCars
         Style.Basket => "basket car", _ => "ghost car",
     };
 
-    public static string CastName(CastMember c) => c.Name ?? $"{c.Short}'s {Noun(StyleOf(c))}";
+    public static string CastName(CastMember c) => $"{c.Short}'s {Noun(StyleOf(c))}";
 
     // The cast's cars, numbered on from the cars made by hand.
     public static Car[] CastCars => Cast.Select((c, i) => new Car(CastName(c), c.Driver, c.Character, CastFirst + i, (ch, racer) => BuildCast(c, i, ch, racer), c.Island)).ToArray();
@@ -365,7 +361,6 @@ internal static partial class RaceTrackCharacterCars
         var variant = index % 3;
         var sides = lean >= 1 ? 8 : 12;
         var parts = StyleBody(m, style, paint, variant, sides, lean, c, fit);
-        if (c.Laser != 0) Cannon(m, parts.Hull, c.Laser, lean);
         // (at the last, the driver's smallest polygons left out: those under a share of the body's area)
         CarDriver.Painter? thin = null;
         if (lean >= 3)
@@ -376,30 +371,7 @@ internal static partial class RaceTrackCharacterCars
             var cut = areas[Math.Min(areas.Count - 1, areas.Count * (lean == 3 ? 35 : 60) / 100)];
             thin = (f, _) => Area(f) < cut ? null : (f.Colour, CarDriver.Own, f.Material == 0 ? 0 : -1);
         }
-        // (Twinsen's laser cars: his tunic's texture left off, the tunic his blue -- the car's own texture page isn't his)
-        if (c.Laser != 0)
-        {
-            var under = thin;
-            thin = (f, bones) => under is not null && under(f, bones) is null ? null
-                : f.Texture is not null ? (BlueSoft, CarDriver.Own, CarDriver.Flat) : (f.Colour, CarDriver.Own, f.Material == 0 ? 0 : -1);
-        }
         return FinishCast(m, parts, character, racer, fit, thin, lean);
-    }
-
-    // A laser cannon on the bonnet: its housing in front of the cockpit, the barrel along the middle of the car out past its nose on two
-    // struts, a dark muzzle and the bolt's colour glowing in it, and a stripe of that colour down each side.
-    private static void Cannon(CarMesh m, Hull hull, int colour, int lean)
-    {
-        var y = hull.Top(0, 120) + 70;
-        var back = new Vector3(0, y, 120); var muzzle = new Vector3(0, y - 20, 800);
-        m.Box(2, back + new Vector3(0, 0, 60), new Vector3(150, 110, 220), Steel + 2, Dark + 2);
-        m.Strut(2, back + new Vector3(0, 0, 160), muzzle, 36, Steel);
-        foreach (var z in new[] { 380f, 600f }) m.Strut(2, hull.OnTop(0, z, -8), new Vector3(0, y - 20 * (z - 120) / 680, z), 16, Dark + 2);
-        m.Ball(2, muzzle, 40, Dark);
-        m.Ball(2, muzzle + new Vector3(0, 0, 40), 44, colour);
-        if (lean < 2)
-            foreach (var side in Sides)
-                for (var i = 0; i + 1 < hull.Rings.Count; i++) { var k = side > 0 ? 2 : hull.Rings[i].Length - 2; m.Line(hull.Rings[i][k], hull.Rings[i + 1][k], colour); }
     }
 
     // What a style makes of the car before its driver: the hull, the cockpit, the wheels.

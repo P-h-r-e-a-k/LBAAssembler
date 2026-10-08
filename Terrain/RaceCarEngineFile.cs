@@ -195,15 +195,21 @@ internal static class RaceCarEngineFile
     // Null when the folder hasn't that car (built before it was made).
     internal static string? DriveAsLine(string gameDirectory, int number)
     {
+        // (Twinsen's laser cars: his own buggy, its gun firing laser bolts instead of magic balls -- RACEMOD.CPP drive_laser=)
+        if (number == RaceCarSetup.LaserGreen) return "# Twinsen's buggy firing green lasers\ndrive_laser=1\n";
+        if (number == RaceCarSetup.LaserRed) return "# Twinsen's buggy firing red lasers\ndrive_laser=2\n";
         if (number < 0) return null;
         var racer = Lba2EntityTable.Load(gameDirectory)?.Entities.FirstOrDefault(e => e.Id == RaceTrackScenes.RacerEntity);
         if (racer is null) return null;
         var anim = racer.Anims.Where(a => a.Generic == 1).Select(a => (int?)a.Anim).FirstOrDefault();
         if (anim is null) return null;
         if (RaceTrackCharacterCars.Catalogue(gameDirectory).FirstOrDefault(e => e.Number == number) is { } listed)
-            // (Twinsen's laser cars: the throw key fires their bolts)
-            return $"# driving as car {number}, {listed.Name}\ndrive_as={listed.Body} {anim} {listed.Small}\n" +
-                   (listed.Name == RaceTrackCharacterCars.LaserGreenName ? "drive_laser=1\n" : listed.Name == RaceTrackCharacterCars.LaserRedName ? "drive_laser=2\n" : "");
+        {
+            // (the laser cars as a folder built on 2026-10-08 lists them: his buggy firing lasers now)
+            if (listed.Name == RaceTrackCharacterCars.LaserGreenName) return DriveAsLine(gameDirectory, RaceCarSetup.LaserGreen);
+            if (listed.Name == RaceTrackCharacterCars.LaserRedName) return DriveAsLine(gameDirectory, RaceCarSetup.LaserRed);
+            return $"# driving as car {number}, {listed.Name}\ndrive_as={listed.Body} {anim} {listed.Small}\n";
+        }
         var body = racer.Bodies.Where(b => b.Generic == number).Select(b => (int?)b.Body).FirstOrDefault();
         if (body is null) return null;
         var small = racer.Bodies.Where(b => b.Generic == RaceTrackSmallCars.SmallOf(number)).Select(b => b.Body).DefaultIfEmpty(-1).First();

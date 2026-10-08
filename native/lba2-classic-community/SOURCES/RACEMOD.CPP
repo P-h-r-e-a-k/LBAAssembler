@@ -450,14 +450,14 @@ static T_RACE_SLICK s_slicks[RACE_MAX_SLICKS];
 #define RACE_HOME_DIRECT 3500.0            // ... straight at it once this near
 #define RACE_HOME_MS 15000                 // ... and gone after this long
 enum { SHOT_YELLOW, SHOT_GREEN, SHOT_RED, SHOT_FIRE, SHOT_LASER_GREEN, SHOT_LASER_RED };
-// Twinsen's laser cars (drive_laser=1 green, 2 red, while he drives as one: drive_as=): the throw key fires their bolts -- the laser cars'
-// models (laser_models=<green> <red>, OBJFIX.HQR: the builder adds them) flown straight ahead, one every RACE_LASER_EVERY ms while it is held
+// Twinsen's laser cars (drive_laser=1 green, 2 red): his own car, its gun firing laser bolts instead of its magic balls -- the bolts' models
+// (laser_models=<green> <red>, OBJFIX.HQR: the builder adds them) flown straight ahead, one for each shot of the gun's firing animation
+// (FICHE.CPP: RaceMod_LaserThrow)
 #define RACE_LASER_SPEED 17000.0
 #define RACE_LASER_RANGE (34 * 512.0)
-#define RACE_LASER_EVERY 260
+#define RACE_LASER_MUZZLE 420.0            // a bolt starts this far ahead of the car (the gun's muzzle, on its bonnet)
 #define RACE_LASER_REACH 1050
 static int s_driveLaser = 0, s_laserModel[2] = {-1, -1};
-static S32 s_laserAt = 0;
 static int LaserExtra(int model, S32 x, S32 y, S32 z);
 typedef struct { int On, Kind, Owner, Target, Extra; double X, Y, Z, Hx, Hz, S, Side, SideV, Travelled; S32 T0, Trail; } T_RACE_SHOT;
 static T_RACE_SHOT s_shots[RACE_MAX_SHOTS];
@@ -4027,19 +4027,23 @@ static int LaserExtra(int model, S32 x, S32 y, S32 z) {
     return -1;
 }
 
-// BUGGY.CPP: Twinsen drives one of his laser cars -- the throw key fires its bolts, not his magic ball.
+// Twinsen drives one of his laser cars (his own car: the user, 2026-10-08, "let's keep the look of his original car, it already has an
+// animation for firing bullets just make it so this gun fires the lasers instead").
 S32 RaceMod_LaserCar(void) {
-    return RaceMod_Active() && s_driveLaser > 0 && s_driveBody >= 0 && s_laserModel[s_driveLaser == 2] >= 0 && Comportement == C_BUGGY;
+    return RaceMod_Active() && s_driveLaser > 0 && s_laserModel[s_driveLaser == 2] >= 0 && Comportement == C_BUGGY;
 }
 
-// ... the throw key held: a bolt out of the front of the car every RACE_LASER_EVERY ms.
-void RaceMod_FireLaser(void) {
-    const S32 now = TimerRefHR;
-    if (!RaceMod_LaserCar() || CubeMode != CUBE_EXTERIEUR || now - s_laserAt < RACE_LASER_EVERY) return;
-    s_laserAt = now;
+// FICHE.CPP F_THROW_MAGIC_EXTRA (the buggy's gun: a magic ball out of its muzzle on each shot of its firing animation): in a laser car,
+// a laser bolt instead, straight ahead out of the front of the car. Non-zero: fired, the animation's own ball left out.
+S32 RaceMod_LaserThrow(S32 numobj) {
+    if (numobj != NUM_PERSO || !RaceMod_LaserCar() || CubeMode != CUBE_EXTERIEUR) return 0;
+    static int told = 0;
+    if (!told) { told = 1; Log_Info("[racemod] Twinsen's car's gun fires %s lasers", s_driveLaser == 2 ? "red" : "green"); }
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
-    const double b = hero->Obj.Beta * 2 * 3.14159265358979 / 4096;
-    LaunchShot(s_driveLaser == 2 ? SHOT_LASER_RED : SHOT_LASER_GREEN, -1, -2, hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0, sin(b), cos(b), now);
+    const double b = hero->Obj.Beta * 2 * 3.14159265358979 / 4096, hx = sin(b), hz = cos(b);
+    LaunchShot(s_driveLaser == 2 ? SHOT_LASER_RED : SHOT_LASER_GREEN, -1, -2, hero->Obj.X + CurrentCubeX * 32768.0 + hx * RACE_LASER_MUZZLE, hero->Obj.Y,
+               hero->Obj.Z + CurrentCubeY * 32768.0 + hz * RACE_LASER_MUZZLE, hx, hz, TimerRefHR);
+    return 1;
 }
 
 static void DropFake(double x, double y, double z, int dropper, S32 now) {
@@ -5489,7 +5493,7 @@ static void ResetTrack(void) {
     s_nbAfterGears = 0; s_wakeFlight = 0;
     s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
     s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes)); memset(s_shots, 0, sizeof(s_shots));
-    s_driveLaser = 0; s_laserModel[0] = s_laserModel[1] = -1; s_laserAt = 0; s_skidUntil = 0;
+    s_driveLaser = 0; s_laserModel[0] = s_laserModel[1] = -1; s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     s_noCollideScene = -1;
     if (s_heroHidden) { ListObjet[NUM_PERSO].Flags &= ~INVISIBLE; s_heroHidden = 0; }

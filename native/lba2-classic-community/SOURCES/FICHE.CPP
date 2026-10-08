@@ -917,6 +917,10 @@ void GereAnimAction(T_OBJET *ptrobj, U8 numobj) {
                 // ATTENTION: cet extra suit l'aplha de l'objet
                 //	      (cf buggy)
 
+                // (one of Twinsen's laser cars in a race-track mod: its gun's shot a laser bolt instead -- RACEMOD.CPP)
+                extern S32 RaceMod_LaserThrow(S32 numobj);
+                if (RaceMod_LaserThrow(numobj)) break;
+
                 last_extra = ThrowExtra(numobj,
                                         point, 0, 0, // magouille: x,y,z seront calculés +tard
                                         sprite,
