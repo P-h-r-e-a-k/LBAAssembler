@@ -610,9 +610,49 @@ static int s_nbJets = 0;
 #define RACE_TUNNEL_BACK 4200              // ... and this far behind the car along the road (TunnelCamera)
 #define RACE_TUNNEL_UP 1500
 #define RACE_TUNNEL_AHEAD 3000
+#define RACE_TUNNEL_SIGHT 700              // ... its sight line clearing the road to the car's middle
+#define RACE_TUNNEL_UNDER 250              // ... and the eye at least this far under the roof
 typedef struct { int From, To; double Roof; } T_RACE_TUNNEL;
 static T_RACE_TUNNEL s_tunnels[RACE_MAX_TUNNELS];
 static int s_nbTunnels = 0;
+// Lava balls (lavaball=<x> <y> <z> <from> <to> <every> <phase>: a source on the lava's surface, island units, and the stretch of the raised
+// road it rains on, its first and last point): Volcano Island's (the user, 2026-10-08: "lava balls shooting up and out of the lava at
+// points and raining down onto the track"). Every so often (Every ms, give or take a quarter, from Phase) while Twinsen is near, a ball
+// of fire -- the magic ball's fire sprite -- is shot up out of the lava and falls on a place along that stretch, its shadow on the road
+// there growing as it comes; where it lands it bursts as a nitro penguin does, and a car in the burst is stopped.
+#define RACE_MAX_LAVA 16
+#define RACE_LAVA_SPRITE 11                // SPRITE_BALLE_LVL_4: the magic ball's fire
+#define RACE_LAVA_SHADOW 12                // SPRITE_BALLE_SHADOW
+#define RACE_LAVA_TRAIL 15                 // SPRITE_TRAINEE_BALLE_1..3
+#define RACE_LAVA_SCALE 14                 // the ball's size (smaller, bigger: about 900 across)
+#define RACE_LAVA_NEAR (40 * 512)          // shot only while Twinsen is this near the place it will land
+#define RACE_LAVA_REACH 1100               // a car this near the place it lands is caught in its burst
+#define RACE_LAVA_FORCE 20
+typedef struct { double SrcX, SrcY, SrcZ, DstX, DstY, DstZ; int From, To; S32 Every, Phase, Next, T0, Dur, Trail; int On, Ball, Shadow; } T_RACE_LAVA;
+static T_RACE_LAVA s_lava[RACE_MAX_LAVA];
+static int s_nbLava = 0;
+// Shuttles (shuttle=<scene> <actor> <x> <y> <z>: the scene's actor, and the pad it lands on, cube-local, on the road): Otringal's spaceship
+// on the square island, which in the game comes down onto its pad on the road and takes off again at random -- the user, 2026-10-08:
+// "leave this in as a feature but perhaps have it hover for a few seconds, land for a couple of seconds before rising straight up
+// again". Its own scripts are stopped and it is flown here, on the race's clock (the same for every lap): out of sight, then down out of
+// the sky over its pad with its legs coming out, hovering over the road high enough for the cars to pass under it, down onto the road,
+// a while there, and straight up again with its legs going in. A car that runs into it while it is down is stopped, as by a penguin's
+// blast (the game's own script hit Twinsen for 50 when it touched him).
+#define RACE_MAX_SHUTTLES 4
+#define RACE_SHUTTLE_AWAY 5500             // out of sight (ms)
+#define RACE_SHUTTLE_DOWN 2600             // ... coming down out of the sky to hover
+#define RACE_SHUTTLE_HOVER 3600            // ... hovering over the pad
+#define RACE_SHUTTLE_TOUCH 900             // ... down onto it
+#define RACE_SHUTTLE_LANDED 2200           // ... on the road
+#define RACE_SHUTTLE_RISE 3400             // ... straight up out of sight
+#define RACE_SHUTTLE_HOVERY 2700           // its hover over the pad (the cars pass under it)
+#define RACE_SHUTTLE_HIGH 15000            // where it comes down from and rises to, over the pad
+#define RACE_SHUTTLE_LOW 1200              // under this over the pad it is in the cars' way ...
+#define RACE_SHUTTLE_REACH 1700            // ... a car this near its middle is hit
+#define RACE_SHUTTLE_FORCE 20
+typedef struct { S32 Scene, Actor, X, Y, Z; int Ready; S32 Hit; } T_RACE_SHUTTLE;
+static T_RACE_SHUTTLE s_shuttles[RACE_MAX_SHUTTLES];
+static int s_nbShuttles = 0;
 // Jump cameras (jumpcam=, JumpCamera): a drop -- a flight off a raised road's end and down a hillside onto the ground far below (the lava
 // lake's, 2026-10-01) -- took the camera behind the car down into the hill, and the landing was never seen. While the hero flies such a
 // jump, and RACE_JUMPCAM_HOLD after he lands, the camera stands at a place of its own beside the flight (the builder's, with the whole
@@ -890,6 +930,10 @@ static int RaisedAlong(int seg, double t, double distance, double *x, double *y,
 // levels are over it, a drop's crest between it and the car, a bend swings it out over nothing -- so the eye rides the road itself:
 // over its middle s_railBack behind the car (behind the way the car faces), s_railUp over it, looking at the road s_railLead ahead of
 // the car. Kept under a level of the road that passes over it, and high enough to see the car over a crest between them.
+// (TunnelCamera's: the sight line to the car ends this far over the road, at the car's middle -- to its wheels, near the car the line
+// is so near the road that the eye was lifted 3,300 over the road to clear it, over the roof of Otringal's bridge, 2026-10-08 -- and
+// the eye no higher than this over the road under it, under a tunnel's roof: -1 none)
+static double s_railSight = 0, s_railCeil = -1;
 static S32 RailCamera(S32 *eye, S32 *target) {
     if (s_railBack <= 0 || !s_nbRaised || CubeMode != CUBE_EXTERIEUR || Comportement != C_BUGGY) return FALSE;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -920,17 +964,19 @@ static S32 RailCamera(S32 *eye, S32 *target) {
     tx = hx + (tx - hx) * RAIL_CAMERA_LOOK; ty = hy + (ty - hy) * RAIL_CAMERA_LOOK; tz = hz + (tz - hz) * RAIL_CAMERA_LOOK;
     // (lower too when nearer, so the view is no steeper)
     const double up = s_railUp * sqrt(back / s_railBack);
+    const double roadBehind = ey;
     ey += up;
     // over a crest between the eye and the car: the line to the car clears the road by RAIL_CAMERA_CLEAR all the way
     double lift = 0;
     for (int k = 1; k < 8; k++) {
         double mx, my, mz;
         RaisedAlong(seg, t, -way * back * k / 8.0, &mx, &my, &mz);
-        const double line = hy + (ey - hy) * k / 8.0;
+        const double line = hy + s_railSight + (ey - hy - s_railSight) * k / 8.0;
         const double need = (my + RAIL_CAMERA_CLEAR - line) * 8.0 / k;      // what the eye has to rise for the line to clear this point
         if (need > lift) lift = need;
     }
     ey += lift;
+    if (s_railCeil >= 0 && ey > roadBehind + s_railCeil) ey = roadBehind + s_railCeil;
     // under a level of the road over the eye
     double over;
     if (RaisedBetween(ex, ez, ey - up - lift + 800.0, ey + RAISED_UNDER, behind, &over) && ey > over - RAISED_UNDER) ey = over - RAISED_UNDER;
@@ -1501,6 +1547,24 @@ static void Load(const char *path, int carOnly = 0) {
             int x, y, z, every;
             if (s_nbVents < RACE_MAX_VENTS && sscanf(v, "%d %d %d %d", &x, &y, &z, &every) == 4 && every > 0) {
                 p->X = x; p->Y = y; p->Z = z; p->Every = every; p->Next = 0; s_nbVents++;
+            }
+        }
+        else if (!strcmp(key, "lavaball")) {
+            T_RACE_LAVA *b = &s_lava[s_nbLava];
+            int x, y, z, from, to, every, phase;
+            if (s_nbLava < RACE_MAX_LAVA && sscanf(v, "%d %d %d %d %d %d %d", &x, &y, &z, &from, &to, &every, &phase) == 7 && every > 0) {
+                memset(b, 0, sizeof(*b));
+                b->SrcX = x; b->SrcY = y; b->SrcZ = z; b->From = from; b->To = to; b->Every = every; b->Phase = phase; b->Ball = b->Shadow = -1;
+                s_nbLava++;
+            }
+        }
+        else if (!strcmp(key, "shuttle")) {
+            T_RACE_SHUTTLE *sh = &s_shuttles[s_nbShuttles];
+            int scene, actor, x, y, z;
+            if (s_nbShuttles < RACE_MAX_SHUTTLES && sscanf(v, "%d %d %d %d %d", &scene, &actor, &x, &y, &z) == 5 && actor > 0) {
+                memset(sh, 0, sizeof(*sh));
+                sh->Scene = scene; sh->Actor = actor; sh->X = x; sh->Y = y; sh->Z = z;
+                s_nbShuttles++;
             }
         }
         else if (!strcmp(key, "tunnel")) {
@@ -3044,8 +3108,9 @@ static S32 TunnelCamera(S32 *eye, S32 *target) {
     s_railBack = RACE_TUNNEL_BACK;
     s_railUp = s_tunnels[k].Roof - RACE_TUNNEL_EYE < RACE_TUNNEL_UP ? s_tunnels[k].Roof - RACE_TUNNEL_EYE : RACE_TUNNEL_UP;
     s_railLead = RACE_TUNNEL_AHEAD;
+    s_railSight = RACE_TUNNEL_SIGHT; s_railCeil = s_tunnels[k].Roof - RACE_TUNNEL_UNDER;
     const S32 done = RailCamera(eye, target);
-    s_railBack = back; s_railUp = upKept; s_railLead = lead;
+    s_railBack = back; s_railUp = upKept; s_railLead = lead; s_railSight = 0; s_railCeil = -1;
     return done;
 }
 
@@ -4092,6 +4157,185 @@ static void Jets(S32 now, int driving) {
     }
 }
 
+// Every frame: the lava balls (lavaball=). A ball in the air is the fire sprite moved along its arc, a trail behind it, and the shadow at
+// the place it will land; landed, the burst (a nitro penguin's) and every car in it stopped -- Twinsen's as by a penguin's blast unless the
+// protection spell or the super jet-pack is on, an opponent's with its hit animation.
+static void LavaBalls(S32 now, int driving) {
+    if (CubeMode != CUBE_EXTERIEUR || !s_nbLava || !s_nbRaised) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const double hx = hero->Obj.X + cx, hz = hero->Obj.Z + cz;
+    const int n = s_raisedLoop ? s_nbRaised - 1 : s_nbRaised - 1;
+    for (int i = 0; i < s_nbLava; i++) {
+        T_RACE_LAVA *b = &s_lava[i];
+        if (!b->On) {
+            if (!b->Next) { b->Next = now + b->Phase % b->Every; continue; }
+            if (now < b->Next) continue;
+            b->Next = now + b->Every * 3 / 4 + (S32)(VentRandom() * b->Every / 2);
+            // a place along its stretch of the road, on the deck (not over a jump's gap), within its rails
+            const int span = ((b->To - b->From) % n + n) % n;
+            int k = -1;
+            for (int tries = 0; tries < 6 && k < 0; tries++) {
+                const int c = (b->From + (int)(VentRandom() * (span + 1))) % n;
+                if (s_raised[c].Half > 0 && s_raised[c + 1].Half > 0) k = c;
+            }
+            if (k < 0) continue;
+            const T_RACE_RAISED *a = &s_raised[k], *c = a + 1;
+            const double t = VentRandom(), dx = c->X - a->X, dz = c->Z - a->Z, len = sqrt(dx * dx + dz * dz);
+            if (len < 1) continue;
+            const double half = (a->Half + (c->Half - a->Half) * t) * 0.6, side = (VentRandom() * 2 - 1) * half;
+            b->DstX = a->X + dx * t - dz / len * side; b->DstZ = a->Z + dz * t + dx / len * side; b->DstY = a->Y + (c->Y - a->Y) * t;
+            // (only near Twinsen, and landing in his scene: the extras are the scene's)
+            if ((b->DstX - hx) * (b->DstX - hx) + (b->DstZ - hz) * (b->DstZ - hz) > (double)RACE_LAVA_NEAR * RACE_LAVA_NEAR) continue;
+            if (b->DstX < cx || b->DstX >= cx + 32768 || b->DstZ < cz || b->DstZ >= cz + 32768) continue;
+            const double far = sqrt((b->DstX - b->SrcX) * (b->DstX - b->SrcX) + (b->DstZ - b->SrcZ) * (b->DstZ - b->SrcZ));
+            b->Dur = 1500 + (S32)(far / 10);
+            b->T0 = now; b->On = 1; b->Trail = now;
+            b->Ball = InitExtraAnimSprite(255, (S32)(b->SrcX - cx), (S32)b->SrcY, (S32)(b->SrcZ - cz), RACE_LAVA_SPRITE, RACE_LAVA_SPRITE, b->Dur + 200, RACE_LAVA_SCALE, 0, 0);
+            b->Shadow = InitExtraAnimSprite(255, (S32)(b->DstX - cx), (S32)b->DstY + 40, (S32)(b->DstZ - cz), RACE_LAVA_SHADOW, RACE_LAVA_SHADOW, b->Dur + 100, 60, 1, 0);
+            if (b->Shadow >= 0) ListExtra[b->Shadow].Flags |= EXTRA_NO_SHADOW;
+            // (out of the lava: a splash where it leaves it)
+            InitExtraPof((S32)(b->SrcX - cx), (S32)b->SrcY, (S32)(b->SrcZ - cz), 1, 1024, 0, 16, 0, 420, 140, 900, 0, 900);
+            continue;
+        }
+        const double u = (double)(now - b->T0) / b->Dur;
+        if (u < 1) {
+            // along its arc: up out of the lava, over and down onto the road
+            const double far = sqrt((b->DstX - b->SrcX) * (b->DstX - b->SrcX) + (b->DstZ - b->SrcZ) * (b->DstZ - b->SrcZ));
+            const double top = (b->SrcY > b->DstY ? b->SrcY : b->DstY) - (b->SrcY + (b->DstY - b->SrcY) * 0.5) + (far * 0.35 > 2500 ? far * 0.35 : 2500);
+            const double x = b->SrcX + (b->DstX - b->SrcX) * u, z = b->SrcZ + (b->DstZ - b->SrcZ) * u, y = b->SrcY + (b->DstY + 250 - b->SrcY) * u + 4 * top * u * (1 - u);
+            if (b->Ball >= 0 && ListExtra[b->Ball].Sprite == RACE_LAVA_SPRITE) {
+                ListExtra[b->Ball].PosX = (S32)(x - cx); ListExtra[b->Ball].PosY = (S32)y; ListExtra[b->Ball].PosZ = (S32)(z - cz);
+            }
+            if (b->Shadow >= 0 && ListExtra[b->Shadow].Sprite == RACE_LAVA_SHADOW) ListExtra[b->Shadow].Scale = (S32)(60 - (60 - RACE_LAVA_SCALE) * u);
+            if (now - b->Trail >= 70) {
+                b->Trail = now;
+                InitExtraAnimSprite(255, (S32)(x - cx), (S32)y, (S32)(z - cz), RACE_LAVA_TRAIL, RACE_LAVA_TRAIL + 2, 450, RACE_LAVA_SCALE + 4, 1, 0);
+            }
+            continue;
+        }
+        // landed: its burst, and the cars in it
+        b->On = 0;
+        if (b->Ball >= 0 && ListExtra[b->Ball].Sprite == RACE_LAVA_SPRITE) ListExtra[b->Ball].Sprite = -1;
+        if (b->Shadow >= 0 && ListExtra[b->Shadow].Sprite == RACE_LAVA_SHADOW) ListExtra[b->Shadow].Sprite = -1;
+        b->Ball = b->Shadow = -1;
+        const S32 lx = (S32)(b->DstX - cx), lz = (S32)(b->DstZ - cz), ly = (S32)b->DstY;
+        if (lx < 0 || lx >= 32768 || lz < 0 || lz >= 32768) continue;
+        DoImpact(RACE_PENGUIN_IMPACT, lx, ly, lz, 255);
+        if (driving && Near(hero, lx, ly, lz, RACE_LAVA_REACH)) {
+            if (now < s_protectUntil || now < s_jetUntil || (hero->Flags & NO_CHOC))
+                Log_Info("[racemod] a lava ball lands on Twinsen's car: %s", now < s_protectUntil ? "the protection spell holds" : now < s_jetUntil ? "the super jet-pack" : "he can't be hit");
+            else {
+                HitObj(PenguinHitter(), NUM_PERSO, RACE_LAVA_FORCE, -1);
+                ListBuggy[0].Speed = 0;
+                if (s_hitUntil < now + RACE_PENGUIN_HOLD) s_hitUntil = now + RACE_PENGUIN_HOLD;
+                Message("Hit by a lava ball!");
+                Log_Info("[racemod] Twinsen's car hit by a lava ball");
+            }
+        }
+        for (int o = 0; o < RACE_MAX_OPPONENTS; o++) {
+            T_RACE_OPPONENT *op = &s_opp[o];
+            if (!op->Count || !RaceOn()) continue;
+            double x, z, y, v, ddx, ddz;
+            PathAt(op, op->S, &x, &z, &y, &v, &ddx, &ddz);
+            if ((x - b->DstX) * (x - b->DstX) + (z - b->DstZ) * (z - b->DstZ) > (double)RACE_LAVA_REACH * RACE_LAVA_REACH || fabs(y - b->DstY) > 1500) continue;
+            if (op->HitUntil < now + RACE_PENGUIN_HOLD) op->HitUntil = now + RACE_PENGUIN_HOLD;
+            Log_Info("[racemod] %s hit by a lava ball", op->Name);
+            const int index = OpponentActor(op);
+            if (index < 0) continue;
+            T_OBJET *car = &ListObjet[index];
+            InitAnim(GEN_ANIM_CHOC, ANIM_ALL_THEN, (U8)index);
+            InitHitExtraPof(car->Obj.X, car->Obj.Y + car->YMax + 1, car->Obj.Z, RACE_LAVA_FORCE);
+        }
+    }
+}
+
+// Every frame: the shuttles (shuttle=) of this scene, flown round their cycle. Its legs (the game's bodies: 58 down, 68 in, 64 60 65 61 66
+// 62 67 63 between, as its own take-off and landing scripts change them) come out on the way down and go in on the way up; its thrust
+// (body 59, every other fifth of a second against 58, as its scripts flicker it) while it hovers, touches down and lifts off.
+static const S32 s_legsOut[] = { 68, 63, 67, 62, 66, 61, 65, 60, 64, 58 };
+static double Ease(double u) { u = u < 0 ? 0 : u > 1 ? 1 : u; return u * u * (3 - 2 * u); }
+static void Shuttles(S32 now, int driving) {
+    for (int i = 0; i < s_nbShuttles; i++) {
+        T_RACE_SHUTTLE *sh = &s_shuttles[i];
+        if (sh->Scene != (S32)NumCube || sh->Actor >= NbObjets) { sh->Ready = 0; continue; }
+        T_OBJET *ship = &ListObjet[sh->Actor];
+        if (!sh->Ready) {
+            // its own scripts stopped, standing still: flown from here on
+            ship->OffsetLife = -1; ship->OffsetTrack = -1;
+            InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, (U8)sh->Actor);
+            sh->Ready = 1;
+            Log_Info("[racemod] shuttle: actor %d of scene %d flown over its pad (%d,%d,%d)", (int)sh->Actor, (int)sh->Scene, (int)sh->X, (int)sh->Y, (int)sh->Z);
+        }
+        const S32 cycle = RACE_SHUTTLE_AWAY + RACE_SHUTTLE_DOWN + RACE_SHUTTLE_HOVER + RACE_SHUTTLE_TOUCH + RACE_SHUTTLE_LANDED + RACE_SHUTTLE_RISE;
+        S32 t = (now + i * cycle / s_nbShuttles) % cycle;      // (several take turns)
+        double y;
+        S32 body = 58;
+        const int thrust = (now / 200) & 1;
+        if (t < RACE_SHUTTLE_AWAY) {
+            ship->Flags |= INVISIBLE | NO_SHADOW;
+            ship->Obj.X = sh->X; ship->Obj.Y = sh->Y + RACE_SHUTTLE_HIGH; ship->Obj.Z = sh->Z;
+            continue;
+        }
+        ship->Flags &= ~(INVISIBLE | NO_SHADOW);
+        if ((t -= RACE_SHUTTLE_AWAY) < RACE_SHUTTLE_DOWN) {
+            // down out of the sky, slowing to the hover; its legs out over the second half
+            const double u = (double)t / RACE_SHUTTLE_DOWN, k = 1 - (1 - u) * (1 - u);
+            y = RACE_SHUTTLE_HIGH + (RACE_SHUTTLE_HOVERY - RACE_SHUTTLE_HIGH) * k;
+            const int leg = u < 0.5 ? 0 : (int)((u - 0.5) * 2 * 10);
+            body = s_legsOut[leg > 9 ? 9 : leg];
+        } else if ((t -= RACE_SHUTTLE_DOWN) < RACE_SHUTTLE_HOVER) {
+            y = RACE_SHUTTLE_HOVERY + 90 * sin(t * 2 * 3.14159265 / 1800.0);
+            body = thrust ? 59 : 58;
+        } else if ((t -= RACE_SHUTTLE_HOVER) < RACE_SHUTTLE_TOUCH) {
+            y = RACE_SHUTTLE_HOVERY * (1 - Ease((double)t / RACE_SHUTTLE_TOUCH));
+            body = thrust ? 59 : 58;
+        } else if ((t -= RACE_SHUTTLE_TOUCH) < RACE_SHUTTLE_LANDED) {
+            y = 0;
+            body = 58;
+        } else {
+            // straight up, faster and faster; its legs in over the middle of it
+            t -= RACE_SHUTTLE_LANDED;
+            const double u = (double)t / RACE_SHUTTLE_RISE;
+            y = RACE_SHUTTLE_HIGH * u * u;
+            if (u < 0.25) body = thrust ? 59 : 58;
+            else { const int leg = (int)((u - 0.25) / 0.5 * 10); body = s_legsOut[9 - (leg > 9 ? 9 : leg)]; }
+        }
+        ship->Obj.X = sh->X; ship->Obj.Y = sh->Y + (S32)y; ship->Obj.Z = sh->Z;
+        if (ship->GenBody != body) InitBody((U8)body, (U8)sh->Actor);
+        if (y >= RACE_SHUTTLE_LOW || now < sh->Hit) continue;
+        // down: the cars that run into it
+        T_OBJET *hero = &ListObjet[NUM_PERSO];
+        if (driving && Near(hero, sh->X, sh->Y, sh->Z, RACE_SHUTTLE_REACH)) {
+            sh->Hit = now + RACE_PENGUIN_HOLD;
+            if (now < s_protectUntil || now < s_jetUntil || (hero->Flags & NO_CHOC))
+                Log_Info("[racemod] Twinsen's car runs into the shuttle: %s", now < s_protectUntil ? "the protection spell holds" : now < s_jetUntil ? "the super jet-pack" : "he can't be hit");
+            else {
+                HitObj(PenguinHitter(), NUM_PERSO, RACE_SHUTTLE_FORCE, -1);
+                ListBuggy[0].Speed = 0;
+                if (s_hitUntil < now + RACE_PENGUIN_HOLD) s_hitUntil = now + RACE_PENGUIN_HOLD;
+                Message("Hit the shuttle!");
+                Log_Info("[racemod] Twinsen's car hits the shuttle");
+            }
+        }
+        const double wx = sh->X + CurrentCubeX * 32768.0, wz = sh->Z + CurrentCubeY * 32768.0;
+        for (int o = 0; o < RACE_MAX_OPPONENTS; o++) {
+            T_RACE_OPPONENT *op = &s_opp[o];
+            if (!op->Count || !RaceOn() || now < op->HitUntil) continue;
+            double x, z, oy, v, ddx, ddz;
+            PathAt(op, op->S, &x, &z, &oy, &v, &ddx, &ddz);
+            if ((x - wx) * (x - wx) + (z - wz) * (z - wz) > (double)RACE_SHUTTLE_REACH * RACE_SHUTTLE_REACH || fabs(oy - sh->Y) > 1500) continue;
+            op->HitUntil = now + RACE_PENGUIN_HOLD;
+            Log_Info("[racemod] %s hits the shuttle", op->Name);
+            const int index = OpponentActor(op);
+            if (index < 0) continue;
+            T_OBJET *car = &ListObjet[index];
+            InitAnim(GEN_ANIM_CHOC, ANIM_ALL_THEN, (U8)index);
+            InitHitExtraPof(car->Obj.X, car->Obj.Y + car->YMax + 1, car->Obj.Z, RACE_SHUTTLE_FORCE);
+        }
+    }
+}
+
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
@@ -4134,6 +4378,8 @@ void RaceMod_Frame(void) {
     if (s_powerups) PowerUps(now, driving);
     Vents(now);
     Jets(now, driving);
+    LavaBalls(now, driving);
+    Shuttles(now, driving);
     if (!Opponents()) return;
     // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car
     if (!s_nbSpots && !s_oppStarted && driving && (Input & I_UP)) s_oppStarted = 1;
@@ -4774,7 +5020,7 @@ static void ResetTrack(void) {
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0;
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
-    s_nbJets = 0; s_nbTunnels = 0;
+    s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0;
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0;

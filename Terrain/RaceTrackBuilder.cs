@@ -95,6 +95,9 @@ internal sealed class RaceTrackPlan
     public PipeLine? Pipeline { get; set; }
     // Tunnels over the raised road (RaceTrackTunnel): Otringal's over the bridge to its square island. From and To are the plan's points.
     public TunnelRun[]? Tunnels { get; set; }
+    // Decor bodies that stay where they are when the ground under them is cut or raised (IslandOps.DecorFollow): Otringal's gatehouse,
+    // which the race track's tunnel runs under -- the cutting beyond the tunnel's mouth reaches the ground under its origin (2026-10-08).
+    public int[]? StayPut { get; set; }
     // The raised road's colours stretch by stretch (DeckTheme by name: "dock", "refinery", "village"), From and To the plan's points;
     // elsewhere the standard greys, red and white.
     public ThemeRun[]? Themes { get; set; }
@@ -710,7 +713,7 @@ internal static class RaceTrackBuilder
         ClearOldTrack(island, options, report);
         DropDecors(island, options, report);
         var adrift = AdriftDecors(island);
-        var follow = new IslandOps.DecorFollow(island);
+        var follow = new IslandOps.DecorFollow(island, plan.StayPut?.ToHashSet());
         var keepBodies = plan.KeepBodies;
         // (the huts the road drives through, made after the ground's followers are counted: their parts keep their heights -- the road's
         // middle, where the ground is cut, is their origin -- and kept by the clearing)
@@ -722,7 +725,15 @@ internal static class RaceTrackBuilder
         if (plan.TrimKept && keepBodies is { Length: > 0 }) { keepBodies = keepBodies.Concat(TrimKept(island, roads, keepBodies, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
         var natural = new Field(island);
         ModifyGround(island, field, index, roads, options, report, plan.KeepGroundUnder ? KeptGround(island, keptBoxes) : null);
-        if (main.Raised is not null && plan.RaisedCut) CutUnderRaised(island, field, main, options, report, plan.KeepGroundUnder ? KeptGround(island, keptBoxes) : null);
+        // (not under a sunk tunnel's stretch: RaceTrackTunnel cuts the ground there itself, straight down beside its walls)
+        var sunk = new HashSet<int>();
+        if (planned && plan.Tunnels is { Length: > 0 } sunkRuns)
+            foreach (var t in sunkRuns.Where(t => t.Sunk))
+            {
+                int a = PlanPoint(plan, main, t.From), b = PlanPoint(plan, main, t.To);
+                for (var k = a; ; k = (k + 1) % main.Count) { sunk.Add(k); if (k == b) break; }
+            }
+        if (main.Raised is not null && plan.RaisedCut) CutUnderRaised(island, field, main, options, report, plan.KeepGroundUnder ? KeptGround(island, keptBoxes) : null, sunk);
         var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned);
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
@@ -3208,7 +3219,8 @@ internal static class RaceTrackBuilder
 
     // `keep`: the ground under the plan's kept buildings (KeepGroundUnder), left as it is -- but where it stands up through the deck, brought
     // down to just under it (Citadel Island's storm track, 2026-10-07: the cutting raised the baggage claim's floor 231 at the north end).
-    private static void CutUnderRaised(IslandFile island, Field field, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, HashSet<(int, int)>? keep = null)
+    private static void CutUnderRaised(IslandFile island, Field field, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, HashSet<(int, int)>? keep = null,
+        HashSet<int>? skip = null)
     {
         var up = r.Raised!; var n = r.Count;
         var inner = o.RaisedHalfWidth + RaisedCutReach;
@@ -3236,6 +3248,7 @@ internal static class RaceTrackBuilder
         {
             var b = At(r, a + 1);
             if (!up[a] || !up[b] || Math.Abs(r.H[a] - r.H[b]) > DropFrom) continue;
+            if (skip is not null && skip.Contains(a) && skip.Contains(b)) continue;
             var nearEnd = Math.Min(fromEnd[a], fromEnd[b]) < RaisedCutFromEnd;
             if (nearEnd && (r.Gap[a] || r.Gap[b])) continue;
             double sx = r.X[b] - r.X[a], sz = r.Z[b] - r.Z[a], len2 = sx * sx + sz * sz;

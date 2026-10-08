@@ -228,6 +228,10 @@ internal sealed record RaceTrackIsland(
     // Game variables the race-track mode holds at a value while it runs (the car file's vargame=): travel cutscenes kept from playing --
     // Otringal's square island's Dino-Fly landing, which holds Twinsen at its pad while variable 83 is under 2 (2026-10-08).
     public (int Var, int Value)[] HeldVars { get; init; } = Array.Empty<(int, int)>();
+    // Shuttles the race-track mode flies (the car file's shuttle=): a scene's actor (its index and entity in the game's scene) and the pad
+    // on the road it comes down onto (cube-local x and z) -- Otringal's spaceship on the square island hovers over the road, lands on it a
+    // while and rises straight up again, over and over (the user, 2026-10-08).
+    public (int Scene, int Actor, int Entity, int X, int Z)[] Shuttles { get; init; } = Array.Empty<(int, int, int, int, int)>();
     public int[] MoreScenes { get; init; } = Array.Empty<int>();
     // Cubes of the island's ground the game has no scene for, that the lap drives over: a scene the build makes for each (IslandScaler
     // .AddCubeScenes), numbered Scene, from a copy of Template (its actors inert stand-ins, cube changes to and from its neighbours) --
@@ -261,18 +265,23 @@ internal sealed record RaceTrackIsland(
         FuelAlways = true,
     };
 
-    // Otringal (OTRINGAL.ILE, the game's island 4, scenes 87-92), from the user's sketch (2026-10-08): one raised road round the island --
-    // round the square island south-east of the town, west over the bridge through a tunnel, up through the town over its roofs onto the
-    // straight along the palace's east side at 14,000 (the start line, the pit lane on its left between the race lanes and the palace),
-    // west along the island's north edge, south down its west side and a jump over the inlet, an S over the town's tanks, down past the west
-    // pier over the sea to the south-west islets (cube (6,9): the game has its ground but no scene there -- NewCubes, scene 264), east along
-    // the south coast and a jump over the sea back onto the square island. The plan: tools/RaceTrackPlan/otringal_design.py.
+    // Otringal (OTRINGAL.ILE, the game's island 4, scenes 87-92), from the user's sketch (2026-10-08): one raised road round the island,
+    // close over its ground (version 2, the same day) -- round the square island south-east of the town past its spaceships' pads, down the
+    // game's own slope into the building at its foot and through the bridge's tube (the game's tunnel) and on under the gatehouse, climbing
+    // into the town, up through it onto the straight along the palace's east side (the start line, the pit lane on its left between the
+    // race lanes and the palace), west along the island's north edge, south down its west side and a jump over the inlet, an S round the
+    // town's tanks, down through the west pier's yard over the sea to the south-west islets (cube (6,9): the game has its ground but no scene
+    // there -- NewCubes, scene 264), along the south coast and a jump over the sea back onto the square island. The plan:
+    // tools/RaceTrackPlan/otringal_design.py.
     public static readonly RaceTrackIsland Otringal = new("Otringal", "OTRINGAL.ILE", "OTRINGAL.OBL", 4, 87, 92, 31, "RaceTrackPlan.Otringal.json", null)
     {
-        Title = "Otringal: through the tunnel, over the town and round the palace",
+        Title = "Otringal: through the game's tunnel, through the town and round the palace",
         NewCubes = new[] { (6, 9, 264, 87) },
         // (Twinsen has arrived on Otringal: the square island's Dino-Fly landing doesn't play when the car flies into it off the jump)
         HeldVars = new[] { (83, 3) },
+        // (its spaceships: scene 92's actor 2, on its pad on the road along the square island's north side -- its script's own pos_point(1)
+        // -- and actor 3, parked on the other pad, beside the road along its east side: the ground-level road runs into it, so it flies too)
+        Shuttles = new[] { (92, 2, 47, 19200, 9472), (92, 3, 47, 19104, 17632) },
     };
 
     public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal };

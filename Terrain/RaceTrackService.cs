@@ -95,7 +95,10 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Jets = null,
         // Tunnels: tunnels over the raised road (RaceTrackTunnel), each [its first point, its last (the raised road's), its roof's height over
         // the deck] (RACEMOD.CPP tunnel=), since 2026-10-08
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Tunnels = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Tunnels = null,
+        // Shuttles: the scenes' actors the race-track mode flies (RaceTrackIsland.Shuttles), each [scene, actor (the built scene's), the pad
+        // it lands on: x, y (the road's surface there), z, cube-local] (RACEMOD.CPP shuttle=), since 2026-10-08
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Shuttles = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -580,6 +583,7 @@ internal static class RaceTrackService
         session ??= new BuildSession();
         var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, Dream = dream };
         if (info.ArcJumps is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
+        if (Shuttles(gameDirectory, report, options) is { Count: > 0 } shuttles) info = info with { Shuttles = shuttles };
         if (twin is { Own: true } && scenes.Twin is { } twinScenes)
         {
             // (the story belongs to the twin's track, which carries the race; either race clears its arrow once Twinsen drives)
@@ -591,6 +595,43 @@ internal static class RaceTrackService
         session.Tracks.Add(info);
         var all = session.Tracks[0] with { Others = session.Tracks.Count > 1 ? session.Tracks.Skip(1).ToList() : null };
         File.WriteAllText(Path.Combine(gameDirectory, InfoFile), JsonSerializer.Serialize(all, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    // The island's shuttles (RaceTrackIsland.Shuttles) as the built scenes have them: each one's actor there (the scene's actor of its
+    // entity nearest where it stood -- removing the others renumbers the scene's actors, and the build moves one off the road) and its pad's
+    // height, the road's surface there.
+    private static List<int[]> Shuttles(string gameDirectory, RaceTrackReport report, RaceTrackOptions options)
+    {
+        var list = new List<int[]>();
+        if (options.Island.Shuttles.Length == 0) return list;
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, gameDirectory);
+        foreach (var (scene, actor, entity, x, z) in options.Island.Shuttles)
+        {
+            LBAAssembler.Scenes.SceneModel model;
+            try { model = store.Load(scene); } catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { continue; }
+            var found = Enumerable.Range(1, Math.Max(0, model.Actors.Count - 1)).Where(i => model.Actors[i].Entity == entity)
+                .OrderBy(i => Math.Abs(i - actor)).ThenBy(i => Math.Abs(model.Actors[i].X - x) + Math.Abs(model.Actors[i].Z - z)).FirstOrDefault(-1);
+            if (found < 0) continue;
+            double cx = model.CubeX * 64 + x / 512.0, cz = model.CubeY * 64 + z / 512.0;
+            // (the deck there as the engine has it -- the raised road's file, world units: the nearest of its segments within its rails --
+            // else the ground)
+            double wx = cx * 512, wz = cz * 512, best = double.MaxValue;
+            double? y = null;
+            for (var i = 0; i + 1 < report.Raised.Count; i++)
+            {
+                int[] a = report.Raised[i], b = report.Raised[i + 1];
+                if (a.Length < 4 || b.Length < 4 || a[3] <= 0 || b[3] <= 0) continue;
+                double sx = b[0] - a[0], sz = b[1] - a[1], len2 = sx * sx + sz * sz;
+                if (len2 < 1) continue;
+                var t = Math.Clamp(((wx - a[0]) * sx + (wz - a[1]) * sz) / len2, 0, 1);
+                var d = Math.Sqrt((wx - a[0] - sx * t) * (wx - a[0] - sx * t) + (wz - a[1] - sz * t) * (wz - a[1] - sz * t));
+                if (d > a[3] + (b[3] - a[3]) * t || d >= best) continue;
+                best = d; y = a[2] + (b[2] - a[2]) * t;
+            }
+            y ??= report.GroundAfter?.Invoke(cx, cz) ?? model.Actors[found].Y;
+            list.Add(new[] { scene, found, x, (int)Math.Round(y.Value), z });
+        }
+        return list;
     }
 
     // A line across the road (island cells) as the engine has it: in the cube its middle is in.
