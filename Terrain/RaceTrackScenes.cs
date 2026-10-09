@@ -21,7 +21,7 @@ internal static class RaceTrackScenes
     // mushroom in each, the fake mushrooms a car drops (since 2026-10-08).
     public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, List<(RaceDriver Driver, Dictionary<int, int> Actors)> Drivers, int StartScene,
         List<int[]> Grid, List<int[]> Pits, Result? Twin = null, List<int[]>? Mushrooms = null, List<int[]>? Penguins = null, List<int[]>? Oil = null,
-        List<int[]>? Fakes = null, List<int[]>? Gunners = null);
+        List<int[]>? Fakes = null, List<int[]>? Gunners = null, List<int[]>? GasMonsters = null);
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
     //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
@@ -247,8 +247,10 @@ internal static class RaceTrackScenes
         public List<int[]> Mushrooms = new(), Penguins = new(), Oil = new(), Fakes = new();
         // the machine guns on their knolls: each [scene, the gun's actor, its Franco's actor] (Report.Gunners, in that order)
         public List<int[]> Gunners = new();
+        // the gas monsters: each [scene, its neck's actor, its head's, its place in Report.GasMonsters]
+        public List<int[]> GasMonsters = new();
         public Result Result(List<string> log, int changed, int removed, Result? twin = null) =>
-            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners);
+            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners, GasMonsters);
     }
 
     // Edits the outside scenes of the island as the options say, from what the build of the island found (start line, jump, road). With
@@ -573,6 +575,27 @@ internal static class RaceTrackScenes
                     t.Gunners.Add(new[] { scene, guns[0], fi });
                     log.Add($"scene {scene}: the machine guns (actors {string.Join(", ", guns)}) on the knoll at ({g.X:0.#}, {g.Z:0.#}), {y} high, a Franco (actor {fi}) at the first");
                 }
+            // the gas monsters (Report.GasMonsters): a neck and a head each, copies of the mushroom with the monster's bodies
+            // (RaceTrackGasMonster), out of sight until the race-track mode raises them out of the gas (gasmonster=)
+            if (mushroomTemplate is not null)
+                foreach (var t in tracks)
+                    for (var gi = 0; gi < t.Report.GasMonsters.Count; gi++)
+                    {
+                        var g = t.Report.GasMonsters[gi];
+                        if ((int)Math.Floor(g.X / 64) != model.CubeX || (int)Math.Floor(g.Z / 64) != model.CubeY) continue;
+                        if (model.Actors.Count + 2 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the gas monster at ({g.X:0.#}, {g.Z:0.#})"); continue; }
+                        int Part(int body)
+                        {
+                            var part = mushroomTemplate.Clone();
+                            part.Body = body; part.Flags = OpponentFlags; part.Move = 0; part.Life = new byte[] { 0 }; part.Track = new byte[] { 0 };
+                            part.X = (int)Math.Round((g.X - model.CubeX * 64) * 512); part.Z = (int)Math.Round((g.Z - model.CubeY * 64) * 512); part.Y = -20000; part.Beta = 0;
+                            return SceneOps.AddActor(model, part);
+                        }
+                        var neck = Part(RaceTrackGasMonster.Neck);
+                        var head = Part(RaceTrackGasMonster.HeadShut);
+                        t.GasMonsters.Add(new[] { scene, neck, head, gi });
+                        log.Add($"scene {scene}: a gas monster (actors {neck}, {head}) in the gas at ({g.X:0.#}, {g.Z:0.#})");
+                    }
             // the power-ups: the mushrooms of the lap in this scene's cube, on the road, and a penguin out of sight
             if (mushroomTemplate is not null && penguinTemplate is not null)
                 foreach (var t in tracks)

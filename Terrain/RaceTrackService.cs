@@ -114,7 +114,10 @@ internal static class RaceTrackService
         // x and z (island units), how fast its head turns (tenths of a degree a second), its ball's body (the island's) and radius, the
         // places in the raised road's file the ball rolls between, its floor's height at the hole's edge and its rise a cell outwards, the
         // hole's radius and the bowl's (units), how far its underside is under its floor, then its head's turning bodies; since 2026-10-09
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Roulette = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Roulette = null,
+        // GasMonsters: the gas monsters (RaceTrackGasMonster; RACEMOD.CPP gasmonster=), each [scene, its neck's actor, its head's, where it
+        // rises x and z, where it bites x and z and the road's height there (island units)], since 2026-10-09
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? GasMonsters = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -581,6 +584,8 @@ internal static class RaceTrackService
             log.Add(RaceTrackOil.Install(gameDirectory));
             // (and the power-ups' mushroom made bigger, beside it in the mushroom's entity)
             log.Add(RaceTrackOil.InstallBigMushroom(gameDirectory));
+            // (and the gas monsters' neck and heads, after it)
+            log.Add(RaceTrackGasMonster.Install(gameDirectory));
             // (and its drum in the item box)
             var (icon, iconLog) = RaceTrackOil.InstallIcon(gameDirectory);
             log.Add(iconLog);
@@ -715,6 +720,10 @@ internal static class RaceTrackService
                 ? new[] { wheel.CubeX, wheel.CubeZ, (int)Math.Round(wheel.X), (int)Math.Round(wheel.Z), (int)Math.Round(wheel.Spin * 10), wheel.Ball, wheel.BallRadius, b0, b1,
                           (int)Math.Round(wheel.HoleY), (int)Math.Round(wheel.Slope), (int)Math.Round(wheel.Hole * 512), (int)Math.Round(wheel.Outer * 512), (int)Math.Round(wheel.Under) }
                     .Concat(wheel.Turning).ToArray()
+                : null,
+            GasMonsters: scenes.GasMonsters is { Count: > 0 } monsters
+                ? monsters.Where(g => g[3] >= 0 && g[3] < report.GasMonsters.Count).Select(g => { var s = report.GasMonsters[g[3]]; return new[] { g[0], g[1], g[2],
+                    (int)Math.Round(s.X * 512), (int)Math.Round(s.Z * 512), (int)Math.Round(s.BiteX * 512), (int)Math.Round(s.BiteZ * 512), (int)Math.Round(s.BiteY) }; }).ToList()
                 : null);
     }
 

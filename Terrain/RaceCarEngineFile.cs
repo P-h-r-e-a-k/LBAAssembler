@@ -70,6 +70,8 @@ internal static class RaceCarEngineFile
         }
         // the roulette wheel the lap runs through, its head turning and its ball rolling (Otringal's)
         if (raisedFile is not null && track?.Roulette is { Length: >= 14 } wheel) text.Append($"roulette={string.Join(' ', wheel)}\n");
+        // the gas monsters that rise out of the gas beside the road to bite cars (Otringal's)
+        foreach (var monster in track?.GasMonsters ?? new()) text.Append($"gasmonster={string.Join(' ', monster)}\n");
         // where the camera stands while the car flies a drop
         foreach (var dropCam in track?.JumpCameras ?? new()) text.Append($"jumpcam={string.Join(' ', dropCam)}\n");
         // the jumps the engine carries the car over (places in the raised road's file), and the island's scenes by cube for the cube

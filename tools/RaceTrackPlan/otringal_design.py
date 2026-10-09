@@ -430,6 +430,11 @@ plan = {
                  'from': int(iWin), 'to': int(iRWLip), 'ballFrom': int(iBall0), 'ballTo': int(iBall1), 'spin': 24.0,
                  # (its legs: degrees round from east towards south, clear of the road under it)
                  'legs': [110.0, 230.0, 340.0]},
+    # gas monsters rising out of the gas beside the road to bite cars (RaceTrackGasMonster; the user, 2026-10-09: "In the dock area and
+    # around the rocks where Baldino crash lands let's have gas monsters coming out of the gas"): from the docks' edge over the gas to the
+    # islets, and along the islets' north shore -- Baldino's plane crashed on the rocks south of it (body 105) -- and on over the gas
+    'gasMonsters': [{'from': int(nearest((420.3, 549.0), S_)), 'to': int(nearest((410.3, 585.0), S_)), 'every': 8.0, 'out': 3.0, 'most': 5},
+                    {'from': int(nearest((414.0, 590.0), E)), 'to': int(nearest((443.0, 605.0), (0.57, 0.82))), 'every': 8.0, 'out': 3.0, 'most': 5}],
 }
 if '--write' in sys.argv:
     json.dump(plan, open(OUT, 'w'))

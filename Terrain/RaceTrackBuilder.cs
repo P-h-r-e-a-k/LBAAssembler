@@ -103,6 +103,9 @@ internal sealed class RaceTrackPlan
     public GunnerRun[]? Gunners { get; set; }
     // A roulette wheel the lap runs through (RaceTrackRoulette, RACEMOD.CPP roulette=): Otringal's by the casino (the user, 2026-10-09).
     public RouletteRun? Roulette { get; set; }
+    // Gas monsters rising out of the gas beside the road to bite cars (RaceTrackGasMonster, RACEMOD.CPP gasmonster=): Otringal's docks and
+    // the islets of Baldino's crash (the user, 2026-10-09).
+    public GasMonsterRun[]? GasMonsters { get; set; }
     // Decor bodies that stay where they are when the ground under them is cut or raised (IslandOps.DecorFollow): Otringal's gatehouse,
     // which the race track's tunnel runs under -- the cutting beyond the tunnel's mouth reaches the ground under its origin (2026-10-08).
     public int[]? StayPut { get; set; }
@@ -439,6 +442,8 @@ internal sealed class RaceTrackReport
     public List<GunnerSpot> Gunners { get; } = new();
     // the roulette wheel (RaceTrackPlan.Roulette): RaceTrackRoulette.Place's
     public RouletteSpot? Roulette;
+    // the gas monsters (RaceTrackPlan.GasMonsters): RaceTrackGasMonster.Place's
+    public List<GasMonsterSpot> GasMonsters { get; } = new();
     // the lap's point of each of Raised's (PlaceRaised): where a point of the lap is in the engine's list
     public List<int> RaisedSpan { get; } = new();
     public int Vertices, Cells, DecorsRemoved, SolidDecorsRemoved, BridgeCells;
@@ -832,6 +837,9 @@ internal static class RaceTrackBuilder
                 PlanPoint(plan, main, roulette.From), PlanPoint(plan, main, roulette.To), PlanPoint(plan, main, roulette.BallFrom), PlanPoint(plan, main, roulette.BallTo),
                 options, report, keep.Contains);
         }
+        if (planned && plan.GasMonsters is { Length: > 0 } monsters)
+            foreach (var g in monsters)
+                report.GasMonsters.AddRange(RaceTrackGasMonster.Place(island, main, PlanPoint(plan, main, g.From), PlanPoint(plan, main, g.To), g, options, report));
         report.GroundBefore = (x, z) => natural.Height(x, z);
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
         report.WasGround = (x, z) => natural.Drawn(x, z);

@@ -744,6 +744,43 @@ typedef struct {
 static T_RACE_ROULETTE s_wheel;
 extern void (*DecorPoseHook)(T_DECORS *list, S32 count);  // 3DEXT/DECORS.CPP
 static void WheelDecors(T_DECORS *list, S32 count);
+// Gas monsters (gasmonster=<scene> <its neck's actor> <its head's> <x> <z> <bite x> <bite z> <bite y>, island units: where it rises out of
+// the gas, where it bites on the road and the road's height there): Otringal's, at its docks and round the islets where Baldino's plane
+// lies crashed -- the user, 2026-10-09: "let's have gas monsters coming out of the gas and attempting to bite cars, any bitten cars should
+// be stunned for a couple of seconds as though they've been hit then be able to continue". A car coming near wakes one: its neck rises
+// out of the gas in a puff of it, rears and sways with its jaws open, and strikes its head down onto the road's near half, the jaws
+// snapping shut there -- a car there is bitten and held RACE_MONSTER_STUN -- then sinks back. Its neck and head are two actors of its
+// scene (RaceTrackGasMonster's bodies), posed while that scene is the one about; elsewhere it rises and bites all the same, for the
+// opponents there.
+#define RACE_MAX_MONSTERS 16
+#define RACE_MONSTER_NECK 7000.0           // its neck's length, foot to head (RaceTrackGasMonster.NeckLength): the most of it under the gas
+#define RACE_MONSTER_SNOUT 1400.0          // its head's length, to its jaws' tip
+#define RACE_MONSTER_STRIKE 0.85           // radians its head is pointed down when it strikes ...
+#define RACE_MONSTER_LOOK 0.35             // ... and while it rears
+#define RACE_MONSTER_REAR 1700.0           // how much higher its neck stands while it rears than when it strikes
+#define RACE_MONSTER_LEAN (-0.15)          // radians its neck leans back, away from the road, while it rears
+#define RACE_MONSTER_WAKE 2600.0           // a car this near its bite wakes it, however slowly it goes ...
+#define RACE_MONSTER_WAKE_FAR 14000.0      // ... and one coming its way from this far, as it will be at the bite when the jaws come down
+#define RACE_MONSTER_RISE 700              // ms: out of the gas ...
+#define RACE_MONSTER_SWAY 520              // ... rearing ...
+#define RACE_MONSTER_LUNGE 260             // ... the strike ...
+#define RACE_MONSTER_HOLD 350              // ... its jaws shut on the road ...
+#define RACE_MONSTER_SINK 900              // ... and back down
+#define RACE_MONSTER_REST 2500             // and up to as much again before it can rise again
+#define RACE_MONSTER_BITE 950              // a car this near its bite (on the level) when its jaws shut is bitten ...
+#define RACE_MONSTER_STUN 2200             // ... and held this long
+#define RACE_MONSTER_NECK_BODY 3           // RaceTrackGasMonster.Neck, HeadOpen and HeadShut: the mushroom's entity's bodies
+#define RACE_MONSTER_OPEN_BODY 4
+#define RACE_MONSTER_SHUT_BODY 5
+enum { MONSTER_DOWN, MONSTER_RISE, MONSTER_SWAY, MONSTER_LUNGE, MONSTER_HOLD, MONSTER_SINK };
+typedef struct {
+    S32 Scene; int Neck, Head; double RiseX, RiseZ, BiteX, BiteZ, BiteY;
+    int State, Shown, Open; S32 T0, Next;
+} T_RACE_MONSTER;
+static T_RACE_MONSTER s_monsters[RACE_MAX_MONSTERS];
+static int s_nbMonsters = 0;
+static S32 s_bittenUntil[RACE_MAX_OPPONENTS + 1];  // a car just bitten is let be till then -- a monster beside it doesn't bite it again
+#define RACE_MONSTER_GRACE 2500            // ms after its stun
 // Shuttles (shuttle=<scene> <actor> <x> <y> <z>: the scene's actor, and the pad it lands on, cube-local, on the road): Otringal's spaceship
 // on the square island, which in the game comes down onto its pad on the road and takes off again at random -- the user, 2026-10-08:
 // "leave this in as a feature but perhaps have it hover for a few seconds, land for a couple of seconds before rising straight up
@@ -1705,6 +1742,15 @@ static void Load(const char *path, int carOnly = 0) {
                 memset(g, 0, sizeof(*g));
                 g->Scene = scene; g->Gun = gun; g->Franco = franco; g->MX = x; g->MY = y; g->MZ = z;
                 s_nbGunners++;
+            }
+        }
+        else if (!strcmp(key, "gasmonster")) {
+            int scene, neck, head, x, z, bx, bz, by;
+            if (s_nbMonsters < RACE_MAX_MONSTERS && sscanf(v, "%d %d %d %d %d %d %d %d", &scene, &neck, &head, &x, &z, &bx, &bz, &by) == 8) {
+                T_RACE_MONSTER *m = &s_monsters[s_nbMonsters++];
+                memset(m, 0, sizeof(*m));
+                m->Scene = scene; m->Neck = neck; m->Head = head; m->RiseX = x; m->RiseZ = z; m->BiteX = bx; m->BiteZ = bz; m->BiteY = by;
+                m->Shown = -1;
             }
         }
         else if (!strcmp(key, "roulette")) {
@@ -4001,7 +4047,11 @@ static void GuideAt(const T_RACE_OPPONENT *o, double s, double side, double *x, 
 
 // A car struck (a ball's hit, a fake mushroom's blast): -1 Twinsen's -- stopped as by a penguin's blast unless the protection spell or the
 // super jet-pack is on -- else an opponent's, stopped with its hit animation unless it is on a super jet-pack.
-static void CarStruck(int who, S32 now, const char *what, const char *by) {
+static void CarStruckFor(int who, S32 now, const char *what, const char *by, S32 hold, const char *message);
+static void CarStruck(int who, S32 now, const char *what, const char *by) { CarStruckFor(who, now, what, by, RACE_PENGUIN_HOLD, NULL); }
+
+// ... held `hold` ms, and Twinsen told `message` (NULL: "Hit by ...!") -- a gas monster's bite (Monsters).
+static void CarStruckFor(int who, S32 now, const char *what, const char *by, S32 hold, const char *message) {
     if (who < 0) {
         T_OBJET *hero = &ListObjet[NUM_PERSO];
         if (now < s_protectUntil || now < s_jetUntil || (hero->Flags & NO_CHOC)) {
@@ -4010,16 +4060,17 @@ static void CarStruck(int who, S32 now, const char *what, const char *by) {
         }
         HitObj(PenguinHitter(), NUM_PERSO, RACE_SHOT_FORCE, -1);
         ListBuggy[0].Speed = 0;
-        if (s_hitUntil < now + RACE_PENGUIN_HOLD) s_hitUntil = now + RACE_PENGUIN_HOLD;
+        if (s_hitUntil < now + hold) s_hitUntil = now + hold;
         char text[80];
-        if (by) snprintf(text, sizeof(text), "Hit by %s's %s!", by, what); else snprintf(text, sizeof(text), "Hit by %s!", what);
+        if (message) snprintf(text, sizeof(text), "%s", message);
+        else if (by) snprintf(text, sizeof(text), "Hit by %s's %s!", by, what); else snprintf(text, sizeof(text), "Hit by %s!", what);
         Message(text);
         Log_Info("[racemod] Twinsen's car hit by %s%s%s", by ? by : "", by ? "'s " : "", what);
         return;
     }
     T_RACE_OPPONENT *op = &s_opp[who];
     if (now < op->JetUntil) return;
-    if (op->HitUntil < now + RACE_PENGUIN_HOLD) op->HitUntil = now + RACE_PENGUIN_HOLD;
+    if (op->HitUntil < now + hold) op->HitUntil = now + hold;
     Log_Info("[racemod] %s hit by %s%s%s", op->Name, by ? by : "", by ? "'s " : "", what);
     const int index = OpponentActor(op);
     if (index < 0 || ListObjet[index].Obj.Y < -10000) return;
@@ -4539,6 +4590,10 @@ static S32 s_noCollideScene = -1;
 S32 RaceMod_NoCollide(S32 numobj) {
     // (the car lapping on its own, parade=: through Twinsen and his car alike -- it keeps to its line whatever is in its way)
     if (RaceMod_Active() && numobj > 0 && numobj == s_paradeActorNow) return 1;
+    // (a gas monster's neck and head: its bite is the race-track mode's own -- Monsters)
+    if (RaceMod_Active() && numobj > 0)
+        for (int i = 0; i < s_nbMonsters; i++)
+            if (s_monsters[i].Scene == (S32)NumCube && (s_monsters[i].Neck == numobj || s_monsters[i].Head == numobj)) return 1;
     if (!RaceMod_Active() || !s_powerups || numobj <= 0 || numobj >= MAX_OBJETS) return 0;
     // (a super jet-pack goes through the cars: Twinsen's through any in its way -- it pushes them aside, RACE_SHOVE_* -- and an
     // opponent's through Twinsen's; on the same line, the jet-pack sat stuck behind the car in front)
@@ -5013,6 +5068,127 @@ static void Wheel(S32 now, int driving) {
     }
 }
 
+// A gas monster's pose (Monsters): its neck's foot at height `base` under the gas, the neck leaning `lean` radians from upright towards
+// where it bites; where its head is (island units: on the neck's top), and the way it faces.
+static void MonsterPose(const T_RACE_MONSTER *m, double base, double lean, double *hx, double *hy, double *hz, S32 *beta) {
+    double dx = m->BiteX - m->RiseX, dz = m->BiteZ - m->RiseZ;
+    const double d = sqrt(dx * dx + dz * dz);
+    if (d > 0) { dx /= d; dz /= d; } else { dx = 0; dz = 1; }
+    *beta = (S32)floor(atan2(dx, dz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    *hx = m->RiseX + dx * RACE_MONSTER_NECK * sin(lean); *hy = base + RACE_MONSTER_NECK * cos(lean); *hz = m->RiseZ + dz * RACE_MONSTER_NECK * sin(lean);
+}
+
+// Every frame: the gas monsters (gasmonster=) -- woken by a car coming near, risen, rearing, striking, biting and sunk again; posed where
+// their scene is the one about.
+static void Monsters(S32 now, int driving) {
+    if (!s_nbMonsters) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    for (int i = 0; i < s_nbMonsters; i++) {
+        T_RACE_MONSTER *m = &s_monsters[i];
+        // (its strike: the jaws' tip on the bite, the head pointed RACE_MONSTER_STRIKE down -- the neck's top that far back and up from it,
+        // the neck leaning to reach it from its foot, its foot that deep under the gas; and rearing, RACE_MONSTER_REAR higher, leaning back)
+        const double dx = m->BiteX - m->RiseX, dz = m->BiteZ - m->RiseZ, d = sqrt(dx * dx + dz * dz);
+        const double reach = d - RACE_MONSTER_SNOUT * cos(RACE_MONSTER_STRIKE), topY = m->BiteY + 250 + RACE_MONSTER_SNOUT * sin(RACE_MONSTER_STRIKE);
+        double share = reach / RACE_MONSTER_NECK;
+        if (share > 0.95) share = 0.95; else if (share < 0) share = 0;
+        const double leanS = asin(share), baseS = topY - RACE_MONSTER_NECK * cos(leanS);
+        const double baseR = baseS + RACE_MONSTER_REAR < -150 ? baseS + RACE_MONSTER_REAR : -150, baseD = -RACE_MONSTER_NECK - 600;
+        const S32 t = now - m->T0;
+        double base = baseD, lean = 0, nod = RACE_MONSTER_LOOK;
+        int open = 0, puff = 0;
+        switch (m->State) {
+        case MONSTER_DOWN:
+            // (woken by Twinsen's car whenever he drives -- a qualifying lap too -- and by the opponents' in a race: one coming its way that
+            // will be at its bite as its jaws come down, by how fast it goes; or one near it, going slowly)
+            if (now < m->Next) break;
+            for (int who = -1; who < RACE_MAX_OPPONENTS && m->State == MONSTER_DOWN; who++) {
+                if (who < 0 && !driving) continue;
+                if (who >= 0 && (!RaceOn() || !s_opp[who].Count || !s_opp[who].Scenes)) continue;
+                if (now < s_bittenUntil[who + 1]) continue;
+                double x, y, z, v = 0, hx = 0, hz = 0;
+                if (!CarAt(who, &x, &y, &z) || fabs(y - m->BiteY) > 2500) continue;
+                if (who < 0) {
+                    const double a = (ListObjet[NUM_PERSO].Obj.Beta & 4095) * 2 * RACE_PI / 4096.0;
+                    v = ListBuggy[0].Speed; hx = sin(a); hz = cos(a);
+                } else {
+                    double px, pz, py;
+                    PathAt(&s_opp[who], s_opp[who].S, &px, &pz, &py, &v, &hx, &hz);
+                    const double hl = sqrt(hx * hx + hz * hz);
+                    if (hl > 0) { hx /= hl; hz /= hl; }
+                }
+                const double tx = m->BiteX - x, tz = m->BiteZ - z, dist = sqrt(tx * tx + tz * tz);
+                const double eta = dist / (v > 1500 ? v : 1500) * 1000, strike = RACE_MONSTER_RISE + RACE_MONSTER_SWAY + RACE_MONSTER_LUNGE;
+                const int coming = dist > 0 && (tx * hx + tz * hz) / dist > 0.5;
+                if ((coming && dist < RACE_MONSTER_WAKE_FAR && eta <= strike + 60) || dist < RACE_MONSTER_WAKE) { m->State = MONSTER_RISE; m->T0 = now; puff = 1; }
+            }
+            break;
+        case MONSTER_RISE: {
+            const double p = t >= RACE_MONSTER_RISE ? 1 : (double)t / RACE_MONSTER_RISE, e = p * p * (3 - 2 * p);
+            base = baseD + (baseR - baseD) * e; lean = RACE_MONSTER_LEAN * e; open = p > 0.6;
+            if (p >= 1) { m->State = MONSTER_SWAY; m->T0 = now; }
+            break;
+        }
+        case MONSTER_SWAY:
+            base = baseR + 140 * sin(2 * RACE_PI * t / 520.0); lean = RACE_MONSTER_LEAN + 0.05 * sin(2 * RACE_PI * t / 260.0); open = 1;
+            if (t >= RACE_MONSTER_SWAY) { m->State = MONSTER_LUNGE; m->T0 = now; }
+            break;
+        case MONSTER_LUNGE: {
+            const double q = t >= RACE_MONSTER_LUNGE ? 1 : (double)t / RACE_MONSTER_LUNGE * t / RACE_MONSTER_LUNGE;
+            base = baseR + (baseS - baseR) * q; lean = RACE_MONSTER_LEAN + (leanS - RACE_MONSTER_LEAN) * q;
+            nod = RACE_MONSTER_LOOK + (RACE_MONSTER_STRIKE - RACE_MONSTER_LOOK) * q;
+            open = 1;
+            if (t >= RACE_MONSTER_LUNGE) {
+                // (its jaws shut on the road: the cars there bitten)
+                m->State = MONSTER_HOLD; m->T0 = now; open = 0;
+                for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+                    if (who < 0 && !driving) continue;
+                    if (who >= 0 && (!RaceOn() || !s_opp[who].Count || !s_opp[who].Scenes)) continue;
+                    double x, y, z;
+                    if (!CarAt(who, &x, &y, &z) || fabs(y - m->BiteY) > 900) continue;
+                    if ((x - m->BiteX) * (x - m->BiteX) + (z - m->BiteZ) * (z - m->BiteZ) > (double)RACE_MONSTER_BITE * RACE_MONSTER_BITE) continue;
+                    if (now < s_bittenUntil[who + 1]) continue;
+                    s_bittenUntil[who + 1] = now + RACE_MONSTER_STUN + RACE_MONSTER_GRACE;
+                    CarStruckFor(who, now, "gas monster's bite", NULL, RACE_MONSTER_STUN, "Bitten by a gas monster!");
+                }
+            }
+            break;
+        }
+        case MONSTER_HOLD:
+            base = baseS; lean = leanS; nod = RACE_MONSTER_STRIKE;
+            if (t >= RACE_MONSTER_HOLD) { m->State = MONSTER_SINK; m->T0 = now; }
+            break;
+        case MONSTER_SINK: {
+            const double p = t >= RACE_MONSTER_SINK ? 1 : (double)t / RACE_MONSTER_SINK, e = p * p * (3 - 2 * p);
+            base = baseS + (baseD - baseS) * e; lean = leanS * (1 - e); nod = RACE_MONSTER_STRIKE + (RACE_MONSTER_LOOK - RACE_MONSTER_STRIKE) * e;
+            if (p >= 1) { m->State = MONSTER_DOWN; m->Next = now + RACE_MONSTER_REST + (S32)(VentRandom() * RACE_MONSTER_REST); puff = 1; }
+            break;
+        }
+        }
+        // posed where its scene is the one about
+        const int here = m->Scene == (S32)NumCube && CubeMode == CUBE_EXTERIEUR && m->Neck > 0 && m->Neck < NbObjets && m->Head > 0 && m->Head < NbObjets;
+        if (!here) { m->Shown = -1; continue; }
+        T_OBJET *neck = &ListObjet[m->Neck], *head = &ListObjet[m->Head];
+        if (m->Shown < 0) {
+            // (their own scripts stopped: they are the race-track mode's)
+            neck->OffsetLife = neck->OffsetTrack = -1; head->OffsetLife = head->OffsetTrack = -1;
+            m->Shown = 0; m->Open = -1;
+        }
+        if (puff) DoImpact(RACE_STEAM_IMPACT, (S32)(m->RiseX - cx), 60, (S32)(m->RiseZ - cz), 255);
+        if (m->State == MONSTER_DOWN) {
+            neck->Obj.Y = head->Obj.Y = -20000;
+            continue;
+        }
+        double hx, hy, hz;
+        S32 beta;
+        MonsterPose(m, base, lean, &hx, &hy, &hz, &beta);
+        neck->Obj.X = (S32)(m->RiseX - cx); neck->Obj.Y = (S32)base; neck->Obj.Z = (S32)(m->RiseZ - cz);
+        CarPitch(&neck->Obj, beta, lean);
+        head->Obj.X = (S32)(hx - cx); head->Obj.Y = (S32)hy; head->Obj.Z = (S32)(hz - cz);
+        CarPitch(&head->Obj, beta, nod);
+        if (open != m->Open) { InitBody((U8)(open ? RACE_MONSTER_OPEN_BODY : RACE_MONSTER_SHUT_BODY), (U8)m->Head); m->Open = open; }
+    }
+}
+
 // Every frame: the shuttles (shuttle=) of this scene, flown round their cycle. Its legs (the game's bodies: 58 down, 68 in, 64 60 65 61 66
 // 62 67 63 between, as its own take-off and landing scripts change them) come out on the way down and go in on the way up; its thrust
 // (body 59, every other fifth of a second against 58, as its scripts flicker it) while it hovers, touches down and lifts off.
@@ -5171,6 +5347,7 @@ void RaceMod_Frame(void) {
     LavaBalls(now, driving);
     Gunners(now, driving);
     Wheel(now, driving);
+    Monsters(now, driving);
     Shuttles(now, driving);
     if (!Opponents()) return;
     // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car
@@ -5838,7 +6015,7 @@ static void ResetTrack(void) {
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
-    memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL;
+    memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = s_arcAcross1 = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0;
