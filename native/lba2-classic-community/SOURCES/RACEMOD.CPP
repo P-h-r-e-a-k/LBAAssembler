@@ -2435,6 +2435,9 @@ void RaceMod_Story(void) {
         Log_Info("[racemod] the dream's race put away: the car alone, %d gears to %d", (int)s_car.Gears, (int)s_car.GearTop[s_car.Gears - 1]);
         // (a fresh start of the scene, at its own start, as a new game's or the console's `cube`: FlagChgCube 2 carries the hero's animation
         // over the change -- FlagReinit, ChangeCube -- and the scene's own opening, which lays him on his bed, lost its animation to it)
+        // (with FlagChgCube 0 ChangeCube doesn't open the game clock's bracket but closes it: opened here, or it closes the one a loaded
+        // game leaves open and the clock goes back to the load -- as the rescue's did, Rescue)
+        SaveTimer();
         NewCube = wakeScene;
         FlagChgCube = 0;
         Log_Info("[racemod] the dream is over: Twinsen wakes up in scene %d", wakeScene);
@@ -2448,6 +2451,9 @@ void RaceMod_Story(void) {
     s_phase = PHASE_WAIT; s_wantGrid = 1;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) if (s_opp[n].Count) { s_opp[n].Laps = 1; s_opp[n].S = 0; s_opp[n].Speed = 0; }
     if (scene >= 0 && !(CurrentCubeX == s_spots[0].CubeX && CurrentCubeY == s_spots[0].CubeZ)) {
+        // (the game clock's bracket opened here: asked for before AffScene, whose end clears FlagChgCube before the change is made, so
+        // ChangeCube doesn't open it but closes it -- as the rescue's, Rescue)
+        SaveTimer();
         NewCube = scene;
         NewPosX = s_spots[0].X; NewPosY = s_spots[0].Y; NewPosZ = s_spots[0].Z;
         FlagChgCube = 1;
@@ -3489,6 +3495,12 @@ static void Rescue(void) {
     // under the super jet-pack, off the end of a road that turned, 2026-10-06 -- back into it, at that place)
     if (s_safeScene >= 0 && (S32)NumCube != s_safeScene) {
         if (NewCube != -1 || s_rescueArrive >= 0 || s_safeIndex < 0 || s_safeIndex >= o->Count) return;
+        // (the game clock's bracket opened here: ChangeCube opens it only on FlagChgCube -- which the frame's end clears before a change
+        // asked for from here is made -- but always closes it, and without this its RestoreTimer closed the one a loaded game leaves
+        // open, and the clock went back to the load. The user's race, 2026-10-09, played from Play's save: Twinsen off the roulette
+        // wheel's south rim into the next cube, rescued back, the clock 153 s back -- his car held stopped by a stun now 153 s off, and
+        // Baldino lapping every few frames, his oil skid's speed run away)
+        SaveTimer();
         NewCube = s_safeScene;
         s_rescueArrive = s_safeIndex;
         Log_Info("[racemod] off the road out of scene %d (in %d): back to it", s_safeScene, (int)NumCube);
@@ -5359,6 +5371,9 @@ void RaceMod_Frame(void) {
     if (!followed && s_nbLoops) { FollowCamera = TRUE; followed = 1; Log_Info("[racemod] loops: the camera follows the car"); }
     FaceTheCar();
     const S32 now = TimerRefHR;
+    // (the game clock gone back -- every time the race keeps, a stun's end, a skid's, a lap's start, then lies ahead of it: said, so
+    // that a race that goes strange afterwards can be read from the log)
+    if (s_oppLast && now < s_oppLast - 1000) Log_Info("[racemod] WARNING: the game clock went back %.1f s (%d to %d)", (s_oppLast - now) / 1000.0, (int)s_oppLast, (int)now);
     S32 dt = s_oppLast ? now - s_oppLast : 0;
     s_oppLast = now;
     if (dt < 0) dt = 0;
