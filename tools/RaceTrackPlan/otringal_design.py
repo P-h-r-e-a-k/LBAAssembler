@@ -57,19 +57,22 @@ def C(x, z): return (x - OX, z - OZ)
 # and drop through the hole onto the road under it, which runs west to the pier. The jump down the west side flies a curve into its
 # north-west side. The lap's way round it -- the opponents' line, spiralling down a turn and a half into the hole -- is the raised road's,
 # with no floor of its own (TrackRoad.Bare); the wheel itself is RaceTrackRoulette's (the plan's 'roulette').
-RW_X, RW_Z = 458.8, 532.0               # its middle: over the casino (its building x 452.6..465.1, z 528.8..535.4)
-RW_RIM, RW_OUT_R = 16.2, 16.5           # its wall's inner face and its outside (cells)
-RW_HOLE = 4.0                           # the hole in its bottom
-RW_YH, RW_S1, RW_S2 = 10600.0, 100.0, 10.0   # its floor at the hole's edge; its rise outwards, S1 a cell, steepening by S2 a cell a cell
+# Then: "Let's see if we can make the roulette wheel bigger still. I don't think we have enough space to make it double the size, but let's
+# get as close to this as we can do": half as big again -- its wall comes within 2 cells of the jump's lip (z 505) north of it, the town's
+# climb passes 3 cells outside it (under it, at 8,500-9,800) south-east of it; its wall no higher (the jump clears it as before).
+RW_X, RW_Z = 458.8, 534.0               # its middle: over the casino (its building x 452.6..465.1, z 528.8..535.4)
+RW_RIM, RW_OUT_R = 24.3, 24.8           # its wall's inner face and its outside (cells)
+RW_HOLE = 5.0                           # the hole in its bottom
+RW_YH, RW_S1, RW_S2 = 10600.0, 70.0, 3.6     # its floor at the hole's edge; its rise outwards, S1 a cell, steepening by S2 a cell a cell
 RW_WALL = 400.0                         # its wall over its floor at the rim
 def bowl(r): d = max(0.0, r - RW_HOLE); return RW_YH + RW_S1 * d + RW_S2 * d * d
 def bowl_slope(r): d = max(0.0, r - RW_HOLE); return (RW_S1 + 2 * RW_S2 * d) / 512    # its rise outwards, a unit a unit
-RW_LAND_R, RW_LAND_A = 9.5, -125.0      # where the jump lands in it (cells out, degrees round from east towards south): its north-west
-RW_END_R = 5.6                          # the opponents' line round it, anticlockwise seen from above, down to this far out at its south ...
-RW_PASS = 1.5                           # ... then a half turn through the hole, passing this far from the middle, heading west
+RW_LAND_R, RW_LAND_A = 14.0, -125.0     # where the jump lands in it (cells out, degrees round from east towards south): its north-west
+RW_END_R = 8.4                          # the opponents' line round it, anticlockwise seen from above, down to this far out at its south ...
+RW_PASS = 2.0                           # ... then a half turn through the hole, passing this far from the middle, heading west
 RW_LIP = RW_HOLE + 0.5                  # the line's lip over the hole (a carried drop from there)
-RW_LAND = 6.5                           # the drop lands on the road under the wheel this far on (cells along the way)
-RW_OUT = 4.0                            # the road under the wheel: straight on west from the half turn's end this far
+RW_LAND = 7.5                           # the drop lands on the road under the wheel this far on (cells along the way)
+RW_OUT = 5.0                            # the road under the wheel: straight on west from the half turn's end this far
 RW_HALF = 3.0                           # the line's room either side (the opponents' lanes: the bowl has no rails)
 WEST_X = 454.8                          # the road down the west side (6.5 cells off the cubes west of it, which the island hasn't got)
 JUMP_FOOT, JUMP_LIP = 498.0, 505.0      # the jump into the wheel down the west side: its ramp's foot and lip
@@ -200,10 +203,19 @@ for k in range(N):
     elif between(k, iTube2, iTube3): HALF[k] = TUBE + (H0 - TUBE) * ramp(iTube2, iTube3, k)
 PIT_HALF = H0 + PIT / 2
 iPit0 = nearest((SX, 511.0), N_); iPit1 = nearest((SX, 504.0), N_); iPit2 = nearest((SX, 470.0), N_); iPit3 = nearest((SX, 463.0), N_)
+# (the straight's full width out through where it narrowed at both ends, easing in and out WIDE_EASE further on -- the user, 2026-10-09,
+# purple lines drawn along those four narrowings: "I've added some purple lines to the start/finish line for the Otringal track, let's
+# expand the track at these points")
+WIDE_EASE = 10.0
+iWide1, iWide2 = iPit0, iPit3
+iWide0 = iWide1
+while ahead(iWide0, iWide1) < WIDE_EASE: iWide0 = (iWide0 - 1) % N
+iWide3 = iWide2
+while ahead(iWide2, iWide3) < WIDE_EASE: iWide3 = (iWide3 + 1) % N
 for k in range(N):
-    if between(k, iPit0, iPit1): HALF[k] = max(HALF[k], H0 + (PIT_HALF - H0) * ramp(iPit0, iPit1, k))
-    elif between(k, iPit1, iPit2): HALF[k] = PIT_HALF
-    elif between(k, iPit2, iPit3): HALF[k] = max(HALF[k], PIT_HALF + (H0 - PIT_HALF) * ramp(iPit2, iPit3, k))
+    if between(k, iWide0, iWide1): HALF[k] = max(HALF[k], H0 + (PIT_HALF - H0) * ramp(iWide0, iWide1, k))
+    elif between(k, iWide1, iWide2): HALF[k] = PIT_HALF
+    elif between(k, iWide2, iWide3): HALF[k] = max(HALF[k], PIT_HALF + (H0 - PIT_HALF) * ramp(iWide2, iWide3, k))
 # (the wheel's way: from where the jump lands round to the line's lip over the hole, where its middle comes within RW_LIP of the wheel's middle)
 def wheel_r(k): return math.hypot(X[k] + OX - RW_X, Z[k] + OZ - RW_Z)
 iJLip = nearest((WEST_X, JUMP_LIP), S_)

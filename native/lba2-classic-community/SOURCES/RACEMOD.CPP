@@ -773,33 +773,31 @@ static int OnWheel(double wx, double wy, double wz) {
 }
 extern void (*DecorPoseHook)(T_DECORS *list, S32 count);  // 3DEXT/DECORS.CPP
 static void WheelDecors(T_DECORS *list, S32 count);
-// Gas monsters (gasmonster=<scene> <its actor> <its size> <x> <z> <bite x> <bite z> <bite y> <foot y> <first anim>, island units: where it
+// Gas monsters (gasmonster=<scene> <its actor> <its body> <x> <z> <bite x> <bite z> <bite y> <foot y> <first anim>, island units: where it
 // stands out of the gas, its place on the road and the road's height there, its foot's height; the first of its animations): Otringal's,
 // at its docks and round the islets where Baldino's plane lies crashed -- the user, 2026-10-09: "let's have gas monsters coming out of the
 // gas and attempting to bite cars, any bitten cars should be stunned for a couple of seconds as though they've been hit then be able to
 // continue"; then: "let's have them permanently visible with their necks above the track and randomly striking down. Let's have each gas
-// monster always attack the same point in the track, so once their positions are learnt they're avoidable". The game's own gas monster
-// (entity 222), twice its size (size 0) or three times (1), stands beside the road for good, its neck arched over the rail, swaying with
-// its head poised over the road's near half (its first animation, mouth open). Every RACE_MONSTER_EVERY to twice that, at random, it rears
-// back and strikes (the next), its head coming down on its place on the road RACE_MONSTER_HIT after the strike begins: a car there, or one
-// driving into it while its jaws are held there (RACE_MONSTER_HOLD), is bitten and held RACE_MONSTER_STUN; it bites (the third, mouth
-// shut) and goes back to poised. Its animations are made for its place by
+// monster always attack the same point in the track, so once their positions are learnt they're avoidable"; then: "Let's make the gas
+// monsters necks longer ... so they're above the track then when they're ready they strike down onto the track into their strike zone".
+// The game's own gas monster (entity 222), twice its size, its neck as long as its place wants (a body of its own), stands beside the road
+// for good, swaying with its head poised high over its strike zone on the road's near half, mouth open (its first animation). Every
+// RACE_MONSTER_EVERY to twice that, at random, it rears back and strikes down (the next), its mouth on the strike zone RACE_MONSTER_HIT after
+// the strike begins: a car there, or one driving into it while its jaw snaps shut and holds (RACE_MONSTER_HOLD), is bitten and held
+// RACE_MONSTER_STUN; then it goes back to poised (the third). Its animations are made for its place by
 // RaceTrackGasMonster.InstallPoses, and these times are theirs. Its actor is posed while its scene is the one about; elsewhere it strikes
 // all the same, for the opponents there.
 #define RACE_MAX_MONSTERS 16
 #define RACE_MONSTER_HIT (150 + 650 + 220) // ms from the strike's start to its head on the road (InstallPoses: PoiseMs, RearMs, LungeMs) ...
-#define RACE_MONSTER_BACK (20 + 450 + 700) // ... and from there, biting, back to poised (20, HoldMs, BackMs)
-#define RACE_MONSTER_HOLD 450              // ... the first part of it its jaws held on the road (HoldMs)
+#define RACE_MONSTER_BACK (20 + 120 + 330 + 700) // ... and from there, biting, back to poised (20, SnapMs, HoldMs, BackMs) ...
+#define RACE_MONSTER_HOLD (120 + 330)      // ... the first part of it its jaw snapping shut on the road and held (SnapMs, HoldMs)
 #define RACE_MONSTER_EVERY 1400            // ms poised between strikes, at the least (and up to twice as long)
 #define RACE_MONSTER_BITE 950              // a car this near its place (on the level) when its head comes down is bitten ...
 #define RACE_MONSTER_STUN 2200             // ... and held this long
-#define RACE_MONSTER_BODY 120              // RaceTrackGasMonster.BodyOf, OpenBodyOf: the gas monster's entity's bodies ...
-#define RACE_MONSTER_OPEN_BODY 122
-#define RACE_MONSTER_NEXT_SIZE 4           // ... and each size's 4 on from the last's
 enum { MONSTER_POISED, MONSTER_STRIKE, MONSTER_BITE };
 typedef struct {
-    S32 Scene; int Neck, Size, Anim0; double RiseX, RiseZ, BiteX, BiteZ, BiteY, FootY;
-    int State, Shown, Open, Anim; S32 T0, Next;
+    S32 Scene; int Neck, Body, Anim0; double RiseX, RiseZ, BiteX, BiteZ, BiteY, FootY;
+    int State, Shown, Anim; S32 T0, Next;
 } T_RACE_MONSTER;
 static T_RACE_MONSTER s_monsters[RACE_MAX_MONSTERS];
 static int s_nbMonsters = 0;
@@ -1793,7 +1791,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_nbMonsters < RACE_MAX_MONSTERS && sscanf(v, "%d %d %d %d %d %d %d %d %d %d", &scene, &neck, &size, &x, &z, &bx, &bz, &by, &fy, &anim0) == 10 && anim0 >= 0) {
                 T_RACE_MONSTER *m = &s_monsters[s_nbMonsters++];
                 memset(m, 0, sizeof(*m));
-                m->Scene = scene; m->Neck = neck; m->Size = size == 1 ? 1 : 0; m->RiseX = x; m->RiseZ = z; m->BiteX = bx; m->BiteZ = bz; m->BiteY = by; m->FootY = fy; m->Anim0 = anim0;
+                m->Scene = scene; m->Neck = neck; m->Body = size; m->RiseX = x; m->RiseZ = z; m->BiteX = bx; m->BiteZ = bz; m->BiteY = by; m->FootY = fy; m->Anim0 = anim0;
                 m->Shown = -1;
             }
         }
@@ -5185,7 +5183,7 @@ static void Monsters(S32 now, int driving) {
     for (int i = 0; i < s_nbMonsters; i++) {
         T_RACE_MONSTER *m = &s_monsters[i];
         const S32 t = now - m->T0;
-        int open = 1, anim = m->Anim0;
+        int anim = m->Anim0;
         switch (m->State) {
         case MONSTER_POISED:
             // (the first strike any time in the first two waits, so that they don't strike together)
@@ -5196,16 +5194,16 @@ static void Monsters(S32 now, int driving) {
             anim = m->Anim0 + 1;
             if (t >= RACE_MONSTER_HIT) {
                 // (its head down on its place: the cars there bitten)
-                m->State = MONSTER_BITE; m->T0 = now; open = 0; anim = m->Anim0 + 2;
+                m->State = MONSTER_BITE; m->T0 = now; anim = m->Anim0 + 2;
                 MonsterBites(m, now, driving);
             }
             break;
         case MONSTER_BITE:
-            open = 0; anim = m->Anim0 + 2;
-            // (and those driving into its jaws while they're held there)
+            anim = m->Anim0 + 2;
+            // (and those driving into its jaws while they snap shut and hold)
             if (t < RACE_MONSTER_HOLD) MonsterBites(m, now, driving);
             if (t >= RACE_MONSTER_BACK) {
-                m->State = MONSTER_POISED; open = 1; anim = m->Anim0;
+                m->State = MONSTER_POISED; anim = m->Anim0;
                 m->Next = now + RACE_MONSTER_EVERY + (S32)(VentRandom() * RACE_MONSTER_EVERY);
             }
             break;
@@ -5215,15 +5213,15 @@ static void Monsters(S32 now, int driving) {
         if (!here) { m->Shown = -1; continue; }
         T_OBJET *monster = &ListObjet[m->Neck];
         if (m->Shown < 0) {
-            // (its own scripts stopped: it is the race-track mode's)
+            // (its own scripts stopped: it is the race-track mode's; its own body)
             monster->OffsetLife = monster->OffsetTrack = -1;
-            m->Shown = 0; m->Open = -1; m->Anim = -1;
+            InitBody((U8)m->Body, (U8)m->Neck);
+            m->Shown = 0; m->Anim = -1;
         }
         const double fx = m->BiteX - m->RiseX, fz = m->BiteZ - m->RiseZ;
         const S32 beta = (S32)floor(atan2(fx, fz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
         monster->Obj.X = (S32)(m->RiseX - cx); monster->Obj.Y = (S32)m->FootY; monster->Obj.Z = (S32)(m->RiseZ - cz);
         CarPitch(&monster->Obj, beta, 0);
-        if (open != m->Open) { InitBody((U8)((open ? RACE_MONSTER_OPEN_BODY : RACE_MONSTER_BODY) + RACE_MONSTER_NEXT_SIZE * m->Size), (U8)m->Neck); m->Open = open; }
         if (anim != m->Anim) { InitAnim((U16)anim, ANIM_REPEAT, (U8)m->Neck); m->Anim = anim; }
     }
 }

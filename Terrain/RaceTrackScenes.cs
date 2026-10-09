@@ -247,7 +247,7 @@ internal static class RaceTrackScenes
         public List<int[]> Mushrooms = new(), Penguins = new(), Oil = new(), Fakes = new();
         // the machine guns on their knolls: each [scene, the gun's actor, its Franco's actor] (Report.Gunners, in that order)
         public List<int[]> Gunners = new();
-        // the gas monsters: each [scene, its actor, its size, its place in Report.GasMonsters]
+        // the gas monsters: each [scene, its actor, its body, its place in Report.GasMonsters]
         public List<int[]> GasMonsters = new();
         public Result Result(List<string> log, int changed, int removed, Result? twin = null) =>
             new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners, GasMonsters);
@@ -585,11 +585,11 @@ internal static class RaceTrackScenes
                         if ((int)Math.Floor(g.X / 64) != model.CubeX || (int)Math.Floor(g.Z / 64) != model.CubeY) continue;
                         if (model.Actors.Count + 1 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the gas monster at ({g.X:0.#}, {g.Z:0.#})"); continue; }
                         var monster = mushroomTemplate.Clone();
-                        monster.Entity = RaceTrackGasMonster.Entity; monster.Body = RaceTrackGasMonster.OpenBodyOf(g.Size); monster.Anim = Math.Max(0, g.FirstAnim);
+                        monster.Entity = RaceTrackGasMonster.Entity; monster.Body = 0; monster.Anim = Math.Max(0, g.FirstAnim);
                         monster.Flags = OpponentFlags; monster.Move = 0; monster.Life = new byte[] { 0 }; monster.Track = new byte[] { 0 };
                         monster.X = (int)Math.Round((g.X - model.CubeX * 64) * 512); monster.Z = (int)Math.Round((g.Z - model.CubeY * 64) * 512); monster.Y = -20000; monster.Beta = 0;
                         var actor = SceneOps.AddActor(model, monster);
-                        t.GasMonsters.Add(new[] { scene, actor, g.Size, gi });
+                        t.GasMonsters.Add(new[] { scene, actor, g.Body, gi });
                         log.Add($"scene {scene}: a gas monster (actor {actor}) in the gas at ({g.X:0.#}, {g.Z:0.#})");
                     }
             // the power-ups: the mushrooms of the lap in this scene's cube, on the road, and a penguin out of sight

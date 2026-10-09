@@ -116,7 +116,7 @@ internal static class RaceTrackService
         // there and its steepening a cell a cell (hundredths), the hole's radius, the wall's and its outside's (units), how far its
         // underside is under its floor, then its turning bodies; since 2026-10-09
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Roulette = null,
-        // GasMonsters: the gas monsters (RaceTrackGasMonster; RACEMOD.CPP gasmonster=), each [scene, its actor, its size (its Scales), where it
+        // GasMonsters: the gas monsters (RaceTrackGasMonster; RACEMOD.CPP gasmonster=), each [scene, its actor, its body, where it
         // rises x and z, where it bites x and z and the road's height there, its foot's height (island units), its first animation], since 2026-10-09
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? GasMonsters = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
@@ -585,8 +585,6 @@ internal static class RaceTrackService
             log.Add(RaceTrackOil.Install(gameDirectory));
             // (and the power-ups' mushroom made bigger, beside it in the mushroom's entity)
             log.Add(RaceTrackOil.InstallBigMushroom(gameDirectory));
-            // (and the game's gas monster in the sizes the race track uses, after it)
-            log.Add(RaceTrackGasMonster.Install(gameDirectory));
             // (and its drum in the item box)
             var (icon, iconLog) = RaceTrackOil.InstallIcon(gameDirectory);
             log.Add(iconLog);
@@ -727,7 +725,7 @@ internal static class RaceTrackService
                 : null,
             GasMonsters: scenes.GasMonsters is { Count: > 0 } monsters
                 ? monsters.Where(g => g[3] >= 0 && g[3] < report.GasMonsters.Count).Select(g => { var s = report.GasMonsters[g[3]]; return new[] { g[0], g[1], g[2],
-                    (int)Math.Round(s.X * 512), (int)Math.Round(s.Z * 512), (int)Math.Round(s.BiteX * 512), (int)Math.Round(s.BiteZ * 512), (int)Math.Round(s.BiteY), (int)Math.Round(s.FootY), s.FirstAnim }; }).ToList()
+                    (int)Math.Round(s.X * 512), (int)Math.Round(s.Z * 512), (int)Math.Round(s.BiteX * 512), (int)Math.Round(s.BiteZ * 512), (int)Math.Round(s.BiteY), 0, s.FirstAnim }; }).ToList()
                 : null);
     }
 
