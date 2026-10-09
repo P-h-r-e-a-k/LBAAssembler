@@ -101,6 +101,8 @@ internal sealed class RaceTrackPlan
     // Machine guns on knolls inside corners (RaceTrackGunner, RACEMOD.CPP gunner=): Otringal's Franco gun, firing bursts onto the corner's
     // inner half (the user, 2026-10-09).
     public GunnerRun[]? Gunners { get; set; }
+    // A roulette wheel the lap runs through (RaceTrackRoulette, RACEMOD.CPP roulette=): Otringal's by the casino (the user, 2026-10-09).
+    public RouletteRun? Roulette { get; set; }
     // Decor bodies that stay where they are when the ground under them is cut or raised (IslandOps.DecorFollow): Otringal's gatehouse,
     // which the race track's tunnel runs under -- the cutting beyond the tunnel's mouth reaches the ground under its origin (2026-10-08).
     public int[]? StayPut { get; set; }
@@ -435,6 +437,8 @@ internal sealed class RaceTrackReport
     public List<(double X, double Y, double Z, int From, int To, int Every, int Phase)> LavaBalls { get; } = new();
     // the machine guns on their knolls (RaceTrackPlan.Gunners): RaceTrackGunner.Place's
     public List<GunnerSpot> Gunners { get; } = new();
+    // the roulette wheel (RaceTrackPlan.Roulette): RaceTrackRoulette.Place's
+    public RouletteSpot? Roulette;
     // the lap's point of each of Raised's (PlaceRaised): where a point of the lap is in the engine's list
     public List<int> RaisedSpan { get; } = new();
     public int Vertices, Cells, DecorsRemoved, SolidDecorsRemoved, BridgeCells;
@@ -557,6 +561,8 @@ internal sealed class TrackRoad
     // The points in a carried jump's gap (RaceTrackPlan.ArcJumps), or null: the car is carried through the air there, nothing in the way
     // of the road is cleared and no crossing zone stands at the cube's edge.
     public bool[]? Arc;
+    // A raised road's points with no deck of its own (no pieces, no piers: the roulette wheel's lane, whose floor the wheel is), or null.
+    public bool[]? Bare;
     // A white stripe along a raised road (RaceTrackPlan.PitStripe): its first and last point and how far across (cells), or null.
     public (int From, int To, double Offset)? Stripe;
     public double AsphaltHalf, CurbHalf, VergeHalf, Blend;
@@ -711,6 +717,11 @@ internal static class RaceTrackBuilder
                 report.Loops.Add(new LoopInfo(main.X[k], main.Z[k], main.H[k], main.Tx[k], main.Tz[k], l[1], l[2], l[3], k, l.Length > 4 ? l[4] : LoopBandHalf));
             }
         if (planned && main.Raised is not null) PlanArcJumps(plan, main, report);
+        if (planned && main.Raised is not null && plan.Roulette is { } wheel)
+        {
+            main.Bare = new bool[main.Count];
+            for (int k = PlanPoint(plan, main, wheel.From), last = PlanPoint(plan, main, wheel.To); ; k = (k + 1) % main.Count) { main.Bare[k] = true; if (k == last) break; }
+        }
         if (planned && main.Raised is not null && plan.PitStripe is [var stripeFrom, var stripeTo, var stripeAt])
             main.Stripe = (PlanPoint(plan, main, (int)stripeFrom), PlanPoint(plan, main, (int)stripeTo), stripeAt);
 
@@ -814,6 +825,13 @@ internal static class RaceTrackBuilder
             foreach (var g in gunners.Where(g => g.Knoll is { Length: >= 2 }))
                 report.Gunners.Add(RaceTrackGunner.Place(island, main, PlanPoint(plan, main, g.From), PlanPoint(plan, main, g.To), g,
                     g.Knoll[0] + plan.OriginCellX, g.Knoll[1] + plan.OriginCellZ, options, report));
+        if (planned && main.Raised is not null && plan.Roulette is { Centre.Length: >= 2 } roulette)
+        {
+            var keep = keepBodies?.ToHashSet() ?? new HashSet<int>();
+            report.Roulette = RaceTrackRoulette.Place(island, main, roulette, roulette.Centre[0] + plan.OriginCellX, roulette.Centre[1] + plan.OriginCellZ,
+                PlanPoint(plan, main, roulette.From), PlanPoint(plan, main, roulette.To), PlanPoint(plan, main, roulette.BallFrom), PlanPoint(plan, main, roulette.BallTo),
+                options, report, keep.Contains);
+        }
         report.GroundBefore = (x, z) => natural.Height(x, z);
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
         report.WasGround = (x, z) => natural.Drawn(x, z);
@@ -2314,7 +2332,7 @@ internal static class RaceTrackBuilder
     // the engine's gravity on a rollercoaster of a lap (RACEMOD.H RACE_GRAVITY, RACE_OVERSPEED_DRAG, RACE_CLIMB)
     private const double EngineGravity = 5000, EngineOverspeedDrag = 0.5, EngineBankSteer = 2.2, EngineClimb = 0.6;
     // how far inside a raised road's edge its rail keeps a car's middle, cells (RACEMOD.CPP RAISED_INSET, 640 units)
-    private const double RailInset = 1.25, RailMargin = 0.6;
+    private const double RailInset = 1.25, RailMargin = 0.6, NarrowMargin = 0.15;
 
     // (how far a racing line keeps from a stripe beside the pit lane: a car's half width and some)
     private const double StripeClear = 1.6;
@@ -2342,6 +2360,10 @@ internal static class RaceTrackBuilder
         // (on a rollercoaster of a lap the road's rail slows a car it holds, and it holds a car's middle RailInset from the road's edge:
         // the line keeps RailMargin inside that)
         if (report.Gravity is > 0) reach = Math.Min(reach, o.RaisedHalfWidth - RailInset - RailMargin);
+        // (where a raised road is narrower than the island's own -- a tunnel's, the roulette wheel's lane, 2026-10-09 -- within the rail
+        // there: the line had run outside Otringal's wheel's lane, over the bowl's floor inside it, and the test pilot drove into its wall)
+        double ReachAt(int k) => r.Raised is { } upAt && upAt[k] && r.RaisedHalfs is { } halfsAt && k < halfsAt.Length && halfsAt[k] < o.RaisedHalfWidth
+            ? Math.Max(0, Math.Min(reach, halfsAt[k] - RailInset - NarrowMargin)) : reach;
         double Turn(int m)
         {
             int a = W(m - 1), b = W(m + 1);
@@ -2353,11 +2375,12 @@ internal static class RaceTrackBuilder
         for (var m = 0; m < count; m++)
         {
             var sharpest = Enumerable.Range(-2, 5).Select(d => turns[W(m + d)]).OrderByDescending(Math.Abs).First();
-            var inside = Math.Abs(sharpest) < 1e-6 ? reach : Math.Clamp(1 / Math.Abs(sharpest) - LineTightest, 0, reach);
+            var reachM = ReachAt(at[m]);
+            var inside = Math.Abs(sharpest) < 1e-6 ? reachM : Math.Clamp(1 / Math.Abs(sharpest) - LineTightest, 0, reachM);
             // (the normal (-Tz, Tx) is the way the road runs turned a quarter turn the way a positive turn goes, so a positive turn has its
             // centre on the normal's side)
-            lo[m] = sharpest > 0 ? -reach : -inside;
-            hi[m] = sharpest > 0 ? inside : reach;
+            lo[m] = sharpest > 0 ? -reachM : -inside;
+            hi[m] = sharpest > 0 ? inside : reachM;
             // (beside a stripe -- the Emerald Moon's pit lane -- no further than a car's width from it, on the road's side of it)
             if (r.Stripe is { } st && (st.From <= st.To ? at[m] >= st.From - 12 && at[m] <= st.To + 12 : at[m] >= st.From - 12 || at[m] <= st.To + 12))
             {
@@ -4444,7 +4467,7 @@ internal static class RaceTrackBuilder
         var cells = Math.Max(1, (int)Math.Round(o.RaisedPiece));
         int pieces = 0, left = 0;
         var runs = new List<List<int>> { new() };
-        foreach (var k in span) { if (r.Gap[k] || !up[k]) { if (runs[^1].Count > 0) runs.Add(new()); } else runs[^1].Add(k); }
+        foreach (var k in span) { if (r.Gap[k] || !up[k] || r.Bare?[k] == true) { if (runs[^1].Count > 0) runs.Add(new()); } else runs[^1].Add(k); }
         foreach (var run in runs.Where(u => u.Count >= 2))
         for (var t = 0; t + per < run.Count + per - 1 && t < run.Count - 1; t += cells * per)
         {
@@ -4605,6 +4628,7 @@ internal static class RaceTrackBuilder
                 if (at < 1 || at >= span.Count - 1) continue;
                 var k = span[at];
                 if (r.Gap[k] || r.Gap[span[at - 1]] || r.Gap[span[at + 1]]) continue;      // (not in a jump's gap)
+                if (r.Bare?[k] == true) continue;                                            // (nor under the roulette wheel's lane)
                 if (!up[k] || !up[span[at - 1]] || !up[span[at + 1]]) continue;
                 var ground = IslandOps.Altitude(island, r.X[k] * 512, r.Z[k] * 512) ?? 0;
                 var road = Math.Min(r.H[k], Math.Min(r.H[span[at - 1]], r.H[span[at + 1]]));

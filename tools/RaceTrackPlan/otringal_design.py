@@ -46,6 +46,54 @@ RX = SX + PIT / 2                       # ... the race lanes' middle; their left
 TZ = 594.45                             # the bridge's, its doorway's and the gatehouse's middle (z)
 
 def C(x, z): return (x - OX, z - OZ)
+
+# ---- the roulette wheel by the casino (the user, 2026-10-09: "The jump approaching the casino the landing is too tight, let's change this
+# area, let's have the jump land into a giant rotating roulette wheel complete with colours, numbers, and a giant white ball that rolls
+# around for cars to avoid. Cars land in the roulette wheel from the jump, and drive around in a circle and out a hole in the bottom"). A
+# bowl on the town's square north of the casino, over the inlet's gully, its floor a cone down to a hole in its middle; the jump over the
+# inlet lands on its west side heading south, and the lane runs round it most of a turn (south, east, north-north-east), dives through a
+# half turn into the hole and the car drops through it (a carried jump) onto the road under the wheel, which runs on east-south-east
+# out from under it to the corner past the casino. (A first try, the dive a half turn through the wheel's very middle, 2.75 cells round
+# and its lane 1.6 cells either side: the test pilot stuck fast where it began -- the engine keeps a car's middle 640 inside the rails.) The lane is the raised road's (its rails the engine's), banked as the cone is; the wheel
+# itself is RaceTrackRoulette's (the plan's 'roulette').
+RW_HALF = 2.0                           # the lane's half width in the wheel
+RW_R0 = 5.8                             # its middle's distance from the wheel's middle round the bowl
+RW_RIM = RW_R0 + RW_HALF + 0.15         # the bowl's wall (its inner face)
+RW_HOLE = 2.8                           # the hole in the bottom
+RW_PASS = 1.5                           # the dive's half turn passes this far from the wheel's middle, over the hole
+RW_LIP = 3.1                            # where the lane ends, its middle this far from the wheel's middle (the drop's lip) ...
+RW_LIP_HALF = 1.0                       # ... and its half width there
+RW_YH, RW_S = 9400.0, 170.0             # the bowl's floor at the hole's edge, and how much it rises a cell outwards
+RW_DIVE = -70.0                         # where the lane leaves the round for the dive (degrees round from east, towards south)
+RW_OUT = 4.5                            # the road under the wheel: straight on from its middle this far, then on to the corner past the casino
+RW_LAND = 5.5                           # the drop lands on it this far from the lip (cells along the way)
+RW_WALL = 250.0                         # the bowl's wall over its floor at the rim
+RW_JUMP_FLOOR = 9750.0                  # the deck at the foot of the jump into it
+WEST_X = 454.8                          # the road down the west side (6.5 cells off the cubes west of it, which the island hasn't got)
+RWX, RWZ = WEST_X + RW_R0, 520.0         # the wheel's middle: the jump lands heading south on its west side (its wall just short of the casino)
+def cone(r): return RW_YH + RW_S * (r - RW_HOLE)
+
+def wheel_path(step=0.02):
+    """the lane's way round the wheel (island cells) from where the jump lands to the end of the straight past its middle, and the way it heads there"""
+    pts = []
+    a0, a1 = math.radians(180.0), math.radians(RW_DIVE)
+    n = int(round(RW_R0 * (a0 - a1) / step))
+    for k in range(n):
+        a = a0 - (a0 - a1) * k / n; pts.append((RWX + RW_R0 * math.cos(a), RWZ + RW_R0 * math.sin(a)))
+    # (the dive: a half turn inside the lane's round, to RW_PASS past the wheel's middle -- over the hole)
+    rho = (RW_R0 + RW_PASS) / 2; mx, mz = RWX + (RW_R0 - rho) * math.cos(a1), RWZ + (RW_R0 - rho) * math.sin(a1)
+    n = int(round(rho * math.pi / step))
+    for k in range(n):
+        a = a1 - math.pi * k / n; pts.append((mx + rho * math.cos(a), mz + rho * math.sin(a)))
+    ex, ez = mx + rho * math.cos(a1 - math.pi), mz + rho * math.sin(a1 - math.pi)
+    hx, hz = math.sin(a1 - math.pi), -math.cos(a1 - math.pi)
+    n = int(round(RW_OUT / step))
+    for k in range(n): pts.append((ex + hx * RW_OUT * k / n, ez + hz * RW_OUT * k / n))
+    return pts, (hx, hz), (ex, ez)
+WHEEL, (RW_HX, RW_HZ), (RW_EX, RW_EZ) = wheel_path()
+WIN = (RWX - RW_R0, RWZ)                # where the lane in the wheel starts (the jump's landing)
+POUT = (RW_EX + RW_HX * RW_OUT, RW_EZ + RW_HZ * RW_OUT)
+
 # the corners in the lap's order, each (x, z) and the radius it is rounded with (island cells)
 K = [((555.0, 620.0), 5.0),             # the square island: east along its south side, round north ...
      ((555.0, TZ), 5.0),                # ... west along its north side, down the slope, through the bridge and under the gatehouse ...
@@ -53,9 +101,10 @@ K = [((555.0, 620.0), 5.0),             # the square island: east along its sout
      ((470.0, 573.0), 6.0),             # ... north up through it ...
      ((SX, 524.0), 10.0),               # ... north: the straight along the palace's east side (the start, the pit lane on the left) ...
      ((SX, 453.0), 7.0),                # ... west along the north edge ...
-     ((453.0, 455.0), 6.0),             # ... south down the west side, the jump over the inlet ...
-     ((452.5, 523.5), 3.5),             # ... the S round the tanks: east (clear of the building at z 528.8) ...
-     ((470.0, 523.5), 4.0),             # ... south ...
+     ((WEST_X, 455.0), 6.0),            # ... south down the west side, the jump over the inlet into the roulette wheel ...
+     (WIN, 0.0),                        # ... (the wheel's lane, wheel_path, spliced in between these two) ...
+     (POUT, 0.0),                       # ... out from under it east-south-east, past the casino (its building from z 528.8) ...
+     ((470.0, POUT[1] + (470.0 - POUT[0]) * RW_HZ / RW_HX), 4.0),   # ... south ...
      ((470.0, 541.0), 4.0),             # ... west ...
      ((443.0, 541.0), 4.0),             # ... north-west, past the west pier ...
      ((437.0, 532.0), 4.0),
@@ -94,7 +143,15 @@ def rounded_polyline(K):
     return np.array(out)
 
 fine = rounded_polyline(K)
-START = (SX, 488.0)                     # the start line on the straight (heading north: its grid behind it, south, on the level)
+# (the wheel's lane in place of the straight between its two sharp corners)
+def at_corner(p):
+    d = np.hypot(fine[:, 0] - C(*p)[0], fine[:, 1] - C(*p)[1]); i = int(np.argmax(d < 1e-6))
+    if d[i] >= 1e-6: sys.exit(f'no corner at {p}')
+    return i
+iW_, iP_ = at_corner(WIN), at_corner(POUT)
+fine = np.vstack([fine[:iW_], np.array([C(x, z) for x, z in WHEEL]), fine[iP_:]])
+fine = fine[np.concatenate([[True], np.hypot(*np.diff(fine, axis=0).T) > 1e-9])]
+START =(SX, 488.0)                     # the start line on the straight (heading north: its grid behind it, south, on the level)
 k0 = int(np.argmin(np.hypot(fine[:, 0] - C(*START)[0], fine[:, 1] - C(*START)[1] - 20)))
 fine = np.roll(fine, -k0, axis=0)
 seg = np.linalg.norm(np.diff(np.vstack([fine, fine[:1]]), axis=0), axis=1)
@@ -134,6 +191,22 @@ for k in range(N):
     if between(k, iPit0, iPit1): HALF[k] = max(HALF[k], H0 + (PIT_HALF - H0) * ramp(iPit0, iPit1, k))
     elif between(k, iPit1, iPit2): HALF[k] = PIT_HALF
     elif between(k, iPit2, iPit3): HALF[k] = max(HALF[k], PIT_HALF + (H0 - PIT_HALF) * ramp(iPit2, iPit3, k))
+# (the wheel's lane: from where the jump lands round to its lip over the hole, where its middle comes within RW_LIP of the wheel's middle)
+def wheel_r(k): return math.hypot(X[k] + OX - RWX, Z[k] + OZ - RWZ)
+iWin = nearest(WIN, S_)
+iRWLip = iWin
+while wheel_r(iRWLip) > RW_LIP: iRWLip = (iRWLip + 1) % N
+iRWDive = (iWin + int(round(RW_R0 * math.radians(180.0 - RW_DIVE) / STEP))) % N
+for k in span_of(iWin, iRWLip): HALF[k] = RW_HALF
+# (narrowing over the last two cells into the hole, which the car is carried over -- the drop's ramp: its rails clear of the hole, and the
+# race-track mode sets the car down the middle of the lip)
+for j, k in enumerate(span_of((iRWLip - 4) % N, iRWLip)): HALF[k] = RW_HALF + (RW_LIP_HALF - RW_HALF) * ease(j / 4)
+iRWLand = iRWLip
+while ahead(iRWLip, iRWLand) < RW_LAND: iRWLand = (iRWLand + 1) % N
+iRWFoot = (iRWLand + 4) % N
+# (the lane and the drop out of the wheel: their heights its own -- the ground's under them neither raises nor smooths the road beside them)
+WHEELED = np.zeros(N, bool)
+for k in span_of(iWin, iRWLand): WHEELED[k] = True
 PIT_WAIT = (496.0, 500.0, 504.0)        # where the opponents wait in the pit lane while the player qualifies (z: behind the line, cube (7,7))
 
 # ---- heights. Floors: CLEAR over the ground under the deck (its 80th percentile across it: a rock at one rail is cut down, RaisedCut),
@@ -160,8 +233,9 @@ iDoor = nearest((528.0, TZ), W_)        # the doorway at the slope's foot (body 
 iTubeW = nearest((501.8, TZ), W_)       # the bridge's west end
 iGateW = nearest((490.8, TZ), W_)       # the gatehouse's west face (body 112, x 490.8..497)
 for k in span_of(iDoor, iTubeW): floor[k] = ceil[k] = TUBE_DECK
-# (the jump over the inlet: its take-off high enough for the flight to clear the ground across the inlet, 9,100 at its highest)
-for k in span_of(nearest((453, 500.0), S_), nearest((453, 506.0), S_)): floor[k] = max(floor[k], 9700.0)
+# (the jump over the inlet into the roulette wheel: its take-off high enough for the flight to clear the wheel's wall)
+JUMP_FOOT, JUMP_LIP, JUMP_DEG = 503.0, 509.5, 24.0
+for k in span_of(nearest((WEST_X, JUMP_FOOT - 6.0), S_), nearest((WEST_X, JUMP_FOOT), S_)): floor[k] = max(floor[k], RW_JUMP_FLOOR)
 for k in span_of(iTubeW, iGateW): ceil[k] = GATE_BASE - SLAB - UNDER_SLAB
 iSlope0 = nearest((556.0, 606.0), N_)   # the steep stretches: down to the doorway, and up from the bridge into the upper town
 iClimb1 = nearest((471.0, 570.0), N_)
@@ -179,6 +253,7 @@ def spread(v, up):
             j = (k + 1) % N
             v[k] = max(v[k], v[j] - g[k]) if up else min(v[k], v[j] + g[k])
     return v
+floor[WHEELED] = -1e9
 F = spread(floor, True); Cc = spread(ceil, False)
 Y = np.minimum(F, Cc)
 # (eased: the kinks of the spread rounded off, a few cells each way -- not near the game's tunnel, whose floor and roofs are as they are)
@@ -186,8 +261,16 @@ hard = ceil < 1e8
 Ys = Y.copy()
 for k in range(N):
     w = [(k + d) % N for d in range(-6, 7)]
-    if not hard[w].any(): Ys[k] = np.mean(Y[w])
+    w = [j for j in w if not WHEELED[j]]
+    if not hard[w].any() and not WHEELED[k]: Ys[k] = np.mean(Y[w])
 Y = np.minimum(np.maximum(Ys, np.minimum(F, Cc) - 60), Cc)
+# the wheel's lane on its cone; the drop through the hole: on down the lane's slope at the lip and falling, onto the road under the wheel
+for k in span_of(iWin, iRWLip): Y[k] = cone(wheel_r(k))
+RW_G0 = max(0.0, (Y[(iRWLip - 1) % N] - Y[iRWLip]) / (STEP * 512)); RW_DL = ahead(iRWLip, iRWLand) * 512
+RW_B = (Y[iRWLip] - Y[iRWLand] - RW_G0 * RW_DL) / RW_DL ** 2
+if RW_B <= 0: sys.exit(f'the drop through the hole: the road under the wheel ({Y[iRWLand]:.0f}) too high for it')
+for k in span_of(iRWLip, iRWLand):
+    d = ahead(iRWLip, k) * 512; Y[k] = Y[iRWLip] - RW_G0 * d - RW_B * d * d
 
 # ---- the jumps the engine carries the car over: (name, foot, lip, landing lip, landing foot as (x, z, heading)), the ramp's angle
 def flight_heights(iFoot, iLip, iLand, iLandFoot, theta, top_needed, land_at=None):
@@ -206,16 +289,28 @@ def flight_heights(iFoot, iLip, iLand, iLandFoot, theta, top_needed, land_at=Non
     return at, yl, land_y
 
 # (the sketch's pink dots: the inlet's at (451.1, 514.5) -> (451.8, 522.9), the sea's at (504.7, 620.4) -> (525.1, 619.5))
-JUMPS = [('inlet', (453, 506.0, S_), (453, 512.5, S_), (453, 521.5, S_), (453, 524.0, S_), 26.0, None),
+def pt(p): return p if isinstance(p, (int, np.integer)) else nearest(p[:2], p[2])
+JUMPS = [('inlet', (WEST_X, JUMP_FOOT, S_), (WEST_X, JUMP_LIP, S_), iWin, (iWin + 5) % N, JUMP_DEG, cone(RW_R0)),
          ('sea', (497, 620.0, E), (505.0, 620.0, E), (525.0, 620.0, E), (531.0, 620.0, E), 24.0, None)]
 gap = np.zeros(N, bool); arcs = []
 for name, f, l, ld, lf, deg, landing in JUMPS:
-    iF, iL, iD, iDF = nearest(f[:2], f[2]), nearest(l[:2], l[2]), nearest(ld[:2], ld[2]), nearest(lf[:2], lf[2])
-    at, yl, land_y = flight_heights(iF, iL, iD, iDF, math.radians(deg), Y[iDF] + 600)
+    iF, iL, iD, iDF = pt(f), pt(l), pt(ld), pt(lf)
+    at, yl, land_y = flight_heights(iF, iL, iD, iDF, math.radians(deg), Y[iDF] + 600, landing)
     for k in span_of(iF, iDF): Y[k] = at(ahead(iF, k) * 512)
     k = (iL + 1) % N
     while k != iD: gap[k] = True; k = (k + 1) % N
     arcs.append((name, iF, iL, iD, iDF))
+# (the drop through the wheel's hole: carried from two cells before its lip to two past where it lands)
+k = (iRWLip + 1) % N
+while k != iRWLand: gap[k] = True; k = (k + 1) % N
+arcs.append(('hole', (iRWLip - 4) % N, iRWLip, iRWLand, iRWFoot))
+# the lane banked as the cone is: across it (Nn), the cone's rise outwards
+BANK = np.zeros(N)
+for k in span_of(iWin, iRWLip):
+    rx, rz = X[k] + OX - RWX, Z[k] + OZ - RWZ
+    BANK[k] = RW_S / 512 * (rx * Nn[k, 0] + rz * Nn[k, 1]) / math.hypot(rx, rz)
+# where the white ball rolls: the lane round the bowl, clear of the landing and the dive
+iBall0, iBall1 = (iWin + 8) % N, (iRWDive - 6) % N
 
 # ---- the game's tunnel: the bridge's tube and the building at the slope's foot cut open for the road (RaceTrackDriveThrough, their roofs
 # kept: a passage CAR_ROOM high), a tunnel's pieces through the rock between the doorway and the bridge, and under the gatehouse a sunk
@@ -243,7 +338,7 @@ MARK = {
     'pier1':   nearest((416, 555), W_), 'sea0': nearest((408, 575), S_), 'isles': nearest((422, 590), E), 'coast0': nearest((446, 609), (0.6, 0.8)),
     'coast1':  nearest((480, 631), E), 'sq0': nearest((532, 620), E), 'sqN': nearest((555, 605), N_), 'pad': nearest((549.5, TZ), W_),
     'door':    iDoor, 'tubeW': iTubeW, 'gateW': iGateW, 'town0': nearest((474, 585), N_), 'town1': nearest((473, 565), N_),
-    'straight0': nearest((SX, 522), N_),
+    'straight0': nearest((SX, 522), N_), 'wheel': iWin, 'dive': iRWDive, 'hole': iRWLip, 'under': iRWLand,
 }
 out = [f'lap {total:.1f} cells, {N} points; heights {Y.min():.0f} to {Y.max():.0f}; steepest driven {np.abs(grade[ride]).max() * 100:.1f} %']
 steepest = sorted(((abs(grade[k]), k) for k in range(N) if ride[k]), reverse=True)
@@ -291,6 +386,11 @@ for i in range(0, N, 2):
     if nearby.any(): close.append((dd[nearby].min(), i, int(np.argmax(nearby))))
 for dmin, i, j in sorted(close)[:4]:
     out.append(f'  CLASH: ({X[i] + OX:.1f}, {Z[i] + OZ:.1f}) {Y[i]:.0f} and ({X[j] + OX:.1f}, {Z[j] + OZ:.1f}) {Y[j]:.0f}: {dmin:.1f} cells apart')
+# (the flight into the wheel over its wall: the car's underside over the wall's top where it crosses it)
+k = iWin
+while wheel_r(k) < RW_RIM + 0.3: k = (k - 1) % N
+out.append(f'  roulette: lane points {iWin}..{iRWLip} ({ahead(iWin, iRWLip):.1f} cells, {Y[iWin]:.0f} down to {Y[iRWLip]:.0f}), the drop {Y[iRWLip]:.0f} to '
+           f'{Y[iRWLand]:.0f} over {ahead(iRWLip, iRWLand):.1f} cells; the jump crosses the wall at ({X[k] + OX:.1f}, {Z[k] + OZ:.1f}) {Y[k] - cone(RW_RIM) - RW_WALL:.0f} over its top')
 for m, k in MARK.items():
     out.append(f'    {m:9s} point {k:4d} ({X[k] + OX:6.1f}, {Z[k] + OZ:6.1f}) {Y[k]:6.0f} (ground {gs[k]:5.0f}) cube ({int((X[k] + OX) // 64)},{int((Z[k] + OZ) // 64)})')
 out.append(f'  pit lane points {iPit1}..{iPit2}; start point {MARK["start"]}; tunnel {iDoor}..{iGateW}')
@@ -303,6 +403,7 @@ plan = {
     'maxGrade': round(float(np.abs(grade).max()) + 0.05, 3),
     'raised': [0, N - 1], 'raisedHalf': H0, 'asphaltHalf': ASPHALT, 'curbHalf': CURB,
     'raisedHalfs': [round(float(h), 3) for h in HALF],
+    'bank': [round(float(b), 4) for b in BANK],
     'arcJumps': [[int(iF), int(iL), int(iD), int(iDF), 0] for name, iF, iL, iD, iDF in arcs],
     'start': int(MARK['start']),
     # the stripe between the pit lane and the race lanes (west of them, -Across), first and last point; the opponents' waiting spots in
@@ -322,6 +423,13 @@ plan = {
     # "move it to the high ground that's just above the track at that corner, and add in a franco to fire in bursts so that the bullets
     # only land on the inside of the corner"): the knoll's middle (plan cells), the corner's points, its top over the corner's deck
     'gunners': [{'knoll': [79.5, 15.5], 'from': 178, 'to': 204, 'rise': 500}],
+    # the roulette wheel the jump over the inlet lands in (RaceTrackRoulette): its middle (plan cells), its bowl's wall and its hole (cells
+    # from the middle), its floor's height at the hole and its rise a cell outwards, the wall's height; the lane round it (points), where
+    # the white ball rolls (points), how fast the wheel turns (degrees a second)
+    'roulette': {'centre': [round(RWX - OX, 3), round(RWZ - OZ, 3)], 'rim': RW_RIM, 'hole': RW_HOLE, 'holeY': RW_YH, 'slope': RW_S, 'wall': RW_WALL,
+                 'from': int(iWin), 'to': int(iRWLip), 'ballFrom': int(iBall0), 'ballTo': int(iBall1), 'spin': 24.0,
+                 # (its legs: degrees round from east towards south, clear of the road under it)
+                 'legs': [110.0, 230.0, 340.0]},
 }
 if '--write' in sys.argv:
     json.dump(plan, open(OUT, 'w'))

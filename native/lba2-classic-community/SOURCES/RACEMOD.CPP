@@ -722,6 +722,28 @@ typedef struct { int On, Extra; double FromX, FromY, FromZ, ToX, ToY, ToZ; S32 T
 static T_RACE_GUNNER s_gunners[RACE_MAX_GUNNERS];
 static int s_nbGunners = 0;
 static T_RACE_BULLET s_bullets[RACE_MAX_BULLETS];
+// The roulette wheel the lap runs through (roulette=<cube x> <cube z> <x> <z> <spin> <the ball's body> <its radius> <from> <to> <the floor's
+// height at the hole's edge> <its rise a cell outwards> <the hole's radius> <the bowl's> <its underside under its floor> <the head's
+// bodies...>, island units): Otringal's by the casino -- the user, 2026-10-09: "a giant rotating roulette wheel complete with colours,
+// numbers, and a giant white ball that rolls around for cars to avoid". Its head (the pockets and their numbers) and its ball are decors
+// of the island's (RaceTrackRoulette), drawn from wherever the wheel is seen: as each cube's decors are drawn (3DEXT/DECORS.CPP
+// DecorPoseHook) the head's are turned, <spin> tenths of a degree a second against the way the lap runs round it, and the ball's moved
+// to where it rolls -- to and fro along the lane between places <from> and <to> of the raised road's file, weaving across it. A car it
+// rolls into is struck, as by a magic ball.
+#define RACE_MAX_WHEEL_PARTS 8
+#define RACE_BALL_SPEED 1700.0             // units a second along the lane
+#define RACE_BALL_WEAVE 4200               // ms for the ball to weave across the lane and back
+#define RACE_BALL_REACH 330                // a car is hit with its middle this much further from the ball's than the ball's radius, or nearer
+#define RACE_BALL_AGAIN 2500               // ms before the ball can hit the same car again
+#define RACE_WHEEL_TURN (-1)               // the way the head turns (the lap runs round the wheel anticlockwise seen from above)
+typedef struct {
+    int On, CubeX, CubeZ, Ball, BallR, From, To, NbParts, Parts[RACE_MAX_WHEEL_PARTS];
+    double X, Z, Spin, Length, BallX, BallY, BallZ, HoleY, Slope, Hole, Outer, Under;
+    S32 Beta, Again[RACE_MAX_OPPONENTS + 1];
+} T_RACE_ROULETTE;
+static T_RACE_ROULETTE s_wheel;
+extern void (*DecorPoseHook)(T_DECORS *list, S32 count);  // 3DEXT/DECORS.CPP
+static void WheelDecors(T_DECORS *list, S32 count);
 // Shuttles (shuttle=<scene> <actor> <x> <y> <z>: the scene's actor, and the pad it lands on, cube-local, on the road): Otringal's spaceship
 // on the square island, which in the game comes down onto its pad on the road and takes off again at random -- the user, 2026-10-08:
 // "leave this in as a feature but perhaps have it hover for a few seconds, land for a couple of seconds before rising straight up
@@ -771,6 +793,9 @@ static int s_cubeScenes[RACE_MAX_CUBE_SCENES][3];
 static int s_nbCubeScenes = 0;
 static int s_arcOn = -1, s_arcLast = -1;
 static double s_arcS = 0, s_arcV = 0, s_arcAcross = 0;
+static double s_arcAcross1 = 0;
+static int s_arcSeg = -1;                 // the raised road's segment the carried car is over, and how far along it (ArcPlace)
+static double s_arcT = 0;           // ... and where it is set down: within the landing's rails (a narrower road there: the roulette wheel's lane)
 static S32 s_arcTime = 0, s_arcLandedAt = 0;
 
 static int ArcPrepare(T_RACE_ARC *a) {
@@ -1025,6 +1050,23 @@ static int RaisedAlong(int seg, double t, double distance, double *x, double *y,
 // is so near the road that the eye was lifted 3,300 over the road to clear it, over the roof of Otringal's bridge, 2026-10-08 -- and
 // the eye no higher than this over the road under it, under a tunnel's roof: -1 none)
 static double s_railSight = 0, s_railCeil = -1;
+// Whether a jump's gap (points with no width) lies on the raised road between segments a and b (either way round, the shorter): the rail
+// camera's eye is not let ride back over the gap the car has just flown -- under the roulette wheel, up on the wheel's lane over the car.
+static int GapBetween(int a, int b) {
+    const int n = s_nbRaised - 1;
+    if (n <= 0 || a < 0 || b < 0) return 0;
+    int from = a, to = b;
+    if (s_raisedLoop) { if (((b - a) % n + n) % n > n / 2) { from = b; to = a; } }
+    else if (a > b) { from = b; to = a; }
+    for (int i = from, guard = 0; guard <= n; guard++) {
+        if (s_raised[i].Half <= 0) return 1;
+        if (i == to) break;
+        i = s_raisedLoop ? (i + 1) % n : i + 1;
+        if (i > n) break;
+    }
+    return 0;
+}
+
 static S32 RailCamera(S32 *eye, S32 *target) {
     if (s_railBack <= 0 || !s_nbRaised || CubeMode != CUBE_EXTERIEUR || Comportement != C_BUGGY) return FALSE;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -1032,7 +1074,11 @@ static S32 RailCamera(S32 *eye, S32 *target) {
     S32 f;
     int seg;
     double lat, t;
-    if (!RaisedAt(hero->Obj.X + cx, hero->Obj.Z + cz, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t) || abs(f - hero->Obj.Y) > 300) return FALSE;
+    // (carried over a jump with no camera of its own beside it -- the roulette wheel's drop through its hole, 2026-10-09: the follow
+    // camera took over there from where it had last been, out past the wheel behind a rock -- where along the road it is)
+    const int carried = s_arcOn >= 0 && s_arcSeg >= 0 && s_arcs[s_arcOn].Side == 0;
+    if (carried) { seg = s_arcSeg; t = s_arcT; }
+    else if (!RaisedAt(hero->Obj.X + cx, hero->Obj.Z + cz, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t) || abs(f - hero->Obj.Y) > 300) return FALSE;
     // which way along the road the car faces
     const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
     const double angle = (hero->Obj.Beta & 4095) * 2 * 3.14159265358979 / 4096.0;
@@ -1044,9 +1090,12 @@ static S32 RailCamera(S32 *eye, S32 *target) {
     const double fx = sin(angle), fz = cos(angle);
     double back = s_railBack;
     int behind = RaisedAlong(seg, t, -way * back, &ex, &ey, &ez);
-    while (back > RAIL_CAMERA_NEAREST) {
+    // (... and nearer still, past RAIL_CAMERA_NEAREST, while it would ride over a jump's gap the car has just flown)
+    while (back > 512) {
+        const int gap = !carried && GapBetween(behind, seg);
+        if (back <= RAIL_CAMERA_NEAREST && !gap) break;
         const double dx = hx - ex, dz = hz - ez, d = sqrt(dx * dx + dz * dz);
-        if (d < 1 || (dx * fx + dz * fz) / d >= cos(RAIL_CAMERA_SIDE * 3.14159265358979 / 180)) break;
+        if ((d < 1 || (dx * fx + dz * fz) / d >= cos(RAIL_CAMERA_SIDE * 3.14159265358979 / 180)) && !gap) break;
         back -= 256;
         behind = RaisedAlong(seg, t, -way * back, &ex, &ey, &ez);
     }
@@ -1068,6 +1117,15 @@ static S32 RailCamera(S32 *eye, S32 *target) {
     }
     ey += lift;
     if (s_railCeil >= 0 && ey > roadBehind + s_railCeil) ey = roadBehind + s_railCeil;
+    // (the car under the roulette wheel -- the road on from its hole runs under the bowl -- the eye under the bowl too)
+    if (s_wheel.On && !carried && hy < s_wheel.HoleY - s_wheel.Under) {
+        double r = sqrt((ex - s_wheel.X) * (ex - s_wheel.X) + (ez - s_wheel.Z) * (ez - s_wheel.Z));
+        if (r < s_wheel.Outer + 600) {
+            if (r < s_wheel.Hole) r = s_wheel.Hole;
+            const double ceiling = s_wheel.HoleY - s_wheel.Under + s_wheel.Slope * (r - s_wheel.Hole) / 512 - 250;
+            if (ey > ceiling) ey = ceiling;
+        }
+    }
     // under a level of the road over the eye
     double over;
     if (RaisedBetween(ex, ez, ey - up - lift + 800.0, ey + RAISED_UNDER, behind, &over) && ey > over - RAISED_UNDER) ey = over - RAISED_UNDER;
@@ -1649,6 +1707,19 @@ static void Load(const char *path, int carOnly = 0) {
                 s_nbGunners++;
             }
         }
+        else if (!strcmp(key, "roulette")) {
+            int cx, cz, x, z, spin, ball, radius, from, to, holeY, slope, hole, outer, under, used = 0;
+            memset(&s_wheel, 0, sizeof(s_wheel));
+            if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d%n", &cx, &cz, &x, &z, &spin, &ball, &radius, &from, &to, &holeY, &slope, &hole, &outer, &under, &used) == 14) {
+                s_wheel.CubeX = cx; s_wheel.CubeZ = cz; s_wheel.X = x; s_wheel.Z = z; s_wheel.Spin = spin / 10.0;
+                s_wheel.Ball = ball; s_wheel.BallR = radius; s_wheel.From = from; s_wheel.To = to;
+                s_wheel.HoleY = holeY; s_wheel.Slope = slope; s_wheel.Hole = hole; s_wheel.Outer = outer; s_wheel.Under = under;
+                const char *p = v + used;
+                int part, n;
+                while (s_wheel.NbParts < RACE_MAX_WHEEL_PARTS && sscanf(p, "%d%n", &part, &n) == 1) { s_wheel.Parts[s_wheel.NbParts++] = part; p += n; }
+                s_wheel.On = 1;
+            }
+        }
         else if (!strcmp(key, "gunner_target")) {
             int x, z, y, r;
             if (s_nbGunners > 0 && sscanf(v, "%d %d %d %d", &x, &z, &y, &r) == 4) {
@@ -1845,6 +1916,9 @@ static void Load(const char *path, int carOnly = 0) {
         if (!ArcPrepare(&s_arcs[i])) { Log_Info("[racemod] carried jump %d: not along the raised road -- left out", i + 1); s_arcs[i--] = s_arcs[--s_nbArcs]; }
     if (s_nbArcs) Log_Info("[racemod] %d carried jump(s), %d cube scenes", s_nbArcs, s_nbCubeScenes);
     if (s_nbLoops || s_nbJumpCams || s_nbArcs || s_nbTunnels) FollowCamEyeHook = RaceCameraEye;
+    // (a roulette wheel: its head and its ball posed as their cube's decors are drawn)
+    DecorPoseHook = s_wheel.On ? WheelDecors : NULL;
+    if (s_wheel.On) Log_Info("[racemod] roulette wheel at (%.0f,%.0f): %d turning pieces, its ball body %d rolling between places %d and %d", s_wheel.X, s_wheel.Z, s_wheel.NbParts, s_wheel.Ball, s_wheel.From, s_wheel.To);
     if (s_car.Gears < 1) s_car.Gears = 1;
     if (s_car.Gears > RACE_MAX_GEARS) s_car.Gears = RACE_MAX_GEARS;
     for (S32 g = 0; g < s_car.Gears; g++)
@@ -2975,6 +3049,7 @@ static void ArcPlace(const T_RACE_ARC *a, double s, double across, double *x, do
     const double len = a->S[k + 1] - a->S[k];
     double t = len > 0 ? (s - a->S[k]) / len : 0;
     if (t < 0) t = 0; else if (t > 1) t = 1;
+    s_arcSeg = a->Foot + k; s_arcT = t;
     double ux = q->X - p->X, uz = q->Z - p->Z;
     const double ul = sqrt(ux * ux + uz * uz);
     if (ul > 0) { ux /= ul; uz /= ul; } else { ux = 1; uz = 0; }
@@ -3007,6 +3082,9 @@ static S32 RaceArc(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
             const double across = -(px - f->X) * uz + (pz - f->Z) * ux;
             if (fabs(across) > f->Half) continue;
             s_arcOn = i; s_arcLast = i; s_arcS = 0; s_arcAcross = across;
+            // (the narrower of the lip -- a lane narrowing into the roulette wheel's hole -- and the landing)
+            const double room = (s_raised[a->LandFoot].Half < s_raised[a->Lip].Half ? s_raised[a->LandFoot].Half : s_raised[a->Lip].Half) - RAISED_INSET;
+            s_arcAcross1 = room <= 0 ? 0 : across > room ? room : across < -room ? -room : across;
             s_arcV = ListBuggy[0].Speed > RACE_ARC_LEAST ? ListBuggy[0].Speed : RACE_ARC_LEAST;
             s_arcTime = TimerRefHR;
             Log_Info("[racemod] carried jump %d: on at %d units/s (carried at %.0f), %.0f across", i + 1, (int)ListBuggy[0].Speed, s_arcV, across);
@@ -3023,7 +3101,10 @@ static S32 RaceArc(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
     const double end = a->S[a->LandFoot - a->Foot];
     const int done = s_arcS >= end;
     double x, y, z, dx, dz, slope;
-    ArcPlace(a, done ? end : s_arcS, s_arcAcross, &x, &y, &z, &dx, &dz, &slope);
+    // (eased over the flight from where it was across the ramp to where the landing's rails let it be)
+    double f = end > 0 ? (done ? end : s_arcS) / end : 1;
+    f = f < 0 ? 0 : f > 1 ? 1 : f * f * (3 - 2 * f);
+    ArcPlace(a, done ? end : s_arcS, s_arcAcross + (s_arcAcross1 - s_arcAcross) * f, &x, &y, &z, &dx, &dz, &slope);
     const S32 beta = (S32)floor(atan2(dx, dz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
     ListBuggy[0].Speed = (S32)s_arcV;
     if (done) {
@@ -3228,7 +3309,45 @@ static S32 TunnelCamera(S32 *eye, S32 *target) {
     return done;
 }
 
-static S32 RaceCameraEye(S32 *eye, S32 *target) { return ArcCamera(eye, target) || JumpCamera(eye, target) || LoopCamera(eye, target) || TunnelCamera(eye, target) || RailCamera(eye, target); }
+// The camera while the car is on the road under the roulette wheel (roulette=), out from its hole: the camera that follows the car lifts
+// its eye over the road it is on, and the wheel's lane over it is that stretch of road -- the eye went up over the bowl and the car was
+// hidden under it. Instead it is behind the car and low, under the bowl -- RACE_WHEEL_CAM_BACK behind it at least, past the near plane
+// (CLIP_NEAR, 3,000: an eye nearer than that and the car isn't drawn) -- until the eye itself is out from under it. And in the bowl, on
+// its lane and dropping through its hole, the eye rides the lane behind the car (RailCamera's way, with RACE_WHEEL_RAIL_*): the camera
+// that follows the car went out over the hill beside the wheel round its dive, and into the hill.
+#define RACE_WHEEL_CAM_BACK 4200.0
+#define RACE_WHEEL_CAM_UP 1000.0
+#define RACE_WHEEL_RAIL_BACK 4608.0
+#define RACE_WHEEL_RAIL_UP 3000.0
+#define RACE_WHEEL_RAIL_LEAD 2048.0
+static S32 WheelCamera(S32 *eye, S32 *target) {
+    if (!s_wheel.On || CubeMode != CUBE_EXTERIEUR || Comportement != C_BUGGY) return FALSE;
+    const T_OBJ_3D *car = &ListObjet[NUM_PERSO].Obj;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0, hx = car->X + cx, hz = car->Z + cz;
+    const double under = s_wheel.HoleY - s_wheel.Under;
+    const double fromMiddle = sqrt((hx - s_wheel.X) * (hx - s_wheel.X) + (hz - s_wheel.Z) * (hz - s_wheel.Z));
+    if (fromMiddle < s_wheel.Outer && (s_arcOn >= 0 ? s_arcs[s_arcOn].Foot >= s_wheel.From : car->Y > under - 600)) {
+        // (in the bowl, or dropping through its hole: the lane's own camera; not the jump into it, whose foot is before the lane)
+        const double back = s_railBack, up = s_railUp, lead = s_railLead;
+        if (back <= 0) { s_railBack = RACE_WHEEL_RAIL_BACK; s_railUp = RACE_WHEEL_RAIL_UP; s_railLead = RACE_WHEEL_RAIL_LEAD; }
+        const S32 placed = RailCamera(eye, target);
+        s_railBack = back; s_railUp = up; s_railLead = lead;
+        return placed;
+    }
+    if (s_arcOn >= 0 || car->Y > under - 600) return FALSE;
+    const double a = (car->Beta & 4095) * 2 * RACE_PI / 4096.0, fx = sin(a), fz = cos(a);
+    const double ex = hx - fx * RACE_WHEEL_CAM_BACK, ez = hz - fz * RACE_WHEEL_CAM_BACK;
+    double r = sqrt((ex - s_wheel.X) * (ex - s_wheel.X) + (ez - s_wheel.Z) * (ez - s_wheel.Z));
+    if (r > s_wheel.Outer + 600 && sqrt((hx - s_wheel.X) * (hx - s_wheel.X) + (hz - s_wheel.Z) * (hz - s_wheel.Z)) > s_wheel.Outer) return FALSE;
+    if (r < s_wheel.Hole) r = s_wheel.Hole;
+    double ey = car->Y + RACE_WHEEL_CAM_UP;
+    if (r < s_wheel.Outer + 600) { const double ceiling = under + s_wheel.Slope * (r - s_wheel.Hole) / 512 - 250; if (ey > ceiling) ey = ceiling; }
+    eye[0] = (S32)(ex - cx); eye[1] = (S32)ey; eye[2] = (S32)(ez - cz);
+    target[0] = (S32)(car->X + fx * 900); target[1] = car->Y + 300; target[2] = (S32)(car->Z + fz * 900);
+    return TRUE;
+}
+
+static S32 RaceCameraEye(S32 *eye, S32 *target) { return ArcCamera(eye, target) || JumpCamera(eye, target) || LoopCamera(eye, target) || TunnelCamera(eye, target) || WheelCamera(eye, target) || RailCamera(eye, target); }
 
 S32 RaceMod_Rescue(void) {
     if (!RaceMod_Active() || !s_rescueOn || Comportement != C_BUGGY || !Guide() || s_safeIndex < 0) return 0;
@@ -4830,6 +4949,70 @@ static void Gunners(S32 now, int driving) {
     }
 }
 
+// The roulette wheel's decors as a cube's are drawn (DECORS.CPP DecorPoseHook): its head's turned, its ball's moved to where it rolls (its
+// box with it: the engine leaves out a decor whose box is out of sight).
+static void WheelDecors(T_DECORS *list, S32 count) {
+    if (!s_wheel.On || !RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return;
+    for (S32 i = 0; i < count; i++) {
+        T_DECORS *d = &list[i];
+        const int body = d->Body & 0xFFFF;
+        if (body == s_wheel.Ball && s_wheel.Length > 0) {
+            const S32 x = (S32)floor(s_wheel.BallX - s_wheel.CubeX * 32768.0 + 0.5), y = (S32)floor(s_wheel.BallY + 0.5), z = (S32)floor(s_wheel.BallZ - s_wheel.CubeZ * 32768.0 + 0.5);
+            d->XMin += x - d->Xworld; d->XMax += x - d->Xworld; d->ZMin += z - d->Zworld; d->ZMax += z - d->Zworld; d->YMin += y - d->Yworld;
+            d->Xworld = x; d->Yworld = y; d->Zworld = z;
+            continue;
+        }
+        for (int p = 0; p < s_wheel.NbParts; p++)
+            if (body == s_wheel.Parts[p]) { d->Beta = (d->Beta & ~0xFFFF) | (s_wheel.Beta & 4095); break; }
+    }
+}
+
+// Every frame: the roulette wheel (roulette=) -- its head's turn, where its ball has rolled to, and the cars it rolls into.
+static void Wheel(S32 now, int driving) {
+    T_RACE_ROULETTE *w = &s_wheel;
+    if (!w->On || w->From < 0 || w->To >= s_nbRaised || w->From >= w->To) return;
+    w->Beta = (S32)floor(fmod(now / 1000.0 * w->Spin * RACE_WHEEL_TURN, 360.0) * 4096 / 360.0) & 4095;
+    if (w->Length <= 0)
+        for (int k = w->From; k < w->To; k++)
+            w->Length += sqrt((double)(s_raised[k + 1].X - s_raised[k].X) * (s_raised[k + 1].X - s_raised[k].X) + (double)(s_raised[k + 1].Z - s_raised[k].Z) * (s_raised[k + 1].Z - s_raised[k].Z));
+    if (w->Length <= 0) return;
+    // (to and fro along the lane, weaving across it as far as its rails let it)
+    double s = fmod(now / 1000.0 * RACE_BALL_SPEED, 2 * w->Length);
+    if (s > w->Length) s = 2 * w->Length - s;
+    int k = w->From;
+    for (; k < w->To - 1; k++) {
+        const double len = sqrt((double)(s_raised[k + 1].X - s_raised[k].X) * (s_raised[k + 1].X - s_raised[k].X) + (double)(s_raised[k + 1].Z - s_raised[k].Z) * (s_raised[k + 1].Z - s_raised[k].Z));
+        if (s <= len) break;
+        s -= len;
+    }
+    const T_RACE_RAISED *a = &s_raised[k], *b = a + 1;
+    double ux = b->X - a->X, uz = b->Z - a->Z;
+    const double ul = sqrt(ux * ux + uz * uz);
+    if (ul <= 0) return;
+    ux /= ul; uz /= ul;
+    double t = s / ul;
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    const double half = a->Half + (b->Half - a->Half) * t, bank = a->Bank + (b->Bank - a->Bank) * t;
+    double room = half - w->BallR - 80;
+    if (room < 0) room = 0;
+    const double across = room * sin(2 * RACE_PI * (now % RACE_BALL_WEAVE) / RACE_BALL_WEAVE);
+    w->BallX = a->X + (b->X - a->X) * t - uz * across;
+    w->BallZ = a->Z + (b->Z - a->Z) * t + ux * across;
+    w->BallY = a->Y + (b->Y - a->Y) * t + across * bank / RAISED_BANK_UNITS + w->BallR;
+    // (the cars it rolls into)
+    for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+        if (who < 0 && !driving) continue;
+        if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
+        if (now < w->Again[who + 1]) continue;
+        double x, y, z;
+        if (!CarAt(who, &x, &y, &z)) continue;
+        const double reach = w->BallR + RACE_BALL_REACH;
+        if ((x - w->BallX) * (x - w->BallX) + (z - w->BallZ) * (z - w->BallZ) > reach * reach || fabs(y - (w->BallY - w->BallR)) > 700) continue;
+        w->Again[who + 1] = now + RACE_BALL_AGAIN;
+        CarStruck(who, now, "the roulette wheel's ball", NULL);
+    }
+}
+
 // Every frame: the shuttles (shuttle=) of this scene, flown round their cycle. Its legs (the game's bodies: 58 down, 68 in, 64 60 65 61 66
 // 62 67 63 between, as its own take-off and landing scripts change them) come out on the way down and go in on the way up; its thrust
 // (body 59, every other fifth of a second against 58, as its scripts flicker it) while it hovers, touches down and lifts off.
@@ -4987,6 +5170,7 @@ void RaceMod_Frame(void) {
     Jets(now, driving);
     LavaBalls(now, driving);
     Gunners(now, driving);
+    Wheel(now, driving);
     Shuttles(now, driving);
     if (!Opponents()) return;
     // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car
@@ -5654,7 +5838,8 @@ static void ResetTrack(void) {
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
-    s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = 0; s_arcTime = s_arcLandedAt = 0;
+    memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL;
+    s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = s_arcAcross1 = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0;
     s_jumpLo = 0.6; s_jumpHi = 4.0; s_jumpRate = 0; s_jumpFrac = 0; s_jumpOver = 0;

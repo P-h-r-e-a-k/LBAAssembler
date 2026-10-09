@@ -109,7 +109,12 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? LaserModels = null,
         // Gunners: the machine guns on knolls (RaceTrackGunner; RACEMOD.CPP gunner=, gunner_target=), each [scene, the gun's actor, its
         // Franco's, the muzzle's x, y, z (island units), then x, z, y and radius of each place its bullets land], since 2026-10-09
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Gunners = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Gunners = null,
+        // Roulette: the roulette wheel the lap runs through (RaceTrackRoulette; RACEMOD.CPP roulette=): its decors' cube x and z, its middle's
+        // x and z (island units), how fast its head turns (tenths of a degree a second), its ball's body (the island's) and radius, the
+        // places in the raised road's file the ball rolls between, its floor's height at the hole's edge and its rise a cell outwards, the
+        // hole's radius and the bowl's (units), how far its underside is under its floor, then its head's turning bodies; since 2026-10-09
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Roulette = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -705,6 +710,11 @@ internal static class RaceTrackService
                 : null,
             Gunners: scenes.Gunners is { Count: > 0 } gunners && gunners.Count == report.Gunners.Count
                 ? gunners.Select((g, k) => GunnerRecord(g, report.Gunners[k])).ToList()
+                : null,
+            Roulette: raised && report.Roulette is { } wheel && report.RaisedSpan.IndexOf(wheel.BallFrom) is var b0 and >= 0 && report.RaisedSpan.IndexOf(wheel.BallTo) is var b1 and > 0
+                ? new[] { wheel.CubeX, wheel.CubeZ, (int)Math.Round(wheel.X), (int)Math.Round(wheel.Z), (int)Math.Round(wheel.Spin * 10), wheel.Ball, wheel.BallRadius, b0, b1,
+                          (int)Math.Round(wheel.HoleY), (int)Math.Round(wheel.Slope), (int)Math.Round(wheel.Hole * 512), (int)Math.Round(wheel.Outer * 512), (int)Math.Round(wheel.Under) }
+                    .Concat(wheel.Turning).ToArray()
                 : null);
     }
 

@@ -61,6 +61,15 @@ internal static class RaceCarEngineFile
         foreach (var shuttle in track?.Shuttles ?? new()) text.Append($"shuttle={string.Join(' ', shuttle)}\n");
         // the lava's balls of fire (Volcano Island)
         foreach (var ball in track?.LavaBalls ?? new()) text.Append($"lavaball={string.Join(' ', ball)}\n");
+        // the machine guns on their knolls, each followed by where its bullets land (Otringal's)
+        foreach (var g in track?.Gunners ?? new())
+        {
+            if (g.Length < 6) continue;
+            text.Append($"gunner={string.Join(' ', g.Take(6))}\n");
+            for (var k = 6; k + 3 < g.Length; k += 4) text.Append($"gunner_target={g[k]} {g[k + 1]} {g[k + 2]} {g[k + 3]}\n");
+        }
+        // the roulette wheel the lap runs through, its head turning and its ball rolling (Otringal's)
+        if (raisedFile is not null && track?.Roulette is { Length: >= 14 } wheel) text.Append($"roulette={string.Join(' ', wheel)}\n");
         // where the camera stands while the car flies a drop
         foreach (var dropCam in track?.JumpCameras ?? new()) text.Append($"jumpcam={string.Join(' ', dropCam)}\n");
         // the jumps the engine carries the car over (places in the raised road's file), and the island's scenes by cube for the cube
@@ -126,13 +135,6 @@ internal static class RaceCarEngineFile
             foreach (var pg in track.Penguins ?? new()) text.Append($"penguin={pg[0]} {pg[1]}\n");
             foreach (var oil in track.Oil ?? new()) text.Append($"oil={oil[0]} {oil[1]}\n");
             foreach (var fake in track.Fakes ?? new()) text.Append($"fake={fake[0]} {fake[1]}\n");
-            // (the machine guns on their knolls, each followed by where its bullets land)
-            foreach (var g in track.Gunners ?? new())
-            {
-                if (g.Length < 6) continue;
-                text.Append($"gunner={string.Join(' ', g.Take(6))}\n");
-                for (var k = 6; k + 3 < g.Length; k += 4) text.Append($"gunner_target={g[k]} {g[k + 1]} {g[k + 2]} {g[k + 3]}\n");
-            }
             // (the laser cars' bolts: the game's own, whatever a track built before them noted -- RaceTrackLasers)
             text.Append($"laser_models={RaceTrackLasers.Green} {RaceTrackLasers.Red}\n");
             // (the oil's drum, which the item box shows)
