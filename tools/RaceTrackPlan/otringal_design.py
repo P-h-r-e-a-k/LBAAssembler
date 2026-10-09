@@ -318,6 +318,10 @@ plan = {
     'stayPut': [112],
     # (the raised road in pieces of 10 cells, not 4: the town's and the palace's cubes are near their 200 decors already)
     'raisedPiece': 10.0,
+    # the Francos' machine gun on a knoll inside the corner past the start, where the game has it beside the road (the user, 2026-10-09:
+    # "move it to the high ground that's just above the track at that corner, and add in a franco to fire in bursts so that the bullets
+    # only land on the inside of the corner"): the knoll's middle (plan cells), the corner's points, its top over the corner's deck
+    'gunners': [{'knoll': [79.5, 15.5], 'from': 178, 'to': 204, 'rise': 500}],
 }
 if '--write' in sys.argv:
     json.dump(plan, open(OUT, 'w'))

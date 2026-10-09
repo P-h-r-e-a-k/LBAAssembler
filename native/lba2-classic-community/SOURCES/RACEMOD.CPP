@@ -695,6 +695,33 @@ static int s_nbTunnels = 0;
 typedef struct { double SrcX, SrcY, SrcZ, DstX, DstY, DstZ; int From, To; S32 Every, Phase, Next, T0, Dur, Trail; int On, Ball, Shadow; } T_RACE_LAVA;
 static T_RACE_LAVA s_lava[RACE_MAX_LAVA];
 static int s_nbLava = 0;
+// Machine gunners (gunner=<scene> <gun's actor> <Franco's actor> <muzzle x> <y> <z>, island units, then gunner_target=<x> <z> <y> <radius>,
+// the places its bullets land): Otringal's Franco machine gun on its knoll inside the corner past the start -- the user, 2026-10-09: "add in
+// a franco to fire in bursts so that the bullets only land on the inside of the corner so they can be avoided by driving the corner on the
+// outside". Every RACE_GUN_EVERY ms or so a burst: the gun plays its own firing animation (its kick and its rattle; the game's bullets it
+// would throw left out, FICHE.CPP RaceMod_SilentThrow) and RACE_GUN_SHOTS bullets -- the game's tracer, raw sprite 50 -- fly from its muzzle
+// to places among its targets, the gun turning to each; where one lands, a spark, and a car there is stopped as by a magic ball.
+#define RACE_MAX_GUNNERS 4
+#define RACE_MAX_GUN_TARGETS 32
+#define RACE_MAX_BULLETS 24
+#define RACE_GUN_EVERY 4200
+#define RACE_GUN_SHOTS 10
+#define RACE_GUN_GAP 110                   // ms between its bullets
+#define RACE_GUN_FLIGHT 240                // ms a bullet takes from the muzzle to the road
+#define RACE_GUN_SPRITE 50                 // the game's tracer (raw sprites)
+#define RACE_GUN_SCALE 18                  // its size (the game's 70: four times that, to be seen from the race camera)
+#define RACE_GUN_REACH 650                 // a car this near where a bullet lands is hit
+#define RACE_GUN_FIRING 173                // the gun's firing animation (entity 200)
+#define RACE_GUN_AT_IT 474                 // the Franco sitting at it (entity 201)
+typedef struct {
+    S32 Scene, Gun, Franco; double MX, MY, MZ;
+    int NbTargets; double TX[RACE_MAX_GUN_TARGETS], TZ[RACE_MAX_GUN_TARGETS], TY[RACE_MAX_GUN_TARGETS], TR[RACE_MAX_GUN_TARGETS];
+    S32 Next, BurstAt; int Fired, Firing, Ready;
+} T_RACE_GUNNER;
+typedef struct { int On, Extra; double FromX, FromY, FromZ, ToX, ToY, ToZ; S32 T0; } T_RACE_BULLET;
+static T_RACE_GUNNER s_gunners[RACE_MAX_GUNNERS];
+static int s_nbGunners = 0;
+static T_RACE_BULLET s_bullets[RACE_MAX_BULLETS];
 // Shuttles (shuttle=<scene> <actor> <x> <y> <z>: the scene's actor, and the pad it lands on, cube-local, on the road): Otringal's spaceship
 // on the square island, which in the game comes down onto its pad on the road and takes off again at random -- the user, 2026-10-08:
 // "leave this in as a feature but perhaps have it hover for a few seconds, land for a couple of seconds before rising straight up
@@ -1611,6 +1638,24 @@ static void Load(const char *path, int carOnly = 0) {
             int x, y, z, every;
             if (s_nbVents < RACE_MAX_VENTS && sscanf(v, "%d %d %d %d", &x, &y, &z, &every) == 4 && every > 0) {
                 p->X = x; p->Y = y; p->Z = z; p->Every = every; p->Next = 0; s_nbVents++;
+            }
+        }
+        else if (!strcmp(key, "gunner")) {
+            T_RACE_GUNNER *g = &s_gunners[s_nbGunners];
+            int scene, gun, franco, x, y, z;
+            if (s_nbGunners < RACE_MAX_GUNNERS && sscanf(v, "%d %d %d %d %d %d", &scene, &gun, &franco, &x, &y, &z) == 6) {
+                memset(g, 0, sizeof(*g));
+                g->Scene = scene; g->Gun = gun; g->Franco = franco; g->MX = x; g->MY = y; g->MZ = z;
+                s_nbGunners++;
+            }
+        }
+        else if (!strcmp(key, "gunner_target")) {
+            int x, z, y, r;
+            if (s_nbGunners > 0 && sscanf(v, "%d %d %d %d", &x, &z, &y, &r) == 4) {
+                T_RACE_GUNNER *g = &s_gunners[s_nbGunners - 1];
+                if (g->NbTargets < RACE_MAX_GUN_TARGETS) {
+                    g->TX[g->NbTargets] = x; g->TZ[g->NbTargets] = z; g->TY[g->NbTargets] = y; g->TR[g->NbTargets] = r; g->NbTargets++;
+                }
             }
         }
         else if (!strcmp(key, "lavaball")) {
@@ -4694,6 +4739,97 @@ static void LavaBalls(S32 now, int driving) {
     }
 }
 
+// FICHE.CPP's throws (F_THROW_3D): a machine gunner's gun plays its firing animation for its kick and its rattle, the bullets it would
+// throw left out -- the race-track mode flies its own, onto its targets (Gunners). Non-zero: leave this throw out.
+S32 RaceMod_SilentThrow(S32 numobj) {
+    if (!RaceMod_Active()) return 0;
+    for (int i = 0; i < s_nbGunners; i++)
+        if (s_gunners[i].Scene == (S32)NumCube && s_gunners[i].Gun == numobj) return 1;
+    return 0;
+}
+
+// A bullet of a gunner's burst: from its muzzle to a place among its targets (a point in the disc round one), the gun and its Franco
+// turned to it; its tracer shown where the gunner's scene is the one drawn.
+static void GunnerShot(T_RACE_GUNNER *g, S32 now) {
+    if (!g->NbTargets) return;
+    int b = -1;
+    for (int i = 0; i < RACE_MAX_BULLETS && b < 0; i++) if (!s_bullets[i].On) b = i;
+    if (b < 0) return;
+    T_RACE_BULLET *u = &s_bullets[b];
+    const int k = (int)(VentRandom() * g->NbTargets) % g->NbTargets;
+    const double a = VentRandom() * 2 * 3.14159265358979, r = sqrt(VentRandom()) * g->TR[k];
+    u->On = 1; u->T0 = now; u->Extra = -1;
+    u->FromX = g->MX; u->FromY = g->MY; u->FromZ = g->MZ;
+    u->ToX = g->TX[k] + cos(a) * r; u->ToZ = g->TZ[k] + sin(a) * r; u->ToY = g->TY[k] + 60;
+    if (g->Scene != (S32)NumCube || CubeMode != CUBE_EXTERIEUR) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const S32 beta = (S32)(atan2(u->ToX - g->MX, u->ToZ - g->MZ) * 4096 / (2 * 3.14159265358979)) & 4095;
+    if (g->Gun > 0 && g->Gun < NbObjets) ListObjet[g->Gun].Obj.Beta = beta;
+    if (g->Franco > 0 && g->Franco < NbObjets) ListObjet[g->Franco].Obj.Beta = beta;
+    u->Extra = InitExtraAnimSprite(255, (S32)(u->FromX - cx), (S32)u->FromY, (S32)(u->FromZ - cz), RACE_GUN_SPRITE, RACE_GUN_SPRITE, RACE_GUN_FLIGHT + 200, RACE_GUN_SCALE, 0, 0);
+    if (u->Extra >= 0) ListExtra[u->Extra].Flags |= EXTRA_NO_SHADOW;
+}
+
+// Every frame: the machine gunners (gunner=). Between bursts the gun stands still, its Franco sitting at it; a burst every RACE_GUN_EVERY
+// ms or so while the race is on (a quarter either way), its bullets flown, and where each lands, the cars there hit.
+static void Gunners(S32 now, int driving) {
+    if (!s_nbGunners) return;
+    for (int i = 0; i < s_nbGunners; i++) {
+        T_RACE_GUNNER *g = &s_gunners[i];
+        const int here = g->Scene == (S32)NumCube && CubeMode == CUBE_EXTERIEUR;
+        if (!here) g->Ready = 0;
+        else if (!g->Ready) {
+            // (their own scripts stopped -- the builder emptied them: the guns' put them back by the road every frame)
+            if (g->Gun > 0 && g->Gun < NbObjets) { ListObjet[g->Gun].OffsetLife = -1; ListObjet[g->Gun].OffsetTrack = -1; InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, (U8)g->Gun); }
+            if (g->Franco > 0 && g->Franco < NbObjets) { ListObjet[g->Franco].OffsetLife = -1; ListObjet[g->Franco].OffsetTrack = -1; InitAnim(RACE_GUN_AT_IT, ANIM_REPEAT, (U8)g->Franco); }
+            g->Ready = 1;
+            Log_Info("[racemod] gunner: actor %d of scene %d at its gun (actor %d), %d places to fire at", (int)g->Franco, (int)g->Scene, (int)g->Gun, g->NbTargets);
+        }
+        if (!RaceOn()) continue;
+        if (!g->Next) { g->Next = now + RACE_GUN_EVERY / 2 + i * 900; continue; }
+        if (!g->Firing && now >= g->Next) {
+            g->Firing = 1; g->Fired = 0; g->BurstAt = now;
+            if (here && g->Gun > 0 && g->Gun < NbObjets) InitAnim(RACE_GUN_FIRING, ANIM_REPEAT, (U8)g->Gun);
+        }
+        if (g->Firing) {
+            while (g->Fired < RACE_GUN_SHOTS && now >= g->BurstAt + g->Fired * RACE_GUN_GAP) { GunnerShot(g, now); g->Fired++; }
+            if (g->Fired >= RACE_GUN_SHOTS && now >= g->BurstAt + RACE_GUN_SHOTS * RACE_GUN_GAP) {
+                g->Firing = 0;
+                g->Next = now + RACE_GUN_EVERY * 3 / 4 + (S32)(VentRandom() * RACE_GUN_EVERY / 2);
+                if (here && g->Gun > 0 && g->Gun < NbObjets) InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, (U8)g->Gun);
+            }
+        }
+    }
+    // the bullets: along their way, and where each lands
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    for (int b = 0; b < RACE_MAX_BULLETS; b++) {
+        T_RACE_BULLET *u = &s_bullets[b];
+        if (!u->On) continue;
+        const double t = (double)(now - u->T0) / RACE_GUN_FLIGHT;
+        const int shown = u->Extra >= 0 && u->Extra < MAX_EXTRAS && ListExtra[u->Extra].Sprite == RACE_GUN_SPRITE;
+        if (t < 1) {
+            if (shown) {
+                ListExtra[u->Extra].PosX = (S32)(u->FromX + (u->ToX - u->FromX) * t - cx);
+                ListExtra[u->Extra].PosY = (S32)(u->FromY + (u->ToY - u->FromY) * t);
+                ListExtra[u->Extra].PosZ = (S32)(u->FromZ + (u->ToZ - u->FromZ) * t - cz);
+            }
+            continue;
+        }
+        u->On = 0;
+        if (shown) ListExtra[u->Extra].Sprite = -1;
+        const S32 lx = (S32)(u->ToX - cx), lz = (S32)(u->ToZ - cz);
+        if (CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768) InitHitExtraPof(lx, (S32)u->ToY, lz, RACE_SHOT_FORCE);
+        for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+            if (who < 0 && !driving) continue;
+            if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes || now < s_opp[who].HitUntil)) continue;
+            double x, y, z;
+            if (!CarAt(who, &x, &y, &z)) continue;
+            if ((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ) > (double)RACE_GUN_REACH * RACE_GUN_REACH || fabs(y - u->ToY) > 1400) continue;
+            CarStruck(who, now, "machine gun", "the Franco gunner");
+        }
+    }
+}
+
 // Every frame: the shuttles (shuttle=) of this scene, flown round their cycle. Its legs (the game's bodies: 58 down, 68 in, 64 60 65 61 66
 // 62 67 63 between, as its own take-off and landing scripts change them) come out on the way down and go in on the way up; its thrust
 // (body 59, every other fifth of a second against 58, as its scripts flicker it) while it hovers, touches down and lifts off.
@@ -4850,6 +4986,7 @@ void RaceMod_Frame(void) {
     Vents(now);
     Jets(now, driving);
     LavaBalls(now, driving);
+    Gunners(now, driving);
     Shuttles(now, driving);
     if (!Opponents()) return;
     // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car
@@ -5516,7 +5653,7 @@ static void ResetTrack(void) {
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0;
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
-    s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0;
+    s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0;

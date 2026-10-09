@@ -98,6 +98,9 @@ internal sealed class RaceTrackPlan
     // Lava balls (RACEMOD.CPP lavaball=): balls of fire shot up out of the lava at Source (plan cells) and raining onto the stretch of the
     // lap From..To (the plan's points), one every Every ms or so -- Volcano Island's (the user, 2026-10-08).
     public LavaBallRun[]? LavaBalls { get; set; }
+    // Machine guns on knolls inside corners (RaceTrackGunner, RACEMOD.CPP gunner=): Otringal's Franco gun, firing bursts onto the corner's
+    // inner half (the user, 2026-10-09).
+    public GunnerRun[]? Gunners { get; set; }
     // Decor bodies that stay where they are when the ground under them is cut or raised (IslandOps.DecorFollow): Otringal's gatehouse,
     // which the race track's tunnel runs under -- the cutting beyond the tunnel's mouth reaches the ground under its origin (2026-10-08).
     public int[]? StayPut { get; set; }
@@ -430,6 +433,8 @@ internal sealed class RaceTrackReport
     // the lava balls (RaceTrackPlan.LavaBalls): each one's source (island units, on the ground there), the lap's points of the stretch it
     // rains on, every (ms) and phase (ms)
     public List<(double X, double Y, double Z, int From, int To, int Every, int Phase)> LavaBalls { get; } = new();
+    // the machine guns on their knolls (RaceTrackPlan.Gunners): RaceTrackGunner.Place's
+    public List<GunnerSpot> Gunners { get; } = new();
     // the lap's point of each of Raised's (PlaceRaised): where a point of the lap is in the engine's list
     public List<int> RaisedSpan { get; } = new();
     public int Vertices, Cells, DecorsRemoved, SolidDecorsRemoved, BridgeCells;
@@ -805,6 +810,10 @@ internal static class RaceTrackBuilder
             }
             report.Notes.Add($"{report.LavaBalls.Count} places the lava shoots balls of fire from onto the road");
         }
+        if (planned && plan.Gunners is { Length: > 0 } gunners)
+            foreach (var g in gunners.Where(g => g.Knoll is { Length: >= 2 }))
+                report.Gunners.Add(RaceTrackGunner.Place(island, main, PlanPoint(plan, main, g.From), PlanPoint(plan, main, g.To), g,
+                    g.Knoll[0] + plan.OriginCellX, g.Knoll[1] + plan.OriginCellZ, options, report));
         report.GroundBefore = (x, z) => natural.Height(x, z);
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
         report.WasGround = (x, z) => natural.Drawn(x, z);

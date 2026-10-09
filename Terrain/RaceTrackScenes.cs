@@ -21,7 +21,7 @@ internal static class RaceTrackScenes
     // mushroom in each, the fake mushrooms a car drops (since 2026-10-08).
     public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, List<(RaceDriver Driver, Dictionary<int, int> Actors)> Drivers, int StartScene,
         List<int[]> Grid, List<int[]> Pits, Result? Twin = null, List<int[]>? Mushrooms = null, List<int[]>? Penguins = null, List<int[]>? Oil = null,
-        List<int[]>? Fakes = null);
+        List<int[]>? Fakes = null, List<int[]>? Gunners = null);
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
     //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
@@ -245,8 +245,10 @@ internal static class RaceTrackScenes
         // the power-ups: where the mushrooms go along the lap (island cells, the road's height), and the scenes' copies of them and of the penguin
         public List<(double X, double Z, double Y)> MushroomSpots = new();
         public List<int[]> Mushrooms = new(), Penguins = new(), Oil = new(), Fakes = new();
+        // the machine guns on their knolls: each [scene, the gun's actor, its Franco's actor] (Report.Gunners, in that order)
+        public List<int[]> Gunners = new();
         public Result Result(List<string> log, int changed, int removed, Result? twin = null) =>
-            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes);
+            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners);
     }
 
     // Edits the outside scenes of the island as the options say, from what the build of the island found (start line, jump, road). With
@@ -539,6 +541,38 @@ internal static class RaceTrackScenes
                 }
                 t.CarAt.Clear();
             }
+            // the machine guns on their knolls (Report.Gunners): the scene's own guns (Otringal's Francos' machine guns, entity 200) moved up onto
+            // the knoll inside the corner, without their scripts -- the guns' life scripts put them on the scene's points beside the road
+            // every frame -- the first one manned by a Franco (entity 201, sitting at it) whose bursts the race-track mode fires (gunner=)
+            foreach (var t in tracks)
+                foreach (var g in t.Report.Gunners)
+                {
+                    if ((int)Math.Floor(g.X / 64) != model.CubeX || (int)Math.Floor(g.Z / 64) != model.CubeY) continue;
+                    double kx = (g.X - model.CubeX * 64) * 512, kz = (g.Z - model.CubeY * 64) * 512;
+                    var guns = Enumerable.Range(1, model.Actors.Count - 1).Where(i => model.Actors[i].Entity == GunEntity)
+                        .OrderBy(i => Math.Abs(model.Actors[i].X - kx) + Math.Abs(model.Actors[i].Z - kz)).Take(2).ToList();
+                    if (guns.Count == 0) { log.Add($"scene {scene}: WARNING: no machine gun to put on the knoll at ({g.X:0.#}, {g.Z:0.#})"); continue; }
+                    // (facing the middle of where it fires; the second gun beside the first, the Franco behind the first's stock)
+                    double fx = g.FaceX - g.X, fz = g.FaceZ - g.Z, fl = Math.Max(1e-9, Math.Sqrt(fx * fx + fz * fz));
+                    fx /= fl; fz /= fl;
+                    var beta = (int)Math.Round(Math.Atan2(fx, fz) * 4096 / (2 * Math.PI)) & 4095;
+                    var y = (int)Math.Round(g.Top);
+                    for (var k = 0; k < guns.Count; k++)
+                    {
+                        var gun = model.Actors[guns[k]];
+                        double side = k == 0 ? 0 : 1.6 * 512, ahead = 0.8 * 512;
+                        gun.X = (int)Math.Round(kx + fx * ahead + fz * side); gun.Z = (int)Math.Round(kz + fz * ahead - fx * side);
+                        gun.Y = y; gun.Beta = beta; gun.Anim = 0; gun.Move = 0; gun.Life = new byte[] { 0 }; gun.Track = new byte[] { 0 };
+                    }
+                    var first = model.Actors[guns[0]];
+                    var franco = first.Clone();
+                    franco.Entity = FrancoEntity; franco.Body = 0; franco.Anim = FrancoAtTheGun;
+                    franco.X = (int)Math.Round(first.X - fx * FrancoBehind); franco.Z = (int)Math.Round(first.Z - fz * FrancoBehind); franco.Y = y;
+                    franco.Beta = beta; franco.Move = 0; franco.Life = new byte[] { 0 }; franco.Track = new byte[] { 0 };
+                    var fi = SceneOps.AddActor(model, franco);
+                    t.Gunners.Add(new[] { scene, guns[0], fi });
+                    log.Add($"scene {scene}: the machine guns (actors {string.Join(", ", guns)}) on the knoll at ({g.X:0.#}, {g.Z:0.#}), {y} high, a Franco (actor {fi}) at the first");
+                }
             // the power-ups: the mushrooms of the lap in this scene's cube, on the road, and a penguin out of sight
             if (mushroomTemplate is not null && penguinTemplate is not null)
                 foreach (var t in tracks)
@@ -660,6 +694,10 @@ internal static class RaceTrackScenes
     // power-up in each (a car takes one from a row: the others it passes give way). And the nitro penguin a car drops: the shop's (scene
     // 14, actor 5: entity 46).
     public const int MushroomScene = 45, MushroomActor = 7, PenguinScene = 14, PenguinActor = 5;
+    // Otringal's machine gun (entity 200: its body faces +z, its muzzle 214 forward) and the Franco who mans it (entity 201, its generic
+    // animation 474 sitting at the gun, 1,072 behind the gun's middle as the game has him: scene 88's points 18 and 19)
+    public const int GunEntity = 200, FrancoEntity = 201, FrancoAtTheGun = 474;
+    private const double FrancoBehind = 1072;
     // (the oil slicks one scene can show at once: RACEMOD.CPP keeps six on the whole lap)
     private const int OilPerScene = 5, PenguinsPerScene = 3, FakesPerScene = 3;   // (oil 3 until 2026-10-07: the refinery's drips lie in slicks too)
     private const double MushroomSpacing = 40, MushroomFirst = 30, MushroomClear = 14;
@@ -950,10 +988,30 @@ void comportement_1()
             if (wasGround is not null && !wasGround(ox + x / 512.0, oz + z / 512.0)) continue;   // not out onto the sea
             var y = ground is null ? actor.Y : (int)Math.Round(ground(ox + x / 512.0, oz + z / 512.0) + offset);
             log.Add($"scene {scene}: actor {index} (entity {actor.Entity}) stood on the road and is moved {out_:0.#} cells aside, to ({x},{y},{z})");
+            // (and the scene's points its life script stands it on -- pos_point -- where they are where it stood, moved with it: Otringal's
+            // machine guns, moved aside, were put back on the road by their scripts every frame, 2026-10-09)
+            foreach (var point in PosPoints(actor, index).Where(p => p < model.TrackPoints.Count))
+            {
+                var p = model.TrackPoints[point];
+                if (Math.Abs(p.X - actor.X) > 3 * 512 || Math.Abs(p.Z - actor.Z) > 3 * 512) continue;
+                var (px, pz) = (p.X + x - actor.X, p.Z + z - actor.Z);
+                var py = ground is null ? p.Y : (int)Math.Round(ground(ox + px / 512.0, oz + pz / 512.0) + (p.Y - actor.Y + offset));
+                model.TrackPoints[point] = p with { X = px, Y = py, Z = pz };
+                log.Add($"scene {scene}: ... and point {point}, where its script stands it, with it");
+            }
             actor.X = x; actor.Z = z; actor.Y = y;
             return;
         }
         log.Add($"scene {scene}: WARNING: actor {index} (entity {actor.Entity}) stands on the road and no clear place was found near it");
+    }
+
+    // The scene's points an actor's life script puts it on (pos_point), read from the script's text.
+    private static IEnumerable<int> PosPoints(SceneActorModel actor, int index)
+    {
+        string text;
+        try { text = LbaScript.LifeText.Decompile(actor.Life, index, LbaScript.NoSymbols.Instance); }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { return Array.Empty<int>(); }
+        return System.Text.RegularExpressions.Regex.Matches(text, @"pos_point\((\d+)\)").Select(m => int.Parse(m.Groups[1].Value)).Distinct().ToList();
     }
 
     private static void Reseat(SceneModel model, Func<double, double, double> before, Func<double, double, double> after, Func<double, double, bool> wasGround, int scene, List<string> log)

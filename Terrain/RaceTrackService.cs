@@ -106,7 +106,10 @@ internal static class RaceTrackService
         // 2026-10-08
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Fakes = null,
         // LaserModels: the laser cars' bolts in OBJFIX.HQR, [green, red] (RaceTrackLasers; RACEMOD.CPP laser_models=), since 2026-10-08
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? LaserModels = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? LaserModels = null,
+        // Gunners: the machine guns on knolls (RaceTrackGunner; RACEMOD.CPP gunner=, gunner_target=), each [scene, the gun's actor, its
+        // Franco's, the muzzle's x, y, z (island units), then x, z, y and radius of each place its bullets land], since 2026-10-09
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Gunners = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -699,7 +702,21 @@ internal static class RaceTrackService
             LavaBalls: raised && report.LavaBalls.Count > 0
                 ? report.LavaBalls.Select(b => new[] { (int)Math.Round(b.X), (int)Math.Round(b.Y), (int)Math.Round(b.Z), report.RaisedSpan.IndexOf(b.From), report.RaisedSpan.IndexOf(b.To), b.Every, b.Phase })
                     .Where(b => b[3] >= 0 && b[4] >= 0).ToList()
+                : null,
+            Gunners: scenes.Gunners is { Count: > 0 } gunners && gunners.Count == report.Gunners.Count
+                ? gunners.Select((g, k) => GunnerRecord(g, report.Gunners[k])).ToList()
                 : null);
+    }
+
+    // A machine gun on its knoll as the car file has it: its scene and actors, the muzzle (the gun stands 0.8 cells towards where it fires
+    // from the knoll's middle, as RaceTrackScenes stands it; its muzzle 214 ahead of the gun's middle, 420 up), and where its bullets land.
+    private static int[] GunnerRecord(int[] placed, GunnerSpot g)
+    {
+        double fx = g.FaceX - g.X, fz = g.FaceZ - g.Z, fl = Math.Max(1e-9, Math.Sqrt(fx * fx + fz * fz));
+        fx /= fl; fz /= fl;
+        double mx = g.X * 512 + fx * (0.8 * 512 + 214), mz = g.Z * 512 + fz * (0.8 * 512 + 214), my = g.Top + 420;
+        return placed.Concat(new[] { (int)Math.Round(mx), (int)Math.Round(my), (int)Math.Round(mz) })
+            .Concat(g.Targets.SelectMany(t => new[] { (int)Math.Round(t.X), (int)Math.Round(t.Z), (int)Math.Round(t.Y), (int)Math.Round(t.R) })).ToArray();
     }
 
     private static int[] LoopRecord(LoopInfo l)

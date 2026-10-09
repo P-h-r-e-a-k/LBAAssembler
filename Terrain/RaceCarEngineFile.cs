@@ -126,6 +126,13 @@ internal static class RaceCarEngineFile
             foreach (var pg in track.Penguins ?? new()) text.Append($"penguin={pg[0]} {pg[1]}\n");
             foreach (var oil in track.Oil ?? new()) text.Append($"oil={oil[0]} {oil[1]}\n");
             foreach (var fake in track.Fakes ?? new()) text.Append($"fake={fake[0]} {fake[1]}\n");
+            // (the machine guns on their knolls, each followed by where its bullets land)
+            foreach (var g in track.Gunners ?? new())
+            {
+                if (g.Length < 6) continue;
+                text.Append($"gunner={string.Join(' ', g.Take(6))}\n");
+                for (var k = 6; k + 3 < g.Length; k += 4) text.Append($"gunner_target={g[k]} {g[k + 1]} {g[k + 2]} {g[k + 3]}\n");
+            }
             // (the laser cars' bolts: the game's own, whatever a track built before them noted -- RaceTrackLasers)
             text.Append($"laser_models={RaceTrackLasers.Green} {RaceTrackLasers.Red}\n");
             // (the oil's drum, which the item box shows)
