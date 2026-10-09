@@ -106,6 +106,8 @@ internal sealed class RaceTrackPlan
     // Gas monsters rising out of the gas beside the road to bite cars (RaceTrackGasMonster, RACEMOD.CPP gasmonster=): Otringal's docks and
     // the islets of Baldino's crash (the user, 2026-10-09).
     public GasMonsterRun[]? GasMonsters { get; set; }
+    // Giant hoops across the lap (RaceTrackHoop): Otringal's dog show's hoop, made big enough for the cars to drive through (2026-10-09).
+    public HoopRun[]? Hoops { get; set; }
     // Decor bodies that stay where they are when the ground under them is cut or raised (IslandOps.DecorFollow): Otringal's gatehouse,
     // which the race track's tunnel runs under -- the cutting beyond the tunnel's mouth reaches the ground under its origin (2026-10-08).
     public int[]? StayPut { get; set; }
@@ -834,12 +836,14 @@ internal static class RaceTrackBuilder
         {
             var keep = keepBodies?.ToHashSet() ?? new HashSet<int>();
             report.Roulette = RaceTrackRoulette.Place(island, main, roulette, roulette.Centre[0] + plan.OriginCellX, roulette.Centre[1] + plan.OriginCellZ,
-                PlanPoint(plan, main, roulette.From), PlanPoint(plan, main, roulette.To), PlanPoint(plan, main, roulette.BallFrom), PlanPoint(plan, main, roulette.BallTo),
-                options, report, keep.Contains);
+                PlanPoint(plan, main, roulette.Landing), options, report, keep.Contains);
         }
         if (planned && plan.GasMonsters is { Length: > 0 } monsters)
             foreach (var g in monsters)
                 report.GasMonsters.AddRange(RaceTrackGasMonster.Place(island, main, PlanPoint(plan, main, g.From), PlanPoint(plan, main, g.To), g, options, report));
+        if (planned && plan.Hoops is { Length: > 0 } hoops)
+            foreach (var h in hoops.Where(h => h.At is { Length: >= 2 }))
+                RaceTrackHoop.Place(island, main, h, h.At[0] + plan.OriginCellX, h.At[1] + plan.OriginCellZ, options, report);
         report.GroundBefore = (x, z) => natural.Height(x, z);
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
         report.WasGround = (x, z) => natural.Drawn(x, z);
@@ -2200,6 +2204,10 @@ internal static class RaceTrackBuilder
             if (from < 0) avoid.Add((from + r.Length, r.Length));
             if (to > r.Length) avoid.Add((0, to - r.Length));
         }
+        // (the roulette wheel's way round its bowl: the cars drive it freely, not along the line -- a line there would be missed)
+        if (r.Bare is { } bare)
+            for (var k = 0; k < r.Count; k++)
+                if (bare[k]) { var a = Ahead(k); avoid.Add((a - 3, a + 3)); }
         // (a carried jump: the car is in the air from its ramp's foot to its landing hill's)
         foreach (var arc in report.ArcJumps)
         {
@@ -4437,7 +4445,8 @@ internal static class RaceTrackBuilder
         // (a jump's gap in it -- between the lips, r.Gap -- has no width: the engine's floor isn't there)
         foreach (var k in span)
         {
-            var width = r.Gap[k] || !up[k] ? 0 : (int)Math.Round(Half(k));
+            // (no width where it is bare too: the roulette wheel's way round its bowl, whose floor is the race-track mode's own, without rails)
+            var width = r.Gap[k] || !up[k] || r.Bare?[k] == true ? 0 : (int)Math.Round(Half(k));
             report.Raised.Add(banks is null
                 ? new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width }
                 : new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width, (int)Math.Round(banks[k] * RaisedBankUnits) });

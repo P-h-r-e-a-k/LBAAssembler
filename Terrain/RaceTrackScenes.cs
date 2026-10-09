@@ -247,7 +247,7 @@ internal static class RaceTrackScenes
         public List<int[]> Mushrooms = new(), Penguins = new(), Oil = new(), Fakes = new();
         // the machine guns on their knolls: each [scene, the gun's actor, its Franco's actor] (Report.Gunners, in that order)
         public List<int[]> Gunners = new();
-        // the gas monsters: each [scene, its neck's actor, its head's, its place in Report.GasMonsters]
+        // the gas monsters: each [scene, its actor, its size, its place in Report.GasMonsters]
         public List<int[]> GasMonsters = new();
         public Result Result(List<string> log, int changed, int removed, Result? twin = null) =>
             new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners, GasMonsters);
@@ -575,26 +575,22 @@ internal static class RaceTrackScenes
                     t.Gunners.Add(new[] { scene, guns[0], fi });
                     log.Add($"scene {scene}: the machine guns (actors {string.Join(", ", guns)}) on the knoll at ({g.X:0.#}, {g.Z:0.#}), {y} high, a Franco (actor {fi}) at the first");
                 }
-            // the gas monsters (Report.GasMonsters): a neck and a head each, copies of the mushroom with the monster's bodies
-            // (RaceTrackGasMonster), out of sight until the race-track mode raises them out of the gas (gasmonster=)
+            // the gas monsters (Report.GasMonsters): the game's gas monster, made bigger (RaceTrackGasMonster), one actor each, out of sight
+            // until the race-track mode raises it out of the gas (gasmonster=)
             if (mushroomTemplate is not null)
                 foreach (var t in tracks)
                     for (var gi = 0; gi < t.Report.GasMonsters.Count; gi++)
                     {
                         var g = t.Report.GasMonsters[gi];
                         if ((int)Math.Floor(g.X / 64) != model.CubeX || (int)Math.Floor(g.Z / 64) != model.CubeY) continue;
-                        if (model.Actors.Count + 2 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the gas monster at ({g.X:0.#}, {g.Z:0.#})"); continue; }
-                        int Part(int body)
-                        {
-                            var part = mushroomTemplate.Clone();
-                            part.Body = body; part.Flags = OpponentFlags; part.Move = 0; part.Life = new byte[] { 0 }; part.Track = new byte[] { 0 };
-                            part.X = (int)Math.Round((g.X - model.CubeX * 64) * 512); part.Z = (int)Math.Round((g.Z - model.CubeY * 64) * 512); part.Y = -20000; part.Beta = 0;
-                            return SceneOps.AddActor(model, part);
-                        }
-                        var neck = Part(RaceTrackGasMonster.Neck);
-                        var head = Part(RaceTrackGasMonster.HeadShut);
-                        t.GasMonsters.Add(new[] { scene, neck, head, gi });
-                        log.Add($"scene {scene}: a gas monster (actors {neck}, {head}) in the gas at ({g.X:0.#}, {g.Z:0.#})");
+                        if (model.Actors.Count + 1 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the gas monster at ({g.X:0.#}, {g.Z:0.#})"); continue; }
+                        var monster = mushroomTemplate.Clone();
+                        monster.Entity = RaceTrackGasMonster.Entity; monster.Body = RaceTrackGasMonster.BodyOf(g.Size); monster.Anim = RaceTrackGasMonster.IdleOf(g.Size);
+                        monster.Flags = OpponentFlags; monster.Move = 0; monster.Life = new byte[] { 0 }; monster.Track = new byte[] { 0 };
+                        monster.X = (int)Math.Round((g.X - model.CubeX * 64) * 512); monster.Z = (int)Math.Round((g.Z - model.CubeY * 64) * 512); monster.Y = -20000; monster.Beta = 0;
+                        var actor = SceneOps.AddActor(model, monster);
+                        t.GasMonsters.Add(new[] { scene, actor, g.Size, gi });
+                        log.Add($"scene {scene}: a gas monster (actor {actor}) in the gas at ({g.X:0.#}, {g.Z:0.#})");
                     }
             // the power-ups: the mushrooms of the lap in this scene's cube, on the road, and a penguin out of sight
             if (mushroomTemplate is not null && penguinTemplate is not null)
@@ -999,7 +995,7 @@ void comportement_1()
         var stood = groundBefore is null ? 0 : groundBefore(fromX, fromZ);
         if ((actor.Flags & Fallable) == 0 && stood <= 0) return;
         if (wasGround is not null && !wasGround(fromX, fromZ)) return;
-        if (distanceToRoad(fromX, fromZ) > clear) return;
+        if (distanceToRoad(fromX, fromZ) > clear) { PointsOffRoad(); return; }
         var offset = (actor.Flags & Fallable) != 0 || groundBefore is null ? 0 : actor.Y - stood;
         for (var out_ = 1.0; out_ <= 24; out_ += 0.5)
         for (var turn = 0; turn < 24; turn++)
@@ -1023,9 +1019,37 @@ void comportement_1()
                 log.Add($"scene {scene}: ... and point {point}, where its script stands it, with it");
             }
             actor.X = x; actor.Z = z; actor.Y = y;
+            PointsOffRoad();
             return;
         }
         log.Add($"scene {scene}: WARNING: actor {index} (entity {actor.Entity}) stands on the road and no clear place was found near it");
+
+        // (the points its life script stands it on that are on the road themselves -- wherever it stood: Otringal's spaceport man,
+        // kept for Twinsen's cutscenes, stood beside the road and his script put him on it, 2026-10-09 -- each moved to the nearest clear
+        // place)
+        void PointsOffRoad()
+        {
+            foreach (var point in PosPoints(actor, index).Where(p => p < model.TrackPoints.Count))
+            {
+                var p = model.TrackPoints[point];
+                if (distanceToRoad(ox + p.X / 512.0, oz + p.Z / 512.0) > clear) continue;
+                var moved = false;
+                for (var out_ = 1.0; out_ <= 24 && !moved; out_ += 0.5)
+                for (var turn = 0; turn < 24 && !moved; turn++)
+                {
+                    var angle = turn * Math.PI / 12;
+                    int x = (int)Math.Round(p.X + Math.Cos(angle) * out_ * 512), z = (int)Math.Round(p.Z + Math.Sin(angle) * out_ * 512);
+                    if (x < 512 || z < 512 || x > IslandFile.CubeSize - 512 || z > IslandFile.CubeSize - 512) continue;
+                    if (distanceToRoad(ox + x / 512.0, oz + z / 512.0) <= clear) continue;
+                    if (wasGround is not null && !wasGround(ox + x / 512.0, oz + z / 512.0)) continue;
+                    var b = groundBefore is null ? 0 : groundBefore(ox + p.X / 512.0, oz + p.Z / 512.0);
+                    var y = ground is null ? p.Y : (int)Math.Round(ground(ox + x / 512.0, oz + z / 512.0) + (p.Y - b));
+                    model.TrackPoints[point] = p with { X = x, Y = y, Z = z };
+                    log.Add($"scene {scene}: point {point}, where actor {index}'s (entity {actor.Entity}) script stands it, was on the road and is moved {out_:0.#} cells aside");
+                    moved = true;
+                }
+            }
+        }
     }
 
     // The scene's points an actor's life script puts it on (pos_point), read from the script's text.

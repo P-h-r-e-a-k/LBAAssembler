@@ -206,6 +206,7 @@ internal static class Program
             "palace" => PalaceCommand.Run(args),
             "cxtower" => ControlTowerCommand.Run(args),
             "decorlist" => DecorList.Run(args),
+            "bodybox" => BodyBox.Run(args),
             "bodyroundtrip" => BodyRoundTrip.Run(args),
             "doortrace" => DoorTrace.Run(args),
             "scenezones" => SceneZoneDump.Run(args),

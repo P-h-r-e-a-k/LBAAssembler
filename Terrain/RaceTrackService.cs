@@ -111,11 +111,12 @@ internal static class RaceTrackService
         // Franco's, the muzzle's x, y, z (island units), then x, z, y and radius of each place its bullets land], since 2026-10-09
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Gunners = null,
         // Roulette: the roulette wheel the lap runs through (RaceTrackRoulette; RACEMOD.CPP roulette=): its decors' cube x and z, its middle's
-        // x and z (island units), how fast its head turns (tenths of a degree a second), its ball's body (the island's) and radius, the
-        // places in the raised road's file the ball rolls between, its floor's height at the hole's edge and its rise a cell outwards, the
-        // hole's radius and the bowl's (units), how far its underside is under its floor, then its head's turning bodies; since 2026-10-09
+        // x and z (island units), how fast it turns (tenths of a degree a second), its ball's body (the island's) and radius, the place in
+        // the raised road's file where the drop through its hole lands, its floor's height at the hole's edge, its rise a cell outwards
+        // there and its steepening a cell a cell (hundredths), the hole's radius, the wall's and its outside's (units), how far its
+        // underside is under its floor, then its turning bodies; since 2026-10-09
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Roulette = null,
-        // GasMonsters: the gas monsters (RaceTrackGasMonster; RACEMOD.CPP gasmonster=), each [scene, its neck's actor, its head's, where it
+        // GasMonsters: the gas monsters (RaceTrackGasMonster; RACEMOD.CPP gasmonster=), each [scene, its actor, its size (its Scales), where it
         // rises x and z, where it bites x and z and the road's height there (island units)], since 2026-10-09
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? GasMonsters = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
@@ -584,7 +585,7 @@ internal static class RaceTrackService
             log.Add(RaceTrackOil.Install(gameDirectory));
             // (and the power-ups' mushroom made bigger, beside it in the mushroom's entity)
             log.Add(RaceTrackOil.InstallBigMushroom(gameDirectory));
-            // (and the gas monsters' neck and heads, after it)
+            // (and the game's gas monster in the sizes the race track uses, after it)
             log.Add(RaceTrackGasMonster.Install(gameDirectory));
             // (and its drum in the item box)
             var (icon, iconLog) = RaceTrackOil.InstallIcon(gameDirectory);
@@ -716,9 +717,10 @@ internal static class RaceTrackService
             Gunners: scenes.Gunners is { Count: > 0 } gunners && gunners.Count == report.Gunners.Count
                 ? gunners.Select((g, k) => GunnerRecord(g, report.Gunners[k])).ToList()
                 : null,
-            Roulette: raised && report.Roulette is { } wheel && report.RaisedSpan.IndexOf(wheel.BallFrom) is var b0 and >= 0 && report.RaisedSpan.IndexOf(wheel.BallTo) is var b1 and > 0
-                ? new[] { wheel.CubeX, wheel.CubeZ, (int)Math.Round(wheel.X), (int)Math.Round(wheel.Z), (int)Math.Round(wheel.Spin * 10), wheel.Ball, wheel.BallRadius, b0, b1,
-                          (int)Math.Round(wheel.HoleY), (int)Math.Round(wheel.Slope), (int)Math.Round(wheel.Hole * 512), (int)Math.Round(wheel.Outer * 512), (int)Math.Round(wheel.Under) }
+            Roulette: raised && report.Roulette is { } wheel && report.RaisedSpan.IndexOf(wheel.Landing) is var landing and >= 0
+                ? new[] { wheel.CubeX, wheel.CubeZ, (int)Math.Round(wheel.X), (int)Math.Round(wheel.Z), (int)Math.Round(wheel.Spin * 10), wheel.Ball, wheel.BallRadius, landing,
+                          (int)Math.Round(wheel.HoleY), (int)Math.Round(wheel.Slope), (int)Math.Round(wheel.Steepen * 100), (int)Math.Round(wheel.Hole * 512),
+                          (int)Math.Round(wheel.Rim * 512), (int)Math.Round(wheel.Outer * 512), (int)Math.Round(wheel.Under) }
                     .Concat(wheel.Turning).ToArray()
                 : null,
             GasMonsters: scenes.GasMonsters is { Count: > 0 } monsters
