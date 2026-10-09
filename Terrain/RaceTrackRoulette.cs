@@ -32,7 +32,7 @@ internal sealed class RouletteRun
     public int BallTo { get; set; }
     public int Landing { get; set; }
     // how fast it turns (degrees a second)
-    public double Spin { get; set; } = 8;
+    public double Spin { get; set; } = 45;
     // its legs round it (degrees from east towards south); none: it floats
     public double[]? Legs { get; set; }
 }

@@ -467,10 +467,11 @@ plan = {
     # the roulette wheel the jump over the inlet lands in (RaceTrackRoulette): its middle (plan cells), its wall's inner face and its outside
     # and its hole (cells from the middle), its floor's height at the hole and its rise outwards (a cell, and its steepening a cell a cell),
     # the wall's height; the line round it (points: no floor of their own -- the wheel is the floor), where the drop through the hole
-    # lands (point), how fast the wheel turns (degrees a second); no legs (floating)
+    # lands (point), how fast the wheel turns (degrees a second: a turn in 8 s -- the user, of 8 a second: "it's currently so slow it's not
+    # noticeable"); no legs (floating)
     'roulette': {'centre': [round(RW_X - OX, 3), round(RW_Z - OZ, 3)], 'rim': RW_RIM, 'outer': RW_OUT_R, 'hole': RW_HOLE, 'holeY': RW_YH,
                  'slope': RW_S1, 'steepen': RW_S2, 'wall': RW_WALL, 'from': int(iWin), 'to': int(iRWLip), 'ballFrom': int(iWin), 'ballTo': int(iRWLip),
-                 'landing': int(iRWFoot), 'spin': 8.0, 'legs': []},
+                 'landing': int(iRWFoot), 'spin': 45.0, 'legs': []},
     # gas monsters rising out of the gas beside the road to bite cars (RaceTrackGasMonster; the user, 2026-10-09: "In the dock area and
     # around the rocks where Baldino crash lands let's have gas monsters coming out of the gas"): from the docks' edge over the gas to the
     # islets, and along the islets' north shore -- Baldino's plane crashed on the rocks south of it (body 105) -- and on over the gas

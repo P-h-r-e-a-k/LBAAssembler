@@ -7,13 +7,14 @@ namespace LBAAssembler.Terrain;
 // Gas monsters along a stretch of the lap over Zeelich's gas (RaceTrackPlan.GasMonsters; RACEMOD.CPP gasmonster=): Otringal's, at its docks
 // and round the islets where Baldino's plane lies crashed among the rocks -- the user, 2026-10-09: "let's have gas monsters coming out of
 // the gas and attempting to bite cars, any bitten cars should be stunned for a couple of seconds as though they've been hit then be able to
-// continue"; then, of the serpents first made for them: "The gas monsters we've added are fake ... let's just reuse the retail version". The
-// game's own gas monster (entity 222, body 320, its mouth open 322; it rises out of the gas in Celebration Island's and the Wannies' scenes),
-// made bigger -- its bodies and the animations it rises, sways and strikes with, their moves that much longer, their steps along the ground
-// left out (the race-track mode stands it) -- in two sizes, twice and three times its own (Scales), a size's bodies and animations the
-// entity's BodyOf, OpenBodyOf and IdleOf (and the three after: strike, after striking, rise). Each monster the smallest that towers over the
-// road where it bites (a deck higher than its head hid it from the chase camera). One actor each, out of sight until the race-track mode
-// raises it beside the road, leans it over the road's near half and snaps its jaws there.
+// continue"; then, of the serpents first made for them: "The gas monsters we've added are fake ... let's just reuse the retail version";
+// then: "Some of the gas monsters strike too low and appear through the track, let's have them permanently visible with their necks above
+// the track and randomly striking down. Let's have each gas monster always attack the same point in the track, so once their positions are
+// learnt they're avoidable". The game's own gas monster (entity 222, body 320, its mouth open 322; it rises out of the gas in Celebration
+// Island's and the Wannies' scenes), made bigger -- twice or three times its own size (Scales), a size's bodies the entity's BodyOf and
+// OpenBodyOf -- standing out of the gas beside the road for good, its neck arched over the rail (GasMonsterNeck), its head poised over the
+// road's near half, swaying; now and then it rears back and strikes its head down onto its own place on the road, its jaws snapping shut
+// there. Each monster's moves are its own animations, its neck bent bone by bone to fit the road beside it (InstallPoses). One actor each.
 internal sealed class GasMonsterRun
 {
     public int From { get; set; }
@@ -25,21 +26,25 @@ internal sealed class GasMonsterRun
 }
 
 // A monster as placed: where it rises out of the gas, and where on the road it bites (island cells, the bite's height the road's); its size
-// (RaceTrackGasMonster.Scales).
-internal sealed record GasMonsterSpot(double X, double Z, double BiteX, double BiteZ, double BiteY, int Size);
+// (RaceTrackGasMonster.Scales); how far towards its bite the road's rail is (cells); once its moves are made (InstallPoses), its foot's
+// height (under the gas) and the first of its animations.
+internal sealed record GasMonsterSpot(double X, double Z, double BiteX, double BiteZ, double BiteY, int Size, double Edge, double FootY = 0, int FirstAnim = -1);
 
 internal static class RaceTrackGasMonster
 {
-    // the game's gas monster: its entity, its bodies (shut, mouth open) and the animations it sways (0), strikes (142), rears after
-    // striking (211) and rises (499) with, its height; how much bigger it is made, and the entity's numbers for each size's bodies (shut,
-    // open) and animations (sway, strike, after, rise: IdleOf and the three after it), each size's 4 on from the last's
+    // the game's gas monster: its entity, its bodies (shut, mouth open), its height; how much bigger it is made, and the entity's numbers
+    // for each size's bodies (shut, open), each size's 4 on from the last's
     public const int Entity = 222, RetailBody = 320, RetailOpen = 322;
-    public static readonly int[] RetailAnims = { 1481, 1485, 1482, 1480 };
     private const double RetailHeight = 2554;
     public static readonly double[] Scales = { 2.0, 3.0 };
     public static int BodyOf(int size) => 120 + 4 * size;
     public static int OpenBodyOf(int size) => 122 + 4 * size;
-    public static int IdleOf(int size) => 600 + 4 * size;
+    // each monster's animations (the entity's, from FirstPoseAnim on, 4 apart): swaying poised, rearing and striking (its mouth open), and
+    // biting and back (shut); their times (ms, RACEMOD.CPP's RACE_MONSTER_*): into the strike's first pose, rearing, the strike, the bite
+    // held, back to poised, and a sway either way; how far it sways (radians)
+    private const int FirstPoseAnim = 610;
+    public const int PoiseMs = 150, RearMs = 650, LungeMs = 220, HoldMs = 450, BackMs = 700, SwayMs = 700;
+    private const double Sway = 0.12;
     // how far across from the road's middle towards the monster it bites, as a share of the road's half width
     private const double BiteAcross = 0.45;
     private const double GasLevel = 60;
@@ -49,32 +54,8 @@ internal static class RaceTrackGasMonster
     // there, was hidden from the chase camera by the road's own deck
     private const double OverRoad = 1800;
 
-    // An animation `k` times as big: its bones' moves (translations) that much longer, its steps along the ground (which move the actor)
-    // left out. Its header: frames, bones, loop frame; each frame its time and step, then each bone's type and three values.
-    public static byte[] ScaledAnim(byte[] anim, double k)
-    {
-        var a = (byte[])anim.Clone();
-        int U(int at) => a[at] | a[at + 1] << 8;
-        short S(int at) => (short)U(at);
-        void W(int at, int v) { v = Math.Clamp(v, short.MinValue, short.MaxValue); a[at] = (byte)v; a[at + 1] = (byte)(v >> 8); }
-        int frames = U(0), bones = U(2);
-        for (var f = 0; f < frames; f++)
-        {
-            var at = 8 + f * (8 + bones * 8);
-            if (at + 8 + bones * 8 > a.Length) break;
-            W(at + 2, 0); W(at + 4, 0); W(at + 6, 0);
-            for (var b = 1; b < bones; b++)
-            {
-                var q = at + 8 + b * 8;
-                if ((S(q) & 1) == 0) continue;
-                for (var v = 1; v <= 3; v++) W(q + v * 2, (int)Math.Round(S(q + v * 2) * k));
-            }
-        }
-        return a;
-    }
-
-    // Into the game folder: the gas monster in each of its sizes -- its bodies appended to BODY.HQR and its animations to ANIM.HQR, as its
-    // entity's bodies BodyOf and OpenBodyOf and animations IdleOf and the three after. A line for the log.
+    // Into the game folder: the gas monster in each of its sizes -- its bodies appended to BODY.HQR, as its entity's bodies BodyOf and
+    // OpenBodyOf. A line for the log.
     public static string Install(string gameDirectory)
     {
         var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
@@ -86,26 +67,97 @@ internal static class RaceTrackGasMonster
             foreach (var index in new[] { RetailBody, RetailOpen })
                 bytes = HqrWriter.AppendEntry(bytes, HqrWriter.StoredEntry(IslandScaler.ScaledBody(bodies.Read(index), scale, ref clipped)));
         File.WriteAllBytes(bodyPath, bytes);
-        var animPath = Path.Combine(gameDirectory, "ANIM.HQR");
-        var anims = HqrArchive.Open(animPath);
-        var firstAnim = HqrArchive.CountEntries(animPath);
-        var animBytes = File.ReadAllBytes(animPath);
-        foreach (var scale in Scales)
-            foreach (var index in RetailAnims)
-                animBytes = HqrWriter.AppendEntry(animBytes, HqrWriter.StoredEntry(ScaledAnim(anims.Read(index), scale)));
-        File.WriteAllBytes(animPath, animBytes);
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var table = HqrArchive.Open(ressPath).Read(44);
         for (var size = 0; size < Scales.Length; size++)
         {
             table = RaceTrackBaldinoCar.WithBody(table, Entity, BodyOf(size), firstBody + 2 * size);
             table = RaceTrackBaldinoCar.WithBody(table, Entity, OpenBodyOf(size), firstBody + 2 * size + 1);
-            for (var i = 0; i < RetailAnims.Length; i++) table = RaceTrackJumpAnim.WithAnim(table, Entity, IdleOf(size) + i, firstAnim + RetailAnims.Length * size + i);
         }
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
         return $"the gas monster (entity {Entity}) {string.Join(" and ", Scales)} times its size: BODY.HQR entries {firstBody}-{firstBody + 2 * Scales.Length - 1} " +
-               $"(its bodies {string.Join(", ", Enumerable.Range(0, Scales.Length).Select(z => $"{BodyOf(z)}/{OpenBodyOf(z)}"))}{(clipped > 0 ? $", {clipped} values clipped" : "")}), " +
-               $"ANIM.HQR {firstAnim}-{firstAnim + RetailAnims.Length * Scales.Length - 1} (its animations from {string.Join(", ", Enumerable.Range(0, Scales.Length).Select(IdleOf))})";
+               $"(its bodies {string.Join(", ", Enumerable.Range(0, Scales.Length).Select(z => $"{BodyOf(z)}/{OpenBodyOf(z)}"))}{(clipped > 0 ? $", {clipped} values clipped" : "")})";
+    }
+
+    // Into the game folder: each monster's moves (report.GasMonsters, which get their size, foot and first animation) -- its poses against
+    // the road beside it (GasMonsterPoser: the smallest size whose struck head comes down on its bite with its neck over the rail and its
+    // poised head well over the road), as three animations appended to ANIM.HQR and given to the entity from FirstPoseAnim on: swaying
+    // poised (mouth open), rearing and striking (open), biting and back to poised (shut). Lines for the log.
+    public static List<string> InstallPoses(string gameDirectory, RaceTrackReport report)
+    {
+        var log = new List<string>();
+        if (report.GasMonsters.Count == 0) return log;
+        var bodies = HqrArchive.Open(Path.Combine(gameDirectory, "BODY.HQR"));
+        var clipped = 0;
+        GasMonsterNeck Neck(int retail, double scale) => new(Body.Read(IslandScaler.ScaledBody(bodies.Read(retail), scale, ref clipped), 2, allowStatic: true));
+        var necks = Scales.Select(scale => (Shut: Neck(RetailBody, scale), Open: Neck(RetailOpen, scale))).ToArray();
+        var animPath = Path.Combine(gameDirectory, "ANIM.HQR");
+        var anims = File.ReadAllBytes(animPath);
+        var index = HqrArchive.CountEntries(animPath);
+        var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
+        var table = HqrArchive.Open(ressPath).Read(44);
+        var gen = FirstFreeAnim(table, Entity, FirstPoseAnim);
+        for (var i = 0; i < report.GasMonsters.Count; i++)
+        {
+            var g = report.GasMonsters[i];
+            double d = Math.Sqrt((g.BiteX - g.X) * (g.BiteX - g.X) + (g.BiteZ - g.Z) * (g.BiteZ - g.Z)) * 512, e = g.Edge * 512;
+            GasMonsterPoser.Poses poses = null!;
+            var size = g.Size;
+            for (; size < Scales.Length; size++)
+            {
+                var k = Scales[size] / Scales[0];
+                poses = GasMonsterPoser.Solve(necks[size].Shut, necks[size].Open, d, e, g.BiteY, k);
+                if (poses.StruckMiss < 200 && poses.ReadyHeadOver >= 600 * k && poses.LeastOverRail >= 0 && poses.LeastOverDeck >= 0) break;
+            }
+            var fits = size < Scales.Length;
+            size = Math.Min(size, Scales.Length - 1);
+            var (shut, open) = necks[size];
+            var (ready, rear, struck) = (poses.Ready, poses.Rear, poses.Struck);
+            var idle = new Anim { Game = 2, LoopFrame = 0 };
+            idle.Frames.AddRange(new[] { open.Frame(ready, SwayMs), open.Frame(ready with { Nod = ready.Nod + 0.1 }, SwayMs, Sway),
+                                         open.Frame(ready, SwayMs), open.Frame(ready with { Nod = ready.Nod - 0.06 }, SwayMs, -Sway) });
+            var strike = new Anim { Game = 2, LoopFrame = 2 };
+            strike.Frames.AddRange(new[] { open.Frame(ready, PoiseMs), open.Frame(rear, RearMs), open.Frame(struck, LungeMs) });
+            var bite = new Anim { Game = 2, LoopFrame = 2 };
+            bite.Frames.AddRange(new[] { shut.Frame(struck, 20), shut.Frame(struck, HoldMs), shut.Frame(ready, BackMs) });
+            foreach (var (anim, n) in new[] { (idle, 0), (strike, 1), (bite, 2) })
+            {
+                anims = HqrWriter.AppendEntry(anims, HqrWriter.StoredEntry(anim.Write()));
+                table = RaceTrackJumpAnim.WithAnim(table, Entity, gen + n, index++);
+            }
+            // (for a look from the side: each pose's points from the foot, and the road beside it -- RT_MONSTER_POSES=<folder>)
+            if (Environment.GetEnvironmentVariable("RT_MONSTER_POSES") is { Length: > 0 } dump)
+            {
+                Directory.CreateDirectory(dump);
+                using var w = new StreamWriter(Path.Combine(dump, $"monster{i}.csv"));
+                w.WriteLine($"# foot {poses.FootY:0} road {g.BiteY:0} rail {e:0} bite {d:0}");
+                w.WriteLine("pose,z,y");
+                foreach (var (name, shape, neck) in new[] { ("ready", ready, open), ("rear", rear, open), ("struck", struck, open), ("bit", struck, shut) })
+                    foreach (var q in neck.Pose(shape)) w.WriteLine($"{name},{q.Z:0},{poses.FootY + q.Y:0}");
+            }
+            report.GasMonsters[i] = g with { Size = size, FootY = poses.FootY, FirstAnim = gen };
+            log.Add($"{(fits ? "" : "WARNING: ")}gas monster at ({g.X:0.0}, {g.Z:0.0}): {Scales[size]} times the size, its foot {poses.FootY:0} " +
+                    $"(the road {g.BiteY:0}, its bite {d / 512:0.0} cells out, the rail {g.Edge:0.0}); struck its head {poses.StruckMiss:0} from the bite, " +
+                    $"poised {poses.ReadyHeadOver:0} over the road, at the least {poses.LeastOverRail:0} over the rail and {poses.LeastOverDeck:0} over the deck; " +
+                    $"animations {gen}-{gen + 2}");
+            gen += 4;
+        }
+        File.WriteAllBytes(animPath, anims);
+        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        return log;
+    }
+
+    // The first of 4 animation numbers in a row the entity doesn't use yet, from `from` on, in steps of 4.
+    private static int FirstFreeAnim(byte[] table, int entity, int from)
+    {
+        int start = BitConverter.ToInt32(table, entity * 4), end = BitConverter.ToInt32(table, (entity + 1) * 4);
+        var used = new HashSet<int>();
+        for (var p = start; p < end && table[p] != 255;)
+            if (table[p] == 3) { used.Add(table[p + 1] | table[p + 2] << 8); p += 3 + table[p + 3]; }
+            else p += 2 + table[p + 2];
+        var gen = from;
+        while (Enumerable.Range(gen, 4).Any(used.Contains)) gen += 4;
+        return gen;
     }
 
     // Where along the stretch From..To (the lap's points) monsters rise: every Every cells, out past the rail over the gas on one side or the
@@ -155,7 +207,7 @@ internal static class RaceTrackGasMonster
                 if (!Gas(sx, sz) || !ClearOfLap(sx, sz, k)) continue;
                 // (and not near another: two side by side bit a car one after the other)
                 if (spots.Concat(placed).Any(o => (o.X - sx) * (o.X - sx) + (o.Z - sz) * (o.Z - sz) < Apart * Apart)) continue;
-                spots.Add(new GasMonsterSpot(sx, sz, r.X[k] + ax * side * half * BiteAcross, r.Z[k] + az * side * half * BiteAcross, r.H[k], size));
+                spots.Add(new GasMonsterSpot(sx, sz, r.X[k] + ax * side * half * BiteAcross, r.Z[k] + az * side * half * BiteAcross, r.H[k], size, run.Out));
                 prefer = -side;
                 break;
             }

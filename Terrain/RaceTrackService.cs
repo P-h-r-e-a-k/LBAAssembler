@@ -117,7 +117,7 @@ internal static class RaceTrackService
         // underside is under its floor, then its turning bodies; since 2026-10-09
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Roulette = null,
         // GasMonsters: the gas monsters (RaceTrackGasMonster; RACEMOD.CPP gasmonster=), each [scene, its actor, its size (its Scales), where it
-        // rises x and z, where it bites x and z and the road's height there (island units)], since 2026-10-09
+        // rises x and z, where it bites x and z and the road's height there, its foot's height (island units), its first animation], since 2026-10-09
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? GasMonsters = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
@@ -601,6 +601,8 @@ internal static class RaceTrackService
             session.LaserModels = new[] { green, red };
             session.Oil = true;
         }
+        // ... and each gas monster's moves, fitted to the road beside it
+        log.AddRange(RaceTrackGasMonster.InstallPoses(gameDirectory, report));
         return log;
     }
 
@@ -725,7 +727,7 @@ internal static class RaceTrackService
                 : null,
             GasMonsters: scenes.GasMonsters is { Count: > 0 } monsters
                 ? monsters.Where(g => g[3] >= 0 && g[3] < report.GasMonsters.Count).Select(g => { var s = report.GasMonsters[g[3]]; return new[] { g[0], g[1], g[2],
-                    (int)Math.Round(s.X * 512), (int)Math.Round(s.Z * 512), (int)Math.Round(s.BiteX * 512), (int)Math.Round(s.BiteZ * 512), (int)Math.Round(s.BiteY) }; }).ToList()
+                    (int)Math.Round(s.X * 512), (int)Math.Round(s.Z * 512), (int)Math.Round(s.BiteX * 512), (int)Math.Round(s.BiteZ * 512), (int)Math.Round(s.BiteY), (int)Math.Round(s.FootY), s.FirstAnim }; }).ToList()
                 : null);
     }
 

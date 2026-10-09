@@ -585,7 +585,7 @@ internal static class RaceTrackScenes
                         if ((int)Math.Floor(g.X / 64) != model.CubeX || (int)Math.Floor(g.Z / 64) != model.CubeY) continue;
                         if (model.Actors.Count + 1 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the gas monster at ({g.X:0.#}, {g.Z:0.#})"); continue; }
                         var monster = mushroomTemplate.Clone();
-                        monster.Entity = RaceTrackGasMonster.Entity; monster.Body = RaceTrackGasMonster.BodyOf(g.Size); monster.Anim = RaceTrackGasMonster.IdleOf(g.Size);
+                        monster.Entity = RaceTrackGasMonster.Entity; monster.Body = RaceTrackGasMonster.OpenBodyOf(g.Size); monster.Anim = Math.Max(0, g.FirstAnim);
                         monster.Flags = OpponentFlags; monster.Move = 0; monster.Life = new byte[] { 0 }; monster.Track = new byte[] { 0 };
                         monster.X = (int)Math.Round((g.X - model.CubeX * 64) * 512); monster.Z = (int)Math.Round((g.Z - model.CubeY * 64) * 512); monster.Y = -20000; monster.Beta = 0;
                         var actor = SceneOps.AddActor(model, monster);
