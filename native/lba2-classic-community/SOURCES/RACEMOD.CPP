@@ -3926,7 +3926,7 @@ static void UseItem(int pu, S32 now) {
         s_skidUntil = 0; s_hitUntil = 0; s_shrunkUntil = 0;
         break;
     }
-    Message(s_puName[pu]);
+    // (its name not said on the screen: the item box shows it -- the user, 2026-10-10: "We also don't need a message for each pickup")
     Log_Info("[racemod] Twinsen uses %s%s", s_puName[pu], s_puJet[pu] > 0 && !Guide() ? " (no line: a boost, the keys his)" : "");
 }
 
@@ -4023,9 +4023,6 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
             const int protect = now < s_protectUntil;
             const S32 ms = ShrinkMs(BackShare(-1));
             if (!protect) s_shrunkUntil = now + ms;
-            char text[64];
-            snprintf(text, sizeof(text), protect ? "%s's lightning: protected!" : "%s's lightning: shrunk!", o->Name);
-            Message(text);
             if (protect) Log_Info("[racemod] %s's lightning strikes Twinsen's car: the protection spell holds", o->Name);
             else Log_Info("[racemod] Twinsen's car struck and shrunk by %s's lightning for %.1f s", o->Name, ms / 1000.0);
         } else if (s_puJet[pu] > 0) {
@@ -4064,7 +4061,6 @@ static void Slicks(S32 now, int driving) {
         if (driving && CubeMode == CUBE_EXTERIEUR && now >= s_skidUntil && now >= s_protectUntil && now >= s_jetUntil && Near(hero, lx, (S32)sl->Y, lz, RACE_OIL_REACH)) {
             s_skidUntil = now + RACE_SKID_MS; s_skidStart = now; s_skidBeta = hero->Obj.Beta; s_skidSpeed = ListBuggy[0].Speed;
             s_skidDir = RaceRandom() < 0.5 ? 1 : -1;
-            Message("Skidding on oil!");
             Log_Info("[racemod] Twinsen skids on oil");
             sl->On = 0;                     // (the car took it with it: a slick is one car's)
         } else if (driving && CubeMode == CUBE_EXTERIEUR && (now < s_protectUntil || now < s_jetUntil) && Near(hero, lx, (S32)sl->Y, lz, RACE_OIL_REACH)) {
@@ -4180,10 +4176,9 @@ static void CarStruckFor(int who, S32 now, const char *what, const char *by, S32
         HitObj(PenguinHitter(), NUM_PERSO, RACE_SHOT_FORCE, -1);
         ListBuggy[0].Speed = 0;
         if (s_hitUntil < now + hold) s_hitUntil = now + hold;
-        char text[80];
-        if (message) snprintf(text, sizeof(text), "%s", message);
-        else if (by) snprintf(text, sizeof(text), "Hit by %s's %s!", by, what); else snprintf(text, sizeof(text), "Hit by %s!", what);
-        Message(text);
+        // (not said on the screen: the car stopped, its stars, say it -- the user, 2026-10-10: "We don't need messages saying 'Hit by
+        // shuttle', 'bitten by gas monster', or 'Hit by gunner'"; the log has it)
+        (void)message;
         Log_Info("[racemod] Twinsen's car hit by %s%s%s", by ? by : "", by ? "'s " : "", what);
         return;
     }
@@ -4553,7 +4548,6 @@ static void PenguinOff(int i, S32 now) {
             HitObj(PenguinHitter(), NUM_PERSO, RACE_BLAST_FORCE, -1);
             ListBuggy[0].Speed = 0;
             if (s_hitUntil < now + RACE_PENGUIN_HOLD) s_hitUntil = now + RACE_PENGUIN_HOLD;
-            Message("Blown up by a penguin!");
             Log_Info("[racemod] Twinsen's car blown up by a penguin: stopped");
         }
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
@@ -4913,7 +4907,6 @@ static void Jets(S32 now, int driving) {
                 HitObj(PenguinHitter(), NUM_PERSO, RACE_STEAM_FORCE, -1);
                 ListBuggy[0].Speed = 0;
                 if (s_hitUntil < now + RACE_STEAM_HOLD) s_hitUntil = now + RACE_STEAM_HOLD;
-                Message("Scalded by steam!");
                 Log_Info("[racemod] Twinsen's car hit by a steam jet");
             }
         }
@@ -5012,7 +5005,6 @@ static void LavaBalls(S32 now, int driving) {
                 HitObj(PenguinHitter(), NUM_PERSO, RACE_LAVA_FORCE, -1);
                 ListBuggy[0].Speed = 0;
                 if (s_hitUntil < now + RACE_PENGUIN_HOLD) s_hitUntil = now + RACE_PENGUIN_HOLD;
-                Message("Hit by a lava ball!");
                 Log_Info("[racemod] Twinsen's car hit by a lava ball");
             }
         }
@@ -5481,7 +5473,6 @@ static void Shuttles(S32 now, int driving) {
                 HitObj(PenguinHitter(), NUM_PERSO, RACE_SHUTTLE_FORCE, -1);
                 ListBuggy[0].Speed = 0;
                 if (s_hitUntil < now + RACE_PENGUIN_HOLD) s_hitUntil = now + RACE_PENGUIN_HOLD;
-                Message("Hit the shuttle!");
                 Log_Info("[racemod] Twinsen's car hits the shuttle");
             }
         }
