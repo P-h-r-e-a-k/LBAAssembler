@@ -221,6 +221,8 @@ internal static class RaceTrackScenes
     // them as they should) and, as every actor the game itself draws that way (Twinsen's buggy: BUGGY.CPP), without a shadow -- the engine
     // draws a depth-buffered actor's shadow over it, a dark patch across the car.
     internal const uint OpponentFlags = 0x1A1000;
+    // how near a scene's cube a gas monster is to be one of its actors too (cells: seen from it)
+    private const double GasMonsterSeen = 40;
 
     public const int DesertIsland = 2;
     // The buggy's own scene on the Desert island: an island with no buggy of its own (Citadel) gets a copy of that actor on the grid.
@@ -247,7 +249,7 @@ internal static class RaceTrackScenes
         public List<int[]> Mushrooms = new(), Penguins = new(), Oil = new(), Fakes = new();
         // the machine guns on their knolls: each [scene, the gun's actor, its Franco's actor, its knoll in Report.Gunners, which gun on it]
         public List<int[]> Gunners = new();
-        // the gas monsters: each [scene, its actor, its body, its place in Report.GasMonsters]
+        // the gas monsters: each [scene, its actor, its body, its place in Report.GasMonsters, 1 in its own scene's cube (0 seen from there)]
         public List<int[]> GasMonsters = new();
         public Result Result(List<string> log, int changed, int removed, Result? twin = null) =>
             new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners, GasMonsters);
@@ -581,22 +583,31 @@ internal static class RaceTrackScenes
                     }
                     log.Add($"scene {scene}: the machine guns (actors {string.Join(", ", guns)}) on the knoll at ({g.X:0.#}, {g.Z:0.#}), {y} high, a Franco at each (actors {string.Join(", ", francos)})");
                 }
-            // the gas monsters (Report.GasMonsters): the game's gas monster, made bigger (RaceTrackGasMonster), one actor each, out of sight
-            // until the race-track mode raises it out of the gas (gasmonster=)
+            // the gas monsters (Report.GasMonsters): the game's gas monster, made bigger (RaceTrackGasMonster), out of sight until the
+            // race-track mode raises it out of the gas (gasmonster=) -- an actor of each scene it can be seen from: its own, and every one
+            // whose cube comes within GasMonsterSeen of it (the engine draws a scene's actors only while it is the one about: the islets'
+            // monsters stood up out of nowhere as the car came into their scene -- the user, 2026-10-10: "Our gas monsters are invisible
+            // until we're right at them, which takes the user by surprise so they have no chance to dodge"); the race-track mode poses
+            // the one of the scene about
             if (mushroomTemplate is not null)
                 foreach (var t in tracks)
                     for (var gi = 0; gi < t.Report.GasMonsters.Count; gi++)
                     {
                         var g = t.Report.GasMonsters[gi];
-                        if ((int)Math.Floor(g.X / 64) != model.CubeX || (int)Math.Floor(g.Z / 64) != model.CubeY) continue;
+                        double ox = Math.Clamp(g.X, model.CubeX * 64.0, model.CubeX * 64.0 + 64), oz = Math.Clamp(g.Z, model.CubeY * 64.0, model.CubeY * 64.0 + 64);
+                        if ((ox - g.X) * (ox - g.X) + (oz - g.Z) * (oz - g.Z) > GasMonsterSeen * GasMonsterSeen) continue;
                         if (model.Actors.Count + 1 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the gas monster at ({g.X:0.#}, {g.Z:0.#})"); continue; }
                         var monster = mushroomTemplate.Clone();
                         monster.Entity = RaceTrackGasMonster.Entity; monster.Body = 0; monster.Anim = Math.Max(0, g.FirstAnim);
                         monster.Flags = OpponentFlags; monster.Move = 0; monster.Life = new byte[] { 0 }; monster.Track = new byte[] { 0 };
-                        monster.X = (int)Math.Round((g.X - model.CubeX * 64) * 512); monster.Z = (int)Math.Round((g.Z - model.CubeY * 64) * 512); monster.Y = -20000; monster.Beta = 0;
+                        // (its start in the cube -- a record's place is 16 bits, and one of the next cube's is past the edge: the race-track mode
+                        // stands it where it is, every frame)
+                        monster.X = Math.Clamp((int)Math.Round((g.X - model.CubeX * 64) * 512), 0, 32767); monster.Z = Math.Clamp((int)Math.Round((g.Z - model.CubeY * 64) * 512), 0, 32767);
+                        monster.Y = -20000; monster.Beta = 0;
                         var actor = SceneOps.AddActor(model, monster);
-                        t.GasMonsters.Add(new[] { scene, actor, g.Body, gi });
-                        log.Add($"scene {scene}: a gas monster (actor {actor}) in the gas at ({g.X:0.#}, {g.Z:0.#})");
+                        var home = (int)Math.Floor(g.X / 64) == model.CubeX && (int)Math.Floor(g.Z / 64) == model.CubeY;
+                        t.GasMonsters.Add(new[] { scene, actor, g.Body, gi, home ? 1 : 0 });
+                        log.Add($"scene {scene}: a gas monster (actor {actor}) in the gas at ({g.X:0.#}, {g.Z:0.#}){(home ? "" : ", in the next cube")}");
                     }
             // the power-ups: the mushrooms of the lap in this scene's cube, on the road, and a penguin out of sight
             if (mushroomTemplate is not null && penguinTemplate is not null)

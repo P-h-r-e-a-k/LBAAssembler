@@ -777,8 +777,10 @@ static int OnWheel(double wx, double wy, double wz) {
 }
 extern void (*DecorPoseHook)(T_DECORS *list, S32 count);  // 3DEXT/DECORS.CPP
 static void WheelDecors(T_DECORS *list, S32 count);
-// Gas monsters (gasmonster=<scene> <its actor> <its body> <x> <z> <bite x> <bite z> <bite y> <foot y> <first anim>, island units: where it
-// stands out of the gas, its place on the road and the road's height there, its foot's height; the first of its animations): Otringal's,
+// Gas monsters (gasmonster=<scene> <its actor> <its body> <x> <z> <bite x> <bite z> <bite y> <foot y> <first anim> [<scene> <actor>]...,
+// island units: where it stands out of the gas, its place on the road and the road's height there, its foot's height; the first of its
+// animations; then its actor in each other scene it is seen from -- the engine draws a scene's actors only while it is the one about, and
+// the islets' monsters stood up out of nowhere as the car came into their scene, 2026-10-10): Otringal's,
 // at its docks and round the islets where Baldino's plane lies crashed -- the user, 2026-10-09: "let's have gas monsters coming out of the
 // gas and attempting to bite cars, any bitten cars should be stunned for a couple of seconds as though they've been hit then be able to
 // continue"; then: "let's have them permanently visible with their necks above the track and randomly striking down. Let's have each gas
@@ -792,6 +794,7 @@ static void WheelDecors(T_DECORS *list, S32 count);
 // RaceTrackGasMonster.InstallPoses, and these times are theirs. Its actor is posed while its scene is the one about; elsewhere it strikes
 // all the same, for the opponents there.
 #define RACE_MAX_MONSTERS 16
+#define RACE_MONSTER_SEEN 8                // the scenes a monster has an actor in, at the most
 #define RACE_MONSTER_HIT (150 + 650 + 220) // ms from the strike's start to its head on the road (InstallPoses: PoiseMs, RearMs, LungeMs) ...
 #define RACE_MONSTER_BACK (20 + 120 + 330 + 700) // ... and from there, biting, back to poised (20, SnapMs, HoldMs, BackMs) ...
 #define RACE_MONSTER_HOLD (120 + 330)      // ... the first part of it its jaw snapping shut on the road and held (SnapMs, HoldMs)
@@ -802,6 +805,7 @@ enum { MONSTER_POISED, MONSTER_STRIKE, MONSTER_BITE };
 typedef struct {
     S32 Scene; int Neck, Body, Anim0; double RiseX, RiseZ, BiteX, BiteZ, BiteY, FootY;
     int State, Shown, Anim; S32 T0, Next;
+    int NbSeen; S32 SeenScene[RACE_MONSTER_SEEN], ShownScene; int SeenActor[RACE_MONSTER_SEEN];   // its actors, its own scene's first
 } T_RACE_MONSTER;
 static T_RACE_MONSTER s_monsters[RACE_MAX_MONSTERS];
 static int s_nbMonsters = 0;
@@ -1792,11 +1796,20 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "gasmonster")) {
             int scene, neck, size, x, z, bx, bz, by, fy, anim0;
-            if (s_nbMonsters < RACE_MAX_MONSTERS && sscanf(v, "%d %d %d %d %d %d %d %d %d %d", &scene, &neck, &size, &x, &z, &bx, &bz, &by, &fy, &anim0) == 10 && anim0 >= 0) {
+            int used = 0;
+            if (s_nbMonsters < RACE_MAX_MONSTERS && sscanf(v, "%d %d %d %d %d %d %d %d %d %d%n", &scene, &neck, &size, &x, &z, &bx, &bz, &by, &fy, &anim0, &used) == 10 && anim0 >= 0) {
                 T_RACE_MONSTER *m = &s_monsters[s_nbMonsters++];
                 memset(m, 0, sizeof(*m));
                 m->Scene = scene; m->Neck = neck; m->Body = size; m->RiseX = x; m->RiseZ = z; m->BiteX = bx; m->BiteZ = bz; m->BiteY = by; m->FootY = fy; m->Anim0 = anim0;
                 m->Shown = -1;
+                m->SeenScene[0] = scene; m->SeenActor[0] = neck; m->NbSeen = 1;
+                // (and its actor in each other scene it is seen from)
+                const char *rest = v + used;
+                int sc, ac, n2 = 0;
+                while (m->NbSeen < RACE_MONSTER_SEEN && sscanf(rest, "%d %d%n", &sc, &ac, &n2) == 2) {
+                    m->SeenScene[m->NbSeen] = sc; m->SeenActor[m->NbSeen] = ac; m->NbSeen++;
+                    rest += n2;
+                }
             }
         }
         else if (!strcmp(key, "roulette")) {
@@ -4670,7 +4683,8 @@ S32 RaceMod_NoCollide(S32 numobj) {
     // (a gas monster: its bite is the race-track mode's own -- Monsters)
     if (RaceMod_Active() && numobj > 0)
         for (int i = 0; i < s_nbMonsters; i++)
-            if (s_monsters[i].Scene == (S32)NumCube && s_monsters[i].Neck == numobj) return 1;
+            for (int k = 0; k < s_monsters[i].NbSeen; k++)
+                if (s_monsters[i].SeenScene[k] == (S32)NumCube && s_monsters[i].SeenActor[k] == numobj) return 1;
     if (!RaceMod_Active() || !s_powerups || numobj <= 0 || numobj >= MAX_OBJETS) return 0;
     // (a super jet-pack goes through the cars: Twinsen's through any in its way -- it pushes them aside, RACE_SHOVE_* -- and an
     // opponent's through Twinsen's; on the same line, the jet-pack sat stuck behind the car in front)
@@ -5238,21 +5252,25 @@ static void Monsters(S32 now, int driving) {
             }
             break;
         }
-        // posed where its scene is the one about: standing at its place out of the gas, facing its place on the road
-        const int here = m->Scene == (S32)NumCube && CubeMode == CUBE_EXTERIEUR && m->Neck > 0 && m->Neck < NbObjets;
-        if (!here) { m->Shown = -1; continue; }
-        T_OBJET *monster = &ListObjet[m->Neck];
-        if (m->Shown < 0) {
+        // posed where it has an actor in the scene about -- its own, or one it is seen from: standing at its place out of the gas (in that
+        // scene's cube's terms, past its edge for one of the next cube's), facing its place on the road
+        int actor = -1;
+        if (CubeMode == CUBE_EXTERIEUR)
+            for (int k = 0; k < m->NbSeen && actor < 0; k++)
+                if (m->SeenScene[k] == (S32)NumCube && m->SeenActor[k] > 0 && m->SeenActor[k] < NbObjets) actor = m->SeenActor[k];
+        if (actor < 0) { m->Shown = -1; continue; }
+        T_OBJET *monster = &ListObjet[actor];
+        if (m->Shown < 0 || m->ShownScene != (S32)NumCube) {
             // (its own scripts stopped: it is the race-track mode's; its own body)
             monster->OffsetLife = monster->OffsetTrack = -1;
-            InitBody((U8)m->Body, (U8)m->Neck);
-            m->Shown = 0; m->Anim = -1;
+            InitBody((U8)m->Body, (U8)actor);
+            m->Shown = 0; m->ShownScene = (S32)NumCube; m->Anim = -1;
         }
         const double fx = m->BiteX - m->RiseX, fz = m->BiteZ - m->RiseZ;
         const S32 beta = (S32)floor(atan2(fx, fz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
         monster->Obj.X = (S32)(m->RiseX - cx); monster->Obj.Y = (S32)m->FootY; monster->Obj.Z = (S32)(m->RiseZ - cz);
         CarPitch(&monster->Obj, beta, 0);
-        if (anim != m->Anim) { InitAnim((U16)anim, ANIM_REPEAT, (U8)m->Neck); m->Anim = anim; }
+        if (anim != m->Anim) { InitAnim((U16)anim, ANIM_REPEAT, (U8)actor); m->Anim = anim; }
     }
 }
 
