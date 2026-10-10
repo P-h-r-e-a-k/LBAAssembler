@@ -61,6 +61,11 @@ internal static class RaceCarEngineFile
         foreach (var shuttle in track?.Shuttles ?? new()) text.Append($"shuttle={string.Join(' ', shuttle)}\n");
         // the lava's balls of fire (Volcano Island)
         foreach (var ball in track?.LavaBalls ?? new()) text.Append($"lavaball={string.Join(' ', ball)}\n");
+        // (the game's lava ball, bigger, that they and the lava fall throw: RaceTrackOil.InstallLavaBall)
+        if (track?.LavaBallModel is { } lavaBall && (track.LavaBalls is { Count: > 0 } || track.LavaFalls is { Count: > 0 })) text.Append($"lava_ball_model={lavaBall}\n");
+        // ... its lava fall, across its face, and its boost panels (Volcano Island's, 2026-10-10)
+        foreach (var fall in track?.LavaFalls ?? new()) text.Append($"lavafall={string.Join(' ', fall)}\n");
+        foreach (var panel in track?.BoostPanels ?? new()) text.Append($"boostpanel={string.Join(' ', panel)}\n");
         // the machine guns on their knolls, each followed by where its bullets land (Otringal's)
         foreach (var g in track?.Gunners ?? new())
         {

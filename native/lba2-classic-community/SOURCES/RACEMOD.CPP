@@ -701,19 +701,56 @@ static int s_nbTunnels = 0;
 // Lava balls (lavaball=<x> <y> <z> <from> <to> <every> <phase>: a source on the lava's surface, island units, and the stretch of the raised
 // road it rains on, its first and last point): Volcano Island's (the user, 2026-10-08: "lava balls shooting up and out of the lava at
 // points and raining down onto the track"). Every so often (Every ms, give or take a quarter, from Phase) while Twinsen is near, a ball
-// of fire -- the magic ball's fire sprite -- is shot up out of the lava and falls on a place along that stretch, its shadow on the road
-// there growing as it comes; where it lands it bursts as a nitro penguin does, and a car in the burst is stopped.
+// of lava is shot up out of the lava and falls on a place along that stretch, its shadow on the road there growing as it comes; where it
+// lands it bursts, and a car in the burst is stopped. Since 2026-10-10 the game's own lava (the user: "the lava balls that are currently
+// coming out of the lava are different to the retail ones, so let's switch these"): the ball is its lava ball (OBJFIX.HQR entry 69, the
+// one Wannies Island's mine spits; lava_ball_model=, the builder's copy of it RaceTrackOil.LavaBallScale times as big) tumbling along its
+// arc, shot out of the lava with the mine's lava burst (impact 25: a spray of sparks and of little balls, its sound) and bursting the same
+// way where it lands -- the magic ball's fire sprite with a trail of fire, and a nitro penguin's blast, until then.
 #define RACE_MAX_LAVA 16
-#define RACE_LAVA_SPRITE 11                // SPRITE_BALLE_LVL_4: the magic ball's fire
+#define RACE_LAVA_MODEL 69                 // OBJFIX.HQR: the game's lava ball (lava_ball_model=: its bigger copy)
+#define RACE_LAVA_BURST 25                 // IMPACT 25: the mine's lava burst
+#define RACE_LAVA_BURST_FLOW 67            // ... its sparks, alone when the extras are short
+#define RACE_LAVA_SPIT_FLOW 90             // impact 23's flow, the mine's fall's foot: sparks thrown out and down, little balls with them
+#define RACE_LAVA_FREE 24                  // the little balls only while this many extras are free (the race's own need theirs)
 #define RACE_LAVA_SHADOW 12                // SPRITE_BALLE_SHADOW
-#define RACE_LAVA_TRAIL 15                 // SPRITE_TRAINEE_BALLE_1..3
-#define RACE_LAVA_SCALE 14                 // the ball's size (smaller, bigger: about 900 across)
+#define RACE_LAVA_SCALE 14                 // the shadow's size where it lands
 #define RACE_LAVA_NEAR (40 * 512)          // shot only while Twinsen is this near the place it will land
 #define RACE_LAVA_REACH 1100               // a car this near the place it lands is caught in its burst
 #define RACE_LAVA_FORCE 20
 typedef struct { double SrcX, SrcY, SrcZ, DstX, DstY, DstZ; int From, To; S32 Every, Phase, Next, T0, Dur, Trail; int On, Ball, Shadow; } T_RACE_LAVA;
 static T_RACE_LAVA s_lava[RACE_MAX_LAVA];
 static int s_nbLava = 0;
+static int s_lavaModel = -1;               // lava_ball_model=
+// Lava falls (lavafall=<lip x> <y> <z> <foot x> <y> <z> <beta>, island units, one a place across the fall's face: RaceTrackLavaFall,
+// Volcano Island's crag by its plateau's south edge -- the user, 2026-10-10: "In scene 100 ... there's a lava water fall next to a section
+// of track that shoots lava balls, let's steal this idea"). While Twinsen is near, the mine's fall's spit: sparks and little lava balls
+// thrown out of its foot every RACE_FALL_FOOT_MS or so (impact 23's, the way its face looks), sparks off its lip and down its face every
+// RACE_FALL_LIP_MS or so. The balls it shoots onto the road are lavaball='s, its pool their source.
+#define RACE_MAX_FALLS 8
+#define RACE_FALL_FOOT_MS 1500
+#define RACE_FALL_LIP_MS 600
+#define RACE_FALL_NEAR (48 * 512)
+#define RACE_FALL_DROP 1000                // (a flow's sparks die this far under where it starts: one at a height down the face)
+typedef struct { double LipX, LipY, LipZ, FootX, FootY, FootZ; S32 Beta; } T_RACE_FALL;
+static T_RACE_FALL s_falls[RACE_MAX_FALLS];
+static int s_nbFalls = 0;
+static S32 s_fallFootNext = 0, s_fallLipNext = 0;
+// Boost panels (boostpanel=<x> <y> <z> <way x> <way z> <half length> <half width>, island units, the way in thousandths: RaceTrackPlan.
+// BoostPanels, chevrons on the deck): a car with two of its wheels or more on one is at RACE_PANEL_KMH at once (the user, 2026-10-10: "a
+// boost panel that cars can drive over for a speed boost, they'd only need to drive over it with at least two wheels for it to activate,
+// this should immediately shoot a car up to 120kph"), the extra lost as any over the gear's top is (BUGGY.CPP RACE_OVERSPEED_DRAG).
+// Twinsen's car by its four wheels where BUGGY.CPP has them. (The opponents' lines keep to the race lanes: Volcano Island's panel is in
+// its pit lane, "so if cars want the speed boost they have to deviate from the normal racing line".)
+#define RACE_MAX_PANELS 8
+#define RACE_PANEL_KMH 120
+#define RACE_PANEL_SPEED (RACE_PANEL_KMH * 5120.0 / 36)
+#define RACE_PANEL_ABOVE 700               // the car this far over the panel or under it is on it (the deck's slope, the car's bounce)
+typedef struct { double X, Y, Z, Dx, Dz, HalfLen, HalfWidth; int OnHero; } T_RACE_PANEL;
+static T_RACE_PANEL s_panels[RACE_MAX_PANELS];
+static int s_nbPanels = 0;
+#define RACE_PANEL_PILOT_MS 2500           // (the test pilot holds the accelerator this long after one, as a player would)
+static S32 s_panelAt = -1000000;
 // Machine gunners (gunner=<scene> <gun's actor> <Franco's actor> <muzzle x> <y> <z>, island units, then gunner_target=<x> <z> <y> <radius>,
 // the places its bullets land): Otringal's Franco machine gun on its knoll inside the corner past the start -- the user, 2026-10-09: "add in
 // a franco to fire in bursts so that the bullets only land on the inside of the corner so they can be avoided by driving the corner on the
@@ -1884,6 +1921,22 @@ static void Load(const char *path, int carOnly = 0) {
                 }
             }
         }
+        else if (!strcmp(key, "lava_ball_model")) s_lavaModel = atoi(v);
+        else if (!strcmp(key, "lavafall")) {
+            int lx, ly, lz, fx, fy, fz, beta;
+            if (s_nbFalls < RACE_MAX_FALLS && sscanf(v, "%d %d %d %d %d %d %d", &lx, &ly, &lz, &fx, &fy, &fz, &beta) == 7) {
+                T_RACE_FALL *f = &s_falls[s_nbFalls++];
+                f->LipX = lx; f->LipY = ly; f->LipZ = lz; f->FootX = fx; f->FootY = fy; f->FootZ = fz; f->Beta = beta & 4095;
+            }
+        }
+        else if (!strcmp(key, "boostpanel")) {
+            int x, y, z, dx, dz, hl, hw;
+            if (s_nbPanels < RACE_MAX_PANELS && sscanf(v, "%d %d %d %d %d %d %d", &x, &y, &z, &dx, &dz, &hl, &hw) == 7 && (dx || dz) && hl > 0 && hw > 0) {
+                T_RACE_PANEL *p = &s_panels[s_nbPanels++];
+                const double l = sqrt((double)dx * dx + (double)dz * dz);
+                p->X = x; p->Y = y; p->Z = z; p->Dx = dx / l; p->Dz = dz / l; p->HalfLen = hl; p->HalfWidth = hw; p->OnHero = 0;
+            }
+        }
         else if (!strcmp(key, "lavaball")) {
             T_RACE_LAVA *b = &s_lava[s_nbLava];
             int x, y, z, from, to, every, phase;
@@ -2619,8 +2672,8 @@ U32 RaceMod_AutoInput(void) {
         const double want = LoopAim(l);
         return bits | (speed > want + 150 ? I_DOWN : speed > want - 60 ? 0 : I_UP);
     }
-    // (the golden Gazogem running: no brakes -- a player holds the accelerator, keeping every 10 km/h it gives)
-    bits |= speed > here * 1.05 + 150 && !RaceMod_NoTopSpeed() ? I_DOWN : I_UP;
+    // (the golden Gazogem running, or just off a boost panel: no brakes -- a player holds the accelerator, keeping every 10 km/h it gives)
+    bits |= speed > here * 1.05 + 150 && !RaceMod_NoTopSpeed() && (S32)TimerRefHR - s_panelAt > RACE_PANEL_PILOT_MS ? I_DOWN : I_UP;
     return bits;
 }
 
@@ -2827,9 +2880,29 @@ static int s_rescue = 0;                   // asked for by GereCodesJeu, done by
 static int s_rescueArrive = -1;            // a rescue into the safe place's scene: the line point, finished once the scene is in (RescueArrive)
 
 // A point of the line on the ground, in the cube the player is in: not over a jump's gap, where the line is the flight's arc.
+// A place over a jump's gap in a raised road, or within a point of it (the raised point nearest it, or one either side, with no floor --
+// Half 0): a car there would be in the air.
+static int OverRaisedGap(double x, double z) {
+    int best = -1;
+    double bd = 1e30;
+    for (int k = 0; k < s_nbRaised; k++) {
+        const double dx = s_raised[k].X - x, dz = s_raised[k].Z - z, d = dx * dx + dz * dz;
+        if (d < bd) { bd = d; best = k; }
+    }
+    if (best < 0) return 0;
+    for (int d = -1; d <= 1; d++) {
+        const int k = best + d;
+        if (k >= 0 && k < s_nbRaised && s_raised[k].Half == 0) return 1;
+    }
+    return 0;
+}
+
 static int LineOnGround(const T_RACE_OPPONENT *o, int i) {
     if (o->X[i] / 32768 != CurrentCubeX || o->Z[i] / 32768 != CurrentCubeY) return 0;
-    if (s_nbRaised) return 1;
+    // (on a raised road, not over a jump's gap: a car that missed a carried jump -- stopped by a fake mushroom's blast at the ramp, 2026-10-10
+    // -- drove off the lip, and its last safe place had been taken in the gap past it, the line there in the air: put back there over and
+    // over, it fell for the rest of the race)
+    if (s_nbRaised) return !OverRaisedGap(o->X[i], o->Z[i]);
     return abs(o->Y[i] - CalculAltitudeTerrain(o->X[i] - CurrentCubeX * 32768, o->Z[i] - CurrentCubeY * 32768, 0)) < 400;
 }
 
@@ -3228,6 +3301,15 @@ static void ArcPlace(const T_RACE_ARC *a, double s, double across, double *x, do
     *slope = len > 0 ? (q->Y - p->Y) / len : 0;
 }
 
+// A carried jump just taken, `across` its way: where across the landing the car comes down (the narrower of the lip -- a lane narrowing
+// into the roulette wheel's hole -- and the landing), how fast it is carried, from when.
+static void ArcTaken(const T_RACE_ARC *a, double across) {
+    const double room = (s_raised[a->LandFoot].Half < s_raised[a->Lip].Half ? s_raised[a->LandFoot].Half : s_raised[a->Lip].Half) - RAISED_INSET;
+    s_arcAcross1 = room <= 0 ? 0 : across > room ? room : across < -room ? -room : across;
+    s_arcV = ListBuggy[0].Speed > RACE_ARC_LEAST ? ListBuggy[0].Speed : RACE_ARC_LEAST;
+    s_arcTime = TimerRefHR;
+}
+
 // For RaceMod_Loop: non-zero when a carried jump carries the car this frame (its new place, cube-local, in *nx..*nz).
 static S32 RaceArc(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -3250,13 +3332,32 @@ static S32 RaceArc(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
             const double across = -(px - f->X) * uz + (pz - f->Z) * ux;
             if (fabs(across) > f->Half) continue;
             s_arcOn = i; s_arcLast = i; s_arcS = 0; s_arcAcross = across;
-            // (the narrower of the lip -- a lane narrowing into the roulette wheel's hole -- and the landing)
-            const double room = (s_raised[a->LandFoot].Half < s_raised[a->Lip].Half ? s_raised[a->LandFoot].Half : s_raised[a->Lip].Half) - RAISED_INSET;
-            s_arcAcross1 = room <= 0 ? 0 : across > room ? room : across < -room ? -room : across;
-            s_arcV = ListBuggy[0].Speed > RACE_ARC_LEAST ? ListBuggy[0].Speed : RACE_ARC_LEAST;
-            s_arcTime = TimerRefHR;
+            ArcTaken(a, across);
             Log_Info("[racemod] carried jump %d: on at %d units/s (carried at %.0f), %.0f across", i + 1, (int)ListBuggy[0].Speed, s_arcV, across);
             break;
+        }
+        // (or a car on the ramp, past its foot, going up it: one that crossed the foot stopped -- held by a fake mushroom's blast, it slid
+        // on over the line at no speed and was never taken; it drove up the ramp and off its lip, 2026-10-10 -- carried on from where it is)
+        for (int i = 0; i < s_nbArcs && s_arcOn < 0; i++) {
+            const T_RACE_ARC *a = &s_arcs[i];
+            for (int k = a->Foot; k < a->Lip; k++) {
+                const T_RACE_RAISED *p = &s_raised[k], *q = p + 1;
+                double ux = q->X - p->X, uz = q->Z - p->Z;
+                const double ul = sqrt(ux * ux + uz * uz);
+                if (ul <= 0) continue;
+                ux /= ul; uz /= ul;
+                const double px = *nx + cx - p->X, pz = *nz + cz - p->Z;
+                const double along = px * ux + pz * uz, across = -px * uz + pz * ux;
+                if (along < 0 || along > ul || fabs(across) > p->Half) continue;
+                const double y = p->Y + (q->Y - p->Y) * along / ul;
+                const double moved = (*nx - ox) * ux + (*nz - oz) * uz;
+                if (fabs(oy - y) > RACE_ARC_ENTRY || moved <= 0) continue;
+                s_arcOn = i; s_arcLast = i; s_arcS = a->S[k - a->Foot] + along; s_arcAcross = across;
+                ArcTaken(a, across);
+                Log_Info("[racemod] carried jump %d: on, up its ramp already (%.0f along), at %d units/s (carried at %.0f), %.0f across", i + 1, s_arcS,
+                         (int)ListBuggy[0].Speed, s_arcV, across);
+                break;
+            }
         }
         if (s_arcOn < 0) return 0;
     }
@@ -5000,11 +5101,36 @@ static void Jets(S32 now, int driving) {
     }
 }
 
-// Every frame: the lava balls (lavaball=). A ball in the air is the fire sprite moved along its arc, a trail behind it, and the shadow at
-// the place it will land; landed, the burst (a nitro penguin's) and every car in it stopped -- Twinsen's as by a penguin's blast unless the
-// protection spell or the super jet-pack is on, an opponent's with its hit animation.
+// The game's lava at (x, y, z), cube-local: the mine's burst (impact 25) or its fall's spit (`spit`: impact 23's flow, thrown the way
+// `beta` says), its sparks and, when there are extras to spare, its little balls -- those only to see: the burst's own reach is what stops
+// a car (they bounce about the deck, and an opponent's car hit by one would be hurt as an actor is, not stopped as a car is).
+static void GameLava(S32 x, S32 y, S32 z, int spit, S32 beta, int balls) {
+    U8 before[MAX_EXTRAS];
+    int free = 0;
+    for (int i = 0; i < MAX_EXTRAS; i++) { before[i] = ListExtra[i].Sprite != -1; free += !before[i]; }
+    balls = balls && free >= RACE_LAVA_FREE;
+    if (!spit) {
+        if (balls) DoImpact(RACE_LAVA_BURST, x, y, z, 255);
+        else CreateParticleFlow(0, 255, 0, x, y, z, 0, RACE_LAVA_BURST_FLOW);
+    } else {
+        const S32 b = (beta - (TabPartFlow + RACE_LAVA_SPIT_FLOW)->Beta) & 4095;
+        CreateParticleFlow(0, 255, 0, x, y, z, b, RACE_LAVA_SPIT_FLOW);
+        if (balls) CreateExtraParticleFlow(FLOW_EXTRA_OBJ, 255, RACE_LAVA_MODEL, 0, x, y, z, b, RACE_LAVA_SPIT_FLOW, 10, 0, 0, 0);
+    }
+    for (int i = 0; i < MAX_EXTRAS; i++)
+        if (!before[i] && ListExtra[i].Sprite == (S16)(3 + 32768)) ListExtra[i].Flags &= ~(EXTRA_END_OBJ | EXTRA_HIT_ANY);
+}
+
+static int LaserExtra(int model, S32 x, S32 y, S32 z);
+
+// Every frame: the lava balls (lavaball=). A ball in the air is the game's lava ball tumbling along its arc, and the shadow at the place it
+// will land; landed, the game's lava burst and every car in its reach stopped -- Twinsen's as by a penguin's blast unless the protection
+// spell or the super jet-pack is on, an opponent's with its hit animation.
 static void LavaBalls(S32 now, int driving) {
     if (CubeMode != CUBE_EXTERIEUR || !s_nbLava || !s_nbRaised) return;
+    // (the lava ball's faces are the objects' texture page's fire, black until something animates it -- the scene does only with animated
+    // textures of its own or the protection spell on: the balls flew black, 2026-10-10)
+    if (!AnimateTexture) DoTextureAnimation();
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     const double hx = hero->Obj.X + cx, hz = hero->Obj.Z + cz;
@@ -5034,11 +5160,12 @@ static void LavaBalls(S32 now, int driving) {
             const double far = sqrt((b->DstX - b->SrcX) * (b->DstX - b->SrcX) + (b->DstZ - b->SrcZ) * (b->DstZ - b->SrcZ));
             b->Dur = 1500 + (S32)(far / 10);
             b->T0 = now; b->On = 1; b->Trail = now;
-            b->Ball = InitExtraAnimSprite(255, (S32)(b->SrcX - cx), (S32)b->SrcY, (S32)(b->SrcZ - cz), RACE_LAVA_SPRITE, RACE_LAVA_SPRITE, b->Dur + 200, RACE_LAVA_SCALE, 0, 0);
+            b->Ball = LaserExtra(s_lavaModel >= 0 ? s_lavaModel : RACE_LAVA_MODEL, (S32)(b->SrcX - cx), (S32)b->SrcY, (S32)(b->SrcZ - cz));
             b->Shadow = InitExtraAnimSprite(255, (S32)(b->DstX - cx), (S32)b->DstY + 40, (S32)(b->DstZ - cz), RACE_LAVA_SHADOW, RACE_LAVA_SHADOW, b->Dur + 100, 60, 1, 0);
             if (b->Shadow >= 0) ListExtra[b->Shadow].Flags |= EXTRA_NO_SHADOW;
-            // (out of the lava: a splash where it leaves it)
-            InitExtraPof((S32)(b->SrcX - cx), (S32)b->SrcY, (S32)(b->SrcZ - cz), 1, 1024, 0, 16, 0, 420, 140, 900, 0, 900);
+            // (out of the lava: the game's burst where it leaves it -- in Twinsen's cube: the little balls fly by its ground)
+            if (b->SrcX >= cx && b->SrcX < cx + 32768 && b->SrcZ >= cz && b->SrcZ < cz + 32768)
+                GameLava((S32)(b->SrcX - cx), (S32)b->SrcY, (S32)(b->SrcZ - cz), 0, 0, 1);
             continue;
         }
         const double u = (double)(now - b->T0) / b->Dur;
@@ -5047,24 +5174,23 @@ static void LavaBalls(S32 now, int driving) {
             const double far = sqrt((b->DstX - b->SrcX) * (b->DstX - b->SrcX) + (b->DstZ - b->SrcZ) * (b->DstZ - b->SrcZ));
             const double top = (b->SrcY > b->DstY ? b->SrcY : b->DstY) - (b->SrcY + (b->DstY - b->SrcY) * 0.5) + (far * 0.35 > 2500 ? far * 0.35 : 2500);
             const double x = b->SrcX + (b->DstX - b->SrcX) * u, z = b->SrcZ + (b->DstZ - b->SrcZ) * u, y = b->SrcY + (b->DstY + 250 - b->SrcY) * u + 4 * top * u * (1 - u);
-            if (b->Ball >= 0 && ListExtra[b->Ball].Sprite == RACE_LAVA_SPRITE) {
-                ListExtra[b->Ball].PosX = (S32)(x - cx); ListExtra[b->Ball].PosY = (S32)y; ListExtra[b->Ball].PosZ = (S32)(z - cz);
+            if (b->Ball >= 0 && ListExtra[b->Ball].Sprite == (S16)(3 + 32768)) {
+                T_EXTRA *e = &ListExtra[b->Ball];
+                e->PosX = (S32)(x - cx); e->PosY = (S32)y; e->PosZ = (S32)(z - cz);
+                // (tumbling as it flies)
+                e->Beta = (S16)(((now - b->T0) * 3) & 4095); e->Scale = ((now - b->T0) * 2) & 4095;
             }
             if (b->Shadow >= 0 && ListExtra[b->Shadow].Sprite == RACE_LAVA_SHADOW) ListExtra[b->Shadow].Scale = (S32)(60 - (60 - RACE_LAVA_SCALE) * u);
-            if (now - b->Trail >= 70) {
-                b->Trail = now;
-                InitExtraAnimSprite(255, (S32)(x - cx), (S32)y, (S32)(z - cz), RACE_LAVA_TRAIL, RACE_LAVA_TRAIL + 2, 450, RACE_LAVA_SCALE + 4, 1, 0);
-            }
             continue;
         }
         // landed: its burst, and the cars in it
         b->On = 0;
-        if (b->Ball >= 0 && ListExtra[b->Ball].Sprite == RACE_LAVA_SPRITE) ListExtra[b->Ball].Sprite = -1;
+        if (b->Ball >= 0 && ListExtra[b->Ball].Sprite == (S16)(3 + 32768)) ListExtra[b->Ball].Sprite = -1;
         if (b->Shadow >= 0 && ListExtra[b->Shadow].Sprite == RACE_LAVA_SHADOW) ListExtra[b->Shadow].Sprite = -1;
         b->Ball = b->Shadow = -1;
         const S32 lx = (S32)(b->DstX - cx), lz = (S32)(b->DstZ - cz), ly = (S32)b->DstY;
         if (lx < 0 || lx >= 32768 || lz < 0 || lz >= 32768) continue;
-        DoImpact(RACE_PENGUIN_IMPACT, lx, ly, lz, 255);
+        GameLava(lx, ly, lz, 0, 0, 1);
         if (driving && Near(hero, lx, ly, lz, RACE_LAVA_REACH)) {
             if (now < s_protectUntil || now < s_jetUntil || (hero->Flags & NO_CHOC))
                 Log_Info("[racemod] a lava ball lands on Twinsen's car: %s", now < s_protectUntil ? "the protection spell holds" : now < s_jetUntil ? "the super jet-pack" : "he can't be hit");
@@ -5089,6 +5215,52 @@ static void LavaBalls(S32 now, int driving) {
             InitAnim(GEN_ANIM_CHOC, ANIM_ALL_THEN, (U8)index);
             InitHitExtraPof(car->Obj.X, car->Obj.Y + car->YMax + 1, car->Obj.Z, RACE_LAVA_FORCE);
         }
+    }
+}
+
+// Every frame: the lava falls (lavafall=), near Twinsen -- sparks off a lip and down the face below it, at a height down it each time (a
+// flow's sparks die RACE_FALL_DROP under where they start), and the game's spit out of a foot.
+static void LavaFalls(S32 now) {
+    if (CubeMode != CUBE_EXTERIEUR || !s_nbFalls) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0, hx = hero->Obj.X + cx, hz = hero->Obj.Z + cz;
+    for (int pass = 0; pass < 2; pass++) {
+        S32 *next = pass ? &s_fallFootNext : &s_fallLipNext;
+        const S32 every = pass ? RACE_FALL_FOOT_MS : RACE_FALL_LIP_MS;
+        if (now < *next) continue;
+        *next = now + every / 2 + (S32)(VentRandom() * every);
+        const T_RACE_FALL *f = &s_falls[(int)(VentRandom() * s_nbFalls) % s_nbFalls];
+        const double x = pass ? f->FootX : f->LipX, z = pass ? f->FootZ : f->LipZ;
+        if ((x - hx) * (x - hx) + (z - hz) * (z - hz) > (double)RACE_FALL_NEAR * RACE_FALL_NEAR) continue;
+        if (x < cx || x >= cx + 32768 || z < cz || z >= cz + 32768) continue;
+        if (pass) GameLava((S32)(x - cx), (S32)f->FootY, (S32)(z - cz), 1, f->Beta, 1);
+        else {
+            // (out from the face a little, at a height down it)
+            const double b = f->Beta * 2 * 3.14159265358979 / 4096, drop = (f->LipY - f->FootY) * VentRandom();
+            GameLava((S32)(x - cx + sin(b) * 160), (S32)(f->LipY - drop), (S32)(z - cz + cos(b) * 160), 1, f->Beta, 0);
+        }
+    }
+}
+
+// Every frame: the boost panels (boostpanel=) under Twinsen's car -- two of its wheels or more on one, and it is going at RACE_PANEL_KMH at
+// least (going forwards).
+static void BoostPanels(S32 now, int driving) {
+    if (CubeMode != CUBE_EXTERIEUR || !s_nbPanels) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    for (int i = 0; i < s_nbPanels; i++) {
+        T_RACE_PANEL *p = &s_panels[i];
+        int on = 0;
+        if (driving && fabs(hero->Obj.Y - p->Y) <= RACE_PANEL_ABOVE)
+            for (int w = 0; w < 4; w++) {
+                const double dx = ListBuggy[0].Wheel[w].X + cx - p->X, dz = ListBuggy[0].Wheel[w].Z + cz - p->Z;
+                if (fabs(dx * p->Dx + dz * p->Dz) <= p->HalfLen && fabs(-dx * p->Dz + dz * p->Dx) <= p->HalfWidth) on++;
+            }
+        if (on >= 2 && ListBuggy[0].Speed >= 0) {
+            if (ListBuggy[0].Speed < RACE_PANEL_SPEED) ListBuggy[0].Speed = (S32)RACE_PANEL_SPEED;
+            if (!p->OnHero) Log_Info("[racemod] boost panel %d: %d of the car's wheels on it -- %d km/h", i + 1, on, (int)((ListBuggy[0].Speed * 36 + 2560) / 5120));
+            p->OnHero = 1; s_panelAt = now;
+        } else p->OnHero = 0;
     }
 }
 
@@ -5683,6 +5855,8 @@ void RaceMod_Frame(void) {
     Vents(now);
     Jets(now, driving);
     LavaBalls(now, driving);
+    LavaFalls(now);
+    BoostPanels(now, driving);
     Gunners(now, driving);
     Wheel(now, driving);
     SlotMachine(now);
@@ -6369,6 +6543,7 @@ static void ResetTrack(void) {
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0;
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
+    s_nbFalls = 0; s_nbPanels = 0; s_lavaModel = -1; s_fallFootNext = s_fallLipNext = 0;
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = s_arcAcross1 = 0; s_arcTime = s_arcLandedAt = 0;

@@ -11,7 +11,15 @@
 #  - west along the shore and back up the volcano's flank onto the plateau.
 #
 # Lava balls (RACEMOD.CPP lavaball=): from points in the lava beside the lap, balls of fire shot up out of it, falling onto the road, a
-# shadow on the road where each will land.
+# shadow on the road where each will land -- the game's own lava balls since 2026-10-10 (the user: "the lava balls that are currently
+# coming out of the lava are different to the retail ones, so let's switch these").
+#
+# 2026-10-10 (the user): "the pit lane is on the wrong side of the start/finish straight" -- its stripe and fence were on the race lanes'
+# north, the grid moved south onto the pit lane (the signs Otringal's, whose straight runs north); "make the entire track slightly wider"
+# (H0 4.0 to 4.75); a lava fall beside the plateau's south edge, a crag of rock with lava pouring down its face into a pool by the road and
+# balls shot out of it onto the road ("In scene 100 ... there's a lava water fall next to a section of track that shoots lava balls, let's
+# steal this idea"; RaceTrackLavaFall, RACEMOD.CPP lavafall=); a boost panel in the pit lane ("cars ... drive over it with at least two
+# wheels ... immediately shoot a car up to 120kph, let's test this by putting this on the pit lane"; RACEMOD.CPP boostpanel=).
 #
 # Run with E:\dump\TEMP\volc holding H.npy and obstacles.npz (E:\dump\TEMP\otr\prep.py E:/dump/TEMP/volc 448 448 128); --pictures draws the
 # lap over boxmap.png; --write writes docs/racetrack/volcano_track_plan.json.
@@ -31,7 +39,7 @@ def ground(x, z):
     return H[zi, xi] * (1 - fx) * (1 - fz) + H[zi, xi + 1] * fx * (1 - fz) + H[zi + 1, xi] * (1 - fx) * fz + H[zi + 1, xi + 1] * fx * fz
 
 STEP = 0.5
-H0 = 4.0
+H0 = 4.75                               # (4.0 until 2026-10-10: "make the entire track slightly wider if we can")
 ASPHALT, CURB = H0 - 1.0, H0 - 0.25
 PIT = 4.5                               # the pit lane beside the plateau's north straight, on its right (south: inside the lap)
 TOPD, SHORE = 13000.0, 4500.0           # the plateau's road (over its sand, 12,750) and the south shore's
@@ -85,7 +93,7 @@ cum = np.concatenate([[0], np.cumsum(seg)]); total = cum[-1]
 N = int(round(total / STEP)); s = np.arange(N) * total / N
 X = np.interp(s, cum, np.append(fine[:, 0], fine[0, 0])); Z = np.interp(s, cum, np.append(fine[:, 1], fine[0, 1]))
 T = np.stack([np.gradient(X), np.gradient(Z)], 1); T /= np.linalg.norm(T, axis=1)[:, None]
-Nn = np.stack([-T[:, 1], T[:, 0]], 1)    # across the road (the builder's Across: north when heading east -- the pit lane is on -Nn)
+Nn = np.stack([-T[:, 1], T[:, 0]], 1)    # across the road (the builder's Across, (-Tz, Tx): south when heading east -- the pit lane is on +Nn)
 def nearest(p, heading=None):
     p = C(*p); d = np.hypot(X - p[0], Z - p[1])
     if heading is not None: d = d + 100 * (T @ np.array(heading) < 0.7)
@@ -102,7 +110,7 @@ def trap(f, q=0.15):
 
 E, W_, S_, N_ = (1, 0), (-1, 0), (0, 1), (0, -1)
 SE_ = (0.915, 0.405); SW_ = (-0.625, 0.781)
-# ---- widths: the usual, and the north straight with its pit lane on its right (south: -Nn heading east)
+# ---- widths: the usual, and the north straight with its pit lane on its right (south: +Nn heading east)
 def ramp(a, b, k): return ease(ahead(a, k) / ahead(a, b))
 HALF = np.full(N, H0)
 PIT_HALF = H0 + PIT / 2
@@ -190,6 +198,23 @@ for (sx, sz), (m0, m1), every in LAVA:
     a, b = mark_or_jump(m0), mark_or_jump(m1)
     lava.append({'source': [sx - OX, sz - OZ], 'from': int(a), 'to': int(b), 'every': every})
 
+# ---- the lava fall (RaceTrackLavaFall): a crag of rock on the plateau inside the lap, by its south edge, lava pouring down its face (south,
+# towards the road) into a pool beside the road's inner rail; balls shot out of the pool onto the road along the straight there (the
+# race-track mode's lavaball=, the pool their source), and the game's spray of lava at the fall's foot and off its lip (lavafall=). The
+# face's foot (x, z), the way it looks, the fall's width, the crag's height over the plateau, its depth back from the face and its width
+# either side of the fall, the pool's reach out from the face; the ground copied for its rock and its lava (the island's own, cells).
+FALL_AT, FALL_W = (486.0, 489.0), 3.0
+lava_fall = {'at': [FALL_AT[0] - OX, FALL_AT[1] - OZ], 'facing': [0.0, 1.0], 'width': FALL_W, 'height': 4600.0, 'depth': 8.0, 'wing': 6.0,
+             'pool': 2.0, 'rock': [530.0 - OX, 466.0 - OZ], 'lava': [515.0 - OX, 479.0 - OZ]}
+lava.append({'source': [FALL_AT[0] - OX, FALL_AT[1] + 1.5 - OZ], 'from': int(nearest((501.0, 497.0), W_)), 'to': int(nearest((471.0, 497.0), W_)), 'every': 2600})
+
+# ---- the boost panel (RACEMOD.CPP boostpanel=: a car with two wheels on it is at 120 km/h at once): in the pit lane, past the start line
+# and the opponents' waiting spots -- a car has to leave the race lanes before the pit lane's fence begins to take it. Its first and last
+# point, how far across the road (Across, cells: the pit lane's middle +/- 1.5)
+BOOST = [(492.0, 497.0)]
+PIT_MID = PIT_HALF - PIT / 2
+boost = [[int(nearest((a, SZ), E)), int(nearest((b, SZ), E)), PIT_MID - 1.5, PIT_MID + 1.5] for a, b in BOOST]
+
 grade = (np.roll(Y, -1) - Y) / (STEP * 512)
 ride = ~np.zeros(N, bool)
 for name, iF, iL, iD, iDF in arcs:
@@ -255,15 +280,17 @@ plan = {
     'raisedHalfs': [round(float(h), 3) for h in HALF],
     'arcJumps': [[int(iF), int(iL), int(iD), int(iDF), 0] for name, iF, iL, iD, iDF in arcs],
     'start': int(MARK['start']),
-    # the stripe between the pit lane and the race lanes (south of them, -Across), first and last point; the opponents' waiting spots in
+    # the stripe between the pit lane and the race lanes (south of them, +Across), first and last point; the opponents' waiting spots in
     # the pit lane's middle, facing along the straight (east), on the deck; Citadel Island's white fence along the stripe; the grid on the
-    # race lanes
-    'pitStripe': [int(iPit1), int(iPit2), round(float(-(PIT_HALF - PIT)), 3)],
-    'pitSpots': [[x - OX, round(SZ + (PIT_HALF - PIT / 2) - OZ, 3), 1.0, 0.0, TOPD] for x in PIT_WAIT],
+    # race lanes (north of the deck's middle, -Across)
+    'pitStripe': [int(iPit1), int(iPit2), round(float(PIT_HALF - PIT), 3)],
+    'pitSpots': [[x - OX, round(SZ + PIT_MID - OZ, 3), 1.0, 0.0, TOPD] for x in PIT_WAIT],
     'pitFence': True,
-    'gridShift': PIT / 2,
+    'gridShift': -PIT / 2,
     'raisedCut': True,
     'lavaBalls': lava,
+    'lavaFalls': [lava_fall],
+    'boostPanels': boost,
 }
 if '--write' in sys.argv:
     json.dump(plan, open(OUT, 'w'))
@@ -289,4 +316,13 @@ if '--pictures' in sys.argv:
         d.ellipse([P(sx - 1, sz - 1), P(sx + 1, sz + 1)], outline=(255, 80, 0), width=3)
         for k in (l['from'], l['to']): d.line([P(sx, sz), P(X[k], Z[k])], fill=(255, 120, 0), width=1)
     for m, k in MARK.items(): d.text(P(X[k], Z[k]), m, fill=(255, 255, 255))
+    # (the pit lane's stripe, the boost panel, the lava fall's crag and pool)
+    st = plan['pitStripe']
+    for k in range(st[0], st[1]): d.point(P(X[k] + Nn[k, 0] * st[2], Z[k] + Nn[k, 1] * st[2]), fill=(255, 255, 255))
+    for a, b, lo, hi in boost:
+        for k in range(a, b + 1):
+            for o in np.linspace(lo, hi, 7): d.point(P(X[k] + Nn[k, 0] * o, Z[k] + Nn[k, 1] * o), fill=(0, 255, 255))
+    fx, fz = lava_fall['at'][0], lava_fall['at'][1]; half = FALL_W / 2 + lava_fall['wing']
+    d.rectangle([P(fx - half, fz - lava_fall['depth']), P(fx + half, fz)], outline=(160, 160, 160), width=2)
+    d.rectangle([P(fx - FALL_W / 2 - 1.5, fz), P(fx + FALL_W / 2 + 1.5, fz + lava_fall['pool'])], fill=(255, 90, 0))
     img.save(D + 'design.png')

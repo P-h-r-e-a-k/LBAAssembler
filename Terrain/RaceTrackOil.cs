@@ -152,6 +152,23 @@ internal static class RaceTrackOil
         return (index, $"the golden Gazogem for the item box: OBJFIX.HQR entry {index}");
     }
 
+    // The game's ball of lava (OBJFIX.HQR entry LavaBallModel: the one the lava falls and bursts of Wannies Island's mine spit, its lava
+    // texture alive) LavaBallScale times its size -- 130 across, a dot from a race car's camera -- for the race-track mode's lava balls
+    // (RACEMOD.CPP lava_ball_model=; the user, 2026-10-10: "the lava balls that are currently coming out of the lava are different to the
+    // retail ones, so let's switch these"). Appended to OBJFIX.HQR; its entry, and a line for the log.
+    private const int LavaBallModel = 69;
+    public const double LavaBallScale = 4;
+
+    public static (int Index, string Log) InstallLavaBall(string gameDirectory)
+    {
+        var path = Path.Combine(gameDirectory, "OBJFIX.HQR");
+        var clipped = 0;
+        var big = IslandScaler.ScaledBody(HqrArchive.Open(path).Read(LavaBallModel), LavaBallScale, ref clipped);
+        var index = HqrArchive.CountEntries(path);
+        File.WriteAllBytes(path, HqrWriter.AppendEntry(File.ReadAllBytes(path), HqrWriter.StoredEntry(big)));
+        return (index, $"the game's lava ball {LavaBallScale} times its size: OBJFIX.HQR entry {index}");
+    }
+
     // The power-ups' mushroom made bigger: the game's small brown mushroom, 246 across and 307 tall -- a quarter of a car's length --
     // MushroomScale times its size, as the mushroom's entity's body BigMushroom; the lap's mushrooms and the fakes are it
     // (RaceTrackScenes). (The user, 2026-10-08: "The mushroom pick up is far too small to see" -- three times its size for a while, but
