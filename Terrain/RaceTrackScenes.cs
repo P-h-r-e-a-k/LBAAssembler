@@ -245,7 +245,7 @@ internal static class RaceTrackScenes
         // the power-ups: where the mushrooms go along the lap (island cells, the road's height), and the scenes' copies of them and of the penguin
         public List<(double X, double Z, double Y)> MushroomSpots = new();
         public List<int[]> Mushrooms = new(), Penguins = new(), Oil = new(), Fakes = new();
-        // the machine guns on their knolls: each [scene, the gun's actor, its Franco's actor] (Report.Gunners, in that order)
+        // the machine guns on their knolls: each [scene, the gun's actor, its Franco's actor, its knoll in Report.Gunners, which gun on it]
         public List<int[]> Gunners = new();
         // the gas monsters: each [scene, its actor, its body, its place in Report.GasMonsters]
         public List<int[]> GasMonsters = new();
@@ -545,7 +545,8 @@ internal static class RaceTrackScenes
             }
             // the machine guns on their knolls (Report.Gunners): the scene's own guns (Otringal's Francos' machine guns, entity 200) moved up onto
             // the knoll inside the corner, without their scripts -- the guns' life scripts put them on the scene's points beside the road
-            // every frame -- the first one manned by a Franco (entity 201, sitting at it) whose bursts the race-track mode fires (gunner=)
+            // every frame -- each manned by a Franco (entity 201, sitting at it) whose bursts the race-track mode fires (gunner=; the user,
+            // 2026-10-10, of the second gun standing there alone: "let's either remove a gun or add a second gunner")
             foreach (var t in tracks)
                 foreach (var g in t.Report.Gunners)
                 {
@@ -566,14 +567,19 @@ internal static class RaceTrackScenes
                         gun.X = (int)Math.Round(kx + fx * ahead + fz * side); gun.Z = (int)Math.Round(kz + fz * ahead - fx * side);
                         gun.Y = y; gun.Beta = beta; gun.Anim = 0; gun.Move = 0; gun.Life = new byte[] { 0 }; gun.Track = new byte[] { 0 };
                     }
-                    var first = model.Actors[guns[0]];
-                    var franco = first.Clone();
-                    franco.Entity = FrancoEntity; franco.Body = 0; franco.Anim = FrancoAtTheGun;
-                    franco.X = (int)Math.Round(first.X - fx * FrancoBehind); franco.Z = (int)Math.Round(first.Z - fz * FrancoBehind); franco.Y = y;
-                    franco.Beta = beta; franco.Move = 0; franco.Life = new byte[] { 0 }; franco.Track = new byte[] { 0 };
-                    var fi = SceneOps.AddActor(model, franco);
-                    t.Gunners.Add(new[] { scene, guns[0], fi });
-                    log.Add($"scene {scene}: the machine guns (actors {string.Join(", ", guns)}) on the knoll at ({g.X:0.#}, {g.Z:0.#}), {y} high, a Franco (actor {fi}) at the first");
+                    var francos = new List<int>();
+                    for (var k = 0; k < guns.Count; k++)
+                    {
+                        var at = model.Actors[guns[k]];
+                        var franco = at.Clone();
+                        franco.Entity = FrancoEntity; franco.Body = 0; franco.Anim = FrancoAtTheGun;
+                        franco.X = (int)Math.Round(at.X - fx * FrancoBehind); franco.Z = (int)Math.Round(at.Z - fz * FrancoBehind); franco.Y = y;
+                        franco.Beta = beta; franco.Move = 0; franco.Life = new byte[] { 0 }; franco.Track = new byte[] { 0 };
+                        var fi = SceneOps.AddActor(model, franco);
+                        francos.Add(fi);
+                        t.Gunners.Add(new[] { scene, guns[k], fi, t.Report.Gunners.IndexOf(g), k });
+                    }
+                    log.Add($"scene {scene}: the machine guns (actors {string.Join(", ", guns)}) on the knoll at ({g.X:0.#}, {g.Z:0.#}), {y} high, a Franco at each (actors {string.Join(", ", francos)})");
                 }
             // the gas monsters (Report.GasMonsters): the game's gas monster, made bigger (RaceTrackGasMonster), one actor each, out of sight
             // until the race-track mode raises it out of the gas (gasmonster=)

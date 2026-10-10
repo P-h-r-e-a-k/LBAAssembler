@@ -714,8 +714,8 @@ internal static class RaceTrackService
                 ? report.LavaBalls.Select(b => new[] { (int)Math.Round(b.X), (int)Math.Round(b.Y), (int)Math.Round(b.Z), report.RaisedSpan.IndexOf(b.From), report.RaisedSpan.IndexOf(b.To), b.Every, b.Phase })
                     .Where(b => b[3] >= 0 && b[4] >= 0).ToList()
                 : null,
-            Gunners: scenes.Gunners is { Count: > 0 } gunners && gunners.Count == report.Gunners.Count
-                ? gunners.Select((g, k) => GunnerRecord(g, report.Gunners[k])).ToList()
+            Gunners: scenes.Gunners is { Count: > 0 } gunners
+                ? gunners.Where(g => g[3] >= 0 && g[3] < report.Gunners.Count).Select(g => GunnerRecord(g, report.Gunners[g[3]])).ToList()
                 : null,
             Roulette: raised && report.Roulette is { } wheel && report.RaisedSpan.IndexOf(wheel.Landing) is var landing and >= 0
                 ? new[] { wheel.CubeX, wheel.CubeZ, (int)Math.Round(wheel.X), (int)Math.Round(wheel.Z), (int)Math.Round(wheel.Spin * 10), wheel.Ball, wheel.BallRadius, landing,
@@ -735,8 +735,10 @@ internal static class RaceTrackService
     {
         double fx = g.FaceX - g.X, fz = g.FaceZ - g.Z, fl = Math.Max(1e-9, Math.Sqrt(fx * fx + fz * fz));
         fx /= fl; fz /= fl;
-        double mx = g.X * 512 + fx * (0.8 * 512 + 214), mz = g.Z * 512 + fz * (0.8 * 512 + 214), my = g.Top + 420;
-        return placed.Concat(new[] { (int)Math.Round(mx), (int)Math.Round(my), (int)Math.Round(mz) })
+        // (the second gun 1.6 cells beside the first, as RaceTrackScenes stands it)
+        var side = placed.Length > 4 && placed[4] > 0 ? 1.6 * 512 : 0;
+        double mx = g.X * 512 + fx * (0.8 * 512 + 214) + fz * side, mz = g.Z * 512 + fz * (0.8 * 512 + 214) - fx * side, my = g.Top + 420;
+        return placed.Take(3).Concat(new[] { (int)Math.Round(mx), (int)Math.Round(my), (int)Math.Round(mz) })
             .Concat(g.Targets.SelectMany(t => new[] { (int)Math.Round(t.X), (int)Math.Round(t.Z), (int)Math.Round(t.Y), (int)Math.Round(t.R) })).ToArray();
     }
 
