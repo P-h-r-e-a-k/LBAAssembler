@@ -739,18 +739,39 @@ static T_RACE_BULLET s_bullets[RACE_MAX_BULLETS];
 // through the hole onto the road under it -- place <landing> of the raised road's file -- from wherever it goes in. A car the ball rolls
 // into is struck, as by a magic ball.
 #define RACE_MAX_WHEEL_PARTS 12
-#define RACE_BALL_TURN 0.35                // radians a second the ball goes round the bowl ...
-#define RACE_BALL_SWING 9000               // ... and ms for it to roll down from near the wall to near the hole and back
+// The user, 2026-10-10: "The roulette wheel we've created isn't really fun to drive" -- of the ideas offered, all four: a prize by the
+// pocket the car goes into the hole over, the turning floor carrying the car round, a quicker way down, balls that bounce and knock cars.
+#define RACE_MAX_BALLS 4                   // roulette_balls=<n>: its balls, rolling down the bowl, carried round by its turn, bouncing off its
+#define RACE_BALL_G 16000.0                // wall, the ridge round its hole, each other and the cars: pulled down it this hard a unit of slope ...
+#define RACE_BALL_GRIP 0.08                // ... brought to the turning floor's own speed this much a second (much more, and they rode round
+                                           // against the wall with it) ...
+#define RACE_BALL_BOUNCE 0.85              // ... keeping this much of their speed off what they hit ...
+#define RACE_BALL_KICK 1.15                // ... and kicked back up the bowl off the ridge round the hole, this much faster ...
+#define RACE_BALL_TOP 9000.0               // ... no faster than this ...
+#define RACE_BALL_DAMP 0.03                // ... losing this share of their speed a second
+#define RACE_BALL_KNOCK 1800.0             // a car a ball rolls into is knocked this far aside ...
+#define RACE_BALL_KNOCK_MS 450             // ... over this long ...
+#define RACE_BALL_SLOW 0.6                 // ... and left this much of its speed
+#define RACE_WHEEL_DRAG 0.4                // how much of the turning floor's speed carries Twinsen's car round with it
+#define RACE_WHEEL_RED_MS 2500             // a red pocket into the hole: Gazogem's boost this long on the road under the wheel ...
+#define RACE_WHEEL_ZERO_MS 5000            // ... the green zero: this long, and an item if a slot is free
 #define RACE_BALL_REACH 330                // a car is hit with its middle this much further from the ball's than the ball's radius, or nearer
-#define RACE_BALL_AGAIN 2500               // ms before the ball can hit the same car again
+#define RACE_BALL_AGAIN 1500               // ms before a ball can knock the same car again
 #define RACE_WHEEL_TURN (-1)               // the way the wheel turns (the cars go round it anticlockwise seen from above, the ball the other way)
-#define RACE_WHEEL_PULL 1500.0             // units a second a car on the bowl is drawn in, a unit of slope
+#define RACE_WHEEL_PULL 3500.0             // units a second a car on the bowl is drawn in, a unit of slope (was 1,500: a slow way down)
 #define RACE_WHEEL_DROP_LEAST 3000.0       // the drop through the hole: carried at least this fast ...
 #define RACE_WHEEL_DROP_MS 900             // ... and taking at least this long
 typedef struct {
     int On, CubeX, CubeZ, Ball, BallR, Landing, NbParts, Parts[RACE_MAX_WHEEL_PARTS];
-    double X, Z, Spin, HoleY, S1, S2, Hole, Rim, Outer, Under, BallX, BallY, BallZ;
-    int BallShown;
+    double X, Z, Spin, HoleY, S1, S2, Hole, Rim, Outer, Under;
+    // (its balls: where, how fast, their last step's time; their bodies Ball.. Ball+NbBalls-1)
+    int NbBalls, BallsSet, BallShown;
+    double BallX[RACE_MAX_BALLS], BallY[RACE_MAX_BALLS], BallZ[RACE_MAX_BALLS], BallVX[RACE_MAX_BALLS], BallVZ[RACE_MAX_BALLS];
+    S32 BallT;
+    // (Twinsen's car knocked by a ball: since when, which way; the pocket it went into the hole over: its number, its prize 0 black, 1 red,
+    // 2 the zero)
+    S32 KnockT0; double KnockX, KnockZ;
+    int Prize, PrizeNumber;
     S32 Beta, Again[RACE_MAX_OPPONENTS + 1];
     // (Twinsen's car: its last move, and the drop through the hole -- from D0, by D1 and D2, to DL, DropMs long at DropV)
     S32 MoveT;
@@ -1826,8 +1847,12 @@ static void Load(const char *path, int carOnly = 0) {
                 const char *p = v + used;
                 int part, n;
                 while (s_wheel.NbParts < RACE_MAX_WHEEL_PARTS && sscanf(p, "%d%n", &part, &n) == 1) { s_wheel.Parts[s_wheel.NbParts++] = part; p += n; }
-                s_wheel.On = 1;
+                s_wheel.On = 1; s_wheel.NbBalls = 1;
             }
+        }
+        else if (!strcmp(key, "roulette_balls")) {
+            const int n = atoi(v);
+            if (s_wheel.On) s_wheel.NbBalls = n < 1 ? 1 : n > RACE_MAX_BALLS ? RACE_MAX_BALLS : n;
         }
         else if (!strcmp(key, "gunner_target")) {
             int x, z, y, r;
@@ -5109,8 +5134,9 @@ static void WheelDecors(T_DECORS *list, S32 count) {
     for (S32 i = 0; i < count; i++) {
         T_DECORS *d = &list[i];
         const int body = d->Body & 0xFFFF;
-        if (body == s_wheel.Ball && s_wheel.BallShown) {
-            const S32 x = (S32)floor(s_wheel.BallX - s_wheel.CubeX * 32768.0 + 0.5), y = (S32)floor(s_wheel.BallY + 0.5), z = (S32)floor(s_wheel.BallZ - s_wheel.CubeZ * 32768.0 + 0.5);
+        if (s_wheel.BallShown && body >= s_wheel.Ball && body < s_wheel.Ball + s_wheel.NbBalls) {
+            const int k = body - s_wheel.Ball;
+            const S32 x = (S32)floor(s_wheel.BallX[k] - s_wheel.CubeX * 32768.0 + 0.5), y = (S32)floor(s_wheel.BallY[k] + 0.5), z = (S32)floor(s_wheel.BallZ[k] - s_wheel.CubeZ * 32768.0 + 0.5);
             d->XMin += x - d->Xworld; d->XMax += x - d->Xworld; d->ZMin += z - d->Zworld; d->ZMax += z - d->Zworld; d->YMin += y - d->Yworld;
             d->Xworld = x; d->Yworld = y; d->Zworld = z;
             continue;
@@ -5120,17 +5146,73 @@ static void WheelDecors(T_DECORS *list, S32 count) {
     }
 }
 
-// Every frame: the roulette wheel (roulette=) -- its turn, where its ball has rolled to round the bowl, and the cars it rolls into.
+// The European wheel's pockets in order round it from its body's x axis towards its z (RaceTrackRoulette.Order), and its reds.
+static const int s_pockets[37] = { 0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26 };
+static int PocketRed(int n) {
+    static const int reds[18] = { 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36 };
+    for (int i = 0; i < 18; i++) if (reds[i] == n) return 1;
+    return 0;
+}
+
+// The turning floor's speed (radians a second, round from x towards z, as the world's angles go: its head's Beta turns the other way).
+static double WheelOmega(void) { return -RACE_WHEEL_TURN * s_wheel.Spin * RACE_PI / 180.0; }
+
+// Every frame: the roulette wheel (roulette=) -- its turn; its balls rolled down the bowl, carried round by its turn, bounced off its wall,
+// the ridge round its hole, each other and the cars, and the cars they roll into knocked aside.
 static void Wheel(S32 now, int driving) {
     T_RACE_ROULETTE *w = &s_wheel;
     if (!w->On) return;
     w->Beta = (S32)floor(fmod(now / 1000.0 * w->Spin * RACE_WHEEL_TURN, 360.0) * 4096 / 360.0) & 4095;
-    // (round the bowl the other way from the cars, rolling down towards the hole and back up towards the wall)
-    const double inner = w->Hole + 2.5 * 512, outer = w->Rim - 2 * 512, mid = (inner + outer) / 2, swing = (outer - inner) / 2;
-    const double angle = now / 1000.0 * RACE_BALL_TURN, r = mid + swing * sin(2 * RACE_PI * (now % RACE_BALL_SWING) / RACE_BALL_SWING);
-    w->BallX = w->X + r * cos(angle); w->BallZ = w->Z + r * sin(angle); w->BallY = WheelFloorAt(r) + w->BallR;
+    const int nb = w->NbBalls < 1 ? 1 : w->NbBalls;
+    const double om = WheelOmega(), inner = w->Hole + 2.0 * 512, outer = w->Rim - w->BallR;
+    double dt = w->BallT ? (now - w->BallT) / 1000.0 : 0;
+    w->BallT = now;
+    if (dt < 0) dt = 0; else if (dt > 0.05) dt = 0.05;
+    if (!w->BallsSet) {
+        // (spread round the bowl half way down, rolling round one way and the other, a little down the slope)
+        for (int k = 0; k < nb; k++) {
+            const double a = 2 * RACE_PI * k / nb, r = (inner + outer) / 2, v = (k % 2 ? -1 : 1) * 4000.0;
+            w->BallX[k] = w->X + r * cos(a); w->BallZ[k] = w->Z + r * sin(a);
+            w->BallVX[k] = -sin(a) * v - cos(a) * 800; w->BallVZ[k] = cos(a) * v - sin(a) * 800;
+        }
+        w->BallsSet = 1;
+    }
+    for (int k = 0; k < nb; k++) {
+        double dx = w->BallX[k] - w->X, dz = w->BallZ[k] - w->Z, r = sqrt(dx * dx + dz * dz);
+        if (r < 1) { dx = 1; dz = 0; r = 1; }
+        const double ux = dx / r, uz = dz / r, a = RACE_BALL_G * WheelSlopeAt(r);
+        // (down the slope; brought towards the floor's own speed there)
+        w->BallVX[k] -= ux * a * dt; w->BallVZ[k] -= uz * a * dt;
+        const double fvx = -uz * om * r, fvz = ux * om * r;
+        w->BallVX[k] += (fvx - w->BallVX[k]) * RACE_BALL_GRIP * dt; w->BallVZ[k] += (fvz - w->BallVZ[k]) * RACE_BALL_GRIP * dt;
+        const double damp = 1 - RACE_BALL_DAMP * dt, sp = sqrt(w->BallVX[k] * w->BallVX[k] + w->BallVZ[k] * w->BallVZ[k]);
+        const double cap = sp > RACE_BALL_TOP ? RACE_BALL_TOP / sp : 1;
+        w->BallVX[k] *= damp * cap; w->BallVZ[k] *= damp * cap;
+        w->BallX[k] += w->BallVX[k] * dt; w->BallZ[k] += w->BallVZ[k] * dt;
+        // (off the wall, and kicked back up off the ridge round the hole)
+        dx = w->BallX[k] - w->X; dz = w->BallZ[k] - w->Z; r = sqrt(dx * dx + dz * dz);
+        if (r > 1 && (r > outer || r < inner)) {
+            const double nx = dx / r, nz = dz / r, lim = r > outer ? outer : inner, vr = w->BallVX[k] * nx + w->BallVZ[k] * nz;
+            w->BallX[k] = w->X + nx * lim; w->BallZ[k] = w->Z + nz * lim;
+            const double e = r > outer ? RACE_BALL_BOUNCE : RACE_BALL_KICK;
+            if ((r > outer && vr > 0) || (r < inner && vr < 0)) { w->BallVX[k] -= (1 + e) * vr * nx; w->BallVZ[k] -= (1 + e) * vr * nz; }
+        }
+    }
+    // (off each other)
+    for (int i2 = 0; i2 < nb; i2++)
+        for (int j2 = i2 + 1; j2 < nb; j2++) {
+            const double dx = w->BallX[j2] - w->BallX[i2], dz = w->BallZ[j2] - w->BallZ[i2], d = sqrt(dx * dx + dz * dz), touch = 2.0 * w->BallR;
+            if (d >= touch || d < 1) continue;
+            const double nx = dx / d, nz = dz / d, push = (touch - d) / 2;
+            w->BallX[i2] -= nx * push; w->BallZ[i2] -= nz * push; w->BallX[j2] += nx * push; w->BallZ[j2] += nz * push;
+            const double vi = w->BallVX[i2] * nx + w->BallVZ[i2] * nz, vj = w->BallVX[j2] * nx + w->BallVZ[j2] * nz;
+            if (vi - vj <= 0) continue;
+            const double e = (vi - vj) * (1 + RACE_BALL_BOUNCE) / 2;
+            w->BallVX[i2] -= e * nx; w->BallVZ[i2] -= e * nz; w->BallVX[j2] += e * nx; w->BallVZ[j2] += e * nz;
+        }
+    for (int k = 0; k < nb; k++) w->BallY[k] = WheelFloorAt(WheelR(w->BallX[k], w->BallZ[k])) + w->BallR;
     w->BallShown = 1;
-    // (the cars it rolls into)
+    // (the cars they roll into: knocked aside, the ball bounced off)
     for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
         if (who < 0 && !driving) continue;
         if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
@@ -5138,9 +5220,24 @@ static void Wheel(S32 now, int driving) {
         double x, y, z;
         if (!CarAt(who, &x, &y, &z)) continue;
         const double reach = w->BallR + RACE_BALL_REACH;
-        if ((x - w->BallX) * (x - w->BallX) + (z - w->BallZ) * (z - w->BallZ) > reach * reach || fabs(y - (w->BallY - w->BallR)) > 900) continue;
-        w->Again[who + 1] = now + RACE_BALL_AGAIN;
-        CarStruck(who, now, "the roulette wheel's ball", NULL);
+        for (int k = 0; k < nb; k++) {
+            const double dx = x - w->BallX[k], dz = z - w->BallZ[k], d = sqrt(dx * dx + dz * dz);
+            if (d > reach || fabs(y - (w->BallY[k] - w->BallR)) > 900) continue;
+            const double nx = d > 1 ? dx / d : 1, nz = d > 1 ? dz / d : 0, vn = w->BallVX[k] * nx + w->BallVZ[k] * nz;
+            if (vn > 0) { w->BallVX[k] -= (1 + RACE_BALL_BOUNCE) * vn * nx; w->BallVZ[k] -= (1 + RACE_BALL_BOUNCE) * vn * nz; }
+            w->Again[who + 1] = now + RACE_BALL_AGAIN;
+            if (who < 0) {
+                w->KnockT0 = now; w->KnockX = nx; w->KnockZ = nz;
+                ListBuggy[0].Speed = (S32)(ListBuggy[0].Speed * RACE_BALL_SLOW);
+                Log_Info("[racemod] Twinsen's car knocked aside by a roulette ball");
+            } else {
+                T_RACE_OPPONENT *o = &s_opp[who];
+                o->ShoveStart = now; o->ShoveUntil = now + RACE_SHOVE_MS; o->ShoveX = nx; o->ShoveZ = nz;
+                o->Speed *= RACE_BALL_SLOW;
+                Log_Info("[racemod] %s knocked aside by a roulette ball", o->Name);
+            }
+            break;
+        }
     }
 }
 
@@ -5163,6 +5260,15 @@ static S32 WheelMove(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
             // (drawn in, down the slope)
             const double pull = RACE_WHEEL_PULL * WheelSlopeAt(tr) * dt;
             if (tr > 1) { tx -= (tx - w->X) / tr * pull; tz -= (tz - w->Z) / tr * pull; }
+            // (carried round by the turning floor, its heading with it)
+            const double da = WheelOmega() * RACE_WHEEL_DRAG * dt, ca = cos(da), sa = sin(da), rx = tx - w->X, rz = tz - w->Z;
+            tx = w->X + rx * ca - rz * sa; tz = w->Z + rx * sa + rz * ca;
+            obj->Beta = (obj->Beta - (S32)floor(da * 4096 / (2 * RACE_PI) + 0.5)) & 4095;
+            // (knocked aside by a ball: RACE_BALL_KNOCK in all, quickly at first)
+            if (w->KnockT0 && now - w->KnockT0 < RACE_BALL_KNOCK_MS) {
+                const double kt = (double)(now - w->KnockT0) / RACE_BALL_KNOCK_MS, v = 2 * RACE_BALL_KNOCK / (RACE_BALL_KNOCK_MS / 1000.0) * (1 - kt);
+                tx += w->KnockX * v * dt; tz += w->KnockZ * v * dt;
+            }
             // (and kept inside the wall, a car's half width in)
             tr = WheelR(tx, tz);
             const double room = w->Rim - RAISED_INSET;
@@ -5187,7 +5293,13 @@ static S32 WheelMove(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
         w->DropMs = (S32)(length / w->DropV * 1000);
         if (w->DropMs < RACE_WHEEL_DROP_MS) w->DropMs = RACE_WHEEL_DROP_MS;
         w->DropT0 = now; w->DropOn = 1;
-        Log_Info("[racemod] roulette wheel: Twinsen's car through its hole at (%.0f,%.0f), %d ms down onto the road", tx, tz, (int)w->DropMs);
+        // (the pocket it goes in over: its angle on the turning head -- a body's point at angle a is drawn at a - Beta)
+        double a = atan2(tz - w->Z, tx - w->X) + (w->Beta & 4095) * 2 * RACE_PI / 4096.0;
+        a = fmod(a, 2 * RACE_PI); if (a < 0) a += 2 * RACE_PI;
+        w->PrizeNumber = s_pockets[(int)(a / (2 * RACE_PI / 37)) % 37];
+        w->Prize = w->PrizeNumber == 0 ? 2 : PocketRed(w->PrizeNumber) ? 1 : 0;
+        Log_Info("[racemod] roulette wheel: Twinsen's car through its hole at (%.0f,%.0f) over %s %d, %d ms down onto the road", tx, tz,
+                 w->Prize == 2 ? "the green" : w->Prize ? "red" : "black", w->PrizeNumber, (int)w->DropMs);
     }
     double t = (double)(now - w->DropT0) / w->DropMs;
     if (t > 1) t = 1;
@@ -5202,6 +5314,24 @@ static S32 WheelMove(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
         w->DropOn = 0;
         s_forgetLap = 1;
         Log_Info("[racemod] roulette wheel: down on the road at (%.0f,%.0f,%.0f)", x, y, z);
+        // (the pocket's prize: red a boost, the zero a longer one and an item, black nothing)
+        static char said[64];
+        if (w->Prize == 2) {
+            s_boostUntil = now + RACE_WHEEL_ZERO_MS;
+            int slot = -1;
+            for (int k = 0; k < RACE_ITEM_SLOTS && slot < 0; k++) if (s_item[k] < 0) slot = k;
+            if (s_powerups && slot >= 0) {
+                s_item[slot] = RandomPowerUp(BackShare(-1));
+                s_itemAt[slot] = now + RACE_ITEM_ROLL_MS;
+                if (s_item[s_sel] < 0 || s_sel == slot) s_sel = slot;
+            }
+            snprintf(said, sizeof(said), "Zero! Jackpot!");
+        } else if (w->Prize == 1) {
+            s_boostUntil = now + RACE_WHEEL_RED_MS;
+            snprintf(said, sizeof(said), "Red %d: a boost!", w->PrizeNumber);
+        } else snprintf(said, sizeof(said), "Black %d", w->PrizeNumber);
+        Message(said);
+        Log_Info("[racemod] roulette wheel: %s", said);
     } else {
         const S32 beta = dx * dx + dz * dz > 1 ? (S32)floor(atan2(dx, dz) * 4096 / (2 * RACE_PI) + 0.5) & 4095 : obj->Beta;
         CarPitch(obj, beta, 0.6 * sin(RACE_PI * t));
@@ -6081,6 +6211,9 @@ void RaceMod_Draw(void) {
             BigText(width / 2, height / 3, count, k, count[0] == 'G' ? RACE_GREEN : RACE_RED);
         }
     }
+    // a message of the race-track mode's (Message: "Back on the road", the roulette wheel's prize), in the middle near the top -- set
+    // since the first tracks and never drawn till 2026-10-10
+    if (now < s_messageUntil && s_message[0]) HudLine(width / 2 - SizeFont(s_message) / 2, height / 5, s_message, -1);
 
     RestoreClipWindow();
     UnsetClip();

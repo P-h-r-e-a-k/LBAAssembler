@@ -35,13 +35,15 @@ internal sealed class RouletteRun
     public double Spin { get; set; } = 45;
     // its legs round it (degrees from east towards south); none: it floats
     public double[]? Legs { get; set; }
+    // its balls (the race-track mode rolls and bounces them: RACEMOD.CPP roulette_balls=)
+    public int Balls { get; set; } = 3;
 }
 
 // The wheel as built: its middle (island world units), the cube its decors are in, the bodies (the island's) of its turning head and of
 // its ball, how fast it turns and the ball's radius; its floor (HoleY, Slope, Steepen), the hole's radius, the wall's and its outside's
 // (cells), its underside's depth under its floor; the lap's point where the drop through the hole lands.
 internal sealed record RouletteSpot(double X, double Z, int CubeX, int CubeZ, int[] Turning, int Ball, double Spin, int BallRadius,
-    double HoleY, double Slope, double Steepen, double Hole, double Rim, double Outer, double Under, int Landing);
+    double HoleY, double Slope, double Steepen, double Hole, double Rim, double Outer, double Under, int Landing, int Balls = 1);
 
 internal static class RaceTrackRoulette
 {
@@ -238,12 +240,21 @@ internal static class RaceTrackRoulette
             if (number >= 0) turning.Add(number);
         }
 
-        // the ball: a white sphere (the race-track mode rolls it round the bowl), where it starts
+        // the balls: white spheres (the race-track mode rolls and bounces them round the bowl), each a body of its own, one after another
+        // (the race-track mode tells them apart by it), where they start
         var ball = new Body { Game = 2, Static = true, Lit = false, Header = new byte[96], Vertices = new List<Vector3> { Vector3.Zero },
             Bones = new List<Bone> { new(0, 1, 0, -1, new byte[8]) } };
         ball.Spheres.Add(new BodySphere(0, BallRadius, White));
         var ballCells = (run.Hole + rim) / 2;
-        var ballBody = Add(ball.Write(), wcx + ballCells * 512, y0 + Floor(ballCells) + BallRadius, wcz, BallRadius + 64, y0 + Floor(ballCells));
+        var balls = Math.Max(1, run.Balls);
+        var ballBody = -1;
+        for (var k = 0; k < balls; k++)
+        {
+            var a = 2 * Math.PI * k / balls;
+            var b = Add(ball.Write(), wcx + ballCells * 512 * Math.Cos(a), y0 + Floor(ballCells) + BallRadius, wcz + ballCells * 512 * Math.Sin(a), BallRadius + 64, y0 + Floor(ballCells));
+            if (k == 0) ballBody = b;
+            else if (b != ballBody + k) { balls = k; break; }
+        }
 
         // the legs, if the plan gives the wheel any: square columns from the ground to its underside
         var legs = 0;
@@ -263,7 +274,7 @@ internal static class RaceTrackRoulette
         report.Notes.Add($"a roulette wheel at cell ({cx:0.0}, {cz:0.0}): its wall {rim:0.##} cells out, its floor {run.HoleY:0} at the hole ({run.Hole:0.#} cells) to " +
                          $"{run.HoleY + Floor(rim):0} at the wall; {turning.Count} turning pieces, its ball, {(legs > 0 ? $"{legs} legs" : "floating")}, {made.Count} decors in all; " +
                          $"{lowered} points of the ground lowered under it, {removed} decors taken away");
-        return new RouletteSpot(wcx, wcz, homeX, homeZ, turning.ToArray(), ballBody, run.Spin, BallRadius, run.HoleY, run.Slope, run.Steepen, run.Hole, rim, outer, Thick, landing);
+        return new RouletteSpot(wcx, wcz, homeX, homeZ, turning.ToArray(), ballBody, run.Spin, BallRadius, run.HoleY, run.Slope, run.Steepen, run.Hole, rim, outer, Thick, landing, balls);
     }
 
     // A digit's pixels as rectangles: each row's runs, runs alike in rows one under another joined (pixel corners: left, top, right, bottom).

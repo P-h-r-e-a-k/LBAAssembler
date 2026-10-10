@@ -69,7 +69,11 @@ internal static class RaceCarEngineFile
             for (var k = 6; k + 3 < g.Length; k += 4) text.Append($"gunner_target={g[k]} {g[k + 1]} {g[k + 2]} {g[k + 3]}\n");
         }
         // the roulette wheel the lap runs through, its head turning and its ball rolling (Otringal's)
-        if (raisedFile is not null && track?.Roulette is { Length: >= 15 } wheel) text.Append($"roulette={string.Join(' ', wheel)}\n");
+        if (raisedFile is not null && track?.Roulette is { Length: >= 15 } wheel)
+        {
+            text.Append($"roulette={string.Join(' ', wheel)}\n");
+            if (track.RouletteBalls is > 1 and var balls) text.Append($"roulette_balls={balls}\n");
+        }
         // the gas monsters that rise out of the gas beside the road to bite cars (Otringal's)
         foreach (var monster in track?.GasMonsters ?? new()) text.Append($"gasmonster={string.Join(' ', monster)}\n");
         // where the camera stands while the car flies a drop

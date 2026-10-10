@@ -119,7 +119,9 @@ internal static class RaceTrackService
         // GasMonsters: the gas monsters (RaceTrackGasMonster; RACEMOD.CPP gasmonster=), each [its scene, its actor there, its body, where it
         // rises x and z, where it bites x and z and the road's height there, its foot's height (island units), its first animation, then
         // the scene and actor of each other scene it is seen from], since 2026-10-09
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? GasMonsters = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? GasMonsters = null,
+        // RouletteBalls: the roulette wheel's balls (bodies Roulette's ball on; RACEMOD.CPP roulette_balls=), since 2026-10-10
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? RouletteBalls = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -724,6 +726,7 @@ internal static class RaceTrackService
                           (int)Math.Round(wheel.Rim * 512), (int)Math.Round(wheel.Outer * 512), (int)Math.Round(wheel.Under) }
                     .Concat(wheel.Turning).ToArray()
                 : null,
+            RouletteBalls: raised && report.Roulette is { Balls: > 1 } balled ? balled.Balls : null,
             GasMonsters: scenes.GasMonsters is { Count: > 0 } monsters
                 ? monsters.Where(g => g[3] >= 0 && g[3] < report.GasMonsters.Count).GroupBy(g => g[3]).Select(pairs =>
                 {
