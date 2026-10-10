@@ -795,6 +795,10 @@ static void WheelDecors(T_DECORS *list, S32 count);
 // all the same, for the opponents there.
 #define RACE_MAX_MONSTERS 16
 #define RACE_MONSTER_SEEN 8                // the scenes a monster has an actor in, at the most
+#define RACE_MONSTER_SEEN_FAR (40 * 512.0) // drawn only with the car this near it, and not from the roulette wheel's bowl: the decors are drawn
+                                           // without the z-buffer, and a monster far behind one -- the wheel, a road's deck -- was drawn over it,
+                                           // white in the fog (the user, 2026-10-10: "random shadow images of our gas monsters at points in
+                                           // the track")
 #define RACE_MONSTER_HIT (150 + 650 + 220) // ms from the strike's start to its head on the road (InstallPoses: PoiseMs, RearMs, LungeMs) ...
 #define RACE_MONSTER_BACK (20 + 120 + 330 + 700) // ... and from there, biting, back to poised (20, SnapMs, HoldMs, BackMs) ...
 #define RACE_MONSTER_HOLD (120 + 330)      // ... the first part of it its jaw snapping shut on the road and held (SnapMs, HoldMs)
@@ -5260,6 +5264,15 @@ static void Monsters(S32 now, int driving) {
                 if (m->SeenScene[k] == (S32)NumCube && m->SeenActor[k] > 0 && m->SeenActor[k] < NbObjets) actor = m->SeenActor[k];
         if (actor < 0) { m->Shown = -1; continue; }
         T_OBJET *monster = &ListObjet[actor];
+        {
+            const T_OBJ_3D *car = &ListObjet[NUM_PERSO].Obj;
+            const double hx = car->X + cx, hz = car->Z + cz;
+            if ((hx - m->RiseX) * (hx - m->RiseX) + (hz - m->RiseZ) * (hz - m->RiseZ) > RACE_MONSTER_SEEN_FAR * RACE_MONSTER_SEEN_FAR
+                    || s_wheel.DropOn || OnWheel(hx, car->Y, hz)) {
+                monster->Obj.Y = -20000;
+                continue;
+            }
+        }
         if (m->Shown < 0 || m->ShownScene != (S32)NumCube) {
             // (its own scripts stopped: it is the race-track mode's; its own body)
             monster->OffsetLife = monster->OffsetTrack = -1;
