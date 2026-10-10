@@ -468,14 +468,17 @@ static T_RACE_SLICK s_slicks[RACE_MAX_SLICKS];
 // twice that)
 // (and faster again the same evening: 15,000, 20 cells, 12,500, 16,000 and 5,000 for a while)
 #define RACE_DART_SPEED 22000.0            // the yellow: straight ahead, this fast, ...
-#define RACE_DART_RANGE (28 * 512.0)       // ... this far
+#define RACE_DART_RANGE (56 * 512.0)       // ... this far (28 cells until 2026-10-10: the user, "increase the cells the yellow ball is
+                                           // active to 56, double what it is now")
 #define RACE_ROLL_SPEED 18000.0            // the green: along the track, this fast, ...
-#define RACE_GREEN_MS 6000                 // ... this long, ...
+#define RACE_GREEN_MS 10000                // ... this long (6 s until 2026-10-10), ...
 #define RACE_ROLL_SIDE (2.6 * 512)         // ... from side to side of the road ...
 #define RACE_ROLL_ACROSS 2600.0            // ... this fast
 #define RACE_HOME_SPEED 24000.0            // the red and the fire: along the track after its car, this fast ...
 #define RACE_HOME_DIRECT 6000.0            // ... straight at it once this near
-#define RACE_HOME_MS 15000                 // ... and gone after this long
+#define RACE_HOME_MS 15000                 // ... and gone after this long -- only the red with no car in front: the red goes on till it
+                                           // hits the car it is after and the fire's till each hits its own (2026-10-10, the user: "Red ball
+                                           // to last until it hits the car in front, and fire balls to always hit all cars")
 enum { SHOT_YELLOW, SHOT_GREEN, SHOT_RED, SHOT_FIRE, SHOT_LASER_GREEN, SHOT_LASER_RED };
 // Twinsen's laser cars (drive_laser=1 green, 2 red): his own car, its gun firing laser bolts instead of its magic balls -- the bolts' models
 // (laser_models=<green> <red>, OBJFIX.HQR: the builder adds them) flown straight ahead, one for each shot of the gun's firing animation
@@ -507,7 +510,8 @@ static int s_nbOilActors = 0;
 static S32 s_skidUntil = 0, s_skidStart = 0, s_skidBeta = 0, s_skidSpeed = 0;
 static int s_skidDir = 1;
 #define RACE_BOOST_MS 4000
-#define RACE_PROTECT_MS 30000
+#define RACE_PROTECT_MS 12000              // (30 s until 2026-10-10: the user, "decrease the length the protection spell lasts for, perhaps
+                                           // 12 seconds, let's also have it no longer cancel a shrink" -- it still keeps a new strike off)
 #define RACE_SHRINK_MS 20000
 #define RACE_SHRINK_SPREAD 0.25            // ... longer for a car ahead, shorter for one behind: the leader's x1.25, the last's x0.75
 #define RACE_JETPACK_MS 10000
@@ -3908,7 +3912,7 @@ static void UseItem(int pu, S32 now) {
     }
     case PU_PROTECT:
         // (the game's own protection spell round him, its sprites and its hum -- taking no magic while it lasts: EXTRA.CPP)
-        s_protectUntil = now + RACE_PROTECT_MS; s_shrunkUntil = 0;
+        s_protectUntil = now + RACE_PROTECT_MS;
         if (!ProtectActif) { ToggleSortProtection(); s_protectSpell = 1; }
         break;
     case PU_LIGHTNING: {
@@ -4257,9 +4261,10 @@ static void LaunchShot(int kind, int owner, int target, double x, double y, doub
         SampleMagicBall((S32)(sh->X - cx), (S32)sh->Y, (S32)(sh->Z - cz));
 }
 
-// A ball power-up used by a car (`owner` -1 Twinsen, else an opponent) at (x, y, z) facing `beta` (radians): the yellow darts ahead, the
-// green rolls ahead, the red goes after the car in front (with none, it darts ahead as far again), the fire ball one after every other
-// car.
+// A ball power-up used by a car (`owner` -1 Twinsen, else an opponent) at (x, y, z) facing `beta` (radians): each out of the front of
+// the car -- the yellow darts ahead, the green rolls ahead, the red goes after the car in front (with none, it darts ahead as far again),
+// the fire ball one after every other car, every one of them going forwards round the lap to its car (the ones after the cars behind
+// went back along the track: the user, 2026-10-10, "Make all magic balls exit the car forwards instead of being dropped behind").
 static void Attack(int pu, int owner, double x, double y, double z, double beta, S32 now) {
     const double hx = sin(beta), hz = cos(beta);
     switch (pu) {
@@ -4318,24 +4323,30 @@ static void Shots(S32 now, int driving) {
             sh->Y = y + 250 + 650 * fabs(sin(age * 3.14159265358979 / 450.0));
             if (age >= RACE_GREEN_MS) done = 1;
         } else {
-            // after its car: along the track (forwards or back, whichever is nearer round the lap), straight at it once near
+            // after its car: forwards along the track, round the lap to it however far behind the thrower it is, straight at it once near
+            // and ahead; until it hits it (a car not on the lap for the moment -- in another scene, not placed -- waited for)
             double tx, ty, tz;
-            if (!CarAt(sh->Target, &tx, &ty, &tz) || age >= RACE_HOME_MS) done = 1;
-            else {
+            if (!CarAt(sh->Target, &tx, &ty, &tz)) {
+                if (sh->Target < -1 || age >= RACE_HOME_MS * 4) done = 1;
+                else {
+                    sh->S += RACE_HOME_SPEED * dt;
+                    double y, hx, hz;
+                    GuideAt(o, sh->S, sh->Side, &sh->X, &y, &sh->Z, &hx, &hz);
+                    sh->Y = y + RACE_SHOT_RISE;
+                }
+            } else {
                 const double dx = tx - sh->X, dz = tz - sh->Z, d = sqrt(dx * dx + dz * dz), step = RACE_HOME_SPEED * dt;
-                if (d < RACE_HOME_DIRECT) {
+                double tside;
+                double ahead = fmod(GuideS(o, tx, ty, tz, -1, &tside) - sh->S, o->Length);
+                if (ahead < 0) ahead += o->Length;
+                if (d < RACE_HOME_DIRECT && (ahead < RACE_HOME_DIRECT * 2 || age > 600)) {
                     const double dy = ty + RACE_SHOT_RISE - sh->Y;
                     const double f = d > step ? step / d : 1;
                     sh->X += dx * f; sh->Z += dz * f; sh->Y += dy * (d > 1 ? (f < 1 ? f : 1) : 1);
                     sh->S = GuideS(o, sh->X, sh->Y, sh->Z, sh->S, NULL);
                 } else {
-                    double side;
-                    const double ts = GuideS(o, tx, ty, tz, -1, &side);
-                    double gap = fmod(ts - sh->S, o->Length);
-                    if (gap > o->Length / 2) gap -= o->Length;
-                    if (gap < -o->Length / 2) gap += o->Length;
-                    sh->S += (gap > 0 ? 1 : -1) * (fabs(gap) < step ? fabs(gap) : step);
-                    sh->Side += (side - sh->Side) * (dt * 2 < 1 ? dt * 2 : 1);
+                    sh->S += ahead < step ? ahead : step;
+                    sh->Side += (tside - sh->Side) * (dt * 2 < 1 ? dt * 2 : 1);
                     double y, hx, hz;
                     GuideAt(o, sh->S, sh->Side, &sh->X, &y, &sh->Z, &hx, &hz);
                     sh->Y = y + RACE_SHOT_RISE;
@@ -4539,8 +4550,8 @@ static void PowerUps(S32 now, int driving) {
     if (superJet || driveAs) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
     else if (s_heroHidden) { hero->Flags &= ~INVISIBLE; s_heroHidden = 0; }
     // shrunk by an opponent's lightning: Twinsen's car at half its size while it lasts
-    const int small = driving && s_heroSmall >= 0 && now < s_shrunkUntil && now >= s_protectUntil && now >= s_jetUntil;
-    s_driveSmallNow = driving && now < s_shrunkUntil && now >= s_protectUntil && now >= s_jetUntil;
+    const int small = driving && s_heroSmall >= 0 && now < s_shrunkUntil && now >= s_jetUntil;
+    s_driveSmallNow = driving && now < s_shrunkUntil && now >= s_jetUntil;
     if (small && hero->GenBody != s_heroSmall) { InitBody((U8)s_heroSmall, NUM_PERSO); s_heroIsSmall = 1; }
     else if (!small && s_heroIsSmall) { if (driving) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO); s_heroIsSmall = 0; }
     // the protection spell's time up
@@ -4797,7 +4808,7 @@ double RaceMod_SpeedFactor(void) {
     // (Gazogem fuel all race, fuel_always=: but the super jet-pack's own speed while it drives)
     if (now < s_boostUntil || (s_fuelAlways && now >= s_jetUntil)) f *= RACE_BOOST;
     else if (now < s_jetUntil) f *= JetFactor(s_jetUntil, s_jetFactor);
-    if (now < s_shrunkUntil && now >= s_protectUntil && now >= s_jetUntil) f *= RACE_SHRUNK;
+    if (now < s_shrunkUntil && now >= s_jetUntil) f *= RACE_SHRUNK;
     return f;
 }
 
