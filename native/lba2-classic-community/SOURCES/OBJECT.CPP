@@ -1704,7 +1704,8 @@ S32 CheckObjCol(U8 numobj) {
                 AND(ptrobjt->Obj.Body.Num != -1)
             //		AND (!(ptrobj->Flags&INVISIBLE))
             AND(ptrobjt->CarryBy != numobj)
-                AND !RaceMod_NoCollide(n)) {      /* a race-track mod's mushrooms, penguins and oil slicks (RACEMOD.CPP) */
+                AND !RaceMod_NoCollide(n)         /* a race-track mod's mushrooms, penguins and oil slicks (RACEMOD.CPP) */
+                AND !(numobj == NUM_PERSO AND RaceMod_JetGhost())) {   /* ... and its super jet-pack, through everything */
             xt0 = ptrobjt->Obj.X + ptrobjt->XMin;
             xt1 = ptrobjt->Obj.X + ptrobjt->XMax;
             yt0 = ptrobjt->Obj.Y + ptrobjt->YMin;
@@ -2034,6 +2035,10 @@ U8 IsObjCol(U8 numobj) {
     z1 = Nzw + ptrobj->ZMax;
 
     ptrobjt = ListObjet;
+
+    // (a race-track mod's super jet-pack: Twinsen's car on it runs into nothing -- RACEMOD.CPP RaceMod_JetGhost)
+    if (numobj == NUM_PERSO AND RaceMod_JetGhost())
+        return 0;
 
     for (n = 0; n < NbObjets; n++, ptrobjt++) {
         if ((n != numobj)

@@ -11,7 +11,7 @@ namespace LBAAssembler.Terrain;
 // legs, its floor rising ever more steeply from a hole in its middle to its wall: HoleY at the hole's edge, Slope a cell outwards from there
 // and Steepen a cell a cell more. The cars drive it freely -- it is the race-track mode's own floor, without rails -- drawn down its slopes
 // towards the hole, and drop through the hole onto the road under it (RACEMOD.CPP roulette=). Its head -- Pockets pockets, the first green,
-// then red and black in turn, no numbers (the user, 2026-10-10: "Let's lose the numbers on the roulette wheel, half the segments, but double
+// then red and black in turn (two reds side by side where the circle closes), no numbers (the user, 2026-10-10: "Let's lose the numbers on the roulette wheel, half the segments, but double
 // the width of the remaining ones. Red is win, black is lose, and green is super jackpot"; the European wheel's 37 numbered ones before)
 // -- turns, and white balls roll round the bowl. All of it decors, seen from wherever the wheel is, the race-track mode turning the head
 // and moving the balls; nothing here is touched by anything. The race-track mode tells the pocket the car drops through over by its angle
@@ -57,8 +57,9 @@ internal static class RaceTrackRoulette
     private const double LegIn = 1.7, LegHalf = 260;
     // the island palettes' shared ramps: the pockets' red, black and green, gold, the woods, white
     private const int Red = 71, Black = 49, Green = 134, Gold = 105, GoldDark = 101, Wood = 25, WoodLight = 27, WoodDark = 20, Skirt = 23, White = 62, HoleDark = 48;
-    // its pockets: the first green, then red and black in turn (half the European wheel's 36 and its zero)
-    public const int Pockets = 19;
+    // its pockets: the first green, then red and black in turn -- 9 red, 8 black (half the European wheel's 36 and its zero: 19 for a
+    // while; the user, 2026-10-10: "drop a segment from our roulette wheel and make all other slots slightly wider to compensate")
+    public const int Pockets = 18;
     private static int PocketColour(int k) => k == 0 ? Green : k % 2 == 1 ? Red : Black;
     private const int NoBoxTop = -32000;
 

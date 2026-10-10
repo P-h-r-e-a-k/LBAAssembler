@@ -434,7 +434,9 @@ static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2, 1, 40, 41, 42, -
 static int s_goldIcon = -1;                // gold_icon=: the golden Gazogem's model in OBJFIX.HQR (the builder adds it)
 #define RACE_GOLD_MS 8000                  // the golden Gazogem: from its first use, this long to boost with it as often as wanted ...
 #define RACE_GOLD_BURST_MS 1200            // ... each use Gazogem's boost this long ...
-#define RACE_GOLD_KICK 1.25                // ... and the car's speed kicked up this much at once (to the boosted top speed at most)
+#define RACE_GOLD_INJECT (10 * 5120 / 36)  // ... and 10 km/h more speed at once (the dial's km/h: speed * 36 / 5120; the user, 2026-10-10:
+                                           // "every time the user presses the powerup button they get an instant 10 kmph speed injection"),
+                                           // to the super jet-pack's speed at most
 #define RACE_GOLD_AUTO_MS 600              // (the test pilot: once in this long)
 static S32 s_goldUntil = 0, s_goldLast = 0;
 static int s_slotOn = 0;                   // the roulette wheel's slot machine spinning (SlotSpin)
@@ -1859,11 +1861,11 @@ static void Load(const char *path, int carOnly = 0) {
                 const char *p = v + used;
                 int part, n;
                 while (s_wheel.NbParts < RACE_MAX_WHEEL_PARTS && sscanf(p, "%d%n", &part, &n) == 1) { s_wheel.Parts[s_wheel.NbParts++] = part; p += n; }
-                s_wheel.On = 1; s_wheel.NbBalls = 1; s_wheel.Pockets = 19;
+                s_wheel.On = 1; s_wheel.NbBalls = 1; s_wheel.Pockets = 18;
             }
         }
         else if (!strcmp(key, "roulette_prize")) s_prizeForce = atoi(v);
-        else if (!strcmp(key, "roulette_pockets")) { if (s_wheel.On) s_wheel.Pockets = atoi(v) > 2 ? atoi(v) : 19; }
+        else if (!strcmp(key, "roulette_pockets")) { if (s_wheel.On) s_wheel.Pockets = atoi(v) > 2 ? atoi(v) : 18; }
         else if (!strcmp(key, "roulette_balls")) {
             const int n = atoi(v);
             if (s_wheel.On) s_wheel.NbBalls = n < 1 ? 1 : n > RACE_MAX_BALLS ? RACE_MAX_BALLS : n;
@@ -3897,10 +3899,11 @@ static void UseItem(int pu, S32 now) {
         if (!s_goldUntil) s_goldUntil = now + RACE_GOLD_MS;
         s_goldLast = now;
         if (s_boostUntil < now + RACE_GOLD_BURST_MS) s_boostUntil = now + RACE_GOLD_BURST_MS;
-        const double top = s_car.GearTop[s_car.Gears - 1] * RACE_BOOST;
-        double v = ListBuggy[0].Speed * RACE_GOLD_KICK;
+        const double top = s_car.GearTop[s_car.Gears - 1] * s_puJet[PU_SUPERJET];
+        double v = ListBuggy[0].Speed + RACE_GOLD_INJECT;
         if (v > top) v = top;
         if (v > ListBuggy[0].Speed) ListBuggy[0].Speed = (S32)v;
+        Log_Info("[racemod] the golden Gazogem: %d km/h", (int)((ListBuggy[0].Speed * 36 + 2560) / 5120));
         break;
     }
     case PU_PROTECT:
@@ -4745,6 +4748,8 @@ S32 RaceMod_NoCollide(S32 numobj) {
         for (int i = 0; i < s_nbMonsters; i++)
             for (int k = 0; k < s_monsters[i].NbSeen; k++)
                 if (s_monsters[i].SeenScene[k] == (S32)NumCube && s_monsters[i].SeenActor[k] == numobj) return 1;
+    // (nothing runs into Twinsen's car on the super jet-pack either: a shuttle coming down onto it)
+    if (numobj == NUM_PERSO && RaceMod_JetGhost()) return 1;
     if (!RaceMod_Active() || !s_powerups || numobj <= 0 || numobj >= MAX_OBJETS) return 0;
     // (a super jet-pack goes through the cars: Twinsen's through any in its way -- it pushes them aside, RACE_SHOVE_* -- and an
     // opponent's through Twinsen's; on the same line, the jet-pack sat stuck behind the car in front)
@@ -4759,6 +4764,15 @@ S32 RaceMod_NoCollide(S32 numobj) {
         s_noCollideScene = NumCube;
     }
     return s_noCollide[numobj];
+}
+
+// EXTFUNC.CPP, OBJECT.CPP CheckObjCol: Twinsen's car on the super jet-pack goes through the island's objects and the scene's actors -- the
+// user, 2026-10-10: "Sometimes on this track our super jetpack can get stuck on things such as the fence on the start/finish line that
+// separates the track from the pit lane, or the side of one of the space shuttles that protrudes onto the track. The jet pack needs updating
+// so it doesn't get stuck on objects" (it steers the car back onto its line from wherever it is: from the pit lane, along the fence). The
+// road's own floor and rails, and the ground, still hold it.
+S32 RaceMod_JetGhost(void) {
+    return RaceMod_Active() && Comportement == C_BUGGY && TimerRefHR < s_jetUntil;
 }
 
 // EXTFUNC.CPP DoAnimExt: an opponent's car, placed where it is on the lap, not kept inside the player's cube.
@@ -5175,9 +5189,10 @@ static void WheelDecors(T_DECORS *list, S32 count) {
     }
 }
 
-// The wheel's pockets round it from its body's x axis towards its z (RaceTrackRoulette): roulette_pockets= of them (19 since 2026-10-10:
-// the user, "lose the numbers on the roulette wheel, half the segments, but double the width of the remaining ones. Red is win, black is
-// lose, and green is super jackpot"), the first green, then red and black in turn. A pocket's prize: 2 the green, 1 red, 0 black.
+// The wheel's pockets round it from its body's x axis towards its z (RaceTrackRoulette): roulette_pockets= of them (19 on 2026-10-10: the
+// user, "lose the numbers on the roulette wheel, half the segments, but double the width of the remaining ones. Red is win, black is lose,
+// and green is super jackpot"; then 18, "drop a segment ... and make all other slots slightly wider"), the first green, then red and black
+// in turn. A pocket's prize: 2 the green, 1 red, 0 black.
 static int PocketPrize(int k) { return k == 0 ? 2 : k % 2 ? 1 : 0; }
 
 // The slot machine the roulette wheel's red pockets spin (the user, 2026-10-10: "For red we spin three wheels at the top middle of the
@@ -5378,7 +5393,7 @@ static S32 WheelMove(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
         // (the pocket it goes in over: its angle on the turning head -- a body's point at angle a is drawn at a - Beta)
         double a = atan2(tz - w->Z, tx - w->X) + (w->Beta & 4095) * 2 * RACE_PI / 4096.0;
         a = fmod(a, 2 * RACE_PI); if (a < 0) a += 2 * RACE_PI;
-        const int pockets = w->Pockets > 2 ? w->Pockets : 19;
+        const int pockets = w->Pockets > 2 ? w->Pockets : 18;
         w->PrizeNumber = (int)(a / (2 * RACE_PI / pockets)) % pockets;
         w->Prize = s_prizeForce >= 0 && s_prizeForce <= 2 ? s_prizeForce : PocketPrize(w->PrizeNumber);
         Log_Info("[racemod] roulette wheel: Twinsen's car through its hole at (%.0f,%.0f) over %s (pocket %d), %d ms down onto the road", tx, tz,
