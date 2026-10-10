@@ -292,7 +292,8 @@ static void RaceSpeedOnSlope(S_BUGGY *ptb, S32 deltatimer, S32 flagattack, doubl
             v = 0;
     }
 
-    if (v > gearTop) {
+    // (the golden Gazogem running: no top speed -- RACEMOD.CPP RaceMod_NoTopSpeed)
+    if (v > gearTop && !RaceMod_NoTopSpeed()) {
         v -= dt * RACE_OVERSPEED_DRAG * (v - gearTop);
         // (the rail takes what the slopes gave: a car it holds loses its speed over the gear's top)
         if (touched) {
@@ -344,7 +345,7 @@ static void RaceSpeed(S_BUGGY *ptb, S32 deltatimer, S32 flagattack) {
             ptb->Speed += (S32)(deltatimer * car->Accel * pull * factor / 1000.0);
             if (ptb->Speed > top)
                 ptb->Speed = top;
-        } else {
+        } else if (!RaceMod_NoTopSpeed()) {     // (the golden Gazogem running: no top speed)
             ptb->Speed -= coast;
             if (ptb->Speed < top)
                 ptb->Speed = top;

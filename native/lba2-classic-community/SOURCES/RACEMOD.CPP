@@ -436,7 +436,8 @@ static int s_goldIcon = -1;                // gold_icon=: the golden Gazogem's m
 #define RACE_GOLD_BURST_MS 1200            // ... each use Gazogem's boost this long ...
 #define RACE_GOLD_INJECT (10 * 5120 / 36)  // ... and 10 km/h more speed at once (the dial's km/h: speed * 36 / 5120; the user, 2026-10-10:
                                            // "every time the user presses the powerup button they get an instant 10 kmph speed injection"),
-                                           // to the super jet-pack's speed at most
+                                           // with no top speed while it runs ("Remove the top speed limit whilst we have golden gazogem,
+                                           // let's allow the user to inject as much speed as they can handle": RaceMod_NoTopSpeed)
 #define RACE_GOLD_AUTO_MS 600              // (the test pilot: once in this long)
 static S32 s_goldUntil = 0, s_goldLast = 0;
 static int s_slotOn = 0;                   // the roulette wheel's slot machine spinning (SlotSpin)
@@ -2618,7 +2619,8 @@ U32 RaceMod_AutoInput(void) {
         const double want = LoopAim(l);
         return bits | (speed > want + 150 ? I_DOWN : speed > want - 60 ? 0 : I_UP);
     }
-    bits |= speed > here * 1.05 + 150 ? I_DOWN : I_UP;
+    // (the golden Gazogem running: no brakes -- a player holds the accelerator, keeping every 10 km/h it gives)
+    bits |= speed > here * 1.05 + 150 && !RaceMod_NoTopSpeed() ? I_DOWN : I_UP;
     return bits;
 }
 
@@ -3903,10 +3905,7 @@ static void UseItem(int pu, S32 now) {
         if (!s_goldUntil) s_goldUntil = now + RACE_GOLD_MS;
         s_goldLast = now;
         if (s_boostUntil < now + RACE_GOLD_BURST_MS) s_boostUntil = now + RACE_GOLD_BURST_MS;
-        const double top = s_car.GearTop[s_car.Gears - 1] * s_puJet[PU_SUPERJET];
-        double v = ListBuggy[0].Speed + RACE_GOLD_INJECT;
-        if (v > top) v = top;
-        if (v > ListBuggy[0].Speed) ListBuggy[0].Speed = (S32)v;
+        if (ListBuggy[0].Speed >= 0) ListBuggy[0].Speed += RACE_GOLD_INJECT;
         Log_Info("[racemod] the golden Gazogem: %d km/h", (int)((ListBuggy[0].Speed * 36 + 2560) / 5120));
         break;
     }
@@ -4784,6 +4783,12 @@ S32 RaceMod_NoCollide(S32 numobj) {
 // road's own floor and rails, and the ground, still hold it.
 S32 RaceMod_JetGhost(void) {
     return RaceMod_Active() && Comportement == C_BUGGY && TimerRefHR < s_jetUntil;
+}
+
+// BUGGY.CPP RaceSpeed: the golden Gazogem running -- from its first use till its time is up -- the car keeps whatever speed it has over
+// the gear's top (each use's 10 km/h on the last's); after it, the extra is lost as any is (RACE_OVERSPEED_DRAG, the coast).
+S32 RaceMod_NoTopSpeed(void) {
+    return RaceMod_Active() && Comportement == C_BUGGY && s_goldUntil && TimerRefHR < s_goldUntil;
 }
 
 // EXTFUNC.CPP DoAnimExt: an opponent's car, placed where it is on the lap, not kept inside the player's cube.
