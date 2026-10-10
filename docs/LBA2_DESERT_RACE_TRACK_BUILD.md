@@ -2724,6 +2724,10 @@ The user: "Make all magic balls exit the car forwards instead of being dropped b
 - *The red and the fire ball* have no time limit while their car is on the lap: each goes on until it hits it (a car not on the lap for the moment is waited for, ahead along the track, for at most a minute). With every mushroom a red ball (`powerup_only=8`), 10 of 10 fired at a car in front hit it.
 - *The protection spell* lasts 12 s (`RACE_PROTECT_MS`, was 30) and no longer clears a shrink, nor holds it off while it lasts: a car already shrunk stays shrunk -- small and at 70 % speed -- for its time. It still keeps a new lightning strike off, and every other hit.
 
+### The golden Gazogem with no top speed (2026-10-10, later)
+
+The user: "Remove the top speed limit whilst we have golden gazogem, let's allow the user to inject as much speed as they can handle for the duration they have it". While it runs -- from its first use till its 8 s are up -- the car keeps whatever speed it has over the gear's top: BUGGY.CPP's overspeed drag and its coast back down to the top are both off (`RaceMod_NoTopSpeed`), and each use adds its 10 km/h with no cap. Gravity still acts (uphill the car loses speed, downhill gains it), and after the 8 s the extra is lost as any is. The test pilot holds the accelerator while it runs (it braked down to its line's speed otherwise): pressing every 0.6 s it went from 44 to 161 km/h -- the car's own top is 34 -- and kept to the road through the islets and up into the spaceport.
+
 ## Volcano Island: over the lava (2026-10-08)
 
 The user's sketch over the editor's minimap: "Pink are jump points, green is track, orange is pitlane. For this track let's add lava balls shooting up and out of the lava at points and raining down onto the track". The minimap was turned half a turn and stretched: sketch x = 1111 - 2.05 * (render x), sketch y = 725 - 1.39 * (render y), the render 4 pixels a cell from cell (448, 448) (E:\dump\TEMP\volc\trace.py, centreline.py).
