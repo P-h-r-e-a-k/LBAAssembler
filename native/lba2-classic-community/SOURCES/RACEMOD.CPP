@@ -727,7 +727,7 @@ static int s_lavaModel = -1;               // lava_ball_model=
 // of track that shoots lava balls, let's steal this idea"). While Twinsen is near, the mine's fall's spit: sparks and little lava balls
 // thrown out of its foot every RACE_FALL_FOOT_MS or so (impact 23's, the way its face looks), sparks off its lip and down its face every
 // RACE_FALL_LIP_MS or so. The balls it shoots onto the road are lavaball='s, its pool their source.
-#define RACE_MAX_FALLS 8
+#define RACE_MAX_FALLS 16
 #define RACE_FALL_FOOT_MS 1500
 #define RACE_FALL_LIP_MS 600
 #define RACE_FALL_NEAR (48 * 512)
@@ -739,17 +739,21 @@ static S32 s_fallFootNext = 0, s_fallLipNext = 0;
 // Boost panels (boostpanel=<x> <y> <z> <way x> <way z> <half length> <half width>, island units, the way in thousandths: RaceTrackPlan.
 // BoostPanels, chevrons on the deck): a car with two of its wheels or more on one is at RACE_PANEL_KMH at once (the user, 2026-10-10: "a
 // boost panel that cars can drive over for a speed boost, they'd only need to drive over it with at least two wheels for it to activate,
-// this should immediately shoot a car up to 120kph"), the extra lost as any over the gear's top is (BUGGY.CPP RACE_OVERSPEED_DRAG).
+// this should immediately shoot a car up to 120kph"). It lasts (the user, the same day: "The current boost panel duration needs to be a lot
+// longer" -- it had been lost as any speed over the gear's top is, in 1.6 s): the car's top speed is RACE_PANEL_KMH for RACE_PANEL_HOLD_MS
+// (RaceMod_SpeedFactor: the accelerator held keeps it there), then comes back down to its own over RACE_PANEL_FADE_MS.
 // Twinsen's car by its four wheels where BUGGY.CPP has them. (The opponents' lines keep to the race lanes: Volcano Island's panel is in
 // its pit lane, "so if cars want the speed boost they have to deviate from the normal racing line".)
 #define RACE_MAX_PANELS 8
 #define RACE_PANEL_KMH 120
 #define RACE_PANEL_SPEED (RACE_PANEL_KMH * 5120.0 / 36)
 #define RACE_PANEL_ABOVE 700               // the car this far over the panel or under it is on it (the deck's slope, the car's bounce)
+#define RACE_PANEL_HOLD_MS 4500
+#define RACE_PANEL_FADE_MS 3500
 typedef struct { double X, Y, Z, Dx, Dz, HalfLen, HalfWidth; int OnHero; } T_RACE_PANEL;
 static T_RACE_PANEL s_panels[RACE_MAX_PANELS];
 static int s_nbPanels = 0;
-#define RACE_PANEL_PILOT_MS 2500           // (the test pilot holds the accelerator this long after one, as a player would)
+#define RACE_PANEL_PILOT_MS (RACE_PANEL_HOLD_MS + RACE_PANEL_FADE_MS) // (the test pilot holds the accelerator while it lasts, as a player would)
 static S32 s_panelAt = -1000000;
 // Machine gunners (gunner=<scene> <gun's actor> <Franco's actor> <muzzle x> <y> <z>, island units, then gunner_target=<x> <z> <y> <radius>,
 // the places its bullets land): Otringal's Franco machine gun on its knoll inside the corner past the start -- the user, 2026-10-09: "add in
@@ -4907,6 +4911,17 @@ S32 RaceMod_BlocksInventory(void) {
 
 // BUGGY.CPP RaceSpeed: how much faster or slower the player's car is than its setup (its top speed and pull): Gazogem fuel and the
 // jet-pack, or shrunk by an opponent's lightning.
+// A boost panel's lift on the car's top speed now: RACE_PANEL_KMH for RACE_PANEL_HOLD_MS after it was last on one, then eased back to its own.
+static double PanelFactor(S32 now) {
+    const S32 since = now - s_panelAt;
+    if (since < 0 || since >= RACE_PANEL_HOLD_MS + RACE_PANEL_FADE_MS || s_car.Gears < 1) return 1;
+    const double full = RACE_PANEL_SPEED / s_car.GearTop[s_car.Gears - 1];
+    if (full <= 1) return 1;
+    if (since < RACE_PANEL_HOLD_MS) return full;
+    const double u = (double)(since - RACE_PANEL_HOLD_MS) / RACE_PANEL_FADE_MS;
+    return full + (1 - full) * u * u * (3 - 2 * u);
+}
+
 double RaceMod_SpeedFactor(void) {
     if (!RaceMod_Active()) return 1;
     const S32 now = TimerRefHR;
@@ -4914,6 +4929,9 @@ double RaceMod_SpeedFactor(void) {
     // (Gazogem fuel all race, fuel_always=: but the super jet-pack's own speed while it drives)
     if (now < s_boostUntil || (s_fuelAlways && now >= s_jetUntil)) f *= RACE_BOOST;
     else if (now < s_jetUntil) f *= JetFactor(s_jetUntil, s_jetFactor);
+    // (a boost panel's, unless the rest lifts it more)
+    const double panel = PanelFactor(now);
+    if (panel > f) f = panel;
     if (now < s_shrunkUntil && now >= s_jetUntil) f *= RACE_SHRUNK;
     return f;
 }

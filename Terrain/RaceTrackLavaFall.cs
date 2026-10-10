@@ -8,6 +8,10 @@ namespace LBAAssembler.Terrain;
 // stretched down it in streaks. The ground copied is the island's own: its rock (Rock) and its lava (Lava, with its game code: a car
 // that falls in is rescued as from any lava). The race-track mode sprays the game's lava off the fall's lip and out of its foot
 // (RACEMOD.CPP lavafall=, report.LavaFalls), and the plan's lava balls with the pool as their source shoot out of it onto the road.
+// Made big, the same: Volcano Island's summit since its redesign (2026-10-10, the user: "the lava waterfall in a new location as pictured,
+// perhaps as tall as the level allows that shoots lava balls") -- the ground north of its main lava channel raised to 30,000 (Top: the
+// island's ground holds 32,767), the stream its whole width a lake on top, the fall down its face in Tiers (a ledge of lava, a cell deep, and
+// a drop, TierDepth cells each), the island's own objects inside it taken out.
 internal sealed class LavaFallRun
 {
     // the foot of the face, its middle (the plan's cells), and the way the face looks (towards the road: one of the four axes)
@@ -20,6 +24,10 @@ internal sealed class LavaFallRun
     public double Depth { get; set; } = 8;
     public double Wing { get; set; } = 6;
     public double Pool { get; set; } = 2;
+    // the crag's top as a height, not over the ground (null: Height over it); the fall's tiers, each this many cells deep (1: one drop)
+    public double? Top { get; set; }
+    public int Tiers { get; set; } = 1;
+    public double TierDepth { get; set; } = 2;
     // a cell of the island's rock and one of its lava (the plan's cells) to copy the ground of
     public double[] Rock { get; set; } = Array.Empty<double>();
     public double[] Lava { get; set; } = Array.Empty<double>();
@@ -31,6 +39,7 @@ internal static class RaceTrackLavaFall
     // fall to the ground (cells); the lava's light (0..15: it glows -- a face turned from the sun was baked dark)
     private const double Bed = 350, PoolDrop = 150, Rough = 600, SideFall = 1.6, BackFall = 2.2, Wobbly = 1.6;
     private const int Glow = 13;
+    private const int MaxPlaces = 16;              // RACEMOD.CPP RACE_MAX_FALLS
 
     public static void Make(IslandFile island, LavaFallRun run, int originX, int originZ, RaceTrackReport report)
     {
@@ -45,7 +54,11 @@ internal static class RaceTrackLavaFall
         var lava = Samples(island, (int)Math.Round(run.Lava[0] + originX), (int)Math.Round(run.Lava[1] + originZ));
         if (rock.Count == 0 || lava.Count == 0 || island.HeightAt(fx, fz) is not { } foot) { report.Notes.Add($"WARNING: the lava fall at ({fx}, {fz}): no ground there, or no rock or lava to copy"); return; }
         var halfW = run.Width / 2; var outer = halfW + run.Wing;
-        var top = foot + run.Height;
+        var top = run.Top ?? foot + run.Height;
+        var lake = top - Bed;
+        var tiers = Math.Max(1, run.Tiers);
+        // (a vertex `f` cells back from the face, on the fall: its tier's ledge -- the front one lowest -- or the lake behind them)
+        double Ledge(int f) { var t = (int)Math.Floor(-f / Math.Max(1, run.TierDepth)); return t >= tiers - 1 ? lake : foot + (lake - foot) * (t + 1) / tiers; }
         double Hash(int x, int z) { var h = (uint)(x * 73856093 ^ z * 19349663); h ^= h >> 13; h *= 0x5bd1e995; h ^= h >> 15; return (h & 0xFFFF) / 32767.5 - 1; }
         // (a wobble along a line, -1..1, changing over a few cells: the crag's sides and back in and out, not a box's)
         double Wobble(double t, int line) { var i = (int)Math.Floor(t / 3); var u = t / 3 - i; u = u * u * (3 - 2 * u); return Hash(i, line) * (1 - u) + Hash(i + 1, line) * u; }
@@ -77,7 +90,7 @@ internal static class RaceTrackLavaFall
                 {
                     var stream = Math.Abs(a) <= halfW - 0.5 && inBack >= 2 - 1e-9;
                     var crater = Math.Abs(a) <= halfW + 0.5 && inBack >= 2 - 1e-9 && inBack <= 4 + 1e-9;
-                    var high = stream || crater ? top - Bed : top + Rough * Hash(gx, gz) - (k < 1 ? Rough * 0.5 : 0);
+                    var high = stream || crater ? (stream ? Ledge(f) : lake) : top + Rough * Hash(gx, gz) - (k < 1 ? Rough * 0.5 : 0);
                     var e = k * k * (3 - 2 * k);
                     want = g + (high - g) * e;
                     if ((stream || crater) && k >= 1) lavaVertex.Add((gx, gz));
@@ -109,6 +122,15 @@ internal static class RaceTrackLavaFall
             else if (isRock) { PaintCell(island, gx, gz, rock[(int)((Hash(gz, gx) + 1) / 2 * rock.Count) % rock.Count]); rockCells++; }
         }
 
+        // the island's objects standing inside the crag taken out (they would be drawn over it: the ground is drawn first)
+        var removed = 0;
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            removed += cube.Decors.RemoveAll(d =>
+            {
+                var gx = (int)Math.Round(cx * IslandCube.Cells + d.X / 512.0); var gz = (int)Math.Round(cz * IslandCube.Cells + d.Z / 512.0);
+                return raised.Contains((gx, gz)) && island.HeightAt(gx, gz) is { } h && h > d.Y + 400;
+            });
+
         // the light, baked again over what changed (the lava's at least Glow)
         var field = new IslandHeightField(island);
         var cube0 = island.CubeAt(fx / IslandCube.Cells, fz / IslandCube.Cells);
@@ -122,15 +144,17 @@ internal static class RaceTrackLavaFall
 
         // the race-track mode's: across the fall, its lip (a little back from the face, on the stream) and its foot below it (in the pool)
         var beta = ((int)Math.Round(Math.Atan2(ux, uz) * 4096 / (2 * Math.PI)) % 4096 + 4096) % 4096;
-        for (var a = -Math.Floor(halfW); a <= Math.Floor(halfW) + 1e-9; a++)
+        // (at most RACE_MAX_FALLS of them, spread across: the engine's)
+        var step = Math.Max(1, Math.Ceiling((2 * Math.Floor(halfW) + 1) / MaxPlaces));
+        for (var a = -Math.Floor(halfW); a <= Math.Floor(halfW) + 1e-9; a += step)
         {
             double lx = fx + ux * -0.2 + ax * a, lz = fz + uz * -0.2 + az * a, px = fx + ux * 1.4 + ax * a, pz = fz + uz * 1.4 + az * a;
-            report.LavaFalls.Add(new[] { (int)Math.Round(lx * 512), (int)Math.Round(top - Bed), (int)Math.Round(lz * 512),
+            report.LavaFalls.Add(new[] { (int)Math.Round(lx * 512), (int)Math.Round(lake), (int)Math.Round(lz * 512),
                                          (int)Math.Round(px * 512), (int)Math.Round(foot - PoolDrop), (int)Math.Round(pz * 512), beta });
         }
         var s = lava[0][0].Polygon;
-        report.Notes.Add($"a lava fall at ({fx}, {fz}) facing ({ux}, {uz}): its crag {run.Height:0} over the ground ({foot}), {changed} heights, {rockCells} cells of rock, " +
-                         $"{lavaCells} of lava (code {s.CodeJeu}, texture flag {s.TexFlag}, polygon flag {s.PolyFlag})");
+        report.Notes.Add($"a lava fall at ({fx}, {fz}) facing ({ux}, {uz}): its crag's top {top:0} (the ground {foot}), {tiers} tier(s), {changed} heights, {rockCells} cells of rock, " +
+                         $"{lavaCells} of lava (code {s.CodeJeu}, texture flag {s.TexFlag}, polygon flag {s.PolyFlag}), {removed} island object(s) inside it taken out");
     }
 
     // The ground of a cell and the three either side of it along x (both its triangles, as they are): copies to paint with. A cell's two

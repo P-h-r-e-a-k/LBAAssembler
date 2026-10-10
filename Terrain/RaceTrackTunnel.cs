@@ -23,7 +23,8 @@ internal sealed class TunnelRun
 }
 
 // A place in the lava that shoots balls of fire onto a stretch of the lap (RaceTrackPlan.LavaBalls, RACEMOD.CPP lavaball=): Source in the
-// plan's cells, From and To the plan's points, about one every Every ms.
+// plan's cells (and, a third number, its height: one of Volcano Island's bowls of lava, its brim -- else the ground's there), From and To
+// the plan's points, about one every Every ms.
 internal sealed class LavaBallRun
 {
     public double[] Source { get; set; } = System.Array.Empty<double>();

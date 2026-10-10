@@ -284,11 +284,13 @@ internal sealed record RaceTrackIsland(
         Shuttles = new[] { (92, 2, 47, 19200, 9472), (92, 3, 47, 19104, 17632) },
     };
 
-    // Volcano Island (SOUSCELB.ILE, the game's island 11 under Celebration Island, scenes 130-132; cube (7,8) isn't there), from the user's
-    // sketch (2026-10-08): round the sand plateau on the volcano's top, the start and the pit lane on its north straight; down off its east end
-    // over a jump across the main lava channel, a jump over the second onto the island's east edge, south along it and a jump down to the
-    // south shore; along the shore and back up the volcano's flank. Balls of fire shot up out of the lava rain onto the road (LavaBalls).
-    // The plan: tools/RaceTrackPlan/volcano_design.py.
+    // Volcano Island (SOUSCELB.ILE, the game's island 11 under Celebration Island, scenes 130-132; cube (7,8) isn't there), redesigned on
+    // 2026-10-10 round its new summit: the ground north of the main lava channel raised to 30,000, a lake of lava on top pouring down its
+    // south face in four tiers (RaceTrackLavaFall). The start and the pit lane (its boost panel) on the sand plateau's north straight; south
+    // under the summit's west cliff, between a crystal gate and down the canyon road along the falls; a drop jump off its end onto the east
+    // ridge, south along it under a crystal arch over the crystal field in the lava; a jump down to the south shore, along it and up the
+    // volcano's flank past its bowls of lava; round the plateau's crystal garden, under another arch (RaceTrackCrystals). The game's lava
+    // balls out of the falls' foot, the lava, the bowls (LavaBalls). The plan: tools/RaceTrackPlan/volcano_design.py.
     public static readonly RaceTrackIsland Volcano = new("Volcano Island", "SOUSCELB.ILE", "SOUSCELB.OBL", 11, 130, 132, 38, "RaceTrackPlan.Volcano.json", null)
     {
         Title = "Volcano Island: over the lava", Roster = RaceDriver.Volcano,

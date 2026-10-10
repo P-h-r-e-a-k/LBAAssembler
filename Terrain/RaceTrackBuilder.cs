@@ -190,6 +190,9 @@ internal sealed class RaceTrackPlan
     public double[][]? BoostPanels { get; set; }
     // Lava falls (RaceTrackLavaFall): a crag of rock with lava pouring down its face into a pool, made in the island's ground.
     public LavaFallRun[]? LavaFalls { get; set; }
+    // Crystals (RaceTrackCrystals): the island's own crystal clusters made big, standing by the road; and arches of crystal over it.
+    public CrystalRun[]? Crystals { get; set; }
+    public CrystalArchRun[]? CrystalArches { get; set; }
     public bool Planned => Heights is { Length: > 0 } h && h.Length == Points.Length;
 
     // The plan's own road widths and sea clearance, onto the options a build uses.
@@ -843,7 +846,7 @@ internal static class RaceTrackBuilder
             foreach (var b in lava.Where(b => b.Source is { Length: >= 2 } && b.Every > 0))
             {
                 double sx = b.Source[0] + plan.OriginCellX, sz = b.Source[1] + plan.OriginCellZ;
-                var y = IslandOps.Altitude(island, sx * 512, sz * 512) ?? 0;
+                var y = b.Source.Length >= 3 ? b.Source[2] : IslandOps.Altitude(island, sx * 512, sz * 512) ?? 0;
                 report.LavaBalls.Add((sx * 512, y, sz * 512, PlanPoint(plan, main, b.From), PlanPoint(plan, main, b.To), b.Every, nth++ * 1733 % b.Every));
             }
             report.Notes.Add($"{report.LavaBalls.Count} places the lava shoots balls of fire from onto the road");
@@ -861,6 +864,10 @@ internal static class RaceTrackBuilder
         if (planned && plan.GasMonsters is { Length: > 0 } monsters)
             foreach (var g in monsters)
                 report.GasMonsters.AddRange(RaceTrackGasMonster.Place(island, main, PlanPoint(plan, main, g.From), PlanPoint(plan, main, g.To), g, options, report));
+        if (planned && plan.Crystals is { Length: > 0 } crystals)
+            RaceTrackCrystals.Place(island, main, crystals, plan.OriginCellX, plan.OriginCellZ, options, report);
+        if (planned && plan.CrystalArches is { Length: > 0 } arches)
+            RaceTrackCrystals.PlaceArches(island, main, arches, plan.OriginCellX, plan.OriginCellZ, options, report);
         if (planned && plan.Hoops is { Length: > 0 } hoops)
             foreach (var h in hoops.Where(h => h.At is { Length: >= 2 }))
                 RaceTrackHoop.Place(island, main, h, h.At[0] + plan.OriginCellX, h.At[1] + plan.OriginCellZ, options, report);
