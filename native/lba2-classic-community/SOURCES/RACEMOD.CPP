@@ -362,6 +362,7 @@ static T_RACE_MUSHROOM s_mush[RACE_MAX_MUSHROOMS];
 static int s_nbMush = 0;
 static int s_powerups = 0;
 static int s_fuelAlways = 0;               // fuel_always=1: every car on Gazogem fuel all race, and no mushroom gives it (the Island of the Francos', 2026-10-07)
+static int s_prizeForce = -1;              // roulette_prize=<0|1|2> (tests): every drop's prize black, red or the green
 static int s_powerupOnly = -1;             // powerup_only=<n> [<n>...] (tests): every mushroom has that one -- or one of those, at random
 static int s_onlyList[8], s_nbOnly = 0;
 #define RACE_MAX_PENGUIN_ACTORS 192
@@ -411,21 +412,32 @@ static T_RACE_PENGUIN s_penguins[RACE_MAX_PENGUINS];
 // rail to rail for a few seconds, the red homes in on the car in front, the fire ball splits into one for each of the other cars, each
 // hunting its own down (Shots); and "a fake powerup mushroom ... identical to the real powerup mushrooms, the car can drop this powerup
 // anywhere, and when another car drives into it the fake mushroom explodes" (Fakes))
-enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_PENGUIN, PU_SUPERJET, PU_OIL, PU_BALL_YELLOW, PU_BALL_GREEN, PU_BALL_RED, PU_BALL_FIRE, PU_FAKE, PU_COUNT };
+// (2026-10-10: the golden Gazogem, the roulette wheel's green zero's prize -- the user: "if they get the green super jackpot they get a
+// golden gazogem bottle where they can use the power up for a speedboost as many times as they like for 8 seconds"; last, and never drawn
+// from a mushroom nor the item box's roulette, PU_ROLLED)
+enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_PENGUIN, PU_SUPERJET, PU_OIL, PU_BALL_YELLOW, PU_BALL_GREEN, PU_BALL_RED, PU_BALL_FIRE, PU_FAKE, PU_GOLD, PU_COUNT };
+#define PU_ROLLED PU_GOLD
 static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Nitro penguin!", "Super jet-pack!", "Oil slick!",
-                                               "Yellow magic ball!", "Green magic ball!", "Red magic ball!", "Fire ball!", "Fake mushroom!"};
-static const int s_puWeight[PU_COUNT] = {20, 12, 10, 16, 12, 16, 12, 10, 9, 5, 10};
-static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 0, 0, 0, 0, 0, 0};
+                                               "Yellow magic ball!", "Green magic ball!", "Red magic ball!", "Fire ball!", "Fake mushroom!", "Golden Gazogem!"};
+static const int s_puWeight[PU_COUNT] = {20, 12, 10, 16, 12, 16, 12, 10, 9, 5, 10, 0};
+static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 0, 0, 0, 0, 0, 0, 0};
 // each one's weight times these for the leader and for the last car (between them by the car's place: RandomPowerUp) -- the ones to
 // drop behind (penguins, oil, a fake mushroom) for the cars in front, the ones to catch up with (the super jet-pack, lightning, the red
 // ball and the fire ball) for the cars at the back
-static const double s_puLead[PU_COUNT] = {1.0, 0.8, 0.05, 1.8, 0.0, 2.0, 1.2, 1.0, 0.3, 0.0, 1.8};
-static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 0.4, 0.8, 1.0, 1.8, 2.4, 0.5};
+static const double s_puLead[PU_COUNT] = {1.0, 0.8, 0.05, 1.8, 0.0, 2.0, 1.2, 1.0, 0.3, 0.0, 1.8, 0};
+static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 0.4, 0.8, 1.0, 1.8, 2.4, 0.5, 0};
 // what the item box shows (OBJFIX.HQR, the inventory's own: the Gazogem, the protection spell, the lightning ring, the meca-penguin,
 // the super jet-pack, the magic ball in each of its colours -- INVENT.CPP's TabObj3D for FLAG_BALLE_MAGIQUE, {1, 40, 41, 42}, picked by
 // MagicLevel - 1: until 2026-10-08 the balls had 0-3 here, OBJFIX's own 0-3, the holomap, the yellow ball, the dart and Sendell's ball;
-// -2 the oil's, oil_icon=; -3 the mushroom's own body)
-static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2, 1, 40, 41, 42, -3};
+// -2 the oil's, oil_icon=; -3 the mushroom's own body; -4 the golden Gazogem, gold_icon=: the Gazogem in gold)
+static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2, 1, 40, 41, 42, -3, -4};
+static int s_goldIcon = -1;                // gold_icon=: the golden Gazogem's model in OBJFIX.HQR (the builder adds it)
+#define RACE_GOLD_MS 8000                  // the golden Gazogem: from its first use, this long to boost with it as often as wanted ...
+#define RACE_GOLD_BURST_MS 1200            // ... each use Gazogem's boost this long ...
+#define RACE_GOLD_KICK 1.25                // ... and the car's speed kicked up this much at once (to the boosted top speed at most)
+#define RACE_GOLD_AUTO_MS 600              // (the test pilot: once in this long)
+static S32 s_goldUntil = 0, s_goldLast = 0;
+static int s_slotOn = 0;                   // the roulette wheel's slot machine spinning (SlotSpin)
 // oil: the slicks on the road (world units; until when), and the scenes' copies of the slick that show them
 #define RACE_MAX_SLICKS 16                 // (6 until 2026-10-07: the pipes' drips have slicks too)
 #define RACE_MAX_OIL_ACTORS 256
@@ -765,7 +777,7 @@ typedef struct {
     int On, CubeX, CubeZ, Ball, BallR, Landing, NbParts, Parts[RACE_MAX_WHEEL_PARTS];
     double X, Z, Spin, HoleY, S1, S2, Hole, Rim, Outer, Under;
     // (its balls: where, how fast, their last step's time; their bodies Ball.. Ball+NbBalls-1)
-    int NbBalls, BallsSet, BallShown;
+    int NbBalls, BallsSet, BallShown, Pockets;
     double BallX[RACE_MAX_BALLS], BallY[RACE_MAX_BALLS], BallZ[RACE_MAX_BALLS], BallVX[RACE_MAX_BALLS], BallVZ[RACE_MAX_BALLS];
     S32 BallT;
     // (Twinsen's car knocked by a ball: since when, which way; the pocket it went into the hole over: its number, its prize 0 black, 1 red,
@@ -1847,9 +1859,11 @@ static void Load(const char *path, int carOnly = 0) {
                 const char *p = v + used;
                 int part, n;
                 while (s_wheel.NbParts < RACE_MAX_WHEEL_PARTS && sscanf(p, "%d%n", &part, &n) == 1) { s_wheel.Parts[s_wheel.NbParts++] = part; p += n; }
-                s_wheel.On = 1; s_wheel.NbBalls = 1;
+                s_wheel.On = 1; s_wheel.NbBalls = 1; s_wheel.Pockets = 19;
             }
         }
+        else if (!strcmp(key, "roulette_prize")) s_prizeForce = atoi(v);
+        else if (!strcmp(key, "roulette_pockets")) { if (s_wheel.On) s_wheel.Pockets = atoi(v) > 2 ? atoi(v) : 19; }
         else if (!strcmp(key, "roulette_balls")) {
             const int n = atoi(v);
             if (s_wheel.On) s_wheel.NbBalls = n < 1 ? 1 : n > RACE_MAX_BALLS ? RACE_MAX_BALLS : n;
@@ -1949,6 +1963,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "protect_ms")) s_protectUntil = TimerRefHR + atoi(v);   // (tests: protected from the start, without the spell's sprites)
         else if (!strcmp(key, "shrunk_ms")) s_shrunkUntil = TimerRefHR + atoi(v);     // (tests: shrunk from the start)
         else if (!strcmp(key, "oil_icon")) s_oilIcon = atoi(v);
+        else if (!strcmp(key, "gold_icon")) s_goldIcon = atoi(v);
         else if (!strcmp(key, "superjet_model")) s_superModel = atoi(v);
         else if (!strcmp(key, "twinsen_small")) s_heroSmall = atoi(v);
         else if (!strcmp(key, "drive_as")) {
@@ -3877,6 +3892,17 @@ static void UseItem(int pu, S32 now) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     switch (pu) {
     case PU_FUEL: s_boostUntil = now + RACE_BOOST_MS; break;
+    case PU_GOLD: {
+        // (its time from the first use; each use a burst of Gazogem's boost and a kick)
+        if (!s_goldUntil) s_goldUntil = now + RACE_GOLD_MS;
+        s_goldLast = now;
+        if (s_boostUntil < now + RACE_GOLD_BURST_MS) s_boostUntil = now + RACE_GOLD_BURST_MS;
+        const double top = s_car.GearTop[s_car.Gears - 1] * RACE_BOOST;
+        double v = ListBuggy[0].Speed * RACE_GOLD_KICK;
+        if (v > top) v = top;
+        if (v > ListBuggy[0].Speed) ListBuggy[0].Speed = (S32)v;
+        break;
+    }
     case PU_PROTECT:
         // (the game's own protection spell round him, its sprites and its hum -- taking no magic while it lasts: EXTRA.CPP)
         s_protectUntil = now + RACE_PROTECT_MS; s_shrunkUntil = 0;
@@ -3952,7 +3978,7 @@ static void ForgetPowerUps(const char *why) {
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0;
     s_skidUntil = s_hitUntil = 0; s_autoIndex = -1; s_boltUntil = 0; s_nbBolts = 0;
     for (int k = 0; k < RACE_ITEM_SLOTS; k++) s_item[k] = -1;
-    s_sel = 0; s_takeAt = 0;
+    s_sel = 0; s_takeAt = 0; s_goldUntil = 0; s_goldLast = 0; s_slotOn = 0;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
         T_RACE_OPPONENT *o = &s_opp[n];
         o->BoostUntil = o->HitUntil = o->JetUntil = o->ShoveUntil = o->SkidUntil = o->ShrunkUntil = 0;
@@ -4477,10 +4503,21 @@ static void PowerUps(S32 now, int driving) {
     const int shift = CheckKey(K_SHIFT) || CheckKey(K_SHIFT_RIGHT), q = CheckKey(K_Q);
     if (driving && q && !s_qWas && s_item[s_sel ^ 1] >= 0) { s_sel ^= 1; Log_Info("[racemod] item slot %d selected", s_sel + 1); }
     const int k = s_item[s_sel] >= 0 ? s_sel : s_sel ^ 1;
-    if (driving && s_item[k] >= 0 && now >= s_itemAt[k] && ((shift && !s_shiftWas) || (s_auto && s_autoDrop > 0 && now >= s_itemAt[k] + s_autoDrop))) {
+    // (the golden Gazogem's time over: gone from its slot)
+    for (int g = 0; g < RACE_ITEM_SLOTS; g++)
+        if (s_item[g] == PU_GOLD && s_goldUntil && now >= s_goldUntil) {
+            s_item[g] = -1; s_goldUntil = 0;
+            if (s_sel == g && s_item[g ^ 1] >= 0) s_sel = g ^ 1;
+            Log_Info("[racemod] the golden Gazogem is used up");
+        }
+    const int gold = s_item[k] == PU_GOLD;
+    if (driving && s_item[k] >= 0 && now >= s_itemAt[k] && ((shift && !s_shiftWas)
+            || (s_auto && s_autoDrop > 0 && now >= s_itemAt[k] + s_autoDrop && (!gold || now >= s_goldLast + RACE_GOLD_AUTO_MS)))) {
         const int pu = s_item[k];
-        s_item[k] = -1;
-        if (s_item[k ^ 1] >= 0) s_sel = k ^ 1;
+        if (!gold) {
+            s_item[k] = -1;
+            if (s_item[k ^ 1] >= 0) s_sel = k ^ 1;
+        }
         s_shiftBlock = shift;
         UseItem(pu, now);
     }
@@ -5138,12 +5175,65 @@ static void WheelDecors(T_DECORS *list, S32 count) {
     }
 }
 
-// The European wheel's pockets in order round it from its body's x axis towards its z (RaceTrackRoulette.Order), and its reds.
-static const int s_pockets[37] = { 0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26 };
-static int PocketRed(int n) {
-    static const int reds[18] = { 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36 };
-    for (int i = 0; i < 18; i++) if (reds[i] == n) return 1;
-    return 0;
+// The wheel's pockets round it from its body's x axis towards its z (RaceTrackRoulette): roulette_pockets= of them (19 since 2026-10-10:
+// the user, "lose the numbers on the roulette wheel, half the segments, but double the width of the remaining ones. Red is win, black is
+// lose, and green is super jackpot"), the first green, then red and black in turn. A pocket's prize: 2 the green, 1 red, 0 black.
+static int PocketPrize(int k) { return k == 0 ? 2 : k % 2 ? 1 : 0; }
+
+// The slot machine the roulette wheel's red pockets spin (the user, 2026-10-10: "For red we spin three wheels at the top middle of the
+// screen like a fruit machine, and they spin stopping one at a time from left to right displaying a powerup, let's make it so roughly 75%
+// of the time the user wins a power up prize"): three reels of power-ups at the top of the screen, stopping left to right; three the same,
+// that power-up won (RACE_SLOT_WIN of the time), into a free item slot -- or the one not selected.
+#define RACE_SLOT_WIN 0.75
+#define RACE_SLOT_STOP0 1200               // ms: the first reel stops ...
+#define RACE_SLOT_STOP_GAP 700             // ... and each next this long after ...
+#define RACE_SLOT_SHOW 1800                // ... and the reels stay this long after the last
+#define RACE_SLOT_TURN 70                  // ms an item a reel turns over
+static int s_slotReel[3], s_slotWin = 0, s_slotPaid = 0;
+static S32 s_slotT0 = 0;
+
+// An item into Twinsen's item box, shown at once (no roulette): a free slot, or the one not selected.
+static void GiveItem(int pu, S32 now) {
+    int slot = -1;
+    for (int k = 0; k < RACE_ITEM_SLOTS && slot < 0; k++) if (s_item[k] < 0) slot = k;
+    if (slot < 0) slot = s_sel ^ 1;
+    if (s_item[slot] == PU_GOLD) s_goldUntil = 0;
+    s_item[slot] = pu;
+    s_itemAt[slot] = now;
+    if (s_item[s_sel] < 0 || s_sel == slot) s_sel = slot;
+    Log_Info("[racemod] Twinsen wins %s (slot %d)", s_puName[pu], slot + 1);
+}
+
+static void SlotSpin(S32 now) {
+    s_slotOn = 1; s_slotT0 = now; s_slotPaid = 0;
+    s_slotWin = RaceRandom() < RACE_SLOT_WIN;
+    const int prize = RandomPowerUp(BackShare(-1));
+    if (s_slotWin) s_slotReel[0] = s_slotReel[1] = s_slotReel[2] = prize;
+    else {
+        // (a miss: often the first two the same and the last not -- so near)
+        s_slotReel[0] = prize;
+        s_slotReel[1] = RaceRandom() < 0.6 ? prize : (prize + 1 + (int)(RaceRandom() * (PU_ROLLED - 1))) % PU_ROLLED;
+        do s_slotReel[2] = (int)(RaceRandom() * PU_ROLLED) % PU_ROLLED; while (s_slotReel[2] == s_slotReel[0] && s_slotReel[1] == s_slotReel[0]);
+    }
+    Log_Info("[racemod] slot machine: %s %s %s", s_puName[s_slotReel[0]], s_puName[s_slotReel[1]], s_puName[s_slotReel[2]]);
+}
+
+// Every frame: the slot machine -- its prize paid as its last reel stops, gone when it has been shown.
+static void SlotMachine(S32 now) {
+    if (!s_slotOn) return;
+    const S32 last = s_slotT0 + RACE_SLOT_STOP0 + 2 * RACE_SLOT_STOP_GAP;
+    if (!s_slotPaid && now >= last) {
+        s_slotPaid = 1;
+        if (s_slotWin) { GiveItem(s_slotReel[0], now); Message("Winner!"); }
+        else { Message("No luck"); Log_Info("[racemod] slot machine: no prize"); }
+    }
+    if (now >= last + RACE_SLOT_SHOW) s_slotOn = 0;
+}
+
+// What a reel shows: turning over until it stops, then its own.
+static int SlotShown(int r, S32 now) {
+    if (now >= s_slotT0 + RACE_SLOT_STOP0 + r * RACE_SLOT_STOP_GAP) return s_slotReel[r];
+    return (int)((now - s_slotT0) / RACE_SLOT_TURN + r * 4) % PU_ROLLED;
 }
 
 // The turning floor's speed (radians a second, round from x towards z, as the world's angles go: its head's Beta turns the other way).
@@ -5288,9 +5378,10 @@ static S32 WheelMove(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
         // (the pocket it goes in over: its angle on the turning head -- a body's point at angle a is drawn at a - Beta)
         double a = atan2(tz - w->Z, tx - w->X) + (w->Beta & 4095) * 2 * RACE_PI / 4096.0;
         a = fmod(a, 2 * RACE_PI); if (a < 0) a += 2 * RACE_PI;
-        w->PrizeNumber = s_pockets[(int)(a / (2 * RACE_PI / 37)) % 37];
-        w->Prize = w->PrizeNumber == 0 ? 2 : PocketRed(w->PrizeNumber) ? 1 : 0;
-        Log_Info("[racemod] roulette wheel: Twinsen's car through its hole at (%.0f,%.0f) over %s %d, %d ms down onto the road", tx, tz,
+        const int pockets = w->Pockets > 2 ? w->Pockets : 19;
+        w->PrizeNumber = (int)(a / (2 * RACE_PI / pockets)) % pockets;
+        w->Prize = s_prizeForce >= 0 && s_prizeForce <= 2 ? s_prizeForce : PocketPrize(w->PrizeNumber);
+        Log_Info("[racemod] roulette wheel: Twinsen's car through its hole at (%.0f,%.0f) over %s (pocket %d), %d ms down onto the road", tx, tz,
                  w->Prize == 2 ? "the green" : w->Prize ? "red" : "black", w->PrizeNumber, (int)w->DropMs);
     }
     double t = (double)(now - w->DropT0) / w->DropMs;
@@ -5306,24 +5397,18 @@ static S32 WheelMove(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
         w->DropOn = 0;
         s_forgetLap = 1;
         Log_Info("[racemod] roulette wheel: down on the road at (%.0f,%.0f,%.0f)", x, y, z);
-        // (the pocket's prize: red a boost, the zero a longer one and an item, black nothing)
-        static char said[64];
+        // (the pocket's prize: red the slot machine's spin, the green the golden Gazogem, black nothing; without power-ups, red and the
+        // green a boost)
         if (w->Prize == 2) {
-            s_boostUntil = now + RACE_WHEEL_ZERO_MS;
-            int slot = -1;
-            for (int k = 0; k < RACE_ITEM_SLOTS && slot < 0; k++) if (s_item[k] < 0) slot = k;
-            if (s_powerups && slot >= 0) {
-                s_item[slot] = RandomPowerUp(BackShare(-1));
-                s_itemAt[slot] = now + RACE_ITEM_ROLL_MS;
-                if (s_item[s_sel] < 0 || s_sel == slot) s_sel = slot;
-            }
-            snprintf(said, sizeof(said), "Zero! Jackpot!");
+            if (s_powerups) {
+                GiveItem(PU_GOLD, now);
+                Message("Super jackpot! A golden Gazogem!");
+            } else { s_boostUntil = now + RACE_WHEEL_ZERO_MS; Message("Super jackpot!"); }
         } else if (w->Prize == 1) {
-            s_boostUntil = now + RACE_WHEEL_RED_MS;
-            snprintf(said, sizeof(said), "Red %d: a boost!", w->PrizeNumber);
-        } else snprintf(said, sizeof(said), "Black %d", w->PrizeNumber);
-        Message(said);
-        Log_Info("[racemod] roulette wheel: %s", said);
+            if (s_powerups) SlotSpin(now);
+            else { s_boostUntil = now + RACE_WHEEL_RED_MS; Message("Red: a boost!"); }
+        } else Message("Black: no luck");
+        Log_Info("[racemod] roulette wheel: %s", w->Prize == 2 ? "the green: super jackpot" : w->Prize ? "red: the slot machine" : "black: nothing");
     } else {
         const S32 beta = dx * dx + dz * dz > 1 ? (S32)floor(atan2(dx, dz) * 4096 / (2 * RACE_PI) + 0.5) & 4095 : obj->Beta;
         CarPitch(obj, beta, 0.6 * sin(RACE_PI * t));
@@ -5569,6 +5654,7 @@ void RaceMod_Frame(void) {
     LavaBalls(now, driving);
     Gunners(now, driving);
     Wheel(now, driving);
+    SlotMachine(now);
     Monsters(now, driving);
     Shuttles(now, driving);
     if (!Opponents()) return;
@@ -6016,7 +6102,7 @@ static void RestoreView(const T_RACE_VIEW *v) {
 static int ShownItem(int k, S32 now) {
     if (s_item[k] < 0 || now >= s_itemAt[k]) return s_item[k];
     const double t = 1.0 - (double)(s_itemAt[k] - now) / RACE_ITEM_ROLL_MS, p = RACE_ITEM_ROLL_STEPS * (1 - (1 - t) * (1 - t));
-    return ((s_item[k] + (int)floor(p) - RACE_ITEM_ROLL_STEPS) % PU_COUNT + 6 * PU_COUNT) % PU_COUNT;
+    return ((s_item[k] + (int)floor(p) - RACE_ITEM_ROLL_STEPS) % PU_ROLLED + 6 * PU_ROLLED) % PU_ROLLED;
 }
 
 #define RACE_GOLD 244                      // the palette's gold, round the selected slot
@@ -6030,7 +6116,7 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int selected, S32 now) {
     SetClip(x0, y0, x1, y1);
     BackupAngles(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
     Box(ClipXMin, ClipYMin, ClipXMax, ClipYMax, 0);
-    const int model = pu < 0 ? -1 : s_puModel[pu] == -2 ? s_oilIcon : s_puModel[pu] == -3 ? -1 : s_puModel[pu];
+    const int model = pu < 0 ? -1 : s_puModel[pu] == -2 ? s_oilIcon : s_puModel[pu] == -3 ? -1 : s_puModel[pu] == -4 ? (s_goldIcon >= 0 ? s_goldIcon : s_puModel[PU_FUEL]) : s_puModel[pu];
     U8 *shape = model >= 0 ? (U8 *)GivePtrObjFix(model) : pu >= 0 && s_puModel[pu] == -3 && s_fakeIconBody >= 0 ? (U8 *)GivePtrBody(s_fakeIconBody) : NULL;
     if (shape) {
         // (the scene's view kept whole -- its projection, its camera and its light -- and put back exactly as it was after the item is
@@ -6151,8 +6237,21 @@ void RaceMod_Draw(void) {
     // the item box, top left: its two slots
     if (items) {
         const S32 size = height / 8 > 60 ? height / 8 : 60, gap = size / 5;
-        for (int k = 0; k < RACE_ITEM_SLOTS; k++)
+        for (int k = 0; k < RACE_ITEM_SLOTS; k++) {
             ItemBox(16 + k * (size + gap), top + 16, size, ShownItem(k, now), k == s_sel && s_item[k] >= 0, now);
+            // (the golden Gazogem in use: a gold bar under its slot, its time left)
+            if (s_item[k] == PU_GOLD && s_goldUntil > now) {
+                const S32 x0 = 16 + k * (size + gap), w = size * (s_goldUntil - now) / RACE_GOLD_MS;
+                Box(x0, top + 16 + size + 8, x0 + w, top + 16 + size + 13, RACE_GOLD);
+                BoxMovingAdd(x0, top + 16 + size + 8, x0 + size, top + 16 + size + 13);
+            }
+        }
+        // the slot machine, top middle: its three reels, the winning line ringed in gold once all three have stopped the same
+        if (s_slotOn) {
+            const S32 reel = size * 5 / 4, sgap = reel / 6, x0 = width / 2 - (3 * reel + 2 * sgap) / 2;
+            const int stopped = now >= s_slotT0 + RACE_SLOT_STOP0 + 2 * RACE_SLOT_STOP_GAP;
+            for (int r = 0; r < 3; r++) ItemBox(x0 + r * (reel + sgap), top + 16, reel, SlotShown(r, now), stopped && s_slotWin, now);
+        }
     }
     if (s_car.Hud) {
         char text[96], a[24], b[24];
@@ -6254,7 +6353,7 @@ static void ResetTrack(void) {
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
-    s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
+    s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_prizeForce = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
     s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes)); memset(s_shots, 0, sizeof(s_shots));
     s_driveLaser = 0; s_laserModel[0] = s_laserModel[1] = -1; s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;

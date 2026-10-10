@@ -73,6 +73,7 @@ internal static class RaceCarEngineFile
         {
             text.Append($"roulette={string.Join(' ', wheel)}\n");
             if (track.RouletteBalls is > 1 and var balls) text.Append($"roulette_balls={balls}\n");
+            if (track.RoulettePockets is { } pockets) text.Append($"roulette_pockets={pockets}\n");
         }
         // the gas monsters that rise out of the gas beside the road to bite cars (Otringal's)
         foreach (var monster in track?.GasMonsters ?? new()) text.Append($"gasmonster={string.Join(' ', monster)}\n");
@@ -145,6 +146,8 @@ internal static class RaceCarEngineFile
             text.Append($"laser_models={RaceTrackLasers.Green} {RaceTrackLasers.Red}\n");
             // (the oil's drum, which the item box shows)
             if (track.OilIcon is { } icon) text.Append($"oil_icon={icon}\n");
+            // (the golden Gazogem, the roulette wheel's super jackpot)
+            if (track.GoldIcon is { } gold) text.Append($"gold_icon={gold}\n");
             // (the super jet-pack the car turns into while it drives it)
             if (track.SuperJetModel is { } jetModel) text.Append($"superjet_model={jetModel}\n");
             // (Twinsen's buggy at half its size, for an opponent's lightning)

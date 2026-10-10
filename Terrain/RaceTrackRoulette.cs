@@ -10,9 +10,12 @@ namespace LBAAssembler.Terrain;
 // ... Let's make the sides of the roulette wheel steeper so instead of a guide rail cars are slowly drawn down with gravity". A bowl with no
 // legs, its floor rising ever more steeply from a hole in its middle to its wall: HoleY at the hole's edge, Slope a cell outwards from there
 // and Steepen a cell a cell more. The cars drive it freely -- it is the race-track mode's own floor, without rails -- drawn down its slopes
-// towards the hole, and drop through the hole onto the road under it (RACEMOD.CPP roulette=). Its head -- the 37 pockets, red, black and the
-// green zero in a European wheel's order, their numbers in white -- turns slowly, and a white ball rolls round the bowl. All of it decors,
-// seen from wherever the wheel is, the race-track mode turning the head and moving the ball; nothing here is touched by anything.
+// towards the hole, and drop through the hole onto the road under it (RACEMOD.CPP roulette=). Its head -- Pockets pockets, the first green,
+// then red and black in turn, no numbers (the user, 2026-10-10: "Let's lose the numbers on the roulette wheel, half the segments, but double
+// the width of the remaining ones. Red is win, black is lose, and green is super jackpot"; the European wheel's 37 numbered ones before)
+// -- turns, and white balls roll round the bowl. All of it decors, seen from wherever the wheel is, the race-track mode turning the head
+// and moving the balls; nothing here is touched by anything. The race-track mode tells the pocket the car drops through over by its angle
+// on the head (RACEMOD.CPP PocketPrize: the same order).
 internal sealed class RouletteRun
 {
     // its middle (the plan's cells), its wall's inner face, its outside, and the hole (cells from the middle)
@@ -43,25 +46,20 @@ internal sealed class RouletteRun
 // its ball, how fast it turns and the ball's radius; its floor (HoleY, Slope, Steepen), the hole's radius, the wall's and its outside's
 // (cells), its underside's depth under its floor; the lap's point where the drop through the hole lands.
 internal sealed record RouletteSpot(double X, double Z, int CubeX, int CubeZ, int[] Turning, int Ball, double Spin, int BallRadius,
-    double HoleY, double Slope, double Steepen, double Hole, double Rim, double Outer, double Under, int Landing, int Balls = 1);
+    double HoleY, double Slope, double Steepen, double Hole, double Rim, double Outer, double Under, int Landing, int Balls = 1, int Pockets = 37);
 
 internal static class RaceTrackRoulette
 {
     public const int BallRadius = 720;
-    // the bowl's floor's thickness; the pockets' inner edge past the hole, the ring their numbers are on in from the wall (cells); the
-    // numbers' pixels (world units)
-    private const double Thick = 300, PocketsPast = 0.8, NumbersIn = 2.4, NumberIn = 1.25, Pixel = 125;
+    // the bowl's floor's thickness; the pockets' inner edge past the hole (cells)
+    private const double Thick = 300, PocketsPast = 0.8;
     private const int Around = 48, Bodies = 7;
     private const double LegIn = 1.7, LegHalf = 260;
     // the island palettes' shared ramps: the pockets' red, black and green, gold, the woods, white
     private const int Red = 71, Black = 49, Green = 134, Gold = 105, GoldDark = 101, Wood = 25, WoodLight = 27, WoodDark = 20, Skirt = 23, White = 62, HoleDark = 48;
-    private static readonly int[] Order = { 0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26 };
-    private static readonly HashSet<int> Reds = new() { 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36 };
-    private static readonly string[] Font =
-    {
-        "111101101101111", "010110010010111", "111001111100111", "111001111001111", "101101111001001",
-        "111100111001111", "111100111101111", "111001001001001", "111101111101111", "111101111001111",
-    };
+    // its pockets: the first green, then red and black in turn (half the European wheel's 36 and its zero)
+    public const int Pockets = 19;
+    private static int PocketColour(int k) => k == 0 ? Green : k % 2 == 1 ? Red : Black;
     private const int NoBoxTop = -32000;
 
     private sealed class Mesh
@@ -191,50 +189,30 @@ internal static class RaceTrackRoulette
         if (innerBody >= 0) turning.Add(innerBody);
 
         // the head: the pockets, each its colour from the floor round the hole to the wall in bands along the floor's curve, gold frets
-        // between them and gold rings round them, its number in white near the wall -- in Bodies pieces (the engine's limit on a body's points)
-        var numbers0 = rim - NumbersIn; var numberMid = rim - NumberIn;
+        // between them and a gold ring round them -- in Bodies pieces (the engine's limit on a body's points)
         var bands = new List<double>();
-        for (var c = pockets; c < numbers0 - 0.01; c += (numbers0 - pockets) / 5) bands.Add(c);
-        bands.Add(numbers0); bands.Add(rim - 0.03);
-        var pocket = 2 * Math.PI / Order.Length;
+        for (var c = pockets; c < rim - 0.04; c += (rim - 0.03 - pockets) / 8) bands.Add(c);
+        bands.Add(rim - 0.03);
+        var pocket = 2 * Math.PI / Pockets;
         for (var piece = 0; piece < Bodies; piece++)
         {
             var head = new Mesh();
-            int k0 = piece * Order.Length / Bodies, k1 = (piece + 1) * Order.Length / Bodies;
+            int k0 = piece * Pockets / Bodies, k1 = (piece + 1) * Pockets / Bodies;
             for (var k = k0; k < k1; k++)
             {
-                double a0 = k * pocket, a1 = (k + 1) * pocket, am = (a0 + a1) / 2;
-                var n = Order[k];
-                var colour = n == 0 ? Green : Reds.Contains(n) ? Red : Black;
+                double a0 = k * pocket, a1 = (k + 1) * pocket;
+                var colour = PocketColour(k);
                 var inEdge = bands.Select(c => head.P(At(c, a0, Floor(c) + 6))).ToArray();
                 var outEdge = bands.Select(c => head.P(At(c, a1, Floor(c) + 6))).ToArray();
                 for (var i = 0; i + 1 < bands.Count; i++) head.Quad(inEdge[i], outEdge[i], outEdge[i + 1], inEdge[i + 1], colour, Vector3.UnitY);
                 void Band(double r0, double r1, double lift, int c) =>
                     head.Quad(head.P(At(r0, a0, Floor(r0) + lift)), head.P(At(r0, a1, Floor(r0) + lift)), head.P(At(r1, a1, Floor(r1) + lift)), head.P(At(r1, a0, Floor(r1) + lift)), c, Vector3.UnitY);
                 Band(pockets, pockets + 0.15, 12, Gold);
-                Band(numbers0 - 0.08, numbers0 + 0.08, 12, Gold);
                 // (the fret along the pocket's first edge: a strip 50 wide following the floor)
                 var side = new Vector3((float)-Math.Sin(a0), 0, (float)Math.Cos(a0)) * 25;
                 var fretA = bands.Select(c => head.P(At(c, a0, Floor(c) + 16) - side)).ToArray();
                 var fretB = bands.Select(c => head.P(At(c, a0, Floor(c) + 16) + side)).ToArray();
                 for (var i = 0; i + 1 < bands.Count; i++) head.Quad(fretA[i], fretB[i], fretB[i + 1], fretA[i + 1], GoldDark, Vector3.UnitY);
-                // (its number: upright seen from the bowl, where the cars drive -- its top towards the wall)
-                var digits = n.ToString();
-                var width = digits.Length * 3 + (digits.Length - 1);
-                Vector3 up = Radial(am), right = new((float)-Math.Sin(am), 0, (float)Math.Cos(am));
-                var mid = Radial(am) * (float)(numberMid * 512);
-                Vector3 Pix(double u, double v)
-                {
-                    var p = mid + right * (float)((u - width / 2.0) * Pixel) + up * (float)((2.5 - v) * Pixel);
-                    var cells = Math.Sqrt(p.X * p.X + p.Z * p.Z) / 512;
-                    return new Vector3(p.X, (float)(Floor(cells) + 22), p.Z);
-                }
-                for (var di = 0; di < digits.Length; di++)
-                    foreach (var (u0, v0, u1, v1) in Runs(Font[digits[di] - '0']))
-                    {
-                        var ox = di * 4;
-                        head.Quad(head.P(Pix(ox + u0, v0)), head.P(Pix(ox + u1, v0)), head.P(Pix(ox + u1, v1)), head.P(Pix(ox + u0, v1)), White, Vector3.UnitY);
-                    }
             }
             var number = Add(head.Write(), wcx, y0, wcz, ext, bottom);
             if (number >= 0) turning.Add(number);
@@ -274,27 +252,6 @@ internal static class RaceTrackRoulette
         report.Notes.Add($"a roulette wheel at cell ({cx:0.0}, {cz:0.0}): its wall {rim:0.##} cells out, its floor {run.HoleY:0} at the hole ({run.Hole:0.#} cells) to " +
                          $"{run.HoleY + Floor(rim):0} at the wall; {turning.Count} turning pieces, its ball, {(legs > 0 ? $"{legs} legs" : "floating")}, {made.Count} decors in all; " +
                          $"{lowered} points of the ground lowered under it, {removed} decors taken away");
-        return new RouletteSpot(wcx, wcz, homeX, homeZ, turning.ToArray(), ballBody, run.Spin, BallRadius, run.HoleY, run.Slope, run.Steepen, run.Hole, rim, outer, Thick, landing, balls);
-    }
-
-    // A digit's pixels as rectangles: each row's runs, runs alike in rows one under another joined (pixel corners: left, top, right, bottom).
-    private static List<(int U0, int V0, int U1, int V1)> Runs(string rows)
-    {
-        var runs = new List<(int U0, int V0, int U1, int V1)>();
-        for (var v = 0; v < 5; v++)
-        {
-            var u = 0;
-            while (u < 3)
-            {
-                if (rows[v * 3 + u] != '1') { u++; continue; }
-                var e = u;
-                while (e < 3 && rows[v * 3 + e] == '1') e++;
-                var joined = runs.FindIndex(q => q.V1 == v && q.U0 == u && q.U1 == e);
-                if (joined >= 0) runs[joined] = runs[joined] with { V1 = v + 1 };
-                else runs.Add((u, v, e, v + 1));
-                u = e;
-            }
-        }
-        return runs;
+        return new RouletteSpot(wcx, wcz, homeX, homeZ, turning.ToArray(), ballBody, run.Spin, BallRadius, run.HoleY, run.Slope, run.Steepen, run.Hole, rim, outer, Thick, landing, balls, Pockets);
     }
 }

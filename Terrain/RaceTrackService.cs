@@ -121,7 +121,10 @@ internal static class RaceTrackService
         // the scene and actor of each other scene it is seen from], since 2026-10-09
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? GasMonsters = null,
         // RouletteBalls: the roulette wheel's balls (bodies Roulette's ball on; RACEMOD.CPP roulette_balls=), since 2026-10-10
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? RouletteBalls = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? RouletteBalls = null,
+        // RoulettePockets: its pockets (RACEMOD.CPP roulette_pockets=); GoldIcon: the golden Gazogem's model in OBJFIX.HQR (gold_icon=), since 2026-10-10
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? RoulettePockets = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? GoldIcon = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -347,7 +350,7 @@ internal static class RaceTrackService
     public sealed class BuildSession
     {
         public bool CharacterCars, Baldino, SmallCars, Oil, CastCars;
-        public int? OilIcon, SuperJetModel, TwinsenSmall;
+        public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon;
         public int[]? LaserModels;
         public List<TrackInfo> Tracks { get; } = new();
     }
@@ -592,6 +595,10 @@ internal static class RaceTrackService
             var (icon, iconLog) = RaceTrackOil.InstallIcon(gameDirectory);
             log.Add(iconLog);
             session.OilIcon = icon;
+            // (and the golden Gazogem, the roulette wheel's super jackpot)
+            var (gold, goldLog) = RaceTrackOil.InstallGoldIcon(gameDirectory);
+            log.Add(goldLog);
+            session.GoldIcon = gold;
             // ... and the super jet-pack the car turns into
             var (jet, jetLog) = RaceTrackSuperJet.Install(gameDirectory);
             log.Add(jetLog);
@@ -613,7 +620,7 @@ internal static class RaceTrackService
         StoryInfo? story = null, DreamInfo? dream = null)
     {
         session ??= new BuildSession();
-        var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, Dream = dream,
+        var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, Dream = dream,
             LaserModels = session.LaserModels };
         if (info.ArcJumps is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
         if (Shuttles(gameDirectory, report, options) is { Count: > 0 } shuttles) info = info with { Shuttles = shuttles };
@@ -623,7 +630,7 @@ internal static class RaceTrackService
             var fine = Info(twin.Report, twin.Options, twinScenes);
             // (the town circuit's own arrow, which the bed switches on)
             if (story is not null) fine = fine with { StoryArrow = story.TownArrow };
-            info = info with { Twin = fine with { OilIcon = session.OilIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, LaserModels = session.LaserModels } };
+            info = info with { Twin = fine with { OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, LaserModels = session.LaserModels } };
         }
         session.Tracks.Add(info);
         var all = session.Tracks[0] with { Others = session.Tracks.Count > 1 ? session.Tracks.Skip(1).ToList() : null };
@@ -727,6 +734,7 @@ internal static class RaceTrackService
                     .Concat(wheel.Turning).ToArray()
                 : null,
             RouletteBalls: raised && report.Roulette is { Balls: > 1 } balled ? balled.Balls : null,
+            RoulettePockets: raised && report.Roulette is { } pocketed ? pocketed.Pockets : null,
             GasMonsters: scenes.GasMonsters is { Count: > 0 } monsters
                 ? monsters.Where(g => g[3] >= 0 && g[3] < report.GasMonsters.Count).GroupBy(g => g[3]).Select(pairs =>
                 {
