@@ -31,6 +31,8 @@ internal sealed class LavaBallRun
     public int From { get; set; }
     public int To { get; set; }
     public int Every { get; set; } = 5000;
+    // (a lava geyser's, RaceTrackPlan.LavaGeysers: the balls of each shower)
+    public int Balls { get; set; }
 }
 
 // The tunnel's pieces, every Piece cells along the road, a decor each: a wall just outside each rail, from under the deck up to the roof,

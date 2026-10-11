@@ -707,7 +707,7 @@ static int s_nbTunnels = 0;
 // one Wannies Island's mine spits; lava_ball_model=, the builder's copy of it RaceTrackOil.LavaBallScale times as big) tumbling along its
 // arc, shot out of the lava with the mine's lava burst (impact 25: a spray of sparks and of little balls, its sound) and bursting the same
 // way where it lands -- the magic ball's fire sprite with a trail of fire, and a nitro penguin's blast, until then.
-#define RACE_MAX_LAVA 16
+#define RACE_MAX_LAVA 48
 #define RACE_LAVA_MODEL 69                 // OBJFIX.HQR: the game's lava ball (lava_ball_model=: its bigger copy)
 #define RACE_LAVA_BURST 25                 // IMPACT 25: the mine's lava burst
 #define RACE_LAVA_BURST_FLOW 67            // ... its sparks, alone when the extras are short
@@ -718,9 +718,31 @@ static int s_nbTunnels = 0;
 #define RACE_LAVA_NEAR (40 * 512)          // shot only while Twinsen is this near the place it will land
 #define RACE_LAVA_REACH 1100               // a car this near the place it lands is caught in its burst
 #define RACE_LAVA_FORCE 20
-typedef struct { double SrcX, SrcY, SrcZ, DstX, DstY, DstZ; int From, To; S32 Every, Phase, Next, T0, Dur, Trail; int On, Ball, Shadow; } T_RACE_LAVA;
+typedef struct { double SrcX, SrcY, SrcZ, DstX, DstY, DstZ; int From, To; S32 Every, Phase, Next, T0, Dur, Trail; int On, Ball, Shadow; int Geyser, Armed; } T_RACE_LAVA;
 static T_RACE_LAVA s_lava[RACE_MAX_LAVA];
 static int s_nbLava = 0;
+// Lava geysers (lavageyser=<x> <y> <z> <from> <to> <every> <phase> <balls>, as lavaball=): every so often (Every ms, give or take a
+// quarter) while Twinsen is within RACE_GEYSER_NEAR of one, a stream of lava shot up out of it into the air for RACE_GEYSER_MS -- the
+// game's lava balls flying up and falling back, its lava burst at the foot -- and a shower of `balls` lava balls (lavaball='s, its own:
+// armed together, a little apart) coming down along its stretch of the road (the user, 2026-10-11: "streams of lava randomly shooting up
+// into the air sending lava balls showering down onto the track").
+#define RACE_MAX_GEYSERS 12
+#define RACE_GEYSER_MS 1800
+#define RACE_GEYSER_NEAR (45 * 512)
+#define RACE_GEYSER_EVERY 85               // a ball up the stream this often (ms) ...
+#define RACE_GEYSER_RISE 9500.0            // ... this fast at least (units a second, up; give or take a fifth: fast enough to go
+                                           //     RACE_GEYSER_OVER past its road's height there -- the bridge is 11,000 over the channel) ...
+#define RACE_GEYSER_G 12000.0              // ... falling back at this
+#define RACE_GEYSER_SPREAD 700.0           // ... and out to the side at up to this
+#define RACE_GEYSER_OVER 2500.0
+#define RACE_GEYSER_SHOWER 220             // the shower's balls this far apart (ms), the first this long after the stream starts ...
+#define RACE_GEYSER_FIRST 350
+#define RACE_MAX_COLUMN 24
+typedef struct { double X, Y, Z, Lift; S32 Every, Phase, Next, Until, Puff, Rise; } T_RACE_GEYSER;
+static T_RACE_GEYSER s_geysers[RACE_MAX_GEYSERS];
+static int s_nbGeysers = 0;
+typedef struct { int Extra; double X, Y, Z, VX, VY, VZ; S32 T0; } T_RACE_COLUMN;
+static T_RACE_COLUMN s_column[RACE_MAX_COLUMN];
 static int s_lavaModel = -1;               // lava_ball_model=
 // Lava falls (lavafall=<lip x> <y> <z> <foot x> <y> <z> <beta>, island units, one a place across the fall's face: RaceTrackLavaFall,
 // Volcano Island's crag by its plateau's south edge -- the user, 2026-10-10: "In scene 100 ... there's a lava water fall next to a section
@@ -1947,7 +1969,23 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_nbLava < RACE_MAX_LAVA && sscanf(v, "%d %d %d %d %d %d %d", &x, &y, &z, &from, &to, &every, &phase) == 7 && every > 0) {
                 memset(b, 0, sizeof(*b));
                 b->SrcX = x; b->SrcY = y; b->SrcZ = z; b->From = from; b->To = to; b->Every = every; b->Phase = phase; b->Ball = b->Shadow = -1;
+                b->Geyser = -1;
                 s_nbLava++;
+            }
+        }
+        else if (!strcmp(key, "lavageyser")) {
+            int x, y, z, from, to, every, phase, balls;
+            if (s_nbGeysers < RACE_MAX_GEYSERS && sscanf(v, "%d %d %d %d %d %d %d %d", &x, &y, &z, &from, &to, &every, &phase, &balls) == 8 && every > 0) {
+                T_RACE_GEYSER *g = &s_geysers[s_nbGeysers];
+                memset(g, 0, sizeof(*g));
+                g->X = x; g->Y = y; g->Z = z; g->Every = every; g->Phase = phase;
+                for (int i = 0; i < balls && s_nbLava < RACE_MAX_LAVA; i++) {
+                    T_RACE_LAVA *b = &s_lava[s_nbLava++];
+                    memset(b, 0, sizeof(*b));
+                    b->SrcX = x; b->SrcY = y; b->SrcZ = z; b->From = from; b->To = to; b->Every = every; b->Phase = phase; b->Ball = b->Shadow = -1;
+                    b->Geyser = s_nbGeysers;
+                }
+                s_nbGeysers++;
             }
         }
         else if (!strcmp(key, "shuttle")) {
@@ -5156,9 +5194,15 @@ static void LavaBalls(S32 now, int driving) {
     for (int i = 0; i < s_nbLava; i++) {
         T_RACE_LAVA *b = &s_lava[i];
         if (!b->On) {
-            if (!b->Next) { b->Next = now + b->Phase % b->Every; continue; }
-            if (now < b->Next) continue;
-            b->Next = now + b->Every * 3 / 4 + (S32)(VentRandom() * b->Every / 2);
+            if (b->Geyser >= 0) {
+                // (a geyser's: when its shower arms it)
+                if (!b->Armed || now < b->Next) continue;
+                b->Armed = 0;
+            } else {
+                if (!b->Next) { b->Next = now + b->Phase % b->Every; continue; }
+                if (now < b->Next) continue;
+                b->Next = now + b->Every * 3 / 4 + (S32)(VentRandom() * b->Every / 2);
+            }
             // a place along its stretch of the road, on the deck (not over a jump's gap), within its rails
             const int span = ((b->To - b->From) % n + n) % n;
             int k = -1;
@@ -5181,8 +5225,9 @@ static void LavaBalls(S32 now, int driving) {
             b->Ball = LaserExtra(s_lavaModel >= 0 ? s_lavaModel : RACE_LAVA_MODEL, (S32)(b->SrcX - cx), (S32)b->SrcY, (S32)(b->SrcZ - cz));
             b->Shadow = InitExtraAnimSprite(255, (S32)(b->DstX - cx), (S32)b->DstY + 40, (S32)(b->DstZ - cz), RACE_LAVA_SHADOW, RACE_LAVA_SHADOW, b->Dur + 100, 60, 1, 0);
             if (b->Shadow >= 0) ListExtra[b->Shadow].Flags |= EXTRA_NO_SHADOW;
-            // (out of the lava: the game's burst where it leaves it -- in Twinsen's cube: the little balls fly by its ground)
-            if (b->SrcX >= cx && b->SrcX < cx + 32768 && b->SrcZ >= cz && b->SrcZ < cz + 32768)
+            // (out of the lava: the game's burst where it leaves it -- in Twinsen's cube: the little balls fly by its ground; a geyser's
+            // stream has its own)
+            if (b->Geyser < 0 && b->SrcX >= cx && b->SrcX < cx + 32768 && b->SrcZ >= cz && b->SrcZ < cz + 32768)
                 GameLava((S32)(b->SrcX - cx), (S32)b->SrcY, (S32)(b->SrcZ - cz), 0, 0, 1);
             continue;
         }
@@ -5233,6 +5278,79 @@ static void LavaBalls(S32 now, int driving) {
             InitAnim(GEN_ANIM_CHOC, ANIM_ALL_THEN, (U8)index);
             InitHitExtraPof(car->Obj.X, car->Obj.Y + car->YMax + 1, car->Obj.Z, RACE_LAVA_FORCE);
         }
+    }
+}
+
+// Every frame: the lava geysers (lavageyser=), near Twinsen -- one going off: its stream (the game's lava balls up into the air and
+// falling back, moved here, the burst at its foot now and then) and its shower armed (LavaBalls flies it).
+static void LavaGeysers(S32 now) {
+    if (CubeMode != CUBE_EXTERIEUR) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    // the stream's balls in the air
+    for (int i = 0; i < RACE_MAX_COLUMN; i++) {
+        T_RACE_COLUMN *c = &s_column[i];
+        if (c->Extra < 0) continue;
+        T_EXTRA *e = &ListExtra[c->Extra];
+        const double t = (now - c->T0) / 1000.0;
+        const double y = c->Y + c->VY * t - RACE_GEYSER_G * t * t / 2;
+        if (e->Sprite != (S16)(3 + 32768) || t > 6 || (t > 0.2 && y < c->Y - 300)) {
+            if (e->Sprite == (S16)(3 + 32768)) e->Sprite = -1;
+            c->Extra = -1;
+            continue;
+        }
+        e->PosX = (S32)(c->X + c->VX * t); e->PosY = (S32)y; e->PosZ = (S32)(c->Z + c->VZ * t);
+        e->Beta = (S16)((now * 3 + i * 500) & 4095); e->Scale = (now * 2 + i * 300) & 4095;
+    }
+    if (!s_nbGeysers) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double hx = hero->Obj.X + cx, hz = hero->Obj.Z + cz;
+    for (int gi = 0; gi < s_nbGeysers; gi++) {
+        T_RACE_GEYSER *g = &s_geysers[gi];
+        const int here = g->X >= cx && g->X < cx + 32768 && g->Z >= cz && g->Z < cz + 32768;
+        if (now < g->Until) {
+            // the stream: a ball up it every so often, the burst at its foot now and then
+            if (here && now - g->Rise >= RACE_GEYSER_EVERY) {
+                g->Rise = now;
+                int free = 0;
+                for (int i = 0; i < MAX_EXTRAS; i++) free += ListExtra[i].Sprite == -1;
+                for (int i = 0; i < RACE_MAX_COLUMN && free >= RACE_LAVA_FREE; i++) {
+                    T_RACE_COLUMN *c = &s_column[i];
+                    if (c->Extra >= 0) continue;
+                    c->X = g->X - cx; c->Y = g->Y; c->Z = g->Z - cz; c->T0 = now;
+                    const double a = VentRandom() * 2 * 3.14159265358979, out = VentRandom() * RACE_GEYSER_SPREAD;
+                    c->VX = cos(a) * out; c->VZ = sin(a) * out; c->VY = g->Lift * (0.8 + VentRandom() * 0.4);
+                    c->Extra = LaserExtra(s_lavaModel >= 0 ? s_lavaModel : RACE_LAVA_MODEL, (S32)c->X, (S32)c->Y, (S32)c->Z);
+                    break;
+                }
+            }
+            if (here && now - g->Puff >= 300) { g->Puff = now; GameLava((S32)(g->X - cx), (S32)g->Y, (S32)(g->Z - cz), 0, 0, 0); }
+            continue;
+        }
+        if (!g->Next) { g->Next = now + g->Phase % g->Every + 1500; continue; }
+        if (now < g->Next) continue;
+        g->Next = now + g->Every * 3 / 4 + (S32)(VentRandom() * g->Every / 2);
+        if ((g->X - hx) * (g->X - hx) + (g->Z - hz) * (g->Z - hz) > (double)RACE_GEYSER_NEAR * RACE_GEYSER_NEAR) continue;
+        // it goes off: the stream, its burst and its sound, and its shower armed -- the stream up past its stretch of road's height
+        if (g->Lift <= 0) {
+            double top = g->Y;
+            for (int i = 0; i < s_nbLava; i++) {
+                if (s_lava[i].Geyser != gi) continue;
+                const int n = s_raisedLoop ? s_nbRaised - 1 : s_nbRaised - 1, span = ((s_lava[i].To - s_lava[i].From) % n + n) % n;
+                for (int q = 0; q <= span; q++) { const int k = (s_lava[i].From + q) % n; if (s_raised[k].Y > top) top = s_raised[k].Y; }
+                break;
+            }
+            const double rise = sqrt(2 * RACE_GEYSER_G * (top - g->Y + RACE_GEYSER_OVER));
+            g->Lift = rise > RACE_GEYSER_RISE ? rise : RACE_GEYSER_RISE;
+        }
+        g->Until = now + RACE_GEYSER_MS; g->Rise = 0; g->Puff = now;
+        if (here) GameLava((S32)(g->X - cx), (S32)g->Y, (S32)(g->Z - cz), 0, 0, 1);
+        int nth = 0;
+        for (int i = 0; i < s_nbLava; i++) {
+            T_RACE_LAVA *b = &s_lava[i];
+            if (b->Geyser != gi || b->On) continue;
+            b->Armed = 1; b->Next = now + RACE_GEYSER_FIRST + nth++ * RACE_GEYSER_SHOWER + (S32)(VentRandom() * 120);
+        }
+        Log_Info("[racemod] lava geyser %d goes off (%d balls)", gi + 1, nth);
     }
 }
 
@@ -5872,6 +5990,7 @@ void RaceMod_Frame(void) {
     if (s_powerups) PowerUps(now, driving);
     Vents(now);
     Jets(now, driving);
+    LavaGeysers(now);
     LavaBalls(now, driving);
     LavaFalls(now);
     BoostPanels(now, driving);
@@ -6562,6 +6681,7 @@ static void ResetTrack(void) {
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
     s_nbFalls = 0; s_nbPanels = 0; s_lavaModel = -1; s_fallFootNext = s_fallLipNext = 0;
+    s_nbGeysers = 0; for (int i = 0; i < RACE_MAX_COLUMN; i++) s_column[i].Extra = -1;
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = s_arcAcross1 = 0; s_arcTime = s_arcLandedAt = 0;

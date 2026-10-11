@@ -131,6 +131,9 @@ internal static class RaceTrackService
         // (RACEMOD.CPP boostpanel=), since 2026-10-10
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? LavaBallModel = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? LavaFalls = null,
+        // LavaGeysers: [x, y, z of the source, the raised road's first and last point of the stretch, every, phase (ms), balls a shower]
+        // (RACEMOD.CPP lavageyser=), since 2026-10-11
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? LavaGeysers = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? BoostPanels = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
@@ -746,6 +749,10 @@ internal static class RaceTrackService
                     .Concat(wheel.Turning).ToArray()
                 : null,
             LavaFalls: report.LavaFalls.Count > 0 ? report.LavaFalls.ToList() : null,
+            LavaGeysers: raised && report.LavaGeysers.Count > 0
+                ? report.LavaGeysers.Select(b => new[] { (int)Math.Round(b.X), (int)Math.Round(b.Y), (int)Math.Round(b.Z), report.RaisedSpan.IndexOf(b.From), report.RaisedSpan.IndexOf(b.To), b.Every, b.Phase, b.Balls })
+                    .Where(b => b[3] >= 0 && b[4] >= 0).ToList()
+                : null,
             BoostPanels: raised && report.BoostPanels.Count > 0 ? report.BoostPanels.ToList() : null,
             RouletteBalls: raised && report.Roulette is { Balls: > 1 } balled ? balled.Balls : null,
             RoulettePockets: raised && report.Roulette is { } pocketed ? pocketed.Pockets : null,

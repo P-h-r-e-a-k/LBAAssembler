@@ -284,13 +284,14 @@ internal sealed record RaceTrackIsland(
         Shuttles = new[] { (92, 2, 47, 19200, 9472), (92, 3, 47, 19104, 17632) },
     };
 
-    // Volcano Island (SOUSCELB.ILE, the game's island 11 under Celebration Island, scenes 130-132; cube (7,8) isn't there), redesigned on
-    // 2026-10-10 round its new summit: the ground north of the main lava channel raised to 30,000, a lake of lava on top pouring down its
-    // south face in four tiers (RaceTrackLavaFall). The start and the pit lane (its boost panel) on the sand plateau's north straight; south
-    // under the summit's west cliff, between a crystal gate and down the canyon road along the falls; a drop jump off its end onto the east
-    // ridge, south along it under a crystal arch over the crystal field in the lava; a jump down to the south shore, along it and up the
-    // volcano's flank past its bowls of lava; round the plateau's crystal garden, under another arch (RaceTrackCrystals). The game's lava
-    // balls out of the falls' foot, the lava, the bowls (LavaBalls). The plan: tools/RaceTrackPlan/volcano_design.py.
+    // Volcano Island (SOUSCELB.ILE, the game's island 11 under Celebration Island, scenes 130-132; cube (7,8) isn't there), from the user's
+    // sketch (2026-10-08), in two layers since 2026-10-11: the start and the pit lane (its boost panel) on the sand plateau's north straight;
+    // the upper layer climbing round the plateau past a lava fall down a crag's face (RaceTrackLavaFall), over its own climb and off east on
+    // a bridge high over the main lava channel, the jump across it a drop; between the channels, a jump onto the east edge (a crystal arch,
+    // the crystal field in the lava: RaceTrackCrystals), a jump down to the south shore, along it and up the volcano's flank; the lower layer
+    // along the plateau's south edge and its west side, under the crag's lava carried over the road on an aqueduct and poured off the bluff.
+    // The game's lava balls out of lava geysers' showers, the aqueduct, the fall's pool (LavaBalls, LavaGeysers).
+    // The plan: tools/RaceTrackPlan/volcano_design.py.
     public static readonly RaceTrackIsland Volcano = new("Volcano Island", "SOUSCELB.ILE", "SOUSCELB.OBL", 11, 130, 132, 38, "RaceTrackPlan.Volcano.json", null)
     {
         Title = "Volcano Island: over the lava", Roster = RaceDriver.Volcano,

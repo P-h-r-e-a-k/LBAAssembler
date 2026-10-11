@@ -98,6 +98,10 @@ internal sealed class RaceTrackPlan
     // Lava balls (RACEMOD.CPP lavaball=): balls of fire shot up out of the lava at Source (plan cells) and raining onto the stretch of the
     // lap From..To (the plan's points), one every Every ms or so -- Volcano Island's (the user, 2026-10-08).
     public LavaBallRun[]? LavaBalls { get; set; }
+    // Lava geysers (RACEMOD.CPP lavageyser=): as LavaBalls, but every so often a stream of lava shot up into the air and Balls balls at once
+    // showering the stretch -- Volcano Island's (the user, 2026-10-11: "streams of lava randomly shooting up into the air sending lava balls
+    // showering down onto the track").
+    public LavaBallRun[]? LavaGeysers { get; set; }
     // Machine guns on knolls inside corners (RaceTrackGunner, RACEMOD.CPP gunner=): Otringal's Franco gun, firing bursts onto the corner's
     // inner half (the user, 2026-10-09).
     public GunnerRun[]? Gunners { get; set; }
@@ -449,6 +453,8 @@ internal sealed class RaceTrackReport
     // the lava balls (RaceTrackPlan.LavaBalls): each one's source (island units, on the ground there), the lap's points of the stretch it
     // rains on, every (ms) and phase (ms)
     public List<(double X, double Y, double Z, int From, int To, int Every, int Phase)> LavaBalls { get; } = new();
+    // ... and the lava geysers (RaceTrackPlan.LavaGeysers): the same, and how many balls each shower
+    public List<(double X, double Y, double Z, int From, int To, int Every, int Phase, int Balls)> LavaGeysers { get; } = new();
     // the lava falls (RaceTrackLavaFall): across each one's face, [its lip's x, y, z, the foot's below it x, y, z (island units), the way the
     // face looks (the engine's beta, 0-4095)] (RACEMOD.CPP lavafall=)
     public List<int[]> LavaFalls { get; } = new();
@@ -839,7 +845,7 @@ internal static class RaceTrackBuilder
             RaceTrackPipes.PlacePipeline(island, main, pipeline, plan.OriginCellX, plan.OriginCellZ, options, report);
         // (the lava falls before the lava balls: a ball shot out of a fall's pool starts from the pool's surface)
         if (planned && plan.LavaFalls is { Length: > 0 } falls)
-            foreach (var fall in falls) RaceTrackLavaFall.Make(island, fall, plan.OriginCellX, plan.OriginCellZ, report);
+            foreach (var fall in falls) RaceTrackLavaFall.Make(island, fall, plan.OriginCellX, plan.OriginCellZ, main, options, report);
         if (planned && plan.LavaBalls is { Length: > 0 } lava)
         {
             var nth = 0;
@@ -850,6 +856,17 @@ internal static class RaceTrackBuilder
                 report.LavaBalls.Add((sx * 512, y, sz * 512, PlanPoint(plan, main, b.From), PlanPoint(plan, main, b.To), b.Every, nth++ * 1733 % b.Every));
             }
             report.Notes.Add($"{report.LavaBalls.Count} places the lava shoots balls of fire from onto the road");
+        }
+        if (planned && plan.LavaGeysers is { Length: > 0 } geysers)
+        {
+            var nth = 0;
+            foreach (var b in geysers.Where(b => b.Source is { Length: >= 2 } && b.Every > 0 && b.Balls > 0))
+            {
+                double sx = b.Source[0] + plan.OriginCellX, sz = b.Source[1] + plan.OriginCellZ;
+                var y = b.Source.Length >= 3 ? b.Source[2] : IslandOps.Altitude(island, sx * 512, sz * 512) ?? 0;
+                report.LavaGeysers.Add((sx * 512, y, sz * 512, PlanPoint(plan, main, b.From), PlanPoint(plan, main, b.To), b.Every, nth++ * 2311 % b.Every, b.Balls));
+            }
+            report.Notes.Add($"{report.LavaGeysers.Count} lava geysers showering the road");
         }
         if (planned && plan.Gunners is { Length: > 0 } gunners)
             foreach (var g in gunners.Where(g => g.Knoll is { Length: >= 2 }))
