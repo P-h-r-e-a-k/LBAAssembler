@@ -1775,6 +1775,9 @@ restartloop:
                 CheckZoneSce(ptrobj, i);
             }
 
+            // a race-track mod's car held at its cube's edge with no zone to take it: into the next cube's scene (RACEMOD.CPP)
+            if (i == NUM_PERSO) { extern void RaceMod_EdgeCross(void); RaceMod_EdgeCross(); }
+
             // Samples Always
             if (pansample AND ptrobj->SampleAlways) {
                 ParmSampleVolume = ptrobj->SampleVolume;

@@ -114,6 +114,60 @@ internal static class RaceTrackScenes
                 result.Add(new EdgeCrossing(to, from, bx, bz, bz > az ? 'N' : 'S', x - bx * 64.0, h));
             }
         }
+
+        // ... and where the road's width reaches over an edge its middle doesn't cross: a crossing at each side of the road that does, each
+        // way, unless one at about that place and height already covers it. Volcano Island's climb loop runs a cell inside the edge between
+        // scenes 130 and 131 with its road reaching four cells over it: scene 130's own zone (its whole east edge up to 15,000) took a car on
+        // the outside of the bend into 131, which had none back there, and the user's car sat at the edge on the third lap (2026-10-11).
+        void Add(int fromScene, int toScene, int cubeX, int cubeZ, char side, double along, double h)
+        {
+            if (result.Any(e => e.FromScene == fromScene && e.ToScene == toScene && e.CubeX == cubeX && e.CubeZ == cubeZ && e.Side == side
+                                && Math.Abs(e.Along - along) <= EdgeHalfCells - 2 && h >= e.Height - EdgeBelow + CoverBelow && h <= e.Height + EdgeAbove - CoverAbove))
+                return;
+            result.Add(new EdgeCrossing(fromScene, toScene, cubeX, cubeZ, side, along, h));
+        }
+        void Overhang(double cx, double cz, double ex, double ez, double h)
+        {
+            int ax = (int)Math.Floor(cx / 64), az = (int)Math.Floor(cz / 64), bx = (int)Math.Floor(ex / 64), bz = (int)Math.Floor(ez / 64);
+            if (ax == bx && az == bz) return;
+            if (!sceneOf.TryGetValue((ax, az), out var from) || !sceneOf.TryGetValue((bx, bz), out var to)) return;
+            if (ax != bx)
+            {
+                var edge = Math.Max(ax, bx) * 64.0; var z = cz + (ez - cz) * (edge - cx) / (ex - cx);
+                Add(from, to, ax, az, bx > ax ? 'E' : 'W', z - az * 64.0, h);
+                Add(to, from, bx, bz, bx > ax ? 'W' : 'E', z - bz * 64.0, h);
+            }
+            if (az != bz)
+            {
+                var edge = Math.Max(az, bz) * 64.0; var x = cx + (ex - cx) * (edge - cz) / (ez - cz);
+                Add(from, to, ax, az, bz > az ? 'S' : 'N', x - ax * 64.0, h);
+                Add(to, from, bx, bz, bz > az ? 'N' : 'S', x - bx * 64.0, h);
+            }
+        }
+        void Sides(double px, double pz, double dx, double dz, double half, double h)
+        {
+            var len = Math.Sqrt(dx * dx + dz * dz);
+            if (len <= 0 || half <= 0) return;
+            double nx = -dz / len * half, nz = dx / len * half;
+            Overhang(px, pz, px + nx, pz + nz, h);
+            Overhang(px, pz, px - nx, pz - nz, h);
+        }
+        // (the raised road by its own points and widths, to its rails and the floor's pad past them; the ground's by the lap, to its curbs)
+        var raised = report.Raised;
+        for (var k = 0; k < raised.Count; k++)
+        {
+            if (raised[k][3] <= 0) continue;
+            var a = raised[Math.Max(0, k - 1)]; var b = raised[Math.Min(raised.Count - 1, k + 1)];
+            Sides(raised[k][0] / 512.0, raised[k][1] / 512.0, (b[0] - a[0]) / 512.0, (b[1] - a[1]) / 512.0, raised[k][3] / 512.0 + 0.5, raised[k][2]);
+        }
+        for (var i = 0; i < n; i++)
+        {
+            if (up is not null && up[i]) continue;
+            if (report.LapArc is { } arc && arc.Length == n && arc[i]) continue;
+            int p = (i + n - 1) % n, q = (i + 1) % n;
+            if (report.Open) { p = Math.Max(0, i - 1); q = Math.Min(n - 1, i + 1); }
+            Sides(report.LapX[i], report.LapZ[i], report.LapX[q] - report.LapX[p], report.LapZ[q] - report.LapZ[p], options.CurbHalfWidth + 0.5, ground(report.LapX[i], report.LapZ[i]));
+        }
         return result;
     }
 

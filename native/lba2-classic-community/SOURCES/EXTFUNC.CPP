@@ -2440,6 +2440,11 @@ static void DoAnimExtGround(U8 numobj) {
         }
     }
 
+    // (a race-track mod's car held at the edge: noted, for the race-track mode to carry it over where no zone does -- RACEMOD.CPP; the
+    // flags themselves are cleared by the next object's move, before the scene is drawn)
+    if (numobj == NUM_PERSO)
+        RaceMod_EdgeHeld(FlagHeroOutX, FlagHeroOutZ);
+
     if (!GereCodesJeu(numobj))
         validepos = FALSE;
 

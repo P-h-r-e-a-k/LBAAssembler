@@ -5989,6 +5989,44 @@ int RaceMod_Cars(char lines[][96], int most) {
     return n;
 }
 
+// The car held at its cube's edge (EXTFUNC.CPP DoAnimExt: Nxw/Nzw kept DEMI_BRICK_XZ inside the cube, FlagHeroOutX/Z set, and no
+// cube-change zone took it -- OBJECT.CPP GereZoneChangeCube): carried over into the next cube's scene (cube_scene=) as such a zone would,
+// at its near side, the height and the other coordinate kept. The build gives the scenes a zone where the lap's middle crosses an edge,
+// and the retail zones cover what they cover: Volcano Island's climb loop runs a cell inside the edge between scenes 130 and 131 with its
+// road reaching four cells over it -- scene 130's own zone took a car on the outside of the bend into 131 (its whole east edge up to
+// 15,000), 131 had none back there, and the user's car sat at the edge on the third lap, an invisible wall (2026-10-11).
+static int s_edgeX = 0, s_edgeZ = 0;       // the hero's last move held him at the cube's edge in x, in z (RaceMod_EdgeHeld)
+void RaceMod_EdgeHeld(S32 outX, S32 outZ) { s_edgeX = outX != 0; s_edgeZ = outZ != 0; }
+// (PERSO.CPP: after the hero's zones, in the actors' loop -- a cube change asked for there is made at once; asked for later, as the
+// scene is drawn, the drawing's autosave cleared FlagChgCube first and the car arrived at the scene's start, on the grid)
+void RaceMod_EdgeCross(void) {
+    const int heldX = s_edgeX, heldZ = s_edgeZ;
+    s_edgeX = s_edgeZ = 0;
+    if (!RaceMod_Active() || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || NewCube != -1 || s_arcOn >= 0 || !(heldX || heldZ)) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    int qx = CurrentCubeX, qz = CurrentCubeY;
+    S32 x = hero->Obj.X, z = hero->Obj.Z;
+    if (heldX) {
+        if (x <= DEMI_BRICK_XZ) { qx--; x = 32768 - DEMI_BRICK_XZ; }
+        else if (x >= 32768 - DEMI_BRICK_XZ) { qx++; x = DEMI_BRICK_XZ; }
+    }
+    if (heldZ) {
+        if (z <= DEMI_BRICK_XZ) { qz--; z = 32768 - DEMI_BRICK_XZ; }
+        else if (z >= 32768 - DEMI_BRICK_XZ) { qz++; z = DEMI_BRICK_XZ; }
+    }
+    if (qx == CurrentCubeX && qz == CurrentCubeY) return;
+    int scene = -1;
+    for (int c = 0; c < s_nbCubeScenes; c++)
+        if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) scene = s_cubeScenes[c][2];
+    if (scene < 0) return;
+    NewCube = scene;
+    NewPosX = x; NewPosY = hero->Obj.Y; NewPosZ = z;
+    FlagChgCube = 1;
+    FlagReajustPosTwinsen = FALSE;
+    Log_Info("[racemod] the car held at the edge of cube (%d,%d) with no zone over it: into cube (%d,%d), scene %d, at (%d,%d,%d)",
+             (int)CurrentCubeX, (int)CurrentCubeY, qx, qz, scene, (int)NewPosX, (int)NewPosY, (int)NewPosZ);
+}
+
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);

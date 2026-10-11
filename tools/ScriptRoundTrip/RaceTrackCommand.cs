@@ -137,7 +137,8 @@ internal static class RaceTrackCommand
             return new RaceTrackService.TrackBuild(RaceTrackPlan.Built(where), options);
         }).ToList();
         var watch = System.Diagnostics.Stopwatch.StartNew();
-        var result = RaceTrackService.Build(game, tracks);
+        // (RT_PROGRESS=1: the build's steps as the race track window's bar hears them, each with the time it was reached)
+        var result = RaceTrackService.Build(game, tracks, Environment.GetEnvironmentVariable("RT_PROGRESS") == "1" ? new ConsoleProgress(watch) : null);
         Console.WriteLine($"{result.Summary} ({watch.Elapsed.TotalSeconds:0.0} s)");
         if (Environment.GetEnvironmentVariable("RT_LOG") == "1") foreach (var l in result.Log) Console.WriteLine("  " + l);
         foreach (var t in RaceTrackService.Tracks(RaceTrackService.ReadInfo(game)))
@@ -447,4 +448,10 @@ internal static class RaceTrackCommand
         for (var i=0;i<names.Count;i++) if (names[i] is { } n && n.ToLowerInvariant().Contains(word)) Console.WriteLine($"{i-1}: {n}");
         return 0;
     }
+}
+
+// A build's progress printed as it comes (RT_PROGRESS=1), on the build's own thread: the time each step was reached, how far, and what it is.
+internal sealed class ConsoleProgress(System.Diagnostics.Stopwatch watch) : IProgress<RaceTrackService.BuildProgress>
+{
+    public void Report(RaceTrackService.BuildProgress value) => Console.WriteLine($"  [{watch.Elapsed.TotalSeconds,6:0.0} s] {value.Done * 100,3:0}%  {value.Doing}");
 }

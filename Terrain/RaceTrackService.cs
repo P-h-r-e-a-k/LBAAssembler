@@ -25,6 +25,8 @@ internal static class RaceTrackService
     public const string InfoFile = "RACETRACK.JSON";
 
     public sealed record BuildResult(bool Ok, string Summary, List<string> Log, RaceTrackReport? Report);
+    // Where a build has got to (Build's `progress`, for RaceTrackWindow's bar): the part of the whole build done (0..1) and what it is doing.
+    public readonly record struct BuildProgress(double Done, string Doing);
 
     // Where a lap is counted, in the terms the engine uses: the island cube the line is in, its ends in that cube's own world units, the way
     // a lap crosses it.
@@ -284,15 +286,23 @@ internal static class RaceTrackService
     // Builds the tracks into the folder, in the order given, all from the originals: what the folder had before -- any island's track,
     // this build's or another's -- goes. (Two entries for one island -- Citadel Island's town circuit and its storm track, which build the
     // same files -- build it once, as the first of them.)
-    public static BuildResult Build(string gameDirectory, IReadOnlyList<TrackBuild> tracks)
+    // `progress` hears where it has got to: the folder's originals first, then each track its share, step by step (BuildSession.Step).
+    public static BuildResult Build(string gameDirectory, IReadOnlyList<TrackBuild> tracks, IProgress<BuildProgress>? progress = null)
     {
         if (Problem(gameDirectory) is { } problem) return new(false, problem, new(), null);
         tracks = tracks.DistinctBy(t => t.Options.Island.IleFile, StringComparer.OrdinalIgnoreCase).ToList();
         if (tracks.Count == 0) return new(false, "No island is chosen: nothing was changed.", new(), null);
+        // (the bar's shares, by how long each part takes: the originals, Polar Island added when the folder hasn't got it, Sendell's Well
+        // made, then each track its own -- BuildSeconds)
+        var addPolar = tracks.Any(t => t.Options.Island.Dream) && !PolarInOriginals(gameDirectory);
+        var setup = 0.5 + (addPolar ? PolarAddSeconds : 0) + (tracks.Any(t => t.Options.Island.Created) ? 0.4 : 0);
+        var whole = setup + tracks.Sum(t => BuildSeconds(t.Options.Island));
         try
         {
             // (Polar Island's track needs the island: added to the originals when they haven't got it)
+            if (addPolar) progress?.Report(new(0, "Polar Island: making the island from LBA1's scenes"));
             var polar = tracks.Any(t => t.Options.Island.Dream) ? EnsurePolar(gameDirectory) : new List<string>();
+            progress?.Report(new((setup - 0.4) / whole, "Keeping the original files and starting from them"));
             var files = tracks.SelectMany(t => FilesFor(t.Options.Island)).Concat(ExtraFiles).Distinct().ToArray();
             foreach (var f in files)
             {
@@ -307,16 +317,21 @@ internal static class RaceTrackService
             // (an island the build makes -- Sendell's Well -- is made afresh, its files and its scene, from those originals; one this
             // build leaves out goes)
             var made = new List<string>();
-            if (tracks.Any(t => t.Options.Island.Created)) made.AddRange(SendellWell.Install(gameDirectory));
+            if (tracks.Any(t => t.Options.Island.Created)) { progress?.Report(new((setup - 0.3) / whole, "Sendell's Well: making the island")); made.AddRange(SendellWell.Install(gameDirectory)); }
             else SendellWell.Remove(gameDirectory);
 
             var session = new BuildSession();
             var log = new List<string>();
             var starts = new List<string>();
             RaceTrackReport? first = null;
-            foreach (var track in tracks)
+            var before = setup;
+            foreach (var (track, k) in tracks.Select((t, k) => (t, k)))
             {
                 var options = track.Options;
+                var shown = tracks.Count > 1 ? $"{options.Island.Name} ({k + 1} of {tracks.Count})" : options.Island.Name;
+                var (from, share) = (before, BuildSeconds(options.Island));
+                before += share;
+                session.Progress = progress is null ? null : (f, what) => progress.Report(new((from + share * Math.Clamp(f, 0, 1)) / whole, $"{shown} — {what}"));
                 var source = Path.Combine(gameDirectory, options.Island.IleFile + (options.Island.Created ? "" : BackupSuffix));
                 var built = BuildFiles(gameDirectory, source, track.Plan, options, track.TwinPlan, session);
                 var (report, scenes) = (built.Report, built.Scenes);
@@ -341,6 +356,7 @@ internal static class RaceTrackService
                     where = $"{options.Island.Name}'s track in the storm ({options.Island.IleFile}) starts in scene {scenes.StartScene}, its track once the storm is over ({options.Island.TwinIleFile}) in scene {fine.StartScene}.";
                 if (where.Length > 0) starts.Add(where);
             }
+            progress?.Report(new(1, "Done"));
             var count = tracks.Sum(t => t.Options.Island.Tracks);
             var built1 = count == 1 ? "The race track is built." : $"{count} race tracks are built ({string.Join(", ", tracks.Select(t => t.Options.Island.Built))}); Play races the one of the island the editor has open.";
             return new(true, $"{built1} {string.Join(" ", starts)}".Trim(), log, first);
@@ -368,6 +384,9 @@ internal static class RaceTrackService
         public int[]? CrystalShardModels;
         public int[]? LaserModels;
         public List<TrackInfo> Tracks { get; } = new();
+        // where the track being built has got to (the part of it done, 0..1, and what it is doing), for Build's progress; null: no one asks
+        public Action<double, string>? Progress;
+        public void Step(double done, string doing) => Progress?.Invoke(done, doing);
     }
 
     // Builds the track into the game folder's files, which are the originals when this runs (the island's own ground is read from
@@ -378,6 +397,7 @@ internal static class RaceTrackService
     public static Built BuildFiles(string gameDirectory, string islandSource, RaceTrackPlan plan, RaceTrackOptions options, RaceTrackPlan? twinPlan = null, BuildSession? session = null)
     {
         session ??= new BuildSession();
+        session.Step(0, "reading the island");
         twinPlan ??= RaceTrackPlan.BuiltTwin(options.Island);
         // (the twin's options as they were chosen, before this file's plan settles its crossing style and bodies)
         var twinOptions = options.Copy();
@@ -401,9 +421,11 @@ internal static class RaceTrackService
         if (options.Island.NewCubes.Length > 0) scaled.AddRange(IslandScaler.AddCubeScenes(gameDirectory, options.Island, island));
         var extra = Prepare(gameDirectory, options);
         extra.InsertRange(0, scaled);
+        session.Step(0.05, "the road's textures");
         var themed = RaceTrackTextures.Import(island, options.Island, gameDirectory);
         options.Theme = themed.Theme;
         if (themed.Log.Length > 0) extra.Add(themed.Log);
+        session.Step(0.1, "the road, its ground and its scenery");
         var report = RaceTrackBuilder.Build(island, plan, options);
         // (an island with more ground pages -- POLAR.ILE -- has a texture index of a page and a definition, IslandFile.GroundPageShift, and
         // the triangle's Wide bit: the road's definitions, the smooth kerbs' a triangle each on a bend, must fit in a cube's 2,048)
@@ -415,14 +437,19 @@ internal static class RaceTrackService
                 throw new InvalidDataException($"{options.Island.IleFile}: cube ({full.Item1}, {full.Item2}) needs {most} ground texture definitions with the road, more than the {island.MaxGroundDefinitions} an island with more texture pages has room for.");
             extra.Add($"{options.Island.IleFile}: at most {most} ground texture definitions in a cube with the road (room for {island.MaxGroundDefinitions})");
         }
+        session.Step(0.65, "saving the island");
         island.Save(Path.Combine(gameDirectory, options.Island.IleFile));
         AppendBodies(Path.Combine(gameDirectory, options.Island.OblFile), report, options);
+        if (options.Island.TwinIleFile is not null) session.Step(0.67, $"{options.Island.TwinIleFile}, the island in the other weather");
         var twin = BuildTwin(gameDirectory, twinPlan ?? plan, twinPlan is not null, twinOptions, options, report);
         if (twin is not null) extra.Add(twin.Log);
+        session.Step(0.7, "the holomap, the jumps and the cars");
         extra.AddRange(Finish(gameDirectory, report, options, twin, session));
         var own = twin is { Own: true } ? twin : null;
+        session.Step(0.92, "the scenes");
         if (RaceTrackScenes.AddScene(gameDirectory, options.Island) is { } added) extra.Add(added);
         var scenes = RaceTrackScenes.Apply(gameDirectory, report, options, own is null ? null : (own.Report, own.Options));
+        session.Step(0.98, "the story and the race's settings");
         var story = Story(gameDirectory, report, options, own, scenes);
         extra.AddRange(story.Log);
         // (a dreamt sprint's texts, and where it ends)
@@ -841,15 +868,36 @@ internal static class RaceTrackService
     private static List<string> EnsurePolar(string gameDirectory)
     {
         if (PolarInOriginals(gameDirectory)) return new List<string> { "Polar Island is in the folder: the track is built on it" };
-        var lba1 = Environment.GetEnvironmentVariable("LBA1_DIR") is { Length: > 0 } env ? env : EditorSettings.Current.Lba1Directory;
-        if (!LBAAssembler.Lba1.Lba1Game.IsInstalled(lba1))
-            throw new InvalidDataException("Polar Island's track is built on Polar Island, which is made from LBA1's own scenes: choose the LBA1 game folder under File > Settings first.");
+        if (PolarProblem(gameDirectory) is { } problem) throw new InvalidDataException(problem);
+        var lba1 = Lba1Folder();
         var log = new List<string>();
         if (AllFiles.Any(f => File.Exists(Path.Combine(gameDirectory, f + BackupSuffix))))
             log.Add("The folder put back to its originals first: " + Restore(gameDirectory));
         var added = LBAAssembler.Terrain.Polar.PolarIsland.Add(lba1, gameDirectory);
         log.Add($"Polar Island added to the folder from LBA1's scenes ({added.Count} steps: Tools > LBA2: Polar Island has the island on its own)");
         return log;
+    }
+
+    // About how long each island's track takes to build, in seconds (2026-10-11: the thirteen built together in 62 s, the Desert island's
+    // ground the longest), and adding Polar Island to a folder: each one's share of the progress bar.
+    private const double PolarAddSeconds = 4;
+    private static double BuildSeconds(RaceTrackIsland island) =>
+        island == RaceTrackIsland.Desert ? 16 : island == RaceTrackIsland.Citadel ? 8.3 : island == RaceTrackIsland.Knartas ? 8.1 : island == RaceTrackIsland.Otringal ? 8.4
+        : island == RaceTrackIsland.Polar ? 5.4 : island == RaceTrackIsland.Volcano ? 2.5 : island == RaceTrackIsland.Sendell || island == RaceTrackIsland.Moon ? 0.8 : 1.4;
+
+    private static string Lba1Folder() => Environment.GetEnvironmentVariable("LBA1_DIR") is { Length: > 0 } env ? env : EditorSettings.Current.Lba1Directory;
+
+    // Why Polar Island's track can't be built into the folder, or null: the folder hasn't got the island and there is no LBA1 game folder
+    // (File > Settings; LBA1_DIR for the command line) to make it from. The window asks before it builds anything -- a build that found
+    // this out half-way changed nothing, and its message went by unseen ("it causes nothing to build", a user's report, 2026-10-11).
+    public static string? PolarProblem(string gameDirectory)
+    {
+        if (PolarInOriginals(gameDirectory)) return null;
+        var lba1 = Lba1Folder();
+        if (LBAAssembler.Lba1.Lba1Game.IsInstalled(lba1)) return null;
+        return "Polar Island's track is built on Polar Island, which isn't in this folder yet: the build makes it from LBA1's own scenes, so it needs the LBA1 game folder. " +
+               (string.IsNullOrWhiteSpace(lba1) ? "No LBA1 folder is set: choose it under File > Settings (the folder with LBA1's SCENE.HQR, LBA_GRI.HQR, LBA_BLL.HQR, LBA_BRK.HQR and RESS.HQR) and build again."
+                                                : $"The LBA1 folder in the settings ({lba1}) hasn't got LBA1's SCENE.HQR, LBA_GRI.HQR, LBA_BLL.HQR, LBA_BRK.HQR and RESS.HQR: choose the right folder under File > Settings and build again.");
     }
 
     // Whether the originals a build starts from have Polar Island: its files and its scenes.

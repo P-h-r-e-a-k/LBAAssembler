@@ -37,6 +37,11 @@ internal sealed class RaceTrackWindow : Window
     private readonly Button closeButton = new() { Content = "Close", Padding = new Thickness(14, 5, 14, 5), IsCancel = true };
     private readonly Button carButton = new() { Content = "Race car setup…", Padding = new Thickness(14, 5, 14, 5), ToolTip = "The buggy's gears, acceleration, brakes and steering when you play a folder with a race track built" };
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
+    // the build's progress (the user, 2026-10-11: "add a visible process bar for building tracks in the track builder window"): the bar and
+    // what the build is doing, how far and for how long; shown from the first build on
+    private readonly ProgressBar progressBar = new() { Height = 14, Minimum = 0, Maximum = 1, Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed };
+    private readonly TextBlock progressText = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed };
+    private bool building;
 
     public RaceTrackWindow(string gameRoot, Action changed)
     {
@@ -69,6 +74,8 @@ internal sealed class RaceTrackWindow : Window
         carButton.Click += (_, _) => new RaceCarWindow(forPlay: false, gameRoot) { Owner = this }.ShowDialog();
         IslandChanged();
         UpdateStatus();
+        // (the build goes on without the window: it isn't closed under it)
+        Closing += (_, e) => { if (building) e.Cancel = true; };
     }
 
     // The islands the window lists, two to a row, each with what its track is: the box's label and its tooltip.
@@ -113,7 +120,10 @@ internal sealed class RaceTrackWindow : Window
 
     private void BuildLayout()
     {
-        foreach (var t in new TextBlock[] { status }) t.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
+        foreach (var t in new TextBlock[] { status, progressText }) t.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
+        progressBar.SetResourceReference(ForegroundProperty, "ThemeAccentBrush");
+        progressBar.SetResourceReference(BackgroundProperty, "ThemeFieldBrush");
+        progressBar.SetResourceReference(BorderBrushProperty, "ThemeBorderBrush");
         foreach (var box in new TextBox[] { planPath, log })
         {
             box.SetResourceReference(BackgroundProperty, "ThemeFieldBrush");
@@ -176,6 +186,8 @@ internal sealed class RaceTrackWindow : Window
         foreach (var c in new CheckBox[] { removeActors, buggyAlways, startAtLine, roadZones, trackCameras, story }) { c.Margin = new Thickness(0, 2, 0, 2); root.Children.Add(c); }
 
         root.Children.Add(status);
+        root.Children.Add(progressBar);
+        root.Children.Add(progressText);
         log.Margin = new Thickness(0, 10, 0, 0);
         root.Children.Add(log);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
@@ -255,6 +267,13 @@ internal sealed class RaceTrackWindow : Window
             MessageBox.Show(this, $"The plan can't be read: {error.Message}", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
+        // (Polar Island's track is built on the island, which the build makes from LBA1's scenes when the folder hasn't got it: without an
+        // LBA1 folder to make it from, nothing would be built -- said now, before anything is asked or changed)
+        if (islands.Any(i => i.Dream) && RaceTrackService.PolarProblem(gameRoot) is { } polar)
+        {
+            MessageBox.Show(this, polar, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
         var files = islands.SelectMany(RaceTrackService.FilesFor).Distinct();
         // (a track built before on an island left unticked goes: every build starts from the originals)
         var gone = RaceTrackService.BuiltIslands(gameRoot).Where(b => !islands.Any(i => i.IleFile == b.IleFile)).Select(b => b.IleFile == RaceTrackIsland.Citadel.IleFile ? "Citadel Island" : b.Name).Distinct().ToList();
@@ -264,16 +283,41 @@ internal sealed class RaceTrackWindow : Window
             (gone.Count > 0 ? $"\n\nThe track{(gone.Count > 1 ? "s" : "")} built before on {string.Join(" and ", gone)} will be taken out: tick {(gone.Count > 1 ? "them" : "it")} to keep {(gone.Count > 1 ? "them" : "it")}." : ""),
             Title, MessageBoxButton.OKCancel, MessageBoxImage.Question);
         if (answer != MessageBoxResult.OK) return;
-        buildButton.IsEnabled = false; restoreButton.IsEnabled = false;
+        buildButton.IsEnabled = false; restoreButton.IsEnabled = false; carButton.IsEnabled = false; closeButton.IsEnabled = false;
+        building = true;
         log.Text = islands.Sum(i => i.Tracks) > 1 ? $"Building {islands.Sum(i => i.Tracks)} tracks…" : "Building…";
+        // the bar, where it can be seen, and the time going by while a step takes long (the road's ground and scenery on a big island)
+        var started = DateTime.Now;
+        var doing = "Starting";
+        var done = 0.0;
+        progressBar.Value = 0; progressBar.Visibility = Visibility.Visible; progressText.Visibility = Visibility.Visible;
+        void Show() => progressText.Text = $"{done * 100:0}%  {doing}…  ({Elapsed(DateTime.Now - started)})";
+        Show();
+        progressText.BringIntoView();
+        var clock = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        clock.Tick += (_, _) => Show();
+        clock.Start();
+        var progress = new Progress<RaceTrackService.BuildProgress>(p => { done = p.Done; doing = p.Doing; progressBar.Value = Math.Clamp(p.Done, 0, 1); Show(); });
         var root = gameRoot;
-        var result = await Task.Run(() => RaceTrackService.Build(root, tracks));
-        buildButton.IsEnabled = true;
-        log.Text = string.Join("\n", result.Log);
+        RaceTrackService.BuildResult result;
+        try { result = await Task.Run(() => RaceTrackService.Build(root, tracks, progress)); }
+        finally
+        {
+            clock.Stop();
+            building = false;
+            buildButton.IsEnabled = true; carButton.IsEnabled = true; closeButton.IsEnabled = true;
+        }
+        var took = Elapsed(DateTime.Now - started);
+        progressBar.Value = result.Ok ? 1 : 0;
+        progressText.Text = result.Ok ? $"Built in {took}." : $"The build stopped after {took}: nothing was changed.";
+        log.Text = result.Ok ? string.Join("\n", result.Log) : result.Summary;
         status.Text = result.Summary;
         UpdateStatus();
         if (result.Ok) changed();
+        else MessageBox.Show(this, result.Summary, Title, MessageBoxButton.OK, MessageBoxImage.Error);
     }
+
+    private static string Elapsed(TimeSpan t) => t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}:{t.Seconds:00}" : $"{t.TotalSeconds:0} s";
 
     private void Restore()
     {

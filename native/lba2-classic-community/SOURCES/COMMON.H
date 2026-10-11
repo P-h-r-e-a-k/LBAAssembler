@@ -309,6 +309,9 @@ S32 RaceMod_BlocksInventory(void);
 // An opponent's car, which the race-track mode places wherever it is on the lap -- in the next cube too (EXTFUNC.CPP: not kept inside
 // the player's cube).
 S32 RaceMod_FreeOfCube(S32 numobj);
+// The hero held at his cube's edge this move (EXTFUNC.CPP DoAnimExt: FlagHeroOutX/Z): the race's car carried over into the next cube's
+// scene once the frame's zones have had their say and none took it (RACEMOD.CPP HeldAtEdge).
+void RaceMod_EdgeHeld(S32 outX, S32 outZ);
 // The race's mushrooms, penguins and oil slicks: no car is stopped by them, or stands on them (OBJECT.CPP CheckObjCol).
 S32 RaceMod_NoCollide(S32 numobj);
 // Twinsen's car on the super jet-pack: through the island's objects and the scene's actors (EXTFUNC.CPP, OBJECT.CPP CheckObjCol).
