@@ -10,6 +10,13 @@ internal static class Program
     private static int Main(string[] args)
     {
         var command = args.Length > 0 ? args[0] : "stats";
+        // (RT_CULTURE=ru-RU: run as a machine with that language set does -- its decimal comma -- to test what the editor writes there)
+        if (Environment.GetEnvironmentVariable("RT_CULTURE") is { Length: > 0 } culture)
+        {
+            var c = System.Globalization.CultureInfo.GetCultureInfo(culture);
+            System.Globalization.CultureInfo.DefaultThreadCurrentCulture = c;
+            System.Globalization.CultureInfo.CurrentCulture = c;
+        }
         HqrPath = Environment.GetEnvironmentVariable("LBA2_SCENE_HQR") ?? DefaultSceneHqr;
         var archive = HqrArchive.Open(HqrPath);
 

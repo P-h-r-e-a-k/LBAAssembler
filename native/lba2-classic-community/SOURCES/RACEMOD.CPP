@@ -124,6 +124,8 @@
  *                                jump's lip: he never lands -- the picture fading to white (WhiteFade) and the waking scene fading in
  *                                from white (RaceMod_FadeFromWhite: Polar Island's jump into the rocky peak, 2026-10-06)
  */
+#include <errno.h>
+#include <string.h>
 #include "C_EXTERN.H"
 #include "COMMON.H"
 #include "AMBIANCE.H"
@@ -1627,7 +1629,7 @@ S32 RaceMod_StatueShown(S32 risen) { return RaceMod_Active() && s_statue >= 0 ? 
 
 static void LoadPath(T_RACE_OPPONENT *o, const char *path) {
     FILE *f = fopen(path, "r");
-    if (!f) return;
+    if (!f) { Log_Warn("[racemod] a car's line: %s could not be read (%s)", path, strerror(errno)); return; }
     int capacity = 4096, count = 0;
     S32 *x = (S32 *)malloc(capacity * sizeof(S32)), *z = (S32 *)malloc(capacity * sizeof(S32));
     S32 *y = (S32 *)malloc(capacity * sizeof(S32)), *v = (S32 *)malloc(capacity * sizeof(S32));
@@ -1817,7 +1819,10 @@ static int ReadSets(const char *v, int *sets) {
 
 static void Load(const char *path, int carOnly = 0) {
     FILE *f = fopen(path, "r");
-    if (!f) return;
+    // (said: a race file the game can't open left the race-track mode on with nothing in it -- no start line, no grid, Twinsen where the
+    // scene put him -- and nothing in the log, 2026-10-12)
+    if (!f) { Log_Warn("[racemod] the race file %s could not be read (%s): no race", path, strerror(errno)); return; }
+    Log_Info("[racemod] race file %s", path);
     snprintf(s_loaded, sizeof(s_loaded), "%s", path);
     // (the set's own keys are read once: a track's file loaded later doesn't add to them)
     const int setRead = s_nbTracks > 0 || s_tiredVar >= 0;

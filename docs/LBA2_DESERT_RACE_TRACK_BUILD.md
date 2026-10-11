@@ -2843,6 +2843,32 @@ The user: "The mushroom pick up is far too small to see, let's make this bigger.
 
 The user: "Update our mini-map for race mode so it fully fits into its viewport and shows all the cars moving around in real time". While Play races a track whose island the editor has open (`MainWindow.RaceMinimap.cs`), the minimap panel shows the lap and 6 cells round it scaled to fit its box (no scrolling), the road drawn over the island -- a raised road its rails' width, a jump's gap left open; a road on the ground the racing line -- and every car as a dot: Twinsen's yellow and bigger, each opponent a colour of its own (its name as the dot's tooltip). The dots move with the cars, asked for every 150 ms over the play's control socket: the engine's console command `racecars` (`RaceMod_Cars`) answers `car <n> <x> <z> <beta> <name>` a line each, island units, n -1 for Twinsen -- an opponent's own car where the scene has it in sight, else where its line has it in the race. When the play stops the minimap goes back to the editor's own (zoomed in, scrolling, the camera's marker).
 
+## Folders with non-English names, and why a race didn't start (2026-10-12)
+
+A user's video (in Russia): Play's "Race: Elevator Platform", the race car setup's Play, and no race -- Twinsen not where he should be, the
+editor's log saying only "LBA2 control socket didn't come up". On a fresh copy of the game with fresh settings the same steps raced (the
+prepared save's start and the fallback `cube 120` start alike); what differs on such a machine:
+
+- *Folder names outside ASCII.* SDL's main hands the game its command line in UTF-8, and the C library's narrow file calls (`stat`, `fopen`)
+  and `getenv` read paths in the process's code page. A play folder (`lba2-play` beside LBAAssembler.exe -- under `C:\Users\<Cyrillic
+  name>` for many) with any letter outside ASCII was "Invalid user directory", and a game folder such was "does not hold the game data":
+  the game ended before its window opened, saying so only on its console, and the editor showed "The game ended." over its own view of the
+  island. Race files read with a path in them that isn't ASCII were "could not be read" (the raised road) or, the race file itself, nothing
+  at all -- the race-track mode on with nothing in it. Fixed with the game's manifest (`packaging/lba2cc.manifest`, resource 1 of type 24
+  in `lba2cc.rc`, replacing the toolchain's default one): the UTF-8 code page (Windows 10 1903 and later), so those calls take the paths as
+  they are. Tested from Play with the editor and its play folder under `...\Иван\`, and the game folder at a Cyrillic path: raced, Twinsen
+  on the grid. (No comments in the manifest: an XML comment can't hold "--", and Windows then won't start the program at all.)
+- *The control socket.* The game opens 127.0.0.1:27015 for the editor's script breakpoints, the race minimap and live resizing -- nothing
+  the race needs. Where something else has the port (or Windows reserves it: Hyper-V, WSL and Docker reserve ranges of ports), the game says
+  `[ctlsrv] bind 127.0.0.1:27015: WSA error 10013` and races on. Another program listening there took the editor's connection and never
+  answered its greeting, and the editor waited for ever; it now gives up after 3 s.
+- *Saying what happened.* The game says which race file it reads (`[racemod] race file ...`) and when one can't be read (the race file
+  itself, a car's line); the editor reads the game's console: a game that ends on an error shows it ("The game ended: [ERROR] ...", and a
+  message when its window never appeared), and its warnings so far go into editor.log once the socket is up or given up on. editor.log also
+  says whether a play races and which track (`Lba2Play: scene 120, racing Elevator Platform, from the grid`) and the race file it wrote.
+- `ScriptRoundTrip` takes `RT_CULTURE=ru-RU` to run as a machine with that language does: the race file and a whole build come out the same
+  as with the invariant culture (the decimal comma is not a problem).
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

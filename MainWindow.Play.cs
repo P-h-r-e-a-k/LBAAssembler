@@ -182,8 +182,15 @@ public partial class MainWindow
     private void OnGameExited()
     {
         if (!playing) return;
+        var lba2 = playingGame == GameKind.Lba2;
         StopPlay();
-        FileLabel.Text = "The game ended.";
+        // (a game that stopped on an error says which, and the editor's log has its last lines)
+        if (lba2 && Lba2Play.LastError is { } error)
+        {
+            DebugLog.Log($"MainWindow: the game ended on an error: {error}\n{Lba2Play.OutputTail}");
+            FileLabel.Text = $"The game ended: {error}";
+        }
+        else FileLabel.Text = "The game ended.";
     }
 
     // ---- zone boxes and actor paths over the game ---------------------------------------------------------------------------------------
@@ -259,6 +266,10 @@ public partial class MainWindow
         newGame = false;
         var story = options.NewGame || !EditorSettings.Current.RaceCar.StartAtLine || raceToPlay?.Dream is not null;
         options.RaceCarFile = Terrain.RaceTrackService.CarFileWriter(gameRoot, raceToPlay, story);
+        // (whether this play races, and which -- the first thing to know about a race that didn't start)
+        DebugLog.Log(options.RaceCarFile is null
+            ? $"Lba2Play: scene {scene}, no race-track mode (no race track built in the folder: its RACETRACK.JSON and *{Terrain.RaceTrackService.BackupSuffix} originals)"
+            : $"Lba2Play: scene {scene}, racing {raceToPlay?.Island ?? "the folder's first track"}{(options.NewGame ? ", a new game" : story ? ", the story's set of tracks" : ", from the grid")}");
         raceOverlayHidden = options.RaceCarFile is not null && (EditorSettings.Current.RaceCar.StartAtLine || options.NewGame);
         if (raceOverlayHidden) { options.ZoneMask = 0; options.Paths = false; }
 
@@ -287,7 +298,11 @@ public partial class MainWindow
         if (!attached)
         {
             StopPlay();
-            MessageBox.Show(this, "The game started but its window didn't appear in the editor.", "LBA2: play scene", MessageBoxButton.OK, MessageBoxImage.Warning);
+            // (a game that ended before its window opened said why on its console: shown, and its last lines logged)
+            var said = Lba2Play.LastError;
+            DebugLog.Log($"MainWindow: the game's window didn't appear{(said is null ? "" : $": {said}")}\n{Lba2Play.OutputTail}");
+            MessageBox.Show(this, "The game started but its window didn't appear in the editor." + (said is null ? "" : $"\n\nThe game said: {said}"),
+                "LBA2: play scene", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         PlayStatus.Text = $"Playing {label}. It plays what is saved on disk. Click the game to give it the keyboard.";
@@ -372,6 +387,10 @@ public partial class MainWindow
     {
         var client = await Lba2ControlClient.ConnectAsync(Lba2BreakpointsPort, CancellationToken.None);
         if (!playing || playingGame != GameKind.Lba2 || lba2ControlScene != scene) { client?.Dispose(); return; }
+        // (the game's warnings and errors by now -- a socket it couldn't open, a race file it couldn't read -- in the editor's log: a report's
+        // editor.log says what went wrong without the game's own log, 2026-10-12)
+        var problems = Lba2Play.Problems;
+        if (problems.Length > 0) DebugLog.Log($"MainWindow: the game's warnings so far:\n{problems}");
         if (client is null) { DebugLog.Log("MainWindow: LBA2 control socket didn't come up; script breakpoints are unavailable this session."); return; }
         lba2Control = client;
         // (a race: the minimap shows the lap and the cars on it)
