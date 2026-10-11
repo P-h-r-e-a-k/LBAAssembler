@@ -67,6 +67,8 @@ internal static class RaceCarEngineFile
         // ... its lava fall, across its face, and its boost panels (Volcano Island's, 2026-10-10)
         foreach (var fall in track?.LavaFalls ?? new()) text.Append($"lavafall={string.Join(' ', fall)}\n");
         foreach (var geyser in track?.LavaGeysers ?? new()) text.Append($"lavageyser={string.Join(' ', geyser)}\n");
+        foreach (var shard in track?.CrystalShards ?? new()) text.Append($"crystalshards={string.Join(' ', shard)}\n");
+        if (track?.CrystalShardModels is { Length: 2 } shardModels && track.CrystalShards is { Count: > 0 }) text.Append($"crystal_shard_model={shardModels[0]} {shardModels[1]}\n");
         foreach (var panel in track?.BoostPanels ?? new()) text.Append($"boostpanel={string.Join(' ', panel)}\n");
         // the machine guns on their knolls, each followed by where its bullets land (Otringal's)
         foreach (var g in track?.Gunners ?? new())

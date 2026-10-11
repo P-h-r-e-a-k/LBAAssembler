@@ -134,6 +134,10 @@ internal static class RaceTrackService
         // LavaGeysers: [x, y, z of the source, the raised road's first and last point of the stretch, every, phase (ms), balls a shower]
         // (RACEMOD.CPP lavageyser=), since 2026-10-11
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? LavaGeysers = null,
+        // CrystalShards: as LavaGeysers (RACEMOD.CPP crystalshards=); CrystalShardModels: the shard's and its pieces' models in OBJFIX.HQR
+        // (RaceTrackCrystals.InstallCrystalShards; crystal_shard_model=), since 2026-10-11
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? CrystalShards = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? CrystalShardModels = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? BoostPanels = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
@@ -361,6 +365,7 @@ internal static class RaceTrackService
     {
         public bool CharacterCars, Baldino, SmallCars, Oil, CastCars;
         public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel;
+        public int[]? CrystalShardModels;
         public int[]? LaserModels;
         public List<TrackInfo> Tracks { get; } = new();
     }
@@ -613,6 +618,10 @@ internal static class RaceTrackService
             var (lavaBall, lavaBallLog) = RaceTrackOil.InstallLavaBall(gameDirectory);
             log.Add(lavaBallLog);
             session.LavaBallModel = lavaBall;
+            // (and the crystal shards the volcano throws)
+            var (shard, shardBit, shardLog) = RaceTrackCrystals.InstallCrystalShards(gameDirectory);
+            log.Add(shardLog);
+            session.CrystalShardModels = new[] { shard, shardBit };
             // ... and the super jet-pack the car turns into
             var (jet, jetLog) = RaceTrackSuperJet.Install(gameDirectory);
             log.Add(jetLog);
@@ -635,7 +644,7 @@ internal static class RaceTrackService
     {
         session ??= new BuildSession();
         var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, Dream = dream,
-            LaserModels = session.LaserModels, LavaBallModel = session.LavaBallModel };
+            LaserModels = session.LaserModels, LavaBallModel = session.LavaBallModel, CrystalShardModels = session.CrystalShardModels };
         if (info.ArcJumps is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
         if (Shuttles(gameDirectory, report, options) is { Count: > 0 } shuttles) info = info with { Shuttles = shuttles };
         if (twin is { Own: true } && scenes.Twin is { } twinScenes)
@@ -645,7 +654,7 @@ internal static class RaceTrackService
             // (the town circuit's own arrow, which the bed switches on)
             if (story is not null) fine = fine with { StoryArrow = story.TownArrow };
             info = info with { Twin = fine with { OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, LaserModels = session.LaserModels,
-                LavaBallModel = session.LavaBallModel } };
+                LavaBallModel = session.LavaBallModel, CrystalShardModels = session.CrystalShardModels } };
         }
         session.Tracks.Add(info);
         var all = session.Tracks[0] with { Others = session.Tracks.Count > 1 ? session.Tracks.Skip(1).ToList() : null };
@@ -749,6 +758,10 @@ internal static class RaceTrackService
                     .Concat(wheel.Turning).ToArray()
                 : null,
             LavaFalls: report.LavaFalls.Count > 0 ? report.LavaFalls.ToList() : null,
+            CrystalShards: raised && report.CrystalShards.Count > 0
+                ? report.CrystalShards.Select(b => new[] { (int)Math.Round(b.X), (int)Math.Round(b.Y), (int)Math.Round(b.Z), report.RaisedSpan.IndexOf(b.From), report.RaisedSpan.IndexOf(b.To), b.Every, b.Phase, b.Balls })
+                    .Where(b => b[3] >= 0 && b[4] >= 0).ToList()
+                : null,
             LavaGeysers: raised && report.LavaGeysers.Count > 0
                 ? report.LavaGeysers.Select(b => new[] { (int)Math.Round(b.X), (int)Math.Round(b.Y), (int)Math.Round(b.Z), report.RaisedSpan.IndexOf(b.From), report.RaisedSpan.IndexOf(b.To), b.Every, b.Phase, b.Balls })
                     .Where(b => b[3] >= 0 && b[4] >= 0).ToList()

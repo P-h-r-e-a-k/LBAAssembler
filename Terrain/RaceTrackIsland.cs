@@ -285,13 +285,13 @@ internal sealed record RaceTrackIsland(
     };
 
     // Volcano Island (SOUSCELB.ILE, the game's island 11 under Celebration Island, scenes 130-132; cube (7,8) isn't there), from the user's
-    // sketch (2026-10-08), in two layers since 2026-10-11: the start and the pit lane (its boost panel) on the sand plateau's north straight;
-    // the upper layer climbing round the plateau past a lava fall down a crag's face (RaceTrackLavaFall), over its own climb and off east on
-    // a bridge high over the main lava channel, the jump across it a drop; between the channels, a jump onto the east edge (a crystal arch,
-    // the crystal field in the lava: RaceTrackCrystals), a jump down to the south shore, along it and up the volcano's flank; the lower layer
-    // along the plateau's south edge and its west side, under the crag's lava carried over the road on an aqueduct and poured off the bluff.
-    // The game's lava balls out of lava geysers' showers, the aqueduct, the fall's pool (LavaBalls, LavaGeysers).
-    // The plan: tools/RaceTrackPlan/volcano_design.py.
+    // sketch (2026-10-08), in layers since 2026-10-11: the start and the pit lane (its boost panel) on the sand plateau's north straight;
+    // a climb twice round a loop over the plateau, each time past a lava fall down a crag's face (RaceTrackLavaFall), its second turn over its
+    // first; a double spiral down north of the main lava channel and a slope over it; between the channels, a jump onto the east edge (a
+    // crystal arch, the crystal field in the lava: RaceTrackCrystals), a jump down to the south shore -- both landing as high as they leave --
+    // along it and up the volcano's flank; along the plateau's south edge and its west side, under the crag's lava carried over the road on an
+    // aqueduct. The game's lava balls out of lava geysers' showers, the aqueduct, the fall's pool; red crystal shards out of the volcano
+    // (LavaBalls, LavaGeysers, CrystalShards). The plan: tools/RaceTrackPlan/volcano_design.py.
     public static readonly RaceTrackIsland Volcano = new("Volcano Island", "SOUSCELB.ILE", "SOUSCELB.OBL", 11, 130, 132, 38, "RaceTrackPlan.Volcano.json", null)
     {
         Title = "Volcano Island: over the lava", Roster = RaceDriver.Volcano,

@@ -102,6 +102,9 @@ internal sealed class RaceTrackPlan
     // showering the stretch -- Volcano Island's (the user, 2026-10-11: "streams of lava randomly shooting up into the air sending lava balls
     // showering down onto the track").
     public LavaBallRun[]? LavaGeysers { get; set; }
+    // Crystal shards (RACEMOD.CPP crystalshards=): as LavaGeysers, red crystal shards shot up out of the volcano (Source, a height its
+    // third number), Balls of them at a time falling onto the stretch, each bursting where it lands and stunning the cars near it.
+    public LavaBallRun[]? CrystalShards { get; set; }
     // Machine guns on knolls inside corners (RaceTrackGunner, RACEMOD.CPP gunner=): Otringal's Franco gun, firing bursts onto the corner's
     // inner half (the user, 2026-10-09).
     public GunnerRun[]? Gunners { get; set; }
@@ -455,6 +458,8 @@ internal sealed class RaceTrackReport
     public List<(double X, double Y, double Z, int From, int To, int Every, int Phase)> LavaBalls { get; } = new();
     // ... and the lava geysers (RaceTrackPlan.LavaGeysers): the same, and how many balls each shower
     public List<(double X, double Y, double Z, int From, int To, int Every, int Phase, int Balls)> LavaGeysers { get; } = new();
+    // ... and the crystal shards (RaceTrackPlan.CrystalShards), the same way
+    public List<(double X, double Y, double Z, int From, int To, int Every, int Phase, int Balls)> CrystalShards { get; } = new();
     // the lava falls (RaceTrackLavaFall): across each one's face, [its lip's x, y, z, the foot's below it x, y, z (island units), the way the
     // face looks (the engine's beta, 0-4095)] (RACEMOD.CPP lavafall=)
     public List<int[]> LavaFalls { get; } = new();
@@ -867,6 +872,17 @@ internal static class RaceTrackBuilder
                 report.LavaGeysers.Add((sx * 512, y, sz * 512, PlanPoint(plan, main, b.From), PlanPoint(plan, main, b.To), b.Every, nth++ * 2311 % b.Every, b.Balls));
             }
             report.Notes.Add($"{report.LavaGeysers.Count} lava geysers showering the road");
+        }
+        if (planned && plan.CrystalShards is { Length: > 0 } shardRuns)
+        {
+            var nth = 0;
+            foreach (var b in shardRuns.Where(b => b.Source is { Length: >= 2 } && b.Every > 0 && b.Balls > 0))
+            {
+                double sx = b.Source[0] + plan.OriginCellX, sz = b.Source[1] + plan.OriginCellZ;
+                var y = b.Source.Length >= 3 ? b.Source[2] : IslandOps.Altitude(island, sx * 512, sz * 512) ?? 0;
+                report.CrystalShards.Add((sx * 512, y, sz * 512, PlanPoint(plan, main, b.From), PlanPoint(plan, main, b.To), b.Every, nth++ * 3307 % b.Every, b.Balls));
+            }
+            report.Notes.Add($"{report.CrystalShards.Count} stretches the volcano's crystal shards fall on");
         }
         if (planned && plan.Gunners is { Length: > 0 } gunners)
             foreach (var g in gunners.Where(g => g.Knoll is { Length: >= 2 }))

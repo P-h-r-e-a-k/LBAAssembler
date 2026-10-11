@@ -718,7 +718,7 @@ static int s_nbTunnels = 0;
 #define RACE_LAVA_NEAR (40 * 512)          // shot only while Twinsen is this near the place it will land
 #define RACE_LAVA_REACH 1100               // a car this near the place it lands is caught in its burst
 #define RACE_LAVA_FORCE 20
-typedef struct { double SrcX, SrcY, SrcZ, DstX, DstY, DstZ; int From, To; S32 Every, Phase, Next, T0, Dur, Trail; int On, Ball, Shadow; int Geyser, Armed; } T_RACE_LAVA;
+typedef struct { double SrcX, SrcY, SrcZ, DstX, DstY, DstZ; int From, To; S32 Every, Phase, Next, T0, Dur, Trail; int On, Ball, Shadow; int Geyser, Armed, Kind; } T_RACE_LAVA;
 static T_RACE_LAVA s_lava[RACE_MAX_LAVA];
 static int s_nbLava = 0;
 // Lava geysers (lavageyser=<x> <y> <z> <from> <to> <every> <phase> <balls>, as lavaball=): every so often (Every ms, give or take a
@@ -738,7 +738,24 @@ static int s_nbLava = 0;
 #define RACE_GEYSER_SHOWER 220             // the shower's balls this far apart (ms), the first this long after the stream starts ...
 #define RACE_GEYSER_FIRST 350
 #define RACE_MAX_COLUMN 24
-typedef struct { double X, Y, Z, Lift; S32 Every, Phase, Next, Until, Puff, Rise; } T_RACE_GEYSER;
+typedef struct { double X, Y, Z, Lift; S32 Every, Phase, Next, Until, Puff, Rise; int Kind; } T_RACE_GEYSER;
+// Crystal shards (crystalshards=, as lavageyser=; its source the volcano -- Volcano Island's crag of lava; crystal_shard_model=<shard>
+// <piece>, OBJFIX.HQR): the user, 2026-10-11: "red crystal shards that shoot up into the air from the volcano, then fall back down onto the
+// track, we should see their shadows on the track getting slowly bigger until they hit with an explosion that stuns any cars in the
+// vicinity". A group goes off as a geyser does: shards shot up out of the volcano and falling back into it, and its shower -- shards
+// (Kind 1 lava balls) arcing high and slowly down onto its stretch of the road, each one's shadow there growing from small to big, then an
+// explosion (a nitro penguin's) and the shard's pieces flying, and every car within RACE_SHARD_REACH stunned for RACE_SHARD_STUN.
+#define RACE_SHARD_KIND 1
+#define RACE_SHARD_REACH 1800
+#define RACE_SHARD_STUN 1800
+#define RACE_SHARD_FORCE 25
+#define RACE_SHARD_UP 3500.0               // their arcs this much higher than a lava ball's ...
+#define RACE_SHARD_SLOW 1100               // ... and this much longer (ms; and a cell more a 50 units on)
+#define RACE_SHARD_SHADOW0 110             // the shadow's scale when it is shot (small) ...
+#define RACE_SHARD_SHADOW1 8               // ... and when it lands (big): its size (1 / the scale -- a sprite's scale divides) growing
+                                           // evenly between, and solid (a see-through one was lost on the dark asphalt)
+#define RACE_SHARD_PIECES 6
+static int s_shardModel = -1, s_shardBit = -1;
 static T_RACE_GEYSER s_geysers[RACE_MAX_GEYSERS];
 static int s_nbGeysers = 0;
 typedef struct { int Extra; double X, Y, Z, VX, VY, VZ; S32 T0; } T_RACE_COLUMN;
@@ -1973,17 +1990,19 @@ static void Load(const char *path, int carOnly = 0) {
                 s_nbLava++;
             }
         }
-        else if (!strcmp(key, "lavageyser")) {
+        else if (!strcmp(key, "crystal_shard_model")) { if (sscanf(v, "%d %d", &s_shardModel, &s_shardBit) != 2) s_shardModel = s_shardBit = -1; }
+        else if (!strcmp(key, "lavageyser") || !strcmp(key, "crystalshards")) {
             int x, y, z, from, to, every, phase, balls;
+            const int kind = !strcmp(key, "crystalshards") ? RACE_SHARD_KIND : 0;
             if (s_nbGeysers < RACE_MAX_GEYSERS && sscanf(v, "%d %d %d %d %d %d %d %d", &x, &y, &z, &from, &to, &every, &phase, &balls) == 8 && every > 0) {
                 T_RACE_GEYSER *g = &s_geysers[s_nbGeysers];
                 memset(g, 0, sizeof(*g));
-                g->X = x; g->Y = y; g->Z = z; g->Every = every; g->Phase = phase;
+                g->X = x; g->Y = y; g->Z = z; g->Every = every; g->Phase = phase; g->Kind = kind;
                 for (int i = 0; i < balls && s_nbLava < RACE_MAX_LAVA; i++) {
                     T_RACE_LAVA *b = &s_lava[s_nbLava++];
                     memset(b, 0, sizeof(*b));
                     b->SrcX = x; b->SrcY = y; b->SrcZ = z; b->From = from; b->To = to; b->Every = every; b->Phase = phase; b->Ball = b->Shadow = -1;
-                    b->Geyser = s_nbGeysers;
+                    b->Geyser = s_nbGeysers; b->Kind = kind;
                 }
                 s_nbGeysers++;
             }
@@ -5179,6 +5198,19 @@ static void GameLava(S32 x, S32 y, S32 z, int spit, S32 beta, int balls) {
 
 static int LaserExtra(int model, S32 x, S32 y, S32 z);
 
+// A crystal shard landing at (x, y, z), cube-local: a nitro penguin's explosion, and the shard's pieces flying out of it -- only to see
+// (the stun is the landing's reach).
+static void ShardBurst(S32 x, S32 y, S32 z) {
+    DoImpact(RACE_PENGUIN_IMPACT, x, y, z, 255);
+    if (s_shardBit < 0) return;
+    int free = 0;
+    for (int i = 0; i < MAX_EXTRAS; i++) free += ListExtra[i].Sprite == -1;
+    for (int i = 0; i < RACE_SHARD_PIECES && free - i > RACE_LAVA_FREE; i++) {
+        const S32 e = ThrowExtraObj(255, x, y + 200, z, s_shardBit, 380 + (S32)(VentRandom() * 380), (S32)(VentRandom() * 4096), 55 + (S32)(VentRandom() * 40), -1, 10, 0);
+        if (e >= 0) ListExtra[e].Flags &= ~(EXTRA_END_OBJ | EXTRA_HIT_ANY);
+    }
+}
+
 // Every frame: the lava balls (lavaball=). A ball in the air is the game's lava ball tumbling along its arc, and the shadow at the place it
 // will land; landed, the game's lava burst and every car in its reach stopped -- Twinsen's as by a penguin's blast unless the protection
 // spell or the super jet-pack is on, an opponent's with its hit animation.
@@ -5220,10 +5252,12 @@ static void LavaBalls(S32 now, int driving) {
             if ((b->DstX - hx) * (b->DstX - hx) + (b->DstZ - hz) * (b->DstZ - hz) > (double)RACE_LAVA_NEAR * RACE_LAVA_NEAR) continue;
             if (b->DstX < cx || b->DstX >= cx + 32768 || b->DstZ < cz || b->DstZ >= cz + 32768) continue;
             const double far = sqrt((b->DstX - b->SrcX) * (b->DstX - b->SrcX) + (b->DstZ - b->SrcZ) * (b->DstZ - b->SrcZ));
-            b->Dur = 1500 + (S32)(far / 10);
+            const int shard = b->Kind == RACE_SHARD_KIND;
+            b->Dur = 1500 + (S32)(far / 10) + (shard ? RACE_SHARD_SLOW + (S32)(far / 50) : 0);
             b->T0 = now; b->On = 1; b->Trail = now;
-            b->Ball = LaserExtra(s_lavaModel >= 0 ? s_lavaModel : RACE_LAVA_MODEL, (S32)(b->SrcX - cx), (S32)b->SrcY, (S32)(b->SrcZ - cz));
-            b->Shadow = InitExtraAnimSprite(255, (S32)(b->DstX - cx), (S32)b->DstY + 40, (S32)(b->DstZ - cz), RACE_LAVA_SHADOW, RACE_LAVA_SHADOW, b->Dur + 100, 60, 1, 0);
+            b->Ball = LaserExtra(shard && s_shardModel >= 0 ? s_shardModel : s_lavaModel >= 0 ? s_lavaModel : RACE_LAVA_MODEL, (S32)(b->SrcX - cx), (S32)b->SrcY, (S32)(b->SrcZ - cz));
+            b->Shadow = InitExtraAnimSprite(255, (S32)(b->DstX - cx), (S32)b->DstY + 40, (S32)(b->DstZ - cz), RACE_LAVA_SHADOW, RACE_LAVA_SHADOW, b->Dur + 100,
+                                            shard ? RACE_SHARD_SHADOW0 : 60, shard ? 0 : 1, 0);
             if (b->Shadow >= 0) ListExtra[b->Shadow].Flags |= EXTRA_NO_SHADOW;
             // (out of the lava: the game's burst where it leaves it -- in Twinsen's cube: the little balls fly by its ground; a geyser's
             // stream has its own)
@@ -5235,15 +5269,19 @@ static void LavaBalls(S32 now, int driving) {
         if (u < 1) {
             // along its arc: up out of the lava, over and down onto the road
             const double far = sqrt((b->DstX - b->SrcX) * (b->DstX - b->SrcX) + (b->DstZ - b->SrcZ) * (b->DstZ - b->SrcZ));
-            const double top = (b->SrcY > b->DstY ? b->SrcY : b->DstY) - (b->SrcY + (b->DstY - b->SrcY) * 0.5) + (far * 0.35 > 2500 ? far * 0.35 : 2500);
+            const double top = (b->SrcY > b->DstY ? b->SrcY : b->DstY) - (b->SrcY + (b->DstY - b->SrcY) * 0.5) + (far * 0.35 > 2500 ? far * 0.35 : 2500)
+                               + (b->Kind == RACE_SHARD_KIND ? RACE_SHARD_UP : 0);
             const double x = b->SrcX + (b->DstX - b->SrcX) * u, z = b->SrcZ + (b->DstZ - b->SrcZ) * u, y = b->SrcY + (b->DstY + 250 - b->SrcY) * u + 4 * top * u * (1 - u);
             if (b->Ball >= 0 && ListExtra[b->Ball].Sprite == (S16)(3 + 32768)) {
                 T_EXTRA *e = &ListExtra[b->Ball];
                 e->PosX = (S32)(x - cx); e->PosY = (S32)y; e->PosZ = (S32)(z - cz);
-                // (tumbling as it flies)
-                e->Beta = (S16)(((now - b->T0) * 3) & 4095); e->Scale = ((now - b->T0) * 2) & 4095;
+                // (tumbling as it flies; a shard end over end)
+                e->Beta = (S16)(((now - b->T0) * 3) & 4095); e->Scale = ((now - b->T0) * (b->Kind == RACE_SHARD_KIND ? 4 : 2)) & 4095;
             }
-            if (b->Shadow >= 0 && ListExtra[b->Shadow].Sprite == RACE_LAVA_SHADOW) ListExtra[b->Shadow].Scale = (S32)(60 - (60 - RACE_LAVA_SCALE) * u);
+            if (b->Shadow >= 0 && ListExtra[b->Shadow].Sprite == RACE_LAVA_SHADOW)
+                ListExtra[b->Shadow].Scale = b->Kind == RACE_SHARD_KIND
+                    ? (S32)(1.0 / (1.0 / RACE_SHARD_SHADOW0 + (1.0 / RACE_SHARD_SHADOW1 - 1.0 / RACE_SHARD_SHADOW0) * u) + 0.5)
+                    : (S32)(60 - (60 - RACE_LAVA_SCALE) * u);
             continue;
         }
         // landed: its burst, and the cars in it
@@ -5253,15 +5291,18 @@ static void LavaBalls(S32 now, int driving) {
         b->Ball = b->Shadow = -1;
         const S32 lx = (S32)(b->DstX - cx), lz = (S32)(b->DstZ - cz), ly = (S32)b->DstY;
         if (lx < 0 || lx >= 32768 || lz < 0 || lz >= 32768) continue;
-        GameLava(lx, ly, lz, 0, 0, 1);
-        if (driving && Near(hero, lx, ly, lz, RACE_LAVA_REACH)) {
+        const int shard = b->Kind == RACE_SHARD_KIND;
+        const S32 reach = shard ? RACE_SHARD_REACH : RACE_LAVA_REACH, hold = shard ? RACE_SHARD_STUN : RACE_PENGUIN_HOLD;
+        const char *what = shard ? "a crystal shard" : "a lava ball";
+        if (shard) ShardBurst(lx, ly, lz); else GameLava(lx, ly, lz, 0, 0, 1);
+        if (driving && Near(hero, lx, ly, lz, reach)) {
             if (now < s_protectUntil || now < s_jetUntil || (hero->Flags & NO_CHOC))
-                Log_Info("[racemod] a lava ball lands on Twinsen's car: %s", now < s_protectUntil ? "the protection spell holds" : now < s_jetUntil ? "the super jet-pack" : "he can't be hit");
+                Log_Info("[racemod] %s lands on Twinsen's car: %s", what, now < s_protectUntil ? "the protection spell holds" : now < s_jetUntil ? "the super jet-pack" : "he can't be hit");
             else {
-                HitObj(PenguinHitter(), NUM_PERSO, RACE_LAVA_FORCE, -1);
+                HitObj(PenguinHitter(), NUM_PERSO, shard ? RACE_SHARD_FORCE : RACE_LAVA_FORCE, -1);
                 ListBuggy[0].Speed = 0;
-                if (s_hitUntil < now + RACE_PENGUIN_HOLD) s_hitUntil = now + RACE_PENGUIN_HOLD;
-                Log_Info("[racemod] Twinsen's car hit by a lava ball");
+                if (s_hitUntil < now + hold) s_hitUntil = now + hold;
+                Log_Info("[racemod] Twinsen's car hit by %s", what);
             }
         }
         for (int o = 0; o < RACE_MAX_OPPONENTS; o++) {
@@ -5269,9 +5310,9 @@ static void LavaBalls(S32 now, int driving) {
             if (!op->Count || !RaceOn()) continue;
             double x, z, y, v, ddx, ddz;
             PathAt(op, op->S, &x, &z, &y, &v, &ddx, &ddz);
-            if ((x - b->DstX) * (x - b->DstX) + (z - b->DstZ) * (z - b->DstZ) > (double)RACE_LAVA_REACH * RACE_LAVA_REACH || fabs(y - b->DstY) > 1500) continue;
-            if (op->HitUntil < now + RACE_PENGUIN_HOLD) op->HitUntil = now + RACE_PENGUIN_HOLD;
-            Log_Info("[racemod] %s hit by a lava ball", op->Name);
+            if ((x - b->DstX) * (x - b->DstX) + (z - b->DstZ) * (z - b->DstZ) > (double)reach * reach || fabs(y - b->DstY) > 1500) continue;
+            if (op->HitUntil < now + hold) op->HitUntil = now + hold;
+            Log_Info("[racemod] %s hit by %s", op->Name, what);
             const int index = OpponentActor(op);
             if (index < 0) continue;
             T_OBJET *car = &ListObjet[index];
@@ -5309,7 +5350,7 @@ static void LavaGeysers(S32 now) {
         const int here = g->X >= cx && g->X < cx + 32768 && g->Z >= cz && g->Z < cz + 32768;
         if (now < g->Until) {
             // the stream: a ball up it every so often, the burst at its foot now and then
-            if (here && now - g->Rise >= RACE_GEYSER_EVERY) {
+            if (here && now - g->Rise >= (g->Kind == RACE_SHARD_KIND ? RACE_GEYSER_EVERY * 3 : RACE_GEYSER_EVERY)) {
                 g->Rise = now;
                 int free = 0;
                 for (int i = 0; i < MAX_EXTRAS; i++) free += ListExtra[i].Sprite == -1;
@@ -5318,8 +5359,10 @@ static void LavaGeysers(S32 now) {
                     if (c->Extra >= 0) continue;
                     c->X = g->X - cx; c->Y = g->Y; c->Z = g->Z - cz; c->T0 = now;
                     const double a = VentRandom() * 2 * 3.14159265358979, out = VentRandom() * RACE_GEYSER_SPREAD;
-                    c->VX = cos(a) * out; c->VZ = sin(a) * out; c->VY = g->Lift * (0.8 + VentRandom() * 0.4);
-                    c->Extra = LaserExtra(s_lavaModel >= 0 ? s_lavaModel : RACE_LAVA_MODEL, (S32)c->X, (S32)c->Y, (S32)c->Z);
+                    c->VX = cos(a) * out * (g->Kind == RACE_SHARD_KIND ? 2 : 1); c->VZ = sin(a) * out * (g->Kind == RACE_SHARD_KIND ? 2 : 1);
+                    c->VY = g->Lift * (0.8 + VentRandom() * 0.4);
+                    c->Extra = LaserExtra(g->Kind == RACE_SHARD_KIND && s_shardModel >= 0 ? s_shardModel : s_lavaModel >= 0 ? s_lavaModel : RACE_LAVA_MODEL,
+                                          (S32)c->X, (S32)c->Y, (S32)c->Z);
                     break;
                 }
             }
@@ -5350,7 +5393,8 @@ static void LavaGeysers(S32 now) {
             if (b->Geyser != gi || b->On) continue;
             b->Armed = 1; b->Next = now + RACE_GEYSER_FIRST + nth++ * RACE_GEYSER_SHOWER + (S32)(VentRandom() * 120);
         }
-        Log_Info("[racemod] lava geyser %d goes off (%d balls)", gi + 1, nth);
+        Log_Info("[racemod] %s %d goes off (%d %s)", g->Kind == RACE_SHARD_KIND ? "the volcano's crystal shards" : "lava geyser", gi + 1, nth,
+                 g->Kind == RACE_SHARD_KIND ? "shards" : "balls");
     }
 }
 
@@ -6682,6 +6726,7 @@ static void ResetTrack(void) {
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
     s_nbFalls = 0; s_nbPanels = 0; s_lavaModel = -1; s_fallFootNext = s_fallLipNext = 0;
     s_nbGeysers = 0; for (int i = 0; i < RACE_MAX_COLUMN; i++) s_column[i].Extra = -1;
+    s_shardModel = s_shardBit = -1;
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = s_arcAcross1 = 0; s_arcTime = s_arcLandedAt = 0;
