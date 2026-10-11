@@ -12,12 +12,18 @@
 # have a slope instead, jumps downwards feel unnatural to drive and we should try to avoid them if possible. Let's also have a double spiral
 # back down again. Let's also add in some red crystal shards that shoot up into the air from the volcano, then fall back down onto the track,
 # we should see their shadows on the track getting slowly bigger until they hit with an explosion that stuns any cars in the vicinity".
+#
+# Version 5 (2026-10-11, later): "Let's make both loops in Volcano island bigger and circular" -- the climb a circle 13.5 cells round its
+# middle (the rectangle was 23.5 by 13), straight on from the start straight's end and back onto its line at the top, its west side still in
+# front of the lava fall; the double spiral a circle 11.5 round (the ellipse was 10 by 7), moved off the island's north edge over the main
+# channel, a lava geyser in its open middle; the plateau's south road 5 cells further south and the pit lane 2.5 west, to make room.
 # Clockwise:
 #
 #  - the start on the plateau's north straight, the pit lane on its right (inside the lap, easy to drive into), the boost panel in it;
-#  - the climb: right at the straight's east end into a loop over the plateau's east part, twice round -- its second turn over its first,
-#    HELIX_PITCH higher -- each time north past the lava fall down the crag's east face (RaceTrackLavaFall), then east over the loop's start;
-#  - the double spiral down: north of the main lava channel, two and a half turns round at the grade's limit, each over the one below;
+#  - the climb: on from the straight's east end into a circle over the plateau's east part, twice round -- its second turn over its first,
+#    HELIX_PITCH higher -- each time north past the lava fall down the crag's east face (RaceTrackLavaFall), then on east over its start;
+#  - the double spiral down: a circle over the main lava channel, round from its north side two and a quarter turns at the grade's limit,
+#    each over the one below, a lava geyser shooting up its open middle onto its top turn;
 #  - the slope (the jump over the channel gone: a bridge down over it), between the channels, the second jump onto the east edge (a crystal
 #    arch, the crystal field in the lava below), the shore jump, the shore -- both jumps landing as high as they leave now ("jumps
 #    downwards feel unnatural"), the road going down after them;
@@ -56,14 +62,33 @@ HELIX_PITCH = 4800.0                    # a spiral's turns this far apart at lea
 
 def C(x, z): return (x - OX, z - OZ)
 # the corners in the lap's order, each (x, z) and the radius it is rounded with (island cells)
-# the double spiral down: an ellipse round (SPIRAL_X, SPIRAL_Z), SPIRAL_RX by SPIRAL_RZ cells, clockwise from its west side, two and a half
-# turns to its east side, each corner 30 degrees on (rounded SPIRAL_R)
-SPIRAL_X, SPIRAL_Z, SPIRAL_RX, SPIRAL_RZ, SPIRAL_R, SPIRAL_TURNS = 534.0, 461.5, 10.0, 7.0, 3.0, 2.5
-spiral = [((SPIRAL_X + SPIRAL_RX * math.cos(math.pi + q * math.pi / 6), SPIRAL_Z + SPIRAL_RZ * math.sin(math.pi + q * math.pi / 6)), SPIRAL_R)
-          for q in range(1, int(SPIRAL_TURNS * 12))]
-# the climb's loop: its corners, twice round
-LOOP = [((511.0, 487.0), 4.5), ((487.5, 487.0), 4.0), ((487.5, 474.0), 4.0)]
-K = ([((542.0, 505.0), 5.0),             # off the spiral's foot, down the slope over the main lava channel: east-south-east, the second jump
+# A circle as corners: the polygon round it, each corner rounded with the circle's own radius -- the road an exact circle -- from its tangent
+# at angle a0 to a1 (degrees: 0 east, 90 south -- clockwise as the map is drawn), its corners about `step` apart.
+def circle(cx, cz, r, a0, a1, step=30.0):
+    n = max(1, int(round((a1 - a0) / step))); th = math.radians((a1 - a0) / n); R = r / math.cos(th / 2)
+    return [((cx + R * math.cos(math.radians(a0) + (q + 0.5) * th), cz + R * math.sin(math.radians(a0) + (q + 0.5) * th)), r) for q in range(n)]
+def on(cx, cz, r, deg): return (cx + r * math.cos(math.radians(deg)), cz + r * math.sin(math.radians(deg)))
+def along(deg): return (-math.sin(math.radians(deg)), math.cos(math.radians(deg)))   # the way round a circle there (clockwise)
+# the climb: a circle touching the north straight's line at its north point, its west side in front of the lava fall (x 487.5, 1.25 cells
+# off the crag's face with its rail), twice round from there and on east along the straight's line
+CLIMB_R = 13.5
+CLIMB_X, CLIMB_Z = 487.5 + CLIMB_R, SZ + CLIMB_R
+climb = circle(CLIMB_X, CLIMB_Z, CLIMB_R, -90.0, 630.0)
+# the double spiral down: a circle touching the same line at its north point (clear of the climb's east rail), clockwise from there round
+# and round until its tangent points at the foot of the slope (K's first corner): two and a quarter turns and a bit
+SPIRAL_R = 11.5
+SPIRAL_X, SPIRAL_Z = 537.0, SZ + SPIRAL_R
+FOOT = (542.0, 505.0)
+def exit_angle():
+    best = None
+    for k in range(0, 6001):
+        a = k * 0.01; p = on(SPIRAL_X, SPIRAL_Z, SPIRAL_R, a); d = along(a); v = (FOOT[0] - p[0], FOOT[1] - p[1])
+        c = abs(v[0] * d[1] - v[1] * d[0])
+        if v[0] * d[0] + v[1] * d[1] > 0 and (best is None or c < best[0]): best = (c, a)
+    return best[1]
+SPIRAL_EXIT = exit_angle()
+spiral = circle(SPIRAL_X, SPIRAL_Z, SPIRAL_R, -90.0, 720.0 + SPIRAL_EXIT)
+K = ([(FOOT, 5.0),                       # off the spiral's foot, down the slope over the main lava channel: east-south-east, the second jump
       ((568.0, 516.5), 4.0),             # ... south along the east edge (clear of the island's edge, x 576), the crystal arch ...
       ((568.0, 551.0), 4.0),             # ... south-west: the shore jump ...
       ((556.0, 566.0), 4.0),             # ... west along the shore ...
@@ -71,13 +96,11 @@ K = ([((542.0, 505.0), 5.0),             # off the spiral's foot, down the slope
       ((537.0, 556.0), 4.0),
       ((553.0, 547.0), 4.0),
       ((555.0, 538.0), 4.0),             # ... north-west, climbing onto the plateau ...
-      ((512.0, 497.0), 8.0),             # ... west along its south edge ...
-      ((462.0, 497.0), 6.0),             # ... north up its west side along the bluff, under the lava flow ...
-      ((461.0, SZ), 6.0),                # ... east along its north straight (the start, the pit lane on the right) ...
-      ((511.0, SZ), 5.0)]                # ... right at its end into the climb's loop: south, west, north past the falls, east ...
-     + LOOP + [((511.0, 474.0), 4.0)] + LOOP   # ... and round again over it ...
-     + [((523.0, 474.0), 4.0)]           # ... east off it over its start, left (north) into the double spiral down ...
-     + spiral)                           # ... round it to its east side, and south off it
+      ((512.0, 502.0), 8.0),             # ... west along its south edge (5 cells further south than before: the climb's circle) ...
+      ((462.0, 502.0), 6.0),             # ... north up its west side along the bluff, under the lava flow ...
+      ((461.0, SZ), 6.0)]                # ... east along its north straight (the start, the pit lane on the right) ...
+     + climb                             # ... on into the climb's circle: south, west, north past the falls, east, and round again over it ...
+     + spiral)                           # ... on east over its start into the double spiral down, round and south off it
 K = [(C(*p), r) for p, r in K]
 
 def rounded_polyline(K):
@@ -103,7 +126,7 @@ def rounded_polyline(K):
     return np.array(out)
 
 fine = rounded_polyline(K)
-START = (490.0, SZ)                     # the start line on the north straight (heading east: its grid behind it, west, on the level)
+START = (487.5, SZ)                     # the start line on the north straight (heading east: its grid behind it, west, on the level)
 k0 = int(np.argmin(np.hypot(fine[:, 0] - C(*START)[0] + 20, fine[:, 1] - C(*START)[1])))
 fine = np.roll(fine, -k0, axis=0)
 seg = np.linalg.norm(np.diff(np.vstack([fine, fine[:1]]), axis=0), axis=1)
@@ -137,34 +160,39 @@ def ramp(a, b, k): return ease(ahead(a, k) / ahead(a, b))
 HALF = np.full(N, H0)
 PIT_HALF = H0 + PIT / 2
 PIT_MID = PIT_HALF - PIT / 2
-iPit0 = nearest((466.0, SZ), E); iPit1 = nearest((474.0, SZ), E); iPit2 = nearest((499.0, SZ), E); iPit3 = nearest((503.5, SZ), E)
-iFence0 = nearest((481.0, SZ), E); iFence1 = nearest((497.0, SZ), E)
+# (2.5 cells further west than before: the straight ends where the climb's circle begins, its north point)
+iPit0 = nearest((463.5, SZ), E); iPit1 = nearest((471.5, SZ), E); iPit2 = nearest((496.5, SZ), E); iPit3 = nearest((501.0, SZ), E)
+iFence0 = nearest((478.5, SZ), E); iFence1 = nearest((494.5, SZ), E)
 for k in range(N):
     if between(k, iPit0, iPit1): HALF[k] = max(HALF[k], H0 + (PIT_HALF - H0) * ramp(iPit0, iPit1, k))
     elif between(k, iPit1, iPit2): HALF[k] = PIT_HALF
     elif between(k, iPit2, iPit3): HALF[k] = max(HALF[k], PIT_HALF + (H0 - PIT_HALF) * ramp(iPit2, iPit3, k))
-PIT_WAIT = (482.5, 486.0, 489.5)        # the opponents' waiting spots in the pit lane, within the fence, behind the line (cube (7,7))
+PIT_WAIT = (480.0, 483.5, 487.0)        # the opponents' waiting spots in the pit lane, within the fence, behind the line (cube (7,7))
 
 MARK = {'start': nearest(START, E)}
-MARK['climb0'] = nearest_after((508.0, SZ + 1), S_, MARK['start'], 40)            # the climb's loop ...
-MARK['t1W0'] = nearest_after((487.5, 485.0), N_, MARK['climb0'], 90)               # ... past the falls the first time ...
-MARK['t1W1'] = nearest_after((487.5, 477.0), N_, MARK['t1W0'], 20)
-MARK['t2E0'] = nearest_after((511.0, 478.0), S_, MARK['t1W1'], 40)                 # ... the second time round ...
-MARK['t2W0'] = nearest_after((487.5, 485.0), N_, MARK['t2E0'], 60)
-MARK['t2W1'] = nearest_after((487.5, 477.0), N_, MARK['t2W0'], 20)
-MARK['top'] = nearest_after((517.0, 474.0), E, MARK['t2W1'], 40)                   # ... off it over its start: the top
-MARK['dIn'] = nearest_after((523.0, 466.0), N_, MARK['top'], 20)                   # the double spiral
-MARK['dS1'] = nearest_after((534.0, 467.5), W_, MARK['dIn'] + int(70 / STEP), 60)  # (its second time along its south side)
-MARK['dOut'] = nearest_after((545.0, 466.0), S_, MARK['dIn'] + int(120 / STEP), 60)  # ... off it south
-MARK['slope'] = nearest_after((543.5, 485.0), S_, MARK['dOut'], 30)                # down the slope over the channel
-MARK['cEnd'] = nearest_after((542.0, 500.0), S_, MARK['dOut'], 50)                 # the stretch between the channels
+CLIMB_ROUND, SPIRAL_ROUND = 2 * math.pi * CLIMB_R, 2 * math.pi * SPIRAL_R
+def climb_at(deg): return on(CLIMB_X, CLIMB_Z, CLIMB_R, deg)
+def spiral_at(deg): return on(SPIRAL_X, SPIRAL_Z, SPIRAL_R, deg)
+MARK['climb0'] = nearest_after((CLIMB_X, SZ), E, MARK['start'], 40)                # the climb's circle ...
+MARK['t1W0'] = nearest_after(climb_at(145), along(145), MARK['climb0'], 90)        # ... past the falls the first time ...
+MARK['t1W1'] = nearest_after(climb_at(190), along(190), MARK['t1W0'], 20)
+MARK['t2E0'] = nearest_after(climb_at(0), S_, MARK['t1W1'], 60)                    # ... the second time round ...
+MARK['t2W0'] = nearest_after(climb_at(145), along(145), MARK['t2E0'], 60)
+MARK['t2W1'] = nearest_after(climb_at(190), along(190), MARK['t2W0'], 20)
+MARK['top'] = nearest_after((CLIMB_X + 12.0, SZ), E, MARK['t2W1'], 60)             # ... on east over its start: the top
+MARK['dIn'] = nearest_after((SPIRAL_X, SZ), E, MARK['top'], 40)                    # the double spiral
+MARK['dW1'] = nearest_after(spiral_at(180), N_, MARK['dIn'], SPIRAL_ROUND)         # (its west side the first time: its top turn)
+MARK['dS1'] = nearest_after(spiral_at(90), W_, MARK['dIn'] + int(1.2 * SPIRAL_ROUND / STEP), 0.6 * SPIRAL_ROUND)  # (its south side again)
+MARK['dOut'] = nearest_after(spiral_at(SPIRAL_EXIT), along(SPIRAL_EXIT), MARK['dIn'] + int(2.0 * SPIRAL_ROUND / STEP), 0.6 * SPIRAL_ROUND)  # ... off it
+MARK['slope'] = nearest_after((546.5, 485.0), S_, MARK['dOut'], 30)                # down the slope over the channel
+MARK['cEnd'] = nearest_after((543.0, 499.5), S_, MARK['dOut'], 50)                 # the stretch between the channels
 MARK['eastN'] = nearest((568, 524), S_)                                            # the east edge
 MARK['eastS'] = nearest((568, 546), S_)
 MARK['shoreE'] = nearest((548, 566), W_)                                           # the south shore
 MARK['shoreW'] = nearest((538, 563), N_)
 MARK['flank1'] = nearest((554, 543), N_)                                           # up the volcano's flank
 MARK['flank2'] = nearest((530, 520), (-0.72, -0.69))
-MARK['plateauS'] = nearest((505, 497), W_)                                         # onto the plateau
+MARK['plateauS'] = nearest((505, 502), W_)                                         # onto the plateau
 MARK['westS'] = nearest((461.5, 490), N_)                                          # the west side, under the lava flow
 MARK['westN'] = nearest((461.5, 472), N_)
 
@@ -173,14 +201,26 @@ MARK['westN'] = nearest((461.5, 472), N_)
 # turn of its loop HELIX_PITCH higher than the last) to its top over its start -- then spread out at GRADE each way and eased. The double
 # spiral comes down at GRADE (its turns HELIX_PITCH apart and more). The jumps land as high as they leave: the ground under their landing
 # and the road after it lifted to their lip's height (the road then going down after them at the grade), worked out twice.
+# (version 5: the climb's turns a little further apart -- its first turn's end passes over the start straight's pit lane, which is level --
+# the top held level on east to the double spiral, and the spiral down from it to SPIRAL_FOOT at an even grade, its turns well apart; the
+# plateau's roads at the plateau's height, the south one beside its edge now)
 CLEAR, LAVA, LAVA_MIN, GRADE = 400.0, 700.0, 1400.0, 0.17
+SPIRAL_FOOT = 11000.0
 loop_len = ahead(MARK['t1W0'], MARK['t2W0'])
-LIFT_GRADE = HELIX_PITCH * 1.04 / (loop_len * 512)
+LIFT_GRADE = HELIX_PITCH * 1.10 / (loop_len * 512)
 gs = np.array([np.median([ground(X[k] + Nn[k, 0] * o, Z[k] + Nn[k, 1] * o) for o in np.linspace(-HALF[k], HALF[k], 9)]) for k in range(N)])
 floor0 = np.where(gs < LAVA, LAVA_MIN, np.maximum(gs + CLEAR, LAVA_MIN))
+Y_TOP = TOPD + 150 + ahead(MARK['climb0'], MARK['top']) * 512 * LIFT_GRADE
+plateau0 = nearest((508.0, 502.0), W_)
 for k in range(N):
     if between(k, MARK['climb0'], MARK['top']):
         floor0[k] = max(floor0[k], TOPD + 150 + ahead(MARK['climb0'], k) * 512 * LIFT_GRADE)
+    elif between(k, MARK['top'], MARK['dIn']):
+        floor0[k] = max(floor0[k], Y_TOP)
+    elif between(k, MARK['dIn'], MARK['dOut']):
+        floor0[k] = max(floor0[k], Y_TOP + (SPIRAL_FOOT - Y_TOP) * ahead(MARK['dIn'], k) / ahead(MARK['dIn'], MARK['dOut']))
+    if between(k, plateau0, MARK['climb0']):
+        floor0[k] = max(floor0[k], TOPD + 150)
 g = GRADE * STEP * 512
 def heights(floor):
     F = floor.copy()
@@ -251,9 +291,9 @@ LAVA = [  # off the aqueduct over the west side, dripping onto the lower layer u
         (P_(461.5, 481.0, 15700.0), nearest((461.5, 486), N_), nearest((461.5, 476), N_), 2400),
           # out of the falls' pool, onto the climb's first time past it
         (P_(483.0, 481.0), MARK['t1W0'], MARK['t1W1'], 3200)]
-GEYSERS = [  # the main channel: onto the slope over it, and the double spiral's last time along its south side over it
-           (P_(536.0, 480.0), MARK['dOut'], MARK['cEnd'], 7000, 5),
-           (P_(526.0, 480.0), MARK['dS1'], nearest_after((525.0, 466.0), N_, MARK['dS1'], 20), 7600, 4),
+GEYSERS = [  # the main channel: up the double spiral's open middle onto its top turn, and beside the slope down off it, onto that
+           (P_(537.0, 479.0), MARK['dIn'] + int(4 / STEP), MARK['dW1'], 7000, 5),
+           (P_(553.0, 488.0), MARK['dOut'], MARK['cEnd'], 7600, 4),
              # the second channel and the lowland
            (P_(556.0, 492.0), MARK['cEnd'], J('second', 1), 8200, 4),
            (P_(559.0, 530.0), MARK['eastN'], MARK['eastS'], 6800, 5),
@@ -263,11 +303,11 @@ GEYSERS = [  # the main channel: onto the slope over it, and the double spiral's
 # crystal shards (crystalShards: as a geyser's, out of the volcano -- the crag's lake of lava -- `shards` at a time): onto the start
 # straight, the climb's first time along its south side and its second down its east side, the west side, the plateau's south edge
 VOLCANO = P_(474.5, 481.0, 23700.0)
-SHARDS = [(nearest((472.0, SZ), E), nearest((500.0, SZ), E), 9000, 3),
-          (nearest_after((508.0, 488.0), W_, MARK['climb0'], 60), nearest_after((491.0, 488.0), W_, MARK['climb0'], 70), 10400, 3),
-          (MARK['t2E0'], nearest_after((511.0, 486.0), S_, MARK['t2E0'], 20), 11200, 3),
+SHARDS = [(nearest((470.0, SZ), E), nearest((498.0, SZ), E), 9000, 3),
+          (nearest_after(climb_at(60), along(60), MARK['climb0'], 60), nearest_after(climb_at(120), along(120), MARK['climb0'], 70), 10400, 3),
+          (MARK['t2E0'], nearest_after(climb_at(40), along(40), MARK['t2E0'], 20), 11200, 3),
           (nearest((461.5, 494.0), N_), nearest((461.5, 468.0), N_), 9800, 3),
-          (nearest((503.0, 497.0), W_), nearest((468.0, 497.0), W_), 10600, 3)]
+          (nearest((503.0, 502.0), W_), nearest((468.0, 502.0), W_), 10600, 3)]
 shards = [{'source': VOLCANO, 'from': int(a), 'to': int(b), 'every': every, 'balls': n} for a, b, every, n in SHARDS]
 lava = [{'source': src, 'from': int(a), 'to': int(b), 'every': every} for src, a, b, every in LAVA]
 geysers = [{'source': src, 'from': int(a), 'to': int(b), 'every': every, 'balls': n} for src, a, b, every, n in GEYSERS]
@@ -276,13 +316,13 @@ geysers = [{'source': src, 'from': int(a), 'to': int(b), 'every': every, 'balls'
 # the plateau's south part
 CRYSTALS = [(557.5, 516.0, 2, 3.0, 300, 10), (551.0, 517.0, 1, 3.5, 250, 5), (552.0, 524.0, 2, 3.5, 80, 7), (557.0, 529.0, 1, 3.0, 20, 8),
             (558.0, 538.0, 1, 3.0, 190, 9), (553.0, 540.0, 2, 3.5, 330, 6),
-            (496.0, 480.5, 2, 3.0, 160, 0), (500.5, 478.5, 1, 2.5, 280, 3), (474.0, 492.0, 1, 2.5, 20, 0), (480.0, 492.0, 2, 2.5, 100, 0)]
+            (496.0, 480.5, 2, 3.0, 160, 0), (500.5, 478.5, 1, 2.5, 280, 3), (506.0, 473.0, 2, 2.5, 230, 4), (494.5, 473.5, 1, 2.5, 60, 0), (474.0, 492.0, 1, 2.5, 20, 0), (480.0, 492.0, 2, 2.5, 100, 0)]
 crystals = [{'at': [x - OX, z - OZ], 'body': b, 'scale': sc, 'turn': t, 'lean': l} for x, z, b, sc, t, l in CRYSTALS]
 arches = [{'at': [568.0 - OX, 530.0 - OZ], 'spread': 3.0}]
 
 # ---- the boost panel (RACEMOD.CPP boostpanel=: a car with two wheels on it is at 120 km/h at once, held a while): in the pit lane, past
 # the start line and the opponents' waiting spots -- its first and last point, how far across the road (Across, cells)
-BOOST = [(491.5, 496.5)]
+BOOST = [(489.0, 494.0)]
 boost = [[int(nearest((a, SZ), E)), int(nearest((b, SZ), E)), PIT_MID - 1.5, PIT_MID + 1.5] for a, b in BOOST]
 
 grade = (np.roll(Y, -1) - Y) / (STEP * 512)

@@ -286,8 +286,9 @@ internal sealed record RaceTrackIsland(
 
     // Volcano Island (SOUSCELB.ILE, the game's island 11 under Celebration Island, scenes 130-132; cube (7,8) isn't there), from the user's
     // sketch (2026-10-08), in layers since 2026-10-11: the start and the pit lane (its boost panel) on the sand plateau's north straight;
-    // a climb twice round a loop over the plateau, each time past a lava fall down a crag's face (RaceTrackLavaFall), its second turn over its
-    // first; a double spiral down north of the main lava channel and a slope over it; between the channels, a jump onto the east edge (a
+    // a climb twice round a circle over the plateau, each time past a lava fall down a crag's face (RaceTrackLavaFall), its second turn over
+    // its first; a double spiral down, a circle over the main lava channel with a lava geyser up its open middle, and a slope over the
+    // channel (both loops circles since 2026-10-11); between the channels, a jump onto the east edge (a
     // crystal arch, the crystal field in the lava: RaceTrackCrystals), a jump down to the south shore -- both landing as high as they leave --
     // along it and up the volcano's flank; along the plateau's south edge and its west side, under the crag's lava carried over the road on an
     // aqueduct. The game's lava balls out of lava geysers' showers, the aqueduct, the fall's pool; red crystal shards out of the volcano
