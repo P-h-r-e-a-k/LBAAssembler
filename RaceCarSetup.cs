@@ -10,6 +10,8 @@ namespace LBAAssembler;
 public sealed class RaceCarSetup
 {
     public const int MaxGears = 6;
+    // the fastest a gear or reverse may go (km/h): ten times the original buggy's 27
+    public const int MaxKmh = 270;
     public const int OriginalTop = 3800, OriginalReverse = 2000, OriginalSteer = 1024;
     public const double OriginalAccel = 4, OriginalBrake = 12, OriginalCoast = 7;
 

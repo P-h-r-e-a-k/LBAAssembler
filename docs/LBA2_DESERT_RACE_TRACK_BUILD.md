@@ -2975,6 +2975,133 @@ where the rooms, the round window, the ways across the rocks and the harbour's p
   4 and won both times, no car rescued; the white flash in mid-flight and Twinsen awake in scene 95. The build takes some 20 s (the
   island and its scenes made afresh each time).
 
+### The palace, second round: wider, more rooms, a loop round the roofs, no white blocks (2026-10-12, later)
+
+The user: "The palace track is far too narrow. We're also getting random white images on screen, as pictured. There's also multiple
+places for Twinsen to clip out of the track and end up on the ground. Let's make the inside tracks wider if we can do, and perhaps loop
+in more rooms. Add a section where we're outside on the roof looping around the palace roof tops. Double check the end jump works and
+correctly teleports us because I had it failing".
+
+![Through the rooms on the wider carpet, a door four bricks wide ahead](racetrack/palace/v2_rooms.png)
+
+![The loop round the palace's roofs, its halls and domes beside the road](racetrack/palace/v2_rooftop_loop.png)
+
+- *Wider*: the rooms' doors are four bricks (16 cells) instead of two, and the line between two facing doors is cleared of furniture
+  -- the rooms' pieces, plain blocks and chests (`PalaceIsland`: "the doors made wider"). The road is 11 cells rail to rail indoors
+  (5.5 from its middle), 14 outdoors. The engine collides a car with a square box about 2.8 cells from its middle whichever way it
+  faces, so the design keeps 1.55 cells past each rail clear as well (`palace_design.py`, `CAR_BOX`).
+- *More rooms*: thirteen of the sixteen, the road winding through them row by row (154 west to 151, 155 east to 158, 162 west to 159,
+  163) into the long hall, its control points every 4 cells and its bends arcs, so the spline doesn't overshoot by the long straights.
+- *The loop round the roofs*: from the hilltop the road runs south along the palace's west side, round its south-west and south-east
+  corners on a corridor the island now leaves clear (`PalaceIsland.RingOut`, `PALACE.JSON`'s second corridor), up its east side and onto
+  the runway.
+- *Off the road and onto the ground*: the rail lets a car go where a raised road lies within 300 of the ground (a track's ends meeting
+  the ground road), and indoors the carpet does: a car on its edge went off it onto the floor. The palace's car file says `rail_held=1`
+  (`RaceTrackIsland.RailHeld`): the rail holds a car everywhere. And on the outside of a bend the rail clamped a car past one segment's
+  end onto the line across that end, frame after frame -- it stopped dead along the outside rail; it now goes round the point the two
+  segments share (`RaceMod_Rail`).
+- *The white blocks*: a polygon's depth for the depth buffer is its distance times a factor that grows as the far plane is pushed out
+  (`Fill_ZBuffer_Factor`, 2^32 / the far plane); for the palace's far domes the product passed 32 bits and wrapped round to a near depth,
+  and far polygons -- the domes' pale stone -- were drawn over everything (`LIB386/OBJECT/AFF_OBJ.CPP`). It is worked out in 64 bits and
+  clamped now.
+- *The jump*: a race won flies into the teleporter, whitens in mid-flight and wakes Twinsen in scene 95; a race lost doesn't -- it is run
+  again from the grid (scene 290). Checked both ways.
+- Tested with the test pilot down the road's middle (209.4 s) and along each edge (185.6 s, 189.0 s): won, no car rescued, no stop at an
+  edge.
+
+## The Emerald Moon: four loops turn and turn about, the road its own width into and out of each; a pit lane out of and into the corners (2026-10-12, later)
+
+The user, of the loops: "the left side of the vertical loops don't capture the car so you're able ot skip the loop and drive straight.
+Also the camera seems questionable in places, let's analyse the camera around entire track and make sure it's as smooth and as optimal
+as we can get it"; and then: "where we have the vertical loops the track is double width when it doesn't need to be, the loop its self
+is double the width, but it should be a single width going into loop, and an offset single width coming out of the loop, let's add an
+extra loop so we have two loops going from left to right, and two going from right to left to keep everything balanced. Let's alternate
+them so right goes into left, then left goes into right. Let's also smooth out the track coming into and out of hte pit lane so the
+entrance and exit are both wider and feed directly out of and into their respective corners" -- with a picture of the pit lane's ends
+coloured in.
+
+![The lap: four rings (blue boxes), the road stepping across under each; the pit lane beside the straight](racetrack/emerald/lap_v4.png)
+
+![Into the fourth ring: the road its own width, the ring's way down beside it on its leg](racetrack/emerald/ring_way_in.png)
+
+![The pit lane: out of the corner onto the straight and into the hairpin, each in one straight line](racetrack/emerald/pit_funnels.png)
+
+- *The road steps sideways under each ring.* It comes into the ring in one lane, its own width, and goes on out of it in the other: the
+  ring is twice the road's width, its band drifting across from the way in's lane to the way out's. The plan's loops take a sixth
+  number for it (`RaceTrackPlan.Loops`): the way out's first point, the first number then the way in's last -- a half cell past the ring's
+  foot, the way out starting a half cell short of it. The points between, the step, have no deck and no floor (`TrackRoad.Jog`, then
+  `Gap`); the road either side runs its own way (`Geometry` doesn't look across a step); the ring's foot is halfway between and the ring
+  along the way in; its legs, no deck beside the road for them now, reach down to the ground. The plan's `keepPoints` has the builder take
+  the plan's points as they are: spacing them again cut the step's corners, the way in's last point off its lane, and the ring turned
+  1.8 degrees with it.
+- *Four rings, in on the right and in on the left in turn*: the east rim's (in on the right), the south side's two (in on the left, then
+  on the right: the road between them on the inside lane), the west rim's (in on the left). After every two the road is back on its own
+  line, so the stretch from the fourth ring over the reactor to the first -- the jump, the straight, the pit lane -- is as it was. In on
+  the right is a negative shift (`loop=`), which the engine takes everywhere (the ring's lane, the line it takes a car in at, the funnel
+  closing the road's other half before it, the camera's side) and the ring's body drifts the other way.
+- *The lap* is 582 cells: the east rim's road after the first ring 9 cells further east, the south side's middle 9 cells north, and the
+  west side straight up onto the west rim at x 9 (4.5 cells from the island's edge) instead of the S. The design script checks each
+  ring's footprint for other parts of the lap and the island's objects (none), and that it stands in one cube.
+- *The loops' capture* (the first report): a car came into a ring anywhere from its lane's far edge to a little past the other lane, and
+  the double road's outer part on the side the car goes in on was past that -- it drove on past the foot. It now takes the car anywhere on
+  the way in (`RACE_LOOP_ENTRY` past either edge), and not the ring it has just come round: put down at its foot, a hair short of the line,
+  a car went round a second time (`RACE_LOOP_AGAIN`).
+- *The opponents*: their line steps from lane to lane at the ring's foot (`RaceTrackBuilder.PlanRacePath`: held on the lane's middle 8
+  cells either side, no bend counted at the step); round the ring, an opponent goes on from the way out's foot (RACEMOD.CPP
+  `OpponentLoops`, `LoopOut`) -- it had gone on from the way in's lane and slid across to the other, after every ring, at its speed. The
+  test pilot doesn't look across a ring's foot either (it steered for the other lane short of the ring).
+- *The pit lane*: its outer edge runs straight from the middle of the corner onto the straight to its own edge, along it, and straight
+  into the middle of the hairpin at the straight's end; the clear space between it and the straight is where it was. On the outside of a
+  bend the engine's floor of a strip beside the road had gaps -- each segment's floor stopped at its end, and the wedge on the outside
+  between one segment's end and the next one's start was neither's -- and a car on the pit lane's new mouths fell through. The strip's edge
+  runs round the point they share there now, as the road's own does (`OnStrip`).
+- Tested with the test pilot: a qualifying lap of 57.5 s, a race lap of 63.6 s, the opponents 69.8 s and 77.1 s, every ring taken by every
+  car, no checkpoint missed, no car rescued.
+
+### The camera round the lap
+
+Measured with the engine's camera trace (console `camtrace 1`: each frame the run's tick, the eye, what it looks at, the hero, the cube
+and which camera placed the eye -- `arm`, `loop`, `arc`, `leave` ...) and `tools/RaceTrackPlan/camtrace.py`, which turns a run's trace
+into how far the eye moves a frame, how sharply, how far the view turns, where the car is in the picture, and -- given a car file's rings
+(`RINGS=`) -- the frames with a ring between the eye and the car.
+
+![Out of a ring: the camera beside the car at the road's height, the ring going by](racetrack/emerald/ring_way_out.png)
+
+![Round a ring, watched down its axis from the side the car went in on](racetrack/emerald/ring_round.png)
+
+- *No cuts*: a race-track camera's eye (`FollowCamEyeHook`: the loop's, the carried jump's, the rail's ...) was taken in one frame, and
+  given back in one -- 16,000 to 22,000 units and 90 to 136 degrees at a time round the loops and the reactor's jump. The view now swings
+  round the car onto it over 40 frames and back onto the arm's over 45, its length eased and the car kept in the picture
+  (`FOLLOWCAM.CPP`, `FollowCamSwing`); the arm's own angle is held on its aim meanwhile. The worst frame over a lap now: 813 units and 4.4 degrees, easing back off a ring.
+- *Round a ring* the eye stands out on the side the car goes in on (from the other, its swing round from behind the car passed behind the
+  ring's way down, and the car was hidden), level with the ring's middle, looking down its axis, its aim drawn only 0.15 towards the car:
+  the ring is a band, open at its sides, and the car is seen all the way round inside it. Over the ring's last three eighths it comes down
+  to a quarter of the radius over the road.
+- *Out of a ring* the arm's eye, behind the car and over it, would look at it through the ring's way down for some 16 cells. So the camera
+  follows the car beside it at the road's height, its sight under the ring's front, until the arm's eye -- behind the car as it heads --
+  and the way back there are clear of the ring, and only then eases back (RACEMOD.CPP `LoopCamera`). Frames with a ring between the eye and
+  the car over a lap: 271 before, 49 now -- a few at each ring as the sight passes just over its edge rail.
+- *By the island's edge* (the fourth ring) the eye comes nearer, onto the island. *Across a cube's edge* (the first ring is by one) the
+  eye held from the last frame is moved into the new cube's coordinates (`FollowCamCubeJump`): the view had swung in from 32,000 away.
+
+## Playing full screen, and the race car's handling up to ten times (2026-10-12)
+
+- *F11* while a scene plays (LBA2) puts the game full screen on the editor's screen, and F11 again puts it back in the editor. The game's
+  window is moved into a window of its own over the whole screen and the game switched to the screen's size (`resolution WxH`, as for
+  any other change of the play area -- up to 1920 by 1024, the engine's limit), and back (`EmbeddedGameHost.ToggleFullScreen`). The game
+  has the keyboard, so the editor takes F11 before it does (a low-level keyboard hook while the play lasts, `PlayKeyHook`, on a thread
+  of its own, only while one of the editor's windows or the game's is in front): the engine's own F11, a debug build's benchmark, stops
+  the game until a key is pressed.
+- *Every change of the game's size went back.* After a `resolution` switch the engine asks whether to keep it, and the editor answered
+  with Enter -- but the dialog opens on Revert, so the game went back to the size it was launched at, scaled into the new area (in the
+  editor as well as full screen). It answers Y now, Keep whatever has the focus (`key 28`).
+- After such a switch SDL gives the game's window its own style again, a popup's: the game's window can then be the one in front, which
+  is why the hook takes F11 from it too. (Made a child's again, SDL put it back at once, again and again; it is left so.)
+- *The race car setup* (the user: "modify the car handling sliders so we can tweak them up to 1000% also expose top speed to be
+  configured. I want to test different combinations to optimise for different tracks"): acceleration, braking, rolling to a stop and
+  steering go up to 1000 % of the original buggy's (from 10 %); a top speed slider on the Car tab sets the top gear's, the other gears
+  scaled with it; each gear's own slider, and reverse, go up to 270 km/h (`RaceCarSetup.MaxKmh`, ten times the original buggy's 27).
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

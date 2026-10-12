@@ -205,11 +205,11 @@ internal static class RaceCarEngineFile
         var gears = Math.Clamp(car.Gears, 1, RaceCarSetup.MaxGears);
         var text = new StringBuilder($"gears={gears}\n");
         var scale = topKmh is { } top && car.TopKmh(gears - 1) > 0 ? (double)top / car.TopKmh(gears - 1) : 1;
-        for (var g = 0; g < gears; g++) text.Append($"gear{g + 1}={RaceCarSetup.KmhToUnits(Math.Clamp(car.TopKmh(g) * scale, 3, 150))}\n");
+        for (var g = 0; g < gears; g++) text.Append($"gear{g + 1}={RaceCarSetup.KmhToUnits(Math.Clamp(car.TopKmh(g) * scale, 3, RaceCarSetup.MaxKmh))}\n");
         text.Append($"accel={N(RaceCarSetup.OriginalAccel * Math.Clamp(car.AccelerationPercent, 10, 1000) / 100.0)}\n");
         text.Append($"brake={N(RaceCarSetup.OriginalBrake * Math.Clamp(car.BrakingPercent, 10, 1000) / 100.0)}\n");
         text.Append($"coast={N(RaceCarSetup.OriginalCoast * Math.Clamp(car.CoastingPercent, 0, 1000) / 100.0)}\n");
-        text.Append($"reverse={RaceCarSetup.KmhToUnits(Math.Clamp(car.ReverseKmh, 1, 150))}\n");
+        text.Append($"reverse={RaceCarSetup.KmhToUnits(Math.Clamp(car.ReverseKmh, 1, RaceCarSetup.MaxKmh))}\n");
         text.Append($"steer={(int)Math.Round(RaceCarSetup.OriginalSteer * Math.Clamp(car.SteeringPercent, 10, 1000) / 100.0)}\n");
         text.Append($"automatic={(car.Automatic ? 1 : 0)}\n");
         text.Append($"hud={(car.ShowDisplay ? 1 : 0)}\n");

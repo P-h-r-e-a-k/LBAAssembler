@@ -80,6 +80,16 @@ static double FollowCamFromEye[3], FollowCamFromLooks[3];
 static S32 FollowCamLeave = 0;          /* frames left of the ease back onto the arm's eye */
 #define FOLLOW_CAM_LEAVE_STEPS 45
 
+/* How far the hero's coordinates moved this frame by a change of cube (one cube's width,
+ * either way, or none): the eye held from last frame -- the hook's, or the ease back from it
+ * -- is in the old cube's coordinates, and taken from his new place it was a cube away
+ * (the race-track mod's loop camera held past a ring as the car crossed into the next
+ * cube, the view swung in from 32,000 away, 2026-10-12). */
+static S32 FollowCamCubeJump(S32 now, S32 before) {
+    const S32 d = now - before;
+    return d > 16384 ? 32768 : d < -16384 ? -32768 : 0;
+}
+
 /* Easing in and out over k of n. */
 static double FollowCamEaseW(S32 k, S32 n) {
     const double s = (double)k / n;
@@ -456,11 +466,13 @@ void UpdateFollowCameraExt(void) {
             FollowCamEyeWho = NULL;
             if (FollowCamEyeHook AND FollowCamEyeHook(ownEye, ownTarget)) {
                 const S32 here[3] = {ptr3d->X, ptr3d->Y, ptr3d->Z};
+                const S32 jump[3] = {FollowCamCubeJump(ptr3d->X, FollowCamPrevHeroX), 0, FollowCamCubeJump(ptr3d->Z, FollowCamPrevHeroZ)};
                 if (FollowCamOwnEye == 0) {
-                    /* (from the view as it is: the arm's, or partway back to it) */
+                    /* (from the view as it is: the arm's, or partway back to it -- last frame's, in
+                     * this frame's cube) */
                     for (S32 k = 0; k < 3; k++) {
-                        FollowCamFromEye[k] = (FollowCamLeave > 0 ? FollowCamOwnEyeAt[k] : (k == 0 ? CameraX : k == 1 ? CameraY : CameraZ)) - here[k];
-                        FollowCamFromLooks[k] = (FollowCamLeave > 0 ? FollowCamOwnEyeLooks[k] : (k == 0 ? VueOffsetX : k == 1 ? VueOffsetY : VueOffsetZ)) - here[k];
+                        FollowCamFromEye[k] = (FollowCamLeave > 0 ? FollowCamOwnEyeAt[k] + jump[k] : (k == 0 ? CameraX : k == 1 ? CameraY : CameraZ)) - here[k];
+                        FollowCamFromLooks[k] = (FollowCamLeave > 0 ? FollowCamOwnEyeLooks[k] + jump[k] : (k == 0 ? VueOffsetX : k == 1 ? VueOffsetY : VueOffsetZ)) - here[k];
                     }
                     FollowCamLeave = 0;
                 }
@@ -476,11 +488,13 @@ void UpdateFollowCameraExt(void) {
                 FollowCamPlaceEye(FollowCamOwnEyeAt, FollowCamOwnEyeLooks);
             } else {
             if (FollowCamOwnEye > 0) {
-                /* (the hook let go: back onto the arm from where the view is) */
+                /* (the hook let go: back onto the arm from where the view is -- last frame's, in
+                 * this frame's cube) */
                 const S32 here[3] = {ptr3d->X, ptr3d->Y, ptr3d->Z};
+                const S32 jump[3] = {FollowCamCubeJump(ptr3d->X, FollowCamPrevHeroX), 0, FollowCamCubeJump(ptr3d->Z, FollowCamPrevHeroZ)};
                 for (S32 k = 0; k < 3; k++) {
-                    FollowCamFromEye[k] = FollowCamOwnEyeAt[k] - here[k];
-                    FollowCamFromLooks[k] = FollowCamOwnEyeLooks[k] - here[k];
+                    FollowCamFromEye[k] = FollowCamOwnEyeAt[k] + jump[k] - here[k];
+                    FollowCamFromLooks[k] = FollowCamOwnEyeLooks[k] + jump[k] - here[k];
                 }
                 FollowCamLeave = FOLLOW_CAM_LEAVE_STEPS;
             }

@@ -143,6 +143,18 @@ block (a grid cell says which block it is and where in it), and made in 3D where
 
 The busiest cube, (8, 10), holds 146 objects of the 200 a cube can.
 
+## Wider doors and a way round the palace, for the race (2026-10-12, later)
+
+The race through the rooms (`docs/LBA2_DESERT_RACE_TRACK_BUILD.md`, the palace's second round) wanted its road wider than the doors were:
+
+- **The doors** are made four bricks wide (16 cells, `PalaceIsland.DoorBricks`) instead of the game's two: each doorway in the band of
+  wall between two rooms (east and south of each room) is opened to that width round its middle, to the lintel's height, and the line
+  from it to the facing door across the next room is cleared -- the furniture's pieces, plain blocks and chests that stood on it
+  (`PalaceIsland`'s log: "the doors made wider: 24 doors ..., pieces ..., chests on them gone"). The floor stays under what is cleared.
+- **A way round the palace's south-west**: the ground the island leaves clear round the building (its corridors, `PALACE.JSON`) gains a
+  ring along the west side and round the south (`PalaceIsland.RingOut` cells out from the wall), so the race's loop over the roofs can
+  come down the west side and round the corners to the east; it replaces the old way at x 470.
+
 ## Making it
 
 - Tools > **LBA2: Palace island (Otringal's palace)…** (`MainWindow.Palace.cs`) adds the two files to the game folder, builds them again,

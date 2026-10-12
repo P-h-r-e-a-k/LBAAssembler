@@ -76,12 +76,15 @@ internal sealed class RaceCarWindow : Window
         preset.SelectionChanged += (_, _) => PresetChosen();
         car.Children.Add(preset);
 
+        // (up to ten times the original buggy's, 2026-10-12, the user: "tweak them up to 1000% also expose top speed to be configured. I
+        // want to test different combinations to optimise for different tracks")
         car.Children.Add(Section("Handling (the original buggy is 100 %)"));
-        car.Children.Add(SliderRow("Acceleration", 25, 300, 5, " %", () => setup.AccelerationPercent, v => setup.AccelerationPercent = (int)v).Row);
-        car.Children.Add(SliderRow("Braking", 25, 300, 5, " %", () => setup.BrakingPercent, v => setup.BrakingPercent = (int)v).Row);
-        car.Children.Add(SliderRow("Rolling to a stop (off the throttle)", 0, 300, 5, " %", () => setup.CoastingPercent, v => setup.CoastingPercent = (int)v).Row);
-        car.Children.Add(SliderRow("Steering", 50, 200, 5, " %", () => setup.SteeringPercent, v => setup.SteeringPercent = (int)v).Row);
-        car.Children.Add(SliderRow("Top speed backwards", 5, 40, 1, " km/h", () => setup.ReverseKmh, v => setup.ReverseKmh = (int)v).Row);
+        car.Children.Add(SliderRow("Top speed (the top gear's; the others with it)", 5, RaceCarSetup.MaxKmh, 1, " km/h", () => setup.TopKmh(setup.Gears - 1), SetTopSpeed).Row);
+        car.Children.Add(SliderRow("Acceleration", 10, 1000, 5, " %", () => setup.AccelerationPercent, v => setup.AccelerationPercent = (int)v).Row);
+        car.Children.Add(SliderRow("Braking", 10, 1000, 5, " %", () => setup.BrakingPercent, v => setup.BrakingPercent = (int)v).Row);
+        car.Children.Add(SliderRow("Rolling to a stop (off the throttle)", 0, 1000, 5, " %", () => setup.CoastingPercent, v => setup.CoastingPercent = (int)v).Row);
+        car.Children.Add(SliderRow("Steering", 10, 1000, 5, " %", () => setup.SteeringPercent, v => setup.SteeringPercent = (int)v).Row);
+        car.Children.Add(SliderRow("Top speed backwards", 5, 150, 1, " km/h", () => setup.ReverseKmh, v => setup.ReverseKmh = (int)v).Row);
 
         // ---- the gearbox
         gearbox.Children.Add(Section("Gearbox", first: true));
@@ -97,7 +100,7 @@ internal sealed class RaceCarWindow : Window
         for (var g = 0; g < RaceCarSetup.MaxGears; g++)
         {
             var gear = g;
-            var (row, slider) = SliderRow($"Gear {g + 1} top speed", 5, 80, 1, " km/h", () => setup.TopKmh(gear), v =>
+            var (row, slider) = SliderRow($"Gear {g + 1} top speed", 5, RaceCarSetup.MaxKmh, 1, " km/h", () => setup.TopKmh(gear), v =>
             {
                 while (setup.GearTopKmh.Count <= gear) setup.GearTopKmh.Add(setup.GearTopKmh.LastOrDefault(27));
                 setup.GearTopKmh[gear] = (int)v;
@@ -284,11 +287,29 @@ internal sealed class RaceCarWindow : Window
         Load();
     }
 
-    // Any value changed by hand: the preset box says Custom unless the values happen to be a preset's.
+    // The top speed slider: every gear's top speed scaled so the top gear's is `kmh`, each still over the one below it.
+    private void SetTopSpeed(double kmh)
+    {
+        var gears = Math.Clamp(setup.Gears, 1, RaceCarSetup.MaxGears);
+        var top = setup.TopKmh(gears - 1);
+        if (top <= 0) return;
+        while (setup.GearTopKmh.Count < gears) setup.GearTopKmh.Add(setup.GearTopKmh.LastOrDefault(27));
+        var scaled = Enumerable.Range(0, gears).Select(g => setup.TopKmh(g) * kmh / top).ToArray();
+        for (var g = 0; g < gears; g++)
+        {
+            if (g == gears - 1) { setup.GearTopKmh[g] = (int)Math.Round(kmh); continue; }
+            var lo = g == 0 ? 1 : setup.GearTopKmh[g - 1] + 1;
+            setup.GearTopKmh[g] = Math.Clamp((int)Math.Round(scaled[g]), lo, Math.Max(lo, (int)Math.Round(kmh) - (gears - 1 - g)));
+        }
+    }
+
+    // Any value changed by hand: the preset box says Custom unless the values happen to be a preset's; and every slider shows its value
+    // again (the top speed moves the gears' and a gear's the top speed's).
     private void Edited()
     {
         if (updating) return;
         updating = true;
+        foreach (var r in refresh) r();
         preset.SelectedIndex = MatchingPreset();
         updating = false;
     }

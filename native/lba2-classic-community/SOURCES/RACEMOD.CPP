@@ -209,6 +209,8 @@ enum { STEP_ON, STEP_ROUND, STEP_BACK, STEP_FELL };
 static int s_loopOn = -1, s_loopState = LOOP_NONE;
 static int s_loopLeft = -1;                // the ring the car last came out of, and when (RACE_LOOP_AGAIN)
 static U32 s_loopLeftAt = 0;
+static int s_loopHold = -1;                // the ring just come round, whose camera holds on it a while (LoopCamera), and since when
+static U32 s_loopHoldAt = 0;
 
 // the opponents: each one's line, where it is along it (world units from the start line), laps begun, the scenes' copies of its car
 #define RACE_MAX_OPPONENTS 6
@@ -238,6 +240,7 @@ typedef struct {
     T_LOOP_RIDE Ride;
     double LoopS[RACE_MAX_LOOPS];          // where each loop's foot is along its line (-1: not on it) ...
     int LoopAt[RACE_MAX_LOOPS];            // ... and the line's point there
+    double LoopOut[RACE_MAX_LOOPS];        // ... and where its line goes on past the ring: its first point in the lane the car comes out in (-1: none)
     double ArcS0[RACE_MAX_ARCS], ArcS1[RACE_MAX_ARCS]; // each carried jump along its line, foot to foot (-1: none)
     int PaceLo, PaceHi;                    // its skill drawn between these when the track loads (opponent_pace=<lo> <hi>; 0: Pace as given)
     S32 BoostUntil, HitUntil;              // a power-up's boost, and a penguin's blast that stopped it, until when
@@ -639,10 +642,13 @@ static char s_fileName[32] = "";
 // own foot). Gap: the part of its top that is missing (radians, 0 none), which the car leaps upside down. Band: from the band's middle to
 // its rails. Lo, Hi: the speeds at its foot a car with the throttle held gets round a ring with a gap at (LoopWindow), Least the least
 // it gets round a whole one at.
+// A negative Shift: in on the right, out on the left (the Emerald Moon's from 2026-10-12, whose road steps sideways under each ring,
+// the rings in turn one way and the other). Camera: the side LoopCamera watches it from, 1 the side the car goes in on, -1 the other.
 typedef struct {
     int CubeX, CubeZ;
     double X, Y, Z, DirX, DirZ, R, Shift, Gap, Band;
     double Lo, Hi, Least;
+    int Camera;
 } T_RACE_LOOP;
 static T_RACE_LOOP s_loops[RACE_MAX_LOOPS];
 static int s_nbLoops = 0;
@@ -1045,7 +1051,13 @@ static int RaisedOpenEnd(int i, double tt) {
 // looked for `pad` past its edges.
 static int OnStrip(const T_RACE_RAISED *a, const T_RACE_RAISED *c, double tt, double side, double d2, double pad) {
     const double lo = a->StripLo + (c->StripLo - a->StripLo) * tt, hi = a->StripHi + (c->StripHi - a->StripHi) * tt;
-    return hi > lo && side >= lo - pad && side <= hi + pad && d2 - side * side <= pad * pad + 1;
+    if (hi <= lo) return 0;
+    if (d2 - side * side <= pad * pad + 1) return side >= lo - pad && side <= hi + pad;
+    // (past the segment's end, on the outside of a bend: in the wedge between its end and the next one's start, which neither reaches
+    // across. The strip's edge runs round the point they share there, as the road's own does -- its distance from it. The Emerald Moon's
+    // pit lane, opening out of a corner and into a hairpin, 2026-10-12: gaps in it there every half cell, and a car on it fell through)
+    const double r = side < 0 ? -sqrt(d2) : sqrt(d2);
+    return r >= lo - pad && r <= hi + pad;
 }
 
 // The road at an island position (world units) for something at height `ref`, looked for `pad` past its edges: its height there, the
@@ -1967,14 +1979,15 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "loop")) {
             T_RACE_LOOP *l = &s_loops[s_nbLoops];
-            double dx, dz, gap, band = 1.3 * 512;
+            double dx, dz, gap, band = 1.3 * 512, camera = 1;
             if (s_nbLoops < RACE_MAX_LOOPS
-                    && sscanf(v, "%d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf", &l->CubeX, &l->CubeZ, &l->X, &l->Y, &l->Z, &dx, &dz, &l->R, &l->Shift, &gap, &band) >= 10) {
+                    && sscanf(v, "%d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", &l->CubeX, &l->CubeZ, &l->X, &l->Y, &l->Z, &dx, &dz, &l->R, &l->Shift, &gap, &band, &camera) >= 10) {
                 const double len = sqrt(dx * dx + dz * dz);
                 if (len > 0 && l->R > 0) {
                     l->DirX = dx / len; l->DirZ = dz / len;
                     l->Gap = gap * 3.14159265358979 / 180;
                     l->Band = band;
+                    l->Camera = camera < 0 ? -1 : 1;
                     s_nbLoops++;
                 }
             }
@@ -2795,6 +2808,19 @@ U32 RaceMod_AutoInput(void) {
     const double fastest = s_car.GearTop[s_car.Gears - 1] * JetFactor(s_jetUntil, s_jetFactor);
     const double look = ListBuggy[0].Speed > fastest ? s_autoLook * ListBuggy[0].Speed / fastest : s_autoLook;
     PathAt(o, o->Cum[best] + look, &x, &z, &y, &v, &dx, &dz);
+    // (not across a ring's foot: the line steps there from the way in's lane to the way out's, and the car steered for the other lane
+    // short of the ring -- it looks on along the way in's lane, past the foot)
+    for (int k = 0; k < s_nbLoops; k++) {
+        if (o->LoopS[k] < 0) continue;
+        double d = o->LoopS[k] - o->Cum[best];
+        if (!s_sprint && d < -o->Length / 2) d += o->Length;
+        if (d < 0 || d >= look) continue;
+        const T_RACE_LOOP *l = &s_loops[k];
+        const double in = -l->Shift / 2, past = look - d;
+        x = l->CubeX * 32768.0 + l->X - l->DirZ * in + l->DirX * past; z = l->CubeZ * 32768.0 + l->Z + l->DirX * in + l->DirZ * past;
+        dx = l->DirX; dz = l->DirZ;
+        break;
+    }
     const double dl = sqrt(dx * dx + dz * dz);
     if (s_autoSide != 0 && dl > 0) { x += dz / dl * s_autoSide; z -= dx / dl * s_autoSide; }
     const double want = atan2(x - wx, z - wz) * 4096.0 / (2 * 3.14159265358979);
@@ -2814,7 +2840,7 @@ U32 RaceMod_AutoInput(void) {
         if (l->Gap <= 0 || l->Hi <= l->Lo || l->Hi >= s_car.GearTop[s_car.Gears - 1] || l->CubeX != CurrentCubeX || l->CubeZ != CurrentCubeY || fabs(wy - l->Y) > 600) continue;
         const double a = (hero->Obj.X - l->X) * l->DirX + (hero->Obj.Z - l->Z) * l->DirZ;
         const double c = -(hero->Obj.X - l->X) * l->DirZ + (hero->Obj.Z - l->Z) * l->DirX;
-        if (a < -15 * 512 || a >= 0 || fabs(c) > l->Shift / 2 + l->Band + 1024) continue;
+        if (a < -15 * 512 || a >= 0 || fabs(c) > fabs(l->Shift) / 2 + l->Band + 1024) continue;
         // (the car's own pull in a low gear adds a couple of hundred a frame: coasting is the gentlest way down)
         const double want = LoopAim(l);
         return bits | (speed > want + 150 ? I_DOWN : speed > want - 60 ? 0 : I_UP);
@@ -3357,20 +3383,32 @@ static double LoopAim(const T_RACE_LOOP *l) { return l->Lo + 0.5 * (l->Hi - l->L
 // jump's two feet.
 static void OpponentLoops(T_RACE_OPPONENT *o) {
     o->LoopOn = -1;
-    for (int k = 0; k < RACE_MAX_LOOPS; k++) { o->LoopS[k] = -1; o->LoopAt[k] = -1; }
+    for (int k = 0; k < RACE_MAX_LOOPS; k++) { o->LoopS[k] = -1; o->LoopAt[k] = -1; o->LoopOut[k] = -1; }
     for (int k = 0; k < RACE_MAX_ARCS; k++) o->ArcS0[k] = o->ArcS1[k] = -1;
     if (!o->Count) return;
     for (int k = 0; k < s_nbLoops; k++) {
         const T_RACE_LOOP *l = &s_loops[k];
         const double wx = l->CubeX * 32768.0 + l->X, wz = l->CubeZ * 32768.0 + l->Z;
+        // (a line that steps sideways under the ring has a point in each lane at its foot, RaceTrackBuilder.PlanRacePath: the foot is
+        // the way in's, a hair either side of the line across the road there)
         for (int i = 0; i < o->Count; i++) {
             const int j = (i + 1) % o->Count;
             const double a0 = (o->X[i] - wx) * l->DirX + (o->Z[i] - wz) * l->DirZ, a1 = (o->X[j] - wx) * l->DirX + (o->Z[j] - wz) * l->DirZ;
-            if (!(a0 < 0 && a1 >= 0) || fabs(o->Y[i] - l->Y) > 800) continue;
+            if (!(a0 < -16 && a1 >= -16) || fabs(o->Y[i] - l->Y) > 800) continue;
             const double across = -(o->X[i] - wx) * l->DirZ + (o->Z[i] - wz) * l->DirX;
-            if (fabs(across) > l->Shift / 2 + l->Band + 1500) continue;
-            o->LoopS[k] = o->Cum[i] + (o->Cum[i + 1] - o->Cum[i]) * (-a0) / (a1 - a0);
+            if (fabs(across) > fabs(l->Shift) / 2 + l->Band + 1500) continue;
+            const double f = -a0 / (a1 - a0);
+            o->LoopS[k] = o->Cum[i] + (o->Cum[i + 1] - o->Cum[i]) * (f > 1 ? 1 : f);
             o->LoopAt[k] = j;
+            // (where it goes on past the ring: its first point in the other lane. It had gone on from the foot, the way in's lane, and
+            // slid across to the other -- after every ring, the opponents' cars sideways at the speed they drove)
+            const double sg = l->Shift < 0 ? -1 : 1;
+            for (int d = 0; d < 80 && d < o->Count; d++) {
+                const int m = (j + d) % o->Count;
+                const double am = (o->X[m] - wx) * l->DirX + (o->Z[m] - wz) * l->DirZ, cm = -(o->X[m] - wx) * l->DirZ + (o->Z[m] - wz) * l->DirX;
+                if (fabs(am) > l->R + 1024) break;
+                if (sg * cm >= fabs(l->Shift) / 4 && am >= -16) { o->LoopOut[k] = o->Cum[m]; break; }
+            }
             break;
         }
     }
@@ -3416,6 +3454,8 @@ static void LoopEnd(T_OBJ_3D *obj, double v, const char *how) {
     ListBuggy[0].Speed = (S32)v;
     Log_Info("[racemod] loop %d: %s at %.0f units/s", s_loopOn + 1, how, v);
     s_loopLeft = s_loopOn; s_loopLeftAt = TimerRefHR;
+    // (come round it: its camera holds on it a while, LoopCamera)
+    s_loopHold = !strcmp(how, "round") ? s_loopOn : -1; s_loopHoldAt = TimerRefHR;
     s_loopOn = -1; s_loopState = LOOP_NONE;
     s_forgetLap = 1;
 }
@@ -3593,7 +3633,7 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
             if (l->CubeX != CurrentCubeX || l->CubeZ != CurrentCubeY || fabs(oy - l->Y) > 600) continue;
             const double a1 = (*nx - l->X) * l->DirX + (*nz - l->Z) * l->DirZ;
             const double c1 = -(*nx - l->X) * l->DirZ + (*nz - l->Z) * l->DirX;
-            if (fabs(c1) > l->Shift / 2 + l->Band + 1024) continue;            // (another road, beside this one)
+            if (fabs(c1) > fabs(l->Shift) / 2 + l->Band + 1024) continue;      // (another road, beside this one)
             // (coming up to a ring with a gap: the least to take it at -- too fast, the car is slowed, below)
             if (l->Gap > 0 && l->Hi > l->Lo && a1 > -RACE_LOOP_HINT * 512 && a1 < -RACE_LOOP_HINT * 256 && s_hinted != i) {
                 char text[64];
@@ -3610,12 +3650,14 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
                     ListBuggy[0].Speed = (S32)allowed;
                 }
             }
-            // (the road's right half closes before the ring: its way down comes down onto the road there)
+            // (the road's right half closes before the ring: its way down comes down onto the road there -- the left half, a ring the car
+            // goes into on the right: `sg` turns such a ring's across round, its way out on the + side)
+            const double sg = l->Shift < 0 ? -1 : 1, shift = fabs(l->Shift), c1s = sg * c1;
             const double funnel = l->R + RACE_LOOP_FUNNEL * 512;
             if (a1 > -funnel && a1 < 0) {
                 const double t = (a1 + funnel) / (funnel - l->R) > 1 ? 1 : (a1 + funnel) / (funnel - l->R);
-                const double right = (l->Shift / 2 + l->Band) * (1 - t) + (-l->Shift / 2 + l->Band - RACE_LOOP_INSET) * t;
-                if (c1 > right) { *nx = (S32)floor(*nx + l->DirZ * (c1 - right) + 0.5); *nz = (S32)floor(*nz - l->DirX * (c1 - right) + 0.5); s_railTouch = 1; }
+                const double right = (shift / 2 + l->Band) * (1 - t) + (-shift / 2 + l->Band - RACE_LOOP_INSET) * t;
+                if (c1s > right) { *nx = (S32)floor(*nx + sg * l->DirZ * (c1s - right) + 0.5); *nz = (S32)floor(*nz - sg * l->DirX * (c1s - right) + 0.5); s_railTouch = 1; }
             }
             if (ListBuggy[0].Speed <= 0) continue;
             // (not the ring the car has just come round: put down at its foot, a hair short of the line, it crossed it again and went
@@ -3631,7 +3673,7 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
             // (anywhere on the way in -- its lane's band, out to the road's edge, and the road's other half, which the funnel above closes:
             // within RACE_LOOP_ENTRY of either lane only, a car on the outer part of the Emerald Moon's road, twice the loop's width, drove
             // past the ring's foot and on, the loop skipped, 2026-10-12)
-            if (across < -l->Shift / 2 - l->Band - RACE_LOOP_ENTRY || across > l->Shift / 2 + RACE_LOOP_ENTRY) continue;
+            if (sg * across < -shift / 2 - l->Band - RACE_LOOP_ENTRY || sg * across > shift / 2 + RACE_LOOP_ENTRY) continue;
             s_loopOn = i; s_loopState = LOOP_RIDE;
             memset(&s_ride, 0, sizeof(s_ride));
             s_ride.State = LOOP_RIDE; s_ride.V = ListBuggy[0].Speed; s_ride.Lat = across - Lane(l, 0);
@@ -3691,16 +3733,104 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
 // half the picture and hid the car going round, 2026-10-12. Drawn RACE_LOOP_CAM_PULL towards the car now, its rim stays out of sight.)
 #define RACE_LOOP_CAM_FAR 3.2
 #define RACE_LOOP_CAM_PULL 0.15
+// Come round a ring, the camera stays beside the car while the arm's eye -- behind the car and over it -- would look at it through the
+// ring's band coming down behind its foot, or would on its way back there (the Emerald Moon's rings, deep drums, filled the picture as the
+// camera swung back behind the car, 2026-10-12): RACE_LOOP_HOLD_MS at the most. Beside the car, not where it watched the ring from: from
+// there the car driving on was behind the ring's front, going up from the foot on the side the camera stands -- so the eye comes down
+// as the car comes down the ring's last three eighths, to RACE_LOOP_CAM_LOW radii over the road, and on down to RACE_LOOP_HOLD_LOW as it
+// drives out, over RACE_LOOP_HOLD_DROP cells, keeping level with it: its sight runs under the ring's front. It turns from the ring to the
+// car over RACE_LOOP_HOLD_PAN cells.
+#define RACE_LOOP_HOLD_MS 3000
+#define RACE_LOOP_CAM_LOW 0.25
+#define RACE_LOOP_HOLD_LOW 450.0
+#define RACE_LOOP_HOLD_DROP 2.0
+#define RACE_LOOP_HOLD_PAN 2.0
+
+// Whether a place (world units) is on the island: in one of the cubes it has a scene for (cube_scene=; none listed: anywhere).
+static int OnIsland(double wx, double wz) {
+    if (!s_nbCubeScenes) return 1;
+    const int cx = (int)floor(wx / 32768.0), cz = (int)floor(wz / 32768.0);
+    for (int i = 0; i < s_nbCubeScenes; i++)
+        if (s_cubeScenes[i][0] == cx && s_cubeScenes[i][1] == cz) return 1;
+    return 0;
+}
+
+// Whether a ring's band is between two places (cube-local, the ring's cube): its road surface and the green outside it, RaceTrackLoopBody's
+// Thickness (160) and some, and its rails along its edges, on the line between them -- not the last 500 units at the second (the car,
+// on the band itself while it goes round).
+static int RingHides(const T_RACE_LOOP *l, double ex, double ey, double ez, double cx, double cy, double cz) {
+    const double len = sqrt((ex - cx) * (ex - cx) + (ey - cy) * (ey - cy) + (ez - cz) * (ez - cz));
+    if (len < 600) return 0;
+    for (int i = 0; i <= 64; i++) {
+        const double s = 500 / len + (1 - 500 / len) * i / 64.0;
+        const double px = cx + (ex - cx) * s - l->X, py = cy + (ey - cy) * s - (l->Y + l->R), pz = cz + (ez - cz) * s - l->Z;
+        const double along = px * l->DirX + pz * l->DirZ, across = -px * l->DirZ + pz * l->DirX;
+        const double rho = sqrt(along * along + py * py);
+        if (rho < l->R - 250 || rho > l->R + 400) continue;
+        double th = atan2(along, -py);
+        if (th < 0) th += 2 * RACE_PI;
+        const double off = fabs(across - Lane(l, th));
+        if (off > l->Band + 64) continue;
+        if (rho > l->R + 20 || off > l->Band - 150) return 1;
+    }
+    return 0;
+}
+
+static double Smoothstep(double f) { f = f < 0 ? 0 : f > 1 ? 1 : f; return f * f * (3 - 2 * f); }
+
 static S32 LoopCamera(S32 *eye, S32 *target) {
-    if (s_loopOn < 0 || s_loopState == LOOP_NONE) return FALSE;
-    const T_RACE_LOOP *l = &s_loops[s_loopOn];
     const T_OBJ_3D *car = &ListObjet[NUM_PERSO].Obj;
+    const int riding = s_loopOn >= 0 && s_loopState != LOOP_NONE;
+    const int k = riding ? s_loopOn : s_loopHold;
+    if (k < 0) return FALSE;
+    const T_RACE_LOOP *l = &s_loops[k];
+    // (the ring's cube from this one: the car comes out of a ring near a cube's edge into the next one -- the Emerald Moon's first)
+    const double ox = (l->CubeX - CurrentCubeX) * 32768.0, oz = (l->CubeZ - CurrentCubeY) * 32768.0;
+    if (!riding && ((S32)(TimerRefHR - s_loopHoldAt) > RACE_LOOP_HOLD_MS || fabs(ox) > 32768 || fabs(oz) > 32768 || Comportement != C_BUGGY)) {
+        s_loopHold = -1;
+        return FALSE;
+    }
     const double nx = -l->DirZ, nz = l->DirX;
-    const double mx = l->X, my = l->Y + l->R, mz = l->Z;
-    const double far = l->R * RACE_LOOP_CAM_FAR + l->Shift / 2;
-    eye[0] = (S32)(mx - nx * far); eye[1] = (S32)my; eye[2] = (S32)(mz - nz * far);
-    target[0] = (S32)(mx + (car->X - mx) * RACE_LOOP_CAM_PULL); target[1] = (S32)(my + (car->Y - my) * RACE_LOOP_CAM_PULL);
-    target[2] = (S32)(mz + (car->Z - mz) * RACE_LOOP_CAM_PULL);
+    const double mx = l->X + ox, my = l->Y + l->R, mz = l->Z + oz;
+    // (out to the side the car goes in on -- its across the shift's way round -- or the other, Camera -1; nearer, where that is off the
+    // island: the Emerald Moon's fourth ring stands by its edge)
+    const double sign = (l->Shift < 0 ? -1 : 1) * l->Camera, wx = CurrentCubeX * 32768.0, wz = CurrentCubeY * 32768.0;
+    double far = l->R * RACE_LOOP_CAM_FAR + fabs(l->Shift) / 2;
+    while (far > l->R + fabs(l->Shift) / 2 + l->Band && !OnIsland(wx + mx - nx * far * sign, wz + mz - nz * far * sign)) far -= 128;
+    far *= sign;
+    // (riding: level with the ring's middle, down to RACE_LOOP_CAM_LOW radii over the road over the last three eighths -- the eye inside the
+    // ring's circle sees the car on its band without the band between; come round, beside the
+    // car and down to RACE_LOOP_HOLD_LOW, turning to it)
+    const double low = l->Y + l->R * RACE_LOOP_CAM_LOW;
+    double along = 0, height = my, pull = RACE_LOOP_CAM_PULL;
+    if (riding) {
+        if (s_ride.State == LOOP_RIDE && s_ride.Theta > 1.25 * RACE_PI) height = my + (low - my) * Smoothstep((s_ride.Theta - 1.25 * RACE_PI) / (0.75 * RACE_PI));
+    } else {
+        const double a = (car->X - mx) * l->DirX + (car->Z - mz) * l->DirZ;
+        along = a > 0 ? a : 0;
+        height = low + (l->Y + RACE_LOOP_HOLD_LOW - low) * Smoothstep(a / (RACE_LOOP_HOLD_DROP * 512));
+        pull += (1 - pull) * Smoothstep(a / (RACE_LOOP_HOLD_PAN * 512));
+    }
+    eye[0] = (S32)(mx + l->DirX * along - nx * far); eye[1] = (S32)height; eye[2] = (S32)(mz + l->DirZ * along - nz * far);
+    target[0] = (S32)(mx + (car->X - mx) * pull); target[1] = (S32)(my + (car->Y - my) * pull);
+    target[2] = (S32)(mz + (car->Z - mz) * pull);
+    if (riding) return TRUE;
+    // (let go once the arm's eye -- behind the car as it heads, as far and as high as the arm has it (CameraX, Y, Z: just placed, FollowCam
+    // calls this after it; while this camera has the view the arm's own angle lags) -- sees the car past the ring, and so does the eye
+    // on its way there from this one, a third and two thirds of the way round)
+    const double hb = car->Beta * 2 * RACE_PI / 4096, fx = sin(hb), fz = cos(hb);
+    const double horiz = sqrt((double)(CameraX - car->X) * (CameraX - car->X) + (double)(CameraZ - car->Z) * (CameraZ - car->Z)), up = CameraY - car->Y;
+    const double from[3] = {eye[0] - car->X, eye[1] - (double)car->Y, eye[2] - car->Z}, to[3] = {-fx * horiz, up, -fz * horiz};
+    const double la = sqrt(from[0] * from[0] + from[1] * from[1] + from[2] * from[2]), lb = sqrt(to[0] * to[0] + to[1] * to[1] + to[2] * to[2]);
+    int clear = la > 1 && lb > 1;
+    for (int s = 1; s <= 3 && clear; s++) {
+        const double w = s / 3.0;
+        double d[3], dl = 0;
+        for (int i = 0; i < 3; i++) { d[i] = from[i] / la * (1 - w) + to[i] / lb * w; dl += d[i] * d[i]; }
+        dl = sqrt(dl) > 1e-6 ? (la + (lb - la) * w) / sqrt(dl) : 0;
+        if (RingHides(l, car->X + d[0] * dl - ox, car->Y + d[1] * dl, car->Z + d[2] * dl - oz, car->X - ox, car->Y + 300, car->Z - oz)) clear = 0;
+    }
+    if (clear) { s_loopHold = -1; return FALSE; }
     return TRUE;
 }
 
@@ -6231,6 +6361,10 @@ void RaceMod_Frame(void) {
                 if (out == STEP_FELL || out == STEP_BACK || o->Ride.State == LOOP_FALL) { out = STEP_ROUND; o->Ride.V = LoopEntry(&s_loops[o->LoopOn], 0); }
                 if (out == STEP_ROUND) {
                     o->Speed = fabs(o->Ride.V);
+                    // (on along its line from the lane it comes down in)
+                    const double out0 = o->S;
+                    if (o->LoopOut[o->LoopOn] > o->S || (o->LoopOut[o->LoopOn] >= 0 && o->S - o->LoopOut[o->LoopOn] > o->Length / 2)) o->S = o->LoopOut[o->LoopOn];
+                    Log_Info("[racemod] opponent %d: loop %d round, on along its line %.0f past its foot", n + 1, o->LoopOn + 1, o->S - out0);
                     o->LoopOn = -1;
                 }
             } else {
@@ -6865,7 +6999,7 @@ static void ResetTrack(void) {
     s_laps = 0; s_lapStart = s_lastLap = s_bestLap = 0;
     s_lineY = s_lineHasY = 0; s_halfway = 0; s_nbCheckpoints = 0; s_next = 0; s_showCheckpoints = 0;
     s_messageUntil = 0;
-    s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1;
+    s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopHold = -1;
     s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0;
     s_phase = PHASE_RACE; s_qualifying = 1; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;

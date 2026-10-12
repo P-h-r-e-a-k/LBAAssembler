@@ -166,6 +166,8 @@ public partial class MainWindow
         if (!playing && gameHost is null && lba1Play is null) return;
         playing = false;
         SaveAudioIfDirty();
+        playKeys?.Dispose();
+        playKeys = null;
         if (gameHost is not null) { gameHost.GameExited -= OnGameExited; gameHost.Stop(); }
         PlayHostBorder.Child = null;
         gameHost = null;
@@ -305,10 +307,15 @@ public partial class MainWindow
                 "LBA2: play scene", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        PlayStatus.Text = $"Playing {label}. It plays what is saved on disk. Click the game to give it the keyboard.";
+        PlayStatus.Text = $"Playing {label}. It plays what is saved on disk. Click the game to give it the keyboard; F11 plays it full screen and back.";
         lba2ControlScene = scene;
+        // (F11: the game full screen, and back into the editor)
+        playKeys?.Dispose();
+        playKeys = new PlayKeyHook(0x7A, host.ProcessId, () => Dispatcher.BeginInvoke(new Action(() => { if (ReferenceEquals(gameHost, host)) host.ToggleFullScreen(); })));
         _ = StartLba2Control(scene);
     }
+
+    private PlayKeyHook? playKeys;
 
     // EmbeddedGameHost's own WantsResize: the host area changed enough (debounced) to be worth a live engine
     // resolution switch. `resolution WxH` is a normal console verb (CONSOLE_CMD.CPP's cmd_resolution) that
@@ -329,12 +336,16 @@ public partial class MainWindow
             // Res_SwitchAllowedReason rejected it or Res_Switch itself failed -- either way, nothing to confirm.
             var response = await client.SendAsync($"resolution {w}x{h}");
             if (!ReferenceEquals(gameHost, host) || lba2Control != client) return;
-            if (!response.Contains($"Resolution: {w}x{h}", StringComparison.Ordinal)) return;
+            if (!response.Contains($"Resolution: {w}x{h}", StringComparison.Ordinal)) { DebugLog.Log($"MainWindow: the game kept its size, asked for {w}x{h}: {response.Trim()}"); return; }
+            DebugLog.Log($"MainWindow: the game now {w}x{h}");
             // A real switch always arms a "keep this resolution? reverts in 15s" modal (Res_BeginRevertCountdown).
-            // `key enter` reaches modal loops (it drives the same input layer MyGetInput reads, unlike `input`),
+            // `key` reaches modal loops (it drives the same input layer MyGetInput reads, unlike `input`),
             // with a small delay so the press lands after the dialog's own entry-latch clears rather than
             // being drained by it -- the dialog opens on the next tick, not synchronously within this response.
-            await client.SendAsync("key enter 90 3");
+            // Y (scancode 28) is Keep whichever button has the focus. (It was Enter, which pressed the focused one, and the dialog
+            // opens with Revert focused: every size the game was switched to went back after it, the picture the launch's size scaled
+            // into the new area -- RES_SWITCH.CPP's log "revert dialog -> REVERT", 2026-10-12.)
+            await client.SendAsync("key 28 90 3");
             if (ReferenceEquals(gameHost, host) && lba2Control == client) host.ConfirmResize(w, h);
         }
         catch (IOException) { }
