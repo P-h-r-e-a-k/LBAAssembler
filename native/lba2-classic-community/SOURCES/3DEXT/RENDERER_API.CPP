@@ -269,9 +269,11 @@ int lba2_renderer_load_island(const char *name)
     }
     if (islandIndex < 0 && !strcasecmp(name, "celebra2")) islandIndex = 5; // shares celebrat's sky/ambience
     // (CXTOWER, the editor's Island CX with the control tower's halls under it: Island CX on top, so Island CX's gas, sky and ambience --
-    // it had the first slot's, Citadel's sea, round it. No scenes of its own yet, so no actors: Island CX's belong to Island CX.)
+    // it had the first slot's, Citadel's sea, round it. PALACE, Otringal's palace made an island: Otringal's, as its palette is. No scenes
+    // of their own yet, so no actors: Island CX's and Otringal's belong to those islands.)
     const S32 actorIsland = islandIndex;
     if (islandIndex < 0 && !strcasecmp(name, "cxtower")) islandIndex = 9;
+    if (islandIndex < 0 && !strcasecmp(name, "palace")) islandIndex = 4;
 
     S32 skyResource = islandIndex >= 0 ? RESS_SKYSEA0 + islandIndex : RESS_SKYSEA0;
     if (!strcasecmp(name, "citabau")) skyResource = RESS_SKYSEA00; // interior-only ambience, no Island slot

@@ -84,7 +84,8 @@ The busiest cube, (8, 10), holds 146 objects of the 200 a cube can.
 
 - Tools > **LBA2: Palace island (Otringal's palace)…** (`MainWindow.Palace.cs`) adds the two files to the game folder, builds them again,
   or takes them out. It is refused while test edits or the 1996 demo are open. The new island appears in the Island list
-  (Otringal's palette).
+  (Otringal's palette). Since 2026-10-12 the editor's 3D view also gives it Otringal's sky, cloud sea and light (`3DEXT/RENDERER_API.CPP`
+  takes `PALACE` for Otringal's slot, as it takes `CXTOWER` for Island CX's); it had Citadel Island's sea and sky, the first slot's.
 - `ScriptRoundTrip palace <game folder> <out folder> [source folder] [--no-roofs] [--no-outside] [--no-furniture]` builds the same files
   into another folder. The source folder holds pristine `OTRINGAL.ILE` and `.OBL` (the game folder by default). `--no-roofs` leaves the
   roofs (and the outside) off so you can see inside, as in the second picture.
