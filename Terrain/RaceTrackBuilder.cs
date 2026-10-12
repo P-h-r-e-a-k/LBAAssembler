@@ -152,7 +152,9 @@ internal sealed class RaceTrackPlan
     public double? Gravity { get; set; }
     // For the race-track mode, on a raised road: the camera that follows the car rides the road behind it -- [cells behind the car,
     // units over the road, cells ahead of the car that it looks at] -- instead of hanging on an arm behind the car, which the road's
-    // other levels, a drop's crest and a tight bend all get in the way of.
+    // other levels, a drop's crest and a tight bend all get in the way of. Two more, both or the first: [..., units over the road its
+    // sight line ends at the car (0: its wheels -- the eye then rises to some 4,000 over a level road to see them; at the car's middle
+    // it stays as low as asked), units over the road ahead it looks at (300)] -- the Emperor's palace's, a level view under the domes.
     public double[]? RailCamera { get; set; }
     // Decor bodies a raised road's piers may stand on (a platform's decks); with this given, the piers are placed by the island's real
     // shapes (RaceTrackScenery) -- on the sea, the ground or one of these, clear of everything else, beside the road where they cannot
@@ -823,7 +825,7 @@ internal static class RaceTrackBuilder
         }
         report.Roads.AddRange(roads);
         report.Gravity = planned && main.Raised is not null ? plan.Gravity : null;
-        report.RailCamera = planned && main.Raised is not null && plan.RailCamera is { Length: 3 } ? plan.RailCamera : null;
+        report.RailCamera = planned && main.Raised is not null && plan.RailCamera is { Length: >= 3 and <= 5 } ? plan.RailCamera : null;
         if (main.Raised is not null) report.RaisedFloor = (x, z, near) => RaisedFloor(main, options, x, z, near);
         // each driver's racing line (with none, the retail racer's: the test pilot and the rescue go by it)
         var drivers = options.Racers();
@@ -4515,6 +4517,8 @@ internal static class RaceTrackBuilder
         // (a lap that is all raised road starts at its first point and closes on it)
         var loop = r.Closed && up.All(u => u);
         var first = loop ? 0 : -1;
+        // (a sprint's road raised from its very first point -- the Emperor's palace's, its start on a carpet in a room -- starts there)
+        if (!r.Closed && up[0]) first = 0;
         for (var i = 0; i < n && first < 0; i++) if (up[i] && !up[At(r, i - 1)]) first = i;
         if (first < 0) return;
         var span = new List<int>();

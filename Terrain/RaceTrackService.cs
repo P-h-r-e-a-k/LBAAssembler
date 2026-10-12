@@ -51,7 +51,8 @@ internal static class RaceTrackService
         // Gravity: how much a raised road's grade changes a car's speed there (RaceTrackPlan.Gravity; a banked road's points carry a
         // fifth number, its banking in ten-thousandths).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] double? Gravity = null,
-        // RailCamera: the camera rides the raised road behind the car (RaceTrackPlan.RailCamera: cells behind, units up, cells ahead).
+        // RailCamera: the camera rides the raised road behind the car (RaceTrackPlan.RailCamera: cells behind, units up, cells ahead[, sight,
+        // aim]).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] double[]? RailCamera = null,
         // Others: the tracks of the other islands built into the folder with this one, each a record of its own (with no Others).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<TrackInfo>? Others = null,
@@ -295,7 +296,8 @@ internal static class RaceTrackService
         // (the bar's shares, by how long each part takes: the originals, Polar Island added when the folder hasn't got it, Sendell's Well
         // made, then each track its own -- BuildSeconds)
         var addPolar = tracks.Any(t => t.Options.Island.Dream) && !PolarInOriginals(gameDirectory);
-        var setup = 0.5 + (addPolar ? PolarAddSeconds : 0) + (tracks.Any(t => t.Options.Island.Created) ? 0.4 : 0);
+        var setup = 0.5 + (addPolar ? PolarAddSeconds : 0) + (tracks.Any(t => t.Options.Island == RaceTrackIsland.Sendell) ? 0.4 : 0)
+                    + (tracks.Any(t => t.Options.Island == RaceTrackIsland.Palace) ? PalaceAddSeconds : 0);
         var whole = setup + tracks.Sum(t => BuildSeconds(t.Options.Island));
         try
         {
@@ -314,11 +316,16 @@ internal static class RaceTrackService
             var grounds = tracks.Select(t => t.Options.Island.IleFile).ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var f in AllFiles.Where(f => !grounds.Contains(f) && File.Exists(Path.Combine(gameDirectory, f + BackupSuffix))))
                 CopyWritable(Path.Combine(gameDirectory, f + BackupSuffix), Path.Combine(gameDirectory, f));
-            // (an island the build makes -- Sendell's Well -- is made afresh, its files and its scene, from those originals; one this
-            // build leaves out goes)
+            // (an island the build makes -- Sendell's Well, the Emperor's palace -- is made afresh, its files and its scenes, from those
+            // originals; Sendell's Well goes when this build leaves it out -- the Palace island stays, an island of its own too: Tools)
             var made = new List<string>();
-            if (tracks.Any(t => t.Options.Island.Created)) { progress?.Report(new((setup - 0.3) / whole, "Sendell's Well: making the island")); made.AddRange(SendellWell.Install(gameDirectory)); }
+            if (tracks.Any(t => t.Options.Island == RaceTrackIsland.Sendell)) { progress?.Report(new((setup - 0.3) / whole, "Sendell's Well: making the island")); made.AddRange(SendellWell.Install(gameDirectory)); }
             else SendellWell.Remove(gameDirectory);
+            if (tracks.Any(t => t.Options.Island == RaceTrackIsland.Palace))
+            {
+                progress?.Report(new((setup - 0.3) / whole, "The Emperor's palace: making the island and its scenes"));
+                made.AddRange(LBAAssembler.Terrain.Palace.PalaceTrack.Install(gameDirectory, BackupSuffix));
+            }
 
             var session = new BuildSession();
             var log = new List<string>();
@@ -452,8 +459,15 @@ internal static class RaceTrackService
         session.Step(0.98, "the story and the race's settings");
         var story = Story(gameDirectory, report, options, own, scenes);
         extra.AddRange(story.Log);
-        // (a dreamt sprint's texts, and where it ends)
+        // (a dreamt sprint's texts, and where it ends; or the Emperor's palace's, its end the Dark Monk's teleporter to Celebration Island)
         DreamInfo? dream = null;
+        if (options.Island.Sprint && report.FinishLine is { } end)
+        {
+            var (textLog, intro, lose, wake) = LBAAssembler.Terrain.Palace.PalaceTrack.Texts(gameDirectory);
+            extra.Add(textLog);
+            dream = new DreamInfo(LineInfo(end, report.FinishLineHeight), 0, intro, lose, LBAAssembler.Terrain.Palace.PalaceTrack.WakeScene, wake,
+                LBAAssembler.Terrain.Palace.PalaceTrack.WakeActor, -1, LBAAssembler.Terrain.Palace.PalaceTrack.WakeFlightMs);
+        }
         if (options.Island.Dream && report.FinishLine is { } finish)
         {
             var (dreamLog, wake, inOpening) = LBAAssembler.Terrain.Polar.PolarDream.Apply(gameDirectory);
@@ -881,9 +895,11 @@ internal static class RaceTrackService
     // About how long each island's track takes to build, in seconds (2026-10-11: the thirteen built together in 62 s, the Desert island's
     // ground the longest), and adding Polar Island to a folder: each one's share of the progress bar.
     private const double PolarAddSeconds = 4;
+    // (and making the Emperor's palace's island: its rooms, furniture, domes and hill)
+    private const double PalaceAddSeconds = 3.5;
     private static double BuildSeconds(RaceTrackIsland island) =>
         island == RaceTrackIsland.Desert ? 16 : island == RaceTrackIsland.Citadel ? 8.3 : island == RaceTrackIsland.Knartas ? 8.1 : island == RaceTrackIsland.Otringal ? 8.4
-        : island == RaceTrackIsland.Polar ? 5.4 : island == RaceTrackIsland.Volcano ? 2.5 : island == RaceTrackIsland.Sendell || island == RaceTrackIsland.Moon ? 0.8 : 1.4;
+        : island == RaceTrackIsland.Polar ? 5.4 : island == RaceTrackIsland.Volcano ? 2.5 : island == RaceTrackIsland.Palace ? 6 : island == RaceTrackIsland.Sendell || island == RaceTrackIsland.Moon ? 0.8 : 1.4;
 
     private static string Lba1Folder() => Environment.GetEnvironmentVariable("LBA1_DIR") is { Length: > 0 } env ? env : EditorSettings.Current.Lba1Directory;
 
@@ -942,8 +958,13 @@ internal static class RaceTrackService
             back.Add(f);
         }
         foreach (var f in back) File.Delete(Path.Combine(gameDirectory, f + BackupSuffix));
-        // (an island the build made has no originals: it goes)
+        // (an island the build made has no originals: it goes -- the Palace island, an island of its own too, made again without its track)
         var gone = SendellWell.Remove(gameDirectory) ? $" {SendellWell.IleFile} and {SendellWell.OblFile}, which the build made, are gone." : "";
+        if (File.Exists(Path.Combine(gameDirectory, LBAAssembler.Terrain.Palace.PalaceIsland.IleFile)))
+        {
+            LBAAssembler.Terrain.Palace.PalaceIsland.Build(gameDirectory, gameDirectory);
+            gone += $" {LBAAssembler.Terrain.Palace.PalaceIsland.IleFile} is the Palace island again, without its track.";
+        }
         foreach (var made in new[] { InfoFile, RaceTrackCharacterCars.CatalogueFile })
             if (File.Exists(Path.Combine(gameDirectory, made))) File.Delete(Path.Combine(gameDirectory, made));
         return $"The original {string.Join(", ", back)} are back.{gone}";

@@ -2905,6 +2905,62 @@ prepared save's start and the fallback `cube 120` start alike); what differs on 
 - `ScriptRoundTrip` takes `RT_CULTURE=ru-RU` to run as a machine with that language does: the race file and a whole build come out the same
   as with the invariant culture (the decimal comma is not a problem).
 
+## The Emperor's palace: through the rooms, out of the round window, over the rooftops (2026-10-12)
+
+The user's brief: "through the palace rooms, coming out the window and around the roof tops? Point-to-point i.e. no laps, finishing
+with massive jump to harbor teleport? - Twinsen, quick, Dark monk's in the palace, he's killing everybody. Leading into final showdown at
+Celebration"; its drivers: "Stan, The pighead w/broom, *Two headed monster". On the Palace island (`docs/LBA2_PALACE_ISLAND.md`), which
+the build makes afresh with its scenes (`Terrain/Palace/PalaceTrack.cs`, `RaceTrackIsland.Palace`: Created, OwnScenes, Sprint); the
+route `docs/racetrack/palace_track_plan.json` from `tools/RaceTrackPlan/palace_design.py` (it reads the built island's `PALACE.JSON`:
+where the rooms, the round window, the ways across the rocks and the harbour's pillar are).
+
+![Through the rooms on the red carpet: a fireplace, windows, the next door](racetrack/palace/rooms.png)
+
+![Over the rooftops among the domed halls, their teal-tiled feet beside the road](racetrack/palace/rooftops.png)
+
+![The runway to the cliff's edge, the Dark Monk's teleporter on its pillar in the bay](racetrack/palace/runway.png)
+
+![In mid-flight into the teleporter: the race won, the picture about to whiten](racetrack/palace/teleporter.png)
+
+![And Twinsen on Celebration Island, by the Dark Monk's statue's lava lake](racetrack/palace/celebration.png)
+
+- *The route*, one raised road from end to end (1,188 cells): the grid in the sixteen rooms' south-east room (154), south of its chest;
+  west along the bottom row of rooms door by door, north up the west column and into the long hall (80) -- a red carpet with gold
+  borders (deck theme `carpet`), the rooms' doors (two bricks, 8 cells) a little wider than it; north down the hall, a ramp up to the
+  round window's sill and out of it over the cliff's edge; over the cloud sea, round to the east and climbing (at most 9.5%) to the
+  hilltop -- the deck theme `palace`, cream and teal, on piers to the sea; south along the way across the rocks (x 470, flat, the domes
+  ahead); onto the roofs, a swing west into the courtyard under the big dome's hall, back east along the north-east hall's north wall,
+  south down its east side and east onto the runway; the jump off the cliff's edge.
+- *Point-to-point*: the race-track mode's sprint (`sprint=`, `race_laps=1`): the finish line at the jump's lip (19,976); the jump carried
+  (`arcjump=`: 43.5 cells, its top 2,600 over the lip) onto the teleporter's pillar, its top as high as the lip (no drop). Won, the
+  picture whitens in mid-flight as the car reaches the ring (`wake_flight=2400`) and Twinsen arrives on Celebration Island, scene 95, by
+  the Dark Monk's statue: "Celebration Island... his teleporter brought me to his statue. This is where it ends, Dark Monk!" (`wake=`).
+  Twinsen's cry as the grid forms ("The Dark Monk is in the palace, and he's killing everybody! ...") and a loss's line are added to
+  Otringal's texts, the arrival line to Celebration Island's, in the game's 6 languages (`PalaceTrack.Texts`).
+- *The scenes*: an outside scene is one cube, so each cube the road reaches -- its width and a cell more -- is a scene, from 265 on,
+  row by row (24 of them, 265-288; the start's is 288), each a copy of the header of Otringal's scene outside the palace (91: its light
+  and music) with Twinsen, the engine's Zoe placeholder, the buggy and a cube-change zone on each edge shared with another. The list is
+  worked out from the route built into the program (`PalaceTrack.SceneCubes`): the rooftops' road, moved in among the domes, ran into
+  cubes that had none, and the car stopped at the first one's edge.
+- *The drivers*: Stan, the road sweeper (the pig-headed sweeper) and the Emperor. The two-headed monster has a car only among the cast's
+  (a body of another entity), and an opponent's car has to be one of the racer's own hand-made ones (`RaceDriver.Palace`).
+- *The camera* rides the road behind the car (`railCamera`), low and level: the rooms' walls, fireplaces and portraits in the picture, and
+  the halls beside the rooftops' road. The race-track mode's rail camera took two more numbers for it (RACEMOD.CPP `railcam=<back> <up>
+  <lead> [sight] [aim]`): its sight line to the car ended at the car's wheels and had to clear the road by 500, which lifted the eye to
+  some 4,000 over a level road whatever it was asked, looking 33 degrees down -- nothing over the road ahead in the picture. Ending it
+  at the car's middle (500) keeps the eye where it is put (2,100 over the road, 9 cells behind: past the near plane round the tightest
+  bend), and looking at a point 1,000 over the road ahead makes the view level, the car in its lower third. Other tracks are as they were.
+- *The domes* are 26,000 over the roofs: near them the camera shows their halls' walls (teal-tiled feet, pale stone), their tops over
+  the picture; they show whole from further off, and in the editor's island view. The island's fog was moved out for them (40,000 to
+  70,000) -- inside, looking through several rooms' doors, the far ones fade to the haze. And the engine had never drawn them at all:
+  it left out an object any of whose foot's corners lay past the fog's end, and a dome's foot is 86,000 across (`3DEXT/DECORS.CPP`: an
+  object of this editor's that is drawn only is left out only when all four are).
+- *The race's road on a route open at both ends* (`RaceTrackBuilder` PlaceRaised): a sprint's road is raised from its first point; the
+  race file had had no raised road, jumps or cube scenes for it, and the car drove under its deck.
+- Tested with the test pilot (autodrive): 117.6 s with the power-ups off, 131.1 s with them (penguins and fire balls stop a car), 1st of
+  4 and won both times, no car rescued; the white flash in mid-flight and Twinsen awake in scene 95. The build takes some 20 s (the
+  island and its scenes made afresh each time).
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

@@ -51,6 +51,8 @@ namespace LBAAssembler.Terrain.Palace;
 internal static class PalaceIsland
 {
     public const string IleFile = "PALACE.ILE", OblFile = "PALACE.OBL";
+    // where things are on the island, for the race track built on it (its plan's design, tools/RaceTrackPlan/palace_design.py)
+    public const string LayoutFile = "PALACE.JSON";
     public const string SourceIle = "OTRINGAL.ILE", SourceObl = "OTRINGAL.OBL";
     public const int PaletteEntry = 31;                 // RESS.HQR: Otringal's
     public const int Across = 4;                        // a brick's 512 across, this many times
@@ -59,9 +61,13 @@ internal static class PalaceIsland
                                                         // (Otringal's palace hill is 17,000 high, over a much smaller top)
     public const int HallScene = 80;                    // the long last room: the others are the sixteen under Otringal's palace
     public const int HarbourCells = 70;                 // cells east of the hill's cubes for the harbour's bay
+    public const int NorthCells = 50;                   // and north of it, for the road out of the round window to loop round over the sea
     public const double QuayY = 1400;                   // the harbour's quay (Otringal's lowest)
     public const int PillarOut = 80;                    // the teleporter's pillar: cells east of the rooms' east wall ...
-    public const double PillarRadius = 6;               // ... its top's radius (cells)
+    public const double PillarRadius = 6;               // ... its top's radius (cells) ...
+    public const double PillarRise = 700;               // ... and its top this much over the hilltop: the race's jump lands as high as its lip
+                                                        // (the road's 60 over the hilltop, its ramp's 700 -- palace_design.py), on the pillar
+    public const double RoadOver = 60;                  // (the race's road over what it lies on)
     public const double CorridorHalf = 9;               // the ways across the hilltop's rocks: half their width (cells)
     // the colours of Otringal's palace (OTRINGAL.OBL's halls, in its palette): its pale stone (walls and flat roofs), the dark teal of its
     // foot, the turquoise of its drums
@@ -116,11 +122,12 @@ internal static class PalaceIsland
         const double U = 512.0 * Across, V = 256.0 * Up;
         const int Pad = PalaceCliff.Margin + PalaceCliff.Wobble + PalaceCliff.Face + PalaceCliff.FarSea;
         int spanX = (maxX - minX + 1) * Across, spanZ = (maxZ - minZ + 1) * Across;
-        int cubesX = (Pad + spanX + Pad + HarbourCells + 63) / 64, cubesZ = (Pad + spanZ + Pad + 63) / 64;
+        int cubesX = (Pad + spanX + Pad + HarbourCells + 63) / 64, cubesZ = (Pad + NorthCells + spanZ + Pad + 63) / 64;
         if (cubesX > IslandFile.MapSize || cubesZ > IslandFile.MapSize) throw new InvalidDataException($"The palace's hill needs {cubesX} x {cubesZ} cubes: more than the map holds.");
         int firstX = (IslandFile.MapSize - cubesX) / 2, firstZ = (IslandFile.MapSize - cubesZ) / 2;
-        // (world units of the palace's first cell's west and north faces: on a cell's edge, Pad cells into the first cube)
-        double x0 = (firstX * 64 + Pad) * 512.0, z0 = (firstZ * 64 + Pad) * 512.0;
+        // (world units of the palace's first cell's west and north faces: on a cell's edge, Pad cells into the first cube -- and NorthCells more
+        // to the north)
+        double x0 = (firstX * 64 + Pad) * 512.0, z0 = (firstZ * 64 + Pad + NorthCells) * 512.0;
         double WX(int x) => x0 + (x - minX) * U;
         double WZ(int z) => z0 + (z - minZ) * U;
         double WY(int y) => Floor + (y - minY) * V;
@@ -224,6 +231,26 @@ internal static class PalaceIsland
             gaps++;
         }
         if (gaps > 0) log.Add($"the walls made whole: {gaps} cells of gaps to the outside, pockets no room reaches and the front door filled");
+        // ---- the floors made whole: a cell of the bottom layer within a room with nothing in it -- a door's threshold, a hole its isometric
+        // picture hides -- is floor, the room's commonest floor brick (the hill's rock under the rooms showed through by the race's carpet)
+        var floorBricks = cells.Where(c => c.Key.Y == minY && c.Value.Brick >= 0).GroupBy(c => c.Value.Tile)
+            .ToDictionary(g => g.Key, g => g.GroupBy(c => c.Value.Brick).MaxBy(b => b.Count())!.Key);
+        var floored = 0;
+        for (var ti = 0; ti < extents.Length; ti++)
+        {
+            var e = extents[ti];
+            for (var x = e.X0; x <= e.X1; x++)
+                for (var z = e.Z0; z <= e.Z1; z++)
+                {
+                    var c = (x, minY, z);
+                    if (cells.ContainsKey(c) || opening.Contains(c)) continue;
+                    var brick = floorBricks.TryGetValue(ti, out var b) ? b : -1;
+                    cells[c] = (brick, ti);
+                    if (!ReferenceEquals(shown, cells)) shown[c] = (brick, ti);
+                    floored++;
+                }
+        }
+        if (floored > 0) log.Add($"the floors made whole: {floored} cells of the bottom layer (doors' thresholds, holes) floored");
         if (opening.Count > 0)
             log.Add($"the long hall's round window open through its wall ({opening.Count} cells), its sill {WY(roundWindow!.Origin.Y):0} ({roundWindow.Origin.Y - minY} layers over the floor's foot), the big chest under it gone");
         // ---- the rooms' wallpaper, layer by layer: the mean colour of the drawn bricks of the walls (columns filled most of the way up)
@@ -317,6 +344,16 @@ internal static class PalaceIsland
             roofs++;
         }
 
+        // ---- the harbour: the sixteen rooms' middle row's line, east of the hill: the quay at the cliffs' foot, the pillar out in the bay
+        var hilltop = roofTops.Count > 0 ? roofTops.Values.Max() : WY(maxY + 1);
+        var east = (int)Math.Round(WX(maxX + 1) / 512);
+        var sixteen = cells.Keys.Where(c => cells[c].Tile != hallTile).ToList();
+        int sqX0 = (int)Math.Round(WX(sixteen.Min(c => c.X)) / 512), sqX1 = (int)Math.Round(WX(sixteen.Max(c => c.X) + 1) / 512);
+        int sqZ0 = (int)Math.Round(WZ(sixteen.Min(c => c.Z)) / 512), sqZ1 = (int)Math.Round(WZ(sixteen.Max(c => c.Z) + 1) / 512);
+        var midZ = (sqZ0 + sqZ1) / 2;
+        var quayX0 = east + PalaceCliff.Margin + PalaceCliff.Face - 6;
+        var harbour = new PalaceCliff.Harbour((quayX0, midZ - 34, quayX0 + 26, midZ + 34), QuayY, (east + PillarOut, midZ, PillarRadius, hilltop + PillarRise));
+
         // ---- the bodies: each room's faces (a few bodies where they are many), each a decor nothing touches, in every cube it reaches
         var oblBytes = File.ReadAllBytes(Path.Combine(sourceDirectory, SourceObl));
         var next = HqrArchive.CountEntries(Path.Combine(sourceDirectory, SourceObl));
@@ -343,6 +380,18 @@ internal static class PalaceIsland
             }
         }
 
+        // ---- the Dark Monk's teleporter on the harbour's pillar, standing across the race's jump: the road crosses its foot (PalaceTeleporter)
+        if (outside && roofed)
+        {
+            var ring = next + newBodies.Count;
+            newBodies.Add(PalaceTeleporter.Body());
+            var (tx, ty, tz) = PalaceTeleporter.Place((harbour.Pillar.X - 2) * 512, harbour.Pillar.Z * 512, harbour.Pillar.Top + RoadOver);
+            const double Reach = PalaceTeleporter.Radius + PalaceTeleporter.Tube;
+            BrickBuilding.AddToCubes(island, ring, 0, tx, (int)Math.Round(ty), tz, tx - PalaceTeleporter.Tube, tx + PalaceTeleporter.Tube,
+                (int)Math.Floor(ty - Reach), BrickBuilding.NoBoxTop, tz - Reach, tz + Reach, Cap);
+            log.Add($"the Dark Monk's teleporter: a gold ring {2 * Reach:0} across on the harbour's pillar, its middle at ({tx / 512:0.#}, {ty:0}, {tz / 512:0.#})");
+        }
+
         // ---- the collision: the filled cells merged into boxes (the furniture's with them), the roofs, the chests and the outside's, each a
         // decor with an empty body, in every cube it reaches
         var empty = next + newBodies.Count;
@@ -354,19 +403,10 @@ internal static class PalaceIsland
 
         // ---- the hill: the plateau at the roofs' top round the rooms (under it), its rim, its cliffs; the hall's end on the cliff's edge; the
         // harbour east of it
-        var hilltop = roofTops.Count > 0 ? roofTops.Values.Max() : WY(maxY + 1);
         var rooms = extents.Select(e => ((int)Math.Round(WX(e.X0) / 512), (int)Math.Round(WZ(e.Z0) / 512), (int)Math.Round(WX(e.X1 + 1) / 512) - 1, (int)Math.Round(WZ(e.Z1 + 1) / 512) - 1)).ToList();
         (int X0, int X1, int Z)? cliffAt = hallTile >= 0 && opening.Count > 0 && outward.Nz < 0
             ? ((int)Math.Round(WX(extents[hallTile].X0) / 512), (int)Math.Round(WX(extents[hallTile].X1 + 1) / 512) - 1, (int)Math.Round(WZ(extents[hallTile].Z0) / 512))
             : null;
-        // (the harbour: the sixteen rooms' middle row's line, east of the hill: the quay at the cliffs' foot, the pillar out in the bay)
-        var east = (int)Math.Round(WX(maxX + 1) / 512);
-        var sixteen = cells.Keys.Where(c => cells[c].Tile != hallTile).ToList();
-        int sqX0 = (int)Math.Round(WX(sixteen.Min(c => c.X)) / 512), sqX1 = (int)Math.Round(WX(sixteen.Max(c => c.X) + 1) / 512);
-        int sqZ0 = (int)Math.Round(WZ(sixteen.Min(c => c.Z)) / 512), sqZ1 = (int)Math.Round(WZ(sixteen.Max(c => c.Z) + 1) / 512);
-        var midZ = (sqZ0 + sqZ1) / 2;
-        var quayX0 = east + PalaceCliff.Margin + PalaceCliff.Face - 6;
-        var harbour = new PalaceCliff.Harbour((quayX0, midZ - 34, quayX0 + 26, midZ + 34), QuayY, (east + PillarOut, midZ, PillarRadius, hilltop + 200));
         // (the ways across the rocks, flat: the runway east from the sixteen rooms' roof to the cliff's edge -- the jump to the harbour's
         // pillar -- and, from the hill's north-east edge -- where a road from the round window comes up onto it -- to their roof's north side)
         var corridors = new List<PalaceCliff.Corridor>
@@ -376,11 +416,12 @@ internal static class PalaceIsland
         if (hallTile >= 0)
         {
             double hx1 = Math.Round(WX(extents[hallTile].X1 + 1) / 512), hz0 = Math.Round(WZ(extents[hallTile].Z0) / 512);
-            // (the hull's edge from the hall's north-east corner to the sixteen rooms' north-east one, its middle, and the way out of it)
-            double ex = sqX1 - hx1, ez = sqZ0 - hz0, len = Math.Sqrt(ex * ex + ez * ez);
-            double mx = (hx1 + sqX1) / 2, mz = (hz0 + sqZ0) / 2, nx = ez / len, nz = -ex / len;
-            var reach = PalaceCliff.Margin + PalaceCliff.Wobble + 10;
-            corridors.Add(new(new() { (mx + nx * reach, mz + nz * reach), (mx, mz), (mx, sqZ0 + 2) }, CorridorHalf));
+            // (north to south across the corner of the L, from out past the hill's north edge, level with the long hall's end, to their roof:
+            // the race's road up from the round window comes onto the hill there. In line with the domes' north-east hall -- the cluster
+            // stands over the rooms' middle, that hall 0.69 of their width in from the west -- so a car coming down it has the domes ahead,
+            // the road on the roof winding in among them)
+            var mx = Math.Round(sqX0 + (sqX1 - sqX0) * 0.69);
+            corridors.Add(new(new() { (mx, hz0 - 4), (mx, sqZ0 + 2) }, CorridorHalf));
         }
         log.AddRange(PalaceCliff.Shape(island, cubeList, new PalaceCliff.Site(rooms, hilltop, Floor - 60, cliffAt, corridors, harbour)));
         log.Add($"  the sixteen rooms: cells x {sqX0}..{sqX1}, z {sqZ0}..{sqZ1}; the ways across the rocks: " +
@@ -396,6 +437,24 @@ internal static class PalaceIsland
         island.Save(ilePath);
         foreach (var b in newBodies) oblBytes = HqrWriter.AppendEntry(oblBytes, HqrWriter.StoredEntry(b));
         File.WriteAllBytes(Path.Combine(outDirectory, OblFile), oblBytes);
+        // (the layout: island cells and world heights -- the floor's top the cars drive on, the hilltop, each room, the round window's opening
+        // and the way out of it, the ways across the rocks, the harbour's pillar and quay, the island's cubes)
+        var layout = new Dictionary<string, object?>
+        {
+            ["floorTop"] = WY(minY + 1), ["hilltop"] = hilltop, ["cell"] = U, ["layer"] = V,
+            ["cubes"] = new[] { firstX, firstZ, cubesX, cubesZ },
+            ["rooms"] = rooms.Select((r, ti) => new Dictionary<string, int> { ["scene"] = area.Tiles[ti].Scene, ["x0"] = r.Item1, ["z0"] = r.Item2, ["x1"] = r.Item3, ["z1"] = r.Item4 }).ToList(),
+            ["window"] = opening.Count == 0 ? null : new Dictionary<string, double>
+            {
+                ["x0"] = Math.Round(WX(opening.Min(c => c.X)) / 512), ["x1"] = Math.Round(WX(opening.Max(c => c.X) + 1) / 512),
+                ["z0"] = Math.Round(WZ(opening.Min(c => c.Z)) / 512), ["z1"] = Math.Round(WZ(opening.Max(c => c.Z) + 1) / 512),
+                ["sill"] = WY(opening.Min(c => c.Y)), ["top"] = WY(opening.Max(c => c.Y) + 1), ["outX"] = outward.Nx, ["outZ"] = outward.Nz,
+            },
+            ["corridors"] = corridors.Select(c => new Dictionary<string, object> { ["points"] = c.Points.Select(p => new[] { p.X, p.Z }).ToList(), ["half"] = c.Half }).ToList(),
+            ["pillar"] = new[] { harbour.Pillar.X, harbour.Pillar.Z, harbour.Pillar.R, harbour.Pillar.Top },
+            ["quay"] = new[] { harbour.Quay.X0, harbour.Quay.Z0, harbour.Quay.X1, harbour.Quay.Z1, harbour.QuayY },
+        };
+        File.WriteAllText(Path.Combine(outDirectory, LayoutFile), System.Text.Json.JsonSerializer.Serialize(layout, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         log.Add($"{IleFile}: {cubesX} x {cubesZ} cubes from cube ({firstX}, {firstZ}); the palace {Across} times a brick across and {Up} times a layer up " +
                 $"({spanX} x {spanZ} cells), its floor's foot at {Floor}, the hilltop at {hilltop:0}");
         log.Add($"{OblFile}: {bodyCount} bodies of the rooms ({faceCount} faces, {roofs} roofs and the furniture among them), {rockBodies} of the roofs' rock ({rockFaces} faces), " +
@@ -530,7 +589,7 @@ internal static class PalaceIsland
     public static List<string> Remove(string gameDirectory)
     {
         var log = new List<string>();
-        foreach (var f in new[] { IleFile, OblFile, IleFile + ".bak" })
+        foreach (var f in new[] { IleFile, OblFile, IleFile + ".bak", LayoutFile })
         {
             var path = Path.Combine(gameDirectory, f);
             if (File.Exists(path)) { File.Delete(path); log.Add($"{f} deleted"); }

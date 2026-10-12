@@ -1013,8 +1013,9 @@ static U32 s_landedAt = 0;                 // ... and when (TimerRefHR)
 static int s_statue = -1;                // statue=: 1 with the statue, 0 without it, -1 (not given) as the game says
 static int s_raisedLoop = 0;               // the road is a whole lap: its last point is its first
 static double s_gravity = 0;               // gravity=<k>: a car on the raised road is pulled down its slopes (RaceMod_Gravity), k times as hard as RACE_GRAVITY
-// railcam=<back> <up> <lead>: the camera that follows the car rides the raised road behind it (RailCamera)
-static double s_railBack = 0, s_railUp = 0, s_railLead = 0;
+// railcam=<back> <up> <lead> [sight] [aim]: the camera that follows the car rides the raised road behind it (RailCamera); sight: its
+// line to the car ends this far over the road (s_railSight); aim: it looks at a point this far over the road ahead (RAIL_CAMERA_AIM)
+static double s_railBack = 0, s_railUp = 0, s_railLead = 0, s_railAim = RAIL_CAMERA_AIM;
 static int s_railTouch = 0;                // the rail held the hero back since RaceMod_RailTouched was last asked
 
 extern S32 (*AltitudeHook)(S32 x, S32 z, S32 y);         // 3DEXT/MAPTOOLS.CPP
@@ -1275,7 +1276,10 @@ static int RaisedAlong(int seg, double t, double distance, double *x, double *y,
 // (TunnelCamera's: the sight line to the car ends this far over the road, at the car's middle -- to its wheels, near the car the line
 // is so near the road that the eye was lifted 3,300 over the road to clear it, over the roof of Otringal's bridge, 2026-10-08 -- and
 // the eye no higher than this over the road under it, under a tunnel's roof: -1 none)
-static double s_railSight = 0, s_railCeil = -1;
+// (railcam='s sight, the race file's: the line to the car's middle -- the eye no higher over the road than railcam= puts it, its view as
+// level as its lead makes it: the Emperor's palace's, under the domes, 2026-10-12. At the wheels, 0, the eye always rose to 4,000 over a
+// level road, and looked steeply down to see the car)
+static double s_railSight = 0, s_railCeil = -1, s_railSightKept = 0;
 // Whether a jump's gap (points with no width) lies on the raised road between segments a and b (either way round, the shorter): the rail
 // camera's eye is not let ride back over the gap the car has just flown -- under the roulette wheel, up on the wheel's lane over the car.
 static int GapBetween(int a, int b) {
@@ -1355,7 +1359,7 @@ static S32 RailCamera(S32 *eye, S32 *target) {
     double over;
     if (RaisedBetween(ex, ez, ey - up - lift + 800.0, ey + RAISED_UNDER, behind, &over) && ey > over - RAISED_UNDER) ey = over - RAISED_UNDER;
     eye[0] = (S32)(ex - cx); eye[1] = (S32)ey; eye[2] = (S32)(ez - cz);
-    target[0] = (S32)(tx - cx); target[1] = (S32)(ty + RAIL_CAMERA_AIM); target[2] = (S32)(tz - cz);
+    target[0] = (S32)(tx - cx); target[1] = (S32)(ty + s_railAim); target[2] = (S32)(tz - cz);
     return TRUE;
 }
 
@@ -1930,7 +1934,12 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%lf %lf", &s_jumpLo, &s_jumpHi) != 2) s_jumpHi = 0;
         }
         else if (!strcmp(key, "railcam")) {
-            if (sscanf(v, "%lf %lf %lf", &s_railBack, &s_railUp, &s_railLead) != 3) s_railBack = 0;
+            s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;
+            const int n = sscanf(v, "%lf %lf %lf %lf %lf", &s_railBack, &s_railUp, &s_railLead, &s_railSightKept, &s_railAim);
+            if (n < 3) s_railBack = 0;
+            if (n < 4) s_railSightKept = 0;
+            if (n < 5) s_railAim = RAIL_CAMERA_AIM;
+            s_railSight = s_railSightKept;
         }
         else if (!strcmp(key, "holo_arrow")) s_holoArrow = atoi(v);
         else if (!strcmp(key, "island_file")) {
@@ -3687,13 +3696,13 @@ static S32 TunnelCamera(S32 *eye, S32 *target) {
     if (!RaisedAt(hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Z + CurrentCubeY * 32768.0, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t) || abs(f - hero->Obj.Y) > 300) return FALSE;
     const int k = InTunnel(seg);
     if (k < 0) return FALSE;
-    const double back = s_railBack, upKept = s_railUp, lead = s_railLead;
-    s_railBack = RACE_TUNNEL_BACK;
+    const double back = s_railBack, upKept = s_railUp, lead = s_railLead, aim = s_railAim;
+    s_railBack = RACE_TUNNEL_BACK; s_railAim = RAIL_CAMERA_AIM;
     s_railUp = s_tunnels[k].Roof - RACE_TUNNEL_EYE < RACE_TUNNEL_UP ? s_tunnels[k].Roof - RACE_TUNNEL_EYE : RACE_TUNNEL_UP;
     s_railLead = RACE_TUNNEL_AHEAD;
     s_railSight = RACE_TUNNEL_SIGHT; s_railCeil = s_tunnels[k].Roof - RACE_TUNNEL_UNDER;
     const S32 done = RailCamera(eye, target);
-    s_railBack = back; s_railUp = upKept; s_railLead = lead; s_railSight = 0; s_railCeil = -1;
+    s_railBack = back; s_railUp = upKept; s_railLead = lead; s_railAim = aim; s_railSight = s_railSightKept; s_railCeil = -1;
     return done;
 }
 
@@ -6830,7 +6839,7 @@ static void ResetTrack(void) {
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = s_arcAcross1 = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
-    s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0;
+    s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0; s_railSight = s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;
     s_jumpLo = 0.6; s_jumpHi = 4.0; s_jumpRate = 0; s_jumpFrac = 0; s_jumpOver = 0;
     s_autoIndex = -1;
     s_faced = 0; s_safeIndex = -1; s_safeScene = -1; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;

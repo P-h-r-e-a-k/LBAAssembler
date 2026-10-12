@@ -140,6 +140,10 @@ internal static class PalaceCliff
             // (the light, the sky and the sea: Otringal's, the sky high over the domes, the sea everywhere the ground isn't over it)
             cube.BitField = 0xFFFF;
             cube.Info[IslandCube.InfoSkyY] = Math.Max(cube.Info[IslandCube.InfoSkyY], SkyY);
+            // (the fog further off than Otringal's 10,500 to 41,200: the hill and its domes seen across the bay, the domes -- 26,000 over the
+            // roofs -- from the race's road as it nears them, and a room's far wall through its door from the next, rooms 28,000 across; the
+            // engine's depth buffer is scaled to the far end, so it can be further than 16 bits)
+            cube.Info[IslandCube.InfoStartZFog] = StartFog; cube.Info[IslandCube.InfoClipZFar] = FarClip;
             for (var vz = 0; vz < IslandCube.Vertices; vz++)
                 for (var vx = 0; vx < IslandCube.Vertices; vx++)
                 {
@@ -160,7 +164,9 @@ internal static class PalaceCliff
                     var hs = new[] { cube.Height(lx, lz), cube.Height(lx + 1, lz), cube.Height(lx, lz + 1), cube.Height(lx + 1, lz + 1) };
                     var underSea = hs.All(h => h <= 0);
                     var quay = site.Harbour is { } hb && gx >= hb.Quay.X0 && gx <= hb.Quay.X1 && gz >= hb.Quay.Z0 && gz <= hb.Quay.Z1 && hs.All(h => Math.Abs(h - hb.QuayY) < 1);
-                    var (tx, ty) = quay ? (Paving.X + RockTile * (gx & 1), Paving.Y + RockTile * (gz & 3)) : (Rock.X + RockTile * (gx % RockTiles), Rock.Y + RockTile * (gz % RockTiles));
+                    // (the quay paved; and the ground under the rooms, out of sight -- but for a crack between a floor and a model -- a stone floor)
+                    var paved = quay || InRooms(gx, gz);
+                    var (tx, ty) = paved ? (Paving.X + RockTile * (gx & 1), Paving.Y + RockTile * (gz & 3)) : (Rock.X + RockTile * (gx % RockTiles), Rock.Y + RockTile * (gz % RockTiles));
                     // (the cut that suits the ground: along the diagonal whose ends are nearer in height)
                     var diagonal = Math.Abs(hs[1] - hs[2]) < Math.Abs(hs[0] - hs[3]);
                     for (var half = 0; half < 2; half++)
@@ -191,6 +197,7 @@ internal static class PalaceCliff
     }
 
     public const int SkyY = 48000;              // the sky over the domes (Otringal's is at 22,199, under them)
+    public const int StartFog = 40000, FarClip = 70000;
 
     // ---- helpers
 

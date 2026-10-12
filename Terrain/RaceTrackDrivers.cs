@@ -98,5 +98,14 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Of(RaceTrackCharacterCars.LavaSlab, "The hide-out's Mosquibee", 2.0, 1.02, 0.97),
     };
 
-    // Otringal's palace has no track yet; its drivers are Stan, the pighead with the broom and the two-headed monster (CharactersForTrack.txt)
+    // The Emperor's palace (2026-10-12): racing out of the palace ahead of the Dark Monk to his teleporter -- Stan in his time machine (the
+    // one to beat), the pighead with the broom in his road sweeper (CharactersForTrack.txt) and the Emperor himself, fleeing his own palace,
+    // a little to either side of the road's middle: the rooms' doors are two bricks wide. (The user's list has the palace's two-headed
+    // monster too: its car is one of the cast's, bodies of entities of their own, which an opponent can't be yet.)
+    public static readonly List<RaceDriver> Palace = new()
+    {
+        Of(RaceTrackCharacterCars.Stan, "Stan", 0, 1.0, 1.0, main: true),
+        Of(RaceTrackCharacterCars.Sweeper, "The road sweeper", -1.2, 0.99, 1.02),
+        Of(RaceTrackCharacterCars.Emperor, "The Emperor", 1.2, 1.02, 0.97),
+    };
 }

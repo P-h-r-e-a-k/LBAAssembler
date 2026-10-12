@@ -30,7 +30,7 @@ internal static class RaceCarEngineFile
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
         var text = new StringBuilder("# LBA Assembler race car setup (read by the engine's race-track mode, RACEMOD.CPP)\n");
         // (a dreamt sprint: the car's gears scaled to its own top speed -- Twinsen's car is a lot faster in his dream)
-        text.Append(car.CarKeys(track?.Dream?.TopKmh));
+        text.Append(car.CarKeys(track?.Dream is { TopKmh: > 0 } scaled ? scaled.TopKmh : null));
         // (a line's height, when it has one: a lap that passes over itself crosses the line's place at other heights too)
         static string Height(RaceTrackService.StartLineInfo line) => line.Y is { } y ? $" {y}" : "";
         if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}{Height(l)}\n");
@@ -42,7 +42,8 @@ internal static class RaceCarEngineFile
         // ... and how much its grade changes a car's speed (a rollercoaster of a lap)
         if (raisedFile is not null && track?.Gravity is { } gravity and > 0) text.Append($"gravity={N(gravity)}\n");
         // ... and the camera that rides the road behind the car: how far behind (units), how high, how far ahead it looks
-        if (raisedFile is not null && track?.RailCamera is { Length: 3 } cam) text.Append($"railcam={N(cam[0] * 512)} {N(cam[1])} {N(cam[2] * 512)}\n");
+        if (raisedFile is not null && track?.RailCamera is { Length: >= 3 and <= 5 } cam)
+            text.Append($"railcam={N(cam[0] * 512)} {N(cam[1])} {N(cam[2] * 512)}{string.Concat(cam.Skip(3).Select(v => " " + N(v)))}\n");
         // Celebration Island's file with the statue, or (the lava lake's track) the one before it rises, whatever the game's own variable says
         if (info is not null && RaceTrackIsland.ByName(info.Island) is { } raced && (raced.Statue || raced.OtherFile)) text.Append($"statue={(raced.Statue ? 1 : 0)}\n");
         // an island drawn from a file the game never loads (the old moon's MOON.ILE, as island 3), and the lap's vertical loops
@@ -351,12 +352,12 @@ internal static class RaceCarEngineFile
                 var file = Path.Combine(folder, $"racecar_track{++n}.txt");
                 car.WriteEngineFile(file, member, story: true, prefix: $"track{n}_");
                 // (the scenes it is raced in: an island's own outside scenes, or the copies a track of its own races in)
-                var (first, last) = island.CopiesScene is not null || island.CopiesScenes is not null ? (island.FirstScene, island.LastScene) : (-1, -1);
+                var (first, last) = island.CopiesScene is not null || island.CopiesScenes is not null || island.OwnScenes ? (island.FirstScene, island.LastScene) : (-1, -1);
                 text.Append($"track={island.IslandByte} {when} {first} {last} {file}\n");
             }
             if (t.Story is { TiredText: >= 0 } s) text.Append($"tired={RaceTrackStory.DayVar} {RaceTrackStory.Tired} {s.TiredText}\n");
             // (a dreamt sprint: a new game starts in it, where its race starts -- Polar Island's dock -- and wakes up at home once it is won)
-            if (t.Dream is not null && t.StartScene >= 0) text.Append($"dream={t.StartScene}\n");
+            if (t.Dream is not null && island.Dream && t.StartScene >= 0) text.Append($"dream={t.StartScene}\n");
         }
         File.WriteAllText(path, text.ToString());
     }

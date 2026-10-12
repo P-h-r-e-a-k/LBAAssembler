@@ -299,7 +299,30 @@ internal sealed record RaceTrackIsland(
         Title = "Volcano Island: over the lava", Roster = RaceDriver.Volcano,
     };
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano };
+    // The Emperor's palace (the user, 2026-10-12: "through the palace rooms, coming out the window and around the roof tops? Point-to-point
+    // i.e. no laps, finishing with massive jump to harbor teleport? - Twinsen, quick, Dark monk's in the palace, he's killing everybody.
+    // Leading into final showdown at Celebration"), on the Palace island (Terrain/Palace: PALACE.ILE and PALACE.OBL, made by the build --
+    // Created: PalaceTrack.Install -- with its scenes from 265, a cube of the route each), raced as Otringal's island 4 drawn from the palace's
+    // file (RaceFile). A sprint on one raised road: from the sixteen rooms' south-east room through their doors -- a red carpet -- into the
+    // long hall, up to its round window and out of it, out over the cloud sea and up onto the hilltop, in among the palace's domes on the
+    // rooftops, and the jump off the
+    // cliff to the Dark Monk's teleporter on the harbour's pillar: won, the car flies into it and Twinsen arrives on Celebration Island
+    // (PalaceTrack's lines and the race-track mode's wake=). The plan: tools/RaceTrackPlan/palace_design.py.
+    public static readonly RaceTrackIsland Palace = new("The Emperor's palace", LBAAssembler.Terrain.Palace.PalaceIsland.IleFile, LBAAssembler.Terrain.Palace.PalaceIsland.OblFile,
+        LBAAssembler.Terrain.Palace.PalaceTrack.IslandByte, LBAAssembler.Terrain.Palace.PalaceTrack.FirstScene, LBAAssembler.Terrain.Palace.PalaceTrack.LastScene,
+        LBAAssembler.Terrain.Palace.PalaceIsland.PaletteEntry, "RaceTrackPlan.Palace.json", null)
+    {
+        Created = true, RaceFile = "palace", NoHolomap = true, Roster = RaceDriver.Palace, Sprint = true, OwnScenes = true,
+        Title = "The Emperor's palace: through its rooms, out of the round window, over the rooftops to the Dark Monk's teleporter",
+    };
+
+    // A sprint whose end the build makes (the Emperor's palace's: its lines and the teleport to Celebration Island, PalaceTrack) -- not a
+    // dream (Dream: Polar Island's, which new games start in).
+    public bool Sprint { get; init; }
+    // Scenes of its own the build makes, FirstScene to LastScene (the palace's): a story set tells its track from the island's own by them.
+    public bool OwnScenes { get; init; }
+
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

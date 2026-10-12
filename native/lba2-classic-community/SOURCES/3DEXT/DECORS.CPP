@@ -312,32 +312,17 @@ void AffichageObjetDecorsZBuf(void) {
 
         // SEB le 12/04/96
         if (!(ptrobj->Body & DEC_INVISIBLE)) {
-            LongWorldRotatePoint(ptrobj->XMin,
-                                 ptrobj->YMin,
-                                 ptrobj->ZMin);
-            zr = CameraZr - Z0;
-            if (zr > ClipZFar)
-                continue;
-
-            LongWorldRotatePoint(ptrobj->XMin,
-                                 ptrobj->YMin,
-                                 ptrobj->ZMax);
-            zr = CameraZr - Z0;
-            if (zr > ClipZFar)
-                continue;
-
-            LongWorldRotatePoint(ptrobj->XMax,
-                                 ptrobj->YMin,
-                                 ptrobj->ZMin);
-            zr = CameraZr - Z0;
-            if (zr > ClipZFar)
-                continue;
-
-            LongWorldRotatePoint(ptrobj->XMax,
-                                 ptrobj->YMin,
-                                 ptrobj->ZMax);
-            zr = CameraZr - Z0;
-            if (zr > ClipZFar)
+            // (a game decor is left out when any corner of its foot is past the far clip; one of LBA Assembler's -- its box's top under its
+            // bottom, drawn only -- only when all of them are: the Emperor's palace's domes, 24,000 across, went from the rooftops' road with
+            // their far corners)
+            const int ours = ptrobj->YMax < ptrobj->YMin;
+            int beyond = 0;
+            for (S32 c = 0; c < 4; c++) {
+                LongWorldRotatePoint((c & 2) ? ptrobj->XMax : ptrobj->XMin, ptrobj->YMin, (c & 1) ? ptrobj->ZMax : ptrobj->ZMin);
+                zr = CameraZr - Z0;
+                if (zr > ClipZFar) beyond++;
+            }
+            if (ours ? beyond == 4 : beyond > 0)
                 continue;
 
             // point chaud obj pour calcul profondeur fog

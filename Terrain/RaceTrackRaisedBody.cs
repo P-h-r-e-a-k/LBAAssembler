@@ -23,7 +23,11 @@ internal sealed record DeckTheme(string Name, int Asphalt, int Red, int White, i
     public static readonly DeckTheme Dock = new("dock", 23, 201, 63, 28, 25, 21, 19, 24, 20, 27, 62);
     public static readonly DeckTheme Refinery = new("refinery", 52, 108, 49, 70, 67, 50, 49, 57, 54, 70, 245);
     public static readonly DeckTheme Village = new("village", 104, 134, 63, 121, 118, 98, 97, 100, 97, 120, 89);
-    public static readonly DeckTheme[] All = { Standard, Dock, Refinery, Village };
+    // the Emperor's palace (Otringal's palette): a red carpet edged in gold through its rooms and up to the round window; out of it and over
+    // the rooftops its pale stone, edged and railed in the turquoise of its domes' drums
+    public static readonly DeckTheme Carpet = new("carpet", 72, 105, 239, 105, 102, 83, 83, 236, 234, 105, 239);
+    public static readonly DeckTheme Palace = new("palace", 236, 188, 239, 188, 197, 234, 55, 236, 234, 188, 105);
+    public static readonly DeckTheme[] All = { Standard, Dock, Refinery, Village, Carpet, Palace };
     public static DeckTheme? ByName(string? name) => All.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
 }
 

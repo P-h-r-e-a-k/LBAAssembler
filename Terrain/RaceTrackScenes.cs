@@ -920,6 +920,8 @@ void comportement_1()
     // them as the island's own. Returns a line for the build's log, or null for an island with scenes of its own.
     public static string? AddScene(string gameDirectory, RaceTrackIsland island)
     {
+        // (the Emperor's palace's scenes are made with its island, PalaceTrack.Install, before the track is built)
+        if (island == RaceTrackIsland.Palace) return null;
         if (island.Created)
         {
             SendellWell.AddScene(gameDirectory, island.FirstScene);

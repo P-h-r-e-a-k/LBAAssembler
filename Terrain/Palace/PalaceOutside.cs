@@ -106,7 +106,8 @@ internal static class PalaceOutside
             var alongZ = hall.Z1 - hall.Z0 >= hall.X1 - hall.X0;
             for (var t = 0; t < Towers; t++)
             {
-                var f = (t + 0.5) / Towers;
+                // (towards the hall's far end: the rooftops' road passes between the near one and the sixteen rooms' domes)
+                var f = 0.18 + 0.38 * t / Math.Max(1, Towers - 1);
                 var at = alongZ ? ((hall.X0 + hall.X1) / 2, hall.Z0 + (hall.Z1 - hall.Z0) * f) : (hall.X0 + (hall.X1 - hall.X0) * f, (hall.Z0 + hall.Z1) / 2);
                 foreach (var d in towerParts) Place(d, TowerScale, (ox + TowerHall.X, oz + TowerHall.Z), baseY, at, site.RoofTop, solid: false);
             }

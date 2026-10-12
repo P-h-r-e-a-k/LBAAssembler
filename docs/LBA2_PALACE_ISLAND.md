@@ -36,8 +36,8 @@ sides cliffs falling to the cloud sea, all of it a mossy rock. Now the Palace is
 - **The roofs are the hilltop's rock**: their tops are Otringal's mossy rock too -- textured polygons of `OTRINGAL.OBL`'s page's rock (its
   64-pixel tile, the ground's rock at half its size, so 32 units a pixel; repeated, 8,192 units a polygon, 727 of them), one body a cube.
 - **Two ways across the rocks** stay flat at the hilltop, 18 cells wide: east from the sixteen rooms' roof to the cliff's edge (the
-  runway for the jump to the harbour), and from the hill's north-east edge across the corner of the L to the sixteen rooms' roof (where a
-  road from the round window will come up onto the hill).
+  runway for the jump to the harbour), and from the hill's north edge across the corner of the L to the sixteen rooms' roof, in line with
+  the domes' north-east hall (x 470: where the race's road from the round window comes up onto the hill, the domes ahead).
 - **The round window open**: the long hall's end stands on the cliff's edge, the ground at its foot the floor's; its round window (the one
   Twinsen leaves by, 4 bricks wide and 8 layers high, its sill 3 layers over the floor's foot) is open through the wall onto the sky, the
   cars' way out. The big chest under it is gone. The palace's front door (room 154's, which led out onto Otringal's hilltop) is in the
@@ -47,10 +47,21 @@ sides cliffs falling to the cloud sea, all of it a mossy rock. Now the Palace is
   the long hall's roof: two smaller halls as Otringal's north hall (two small domes, its wing, its turret), 3.5 times their size. Their
   shape from above is the collision (152 boxes); the arch is solid.
 - **The harbour**: east of the hill, a quay at 1,400 (Otringal's lowest) at the cliffs' foot, and out in the bay a rock pillar 6 cells
-  across, its top level with the hilltop (19,416) -- for the Dark Monk's teleporter, the race's finish.
+  across, its top 700 over the hilltop (19,916), and on it **the Dark Monk's teleporter** (`Terrain/Palace/PalaceTeleporter.cs`): a
+  gold ring 7,240 across standing on its edge, facing the hill, a pale band inside it -- the race's finish (it is drawn only: a car flies
+  into it).
+- **The floors made whole**: a cell of a room's bottom layer with nothing in it -- a door's threshold, a hole the isometric picture hides
+  -- is floor, the room's commonest floor brick (201 cells); and the ground under the rooms is paved, should a crack between a floor and a
+  model show it (the hill's rock showed through by the race's carpet).
 - **Every body and box in every cube it reaches**: the engine draws and collides only the decors of the cube the hero is in (the race
-  tracks' decks are placed the same way), up to this editor's engine's 1,000 a cube; the busiest has 110.
-- **The sky** is at 48,000 (Otringal's is at 22,199, under the domes' tops).
+  tracks' decks are placed the same way), up to this editor's engine's 1,000 a cube; the busiest has 113.
+- **The sky** is at 48,000 (Otringal's is at 22,199, under the domes' tops). **The fog** starts at 40,000 and ends at 70,000 (Otringal's:
+  10,500 to 41,200): the domes clear from the race's road as it nears them, and a room's far wall through its door from the next (the
+  rooms are 28,000 across). The engine's depth buffer is 16 bits scaled to the fog's end, so the end can be further than 65,535; and it
+  draws the hero's cube and the 8 round it, no more.
+- **Far objects** (`3DEXT/DECORS.CPP`): the engine left out an object any of whose foot's corners lay past the fog's end -- the domes,
+  86,000 across, always had one, and were never drawn in the game. An object of this editor's that is drawn only (its box's top under its
+  bottom) is left out only when all four are.
 - The island: 7 x 9 cubes from cube (4, 3), 63 cubes.
 
 ![From above, as the user's picture of Otringal's: the domes on the hilltop, the rocks round them, the harbour's pillar east](palace/palace_top.png)
