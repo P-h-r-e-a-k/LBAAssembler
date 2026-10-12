@@ -16,9 +16,13 @@ internal static class Lba2Engine
 
     public static string? Find()
     {
-        var beside = Path.Combine(AppContext.BaseDirectory, "lba2cc.exe");
-        if (File.Exists(beside)) return beside;
+        // (another build of the engine to play with, for development: LBA2_ENGINE=<path to an lba2cc.exe>)
+        if (Environment.GetEnvironmentVariable("LBA2_ENGINE") is { Length: > 0 } custom && File.Exists(custom)) return custom;
 
+        // The engine built into this editor, always. An lba2cc.exe beside the editor used to be taken first: a user who had put the
+        // editor in their LBA2 Classic Community folder -- that project's own lba2cc.exe there, as its readme says to unzip it -- played
+        // every scene on that engine, built before this editor's race-track mode: no race, the opponents standing by the track, the
+        // raised roads only partly solid, and no control socket (2026-10-12, "Built Aug 23 2026" in the game's log).
         var assembly = Assembly.GetExecutingAssembly();
         using (var resource = assembly.GetManifestResourceStream(ResourceName))
         {
@@ -327,6 +331,8 @@ internal static class Lba2Play
         LastOptions = options;
         var engine = Lba2Engine.Find();
         if (engine is null) { problem = "The LBA2 engine (lba2cc.exe) isn't part of this build."; return null; }
+        // (which engine plays: one that isn't this editor's own has no race-track mode or control socket)
+        DebugLog.Log($"Lba2Play: the engine {engine}");
         if (!Lba2Engine.IsGameFolder(gameDirectory)) { problem = "The LBA2 game folder isn't set. Choose it under File > Settings."; return null; }
         var user = UserDirectory(out problem);
         if (user is null) return null;

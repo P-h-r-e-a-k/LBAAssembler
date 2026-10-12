@@ -2904,6 +2904,14 @@ prepared save's start and the fallback `cube 120` start alike); what differs on 
   says whether a play races and which track (`Lba2Play: scene 120, racing Elevator Platform, from the grid`) and the race file it wrote.
 - `ScriptRoundTrip` takes `RT_CULTURE=ru-RU` to run as a machine with that language does: the race file and a whole build come out the same
   as with the invariant culture (the decimal comma is not a problem).
+- *The cause, as it turned out* (the same user's logs, later that day: their folders' names were plain): the editor sat in their game
+  folder, an LBA2 Classic Community install, whose own `lba2cc.exe` was there too -- that project's readme says to unzip it into the
+  game's folder -- and the editor took an `lba2cc.exe` beside itself before its own. The game's log said "Built Aug 23 2026" with no
+  commit after it (the editor's engine says "Built <date> from commit <hash>"): an engine from before the race-track mode, so no race,
+  the opponents standing where the build parks them, the raised roads solid only where their decor boxes are, no control socket and no
+  `[racemod]` lines. `Lba2Engine.Find` now always plays the editor's own engine (`LBA2_ENGINE=<path>` picks another, for development),
+  and editor.log says which: `Lba2Play: the engine ...\native\lba2cc.<key>.exe`. Tested with a stranger's `lba2cc.exe` beside the
+  editor: Play raced the Emperor's palace on the editor's own.
 
 ## The Emperor's palace: through the rooms, out of the round window, over the rooftops (2026-10-12)
 
