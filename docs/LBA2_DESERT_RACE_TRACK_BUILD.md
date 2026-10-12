@@ -3084,6 +3084,15 @@ into how far the eye moves a frame, how sharply, how far the view turns, where t
 - *By the island's edge* (the fourth ring) the eye comes nearer, onto the island. *Across a cube's edge* (the first ring is by one) the
   eye held from the last frame is moved into the new cube's coordinates (`FollowCamCubeJump`): the view had swung in from 32,000 away.
 
+## No power-ups on the qualifying lap (2026-10-12)
+
+The user: "Remove power ups while a car is driving a qualifying lap". While the qualifying lap is driven (the race-track mode's
+`PHASE_QUALIFYING`) the mushrooms are off the track and give nothing, the item box isn't drawn, and a track's Gazogem fuel all race
+(`fuel_always=`, the Island of the Francos') doesn't push the car; from the grid on, the race has them all (RACEMOD.CPP `Qualifying`). The
+opponents' qualifying times are their planned laps, none of the power-ups in them -- the player's lap is now timed the same way. (The test
+pilot's qualifying lap on the Emerald Moon took seven power-ups, a super jet-pack among them: 57.5 s; without them 63.6 s, as a race lap.)
+The game's log says so as the lap starts: `[racemod] the qualifying lap: no power-ups until the race`.
+
 ## Playing full screen, and the race car's handling up to ten times (2026-10-12)
 
 - *F11* while a scene plays (LBA2) puts the game full screen on the editor's screen, and F11 again puts it back in the editor. The game's

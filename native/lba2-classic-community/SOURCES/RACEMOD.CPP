@@ -2354,6 +2354,7 @@ static void Load(const char *path, int carOnly = 0) {
             else OnSpot(&s_opp[n], &s_spots[spot < s_nbSpots ? spot++ : s_nbSpots - 1]);
         }
         s_phase = s_qualifying ? PHASE_QUALIFYING : PHASE_WAIT;
+        if (s_qualifying && (s_powerups || s_fuelAlways)) Log_Info("[racemod] the qualifying lap: no power-ups until the race");
     }
     s_ownTrack = s_car.HasLine;
 }
@@ -2832,7 +2833,7 @@ U32 RaceMod_AutoInput(void) {
     else if (err < -24) bits |= I_RIGHT;
     // the line's speed here (the reference car's; the jet-pack's times its factor), and the car's own
     // (on Gazogem fuel all race, fuel_always=: the line's speed times its boost, as the car's own top speed is)
-    const double here = o->V[best] * JetFactor(s_jetUntil, s_jetFactor) * (s_fuelAlways && (S32)TimerRefHR >= s_jetUntil ? RACE_BOOST : 1.0), speed = ListBuggy[0].Speed;
+    const double here = o->V[best] * JetFactor(s_jetUntil, s_jetFactor) * (s_fuelAlways && s_phase != PHASE_QUALIFYING && (S32)TimerRefHR >= s_jetUntil ? RACE_BOOST : 1.0), speed = ListBuggy[0].Speed;
     // (coming up to a ring with a gap: held close to the speed it is leapt at -- coasting a little over it, braking only well over it --
     // and no brakes in the last cell, which a car carries into the ring)
     for (int k = 0; k < s_nbLoops; k++) {
@@ -4883,17 +4884,23 @@ static void Fakes(S32 now, int driving) {
 }
 
 // Every frame: the mushrooms of this scene (gone while taken, grown back after), the player's car over one, the penguins going off.
+// No power-ups while the qualifying lap is driven: no mushrooms on the track, no item box, no Gazogem fuel all race (fuel_always=). The
+// opponents' qualifying times are their planned laps, none of it in them (the user, 2026-10-12: "Remove power ups while a car is driving
+// a qualifying lap"); the race has them all.
+static int Qualifying(void) { return s_phase == PHASE_QUALIFYING; }
+
 static void PowerUps(S32 now, int driving) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const int qualifying = Qualifying();
     for (int i = 0; i < s_nbMush; i++) {
         T_RACE_MUSHROOM *m = &s_mush[i];
         if (m->Back && now >= m->Back) m->Back = 0;
         const int a = MushroomActor(m);
         if (a < 0) continue;
-        ListObjet[a].Obj.Y = m->Back ? -20000 : m->Y;
+        ListObjet[a].Obj.Y = m->Back || qualifying ? -20000 : m->Y;
         // (its box a point: nothing is stopped by it before it is taken)
         ListObjet[a].XMin = ListObjet[a].XMax = ListObjet[a].ZMin = ListObjet[a].ZMax = 0;
-        if (m->Back || !driving || CubeMode != CUBE_EXTERIEUR) continue;
+        if (m->Back || qualifying || !driving || CubeMode != CUBE_EXTERIEUR) continue;
         if (!Near(hero, ListObjet[a].Obj.X, m->Y, ListObjet[a].Obj.Z, RACE_MUSHROOM_REACH)) continue;
         m->Back = now + RACE_MUSHROOM_BACK;
         ListObjet[a].Obj.Y = -20000;
@@ -5221,7 +5228,7 @@ double RaceMod_SpeedFactor(void) {
     const S32 now = TimerRefHR;
     double f = 1;
     // (Gazogem fuel all race, fuel_always=: but the super jet-pack's own speed while it drives)
-    if (now < s_boostUntil || (s_fuelAlways && now >= s_jetUntil)) f *= RACE_BOOST;
+    if (now < s_boostUntil || (s_fuelAlways && !Qualifying() && now >= s_jetUntil)) f *= RACE_BOOST;
     else if (now < s_jetUntil) f *= JetFactor(s_jetUntil, s_jetFactor);
     // (a boost panel's, unless the rest lifts it more)
     const double panel = PanelFactor(now);
@@ -6887,7 +6894,7 @@ static void BigText(S32 cx, S32 cy, const char *text, S32 k, S32 colour) {
 void RaceMod_Draw(void) {
     if (!RaceMod_Active() || !LbaFont) return;
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
-    const int items = s_powerups && s_nbMush > 0;
+    const int items = s_powerups && s_nbMush > 0 && !Qualifying();
     if (!s_car.Hud && !items) return;
     const S32 speed = ListBuggy[0].Speed;
 
