@@ -154,6 +154,7 @@ internal static class Program
             "gridcolumn" => PalaceStudy.GridColumn(args),
             "blockface" => PalaceStudy.BlockFace(args),
             "oblcheck" => PalaceStudy.OblCheck(args),
+            "palacefurniture" => PalaceStudy.Furniture(args),
             "holopos" => HoloPosCommand.Run(args),
             "lba2scriptgrep" => ScriptGrepCommand.Run(args),
             "gloves" => GlovesCommand.Run(args),

@@ -18,7 +18,8 @@ namespace ScriptRoundTrip;
 //     bodies (and collision boxes) as coloured triangles (world units; 13 float32 each: three corners, r g b, kind 0 decor 1 ground 2 box)
 //   meshshot <mesh.bin> <out.png> [...]: such a mesh drawn with a depth buffer (below)
 //   oblcheck <obl> [first]: the bodies past the engine's 550 points or primitives
-//   decorcount <ile>: each cube's decors (the engine's 200)
+//   decorcount <ile> [obl]: each cube's decors (the engine's 200), and with the OBL whether their bodies are there
+//   palacefurniture <game folder>: the furniture PalaceFurniture finds, room by room
 internal static class PalaceStudy
 {
     public static int Actors(string[] args)
@@ -383,6 +384,32 @@ internal static class PalaceStudy
         }
         Console.WriteLine($"{count - first} bodies from {first}: at most {worstPoints} points and {worstPrims} primitives; {bad} past the engine's 550");
         return bad == 0 ? 0 : 1;
+    }
+
+    // palacefurniture <game folder>: the furniture PalaceFurniture finds, room by room
+    public static int Furniture(string[] args)
+    {
+        var interiors = new Lba2Interiors(args[1]);
+        var area = Lba2Areas.Find(interiors.LoadScene).First(a => a.Tiles.Any(t => t.Scene == 151));
+        var cells = new Dictionary<(int X, int Y, int Z), (int Brick, int Tile)>();
+        var offsets = new (int X, int Y, int Z)[area.Tiles.Count];
+        for (var ti = 0; ti < area.Tiles.Count; ti++)
+        {
+            var tile = area.Tiles[ti];
+            var sep = Lba2Areas.Separations.Where(s => s.Scene == tile.Scene).Select(s => (s.Dx, s.Dy, s.Dz)).FirstOrDefault();
+            offsets[ti] = (tile.OffsetX / 512 - sep.Dx, tile.OffsetY / 256 - sep.Dy, tile.OffsetZ / 512 - sep.Dz);
+            foreach (var p in interiors.Placements(tile)) cells.TryAdd((p.X + offsets[ti].X, p.Y + offsets[ti].Y, p.Z + offsets[ti].Z), (p.Brick, ti));
+        }
+        var pieces = LBAAssembler.Terrain.Palace.PalaceFurniture.Find(args[1], area, offsets, cells);
+        var chests = LBAAssembler.Terrain.Palace.PalaceFurniture.Chests(interiors, area, offsets);
+        for (var ti = 0; ti < area.Tiles.Count; ti++)
+        {
+            var mine = pieces.Where(p => p.Tile == ti).GroupBy(p => p.Kind).Select(g => $"{g.Count()} {g.Key}").ToList();
+            var chestCount = chests.Count(c => c.Tile == ti);
+            if (chestCount > 0) mine.Add($"{chestCount} chest{(chestCount > 1 ? "s" : "")}");
+            Console.WriteLine($"room {area.Tiles[ti].Scene}: {string.Join(", ", mine)}");
+        }
+        return 0;
     }
 
     // decorcount <ile>: how many decors each cube holds (the engine draws 200 at the most: MAX_OBJ_DECORS)
