@@ -2965,6 +2965,12 @@ where the rooms, the round window, the ways across the rocks and the harbour's p
   object of this editor's that is drawn only is left out only when all four are).
 - *The race's road on a route open at both ends* (`RaceTrackBuilder` PlaceRaised): a sprint's road is raised from its first point; the
   race file had had no raised road, jumps or cube scenes for it, and the car drove under its deck.
+- *With Otringal's track in the same folder* (the user, the same day: "dropping twinsen into the gas and he's dying"): Play races the
+  palace as the game's set of tracks (a sprint that ends somewhere else -- the race-track mode's `track=` lines, one car file a track), and
+  the race-track mode took the first of them on the island the scene is on. Otringal's is on island 4 too, raced in all its scenes
+  (`track=4 0 -1 -1`), and built before the palace: in scene 288 it loaded Otringal's track, drew OTRINGAL.ILE under the palace's grid,
+  and Twinsen fell into its clouds (here, the game crashed). Now a track raced in scenes of its own comes first (RACEMOD.CPP
+  RaceMod_Island); Otringal's own still races in its scenes.
 - Tested with the test pilot (autodrive): 117.6 s with the power-ups off, 131.1 s with them (penguins and fire balls stop a car), 1st of
   4 and won both times, no car rescued; the white flash in mid-flight and Twinsen awake in scene 95. The build takes some 20 s (the
   island and its scenes made afresh each time).

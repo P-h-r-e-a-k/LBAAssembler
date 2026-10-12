@@ -6873,11 +6873,15 @@ void RaceMod_Island(S32 island) {
     if (!RaceMod_Active() || !s_nbTracks) return;
     const int fine = ListVarGame[FLAG_CHAPTER] >= 2, risen = ListVarGame[FLAG_CELEBRATION] != 0;
     const char *want = NULL;
-    for (int i = 0; i < s_nbTracks && !want; i++) {
-        const T_RACE_TRACK *t = &s_tracks[i];
-        if (t->Island != island || (t->First >= 0 && ((S32)NumCube < t->First || (S32)NumCube > t->Last))) continue;
-        if (t->When == 0 || (t->When == 1 && !fine) || (t->When == 2 && fine) || (t->When == 3 && risen) || (t->When == 4 && !risen)) want = t->Path;
-    }
+    // (a track raced in scenes of its own before one raced in any of the island's: the set lists them in the order they were built, and
+    // Otringal's own track -- every scene of island 4 -- took the Emperor's palace's scenes too, island 4's: the palace's grid on
+    // Otringal's file, Twinsen dropped into its clouds, 2026-10-12)
+    for (int own = 1; own >= 0 && !want; own--)
+        for (int i = 0; i < s_nbTracks && !want; i++) {
+            const T_RACE_TRACK *t = &s_tracks[i];
+            if (t->Island != island || (t->First >= 0) != own || (t->First >= 0 && ((S32)NumCube < t->First || (S32)NumCube > t->Last))) continue;
+            if (t->When == 0 || (t->When == 1 && !fine) || (t->When == 2 && fine) || (t->When == 3 && risen) || (t->When == 4 && !risen)) want = t->Path;
+        }
     // (the same track goes on -- unless its race is over: coming back to it is a race afresh)
     if (want ? s_ownTrack && !strcmp(want, s_loaded) && !s_place : !s_ownTrack) return;
     const char *base = getenv("LBA2_RACETRACK_FILE");
