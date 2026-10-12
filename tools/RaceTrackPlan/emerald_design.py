@@ -7,11 +7,14 @@
 # on the north rim: a plateau 6,695 high (x 48-90), on it a cylinder 26 cells across up to 12,000 and a dish 17.3 cells across up to
 # 18,715, its middle on the cubes' border (x 64, z 13). The lap, all of it a raised road (the inner part 5,000 high, the outer ring
 # 7,700):
-#   - the straight, south along the middle of the base's long arm on its roof, the pit lane beside it on the right (west): one deck,
-#     wider there, a white stripe between the lanes; the start line on it;
+#   - the straight, south along the middle of the base's long arm on its roof, the start line on it, the pit lane beside it on the right
+#     (west): a strip of road of its own (RaceTrackPlan.RaisedStrips), growing out of the road's edge, then apart from it with clear space
+#     between them, and back (2026-10-12, the user: "remove the fence and have an extra strip of road with clear space between the
+#     start/finish line and the pit straight with the pit lane being wider" -- it was one deck, a fence along a stripe between the lanes);
 #   - a hairpin at its south end, back north over the short arm, a U to the east climbing onto the east rim;
-#   - south down the east rim through the first loop (whole), the south side west through the second (a gap at its top), the west rim
-#     north through the third (whole);
+#   - south down the east rim through the first loop, the south side west through the second, the west rim north through the third --
+#     all three whole (the second had a gap at its top, leapt upside down, until 2026-10-12: "the cut out loop needs removing and
+#     replacing with a normal loop");
 #   - a wide banked turn onto the reactor's line, the road as wide as the reactor's dish (8.5 cells from its middle to its rail), and one
 #     jump over the whole reactor: a curved ramp up to a lip, a flight over the dish, a curved landing hill down (RaceTrackPlan.ArcJumps:
 #     the engine carries the car along it, over the cubes' border); a wide banked U-turn back west past the reactor's south side, down
@@ -37,9 +40,9 @@ def ground(x, z):
 STEP = 0.5
 H0, HJ, HL = 4.5, 8.5, 9.0             # the deck's half width (to the rail): the usual (the ground tracks' curbs), the reactor's jump (its dish), at a loop (twice)
 ASPHALT, CURB = H0 - 1.0, H0 - 0.25    # the asphalt's edge and the curb's (from them to the rail: the curb, a cell's three quarters, and the rail's top)
-PIT = 4.5                              # the pit lane's width beside the straight (cells), past a fence
+PIT_GAP, PIT_W = 2.5, 8.0              # the pit lane: the clear space between it and the straight, and its width rail to rail (cells; its asphalt 6, the fenced lane's was 4.5)
 INNER, OUTER = 5000.0, 7700.0          # the inner part's height (over the base's roof) and the outer ring's (over the west rim, 7,150)
-SX = 60.5 - PIT / 2                    # the straight's middle line (the race lanes' middle stays on the roof's middle, x 60.5)
+SX = 60.5                              # the straight's middle line: the roof's middle
 JZ = 13.0                              # the jump's line (through the reactor's middle)
 # the corners in the lap's order, each (x, z) and the radius it is rounded with
 K = [((SX, 92.0), 6.0),               # the straight's south end: the hairpin, east ...
@@ -57,13 +60,15 @@ K = [((SX, 92.0), 6.0),               # the straight's south end: the hairpin, e
      ((112.0, JZ), 10.0),             # past the reactor, the wide banked U-turn: south ...
      ((112.0, 33.0), 10.0),           # ... and west, past the reactor's south side, coming down (10 cells from the inner U: both 9 wide)
      ((SX, 33.0), 5.5)]               # south onto the base's roof: the straight
-LOOPS = [((104.0, 59.0), 4.0, 0.0), ((54.0, 114.0), 4.0, 35.0), ((18.0, 54.5), 4.0, 0.0)]   # foot, radius, gap (degrees: 35 is leapt from 22 km/h to 43)
+LOOPS = [((104.0, 59.0), 4.0, 0.0), ((54.0, 114.0), 4.0, 0.0), ((18.0, 54.5), 4.0, 0.0)]    # foot, radius, gap (degrees; none now)
 LOOP_RUN, LOOP_EASE = 10.0, 8.0        # straight and level either side of a loop's foot, then the deck narrowing back (cells)
 KICK = 6.0                             # the jump's ramp and landing hill: their length along the road (cells)
 LIP_X, LAND_X = 39.0, 90.0             # the take-off lip and the landing lip
 CLEAR = 900                            # the flight over the reactor's top, at the least (a car's height and some)
 START_Z = 62.0                         # the start line on the straight (its grid behind it on the level, not the way down)
-PIT_WAIT = (49.0, 53.0, 57.0)          # where the opponents wait in the pit lane while the player qualifies (z: before the line, in its cube)
+PIT_WAIT = (52.0, 55.5, 59.0)          # where the opponents wait in the pit lane while the player qualifies (z: before the line, in its cube)
+# the pit lane along the straight (z): growing out of the road's edge, moving away from it, its full width, back to it, and into it
+PIT_GROW, PIT_OPEN, PIT_CLOSE, PIT_END = (40.0, 45.0), (45.0, 50.0), (74.0, 79.0), (79.0, 84.0)
 
 def rounded_polyline(K):
     """the closed lap through corners K, each rounded with its radius: points every 0.02 cells"""
@@ -129,12 +134,18 @@ def flight(theta, d):
     if d <= k + L: u = d - k; return yl + sl * u * (1 - u / L)
     u = d - k - L
     return R - math.sqrt(max(0, R * R - (k - u) ** 2)) if u < k else 0
+# (the ramp as built 2026-10-02: 60 degrees, the flight's top 20,780 -- the search below picked it from the island's objects as read then;
+# read again since, a little differently, it picks 61. The jump is kept as it was; the search only says if it no longer clears the reactor.)
+THETA_DEG = 60.0
 theta = None
 for deg in np.arange(40, 75.01, 0.5):
     th = math.radians(deg)
     if all(prof[j] < 0 or OUTER + flight(th, (j / RQ - (LIP_X - KICK)) * 512) >= prof[j] + CLEAR for j in range(int(LIP_X * RQ), int(LAND_X * RQ))):
         theta = th; break
 if theta is None: sys.exit('no ramp clears the reactor')
+if THETA_DEG is not None:
+    if math.radians(THETA_DEG) < theta - 1e-9: print(f'WARNING: a ramp of {THETA_DEG} degrees clears the reactor by less than {CLEAR}: {math.degrees(theta):.1f} would')
+    theta = math.radians(THETA_DEG)
 
 # ---- heights: the inner part, the outer ring, the climb and the descent between them; the jump
 iUp0 = nearest((72.5, 54.0), (0, -1)); iUp1 = nearest((104.0, 48.0), (0, 1))
@@ -166,12 +177,19 @@ for c, R, gp in loops:
         d = min(ahead(c, k), ahead(k, c))
         if d <= LOOP_RUN: HALF[k] = max(HALF[k], HL)
         elif d <= LOOP_RUN + LOOP_EASE: HALF[k] = max(HALF[k], H0 + (HL - H0) * ease((LOOP_RUN + LOOP_EASE - d) / LOOP_EASE))
-PIT_HALF = H0 + PIT / 2
-iPit0 = nearest((SX, 40.0), (0, 1)); iPit1 = nearest((SX, 46.0), (0, 1)); iPit2 = nearest((SX, 80.0), (0, 1)); iPit3 = nearest((SX, 86.0), (0, 1))
+# the pit lane: a strip from SLO to SHI across (west: +Across heading south), nothing where they are equal
+SLO, SHI = np.zeros(N), np.zeros(N)
+iPit0, iPit1 = nearest((SX, PIT_GROW[0]), (0, 1)), nearest((SX, PIT_GROW[1]), (0, 1))
+iPitO = nearest((SX, PIT_OPEN[1]), (0, 1)); iPitC = nearest((SX, PIT_CLOSE[0]), (0, 1))
+iPit2, iPit3 = nearest((SX, PIT_END[0]), (0, 1)), nearest((SX, PIT_END[1]), (0, 1))
 for k in range(N):
-    if between(k, iPit0, iPit1): HALF[k] = max(HALF[k], H0 + (PIT_HALF - H0) * ramp(iPit0, iPit1, k))
-    elif between(k, iPit1, iPit2): HALF[k] = PIT_HALF
-    elif between(k, iPit2, iPit3): HALF[k] = max(HALF[k], PIT_HALF + (H0 - PIT_HALF) * ramp(iPit2, iPit3, k))
+    if between(k, iPit0, iPit1): lo, w = H0, PIT_W * ramp(iPit0, iPit1, k)                       # growing out of the road's edge
+    elif between(k, iPit1, iPitO): lo, w = H0 + PIT_GAP * ramp(iPit1, iPitO, k), PIT_W            # moving away from it
+    elif between(k, iPitO, iPitC): lo, w = H0 + PIT_GAP, PIT_W                                    # the pit straight, clear space beside it
+    elif between(k, iPitC, iPit2): lo, w = H0 + PIT_GAP * (1 - ramp(iPitC, iPit2, k)), PIT_W      # back to the road's edge
+    elif between(k, iPit2, iPit3): lo, w = H0, PIT_W * (1 - ramp(iPit2, iPit3, k))                 # into it
+    else: continue
+    SLO[k], SHI[k] = lo, lo + w
 
 # ---- banking: the road leans into its bends, hard in the wide turns either side of the reactor's jump
 kappa = np.zeros(N)
@@ -203,12 +221,17 @@ out = [f'lap {total:.1f} cells, {N} points; heights {Y[ride].min():.0f} to {Y[ri
        f'banking up to {np.abs(bank).max():.2f}; widths {HALF.min():.2f} to {HALF.max():.2f}']
 edge = np.minimum.reduce([X - HALF, Z - HALF, 128 - X - HALF, 128 - Z - HALF])
 out.append(f'  the rails nearest the island edge: {edge.min():.1f} cells (at ({X[np.argmin(edge)]:.1f}, {Z[np.argmin(edge)]:.1f}))')
-clear = sorted((Y[k] - max(ground(X[k] + Nn[k, 0] * o, Z[k] + Nn[k, 1] * o) for o in np.linspace(-HALF[k], HALF[k], 9)), k) for k in range(N) if not gap[k])
+# (across the road and the pit lane's strip beside it)
+def across(k, n=9):
+    a = list(np.linspace(-HALF[k], HALF[k], n))
+    if SHI[k] > SLO[k]: a += list(np.linspace(SLO[k], SHI[k], n))
+    return a
+clear = sorted((Y[k] - max(ground(X[k] + Nn[k, 0] * o, Z[k] + Nn[k, 1] * o) for o in across(k)), k) for k in range(N) if not gap[k])
 out.append('  the deck over the ground, least: ' + ', '.join(f'{c:.0f} at ({X[k]:.1f}, {Z[k]:.1f})' for c, k in clear[:3]))
 hits = {}
 for k in range(N):
     if gap[k]: continue
-    for o in np.linspace(-HALF[k] - 0.3, HALF[k] + 0.3, 17):
+    for o in across(k, 17):
         x, z = X[k] + Nn[k, 0] * o, Z[k] + Nn[k, 1] * o
         i, j = int(z * RQ), int(x * RQ)
         if not (0 <= i < TOP.shape[0] and 0 <= j < TOP.shape[1]) or TOP[i, j] < 0: continue
@@ -235,7 +258,8 @@ for c, R, gp in loops:
 yl = OUTER + flight(theta, KICK * 512)
 out.append(f'  the jump: a ramp {KICK:.0f} cells up to {math.degrees(theta):.1f} degrees, lips ({X[iLip]:.1f}, {Z[iLip]:.1f}) -> ({X[iLand]:.1f}, {Z[iLand]:.1f}) at {yl:.0f}, '
            f'{(LAND_X - LIP_X):.0f} cells apart, the top {Y[gap].max():.0f} (the reactor {prof[prof > 0].max():.0f}); points {iFoot} {iLip} {iLand} {iLandFoot}')
-out.append(f'  start line at point {iStart} ({X[iStart]:.1f}, {Z[iStart]:.1f}) at {Y[iStart]:.0f}; pit lane from point {iPit1} to {iPit2}')
+out.append(f'  start line at point {iStart} ({X[iStart]:.1f}, {Z[iStart]:.1f}) at {Y[iStart]:.0f}; the pit lane points {iPit0}..{iPit3}, apart from the road {iPitO}..{iPitC}, '
+           f'{PIT_GAP} cells of clear space, {PIT_W} wide; its waiting spots at x {SX - (SLO[iStart] + SHI[iStart]) / 2:.1f}')
 print('\n'.join(out))
 
 plan = {
@@ -249,13 +273,10 @@ plan = {
     'loops': [[int(c), R, 2 * H0, gp, H0] for c, R, gp in loops],
     'arcJumps': [[int(iFoot), int(iLip), int(iLand), int(iLandFoot)]],
     'start': int(iStart),
-    # the stripe between the pit lane and the race lanes: across the road (the builder's Across, cells from the middle), first and last point
-    'pitStripe': [int(iPit1), int(iPit2), round(float(PIT_HALF - PIT), 3)],
-    # (the opponents' waiting spots, in the pit lane's middle, facing down the straight, on the deck)
-    'pitSpots': [[round(SX - (PIT_HALF - PIT / 2), 3), z, 0.0, 1.0, INNER] for z in PIT_WAIT],
-    # (a fence along the stripe, Citadel Island's white one; the grid on the race lanes, whose middle is half the pit lane's width over)
-    'pitFence': True,
-    'gridShift': -PIT / 2,
+    # the pit lane, a strip of road beside the straight: from and to across (the builder's Across, cells from the middle), point by point
+    'raisedStrips': [[round(float(a), 3), round(float(b), 3)] for a, b in zip(SLO, SHI)],
+    # (the opponents' waiting spots, in the pit lane's middle, facing down the straight, on its deck)
+    'pitSpots': [[round(float(SX - (SLO[iStart] + SHI[iStart]) / 2), 3), z, 0.0, 1.0, INNER] for z in PIT_WAIT],
     'keepBodies': sorted(set(int(b) for b in np.unique(WHO[WHO >= 0]))),
 }
 json.dump(plan, open(OUT, 'w'))
@@ -265,7 +286,9 @@ print('wrote', OUT)
 if '--pictures' in sys.argv:
     from PIL import Image, ImageDraw
     S = 8
-    im = Image.open(D + 'heightmap.png').convert('RGB'); d = ImageDraw.Draw(im)
+    import os
+    base = D + 'heightmap.png' if os.path.exists(D + 'heightmap.png') else D + 'map4.png'
+    im = Image.open(base).convert('RGB'); im = im.resize((128 * S, 128 * S)); d = ImageDraw.Draw(im)
     def px(x, z): return (x * S, z * S)
     for i in range(N):
         if gap[i]: continue
@@ -279,8 +302,10 @@ if '--pictures' in sys.argv:
         d.line([a, b], fill=(40, 160, 255), width=6)
     a = px(X[iStart] + Nn[iStart, 0] * HALF[iStart], Z[iStart] + Nn[iStart, 1] * HALF[iStart]); b = px(X[iStart] - Nn[iStart, 0] * HALF[iStart], Z[iStart] - Nn[iStart, 1] * HALF[iStart])
     d.line([a, b], fill=(255, 255, 255), width=4)
-    for k in range(iPit1, iPit2):
-        o = plan['pitStripe'][2]; d.point(px(X[k] + Nn[k, 0] * o, Z[k] + Nn[k, 1] * o), fill=(255, 255, 255))
+    for k in range(N):
+        if SHI[k] > SLO[k]:
+            a = px(X[k] + Nn[k, 0] * SLO[k], Z[k] + Nn[k, 1] * SLO[k]); b = px(X[k] + Nn[k, 0] * SHI[k], Z[k] + Nn[k, 1] * SHI[k])
+            d.line([a, b], fill=(255, 160, 40), width=2)
     for i in range(0, N, 30): d.text(px(X[i] + 0.8, Z[i] + 0.8), f'{int(Y[i])}', fill=(255, 255, 255))
     im.save(D + 'lap.png')
     # the jump from the side

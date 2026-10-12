@@ -598,6 +598,10 @@ static int ReadLine(const char *v, T_RACE_LINE *l) {
 typedef struct {
     S32 X, Z, Y, Half;
     S32 Bank;                              // its banking: the height gained across it, per RAISED_BANK_UNITS to the left of the way it runs
+    // A strip of road beside it, from StripLo to StripHi across (the way Bank's side runs; equal: none) -- the Emerald Moon's pit lane
+    // (2026-10-12): growing out of the road's edge, then apart from it with clear space between. A floor as the road is, and the rail
+    // keeps a car on whichever of the two it is on; where they meet, it drives from one onto the other.
+    S32 StripLo, StripHi;
 } T_RACE_RAISED;
 #define RAISED_BANK_UNITS 10000.0
 static T_RACE_RAISED *s_raised = NULL;
@@ -1030,6 +1034,13 @@ static int RaisedOpenEnd(int i, double tt) {
     return 0;
 }
 
+// Whether a place `side` across segment a-c at `tt` along it (`d2`: its distance from the segment squared) is on the strip beside it,
+// looked for `pad` past its edges.
+static int OnStrip(const T_RACE_RAISED *a, const T_RACE_RAISED *c, double tt, double side, double d2, double pad) {
+    const double lo = a->StripLo + (c->StripLo - a->StripLo) * tt, hi = a->StripHi + (c->StripHi - a->StripHi) * tt;
+    return hi > lo && side >= lo - pad && side <= hi + pad && d2 - side * side <= pad * pad + 1;
+}
+
 // The road at an island position (world units) for something at height `ref`, looked for `pad` past its edges: its height there, the
 // segment (from point *seg to the next), how far along it (*t, 0..1) and how far to the side of its middle (*lat, to the left of the way
 // the lap runs positive). Of the parts of the road in reach -- each no more than RAISED_STEP above `ref` -- the highest level, and of
@@ -1066,8 +1077,9 @@ static int RaisedAt(double wx, double wz, S32 ref, double pad, S32 *y, int *seg,
                     const double px = a->X + sx * tt, pz = a->Z + sz * tt;
                     const double d2 = (wx - px) * (wx - px) + (wz - pz) * (wz - pz);
                     const double half = a->Half + (c->Half - a->Half) * tt + pad;
-                    if (d2 > half * half) continue;
                     const double side = (sx * (wz - pz) - sz * (wx - px)) / sqrt(len2);
+                    // (or on the strip beside it: across within it, along within the segment)
+                    if (d2 > half * half && !OnStrip(a, c, tt, side, d2, pad)) continue;
                     const double yy = a->Y + (c->Y - a->Y) * tt + side * (a->Bank + (c->Bank - a->Bank) * tt) / RAISED_BANK_UNITS;
                     if (yy > ref + RAISED_STEP) continue;
                     if (!pass) { if (yy > top) top = yy; continue; }
@@ -1437,6 +1449,24 @@ static int RaisedPastEnd(double wx, double wz, double wy) {
     return 0;
 }
 
+// Whether the hero could stand at a place (world units, at height y) as far as the raised road's rail goes: not on the raised road there
+// (the ground, nothing to keep him off), or within its rail -- the road's own or the strip's beside it (RaceMod_Rail's bounds).
+static int RailAllows(double wx, double wz, S32 y) {
+    S32 f;
+    int seg;
+    double lat, t;
+    if (!s_nbRaised || !RaisedAt(wx, wz, y + 64, 4 * 512, &f, &seg, &lat, &t) || y < f - 200 || y > f + 1500) return 1;
+    const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
+    const double half = a->Half + (c->Half - a->Half) * t, limit = half - RAISED_INSET;
+    if (fabs(lat) <= limit) return 1;
+    const double sLo = a->StripLo + (c->StripLo - a->StripLo) * t, sHi = a->StripHi + (c->StripHi - a->StripHi) * t;
+    if (sHi > sLo) {
+        if (sLo <= half && sHi >= -half) return lat >= (sLo + RAISED_INSET < -limit ? sLo + RAISED_INSET : -limit) && lat <= (sHi - RAISED_INSET > limit ? sHi - RAISED_INSET : limit);
+        return lat >= sLo + RAISED_INSET && lat <= sHi - RAISED_INSET;
+    }
+    return 0;
+}
+
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     if (!s_nbRaised || CubeMode != CUBE_EXTERIEUR) return;
     if (s_flying >= 0 || s_arcOn >= 0) return; // (a jump's flight is scripted: the rail held a car on it back at the lip, and the flight went nowhere)
@@ -1455,10 +1485,25 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     if ((!s_raisedLoop && ((seg == 0 && t <= 0) || (seg == s_nbRaised - 2 && t >= 1))) || RaisedPastEnd(*nx + cx, *nz + cz, oy)) return;
     const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
     const double half = a->Half + (c->Half - a->Half) * t, limit = half - RAISED_INSET;
-    if (fabs(lat) <= limit) return;
+    // (a strip beside the road -- the Emerald Moon's pit lane: the car kept on the road or on the strip, the nearer, the clear space
+    // between them as an edge; where they meet, one floor from the road's far edge to the strip's)
+    double lo = -limit, hi = limit, stripLo = 0, stripHi = 0;
+    const double sLo = a->StripLo + (c->StripLo - a->StripLo) * t, sHi = a->StripHi + (c->StripHi - a->StripHi) * t;
+    if (sHi > sLo) {
+        if (sLo <= half && sHi >= -half) { if (sHi - RAISED_INSET > hi) hi = sHi - RAISED_INSET; if (sLo + RAISED_INSET < lo) lo = sLo + RAISED_INSET; }
+        else if (sHi - sLo > 2 * RAISED_INSET) { stripLo = sLo + RAISED_INSET; stripHi = sHi - RAISED_INSET; }
+    }
+    if (lat >= lo && lat <= hi) return;
+    if (stripHi > stripLo && lat >= stripLo && lat <= stripHi) return;
     const double sx = c->X - a->X, sz = c->Z - a->Z, len = sqrt(sx * sx + sz * sz);
-    const double px = a->X + sx * t, pz = a->Z + sz * t, side = lat > 0 ? limit : -limit;
-    if (grounded) {
+    double side = lat > hi ? hi : lo;
+    if (stripHi > stripLo) {
+        const double toStrip = lat < stripLo ? stripLo - lat : lat - stripHi, toRoad = lat < lo ? lo - lat : lat - hi;
+        if (toStrip < toRoad) side = lat < stripLo ? stripLo : stripHi;
+    }
+    const double px = a->X + sx * t, pz = a->Z + sz * t;
+    const int onRoad = side >= lo && side <= hi;
+    if (grounded && onRoad) {
         // the ground just past the floor on the side he is going: about as high as the road, he drives off onto it
         const double out = (lat > 0 ? 1 : -1) * (half + RAISED_PAD + RAISED_BESIDE);
         const S32 bx = (S32)floor(px - sz / len * out - cx + 0.5), bz = (S32)floor(pz + sx / len * out - cz + 0.5);
@@ -1576,10 +1621,10 @@ static void LoadRaised(const char *path) {
     T_RACE_RAISED *r = (T_RACE_RAISED *)malloc(capacity * sizeof(T_RACE_RAISED));
     char line[128];
     while (fgets(line, sizeof(line), f)) {
-        int a, b, c, d, e = 0;
-        if (sscanf(line, "%d %d %d %d %d", &a, &b, &c, &d, &e) < 4) continue;
+        int a, b, c, d, e = 0, f = 0, g = 0;
+        if (sscanf(line, "%d %d %d %d %d %d %d", &a, &b, &c, &d, &e, &f, &g) < 4) continue;
         if (count == capacity) { capacity *= 2; r = (T_RACE_RAISED *)realloc(r, capacity * sizeof(T_RACE_RAISED)); }
-        r[count].X = a; r[count].Z = b; r[count].Y = c; r[count].Half = d; r[count].Bank = e;
+        r[count].X = a; r[count].Z = b; r[count].Y = c; r[count].Half = d; r[count].Bank = e; r[count].StripLo = f; r[count].StripHi = g;
         count++;
     }
     fclose(f);
@@ -1595,7 +1640,14 @@ static void LoadRaised(const char *path) {
     }
     s_rbX0 = x0; s_rbZ0 = z0; s_rbW = x1 - x0 + 1; s_rbH = z1 - z0 + 1;
     int widest = 0;
-    for (int i = 0; i < count; i++) if (r[i].Half > widest) widest = r[i].Half;
+    for (int i = 0; i < count; i++) {
+        if (r[i].Half > widest) widest = r[i].Half;
+        // (a strip beside the road reaches further across)
+        if (r[i].StripHi > r[i].StripLo) {
+            if (abs(r[i].StripLo) > widest) widest = abs(r[i].StripLo);
+            if (abs(r[i].StripHi) > widest) widest = abs(r[i].StripHi);
+        }
+    }
     s_rbExtra = widest / RAISED_BUCKET;
     s_rbStart = (int *)calloc(s_rbW * s_rbH + 1, sizeof(int));
     s_rbItem = (int *)malloc(count * sizeof(int));
@@ -6024,6 +6076,10 @@ void RaceMod_EdgeCross(void) {
     for (int c = 0; c < s_nbCubeScenes; c++)
         if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) scene = s_cubeScenes[c][2];
     if (scene < 0) return;
+    // (only where the car can be on the other side: a cube change puts it half a cell inside the next cube, and a raised road whose rail
+    // keeps it short of that took it over and its rail straight back -- a scene change a frame, along the Emerald Moon's straight, its rail
+    // a quarter cell short of the cube's edge, 2026-10-12)
+    if (!RailAllows(qx * 32768.0 + x, qz * 32768.0 + z, hero->Obj.Y)) return;
     NewCube = scene;
     NewPosX = x; NewPosY = hero->Obj.Y; NewPosZ = z;
     FlagChgCube = 1;

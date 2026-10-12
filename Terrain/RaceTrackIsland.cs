@@ -160,7 +160,8 @@ internal sealed record RaceTrackIsland(
     };
 
     // The Emerald Moon itself (EMERAUDE.ILE, island 3), from the user's sketch: all of it a raised road -- along the middle of the moon
-    // base's long arm on its roof (the straight, its pit lane beside it on one deck), up onto the crater's rim and round it through three
+    // base's long arm on its roof (the straight, its pit lane beside it: a strip of road of its own, clear space between them, since
+    // 2026-10-12 -- RaceTrackPlan.RaisedStrips), up onto the crater's rim and round it through three
     // vertical loops (the plan's Loops: the deck there twice the road's width, the car going in on one half and coming out on the other),
     // and one jump over the whole reactor on the north rim (ArcJumps: the race-track mode carries the car up a curved ramp, over the
     // reactor's dish and down a curved hill, from one cube into the next), the road as wide as the dish there and banked hard through the

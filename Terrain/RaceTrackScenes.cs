@@ -152,13 +152,25 @@ internal static class RaceTrackScenes
             Overhang(px, pz, px + nx, pz + nz, h);
             Overhang(px, pz, px - nx, pz - nz, h);
         }
-        // (the raised road by its own points and widths, to its rails and the floor's pad past them; the ground's by the lap, to its curbs)
+        // (the raised road by its own points and widths, as far as a car's middle goes on it -- the rail keeps it RailInset inside the edge
+        // -- less the half cell inside the next cube a car arrives at: where a car can't be there, the zone would carry it over and its rail
+        // straight back, a scene change a frame -- the Emerald Moon's straight, its rail a quarter cell short of the cube's edge, 2026-10-12;
+        // and the strip beside it the same way. The ground's by the lap, to its curbs.)
+        const double Reach = 1.25 + 0.5;
         var raised = report.Raised;
         for (var k = 0; k < raised.Count; k++)
         {
             if (raised[k][3] <= 0) continue;
             var a = raised[Math.Max(0, k - 1)]; var b = raised[Math.Min(raised.Count - 1, k + 1)];
-            Sides(raised[k][0] / 512.0, raised[k][1] / 512.0, (b[0] - a[0]) / 512.0, (b[1] - a[1]) / 512.0, raised[k][3] / 512.0 + 0.5, raised[k][2]);
+            double px = raised[k][0] / 512.0, pz = raised[k][1] / 512.0, dx = (b[0] - a[0]) / 512.0, dz = (b[1] - a[1]) / 512.0;
+            Sides(px, pz, dx, dz, raised[k][3] / 512.0 - Reach, raised[k][2]);
+            if (raised[k].Length >= 7 && raised[k][6] > raised[k][5])
+            {
+                var len = Math.Sqrt(dx * dx + dz * dz);
+                double lo = raised[k][5] / 512.0 + Reach, hi = raised[k][6] / 512.0 - Reach;
+                if (len > 0 && hi > lo)
+                    foreach (var u in new[] { lo, hi }) Overhang(px, pz, px - dz / len * u, pz + dx / len * u, raised[k][2]);
+            }
         }
         for (var i = 0; i < n; i++)
         {

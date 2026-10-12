@@ -2843,6 +2843,42 @@ The user: "The mushroom pick up is far too small to see, let's make this bigger.
 
 The user: "Update our mini-map for race mode so it fully fits into its viewport and shows all the cars moving around in real time". While Play races a track whose island the editor has open (`MainWindow.RaceMinimap.cs`), the minimap panel shows the lap and 6 cells round it scaled to fit its box (no scrolling), the road drawn over the island -- a raised road its rails' width, a jump's gap left open; a road on the ground the racing line -- and every car as a dot: Twinsen's yellow and bigger, each opponent a colour of its own (its name as the dot's tooltip). The dots move with the cars, asked for every 150 ms over the play's control socket: the engine's console command `racecars` (`RaceMod_Cars`) answers `car <n> <x> <z> <beta> <name>` a line each, island units, n -1 for Twinsen -- an opponent's own car where the scene has it in sight, else where its line has it in the race. When the play stops the minimap goes back to the editor's own (zoomed in, scrolling, the camera's marker).
 
+## The Emerald Moon: a whole second loop, and the pit lane apart from the straight (2026-10-12)
+
+The user: "Emerald moon, the cut out loop needs removing and replacing with a normal loop, the pit lane is devided with a fence, and the
+pit lane is too narrow. Let's remove the fence and have an extra strip of road with clear space between the start/finish line and the
+pit straight with the pit lane being wider".
+
+![The pit lane on the right, apart from the straight with the start gantry, the opponents waiting in it](racetrack/emerald/pit_lane.png)
+
+- *The second loop* (the south side's) is whole, as the other two: its gap of 35 degrees, leapt upside down, is gone (the plan's loop
+  gap 0).
+- *The pit lane* is a strip of road of its own beside the straight (plan `raisedStrips`: for each point of the lap, from and to across
+  it, cells; RaceTrackPlan.RaisedStrips): from the first corner's end it grows out of the straight's west edge over 5 cells, moves 2.5
+  cells away from it over 5 more -- clear space between them, the base's roof under it -- runs beside it past the start line, and comes
+  back the same way before the hairpin. It is 8 cells wide, rail to rail (its asphalt 6; the fenced lane's was 4.5). The fence and the
+  white stripe are gone; the straight is the road's usual width again, on the roof's middle (it had been moved half the old pit lane's
+  width east), and the grid on its middle.
+- *The deck*: where the strip meets the straight's edge, the straight's deck reaches across to the strip's far edge, one deck; where it
+  is apart, a deck of its own, with its own curbs and rails (`RaceTrackBuilder` StripPieces: RaceTrackRaisedBody.Tile on sections moved
+  across). The start line and its gantry: the line reaches across the strip, so a car in the pit lane crosses it too (LapLine); the
+  gantry stands over the straight.
+- *The engine* (RACEMOD.CPP): the raised road's file has two more numbers on a point with a strip beside it, from and to across
+  (`StripLo`, `StripHi`). The floor is the road's or the strip's (RaisedAt, OnStrip); the rail keeps a car on whichever of the two it is
+  nearer, the clear space between them an edge like the road's outer one, and where they meet, one floor from the road's far edge to the
+  strip's (RaceMod_Rail).
+- *Cube edges again*: the straight's rail is a quarter cell short of the edge between scenes 229 and 231 (x 64). The crossing zones the
+  build now adds where a road's width reaches over an edge, and the engine's own carrying over (above), took a car riding the rail into
+  231 -- half a cell inside it, where a car arrives -- and its rail straight back, a scene change a frame. Now both carry a car over only
+  where it can be on the other side: the build where a car's middle reaches more than half a cell past the edge inside its rail
+  (`EdgeCrossings`, `Reach`), the engine where its rail lets it be where it arrives (`RailAllows`). Volcano Island's climb keeps its
+  zones; the user's own place there still crosses.
+- The design script's jump: the island's objects read again since 2026-10-02 put the reactor a little higher, and the ramp search picked
+  61 degrees; the ramp is kept at 60 (`THETA_DEG`), as built and raced, and the script says it clears by less than 900 by that reading.
+- Tested: a qualifying lap of 53.6 s and a race lap of 64.1 s with the opponents, no checkpoint missed, no car rescued; the pilot through
+  the whole pit lane and back onto the straight; a car steered at the clear space held on the straight's edge all the way along; along
+  the straight's other rail no change of scene.
+
 ## Folders with non-English names, and why a race didn't start (2026-10-12)
 
 A user's video (in Russia): Play's "Race: Elevator Platform", the race car setup's Play, and no race -- Twinsen not where he should be, the

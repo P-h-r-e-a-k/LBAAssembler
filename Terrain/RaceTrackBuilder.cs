@@ -172,6 +172,11 @@ internal sealed class RaceTrackPlan
     // A raised road's width point by point (with Raised): cells from its middle to its rail, instead of RaisedHalf everywhere -- the
     // Emerald Moon's lap widens to the reactor's dish for its jump, to twice its width at its loops and beside its straight for the pit lane.
     public double[]? RaisedHalfs { get; set; }
+    // A strip of road beside a raised road, point by point (with Raised): [from, to] cells across it (the builder's Across; equal: none).
+    // The Emerald Moon's pit lane (2026-10-12, the user: "remove the fence and have an extra strip of road with clear space between the
+    // start/finish line and the pit straight with the pit lane being wider"): it grows out of the road's edge, then moves apart from it,
+    // clear space between them, and back. Its own deck and rails; the race-track mode's floor and rail know it (RACEMOD.CPP StripLo/Hi).
+    public double[][]? RaisedStrips { get; set; }
     // Jumps the engine carries the car over (with Raised), each [the take-off ramp's foot, its lip, the landing lip, the landing hill's
     // foot]: the plan's heights from foot to foot are the car's way -- a ramp curving up, the flight, a hill curving down -- and the road
     // has no deck between the lips. The race-track mode (RACEMOD.CPP arcjump=) takes the car at the ramp's foot and carries it along that
@@ -591,6 +596,8 @@ internal sealed class TrackRoad
     public double[]? RoadBank;
     // A raised road's width, point by point (RaceTrackPlan.RaisedHalfs, cells from its middle to its rail), or null: RaisedHalfWidth.
     public double[]? RaisedHalfs;
+    // ... and a strip of road beside it (RaceTrackPlan.RaisedStrips): from and to, cells across (Across; equal: none), or null.
+    public double[]? StripLo, StripHi;
     // The points in a carried jump's gap (RaceTrackPlan.ArcJumps), or null: the car is carried through the air there, nothing in the way
     // of the road is cleared and no crossing zone stands at the cube's edge.
     public bool[]? Arc;
@@ -921,24 +928,27 @@ internal static class RaceTrackBuilder
         var raw = plan.Points.Select(p => (X: p[0] + plan.OriginCellX, Z: p[1] + plan.OriginCellZ)).ToList();
         var banked = plan.Planned && plan.Raised is not null && plan.Bank is { } bank && bank.Length == plan.Points.Length && bank.Any(b => b != 0);
         var widths = plan.Planned && plan.Raised is not null && plan.RaisedHalfs is { } rh && rh.Length == plan.Points.Length ? plan.RaisedHalfs : null;
-        return Resample(name, raw, o, closed, plan.Planned ? plan.Heights : null, banked ? plan.Bank : null, widths);
+        var strips = plan.Planned && plan.Raised is not null && plan.RaisedStrips is { } rs && rs.Length == plan.Points.Length && rs.Any(s => s.Length == 2 && s[1] > s[0]) ? plan.RaisedStrips : null;
+        return Resample(name, raw, o, closed, plan.Planned ? plan.Heights : null, banked ? plan.Bank : null, widths, strips);
     }
 
     // (with `heights`, one per raw point, the road's Planned heights are taken along with it; and its banking and raised widths)
     private static TrackRoad Resample(string name, List<(double X, double Z)> raw, RaceTrackOptions o, bool closed, IReadOnlyList<double>? heights = null,
-        IReadOnlyList<double>? banks = null, IReadOnlyList<double>? halfs = null)
+        IReadOnlyList<double>? banks = null, IReadOnlyList<double>? halfs = null, IReadOnlyList<double[]>? strips = null)
     {
         var pts = closed ? raw.Append(raw[0]).ToList() : raw;
         var hs = heights is null ? null : closed ? heights.Append(heights[0]).ToList() : heights.ToList();
         var bs = banks is null ? null : closed ? banks.Append(banks[0]).ToList() : banks.ToList();
         var ws = halfs is null ? null : closed ? halfs.Append(halfs[0]).ToList() : halfs.ToList();
+        var ss = strips is null ? null : closed ? strips.Append(strips[0]).ToList() : strips.ToList();
         var cum = new List<double> { 0 };
         for (var i = 1; i < pts.Count; i++) cum.Add(cum[^1] + Math.Sqrt(Sq(pts[i].X - pts[i - 1].X) + Sq(pts[i].Z - pts[i - 1].Z)));
         var total = cum[^1];
         var n = Math.Max(8, (int)Math.Round(total / o.Spacing));
         var count = closed ? n : n + 1;
         var road = new TrackRoad { Name = name, Closed = closed, X = new double[count], Z = new double[count], Length = total, Planned = hs is null ? null : new double[count],
-            RoadBank = bs is null ? null : new double[count], RaisedHalfs = ws is null ? null : new double[count] };
+            RoadBank = bs is null ? null : new double[count], RaisedHalfs = ws is null ? null : new double[count],
+            StripLo = ss is null ? null : new double[count], StripHi = ss is null ? null : new double[count] };
         var j = 0;
         for (var i = 0; i < count; i++)
         {
@@ -951,6 +961,11 @@ internal static class RaceTrackBuilder
             if (hs is not null) road.Planned![i] = hs[j] + (hs[j + 1] - hs[j]) * t;
             if (bs is not null) road.RoadBank![i] = bs[j] + (bs[j + 1] - bs[j]) * t;
             if (ws is not null) road.RaisedHalfs![i] = ws[j] + (ws[j + 1] - ws[j]) * t;
+            if (ss is not null)
+            {
+                road.StripLo![i] = ss[j][0] + (ss[j + 1][0] - ss[j][0]) * t;
+                road.StripHi![i] = ss[j][1] + (ss[j + 1][1] - ss[j][1]) * t;
+            }
         }
         road.AsphaltHalf = o.AsphaltHalfWidth; road.CurbHalf = o.CurbHalfWidth; road.VergeHalf = o.VergeHalfWidth; road.Blend = o.BlendWidth;
         Geometry(road, o);
@@ -4059,6 +4074,17 @@ internal static class RaceTrackBuilder
         var nx = -dz; var nz = dx;
         double left = roads[0].VergeHalf, right = roads[0].VergeHalf;
         double leftCurb = roads[0].CurbHalf, rightCurb = roads[0].CurbHalf;
+        // (a strip of road beside a raised road -- the Emerald Moon's pit lane -- at the line: the line across it too, or a car in the pit
+        // lane would never cross it)
+        if (roads[0].StripLo is { } sl && roads[0].StripHi is { } sh)
+        {
+            var near = Enumerable.Range(0, roads[0].Count).MinBy(i => Sq(roads[0].X[i] - x) + Sq(roads[0].Z[i] - z));
+            if (sh[near] > sl[near])
+            {
+                if (sh[near] > 0) { right = Math.Max(right, sh[near] + 0.5); rightCurb = Math.Max(rightCurb, sh[near]); }
+                if (sl[near] < 0) { left = Math.Max(left, -sl[near] + 0.5); leftCurb = Math.Max(leftCurb, -sl[near]); }
+            }
+        }
         if (roads.Count > 1)
         {
             var pit = roads[1];
@@ -4501,13 +4527,19 @@ internal static class RaceTrackBuilder
         report.RaisedSpan.Clear(); report.RaisedSpan.AddRange(span);
         var half = o.RaisedHalfWidth * 512;
         double Half(int k) => (r.RaisedHalfs?[k] ?? o.RaisedHalfWidth) * 512;
+        // (the strip beside the road there, cells across, or null)
+        (double Lo, double Hi)? StripAt(int k) => r.StripLo is { } sl && r.StripHi is { } sh && sh[k] > sl[k] + 1e-6 ? (sl[k], sh[k]) : null;
         var banks = r.RoadBank;
         // (a jump's gap in it -- between the lips, r.Gap -- has no width: the engine's floor isn't there)
         foreach (var k in span)
         {
             // (no width where it is bare too: the roulette wheel's way round its bowl, whose floor is the race-track mode's own, without rails)
             var width = r.Gap[k] || !up[k] || r.Bare?[k] == true ? 0 : (int)Math.Round(Half(k));
-            report.Raised.Add(banks is null
+            // (a strip beside it: two more numbers, from and to across -- the bank's before them, 0 if none)
+            if (width > 0 && StripAt(k) is { } strip)
+                report.Raised.Add(new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width,
+                                          (int)Math.Round((banks?[k] ?? 0) * RaisedBankUnits), (int)Math.Round(strip.Lo * 512), (int)Math.Round(strip.Hi * 512) });
+            else report.Raised.Add(banks is null
                 ? new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width }
                 : new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width, (int)Math.Round(banks[k] * RaisedBankUnits) });
         }
@@ -4588,6 +4620,13 @@ internal static class RaceTrackBuilder
             }).ToArray();
             // (an arrow on every third piece, the way the lap runs; none across the stripe or a boost panel)
             var arrow = pieces % RaisedArrowEvery == 1 && ids.Count == cells + 1 && line < 0 && !striped.Any(b => b) && boosted.All(b => b is null);
+            // (a strip beside the road over these cells -- the Emerald Moon's pit lane: where it meets the road's edge, the road's deck
+            // reaches across to its far edge, one deck; where it is apart, a deck of its own beside it, clear space between)
+            if (ids.Any(k => StripAt(k) is not null))
+            {
+                left += StripPieces(ids, sections, origin, t / per, line);
+                continue;
+            }
             var body = RaceTrackRaisedBody.Tile(sections, t / per, r.AsphaltHalf * 512, r.CurbHalf * 512, half, arrow, line,
                 r.RaisedHalfs is null ? null : ids.Select(k => Half(k) - half).ToArray(),
                 r.Stripe is { } st && !o.PitFence ? st.Offset * 512 : double.NaN, striped, strips, r.Themes?[ids[ids.Count / 2]],   // (under a fence, no stripe)
@@ -4597,6 +4636,59 @@ internal static class RaceTrackBuilder
             var corners = ids.SelectMany(k => new[] { -1, 1 }.Select(side => World(k) + new System.Numerics.Vector3((float)-r.Tz[k], 0, (float)r.Tx[k]) * (float)(side * (Half(k) + 64)) - origin)).ToList();
             int x0 = (int)Math.Floor(corners.Min(c => c.X)), x1 = (int)Math.Ceiling(corners.Max(c => c.X)), z0 = (int)Math.Floor(corners.Min(c => c.Z)), z1 = (int)Math.Ceiling(corners.Max(c => c.Z));
             if (Add(body, origin.X, origin.Y, origin.Z, x0, -(int)RaceTrackRaisedBody.Thickness - 80, z0, x1, 0, z1, untouchable: true)) pieces++; else left++;
+        }
+
+        // A piece of road with a strip beside it (StripAt), its sections from `sections` (round `origin`): cut where the strip meets the
+        // road's edge or leaves it into runs, each one deck -- the road's reaching to the strip's far edge -- or two, the road's and the
+        // strip's, the clear space between. Returns the decors left out.
+        int StripPieces(List<int> ids, List<(System.Numerics.Vector3 Mid, System.Numerics.Vector3 Across)> sections, System.Numerics.Vector3 origin, int block, int line)
+        {
+            // (how a cell is: 0 no strip, 1 the strip at the road's edge -- one deck -- 2 apart; a cell's kind is its ends' larger)
+            int Kind(int k) => StripAt(k) is not { } s ? 0 : s.Lo * 512 <= Half(k) + 1 && s.Hi * 512 >= -Half(k) - 1 ? 1 : 2;
+            var stripAsphalt = RaceTrackRaisedBody.StripsFor(span.Where(k => StripAt(k) is not null).Max(k => (StripAt(k)!.Value.Hi - StripAt(k)!.Value.Lo) / 2 * 512
+                                                                                                                + (r.AsphaltHalf - o.RaisedHalfWidth) * 512));
+            var missed = 0;
+            bool Place(byte[] body, IEnumerable<System.Numerics.Vector3> corners)
+            {
+                var c = corners.ToList();
+                int x0 = (int)Math.Floor(c.Min(p => p.X)), x1 = (int)Math.Ceiling(c.Max(p => p.X)), z0 = (int)Math.Floor(c.Min(p => p.Z)), z1 = (int)Math.Ceiling(c.Max(p => p.Z));
+                return Add(body, origin.X, origin.Y, origin.Z, x0, -(int)RaceTrackRaisedBody.Thickness - 80, z0, x1, 0, z1, untouchable: true);
+            }
+            System.Numerics.Vector3 Flat(int k) => new((float)-r.Tz[k], 0, (float)r.Tx[k]);
+            var j0 = 0;
+            while (j0 + 1 < ids.Count)
+            {
+                var kind = Math.Max(Kind(ids[j0]), Kind(ids[j0 + 1]));
+                var j1 = j0 + 1;
+                while (j1 + 1 < ids.Count && Math.Max(Kind(ids[j1]), Kind(ids[j1 + 1])) == kind) j1++;
+                var run = Enumerable.Range(j0, j1 - j0 + 1).ToList();
+                var lineAt = line >= j0 && line < j1 ? line - j0 : -1;
+                // (each section's extent across: from lo to hi, world units)
+                List<(System.Numerics.Vector3 Mid, System.Numerics.Vector3 Across)> Shifted(Func<int, double> lo, Func<int, double> hi)
+                    => run.Select(j => (sections[j].Mid + sections[j].Across * (float)((lo(ids[j]) + hi(ids[j])) / 2), sections[j].Across)).ToList();
+                double[] Wider(Func<int, double> lo, Func<int, double> hi) => run.Select(j => (hi(ids[j]) - lo(ids[j])) / 2 - half).ToArray();
+                IEnumerable<System.Numerics.Vector3> Corners(Func<int, double> lo, Func<int, double> hi)
+                    => run.SelectMany(j => new[] { lo(ids[j]) - 64, hi(ids[j]) + 64 }.Select(u => World(ids[j]) + Flat(ids[j]) * (float)u - origin));
+                double RoadLo(int k) => -Half(k);
+                double RoadHi(int k) => Half(k);
+                // the road's deck: as far as the strip reaches where the two are one
+                Func<int, double> deckLo = kind == 1 ? k => Math.Min(-Half(k), StripAt(k) is { } s ? s.Lo * 512 : -Half(k)) : RoadLo;
+                Func<int, double> deckHi = kind == 1 ? k => Math.Max(Half(k), StripAt(k) is { } s ? s.Hi * 512 : Half(k)) : RoadHi;
+                var deck = RaceTrackRaisedBody.Tile(Shifted(deckLo, deckHi), block + j0, r.AsphaltHalf * 512, r.CurbHalf * 512, half, false, lineAt,
+                    Wider(deckLo, deckHi), double.NaN, null, strips, r.Themes?[ids[run[run.Count / 2]]]);
+                if (!Place(deck, Corners(deckLo, deckHi))) missed++;
+                if (kind == 2)
+                {
+                    // the strip's own deck (where it has none at a section -- its last cell before the road's edge -- as narrow as a deck goes)
+                    double Lo(int k) => StripAt(k) is { } s ? s.Lo * 512 : Half(k);
+                    double Hi(int k) => StripAt(k) is { } s ? Math.Max(s.Hi * 512, s.Lo * 512 + 2 * (o.RaisedHalfWidth - r.AsphaltHalf) * 512 + 64) : Half(k) + 2 * (o.RaisedHalfWidth - r.AsphaltHalf) * 512 + 64;
+                    var strip = RaceTrackRaisedBody.Tile(Shifted(Lo, Hi), block + j0, r.AsphaltHalf * 512, r.CurbHalf * 512, half, false, lineAt,
+                        Wider(Lo, Hi), double.NaN, null, stripAsphalt, r.Themes?[ids[run[run.Count / 2]]]);
+                    if (!Place(strip, Corners(Lo, Hi))) missed++;
+                }
+                j0 = j1;
+            }
+            return missed;
         }
 
         // the gantry over a start line that is on the raised road: one body, its posts on the rails (nothing collides with it)
