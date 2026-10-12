@@ -40,10 +40,15 @@ U8 RendererDrawSky = TRUE;
 // against elevated terrain from a near-vertical (top-down) camera -- from
 // that angle the sea plane can come out *nearer* than higher ground it
 // should be sitting well behind, painting flat sea color over real terrain.
-// Off only for the minimap's top-down snapshots (RenderIslandTopDown);
-// the main 3D view's ordinary viewing angles don't have this problem, so it
-// stays on there.
+// Off for the minimap's top-down snapshots (RenderIslandTopDown); the main
+// 3D view's ordinary viewing angles don't have this problem, so it stays on
+// there, unless the viewport's temporary "Sea/gas" checkbox is unticked to
+// see what's under the sea or gas (with RendererDrawSeaPolys, below).
 U8 RendererDrawSea = TRUE;
+// Renderer-only as well: the ground's own animated sea and gas triangles (TERRAIN.CPP HalfPolyShown) -- off, with the sea plane, for the
+// editor's temporary "Sea/gas" toggle, to see what is under them (the control tower's halls under Island CX's gas); on for everything
+// else, the minimap's snapshots too.
+U8 RendererDrawSeaPolys = TRUE;
 // Same idea as RendererDrawSky/RendererDrawSea: renderer-only toggle (LBA2 Level Workshop's "Hide all
 // actors" checkbox), defaults to TRUE so the full game is unaffected. Gates AffichageActorsZBuf()
 // (EXTFUNC.CPP), the dedicated actor-draw pass -- terrain and decor objects are drawn by separate code

@@ -20,6 +20,7 @@ internal sealed class RendererLibraryApi : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void SetCameraFn(int alpha, int beta, int gamma, int distance);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void SetDrawSkyFn(int enabled);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void SetDrawSeaFn(int enabled);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void SetDrawSeaPolysFn(int enabled);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void SetDrawActorsFn(int enabled);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr FramebufferFn(out int width, out int height, out int pitch);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int GetActorCountFn();
@@ -70,6 +71,7 @@ internal sealed class RendererLibraryApi : IDisposable
     private SetCameraFn? setCamera;
     private SetDrawSkyFn? setDrawSky;
     private SetDrawSeaFn? setDrawSea;
+    private SetDrawSeaPolysFn? setDrawSeaPolys;
     private SetDrawActorsFn? setDrawActors;
     private FramebufferFn? framebuffer;
     private GetActorCountFn? getActorCount;
@@ -149,6 +151,7 @@ internal sealed class RendererLibraryApi : IDisposable
         setViewDistance = Get<SetViewDistanceFn>("lba2_renderer_set_view_distance");
         setDrawSky = Get<SetDrawSkyFn>("lba2_renderer_set_draw_sky");
         setDrawSea = Get<SetDrawSeaFn>("lba2_renderer_set_draw_sea");
+        setDrawSeaPolys = Get<SetDrawSeaPolysFn>("lba2_renderer_set_draw_sea_polys");
         setDrawActors = Get<SetDrawActorsFn>("lba2_renderer_set_draw_actors");
         getActorCount = Get<GetActorCountFn>("lba2_renderer_get_actor_count");
         getActor = Get<GetActorFn>("lba2_renderer_get_actor");
@@ -288,6 +291,9 @@ internal sealed class RendererLibraryApi : IDisposable
     public void SetCamera(int alpha, int beta, int gamma, int distance) => setCamera?.Invoke(alpha, beta, gamma, distance);
     public void SetDrawSky(bool enabled) => setDrawSky?.Invoke(enabled ? 1 : 0);
     public void SetDrawSea(bool enabled) => setDrawSea?.Invoke(enabled ? 1 : 0);
+    // The ground's own animated sea and gas triangles (Island CX's gas round its plateau, the shallow water at the shores), apart from the
+    // sea plane: off with it for the viewport's temporary "Sea/gas" toggle, on for everything else (a DLL without it: always on).
+    public void SetDrawSeaPolys(bool enabled) => setDrawSeaPolys?.Invoke(enabled ? 1 : 0);
     public void SetDrawActors(bool enabled) => setDrawActors?.Invoke(enabled ? 1 : 0);
     public IntPtr GetFramebuffer(out int width, out int height, out int pitch)
     {

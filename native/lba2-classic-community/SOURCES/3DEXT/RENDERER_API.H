@@ -55,8 +55,14 @@ LBA2_RENDERER_API void lba2_renderer_set_draw_sky(int enabled);
    elevated terrain it should sit well behind, painting flat sea color over
    real terrain -- off for the minimap's top-down snapshots, on (the
    default) for the main 3D view's ordinary viewing angles which don't hit
-   this. Does not affect the full game. */
+   this, unless its "Sea/gas" checkbox is unticked. Also gates the sea of
+   the horizon's empty cubes (DrawHorizon2ZBuf). Does not affect the full
+   game. */
 LBA2_RENDERER_API void lba2_renderer_set_draw_sea(int enabled);
+/* Toggles the ground's own animated sea and gas triangles (TERRAIN.CPP HalfPolyShown: CodeJeu 12..15 -- Island CX's gas round its
+   plateau, the shallow water at the retail islands' shores). Off, with the sea plane, for the editor's temporary "Sea/gas" toggle, to see
+   what is under them; on (the default) otherwise, the minimap's snapshots too. Does not affect the full game. */
+LBA2_RENDERER_API void lba2_renderer_set_draw_sea_polys(int enabled);
 /* Toggles AffichageActorsZBuf() (EXTFUNC.CPP), the dedicated actor-draw pass -- off hides every actor's
    real body from the rendered frame (terrain and decor objects are drawn by separate code and are
    unaffected). Does not affect the full game. */

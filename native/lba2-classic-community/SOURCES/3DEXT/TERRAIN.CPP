@@ -100,6 +100,16 @@ static inline const T_HALF_TEX *GroundTexDef(const T_HALF_POLY *ptrh) {
     return &ListTexDef[ptrh->IndexTex];
 }
 
+// Whether a ground triangle is drawn: it has a colour or a texture, and it is not one of the ground's own animated sea or gas triangles
+// (CodeJeu 12..15 -- Island CX's gas round its plateau, the shallow water at the retail islands' shores) while the editor's temporary
+// "Sea/gas" toggle hides them, with the sea plane, to see what is under them (RENDERER_API.CPP lba2_renderer_set_draw_sea_polys; the game
+// never turns it off). (RendererDrawSea: the sea plane's flag, here and in the horizon's cubes, DrawHorizon2ZBuf.)
+extern U8 RendererDrawSeaPolys;
+extern U8 RendererDrawSea;
+static inline S32 HalfPolyShown(const T_HALF_POLY *h) {
+    return (h->PolyFlag + h->TexFlag) AND(RendererDrawSeaPolys OR(h->CodeJeu & 12) != 12);
+}
+
 static inline void DrawFeuillePolyZBuf(S32 xi, S32 zi, T_SOMMET_ROT *ptrs) {
     S32 color;
     T_HALF_POLY *ptrh;
@@ -170,7 +180,7 @@ static inline void DrawFeuillePolyZBuf(S32 xi, S32 zi, T_SOMMET_ROT *ptrs) {
 */	}
 
 if (ptrh->Sens == 0) {
-    if (ptrh->PolyFlag + ptrh->TexFlag) {
+    if (HalfPolyShown(ptrh)) {
         // type 0 triangle 0----------------------------
 
         Tab_Points[0].Pt_XE = (S16)x0;
@@ -257,7 +267,7 @@ if (ptrh->Sens == 0) {
 
     ptrh++;
 
-    if (ptrh->PolyFlag + ptrh->TexFlag) {
+    if (HalfPolyShown(ptrh)) {
         Tab_Points[0].Pt_XE = (S16)x2;
         Tab_Points[0].Pt_YE = (S16)z2;
         Tab_Points[1].Pt_XE = (S16)x3;
@@ -340,7 +350,7 @@ if (ptrh->Sens == 0) {
 {
     // type 1 triangle 0
 
-    if (ptrh->PolyFlag + ptrh->TexFlag) {
+    if (HalfPolyShown(ptrh)) {
         Tab_Points[0].Pt_XE = (S16)x3;
         Tab_Points[0].Pt_YE = (S16)z3;
         Tab_Points[1].Pt_XE = (S16)x0;
@@ -423,7 +433,7 @@ if (ptrh->Sens == 0) {
 
     ptrh++;
 
-    if (ptrh->PolyFlag + ptrh->TexFlag) {
+    if (HalfPolyShown(ptrh)) {
         Tab_Points[0].Pt_XE = (S16)x1;
         Tab_Points[0].Pt_YE = (S16)z1;
         Tab_Points[1].Pt_XE = (S16)x2;
@@ -751,7 +761,7 @@ void DrawHorizon2ZBuf() {
                     if (LoadCube(x, y)) {
                         AffichageTerrainZBuf();
                         flag = TRUE;
-                    } else
+                    } else if (RendererDrawSea)
                         DrawOneSea(Y_SEA);
                 }
             }
@@ -764,7 +774,8 @@ void DrawHorizon2ZBuf() {
         if (!LoadCube(CurrentCubeX, CurrentCubeY)) {
             // on est dans un cube phantom !!!!!!!
             InitSeaCube();
-            DrawOneSea(Y_SEA);
+            if (RendererDrawSea)
+                DrawOneSea(Y_SEA);
         }
     }
 }
@@ -807,7 +818,7 @@ static void DrawClippedTriangle(const STRUC_CLIPVERTEX *a, const STRUC_CLIPVERTE
     STRUC_CLIPVERTEX src[3], dst[8];
     S32 k, l, color, light;
 
-    if (!(ptrh->PolyFlag + ptrh->TexFlag))
+    if (!HalfPolyShown(ptrh))
         return;
     src[0] = *a;
     src[1] = *b;
@@ -980,7 +991,6 @@ void AffichageTerrainZBuf(void) {
         ptrs++;
     }
 
-    extern U8 RendererDrawSea;
     if (RendererDrawSea)
         DrawOneSea(Y_SEA);
 

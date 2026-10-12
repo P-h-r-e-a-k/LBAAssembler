@@ -33,6 +33,7 @@ extern unsigned int InitPartFlow(void);
 extern S32 Island;
 extern U8 RendererDrawSky;
 extern U8 RendererDrawSea;
+extern U8 RendererDrawSeaPolys;
 extern U8 RendererDrawActors;
 extern int RendererScanIslandActors(int islandIndex);
 extern int RendererGetActorCount(void);
@@ -267,6 +268,10 @@ int lba2_renderer_load_island(const char *name)
         if (!strcasecmp(name, kIslandNames[i])) { islandIndex = i; break; }
     }
     if (islandIndex < 0 && !strcasecmp(name, "celebra2")) islandIndex = 5; // shares celebrat's sky/ambience
+    // (CXTOWER, the editor's Island CX with the control tower's halls under it: Island CX on top, so Island CX's gas, sky and ambience --
+    // it had the first slot's, Citadel's sea, round it. No scenes of its own yet, so no actors: Island CX's belong to Island CX.)
+    const S32 actorIsland = islandIndex;
+    if (islandIndex < 0 && !strcasecmp(name, "cxtower")) islandIndex = 9;
 
     S32 skyResource = islandIndex >= 0 ? RESS_SKYSEA0 + islandIndex : RESS_SKYSEA0;
     if (!strcasecmp(name, "citabau")) skyResource = RESS_SKYSEA00; // interior-only ambience, no Island slot
@@ -287,7 +292,7 @@ int lba2_renderer_load_island(const char *name)
     // RENDERER_ACTORS.CPP); islandIndex < 0 (e.g. citabau, which has no
     // ordinary Island slot -- see ChoicePalette()'s special case) just
     // leaves the actor list empty rather than scanning.
-    RendererScanIslandActors(islandIndex);
+    RendererScanIslandActors(actorIsland);
     return 1;
 }
 
@@ -515,6 +520,11 @@ void lba2_renderer_set_draw_sky(int enabled)
 void lba2_renderer_set_draw_sea(int enabled)
 {
     RendererDrawSea = enabled ? 1 : 0;
+}
+
+void lba2_renderer_set_draw_sea_polys(int enabled)
+{
+    RendererDrawSeaPolys = enabled ? 1 : 0;
 }
 
 void lba2_renderer_set_draw_actors(int enabled)

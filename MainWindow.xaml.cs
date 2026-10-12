@@ -67,6 +67,7 @@ public partial class MainWindow : Window
     private bool nativeRenderInFlight;
     private bool nativeRenderDirty;
     private bool desiredSkyEnabled = true;
+    private bool desiredSeaEnabled = true;
     // Coalesces RenderSoftwareTerrain during a zoom/orbit drag: it's a full synchronous CPU rasterisation of
     // the island on the UI thread (SoftwareTerrainRenderer.Render), and wheel/mouse-move events fire dozens
     // of times a second -- calling it inline on every one was the software-view counterpart of the stutter
@@ -2745,6 +2746,7 @@ public partial class MainWindow : Window
         }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 
+    // (the Sky and Sea/gas checkboxes both)
     private void SkyCheckBox_Changed(object sender, RoutedEventArgs e)
     {
         // RenderNativeCamera reads the checkbox and applies it inside the render lock.
@@ -3057,6 +3059,7 @@ public partial class MainWindow : Window
         // reasserts the checkbox's actual state instead of trusting
         // whatever the native flag happened to be left at.
         desiredSkyEnabled = SkyCheckBox.IsChecked == true;
+        desiredSeaEnabled = SeaCheckBox.IsChecked == true;
         nativeRenderCancellation ??= new CancellationTokenSource();
         var token = nativeRenderCancellation.Token;
         lock (nativeRenderGate)
@@ -3131,6 +3134,7 @@ public partial class MainWindow : Window
                 wideRadiusCubes: wideRadius,
                 cubeArea: area,
                 drawSky: desiredSkyEnabled,
+                drawSea: desiredSeaEnabled,
                 drawActors: !hideAllActors,
                 afterRenderBeforeUnlock: () =>
                 {

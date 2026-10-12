@@ -65,6 +65,25 @@ unit back.)
 No scenes yet, and no way down to the halls: a race track on it comes later (in through a door, round the halls and out again), and its
 way down with it.
 
+## In the editor: the gas, and seeing under it (2026-10-12)
+
+The user: "CXTower.ile looks better, however it has the wrong colour island surround, it looks like water instead of the correct gas layer.
+Also add a temporary option to disable showing this layer to make it easier to see the section under the gas".
+
+- **The gas**: the editor's renderer picks an island's sky, sea or gas and light by its name (`3DEXT/RENDERER_API.CPP`, `kIslandNames`, in
+  the engine's own island order). `CXTOWER` wasn't one of them, so it had the first slot's: Citadel Island's sea and sky. Now it has Island
+  CX's (slot 9), so the gas, the sky and the light are the same as Island CX's. Island CX's actors aren't shown on it: they belong to Island
+  CX's scenes.
+- **Sea/gas**, a temporary checkbox on the viewport's toolbar beside *Sky*: untick it and the renderer leaves out the sea or the gas round
+  an island, so the halls show under Island CX. That is two things: the flat plane round the island (`DrawOneSea`, also in the horizon's
+  cubes), and the ground's own gas or water triangles (ground codes 12 to 15: Island CX has 962 of them round its plateau). The second is
+  a flag of its own (`lba2_renderer_set_draw_sea_polys`, TERRAIN.CPP `HalfPolyShown`), because the minimap leaves out the plane but keeps
+  the shores. It works on every island; the minimap and the game are unaffected.
+
+![CXTOWER.ILE with the gas, as Island CX](controltower/gas_on.png)
+
+![The same view with Sea/gas unticked: the halls and the secret passage's walkway under the island](controltower/gas_off.png)
+
 ## Making it
 
 - Tools > **LBA2: Island CX control tower (3D)…** (`MainWindow.ControlTower.cs`) adds the two files to the game folder, builds them again,

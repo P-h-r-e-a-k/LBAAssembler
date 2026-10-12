@@ -143,18 +143,20 @@ internal sealed class CommunityRendererBackend
     // (from rapid dragging) could have already changed that shared state --
     // the visible symptom of that race was actor markers "swimming" a few
     // pixels out of sync with the terrain while panning.
-    // drawSky asserts the sky flag for this frame, and the sea flag is always turned back on: the
-    // minimap render (RenderIslandTopDown) leaves sea off, and setting either flag from outside
-    // this lock could land in the middle of a minimap render and put sea back over its land.
+    // drawSky asserts the sky flag for this frame, and drawSea the sea's (the sea plane and the ground's
+    // own sea and gas triangles; off for the viewport's temporary "Sea/gas" toggle, to see what's under
+    // them): the minimap render (RenderIslandTopDown) leaves sea off, and setting either flag from
+    // outside this lock could land in the middle of a minimap render and put sea back over its land.
     public BitmapSource? RenderIslandDirect(string islandName, byte[] paletteBytes, int worldX, int worldY, int worldZ, int alpha = 240, int beta = -256, int gamma = 0, int distance = 30000, Action? afterRenderBeforeUnlock = null, int wideRadiusCubes = 0, bool drawSky = true, bool drawActors = true,
-        (int X0, int Z0, int X1, int Z1)? cubeArea = null)
+        (int X0, int Z0, int X1, int Z1)? cubeArea = null, bool drawSea = true)
     {
         if (RendererLibrary is null || !RendererLibrary.IsRendererReady) { directFailure = "renderer DLL unavailable"; return null; }
         lock (directRenderLock)
         {
             if (interiorLoaded) { directFailure = "an interior scene is loaded"; return null; }
             RendererLibrary.SetDrawSky(drawSky);
-            RendererLibrary.SetDrawSea(true);
+            RendererLibrary.SetDrawSea(drawSea);
+            RendererLibrary.SetDrawSeaPolys(drawSea);
             RendererLibrary.SetDrawActors(drawActors);
             var baseName = islandName.ToLowerInvariant();
             if (!directSession)
@@ -633,6 +635,8 @@ internal sealed class CommunityRendererBackend
                 directIsland = baseName;
             }
             RendererLibrary.SetDrawSky(false);
+            // (the ground's own sea and gas triangles are part of the map's land and shores, whatever the viewport's "Sea/gas" toggle says)
+            RendererLibrary.SetDrawSeaPolys(true);
 
             var masterWidth = cubeSpanX * TopDownTileSize;
             var masterHeight = cubeSpanY * TopDownTileSize;
