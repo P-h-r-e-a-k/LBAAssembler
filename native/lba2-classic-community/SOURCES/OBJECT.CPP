@@ -6544,6 +6544,8 @@ static S32 DrawTurnedExtra(T_EXTRA *e, S32 num) {
 }
 
 S32 GereZoneChangeCube(T_OBJET *ptrobj, T_ZONE *ptrz) {
+    // (a race-track mod's car: not straight back into the scene it has just come from -- RACEMOD.CPP RaceMod_CubeChangeAllowed)
+    { extern S32 RaceMod_CubeChangeAllowed(S32 scene); if (!RaceMod_CubeChangeAllowed(ptrz->Num)) return FALSE; }
     if (((ptrobj->Move != MOVE_BUGGY_MANUAL AND ptrobj->Move != MOVE_BUGGY)
              OR(CubeArrowFlags(ptrz->Num) & 4)) // Exterieur
         AND(ptrz->Info7 & ZONE_ON)) {

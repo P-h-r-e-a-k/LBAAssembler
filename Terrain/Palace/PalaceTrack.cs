@@ -46,6 +46,11 @@ internal static class PalaceTrack
                 for (var dx = -1; dx <= 1; dx++)
                     cubes.Add(((int)Math.Floor((x + dx * reach) / 64), (int)Math.Floor((z + dz * reach) / 64)));
         }
+        // (and every cube where the cars drive where they like: the rooms, any way through them -- RaceTrackPlan.OpenAreas)
+        foreach (var a in (plan.OpenAreas ?? Array.Empty<double[]>()).Where(a => a.Length >= 4))
+            for (var cz = (int)Math.Floor((plan.OriginCellZ + a[1]) / 64); cz <= (int)Math.Floor((plan.OriginCellZ + a[3]) / 64); cz++)
+                for (var cx = (int)Math.Floor((plan.OriginCellX + a[0]) / 64); cx <= (int)Math.Floor((plan.OriginCellX + a[2]) / 64); cx++)
+                    cubes.Add((cx, cz));
         return cubes.OrderBy(c => c.Cz).ThenBy(c => c.Cx).ToArray();
     }
     public static int SceneOf(int cx, int cz) => Array.IndexOf(SceneCubes, (cx, cz)) is var i and >= 0 ? FirstScene + i : -1;

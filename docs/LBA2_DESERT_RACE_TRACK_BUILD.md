@@ -3111,6 +3111,74 @@ The game's log says so as the lap starts: `[racemod] the qualifying lap: no powe
   steering go up to 1000 % of the original buggy's (from 10 %); a top speed slider on the Car tab sets the top gear's, the other gears
   scaled with it; each gear's own slider, and reverse, go up to 270 km/h (`RaceCarSetup.MaxKmh`, ten times the original buggy's 27).
 
+## The Emperor's palace, third round: the rooms open, arrows on the floor, a bigger roof top (2026-10-12, later)
+
+The user: "For our palace track let's scale up the roof top so it covers more of the outside of the palace area. For the inside of the
+palace let's remove the track but add some arrows to allow cars to take multiple directions, it has a single entry and exit area so all
+cars will ultimately end up back on the same track".
+
+![The sprint: the rooms (no road, the opponents' ways in light blue, the arrows white), the long hall, the round window, out over the cloud sea and round onto the bigger roof top, the jump to the pillar](racetrack/palace/v3_lap.png)
+
+![The grid in room 154: an arrow ahead (west) and one to the right (north, through the door to room 158)](racetrack/palace/v3_rooms_arrows.png)
+
+![North through the doors, the arrow on the floor](racetrack/palace/v3_hall_door.png)
+
+![Round the roof top, a hall of the domes beside the road](racetrack/palace/v3_roof_top.png)
+
+- *The rooms have no road.* The plan's `bare` runs from the route's start to the foot of the ramp up to the round window: no deck, no rail,
+  no floor of the race-track mode's (`RaceTrackPlan.Bare`, `TrackRoad.Bare`). The cars drive the rooms' own floor, and go where they like
+  through the doors -- all four walls of a room have one. The race-track mode holds them on the floor wherever the plan's `openAreas` are
+  (the sixteen rooms, the long hall: `open_area=` in the car file, RACEMOD.CPP `OpenAreaAt`): the floor's drawn top, 10,640, is under them
+  whatever the boxes say there -- the floor's collision is lower, and at a cube's edge a car had dropped to the hill's ground under the
+  rooms. Every cube of the areas has a scene (`PalaceTrack.CubesOf`), so a car can cross into any of them.
+- *Arrows on the floor* (`floorArrows`, `RaceTrackBuilder.PlaceFloorArrows`): a flat arrow five cells long in front of each room's west and
+  north doors -- the ways on towards room 163 -- and two up the long hall; a decor each, one body for each way they point, nothing touching
+  its box. Every way from the start (room 154, the south-east) to room 163 (the north-west) and its door into the hall goes west or north.
+- *The opponents each take their own way* (`openRoutes`, `RaceTrackBuilder.RouteThrough`): a driver's line from the grid to where it meets
+  the route in the long hall is replaced by the plan's way, a cell apart, with each point's bend for the engine's speed plan. The first
+  driver keeps the route (west along the bottom row, north up the west column -- the test pilot's way); the second goes north up the east
+  column and west along the top row; the third a staircase from room 153, west and north by turns. The design script checks each way, a
+  car's box either side, against the rooms' walls and furniture.
+- *The camera in the rooms* follows the car's own trail (RACEMOD.CPP `OpenCamera`, `TrailStep`): where there is no road the rail camera
+  has nothing to ride, so the eye walks back along the way the car came, as far back and as high as the rail camera's, and looks ahead of
+  the car as it heads. Out of the window it hands over to the rail camera (85 units, 0.6 degrees in a frame).
+- *A bigger roof top.* The hill's flat top was a terrace 10 cells round the rooms and rocks beyond -- the corner of the rooms' L between
+  the long hall and the sixteen rooms was all rocks, up to 3,800 over the roofs. It is flat now over that corner and 24 cells round the
+  rooms' outline (`PalaceCliff.Terrace`, measured from the outline's hull), the rocks only at the plateau's rim
+  (`docs/LBA2_PALACE_ISLAND.md`). The road over it: out of the window north over the cloud sea and round to the east (182 cells, climbing
+  9 % at the most), down onto the roof top east of the long hall, south-east along the north-east coast, back west in a hairpin along the
+  sixteen rooms' north side and over the long hall's roof between its towers and the domes, south down the west side, east along the
+  south side, north up the sixteen rooms' roof's east side between the domes and its edge, and east along the runway: 1,050 cells round
+  the roof top, where it was some 750.
+- *Floors and ceilings that went near the camera.* The engine leaves out a body's polygon with any corner behind the camera's near plane
+  (`LIB386/OBJECT/AFF_OBJ.CPP` `TestVisible`), and the palace's floors, ceilings and walls were rectangles merged a dozen cells long: one
+  passing under or beside the camera went from the picture whole -- the hill's grey paving under the rooms showed through the floor, the
+  sky through the long hall's roof (it was so in the second round too, under the carpet road's edges). The palace's faces are a cell
+  across at the most now (`PalaceIsland.NearRun`; a wall's still runs up it), and the roofs' undersides squares of a cell: what goes is
+  under the bottom of the picture with the near plane at 2,000 or less -- the game's 3,000 at 480 lines high, scaled down for more lines
+  (at the test pilot's 640 x 480 a sliver at the bottom edge can still go). 33,000 faces in 88 bodies instead of 19,000 in 67.
+- *Scene to scene and back at a cube's edge.* A change of cube puts the car a cell on: from half a brick inside the cube it leaves to half
+  a brick inside the next. With an opponent's car just ahead -- nose to tail up the long hall -- that put it against the other car, whose
+  box pushed it back over the edge, into the scene it had just left, a cell on again: every frame, four or five times, the car standing
+  still and the camera jolting 1,000 units. A car that has just come into a scene isn't taken straight back into the one it left for half
+  a second now (RACEMOD.CPP `RaceMod_CubeChangeAllowed`, in OBJECT.CPP `GereZoneChangeCube` and the race-track mode's own crossing): held
+  at the edge, it goes on as the car ahead does. (Every race track's cube changes go through it.)
+- Tested with the test pilot down the route's middle (183.2 s, no power-ups), with power-ups (179.4 s) and along the road's side (185.9 s):
+  won every time, the opponents on their three ways, no car rescued, no cube changed back and forth, the jump into the teleporter and
+  Twinsen awake in scene 95.
+
+## The game has the keyboard from the start (2026-10-12)
+
+The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove
+this limitation". The game's window was given the keyboard once, as it was embedded; anything of the editor's that took it after that
+kept it -- WPF giving the focus back to the control that last had it when the editor's window is activated again (after the race car's
+setup closes, after another program), the game's own window restyled by SDL at a change of size -- and only a click on the game gave it
+back. Now the game has the keyboard from the moment it is embedded until a click on one of the editor's own controls, and again from a
+click on the game; while it should have it, it is given it back on the next tick (120 ms) whenever the window in front is the editor's,
+full screen's or the game's own (`EmbeddedGameHost.FocusTick`, `EditorInFront`; a click on the game comes in as the game's window's
+`WM_PARENTNOTIFY`). A dialog, a panel floating on its own or another program in front keeps the keyboard. Checked from the UI: Play, the
+race car setup's Play, and no click -- the game's window had the keyboard from the first look, 6 s on, to the last, 36 s on.
+
 ## The menu command
 
 Tools > LBA2: Desert island race track... (`RaceTrackWindow.cs`, `Terrain/RaceTrackService.cs`) builds the track from the plan built into the program, or from a plan file. The scene options are choices in the dialog; the crossing style, clearing the old track and drawing on the holomap were too, until 2026-09-30 (see "Fixed choices").

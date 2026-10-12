@@ -27,8 +27,9 @@ sides cliffs falling to the cloud sea, all of it a mossy rock. Now the Palace is
   are some 1,300 across and turn on some 5.5 cells at speed (the race-track docs), so a door is about three cars wide; a room is some
   27,000 across. The palace is 224 x 404 cells of the island, 14 layers of 640.
 - **Under the hill** (`Terrain/Palace/PalaceCliff.cs`): the rooms' floor's foot at 10,000, their roofs' top at 19,216 -- the hilltop. Round
-  the rooms the ground is the hill's: a terrace 10 cells wide, flat at the hilltop (the palace's foot, as Otringal's palace stands on the
-  flat middle of its hill), then rocks -- crags on swells -- rising towards the plateau's edge, up to 6,000 over it; the plateau reaching 30
+  the rooms the ground is the hill's: a terrace flat at the hilltop over the corner of the rooms' L and 24 cells round their outline (the
+  palace's foot, as Otringal's palace stands on the flat middle of its hill; 10 cells round the rooms themselves until the race's third
+  round, below), then rocks -- crags on swells -- rising towards the plateau's edge, up to 6,000 over it; the plateau reaching 30
   cells give or take 12 beyond the rooms' outline (its hull: the corner of the L between the long hall and the sixteen rooms is hilltop
   too), bays and spurs; and its sides cliffs, 9 cells give or take 4, ragged, falling to the sea floor. All of it Otringal's mossy rock
   (its ground atlas, 4 x 4 tiles of 32 pixels as its hill has it), lit as the island's sun falls on it, with the cliffs' shadows; the sea --
@@ -154,6 +155,20 @@ The race through the rooms (`docs/LBA2_DESERT_RACE_TRACK_BUILD.md`, the palace's
 - **A way round the palace's south-west**: the ground the island leaves clear round the building (its corridors, `PALACE.JSON`) gains a
   ring along the west side and round the south (`PalaceIsland.RingOut` cells out from the wall), so the race's loop over the roofs can
   come down the west side and round the corners to the east; it replaces the old way at x 470.
+
+## A bigger roof top, and polygons a cell across (2026-10-12, later)
+
+For the race's third round (`docs/LBA2_DESERT_RACE_TRACK_BUILD.md`: "let's scale up the roof top so it covers more of the outside of the
+palace area"):
+
+- **The roof top**: the hill's flat terrace is measured from the rooms' outline's hull now, not from the rooms, and is 24 cells wide
+  (`PalaceCliff.Terrace`, was 10): the corner of the L between the long hall and the sixteen rooms -- rocks up to 3,800 over the roofs
+  before -- is flat at the hilltop, and so is a band round the whole palace; the rocks rise only towards the plateau's rim.
+- **Polygons a cell across at the most** (`PalaceIsland.NearRun`, `BrickBuilding.Rectangles`' limits): the engine leaves out a polygon
+  with any corner behind the camera's near plane, and a floor, a ceiling or a wall merged a dozen cells long went whole when a camera low
+  in a room passed over or beside it -- the hill's paving showed through the floor and the sky through the long hall's roof. The faces
+  are merged a cell across at the most (a wall's still up it, a dozen layers), and each roof slab's underside -- the ceiling -- is a grid
+  of cell squares: 32,885 faces in 88 bodies of the rooms (they were 18,999 in 67), the busiest cube 115 objects.
 
 ## Making it
 

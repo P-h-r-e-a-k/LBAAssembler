@@ -307,7 +307,7 @@ public partial class MainWindow
                 "LBA2: play scene", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        PlayStatus.Text = $"Playing {label}. It plays what is saved on disk. Click the game to give it the keyboard; F11 plays it full screen and back.";
+        PlayStatus.Text = $"Playing {label}. It plays what is saved on disk. The game has the keyboard until you click the editor (click the game to give it back); F11 plays it full screen and back.";
         lba2ControlScene = scene;
         // (F11: the game full screen, and back into the editor)
         playKeys?.Dispose();

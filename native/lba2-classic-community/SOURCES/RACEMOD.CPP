@@ -59,6 +59,8 @@
  *                                ramp's foot, its lip, the landing lip and the landing hill's foot; the camera beside it on `side` (1 or -1),
  *                                or with 0 behind the car as on the road (the follow camera)
  *     cube_scene=<cube x> <cube z> <scene>   the island's outside scene of that cube, for the cube changes a carried jump makes
+ *     open_area=<x0> <z0> <x1> <z1> <floor>   where the cars drive where they like (world units): its floor under a car near its height,
+ *                                the camera following the car's trail there (OpenAreaAt, OpenCamera) -- the Emperor's palace's rooms
  *   The story (the race-track mod's, on Citadel Island; the editor writes these only for a game played as a game, not for a race
  *   started on the line):
  *     track=<island> <when> <first scene> <last scene> <file>   one of the folder's tracks (a car file of its own) and when it is
@@ -996,6 +998,19 @@ static T_RACE_ARC s_arcs[RACE_MAX_ARCS];
 static int s_nbArcs = 0;
 static int s_cubeScenes[RACE_MAX_CUBE_SCENES][3];
 static int s_nbCubeScenes = 0;
+// Where the cars drive where they like (open_area=<x0> <z0> <x1> <z1> <floor>, world units): its floor the ground there for whatever is
+// near its height (RaisedAltitude), its camera the car's trail (OpenCamera). The Emperor's palace's rooms.
+#define RACE_MAX_OPEN 8
+typedef struct { double X0, Z0, X1, Z1, Floor; } T_RACE_OPEN;
+static T_RACE_OPEN s_open[RACE_MAX_OPEN];
+static int s_nbOpen = 0;
+static int OpenAreaAt(double wx, double wz, double y) {
+    for (int i = 0; i < s_nbOpen; i++) {
+        const T_RACE_OPEN *a = &s_open[i];
+        if (wx >= a->X0 && wx <= a->X1 && wz >= a->Z0 && wz <= a->Z1 && y > a->Floor - 1500 && y < a->Floor + 2500) return i;
+    }
+    return -1;
+}
 static int s_arcOn = -1, s_arcLast = -1;
 static double s_arcS = 0, s_arcV = 0, s_arcAcross = 0;
 static double s_arcAcross1 = 0;
@@ -1127,6 +1142,9 @@ static S32 RaisedAltitude(S32 x, S32 z, S32 y) {
             if (s_floorRef > f - 1500 && s_floorRef < f + 1500) return f > y ? (S32)floor(f + 0.5) : y;
         }
     }
+    // (in an open area, near its floor: its floor -- and the raised road's over it where that is higher, the palace's ramp to its window)
+    const int open = OpenAreaAt(x + CurrentCubeX * 32768.0, z + CurrentCubeY * 32768.0, s_floorRef);
+    if (open >= 0 && s_open[open].Floor > y) y = (S32)floor(s_open[open].Floor + 0.5);
     S32 f;
     int seg;
     double lat, t;
@@ -1997,6 +2015,10 @@ static void Load(const char *path, int carOnly = 0) {
             a->Side = 1;
             if (s_nbArcs < RACE_MAX_ARCS && sscanf(v, "%d %d %d %d %d", &a->Foot, &a->Lip, &a->Land, &a->LandFoot, &a->Side) >= 4) s_nbArcs++;
         }
+        else if (!strcmp(key, "open_area")) {
+            T_RACE_OPEN *a = &s_open[s_nbOpen];
+            if (s_nbOpen < RACE_MAX_OPEN && sscanf(v, "%lf %lf %lf %lf %lf", &a->X0, &a->Z0, &a->X1, &a->Z1, &a->Floor) == 5) s_nbOpen++;
+        }
         else if (!strcmp(key, "cube_scene")) {
             int *c = s_cubeScenes[s_nbCubeScenes];
             if (s_nbCubeScenes < RACE_MAX_CUBE_SCENES && sscanf(v, "%d %d %d", &c[0], &c[1], &c[2]) == 3) s_nbCubeScenes++;
@@ -2284,7 +2306,7 @@ static void Load(const char *path, int carOnly = 0) {
     for (int i = 0; i < s_nbArcs; i++)
         if (!ArcPrepare(&s_arcs[i])) { Log_Info("[racemod] carried jump %d: not along the raised road -- left out", i + 1); s_arcs[i--] = s_arcs[--s_nbArcs]; }
     if (s_nbArcs) Log_Info("[racemod] %d carried jump(s), %d cube scenes", s_nbArcs, s_nbCubeScenes);
-    if (s_nbLoops || s_nbJumpCams || s_nbArcs || s_nbTunnels) FollowCamEyeHook = RaceCameraEye;
+    if (s_nbLoops || s_nbJumpCams || s_nbArcs || s_nbTunnels || s_nbOpen) FollowCamEyeHook = RaceCameraEye;
     // (a roulette wheel: its head and its ball posed as their cube's decors are drawn)
     DecorPoseHook = s_wheel.On ? WheelDecors : NULL;
     if (s_wheel.On) Log_Info("[racemod] roulette wheel at (%.0f,%.0f): %d turning pieces, its floor %.0f at the hole to %.0f at the wall, the drop onto place %d", s_wheel.X, s_wheel.Z,
@@ -3915,13 +3937,69 @@ static S32 WheelCamera(S32 *eye, S32 *target) {
     return TRUE;
 }
 
+// ---- where the cars drive where they like (open_area=) -----------------------------------------------------------------------------------
+// The Emperor's palace's rooms (2026-10-12, the user: "For the inside of the palace let's remove the track but add some arrows to allow cars
+// to take multiple directions"): no road there -- the route only the opponents' way through -- the cars on the rooms' own floor, between
+// their walls and furniture. An area's floor is the ground there for whatever is near its height (RaisedAltitude): the rooms' floor is
+// boxes the island stands over its ground, and a scene change at a cube's edge put the car on the ground under them. The camera follows
+// the car's own trail there (OpenCamera): behind it where it has been, through the doors it came through, under the rooms' ceilings.
+#define RACE_TRAIL 256
+#define RACE_TRAIL_STEP 128.0               // the trail's points this far apart at the least (world units)
+static double s_trailX[RACE_TRAIL], s_trailY[RACE_TRAIL], s_trailZ[RACE_TRAIL];
+static int s_trailN = 0, s_trailHead = -1;  // a ring: its newest point at s_trailHead
+
+// The car's trail: its place added when it has moved far enough from the last one (every frame the race-track camera is asked for).
+static void TrailStep(void) {
+    if (CubeMode != CUBE_EXTERIEUR) { s_trailN = 0; return; }
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double x = hero->Obj.X + CurrentCubeX * 32768.0, y = hero->Obj.Y, z = hero->Obj.Z + CurrentCubeY * 32768.0;
+    if (s_trailN > 0) {
+        const double dx = x - s_trailX[s_trailHead], dz = z - s_trailZ[s_trailHead], d = sqrt(dx * dx + dz * dz);
+        if (d > 40 * 512.0) s_trailN = 0;    // (a jump of the car's: the race again from the grid, a rescue -- a new trail)
+        else if (d < RACE_TRAIL_STEP) return;
+    }
+    s_trailHead = (s_trailHead + 1) % RACE_TRAIL;
+    s_trailX[s_trailHead] = x; s_trailY[s_trailHead] = y; s_trailZ[s_trailHead] = z;
+    if (s_trailN < RACE_TRAIL) s_trailN++;
+}
+
+static S32 OpenCamera(S32 *eye, S32 *target) {
+    if (!s_nbOpen || CubeMode != CUBE_EXTERIEUR || Comportement != C_BUGGY) return FALSE;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const double hx = hero->Obj.X + cx, hy = hero->Obj.Y, hz = hero->Obj.Z + cz;
+    if (OpenAreaAt(hx, hz, hy) < 0) return FALSE;
+    // (as far behind and as high as the rail camera has its eye, and looking as far ahead: from the rooms out onto the road it is the
+    // same view -- railcam=, else its defaults)
+    const double back = s_railBack > 0 ? s_railBack : 9 * 512.0, up = s_railBack > 0 ? s_railUp : 2100.0;
+    const double lead = s_railBack > 0 ? s_railLead : 7 * 512.0, aim = s_railBack > 0 ? s_railAim : 1000.0;
+    // the eye: `back` along the trail from the car, through its points newest first
+    double px = hx, py = hy, pz = hz, left = back;
+    int k = s_trailHead, n = s_trailN;
+    while (n > 0 && left > 0) {
+        const double dx = s_trailX[k] - px, dz = s_trailZ[k] - pz, d = sqrt(dx * dx + dz * dz);
+        if (d >= left) { const double f = left / d; px += dx * f; py += (s_trailY[k] - py) * f; pz += dz * f; left = 0; break; }
+        px = s_trailX[k]; py = s_trailY[k]; pz = s_trailZ[k]; left -= d;
+        k = (k + RACE_TRAIL - 1) % RACE_TRAIL; n--;
+    }
+    // (a trail too short -- the race's start -- goes on straight back behind the car)
+    const double angle = (hero->Obj.Beta & 4095) * 2 * 3.14159265358979 / 4096.0, fx = sin(angle), fz = cos(angle);
+    if (left > 0) { px -= fx * left; pz -= fz * left; }
+    eye[0] = (S32)(px - cx); eye[1] = (S32)(py + up); eye[2] = (S32)(pz - cz);
+    // (looking between the car and the way it heads, `lead` ahead, as the rail camera looks between it and the road ahead)
+    target[0] = (S32)(hx + fx * lead * RAIL_CAMERA_LOOK - cx); target[1] = (S32)(hy + aim); target[2] = (S32)(hz + fz * lead * RAIL_CAMERA_LOOK - cz);
+    return TRUE;
+}
+
 static S32 RaceCameraEye(S32 *eye, S32 *target) {
+    TrailStep();
     // (which of them placed the eye: the camera trace's, FOLLOWCAM.CPP camtrace)
     if (ArcCamera(eye, target)) { FollowCamEyeWho = "arc"; return TRUE; }
     if (JumpCamera(eye, target)) { FollowCamEyeWho = "jump"; return TRUE; }
     if (LoopCamera(eye, target)) { FollowCamEyeWho = "loop"; return TRUE; }
     if (TunnelCamera(eye, target)) { FollowCamEyeWho = "tunnel"; return TRUE; }
     if (WheelCamera(eye, target)) { FollowCamEyeWho = "wheel"; return TRUE; }
+    if (OpenCamera(eye, target)) { FollowCamEyeWho = "open"; return TRUE; }
     return RailCamera(eye, target);
 }
 
@@ -6241,6 +6319,23 @@ int RaceMod_Cars(char lines[][96], int most) {
 // 15,000), 131 had none back there, and the user's car sat at the edge on the third lap, an invisible wall (2026-10-11).
 static int s_edgeX = 0, s_edgeZ = 0;       // the hero's last move held him at the cube's edge in x, in z (RaceMod_EdgeHeld)
 void RaceMod_EdgeHeld(S32 outX, S32 outZ) { s_edgeX = outX != 0; s_edgeZ = outZ != 0; }
+
+// A car that has just come into a scene isn't taken straight back into the one it left (OBJECT.CPP GereZoneChangeCube, RaceMod_EdgeCross)
+// for RACE_BACK_MS. A cube change puts it a cell on -- from half a brick inside the cube it leaves to half a brick inside the next -- and
+// an opponent's car just ahead pushed it back over the edge, into the other scene, which put it a cell on again: scene to scene and back
+// every frame, the car standing still and the camera jolting, until the other pulled away (the Emperor's palace's long hall, the cars
+// nose to tail, 2026-10-12). Held at the edge meanwhile, it goes on as the car ahead does.
+#define RACE_BACK_MS 500
+static S32 s_sceneNow = -1, s_sceneLeft = -1, s_sceneAt = 0;
+static void NoteScene(void) {
+    if ((S32)NumCube == s_sceneNow) return;
+    s_sceneLeft = s_sceneNow; s_sceneNow = (S32)NumCube; s_sceneAt = TimerRefHR;
+}
+S32 RaceMod_CubeChangeAllowed(S32 scene) {
+    if (!RaceMod_Active() || Comportement != C_BUGGY) return 1;
+    NoteScene();
+    return scene != s_sceneLeft || TimerRefHR - s_sceneAt >= RACE_BACK_MS;
+}
 // (PERSO.CPP: after the hero's zones, in the actors' loop -- a cube change asked for there is made at once; asked for later, as the
 // scene is drawn, the drawing's autosave cleared FlagChgCube first and the car arrived at the scene's start, on the grid)
 void RaceMod_EdgeCross(void) {
@@ -6267,6 +6362,7 @@ void RaceMod_EdgeCross(void) {
     // keeps it short of that took it over and its rail straight back -- a scene change a frame, along the Emerald Moon's straight, its rail
     // a quarter cell short of the cube's edge, 2026-10-12)
     if (!RailAllows(qx * 32768.0 + x, qz * 32768.0 + z, hero->Obj.Y)) return;
+    if (!RaceMod_CubeChangeAllowed(scene)) return;
     NewCube = scene;
     NewPosX = x; NewPosY = hero->Obj.Y; NewPosZ = z;
     FlagChgCube = 1;
@@ -6277,6 +6373,7 @@ void RaceMod_EdgeCross(void) {
 
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
+    NoteScene();
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
     for (int i = 0; i < s_nbHeld; i++)
         if (ListVarGame[s_held[i][0]] != s_held[i][1]) {
@@ -7012,7 +7109,7 @@ static void ResetTrack(void) {
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0;
-    s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0;
+    s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0; s_nbOpen = 0; s_trailN = 0; s_trailHead = -1;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
     s_nbFalls = 0; s_nbPanels = 0; s_lavaModel = -1; s_fallFootNext = s_fallLipNext = 0;
     s_nbGeysers = 0; for (int i = 0; i < RACE_MAX_COLUMN; i++) s_column[i].Extra = -1;

@@ -110,6 +110,21 @@ internal sealed class RaceTrackPlan
     public GunnerRun[]? Gunners { get; set; }
     // A roulette wheel the lap runs through (RaceTrackRoulette, RACEMOD.CPP roulette=): Otringal's by the casino (the user, 2026-10-09).
     public RouletteRun? Roulette { get; set; }
+    // Stretches of a raised road with no road at all (with Raised), each [first point, last point]: no deck, no piers and no floor of the
+    // race-track mode's -- the cars drive on whatever the island has there, where they like, the route only their way through it (the
+    // opponents' line, the grid's places, the scenes). The Emperor's palace's rooms (the user, 2026-10-12: "For the inside of the palace
+    // let's remove the track but add some arrows to allow cars to take multiple directions").
+    public int[][]? Bare { get; set; }
+    // Where the cars drive where they like (with Bare), each [x0, z0, x1, z1] (cells from the origin): every cube one reaches has a
+    // scene (PalaceTrack.SceneCubes), and the race-track mode's camera follows the car's own trail there, low (RACEMOD.CPP open_area=).
+    public double[][]? OpenAreas { get; set; }
+    // Arrows on the floor (with Bare), each [x, z (cells from the origin), y (the floor's height), the way it points (x, z)]: the ways
+    // on through the palace's rooms (RaceTrackBuilder.PlaceFloorArrows).
+    public double[][]? FloorArrows { get; set; }
+    // The opponents' own ways through where the cars drive where they like (with Bare): each a line of [x, z] (cells from the origin) from
+    // the start line to where it meets the route again; the second driver takes the first, the third the second, and so on round
+    // (RaceTrackBuilder.RouteThrough). The first keeps the route itself, the test pilot's.
+    public double[][][]? OpenRoutes { get; set; }
     // Gas monsters rising out of the gas beside the road to bite cars (RaceTrackGasMonster, RACEMOD.CPP gasmonster=): Otringal's docks and
     // the islets of Baldino's crash (the user, 2026-10-09).
     public GasMonsterRun[]? GasMonsters { get; set; }
@@ -567,6 +582,10 @@ internal sealed class RaceTrackReport
     public bool[]? LapArc { get; set; }
     // A drop's camera (RACEMOD.CPP jumpcam=): its flight's animation and the place the camera stands while the car flies it (cells, units up).
     public List<(int Anim, int CubeX, int CubeZ, double X, double Y, double Z)> JumpCameras { get; } = new();
+    // Where the cars drive where they like (RaceTrackPlan.OpenAreas), each [x0, z0, x1, z1, its floor's height] in world units (RACEMOD.CPP
+    // open_area=); and the arrows on the floor there (RaceTrackPlan.FloorArrows: x, z cells, y, the way it points).
+    public List<int[]> OpenAreas { get; } = new();
+    public List<double[]> FloorArrows { get; } = new();
     public JumpInfo? Jump => Jumps.Count > 0 ? Jumps[0] : null;
     public RoadBridgeInfo? RoadBridge { get; set; }
     // How far (cells) an island cell position is from the nearest road's centre line, 1e9 when far away.
@@ -792,6 +811,23 @@ internal static class RaceTrackBuilder
             main.Bare = new bool[main.Count];
             for (int k = PlanPoint(plan, main, wheel.From), last = PlanPoint(plan, main, wheel.To); ; k = (k + 1) % main.Count) { main.Bare[k] = true; if (k == last) break; }
         }
+        // (stretches with no road at all: the palace's rooms -- the cars where they like there, its floor the race-track mode's open area's,
+        // arrows on it)
+        if (planned && main.Raised is not null && plan.Bare is { Length: > 0 } bareRuns)
+        {
+            main.Bare ??= new bool[main.Count];
+            foreach (var run in bareRuns.Where(b => b.Length >= 2))
+                for (int k = PlanPoint(plan, main, run[0]), last = PlanPoint(plan, main, run[1]); ; k = At(main, k + 1)) { main.Bare[k] = true; if (k == last || !main.Closed && k == main.Count - 1) break; }
+            report.Notes.Add($"no road at all over {main.Bare.Count(b => b)} of the route's points (the plan's Bare): the cars drive on what is there");
+        }
+        if (planned)
+        {
+            foreach (var a in (plan.OpenAreas ?? Array.Empty<double[]>()).Where(a => a.Length >= 5))
+                report.OpenAreas.Add(new[] { (int)Math.Round((a[0] + plan.OriginCellX) * 512), (int)Math.Round((a[1] + plan.OriginCellZ) * 512),
+                                             (int)Math.Round((a[2] + plan.OriginCellX) * 512), (int)Math.Round((a[3] + plan.OriginCellZ) * 512), (int)Math.Round(a[4]) });
+            foreach (var a in (plan.FloorArrows ?? Array.Empty<double[]>()).Where(a => a.Length >= 5))
+                report.FloorArrows.Add(new[] { a[0] + plan.OriginCellX, a[1] + plan.OriginCellZ, a[2], a[3], a[4] });
+        }
         if (planned && main.Raised is not null && plan.PitStripe is [var stripeFrom, var stripeTo, var stripeAt])
             main.Stripe = (PlanPoint(plan, main, (int)stripeFrom), PlanPoint(plan, main, (int)stripeTo), stripeAt);
         if (planned && main.Raised is not null && plan.BoostPanels is { Length: > 0 } panels)
@@ -862,6 +898,10 @@ internal static class RaceTrackBuilder
             if (report.Loops.Count > 0) LaneIntoLoops(report, line);
             report.DriverPaths.Add(line);
         }
+        // (where the cars drive where they like, the opponents each their own way through it: the plan's routes, the second driver on)
+        if (planned && plan.OpenRoutes is { Length: > 0 } openRoutes)
+            for (var k = 1; k < report.DriverPaths.Count; k++)
+                RouteThrough(report.DriverPaths[k], openRoutes[(k - 1) % openRoutes.Length], plan, report);
         report.RacePath.AddRange(report.DriverPaths[0]);
         ClearStaleCol(island, natural, field, index, painted, report);
         if (planned) WallSteepBanks(island, natural, field, index, painted, options, report);
@@ -2751,6 +2791,40 @@ internal static class RaceTrackBuilder
                          $"(the middle of the road {LapTime(new double[count]):0.0} s)");
     }
 
+    // A driver's line from the start through where the cars drive where they like, taken another way (RaceTrackPlan.OpenRoutes): its points
+    // from its first to the one nearest the route's end replaced by the route's, a cell apart, at the floor's height there, each with its
+    // bend's radius (the engine plans the driver's speeds from those).
+    private static void RouteThrough(List<(double X, double Z, double Y, double Speed, double Radius)> line, double[][] route, RaceTrackPlan plan,
+        RaceTrackReport report)
+    {
+        var pts = route.Where(p => p.Length >= 2).Select(p => (X: p[0] + plan.OriginCellX, Z: p[1] + plan.OriginCellZ)).ToList();
+        if (pts.Count < 2 || line.Count < 4) return;
+        // (where it meets the line again: the line's point nearest its end, in the line's first half)
+        var join = Enumerable.Range(0, line.Count / 2).MinBy(i => Sq(line[i].X - pts[^1].X) + Sq(line[i].Z - pts[^1].Z));
+        // (a cell apart along it)
+        var dense = new List<(double X, double Z)> { pts[0] };
+        for (var i = 1; i < pts.Count; i++)
+        {
+            double ax = pts[i - 1].X, az = pts[i - 1].Z, d = Math.Sqrt(Sq(pts[i].X - ax) + Sq(pts[i].Z - az));
+            var n = Math.Max(1, (int)Math.Round(d));
+            for (var s = 1; s <= n; s++) dense.Add((ax + (pts[i].X - ax) * s / n, az + (pts[i].Z - az) * s / n));
+        }
+        var y = line[join].Y;
+        var speed = line.Take(join + 1).Max(p => p.Speed);
+        var way = new List<(double X, double Z, double Y, double Speed, double Radius)>();
+        for (var i = 0; i < dense.Count; i++)
+        {
+            int a = Math.Max(0, i - 3), c = Math.Min(dense.Count - 1, i + 3);
+            double abx = dense[i].X - dense[a].X, abz = dense[i].Z - dense[a].Z, bcx = dense[c].X - dense[i].X, bcz = dense[c].Z - dense[i].Z, cax = dense[a].X - dense[c].X, caz = dense[a].Z - dense[c].Z;
+            var cross = Math.Abs(abx * bcz - abz * bcx);
+            var bend = a == i || c == i || cross < 1e-9 ? 1e6 : Math.Min(1e6, Math.Sqrt((abx * abx + abz * abz) * (bcx * bcx + bcz * bcz) * (cax * cax + caz * caz)) / (2 * cross) * 512);
+            way.Add((dense[i].X, dense[i].Z, y, speed, bend));
+        }
+        line.RemoveRange(0, join + 1);
+        line.InsertRange(0, way);
+        report.Notes.Add($"a line through by its own way: {way.Count} points, from ({pts[0].X:0.0}, {pts[0].Z:0.0}) to ({pts[^1].X:0.0}, {pts[^1].Z:0.0})");
+    }
+
     private static double ReferencePull(double v)
     {
         var g = 0;
@@ -4480,6 +4554,7 @@ internal static class RaceTrackBuilder
         if ((options.Crossing == CrossingStyle.Bridge || planned) && report.RoadBridge is { } rb) PlaceDeck(island, rb, options, report);
         if (main.Raised is not null) PlaceRaised(island, main, options, report, startIndex);
         if (report.Loops.Count > 0) PlaceLoops(island, options, report);
+        if (report.FloorArrows.Count > 0) PlaceFloorArrows(island, options, report);
         if (report.Jumps.Any(j => j.Drop > 0)) PlaceJumpCameras(island, report);
     }
 
@@ -4594,6 +4669,56 @@ internal static class RaceTrackBuilder
 
     // a loop ring's band: from its middle to its rails (cells), when the plan doesn't say
     private const double LoopBandHalf = 1.3;
+
+    // The arrows on the floor where the cars drive where they like (RaceTrackPlan.FloorArrows: the Emperor's palace's rooms, the ways on
+    // through each): each a flat arrow FloorArrowLift over the floor, five cells long -- a shaft and a broad head -- in the colour of the
+    // carpet's arrows, its decor's box touching nothing. One body for each way they point, the arrows that point it all using it.
+    private const double FloorArrowLift = 24, FloorArrowLength = 2560, FloorArrowShaft = 320, FloorArrowHead = 800, FloorArrowHeadLength = 1024;
+    private const int FloorArrowColour = 239;
+
+    private static void PlaceFloorArrows(IslandFile island, RaceTrackOptions o, RaceTrackReport report)
+    {
+        if (o.NewBodyBase < 0) { report.Notes.Add("WARNING: no place for the floor's arrows was prepared (the island's OBL wasn't counted) -- no arrows."); return; }
+        var bodies = new Dictionary<(int, int), int>();
+        int placed = 0, left = 0;
+        foreach (var a in report.FloorArrows)
+        {
+            double dx = a[3], dz = a[4], len = Math.Sqrt(dx * dx + dz * dz);
+            if (len < 1e-6) continue;
+            dx /= len; dz /= len;
+            var key = ((int)Math.Round(dx * 1000), (int)Math.Round(dz * 1000));
+            if (!bodies.TryGetValue(key, out var body))
+            {
+                body = o.NewBodyBase + report.NewBodies.Count;
+                report.NewBodies.Add(FloorArrow((float)dx, (float)dz));
+                bodies[key] = body;
+            }
+            var wx = a[0] * 512; var wz = a[1] * 512;
+            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { left++; continue; }
+            var d = IslandDecors.Blank(body, at.X, (int)Math.Round(a[2] + FloorArrowLift), at.Z, 0);
+            var reach = (int)Math.Ceiling(FloorArrowLength / 2 + 64);
+            d.XMin = at.X - reach; d.XMax = at.X + reach; d.ZMin = at.Z - reach; d.ZMax = at.Z + reach; d.YMin = d.Y - 64; d.YMax = NoBoxTop;
+            at.Cube.Decors.Add(d);
+            placed++;
+        }
+        report.Placed.Add($"arrows on the floor: {placed} ({bodies.Count} ways){(left > 0 ? $", {left} left out (their cubes full)" : "")}");
+    }
+
+    // A flat arrow pointing (dx, dz), its middle at the body's origin, facing up.
+    private static byte[] FloorArrow(float dx, float dz)
+    {
+        var m = new RaceTrackRaisedBody.Mesh();
+        var along = new System.Numerics.Vector3(dx, 0, dz);
+        var across = new System.Numerics.Vector3(-dz, 0, dx);
+        var up = System.Numerics.Vector3.UnitY;
+        System.Numerics.Vector3 At(double u, double v) => along * (float)u + across * (float)v;
+        double tail = -FloorArrowLength / 2, neck = FloorArrowLength / 2 - FloorArrowHeadLength, tip = FloorArrowLength / 2;
+        int a = m.P(At(tail, -FloorArrowShaft)), b = m.P(At(neck, -FloorArrowShaft)), c = m.P(At(neck, FloorArrowShaft)), e = m.P(At(tail, FloorArrowShaft));
+        m.Quad(a, b, c, e, FloorArrowColour, up);
+        int h0 = m.P(At(neck, -FloorArrowHead)), h1 = m.P(At(tip, 0)), h2 = m.P(At(neck, FloorArrowHead));
+        m.Tri(h0, h1, h2, FloorArrowColour, up);
+        return m.Write();
+    }
 
     // The racing lines past a loop (the opponents' and the test pilot's: the race-track mode takes them round it as it does the player's
     // car) run into its ring on its own lane -- left of the road's middle by half the loop's shift -- and away from it on the other. (Not

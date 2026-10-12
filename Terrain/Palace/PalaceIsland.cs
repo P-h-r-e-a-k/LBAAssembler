@@ -438,7 +438,7 @@ internal static class PalaceIsland
             for (var sz = rz0; sz <= rz1; sz += BrickBuilding.MaxRun)
             {
             double xa = WX(sx), xb = WX(Math.Min(rx1, sx + BrickBuilding.MaxRun - 1) + 1), za = WZ(sz), zb = WZ(Math.Min(rz1, sz + BrickBuilding.MaxRun - 1) + 1);
-            Slab(list, new((float)xa, (float)ya, (float)za), new((float)xb, (float)yb, (float)zb), roofSide);
+            Slab(list, new((float)xa, (float)ya, (float)za), new((float)xb, (float)yb, (float)zb), roofSide, (float)(U * NearRun));
             roofBoxes.Add((xa, ya, za, xb, yb, zb));
             roofRects.Add((xa, za, xb, zb, yb));
             }
@@ -565,11 +565,17 @@ internal static class PalaceIsland
     }
 
     // A roof slab's sides and bottom (its top is the rock: RockRoof).
-    private static void Slab(List<BrickBuilding.Face> list, Vector3 lo, Vector3 hi, int side)
+    private static void Slab(List<BrickBuilding.Face> list, Vector3 lo, Vector3 hi, int side, float cell)
     {
         float xa = lo.X, ya = lo.Y, za = lo.Z, xb = hi.X, yb = hi.Y, zb = hi.Z;
         void Q(Vector3 a, Vector3 b, Vector3 c, Vector3 e, Vector3 n) => list.Add(new BrickBuilding.Face(new[] { a, b, c, e }, side, n));
-        Q(new(xa, ya, za), new(xb, ya, za), new(xb, ya, zb), new(xa, ya, zb), -Vector3.UnitY);
+        // (its underside -- the room's ceiling, seen from in it -- in squares `cell` across at the most: Faces' NearRun)
+        for (var i = 0; xa + i * cell < xb - 0.5f; i++)
+            for (var k = 0; za + k * cell < zb - 0.5f; k++)
+            {
+                float x0 = xa + i * cell, z0 = za + k * cell, x1 = Math.Min(xb, x0 + cell), z1 = Math.Min(zb, z0 + cell);
+                Q(new(x0, ya, z0), new(x1, ya, z0), new(x1, ya, z1), new(x0, ya, z1), -Vector3.UnitY);
+            }
         Q(new(xa, ya, za), new(xb, ya, za), new(xb, yb, za), new(xa, yb, za), -Vector3.UnitZ);
         Q(new(xa, ya, zb), new(xb, ya, zb), new(xb, yb, zb), new(xa, yb, zb), Vector3.UnitZ);
         Q(new(xa, ya, za), new(xa, ya, zb), new(xa, yb, zb), new(xa, yb, za), -Vector3.UnitX);
@@ -638,7 +644,15 @@ internal static class PalaceIsland
     }
 
     // BrickBuilding.Faces, a face's colour told its cell and the way it faces too (the walls' outer faces are coloured apart from their
-    // inner ones): the faces that show, merged into rectangles of one colour, group by group.
+    // inner ones): the faces that show, merged into rectangles of one colour, group by group -- none more than NearRun cells across (along
+    // a wall: up it as far as MaxRun).
+    //
+    // (The engine leaves out a body's polygon with any corner behind the camera's near plane: a floor, a ceiling or a wall merged a dozen
+    // cells long, passing under or beside a camera low in a room, went from the picture whole -- the hill's paving under the rooms showed
+    // through the floor near the camera, the sky through the long hall's roof (the user, 2026-10-12: the palace's rooms with no road in them,
+    // the floor was the cars' own). A cell across, 2,048: what goes is under the bottom of the picture at a near plane of 2,000 or less --
+    // the game's 3,000 at 480 lines high, scaled down for more, EXTFUNC.CPP)
+    private const int NearRun = 1;
     private static Dictionary<int, List<BrickBuilding.Face>> Faces(Dictionary<(int X, int Y, int Z), (int Brick, int Tile)> cells,
         Func<(int X, int Y, int Z), int, int, float, int> colour, Func<int, int, int, Vector3> corner)
     {
@@ -657,7 +671,7 @@ internal static class PalaceIsland
         {
             var (dx, dy, dz, _) = BrickBuilding.Directions[d];
             var list = faces.TryGetValue(group, out var l) ? l : faces[group] = new();
-            foreach (var (u0, v0, u1, v1, c) in BrickBuilding.Rectangles(plane))
+            foreach (var (u0, v0, u1, v1, c) in dy != 0 ? BrickBuilding.Rectangles(plane, NearRun, NearRun) : BrickBuilding.Rectangles(plane, NearRun, BrickBuilding.MaxRun))
             {
                 Vector3 P(int u, int v) => dy != 0 ? corner(u, at + (dy > 0 ? 1 : 0), v)
                                        : dx != 0 ? corner(at + (dx > 0 ? 1 : 0), v, u)

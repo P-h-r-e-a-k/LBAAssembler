@@ -7,9 +7,11 @@ namespace LBAAssembler.Terrain.Palace;
 // OTRINGAL.ILE's ground atlas. Here the same, round the palace's rooms, which are under it:
 //   - the plateau: the rooms' footprint (and the corner of its L, their outline's hull) and a margin round it, Margin cells give or take
 //     Wobble -- bays and spurs;
-//   - its top: a terrace Terrace cells round the rooms, flat at the roofs' top (the roofs, rock-topped, the rest of it: the palace's foot,
-//     as Otringal's palace stands on the flat middle of its hill), and beyond it rocks, rising -- the more towards the plateau's edge, its
-//     rim -- up to RockRise over it (but along the Corridors, flat: the ways a road crosses the rocks);
+//   - its top: a terrace flat at the roofs' top over the corner of the rooms' L and Terrace cells round their outline (the roofs, rock-topped,
+//     the rest of it: the palace's foot, as Otringal's palace stands on the flat middle of its hill), and beyond it rocks, rising -- the
+//     more towards the plateau's edge, its rim -- up to RockRise over it (but along the Corridors, flat: the ways a road crosses the rocks).
+//     The roof top scaled up for the race round it (the user, 2026-10-12: "let's scale up the roof top so it covers more of the outside of
+//     the palace area"): it was 10 cells round the rooms themselves, the L's corner rocks;
 //   - its sides: cliffs falling to the sea floor over Face cells give or take FaceWobble, ragged;
 //   - under the rooms the ground is low (it is their floor's foot), out of sight;
 //   - at the long hall's end (the round window, Twinsen's way out) the plateau stops at the hall's wall: the window looks out from the
@@ -21,7 +23,7 @@ internal static class PalaceCliff
 {
     public const int Margin = 30;               // the plateau round the rooms' outline (cells) ...
     public const int Wobble = 12;               // ... give or take this much
-    public const int Terrace = 10;              // the flat terrace round the rooms (cells) ...
+    public const int Terrace = 24;              // the flat terrace round the rooms' outline (cells) ...
     public const double RockRise = 6000;        // ... and beyond it the rocks, up to this much over it
     public const int Rim = 10;                  // the plateau's outer cells: its rim, the rocks highest
     public const int Face = 9;                  // the cliffs: cells from the plateau's edge down to the sea floor ...
@@ -58,12 +60,6 @@ internal static class PalaceCliff
         // rooms share their walls, so a cell of any of them)
         bool UnderRooms(int gx, int gz) => InRooms(gx - 1, gz - 1) && InRooms(gx, gz - 1) && InRooms(gx - 1, gz) && InRooms(gx, gz);
 
-        // (how far a vertex is from the rooms, in cells: 0 on their outer face)
-        double ToRooms(int gx, int gz) => site.Rooms.Min(r =>
-        {
-            double dx = Math.Max(Math.Max(r.X0 - gx, gx - (r.X1 + 1)), 0), dz = Math.Max(Math.Max(r.Z0 - gz, gz - (r.Z1 + 1)), 0);
-            return Math.Sqrt(dx * dx + dz * dz);
-        });
         // (how much a corridor flattens a vertex: 1 within its width, none 5 cells past it)
         double Flattened(int gx, int gz)
         {
@@ -100,8 +96,9 @@ internal static class PalaceCliff
                 var beside = Math.Max(c.X0 - gx, gx - c.X1 - 1);
                 margin *= SmoothStep(4, 24, beside);
             }
-            // the top: the terrace round the rooms, then the rocks, the higher towards the rim (but along a corridor, flat)
-            var rise = RockRise * Rough(gx, gz) * SmoothStep(Terrace, Terrace + 10, ToRooms(gx, gz)) * (0.55 + 0.45 * SmoothStep(margin - Rim, margin, d))
+            // the top: the terrace over the L's corner and round the rooms' outline, then the rocks, the higher towards the rim (but along a
+            // corridor, flat)
+            var rise = RockRise * Rough(gx, gz) * SmoothStep(Terrace, Terrace + 10, d) * (0.55 + 0.45 * SmoothStep(margin - Rim, margin, d))
                        * (1 - Flattened(gx, gz));
             if (d <= margin) return site.Top + rise;
             // the cliff: from the rocks at the edge down to the sea floor, ragged, its face the wider or narrower here and there
@@ -189,7 +186,7 @@ internal static class PalaceCliff
         var light = island.CubeAt(cubeList[0].X, cubeList[0].Z) is { } first ? BakeOptions.For(first) : new BakeOptions();
         light.TerrainShadows = true;
         IslandBake.Bake(island, region, light);
-        log.Add($"the hill: a plateau at {site.Top:0} round the rooms (their outline and {Margin} cells give or take {Wobble}), a terrace of {Terrace} cells round them, " +
+        log.Add($"the hill: a plateau at {site.Top:0} round the rooms (their outline and {Margin} cells give or take {Wobble}), a terrace over the L's corner and {Terrace} cells round them, " +
                 $"rocks beyond up to {RockRise:0} over it ({site.Corridors.Count} ways across them flat), cliffs of {Face} cells give or take {FaceWobble} to the sea floor at {SeaFloor}; " +
                 $"{painted} cells of Otringal's rock, {sea} under the sea" +
                 (site.Harbour is { } h2 ? $"; a harbour quay at {h2.QuayY:0}, a pillar out in the bay ({h2.Pillar.R:0.#} cells across its top, at {h2.Pillar.Top:0})" : ""));

@@ -253,8 +253,8 @@ internal static class BrickBuilding
     }
 
     // A plane's faces merged into rectangles of one colour (u0, v0, u1, v1 inclusive): grown along u, then along v as far as the whole row
-    // matches.
-    public static IEnumerable<(int U0, int V0, int U1, int V1, int Colour)> Rectangles(Dictionary<(int U, int V), int> plane)
+    // matches -- at the most maxU cells along u and maxV along v (MaxRun when not given).
+    public static IEnumerable<(int U0, int V0, int U1, int V1, int Colour)> Rectangles(Dictionary<(int U, int V), int> plane, int maxU = MaxRun, int maxV = MaxRun)
     {
         var done = new HashSet<(int, int)>();
         foreach (var (u, v) in plane.Keys.OrderBy(k => k.V).ThenBy(k => k.U))
@@ -262,9 +262,9 @@ internal static class BrickBuilding
             if (done.Contains((u, v))) continue;
             var colour = plane[(u, v)];
             var u1 = u;
-            while (u1 - u + 1 < MaxRun && plane.TryGetValue((u1 + 1, v), out var c) && c == colour && !done.Contains((u1 + 1, v))) u1++;
+            while (u1 - u + 1 < maxU && plane.TryGetValue((u1 + 1, v), out var c) && c == colour && !done.Contains((u1 + 1, v))) u1++;
             var v1 = v;
-            while (v1 - v + 1 < MaxRun)
+            while (v1 - v + 1 < maxV)
             {
                 var row = v1 + 1; var ok = true;
                 for (var k = u; k <= u1 && ok; k++) ok = plane.TryGetValue((k, row), out var c) && c == colour && !done.Contains((k, row));

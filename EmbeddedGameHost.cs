@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -59,6 +60,8 @@ internal sealed class EmbeddedGameHost : HwndHost
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT point);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    private const int WM_PARENTNOTIFY = 0x0210, WM_LBUTTONDOWN = 0x0201, WM_RBUTTONDOWN = 0x0204, WM_MBUTTONDOWN = 0x0207;
     private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr param);
     [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X, Y; }
@@ -227,6 +230,9 @@ internal sealed class EmbeddedGameHost : HwndHost
         SetWindowPos(game, IntPtr.Zero, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
         Fit();
         ShowWindow(game, SW_SHOW);
+        // (the game has the keyboard from the start -- and keeps it: FocusTick)
+        wantsKeyboard = true;
+        WatchOwner();
         SetFocus(game);
         focusTimer.Tick -= FocusTick;
         focusTimer.Tick += FocusTick;
@@ -295,17 +301,87 @@ internal sealed class EmbeddedGameHost : HwndHost
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
     private const uint GA_PARENT = 1;
 
-    // Clicking on the game gives it the keyboard (a click on a foreign child window doesn't move the focus by itself).
+    // ---- the keyboard: the game has it from the moment it is embedded until a click on one of the editor's own controls, and again from a
+    // click on the game (a click on a foreign child window doesn't move the focus by itself). While it should, the focus anything else of the
+    // editor's takes from it is given back on the next tick, so long as the window in front is the editor's: WPF giving it back to the
+    // control that had it when the editor's window is activated again (after a dialog, after another program, after the race car's setup),
+    // the game's own window restyled by SDL at a change of size. (The user, 2026-10-12: "After hitting play sometimes we have to manually
+    // click the game area to get it to respond to input")
+    private bool wantsKeyboard;
+    private Window? owner;
+
     private void FocusTick(object? sender, EventArgs e)
     {
         KeepInside();
-        if (game == IntPtr.Zero || GetFocus() == game || (GetAsyncKeyState(VK_LBUTTON) & 0x8000) == 0) return;
-        if (GetCursorPos(out var p) && GetWindowRect(game, out var r) && p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom) SetFocus(game);
+        if (game == IntPtr.Zero || GetFocus() == game) return;
+        // (a click on the game its window didn't tell of: the button down over it)
+        if ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0 && GetCursorPos(out var p) && GetWindowRect(game, out var r) && p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom)
+            wantsKeyboard = true;
+        if (wantsKeyboard && EditorInFront()) SetFocus(game);
+    }
+
+    // Whether the window in front is the editor's own -- its main window, full screen's, or the game's (SDL's popup once its size has
+    // changed): not a dialog, a panel floating on its own, nor another program's; the keyboard isn't taken from those.
+    private bool EditorInFront()
+    {
+        var front = GetForegroundWindow();
+        return front != IntPtr.Zero && (front == game || front == fullScreenHwnd || owner is not null && front == new WindowInteropHelper(owner).Handle);
+    }
+
+    // A click on the game, or on the black round it: it takes the keyboard. (Its window tells the window it sits in -- this control's, or
+    // full screen's -- of a button pressed on it before acting on it: WM_PARENTNOTIFY.)
+    private void GameClicked()
+    {
+        wantsKeyboard = true;
+        if (game != IntPtr.Zero && GetFocus() != game) SetFocus(game);
+    }
+
+    protected override IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_PARENTNOTIFY && (wParam.ToInt64() & 0xFFFF) is WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN || msg == WM_LBUTTONDOWN) GameClicked();
+        return base.WndProc(hwnd, msg, wParam, lParam, ref handled);
+    }
+
+    private IntPtr FullScreenHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_PARENTNOTIFY && (wParam.ToInt64() & 0xFFFF) is WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN || msg == WM_LBUTTONDOWN) GameClicked();
+        return IntPtr.Zero;
+    }
+
+    // The editor's window: a click on any of its own controls -- a panel, a box, a button -- leaves the keyboard there; the window activated
+    // again gives it back to the game at once, should it have it (WPF has just given it to the control that last had it).
+    private void WatchOwner()
+    {
+        var window = Window.GetWindow(this);
+        if (ReferenceEquals(window, owner)) return;
+        UnwatchOwner();
+        owner = window;
+        if (owner is null) return;
+        owner.PreviewMouseDown += OwnerMouseDown;
+        owner.Activated += OwnerActivated;
+    }
+
+    private void UnwatchOwner()
+    {
+        if (owner is null) return;
+        owner.PreviewMouseDown -= OwnerMouseDown;
+        owner.Activated -= OwnerActivated;
+        owner = null;
+    }
+
+    private void OwnerMouseDown(object sender, MouseButtonEventArgs e) => wantsKeyboard = false;
+
+    private void OwnerActivated(object? sender, EventArgs e)
+    {
+        if (!wantsKeyboard) return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => { if (wantsKeyboard && game != IntPtr.Zero && GetFocus() != game && EditorInFront()) SetFocus(game); }));
     }
 
     public void FocusGame()
     {
-        if (game != IntPtr.Zero) SetFocus(game);
+        if (game == IntPtr.Zero) return;
+        wantsKeyboard = true;
+        SetFocus(game);
     }
 
     private void Release()
@@ -313,6 +389,8 @@ internal sealed class EmbeddedGameHost : HwndHost
         focusTimer.Stop();
         resizeDebounce.Stop();
         game = IntPtr.Zero;
+        wantsKeyboard = false;
+        UnwatchOwner();
         CloseFullScreen();
     }
 
@@ -349,8 +427,10 @@ internal sealed class EmbeddedGameHost : HwndHost
         window.Show();
         fullScreen = window;
         fullScreenHwnd = new WindowInteropHelper(window).Handle;
+        HwndSource.FromHwnd(fullScreenHwnd)?.AddHook(FullScreenHook);
         SetParent(game, fullScreenHwnd);
         Fit();
+        wantsKeyboard = true;
         SetFocus(game);
         ConsiderLiveResize();
         DebugLog.Log("EmbeddedGameHost: full screen");
@@ -362,6 +442,7 @@ internal sealed class EmbeddedGameHost : HwndHost
         if (game != IntPtr.Zero) SetParent(game, host);
         CloseFullScreen();
         Fit();
+        wantsKeyboard = true;
         if (game != IntPtr.Zero) SetFocus(game);
         ConsiderLiveResize();
         DebugLog.Log("EmbeddedGameHost: back in the editor");
