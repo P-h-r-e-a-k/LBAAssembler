@@ -247,6 +247,9 @@ internal static class IslandGround
 internal static class IslandDecors
 {
     public const int MaxPerCube = 200;
+    // ... and in an island only this editor's engine plays (no retail scene goes there: Island CX's control tower under the gas), as many
+    // as its draw list holds (3DEXT/LBA_EXT.H MAX_OBJ_DECORS, 1,000 since 2026-10-12; the retail engine's is 200)
+    public const int MaxPerCubeOwnEngine = 1000;
 
     public static IslandDecor Blank(int body, int x, int y, int z, int beta = 0, int halfSize = 512, int height = 1024)
     {

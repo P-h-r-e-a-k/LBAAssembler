@@ -5,7 +5,7 @@ connect together 180: Island CX, Secret passage (room #126) needs moving underne
 we'll probably need to do a little bit of stretching so it all fits where it's meant to. This is going to be an extra area for our island
 CX track, we're going to start outside, enter through a door, drive around inside, and come back out again".
 
-![Island CX twice its size, the halls roofed round the control room, the tower on top](controltower/island.png)
+![CXTOWER.ILE in the editor: Island CX as it is, the halls under it out of sight under the gas](controltower/island.png)
 
 ## The two scenes
 
@@ -34,44 +34,41 @@ The flat picture can't stretch the passage, so only the first shaft lines up the
 
 ## The island: CXTOWER.ILE and CXTOWER.OBL
 
-Island CX is one cube. On it, two L-shaped buildings sit sunk in trenches between the two landing pads (the octagons) and the block under
-the control tower in the middle. They are the outside of the room: the same shape, half the size. The room's 64 cells are the plateau's
-32 (cells 16-48), so `Terrain/ControlTower/ControlTowerIsland.cs` makes the island twice its size and puts the room in brick for brick:
+2026-10-12, the user: "The CX tower we created looks terrible, the top part should be identical ILOTCX.ILE. The other sections we combined
+into it should be below the top part vertically, almost as though they're under the gas layer". (The first version made Island CX twice its
+size with its buildings replaced by the room, roofed, and the tower on the control room.)
 
-- **The ground**: Island CX twice its size (`IslandScaler.Scale`, as for the Island of the Francos' track: 4 cubes, (7, 7) to (8, 8)).
-  Every height is half again as high (1.5 times), so the plateau is at 7,680. It is flat at the doors' thresholds: the yards outside the
-  doors are where the landing pads are, painted as they were. Under the room the ground is open down to 768, the passage's floor (the pit).
-- **The room**: every filled cell is a box a brick across and a layer high, in its brick's colour matched in Island CX's palette (RESS 36).
-  Only the faces that show are kept, merged into rectangles of one colour, in bodies of 16 x 16 cells; the filled cells are merged into
-  collision boxes (`Terrain/Palace/BrickBuilding.cs`, shared with the Palace island). The old buildings' objects are taken away (25 of
-  them); the four landing pads on their pillars at the corners stay, as high as their ground now is.
-- **The doors**: the room's three doors are as the scene has them, 3 cells wide and 10 layers high, their landings level with the yards.
-  Two open onto the south-east yard, one onto the north-west yard. Inside, the floor is 2 layers (512) below the landing.
-- **The roofs**: one over each hall and the control room, as high as their low walls (layers 10 and 11). The tall walls (19 layers) stand
-  through the roofs. The roofs are solid.
-- **The control tower** (Island CX's own body) stands on the control room's pillars and tall walls, at 12,032.
-- **The secret passage** hangs underneath, stretched to fit:
-  - the first shaft is under the first grate, its posts 7 layers longer so its top reaches the floor as the second's does;
-  - the walkway's 24 cells are repeated along an L under the floor: east from the first shaft for 33 cells (under the control room), a
-    corner, then north for 27 cells;
-  - the second shaft is under the second grate;
-  - the two grates are open, so you can look down the shafts.
+![Island CX on top, the halls under the gas, the secret passage under them](controltower/underground.png)
 
-![The secret passage under the floor (the floor's outline in grey)](controltower/passage.png)
+- **The top**: Island CX as it is -- its ground, its two L-shaped buildings in their trenches, the block and the control tower, the landing
+  pads -- nothing moved, scaled or taken away.
+- **The room** (`Terrain/ControlTower/ControlTowerIsland.cs`): Island CX is one cube, and the room is the inside of its two buildings and the
+  block between them at twice their size: its 64 cells are the whole cube, the plateau's 32 in its middle. So it lies under the island cell
+  for cell, each hall under its building, the control room under the tower. Every filled cell is a box a brick across and a layer high, in
+  its brick's colour matched in Island CX's palette (RESS 36); only the faces that show are kept, merged into rectangles of one colour, in
+  bodies of 16 x 16 cells; the filled cells are merged into collision boxes (`Terrain/Palace/BrickBuilding.cs`, shared with the Palace
+  island). Its highest wall's top (layer 19) is 512 under the gas (the sea round the island, height 0): the floor is at -5,632. No roofs:
+  under the gas there is nothing for them to hide the halls from (`--roofs` puts them on).
+- **The secret passage** hangs under the room as before, stretched to fit: the first shaft under the first grate, its posts 7 layers longer
+  so its top reaches the floor as the second's does; the walkway's 24 cells repeated along an L -- east from the first shaft for 33 cells,
+  a corner, north for 27; the second shaft under the second grate. Its floor is at -11,520. The two grates are open.
 
-![Inside, without the roofs](controltower/inside.png)
+![The halls from above, Island CX taken away: the control room in the middle, a grate in each hall](controltower/halls.png)
 
-Counts: the room is 6,726 cells and the passage 1,310. That makes 29 bodies (6,732 faces, the three roofs among them) and 417 collision
-boxes. The busiest cube has 141 objects, under the engine's 200. `CXTOWER.OBL` is `ILOTCX.OBL` twice its size with the building's bodies
-added at the end (from body 14 on).
+Counts: the room is 6,726 cells and the passage 1,310: 26 bodies (6,468 faces) and 373 collision boxes, 437 objects in the cube with
+Island CX's own. The retail engine draws 200 objects a cube at most (`MAX_OBJ_DECORS`, the length of the frame's list of them to sort
+and draw); this editor's engine draws 1,000 (`3DEXT/LBA_EXT.H`, and the editor's `IslandDecors.MaxPerCubeOwnEngine` for islands only it
+plays -- other islands are still kept to 200). `CXTOWER.OBL` is `ILOTCX.OBL` with the building's bodies added at the end (from body 14 on).
+(A wall's outer face on the cube's far edge has its middle in the next cube, which Island CX hasn't got: `BrickBuilding` puts such a body a
+unit back.)
 
-No scenes yet: the engine can't go there until a race track adds them. (The Island CX track will start in a yard, go in through a door,
-round the halls and out again.)
+No scenes yet, and no way down to the halls: a race track on it comes later (in through a door, round the halls and out again), and its
+way down with it.
 
 ## Making it
 
 - Tools > **LBA2: Island CX control tower (3D)…** (`MainWindow.ControlTower.cs`) adds the two files to the game folder, builds them again,
   or takes them out. It is refused while test edits or the 1996 demo are open. The island appears in the Island list as `CXTOWER.ILE`
   (Island CX's palette).
-- `ScriptRoundTrip cxtower <game folder> <out folder> [source folder] [--no-roofs] [--closed-grates]` builds the same files into another
+- `ScriptRoundTrip cxtower <game folder> <out folder> [source folder] [--roofs] [--closed-grates]` builds the same files into another
   folder. The source folder holds pristine `ILOTCX.ILE` and `.OBL` (the game folder by default).

@@ -5,55 +5,47 @@ using LBAAssembler.Terrain.Palace;
 
 namespace LBAAssembler.Terrain.ControlTower;
 
-// Island CX's control tower, lower level, as a 3D building on the island itself (the user, 2026-10-08: "Let's convert the 'control tower,
+// Island CX's control tower, lower level, as a 3D building under the island (the user, 2026-10-08: "Let's convert the 'control tower,
 // lower level' into a 3D island ... 180: Island CX, Secret passage needs moving underneath 181: Island CX, Room in the emperor, and we'll
 // probably need to do a little bit of stretching so it all fits where it's meant to. This is going to be an extra area for our island CX
 // track, we're going to start outside, enter through a door, drive around inside, and come back out again").
 //
-// Island CX is one cube: a plateau with two landing pads (the octagons), a block in the middle under the control tower, and two L-shaped
-// buildings between them, sunk in trenches, roofed, a door at the ends of their arms. The room (181) is the inside of those buildings and
-// the middle -- two L-shaped halls round the control room -- the same shape as the plateau at twice the size: its 64 cells are the plateau's
-// 32. So the island is made twice as big (IslandScaler, as the Island of the Francos' track did) and the room put in it brick for brick:
-//   - the ground: Island CX twice its size, every height half again as high (the plateau 7,680 over the sea: room for the passage under the
-//     room), the plateau flat at the doors' thresholds -- the yards where the pads are, outside the doors -- and open under the room down to
-//     the passage's floor (the pit);
-//   - the room: every filled cell a box a brick across and a layer high, in its brick's colour matched in Island CX's palette (BrickBuilding,
-//     as the Palace island's); the old buildings' objects taken away (the tower and the landing pads kept); a roof over each hall and the
-//     control room at the height of most of its walls; the control tower on the control room, on the pillars under it; the two grates in
-//     the floor open;
-//   - the secret passage (180) underneath: a walkway hung between two shafts, each shaft's top one of the grates. The grates are 37 cells
+// 2026-10-12: "The CX tower we created looks terrible, the top part should be identical ILOTCX.ILE. The other sections we combined into it
+// should be below the top part vertically, almost as though they're under the gas layer". So the island is Island CX as it is -- its ground,
+// its buildings, the tower and the landing pads untouched -- and the lower level is underneath it, under the gas the island stands in:
+//   - the room (181), the inside of the two L-shaped buildings and the block between them -- two L-shaped halls round the control room -- is
+//     the same shape as the plateau at twice its size: its 64 cells are the whole of Island CX's one cube, the plateau's 32 in its middle,
+//     so the room lies under the island cell for cell, each hall under its building. Brick for brick (BrickBuilding, as the Palace island's):
+//     every filled cell a box a brick across and a layer high, in its brick's colour matched in Island CX's palette; its highest wall a
+//     little under the gas (height 0, the sea round the island);
+//   - the secret passage (180) under the room: a walkway hung between two shafts, each shaft's top one of the grates. The grates are 37 cells
 //     apart east and 32 north, the shafts 28 east, so it is stretched to fit: the first shaft under the first grate, its posts lengthened by
 //     7 layers (its top reaches the floor as the second's does), the walkway repeated along an L -- east, a corner, north -- and the second
-//     shaft under the second grate. (The editor's joined map puts the passage under the room the same way, its first shaft under the first
-//     grate: Lba2Areas.)
-// CXTOWER.OBL is ILOTCX.OBL twice its size with the building's bodies on its end. No scenes yet: a race track on it comes later.
+//     shaft under the second grate. (The editor's joined map puts the passage under the room the same way: Lba2Areas.)
+// That is some 480 objects in the one cube -- the building's bodies and its collision boxes -- more than the retail engine's 200 a cube, as
+// many as this editor's engine draws (IslandDecors.MaxPerCubeOwnEngine). CXTOWER.OBL is ILOTCX.OBL with the building's bodies on its end. No
+// scenes yet: a race track on it comes later (and a way down to the halls with it).
 internal static class ControlTowerIsland
 {
     public const string IleFile = "CXTOWER.ILE", OblFile = "CXTOWER.OBL";
     public const string SourceIle = "ILOTCX.ILE", SourceObl = "ILOTCX.OBL";
     public const int PaletteEntry = 36;                 // RESS.HQR: Island CX's
     public const int Room = 181, Passage = 180;
-    public const int Times = 2;                         // the island twice its size
-    public const double Stretch = 1.5;                  // ... and its heights half again as high
-    public const int Yard = 7680;                       // the plateau: the doors' thresholds (the room's layer 2, its top 768)
-    public const int Threshold = 768;
-    public const int PitFloor = 768;                    // the ground under the room: the passage's own floor's top
+    public const int GasLevel = 0;                      // the gas round the island: the height of its sea
+    public const int UnderGas = 512;                    // the room's highest wall's top this far under it
     public const int PassageDrop = 25;                  // the passage's layers under the room's (its highest, 24, just under the room's floor)
     public const int RoofBelow = 25;                    // a roof's height: the walls round it, this percentile (most are low; the tall ones stand through)
-    // the room's corner in the island twice its size: the plateau's (the original's 16th cell), from the island's first cube's corner
-    private const int RoomCorner = 16384;
-    // the plateau in vertices of the island twice its size, from its first cube's corner: the original's cells 16-48 (the rim round it)
-    private const int PlateauFrom = 32, PlateauTo = 96;
     // the grates in the room's floor (the zones down to the passage): their holes
     private static readonly (int X, int Z)[] Grates = { (9, 34), (10, 34), (9, 35), (10, 35), (46, 2), (47, 2), (46, 3), (47, 3) };
     private static readonly (float R, float G, float B) RoofColour = (112, 120, 128), RoofEdge = (72, 78, 86);
 
-    public sealed record Built(int RoomCells, int PassageCells, int Bodies, int Faces, int Boxes, int Roofs, int Pit, string Log);
+    public sealed record Built(int RoomCells, int PassageCells, int Bodies, int Faces, int Boxes, int Roofs, int Floor, string Log);
 
     // Builds CXTOWER.ILE and CXTOWER.OBL into `outDirectory` from the game folder's scenes 180 and 181 and Island CX's island files
-    // (`sourceDirectory`: where pristine ILOTCX.ILE/.OBL are, the game folder itself by default). (`roofed`: false leaves the roofs off -- a
-    // look inside; `openGrates`: false leaves the grates' bricks in the floor.)
-    public static Built Build(string gameDirectory, string outDirectory, string? sourceDirectory = null, bool roofed = true, bool openGrates = true)
+    // (`sourceDirectory`: where pristine ILOTCX.ILE/.OBL are, the game folder itself by default). (`roofed`: a roof over each hall and the
+    // control room -- under the gas there is nothing to hide them from, so none by default; `openGrates`: false leaves the grates' bricks
+    // in the floor.)
+    public static Built Build(string gameDirectory, string outDirectory, string? sourceDirectory = null, bool roofed = false, bool openGrates = true)
     {
         sourceDirectory ??= gameDirectory;
         var log = new List<string>();
@@ -67,61 +59,15 @@ internal static class ControlTowerIsland
         var passage = PassageCells(interiors);
         log.Add($"the control tower's lower level: the room (scene {Room}) {room.Count} cells, the secret passage (scene {Passage}) {passage.Count} under it, stretched to its two grates");
 
-        // ---- the island: Island CX twice its size, half again as high, the plateau flat at the thresholds and open under the room
-        var source = IslandFile.Load(Path.Combine(sourceDirectory, SourceIle));
-        var island = IslandScaler.Scale(source, Times, log);
-        var anchor = IslandScaler.Anchor(source);
-        double ax = anchor.X * 32768.0, az = anchor.Z * 32768.0;
-        double X0 = ax + RoomCorner, Z0 = az + RoomCorner, Y0 = Yard - Threshold;
-        var footprint = room.Keys.Select(c => (c.X, c.Z)).Concat(passage.Keys.Select(c => (c.X, c.Z))).ToHashSet();
-        var pit = 0;
-        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island).ToList())
-        {
-            for (var vz = 0; vz < IslandCube.Vertices; vz++)
-                for (var vx = 0; vx < IslandCube.Vertices; vx++)
-                {
-                    var i = vz * IslandCube.Vertices + vx;
-                    // (the vertex in the island twice its size, from its first cube's corner; the room's cell corner it is)
-                    int lx = (cx - anchor.X) * 64 + vx, lz = (cz - anchor.Z) * 64 + vz;
-                    int rx = lx - RoomCorner / 512, rz = lz - RoomCorner / 512;
-                    double h;
-                    if (lx >= PlateauFrom && lx <= PlateauTo && lz >= PlateauFrom && lz <= PlateauTo)
-                    {
-                        var under = footprint.Contains((rx - 1, rz - 1)) && footprint.Contains((rx, rz - 1)) && footprint.Contains((rx - 1, rz)) && footprint.Contains((rx, rz));
-                        h = under ? PitFloor : Yard;
-                        if (under) { cube.Intensity[i] = (byte)(cube.Intensity[i] & 15); pit++; }
-                    }
-                    else h = cube.Heights[i] * Stretch;
-                    cube.Heights[i] = (short)Math.Clamp(Math.Round(h), short.MinValue, short.MaxValue);
-                }
-        }
-
-        // ---- the objects: the old buildings' taken away; the landing pads as high as their ground now is; the tower on the control room
-        var removed = 0; IslandDecor? tower = null; (int X, int Z) towerCube = default;
-        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island).ToList())
-            foreach (var d in cube.Decors.ToList())
-            {
-                double wx = cx * 32768.0 + d.X - ax, wz = cz * 32768.0 + d.Z - az;
-                var onPlateau = wx >= PlateauFrom * 512 && wx <= PlateauTo * 512 && wz >= PlateauFrom * 512 && wz <= PlateauTo * 512;
-                if (onPlateau && d.Body == 0 && tower is null) { tower = d; towerCube = (cx, cz); continue; }
-                if (onPlateau) { cube.Decors.Remove(d); removed++; continue; }
-                var up = (int)Math.Round(d.Y * Stretch) - d.Y;
-                d.Y += up; d.YMin += up; if (d.YMax != BrickBuilding.NoBoxTop) d.YMax += up;
-            }
+        // ---- the island: Island CX as it is; the room under its cube, cell for cell, its highest wall a little under the gas
+        var island = IslandFile.Load(Path.Combine(sourceDirectory, SourceIle));
+        var anchor = IslandScaler.Anchor(island);
+        double X0 = anchor.X * 32768.0, Z0 = anchor.Z * 32768.0;
+        var highest = room.Keys.Max(c => c.Y);
         var top = room.GroupBy(c => (c.Key.X, c.Key.Z)).ToDictionary(g => g.Key, g => g.Max(c => c.Key.Y));
-        if (tower is not null)
-        {
-            // (on the highest of the room's columns under it: the control room's pillars and its tall walls, layer 19 -- the original stands
-            // a few layers higher, on the block over the trenches the buildings are sunk in)
-            double tx = towerCube.X * 32768.0 + tower.X, tz = towerCube.Z * 32768.0 + tower.Z;
-            double half = Math.Max(tower.XMax - tower.XMin, tower.ZMax - tower.ZMin) / 2.0 / 512;
-            int cx = (int)Math.Floor((tx - X0) / 512), cz = (int)Math.Floor((tz - Z0) / 512), reach = (int)Math.Ceiling(half);
-            var under = top.Where(t => Math.Abs(t.Key.X - cx) <= reach && Math.Abs(t.Key.Z - cz) <= reach).Select(t => t.Value).DefaultIfEmpty(0).Max();
-            var y = (int)Math.Round(Y0 + (under + 1) * 256.0);
-            var up = y - tower.Y;
-            tower.Y += up; tower.YMin += up; tower.YMax += up;
-            log.Add($"the control tower on the control room's pillars, at {y} (their top, layer {under})");
-        }
+        var roofLayers = roofed ? Halls(top).Select(h => RoofLayer(h, top)).DefaultIfEmpty(0).Max() : 0;
+        double Y0 = GasLevel - UnderGas - (Math.Max(highest, roofLayers) + 1) * 256.0;
+        log.Add($"{SourceIle} as it is; the room's floor at {Y0:0}, its highest wall (layer {highest}) {UnderGas} under the gas at {GasLevel}, the passage's floor at {Y0 + (2 - PassageDrop) * 256.0:0}");
 
         // ---- colours: each brick's average in the interiors' palette, matched in Island CX's, shaded by the way a face looks
         var palette = interiors.Palette;
@@ -142,7 +88,7 @@ internal static class ControlTowerIsland
         foreach (var (c, b) in passage) cells[c] = (b, 100 + (c.X >> 4) + 4 * (c.Z >> 4));
         var faces = BrickBuilding.Faces(cells, ColourOf, (x, y, z) => Corner(x, y, z));
 
-        // ---- the roofs: over each hall and the control room, at the height of most of its walls
+        // ---- the roofs (when asked for): over each hall and the control room, at the height of most of its walls
         var roofs = 0;
         var roofBoxes = new List<(double X0, double Y0, double Z0, double X1, double Y1, double Z1)>();
         if (roofed)
@@ -150,14 +96,8 @@ internal static class ControlTowerIsland
             var covered = new HashSet<(int X, int Z)>();
             foreach (var hall in Halls(top))
             {
-                // (the hall's floor and its walls round it, two cells deep, as far as the room goes; the roof as high as the low walls -- the
-                // halls' are 9 or 10 layers on two sides, 19 on the others, standing through it)
-                var under = new HashSet<(int X, int Z)>();
-                foreach (var (x, z) in hall)
-                    for (var dz = -2; dz <= 2; dz++) for (var dx = -2; dx <= 2; dx++)
-                        if (top.ContainsKey((x + dx, z + dz)) && !covered.Contains((x + dx, z + dz))) under.Add((x + dx, z + dz));
-                var walls = under.Where(c => !hall.Contains(c) && top[c] > 8).Select(c => top[c]).OrderBy(h => h).ToList();
-                var layer = (walls.Count > 0 ? walls[walls.Count * RoofBelow / 100] : under.Max(c => top[c])) + 1;
+                var under = Under(hall, top, covered);
+                var layer = RoofLayer(hall, top);
                 double ya = Y0 + layer * 256.0, yb = ya + 128;
                 int roofTop = Nearest(RoofColour), roofSide = Nearest(RoofEdge);
                 var list = new List<BrickBuilding.Face>();
@@ -174,15 +114,15 @@ internal static class ControlTowerIsland
             }
         }
 
-        // ---- the bodies: ILOTCX.OBL twice its size, the building's on its end
+        // ---- the bodies: ILOTCX.OBL, the building's on its end
         Directory.CreateDirectory(outDirectory);
         var oblPath = Path.Combine(outDirectory, OblFile);
         File.Copy(Path.Combine(sourceDirectory, SourceObl), oblPath, true);
-        log.Add(IslandScaler.ScaleObl(oblPath, Times));
         var oblBytes = File.ReadAllBytes(oblPath);
         var next = HqrArchive.CountEntries(oblPath);
         var newBodies = new List<byte[]>();
-        var (bodyCount, faceCount, decorsLeft) = BrickBuilding.AddBodies(island, faces, newBodies, next, g => g >= 200 ? "a roof" : g >= 100 ? "the passage" : "the room");
+        var (bodyCount, faceCount, decorsLeft) = BrickBuilding.AddBodies(island, faces, newBodies, next, g => g >= 200 ? "a roof" : g >= 100 ? "the passage" : "the room",
+            IslandDecors.MaxPerCubeOwnEngine);
 
         // ---- the collision: the filled cells merged into boxes, and the roofs, each a decor with an empty body
         var empty = next + newBodies.Count;
@@ -190,7 +130,7 @@ internal static class ControlTowerIsland
         var boxes = BrickBuilding.Boxes(cells.Keys.ToHashSet())
             .Select(b => { var lo = Corner(b.X0, b.Y0, b.Z0); var hi = Corner(b.X1 + 1, b.Y1 + 1, b.Z1 + 1); return ((double)lo.X, (double)lo.Y, (double)lo.Z, (double)hi.X, (double)hi.Y, (double)hi.Z); })
             .Concat(roofBoxes).ToList();
-        var (boxCount, boxesLeft) = BrickBuilding.AddBoxes(island, empty, boxes);
+        var (boxCount, boxesLeft) = BrickBuilding.AddBoxes(island, empty, boxes, IslandDecors.MaxPerCubeOwnEngine);
         decorsLeft += boxesLeft;
         foreach (var cube in island.Cubes.Values) cube.Info[IslandCube.InfoNbDecors] = cube.Decors.Count;
 
@@ -202,11 +142,28 @@ internal static class ControlTowerIsland
         foreach (var b in newBodies) oblBytes = HqrWriter.AppendEntry(oblBytes, HqrWriter.StoredEntry(b));
         File.WriteAllBytes(oblPath, oblBytes);
         var perCube = string.Join(", ", IslandOps.CubeCells(island).Select(c => $"({c.X},{c.Z}) {c.Cube.Decors.Count}"));
-        log.Add($"{IleFile}: Island CX {Times} times its size, its heights {Stretch} times, the plateau flat at {Yard} (the doors' thresholds), open under the room down to {PitFloor} ({pit} vertices); " +
-                $"{removed} objects of the old buildings taken away; objects per cube: {perCube}");
-        log.Add($"{OblFile}: {bodyCount} bodies of the building ({faceCount} faces, {roofs} roofs among them) and an empty one for the {boxCount} collision boxes, from body {next} on" +
+        log.Add($"{IleFile}: Island CX as it is, the lower level under it; objects per cube: {perCube} (this editor's engine draws {IslandDecors.MaxPerCubeOwnEngine} a cube, the retail one {IslandDecors.MaxPerCube})");
+        log.Add($"{OblFile}: {bodyCount} bodies of the building ({faceCount} faces{(roofs > 0 ? $", {roofs} roofs among them" : "")}) and an empty one for the {boxCount} collision boxes, from body {next} on" +
                 (decorsLeft > 0 ? $"; WARNING: {decorsLeft} decors left out (a cube full)" : ""));
-        return new Built(room.Count, passage.Count, bodyCount, faceCount, boxCount, roofs, pit, string.Join("\n", log));
+        return new Built(room.Count, passage.Count, bodyCount, faceCount, boxCount, roofs, (int)Y0, string.Join("\n", log));
+    }
+
+    // A hall's floor and its walls round it, two cells deep, as far as the room goes (those a roof before it covers left out).
+    private static HashSet<(int X, int Z)> Under(HashSet<(int X, int Z)> hall, Dictionary<(int X, int Z), int> top, HashSet<(int X, int Z)>? covered = null)
+    {
+        var under = new HashSet<(int X, int Z)>();
+        foreach (var (x, z) in hall)
+            for (var dz = -2; dz <= 2; dz++) for (var dx = -2; dx <= 2; dx++)
+                if (top.ContainsKey((x + dx, z + dz)) && covered?.Contains((x + dx, z + dz)) != true) under.Add((x + dx, z + dz));
+        return under;
+    }
+
+    // The layer a hall's roof is at: as high as its low walls (the halls' are 9 or 10 layers on two sides, 19 on the others, standing through it).
+    private static int RoofLayer(HashSet<(int X, int Z)> hall, Dictionary<(int X, int Z), int> top)
+    {
+        var under = Under(hall, top);
+        var walls = under.Where(c => !hall.Contains(c) && top[c] > 8).Select(c => top[c]).OrderBy(h => h).ToList();
+        return (walls.Count > 0 ? walls[walls.Count * RoofBelow / 100] : under.Max(c => top[c])) + 1;
     }
 
     // The secret passage's cells in the room's cells and layers: the walkway between two shafts (scene 180, x 21-52, rows 34-37: the shafts

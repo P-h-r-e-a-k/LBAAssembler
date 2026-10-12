@@ -69,9 +69,9 @@ internal static class BrickBuilding
     }
 
     // Each group's faces as bodies (a few where they are many), appended to `newBodies` (numbered from `firstBody` on), each a decor nothing
-    // touches. Returns the bodies, the faces, and the decors left out (a cube full).
+    // touches. Returns the bodies, the faces, and the decors left out (a cube full: `maxPerCube` decors).
     public static (int Bodies, int Faces, int Left) AddBodies(IslandFile island, Dictionary<int, List<Face>> groups, List<byte[]> newBodies, int firstBody,
-        Func<int, string>? what = null)
+        Func<int, string>? what = null, int maxPerCube = IslandDecors.MaxPerCube)
     {
         int faceCount = 0, bodyCount = 0, left = 0;
         foreach (var (group, faces) in groups)
@@ -81,6 +81,10 @@ internal static class BrickBuilding
                 foreach (var f in chunk) foreach (var p in f.Quad) { lo = Vector3.Min(lo, p); hi = Vector3.Max(hi, p); }
                 // (the origin at the middle of the chunk: every point within what a body holds)
                 var origin = new Vector3((lo.X + hi.X) / 2, (lo.Y + hi.Y) / 2, (lo.Z + hi.Z) / 2);
+                // (a wall's outer face on a cube's far edge -- Island CX's control room's, the room the whole cube wide -- has its middle in
+                // the next cube, which may not be there: a unit back, in this one)
+                if (IslandDecors.Locate(island, origin.X, origin.Z) is null && IslandDecors.Locate(island, origin.X - 1, origin.Z - 1) is not null)
+                    origin = new Vector3(origin.X - 1, origin.Y, origin.Z - 1);
                 var pts = new List<Vector3>(); var bodyFaces = new List<LbaBodyStudio.Face>();
                 var shared = new Dictionary<Vector3, int>();
                 foreach (var (quad, colour, normal) in chunk)
@@ -96,7 +100,7 @@ internal static class BrickBuilding
                     throw new InvalidDataException($"{what?.Invoke(group) ?? $"group {group}"}: a body of {chunk.Count} faces from {lo} to {hi} is bigger than a body holds");
                 newBodies.Add(RaceTrackPipes.Write(pts, bodyFaces, lit: false));
                 faceCount += chunk.Count; bodyCount++;
-                if (IslandDecors.Locate(island, origin.X, origin.Z) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { left++; continue; }
+                if (IslandDecors.Locate(island, origin.X, origin.Z) is not { } at || at.Cube.Decors.Count >= maxPerCube) { left++; continue; }
                 var d = IslandDecors.Blank(body, at.X, (int)Math.Round(origin.Y), at.Z);
                 d.XMin = (int)Math.Floor(at.X + lo.X - origin.X); d.XMax = (int)Math.Ceiling(at.X + hi.X - origin.X);
                 d.ZMin = (int)Math.Floor(at.Z + lo.Z - origin.Z); d.ZMax = (int)Math.Ceiling(at.Z + hi.Z - origin.Z);
@@ -106,14 +110,16 @@ internal static class BrickBuilding
         return (bodyCount, faceCount, left);
     }
 
-    // The collision boxes (world units), each a decor with the empty body `empty`. Returns the boxes placed and those left out (a cube full).
-    public static (int Boxes, int Left) AddBoxes(IslandFile island, int empty, IEnumerable<(double X0, double Y0, double Z0, double X1, double Y1, double Z1)> boxes)
+    // The collision boxes (world units), each a decor with the empty body `empty`. Returns the boxes placed and those left out (a cube full:
+    // `maxPerCube` decors).
+    public static (int Boxes, int Left) AddBoxes(IslandFile island, int empty, IEnumerable<(double X0, double Y0, double Z0, double X1, double Y1, double Z1)> boxes,
+        int maxPerCube = IslandDecors.MaxPerCube)
     {
         int count = 0, left = 0;
         foreach (var (bx0, by0, bz0, bx1, by1, bz1) in boxes)
         {
             double cx = (bx0 + bx1) / 2, cz = (bz0 + bz1) / 2;
-            if (IslandDecors.Locate(island, cx, cz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { left++; continue; }
+            if (IslandDecors.Locate(island, cx, cz) is not { } at || at.Cube.Decors.Count >= maxPerCube) { left++; continue; }
             var d = IslandDecors.Blank(empty, at.X, (int)Math.Round(by0), at.Z);
             d.XMin = (int)Math.Floor(at.X + bx0 - cx); d.XMax = (int)Math.Ceiling(at.X + bx1 - cx);
             d.ZMin = (int)Math.Floor(at.Z + bz0 - cz); d.ZMax = (int)Math.Ceiling(at.Z + bz1 - cz);
