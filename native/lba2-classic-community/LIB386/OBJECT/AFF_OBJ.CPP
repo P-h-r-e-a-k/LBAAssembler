@@ -276,6 +276,14 @@ static void SetEnvMappedQuadUvs(Struc_Point *points, const STRUC_POLY4_ENV *poly
     Z0 = rotated.Z;
 }
 
+// A point's depth in the Z-buffer: its distance scaled to the far clip, 0..0xFFFF. Worked out in 32 bits, a point past the far clip
+// wrapped round to a small depth -- nearer than everything -- and a big decor partly past it was drawn in the fog's white over the
+// view (LBA Assembler's palace, whose far parts the decors' cull no longer drops, 2026-10-12); so in 64, held at the far end.
+static inline U16 ZBufferDepth(S32 z) {
+    const S64 depth = ((S64)z * Fill_ZBuffer_Factor) >> 16;
+    return (U16)(depth < 0 ? 0 : depth > 0xFFFF ? 0xFFFF : depth);
+}
+
 void GetZO3(Struc_Point *dst, U16 index1, U16 index2, U16 index3) {
     if (!Fill_Flag_ZBuffer || TypeProj != TYPE_3D) {
         return;
@@ -286,7 +294,7 @@ void GetZO3(Struc_Point *dst, U16 index1, U16 index2, U16 index3) {
     for (int i = 0; i < 3; i++) {
         U16 idx = indices[i];
         S32 Z = -Obj_ListRotatedPoints[idx].Z - PosZWr;
-        dst[i].Pt_ZO = (Z * Fill_ZBuffer_Factor) >> 16;
+        dst[i].Pt_ZO = ZBufferDepth(Z);
     }
 }
 
@@ -300,7 +308,7 @@ void GetZO4(Struc_Point *dst, U16 index1, U16 index2, U16 index3, U16 index4) {
     for (int i = 0; i < 4; i++) {
         U16 idx = indices[i];
         S32 Z = -Obj_ListRotatedPoints[idx].Z - PosZWr;
-        dst[i].Pt_ZO = (Z * Fill_ZBuffer_Factor) >> 16;
+        dst[i].Pt_ZO = ZBufferDepth(Z);
     }
 }
 
@@ -1065,8 +1073,8 @@ S32 Line(U32 typePoly, void *poly) {
 
         // z1/z2 are the z-buffer depths of P1/P2 (matches AFF_OBJ.ASM: esi<-P1,
         // edi<-P2). `~z - (PosZWr-1)` is the ASM's obfuscated `-z - PosZWr`.
-        z1 = Fill_ZBuffer_Factor * (~rotatedP1.Z - (PosZWr - 1)) >> 16;
-        z2 = Fill_ZBuffer_Factor * (~rotatedP2.Z - (PosZWr - 1)) >> 16;
+        z1 = ZBufferDepth(~rotatedP1.Z - (PosZWr - 1));
+        z2 = ZBufferDepth(~rotatedP2.Z - (PosZWr - 1));
     }
 
     if ((p1.X == -0x8000 && p1.Y == -0x8000) || (p2.X == -0x8000 && p2.Y == -0x8000)) {
@@ -1130,7 +1138,7 @@ S32 Sphere(U32 typePoly, void *poly) {
 
     if (Fill_Flag_ZBuffer && TypeProj == TYPE_3D) {
         T_OBJ_POINT rotatedP1 = Obj_ListRotatedPoints[sphere->P1];
-        z = (Fill_ZBuffer_Factor * (-rotatedP1.Z - PosZWr)) >> 16;
+        z = ZBufferDepth(-rotatedP1.Z - PosZWr);
     }
     // @@NoZBufSphere:
     Fill_Sphere(sphere->Type, sphere->Coul, p1.X, p1.Y, radius, z);
@@ -1188,7 +1196,7 @@ S32 Sphere_Transp(U32 typePoly, void *poly) {
     S32 z = 0;
     if (Fill_Flag_ZBuffer && TypeProj == TYPE_3D) {
         T_OBJ_POINT rotatedP1 = Obj_ListRotatedPoints[sphere->P1];
-        z = (Fill_ZBuffer_Factor * (-rotatedP1.Z - PosZWr)) >> 16;
+        z = ZBufferDepth(-rotatedP1.Z - PosZWr);
     }
 
     Fill_Sphere(2, sphere->Coul, p1.X, p1.Y, radius, z);

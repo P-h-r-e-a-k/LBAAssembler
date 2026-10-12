@@ -68,7 +68,10 @@ internal static class PalaceIsland
     public const double PillarRise = 700;               // ... and its top this much over the hilltop: the race's jump lands as high as its lip
                                                         // (the road's 60 over the hilltop, its ramp's 700 -- palace_design.py), on the pillar
     public const double RoadOver = 60;                  // (the race's road over what it lies on)
+    public const int DoorBricks = 4;                    // a door between two rooms this many bricks wide (the game's are two: 8 cells, the
+                                                        // race's road through them too narrow)
     public const double CorridorHalf = 9;               // the ways across the hilltop's rocks: half their width (cells)
+    public const int RingOut = 9;                       // the way round the palace's west and south sides: cells out from its walls
     // the colours of Otringal's palace (OTRINGAL.OBL's halls, in its palette): its pale stone (walls and flat roofs), the dark teal of its
     // foot, the turquoise of its drums
     private static readonly (float R, float G, float B) Stone = (176, 164, 160), StoneShadow = (160, 144, 140), Teal = (0, 48, 60), Turquoise = (116, 156, 160);
@@ -251,6 +254,104 @@ internal static class PalaceIsland
                 }
         }
         if (floored > 0) log.Add($"the floors made whole: {floored} cells of the bottom layer (doors' thresholds, holes) floored");
+        // ---- the doors made wider (the user, 2026-10-12: "The palace track is far too narrow ... Let's make the inside tracks wider"): a door
+        // between two rooms is two bricks wide, through a wall band four bricks deep -- both rooms' walls and the shaft between them. Each is
+        // opened to DoorBricks, as much on either side, through the band and up to its lintel; a piece of furniture in the way goes, its
+        // model and its cells with it (the floor stays)
+        var widened = new HashSet<(int X, int Y, int Z)>();
+        var doors = 0;
+        // (each door: the two rooms, whether it is in a wall along z, its span along the wall once widened, its top layer)
+        var doorways = new List<(int A, int B, bool AlongZ, int U0, int U1, int Top)>();
+        for (var a = 0; a < extents.Length; a++)
+            for (var b = 0; b < extents.Length; b++)
+            {
+                var (ea, eb) = (extents[a], extents[b]);
+                // b east of a -- the band their columns share along x -- or south of it, along z (u along the wall, v across it)
+                var alongZ = eb.X0 > ea.X0 && eb.X0 <= ea.X1 && Math.Min(ea.Z1, eb.Z1) - Math.Max(ea.Z0, eb.Z0) > 4;
+                var alongX = eb.Z0 > ea.Z0 && eb.Z0 <= ea.Z1 && Math.Min(ea.X1, eb.X1) - Math.Max(ea.X0, eb.X0) > 4;
+                if (a == b || !(alongZ || alongX)) continue;
+                int v0 = alongZ ? eb.X0 : eb.Z0, v1 = alongZ ? ea.X1 : ea.Z1;
+                int u0 = (alongZ ? Math.Max(ea.Z0, eb.Z0) : Math.Max(ea.X0, eb.X0)) + 1, u1 = (alongZ ? Math.Min(ea.Z1, eb.Z1) : Math.Min(ea.X1, eb.X1)) - 1;
+                (int X, int Y, int Z) At(int u, int y, int v) => alongZ ? (v, y, u) : (u, y, v);
+                bool Open(int u) { for (var v = v0; v <= v1; v++) if (cells.ContainsKey(At(u, minY + 1, v))) return false; return true; }
+                for (var u = u0; u <= u1; u++)
+                {
+                    if (!Open(u) || (u > u0 && Open(u - 1))) continue;
+                    var d1 = u;
+                    while (d1 + 1 <= u1 && Open(d1 + 1)) d1++;
+                    var width = d1 - u + 1;
+                    // (its lintel: the lowest filled layer over the door)
+                    var top = minY + 1;
+                    while (top < maxY && Enumerable.Range(v0, v1 - v0 + 1).All(v => !cells.ContainsKey(At(u, top + 1, v)))) top++;
+                    if (width >= DoorBricks) { doorways.Add((a, b, alongZ, u, d1, top)); continue; }
+                    var more = (DoorBricks - width + 1) / 2;
+                    for (var w = u - more; w <= d1 + more; w++)
+                        if (w < u || w > d1)
+                            for (var v = v0; v <= v1; v++)
+                                for (var y = minY + 1; y <= top; y++) widened.Add(At(w, y, v));
+                    doorways.Add((a, b, alongZ, u - more, d1 + more, top));
+                    doors++;
+                }
+            }
+        // (and the way across a room between two of its doors that face each other kept clear, as high as the doors: a piece of furniture
+        // standing in it goes, and any other block -- the race's road runs from door to door; room 156's block and room 160's stood in the
+        // middle of it)
+        var lines = new Dictionary<(int X, int Z), int>();
+        for (var t = 0; t < extents.Length; t++)
+            foreach (var alongZ in new[] { true, false })
+            {
+                // (its doors in its two walls along z -- west and east -- or along x -- north and south)
+                var near = doorways.Where(d => d.AlongZ == alongZ && d.B == t).ToList();
+                var far = doorways.Where(d => d.AlongZ == alongZ && d.A == t).ToList();
+                foreach (var p in near)
+                    foreach (var q in far)
+                    {
+                        int s0 = Math.Max(p.U0, q.U0), s1 = Math.Min(p.U1, q.U1), top = Math.Min(p.Top, q.Top);
+                        if (s1 < s0) continue;
+                        var e = extents[t];
+                        for (var w = alongZ ? e.X0 : e.Z0; w <= (alongZ ? e.X1 : e.Z1); w++)
+                            for (var s = s0; s <= s1; s++)
+                            {
+                                var key = alongZ ? (w, s) : (s, w);
+                                lines[key] = Math.Max(lines.GetValueOrDefault(key, minY), top);
+                            }
+                    }
+            }
+        var inTheWay = pieces.Where(p => p.Standing && p.Cells.Any(c => c.Y > minY && lines.ContainsKey((c.X, c.Z)))).ToList();
+        foreach (var p in inTheWay) widened.UnionWith(p.Cells.Where(c => c.Y > minY));
+        var blocks = 0;
+        foreach (var ((x, z), top) in lines)
+            for (var y = minY + 1; y <= top; y++)
+                if (cells.ContainsKey((x, y, z)) && widened.Add((x, y, z))) blocks++;
+        // (the chests too: one in the middle of rooms 156 and 160 -- a chest's size is the game's, 512 to a cell)
+        var chestsGone = chests.RemoveAll(c =>
+        {
+            double hx = (c.AlongX ? c.Long : c.Short) / 1024, hz = (c.AlongX ? c.Short : c.Long) / 1024;
+            for (var x = (int)Math.Floor(c.X - hx); x <= (int)Math.Floor(c.X + hx); x++)
+                for (var z = (int)Math.Floor(c.Z - hz); z <= (int)Math.Floor(c.Z + hz); z++)
+                    if (lines.ContainsKey((x, z))) return true;
+            return false;
+        });
+        if (widened.Count > 0)
+        {
+            var gone = pieces.Where(p => p.Cells.Any(widened.Contains)).ToList();
+            foreach (var p in gone)
+            {
+                pieces.Remove(p);
+                if (p.Standing) foreach (var c in p.Cells.Where(c => c.Y > minY)) widened.Add(c);
+            }
+            foreach (var c in widened)
+            {
+                if (cells.Remove(c) && !ReferenceEquals(shown, cells)) shown.Remove(c);
+                modelled.Remove(c);
+                air.Add(c);
+            }
+            papered = pieces.Where(p => !p.Standing).SelectMany(p => p.Cells).ToHashSet();
+            log.Add($"the doors made wider: {doors} doors between rooms {DoorBricks} bricks wide ({DoorBricks * Across} cells), {widened.Count} cells opened" +
+                    (gone.Count > 0 ? $", {gone.Count} pieces of furniture in the way gone ({string.Join(", ", gone.GroupBy(p => p.Kind).Select(g => $"{g.Count()} {g.Key}"))})" : "") +
+                    (blocks > 0 ? $", {blocks} cells of other blocks on the ways between facing doors" : "") +
+                    (chestsGone > 0 ? $", {chestsGone} chests on them gone" : ""));
+        }
         if (opening.Count > 0)
             log.Add($"the long hall's round window open through its wall ({opening.Count} cells), its sill {WY(roundWindow!.Origin.Y):0} ({roundWindow.Origin.Y - minY} layers over the floor's foot), the big chest under it gone");
         // ---- the rooms' wallpaper, layer by layer: the mean colour of the drawn bricks of the walls (columns filled most of the way up)
@@ -408,20 +509,19 @@ internal static class PalaceIsland
             ? ((int)Math.Round(WX(extents[hallTile].X0) / 512), (int)Math.Round(WX(extents[hallTile].X1 + 1) / 512) - 1, (int)Math.Round(WZ(extents[hallTile].Z0) / 512))
             : null;
         // (the ways across the rocks, flat: the runway east from the sixteen rooms' roof to the cliff's edge -- the jump to the harbour's
-        // pillar -- and, from the hill's north-east edge -- where a road from the round window comes up onto it -- to their roof's north side)
+        // pillar -- and the way round the palace's west and south sides)
         var corridors = new List<PalaceCliff.Corridor>
         {
             new(new() { (sqX1 - 4, midZ), (sqX1 + PalaceCliff.Margin + PalaceCliff.Wobble + 10, midZ) }, CorridorHalf),
         };
         if (hallTile >= 0)
         {
-            double hx1 = Math.Round(WX(extents[hallTile].X1 + 1) / 512), hz0 = Math.Round(WZ(extents[hallTile].Z0) / 512);
-            // (north to south across the corner of the L, from out past the hill's north edge, level with the long hall's end, to their roof:
-            // the race's road up from the round window comes onto the hill there. In line with the domes' north-east hall -- the cluster
-            // stands over the rooms' middle, that hall 0.69 of their width in from the west -- so a car coming down it has the domes ahead,
-            // the road on the roof winding in among them)
-            var mx = Math.Round(sqX0 + (sqX1 - sqX0) * 0.69);
-            corridors.Add(new(new() { (mx, hz0 - 4), (mx, sqZ0 + 2) }, CorridorHalf));
+            double hz0 = Math.Round(WZ(extents[hallTile].Z0) / 512);
+            // (round the palace's west and south sides, RingOut cells out from them: from out past the hill's north edge -- where the race's
+            // road from the round window comes up onto the hill, round the long hall's end -- south past the long hall and the sixteen rooms,
+            // and east along their south side to its corner; the user, 2026-10-12: "Add a section where we're outside on the roof looping
+            // around the palace roof tops")
+            corridors.Add(new(new() { (sqX0 - RingOut, hz0 - 4), (sqX0 - RingOut, sqZ1 + RingOut), (sqX1 - 14, sqZ1 + RingOut) }, CorridorHalf));
         }
         log.AddRange(PalaceCliff.Shape(island, cubeList, new PalaceCliff.Site(rooms, hilltop, Floor - 60, cliffAt, corridors, harbour)));
         log.Add($"  the sixteen rooms: cells x {sqX0}..{sqX1}, z {sqZ0}..{sqZ1}; the ways across the rocks: " +

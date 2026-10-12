@@ -49,6 +49,8 @@ internal static class RaceCarEngineFile
         // an island drawn from a file the game never loads (the old moon's MOON.ILE, as island 3), and the lap's vertical loops
         if (info is not null && RaceTrackIsland.ByName(info.Island) is { RaceFile: { } raceFile } fileIsland) text.Append($"island_file={fileIsland.IslandByte} {raceFile}\n");
         foreach (var loop in track?.Loops ?? new()) text.Append($"loop={string.Join(' ', loop)}\n");
+        // (the rail holding the car on the road even where it lies on the ground: the Emperor's palace's)
+        if (raisedFile is not null && info is not null && RaceTrackIsland.ByName(info.Island) is { RailHeld: true }) text.Append("rail_held=1\n");
         // (the Island of the Francos: every car on Gazogem fuel all race, none from a mushroom)
         if (info is not null && RaceTrackIsland.ByName(info.Island) is { FuelAlways: true }) text.Append("fuel_always=1\n");
         // (game variables held while it races: travel cutscenes kept from playing -- Otringal's Dino-Fly landing)

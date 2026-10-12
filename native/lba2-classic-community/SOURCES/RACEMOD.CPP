@@ -207,6 +207,8 @@ typedef struct {
 enum { LOOP_NONE, LOOP_RIDE, LOOP_AIR, LOOP_FALL };
 enum { STEP_ON, STEP_ROUND, STEP_BACK, STEP_FELL };
 static int s_loopOn = -1, s_loopState = LOOP_NONE;
+static int s_loopLeft = -1;                // the ring the car last came out of, and when (RACE_LOOP_AGAIN)
+static U32 s_loopLeftAt = 0;
 
 // the opponents: each one's line, where it is along it (world units from the start line), laps begun, the scenes' copies of its car
 #define RACE_MAX_OPPONENTS 6
@@ -1017,6 +1019,9 @@ static double s_gravity = 0;               // gravity=<k>: a car on the raised r
 // line to the car ends this far over the road (s_railSight); aim: it looks at a point this far over the road ahead (RAIL_CAMERA_AIM)
 static double s_railBack = 0, s_railUp = 0, s_railLead = 0, s_railAim = RAIL_CAMERA_AIM;
 static int s_railTouch = 0;                // the rail held the hero back since RaceMod_RailTouched was last asked
+// rail_held=1: the rail holds a car on the raised road even where the road lies on the ground (RaceMod_Rail's grounded): a car on a road
+// laid over flat ground otherwise drives off it there -- the Emperor's palace's, along the hilltop, ended up on the rocks (2026-10-12)
+static int s_railHeld = 0;
 
 extern S32 (*AltitudeHook)(S32 x, S32 z, S32 y);         // 3DEXT/MAPTOOLS.CPP
 extern S32 (*TerrainColHook)(S32 x, S32 z, S32 col);
@@ -1024,6 +1029,7 @@ extern S32 (*SightFloorHook)(S32 x, S32 z, S32 y);
 extern S32 FollowCamera;                                 // FOLLOWCAM.CPP
 extern S32 (*FollowCamArmHook)(S32 base);
 extern S32 (*FollowCamEyeHook)(S32 *eye, S32 *target);
+extern const char *FollowCamEyeWho;                      // FOLLOWCAM.CPP: which camera of the hook placed the eye (camtrace)
 extern S32 CalculAltitudeTerrain(S32 x, S32 z, S32 cj);
 
 // Whether a place `tt` along segment i (its projection, unclamped) is past an open end of the road -- the road's own last point, or a
@@ -1360,6 +1366,7 @@ static S32 RailCamera(S32 *eye, S32 *target) {
     if (RaisedBetween(ex, ez, ey - up - lift + 800.0, ey + RAISED_UNDER, behind, &over) && ey > over - RAISED_UNDER) ey = over - RAISED_UNDER;
     eye[0] = (S32)(ex - cx); eye[1] = (S32)ey; eye[2] = (S32)(ez - cz);
     target[0] = (S32)(tx - cx); target[1] = (S32)(ty + s_railAim); target[2] = (S32)(tz - cz);
+    FollowCamEyeWho = "rail";
     return TRUE;
 }
 
@@ -1480,7 +1487,7 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     double lat, t;
     if (!RaisedAt(ox + cx, oz + cz, oy + 64, RAISED_PAD, &f, &seg, &lat, &t)) return;
     if (oy < f - 200 || oy > f + 1500) return;
-    const int grounded = f - CalculAltitudeTerrain(ox, oz, 0) < RAISED_GROUNDED;
+    const int grounded = !s_railHeld && f - CalculAltitudeTerrain(ox, oz, 0) < RAISED_GROUNDED;
     if (!RaisedAt(*nx + cx, *nz + cz, oy + 64, 4 * 512, &f, &seg, &lat, &t)) {
         if (grounded) return;
         *nx = ox; *nz = oz; s_railTouch = 1; return;
@@ -1514,6 +1521,18 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
         if (f - CalculAltitudeTerrain(bx, bz, 0) < RAISED_GROUNDED) return;
     }
     s_railTouch = 1;
+    // (on the outside of a bend, past one segment's end and short of the next one's start, the nearest place on the road's middle is the
+    // corner they share: held at the rail's distance from it the car goes on round it. Held on the line across the segment's end, it was
+    // put back where it had been, frame after frame -- a car along the outside rail stopped dead, the wider the road the more often: the
+    // Emperor's palace's, 2026-10-12)
+    if (t <= 0 || t >= 1) {
+        const double dx = *nx + cx - px, dz = *nz + cz - pz, d = sqrt(dx * dx + dz * dz);
+        if (d > 1 && (side > 0) == (lat > 0)) {
+            *nx = (S32)floor(px + dx * fabs(side) / d - cx + 0.5);
+            *nz = (S32)floor(pz + dz * fabs(side) / d - cz + 0.5);
+            return;
+        }
+    }
     *nx = (S32)floor(px - sz / len * side - cx + 0.5);
     *nz = (S32)floor(pz + sx / len * side - cz + 0.5);
 }
@@ -1933,6 +1952,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "jump_speed")) {
             if (sscanf(v, "%lf %lf", &s_jumpLo, &s_jumpHi) != 2) s_jumpHi = 0;
         }
+        else if (!strcmp(key, "rail_held")) s_railHeld = atoi(v) != 0;
         else if (!strcmp(key, "railcam")) {
             s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;
             const int n = sscanf(v, "%lf %lf %lf %lf %lf", &s_railBack, &s_railUp, &s_railLead, &s_railSightKept, &s_railAim);
@@ -3087,6 +3107,7 @@ S32 RaceMod_CarHit(void) {
 #define RACE_LOOP_G 1600.0
 #define RACE_LOOP_PUSH 600.0
 #define RACE_LOOP_ENTRY 1100.0     // how far past either lane across the road the ring's foot still takes a car in (units)
+#define RACE_LOOP_AGAIN 1500       // a ring doesn't take the car that has just come round it for this long (ms)
 #define RACE_LOOP_FALL_HOLD 900
 #define RACE_LOOP_CATCH 500.0      // a car leaping a gap no more than this over the far edge's road is caught by it
 #define RACE_LOOP_BOTTOM 0.44      // radians either side of the ring's foot: a car falling inside the ring that comes down there has fallen off
@@ -3394,6 +3415,7 @@ static void LoopEnd(T_OBJ_3D *obj, double v, const char *how) {
     obj->Beta = (s_loopBeta - (S32)floor(s_ride.Steer * 4096 / (2 * RACE_PI) + 0.5)) & 4095;
     ListBuggy[0].Speed = (S32)v;
     Log_Info("[racemod] loop %d: %s at %.0f units/s", s_loopOn + 1, how, v);
+    s_loopLeft = s_loopOn; s_loopLeftAt = TimerRefHR;
     s_loopOn = -1; s_loopState = LOOP_NONE;
     s_forgetLap = 1;
 }
@@ -3596,6 +3618,9 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
                 if (c1 > right) { *nx = (S32)floor(*nx + l->DirZ * (c1 - right) + 0.5); *nz = (S32)floor(*nz - l->DirX * (c1 - right) + 0.5); s_railTouch = 1; }
             }
             if (ListBuggy[0].Speed <= 0) continue;
+            // (not the ring the car has just come round: put down at its foot, a hair short of the line, it crossed it again and went
+            // round a second time -- the Emerald Moon's second loop, 2026-10-12)
+            if (i == s_loopLeft && TimerRefHR - s_loopLeftAt < RACE_LOOP_AGAIN) continue;
             // (the line across the road at the ring's foot, crossed the lap's way)
             const double a0 = (ox - l->X) * l->DirX + (oz - l->Z) * l->DirZ;
             const double a2 = (*nx - l->X) * l->DirX + (*nz - l->Z) * l->DirZ;
@@ -3603,7 +3628,10 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
             const double t = a0 / (a0 - a2);
             const double cx = ox + (*nx - ox) * t, cz = oz + (*nz - oz) * t;
             const double across = -(cx - l->X) * l->DirZ + (cz - l->Z) * l->DirX;
-            if (fabs(across) > l->Shift / 2 + RACE_LOOP_ENTRY) continue;
+            // (anywhere on the way in -- its lane's band, out to the road's edge, and the road's other half, which the funnel above closes:
+            // within RACE_LOOP_ENTRY of either lane only, a car on the outer part of the Emerald Moon's road, twice the loop's width, drove
+            // past the ring's foot and on, the loop skipped, 2026-10-12)
+            if (across < -l->Shift / 2 - l->Band - RACE_LOOP_ENTRY || across > l->Shift / 2 + RACE_LOOP_ENTRY) continue;
             s_loopOn = i; s_loopState = LOOP_RIDE;
             memset(&s_ride, 0, sizeof(s_ride));
             s_ride.State = LOOP_RIDE; s_ride.V = ListBuggy[0].Speed; s_ride.Lat = across - Lane(l, 0);
@@ -3657,8 +3685,12 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
 
 // The camera while the car goes round a loop: an arm behind the car would look into the ring's own back -- the part of it coming down
 // behind its foot, between the arm's eye and the car -- so the eye stands out to the ring's side, RACE_LOOP_CAM_FAR radii from its
-// middle on the side the car goes in on and a little over it, looking at the ring's middle drawn a little towards the car.
+// middle on the side the car goes in on, level with its middle, looking down its axis into it: a ring is a band, open at its sides, and
+// the car is seen all the way round inside it. (It looked at the ring's middle drawn 0.3 of the way towards the car, from a little over
+// it: across the axis, so the band's rim stood between -- the Emerald Moon's rings, twice the road's width and so deep drums, covered
+// half the picture and hid the car going round, 2026-10-12. Drawn RACE_LOOP_CAM_PULL towards the car now, its rim stays out of sight.)
 #define RACE_LOOP_CAM_FAR 3.2
+#define RACE_LOOP_CAM_PULL 0.15
 static S32 LoopCamera(S32 *eye, S32 *target) {
     if (s_loopOn < 0 || s_loopState == LOOP_NONE) return FALSE;
     const T_RACE_LOOP *l = &s_loops[s_loopOn];
@@ -3666,8 +3698,9 @@ static S32 LoopCamera(S32 *eye, S32 *target) {
     const double nx = -l->DirZ, nz = l->DirX;
     const double mx = l->X, my = l->Y + l->R, mz = l->Z;
     const double far = l->R * RACE_LOOP_CAM_FAR + l->Shift / 2;
-    eye[0] = (S32)(mx - nx * far); eye[1] = (S32)(l->Y + l->R * 1.2); eye[2] = (S32)(mz - nz * far);
-    target[0] = (S32)(mx + (car->X - mx) * 0.3); target[1] = (S32)(my + (car->Y - my) * 0.3); target[2] = (S32)(mz + (car->Z - mz) * 0.3);
+    eye[0] = (S32)(mx - nx * far); eye[1] = (S32)my; eye[2] = (S32)(mz - nz * far);
+    target[0] = (S32)(mx + (car->X - mx) * RACE_LOOP_CAM_PULL); target[1] = (S32)(my + (car->Y - my) * RACE_LOOP_CAM_PULL);
+    target[2] = (S32)(mz + (car->Z - mz) * RACE_LOOP_CAM_PULL);
     return TRUE;
 }
 
@@ -3751,7 +3784,15 @@ static S32 WheelCamera(S32 *eye, S32 *target) {
     return TRUE;
 }
 
-static S32 RaceCameraEye(S32 *eye, S32 *target) { return ArcCamera(eye, target) || JumpCamera(eye, target) || LoopCamera(eye, target) || TunnelCamera(eye, target) || WheelCamera(eye, target) || RailCamera(eye, target); }
+static S32 RaceCameraEye(S32 *eye, S32 *target) {
+    // (which of them placed the eye: the camera trace's, FOLLOWCAM.CPP camtrace)
+    if (ArcCamera(eye, target)) { FollowCamEyeWho = "arc"; return TRUE; }
+    if (JumpCamera(eye, target)) { FollowCamEyeWho = "jump"; return TRUE; }
+    if (LoopCamera(eye, target)) { FollowCamEyeWho = "loop"; return TRUE; }
+    if (TunnelCamera(eye, target)) { FollowCamEyeWho = "tunnel"; return TRUE; }
+    if (WheelCamera(eye, target)) { FollowCamEyeWho = "wheel"; return TRUE; }
+    return RailCamera(eye, target);
+}
 
 S32 RaceMod_Rescue(void) {
     if (!RaceMod_Active() || !s_rescueOn || Comportement != C_BUGGY || !Guide() || s_safeIndex < 0) return 0;
@@ -6824,7 +6865,7 @@ static void ResetTrack(void) {
     s_laps = 0; s_lapStart = s_lastLap = s_bestLap = 0;
     s_lineY = s_lineHasY = 0; s_halfway = 0; s_nbCheckpoints = 0; s_next = 0; s_showCheckpoints = 0;
     s_messageUntil = 0;
-    s_loopOn = -1; s_loopState = LOOP_NONE;
+    s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1;
     s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0;
     s_phase = PHASE_RACE; s_qualifying = 1; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
@@ -6839,7 +6880,7 @@ static void ResetTrack(void) {
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = s_arcAcross1 = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
-    s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0; s_railSight = s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;
+    s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0; s_railHeld = 0; s_railSight = s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;
     s_jumpLo = 0.6; s_jumpHi = 4.0; s_jumpRate = 0; s_jumpFrac = 0; s_jumpOver = 0;
     s_autoIndex = -1;
     s_faced = 0; s_safeIndex = -1; s_safeScene = -1; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;

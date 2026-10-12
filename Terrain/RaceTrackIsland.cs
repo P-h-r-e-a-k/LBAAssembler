@@ -312,7 +312,7 @@ internal sealed record RaceTrackIsland(
         LBAAssembler.Terrain.Palace.PalaceTrack.IslandByte, LBAAssembler.Terrain.Palace.PalaceTrack.FirstScene, LBAAssembler.Terrain.Palace.PalaceTrack.LastScene,
         LBAAssembler.Terrain.Palace.PalaceIsland.PaletteEntry, "RaceTrackPlan.Palace.json", null)
     {
-        Created = true, RaceFile = "palace", NoHolomap = true, Roster = RaceDriver.Palace, Sprint = true, OwnScenes = true,
+        Created = true, RaceFile = "palace", NoHolomap = true, Roster = RaceDriver.Palace, Sprint = true, OwnScenes = true, RailHeld = true,
         Title = "The Emperor's palace: through its rooms, out of the round window, over the rooftops to the Dark Monk's teleporter",
     };
 
@@ -321,6 +321,9 @@ internal sealed record RaceTrackIsland(
     public bool Sprint { get; init; }
     // Scenes of its own the build makes, FirstScene to LastScene (the palace's): a story set tells its track from the island's own by them.
     public bool OwnScenes { get; init; }
+    // The rail holds the car on the raised road everywhere, even where it lies over flat ground (the race-track mode's rail_held=): the
+    // Emperor's palace's road along the hilltop, 60 over it, let cars drive off onto the rocks.
+    public bool RailHeld { get; init; }
 
     public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace };
 

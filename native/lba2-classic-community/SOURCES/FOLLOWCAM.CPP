@@ -8,6 +8,7 @@
 #include "INPUT.H"
 #include <SYSTEM/KEYBOARD_KEYS.H>
 #include <SYSTEM/LOG.H>
+#include <math.h>
 
 /* FollowCamera refreshes terrain with AFF_ALL_FLIP every movement frame.
  * AFF_ALL_FLIP runs the full AffScene preamble (MemoClipWindow / UnsetClipWindow
@@ -58,9 +59,60 @@ static S32 FollowCamAppliedLift = 0;    /* ... and the share of it last applied 
  * car: RACEMOD.CPP): given his object, the eye's place and the point to look at, cube-local;
  * TRUE when it has one for where he is. NULL, or FALSE: the follow camera's own. */
 S32 (*FollowCamEyeHook)(S32 *eye, S32 *target) = NULL;
+/* Which of the hook's cameras placed the eye this frame (set by the hook: a race-track
+ * mod's rail, loop, jump ... camera), for camtrace; NULL: the arm's. */
+const char *FollowCamEyeWho = NULL;
+/* The run's tick, for camtrace (CONTROL.CPP's tick hook sets it: -1 without one). */
+long FollowCamTraceTick = -1;
 static S32 FollowCamOwnEye = 0;         /* how far the view has moved onto the hook's eye, of FOLLOW_CAM_OWN_EYE_STEPS */
 static S32 FollowCamOwnEyeAt[3], FollowCamOwnEyeLooks[3];
-#define FOLLOW_CAM_OWN_EYE_STEPS 12
+#define FOLLOW_CAM_OWN_EYE_STEPS 40
+/* The view eases onto the hook's eye from where it was when the hook took it, and back
+ * onto the arm's from where it was when the hook let go: each start held as the eye's and
+ * the target's places from the hero, the eye swung round him from one to the other and
+ * the target slid along, so he stays in the picture all the while. (It eased from the
+ * arm's eye of the frame -- an arm behind a car going up a loop or a jump's ramp swings
+ * round with it: 2,000 a frame near the ease's end -- and back onto the arm in one frame,
+ * 16,000-22,000 and 90-136 degrees: the race-track mod's loops and its carried jump; then,
+ * eased but eye and target apart, 3,000 and 27 degrees a frame, the hero out of the
+ * picture's side, 2026-10-12.) */
+static double FollowCamFromEye[3], FollowCamFromLooks[3];
+static S32 FollowCamLeave = 0;          /* frames left of the ease back onto the arm's eye */
+#define FOLLOW_CAM_LEAVE_STEPS 45
+
+/* Easing in and out over k of n. */
+static double FollowCamEaseW(S32 k, S32 n) {
+    const double s = (double)k / n;
+    return s * s * (3 - 2 * s);
+}
+
+/* The eye from the hero swung from `from` to `to` (w 0..1): round him, its length eased
+ * from one's to the other's; and the target slid from one to the other. Placed at the
+ * hero's place (x, y, z). */
+static void FollowCamSwing(const double *from, const double *to, const double *fromLooks, const double *toLooks, double w,
+                           S32 x, S32 y, S32 z, S32 *eye, S32 *looks) {
+    const double la = sqrt(from[0] * from[0] + from[1] * from[1] + from[2] * from[2]);
+    const double lb = sqrt(to[0] * to[0] + to[1] * to[1] + to[2] * to[2]);
+    double d[3];
+    if (la < 1 OR lb < 1) {
+        for (S32 k = 0; k < 3; k++) d[k] = from[k] + (to[k] - from[k]) * w;
+    } else {
+        double dot = (from[0] * to[0] + from[1] * to[1] + from[2] * to[2]) / (la * lb);
+        if (dot > 1) dot = 1; else if (dot < -1) dot = -1;
+        const double th = acos(dot), s = sin(th);
+        const double ka = s < 1e-3 ? 1 - w : sin((1 - w) * th) / s, kb = s < 1e-3 ? w : sin(w * th) / s;
+        const double len = la + (lb - la) * w;
+        double u[3], lu = 0;
+        for (S32 k = 0; k < 3; k++) { u[k] = from[k] / la * ka + to[k] / lb * kb; lu += u[k] * u[k]; }
+        lu = sqrt(lu);
+        for (S32 k = 0; k < 3; k++) d[k] = lu > 1e-9 ? u[k] / lu * len : from[k] + (to[k] - from[k]) * w;
+    }
+    const S32 at[3] = {x, y, z};
+    for (S32 k = 0; k < 3; k++) {
+        eye[k] = (S32)(at[k] + d[k]);
+        looks[k] = (S32)(at[k] + fromLooks[k] + (toLooks[k] - fromLooks[k]) * w);
+    }
+}
 
 /* A shorter arm than the zoom chosen, where something asks for one (a race-track mod's
  * raised road coming steeply down: RACEMOD.CPP): given the chosen length, the length to
@@ -128,13 +180,20 @@ void FollowCamTrace(void) {
     }
     primed = TRUE;
 
-    Log_Info("[cam] heroBeta %4d add %4d beta %4d target %4d step %5d delay %3d orbit %d moving %d "
-             "zone %d forced %d cine %d follow %d ext %d vue %d alpha %4d dist %6d eye %d,%d,%d",
-             (int)ptr3d->Beta, (int)AddBetaCam, (int)BetaCam, (int)FollowCamTargetBeta,
+    /* (and, for a race-track mod's cameras: what the view looks at, the hero, the cube,
+     * how far the view has eased onto the hook's eye and which of its cameras it is) */
+    const S32 *looks = FollowCamOwnEye OR FollowCamLeave ? FollowCamOwnEyeLooks : NULL;
+    Log_Info("[cam] tick %ld heroBeta %4d add %4d beta %4d target %4d step %5d delay %3d orbit %d moving %d "
+             "zone %d forced %d cine %d follow %d ext %d vue %d alpha %4d dist %6d eye %d,%d,%d "
+             "look %d,%d,%d hero %d,%d,%d cube %d,%d own %d who %s",
+             FollowCamTraceTick, (int)ptr3d->Beta, (int)AddBetaCam, (int)BetaCam, (int)FollowCamTargetBeta,
              (int)step, (int)FollowCamReengageDelay, (int)ManualCameraOrbitActive, (int)moving,
              (int)CameraZone, (int)FlagCameraForcee, (int)CinemaMode, (int)FollowCamera,
              (int)(CubeMode == CUBE_EXTERIEUR), (int)VueCamera, (int)AlphaCam, (int)VueDistance,
-             (int)CameraX, (int)CameraY, (int)CameraZ);
+             (int)CameraX, (int)CameraY, (int)CameraZ,
+             (int)(looks ? looks[0] : VueOffsetX), (int)(looks ? looks[1] : VueOffsetY), (int)(looks ? looks[2] : VueOffsetZ),
+             (int)ptr3d->X, (int)ptr3d->Y, (int)ptr3d->Z, (int)CurrentCubeX, (int)CurrentCubeY, (int)FollowCamOwnEye,
+             FollowCamOwnEye ? (FollowCamEyeWho ? FollowCamEyeWho : "hook") : FollowCamLeave ? "leave" : "arm");
 
     prevBeta = BetaCam;
     prevX = ptr3d->X;
@@ -394,20 +453,37 @@ void UpdateFollowCameraExt(void) {
              * frames from where the arm had it, and then is it. Nothing of the ground
              * clearance below: the hook's eye is where the mod wants it. */
             S32 ownEye[3], ownTarget[3];
+            FollowCamEyeWho = NULL;
             if (FollowCamEyeHook AND FollowCamEyeHook(ownEye, ownTarget)) {
+                const S32 here[3] = {ptr3d->X, ptr3d->Y, ptr3d->Z};
+                if (FollowCamOwnEye == 0) {
+                    /* (from the view as it is: the arm's, or partway back to it) */
+                    for (S32 k = 0; k < 3; k++) {
+                        FollowCamFromEye[k] = (FollowCamLeave > 0 ? FollowCamOwnEyeAt[k] : (k == 0 ? CameraX : k == 1 ? CameraY : CameraZ)) - here[k];
+                        FollowCamFromLooks[k] = (FollowCamLeave > 0 ? FollowCamOwnEyeLooks[k] : (k == 0 ? VueOffsetX : k == 1 ? VueOffsetY : VueOffsetZ)) - here[k];
+                    }
+                    FollowCamLeave = 0;
+                }
                 if (FollowCamOwnEye < FOLLOW_CAM_OWN_EYE_STEPS)
                     FollowCamOwnEye++;
-                const S32 arm[3] = {CameraX, CameraY, CameraZ};
-                const S32 lean[3] = {VueOffsetX, VueOffsetY, VueOffsetZ};
-                for (S32 k = 0; k < 3; k++) {
-                    FollowCamOwnEyeAt[k] = arm[k] + (ownEye[k] - arm[k]) * FollowCamOwnEye / FOLLOW_CAM_OWN_EYE_STEPS;
-                    FollowCamOwnEyeLooks[k] = lean[k] + (ownTarget[k] - lean[k]) * FollowCamOwnEye / FOLLOW_CAM_OWN_EYE_STEPS;
-                }
+                double to[3], toLooks[3];
+                for (S32 k = 0; k < 3; k++) { to[k] = ownEye[k] - here[k]; toLooks[k] = ownTarget[k] - here[k]; }
+                FollowCamSwing(FollowCamFromEye, to, FollowCamFromLooks, toLooks, FollowCamEaseW(FollowCamOwnEye, FOLLOW_CAM_OWN_EYE_STEPS),
+                               here[0], here[1], here[2], FollowCamOwnEyeAt, FollowCamOwnEyeLooks);
                 FollowCamEyeLift = 0;
                 FollowCamAppliedLift = 0;
                 FollowCamGroundSettling = 0;
                 FollowCamPlaceEye(FollowCamOwnEyeAt, FollowCamOwnEyeLooks);
             } else {
+            if (FollowCamOwnEye > 0) {
+                /* (the hook let go: back onto the arm from where the view is) */
+                const S32 here[3] = {ptr3d->X, ptr3d->Y, ptr3d->Z};
+                for (S32 k = 0; k < 3; k++) {
+                    FollowCamFromEye[k] = FollowCamOwnEyeAt[k] - here[k];
+                    FollowCamFromLooks[k] = FollowCamOwnEyeLooks[k] - here[k];
+                }
+                FollowCamLeave = FOLLOW_CAM_LEAVE_STEPS;
+            }
             FollowCamOwnEye = 0;
 
             /* Terrain occlusion clearance: a smooth port of the
@@ -493,6 +569,25 @@ void UpdateFollowCameraExt(void) {
                 FollowCamGroundSettling = 0;
                 FollowCamAppliedLift = 0;
             }
+            /* (easing back onto the arm's eye, as it has just been placed, from the held start) */
+            if (FollowCamLeave > 0) {
+                const S32 here[3] = {ptr3d->X, ptr3d->Y, ptr3d->Z};
+                const S32 armEye[3] = {CameraX, CameraY, CameraZ};
+                const S32 armLooks[3] = {VueOffsetX, VueOffsetY, VueOffsetZ};
+                double to[3], toLooks[3];
+                for (S32 i = 0; i < 3; i++) { to[i] = armEye[i] - here[i]; toLooks[i] = armLooks[i] - here[i]; }
+                FollowCamSwing(FollowCamFromEye, to, FollowCamFromLooks, toLooks,
+                               FollowCamEaseW(FOLLOW_CAM_LEAVE_STEPS - FollowCamLeave + 1, FOLLOW_CAM_LEAVE_STEPS),
+                               here[0], here[1], here[2], FollowCamOwnEyeAt, FollowCamOwnEyeLooks);
+                FollowCamLeave--;
+                /* (the arm's own angle held on its aim meanwhile: it had stood still or
+                 * wandered while the hook had the view, lagged behind its aim coming out,
+                 * and caught up 16 degrees at once in the middle of the ease -- the view
+                 * jumped with it) */
+                BetaCam = FollowCamTargetBeta;
+                if (FollowCamLeave > 0)
+                    FollowCamPlaceEye(FollowCamOwnEyeAt, FollowCamOwnEyeLooks);
+            }
             } /* (not a mod's own eye) */
         } else {
             FollowCamOwnEye = 0;
@@ -523,7 +618,7 @@ void UpdateFollowCameraExt(void) {
  * dropped before anything was drawn, so an eye behind a hill (or under a race track's
  * raised road) stayed there. AffGrilleExt calls this after its own set-up. */
 void FollowCamReapplyLift(void) {
-    if (FollowCamera AND CubeMode == CUBE_EXTERIEUR AND !CameraZone AND !CinemaMode AND FollowCamOwnEye > 0) {
+    if (FollowCamera AND CubeMode == CUBE_EXTERIEUR AND !CameraZone AND !CinemaMode AND (FollowCamOwnEye > 0 OR FollowCamLeave > 0)) {
         FollowCamPlaceEye(FollowCamOwnEyeAt, FollowCamOwnEyeLooks);
         return;
     }
