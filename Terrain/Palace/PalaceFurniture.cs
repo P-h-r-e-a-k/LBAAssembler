@@ -38,7 +38,7 @@ internal static class PalaceFurniture
     };
     // the chests' sprites (SPRITES.HQR): closed and open, the long side along z (342, 343, 346, 347) or x (344, 345, 348); 394 the big one
     private static readonly int[] ChestsAlongZ = { 342, 343, 346, 347 }, ChestsAlongX = { 344, 345, 348 };
-    private const int BigChest = 394;
+    public const int BigChest = 394;
 
     // A placement of a furniture block in a room: its block, room (tile), first cell and size (cells of the island's palace) and the cells it
     // fills there; a portrait's or the round window's block picture (its bricks drawn alone, as the joined map draws them).

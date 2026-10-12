@@ -69,9 +69,10 @@ internal static class BrickBuilding
     }
 
     // Each group's faces as bodies (a few where they are many), appended to `newBodies` (numbered from `firstBody` on), each a decor nothing
-    // touches. Returns the bodies, the faces, and the decors left out (a cube full: `maxPerCube` decors).
+    // touches. Returns the bodies, the faces, and the decors left out (a cube full: `maxPerCube` decors). (`everyCube`: a copy of each in every
+    // cube it reaches, as the race tracks' decks are -- the engine draws and collides only the decors of the cube the hero is in)
     public static (int Bodies, int Faces, int Left) AddBodies(IslandFile island, Dictionary<int, List<Face>> groups, List<byte[]> newBodies, int firstBody,
-        Func<int, string>? what = null, int maxPerCube = IslandDecors.MaxPerCube)
+        Func<int, string>? what = null, int maxPerCube = IslandDecors.MaxPerCube, bool everyCube = false)
     {
         int faceCount = 0, bodyCount = 0, left = 0;
         foreach (var (group, faces) in groups)
@@ -100,6 +101,11 @@ internal static class BrickBuilding
                     throw new InvalidDataException($"{what?.Invoke(group) ?? $"group {group}"}: a body of {chunk.Count} faces from {lo} to {hi} is bigger than a body holds");
                 newBodies.Add(RaceTrackPipes.Write(pts, bodyFaces, lit: false));
                 faceCount += chunk.Count; bodyCount++;
+                if (everyCube)
+                {
+                    left += AddToCubes(island, body, 0, origin.X, (int)Math.Round(origin.Y), origin.Z, lo.X, hi.X, (int)Math.Floor(lo.Y), NoBoxTop, lo.Z, hi.Z, maxPerCube).Full;
+                    continue;
+                }
                 if (IslandDecors.Locate(island, origin.X, origin.Z) is not { } at || at.Cube.Decors.Count >= maxPerCube) { left++; continue; }
                 var d = IslandDecors.Blank(body, at.X, (int)Math.Round(origin.Y), at.Z);
                 d.XMin = (int)Math.Floor(at.X + lo.X - origin.X); d.XMax = (int)Math.Ceiling(at.X + hi.X - origin.X);
@@ -113,12 +119,19 @@ internal static class BrickBuilding
     // The collision boxes (world units), each a decor with the empty body `empty`. Returns the boxes placed and those left out (a cube full:
     // `maxPerCube` decors).
     public static (int Boxes, int Left) AddBoxes(IslandFile island, int empty, IEnumerable<(double X0, double Y0, double Z0, double X1, double Y1, double Z1)> boxes,
-        int maxPerCube = IslandDecors.MaxPerCube)
+        int maxPerCube = IslandDecors.MaxPerCube, bool everyCube = false)
     {
         int count = 0, left = 0;
         foreach (var (bx0, by0, bz0, bx1, by1, bz1) in boxes)
         {
             double cx = (bx0 + bx1) / 2, cz = (bz0 + bz1) / 2;
+            if (everyCube)
+            {
+                var (placed, full) = AddToCubes(island, empty, 0, cx, (int)Math.Round(by0), cz, bx0, bx1, (int)Math.Floor(by0), (int)Math.Ceiling(by1), bz0, bz1, maxPerCube);
+                if (placed > 0) count++;
+                left += full;
+                continue;
+            }
             if (IslandDecors.Locate(island, cx, cz) is not { } at || at.Cube.Decors.Count >= maxPerCube) { left++; continue; }
             var d = IslandDecors.Blank(empty, at.X, (int)Math.Round(by0), at.Z);
             d.XMin = (int)Math.Floor(at.X + bx0 - cx); d.XMax = (int)Math.Ceiling(at.X + bx1 - cx);
@@ -128,6 +141,29 @@ internal static class BrickBuilding
             count++;
         }
         return (count, left);
+    }
+
+    // One decor in every cube its box reaches into (world units), each copy in that cube's own frame (its place may then be outside
+    // 0..32767) -- RaceTrackBuilder's way for its decks. Returns the copies placed and the cubes too full to take one.
+    public static (int Placed, int Full) AddToCubes(IslandFile island, int body, int beta, double wx, int y, double wz,
+        double minX, double maxX, int yMin, int yMax, double minZ, double maxZ, int maxPerCube = IslandDecors.MaxPerCube)
+    {
+        var size = (double)IslandFile.CubeSize;
+        int placed = 0, full = 0;
+        for (var cz = (int)Math.Floor(minZ / size); cz <= (int)Math.Floor((maxZ - 1e-6) / size); cz++)
+        for (var cx = (int)Math.Floor(minX / size); cx <= (int)Math.Floor((maxX - 1e-6) / size); cx++)
+        {
+            if (island.CubeAt(cx, cz) is not { } cube) continue;
+            if (cube.Decors.Count >= maxPerCube) { full++; continue; }
+            var ox = cx * size; var oz = cz * size;
+            var d = IslandDecors.Blank(body, (int)Math.Round(wx - ox), y, (int)Math.Round(wz - oz), beta);
+            d.XMin = (int)Math.Floor(minX - ox); d.XMax = (int)Math.Ceiling(maxX - ox);
+            d.ZMin = (int)Math.Floor(minZ - oz); d.ZMax = (int)Math.Ceiling(maxZ - oz);
+            d.YMin = yMin; d.YMax = yMax;
+            cube.Decors.Add(d);
+            placed++;
+        }
+        return (placed, full);
     }
 
     // The nearest colour of a palette (6-bit or 8-bit) to `c`, weighted as the eye sees, entries 1-254; remembered in `cache`.

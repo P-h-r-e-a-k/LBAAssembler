@@ -1,4 +1,4 @@
-# The Palace island: Otringal's palace as a building of its own (2026-10-08, its outside and furniture 2026-10-12)
+# The Palace island: Otringal's palace as a building of its own (2026-10-08, its outside and furniture 2026-10-12, on its hill 2026-10-12)
 
 The user: "We need to create a new track based on the Palace that's featured on Otringal, this will need to be recreated as a new island.
 The idea behind this track is that the cars race through the inside of the palace, through the window by the chest that Twinsen normally
@@ -7,6 +7,58 @@ a track to it later, let's just get our Palace island created for now".
 
 And then (2026-10-12): "The Palace island we created needs work. We need to add in the outside of the palace as featured in Otringal.ile
 ... Let's also see if for each inside room of the palace we can recreate the decor that each room naturally has".
+
+And then, with a picture of Otringal's palace from above: "Our new palace has a weird ground area that we should get rid of. The original
+palace is sat on a raised cliff area - I've added a picture. We need to make the outside look more like the original. Perhaps scaling up
+the roof section, or adding more towers to the roof section. It's okay for the inside to be underground. We may also need to scale up the
+size of the inside of the palace so we can drive through the rooms", with the track's brief: "through the palace rooms, coming out the
+window and around the roof tops? Point-to-point i.e. no laps, finishing with massive jump to harbor teleport".
+
+## On its hill (2026-10-12, later)
+
+![The palace on its hill: the cliffs falling to the cloud sea, the harbour's quay and the teleporter's pillar at its foot, the wing of towers on the long hall's roof](palace/palace_hill.png)
+
+![The domes on the hilltop over the sixteen rooms, the arch in front of the porch, the rocks round the terrace](palace/palace_domes.png)
+
+On Otringal's island the palace's halls stand on the flat top of a hill 17,000 high (cube (8, 7)), ringed by rocks a little higher, its
+sides cliffs falling to the cloud sea, all of it a mossy rock. Now the Palace island is that hill, with the rooms inside it:
+
+- **The rooms 4 times a brick across** (they were 3): a door between two rooms, two bricks, is 4,096 wide. The race cars' collision boxes
+  are some 1,300 across and turn on some 5.5 cells at speed (the race-track docs), so a door is about three cars wide; a room is some
+  27,000 across. The palace is 224 x 404 cells of the island, 14 layers of 640.
+- **Under the hill** (`Terrain/Palace/PalaceCliff.cs`): the rooms' floor's foot at 10,000, their roofs' top at 19,216 -- the hilltop. Round
+  the rooms the ground is the hill's: a terrace 10 cells wide, flat at the hilltop (the palace's foot, as Otringal's palace stands on the
+  flat middle of its hill), then rocks -- crags on swells -- rising towards the plateau's edge, up to 6,000 over it; the plateau reaching 30
+  cells give or take 12 beyond the rooms' outline (its hull: the corner of the L between the long hall and the sixteen rooms is hilltop
+  too), bays and spurs; and its sides cliffs, 9 cells give or take 4, ragged, falling to the sea floor. All of it Otringal's mossy rock
+  (its ground atlas, 4 x 4 tiles of 32 pixels as its hill has it), lit as the island's sun falls on it, with the cliffs' shadows; the sea --
+  Otringal's cloud sea -- everywhere the ground isn't over it. Under the rooms the ground is low (the floor's foot), out of sight.
+- **The roofs are the hilltop's rock**: their tops are Otringal's mossy rock too -- textured polygons of `OTRINGAL.OBL`'s page's rock (its
+  64-pixel tile, the ground's rock at half its size, so 32 units a pixel; repeated, 8,192 units a polygon, 727 of them), one body a cube.
+- **Two ways across the rocks** stay flat at the hilltop, 18 cells wide: east from the sixteen rooms' roof to the cliff's edge (the
+  runway for the jump to the harbour), and from the hill's north-east edge across the corner of the L to the sixteen rooms' roof (where a
+  road from the round window will come up onto the hill).
+- **The round window open**: the long hall's end stands on the cliff's edge, the ground at its foot the floor's; its round window (the one
+  Twinsen leaves by, 4 bricks wide and 8 layers high, its sill 3 layers over the floor's foot) is open through the wall onto the sky, the
+  cars' way out. The big chest under it is gone. The palace's front door (room 154's, which led out onto Otringal's hilltop) is in the
+  hill now, and filled.
+- **On the roofs, a bigger palace**: Otringal's palace 5.5 times its size (86,642 x 100,639, 26,813 high) over the sixteen rooms, its arch
+  in front of its porch as Otringal has it -- on the hilltop now, big enough to drive through (9,400 between its posts) -- and a wing on
+  the long hall's roof: two smaller halls as Otringal's north hall (two small domes, its wing, its turret), 3.5 times their size. Their
+  shape from above is the collision (152 boxes); the arch is solid.
+- **The harbour**: east of the hill, a quay at 1,400 (Otringal's lowest) at the cliffs' foot, and out in the bay a rock pillar 6 cells
+  across, its top level with the hilltop (19,416) -- for the Dark Monk's teleporter, the race's finish.
+- **Every body and box in every cube it reaches**: the engine draws and collides only the decors of the cube the hero is in (the race
+  tracks' decks are placed the same way), up to this editor's engine's 1,000 a cube; the busiest has 110.
+- **The sky** is at 48,000 (Otringal's is at 22,199, under the domes' tops).
+- The island: 7 x 9 cubes from cube (4, 3), 63 cubes.
+
+![From above, as the user's picture of Otringal's: the domes on the hilltop, the rocks round them, the harbour's pillar east](palace/palace_top.png)
+
+![The long hall's end on the cliff's edge: its windows and the open round window between them](palace/palace_window_end.png)
+
+What follows is the first island (2026-10-08) and its outside and furniture (2026-10-12): the rooms and their furniture are still built
+that way; the ground, the scale and the outside's place are as above now.
 
 ![Otringal's palace on the sixteen rooms' roof, the arch round the door out, the long hall's windows](palace/palace_outside.png)
 
