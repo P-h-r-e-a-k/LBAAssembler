@@ -79,6 +79,9 @@ void DrawSkySeaZBuf() {
 /*──────────────────────────────────────────────────────────────────────────*/
 
 void ClsTerrainZBuf() {
+    extern U32 DecorFrame;
+    DecorFrame++; // (a new frame: every decor may be drawn once again -- DECORS.CPP DrawnThisFrame)
+    if (DecorFrame == 0) DecorFrame = 1;
     SetClearColor((U8)FogCoul);
     Cls();
     SetClearColor(0);

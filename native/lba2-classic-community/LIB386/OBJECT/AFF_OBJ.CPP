@@ -1372,10 +1372,12 @@ S16 TestZFar3(STRUC_POLY3_ENV *poly) {
 // ground under the rooms showed in a band along the screen's foot. A body with MASK_OBJECT_CLOSE in its Info (the palace's) has its
 // polygons cut CLOSE_NEAR in front of the camera instead: what is nearer than the near plane, the engine's only, is drawn too.
 // So close, a polygon's corner out to the side goes far off the screen, past what a screen point holds (16 bits): the polygon is cut at
-// the sides of a view CLIP_SIDE pixels either way of the middle too.
+// the sides of a view CLIP_SIDE pixels either way of the middle too. Not much further: the filler cuts a polygon to the screen in 16.16
+// fixed point (POLY.CPP Generic_ClipXMin and the rest: a difference of two corners << 16), and two corners more than 32,767 apart
+// overflowed it -- the palace's floor merged into rectangles 12 cells across, cut at the near plane, went from the picture whole.
 #define CLIP_MARK 0xFF // (a sorted entry's type byte: a cut polygon, its offset the index in ClippedInfo)
 #define MAX_CLIPPED MAX_NB_POLYS
-#define CLIP_SIDE 30000
+#define CLIP_SIDE 8000
 #define CLIP_MAX_PTS 12 // (4 corners and one more for each of the 5 planes cut at)
 static U32 ClippedInfo[MAX_CLIPPED]; // (each cut polygon's own sorted entry: its type, its offset in the body)
 static S32 NbClipped = 0;

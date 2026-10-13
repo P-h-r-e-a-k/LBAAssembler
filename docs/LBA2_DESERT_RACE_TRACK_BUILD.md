@@ -3232,8 +3232,9 @@ The user: "There's terrain clipping through the palace floor and visible inside 
   along the screen's foot. A body with the flag has its polygons cut 400 in front instead -- what is nearer than the engine's near plane
   is drawn too -- and `DECORS.CPP` keeps one of LBA Assembler's drawn-only decors while a corner of its foot is 400 in front (not the near
   plane's 3,000). The palace's rooms, roof rock and turrets have it (`BrickBuilding.CloseFlag`).
-- *The rooms in every cube they are seen from* (`docs/LBA2_PALACE_ISLAND.md`): the floor under the camera, in the cube behind the car's,
-  went from the picture with the rest of that cube's.
+- *The rooms in every cube they are seen from* (`docs/LBA2_PALACE_ISLAND.md`): the game draws the decors of the 3 x 3 cubes round the
+  camera's, and a room further off, seen down a row of doors, wasn't drawn. (First put down here as what brought back the floor under the
+  camera; that was the cut quads. The copies made the palace slow -- the next section.)
 - *Race-track pieces up to 1,000 a cube* (`IslandDecors.MaxPerCubeRaceTrack`). The builder placed its pieces up to the retail engine's
   200 decors a cube; with the rooms in every cube the palace's start gate and 23 of its 27 floor arrows were left out (the report even said
   the gate was "off the island" -- now "its cube full"). A race track is played in this editor's engine only, which draws 1,000.
@@ -3242,6 +3243,43 @@ The user: "There's terrain clipping through the palace floor and visible inside 
 - Checked: the test pilot through the rooms, a picture every 40 frames -- the floor to the screen's foot in every one; won in 60.7 s, and
   with power-ups lost (54.5 s; opponents' skill is drawn anew each run); no car rescued. The Emerald Moon's lap, a picture every 30 frames:
   the loops and rings as before, 63.5 s. The thirteen other tracks built by the last commit's code and this one: all 42 files the same.
+
+### The palace fast again (2026-10-13, later still)
+
+The user: "Our palace track is now very laggy, and it's very laggy to view in our editor window too, is there anything we can do to
+improve this". Measured with the engine's `perftrace` (headless, 1280 x 720, the test pilot through the rooms and the hall: `perf.sh`):
+the frame took 61 ms (16 a second) in the rooms where the island before the copies had taken 25 ms; the editor's 3D view took 330 to
+760 ms a frame.
+
+- *Every copy drawn.* A cube's decors are drawn with its ground (`TERRAIN.CPP` `AffichageTerrainZBuf`), and the game draws the 3 x 3
+  cubes round the camera's -- the editor's view every cube of the island (`EXTFUNC.CPP` `AffGrilleExtArea`). A body in every cube within
+  the far plane was drawn once for each of them: nine times a frame in the game, some thirty in the editor, each time all its points
+  turned and projected and its polygons filled at the same place. One of LBA Assembler's drawn-only decors -- its box's top under its
+  bottom -- is now drawn once a frame (`DECORS.CPP` `DrawnThisFrame`: the same body at the same place in the island, turned the same;
+  `LoadCube` notes which cube's list is loaded, `ClsTerrainZBuf` starts a frame). A race track's decks, copied into each cube they
+  reach, were drawn twice where they cross a cube's edge: once now. A retail decor is drawn as before.
+- *Out of the view, left out first.* Such a decor wholly behind the camera, off to a side or past the far plane is left out before its
+  points are turned, by its body's own box (its points', worked out once a body; `DecorOutOfView`, `BoxOutOfView`). A few per cent.
+- *The editor's view.* Its cube data was unpacked again every frame: the per-cube caches held 20 cubes' worth (the retail engine draws 9)
+  and, by memory, 10 of the palace's decor lists of 18 KB; the editor goes round the 54 of the palace's island. They hold a whole island
+  now, 16 x 16 cubes (`DEFINES.H` `MAX_*_MEM`, `LBA_EXT.H` `ISLE_CUBE_SLOTS`; some 35 MB): 22 ms of the frame to 0.2. And a cube wholly
+  out of the view is neither loaded nor drawn; the 3 x 3 round the camera, drawn by the loop over the island's cubes, isn't drawn again
+  before it (`DrawHorizon2ZBuf`).
+- *The cut polygons* (the near plane's, above) are cut at 8,000 pixels either way of the middle, not 30,000: the filler cuts a polygon to
+  the screen in 16.16 fixed point and two corners more than 32,767 apart overflowed it.
+- Tried and left: the rooms' faces merged back into rectangles of up to 12 cells (19,000 faces, not 33,000): 10 % faster, but the filler
+  takes a polygon's depth straight across the screen, and on a long rectangle running away from the camera it is too far in the middle --
+  the ground under the floor came through in big patches. The faces stay a cell across (`PalaceIsland.NearRun`).
+
+| | rooms (frame 400) | rooms (1200) | hall (2400) | editor's view |
+|---|---|---|---|---|
+| v2026-10-13c | 61 ms | 58 ms | 31 ms | 330-760 ms |
+| the island before the copies, the engine then | 25 ms | 22 ms | 20 ms | -- |
+| now | 19 ms | 18 ms | 13 ms | 29-54 ms |
+
+Checked: the test pilot through the palace, a picture every 40 frames, as before (won in 58.8 s; with power-ups 49.5 s); the Emerald
+Moon's lap a picture every 30 frames: 81 of 111 the same to the pixel, the rest by a few pixels but the last five, where the grid's
+opponents stood in other places (drawn at random); the editor's views of the palace as before.
 
 ## The game has the keyboard from the start (2026-10-12)
 

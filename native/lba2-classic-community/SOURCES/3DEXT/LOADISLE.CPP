@@ -89,27 +89,28 @@ S32 InitExternalView() {
     if (!HQR_Isle_Obj)
         TheEnd(NOT_ENOUGH_MEM, "HQR_Isle_Obj (3DExt)");
 
-    HQR_CubeInfos = HQR_Init_Ressource("", CubeInfosMem, MAX_CUBES_PER_ISLE);
+    // (the per-cube caches: a slot for each cube an island can have -- DEFINES.H's MAX_CUBE_INFOS_MEM comment)
+    HQR_CubeInfos = HQR_Init_Ressource("", CubeInfosMem, ISLE_CUBE_SLOTS);
     if (!HQR_CubeInfos)
         TheEnd(NOT_ENOUGH_MEM, "HQR_CubeInfos (3DExt)");
 
-    HQR_ListDecors = HQR_Init_Ressource("", ListDecorsMem, MAX_CUBES_PER_ISLE);
+    HQR_ListDecors = HQR_Init_Ressource("", ListDecorsMem, ISLE_CUBE_SLOTS);
     if (!HQR_ListDecors)
         TheEnd(NOT_ENOUGH_MEM, "HQR_ListDecors (3DExt)");
 
-    HQR_MapPGround = HQR_Init_Ressource("", MapPGroundMem, 200 /*MAX_CUBES_PER_ISLE*/);
+    HQR_MapPGround = HQR_Init_Ressource("", MapPGroundMem, ISLE_CUBE_SLOTS);
     if (!HQR_MapPGround)
         TheEnd(NOT_ENOUGH_MEM, "HQR_MapPGround (3DExt)");
 
-    HQR_ListTexDef = HQR_Init_Ressource("", ListTexDefMem, MAX_CUBES_PER_ISLE);
+    HQR_ListTexDef = HQR_Init_Ressource("", ListTexDefMem, ISLE_CUBE_SLOTS);
     if (!HQR_ListTexDef)
         TheEnd(NOT_ENOUGH_MEM, "HQR_ListTexDef (3DExt)");
 
-    HQR_MapSommetY = HQR_Init_Ressource("", MapSommetYMem, MAX_CUBES_PER_ISLE);
+    HQR_MapSommetY = HQR_Init_Ressource("", MapSommetYMem, ISLE_CUBE_SLOTS);
     if (!HQR_MapSommetY)
         TheEnd(NOT_ENOUGH_MEM, "HQR_MapSommetY (3DExt)");
 
-    HQR_MapIntensity = HQR_Init_Ressource("", MapIntensityMem, MAX_CUBES_PER_ISLE);
+    HQR_MapIntensity = HQR_Init_Ressource("", MapIntensityMem, ISLE_CUBE_SLOTS);
     if (!HQR_MapIntensity)
         TheEnd(NOT_ENOUGH_MEM, "HQR_MapIntensity (3DExt)");
 
@@ -288,6 +289,12 @@ S32 LoadCube(S32 x, S32 y) {
     MapSommetY = (S16 *)HQR_Get(HQR_MapSommetY, index + HQR_CUBE_Y);
 
     MapIntensity = (U8 *)HQR_Get(HQR_MapIntensity, index + HQR_CUBE_LUM);
+
+    // (the cube whose decors ListDecors now holds: a decor copied into several cubes is drawn once a frame, by its place in the island --
+    // DECORS.CPP DrawnThisFrame)
+    extern S32 DecorCubeX, DecorCubeZ;
+    DecorCubeX = x;
+    DecorCubeZ = y;
 
     return TRUE;
 }

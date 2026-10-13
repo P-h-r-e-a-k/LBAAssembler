@@ -46,8 +46,9 @@ namespace LBAAssembler.Terrain.Palace;
 //   - the long hall's end stands on the cliff's edge, its round window (the one Twinsen leaves by) open through the wall onto the sky -- the
 //     cars' way out -- the big chest under it gone;
 //   - on the roofs, Otringal's palace bigger, its arch in front of its porch, and a wing of towers on the long hall's roof (PalaceOutside);
-//   - every body and box in every cube it reaches (the engine draws and collides only the decors of the cube the hero is in), as many a
-//     cube as this editor's engine takes;
+//   - every body and box in every cube it reaches (the engine collides only with the decors of the cube the hero is in), the bodies in
+//     every cube they can be seen from too (it draws those of the 3 x 3 cubes round the camera's), as many a cube as this editor's engine
+//     takes;
 //   - east of the hill, a harbour: a quay at its foot and, out in the bay, a rock pillar level with the hilltop -- the teleporter's.
 internal static class PalaceIsland
 {
@@ -457,8 +458,8 @@ internal static class PalaceIsland
         var harbour = new PalaceCliff.Harbour((quayX0, midZ - 34, quayX0 + 26, midZ + 34), QuayY, (east + PillarOut, midZ, PillarRadius, hilltop + PillarRise));
 
         // ---- the bodies: each room's faces (a few bodies where they are many), each a decor nothing touches, in every cube it can be seen
-        // from (the engine draws the hero's cube's decors only: the floor under a car's camera, a cube back, went missing) -- and drawn close
-        // to the camera (BrickBuilding.CloseFlag: cut at the near plane, the floor under the camera let the ground show)
+        // from (the engine draws the decors of the 3 x 3 cubes round the camera's: a room further off, seen down a row of doors, wasn't) --
+        // and drawn close to the camera (BrickBuilding.CloseFlag: cut at the near plane, the floor under the camera let the ground show)
         var oblBytes = File.ReadAllBytes(Path.Combine(sourceDirectory, SourceObl));
         var next = HqrArchive.CountEntries(Path.Combine(sourceDirectory, SourceObl));
         var newBodies = new List<byte[]>();
@@ -643,8 +644,8 @@ internal static class PalaceIsland
                 var number = firstBody + newBodies.Count;
                 newBodies.Add(body.Write());
                 bodies++; faces += bodyFaces.Count;
-                // (in every cube it can be seen from: the engine draws only the camera's cube's decors, and from the others the roof was
-                // see-through -- PalaceOutside.Seen)
+                // (in every cube it can be seen from: the engine draws the decors of the 3 x 3 cubes round the camera's, and from further
+                // the roof was see-through -- PalaceOutside.Seen)
                 BrickBuilding.AddToCubes(island, number, 0, origin.X, (int)Math.Round(origin.Y), origin.Z, lx, hx, (int)Math.Floor(ly), BrickBuilding.NoBoxTop, lz, hz, maxPerCube, PalaceOutside.Seen);
             }
         return (bodies, faces);
@@ -659,6 +660,9 @@ internal static class PalaceIsland
     // through the floor near the camera, the sky through the long hall's roof (the user, 2026-10-12: the palace's rooms with no road in them,
     // the floor was the cars' own). A cell across, 2,048: what goes is under the bottom of the picture at a near plane of 2,000 or less --
     // the game's 3,000 at 480 lines high, scaled down for more, EXTFUNC.CPP)
+    // (Since 2026-10-13 the engine cuts such polygons at the near plane instead -- but keep the cell: the filler takes a polygon's depth
+    // straight across the screen, not as the perspective has it, and on a rectangle 12 cells long running away from the camera that is
+    // too far in its middle -- the ground under the floor, 700 below, came through in big patches again; tried and measured: 10 % faster.)
     private const int NearRun = 1;
     private static Dictionary<int, List<BrickBuilding.Face>> Faces(Dictionary<(int X, int Y, int Z), (int Brick, int Tile)> cells,
         Func<(int X, int Y, int Z), int, int, float, int> colour, Func<int, int, int, Vector3> corner)

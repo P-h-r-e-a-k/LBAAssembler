@@ -1050,10 +1050,12 @@ void AffGrilleExtArea(int x0, int z0, int x1, int z1) {
 
     ManageSystem();
 
+    // (the cubes round the camera's own are drawn by the loop below when they are in the area: drawn here too they were drawn twice)
+    const int ringInArea = CurrentCubeX - 1 >= x0 && CurrentCubeX + 1 <= x1 && CurrentCubeY - 1 >= z0 && CurrentCubeY + 1 <= z1;
 #ifdef LBA_EDITOR
-    if ((FlagInfos & INFO_HORIZON) && RendererDrawSky)
+    if ((FlagInfos & INFO_HORIZON) && RendererDrawSky && !ringInArea)
 #else
-    if (FlagDrawHorizon && RendererDrawSky)
+    if (FlagDrawHorizon && RendererDrawSky && !ringInArea)
 #endif
     {
         DrawHorizon2ZBuf();
@@ -1067,6 +1069,16 @@ void AffGrilleExtArea(int x0, int z0, int x1, int z1) {
 
             S32 localOffsetX = centerWorldX - cx * WIDE_WORLD_CUBE_SIZE;
             S32 localOffsetZ = centerWorldZ - cy * WIDE_WORLD_CUBE_SIZE;
+            // A cube wholly out of the view is not loaded nor drawn (the Emperor's palace's island is 54 cubes, each drawn every frame:
+            // 2026-10-13, "it's very laggy to view in our editor window too"): its column, from under the sea floor to well over the
+            // tallest decor, half a cube wider all round (a decor may stand out of its cube), against the view (DECORS.CPP BoxOutOfView).
+            {
+                extern int BoxOutOfView(const S32 lo[3], const S32 hi[3], S32 nearZ);
+                SetFollowCamera(localOffsetX, centerWorldY, localOffsetZ, AlphaCam, BetaCam, GammaCam, VueDistance);
+                const S32 lo[3] = {-WIDE_WORLD_CUBE_SIZE / 2, -20000, -WIDE_WORLD_CUBE_SIZE / 2};
+                const S32 hi[3] = {WIDE_WORLD_CUBE_SIZE + WIDE_WORLD_CUBE_SIZE / 2, 140000, WIDE_WORLD_CUBE_SIZE + WIDE_WORLD_CUBE_SIZE / 2};
+                if (BoxOutOfView(lo, hi, 1)) continue;
+            }
             // Every cube in the loop -- including (dx,dy)==(0,0), the
             // primary/camera-target cube -- reloads its own terrain/scene
             // here, with no special case that skips it. An earlier version

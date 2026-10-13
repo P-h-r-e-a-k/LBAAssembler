@@ -54,6 +54,7 @@ S32	Max3( S32 a, S32 b, S32 c ) ;
 #define	SIZE_MAIN_MAP		16
 
 #define	MAX_CUBES_PER_ISLE	20	// desert
+#define	ISLE_CUBE_SLOTS		256	// (the per-cube caches' slots, LOADISLE.CPP: as many as an island's cubes can be, 16 x 16)
 
 // cube infos
 #define		INFO_ALPHA_LIGHT	0

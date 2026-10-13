@@ -23,8 +23,8 @@ namespace LBAAssembler.Terrain.Palace;
 //   - over the sixteen rooms two by two, each hall filling a quarter of their roof (SlotFill of it), turned to vary; along the long hall's
 //     part out of them, the north hall one after another; each Tall times as tall as it is wide -- 6 to 9 times their own width, 30,000 to
 //     60,000 high where they stood 26,000 (TurretBody: wider and taller apart, about their middle height);
-//   - each body drawn only (its box touches nothing, as the rooms' are), in every cube it can be seen from (`Seen`: the engine draws and
-//     collides only the decors of the cube the hero is in), and drawn close to the camera (BrickBuilding.CloseFlag);
+//   - each body drawn only (its box touches nothing, as the rooms' are), in every cube it can be seen from (`Seen`: the engine draws the
+//     decors of the 3 x 3 cubes round the camera's, each copy once a frame), and drawn close to the camera (BrickBuilding.CloseFlag);
 //   - the halls' shape seen from above (Cell x Cell columns as high as their tops, up to MaxClimb layers over the roof -- all of them) as
 //     collision boxes, so a car round the rooftops goes round the turrets, not through them.
 internal static class PalaceOutside
@@ -44,9 +44,9 @@ internal static class PalaceOutside
     public const double Tall = 1.35;
     public const double TallMost = 12.5;        // (times the hall's own height at the most: a body's points are 16-bit about its middle)
     public const int MaxClimb = 100;            // the collision's layers over the roof at the most (all of the tallest turret)
-    // (the engine draws only the decors of the cube its camera's hero is in: each piece of a turret is in every cube it can be seen from --
-    // as far round it as the far plane -- or from all but a few cubes a turret stood with quarters missing, the sky through it: the user,
-    // 2026-10-13, "a lot of points on our new roof that isn't full and can be seen through")
+    // (the engine draws the decors of the 3 x 3 cubes round the camera's: each piece of a turret is in every cube it can be seen from --
+    // as far round it as the far plane -- or from further than a cube off a turret stood with quarters missing, the sky through it: the
+    // user, 2026-10-13, "a lot of points on our new roof that isn't full and can be seen through". DECORS.CPP draws the copies once a frame)
     public const double Seen = PalaceCliff.FarClip;
 
     // Where the turrets go: the sixteen rooms' extent (world units), the roof's top, the building's cell and layer; the long hall's extent

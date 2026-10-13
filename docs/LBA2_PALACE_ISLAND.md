@@ -214,12 +214,13 @@ through the palace floor and visible inside as pictured, we should fix this also
 
 ![The turrets whole in the editor's 3D view, from a cube away](palace/turrets_editor.png)
 
-- **Seen from another cube.** The engine draws only the decors listed in the cube it stands in -- in Play the hero's, in the editor's 3D
-  view the cube it loads -- and the turrets' pieces, the roof's rock and the rooms' bodies were listed only in the cubes their boxes reach.
-  From further off a turret stood with quarters missing and the sky showed through the roof; in the rooms the floor under the camera,
-  nine cells behind the car and so often in the cube before, went. Each is now listed in every cube within the far plane of it (70,000:
-  `PalaceOutside.Seen`; `BrickBuilding.AddBodies`/`AddToCubes`' `reach`, the copy keeping its own box): 6,147 decors in all, the busiest
-  cube 379 of the 1,000 this editor's engine draws.
+- **Seen from another cube.** The game draws the decors listed in the 3 x 3 cubes round the camera's own (the editor's 3D view: every cube
+  of the island), and the turrets' pieces, the roof's rock and the rooms' bodies were listed only in the cubes their boxes reach: from
+  further than a cube off a turret stood with quarters missing and the sky showed through the roof. Each is now listed in every cube
+  within the far plane of it (70,000: `PalaceOutside.Seen`; `BrickBuilding.AddBodies`/`AddToCubes`' `reach`, the copy keeping its own
+  box): 6,147 decors in all, the busiest cube 379 of the 1,000 this editor's engine draws. (This round's notes first had the engine
+  drawing the hero's cube's decors only, and the copies bringing back the floor under the camera; it draws the 3 x 3, and what brought the
+  floor back was the cut quads, below. Drawing every copy made the palace slow: see the next section.)
 - **Behind the camera.** The engine dropped a polygon whole when a corner of it was behind the camera's near plane (3,000 in front at 480
   lines): the floor's squares under the camera went and the ground, 700 under the floor, showed through; near the editor's camera the
   roof's rock had holes the sky showed through. It now cuts them at the plane (`AFF_OBJ.CPP`, every polygon type, its map points and light
@@ -228,6 +229,15 @@ through the palace floor and visible inside as pictured, we should fix this also
   `BrickBuilding.CloseFlag`, no retail body has it) that has them cut 400 in front of the camera instead. The floor runs to the screen's foot.
 - The island's own ground (the cliffs' tops) is cut at the near plane as in the retail game: in the editor's 3D view, close to a cliff's
   edge, a wedge of sky can show there.
+
+## Fast again (2026-10-13, later still)
+
+The user: "Our palace track is now very laggy, and it's very laggy to view in our editor window too". The copies in every cube were all
+drawn -- the game draws the 3 x 3 cubes round the camera's, the editor's view every cube -- nine times a frame in the game, some thirty in
+the editor: 61 ms a frame in the rooms (1280 x 720) where the island had taken 25, and 330 to 760 ms a frame in the editor. The engine now
+draws each of them once a frame, leaves out one wholly out of the view first, and holds a whole island's cubes in its caches (the editor
+unpacked the palace's 54 cubes again every frame): 19 ms in the rooms, 13 in the hall, 29 to 54 ms in the editor. Details, and the
+faces merged back into bigger rectangles (tried, left): `docs/LBA2_DESERT_RACE_TRACK_BUILD.md`, "The palace fast again".
 
 ## Making it
 

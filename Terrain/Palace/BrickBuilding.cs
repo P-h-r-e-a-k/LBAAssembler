@@ -76,8 +76,9 @@ internal static class BrickBuilding
 
     // Each group's faces as bodies (a few where they are many), appended to `newBodies` (numbered from `firstBody` on), each a decor nothing
     // touches. Returns the bodies, the faces, and the decors left out (a cube full: `maxPerCube` decors). (`everyCube`: a copy of each in every
-    // cube it reaches, as the race tracks' decks are -- the engine draws and collides only the decors of the cube the hero is in; and with
-    // `reach`, in every cube within that of it too: those it can be seen from. `close`: the bodies drawn close to the camera, CloseFlag)
+    // cube it reaches, as the race tracks' decks are -- the engine collides only with the decors of the cube the hero is in, and draws those
+    // of the cubes next to it too; and with `reach`, in every cube within that of it too: those it can be seen from (AddToCubes). `close`:
+    // the bodies drawn close to the camera, CloseFlag)
     public static (int Bodies, int Faces, int Left) AddBodies(IslandFile island, Dictionary<int, List<Face>> groups, List<byte[]> newBodies, int firstBody,
         Func<int, string>? what = null, int maxPerCube = IslandDecors.MaxPerCube, bool everyCube = false, bool close = false, double reach = 0)
     {
@@ -155,8 +156,9 @@ internal static class BrickBuilding
 
     // One decor in every cube its box reaches into (world units), each copy in that cube's own frame (its place may then be outside
     // 0..32767) -- RaceTrackBuilder's way for its decks. Returns the copies placed and the cubes too full to take one.
-    // (`reach`: in every cube that far round its box too -- the engine draws only the decors of the cube the camera's hero is in, so a
-    // thing seen from afar, the Emperor's palace's turrets over its roof, has a copy in each cube it can be seen from; its box stays its own)
+    // (`reach`: in every cube that far round its box too -- the engine draws the decors of the cubes round the camera's own, the 3 x 3, so
+    // a thing seen from further, the Emperor's palace's turrets over its roof, has a copy in each cube it can be seen from; its box stays its
+    // own. The engine draws such copies once a frame: DECORS.CPP DrawnThisFrame)
     public static (int Placed, int Full) AddToCubes(IslandFile island, int body, int beta, double wx, int y, double wz,
         double minX, double maxX, int yMin, int yMax, double minZ, double maxZ, int maxPerCube = IslandDecors.MaxPerCube, double reach = 0)
     {
