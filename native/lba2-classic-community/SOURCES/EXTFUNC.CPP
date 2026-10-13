@@ -2375,6 +2375,7 @@ static void DoAnimExtGround(U8 numobj) {
     // stands on one, in more than one place above -- still inside its rail, and not through the road he stood on
     if (numobj == NUM_PERSO) {
         RaceMod_Rail(OldX, OldY, OldZ, &Nxw, &Nzw);
+        RaceMod_OpenWall(OldX, OldY, OldZ, &Nxw, &Nzw);
         RaceMod_Floor(OldX, OldY, OldZ, Nxw, &Nyw, Nzw);
     }
 

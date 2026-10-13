@@ -11,7 +11,8 @@ namespace LBAAssembler.Terrain.Palace;
 //     the rest of it: the palace's foot, as Otringal's palace stands on the flat middle of its hill), and beyond it rocks, rising -- the
 //     more towards the plateau's edge, its rim -- up to RockRise over it (but along the Corridors, flat: the ways a road crosses the rocks).
 //     The roof top scaled up for the race round it (the user, 2026-10-12: "let's scale up the roof top so it covers more of the outside of
-//     the palace area"): it was 10 cells round the rooms themselves, the L's corner rocks;
+//     the palace area"; 2026-10-13: "Let's make the roof top bigger"): it was 10 cells round the rooms themselves, the L's corner rocks,
+//     then 24 round their outline on a plateau reaching 30 -- now 54 on one reaching 66;
 //   - its sides: cliffs falling to the sea floor over Face cells give or take FaceWobble, ragged;
 //   - under the rooms the ground is low (it is their floor's foot), out of sight;
 //   - at the long hall's end (the round window, Twinsen's way out) the plateau stops at the hall's wall: the window looks out from the
@@ -21,9 +22,9 @@ namespace LBAAssembler.Terrain.Palace;
 // and lit as the island's light falls on it.
 internal static class PalaceCliff
 {
-    public const int Margin = 30;               // the plateau round the rooms' outline (cells) ...
+    public const int Margin = 66;               // the plateau round the rooms' outline (cells) ...
     public const int Wobble = 12;               // ... give or take this much
-    public const int Terrace = 24;              // the flat terrace round the rooms' outline (cells) ...
+    public const int Terrace = 54;              // the flat terrace round the rooms' outline (cells) ...
     public const double RockRise = 6000;        // ... and beyond it the rocks, up to this much over it
     public const int Rim = 10;                  // the plateau's outer cells: its rim, the rocks highest
     public const int Face = 9;                  // the cliffs: cells from the plateau's edge down to the sea floor ...

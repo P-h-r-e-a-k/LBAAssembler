@@ -27,9 +27,9 @@ sides cliffs falling to the cloud sea, all of it a mossy rock. Now the Palace is
   are some 1,300 across and turn on some 5.5 cells at speed (the race-track docs), so a door is about three cars wide; a room is some
   27,000 across. The palace is 224 x 404 cells of the island, 14 layers of 640.
 - **Under the hill** (`Terrain/Palace/PalaceCliff.cs`): the rooms' floor's foot at 10,000, their roofs' top at 19,216 -- the hilltop. Round
-  the rooms the ground is the hill's: a terrace flat at the hilltop over the corner of the rooms' L and 24 cells round their outline (the
-  palace's foot, as Otringal's palace stands on the flat middle of its hill; 10 cells round the rooms themselves until the race's third
-  round, below), then rocks -- crags on swells -- rising towards the plateau's edge, up to 6,000 over it; the plateau reaching 30
+  the rooms the ground is the hill's: a terrace flat at the hilltop over the corner of the rooms' L and 54 cells round their outline (the
+  palace's foot, as Otringal's palace stands on the flat middle of its hill; 10 cells round the rooms themselves, then 24, until the
+  rounds below), then rocks -- crags on swells -- rising towards the plateau's edge, up to 6,000 over it; the plateau reaching 66
   cells give or take 12 beyond the rooms' outline (its hull: the corner of the L between the long hall and the sixteen rooms is hilltop
   too), bays and spurs; and its sides cliffs, 9 cells give or take 4, ragged, falling to the sea floor. All of it Otringal's mossy rock
   (its ground atlas, 4 x 4 tiles of 32 pixels as its hill has it), lit as the island's sun falls on it, with the cliffs' shadows; the sea --
@@ -169,6 +169,21 @@ palace area"):
   in a room passed over or beside it -- the hill's paving showed through the floor and the sky through the long hall's roof. The faces
   are merged a cell across at the most (a wall's still up it, a dozen layers), and each roof slab's underside -- the ceiling -- is a grid
   of cell squares: 32,885 faces in 88 bodies of the rooms (they were 18,999 in 67), the busiest cube 115 objects.
+
+## The roof top bigger again (2026-10-13)
+
+The user: "The roof of our Palace needs a lot of work. Let's make the roof top bigger".
+
+![The hill now: the flat roof top (green) 54 cells round the palace, the rocky rim (brown) beyond, the round window's bay between the hill's two arms at the long hall's end, the pillar out in the harbour](palace/roof_top_v2.png)
+
+- **The plateau** reaches 66 cells give or take 12 past the rooms' outline (`PalaceCliff.Margin`, was 30) and its flat top 54 cells
+  (`PalaceCliff.Terrace`, was 24): a broad flat roof top all round the palace, the rocks only on the rim at its edge. Beside the long
+  hall's end the plateau still stops at the hall's wall, so the round window looks out from the cliff -- now into a bay between two arms
+  of the hill.
+- **The island** is bigger with it: 8 x 11 cubes from cube (4, 2) (it was 7 x 9 from (4, 3)), the palace 36 cells further east and 28
+  further south in it (`PALACE.JSON` says where everything is).
+- **The harbour's pillar** stands `PalaceCliff.Margin` + 50 cells east of the rooms (`PalaceIsland.PillarOut`, was a fixed 80): out past
+  the cliffs however far the plateau reaches.
 
 ## Making it
 

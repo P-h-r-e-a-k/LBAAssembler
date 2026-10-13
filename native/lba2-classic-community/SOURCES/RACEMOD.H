@@ -59,6 +59,8 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
 // ... and never under the surface of the road he stood on: moving from (ox, oy, oz) to (nx, *ny, nz), after everything else has had its
 // say (an actor's box against him lowers him to see whether he stands on it).
 void RaceMod_Floor(S32 ox, S32 oy, S32 oz, S32 nx, S32 *ny, S32 nz);
+// ... and where the cars drive where they like (open_area=), inside the area, as between walls: moving from (ox, oy, oz) to (*nx, *nz).
+void RaceMod_OpenWall(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
 
 // gravity=<k>, a rollercoaster of a lap: k where the hero is on the raised road (0 anywhere else and without the key), and the road's
 // slope the way he faces and its banking. The slope pulls at his car k x RACE_GRAVITY x its sine; up a climb the engine holds RaceMod_ClimbShare of the

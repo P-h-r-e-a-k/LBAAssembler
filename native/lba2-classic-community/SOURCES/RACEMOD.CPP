@@ -1567,6 +1567,27 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     *nz = (S32)floor(pz + sx / len * side - cz + 0.5);
 }
 
+// Where the cars drive where they like (open_area=) they stay in, as between walls: a move from an area's floor onto ground well over it
+// -- the hill round the Emperor's palace's rooms, through a wall with no box -- or out of every area, but onto the raised road (the ramp
+// to the round window), is not made. (The user, 2026-10-13: "in a few places I've clipped from the inside to the outside" -- the rooms'
+// east wall had lost its box to the race track's build, and the car went through it and up onto the hilltop.)
+#define RACE_OPEN_STEP 600                  // ground this much over an area's floor is a wall's foot
+void RaceMod_OpenWall(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
+    if (!s_nbOpen || CubeMode != CUBE_EXTERIEUR || Comportement != C_BUGGY) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const int from = OpenAreaAt(ox + cx, oz + cz, oy);
+    if (from < 0 || oy > s_open[from].Floor + RACE_OPEN_STEP) return;
+    if (*nx == ox && *nz == oz) return;
+    S32 f;
+    int seg;
+    double lat, t;
+    if (s_nbRaised && RaisedAt(*nx + cx, *nz + cz, oy + 64, RAISED_PAD, &f, &seg, &lat, &t) && f >= s_open[from].Floor - 200) return;
+    const S32 gx = *nx < 0 ? 0 : *nx > 32767 ? 32767 : *nx, gz = *nz < 0 ? 0 : *nz > 32767 ? 32767 : *nz;
+    if (OpenAreaAt(*nx + cx, *nz + cz, oy) >= 0 && CalculAltitudeTerrain(gx, gz, 0) < s_open[from].Floor + RACE_OPEN_STEP) return;
+    *nx = ox; *nz = oz;
+    s_railTouch = 1;
+}
+
 // The hero is not let under the surface of the road he stood on. The engine lowers an object that nothing of the ground holds up by half
 // a brick to see whether it stands on another object, and leaves it lowered when that finds one: with an opponent's car against his --
 // their boxes overlapping -- he rode half a brick into the road. Called with the rail (RaceMod_Rail) after everything else in his move:
@@ -2752,8 +2773,11 @@ void RaceMod_Story(void) {
         return;
     }
     if (s_endWon) return;
-    // a loss: the race again, from the grid in the start line's scene (the car taken there)
+    // a loss: the race again, from the grid in the start line's scene (the car taken there) -- out of a carried jump too: still flying, the
+    // car was put back on the jump's way the next frame and carried on into its next cube, the grid's scene forgotten (the Emperor's
+    // palace's leap out of the round window, the finish line at its lip, 2026-10-13)
     const int scene = StartScene();
+    s_arcOn = s_arcLast = -1;
     if (s_loseText >= 0) s_pendLose = s_loseText;
     s_place = 0; s_laps = 0; s_halfway = 0; s_next = 0; s_beatMain = 0;
     s_phase = PHASE_WAIT; s_wantGrid = 1;

@@ -3167,6 +3167,40 @@ cars will ultimately end up back on the same track".
   won every time, the opponents on their three ways, no car rescued, no cube changed back and forth, the jump into the teleporter and
   Twinsen awake in scene 95.
 
+## The Emperor's palace, fourth round: no way out through the walls, a bigger roof top, the race ends out of the round window (2026-10-13)
+
+The user: "The inside of our Palace track has bugs, in a few places I've clipped from the inside to the outside. The roof of our Palace
+needs a lot of work. Let's make the roof top bigger, and remove the track from the outside for now. The track on the outside needs to be
+raised in the air looping around the giant turrets that form the roof, which means the existing track section outside needs to go".
+
+![The rooms flooded at a car's size from the start (green): every wall stands, nothing reaches outside](racetrack/palace/v4_sealed_rooms.png)
+
+![Up the ramp to the round window: the finish line is in it](racetrack/palace/v4_window_ramp.png)
+
+![Out of the window over the cloud sea: won, the teleporter's white takes the car in mid-air](racetrack/palace/v4_leap.png)
+
+- *Out through the walls.* The rooms' collision is fine as the island builds it; the race track's build cut it. Where a decor stands in a
+  raised road's space and is kept (the palace's are: `keepAbove`), its box is cut down to end under the road -- and the route through
+  the rooms, a raised road with no road at all (`bare`), counted, at the floor's height: the rooms' east wall, one long box, was cut to
+  end under the floor along its whole length, and the car drove through it and up onto the hilltop (two places on the long hall's west
+  wall the same). Where there is no road nothing is cut now (`RoadHit.Bare`, `ClearDecors`); and a decor only drawn -- its box's top under
+  its bottom -- keeps that box (cut down, it became a box things hit, which the engine culls as a game decor's: walls went from the
+  picture). Checked by flooding the rooms' free floor at a car's size from the start: before, it ran out along the whole east side; now
+  it stays in. And as a net (RACEMOD.CPP `RaceMod_OpenWall`): from an open area's floor a car doesn't move onto ground well over the floor
+  -- the hill round the rooms -- nor out of every area but onto the raised road; held as by a wall.
+- *A bigger roof top*: flat 54 cells round the palace on a plateau reaching 66 (`PalaceCliff`; `docs/LBA2_PALACE_ISLAND.md`). The island
+  grew to 8 x 11 cubes and the palace moved in it; the design script reads where from `PALACE.JSON`, the start line and the grid placed
+  from room 154's own door lines (still in one cube).
+- *The road outside is gone* (until the road round the roof's turrets, high in the air). The race ends in the round window: the finish
+  line at the window's outer face, at the top of the ramp up from the long hall, and the leap out of it -- a carried jump, 108 cells north
+  over the cloud sea between the hill's two arms, 2,600 up at its top -- in which the Dark Monk's teleporter takes a winner: the picture
+  whitens 2.4 s on and Twinsen wakes on Celebration Island. Where the leap would come down there is no road: no car reaches it.
+- *A lost race out of a carried jump* (found here): the race again from the grid was asked for while the car was still being carried, and
+  the next frame the flight put it back on its way and on into the next cube -- the car flew on, came down on the road beyond, drove off
+  its end into the sea, was put back on the road four times. A loss now ends the flight first (`s_arcOn`).
+- Tested with the test pilot: 59.6 s and won (no power-ups), 48.5 s and won (power-ups), along the road's side 62.1 s and lost -- the race
+  run again from the grid; no car rescued, Twinsen awake in scene 95 after each win. The start scene is 290 now.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

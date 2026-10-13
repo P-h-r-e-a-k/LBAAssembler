@@ -656,7 +656,7 @@ internal sealed class TrackRoad
 }
 
 internal readonly record struct RoadHit(int Road, double Dist, double Lat, double S, double H, double Bank, bool Bridge, double Kappa, bool Deck, bool Landing = false, bool UnderDeck = false,
-    bool Jump = false, bool Gap = false, bool Lip = false, bool Void = false, bool Raised = false, double Cross = 0, double Half = 0, bool Arc = false);
+    bool Jump = false, bool Gap = false, bool Lip = false, bool Void = false, bool Raised = false, double Cross = 0, double Half = 0, bool Arc = false, bool Bare = false);
 
 // A road-over-road bridge: the straighter road's own flat deck core (island cell coordinates), oriented along its own heading.
 // RailBehind, RailAhead: whether the railings run on along the landing behind the deck's start and past its end (the way DirX, DirZ
@@ -1486,7 +1486,7 @@ internal static class RaceTrackBuilder
                 best = new RoadHit(ri, d, lat, s, h, 0, r.Bridge[a] && r.Bridge[b], k, r.Deck[a] && r.Deck[b], r.Landing[a] || r.Landing[b], r.UnderDeck[a] || r.UnderDeck[b],
                     r.Jump[a] || r.Jump[b], r.Gap[a] && r.Gap[b], t < 0.5 ? r.Lip[a] : r.Lip[b], r.Void.Length > 0 && r.Void[a] && r.Void[b],
                     r.Raised is { } up && up[a] && up[b], r.RoadBank is { } rb ? rb[a] * (1 - t) + rb[b] * t : 0,
-                    r.RaisedHalfs is { } rh ? rh[a] * (1 - t) + rh[b] * t : 0, r.Arc is { } arc && arc[a] && arc[b]);
+                    r.RaisedHalfs is { } rh ? rh[a] * (1 - t) + rh[b] * t : 0, r.Arc is { } arc && arc[a] && arc[b], r.Bare is { } bare && bare[a] && bare[b]);
             }
             return best;
         }
@@ -2981,8 +2981,10 @@ internal static class RaceTrackBuilder
                         // a raised road passes over what stands on the ground: only what reaches into its own space is in its way
                         if (h.Raised)
                         {
-                            // (a carried jump's flight: over whatever stands under it, the Emerald Moon's reactor)
-                            if (h.Arc) continue;
+                            // (a carried jump's flight: over whatever stands under it, the Emerald Moon's reactor; and where there is no road
+                            // at all -- the Emperor's palace's rooms, the cars on their floor between their walls -- nothing is in its way: the
+                            // rooms' east wall, its box cut down under the floor there, was no wall, and the user drove out through it, 2026-10-13)
+                            if (h.Arc || h.Bare) continue;
                             var half = h.Half > 0 ? h.Half : o.RaisedHalfWidth;
                             var lean = Math.Abs(h.Cross) * half * 512;
                             if (h.Dist > half + 0.75 || d.YMax < h.H - lean - RaisedBelow || d.YMin > h.H + lean + RaisedAbove) continue;
@@ -2995,6 +2997,10 @@ internal static class RaceTrackBuilder
                 if (asIs?.Contains(body) == true) continue;
                 if (Kept(d))
                 {
+                    // (one only drawn -- its box's top under its bottom, nothing touches it: it keeps that box. Cut down, it became a
+                    // box things hit, and the engine culls such a decor as a game decor: the Emperor's palace's rooms' walls went from
+                    // the picture, 2026-10-13)
+                    if (d.YMax < d.YMin) continue;
                     // it stays: its collision box is cut down to end under the road (the box is a box, a statue isn't: the plan keeps
                     // the road clear of the statue itself)
                     if (roof < double.MaxValue) { d.YMax = Math.Max(d.YMin + 1, (int)Math.Floor(roof - RaisedBelow - 60)); cut++; }
