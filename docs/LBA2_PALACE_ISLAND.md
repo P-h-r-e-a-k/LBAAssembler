@@ -288,9 +288,7 @@ portrait", and "Add a raised track outside on the roof that loops around the roo
 
 ![The palace's doors in the start room's east wall, the carpet up to them](racetrack/palace/v7_doors.png)
 
-![Room 151's fireplace made a teleporter, at the end of the bottom row's carpet](racetrack/palace/v7_portal.png)
-
-![Out of room 159's fireplace: the Queen of the Mosquibees over it](racetrack/palace/v7_portal_out.png)
+![Room 151's fireplace, a secret warp point: as the others look](racetrack/palace/v8_warp.png)
 
 - **The carpet as wide as the doors.** The grids' carpets are two cells across. Every cell within one of them is carpet now too, so the
   carpet is four cells across (`DoorBricks`), the doors' width, and its corners are square (the gaps there are gone). The cells along
@@ -300,17 +298,22 @@ portrait", and "Add a raised track outside on the roof that loops around the roo
   room's west door and as high: two leaves of dark wood with raised panels, gold handles by a gold seam, a frame standing out from the
   wall and a crest over it. They are on the wall's plane, its faces behind them left out, and no picture hangs within a cell of them.
   The carpet runs on to them. The chest that stood in front of them is against the north wall now, east of that wall's door.
-- **The teleporters** (`PortalFrom` 151, `PortalTo` 159; `PalaceFurniture.Portal`). Room 151's fireplace, at the end of the bottom row's
-  carpet, and room 159's are hollow. Their hearth is the middle two cells of the four along the wall and three layers up: out of the
-  collision, the chimney breast built round it, its sides and top dark blue, the teleporter's glow at its back (dark blue, light blue,
-  white, as the Dark Monk's teleporter) where the wall's faces are left out. The layout's `teleports` gives the race-track mode the box a
-  car is taken in by (the first's hearth, from its back to 1.2 cells in front of it) and where it comes out (just in the second's hearth,
-  looking out of it): RACEMOD.CPP `teleport=`.
-- **The Queen's pictures mark them.** The Dino-Fly's picture is gone, and the Queen of the Mosquibees hangs only by the teleporters: in
-  room 151 where the Dino-Fly was, the picture nearest the fireplace; in room 159 over the fireplace, the wall behind it from the layer
-  over its top (that room has no plain wall across from it). The other pictures go round the six others.
-- **The turrets apart** (`PalaceOutside.SlotFill` 0.80, was 0.96): the road round the roof goes between them, and the ways between them are
-  some 24 cells across at their narrowest now. They are still 35,000 to 47,500 high.
+- **A secret warp** (`PortalFrom` 151; `PalaceFurniture.Portal`). Room 151's fireplace, at the end of the bottom row's carpet, leads to a
+  fireplace made in the same room, on its south wall between the pictures of the Queen of the Mosquibees and Zoé (the user, with a
+  picture of the room: "the exit fireplace should be between the two portraits"; first it was room 159's). The made one is the grids'
+  fireplace block (`FireplaceWide` 4 cells along the wall, `FireplaceHigh` 5 layers), its cells in the collision as the others' are.
+  Both are hollow -- the middle two cells of the four along the wall and three layers up, out of the collision, the wall's faces at the
+  back left out -- but look as every other fireplace does (the user: "Make the teleport linked fireplaces visually identical to the
+  other fireplaces, they're a secret warp point"): the same breast, surround, black opening, grate, shelf and strips, black inside. The
+  layout's `teleports` gives the race-track mode the box a car is taken in by (the first's hearth, from its back to 1.2 cells in front of
+  it) and where it comes out (just in the second's, looking out of it, north into the room): RACEMOD.CPP `teleport=`.
+- **The Queen's picture.** The Dino-Fly's picture is gone; the Queen of the Mosquibees hangs where it was, by the first fireplace, the
+  second beside her. The other pictures go round the six others.
+- **The turrets apart** (`PalaceOutside.SlotFill` 0.80, was 0.96; the long hall's two `HallFill` 0.70): the road round the roof goes
+  between them -- the ways between the four over the sixteen rooms are some 24 cells across at their narrowest, the gap between the
+  long hall's two some 27. They are still 35,000 to 47,500 high.
+- **The teleporter's pillar** (`PillarNorth`, `PillarRise`): 78 cells north of the sixteen rooms' north wall, out in the sea, its top at
+  28,766 (was 19,916, by the quay): in the way of the leap off the race's spiral, the Dark Monk's teleporter on it at 31,506.
 - `PALACE.JSON` has two more keys: `entrance` (the doors' wall face and span, island cells) and `teleports` (each the box in and the place
   out, island cells and world heights, and the turn).
 

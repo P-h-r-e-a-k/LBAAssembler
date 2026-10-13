@@ -3376,6 +3376,48 @@ as a door way", and "Add an entrance door to the palace in the start room". The 
     another cube's scene, from 4th to 1st, and drove on.
   - with power-ups: won in 157.58 s, no car rescued.
 
+## The Emperor's palace, seventh round: the user's own way round the roof, a spiral up to the take-off ramp, a secret warp (2026-10-13, night)
+
+The user, with a drawing of the island from above: "I've added an image of a proposed new track route for outside the palace it's in lime
+green, starting at the point the current track exits the building, at the end of the route let's add a loop of track going up into the air,
+culminating with a large take off ramp, the spiral part isn't drawn"; and, with a picture of room 151: "Our exit fireplace is in the wrong
+place ... the exit fireplace should be between the two portraits", then "Make the teleport linked fireplaces visually identical to the
+other fireplaces, they're a secret warp point".
+
+![The route (getting redder as it climbs) round the turrets as the user drew it, and the spiral up to the leap through the pillar's teleporter](racetrack/palace/v8_route.png)
+
+![On the spiral: its turns over one another](racetrack/palace/v8_spiral.png)
+
+![Down the straight off the spiral's top to the take-off ramp, the teleporter's ring on its pillar ahead](racetrack/palace/v8_ring.png)
+
+- *The user's way* (`palace_design.py`; the drawing was the island turned a quarter round, north to its left). Out of the round window a
+  hook east over the sea and back west between the long hall's two turrets (they were made smaller for it: `HallFill` 0.70), south down
+  the west side of the second, east along the north-west turret's north side, south down the middle way, west through the middle way
+  across, round the south-west turret (south down the west side, east along the south side, north up the middle way), east through the
+  middle way's east half (5.5 cells either side there: the turrets 16 cells apart), north up the east side and west to the spiral. Each
+  line is where the turrets leave the most room, measured on the island's collision.
+- *Heights*: the road climbs out of the window (at most 10 %) to 380 over the long hall's roof, then to 1,500 over the roof
+  (`RAISE`), and on round the south-west turret 4,500 more (`BRIDGE`): the second time through the middle crossing it passes over the
+  first.
+- *The spiral* over the sea north of the turrets: one and a half turns (`SPIRAL_LOOPS`) climbing 5,000 (`SPIRAL_RISE`), 3,333 a turn, so
+  each turn passes 2,861 or more over the one under it. Off its top a straight east to a take-off ramp rising 1,000 over 12 cells
+  (`KICK`, `RUNUP`): the leap -- a carried jump, the finish line at its lip, 31,216 high -- through the Dark Monk's teleporter. The
+  teleporter's pillar was moved onto the leap's line and raised to it (`PalaceIsland.PillarNorth`, `PillarRise`). A win's teleporter
+  takes the car in mid-air as before; the leap's top is 32,616, under 32,767.
+- *The design script's new check*: where the road passes over itself (the middle crossing, the spiral's turns, the straight off its
+  top), the least height between the two (`the road over itself`), with a warning under 2,800.
+- *Into the wrong cube at a corner* (`RaceTrackScenes.EdgeCrossings`, found here). The crossing zones were made between the cube a step
+  of the road (or of its edge) started in and the cube it ended in. Where that step went through a corner, the zone on each edge led
+  into the cube across the corner and kept the coordinate along its edge: on the spiral, the car on its second turn went into a zone made
+  for its road's edge at the corner of four cubes, arrived a whole cube west, came down on the road below and lost the race. Each zone
+  now leads into the cube across its own edge, where the step meets it. The Desert island's track had it too: six of its scenes had zones
+  into the cube across a corner (scene 58's east and north edges into 62, 67's into 71, and back) -- now gone, its edges covered by the
+  scenes' own whole-edge zones and zones into the right cube (67 into 72). The other twelve tracks build the same.
+- *The secret warp*: room 151's fireplace now leads to a fireplace made between the two pictures on the same room's south wall, the car
+  coming out of it heading north into the room. Both look as every other fireplace (`docs/LBA2_PALACE_ISLAND.md`). Driven into from the
+  bottom row's carpet, the car came out of the other at 4,836 units a second.
+- *Checked* with the test pilot: no power-ups, won in 240.98 s, no car rescued, Twinsen awake in scene 95 after the leap.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

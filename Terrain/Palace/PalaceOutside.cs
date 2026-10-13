@@ -41,6 +41,8 @@ internal static class PalaceOutside
     // whole of our inside of the palace"): over the sixteen rooms two by two, a hall a quarter of their roof; along the long hall one after
     // another; each as wide as its place allows (SlotFill of it) and Tall times that up -- 30,000 to 60,000 over the roof
     public const double SlotFill = 0.80;
+    // (the long hall's two smaller: the race's road goes between them -- the user's way round the roof, 2026-10-13)
+    public const double HallFill = 0.70;
     public const double Tall = 1.35;
     public const double TallMost = 12.5;        // (times the hall's own height at the most: a body's points are 16-bit about its middle)
     public const int MaxClimb = 100;            // the collision's layers over the roof at the most (all of the tallest turret)
@@ -85,7 +87,7 @@ internal static class PalaceOutside
         var built = new List<string>();
         // (a hall in a place: turned `quarter` quarter turns about its middle, kxz times as wide and ky times as tall, its middle at the
         // place's, its foot on the roof; each piece drawn only, in every cube its box reaches)
-        void Turret((int X, int Z) at, int quarter, (double X0, double Z0, double X1, double Z1) place, string name)
+        void Turret((int X, int Z) at, int quarter, (double X0, double Z0, double X1, double Z1) place, string name, double fill = SlotFill)
         {
             var parts = Hall(at);
             if (parts.Count == 0) return;
@@ -94,7 +96,7 @@ internal static class PalaceOutside
             var turn = Matrix4x4.CreateRotationY((float)(quarter * Math.PI / 2));
             Vector3 Turned(double x, double z) => Vector3.Transform(new Vector3((float)(x - cx), 0, (float)(z - cz)), turn);
             double wide = quarter % 2 == 0 ? hx1 - hx0 : hz1 - hz0, deep = quarter % 2 == 0 ? hz1 - hz0 : hx1 - hx0;
-            var kxz = Math.Round(Math.Min((place.X1 - place.X0) / wide, (place.Z1 - place.Z0) / deep) * SlotFill, 2);
+            var kxz = Math.Round(Math.Min((place.X1 - place.X0) / wide, (place.Z1 - place.Z0) / deep) * fill, 2);
             var ky = Math.Round(Math.Min(TallMost, kxz * Tall), 2);
             var baseY = parts.Min(d => d.YMin);
             double mx = (place.X0 + place.X1) / 2, mz = (place.Z0 + place.Z1) / 2;
@@ -136,7 +138,7 @@ internal static class PalaceOutside
             for (var t = 0; t < count; t++)
             {
                 double s0 = a0 + (a1 - a0) * t / count, s1 = a0 + (a1 - a0) * (t + 1) / count;
-                Turret(NorthHall, alongZ ? 2 * (t % 2) : 1 + 2 * (t % 2), alongZ ? (hall.X0, s0, hall.X1, s1) : (s0, hall.Z0, s1, hall.Z1), "the north hall");
+                Turret(NorthHall, alongZ ? 2 * (t % 2) : 1 + 2 * (t % 2), alongZ ? (hall.X0, s0, hall.X1, s1) : (s0, hall.Z0, s1, hall.Z1), "the north hall", HallFill);
             }
         }
         log.Add($"the outside: Otringal's palace's halls as turrets over the whole of the palace -- {string.Join("; ", built)}");

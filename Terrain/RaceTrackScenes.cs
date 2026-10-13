@@ -98,20 +98,30 @@ internal static class RaceTrackScenes
             if (report.LapArc is { } arc && arc.Length == n && (arc[i] || arc[j])) continue;
             if (!sceneOf.TryGetValue((ax, az), out var from) || !sceneOf.TryGetValue((bx, bz), out var to)) continue;
             double Height(double x, double z, double t) => up is not null && up[i] && up[j] ? report.LapY[i] + (report.LapY[j] - report.LapY[i]) * t : ground(x, z);
-            // (where the segment meets the edge: an x edge, a z edge, or -- through a corner -- both, each taken at its own point)
+            // (where the segment meets the edge: an x edge, a z edge, or -- through a corner -- both, each taken at its own point, between the
+            // cubes either side of that edge there: a step through a corner meets one edge before the other. A zone into the cube across
+            // the corner kept the coordinate along its edge and carried a car a whole cube along it -- the palace's spiral, 2026-10-13)
             if (ax != bx)
             {
                 var ex = Math.Max(ax, bx) * 64.0; var t = (ex - x0) / (x1 - x0); var z = z0 + (z1 - z0) * t;
                 var h = Height(ex, z, t);
-                result.Add(new EdgeCrossing(from, to, ax, az, bx > ax ? 'E' : 'W', z - az * 64.0, h));
-                result.Add(new EdgeCrossing(to, from, bx, bz, bx > ax ? 'W' : 'E', z - bz * 64.0, h));
+                var row = az == bz ? az : (int)Math.Floor(z / 64);
+                if (sceneOf.TryGetValue((ax, row), out var xFrom) && sceneOf.TryGetValue((bx, row), out var xTo))
+                {
+                    result.Add(new EdgeCrossing(xFrom, xTo, ax, row, bx > ax ? 'E' : 'W', z - row * 64.0, h));
+                    result.Add(new EdgeCrossing(xTo, xFrom, bx, row, bx > ax ? 'W' : 'E', z - row * 64.0, h));
+                }
             }
             if (az != bz)
             {
                 var ez = Math.Max(az, bz) * 64.0; var t = (ez - z0) / (z1 - z0); var x = x0 + (x1 - x0) * t;
                 var h = Height(x, ez, t);
-                result.Add(new EdgeCrossing(from, to, ax, az, bz > az ? 'S' : 'N', x - ax * 64.0, h));
-                result.Add(new EdgeCrossing(to, from, bx, bz, bz > az ? 'N' : 'S', x - bx * 64.0, h));
+                var col = ax == bx ? ax : (int)Math.Floor(x / 64);
+                if (sceneOf.TryGetValue((col, az), out var zFrom) && sceneOf.TryGetValue((col, bz), out var zTo))
+                {
+                    result.Add(new EdgeCrossing(zFrom, zTo, col, az, bz > az ? 'S' : 'N', x - col * 64.0, h));
+                    result.Add(new EdgeCrossing(zTo, zFrom, col, bz, bz > az ? 'N' : 'S', x - col * 64.0, h));
+                }
             }
         }
 
@@ -130,18 +140,26 @@ internal static class RaceTrackScenes
         {
             int ax = (int)Math.Floor(cx / 64), az = (int)Math.Floor(cz / 64), bx = (int)Math.Floor(ex / 64), bz = (int)Math.Floor(ez / 64);
             if (ax == bx && az == bz) return;
-            if (!sceneOf.TryGetValue((ax, az), out var from) || !sceneOf.TryGetValue((bx, bz), out var to)) return;
+            // (each edge between the cubes either side of it where the line meets it, as the lap's own crossings above)
             if (ax != bx)
             {
                 var edge = Math.Max(ax, bx) * 64.0; var z = cz + (ez - cz) * (edge - cx) / (ex - cx);
-                Add(from, to, ax, az, bx > ax ? 'E' : 'W', z - az * 64.0, h);
-                Add(to, from, bx, bz, bx > ax ? 'W' : 'E', z - bz * 64.0, h);
+                var row = az == bz ? az : (int)Math.Floor(z / 64);
+                if (sceneOf.TryGetValue((ax, row), out var from) && sceneOf.TryGetValue((bx, row), out var to))
+                {
+                    Add(from, to, ax, row, bx > ax ? 'E' : 'W', z - row * 64.0, h);
+                    Add(to, from, bx, row, bx > ax ? 'W' : 'E', z - row * 64.0, h);
+                }
             }
             if (az != bz)
             {
                 var edge = Math.Max(az, bz) * 64.0; var x = cx + (ex - cx) * (edge - cz) / (ez - cz);
-                Add(from, to, ax, az, bz > az ? 'S' : 'N', x - ax * 64.0, h);
-                Add(to, from, bx, bz, bz > az ? 'N' : 'S', x - bx * 64.0, h);
+                var col = ax == bx ? ax : (int)Math.Floor(x / 64);
+                if (sceneOf.TryGetValue((col, az), out var from) && sceneOf.TryGetValue((col, bz), out var to))
+                {
+                    Add(from, to, col, az, bz > az ? 'S' : 'N', x - col * 64.0, h);
+                    Add(to, from, col, bz, bz > az ? 'N' : 'S', x - col * 64.0, h);
+                }
             }
         }
         void Sides(double px, double pz, double dx, double dz, double half, double h)

@@ -67,7 +67,10 @@ internal static class PalaceIsland
     public const double QuayY = 1400;                   // the harbour's quay (Otringal's lowest)
     public const int PillarOut = PalaceCliff.Margin + 50; // the teleporter's pillar: cells east of the rooms' east wall, past the cliffs ...
     public const double PillarRadius = 6;               // ... its top's radius (cells) ...
-    public const double PillarRise = 700;               // ... and its top this much over the hilltop: the race's jump lands as high as its lip
+    public const double PillarRise = 9550;              // ... its top this much over the hilltop, the teleporter on it in the way of the race's leap
+                                                        // off its spiral (2026-10-13: the jump's lip some 30,200 high; was 700) ...
+    public const int PillarNorth = 78;                  // ... and this many cells north of the sixteen rooms' north wall: on the leap's line (was on
+                                                        // their middle row's, by the quay)
                                                         // (the road's 60 over the hilltop, its ramp's 700 -- palace_design.py), on the pillar
     public const double RoadOver = 60;                  // (the race's road over what it lies on)
     public const int DoorBricks = 4;                    // a door between two rooms this many bricks wide (the game's are two: 8 cells, the
@@ -75,7 +78,8 @@ internal static class PalaceIsland
     public const double CorridorHalf = 9;               // the ways across the hilltop's rocks: half their width (cells)
     public const int RingOut = 9;                       // the way round the palace's west and south sides: cells out from its walls
     public const int StartScene = 154;                  // the race's start: its room's way in from outside (Build: the entrance)
-    public const int PortalFrom = 151, PortalTo = 159;  // the fireplace made a teleporter, and the one it leads to (Build: the teleporters)
+    public const int PortalFrom = 151;                  // the room whose fireplace is a teleporter -- to a fireplace made in the same room (Build)
+    public const int FireplaceWide = 4, FireplaceHigh = 5;   // (a fireplace made: the cells along its wall and its layers, as the grids' own)
     public const int PortraitsPerRoom = 2;              // pictures of the game's characters on a room's walls (PalacePortraits) ...
     public const int HallPortraits = 6;                 // ... and this many more along the long hall's
     // the colours of Otringal's palace (OTRINGAL.OBL's halls, in its palette): its pale stone (walls and flat roofs), the dark teal of its
@@ -459,14 +463,14 @@ internal static class PalaceIsland
 
         // ---- the fireplaces made a teleporter (the user, 2026-10-13: "Our fireplace that's here (see image) near the dinofly picture let's
         // turn it into a teleporter so driving into it brings us out of a second fire place where the Queen of the mosquibees is on the
-        // wall"): room 151's -- at the end of the bottom row's carpet, by the Dino-Fly's picture -- leads to room 159's, two rooms on up the
-        // west column (a short cut past room 155). Each hollow (PalaceFurniture.Portal): its hearth -- the middle two cells of the four along
-        // the wall, the bottom three layers -- out of the collision, the wall's faces at its back left out under the glow. The race-track
-        // mode takes a car into the first's hearth out of the second's (the layout's teleports, RACEMOD.CPP teleport=); the pictures of the
-        // Queen of the Mosquibees mark both (below).
+        // wall"; then, with a picture of the room: "the exit fireplace should be between the two portraits"): room 151's -- at the end of the
+        // bottom row's carpet, by the Dino-Fly's picture, now the Queen of the Mosquibees' -- leads to a fireplace made in the same room,
+        // on the wall the Queen hangs on, between her picture and the next one (below, with the pictures). Each hollow
+        // (PalaceFurniture.Portal): its hearth -- the middle two cells of the four along the wall, the bottom three layers -- out of the
+        // collision, the wall's faces at its back left out under the glow. The race-track mode takes a car into the first's hearth out of
+        // the second's (the layout's teleports, RACEMOD.CPP teleport=). (First the second was room 159's own fireplace.)
         var portals = new HashSet<PalaceFurniture.Piece>();
         var teleports = new List<double[]>();
-        PalaceFurniture.Piece? FireplaceIn(int scene) => pieces.FirstOrDefault(p => p.Kind == PalaceFurniture.Kind.Fireplace && area.Tiles[p.Tile].Scene == scene);
         // (a fireplace's hearth: its cells; and its front's middle -- palace cells)
         List<(int X, int Y, int Z)> Hearth(PalaceFurniture.Piece p, int nx, int nz)
         {
@@ -476,37 +480,21 @@ internal static class PalaceIsland
         }
         (double X, double Z) Front(PalaceFurniture.Piece p, int nx, int nz) =>
             (p.Origin.X + p.Size.X / 2.0 + nx * p.Size.X / 2.0, p.Origin.Z + p.Size.Z / 2.0 + nz * p.Size.Z / 2.0);
-        var portalFrom = furnished ? FireplaceIn(PortalFrom) : null; var portalTo = furnished ? FireplaceIn(PortalTo) : null;
-        if (portalFrom is not null && portalTo is not null)
+        void Hollow(PalaceFurniture.Piece p)
         {
-            foreach (var p in new[] { portalFrom, portalTo })
+            portals.Add(p);
+            var (nx, nz) = Looks(p);
+            foreach (var c in Hearth(p, nx, nz))
             {
-                portals.Add(p);
-                var (nx, nz) = Looks(p);
-                foreach (var c in Hearth(p, nx, nz))
-                {
-                    cells.Remove(c);
-                    air.Add(c);
-                    var back = (c.X - nx, c.Y, c.Z - nz);
-                    if (!p.Cells.Contains(back)) hidden.Add((back, nx > 0 ? 2 : nx < 0 ? 3 : nz > 0 ? 4 : 5));
-                }
+                cells.Remove(c);
+                air.Add(c);
+                var back = (c.X - nx, c.Y, c.Z - nz);
+                if (!p.Cells.Contains(back)) hidden.Add((back, nx > 0 ? 2 : nx < 0 ? 3 : nz > 0 ? 4 : 5));
             }
-            // (the teleport: into the first's hearth -- its width less a little, from its back to a little in front of it, the floor's height
-            // up -- out of the second's, its middle just in its hearth, looking out of it; island cells, world heights, the engine's turn)
-            var (fx, fz) = Looks(portalFrom); var (tx, tz) = Looks(portalTo);
-            var (ax, az) = Front(portalFrom, fx, fz); var (bx, bz) = Front(portalTo, tx, tz);
-            double I(double x) => (x0 + (x - minX) * U) / 512;
-            double J(double z) => (z0 + (z - minZ) * U) / 512;
-            double depth = (fx != 0 ? portalFrom.Size.X : portalFrom.Size.Z) * U / 512, inset = 0.8, ahead = 1.2, halfW = U / 512 - inset;
-            var (ix, jz) = (I(ax), J(az));
-            var box = fx != 0
-                ? new[] { Math.Min(ix, ix - fx * depth) - (fx < 0 ? ahead : 0), jz - halfW, Math.Max(ix, ix - fx * depth) + (fx > 0 ? ahead : 0), jz + halfW }
-                : new[] { ix - halfW, Math.Min(jz, jz - fz * depth) - (fz < 0 ? ahead : 0), ix + halfW, Math.Max(jz, jz - fz * depth) + (fz > 0 ? ahead : 0) };
-            var beta = (int)Math.Round(Math.Atan2(tx, tz) * 4096 / (2 * Math.PI)) & 4095;
-            teleports.Add(new[] { box[0], box[1], box[2], box[3], WY(minY + 1) - 600, WY(minY + 1) + 2400, I(bx) - tx * 0.4, J(bz) - tz * 0.4, WY(minY + 1), beta });
-            log.Add($"the teleporters: room {PortalFrom}'s fireplace (cells x {box[0]:0.#}..{box[2]:0.#}, z {box[1]:0.#}..{box[3]:0.#}) to room {PortalTo}'s " +
-                    $"(out at cells ({I(bx) - tx * 0.4:0.#}, {J(bz) - tz * 0.4:0.#}), turned {beta})");
         }
+        var portalFrom = furnished ? pieces.FirstOrDefault(p => p.Kind == PalaceFurniture.Kind.Fireplace && area.Tiles[p.Tile].Scene == PortalFrom) : null;
+        PalaceFurniture.Piece? portalTo = null;
+        if (portalFrom is not null) Hollow(portalFrom);
         // ---- the floor painted (the user, 2026-10-13: "Let's make the main road section that's mostly red at the moment pure red just with
         // the white arrows. The surrounding area varies a lot, let's keep this consistent with a check pattern based on the green"): the
         // grids' carpets -- red with a brown border, the ways between the doors the race runs along -- one red; the rest of the floor the
@@ -553,28 +541,61 @@ internal static class PalaceIsland
                 var furniture = modelled.Concat(papered).Concat(blocked).ToHashSet();
                 int RoomOf((int X, int Y, int Z) c) => Array.FindIndex(extents, e => c.X > e.X0 && c.X < e.X1 && c.Z > e.Z0 && c.Z < e.Z1);
                 spots = PalacePortraits.Spots(shown, air, furniture, minY + 1, RoomOf, PortraitsPerRoom, out var all, ti => ti == hallTile ? HallPortraits : 0);
-                // (the teleporters' pictures, the Queen of the Mosquibees: by the first fireplace the picture nearest it -- where the Dino-Fly
-                // was; over the second -- its room has no plain wall across from it)
-                if (portalFrom is not null && portalTo is not null)
+                // (the teleporter's picture, the Queen of the Mosquibees: by its fireplace the picture nearest it -- where the Dino-Fly was; and
+                // its way out, a fireplace made on the wall she hangs on, between her picture and the next one along it -- in front of the
+                // wall, the room's air there, nothing else standing there)
+                if (portalFrom is not null)
                 {
                     var (fx, fz) = Looks(portalFrom);
                     var (ax, az) = Front(portalFrom, fx, fz);
                     var near = spots.Where(sp => sp.Tile == portalFrom.Tile)
                         .OrderBy(sp => PalacePortraits.Middle(sp) is var m ? (m.X - ax) * (m.X - ax) + (m.Z - az) * (m.Z - az) : 0).FirstOrDefault();
-                    if (near is not null) spots[spots.IndexOf(near)] = near with { Sitter = PalacePortraits.Queen };
-                    // (over the second fireplace: on the wall behind it, the middle of its four cells, from the layer over its top -- if the wall
-                    // is plain there and the room's air in front of it)
-                    var (tx, tz) = Looks(portalTo);
-                    var o = portalTo.Origin;
-                    var y0 = o.Y + portalTo.Size.Y;
-                    var dir = tx > 0 ? 2 : tx < 0 ? 3 : tz > 0 ? 4 : 5;
-                    var at = tx > 0 ? o.X - 1 : tx < 0 ? o.X + portalTo.Size.X : tz > 0 ? o.Z - 1 : o.Z + portalTo.Size.Z;
-                    var u0 = (tx != 0 ? o.Z + portalTo.Size.Z / 2 : o.X + portalTo.Size.X / 2) - PalacePortraits.Cells / 2;
-                    var over = new PalacePortraits.Spot(portalTo.Tile, dir, at, u0, y0, PalacePortraits.Queen);
-                    if (PalacePortraits.Covered(over).All(f => shown.ContainsKey(f.Cell) && !furniture.Contains(f.Cell)
-                                                               && air.Contains((f.Cell.X + tx, f.Cell.Y, f.Cell.Z + tz))))
-                        spots.Add(over);
-                    else log.Add($"  no plain wall over room {PortalTo}'s fireplace for the Queen of the Mosquibees' picture");
+                    if (near is not null)
+                    {
+                        spots[spots.IndexOf(near)] = near with { Sitter = PalacePortraits.Queen };
+                        var beside = spots.Where(sp => sp.U0 != near.U0 && sp.Tile == near.Tile && sp.Dir == near.Dir && sp.At == near.At)
+                            .OrderBy(sp => Math.Abs(sp.U0 - near.U0)).FirstOrDefault();
+                        var (dx, _, dz, _) = BrickBuilding.Directions[near.Dir];
+                        // (the gap between the two: from the one's end to the other's start; with no other, beside her towards the wall's middle)
+                        int g0, g1;
+                        if (beside is not null) (g0, g1) = beside.U0 > near.U0 ? (near.U0 + PalacePortraits.Cells, beside.U0 - 1) : (beside.U0 + PalacePortraits.Cells, near.U0 - 1);
+                        else (g0, g1) = (near.U0 + PalacePortraits.Cells + 1, near.U0 + PalacePortraits.Cells + FireplaceWide);
+                        var u0 = g0 + Math.Max(0, (g1 - g0 + 1 - FireplaceWide) / 2);
+                        var made = new List<(int X, int Y, int Z)>();
+                        for (var u = u0; u < u0 + FireplaceWide; u++)
+                            for (var y = minY + 1; y <= minY + FireplaceHigh; y++)
+                                made.Add(dx != 0 ? (near.At + dx, y, u) : (u, y, near.At + dz));
+                        if (g1 - g0 + 1 >= FireplaceWide && made.All(c => air.Contains(c) && !cells.ContainsKey(c) && !modelled.Contains(c) && !papered.Contains(c)))
+                        {
+                            var origin = (made.Min(c => c.X), minY + 1, made.Min(c => c.Z));
+                            var size = dx != 0 ? (1, FireplaceHigh, FireplaceWide) : (FireplaceWide, FireplaceHigh, 1);
+                            portalTo = new PalaceFurniture.Piece(PalaceFurniture.Kind.Fireplace, dx != 0 ? 68 : 69, near.Tile, origin, size, made);
+                            pieces.Add(portalTo);
+                            foreach (var c in made) { cells[c] = (-1, near.Tile); modelled.Add(c); }
+                            Hollow(portalTo);
+                        }
+                        else log.Add($"  no room for the teleporter's way out between the pictures on room {PortalFrom}'s wall (cells {g0}..{g1} along it)");
+                    }
+                    // (the teleport: into the first's hearth -- its width less a little, from its back to a little in front of it, the floor's
+                    // height up -- out of the second's, its middle just in its hearth, looking out of it; island cells, world heights, the
+                    // engine's turn)
+                    if (portalTo is not null)
+                    {
+                        var (tx, tz) = Looks(portalTo);
+                        var (bx, bz) = Front(portalTo, tx, tz);
+                        double I(double x) => (x0 + (x - minX) * U) / 512;
+                        double J(double z) => (z0 + (z - minZ) * U) / 512;
+                        double depth = (fx != 0 ? portalFrom.Size.X : portalFrom.Size.Z) * U / 512, inset = 0.8, ahead = 1.2, halfW = U / 512 - inset;
+                        var (ix, jz) = (I(ax), J(az));
+                        var box = fx != 0
+                            ? new[] { Math.Min(ix, ix - fx * depth) - (fx < 0 ? ahead : 0), jz - halfW, Math.Max(ix, ix - fx * depth) + (fx > 0 ? ahead : 0), jz + halfW }
+                            : new[] { ix - halfW, Math.Min(jz, jz - fz * depth) - (fz < 0 ? ahead : 0), ix + halfW, Math.Max(jz, jz - fz * depth) + (fz > 0 ? ahead : 0) };
+                        var beta = (int)Math.Round(Math.Atan2(tx, tz) * 4096 / (2 * Math.PI)) & 4095;
+                        teleports.Add(new[] { box[0], box[1], box[2], box[3], WY(minY + 1) - 600, WY(minY + 1) + 2400, I(bx) - tx * 0.4, J(bz) - tz * 0.4, WY(minY + 1), beta });
+                        log.Add($"the teleporter: room {PortalFrom}'s fireplace (cells x {box[0]:0.#}..{box[2]:0.#}, z {box[1]:0.#}..{box[3]:0.#}) to a fireplace made " +
+                                $"between the pictures on its {(tz < 0 ? "south" : tz > 0 ? "north" : tx < 0 ? "east" : "west")} wall (out at cells ({I(bx) - tx * 0.4:0.#}, " +
+                                $"{J(bz) - tz * 0.4:0.#}), turned {beta})");
+                    }
                 }
             }
         }
@@ -642,7 +663,7 @@ internal static class PalaceIsland
         int sqZ0 = (int)Math.Round(WZ(sixteen.Min(c => c.Z)) / 512), sqZ1 = (int)Math.Round(WZ(sixteen.Max(c => c.Z) + 1) / 512);
         var midZ = (sqZ0 + sqZ1) / 2;
         var quayX0 = east + PalaceCliff.Margin + PalaceCliff.Face - 6;
-        var harbour = new PalaceCliff.Harbour((quayX0, midZ - 34, quayX0 + 26, midZ + 34), QuayY, (east + PillarOut, midZ, PillarRadius, hilltop + PillarRise));
+        var harbour = new PalaceCliff.Harbour((quayX0, midZ - 34, quayX0 + 26, midZ + 34), QuayY, (east + PillarOut, sqZ0 - PillarNorth, PillarRadius, hilltop + PillarRise));
 
         // ---- the bodies: each room's faces (a few bodies where they are many), each a decor nothing touches, in every cube it can be seen
         // from (the engine draws the decors of the 3 x 3 cubes round the camera's: a room further off, seen down a row of doors, wasn't) --
