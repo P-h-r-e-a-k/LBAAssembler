@@ -3211,6 +3211,38 @@ another place in the smaller island (the plan from `PALACE.JSON` again). Checked
 the test pilot won in 61.1 s and along the road's side in 56.1 s, and with power-ups lost (64.6 s) and was run again from the grid, no car
 rescued.
 
+### Nothing missing near the camera (2026-10-13, later)
+
+The user: "There's terrain clipping through the palace floor and visible inside as pictured, we should fix this also" (and the roof:
+"a lot of points on our new roof that isn't full and can be seen through").
+
+![Before (left) and after: the ground under the floor in a band along the screen's foot, gone](racetrack/palace/v5_floor_cut.png)
+
+- *Polygons cut at the camera's near plane* (`LIB386/OBJECT/AFF_OBJ.CPP`). A body's polygon with a corner behind the near plane (3,000
+  in front of the camera at 480 lines; `ProjectList` marks the corner, `TestVisible` dropped the polygon) went from the picture whole, a
+  hole as big as the polygon. It now goes in the body's sorted list where it would have gone whole (`QueueClipped`, a 0xFF type byte), and
+  is drawn by its own type's handler -- its colour, light, texture and map points as for any other -- whose `Fill_Poly` call goes, while
+  it is drawn, to `ClipFill`: the corners in the camera's space, cut at the near plane (as the terrain's triangles are, `ClipperZ` at
+  NearClip + 1) and at the sides of a view 30,000 pixels either way of the middle (a screen point is 16 bits), their map points and light
+  in between, projected, faced as `TestVisible` faces a polygon, and filled. A corner right on the camera's plane is moved off it while the
+  handler runs (its W divides by the depth). A body partly behind the camera is drawn even when the points in front are all off the screen
+  (`SomeBehind`). In the isometric view nothing changes.
+- *Drawn close* (`MASK_OBJECT_CLOSE`, Info bit 11 -- no retail body has it; `CLOSE_NEAR` 400 in `AFF_OBJ.H`). Cut at the near plane the
+  palace's floor ended 3,000 in front of the camera, on the screen with the camera tilted down, and the ground under it showed in a band
+  along the screen's foot. A body with the flag has its polygons cut 400 in front instead -- what is nearer than the engine's near plane
+  is drawn too -- and `DECORS.CPP` keeps one of LBA Assembler's drawn-only decors while a corner of its foot is 400 in front (not the near
+  plane's 3,000). The palace's rooms, roof rock and turrets have it (`BrickBuilding.CloseFlag`).
+- *The rooms in every cube they are seen from* (`docs/LBA2_PALACE_ISLAND.md`): the floor under the camera, in the cube behind the car's,
+  went from the picture with the rest of that cube's.
+- *Race-track pieces up to 1,000 a cube* (`IslandDecors.MaxPerCubeRaceTrack`). The builder placed its pieces up to the retail engine's
+  200 decors a cube; with the rooms in every cube the palace's start gate and 23 of its 27 floor arrows were left out (the report even said
+  the gate was "off the island" -- now "its cube full"). A race track is played in this editor's engine only, which draws 1,000.
+- Found on the way: the first cut covered one-colour triangles only -- a quad's header carries its quad bit (0x8000) in `TypePoly`, and
+  the floor's quads never matched.
+- Checked: the test pilot through the rooms, a picture every 40 frames -- the floor to the screen's foot in every one; won in 60.7 s, and
+  with power-ups lost (54.5 s; opponents' skill is drawn anew each run); no car rescued. The Emerald Moon's lap, a picture every 30 frames:
+  the loops and rings as before, 63.5 s. The thirteen other tracks built by the last commit's code and this one: all 42 files the same.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

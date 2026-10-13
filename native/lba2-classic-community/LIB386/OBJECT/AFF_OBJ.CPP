@@ -284,6 +284,16 @@ static inline U16 ZBufferDepth(S32 z) {
     return (U16)(depth < 0 ? 0 : depth > 0xFFFF ? 0xFFFF : depth);
 }
 
+// (a polygon cut at the near plane is drawn by its own type's handler, and its call to Fill_Poly, made while ClipOn, goes to ClipFill:
+// see the cut polygons' comment, further down)
+static S32 ClipOn = 0;
+static S32 ClipFill(S32 type, S32 colour, S32 n, Struc_Point *points);
+static S32 (*const RealFillPoly)(S32, S32, S32, Struc_Point *) = Fill_Poly;
+static S32 ObjFillPoly(S32 type, S32 colour, S32 n, Struc_Point *points) {
+    return ClipOn ? ClipFill(type, colour, n, points) : RealFillPoly(type, colour, n, points);
+}
+#define Fill_Poly ObjFillPoly
+
 void GetZO3(Struc_Point *dst, U16 index1, U16 index2, U16 index3) {
     if (!Fill_Flag_ZBuffer || TypeProj != TYPE_3D) {
         return;
@@ -1350,6 +1360,173 @@ S16 TestZFar3(STRUC_POLY3_ENV *poly) {
     return zFar;
 }
 
+// ---- polygons cut at the near plane ----
+// A polygon with a corner behind the camera's near plane can't be projected whole, and the engine left it out (ProjectList marks the
+// point, TestVisible drops the polygon): with a big body close to the camera -- LBA Assembler's Emperor's palace, its floor in squares a
+// brick across -- a piece of floor went from the picture whole and the hill's ground under the rooms showed through the hole (2026-10-13:
+// "There's terrain clipping through the palace floor and visible inside"), and the rock on its roof had holes the sky showed through.
+// Such a polygon is cut at the plane instead, in the camera's space as the terrain's triangles are (TERRAIN.CPP, ClipperZ at NearClip
+// + 1): it goes in the sorted list where it would have gone whole, and it is drawn by its own type's handler -- its colour, light,
+// texture and map points as for any other -- whose fill takes the corners cut, their map points and light in between (ClipFill).
+// Cut at the near plane, though, the floor ends 3,000 in front of a camera over it -- on the screen with the camera tilted down -- and the
+// ground under the rooms showed in a band along the screen's foot. A body with MASK_OBJECT_CLOSE in its Info (the palace's) has its
+// polygons cut CLOSE_NEAR in front of the camera instead: what is nearer than the near plane, the engine's only, is drawn too.
+// So close, a polygon's corner out to the side goes far off the screen, past what a screen point holds (16 bits): the polygon is cut at
+// the sides of a view CLIP_SIDE pixels either way of the middle too.
+#define CLIP_MARK 0xFF // (a sorted entry's type byte: a cut polygon, its offset the index in ClippedInfo)
+#define MAX_CLIPPED MAX_NB_POLYS
+#define CLIP_SIDE 30000
+#define CLIP_MAX_PTS 12 // (4 corners and one more for each of the 5 planes cut at)
+static U32 ClippedInfo[MAX_CLIPPED]; // (each cut polygon's own sorted entry: its type, its offset in the body)
+static S32 NbClipped = 0;
+static S32 ClipN = 0;                // (the cut polygon being drawn: its corners in the camera's space)
+static double ClipPos[4][3];
+
+// How near the camera the current body is drawn.
+static inline S32 NearOfBody(void) {
+    return (lBody->Info & MASK_OBJECT_CLOSE) && NearClip > CLOSE_NEAR ? CLOSE_NEAR : NearClip;
+}
+
+// A point of the body in the camera's space: x, y and the depth as ProjectList takes it.
+static inline void CameraPoint(U16 index, double *out) {
+    const T_OBJ_POINT *p = &Obj_ListRotatedPoints[index];
+    out[0] = (double)p->X + PosXWr;
+    out[1] = (double)p->Y + PosYWr;
+    out[2] = -(double)p->Z - PosZWr;
+}
+
+// Whether a polygon (its corners' point numbers) is cut at the near plane: a corner behind it, and one in front of where the body is
+// drawn from (the isometric view has none).
+static bool CutAtNear(const U16 *idx, S32 n) {
+    if (TypeProj != TYPE_3D) return false;
+    const S32 nearZ = NearOfBody();
+    bool behind = false, front = false;
+    for (S32 i = 0; i < n; i++) {
+        const S32 z = -(S32)Obj_ListRotatedPoints[idx[i]].Z - PosZWr;
+        if (z < NearClip) behind = true;
+        if (z > nearZ) front = true;
+    }
+    return behind && front;
+}
+
+// Whether any of the body's points is behind the near plane: the screen box ProjectList makes is only of the points in front, and a
+// polygon cut at the plane can be on the screen when they are all off it.
+static bool SomeBehind(S32 nbPoints) {
+    if (TypeProj != TYPE_3D) return false;
+    for (S32 i = 0; i < nbPoints; i++) {
+        if (-(S32)Obj_ListRotatedPoints[i].Z - PosZWr < NearClip) return true;
+    }
+    return false;
+}
+
+// A polygon (its own sorted entry: type and offset) queued as cut at the near plane, where it would have gone whole (zFar: TestZFar3/4's).
+static void QueueClipped(S16 zFar, U32 info) {
+    if (NbClipped >= MAX_CLIPPED || Nb_Sort >= MAX_NB_POLYS) return;
+    ClippedInfo[NbClipped] = info;
+    Off_Sort[0] = (S32)(((U32)(S32)zFar << 16) | (Nb_Sort & 0xFFFF));
+    Off_Sort[MAX_NB_POLYS] = (S32)(((U32)CLIP_MARK << 24) | (U32)NbClipped);
+    Nb_Sort++;
+    Off_Sort++;
+    NbClipped++;
+}
+
+// The fill of a cut polygon (its handler's call to Fill_Poly, made while ClipOn): its corners -- in the camera's space, with the map
+// points and light the handler gave them -- cut at the near plane and the view's sides, projected, faced as TestVisible faces a polygon,
+// and filled.
+static S32 ClipFill(S32 type, S32 colour, S32 n, Struc_Point *points) {
+    if (n != ClipN) return 0;
+    const double fx = FRatioX, fy = (double)FRatioX * FRatioY;
+    const double planes[5][4] = {
+        {0, 0, 1, -((double)NearOfBody() + 1)},
+        {-fx, 0, CLIP_SIDE, 0},
+        {fx, 0, CLIP_SIDE, 0},
+        {0, -fy, CLIP_SIDE, 0},
+        {0, fy, CLIP_SIDE, 0},
+    };
+    double v[2][CLIP_MAX_PTS][6]; // (x, y, z, map u, map v, light)
+    S32 m = n, from = 0;
+    for (S32 i = 0; i < n; i++) {
+        v[0][i][0] = ClipPos[i][0];
+        v[0][i][1] = ClipPos[i][1];
+        v[0][i][2] = ClipPos[i][2];
+        v[0][i][3] = points[i].Pt_MapU;
+        v[0][i][4] = points[i].Pt_MapV;
+        v[0][i][5] = points[i].Pt_Light;
+    }
+    for (S32 k = 0; k < 5 && m >= 3; k++) {
+        const double *pl = planes[k];
+        double (*src)[6] = v[from], (*dst)[6] = v[from ^ 1];
+        S32 out = 0;
+        for (S32 i = 0; i < m; i++) {
+            const double *a = src[i], *b = src[(i + 1) % m];
+            const double da = pl[0] * a[0] + pl[1] * a[1] + pl[2] * a[2] + pl[3];
+            const double db = pl[0] * b[0] + pl[1] * b[1] + pl[2] * b[2] + pl[3];
+            if (da >= 0) {
+                for (S32 c = 0; c < 6; c++) dst[out][c] = a[c];
+                out++;
+            }
+            if ((da >= 0) != (db >= 0)) {
+                const double t = da / (da - db);
+                for (S32 c = 0; c < 6; c++) dst[out][c] = a[c] + (b[c] - a[c]) * t;
+                out++;
+            }
+        }
+        m = out;
+        from ^= 1;
+    }
+    if (m < 3) return 0; // (none of it in view)
+    Struc_Point cut[CLIP_MAX_PTS];
+    memset(cut, 0, sizeof(cut));
+    const bool depth = Fill_Flag_ZBuffer && TypeProj == TYPE_3D;
+    for (S32 i = 0; i < m; i++) {
+        const double *c = v[from][i];
+        const double factor = fx / c[2];
+        const double sx = XCentre + (double)lrint(c[0] * factor), sy = YCentre + (double)lrint(c[1] * factor * (double)FRatioY);
+        if (sx > 32767 || sx < -32767 || sy > 32767 || sy < -32767) return 0;
+        cut[i].Pt_XE = (S16)sx;
+        cut[i].Pt_YE = (S16)sy;
+        cut[i].Pt_MapU = (U16)lrint(c[3]);
+        cut[i].Pt_MapV = (U16)lrint(c[4]);
+        cut[i].Pt_Light = (U16)lrint(c[5]);
+        cut[i].Pt_ZO = depth ? ZBufferDepth((S32)c[2]) : 0;
+        cut[i].Pt_W = (S32)(-(double)W_NORM / c[2]); // (as the handlers have it: W_NORM over the rotated z and PosZWr)
+    }
+    if (!g_disableBackfaceCulling) {
+        // (TestVisible's test, over the whole outline: twice its area, which way round)
+        S64 area = 0;
+        for (S32 i = 1; i + 1 < m; i++) {
+            area += (S64)(cut[i].Pt_XE - cut[0].Pt_XE) * (cut[0].Pt_YE - cut[i + 1].Pt_YE) -
+                    (S64)(cut[i].Pt_YE - cut[0].Pt_YE) * (cut[0].Pt_XE - cut[i + 1].Pt_XE);
+        }
+        if (area < 0) return 0;
+    }
+    return RealFillPoly(type, colour, m, cut);
+}
+
+// A cut polygon drawn: its handler (Poly_Jump) with its fill going to ClipFill. (A corner behind the camera means nothing to the handler,
+// but one right on the camera's plane would have it divide by 0 for the perspective's W: moved off it while the handler runs -- ClipFill
+// takes the corners' places from ClipPos.)
+static void DrawClipped(S32 k) {
+    const U32 info = ClippedInfo[k];
+    const U8 type = info >> 24;
+    void *poly = (void *)((U8 *)lBody + (info & 0xFFFFFF));
+    const U16 *idx = (const U16 *)poly; // (every polygon structure starts with its corners' point numbers)
+    ClipN = (type & 1) ? 4 : 3;         // (the type's quad bit)
+    S16 saved[4];
+    for (S32 i = 0; i < ClipN; i++) {
+        CameraPoint(idx[i], ClipPos[i]);
+        saved[i] = Obj_ListRotatedPoints[idx[i]].Z;
+    }
+    for (S32 i = 0; i < ClipN; i++) {
+        T_OBJ_POINT *p = &Obj_ListRotatedPoints[idx[i]];
+        if (p->Z + PosZWr == 0) p->Z += p->Z < 32767 ? 1 : -1;
+    }
+    ClipOn = 1;
+    Poly_Jump[type](type, poly);
+    ClipOn = 0;
+    for (S32 i = ClipN - 1; i >= 0; i--) Obj_ListRotatedPoints[idx[i]].Z = saved[i];
+}
+
 void InsertTriangle(U8 type, T_POLY_HEADER *header, void **poly, U32 *polyOffset) {
     for (int i = 0; i < header->NbPoly; i++) {
         // @@Do_Triangle:
@@ -1380,6 +1557,14 @@ void InsertTriangle(U8 type, T_POLY_HEADER *header, void **poly, U32 *polyOffset
 
             Nb_Sort++;
             Off_Sort++;
+        } else {
+            // (a corner behind the camera: see the cut polygons' comment)
+            const U16 idx[3] = {poly3->P1, poly3->P2, poly3->P3};
+            if (CutAtNear(idx, 3)) {
+                U32 polyType = (U32)header->TypePoly << 26;
+                if (type == 2) polyType |= 0b10 << 24;
+                QueueClipped(TestZFar3(poly3), polyType | (*polyOffset & 0xFFFFFF));
+            }
         }
 
         // @@Next_Triangle:
@@ -1402,6 +1587,7 @@ void InsertQuad(U8 type, T_POLY_HEADER *header, void **poly, U32 *polyOffset) {
         // @@Do_Quad:
         STRUC_POLY3_ENV *poly3 = (STRUC_POLY3_ENV *)*poly;
 
+        bool queued = false;
         if (TestVisible(poly3, g_disableBackfaceCulling)) {
             STRUC_POLY4_LIGHT *poly4 = (STRUC_POLY4_LIGHT *)*poly;
 
@@ -1425,6 +1611,17 @@ void InsertQuad(U8 type, T_POLY_HEADER *header, void **poly, U32 *polyOffset) {
 
                 Nb_Sort++;
                 Off_Sort++;
+                queued = true;
+            }
+        }
+        if (!queued) {
+            // (a corner behind the camera: see the cut polygons' comment)
+            const STRUC_POLY4_LIGHT *corners = (const STRUC_POLY4_LIGHT *)*poly;
+            const U16 idx[4] = {corners->P1, corners->P2, corners->P3, corners->P4};
+            if (CutAtNear(idx, 4)) {
+                U32 polyType = (U32)header->TypePoly << 26;
+                polyType |= (type == 2 ? 0b11 : 0b01) << 24; // (quad, and environment)
+                QueueClipped(TestZFar4(poly3), polyType | (*polyOffset & 0xFFFFFF));
             }
         }
         // @@Next_Quad:
@@ -1449,6 +1646,7 @@ S32 EntityCreation(T_BODY_HEADER *body) {
 
     Off_Sort = ListSort;
     Nb_Sort = 0;
+    NbClipped = 0;
 
     void *lines = (void *)((U8 *)body + body->OffLines);
     void *currentPoly = (void *)((U8 *)body + body->OffPolys);
@@ -1589,6 +1787,10 @@ S32 EntityCreation(T_BODY_HEADER *body) {
         U8 type = info >> 24;
         S32 offset = info & 0xFFFFFF;
 
+        if (type == CLIP_MARK) {
+            DrawClipped(offset);
+            continue;
+        }
         void *poly = (void *)((U8 *)lBody + offset);
         Poly_Jump[type](type, poly);
         // @@Return_Display:
@@ -1776,9 +1978,10 @@ S32 ObjectDisplay(T_OBJ_3D *obj) {
     ProjectList(Obj_ListProjectedPoints, (TYPE_VT16 *)Obj_ListRotatedPoints,
                 lBody->NbPoints, -PosXWr, -PosYWr, -PosZWr);
 
-    // Is the object visible?
-    if (ScreenXMin > ClipXMax || ScreenYMin > ClipYMax ||
-        ScreenXMax < ClipXMin || ScreenYMax < ClipYMin) {
+    // Is the object visible? (or partly behind the camera: see the cut polygons, ClipFill)
+    if ((ScreenXMin > ClipXMax || ScreenYMin > ClipYMax ||
+         ScreenXMax < ClipXMin || ScreenYMax < ClipYMin) &&
+        !SomeBehind(lBody->NbPoints)) {
         return 0;
     }
 
@@ -1799,9 +2002,10 @@ S32 Return_BodyDisplay(TYPE_MAT *srcMatrix, TYPE_MAT *dstMatrix, S32 alpha, S32 
     ProjectList(Obj_ListProjectedPoints, (TYPE_VT16 *)Obj_ListRotatedPoints,
                 lBody->NbPoints, -PosXWr, -PosYWr, -PosZWr);
 
-    // Is the object visible?
-    if (ScreenXMin > ClipXMax || ScreenYMin > ClipYMax ||
-        ScreenXMax < ClipXMin || ScreenYMax < ClipYMin) {
+    // Is the object visible? (or partly behind the camera: see the cut polygons, ClipFill)
+    if ((ScreenXMin > ClipXMax || ScreenYMin > ClipYMax ||
+         ScreenXMax < ClipXMin || ScreenYMax < ClipYMin) &&
+        !SomeBehind(lBody->NbPoints)) {
         return 0;
     }
 

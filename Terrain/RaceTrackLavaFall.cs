@@ -191,7 +191,7 @@ internal static class RaceTrackLavaFall
         dx /= len; dz /= len;
         // (the body's +x turned by the decor's beta is (cos, -sin) of it: along the aqueduct)
         var beta = ((int)Math.Round(Math.Atan2(-dz, dx) * 4096 / (2 * Math.PI)) % 4096 + 4096) % 4096;
-        if (IslandDecors.Locate(island, sx * 512, sz * 512) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube)
+        if (IslandDecors.Locate(island, sx * 512, sz * 512) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack)
         { report.Notes.Add($"WARNING: the aqueduct from ({sx:0.#}, {sz:0.#}): no room"); return; }
         // its underside along it: level over the road (within its rails and a cell, under the lava's level), down into the ground beyond
         var n = Math.Max(4, (int)Math.Ceiling(len * 512 / 600));

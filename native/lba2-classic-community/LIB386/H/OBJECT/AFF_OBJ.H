@@ -129,6 +129,8 @@ typedef struct {
 #define MASK_OBJECT_ANIMATED (1 << 8)
 #define MASK_OBJECT_NO_SORT (1 << 9)
 #define MASK_OBJECT_TRANSPARENT (1 << 10)
+#define MASK_OBJECT_CLOSE (1 << 11) // (LBA Assembler, no retail body has it: drawn close to the camera, see AFF_OBJ.CPP ClipFill)
+#define CLOSE_NEAR 400              // (how close: its polygons cut that far in front of the camera, not at NearClip)
 
 // -----------------------------------------------------------------------------
 extern U8 *ObjPtrMap; // Ptr on the current texture page

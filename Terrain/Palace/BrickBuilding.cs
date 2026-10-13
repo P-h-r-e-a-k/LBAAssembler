@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO;
 using System.Numerics;
 using LbaBodyStudio;
@@ -68,11 +69,17 @@ internal static class BrickBuilding
         Q(new(xb, ya, za), new(xb, ya, zb), new(xb, yb, zb), new(xb, yb, za), side, Vector3.UnitX);
     }
 
+    // A body's Info bit (unused by every retail body) that has LBA Assembler's engine draw its polygons up to 400 from the camera, not cut at
+    // the near plane, 3,000 away (AFF_OBJ.CPP, MASK_OBJECT_CLOSE): the palace's floor was cut there with the camera over it, and the ground
+    // under the rooms showed in a band along the screen's foot.
+    public const int CloseFlag = 1 << 11;
+
     // Each group's faces as bodies (a few where they are many), appended to `newBodies` (numbered from `firstBody` on), each a decor nothing
     // touches. Returns the bodies, the faces, and the decors left out (a cube full: `maxPerCube` decors). (`everyCube`: a copy of each in every
-    // cube it reaches, as the race tracks' decks are -- the engine draws and collides only the decors of the cube the hero is in)
+    // cube it reaches, as the race tracks' decks are -- the engine draws and collides only the decors of the cube the hero is in; and with
+    // `reach`, in every cube within that of it too: those it can be seen from. `close`: the bodies drawn close to the camera, CloseFlag)
     public static (int Bodies, int Faces, int Left) AddBodies(IslandFile island, Dictionary<int, List<Face>> groups, List<byte[]> newBodies, int firstBody,
-        Func<int, string>? what = null, int maxPerCube = IslandDecors.MaxPerCube, bool everyCube = false)
+        Func<int, string>? what = null, int maxPerCube = IslandDecors.MaxPerCube, bool everyCube = false, bool close = false, double reach = 0)
     {
         int faceCount = 0, bodyCount = 0, left = 0;
         foreach (var (group, faces) in groups)
@@ -99,11 +106,14 @@ internal static class BrickBuilding
                 var body = firstBody + newBodies.Count;
                 if (pts.Any(p => Math.Abs(p.X) > 32767 || Math.Abs(p.Y) > 32767 || Math.Abs(p.Z) > 32767))
                     throw new InvalidDataException($"{what?.Invoke(group) ?? $"group {group}"}: a body of {chunk.Count} faces from {lo} to {hi} is bigger than a body holds");
-                newBodies.Add(RaceTrackPipes.Write(pts, bodyFaces, lit: false));
+                var bytes = RaceTrackPipes.Write(pts, bodyFaces, lit: false);
+                if (close) BinaryPrimitives.WriteInt32LittleEndian(bytes, BinaryPrimitives.ReadInt32LittleEndian(bytes) | CloseFlag);
+                newBodies.Add(bytes);
                 faceCount += chunk.Count; bodyCount++;
                 if (everyCube)
                 {
-                    left += AddToCubes(island, body, 0, origin.X, (int)Math.Round(origin.Y), origin.Z, lo.X, hi.X, (int)Math.Floor(lo.Y), NoBoxTop, lo.Z, hi.Z, maxPerCube).Full;
+                    left += AddToCubes(island, body, 0, origin.X, (int)Math.Round(origin.Y), origin.Z, lo.X, hi.X, (int)Math.Floor(lo.Y), NoBoxTop, lo.Z, hi.Z, maxPerCube,
+                        reach).Full;
                     continue;
                 }
                 if (IslandDecors.Locate(island, origin.X, origin.Z) is not { } at || at.Cube.Decors.Count >= maxPerCube) { left++; continue; }
@@ -145,13 +155,15 @@ internal static class BrickBuilding
 
     // One decor in every cube its box reaches into (world units), each copy in that cube's own frame (its place may then be outside
     // 0..32767) -- RaceTrackBuilder's way for its decks. Returns the copies placed and the cubes too full to take one.
+    // (`reach`: in every cube that far round its box too -- the engine draws only the decors of the cube the camera's hero is in, so a
+    // thing seen from afar, the Emperor's palace's turrets over its roof, has a copy in each cube it can be seen from; its box stays its own)
     public static (int Placed, int Full) AddToCubes(IslandFile island, int body, int beta, double wx, int y, double wz,
-        double minX, double maxX, int yMin, int yMax, double minZ, double maxZ, int maxPerCube = IslandDecors.MaxPerCube)
+        double minX, double maxX, int yMin, int yMax, double minZ, double maxZ, int maxPerCube = IslandDecors.MaxPerCube, double reach = 0)
     {
         var size = (double)IslandFile.CubeSize;
         int placed = 0, full = 0;
-        for (var cz = (int)Math.Floor(minZ / size); cz <= (int)Math.Floor((maxZ - 1e-6) / size); cz++)
-        for (var cx = (int)Math.Floor(minX / size); cx <= (int)Math.Floor((maxX - 1e-6) / size); cx++)
+        for (var cz = (int)Math.Floor((minZ - reach) / size); cz <= (int)Math.Floor((maxZ + reach - 1e-6) / size); cz++)
+        for (var cx = (int)Math.Floor((minX - reach) / size); cx <= (int)Math.Floor((maxX + reach - 1e-6) / size); cx++)
         {
             if (island.CubeAt(cx, cz) is not { } cube) continue;
             if (cube.Decors.Count >= maxPerCube) { full++; continue; }

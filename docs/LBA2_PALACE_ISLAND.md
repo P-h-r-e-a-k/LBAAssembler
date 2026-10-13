@@ -207,6 +207,28 @@ inside of the palace, then have the turret's on the roof cover the whole of our 
 - **Their collision**: their shape seen from above, all the way up (`MaxClimb` 100 layers): 1,265 boxes.
 - **The sky** is at 90,000 over the turrets (`PalaceCliff.SkyY`, was 48,000).
 
+## The roof whole from everywhere, and the floor up to the camera (2026-10-13, later)
+
+The user: "There seems to be a lot of points on our new roof that isn't full and can be seen through", and "There's terrain clipping
+through the palace floor and visible inside as pictured, we should fix this also".
+
+![The turrets whole in the editor's 3D view, from a cube away](palace/turrets_editor.png)
+
+- **Seen from another cube.** The engine draws only the decors listed in the cube it stands in -- in Play the hero's, in the editor's 3D
+  view the cube it loads -- and the turrets' pieces, the roof's rock and the rooms' bodies were listed only in the cubes their boxes reach.
+  From further off a turret stood with quarters missing and the sky showed through the roof; in the rooms the floor under the camera,
+  nine cells behind the car and so often in the cube before, went. Each is now listed in every cube within the far plane of it (70,000:
+  `PalaceOutside.Seen`; `BrickBuilding.AddBodies`/`AddToCubes`' `reach`, the copy keeping its own box): 6,147 decors in all, the busiest
+  cube 379 of the 1,000 this editor's engine draws.
+- **Behind the camera.** The engine dropped a polygon whole when a corner of it was behind the camera's near plane (3,000 in front at 480
+  lines): the floor's squares under the camera went and the ground, 700 under the floor, showed through; near the editor's camera the
+  roof's rock had holes the sky showed through. It now cuts them at the plane (`AFF_OBJ.CPP`, every polygon type, its map points and light
+  carried to the cut corners; see `docs/LBA2_DESERT_RACE_TRACK_BUILD.md`). Cut there, the floor still ended 3,000 in front of the camera,
+  on the screen with the camera tilted down: the palace's bodies -- the rooms, the rock, the turrets -- carry a flag (Info bit 11,
+  `BrickBuilding.CloseFlag`, no retail body has it) that has them cut 400 in front of the camera instead. The floor runs to the screen's foot.
+- The island's own ground (the cliffs' tops) is cut at the near plane as in the retail game: in the editor's 3D view, close to a cliff's
+  edge, a wedge of sky can show there.
+
 ## Making it
 
 - Tools > **LBA2: Palace island (Otringal's palace)…** (`MainWindow.Palace.cs`) adds the two files to the game folder, builds them again,

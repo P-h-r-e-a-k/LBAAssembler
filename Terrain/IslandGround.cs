@@ -250,6 +250,10 @@ internal static class IslandDecors
     // ... and in an island only this editor's engine plays (no retail scene goes there: Island CX's control tower under the gas), as many
     // as its draw list holds (3DEXT/LBA_EXT.H MAX_OBJ_DECORS, 1,000 since 2026-10-12; the retail engine's is 200)
     public const int MaxPerCubeOwnEngine = 1000;
+    // ... and so in a race track's island: the race-track mode is this editor's engine's (RACEMOD.CPP). Its pieces were placed up to the
+    // retail engine's 200 a cube, and the Emperor's palace -- its rooms and turrets in every cube they are seen from -- lost its start gate
+    // and most of its floor arrows (2026-10-13)
+    public const int MaxPerCubeRaceTrack = MaxPerCubeOwnEngine;
 
     public static IslandDecor Blank(int body, int x, int y, int z, int beta = 0, int halfSize = 512, int height = 1024)
     {

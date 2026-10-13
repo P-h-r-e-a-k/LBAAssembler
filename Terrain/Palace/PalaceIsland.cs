@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO;
 using System.Numerics;
 using LbaBodyStudio;
@@ -455,12 +456,15 @@ internal static class PalaceIsland
         var quayX0 = east + PalaceCliff.Margin + PalaceCliff.Face - 6;
         var harbour = new PalaceCliff.Harbour((quayX0, midZ - 34, quayX0 + 26, midZ + 34), QuayY, (east + PillarOut, midZ, PillarRadius, hilltop + PillarRise));
 
-        // ---- the bodies: each room's faces (a few bodies where they are many), each a decor nothing touches, in every cube it reaches
+        // ---- the bodies: each room's faces (a few bodies where they are many), each a decor nothing touches, in every cube it can be seen
+        // from (the engine draws the hero's cube's decors only: the floor under a car's camera, a cube back, went missing) -- and drawn close
+        // to the camera (BrickBuilding.CloseFlag: cut at the near plane, the floor under the camera let the ground show)
         var oblBytes = File.ReadAllBytes(Path.Combine(sourceDirectory, SourceObl));
         var next = HqrArchive.CountEntries(Path.Combine(sourceDirectory, SourceObl));
         var newBodies = new List<byte[]>();
         const int Cap = IslandDecors.MaxPerCubeOwnEngine;
-        var (bodyCount, faceCount, decorsLeft) = BrickBuilding.AddBodies(island, roomFaces, newBodies, next, ti => $"room {area.Tiles[ti].Scene}", Cap, everyCube: true);
+        var (bodyCount, faceCount, decorsLeft) = BrickBuilding.AddBodies(island, roomFaces, newBodies, next, ti => $"room {area.Tiles[ti].Scene}", Cap, everyCube: true,
+            close: true, reach: PalaceOutside.Seen);
         var (rockBodies, rockFaces) = RockRoof(island, roofRects, newBodies, next, Cap);
 
         // ---- the outside: Otringal's palace on the sixteen rooms' roof, its arch in front of its porch, a wing of towers on the long hall's
@@ -489,7 +493,7 @@ internal static class PalaceIsland
             var (tx, ty, tz) = PalaceTeleporter.Place((harbour.Pillar.X - 2) * 512, harbour.Pillar.Z * 512, harbour.Pillar.Top + RoadOver);
             const double Reach = PalaceTeleporter.Radius + PalaceTeleporter.Tube;
             BrickBuilding.AddToCubes(island, ring, 0, tx, (int)Math.Round(ty), tz, tx - PalaceTeleporter.Tube, tx + PalaceTeleporter.Tube,
-                (int)Math.Floor(ty - Reach), BrickBuilding.NoBoxTop, tz - Reach, tz + Reach, Cap);
+                (int)Math.Floor(ty - Reach), BrickBuilding.NoBoxTop, tz - Reach, tz + Reach, Cap, PalaceOutside.Seen);
             log.Add($"the Dark Monk's teleporter: a gold ring {2 * Reach:0} across on the harbour's pillar, its middle at ({tx / 512:0.#}, {ty:0}, {tz / 512:0.#})");
         }
 
@@ -626,9 +630,10 @@ internal static class PalaceIsland
                     bodyFaces.Add(new Face(ids, 0, Texture: new FaceTexture(0, uv), Lba2Type: 8));
                 }
                 if (points.Count > BrickBuilding.MaxPoints) throw new InvalidDataException("The roofs' rock: a body of more points than one holds.");
-                // (the header's first byte: the body format's version, 0x10 as every retail body has it -- the engine reads textured polygons by it)
+                // (the header's first byte: the body format's version, 0x10 as every retail body has it -- the engine reads textured polygons by
+                // it; and drawn close to the camera, as the rooms are: BrickBuilding.CloseFlag)
                 var header = new byte[96];
-                header[0] = 0x10;
+                BinaryPrimitives.WriteInt32LittleEndian(header, 0x10 | BrickBuilding.CloseFlag);
                 var body = new Body
                 {
                     Game = 2, Static = true, Lit = false, Header = header, Vertices = points,
@@ -638,7 +643,9 @@ internal static class PalaceIsland
                 var number = firstBody + newBodies.Count;
                 newBodies.Add(body.Write());
                 bodies++; faces += bodyFaces.Count;
-                BrickBuilding.AddToCubes(island, number, 0, origin.X, (int)Math.Round(origin.Y), origin.Z, lx, hx, (int)Math.Floor(ly), BrickBuilding.NoBoxTop, lz, hz, maxPerCube);
+                // (in every cube it can be seen from: the engine draws only the camera's cube's decors, and from the others the roof was
+                // see-through -- PalaceOutside.Seen)
+                BrickBuilding.AddToCubes(island, number, 0, origin.X, (int)Math.Round(origin.Y), origin.Z, lx, hx, (int)Math.Floor(ly), BrickBuilding.NoBoxTop, lz, hz, maxPerCube, PalaceOutside.Seen);
             }
         return (bodies, faces);
     }

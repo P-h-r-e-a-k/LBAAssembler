@@ -110,7 +110,7 @@ internal static class RaceTrackTunnel
                         }
                 }
                 if (faces.Count == 0) continue;
-                if (IslandDecors.Locate(island, origin.X, origin.Z) is not { } where || where.Cube.Decors.Count >= IslandDecors.MaxPerCube) { skipped++; continue; }
+                if (IslandDecors.Locate(island, origin.X, origin.Z) is not { } where || where.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) { skipped++; continue; }
                 var (cube, lx, lz) = where;
                 var d = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, lx, (int)Math.Round(origin.Y), lz, 0);
                 report.NewBodies.Add(RaceTrackPipes.Write(mesh, faces, lit: false));

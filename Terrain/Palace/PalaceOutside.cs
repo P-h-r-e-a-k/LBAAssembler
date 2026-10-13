@@ -23,8 +23,8 @@ namespace LBAAssembler.Terrain.Palace;
 //   - over the sixteen rooms two by two, each hall filling a quarter of their roof (SlotFill of it), turned to vary; along the long hall's
 //     part out of them, the north hall one after another; each Tall times as tall as it is wide -- 6 to 9 times their own width, 30,000 to
 //     60,000 high where they stood 26,000 (TurretBody: wider and taller apart, about their middle height);
-//   - each body drawn only (its box touches nothing, as the rooms' are), in every cube it reaches (the engine draws and collides only the
-//     decors of the cube the hero is in);
+//   - each body drawn only (its box touches nothing, as the rooms' are), in every cube it can be seen from (`Seen`: the engine draws and
+//     collides only the decors of the cube the hero is in), and drawn close to the camera (BrickBuilding.CloseFlag);
 //   - the halls' shape seen from above (Cell x Cell columns as high as their tops, up to MaxClimb layers over the roof -- all of them) as
 //     collision boxes, so a car round the rooftops goes round the turrets, not through them.
 internal static class PalaceOutside
@@ -44,6 +44,10 @@ internal static class PalaceOutside
     public const double Tall = 1.35;
     public const double TallMost = 12.5;        // (times the hall's own height at the most: a body's points are 16-bit about its middle)
     public const int MaxClimb = 100;            // the collision's layers over the roof at the most (all of the tallest turret)
+    // (the engine draws only the decors of the cube its camera's hero is in: each piece of a turret is in every cube it can be seen from --
+    // as far round it as the far plane -- or from all but a few cubes a turret stood with quarters missing, the sky through it: the user,
+    // 2026-10-13, "a lot of points on our new roof that isn't full and can be seen through")
+    public const double Seen = PalaceCliff.FarClip;
 
     // Where the turrets go: the sixteen rooms' extent (world units), the roof's top, the building's cell and layer; the long hall's extent
     // (its turrets on its part out of the sixteen rooms) when there is one.
@@ -71,6 +75,8 @@ internal static class PalaceOutside
             var clipped = 0;
             var bytes = TurretBody(sourceObl.Read(body), kxz, ky, out var shift, ref clipped);
             if (clipped > 0) throw new InvalidDataException($"{PalaceIsland.SourceObl} body {body} {kxz:0.##} times as wide and {ky:0.##} times as tall is bigger than a body holds.");
+            // (drawn close to the camera, as the rooms are: BrickBuilding.CloseFlag)
+            BinaryPrimitives.WriteInt32LittleEndian(bytes, BinaryPrimitives.ReadInt32LittleEndian(bytes) | BrickBuilding.CloseFlag);
             newBodies.Add(bytes);
             bodies++;
             return scaled[(body, kxz, ky)] = (firstBody + newBodies.Count - 1, shift);
@@ -106,7 +112,7 @@ internal static class PalaceOutside
                 double minZ = mz + corners.Min(c => c.Z) * kxz, maxZ = mz + corners.Max(c => c.Z) * kxz;
                 var foot = site.RoofTop + (d.YMin - baseY) * ky;
                 var y = Math.Round(site.RoofTop + (d.Y - baseY) * ky + shift.Y);
-                var (placed, full) = AddCopies(island, copy, body, wx, (int)y, wz, minX, maxX, (int)Math.Floor(foot), BrickBuilding.NoBoxTop, minZ, maxZ, maxPerCube);
+                var (placed, full) = AddCopies(island, copy, body, wx, (int)y, wz, minX, maxX, (int)Math.Floor(foot), BrickBuilding.NoBoxTop, minZ, maxZ, maxPerCube, Seen);
                 if (placed == 0) left++;
                 left += full; decors += placed;
                 triangles.AddRange(Triangles(newBodies[body - firstBody], wx, y, wz, copy.Beta & 0xFFFF));
@@ -221,15 +227,15 @@ internal static class PalaceOutside
         return b;
     }
 
-    // A source decor's copy in every cube its box reaches (world units), each in that cube's frame, its body `body`, its turn and the rest
-    // as the source's.
+    // A source decor's copy in every cube its box reaches (world units) -- and every cube `reach` round it -- each in that cube's frame, its
+    // body `body`, its turn and the rest as the source's, its box its own.
     private static (int Placed, int Full) AddCopies(IslandFile island, IslandDecor source, int body, double wx, int y, double wz,
-        double minX, double maxX, int yMin, int yMax, double minZ, double maxZ, int maxPerCube)
+        double minX, double maxX, int yMin, int yMax, double minZ, double maxZ, int maxPerCube, double reach = 0)
     {
         var size = (double)IslandFile.CubeSize;
         int placed = 0, full = 0;
-        for (var cz = (int)Math.Floor(minZ / size); cz <= (int)Math.Floor((maxZ - 1e-6) / size); cz++)
-        for (var cx = (int)Math.Floor(minX / size); cx <= (int)Math.Floor((maxX - 1e-6) / size); cx++)
+        for (var cz = (int)Math.Floor((minZ - reach) / size); cz <= (int)Math.Floor((maxZ + reach - 1e-6) / size); cz++)
+        for (var cx = (int)Math.Floor((minX - reach) / size); cx <= (int)Math.Floor((maxX + reach - 1e-6) / size); cx++)
         {
             if (island.CubeAt(cx, cz) is not { } cube) continue;
             if (cube.Decors.Count >= maxPerCube) { full++; continue; }

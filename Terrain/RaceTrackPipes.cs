@@ -126,7 +126,7 @@ internal static class RaceTrackPipes
                 var len = (float)(run.Every * 512);
                 var jetRun = JetRunAt(i);
                 var body = Gantry(along, across, half * 512, feet[0] - y, feet[1] - y, len, jetRun >= 0 ? jets[jetRun].Run.High : -1);
-                if (IslandDecors.Locate(island, x * 512, z * 512) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { skipped++; why.Add($"({x:0.#}, {z:0.#}): its cube full"); continue; }
+                if (IslandDecors.Locate(island, x * 512, z * 512) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) { skipped++; why.Add($"({x:0.#}, {z:0.#}): its cube full"); continue; }
                 var (cube, lx, lz) = at;
                 var d = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, lx, (int)Math.Round(y), lz, 0);
                 report.NewBodies.Add(body);
@@ -226,7 +226,7 @@ internal static class RaceTrackPipes
         int pieces = 0, supports = 0, skipped = 0;
         bool Add(byte[] body, Vector3 at, Vector3 lo, Vector3 hi)
         {
-            if (IslandDecors.Locate(island, at.X, at.Z) is not { } where || where.Cube.Decors.Count >= IslandDecors.MaxPerCube) return false;
+            if (IslandDecors.Locate(island, at.X, at.Z) is not { } where || where.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) return false;
             var (cube, lx, lz) = where;
             var d = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, lx, (int)Math.Round(at.Y), lz, 0);
             report.NewBodies.Add(body);

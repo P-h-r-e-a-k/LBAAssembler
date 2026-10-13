@@ -4405,7 +4405,7 @@ internal static class RaceTrackBuilder
             };
             middle = choices.FirstOrDefault(m => Grounded(m - total / 2) && Grounded(m + total / 2), (right - left) / 2);
         }
-        var placed = 0;
+        int placed = 0, full = 0;
         var posts = new List<(double X0, double Z0, double X1, double Z1)>();
         for (var k = 0; k < beams; k++)
         {
@@ -4427,11 +4427,11 @@ internal static class RaceTrackBuilder
                 d.XMin = at.X + (int)Math.Floor(minX); d.XMax = at.X + (int)Math.Ceiling(maxX);
                 d.ZMin = at.Z + (int)Math.Floor(minZ); d.ZMax = at.Z + (int)Math.Ceiling(maxZ);
                 d.YMin = y + box[1]; d.YMax = y + box[4];
-                if (at.Cube.Decors.Count < IslandDecors.MaxPerCube) { at.Cube.Decors.Add(d); placed++; }
+                if (at.Cube.Decors.Count < IslandDecors.MaxPerCubeRaceTrack) { at.Cube.Decors.Add(d); placed++; } else full++;
                 if (body != 64) posts.Add(((cubeX + d.XMin) / 512, (cubeZ + d.ZMin) / 512, (cubeX + d.XMax) / 512, (cubeZ + d.ZMax) / 512));
             }
         }
-        if (placed == 0) { report.Placed.Add($"{what}: off the island"); return; }
+        if (placed == 0) { report.Placed.Add($"{what}: " + (full > 0 ? $"its cube full ({IslandDecors.MaxPerCubeRaceTrack} decors)" : "off the island")); return; }
         if (o.GantryFootings) PostFootings(island, o, posts, y, what, report);
         var span = beams == 1 ? "" : $", {beams} beams end to end over the lap and the pit lane beside it, posts {middle - beams * beam / 2:0.0} and {middle + beams * beam / 2:+0.0} cells across";
         report.Placed.Add($"{what}: gantry at cell ({cx:0.0}, {cz:0.0}), height {y}, turn {beta}{span}");
@@ -4643,7 +4643,7 @@ internal static class RaceTrackBuilder
         foreach (var l in report.Loops)
         {
             var wx = l.X * 512; var wz = l.Z * 512;
-            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { report.Notes.Add($"WARNING: the loop at cell ({l.X:0.0}, {l.Z:0.0}): no room for its ring"); continue; }
+            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) { report.Notes.Add($"WARNING: the loop at cell ({l.X:0.0}, {l.Z:0.0}): no room for its ring"); continue; }
             var along = new System.Numerics.Vector3((float)l.DirX, 0, (float)l.DirZ);
             var radius = l.Radius * 512; var shift = l.Shift * 512; var half = l.Band * 512;
             var y = (int)Math.Round(l.Y);
@@ -4657,7 +4657,7 @@ internal static class RaceTrackBuilder
                     return Math.Max(200, y - ground);
                 }).ToArray();
             var bodies = RaceTrackLoopBody.Ring(along, radius, shift, half, l.Gap * Math.PI / 180, legs);
-            if (at.Cube.Decors.Count + bodies.Count > IslandDecors.MaxPerCube) { report.Notes.Add($"WARNING: the loop at cell ({l.X:0.0}, {l.Z:0.0}): no room for its ring"); continue; }
+            if (at.Cube.Decors.Count + bodies.Count > IslandDecors.MaxPerCubeRaceTrack) { report.Notes.Add($"WARNING: the loop at cell ({l.X:0.0}, {l.Z:0.0}): no room for its ring"); continue; }
             var reach = (int)Math.Ceiling(radius + RaceTrackLoopBody.Thickness + 2 * RaceTrackLoopBody.LegHalf);
             var wide = (int)Math.Ceiling(Math.Abs(shift) / 2 + half + RaceTrackLoopBody.RailWidth);
             int ex = (int)Math.Ceiling(Math.Abs(l.DirX) * reach + Math.Abs(l.DirZ) * wide), ez = (int)Math.Ceiling(Math.Abs(l.DirZ) * reach + Math.Abs(l.DirX) * wide);
@@ -4700,7 +4700,7 @@ internal static class RaceTrackBuilder
                 bodies[key] = body;
             }
             var wx = a[0] * 512; var wz = a[1] * 512;
-            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { left++; continue; }
+            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) { left++; continue; }
             var d = IslandDecors.Blank(body, at.X, (int)Math.Round(a[2] + FloorArrowLift), at.Z, 0);
             var reach = (int)Math.Ceiling(FloorArrowLength / 2 + 64);
             d.XMin = at.X - reach; d.XMax = at.X + reach; d.ZMin = at.Z - reach; d.ZMax = at.Z + reach; d.YMin = d.Y - 64; d.YMax = NoBoxTop;
@@ -4826,7 +4826,7 @@ internal static class RaceTrackBuilder
         System.Numerics.Vector3 Across(int k) => new((float)-r.Tz[k], (float)(banks?[k] ?? 0), (float)r.Tx[k]);
         bool Add(byte[] body, double wx, double wy, double wz, int x0, int y0, int z0, int x1, int y1, int z1, bool untouchable = false)
         {
-            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) return false;
+            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) return false;
             var d = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, at.X, (int)Math.Round(wy), at.Z, 0);
             d.XMin = at.X + x0; d.XMax = at.X + x1; d.YMin = d.Y + y0; d.YMax = untouchable ? NoBoxTop : d.Y + y1; d.ZMin = at.Z + z0; d.ZMax = at.Z + z1;
             at.Cube.Decors.Add(d);
@@ -4962,7 +4962,7 @@ internal static class RaceTrackBuilder
         var (piers, none) = o.PierBodies is { } stand && o.SceneryObl is { } obl && RaceTrackScenery.Load(island, obl) is { } scenery
             ? PlacePiersOnScenery(island, r, o, report, span, loop, scenery, stand, Across, Add, ref left)
             : PlacePiers(island, r, o, report, span, Across, Add, ref left);
-        if (left > 0) report.Notes.Add($"WARNING: {left} pieces of the raised road were left out: the cube already holds {IslandDecors.MaxPerCube} decors");
+        if (left > 0) report.Notes.Add($"WARNING: {left} pieces of the raised road were left out: the cube already holds {IslandDecors.MaxPerCubeRaceTrack} decors");
         report.Placed.Add($"raised road: {(span.Count(k => up[k]) - (loop ? 1 : 0)) * o.Spacing:0} cells in {pieces} pieces of {o.RaisedPiece:0} cells and {piers} piers" +
                           (none > 0 ? $" ({none} more left out: no clear ground under the road there)" : "") +
                           $", {report.NewBodies.Count} new decor bodies from {o.NewBodyBase} on");
@@ -5007,7 +5007,7 @@ internal static class RaceTrackBuilder
         int placed = 0, left = 0;
         bool Put(int body, (float X0, float X1, float Y1, float Z0, float Z1) b, double wx, double wy, double wz, int turn)
         {
-            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) return false;
+            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) return false;
             var d = IslandDecors.Blank(body, at.X, (int)Math.Round(wy), at.Z, turn);
             // (the box: the body's own, turned as the engine turns it -- x' = x cos + z sin, z' = -x sin + z cos)
             var a = turn * 2 * Math.PI / 4096; double c = Math.Cos(a), sn = Math.Sin(a);
@@ -5287,7 +5287,7 @@ internal static class RaceTrackBuilder
                             y - 100, y + (int)RaceTrackDeckBody.RailHeight + 100, (side * (width / 2 + RailBoxOutset), lz, RailBoxHalf))) rails++;
                 }
         }
-        if (full > 0) report.Notes.Add($"WARNING: {full} deck pieces were left out of a cube that already holds {IslandDecors.MaxPerCube} decors");
+        if (full > 0) report.Notes.Add($"WARNING: {full} deck pieces were left out of a cube that already holds {IslandDecors.MaxPerCubeRaceTrack} decors");
         report.Placed.Add($"road bridge: {tiles} deck tiles ({cols} x {rows} of {o.RoadBridgeTileLength:0} cells, {width / 512:0.#} x {length / 512:0.#} cells) and {rails} railing pieces ({copies} decors in all, counting the copies in each cube a piece reaches) at cell ({rb.X:0.0}, {rb.Z:0.0}), deck height {y}, turn {beta}, over road {rb.UnderRoad}");
     }
 
@@ -5305,7 +5305,7 @@ internal static class RaceTrackBuilder
         for (var cx = (int)Math.Floor(minX / size); cx <= (int)Math.Floor(maxX / size); cx++)
         {
             if (island.CubeAt(cx, cz) is not { } cube) continue;
-            if (cube.Decors.Count >= IslandDecors.MaxPerCube) { full++; continue; }
+            if (cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) { full++; continue; }
             var ox = cx * size; var oz = cz * size;
             var d = IslandDecors.Blank(body, (int)Math.Round(wx - ox), y, (int)Math.Round(wz - oz), beta);
             d.XMin = (int)Math.Floor(minX - ox); d.XMax = (int)Math.Ceiling(maxX - ox);
@@ -5344,7 +5344,7 @@ internal static class RaceTrackBuilder
         foreach (var (body, box, originLocal) in pieces)
         {
             var wx = (cx * 512 + ex * originLocal); var wz = (cz * 512 + ez * originLocal);
-            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) continue;
+            if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) continue;
             var d = IslandDecors.Blank(o.RetailBody(body), at.X, y, at.Z, beta);
             double minX = 1e18, maxX = -1e18, minZ = 1e18, maxZ = -1e18;
             foreach (var (bx, bz) in new[] { (box[0], box[2]), (box[3], box[2]), (box[0], box[5]), (box[3], box[5]) })

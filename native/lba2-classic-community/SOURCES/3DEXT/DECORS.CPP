@@ -334,11 +334,14 @@ void AffichageObjetDecorsZBuf(void) {
             const S32 zrot = CameraZr - Z0;
             // A race-track mod's piece of raised road (LBA Assembler: its box over its footprint and touching nothing, its top under its
             // bottom -- no game decor has one) is still drawn while a corner of its box is in front of the camera, though its middle has
-            // gone behind it: a long piece passing under a close camera left a hole in the road.
+            // gone behind it: a long piece passing under a close camera left a hole in the road. In front of the camera by CLOSE_NEAR,
+            // not the near plane: a body drawn close (MASK_OBJECT_CLOSE, the palace's rooms) is drawn nearer than that, and a small piece of
+            // the palace's floor right under the camera would be left out whole.
             if (!seen && ptrobj->YMax < ptrobj->YMin) {
+                const S32 closeZ = NearClip > CLOSE_NEAR ? CLOSE_NEAR : NearClip;
                 for (S32 c = 0; c < 4 && !seen; c++) {
                     LongWorldRotatePoint((c & 1) ? ptrobj->XMax : ptrobj->XMin, ptrobj->YMin, (c & 2) ? ptrobj->ZMax : ptrobj->ZMin);
-                    seen = Z0 <= CameraZrClip;
+                    seen = CameraZr - Z0 >= closeZ;
                 }
             }
 

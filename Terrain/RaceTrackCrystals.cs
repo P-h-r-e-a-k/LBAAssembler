@@ -46,7 +46,7 @@ internal static class RaceTrackCrystals
         foreach (var c in runs.Where(c => c.At is { Length: >= 2 }))
         {
             double wx = c.At[0] + originX, wz = c.At[1] + originZ;
-            if (IslandDecors.Locate(island, wx * 512, wz * 512) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube) { left++; continue; }
+            if (IslandDecors.Locate(island, wx * 512, wz * 512) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) { left++; continue; }
             var source = obl.Read(c.Body);
             var baseY = (IslandOps.Altitude(island, wx * 512, wz * 512) ?? 0) - c.Sink;
             int Beta(double turn) => ((int)Math.Round(turn * 4096 / 360) % 4096 + 4096) % 4096;
@@ -96,7 +96,7 @@ internal static class RaceTrackCrystals
                 double lx = r.X[k] + tz * half * side, lz = r.Z[k] - tx * half * side;
                 return deck - (IslandOps.Altitude(island, lx * 512, lz * 512) ?? deck - 400) + 300;
             }
-            if (IslandDecors.Locate(island, r.X[k] * 512, r.Z[k] * 512) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCube)
+            if (IslandDecors.Locate(island, r.X[k] * 512, r.Z[k] * 512) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack)
             { report.Notes.Add($"WARNING: the crystal arch at ({x:0.#}, {z:0.#}): no room"); continue; }
             var (body, reach) = Arch(half * 512, Leg(-1), Leg(1), k * 7919);
             var d = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, at.X, (int)Math.Round(deck), at.Z, beta);
