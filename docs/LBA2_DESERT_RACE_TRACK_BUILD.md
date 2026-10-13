@@ -3334,6 +3334,48 @@ the walls based on some of the games characters".
     for 15 s.
   - no car was rescued in any run.
 
+## The Emperor's palace, sixth round: round the turrets on the roof, a fireplace that's a teleporter, giants (2026-10-13, night)
+
+The user: "The start area needs changing so the start line lines up with the straight of the track", "The enemies are too easy to avoid,
+perhaps making them bigger would help with this?", the fireplace in room 151 "a teleporter so driving into it brings us out of a second
+fire place", "Add a raised track outside on the roof that loops around the roof turrets", "Enlarge the track width so it's the same width
+as a door way", and "Add an entrance door to the palace in the start room". The island's part: `docs/LBA2_PALACE_ISLAND.md`.
+
+![The route: the rooms (blue), out of the round window and climbing past the long hall's turrets, round the four turrets on the roof
+(white), the leap through the teleporter on the harbour's pillar; the fireplace teleporter (magenta), the guards (orange)](racetrack/palace/v7_route.png)
+
+![On the roof, between the turrets](racetrack/palace/v7_roof.png)
+
+![A soldier twice the game's size](racetrack/palace/v7_giant.png)
+
+- *The start on the straight.* The grid is in front of the palace's new doors in room 154's east wall, on the bottom row's carpet line,
+  and the start line is ahead of it on the same line (the room's chest, which put the grid off the line, is against the north wall now).
+  The grid's back is 12 cells from the doors, so the camera behind it is clear of their frame.
+- *The road round the turrets* (`palace_design.py`, fifth version). Out of the round window a raised road 1,500 over the roof's rock
+  (`RAISE`), 7 cells either side of its middle, 6 in the ways between the turrets:
+  1. north and east over the cloud sea, climbing (at most 9 %), and south past the long hall's turrets;
+  2. on south down the middle way between the four turrets on the sixteen rooms' roof;
+  3. west through the middle way across, south down the palace's west side, east along its south side and north up its east side:
+     round three sides of the south-west turret and two of the south-east one;
+  4. east off the roof's edge: the leap over the harbour (a carried jump, 80 cells) through the Dark Monk's teleporter on its pillar, the
+     finish line at its lip. A win's teleporter takes the car in mid-air, as the round window's leap did.
+  The turrets were made to leave room (`SlotFill` 0.80); a first way, out east over the sea and round by the turrets' north side, had
+  half a minute of road in the fog with nothing beside it. The race is about 2 minutes 40 at the top speed now, 105 seconds of it outside.
+- *The teleporter* (`RACEMOD.CPP` `Teleport`, `teleport=`; the plan's `teleports`, from the island's layout). The player's car driven
+  into room 151's fireplace comes out of room 159's at its speed, looking out of it. It is a short cut past room 155: about 5 seconds.
+  It goes into the other cube's scene as a carried jump does (`NewCube`, the car where it was until the scene is in). The open areas'
+  camera starts its trail again, and the lap forgets where the car was. The race's places find the car on the line again
+  (`PlayerProgress`' whole-line search).
+- *Giants* (`RaceTrackGuards.Install`, `guard_size=`). Each kind's body is twice the game's (`RaceTrackSmallCars.Scaled`), at the end of
+  BODY.HQR and given to its entity as body 20 (`BigBody`). The race-track mode scales their reach, their pace and how near a car runs into
+  them by the same, and how far they see a car coming by its square root. The carpets are four bricks across now, so the guards stand
+  further off them (`CARPET_HALF` 8) and step out further (a leash of 10 cells).
+- *Checked* with the test pilot:
+  - no power-ups: won in 178.44 s; the giants stopped the car more than once; no car rescued.
+  - the teleporter: the car driven straight into room 151's fireplace came out of room 159's facing east at 4,836 units a second, in
+    another cube's scene, from 4th to 1st, and drove on.
+  - with power-ups: won in 157.58 s, no car rescued.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

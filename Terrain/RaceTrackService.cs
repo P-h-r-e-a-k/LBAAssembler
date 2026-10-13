@@ -148,7 +148,10 @@ internal static class RaceTrackService
         // Guards: the people in the cars' way (RaceTrackGuards; RACEMOD.CPP guard=), each [kind, its post x and z, the floor's height, the way
         // it faces x and z (thousandths), how far it steps out (island units), its animations -- standing, walking, knocked back -- its four
         // strikes (-1 none), then the scene and actor of each scene it has one in, its own first], since 2026-10-13
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Guards = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Guards = null,
+        // Teleports: each [the box a car is taken in by: x0, z0, x1, z1, y0, y1; where it comes out: x, y, z, the way it looks] in island units
+        // (RACEMOD.CPP teleport=), since 2026-10-13
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Teleports = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -393,7 +396,7 @@ internal static class RaceTrackService
     // all of them, and each track's record for RACETRACK.JSON, in the order built.
     public sealed class BuildSession
     {
-        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars;
+        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars, GuardBodies;
         public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel;
         public int[]? CrystalShardModels;
         public int[]? LaserModels;
@@ -637,6 +640,8 @@ internal static class RaceTrackService
         // the cars after the game's characters, three or more for each island: in the game's files for whoever is to drive them (no actor
         // has one yet)
         if (!session.CharacterCars) { log.AddRange(RaceTrackCharacterCars.Install(gameDirectory).Log); session.CharacterCars = true; }
+        // ... and the people in the cars' way twice their size (RaceTrackGuards), when a track has them
+        if (report.Guards.Count > 0 && !session.GuardBodies) { log.AddRange(RaceTrackGuards.Install(gameDirectory)); session.GuardBodies = true; }
         // ... and each of the racer entity's cars shrunk to half its size, for the lightning spell (RaceTrackSmallCars)
         if (!session.SmallCars)
         {
@@ -841,6 +846,10 @@ internal static class RaceTrackService
                             (int)Math.Round(s[5] * 1000), (int)Math.Round(s[6] * 1000), (int)Math.Round(s[7] * 512), look.Idle, look.Walk, look.Hit }
                         .Concat(strikes).Concat(seen).ToArray();
                 }).ToList()
+                : null,
+            Teleports: report.Teleports.Count > 0
+                ? report.Teleports.Select(t => new[] { (int)Math.Round(t[0] * 512), (int)Math.Round(t[1] * 512), (int)Math.Round(t[2] * 512), (int)Math.Round(t[3] * 512),
+                    (int)Math.Round(t[4]), (int)Math.Round(t[5]), (int)Math.Round(t[6] * 512), (int)Math.Round(t[8]), (int)Math.Round(t[7] * 512), (int)Math.Round(t[9]) }).ToList()
                 : null);
     }
 

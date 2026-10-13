@@ -40,7 +40,7 @@ internal static class PalaceOutside
     // then: "Make the island small enough so that it only just fits the inside of the palace, then have the turret's on the roof cover the
     // whole of our inside of the palace"): over the sixteen rooms two by two, a hall a quarter of their roof; along the long hall one after
     // another; each as wide as its place allows (SlotFill of it) and Tall times that up -- 30,000 to 60,000 over the roof
-    public const double SlotFill = 0.96;
+    public const double SlotFill = 0.80;
     public const double Tall = 1.35;
     public const double TallMost = 12.5;        // (times the hall's own height at the most: a body's points are 16-bit about its middle)
     public const int MaxClimb = 100;            // the collision's layers over the roof at the most (all of the tallest turret)

@@ -128,6 +128,9 @@ internal sealed class RaceTrackPlan
     // People in the cars' way (RaceTrackGuards, RACEMOD.CPP guard=), each [kind, which, x, z (cells from the origin), the floor's height,
     // the way they face (x, z), how far they step out (cells)]: the Emperor's palace's soldiers, pigheads and Stan (2026-10-13).
     public double[][]? Guards { get; set; }
+    // Teleporters (RACEMOD.CPP teleport=), each [the box a car is taken in by: x0, z0, x1, z1 (cells from the origin), y0, y1 (world); where
+    // it comes out: x, z (cells), y, the way it looks then (the engine's turn)]: the Emperor's palace's fireplaces (2026-10-13).
+    public double[][]? Teleports { get; set; }
     // Gas monsters rising out of the gas beside the road to bite cars (RaceTrackGasMonster, RACEMOD.CPP gasmonster=): Otringal's docks and
     // the islets of Baldino's crash (the user, 2026-10-09).
     public GasMonsterRun[]? GasMonsters { get; set; }
@@ -591,6 +594,8 @@ internal sealed class RaceTrackReport
     public List<double[]> FloorArrows { get; } = new();
     // The people in the cars' way (RaceTrackPlan.Guards: kind, which, x, z cells, the floor's height, the way they face, their leash cells)
     public List<double[]> Guards { get; } = new();
+    // The teleporters (RaceTrackPlan.Teleports, cells from the island's own origin)
+    public List<double[]> Teleports { get; } = new();
     public JumpInfo? Jump => Jumps.Count > 0 ? Jumps[0] : null;
     public RoadBridgeInfo? RoadBridge { get; set; }
     // How far (cells) an island cell position is from the nearest road's centre line, 1e9 when far away.
@@ -836,6 +841,10 @@ internal static class RaceTrackBuilder
                 report.Guards.Add(new[] { g[0], g[1], g[2] + plan.OriginCellX, g[3] + plan.OriginCellZ, g[4], g[5], g[6], g[7] });
             if (report.Guards.Count > 0)
                 report.Notes.Add($"people in the cars' way: {string.Join(", ", report.Guards.GroupBy(g => (int)g[0]).Select(k => $"{k.Count()} {RaceTrackGuards.KindName((int)k.Key, k.Count())}"))}");
+            foreach (var t in (plan.Teleports ?? Array.Empty<double[]>()).Where(t => t.Length >= 10))
+                report.Teleports.Add(new[] { t[0] + plan.OriginCellX, t[1] + plan.OriginCellZ, t[2] + plan.OriginCellX, t[3] + plan.OriginCellZ, t[4], t[5],
+                                             t[6] + plan.OriginCellX, t[7] + plan.OriginCellZ, t[8], t[9] });
+            if (report.Teleports.Count > 0) report.Notes.Add($"{report.Teleports.Count} teleporter{(report.Teleports.Count == 1 ? "" : "s")}");
         }
         if (planned && main.Raised is not null && plan.PitStripe is [var stripeFrom, var stripeTo, var stripeAt])
             main.Stripe = (PlanPoint(plan, main, (int)stripeFrom), PlanPoint(plan, main, (int)stripeTo), stripeAt);

@@ -91,6 +91,8 @@ internal static class RaceCarEngineFile
         foreach (var monster in track?.GasMonsters ?? new()) text.Append($"gasmonster={string.Join(' ', monster)}\n");
         // the people in the cars' way, stepping out at them, striking and throwing (the Emperor's palace's)
         foreach (var guard in track?.Guards ?? new()) text.Append($"guard={string.Join(' ', guard)}\n");
+        if (track?.Guards is { Count: > 0 }) text.Append($"guard_size={(int)Math.Round(RaceTrackGuards.Size * 100)}\n");
+        foreach (var teleport in track?.Teleports ?? new()) text.Append($"teleport={string.Join(' ', teleport)}\n");
         // where the camera stands while the car flies a drop
         foreach (var dropCam in track?.JumpCameras ?? new()) text.Append($"jumpcam={string.Join(' ', dropCam)}\n");
         // the jumps the engine carries the car over (places in the raised road's file), and the island's scenes by cube for the cube

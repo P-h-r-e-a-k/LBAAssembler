@@ -277,6 +277,43 @@ blocky. Let's also see if we can generate some pictures to hang on the walls bas
     body number (`IslandFile.DecorPageShift`). It is drawn close and in every cube it is seen from, as the rooms are. The wall's faces
     behind it are left out (`Faces`' `skip`), because the filler takes depth straight across the screen and would mix the two up.
 
+## The carpet as wide as the doors, a way in, a fireplace that's a teleporter (2026-10-13, night)
+
+The user, with pictures: "some of the red carpet doesn't join up, at the corners for example", "Enlarge the track width so it's the same
+width as a door way. Let's change the tile colour next to the track to a different colour than the rest of the floor", "Add an entrance
+door to the palace in the start room, we may need to reposition the large purple chest on the wall Perhaps over to the wall to the left of
+it", "Our fireplace that's here ... near the dinofly picture let's turn it into a teleporter so driving into it brings us out of a second
+fire place where the Queen of the mosquibees is on the wall. Let's move the queen's picture to where dinofly is, and drop the dinofly
+portrait", and "Add a raised track outside on the roof that loops around the roof turrets".
+
+![The palace's doors in the start room's east wall, the carpet up to them](racetrack/palace/v7_doors.png)
+
+![Room 151's fireplace made a teleporter, at the end of the bottom row's carpet](racetrack/palace/v7_portal.png)
+
+![Out of room 159's fireplace: the Queen of the Mosquibees over it](racetrack/palace/v7_portal_out.png)
+
+- **The carpet as wide as the doors.** The grids' carpets are two cells across. Every cell within one of them is carpet now too, so the
+  carpet is four cells across (`DoorBricks`), the doors' width, and its corners are square (the gaps there are gone). The cells along
+  it, a cell either side, are gold tiles in two shades (`BandLight`, `BandDark`); the rest of the floor is the two greens. Rooms are 13
+  cells across, so most of each room is carpet now.
+- **The palace's way in** (`EntranceDoors`). Room 154's east wall has a pair of doors on the bottom row's carpet line, as wide as the
+  room's west door and as high: two leaves of dark wood with raised panels, gold handles by a gold seam, a frame standing out from the
+  wall and a crest over it. They are on the wall's plane, its faces behind them left out, and no picture hangs within a cell of them.
+  The carpet runs on to them. The chest that stood in front of them is against the north wall now, east of that wall's door.
+- **The teleporters** (`PortalFrom` 151, `PortalTo` 159; `PalaceFurniture.Portal`). Room 151's fireplace, at the end of the bottom row's
+  carpet, and room 159's are hollow. Their hearth is the middle two cells of the four along the wall and three layers up: out of the
+  collision, the chimney breast built round it, its sides and top dark blue, the teleporter's glow at its back (dark blue, light blue,
+  white, as the Dark Monk's teleporter) where the wall's faces are left out. The layout's `teleports` gives the race-track mode the box a
+  car is taken in by (the first's hearth, from its back to 1.2 cells in front of it) and where it comes out (just in the second's hearth,
+  looking out of it): RACEMOD.CPP `teleport=`.
+- **The Queen's pictures mark them.** The Dino-Fly's picture is gone, and the Queen of the Mosquibees hangs only by the teleporters: in
+  room 151 where the Dino-Fly was, the picture nearest the fireplace; in room 159 over the fireplace, the wall behind it from the layer
+  over its top (that room has no plain wall across from it). The other pictures go round the six others.
+- **The turrets apart** (`PalaceOutside.SlotFill` 0.80, was 0.96): the road round the roof goes between them, and the ways between them are
+  some 24 cells across at their narrowest now. They are still 35,000 to 47,500 high.
+- `PALACE.JSON` has two more keys: `entrance` (the doors' wall face and span, island cells) and `teleports` (each the box in and the place
+  out, island cells and world heights, and the turn).
+
 ## Making it
 
 - Tools > **LBA2: Palace island (Otringal's palace)…** (`MainWindow.Palace.cs`) adds the two files to the game folder, builds them again,

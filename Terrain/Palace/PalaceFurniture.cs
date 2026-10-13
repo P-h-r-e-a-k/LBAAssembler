@@ -152,8 +152,9 @@ internal static class PalaceFurniture
     // The pieces' and chests' models. `place`: a point of the palace in cells (fractions of one) and layers to the island's world;
     // `colour`: a colour seen from a way (a unit normal in the world) as a colour of the island's palette; `faces`: which way a piece
     // looks (a unit along x or z: away from the wall it stands at, into its room); `wall`: the wallpaper's colour at a layer.
+    // (`portals`: fireplaces made teleporters -- hollow, a glow at the back -- PalaceIsland's PortalFrom and PortalTo)
     public static Made Build(List<Piece> pieces, List<Chest> chests, Func<double, double, double, Vector3> place, Func<(float R, float G, float B), Vector3, int> colour,
-        Func<Piece, (int Nx, int Nz)> faces, Func<int, (float R, float G, float B)> wall)
+        Func<Piece, (int Nx, int Nz)> faces, Func<int, (float R, float G, float B)> wall, IReadOnlySet<Piece>? portals = null)
     {
         var made = new Dictionary<int, List<BrickBuilding.Face>>();
         var boxes = new List<(double, double, double, double, double, double)>();
@@ -185,7 +186,10 @@ internal static class PalaceFurniture
                     var armsKit = new Kit(list, place, colour, ox + dx / 2.0, oy, oz + dz / 2.0, dx > dz ? 0 : 1, dx > dz ? 1 : 0);
                     Candelabra(armsKit); Count("candelabra", "candelabras"); break;
                 case Kind.Candle: Candle(kit); Count("candlestick", "candlesticks"); break;
-                case Kind.Fireplace: Fireplace(kit, depth, width, high); Count("fireplace", "fireplaces"); break;
+                case Kind.Fireplace:
+                    if (portals?.Contains(piece) == true) { Portal(kit, depth, width, high); Count("fireplace made a teleporter", "fireplaces made teleporters"); }
+                    else { Fireplace(kit, depth, width, high); Count("fireplace", "fireplaces"); }
+                    break;
                 case Kind.Portrait:
                     if (piece.Image is not { } portrait) break;
                     Picture(list, portrait, piece, nx, nz, place, colour, wall);
@@ -314,6 +318,44 @@ internal static class PalaceFurniture
         // (gold strips down the surround's sides)
         foreach (var s in new[] { -1, 1 })
             k.Quad(new(front + 12, 0, s * 700 - 60), new(front + 12, 0, s * 700 + 60), new(front + 12, 920, s * 700 + 60), new(front + 12, 920, s * 700 - 60), Gold, Vector3.UnitX);
+    }
+
+    // A fireplace made a teleporter (the user, 2026-10-13: "Our fireplace ... let's turn it into a teleporter so driving into it brings us
+    // out of a second fire place"): the chimney breast round a hearth open the whole block deep, PortalHalf either side of the middle and
+    // PortalHigh up -- the cells PalaceIsland takes out of the collision -- its sides and top dark, the teleporter's glow at its back (light
+    // blue round white, the Dark Monk's teleporter's); the white surround round it, no grate.
+    public const double PortalHalf = 512, PortalHigh = 768;    // (room units: two cells across, three layers up)
+    private static readonly (float R, float G, float B) PortalSide = (34, 30, 84), PortalDeep = (44, 64, 168), PortalMid = (104, 164, 236), PortalCore = (226, 242, 255);
+    private static void Portal(Kit k, double depth, double width, double high)
+    {
+        double d = depth / 2, w = width / 2, mantel = high - 130, ow = PortalHalf, oh = PortalHigh;
+        float fd = (float)d, fw = (float)w, fm = (float)mantel, fo = (float)ow, fh = (float)oh;
+        // (the breast either side of the hearth and over it)
+        k.Box(new(-fd, 0, -fw), new(fd, fm, -fo), GreenMarble, GreenMarble, lid: false);
+        k.Box(new(-fd, 0, fo), new(fd, fm, fw), GreenMarble, GreenMarble, lid: false);
+        k.Box(new(-fd, fh, -fo), new(fd, fm, fo), GreenMarble, GreenMarble, lid: false);
+        k.Box(new(-fd, fm, -fw - 20), new(fd + 50, (float)high, fw + 20), DarkGold, Gold, bottom: true);
+        // (the hearth: its sides and top, and the glow at its back in three steps)
+        k.Quad(new(-fd, 0, -fo + 2), new(fd, 0, -fo + 2), new(fd, fh, -fo + 2), new(-fd, fh, -fo + 2), PortalSide, Vector3.UnitZ);
+        k.Quad(new(-fd, 0, fo - 2), new(-fd, fh, fo - 2), new(fd, fh, fo - 2), new(fd, 0, fo - 2), PortalSide, -Vector3.UnitZ);
+        k.Quad(new(-fd, fh - 2, -fo), new(fd, fh - 2, -fo), new(fd, fh - 2, fo), new(-fd, fh - 2, fo), PortalSide, -Vector3.UnitY);
+        void Glow(double inset, float off, (float, float, float) c)
+        {
+            double a = ow * inset, b = oh * inset * 0.8;
+            k.Quad(new(-fd + off, (float)(b * 0.6), (float)(-ow + a)), new(-fd + off, (float)(b * 0.6), (float)(ow - a)), new(-fd + off, (float)(oh - b), (float)(ow - a)),
+                new(-fd + off, (float)(oh - b), (float)(-ow + a)), c, Vector3.UnitX);
+        }
+        Glow(0, 6, PortalDeep);
+        Glow(0.3, 14, PortalMid);
+        Glow(0.6, 22, PortalCore);
+        // (the white surround round the hearth, gold down its outer sides)
+        var front = fd + 4;
+        k.Quad(new(front, 0, -fo - 190), new(front, 0, -fo), new(front, fh, -fo), new(front, fh + 190, -fo - 190), WhiteMarble, Vector3.UnitX);
+        k.Quad(new(front, 0, fo), new(front, 0, fo + 190), new(front, fh + 190, fo + 190), new(front, fh, fo), WhiteMarble, Vector3.UnitX);
+        k.Quad(new(front, fh, -fo), new(front, fh, fo), new(front, fh + 190, fo + 190), new(front, fh + 190, -fo - 190), WhiteMarble, Vector3.UnitX);
+        foreach (var s in new[] { -1, 1 })
+            k.Quad(new(front + 8, 0, (float)(s * (ow + 190) - 50)), new(front + 8, 0, (float)(s * (ow + 190) + 50)), new(front + 8, fh + 190, (float)(s * (ow + 190) + 50)),
+                new(front + 8, fh + 190, (float)(s * (ow + 190) - 50)), Gold, Vector3.UnitX);
     }
 
     private static void Window(Kit k, double depth, double width, double high, bool inside)

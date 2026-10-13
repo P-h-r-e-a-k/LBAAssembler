@@ -34,6 +34,8 @@ internal static class PalacePortraits
     // bigger than the frame holds them (the Dino-Fly's wings past its sides).
     public sealed record Sitter(string Name, int Body, double Turn, double Show, (float R, float G, float B) Backdrop, double Zoom = 1);
 
+    // (the last, the Queen of the Mosquibees, hangs only by the fireplaces that are a teleporter -- PalaceIsland; the user, 2026-10-13: "Let's
+    // move the queen's picture to where dinofly is, and drop the dinofly portrait")
     public static readonly Sitter[] Sitters =
     {
         new("Twinsen", 1, 0.45, 0.62, (44, 66, 100)),
@@ -42,9 +44,9 @@ internal static class PalacePortraits
         new("FunFrock", 313, -0.35, 0.62, (84, 34, 32)),
         new("Jerome Baldino", 139, 0.6, 0.85, (44, 76, 64)),
         new("Joe the Elf", 110, -0.45, 1.0, (66, 54, 88)),
-        new("Dino-Fly", 167, 0.5, 1.0, (44, 72, 88), 1.9),
         new("the Queen of the Mosquibees", 196, -0.45, 0.8, (84, 66, 34)),
     };
+    public static int Queen => Sitters.Length - 1;
 
     // ---- the pictures ------------------------------------------------------------------------------------------------------------------
 
@@ -267,8 +269,9 @@ internal static class PalacePortraits
     // (`furniture`: their cells, and the standing pieces'), the room's air Clear cells out from it with nothing standing in the first two,
     // and a cell of plain wall on each side (not hard by a door). In the middle of each such stretch of a wall (one every Spacing cells along a long one), `perRoom` a room at
     // the most -- the longest stretches -- and the sitters by turns. `room`: the room (tile) a cell of air is in, -1 none.
+    // (`all`: every place a picture could hang, chosen or not -- PalaceIsland's teleporters choose from them)
     public static List<Spot> Spots(IReadOnlyDictionary<(int X, int Y, int Z), (int Brick, int Tile)> shown, HashSet<(int X, int Y, int Z)> air,
-        HashSet<(int X, int Y, int Z)> furniture, int floorTop, Func<(int X, int Y, int Z), int> room, int perRoom, Func<int, int>? morePerRoom = null)
+        HashSet<(int X, int Y, int Z)> furniture, int floorTop, Func<(int X, int Y, int Z), int> room, int perRoom, out List<Spot> all, Func<int, int>? morePerRoom = null)
     {
         var planes = new Dictionary<(int Dir, int At), HashSet<(int U, int Y)>>();
         var rooms = new Dictionary<(int Dir, int At, int U), int>();
@@ -322,9 +325,17 @@ internal static class PalacePortraits
             var most = perRoom + (morePerRoom?.Invoke(group.Key) ?? 0);
             foreach (var f in group.OrderByDescending(f => f.Run).ThenBy(f => f.Dir).ThenBy(f => f.At).ThenBy(f => f.U0).Take(most)
                          .OrderBy(f => f.Dir).ThenBy(f => f.At).ThenBy(f => f.U0))
-                spots.Add(new Spot(f.Tile, f.Dir, f.At, f.U0, y0, turn++ % Sitters.Length));
+                spots.Add(new Spot(f.Tile, f.Dir, f.At, f.U0, y0, turn++ % Queen));
         }
+        all = found.Select(f => new Spot(f.Tile, f.Dir, f.At, f.U0, y0, -1)).ToList();
         return spots;
+    }
+
+    // A picture's middle on its wall (the palace's cells, x and z) and the way it looks.
+    public static (double X, double Z, int Nx, int Nz) Middle(Spot s)
+    {
+        var (dx, _, dz, _) = BrickBuilding.Directions[s.Dir];
+        return dx != 0 ? (s.At + (dx > 0 ? 1 : 0), s.U0 + Cells / 2.0, dx, 0) : (s.U0 + Cells / 2.0, s.At + (dz > 0 ? 1 : 0), 0, dz);
     }
 
     // ---- hung ---------------------------------------------------------------------------------------------------------------------------

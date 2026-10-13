@@ -26,6 +26,20 @@ sprint (the plan's open) through the palace alone:
     wake=, wake_flight=); lost, the race is run again from the grid before it comes down.
 (Until the road round the roof's turrets, high in the air, is made.)
 
+Fifth version, 2026-10-13, later (the user: "The start area needs changing so the start line lines up with the straight of the track",
+"Add a raised track outside on the roof that loops around the roof turrets", "Enlarge the track width so it's the same width as a door
+way", "Add an entrance door to the palace in the start room", and the fireplace in room 151 a teleporter to room 159's):
+  - the grid in front of the palace's new doors in room 154's east wall, on the bottom row's carpet line, the start line ahead on it --
+    the chest that stood there moved to the room's north wall (PalaceIsland);
+  - out of the round window a raised road (RAISE over the roof's rock): north, east over the cloud sea and south past the long hall's
+    turrets, climbing to the roof, on south down the middle way between the four turrets (they are SlotFill 0.80 of their places now: the
+    ways between them some 24 cells), west through the middle way across, south down the west side, east along the south side and north
+    up the east side -- round three sides of the south-west turret and two of the south-east one -- and east off the roof's edge: the
+    leap over the harbour, through the Dark Monk's teleporter on its pillar (the finish line at the lip). (First east out over the sea
+    and round by the turrets' north side: half a minute of road in the fog with nothing beside it);
+  - the teleporter: the plan's teleports, from the island's layout (RACEMOD.CPP teleport=);
+  - the carpets four bricks across (16 cells): the guards stand off them further.
+
 Usage: palace_design.py <game folder with PALACE.ILE and PALACE.JSON: the island built on its own, `ScriptRoundTrip palace`> [out plan]
 """
 import json, math, sys
@@ -42,10 +56,13 @@ FLOOR = L['floorTop']                       # the rooms' floor: what the cars dr
 TOP = L['hilltop']                          # the hilltop: the roofs' top
 DECK = 60                                   # the raised road over what it lies on
 HALF_IN, HALF_OUT = 5.5, 7.0                # the road's half width (cells): up to the round window (16 cells across), out over the sea
-JUMP_APEX = 2600                            # the leap's top over the window's sill
-FLIGHT = 110                                # the leap's length (cells): a car at three times the race car's speed is still in the air when
-                                            # the teleporter takes it (wake_flight=, 2.4 s)
-PAD = 25                                    # where the leap comes down (no road: never reached)
+JUMP_APEX = 2600                            # the leap's top over its lip
+FLIGHT = 80                                 # the leap's length (cells): a car at three times the race car's speed is still in the air when
+                                            # the teleporter takes it (wake_flight=, 2.4 s) -- within the island's cubes
+PAD = 12                                    # where the leap comes down (no road: never reached)
+RAISE = 1500                                # the road round the turrets: this much over the roof's rock
+KICK = 500                                  # the runway's rise to the leap's lip, over its last RUNUP cells
+RUNUP = 16
 # (a car's collision box: some 1,420 units either way of its middle whichever way it faces: 2.8 cells. Where the cars drive the floor,
 # nothing within CAR_HALF of a line they follow; on the ramp nothing within the road's half-width less the rail's inset and a box)
 CAR_BOX = 2.8
@@ -132,18 +149,18 @@ def path(corners, radii, sp=SP):
 # ---- the rooms: the rows' door lines (z) and the columns' (x), a room's middle where its two cross
 R0, R1, R2, R3 = row(154), row(158), row(162), row(166)    # the bottom row's ... the top row's
 C0, C1, C2, C3 = col(151), col(152), col(153), col(154)    # the west column's ... the east column's
-# (the start line in the east half of room 154, the grid behind it by the room's east wall, all in one cube -- the start's scene; room
-# 154's chest stands on its row's door line east of the room's middle, so the grid is south of it, the way on west swinging up to the
-# row's door line)
-START_X = C3 + 7
-GRID_Z = R0 + 11
-BEHIND = rooms[154]['x1'] - 6
+# (the start line in the east half of room 154, the grid behind it in front of the palace's doors in the room's east wall -- the way in --
+# on the bottom row's door line, all in one cube -- the start's scene; the room's chest stood there: the island moved it to the north
+# wall)
+START_X = C3 + 3
+GRID_Z = R0
+BEHIND = (L['entrance'][0] if L.get('entrance') else rooms[154]['x1']) - 12   # (and the camera behind the grid clear of the doors' frame)
 if START_X // 64 != BEHIND // 64:
     raise ValueError(f'the grid ({START_X}..{BEHIND}) crosses a cube edge')
 TURN = 12                                                   # a turn at a room's middle: its radius (cells)
 HALL_JOIN = (C0, hall['z1'] - 36)                           # where every way through the rooms is the route again, up the long hall
-GRID = [(BEHIND, GRID_Z), (START_X - 9, GRID_Z), (START_X - 25, R0)]
-GRID_R = [0, 15, 15]
+GRID = [(BEHIND, GRID_Z)]
+GRID_R = [0]
 # (the opponents' ways: north at once through room 154's north door, or west first; a turn at each room's middle)
 NORTH_FIRST = [(BEHIND, GRID_Z), (C3, GRID_Z)]
 NORTH_FIRST_R = [0, 7]
@@ -161,19 +178,34 @@ arrows = []
 for s in SIXTEEN:
     cx, cz = col(s), row(s)
     if s == 154:
-        # (the start's room: the grid south of its door line -- the arrows where the cars pass, swinging up to it, or turning north)
-        arrows += [(cx - 16, cz + 3, -1, 0), (cx, cz - 10, 0, -1)]
+        # (the start's room: the grid on its door line -- the arrows where the cars pass, on west, or turning north)
+        arrows += [(cx - 16, cz, -1, 0), (cx, cz - 10, 0, -1)]
         continue
     if cx > C0: arrows.append((cx - 12, cz, -1, 0))
     if cz > R3 or s == 163: arrows.append((cx, cz - 12, 0, -1))
 arrows += [(C0, hall['z1'] - 40, 0, -1), (C0, (hall['z0'] + hall['z1']) / 2 + 20, 0, -1)]
 
-# ---- the route: the grid, west along the bottom row, north up the west column, the long hall, the round window, the leap north out over
-# the cloud sea and the stretch of road it comes down on
+# ---- the route: the grid, west along the bottom row, north up the west column, the long hall, the round window; then the raised road
+# round the turrets on the roof -- out north over the cloud sea, east, south down the palace's east side, west along the turrets' north
+# side, south down the west side, east through the middle way, south down the middle, east along the south side, north up the east side
+# -- and east off the roof's edge: the leap over the harbour through the teleporter on its pillar, and the stretch it comes down on
 if abs(C0 - wx) > 0.01:
     raise ValueError(f'the west column ({C0}) and the round window ({wx}) are not in line')
-corners = GRID + [(C0, R0), (wx, w_out - FLIGHT - PAD)]
-radii = GRID_R + [TURN, 0]
+# (the lines the road runs along, cells: round the sixteen rooms' square, the turrets standing on it two by two)
+ZN = w_out - 30                             # north of the round window, over the cloud sea
+XE = sq_x1 + 1                              # the east side
+ZNE = sq_z0 + 1                             # the turrets' north side
+XW = sq_x0 - 5                              # the west side
+ZH = (sq_z0 + sq_z1) / 2 - 1                # the middle way across ...
+XV = (sq_x0 + sq_x1) / 2 + 2                # ... and down (where the turrets leave most room: some 24 cells)
+HALF_MID = 6.0                              # the road's half width in the middle ways
+ZS = sq_z1 + 1                              # the south side
+ZR = L['pillar'][1]                         # the leap's line: the pillar's
+X_LIP = XE + 30                             # the leap's lip: out over the harbour, off the roof's edge
+OUTSIDE = [(wx, ZN), (XV, ZN), (XV, ZH), (XW, ZH), (XW, ZS), (XE, ZS), (XE, ZR), (X_LIP + FLIGHT + PAD, ZR)]
+OUTSIDE_R = [22, 22, 16, 16, 16, 16, 14, 0]
+corners = GRID + [(C0, R0)] + OUTSIDE
+radii = GRID_R + [TURN] + OUTSIDE_R
 pts = path(corners, radii)
 n = len(pts)
 S = np.r_[0, np.cumsum(np.linalg.norm(np.diff(pts, axis=0), axis=1))]
@@ -187,24 +219,43 @@ def nearest(p, lo=0, hi=None):
 start = nearest((START_X, GRID_Z), 0, 200)
 i_ramp_foot = nearest((wx, w_in + 30)); i_ramp_top = nearest((wx, w_in + 8), i_ramp_foot)
 i_window_in = nearest((wx, w_in), i_ramp_foot); i_window_out = nearest((wx, w_out), i_window_in)
-lip = nearest((wx, w_out - 2), i_window_out)
-land = nearest((wx, w_out - FLIGHT), lip); land_foot = n - 1
+i_up = nearest((XV, ZNE - 24), i_window_out)                      # the climb to the roof done: before the road comes over it
+i_east = nearest((XE, ZR), nearest((XE, ZS), i_up))               # the last turn, east to the leap
+lip = nearest((X_LIP, ZR), i_east); foot = nearest((X_LIP - RUNUP, ZR), i_east)
+land = nearest((X_LIP + FLIGHT, ZR), lip); land_foot = n - 1
 i_hall = nearest(HALL_JOIN, 0, i_ramp_foot)
 
-# ---- heights: the rooms' floor (no road there); the ramp up to the window's sill, level through the window; the leap -- up JUMP_APEX
-# and down to the sill's height -- and the stretch of road beyond
+# ---- heights: the rooms' floor (no road there); the ramp up to the window's sill, level through the window; out of it climbing over the
+# cloud sea to RAISE over the roof's rock; level round the turrets; the runway's rise to the lip; the leap -- up JUMP_APEX and down -- and
+# the stretch of road beyond
+def ease(t): return t * t * (3 - 2 * t)
 h = np.full(n, FLOOR, float)
 for i in range(i_ramp_foot, i_ramp_top + 1):
-    t = (i - i_ramp_foot) / max(1, i_ramp_top - i_ramp_foot); h[i] = FLOOR + (sill + DECK - FLOOR) * (t * t * (3 - 2 * t))
-lipH = sill + DECK
-h[i_ramp_top:] = lipH
+    t = (i - i_ramp_foot) / max(1, i_ramp_top - i_ramp_foot); h[i] = FLOOR + (sill + DECK - FLOOR) * ease(t)
+sillH = sill + DECK
+roofH = TOP + RAISE
+h[i_ramp_top:] = sillH
+for i in range(i_window_out, i_up + 1):
+    h[i] = sillH + (roofH - sillH) * ease((S[i] - S[i_window_out]) / max(1e-6, S[i_up] - S[i_window_out]))
+h[i_up:] = roofH
+for i in range(foot, lip + 1):
+    h[i] = roofH + KICK * ease((i - foot) / max(1, lip - foot))
+lipH = roofH + KICK
+h[lip:] = lipH
 for i in range(lip, land + 1):
     t = (i - lip) / max(1, land - lip); h[i] = lipH + JUMP_APEX * 4 * t * (1 - t)
 
 # ---- widths (cells from the road's middle to its rail): up to the round window as wide as it allows, wider beyond; the grid's places
 # by room 154's south wall two abreast. (In the rooms there is no road: the width only places the grid and the scenes)
 half = np.full(n, HALF_IN)
-half[land:] = HALF_OUT
+# (out of the round window as wide as it, then wider -- 10 cells on, clear of its wall -- and narrower again in the middle ways between
+# the turrets, within the sixteen rooms' square: each change over 10 cells)
+for i in range(i_window_out, n):
+    x, z = pts[i]
+    inside = min(x - sq_x0, sq_x1 - x, z - sq_z0, sq_z1 - z)
+    inner = min(1, max(0, (inside - 12) / 10))
+    half[i] = HALF_IN + (HALF_OUT - HALF_IN) * min(1, max(0, (S[i] - S[i_window_out] - 10) / 10))
+    half[i] += (HALF_MID - half[i]) * inner
 HALF_GRID = 3.5
 for i in range(0, n):
     if i <= start + 6: half[i] = HALF_GRID
@@ -220,7 +271,7 @@ routes = [path(c, r, 1.0) for c, r in open_routes]
 # one with the hammer, the brown with the garden tool, the yellow with the broom), 2 Stan (as a soldier). Each stands on the tiles by a
 # room's carpets -- they run through the room's middle, a row's and a column's, two bricks (8 cells) wide -- facing where they cross, and
 # steps out at most `leash` cells -- far enough to reach a car on the carpet's middle.
-CARPET_HALF = 4.0
+CARPET_HALF = 8.0                           # (the carpets four bricks across since 2026-10-13, as the doors)
 def free(x, z, r=1.2): return not blocked(x, z, FLOOR, r)
 def post(cx, cz, ox, oz, kind, which, leash, room):
     """A guard by the carpets' crossing at (cx, cz): `ox`, `oz` cells off it (the first free spot along the way out, or None)."""
@@ -241,7 +292,7 @@ corner = [(1, 1), (-1, 1), (-1, -1), (1, -1)]
 for k, s in enumerate(sorted(SIXTEEN)):
     if s == 154: continue
     sx, sz = corner[k % 4]
-    g = post(col(s), row(s), sx * (CARPET_HALF + 3), sz * (CARPET_HALF + 3), SOLDIER, 0, 6.5, s)
+    g = post(col(s), row(s), sx * (CARPET_HALF + 3), sz * (CARPET_HALF + 3), SOLDIER, 0, 10.0, s)
     if g: guards.append(g)
 for which, s in enumerate([152, 163]):
     # (the first of the crossing's four corners with room for him, from a different one in each room)
@@ -253,7 +304,7 @@ for which, s in enumerate([152, 163]):
 hx = col(163)
 for k, hz in enumerate([hall['z1'] - 52, hall['z1'] - 82, hall['z1'] - 112, hall['z1'] - 142]):
     side = 1 if k % 2 == 0 else -1
-    g = post(hx, hz, side * (CARPET_HALF + 4), 0.01, SOLDIER, 0, 7.0, 80)
+    g = post(hx, hz, side * (CARPET_HALF + 4), 0.01, SOLDIER, 0, 10.0, 80)
     if g: guards.append(g)
 print('guards:', len(guards), '--', ', '.join(f'{["soldier", "pighead", "Stan"][g[0]]} at ({g[2]:.1f}, {g[3]:.1f})' for g in guards))
 
@@ -271,17 +322,20 @@ def check_floor(line, what):
 print('route', n, 'points,', round(S[-1]), 'cells; start', start, 'the hall', i_hall, 'window', i_window_in, i_window_out, 'the leap', lip, land, land_foot)
 check_floor(pts[:i_ramp_foot], 'the rooms and the hall (the route)')
 for k, rt in enumerate(routes): check_floor(rt, f'the rooms (way {k + 1})')
-check(i_ramp_foot, lip + 1, 'the ramp and the window')
+check(i_ramp_foot, i_window_out + 1, 'the ramp and the window')
+check(i_window_out, lip + 1, 'the road round the turrets')
 grade = np.abs(np.diff(h)) / (SP * 512)
-print('steepest: the ramp to the window %.2f' % grade[i_ramp_foot:i_window_in].max())
+print('steepest: the ramp to the window %.2f, the climb to the roof %.3f' % (grade[i_ramp_foot:i_window_in].max(), grade[i_window_out:i_up].max()))
+low = min((h[i] - DECK - ground(pts[i][0], pts[i][1]), i) for i in range(i_window_out, lip))
+print('the road round the turrets: the least clearance over the ground %.0f at %s (height %.0f)' % (low[0], tuple(np.round(pts[low[1]], 1)), h[low[1]]))
 # (the leap over the ground: the least clearance under it, and under the stretch of road beyond -- the hill's arms either side)
 low = min((h[i] - DECK - max(ground(pts[i][0] + dx, pts[i][1]) for dx in (-HALF_OUT - 3, 0, HALF_OUT + 3)), i) for i in range(lip, n))
 print('the leap: lip %.0f at %s, its top %.0f, down at %s; %.1f cells; the least clearance over the ground under it and beyond %.0f at %s' %
       (h[lip], tuple(np.round(pts[lip], 1)), h[lip:land + 1].max(), tuple(np.round(pts[land], 1)), S[land] - S[lip], low[0], tuple(np.round(pts[low[1]], 1))))
-print('the parts: the rooms and the hall %.0f cells, the ramp and the window %.0f, the leap %.0f, the road beyond %.0f' %
-      (S[i_ramp_foot], S[lip] - S[i_ramp_foot], S[land] - S[lip], S[-1] - S[land]))
+print('the parts: the rooms and the hall %.0f cells, the ramp and the window %.0f, the road round the turrets %.0f, the leap %.0f, the road beyond %.0f' %
+      (S[i_ramp_foot], S[i_window_out] - S[i_ramp_foot], S[lip] - S[i_window_out], S[land] - S[lip], S[-1] - S[land]))
 print('the opponents\' ways through the rooms: ' + ', '.join('%.0f cells' % (len(rt) - 1) for rt in routes) + ' (the route %.0f to the same place)' % S[i_hall])
-print('about %.0f s to the window at the top speed (34 km/h, 9.4 cells a second)' % (S[lip] / 9.44))
+print('about %.0f s to the lip at the top speed (34 km/h, 9.4 cells a second)' % (S[lip] / 9.44))
 
 plan = {
     'originCellX': 0, 'originCellZ': 0,
@@ -300,13 +354,15 @@ plan = {
     'floorArrows': [[round(float(x), 2), round(float(z), 2), FLOOR, dx, dz] for x, z, dx, dz in arrows],
     'openRoutes': [[[round(float(x), 2), round(float(z), 2)] for x, z in rt] for rt in routes],
     'guards': guards,
-    # (the leap out of the window: its ramp the ramp up to the sill; the camera behind the car)
-    'arcJumps': [[i_ramp_foot, lip, land, land_foot, 0]],
+    # (the leap off the roof's edge over the harbour: its ramp the runway's rise; the camera behind the car)
+    'arcJumps': [[foot, lip, land, land_foot, 0]],
+    # (the fireplace made a teleporter: into room 151's, out of room 159's -- the island's layout)
+    'teleports': L.get('teleports') or [],
     # (the camera rides the road behind the car, low -- 9 cells behind, 2,100 over the road, looking 7 cells ahead at a point 1,000 over
     # it, its sight line to the car's middle 500 over the road; in the rooms, where there is no road, it follows the car's own trail, as
     # low -- RACEMOD.CPP OpenCamera)
     'railCamera': [9, 2100, 7, 500, 1000],
-    'themes': [{'from': 0, 'to': lip, 'theme': 'carpet'}, {'from': lip, 'to': n - 1, 'theme': 'palace'}],
+    'themes': [{'from': 0, 'to': i_window_out, 'theme': 'carpet'}, {'from': i_window_out, 'to': n - 1, 'theme': 'palace'}],
     # (the palace -- its rooms, roofs, furniture and domes -- stays where it is under and beside the road: every decor of the island's own
     # bodies on, PALACE.OBL's from 151; and nothing is cut into the ground)
     'keepAbove': 0,

@@ -74,6 +74,8 @@ internal static class PalaceIsland
                                                         // race's road through them too narrow)
     public const double CorridorHalf = 9;               // the ways across the hilltop's rocks: half their width (cells)
     public const int RingOut = 9;                       // the way round the palace's west and south sides: cells out from its walls
+    public const int StartScene = 154;                  // the race's start: its room's way in from outside (Build: the entrance)
+    public const int PortalFrom = 151, PortalTo = 159;  // the fireplace made a teleporter, and the one it leads to (Build: the teleporters)
     public const int PortraitsPerRoom = 2;              // pictures of the game's characters on a room's walls (PalacePortraits) ...
     public const int HallPortraits = 6;                 // ... and this many more along the long hall's
     // the colours of Otringal's palace (OTRINGAL.OBL's halls, in its palette): its pale stone (walls and flat roofs), the dark teal of its
@@ -377,6 +379,134 @@ internal static class PalaceIsland
         var wallpaper = sums.ToDictionary(s => s.Key, s => ((float)(s.Value.R / s.Value.N), (float)(s.Value.G / s.Value.N), (float)(s.Value.B / s.Value.N)));
         (float R, float G, float B) WallpaperAt(int y) =>
             wallpaper.TryGetValue(y, out var w) ? w : wallpaper.Count > 0 ? wallpaper.MinBy(p => Math.Abs(p.Key - y)).Value : (150f, 150f, 150f);
+        // (the way a piece of furniture looks: away from its wall -- the side with the most of a room's air in front of it, three cells deep,
+        // less what is behind it)
+        (int Nx, int Nz) Looks(PalaceFurniture.Piece p)
+        {
+            var (ox, oy, oz) = p.Origin; var (sx, sy, sz) = p.Size;
+            int AirOn(int nx, int nz)
+            {
+                var n = 0;
+                for (var far = 0; far < 3; far++)
+                    for (var y = oy; y < oy + sy; y++)
+                        for (var i = 0; i < (nx != 0 ? sz : sx); i++)
+                            if (air.Contains(nx > 0 ? (ox + sx + far, y, oz + i) : nx < 0 ? (ox - 1 - far, y, oz + i) : nz > 0 ? (ox + i, y, oz + sz + far) : (ox + i, y, oz - 1 - far))) n++;
+                return n;
+            }
+            return new[] { (1, 0), (0, 1), (-1, 0), (0, -1) }.MaxBy(d => AirOn(d.Item1, d.Item2) - AirOn(-d.Item1, -d.Item2));
+        }
+        var hidden = new HashSet<((int X, int Y, int Z) Cell, int Dir)>();   // (wall faces left out: behind the entrance's doors, the teleporters' glow)
+        var blocked = new HashSet<(int X, int Y, int Z)>();                  // (wall cells no picture may hang on)
+
+        // ---- the palace's way in (the user, 2026-10-13: "Add an entrance door to the palace in the start room, we may need to reposition the
+        // large purple chest on the wall Perhaps over to the wall to the left of it"): a pair of doors in the start room's east wall, as wide
+        // as the room's west door and on its line -- the race's grid lines up in front of them, the start line on the straight -- in a gold
+        // frame; on the wall's plane, its faces behind them left out. The chest that stood in front of them goes to the north wall, east of
+        // the room's north door, against it (out of the way, or out altogether).
+        var startTile = Enumerable.Range(0, area.Tiles.Count).FirstOrDefault(ti => area.Tiles[ti].Scene == StartScene, -1);
+        var entranceFaces = new List<BrickBuilding.Face>();
+        var entranceFloor = new HashSet<(int X, int Z)>();   // (the carpet on up to the doors: PaintFloor widens it as the rest)
+        (double X, double Z0, double Z1)? entrance = null;
+        if (startTile >= 0 && doorways.Where(d => d.AlongZ && d.B == startTile).Select(d => ((int U0, int U1, int Top)?)(d.U0, d.U1, d.Top)).FirstOrDefault() is { } wd)
+        {
+            int mz = (wd.U0 + wd.U1) / 2, xw = (extents[startTile].X0 + extents[startTile].X1) / 2;
+            while (xw <= extents[startTile].X1 && air.Contains((xw, minY + 1, mz))) xw++;
+            var flat = xw <= extents[startTile].X1 && Enumerable.Range(wd.U0, wd.U1 - wd.U0 + 1)
+                .All(z => Enumerable.Range(minY + 1, wd.Top - minY).All(y => shown.ContainsKey((xw, y, z)) && air.Contains((xw - 1, y, z))));
+            if (flat)
+            {
+                for (var z = wd.U0; z <= wd.U1; z++)
+                    for (var y = minY + 1; y <= wd.Top; y++) hidden.Add(((xw, y, z), 3));
+                for (var z = wd.U0 - 1; z <= wd.U1 + 1; z++)
+                    for (var y = minY + 1; y <= wd.Top + 2; y++) blocked.Add((xw, y, z));
+                EntranceDoors(entranceFaces, WX(xw), WZ(wd.U0), WZ(wd.U1 + 1), WY(minY + 1), WY(wd.Top + 1), Shaded);
+                entrance = (WX(xw) / 512, WZ(wd.U0) / 512, WZ(wd.U1 + 1) / 512);
+                for (var x = xw - 8; x < xw; x++)
+                    for (var z = wd.U0 + 1; z < wd.U1; z++) entranceFloor.Add((x, z));
+                log.Add($"the palace's way in: doors in room {StartScene}'s east wall, cells z {entrance.Value.Z0:0}..{entrance.Value.Z1:0} at x {entrance.Value.X:0}, " +
+                        $"{wd.Top - minY} layers high");
+                // (the chest in front of them to the north wall)
+                var ci = chests.FindIndex(c => c.Tile == startTile && c.Z >= wd.U0 - 1 && c.Z <= wd.U1 + 2);
+                if (ci >= 0)
+                {
+                    var chest = chests[ci];
+                    chests.RemoveAt(ci);
+                    var nd = doorways.Where(d => !d.AlongZ && d.B == startTile).Select(d => ((int U0, int U1)?)(d.U0, d.U1)).FirstOrDefault();
+                    double halfLong = chest.Long / 1024, halfShort = chest.Short / 1024;
+                    var moved = false;
+                    if (nd is { } n)
+                    {
+                        var cx = (n.U1 + 1 + xw) / 2.0;
+                        var zn = mz;
+                        while (zn > extents[startTile].Z0 && air.Contains(((int)Math.Floor(cx), minY + 1, zn))) zn--;
+                        var cz = zn + 1 + halfShort + 0.1;
+                        var clear = true;
+                        for (var x = (int)Math.Floor(cx - halfLong); x <= (int)Math.Floor(cx + halfLong) && clear; x++)
+                            for (var z = (int)Math.Floor(cz - halfShort); z <= (int)Math.Floor(cz + halfShort) && clear; z++)
+                                clear = air.Contains((x, minY + 1, z)) && !modelled.Contains((x, minY + 1, z));
+                        if (clear && cx + halfLong < xw)
+                        {
+                            chests.Add(chest with { X = cx, Z = cz, AlongX = true });
+                            moved = true;
+                            log.Add($"  its chest moved to the north wall, at cells ({(x0 + (cx - minX) * U) / 512:0.#}, {(z0 + (cz - minZ) * U) / 512:0.#})");
+                        }
+                    }
+                    if (!moved) log.Add("  its chest taken away: no room for it by the north wall");
+                }
+            }
+            else log.Add($"the palace's way in: room {StartScene}'s east wall isn't flat on its west door's line -- no doors");
+        }
+
+        // ---- the fireplaces made a teleporter (the user, 2026-10-13: "Our fireplace that's here (see image) near the dinofly picture let's
+        // turn it into a teleporter so driving into it brings us out of a second fire place where the Queen of the mosquibees is on the
+        // wall"): room 151's -- at the end of the bottom row's carpet, by the Dino-Fly's picture -- leads to room 159's, two rooms on up the
+        // west column (a short cut past room 155). Each hollow (PalaceFurniture.Portal): its hearth -- the middle two cells of the four along
+        // the wall, the bottom three layers -- out of the collision, the wall's faces at its back left out under the glow. The race-track
+        // mode takes a car into the first's hearth out of the second's (the layout's teleports, RACEMOD.CPP teleport=); the pictures of the
+        // Queen of the Mosquibees mark both (below).
+        var portals = new HashSet<PalaceFurniture.Piece>();
+        var teleports = new List<double[]>();
+        PalaceFurniture.Piece? FireplaceIn(int scene) => pieces.FirstOrDefault(p => p.Kind == PalaceFurniture.Kind.Fireplace && area.Tiles[p.Tile].Scene == scene);
+        // (a fireplace's hearth: its cells; and its front's middle -- palace cells)
+        List<(int X, int Y, int Z)> Hearth(PalaceFurniture.Piece p, int nx, int nz)
+        {
+            var along = nx != 0 ? p.Size.Z : p.Size.X;
+            int a0 = along / 2 - 1, a1 = along / 2;
+            return p.Cells.Where(c => c.Y >= p.Origin.Y && c.Y <= p.Origin.Y + 2 && (nx != 0 ? c.Z - p.Origin.Z : c.X - p.Origin.X) is var i && i >= a0 && i <= a1).ToList();
+        }
+        (double X, double Z) Front(PalaceFurniture.Piece p, int nx, int nz) =>
+            (p.Origin.X + p.Size.X / 2.0 + nx * p.Size.X / 2.0, p.Origin.Z + p.Size.Z / 2.0 + nz * p.Size.Z / 2.0);
+        var portalFrom = furnished ? FireplaceIn(PortalFrom) : null; var portalTo = furnished ? FireplaceIn(PortalTo) : null;
+        if (portalFrom is not null && portalTo is not null)
+        {
+            foreach (var p in new[] { portalFrom, portalTo })
+            {
+                portals.Add(p);
+                var (nx, nz) = Looks(p);
+                foreach (var c in Hearth(p, nx, nz))
+                {
+                    cells.Remove(c);
+                    air.Add(c);
+                    var back = (c.X - nx, c.Y, c.Z - nz);
+                    if (!p.Cells.Contains(back)) hidden.Add((back, nx > 0 ? 2 : nx < 0 ? 3 : nz > 0 ? 4 : 5));
+                }
+            }
+            // (the teleport: into the first's hearth -- its width less a little, from its back to a little in front of it, the floor's height
+            // up -- out of the second's, its middle just in its hearth, looking out of it; island cells, world heights, the engine's turn)
+            var (fx, fz) = Looks(portalFrom); var (tx, tz) = Looks(portalTo);
+            var (ax, az) = Front(portalFrom, fx, fz); var (bx, bz) = Front(portalTo, tx, tz);
+            double I(double x) => (x0 + (x - minX) * U) / 512;
+            double J(double z) => (z0 + (z - minZ) * U) / 512;
+            double depth = (fx != 0 ? portalFrom.Size.X : portalFrom.Size.Z) * U / 512, inset = 0.8, ahead = 1.2, halfW = U / 512 - inset;
+            var (ix, jz) = (I(ax), J(az));
+            var box = fx != 0
+                ? new[] { Math.Min(ix, ix - fx * depth) - (fx < 0 ? ahead : 0), jz - halfW, Math.Max(ix, ix - fx * depth) + (fx > 0 ? ahead : 0), jz + halfW }
+                : new[] { ix - halfW, Math.Min(jz, jz - fz * depth) - (fz < 0 ? ahead : 0), ix + halfW, Math.Max(jz, jz - fz * depth) + (fz > 0 ? ahead : 0) };
+            var beta = (int)Math.Round(Math.Atan2(tx, tz) * 4096 / (2 * Math.PI)) & 4095;
+            teleports.Add(new[] { box[0], box[1], box[2], box[3], WY(minY + 1) - 600, WY(minY + 1) + 2400, I(bx) - tx * 0.4, J(bz) - tz * 0.4, WY(minY + 1), beta });
+            log.Add($"the teleporters: room {PortalFrom}'s fireplace (cells x {box[0]:0.#}..{box[2]:0.#}, z {box[1]:0.#}..{box[3]:0.#}) to room {PortalTo}'s " +
+                    $"(out at cells ({I(bx) - tx * 0.4:0.#}, {J(bz) - tz * 0.4:0.#}), turned {beta})");
+        }
         // ---- the floor painted (the user, 2026-10-13: "Let's make the main road section that's mostly red at the moment pure red just with
         // the white arrows. The surrounding area varies a lot, let's keep this consistent with a check pattern based on the green"): the
         // grids' carpets -- red with a brown border, the ways between the doors the race runs along -- one red; the rest of the floor the
@@ -390,8 +520,9 @@ internal static class PalaceIsland
             for (var u = u0; u <= u1; u++)
                 for (var v = v0; v <= v1; v++) doorFloor.Add(alongZ ? (v, u) : (u, v));
         }
-        var floorPaint = PaintFloor(cells, original, air, minY, b => Average(b), doorFloor);
-        log.Add($"the floor painted: {floorPaint.Count(p => p.Value == CarpetRed)} cells of carpet red, the rest checked in two greens");
+        var floorPaint = PaintFloor(cells, original, air, minY, b => Average(b), doorFloor, entranceFloor);
+        log.Add($"the floor painted: {floorPaint.Count(p => p.Value == CarpetRed)} cells of carpet red ({DoorBricks} across, as the doors), " +
+                $"{floorPaint.Count(p => p.Value == BandLight || p.Value == BandDark)} of gold tiles along it, the rest checked in two greens");
         // (LBA2_PALACE_PAINT=<file>: the paint, a line a cell -- "x z r g b", the palace's cells -- for a look at it from above)
         if (Environment.GetEnvironmentVariable("LBA2_PALACE_PAINT") is { Length: > 0 } paintFile)
             File.WriteAllLines(paintFile, floorPaint.Select(p => $"{p.Key.X} {p.Key.Z} {p.Value.R:0} {p.Value.G:0} {p.Value.B:0} " +
@@ -419,16 +550,40 @@ internal static class PalaceIsland
             painted = PalacePortraits.PaintAll(gameDirectory, Nearest);
             if (painted.Pages.Count > 0 && island.ObjectPages.Count + painted.Pages.Count < IslandFile.MaxObjectPages)
             {
-                var furniture = modelled.Concat(papered).ToHashSet();
+                var furniture = modelled.Concat(papered).Concat(blocked).ToHashSet();
                 int RoomOf((int X, int Y, int Z) c) => Array.FindIndex(extents, e => c.X > e.X0 && c.X < e.X1 && c.Z > e.Z0 && c.Z < e.Z1);
-                spots = PalacePortraits.Spots(shown, air, furniture, minY + 1, RoomOf, PortraitsPerRoom, ti => ti == hallTile ? HallPortraits : 0);
+                spots = PalacePortraits.Spots(shown, air, furniture, minY + 1, RoomOf, PortraitsPerRoom, out var all, ti => ti == hallTile ? HallPortraits : 0);
+                // (the teleporters' pictures, the Queen of the Mosquibees: by the first fireplace the picture nearest it -- where the Dino-Fly
+                // was; over the second -- its room has no plain wall across from it)
+                if (portalFrom is not null && portalTo is not null)
+                {
+                    var (fx, fz) = Looks(portalFrom);
+                    var (ax, az) = Front(portalFrom, fx, fz);
+                    var near = spots.Where(sp => sp.Tile == portalFrom.Tile)
+                        .OrderBy(sp => PalacePortraits.Middle(sp) is var m ? (m.X - ax) * (m.X - ax) + (m.Z - az) * (m.Z - az) : 0).FirstOrDefault();
+                    if (near is not null) spots[spots.IndexOf(near)] = near with { Sitter = PalacePortraits.Queen };
+                    // (over the second fireplace: on the wall behind it, the middle of its four cells, from the layer over its top -- if the wall
+                    // is plain there and the room's air in front of it)
+                    var (tx, tz) = Looks(portalTo);
+                    var o = portalTo.Origin;
+                    var y0 = o.Y + portalTo.Size.Y;
+                    var dir = tx > 0 ? 2 : tx < 0 ? 3 : tz > 0 ? 4 : 5;
+                    var at = tx > 0 ? o.X - 1 : tx < 0 ? o.X + portalTo.Size.X : tz > 0 ? o.Z - 1 : o.Z + portalTo.Size.Z;
+                    var u0 = (tx != 0 ? o.Z + portalTo.Size.Z / 2 : o.X + portalTo.Size.X / 2) - PalacePortraits.Cells / 2;
+                    var over = new PalacePortraits.Spot(portalTo.Tile, dir, at, u0, y0, PalacePortraits.Queen);
+                    if (PalacePortraits.Covered(over).All(f => shown.ContainsKey(f.Cell) && !furniture.Contains(f.Cell)
+                                                               && air.Contains((f.Cell.X + tx, f.Cell.Y, f.Cell.Z + tz))))
+                        spots.Add(over);
+                    else log.Add($"  no plain wall over room {PortalTo}'s fireplace for the Queen of the Mosquibees' picture");
+                }
             }
         }
-        var covered = spots.SelectMany(PalacePortraits.Covered).ToHashSet();
+        var covered = spots.SelectMany(PalacePortraits.Covered).Concat(hidden).ToHashSet();
 
         // ---- the faces that show, merged into rectangles of one colour, room by room
         var roomFaces = Faces(shown, FaceColour, (x, y, z) => new Vector3((float)WX(x), (float)WY(y), (float)WZ(z)), covered);
         foreach (var ti in Enumerable.Range(0, area.Tiles.Count)) roomFaces.TryAdd(ti, new List<BrickBuilding.Face>());
+        if (startTile >= 0) roomFaces[startTile].AddRange(entranceFaces);
 
         // ---- the furniture's models, with each room's faces (in its bodies)
         var chestBoxes = new List<(double X0, double Y0, double Z0, double X1, double Y1, double Z1)>();
@@ -437,26 +592,16 @@ internal static class PalaceIsland
             Vector3 Place(double x, double y, double z) => new((float)(x0 + (x - minX) * U), (float)(Floor + (y - minY) * V), (float)(z0 + (z - minZ) * U));
             // (seen from a way: shaded as the rooms' faces are -- top, bottom, east and west, south and north -- in between for the slopes)
             int Seen((float R, float G, float B) c, Vector3 n) => Shaded(c, n.Y * n.Y * (n.Y > 0 ? 1f : 0.5f) + n.X * n.X * 0.84f + n.Z * n.Z * 0.70f);
-            // (the way a piece looks: away from its wall -- the side with the most of a room's air in front of it, three cells deep, less what
-            // is behind it)
-            (int Nx, int Nz) Looks(PalaceFurniture.Piece p)
-            {
-                var (ox, oy, oz) = p.Origin; var (sx, sy, sz) = p.Size;
-                int AirOn(int nx, int nz)
-                {
-                    var n = 0;
-                    for (var far = 0; far < 3; far++)
-                        for (var y = oy; y < oy + sy; y++)
-                            for (var i = 0; i < (nx != 0 ? sz : sx); i++)
-                                if (air.Contains(nx > 0 ? (ox + sx + far, y, oz + i) : nx < 0 ? (ox - 1 - far, y, oz + i) : nz > 0 ? (ox + i, y, oz + sz + far) : (ox + i, y, oz - 1 - far))) n++;
-                    return n;
-                }
-                return new[] { (1, 0), (0, 1), (-1, 0), (0, -1) }.MaxBy(d => AirOn(d.Item1, d.Item2) - AirOn(-d.Item1, -d.Item2));
-            }
-            var made = PalaceFurniture.Build(pieces, chests, Place, Seen, Looks, y => WallpaperAt(y));
+            var made = PalaceFurniture.Build(pieces, chests, Place, Seen, Looks, y => WallpaperAt(y), portals);
             foreach (var (ti, list) in made.Faces) roomFaces[ti].AddRange(list);
             chestBoxes = made.Boxes;
             log.AddRange(made.Log);
+            // (where the fireplaces and chests are: island cells)
+            foreach (var p in pieces.Where(p => p.Kind == PalaceFurniture.Kind.Fireplace))
+                log.Add($"  a fireplace in room {area.Tiles[p.Tile].Scene}: cells x {WX(p.Origin.X) / 512:0}..{WX(p.Origin.X + p.Size.X) / 512:0}, " +
+                        $"z {WZ(p.Origin.Z) / 512:0}..{WZ(p.Origin.Z + p.Size.Z) / 512:0}, looking {Looks(p)}");
+            foreach (var c in chests)
+                log.Add($"  a chest in room {area.Tiles[c.Tile].Scene} at cells ({(x0 + (c.X - minX) * U) / 512:0.#}, {(z0 + (c.Z - minZ) * U) / 512:0.#})");
         }
 
         // ---- the roofs: over each room, level with the top of its walls -- the hilltop over the rooms: their tops Otringal's rock (drawn apart,
@@ -521,6 +666,12 @@ internal static class PalaceIsland
                     PalaceOutside.Seen);
                 log.Add($"the pictures hung: {hung} of {spots.Count} -- " + string.Join("; ", spots.GroupBy(s => s.Tile).Select(g =>
                     $"room {area.Tiles[g.Key].Scene}: {string.Join(", ", g.Select(s => PalacePortraits.Sitters[s.Sitter].Name))}")));
+                foreach (var s in spots)
+                {
+                    var (dx, _, dz, _) = BrickBuilding.Directions[s.Dir];
+                    double px = dx != 0 ? WX(s.At + (dx > 0 ? 1 : 0)) : WX(s.U0 + 1), pz = dx != 0 ? WZ(s.U0 + 1) : WZ(s.At + (dz > 0 ? 1 : 0));
+                    log.Add($"  {PalacePortraits.Sitters[s.Sitter].Name} in room {area.Tiles[s.Tile].Scene} at cells ({px / 512:0}, {pz / 512:0}), looking ({dx}, {dz})");
+                }
             }
         }
 
@@ -613,6 +764,10 @@ internal static class PalaceIsland
             },
             ["corridors"] = corridors.Select(c => new Dictionary<string, object> { ["points"] = c.Points.Select(p => new[] { p.X, p.Z }).ToList(), ["half"] = c.Half }).ToList(),
             ["pillar"] = new[] { harbour.Pillar.X, harbour.Pillar.Z, harbour.Pillar.R, harbour.Pillar.Top },
+            // (the palace's doors in the start room's east wall: the wall's face and their span, island cells; the teleporters: each [into the
+            // first fireplace's hearth: x0, z0, x1, z1 (island cells), y0, y1; out of the second's: x, z (island cells), y, the turn])
+            ["entrance"] = entrance is { } way ? new[] { way.X, way.Z0, way.Z1 } : null,
+            ["teleports"] = teleports,
             ["quay"] = new[] { harbour.Quay.X0, harbour.Quay.Z0, harbour.Quay.X1, harbour.Quay.Z1, harbour.QuayY },
         };
         File.WriteAllText(Path.Combine(outDirectory, LayoutFile), System.Text.Json.JsonSerializer.Serialize(layout, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
@@ -629,6 +784,7 @@ internal static class PalaceIsland
     // can make the colours on the walls more consistent too as they're currently very blocky"): colours of the grids' own, averaged.
     internal static readonly (float R, float G, float B) CarpetRed = (119, 42, 30);      // the carpets' red (their border's brown with it)
     private static readonly (float R, float G, float B) TileLight = (127, 139, 94), TileDark = (64, 82, 53);   // the floor tiles' greens
+    private static readonly (float R, float G, float B) BandLight = (196, 156, 80), BandDark = (140, 100, 44);  // the tiles along the road: golds
     private static readonly (float R, float G, float B) Skirting = (64, 80, 48), Wallpaper = (112, 110, 70), Trim = (144, 112, 48), Cornice = (80, 80, 48);
     private const int CarpetReach = 6;                   // a cell the rooms didn't show as floor is carpet with carpet this near on both sides ...
     private const int InlayReach = 3;                    // ... and one they did (a grey inlay where carpets cross) with carpet this near all round
@@ -642,7 +798,7 @@ internal static class PalaceIsland
     private const int DoorReach = 4;
     private static Dictionary<(int X, int Z), (float R, float G, float B)> PaintFloor(Dictionary<(int X, int Y, int Z), (int Brick, int Tile)> cells,
         HashSet<(int X, int Y, int Z)> original, HashSet<(int X, int Y, int Z)> air, int minY, Func<int, (float R, float G, float B)> average,
-        HashSet<(int X, int Z)> doors)
+        HashSet<(int X, int Z)> doors, IReadOnlySet<(int X, int Z)>? alsoCarpet = null)
     {
         // (the floor the rooms showed: a cell of the grids' bottom layer with nothing of the grids' over it)
         bool Shown((int X, int Z) c) => original.Contains((c.X, minY, c.Z)) && !original.Contains((c.X, minY + 1, c.Z));
@@ -679,17 +835,40 @@ internal static class PalaceIsland
             }
             return Side(1) && Side(-1);
         }
-        var paint = new Dictionary<(int X, int Z), (float R, float G, float B)>();
+        var floor = new HashSet<(int X, int Z)>();
+        var red = new HashSet<(int X, int Z)>();
         foreach (var (x, y, z) in cells.Keys)
         {
             if (y != minY || !air.Contains((x, minY + 1, z))) continue;
             var c = (x, z);
+            floor.Add(c);
             // (carpet; or a cell the rooms didn't show as floor between carpet along a row or a column; or one they did, other than carpet
             // -- the grey inlays where carpets cross -- with carpet all round it)
-            var red = carpet.Contains(c)
-                      || (!Shown(c) && (Between(c, 1, 0, CarpetReach) || Between(c, 0, 1, CarpetReach)))
-                      || (Shown(c) && Between(c, 1, 0, InlayReach) && Between(c, 0, 1, InlayReach));
-            paint[c] = red ? CarpetRed : ((x + z) & 1) == 0 ? TileLight : TileDark;
+            if (carpet.Contains(c)
+                || (!Shown(c) && (Between(c, 1, 0, CarpetReach) || Between(c, 0, 1, CarpetReach)))
+                || (Shown(c) && Between(c, 1, 0, InlayReach) && Between(c, 0, 1, InlayReach))) red.Add(c);
+        }
+        // (the road as wide as the doors -- the user, 2026-10-13: "Enlarge the track width so it's the same width as a door way" -- the grids'
+        // carpets two cells across, the doors DoorBricks: a cell more on each side, the corners square)
+        // (and the carpet the start room's way in asks for: on to its doors, `alsoCarpet`)
+        foreach (var c in alsoCarpet ?? new HashSet<(int X, int Z)>()) if (floor.Contains(c)) red.Add(c);
+        var road = new HashSet<(int X, int Z)>(red);
+        const int Widen = (DoorBricks - 2) / 2;
+        foreach (var (x, z) in red)
+            for (var dx = -Widen; dx <= Widen; dx++)
+                for (var dz = -Widen; dz <= Widen; dz++)
+                    if (floor.Contains((x + dx, z + dz))) road.Add((x + dx, z + dz));
+        // (and the tiles along it in gold, a cell either side -- "Let's change the tile colour next to the track to a different colour than
+        // the rest of the floor"; the rest in the greens)
+        var paint = new Dictionary<(int X, int Z), (float R, float G, float B)>();
+        foreach (var c in floor)
+        {
+            if (road.Contains(c)) { paint[c] = CarpetRed; continue; }
+            var edge = false;
+            for (var dx = -1; dx <= 1 && !edge; dx++)
+                for (var dz = -1; dz <= 1 && !edge; dz++) edge = road.Contains((c.X + dx, c.Z + dz));
+            var light = ((c.X + c.Z) & 1) == 0;
+            paint[c] = edge ? (light ? BandLight : BandDark) : light ? TileLight : TileDark;
         }
         return paint;
     }
@@ -701,6 +880,44 @@ internal static class PalaceIsland
     {
         if (brick is { } b && IsCarpet(b) && b.R > 1.8f * b.G) return CarpetRed;
         return layer <= 2 ? Skirting : layer == 3 || layer == top - 3 ? Trim : layer >= top ? Cornice : Wallpaper;
+    }
+
+    // The palace's doors (Build's entrance): on a wall's plane `x` (its face looking -x, into the room), from z0 to z1 and from y0 (the floor's
+    // top) to y1 -- two leaves of dark wood, each with two raised panels and a gold handle by the gold seam between them -- in a frame
+    // standing out from the wall, a crest over it. Each face shaded the way it looks (`shaded`: a colour and a shade to the island's palette).
+    private static readonly (float R, float G, float B) DoorWood = (92, 36, 22), DoorPanel = (132, 56, 32), DoorGold = (200, 154, 66), DoorFrame = (164, 124, 54);
+    private static void EntranceDoors(List<BrickBuilding.Face> list, double x, double z0, double z1, double y0, double y1, Func<(float R, float G, float B), float, int> shaded)
+    {
+        // (a box against the wall: its faces but the back, each in its shade)
+        void Box(double xa, double ya, double za, double xb, double yb, double zb, (float R, float G, float B) c)
+        {
+            float a = (float)xa, b = (float)xb, lo = (float)ya, hi = (float)yb, za2 = (float)za, zb2 = (float)zb;
+            void Q(Vector3 p, Vector3 q, Vector3 r, Vector3 t, Vector3 n, float shade) => list.Add(new BrickBuilding.Face(new[] { p, q, r, t }, shaded(c, shade), n));
+            Q(new(a, hi, za2), new(b, hi, za2), new(b, hi, zb2), new(a, hi, zb2), Vector3.UnitY, 1.00f);
+            Q(new(a, lo, za2), new(b, lo, za2), new(b, lo, zb2), new(a, lo, zb2), -Vector3.UnitY, 0.50f);
+            Q(new(a, lo, za2), new(b, lo, za2), new(b, hi, za2), new(a, hi, za2), -Vector3.UnitZ, 0.70f);
+            Q(new(a, lo, zb2), new(b, lo, zb2), new(b, hi, zb2), new(a, hi, zb2), Vector3.UnitZ, 0.70f);
+            Q(new(a, lo, za2), new(a, lo, zb2), new(a, hi, zb2), new(a, hi, za2), -Vector3.UnitX, 0.84f);
+        }
+        double h = y1 - y0, zm = (z0 + z1) / 2;
+        // (the leaves, on the wall's plane where its faces are left out)
+        foreach (var (za, zb) in new[] { (z0, zm), (zm, z1) })
+        {
+            list.Add(new BrickBuilding.Face(new[] { new Vector3((float)x - 2, (float)y0, (float)za), new Vector3((float)x - 2, (float)y0, (float)zb),
+                new Vector3((float)x - 2, (float)y1, (float)zb), new Vector3((float)x - 2, (float)y1, (float)za) }, shaded(DoorWood, 0.84f), -Vector3.UnitX));
+            double w = zb - za, i0 = za + w * 0.16, i1 = zb - w * 0.16;
+            Box(x - 70, y0 + h * 0.07, i0, x - 2, y0 + h * 0.42, i1, DoorPanel);
+            Box(x - 70, y0 + h * 0.50, i0, x - 2, y1 - h * 0.07, i1, DoorPanel);
+        }
+        Box(x - 90, y0, zm - 70, x - 2, y1, zm + 70, DoorGold);
+        foreach (var sg in new[] { -1, 1 })
+            Box(x - 260, y0 + h * 0.44, Math.Min(zm + sg * 200, zm + sg * 330), x - 90, y0 + h * 0.52, Math.Max(zm + sg * 200, zm + sg * 330), DoorGold);
+        // (the frame: its two sides, the lintel and the crest over it)
+        const double Out = 340, Wide = 760;
+        Box(x - Out, y0, z0 - Wide, x, y1 + Wide, z0, DoorFrame);
+        Box(x - Out, y0, z1, x, y1 + Wide, z1 + Wide, DoorFrame);
+        Box(x - Out, y1, z0, x, y1 + Wide, z1, DoorFrame);
+        Box(x - Out - 40, y1 + Wide, zm - 520, x, y1 + Wide + 560, zm + 520, DoorGold);
     }
 
     // A roof slab's sides and bottom (its top is the rock: RockRoof).

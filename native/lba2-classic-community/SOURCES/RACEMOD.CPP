@@ -998,6 +998,23 @@ typedef struct {
 } T_RACE_GUARD;
 static T_RACE_GUARD s_guards[RACE_MAX_GUARDS];
 static int s_nbGuards = 0;
+// (guard_size=<percent>: the guards' bodies that much of the game's -- RaceTrackGuards.Install -- and their reach, their pace and how near a
+// car runs into them with them; the user, 2026-10-13: "The enemies are too easy to avoid, perhaps making them bigger would help with this?")
+static double s_guardSize = 1.0;
+
+// Teleporters (teleport=<x0> <z0> <x1> <z1> <y0> <y1> <x> <y> <z> <turn>, island units: the box a car is taken in by; where it comes out and
+// the way it then looks): the Emperor's palace's fireplaces -- the user, 2026-10-13: "Our fireplace that's here ... let's turn it into a
+// teleporter so driving into it brings us out of a second fire place" (LBA Assembler's PalaceIsland). The player's car: driven into the
+// box, it comes out at the other end at its speed, looking the way out (into another cube: its scene, as a carried jump's).
+#define RACE_MAX_TELEPORTS 8
+#define RACE_TELEPORT_AGAIN 1500           // ms after coming out before a car is taken again
+typedef struct {
+    double X0, Z0, X1, Z1, Y0, Y1, X, Y, Z;
+    S32 Beta;
+} T_RACE_TELEPORT;
+static T_RACE_TELEPORT s_teleports[RACE_MAX_TELEPORTS];
+static int s_nbTeleports = 0;
+static S32 s_teleportedAt = 0;
 typedef struct { int On, Extra, Owner, Sprite; double ToX, ToY, ToZ; S32 T0, Dur; } T_RACE_THROWN;
 static T_RACE_THROWN s_thrown[RACE_MAX_THROWN];
 static S32 s_guardGrace[RACE_MAX_OPPONENTS + 1];   // a car just struck by one of them is let be till then
@@ -2150,6 +2167,14 @@ static void Load(const char *path, int carOnly = 0) {
                     g->SeenScene[g->NbSeen] = sc; g->SeenActor[g->NbSeen] = ac; g->NbSeen++;
                     rest += n2;
                 }
+            }
+        }
+        else if (!strcmp(key, "guard_size")) s_guardSize = atoi(v) > 0 ? atoi(v) / 100.0 : 1.0;
+        else if (!strcmp(key, "teleport")) {
+            int x0, z0, x1, z1, y0, y1, x, y, z, beta;
+            if (s_nbTeleports < RACE_MAX_TELEPORTS && sscanf(v, "%d %d %d %d %d %d %d %d %d %d", &x0, &z0, &x1, &z1, &y0, &y1, &x, &y, &z, &beta) == 10) {
+                T_RACE_TELEPORT *t = &s_teleports[s_nbTeleports++];
+                t->X0 = x0; t->Z0 = z0; t->X1 = x1; t->Z1 = z1; t->Y0 = y0; t->Y1 = y1; t->X = x; t->Y = y; t->Z = z; t->Beta = beta & 4095;
             }
         }
         else if (!strcmp(key, "roulette")) {
@@ -3740,10 +3765,13 @@ static S32 ArcCamera(S32 *eye, S32 *target) {
 // For DoAnimExt (EXTFUNC.CPP), on the hero, after his car's move from (ox,oy,oz) towards (*nx,*ny,*nz): non-zero when a loop carries
 // the car this frame -- the new place is in *nx..*nz, and nothing else is to move it (no ground, no collisions: the ring has none).
 // Also stands the car level again whenever neither a loop nor a flight's master rotation pitches it (a flight cut short left it so).
+static int Teleport(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);
+
 S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     T_OBJ_3D *obj = &hero->Obj;
     if (!RaceMod_Active() || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) { s_loopOn = -1; s_loopState = LOOP_NONE; s_arcOn = -1; return 0; }
+    if (s_loopState == LOOP_NONE && s_arcOn < 0 && Teleport(ox, oy, oz, nx, ny, nz)) return 1;
     if (s_loopState == LOOP_NONE && RaceArc(ox, oy, oz, nx, ny, nz)) return 1;
     if (s_loopState == LOOP_NONE && s_arcOn < 0 && WheelMove(ox, oy, oz, nx, ny, nz)) return 1;
     if (s_loopState == LOOP_NONE) {
@@ -4045,6 +4073,40 @@ static S32 WheelCamera(S32 *eye, S32 *target) {
 #define RACE_TRAIL_STEP 128.0               // the trail's points this far apart at the least (world units)
 static double s_trailX[RACE_TRAIL], s_trailY[RACE_TRAIL], s_trailZ[RACE_TRAIL];
 static int s_trailN = 0, s_trailHead = -1;  // a ring: its newest point at s_trailHead
+
+// The hero's car moved from (ox,oy,oz) towards (*nx,*ny,*nz) (cube coordinates): non-zero when it drove into a teleporter's box -- put where it
+// comes out, looking the way out, at its speed (its new place in *nx..*nz; in another cube, NewCube: its scene, the car where it was until
+// it is in, as a carried jump's -- RaceArc). Its trail -- the open areas' camera's -- starts again, and the lap forgets where it was.
+static int Teleport(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
+    if (!s_nbTeleports || NewCube != -1 || (s_teleportedAt && TimerRefHR - s_teleportedAt < RACE_TELEPORT_AGAIN)) return 0;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0, x = *nx + cx, z = *nz + cz;
+    for (int i = 0; i < s_nbTeleports; i++) {
+        const T_RACE_TELEPORT *t = &s_teleports[i];
+        if (x < t->X0 || x > t->X1 || z < t->Z0 || z > t->Z1 || oy < t->Y0 || oy > t->Y1) continue;
+        const int qx = (int)floor(t->X / 32768.0), qz = (int)floor(t->Z / 32768.0);
+        int scene = -1;
+        if (qx != CurrentCubeX || qz != CurrentCubeY) {
+            for (int c = 0; c < s_nbCubeScenes; c++)
+                if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) scene = s_cubeScenes[c][2];
+            if (scene < 0) { Log_Info("[racemod] teleporter %d: no scene for cube (%d,%d)", i + 1, qx, qz); return 0; }
+        }
+        ListObjet[NUM_PERSO].Obj.Beta = t->Beta;
+        s_teleportedAt = TimerRefHR; s_trailN = 0; s_forgetLap = 1;
+        Log_Info("[racemod] teleporter %d: taken in at (%.0f,%.0f), out at (%.0f,%.0f,%.0f) turned %d, at %d units/s", i + 1, x, z, t->X, t->Y, t->Z, (int)t->Beta,
+                 (int)ListBuggy[0].Speed);
+        if (scene >= 0) {
+            NewCube = scene;
+            NewPosX = (S32)floor(t->X - qx * 32768.0 + 0.5); NewPosY = (S32)floor(t->Y + 0.5); NewPosZ = (S32)floor(t->Z - qz * 32768.0 + 0.5);
+            FlagChgCube = 1;
+            FlagReajustPosTwinsen = FALSE;
+            *nx = ox; *ny = oy; *nz = oz;
+            return 1;
+        }
+        *nx = (S32)floor(t->X - cx + 0.5); *ny = (S32)floor(t->Y + 0.5); *nz = (S32)floor(t->Z - cz + 0.5);
+        return 1;
+    }
+    return 0;
+}
 
 // The car's trail: its place added when it has moved far enough from the last one (every frame the race-track camera is asked for).
 static void TrailStep(void) {
@@ -6333,7 +6395,7 @@ static void GuardStrikes(int who, S32 now, const char *what, S32 hold) {
 static int GuardWalk(T_RACE_GUARD *g, double tx, double tz, double step) {
     const double dx = tx - g->X, dz = tz - g->Z, d = sqrt(dx * dx + dz * dz);
     if (d < 60) return 0;
-    const double v = RACE_GUARD_WALK * (g->Kind == 2 ? 1.5 : 1.0) * step;
+    const double v = RACE_GUARD_WALK * s_guardSize * (g->Kind == 2 ? 1.5 : 1.0) * step;
     if (v >= d) { g->X = tx; g->Z = tz; }
     else { g->X += dx / d * v; g->Z += dz / d * v; }
     g->Beta = (S32)floor(atan2(dx, dz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
@@ -6409,19 +6471,19 @@ static void Guards(S32 now, int driving, S32 dt) {
                 if (!CarAt(who, &x, &y, &z) || fabs(y - g->Y) > 1500) continue;
                 const double dx = g->X - x, dz = g->Z - z, d2 = dx * dx + dz * dz;
                 const double vx = s_carVX[who + 1], vz = s_carVZ[who + 1];
-                if (d2 < RACE_GUARD_BOWL * RACE_GUARD_BOWL && g->State != GUARD_DOWN) {
+                if (d2 < RACE_GUARD_BOWL * RACE_GUARD_BOWL * s_guardSize * s_guardSize && g->State != GUARD_DOWN) {
                     // (run into: knocked back, out of the car's way; the car slowed)
                     g->State = GUARD_DOWN; g->T0 = now;
                     const double vl = sqrt(vx * vx + vz * vz);
                     if (vl > 1) {
                         const double side = dx * vz - dz * vx >= 0 ? 1 : -1;
-                        g->X += side * vz / vl * 500; g->Z -= side * vx / vl * 500;
+                        g->X += side * vz / vl * 500 * s_guardSize; g->Z -= side * vx / vl * 500 * s_guardSize;
                     }
                     if (who < 0) ListBuggy[0].Speed = (S32)(ListBuggy[0].Speed * RACE_GUARD_BOWL_KEEP);
                     Log_Info("[racemod] %s %d knocked back by %s's car", GuardName(g), i, CarName(who));
                 }
                 const int coming = dx * vx + dz * vz > 0 || d2 < 2500.0 * 2500.0;
-                const double far = g->Kind == 1 ? RACE_THROWN_FAR : RACE_GUARD_ALERT;
+                const double far = g->Kind == 1 ? RACE_THROWN_FAR : RACE_GUARD_ALERT * sqrt(s_guardSize);
                 if (!coming || d2 > far * far || d2 >= best) continue;
                 if (g->Kind == 1 && d2 < RACE_THROWN_NEAR * RACE_THROWN_NEAR) continue;
                 best = d2; target = who;
@@ -6449,7 +6511,7 @@ static void Guards(S32 now, int driving, S32 dt) {
                         if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
                         double x, y, z;
                         if (!CarAt(who, &x, &y, &z) || fabs(y - g->Y) > 1500) continue;
-                        if ((x - g->X) * (x - g->X) + (z - g->Z) * (z - g->Z) > RACE_GUARD_REACH * RACE_GUARD_REACH) continue;
+                        if ((x - g->X) * (x - g->X) + (z - g->Z) * (z - g->Z) > RACE_GUARD_REACH * RACE_GUARD_REACH * s_guardSize * s_guardSize) continue;
                         Log_Info("[racemod] %s %d strikes %s's car", GuardName(g), i, CarName(who));
                         GuardStrikes(who, now, g->Kind == 2 ? "Stan's blow" : "a soldier's sword", RACE_GUARD_STUN);
                     }
@@ -6483,7 +6545,7 @@ static void Guards(S32 now, int driving, S32 dt) {
                     GuardFaces(g, target);
                     // ... and a strike when its blow will land on the car
                     const double bt = RACE_GUARD_BLOW / 1000.0, px = x + vx * bt - g->X, pz = z + vz * bt - g->Z;
-                    if (now >= g->Rest && g->NbStrikes && px * px + pz * pz < 0.8 * RACE_GUARD_REACH * RACE_GUARD_REACH) {
+                    if (now >= g->Rest && g->NbStrikes && px * px + pz * pz < 0.8 * RACE_GUARD_REACH * RACE_GUARD_REACH * s_guardSize * s_guardSize) {
                         g->State = GUARD_STRIKE; g->T0 = now; g->Blown = 0;
                         g->Strike = g->Strikes[(int)(VentRandom() * g->NbStrikes) % g->NbStrikes];
                         anim = g->Strike;
@@ -7457,6 +7519,7 @@ static void ResetTrack(void) {
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
+    s_guardSize = 1.0; s_nbTeleports = 0; s_teleportedAt = 0;
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = s_arcAcross1 = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0; s_railHeld = 0; s_railSight = s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;
