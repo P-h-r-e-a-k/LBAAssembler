@@ -79,6 +79,10 @@ internal static class PalaceIsland
     public const int RingOut = 9;                       // the way round the palace's west and south sides: cells out from its walls
     public const int StartScene = 154;                  // the race's start: its room's way in from outside (Build: the entrance)
     public const int PortalFrom = 151;                  // the room whose fireplace is a teleporter -- to a fireplace made in the same room (Build)
+    // the race's track through the rooms, the floor's only red (Build): west along the bottom row from the start's room to the warp's, then
+    // north up the west column from there into the long hall
+    private static readonly int[] TrackRow = { StartScene, 153, 152, PortalFrom };
+    private static readonly int[] TrackColumn = { PortalFrom, 155, 159, 163, HallScene };
     public const int FireplaceWide = 4, FireplaceHigh = 5;   // (a fireplace made: the cells along its wall and its layers, as the grids' own)
     public const int PortraitsPerRoom = 2;              // pictures of the game's characters on a room's walls (PalacePortraits) ...
     public const int HallPortraits = 6;                 // ... and this many more along the long hall's
@@ -496,21 +500,47 @@ internal static class PalaceIsland
         PalaceFurniture.Piece? portalTo = null;
         if (portalFrom is not null) Hollow(portalFrom);
         // ---- the floor painted (the user, 2026-10-13: "Let's make the main road section that's mostly red at the moment pure red just with
-        // the white arrows. The surrounding area varies a lot, let's keep this consistent with a check pattern based on the green"): the
-        // grids' carpets -- red with a brown border, the ways between the doors the race runs along -- one red; the rest of the floor the
-        // two greens of its tiles, cell by cell. A cell the rooms didn't show as floor (a door's threshold, a door's widening, a hole) is
-        // carpet when there is carpet on both sides of it along a row or a column, a few cells off: the red runs on through the doors.
-        // (the doors' floor -- the ways through the walls, once widened -- where the road's carpet comes from)
-        var doorFloor = new HashSet<(int X, int Z)>();
-        foreach (var (a, b, alongZ, u0, u1, _) in doorways)
+        // the white arrows. The surrounding area varies a lot, let's keep this consistent with a check pattern based on the green"; then
+        // "We have lots of red that isn't the inside track. The red track area should be the width of the door way, there should be no other
+        // red on the floor ... let's keep the corners nice and square"): the race's track red -- from the palace's doors in the start's room
+        // west through the bottom row's doors (TrackRow), as wide as they are, to the west column's line; and from there north through that
+        // column's doors (TrackColumn) and up the long hall to its north wall, the round window -- the two meeting in a square corner; the
+        // tiles along it gold; the rest of the floor the two greens of its tiles, cell by cell. (Until then every carpet of the grids was red,
+        // widened to the doors' width -- a red lattice through all sixteen rooms, its corners the grids' carpets' cut ones)
+        int TileOf(int scene) => Enumerable.Range(0, area.Tiles.Count).FirstOrDefault(ti => area.Tiles[ti].Scene == scene, -1);
+        // (the doors between a line of rooms, one after another: their spans along their walls)
+        List<(int U0, int U1)> Doors(int[] scenes, bool alongZ)
         {
-            int v0 = alongZ ? extents[b].X0 : extents[b].Z0, v1 = alongZ ? extents[a].X1 : extents[a].Z1;
-            for (var u = u0; u <= u1; u++)
-                for (var v = v0; v <= v1; v++) doorFloor.Add(alongZ ? (v, u) : (u, v));
+            var spans = new List<(int U0, int U1)>();
+            for (var k = 0; k + 1 < scenes.Length; k++)
+            {
+                int p = TileOf(scenes[k]), q = TileOf(scenes[k + 1]);
+                spans.AddRange(doorways.Where(d => d.AlongZ == alongZ && ((d.A == p && d.B == q) || (d.A == q && d.B == p))).Select(d => (d.U0, d.U1)));
+            }
+            return spans;
         }
-        var floorPaint = PaintFloor(cells, original, air, minY, b => Average(b), doorFloor, entranceFloor);
-        log.Add($"the floor painted: {floorPaint.Count(p => p.Value == CarpetRed)} cells of carpet red ({DoorBricks} across, as the doors), " +
-                $"{floorPaint.Count(p => p.Value == BandLight || p.Value == BandDark)} of gold tiles along it, the rest checked in two greens");
+        var track = new HashSet<(int X, int Z)>();
+        var rowDoors = Doors(TrackRow, true);
+        var columnDoors = Doors(TrackColumn, false);
+        if (rowDoors.Count == TrackRow.Length - 1 && columnDoors.Count == TrackColumn.Length - 1 && TileOf(StartScene) >= 0 && TileOf(HallScene) >= 0)
+        {
+            // (the doors on a line are in line -- the grids put them so; should one be off, the band takes the span most of them have)
+            var (r0, r1) = rowDoors.GroupBy(s => s).MaxBy(g => g.Count())!.Key;
+            var (c0, c1) = columnDoors.GroupBy(s => s).MaxBy(g => g.Count())!.Key;
+            var trackEast = entranceFloor.Count > 0 ? entranceFloor.Max(c => c.X) : extents[TileOf(StartScene)].X1;
+            var trackNorth = extents[TileOf(HallScene)].Z0;
+            for (var x = c0; x <= trackEast; x++)
+                for (var z = r0; z <= r1; z++) track.Add((x, z));
+            for (var z = trackNorth; z <= r1; z++)
+                for (var x = c0; x <= c1; x++) track.Add((x, z));
+            if (rowDoors.Concat(columnDoors).Any(s => s.U1 - s.U0 + 1 != DoorBricks) || rowDoors.Distinct().Count() > 1 || columnDoors.Distinct().Count() > 1)
+                log.Add($"  WARNING: the track's doors aren't all in line and {DoorBricks} wide: the bottom row's {string.Join(", ", rowDoors)}, the west column's {string.Join(", ", columnDoors)}");
+        }
+        else log.Add($"WARNING: the track's doors not found ({rowDoors.Count} of the bottom row's, {columnDoors.Count} of the west column's): no red on the floor");
+        var floorPaint = PaintFloor(cells, air, minY, track);
+        log.Add($"the floor painted: {floorPaint.Count(p => p.Value == CarpetRed)} cells of the track's red ({DoorBricks} across, as the doors: from the palace's doors " +
+                $"west along the bottom row, north up the west column and the long hall to the round window), {floorPaint.Count(p => p.Value == BandLight || p.Value == BandDark)} " +
+                "of gold tiles along it, the rest checked in two greens");
         // (LBA2_PALACE_PAINT=<file>: the paint, a line a cell -- "x z r g b", the palace's cells -- for a look at it from above)
         if (Environment.GetEnvironmentVariable("LBA2_PALACE_PAINT") is { Length: > 0 } paintFile)
             File.WriteAllLines(paintFile, floorPaint.Select(p => $"{p.Key.X} {p.Key.Z} {p.Value.R:0} {p.Value.G:0} {p.Value.B:0} " +
@@ -807,78 +837,18 @@ internal static class PalaceIsland
     private static readonly (float R, float G, float B) TileLight = (127, 139, 94), TileDark = (64, 82, 53);   // the floor tiles' greens
     private static readonly (float R, float G, float B) BandLight = (196, 156, 80), BandDark = (140, 100, 44);  // the tiles along the road: golds
     private static readonly (float R, float G, float B) Skirting = (64, 80, 48), Wallpaper = (112, 110, 70), Trim = (144, 112, 48), Cornice = (80, 80, 48);
-    private const int CarpetReach = 6;                   // a cell the rooms didn't show as floor is carpet with carpet this near on both sides ...
-    private const int InlayReach = 3;                    // ... and one they did (a grey inlay where carpets cross) with carpet this near all round
-
     // A colour of the carpets: their red and the brown of their border (a red at least half as strong again as its green, near twice its blue).
     private static bool IsCarpet((float R, float G, float B) a) => a.R > 60 && a.R > 1.4f * a.G && a.R > 1.8f * a.B;
 
-    // The floor's paint, cell by cell (x, z of the bottom layer's cells with a room's air over them): carpet red or the tiles' greens.
-    // The road's carpet: the carpet the doors' floor (`doors`) reaches -- carpet a few cells from a door, and all the carpet joined to it --
-    // not a runner along an outer wall, which leads to no door.
-    private const int DoorReach = 4;
+    // The floor's paint, cell by cell (x, z of the bottom layer's cells with a room's air over them): the race's track (`track`) red, the tiles
+    // along it gold, the rest the tiles' greens.
     private static Dictionary<(int X, int Z), (float R, float G, float B)> PaintFloor(Dictionary<(int X, int Y, int Z), (int Brick, int Tile)> cells,
-        HashSet<(int X, int Y, int Z)> original, HashSet<(int X, int Y, int Z)> air, int minY, Func<int, (float R, float G, float B)> average,
-        HashSet<(int X, int Z)> doors, IReadOnlySet<(int X, int Z)>? alsoCarpet = null)
+        HashSet<(int X, int Y, int Z)> air, int minY, IReadOnlySet<(int X, int Z)> track)
     {
-        // (the floor the rooms showed: a cell of the grids' bottom layer with nothing of the grids' over it)
-        bool Shown((int X, int Z) c) => original.Contains((c.X, minY, c.Z)) && !original.Contains((c.X, minY + 1, c.Z));
-        var anyCarpet = new HashSet<(int X, int Z)>();
-        foreach (var ((x, y, z), (brick, _)) in cells)
-            if (y == minY && brick >= 0 && Shown((x, z)) && IsCarpet(average(brick))) anyCarpet.Add((x, z));
-        // (the road's carpet is two cells wide at the least: a cell of a square of four carpet cells -- a runner along a wall is one wide,
-        // and its stubs to the doors' corners too)
-        bool Square(int x, int z) => anyCarpet.Contains((x, z)) && anyCarpet.Contains((x + 1, z)) && anyCarpet.Contains((x, z + 1)) && anyCarpet.Contains((x + 1, z + 1));
-        anyCarpet = anyCarpet.Where(c => Square(c.X, c.Z) || Square(c.X - 1, c.Z) || Square(c.X, c.Z - 1) || Square(c.X - 1, c.Z - 1)).ToHashSet();
-        var carpet = new HashSet<(int X, int Z)>();
-        var queue = new Queue<(int X, int Z)>();
-        foreach (var c in anyCarpet)
-        {
-            var nearDoor = false;
-            for (var dx = -DoorReach; dx <= DoorReach && !nearDoor; dx++)
-                for (var dz = -DoorReach; dz <= DoorReach && !nearDoor; dz++)
-                    nearDoor = doors.Contains((c.X + dx, c.Z + dz));
-            if (nearDoor && carpet.Add(c)) queue.Enqueue(c);
-        }
-        while (queue.Count > 0)
-        {
-            var (x, z) = queue.Dequeue();
-            foreach (var n in new[] { (x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1) })
-                if (anyCarpet.Contains(n) && carpet.Add(n)) queue.Enqueue(n);
-        }
-        bool Between((int X, int Z) c, int dx, int dz, int reach)
-        {
-            bool Side(int sign)
-            {
-                for (var k = 1; k <= reach; k++)
-                    if (carpet.Contains((c.X + sign * dx * k, c.Z + sign * dz * k))) return true;
-                return false;
-            }
-            return Side(1) && Side(-1);
-        }
         var floor = new HashSet<(int X, int Z)>();
-        var red = new HashSet<(int X, int Z)>();
         foreach (var (x, y, z) in cells.Keys)
-        {
-            if (y != minY || !air.Contains((x, minY + 1, z))) continue;
-            var c = (x, z);
-            floor.Add(c);
-            // (carpet; or a cell the rooms didn't show as floor between carpet along a row or a column; or one they did, other than carpet
-            // -- the grey inlays where carpets cross -- with carpet all round it)
-            if (carpet.Contains(c)
-                || (!Shown(c) && (Between(c, 1, 0, CarpetReach) || Between(c, 0, 1, CarpetReach)))
-                || (Shown(c) && Between(c, 1, 0, InlayReach) && Between(c, 0, 1, InlayReach))) red.Add(c);
-        }
-        // (the road as wide as the doors -- the user, 2026-10-13: "Enlarge the track width so it's the same width as a door way" -- the grids'
-        // carpets two cells across, the doors DoorBricks: a cell more on each side, the corners square)
-        // (and the carpet the start room's way in asks for: on to its doors, `alsoCarpet`)
-        foreach (var c in alsoCarpet ?? new HashSet<(int X, int Z)>()) if (floor.Contains(c)) red.Add(c);
-        var road = new HashSet<(int X, int Z)>(red);
-        const int Widen = (DoorBricks - 2) / 2;
-        foreach (var (x, z) in red)
-            for (var dx = -Widen; dx <= Widen; dx++)
-                for (var dz = -Widen; dz <= Widen; dz++)
-                    if (floor.Contains((x + dx, z + dz))) road.Add((x + dx, z + dz));
+            if (y == minY && air.Contains((x, minY + 1, z))) floor.Add((x, z));
+        var road = floor.Where(track.Contains).ToHashSet();
         // (and the tiles along it in gold, a cell either side -- "Let's change the tile colour next to the track to a different colour than
         // the rest of the floor"; the rest in the greens)
         var paint = new Dictionary<(int X, int Z), (float R, float G, float B)>();

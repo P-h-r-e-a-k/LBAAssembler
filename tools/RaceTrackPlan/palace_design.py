@@ -49,6 +49,18 @@ way", "Add an entrance door to the palace in the start room", and the fireplace 
     leap's line and raised to it (PalaceIsland.PillarNorth, PillarRise);
   - the carpets four bricks across (16 cells): the guards stand off them further.
 
+Sixth version, 2026-10-13, late (the user, after a picture of the rooms from above: "We have lots of red that isn't the inside track. The
+red track area should be the width of the door way, there should be no other red on the floor ... let's keep the corners nice and square.
+The outside segment of track we have is still terrible. It needs to represent driving over the roof top, looping between the roof
+turrets, more height. We also need the outside track colour to be our regular track colour with a red/white border on the edge"):
+  - the floor's red only the route's (PalaceIsland's TrackRow, TrackColumn): the route here runs along the middle of it;
+  - the user's way round the roof kept, high over it: out of the round window climbing over the sea to OVER_HALL over the long hall's roof
+    where it comes in between its turrets, on up to HIGH over the roof by the first time through the middle crossing -- most of the way
+    up the turrets -- down DIP round the south-west turret to pass under itself there the second time, gently up to the spiral, up the
+    spiral (SPIRAL_RISE) and the take-off ramp (KICK) to the leap's lip as before;
+  - out of the round window the race-track mode's own road: asphalt, red and white curbs (the deck theme standard; the palace's pale
+    stone and turquoise was lost in the haze).
+
 Usage: palace_design.py <game folder with PALACE.ILE and PALACE.JSON: the island built on its own, `ScriptRoundTrip palace`> [out plan]
 """
 import json, math, sys
@@ -69,14 +81,15 @@ JUMP_APEX = 1400                            # the leap's top over its lip (its t
 FLIGHT = 80                                 # the leap's length (cells): a car at three times the race car's speed is still in the air when
                                             # the teleporter takes it (wake_flight=, 2.4 s) -- within the island's cubes
 PAD = 12                                    # where the leap comes down (no road: never reached)
-RAISE = 1500                                # the road round the turrets: this much over the roof's rock
 KICK = 1000                                 # the take-off ramp: its rise to the leap's lip over its last RUNUP cells
 RUNUP = 12
-GAP_OVER = 380                              # the road through the gap between the long hall's turrets: this much over the roof's rock
-BRIDGE = 4500                               # the road's rise round the south-west turret: its second way through the middle crossing over its first
+OVER_HALL = 2300                            # the road where it comes in over the long hall's roof, between its turrets: this much over the roof
+HIGH = 9000                                 # ... and by the first time through the middle crossing (the turrets 35,000 to 47,500 high)
+DIP = 3000                                  # round the south-west turret down this much: its second way through the middle crossing under its first
 SPIRAL_LOOPS = 1.5                          # the spiral at the end: its turns ...
 SPIRAL_RISE = 5000                          # ... and its climb (3,333 a turn: the turns pass over one another, the straight off its top over
-                                            # its first turn)
+                                            # its first turn -- 2,800 at the least between a deck and the one over it: 4,900 at the least)
+LIP = 31216                                 # the leap's lip (its top JUMP_APEX more, under 32,767; the teleporter's ring on the pillar at 31,506)
 HALF_MID = 6.0                              # the road's half width over the palace, between its turrets ...
 HALF_TIGHT = 5.5                            # ... and through the middle way's east half (TR and BR some 16 cells apart)
 # (a car's collision box: some 1,420 units either way of its middle whichever way it faces: 2.8 cells. Where the cars drive the floor,
@@ -247,18 +260,24 @@ start = nearest((START_X, GRID_Z), 0, 200)
 i_ramp_foot = nearest((wx, w_in + 30)); i_ramp_top = nearest((wx, w_in + 8), i_ramp_foot)
 i_window_in = nearest((wx, w_in), i_ramp_foot); i_window_out = nearest((wx, w_out), i_window_in)
 i_over = nearest((hall['x1'] + 16, ZGAP), i_window_out)          # over the island: the long hall's east rim, west into the gap
-i_roof = nearest((XV, ZNS + 10), i_over)                         # up to RAISE over the roof by the middle way
+i_roof = nearest((XV, ZNS + 10), i_over)                         # up to HIGH over the roof by the middle way
 i_cross1 = nearest((XV - 12, ZH1), i_roof)                       # the first time through the middle crossing: on west from it ...
-i_cross2 = nearest((XV, ZH2 + 14), nearest((XV, ZS), i_cross1))  # ... the second, north into it: BRIDGE over the first by then
+i_cross2 = nearest((XV, ZH2 + 14), nearest((XV, ZS), i_cross1))  # ... the second, north into it: DIP under the first by then
 lip = nearest((X_LIP, PZ), i_sp1); foot = nearest((X_LIP - RUNUP, PZ), i_sp1)
 land = nearest((X_LIP + FLIGHT, PZ), lip); land_foot = n - 1
 i_hall = nearest(HALL_JOIN, 0, i_ramp_foot)
 
 # ---- heights: the rooms' floor (no road there); the ramp up to the window's sill, level through the window; out of it climbing over the
-# sea to GAP_OVER over the roof's rock where it comes over the long hall; up to RAISE over it by the middle way; level through the
-# middle crossing; climbing round the south-west turret to BRIDGE more by the second time through the crossing; level to the spiral; up
+# sea to OVER_HALL over the roof where it comes over the long hall; on up to HIGH over it by the middle way; level through the middle
+# crossing; down DIP round the south-west turret by the second time through the crossing, under the first; gently up to the spiral; up
 # the spiral; level down the straight to the take-off ramp; the leap -- up JUMP_APEX and down -- and the stretch of road beyond
 def ease(t): return t * t * (3 - 2 * t)
+def ramp(t, e=0.2):
+    """A climb steady in its middle, easing in and out over its first and last `e` (the steepest 1 / (1 - e) times the mean)."""
+    v = 1 / (1 - e)
+    if t < e: return v * t * t / (2 * e)
+    if t > 1 - e: return 1 - v * (1 - t) ** 2 / (2 * e)
+    return v * (e / 2 + t - e)
 def climb(a, b, h0, h1, shape=ease):
     for i in range(a, b + 1):
         h[i] = h0 + (h1 - h0) * shape((S[i] - S[a]) / max(1e-6, S[b] - S[a]))
@@ -267,21 +286,23 @@ h = np.full(n, FLOOR, float)
 for i in range(i_ramp_foot, i_ramp_top + 1):
     t = (i - i_ramp_foot) / max(1, i_ramp_top - i_ramp_foot); h[i] = FLOOR + (sill + DECK - FLOOR) * ease(t)
 sillH = sill + DECK
-gapH = TOP + GAP_OVER
-roofH = TOP + RAISE
-bridgeH = roofH + BRIDGE
-topH = bridgeH + SPIRAL_RISE
+gapH = TOP + OVER_HALL
+roofH = TOP + HIGH
+bridgeH = roofH - DIP
+lipH = LIP
+topH = lipH - KICK
+spH = topH - SPIRAL_RISE
+if spH < bridgeH: raise ValueError(f'the spiral starts ({spH:.0f}) under the second way through the middle crossing ({bridgeH:.0f})')
 h[i_ramp_top:] = sillH
-climb(i_window_out, i_over, sillH, gapH)
-climb(i_over, i_roof, gapH, roofH)
+climb(i_window_out, i_over, sillH, gapH, ramp)
+climb(i_over, i_roof, gapH, roofH, ramp)
 h[i_roof:i_cross1 + 1] = roofH
 climb(i_cross1, i_cross2, roofH, bridgeH)
-h[i_cross2:i_sp0 + 1] = bridgeH
-climb(i_sp0, i_sp1, bridgeH, topH, linear)
+climb(i_cross2, i_sp0, bridgeH, spH)
+climb(i_sp0, i_sp1, spH, topH, linear)
 h[i_sp1:foot + 1] = topH
 for i in range(foot, lip + 1):
     h[i] = topH + KICK * ease((i - foot) / max(1, lip - foot))
-lipH = topH + KICK
 h[lip:] = lipH
 for i in range(lip, land + 1):
     t = (i - lip) / max(1, land - lip); h[i] = lipH + JUMP_APEX * 4 * t * (1 - t)
@@ -367,8 +388,10 @@ for k, rt in enumerate(routes): check_floor(rt, f'the rooms (way {k + 1})')
 check(i_ramp_foot, i_window_out + 1, 'the ramp and the window')
 check(i_window_out, lip + 1, 'the road round the turrets')
 grade = np.abs(np.diff(h)) / (SP * 512)
-print('steepest: the ramp to the window %.2f, the climb to the roof %.3f, round the south-west turret %.3f, the spiral %.3f, the take-off ramp %.3f' %
-      (grade[i_ramp_foot:i_window_in].max(), grade[i_window_out:i_roof].max(), grade[i_cross1:i_cross2].max(), grade[i_sp0:i_sp1].max(), grade[foot:lip].max()))
+print('steepest: the ramp to the window %.2f, the climb over the sea %.3f, on up over the roof %.3f, down round the south-west turret %.3f, '
+      'up to the spiral %.3f, the spiral %.3f, the take-off ramp %.3f' %
+      (grade[i_ramp_foot:i_window_in].max(), grade[i_window_out:i_over].max(), grade[i_over:i_roof].max(), grade[i_cross1:i_cross2].max(),
+       grade[i_cross2:i_sp0].max(), grade[i_sp0:i_sp1].max(), grade[foot:lip].max()))
 # (where the road passes over itself -- the middle crossing, the spiral's turns: the least height between the two, its decks and a car)
 over_min = (1e9, None)
 for i in range(i_window_out, lip, 4):
@@ -386,8 +409,9 @@ print('the leap: lip %.0f at %s, its top %.0f, down at %s; %.1f cells; the least
       (h[lip], tuple(np.round(pts[lip], 1)), h[lip:land + 1].max(), tuple(np.round(pts[land], 1)), S[land] - S[lip], low[0], tuple(np.round(pts[low[1]], 1))))
 print('the parts: the rooms and the hall %.0f cells, the ramp and the window %.0f, the road round the turrets %.0f, the spiral %.0f, the straight to the lip %.0f, the leap %.0f, the road beyond %.0f' %
       (S[i_ramp_foot], S[i_window_out] - S[i_ramp_foot], S[i_sp0] - S[i_window_out], S[i_sp1] - S[i_sp0], S[lip] - S[i_sp1], S[land] - S[lip], S[-1] - S[land]))
-print('heights: over the long hall %.0f, round the turrets %.0f, the bridge %.0f, the spiral\'s top %.0f, the lip %.0f; the teleporter\'s ring %.0f, the car there %.0f' %
-      (gapH, roofH, bridgeH, topH, lipH, L['pillar'][3] + 2740, lipH + JUMP_APEX * 4 * (23 / FLIGHT) * (1 - 23 / FLIGHT)))
+print('heights: over the long hall %.0f, the first time through the middle crossing %.0f, the second %.0f, the spiral %.0f to %.0f, the lip %.0f; '
+      'the teleporter\'s ring %.0f, the car there %.0f (the roof %.0f)' %
+      (gapH, roofH, bridgeH, spH, topH, lipH, L['pillar'][3] + 2740, lipH + JUMP_APEX * 4 * (23 / FLIGHT) * (1 - 23 / FLIGHT), TOP))
 print('the opponents\' ways through the rooms: ' + ', '.join('%.0f cells' % (len(rt) - 1) for rt in routes) + ' (the route %.0f to the same place)' % S[i_hall])
 print('about %.0f s to the lip at the top speed (34 km/h, 9.4 cells a second)' % (S[lip] / 9.44))
 
@@ -416,7 +440,9 @@ plan = {
     # it, its sight line to the car's middle 500 over the road; in the rooms, where there is no road, it follows the car's own trail, as
     # low -- RACEMOD.CPP OpenCamera)
     'railCamera': [9, 2100, 7, 500, 1000],
-    'themes': [{'from': 0, 'to': i_window_out, 'theme': 'carpet'}, {'from': i_window_out, 'to': n - 1, 'theme': 'palace'}],
+    # (the ramp up to the round window the rooms' red carpet edged in gold; out of it the race-track mode's own road -- the user: "our
+    # regular track colour with a red/white border on the edge")
+    'themes': [{'from': 0, 'to': i_window_out, 'theme': 'carpet'}, {'from': i_window_out, 'to': n - 1, 'theme': 'standard'}],
     # (the palace -- its rooms, roofs, furniture and domes -- stays where it is under and beside the road: every decor of the island's own
     # bodies on, PALACE.OBL's from 151; and nothing is cut into the ground)
     'keepAbove': 0,

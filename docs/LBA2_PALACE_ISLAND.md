@@ -339,6 +339,27 @@ drawing on.
   --clip-y <cut> --cut` (the triangles cut at that height, what is over it left out), the outside of the rooms left out, turned a quarter
   round, and the words drawn with matplotlib.
 
+## Only the track red (2026-10-13, late)
+
+The user, after the pictures above: "We have lots of red that isn't the inside track. The red track area should be the width of the door
+way, there should be no other red on the floor. It looks like we've also attempted to round the corners slightly, let's keep the corners
+nice and square."
+
+![From above now: the red only the track's, from the entrance doors west to room 151, a square corner, north up the west column and the long hall to the round window](racetrack/palace/v9_inside_top.png)
+
+![The same with the race on it](racetrack/palace/v9_inside_top_labelled.png)
+
+![In the game: the track's red with its gold edge, the rest of the floor green checks](racetrack/palace/v9_inside.png)
+
+- Until then every carpet of the grids was red, widened to the doors' width: a red lattice through all sixteen rooms, its corners the
+  grids' carpets' cut ones. Now the floor's only red is the race's track (`TrackRow`, `TrackColumn`): from the palace's doors in room 154
+  west through the bottom row's doors to room 151's west column line, and from there north through the west column's doors (155, 159,
+  163) and up the long hall to its north wall, the round window. Each stretch is exactly as wide as the doors on it (`DoorBricks`: the
+  doors' own span along their walls, 16 cells), and the two meet in a square corner. The tiles a cell round it are gold, as before; the
+  rest of the floor is the two greens' checks (`PaintFloor`). 548 cells of red (1,643 before), 235 of gold.
+- The build warns if the track's doors aren't all in line and four bricks wide (they are).
+- The benches' cushions are still red: they are furniture, not the floor.
+
 ## Making it
 
 - Tools > **LBA2: Palace island (Otringal's palace)…** (`MainWindow.Palace.cs`) adds the two files to the game folder, builds them again,

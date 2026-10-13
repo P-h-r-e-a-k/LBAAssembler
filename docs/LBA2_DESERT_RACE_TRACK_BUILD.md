@@ -3418,6 +3418,35 @@ other fireplaces, they're a secret warp point".
   bottom row's carpet, the car came out of the other at 4,836 units a second.
 - *Checked* with the test pilot: no power-ups, won in 240.98 s, no car rescued, Twinsen awake in scene 95 after the leap.
 
+## The Emperor's palace, eighth round: only the track red inside, the road high over the roof in the regular colours (2026-10-13, late)
+
+The user, after a picture of the rooms from above: "We have lots of red that isn't the inside track. The red track area should be the
+width of the door way, there should be no other red on the floor. It looks like we've also attempted to round the corners slightly,
+let's keep the corners nice and square. The outside segment of track we have is still terrible. It needs to represent driving over the
+roof top, looping between the roof turrets, more height. We also need the outside track colour to be our regular track colour with a
+red/white border on the edge".
+
+![The road over the roof from above, by height: out of the window, high over the long hall and the roof, under itself at the middle crossing, up the spiral to the take-off ramp](racetrack/palace/v9_route.png)
+
+![High over the roof's rock between the turrets](racetrack/palace/v9_roof.png)
+
+![Between the domed turrets](racetrack/palace/v9_turrets.png)
+
+- *The red inside* is the race's track only, as wide as the doors with a square corner (`docs/LBA2_PALACE_ISLAND.md`, "Only the
+  track red"). The route runs along its middle as before: the bottom row's door line and the west column's.
+- *Higher* (`palace_design.py`; the user's way round the roof kept as it was). Before, the road came over the long hall's roof 380 over
+  it and ran round the turrets 1,500 over the roof: from the car it was a road on the ground between the turrets' walls. Now it climbs
+  out of the window over the sea (at most 10.7 %) to 2,300 over the long hall's roof where it comes in between its turrets
+  (`OVER_HALL`), and on (at most 5.5 %) to 9,000 over the roof by the first time through the middle crossing (`HIGH`: 28,216 -- the
+  turrets are 35,000 to 47,500 high). Round the south-west turret it comes down 3,000 (`DIP`), so the second time through the middle
+  crossing it passes under the first; then level to the spiral, up the spiral 5,000 to 30,216 and the take-off ramp to the lip at
+  31,216 as before. The road's two ways through the crossing are 3,000 apart, the spiral's turns 2,861 (the least: 2,800).
+- *The regular road*: out of the round window the deck theme `standard` (dark asphalt, red and white curbs, grey rails and piers)
+  instead of `palace` (the palace's pale stone, turquoise edges and rails), which was lost in the haze. The ramp up to the window keeps
+  the carpet's red.
+- *Checked* with the test pilot: no power-ups, won in 242.41 s; power-ups, won in 245.56 s; no car rescued, through the teleporter's
+  ring at 4,836 units a second, Twinsen awake in scene 95.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove
