@@ -317,6 +317,28 @@ portrait", and "Add a raised track outside on the roof that loops around the roo
 - `PALACE.JSON` has two more keys: `entrance` (the doors' wall face and span, island cells) and `teleports` (each the box in and the place
   out, island cells and world heights, and the turn).
 
+## The inside from above (2026-10-13, night)
+
+The user: "Create a top down image of the inside of the palace track". The island as the race-track build leaves it, its roof and walls cut
+away 1,600 over the floor: where the cut goes through a wall or a tall piece of furniture it is dark, the solid there. The doors' tops are
+higher, so the doorways show as gaps. North is to the left and east up, as in the user's drawing of the roof route. The plain one is for
+drawing on.
+
+![The palace's inside from above: the sixteen rooms four by four, the long hall off the fourth row to the round window](racetrack/palace/inside_top.png)
+
+![The same with the race on it: the test pilot's line, the opponents' other ways, the start, the guards, the pictures, the secret warp, the rooms' numbers](racetrack/palace/inside_top_labelled.png)
+
+- Each room is the square round its carpets' crossing. The dark `#` shapes are where four rooms' corners meet: each room's own walls,
+  with a strip of floor between them where two rooms' grids overlap. The labelled picture marks where rooms meet with faint dots and
+  numbers each room with the game's scene it was built from.
+- The labelled picture's lines come from the plan (`docs/racetrack/palace_track_plan.json`): the racing line (the test pilot's) to just
+  through the round window, the opponents' `openRoutes`, the `guards` (each with a tick the way he looks), the `teleports`. The pictures'
+  places and sitters come from the built island (`palacepictures`).
+- Made by `tools/RaceTrackPlan/palace_topdown.py <game folder with the track built> <out folder>` (`ScriptRoundTrip` built in Release):
+  `islandmesh --no-terrain --caps <cut>` (each solid box through the cut height as its dark cross-section there), `meshshot --top
+  --clip-y <cut> --cut` (the triangles cut at that height, what is over it left out), the outside of the rooms left out, turned a quarter
+  round, and the words drawn with matplotlib.
+
 ## Making it
 
 - Tools > **LBA2: Palace island (Otringal's palace)…** (`MainWindow.Palace.cs`) adds the two files to the game folder, builds them again,
@@ -326,9 +348,10 @@ portrait", and "Add a raised track outside on the roof that loops around the roo
 - `ScriptRoundTrip palace <game folder> <out folder> [source folder] [--no-roofs] [--no-outside] [--no-furniture]` builds the same files
   into another folder. The source folder holds pristine `OTRINGAL.ILE` and `.OBL` (the game folder by default). `--no-roofs` leaves the
   roofs (and the outside) off so you can see inside, as in the second picture.
-- Pictures: `ScriptRoundTrip islandmesh <ile> <obl> 31 <out.bin> [x0 z0 x1 z1] [--no-terrain] [--boxes]` and
-  `ScriptRoundTrip meshshot <out.bin> <png> --target x y z --yaw a --pitch b --dist d [--clip-y y] [--cull]` (a depth-buffered picture;
-  `tools/ScriptRoundTrip/PalaceStudy.cs` has the studies behind the outside and the furniture).
+- Pictures: `ScriptRoundTrip islandmesh <ile> <obl> 31 <out.bin> [x0 z0 x1 z1] [--no-terrain] [--boxes] [--caps y]` and
+  `ScriptRoundTrip meshshot <out.bin> <png> --target x y z --yaw a --pitch b --dist d [--clip-y y [--cut]] [--cull]` (a depth-buffered
+  picture; `--top --box x0 z0 x1 z1` straight down; `tools/ScriptRoundTrip/PalaceStudy.cs` has the studies behind the outside and the
+  furniture). `ScriptRoundTrip palacepictures <ile> <obl>` lists where a built island's pictures hang, and whose they are.
 - `ScriptRoundTrip palaceportraits <game folder> <out.png> [scale]` paints the pictures' pages as the island has them.
   `ScriptRoundTrip palacefloor <game folder> <out.png>` maps the rooms' floor bricks from above in their average colours.
   `LBA2_PALACE_PAINT=<file>` has a build write the floor's paint, a line a cell.

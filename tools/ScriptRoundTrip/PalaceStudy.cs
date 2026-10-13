@@ -13,11 +13,13 @@ namespace ScriptRoundTrip;
 //   palaceblocks <game folder> <out folder>: the library blocks the palace grids are made of, how often placed where, a picture of each
 //   palacefloor <game folder> <out.png>: the rooms' floor bricks from above, in their average colours, and the floor's colours
 //   palaceportraits <game folder> <out.png> [scale]: the pictures of the game's characters as the island's object pages have them
+//   palacepictures <ile> <obl>: where a built island's pictures hang -- who, the middle (cells), the way it looks: "name;x;z;nx;nz"
 //   palacezones <game folder> [--inner]: the palace rooms' ways out and other scenes' ways in
 //   gridcolumn <game folder> <scene> <x> <z> [<x1> <z1>]: what a grid has in a column, layer by layer (block.place)
 //   blockface <game folder> <scene> <block> <out.png> [dx,dy]: a block's picture and its +x and +z faces looked up through it
-//   islandmesh <ile> <obl> <ress palette entry> <out.bin> [x0 z0 x1 z1] [--no-terrain] [--no-decors] [--boxes]: the island's ground, decor
-//     bodies (and collision boxes) as coloured triangles (world units; 13 float32 each: three corners, r g b, kind 0 decor 1 ground 2 box)
+//   islandmesh <ile> <obl> <ress palette entry> <out.bin> [x0 z0 x1 z1] [--no-terrain] [--no-decors] [--boxes] [--caps y]: the island's
+//     ground, decor bodies (and collision boxes, or their cross-sections at height y) as coloured triangles (world units; 13 float32 each:
+//     three corners, r g b, kind 0 decor 1 ground 2 box 3 cut box)
 //   meshshot <mesh.bin> <out.png> [...]: such a mesh drawn with a depth buffer (below)
 //   oblcheck <obl> [first]: the bodies past the engine's 550 points or primitives
 //   decorcount <ile> [obl]: each cube's decors (the engine's 200), and with the OBL whether their bodies are there
@@ -132,6 +134,41 @@ internal static class PalaceStudy
                 }
         PngWriter.Write(args[2], bgra, w, h);
         Console.WriteLine($"{args[2]}: {painted.Pages.Count} pages");
+        return 0;
+    }
+
+    // palacepictures <ile> <obl>: the pictures a built Palace island has hung (PalacePortraits.Hang: a body of one textured polygon each,
+    // its texture entry 0x7F7F0000 | the picture's corner on its page) -- the sitter from the corner and the page (four to a page, the
+    // lowest page the first's), each once (not its copies in the cubes round it): name, middle x and z in cells, the way it looks
+    public static int Pictures(string[] args)
+    {
+        var island = IslandFile.Load(args[1]);
+        var obl = HqrArchive.Open(args[2]);
+        var bodies = new Dictionary<int, Body?>();
+        var found = new Dictionary<(int X, int Y, int Z), (int Page, int Offset, Vector3 Normal)>();
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            foreach (var d in cube.Decors)
+            {
+                var index = d.Body & ((1 << IslandFile.DecorPageShift) - 1);
+                if (!bodies.TryGetValue(index, out var body))
+                {
+                    try { body = Body.Read(obl.Read(index), 2, allowStatic: true); } catch (Exception) { body = null; }
+                    bodies[index] = body;
+                }
+                if (body is null || body.Faces.Count != 1 || body.Faces[0].Texture is null || body.Textures.Length != 1 || (body.Textures[0] & 0xFFFF0000) != 0x7F7F0000) continue;
+                var f = body.Faces[0];
+                var turn = Matrix4x4.CreateRotationY((float)((d.Beta & 0xFFFF) * 2 * Math.PI / 4096));
+                var normal = Vector3.Normalize(Vector3.TransformNormal(Vector3.Cross(body.Vertices[f.Points[1]] - body.Vertices[f.Points[0]], body.Vertices[f.Points[2]] - body.Vertices[f.Points[0]]), turn));
+                found.TryAdd((cx * 32768 + d.X, d.Y, cz * 32768 + d.Z), (IslandFile.ObjectPageOf(d), (int)(body.Textures[0] & 0xFFFF), normal));
+            }
+        if (found.Count == 0) { Console.WriteLine("no pictures"); return 1; }
+        var first = found.Values.Min(v => v.Page);
+        var sitters = LBAAssembler.Terrain.Palace.PalacePortraits.Sitters;
+        foreach (var ((x, _, z), (page, offset, normal)) in found.OrderBy(p => p.Key.X).ThenBy(p => p.Key.Z))
+        {
+            var k = (page - first) * 4 + offset / 256 / 120 * 2 + offset % 256 / 96;
+            Console.WriteLine($"{(k < sitters.Length ? sitters[k].Name : "?" + k)};{x / 512.0:0.##};{z / 512.0:0.##};{Math.Round(normal.X)};{Math.Round(normal.Z)}");
+        }
         return 0;
     }
 
@@ -262,9 +299,10 @@ internal static class PalaceStudy
     }
 
     // meshshot <mesh.bin> <out.png> [--size W H] [--target x y z] [--yaw deg] [--pitch deg] [--dist d] [--fov deg] [--top] [--box x0 z0 x1 z1]
-    //   [--no-ground] [--clip-y y] [--clip-box x0 y0 z0 x1 y1 z1]: an islandmesh dump drawn with a depth buffer -- a perspective camera
-    //   `dist` from `target`, turned `yaw` about the upright (0: looking north, from the south) and tilted down `pitch`; or (--top) straight
-    //   down over the box. --clip-y leaves out what is above that height (a look into the rooms); --clip-box only what is inside it.
+    //   [--no-ground] [--clip-y y [--cut]] [--clip-box x0 y0 z0 x1 y1 z1]: an islandmesh dump drawn with a depth buffer -- a perspective
+    //   camera `dist` from `target`, turned `yaw` about the upright (0: looking north, from the south) and tilted down `pitch`; or (--top)
+    //   straight down over the box. --clip-y leaves out the triangles above that height (a look into the rooms), with --cut the parts of
+    //   triangles above it; --clip-box only what is inside it.
     public static int Shot(string[] args)
     {
         double[] Opt(string name, params double[] fallback)
@@ -281,6 +319,7 @@ internal static class PalaceStudy
         var clipY = Opt("--clip-y", double.NaN)[0];
         var clipBox = Opt("--clip-box", double.NaN, 0, 0, 0, 0, 0);
         var noGround = args.Contains("--no-ground");
+        var cutAtClip = args.Contains("--cut") && !double.IsNaN(clipY);
         var light = Vector3.Normalize(new Vector3(-0.45f, 0.8f, 0.4f));
         var tris = new List<(Vector3 A, Vector3 B, Vector3 C, Vector3 Col, bool Body)>();
         for (var t = 0; t < n; t++)
@@ -290,13 +329,30 @@ internal static class PalaceStudy
             Vector3 a = new(f[o], f[o + 1], f[o + 2]), b = new(f[o + 3], f[o + 4], f[o + 5]), c = new(f[o + 6], f[o + 7], f[o + 8]);
             var m = (a + b + c) / 3;
             if (!double.IsNaN(box[0]) && (m.X < box[0] || m.X > box[2] || m.Z < box[1] || m.Z > box[3])) continue;
-            if (!double.IsNaN(clipY) && Math.Min(a.Y, Math.Min(b.Y, c.Y)) > clipY - 1) continue;
+            if (!double.IsNaN(clipY) && !cutAtClip && Math.Min(a.Y, Math.Min(b.Y, c.Y)) > clipY - 1) continue;
             if (!double.IsNaN(clipBox[0]) && (m.X < clipBox[0] || m.Y < clipBox[1] || m.Z < clipBox[2] || m.X > clipBox[3] || m.Y > clipBox[4] || m.Z > clipBox[5])) continue;
             var nn = Vector3.Cross(b - a, c - a);
             if (nn.LengthSquared() < 1e-6f) continue;
             nn = Vector3.Normalize(nn);
-            var shade = f[o + 12] == 1 ? 0.75f + 0.25f * Math.Abs(Vector3.Dot(nn, light)) : 0.55f + 0.45f * Math.Abs(Vector3.Dot(nn, light));
-            tris.Add((a, b, c, new Vector3(f[o + 9], f[o + 10], f[o + 11]) * shade, f[o + 12] != 1));
+            // (a cut box -- islandmesh --caps -- in its own colour, unlit)
+            var shade = f[o + 12] == 3 ? 1f : f[o + 12] == 1 ? 0.75f + 0.25f * Math.Abs(Vector3.Dot(nn, light)) : 0.55f + 0.45f * Math.Abs(Vector3.Dot(nn, light));
+            var col = new Vector3(f[o + 9], f[o + 10], f[o + 11]) * shade;
+            if (cutAtClip)
+            {
+                // (--cut: the triangle cut at the clip height, what is over it left out -- not the whole triangle kept or dropped)
+                var corners = new[] { a, b, c };
+                var under = new List<Vector3>();
+                for (var i = 0; i < 3; i++)
+                {
+                    Vector3 p = corners[i], q = corners[(i + 1) % 3];
+                    bool pin = p.Y <= clipY, qin = q.Y <= clipY;
+                    if (pin) under.Add(p);
+                    if (pin != qin) under.Add(p + (q - p) * (float)((clipY - p.Y) / (q.Y - p.Y)));
+                }
+                for (var k = 1; k + 1 < under.Count; k++) tris.Add((under[0], under[k], under[k + 1], col, f[o + 12] != 1));
+                continue;
+            }
+            tris.Add((a, b, c, col, f[o + 12] != 1));
         }
         var depth = new float[W * H]; Array.Fill(depth, float.MaxValue);
         var bgra = new byte[W * H * 4];
@@ -555,7 +611,8 @@ internal static class PalaceStudy
         var oblFolder = Path.GetDirectoryName(Path.GetFullPath(args[2]))!;
         var ressFolder = File.Exists(Path.Combine(oblFolder, "RESS.HQR")) ? oblFolder : Environment.GetEnvironmentVariable("LBA2_DIR") ?? @"E:\GOG Games\Little Big Adventure 2";
         var palette = IslandMapRenderer.LoadPaletteEntry(ressFolder, int.Parse(args[3]));
-        var rest = args.Skip(5).Where(a => !a.StartsWith("--")).Select(double.Parse).ToArray();
+        var capsAt = Array.IndexOf(args, "--caps");
+        var rest = args.Skip(5).Where((a, i) => !a.StartsWith("--") && i + 5 != capsAt + 1).Select(double.Parse).ToArray();
         var (x0, z0, x1, z1) = rest.Length >= 4 ? (rest[0], rest[1], rest[2], rest[3]) : (double.MinValue, double.MinValue, double.MaxValue, double.MaxValue);
         using var w = new BinaryWriter(File.Create(args[4]));
         var tris = 0;
@@ -611,6 +668,22 @@ internal static class PalaceStudy
                     Vector3 P(int i) => new((i & 1) != 0 ? bx1 : bx0, (i & 2) != 0 ? by1 : by0, (i & 4) != 0 ? bz1 : bz0);
                     foreach (var q in new[] { new[] { 2, 3, 7, 6 }, new[] { 0, 1, 5, 4 }, new[] { 0, 2, 6, 4 }, new[] { 1, 3, 7, 5 }, new[] { 0, 1, 3, 2 }, new[] { 4, 5, 7, 6 } })
                     { Tri(P(q[0]), P(q[1]), P(q[2]), col, 2); Tri(P(q[0]), P(q[2]), P(q[3]), col, 2); }
+                }
+        }
+        if (capsAt >= 0)
+        {
+            // (--caps y: the solid boxes through height y as their cross-section there, dark -- kind 3, a plan's cut walls: drawn with
+            // meshshot --top --clip-y y --cut, a look down into rooms)
+            var capY = float.Parse(args[capsAt + 1]);
+            foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+                foreach (var d in cube.Decors)
+                {
+                    if (d.YMax < d.YMin || d.YMin >= capY || d.YMax <= capY) continue;
+                    float bx0 = cx * 32768f + d.XMin, bx1 = cx * 32768f + d.XMax, bz0 = cz * 32768f + d.ZMin, bz1 = cz * 32768f + d.ZMax;
+                    if (bx1 < x0 || bx0 > x1 || bz1 < z0 || bz0 > z1) continue;
+                    (byte, byte, byte) col = (44, 40, 40);
+                    Tri(new(bx0, capY, bz0), new(bx0, capY, bz1), new(bx1, capY, bz1), col, 3);
+                    Tri(new(bx0, capY, bz0), new(bx1, capY, bz1), new(bx1, capY, bz0), col, 3);
                 }
         }
         if (!args.Contains("--no-decors"))

@@ -150,6 +150,7 @@ internal static class Program
             "palacecells" => PalaceStudy.Cells(args),
             "palacefloor" => PalaceStudy.Floor(args),
             "palaceportraits" => PalaceStudy.Portraits(args),
+            "palacepictures" => PalaceStudy.Pictures(args),
             "palaceblocks" => PalaceStudy.Blocks(args),
             "decorcount" => PalaceStudy.DecorCount(args),
             "meshshot" => PalaceStudy.Shot(args),
