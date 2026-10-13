@@ -61,7 +61,10 @@ internal static class PalaceTrack
 
     // the race's end: Twinsen arrives on Celebration Island (scene 95, the island with the Dark Monk's statue) and says the wake line
     public const int WakeScene = 95, WakeActor = 0;
-    // the race ends at the jump's lip, and the teleporter takes the car this long after it, in mid-flight as it reaches the ring
+    // ... the statue risen: a win sets the game's variable the engine draws Celebration Island from CELEBRA2 by (FLAG_CELEBRATION) -- the
+    // user, 2026-10-13: "the black dot is where the race ends in a large jump where we'll then zone transition to CELEBRA2.ILE"
+    public const int StatueVar = 79;
+    // the race ends at the leap's lip, and the dream fades this long after it, in mid-flight
     public const int WakeFlightMs = 2400;
     // TEXT.HQR's files: an island's is the engine's file 3 + its number (MESSAGE.CPP TextEntry): Otringal's 7, Celebration Island's 8
     private const int OtringalTexts = 3 + 4, CelebrationTexts = 3 + 5;

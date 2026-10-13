@@ -67,10 +67,9 @@ internal static class PalaceIsland
     public const double QuayY = 1400;                   // the harbour's quay (Otringal's lowest)
     public const int PillarOut = PalaceCliff.Margin + 50; // the teleporter's pillar: cells east of the rooms' east wall, past the cliffs ...
     public const double PillarRadius = 6;               // ... its top's radius (cells) ...
-    public const double PillarRise = 9550;              // ... its top this much over the hilltop, the teleporter on it in the way of the race's leap
-                                                        // off its spiral (2026-10-13: the jump's lip some 30,200 high; was 700) ...
-    public const int PillarNorth = 78;                  // ... and this many cells north of the sixteen rooms' north wall: on the leap's line (was on
-                                                        // their middle row's, by the quay)
+    public const double PillarRise = 700;               // ... and its top this much over the hilltop, by the quay on the sixteen rooms' middle row's
+                                                        // line (2026-10-13 it stood 78 cells north of them, 9,550 over the hilltop, in the way of
+                                                        // the leap off the race's spiral; the race's leap is off the roof's middle way since)
                                                         // (the road's 60 over the hilltop, its ramp's 700 -- palace_design.py), on the pillar
     public const double RoadOver = 60;                  // (the race's road over what it lies on)
     public const int DoorBricks = 4;                    // a door between two rooms this many bricks wide (the game's are two: 8 cells, the
@@ -693,7 +692,7 @@ internal static class PalaceIsland
         int sqZ0 = (int)Math.Round(WZ(sixteen.Min(c => c.Z)) / 512), sqZ1 = (int)Math.Round(WZ(sixteen.Max(c => c.Z) + 1) / 512);
         var midZ = (sqZ0 + sqZ1) / 2;
         var quayX0 = east + PalaceCliff.Margin + PalaceCliff.Face - 6;
-        var harbour = new PalaceCliff.Harbour((quayX0, midZ - 34, quayX0 + 26, midZ + 34), QuayY, (east + PillarOut, sqZ0 - PillarNorth, PillarRadius, hilltop + PillarRise));
+        var harbour = new PalaceCliff.Harbour((quayX0, midZ - 34, quayX0 + 26, midZ + 34), QuayY, (east + PillarOut, midZ, PillarRadius, hilltop + PillarRise));
 
         // ---- the bodies: each room's faces (a few bodies where they are many), each a decor nothing touches, in every cube it can be seen
         // from (the engine draws the decors of the 3 x 3 cubes round the camera's: a room further off, seen down a row of doors, wasn't) --

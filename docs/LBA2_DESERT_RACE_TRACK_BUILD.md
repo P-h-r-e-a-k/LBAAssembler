@@ -3447,6 +3447,61 @@ red/white border on the edge".
 - *Checked* with the test pilot: no power-ups, won in 242.41 s; power-ups, won in 245.56 s; no car rescued, through the teleporter's
   ring at 4,836 units a second, Twinsen awake in scene 95.
 
+## The Emperor's palace, ninth round: the user's new way over the roof -- two loops round the long hall's turrets, a weave, a jump (2026-10-13, late)
+
+The user, with a drawing over a picture of the roof from above: "I've re-drawn the roof portion of our palace track again. The previous
+version we had was too many straight lines and wasn't very interesting. This track exits the palace at the same place, loops around twice,
+one loop on top of the other, a short straight into another double loop going down, then looping around and weaving in and out of the
+buildings, as much as possible we should avoid straight track sections. The pink dots are a jump and the black dot is where the race ends
+in a large jump where we'll then zone transition to CELEBRA2.ILE"; then "our current outside track section had very wide edges at the side
+of the track, these should more closely resemble our other tracks".
+
+![The road over the roof from above, by height: the two loops round the long hall's turrets, the weave round the four turrets, the jump (dashed, from the pink dot) and the leap off the finish (the black dot)](racetrack/palace/v10_route.png)
+
+![Climbing round the long hall's first turret, the loop's second time round overhead](racetrack/palace/v10_loop1.png)
+
+![Coming down round the second turret](racetrack/palace/v10_loop2.png)
+
+![Weaving between the turrets, the road's other level beside it](racetrack/palace/v10_weave.png)
+
+![The jump along the strip north of the north-east turret](racetrack/palace/v10_jump.png)
+
+![Up the middle way to the finish line, the leap's lip](racetrack/palace/v10_home.png)
+
+- *Reading the drawing.* The user's picture was the editor's 3D view from above, in perspective: the higher a thing, the further from the
+  picture's middle it shows. A camera straight down was fitted to the old road in the picture (its heights known: `PALACE.JSON`, the
+  plan) -- 77 % of the road's points fell on its asphalt -- and the drawn line read through it onto the island, at 22,000 high.
+- *The way* (`palace_design.py`: the loops are ellipses, `HELIX1`, `HELIX2`; the rest smooth curves through points in the middle of the room
+  the turrets leave, measured on the island's collision). Out of the round window round the long hall's first turret one and a half
+  times, clockwise seen from above, climbing -- the second time round over the first; across to the second turret and round it the other
+  way, coming down -- its west side twice, one over the other; south down the sixteen rooms' west side, round the south-west turret
+  (east along the south side, north up the middle way, west through the middle way across), north by the north-west turret's west side
+  (over the way down: the road there twice), east along its north side to the jump; east along the north side, south down the east side,
+  west along the south side and north up the middle way -- over the way up it before -- to the finish. The long sides weave a little
+  from side to side; no bend is tighter than 11 cells.
+- *Heights.* The ramp up to the round window is 80 cells long now and the road goes through the window at 14,600 (it was 11,980: the
+  first loop has to be over the long hall's roof a third of a turn on). The first loop climbs to 30,500, the second comes down 3,400 each
+  time round to 26,339, the way round the sixteen rooms comes down to 23,400 by the north-west turret, the jump's lip is 24,400 (its top
+  25,900), home climbs to 29,000 and the finish line is at the leap's lip at 30,000 (its top 31,400). Where the road passes over itself the
+  two are 2,915 apart at the least.
+- *What the drawing couldn't have.* Its jump went over the north-east turret's west wing, 46,000 to 56,000 high -- past what a car can
+  reach (32,767): it flies along the strip north of that turret instead (44 cells, a carried jump: `arcJumps`). Its finish (the black dot)
+  was by that turret: the finish line is 25 cells west of it, in the middle way, and the leap goes north off the roof over the cloud sea.
+- *The finish.* A win sets game variable 79 (the car file's `win=79 1`: `PalaceTrack.StatueVar`, `RaceTrackService`'s DreamInfo
+  WinVar), so the dream ends on Celebration Island with its statue: the engine draws it from CELEBRA2.ILE by that variable. The
+  teleporter's pillar is back by the harbour's quay, off the race's way (`docs/LBA2_PALACE_ISLAND.md`).
+- *The road's edges like the other tracks'.* The palace's road had its curbs 3.5 cells out and its deck to 5.5 to 7, a flat rail top 2 to
+  3.5 cells wide either side. Now the deck is 4.5 cells either side (5.5 up the ramp and through the window), its asphalt to a cell in
+  from the edge and its curbs to a quarter of a cell in (`asphaltHalf`, `curbHalf`, `raisedHalf`): the Island of the Francos', the
+  Volcano's, the Emerald Moon's.
+- *Two lines on cubes' edges.* The finish line first stood at z 576, a cube's edge: the car flew over it uncounted, came down off the
+  leap and was rescued. The finish line and the jump's lip are a few cells off the edges now.
+- *The design's checks* (`palace_design.py`): a car's box round any place across the road it can be (the road's half-width less a curb's
+  width and a quarter, either side, across the way the road runs, and the car's box round that) -- a square round the road's middle as wide
+  as that was too much on a slant; the jumps' flights; where the road passes over itself; the tightest bends and the longest straight.
+- *Checked* with the test pilot: power-ups, won in 290.85 s; no power-ups, won in 314.60 s (stopped by three of the guards on the way);
+  no car rescued, both jumps carried, game variable 79 set, Twinsen awake in scene 95. The race is long: some 5 minutes.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

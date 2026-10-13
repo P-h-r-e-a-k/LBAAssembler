@@ -359,6 +359,9 @@ nice and square."
   rest of the floor is the two greens' checks (`PaintFloor`). 548 cells of red (1,643 before), 235 of gold.
 - The build warns if the track's doors aren't all in line and four bricks wide (they are).
 - The benches' cushions are still red: they are furniture, not the floor.
+- The teleporter's pillar is back by the harbour's quay, on the sixteen rooms' middle row's line and 700 over the hilltop (`PillarRise`;
+  `PillarNorth` is gone): the race's leap is off the roof's middle way now, north over the cloud sea (the user's new way over the roof,
+  `docs/LBA2_DESERT_RACE_TRACK_BUILD.md`).
 
 ## Making it
 

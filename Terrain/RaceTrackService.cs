@@ -157,7 +157,7 @@ internal static class RaceTrackService
     // actor says there.
     public sealed record DreamInfo(StartLineInfo Finish, int TopKmh, int IntroText, int LoseText, int WakeScene, int WakeText, int WakeActor,
         // (since 2026-10-06, later: the game variable a win sets, which scene 0's opening wakes Twinsen up in his bed by -- it says the
-        // wake line itself then, and WakeText is -1)
+        // wake line itself then, and WakeText is -1; the Emperor's palace's since 2026-10-13: Celebration Island's statue risen)
         int WinVar = -1,
         // (since the island was made twice its size: how long after the finish line -- a jump's lip -- Twinsen wakes up, in mid-flight; 0, the
         // car stops at the line and he wakes up 3.5 s later)
@@ -476,7 +476,7 @@ internal static class RaceTrackService
             var (textLog, intro, lose, wake) = LBAAssembler.Terrain.Palace.PalaceTrack.Texts(gameDirectory);
             extra.Add(textLog);
             dream = new DreamInfo(LineInfo(end, report.FinishLineHeight), 0, intro, lose, LBAAssembler.Terrain.Palace.PalaceTrack.WakeScene, wake,
-                LBAAssembler.Terrain.Palace.PalaceTrack.WakeActor, -1, LBAAssembler.Terrain.Palace.PalaceTrack.WakeFlightMs);
+                LBAAssembler.Terrain.Palace.PalaceTrack.WakeActor, LBAAssembler.Terrain.Palace.PalaceTrack.StatueVar, LBAAssembler.Terrain.Palace.PalaceTrack.WakeFlightMs);
         }
         if (options.Island.Dream && report.FinishLine is { } finish)
         {
