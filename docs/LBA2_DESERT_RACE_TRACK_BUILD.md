@@ -3281,6 +3281,59 @@ Checked: the test pilot through the palace, a picture every 40 frames, as before
 Moon's lap a picture every 30 frames: 81 of 111 the same to the pixel, the rest by a few pixels but the last five, where the grid's
 opponents stood in other places (drawn at random); the editor's views of the palace as before.
 
+## The Emperor's palace, fifth round: one red carpet, the palace's people in the cars' way, pictures on the walls (2026-10-13, evening)
+
+The user: "Let's simplify the flooring inside the palace. Let's make the main road section that's mostly red at the moment pure red just
+with the white arrows. The surrounding area varies a lot, let's keep this consistent with a check pattern based on the green ... The
+retail game has enemies inside the palace, 3 pigs, Stan from Time commando, and lots of soldiers with swords, let's add some of these
+enemies inside as obstacles, perhaps the could chase and attack the cars, or throw random things at them"; then "let's see if we can make
+the colours on the walls more consistent too as they're currently very blocky. Let's also see if we can generate some pictures to hang on
+the walls based on some of the games characters".
+
+![The road one red under its arrow, the floor's checks, Twinsen's picture; a soldier at his post, the red pighead at his work](racetrack/palace/v6_rooms.png)
+
+![A soldier has struck the car in front: it is stopped, stars round it](racetrack/palace/v6_strike.png)
+
+![The long hall hung with the characters' pictures](racetrack/palace/v6_hall.png)
+
+- *The floor and the walls* (the island: `docs/LBA2_PALACE_ISLAND.md`). The carpets the doors lead to are one red under the arrows, and
+  the rest of the floor is checked in the tiles' two greens. The rooms' walls are in bands: skirting, trim, wallpaper, trim, cornice.
+- *The palace's people* (`Terrain/RaceTrackGuards.cs`; `RACEMOD.CPP` `Guards`). They come from the plan's `guards`, which
+  `palace_design.py` places, and reach the engine as `guard=` lines in the race car file: kind, post, floor, the way it faces, leash, its
+  animations, then a (scene, actor) pair for each scene it has an actor in. There are 21 of them.
+  - *19 of the Emperor's soldiers*, sword out (entity 184, body 2: BODY.HQR 261), in their fighting stance (animation 434). There is one
+    in every room but the start's, at a corner of its carpets' crossing, 7 cells off each way, on a leash of 6.5 cells. Four more stand
+    along the long hall's carpet, 8 cells from its middle, either side by turns, on a leash of 7.
+  - *A soldier's attack.* When a car comes his way within 9,000, he walks (animation 437, 1,800 a second) towards where it will pass, no
+    further than his leash from his post, turned to it. He strikes (one of his four strikes, 142, 277, 438 or 439, at random) when the
+    car will be in reach as the blow lands, 600 ms in. A car whose middle is within 1,350 of his is then stopped 1.1 s (stars round it:
+    `CarStruckFor`) and let be for 1.5 s after. Then he walks back to his post.
+  - *Running him down.* A car whose middle comes within 700 of his knocks him back (animation 6, 1.7 s) and keeps 0.6 of its speed.
+  - *Two pigheads*: the red one with the hammer (entity 313, at his work: animation 231) in room 152, and the brown one with the garden
+    tool (314, animation 585) in room 163, where every way meets before the long hall. Each stands 14 and 13 cells off the crossing, on a
+    leash of 1.
+  - *A pighead's throw.* At a car between 2,500 and 11,000 from him, he throws (animation 142) one of twelve of the game's things at
+    random: a vase, a key, a coin, a ring, fruit, mushrooms, tins, a stone, a bone, a sausage, meat or a rock (SPRIRAW.HQR 5, 6, 18, 19,
+    20, 28, 31, 55, 57, 59, 60, 124). He aims at where the car will be when it comes down, and throws as the game throws (`ThrowExtra`,
+    4,500 a second; never a flight of more than 2.4 s), every 2.4 to 3.6 s. A car within 950 of where it lands is stopped 0.9 s.
+  - *Not in the way:* Stan and the yellow pighead with the broom. They race, in the user's line-up: Stan in his time machine, and the
+    road sweeper.
+  - *Their actors.* Each has an actor in every scene within 40 cells of his post, because the game draws a scene's actors only while it
+    is the one about. The actors' scripts are gone: the race-track mode moves and poses the copy in the scene about, and hides it further
+    than 40 cells from Twinsen. In the other scenes they strike and throw all the same, at the opponents there. Before the start they
+    stand at their posts.
+  - *First placed*, the pigheads stood in rooms 157 and 160, which only the opponents' other ways cross. No car came within 11,000 of
+    them, and they threw nothing.
+- *Pictures of the game's characters.* 28 pictures of 8 characters hang on the rooms' walls (`Terrain/Palace/PalacePortraits.cs`). They
+  are painted from the game folder's own bodies when the island is built, onto two pages of the island's object textures, and each is
+  one textured polygon.
+- *Checked* with the test pilot:
+  - no power-ups: won in 61.66 s. Soldiers struck the cars (Twinsen's down to 12 km/h at one), and the pigheads' throws hit Twinsen, the
+    Emperor and the road sweeper.
+  - with power-ups: won in 62.90 s (before the pigheads moved). Another run wasn't over in 72 s: Stan's lightning shrank Twinsen's car
+    for 15 s.
+  - no car was rescued in any run.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

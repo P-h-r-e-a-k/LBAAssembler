@@ -89,6 +89,8 @@ internal static class RaceCarEngineFile
         }
         // the gas monsters that rise out of the gas beside the road to bite cars (Otringal's)
         foreach (var monster in track?.GasMonsters ?? new()) text.Append($"gasmonster={string.Join(' ', monster)}\n");
+        // the people in the cars' way, stepping out at them, striking and throwing (the Emperor's palace's)
+        foreach (var guard in track?.Guards ?? new()) text.Append($"guard={string.Join(' ', guard)}\n");
         // where the camera stands while the car flies a drop
         foreach (var dropCam in track?.JumpCameras ?? new()) text.Append($"jumpcam={string.Join(' ', dropCam)}\n");
         // the jumps the engine carries the car over (places in the raised road's file), and the island's scenes by cube for the cube

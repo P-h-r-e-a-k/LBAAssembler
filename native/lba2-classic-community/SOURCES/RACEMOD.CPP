@@ -950,6 +950,60 @@ typedef struct {
 static T_RACE_MONSTER s_monsters[RACE_MAX_MONSTERS];
 static int s_nbMonsters = 0;
 static S32 s_bittenUntil[RACE_MAX_OPPONENTS + 1];  // a car just bitten is let be till then -- a monster beside it doesn't bite it again
+// People in the cars' way (guard=<kind> <x> <z> <floor y> <face x> <face z> <leash> <standing> <walking> <knocked back> <strike> <strike>
+// <strike> <strike> <scene> <actor> [<scene> <actor>]..., island units, the way it faces in thousandths, an animation -1 none; its own
+// scene's actor first, then its actor in each other scene it is seen from): the Emperor's palace's -- the user, 2026-10-13: "The retail
+// game has enemies inside the palace, 3 pigs, Stan from Time commando, and lots of soldiers with swords, let's add some of these enemies
+// inside as obstacles, perhaps the could chase and attack the cars, or throw random things at them" (LBA Assembler's RaceTrackGuards).
+// Each stands at its post by a room's carpets, the game's own animations. Kind 0, a soldier (and 2, Stan): a car coming his way, he
+// steps out towards where it will pass -- no further than his leash from his post -- and strikes as it comes by, timed for his blow to
+// land on it; a car in reach then is stopped RACE_GUARD_STUN. A car that runs into him knocks him back (and keeps only some of its
+// speed). Kind 1, a pighead: a car in range, he throws a thing at where it is going (one of RACE_THROWN's sprites, at random) -- a car
+// near where it comes down is stopped RACE_THROWN_STUN. Their actors are posed while their scene is the one about; elsewhere they strike
+// and throw all the same, at the opponents there.
+#define RACE_MAX_GUARDS 32
+#define RACE_GUARD_SEEN 8                  // the scenes a guard has an actor in, at the most
+#define RACE_GUARD_SEEN_FAR (40 * 512.0)   // drawn only with the car this near it
+#define RACE_GUARD_ALERT 9000.0            // a car this near and coming his way: he steps out at it
+#define RACE_GUARD_WALK 1800.0             // units a second he walks (Stan: half again)
+#define RACE_GUARD_REACH 1350.0            // his blow reaches a car whose middle is this near his
+#define RACE_GUARD_BLOW 600                // ms into a strike its blow lands ...
+#define RACE_GUARD_STRIKE 1150             // ... and the strike over
+#define RACE_GUARD_REST 1300               // ms after a strike before the next
+#define RACE_GUARD_STUN 1100               // a car struck is stopped this long ...
+#define RACE_GUARD_GRACE 1500              // ... and let be this long after
+#define RACE_GUARD_BOWL 700.0              // a car whose middle comes this near his knocks him back ...
+#define RACE_GUARD_BOWL_KEEP 0.6           // ... keeping this share of its speed ...
+#define RACE_GUARD_DOWN 1700               // ... and he is knocked back this long
+#define RACE_THROWN_NEAR 2500.0            // a pighead throws at a car between this near ...
+#define RACE_THROWN_FAR 11000.0            // ... and this far
+#define RACE_THROWN_EVERY 2400             // ms between his throws, at the least (and up to half again)
+#define RACE_THROWN_RELEASE 380            // ms into his throw the thing leaves his hand ...
+#define RACE_THROWN_END 950                // ... and the throw is over
+#define RACE_THROWN_SPEED 90               // the thing's speed (a 20 ms frame's way: 4,500 units a second) ...
+#define RACE_THROWN_WEIGHT 12              // ... and weight (ThrowExtra, InitFly)
+#define RACE_THROWN_REACH 950.0            // a car this near where it comes down is hit ...
+#define RACE_THROWN_STUN 900               // ... and stopped this long
+#define RACE_THROWN_LONGEST 2.4            // (s: he doesn't throw at a car he couldn't hit sooner than this)
+#define RACE_MAX_THROWN 12
+// (what they throw: raw sprites -- a vase, a key, a coin, a ring, a fruit, mushrooms, tins, a stone, a bone, a sausage, meat, a rock)
+static const S32 RACE_THROWN[] = { 5, 6, 18, 19, 20, 28, 31, 55, 57, 59, 60, 124 };
+enum { GUARD_POST, GUARD_STEP, GUARD_STRIKE, GUARD_BACK, GUARD_DOWN, GUARD_THROW };
+typedef struct {
+    int Kind; double PostX, PostZ, Y, FaceX, FaceZ, Leash;
+    int Stand, Walk, Hit, NbStrikes, Strikes[4];
+    int State, Anim, Strike, Blown, Target; double X, Z; S32 Beta, T0, Rest, Next;
+    int Shown; S32 ShownScene;
+    int NbSeen; S32 SeenScene[RACE_GUARD_SEEN]; int SeenActor[RACE_GUARD_SEEN];
+} T_RACE_GUARD;
+static T_RACE_GUARD s_guards[RACE_MAX_GUARDS];
+static int s_nbGuards = 0;
+typedef struct { int On, Extra, Owner, Sprite; double ToX, ToY, ToZ; S32 T0, Dur; } T_RACE_THROWN;
+static T_RACE_THROWN s_thrown[RACE_MAX_THROWN];
+static S32 s_guardGrace[RACE_MAX_OPPONENTS + 1];   // a car just struck by one of them is let be till then
+// (where each car is going: its last place and its way, units a second -- -1 Twinsen's at 0)
+static double s_carLastX[RACE_MAX_OPPONENTS + 1], s_carLastZ[RACE_MAX_OPPONENTS + 1], s_carVX[RACE_MAX_OPPONENTS + 1], s_carVZ[RACE_MAX_OPPONENTS + 1];
+static S32 s_carLastT[RACE_MAX_OPPONENTS + 1];
 #define RACE_MONSTER_GRACE 2500            // ms after its stun
 // Shuttles (shuttle=<scene> <actor> <x> <y> <z>: the scene's actor, and the pad it lands on, cube-local, on the road): Otringal's spaceship
 // on the square island, which in the game comes down onto its pad on the road and takes off again at random -- the user, 2026-10-08:
@@ -2074,6 +2128,26 @@ static void Load(const char *path, int carOnly = 0) {
                 int sc, ac, n2 = 0;
                 while (m->NbSeen < RACE_MONSTER_SEEN && sscanf(rest, "%d %d%n", &sc, &ac, &n2) == 2) {
                     m->SeenScene[m->NbSeen] = sc; m->SeenActor[m->NbSeen] = ac; m->NbSeen++;
+                    rest += n2;
+                }
+            }
+        }
+        else if (!strcmp(key, "guard")) {
+            int kind, x, z, y, fx, fz, leash, stand, walk, hit, s1, s2, s3, s4, used = 0;
+            if (s_nbGuards < RACE_MAX_GUARDS && sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d%n", &kind, &x, &z, &y, &fx, &fz, &leash, &stand, &walk, &hit,
+                                                       &s1, &s2, &s3, &s4, &used) == 14) {
+                T_RACE_GUARD *g = &s_guards[s_nbGuards++];
+                memset(g, 0, sizeof(*g));
+                g->Kind = kind; g->PostX = x; g->PostZ = z; g->Y = y; g->FaceX = fx / 1000.0; g->FaceZ = fz / 1000.0; g->Leash = leash;
+                g->Stand = stand; g->Walk = walk; g->Hit = hit;
+                const int strikes[4] = { s1, s2, s3, s4 };
+                for (int k = 0; k < 4; k++) if (strikes[k] >= 0) g->Strikes[g->NbStrikes++] = strikes[k];
+                g->X = x; g->Z = z; g->Shown = -1; g->Target = -2;
+                g->Beta = (S32)floor(atan2(g->FaceX, g->FaceZ) * 4096 / (2 * 3.14159265358979) + 0.5) & 4095;
+                const char *rest = v + used;
+                int sc, ac, n2 = 0;
+                while (g->NbSeen < RACE_GUARD_SEEN && sscanf(rest, "%d %d%n", &sc, &ac, &n2) == 2) {
+                    g->SeenScene[g->NbSeen] = sc; g->SeenActor[g->NbSeen] = ac; g->NbSeen++;
                     rest += n2;
                 }
             }
@@ -5266,6 +5340,11 @@ S32 RaceMod_NoCollide(S32 numobj) {
         for (int i = 0; i < s_nbMonsters; i++)
             for (int k = 0; k < s_monsters[i].NbSeen; k++)
                 if (s_monsters[i].SeenScene[k] == (S32)NumCube && s_monsters[i].SeenActor[k] == numobj) return 1;
+    // (nor one of the people in the cars' way: what a car running into him does is the race-track mode's -- Guards)
+    if (RaceMod_Active() && numobj > 0)
+        for (int i = 0; i < s_nbGuards; i++)
+            for (int k = 0; k < s_guards[i].NbSeen; k++)
+                if (s_guards[i].SeenScene[k] == (S32)NumCube && s_guards[i].SeenActor[k] == numobj) return 1;
     // (nothing runs into Twinsen's car on the super jet-pack either: a shuttle coming down onto it)
     if (numobj == NUM_PERSO && RaceMod_JetGhost()) return 1;
     if (!RaceMod_Active() || !s_powerups || numobj <= 0 || numobj >= MAX_OBJETS) return 0;
@@ -6223,6 +6302,242 @@ static void Monsters(S32 now, int driving) {
     }
 }
 
+// ---- the people in the cars' way (guard=) ----
+
+// Where the cars are going: each one's way (units a second) from its last place, every frame.
+static void CarWays(S32 now) {
+    for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+        const int k = who + 1;
+        double x, y, z;
+        if (!CarAt(who, &x, &y, &z)) { s_carLastT[k] = 0; s_carVX[k] = s_carVZ[k] = 0; continue; }
+        if (s_carLastT[k] && now > s_carLastT[k]) {
+            const double dt = (now - s_carLastT[k]) / 1000.0;
+            double vx = (x - s_carLastX[k]) / dt, vz = (z - s_carLastZ[k]) / dt;
+            if (vx * vx + vz * vz > 20000.0 * 20000.0) vx = vz = 0;   // (put somewhere else: the grid, a scene changed)
+            s_carVX[k] = s_carVX[k] * 0.6 + vx * 0.4; s_carVZ[k] = s_carVZ[k] * 0.6 + vz * 0.4;
+        }
+        if (!s_carLastT[k] || now > s_carLastT[k]) { s_carLastX[k] = x; s_carLastZ[k] = z; s_carLastT[k] = now; }
+    }
+}
+
+static const char *GuardName(const T_RACE_GUARD *g) { return g->Kind == 1 ? "pighead" : g->Kind == 2 ? "Stan" : "soldier"; }
+
+// A car struck by one of them -- unless one of them has just struck it.
+static void GuardStrikes(int who, S32 now, const char *what, S32 hold) {
+    if (now < s_guardGrace[who + 1]) return;
+    s_guardGrace[who + 1] = now + hold + RACE_GUARD_GRACE;
+    CarStruckFor(who, now, what, NULL, hold, NULL);
+}
+
+// One of them a step towards a place at his pace; 0 when he is there.
+static int GuardWalk(T_RACE_GUARD *g, double tx, double tz, double step) {
+    const double dx = tx - g->X, dz = tz - g->Z, d = sqrt(dx * dx + dz * dz);
+    if (d < 60) return 0;
+    const double v = RACE_GUARD_WALK * (g->Kind == 2 ? 1.5 : 1.0) * step;
+    if (v >= d) { g->X = tx; g->Z = tz; }
+    else { g->X += dx / d * v; g->Z += dz / d * v; }
+    g->Beta = (S32)floor(atan2(dx, dz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    return 1;
+}
+
+static void GuardFaces(T_RACE_GUARD *g, int who) {
+    double x, y, z;
+    if (who >= -1 && CarAt(who, &x, &y, &z)) g->Beta = (S32)floor(atan2(x - g->X, z - g->Z) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+}
+
+// A thing a pighead throws, at where his car will be when it comes down (its way kept on; three guesses at the flight's time), from his
+// hand; the game's thing thrown where his actor is in the scene about (`actor`), as the gunners' bullets are.
+static void GuardThrow(T_RACE_GUARD *g, int actor, S32 now) {
+    double x, y, z;
+    if (!CarAt(g->Target, &x, &y, &z)) return;
+    int t = -1;
+    for (int i = 0; i < RACE_MAX_THROWN && t < 0; i++) if (!s_thrown[i].On) t = i;
+    if (t < 0) return;
+    T_RACE_THROWN *u = &s_thrown[t];
+    const int k = g->Target + 1;
+    const double fromX = g->X, fromY = g->Y + 900, fromZ = g->Z;
+    const double v = RACE_THROWN_SPEED, c = RACE_THROWN_WEIGHT / 16.0;
+    double tx = x, tz = z, flight = 0, h = 0;
+    for (int pass = 0; pass < 3; pass++) {
+        tx = x + s_carVX[k] * flight; tz = z + s_carVZ[k] * flight;
+        const double R = sqrt((tx - fromX) * (tx - fromX) + (tz - fromZ) * (tz - fromZ)), dy = y + 300 - fromY, q = c * R * R / (v * v);
+        const double disc = R * R - 4 * q * (dy + q);
+        h = q > 0 && disc >= 0 ? atan((R - sqrt(disc)) / (2 * q)) : atan2(dy, R);
+        flight = R / (v * cos(h)) * 20 / 1000.0;
+    }
+    if (flight > RACE_THROWN_LONGEST) return;
+    const int n = (int)(sizeof(RACE_THROWN) / sizeof(RACE_THROWN[0]));
+    u->On = 1; u->T0 = now; u->Dur = (S32)(flight * 1000); u->ToX = tx; u->ToY = y; u->ToZ = tz;
+    u->Sprite = RACE_THROWN[(int)(VentRandom() * n) % n]; u->Extra = -1; u->Owner = actor >= 0 ? actor : 255;
+    Log_Info("[racemod] %s throws sprite %d at %s's car (%.1f s, %.0f away)", GuardName(g), (int)u->Sprite, CarName(g->Target), flight,
+             sqrt((tx - fromX) * (tx - fromX) + (tz - fromZ) * (tz - fromZ)));
+    if (actor < 0 || CubeMode != CUBE_EXTERIEUR) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const S32 beta = (S32)(atan2(tx - fromX, tz - fromZ) * 4096 / (2 * RACE_PI)) & 4095;
+    const S32 alpha = (S32)floor(h * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    u->Extra = ThrowExtra((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), u->Sprite, alpha, beta, RACE_THROWN_SPEED, RACE_THROWN_WEIGHT, 0);
+    if (u->Extra >= 0) ListExtra[u->Extra].Flags &= ~(EXTRA_END_OBJ | EXTRA_END_COL | EXTRA_IMPACT);
+}
+
+// Every frame: the people in the cars' way (guard=) -- standing at their posts, stepping out at the cars and striking, throwing; posed
+// where their scene is the one about.
+static void Guards(S32 now, int driving, S32 dt) {
+    if (!s_nbGuards) return;
+    CarWays(now);
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const int running = RaceRunning();
+    const double step = dt / 1000.0;
+    for (int i = 0; i < s_nbGuards; i++) {
+        T_RACE_GUARD *g = &s_guards[i];
+        int anim = g->Stand;
+        int actor = -1;
+        if (CubeMode == CUBE_EXTERIEUR)
+            for (int k = 0; k < g->NbSeen && actor < 0; k++)
+                if (g->SeenScene[k] == (S32)NumCube && g->SeenActor[k] > 0 && g->SeenActor[k] < NbObjets) actor = g->SeenActor[k];
+        if (!running) {
+            // (before the race's GO, the grid forming, a race run again: at his post as he stood)
+            g->State = GUARD_POST; g->X = g->PostX; g->Z = g->PostZ; g->Target = -2; g->Next = 0;
+            g->Beta = (S32)floor(atan2(g->FaceX, g->FaceZ) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+        } else {
+            // the cars: the nearest coming his way (or right by him) -- and any running into him
+            int target = -2;
+            double best = 1e30;
+            for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+                if (who < 0 && !driving) continue;
+                if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
+                double x, y, z;
+                if (!CarAt(who, &x, &y, &z) || fabs(y - g->Y) > 1500) continue;
+                const double dx = g->X - x, dz = g->Z - z, d2 = dx * dx + dz * dz;
+                const double vx = s_carVX[who + 1], vz = s_carVZ[who + 1];
+                if (d2 < RACE_GUARD_BOWL * RACE_GUARD_BOWL && g->State != GUARD_DOWN) {
+                    // (run into: knocked back, out of the car's way; the car slowed)
+                    g->State = GUARD_DOWN; g->T0 = now;
+                    const double vl = sqrt(vx * vx + vz * vz);
+                    if (vl > 1) {
+                        const double side = dx * vz - dz * vx >= 0 ? 1 : -1;
+                        g->X += side * vz / vl * 500; g->Z -= side * vx / vl * 500;
+                    }
+                    if (who < 0) ListBuggy[0].Speed = (S32)(ListBuggy[0].Speed * RACE_GUARD_BOWL_KEEP);
+                    Log_Info("[racemod] %s %d knocked back by %s's car", GuardName(g), i, CarName(who));
+                }
+                const int coming = dx * vx + dz * vz > 0 || d2 < 2500.0 * 2500.0;
+                const double far = g->Kind == 1 ? RACE_THROWN_FAR : RACE_GUARD_ALERT;
+                if (!coming || d2 > far * far || d2 >= best) continue;
+                if (g->Kind == 1 && d2 < RACE_THROWN_NEAR * RACE_THROWN_NEAR) continue;
+                best = d2; target = who;
+            }
+            const S32 t = now - g->T0;
+            switch (g->State) {
+            case GUARD_DOWN:
+                anim = g->Hit;
+                if (t >= RACE_GUARD_DOWN) { g->State = GUARD_BACK; g->Rest = now + RACE_GUARD_REST; }
+                break;
+            case GUARD_THROW:
+                anim = g->Strike;
+                GuardFaces(g, g->Target);
+                if (!g->Blown && t >= RACE_THROWN_RELEASE) { g->Blown = 1; GuardThrow(g, actor, now); }
+                if (t >= RACE_THROWN_END) { g->State = GUARD_POST; g->Next = now + RACE_THROWN_EVERY + (S32)(VentRandom() * RACE_THROWN_EVERY / 2); }
+                break;
+            case GUARD_STRIKE:
+                anim = g->Strike;
+                GuardFaces(g, g->Target);
+                if (!g->Blown && t >= RACE_GUARD_BLOW) {
+                    // (his blow: the cars in its reach)
+                    g->Blown = 1;
+                    for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+                        if (who < 0 && !driving) continue;
+                        if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
+                        double x, y, z;
+                        if (!CarAt(who, &x, &y, &z) || fabs(y - g->Y) > 1500) continue;
+                        if ((x - g->X) * (x - g->X) + (z - g->Z) * (z - g->Z) > RACE_GUARD_REACH * RACE_GUARD_REACH) continue;
+                        Log_Info("[racemod] %s %d strikes %s's car", GuardName(g), i, CarName(who));
+                        GuardStrikes(who, now, g->Kind == 2 ? "Stan's blow" : "a soldier's sword", RACE_GUARD_STUN);
+                    }
+                }
+                if (t >= RACE_GUARD_STRIKE) { g->State = target >= -1 ? GUARD_STEP : GUARD_BACK; g->Rest = now + RACE_GUARD_REST; }
+                break;
+            default:
+                if (g->Kind == 1) {
+                    // a pighead: back to his post if he was knocked from it, and a throw at a car in range now and then
+                    if (GuardWalk(g, g->PostX, g->PostZ, step)) { anim = g->Walk; break; }
+                    g->State = GUARD_POST;
+                    if (target >= -1 && g->NbStrikes && now >= g->Next) {
+                        g->Target = target; g->State = GUARD_THROW; g->T0 = now; g->Blown = 0; g->Strike = g->Strikes[0];
+                        GuardFaces(g, target);
+                        anim = g->Strike;
+                    } else g->Beta = (S32)floor(atan2(g->FaceX, g->FaceZ) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+                    break;
+                }
+                if (target >= -1) {
+                    // out towards where the car will pass nearest his post (within his leash of it), facing it ...
+                    g->Target = target; g->State = GUARD_STEP;
+                    double x, y, z;
+                    CarAt(target, &x, &y, &z);
+                    const double vx = s_carVX[target + 1], vz = s_carVZ[target + 1], v2 = vx * vx + vz * vz;
+                    double tau = v2 > 1 ? ((g->PostX - x) * vx + (g->PostZ - z) * vz) / v2 : 0;
+                    tau = tau < 0 ? 0 : tau > 1.5 ? 1.5 : tau;
+                    double gx = x + vx * tau, gz = z + vz * tau;
+                    const double ox = gx - g->PostX, oz = gz - g->PostZ, ol = sqrt(ox * ox + oz * oz);
+                    if (ol > g->Leash && ol > 0) { gx = g->PostX + ox / ol * g->Leash; gz = g->PostZ + oz / ol * g->Leash; }
+                    anim = GuardWalk(g, gx, gz, step) ? g->Walk : g->Stand;
+                    GuardFaces(g, target);
+                    // ... and a strike when its blow will land on the car
+                    const double bt = RACE_GUARD_BLOW / 1000.0, px = x + vx * bt - g->X, pz = z + vz * bt - g->Z;
+                    if (now >= g->Rest && g->NbStrikes && px * px + pz * pz < 0.8 * RACE_GUARD_REACH * RACE_GUARD_REACH) {
+                        g->State = GUARD_STRIKE; g->T0 = now; g->Blown = 0;
+                        g->Strike = g->Strikes[(int)(VentRandom() * g->NbStrikes) % g->NbStrikes];
+                        anim = g->Strike;
+                    }
+                } else {
+                    // back to his post, and standing as he stood
+                    g->Target = -2;
+                    if (GuardWalk(g, g->PostX, g->PostZ, step)) { anim = g->Walk; g->State = GUARD_BACK; }
+                    else { g->State = GUARD_POST; g->Beta = (S32)floor(atan2(g->FaceX, g->FaceZ) * 4096 / (2 * RACE_PI) + 0.5) & 4095; }
+                }
+                break;
+            }
+        }
+        // posed where he has an actor in the scene about (out of sight with Twinsen's car far off)
+        if (actor < 0) { g->Shown = -1; continue; }
+        T_OBJET *o = &ListObjet[actor];
+        {
+            const T_OBJ_3D *car = &ListObjet[NUM_PERSO].Obj;
+            const double hx = car->X + cx, hz = car->Z + cz;
+            if ((hx - g->X) * (hx - g->X) + (hz - g->Z) * (hz - g->Z) > RACE_GUARD_SEEN_FAR * RACE_GUARD_SEEN_FAR) { o->Obj.Y = -20000; g->Shown = -1; continue; }
+        }
+        if (g->Shown < 0 || g->ShownScene != (S32)NumCube) {
+            // (his own scripts stopped: he is the race-track mode's)
+            o->OffsetLife = o->OffsetTrack = -1;
+            g->Shown = 0; g->ShownScene = (S32)NumCube; g->Anim = -1;
+        }
+        o->Obj.X = (S32)floor(g->X - cx + 0.5); o->Obj.Y = (S32)g->Y; o->Obj.Z = (S32)floor(g->Z - cz + 0.5);
+        o->Obj.Alpha = 0; o->Obj.Gamma = 0; o->Obj.Beta = g->Beta;
+        if (anim != g->Anim) {
+            const int once = anim != g->Stand && anim != g->Walk;
+            InitAnim((U16)anim, once ? ANIM_ALL_THEN : ANIM_REPEAT, (U8)actor);
+            g->Anim = anim;
+        }
+    }
+    // the things thrown: taken away where they come down, and the cars there hit
+    for (int b = 0; b < RACE_MAX_THROWN; b++) {
+        T_RACE_THROWN *u = &s_thrown[b];
+        if (!u->On || now - u->T0 < u->Dur) continue;
+        u->On = 0;
+        if (u->Extra >= 0 && u->Extra < MAX_EXTRAS && ListExtra[u->Extra].Sprite == u->Sprite && ListExtra[u->Extra].Owner == (U8)u->Owner) ListExtra[u->Extra].Sprite = -1;
+        const S32 lx = (S32)(u->ToX - cx), lz = (S32)(u->ToZ - cz);
+        if (CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768) InitHitExtraPof(lx, (S32)u->ToY, lz, RACE_SHOT_FORCE);
+        for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+            if (who < 0 && !driving) continue;
+            if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
+            double x, y, z;
+            if (!CarAt(who, &x, &y, &z)) continue;
+            if ((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ) > RACE_THROWN_REACH * RACE_THROWN_REACH || fabs(y - u->ToY) > 1400) continue;
+            Log_Info("[racemod] a thrown thing (sprite %d) hits %s's car", (int)u->Sprite, CarName(who));
+            GuardStrikes(who, now, "a pighead's throw", RACE_THROWN_STUN);
+        }
+    }
+}
+
 // Every frame: the shuttles (shuttle=) of this scene, flown round their cycle. Its legs (the game's bodies: 58 down, 68 in, 64 60 65 61 66
 // 62 67 63 between, as its own take-off and landing scripts change them) come out on the way down and go in on the way up; its thrust
 // (body 59, every other fifth of a second against 58, as its scripts flicker it) while it hovers, touches down and lifts off.
@@ -6449,6 +6764,7 @@ void RaceMod_Frame(void) {
     Wheel(now, driving);
     SlotMachine(now);
     Monsters(now, driving);
+    Guards(now, driving, dt);
     Shuttles(now, driving);
     if (!Opponents()) return;
     // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car
@@ -7140,6 +7456,7 @@ static void ResetTrack(void) {
     s_shardModel = s_shardBit = -1;
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
+    s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = s_arcAcross1 = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0; s_railHeld = 0; s_railSight = s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;

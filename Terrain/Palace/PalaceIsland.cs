@@ -74,6 +74,8 @@ internal static class PalaceIsland
                                                         // race's road through them too narrow)
     public const double CorridorHalf = 9;               // the ways across the hilltop's rocks: half their width (cells)
     public const int RingOut = 9;                       // the way round the palace's west and south sides: cells out from its walls
+    public const int PortraitsPerRoom = 2;              // pictures of the game's characters on a room's walls (PalacePortraits) ...
+    public const int HallPortraits = 6;                 // ... and this many more along the long hall's
     // the colours of Otringal's palace (OTRINGAL.OBL's halls, in its palette): its pale stone (walls and flat roofs), the dark teal of its
     // foot, the turquoise of its drums
     private static readonly (float R, float G, float B) Stone = (176, 164, 160), StoneShadow = (160, 144, 140), Teal = (0, 48, 60), Turquoise = (116, 156, 160);
@@ -117,6 +119,8 @@ internal static class PalaceIsland
             }
         }
         if (cells.Count == 0) throw new InvalidDataException("The palace's scenes have no cells.");
+        // (the grids' own cells, before the walls and floors are made whole and the doors wider: the floor the rooms had -- PaintFloor)
+        var original = cells.Keys.ToHashSet();
         int minX = cells.Keys.Min(c => c.X), maxX = cells.Keys.Max(c => c.X), minY = cells.Keys.Min(c => c.Y), maxY = cells.Keys.Max(c => c.Y);
         int minZ = cells.Keys.Min(c => c.Z), maxZ = cells.Keys.Max(c => c.Z);
         log.Add($"the palace: {area.Tiles.Count} rooms (scenes {string.Join(", ", area.Tiles.Select(t => t.Scene))}), {cells.Count} filled cells, " +
@@ -373,10 +377,32 @@ internal static class PalaceIsland
         var wallpaper = sums.ToDictionary(s => s.Key, s => ((float)(s.Value.R / s.Value.N), (float)(s.Value.G / s.Value.N), (float)(s.Value.B / s.Value.N)));
         (float R, float G, float B) WallpaperAt(int y) =>
             wallpaper.TryGetValue(y, out var w) ? w : wallpaper.Count > 0 ? wallpaper.MinBy(p => Math.Abs(p.Key - y)).Value : (150f, 150f, 150f);
+        // ---- the floor painted (the user, 2026-10-13: "Let's make the main road section that's mostly red at the moment pure red just with
+        // the white arrows. The surrounding area varies a lot, let's keep this consistent with a check pattern based on the green"): the
+        // grids' carpets -- red with a brown border, the ways between the doors the race runs along -- one red; the rest of the floor the
+        // two greens of its tiles, cell by cell. A cell the rooms didn't show as floor (a door's threshold, a door's widening, a hole) is
+        // carpet when there is carpet on both sides of it along a row or a column, a few cells off: the red runs on through the doors.
+        // (the doors' floor -- the ways through the walls, once widened -- where the road's carpet comes from)
+        var doorFloor = new HashSet<(int X, int Z)>();
+        foreach (var (a, b, alongZ, u0, u1, _) in doorways)
+        {
+            int v0 = alongZ ? extents[b].X0 : extents[b].Z0, v1 = alongZ ? extents[a].X1 : extents[a].Z1;
+            for (var u = u0; u <= u1; u++)
+                for (var v = v0; v <= v1; v++) doorFloor.Add(alongZ ? (v, u) : (u, v));
+        }
+        var floorPaint = PaintFloor(cells, original, air, minY, b => Average(b), doorFloor);
+        log.Add($"the floor painted: {floorPaint.Count(p => p.Value == CarpetRed)} cells of carpet red, the rest checked in two greens");
+        // (LBA2_PALACE_PAINT=<file>: the paint, a line a cell -- "x z r g b", the palace's cells -- for a look at it from above)
+        if (Environment.GetEnvironmentVariable("LBA2_PALACE_PAINT") is { Length: > 0 } paintFile)
+            File.WriteAllLines(paintFile, floorPaint.Select(p => $"{p.Key.X} {p.Key.Z} {p.Value.R:0} {p.Value.G:0} {p.Value.B:0} " +
+                $"{(cells.TryGetValue((p.Key.X, minY, p.Key.Z), out var pc) ? pc.Brick : -2)} {(original.Contains((p.Key.X, minY, p.Key.Z)) && !original.Contains((p.Key.X, minY + 1, p.Key.Z)) ? 1 : 0)}"));
         int FaceColour((int X, int Y, int Z) c, int d, int brick, float shade)
         {
             var (dx, dy, dz, _) = BrickBuilding.Directions[d];
             var outward2 = !air.Contains((c.X + dx, c.Y + dy, c.Z + dz));
+            if (dy > 0 && c.Y == minY && floorPaint.TryGetValue((c.X, c.Z), out var paint)) return Shaded(paint, shade);
+            // (a room's wall: in bands by height -- PaintWall)
+            if (dy == 0 && !outward2) return Shaded(PaintWall(c.Y - minY, maxY - minY, brick >= 0 && Drawn(brick) && !papered.Contains(c) ? Average(brick) : null), shade);
             // (the palace's outside: Otringal's palace's walls, by height; and its stone on the top of a wall made whole -- a ledge)
             if (dy == 0 && outward2)
                 return Shaded(c.Y - minY < FootLayers ? Teal : c.Y > maxY - TopLayers ? Turquoise : Stone, shade);
@@ -384,8 +410,24 @@ internal static class PalaceIsland
             return Drawn(brick) && !papered.Contains(c) ? ColourOf(brick, shade) : Shaded(WallpaperAt(c.Y), shade);
         }
 
+        // ---- the pictures of the game's characters (PalacePortraits): painted (pages of the island's object textures), and their places on
+        // the rooms' plain walls -- PortraitsPerRoom a room, more along the long hall (its gallery) -- the wall's faces behind them left out
+        var spots = new List<PalacePortraits.Spot>();
+        PalacePortraits.Painted? painted = null;
+        if (furnished)
+        {
+            painted = PalacePortraits.PaintAll(gameDirectory, Nearest);
+            if (painted.Pages.Count > 0 && island.ObjectPages.Count + painted.Pages.Count < IslandFile.MaxObjectPages)
+            {
+                var furniture = modelled.Concat(papered).ToHashSet();
+                int RoomOf((int X, int Y, int Z) c) => Array.FindIndex(extents, e => c.X > e.X0 && c.X < e.X1 && c.Z > e.Z0 && c.Z < e.Z1);
+                spots = PalacePortraits.Spots(shown, air, furniture, minY + 1, RoomOf, PortraitsPerRoom, ti => ti == hallTile ? HallPortraits : 0);
+            }
+        }
+        var covered = spots.SelectMany(PalacePortraits.Covered).ToHashSet();
+
         // ---- the faces that show, merged into rectangles of one colour, room by room
-        var roomFaces = Faces(shown, FaceColour, (x, y, z) => new Vector3((float)WX(x), (float)WY(y), (float)WZ(z)));
+        var roomFaces = Faces(shown, FaceColour, (x, y, z) => new Vector3((float)WX(x), (float)WY(y), (float)WZ(z)), covered);
         foreach (var ti in Enumerable.Range(0, area.Tiles.Count)) roomFaces.TryAdd(ti, new List<BrickBuilding.Face>());
 
         // ---- the furniture's models, with each room's faces (in its bodies)
@@ -467,6 +509,20 @@ internal static class PalaceIsland
         var (bodyCount, faceCount, decorsLeft) = BrickBuilding.AddBodies(island, roomFaces, newBodies, next, ti => $"room {area.Tiles[ti].Scene}", Cap, everyCube: true,
             close: true, reach: PalaceOutside.Seen);
         var (rockBodies, rockFaces) = RockRoof(island, roofRects, newBodies, next, Cap);
+        // (the pictures hung: a body each, its page the decor's)
+        if (painted is not null)
+        {
+            log.AddRange(painted.Log);
+            if (spots.Count > 0)
+            {
+                var firstPage = island.ObjectPages.Count + 1;
+                island.ObjectPages.AddRange(painted.Pages);
+                var hung = PalacePortraits.Hang(island, spots, painted, firstPage, (x, y, z) => new Vector3((float)WX(x), (float)WY(y), (float)WZ(z)), newBodies, next, Cap,
+                    PalaceOutside.Seen);
+                log.Add($"the pictures hung: {hung} of {spots.Count} -- " + string.Join("; ", spots.GroupBy(s => s.Tile).Select(g =>
+                    $"room {area.Tiles[g.Key].Scene}: {string.Join(", ", g.Select(s => PalacePortraits.Sitters[s.Sitter].Name))}")));
+            }
+        }
 
         // ---- the outside: Otringal's palace on the sixteen rooms' roof, its arch in front of its porch, a wing of towers on the long hall's
         var outsideBoxes = new List<(double X0, double Y0, double Z0, double X1, double Y1, double Z1)>();
@@ -569,6 +625,84 @@ internal static class PalaceIsland
         return new Built(area.Tiles.Count, cells.Count, bodyCount, faceCount, boxCount, roofs, (firstX, firstZ), (cubesX, cubesZ), string.Join("\n", log));
     }
 
+    // The floor's and the walls' paint (the user, 2026-10-13, the floor's: see Build; then "Whilst we're cleaning up the floor let's see if we
+    // can make the colours on the walls more consistent too as they're currently very blocky"): colours of the grids' own, averaged.
+    internal static readonly (float R, float G, float B) CarpetRed = (119, 42, 30);      // the carpets' red (their border's brown with it)
+    private static readonly (float R, float G, float B) TileLight = (127, 139, 94), TileDark = (64, 82, 53);   // the floor tiles' greens
+    private static readonly (float R, float G, float B) Skirting = (64, 80, 48), Wallpaper = (112, 110, 70), Trim = (144, 112, 48), Cornice = (80, 80, 48);
+    private const int CarpetReach = 6;                   // a cell the rooms didn't show as floor is carpet with carpet this near on both sides ...
+    private const int InlayReach = 3;                    // ... and one they did (a grey inlay where carpets cross) with carpet this near all round
+
+    // A colour of the carpets: their red and the brown of their border (a red at least half as strong again as its green, near twice its blue).
+    private static bool IsCarpet((float R, float G, float B) a) => a.R > 60 && a.R > 1.4f * a.G && a.R > 1.8f * a.B;
+
+    // The floor's paint, cell by cell (x, z of the bottom layer's cells with a room's air over them): carpet red or the tiles' greens.
+    // The road's carpet: the carpet the doors' floor (`doors`) reaches -- carpet a few cells from a door, and all the carpet joined to it --
+    // not a runner along an outer wall, which leads to no door.
+    private const int DoorReach = 4;
+    private static Dictionary<(int X, int Z), (float R, float G, float B)> PaintFloor(Dictionary<(int X, int Y, int Z), (int Brick, int Tile)> cells,
+        HashSet<(int X, int Y, int Z)> original, HashSet<(int X, int Y, int Z)> air, int minY, Func<int, (float R, float G, float B)> average,
+        HashSet<(int X, int Z)> doors)
+    {
+        // (the floor the rooms showed: a cell of the grids' bottom layer with nothing of the grids' over it)
+        bool Shown((int X, int Z) c) => original.Contains((c.X, minY, c.Z)) && !original.Contains((c.X, minY + 1, c.Z));
+        var anyCarpet = new HashSet<(int X, int Z)>();
+        foreach (var ((x, y, z), (brick, _)) in cells)
+            if (y == minY && brick >= 0 && Shown((x, z)) && IsCarpet(average(brick))) anyCarpet.Add((x, z));
+        // (the road's carpet is two cells wide at the least: a cell of a square of four carpet cells -- a runner along a wall is one wide,
+        // and its stubs to the doors' corners too)
+        bool Square(int x, int z) => anyCarpet.Contains((x, z)) && anyCarpet.Contains((x + 1, z)) && anyCarpet.Contains((x, z + 1)) && anyCarpet.Contains((x + 1, z + 1));
+        anyCarpet = anyCarpet.Where(c => Square(c.X, c.Z) || Square(c.X - 1, c.Z) || Square(c.X, c.Z - 1) || Square(c.X - 1, c.Z - 1)).ToHashSet();
+        var carpet = new HashSet<(int X, int Z)>();
+        var queue = new Queue<(int X, int Z)>();
+        foreach (var c in anyCarpet)
+        {
+            var nearDoor = false;
+            for (var dx = -DoorReach; dx <= DoorReach && !nearDoor; dx++)
+                for (var dz = -DoorReach; dz <= DoorReach && !nearDoor; dz++)
+                    nearDoor = doors.Contains((c.X + dx, c.Z + dz));
+            if (nearDoor && carpet.Add(c)) queue.Enqueue(c);
+        }
+        while (queue.Count > 0)
+        {
+            var (x, z) = queue.Dequeue();
+            foreach (var n in new[] { (x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1) })
+                if (anyCarpet.Contains(n) && carpet.Add(n)) queue.Enqueue(n);
+        }
+        bool Between((int X, int Z) c, int dx, int dz, int reach)
+        {
+            bool Side(int sign)
+            {
+                for (var k = 1; k <= reach; k++)
+                    if (carpet.Contains((c.X + sign * dx * k, c.Z + sign * dz * k))) return true;
+                return false;
+            }
+            return Side(1) && Side(-1);
+        }
+        var paint = new Dictionary<(int X, int Z), (float R, float G, float B)>();
+        foreach (var (x, y, z) in cells.Keys)
+        {
+            if (y != minY || !air.Contains((x, minY + 1, z))) continue;
+            var c = (x, z);
+            // (carpet; or a cell the rooms didn't show as floor between carpet along a row or a column; or one they did, other than carpet
+            // -- the grey inlays where carpets cross -- with carpet all round it)
+            var red = carpet.Contains(c)
+                      || (!Shown(c) && (Between(c, 1, 0, CarpetReach) || Between(c, 0, 1, CarpetReach)))
+                      || (Shown(c) && Between(c, 1, 0, InlayReach) && Between(c, 0, 1, InlayReach));
+            paint[c] = red ? CarpetRed : ((x + z) & 1) == 0 ? TileLight : TileDark;
+        }
+        return paint;
+    }
+
+    // A room's wall at a layer over the floor's (1 the lowest, `top` the highest): a skirting, a gold trim over it, the wallpaper, a gold
+    // trim under the top and a cornice -- and the grids' red pillars red, as the carpets (`brick`: the colour of the cell's own brick, when
+    // it has one drawn).
+    private static (float R, float G, float B) PaintWall(int layer, int top, (float R, float G, float B)? brick)
+    {
+        if (brick is { } b && IsCarpet(b) && b.R > 1.8f * b.G) return CarpetRed;
+        return layer <= 2 ? Skirting : layer == 3 || layer == top - 3 ? Trim : layer >= top ? Cornice : Wallpaper;
+    }
+
     // A roof slab's sides and bottom (its top is the rock: RockRoof).
     private static void Slab(List<BrickBuilding.Face> list, Vector3 lo, Vector3 hi, int side, float cell)
     {
@@ -664,15 +798,16 @@ internal static class PalaceIsland
     // straight across the screen, not as the perspective has it, and on a rectangle 12 cells long running away from the camera that is
     // too far in its middle -- the ground under the floor, 700 below, came through in big patches again; tried and measured: 10 % faster.)
     private const int NearRun = 1;
+    // (`skip`: faces left out -- a cell's, the way it looks: where a picture hangs, PalacePortraits)
     private static Dictionary<int, List<BrickBuilding.Face>> Faces(Dictionary<(int X, int Y, int Z), (int Brick, int Tile)> cells,
-        Func<(int X, int Y, int Z), int, int, float, int> colour, Func<int, int, int, Vector3> corner)
+        Func<(int X, int Y, int Z), int, int, float, int> colour, Func<int, int, int, Vector3> corner, HashSet<((int X, int Y, int Z) Cell, int Dir)>? skip = null)
     {
         var planes = new Dictionary<(int Group, int Dir, int Plane), Dictionary<(int U, int V), int>>();
         foreach (var ((x, y, z), (brick, group)) in cells)
             for (var d = 0; d < BrickBuilding.Directions.Length; d++)
             {
                 var (dx, dy, dz, shade) = BrickBuilding.Directions[d];
-                if (cells.ContainsKey((x + dx, y + dy, z + dz))) continue;
+                if (cells.ContainsKey((x + dx, y + dy, z + dz)) || skip?.Contains(((x, y, z), d)) == true) continue;
                 var key = (group, d, dy != 0 ? y : dx != 0 ? x : z);
                 if (!planes.TryGetValue(key, out var plane)) planes[key] = plane = new();
                 plane[dy != 0 ? (x, z) : dx != 0 ? (z, y) : (x, y)] = colour((x, y, z), d, brick, shade);

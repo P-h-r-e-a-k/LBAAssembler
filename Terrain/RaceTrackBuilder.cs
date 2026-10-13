@@ -125,6 +125,9 @@ internal sealed class RaceTrackPlan
     // the start line to where it meets the route again; the second driver takes the first, the third the second, and so on round
     // (RaceTrackBuilder.RouteThrough). The first keeps the route itself, the test pilot's.
     public double[][][]? OpenRoutes { get; set; }
+    // People in the cars' way (RaceTrackGuards, RACEMOD.CPP guard=), each [kind, which, x, z (cells from the origin), the floor's height,
+    // the way they face (x, z), how far they step out (cells)]: the Emperor's palace's soldiers, pigheads and Stan (2026-10-13).
+    public double[][]? Guards { get; set; }
     // Gas monsters rising out of the gas beside the road to bite cars (RaceTrackGasMonster, RACEMOD.CPP gasmonster=): Otringal's docks and
     // the islets of Baldino's crash (the user, 2026-10-09).
     public GasMonsterRun[]? GasMonsters { get; set; }
@@ -586,6 +589,8 @@ internal sealed class RaceTrackReport
     // open_area=); and the arrows on the floor there (RaceTrackPlan.FloorArrows: x, z cells, y, the way it points).
     public List<int[]> OpenAreas { get; } = new();
     public List<double[]> FloorArrows { get; } = new();
+    // The people in the cars' way (RaceTrackPlan.Guards: kind, which, x, z cells, the floor's height, the way they face, their leash cells)
+    public List<double[]> Guards { get; } = new();
     public JumpInfo? Jump => Jumps.Count > 0 ? Jumps[0] : null;
     public RoadBridgeInfo? RoadBridge { get; set; }
     // How far (cells) an island cell position is from the nearest road's centre line, 1e9 when far away.
@@ -827,6 +832,10 @@ internal static class RaceTrackBuilder
                                              (int)Math.Round((a[2] + plan.OriginCellX) * 512), (int)Math.Round((a[3] + plan.OriginCellZ) * 512), (int)Math.Round(a[4]) });
             foreach (var a in (plan.FloorArrows ?? Array.Empty<double[]>()).Where(a => a.Length >= 5))
                 report.FloorArrows.Add(new[] { a[0] + plan.OriginCellX, a[1] + plan.OriginCellZ, a[2], a[3], a[4] });
+            foreach (var g in (plan.Guards ?? Array.Empty<double[]>()).Where(g => g.Length >= 8))
+                report.Guards.Add(new[] { g[0], g[1], g[2] + plan.OriginCellX, g[3] + plan.OriginCellZ, g[4], g[5], g[6], g[7] });
+            if (report.Guards.Count > 0)
+                report.Notes.Add($"people in the cars' way: {string.Join(", ", report.Guards.GroupBy(g => (int)g[0]).Select(k => $"{k.Count()} {RaceTrackGuards.KindName((int)k.Key, k.Count())}"))}");
         }
         if (planned && main.Raised is not null && plan.PitStripe is [var stripeFrom, var stripeTo, var stripeAt])
             main.Stripe = (PlanPoint(plan, main, (int)stripeFrom), PlanPoint(plan, main, (int)stripeTo), stripeAt);

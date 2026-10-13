@@ -213,6 +213,50 @@ for i in range(0, n):
 # ---- the opponents' ways through the rooms, a cell apart (RaceTrackBuilder.RouteThrough)
 routes = [path(c, r, 1.0) for c, r in open_routes]
 
+# ---- the palace's own people in the cars' way (2026-10-13, the user: "The retail game has enemies inside the palace, 3 pigs, Stan from
+# Time commando, and lots of soldiers with swords, let's add some of these enemies inside as obstacles, perhaps the could chase and attack
+# the cars, or throw random things at them"; RACEMOD.CPP guard=): each [kind, which, x, z, floor, face x, face z, leash] -- kind 0 one of
+# the Emperor's soldiers, sword out (steps into the road at a car and strikes), 1 a pighead (throws things at the cars; which: the red
+# one with the hammer, the brown with the garden tool, the yellow with the broom), 2 Stan (as a soldier). Each stands on the tiles by a
+# room's carpets -- they run through the room's middle, a row's and a column's, two bricks (8 cells) wide -- facing where they cross, and
+# steps out at most `leash` cells -- far enough to reach a car on the carpet's middle.
+CARPET_HALF = 4.0
+def free(x, z, r=1.2): return not blocked(x, z, FLOOR, r)
+def post(cx, cz, ox, oz, kind, which, leash, room):
+    """A guard by the carpets' crossing at (cx, cz): `ox`, `oz` cells off it (the first free spot along the way out, or None)."""
+    for k in range(0, 8):
+        x, z = cx + ox * (1 + k * 0.12), cz + oz * (1 + k * 0.12)
+        if free(x, z) and all(free(cx + (x - cx) * t, cz + (z - cz) * t, 0.6) for t in (0.85, 0.7)):
+            fx, fz = cx - x, cz - z; l = math.hypot(fx, fz)
+            return [kind, which, round(x, 2), round(z, 2), FLOOR, round(fx / l, 3), round(fz / l, 3), leash]
+    print(f'  WARNING: no free spot for a guard in room {room} at ({cx + ox:.1f}, {cz + oz:.1f})')
+    return None
+guards = []
+SOLDIER, PIG, STAN = 0, 1, 2
+# (a soldier in every room but the start's, by turns in a corner of its carpets' crossing; the pigheads further off in two rooms on the
+# race's way -- 152 on the bottom row, and 163, where every way meets before the long hall: in 157 and 160, on the opponents' other ways
+# only, no car came near enough for a throw; soldiers in the long hall, by its carpet. Not Stan nor the pighead with the broom: they race,
+# the user's line-up -- CharactersForTrack.txt -- Stan in his time machine, and the road sweeper)
+corner = [(1, 1), (-1, 1), (-1, -1), (1, -1)]
+for k, s in enumerate(sorted(SIXTEEN)):
+    if s == 154: continue
+    sx, sz = corner[k % 4]
+    g = post(col(s), row(s), sx * (CARPET_HALF + 3), sz * (CARPET_HALF + 3), SOLDIER, 0, 6.5, s)
+    if g: guards.append(g)
+for which, s in enumerate([152, 163]):
+    # (the first of the crossing's four corners with room for him, from a different one in each room)
+    ways = [corner[(which + 2 + t) % 4] for t in range(4)]
+    sx, sz = next((w for w in ways if free(col(s) + w[0] * (CARPET_HALF + 10), row(s) + w[1] * (CARPET_HALF + 9))), ways[0])
+    g = post(col(s), row(s), sx * (CARPET_HALF + 10), sz * (CARPET_HALF + 9), PIG, which, 1.0, s)
+    if g: guards.append(g)
+# (the long hall: soldiers by its carpet either side, by turns, facing across it)
+hx = col(163)
+for k, hz in enumerate([hall['z1'] - 52, hall['z1'] - 82, hall['z1'] - 112, hall['z1'] - 142]):
+    side = 1 if k % 2 == 0 else -1
+    g = post(hx, hz, side * (CARPET_HALF + 4), 0.01, SOLDIER, 0, 7.0, 80)
+    if g: guards.append(g)
+print('guards:', len(guards), '--', ', '.join(f'{["soldier", "pighead", "Stan"][g[0]]} at ({g[2]:.1f}, {g[3]:.1f})' for g in guards))
+
 # ---- checks
 def check(lo, hi, what):
     bad = [i for i in range(lo, hi) if blocked(pts[i][0], pts[i][1], h[i] - DECK, max(0.5, half[i] - 1.25 + CAR_BOX))]
@@ -255,6 +299,7 @@ plan = {
     'openAreas': [[sq_x0, sq_z0, sq_x1, sq_z1, FLOOR], [hall['x0'], hall['z0'], hall['x1'] + 1, hall['z1'] + 1, FLOOR]],
     'floorArrows': [[round(float(x), 2), round(float(z), 2), FLOOR, dx, dz] for x, z, dx, dz in arrows],
     'openRoutes': [[[round(float(x), 2), round(float(z), 2)] for x, z in rt] for rt in routes],
+    'guards': guards,
     # (the leap out of the window: its ramp the ramp up to the sill; the camera behind the car)
     'arcJumps': [[i_ramp_foot, lip, land, land_foot, 0]],
     # (the camera rides the road behind the car, low -- 9 cells behind, 2,100 over the road, looking 7 cells ahead at a point 1,000 over

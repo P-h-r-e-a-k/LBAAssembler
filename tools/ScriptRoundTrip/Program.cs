@@ -148,6 +148,8 @@ internal static class Program
             "islandmesh" => PalaceStudy.Mesh(args),
             "palacezones" => PalaceStudy.Zones(args),
             "palacecells" => PalaceStudy.Cells(args),
+            "palacefloor" => PalaceStudy.Floor(args),
+            "palaceportraits" => PalaceStudy.Portraits(args),
             "palaceblocks" => PalaceStudy.Blocks(args),
             "decorcount" => PalaceStudy.DecorCount(args),
             "meshshot" => PalaceStudy.Shot(args),

@@ -11,6 +11,8 @@ namespace ScriptRoundTrip;
 //   palaceactors <game folder> [scene ...]: each palace room's actors (entity, BODY.HQR body and its size, sprite, flags, place, scripts)
 //   palacecells <game folder> [--walls]: each room's cells as the Palace island places them and its roof layer; the outer walls' columns
 //   palaceblocks <game folder> <out folder>: the library blocks the palace grids are made of, how often placed where, a picture of each
+//   palacefloor <game folder> <out.png>: the rooms' floor bricks from above, in their average colours, and the floor's colours
+//   palaceportraits <game folder> <out.png> [scale]: the pictures of the game's characters as the island's object pages have them
 //   palacezones <game folder> [--inner]: the palace rooms' ways out and other scenes' ways in
 //   gridcolumn <game folder> <scene> <x> <z> [<x1> <z1>]: what a grid has in a column, layer by layer (block.place)
 //   blockface <game folder> <scene> <block> <out.png> [dx,dy]: a block's picture and its +x and +z faces looked up through it
@@ -105,6 +107,99 @@ internal static class PalaceStudy
             var top = edge.Count > 0 ? edge[(int)(edge.Count * 0.8)] + 1 : mine.Max(c => c.Y) + 1;
             var layers = string.Join(" ", Enumerable.Range(0, 15).Select(y => mine.Count(c => c.Y == y)));
             Console.WriteLine($"room {area.Tiles[ti].Scene}: x {rx0}..{rx1} z {rz0}..{rz1}, {mine.Count} cells, roof at layer {top} (max {mine.Max(c => c.Y)}); per layer: {layers}");
+        }
+        return 0;
+    }
+
+    // palaceportraits <game folder> <out.png> [scale]: the palace's pictures of the game's characters (PalacePortraits) as the island's
+    // object pages have them, in Otringal's palette, `scale` (3) times as big
+    public static int Portraits(string[] args)
+    {
+        var palette = IslandMapRenderer.LoadPaletteEntry(args[1], LBAAssembler.Terrain.Palace.PalaceIsland.PaletteEntry);
+        var cache = new Dictionary<(float, float, float), int>();
+        var painted = LBAAssembler.Terrain.Palace.PalacePortraits.PaintAll(args[1], c => LBAAssembler.Terrain.Palace.BrickBuilding.Nearest(palette, c, cache));
+        foreach (var line in painted.Log) Console.WriteLine(line);
+        var scale = args.Length > 3 ? int.Parse(args[3]) : 3;
+        int w = painted.Pages.Count * 256 * scale + (painted.Pages.Count - 1) * 8, h = 256 * scale;
+        var bgra = new byte[w * h * 4];
+        for (var p = 0; p < painted.Pages.Count; p++)
+            for (var y = 0; y < h; y++)
+                for (var x = 0; x < 256 * scale; x++)
+                {
+                    var (r, g, b) = LBAAssembler.Terrain.Palace.BrickBuilding.Colour(palette, painted.Pages[p][y / scale * 256 + x / scale]);
+                    var at = (y * w + p * (256 * scale + 8) + x) * 4;
+                    bgra[at] = b; bgra[at + 1] = g; bgra[at + 2] = r; bgra[at + 3] = 255;
+                }
+        PngWriter.Write(args[2], bgra, w, h);
+        Console.WriteLine($"{args[2]}: {painted.Pages.Count} pages");
+        return 0;
+    }
+
+    // palacefloor <game folder> <out.png>: the rooms' floor -- each bottom-layer cell with nothing over it, in its brick's average colour (as
+    // the Palace island colours it, before matching to Otringal's palette), 6 pixels a cell; and the floor's colours, most used first
+    public static int Floor(string[] args)
+    {
+        var interiors = new Lba2Interiors(args[1]);
+        var area = Lba2Areas.Find(interiors.LoadScene).First(a => a.Tiles.Any(t => t.Scene == 151));
+        var cells = new Dictionary<(int X, int Y, int Z), (int Brick, int Tile)>();
+        for (var ti = 0; ti < area.Tiles.Count; ti++)
+        {
+            var tile = area.Tiles[ti];
+            var sep = Lba2Areas.Separations.Where(s => s.Scene == tile.Scene).Select(s => (s.Dx, s.Dy, s.Dz)).FirstOrDefault();
+            int ox = tile.OffsetX / 512 - sep.Dx, oy = tile.OffsetY / 256 - sep.Dy, oz = tile.OffsetZ / 512 - sep.Dz;
+            foreach (var p in interiors.Placements(tile)) cells.TryAdd((p.X + ox, p.Y + oy, p.Z + oz), (p.Brick, ti));
+        }
+        int minX = cells.Keys.Min(c => c.X), maxX = cells.Keys.Max(c => c.X), minY = cells.Keys.Min(c => c.Y);
+        int minZ = cells.Keys.Min(c => c.Z), maxZ = cells.Keys.Max(c => c.Z);
+        var averages = new Dictionary<int, (float R, float G, float B)>();
+        const int S = 6;
+        int w = (maxX - minX + 1) * S, h = (maxZ - minZ + 1) * S;
+        var px = new byte[w * h * 4];
+        for (var k = 3; k < px.Length; k += 4) px[k] = 255;
+        var counts = new Dictionary<int, int>();
+        foreach (var ((x, y, z), (brick, _)) in cells)
+        {
+            if (y != minY || brick < 0 || cells.ContainsKey((x, y + 1, z))) continue;
+            if (!averages.TryGetValue(brick, out var a)) averages[brick] = a = LBAAssembler.Terrain.Palace.BrickBuilding.BrickAverage(interiors.ReadBrick(brick), interiors.Palette);
+            counts[brick] = counts.GetValueOrDefault(brick) + 1;
+            for (var i = 0; i < S - 1; i++)
+                for (var j = 0; j < S - 1; j++)
+                {
+                    var at = (((z - minZ) * S + j) * w + (x - minX) * S + i) * 4;
+                    px[at] = (byte)Math.Clamp(a.B, 0, 255); px[at + 1] = (byte)Math.Clamp(a.G, 0, 255); px[at + 2] = (byte)Math.Clamp(a.R, 0, 255);
+                }
+        }
+        PngWriter.Write(args[2], px, w, h);
+        Console.WriteLine($"floor cells x {minX}..{maxX} z {minZ}..{maxZ} (layer {minY}); bricks, most used first:");
+        foreach (var (brick, n) in counts.OrderByDescending(c => c.Value))
+        {
+            var a = averages[brick];
+            Console.WriteLine($"  brick {brick}: {n} cells, rgb ({a.R:0},{a.G:0},{a.B:0})");
+        }
+        // (the inner walls: a cell over the floor with an empty cell beside it inside a room's columns -- each layer's colours, by how many
+        // faces; drawn bricks only, as the island has them)
+        var extents = new List<(int X0, int Z0, int X1, int Z1)>();
+        foreach (var g in cells.GroupBy(c => c.Value.Tile))
+            extents.Add((g.Min(c => c.Key.X), g.Min(c => c.Key.Z), g.Max(c => c.Key.X), g.Max(c => c.Key.Z)));
+        bool Inside(int x, int z) => extents.Any(e => x > e.X0 && x < e.X1 && z > e.Z0 && z < e.Z1);
+        var maxY = cells.Keys.Max(c => c.Y);
+        for (var y = minY + 1; y <= maxY; y++)
+        {
+            var layer = new Dictionary<(int R, int G, int B), int>();
+            var total = 0;
+            foreach (var ((x, cy, z), (brick, _)) in cells)
+            {
+                if (cy != y || brick < 0) continue;
+                foreach (var (dx, dz) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                {
+                    if (cells.ContainsKey((x + dx, y, z + dz)) || !Inside(x + dx, z + dz)) continue;
+                    if (!averages.TryGetValue(brick, out var a)) averages[brick] = a = LBAAssembler.Terrain.Palace.BrickBuilding.BrickAverage(interiors.ReadBrick(brick), interiors.Palette);
+                    var key = ((int)(a.R / 16) * 16, (int)(a.G / 16) * 16, (int)(a.B / 16) * 16);
+                    layer[key] = layer.GetValueOrDefault(key) + 1; total++;
+                }
+            }
+            if (total == 0) continue;
+            Console.WriteLine($"wall layer {y}: {total} faces; " + string.Join(", ", layer.OrderByDescending(p => p.Value).Take(7).Select(p => $"({p.Key.R},{p.Key.G},{p.Key.B}) {p.Value * 100 / total}%")));
         }
         return 0;
     }

@@ -239,6 +239,44 @@ draws each of them once a frame, leaves out one wholly out of the view first, an
 unpacked the palace's 54 cubes again every frame): 19 ms in the rooms, 13 in the hall, 29 to 54 ms in the editor. Details, and the
 faces merged back into bigger rectangles (tried, left): `docs/LBA2_DESERT_RACE_TRACK_BUILD.md`, "The palace fast again".
 
+## One red carpet, green checks, even walls, and pictures of the game's characters (2026-10-13, evening)
+
+The user: "Let's simplify the flooring inside the palace. Let's make the main road section that's mostly red at the moment pure red just
+with the white arrows. The surrounding area varies a lot, let's keep this consistent with a check pattern based on the green", then
+"Whilst we're cleaning up the floor let's see if we can make the colours on the walls more consistent too as they're currently very
+blocky. Let's also see if we can generate some pictures to hang on the walls based on some of the games characters".
+
+![The pictures as the island's object pages have them, in Otringal's palette (twice their size)](palace/portraits.png)
+
+![In the game: the carpet one red under its arrow, the floor's checks, the walls in bands, Twinsen's picture](racetrack/palace/v6_rooms.png)
+
+- **The floor** (`PaintFloor`). The carpets the doors lead to are one red, (119, 42, 30). These are the grids' red carpets and their
+  brown border, at least two cells wide (a runner along an outer wall is one cell wide and leads to no door), and joined to carpet
+  within 4 cells of a door's way through the walls. A cell the rooms didn't show as floor (a door's threshold, its widening, a hole) is
+  red when there is carpet on both sides of it within 6 cells along a row or a column: the red runs on through the doors. A cell they did
+  show that isn't carpet (the grey inlays where carpets cross) is red when there is carpet within 3 cells all round. The rest of the floor
+  is checked cell by cell in the tiles' two greens, (127, 139, 94) and (64, 82, 53): 971 cells of red. The floor arrows are the race
+  track's own decks, on top.
+- **The walls** (`PaintWall`). Inside the rooms each wall is coloured by height over the floor: a skirting two layers high, a gold trim,
+  the wallpaper, a gold trim three layers under the top, and a cornice. The grids' red pillars stay the carpet's red. (Each cell was its
+  brick's average colour: a patchwork.) The outer faces keep Otringal's palace's teal, stone and turquoise.
+- **Pictures** (`PalacePortraits`). Eight of the game's characters are painted when the island is built: Twinsen, Zoé, the Dark Monk,
+  FunFrock, Jerome Baldino, Joe the Elf, the Dino-Fly and the Queen of the Mosquibees.
+  - *The paint.* Each comes from the game folder's own body (BODY.HQR, and the body textures of RESS.HQR's entry 6). It is drawn in
+    Otringal's palette in the colours the game draws that body in there. The sitter is shown three-quarters from the front, lit from above
+    at the left as the game lights a body (steps up its colours' ramps), on a dark backdrop dithered in eighths, in a gold frame. Nothing
+    of the game's is put into the program.
+  - *The pages.* A picture is 96 x 120 pixels; four go on a page, so the eight take two pages of the island's object textures
+    (`IslandFile.ObjectPages`).
+  - *Where they hang.* Each takes a room's plain wall, 2 cells across and 8 layers up (4,096 x 5,120), from 2 layers over the floor. None
+    of that wall may be a piece of furniture. The room's air must reach 5 cells out from it, so it is not a door's side (a door's way
+    through the walls is 4 cells wide), with nothing standing in the first 2. A cell of plain wall must be left on each side.
+  - *How many.* One goes in the middle of each such stretch, one every 7 cells along a long one. Each room takes its two longest
+    stretches, and the long hall six more: 28 pictures in 13 rooms, the sitters by turns.
+  - *How they are drawn.* A picture is a body of one perspective-correct textured polygon (type 16, TEXTUREZ), its page in the decor's
+    body number (`IslandFile.DecorPageShift`). It is drawn close and in every cube it is seen from, as the rooms are. The wall's faces
+    behind it are left out (`Faces`' `skip`), because the filler takes depth straight across the screen and would mix the two up.
+
 ## Making it
 
 - Tools > **LBA2: Palace island (Otringal's palace)…** (`MainWindow.Palace.cs`) adds the two files to the game folder, builds them again,
@@ -251,3 +289,6 @@ faces merged back into bigger rectangles (tried, left): `docs/LBA2_DESERT_RACE_T
 - Pictures: `ScriptRoundTrip islandmesh <ile> <obl> 31 <out.bin> [x0 z0 x1 z1] [--no-terrain] [--boxes]` and
   `ScriptRoundTrip meshshot <out.bin> <png> --target x y z --yaw a --pitch b --dist d [--clip-y y] [--cull]` (a depth-buffered picture;
   `tools/ScriptRoundTrip/PalaceStudy.cs` has the studies behind the outside and the furniture).
+- `ScriptRoundTrip palaceportraits <game folder> <out.png> [scale]` paints the pictures' pages as the island has them.
+  `ScriptRoundTrip palacefloor <game folder> <out.png>` maps the rooms' floor bricks from above in their average colours.
+  `LBA2_PALACE_PAINT=<file>` has a build write the floor's paint, a line a cell.

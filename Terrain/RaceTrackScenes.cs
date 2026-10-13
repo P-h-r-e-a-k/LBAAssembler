@@ -21,7 +21,7 @@ internal static class RaceTrackScenes
     // mushroom in each, the fake mushrooms a car drops (since 2026-10-08).
     public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, List<(RaceDriver Driver, Dictionary<int, int> Actors)> Drivers, int StartScene,
         List<int[]> Grid, List<int[]> Pits, Result? Twin = null, List<int[]>? Mushrooms = null, List<int[]>? Penguins = null, List<int[]>? Oil = null,
-        List<int[]>? Fakes = null, List<int[]>? Gunners = null, List<int[]>? GasMonsters = null);
+        List<int[]>? Fakes = null, List<int[]>? Gunners = null, List<int[]>? GasMonsters = null, List<int[]>? Guards = null);
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
     //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
@@ -317,8 +317,10 @@ internal static class RaceTrackScenes
         public List<int[]> Gunners = new();
         // the gas monsters: each [scene, its actor, its body, its place in Report.GasMonsters, 1 in its own scene's cube (0 seen from there)]
         public List<int[]> GasMonsters = new();
+        // the people in the cars' way: each [scene, its actor, its place in Report.Guards, 1 in its own scene's cube (0 seen from there)]
+        public List<int[]> Guards = new();
         public Result Result(List<string> log, int changed, int removed, Result? twin = null) =>
-            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners, GasMonsters);
+            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners, GasMonsters, Guards);
     }
 
     // Edits the outside scenes of the island as the options say, from what the build of the island found (start line, jump, road). With
@@ -674,6 +676,27 @@ internal static class RaceTrackScenes
                         var home = (int)Math.Floor(g.X / 64) == model.CubeX && (int)Math.Floor(g.Z / 64) == model.CubeY;
                         t.GasMonsters.Add(new[] { scene, actor, g.Body, gi, home ? 1 : 0 });
                         log.Add($"scene {scene}: a gas monster (actor {actor}) in the gas at ({g.X:0.#}, {g.Z:0.#}){(home ? "" : ", in the next cube")}");
+                    }
+            // the people in the cars' way (Report.Guards: RaceTrackGuards) -- an actor of each scene they can be seen from, as the gas monsters
+            // are, their scripts gone, out of sight till the race-track mode stands them at their posts (guard=)
+            if (mushroomTemplate is not null)
+                foreach (var t in tracks)
+                    for (var gi = 0; gi < t.Report.Guards.Count; gi++)
+                    {
+                        var g = t.Report.Guards[gi];
+                        double gx = g[2], gz = g[3];
+                        double ox = Math.Clamp(gx, model.CubeX * 64.0, model.CubeX * 64.0 + 64), oz = Math.Clamp(gz, model.CubeY * 64.0, model.CubeY * 64.0 + 64);
+                        if ((ox - gx) * (ox - gx) + (oz - gz) * (oz - gz) > RaceTrackGuards.Seen * RaceTrackGuards.Seen) continue;
+                        if (model.Actors.Count + 1 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the {RaceTrackGuards.KindName((int)g[0], 1)} at ({gx:0.#}, {gz:0.#})"); continue; }
+                        var look = RaceTrackGuards.Of((int)g[0], (int)g[1]);
+                        var guard = mushroomTemplate.Clone();
+                        guard.Entity = look.Entity; guard.Body = look.Body; guard.Anim = look.Idle;
+                        guard.Flags = OpponentFlags; guard.Move = 0; guard.Life = new byte[] { 0 }; guard.Track = new byte[] { 0 };
+                        guard.X = Math.Clamp((int)Math.Round((gx - model.CubeX * 64) * 512), 0, 32767); guard.Z = Math.Clamp((int)Math.Round((gz - model.CubeY * 64) * 512), 0, 32767);
+                        guard.Y = -20000; guard.Beta = 0;
+                        var actor = SceneOps.AddActor(model, guard);
+                        var home = (int)Math.Floor(gx / 64) == model.CubeX && (int)Math.Floor(gz / 64) == model.CubeY;
+                        t.Guards.Add(new[] { scene, actor, gi, home ? 1 : 0 });
                     }
             // the power-ups: the mushrooms of the lap in this scene's cube, on the road, and a penguin out of sight
             if (mushroomTemplate is not null && penguinTemplate is not null)

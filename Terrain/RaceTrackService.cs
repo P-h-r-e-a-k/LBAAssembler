@@ -144,7 +144,11 @@ internal static class RaceTrackService
         // (RaceTrackCrystals.InstallCrystalShards; crystal_shard_model=), since 2026-10-11
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? CrystalShards = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? CrystalShardModels = null,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? BoostPanels = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? BoostPanels = null,
+        // Guards: the people in the cars' way (RaceTrackGuards; RACEMOD.CPP guard=), each [kind, its post x and z, the floor's height, the way
+        // it faces x and z (thousandths), how far it steps out (island units), its animations -- standing, walking, knocked back -- its four
+        // strikes (-1 none), then the scene and actor of each scene it has one in, its own first], since 2026-10-13
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Guards = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -823,6 +827,19 @@ internal static class RaceTrackService
                     return new[] { home[0][0], home[0][1], home[0][2],
                             (int)Math.Round(s.X * 512), (int)Math.Round(s.Z * 512), (int)Math.Round(s.BiteX * 512), (int)Math.Round(s.BiteZ * 512), (int)Math.Round(s.BiteY), 0, s.FirstAnim }
                         .Concat(home.Skip(1).SelectMany(g => new[] { g[0], g[1] })).ToArray();
+                }).ToList()
+                : null,
+            Guards: scenes.Guards is { Count: > 0 } guards
+                ? guards.Where(g => g[2] >= 0 && g[2] < report.Guards.Count).GroupBy(g => g[2]).Select(pairs =>
+                {
+                    // (one line a guard: its post, its look, then its actor in each scene -- its own scene's first)
+                    var s = report.Guards[pairs.Key];
+                    var look = RaceTrackGuards.Of((int)s[0], (int)s[1]);
+                    var strikes = Enumerable.Range(0, 4).Select(k => k < look.Strikes.Length ? look.Strikes[k] : -1);
+                    var seen = pairs.OrderByDescending(g => g[3]).SelectMany(g => new[] { g[0], g[1] });
+                    return new[] { (int)s[0], (int)Math.Round(s[2] * 512), (int)Math.Round(s[3] * 512), (int)Math.Round(s[4]),
+                            (int)Math.Round(s[5] * 1000), (int)Math.Round(s[6] * 1000), (int)Math.Round(s[7] * 512), look.Idle, look.Walk, look.Hit }
+                        .Concat(strikes).Concat(seen).ToArray();
                 }).ToList()
                 : null);
     }
