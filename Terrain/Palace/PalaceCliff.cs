@@ -5,14 +5,13 @@ namespace LBAAssembler.Terrain.Palace;
 // original ... It's okay for the inside to be underground"). On Otringal's island the palace's halls stand on a flat hilltop (17,000 in cube
 // (8, 7)) ringed by a rocky rim a little higher (up to 2,900 over it), its sides cliffs falling to the cloud sea; all of it the mossy rock of
 // OTRINGAL.ILE's ground atlas. Here the same, round the palace's rooms, which are under it:
-//   - the plateau: the rooms' footprint (and the corner of its L, their outline's hull) and a margin round it, Margin cells give or take
-//     Wobble -- bays and spurs;
-//   - its top: a terrace flat at the roofs' top over the corner of the rooms' L and Terrace cells round their outline (the roofs, rock-topped,
-//     the rest of it: the palace's foot, as Otringal's palace stands on the flat middle of its hill), and beyond it rocks, rising -- the
-//     more towards the plateau's edge, its rim -- up to RockRise over it (but along the Corridors, flat: the ways a road crosses the rocks).
-//     The roof top scaled up for the race round it (the user, 2026-10-12: "let's scale up the roof top so it covers more of the outside of
-//     the palace area"; 2026-10-13: "Let's make the roof top bigger"): it was 10 cells round the rooms themselves, the L's corner rocks,
-//     then 24 round their outline on a plateau reaching 30 -- now 54 on one reaching 66;
+//   - the plateau: the rooms' footprint and a margin round their walls, Margin cells give or take Wobble;
+//   - its top: a terrace flat at the roofs' top Terrace cells round the rooms (the roofs, rock-topped, and the palace's foot), and beyond it
+//     rocks, rising -- the more towards the plateau's edge, its rim -- up to RockRise over it (but along the Corridors, flat: the ways a
+//     road crosses the rocks). (The user, 2026-10-13: "Make the island small enough so that it only just fits the inside of the palace,
+//     then have the turret's on the roof cover the whole of our inside of the palace": the island is the palace's L and a few cells, all of
+//     it flat, the turrets -- PalaceOutside -- over the whole of it. It was a plateau 30 cells, then 66, past the outline's hull -- the L's
+//     corner hilltop too -- with a terrace 10, 24, then 54 cells wide in it and rocks beyond);
 //   - its sides: cliffs falling to the sea floor over Face cells give or take FaceWobble, ragged;
 //   - under the rooms the ground is low (it is their floor's foot), out of sight;
 //   - at the long hall's end (the round window, Twinsen's way out) the plateau stops at the hall's wall: the window looks out from the
@@ -22,9 +21,9 @@ namespace LBAAssembler.Terrain.Palace;
 // and lit as the island's light falls on it.
 internal static class PalaceCliff
 {
-    public const int Margin = 66;               // the plateau round the rooms' outline (cells) ...
-    public const int Wobble = 12;               // ... give or take this much
-    public const int Terrace = 54;              // the flat terrace round the rooms' outline (cells) ...
+    public const int Margin = 6;                // the plateau round the rooms' walls (cells) ...
+    public const int Wobble = 2;                // ... give or take this much
+    public const int Terrace = 12;              // the flat terrace round the rooms' walls (cells: all of the plateau -- no rocks) ...
     public const double RockRise = 6000;        // ... and beyond it the rocks, up to this much over it
     public const int Rim = 10;                  // the plateau's outer cells: its rim, the rocks highest
     public const int Face = 9;                  // the cliffs: cells from the plateau's edge down to the sea floor ...
@@ -53,9 +52,6 @@ internal static class PalaceCliff
     {
         var log = new List<string>();
         var cubeList = cubes.ToList();
-        // the rooms' outline's hull (cell corners), to measure the plateau from
-        var corners = site.Rooms.SelectMany(r => new[] { (X: (double)r.X0, Z: (double)r.Z0), (X: r.X1 + 1.0, Z: (double)r.Z0), (X: r.X1 + 1.0, Z: r.Z1 + 1.0), (X: (double)r.X0, Z: r.Z1 + 1.0) }).ToList();
-        var hull = Hull(corners);
         bool InRooms(int cx, int cz) => site.Rooms.Any(r => cx >= r.X0 && cx <= r.X1 && cz >= r.Z0 && cz <= r.Z1);
         // (a vertex whose four cells are all the rooms': inside their outer walls -- a vertex on the walls' outer face is the hilltop's; the
         // rooms share their walls, so a cell of any of them)
@@ -79,10 +75,18 @@ internal static class PalaceCliff
             return Math.Clamp((0.7 * ridges + 0.3 * fine) * (0.3 + 0.7 * swell) * 1.35, 0, 1.1);
         }
 
+        // (how far a vertex is from the rooms, in cells: 0 on their walls' outer face -- the island only just round them, the corner of their
+        // L sea)
+        double ToRooms(int gx, int gz) => site.Rooms.Min(r =>
+        {
+            double dx = Math.Max(Math.Max(r.X0 - gx, gx - (r.X1 + 1)), 0), dz = Math.Max(Math.Max(r.Z0 - gz, gz - (r.Z1 + 1)), 0);
+            return Math.Sqrt(dx * dx + dz * dz);
+        });
+
         double HeightAt(int gx, int gz)
         {
             if (UnderRooms(gx, gz)) return site.Under;
-            var d = OutsideHull(hull, gx, gz);
+            var d = ToRooms(gx, gz);
             // the plateau's reach here: Margin give or take Wobble -- bays and spurs -- and none beside the hall's end
             var margin = Margin + Wobble * (0.65 * Noise(gx / 31.0, gz / 31.0, 1) + 0.35 * Noise(gx / 11.0, gz / 11.0, 6));
             if (site.CliffAt is { } c && gz <= c.Z)
@@ -97,8 +101,7 @@ internal static class PalaceCliff
                 var beside = Math.Max(c.X0 - gx, gx - c.X1 - 1);
                 margin *= SmoothStep(4, 24, beside);
             }
-            // the top: the terrace over the L's corner and round the rooms' outline, then the rocks, the higher towards the rim (but along a
-            // corridor, flat)
+            // the top: the terrace round the rooms' walls, then the rocks, the higher towards the rim (but along a corridor, flat)
             var rise = RockRise * Rough(gx, gz) * SmoothStep(Terrace, Terrace + 10, d) * (0.55 + 0.45 * SmoothStep(margin - Rim, margin, d))
                        * (1 - Flattened(gx, gz));
             if (d <= margin) return site.Top + rise;
@@ -194,25 +197,10 @@ internal static class PalaceCliff
         return log;
     }
 
-    public const int SkyY = 48000;              // the sky over the domes (Otringal's is at 22,199, under them)
+    public const int SkyY = 90000;              // the sky over the turrets (Otringal's is at 22,199, under its domes)
     public const int StartFog = 40000, FarClip = 70000;
 
     // ---- helpers
-
-    // The convex hull of points (Andrew's monotone chain), counter-clockwise.
-    private static List<(double X, double Z)> Hull(List<(double X, double Z)> points)
-    {
-        var p = points.Distinct().OrderBy(q => q.X).ThenBy(q => q.Z).ToList();
-        if (p.Count < 3) return p;
-        static double Cross((double X, double Z) o, (double X, double Z) a, (double X, double Z) b) => (a.X - o.X) * (b.Z - o.Z) - (a.Z - o.Z) * (b.X - o.X);
-        var lower = new List<(double X, double Z)>();
-        foreach (var q in p) { while (lower.Count >= 2 && Cross(lower[^2], lower[^1], q) <= 0) lower.RemoveAt(lower.Count - 1); lower.Add(q); }
-        var upper = new List<(double X, double Z)>();
-        for (var i = p.Count - 1; i >= 0; i--) { var q = p[i]; while (upper.Count >= 2 && Cross(upper[^2], upper[^1], q) <= 0) upper.RemoveAt(upper.Count - 1); upper.Add(q); }
-        lower.RemoveAt(lower.Count - 1); upper.RemoveAt(upper.Count - 1);
-        lower.AddRange(upper);
-        return lower;
-    }
 
     // How far a point is from a segment.
     private static double ToSegment(double x, double z, (double X, double Z) a, (double X, double Z) b)
@@ -221,24 +209,6 @@ internal static class PalaceCliff
         var t = len2 > 0 ? Math.Clamp(((x - a.X) * ex + (z - a.Z) * ez) / len2, 0, 1) : 0;
         double dx = x - (a.X + t * ex), dz = z - (a.Z + t * ez);
         return Math.Sqrt(dx * dx + dz * dz);
-    }
-
-    // How far a point is outside a convex polygon (counter-clockwise), 0 inside.
-    private static double OutsideHull(List<(double X, double Z)> hull, double x, double z)
-    {
-        var inside = true;
-        var best = double.MaxValue;
-        for (var i = 0; i < hull.Count; i++)
-        {
-            var a = hull[i]; var b = hull[(i + 1) % hull.Count];
-            double ex = b.X - a.X, ez = b.Z - a.Z;
-            if (ex * (z - a.Z) - ez * (x - a.X) < 0) inside = false;
-            var len2 = ex * ex + ez * ez;
-            var t = len2 > 0 ? Math.Clamp(((x - a.X) * ex + (z - a.Z) * ez) / len2, 0, 1) : 0;
-            double dx = x - (a.X + t * ex), dz = z - (a.Z + t * ez);
-            best = Math.Min(best, Math.Sqrt(dx * dx + dz * dz));
-        }
-        return inside ? 0 : best;
     }
 
     private static double SmoothStep(double a, double b, double x)

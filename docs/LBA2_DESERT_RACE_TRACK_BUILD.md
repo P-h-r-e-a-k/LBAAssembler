@@ -3201,6 +3201,16 @@ raised in the air looping around the giant turrets that form the roof, which mea
 - Tested with the test pilot: 59.6 s and won (no power-ups), 48.5 s and won (power-ups), along the road's side 62.1 s and lost -- the race
   run again from the grid; no car rescued, Twinsen awake in scene 95 after each win. The start scene is 290 now.
 
+### The island only just round the palace, the turrets over all of it (2026-10-13, later)
+
+The user: "let's also make the turrets taller and wider", then "Make the island small enough so that it only just fits the inside of the
+palace, then have the turret's on the roof cover the whole of our inside of the palace". The island is the palace's L and a few cells, its
+cliffs straight down to the cloud sea, and Otringal's four domed halls stand on the roof as six turrets 31,000 to 57,000 high over all of
+it (`docs/LBA2_PALACE_ISLAND.md`). The race is as it was -- the rooms, the long hall, the leap out of the round window -- the palace in
+another place in the smaller island (the plan from `PALACE.JSON` again). Checked: the rooms flooded from the start reach nowhere outside;
+the test pilot won in 61.1 s and along the road's side in 56.1 s, and with power-ups lost (64.6 s) and was run again from the grid, no car
+rescued.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

@@ -27,11 +27,10 @@ sides cliffs falling to the cloud sea, all of it a mossy rock. Now the Palace is
   are some 1,300 across and turn on some 5.5 cells at speed (the race-track docs), so a door is about three cars wide; a room is some
   27,000 across. The palace is 224 x 404 cells of the island, 14 layers of 640.
 - **Under the hill** (`Terrain/Palace/PalaceCliff.cs`): the rooms' floor's foot at 10,000, their roofs' top at 19,216 -- the hilltop. Round
-  the rooms the ground is the hill's: a terrace flat at the hilltop over the corner of the rooms' L and 54 cells round their outline (the
-  palace's foot, as Otringal's palace stands on the flat middle of its hill; 10 cells round the rooms themselves, then 24, until the
-  rounds below), then rocks -- crags on swells -- rising towards the plateau's edge, up to 6,000 over it; the plateau reaching 66
-  cells give or take 12 beyond the rooms' outline (its hull: the corner of the L between the long hall and the sixteen rooms is hilltop
-  too), bays and spurs; and its sides cliffs, 9 cells give or take 4, ragged, falling to the sea floor. All of it Otringal's mossy rock
+  the rooms the ground is the hill's: since 2026-10-13 only just round them -- flat at the hilltop 6 cells give or take 2 past their walls,
+  the island the palace's L and no more (below; it was a plateau reaching 30, then 66 cells past their outline's hull, the corner of the
+  L hilltop too, with a terrace and rocks on it) -- and its sides cliffs, 9 cells give or take 4, ragged, falling to the sea floor. All
+  of it Otringal's mossy rock
   (its ground atlas, 4 x 4 tiles of 32 pixels as its hill has it), lit as the island's sun falls on it, with the cliffs' shadows; the sea --
   Otringal's cloud sea -- everywhere the ground isn't over it. Under the rooms the ground is low (the floor's foot), out of sight.
 - **The roofs are the hilltop's rock**: their tops are Otringal's mossy rock too -- textured polygons of `OTRINGAL.OBL`'s page's rock (its
@@ -184,6 +183,29 @@ The user: "The roof of our Palace needs a lot of work. Let's make the roof top b
   further south in it (`PALACE.JSON` says where everything is).
 - **The harbour's pillar** stands `PalaceCliff.Margin` + 50 cells east of the rooms (`PalaceIsland.PillarOut`, was a fixed 80): out past
   the cliffs however far the plateau reaches.
+
+## The island only just round the palace, the turrets over all of it (2026-10-13, later)
+
+The user: "Did we make the turrets bigger? Let's spread them out so almost the entire island has a roof, let's also make the turrets
+taller and wider, we can add more turrets if we need to too", and then: "Make the island small enough so that it only just fits the
+inside of the palace, then have the turret's on the roof cover the whole of our inside of the palace".
+
+![The island now: the palace's L, its cliffs straight down to the cloud sea, the turrets over its whole roof](palace/turrets_persp.png)
+
+![From above: four halls over the sixteen rooms two by two, two along the long hall](palace/turrets_top.png)
+
+- **The island** is the palace's L and 6 cells give or take 2 past its walls, flat (`PalaceCliff`: Margin 6, Wobble 2, measured from the
+  rooms themselves -- the corner of the L is sea now); 6 x 9 cubes from cube (5, 3), with room north of the long hall for the race's leap
+  out of the round window (`PalaceIsland.NorthCells` 120).
+- **The turrets** (`PalaceOutside`): Otringal's palace's four domed halls stand apart now, each a turret, over the whole of the roof --
+  over the sixteen rooms two by two, each filling a quarter of their roof (96 % of it), turned to vary; along the long hall's part out of
+  them, the north hall one after another. Each is 1.35 times as tall as it is wide: the west hall 8.7 times its own width and 11.7 its
+  height (57,000 high), the east halls 7.2 and 9.7 (47,000), the south-east hall 6.4 and 8.7 (42,000), the north halls on the long hall
+  4.7 and 6.3 (31,000) -- the cluster stood 5.5 times its size, 26,800 high. A body's points are 16-bit, so each scaled body is moved to be
+  about its own middle (`TurretBody`), its decor's place moved the other way, turned with it as the engine turns it (`LongRotate`'s
+  way). The porch and the stone arch -- the palace's way in at its hill's foot -- are left out: there is no ground for them.
+- **Their collision**: their shape seen from above, all the way up (`MaxClimb` 100 layers): 1,265 boxes.
+- **The sky** is at 90,000 over the turrets (`PalaceCliff.SkyY`, was 48,000).
 
 ## Making it
 

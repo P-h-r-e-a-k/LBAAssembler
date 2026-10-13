@@ -61,7 +61,7 @@ internal static class PalaceIsland
                                                         // (Otringal's palace hill is 17,000 high, over a much smaller top)
     public const int HallScene = 80;                    // the long last room: the others are the sixteen under Otringal's palace
     public const int HarbourCells = 70;                 // cells east of the hill's cubes for the harbour's bay
-    public const int NorthCells = 50;                   // and north of it, for the road out of the round window to loop round over the sea
+    public const int NorthCells = 120;                  // and north of it, for the race's leap out of the round window over the sea
     public const double QuayY = 1400;                   // the harbour's quay (Otringal's lowest)
     public const int PillarOut = PalaceCliff.Margin + 50; // the teleporter's pillar: cells east of the rooms' east wall, past the cliffs ...
     public const double PillarRadius = 6;               // ... its top's radius (cells) ...

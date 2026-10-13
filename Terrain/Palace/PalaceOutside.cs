@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO;
 using System.Numerics;
 using LbaBodyStudio;
@@ -13,106 +14,126 @@ namespace LBAAssembler.Terrain.Palace;
 // the way it stands on its hill.
 //
 // 2026-10-12, later (the user: "We need to make the outside look more like the original. Perhaps scaling up the roof section, or adding more
-// towers to the roof section. It's okay for the inside to be underground"): the rooms are under the hill now (PalaceCliff), their roofs the
-// rock of its top, and on them:
-//   - the cluster, Scale times its size about its middle, over the middle of the sixteen rooms, its foot on the roof; the arch where Otringal
-//     has it, in front of the porch, as big -- on the hilltop now, the palace's front door below it in the hill closed;
-//   - on the long hall's roof, a wing of the palace: Towers smaller halls in a row along it, each as Otringal's north hall (two small domes,
-//     its wing, its turret), TowerScale times its size;
+// towers to the roof section. It's okay for the inside to be underground"): the rooms are under the hill (PalaceCliff), their roofs the
+// rock of its top. The cluster stood on the sixteen rooms' roof 5.5 times its size, two of the north hall 3.5 times on the long hall's.
+//
+// 2026-10-13 (the user: "let's also make the turrets taller and wider", then "Make the island small enough so that it only just fits the
+// inside of the palace, then have the turret's on the roof cover the whole of our inside of the palace"): the island is the palace's L and
+// a few cells, and its four halls stand apart as turrets over the whole of the roof:
+//   - over the sixteen rooms two by two, each hall filling a quarter of their roof (SlotFill of it), turned to vary; along the long hall's
+//     part out of them, the north hall one after another; each Tall times as tall as it is wide -- 6 to 9 times their own width, 30,000 to
+//     60,000 high where they stood 26,000 (TurretBody: wider and taller apart, about their middle height);
 //   - each body drawn only (its box touches nothing, as the rooms' are), in every cube it reaches (the engine draws and collides only the
-//     decors of the cube the hero is in); the arch solid, as Otringal's is;
-//   - the halls' shape seen from above (Cell x Cell columns as high as their tops, up to MaxClimb layers over the roof) as collision boxes,
-//     so a car on the rooftops drives round the halls and towers, not through them.
+//     decors of the cube the hero is in);
+//   - the halls' shape seen from above (Cell x Cell columns as high as their tops, up to MaxClimb layers over the roof -- all of them) as
+//     collision boxes, so a car round the rooftops goes round the turrets, not through them.
 internal static class PalaceOutside
 {
-    // Otringal's palace: the decors of this cube of OTRINGAL.ILE with these bodies of OTRINGAL.OBL
+    // Otringal's palace: the decors of this cube of OTRINGAL.ILE with these bodies of OTRINGAL.OBL -- its four domed halls (each a turret
+    // here); the porch (49) and the arch (33-35) are its way in at the hilltop's foot, which the island no longer has
     public static readonly (int X, int Z) SourceCube = (8, 7);
-    public static readonly int[] ClusterBodies = { 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49 };
-    public static readonly int[] ArchBodies = { 33, 34, 35 };
-    // the hall the wing's towers copy: Otringal's north hall (its two small domes, its wing and its turret), about its middle
-    private static readonly (int X, int Z) TowerHall = (13692, 10520);
-    public const double Scale = 5.5;            // the cluster (and its arch) over the sixteen rooms
-    public const double TowerScale = 3.5;       // the towers on the long hall's roof
-    public const int Towers = 2;
-    public const int MaxClimb = 12;             // the collision's layers over the roof at the most
+    public static readonly int[] ClusterBodies = { 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 };
+    // the halls, each the decors at one place (Otringal's cube's frame): the west hall, the north hall (its two small domes, its wing, its
+    // turret), the east one, the south-east one
+    private static readonly (int X, int Z) WestHall = (12616, 19968), NorthHall = (13692, 10520), EastHall = (16944, 15768), SouthHall = (18944, 19968);
+    // (the user, 2026-10-13: "spread them out ... let's also make the turrets taller and wider, we can add more turrets if we need to too";
+    // then: "Make the island small enough so that it only just fits the inside of the palace, then have the turret's on the roof cover the
+    // whole of our inside of the palace"): over the sixteen rooms two by two, a hall a quarter of their roof; along the long hall one after
+    // another; each as wide as its place allows (SlotFill of it) and Tall times that up -- 30,000 to 60,000 over the roof
+    public const double SlotFill = 0.96;
+    public const double Tall = 1.35;
+    public const double TallMost = 12.5;        // (times the hall's own height at the most: a body's points are 16-bit about its middle)
+    public const int MaxClimb = 100;            // the collision's layers over the roof at the most (all of the tallest turret)
 
-    // Where the cluster goes: the sixteen rooms' extent (world units), the roof's top, the building's cell and layer; the long hall's extent
-    // (its towers on it) when there is one.
+    // Where the turrets go: the sixteen rooms' extent (world units), the roof's top, the building's cell and layer; the long hall's extent
+    // (its turrets on its part out of the sixteen rooms) when there is one.
     public sealed record Site(double X0, double Z0, double X1, double Z1, double RoofTop, double Cell, double Layer, (double X0, double Z0, double X1, double Z1)? Hall);
 
     public sealed record Placed(int Decors, int Bodies, List<(double X0, double Y0, double Z0, double X1, double Y1, double Z1)> Boxes, List<string> Log);
 
-    // Adds the cluster, its arch and the wing's towers to `island` (their bodies, scaled, appended to `newBodies`, numbered from `firstBody`
-    // on; at most `maxPerCube` decors a cube) and returns the collision boxes for the caller to add with its empty body.
+    // Adds the turrets to `island` (their bodies, scaled, appended to `newBodies`, numbered from `firstBody` on; at most `maxPerCube` decors
+    // a cube) and returns the collision boxes for the caller to add with its empty body.
     public static Placed Add(IslandFile island, IslandFile source, HqrArchive sourceObl, List<byte[]> newBodies, int firstBody, Site site, int maxPerCube)
     {
         var log = new List<string>();
         var boxes = new List<(double, double, double, double, double, double)>();
         var cube = source.CubeAt(SourceCube.X, SourceCube.Z) ?? throw new InvalidDataException($"{PalaceIsland.SourceIle} has no cube {SourceCube}: no palace to copy.");
-        double ox = SourceCube.X * (double)IslandFile.CubeSize, oz = SourceCube.Z * (double)IslandFile.CubeSize;
         var cluster = cube.Decors.Where(d => ClusterBodies.Contains(d.Body & 0xFFFF)).ToList();
-        var arch = cube.Decors.Where(d => ArchBodies.Contains(d.Body & 0xFFFF)).ToList();
         if (cluster.Count == 0) throw new InvalidDataException($"{PalaceIsland.SourceIle}'s cube {SourceCube} has no palace (bodies {ClusterBodies[0]}-{ClusterBodies[^1]}).");
+        List<IslandDecor> Hall((int X, int Z) at) => cluster.Where(d => d.X == at.X && d.Z == at.Z).ToList();
         int decors = 0, bodies = 0, left = 0;
-        // (each source body scaled once, however often it is placed)
-        var scaled = new Dictionary<(int Body, double Scale), int>();
-        int BodyOf(int body, double k)
+        // (each source body scaled once for each size it is placed at: its points kxz times as far across and ky times as far up, about
+        // their middle -- `Shift` from its own origin)
+        var scaled = new Dictionary<(int Body, double Kxz, double Ky), (int Index, Vector3 Shift)>();
+        (int Index, Vector3 Shift) BodyOf(int body, double kxz, double ky)
         {
-            if (scaled.TryGetValue((body, k), out var index)) return index;
+            if (scaled.TryGetValue((body, kxz, ky), out var known)) return known;
             var clipped = 0;
-            newBodies.Add(IslandScaler.ScaledBody(sourceObl.Read(body), k, ref clipped));
-            if (clipped > 0) throw new InvalidDataException($"{PalaceIsland.SourceObl} body {body} {k} times its size is bigger than a body holds.");
+            var bytes = TurretBody(sourceObl.Read(body), kxz, ky, out var shift, ref clipped);
+            if (clipped > 0) throw new InvalidDataException($"{PalaceIsland.SourceObl} body {body} {kxz:0.##} times as wide and {ky:0.##} times as tall is bigger than a body holds.");
+            newBodies.Add(bytes);
             bodies++;
-            return scaled[(body, k)] = firstBody + newBodies.Count - 1;
+            return scaled[(body, kxz, ky)] = (firstBody + newBodies.Count - 1, shift);
         }
         var triangles = new List<(Vector3 A, Vector3 B, Vector3 C)>();
-        // (a source decor Scale times its size about `about` (Otringal's world), its foot at `foot`, its middle at `to`: in every cube its box
-        // reaches, drawn only or solid)
-        void Place(IslandDecor d, double k, (double X, double Z) about, double baseY, (double X, double Z) to, double foot, bool solid)
+        var built = new List<string>();
+        // (a hall in a place: turned `quarter` quarter turns about its middle, kxz times as wide and ky times as tall, its middle at the
+        // place's, its foot on the roof; each piece drawn only, in every cube its box reaches)
+        void Turret((int X, int Z) at, int quarter, (double X0, double Z0, double X1, double Z1) place, string name)
         {
-            var body = BodyOf(d.Body & 0xFFFF, k);
-            double X(double x) => to.X + (ox + x - about.X) * k;
-            double Z(double z) => to.Z + (oz + z - about.Z) * k;
-            double Y(double y) => foot + (y - baseY) * k;
-            double wx = X(d.X), wz = Z(d.Z);
-            var yMax = solid ? (int)Math.Ceiling(Y(d.YMax)) : BrickBuilding.NoBoxTop;
-            var (placed, full) = AddCopies(island, d, body, wx, (int)Math.Round(Y(d.Y)), wz, X(d.XMin), X(d.XMax), (int)Math.Floor(Y(d.YMin)), yMax, Z(d.ZMin), Z(d.ZMax), maxPerCube);
-            if (placed == 0) left++;
-            left += full; decors += placed;
-            if (!solid) triangles.AddRange(Triangles(newBodies[body - firstBody], wx, Y(d.Y), wz, d.Beta & 0xFFFF));
+            var parts = Hall(at);
+            if (parts.Count == 0) return;
+            double hx0 = parts.Min(d => (double)d.XMin), hx1 = parts.Max(d => (double)d.XMax), hz0 = parts.Min(d => (double)d.ZMin), hz1 = parts.Max(d => (double)d.ZMax);
+            double cx = (hx0 + hx1) / 2, cz = (hz0 + hz1) / 2;
+            var turn = Matrix4x4.CreateRotationY((float)(quarter * Math.PI / 2));
+            Vector3 Turned(double x, double z) => Vector3.Transform(new Vector3((float)(x - cx), 0, (float)(z - cz)), turn);
+            double wide = quarter % 2 == 0 ? hx1 - hx0 : hz1 - hz0, deep = quarter % 2 == 0 ? hz1 - hz0 : hx1 - hx0;
+            var kxz = Math.Round(Math.Min((place.X1 - place.X0) / wide, (place.Z1 - place.Z0) / deep) * SlotFill, 2);
+            var ky = Math.Round(Math.Min(TallMost, kxz * Tall), 2);
+            var baseY = parts.Min(d => d.YMin);
+            double mx = (place.X0 + place.X1) / 2, mz = (place.Z0 + place.Z1) / 2;
+            foreach (var d in parts)
+            {
+                var (body, shift) = BodyOf(d.Body & 0xFFFF, kxz, ky);
+                var p = Turned(d.X, d.Z);
+                var copy = d.Clone();
+                copy.Beta = (d.Beta & ~0xFFFF) | ((d.Beta + quarter * 1024) & 4095);
+                // (its origin moved to the middle of its points: as far as they are turned with it -- the engine's way, LongRotate)
+                var moved = Vector3.Transform(new Vector3(shift.X, 0, shift.Z), Matrix4x4.CreateRotationY((float)((copy.Beta & 4095) * 2 * Math.PI / 4096)));
+                double wx = mx + p.X * kxz + moved.X, wz = mz + p.Z * kxz + moved.Z;
+                var corners = new[] { Turned(d.XMin, d.ZMin), Turned(d.XMax, d.ZMin), Turned(d.XMin, d.ZMax), Turned(d.XMax, d.ZMax) };
+                double minX = mx + corners.Min(c => c.X) * kxz, maxX = mx + corners.Max(c => c.X) * kxz;
+                double minZ = mz + corners.Min(c => c.Z) * kxz, maxZ = mz + corners.Max(c => c.Z) * kxz;
+                var foot = site.RoofTop + (d.YMin - baseY) * ky;
+                var y = Math.Round(site.RoofTop + (d.Y - baseY) * ky + shift.Y);
+                var (placed, full) = AddCopies(island, copy, body, wx, (int)y, wz, minX, maxX, (int)Math.Floor(foot), BrickBuilding.NoBoxTop, minZ, maxZ, maxPerCube);
+                if (placed == 0) left++;
+                left += full; decors += placed;
+                triangles.AddRange(Triangles(newBodies[body - firstBody], wx, y, wz, copy.Beta & 0xFFFF));
+            }
+            built.Add($"{name} {kxz:0.##} times as wide and {ky:0.##} as tall ({(hx1 - hx0) * kxz / 512:0} x {(hz1 - hz0) * kxz / 512:0} cells, {(parts.Max(d => d.YMax) - baseY) * ky:0} high)");
         }
 
-        // ---- the cluster and its arch: Scale times their size about the middle of the cluster's boxes, over the middle of the sixteen rooms,
-        // their foot on the roof
-        double sx0 = cluster.Min(d => ox + d.XMin), sx1 = cluster.Max(d => ox + d.XMax), sz0 = cluster.Min(d => oz + d.ZMin), sz1 = cluster.Max(d => oz + d.ZMax);
-        double baseY = cluster.Min(d => d.YMin);
-        var middle = ((sx0 + sx1) / 2, (sz0 + sz1) / 2);
-        var over = ((site.X0 + site.X1) / 2, (site.Z0 + site.Z1) / 2);
-        var all = cluster.Concat(arch).ToList();
-        double ax0 = all.Min(d => ox + d.XMin), ax1 = all.Max(d => ox + d.XMax), az0 = all.Min(d => oz + d.ZMin), az1 = all.Max(d => oz + d.ZMax);
-        if (over.Item1 + (ax0 - middle.Item1) * Scale < site.X0 || over.Item1 + (ax1 - middle.Item1) * Scale > site.X1 ||
-            over.Item2 + (az0 - middle.Item2) * Scale < site.Z0 || over.Item2 + (az1 - middle.Item2) * Scale > site.Z1)
-            throw new InvalidDataException($"Otringal's palace {Scale} times its size ({(ax1 - ax0) * Scale:0} x {(az1 - az0) * Scale:0}) is bigger than the rooms' roof.");
-        foreach (var d in cluster) Place(d, Scale, middle, baseY, over, site.RoofTop, solid: false);
-        foreach (var d in arch) Place(d, Scale, middle, baseY, over, site.RoofTop, solid: true);
-        log.Add($"the outside: Otringal's palace ({cluster.Count} of {PalaceIsland.SourceIle}'s objects, bodies {string.Join(", ", cluster.Select(d => d.Body & 0xFFFF).Distinct().OrderBy(b => b))}) " +
-                $"{Scale} times its size ({(sx1 - sx0) * Scale:0} x {(sz1 - sz0) * Scale:0}, {(cluster.Max(d => d.YMax) - baseY) * Scale:0} high) on the sixteen rooms' roof, " +
-                $"its stone arch (bodies {string.Join(", ", arch.Select(d => d.Body & 0xFFFF).Distinct().OrderBy(b => b))}) in front of its porch");
-
-        // ---- the wing on the long hall's roof: Towers halls in a row along it, each as Otringal's north hall
-        var towerParts = cluster.Where(d => d.X == TowerHall.X && d.Z == TowerHall.Z).ToList();
-        if (site.Hall is { } hall && towerParts.Count > 0)
+        // ---- over the sixteen rooms: two by two, a hall a quarter of their roof
+        double midX = (site.X0 + site.X1) / 2, midZ = (site.Z0 + site.Z1) / 2;
+        Turret(WestHall, 0, (site.X0, site.Z0, midX, midZ), "the west hall");
+        Turret(EastHall, 1, (midX, site.Z0, site.X1, midZ), "the east hall");
+        Turret(SouthHall, 0, (site.X0, midZ, midX, site.Z1), "the south-east hall");
+        Turret(EastHall, 3, (midX, midZ, site.X1, site.Z1), "the east hall");
+        // ---- along the long hall's part out of them: the north hall, one after another
+        if (site.Hall is { } hall)
         {
             var alongZ = hall.Z1 - hall.Z0 >= hall.X1 - hall.X0;
-            for (var t = 0; t < Towers; t++)
+            double a0 = alongZ ? hall.Z0 : hall.X0, a1 = alongZ ? Math.Min(hall.Z1, site.Z0) : Math.Min(hall.X1, site.X0);
+            double across = alongZ ? hall.X1 - hall.X0 : hall.Z1 - hall.Z0;
+            var count = Math.Max(1, (int)Math.Round((a1 - a0) / (across * 1.4)));
+            for (var t = 0; t < count; t++)
             {
-                // (towards the hall's far end: the rooftops' road passes between the near one and the sixteen rooms' domes)
-                var f = 0.18 + 0.38 * t / Math.Max(1, Towers - 1);
-                var at = alongZ ? ((hall.X0 + hall.X1) / 2, hall.Z0 + (hall.Z1 - hall.Z0) * f) : (hall.X0 + (hall.X1 - hall.X0) * f, (hall.Z0 + hall.Z1) / 2);
-                foreach (var d in towerParts) Place(d, TowerScale, (ox + TowerHall.X, oz + TowerHall.Z), baseY, at, site.RoofTop, solid: false);
+                double s0 = a0 + (a1 - a0) * t / count, s1 = a0 + (a1 - a0) * (t + 1) / count;
+                Turret(NorthHall, alongZ ? 2 * (t % 2) : 1 + 2 * (t % 2), alongZ ? (hall.X0, s0, hall.X1, s1) : (s0, hall.Z0, s1, hall.Z1), "the north hall");
             }
-            log.Add($"  a wing on the long hall's roof: {Towers} halls as Otringal's north hall ({towerParts.Count} objects each), {TowerScale} times their size");
         }
+        log.Add($"the outside: Otringal's palace's halls as turrets over the whole of the palace -- {string.Join("; ", built)}");
 
         // ---- the halls' collision: their shape seen from above, columns of cells as high as their tops (MaxClimb layers at the most), merged
         var tops = new Dictionary<(int X, int Z), double>();
@@ -154,6 +175,50 @@ internal static class PalaceOutside
                 $"{decors} objects in all, counting the copies in each cube a body reaches");
         if (left > 0) log.Add($"  WARNING: {left} of its objects left out (a cube full)");
         return new Placed(decors, bodies, boxes, log);
+    }
+
+    // A body kxz times as wide and ky times as tall, its points moved by `shift` -- to be about their own middle: a turret 60,000 high and
+    // as wide is still 16-bit either way of it (its decor's place moves that much the other way). Its box and its spheres too.
+    private static byte[] TurretBody(byte[] body, double kxz, double ky, out Vector3 shift, ref int clipped)
+    {
+        var b = (byte[])body.Clone();
+        int I(int at) => BinaryPrimitives.ReadInt32LittleEndian(b.AsSpan(at));
+        int points = I(40), p0 = I(44);
+        shift = Vector3.Zero;
+        if (p0 < 0 || p0 + points * 8 > b.Length) return body;
+        var lo = new double[] { double.MaxValue, double.MaxValue, double.MaxValue }; var hi = new double[] { double.MinValue, double.MinValue, double.MinValue };
+        var k3 = new[] { kxz, ky, kxz };
+        for (var i = 0; i < points; i++)
+            for (var a = 0; a < 3; a++)
+            {
+                var v = BinaryPrimitives.ReadInt16LittleEndian(b.AsSpan(p0 + i * 8 + a * 2)) * k3[a];
+                lo[a] = Math.Min(lo[a], v); hi[a] = Math.Max(hi[a], v);
+            }
+        var mid = new[] { Math.Round((lo[0] + hi[0]) / 2), Math.Round((lo[1] + hi[1]) / 2), Math.Round((lo[2] + hi[2]) / 2) };
+        shift = new Vector3((float)mid[0], (float)mid[1], (float)mid[2]);
+        var lost = 0;
+        void Put(int at, double v)
+        {
+            v = Math.Round(v);
+            if (v > short.MaxValue || v < short.MinValue) lost++;
+            BinaryPrimitives.WriteInt16LittleEndian(b.AsSpan(at), (short)Math.Clamp(v, short.MinValue, short.MaxValue));
+        }
+        for (var i = 0; i < points; i++)
+        {
+            var at = p0 + i * 8;
+            Put(at, BinaryPrimitives.ReadInt16LittleEndian(b.AsSpan(at)) * kxz - mid[0]);
+            Put(at + 2, BinaryPrimitives.ReadInt16LittleEndian(b.AsSpan(at + 2)) * ky - mid[1]);
+            Put(at + 4, BinaryPrimitives.ReadInt16LittleEndian(b.AsSpan(at + 4)) * kxz - mid[2]);
+        }
+        // (the header's box: x, y, z, each its least and most)
+        var scale = new[] { kxz, kxz, ky, ky, kxz, kxz };
+        for (var k = 0; k < 6; k++) BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(8 + k * 4), (int)Math.Round(I(8 + k * 4) * scale[k] - mid[k / 2]));
+        int spheres = I(80), q = I(84);
+        if (spheres > 0 && q > 0 && q + spheres * 8 <= b.Length)
+            for (var i = 0; i < spheres; i++, q += 8)
+                BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(q + 6), (ushort)Math.Min(65535, Math.Round(BinaryPrimitives.ReadUInt16LittleEndian(b.AsSpan(q + 6)) * Math.Max(kxz, ky))));
+        clipped += lost;
+        return b;
     }
 
     // A source decor's copy in every cube its box reaches (world units), each in that cube's frame, its body `body`, its turn and the rest
