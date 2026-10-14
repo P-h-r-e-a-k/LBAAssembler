@@ -301,6 +301,18 @@ internal sealed record RaceTrackIsland(
         Title = "Volcano Island: over the lava", Roster = RaceDriver.Volcano,
     };
 
+    // Wannies Island (PLATFORM.ILE, island 6: outside scenes 96-99), from the user's drawing (2026-10-14): from the pier south of the
+    // elevator's platform round the east island and the west one, climbing all the way, high over the islands, to a jump into a giant frog's
+    // mouth (timed: it opens and shuts), through it and out of its back, up over the lava to the elevator tower's top and three times round
+    // it down a helix to the pier. The plan: tools/RaceTrackPlan/wannies_design.py.
+    public static readonly RaceTrackIsland Wannies = new("Wannies Island", "PLATFORM.ILE", "PLATFORM.OBL", 6, 96, 99, 33, "RaceTrackPlan.Wannies.json", null)
+    {
+        Title = "Wannies Island: through the frog and down the tower", Roster = RaceDriver.Wannies,
+        // (Twinsen has come down in the elevator: scene 98's hero script plays the elevator's cutscene -- and puts him at its point 7, on
+        // foot -- while it's 0, and above 1 the cinema of his way back up)
+        HeldVars = new[] { (107, 1) },
+    };
+
     // The Emperor's palace (the user, 2026-10-12: "through the palace rooms, coming out the window and around the roof tops? Point-to-point
     // i.e. no laps, finishing with massive jump to harbor teleport? - Twinsen, quick, Dark monk's in the palace, he's killing everybody.
     // Leading into final showdown at Celebration"), on the Palace island (Terrain/Palace: PALACE.ILE and PALACE.OBL, made by the build --
@@ -327,7 +339,7 @@ internal sealed record RaceTrackIsland(
     // Emperor's palace's road along the hilltop, 60 over it, let cars drive off onto the rocks.
     public bool RailHeld { get; init; }
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace, Wannies };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

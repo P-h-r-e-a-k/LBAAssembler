@@ -2414,7 +2414,13 @@ internal static class RaceTrackBuilder
             var (from, to) = a > r.Length / 2 ? (a, b) : (b, a);          // the pit lane runs through the start line: from before it to after it
             avoid.Add((from - 6, r.Length)); avoid.Add((0, to + 6));
         }
-        else avoid.Add((r.Length - 10, r.Length));
+        else
+        {
+            avoid.Add((r.Length - 10, r.Length));
+            // (and just past the start line: a line there is crossed in the frame the car crosses the start line, which begins the lap
+            // after the checkpoints are counted -- Wannies Island's checkpoint 1, at the bend through its start line, never taken)
+            avoid.Add((0, 6));
+        }
         // (every line has its height, so near a bridge's crossing the road over it and the road under it each have their own lines; only a
         // level crossing, where both roads are at one height, keeps them away)
         var crossingClear = !planned && o.Crossing == CrossingStyle.Level ? 45 : 8;

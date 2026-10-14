@@ -98,6 +98,15 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Of(RaceTrackCharacterCars.LavaSlab, "The hide-out's Mosquibee", 2.0, 1.02, 0.97),
     };
 
+    // Wannies Island (2026-10-14): the Wannie miner in his undergas bulldozer (the one to beat), a Wannie in a mine cart and the old Wannie
+    // on her firefly tart
+    public static readonly List<RaceDriver> Wannies = new()
+    {
+        Of(RaceTrackCharacterCars.Bulldozer, "The Wannie miner", 0, 1.0, 1.0, main: true),
+        Of(RaceTrackCharacterCars.Wannie, "The mine cart", -2.0, 0.99, 1.02),
+        Of(RaceTrackCharacterCars.Tart, "The old Wannie", 2.0, 1.02, 0.97),
+    };
+
     // The Emperor's palace (2026-10-12): racing out of the palace ahead of the Dark Monk to his teleporter -- Stan in his time machine (the
     // one to beat), the pighead with the broom in his road sweeper (CharactersForTrack.txt) and the Emperor himself, fleeing his own palace,
     // a little to either side of the road's middle: the rooms' doors are two bricks wide. (The user's list has the palace's two-headed
