@@ -97,13 +97,20 @@ WINDOW_H = 14600                            # ... and the road's height through 
                                             # climbs out over the sea to over the long hall's roof in a third of a turn
 H1_ROOF_OVER = 900                          # the first loop over the long hall's roof (at H1_ROOF) at the least this much over it ...
 H1_TOP = 30500                              # ... and its top, out of it (the rail camera 2,100 over a road: under 32,767)
-H2_IN_H = 30300                             # into the second loop; down it DESCENT each time round (its west side twice, one over the
-DESCENT = 3400                              # other: 2,800 at the least between a deck and the one over it)
-AWAY_MID = 25000                            # the middle way across, west end, on the way round the sixteen rooms' south-west turret ...
-AWAY_LOW = 23400                            # ... and by the north-west turret and to the jump -- under the way down the west side
-HOME_SE = 28000                             # on the way home: the south-east corner, then up the middle way -- over the way up it before
-HOME_HIGH = 29000
-LIP = 30000                                 # the finish line: the leap's lip (its top JUMP_APEX more)
+H2_IN_H = 30500                             # into the second loop; down it DESCENT each time round (its west side twice, one over the
+DESCENT = 3300                              # other: 2,800 at the least between a deck and the one over it -- 3,400 until 2026-10-14)
+# (2026-10-14, the user: "the outside of the palace track is too low to the ground, let's lift the track up, so we're hugging tighter
+# to the buildings, so we get more of a sense of driving through the roof tops. Also the outside jump is far too long and needs to be
+# shorter" -- every level up as far as the ways over and under each other leave room: the second loop in 200 higher and down 3,300 a turn (3,400), round
+# the sixteen rooms 26,000 (25,000), under the way down the west side 23,800 (23,400; the way down the west side over it is the second
+# loop's way out, and the second loop's south side is over it too), up to the jump past the second loop, home and the lip 500 higher;
+# the jump half as long. The road can't go higher: the rail camera rides 2,100 over it, under 32,767)
+AWAY_MID = 26000                            # the middle way across, west end, on the way round the sixteen rooms' south-west turret ...
+AWAY_LOW = 23800                            # ... and by the north-west turret -- under the way down the west side
+JUMP_FOOT_H = 25000                         # ... up to the jump's take-off ramp east of the second loop
+HOME_SE = 28500                             # on the way home: the south-east corner, then up the middle way -- over the way up it before
+HOME_HIGH = 29500
+LIP = 30500                                 # the finish line: the leap's lip (its top JUMP_APEX more)
 # (a car's collision box: some 1,420 units either way of its middle whichever way it faces: 2.8 cells. Where the cars drive the floor,
 # nothing within CAR_HALF of a line they follow; on the ramp nothing within the road's half-width less the rail's inset and a box)
 CAR_BOX = 2.8
@@ -344,9 +351,10 @@ loop1, th1 = ellipse(HELIX1, H1_IN, H1_OUT)
 bend = hermite(*ellipse_pose(HELIX1, H1_OUT), *ellipse_pose(HELIX2, H2_IN))
 loop2, th2 = ellipse(HELIX2, H2_IN, H2_OUT)
 JUMP_Z = 522                                # the jump: along the strip north of the north-east turret (cells x 473..545: its north edge 529..545)
-A_FOOT, A_LIP, A_LAND, A_END = 439, 451, 495, 507     # its take-off ramp's foot and lip, the landing lip and the landing's end (cells x;
+A_FOOT, A_LIP, A_LAND, A_END = 451, 463, 485, 497     # its take-off ramp's foot and lip, the landing lip and the landing's end (cells x;
+                                                      # 22 cells over since 2026-10-14, 44 before -- "far too long";
                                                       # none on a cube's edge: a line there wasn't seen crossed)
-A_KICK, A_APEX = 1000, 1500                 # its ramp's rise, and its top over the lips
+A_KICK, A_APEX = 1000, 900                  # its ramp's rise, and its top over the lips (1,500 over the 44 cells before)
 LIP_X, LIP_Z = 463, 572                     # the finish line: the leap's lip, by the drawing's black dot -- north up the middle way off it
                                             # (at 576, on the edge of two cubes, the car flew over it uncounted and fell)
 # (the sixteen rooms: down the west side, round the south-west turret, back north by the north-west turret, east along its north side to
@@ -422,9 +430,11 @@ i_cross = nearest((384, 628), i_level)                            # the middle w
 climb(i_level, i_cross, away0, AWAY_MID)
 climb(i_cross, i_west2, AWAY_MID, AWAY_LOW)
 h[i_west2:a_foot + 1] = AWAY_LOW
+i_free = nearest((424, JUMP_Z), i_west2)                          # past the second loop's south side: up to the jump's foot from here
+climb(i_free, a_foot, AWAY_LOW, JUMP_FOOT_H)
 for i in range(a_foot, a_lip + 1):
-    h[i] = AWAY_LOW + A_KICK * ease((S[i] - S[a_foot]) / max(1e-6, S[a_lip] - S[a_foot]))
-a_lipH = AWAY_LOW + A_KICK
+    h[i] = JUMP_FOOT_H + A_KICK * ease((S[i] - S[a_foot]) / max(1e-6, S[a_lip] - S[a_foot]))
+a_lipH = JUMP_FOOT_H + A_KICK
 for i in range(a_lip, a_land + 1):
     t = (S[i] - S[a_lip]) / max(1e-6, S[a_land] - S[a_lip]); h[i] = a_lipH + A_APEX * 4 * t * (1 - t)
 h[a_land:a_end + 1] = a_lipH

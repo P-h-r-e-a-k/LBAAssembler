@@ -3650,6 +3650,27 @@ cells either way from its point nearest the hut, at the height nearest the hut's
 with the test pilot driving 4 cells to the right through hut 88 and to the left through hut 84: through both at speed; the same on a
 build without the fix stopped dead at hut 88's wall. Otringal's tunnel (its drive-throughs) is cut as before.
 
+## The Emperor's palace, eleventh round: the roof road higher, the jump half as long (2026-10-14, night)
+
+The user: "The inside of the Palace track is good and should be left alone for the moment, however the outside of the palace track is
+too low to the ground, let's lift the track up, so we're hugging tighter to the buildings, so we get more of a sense of driving through
+the roof tops. Also the outside jump is far too long and needs to be shorter". The inside is as it was (`palace_design.py`: only the
+outside's heights and the jump changed; the way the road goes is the user's drawing's, v10's).
+
+- *How high it can go.* No higher than some 30,600 anywhere: positions are 16-bit (32,767) and the rail camera rides 2,100 over the
+  road. The first loop already tops out there (30,500), and the finish's leap needs its 1,400 over the lip. The turrets' walls rise from
+  the roof (19,216) to 34,000 to 38,000 (their domes further), so the road runs up their sides, not over them.
+- *What holds it down.* Where the road passes over itself the decks are 2,800 apart at the least: the second loop's west side twice
+  (the second time is its way out), and round the north-west turret the road passes under its own way down the west side and beside
+  the second loop's south side -- that stretch stays the lowest.
+- *The heights now* (v10's in brackets): the second loop in at 30,500 (30,300) and down 3,300 a turn (3,400) -- out at 26,656 (26,339);
+  round the sixteen rooms to 26,000 at the middle way's west end (25,000); under the way down the west side 23,800 (23,400); then, past
+  the second loop, up to the jump: its lip 26,000 (24,400); home 28,500 to 29,500 (28,000 to 29,000); the finish's lip 30,500 (30,000),
+  the leap's top 31,900. The least height between two of the road's ways is 2,829.
+- *The jump* along the strip north of the north-east turret is 22 cells (44): lips at x 463 and 485, its top 900 over them (1,500).
+- Checked with the test pilot: won in 286.82 s, no car rescued, both jumps carried (the short one set down on its landing at 26,000),
+  game variable 79 set, Twinsen awake in scene 95.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove
