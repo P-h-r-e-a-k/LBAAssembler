@@ -3555,7 +3555,7 @@ of the track, these should more closely resemble our other tracks".
   on an even lap. The engine's log says now how far over the middle a car was when the steam hit it, and whether the oil it skidded on
   was a pipe's drip.
 
-## The jumps' strips across the whole ramp, missed checkpoints called out, Otringal's pier smoothed, a shorter landing (2026-10-14, later)
+## The jumps' strips across the whole ramp, missed checkpoints called out, Otringal's pier smoothed, a shorter landing, the Volcano's pit lane (2026-10-14, later)
 
 - *A jump's strip across the whole ramp.* The user: "Let's extend the jump zone for Mosquibe.ile fully across to cover the left side. A
   car has to be almost fully off the track to jump there, but it should still work for them". The strip of scene zone that starts a
@@ -3593,6 +3593,20 @@ of the track, these should more closely resemble our other tracks".
   blocking the track slightly". It blocked the road while under 1,200 over its pad: the end of its touch-down, its 2.2 seconds on the
   road and the first second of its climb -- some 3.6 seconds a landing. It stands on the road 1.3 seconds now (`RACE_SHUTTLE_LANDED`):
   some 2.7 seconds.
+- *Volcano Island's pit lane, easier to get into.* The user, with a picture of the minimap: "The pit lane on volcano island
+  (souscelb.ile) is too tight to drive into, are we able to bring the section of track there out slightly further to the left so we can
+  widen the angle coming into the pitlane". The road up the plateau's west side turned onto the north straight square, 6 cells round,
+  and the deck only widened for the pit lane -- on that bend's inside -- after it: the bend's inner edge was all but a point. The bend
+  is further out now, north-west (its corner 4.5 cells north and 1.5 west of where it was, 9 cells round), the road leaving it
+  east-south-east, across towards the pit lane's side, and onto the straight 3.5 cells before the fence (`volcano_design.py`:
+  `PIT_BEND_X`, `PIT_BEND_OUT`, `PIT_JOIN_X`); the deck widens from the bend's middle, so its inside is a broad curve straight into the
+  pit lane. The start line, the grid, the fence and the waiting spots are where they were. (The widening's end had been found as the
+  lap's point nearest (501, SZ) -- which the climb's second turn passes over again, higher: with the lap a few points longer it was
+  taken there, and the pit lane's width ran on round the whole first turn of the climb. It is the first such point after the pit lane
+  now.) Checked with the test pilot steering for the pit lane from the approach: on the old bend it ran into the bend's inside and
+  stayed there; on the new one it drove into the pit lane and down it (three runs); a lap on the line, 66.95 s.
+
+![Volcano Island's bend onto the start straight, turned as the minimap shows it: before (left) and after](racetrack/volcano_pit_bend.png)
 
 ## The game has the keyboard from the start (2026-10-12)
 

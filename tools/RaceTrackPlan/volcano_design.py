@@ -57,6 +57,8 @@ PIT = 4.5                               # the pit lane beside the plateau's nort
 TOPD = 13000.0                          # the plateau's road (over its sand, 12,750)
 NZ = 461.5                              # the north straight's race lanes' middle
 SZ = NZ + PIT / 2                       # the deck's middle there (the pit lane south of the race lanes: the deck's middle south of theirs)
+PIT_BEND_X, PIT_BEND_OUT = 459.5, 4.5    # the bend onto the north straight: its corner, west of and north of the straight's line
+PIT_JOIN_X = 475.0                      # ... and where the road is on the straight's line again (before the pit lane's fence, x 478.5)
 HELIX_PITCH = 4800.0                    # a spiral's turns this far apart at least (the camera following the car fits between them: the
                                         # Elevator Platform's helix)
 
@@ -98,7 +100,12 @@ K = ([(FOOT, 5.0),                       # off the spiral's foot, down the slope
       ((555.0, 538.0), 4.0),             # ... north-west, climbing onto the plateau ...
       ((512.0, 502.0), 8.0),             # ... west along its south edge (5 cells further south than before: the climb's circle) ...
       ((462.0, 502.0), 6.0),             # ... north up its west side along the bluff, under the lava flow ...
-      ((461.0, SZ), 6.0)]                # ... east along its north straight (the start, the pit lane on the right) ...
+      # (2026-10-14, the user: "The pit lane ... is too tight to drive into, are we able to bring the section of track there out
+      # slightly further to the left so we can widen the angle coming into the pitlane" -- the bend onto the north straight was at
+      # (461, SZ), 6 round, square, the pit lane on its inside from its end: now further out, north-west, rounder, the road leaving it
+      # east-south-east across to the pit lane's side and onto the straight before the pit lane's fence)
+      ((PIT_BEND_X, SZ - PIT_BEND_OUT), 9.0),  # ... east-south-east out of it ...
+      ((PIT_JOIN_X, SZ), 12.0)]          # ... east along its north straight (the start, the pit lane on the right) ...
      + climb                             # ... on into the climb's circle: south, west, north past the falls, east, and round again over it ...
      + spiral)                           # ... on east over its start into the double spiral down, round and south off it
 K = [(C(*p), r) for p, r in K]
@@ -161,7 +168,13 @@ HALF = np.full(N, H0)
 PIT_HALF = H0 + PIT / 2
 PIT_MID = PIT_HALF - PIT / 2
 # (2.5 cells further west than before: the straight ends where the climb's circle begins, its north point)
-iPit0 = nearest((463.5, SZ), E); iPit1 = nearest((471.5, SZ), E); iPit2 = nearest((496.5, SZ), E); iPit3 = nearest((501.0, SZ), E)
+# (since 2026-10-14 widened from the middle of the bend onto the straight -- out further north-west and rounder, its inside the pit
+# lane's side -- over 8 cells, round the rest of the bend: full width before the fence)
+iPit0 = int(np.argmin(np.hypot(X - C(PIT_BEND_X, SZ - PIT_BEND_OUT)[0], Z - C(PIT_BEND_X, SZ - PIT_BEND_OUT)[1])))
+iPit1 = (iPit0 + int(round(8.0 / STEP))) % N
+# (each the first after the last: the climb's second turn passes over (501, SZ) again, higher -- a lap a few points longer made plain
+# `nearest` take that one, and the pit lane's width ran on round the whole first turn)
+iPit2 = nearest_after((496.5, SZ), E, iPit1, 40); iPit3 = nearest_after((501.0, SZ), E, iPit2, 10)
 iFence0 = nearest((478.5, SZ), E); iFence1 = nearest((494.5, SZ), E)
 for k in range(N):
     if between(k, iPit0, iPit1): HALF[k] = max(HALF[k], H0 + (PIT_HALF - H0) * ramp(iPit0, iPit1, k))
