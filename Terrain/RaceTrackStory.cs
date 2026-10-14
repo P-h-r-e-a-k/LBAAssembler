@@ -60,8 +60,9 @@ internal static class RaceTrackStory
     public const int HasCar = 207, RaphHere = 208;
     // the race-track mode's: 1 while a gate of the track is shut (RACEMOD.CPP RACE_GATE_VAR) -- the story's race, not one started on its line
     public const int GateShut = 209;
-    // the game's own people at the lighthouse (scene 46), kept by the build (RaceTrackIsland.StoryEntities): Raph by its door, his fiancee,
-    // and Twinsen and Zoe on its top in the spell's last shot (BODY 175); and the behaviour of Twinsen and Zoe walking together (entity 5)
+    // the game's own people at the lighthouse (scene 46), kept by the build (RaceTrackIsland.StoryEntities): Raph by its door and Twinsen
+    // and Zoe on its top in the spell's last shot (BODY 175) -- his fiancee (Fiancee) no longer, since 2026-10-14: she stood and ran on the
+    // town circuit; and the behaviour of Twinsen and Zoe walking together (entity 5)
     public const int LighthouseRaph = 19, Fiancee = 113, CoupleOnTop = 116;
     private const int LighthouseScene = 46, TwinsenAndZoe = 5;
     public const int RaceLaps = 3;

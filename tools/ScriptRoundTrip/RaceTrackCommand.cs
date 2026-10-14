@@ -53,6 +53,7 @@ internal static class RaceTrackCommand
             var t = twin.Report;
             Console.WriteLine($"{where.TwinIleFile}'s own track: lap {t.Length:0} cells, {t.Vertices} vertices levelled, {t.Cells} cells painted, {t.DecorsRemoved} props and {t.SolidDecorsRemoved} solid decors removed");
             foreach (var note in t.Notes) Console.WriteLine("  " + note);
+            if (Environment.GetEnvironmentVariable("RT_ARROWS") == "1") foreach (var a in t.Arrows) Console.WriteLine($"  arrow at cell ({a[0]:0.0}, {a[1]:0.0}) heading ({a[2]:0.00}, {a[3]:0.00})");
             foreach (var l in t.StartLine) Console.WriteLine($"  start line at cell ({l.X:0.0}, {l.Z:0.0}), height {l.Y:0}, heading ({l.DirX:0.00}, {l.DirZ:0.00})");
             foreach (var l in t.Placed) Console.WriteLine("  placed " + l);
             if (t.RoadBridge is { } trb) Console.WriteLine($"  road bridge: cell ({trb.X:0.0},{trb.Z:0.0}) dir ({trb.DirX:0.00},{trb.DirZ:0.00}) height {trb.Height:0} size {trb.Width / 512:0.#}x{trb.Length / 512:0.#} cells, deck body {twin.Options.DeckBodyIndex}");

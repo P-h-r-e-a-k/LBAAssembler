@@ -665,7 +665,11 @@ static int s_nbLoops = 0;
                                            // and the jets out of their uprights blew nothing to be seen, 2026-10-07)
 #define RACE_DRIP_SLICK_MS 7000            // how long a drip's slick lies on the road if no car takes it
 typedef struct { double X, Y, Z; S32 Every, Next; } T_RACE_VENT;
-typedef struct { double X, Y, Z, RoadY; S32 Every, Next, LandAt; } T_RACE_DRIP;
+// (Flip: a gantry's drip among steam jets, drip='s 7-number form -- X, Z on the driver's left, mirrored through the road's middle MX, MZ
+// on the player's even laps: on the side the jets blow from that lap (Jets), the other half of the road clear of both -- the user,
+// 2026-10-14: "always providing a safe path through so they can avoid getting hit if they drive well". LandX, LandZ: where the falling
+// drop lands, its side taken when it starts to fall.)
+typedef struct { double X, Y, Z, RoadY, MX, MZ, LandX, LandZ; S32 Every, Next, LandAt; int Flip; } T_RACE_DRIP;
 static T_RACE_VENT s_vents[RACE_MAX_VENTS];
 static T_RACE_DRIP s_drips[RACE_MAX_DRIPS];
 static int s_nbVents = 0, s_nbDrips = 0;
@@ -2283,9 +2287,14 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "drip")) {
             T_RACE_DRIP *p = &s_drips[s_nbDrips];
-            int x, y, z, road, every;
-            if (s_nbDrips < RACE_MAX_DRIPS && sscanf(v, "%d %d %d %d %d", &x, &y, &z, &road, &every) == 5 && every > 0 && y > road) {
-                p->X = x; p->Y = y; p->Z = z; p->RoadY = road; p->Every = every; p->Next = p->LandAt = 0; s_nbDrips++;
+            int x, y, z, road, every, mx, mz;
+            // (x y z road every [mx mz]: with the road's middle under it, a drip that changes side with the steam jets each lap)
+            const int n = s_nbDrips < RACE_MAX_DRIPS ? sscanf(v, "%d %d %d %d %d %d %d", &x, &y, &z, &road, &every, &mx, &mz) : 0;
+            if ((n == 5 || n == 7) && every > 0 && y > road) {
+                memset(p, 0, sizeof(*p));
+                p->X = p->LandX = x; p->Y = y; p->Z = p->LandZ = z; p->RoadY = road; p->Every = every; p->Next = p->LandAt = 0;
+                if (n == 7) { p->Flip = 1; p->MX = mx; p->MZ = mz; }
+                s_nbDrips++;
             }
         }
         else if (!strcmp(key, "jumpcam")) {
@@ -4731,7 +4740,7 @@ static void Slicks(S32 now, int driving) {
         if (driving && CubeMode == CUBE_EXTERIEUR && now >= s_skidUntil && now >= s_protectUntil && now >= s_jetUntil && Near(hero, lx, (S32)sl->Y, lz, RACE_OIL_REACH)) {
             s_skidUntil = now + RACE_SKID_MS; s_skidStart = now; s_skidBeta = hero->Obj.Beta; s_skidSpeed = ListBuggy[0].Speed;
             s_skidDir = RaceRandom() < 0.5 ? 1 : -1;
-            Log_Info("[racemod] Twinsen skids on oil");
+            Log_Info("[racemod] Twinsen skids on oil%s", sl->Until ? " (a pipe's drip)" : "");
             sl->On = 0;                     // (the car took it with it: a slick is one car's)
         } else if (driving && CubeMode == CUBE_EXTERIEUR && (now < s_protectUntil || now < s_jetUntil) && Near(hero, lx, (S32)sl->Y, lz, RACE_OIL_REACH)) {
             // (protected, or on the super jet-pack: over it unharmed -- it stays for the next car)
@@ -4747,7 +4756,7 @@ static void Slicks(S32 now, int driving) {
             if ((x - sl->X) * (x - sl->X) + (z - sl->Z) * (z - sl->Z) >= (double)RACE_OIL_REACH * RACE_OIL_REACH || fabs(y - sl->Y) > 900) continue;
             if (now < o->JetUntil) continue;  // (on a super jet-pack: nothing touches it)
             o->SkidUntil = now + RACE_SKID_MS; o->SkidStart = now; o->SkidDir = RaceRandom() < 0.5 ? 1 : -1; o->SkidSpeed = o->Speed;
-            Log_Info("[racemod] %s skids on oil", o->Name);
+            Log_Info("[racemod] %s skids on oil%s", o->Name, sl->Until ? " (a pipe's drip)" : "");
             sl->On = 0;
             break;
         }
@@ -5554,17 +5563,20 @@ static void Vents(S32 now) {
             // landed: a slick where it fell (with the power-ups' oil: their slicks show it)
             if (now < p->LandAt) continue;
             p->LandAt = 0;
-            if (s_powerups && s_nbOilActors && DripOil(p->X, p->RoadY, p->Z, now)) Log_Info("[racemod] oil dripped onto the road at %.0f %.0f", p->X, p->Z);
+            if (s_powerups && s_nbOilActors && DripOil(p->LandX, p->RoadY, p->LandZ, now)) Log_Info("[racemod] oil dripped onto the road at %.0f %.0f", p->LandX, p->LandZ);
             continue;
         }
         if (!p->Next) { p->Next = now + (S32)(VentRandom() * p->Every); continue; }
         if (now < p->Next) continue;
         p->Next = now + p->Every * 3 / 4 + (S32)(VentRandom() * p->Every / 2);
+        // (a drip among steam jets: on the driver's left on the player's odd laps, his right on his even ones -- the jets' side, Jets)
+        const int right = p->Flip && !(s_laps & 1);
+        p->LandX = right ? 2 * p->MX - p->X : p->X; p->LandZ = right ? 2 * p->MZ - p->Z : p->Z;
         // a drop falling from a standstill (weight 16: down t*t in t 20 ms ticks), gone when it reaches the road
         const S32 ms = (S32)(sqrt(p->Y - p->RoadY) * 20);
         p->LandAt = now + ms;
-        if ((p->X - hx) * (p->X - hx) + (p->Z - hz) * (p->Z - hz) <= near2)
-            InitExtraPof((S32)(p->X - cx), (S32)p->Y, (S32)(p->Z - cz), 1, 1024, 0, 0, 16, 2600, 2601, ms, 0, ms);
+        if ((p->LandX - hx) * (p->LandX - hx) + (p->LandZ - hz) * (p->LandZ - hz) <= near2)
+            InitExtraPof((S32)(p->LandX - cx), (S32)p->Y, (S32)(p->LandZ - cz), 1, 1024, 0, 0, 16, 2600, 2601, ms, 0, ms);
     }
 }
 
@@ -5637,7 +5649,9 @@ static void Jets(S32 now, int driving) {
                 HitObj(PenguinHitter(), NUM_PERSO, RACE_STEAM_FORCE, -1);
                 ListBuggy[0].Speed = 0;
                 if (s_hitUntil < now + RACE_STEAM_HOLD) s_hitUntil = now + RACE_STEAM_HOLD;
-                Log_Info("[racemod] Twinsen's car hit by a steam jet");
+                if (across) Log_Info("[racemod] Twinsen's car hit by a steam jet (lap %d, %.1f cells from the road's middle towards the jet, the steam %.1f past it)",
+                                     (int)s_laps, side / 512.0, (j->Reach - j->Half) / 512.0);
+                else Log_Info("[racemod] Twinsen's car hit by a steam jet");
             }
         }
         // an opponent's

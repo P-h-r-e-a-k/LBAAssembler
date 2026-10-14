@@ -3502,6 +3502,59 @@ of the track, these should more closely resemble our other tracks".
 - *Checked* with the test pilot: power-ups, won in 290.85 s; no power-ups, won in 314.60 s (stopped by three of the guards on the way);
   no car rescued, both jumps carried, game variable 79 set, Twinsen awake in scene 95. The race is long: some 5 minutes.
 
+## A woman off the town circuit, a clean arrow, smooth kerbs, a crash, a fairer refinery (2026-10-14)
+
+- *Off the town circuit.* The user: "Our citabau.ile track has an NPC on the track behind the lighthouse that we need to remove". She was
+  the fiancée (scene 46, entity 113): her script puts her at a random one of track points 9 to 13 behind the lighthouse and walks her
+  between them, and she follows Twinsen when he comes within 1,300 -- onto the road. The track kept her as one of the lighthouse's story
+  people (`RaceTrackIsland` Citadel's `StoryEntities`), but no other script of the scene refers to her and the storm's end needs only
+  Raph by the door and Twinsen and Zoe on the top: she is removed with the scene's other actors now (12 removed, 6 left).
+- *The first arrow past the start line* (the town circuit): "looks corrupted". The road there runs 11 degrees off the nearest of the
+  eight directions an arrow is drawn exactly in, and an arrow at any other heading (`ArrowFree`) had its edges step by half cells. Now
+  the arrow may be turned up to 16 degrees (5, 8, 12, then 16: `ArrowSnapDegrees`) to land on one of the eight, and a straight no spot
+  of which fits within 16 degrees gets none. That arrow is a clean one pointing west at (519.3, 689.3) now. No other island's arrows
+  changed (each island built by the program before and after, from the same files).
+- *Smooth kerbs where the lap runs close to itself.* The user, with a picture of the Desert island: "Some of the red/white lines around
+  the track on desert.ile aren't smooth lines". A cell takes the smooth kerb (`KerbCells`: the kerb texture mapped by the road's own
+  coordinates) only where it is plainly one road's; two kinds of cells weren't and were painted whole, red or white -- a kerb in steps:
+  a jump's ramp (on the Desert island it runs on a slant: its kerbs stepped all the way up), and a cell another part of the lap came
+  near at all, even with only its verge or the gap under a jump's flight. Now a ramp is plain road, and another part of the lap only
+  counts where its kerb comes within reach of the cell (more than three quarters of a cell past its kerb, `KerbClear`, it doesn't).
+  What is still painted cell by cell is where two kerbs really overlap: the pit lane's joins (27 cells), a hairpin's inside (11) and
+  the jumps' lips (4: the lip's road is the hatched warning stripe, and the kerb texture would lay asphalt into it). The Desert island
+  has 264 more smooth kerb triangles, Mosquibees Island 188, the storm track 88, the town circuit 42; Polar Island changes too.
+
+![The Desert island's ramp before: its kerbs and the lower road's in whole cells](racetrack/desert_ramp_kerbs_before.png)
+
+![After: cut along the slant (the two red squares at the hatched stripe's ends are the jump's lip)](racetrack/desert_ramp_kerbs_after.png)
+
+- *A crash in a race.* The user: "I've just had race mode crash whilst testing". The engine's log (`adeline.log`'s CRASH block, the
+  addresses read against the build's symbols) put it in `GiveTerrainCol` (3DEXT/MAPTOOLS.CPP), from the hero's animation step
+  (`DoAnimExt`, `ReceptionObj`): on the Island of the Francos, scene 257, the car by the cube's north edge after lap 4. The ground's
+  collision is read cell by cell from the island's cache with no check that the cell is in the cube -- a place a little off its edge read
+  outside it, and past the cache's end, memory that isn't there. `GiveTerrainCol` and `GiveTriangle` take a place outside the cube's
+  64 by 64 cells as no ground now (as off the island). Three races of three laps since, through that scene each lap: no crash.
+- *The Island of the Francos' refinery: a safe way through.* The user: "Our Knartas.ile track is a little too chaotic, in places we have
+  both steam and oil attacking obstacles for the player at the same time, and in lots of places at the same time, let's tweak this so
+  we're always providing a safe path through so they can avoid getting hit if they drive well". Every one of the 16 gantries over the
+  road blew steam from one side (5.5 cells across, three quarters of a cell past the road's middle) and dripped oil 2.1 cells to one
+  side of the middle, the side changing gantry by gantry -- where the oil fell on the side the steam didn't reach, 0.4 of a cell of road
+  was left; and the pipeline from the factory dripped three times across the road where it passes over it (2.5 cells apart, a slick
+  taking a car 1.5 cells from its middle: under a cell left). Now (`PipeRun.OneSide`, `PipeLine.OneSide`, the plan's `oneSide`):
+  - a gantry either blows steam or drips oil, never both: every other one of a steam stretch blows (9 jets, 15 before), the ones between
+    drip (7 drips, 16 before);
+  - the steam blows to the road's middle and no further;
+  - a gantry's drip falls on the side the steam blows from that lap -- the driver's left on odd laps, his right on even ones (the
+    engine's `drip=` takes the road's middle under it as two more numbers and mirrors the drip through it on even laps);
+  - the pipeline drips once where it passes over the road (two places), on one half, its slick clear of the middle (`SlickClear`).
+
+  So on each lap the steam and the gantries' oil are all on one half of the road and the other half is clear; at the pipeline, the half
+  away from its drip. The test pilot, which keeps to its line, shows it: on the odd laps (steam from the left), where its line runs on
+  the right it was never hit, and its only hits were where its line runs exactly down the middle (0.0 cells over); on the even lap its
+  line runs on the steam's side through the second and third stretches and it was hit there, and every one of its skids on a drip was
+  on an even lap. The engine's log says now how far over the middle a car was when the steam hit it, and whether the oil it skidded on
+  was a pipe's drip.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

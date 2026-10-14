@@ -187,6 +187,9 @@ S32	GiveTriangle( S32 x, S32 z )
 	dx = x>>9; // div512
 	dz = z>>9; // div512
 
+	// (outside the cube's 64 x 64 cells there is no polygon of its own: the first triangle -- as GiveTerrainCol, which no longer asks)
+	if( (dx < 0) OR (dx > 63) OR (dz < 0) OR (dz > 63) )	return 0 ;
+
 	x &= 511 ;
 	z &= 511 ;
 
@@ -215,6 +218,16 @@ S32	GiveTerrainCol( S32 x, S32 z )
 
 	dx = x>>9; // div512
 	dz = z>>9; // div512
+
+	// (a place outside the cube's 64 x 64 cells -- a car crossing into the next cube, the new place a step past the edge -- blocks
+	// nothing: its polygon isn't this cube's. Unchecked, the index read before or past the cube's polygons in the island's cache, and
+	// a car landing half a cell from a cube's north edge read unmapped memory: the race on the Island of the Francos, 2026-10-14,
+	// scene 257, through ReceptionObj. CalculAltitudeTerrain and GiveTerrainCodeJeu already refuse such a place.)
+	if( (dx < 0) OR (dx > 63) OR (dz < 0) OR (dz > 63) )
+	{
+		IndexMapPolyTested = 0 ;
+		return TerrainColHook ? TerrainColHook( x, z, 0 ) : 0 ;
+	}
 
 	IndexMapPolyTested = dz*64*2+dx*2 ;	// pour le recuperer dans
 						// perso pour glisser sur les

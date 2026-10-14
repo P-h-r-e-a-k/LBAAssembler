@@ -3723,8 +3723,13 @@ internal static class RaceTrackBuilder
             // nose over the drop
             if (!stripe && ck is Kind.Sand or Kind.Hatch && NearSea(field, gx, gz, 2)) ck = Kind.Wall;
             kinds[(gx, gz)] = ck;
+            // (another part of the lap near enough only with its verge -- past its kerb by more than the cell reaches -- leaves the cell
+            // the chosen road's: the smooth kerb draws the verge past its own kerb anyway; and a jump's gap over it, where the lap has no
+            // surface, leaves it the road's under the leap. Where the lap ran close to itself, cells of one kerb within the other's verge
+            // were painted cell by cell, a kerb in steps -- the user, 2026-10-14, of the Desert island's)
             if (ck is Kind.Asphalt or Kind.RedCurb or Kind.WhiteCurb or Kind.Sand or Kind.Hatch && Plain(chosen.Value)
-                && hits.Count(h => !h.Deck && Across(roads[h.Road], h) <= roads[h.Road].CurbHalf + 1.5) == 1)
+                && hits.Where(h => !h.Deck && !h.Gap && !h.Void && !h.Equals(chosen.Value) && Across(roads[h.Road], h) <= roads[h.Road].CurbHalf + 1.5)
+                       .All(h => Plain(h) && Across(roads[h.Road], h) > roads[h.Road].CurbHalf + KerbClear))
                 plain[(gx, gz)] = chosen.Value;
         }
         // the start line first, so the arrows (which only go where every cell is plain asphalt) keep clear of it
@@ -3757,9 +3762,11 @@ internal static class RaceTrackBuilder
         return kinds.Keys.ToHashSet();
     }
 
-    // Plain road: not a deck's, a jump's or a landing's (a walled road -- Bridge: over water or a valley, or cut into a cliff -- is, its
-    // verge rock).
-    private static bool Plain(RoadHit h) => !h.Deck && !h.Void && !h.Gap && !h.Lip && !h.UnderDeck && !h.Landing && !h.Jump && !h.Raised && !h.Arc;
+    // Plain road, for the smooth kerbs: not a deck's, a jump's lip or gap, or a landing's (a walled road -- Bridge: over water or a valley,
+    // or cut into a cliff -- is, its verge rock; and so is a jump's ramp up to its lip since 2026-10-14: its kerbs were painted cell by
+    // cell, in steps up the Desert island's ramp, which runs on a slant -- the user: "Some of the red/white lines around the track on
+    // desert.ile aren't smooth lines").
+    private static bool Plain(RoadHit h) => !h.Deck && !h.Void && !h.Gap && !h.Lip && !h.UnderDeck && !h.Landing && !h.Raised && !h.Arc;
 
     // A cell along a kerb, drawn triangle by triangle: cut the way the road runs (Diagonal), and each of its two triangles either plain
     // paint (Kinds: the asphalt, or the verge -- sand, or a banked bend's hatching) or, reaching the kerb, its kerb texture's corners
@@ -3782,6 +3789,9 @@ internal static class RaceTrackBuilder
     // cell and the blocks 1.6 cells long, had a definition a triangle -- 1,815 for 1,871 in its busiest cube -- and an island with more
     // ground pages has room for 1,024)
     private const double KerbSnap = 1.0 / 16, KerbSnapBlock = 2;
+    // How far past its kerb another part of the lap must be for a cell to be drawn as the chosen road's alone (PaintRoad): more than
+    // a cell reaches from its middle (half a diagonal)
+    private const double KerbClear = 0.75;
 
     private static Dictionary<(int, int), KerbCell> KerbCells(IslandFile island, RoadIndex index, List<TrackRoad> roads, Dictionary<(int, int), Kind> kinds,
         Dictionary<(int, int), ArrowCell> arrows, Dictionary<(int, int), RoadHit> plain, (int X, int Y) texture, RaceTrackTheme theme, double? snap = null)
@@ -4026,14 +4036,11 @@ internal static class RaceTrackBuilder
     {
         (0, 0), (-3, 3), (-3, 1), (-9, 1), (-9, -1), (-3, -1), (-3, -3),
     }, Math.Sqrt(0.5));
-    // At any other heading (only when no spot of the straight runs close enough to one of the eight): 6.5 long, a head 3 long and
-    // 5 wide on a shaft 1.7 wide. Its edges step by half cells.
-    private static readonly (double F, double U)[] ArrowFree =
-    {
-        (0, 0), (-3, 2.5), (-3, 0.85), (-6.5, 0.85), (-6.5, -0.85), (-3, -0.85), (-3, -2.5),
-    };
-    // How far the arrow may be turned off the road's own heading to land on one of the eight: first 5 degrees, then 8.
-    private static readonly double[] ArrowSnapDegrees = { 5, 8 };
+    // How far the arrow may be turned off the road's own heading to land on one of the eight: first 5 degrees, then 8, 12 and 16. (An
+    // arrow at any other heading had its edges step by half cells and came out ragged -- the user, 2026-10-14, of the town circuit's
+    // first arrow past the start line, 11 degrees off: "looks corrupted" -- so none is drawn at another heading: an arrow no spot of the
+    // straight fits within 16 degrees of the eight is left out.)
+    private static readonly double[] ArrowSnapDegrees = { 5, 8, 12, 16 };
     // The stretch searched for the arrow's spot (cells after the bend's exit) and the usual spot within it.
     private const double ArrowSearchFrom = 4, ArrowSearchTo = 36, ArrowUsual = 18;
     // Over what length of road its heading is measured (the chord, so an arrow where the road still turns sits in its lane).
@@ -4074,8 +4081,8 @@ internal static class RaceTrackBuilder
     }
 
     // One arrow for the straight that starts at point i: at the spot nearest the usual one whose heading is within
-    // ArrowSnapDegrees of one of the eight exact directions, else at the usual spot at the road's own heading. The whole arrow
-    // or none of it: a spot where it would touch anything but plain asphalt (a curb, the start line, a bridge deck ...) is passed over.
+    // ArrowSnapDegrees of one of the eight exact directions (the smallest turn first), else none. The whole arrow or none of it: a
+    // spot where it would touch anything but plain asphalt (a curb, the start line, a bridge deck ...) is passed over.
     private static bool PlaceArrow(IslandFile island, TrackRoad r, int i, Dictionary<(int, int), Kind> kinds, Dictionary<(int, int), ArrowCell> arrows, RaceTrackOptions o, RaceTrackReport report)
     {
         var usual = (int)(ArrowUsual / o.Spacing);
@@ -4110,15 +4117,7 @@ internal static class RaceTrackBuilder
             Keep(cells, j, dx * scale, dz * scale);
             return true;
         }
-        {
-            var j = At(r, i + usual);
-            var (tx, tz) = Chord(r, j, OutlineLength(ArrowFree), o);
-            var half = OutlineLength(ArrowFree) / 2;
-            var cells = RasteriseArrow(island, ArrowFree, r.X[j] + tx * half, r.Z[j] + tz * half, tx, tz);
-            if (!Fits(cells)) return false;
-            Keep(cells, j, tx, tz);
-            return true;
-        }
+        return false;
     }
 
     // Whether a cell lies under the road bridge's deck (with a cell to spare).

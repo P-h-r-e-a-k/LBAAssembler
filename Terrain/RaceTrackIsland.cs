@@ -39,11 +39,13 @@ internal sealed record RaceTrackIsland(
         // carport, where the island's own car stands: that one, a decor that can't be driven, goes from both files)
         ParkOwn = (540.5, 637.5, 1024, 1), ParkTwin = (544.125, 654.75, 1024, 0),
         DropDecors = new[] { (8, 10, 16448, 7552) }, OwnWeather = 0,
-        // (the lighthouse, scene 46, where the storm ends: the game's own Raph by its door, his fiancee and Twinsen and Zoe on its top, whom
-        // the Weather Wizard's spell needs -- RaceTrackStory -- and the door's people and track points on the storm file's ground: the town
-        // circuit, in the fine weather's file, cut the hill there by 2,000)
-        StoryEntities = new[] { RaceTrackStory.LighthouseRaph, RaceTrackStory.Fiancee, RaceTrackStory.CoupleOnTop },
-        OwnGroundAt = new[] { (46, 481.5, 661.8, 10.0), (46, 463.0, 665.0, 3.0) },
+        // (the lighthouse, scene 46, where the storm ends: the game's own Raph by its door and Twinsen and Zoe on its top, whom the Weather
+        // Wizard's spell needs -- RaceTrackStory -- and the door's people and track points on the storm file's ground: the town circuit, in
+        // the fine weather's file, cut the hill there by 2,000. Raph's fiancee went with the others, 2026-10-14 -- the user: "an NPC on the
+        // track behind the lighthouse that we need to remove": she wanders between five places behind it, on the town circuit, and runs
+        // after Twinsen until the keeper is back -- after the car; no script of the scene's refers to her)
+        StoryEntities = new[] { RaceTrackStory.LighthouseRaph, RaceTrackStory.CoupleOnTop },
+        OwnGroundAt = new[] { (46, 481.5, 661.8, 10.0) },
     };
 
     public static readonly RaceTrackIsland CitadelStorm = Citadel with
