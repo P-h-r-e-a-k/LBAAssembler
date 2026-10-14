@@ -3636,6 +3636,20 @@ left". ("Left" is the driver's, the way the lap runs.)
   Desert a car moved from the hairpin's way up to its way down, past the top, was called at once: "MISSED checkpoint 13 of 23 on lap 1:
   23 cells further round the lap".
 
+### The Island of the Francos' huts: nothing in the way along the rails
+
+The user, with a picture of the road going in under a hut's dome: "The right side of the track on Knartas.ile in this position seems to
+have something us stopping when we're hugging the right side of the track". A hut the road is driven through
+(`RaceTrackDriveThrough`) is cut into walls either side and a roof, each with its own box -- and the engine stops a car at any decor's
+box. The walls' boxes were to be kept out of the passage, the deck's width and `Margin` from the road's middle, but the road through a
+hut was every point of the lap within 40 cells of it, and the Francos' lap passes 25 cells beside two of them: the passage was measured
+from that other road's middle, and the walls' boxes stayed where they were -- hut 88's right wall's 3.9 cells from the middle, hut 84's
+left wall's 3.7, with the deck 4.75 and 4.4 to 4.6 wide. Now the road through a hut is the stretch of the lap through it (`PassageReach`
+cells either way from its point nearest the hut, at the height nearest the hut's floor), and the passage is as wide as the deck there
+(its own half width, point by point, and `Margin`). No decor's box comes within 0.6 of a cell of a rail anywhere on the lap now. Checked
+with the test pilot driving 4 cells to the right through hut 88 and to the left through hut 84: through both at speed; the same on a
+build without the fix stopped dead at hut 88's wall. Otringal's tunnel (its drive-throughs) is cut as before.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove
