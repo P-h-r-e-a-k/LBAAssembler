@@ -2228,14 +2228,18 @@ internal static class RaceTrackBuilder
         var sx = r.X[ia] + hx * start; var sz = r.Z[ia] + hz * start;       // where the flight starts
         var lx = r.X[ia] + hx * land; var lz = r.Z[ia] + hz * land;         // where it ends
         var beta = (int)Math.Round(Math.Atan2(hx, hz) / (2 * Math.PI) * 4096); beta = ((beta % 4096) + 4096) % 4096;
-        // the strip across the ramp: cells whose centre is 0..JumpZoneDepth cells past the start and within the curbs
+        // the strip across the ramp: cells whose centre is 0..JumpZoneDepth cells past the start and on the ramp's top -- its kerbs, its
+        // rock shoulders and the walls at their edges (within the curbs until 2026-10-14: on Mosquibees Island the strip ended a cell into
+        // the kerb on one side and half a cell short of the shoulder's edge on the other, and a car there drove off the lip into the gap --
+        // the user: "extend the jump zone ... fully across ... A car has to be almost fully off the track to jump there, but it should
+        // still work for them")
         var cells = new HashSet<(int, int)>();
-        for (var gz = (int)Math.Floor(sz) - 8; gz <= (int)Math.Ceiling(sz) + 8; gz++)
-        for (var gx = (int)Math.Floor(sx) - 8; gx <= (int)Math.Ceiling(sx) + 8; gx++)
+        for (var gz = (int)Math.Floor(sz) - 9; gz <= (int)Math.Ceiling(sz) + 9; gz++)
+        for (var gx = (int)Math.Floor(sx) - 9; gx <= (int)Math.Ceiling(sx) + 9; gx++)
         {
             var qx = gx + 0.5 - sx; var qz = gz + 0.5 - sz;
             var f = qx * hx + qz * hz; var u = -qx * hz + qz * hx;
-            if (f >= 0 && f <= JumpZoneDepth && Math.Abs(u) <= r.CurbHalf) cells.Add((gx, gz));
+            if (f >= 0 && f <= JumpZoneDepth && Math.Abs(u) <= r.CurbHalf + RampShoulder) cells.Add((gx, gz));
         }
         // rows of cells become boxes; equal runs in neighbouring rows join
         var rows = cells.GroupBy(q => q.Item2).OrderBy(g => g.Key).ToList();

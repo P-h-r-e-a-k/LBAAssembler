@@ -3555,6 +3555,45 @@ of the track, these should more closely resemble our other tracks".
   on an even lap. The engine's log says now how far over the middle a car was when the steam hit it, and whether the oil it skidded on
   was a pipe's drip.
 
+## The jumps' strips across the whole ramp, missed checkpoints called out, Otringal's pier smoothed, a shorter landing (2026-10-14, later)
+
+- *A jump's strip across the whole ramp.* The user: "Let's extend the jump zone for Mosquibe.ile fully across to cover the left side. A
+  car has to be almost fully off the track to jump there, but it should still work for them". The strip of scene zone that starts a
+  jump's flight held the cells whose middles were within the kerbs; past the kerb the ramp has a cell of rock shoulder and its blocking
+  walls (`RampShoulder`, 2.5 cells), and a car there drove off the lip into the gap. On Mosquibees Island the strip ran from 5 cells left
+  of the road's middle to 4 right of it; now (`LayJump`) it holds the ramp's whole top, kerbs, shoulders and walls -- 7 cells either side
+  (cells 520 to 534, the road's middle at 527). Checked with the test pilot driving the ramp 5 cells to either side of the middle: both
+  flew and landed on the far ramp. Every island's ramp jumps get it (the Desert's, the storm track's, Mosquibees', the lava lake's
+  three); on each, the lap's line passes through the wider strip only at the ramp itself (no other part of the lap could set it off).
+- *Missed checkpoints, for testing.* The user: "add in some code that alerts me for when I miss a check point in a track complete with
+  the check point number, also add this to the log file". The moment the car is past the next checkpoint without having crossed it -- a
+  later one crossed first, or the car 16 cells further round the lap than it (`RACE_MISS_PAST`) -- "Missed checkpoint N" shows on the
+  display for 4 seconds, and the log (`adeline.log`) has a line: `MISSED checkpoint N of M on lap L: <how> -- the car in cube (x,z) at
+  (x, y, z), the checkpoint's line in cube (x,z) from (x0, z0) to (x1, z1)`. Once a checkpoint a lap; crossing the start line with one
+  still missed now says "Missed checkpoint N: no lap" on the display too (it was only in the log). How far round the lap the car is
+  counts the road's height (`CarAlongGuide`): round Mosquibees Island's mountain, on the ground, the lap passes over itself and the
+  race's own position tracker -- which counts height only on a raised road -- put the car on the loop above, and checkpoint 6 was
+  called missed before the car came to it. Checked: two laps of Mosquibees and of Otringal with none called, and a car moved past
+  checkpoint 2 called at once with the right number.
+
+![The display when a checkpoint is missed](racetrack/missed_checkpoint.png)
+
+- *Otringal's pier, smoothed.* The user, with a green line drawn over the map: "This section of track on Otringal, the corners are a
+  little tight, let's change the track so it matches the green line in this image instead to smooth them out". Out from under the
+  roulette wheel the road turned south at the pier's yard, west north of the little house and south again over the sea -- three
+  corners 4 cells round (the builder's 6). It is one straight now from the first corner to the last, both 12 cells round
+  (`otringal_design.py`: the corner at (420.3, 553) gone, the others widened); the lap is 4 cells shorter. Two laps with the test
+  pilot: 73.7 s from the standing start, then 65.5 s.
+
+![Before: the zig-zag west of the wheel](racetrack/otringal_pier_before.png)
+
+![After: one sweep](racetrack/otringal_pier_after.png)
+
+- *The spaceship's landing.* The user: "The space ship that lands on Otringal before taking off again, let's reduce the time it's
+  blocking the track slightly". It blocked the road while under 1,200 over its pad: the end of its touch-down, its 2.2 seconds on the
+  road and the first second of its climb -- some 3.6 seconds a landing. It stands on the road 1.3 seconds now (`RACE_SHUTTLE_LANDED`):
+  some 2.7 seconds.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

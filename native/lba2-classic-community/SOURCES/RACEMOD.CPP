@@ -1038,7 +1038,9 @@ static S32 s_carLastT[RACE_MAX_OPPONENTS + 1];
 #define RACE_SHUTTLE_DOWN 2600             // ... coming down out of the sky to hover
 #define RACE_SHUTTLE_HOVER 3600            // ... hovering over the pad
 #define RACE_SHUTTLE_TOUCH 900             // ... down onto it
-#define RACE_SHUTTLE_LANDED 2200           // ... on the road
+// (on the road 2200 until 2026-10-14 -- the road blocked some 3.6 s a landing, under RACE_SHUTTLE_LOW from the end of its touch-down
+// to a second into its rise; now some 2.7 s. The user: "let's reduce the time it's blocking the track slightly")
+#define RACE_SHUTTLE_LANDED 1300           // ... on the road
 #define RACE_SHUTTLE_RISE 3400             // ... straight up out of sight
 #define RACE_SHUTTLE_HOVERY 2700           // its hover over the pad (the cars pass under it)
 #define RACE_SHUTTLE_HIGH 15000            // where it comes down from and rises to, over the pad
@@ -2565,6 +2567,79 @@ static void Message(const char *text) {
     s_messageUntil = TimerRefHR + 2500;
 }
 
+// A missed checkpoint, for testing the tracks (the user, 2026-10-14: "alerts me for when I miss a check point in a track complete with
+// the check point number, also add this to the log file"): as soon as the car is past the next checkpoint without having crossed it --
+// a later one crossed first, or the car RACE_MISS_PAST further round the lap than it (RaceMod_Lap) -- "Missed checkpoint N" on the
+// display and a line in the log with where the car and the checkpoint's line are; once a checkpoint a lap. (The lap still counts only
+// once the car goes back and crosses it, as before.)
+#define RACE_MISS_PAST (16 * 512)
+static int s_missIndex = -1;
+static S32 s_missLap = -1;
+static double s_checkpointAt[RACE_MAX_CHECKPOINTS];   // each checkpoint's place round the guide's line (its Cum), -1 not worked out yet
+static int s_checkpointAtFor = 0;                     // ... for this many checkpoints (0: work them out again)
+
+static void MissedCheckpoint(int k, const char *how) {
+    if (k < 0 || k >= s_nbCheckpoints || (k == s_missIndex && s_laps == s_missLap)) return;
+    s_missIndex = k; s_missLap = s_laps;
+    char text[64];
+    snprintf(text, sizeof(text), "Missed checkpoint %d", k + 1);
+    Message(text);
+    s_messageUntil = TimerRefHR + 4000;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const T_RACE_LINE *l = &s_checkpoints[k];
+    Log_Info("[racemod] MISSED checkpoint %d of %d on lap %d: %s -- the car in cube (%d,%d) at (%d, %d, %d), the checkpoint's line in cube (%d,%d) "
+             "from (%d, %d) to (%d, %d)%s", k + 1, s_nbCheckpoints, (int)s_laps, how, (int)CurrentCubeX, (int)CurrentCubeY, (int)hero->Obj.X,
+             (int)hero->Obj.Y, (int)hero->Obj.Z, (int)l->CubeX, (int)l->CubeZ, (int)l->X0, (int)l->Z0, (int)l->X1, (int)l->Z1,
+             l->HasY ? "" : " (no height)");
+}
+
+// Where the car is round the guide's line for that: the line's point nearest it, its height counted -- PlayerProgress counts it only on
+// a raised road, and round Mosquibees Island's mountain, on the ground, the lap passing over itself put the car on the loop above, 72
+// cells further round, and its next checkpoint missed before the car came to it. Near the point found last (RACE_MISS_SEARCH either
+// way), all of the line when the car is far from that; -1 with no line.
+#define RACE_MISS_SEARCH 150
+static int s_missAt = -1;
+static double CarAlongGuide(void) {
+    const T_RACE_OPPONENT *o = Guide();
+    if (!o || o->Count <= 0) return -1;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0, wy = hero->Obj.Y;
+    int best = -1;
+    double bd = 1e30;
+    for (int pass = s_missAt >= 0 && s_missAt < o->Count ? 0 : 1; pass < 2 && (best < 0 || bd > 20.0 * 512 * 20 * 512); pass++)
+        for (int k = pass ? 0 : -RACE_MISS_SEARCH; pass ? k < o->Count : k <= RACE_MISS_SEARCH; k++) {
+            const int i = pass ? k : ((s_missAt + k) % o->Count + o->Count) % o->Count;
+            const double d = (o->X[i] - wx) * (o->X[i] - wx) + (o->Z[i] - wz) * (o->Z[i] - wz) + 4.0 * (o->Y[i] - wy) * (o->Y[i] - wy);
+            if (d < bd) { bd = d; best = i; }
+        }
+    s_missAt = best;
+    return best >= 0 ? o->Cum[best] : -1;
+}
+
+// A checkpoint's place round the guide's line: the line's point nearest its middle (at its height, where it has one: a lap that passes
+// over itself), or -1 with no line.
+static double CheckpointAt(int k) {
+    const T_RACE_OPPONENT *o = Guide();
+    if (!o || o->Count <= 0 || k < 0 || k >= s_nbCheckpoints) return -1;
+    if (s_checkpointAtFor != s_nbCheckpoints) {
+        for (int i = 0; i < RACE_MAX_CHECKPOINTS; i++) s_checkpointAt[i] = -1;
+        s_checkpointAtFor = s_nbCheckpoints;
+    }
+    if (s_checkpointAt[k] < 0) {
+        const T_RACE_LINE *l = &s_checkpoints[k];
+        const double mx = l->CubeX * 32768.0 + (l->X0 + l->X1) / 2.0, mz = l->CubeZ * 32768.0 + (l->Z0 + l->Z1) / 2.0;
+        double bd = 1e30;
+        int best = 0;
+        for (int i = 0; i < o->Count; i++) {
+            double d = (o->X[i] - mx) * (o->X[i] - mx) + (o->Z[i] - mz) * (o->Z[i] - mz);
+            if (l->HasY) d += 4.0 * (o->Y[i] - l->Y) * (double)(o->Y[i] - l->Y);
+            if (d < bd) { bd = d; best = i; }
+        }
+        s_checkpointAt[k] = o->Cum[best];
+    }
+    return s_checkpointAt[k];
+}
+
 // Whether the move (x0,z0)->(x1,z1) crosses the segment (ax,az)-(bx,bz).
 static int Crosses(double x0, double z0, double x1, double z1, double ax, double az, double bx, double bz) {
     const double d1 = (bx - ax) * (z0 - az) - (bz - az) * (x0 - ax);
@@ -2658,6 +2733,24 @@ void RaceMod_Lap(S32 x, S32 z) {
             } else if (i == s_next - 1 && CrossLine(&s_checkpoints[i], x0, z0, x, z) < 0) {
                 s_next--;
                 Log_Info("[racemod] checkpoint %d crossed backwards", s_next + 1);
+            } else if (i > s_next && CrossLine(&s_checkpoints[i], x0, z0, x, z) > 0) {
+                char how[48];
+                snprintf(how, sizeof(how), "checkpoint %d crossed before it", i + 1);
+                MissedCheckpoint(s_next, how);
+            }
+        }
+    // ... and the car further round the lap than the next one, not having crossed it (round its end, or off the road)
+    if (s_laps > 0 && s_next < s_nbCheckpoints && s_loopState == LOOP_NONE)
+        if (const T_RACE_OPPONENT *o = Guide()) {
+            const double car = CarAlongGuide(), at = CheckpointAt(s_next);
+            if (at >= 0 && car >= 0 && o->Length > 0) {
+                double ahead = fmod(car - at, o->Length);
+                if (ahead < 0) ahead += o->Length;
+                if (ahead > RACE_MISS_PAST && ahead < o->Length / 2) {
+                    char how[48];
+                    snprintf(how, sizeof(how), "%.0f cells further round the lap", ahead / 512);
+                    MissedCheckpoint(s_next, how);
+                }
             }
         }
 
@@ -2681,6 +2774,9 @@ void RaceMod_Lap(S32 x, S32 z) {
     }
     // (a checkpoint missed -- a corner cut -- or, with none, the start line crossed again before the car has been round: no lap)
     if (s_laps > 0 && s_nbCheckpoints && s_next < s_nbCheckpoints) {
+        char text[64];
+        snprintf(text, sizeof(text), "Missed checkpoint %d: no lap", s_next + 1);
+        Message(text);
         Log_Info("[racemod] missed checkpoint %d of %d: no lap", s_next + 1, s_nbCheckpoints);
         return;
     }
@@ -7517,7 +7613,7 @@ static void ResetTrack(void) {
     Defaults(&s_car);                       // (the opponents too)
     s_gear = 1;
     s_laps = 0; s_lapStart = s_lastLap = s_bestLap = 0;
-    s_lineY = s_lineHasY = 0; s_halfway = 0; s_nbCheckpoints = 0; s_next = 0; s_showCheckpoints = 0;
+    s_lineY = s_lineHasY = 0; s_halfway = 0; s_nbCheckpoints = 0; s_next = 0; s_showCheckpoints = 0; s_checkpointAtFor = 0; s_missIndex = -1; s_missLap = -1; s_missAt = -1;
     s_messageUntil = 0;
     s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopHold = -1;
     s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0;
