@@ -737,7 +737,9 @@ internal static class PalaceIsland
                 var hall = hallTile >= 0 ? (WX(extents[hallTile].X0), WZ(extents[hallTile].Z0), WX(extents[hallTile].X1 + 1), WZ(extents[hallTile].Z1 + 1)) : ((double, double, double, double)?)null;
                 var site = new PalaceOutside.Site(WX(under.Min(c => c.X)), WZ(under.Min(c => c.Z)), WX(under.Max(c => c.X) + 1), WZ(under.Max(c => c.Z) + 1),
                     tops.Max(), U, V, hall);
-                var placed = PalaceOutside.Add(island, source, HqrArchive.Open(Path.Combine(sourceDirectory, SourceObl)), newBodies, next, site, Cap);
+                // (the rooftops round the race's road over the roof: the palace's track built into the program, since 2026-10-14)
+                var placed = PalaceOutside.Add(island, source, HqrArchive.Open(Path.Combine(sourceDirectory, SourceObl)), newBodies, next, site, Cap,
+                    PalaceOutside.RaceRoad(tops.Max() - 500));
                 outsideBoxes = placed.Boxes; outsideBodies = placed.Bodies;
                 log.AddRange(placed.Log);
             }

@@ -363,6 +363,16 @@ nice and square."
   `PillarNorth` is gone): the race's leap is off the roof's middle way now, north over the cloud sea (the user's new way over the roof,
   `docs/LBA2_DESERT_RACE_TRACK_BUILD.md`).
 
+## Sixty rooftops (2026-10-14, night)
+
+The user: "Let's lower the roof tops. Are we able to add in more roof tops?". The six turrets (22,500 to 47,500 over the roof) are
+sixty rooftops now (`PalaceOutside`: `RoofWidths`, `RoofTall`, `RoofRiseLeast`/`RoofRiseMost`, `RoofOverRoad`/`RoofUnderRoad`,
+`RoofGap`, `RoadGap`, `RoadOverTop`, `RoofMost`): Otringal's four palace halls in turn, a quarter turn more each time round, 13 to 34
+cells across and 7,000 to 12,000 tall, their tops round the race's road's height near them, packed round the road
+(`PalaceOutside.RaceRoad`: the palace's track as the program builds it). Without a road (`Add`'s `road` null) the turrets are placed as
+before. Their collision is their shape from above, as before. The busiest cube holds 551 objects of 1,000; the outside has 131 bodies.
+See `docs/LBA2_DESERT_RACE_TRACK_BUILD.md` ("The rooftops") for pictures and the frame times.
+
 ## Making it
 
 - Tools > **LBA2: Palace island (Otringal's palace)…** (`MainWindow.Palace.cs`) adds the two files to the game folder, builds them again,

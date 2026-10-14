@@ -46,6 +46,16 @@ internal static class PalaceOutside
     public const double Tall = 1.35;
     public const double TallMost = 12.5;        // (times the hall's own height at the most: a body's points are 16-bit about its middle)
     public const int MaxClimb = 100;            // the collision's layers over the roof at the most (all of the tallest turret)
+    // the rooftops (2026-10-14): their widths, widest first (cells across, a hall's longer side), as tall as their own shape between
+    // RoofTall's times its width and between RoofRiseLeast and RoofRiseMost over the roof, their tops RoofOverRoad over or RoofUnderRoad
+    // under the road nearest them in turn; RoofGap cells between them, RoadGap cells clear of the road's edge (unless the road is
+    // RoadOverTop over the top), RoofMost of them at the most
+    public static readonly double[] RoofWidths = { 34, 30, 26, 22, 19, 16, 13 };
+    public static readonly (double Least, double Most) RoofTall = (0.8, 1.35);
+    public const double RoofRiseLeast = 6000, RoofRiseMost = 13500, RoofOverRoad = 1500, RoofUnderRoad = 2000;
+    public const double RoofGap = 2, RoadGap = 2.5, RoadOverTop = 1800;
+    public const int RoofMost = 60;
+    private const double IslandCell = 512;      // (the rooftops' sizes are island cells; the site's Cell is the building's, a brick)
     // (the engine draws the decors of the 3 x 3 cubes round the camera's: each piece of a turret is in every cube it can be seen from --
     // as far round it as the far plane -- or from further than a cube off a turret stood with quarters missing, the sky through it: the
     // user, 2026-10-13, "a lot of points on our new roof that isn't full and can be seen through". DECORS.CPP draws the copies once a frame)
@@ -59,7 +69,10 @@ internal static class PalaceOutside
 
     // Adds the turrets to `island` (their bodies, scaled, appended to `newBodies`, numbered from `firstBody` on; at most `maxPerCube` decors
     // a cube) and returns the collision boxes for the caller to add with its empty body.
-    public static Placed Add(IslandFile island, IslandFile source, HqrArchive sourceObl, List<byte[]> newBodies, int firstBody, Site site, int maxPerCube)
+    // `road`: the race's road over the roof (world units: each point's place, height and half width in cells) -- the rooftops go round it;
+    // without it, the turrets as before them.
+    public static Placed Add(IslandFile island, IslandFile source, HqrArchive sourceObl, List<byte[]> newBodies, int firstBody, Site site, int maxPerCube,
+        IReadOnlyList<(double X, double Z, double H, double Half)>? road = null)
     {
         var log = new List<string>();
         var boxes = new List<(double, double, double, double, double, double)>();
@@ -85,9 +98,17 @@ internal static class PalaceOutside
         }
         var triangles = new List<(Vector3 A, Vector3 B, Vector3 C)>();
         var built = new List<string>();
-        // (a hall in a place: turned `quarter` quarter turns about its middle, kxz times as wide and ky times as tall, its middle at the
-        // place's, its foot on the roof; each piece drawn only, in every cube its box reaches)
-        void Turret((int X, int Z) at, int quarter, (double X0, double Z0, double X1, double Z1) place, string name, double fill = SlotFill)
+        // a hall's size across and along (its parts' box, world units, the way `quarter` quarter turns leave it) and its own height
+        (double Wide, double Deep, double High) Size((int X, int Z) at, int quarter)
+        {
+            var parts = Hall(at);
+            if (parts.Count == 0) return (0, 0, 0);
+            double hx = parts.Max(d => (double)d.XMax) - parts.Min(d => (double)d.XMin), hz = parts.Max(d => (double)d.ZMax) - parts.Min(d => (double)d.ZMin);
+            return (quarter % 2 == 0 ? hx : hz, quarter % 2 == 0 ? hz : hx, parts.Max(d => (double)d.YMax) - parts.Min(d => (double)d.YMin));
+        }
+        // (a hall at a place: turned `quarter` quarter turns about its middle, kxz times as wide and ky times as tall, its middle at (mx, mz),
+        // its foot on the roof; each piece drawn only, in every cube its box reaches)
+        void TurretAt((int X, int Z) at, int quarter, double mx, double mz, double kxz, double ky, string name)
         {
             var parts = Hall(at);
             if (parts.Count == 0) return;
@@ -95,11 +116,7 @@ internal static class PalaceOutside
             double cx = (hx0 + hx1) / 2, cz = (hz0 + hz1) / 2;
             var turn = Matrix4x4.CreateRotationY((float)(quarter * Math.PI / 2));
             Vector3 Turned(double x, double z) => Vector3.Transform(new Vector3((float)(x - cx), 0, (float)(z - cz)), turn);
-            double wide = quarter % 2 == 0 ? hx1 - hx0 : hz1 - hz0, deep = quarter % 2 == 0 ? hz1 - hz0 : hx1 - hx0;
-            var kxz = Math.Round(Math.Min((place.X1 - place.X0) / wide, (place.Z1 - place.Z0) / deep) * fill, 2);
-            var ky = Math.Round(Math.Min(TallMost, kxz * Tall), 2);
             var baseY = parts.Min(d => d.YMin);
-            double mx = (place.X0 + place.X1) / 2, mz = (place.Z0 + place.Z1) / 2;
             foreach (var d in parts)
             {
                 var (body, shift) = BodyOf(d.Body & 0xFFFF, kxz, ky);
@@ -121,27 +138,111 @@ internal static class PalaceOutside
             }
             built.Add($"{name} {kxz:0.##} times as wide and {ky:0.##} as tall ({(hx1 - hx0) * kxz / 512:0} x {(hz1 - hz0) * kxz / 512:0} cells, {(parts.Max(d => d.YMax) - baseY) * ky:0} high)");
         }
-
-        // ---- over the sixteen rooms: two by two, a hall a quarter of their roof
-        double midX = (site.X0 + site.X1) / 2, midZ = (site.Z0 + site.Z1) / 2;
-        Turret(WestHall, 0, (site.X0, site.Z0, midX, midZ), "the west hall");
-        Turret(EastHall, 1, (midX, site.Z0, site.X1, midZ), "the east hall");
-        Turret(SouthHall, 0, (site.X0, midZ, midX, site.Z1), "the south-east hall");
-        Turret(EastHall, 3, (midX, midZ, site.X1, site.Z1), "the east hall");
-        // ---- along the long hall's part out of them: the north hall, one after another
-        if (site.Hall is { } hall)
+        // (a hall filling `fill` of a place, Tall times as tall as it is wide -- the layout before the rooftops)
+        void Turret((int X, int Z) at, int quarter, (double X0, double Z0, double X1, double Z1) place, string name, double fill = SlotFill)
         {
-            var alongZ = hall.Z1 - hall.Z0 >= hall.X1 - hall.X0;
-            double a0 = alongZ ? hall.Z0 : hall.X0, a1 = alongZ ? Math.Min(hall.Z1, site.Z0) : Math.Min(hall.X1, site.X0);
-            double across = alongZ ? hall.X1 - hall.X0 : hall.Z1 - hall.Z0;
-            var count = Math.Max(1, (int)Math.Round((a1 - a0) / (across * 1.4)));
-            for (var t = 0; t < count; t++)
-            {
-                double s0 = a0 + (a1 - a0) * t / count, s1 = a0 + (a1 - a0) * (t + 1) / count;
-                Turret(NorthHall, alongZ ? 2 * (t % 2) : 1 + 2 * (t % 2), alongZ ? (hall.X0, s0, hall.X1, s1) : (s0, hall.Z0, s1, hall.Z1), "the north hall", HallFill);
-            }
+            var (wide, deep, _) = Size(at, quarter);
+            if (wide <= 0) return;
+            var kxz = Math.Round(Math.Min((place.X1 - place.X0) / wide, (place.Z1 - place.Z0) / deep) * fill, 2);
+            TurretAt(at, quarter, (place.X0 + place.X1) / 2, (place.Z0 + place.Z1) / 2, kxz, Math.Round(Math.Min(TallMost, kxz * Tall), 2), name);
         }
-        log.Add($"the outside: Otringal's palace's halls as turrets over the whole of the palace -- {string.Join("; ", built)}");
+
+        if (road is { Count: > 0 })
+        {
+            // ---- the rooftops: many halls, lower, round the race's road (the user, 2026-10-14: "Let's lower the roof tops. Are we able to
+            // add in more roof tops?" -- after "lift the track up, so we're hugging tighter to the buildings, so we get more of a sense of
+            // driving through the roof tops"; the road can't go over ~30,600, the turrets stood 22,500 to 47,500 over the roof). Halls
+            // RoofWidest down to RoofNarrowest cells across, as tall as their own shape makes them (RoofTall times), their tops round the
+            // height of the road nearest them, a little over it and a little under it in turn; packed over the sixteen rooms' roof and the
+            // long hall's -- in an order of their own, not a grid -- each RoofGap from the next, none where the road is (its half width and
+            // RoadGap either side) unless the road passes over its top by RoadOverTop; RoofMost at the most.
+            var regions = new List<(double X0, double Z0, double X1, double Z1)> { (site.X0, site.Z0, site.X1, site.Z1) };
+            if (site.Hall is { } longHall) regions.Add(longHall);
+            var halls = new[] { (At: WestHall, Name: "the west hall"), (At: EastHall, Name: "the east hall"), (At: SouthHall, Name: "the south-east hall"), (At: NorthHall, Name: "the north hall") };
+            var placedRects = new List<(double X0, double Z0, double X1, double Z1)>();
+            var roofs = 0;
+            double RoadNear(double x, double z)
+            {
+                var best = double.MaxValue; var h = site.RoofTop + RoofRiseMost;
+                foreach (var (rx, rz, rh, _) in road) { var d = (rx - x) * (rx - x) + (rz - z) * (rz - z); if (d < best) { best = d; h = rh; } }
+                return h;
+            }
+            bool RoadClear(double x0, double z0, double x1, double z1, double top)
+            {
+                foreach (var (rx, rz, rh, half) in road)
+                {
+                    var m = (half + RoadGap) * IslandCell;
+                    if (rx > x0 - m && rx < x1 + m && rz > z0 - m && rz < z1 + m && rh < top + RoadOverTop) return false;
+                }
+                return true;
+            }
+            var step = 2 * IslandCell;
+            foreach (var widest in RoofWidths)
+            {
+                var spots = new List<(double X, double Z, int Region, uint Order)>();
+                for (var ri = 0; ri < regions.Count; ri++)
+                {
+                    var (qx0, qz0, qx1, qz1) = regions[ri];
+                    for (var z = qz0; z <= qz1; z += step)
+                        for (var x = qx0; x <= qx1; x += step)
+                        {
+                            var order = (uint)((int)(x / step) * 73856093 ^ (int)(z / step) * 19349663 ^ (int)widest * 83492791);
+                            order ^= order >> 13; order *= 0x5bd1e995; order ^= order >> 15;
+                            spots.Add((x, z, ri, order));
+                        }
+                }
+                foreach (var (x, z, ri, _) in spots.OrderBy(s => s.Order))
+                {
+                    if (roofs >= RoofMost) break;
+                    var (hallAt, hallName) = halls[roofs % halls.Length];
+                    var quarter = (roofs / halls.Length + roofs) % 4;
+                    var (wide, deep, high) = Size(hallAt, quarter);
+                    if (wide <= 0) continue;
+                    var kxz = Math.Round(widest * IslandCell / Math.Max(wide, deep), 2);
+                    double hw = wide * kxz / 2, hd = deep * kxz / 2;
+                    double x0 = x - hw, x1 = x + hw, z0 = z - hd, z1 = z + hd;
+                    var (rx0, rz0, rx1, rz1) = regions[ri];
+                    if (x0 < rx0 || x1 > rx1 || z0 < rz0 || z1 > rz1) continue;
+                    var g = RoofGap * IslandCell;
+                    if (placedRects.Any(p => x0 < p.X1 + g && x1 > p.X0 - g && z0 < p.Z1 + g && z1 > p.Z0 - g)) continue;
+                    // its top: the road's height nearest it, over or under it in turn, its shape's own height or a little more or less
+                    var want = RoadNear(x, z) + (roofs % 2 == 0 ? RoofOverRoad : -RoofUnderRoad) - site.RoofTop;
+                    var ky = Math.Round(Math.Clamp(want / high, kxz * RoofTall.Least, kxz * RoofTall.Most), 2);
+                    var rise = high * ky;
+                    if (rise < RoofRiseLeast) ky = Math.Round(RoofRiseLeast / high, 2);
+                    if (rise > RoofRiseMost) ky = Math.Round(RoofRiseMost / high, 2);
+                    if (!RoadClear(x0, z0, x1, z1, site.RoofTop + high * ky)) continue;
+                    TurretAt(hallAt, quarter, x, z, kxz, ky, hallName);
+                    placedRects.Add((x0, z0, x1, z1));
+                    roofs++;
+                }
+            }
+            log.Add($"the outside: the rooftops -- {roofs} of Otringal's palace's halls round the race's road over the palace's roof, " +
+                    $"{RoofWidths[^1]:0} to {RoofWidths[0]:0} cells across: {string.Join("; ", built)}");
+        }
+        else
+        {
+            // ---- over the sixteen rooms: two by two, a hall a quarter of their roof
+            double midX = (site.X0 + site.X1) / 2, midZ = (site.Z0 + site.Z1) / 2;
+            Turret(WestHall, 0, (site.X0, site.Z0, midX, midZ), "the west hall");
+            Turret(EastHall, 1, (midX, site.Z0, site.X1, midZ), "the east hall");
+            Turret(SouthHall, 0, (site.X0, midZ, midX, site.Z1), "the south-east hall");
+            Turret(EastHall, 3, (midX, midZ, site.X1, site.Z1), "the east hall");
+            // ---- along the long hall's part out of them: the north hall, one after another
+            if (site.Hall is { } hall)
+            {
+                var alongZ = hall.Z1 - hall.Z0 >= hall.X1 - hall.X0;
+                double a0 = alongZ ? hall.Z0 : hall.X0, a1 = alongZ ? Math.Min(hall.Z1, site.Z0) : Math.Min(hall.X1, site.X0);
+                double across = alongZ ? hall.X1 - hall.X0 : hall.Z1 - hall.Z0;
+                var count = Math.Max(1, (int)Math.Round((a1 - a0) / (across * 1.4)));
+                for (var t = 0; t < count; t++)
+                {
+                    double s0 = a0 + (a1 - a0) * t / count, s1 = a0 + (a1 - a0) * (t + 1) / count;
+                    Turret(NorthHall, alongZ ? 2 * (t % 2) : 1 + 2 * (t % 2), alongZ ? (hall.X0, s0, hall.X1, s1) : (s0, hall.Z0, s1, hall.Z1), "the north hall", HallFill);
+                }
+            }
+            log.Add($"the outside: Otringal's palace's halls as turrets over the whole of the palace -- {string.Join("; ", built)}");
+        }
 
         // ---- the halls' collision: their shape seen from above, columns of cells as high as their tops (MaxClimb layers at the most), merged
         var tops = new Dictionary<(int X, int Z), double>();
@@ -183,6 +284,25 @@ internal static class PalaceOutside
                 $"{decors} objects in all, counting the copies in each cube a body reaches");
         if (left > 0) log.Add($"  WARNING: {left} of its objects left out (a cube full)");
         return new Placed(decors, bodies, boxes, log);
+    }
+
+    // The race's road over the palace's roof, for the rooftops to go round: the palace's track as built into the program (its points, their
+    // heights and half widths), out of the rooms (the plan's bare stretches) and over `over` -- world units, the half width in cells.
+    public static List<(double X, double Z, double H, double Half)> RaceRoad(double over)
+    {
+        var road = new List<(double, double, double, double)>();
+        var plan = RaceTrackPlan.Built(RaceTrackIsland.Palace);
+        if (plan.Heights is not { } heights) return road;
+        var bare = new bool[plan.Points.Length];
+        foreach (var b in plan.Bare ?? Array.Empty<int[]>())
+            if (b.Length >= 2) for (var i = Math.Max(0, b[0]); i <= Math.Min(bare.Length - 1, b[1]); i++) bare[i] = true;
+        for (var i = 0; i < plan.Points.Length && i < heights.Length; i++)
+        {
+            if (bare[i] || heights[i] <= over) continue;
+            var half = plan.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : plan.RaisedHalf ?? 4.5;
+            road.Add(((plan.Points[i][0] + plan.OriginCellX) * 512, (plan.Points[i][1] + plan.OriginCellZ) * 512, heights[i], half));
+        }
+        return road;
     }
 
     // A body kxz times as wide and ky times as tall, its points moved by `shift` -- to be about their own middle: a turret 60,000 high and

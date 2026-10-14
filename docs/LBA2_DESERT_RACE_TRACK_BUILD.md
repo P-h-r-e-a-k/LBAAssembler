@@ -3671,6 +3671,27 @@ outside's heights and the jump changed; the way the road goes is the user's draw
 - Checked with the test pilot: won in 286.82 s, no car rescued, both jumps carried (the short one set down on its landing at 26,000),
   game variable 79 set, Twinsen awake in scene 95.
 
+### The rooftops: sixty of them, lower, round the road (2026-10-14, night)
+
+The user: "Let's lower the roof tops. Are we able to add in more roof tops? I know we've previously had performance issues on this
+level". The four halls over the sixteen rooms and the two on the long hall stood 22,500 to 47,500 over the roof (19,216) -- the road,
+at 23,800 to 30,500 and no higher, ran far down their sides. Now (`PalaceOutside`: the rooftops) Otringal's four palace halls stand
+over the roof sixty times, 13 to 34 cells across, as tall as their own shape (0.8 to 1.35 times their width up: 7,000 to 12,000 over
+the roof), their tops round the height of the road nearest them -- 1,500 over it and 2,000 under it in turn -- packed in an order of
+their own over the sixteen rooms' roof and the long hall's, two cells apart, none within the road's half width and 2.5 cells of it
+unless the road is 1,800 over its top (`RaceRoad`: the palace's track built into the program, its points out of the rooms). The
+route's checks (`palace_design.py`) are all clear against them and give the same plan.
+
+![The roof from above: the road and the sixty rooftops round it](racetrack/palace/v12_rooftops_top.png)
+
+![From the car: the domes round the road at its height](racetrack/palace/v12_rooftops_race.png)
+
+- *What it costs.* The test pilot over the roof, 6,000 frames: 10.3 ms a frame with the six turrets, 10.6 with sixty rooftops; the
+  busiest cube 551 objects of the 1,000 a cube holds (406 with thirty); 131 bodies of the outside (each size its own body), well inside
+  the island bodies' cache (1,024 bodies, 16 MB). The earlier slowness was each copy of a decor drawn once for every cube that listed
+  it, fixed then (the "lag fix" of 2026-10-13): a copy is drawn once a frame now.
+- Checked: won in 276.43 s, no car rescued, both jumps carried, Twinsen awake in scene 95.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove
