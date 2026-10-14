@@ -159,6 +159,9 @@ internal sealed class RaceTrackPlan
     // Decor bodies that stay where they are under the raised road (a statue the road winds round): where one's collision box reaches
     // into the road's space the box is cut down under the road instead of the object being cleared.
     public int[]? KeepBodies { get; set; }
+    // Hand adjustments of the checkpoints the builder places (PlaceCheckpoints), the user's, track by track, testing with the race-track
+    // mode's missed-checkpoint alert (2026-10-14): CheckpointTweak.
+    public CheckpointTweak[]? CheckpointTweaks { get; set; }
     // Decors whose top is this high or higher stay, whatever their body, as KeepBodies' do (their collision boxes cut down under a raised
     // road that passes over them): Polar Island's rocky peak and its plateau are decors, and its jump lands on the peak's top -- the
     // build took the peak's columns away under the road, down to the sea, and left the road on its piers in mid-air (2026-10-06).
@@ -306,6 +309,25 @@ internal sealed class ThinKeptPiece
 // Camera: the side of the ring the camera watches it from while a car goes round, 1 the side it goes in on, -1 the other.
 internal sealed record LoopInfo(double X, double Z, double Y, double DirX, double DirZ, double Radius, double Shift, double Gap, int Point, double Band = 0,
     int Out = -1, int Camera = 1);
+
+// A hand adjustment of one of the lap's checkpoints (RaceTrackPlan.CheckpointTweaks): the one numbered Number as the race counts them
+// from the start line (1 the first), or -- when Near is given -- the one whose line's middle is nearest Near (plan cells, within 12);
+// moved to the lap's point nearest At (plan cells) when that is given, the line there reaching across the road at least (the road's
+// edge), however near another part of the lap is; and its left and right ends (the driver's, the way the lap runs) Left and Right cells
+// further out. The user, 2026-10-14: "Let's move check point 3 for CITADEL.ILE so it's further round at the middle of the corner",
+// "extend checkpoint 4 slightly further to the left", "Desert, extend check point 7 slightly both left and right, then check point 8
+// extend left".
+internal sealed class CheckpointTweak
+{
+    public int Number { get; set; }
+    public double[]? Near { get; set; }
+    public double[]? At { get; set; }
+    public double Left { get; set; }
+    public double Right { get; set; }
+    // (a line of the plan's own at At, beside the builder's, where a corner can be cut between two of them -- "On Desert.ile we need to
+    // add a check point between 12 and 13, so the corner can't be skipped")
+    public bool Add { get; set; }
+}
 
 internal sealed record JumpInfo(double StartX, double StartZ, double LandX, double LandZ, double DirX, double DirZ, int Beta, double Height,
     int CubeX, int CubeZ, List<(int X0, int Z0, int X1, int Z1)> Boxes, int Zone, int Anim, double FlightScale, double FlightCells,
@@ -887,7 +909,7 @@ internal static class RaceTrackBuilder
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
         report.LapY = (double[])main.H.Clone(); report.LapRaised = (bool[]?)main.Raised?.Clone(); report.LapArc = (bool[]?)main.Arc?.Clone();
-        if (!plan.Open) PlaceCheckpoints(roads, report, options, planned);
+        if (!plan.Open) PlaceCheckpoints(roads, report, options, planned, plan.CheckpointTweaks, plan.OriginCellX, plan.OriginCellZ);
         else if (plan.Finish is { } finish) FinishLine(main, PlanPoint(plan, main, finish), options, report);
         PlacePits(roads, report, options, planned);
         foreach (var mine in plan.Mines ?? Array.Empty<double[]>())
@@ -2312,6 +2334,8 @@ internal static class RaceTrackBuilder
     // line in the middle of each half-circle of it. (Before: one about every 60 cells, where the road ran straightest.)
     private const int MaxCheckpoints = 64;      // (the engine's RACE_MAX_CHECKPOINTS)
     private const double CheckpointPastEdge = 2, CornerRadius = 40, CornerTurn = 0.5, CornerJoin = 8;
+    // (on a corner's inside, where cars cut it, a line reaches this far past the edge when nothing stops it short: PlaceCheckpoints)
+    private const double CheckpointInsidePastEdge = 6;
 
     // Where the opponents' cars wait while the player drives his qualifying lap: in the pit lane beside the start line, PitStep cells
     // apart, the first PitFirst cells before the line, each facing the way a car leaves the pits. On the grid they stand across the start
@@ -2375,7 +2399,8 @@ internal static class RaceTrackBuilder
         report.Notes.Add($"a sprint: the finish line at cell ({x:0.0}, {z:0.0}), height {r.H[k]:0}, {r.S[k] - (report.StartLine.Count > 0 ? r.S[Nearest(r, report.StartLine[0].X, report.StartLine[0].Z)] : 0):0} cells from the start line; no checkpoints");
     }
 
-    private static void PlaceCheckpoints(List<TrackRoad> roads, RaceTrackReport report, RaceTrackOptions o, bool planned = false)
+    private static void PlaceCheckpoints(List<TrackRoad> roads, RaceTrackReport report, RaceTrackOptions o, bool planned = false,
+        IReadOnlyList<CheckpointTweak>? tweaks = null, double originX = 0, double originZ = 0)
     {
         if (report.StartLine.Count == 0) return;
         var r = roads[0]; var n = r.Count;
@@ -2468,56 +2493,124 @@ internal static class RaceTrackBuilder
         }
         // the road's edge at a point: its curbs, or a raised road's rail
         double Edge(int k) => r.Raised is { } up && up[k] ? r.RaisedHalfs is { } halfs && k < halfs.Length ? halfs[k] : o.RaisedHalfWidth : r.CurbHalf;
-        var placed = new List<int>();
+        // A line across the road at point k: how far each side reaches from its middle (the driver's left, -Across, and right), and whether
+        // that is far enough -- past the road's edge, or, stopped by another part of the lap, at least to the edge.
+        (double Left, bool LeftEnough, double Right, bool RightEnough, int Inside) LineAt(int k)
+        {
+            var x = r.X[k]; var z = r.Z[k]; var nx = -r.Tz[k]; var nz = r.Tx[k];
+            var cx = Math.Floor(x / 64); var cz = Math.Floor(z / 64);
+            var full = Edge(k) + CheckpointPastEdge;
+            // (the corner's inside -- the side the road turns to, its point a few cells on -- reaching CheckpointInsidePastEdge past the
+            // edge where nothing stops it: a car cutting the corner goes round the line's inner end. The user, 2026-10-14: "CITABAU.ILE
+            // check point three needs extending to the left" -- the town circuit's left-hand bend north of the shop, the square on its
+            // inside drivable. Only as far as that side reaches; the line is placed as before when it is stopped short of it)
+            var ahead = At(r, k + (int)Math.Round(5 / o.Spacing));
+            var inside = (r.X[ahead] - x) * nx + (r.Z[ahead] - z) * nz > 0 ? 1 : -1;
+            // (what stops a side short: 0 nothing, 1 the cube's edge, 2 another part of the lap at its height -- the road coming back
+            // round a hairpin, another running alongside -- by that part's verge)
+            int Stop(double t)
+            {
+                var px = x + nx * t; var pz = z + nz * t;
+                if (Math.Floor(px / 64) != cx || Math.Floor(pz / 64) != cz) return 1;
+                var own = r.VergeHalf + 3;
+                for (var m = 0; m < n; m += 2)
+                {
+                    var sep = Math.Abs(r.S[m] - r.S[k]); if (r.Closed) sep = Math.Min(sep, r.Length - sep);
+                    // (another level -- a bridge over the line's place, a raised road's helix -- doesn't count: the line has its height)
+                    if (sep <= own || Math.Abs(r.H[m] - r.H[k]) > RaisedLevelApart) continue;
+                    if (Sq(r.X[m] - px) + Sq(r.Z[m] - pz) < Sq(r.VergeHalf)) return 2;
+                }
+                return 0;
+            }
+            (double Reach, bool Enough) Side(int way)
+            {
+                var reach = 0.0; var stop = 0;
+                var most = way == inside ? Edge(k) + CheckpointInsidePastEdge : full;
+                for (var t = 0.5; t <= most + 1e-9; t += 0.5)
+                {
+                    stop = Stop(way * t);
+                    if (stop != 0) break;
+                    reach = t;
+                }
+                return (reach, reach >= full - 0.5 || stop == 2 && reach >= Edge(k));
+            }
+            var (left, leftEnough) = Side(-1); var (right, rightEnough) = Side(1);
+            return (left, leftEnough, right, rightEnough, inside);
+        }
+        var placed = new List<(int Point, double Left, double Right)>();
         foreach (var (point, from, count) in targets.OrderBy(t => Ahead(t.Point)))
         {
-            if (report.Checkpoints.Count >= MaxCheckpoints) break;
+            if (placed.Count >= MaxCheckpoints) break;
             // the corner's middle, or the nearest place in the corner a line will do (clear of the pits, the jumps, the crossings and the
             // cubes' edges, and reaching past the road's edge on both sides)
             var order = Enumerable.Range(from, count).Select(j => (startAt + j) % n).Where(Clear).OrderBy(k => Math.Abs(r.S[k] - r.S[point]));
             foreach (var k in order)
             {
-                var x = r.X[k]; var z = r.Z[k]; var nx = -r.Tz[k]; var nz = r.Tx[k];
-                var cx = Math.Floor(x / 64); var cz = Math.Floor(z / 64);
-                if (!InsideCube(x, z)) continue;
-                if (placed.Any(p => Math.Abs(Ahead(p) - Ahead(k)) < 6)) break;
-                var full = Edge(k) + CheckpointPastEdge;
-                // (what stops a side short: 0 nothing, 1 the cube's edge, 2 another part of the lap at its height -- the road coming back
-                // round a hairpin, another running alongside -- by that part's verge)
-                int Stop(double t)
-                {
-                    var px = x + nx * t; var pz = z + nz * t;
-                    if (Math.Floor(px / 64) != cx || Math.Floor(pz / 64) != cz) return 1;
-                    var own = r.VergeHalf + 3;
-                    for (var m = 0; m < n; m += 2)
-                    {
-                        var sep = Math.Abs(r.S[m] - r.S[k]); if (r.Closed) sep = Math.Min(sep, r.Length - sep);
-                        // (another level -- a bridge over the line's place, a raised road's helix -- doesn't count: the line has its height)
-                        if (sep <= own || Math.Abs(r.H[m] - r.H[k]) > RaisedLevelApart) continue;
-                        if (Sq(r.X[m] - px) + Sq(r.Z[m] - pz) < Sq(r.VergeHalf)) return 2;
-                    }
-                    return 0;
-                }
-                // (a side reaches far enough when it is past the road's edge -- or, stopped by another part of the lap, at least to the edge)
-                (double Reach, bool Enough) Side(int way)
-                {
-                    var reach = 0.0; var stop = 0;
-                    for (var t = 0.5; t <= full + 1e-9; t += 0.5)
-                    {
-                        stop = Stop(way * t);
-                        if (stop != 0) break;
-                        reach = t;
-                    }
-                    return (reach, reach >= full - 0.5 || stop == 2 && reach >= Edge(k));
-                }
-                var (left, leftEnough) = Side(-1); var (right, rightEnough) = Side(1);
+                if (!InsideCube(r.X[k], r.Z[k])) continue;
+                if (placed.Any(p => Math.Abs(Ahead(p.Point) - Ahead(k)) < 6)) break;
+                var (left, leftEnough, right, rightEnough, _) = LineAt(k);
                 if (!leftEnough || !rightEnough) continue;
-                report.Checkpoints.Add((x - nx * left, z - nz * left, x + nx * right, z + nz * right, r.Tx[k], r.Tz[k]));
-                report.CheckpointHeights.Add(r.H[k]);
-                placed.Add(k);
+                placed.Add((k, left, right));
                 break;
             }
         }
+        // the plan's own adjustments (RaceTrackPlan.CheckpointTweaks): a line moved to another place round its corner -- reaching across the
+        // road there at least, however near another part of the lap is -- a side reaching further, or a line of its own added; the
+        // numbers the builder's, before any is added
+        var tweaked = new List<string>();
+        (double X, double Z) Middle((int Point, double Left, double Right) p)
+        {
+            double nx = -r.Tz[p.Point], nz = r.Tx[p.Point];
+            return (r.X[p.Point] + nx * (p.Right - p.Left) / 2, r.Z[p.Point] + nz * (p.Right - p.Left) / 2);
+        }
+        (int Point, double Left, double Right) Across(int k, CheckpointTweak tw)
+        {
+            var line = LineAt(k);
+            return (k, Math.Max(line.Left, Edge(k)) + tw.Left, Math.Max(line.Right, Edge(k)) + tw.Right);
+        }
+        var built = placed.ToList();
+        var added = new List<(int Point, double Left, double Right)>();
+        foreach (var tw in tweaks ?? Array.Empty<CheckpointTweak>())
+        {
+            if (tw.Add)
+            {
+                if (tw.At is not { Length: >= 2 } where) { report.Notes.Add("WARNING: the plan adds a checkpoint without a place (At)"); continue; }
+                added.Add(Across(Nearest(r, where[0] + originX, where[1] + originZ), tw));
+                tweaked.Add($"a checkpoint added at cell ({r.X[added[^1].Point]:0.0}, {r.Z[added[^1].Point]:0.0})");
+                continue;
+            }
+            var c = -1;
+            if (tw.Near is { Length: >= 2 } near)
+            {
+                var best = 12.0;
+                for (var q = 0; q < built.Count; q++)
+                {
+                    var (mx, mz) = Middle(built[q]);
+                    var d = Math.Sqrt(Sq(mx - (near[0] + originX)) + Sq(mz - (near[1] + originZ)));
+                    if (d < best) { best = d; c = q; }
+                }
+            }
+            else if (tw.Number >= 1 && tw.Number <= built.Count) c = tw.Number - 1;
+            if (c < 0) { report.Notes.Add($"WARNING: the plan's adjustment of checkpoint {tw.Number} found no checkpoint there"); continue; }
+            if (tw.Number > 0 && tw.Number != c + 1) report.Notes.Add($"WARNING: the plan's adjustment of checkpoint {tw.Number} is checkpoint {c + 1}'s now");
+            var at = placed.IndexOf(built[c]);
+            placed[at] = tw.At is { Length: >= 2 } there ? Across(Nearest(r, there[0] + originX, there[1] + originZ), tw)
+                                                         : (built[c].Point, built[c].Left + tw.Left, built[c].Right + tw.Right);
+            built[c] = placed[at];
+            tweaked.Add($"checkpoint {c + 1} at cell ({r.X[placed[at].Point]:0.0}, {r.Z[placed[at].Point]:0.0}), {placed[at].Left:0.#} cells left of the road's middle and {placed[at].Right:0.#} right");
+        }
+        placed.AddRange(added);
+        placed = placed.OrderBy(p => Ahead(p.Point)).ToList();
+        foreach (var (k, left, right) in placed)
+        {
+            double x = r.X[k], z = r.Z[k], nx = -r.Tz[k], nz = r.Tx[k];
+            report.Checkpoints.Add((x - nx * left, z - nz * left, x + nx * right, z + nz * right, r.Tx[k], r.Tz[k]));
+            report.CheckpointHeights.Add(r.H[k]);
+        }
+        if (tweaked.Count > 0) report.Notes.Add("checkpoints adjusted by the plan: " + string.Join("; ", tweaked));
+        if (Environment.GetEnvironmentVariable("RT_CPDEBUG") == "1")
+            for (var q = 0; q < placed.Count; q++)
+                Console.WriteLine($"CP {q + 1} at point {placed[q].Point} ({r.X[placed[q].Point]:0.0}, {r.Z[placed[q].Point]:0.0}) left {placed[q].Left:0.0} right {placed[q].Right:0.0} inside {(LineAt(placed[q].Point).Inside < 0 ? "left" : "right")} edge {Edge(placed[q].Point):0.0}");
         report.Notes.Add($"{report.Checkpoints.Count} checkpoints round the lap, in the middle of {targets.Count} corners (a lap counts once the car has crossed them all, in order)");
     }
 

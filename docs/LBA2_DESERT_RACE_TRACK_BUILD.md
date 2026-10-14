@@ -3608,6 +3608,34 @@ of the track, these should more closely resemble our other tracks".
 
 ![Volcano Island's bend onto the start straight, turned as the minimap shows it: before (left) and after](racetrack/volcano_pit_bend.png)
 
+## Checkpoints, round by round with the missed-checkpoint alert (2026-10-14, evening)
+
+The user drove the tracks with the new alert and asked, track by track: "CITABAU.ILE check point three needs extending to the left";
+"Let's move check point 3 for CITADEL.ILE so it's further round at the middle of the corner"; "CITADEL.ILE let's extend checkpoint 4
+slightly further to the left"; "Desert, extend check point 7 slightly both left and right, then check point 8 extend left"; "On
+Desert.ile we need to add a check point between 12 and 13, so the corner can't be skipped"; "Desert, extend check point 17 slightly
+left". ("Left" is the driver's, the way the lap runs.)
+
+- *Every line reaches further on its corner's inside* (`PlaceCheckpoints`: `CheckpointInsidePastEdge`, 6 cells past the road's edge
+  where nothing stops it short, 2 on the outside as before) -- the side a car cuts a corner on. The town circuit's checkpoint 3 (a
+  left-hand bend north of the shop, the square on its inside open) reaches 10.5 cells to the left of the road's middle now (6.5), and so
+  does the Desert's 17 (18 now: see below) -- both were the inside. Whether a line can be placed is decided as before: no island has a
+  checkpoint more or fewer for it.
+- *The plan's own adjustments* (`RaceTrackPlan.CheckpointTweaks`, `CheckpointTweak`): a checkpoint picked by its number (as the race
+  counts them, the builder's, before any added) or by a place near its line, moved to the lap's point nearest `at` -- reaching across
+  the road there at least, however near another part of the lap is -- its ends `left` and `right` cells further out; or (`add`) a line
+  of the plan's own at `at`. The storm track (`citadel_storm_design.py`): 3 at its hairpin's middle (lap point 65; the builder had
+  stepped it 4 cells back, the hairpin's way out 4.8 cells from where its inside end has to be), 4 1.5 cells further left. The Desert
+  island (`track_plan.json`): 7 2 cells further left (its right, the inside, 4 further already), 8 2 further left (its inside, held at
+  the kerb by the hairpin's own way out, which runs along the line), and a new line at the top of the hairpin between 12 and 13 (lap
+  point 1378), its inside end at the V where the hairpin's two legs' kerbs meet (9 cells) -- from one leg to the other a car crosses
+  it; the Desert's checkpoints after it are numbered one more.
+- `RT_CPDEBUG=1` for `buildtrack` lists each checkpoint: its lap point, how far it reaches either side of the road's middle and which
+  side is the inside.
+- Checked: the storm track (five laps), the town circuit and the Desert (a lap each) with every checkpoint counted in order; on the
+  Desert a car moved from the hairpin's way up to its way down, past the top, was called at once: "MISSED checkpoint 13 of 23 on lap 1:
+  23 cells further round the lap".
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove
