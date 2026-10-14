@@ -107,8 +107,10 @@ internal static class RaceTrackRaisedBody
     // sections run (RACEMOD.CPP boostpanel=).
     public static byte[] Tile(IReadOnlyList<(Vector3 Mid, Vector3 Across)> sections, int firstBlock, double asphalt, double curb, double edge, bool arrow = false, int line = -1,
         IReadOnlyList<double>? wider = null, double stripe = double.NaN, IReadOnlyList<bool>? striped = null, int strips = 0, DeckTheme? theme = null,
-        IReadOnlyList<(double Lo, double Hi, int Q)?>? boost = null)
+        IReadOnlyList<(double Lo, double Hi, int Q)?>? boost = null, IReadOnlyList<(bool Minus, bool Plus)>? open = null)
     {
+        // (open: a section with no rail on that side -- down to the curb -- where another road's deck runs on from it: a branch of the
+        // raised road leaving the lap or coming back onto it, Wannies Island's shortcut)
         var m = new Mesh();
         var (Asphalt, Red, White, RailTop, RailSide, Side, Under, Arrow) = theme is { } th
             ? (th.Asphalt, th.Red, th.White, th.RailTop, th.RailSide, th.Side, th.Under, th.Arrow)
@@ -128,7 +130,10 @@ internal static class RaceTrackRaisedBody
         int On(int j, double u, double y = 0) => m.P(sections[j].Mid + sections[j].Across * (float)u + new Vector3(0, (float)y, 0));
         for (var j = 0; j < sections.Count; j++)
             for (var k = 0; k < profile.Length; k++)
-                at[j, k] = On(j, profile[k].U + Math.Sign(profile[k].U) * Wider(j), profile[k].Y);
+            {
+                var flat = open is not null && j < open.Count && (k is 1 or 2 ? open[j].Minus : k is 7 or 8 && open[j].Plus);
+                at[j, k] = On(j, profile[k].U + Math.Sign(profile[k].U) * Wider(j), flat ? 0 : profile[k].Y);
+            }
         // the asphalt's strips, their edges evenly across it at every section; and the underside's, two to each of them
         var edges = new int[sections.Count, strips + 1];
         var below = Math.Max(1, (strips + 1) / 2);

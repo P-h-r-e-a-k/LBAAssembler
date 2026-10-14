@@ -153,7 +153,11 @@ internal static class RaceTrackService
         // (RACEMOD.CPP teleport=), since 2026-10-13
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Teleports = null,
         // Frogs: the giant frogs the lap drives through (RaceTrackFrog.Line; RACEMOD.CPP frog=), since 2026-10-14
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Frogs = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Frogs = null,
+        // RaisedLap: the lap's own points in Raised, the branches after them; RaisedBranches: each [its first and last point in Raised, the
+        // lap's points there it leaves from and comes back onto] (RACEMOD.CPP raised_lap=, raised_branch=), since 2026-10-14
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? RaisedLap = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? RaisedBranches = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -855,7 +859,9 @@ internal static class RaceTrackService
                 ? report.Teleports.Select(t => new[] { (int)Math.Round(t[0] * 512), (int)Math.Round(t[1] * 512), (int)Math.Round(t[2] * 512), (int)Math.Round(t[3] * 512),
                     (int)Math.Round(t[4]), (int)Math.Round(t[5]), (int)Math.Round(t[6] * 512), (int)Math.Round(t[8]), (int)Math.Round(t[7] * 512), (int)Math.Round(t[9]) }).ToList()
                 : null,
-            Frogs: report.Frogs.Count(f => f.Body >= 0) > 0 ? report.Frogs.Where(f => f.Body >= 0).Select(RaceTrackFrog.Line).ToList() : null);
+            Frogs: report.Frogs.Count(f => f.Body >= 0) > 0 ? report.Frogs.Where(f => f.Body >= 0).Select(RaceTrackFrog.Line).ToList() : null,
+            RaisedLap: raised && report.RaisedBranches.Count > 0 ? report.RaisedLap : null,
+            RaisedBranches: raised && report.RaisedBranches.Count > 0 ? report.RaisedBranches.ToList() : null);
     }
 
     // A machine gun on its knoll as the car file has it: its scene and actors, the muzzle (the gun stands 0.8 cells towards where it fires

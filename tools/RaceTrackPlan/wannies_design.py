@@ -227,6 +227,63 @@ for k in range(N):
 grade = (np.roll(Y, -1) - Y) / (STEP * 512)
 ride = ~gap
 
+# ---- the shortcut (the drawing's purple boost pad and pink jump; the user: "Both: jump as a shortcut"): a branch of the raised road.
+# Where the lap turns west at the east island's south-west corner (532.5, 555.5) it goes straight on north-west, over the boost pad, bends
+# west up a ramp and jumps west -- over the lap's dip south round the channel -- landing on the lap at its corner (498, 547.5) and on along
+# it. Level with the lap where it leaves it (a little over it while the two decks overlap: no two decks at one height), climbing as the
+# lap does, the ramp's kick at the lip, and up across the jump onto the lap (no jump lands lower than it took off). Where it lies on the
+# lap's road -- its first cells, its landing -- it has no deck of its own (hidden).
+SC_HALF = 3.5                           # its half width
+SC_OVER = 40.0                          # over the lap's deck where they overlap
+SC_ZJ = 548.6                           # the jump's line (west), the landing on the lap ...
+SC_XD = 497.0                           # ... at the corner
+SC_RAMP, SC_KICK, SC_ARC = 9.0, 800.0, 1400.0
+SC_F = nearest_after((536.2, 557.4), MARK['start'], 300)                   # the lap's point it leaves at (on the straight before the corner)
+SC_J = nearest_after((489.0, 547.2), SC_F, 150)                           # ... and comes back onto it (after the corner, heading west)
+P0 = np.array([X[SC_F] + OX, Z[SC_F] + OZ]); d0 = T[SC_F] / np.linalg.norm(T[SC_F])
+tV = (SC_ZJ - P0[1]) / d0[1]
+V = P0 + d0 * tV                        # where the north-west line meets the jump's
+sc = rounded([(tuple(P0), 0.0), (tuple(V), 8.0), ((SC_XD - 4.0, SC_ZJ), 0.0)])
+sc = sc[np.concatenate([[True], np.hypot(*np.diff(sc, axis=0).T) > 1e-9])]
+sc_cum = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(sc, axis=0).T))])
+SM = int(round(sc_cum[-1] / STEP))
+SX = np.interp(np.arange(SM + 1) * STEP, sc_cum, sc[:, 0]); SZ = np.interp(np.arange(SM + 1) * STEP, sc_cum, sc[:, 1])
+# (where the bend begins and ends: the boost pad 4 cells long 2 cells before it; the ramp's foot a cell after it, its lip SC_RAMP
+# further; the landing at SC_XD and its foot 4 cells on)
+tan_len = 8.0 * math.tan(abs(math.atan2(d0[1], -d0[0])) / 2)
+bend_start = int((tV - tan_len) / STEP)
+bend_end = max(k for k in range(SM + 1) if SX[k] > V[0] - tan_len - 1e-6)
+sF = bend_end + int(1 / STEP); sL = sF + int(SC_RAMP / STEP)
+sD = int(np.argmin(np.abs(SX - SC_XD))); sDF = min(SM, sD + int(4 / STEP))
+# (and on along the lap's own points from the landing's foot to where it comes back onto it)
+mainK = [k % N for k in range(SC_J - 200, SC_J + 1)]
+near = min(mainK, key=lambda k: math.hypot(X[k] + OX - SX[sDF], Z[k] + OZ - SZ[sDF]))
+tailK = [k % N for k in range(near + 1, SC_J + 1)] if between(near, SC_J - 200, SC_J) else []
+BX = list(SX[:sDF + 1]) + [X[k] + OX for k in tailK]; BZ = list(SZ[:sDF + 1]) + [Z[k] + OZ for k in tailK]
+BM = len(BX)
+def lap_y(x, z):
+    k = min(range(N), key=lambda k: (X[k] + OX - x) ** 2 + (Z[k] + OZ - z) ** 2)
+    return Y[k], math.hypot(X[k] + OX - x, Z[k] + OZ - z), HALF[k]
+lap_grade = (Y[SC_J] - Y[SC_F]) / (ahead(SC_F, SC_J) * 512)
+BY = np.zeros(BM); B_HALF = np.full(BM, SC_HALF); b_hidden = np.zeros(BM, bool)
+yLand = lap_y(BX[sD], BZ[sD])[0]
+for k in range(BM):
+    s = k * STEP
+    if k <= sF: BY[k] = Y[SC_F] + lap_grade * s * 512
+    elif k <= sL: BY[k] = Y[SC_F] + lap_grade * sF * STEP * 512 + SC_KICK * ease((k - sF) / (sL - sF))
+    elif k < sD:
+        f = (k - sL) / (sD - sL); yL = Y[SC_F] + lap_grade * sF * STEP * 512 + SC_KICK
+        BY[k] = yL + (yLand - yL) * f + 4 * SC_ARC * f * (1 - f)
+    else: BY[k] = lap_y(BX[k], BZ[k])[0]
+    ly, dist, lh = lap_y(BX[k], BZ[k])
+    if dist + SC_HALF <= lh + 0.3 and abs(BY[k] - ly) < 120: b_hidden[k] = True        # wholly on the lap's road, at its height
+    elif k < sF and dist < lh + SC_HALF: BY[k] = max(BY[k], ly + SC_OVER)              # overlapping it: a little over it
+b_gap = np.zeros(BM, bool); b_gap[sL + 1:sD] = True
+b_hidden &= ~b_gap
+SC_PAD = (max(0, bend_start - int(6 / STEP)), max(0, bend_start - int(2 / STEP)))   # the boost pad: 4 cells on the straight before the bend
+bgrade = np.diff(BY) / (STEP * 512)
+hid = [[int(a), int(b)] for a, b in zip(*[np.flatnonzero(np.diff(np.concatenate([[0], b_hidden.astype(int), [0]])) == v) - (0 if v == 1 else 1) for v in (1, -1)])]
+
 # ---- checks
 out = [f'lap {total:.1f} cells, {N} points (the last joint {gapclose:.2f} cells); heights {Y.min():.0f} to {Y.max():.0f}; steepest driven '
        f'{np.abs(grade[ride]).max() * 100:.1f} %']
@@ -271,6 +328,32 @@ if under:
     out.append('  stacked: the least ' + ', '.join(f'{c:.0f} at ({X[i] + OX:.1f}, {Z[i] + OZ:.1f})' for c, i in sorted(under)[:3]))
 for m, k in MARK.items():
     out.append(f'    {m:6s} point {k:4d} ({X[k] + OX:6.1f}, {Z[k] + OZ:6.1f}) {Y[k]:6.0f} (ground {ground(X[k], Z[k]):5.0f})')
+# the shortcut: its marks, steepest grade, the jump, what it passes over, its decor hits, how near the rest of the lap is
+out.append(f'  shortcut: {BM} points, {sc_cum[-1]:.1f} cells to its landing foot then {len(tailK) * STEP:.1f} along the lap; the lap there {ahead(SC_F, SC_J):.1f} cells')
+for name, k in (('fork', 0), ('pad', SC_PAD[0]), ('padEnd', SC_PAD[1]), ('bend0', bend_start), ('foot', sF), ('lip', sL), ('land', sD), ('landFt', sDF), ('join', BM - 1)):
+    out.append(f'    {name:6s} {k:4d} ({BX[k]:6.1f}, {BZ[k]:6.1f}) {BY[k]:6.0f} (ground {ground(BX[k] - OX, BZ[k] - OZ):5.0f}){" hidden" if b_hidden[k] else ""}')
+out.append(f'    steepest driven {max(abs(g) for i, g in enumerate(bgrade) if not b_gap[i] and not b_gap[i + 1]) * 100:.1f} %; the jump {BY[sD] - BY[sL]:+.0f} over {(sD - sL) * STEP:.1f} cells; hidden {hid}')
+bh = {}
+for k in range(BM):
+    if b_gap[k]: continue
+    nx_, nz_ = -(BZ[min(k + 1, BM - 1)] - BZ[max(k - 1, 0)]), BX[min(k + 1, BM - 1)] - BX[max(k - 1, 0)]
+    ln = math.hypot(nx_, nz_) or 1
+    for o in np.linspace(-SC_HALF - 0.3, SC_HALF + 0.3, 9):
+        x, z = BX[k] - OX + nx_ / ln * o, BZ[k] - OZ + nz_ / ln * o
+        i, j = int(z * RQ), int(x * RQ)
+        if not (0 <= i < TOP.shape[0] and 0 <= j < TOP.shape[1]) or TOP[i, j] < 0: continue
+        if TOP[i, j] > BY[k] - 350 and BOT[i, j] < BY[k] + 1400: bh.setdefault(int(WHO[i, j]), []).append((round(x + OX, 1), round(z + OZ, 1)))
+out.append('    decor in its space: ' + '; '.join(f'{b}: {len(h)} {h[0]}' for b, h in sorted(bh.items())))
+fl = list(range(sL, sD + 1))
+out.append(f'    under the flight: the ground at most {max(ground(BX[k] - OX, BZ[k] - OZ) for k in fl):.0f}, the flight at least {min(BY[k] for k in fl):.0f}')
+cl = []
+for k in range(0, BM, 2):
+    if b_hidden[k] or b_gap[k]: continue
+    for m in range(0, N, 2):
+        if between(m, SC_F, SC_J) and abs(Y[m] - BY[k]) < 2600:
+            dd = math.hypot(X[m] + OX - BX[k], Z[m] + OZ - BZ[k]) - HALF[m] - SC_HALF
+            if dd < 0.5: cl.append((round(dd, 1), k, m, round(BY[k] - Y[m])))
+out.append(f'    its deck near the lap (cells apart, its point, the lap point, height over it): {sorted(cl)[:6]}')
 print('\n'.join(out))
 
 plan = {
@@ -290,6 +373,16 @@ plan = {
     # the giant frog (RaceTrackFrog): into its mouth -- the carried jump's landing -- and out of its back; the camera kept low in its throat
     'frog': {'mouth': int(MARK['mouth']), 'back': int(MARK['back'])},
     'tunnels': [{'from': int(MARK['mouth']), 'to': int(MARK['back']), 'roof': 2700, 'pieces': False}],
+    # the shortcut (RaceTrackPlan.Branches): off the lap at SC_F, over the boost pad, up the ramp, the jump, onto the lap at SC_J
+    'branches': [{
+        'points': [[round(float(x - OX), 3), round(float(z - OZ), 3)] for x, z in zip(BX, BZ)],
+        'heights': [round(float(y), 1) for y in BY],
+        'halfs': [round(float(h), 3) for h in B_HALF],
+        'from': int(SC_F), 'to': int(SC_J),
+        'arcJumps': [[int(sF), int(sL), int(sD), int(sDF), 0]],
+        'boostPanels': [[int(SC_PAD[0]), int(SC_PAD[1]), -1.6, 1.6]],
+        'hidden': hid,
+    }],
 }
 if '--write' in sys.argv:
     json.dump(plan, open(OUT, 'w'))
@@ -311,4 +404,7 @@ if '--pictures' in sys.argv:
         for o in (-HALF[k], HALF[k]):
             d.line([P(X[k] + Nn[k, 0] * o, Z[k] + Nn[k, 1] * o), P(X[j] + Nn[j, 0] * o, Z[j] + Nn[j, 1] * o)], fill=col, width=1)
     for m, k in MARK.items(): d.text(P(X[k], Z[k]), m, fill=(255, 255, 255))
+    for k in range(BM - 1):
+        col = (255, 255, 255) if b_gap[k] else (255, 0, 255) if SC_PAD[0] <= k <= SC_PAD[1] else (80, 80, 80) if b_hidden[k] else (255, 160, 0)
+        d.line([P(BX[k] - OX, BZ[k] - OZ), P(BX[k + 1] - OX, BZ[k + 1] - OZ)], fill=col, width=3)
     img.save(D + 'lap.png')

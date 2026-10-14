@@ -16,6 +16,23 @@ internal sealed class FrogRun
     public int Back { get; set; }
 }
 
+// A branch of a raised road (RaceTrackPlan.Branches): a way off the lap and back onto it -- Wannies Island's shortcut over its boost panel
+// and jump. Its points (cells from the plan's origin, half a cell apart, its first on the lap's road at the lap's point From, its last on it
+// at To), a height and a half width each; its carried jumps ([foot, lip, landing, landing's foot, camera], its own points) and boost panels
+// ([from, to, from and to across], its own points).
+internal sealed class BranchRun
+{
+    public double[][] Points { get; set; } = Array.Empty<double[]>();
+    public double[] Heights { get; set; } = Array.Empty<double>();
+    public double[]? Halfs { get; set; }
+    public int From { get; set; }
+    public int To { get; set; }
+    public int[][]? ArcJumps { get; set; }
+    public double[][]? BoostPanels { get; set; }
+    // its stretches on the lap's own road ([first, last], its own points): no deck of its own there, the lap's is
+    public int[][]? Hidden { get; set; }
+}
+
 // The frog as placed: its mouth (island cells, the road's middle there) and the road's height there, the way the lap runs into it (a unit
 // vector), how long it is (cells, mouth to back), the ground's height under its middle; the lap's points of its mouth and back; once made
 // (Install), its body (BODY.HQR).

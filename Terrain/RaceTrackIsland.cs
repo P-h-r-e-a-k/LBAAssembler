@@ -302,9 +302,10 @@ internal sealed record RaceTrackIsland(
     };
 
     // Wannies Island (PLATFORM.ILE, island 6: outside scenes 96-99), from the user's drawing (2026-10-14): from the pier south of the
-    // elevator's platform round the east island and the west one, climbing all the way, high over the islands, to a jump into a giant frog's
-    // mouth (timed: it opens and shuts), through it and out of its back, up over the lava to the elevator tower's top and three times round
-    // it down a helix to the pier. The plan: tools/RaceTrackPlan/wannies_design.py.
+    // elevator's platform round the east island (or a shortcut off its corner over a boost pad and a jump: a branch of the raised road) and
+    // the west one, climbing all the way, high over the islands, to a jump into a giant frog's mouth (timed: it opens and shuts; a shut one
+    // throws the car back -- RaceTrackFrog), through it and out of its back, up over the lava to the elevator tower's top and three times
+    // round it down a helix to the pier. The plan: tools/RaceTrackPlan/wannies_design.py.
     public static readonly RaceTrackIsland Wannies = new("Wannies Island", "PLATFORM.ILE", "PLATFORM.OBL", 6, 96, 99, 33, "RaceTrackPlan.Wannies.json", null)
     {
         Title = "Wannies Island: through the frog and down the tower", Roster = RaceDriver.Wannies,

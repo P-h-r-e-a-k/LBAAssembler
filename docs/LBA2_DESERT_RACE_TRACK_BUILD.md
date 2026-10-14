@@ -3692,6 +3692,84 @@ route's checks (`palace_design.py`) are all clear against them and give the same
   it, fixed then (the "lag fix" of 2026-10-13): a copy is drawn once a frame now.
 - Checked: won in 276.43 s, no car rescued, both jumps carried, Twinsen awake in scene 95.
 
+## Wannies Island: through a giant frog, down the elevator tower, a shortcut over a jump (2026-10-14)
+
+The user's drawing for `PLATFORM.ILE`: "Pink is jump, and purple is a boost pad. The massive blue circle is to be a giant frog that we
+drive through. The frog repeatedly opens and closes its mouth and extends its tongue as it does so, so we have to time the jump into the
+mouth. Exiting the frog we go up a slope to the top of the tower, then there's a loop coming down the tower looping around about three
+times, into the start finish line and the pit lane". Asked how the pieces fit: the boost pad and its jump a shortcut beside the road
+round the right ("Both: jump as a shortcut"); the road built up to the frog's jump, "which then lifts the frog higher into the air, this
+will then make the slope to the top of the tower less steep"; a car meeting a shut mouth bounced back.
+
+The plan is `tools/RaceTrackPlan/wannies_design.py` (the drawing read off and laid on the island, as the other tracks'), the island
+`RaceTrackIsland.Wannies` (outside scenes 96-99), the line-up the Wannie miner in his undergas bulldozer (the one to beat), a Wannie in a
+mine cart and the old Wannie on her firefly tart.
+
+- *The lap* (812 cells, all raised road): from the pier south of the Wannies' elevator round the east island -- north of its buildings,
+  out round the mine's machinery -- west along its south side, the west island's south loop, and north-west up to the frog, climbing all
+  the way (2,600 to 19,500, 10.7 %); the jump into the frog's mouth at 20,400; through the frog and out of its back, up over the lava to
+  the elevator tower's top (25,000, 13.8 %) and three times round it down a helix (11.5 %) onto the pier.
+- *Scene 98's own script.* The hero's life script there plays the elevator's cutscene while game variable 107 is 0 (and puts Twinsen at
+  its point 7, on foot): the island holds 107 at 1 (`HeldVars`, the race file's `vargame=`).
+- *A checkpoint just past the start line* -- here the corner after it -- was never taken: the car crosses it in the frame it crosses the
+  start line, and the lap begins after the checkpoints are counted. None is placed within 6 cells after the line now (no other track had
+  one there).
+
+![Down the tower's helix](racetrack/wannies/tower_helix.png)
+
+### The frog
+
+![The frog's tongue shooting out at the car coming up the ramp](racetrack/wannies/frog_tongue.png)
+
+- *The body* (`RaceTrackFrog`, one body of 417 points, 365 polygons and 9 spheres): a throat the road's width through it, mouth to back
+  (18 cells, straight along the drawing's line); its skin ring by ring round it -- a wide head, its back sloping down to the rump round
+  the way out; bulging gold eyes, nostrils, front legs to its hands and folded hind legs to webbed feet, on a lily pad on a stalk down to
+  the ground (14,000 under it). Bone 1 is the lower jaw, hinged at the back of the mouth: its top the mouth's floor -- the road -- while
+  the mouth is open, turned up it fills the mouth like a drawbridge (a pale throat sac and walls under it). Bones 2-4 are the tongue,
+  folded back along the floor; turned over the lip it shoots out of the mouth at the cars coming and curls down towards the ramp.
+- *Drawn by the race-track mode*, not as a scene's actor: posed by the mode's own clock every frame -- the jaw and the tongue turned
+  straight in the body's frame (`CurrentFrame`), no animation of the game's -- and drawn into the island's background after the ground
+  and the decor, its depth written (`RaceMod_DrawBackdrop`, from `AffGrilleExt`). So the cars, drawn after it and tested against the
+  depth, are hidden by it where they should be and seen in its throat; an actor would have been sorted against the car by its box, and
+  the car inside the frog's box drawn over it or under it whole. Its polygons are cut close to the camera (the body's close flag): the
+  camera is in its throat.
+- *The mouth's cycle*, 4.4 s: opening 0.32 s, open 2.5 s (the tongue out and back in its first 0.8 s), shutting 0.32 s, shut. A car is
+  let in until 0.6 s before it shuts -- the time to get past the jaw -- and the jaw twitches three times then: too late.
+- *A shut mouth* (`frog=`, `FrogBounce`): the carried jump into it (its landing is the mouth) is broken off at the jaw's lip, and the car
+  thrown back over the gap in an arc and put down on the road 8 cells before the ramp's foot, facing on, stopped -- 1.3 s.
+- *The opponents* coming up to it are slowed, from 40 cells out, to come to it as it opens (`FrogCap`), their arrival kept till they are in.
+- *The road through it* has no deck of its own (`TrackRoad.Hidden`: no pieces, no piers; the mode's floor as anywhere), narrower up the
+  ramp and through the frog (3.5 cells either side); the camera kept low in its throat (a tunnel with no pieces).
+
+![In its throat](racetrack/wannies/frog_throat.png)
+
+![The mouth shut: the car thrown back](racetrack/wannies/frog_shut.png)
+
+![The body, open with its tongue out (the frog view of `frogbody`)](racetrack/wannies/frog_body.png)
+
+### The shortcut
+
+Where the lap turns west at the east island's south-west corner, a branch of the raised road goes straight on north-west, over the boost
+pad, bends west up a ramp (9 cells, 800 up) and jumps west over the lap's dip round the channel (11.5 cells, 350 up: no jump lands lower
+than it took off), landing on the lap at its next corner and on along it. As long as the lap's stretch it skips (50 cells); what it gains
+is the boost pad's speed, carried over the jump.
+
+- *A branch of the raised road* (the plan's `branches`, `BranchRun`; the engine's `raised_lap=`, `raised_branch=`): its points after the
+  lap's in the engine's raised road, behind a point with no width, its first on the lap's road where it leaves, its last where it comes
+  back. The engine finds its floor and keeps the car on it as on the lap (the nearest road the car is on); its ends are not open ends
+  (the lap's road is there); the lap's loop is the lap's own points; the camera that rides the road behind the car goes on along the lap
+  past a branch's ends, and the distances between the road's points that the cameras and the floor's levels go by run through them.
+- *Its decks*: where it lies on the lap's road (its first cells, its landing) it has none of its own; 40 over the lap's deck where the
+  two overlap; neither road has a rail across the other's deck there (`OpenRails`: a deck piece's rail down to its curb), so the two
+  part at a V. Its piers stand clear of the lap's road.
+- No checkpoint on the stretch of the lap it goes round.
+- Checked with the test pilot taken off its line at the fork: on the boost pad (120 km/h), carried over the jump at 17,066 units/s,
+  down on the lap.
+
+![The fork: the shortcut straight on, its boost pad](racetrack/wannies/shortcut_fork.png)
+
+![Over the jump](racetrack/wannies/shortcut_jump.png)
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

@@ -1130,6 +1130,38 @@ static S32 s_landed = -1;                  // the flight he last landed from ...
 static U32 s_landedAt = 0;                 // ... and when (TimerRefHR)
 static int s_statue = -1;                // statue=: 1 with the statue, 0 without it, -1 (not given) as the game says
 static int s_raisedLoop = 0;               // the road is a whole lap: its last point is its first
+// Branches of the raised road (raised_lap=<the lap's points>, raised_branch=<first> <last> <from> <to>): a way off the lap and back onto
+// it -- Wannies Island's shortcut over its boost panel and jump, 2026-10-14. The raised road's file has the lap's own points first (its
+// last its first again, a loop), then each branch after a point with no width: its first point on the lap's road at the lap's point From,
+// its last on it at To, where it comes back. A branch's ends are not open (the lap's road is there); a jump's gap in it is.
+#define RACE_MAX_BRANCHES 4
+typedef struct { int First, Last, From, To; } T_RACE_BRANCH;
+static T_RACE_BRANCH s_branches[RACE_MAX_BRANCHES];
+static int s_nbBranches = 0, s_nbLap = 0;
+static int LapPoints(void) { return s_nbLap > 1 && s_nbLap <= s_nbRaised ? s_nbLap : s_nbRaised; }
+static int BranchOf(int i) {
+    for (int b = 0; b < s_nbBranches; b++) if (i >= s_branches[b].First && i <= s_branches[b].Last) return b;
+    return -1;
+}
+// How far apart two points of the raised road are along it (points): round the lap's seam, and from a branch through the nearer of its
+// ends onto the lap.
+static int LapApart(int i, int j) {
+    const int n = LapPoints() - 1;
+    int a = abs(i - j);
+    if (s_raisedLoop && n > 0 && a > n / 2) a = n - a;
+    return a;
+}
+static int RaisedApart(int i, int j) {
+    const int lap = LapPoints();
+    const int bi = i >= lap ? BranchOf(i) : -1, bj = j >= lap ? BranchOf(j) : -1;
+    if (bi < 0 && bj < 0) return LapApart(i, j);
+    if (bi >= 0 && bi == bj) return abs(i - j);
+    if (bi >= 0 && bj >= 0) return 1 << 20;
+    const int k = bi >= 0 ? i : j, other = bi >= 0 ? j : i;
+    const T_RACE_BRANCH *b = &s_branches[bi >= 0 ? bi : bj];
+    const int viaFrom = k - b->First + LapApart(b->From, other), viaTo = b->Last - k + LapApart(b->To, other);
+    return viaFrom < viaTo ? viaFrom : viaTo;
+}
 static double s_gravity = 0;               // gravity=<k>: a car on the raised road is pulled down its slopes (RaceMod_Gravity), k times as hard as RACE_GRAVITY
 // railcam=<back> <up> <lead> [sight] [aim]: the camera that follows the car rides the raised road behind it (RailCamera); sight: its
 // line to the car ends this far over the road (s_railSight); aim: it looks at a point this far over the road ahead (RAIL_CAMERA_AIM)
@@ -1152,7 +1184,15 @@ extern S32 CalculAltitudeTerrain(S32 x, S32 z, S32 cj);
 // jump's take-off lip, where a gap (Half 0) follows: there is no floor out there (a segment's ends are otherwise round, so the deck
 // reached a half-width past the lava lake's drop lip and held the car up over the gap, 2026-10-01).
 static int RaisedOpenEnd(int i, double tt) {
-    if (tt > 1) return i + 2 >= s_nbRaised ? !s_raisedLoop : s_raised[i + 2].Half <= 0;
+    const int lap = LapPoints();
+    if (i >= lap) {
+        // (a branch: its ends on the lap's road)
+        const int b = BranchOf(i);
+        if (tt > 1) return b >= 0 && i + 1 >= s_branches[b].Last ? 0 : i + 2 >= s_nbRaised || s_raised[i + 2].Half <= 0;
+        if (tt < 0) return b >= 0 && i <= s_branches[b].First ? 0 : s_raised[i - 1].Half <= 0;
+        return 0;
+    }
+    if (tt > 1) return i + 2 >= lap ? !s_raisedLoop : s_raised[i + 2].Half <= 0;
     if (tt < 0) return i == 0 ? !s_raisedLoop : s_raised[i - 1].Half <= 0;
     return 0;
 }
@@ -1191,11 +1231,7 @@ static int RaisedAt(double wx, double wz, S32 ref, double pad, S32 *y, int *seg,
                 for (int k = s_rbStart[b]; k < s_rbStart[b + 1]; k++) {
                     const int i = s_rbItem[k];
                     if (i >= s_nbRaised - 1) continue;
-                    if (s_onlyNear >= 0) {
-                        int apart = abs(i - s_onlyNear);
-                        if (s_raisedLoop && apart > (s_nbRaised - 1) / 2) apart = s_nbRaised - 1 - apart;
-                        if (apart > RAISED_SIGHT) continue;
-                    }
+                    if (s_onlyNear >= 0 && RaisedApart(i, s_onlyNear) > RAISED_SIGHT) continue;
                     const T_RACE_RAISED *a = &s_raised[i], *c = a + 1;
                     if (a->Half <= 0 || c->Half <= 0) continue;
                     const double sx = c->X - a->X, sz = c->Z - a->Z, len2 = sx * sx + sz * sz;
@@ -1276,12 +1312,17 @@ static S32 RaisedSight(S32 x, S32 z, S32 y) {
 // The road's slope at a segment for something facing `beta`: the height it gains per unit that way (over a cell or two of road).
 static double RaisedSlope(int seg, S32 beta) {
     int a = seg - 2, b = seg + 3;
-    if (s_raisedLoop) {
-        const int n = s_nbRaised - 1;
+    const int lap = LapPoints(), br = seg >= lap ? BranchOf(seg) : -1;
+    if (br >= 0) {
+        // (on a branch: within it)
+        if (a < s_branches[br].First) a = s_branches[br].First;
+        if (b > s_branches[br].Last) b = s_branches[br].Last;
+    } else if (s_raisedLoop) {
+        const int n = lap - 1;
         a = ((a % n) + n) % n; b = b % n;
     } else {
         if (a < 0) a = 0;
-        if (b > s_nbRaised - 1) b = s_nbRaised - 1;
+        if (b > lap - 1) b = lap - 1;
     }
     const double sx = s_raised[b].X - s_raised[a].X, sz = s_raised[b].Z - s_raised[a].Z, len = sqrt(sx * sx + sz * sz);
     if (len < 1) return 0;
@@ -1348,11 +1389,7 @@ static int RaisedBetween(double wx, double wz, double lo, double hi, int own, do
             for (int k = s_rbStart[b]; k < s_rbStart[b + 1]; k++) {
                 const int i = s_rbItem[k];
                 if (i >= s_nbRaised - 1) continue;
-                if (own >= 0) {
-                    int apart = abs(i - own);
-                    if (s_raisedLoop && apart > (s_nbRaised - 1) / 2) apart = s_nbRaised - 1 - apart;
-                    if (apart <= RAISED_OWN) continue;
-                }
+                if (own >= 0 && RaisedApart(i, own) <= RAISED_OWN) continue;
                 const T_RACE_RAISED *a = &s_raised[i], *c = a + 1;
                 if (a->Half <= 0 || c->Half <= 0) continue;
                 const double sx = c->X - a->X, sz = c->Z - a->Z, len2 = sx * sx + sz * sz;
@@ -1375,21 +1412,25 @@ static int RaisedBetween(double wx, double wz, double lo, double hi, int own, do
 // The road's place `distance` along it from a point of it (segment `seg`, `t` along it), forwards or (negative) backwards: its middle
 // there, at the road's own height. Round a loop's seam; stopped at an open road's ends.
 static int RaisedAlong(int seg, double t, double distance, double *x, double *y, double *z) {
-    const int n = s_nbRaised - 1;                       // its segments
+    const int n = LapPoints() - 1;                      // the lap's segments
     int i = seg;
     double at = t;
-    for (int guard = 0; guard < 2 * n + 8; guard++) {
+    for (int guard = 0; guard < 2 * s_nbRaised + 8; guard++) {
         const T_RACE_RAISED *a = &s_raised[i], *c = a + 1;
         const double len = sqrt((double)(c->X - a->X) * (c->X - a->X) + (double)(c->Z - a->Z) * (c->Z - a->Z));
         const int forward = distance >= 0;
         const double room = forward ? (1 - at) * len : at * len;      // what is left of this segment that way
         if (len > 1e-6 && fabs(distance) <= room) { at += distance / len; break; }
         distance += forward ? -room : room;
+        // (off a branch's end: on along the lap from where the branch meets it)
+        const int br = i > n ? BranchOf(i) : -1;
         if (forward) {
-            if (i + 1 >= n) { if (!s_raisedLoop) { at = 1; break; } i = 0; } else i++;
+            if (br >= 0) { if (i + 1 >= s_branches[br].Last) { i = s_branches[br].To; if (i >= n) i = n - 1; } else i++; }
+            else if (i + 1 >= n) { if (!s_raisedLoop) { at = 1; break; } i = 0; } else i++;
             at = 0;
         } else {
-            if (i == 0) { if (!s_raisedLoop) { at = 0; break; } i = n - 1; } else i--;
+            if (br >= 0) { if (i <= s_branches[br].First) { i = s_branches[br].From - 1; if (i < 0) i = s_raisedLoop ? n - 1 : 0; } else i--; }
+            else if (i == 0) { if (!s_raisedLoop) { at = 0; break; } i = n - 1; } else i--;
             at = 1;
         }
     }
@@ -1414,8 +1455,21 @@ static double s_railSight = 0, s_railCeil = -1, s_railSightKept = 0;
 // Whether a jump's gap (points with no width) lies on the raised road between segments a and b (either way round, the shorter): the rail
 // camera's eye is not let ride back over the gap the car has just flown -- under the roulette wheel, up on the wheel's lane over the car.
 static int GapBetween(int a, int b) {
-    const int n = s_nbRaised - 1;
+    const int lap = LapPoints(), n = lap - 1;
     if (n <= 0 || a < 0 || b < 0) return 0;
+    const int ba = a >= lap ? BranchOf(a) : -1, bb = b >= lap ? BranchOf(b) : -1;
+    if (ba >= 0 || bb >= 0) {
+        // (on a branch: its points between them -- or, the other on the lap, between the branch's end nearer it and the one on it)
+        int from, to;
+        if (ba >= 0 && ba == bb) { from = a < b ? a : b; to = a < b ? b : a; }
+        else {
+            const int k = ba >= 0 ? a : b, other = ba >= 0 ? b : a;
+            const T_RACE_BRANCH *br = &s_branches[ba >= 0 ? ba : bb];
+            if (LapApart(br->From, other) <= LapApart(br->To, other)) { from = br->First; to = k; } else { from = k; to = br->Last; }
+        }
+        for (int i = from; i <= to; i++) if (s_raised[i].Half <= 0) return 1;
+        return 0;
+    }
     int from = a, to = b;
     if (s_raisedLoop) { if (((b - a) % n + n) % n > n / 2) { from = b; to = a; } }
     else if (a > b) { from = b; to = a; }
@@ -1519,8 +1573,10 @@ static S32 RaisedArm(S32 base) {
     int over[3] = {0, 0, 0};
     for (int k = 0; k < 3; k++) {
         int i = seg + (k - 1) * RAISED_STACK;
-        if (s_raisedLoop) { const int n = s_nbRaised - 1; i = ((i % n) + n) % n; }
-        else if (i < 0 || i > s_nbRaised - 1) continue;
+        const int lap = LapPoints(), br = seg >= lap ? BranchOf(seg) : -1;
+        if (br >= 0) { if (i < s_branches[br].First || i > s_branches[br].Last) continue; }
+        else if (s_raisedLoop) { const int n = lap - 1; i = ((i % n) + n) % n; }
+        else if (i < 0 || i > lap - 1) continue;
         double level;
         if (!RaisedBetween(s_raised[i].X, s_raised[i].Z, s_raised[i].Y + 800.0, s_raised[i].Y + 9000.0, i, &level)) continue;
         over[k] = 1;
@@ -1537,7 +1593,8 @@ static S32 RaisedArm(S32 base) {
 
 // The tunnel the car is in, or coming up to (RACE_TUNNEL_LEAD points before its mouth): -1 none. `seg` a raised road segment.
 static int InTunnel(int seg) {
-    const int n = s_raisedLoop ? s_nbRaised - 1 : s_nbRaised;
+    if (seg >= LapPoints()) return -1;
+    const int n = s_raisedLoop ? LapPoints() - 1 : LapPoints();
     for (int k = 0; k < s_nbTunnels && n > 0; k++) {
         const T_RACE_TUNNEL *tn = &s_tunnels[k];
         const int from = ((tn->From - RACE_TUNNEL_LEAD) % n + n) % n;
@@ -1570,7 +1627,10 @@ static int RaisedPastEnd(double wx, double wz, double wy) {
         if (tip->Half <= 0) continue;
         for (int end = 0; end < 2; end++) {
             // (end 1: the last point before a gap or the road's end; end 0: the first point after one)
-            const int open = end ? (i + 1 >= s_nbRaised ? !s_raisedLoop : s_raised[i + 1].Half <= 0)
+            // (a branch's ends are on the lap's road: not open)
+            const int lap = LapPoints(), br = i >= lap ? BranchOf(i) : -1;
+            const int open = br >= 0 ? (end ? i < s_branches[br].Last && s_raised[i + 1].Half <= 0 : i > s_branches[br].First && s_raised[i - 1].Half <= 0)
+                           : end ? (i + 1 >= lap ? !s_raisedLoop : s_raised[i + 1].Half <= 0)
                                  : (i == 0 ? !s_raisedLoop : s_raised[i - 1].Half <= 0);
             const int j = end ? i - 1 : i + 1;
             if (!open || j < 0 || j >= s_nbRaised) continue;
@@ -1618,7 +1678,7 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
         *nx = ox; *nz = oz; s_railTouch = 1; return;
     }
     // (past the road's own end: onto the ground it comes down to)
-    if ((!s_raisedLoop && ((seg == 0 && t <= 0) || (seg == s_nbRaised - 2 && t >= 1))) || RaisedPastEnd(*nx + cx, *nz + cz, oy)) return;
+    if ((!s_raisedLoop && ((seg == 0 && t <= 0) || (seg == LapPoints() - 2 && t >= 1))) || RaisedPastEnd(*nx + cx, *nz + cz, oy)) return;
     const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
     const double half = a->Half + (c->Half - a->Half) * t, limit = half - RAISED_INSET;
     // (a strip beside the road -- the Emerald Moon's pit lane: the car kept on the road or on the strip, the nearer, the clear space
@@ -2092,6 +2152,11 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "weather")) s_fineWeather = !strcmp(v, "fine");
         else if (!strcmp(key, "wake_flight")) s_wakeFlight = atoi(v);
         else if (!strcmp(key, "raised")) LoadRaised(v);
+        else if (!strcmp(key, "raised_lap")) s_nbLap = atoi(v);
+        else if (!strcmp(key, "raised_branch")) {
+            T_RACE_BRANCH b;
+            if (s_nbBranches < RACE_MAX_BRANCHES && sscanf(v, "%d %d %d %d", &b.First, &b.Last, &b.From, &b.To) == 4 && b.First < b.Last) s_branches[s_nbBranches++] = b;
+        }
         else if (!strcmp(key, "statue")) s_statue = atoi(v);
         else if (!strcmp(key, "rescue")) s_rescueOn = atoi(v);
         else if (!strcmp(key, "gravity")) s_gravity = atof(v);
@@ -2465,6 +2530,14 @@ static void Load(const char *path, int carOnly = 0) {
     fclose(f);
     // (a lap with loops: the camera that follows the car looks at a loop from its side while the car goes round it; and at a drop from
     // its own place beside it)
+    // (a raised road with branches after the lap's own points: whether the lap is a loop, from its own)
+    if (s_nbLap > 3 && s_nbLap < s_nbRaised) {
+        const T_RACE_RAISED *r = s_raised;
+        s_raisedLoop = r[0].X == r[s_nbLap - 1].X && r[0].Z == r[s_nbLap - 1].Z && r[0].Y == r[s_nbLap - 1].Y;
+        for (int b = 0; b < s_nbBranches; b++)
+            if (s_branches[b].Last >= s_nbRaised || s_branches[b].First < s_nbLap) { Log_Info("[racemod] raised road: branch %d out of its points -- left out", b + 1); s_branches[b--] = s_branches[--s_nbBranches]; }
+        Log_Info("[racemod] raised road: the lap's %d points%s and %d branch(es)", s_nbLap, s_raisedLoop ? " (a loop)" : "", s_nbBranches);
+    }
     for (int i = 0; i < s_nbArcs; i++)
         if (!ArcPrepare(&s_arcs[i])) { Log_Info("[racemod] carried jump %d: not along the raised road -- left out", i + 1); s_arcs[i--] = s_arcs[--s_nbArcs]; }
     if (s_nbArcs) Log_Info("[racemod] %d carried jump(s), %d cube scenes", s_nbArcs, s_nbCubeScenes);
@@ -3340,14 +3413,16 @@ static int s_rescueArrive = -1;            // a rescue into the safe place's sce
 static int OverRaisedGap(double x, double z) {
     int best = -1;
     double bd = 1e30;
-    for (int k = 0; k < s_nbRaised; k++) {
+    // (the lap's own points: the lines are the lap's, and a branch begins after a point with no width)
+    const int lap = LapPoints();
+    for (int k = 0; k < lap; k++) {
         const double dx = s_raised[k].X - x, dz = s_raised[k].Z - z, d = dx * dx + dz * dz;
         if (d < bd) { bd = d; best = k; }
     }
     if (best < 0) return 0;
     for (int d = -1; d <= 1; d++) {
         const int k = best + d;
-        if (k >= 0 && k < s_nbRaised && s_raised[k].Half == 0) return 1;
+        if (k >= 0 && k < lap && s_raised[k].Half == 0) return 1;
     }
     return 0;
 }
@@ -6036,7 +6111,7 @@ static void LavaBalls(S32 now, int driving) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     const double hx = hero->Obj.X + cx, hz = hero->Obj.Z + cz;
-    const int n = s_raisedLoop ? s_nbRaised - 1 : s_nbRaised - 1;
+    const int n = LapPoints() - 1;
     for (int i = 0; i < s_nbLava; i++) {
         T_RACE_LAVA *b = &s_lava[i];
         if (!b->On) {
@@ -6192,7 +6267,7 @@ static void LavaGeysers(S32 now) {
             double top = g->Y;
             for (int i = 0; i < s_nbLava; i++) {
                 if (s_lava[i].Geyser != gi) continue;
-                const int n = s_raisedLoop ? s_nbRaised - 1 : s_nbRaised - 1, span = ((s_lava[i].To - s_lava[i].From) % n + n) % n;
+                const int n = LapPoints() - 1, span = ((s_lava[i].To - s_lava[i].From) % n + n) % n;
                 for (int q = 0; q <= span; q++) { const int k = (s_lava[i].From + q) % n; if (s_raised[k].Y > top) top = s_raised[k].Y; }
                 break;
             }
@@ -7856,6 +7931,7 @@ static void ResetTrack(void) {
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
     s_guardSize = 1.0; s_nbTeleports = 0; s_teleportedAt = 0;
     memset(&s_frog, 0, sizeof(s_frog)); s_frog.Arc = -1;
+    s_nbLap = 0; s_nbBranches = 0;
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = s_arcAcross1 = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0; s_railHeld = 0; s_railSight = s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;

@@ -39,6 +39,12 @@ internal static class RaceCarEngineFile
         if (track?.Checkpoints is { Count: > 0 }) text.Append($"checkpoint_lines={(car.ShowCheckpoints ? 1 : 0)}\n");
         // a raised road: the file with its middle, point by point (the engine's floor there)
         if (raisedFile is not null) text.Append($"raised={raisedFile}\n");
+        // ... the lap's own points in it, and its branches after them (a shortcut off the lap and back onto it)
+        if (raisedFile is not null && track?.RaisedLap is { } lapPoints && track.RaisedBranches is { Count: > 0 } branches)
+        {
+            text.Append($"raised_lap={lapPoints}\n");
+            foreach (var b in branches) text.Append($"raised_branch={string.Join(' ', b)}\n");
+        }
         // ... and how much its grade changes a car's speed (a rollercoaster of a lap)
         if (raisedFile is not null && track?.Gravity is { } gravity and > 0) text.Append($"gravity={N(gravity)}\n");
         // ... and the camera that rides the road behind the car: how far behind (units), how high, how far ahead it looks

@@ -137,6 +137,9 @@ internal sealed class RaceTrackPlan
     // A giant frog the lap drives through, into its mouth and out of its back (RaceTrackFrog, RACEMOD.CPP frog=): Wannies Island's
     // (the user, 2026-10-14).
     public FrogRun? Frog { get; set; }
+    // Branches of a raised road: ways off the lap and back onto it (BranchRun; RACEMOD.CPP raised_branch=) -- Wannies Island's shortcut over
+    // its boost panel and jump (the user, 2026-10-14: "Both: jump as a shortcut").
+    public BranchRun[]? Branches { get; set; }
     // Giant hoops across the lap (RaceTrackHoop): Otringal's dog show's hoop, made big enough for the cars to drive through (2026-10-09).
     public HoopRun[]? Hoops { get; set; }
     // Decor bodies that stay where they are when the ground under them is cut or raised (IslandOps.DecorFollow): Otringal's gatehouse,
@@ -623,6 +626,12 @@ internal sealed class RaceTrackReport
     public List<double[]> Teleports { get; } = new();
     // The giant frogs the lap drives through (RaceTrackFrog)
     public List<FrogInfo> Frogs { get; } = new();
+    // The raised road's branches (RaceTrackPlan.Branches) as planned -- their points in island cells, the lap's points they leave from and
+    // come back onto -- and, once placed (PlaceBranch), each one's first and last point in Raised and the lap's points in Raised it leaves
+    // from and comes back onto (RACEMOD.CPP raised_branch=); the lap's own points in Raised, the branches after them (raised_lap=).
+    public List<(BranchRun Run, double[] X, double[] Z, int From, int To)> BranchPlans { get; } = new();
+    public List<int[]> RaisedBranches { get; } = new();
+    public int RaisedLap { get; set; }
     public JumpInfo? Jump => Jumps.Count > 0 ? Jumps[0] : null;
     public RoadBridgeInfo? RoadBridge { get; set; }
     // How far (cells) an island cell position is from the nearest road's centre line, 1e9 when far away.
@@ -678,6 +687,9 @@ internal sealed class TrackRoad
     // A raised road's points with no deck of its own that the cars still drive on (no pieces, no piers; the race-track mode's floor as
     // anywhere: a giant frog's throat, RaceTrackFrog), or null.
     public bool[]? Hidden;
+    // A raised road's points with no rail on one side (OpenMinus: the side -Across, OpenPlus: +Across), or null: where another road's
+    // deck runs on from it -- a branch leaving the lap or coming back onto it.
+    public bool[]? OpenMinus, OpenPlus;
     // A white stripe along a raised road (RaceTrackPlan.PitStripe): its first and last point and how far across (cells), or null.
     public (int From, int To, double Offset)? Stripe;
     // Boost panels on a raised road (RaceTrackPlan.BoostPanels): each one's first and last point and how far across it reaches (cells).
@@ -847,6 +859,13 @@ internal static class RaceTrackBuilder
             }
         if (planned && main.Raised is not null) PlanArcJumps(plan, main, report);
         if (planned && main.Raised is not null && plan.Frog is { } frog) RaceTrackFrog.Place(island, main, PlanPoint(plan, main, frog.Mouth), PlanPoint(plan, main, frog.Back), report);
+        if (planned && main.Raised is not null && plan.Branches is { Length: > 0 } branchRuns)
+            foreach (var run in branchRuns)
+            {
+                if (run.Points.Length < 4 || run.Heights.Length != run.Points.Length) { report.Notes.Add("WARNING: a branch of the raised road with too few points, or not a height each -- left out"); continue; }
+                report.BranchPlans.Add((run, run.Points.Select(p => p[0] + plan.OriginCellX).ToArray(), run.Points.Select(p => p[1] + plan.OriginCellZ).ToArray(),
+                                        PlanPoint(plan, main, run.From), PlanPoint(plan, main, run.To)));
+            }
         if (planned && main.Raised is not null && plan.Roulette is { } wheel)
         {
             main.Bare = new bool[main.Count];
@@ -2445,6 +2464,14 @@ internal static class RaceTrackBuilder
             avoid.Add((from, to));
             if (from < 0) avoid.Add((from + r.Length, r.Length));
             if (to > r.Length) avoid.Add((0, to - r.Length));
+        }
+        // (not on the stretch of the lap a branch of the raised road goes round -- Wannies Island's shortcut: a car taking it doesn't cross it)
+        foreach (var bp in report.BranchPlans)
+        {
+            double a = Ahead(bp.From) - 4, b = Ahead(bp.To) + 4;
+            avoid.Add((a, b));
+            if (a < 0) avoid.Add((a + r.Length, r.Length));
+            if (b > r.Length) avoid.Add((0, b - r.Length));
         }
         // (the roulette wheel's way round its bowl: the cars drive it freely, not along the line -- a line there would be missed)
         if (r.Bare is { } bare)
@@ -4687,7 +4714,13 @@ internal static class RaceTrackBuilder
         if (options.Crossing == CrossingStyle.Viaduct && !planned)
             foreach (var c in crossings) PlaceBridge(island, c.X, c.Z, main.H[c.I], c.BisX, c.BisZ, report, options);
         if ((options.Crossing == CrossingStyle.Bridge || planned) && report.RoadBridge is { } rb) PlaceDeck(island, rb, options, report);
+        // (a branch of the raised road: made first, so that where it leaves the lap and comes back onto it neither road's deck has a rail
+        // across the other's)
+        var branchRoads = main.Raised is null ? new List<(TrackRoad Road, (BranchRun Run, double[] X, double[] Z, int From, int To) Plan)>()
+            : report.BranchPlans.Select(p => (MakeBranch(main, p, options), p)).ToList();
+        foreach (var (road, _) in branchRoads) { OpenRails(main, road, options); OpenRails(road, main, options); }
         if (main.Raised is not null) PlaceRaised(island, main, options, report, startIndex);
+        foreach (var (road, plan) in branchRoads) PlaceBranch(island, main, road, plan, options, report);
         if (report.Loops.Count > 0) PlaceLoops(island, options, report);
         if (report.FloorArrows.Count > 0) PlaceFloorArrows(island, options, report);
         if (report.Jumps.Any(j => j.Drop > 0)) PlaceJumpCameras(island, report);
@@ -4892,8 +4925,12 @@ internal static class RaceTrackBuilder
     private const int NoBoxTop = -32000, PierClear = 5, RaisedArrowEvery = 3;
     private const double RaisedGantryClear = 2300, RaisedGantryBeam = 640;
 
-    private static void PlaceRaised(IslandFile island, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, int startIndex = -1)
+    private static void PlaceRaised(IslandFile island, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, int startIndex = -1, int[][]? branchArcs = null, TrackRoad? lap = null)
     {
+        // (branchArcs: r is a branch of the raised road -- PlaceBranch -- its points after the lap's in Raised, its carried jumps these, its
+        // own points)
+        var isBranch = branchArcs is not null;
+        var offset = report.Raised.Count;
         var up = r.Raised!; var n = r.Count;
         // (a lap that is all raised road starts at its first point and closes on it)
         var loop = r.Closed && up.All(u => u);
@@ -4908,8 +4945,7 @@ internal static class RaceTrackBuilder
         if (!r.Closed) { var last = Enumerable.Range(0, n).Last(i => up[i]); for (var k = first; k <= last; k++) span.Add(k); }
         else for (var k = first; up[k] && span.Count < n; k = At(r, k + 1)) span.Add(k);
         if (loop) span.Add(first);
-        report.RaisedLoop = loop;
-        report.RaisedSpan.Clear(); report.RaisedSpan.AddRange(span);
+        if (!isBranch) { report.RaisedLoop = loop; report.RaisedSpan.Clear(); report.RaisedSpan.AddRange(span); }
         var half = o.RaisedHalfWidth * 512;
         double Half(int k) => (r.RaisedHalfs?[k] ?? o.RaisedHalfWidth) * 512;
         // (the strip beside the road there, cells across, or null)
@@ -4928,8 +4964,15 @@ internal static class RaceTrackBuilder
                 ? new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width }
                 : new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width, (int)Math.Round(banks[k] * RaisedBankUnits) });
         }
+        // (a branch's carried jumps: its own points, after the lap's in the list)
+        foreach (var j in branchArcs ?? Array.Empty<int[]>())
+        {
+            var ids = j.Take(4).Select(k => span.IndexOf(k) is var at and >= 0 ? at + offset : -1).ToArray();
+            if (j.Length >= 4 && ids.All(i => i >= 0) && ids[0] < ids[1] && ids[1] < ids[2] && ids[2] < ids[3]) report.ArcRaised.Add(j.Length > 4 ? ids.Append(j[4]).ToArray() : ids);
+            else report.Notes.Add("WARNING: a carried jump of a branch of the raised road is not along it in one piece: the engine won't carry the car over it");
+        }
         // (the carried jumps' feet and lips as places in that list: the engine's way over each)
-        foreach (var (arc, which) in report.ArcJumps.Select((a, i) => (a, i)))
+        foreach (var (arc, which) in isBranch ? Enumerable.Empty<((int Foot, int Lip, int Land, int LandFoot, double S0, double S1), int)>() : report.ArcJumps.Select((a, i) => (a, i)))
         {
             var ids = new[] { arc.Foot, arc.Lip, arc.Land, arc.LandFoot }.Select(k => span.IndexOf(k)).ToArray();
             // (the camera's side, when the plan gives it: the engine's arcjump= fifth number)
@@ -5012,10 +5055,11 @@ internal static class RaceTrackBuilder
                 left += StripPieces(ids, sections, origin, t / per, line);
                 continue;
             }
+            var opened = r.OpenMinus is null && r.OpenPlus is null ? null : ids.Select(k => (r.OpenMinus?[k] == true, r.OpenPlus?[k] == true)).ToList();
             var body = RaceTrackRaisedBody.Tile(sections, t / per, r.AsphaltHalf * 512, r.CurbHalf * 512, half, arrow, line,
                 r.RaisedHalfs is null ? null : ids.Select(k => Half(k) - half).ToArray(),
                 r.Stripe is { } st && !o.PitFence ? st.Offset * 512 : double.NaN, striped, strips, r.Themes?[ids[ids.Count / 2]],   // (under a fence, no stripe)
-                boosted.Any(b => b is not null) ? boosted : null);
+                boosted.Any(b => b is not null) ? boosted : null, opened);
             // (its box over its footprint, touching nothing: the engine leaves out a decor whose middle is behind the camera unless a corner
             // of its box is in front of it -- 3DEXT/DECORS.CPP -- and a piece whose middle had just passed under the camera was a hole)
             var corners = ids.SelectMany(k => new[] { -1, 1 }.Select(side => World(k) + new System.Numerics.Vector3((float)-r.Tz[k], 0, (float)r.Tx[k]) * (float)(side * (Half(k) + 64)) - origin)).ToList();
@@ -5090,11 +5134,79 @@ internal static class RaceTrackBuilder
 
         var (piers, none) = o.PierBodies is { } stand && o.SceneryObl is { } obl && RaceTrackScenery.Load(island, obl) is { } scenery
             ? PlacePiersOnScenery(island, r, o, report, span, loop, scenery, stand, Across, Add, ref left)
-            : PlacePiers(island, r, o, report, span, Across, Add, ref left);
+            : PlacePiers(island, r, o, report, span, Across, Add, ref left, lap);
         if (left > 0) report.Notes.Add($"WARNING: {left} pieces of the raised road were left out: the cube already holds {IslandDecors.MaxPerCubeRaceTrack} decors");
-        report.Placed.Add($"raised road: {(span.Count(k => up[k]) - (loop ? 1 : 0)) * o.Spacing:0} cells in {pieces} pieces of {o.RaisedPiece:0} cells and {piers} piers" +
+        report.Placed.Add($"raised road{(isBranch ? "'s branch" : "")}: {(span.Count(k => up[k]) - (loop ? 1 : 0)) * o.Spacing:0} cells in {pieces} pieces of {o.RaisedPiece:0} cells and {piers} piers" +
                           (none > 0 ? $" ({none} more left out: no clear ground under the road there)" : "") +
                           $", {report.NewBodies.Count} new decor bodies from {o.NewBodyBase} on");
+    }
+
+    // A branch of the raised road (RaceTrackPlan.Branches): its own road -- the plan's points as they are, half a cell apart, its heights and
+    // widths, the gaps of its carried jumps, its boost panels -- its pieces and piers as the lap's (PlaceRaised), its points after the lap's
+    // in Raised behind a point with no width, and where it leaves the lap and comes back onto it (RaisedBranches).
+    private static TrackRoad MakeBranch(TrackRoad main, (BranchRun Run, double[] X, double[] Z, int From, int To) plan, RaceTrackOptions o)
+    {
+        var run = plan.Run;
+        var n = plan.X.Length;
+        var b = new TrackRoad { Name = "branch", Closed = false, X = plan.X.ToArray(), Z = plan.Z.ToArray(), Planned = run.Heights.ToArray(),
+            RaisedHalfs = run.Halfs is { } h && h.Length == n ? h.ToArray() : null };
+        b.AsphaltHalf = main.AsphaltHalf; b.CurbHalf = main.CurbHalf; b.VergeHalf = main.VergeHalf; b.Blend = main.Blend;
+        Geometry(b, o);
+        b.H = run.Heights.ToArray();
+        b.Raised = Enumerable.Repeat(true, n).ToArray();
+        b.Deck = Enumerable.Repeat(true, n).ToArray();
+        b.Gap = new bool[n]; b.Void = new bool[n]; b.Jump = new bool[n]; b.Lip = new bool[n]; b.Bridge = new bool[n]; b.Landing = new bool[n]; b.UnderDeck = new bool[n];
+        b.Arc = new bool[n];
+        foreach (var j in run.ArcJumps ?? Array.Empty<int[]>())
+            if (j.Length >= 4) for (var k = Math.Max(0, j[1] + 1); k < Math.Min(n, j[2]); k++) { b.Gap[k] = true; b.Void[k] = true; b.Arc[k] = true; }
+        foreach (var p in (run.BoostPanels ?? Array.Empty<double[]>()).Where(p => p.Length >= 4))
+            b.Boosts.Add(((int)p[0], (int)p[1], Math.Min(p[2], p[3]), Math.Max(p[2], p[3])));
+        b.Hidden = new bool[n];
+        foreach (var span in (run.Hidden ?? Array.Empty<int[]>()).Where(s => s.Length >= 2))
+            for (var k = Math.Max(0, span[0]); k <= Math.Min(n - 1, span[1]); k++) b.Hidden[k] = true;
+        return b;
+    }
+
+    // Where one raised road's rail lies on another's deck, at about its height -- a branch leaving the lap or coming back onto it -- the
+    // first road has no rail on that side there (TrackRoad.OpenMinus, OpenPlus).
+    private static void OpenRails(TrackRoad r, TrackRoad other, RaceTrackOptions o)
+    {
+        if (r.Raised is not { } up || other.Raised is not { } otherUp) return;
+        r.OpenMinus ??= new bool[r.Count]; r.OpenPlus ??= new bool[r.Count];
+        for (var k = 0; k < r.Count; k++)
+        {
+            if (!up[k] || r.Gap[k]) continue;
+            var half = r.RaisedHalfs?[k] ?? o.RaisedHalfWidth;
+            foreach (var side in new[] { -1, 1 })
+            {
+                double px = r.X[k] - r.Tz[k] * side * half, pz = r.Z[k] + r.Tx[k] * side * half;
+                for (var m = 0; m < other.Count; m++)
+                {
+                    if (!otherUp[m] || other.Gap[m] || other.Hidden?[m] == true || Math.Abs(other.H[m] - r.H[k]) > 300) continue;
+                    var reach = (other.RaisedHalfs?[m] ?? o.RaisedHalfWidth) - 0.2;
+                    if (Sq(other.X[m] - px) + Sq(other.Z[m] - pz) > reach * reach) continue;
+                    if (side < 0) r.OpenMinus[k] = true; else r.OpenPlus[k] = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    private static void PlaceBranch(IslandFile island, TrackRoad main, TrackRoad b, (BranchRun Run, double[] X, double[] Z, int From, int To) plan, RaceTrackOptions o, RaceTrackReport report)
+    {
+        var run = plan.Run;
+        var n = b.Count;
+        if (report.RaisedBranches.Count == 0) report.RaisedLap = report.Raised.Count;
+        // (behind a point with no width: the engine's floor isn't there)
+        report.Raised.Add(new[] { (int)Math.Round(b.X[0] * 512), (int)Math.Round(b.Z[0] * 512), (int)Math.Round(b.H[0]), 0 });
+        var first = report.Raised.Count;
+        PlaceRaised(island, b, o, report, -1, run.ArcJumps ?? Array.Empty<int[]>(), main);
+        var last = report.Raised.Count - 1;
+        int from = report.RaisedSpan.IndexOf(plan.From), to = report.RaisedSpan.IndexOf(plan.To);
+        if (last <= first || from < 0 || to < 0) { report.Notes.Add("WARNING: a branch of the raised road doesn't leave the lap's raised road or come back onto it -- left out of the engine's road"); return; }
+        report.RaisedBranches.Add(new[] { first, last, from, to });
+        report.Notes.Add($"a branch of the raised road: {b.Length:0} cells from cell ({b.X[0]:0.0}, {b.Z[0]:0.0}) on the lap to ({b.X[n - 1]:0.0}, {b.Z[n - 1]:0.0}), back onto it, " +
+                         $"{run.ArcJumps?.Length ?? 0} carried jump(s), {b.Boosts.Count} boost panel(s)");
     }
 
     // A raised road's banking in the engine's file: this many to one (RACEMOD.CPP RAISED_BANK_UNITS).
@@ -5169,7 +5281,7 @@ internal static class RaceTrackBuilder
     // The piers under the road's middle, on the ground: one every RaisedPier cells, moved a few cells along the road where it would stand
     // on another part of the lap, where an opponent waits or in a decor object's box.
     private static (int Piers, int None) PlacePiers(IslandFile island, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, List<int> span,
-        Func<int, System.Numerics.Vector3> across, AddDecor add, ref int left)
+        Func<int, System.Numerics.Vector3> across, AddDecor add, ref int left, TrackRoad? lap = null)
     {
         var up = r.Raised!; var n = r.Count;
         (double X0, double Z0, double X1, double Z1, double Y1)[] boxes = IslandOps.CubeCells(island).SelectMany(c => c.Item3.Decors.Select(d =>
@@ -5185,6 +5297,13 @@ internal static class RaceTrackBuilder
                 var reach = (up[m] ? r.RaisedHalfs?[m] ?? o.RaisedHalfWidth : r.VergeHalf) + 1.2;
                 if (Sq(r.X[m] - r.X[k]) + Sq(r.Z[m] - r.Z[k]) < reach * reach && r.H[m] < r.H[k] - 300) return false;
             }
+            // ... nor on the lap's own road, under a branch of it (or through it)
+            if (lap?.Raised is { } lapUp)
+                for (var m = 0; m < lap.Count; m++)
+                {
+                    var reach = (lapUp[m] ? lap.RaisedHalfs?[m] ?? o.RaisedHalfWidth : lap.VergeHalf) + 1.2;
+                    if (Sq(lap.X[m] - r.X[k]) + Sq(lap.Z[m] - r.Z[k]) < reach * reach) return false;
+                }
             // ... nor where an opponent's car waits
             foreach (var p in report.Pits) if (Sq(p.X - r.X[k]) + Sq(p.Z - r.Z[k]) < Sq(2.5)) return false;
             // ... nor in a decor object that stands there
