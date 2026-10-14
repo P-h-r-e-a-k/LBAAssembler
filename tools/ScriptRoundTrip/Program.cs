@@ -62,6 +62,7 @@ internal static class Program
             "scaleisland" => RaceTrackCommand.ScaleIsland(args),
             "palettechart" => RaceTrackCommand.PaletteChart(args),
             "hqrentry" => RaceTrackCommand.HqrEntry(args),
+            "frogbody" => RaceTrackCommand.FrogBody(args),
             "buildtwice" => RaceTrackCommand.BuildTwice(args),
             "buildtogether" => RaceTrackCommand.BuildTogether(args),
             "buildhere" => RaceTrackCommand.BuildHere(args),

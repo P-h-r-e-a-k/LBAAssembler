@@ -954,6 +954,24 @@ typedef struct {
 static T_RACE_MONSTER s_monsters[RACE_MAX_MONSTERS];
 static int s_nbMonsters = 0;
 static S32 s_bittenUntil[RACE_MAX_OPPONENTS + 1];  // a car just bitten is let be till then -- a monster beside it doesn't bite it again
+// The giant frog (frog=: see "the giant frog" further on)
+#define RACE_FROG_CLEAR 600                // ms the mouth has to stay open once a car is in it: past the jaw, its hinge 7 cells in --
+                                           // the jaw twitching meanwhile (FrogPose), the sign it is too late
+#define RACE_FROG_MARGIN 150               // ms after it is open enough that a slowed opponent comes to it
+#define RACE_FROG_LIP 256.0                // (the jaw's lip, out past the mouth: where a car meets it)
+#define RACE_FROG_BACK (8 * 512.0)         // a car thrown back: put down this far before the ramp's foot ...
+#define RACE_FROG_BOUNCE_MS 1300           // ... over this long ...
+#define RACE_FROG_BOUNCE_UP 2400.0         // ... flying this high over the line between
+#define RACE_FROG_PACE (40 * 512.0)
+typedef struct {
+    int On, Ready, Arc;
+    double X, Y, Z, Tx, Tz, Length, Half;
+    S32 Body, Beta, Period, Move, Open, TongueOut, TongueHold, TongueIn, JawShut, TongueFlip, TongueCurl;
+    T_OBJ_3D Obj;
+    double OppMouth[RACE_MAX_OPPONENTS]; int OppFor[RACE_MAX_OPPONENTS]; S32 Arrive[RACE_MAX_OPPONENTS];
+    int Bouncing; S32 BounceT0, BounceBeta; double B0[3], B1[3];
+} T_RACE_FROG;
+static T_RACE_FROG s_frog;
 // People in the cars' way (guard=<kind> <x> <z> <floor y> <face x> <face z> <leash> <standing> <walking> <knocked back> <strike> <strike>
 // <strike> <strike> <scene> <actor> [<scene> <actor>]..., island units, the way it faces in thousandths, an animation -1 none; its own
 // scene's actor first, then its actor in each other scene it is seen from): the Emperor's palace's -- the user, 2026-10-13: "The retail
@@ -2153,6 +2171,19 @@ static void Load(const char *path, int carOnly = 0) {
                     m->SeenScene[m->NbSeen] = sc; m->SeenActor[m->NbSeen] = ac; m->NbSeen++;
                     rest += n2;
                 }
+            }
+        }
+        else if (!strcmp(key, "frog")) {
+            int f[17];
+            if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d", &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6], &f[7], &f[8], &f[9], &f[10],
+                       &f[11], &f[12], &f[13], &f[14], &f[15], &f[16]) == 17 && f[6] >= 0 && f[8] > 0) {
+                memset(&s_frog, 0, sizeof(s_frog));
+                s_frog.X = f[0]; s_frog.Y = f[1]; s_frog.Z = f[2]; s_frog.Tx = f[3] / 1000.0; s_frog.Tz = f[4] / 1000.0; s_frog.Body = f[5];
+                s_frog.Length = f[6]; s_frog.Period = f[7]; s_frog.Move = f[8]; s_frog.Open = f[9]; s_frog.TongueOut = f[10]; s_frog.TongueHold = f[11];
+                s_frog.TongueIn = f[12]; s_frog.JawShut = f[13]; s_frog.TongueFlip = f[14]; s_frog.TongueCurl = f[15]; s_frog.Half = f[16];
+                // (its mouth faces the cars coming: the way into it turned round)
+                s_frog.Beta = (S32)floor(atan2(-s_frog.Tx, -s_frog.Tz) * 4096 / (2 * 3.14159265358979) + 0.5) & 4095;
+                s_frog.Arc = -1; s_frog.On = 1;
             }
         }
         else if (!strcmp(key, "guard")) {
@@ -3711,6 +3742,180 @@ static void LoopEnd(T_OBJ_3D *obj, double v, const char *how) {
     s_forgetLap = 1;
 }
 
+// ---- the giant frog (frog=) ---------------------------------------------------------------------------------------------------------
+// The giant frog the lap drives through, into its mouth and out of its back (frog=<mouth x> <y> <z> <way in x> <way in z> (thousandths)
+// <body> <length> <period> <move> <open> <tongue out> <tongue held> <tongue in> <jaw shut> <tongue flip> <tongue curl> <throat half>: the
+// builder's RaceTrackFrog) -- Wannies Island's, the user, 2026-10-14: "The frog repeatedly opens and closes its mouth and extends its
+// tongue as it does so, so we have to time the jump into the mouth"; a car meeting a shut mouth bounced back. Its mouth's cycle runs on
+// the race-track mode's own clock -- opening (move), open (the tongue shooting out over its lip and back), shutting (move), shut -- and its
+// body, the island's and no scene's, is posed by that clock every frame and drawn into the background after the ground and the decor, its
+// depth written (RaceMod_DrawBackdrop): the cars are hidden by it, and seen in its throat. The carried jump whose landing is its mouth is
+// the way in: Twinsen's car meeting the mouth shut -- or shutting before it is past the jaw -- is thrown back over the gap and put down on
+// the road RACE_FROG_BACK before the ramp's foot, stopped (FrogBounce); an opponent coming up to it is slowed, from RACE_FROG_PACE before
+// it, to come to it as it opens (FrogCap).
+
+static double FrogEase(double u) { u = u < 0 ? 0 : u > 1 ? 1 : u; return u * u * (3 - 2 * u); }
+static S32 FrogPhase(S32 t) { const S32 p = t % s_frog.Period; return p < 0 ? p + s_frog.Period : p; }
+
+// Whether a car coming to the mouth at t gets in: it is open enough, and stays open till the car is past the jaw.
+static int FrogOpen(S32 t) {
+    const S32 p = FrogPhase(t);
+    return p >= s_frog.Move / 2 && p <= s_frog.Move + s_frog.Open - RACE_FROG_CLEAR;
+}
+
+// The first time from t on that it does (a little after it opens).
+static S32 FrogNextOpen(S32 t) {
+    const S32 p = FrogPhase(t);
+    if (p < s_frog.Move / 2) return t + s_frog.Move / 2 - p + RACE_FROG_MARGIN;
+    if (p <= s_frog.Move + s_frog.Open - RACE_FROG_CLEAR) return t;
+    return t + s_frog.Period - p + s_frog.Move / 2 + RACE_FROG_MARGIN;
+}
+
+// Its jaw's, its tongue's and its tongue's tip's turns at `now`.
+static void FrogPose(S32 now, S32 *jaw, S32 *flip, S32 *curl) {
+    const S32 p = FrogPhase(now), m = s_frog.Move, o = s_frog.Open;
+    double shut = p < m ? 1 - FrogEase((double)p / m) : p < m + o ? 0 : p < 2 * m + o ? FrogEase((double)(p - m - o) / m) : 1;
+    // (too late to get in: the jaw twitching, three times, a tenth of the way up)
+    if (p >= m + o - RACE_FROG_CLEAR && p < m + o) shut = 0.1 * (0.5 - 0.5 * cos(2 * RACE_PI * 3 * (p - (m + o - RACE_FROG_CLEAR)) / (double)RACE_FROG_CLEAR));
+    const S32 q = p - m, a = s_frog.TongueOut, h = s_frog.TongueHold, b = s_frog.TongueIn;
+    const double out = q < 0 ? 0 : q < a ? FrogEase((double)q / a) : q < a + h ? 1 : q < a + h + b ? 1 - FrogEase((double)(q - a - h) / b) : 0;
+    *jaw = (S32)floor(s_frog.JawShut * shut + 0.5);
+    *flip = (S32)floor(s_frog.TongueFlip * out + 0.5);
+    *curl = (S32)floor(s_frog.TongueCurl * out + 0.5);
+}
+
+// The carried jump into its mouth: the one whose landing is nearest the mouth (and within 3 cells of it), -1 none.
+static int FrogArc(void) {
+    int best = -1;
+    double bd = 3.0 * 512 * 3.0 * 512;
+    for (int i = 0; i < s_nbArcs; i++) {
+        const T_RACE_RAISED *l = &s_raised[s_arcs[i].Land];
+        const double d = (l->X - s_frog.X) * (l->X - s_frog.X) + (l->Z - s_frog.Z) * (l->Z - s_frog.Z);
+        if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+}
+
+// The car put where a frame of the race-track mode's has it (world units): in the cube about, or -- out past its edge -- into the next
+// cube's scene (cube_scene=), this frame at the edge (as a carried jump's car is: RaceArc).
+static void FrogCarry(double x, double y, double z, S32 *nx, S32 *ny, S32 *nz) {
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const int qx = (int)floor(x / 32768.0), qz = (int)floor(z / 32768.0);
+    if (qx != CurrentCubeX || qz != CurrentCubeY) {
+        int scene = -1;
+        for (int c = 0; c < s_nbCubeScenes; c++)
+            if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) scene = s_cubeScenes[c][2];
+        if (scene >= 0 && NewCube == -1) {
+            NewCube = scene;
+            NewPosX = (S32)floor(x - qx * 32768.0 + 0.5); NewPosY = (S32)floor(y + 0.5); NewPosZ = (S32)floor(z - qz * 32768.0 + 0.5);
+            FlagChgCube = 1;
+            FlagReajustPosTwinsen = FALSE;
+            Log_Info("[racemod] thrown back by the frog: into cube (%d,%d), scene %d", qx, qz, scene);
+        }
+        x = x - cx < 1 ? cx + 1 : x - cx > 32767 ? cx + 32767 : x;
+        z = z - cz < 1 ? cz + 1 : z - cz > 32767 ? cz + 32767 : z;
+    }
+    *nx = (S32)floor(x - cx + 0.5); *ny = (S32)floor(y + 0.5); *nz = (S32)floor(z - cz + 0.5);
+}
+
+// Twinsen's car met the mouth shut at (x, y, z), carried over jump `a`: thrown back over the gap, to the road RACE_FROG_BACK before the
+// ramp's foot, facing the way the lap runs there.
+static void FrogBounceStart(double x, double y, double z, const T_RACE_ARC *a) {
+    int k = a->Foot;
+    double back = 0;
+    while (k > 0 && back < RACE_FROG_BACK) {
+        const T_RACE_RAISED *p = &s_raised[k - 1], *q = &s_raised[k];
+        back += sqrt((double)(q->X - p->X) * (q->X - p->X) + (double)(q->Z - p->Z) * (q->Z - p->Z));
+        k--;
+    }
+    const T_RACE_RAISED *p = &s_raised[k], *q = &s_raised[k + 1];
+    s_frog.B0[0] = x; s_frog.B0[1] = y; s_frog.B0[2] = z;
+    s_frog.B1[0] = p->X; s_frog.B1[1] = p->Y; s_frog.B1[2] = p->Z;
+    s_frog.BounceBeta = (S32)floor(atan2((double)(q->X - p->X), (double)(q->Z - p->Z)) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    s_frog.Bouncing = 1; s_frog.BounceT0 = TimerRefHR;
+    ListBuggy[0].Speed = 0;
+    Log_Info("[racemod] the frog's mouth shut (%d ms into its cycle): Twinsen's car thrown back %.0f cells to (%d,%d,%d)", (int)FrogPhase(TimerRefHR),
+             sqrt((p->X - x) * (p->X - x) + (p->Z - z) * (p->Z - z)) / 512, (int)p->X, (int)p->Y, (int)p->Z);
+}
+
+// For RaceMod_Loop, while the car is thrown back: its place this frame (an arc over the line to where it is put down, its nose up), stopped.
+static S32 FrogBounce(S32 *nx, S32 *ny, S32 *nz) {
+    T_OBJ_3D *obj = &ListObjet[NUM_PERSO].Obj;
+    const double t = (TimerRefHR - s_frog.BounceT0) / (double)RACE_FROG_BOUNCE_MS, f = FrogEase(t), lift = t >= 1 ? 0 : RACE_FROG_BOUNCE_UP * 4 * t * (1 - t);
+    const double x = s_frog.B0[0] + (s_frog.B1[0] - s_frog.B0[0]) * f, y = s_frog.B0[1] + (s_frog.B1[1] - s_frog.B0[1]) * f + lift;
+    const double z = s_frog.B0[2] + (s_frog.B1[2] - s_frog.B0[2]) * f;
+    ListBuggy[0].Speed = 0;
+    if (t >= 1) {
+        s_frog.Bouncing = 0;
+        obj->Alpha = 0; obj->Gamma = 0; obj->Beta = s_frog.BounceBeta;
+        s_forgetLap = 1;
+        Log_Info("[racemod] thrown back by the frog: down at (%.0f,%.0f,%.0f)", x, y, z);
+    } else
+        CarPitch(obj, s_frog.BounceBeta, -0.5 * sin(t * RACE_PI));
+    FrogCarry(x, y, z, nx, ny, nz);
+    return 1;
+}
+
+// An opponent coming up to the frog: the most it may go (units/s) to come to the mouth as it opens -- worked out once, RACE_FROG_PACE
+// before it, from how fast it goes then, and kept till it is in -- or -1: no cap (the mouth open when it comes, or no frog ahead).
+static double FrogCap(int n, const T_RACE_OPPONENT *o, S32 now) {
+    if (!s_frog.On || s_frog.Arc < 0 || !o->Count || o->Length <= 0) return -1;
+    if (s_frog.OppFor[n] != o->Count) {
+        // (the mouth's place along its line: its point nearest the mouth, at the mouth's height)
+        double bd = 1e30;
+        s_frog.OppMouth[n] = -1;
+        for (int i = 0; i < o->Count; i++) {
+            const double d = (o->X[i] - s_frog.X) * (o->X[i] - s_frog.X) + (o->Z[i] - s_frog.Z) * (o->Z[i] - s_frog.Z) + 4.0 * (o->Y[i] - s_frog.Y) * (o->Y[i] - s_frog.Y);
+            if (d < bd) { bd = d; s_frog.OppMouth[n] = o->Cum[i]; }
+        }
+        s_frog.OppFor[n] = o->Count; s_frog.Arrive[n] = 0;
+    }
+    if (s_frog.OppMouth[n] < 0) return -1;
+    double d = s_frog.OppMouth[n] - o->S;
+    if (d < 0) d += o->Length;
+    if (d > RACE_FROG_PACE || d < 64) { s_frog.Arrive[n] = 0; return -1; }
+    if (!s_frog.Arrive[n]) {
+        const double v = o->Speed > 1000 ? o->Speed : 1000;
+        const S32 at = now + (S32)(d / v * 1000), open = FrogNextOpen(at);
+        s_frog.Arrive[n] = open == at ? -1 : open;
+        if (open != at) Log_Info("[racemod] %s slows for the frog's mouth (there %.1f s later)", o->Name, (open - at) / 1000.0);
+    }
+    if (s_frog.Arrive[n] < 0) return -1;
+    const double left = (s_frog.Arrive[n] - now) / 1000.0;
+    return left > 0.1 ? d / left : -1;
+}
+
+// Drawn into the background (EXTFUNC.CPP AffGrilleExt, after the ground and the decor): the frog, posed, its depth written.
+void RaceMod_DrawBackdrop(void) {
+    if (!RaceMod_Active() || !s_frog.On || CubeMode != CUBE_EXTERIEUR) return;
+    T_OBJ_3D *o = &s_frog.Obj;
+    if (!s_frog.Ready) {
+        if (!GivePtrBody(s_frog.Body)) { Log_Info("[racemod] frog: no body %d -- left out", (int)s_frog.Body); s_frog.On = 0; return; }
+        ObjectClear(o);
+        o->Body.Num = -1;
+        ObjectInitBody(o, (void *)(uintptr_t)(U32)s_frog.Body);
+        o->Texture = BufferTexture; o->NextTexture = BufferTexture;
+        s_frog.Ready = 1;
+        Log_Info("[racemod] the giant frog: body %d, its mouth at (%.0f,%.0f,%.0f), turned %d", (int)s_frog.Body, s_frog.X, s_frog.Y, s_frog.Z, (int)s_frog.Beta);
+    }
+    o->X = (S32)floor(s_frog.X - CurrentCubeX * 32768.0 + 0.5); o->Y = (S32)floor(s_frog.Y + 0.5); o->Z = (S32)floor(s_frog.Z - CurrentCubeY * 32768.0 + 0.5);
+    o->Alpha = 0; o->Beta = s_frog.Beta; o->Gamma = 0;
+    S32 jaw, flip, curl;
+    FrogPose(TimerRefHR, &jaw, &flip, &curl);
+    memset(o->CurrentFrame, 0, sizeof(o->CurrentFrame));
+    o->CurrentFrame[0].Alpha = (S16)jaw; o->CurrentFrame[1].Alpha = (S16)flip; o->CurrentFrame[2].Alpha = (S16)curl; o->CurrentFrame[3].Alpha = (S16)curl;
+    // (its fog by its middle's distance, as the scene's objects have theirs)
+    LongWorldRotatePoint((S32)floor(o->X + s_frog.Tx * s_frog.Length / 2), o->Y + 1500, (S32)floor(o->Z + s_frog.Tz * s_frog.Length / 2));
+    const S32 zr = CameraZr - Z0;
+    if (zr > ClipZFar + 12000) return;
+    const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
+    SetCLUT(PalLevel + 16 * BoundRegleTrois(0, 15, ClipZFar - StartZFog, zr - StartZFog));
+    Switch_Fillers(FILL_POLY_FOG_ZBUFFER);
+    UnsetClip();
+    ObjectDisplay(o);
+    SetCLUT(clut);
+}
+
 // ---- a jump the car is carried over (arcjump=, RaceArc) -----------------------------------------------------------------------------
 // The Emerald Moon's leap over its reactor (2026-10-02): a ramp curving up to 60 degrees, a flight over the reactor's dish 20,000 up, and
 // a hill curving back down, 64 cells from foot to foot. No flight animation of the hero's could fly it: an animation moves him in his
@@ -3807,6 +4012,17 @@ static S32 RaceArc(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
     if (dt < 0) dt = 0;
     if (dt > 0.1) dt = 0.1;
     s_arcS += s_arcV * dt;
+    // (the frog's mouth -- its jaw's lip -- come to shut: thrown back, FrogBounce)
+    if (s_frog.On && s_arcOn == s_frog.Arc) {
+        const double lip = a->S[a->Land - a->Foot] - RACE_FROG_LIP;
+        if (s_arcS - s_arcV * dt < lip && s_arcS >= lip && !FrogOpen(TimerRefHR)) {
+            double x, y, z, dx, dz, slope;
+            ArcPlace(a, lip, s_arcAcross, &x, &y, &z, &dx, &dz, &slope);
+            s_arcOn = -1;
+            FrogBounceStart(x, y, z, a);
+            return FrogBounce(nx, ny, nz);
+        }
+    }
     const double end = a->S[a->LandFoot - a->Foot];
     const int done = s_arcS >= end;
     double x, y, z, dx, dz, slope;
@@ -3875,7 +4091,8 @@ static int Teleport(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);
 S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     T_OBJ_3D *obj = &hero->Obj;
-    if (!RaceMod_Active() || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) { s_loopOn = -1; s_loopState = LOOP_NONE; s_arcOn = -1; return 0; }
+    if (!RaceMod_Active() || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) { s_loopOn = -1; s_loopState = LOOP_NONE; s_arcOn = -1; s_frog.Bouncing = 0; return 0; }
+    if (s_frog.Bouncing) return FrogBounce(nx, ny, nz);
     if (s_loopState == LOOP_NONE && s_arcOn < 0 && Teleport(ox, oy, oz, nx, ny, nz)) return 1;
     if (s_loopState == LOOP_NONE && RaceArc(ox, oy, oz, nx, ny, nz)) return 1;
     if (s_loopState == LOOP_NONE && s_arcOn < 0 && WheelMove(ox, oy, oz, nx, ny, nz)) return 1;
@@ -6936,6 +7153,11 @@ void RaceMod_Frame(void) {
     Wheel(now, driving);
     SlotMachine(now);
     Monsters(now, driving);
+    if (s_frog.On && s_frog.Arc == -1 && s_nbArcs) {
+        s_frog.Arc = FrogArc();
+        Log_Info("[racemod] the giant frog: %s", s_frog.Arc >= 0 ? "its mouth the landing of a carried jump" : "no carried jump lands in its mouth");
+        if (s_frog.Arc < 0) s_frog.Arc = -2;
+    }
     Guards(now, driving, dt);
     Shuttles(now, driving);
     if (!Opponents()) return;
@@ -6964,7 +7186,10 @@ void RaceMod_Frame(void) {
             if (now < o->HitUntil) { pace = 0; o->Speed = 0; }
 
             // its line's speed at its skill, reached from a standstill no faster than the car pulls away (the plan's braking is kept)
-            const double target = v * pace / 100.0;
+            double target = v * pace / 100.0;
+            // (coming up to the frog: slowed to come to its mouth as it opens)
+            const double cap = FrogCap(n, o, now);
+            if (cap >= 0 && target > cap) target = cap;
             if (o->Speed < target) {
                 o->Speed += s_car.Accel * Pull(o->Speed) * o->Top / 100.0 * pace / 100.0 * dt / 1000.0;
                 if (o->Speed > target) o->Speed = target;
@@ -7630,6 +7855,7 @@ static void ResetTrack(void) {
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
     s_guardSize = 1.0; s_nbTeleports = 0; s_teleportedAt = 0;
+    memset(&s_frog, 0, sizeof(s_frog)); s_frog.Arc = -1;
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = s_arcAcross1 = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0; s_railHeld = 0; s_railSight = s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;

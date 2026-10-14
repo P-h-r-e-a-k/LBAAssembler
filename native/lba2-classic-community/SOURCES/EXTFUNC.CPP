@@ -1184,6 +1184,8 @@ void AffGrilleExt() {
 
     AffichageActorsZBuf();
 
+    { extern void RaceMod_DrawBackdrop(void); RaceMod_DrawBackdrop(); }  /* a race-track mod's giant frog, into the background (RACEMOD.CPP) */
+
     ManageSystem(); // for streaming
 
     if (RendererDrawSky)

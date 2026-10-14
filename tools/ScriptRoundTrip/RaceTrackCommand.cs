@@ -324,6 +324,17 @@ internal static class RaceTrackCommand
         return 0;
     }
 
+    // frogbody <game folder> <out> [length cells] [floor over the ground]: the giant frog's body (RaceTrackFrog.Make) to a file, as the build
+    // appends it to BODY.HQR (looking at its shape: E:\dump\TEMP\wan\frogview.py)
+    public static int FrogBody(string[] args)
+    {
+        var header = LbaBodyStudio.Body.Read(HqrArchive.Open(Path.Combine(args[1], "BODY.HQR")).Read(RaceTrackBaldinoCar.RacerBody), 2).Header;
+        var body = RaceTrackFrog.Make(header, (args.Length > 3 ? double.Parse(args[3]) : 18) * 512, args.Length > 4 ? double.Parse(args[4]) : 14000);
+        File.WriteAllBytes(args[2], body.Write());
+        Console.WriteLine($"{args[2]}: {body.Vertices.Count} points, {body.Faces.Count} polygons, {body.Spheres.Count} spheres");
+        return 0;
+    }
+
     public static int RaceCarFile(string[] args)
     {
         var setup = new LBAAssembler.RaceCarSetup();

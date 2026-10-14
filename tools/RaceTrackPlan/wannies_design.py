@@ -72,14 +72,18 @@ ROUND = [((545.5, 498.0), 0.0),          # (the start straight: south down the p
          ((455.5, 545.0), 7.0),          # ... north ...
          ((468.0, 532.5), 8.0),          # ... north-east ...
          ((497.5, 521.5), 8.0),          # ... east along the channel ...
-         ((497.5, 507.0), 7.0),          # ... north ...
-         ((477.0, 497.0), 7.0),          # ... north-west up to the frog ...
-         ((477.0, 489.5), 0.0)]          # ... its take-off ramp's lip
-FROG_LIP = (477.0, 489.5)               # the take-off lip (the drawing's pink dot 478.0, 489.6), the mouth (pink 477.3, 484.7)
-FROG_MOUTH = (477.0, 484.5)
-FROG_EXIT = (480.0, 467.0)              # out of its back (the drawing's line leaves at 483.7, 466.9)
-APPROACH = [((477.0, 489.5), 0.0), ((477.0, 476.0), 6.0),   # through the frog, north ...
-            ((486.0, 458.0), 8.0),       # ... out of its back, north-east over the lava ...
+         ((497.5, 507.0), 7.0)]          # ... north, then west and round north-north-east up to the frog (FROG_ROUND) ...
+# the frog: the road straight through it along the drawing's line, from its mouth (the drawing's pink dot 477.3, 484.7) to where the line
+# leaves the circle (483.7, 466.9) -- and straight before it, up the take-off ramp (RAMP cells) and over the gap (GAP) into the mouth
+FROG_MOUTH = (477.3, 484.7)
+FROG_DIR = np.array([483.7 - 477.3, 466.9 - 484.7]); FROG_DIR /= np.linalg.norm(FROG_DIR)
+FROG_LEN, GAP, RAMP = 18.0, 5.0, 10.0
+FROG_HALF = 3.5                         # the road's half width through the frog (its throat 4.2 cells either side: RaceTrackFrog.ThroatHalf)
+def along(t): return (float(FROG_MOUTH[0] + FROG_DIR[0] * t), float(FROG_MOUTH[1] + FROG_DIR[1] * t))
+FROG_LIP, FROG_EXIT = along(-GAP), along(FROG_LEN)
+ROUND += [(along(-26.0), 7.0),          # ... the turn onto the frog's line (its bend over 10.8 cells before the ramp's foot) ...
+          (FROG_LIP, 0.0)]              # ... its take-off ramp's lip
+APPROACH = [(FROG_LIP, 0.0), (along(26.0), 8.0),            # through the frog, out of its back, on along its line ...
             ((530.0, 454.0), 6.0)]       # ... east along the island's north edge to the helix's top (its north point 543.5, 454)
 
 def rounded(K, closed=False):
@@ -173,7 +177,7 @@ def ease(f): f = min(1, max(0, f)); return f * f * (3 - 2 * f)
 MARK = {}
 MARK['start'] = nearest_after((545.5, 508.0), 0, 30)                           # the start line on the pier
 MARK['lip'] = nearest_after(FROG_LIP, 0, total)                                # the frog's take-off lip ...
-MARK['foot'] = (MARK['lip'] - int(10 / STEP)) % N                              # ... its ramp's foot
+MARK['foot'] = (MARK['lip'] - int(RAMP / STEP)) % N                            # ... its ramp's foot
 MARK['mouth'] = nearest_after(FROG_MOUTH, MARK['lip'], 20)                     # ... the mouth: the landing
 MARK['back'] = nearest_after(FROG_EXIT, MARK['mouth'], 40)                     # ... out of its back
 def at_cells(c): return int(round(c / total * N)) % N
@@ -209,6 +213,12 @@ PIT_HALF = H0 + PIT / 2
 PIT_MID = PIT_HALF - PIT / 2
 iPit0 = (MARK['pier'] + 4) % N; iPit1 = (iPit0 + int(6 / STEP)) % N
 iPit3 = nearest_after((547.5, 513.0), MARK['start'], 30); iPit2 = (iPit3 - int(5 / STEP)) % N
+# (narrower up the frog's ramp and through it -- into its mouth -- and back out after it)
+iWide = (MARK['back'] + int(6 / STEP)) % N
+for k in range(N):
+    if between(k, MARK['foot'], MARK['lip']): HALF[k] = H0 + (FROG_HALF - H0) * ease(ahead(MARK['foot'], k) / ahead(MARK['foot'], MARK['lip']))
+    elif between(k, MARK['lip'], MARK['back']): HALF[k] = FROG_HALF
+    elif between(k, MARK['back'], iWide): HALF[k] = FROG_HALF + (H0 - FROG_HALF) * ease(ahead(MARK['back'], k) / ahead(MARK['back'], iWide))
 for k in range(N):
     if between(k, iPit0, iPit1): HALF[k] = H0 + (PIT_HALF - H0) * ease(ahead(iPit0, k) / ahead(iPit0, iPit1))
     elif between(k, iPit1, iPit2): HALF[k] = PIT_HALF
@@ -277,6 +287,9 @@ plan = {
     'gridShift': PIT / 2,
     'raisedCut': True,
     'keepBodies': [19, 20, 21, 27, 28, 29, 30, 31],
+    # the giant frog (RaceTrackFrog): into its mouth -- the carried jump's landing -- and out of its back; the camera kept low in its throat
+    'frog': {'mouth': int(MARK['mouth']), 'back': int(MARK['back'])},
+    'tunnels': [{'from': int(MARK['mouth']), 'to': int(MARK['back']), 'roof': 2700, 'pieces': False}],
 }
 if '--write' in sys.argv:
     json.dump(plan, open(OUT, 'w'))

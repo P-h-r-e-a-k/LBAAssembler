@@ -134,6 +134,9 @@ internal sealed class RaceTrackPlan
     // Gas monsters rising out of the gas beside the road to bite cars (RaceTrackGasMonster, RACEMOD.CPP gasmonster=): Otringal's docks and
     // the islets of Baldino's crash (the user, 2026-10-09).
     public GasMonsterRun[]? GasMonsters { get; set; }
+    // A giant frog the lap drives through, into its mouth and out of its back (RaceTrackFrog, RACEMOD.CPP frog=): Wannies Island's
+    // (the user, 2026-10-14).
+    public FrogRun? Frog { get; set; }
     // Giant hoops across the lap (RaceTrackHoop): Otringal's dog show's hoop, made big enough for the cars to drive through (2026-10-09).
     public HoopRun[]? Hoops { get; set; }
     // Decor bodies that stay where they are when the ground under them is cut or raised (IslandOps.DecorFollow): Otringal's gatehouse,
@@ -618,6 +621,8 @@ internal sealed class RaceTrackReport
     public List<double[]> Guards { get; } = new();
     // The teleporters (RaceTrackPlan.Teleports, cells from the island's own origin)
     public List<double[]> Teleports { get; } = new();
+    // The giant frogs the lap drives through (RaceTrackFrog)
+    public List<FrogInfo> Frogs { get; } = new();
     public JumpInfo? Jump => Jumps.Count > 0 ? Jumps[0] : null;
     public RoadBridgeInfo? RoadBridge { get; set; }
     // How far (cells) an island cell position is from the nearest road's centre line, 1e9 when far away.
@@ -670,6 +675,9 @@ internal sealed class TrackRoad
     public bool[]? Jog;
     // A raised road's points with no deck of its own (no pieces, no piers: the roulette wheel's lane, whose floor the wheel is), or null.
     public bool[]? Bare;
+    // A raised road's points with no deck of its own that the cars still drive on (no pieces, no piers; the race-track mode's floor as
+    // anywhere: a giant frog's throat, RaceTrackFrog), or null.
+    public bool[]? Hidden;
     // A white stripe along a raised road (RaceTrackPlan.PitStripe): its first and last point and how far across (cells), or null.
     public (int From, int To, double Offset)? Stripe;
     // Boost panels on a raised road (RaceTrackPlan.BoostPanels): each one's first and last point and how far across it reaches (cells).
@@ -838,6 +846,7 @@ internal static class RaceTrackBuilder
                 else report.Loops.Add(new LoopInfo(main.X[k], main.Z[k], main.H[k], main.Tx[k], main.Tz[k], l[1], l[2], l[3], k, band, Camera: camera));
             }
         if (planned && main.Raised is not null) PlanArcJumps(plan, main, report);
+        if (planned && main.Raised is not null && plan.Frog is { } frog) RaceTrackFrog.Place(island, main, PlanPoint(plan, main, frog.Mouth), PlanPoint(plan, main, frog.Back), report);
         if (planned && main.Raised is not null && plan.Roulette is { } wheel)
         {
             main.Bare = new bool[main.Count];
@@ -4963,7 +4972,7 @@ internal static class RaceTrackBuilder
         var cells = Math.Max(1, (int)Math.Round(o.RaisedPiece));
         int pieces = 0, left = 0;
         var runs = new List<List<int>> { new() };
-        foreach (var k in span) { if (r.Gap[k] || !up[k] || r.Bare?[k] == true) { if (runs[^1].Count > 0) runs.Add(new()); } else runs[^1].Add(k); }
+        foreach (var k in span) { if (r.Gap[k] || !up[k] || r.Bare?[k] == true || r.Hidden?[k] == true) { if (runs[^1].Count > 0) runs.Add(new()); } else runs[^1].Add(k); }
         foreach (var run in runs.Where(u => u.Count >= 2))
         for (var t = 0; t + per < run.Count + per - 1 && t < run.Count - 1; t += cells * per)
         {
@@ -5196,6 +5205,7 @@ internal static class RaceTrackBuilder
                 var k = span[at];
                 if (r.Gap[k] || r.Gap[span[at - 1]] || r.Gap[span[at + 1]]) continue;      // (not in a jump's gap)
                 if (r.Bare?[k] == true) continue;                                            // (nor under the roulette wheel's lane)
+                if (r.Hidden?[k] == true) continue;                                          // (nor under a frog: its pad's stalk holds it)
                 if (!up[k] || !up[span[at - 1]] || !up[span[at + 1]]) continue;
                 var ground = IslandOps.Altitude(island, r.X[k] * 512, r.Z[k] * 512) ?? 0;
                 var road = Math.Min(r.H[k], Math.Min(r.H[span[at - 1]], r.H[span[at + 1]]));
