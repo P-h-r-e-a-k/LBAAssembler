@@ -336,6 +336,29 @@ internal sealed record RaceTrackIsland(
         Title = "The Emperor's palace: through its rooms, upstairs past the throne, out of the round window to the Dark Monk's teleporter",
     };
 
+    // Island CX (the user, 2026-10-15: "a loop around the tower, the track enters the underground section through a slope down through one of
+    // the doors ... loops around the underground section a few times then back out a door on the other side ... a pit lane ... the cannons
+    // that normally fire at Twinsen outside randomly firing at any outside car"; then: "In the underground section there's some gas monsters
+    // that attack the player let's build on this theme"), on CXTOWER.ILE -- Island CX with the control tower's lower level under its gas,
+    // made by the build as one ring of a hall round the control room (Created: ControlTower.CxTowerTrack.Install) -- raced as island 9 drawn
+    // from it (RaceFile) in a copy of Island CX's outside scene, 300 (CopiesScene). Round the island under its corner towers' cannons, which
+    // fire at whichever car outside they like (HuntingGuns); down the south-west trench and through its door, down under the gas and twice
+    // round the ring past its gas monsters, up and out of the north-east trench's door. The plan: tools/RaceTrackPlan/cxtower_design.py.
+    public static readonly RaceTrackIsland CxTower = new("Island CX", LBAAssembler.Terrain.ControlTower.ControlTowerIsland.IleFile,
+        LBAAssembler.Terrain.ControlTower.ControlTowerIsland.OblFile, LBAAssembler.Terrain.ControlTower.CxTowerTrack.IslandByte,
+        LBAAssembler.Terrain.ControlTower.CxTowerTrack.Scene, LBAAssembler.Terrain.ControlTower.CxTowerTrack.Scene,
+        LBAAssembler.Terrain.ControlTower.ControlTowerIsland.PaletteEntry, LBAAssembler.Terrain.ControlTower.CxTowerTrack.PlanResource, null)
+    {
+        Created = true, RaceFile = "cxtower", CopiesScene = LBAAssembler.Terrain.ControlTower.CxTowerTrack.SourceScene, NoHolomap = true, RailHeld = true,
+        Roster = RaceDriver.CxTower,
+        HuntingGuns = (LBAAssembler.Terrain.ControlTower.CxTowerTrack.CannonEntity, LBAAssembler.Terrain.ControlTower.CxTowerTrack.CannonReach),
+        Title = "Island CX: round the island under its cannons, down through a door and twice round the halls under the gas",
+    };
+
+    // Guns of the island's own scene the race-track mode fires at the cars (gunner= with gunner_hunt=): their entity, kept in the scene with
+    // their scripts emptied, and how far they reach (cells) -- Island CX's cannons.
+    public (int Entity, double Reach)? HuntingGuns { get; init; }
+
     // A sprint whose end the build makes (the Emperor's palace's: its lines and the teleport to Celebration Island, PalaceTrack) -- not a
     // dream (Dream: Polar Island's, which new games start in).
     public bool Sprint { get; init; }
@@ -345,7 +368,7 @@ internal sealed record RaceTrackIsland(
     // Emperor's palace's road along the hilltop, 60 over it, let cars drive off onto the rocks.
     public bool RailHeld { get; init; }
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace, Wannies };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace, Wannies, CxTower };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

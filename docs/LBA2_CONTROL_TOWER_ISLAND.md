@@ -91,3 +91,25 @@ Also add a temporary option to disable showing this layer to make it easier to s
   (Island CX's palette).
 - `ScriptRoundTrip cxtower <game folder> <out folder> [source folder] [--roofs] [--closed-grates]` builds the same files into another
   folder. The source folder holds pristine `ILOTCX.ILE` and `.OBL` (the game folder by default).
+- `--race [plan.json]`: the race track's island instead (`ControlTowerIsland.RaceRoom`, below), its roof open where the plan's road comes
+  down through it (the plan given, or the one built into the program).
+
+## The race track's island (2026-10-15)
+
+Island CX's race track (`docs/LBA2_DESERT_RACE_TRACK_BUILD.md`, "Island CX") builds the island its own way
+(`ControlTower/CxTowerTrack.Install`):
+
+- *One ring of a hall round the control room* (`RingRoom`):
+  - Inside the room's outer walls (its cells 1 to 61 each way), everything over the floor is taken away, except the control room in the
+    middle (x and z 20 to 41). That removes the walls between the two halls and the empty corners, and what stood on the halls' floors.
+  - The floor is laid where there was none (the corners, and the empty cells round the control room's north-west corner).
+  - The outer walls are built up to 20 layers, x/z 0 and 62-63, with the bricks of the north-east hall's east wall where a wall has none of
+    its own.
+  - The grates are shut, and there is no secret passage.
+- *One roof over all of it*, at layer 20 (-512 to -384), under the gas:
+  - It is open only where the road's tunnels come down through it (`CxTowerTrack.RoofHoles`).
+  - It is 16 bodies of 16 x 16 cells. Its underside is a face a cell (no top: the gas hides it), with the close flag. The bodies' boxes
+    start at the floor, so the engine draws them from under them.
+- The room's bodies all have the close flag. The floor is at -5,632 (its top -5,376), as Tools' island.
+
+Taking the race track out of a folder (Restore) builds Tools' island again in its place, without the track.

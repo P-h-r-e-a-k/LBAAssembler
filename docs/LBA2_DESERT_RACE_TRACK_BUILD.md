@@ -3914,6 +3914,83 @@ theme."
 ![The long hall, two storeys high](racetrack/palace/upstairs_long_hall_two_storeys.png)
 ![The upstairs from above](racetrack/palace/upstairs_top.png)
 
+## Island CX: round the island under its cannons, down through a door, twice round the halls under the gas (2026-10-15)
+
+The user: "Create a track for our CXTower island. The basic concept for this track is a loop around the tower, the track enters the
+underground section through a slope down through one of the doors, which means we'll need to remove the metal grate that's currently
+there, loops around the underground section a few times then back out a door on the other side. Don't forget to add a pit lane. Let's
+have the cannons that normally fire at Twinsen outside randomly firing at any outside car." Then: "In the underground section there's
+some gas monsters that attack the player let's build on this theme for the underground section."
+
+The island is `CXTOWER.ILE`: Island CX as it is, with the control tower's lower level under its gas (`docs/LBA2_CONTROL_TOWER_ISLAND.md`).
+The track is `RaceTrackIsland.CxTower`. It is raced as island 9 drawn from that file (`island_file=9 cxtower`), in scene 300, a copy of
+Island CX's outside scene 110. The build makes the island afresh (`ControlTower/CxTowerTrack.Install`, `ControlTowerIsland.RaceRoom`):
+
+- *One ring of a hall round the control room.* The walls between the two halls and the empty corners under the island are taken down. The
+  corners are floored and walled like the halls. What stood on the halls' floors is gone (the doors' landings, the consoles, the grates'
+  rims), and the grates are shut. The low outer walls are built up to the tall ones' height, 19 layers.
+- *One roof just under the gas*, at -512. It is open only where the road's tunnels come down through it (`CxTowerTrack.RoofHoles`, the plan's
+  tunnels with pieces). Its underside is a face a cell, in 16 x 16-cell bodies drawn from the floor's height (see the camera, below).
+- No secret passage under it.
+
+The route (`tools/RaceTrackPlan/cxtower_design.py`), 457 cells:
+
+1. The start straight runs west along the island's south side. Its pit lane goes straight on along z 59.5 where the lap's S-bend turns up
+   onto the straight, and comes back onto the road at the turn into the trench. It is a branch of the raised road, with three spots.
+2. North down the south-west trench, which the build cuts wider, and through door A. The door's grate (body 9) is gone. The first 3 cells
+   past the door are a tunnel sunk in the plateau, its roof flush with it.
+3. A tunnel under the island at 26 %, and a U-turn under the north-west tower down into the ring.
+4. Once round the ring on its inner lanes (west, south, east, north), then on round the outer ones (west and south). Most of it is on the
+   floor at -5,166.
+5. North up a tunnel to door C (26 % for its last 22 cells; 16 % up the outer lane before it). On the way it passes 3,144 over the ring's
+   south inner lane.
+6. Out through the north-east trench and north past the north-east tower. East round it over the gas, down the east side, round the
+   south-east tower, and through the S-bend onto the start straight.
+
+The road's rails are 3 cells from the road's middle underground and 3.5 outside. The plan's `edgeMargin` is 4: the builder no longer pushes
+the lap off the cube's edges, where the ring's outer lanes and the road round the towers run.
+
+The race-track mode's part (`RACEMOD.CPP`):
+
+- *Under the ground* (the plan's `under`; the raised road file's eighth number on each point; an open area's sixth number):
+  - The road's floor is the deck, whatever ground is over it, and there is no collision with the ground there.
+  - The camera's sight line isn't lifted over the ground there, and the oil, the penguins and the open-area walls ignore the ground over the road.
+  - A car there is in no gas (`TerrainUnderHook`, `GiveTerrainCodeJeu`), so it isn't rescued from the gas overhead.
+  - The builder cuts no ground for these stretches, stands no piers under them and clears no decor in their way.
+- *The cannons* on the four corner towers are scene 110's actors 3-6, entity 264, kept in the scene with their scripts emptied
+  (`RaceTrackIsland.HuntingGuns`). Each is a gunner, `gunner=` with `gunner_hunt=<reach>` (40 cells). For each burst it picks a car at
+  random among those within its reach that are outside: over the gas, not under the island. It fires 8 shots at where that car will be
+  when each one comes down, the car's speed measured between shots, a little either side. A car that turns, brakes or speeds up is
+  missed; one in a burst is stunned. The test pilot's race had them fire at Twinsen and the opponents alike.
+- *Gas monsters*: 6 of them, the game's own, stand on the ring's floor beside its lanes (`GasMonsterRun.Floor`; the monster's foot is its
+  floor, its poses fitted to the road over it). Each strikes at its own place on the road.
+- *Gas vents*: 11 of them blow across the ring's lanes from the rail on its east side, its north side and the west outer lane (the plan's
+  `steamJets`). They are the Gazogem factory's steam jets, and a burst stuns a car in it.
+- *The camera in the ring*: three tunnels of the camera's alone (no pieces) cover the ring, their roofs the room's roof over the road. The
+  camera that follows the car normally stood 6,000 over it, out over the roof and the gas, where the island's ground near the eye isn't
+  drawn (the near plane), so the car was seen through the island. In a tunnel the race-track mode's tunnel camera rides behind the car
+  under the roof.
+- *The roof itself* was first one body the whole cube wide, then 16 merged rectangles a tile. Neither was drawn:
+  - The engine draws a decor whose box's bottom corners are in sight; a roof's are over the camera. So the roof pieces' boxes now start at
+    the floor (`AddBodies`' `drawnFrom`).
+  - The filler runs a face's depth straight across the screen, and the ground over the roof showed through big faces running away from
+    the camera. So the roof's underside is a face a cell, with the close flag, as the palace's floors are.
+
+The opponents are Island CX's own people's cars: the Emperor's soldier in his rocket launcher (the one to beat), a Franco trooper's tank
+and the survivor's raft.
+
+The test pilot raced 3 laps: 48.8, 53.2 and 51.9 s, first of four, no rescues and no missed checkpoints. It was hit by vents and bites
+along the way, and the opponents finished all three laps.
+
+![The lap from above](racetrack/cxtower/lap_from_above.png)
+![The ring under the island, its roof off: the inner lanes once round, the outer ones on, the ramps down and up](racetrack/cxtower/ring_roof_off.png)
+![The start straight](racetrack/cxtower/start.png)
+![Into door A](racetrack/cxtower/door_a.png)
+![The gas monsters in the ring](racetrack/cxtower/ring_gas_monsters.png)
+![A gas vent](racetrack/cxtower/ring_gas_vent.png)
+![Up the tunnel to door C](racetrack/cxtower/exit_tunnel.png)
+![Round the north-east tower, the car stunned by its cannon](racetrack/cxtower/cannon_tower.png)
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

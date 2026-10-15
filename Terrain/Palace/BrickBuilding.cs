@@ -80,8 +80,11 @@ internal static class BrickBuilding
     // of the cubes next to it too; and with `reach`, in every cube within that of it too: those it can be seen from (AddToCubes). `close`:
     // the bodies drawn close to the camera, CloseFlag)
     public static (int Bodies, int Faces, int Left) AddBodies(IslandFile island, Dictionary<int, List<Face>> groups, List<byte[]> newBodies, int firstBody,
-        Func<int, string>? what = null, int maxPerCube = IslandDecors.MaxPerCube, bool everyCube = false, bool close = false, double reach = 0)
+        Func<int, string>? what = null, int maxPerCube = IslandDecors.MaxPerCube, bool everyCube = false, bool close = false, double reach = 0,
+        Func<int, int?>? drawnFrom = null)
     {
+        // (`drawnFrom`: a group's box's bottom, when not its lowest point -- the engine draws a decor whose box's bottom corners are in sight,
+        // and a roof's, over the camera, never are: Island CX's ring's roof, drawn from its floor)
         int faceCount = 0, bodyCount = 0, left = 0;
         foreach (var (group, faces) in groups)
             foreach (var chunk in Chunks(faces))
@@ -121,7 +124,7 @@ internal static class BrickBuilding
                 var d = IslandDecors.Blank(body, at.X, (int)Math.Round(origin.Y), at.Z);
                 d.XMin = (int)Math.Floor(at.X + lo.X - origin.X); d.XMax = (int)Math.Ceiling(at.X + hi.X - origin.X);
                 d.ZMin = (int)Math.Floor(at.Z + lo.Z - origin.Z); d.ZMax = (int)Math.Ceiling(at.Z + hi.Z - origin.Z);
-                d.YMin = (int)Math.Floor(lo.Y); d.YMax = NoBoxTop;     // (its Y the middle of its points: the body is drawn round it)
+                d.YMin = drawnFrom?.Invoke(group) ?? (int)Math.Floor(lo.Y); d.YMax = NoBoxTop;     // (its Y the middle of its points: the body is drawn round it)
                 at.Cube.Decors.Add(d);
             }
         return (bodyCount, faceCount, left);

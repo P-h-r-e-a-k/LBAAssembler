@@ -609,6 +609,10 @@ typedef struct {
     // (2026-10-12): growing out of the road's edge, then apart from it with clear space between. A floor as the road is, and the rail
     // keeps a car on whichever of the two it is on; where they meet, it drives from one onto the other.
     S32 StripLo, StripHi;
+    // Under the ground (under=<first> <last>): the road runs below the island's ground there -- Island CX's way down through a door to the
+    // halls under it, round them and back up (2026-10-15) -- and the ground over it counts for nothing: its height isn't the floor
+    // (RaisedAltitude), its blocking triangles don't block (RaisedCol), it hides nothing from the camera (RaisedSight).
+    S32 Under;
 } T_RACE_RAISED;
 #define RAISED_BANK_UNITS 10000.0
 static T_RACE_RAISED *s_raised = NULL;
@@ -832,7 +836,7 @@ static S32 s_panelAt = -1000000;
 // frame, its weight 12, ThrowExtra) at the height that brings each down on its place (the user, 2026-10-10: "he's not firing the default
 // bullets the retail version normally fires" -- they were a tracer of the race mode's, the sprite made bigger and flown straight); where
 // one lands, a spark, and a car there is stopped as by a magic ball.
-#define RACE_MAX_GUNNERS 4
+#define RACE_MAX_GUNNERS 8
 #define RACE_MAX_GUN_TARGETS 32
 #define RACE_MAX_BULLETS 24
 #define RACE_GUN_EVERY 4200
@@ -844,10 +848,19 @@ static S32 s_panelAt = -1000000;
 #define RACE_GUN_REACH 650                 // a car this near where a bullet lands is hit
 #define RACE_GUN_FIRING 173                // the gun's firing animation (entity 200)
 #define RACE_GUN_AT_IT 474                 // the Franco sitting at it (entity 201)
+// A gun that hunts (gunner_hunt=<reach> after its gunner= line: Island CX's guns on its four corner towers -- the user, 2026-10-15: "Let's
+// have the cannons that normally fire at Twinsen outside randomly firing at any outside car"): no places of its own -- each burst at a car
+// it picks at random among those within its reach and outside, over the gas (not in the halls under the island), each bullet where that
+// car will be when it comes down (its way measured between bullets), a little either side (RACE_GUN_HUNT_SPREAD): a car that turns or
+// brakes or speeds up is missed.
+#define RACE_MAX_GUNNERS_HUNTING 8
+#define RACE_GUN_HUNT_SPREAD 700
+#define RACE_GUN_HUNT_SHOTS 8
 typedef struct {
     S32 Scene, Gun, Franco; double MX, MY, MZ;
     int NbTargets; double TX[RACE_MAX_GUN_TARGETS], TZ[RACE_MAX_GUN_TARGETS], TY[RACE_MAX_GUN_TARGETS], TR[RACE_MAX_GUN_TARGETS];
     S32 Next, BurstAt; int Fired, Firing, Ready;
+    double Hunt; int Who; double LastX, LastY, LastZ; S32 LastAt;       // (a hunting gun: its reach; its car this burst, where and when last seen)
 } T_RACE_GUNNER;
 typedef struct { int On, Extra, Owner; double FromX, FromY, FromZ, ToX, ToY, ToZ; S32 T0, Dur; } T_RACE_BULLET;
 static T_RACE_GUNNER s_gunners[RACE_MAX_GUNNERS];
@@ -1106,7 +1119,7 @@ static int s_nbCubeScenes = 0;
 // Where the cars drive where they like (open_area=<x0> <z0> <x1> <z1> <floor>, world units): its floor the ground there for whatever is
 // near its height (RaisedAltitude), its camera the car's trail (OpenCamera). The Emperor's palace's rooms.
 #define RACE_MAX_OPEN 8
-typedef struct { double X0, Z0, X1, Z1, Floor; } T_RACE_OPEN;
+typedef struct { double X0, Z0, X1, Z1, Floor; int Under; } T_RACE_OPEN;     // (Under: under the ground -- open_area='s sixth number -- as under= for the road)
 static T_RACE_OPEN s_open[RACE_MAX_OPEN];
 static int s_nbOpen = 0;
 static int OpenAreaAt(double wx, double wz, double y) {
@@ -1184,6 +1197,7 @@ static int s_railHeld = 0;
 extern S32 (*AltitudeHook)(S32 x, S32 z, S32 y);         // 3DEXT/MAPTOOLS.CPP
 extern S32 (*TerrainColHook)(S32 x, S32 z, S32 col);
 extern S32 (*SightFloorHook)(S32 x, S32 z, S32 y);
+extern S32 (*TerrainUnderHook)(S32 x, S32 y, S32 z);
 extern S32 FollowCamera;                                 // FOLLOWCAM.CPP
 extern S32 (*FollowCamArmHook)(S32 base);
 extern S32 (*FollowCamEyeHook)(S32 *eye, S32 *target);
@@ -1273,6 +1287,40 @@ static int RaisedAt(double wx, double wz, S32 ref, double pad, S32 *y, int *seg,
     return 0;
 }
 
+// Under the ground: a segment of the raised road (either end under=), an open area (its sixth number); and the hero now -- on such a stretch
+// of the road, near its height, or on such an area's floor (Island CX's halls, 2026-10-15).
+static int RaisedUnder(int seg) {
+    return seg >= 0 && seg + 1 < s_nbRaised && (s_raised[seg].Under || s_raised[seg + 1].Under);
+}
+static int OpenUnderAt(double wx, double wz, double y) {
+    const int a = OpenAreaAt(wx, wz, y);
+    return a >= 0 && s_open[a].Under;
+}
+static int HeroUnder(void) {
+    if (CubeMode != CUBE_EXTERIEUR) return 0;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    if (OpenUnderAt(wx, wz, hero->Obj.Y)) return 1;
+    S32 f;
+    int seg;
+    double lat, t;
+    return s_nbRaised && RaisedAt(wx, wz, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t) && abs(f - hero->Obj.Y) < 900 && RaisedUnder(seg);
+}
+
+// GiveTerrainCodeJeu's hook: a place on a stretch of the road under the ground, or an area's floor under it, is in no gas (a car on Island
+// CX's road down to its halls was in the gas over it, and was rescued from it).
+static int UnderAtWorld(double wx, double wz, S32 y) {
+    if (OpenUnderAt(wx, wz, y)) return 1;
+    S32 f;
+    int seg;
+    double lat, t;
+    return s_nbRaised && RaisedAt(wx, wz, y + 64, RAISED_PAD, &f, &seg, &lat, &t) && abs(f - y) < 900 && RaisedUnder(seg);
+}
+static S32 RaisedUnderHere(S32 x, S32 y, S32 z) {
+    if (CubeMode != CUBE_EXTERIEUR) return 0;
+    return UnderAtWorld(x + CurrentCubeX * 32768.0, z + CurrentCubeY * 32768.0, y);
+}
+
 static S32 RaisedAltitude(S32 x, S32 z, S32 y) {
     if (s_floorRef == RAISED_NOREF || CubeMode != CUBE_EXTERIEUR) return y;
     // (the roulette wheel's bowl, for something about its floor's height there)
@@ -1284,12 +1332,14 @@ static S32 RaisedAltitude(S32 x, S32 z, S32 y) {
         }
     }
     // (in an open area, near its floor: its floor -- and the raised road's over it where that is higher, the palace's ramp to its window)
+    // (under the ground -- an area's or the road's -- its floor whatever the ground over it: Island CX's halls)
     const int open = OpenAreaAt(x + CurrentCubeX * 32768.0, z + CurrentCubeY * 32768.0, s_floorRef);
-    if (open >= 0 && s_open[open].Floor > y) y = (S32)floor(s_open[open].Floor + 0.5);
+    if (open >= 0 && (s_open[open].Floor > y || s_open[open].Under)) y = (S32)floor(s_open[open].Floor + 0.5);
     S32 f;
     int seg;
     double lat, t;
     if (!RaisedAt(x + CurrentCubeX * 32768.0, z + CurrentCubeY * 32768.0, s_floorRef, RAISED_PAD, &f, &seg, &lat, &t)) return y;
+    if (RaisedUnder(seg)) return open >= 0 && s_open[open].Under && y > f ? y : f;
     return f > y ? f : y;
 }
 
@@ -1299,8 +1349,10 @@ static S32 RaisedCol(S32 x, S32 z, S32 col) {
     S32 f;
     int seg;
     double lat, t;
+    // (under the ground, its triangles block nothing: they are thousands over the floor)
+    if (OpenUnderAt(x + CurrentCubeX * 32768.0, z + CurrentCubeY * 32768.0, s_floorRef)) return 0;
     if (!RaisedAt(x + CurrentCubeX * 32768.0, z + CurrentCubeY * 32768.0, s_floorRef, RAISED_PAD, &f, &seg, &lat, &t)) return col;
-    return f > CalculAltitudeTerrain(x, z, 0) ? 0 : col;
+    return f > CalculAltitudeTerrain(x, z, 0) || RaisedUnder(seg) ? 0 : col;
 }
 
 // For the cameras: what would hide the hero from an eye at (x, z) -- the stretch of raised road he is on, where it passes there (the
@@ -1312,6 +1364,11 @@ static S32 RaisedSight(S32 x, S32 z, S32 y) {
     S32 f;
     int seg;
     double lat, t;
+    // (the hero under the ground: the ground over him hides nothing -- the road's floor at the eye's place, else a floor well under him)
+    if (HeroUnder()) {
+        if (s_nbRaised && RaisedAt(x + cx, z + cz, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t) && abs(f - hero->Obj.Y) < 3000) return f;
+        return hero->Obj.Y - 2000;
+    }
     if (!RaisedAt(hero->Obj.X + cx, hero->Obj.Z + cz, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t) || abs(f - hero->Obj.Y) > 300) return y;
     s_onlyNear = seg;
     const int found = RaisedAt(x + cx, z + cz, 0x3FFFFFFF, RAISED_PAD, &f, &seg, &lat, &t);
@@ -1748,7 +1805,7 @@ void RaceMod_OpenWall(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     double lat, t;
     if (s_nbRaised && RaisedAt(*nx + cx, *nz + cz, oy + 64, RAISED_PAD, &f, &seg, &lat, &t) && f >= s_open[from].Floor - 200) return;
     const S32 gx = *nx < 0 ? 0 : *nx > 32767 ? 32767 : *nx, gz = *nz < 0 ? 0 : *nz > 32767 ? 32767 : *nz;
-    if (OpenAreaAt(*nx + cx, *nz + cz, oy) >= 0 && CalculAltitudeTerrain(gx, gz, 0) < s_open[from].Floor + RACE_OPEN_STEP) return;
+    if (OpenAreaAt(*nx + cx, *nz + cz, oy) >= 0 && (s_open[from].Under || CalculAltitudeTerrain(gx, gz, 0) < s_open[from].Floor + RACE_OPEN_STEP)) return;
     *nx = ox; *nz = oz;
     s_railTouch = 1;
 }
@@ -1766,7 +1823,7 @@ void RaceMod_Floor(S32 ox, S32 oy, S32 oz, S32 nx, S32 *ny, S32 nz) {
     double lat, t;
     // (standing on the road -- or a little over it, a jump on foot -- where he was)
     if (!RaisedAt(ox + cx, oz + cz, oy + 64, RAISED_PAD, &f, &seg, &lat, &t) || oy < f - 200 || oy > f + 1500) return;
-    if (f - CalculAltitudeTerrain(ox, oz, 0) < 300) return;
+    if (f - CalculAltitudeTerrain(ox, oz, 0) < 300 && !RaisedUnder(seg)) return;
     if (!RaisedAt(nx + cx, nz + cz, oy + 64, RAISED_PAD, &f, &seg, &lat, &t)) return;
     if (*ny < f) *ny = f;
 }
@@ -1860,10 +1917,10 @@ static void LoadRaised(const char *path) {
     T_RACE_RAISED *r = (T_RACE_RAISED *)malloc(capacity * sizeof(T_RACE_RAISED));
     char line[128];
     while (fgets(line, sizeof(line), f)) {
-        int a, b, c, d, e = 0, f = 0, g = 0;
-        if (sscanf(line, "%d %d %d %d %d %d %d", &a, &b, &c, &d, &e, &f, &g) < 4) continue;
+        int a, b, c, d, e = 0, f = 0, g = 0, h = 0;
+        if (sscanf(line, "%d %d %d %d %d %d %d %d", &a, &b, &c, &d, &e, &f, &g, &h) < 4) continue;
         if (count == capacity) { capacity *= 2; r = (T_RACE_RAISED *)realloc(r, capacity * sizeof(T_RACE_RAISED)); }
-        r[count].X = a; r[count].Z = b; r[count].Y = c; r[count].Half = d; r[count].Bank = e; r[count].StripLo = f; r[count].StripHi = g;
+        r[count].X = a; r[count].Z = b; r[count].Y = c; r[count].Half = d; r[count].Bank = e; r[count].StripLo = f; r[count].StripHi = g; r[count].Under = h;
         count++;
     }
     fclose(f);
@@ -1905,6 +1962,7 @@ static void LoadRaised(const char *path) {
     AltitudeHook = RaisedAltitude;
     TerrainColHook = RaisedCol;
     SightFloorHook = RaisedSight;
+    TerrainUnderHook = RaisedUnderHere;
     FollowCamArmHook = RaisedArm;
     FollowCamEyeHook = RailCamera;
     // (the camera that follows the car is turned on with the first frame: RaceMod_Frame)
@@ -2208,7 +2266,8 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "open_area")) {
             T_RACE_OPEN *a = &s_open[s_nbOpen];
-            if (s_nbOpen < RACE_MAX_OPEN && sscanf(v, "%lf %lf %lf %lf %lf", &a->X0, &a->Z0, &a->X1, &a->Z1, &a->Floor) == 5) s_nbOpen++;
+            a->Under = 0;
+            if (s_nbOpen < RACE_MAX_OPEN && sscanf(v, "%lf %lf %lf %lf %lf %d", &a->X0, &a->Z0, &a->X1, &a->Z1, &a->Floor, &a->Under) >= 5) s_nbOpen++;
         }
         else if (!strcmp(key, "cube_scene")) {
             int *c = s_cubeScenes[s_nbCubeScenes];
@@ -2307,6 +2366,9 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "roulette_balls")) {
             const int n = atoi(v);
             if (s_wheel.On) s_wheel.NbBalls = n < 1 ? 1 : n > RACE_MAX_BALLS ? RACE_MAX_BALLS : n;
+        }
+        else if (!strcmp(key, "gunner_hunt")) {
+            if (s_nbGunners > 0) s_gunners[s_nbGunners - 1].Hunt = atof(v);
         }
         else if (!strcmp(key, "gunner_target")) {
             int x, z, y, r;
@@ -4799,7 +4861,7 @@ static S32 SlickGround(S32 lx, S32 lz, S32 ref, int *ok) {
     double lat, t;
     const int deck = RaisedAt(lx + CurrentCubeX * 32768.0, lz + CurrentCubeY * 32768.0, ref + 64, 0, &f, &seg, &lat, &t);
     *ok = deck || ground != -1;
-    return deck && f > ground ? f : ground;
+    return deck && (f > ground || RaisedUnder(seg)) ? f : ground;
 }
 
 // A slick laid on the road where it is (cube-local), once it is in this scene: at the road's height there -- it was dropped at the car's,
@@ -5711,7 +5773,9 @@ static int PenguinHits(int i, S32 now, int driving, int *other) {
         ListObjet[a].Obj.Y = -20000;
         return 11;
     }
-    return CalculAltitudeTerrain(lx, lz, 0) > pg->Y + RACE_PENGUIN_WALL ? 12 : 0;
+    // (a step up of the ground is a wall -- not the ground far over a penguin on a floor under it: Island CX's halls)
+    const S32 ground = CalculAltitudeTerrain(lx, lz, 0);
+    return ground > pg->Y + RACE_PENGUIN_WALL && ground < pg->Y + 2500 ? 12 : 0;
 }
 
 static void PenguinHitLog(int code) {
@@ -6373,16 +6437,36 @@ S32 RaceMod_SilentThrow(S32 numobj) {
 // turned to it; where the gunner's scene is the one drawn, the game's bullet thrown so that it comes down there -- its height the lower
 // of the two that do, at its speed and weight (flying in frames of 20 ms: its way v a frame, falling weight/16 a frame a frame).
 static void GunnerShot(T_RACE_GUNNER *g, S32 now) {
-    if (!g->NbTargets) return;
+    if (!g->NbTargets && g->Hunt <= 0) return;
     int b = -1;
     for (int i = 0; i < RACE_MAX_BULLETS && b < 0; i++) if (!s_bullets[i].On) b = i;
     if (b < 0) return;
     T_RACE_BULLET *u = &s_bullets[b];
-    const int k = (int)(VentRandom() * g->NbTargets) % g->NbTargets;
-    const double a = VentRandom() * 2 * 3.14159265358979, r = sqrt(VentRandom()) * g->TR[k];
+    double tx, ty, tz;
+    if (g->Hunt > 0) {
+        // (a hunting gun: its car's place now, and where it will be when the bullet comes down -- its way since the last bullet, over the
+        // flight's time, once more for the flight to there -- a little either side)
+        double x, y, z;
+        if (g->Who < -1 || !CarAt(g->Who, &x, &y, &z)) return;
+        double vx = 0, vz = 0;
+        if (g->LastAt && now > g->LastAt) { vx = (x - g->LastX) * 1000.0 / (now - g->LastAt); vz = (z - g->LastZ) * 1000.0 / (now - g->LastAt); }
+        g->LastX = x; g->LastY = y; g->LastZ = z; g->LastAt = now;
+        tx = x; tz = z;
+        for (int pass = 0; pass < 2; pass++) {
+            const double rr = sqrt((tx - g->MX) * (tx - g->MX) + (tz - g->MZ) * (tz - g->MZ));
+            const double fly = rr / RACE_GUN_SPEED * 20 / 1000.0;
+            tx = x + vx * fly; tz = z + vz * fly;
+        }
+        const double a = VentRandom() * 2 * 3.14159265358979, r = sqrt(VentRandom()) * RACE_GUN_HUNT_SPREAD;
+        tx += cos(a) * r; tz += sin(a) * r; ty = y;
+    } else {
+        const int k = (int)(VentRandom() * g->NbTargets) % g->NbTargets;
+        const double a = VentRandom() * 2 * 3.14159265358979, r = sqrt(VentRandom()) * g->TR[k];
+        tx = g->TX[k] + cos(a) * r; tz = g->TZ[k] + sin(a) * r; ty = g->TY[k];
+    }
     u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = g->Gun > 0 ? g->Gun : 255;
     u->FromX = g->MX; u->FromY = g->MY; u->FromZ = g->MZ;
-    u->ToX = g->TX[k] + cos(a) * r; u->ToZ = g->TZ[k] + sin(a) * r; u->ToY = g->TY[k] + 60;
+    u->ToX = tx; u->ToZ = tz; u->ToY = ty + 60;
     // (its height: tan h from c R^2/v^2 T^2 - R T + (dy + c R^2/v^2) = 0, the lower root; out of reach, straight at it)
     const double R = sqrt((u->ToX - u->FromX) * (u->ToX - u->FromX) + (u->ToZ - u->FromZ) * (u->ToZ - u->FromZ)), dy = u->ToY - u->FromY;
     const double v = RACE_GUN_SPEED, c = RACE_GUN_WEIGHT / 16.0, q = c * R * R / (v * v);
@@ -6399,6 +6483,12 @@ static void GunnerShot(T_RACE_GUNNER *g, S32 now) {
     // stops it on the way -- an actor, a rail)
     u->Extra = ThrowExtra((U8)(g->Gun > 0 ? g->Gun : 255), (S32)(u->FromX - cx), (S32)u->FromY, (S32)(u->FromZ - cz), RACE_GUN_SPRITE, alpha, beta, RACE_GUN_SPEED, RACE_GUN_WEIGHT, 0);
     if (u->Extra >= 0) ListExtra[u->Extra].Flags &= ~(EXTRA_END_OBJ | EXTRA_END_COL | EXTRA_IMPACT);
+}
+
+// Whether the gun that is actor `gun` of this scene hunts (a hunting gunner's).
+static int GunHunts(int gun) {
+    for (int i = 0; i < s_nbGunners; i++) if (s_gunners[i].Gun == gun && s_gunners[i].Scene == (S32)NumCube) return s_gunners[i].Hunt > 0;
+    return 0;
 }
 
 // Every frame: the machine gunners (gunner=). Between bursts the gun stands still, its Franco sitting at it; a burst every RACE_GUN_EVERY
@@ -6418,13 +6508,29 @@ static void Gunners(S32 now, int driving) {
         }
         if (!RaceRunning()) continue;
         if (!g->Next) { g->Next = now + RACE_GUN_EVERY / 2 + i * 900; continue; }
+        const int shots = g->Hunt > 0 ? RACE_GUN_HUNT_SHOTS : RACE_GUN_SHOTS;
         if (!g->Firing && now >= g->Next) {
+            if (g->Hunt > 0) {
+                // (its car: one at random among those in its reach, outside -- over the gas, not under the island -- and racing)
+                int pick[RACE_MAX_OPPONENTS + 1], n = 0;
+                for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+                    if (who < 0 && !driving) continue;
+                    if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
+                    double x, y, z;
+                    if (!CarAt(who, &x, &y, &z) || y < 0 || UnderAtWorld(x, z, (S32)y)) continue;
+                    if ((x - g->MX) * (x - g->MX) + (z - g->MZ) * (z - g->MZ) > g->Hunt * g->Hunt) continue;
+                    pick[n++] = who;
+                }
+                if (!n) { g->Next = now + 500 + (S32)(VentRandom() * 1000); continue; }
+                g->Who = pick[(int)(VentRandom() * n) % n]; g->LastAt = 0;
+                Log_Info("[racemod] gunner %d fires at %s", i + 1, g->Who < 0 ? "Twinsen" : "an opponent");
+            }
             g->Firing = 1; g->Fired = 0; g->BurstAt = now;
             if (here && g->Gun > 0 && g->Gun < NbObjets) InitAnim(RACE_GUN_FIRING, ANIM_REPEAT, (U8)g->Gun);
         }
         if (g->Firing) {
-            while (g->Fired < RACE_GUN_SHOTS && now >= g->BurstAt + g->Fired * RACE_GUN_GAP) { GunnerShot(g, now); g->Fired++; }
-            if (g->Fired >= RACE_GUN_SHOTS && now >= g->BurstAt + RACE_GUN_SHOTS * RACE_GUN_GAP) {
+            while (g->Fired < shots && now >= g->BurstAt + g->Fired * RACE_GUN_GAP) { GunnerShot(g, now); g->Fired++; }
+            if (g->Fired >= shots && now >= g->BurstAt + shots * RACE_GUN_GAP) {
                 g->Firing = 0;
                 g->Next = now + RACE_GUN_EVERY * 3 / 4 + (S32)(VentRandom() * RACE_GUN_EVERY / 2);
                 if (here && g->Gun > 0 && g->Gun < NbObjets) InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, (U8)g->Gun);
@@ -6449,7 +6555,7 @@ static void Gunners(S32 now, int driving) {
             double x, y, z;
             if (!CarAt(who, &x, &y, &z)) continue;
             if ((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ) > (double)RACE_GUN_REACH * RACE_GUN_REACH || fabs(y - u->ToY) > 1400) continue;
-            CarStruck(who, now, "machine gun", "the Franco gunner");
+            CarStruck(who, now, "machine gun", u->Owner < 255 && GunHunts(u->Owner) ? "Island CX's guns" : "the Franco gunner");
         }
     }
 }

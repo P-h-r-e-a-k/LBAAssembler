@@ -63,6 +63,10 @@ internal sealed class RaceTrackPlan
     // A footing of ground under a start gantry's post that stands over a hole (RaceTrackBuilder.PostFootings): the lava lake's dock is
     // narrower than its gantry.
     public bool GantryFootings { get; set; }
+    // How near a cube the island hasn't got the lap's middle may come (cells), when not the ground road's verge and half a cell more
+    // (RaceTrackBuilder.IslandEdgeMargin): a raised road whose rails are what the car keeps within -- Island CX, one cube, its road round
+    // its corner towers over the gas and its halls' lanes along the room's walls, all of them near the cube's edges.
+    public double? EdgeMargin { get; set; }
     // The ground cut down where it comes near the raised road's deck (RaceTrackBuilder.CutUnderRaised: the lava lake's lap, which runs
     // along cliffs and the crater's rim; the statue track's was left as it was built).
     public bool RaisedCut { get; set; }
@@ -115,6 +119,11 @@ internal sealed class RaceTrackPlan
     // opponents' line, the grid's places, the scenes). The Emperor's palace's rooms (the user, 2026-10-12: "For the inside of the palace
     // let's remove the track but add some arrows to allow cars to take multiple directions").
     public int[][]? Bare { get; set; }
+    // Stretches of a raised road under the ground (with Raised), each [first point, last point]: Island CX's road through its door and down
+    // to the halls under its gas, and back up out of the door on the other side (the user, 2026-10-15). The race-track mode drives them
+    // whatever ground is over them and finds no gas there (RACEMOD.CPP: raceraised.txt's eighth number); the builder cuts no ground for them
+    // and stands no piers under them.
+    public int[][]? Under { get; set; }
     // Where the cars drive where they like (with Bare), each [x0, z0, x1, z1] (cells from the origin): every cube one reaches has a
     // scene (PalaceTrack.SceneCubes), and the race-track mode's camera follows the car's own trail there, low (RACEMOD.CPP open_area=).
     public double[][]? OpenAreas { get; set; }
@@ -265,6 +274,7 @@ internal sealed class RaceTrackPlan
         o.PitFence = PitFence && PitStripe is { Length: 3 };
         o.GantryFootings = GantryFootings;
         o.PierBodies = PierBodies?.ToHashSet();
+        o.EdgeMargin = EdgeMargin;
     }
 
     public static RaceTrackPlan Load(string path)
@@ -391,6 +401,8 @@ internal sealed class RaceTrackOptions
     public double GridStep { get; set; } = RaceTrackScenes.DefaultGridStep;
     // A footing under a gantry's post that stands over a hole (RaceTrackPlan.GantryFootings).
     public bool GantryFootings { get; set; }
+    // How near a missing cube the lap's middle may come (RaceTrackPlan.EdgeMargin), or null: the verge's width and half a cell more.
+    public double? EdgeMargin { get; set; }
     // The grid moved across the road (RaceTrackPlan.GridShift, cells).
     public double GridShift { get; set; }
     // How long each of the raised road's pieces is, cells (RaceTrackPlan.RaisedPiece; a decor body each).
@@ -684,6 +696,8 @@ internal sealed class TrackRoad
     public bool[]? Jog;
     // A raised road's points with no deck of its own (no pieces, no piers: the roulette wheel's lane, whose floor the wheel is), or null.
     public bool[]? Bare;
+    // A raised road's points under the ground (RaceTrackPlan.Under), or null.
+    public bool[]? Under;
     // A raised road's points with no deck of its own that the cars still drive on (no pieces, no piers; the race-track mode's floor as
     // anywhere: a giant frog's throat, RaceTrackFrog), or null.
     public bool[]? Hidden;
@@ -709,7 +723,8 @@ internal sealed class TrackRoad
 }
 
 internal readonly record struct RoadHit(int Road, double Dist, double Lat, double S, double H, double Bank, bool Bridge, double Kappa, bool Deck, bool Landing = false, bool UnderDeck = false,
-    bool Jump = false, bool Gap = false, bool Lip = false, bool Void = false, bool Raised = false, double Cross = 0, double Half = 0, bool Arc = false, bool Bare = false);
+    bool Jump = false, bool Gap = false, bool Lip = false, bool Void = false, bool Raised = false, double Cross = 0, double Half = 0, bool Arc = false, bool Bare = false,
+    bool Under = false);
 
 // A road-over-road bridge: the straighter road's own flat deck core (island cell coordinates), oriented along its own heading.
 // RailBehind, RailAhead: whether the railings run on along the landing behind the deck's start and past its end (the way DirX, DirZ
@@ -881,11 +896,21 @@ internal static class RaceTrackBuilder
                 for (int k = PlanPoint(plan, main, run[0]), last = PlanPoint(plan, main, run[1]); ; k = At(main, k + 1)) { main.Bare[k] = true; if (k == last || !main.Closed && k == main.Count - 1) break; }
             report.Notes.Add($"no road at all over {main.Bare.Count(b => b)} of the route's points (the plan's Bare): the cars drive on what is there");
         }
+        // (stretches under the ground: Island CX's road down to its halls)
+        if (planned && main.Raised is not null && plan.Under is { Length: > 0 } underRuns)
+        {
+            main.Under = new bool[main.Count];
+            foreach (var run in underRuns.Where(u => u.Length >= 2))
+                for (int k = PlanPoint(plan, main, run[0]), last = PlanPoint(plan, main, run[1]); ; k = At(main, k + 1)) { main.Under[k] = true; if (k == last || !main.Closed && k == main.Count - 1) break; }
+            report.Notes.Add($"the raised road under the ground over {main.Under.Count(u => u)} of its points (the plan's Under): no ground cut for it, no piers under it");
+        }
         if (planned)
         {
+            // (an area's sixth number: under the ground, as Under's stretches are)
             foreach (var a in (plan.OpenAreas ?? Array.Empty<double[]>()).Where(a => a.Length >= 5))
                 report.OpenAreas.Add(new[] { (int)Math.Round((a[0] + plan.OriginCellX) * 512), (int)Math.Round((a[1] + plan.OriginCellZ) * 512),
-                                             (int)Math.Round((a[2] + plan.OriginCellX) * 512), (int)Math.Round((a[3] + plan.OriginCellZ) * 512), (int)Math.Round(a[4]) });
+                                             (int)Math.Round((a[2] + plan.OriginCellX) * 512), (int)Math.Round((a[3] + plan.OriginCellZ) * 512), (int)Math.Round(a[4]) }
+                                       .Concat(a.Length >= 6 && a[5] != 0 ? new[] { 1 } : Array.Empty<int>()).ToArray());
             foreach (var a in (plan.FloorArrows ?? Array.Empty<double[]>()).Where(a => a.Length >= 5))
                 report.FloorArrows.Add(new[] { a[0] + plan.OriginCellX, a[1] + plan.OriginCellZ, a[2], a[3], a[4] });
             foreach (var g in (plan.Guards ?? Array.Empty<double[]>()).Where(g => g.Length >= 8))
@@ -1555,7 +1580,8 @@ internal static class RaceTrackBuilder
                 best = new RoadHit(ri, d, lat, s, h, 0, r.Bridge[a] && r.Bridge[b], k, r.Deck[a] && r.Deck[b], r.Landing[a] || r.Landing[b], r.UnderDeck[a] || r.UnderDeck[b],
                     r.Jump[a] || r.Jump[b], r.Gap[a] && r.Gap[b], t < 0.5 ? r.Lip[a] : r.Lip[b], r.Void.Length > 0 && r.Void[a] && r.Void[b],
                     r.Raised is { } up && up[a] && up[b], r.RoadBank is { } rb ? rb[a] * (1 - t) + rb[b] * t : 0,
-                    r.RaisedHalfs is { } rh ? rh[a] * (1 - t) + rh[b] * t : 0, r.Arc is { } arc && arc[a] && arc[b], r.Bare is { } bare && bare[a] && bare[b]);
+                    r.RaisedHalfs is { } rh ? rh[a] * (1 - t) + rh[b] * t : 0, r.Arc is { } arc && arc[a] && arc[b], r.Bare is { } bare && bare[a] && bare[b],
+                    r.Under is { } under && (under[a] || under[b]));
             }
             return best;
         }
@@ -1792,7 +1818,7 @@ internal static class RaceTrackBuilder
     // ---- the island's edge ----
     // An island is a set of cubes; beyond one it hasn't got, the engine has no ground at all (a car that gets there is in NUM_CUBE_PHANTOM,
     // the open sea). A road is kept this far from such a cube, centre to edge: its verge and half a cell more.
-    private static double IslandEdgeMargin(RaceTrackOptions o) => o.VergeHalfWidth + 0.5;
+    private static double IslandEdgeMargin(RaceTrackOptions o) => o.EdgeMargin ?? o.VergeHalfWidth + 0.5;
 
     // How far an island cell position is from the nearest cube the island hasn't got (or from the edge of the 16 x 16 map). Large when
     // there is none nearby.
@@ -3144,7 +3170,9 @@ internal static class RaceTrackBuilder
                             // (a carried jump's flight: over whatever stands under it, the Emerald Moon's reactor; and where there is no road
                             // at all -- the Emperor's palace's rooms, the cars on their floor between their walls -- nothing is in its way: the
                             // rooms' east wall, its box cut down under the floor there, was no wall, and the user drove out through it, 2026-10-13)
-                            if (h.Arc || h.Bare) continue;
+                            // (nor under the ground -- Island CX's road down to its halls: the island made for it has its way through them, and
+                            // what stands on the ground far over it stays)
+                            if (h.Arc || h.Bare || h.Under) continue;
                             var half = h.Half > 0 ? h.Half : o.RaisedHalfWidth;
                             var lean = Math.Abs(h.Cross) * half * 512;
                             if (h.Dist > half + 0.75 || d.YMax < h.H - lean - RaisedBelow || d.YMin > h.H + lean + RaisedAbove) continue;
@@ -3742,6 +3770,7 @@ internal static class RaceTrackBuilder
             var b = At(r, a + 1);
             if (!up[a] || !up[b] || Math.Abs(r.H[a] - r.H[b]) > DropFrom) continue;
             if (skip is not null && skip.Contains(a) && skip.Contains(b)) continue;
+            if (r.Under?[a] == true || r.Under?[b] == true) continue;
             var nearEnd = Math.Min(fromEnd[a], fromEnd[b]) < RaisedCutFromEnd;
             if (nearEnd && (r.Gap[a] || r.Gap[b])) continue;
             double sx = r.X[b] - r.X[a], sz = r.Z[b] - r.Z[a], len2 = sx * sx + sz * sz;
@@ -4982,6 +5011,8 @@ internal static class RaceTrackBuilder
             else report.Raised.Add(banks is null
                 ? new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width }
                 : new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width, (int)Math.Round(banks[k] * RaisedBankUnits) });
+            // (under the ground: an eighth number, the bank and the strip's before it 0 when it has none)
+            if (r.Under?[k] == true) { var p = report.Raised[^1]; report.Raised[^1] = p.Concat(Enumerable.Repeat(0, Math.Max(0, 7 - p.Length))).Append(1).ToArray(); }
         }
         // (a branch's carried jumps: its own points, after the lap's in the list)
         foreach (var j in branchArcs ?? Array.Empty<int[]>())
@@ -5352,6 +5383,7 @@ internal static class RaceTrackBuilder
                 if (r.Gap[k] || r.Gap[span[at - 1]] || r.Gap[span[at + 1]]) continue;      // (not in a jump's gap)
                 if (r.Bare?[k] == true) continue;                                            // (nor under the roulette wheel's lane)
                 if (r.Hidden?[k] == true) continue;                                          // (nor under a frog: its pad's stalk holds it)
+                if (r.Under?[k] == true) { placed = true; break; }                           // (nor under the ground: nothing to stand on)
                 if (!up[k] || !up[span[at - 1]] || !up[span[at + 1]]) continue;
                 var ground = IslandOps.Altitude(island, r.X[k] * 512, r.Z[k] * 512) ?? 0;
                 var road = Math.Min(r.H[k], Math.Min(r.H[span[at - 1]], r.H[span[at + 1]]));

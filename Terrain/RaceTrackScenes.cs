@@ -21,7 +21,7 @@ internal static class RaceTrackScenes
     // mushroom in each, the fake mushrooms a car drops (since 2026-10-08).
     public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, List<(RaceDriver Driver, Dictionary<int, int> Actors)> Drivers, int StartScene,
         List<int[]> Grid, List<int[]> Pits, Result? Twin = null, List<int[]>? Mushrooms = null, List<int[]>? Penguins = null, List<int[]>? Oil = null,
-        List<int[]>? Fakes = null, List<int[]>? Gunners = null, List<int[]>? GasMonsters = null, List<int[]>? Guards = null);
+        List<int[]>? Fakes = null, List<int[]>? Gunners = null, List<int[]>? GasMonsters = null, List<int[]>? Guards = null, List<int[]>? Hunters = null);
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
     //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
@@ -337,8 +337,11 @@ internal static class RaceTrackScenes
         public List<int[]> GasMonsters = new();
         // the people in the cars' way: each [scene, its actor, its place in Report.Guards, 1 in its own scene's cube (0 seen from there)]
         public List<int[]> Guards = new();
+        // the island's own guns that fire at the cars (RaceTrackIsland.HuntingGuns): each [scene, its actor, its muzzle x, y, z (island units),
+        // its reach (units)]
+        public List<int[]> Hunters = new();
         public Result Result(List<string> log, int changed, int removed, Result? twin = null) =>
-            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners, GasMonsters, Guards);
+            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners, GasMonsters, Guards, Hunters);
     }
 
     // Edits the outside scenes of the island as the options say, from what the build of the island found (start line, jump, road). With
@@ -434,6 +437,9 @@ internal static class RaceTrackScenes
                 var storyKept = new HashSet<int>();
                 if (options.Story && options.Island.StoryEntities is { } story)
                     for (var i = 1; i < model.Actors.Count; i++) if (story.Contains(model.Actors[i].Entity)) storyKept.Add(i);
+                // (and the island's guns that fire at the cars: Island CX's cannons)
+                if (options.Island.HuntingGuns is { } hunting)
+                    for (var i = 1; i < model.Actors.Count; i++) if (model.Actors[i].Entity == hunting.Entity) storyKept.Add(i);
                 var doomed = Enumerable.Range(1, model.Actors.Count - 1)
                     .Where(i => model.Actors[i].Entity != BuggyEntity && !(i == 1 && model.Actors[i].Entity == ZoeEntity && model.Actors[i].X == 0 && model.Actors[i].Z == 0))
                     .Where(i => !needed.Contains(i) && !storyKept.Contains(i) || biking && model.Actors[i].Entity == BikerEntity)
@@ -669,6 +675,19 @@ internal static class RaceTrackScenes
                     }
                     log.Add($"scene {scene}: the machine guns (actors {string.Join(", ", guns)}) on the knoll at ({g.X:0.#}, {g.Z:0.#}), {y} high, a Franco at each (actors {string.Join(", ", francos)})");
                 }
+            // the island's own guns that fire at the cars (RaceTrackIsland.HuntingGuns: Island CX's cannons on its corner towers), where they
+            // stand, their scripts emptied -- the race-track mode fires their bursts (gunner= and gunner_hunt=: at a car it picks outside)
+            if (options.Island.HuntingGuns is { } guns_)
+                foreach (var t in tracks.Take(1))
+                    for (var i = 1; i < model.Actors.Count; i++)
+                    {
+                        var gun = model.Actors[i];
+                        if (gun.Entity != guns_.Entity) continue;
+                        gun.Life = new byte[] { 0 }; gun.Track = new byte[] { 0 }; gun.Move = 0;
+                        t.Hunters.Add(new[] { scene, i, model.CubeX * IslandFile.CubeSize + gun.X, gun.Y + LBAAssembler.Terrain.ControlTower.CxTowerTrack.CannonMuzzle,
+                                              model.CubeY * IslandFile.CubeSize + gun.Z, (int)Math.Round(guns_.Reach * 512) });
+                        log.Add($"scene {scene}: the cannon (actor {i}) at ({gun.X}, {gun.Y}, {gun.Z}) fires at the cars outside within {guns_.Reach:0} cells");
+                    }
             // the gas monsters (Report.GasMonsters): the game's gas monster, made bigger (RaceTrackGasMonster), out of sight until the
             // race-track mode raises it out of the gas (gasmonster=) -- an actor of each scene it can be seen from: its own, and every one
             // whose cube comes within GasMonsterSeen of it (the engine draws a scene's actors only while it is the one about: the islets'
@@ -963,7 +982,8 @@ void comportement_1()
     {
         // (the Emperor's palace's scenes are made with its island, PalaceTrack.Install, before the track is built)
         if (island == RaceTrackIsland.Palace) return null;
-        if (island.Created)
+        // (an island the build makes that races in a copy of a game's scene -- Island CX's, CXTOWER -- gets that copy, as below)
+        if (island.Created && island.CopiesScene is null && island.CopiesScenes is null)
         {
             SendellWell.AddScene(gameDirectory, island.FirstScene);
             return $"scene {island.FirstScene}: {island.Name}'s own, made from scene 44's (island {island.IslandByte}), with its place on the holomap";
@@ -996,6 +1016,8 @@ void comportement_1()
             while (hqr.Count < entry) hqr.Slots.Add(new HqrFile.Slot());
             if (hqr.Count == entry) hqr.Add(record); else hqr.SetStored(entry, record);
             int at = (50 + from) * size, mine = (50 + to) * size;
+            // (a copy past the table's end has no place on the holomap -- Island CX's, 300: drawn on none, NoHolomap)
+            if (island.NoHolomap && arrows.Length < mine + size) continue;
             if (arrows.Length < Math.Max(at, mine) + size) throw new InvalidDataException("The holomap's position table is shorter than the game's own.");
             arrows.AsSpan(at, size).CopyTo(arrows.AsSpan(mine));
         }

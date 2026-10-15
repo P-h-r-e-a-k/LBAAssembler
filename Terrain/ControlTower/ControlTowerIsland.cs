@@ -41,13 +41,27 @@ internal static class ControlTowerIsland
 
     public sealed record Built(int RoomCells, int PassageCells, int Bodies, int Faces, int Boxes, int Roofs, int Floor, string Log);
 
+    // The race track's island (RaceTrackIsland.CxTower, the user, 2026-10-15: "Create a track for our CXTower island ... the track enters
+    // the underground section through a slope down through one of the doors ... loops around the underground section a few times then back
+    // out a door on the other side"): the room one ring of a hall round the control room -- the walls between the two halls and the empty
+    // corners under the island taken down, the corners floored and walled round as the halls are, what stood on the halls' floors gone (the
+    // doors' landings, the consoles, the grates' rims; the grates shut), the low outer walls built up to the tall ones' height -- under one
+    // roof just under the gas, open only where the road comes down through it (RoofHoles, the room's cells: CxTowerTrack.RoofHoles). No
+    // secret passage under it.
+    public sealed record RaceRoom(HashSet<(int X, int Z)> RoofHoles);
+    public const int ControlLo = 20, ControlHi = 41;   // the control room in the room's middle (its cells, both ways): left as it is
+    public const int TopLayer = 19;                     // the tall walls' top layer: the ring's walls all that high, its roof on them
+    private const int Side = 64;
+
     // Builds CXTOWER.ILE and CXTOWER.OBL into `outDirectory` from the game folder's scenes 180 and 181 and Island CX's island files
     // (`sourceDirectory`: where pristine ILOTCX.ILE/.OBL are, the game folder itself by default). (`roofed`: a roof over each hall and the
     // control room -- under the gas there is nothing to hide them from, so none by default; `openGrates`: false leaves the grates' bricks
     // in the floor.)
-    public static Built Build(string gameDirectory, string outDirectory, string? sourceDirectory = null, bool roofed = false, bool openGrates = true)
+    public static Built Build(string gameDirectory, string outDirectory, string? sourceDirectory = null, bool roofed = false, bool openGrates = true,
+        RaceRoom? race = null)
     {
         sourceDirectory ??= gameDirectory;
+        if (race is not null) { openGrates = false; roofed = false; }
         var log = new List<string>();
         var interiors = new Lba2Interiors(gameDirectory);
 
@@ -56,8 +70,10 @@ internal static class ControlTowerIsland
         foreach (var p in interiors.Placements(Room)) room.TryAdd((p.X, p.Y, p.Z), p.Brick);
         if (room.Count == 0) throw new InvalidDataException("The game folder has no control tower room (scene 181).");
         if (openGrates) foreach (var (x, z) in Grates) room.Remove((x, 0, z));
-        var passage = PassageCells(interiors);
-        log.Add($"the control tower's lower level: the room (scene {Room}) {room.Count} cells, the secret passage (scene {Passage}) {passage.Count} under it, stretched to its two grates");
+        if (race is not null) log.Add(RingRoom(room));
+        var passage = race is null ? PassageCells(interiors) : new Dictionary<(int X, int Y, int Z), int>();
+        log.Add($"the control tower's lower level: the room (scene {Room}) {room.Count} cells" +
+                (race is null ? $", the secret passage (scene {Passage}) {passage.Count} under it, stretched to its two grates" : ", the secret passage left out"));
 
         // ---- the island: Island CX as it is; the room under its cube, cell for cell, its highest wall a little under the gas
         var island = IslandFile.Load(Path.Combine(sourceDirectory, SourceIle));
@@ -65,7 +81,7 @@ internal static class ControlTowerIsland
         double X0 = anchor.X * 32768.0, Z0 = anchor.Z * 32768.0;
         var highest = room.Keys.Max(c => c.Y);
         var top = room.GroupBy(c => (c.Key.X, c.Key.Z)).ToDictionary(g => g.Key, g => g.Max(c => c.Key.Y));
-        var roofLayers = roofed ? Halls(top).Select(h => RoofLayer(h, top)).DefaultIfEmpty(0).Max() : 0;
+        var roofLayers = roofed ? Halls(top).Select(h => RoofLayer(h, top)).DefaultIfEmpty(0).Max() : race is not null ? TopLayer : 0;
         double Y0 = GasLevel - UnderGas - (Math.Max(highest, roofLayers) + 1) * 256.0;
         log.Add($"{SourceIle} as it is; the room's floor at {Y0:0}, its highest wall (layer {highest}) {UnderGas} under the gas at {GasLevel}, the passage's floor at {Y0 + (2 - PassageDrop) * 256.0:0}");
 
@@ -113,6 +129,39 @@ internal static class ControlTowerIsland
                 roofs++;
             }
         }
+        if (race is not null)
+        {
+            // (the race track's: one roof over the whole ring, on its walls' tops, open where the road comes down through it)
+            double ya = Y0 + (TopLayer + 1) * 256.0, yb = ya + 128;
+            int roofTop = Nearest(RoofColour), roofSide = Nearest(RoofEdge);
+            // (in bodies of 16 x 16 cells, as the room's: one body the whole cube wide was never drawn -- the engine leaves out a decor whose
+            // box's corners are all out of sight, and from under its middle they are)
+            for (var tz = 0; tz < Side / 16; tz++)
+                for (var tx = 0; tx < Side / 16; tx++)
+                {
+                    var list = new List<BrickBuilding.Face>();
+                    var plane = new Dictionary<(int U, int V), int>();
+                    for (var z = tz * 16; z < tz * 16 + 16; z++)
+                        for (var x = tx * 16; x < tx * 16 + 16; x++)
+                            if (!race.RoofHoles.Contains((x, z))) plane[(x, z)] = 0;
+                    // (seen only from under it -- the gas hides its top: its underside a face a cell, as the palace's floors are; the
+                    // engine's filler runs a face's depth straight across the screen, and the island's ground over the roof showed through
+                    // big faces running away from the camera, 2026-10-15)
+                    foreach (var (x, z) in plane.Keys)
+                    {
+                        var a = Corner(x, 0, z); var b = Corner(x + 1, 0, z + 1);
+                        list.Add(new BrickBuilding.Face(new[] { new Vector3(a.X, (float)ya, a.Z), new Vector3(b.X, (float)ya, a.Z), new Vector3(b.X, (float)ya, b.Z), new Vector3(a.X, (float)ya, b.Z) },
+                            roofSide, -Vector3.UnitY));
+                    }
+                    foreach (var (u0, v0, u1, v1, _) in BrickBuilding.Rectangles(plane))
+                    {
+                        var lo = Corner(u0, 0, v0); var hi = Corner(u1 + 1, 0, v1 + 1);
+                        roofBoxes.Add((lo.X, ya, lo.Z, hi.X, yb, hi.Z));
+                    }
+                    if (list.Count > 0) faces[200 + roofs++] = list;
+                }
+            log.Add($"one roof over the ring at {ya:0}, open over {race.RoofHoles.Count} cells where the road comes down through it");
+        }
 
         // ---- the bodies: ILOTCX.OBL, the building's on its end
         Directory.CreateDirectory(outDirectory);
@@ -122,7 +171,7 @@ internal static class ControlTowerIsland
         var next = HqrArchive.CountEntries(oblPath);
         var newBodies = new List<byte[]>();
         var (bodyCount, faceCount, decorsLeft) = BrickBuilding.AddBodies(island, faces, newBodies, next, g => g >= 200 ? "a roof" : g >= 100 ? "the passage" : "the room",
-            IslandDecors.MaxPerCubeOwnEngine);
+            IslandDecors.MaxPerCubeOwnEngine, drawnFrom: g => g >= 200 ? (int)Y0 : null, close: race is not null);
 
         // ---- the collision: the filled cells merged into boxes, and the roofs, each a decor with an empty body
         var empty = next + newBodies.Count;
@@ -146,6 +195,39 @@ internal static class ControlTowerIsland
         log.Add($"{OblFile}: {bodyCount} bodies of the building ({faceCount} faces{(roofs > 0 ? $", {roofs} roofs among them" : "")}) and an empty one for the {boxCount} collision boxes, from body {next} on" +
                 (decorsLeft > 0 ? $"; WARNING: {decorsLeft} decors left out (a cube full)" : ""));
         return new Built(room.Count, passage.Count, bodyCount, faceCount, boxCount, roofs, (int)Y0, string.Join("\n", log));
+    }
+
+    // The race track's ring (RaceRoom): inside the room's outer walls (its cells 1 to 61 each way) everything over the floor taken away, but
+    // the control room in the middle; the floor laid where there is none (the empty corners); the outer walls -- the room's edge cells, two
+    // deep on the east and south as the halls' are -- built up to TopLayer, the bricks of a tall wall's column (the north-east hall's east
+    // wall) where a wall has none of its own.
+    private static string RingRoom(Dictionary<(int X, int Y, int Z), int> room)
+    {
+        static bool Control(int x, int z) => x >= ControlLo && x <= ControlHi && z >= ControlLo && z <= ControlHi;
+        static bool Edge(int x, int z) => x <= 0 || z <= 0 || x >= Side - 2 || z >= Side - 2;
+        var floor = room.Where(c => c.Key.Y == 0 && !Edge(c.Key.X, c.Key.Z) && !Control(c.Key.X, c.Key.Z)).GroupBy(c => c.Value)
+            .OrderByDescending(g => g.Count()).Select(g => g.Key).First();
+        // (the wall's column: the north-east hall's east wall, its bricks layer by layer -- the one under where it has none)
+        var column = new int[TopLayer + 1];
+        for (var y = 0; y <= TopLayer; y++)
+            column[y] = room.TryGetValue((Side - 2, y, 10), out var b) ? b : y > 0 ? column[y - 1] : floor;
+        int cleared = 0, floored = 0, walled = 0;
+        var byColumn = room.Keys.GroupBy(c => (c.X, c.Z)).ToDictionary(g => g.Key, g => g.ToList());
+        for (var z = 0; z < Side; z++)
+            for (var x = 0; x < Side; x++)
+            {
+                if (Control(x, z) && byColumn.ContainsKey((x, z))) continue;   // (the control room; the empty cells round its corner the ring's)
+                if (Edge(x, z))
+                {
+                    for (var y = 0; y <= TopLayer; y++)
+                        if (!room.ContainsKey((x, y, z))) { room[(x, y, z)] = y > 0 && room.TryGetValue((x, y - 1, z), out var under) ? under : column[y]; walled++; }
+                    continue;
+                }
+                if (byColumn.TryGetValue((x, z), out var cells))
+                    foreach (var c in cells.Where(c => c.Y > 0)) { room.Remove(c); cleared++; }
+                if (!room.ContainsKey((x, 0, z))) { room[(x, 0, z)] = floor; floored++; }
+            }
+        return $"the race track's ring: {cleared} cells taken off the floor between the outer walls and the control room, {floored} of floor laid, {walled} added to the outer walls (all {TopLayer + 1} layers high)";
     }
 
     // A hall's floor and its walls round it, two cells deep, as far as the room goes (those a roof before it covers left out).

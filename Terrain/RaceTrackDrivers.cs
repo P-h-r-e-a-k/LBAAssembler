@@ -107,6 +107,15 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Of(RaceTrackCharacterCars.Tart, "The old Wannie", 2.0, 1.02, 0.97),
     };
 
+    // Island CX (2026-10-15): its own people's cars -- one of the Emperor's soldiers in his rocket launcher (the one to beat), a Franco
+    // trooper's tank and the Franco survivor on his raft
+    public static readonly List<RaceDriver> CxTower = new()
+    {
+        Of(RaceTrackCharacterCars.Launcher, "The Emperor's soldier", 0, 1.0, 1.0, main: true),
+        Of(RaceTrackCharacterCars.Tank, "The Franco trooper", -1.8, 0.99, 1.02),
+        Of(RaceTrackCharacterCars.Survivor, "The survivor", 1.8, 1.02, 0.97),
+    };
+
     // The Emperor's palace (2026-10-12): racing out of the palace ahead of the Dark Monk to his teleporter -- Stan in his time machine (the
     // one to beat), the pighead with the broom in his road sweeper (CharactersForTrack.txt) and the Emperor himself, fleeing his own palace,
     // a little to either side of the road's middle: the rooms' doors are two bricks wide. (The user's list has the palace's two-headed

@@ -86,6 +86,13 @@ internal static class RaceCarEngineFile
             text.Append($"gunner={string.Join(' ', g.Take(6))}\n");
             for (var k = 6; k + 3 < g.Length; k += 4) text.Append($"gunner_target={g[k]} {g[k + 1]} {g[k + 2]} {g[k + 3]}\n");
         }
+        // the island's own guns, each burst at a car outside that it picks (Island CX's cannons)
+        foreach (var h in track?.Hunters ?? new())
+        {
+            if (h.Length < 6) continue;
+            text.Append($"gunner={h[0]} {h[1]} 0 {h[2]} {h[3]} {h[4]}\n");
+            text.Append($"gunner_hunt={h[5]}\n");
+        }
         // the roulette wheel the lap runs through, its head turning and its ball rolling (Otringal's)
         if (raisedFile is not null && track?.Roulette is { Length: >= 15 } wheel)
         {

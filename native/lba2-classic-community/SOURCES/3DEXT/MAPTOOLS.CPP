@@ -22,6 +22,8 @@ S32	(*TerrainColHook)( S32 x, S32 z, S32 col ) = NULL ;
 // ... and for the camera: given the ground's height at (x, z), the height of what would hide the hero from an eye there (the
 // stretch of raised road he is on).
 S32	(*SightFloorHook)( S32 x, S32 z, S32 y ) = NULL ;
+// (a race-track mod's: whether a place is on its road under the ground -- no water, lava or gas there: GiveTerrainCodeJeu)
+S32	(*TerrainUnderHook)( S32 x, S32 y, S32 z ) = NULL ;
 
 S32	CalculAltitudeTerrain( S32 x, S32 z, S32 cj ) ;
 
@@ -248,8 +250,13 @@ U8	GiveTerrainCodeJeu( S32 x, S32 y, S32 z )
 	U8	codejeu ;
 	T_HALF_POLY *mappoly ;
 
-	// (the ground's own height: what stands on a floor above it isn't in its water or its lava)
-	if( CalculAltitudeTerrain(x,z,0)<(y-1) )	return 0 ;
+	// (the ground's own height: what stands on a floor above it isn't in its water or its lava -- nor what is far under it, on a floor
+	// under the ground: a race-track mod's road down to Island CX's halls, under its gas -- 2026-10-15)
+	{
+		S32	ground = CalculAltitudeTerrain(x,z,0) ;
+		if( ground<(y-1) OR ground>y+2000 )	return 0 ;
+		if( TerrainUnderHook AND ground>y+64 AND TerrainUnderHook(x,y,z) )	return 0 ;
+	}
 
 	// check ground poly codejeu/sample
 

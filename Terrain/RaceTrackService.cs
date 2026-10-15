@@ -154,6 +154,9 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Teleports = null,
         // Frogs: the giant frogs the lap drives through (RaceTrackFrog.Line; RACEMOD.CPP frog=), since 2026-10-14
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Frogs = null,
+        // Hunters: the island's own guns that fire at the cars outside (RaceTrackIsland.HuntingGuns; RACEMOD.CPP gunner= with gunner_hunt=), each
+        // [scene, the gun's actor, the muzzle's x, y, z (island units), its reach (units)] -- Island CX's cannons, since 2026-10-15
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Hunters = null,
         // RaisedLap: the lap's own points in Raised, the branches after them; RaisedBranches: each [its first and last point in Raised, the
         // lap's points there it leaves from and comes back onto] (RACEMOD.CPP raised_lap=, raised_branch=), since 2026-10-14
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? RaisedLap = null,
@@ -313,7 +316,8 @@ internal static class RaceTrackService
         // made, then each track its own -- BuildSeconds)
         var addPolar = tracks.Any(t => t.Options.Island.Dream) && !PolarInOriginals(gameDirectory);
         var setup = 0.5 + (addPolar ? PolarAddSeconds : 0) + (tracks.Any(t => t.Options.Island == RaceTrackIsland.Sendell) ? 0.4 : 0)
-                    + (tracks.Any(t => t.Options.Island == RaceTrackIsland.Palace) ? PalaceAddSeconds : 0);
+                    + (tracks.Any(t => t.Options.Island == RaceTrackIsland.Palace) ? PalaceAddSeconds : 0)
+                    + (tracks.Any(t => t.Options.Island == RaceTrackIsland.CxTower) ? CxTowerAddSeconds : 0);
         var whole = setup + tracks.Sum(t => BuildSeconds(t.Options.Island));
         try
         {
@@ -341,6 +345,11 @@ internal static class RaceTrackService
             {
                 progress?.Report(new((setup - 0.3) / whole, "The Emperor's palace: making the island and its scenes"));
                 made.AddRange(LBAAssembler.Terrain.Palace.PalaceTrack.Install(gameDirectory, BackupSuffix));
+            }
+            if (tracks.Any(t => t.Options.Island == RaceTrackIsland.CxTower))
+            {
+                progress?.Report(new((setup - 0.3) / whole, "Island CX: making the island, its halls one ring under the gas"));
+                made.AddRange(LBAAssembler.Terrain.ControlTower.CxTowerTrack.Install(gameDirectory, BackupSuffix));
             }
 
             var session = new BuildSession();
@@ -838,7 +847,7 @@ internal static class RaceTrackService
                     var s = report.GasMonsters[pairs.Key];
                     var home = pairs.OrderByDescending(g => g.Length > 4 ? g[4] : 1).ToList();
                     return new[] { home[0][0], home[0][1], home[0][2],
-                            (int)Math.Round(s.X * 512), (int)Math.Round(s.Z * 512), (int)Math.Round(s.BiteX * 512), (int)Math.Round(s.BiteZ * 512), (int)Math.Round(s.BiteY), 0, s.FirstAnim }
+                            (int)Math.Round(s.X * 512), (int)Math.Round(s.Z * 512), (int)Math.Round(s.BiteX * 512), (int)Math.Round(s.BiteZ * 512), (int)Math.Round(s.BiteY), (int)Math.Round(s.FootY), s.FirstAnim }
                         .Concat(home.Skip(1).SelectMany(g => new[] { g[0], g[1] })).ToArray();
                 }).ToList()
                 : null,
@@ -860,6 +869,7 @@ internal static class RaceTrackService
                     (int)Math.Round(t[4]), (int)Math.Round(t[5]), (int)Math.Round(t[6] * 512), (int)Math.Round(t[8]), (int)Math.Round(t[7] * 512), (int)Math.Round(t[9]) }).ToList()
                 : null,
             Frogs: report.Frogs.Count(f => f.Body >= 0) > 0 ? report.Frogs.Where(f => f.Body >= 0).Select(RaceTrackFrog.Line).ToList() : null,
+            Hunters: scenes.Hunters is { Count: > 0 } hunters ? hunters.ToList() : null,
             RaisedLap: raised && report.RaisedBranches.Count > 0 ? report.RaisedLap : null,
             RaisedBranches: raised && report.RaisedBranches.Count > 0 ? report.RaisedBranches.ToList() : null);
     }
@@ -940,6 +950,8 @@ internal static class RaceTrackService
     private const double PolarAddSeconds = 4;
     // (and making the Emperor's palace's island: its rooms, furniture, domes and hill)
     private const double PalaceAddSeconds = 3.5;
+    // (and making Island CX's: the control tower's halls under it)
+    private const double CxTowerAddSeconds = 2;
     private static double BuildSeconds(RaceTrackIsland island) =>
         island == RaceTrackIsland.Desert ? 16 : island == RaceTrackIsland.Citadel ? 8.3 : island == RaceTrackIsland.Knartas ? 8.1 : island == RaceTrackIsland.Otringal ? 8.4
         : island == RaceTrackIsland.Polar ? 5.4 : island == RaceTrackIsland.Volcano ? 2.5 : island == RaceTrackIsland.Palace ? 6 : island == RaceTrackIsland.Sendell || island == RaceTrackIsland.Moon ? 0.8 : 1.4;
@@ -1007,6 +1019,12 @@ internal static class RaceTrackService
         {
             LBAAssembler.Terrain.Palace.PalaceIsland.Build(gameDirectory, gameDirectory);
             gone += $" {LBAAssembler.Terrain.Palace.PalaceIsland.IleFile} is the Palace island again, without its track.";
+        }
+        // (and Island CX's: the control tower's lower level under it again, as Tools makes it)
+        if (File.Exists(Path.Combine(gameDirectory, LBAAssembler.Terrain.ControlTower.ControlTowerIsland.IleFile)))
+        {
+            LBAAssembler.Terrain.ControlTower.ControlTowerIsland.Build(gameDirectory, gameDirectory);
+            gone += $" {LBAAssembler.Terrain.ControlTower.ControlTowerIsland.IleFile} is Island CX with its control tower's lower level again, without its track.";
         }
         foreach (var made in new[] { InfoFile, RaceTrackCharacterCars.CatalogueFile })
             if (File.Exists(Path.Combine(gameDirectory, made))) File.Delete(Path.Combine(gameDirectory, made));
