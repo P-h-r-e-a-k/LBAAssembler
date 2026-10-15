@@ -803,13 +803,21 @@ static S32 s_fallFootNext = 0, s_fallLipNext = 0;
 // (RaceMod_SpeedFactor: the accelerator held keeps it there), then comes back down to its own over RACE_PANEL_FADE_MS.
 // Twinsen's car by its four wheels where BUGGY.CPP has them. (The opponents' lines keep to the race lanes: Volcano Island's panel is in
 // its pit lane, "so if cars want the speed boost they have to deviate from the normal racing line".)
+// (Since 2026-10-15 at least RACE_PANEL_LIFT times the car's own top speed, whichever is faster -- the user, with a car set up to 110 km/h:
+// "Our current boost pad isn't fast enough so we'll need to increase the speed boost it offers": 120 km/h was hardly a boost for it.)
 #define RACE_MAX_PANELS 8
 #define RACE_PANEL_KMH 120
-#define RACE_PANEL_SPEED (RACE_PANEL_KMH * 5120.0 / 36)
+#define RACE_PANEL_LIFT 1.7
+#define RACE_PANEL_SPEED PanelSpeed()
 #define RACE_PANEL_ABOVE 700               // the car this far over the panel or under it is on it (the deck's slope, the car's bounce)
 #define RACE_PANEL_HOLD_MS 4500
 #define RACE_PANEL_FADE_MS 3500
-typedef struct { double X, Y, Z, Dx, Dz, HalfLen, HalfWidth; int OnHero; } T_RACE_PANEL;
+// (boostpanel='s eighth number, when given: the panel's own lift, hundredths -- Wannies Island's round the loop its shortcut jumps,
+// stronger than the shortcut's, "so if driven well it's the same as if not quicker than taking the jump", 2026-10-15. Its least speed is
+// RACE_PANEL_KMH as much stronger.)
+typedef struct { double X, Y, Z, Dx, Dz, HalfLen, HalfWidth, Lift; int OnHero; } T_RACE_PANEL;
+static double s_panelLift = RACE_PANEL_LIFT;     // the lift of the panel the car was last on
+static double PanelSpeed(void);
 static T_RACE_PANEL s_panels[RACE_MAX_PANELS];
 static int s_nbPanels = 0;
 #define RACE_PANEL_PILOT_MS (RACE_PANEL_HOLD_MS + RACE_PANEL_FADE_MS) // (the test pilot holds the accelerator while it lasts, as a player would)
@@ -1087,6 +1095,8 @@ static int s_nbJumpCams = 0;
 #define RACE_ARC_CAM_HOLD 500      // ms it stays there after the car lands
 typedef struct {
     int Foot, Lip, Land, LandFoot, Side;
+    int FlightMs;                  // arcjump='s sixth number: the flight over the gap takes this long (0: at the car's speed) -- a high leap
+                                   // that hangs in the air: Wannies Island's shortcut onto the lap above it, 2026-10-15
     double *S;                     // the way's distance along the ground from the foot, point by point
 } T_RACE_ARC;
 static T_RACE_ARC s_arcs[RACE_MAX_ARCS];
@@ -2193,8 +2203,8 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "arcjump")) {
             T_RACE_ARC *a = &s_arcs[s_nbArcs];
-            a->Side = 1;
-            if (s_nbArcs < RACE_MAX_ARCS && sscanf(v, "%d %d %d %d %d", &a->Foot, &a->Lip, &a->Land, &a->LandFoot, &a->Side) >= 4) s_nbArcs++;
+            a->Side = 1; a->FlightMs = 0;
+            if (s_nbArcs < RACE_MAX_ARCS && sscanf(v, "%d %d %d %d %d %d", &a->Foot, &a->Lip, &a->Land, &a->LandFoot, &a->Side, &a->FlightMs) >= 4) s_nbArcs++;
         }
         else if (!strcmp(key, "open_area")) {
             T_RACE_OPEN *a = &s_open[s_nbOpen];
@@ -2321,6 +2331,9 @@ static void Load(const char *path, int carOnly = 0) {
                 T_RACE_PANEL *p = &s_panels[s_nbPanels++];
                 const double l = sqrt((double)dx * dx + (double)dz * dz);
                 p->X = x; p->Y = y; p->Z = z; p->Dx = dx / l; p->Dz = dz / l; p->HalfLen = hl; p->HalfWidth = hw; p->OnHero = 0;
+                int lift = 0, used = 0;
+                sscanf(v, "%*d %*d %*d %*d %*d %*d %*d%n", &used);
+                p->Lift = used > 0 && sscanf(v + used, "%d", &lift) == 1 && lift > 100 ? lift / 100.0 : RACE_PANEL_LIFT;
             }
         }
         else if (!strcmp(key, "lavaball")) {
@@ -4086,11 +4099,17 @@ static S32 RaceArc(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
     s_arcTime = TimerRefHR;
     if (dt < 0) dt = 0;
     if (dt > 0.1) dt = 0.1;
-    s_arcS += s_arcV * dt;
+    // (over the gap in its own time, when it has one)
+    const double before = s_arcS;
+    {
+        const double lip = a->S[a->Lip - a->Foot], land = a->S[a->Land - a->Foot];
+        const double v = a->FlightMs > 0 && s_arcS >= lip && s_arcS < land ? (land - lip) * 1000.0 / a->FlightMs : s_arcV;
+        s_arcS += v * dt;
+    }
     // (the frog's mouth -- its jaw's lip -- come to shut: thrown back, FrogBounce)
     if (s_frog.On && s_arcOn == s_frog.Arc) {
         const double lip = a->S[a->Land - a->Foot] - RACE_FROG_LIP;
-        if (s_arcS - s_arcV * dt < lip && s_arcS >= lip && !FrogOpen(TimerRefHR)) {
+        if (before < lip && s_arcS >= lip && !FrogOpen(TimerRefHR)) {
             double x, y, z, dx, dz, slope;
             ArcPlace(a, lip, s_arcAcross, &x, &y, &z, &dx, &dz, &slope);
             s_arcOn = -1;
@@ -5852,7 +5871,13 @@ S32 RaceMod_BlocksInventory(void) {
 
 // BUGGY.CPP RaceSpeed: how much faster or slower the player's car is than its setup (its top speed and pull): Gazogem fuel and the
 // jet-pack, or shrunk by an opponent's lightning.
-// A boost panel's lift on the car's top speed now: RACE_PANEL_KMH for RACE_PANEL_HOLD_MS after it was last on one, then eased back to its own.
+// A boost panel's speed (units/s): RACE_PANEL_KMH, or RACE_PANEL_LIFT times the car's own top speed where that is faster.
+static double PanelSpeed(void) {
+    const double kmh = RACE_PANEL_KMH * s_panelLift / RACE_PANEL_LIFT * 5120.0 / 36, own = s_car.Gears >= 1 ? s_car.GearTop[s_car.Gears - 1] * s_panelLift : 0;
+    return own > kmh ? own : kmh;
+}
+
+// A boost panel's lift on the car's top speed now: PanelSpeed for RACE_PANEL_HOLD_MS after it was last on one, then eased back to its own.
 static double PanelFactor(S32 now) {
     const S32 since = now - s_panelAt;
     if (since < 0 || since >= RACE_PANEL_HOLD_MS + RACE_PANEL_FADE_MS || s_car.Gears < 1) return 1;
@@ -6326,6 +6351,8 @@ static void BoostPanels(S32 now, int driving) {
                 if (fabs(dx * p->Dx + dz * p->Dz) <= p->HalfLen && fabs(-dx * p->Dz + dz * p->Dx) <= p->HalfWidth) on++;
             }
         if (on >= 2 && ListBuggy[0].Speed >= 0) {
+            // (a stronger panel's lift is kept, a weaker one's taken only once the stronger's has run down)
+            if (p->Lift >= s_panelLift || now - s_panelAt > RACE_PANEL_HOLD_MS) s_panelLift = p->Lift;
             if (ListBuggy[0].Speed < RACE_PANEL_SPEED) ListBuggy[0].Speed = (S32)RACE_PANEL_SPEED;
             if (!p->OnHero) Log_Info("[racemod] boost panel %d: %d of the car's wheels on it -- %d km/h", i + 1, on, (int)((ListBuggy[0].Speed * 36 + 2560) / 5120));
             p->OnHero = 1; s_panelAt = now;

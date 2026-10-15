@@ -693,7 +693,8 @@ internal sealed class TrackRoad
     // A white stripe along a raised road (RaceTrackPlan.PitStripe): its first and last point and how far across (cells), or null.
     public (int From, int To, double Offset)? Stripe;
     // Boost panels on a raised road (RaceTrackPlan.BoostPanels): each one's first and last point and how far across it reaches (cells).
-    public List<(int From, int To, double Lo, double Hi)> Boosts = new();
+    // (Lift: the panel's own lift on the car's top speed, 0 the engine's own -- RACEMOD.CPP boostpanel='s eighth number)
+    public List<(int From, int To, double Lo, double Hi, double Lift)> Boosts = new();
     public double AsphaltHalf, CurbHalf, VergeHalf, Blend;
     public int Count => X.Length;
     public double Length;
@@ -900,7 +901,7 @@ internal static class RaceTrackBuilder
             main.Stripe = (PlanPoint(plan, main, (int)stripeFrom), PlanPoint(plan, main, (int)stripeTo), stripeAt);
         if (planned && main.Raised is not null && plan.BoostPanels is { Length: > 0 } panels)
             foreach (var p in panels.Where(p => p.Length >= 4))
-                main.Boosts.Add((PlanPoint(plan, main, (int)p[0]), PlanPoint(plan, main, (int)p[1]), Math.Min(p[2], p[3]), Math.Max(p[2], p[3])));
+                main.Boosts.Add((PlanPoint(plan, main, (int)p[0]), PlanPoint(plan, main, (int)p[1]), Math.Min(p[2], p[3]), Math.Max(p[2], p[3]), p.Length > 4 ? p[4] : 0));
 
         if (plan.PitA is { } pa && plan.PitB is { } pb) roads.Add(MakePit(main, plan, pa, pb, options, report));
 
@@ -2466,9 +2467,11 @@ internal static class RaceTrackBuilder
             if (to > r.Length) avoid.Add((0, to - r.Length));
         }
         // (not on the stretch of the lap a branch of the raised road goes round -- Wannies Island's shortcut: a car taking it doesn't cross it)
+        // (and a branch that runs past the start line -- Wannies Island's pit lane: the stretch round the line)
         foreach (var bp in report.BranchPlans)
         {
             double a = Ahead(bp.From) - 4, b = Ahead(bp.To) + 4;
+            if (Ahead(bp.From) > Ahead(bp.To)) { avoid.Add((a, r.Length)); avoid.Add((0, b)); continue; }
             avoid.Add((a, b));
             if (a < 0) avoid.Add((a + r.Length, r.Length));
             if (b > r.Length) avoid.Add((0, b - r.Length));
@@ -4442,6 +4445,16 @@ internal static class RaceTrackBuilder
             if (across > 0) right = Math.Max(right, across + pit.VergeHalf); else left = Math.Max(left, -across + pit.VergeHalf);
             if (across > 0) rightCurb = Math.Max(rightCurb, across + pit.CurbHalf); else leftCurb = Math.Max(leftCurb, -across + pit.CurbHalf);
         }
+        // (a branch of the raised road beside the line -- Wannies Island's pit lane: the line across it too)
+        foreach (var bp in report.BranchPlans)
+            for (var i = 0; i < bp.X.Length; i++)
+            {
+                double ax = bp.X[i] - x, az = bp.Z[i] - z, along = ax * dx + az * dz, across = ax * nx + az * nz;
+                if (Math.Abs(along) > 0.6 || Math.Abs(across) > 20 || Math.Abs(across) < 0.5) continue;
+                var h = bp.Run.Halfs is { } halfs && i < halfs.Length ? halfs[i] : 2.5;
+                if (across > 0) { right = Math.Max(right, across + h + 0.5); rightCurb = Math.Max(rightCurb, across + h); }
+                else { left = Math.Max(left, -across + h + 0.5); leftCurb = Math.Max(leftCurb, -across + h); }
+            }
         // (no further across than another part of the lap: just out of the lava lake's corner the line's end reached the road the grid
         // stands on, and a car leaving the grid crossed it there first)
         var main = roads[0];
@@ -4968,7 +4981,8 @@ internal static class RaceTrackBuilder
         foreach (var j in branchArcs ?? Array.Empty<int[]>())
         {
             var ids = j.Take(4).Select(k => span.IndexOf(k) is var at and >= 0 ? at + offset : -1).ToArray();
-            if (j.Length >= 4 && ids.All(i => i >= 0) && ids[0] < ids[1] && ids[1] < ids[2] && ids[2] < ids[3]) report.ArcRaised.Add(j.Length > 4 ? ids.Append(j[4]).ToArray() : ids);
+            // (its camera's side, and how long its flight takes when it has its own time: the engine's fifth and sixth numbers)
+            if (j.Length >= 4 && ids.All(i => i >= 0) && ids[0] < ids[1] && ids[1] < ids[2] && ids[2] < ids[3]) report.ArcRaised.Add(ids.Concat(j.Skip(4).Take(2)).ToArray());
             else report.Notes.Add("WARNING: a carried jump of a branch of the raised road is not along it in one piece: the engine won't carry the car over it");
         }
         // (the carried jumps' feet and lips as places in that list: the engine's way over each)
@@ -4987,8 +5001,9 @@ internal static class RaceTrackBuilder
             var mid = At(r, b.From + len / 2);
             var across = (b.Lo + b.Hi) / 2;
             double cx = r.X[mid] - r.Tz[mid] * across, cz = r.Z[mid] + r.Tx[mid] * across;
-            report.BoostPanels.Add(new[] { (int)Math.Round(cx * 512), (int)Math.Round(r.H[mid]), (int)Math.Round(cz * 512), (int)Math.Round(r.Tx[mid] * 1000), (int)Math.Round(r.Tz[mid] * 1000),
-                                           (int)Math.Round(len * o.Spacing * 512 / 2), (int)Math.Round((b.Hi - b.Lo) * 512 / 2) });
+            var panel = new[] { (int)Math.Round(cx * 512), (int)Math.Round(r.H[mid]), (int)Math.Round(cz * 512), (int)Math.Round(r.Tx[mid] * 1000), (int)Math.Round(r.Tz[mid] * 1000),
+                                (int)Math.Round(len * o.Spacing * 512 / 2), (int)Math.Round((b.Hi - b.Lo) * 512 / 2) };
+            report.BoostPanels.Add(b.Lift > 0 ? panel.Append((int)Math.Round(b.Lift * 100)).ToArray() : panel);
             report.Notes.Add($"a boost panel at ({cx:0.0}, {cz:0.0}), {len * o.Spacing:0.0} cells long, {b.Hi - b.Lo:0.0} wide, {b.Lo:0.0}..{b.Hi:0.0} across the road");
         }
         if (o.NewBodyBase < 0) { report.Notes.Add("WARNING: no place for the raised road's bodies was prepared (the island's OBL wasn't counted) -- the raised road has no pieces."); return; }
@@ -5160,7 +5175,7 @@ internal static class RaceTrackBuilder
         foreach (var j in run.ArcJumps ?? Array.Empty<int[]>())
             if (j.Length >= 4) for (var k = Math.Max(0, j[1] + 1); k < Math.Min(n, j[2]); k++) { b.Gap[k] = true; b.Void[k] = true; b.Arc[k] = true; }
         foreach (var p in (run.BoostPanels ?? Array.Empty<double[]>()).Where(p => p.Length >= 4))
-            b.Boosts.Add(((int)p[0], (int)p[1], Math.Min(p[2], p[3]), Math.Max(p[2], p[3])));
+            b.Boosts.Add(((int)p[0], (int)p[1], Math.Min(p[2], p[3]), Math.Max(p[2], p[3]), p.Length > 4 ? p[4] : 0));
         b.Hidden = new bool[n];
         foreach (var span in (run.Hidden ?? Array.Empty<int[]>()).Where(s => s.Length >= 2))
             for (var k = Math.Max(0, span[0]); k <= Math.Min(n - 1, span[1]); k++) b.Hidden[k] = true;

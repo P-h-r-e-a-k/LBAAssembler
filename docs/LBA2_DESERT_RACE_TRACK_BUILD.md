@@ -3770,6 +3770,38 @@ is the boost pad's speed, carried over the jump.
 
 ![Over the jump](racetrack/wannies/shortcut_jump.png)
 
+### Second round: two turns down the tower, a straight start with its own pit lane, a shortcut that is one (2026-10-15)
+
+The user: "Let's reduce the downward loops around the elevator by one so it's a slightly steeper spiral downwards. Let's also refine the
+start/finish line ... The main path now goes straight on, with a thinner pitlane to the side"; then: "change the jump section so it acts
+as a short cut. Let's add some boost pads around the other loop of track that the jump skips so if driven well it's the same as if not
+quicker than taking the jump"; and: "Our current boost pad isn't fast enough so we'll need to increase the speed boost it offers".
+
+- *Two turns down the tower* (three before): 257 cells from 25,000 to 7,000, 13.7 % (11.5 % before). The lap is 685 cells (812).
+- *The start straight* goes straight on south from the helix (x 558.5) over the lava east of the pier -- no more swing west onto the
+  pier and back -- the start line on it at z 497 under the gantry, the grid behind it. *The pit lane* is a branch of the raised road of
+  its own, half as wide (2.25 cells either side): off the straight's west side just out of the helix, down the pier's east side (x 551)
+  past the start line, the opponents' three waiting places along it, back onto the straight before it bends onto the east island. The
+  start line reaches across it too (a car in the pits crosses it), and no checkpoint is on the stretch it runs beside -- that stretch
+  runs round the lap's seam now, which the builder's checkpoint rule for a branch didn't allow for before.
+- *The shortcut*: off the lap where it did before, over its boost pad, then up a ramp north-north-west to a take-off at (510, 533) -- the
+  user's pink -- and a leap that hangs in the air 2.4 s, curving west over the S's turn, down onto the lap's road past the turn (the
+  other pink): the loop round the west island's south is left out (82 cells instead of 196). For the leap to be up onto the lap (no
+  jump lands lower), the lap climbs only gently round that loop (4.5 %) and 13.5 % elsewhere, the start straight at 6,500 and the
+  helix's foot at 7,000 (2,600 and 3,300 before): it takes off at 15,390 and comes down at 18,187. The leap's time in the air is its own
+  (the engine's arcjump='s sixth number: the car carried over the gap at the speed that takes), the camera beside it.
+- *Round the loop it leaves out*: three boost pads (just past the fork, on the way west past the corner, on the S's lower leg), stronger
+  than the shortcut's own: 2.1 times the car's top speed. With the user's car (110 km/h) the loop, boosted all round, takes about 3.1 s
+  from the fork to where the leap comes down, the shortcut about 3.4 s; with the setup's default car (34 km/h) the shortcut is still
+  about a second and a half the quicker.
+- *A boost pad's speed* is now at least 1.7 times the car's own top speed (RACEMOD.CPP `PanelSpeed`), 120 km/h at the least as before
+  (for a car of the default setup nothing changes); a pad with a lift of its own (boostpanel='s eighth number, hundredths) has its least
+  speed as much higher -- the loop's, 148 km/h for the default car.
+- Checked with the test pilot: a lap of 70.5 s (one bounce at the frog) over the loop's pads; taken off its line at the fork, on the
+  shortcut's pad, the leap carried (two scene changes in the air), down on the S. The other 13 tracks build the same, byte for byte.
+
+![The start: the gantry over the straight, the pit lane beside it](racetrack/wannies/start_pitlane.png)
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove
