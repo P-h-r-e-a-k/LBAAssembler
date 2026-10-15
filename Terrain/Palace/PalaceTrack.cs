@@ -71,12 +71,12 @@ internal static class PalaceTrack
 
     private static readonly string[] Intro =
     {
-        "The Dark Monk is in the palace, and he's killing everybody! I have to get out: through the rooms, out of the round window and over the rooftops to his teleporter at the harbour!",
-        "Le Moine Noir est dans le palais, et il tue tout le monde ! Je dois sortir : par les salles, par la fenêtre ronde et par les toits jusqu'à son téléporteur au port !",
-        "Der Schwarze Mönch ist im Palast und bringt alle um! Ich muss hier raus: durch die Säle, aus dem runden Fenster und über die Dächer zu seinem Teleporter am Hafen!",
-        "¡El Monje Negro está en el palacio y está matando a todos! Tengo que salir: por las salas, por la ventana redonda y por los tejados hasta su teletransportador en el puerto!",
-        "Il Monaco Nero è nel palazzo e sta uccidendo tutti! Devo uscire: attraverso le sale, dalla finestra rotonda e sui tetti fino al suo teletrasporto al porto!",
-        "O Monge Negro está no palácio e está a matar toda a gente! Tenho de sair: pelas salas, pela janela redonda e pelos telhados até ao teletransportador dele no porto!",
+        "The Dark Monk is in the palace, and he's killing everybody! I have to get out: through the rooms, up the stairs, past the throne and back down, out of the round window and into his teleporter!",
+        "Le Moine Noir est dans le palais, et il tue tout le monde ! Je dois sortir : par les salles, en haut de l'escalier, devant le trône et redescendre, par la fenêtre ronde jusque dans son téléporteur !",
+        "Der Schwarze Mönch ist im Palast und bringt alle um! Ich muss hier raus: durch die Säle, die Treppe hinauf, am Thron vorbei und wieder hinunter, aus dem runden Fenster in seinen Teleporter!",
+        "¡El Monje Negro está en el palacio y está matando a todos! Tengo que salir: por las salas, escaleras arriba, delante del trono y otra vez abajo, por la ventana redonda hasta su teletransportador!",
+        "Il Monaco Nero è nel palazzo e sta uccidendo tutti! Devo uscire: attraverso le sale, su per le scale, davanti al trono e di nuovo giù, dalla finestra rotonda fino al suo teletrasporto!",
+        "O Monge Negro está no palácio e está a matar toda a gente! Tenho de sair: pelas salas, escadas acima, diante do trono e de novo para baixo, pela janela redonda até ao teletransportador dele!",
     };
     private static readonly string[] Lose =
     {

@@ -373,13 +373,53 @@ cells across and 7,000 to 12,000 tall, their tops round the race's road's height
 before. Their collision is their shape from above, as before. The busiest cube holds 551 objects of 1,000; the outside has 131 bodies.
 See `docs/LBA2_DESERT_RACE_TRACK_BUILD.md` ("The rooftops") for pictures and the frame times.
 
+## No outside, and an upstairs (2026-10-15)
+
+The user: "The outside of the palace track just isn't working, and we've tried a few revisions, let's keep a copy of it so we can rebuild
+it in the future if we need to, but for now drop it totally. Let's add an upstairs to the inside of the palace. Let's keep the same basic
+colour theming, but maybe add a couple of bedrooms, a throne room, and any other rooms you can think of that would fit with a palace
+theme."
+
+- **The outside off**: `Build`'s `outside` is false by default now: no turrets or rooftops (`PalaceOutside`), no Dark Monk's teleporter
+  ring on the harbour's pillar (`PalaceTeleporter`), no flat ways across the hilltop's rocks. The code stays: `outside: true` (or
+  `ScriptRoundTrip palace ... --outside`) puts it back. The race's outside is archived in `docs/racetrack/palace_outside_archive` (its
+  plan and design script) and the git tag `palace-outside-v12`.
+- **The upstairs** (`PalaceUpstairs`): a second storey on the sixteen rooms' own grid. Each room of the ground floor is a slot upstairs,
+  9 x 9 bricks inside (36 cells) between the same four-brick wall bands, 11 layers high (7,040). Its floor fills the layer where the
+  rooms' roofs were (the ground floor's ceiling under it, in the stone the roofs' undersides had), its top at 26,640, the roof's rock over
+  it all: the hill's plateau is at 26,896 now (19,216 before).
+  - The rooms: the library (over 151), the music room (152), the princess's bedroom (153), the Emperor's bedchamber (154), his dressing
+    room and bath (158), the throne room (over 156, 157, 160 and 161, the walls between them gone: 22 x 22 bricks), the treasury (162),
+    the armoury (166), the banquet hall (over 164 and 165: 22 x 9) and the chapel (163).
+  - Two of the ground floor's rooms are stairwells, open to the roof: 155 and 159. Each has a column in its middle (red marble, gold bands
+    a storey apart) and the race's ramp winds round it.
+  - The doors upstairs (`Doors`): the rows' and columns' doors on the ground floor's lines (bricks 3..6 of a room's inside), the
+    stairwells' on their ramps' lines, the treasury's into the throne room two bricks south (clear of the throne's dais).
+  - The ground floor's doors from 159 to 155 and to 160, and from 163 to 164, are walled up (`Closed`): the rooms the race comes down into
+    -- 159, 163 and the long hall -- are reached only by the stairs.
+  - The long hall goes up with it: its walls on up to the roof, two storeys high, its round window where it was.
+  - The colours: the floor's red along the race's way (door to door, square-cornered, as wide as the doors), gold tiles along it, the
+    greens elsewhere; rugs in the bedrooms, the library, the throne room (a purple runner up to the throne), the chapel's aisle and under
+    the banquet table; the walls in the ground floor's bands (skirting, gold trim, wallpaper, trim, cornice) counted from the upstairs'
+    floor. Pictures of the game's characters where a wall has room (`PalacePortraits.Spots` again, from the upstairs' floor).
+  - The furniture (`PalaceFurniture.Upstairs`, made here -- the game has none of it): four-poster beds, wardrobes, a dressing table and
+    mirror, a bath on gold feet, bookshelves full of books, a globe, a grand piano, a harp, music stands, chairs, the throne on a three-step
+    dais, columns, chandeliers, a banquet table with a gold runner, plates and goblets, fireplaces, gold piles, gem pedestals, chests, suits
+    of armour, weapon racks, an altar and pews; and the ground floor's candelabras, candles, plants and benches. Each in the strips the
+    race's way leaves, a box in the cars' way (the chandeliers and candles none; a stairwell's column's narrower than it is, so a car on
+    the ramp by its inner rail never touches it).
+- Built: 133 bodies of the rooms (44,334 faces), the busiest cube 285 objects of 1,000 (577 with the outside).
+
+![The upstairs from above (north to the left, east up): the race's way red, the two ramps in their stairwells](racetrack/palace/upstairs_top.png)
+![The ground floor from above](racetrack/palace/ground_floor_top.png)
+
 ## Making it
 
 - Tools > **LBA2: Palace island (Otringal's palace)…** (`MainWindow.Palace.cs`) adds the two files to the game folder, builds them again,
   or takes them out. It is refused while test edits or the 1996 demo are open. The new island appears in the Island list
   (Otringal's palette). Since 2026-10-12 the editor's 3D view also gives it Otringal's sky, cloud sea and light (`3DEXT/RENDERER_API.CPP`
   takes `PALACE` for Otringal's slot, as it takes `CXTOWER` for Island CX's); it had Citadel Island's sea and sky, the first slot's.
-- `ScriptRoundTrip palace <game folder> <out folder> [source folder] [--no-roofs] [--no-outside] [--no-furniture]` builds the same files
+- `ScriptRoundTrip palace <game folder> <out folder> [source folder] [--no-roofs] [--outside] [--no-furniture] [--no-upstairs]` builds the same files
   into another folder. The source folder holds pristine `OTRINGAL.ILE` and `.OBL` (the game folder by default). `--no-roofs` leaves the
   roofs (and the outside) off so you can see inside, as in the second picture.
 - Pictures: `ScriptRoundTrip islandmesh <ile> <obl> 31 <out.bin> [x0 z0 x1 z1] [--no-terrain] [--boxes] [--caps y]` and

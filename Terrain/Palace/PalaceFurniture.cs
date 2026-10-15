@@ -224,6 +224,398 @@ internal static class PalaceFurniture
         return new Made(made, boxes, log);
     }
 
+    // ---- the upstairs' furniture (PalaceUpstairs: the user, 2026-10-15, "maybe add a couple of bedrooms, a throne room, and any other
+    // rooms you can think of that would fit with a palace theme") -- no blocks of the game's to follow: each piece made here, in the rooms'
+    // own colours (the gold, the reds, the marbles, the wood of the ground floor's furniture).
+    public enum Up
+    {
+        Bed, GrandBed, Wardrobe, Bookshelf, ReadingTable, Chair, Globe, Piano, Harp, MusicStand, Bathtub, DressingTable, Throne, Column,
+        Candelabra, Chandelier, GoldPile, Pedestal, Chest, Armour, WeaponRack, Altar, Pew, Candle, Plant, Fireplace, BanquetTable, Bench, StairColumn,
+    }
+
+    // A piece upstairs: its kind, room (tile), the middle of its foot (palace cells, fractions of one; the floor's layer), the way it looks
+    // (its front: away from the wall it stands at), its depth along that way and width across it (cells) and height (layers: its box, if
+    // `Solid`; a chandelier hangs from `High` up).
+    public sealed record UpPiece(Up Kind, int Tile, double X, double Y, double Z, int Nx, int Nz, double Depth, double Width, double High, bool Solid = true);
+
+    private static readonly (float R, float G, float B) Linen = (226, 220, 200), Royal = (150, 30, 36), RoyalDark = (110, 22, 30), DarkWood = (74, 44, 24),
+        PianoBlack = (28, 24, 26), Ivory = (232, 226, 210), Steel = (150, 156, 164), SteelDark = (100, 104, 112), Water = (70, 120, 170), Enamel = (236, 236, 232),
+        Ruby = (200, 30, 40), Emerald = (40, 160, 80), Sapphire = (40, 70, 190), Velvet = (96, 40, 120);
+    private static readonly (float R, float G, float B)[] Books = { (140, 40, 30), (40, 70, 120), (50, 100, 50), (170, 130, 60), (90, 50, 90), (120, 80, 40) };
+
+    // The upstairs pieces' models (each room's faces) and their boxes. `place` and `colour` as Build's.
+    public static Made Upstairs(List<UpPiece> pieces, Func<double, double, double, Vector3> place, Func<(float R, float G, float B), Vector3, int> colour)
+    {
+        var made = new Dictionary<int, List<BrickBuilding.Face>>();
+        var boxes = new List<(double, double, double, double, double, double)>();
+        var counts = new Dictionary<Up, int>();
+        foreach (var p in pieces)
+        {
+            var list = made.TryGetValue(p.Tile, out var l) ? l : made[p.Tile] = new();
+            var kit = new Kit(list, place, colour, p.X, p.Y, p.Z, p.Nx, p.Nz);
+            double d = p.Depth * 512, w = p.Width * 512, h = p.High * 256;
+            switch (p.Kind)
+            {
+                case Up.Bed: Bed(kit, d, w, Velvet, false); break;
+                case Up.GrandBed: Bed(kit, d, w, Royal, true); break;
+                case Up.Wardrobe: Wardrobe(kit, d, w, h); break;
+                case Up.Bookshelf: Bookshelf(kit, d, w, h); break;
+                case Up.ReadingTable: Table(kit, d, w, 300, cloth: false); break;
+                case Up.BanquetTable: Table(kit, d, w, 300, cloth: true); break;
+                case Up.Chair: Chair(kit); break;
+                case Up.Globe: GlobeModel(kit); break;
+                case Up.Piano: Piano(kit, d, w); break;
+                case Up.Harp: Harp(kit); break;
+                case Up.MusicStand: MusicStand(kit); break;
+                case Up.Bathtub: Bathtub(kit, d, w); break;
+                case Up.DressingTable: DressingTable(kit, d, w); break;
+                case Up.Throne: Throne(kit, d, w); break;
+                case Up.Column: Column(kit, h); break;
+                case Up.StairColumn: StairColumn(kit, h, Math.Min(d, w) / 2); break;
+                case Up.Candelabra: Candelabra(kit); break;
+                case Up.Chandelier: Chandelier(kit, h); break;
+                case Up.GoldPile: GoldPile(kit, w); break;
+                case Up.Pedestal: Pedestal(kit, counts.GetValueOrDefault(Up.Pedestal)); break;
+                case Up.Chest: ChestModel(kit, w, d, 440); break;
+                case Up.Armour: Armour(kit); break;
+                case Up.WeaponRack: WeaponRack(kit, w); break;
+                case Up.Altar: Altar(kit, d, w); break;
+                case Up.Pew: Pew(kit, d, w); break;
+                case Up.Bench: Bench(kit, w, d); break;
+                case Up.Candle: Candle(kit); break;
+                case Up.Plant: Plant(kit, 0); break;
+                case Up.Fireplace: Fireplace(kit, d, w, h); break;
+            }
+            counts[p.Kind] = counts.GetValueOrDefault(p.Kind) + 1;
+            if (!p.Solid) continue;
+            // (its box: its foot, turned as it looks, up to its height -- a stairwell's column's much narrower than it is: a car on the ramp by
+            // its inner rail, 5.5 cells from the column's middle, its box 2.8 either way along x and z -- a corner of it as near as 1.5 cells
+            // where the ramp runs on a slant -- must not touch it: a cell either way)
+            var shrink = p.Kind == Up.StairColumn ? 1.0 / 3.5 : 1.0;
+            double hx = (p.Nx != 0 ? p.Depth : p.Width) / 2 * shrink, hz = (p.Nx != 0 ? p.Width : p.Depth) / 2 * shrink;
+            var lo = place(p.X - hx, p.Y, p.Z - hz); var hi = place(p.X + hx, p.Y + p.High, p.Z + hz);
+            boxes.Add((lo.X, lo.Y, lo.Z, hi.X, hi.Y, hi.Z));
+        }
+        var log = new List<string> { $"the upstairs' furniture: {string.Join(", ", counts.OrderByDescending(c => c.Value).Select(c => $"{c.Value} {c.Key}"))}" };
+        return new Made(made, boxes, log);
+    }
+
+    private static void Bed(Kit k, double length, double width, (float R, float G, float B) cover, bool grand)
+    {
+        // a four-poster: its head against the wall (-x), a wooden frame, the mattress, the cover over its foot two thirds, two pillows, a
+        // headboard with a gold crest, the posts and the canopy over it, a gold valance round the canopy's three open sides
+        float L = (float)length / 2, W = (float)width / 2, post = grand ? 80 : 65, top = grand ? 1750 : 1550;
+        k.Box(new(-L, 0, -W), new(L, 150, W), DarkWood, Wood, bottom: false);
+        k.Box(new(-L + 30, 150, -W + 30), new(L - 30, 270, W - 30), Linen, Linen);
+        k.Box(new(-L + (float)length * 0.3f, 268, -W + 22), new(L - 22, 300, W - 22), cover, cover);
+        foreach (var s in new[] { -1, 1 })
+            k.Box(new(-L + 50, 270, s > 0 ? 25 : -W + 60), new(-L + 50 + (float)length * 0.2f, 345, s > 0 ? W - 60 : -25), Linen, Linen);
+        k.Box(new(-L, 0, -W), new(-L + 70, 760, W), DarkWood, DarkGold);
+        k.Box(new(-L, 760, -W * 0.35f), new(-L + 70, 860, W * 0.35f), DarkGold, Gold);
+        foreach (var sx in new[] { -1, 1 })
+            foreach (var sz in new[] { -1, 1 })
+                k.Box(new(sx < 0 ? -L : L - post, 0, sz < 0 ? -W : W - post), new(sx < 0 ? -L + post : L, top, sz < 0 ? -W + post : W), DarkWood, Gold, lid: false);
+        k.Box(new(-L - 10, top, -W - 10), new(L + 10, top + 60, W + 10), cover, cover, bottom: true);
+        k.Box(new(L - 10, top - 150, -W - 10), new(L + 10, top, W + 10), Gold, Gold, lid: false);
+        foreach (var s in new[] { -1, 1 })
+            k.Box(new(-L - 10, top - 150, s < 0 ? -W - 10 : W - 10), new(L + 10, top, s < 0 ? -W + 10 : W + 10), Gold, Gold, lid: false);
+        if (grand)
+            foreach (var s in new[] { -1, 1 })
+                // (drapes tied back at the foot's posts)
+                k.Quad(new(L - 40, top, s * (W - 40)), new(L - 40, top, s * (W - 260)), new(L - 40, 250, s * (W - 80)), new(L - 40, 250, s * (W - 10)), cover, Vector3.UnitX);
+    }
+
+    private static void Wardrobe(Kit k, double depth, double width, double high)
+    {
+        // dark wood against the wall, its two doors' raised panels on the front (+x), gold handles, a cornice
+        float d = (float)depth / 2, w = (float)width / 2, h = (float)high;
+        k.Box(new(-d, 0, -w), new(d, h - 60, w), DarkWood, DarkWood);
+        k.Box(new(-d - 10, h - 60, -w - 25), new(d + 25, h, w + 25), DarkGold, Gold, bottom: true);
+        foreach (var s in new[] { -1, 1 })
+        {
+            k.Box(new(d, 120, s < 0 ? -w + 50 : 20), new(d + 18, h - 180, s < 0 ? -20 : w - 50), Wood, Wood);
+            k.Box(new(d + 18, h * 0.45f, s * 70 - 18), new(d + 45, h * 0.45f + 110, s * 70 + 18), DarkGold, Gold);
+        }
+    }
+
+    private static void Bookshelf(Kit k, double depth, double width, double high)
+    {
+        // a tall case against the wall, its shelves full: rows of spines on its front (+x), in turns of colours, each shelf a board
+        float d = (float)depth / 2, w = (float)width / 2, h = (float)high;
+        k.Box(new(-d, 0, -w), new(d, h, w), DarkWood, DarkGold);
+        const int Rows = 5;
+        float row = (h - 120) / Rows;
+        var books = 0;
+        for (var r = 0; r < Rows; r++)
+        {
+            float y0 = 70 + r * row;
+            k.Box(new(d, y0 - 25, -w + 20), new(d + 20, y0, w - 20), Wood, Wood, lid: true);
+            // (the spines: some leaning taller than others)
+            for (float z = -w + 40; z < w - 60; z += 70)
+            {
+                var c = Books[(books++ * 7 + r * 3) % Books.Length];
+                var tall = row * (0.62f + 0.18f * ((books * 5) % 3) / 2f);
+                k.Quad(new(d + 6, y0, z), new(d + 6, y0, z + 62), new(d + 6, y0 + tall, z + 62), new(d + 6, y0 + tall, z), c, Vector3.UnitX);
+            }
+        }
+    }
+
+    private static void Table(Kit k, double length, double width, double high, bool cloth)
+    {
+        // a wooden top on four legs; a white cloth over a banquet's, hanging over its edges
+        float l = (float)length / 2, w = (float)width / 2, h = (float)high;
+        k.Box(new(-l, h - 40, -w), new(l, h, w), Wood, cloth ? Linen : Wood, bottom: true);
+        foreach (var sx in new[] { -1, 1 })
+            foreach (var sz in new[] { -1, 1 })
+                k.Box(new(sx * (l - 60) - 30, 0, sz * (w - 60) - 30), new(sx * (l - 60) + 30, h - 40, sz * (w - 60) + 30), DarkWood, DarkWood, lid: false);
+        if (!cloth) return;
+        k.Box(new(-l - 30, h - 120, -w - 30), new(l + 30, h + 6, w + 30), Linen, Linen, bottom: false);
+        // (a gold runner down its middle, and plates and goblets along it)
+        k.Quad(new(-l + 60, h + 8, -w * 0.2f), new(l - 60, h + 8, -w * 0.2f), new(l - 60, h + 8, w * 0.2f), new(-l + 60, h + 8, w * 0.2f), Gold, Vector3.UnitY);
+        for (float x = -l + 180; x < l - 120; x += 360)
+            foreach (var s in new[] { -1, 1 })
+            {
+                k.Lathe(new[] { (0.0, h + 7.0), (70.0, h + 9.0), (80.0, h + 20.0) }, 8, _ => Ivory, top: false, bottom: false, cx: x, cz: s * w * 0.62);
+                k.Lathe(new[] { (25.0, h + 6.0), (8.0, h + 30.0), (8.0, h + 80.0), (32.0, h + 130.0) }, 6, _ => Gold, top: true, bottom: false, cx: x + 110, cz: s * w * 0.45);
+            }
+    }
+
+    private static void Chair(Kit k)
+    {
+        // a seat facing +x, its back behind it (-x), red cushion, dark wood, a gold top rail
+        k.Box(new(-120, 170, -120), new(120, 210, 120), DarkWood, Cushion, bottom: true);
+        k.Box(new(-130, 210, -115), new(-95, 560, 115), DarkWood, DarkWood);
+        k.Box(new(-128, 560, -125), new(-92, 600, 125), DarkGold, Gold);
+        k.Box(new(-95, 260, -95), new(-90, 520, 95), Cushion, Cushion, lid: false);
+        foreach (var sx in new[] { -1, 1 })
+            foreach (var sz in new[] { -1, 1 })
+                k.Box(new(sx * 95 - 22, 0, sz * 95 - 22), new(sx * 95 + 22, 170, sz * 95 + 22), DarkWood, DarkWood, lid: false);
+    }
+
+    private static void GlobeModel(Kit k)
+    {
+        // a globe on a wooden stand: its seas and lands in bands, a gold ring round it
+        k.Lathe(new[] { (190.0, 0.0), (190.0, 40.0), (60.0, 80.0), (40.0, 420.0), (90.0, 460.0) }, 8, _ => DarkWood, top: false, bottom: true);
+        k.Lathe(new[] { (0.0, 470.0), (130.0, 510.0), (200.0, 600.0), (215.0, 700.0), (200.0, 800.0), (130.0, 890.0), (0.0, 930.0) }, 10,
+            band => band % 2 == 0 ? Water : Emerald, top: false, bottom: false);
+        k.Lathe(new[] { (235.0, 690.0), (235.0, 710.0) }, 12, _ => Gold, top: false, bottom: false);
+    }
+
+    private static void Piano(Kit k, double length, double width)
+    {
+        // a grand piano: its keyboard at the front (+x), its body tapering back to the curved tail (-x), black, on three legs; its lid propped
+        // open on the bass side; a bench before the keys
+        float L = (float)length / 2, W = (float)width / 2;
+        (float X, float Z)[] outline = { (L, -W), (L, W), (-L * 0.15f, W), (-L * 0.7f, W * 0.8f), (-L, W * 0.35f), (-L * 0.95f, -W * 0.1f), (-L * 0.55f, -W * 0.45f), (L * 0.05f, -W) };
+        const float y0 = 330, y1 = 470;
+        var mid = new Vector3(0, 0, 0);
+        for (var i = 0; i < outline.Length; i++)
+        {
+            var (ax, az) = outline[i]; var (bx, bz) = outline[(i + 1) % outline.Length];
+            var n = new Vector3(bz - az, 0, -(bx - ax));
+            k.Quad(new(ax, y0, az), new(bx, y0, bz), new(bx, y1, bz), new(ax, y1, az), PianoBlack, n.LengthSquared() > 0 ? Vector3.Normalize(n) : Vector3.UnitX);
+            k.Tri(new(mid.X, y1, mid.Z), new(ax, y1, az), new(bx, y1, bz), PianoBlack, Vector3.UnitY);
+            k.Tri(new(mid.X, y0, mid.Z), new(ax, y0, az), new(bx, y0, bz), PianoBlack, -Vector3.UnitY);
+        }
+        // (the lid: hinged on the bass side, its far edge propped up)
+        k.Quad(new(L * 0.9f, y1 + 5, W), new(-L * 0.6f, y1 + 5, W), new(-L * 0.6f, y1 + 520, W * 0.1f), new(L * 0.9f, y1 + 300, -W * 0.2f), PianoBlack, new Vector3(0, 0.5f, -0.86f));
+        k.Box(new(-L * 0.6f, y1, W * 0.05f), new(-L * 0.6f + 20, y1 + 500, W * 0.05f + 20), DarkGold, DarkGold, lid: false);
+        // (the keys: a white strip, black keys over it in twos and threes)
+        k.Box(new(L, 380, -W + 40), new(L + 130, 420, W - 40), PianoBlack, Ivory);
+        for (int i = 0, n = (int)((2 * W - 120) / 46); i < n; i++)
+            if (i % 7 is not (2 or 6))
+                k.Box(new(L + 50, 420, -W + 60 + i * 46), new(L + 130, 445, -W + 60 + i * 46 + 26), PianoBlack, PianoBlack, lid: true);
+        foreach (var (x, z) in new[] { (L - 80, -W + 80), (L - 80, W - 80), (-L * 0.75f, W * 0.4f) })
+            k.Box(new(x - 40, 0, z - 40), new(x + 40, y0, z + 40), PianoBlack, PianoBlack, lid: false);
+        // (the bench)
+        k.Box(new(L + 330, 0, -260), new(L + 470, 230, 260), PianoBlack, Cushion);
+    }
+
+    private static void Harp(Kit k)
+    {
+        // a gold harp on its foot: the pillar, the neck curving over, the soundbox sloping back down; its strings
+        k.Box(new(-160, 0, -220), new(160, 70, 220), DarkGold, Gold);
+        k.Box(new(-40, 70, -210), new(40, 1250, -150), Gold, Gold);
+        var a = new Vector3(0, 1250, -180); var b = new Vector3(0, 1120, 230); var c = new Vector3(0, 90, 120);
+        void Bar(Vector3 p, Vector3 q, float t, (float, float, float) col)
+        {
+            var side = new Vector3(t, 0, 0);
+            var up = Vector3.Normalize(Vector3.Cross(q - p, side)) * t;
+            k.Quad(p - side, q - side, q + side, p + side, col, Vector3.Normalize(up));
+            k.Quad(p - side + up * 0, p + side, q + side, q - side, col, -Vector3.Normalize(up));
+            k.Quad(p - side, q - side, q - side + up, p - side + up, col, -Vector3.UnitX);
+            k.Quad(p + side, q + side, q + side + up, p + side + up, col, Vector3.UnitX);
+        }
+        Bar(a, b, 40, Gold);
+        Bar(c, b, 60, DarkGold);
+        for (var i = 1; i < 8; i++)
+        {
+            var t = i / 8f;
+            var top = a + (b - a) * t; var bottom = new Vector3(0, 90 + (1120 - 90) * t, -150 + (120 + 150) * t * 0.0f + 270 * t);
+            k.Quad(new(3, bottom.Y, bottom.Z - 4), new(3, top.Y, top.Z - 4), new(3, top.Y, top.Z + 4), new(3, bottom.Y, bottom.Z + 4), Linen, Vector3.UnitX);
+        }
+    }
+
+    private static void MusicStand(Kit k)
+    {
+        k.Lathe(new[] { (120.0, 0.0), (120.0, 20.0), (20.0, 40.0), (15.0, 560.0) }, 6, _ => Pewter, top: false, bottom: true);
+        k.Quad(new(-30, 520, -180), new(-30, 520, 180), new(-110, 820, 180), new(-110, 820, -180), Pewter, Vector3.Normalize(new Vector3(1, 0.27f, 0)));
+        k.Quad(new(-25, 525, -170), new(-25, 525, 170), new(-105, 815, 170), new(-105, 815, -170), Linen, Vector3.Normalize(new Vector3(1, 0.27f, 0)));
+    }
+
+    private static void Bathtub(Kit k, double depth, double width)
+    {
+        // a white bath on four gold feet, its long side along z: its rim, the water in it, gold taps at the wall's end
+        float d = (float)depth / 2, w = (float)width / 2, rim = 430;
+        k.Box(new(-d, 90, -w), new(d, rim - 40, w), Enamel, Enamel, lid: false, bottom: true);
+        k.Box(new(-d - 20, rim - 40, -w - 20), new(d + 20, rim, -w + 70), Enamel, Enamel);
+        k.Box(new(-d - 20, rim - 40, w - 70), new(d + 20, rim, w + 20), Enamel, Enamel);
+        k.Box(new(-d - 20, rim - 40, -w + 70), new(-d + 70, rim, w - 70), Enamel, Enamel);
+        k.Box(new(d - 70, rim - 40, -w + 70), new(d + 20, rim, w - 70), Enamel, Enamel);
+        k.Quad(new(-d + 70, rim - 90, -w + 70), new(d - 70, rim - 90, -w + 70), new(d - 70, rim - 90, w - 70), new(-d + 70, rim - 90, w - 70), Water, Vector3.UnitY);
+        foreach (var sx in new[] { -1, 1 })
+            foreach (var sz in new[] { -1, 1 })
+                k.Lathe(new[] { (55.0, 0.0), (35.0, 50.0), (45.0, 95.0) }, 6, _ => Gold, top: false, bottom: false, cx: sx * (d - 90), cz: sz * (w - 110));
+        k.Box(new(-50, rim, -w - 20), new(50, rim + 160, -w + 30), DarkGold, Gold);
+    }
+
+    private static void DressingTable(Kit k, double depth, double width)
+    {
+        // a small table against the wall, a tall mirror over it in a gold frame, a stool before it
+        float d = (float)depth / 2, w = (float)width / 2;
+        Table(k, depth, width, 330, cloth: false);
+        k.Box(new(-d, 330, -w * 0.6f), new(-d + 50, 1300, w * 0.6f), DarkGold, Gold);
+        k.Quad(new(-d + 52, 380, -w * 0.5f), new(-d + 52, 380, w * 0.5f), new(-d + 52, 1250, w * 0.5f), new(-d + 52, 1250, -w * 0.5f), Glass, Vector3.UnitX);
+        k.Lathe(new[] { (0.0, 0.0), (90.0, 10.0), (60.0, 200.0), (130.0, 230.0), (130.0, 260.0), (0.0, 265.0) }, 8, b => b >= 3 ? Cushion : DarkWood, top: false, bottom: false, cx: d + 260);
+    }
+
+    private static void Throne(Kit k, double depth, double width)
+    {
+        // the dais: three steps of red carpet edged in gold, deeper at the back; on its top the throne, its back to the wall (-x): a gold
+        // frame, a red seat and back, armrests, a crest of gold over it and gold balls on its posts
+        float D = (float)depth / 2, W = (float)width / 2;
+        for (var s = 0; s < 3; s++)
+        {
+            float x0 = -D, x1 = D - s * (float)depth * 0.18f, z = W - s * (float)width * 0.1f, y0 = s * 90, y1 = (s + 1) * 90;
+            k.Box(new(x0, y0, -z), new(x1, y1, z), Gold, Royal);
+            k.Quad(new(x1 + 3, y0 + 20, -z), new(x1 + 3, y0 + 20, z), new(x1 + 3, y1 - 20, z), new(x1 + 3, y1 - 20, -z), RoyalDark, Vector3.UnitX);
+        }
+        float b = 270, bx = -D + 60;
+        k.Box(new(bx, b, -330), new(bx + 620, b + 210, 330), Gold, Royal);
+        k.Box(new(bx, b + 210, -330), new(bx + 140, b + 1500, 330), DarkGold, Gold);
+        k.Box(new(bx + 140, b + 300, -260), new(bx + 150, b + 1400, 260), Royal, Royal, lid: false);
+        foreach (var s in new[] { -1, 1 })
+        {
+            k.Box(new(bx + 140, b + 210, s < 0 ? -330 : 270), new(bx + 620, b + 470, s < 0 ? -270 : 330), DarkGold, Gold);
+            k.Lathe(new[] { (0.0, b + 1500.0), (70.0, b + 1540.0), (75.0, b + 1600.0), (0.0, b + 1660.0) }, 8, _ => Gold, top: false, bottom: false, cx: bx + 70, cz: s * 290);
+        }
+        k.Quad(new(bx + 141, b + 1500, -230), new(bx + 141, b + 1500, 230), new(bx + 141, b + 1820, 0), new(bx + 141, b + 1820, 0), Gold, Vector3.UnitX);
+        k.Quad(new(bx - 1, b + 1500, 230), new(bx - 1, b + 1500, -230), new(bx - 1, b + 1820, 0), new(bx - 1, b + 1820, 0), Gold, -Vector3.UnitX);
+    }
+
+    private static void Chandelier(Kit k, double high)
+    {
+        // hung from the ceiling (`high` up): a gold chain, a gold dish and ring, eight candles round it
+        float y = (float)high - 900;
+        k.Box(new(-15, y + 260, -15), new(15, (float)high, 15), DarkGold, DarkGold, lid: false);
+        k.Lathe(new[] { (0.0, y + 40.0), (110.0, y + 70.0), (380.0, y + 150.0), (420.0, y + 200.0), (380.0, y + 210.0), (0.0, y + 230.0) }, 12,
+            band => band % 2 == 0 ? Gold : DarkGold, top: false, bottom: false);
+        for (var i = 0; i < 8; i++)
+        {
+            var a = i * Math.PI / 4;
+            float x = (float)(Math.Cos(a) * 340), z = (float)(Math.Sin(a) * 340);
+            k.Box(new(x - 20, y + 210, z - 20), new(x + 20, y + 360, z + 20), Wax, Wax);
+            k.Leaf(new Vector3(x, y + 365, z), new Vector3(x, y + 440, z), new Vector3(18, 0, 0), Flame);
+        }
+    }
+
+    private static void GoldPile(Kit k, double width)
+    {
+        // a heap of gold: stepped, coins on top, a goblet in it
+        float w = (float)width / 2;
+        k.Box(new(-w, 0, -w), new(w, 110, w), DarkGold, Gold);
+        k.Box(new(-w * 0.7f, 110, -w * 0.65f), new(w * 0.65f, 220, w * 0.7f), DarkGold, Gold);
+        k.Box(new(-w * 0.4f, 220, -w * 0.35f), new(w * 0.35f, 310, w * 0.4f), DarkGold, Gold);
+        k.Lathe(new[] { (40.0, 310.0), (14.0, 350.0), (14.0, 420.0), (60.0, 520.0) }, 6, _ => Gold, top: true, bottom: false, cx: w * 0.1, cz: -w * 0.1);
+    }
+
+    private static void Pedestal(Kit k, int which)
+    {
+        // a white marble pedestal, a red cushion on it, a gem: ruby, emerald, sapphire by turns
+        k.Lathe(new[] { (170.0, 0.0), (170.0, 60.0), (110.0, 90.0), (90.0, 480.0), (160.0, 520.0), (160.0, 560.0) }, 8, _ => WhiteMarble, top: true, bottom: false);
+        k.Box(new(-110, 560, -110), new(110, 610, 110), Royal, Royal);
+        var gem = new[] { Ruby, Emerald, Sapphire }[which % 3];
+        k.Lathe(new[] { (0.0, 610.0), (110.0, 690.0), (80.0, 740.0), (0.0, 760.0) }, 8, _ => gem, top: false, bottom: false);
+    }
+
+    private static void Armour(Kit k)
+    {
+        // a suit of armour on a plinth, facing out (+x): legs, body, arms, helmet with a red plume, a spear held up beside it
+        k.Box(new(-170, 0, -170), new(170, 90, 170), DarkWood, DarkWood);
+        foreach (var s in new[] { -1, 1 })
+        {
+            k.Box(new(-55, 90, s < 0 ? -115 : 30), new(55, 620, s < 0 ? -30 : 115), SteelDark, Steel);
+            k.Box(new(-60, 650, s < 0 ? -195 : 135), new(50, 1000, s < 0 ? -135 : 195), SteelDark, Steel);
+        }
+        k.Box(new(-80, 620, -135), new(80, 1020, 135), Steel, Steel);
+        k.Box(new(-85, 1020, -80), new(85, 1230, 80), Steel, SteelDark);
+        k.Box(new(84, 1100, -60), new(88, 1140, 60), PianoBlack, PianoBlack, lid: false);
+        k.Box(new(-20, 1230, -25), new(30, 1340, 25), Royal, Royal);
+        k.Box(new(40, 0, 210), new(80, 1650, 250), Wood, Wood);
+        k.Leaf(new Vector3(60, 1650, 230), new Vector3(60, 1830, 230), new Vector3(0, 0, 45), Steel);
+    }
+
+    private static void WeaponRack(Kit k, double width)
+    {
+        // a wooden rack against the wall: two posts, two rails, spears and swords standing in it
+        float w = (float)width / 2;
+        foreach (var s in new[] { -1, 1 })
+            k.Box(new(-60, 0, s * w - 35), new(10, 1300, s * w + 35), DarkWood, DarkWood);
+        k.Box(new(-40, 300, -w), new(30, 360, w), DarkWood, DarkWood);
+        k.Box(new(-40, 1000, -w), new(30, 1060, w), DarkWood, DarkWood);
+        for (float z = -w + 120; z < w - 80; z += 160)
+        {
+            var spear = ((int)((z + w) / 160)) % 2 == 0;
+            k.Box(new(30, 0, z - 15), new(60, spear ? 1550 : 1150, z + 15), spear ? Wood : Steel, Steel);
+            if (spear) k.Leaf(new Vector3(45, 1550, z), new Vector3(45, 1720, z), new Vector3(0, 0, 40), Steel);
+            else k.Box(new(20, 1000, z - 70), new(70, 1030, z + 70), DarkGold, Gold);
+        }
+    }
+
+    private static void Altar(Kit k, double depth, double width)
+    {
+        // a white marble altar, a red cloth over it hanging at the front with a gold edge, candlesticks and a gold orb on it
+        float d = (float)depth / 2, w = (float)width / 2;
+        k.Box(new(-d, 0, -w), new(d, 420, w), WhiteMarble, WhiteMarble);
+        k.Box(new(-d - 10, 420, -w - 10), new(d + 10, 440, w + 10), Royal, Royal, bottom: true);
+        k.Quad(new(d + 12, 160, -w * 0.6f), new(d + 12, 160, w * 0.6f), new(d + 12, 430, w * 0.6f), new(d + 12, 430, -w * 0.6f), Royal, Vector3.UnitX);
+        k.Quad(new(d + 14, 160, -w * 0.6f), new(d + 14, 160, w * 0.6f), new(d + 14, 200, w * 0.6f), new(d + 14, 200, -w * 0.6f), Gold, Vector3.UnitX);
+        k.Lathe(new[] { (0.0, 440.0), (60.0, 450.0), (40.0, 480.0), (90.0, 540.0), (100.0, 600.0), (70.0, 660.0), (0.0, 680.0) }, 8, _ => Gold, top: false, bottom: false);
+    }
+
+    private static void StairColumn(Kit k, double high, double radius)
+    {
+        // the stairwell's column, the ramp winding round it: red marble in gold bands a storey apart, a gold foot and capital
+        var r = radius * 0.92;
+        k.Lathe(new[] { (radius, 0.0), (radius, 90.0), (r, 130.0) }, 12, _ => Gold, top: false, bottom: false);
+        var bands = new List<(double R, double Y)> { (r, 130.0) };
+        for (var y = 900.0; y < high - 400; y += 900) { bands.Add((r, y)); bands.Add((r, y + 60)); }
+        bands.Add((r, high - 260));
+        k.Lathe(bands.ToArray(), 12, i => i % 2 == 1 ? Gold : RedMarble, top: false, bottom: false);
+        k.Lathe(new[] { (r, high - 260), (radius * 1.08, high - 160), (radius * 1.08, high) }, 12, _ => Gold, top: false, bottom: false);
+    }
+
+    private static void Pew(Kit k, double depth, double width)
+    {
+        // a long wooden seat facing +x, its back behind it, its length along z
+        float d = (float)depth / 2, w = (float)width / 2;
+        k.Box(new(-d, 200, -w), new(d, 250, w), DarkWood, Wood, bottom: true);
+        k.Box(new(-d, 250, -w), new(-d + 50, 620, w), DarkWood, DarkWood);
+        foreach (var s in new[] { -1, 1 })
+            k.Box(new(-d, 0, s * w - 30), new(d, 330, s * w + 30), DarkWood, DarkGold);
+        k.Box(new(-d + 30, 0, -w + 30), new(d - 30, 200, -w + 60), DarkWood, DarkWood, lid: false);
+    }
+
     private static void Column(Kit k, double high)
     {
         // a red marble shaft on a gold base, a gold capital and its square top

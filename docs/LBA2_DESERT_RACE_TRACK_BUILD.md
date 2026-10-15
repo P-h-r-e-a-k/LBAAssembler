@@ -3866,6 +3866,54 @@ The test pilot: a lap in 75.5 s (thrown back twice by the frog, untimed as ever)
 ![The blue frog](racetrack/wannies/frog_blue.png)
 ![The climb from the frog to the tower's top](racetrack/wannies/climb_to_tower.png)
 
+## The Emperor's palace, twelfth round: the outside dropped, an upstairs, the race through both floors (2026-10-15)
+
+The user: "The outside of the palace track just isn't working, and we've tried a few revisions, let's keep a copy of it so we can rebuild
+it in the future if we need to, but for now drop it totally. Let's add an upstairs to the inside of the palace. Let's keep the same basic
+colour theming, but maybe add a couple of bedrooms, a throne room, and any other rooms you can think of that would fit with a palace
+theme."
+
+- *The outside, kept*: the git tag `palace-outside-v12` (commit `60c8e61`, the last with it) and `docs/racetrack/palace_outside_archive`:
+  the design script and the plan as they were, and how to build them again. The island's outside code stays, off (`PalaceIsland.Build`'s
+  `outside`).
+- *The upstairs* is the island's (`docs/LBA2_PALACE_ISLAND.md`, "No outside, and an upstairs"): ten rooms over the sixteen, two stairwells
+  open to the roof, the long hall two storeys high, the hill's top over it all.
+- *The race* (`tools/RaceTrackPlan/palace_design.py`, thirteenth version), inside only, 1,230 cells:
+  1. From the grid in front of the palace's doors in room 154, west along the bottom row and north into room 155, a stairwell.
+  2. Up the ramp round its column: 1.5 turns, 9 cells round, at 21 % (23 % at the steepest). It is the race-track mode's raised road, the
+     rooms' red carpet edged in gold, the car held on its rails.
+  3. Upstairs, out south into the library, then east through the music room, the princess's bedroom and the Emperor's bedchamber.
+  4. North through his dressing room, then west into the throne room past the throne on its dais. North up the room and west into the
+     other stairwell, room 159's.
+  5. Down its ramp: 1.75 turns at 18 % (20 % at the steepest).
+  6. Out north through room 163 into the long hall and up its ramp to the round window. The finish line is in the window, and the leap
+     out of it is carried; a win's teleporter takes the car in mid-air, as in the fourth round.
+  - The floors are open areas, the cars driving where they like: the ground floor's and the long hall's at 10,640, the upstairs' at
+    19,600. Upstairs they leave out the stairwells' open middles, where a car on a ramp under the floor would be taken for one on it.
+  - Each ramp's turns pass at least 4,508 (up) and 3,732 (down) over the one under them.
+- *The opponents' other ways* (`openRoutes`):
+  - One goes north through room 158 and west through 157 back to the bottom row. Upstairs it goes from the dressing room north through
+    the treasury into the throne room.
+  - The other goes on from the treasury through the armoury, west into the banquet hall, and south through its door into the throne room.
+- *Arrows on the floor*: the ground floor's other rooms point south, to the bottom row (159, 163 and the long hall are reached only down
+  the stairs). Upstairs they run along the race's way and the others'.
+- *Guards*:
+  - Ground floor: soldiers in the rooms on the way and beside it, and up the long hall; the pigheads in 152 and 163.
+  - Upstairs: soldiers in the music room, the dressing room and the throne room.
+- The checks: every way clear of the furniture's and walls' boxes; the leap's flight clear.
+- *The race's lines*: the intro is now "through the rooms, up the stairs, past the throne and back down, out of the round window and into
+  his teleporter", in all six languages.
+- The test pilot (start scene 290): won in 111.11 s, first of four, no rescues. It was up on the upstairs' floor from 32 s to 79 s, down
+  the second ramp by 92 s, and woke on Celebration Island (scene 95).
+
+![The up-stairwell: the ramp round its column](racetrack/palace/upstairs_up_stairwell.png)
+![The library](racetrack/palace/upstairs_library.png)
+![The princess's bedroom](racetrack/palace/upstairs_bedroom.png)
+![The throne room](racetrack/palace/upstairs_throne_room.png)
+![The down-stairwell](racetrack/palace/upstairs_down_stairwell.png)
+![The long hall, two storeys high](racetrack/palace/upstairs_long_hall_two_storeys.png)
+![The upstairs from above](racetrack/palace/upstairs_top.png)
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

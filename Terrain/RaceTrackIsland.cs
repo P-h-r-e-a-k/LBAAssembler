@@ -322,17 +322,18 @@ internal sealed record RaceTrackIsland(
     // i.e. no laps, finishing with massive jump to harbor teleport? - Twinsen, quick, Dark monk's in the palace, he's killing everybody.
     // Leading into final showdown at Celebration"), on the Palace island (Terrain/Palace: PALACE.ILE and PALACE.OBL, made by the build --
     // Created: PalaceTrack.Install -- with its scenes from 265, a cube of the route each), raced as Otringal's island 4 drawn from the palace's
-    // file (RaceFile). A sprint on one raised road: from the sixteen rooms' south-east room through their doors -- a red carpet -- into the
-    // long hall, up to its round window and out of it, out over the cloud sea and up onto the hilltop, in among the palace's domes on the
-    // rooftops, and the jump off the
-    // cliff to the Dark Monk's teleporter on the harbour's pillar: won, the car flies into it and Twinsen arrives on Celebration Island
-    // (PalaceTrack's lines and the race-track mode's wake=). The plan: tools/RaceTrackPlan/palace_design.py.
+    // file (RaceFile). A sprint through the palace, two storeys high since 2026-10-15 (its outside dropped -- docs/racetrack/
+    // palace_outside_archive -- and an upstairs added: PalaceUpstairs): from the sixteen rooms' south-east room west along the bottom row,
+    // up the ramp round the stairwell's column, through the library, the music room, the bedrooms and the dressing room into the throne
+    // room, down the other stairwell's ramp, through the long hall and up to its round window: the finish, the leap out of it -- won, the
+    // Dark Monk's teleporter takes the car in mid-air and Twinsen arrives on Celebration Island (PalaceTrack's lines and the race-track
+    // mode's wake=). The plan: tools/RaceTrackPlan/palace_design.py.
     public static readonly RaceTrackIsland Palace = new("The Emperor's palace", LBAAssembler.Terrain.Palace.PalaceIsland.IleFile, LBAAssembler.Terrain.Palace.PalaceIsland.OblFile,
         LBAAssembler.Terrain.Palace.PalaceTrack.IslandByte, LBAAssembler.Terrain.Palace.PalaceTrack.FirstScene, LBAAssembler.Terrain.Palace.PalaceTrack.LastScene,
         LBAAssembler.Terrain.Palace.PalaceIsland.PaletteEntry, "RaceTrackPlan.Palace.json", null)
     {
         Created = true, RaceFile = "palace", NoHolomap = true, Roster = RaceDriver.Palace, Sprint = true, OwnScenes = true, RailHeld = true,
-        Title = "The Emperor's palace: through its rooms, out of the round window, over the rooftops to the Dark Monk's teleporter",
+        Title = "The Emperor's palace: through its rooms, upstairs past the throne, out of the round window to the Dark Monk's teleporter",
     };
 
     // A sprint whose end the build makes (the Emperor's palace's: its lines and the teleport to Celebration Island, PalaceTrack) -- not a

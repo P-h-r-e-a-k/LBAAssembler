@@ -99,9 +99,13 @@ internal static class PalaceIsland
 
     // Builds PALACE.ILE and PALACE.OBL into `outDirectory` from the game folder's palace scenes and Otringal's island files (`sourceDirectory`:
     // where pristine OTRINGAL.ILE/.OBL are, the game folder itself by default).
-    // (`roofed`: false leaves the roofs off -- a look inside, and the outside with them; `outside` false leaves Otringal's palace off the
-    // roof, `furnished` false the rooms' furniture out)
-    public static Built Build(string gameDirectory, string outDirectory, string? sourceDirectory = null, bool roofed = true, bool outside = true, bool furnished = true)
+    // (`roofed`: false leaves the roofs off -- a look inside, and the outside with them; `outside` true puts Otringal's palace on the roof
+    // -- its turrets and the rooftops round the race's old road over them, the Dark Monk's teleporter on the harbour's pillar, the ways
+    // across the rocks: off since 2026-10-15, the user: "The outside of the palace track just isn't working ... let's keep a copy of it so
+    // we can rebuild it in the future if we need to, but for now drop it totally" -- docs/racetrack/palace_outside_archive; `furnished`
+    // false the rooms' furniture out; `upstairs` false the palace as the game's, one storey -- PalaceUpstairs)
+    public static Built Build(string gameDirectory, string outDirectory, string? sourceDirectory = null, bool roofed = true, bool outside = false, bool furnished = true,
+        bool upstairs = true)
     {
         sourceDirectory ??= gameDirectory;
         var log = new List<string>();
@@ -498,6 +502,33 @@ internal static class PalaceIsland
         var portalFrom = furnished ? pieces.FirstOrDefault(p => p.Kind == PalaceFurniture.Kind.Fireplace && area.Tiles[p.Tile].Scene == PortalFrom) : null;
         PalaceFurniture.Piece? portalTo = null;
         if (portalFrom is not null) Hollow(portalFrom);
+        // ---- the upstairs (PalaceUpstairs): its floor where the sixteen rooms' roofs were -- the layer over their walls' top -- its rooms,
+        // walls and doors over it, the stairwells open to its roof, the ground floor's doors from the rooms the race comes down into walled
+        // up, the long hall two storeys high
+        PalaceUpstairs.Made? up = null;
+        var firstUpTile = area.Tiles.Count;
+        var groundTop = maxY;
+        if (upstairs && roofed && hallTile >= 0)
+        {
+            int WallTop(int ti)
+            {
+                var mine = cells.Where(c => c.Value.Tile == ti).Select(c => c.Key).ToList();
+                if (mine.Count == 0) return maxY + 1;
+                int rx0 = mine.Min(c => c.X), rx1 = mine.Max(c => c.X), rz0 = mine.Min(c => c.Z), rz1 = mine.Max(c => c.Z);
+                var edge = mine.Where(c => c.X == rx0 || c.X == rx1 || c.Z == rz0 || c.Z == rz1).GroupBy(c => (c.X, c.Z)).Select(g => g.Max(c => c.Y)).OrderBy(h => h).ToList();
+                return edge.Count > 0 ? edge[(int)(edge.Count * 0.8)] + 1 : mine.Max(c => c.Y) + 1;
+            }
+            var tops = Enumerable.Range(0, area.Tiles.Count).Where(ti => ti != hallTile).Select(WallTop).ToList();
+            var floorLayer = tops.Max();
+            if (tops.Distinct().Count() > 1) log.Add($"  (the sixteen rooms' walls' tops: layers {string.Join(", ", tops.Distinct().OrderBy(t => t))}: the upstairs' floor at {floorLayer})");
+            double CellX(double x) => (x0 + (x - minX) * U) / 512;
+            double CellZ(double z) => (z0 + (z - minZ) * U) / 512;
+            up = PalaceUpstairs.Add(area.Tiles.Select(t => t.Scene).ToList(), extents, hallTile, minY, floorLayer, cells, shown, air, firstUpTile, CellX, CellZ,
+                (CarpetRed, BandLight, BandDark, TileLight, TileDark));
+            log.AddRange(up.Log);
+            maxY = up.TopLayer;
+        }
+        string RoomName(int ti) => ti < area.Tiles.Count ? $"room {area.Tiles[ti].Scene}" : up is not null && ti - firstUpTile < up.Rooms.Count ? up.Rooms[ti - firstUpTile].Name : $"tile {ti}";
         // ---- the floor painted (the user, 2026-10-13: "Let's make the main road section that's mostly red at the moment pure red just with
         // the white arrows. The surrounding area varies a lot, let's keep this consistent with a check pattern based on the green"; then
         // "We have lots of red that isn't the inside track. The red track area should be the width of the door way, there should be no other
@@ -549,8 +580,16 @@ internal static class PalaceIsland
             var (dx, dy, dz, _) = BrickBuilding.Directions[d];
             var outward2 = !air.Contains((c.X + dx, c.Y + dy, c.Z + dz));
             if (dy > 0 && c.Y == minY && floorPaint.TryGetValue((c.X, c.Z), out var paint)) return Shaded(paint, shade);
+            // (upstairs: its floor's paint, the ground floor's ceiling under it -- the stone the roofs' undersides were -- and its walls in the
+            // same bands from its own floor up)
+            if (up is not null && c.Y >= up.FloorLayer)
+            {
+                if (dy > 0 && c.Y == up.FloorLayer && up.Paint.TryGetValue((c.X, c.Z), out var upPaint)) return Shaded(upPaint, shade);
+                if (dy < 0 && c.Y == up.FloorLayer && !outward2) return Shaded(StoneShadow, 1f);
+                if (dy == 0 && !outward2) return Shaded(PaintWall(c.Y - up.FloorLayer, PalaceUpstairs.UpLayers, null), shade);
+            }
             // (a room's wall: in bands by height -- PaintWall)
-            if (dy == 0 && !outward2) return Shaded(PaintWall(c.Y - minY, maxY - minY, brick >= 0 && Drawn(brick) && !papered.Contains(c) ? Average(brick) : null), shade);
+            if (dy == 0 && !outward2) return Shaded(PaintWall(c.Y - minY, groundTop - minY, brick >= 0 && Drawn(brick) && !papered.Contains(c) ? Average(brick) : null), shade);
             // (the palace's outside: Otringal's palace's walls, by height; and its stone on the top of a wall made whole -- a ledge)
             if (dy == 0 && outward2)
                 return Shaded(c.Y - minY < FootLayers ? Teal : c.Y > maxY - TopLayers ? Turquoise : Stone, shade);
@@ -626,13 +665,27 @@ internal static class PalaceIsland
                                 $"{J(bz) - tz * 0.4:0.#}), turned {beta})");
                     }
                 }
+                // (and upstairs: as many a room on its plain walls -- none behind its furniture -- and a few more along the long hall's upper storey)
+                if (up is not null)
+                {
+                    int UpRoomOf((int X, int Y, int Z) c)
+                    {
+                        foreach (var r in up.Rooms) if (c.X >= r.Inside.X0 && c.X <= r.Inside.X1 && c.Z >= r.Inside.Z0 && c.Z <= r.Inside.Z1) return r.Tile;
+                        var e = extents[hallTile];
+                        return c.X > e.X0 && c.X < e.X1 && c.Z > e.Z0 && c.Z < e.Z1 && !up.Stairs.Any(s => c.X >= s.Inside.X0 && c.X <= s.Inside.X1 && c.Z >= s.Inside.Z0 && c.Z <= s.Inside.Z1)
+                            ? hallTile : -1;
+                    }
+                    var upFurniture = furniture.Concat(up.Standing).ToHashSet();
+                    var upSpots = PalacePortraits.Spots(shown, air, upFurniture, up.FloorLayer + 1, UpRoomOf, PortraitsPerRoom, out _, ti => ti == hallTile ? HallPortraits - PortraitsPerRoom : 0);
+                    spots.AddRange(upSpots);
+                }
             }
         }
         var covered = spots.SelectMany(PalacePortraits.Covered).Concat(hidden).ToHashSet();
 
         // ---- the faces that show, merged into rectangles of one colour, room by room
         var roomFaces = Faces(shown, FaceColour, (x, y, z) => new Vector3((float)WX(x), (float)WY(y), (float)WZ(z)), covered);
-        foreach (var ti in Enumerable.Range(0, area.Tiles.Count)) roomFaces.TryAdd(ti, new List<BrickBuilding.Face>());
+        foreach (var ti in Enumerable.Range(0, area.Tiles.Count + (up?.Rooms.Count ?? 0))) roomFaces.TryAdd(ti, new List<BrickBuilding.Face>());
         if (startTile >= 0) roomFaces[startTile].AddRange(entranceFaces);
 
         // ---- the furniture's models, with each room's faces (in its bodies)
@@ -653,6 +706,16 @@ internal static class PalaceIsland
             foreach (var c in chests)
                 log.Add($"  a chest in room {area.Tiles[c.Tile].Scene} at cells ({(x0 + (c.X - minX) * U) / 512:0.#}, {(z0 + (c.Z - minZ) * U) / 512:0.#})");
         }
+        // (and the upstairs': its rooms' furniture, the stairwells' columns -- in the way, each its box)
+        if (up is not null && furnished)
+        {
+            Vector3 Place(double x, double y, double z) => new((float)(x0 + (x - minX) * U), (float)(Floor + (y - minY) * V), (float)(z0 + (z - minZ) * U));
+            int Seen((float R, float G, float B) c, Vector3 n) => Shaded(c, n.Y * n.Y * (n.Y > 0 ? 1f : 0.5f) + n.X * n.X * 0.84f + n.Z * n.Z * 0.70f);
+            var made = PalaceFurniture.Upstairs(up.Pieces, Place, Seen);
+            foreach (var (ti, list) in made.Faces) roomFaces[ti].AddRange(list);
+            chestBoxes.AddRange(made.Boxes);
+            log.AddRange(made.Log);
+        }
 
         // ---- the roofs: over each room, level with the top of its walls -- the hilltop over the rooms: their tops Otringal's rock (drawn apart,
         // RockRoof), their sides its palace's stone
@@ -660,7 +723,33 @@ internal static class PalaceIsland
         var roofBoxes = new List<(double X0, double Y0, double Z0, double X1, double Y1, double Z1)>();
         var roofTops = new Dictionary<int, double>();
         var roofRects = new List<(double X0, double Z0, double X1, double Z1, double Y)>();
-        foreach (var ti in roofed ? roomFaces.Keys.ToList() : new List<int>())
+        // (with the upstairs, one roof over the lot: the sixteen rooms' and the long hall's, over the upstairs' walls' top)
+        void Roof(int ti, int rx0, int rz0, int rx1, int rz1, int top)
+        {
+            double ya = WY(top), yb = ya + V * 0.4;
+            roofTops[ti] = yb;
+            int roofSide = Nearest(StoneShadow);
+            var list = roomFaces[ti];
+            // (in slabs of MaxRun cells at the most: a body holds no more)
+            for (var sx = rx0; sx <= rx1; sx += BrickBuilding.MaxRun)
+            for (var sz = rz0; sz <= rz1; sz += BrickBuilding.MaxRun)
+            {
+            double xa = WX(sx), xb = WX(Math.Min(rx1, sx + BrickBuilding.MaxRun - 1) + 1), za = WZ(sz), zb = WZ(Math.Min(rz1, sz + BrickBuilding.MaxRun - 1) + 1);
+            Slab(list, new((float)xa, (float)ya, (float)za), new((float)xb, (float)yb, (float)zb), roofSide, (float)(U * NearRun));
+            roofBoxes.Add((xa, ya, za, xb, yb, zb));
+            roofRects.Add((xa, za, xb, zb, yb));
+            }
+            roofs++;
+        }
+        if (roofed && up is not null)
+        {
+            var sixteenExtents = Enumerable.Range(0, area.Tiles.Count).Where(ti => ti != hallTile).Select(ti => extents[ti]).ToList();
+            int ux0 = sixteenExtents.Min(e => e.X0), ux1 = sixteenExtents.Max(e => e.X1), uz0 = sixteenExtents.Min(e => e.Z0), uz1 = sixteenExtents.Max(e => e.Z1);
+            Roof(firstUpTile, ux0, uz0, ux1, uz1, up.TopLayer + 1);
+            var he = extents[hallTile];
+            Roof(hallTile, he.X0, he.Z0, he.X1, Math.Min(he.Z1, uz0 - 1), up.TopLayer + 1);
+        }
+        foreach (var ti in roofed && up is null ? roomFaces.Keys.ToList() : new List<int>())
         {
             var mine = cells.Where(c => c.Value.Tile == ti).Select(c => c.Key).ToList();
             if (mine.Count == 0) continue;
@@ -701,7 +790,7 @@ internal static class PalaceIsland
         var next = HqrArchive.CountEntries(Path.Combine(sourceDirectory, SourceObl));
         var newBodies = new List<byte[]>();
         const int Cap = IslandDecors.MaxPerCubeOwnEngine;
-        var (bodyCount, faceCount, decorsLeft) = BrickBuilding.AddBodies(island, roomFaces, newBodies, next, ti => $"room {area.Tiles[ti].Scene}", Cap, everyCube: true,
+        var (bodyCount, faceCount, decorsLeft) = BrickBuilding.AddBodies(island, roomFaces, newBodies, next, RoomName, Cap, everyCube: true,
             close: true, reach: PalaceOutside.Seen);
         var (rockBodies, rockFaces) = RockRoof(island, roofRects, newBodies, next, Cap);
         // (the pictures hung: a body each, its page the decor's)
@@ -715,12 +804,12 @@ internal static class PalaceIsland
                 var hung = PalacePortraits.Hang(island, spots, painted, firstPage, (x, y, z) => new Vector3((float)WX(x), (float)WY(y), (float)WZ(z)), newBodies, next, Cap,
                     PalaceOutside.Seen);
                 log.Add($"the pictures hung: {hung} of {spots.Count} -- " + string.Join("; ", spots.GroupBy(s => s.Tile).Select(g =>
-                    $"room {area.Tiles[g.Key].Scene}: {string.Join(", ", g.Select(s => PalacePortraits.Sitters[s.Sitter].Name))}")));
+                    $"{RoomName(g.Key)}: {string.Join(", ", g.Select(s => PalacePortraits.Sitters[s.Sitter].Name))}")));
                 foreach (var s in spots)
                 {
                     var (dx, _, dz, _) = BrickBuilding.Directions[s.Dir];
                     double px = dx != 0 ? WX(s.At + (dx > 0 ? 1 : 0)) : WX(s.U0 + 1), pz = dx != 0 ? WZ(s.U0 + 1) : WZ(s.At + (dz > 0 ? 1 : 0));
-                    log.Add($"  {PalacePortraits.Sitters[s.Sitter].Name} in room {area.Tiles[s.Tile].Scene} at cells ({px / 512:0}, {pz / 512:0}), looking ({dx}, {dz})");
+                    log.Add($"  {PalacePortraits.Sitters[s.Sitter].Name} in {RoomName(s.Tile)} at cells ({px / 512:0}, {pz / 512:0}), looking ({dx}, {dz})");
                 }
             }
         }
@@ -730,8 +819,8 @@ internal static class PalaceIsland
         var outsideBodies = 0;
         if (outside && roofed)
         {
-            var under = cells.Where(c => area.Tiles[c.Value.Tile].Scene != HallScene).Select(c => c.Key).ToList();
-            var tops = roofTops.Where(r => area.Tiles[r.Key].Scene != HallScene).Select(r => r.Value).ToList();
+            var under = cells.Where(c => c.Value.Tile < area.Tiles.Count && area.Tiles[c.Value.Tile].Scene != HallScene).Select(c => c.Key).ToList();
+            var tops = roofTops.Where(r => r.Key >= area.Tiles.Count || area.Tiles[r.Key].Scene != HallScene).Select(r => r.Value).ToList();
             if (under.Count > 0 && tops.Count > 0)
             {
                 var hall = hallTile >= 0 ? (WX(extents[hallTile].X0), WZ(extents[hallTile].Z0), WX(extents[hallTile].X1 + 1), WZ(extents[hallTile].Z1 + 1)) : ((double, double, double, double)?)null;
@@ -774,11 +863,10 @@ internal static class PalaceIsland
             : null;
         // (the ways across the rocks, flat: the runway east from the sixteen rooms' roof to the cliff's edge -- the jump to the harbour's
         // pillar -- and the way round the palace's west and south sides)
-        var corridors = new List<PalaceCliff.Corridor>
-        {
-            new(new() { (sqX1 - 4, midZ), (sqX1 + PalaceCliff.Margin + PalaceCliff.Wobble + 10, midZ) }, CorridorHalf),
-        };
-        if (hallTile >= 0)
+        // (the race's outside -- dropped: `outside` -- had them; the hill's top has none now)
+        var corridors = new List<PalaceCliff.Corridor>();
+        if (outside) corridors.Add(new(new() { (sqX1 - 4, midZ), (sqX1 + PalaceCliff.Margin + PalaceCliff.Wobble + 10, midZ) }, CorridorHalf));
+        if (outside && hallTile >= 0)
         {
             double hz0 = Math.Round(WZ(extents[hallTile].Z0) / 512);
             // (round the palace's west and south sides, RingOut cells out from them: from out past the hill's north edge -- where the race's
@@ -820,6 +908,24 @@ internal static class PalaceIsland
             // first fireplace's hearth: x0, z0, x1, z1 (island cells), y0, y1; out of the second's: x, z (island cells), y, the turn])
             ["entrance"] = entrance is { } way ? new[] { way.X, way.Z0, way.Z1 } : null,
             ["teleports"] = teleports,
+            // (the upstairs: its floor's top, its ceiling, its rooms -- each its inside, island cells -- the doors, the stairwells' middles and
+            // the ramp's radius round them, the ground floor's doors walled up)
+            ["upstairs"] = up is null ? null : new Dictionary<string, object>
+            {
+                ["floorTop"] = WY(up.FloorLayer + 1), ["ceiling"] = WY(up.TopLayer + 1), ["layers"] = PalaceUpstairs.UpLayers,
+                ["rooms"] = up.Rooms.Select(r => new Dictionary<string, object>
+                {
+                    ["name"] = r.Name, ["kind"] = r.Kind.ToString(), ["under"] = r.Under,
+                    ["x0"] = WX(r.Inside.X0) / 512, ["z0"] = WZ(r.Inside.Z0) / 512, ["x1"] = WX(r.Inside.X1 + 1) / 512, ["z1"] = WZ(r.Inside.Z1 + 1) / 512,
+                }).ToList(),
+                ["doors"] = up.DoorWays.Select(d => new Dictionary<string, object> { ["a"] = d.A, ["b"] = d.B, ["x0"] = d.X0, ["z0"] = d.Z0, ["x1"] = d.X1, ["z1"] = d.Z1, ["main"] = d.Main }).ToList(),
+                ["stairs"] = up.Stairs.Select(t => new Dictionary<string, object>
+                {
+                    ["scene"] = t.Scene, ["x"] = t.X, ["z"] = t.Z, ["radius"] = PalaceUpstairs.StairRadius, ["column"] = PalaceUpstairs.ColumnRadius, ["up"] = t.Up,
+                    ["x0"] = WX(t.Inside.X0) / 512, ["z0"] = WZ(t.Inside.Z0) / 512, ["x1"] = WX(t.Inside.X1 + 1) / 512, ["z1"] = WZ(t.Inside.Z1 + 1) / 512,
+                }).ToList(),
+                ["closed"] = PalaceUpstairs.Closed.Select(c => new[] { c.A, c.B }).ToList(),
+            },
             ["quay"] = new[] { harbour.Quay.X0, harbour.Quay.Z0, harbour.Quay.X1, harbour.Quay.Z1, harbour.QuayY },
         };
         File.WriteAllText(Path.Combine(outDirectory, LayoutFile), System.Text.Json.JsonSerializer.Serialize(layout, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
