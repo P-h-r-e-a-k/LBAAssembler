@@ -180,7 +180,11 @@ upstairs = path([(TOP_X, uz), (TOP_X, ROW_UP), (COL_E, ROW_UP), (COL_E, ROW_DR),
                 [0, TURN, TURN, TURN, TURN, TURN, 0])
 down_ramp = helix(dx_, dz_, dr, -math.pi / 2, DOWN_TURNS)
 # (ground floor again: north out of the stairwell through room 163 into the long hall, onto the round window's line, up the hall)
-after = path([(OUT_X, dz_), (OUT_X, rooms[163]['z0'] + 30), (wx, rooms[163]['z0'] - 6), (wx, w_out)], [0, 40, 40, 0])
+# (straight over onto the window's line just past the stairwell's foot, which sits 1.5 cells past the cube edge at x 384: a line along that
+# edge -- north, then over to the window's line further on -- had the car changing cubes back and forth every half second, 2026-10-15
+# later; the window's line is 3 cells inside the cube west of it)
+JOG_AT, JOG = 3, 10
+after = path([(OUT_X, dz_), (OUT_X, dz_ - JOG_AT), (wx, dz_ - JOG_AT - JOG), (wx, w_out)], [0, 12, 12, 0])
 leap = path([(wx, w_out), (wx, w_out - FLIGHT - PAD)], [0, 0])
 pts, (o_in, o_up, o_upstairs, o_down, o_after, o_leap) = join(ground_in, up_ramp, upstairs, down_ramp, after, leap)
 n = len(pts)

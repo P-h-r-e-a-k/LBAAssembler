@@ -157,6 +157,9 @@ internal static class RaceTrackService
         // Hunters: the island's own guns that fire at the cars outside (RaceTrackIsland.HuntingGuns; RACEMOD.CPP gunner= with gunner_hunt=), each
         // [scene, the gun's actor, the muzzle's x, y, z (island units), its reach (units)] -- Island CX's cannons, since 2026-10-15
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Hunters = null,
+        // Flyers: the flying gas monsters (RaceTrackFlyers; RACEMOD.CPP flyer=), each [scene, its actor, its height, then its way's points x and
+        // z (island units)] -- Island CX's hall, since 2026-10-15
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Flyers = null,
         // RaisedLap: the lap's own points in Raised, the branches after them; RaisedBranches: each [its first and last point in Raised, the
         // lap's points there it leaves from and comes back onto] (RACEMOD.CPP raised_lap=, raised_branch=), since 2026-10-14
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? RaisedLap = null,
@@ -870,6 +873,11 @@ internal static class RaceTrackService
                 : null,
             Frogs: report.Frogs.Count(f => f.Body >= 0) > 0 ? report.Frogs.Where(f => f.Body >= 0).Select(RaceTrackFrog.Line).ToList() : null,
             Hunters: scenes.Hunters is { Count: > 0 } hunters ? hunters.ToList() : null,
+            Flyers: scenes.Flyers is { Count: > 0 } flyers
+                ? flyers.Where(f => f[2] >= 0 && f[2] < report.Flyers.Count).Select(f =>
+                    new[] { f[0], f[1], (int)Math.Round(report.Flyers[f[2]].Y) }
+                        .Concat(report.Flyers[f[2]].Way.SelectMany(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512) })).ToArray()).ToList()
+                : null,
             RaisedLap: raised && report.RaisedBranches.Count > 0 ? report.RaisedLap : null,
             RaisedBranches: raised && report.RaisedBranches.Count > 0 ? report.RaisedBranches.ToList() : null);
     }

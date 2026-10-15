@@ -102,6 +102,27 @@ internal static class RaceTrackTunnel
                     var rc = new Vector3(centre.X, 0, centre.Z);
                     var eave = (float)(run.Eave * 512);
                     RaceTrackPipes.Box(mesh, faces, rc, halfAlong, across * (half + (float)Wall + eave), roof, roof + (float)Slab, RoofLight, RoofDark, RoofTop);
+                    // (a sunk tunnel's end where the road goes on under the island, `under`: a wall over the next tunnel's mouth, from its roof
+                    // -- this one's Roof over the deck -- up to this one's top: the ground's face over the mouth is left undrawn
+                    // (RaceTrackBuilder.OpenTunnelMouths) and the gap between the two roofs showed the sky -- Island CX's doors, 2026-10-15)
+                    if (run.Sunk)
+                        foreach (var (isEnd, at, sign) in new[] { (k == span - 1 && r.Under?[j] == true, q, 1f), (k == 0 && r.Under?[i] == true, p, -1f) })
+                        {
+                            if (!isEnd) continue;
+                            var hc = new Vector3(at.X, 0, at.Z) - dir * sign * ((float)Wall / 2);
+                            var bottom = at.Y + (float)run.Roof;
+                            // (up to the ground behind it where that is higher than this tunnel's top: Island CX's plateau stands 320 over
+                            // door A's portal, and its edge showed over the portal's roof, floating)
+                            var headTop = roof + (float)Slab;
+                            var ex = (r.X[at == q ? j : i]); var ez = (r.Z[at == q ? j : i]);
+                            var reachCells = HalfAt(r, at == q ? j : i, o) + WallOut + Wall / 512 + run.Eave + 1;
+                            for (var gz = (int)Math.Floor(ez - reachCells); gz <= (int)Math.Ceiling(ez + reachCells); gz++)
+                                for (var gx = (int)Math.Floor(ex - reachCells); gx <= (int)Math.Ceiling(ex + reachCells); gx++)
+                                    if ((gx - ex) * (gx - ex) + (gz - ez) * (gz - ez) <= reachCells * reachCells && island.HeightAt(gx, gz) is { } gh)
+                                        headTop = Math.Max(headTop, gh - origin.Y + 20);
+                            if (headTop > bottom + 50)
+                                RaceTrackPipes.Box(mesh, faces, hc, dir * ((float)Wall / 2 + 12), across * (half + (float)Wall + eave), bottom, headTop, WallLight, WallDark, WallTop);
+                        }
                     foreach (var v in new[] { p, q })
                         foreach (var side in new[] { -1f, 1f })
                         {
@@ -151,6 +172,9 @@ internal static class RaceTrackTunnel
             {
                 var t = ((gx - r.X[a]) * sx + (gz - r.Z[a]) * sz) / len2;
                 if (t < -0.01 && k > 0 || t > 1.01 && k < span - 1) continue;
+                // (nor past an end where the road goes on under the island, `under`: the ground there is over it -- Island CX's door A's
+                // portal cut the plateau behind it 4 cells deep, and the road went into flat ground before the cliff, 2026-10-15)
+                if (t < -0.01 && r.Under?[a] == true || t > 1.01 && r.Under?[b] == true) continue;
                 t = Math.Clamp(t, 0, 1);
                 var d = Math.Sqrt((gx - r.X[a] - sx * t) * (gx - r.X[a] - sx * t) + (gz - r.Z[a] - sz * t) * (gz - r.Z[a] - sz * t));
                 if (d > reach) continue;

@@ -732,6 +732,11 @@ void GereAnimAction(T_OBJET *ptrobj, U8 numobj) {
                 poids = GET_S8;
                 force = GET_S8;
 
+                // (a race-track mode's hunting gun -- Island CX's: its firing animation without the missile it throws level along its
+                // facing; RACEMOD.CPP flies it at a car)
+                extern S32 RaceMod_SilentThrow(S32 numobj);
+                if (RaceMod_SilentThrow(numobj)) break;
+
                 last_extra = ThrowExtraObj(numobj,
                                            x, y, z,
                                            sprite, // IndexFile3d

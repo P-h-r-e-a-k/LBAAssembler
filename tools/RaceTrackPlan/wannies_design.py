@@ -216,7 +216,23 @@ MARK['pier'] = at_cells(piece_at[4] + lengths[4])                              #
 # (the shortcut's ends on the lap -- its own way further on: where it leaves the lap, where its leap comes down onto it, where it is back)
 SC_F = nearest_after((536.2, 557.4), MARK['start'], 300)                   # off the lap: straight on north-west where the lap turns west
 SC_LIP = np.array([510.0, 533.0])                                         # its take-off (the user's pink, 2026-10-15) ...
-SC_D = nearest_after((484.0, 507.8), SC_F, 400)                           # ... its landing: on the S, west past its turn (the other pink)
+# ... its landing: the lap's first point past the loop it skips that its leap can come down on (the user, 2026-10-15 later: "Our jump on
+# platform.ile is far too long, we need to change it so the car lands as soon as it can" -- it came down on the S west past its turn, the
+# other pink, 38 cells on and 2.4 s in the air): from where the lap comes back east under the take-off, the first whose way the leap turns
+# onto by LAND_TURN at the most, with LAND_ROOM cells of it before the landing to curve onto it (the leap's way: the ramp's, towards the S's
+# turn) -- just past the S's turn, 25 cells on
+LAND_TURN, LAND_ROOM = math.radians(40), 1.5
+def leap_landing():
+    lip = np.array([510.0, 533.0]); u_ = np.array([497.5, 514.0]) - lip; u_ /= np.linalg.norm(u_)
+    back = nearest_after((486.8, 525.5), MARK['start'], 400)
+    for j in range(int(60 / STEP)):
+        k = (back + j) % N
+        t_ = T[k] / np.linalg.norm(T[k])
+        if math.acos(max(-1, min(1, float(u_ @ t_)))) > LAND_TURN: continue
+        a_, b_ = np.linalg.solve(np.array([[u_[0], t_[0]], [u_[1], t_[1]]]), np.array([X[k] + OX, Z[k] + OZ]) - lip)
+        if a_ > 0 and b_ >= LAND_ROOM: return k
+    return nearest_after((484.0, 507.8), MARK['start'], 400)
+SC_D = leap_landing()
 SC_J = (SC_D + int(7 / STEP)) % N                                         # ... back on the lap's own road
 
 # ---- heights (2026-10-15, round 4 -- the user: "Let's make all the track closer to the ground which means our inclines will be steeper
@@ -313,8 +329,10 @@ def lap_low(need_land, h_frog):
 # lets it, as the lap.
 SC_HALF = 3.5                           # its half width
 SC_OVER = 40.0                          # over the lap's deck where they overlap
-SC_RAMP, SC_KICK, SC_ARC = 9.0, 700.0, 2500.0
-SC_FLIGHT_MS = 2400                     # the leap's time in the air (the engine's arcjump= sixth number)
+SC_RAMP, SC_KICK = 9.0, 700.0
+# (its arc over the straight line from the lip to where it comes down, and its time in the air -- the engine's arcjump= sixth number: as the
+# first leap's, 2,500 and 2.4 s over its 38.2 cells, for the cells it has now)
+SC_ARC_PER, SC_FLIGHT_PER = 2500.0 / 38.2, 2400 / 38.2
 SC_LOOP_LIFT = 2.1                      # the loop's boost pads' lift (the engine's own: 1.7)
 P0 = np.array([X[SC_F] + OX, Z[SC_F] + OZ]); d0 = T[SC_F] / np.linalg.norm(T[SC_F])
 # (the ramp's way: from the take-off towards the S's turn; the bend onto it where the north-west line meets it)
@@ -338,6 +356,8 @@ def resample(pl):
     t = np.linspace(0, cum[-1], m + 1)
     return np.interp(t, cum, pl[:, 0]), np.interp(t, cum, pl[:, 1]), cum[-1]
 DX_, DZ_, dr_len = resample(dr); FX_, FZ_, fl_len = resample(fl)
+SC_ARC = max(900.0, SC_ARC_PER * fl_len)
+SC_FLIGHT_MS = int(round(max(900, SC_FLIGHT_PER * fl_len) / 50) * 50)
 tailK = [k % N for k in range(SC_D + 1, SC_J + 1)]
 BX = list(DX_) + list(FX_[1:]) + [X[k] + OX for k in tailK]; BZ = list(DZ_) + list(FZ_[1:]) + [Z[k] + OZ for k in tailK]
 BM = len(BX)

@@ -102,6 +102,8 @@ internal static class RaceCarEngineFile
         }
         // the gas monsters that rise out of the gas beside the road to bite cars (Otringal's)
         foreach (var monster in track?.GasMonsters ?? new()) text.Append($"gasmonster={string.Join(' ', monster)}\n");
+        // the flying gas monsters, to and fro beside the road, spitting fire balls (Island CX's hall)
+        foreach (var flyer in track?.Flyers ?? new()) text.Append($"flyer={string.Join(' ', flyer)}\n");
         // the people in the cars' way, stepping out at them, striking and throwing (the Emperor's palace's)
         foreach (var guard in track?.Guards ?? new()) text.Append($"guard={string.Join(' ', guard)}\n");
         if (track?.Guards is { Count: > 0 }) text.Append($"guard_size={(int)Math.Round(RaceTrackGuards.Size * 100)}\n");

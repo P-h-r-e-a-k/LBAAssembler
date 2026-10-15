@@ -543,6 +543,8 @@ static int s_superModel = -1, s_heroHidden = 0, s_superShown = 0;
 static int s_driveBody = -1, s_driveAnim = -1, s_driveSmall = -1, s_driveShown = -1, s_driveSmallNow = 0;
 static T_OBJ_3D s_driveObj;
 static double s_drivePitch = 0;
+#define RACE_DRIVE_ALONG_LEAST 0.5         // (its way at least this much along its heading for the pitch to follow it -- DrawDriveAs)
+#define RACE_DRIVE_SLOPE_MOST 1.4          // (the steepest a road climbs or falls: the Elevator Platform's drop, 125 %)
 static S32 s_drivePrevX, s_drivePrevY, s_drivePrevZ;
 // Twinsen's car at half its size, while an opponent's lightning has him shrunk (twinsen_small=: the buggy's own body -- the buggy
 // behaviour's entity's GEN_BODY_TUNIQUE -- halved, its generic body; the builder adds it)
@@ -838,7 +840,7 @@ static S32 s_panelAt = -1000000;
 // one lands, a spark, and a car there is stopped as by a magic ball.
 #define RACE_MAX_GUNNERS 8
 #define RACE_MAX_GUN_TARGETS 32
-#define RACE_MAX_BULLETS 24
+#define RACE_MAX_BULLETS 40
 #define RACE_GUN_EVERY 4200
 #define RACE_GUN_SHOTS 10
 #define RACE_GUN_GAP 110                   // ms between its bullets
@@ -855,14 +857,27 @@ static S32 s_panelAt = -1000000;
 // brakes or speeds up is missed.
 #define RACE_MAX_GUNNERS_HUNTING 8
 #define RACE_GUN_HUNT_SPREAD 700
-#define RACE_GUN_HUNT_SHOTS 8
+// ... since 2026-10-15 later (the user: "The large missile launchers on CX aren't firing in a way to hit the cars as they're firing over the
+// track, however we seem to have new machine gun fire coming from the turrets instead. The actual missile launchers should target the cars,
+// and let's remove the smaller machine gun fire"), a hunting gun fires no bullets: one missile a burst, its own -- its firing animation's
+// (F_THROW_OBJ_3D: OBJFIX.HQR's 92, thrown level along the gun's facing, which flew over the track) left out (RaceMod_SilentThrow) and
+// flown by the race-track mode instead, straight from the gun's mouth at where its car will be when it gets there (a little either side);
+// where it comes down, an explosion, and a car in its reach is hit.
+#define RACE_MISSILE_OBJ 92
+#define RACE_MISSILE_SPEED 150             // a 20 ms frame's way, the animation's own (7,500 units a second)
+#define RACE_MISSILE_FORWARD 2662          // where the animation throws it from: this far along the gun's facing
+#define RACE_MISSILE_REACH 1400            // a car this near where it comes down is hit (its blast)
+#define RACE_MISSILE_FIRING 900            // ms the gun plays its firing animation
+#define RACE_MISSILE_SPREAD 250
 typedef struct {
     S32 Scene, Gun, Franco; double MX, MY, MZ;
     int NbTargets; double TX[RACE_MAX_GUN_TARGETS], TZ[RACE_MAX_GUN_TARGETS], TY[RACE_MAX_GUN_TARGETS], TR[RACE_MAX_GUN_TARGETS];
     S32 Next, BurstAt; int Fired, Firing, Ready;
     double Hunt; int Who; double LastX, LastY, LastZ; S32 LastAt;       // (a hunting gun: its reach; its car this burst, where and when last seen)
 } T_RACE_GUNNER;
-typedef struct { int On, Extra, Owner; double FromX, FromY, FromZ, ToX, ToY, ToZ; S32 T0, Dur; } T_RACE_BULLET;
+// (what the race-track mode flies: a gunner's bullet, a hunting gun's missile, a flying gas monster's fire ball -- Projectiles)
+enum { SHOT_BULLET, SHOT_MISSILE, SHOT_FIREBALL };
+typedef struct { int On, Extra, Owner, Kind; S16 Sprite, Body; double FromX, FromY, FromZ, ToX, ToY, ToZ; S32 T0, Dur; } T_RACE_BULLET;
 static T_RACE_GUNNER s_gunners[RACE_MAX_GUNNERS];
 static int s_nbGunners = 0;
 static T_RACE_BULLET s_bullets[RACE_MAX_BULLETS];
@@ -974,6 +989,40 @@ typedef struct {
 } T_RACE_MONSTER;
 static T_RACE_MONSTER s_monsters[RACE_MAX_MONSTERS];
 static int s_nbMonsters = 0;
+// Flying gas monsters (flyer=<scene> <its actor> <height> <x> <z> <x> <z> ..., island units: the height it flies at, and its way, flown to
+// and fro): Island CX's, in the hall under its gas -- the user, 2026-10-15: "Naturally the inside has two types of gas monster, one that
+// flies around and shoots red fire balls, and the other one that you've already implemented". The game's own (entity 329: it rises out of
+// the gas in Island CX's room under the emperor's, scene 181, and spits red fire balls -- raw sprite 20 -- at Twinsen), floating to and fro
+// over the hall's floor beside the road, bobbing. Every RACE_FLYER_EVERY ms or so (half again at the most) it stops, turns to the nearest
+// car in its reach below it and spits a fire ball at where that car will be (its animation's own ball left out, RaceMod_SilentThrow); a car
+// the ball comes down by is hit.
+#define RACE_MAX_FLYERS 12
+#define RACE_FLYER_POINTS 32
+#define RACE_FLYER_SPEED 1500.0            // units a second along its way
+#define RACE_FLYER_BOB 220.0               // up and down this much, ...
+#define RACE_FLYER_BOB_MS 1400.0           // ... once in this long
+#define RACE_FLYER_NEAR 1800.0             // it spits at a car between this near ...
+#define RACE_FLYER_FAR 11000.0             // ... and this far
+#define RACE_FLYER_EVERY 3600              // ms between its spits, at the least
+#define RACE_FLYER_RELEASE 420             // ms into its spit the ball leaves its mouth ...
+#define RACE_FLYER_END 1300                // ... and the spit is over
+#define RACE_FLYER_IDLE 0                  // its animations (entity 329): floating, spitting
+#define RACE_FLYER_SPIT 173
+#define RACE_FLYER_MOUTH_UP 937            // its mouth over its feet, and in front (the spit's throw, F_THROW_3D)
+#define RACE_FLYER_MOUTH_FORWARD 1116
+#define RACE_FIREBALL_SPRITE 20
+#define RACE_FIREBALL_SPEED 110            // a 20 ms frame's way (5,500 units a second), straight
+#define RACE_FIREBALL_REACH 900.0          // a car this near where it comes down is hit
+#define RACE_FIREBALL_LONGEST 2.2          // (s: it doesn't spit at a car it couldn't hit sooner than this)
+#define RACE_FIREBALL_SPREAD 650.0         // aimed a little either side of where its car will be (a car that turns or brakes is missed) ...
+#define RACE_FIREBALL_STUN 900             // ... and a car it hits stopped this long (a stumble: there are four of them over the lanes)
+typedef struct {
+    S32 Scene; int Actor; double Y; int Np; double PX[RACE_FLYER_POINTS], PZ[RACE_FLYER_POINTS];
+    double Len, S; int Dir; double X, Z; S32 Beta;
+    int Spitting, Spat, Target; S32 T0, Next; int Ready, Anim;
+} T_RACE_FLYER;
+static T_RACE_FLYER s_flyers[RACE_MAX_FLYERS];
+static int s_nbFlyers = 0;
 static S32 s_bittenUntil[RACE_MAX_OPPONENTS + 1];  // a car just bitten is let be till then -- a monster beside it doesn't bite it again
 // The giant frog (frog=: see "the giant frog" further on)
 #define RACE_FROG_CLEAR 600                // ms the mouth has to stay open once a car is in it: past the jaw, its hinge 7 cells in --
@@ -2287,6 +2336,19 @@ static void Load(const char *path, int carOnly = 0) {
                 memset(g, 0, sizeof(*g));
                 g->Scene = scene; g->Gun = gun; g->Franco = franco; g->MX = x; g->MY = y; g->MZ = z;
                 s_nbGunners++;
+            }
+        }
+        else if (!strcmp(key, "flyer")) {
+            int scene, actor, y, used = 0;
+            if (s_nbFlyers < RACE_MAX_FLYERS && sscanf(v, "%d %d %d%n", &scene, &actor, &y, &used) == 3) {
+                T_RACE_FLYER *f = &s_flyers[s_nbFlyers];
+                memset(f, 0, sizeof(*f));
+                f->Scene = scene; f->Actor = actor; f->Y = y; f->Dir = 1;
+                const char *rest = v + used;
+                int x, z, n2 = 0;
+                while (f->Np < RACE_FLYER_POINTS && sscanf(rest, "%d %d%n", &x, &z, &n2) == 2) { f->PX[f->Np] = x; f->PZ[f->Np] = z; f->Np++; rest += n2; }
+                for (int k = 1; k < f->Np; k++) f->Len += sqrt((f->PX[k] - f->PX[k - 1]) * (f->PX[k] - f->PX[k - 1]) + (f->PZ[k] - f->PZ[k - 1]) * (f->PZ[k] - f->PZ[k - 1]));
+                if (f->Np >= 1) { f->X = f->PX[0]; f->Z = f->PZ[0]; f->S = (s_nbFlyers * 0.37 - floor(s_nbFlyers * 0.37)) * f->Len; s_nbFlyers++; }
             }
         }
         else if (!strcmp(key, "gasmonster")) {
@@ -5882,6 +5944,10 @@ S32 RaceMod_NoCollide(S32 numobj) {
         for (int i = 0; i < s_nbMonsters; i++)
             for (int k = 0; k < s_monsters[i].NbSeen; k++)
                 if (s_monsters[i].SeenScene[k] == (S32)NumCube && s_monsters[i].SeenActor[k] == numobj) return 1;
+    // (a flying gas monster: its fire balls are the race-track mode's -- Flyers)
+    if (RaceMod_Active() && numobj > 0)
+        for (int i = 0; i < s_nbFlyers; i++)
+            if (s_flyers[i].Scene == (S32)NumCube && s_flyers[i].Actor == numobj) return 1;
     // (nor one of the people in the cars' way: what a car running into him does is the race-track mode's -- Guards)
     if (RaceMod_Active() && numobj > 0)
         for (int i = 0; i < s_nbGuards; i++)
@@ -6430,41 +6496,79 @@ S32 RaceMod_SilentThrow(S32 numobj) {
     if (!RaceMod_Active()) return 0;
     for (int i = 0; i < s_nbGunners; i++)
         if (s_gunners[i].Scene == (S32)NumCube && s_gunners[i].Gun == numobj) return 1;
+    for (int i = 0; i < s_nbFlyers; i++)
+        if (s_flyers[i].Scene == (S32)NumCube && s_flyers[i].Actor == numobj) return 1;
     return 0;
 }
 
 // A bullet of a gunner's burst: from its muzzle to a place among its targets (a point in the disc round one), the gun and its Franco
 // turned to it; where the gunner's scene is the one drawn, the game's bullet thrown so that it comes down there -- its height the lower
 // of the two that do, at its speed and weight (flying in frames of 20 ms: its way v a frame, falling weight/16 a frame a frame).
+static int FreeShot(void) {
+    for (int i = 0; i < RACE_MAX_BULLETS; i++) if (!s_bullets[i].On) return i;
+    return -1;
+}
+
+// A hunting gun's missile: straight from the gun's mouth at where its car will be when it gets there (its way since it was last seen, over
+// the flight's time -- twice, the flight measured to that place -- a little either side), the gun turned to it; where the gun's scene is the
+// one drawn, its own missile (the game's 3D object) flown along that line.
+static void GunnerMissile(T_RACE_GUNNER *g, S32 now) {
+    double x, y, z;
+    if (g->Who < -1 || !CarAt(g->Who, &x, &y, &z)) return;
+    const int b = FreeShot();
+    if (b < 0) return;
+    double vx = 0, vz = 0;
+    if (g->LastAt && now > g->LastAt) { vx = (x - g->LastX) * 1000.0 / (now - g->LastAt); vz = (z - g->LastZ) * 1000.0 / (now - g->LastAt); }
+    g->LastX = x; g->LastY = y; g->LastZ = z; g->LastAt = now;
+    const double v = RACE_MISSILE_SPEED * 50.0;   // (a second's way)
+    double tx = x, tz = z, ty = y + 200, fx = g->MX, fy = g->MY, fz = g->MZ, flight = 0;
+    for (int pass = 0; pass < 3; pass++) {
+        // (from the gun's mouth, along the gun's facing towards the car)
+        const double dx = tx - g->MX, dz = tz - g->MZ, d = sqrt(dx * dx + dz * dz);
+        if (d < 1) return;
+        fx = g->MX + dx / d * RACE_MISSILE_FORWARD; fz = g->MZ + dz / d * RACE_MISSILE_FORWARD; fy = g->MY;
+        const double dd = sqrt((tx - fx) * (tx - fx) + (ty - fy) * (ty - fy) + (tz - fz) * (tz - fz));
+        flight = dd / v;
+        tx = x + vx * flight; tz = z + vz * flight;
+    }
+    const double a = VentRandom() * 2 * RACE_PI, r = sqrt(VentRandom()) * RACE_MISSILE_SPREAD;
+    tx += cos(a) * r; tz += sin(a) * r;
+    T_RACE_BULLET *u = &s_bullets[b];
+    memset(u, 0, sizeof(*u));
+    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = g->Gun > 0 ? g->Gun : 255; u->Kind = SHOT_MISSILE;
+    u->FromX = fx; u->FromY = fy; u->FromZ = fz; u->ToX = tx; u->ToY = ty; u->ToZ = tz;
+    const double R = sqrt((tx - fx) * (tx - fx) + (tz - fz) * (tz - fz)), dy = ty - fy;
+    u->Dur = (S32)(sqrt(R * R + dy * dy) / v * 1000);
+    Log_Info("[racemod] Island CX's gun (actor %d) fires a missile at %s (%.1f s)", (int)g->Gun, g->Who < 0 ? "Twinsen" : "an opponent", u->Dur / 1000.0);
+    if (g->Scene != (S32)NumCube || CubeMode != CUBE_EXTERIEUR) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const S32 beta = (S32)floor(atan2(tx - g->MX, tz - g->MZ) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    if (g->Gun > 0 && g->Gun < NbObjets) ListObjet[g->Gun].Obj.Beta = beta;
+    const S32 alpha = (S32)floor(atan2(dy, R) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    u->Extra = ThrowExtraObj((U8)(g->Gun > 0 ? g->Gun : 255), (S32)(fx - cx), (S32)fy, (S32)(fz - cz), RACE_MISSILE_OBJ, alpha, beta, RACE_MISSILE_SPEED, -1, 0, 0);
+    if (u->Extra >= 0) {
+        ListExtra[u->Extra].Flags &= ~(EXTRA_END_OBJ | EXTRA_END_COL | EXTRA_IMPACT);
+        u->Sprite = ListExtra[u->Extra].Sprite; u->Body = ListExtra[u->Extra].Body;
+    }
+}
+
+// A bullet of a gunner's burst: from its muzzle to a place among its targets (a point in the disc round one), the gun and its Franco
+// turned to it; where the gunner's scene is the one drawn, the game's bullet thrown so that it comes down there -- its height the lower
+// of the two that do, at its speed and weight (flying in frames of 20 ms: its way v a frame, falling weight/16 a frame a frame).
 static void GunnerShot(T_RACE_GUNNER *g, S32 now) {
-    if (!g->NbTargets && g->Hunt <= 0) return;
-    int b = -1;
-    for (int i = 0; i < RACE_MAX_BULLETS && b < 0; i++) if (!s_bullets[i].On) b = i;
+    if (g->Hunt > 0) { GunnerMissile(g, now); return; }
+    if (!g->NbTargets) return;
+    const int b = FreeShot();
     if (b < 0) return;
     T_RACE_BULLET *u = &s_bullets[b];
     double tx, ty, tz;
-    if (g->Hunt > 0) {
-        // (a hunting gun: its car's place now, and where it will be when the bullet comes down -- its way since the last bullet, over the
-        // flight's time, once more for the flight to there -- a little either side)
-        double x, y, z;
-        if (g->Who < -1 || !CarAt(g->Who, &x, &y, &z)) return;
-        double vx = 0, vz = 0;
-        if (g->LastAt && now > g->LastAt) { vx = (x - g->LastX) * 1000.0 / (now - g->LastAt); vz = (z - g->LastZ) * 1000.0 / (now - g->LastAt); }
-        g->LastX = x; g->LastY = y; g->LastZ = z; g->LastAt = now;
-        tx = x; tz = z;
-        for (int pass = 0; pass < 2; pass++) {
-            const double rr = sqrt((tx - g->MX) * (tx - g->MX) + (tz - g->MZ) * (tz - g->MZ));
-            const double fly = rr / RACE_GUN_SPEED * 20 / 1000.0;
-            tx = x + vx * fly; tz = z + vz * fly;
-        }
-        const double a = VentRandom() * 2 * 3.14159265358979, r = sqrt(VentRandom()) * RACE_GUN_HUNT_SPREAD;
-        tx += cos(a) * r; tz += sin(a) * r; ty = y;
-    } else {
+    {
         const int k = (int)(VentRandom() * g->NbTargets) % g->NbTargets;
         const double a = VentRandom() * 2 * 3.14159265358979, r = sqrt(VentRandom()) * g->TR[k];
         tx = g->TX[k] + cos(a) * r; tz = g->TZ[k] + sin(a) * r; ty = g->TY[k];
     }
-    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = g->Gun > 0 ? g->Gun : 255;
+    memset(u, 0, sizeof(*u));
+    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = g->Gun > 0 ? g->Gun : 255; u->Kind = SHOT_BULLET; u->Sprite = RACE_GUN_SPRITE;
     u->FromX = g->MX; u->FromY = g->MY; u->FromZ = g->MZ;
     u->ToX = tx; u->ToZ = tz; u->ToY = ty + 60;
     // (its height: tan h from c R^2/v^2 T^2 - R T + (dy + c R^2/v^2) = 0, the lower root; out of reach, straight at it)
@@ -6508,7 +6612,8 @@ static void Gunners(S32 now, int driving) {
         }
         if (!RaceRunning()) continue;
         if (!g->Next) { g->Next = now + RACE_GUN_EVERY / 2 + i * 900; continue; }
-        const int shots = g->Hunt > 0 ? RACE_GUN_HUNT_SHOTS : RACE_GUN_SHOTS;
+        const int shots = g->Hunt > 0 ? 1 : RACE_GUN_SHOTS;
+        const S32 burst = g->Hunt > 0 ? RACE_MISSILE_FIRING : shots * RACE_GUN_GAP;
         if (!g->Firing && now >= g->Next) {
             if (g->Hunt > 0) {
                 // (its car: one at random among those in its reach, outside -- over the gas, not under the island -- and racing)
@@ -6530,32 +6635,44 @@ static void Gunners(S32 now, int driving) {
         }
         if (g->Firing) {
             while (g->Fired < shots && now >= g->BurstAt + g->Fired * RACE_GUN_GAP) { GunnerShot(g, now); g->Fired++; }
-            if (g->Fired >= shots && now >= g->BurstAt + shots * RACE_GUN_GAP) {
+            if (g->Fired >= shots && now >= g->BurstAt + burst) {
                 g->Firing = 0;
                 g->Next = now + RACE_GUN_EVERY * 3 / 4 + (S32)(VentRandom() * RACE_GUN_EVERY / 2);
                 if (here && g->Gun > 0 && g->Gun < NbObjets) InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, (U8)g->Gun);
             }
         }
     }
-    // the bullets: along their way, and where each lands
+}
+
+// Every frame: what the race-track mode flies (s_bullets) -- the gunners' bullets, the hunting guns' missiles, the flying gas monsters' fire
+// balls: along their way, and where each comes down, the cars there hit.
+static void Projectiles(S32 now, int driving) {
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     for (int b = 0; b < RACE_MAX_BULLETS; b++) {
         T_RACE_BULLET *u = &s_bullets[b];
         if (!u->On) continue;
         // (flown by the game, as its own are; taken away where it comes down)
-        const int shown = u->Extra >= 0 && u->Extra < MAX_EXTRAS && ListExtra[u->Extra].Sprite == RACE_GUN_SPRITE && ListExtra[u->Extra].Owner == (U8)u->Owner;
+        const int shown = u->Extra >= 0 && u->Extra < MAX_EXTRAS && ListExtra[u->Extra].Sprite == u->Sprite && ListExtra[u->Extra].Owner == (U8)u->Owner
+                          && (u->Kind != SHOT_MISSILE || ListExtra[u->Extra].Body == u->Body);
         if (now - u->T0 < u->Dur) continue;
         u->On = 0;
         if (shown) ListExtra[u->Extra].Sprite = -1;
         const S32 lx = (S32)(u->ToX - cx), lz = (S32)(u->ToZ - cz);
-        if (CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768) InitHitExtraPof(lx, (S32)u->ToY, lz, RACE_SHOT_FORCE);
+        const int inCube = CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768;
+        if (inCube) {
+            if (u->Kind == SHOT_MISSILE) DoImpact(RACE_PENGUIN_IMPACT, lx, (S32)u->ToY, lz, 255);
+            else InitHitExtraPof(lx, (S32)u->ToY, lz, RACE_SHOT_FORCE);
+        }
+        const double reach = u->Kind == SHOT_MISSILE ? RACE_MISSILE_REACH : u->Kind == SHOT_FIREBALL ? RACE_FIREBALL_REACH : RACE_GUN_REACH;
         for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
             if (who < 0 && !driving) continue;
             if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes || now < s_opp[who].HitUntil)) continue;
             double x, y, z;
             if (!CarAt(who, &x, &y, &z)) continue;
-            if ((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ) > (double)RACE_GUN_REACH * RACE_GUN_REACH || fabs(y - u->ToY) > 1400) continue;
-            CarStruck(who, now, "machine gun", u->Owner < 255 && GunHunts(u->Owner) ? "Island CX's guns" : "the Franco gunner");
+            if ((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ) > reach * reach || fabs(y - u->ToY) > 1400) continue;
+            if (u->Kind == SHOT_MISSILE) CarStruck(who, now, "missile", "an Island CX gun");
+            else if (u->Kind == SHOT_FIREBALL) CarStruckFor(who, now, "fire ball", "a flying gas monster", RACE_FIREBALL_STUN, NULL);
+            else CarStruck(who, now, "machine gun", "the Franco gunner");
         }
     }
 }
@@ -6900,6 +7017,112 @@ static void Monsters(S32 now, int driving) {
 }
 
 // ---- the people in the cars' way (guard=) ----
+
+static void CarWays(S32 now);
+
+// A flying gas monster's fire ball: from its mouth at where its car will be when it gets there (the car's way kept on, three guesses at the
+// flight's time), straight; the game's fire ball flown along that line where its scene is the one drawn.
+static void FlyerSpit(T_RACE_FLYER *f, S32 now, double y) {
+    double x, cy, z;
+    if (!CarAt(f->Target, &x, &cy, &z)) return;
+    const int b = FreeShot();
+    if (b < 0) return;
+    const int k = f->Target + 1;
+    const double v = RACE_FIREBALL_SPEED * 50.0;
+    double tx = x, tz = z, ty = cy + 300, fx = f->X, fy = y + RACE_FLYER_MOUTH_UP, fz = f->Z, flight = 0;
+    for (int pass = 0; pass < 3; pass++) {
+        const double dx = tx - f->X, dz = tz - f->Z, d = sqrt(dx * dx + dz * dz);
+        if (d < 1) return;
+        fx = f->X + dx / d * RACE_FLYER_MOUTH_FORWARD; fz = f->Z + dz / d * RACE_FLYER_MOUTH_FORWARD;
+        flight = sqrt((tx - fx) * (tx - fx) + (ty - fy) * (ty - fy) + (tz - fz) * (tz - fz)) / v;
+        tx = x + s_carVX[k] * flight; tz = z + s_carVZ[k] * flight;
+    }
+    if (flight > RACE_FIREBALL_LONGEST) return;
+    {
+        const double a = VentRandom() * 2 * RACE_PI, r = sqrt(VentRandom()) * RACE_FIREBALL_SPREAD;
+        tx += cos(a) * r; tz += sin(a) * r;
+    }
+    T_RACE_BULLET *u = &s_bullets[b];
+    memset(u, 0, sizeof(*u));
+    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = f->Actor > 0 ? f->Actor : 255; u->Kind = SHOT_FIREBALL; u->Sprite = RACE_FIREBALL_SPRITE;
+    u->FromX = fx; u->FromY = fy; u->FromZ = fz; u->ToX = tx; u->ToY = ty; u->ToZ = tz; u->Dur = (S32)(flight * 1000);
+    if (f->Scene != (S32)NumCube || CubeMode != CUBE_EXTERIEUR || f->Actor <= 0 || f->Actor >= NbObjets) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const double R = sqrt((tx - fx) * (tx - fx) + (tz - fz) * (tz - fz));
+    const S32 beta = (S32)floor(atan2(tx - fx, tz - fz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    const S32 alpha = (S32)floor(atan2(ty - fy, R) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    u->Extra = ThrowExtra((U8)f->Actor, (S32)(fx - cx), (S32)fy, (S32)(fz - cz), RACE_FIREBALL_SPRITE, alpha, beta, RACE_FIREBALL_SPEED, 0, 0);
+    if (u->Extra >= 0) ListExtra[u->Extra].Flags &= ~(EXTRA_END_OBJ | EXTRA_END_COL | EXTRA_IMPACT);
+}
+
+// Every frame: the flying gas monsters (flyer=) -- to and fro along their ways, bobbing; now and then stopping to spit a fire ball at a car;
+// posed where their scene is the one about.
+static void Flyers(S32 now, int driving, S32 dt) {
+    if (!s_nbFlyers) return;
+    CarWays(now);
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const int running = RaceRunning();
+    for (int i = 0; i < s_nbFlyers; i++) {
+        T_RACE_FLYER *f = &s_flyers[i];
+        const double bob = RACE_FLYER_BOB * sin((now + i * 517) * 2 * RACE_PI / RACE_FLYER_BOB_MS);
+        const double y = f->Y + bob;
+        if (f->Spitting) {
+            const S32 t = now - f->T0;
+            double x, cy, z;
+            if (f->Target >= -1 && CarAt(f->Target, &x, &cy, &z)) f->Beta = (S32)floor(atan2(x - f->X, z - f->Z) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+            if (!f->Spat && t >= RACE_FLYER_RELEASE) { f->Spat = 1; FlyerSpit(f, now, y); }
+            if (t >= RACE_FLYER_END) { f->Spitting = 0; f->Next = now + RACE_FLYER_EVERY + (S32)(VentRandom() * RACE_FLYER_EVERY / 2); }
+        } else if (f->Np >= 2 && f->Len > 1) {
+            // (along its way, turning back at either end)
+            f->S += f->Dir * RACE_FLYER_SPEED * dt / 1000.0;
+            if (f->S >= f->Len) { f->S = 2 * f->Len - f->S; f->Dir = -1; }
+            if (f->S <= 0) { f->S = -f->S; f->Dir = 1; }
+            double left = f->S;
+            for (int k = 1; k < f->Np; k++) {
+                const double dx = f->PX[k] - f->PX[k - 1], dz = f->PZ[k] - f->PZ[k - 1], d = sqrt(dx * dx + dz * dz);
+                if (left <= d || k == f->Np - 1) {
+                    const double u = d > 0 ? fmin(1.0, left / d) : 0;
+                    f->X = f->PX[k - 1] + dx * u; f->Z = f->PZ[k - 1] + dz * u;
+                    f->Beta = (S32)floor(atan2(dx * f->Dir, dz * f->Dir) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+                    break;
+                }
+                left -= d;
+            }
+            // (a spit: at the nearest car in its reach below it, in the hall)
+            if (running) {
+                if (!f->Next) f->Next = now + RACE_FLYER_EVERY / 2 + (S32)(VentRandom() * RACE_FLYER_EVERY);
+                if (now >= f->Next) {
+                    int best = -2; double bestD = 1e18;
+                    for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+                        if (who < 0 && !driving) continue;
+                        if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
+                        double x, cy, z;
+                        if (!CarAt(who, &x, &cy, &z) || cy > y || !UnderAtWorld(x, z, (S32)cy)) continue;
+                        const double d2 = (x - f->X) * (x - f->X) + (z - f->Z) * (z - f->Z);
+                        if (d2 < RACE_FLYER_NEAR * RACE_FLYER_NEAR || d2 > RACE_FLYER_FAR * RACE_FLYER_FAR || d2 >= bestD) continue;
+                        best = who; bestD = d2;
+                    }
+                    if (best >= -1) { f->Spitting = 1; f->Spat = 0; f->T0 = now; f->Target = best; }
+                    else f->Next = now + 400;
+                }
+            } else { f->Next = 0; }
+        }
+        // posed where its scene is the one about
+        if (f->Scene != (S32)NumCube || CubeMode != CUBE_EXTERIEUR || f->Actor <= 0 || f->Actor >= NbObjets) { f->Ready = 0; continue; }
+        T_OBJET *o = &ListObjet[f->Actor];
+        if (!f->Ready) {
+            // (its own scripts stopped: it is the race-track mode's)
+            o->OffsetLife = o->OffsetTrack = -1;
+            InitBody(0, (U8)f->Actor);
+            f->Ready = 1; f->Anim = -1;
+            Log_Info("[racemod] flying gas monster: actor %d of scene %d, %d points, %.0f long", f->Actor, (int)f->Scene, f->Np, f->Len);
+        }
+        o->Obj.X = (S32)(f->X - cx); o->Obj.Y = (S32)y; o->Obj.Z = (S32)(f->Z - cz);
+        CarPitch(&o->Obj, f->Beta, 0);
+        const int anim = f->Spitting ? RACE_FLYER_SPIT : RACE_FLYER_IDLE;
+        if (anim != f->Anim) { InitAnim((U16)anim, f->Spitting ? ANIM_THEN : ANIM_REPEAT, (U8)f->Actor); f->Anim = anim; }
+    }
+}
 
 // Where the cars are going: each one's way (units a second) from its last place, every frame.
 static void CarWays(S32 now) {
@@ -7358,6 +7581,8 @@ void RaceMod_Frame(void) {
     LavaFalls(now);
     BoostPanels(now, driving);
     Gunners(now, driving);
+    Flyers(now, driving, dt);
+    Projectiles(now, driving);
     Wheel(now, driving);
     SlotMachine(now);
     Monsters(now, driving);
@@ -7658,14 +7883,21 @@ static void DrawDriveAs(S32 now) {
         s_driveShown = body;
         Log_Info("[racemod] driving as body %d (animation %d)", body, s_driveAnim);
     }
-    // the pitch: the height it has gained over the way it has gone along its heading (backwards too), smoothed
+    // the pitch: the height it has gained over the way it has gone (forwards or backwards along its heading), smoothed. Over the whole way,
+    // not only its share along the heading: a car driven into the rail -- off a boost panel, Wannies Island's loop, 2026-10-15 ("After using
+    // the boost panels on platform.ile and driving into the side wall it tips the car up on its nose") -- is pushed along the rail nearly
+    // sideways to its heading, and the road's climb over that way, over the little of it along its heading, stood it on its nose. Going
+    // mostly sideways it keeps the pitch it has; and no road climbs or falls steeper than RACE_DRIVE_SLOPE_MOST.
     const double b = hero->Obj.Beta * 2 * RACE_PI / 4096;
-    const double along = (hero->Obj.X - s_drivePrevX) * sin(b) + (hero->Obj.Z - s_drivePrevZ) * cos(b);
-    if (fabs(along) > 48) {
-        const double slope = (hero->Obj.Y - s_drivePrevY) / along;
-        s_drivePitch += (-atan(slope) - s_drivePitch) * 0.35;
-        s_drivePrevX = hero->Obj.X; s_drivePrevY = hero->Obj.Y; s_drivePrevZ = hero->Obj.Z;
-    } else if (abs(hero->Obj.X - s_drivePrevX) + abs(hero->Obj.Z - s_drivePrevZ) > 600) {
+    const double dx = hero->Obj.X - s_drivePrevX, dz = hero->Obj.Z - s_drivePrevZ, way = sqrt(dx * dx + dz * dz);
+    const double along = dx * sin(b) + dz * cos(b);
+    if (way > 48) {
+        if (fabs(along) >= RACE_DRIVE_ALONG_LEAST * way) {
+            double slope = (hero->Obj.Y - s_drivePrevY) / (along < 0 ? -way : way);
+            if (slope > RACE_DRIVE_SLOPE_MOST) slope = RACE_DRIVE_SLOPE_MOST;
+            if (slope < -RACE_DRIVE_SLOPE_MOST) slope = -RACE_DRIVE_SLOPE_MOST;
+            s_drivePitch += (-atan(slope) - s_drivePitch) * 0.35;
+        }
         s_drivePrevX = hero->Obj.X; s_drivePrevY = hero->Obj.Y; s_drivePrevZ = hero->Obj.Z;
     }
     // (its animation stepped -- in place: the opponents' cars are moved by their lines, not by it)
@@ -8061,6 +8293,7 @@ static void ResetTrack(void) {
     s_shardModel = s_shardBit = -1;
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
+    s_nbFlyers = 0;
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
     s_guardSize = 1.0; s_nbTeleports = 0; s_teleportedAt = 0;
     memset(&s_frog, 0, sizeof(s_frog)); s_frog.Arc = -1;

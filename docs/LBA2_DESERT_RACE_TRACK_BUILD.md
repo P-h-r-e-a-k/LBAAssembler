@@ -3866,6 +3866,26 @@ The test pilot: a lap in 75.5 s (thrown back twice by the frog, untimed as ever)
 ![The blue frog](racetrack/wannies/frog_blue.png)
 ![The climb from the frog to the tower's top](racetrack/wannies/climb_to_tower.png)
 
+### Fifth round: a shorter leap, no car on its nose (2026-10-15, later)
+
+The user: "Our jump on platform.ile is far too long, we need to change it so the car lands as soon as it can"; then "After using the boost
+panels on platform.ile and driving into the side wall it tips the car up on its nose, we should fix this".
+
+- *The shortcut's leap* came down on the S west past its turn (the user's other pink): 38 cells and 2.4 s in the air, climbing 3,400. It
+  now lands on the lap's first point past the loop it skips that the leap can come down on (`wannies_design.py` `leap_landing`): from where
+  the lap comes back east under the take-off, the first whose way the leap turns onto by 40 degrees at the most, with room before it to
+  curve onto it. With the ramp aimed at the S's turn, that is just past the turn: 24 cells, curving 17 degrees, 1.5 s in the air (the arc
+  and the time scaled to its length). The lap itself is unchanged. The test pilot took it: carried from the lip, down on the S 1.5 s later.
+- *On its nose*: the car's pitch and roll are measured from the floor 400 in front of and behind its middle and 400 to either side
+  (BUGGY.CPP). Driven into the rail -- at a boost panel's speed, further over it -- a point past the rail is over the ground far below the
+  deck, and the car stood on its nose. In a race a point whose floor is more than 700 off the car's own now counts as level with it for
+  the pitch, 250 for the roll (`TiltFloorY`): no road climbs or falls 700 over 400 (the steepest, the Elevator Platform's drop, 500), and
+  none is banked 250 across (the steepest bank, 0.40: 160). The car driving as a character car is pitched by the way it climbs: that is
+  measured over the whole way it goes now, not only its share along its heading (pushed along a rail it goes nearly sideways), and
+  capped (`DrawDriveAs`).
+
+![The shortcut's leap, down on the S just past its turn](racetrack/wannies/leap_short.png)
+
 ## The Emperor's palace, twelfth round: the outside dropped, an upstairs, the race through both floors (2026-10-15)
 
 The user: "The outside of the palace track just isn't working, and we've tried a few revisions, let's keep a copy of it so we can rebuild
@@ -3913,6 +3933,22 @@ theme."
 ![The down-stairwell](racetrack/palace/upstairs_down_stairwell.png)
 ![The long hall, two storeys high](racetrack/palace/upstairs_long_hall_two_storeys.png)
 ![The upstairs from above](racetrack/palace/upstairs_top.png)
+
+### The down-stairwell's ramp down to the floor (2026-10-15, later)
+
+The user: "Inside the palace the spiral down from upstairs to downstairs doesn't connect to the ground it just stops forcing cars to just
+drop off, we should fix this, so it's a smooth drive down".
+
+- The plan's bare stretch (no road: the ground floor's rooms) begins at the ramp's foot, and the builder finds a plan point's place on the
+  road as the nearest road point (`PlanPoint`) -- but the ramp's turn above its foot passes within a fifth of a cell of it, and the bare
+  stretch began up there: no road under the ramp's last 1.25 turns, and the car fell 5,500 to the floor halfway down. A road point is now
+  given the plan's height at its place along the plan, and where the nearest point is another level's (1,500 off), the nearest at the plan
+  point's own height is taken. Roads that don't pass over themselves are unchanged.
+- Out of the stairwell the line ran north along the cube edge (x 384, the ramp's foot 1.5 cells past it) and the car changed cubes back
+  and forth every half second; it now goes straight over to the round window's line (3 cells inside the cube west of the edge) just past
+  the foot.
+- The test pilot: down the ramp from 19,600 to the floor without a drop, three cube changes on to the long hall; won in 123.99 s, no
+  rescues.
 
 ## Island CX: round the island under its cannons, down through a door, twice round the halls under the gas (2026-10-15)
 
@@ -3962,10 +3998,8 @@ The race-track mode's part (`RACEMOD.CPP`):
   random among those within its reach that are outside: over the gas, not under the island. It fires 8 shots at where that car will be
   when each one comes down, the car's speed measured between shots, a little either side. A car that turns, brakes or speeds up is
   missed; one in a burst is stunned. The test pilot's race had them fire at Twinsen and the opponents alike.
-- *Gas monsters*: 6 of them, the game's own, stand on the ring's floor beside its lanes (`GasMonsterRun.Floor`; the monster's foot is its
-  floor, its poses fitted to the road over it). Each strikes at its own place on the road.
-- *Gas vents*: 11 of them blow across the ring's lanes from the rail on its east side, its north side and the west outer lane (the plan's
-  `steamJets`). They are the Gazogem factory's steam jets, and a burst stuns a car in it.
+- *Gas monsters*: the game's own stand on the ring's floor beside its lanes (`GasMonsterRun.Floor`; the monster's foot is its floor, its
+  poses fitted to the road over it). Each strikes at its own place on the road. (6 at first, 2 since the second round below.)
 - *The camera in the ring*: three tunnels of the camera's alone (no pieces) cover the ring, their roofs the room's roof over the road. The
   camera that follows the car normally stood 6,000 over it, out over the roof and the gas, where the island's ground near the eye isn't
   drawn (the near plane), so the car was seen through the island. In a tunnel the race-track mode's tunnel camera rides behind the car
@@ -3987,9 +4021,47 @@ along the way, and the opponents finished all three laps.
 ![The start straight](racetrack/cxtower/start.png)
 ![Into door A](racetrack/cxtower/door_a.png)
 ![The gas monsters in the ring](racetrack/cxtower/ring_gas_monsters.png)
-![A gas vent](racetrack/cxtower/ring_gas_vent.png)
 ![Up the tunnel to door C](racetrack/cxtower/exit_tunnel.png)
 ![Round the north-east tower, the car stunned by its cannon](racetrack/cxtower/cannon_tower.png)
+
+### The second round (2026-10-15, later)
+
+The user: "Our CXTower track, you've added steam that fires underground, this needs removing. Naturally the inside has two types of gas
+monster, one that flies around and shoots red fire balls, and the other one that you've already implemented. Let's reduce the number of gas
+monsters you've already added, and add some of the flying ones that fire fireballs. Currently driving inside there's no visible door way, it
+looks like we're driving into a cliff, we should fix this". Then: "The large missile launchers on CX aren't firing in a way to hit the cars
+as they're firing over the track, however we seem to have new machine gun fire coming from the turrets instead. The actual missile launchers
+should target the cars, and let's remove the smaller machine gun fire".
+
+- *No gas vents*: the plan's `steamJets` are gone (`cxtower_design.py`).
+- *Gas monsters*: one a run on three of the ring's sides (`most: 1`); the build places 2.
+- *Flying gas monsters* (`RaceTrackFlyers`, plan `flyers`, `RACEMOD.CPP` `flyer=`): the game's other gas monster, entity 329. In Island
+  CX's room under the emperor's (scene 181) it rises out of the gas and spits red fire balls (raw sprite 20, its animation 173's
+  `F_THROW_3D`) at Twinsen. Four fly to and fro along the south inner lane, the east and north sides and the west outer lane, 2,600 over
+  the floor beside the lane (away from the walls), bobbing. Every 3.6 to 5.4 s each stops, turns to the nearest car below it in the hall
+  between 1,800 and 11,000 away and spits a fire ball (its animation's own left out, `RaceMod_SilentThrow`) at where that car will be, a
+  little either side. A car the ball comes down by is stopped 0.9 s.
+- *The cannons fire their missiles*: the "machine gun fire" was the hunting gunners' bullets (`gunner_hunt=` borrowed the Franco gunner's
+  burst), and the missiles flying over the track were the cannon's own firing animation's (`F_THROW_OBJ_3D`, OBJFIX.HQR 92, thrown level
+  along its facing). A hunting gun now fires one missile a burst and no bullets: its animation's missile is left out (`RaceMod_SilentThrow`,
+  now in `F_THROW_OBJ_3D` too) and the race-track mode flies the same missile straight from the gun's mouth (2,662 along its facing) at
+  where its car will be when it gets there (7,500 units a second). Where it comes down, a nitro penguin's explosion, and a car within 1,400
+  is stunned. The gunners' bullets, the missiles and the fire balls are one list, `Projectiles`.
+- *Door A's doorway*: the road went down into the trench's end and into flat ground before the cliff, so it looked like driving into rock.
+  - The sunk tunnel (door A's portal) rounded its cutting's far end 4 cells deep into the plateau over the road going on under the island.
+    `CutSunk` no longer cuts past an end where the road goes on `under`; the raised road's cutting (`CutUnderRaised`) leaves a cell nearer
+    an `under` point of about its height (2,000) than the stretch it cuts. Only Island CX has `under`.
+  - A heightmap can't hang over the road: the ground's face over the mouth (one cell, from the road up to the plateau) stood across it.
+    `OpenTunnelMouths` (after the tunnels are placed) leaves those cells' triangles undrawn (texture and polygon flags 0).
+  - The sunk tunnel's end gets a wall from the next tunnel's roof up to the ground behind it (the plateau stands 320 over the portal's roof,
+    and its edge showed, floating). Seen from the trench: the portal, a wall over the opening and the tunnel going down into the island.
+  Door C, coming out, is the same.
+
+The test pilot raced 3 laps: 48.2, 49.4 and 48.8 s, first of four, no rescues. Fire balls hit Twinsen 11 times and the opponents 17 (the
+pilot never dodges); the missiles, 45 of them, mostly came down by the cars outside.
+
+![Door A from the trench: the portal, the wall over the opening, the tunnel going down](racetrack/cxtower/door_a_doorway.png)
+![Flying gas monsters over the ring](racetrack/cxtower/ring_flyers.png)
 
 ## The game has the keyboard from the start (2026-10-12)
 

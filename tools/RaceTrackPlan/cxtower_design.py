@@ -260,8 +260,15 @@ iE = nearest_after((55.0, 38.0), iS_in2, 40); iE2 = nearest_after((55.0, 14.0), 
 iN = nearest_after((44.0, 4.5), iE2, 40); iN2 = nearest_after((14.0, 4.5), iN, 80)
 iW2 = nearest_after((4.5, 18.0), iN2, 40); iW22 = nearest_after((4.5, 50.0), iW2, 80)
 iS2 = nearest_after((14.0, 58.0), iW22, 40); iS22 = nearest_after((33.0, 58.0), iS2, 60)
+# (fewer since 2026-10-15 later -- the user: "Let's reduce the number of gas monsters you've already added, and add some of the flying ones
+# that fire fireballs": one on the south side's inner lane, one on the north side's, one on the west outer lane)
 MONSTERS = [{'from': int(a), 'to': int(b), 'every': 9.0, 'out': 2.5, 'most': m, 'floor': GAS_MONSTER_FLOOR}
-            for a, b, m in ((iS_in, iS_in2, 3), (iE, iE2, 2), (iN, iN2, 3), (iW2, iW22, 2), (iS2, iS22, 2))]
+            for a, b, m in ((iS_in, iS_in2, 1), (iN, iN2, 1), (iW2, iW22, 1))]
+# ---- the flying gas monsters (RaceTrackFlyers: the game's entity 329, spitting red fire balls): to and fro along the south side's inner
+# lane, the east side's, the north side's and the west outer lane, 2,600 over the floor, beside the lane on the side away from the walls --
+# between the lane and the control room or the next lane ('out': cells to the lane's left as it runs, minus to its right)
+FLYERS = [{'from': int(a), 'to': int(b), 'out': o, 'height': 2600.0, 'floor': GAS_MONSTER_FLOOR}
+          for a, b, o in ((iS_in, iS_in2, 5.5), (iE, iE2, -6.0), (iN, iN2, -6.0), (iW2, iW22, -3.5))]
 
 # ---- checks
 ride = np.ones(N, bool)
@@ -321,7 +328,7 @@ for m, k in MARK.items():
     out.append(f'    {m:9s} point {k:4d} ({X[k]:5.1f}, {Z[k]:5.1f}) {Y[k]:6.0f}  ground {ground(X[k], Z[k]):5.0f}{"  under" if under[k] else ""}{"  tunnel" if in_tunnel[k] else ""}')
 out.append(f'  under: {UNDER_RUNS}; tunnels {[(t["from"], t["to"]) for t in TUNNELS]}')
 out.append(f'  pit lane: {PM} points, {pit_len:.1f} cells, hidden {pit_hid}, spots {PIT_SPOT_LIST}, heights {PY.min():.0f}..{PY.max():.0f}')
-out.append(f'  gas monster runs: {[(m["from"], m["to"]) for m in MONSTERS]}')
+out.append(f'  gas monster runs: {[(m["from"], m["to"]) for m in MONSTERS]}; flyers {[(f["from"], f["to"], f["out"]) for f in FLYERS]}')
 print('\n'.join(out))
 
 plan = {
@@ -339,9 +346,8 @@ plan = {
     'under': UNDER_RUNS,
     'tunnels': TUNNELS,
     'gasMonsters': MONSTERS,
-    # gas vents in the ring: bursts of gas blowing across its lanes out of the rail (the Gazogem factory's steam jets: RaceTrackPipes.PlaceJets),
-    # along its east side and the north side's, and the west outer lane
-    'steamJets': [{'from': int(a), 'to': int(b), 'every': 8.0} for a, b in ((iE, iE2), (iN, iN2), (iW2, iW22))],
+    # (no steam jets in the ring since 2026-10-15 later -- the user: "you've added steam that fires underground, this needs removing")
+    'flyers': FLYERS,
     'branches': [{
         # the pit lane: off the lap before the S-bend, back on at the trench's mouth
         'points': [[round(float(x), 3), round(float(z), 3)] for x, z in zip(PX, PZ)],

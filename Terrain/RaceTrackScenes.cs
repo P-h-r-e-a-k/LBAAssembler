@@ -21,7 +21,8 @@ internal static class RaceTrackScenes
     // mushroom in each, the fake mushrooms a car drops (since 2026-10-08).
     public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, List<(RaceDriver Driver, Dictionary<int, int> Actors)> Drivers, int StartScene,
         List<int[]> Grid, List<int[]> Pits, Result? Twin = null, List<int[]>? Mushrooms = null, List<int[]>? Penguins = null, List<int[]>? Oil = null,
-        List<int[]>? Fakes = null, List<int[]>? Gunners = null, List<int[]>? GasMonsters = null, List<int[]>? Guards = null, List<int[]>? Hunters = null);
+        List<int[]>? Fakes = null, List<int[]>? Gunners = null, List<int[]>? GasMonsters = null, List<int[]>? Guards = null, List<int[]>? Hunters = null,
+        List<int[]>? Flyers = null);
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
     //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
@@ -340,8 +341,10 @@ internal static class RaceTrackScenes
         // the island's own guns that fire at the cars (RaceTrackIsland.HuntingGuns): each [scene, its actor, its muzzle x, y, z (island units),
         // its reach (units)]
         public List<int[]> Hunters = new();
+        // the flying gas monsters: each [scene, its actor, its place in Report.Flyers]
+        public List<int[]> Flyers = new();
         public Result Result(List<string> log, int changed, int removed, Result? twin = null) =>
-            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners, GasMonsters, Guards, Hunters);
+            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners, GasMonsters, Guards, Hunters, Flyers);
     }
 
     // Edits the outside scenes of the island as the options say, from what the build of the island found (start line, jump, road). With
@@ -713,6 +716,25 @@ internal static class RaceTrackScenes
                         var home = (int)Math.Floor(g.X / 64) == model.CubeX && (int)Math.Floor(g.Z / 64) == model.CubeY;
                         t.GasMonsters.Add(new[] { scene, actor, g.Body, gi, home ? 1 : 0 });
                         log.Add($"scene {scene}: a gas monster (actor {actor}) in the gas at ({g.X:0.#}, {g.Z:0.#}){(home ? "" : ", in the next cube")}");
+                    }
+            // the flying gas monsters (Report.Flyers: RaceTrackFlyers) -- an actor in the scene of the cube their way starts in, its scripts gone:
+            // the race-track mode flies it (flyer=)
+            if (mushroomTemplate is not null)
+                foreach (var t in tracks)
+                    for (var fi = 0; fi < t.Report.Flyers.Count; fi++)
+                    {
+                        var f = t.Report.Flyers[fi];
+                        var (fx, fz) = f.Way[0];
+                        if ((int)Math.Floor(fx / 64) != model.CubeX || (int)Math.Floor(fz / 64) != model.CubeY) continue;
+                        if (model.Actors.Count + 1 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the flying gas monster at ({fx:0.#}, {fz:0.#})"); continue; }
+                        var flyer = mushroomTemplate.Clone();
+                        flyer.Entity = RaceTrackFlyers.Entity; flyer.Body = 0; flyer.Anim = 0;
+                        flyer.Flags = OpponentFlags; flyer.Move = 0; flyer.Life = new byte[] { 0 }; flyer.Track = new byte[] { 0 };
+                        flyer.X = Math.Clamp((int)Math.Round((fx - model.CubeX * 64) * 512), 0, 32767); flyer.Z = Math.Clamp((int)Math.Round((fz - model.CubeY * 64) * 512), 0, 32767);
+                        flyer.Y = (int)Math.Round(f.Y); flyer.Beta = 0;
+                        var actor = SceneOps.AddActor(model, flyer);
+                        t.Flyers.Add(new[] { scene, actor, fi });
+                        log.Add($"scene {scene}: a flying gas monster (actor {actor}) over ({fx:0.#}, {fz:0.#}), {f.Way.Count} points at {f.Y:0}");
                     }
             // the people in the cars' way (Report.Guards: RaceTrackGuards) -- an actor of each scene they can be seen from, as the gas monsters
             // are, their scripts gone, out of sight till the race-track mode stands them at their posts (guard=)

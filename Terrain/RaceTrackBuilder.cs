@@ -143,6 +143,9 @@ internal sealed class RaceTrackPlan
     // Gas monsters rising out of the gas beside the road to bite cars (RaceTrackGasMonster, RACEMOD.CPP gasmonster=): Otringal's docks and
     // the islets of Baldino's crash (the user, 2026-10-09).
     public GasMonsterRun[]? GasMonsters { get; set; }
+    // Flying gas monsters to and fro beside the road, spitting fire balls at the cars (RaceTrackFlyers, RACEMOD.CPP flyer=): Island CX's
+    // hall under its gas (the user, 2026-10-15).
+    public FlyerRun[]? Flyers { get; set; }
     // A giant frog the lap drives through, into its mouth and out of its back (RaceTrackFrog, RACEMOD.CPP frog=): Wannies Island's
     // (the user, 2026-10-14).
     public FrogRun? Frog { get; set; }
@@ -551,6 +554,8 @@ internal sealed class RaceTrackReport
     public RouletteSpot? Roulette;
     // the gas monsters (RaceTrackPlan.GasMonsters): RaceTrackGasMonster.Place's
     public List<GasMonsterSpot> GasMonsters { get; } = new();
+    // the flying gas monsters (RaceTrackPlan.Flyers): RaceTrackFlyers.Place's
+    public List<FlyerSpot> Flyers { get; } = new();
     // the lap's point of each of Raised's (PlaceRaised): where a point of the lap is in the engine's list
     public List<int> RaisedSpan { get; } = new();
     public int Vertices, Cells, DecorsRemoved, SolidDecorsRemoved, BridgeCells;
@@ -1015,6 +1020,8 @@ internal static class RaceTrackBuilder
             RaceTrackPipes.PlaceJets(main, jetRuns, options, report);
         if (planned && plan.Tunnels is { Length: > 0 } tunnels)
             RaceTrackTunnel.Place(island, main, tunnels.Select(t => (PlanPoint(plan, main, t.From), PlanPoint(plan, main, t.To), t)).ToList(), options, report);
+        // (after the sunk tunnels' cuttings: the faces they leave over the mouths)
+        if (main.Under is not null) OpenTunnelMouths(island, main, options, report);
         if (planned && plan.Pipeline is { } pipeline)
             RaceTrackPipes.PlacePipeline(island, main, pipeline, plan.OriginCellX, plan.OriginCellZ, options, report);
         // (the lava falls before the lava balls: a ball shot out of a fall's pool starts from the pool's surface)
@@ -1066,6 +1073,9 @@ internal static class RaceTrackBuilder
         if (planned && plan.GasMonsters is { Length: > 0 } monsters)
             foreach (var g in monsters)
                 report.GasMonsters.AddRange(RaceTrackGasMonster.Place(island, main, PlanPoint(plan, main, g.From), PlanPoint(plan, main, g.To), g, options, report));
+        if (planned && plan.Flyers is { Length: > 0 } flyers)
+            foreach (var f in flyers)
+                if (RaceTrackFlyers.Place(island, main, PlanPoint(plan, main, f.From), PlanPoint(plan, main, f.To), f, options) is { } spot) report.Flyers.Add(spot);
         if (planned && plan.Crystals is { Length: > 0 } crystals)
             RaceTrackCrystals.Place(island, main, crystals, plan.OriginCellX, plan.OriginCellZ, options, report);
         if (planned && plan.CrystalArches is { Length: > 0 } arches)
@@ -1437,8 +1447,27 @@ internal static class RaceTrackBuilder
         var window = Math.Max(20, r.Count / 20);
         var best = At(r, guess); var bd = double.MaxValue;
         for (var k = -window; k <= window; k++) { var i = At(r, guess + k); var d = Sq(r.X[i] - x) + Sq(r.Z[i] - z); if (d < bd) { bd = d; best = i; } }
+        // (a road over itself -- a spiral's turns: the nearest point another level's, the nearest at the plan point's own height instead. The
+        // palace's down-stairwell, 2026-10-15: the ramp's foot, where the plan's bare floor begins, lies under its turn above, and the bare
+        // stretch began up there -- no road under the lower turns, "it just stops forcing cars to just drop off")
+        // (a road point's height: the plan's at its place along the plan -- the road is the plan's line resampled, in its order; its own
+        // heights may still be the ground's here)
+        double PlanHeight(int i, double[] h) => h[Math.Clamp((int)Math.Round((double)i / r.Count * plan.Points.Length), 0, h.Length - 1)];
+        if (plan.Heights is { Length: > 0 } ph && p < ph.Length && Math.Abs(PlanHeight(best, ph) - ph[p]) > PlanPointLevel)
+        {
+            var level = -1; var ld = double.MaxValue;
+            for (var k = -window; k <= window; k++)
+            {
+                var i = At(r, guess + k);
+                if (Math.Abs(PlanHeight(i, ph) - ph[p]) > PlanPointLevel) continue;
+                var d = Sq(r.X[i] - x) + Sq(r.Z[i] - z);
+                if (d < ld) { ld = d; level = i; }
+            }
+            if (level >= 0) return level;
+        }
         return best;
     }
+    private const double PlanPointLevel = 1500;
 
     // ---------------------------------------------------------------------------------------------------------------------
     // the pit lane: a short road beside the lap, tapering onto it at both ends
@@ -3730,6 +3759,7 @@ internal static class RaceTrackBuilder
     // near the end) nor the ends' flush (the deck well over the dip under its middle) reached it. Not where the ground road is nearer:
     // the ground there is the road's own.
     private const double RaisedClearance = 450, RaisedCutReach = 1, RaisedCutBank = 1.5, RaisedCutFromEnd = 8;
+    private const double UnderNearHeight = 2000;
     // And the ends themselves (later on 2026-10-01): the deck there is only a little over the ground, and the ground under it was the
     // island's own -- at the lava lake's dock the deck's first cells hovered over the slope down to the sea (a slit under its end), and
     // at its ramp's foot the hill's toe stood up through the deck (the engine takes the higher of deck and ground: cars rode up it and
@@ -3765,6 +3795,17 @@ internal static class RaceTrackBuilder
         var limit = new Dictionary<(int, int), double>();
         // (near the ends the nearest stretch of deck's, as the ends' flush: a ramp rises fast, and the lowest deck in reach was its foot)
         var endLimit = new Dictionary<(int, int), (double Allowed, double D)>();
+        // (not the ground over the road where it runs under the island, `under`: a cell nearer one of those points than to the stretch
+        // being cut is that road's -- Island CX's door A, 2026-10-15: the road in the trench cut the ground 4 cells on past the door's
+        // portal, over the road going down under the island, and the road vanished into flat ground before the cliff it goes in at)
+        // (only those near the deck's height: the hall under the island runs under the whole of the road outside)
+        var underPoints = r.Under is { } under_ ? Enumerable.Range(0, n).Where(i => under_[i]).ToArray() : Array.Empty<int>();
+        bool UnderNearer(int gx, int gz, double d, double deck)
+        {
+            foreach (var i in underPoints)
+                if (Math.Abs(r.H[i] - deck) < UnderNearHeight && Sq(r.X[i] - gx) + Sq(r.Z[i] - gz) < d * d) return true;
+            return false;
+        }
         for (var a = 0; a < n; a++)
         {
             var b = At(r, a + 1);
@@ -3782,6 +3823,7 @@ internal static class RaceTrackBuilder
                 var d = Math.Sqrt(Sq(gx - r.X[a] - sx * t) + Sq(gz - r.Z[a] - sz * t));
                 if (d > reach) continue;
                 var deck = r.H[a] + (r.H[b] - r.H[a]) * t;
+                if (underPoints.Length > 0 && UnderNearer(gx, gz, d, deck)) continue;
                 if (r.RoadBank is { } rb) deck -= Math.Abs(rb[a]) * o.RaisedHalfWidth * 512;
                 var allowed = deck - (nearEnd ? RaisedFlushUnder : RaisedClearance) + Math.Max(0, d - inner) * 512 * RaisedCutBank;
                 if (nearEnd)
@@ -3830,6 +3872,47 @@ internal static class RaceTrackBuilder
         if (cut == 0) return;
         report.Vertices += cut;
         report.Notes.Add($"the raised road: the ground cut down under and beside it at {cut} vertices, {deepest:0} at the most, to stand {RaisedClearance:0} under the deck");
+    }
+
+    // Where the road goes in under the island (`under`) and comes out again: the ground's face over the tunnel's mouth -- a cell over the
+    // road there whose ground rises from the road's height up past its tunnel's roof -- left undrawn, so that the road is seen going in at
+    // a doorway instead of into the rock (the user, 2026-10-15, of Island CX's door A: "Currently driving inside there's no visible door
+    // way, it looks like we're driving into a cliff"). A heightmap can't hang over the road; with that cell's two triangles not drawn,
+    // the tunnel's own walls and roof are seen through it, under the portal's roof (a sunk tunnel's, TunnelRun.Sunk).
+    private const int MouthPoints = 6;                           // points either side of where the road goes under
+    private const double MouthOpen = 300, MouthRoof = 1000;      // the face: ground from at most this over the road to at least this
+    private static void OpenTunnelMouths(IslandFile island, TrackRoad r, RaceTrackOptions o, RaceTrackReport report)
+    {
+        if (r.Under is not { } under) return;
+        var n = r.Count;
+        var hidden = new HashSet<(int, int)>();
+        for (var u = 0; u < n; u++)
+        {
+            if (under[u] == under[At(r, u - 1)]) continue;
+            for (var j = -MouthPoints; j <= MouthPoints; j++)
+            {
+                var k = At(r, u + j);
+                var half = r.RaisedHalfs?[k] ?? o.RaisedHalfWidth;
+                for (var gz = (int)Math.Floor(r.Z[k] - half - 1); gz <= (int)Math.Ceiling(r.Z[k] + half); gz++)
+                    for (var gx = (int)Math.Floor(r.X[k] - half - 1); gx <= (int)Math.Ceiling(r.X[k] + half); gx++)
+                    {
+                        // (a cell whose middle is over the road)
+                        if (Sq(gx + 0.5 - r.X[k]) + Sq(gz + 0.5 - r.Z[k]) > half * half || hidden.Contains((gx, gz))) continue;
+                        double lo = double.MaxValue, hi = double.MinValue;
+                        foreach (var (dx, dz) in new[] { (0, 0), (1, 0), (0, 1), (1, 1) })
+                        {
+                            if (island.HeightAt(gx + dx, gz + dz) is not { } h) { lo = double.MaxValue; break; }
+                            lo = Math.Min(lo, h); hi = Math.Max(hi, h);
+                        }
+                        if (lo == double.MaxValue || lo > r.H[k] + MouthOpen || hi < r.H[k] + MouthRoof) continue;
+                        if (island.CubeAt(Math.DivRem(gx, IslandCube.Cells, out var lx), Math.DivRem(gz, IslandCube.Cells, out var lz)) is not { HasPolygons: true } cube) continue;
+                        for (var half2 = 0; half2 < 2; half2++)
+                            cube.SetPolygon(lx, lz, half2, new IslandPolygon(cube.Polygon(lx, lz, half2)).With(texFlag: 0, polyFlag: 0).Raw);
+                        hidden.Add((gx, gz));
+                    }
+            }
+        }
+        if (hidden.Count > 0) report.Notes.Add($"the road going in under the island: the ground's face over its tunnel's mouth left undrawn at {hidden.Count} cells");
     }
 
     // ---------------------------------------------------------------------------------------------------------------------

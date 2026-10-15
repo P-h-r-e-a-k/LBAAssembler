@@ -634,6 +634,21 @@ static S32 BuggyFloorY(T_OBJET *ptrobj, S32 x, S32 z) {
     return y;
 }
 
+// The floor under a point the car's pitch and roll are measured by. In a race-track mode's race, a point whose floor is more than
+// RACE_TILT_STEP off the car's own is taken as level with it: on a raised road a point past its rail is over the ground far below the deck
+// -- the car driven into the rail, a boost panel's speed taking it further -- and the car stood on its nose (Wannies Island, 2026-10-15:
+// "After using the boost panels on platform.ile and driving into the side wall it tips the car up on its nose"). No road climbs or falls
+// that much over the 400 the points are from the car's middle (the steepest, the Elevator Platform's drop, 500), and none is banked that much
+// across (the steepest bank, 0.40: 160).
+#define RACE_TILT_PITCH 700
+#define RACE_TILT_ROLL 250
+static S32 TiltFloorY(T_OBJET *ptrobj, S32 x, S32 z, S32 own, S32 most) {
+    const S32 y = BuggyFloorY(ptrobj, x, z);
+    if (RaceMod_Active() AND (y > own + most OR y < own - most))
+        return own;
+    return y;
+}
+
 //■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 
 void DoAnimBuggy(T_OBJET *ptrobj) {
@@ -790,12 +805,12 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
     LongRotate(0, -400, ptb3d->Beta);
 
     if (Nxw + x1 >= 0 AND Nxw + x1 < 32768 AND Nzw + z1 >= 0 AND Nzw + z1 < 32768) {
-        y = BuggyFloorY(ptrobj, Nxw + x1, Nzw + z1);
+        y = TiltFloorY(ptrobj, Nxw + x1, Nzw + z1, yw, RACE_TILT_PITCH);
     } else
         y = yw;
 
     if (Nxw + X0 >= 0 AND Nxw + X0 < 32768 AND Nzw + Z0 >= 0 AND Nzw + Z0 < 32768) {
-        y1 = BuggyFloorY(ptrobj, Nxw + X0, Nzw + Z0);
+        y1 = TiltFloorY(ptrobj, Nxw + X0, Nzw + Z0, yw, RACE_TILT_PITCH);
     } else
         y1 = yw;
 
@@ -809,12 +824,12 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
     LongRotate(-400, 0, ptb3d->Beta);
 
     if (Nxw + X0 >= 0 AND Nxw + X0 < 32768 AND Nzw + Z0 >= 0 AND Nzw + Z0 < 32768) {
-        y = BuggyFloorY(ptrobj, Nxw + X0, Nzw + Z0);
+        y = TiltFloorY(ptrobj, Nxw + X0, Nzw + Z0, yw, RACE_TILT_ROLL);
     } else
         y = yw;
 
     if (Nxw + x1 >= 0 AND Nxw + x1 < 32768 AND Nzw + z1 >= 0 AND Nzw + z1 < 32768) {
-        y1 = BuggyFloorY(ptrobj, Nxw + x1, Nzw + z1);
+        y1 = TiltFloorY(ptrobj, Nxw + x1, Nzw + z1, yw, RACE_TILT_ROLL);
     } else
         y1 = yw;
 
