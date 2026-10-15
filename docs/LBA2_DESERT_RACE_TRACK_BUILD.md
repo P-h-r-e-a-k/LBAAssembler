@@ -3802,6 +3802,28 @@ quicker than taking the jump"; and: "Our current boost pad isn't fast enough so 
 
 ![The start: the gantry over the straight, the pit lane beside it](racetrack/wannies/start_pitlane.png)
 
+### Third round: a longer, wider pit lane, the frog's mouth open longer, the car the player's up to the lip (2026-10-15, later)
+
+The user: "The pit lane is short, narrow, and has a strut through it from the road above. Let's lengthen the pitlane, remove the strut and
+make it slightly wider. The frog isn't visible in the editor, is there a reason for this? Let's make the frogs mouth open for slightly
+longer with the tongue remaining out longer too. The game takes control of the car too early, if we need to script the car let's wait until
+the last second to guide it through the frog".
+
+- *The pit lane* is 61 cells (41): off the helix's last straight down the tower's east side, its straight down the pier from z 484 to
+  515, back onto the lap past its bend onto the east island; 2.75 cells either side of its middle (2.25). *The strut* was one of the
+  helix's piers: its lowest turn's south side passes high over the pit lane, and a pier stood clear of the lap but on the pit lane. A
+  raised road's piers now stand clear of every other road of it -- the lap's of its branches', a branch's of the lap's and the other
+  branches' -- where those have a deck.
+- *The frog's mouth* opens for 3.1 s (2.5) and its tongue is held out 0.9 s (0.16); the time it stays shut is as it was, its cycle 5 s.
+- *The car is the player's up the ramp*: the carried jumps -- into the frog and the shortcut's leap -- take the car only from half a cell
+  before their lip (from the ramp's foot before, 10 and 9 cells back). A car the frog throws back is put down 18 cells before the lip,
+  where it was.
+- *The frog in the editor*: it was drawn only by the race-track mode, in the game; the editor shows the island's decor. The build now puts
+  a still copy of it among the island's decor too (its mouth open), hidden by game variable 212 -- the game's own way of hiding a decor --
+  which the race-track mode holds set on Wannies Island while it races, so in the game only the moving frog is seen.
+
+![The frog in the editor, among the island's decor](racetrack/wannies/editor_frog.png)
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

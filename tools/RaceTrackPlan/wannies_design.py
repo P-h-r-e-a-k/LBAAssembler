@@ -39,9 +39,9 @@ def ground(x, z):
 STEP = 0.5
 H0 = 4.75                               # the deck's half width to its rail (the other tracks')
 ASPHALT, CURB = H0 - 1.0, H0 - 0.25
-PIT_X = 551.0                           # the pit lane: down the pier's east side, beside the start straight (2026-10-15) ...
-PIT_HALF = 2.25                         # ... thinner than the road
-PIT_SPOTS = (494.0, 498.0, 502.0)       # ... the opponents' waiting places along it
+PIT_X = 550.5                           # the pit lane: down the pier's east side, beside the start straight (2026-10-15) ...
+PIT_HALF = 2.75                         # ... thinner than the road (2.25 at first: "short, narrow" -- longer and wider since)
+PIT_SPOTS = (487.0, 503.0, 508.5)       # ... the opponents' waiting places along it (clear of the start line at 497)
 TOWER = (543.5, 467.5)                  # the elevator tower's middle (its top block 537.6..549.4 x 463.9..471.1, its legs 536.6..550.4 x 462.8..472.2)
 TOWER_TOP = 24455
 # the helix round the tower: a stadium -- two half circles (radius HR, their middles HZ0 and HZ1 on the tower's line north-south) joined
@@ -221,7 +221,9 @@ climb(MARK['hOut'], MARK['pier'], H_BOTTOM, START_H, ease)
 # (the jump into the frog: the gap from the lip to the mouth -- no road there)
 gap = np.zeros(N, bool)
 for k in range(MARK['lip'] + 1, MARK['mouth']): gap[k % N] = True
-arcs = [('frog', MARK['foot'], MARK['lip'], MARK['mouth'], (MARK['mouth'] + int(4 / STEP)) % N)]
+# (the car carried only from the lip -- the user drives up the ramp: "The game takes control of the car too early ... let's wait until the
+# last second to guide it through the frog", 2026-10-15; from the ramp's foot before)
+arcs = [('frog', (MARK['lip'] - 1) % N, MARK['lip'], MARK['mouth'], (MARK['mouth'] + int(4 / STEP)) % N)]
 
 # ---- (the pit lane: a branch of its own beside the start straight -- further on, with the shortcut)
 # (narrower up the frog's ramp and through it -- into its mouth -- and back out after it)
@@ -314,9 +316,12 @@ for where, after in (((None, 14.0), SC_F), (((487.0, 547.3), None), SC_F), (((48
 # road off the start straight's west side just out of the helix, down the pier's east side past the start line -- the opponents' waiting
 # places along it -- and back onto the straight before it bends onto the east island. Level with the straight beside it (a little over it
 # where the two decks overlap), no deck of its own where it lies on the straight's.
-PL_F = nearest_after((558.5, 480.0), MARK['hOut'], 20)
-PL_J = nearest_after((558.5, 515.5), PL_F, 60)
-pl = rounded([((X[PL_F] + OX, Z[PL_F] + OZ), 0.0), ((558.5, 483.0), 5.0), ((PIT_X, 490.5), 5.0), ((PIT_X, 505.5), 5.0), ((558.5, 513.0), 5.0),
+# (off the helix's last straight down the tower's east side -- the lap's last pass there -- and back onto the lap past its bend onto the
+# east island, heading the way it does: its straight from z 484 to 515)
+PL_F = nearest_after((558.5, 472.0), (MARK['hOut'] - int(8 / STEP)) % N, 10)
+PL_J = nearest_after((561.3, 526.0), PL_F, 80)
+_dj = T[PL_J] / np.linalg.norm(T[PL_J]); _V4 = np.array([X[PL_J] + OX, Z[PL_J] + OZ]) - _dj * 5.0
+pl = rounded([((X[PL_F] + OX, Z[PL_F] + OZ), 0.0), ((558.5, 476.0), 6.0), ((PIT_X, 484.0), 6.0), ((PIT_X, 515.0), 6.0), (tuple(_V4), 8.0),
               ((X[PL_J] + OX, Z[PL_J] + OZ), 0.0)])
 pl = pl[np.concatenate([[True], np.hypot(*np.diff(pl, axis=0).T) > 1e-9])]
 pl_cum = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(pl, axis=0).T))])
@@ -327,7 +332,11 @@ _sz = np.array([Z[k] + OZ for k in straightK]); _sy = np.array([Y[k] for k in st
 def straight_y(z): return float(np.interp(z, _sz[_o], _sy[_o]))
 PY = np.array([straight_y(z) for z in PZ]); P_HALF = np.full(PM + 1, PIT_HALF); p_hidden = np.zeros(PM + 1, bool)
 for k in range(PM + 1):
-    off = abs(PX[k] - (X[PL_F] + OX))
+    # (how far from the lap's middle -- it bends east onto the east island where the pit lane ends -- of the stretch it runs beside: the
+    # helix passes over it)
+    _m = min(straightK, key=lambda m: (X[m] + OX - PX[k]) ** 2 + (Z[m] + OZ - PZ[k]) ** 2)
+    ly_, off = Y[_m], math.hypot(X[_m] + OX - PX[k], Z[_m] + OZ - PZ[k])
+    if off + PIT_HALF <= H0 + 0.3: PY[k] = ly_
     if off + PIT_HALF <= H0 + 0.3: p_hidden[k] = True
     else: PY[k] += SC_OVER * max(0.0, min(1.0, (off + PIT_HALF - H0 - 0.3) / 1.5, (H0 + PIT_HALF + 1.5 - off) / 1.5))   # (eased in and out)
 pit_hid = [[int(a), int(b)] for a, b in zip(*[np.flatnonzero(np.diff(np.concatenate([[0], p_hidden.astype(int), [0]])) == v) - (0 if v == 1 else 1) for v in (1, -1)])]
@@ -408,6 +417,17 @@ for k in range(0, BM, 2):
             if dd < 0.5: cl.append((round(dd, 1), k, m, round(BY[k] - Y[m])))
 out.append(f'    its deck near the lap (cells apart, its point, the lap point, height over it): {sorted(cl)[:6]}')
 pgrade = np.diff(PY) / (STEP * 512)
+ph = {}
+for k in range(PM + 1):
+    if p_hidden[k]: continue
+    nx_, nz_ = -(PZ[min(k + 1, PM)] - PZ[max(k - 1, 0)]), PX[min(k + 1, PM)] - PX[max(k - 1, 0)]
+    ln = math.hypot(nx_, nz_) or 1
+    for o in np.linspace(-PIT_HALF - 0.3, PIT_HALF + 0.3, 7):
+        x, z = PX[k] - OX + nx_ / ln * o, PZ[k] - OZ + nz_ / ln * o
+        i, j = int(z * RQ), int(x * RQ)
+        if not (0 <= i < TOP.shape[0] and 0 <= j < TOP.shape[1]) or TOP[i, j] < 0: continue
+        if TOP[i, j] > PY[k] - 350 and BOT[i, j] < PY[k] + 1400: ph.setdefault(int(WHO[i, j]), []).append((round(x + OX, 1), round(z + OZ, 1), int(TOP[i, j]), int(PY[k])))
+out.append('  pit lane decor in its space: ' + '; '.join(f'{b}: {len(h)} {h[0]}' for b, h in sorted(ph.items())))
 out.append(f'  pit lane: {PM + 1} points, {pl_cum[-1]:.1f} cells from the straight at ({PX[0]:.1f}, {PZ[0]:.1f}) to ({PX[-1]:.1f}, {PZ[-1]:.1f}), {PY.min():.0f} to {PY.max():.0f}, '
            f'steepest {np.abs(pgrade).max() * 100:.1f} %, hidden {pit_hid}; its spots {[(p[0] + OX, p[1] + OZ, p[4]) for p in PIT_SPOT_LIST]}; '
            f'the straight at the start line {X[MARK["start"]] + OX:.1f}, the pit lane {PX[int(np.argmin(np.abs(PZ - (Z[MARK["start"]] + OZ))))]:.1f}')
@@ -435,7 +455,7 @@ plan = {
         'heights': [round(float(y), 1) for y in BY],
         'halfs': [round(float(h), 3) for h in B_HALF],
         'from': int(SC_F), 'to': int(SC_J),
-        'arcJumps': [[int(sF), int(sL), int(sD), int(sDF), -1, SC_FLIGHT_MS]],
+        'arcJumps': [[int(sL - 1), int(sL), int(sD), int(sDF), -1, SC_FLIGHT_MS]],      # (carried from its lip, as the frog's jump)
         'boostPanels': [[int(SC_PAD[0]), int(SC_PAD[1]), -1.6, 1.6]],
         'hidden': hid,
     }, {

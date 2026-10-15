@@ -57,8 +57,10 @@ internal static class RaceTrackFrog
 {
     // The mouth's cycle (ms; RACEMOD.CPP frog=): opening (Move), open (Open), shutting (Move), shut (the rest of Period); the tongue out
     // over TongueOut once the mouth is open, held there TongueHold, back over TongueIn. (The race-track mode lets a car in until
-    // RACE_FROG_CLEAR before it shuts -- the time to get past the jaw -- and the jaw twitches then: too late.)
-    public const int Period = 4400, Move = 320, Open = 2500, TongueOut = 260, TongueHold = 160, TongueIn = 360;
+    // RACE_FROG_CLEAR before it shuts -- the time to get past the jaw -- and the jaw twitches then: too late.) (The user, 2026-10-15:
+    // "make the frogs mouth open for slightly longer with the tongue remaining out longer too": open 3.1 s, not 2.5; the tongue held out
+    // 0.9 s, not 0.16; the shut time as it was.)
+    public const int Period = 5000, Move = 320, Open = 3100, TongueOut = 260, TongueHold = 900, TongueIn = 360;
     // The jaw's turn about its hinge shut, the tongue's over the lip and its two further pieces' curl (the engine's units: 4096 a turn).
     public const int JawShut = -680, TongueFlip = 1750, TongueCurl = 260;
     // The throat (units): either side of the road's middle and over the road; the jaw from its hinge to the mouth, its lip past the mouth,
@@ -114,6 +116,45 @@ internal static class RaceTrackFrog
         }
         File.WriteAllBytes(path, bodies);
         return log;
+    }
+
+    // The game variable whose being set hides the frog's still copy among the island's decor (DecorVar): a decor is hidden by the variable
+    // its turn's high word names, as the game's own are; the race-track mode holds it set while it races (RaceTrackIsland.HeldVars).
+    public const int DecorVar = 212;
+
+    // The frog as one of the island's decors too, still, its mouth open -- the editor's view, and the 3D export, show the island's decor,
+    // not what the race-track mode draws (the user, 2026-10-15: "The frog isn't visible in the editor, is there a reason for this?"): its
+    // body appended to the island's own (report.NewBodies), drawn only (nothing touches it), hidden while racing (DecorVar).
+    public static void AddDecor(IslandFile island, FrogInfo f, int newBodyBase, RaceTrackReport report)
+    {
+        if (newBodyBase < 0) return;
+        var posed = Make(new byte[96], f.Length * 512, f.Y - f.Ground);
+        var world = posed.World();
+        var still = new Body
+        {
+            Game = 2, Static = true, Lit = true, Header = new byte[96], Vertices = world.ToList(),
+            Bones = new List<Bone> { new(0, world.Length, 0, -1, new byte[8]) }, Faces = posed.Faces, Spheres = posed.Spheres, Lines = posed.Lines,
+        };
+        var bytes = still.Write();
+        BinaryPrimitives.WriteInt32LittleEndian(bytes, BinaryPrimitives.ReadInt32LittleEndian(bytes) | Palace.BrickBuilding.CloseFlag);
+        double wx = f.X * 512, wz = f.Z * 512;
+        if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack)
+        {
+            report.Notes.Add("WARNING: no room for the frog among the island's decor (it is drawn while racing all the same)");
+            return;
+        }
+        var turn = (int)Math.Round(Math.Atan2(-f.Tx, -f.Tz) * 4096 / (2 * Math.PI)) & 4095;
+        var d = IslandDecors.Blank(newBodyBase + report.NewBodies.Count, at.X, (int)Math.Round(f.Y), at.Z, (DecorVar << 16) | turn);
+        // (its box: its footprint turned as the engine turns it -- x' = x cos + z sin, z' = -x sin + z cos -- from its foot up; its top
+        // under its bottom: drawn only, nothing touches it)
+        double c = Math.Cos(turn * 2 * Math.PI / 4096), s = Math.Sin(turn * 2 * Math.PI / 4096);
+        var xs = world.Select(v => v.X * c + v.Z * s).ToList(); var zs = world.Select(v => -v.X * s + v.Z * c).ToList();
+        d.XMin = at.X + (int)Math.Floor(xs.Min()); d.XMax = at.X + (int)Math.Ceiling(xs.Max());
+        d.ZMin = at.Z + (int)Math.Floor(zs.Min()); d.ZMax = at.Z + (int)Math.Ceiling(zs.Max());
+        d.YMin = d.Y + (int)Math.Floor(world.Min(v => v.Y)); d.YMax = -32000;
+        at.Cube.Decors.Add(d);
+        report.NewBodies.Add(bytes);
+        report.Placed.Add($"the giant frog among the island's decor, still, its mouth open (hidden while racing: game variable {DecorVar})");
     }
 
     // The frog's line for the race-track mode (RACEMOD.CPP frog=): its mouth (island units, the road's height), the way into it

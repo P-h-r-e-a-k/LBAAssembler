@@ -4732,8 +4732,13 @@ internal static class RaceTrackBuilder
         var branchRoads = main.Raised is null ? new List<(TrackRoad Road, (BranchRun Run, double[] X, double[] Z, int From, int To) Plan)>()
             : report.BranchPlans.Select(p => (MakeBranch(main, p, options), p)).ToList();
         foreach (var (road, _) in branchRoads) { OpenRails(main, road, options); OpenRails(road, main, options); }
-        if (main.Raised is not null) PlaceRaised(island, main, options, report, startIndex);
-        foreach (var (road, plan) in branchRoads) PlaceBranch(island, main, road, plan, options, report);
+        // (each road's piers clear of the others' -- the helix's stood on the pit lane under it, 2026-10-15: "has a strut through it from
+        // the road above")
+        if (main.Raised is not null) PlaceRaised(island, main, options, report, startIndex, null, branchRoads.Select(b => b.Item1).ToList());
+        foreach (var (road, plan) in branchRoads)
+            PlaceBranch(island, main, road, plan, options, report, branchRoads.Select(b => b.Item1).Where(b => b != road).Append(main).ToList());
+        // (a giant frog: a still copy of it among the island's decor, for the editor's view)
+        foreach (var f in report.Frogs) RaceTrackFrog.AddDecor(island, f, options.NewBodyBase, report);
         if (report.Loops.Count > 0) PlaceLoops(island, options, report);
         if (report.FloorArrows.Count > 0) PlaceFloorArrows(island, options, report);
         if (report.Jumps.Any(j => j.Drop > 0)) PlaceJumpCameras(island, report);
@@ -4938,7 +4943,8 @@ internal static class RaceTrackBuilder
     private const int NoBoxTop = -32000, PierClear = 5, RaisedArrowEvery = 3;
     private const double RaisedGantryClear = 2300, RaisedGantryBeam = 640;
 
-    private static void PlaceRaised(IslandFile island, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, int startIndex = -1, int[][]? branchArcs = null, TrackRoad? lap = null)
+    private static void PlaceRaised(IslandFile island, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, int startIndex = -1, int[][]? branchArcs = null,
+        IReadOnlyList<TrackRoad>? others = null)
     {
         // (branchArcs: r is a branch of the raised road -- PlaceBranch -- its points after the lap's in Raised, its carried jumps these, its
         // own points)
@@ -5149,7 +5155,7 @@ internal static class RaceTrackBuilder
 
         var (piers, none) = o.PierBodies is { } stand && o.SceneryObl is { } obl && RaceTrackScenery.Load(island, obl) is { } scenery
             ? PlacePiersOnScenery(island, r, o, report, span, loop, scenery, stand, Across, Add, ref left)
-            : PlacePiers(island, r, o, report, span, Across, Add, ref left, lap);
+            : PlacePiers(island, r, o, report, span, Across, Add, ref left, others);
         if (left > 0) report.Notes.Add($"WARNING: {left} pieces of the raised road were left out: the cube already holds {IslandDecors.MaxPerCubeRaceTrack} decors");
         report.Placed.Add($"raised road{(isBranch ? "'s branch" : "")}: {(span.Count(k => up[k]) - (loop ? 1 : 0)) * o.Spacing:0} cells in {pieces} pieces of {o.RaisedPiece:0} cells and {piers} piers" +
                           (none > 0 ? $" ({none} more left out: no clear ground under the road there)" : "") +
@@ -5207,7 +5213,8 @@ internal static class RaceTrackBuilder
         }
     }
 
-    private static void PlaceBranch(IslandFile island, TrackRoad main, TrackRoad b, (BranchRun Run, double[] X, double[] Z, int From, int To) plan, RaceTrackOptions o, RaceTrackReport report)
+    private static void PlaceBranch(IslandFile island, TrackRoad main, TrackRoad b, (BranchRun Run, double[] X, double[] Z, int From, int To) plan, RaceTrackOptions o, RaceTrackReport report,
+        IReadOnlyList<TrackRoad> others)
     {
         var run = plan.Run;
         var n = b.Count;
@@ -5215,7 +5222,7 @@ internal static class RaceTrackBuilder
         // (behind a point with no width: the engine's floor isn't there)
         report.Raised.Add(new[] { (int)Math.Round(b.X[0] * 512), (int)Math.Round(b.Z[0] * 512), (int)Math.Round(b.H[0]), 0 });
         var first = report.Raised.Count;
-        PlaceRaised(island, b, o, report, -1, run.ArcJumps ?? Array.Empty<int[]>(), main);
+        PlaceRaised(island, b, o, report, -1, run.ArcJumps ?? Array.Empty<int[]>(), others);
         var last = report.Raised.Count - 1;
         int from = report.RaisedSpan.IndexOf(plan.From), to = report.RaisedSpan.IndexOf(plan.To);
         if (last <= first || from < 0 || to < 0) { report.Notes.Add("WARNING: a branch of the raised road doesn't leave the lap's raised road or come back onto it -- left out of the engine's road"); return; }
@@ -5296,7 +5303,7 @@ internal static class RaceTrackBuilder
     // The piers under the road's middle, on the ground: one every RaisedPier cells, moved a few cells along the road where it would stand
     // on another part of the lap, where an opponent waits or in a decor object's box.
     private static (int Piers, int None) PlacePiers(IslandFile island, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, List<int> span,
-        Func<int, System.Numerics.Vector3> across, AddDecor add, ref int left, TrackRoad? lap = null)
+        Func<int, System.Numerics.Vector3> across, AddDecor add, ref int left, IReadOnlyList<TrackRoad>? others = null)
     {
         var up = r.Raised!; var n = r.Count;
         (double X0, double Z0, double X1, double Z1, double Y1)[] boxes = IslandOps.CubeCells(island).SelectMany(c => c.Item3.Decors.Select(d =>
@@ -5312,13 +5319,18 @@ internal static class RaceTrackBuilder
                 var reach = (up[m] ? r.RaisedHalfs?[m] ?? o.RaisedHalfWidth : r.VergeHalf) + 1.2;
                 if (Sq(r.X[m] - r.X[k]) + Sq(r.Z[m] - r.Z[k]) < reach * reach && r.H[m] < r.H[k] - 300) return false;
             }
-            // ... nor on the lap's own road, under a branch of it (or through it)
-            if (lap?.Raised is { } lapUp)
-                for (var m = 0; m < lap.Count; m++)
+            // ... nor on another road of the raised road's -- the lap's under a branch, a branch under the lap (the pit lane under the
+            // helix) -- where it has a deck of its own (not in a jump's gap, nor where it lies on this road)
+            foreach (var other in others ?? Array.Empty<TrackRoad>())
+            {
+                if (other.Raised is not { } otherUp) continue;
+                for (var m = 0; m < other.Count; m++)
                 {
-                    var reach = (lapUp[m] ? lap.RaisedHalfs?[m] ?? o.RaisedHalfWidth : lap.VergeHalf) + 1.2;
-                    if (Sq(lap.X[m] - r.X[k]) + Sq(lap.Z[m] - r.Z[k]) < reach * reach) return false;
+                    if (other.Gap.Length > m && other.Gap[m] || other.Hidden?[m] == true) continue;
+                    var reach = (otherUp[m] ? other.RaisedHalfs?[m] ?? o.RaisedHalfWidth : other.VergeHalf) + 1.2;
+                    if (Sq(other.X[m] - r.X[k]) + Sq(other.Z[m] - r.Z[k]) < reach * reach) return false;
                 }
+            }
             // ... nor where an opponent's car waits
             foreach (var p in report.Pits) if (Sq(p.X - r.X[k]) + Sq(p.Z - r.Z[k]) < Sq(2.5)) return false;
             // ... nor in a decor object that stands there

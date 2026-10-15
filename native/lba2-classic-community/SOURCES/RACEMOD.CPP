@@ -967,7 +967,7 @@ static S32 s_bittenUntil[RACE_MAX_OPPONENTS + 1];  // a car just bitten is let b
                                            // the jaw twitching meanwhile (FrogPose), the sign it is too late
 #define RACE_FROG_MARGIN 150               // ms after it is open enough that a slowed opponent comes to it
 #define RACE_FROG_LIP 256.0                // (the jaw's lip, out past the mouth: where a car meets it)
-#define RACE_FROG_BACK (8 * 512.0)         // a car thrown back: put down this far before the ramp's foot ...
+#define RACE_FROG_BACK (18 * 512.0)        // a car thrown back: put down this far before the take-off's lip (the ramp's foot 10 before it) ...
 #define RACE_FROG_BOUNCE_MS 1300           // ... over this long ...
 #define RACE_FROG_BOUNCE_UP 2400.0         // ... flying this high over the line between
 #define RACE_FROG_PACE (40 * 512.0)
@@ -3839,7 +3839,7 @@ static void LoopEnd(T_OBJ_3D *obj, double v, const char *how) {
 // body, the island's and no scene's, is posed by that clock every frame and drawn into the background after the ground and the decor, its
 // depth written (RaceMod_DrawBackdrop): the cars are hidden by it, and seen in its throat. The carried jump whose landing is its mouth is
 // the way in: Twinsen's car meeting the mouth shut -- or shutting before it is past the jaw -- is thrown back over the gap and put down on
-// the road RACE_FROG_BACK before the ramp's foot, stopped (FrogBounce); an opponent coming up to it is slowed, from RACE_FROG_PACE before
+// the road RACE_FROG_BACK before the take-off, stopped (FrogBounce); an opponent coming up to it is slowed, from RACE_FROG_PACE before
 // it, to come to it as it opens (FrogCap).
 
 static double FrogEase(double u) { u = u < 0 ? 0 : u > 1 ? 1 : u; return u * u * (3 - 2 * u); }
@@ -3906,10 +3906,10 @@ static void FrogCarry(double x, double y, double z, S32 *nx, S32 *ny, S32 *nz) {
     *nx = (S32)floor(x - cx + 0.5); *ny = (S32)floor(y + 0.5); *nz = (S32)floor(z - cz + 0.5);
 }
 
-// Twinsen's car met the mouth shut at (x, y, z), carried over jump `a`: thrown back over the gap, to the road RACE_FROG_BACK before the
-// ramp's foot, facing the way the lap runs there.
+// Twinsen's car met the mouth shut at (x, y, z), carried over jump `a`: thrown back over the gap, to the road RACE_FROG_BACK before its
+// lip, facing the way the lap runs there.
 static void FrogBounceStart(double x, double y, double z, const T_RACE_ARC *a) {
-    int k = a->Foot;
+    int k = a->Lip;     // (from the lip: the car is carried only from there since 2026-10-15 -- the user drives up the ramp)
     double back = 0;
     while (k > 0 && back < RACE_FROG_BACK) {
         const T_RACE_RAISED *p = &s_raised[k - 1], *q = &s_raised[k];

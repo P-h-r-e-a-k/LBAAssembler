@@ -312,7 +312,8 @@ internal sealed record RaceTrackIsland(
         Title = "Wannies Island: through the frog and down the tower", Roster = RaceDriver.Wannies,
         // (Twinsen has come down in the elevator: scene 98's hero script plays the elevator's cutscene -- and puts him at its point 7, on
         // foot -- while it's 0, and above 1 the cinema of his way back up)
-        HeldVars = new[] { (107, 1) },
+        // (and the frog's still copy among the decor -- the editor's -- hidden: the race-track mode draws the frog, RaceTrackFrog.AddDecor)
+        HeldVars = new[] { (107, 1), (RaceTrackFrog.DecorVar, 1) },
     };
 
     // The Emperor's palace (the user, 2026-10-12: "through the palace rooms, coming out the window and around the roof tops? Point-to-point
