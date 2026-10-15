@@ -245,7 +245,7 @@ void InitGrille(U32 numcube) {
     U32 id_bll;
     char tmpFilePath[ADELINE_MAX_PATH];
 
-    numcube = TabAllCube[numcube].Num; //	Indirection
+    numcube = numcube < MAX_GRID_SCENES ? TabAllCube[numcube].Num : 0; //	Indirection
 
     id_gri = BkgHeader.Gri_Start + numcube;
 

@@ -125,6 +125,14 @@
     <DockPanel LastChildFill="True">
         <Menu DockPanel.Dock="Top" Background="{DynamicResource ThemeRaisedBrush}" Foreground="{DynamicResource ThemeTextBrush}" Padding="6,2" BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="0,0,0,1">
             <MenuItem Header="_File" Foreground="{DynamicResource ThemeTextBrush}">
+                <MenuItem Header="_New map…" Click="NewMap_Click" ToolTip="A new LBA2 island, LBA2 interior or LBA1 interior, made from one of the game's own, in a map file of its own"/>
+                <MenuItem Header="Open _map…" Click="OpenMap_Click" ToolTip="A map file (.lbamap), or an LBA2 island (.ILE) from outside the game folder: opened in a copy of the game folder, to edit and play"/>
+                <MenuItem Header="Save m_ap" Click="SaveMap_Click"/>
+                <MenuItem Header="Save map a_s…" Click="SaveMapAs_Click"/>
+                <MenuItem Header="_Install map into game…" Click="InstallMap_Click" ToolTip="Puts the open map into your game folder: LBA2's as new scenes, LBA1's in the scene slot it takes"/>
+                <MenuItem Header="Close ma_p" Click="CloseMap_Click"/>
+                <MenuItem Header="_Export map…" Click="ExportMap_Click" ToolTip="The island or interior scene in view, out of the game folder into a map file"/>
+                <Separator/>
                 <MenuItem Header="_Open…" InputGestureText="Ctrl+O" Click="Open_Click"/>
                 <MenuItem Header="_Save" InputGestureText="Ctrl+S" Click="Save_Click"/>
                 <Separator/>

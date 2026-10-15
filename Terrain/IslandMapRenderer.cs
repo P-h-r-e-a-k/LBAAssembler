@@ -57,7 +57,9 @@ internal sealed class IslandMapRenderer
             "SENDELL" => 28, "MOON" => 30,
             // island 12, Polar Island (ported from LBA1: Terrain.Polar), its own slot -- an empty one in the retail file, filled when it is
             // installed; until then the palette its ground was made in
-            "POLAR" => PolarPaletteEntry(gameDirectory), _ => 27,
+            "POLAR" => PolarPaletteEntry(gameDirectory),
+            // a map's island (Maps/IslandFiles, ISLANDS.TXT): the game's island whose look it has
+            var other => Maps.IslandFiles.Load(gameDirectory).Look.TryGetValue(other, out var look) ? 27 + look : 27,
         };
         return LoadPaletteEntry(gameDirectory, index);
     }

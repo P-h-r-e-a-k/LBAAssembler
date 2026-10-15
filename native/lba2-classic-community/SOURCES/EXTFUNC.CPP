@@ -109,6 +109,41 @@ S16 NumDecorsCol = -1;      // avec l'objet courant
 U8 *PtrNuances; // Nuances gouraud
 
 S32 LastIsland = -1;
+// (the island file last loaded: a scene drawn on a file of its own -- ISLANDS.TXT, SceneIslandFile -- shares its island's number with the
+// island's own scenes, and going from one to the other loads the other file)
+static char LastIslandFile[ADELINE_MAX_PATH] = "";
+
+// A scene drawn on an island file of its own (LBA Assembler's maps, File > New map, an island; 2026-10-15): the game folder's ISLANDS.TXT,
+// its lines "scene <number> <file>" (the file's name, no extension; '#' a comment; "island <file> <number>" lines are the editor's), read
+// once. Its scenes carry an island's number -- whose sky, palette, music and holomap they borrow -- and are drawn from their own file
+// instead of that island's.
+#define MAX_SCENE_ISLAND_FILES 1024
+static const char *SceneIslandFile(S32 scene) {
+    static int loaded = 0, count = 0;
+    static S32 scenes[MAX_SCENE_ISLAND_FILES];
+    static char names[MAX_SCENE_ISLAND_FILES][16];
+    if (!loaded) {
+        loaded = 1;
+        char path[ADELINE_MAX_PATH];
+        GetResPath(path, ADELINE_MAX_PATH, "ISLANDS.TXT");
+        FILE *f = fopen(path, "r");
+        if (f) {
+            char line[128];
+            while (count < MAX_SCENE_ISLAND_FILES && fgets(line, sizeof(line), f)) {
+                int s;
+                char name[16];
+                if (line[0] == '#' || sscanf(line, "scene %d %15s", &s, name) != 2) continue;
+                scenes[count] = s;
+                strcpy(names[count], name);
+                count++;
+            }
+            fclose(f);
+        }
+    }
+    for (int i = 0; i < count; i++)
+        if (scenes[i] == scene) return names[i];
+    return NULL;
+}
 
 #ifdef LBA_EDITOR
 char *GenAnimSkate; /* identificateur anim en cours */
@@ -360,14 +395,17 @@ void InitGrilleExt(U32 numcube) {
         // island's, with its sky and palette (RACEMOD.CPP RaceMod_IslandFile)
         if (const char *raced = RaceMod_IslandFile(Island)) strcpy(IslandName, raced);
     }
+    // (a scene drawn on an island file of its own: ISLANDS.TXT)
+    if (const char *own = SceneIslandFile(NumCube)) strcpy(IslandName, own);
 
     if (NumCube != NUM_CUBE_PHANTOM) {
-        if (LastIsland != Island) {
+        if (LastIsland != Island || strcmp(LastIslandFile, IslandName)) {
             GetResPath(tmpFilePath, ADELINE_MAX_PATH, RESS_HQR_NAME);
             Load_HQR(tmpFilePath, SkySeaTexture, numskysea);
 
             LoadIsland();
             LastIsland = Island;
+            strcpy(LastIslandFile, IslandName);
         }
 
         ManageSystem(); // for streaming

@@ -274,6 +274,19 @@ int lba2_renderer_load_island(const char *name)
     const S32 actorIsland = islandIndex;
     if (islandIndex < 0 && !strcasecmp(name, "cxtower")) islandIndex = 9;
     if (islandIndex < 0 && !strcasecmp(name, "palace")) islandIndex = 4;
+    // (an island of LBA Assembler's maps -- File > New map: the game folder's ISLANDS.TXT says whose look it has, "island <file> <number>")
+    if (islandIndex < 0) {
+        char listPath[ADELINE_MAX_PATH];
+        GetResPath(listPath, ADELINE_MAX_PATH, "ISLANDS.TXT");
+        if (FILE *list = fopen(listPath, "r")) {
+            char line[128], file[32];
+            int look;
+            while (islandIndex < 0 && fgets(line, sizeof(line), list))
+                if (sscanf(line, "island %31s %d", file, &look) == 2 && !strcasecmp(file, name) && look >= 0
+                        && look < (S32)(sizeof(kIslandNames) / sizeof(kIslandNames[0]))) islandIndex = look;
+            fclose(list);
+        }
+    }
 
     S32 skyResource = islandIndex >= 0 ? RESS_SKYSEA0 + islandIndex : RESS_SKYSEA0;
     if (!strcasecmp(name, "citabau")) skyResource = RESS_SKYSEA00; // interior-only ambience, no Island slot

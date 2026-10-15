@@ -79,6 +79,7 @@
     <Compile Include="..\..\EditorSettings.cs" Link="EditorSettings.cs" />
     <Compile Include="..\..\Assets\**\*.cs" Link="Assets\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\Grids\**\*.cs" Link="Grids\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\..\Maps\**\*.cs" Link="Maps\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\Lba1\Lba1GridRenderer.cs" Link="Lba1\Lba1GridRenderer.cs" />
     <Compile Include="..\..\Lba2Areas.cs" Link="Lba2Areas.cs" />
     <Compile Include="..\..\Lba2Interiors.cs" Link="Lba2Interiors.cs" />

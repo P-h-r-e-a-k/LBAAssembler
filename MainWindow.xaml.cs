@@ -11,6 +11,7 @@ using Microsoft.Win32;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Threading;
+using LBAAssembler.Maps;
 using LBAAssembler.Lba1;
 using LBAAssembler.LbaScript;
 
@@ -258,6 +259,8 @@ public partial class MainWindow : Window
         var folderNames = File.Exists(Path.Combine(gameRoot, HqdWriter.SidecarName("SCENE.HQR")))
             ? File.ReadAllLines(Path.Combine(gameRoot, HqdWriter.SidecarName("SCENE.HQR")), System.Text.Encoding.Latin1).Skip(1).ToArray() : Array.Empty<string>();
         var archive = HqrArchive.Open(scenePath);
+        // (scenes drawn on an island file of their own -- maps' islands, ISLANDS.TXT: Maps/MapInstall -- listed under it)
+        var ownIslands = Maps.IslandFiles.Load(gameRoot).Scenes;
 
         var entries = new List<SceneEntry>();
         for (var hqrIndex = 1; hqrIndex < hqrCount; hqrIndex++)
@@ -271,7 +274,7 @@ public partial class MainWindow : Window
                 : hqrIndex < descriptions.Names.Count ? descriptions.Names[hqrIndex] : null)?.Replace("White Leaf Desert", "Desert Island");
             var option = new FilterableComboBox.Option(numscene, name is null ? $"{numscene}" : $"{numscene}: {name}");
             var header = archive.Read(hqrIndex);
-            entries.Add(new SceneEntry(ResolveSceneIsland(archive, hqrIndex), isInterior, option, header.Length > 2 ? header[1] : 0, header.Length > 2 ? header[2] : 0));
+            entries.Add(new SceneEntry(ownIslands.TryGetValue(numscene, out var own) ? own : ResolveSceneIsland(archive, hqrIndex), isInterior, option, header.Length > 2 ? header[1] : 0, header.Length > 2 ? header[2] : 0));
         }
         return entries;
     }
@@ -451,6 +454,8 @@ public partial class MainWindow : Window
         else if (name == "MOON") paletteIndex = 30;
         // island 12, Polar Island (Terrain/Polar): its own slot once installed, else the palette its ground was made in
         else if (name == "POLAR") paletteIndex = Terrain.IslandMapRenderer.PolarPaletteEntryFor(gameRoot);
+        // (a map's island: the game's island whose look it has, ISLANDS.TXT)
+        else if (Maps.IslandFiles.Load(gameRoot).Look.TryGetValue(name, out var look)) paletteIndex = look == 0 ? 27 : 27 + look;
         lastExteriorPaletteIndex = paletteIndex;
         return LoadPaletteEntry(paletteIndex);
     }
@@ -762,6 +767,8 @@ public partial class MainWindow : Window
         EndBodyPreviewLive();
         if (live is null && Directory.Exists(gameRoot)) LiveDataRoot.CleanStale(gameRoot);      // a preview folder a crashed session left behind
         if (bodyPreviewLive is null && Directory.Exists(gameRoot)) LiveDataRoot.CleanStale(gameRoot, LiveDataRoot.BodyPreviewFolderName);
+        // (and a map's workspace a crashed session left behind -- not the open map's own)
+        if (!MapOpen && Directory.Exists(gameRoot)) LiveDataRoot.CleanStale(gameRoot, MapWorkspaceFolderName);
         selectedLba2Scene = null;
         SwitchGameCore(game);
         ApplyMode();
@@ -3404,7 +3411,7 @@ public partial class MainWindow : Window
     // frame is actually on screen, not just laid out), covers both without the complexity of trying to
     // find one exact root cause for what's fundamentally a racy OS mechanism.
     private void Window_Loaded(object sender, RoutedEventArgs e) => ForceForegroundRetrying(this);
-    private void Window_ContentRendered(object? sender, EventArgs e) { ForceForegroundRetrying(this); OpenDemo96FromCommandLine(); }
+    private void Window_ContentRendered(object? sender, EventArgs e) { ForceForegroundRetrying(this); OpenDemo96FromCommandLine(); OpenMapFromCommandLine(); }
 
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
@@ -3470,6 +3477,8 @@ public partial class MainWindow : Window
         StopPlay();
         SaveAudioIfDirty();
         if (!ConfirmTerrainDiscard()) { e.Cancel = true; return; }
+        // (an open map: its changes saved or let go, its copy of the game folder removed)
+        if (MapOpen && !CloseMapWorkspace()) { e.Cancel = true; return; }
         // Every other open window (actor attributes, script editors, the grid/object/asset editors, ...)
         // closes too, each running its own Closing handler (an unsaved script edit still asks first) -- if
         // any of them refuses, the main window's own close is cancelled rather than leaving them orphaned.
@@ -3554,8 +3563,13 @@ public partial class MainWindow : Window
     private void Open_Click(object sender, RoutedEventArgs e)
     {
         if (currentGame == GameKind.Lba1) { SetStatus("LBA1 doesn't use Open -- it plays from the game folder set under File > Settings."); return; }
-        var dialog = new OpenFileDialog { Filter = "LBA2 islands (*.ILE)|*.ILE|All files (*.*)|*.*", InitialDirectory = gameRoot };
-        if (dialog.ShowDialog() == true) LoadIsland(dialog.FileName);
+        var dialog = new OpenFileDialog { Filter = "LBA2 islands and maps (*.ILE;*.lbamap)|*.ILE;*.lbamap|All files (*.*)|*.*", InitialDirectory = gameRoot };
+        if (dialog.ShowDialog() != true) return;
+        // (a map, or an island from outside the game folder: a map's workspace -- MainWindow.Maps; the folder's own island as it always was)
+        var inGame = string.Equals(Path.TrimEndingDirectorySeparator(Path.GetDirectoryName(Path.GetFullPath(dialog.FileName)) ?? ""),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(gameRoot)), StringComparison.OrdinalIgnoreCase);
+        if (Path.GetExtension(dialog.FileName).Equals(LbaMap.Extension, StringComparison.OrdinalIgnoreCase) || !inGame) { if (ReadyForMap()) OpenMapFile(dialog.FileName); return; }
+        LoadIsland(dialog.FileName);
     }
 
     private void Settings_Click(object sender, RoutedEventArgs e)
@@ -3616,6 +3630,8 @@ public partial class MainWindow : Window
     // most standard shortcut. It's just a status message now.
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        // (a map open: it too -- its island's ground first, into the map's copy of the game folder)
+        if (MapOpen) { SaveMap(saveAs: false); return; }
         if (terrainEditor is { Dirty: true } editor) editor.Save();
         else SetStatus("Nothing to save here -- zone, actor, and script edits each save from their own Apply button.", StatusKind.Info);
     }

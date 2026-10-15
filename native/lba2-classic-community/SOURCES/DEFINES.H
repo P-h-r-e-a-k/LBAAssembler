@@ -483,6 +483,9 @@ typedef struct
     U8 Num;
 
 } T_TABALLCUBE;
+// the scenes LBA_BKG.HQR's scene-to-grid table can name: 256 retail, more for LBA Assembler's maps (File > New map, an LBA2 interior: its
+// scene numbered from 400 on, 2026-10-15)
+#define MAX_GRID_SCENES 1024
 
 #ifndef EDITLBA2
 

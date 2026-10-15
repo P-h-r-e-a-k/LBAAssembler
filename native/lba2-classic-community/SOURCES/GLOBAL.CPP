@@ -388,7 +388,7 @@ S32 VueCamera = 0;
 S32 DefVueDistance[NB_VUE_CAMERA] = {10500, 17000};
 S32 DefAlphaCam[NB_VUE_CAMERA] = {300, 530};
 
-T_TABALLCUBE TabAllCube[256]; //	A mettre en define
+T_TABALLCUBE TabAllCube[MAX_GRID_SCENES]; // (256 retail; LBA Assembler's new interiors past it: GRILLE.CPP InitGrille)
 /*──────────────────────────────────────────────────────────────────────────*/
 
 U8 NumObjDial = 0;
