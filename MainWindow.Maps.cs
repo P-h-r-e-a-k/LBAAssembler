@@ -252,7 +252,8 @@ public partial class MainWindow
     {
         static bool Same(byte[]? x, byte[]? y) => (x is null) == (y is null) && (x is null || x.AsSpan().SequenceEqual(y));
         return a.Scenes.Count == b.Scenes.Count && a.Scenes.Zip(b.Scenes).All(p => Same(p.First.Record, p.Second.Record))
-            && Same(a.Grid, b.Grid) && Same(a.Library, b.Library) && Same(a.Ile, b.Ile) && Same(a.Obl, b.Obl);
+            && Same(a.Grid, b.Grid) && Same(a.Library, b.Library) && Same(a.Ile, b.Ile) && Same(a.Obl, b.Obl)
+            && Same(a.Bricks, b.Bricks) && Same(a.Fragments, b.Fragments) && a.ForbiddenBrick == b.ForbiddenBrick;
     }
 
     // ---- File > Save map / Save map as
@@ -302,7 +303,38 @@ public partial class MainWindow
             _ => $"It is added to your LBA2 game folder ({mapRealDirectory}): {map.IslandFile}.ILE and .OBL, and an outside scene for each of its {map.Scenes.Count} cubes from scene {MapInstall.FirstMapScene} on."
                  + (File.Exists(Path.Combine(mapRealDirectory!, map.IslandFile + ".ILE")) ? $" The folder's {map.IslandFile}.ILE is replaced." : ""),
         };
-        if (MessageBox.Show(this, $"Install the map \"{map.Name}\" into your game? {where} Each file changed keeps a .bak copy of how it was.", "Install map into game",
+        // LBA2: as a map file in the game folder's MAPS folder, which the engine plays it from (MAPPACK.CPP; the user, 2026-10-15: "save
+        // them as a zip ... Makes it easy to save and load"), or into the game's own files as before
+        var intoMapsFolder = false;
+        string? mapsFile = null;
+        if (!map.IsLba1)
+        {
+            mapsFile = openMapPath is not null ? Path.GetFileNameWithoutExtension(openMapPath) + LbaMap.Extension : LbaMap.FileNameFrom(map.Name, 24).ToLowerInvariant() + LbaMap.Extension;
+            var there = Path.Combine(mapRealDirectory!, MapInstall.MapsFolderName, mapsFile);
+            var files = map.Kind == MapKind.Lba2Island ? $"SCENE.HQR, {map.IslandFile}.ILE and .OBL, ISLANDS.TXT" : "SCENE.HQR and LBA_BKG.HQR";
+            var answer = MessageBox.Show(this,
+                $"Install the map \"{map.Name}\" into your game ({mapRealDirectory})?\n\n" +
+                $"Yes: as a map file, {MapInstall.MapsFolderName}\\{mapsFile}{(File.Exists(there) ? " (it replaces the one there, which keeps a .bak copy)" : "")}. " +
+                "The engine plays it from there, as the scenes its MAP.TXT numbers; nothing else in the game folder changes.\n\n" +
+                $"No: into the game's own files ({files}), where the editor lists it among the game's scenes. {where} Each file changed keeps a .bak copy.",
+                "Install map into game", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Cancel || answer == MessageBoxResult.None) return;
+            intoMapsFolder = answer == MessageBoxResult.Yes;
+        }
+        if (intoMapsFolder)
+        {
+            try
+            {
+                var (path, scenes) = MapInstall.InstallInMapsFolder(map, mapRealDirectory!, mapsFile!);
+                SetStatus($"Installed \"{map.Name}\" as {path}: the engine plays it as scene{(scenes.Count > 1 ? "s" : "")} {string.Join(", ", scenes)}.", StatusKind.Success);
+            }
+            catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or Scenes.SceneEditException)
+            {
+                SetStatus($"Couldn't install the map: {error.Message}", StatusKind.Warning);
+            }
+            return;
+        }
+        if (map.IsLba1 && MessageBox.Show(this, $"Install the map \"{map.Name}\" into your game? {where} Each file changed keeps a .bak copy of how it was.", "Install map into game",
                 MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         try
         {

@@ -1,4 +1,5 @@
 #include "C_EXTERN.H"
+#include "MAPPACK.H"
 #include "RES_SWITCH.H"
 #include <POLYGON/POLYFILT.H>
 
@@ -6616,7 +6617,8 @@ S32 GereZoneChangeCube(T_OBJET *ptrobj, T_ZONE *ptrz) {
                 }
             }
 
-            NewCube = ptrz->Num;
+            // (a zone of an LBA Assembler map's scene into the map's own scene k names it 30000 + k: MAPPACK.CPP)
+            NewCube = MapPack_ZoneScene(NumCube, ptrz->Num);
             NewPosY = y - ptrz->Y0 + ptrz->Info1;
             newbeta = (-ptrz->Info3 * 1024) & 4095;
 

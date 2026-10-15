@@ -9,6 +9,7 @@
 
 #include "C_EXTERN.H"
 #include "DIRECTORIES.H"
+#include "MAPPACK.H"
 #include "INPUT.H"
 
 #include <POLYGON/POLY_JMP.H>
@@ -119,6 +120,8 @@ static char LastIslandFile[ADELINE_MAX_PATH] = "";
 // instead of that island's.
 #define MAX_SCENE_ISLAND_FILES 1024
 static const char *SceneIslandFile(S32 scene) {
+    // (an island map in the MAPS folder: its scenes are drawn from its own ILE and OBL, MAPPACK.CPP)
+    if (const char *map = MapPack_IslandFile(scene)) return map;
     static int loaded = 0, count = 0;
     static S32 scenes[MAX_SCENE_ISLAND_FILES];
     static char names[MAX_SCENE_ISLAND_FILES][16];

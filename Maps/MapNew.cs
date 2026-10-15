@@ -22,6 +22,8 @@ internal static class MapNew
         scene.Hero.Life = new byte[] { 0 }; scene.Hero.Track = new byte[] { 0 };
         var map = new LbaMap { Kind = MapKind.Lba2Interior, Name = name, IslandByte = scene.Island, Slot = baseScene, Grid = Lba2GridBackend.FromLba1Shape(backend.RawGrid(gridId), grid) };
         map.Scenes.Add(new MapScene(SceneSerializer.Write(scene)));
+        // (with the base scene's block library and its bricks: its own, what it can be built of)
+        MapBricks.Package(map, gameDirectory);
         return map;
     }
 

@@ -1,5 +1,6 @@
 #include "RENDERER_API.H"
 #include "DEFINES.H"
+#include "../MAPPACK.H"
 #include "EXTERN.H"
 #include "LOADISLE.H"
 #include "DIRECTORIES.H"
@@ -223,6 +224,8 @@ int lba2_renderer_set_data_root(const char *path)
     // assert(directoriesInitialized == false) and the process fail-fasted via abort().
     EndDirectories();
     InitDirectories(root, root, root, "", 0);
+    // (LBA Assembler's maps: the new root's MAPS folder's, when next asked -- MAPPACK.CPP)
+    MapPack_Reset();
     return 1;
 }
 

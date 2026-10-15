@@ -64,21 +64,26 @@ internal static class MapInstall
         var scenes = HqrFile.Parse(File.ReadAllBytes(scenePath));
         var bkgPath = Path.Combine(directory, "LBA_BKG.HQR");
         var bkg = HqrFile.Parse(File.ReadAllBytes(bkgPath));
+        var beforeGrid = InstalledBefore(map, directory) is [var was] ? new Lba2GridBackend(directory).GridOfScene(was) : null;
+        // (its own block library, bricks and fragments first -- MapBricks: they move the entries after them; the grid's header names them)
+        var (library, fragments) = MapBricks.Install(map, bkg);
+        var gridBytes = (byte[])map.Grid!.Clone();
+        gridBytes[0] = (byte)library; gridBytes[1] = (byte)fragments;
         var header = bkg.Read(0);
         int gri = U16(header, 0), grm = U16(header, 2), bll = U16(header, 4), brk = U16(header, 6), maxBrk = U16(header, 8);
 
         // (installed before -- a scene of the maps' with its name: it and its grid replaced, where they are)
-        if (InstalledBefore(map, directory) is [var before] && new Lba2GridBackend(directory).GridOfScene(before) is { } beforeGrid)
+        if (InstalledBefore(map, directory) is [var before] && beforeGrid is not null)
         {
-            bkg.SetStored(gri + beforeGrid, map.Grid!);
-            if (header.Length >= 16 && BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(12)) < (uint)map.Grid!.Length)
-            { BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(12), (uint)map.Grid.Length); bkg.SetStored(0, header); }
+            bkg.SetStored(gri + beforeGrid.Value, gridBytes);
+            if (header.Length >= 16 && BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(12)) < (uint)gridBytes.Length)
+            { BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(12), (uint)gridBytes.Length); bkg.SetStored(0, header); }
             PutScene(scenes, before, WithSceneNumbers(map.Scenes[0].Record, SceneGame.Lba2, new[] { before }));
             new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
             return new InstalledMap(map, directory, new[] { before }, beforeGrid);
         }
 
-        var number = FreeScenes(scenes, 1)[0];
+        var number = FreeScenes(scenes, 1, MapsFolderScenes(directory))[0];
         if (number >= MaxGridScenes) throw new SceneEditException($"The game's scene-to-grid table holds {MaxGridScenes} scenes, and the first free one is {number}.");
         var grid = grm - gri;
         if (grid > 255) throw new SceneEditException("LBA_BKG.HQR has 256 grids already: the game can't name another.");
@@ -86,13 +91,13 @@ internal static class MapInstall
         var table = bkg.Read(brk + maxBrk);
         var type = map.Slot is { } from && from * 2 + 1 < table.Length ? table[from * 2] : (byte)1;
         // the grid after the last one; what follows it one entry on
-        bkg.InsertAt(grm, map.Grid!);
+        bkg.InsertAt(grm, gridBytes);
         BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(2), (ushort)(grm + 1));
         BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(4), (ushort)(bll + 1));
         BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(6), (ushort)(brk + 1));
         // (the biggest grid's size: the engine's buffer for one)
-        if (header.Length >= 16 && BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(12)) < (uint)map.Grid!.Length)
-            BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(12), (uint)map.Grid.Length);
+        if (header.Length >= 16 && BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(12)) < (uint)gridBytes.Length)
+            BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(12), (uint)gridBytes.Length);
         bkg.SetStored(0, header);
         if (table.Length < (number + 1) * 2) Array.Resize(ref table, (number + 1) * 2);
         table[number * 2] = type; table[number * 2 + 1] = (byte)grid;
@@ -119,7 +124,7 @@ internal static class MapInstall
         else
         {
             foreach (var n in before) { islands.Scenes.Remove(n); if (n + 1 < scenes.Count) scenes.Clear(n + 1); }
-            numbers = FreeScenes(scenes, map.Scenes.Count);
+            numbers = FreeScenes(scenes, map.Scenes.Count, MapsFolderScenes(directory));
         }
         for (var k = 0; k < map.Scenes.Count; k++) PutScene(scenes, numbers[k], WithSceneNumbers(map.Scenes[k].Record, SceneGame.Lba2, numbers));
         islands.Look[name] = map.IslandByte;
@@ -161,7 +166,7 @@ internal static class MapInstall
     public static LbaMap Capture(InstalledMap at)
     {
         var map = at.Map;
-        var captured = new LbaMap { Kind = map.Kind, Name = map.Name, Description = map.Description, IslandByte = map.IslandByte, Slot = map.Slot, IslandFile = map.IslandFile };
+        var captured = new LbaMap { Kind = map.Kind, Name = map.Name, Description = map.Description, IslandByte = map.IslandByte, Slot = map.Slot, IslandFile = map.IslandFile, SceneNumbers = map.SceneNumbers };
         var game = map.IsLba1 ? SceneGame.Lba1 : SceneGame.Lba2;
         var store = new SceneStore(game, at.Directory);
         for (var k = 0; k < at.Scenes.Count; k++)
@@ -173,7 +178,10 @@ internal static class MapInstall
                 captured.Library = store.LoadLibrary(at.FirstScene);
                 break;
             case MapKind.Lba2Interior:
-                captured.Grid = new Lba2GridBackend(at.Directory).RawGrid(at.Grid!.Value);
+                var bkg = HqrFile.Parse(File.ReadAllBytes(Path.Combine(at.Directory, "LBA_BKG.HQR")));
+                captured.Grid = bkg.Read(U16(bkg.Read(0), 0) + at.Grid!.Value);
+                // (its own block library, bricks and fragments: as the folder has them now)
+                MapBricks.Capture(captured, map, bkg);
                 break;
             default:
                 captured.Ile = File.ReadAllBytes(Path.Combine(at.Directory, map.IslandFile!.ToUpperInvariant() + ".ILE"));
@@ -193,6 +201,8 @@ internal static class MapInstall
         var grid = backend.GridOfScene(scene) ?? throw new SceneEditException($"Scene {scene} has no interior grid.");
         var map = new LbaMap { Kind = MapKind.Lba2Interior, Name = name, IslandByte = record[0], Slot = scene, Grid = backend.RawGrid(grid) };
         map.Scenes.Add(new MapScene(WithLocalScenes(record, SceneGame.Lba2, new[] { scene })));
+        // (with its block library, bricks and grid fragments: a map of its own, whatever the game folder it goes into)
+        MapBricks.Package(map, directory);
         return map;
     }
 
@@ -237,11 +247,54 @@ internal static class MapInstall
         return map;
     }
 
-    // ---- scene numbers
-    // `count` scene numbers SCENE.HQR has no scene at, from FirstMapScene on, together where it can.
-    private static List<int> FreeScenes(HqrFile scenes, int count)
+    // ---- the game folder's MAPS folder: the engine plays a map from there (MAPPACK.CPP), the game's own files untouched
+    public const string MapsFolderName = "MAPS";
+
+    // The map written into `directory`'s MAPS folder as `fileName`, its scenes numbered as no scene of SCENE.HQR's or of another map's there
+    // is -- the numbers of the map it replaces there (the same file name) kept. The file it replaces keeps a .bak (the engine reads only
+    // .lbamap files). Returns where it went and its scenes' numbers.
+    public static (string Path, IReadOnlyList<int> Scenes) InstallInMapsFolder(LbaMap map, string directory, string fileName)
     {
-        bool Free(int n) => n + 1 >= scenes.Count || scenes.IsEmpty(n + 1);
+        if (map.IsLba1) throw new SceneEditException("The engine's MAPS folder is LBA2's: an LBA1 map goes into its scene slot.");
+        map.Check();
+        var folder = Path.Combine(directory, MapsFolderName);
+        var path = Path.Combine(folder, Path.GetFileNameWithoutExtension(fileName) + LbaMap.Extension);
+        var scenes = HqrFile.Parse(File.ReadAllBytes(Path.Combine(directory, "SCENE.HQR")));
+        var others = MapsFolderScenes(directory, except: path);
+        List<int> numbers;
+        if (File.Exists(path) && ReadNumbers(path) is { } before && before.Count == map.Scenes.Count && before.All(n => !others.Contains(n) && n < MaxGridScenes))
+            numbers = before;
+        else numbers = FreeScenes(scenes, map.Scenes.Count, others);
+        if (numbers[^1] >= MaxGridScenes) throw new SceneEditException($"The engine plays scenes up to {MaxGridScenes - 1}, and the map's would go to {numbers[^1]}.");
+        var copy = map.Numbered(numbers);
+        Directory.CreateDirectory(folder);
+        new FileTransaction().Write(path, copy.ToZip()).Commit();
+        return (path, numbers);
+    }
+
+    // The scene numbers the maps in `directory`'s MAPS folder take (but `except`'s).
+    public static HashSet<int> MapsFolderScenes(string directory, string? except = null)
+    {
+        var taken = new HashSet<int>();
+        var folder = Path.Combine(directory, MapsFolderName);
+        if (!Directory.Exists(folder)) return taken;
+        foreach (var file in Directory.EnumerateFiles(folder, "*" + LbaMap.Extension))
+            if (except is null || !string.Equals(Path.GetFullPath(file), Path.GetFullPath(except), StringComparison.OrdinalIgnoreCase))
+                if (ReadNumbers(file) is { } numbers) taken.UnionWith(numbers);
+        return taken;
+    }
+
+    private static List<int>? ReadNumbers(string file)
+    {
+        try { return LbaMap.Load(file).SceneNumbers; }
+        catch (InvalidDataException) { return null; }
+    }
+
+    // ---- scene numbers
+    // `count` scene numbers SCENE.HQR has no scene at (nor a map of the MAPS folder: `taken`), from FirstMapScene on, together where it can.
+    private static List<int> FreeScenes(HqrFile scenes, int count, IReadOnlySet<int>? taken = null)
+    {
+        bool Free(int n) => (n + 1 >= scenes.Count || scenes.IsEmpty(n + 1)) && taken?.Contains(n) != true;
         for (var first = FirstMapScene; ; first++)
             if (Enumerable.Range(first, count).All(Free)) return Enumerable.Range(first, count).ToList();
     }

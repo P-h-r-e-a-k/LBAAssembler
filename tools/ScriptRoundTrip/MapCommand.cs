@@ -9,9 +9,19 @@ namespace ScriptRoundTrip;
 //   mapexport lba2interior|lba1interior <folder> <scene> <out.lbamap>  /  mapexport lba2island <folder> <island file> <out.lbamap>
 //   mapinstall <map.lbamap> <folder>: installed into the folder (a sandbox: it writes the folder's files), and read back -- the map it gives
 //     back the same as the map put in -- printing where it went
-//   mapinfo <map.lbamap>
+//   mapmaps <map.lbamap> <game folder> [file name]: put into the folder's MAPS folder, where the engine plays it from (MAPPACK.CPP), printing
+//     the scene numbers it was given
+//   mapinfo <map.lbamap>: what it is, its MAP.TXT and its files
 internal static class MapCommand
 {
+    public static int MapsFolder(string[] args)
+    {
+        var map = LbaMap.Load(args[1]);
+        var (path, scenes) = MapInstall.InstallInMapsFolder(map, args[2], args.Length > 3 ? args[3] : System.IO.Path.GetFileName(args[1]));
+        Console.WriteLine($"{path}: scenes {string.Join(", ", scenes)}");
+        return 0;
+    }
+
     public static int New(string[] args)
     {
         LbaMap map;
@@ -57,6 +67,14 @@ internal static class MapCommand
     public static int Info(string[] args)
     {
         Console.WriteLine(Describe(LbaMap.Load(args[1])));
+        using var zip = System.IO.Compression.ZipFile.OpenRead(args[1]);
+        foreach (var entry in zip.Entries)
+            Console.WriteLine($"  {entry.FullName,-16} {entry.Length,9} bytes{(entry.CompressedLength != entry.Length ? $" ({entry.CompressedLength} compressed)" : "")}");
+        if (zip.GetEntry(LbaMap.ManifestName) is { } manifest)
+        {
+            using var reader = new System.IO.StreamReader(manifest.Open());
+            Console.WriteLine(reader.ReadToEnd().TrimEnd());
+        }
         return 0;
     }
 
@@ -64,6 +82,8 @@ internal static class MapCommand
         $"{map.KindName} \"{map.Name}\", island byte {map.IslandByte}{(map.Slot is { } s ? $", slot {s}" : "")}{(map.IslandFile is { } f ? $", file {f}" : "")}, " +
         $"{map.Scenes.Count} scene(s) ({string.Join(", ", map.Scenes.Select(x => $"{x.Record.Length} bytes" + (map.Kind == MapKind.Lba2Island ? $" at ({x.CubeX},{x.CubeZ})" : "")))})" +
         (map.Grid is { } g ? $", grid {g.Length} bytes" : "") + (map.Library is { } l ? $", library {l.Length} bytes" : "") +
+        (map.Bricks is { } b ? $", bricks {b.Length} bytes ({LBAAssembler.HqrFile.Parse(b).Count})" : "") + (map.Fragments is { } fr ? $", fragments {fr.Length} bytes" : "") +
+        (map.SceneNumbers is { } numbers ? $", numbered {string.Join(",", numbers)}" : "") +
         (map.Ile is { } i ? $", ILE {i.Length} bytes, OBL {map.Obl!.Length} bytes" : "");
 
     private static List<string> Compare(LbaMap a, LbaMap b)
@@ -74,6 +94,8 @@ internal static class MapCommand
             if (!a.Scenes[k].Record.AsSpan().SequenceEqual(b.Scenes[k].Record)) problems.Add($"scene {k} differs");
         void Same(string what, byte[]? x, byte[]? y) { if ((x is null) != (y is null) || x is not null && !x.AsSpan().SequenceEqual(y)) problems.Add($"{what} differs"); }
         Same("grid", a.Grid, b.Grid); Same("library", a.Library, b.Library); Same("ILE", a.Ile, b.Ile); Same("OBL", a.Obl, b.Obl);
+        Same("bricks", a.Bricks, b.Bricks); Same("fragments", a.Fragments, b.Fragments);
+        if (a.ForbiddenBrick != b.ForbiddenBrick) problems.Add($"forbidden brick {a.ForbiddenBrick} vs {b.ForbiddenBrick}");
         return problems;
     }
 }

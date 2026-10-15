@@ -11,7 +11,14 @@ A **map** is one of three kinds:
 | LBA2 interior | a scene and its grid of blocks, in one of the game's block libraries |
 | LBA1 interior | a scene, its grid and its block library |
 
-It lives in a file of its own, a **`.lbamap`** (`Maps/LbaMap.cs`), not inside the game's HQR files.
+It lives in a file of its own, a **`.lbamap`** (`Maps/LbaMap.cs`), not inside the game's HQR files. The engine plays a map put in the
+game folder's **`MAPS`** folder straight from that file (`MAPPACK.CPP`, below).
+
+Then (2026-10-15), on the files a map is made of: "The GR2 file contains the raw structural data for a map's physical geometry and tile
+architecture... needs two external componets the .brk file that hold the individual graphic blocks/tiles. and the .bl2 file the layout
+library... LS2 file: placement of twinsen, enemies, and characters... I don't know if when loading a map raw it can also reference a brick
+package but that's what i'd like to do... Maybe just a simple txt tile inside the zip that can be manually added later?... save them as a
+zip but a zip with a custom extension so it can keep .lbamap but it is actually a zip file and can just be opened with a file extractor."
 
 ## The File menu
 
@@ -36,11 +43,14 @@ It lives in a file of its own, a **`.lbamap`** (`Maps/LbaMap.cs`), not inside th
 - **`--map <file>`** on the command line, or a `.lbamap` as the only argument, opens a map at start.
 - **Save map / Save map as…** (Ctrl+S while a map is open): reads the map back out of its workspace (below) into its file. The island's
   unsaved ground is saved first.
-- **Install map into game…**: puts the open map into the real game folder, after a question.
-  - An LBA2 map is added as new scenes from 400 on.
+- **Install map into game…**: puts the open map into the real game folder. An LBA2 map asks which way:
+  - *Yes*: as a map file, `MAPS\<name>.lbamap` (`MapInstall.InstallInMapsFolder`). The engine plays it from there; nothing else in the game
+    folder changes. Its scenes are numbered from 400 where neither SCENE.HQR nor another map in `MAPS` has one, and written in its `MAP.TXT`.
+    A map file of the same name there is replaced (its numbers kept, a `.bak` of it left).
+  - *No*: into the game's own files, as before: new scenes from 400 on (clear of the maps in `MAPS` too). A map installed before is put back
+    where it was: an island onto the scenes `ISLANDS.TXT` draws on its file, an LBA2 interior onto the map scene with its name and onto its
+    grid.
   - An LBA1 map goes into its slot.
-  - A map installed before is put back where it was: an island onto the scenes `ISLANDS.TXT` draws on its file, an LBA2 interior onto the
-    map scene with its name and onto its grid.
   - Every file changed keeps a `.bak` (`FileTransaction`).
 - **Close map**: asks to save unsaved changes, then goes back to the game folder.
 - **Export map…**: the island or interior scene in view, out of the game folder into a `.lbamap`.
@@ -63,27 +73,55 @@ Leaving the workspace:
 
 ## The `.lbamap` file
 
-A zip:
+A zip: any zip program opens it. Its files are stored, not compressed (a zip program packing it again with compression is fine too: the
+engine inflates them). They are named after the map (eight letters of its name, an island's file name):
 
-- `map.json`, which holds:
-  - the format (1) and the kind
-  - the name and a description
-  - the island number its scenes carry (LBA2: the game island whose sky, palette, music and holomap they borrow)
-  - the slot (an LBA1 map's; an LBA2 interior's base scene)
-  - an island's file name
-  - its scenes' files and cubes
-- `scene<k>.bin`: each scene's record as SCENE.HQR holds it. A zone into another of the map's own scenes names it `30000 + k`
-  (`LbaMap.LocalScene`). The real numbers are given at install, and turned back at save.
-- `grid.bin`:
-  - LBA2: LBA_BKG.HQR's entry, with its 34-byte header (library, fragments, used blocks).
-  - LBA1: LBA_GRI.HQR's entry.
-- `library.bin`: LBA1's LBA_BLL.HQR entry.
-- `island.ile`, `island.obl`: an island's files.
+| File | What it is |
+|---|---|
+| `MAP.TXT` | what the map is, `key = value` lines a person can edit (below) |
+| `<NAME>.LS2` | a scene's record as SCENE.HQR holds it (an island's: `<NAME>_<k>.LS2`, one for each cube). LBA1: `.LS1` |
+| `<NAME>.GR2` | an interior's grid: LBA_BKG.HQR's entry, its 34-byte header (library, fragments, used blocks) and its columns. LBA1: `.GR1`, LBA_GRI.HQR's |
+| `<NAME>.BL2` | its own block library: LBA_BKG.HQR's library entry, its brick numbers the BRK's. LBA1: `.BL1`, LBA_BLL.HQR's |
+| `<NAME>.BRK` | its own bricks: an HQR, brick n its entry n, each as LBA_BKG.HQR stores it |
+| `<NAME>.GRM` | its own grid fragments (doors and the like): an HQR, fragment n its entry n |
+| `<NAME>.ILE`, `.OBL` | an island's ground and objects |
+
+`MAP.TXT` ('#' a comment):
+
+```
+format = 2
+game = lba2                       (lba1: an LBA1 map, for its scene slot)
+kind = interior                   (or island)
+name = Brick room
+island = 0                        (the game island its scenes borrow sky, palette, music and holomap from)
+slot = 4                          (the scene it was made from; an LBA1 map's slot)
+scene 400 = BRICKROO.LS2          (one line for each scene: the engine plays it as scene 400)
+grid = BRICKROO.GR2
+library = BRICKROO.BL2            (without it: the game's library its grid's header names)
+bricks = BRICKROO.BRK             (without it: the game's bricks)
+fragments = BRICKROO.GRM          (without it: the game's fragments its grid's header names)
+forbidden brick = 0               (of its own bricks, the one the engine never draws)
+ile = PACKISLE.ILE                (an island's)
+obl = PACKISLE.OBL
+```
+
+- The scene lines' order is the map's own. A zone into another of the map's scenes names it `30000 + k`, k its place (`LbaMap.LocalScene`):
+  the map works whatever numbers its scenes get. Change a number in `MAP.TXT` to move a scene.
+- **The brick package** (`Maps/MapBricks.cs`): a new LBA2 interior and an exported one carry their block library, every brick it names
+  (numbered from 0 in the game's order) and the grid fragments their scene's fragment zones use. A 32 x 32 floor from scene 4: 673 bricks,
+  310 KB. Scene 10: 1,324 bricks, 554 KB. Such a map needs nothing of the game's LBA_BKG.HQR.
+- A map of the first version (`map.json`, `scene<k>.bin`, `grid.bin`, `library.bin`, `island.ile`/`.obl`) still opens, and saves as the
+  new one. Its interior keeps the game's library.
 
 ## Installing into a game folder (`MapInstall`)
 
 - **LBA2 scenes** are appended to SCENE.HQR from scene 400 on, past the game's own and the race tracks' (222-300). SCENE.HQR is padded with
   empty entries up to them, entry 0 keeps the biggest scene's size, and they are named in the folder's SCENE.HQD.
+- **An LBA2 interior's own library, bricks and fragments** (`MapBricks.Install`): a brick LBA_BKG.HQR has already (the same entry, or the
+  same decoded brick) is used, the others are added after its bricks. The library, its brick numbers renumbered to them, is one of the file's
+  own it equals, else it is added after its libraries. The fragments likewise. The header's sizes for a cube's bricks and masks are raised
+  if the map's need more. Read back (`MapBricks.Capture`), the package is made again from what the folder has, with the grid's header as the
+  map's.
 - **An LBA2 interior's grid** is inserted into LBA_BKG.HQR after its last grid:
   - The grid fragments, block libraries, bricks and the scene-to-grid table after it each move up an entry.
   - Entry 0 says where they now start, and its biggest-grid size is raised if needed.
@@ -95,6 +133,29 @@ A zip:
 - **LBA1**: the scene, grid and library entries of its slot are replaced.
 
 ## The engine (`native/lba2-classic-community`)
+
+**Maps in the MAPS folder** (`SOURCES/MAPPACK.CPP`, `LIB386/SYSTEM/ZIPREAD.CPP`):
+
+- The game folder's `MAPS\*.lbamap` are read when first needed (in their names' order): each one's `MAP.TXT`. The log says what each one
+  has (`MAPS: room2.lbamap: 1 scene (409 to 409), an interior, its own block library, its own bricks`). An LBA1 map is left alone. A scene
+  number another map took first is left to it, with a warning; one past 1023 too. A map's scene numbered as one of the game's is played
+  instead of the game's.
+- `ZIPREAD.CPP`: a zip's central directory, its stored and deflated members (an inflater of its own: the engine has no zlib), and
+  **virtual files**: `OpenRead` (FILES.CPP) opens a file a map stands in for before the file system's; `Read`/`Seek`/`Close` follow it.
+  A stored member is read in place; a deflated one is inflated, the last four kept.
+- **Scenes**: `HQF_Hook` (HQFILE.CPP, asked first by `HQF_Init`) serves SCENE.HQR's entry n + 1 from the map's LS2 for scene n, so
+  `LoadScene`, the buggy's `LoadSceneCubeXY` and the renderer read it as the game's. `AdjustLba2Mem` makes the scene buffer as big as the
+  biggest LS2 too.
+- **Zones**: a cube-change zone of a map's scene going to `30000 + k` goes to the map's k-th scene (`MapPack_ZoneScene`, OBJECT.CPP).
+- **Interiors** (`InitGrille`): the grid from the GR2; the library from the BL2 if it has one, else the game's its grid's header names; the
+  bricks from the BRK (`LoadUsedBrickFrom`: the brick table at 0 of the map's HQR) if it has them, else LBA_BKG.HQR's. Fragments
+  (`IncrustGrm`) from the GRM. `InitBufferCube` makes the grid, library, brick and mask buffers room for the maps' (each map's used bricks'
+  sizes added up from their headers); a map read later that doesn't fit (the renderer's data root changed) is refused with a warning.
+- **Islands**: the ILE and OBL are virtual files under a name no game file can have (`<map file>|<NAME>.ile`); `SceneIslandFile` gives
+  that name for the map's scenes.
+- The renderer's `set_data_root` forgets the maps read (`MapPack_Reset`).
+
+**Maps in the game's own files** (the other install):
 
 - `EXTFUNC.CPP` `SceneIslandFile`: reads `ISLANDS.TXT` once. A scene listed there is drawn from its own island file instead of its island
   number's.
@@ -117,8 +178,26 @@ A zip:
 
 - `mapnew lba2interior|lba1interior|lba2island ...`
 - `mapexport lba2interior|lba1interior|lba2island ...`
-- `mapinstall <map> <folder>`: installs the map, reads it back, and says whether it is the same map.
-- `mapinfo <map>`
+- `mapinstall <map> <folder>`: installs the map into the folder's HQRs, reads it back, and says whether it is the same map.
+- `mapmaps <map> <folder> [file name]`: puts it in the folder's MAPS folder, printing the scene numbers it was given.
+- `mapinfo <map>`: what it is, its files and its MAP.TXT.
+
+From the MAPS folder, headless (`lba2cc --headless --no-audio --game-dir <sandbox> --exec-at 6 "cube <n>" ...`), 2026-10-15, on a sandbox
+(`E:\dump\TEMP\mappack\game`):
+
+- A new interior from scene 4, with its own library and 673 bricks, played as scene 405. Its library's brick numbers are its own (0 to 672):
+  drawn from the game's bricks they would be the wrong ones.
+- The same file packed again by a zip program, compressed, its `MAP.TXT` changed by hand to scene 777: the same picture.
+- Scene 10 exported (its own library, 1,324 bricks, its fragments; a fragment zone on from the start) and played as scene 407: the same
+  picture, pixel for pixel, as the game's own scene 10.
+- A first-version interior (the game's library) as scene 408: the same picture as the one with its own bricks.
+- A 2 x 1 island (`PACKISLE`, no ILE of that name in the folder) as scenes 405-406: Twinsen on its land; walking east over the cube's edge
+  took him to scene 406 (its zone names 30001).
+- Installed into the HQRs and read back: the same map (the 673 bricks all found in LBA_BKG.HQR, its library one of the file's); scene 10's
+  too; an LBA1 map in its slot.
+- The UI (the Debug editor on the sandbox): `--map` with the map of its own bricks, Install map into game, Yes (`MAPS\room2.lbamap`, scene
+  409, played headless: the same picture), Save map, Close map.
+- The 15 race tracks build byte for byte as before (42 files).
 
 On sandboxes (2026-10-15):
 
@@ -131,6 +210,11 @@ On sandboxes (2026-10-15):
 - The UI (UI Automation on a sandbox): New map for all three kinds, `--map`, Save map as, Install map into game, Close map.
 
 ## Limits
+
+- The engine plays maps from the MAPS folder; the editor's scene list doesn't show them. File > Open map opens one to edit (in the
+  workspace, installed in its HQRs).
+- A life script's own scene change (`CHANGE_CUBE`) to a map's scene names its number, not `30000 + k`.
+- LBA1 maps are for their slot: the LBA2 engine leaves them alone in MAPS.
 
 - LBA1's scenes can't be added to: an LBA1 map takes a scene slot of the game.
 - An LBA2 map island's scenes have no place on the holomap, and the renderer shows no actors on it in the 3D view outside Play: its scenes

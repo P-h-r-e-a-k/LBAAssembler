@@ -231,6 +231,7 @@ internal static class Program
             "mapexport" => MapCommand.Export(args),
             "mapinstall" => MapCommand.Install(args),
             "mapinfo" => MapCommand.Info(args),
+            "mapmaps" => MapCommand.MapsFolder(args),
             "decorlist" => DecorList.Run(args),
             "bodybox" => BodyBox.Run(args),
             "bodyroundtrip" => BodyRoundTrip.Run(args),

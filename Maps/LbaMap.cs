@@ -1,28 +1,41 @@
 using System.IO;
 using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace LBAAssembler.Maps;
 
 // What a map is: an LBA2 island (its ground and its objects -- ILE and OBL -- and an outside scene for each of its cubes), an LBA2 interior
-// (a scene and its grid of blocks, in one of the game's block libraries) or an LBA1 interior (a scene, its grid and its block library).
+// (a scene and its grid of blocks, with its block library and bricks or in one of the game's) or an LBA1 interior (a scene, its grid and its
+// block library).
 internal enum MapKind { Lba2Island, Lba2Interior, Lba1Interior }
 
 // One scene of a map: its record as SCENE.HQR holds it, and -- an island's -- the cube it is the outside scene of. Its cube-change and door
 // zones to the map's own scenes name them LocalScene + their place in the map, not a game scene number: the numbers a map gets in a game
-// folder are only known when it is installed there (MapInstall).
+// folder are only known when it is installed there (MapInstall), or read from its MAP.TXT by the engine (MAPPACK.CPP).
 internal sealed record MapScene(byte[] Record, int CubeX = 0, int CubeZ = 0);
 
 // A map in a file of its own, `.lbamap` (the user, 2026-10-15: "Let's also add the ability to load new maps from a file instead of them
-// having to be in a HQR file"): a zip of map.json (what it is) and the map's own parts, as the game's files hold them -- its scenes' records,
-// its grid and block library or its island's ILE and OBL. It is opened into a copy of the game folder with the map installed in it
-// (MapWorkspace), where every editor and Play work on it as on any of the game's own, and saved back out of it.
+// having to be in a HQR file"; then: "save it as two files a gr2 and an ls2 ... a zip with a custom extension so it can keep .lbamap but it
+// is actually a zip file and can just be opened with a file extractor"): a zip, its files stored (not compressed: the engine reads them in
+// place), of
+//   MAP.TXT          what it is, "key = value" lines a person can edit (Manifest below)
+//   <NAME>.LS2       each scene's record as SCENE.HQR holds it (LBA1: .LS1); an island's, <NAME>_<k>.LS2
+//   <NAME>.GR2       an interior's grid (LBA2: LBA_BKG.HQR's entry, its 34-byte header and all; LBA1: LBA_GRI.HQR's, .GR1)
+//   <NAME>.BL2       its own block library (LBA1: .BL1, LBA_BLL.HQR's entry: each LBA1 scene has its own)
+//   <NAME>.BRK       its own bricks, an HQR: brick n its entry n, as its library's brick numbers count them
+//   <NAME>.GRM       its own grid fragments, an HQR, fragment n its entry n
+//   <NAME>.ILE/.OBL  an island's ground and objects
+// The engine plays an LBA2 map put in the game folder's MAPS folder (native MAPPACK.CPP). The editor opens it into a copy of the game folder
+// with the map installed in its HQRs (MapInstall), where every editor and Play work on it as on any of the game's own, and saves it back out
+// of it. A map of the first version -- map.json, scene<k>.bin, grid.bin, library.bin, island.ile/.obl, compressed -- still opens.
 internal sealed class LbaMap
 {
     public const string Extension = ".lbamap";
     public const string FileFilter = "LBA Assembler maps (*.lbamap)|*.lbamap";
-    public const int FormatVersion = 1;
+    public const string ManifestName = "MAP.TXT";
+    public const int FormatVersion = 2;
     // (a zone's number from LocalScene on: the map's own scene, by its place in Scenes)
     public const int LocalScene = 30000;
 
@@ -38,19 +51,205 @@ internal sealed class LbaMap
     // An island: the name of its ILE and OBL in a game folder (eight letters at the most)
     public string? IslandFile { get; set; }
     public List<MapScene> Scenes { get; } = new();
+    // The game scene numbers MAP.TXT gives its scenes (the engine plays them as those), or null: not given yet
+    public List<int>? SceneNumbers { get; set; }
     // An interior's grid (LBA2: LBA_BKG.HQR's entry, its 34-byte header -- library, fragments, used blocks -- and all; LBA1: LBA_GRI.HQR's)
     public byte[]? Grid { get; set; }
-    // An LBA1 interior's block library (LBA_BLL.HQR's entry: each LBA1 scene has its own)
+    // Its block library: an LBA1 interior's (LBA_BLL.HQR's entry), an LBA2 interior's own (LBA_BKG.HQR's library entry, its brick numbers
+    // Bricks's); null: an LBA2 interior's is the game's its grid's header names
     public byte[]? Library { get; set; }
+    // An LBA2 interior's own bricks (an HQR, brick n its entry n), and its own grid fragments (an HQR); null: the game's
+    public byte[]? Bricks { get; set; }
+    public byte[]? Fragments { get; set; }
+    // Of its own bricks, the one the engine never draws (LBA_BKG.HQR's header's ForbidenBrick), or null
+    public int? ForbiddenBrick { get; set; }
     public byte[]? Ile { get; set; }
     public byte[]? Obl { get; set; }
 
     public bool IsLba1 => Kind == MapKind.Lba1Interior;
     public string KindName => Kind switch { MapKind.Lba2Island => "LBA2 island", MapKind.Lba2Interior => "LBA2 interior", _ => "LBA1 interior" };
+    public bool OwnBricks => Kind == MapKind.Lba2Interior && Library is not null && Bricks is not null;
 
+    // The name its files have in the zip: an island's file name, else eight letters of its name.
+    public string Stem => Kind == MapKind.Lba2Island && IslandFile is { Length: > 0 } f ? f.ToUpperInvariant() : FileNameFrom(Name, 8);
+
+    // ---- writing
+    public void Save(string path)
+    {
+        // (written beside it and swapped in: a map file is never left half written)
+        var temp = path + ".tmp";
+        File.WriteAllBytes(temp, ToZip());
+        File.Move(temp, path, overwrite: true);
+    }
+
+    public byte[] ToZip()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, bytes) in Members())
+            {
+                var entry = zip.CreateEntry(name, CompressionLevel.NoCompression);
+                entry.LastWriteTime = DateTimeOffset.Now;
+                using var write = entry.Open();
+                write.Write(bytes);
+            }
+        }
+        return stream.ToArray();
+    }
+
+    // The map with its scenes numbered `numbers` in its MAP.TXT (MapInstall.InstallInMapsFolder).
+    public LbaMap Numbered(IReadOnlyList<int> numbers)
+    {
+        var copy = (LbaMap)MemberwiseClone();
+        copy.SceneNumbers = numbers.ToList();
+        return copy;
+    }
+
+    // Its files as the zip holds them, MAP.TXT first.
+    public List<(string Name, byte[] Bytes)> Members()
+    {
+        var stem = Stem;
+        var ls = IsLba1 ? ".LS1" : ".LS2";
+        var files = new List<(string, byte[])>();
+        var sceneFiles = new List<string>();
+        for (var k = 0; k < Scenes.Count; k++)
+        {
+            var name = Scenes.Count == 1 ? stem + ls : $"{stem}_{k}{ls}";
+            sceneFiles.Add(name);
+            files.Add((name, Scenes[k].Record));
+        }
+        string? Put(string extension, byte[]? bytes)
+        {
+            if (bytes is null) return null;
+            files.Add((stem + extension, bytes));
+            return stem + extension;
+        }
+        var grid = Put(IsLba1 ? ".GR1" : ".GR2", Grid);
+        var library = Put(IsLba1 ? ".BL1" : ".BL2", Library);
+        var bricks = Put(".BRK", Bricks);
+        var fragments = Put(".GRM", Fragments);
+        var ile = Put(".ILE", Ile);
+        var obl = Put(".OBL", Obl);
+        files.Insert(0, (ManifestName, Encoding.UTF8.GetBytes(ManifestText(sceneFiles, grid, library, bricks, fragments, ile, obl))));
+        return files;
+    }
+
+    private string ManifestText(List<string> sceneFiles, string? grid, string? library, string? bricks, string? fragments, string? ile, string? obl)
+    {
+        static string Line(string text) => text.Replace("\r", " ").Replace("\n", " ").Trim();
+        var numbers = SceneNumbers is { } given && given.Count == Scenes.Count ? given
+            : IsLba1 ? new List<int> { Slot ?? 0 } : Enumerable.Range(MapInstall.FirstMapScene, Scenes.Count).ToList();
+        var t = new StringBuilder();
+        t.Append("# An LBA Assembler map. This file is a zip: any zip program opens it.\r\n");
+        if (IsLba1)
+            t.Append("# An LBA1 map: LBA Assembler's File > Install map into game puts it into its scene slot.\r\n");
+        else
+        {
+            t.Append("# Put it in the game folder's MAPS folder and the engine plays its scenes as the game's scenes numbered below\r\n");
+            t.Append("# (\"scene <number> = <file>\"). Change a number to move a scene; two maps can't have a scene numbered the same.\r\n");
+            t.Append("# The scene lines' order is the map's own: a zone into scene 30000 + k goes to the k-th (from 0).\r\n");
+            if (Kind == MapKind.Lba2Interior)
+                t.Append("# library, bricks, fragments: the map's own; without them, the game's its grid's header names.\r\n");
+        }
+        t.Append($"format = {FormatVersion}\r\n");
+        t.Append($"game = {(IsLba1 ? "lba1" : "lba2")}\r\n");
+        t.Append($"kind = {(Kind == MapKind.Lba2Island ? "island" : "interior")}\r\n");
+        t.Append($"name = {Line(Name)}\r\n");
+        if (Description.Length > 0) t.Append($"description = {Line(Description)}\r\n");
+        t.Append($"island = {IslandByte}\r\n");
+        if (Slot is { } slot) t.Append($"slot = {slot}\r\n");
+        for (var k = 0; k < sceneFiles.Count; k++) t.Append($"scene {numbers[k]} = {sceneFiles[k]}\r\n");
+        if (grid is not null) t.Append($"grid = {grid}\r\n");
+        if (library is not null) t.Append($"library = {library}\r\n");
+        if (bricks is not null) t.Append($"bricks = {bricks}\r\n");
+        if (fragments is not null) t.Append($"fragments = {fragments}\r\n");
+        if (ForbiddenBrick is { } forbidden && bricks is not null) t.Append($"forbidden brick = {forbidden}\r\n");
+        if (ile is not null) t.Append($"ile = {ile}\r\n");
+        if (obl is not null) t.Append($"obl = {obl}\r\n");
+        t.Append("program = LBA Assembler\r\n");
+        return t.ToString();
+    }
+
+    // ---- reading
+    public static LbaMap Load(string path)
+    {
+        try
+        {
+            using var zip = ZipFile.OpenRead(path);
+            ZipArchiveEntry? Find(string name) =>
+                zip.GetEntry(name) ?? zip.Entries.FirstOrDefault(e => e.FullName.Equals(name, StringComparison.OrdinalIgnoreCase));
+            byte[]? Get(string? name)
+            {
+                if (name is null || Find(name) is not { } entry) return null;
+                using var stream = entry.Open();
+                using var copy = new MemoryStream();
+                stream.CopyTo(copy);
+                return copy.ToArray();
+            }
+            LbaMap map;
+            if (Get(ManifestName) is { } text) map = FromManifest(Encoding.UTF8.GetString(text), Get);
+            else if (Get("map.json") is { } json) map = FromJson(json, Get);
+            else throw new InvalidDataException($"It has no {ManifestName}: it isn't an LBA Assembler map.");
+            map.Check();
+            return map;
+        }
+        catch (Exception error) when (error is JsonException or InvalidDataException or IOException or FormatException)
+        {
+            throw new InvalidDataException($"{Path.GetFileName(path)} can't be read as a map: {error.Message}", error);
+        }
+    }
+
+    // MAP.TXT: "key = value" lines, '#' a comment; scenes "scene <number> = <file>" in the map's own order.
+    private static LbaMap FromManifest(string text, Func<string?, byte[]?> get)
+    {
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var scenes = new List<(int Number, string File)>();
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.Trim();
+            var eq = line.IndexOf('=');
+            if (line.Length == 0 || line[0] == '#' || eq < 0) continue;
+            var key = System.Text.RegularExpressions.Regex.Replace(line[..eq].Trim(), @"\s+", " ");
+            var value = line[(eq + 1)..].Trim();
+            if (key.StartsWith("scene ", StringComparison.OrdinalIgnoreCase))
+                scenes.Add((int.TryParse(key[6..].Trim(), out var n) ? n : -1, value));
+            else values[key] = value;
+        }
+        string? Value(string key) => values.TryGetValue(key, out var v) && v.Length > 0 && !v.Equals("game", StringComparison.OrdinalIgnoreCase) ? v : null;
+        int? Number(string key) => Value(key) is { } v ? int.Parse(v) : null;
+        if (Number("format") is { } format && format > FormatVersion)
+            throw new InvalidDataException($"It is a newer kind of map (format {format}) than this version of the program reads ({FormatVersion}).");
+        var lba1 = string.Equals(Value("game"), "lba1", StringComparison.OrdinalIgnoreCase);
+        var island = string.Equals(Value("kind"), "island", StringComparison.OrdinalIgnoreCase);
+        var map = new LbaMap
+        {
+            Kind = lba1 ? MapKind.Lba1Interior : island ? MapKind.Lba2Island : MapKind.Lba2Interior,
+            Name = Value("name") ?? "Map", Description = Value("description") ?? "", IslandByte = Number("island") ?? 0, Slot = Number("slot"),
+            ForbiddenBrick = Number("forbidden brick"),
+        };
+        byte[]? Part(string key)
+        {
+            if (Value(key) is not { } file) return null;
+            return get(file) ?? throw new InvalidDataException($"Its {key} {file} isn't in it.");
+        }
+        map.Grid = Part("grid"); map.Library = Part("library"); map.Bricks = Part("bricks"); map.Fragments = Part("fragments");
+        map.Ile = Part("ile"); map.Obl = Part("obl");
+        if (Value("ile") is { } ile) map.IslandFile = Path.GetFileNameWithoutExtension(ile).ToUpperInvariant();
+        foreach (var (_, file) in scenes)
+        {
+            var record = get(file) ?? throw new InvalidDataException($"Its scene {file} isn't in it.");
+            map.Scenes.Add(map.Kind == MapKind.Lba2Island && record.Length > 2 ? new MapScene(record, record[1], record[2]) : new MapScene(record));
+        }
+        if (scenes.All(s => s.Number >= 0)) map.SceneNumbers = scenes.Select(s => s.Number).ToList();
+        if (map.Kind == MapKind.Lba1Interior && map.Slot is null && map.SceneNumbers is [var slot]) map.Slot = slot;
+        return map;
+    }
+
+    // ---- the first version: map.json
     private sealed class Manifest
     {
-        public int Format { get; set; } = FormatVersion;
+        public int Format { get; set; }
         [JsonConverter(typeof(JsonStringEnumConverter))] public MapKind Kind { get; set; }
         public string Name { get; set; } = "";
         public string Description { get; set; } = "";
@@ -58,7 +257,6 @@ internal sealed class LbaMap
         public int? Slot { get; set; }
         public string? IslandFile { get; set; }
         public List<ManifestScene> Scenes { get; set; } = new();
-        public string Program { get; set; } = "LBA Assembler";
     }
     private sealed class ManifestScene
     {
@@ -67,67 +265,20 @@ internal sealed class LbaMap
         public int CubeZ { get; set; }
     }
 
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public void Save(string path)
+    private static LbaMap FromJson(byte[] json, Func<string?, byte[]?> get)
     {
-        var manifest = new Manifest { Kind = Kind, Name = Name, Description = Description, IslandByte = IslandByte, Slot = Slot, IslandFile = IslandFile };
-        // (written beside it and swapped in: a map file is never left half written)
-        var temp = path + ".tmp";
-        using (var stream = File.Create(temp))
-        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
+        var manifest = JsonSerializer.Deserialize<Manifest>(json, Json) ?? throw new InvalidDataException("Its map.json is empty.");
+        if (manifest.Format > 1) throw new InvalidDataException($"Its map.json is of a newer kind (format {manifest.Format}).");
+        var map = new LbaMap
         {
-            void Put(string name, byte[]? bytes)
-            {
-                if (bytes is null) return;
-                using var entry = zip.CreateEntry(name, CompressionLevel.Optimal).Open();
-                entry.Write(bytes);
-            }
-            for (var i = 0; i < Scenes.Count; i++)
-            {
-                var name = $"scene{i}.bin";
-                manifest.Scenes.Add(new ManifestScene { File = name, CubeX = Scenes[i].CubeX, CubeZ = Scenes[i].CubeZ });
-                Put(name, Scenes[i].Record);
-            }
-            Put("grid.bin", Grid);
-            Put("library.bin", Library);
-            Put("island.ile", Ile);
-            Put("island.obl", Obl);
-            Put("map.json", JsonSerializer.SerializeToUtf8Bytes(manifest, Json));
-        }
-        File.Move(temp, path, overwrite: true);
-    }
-
-    public static LbaMap Load(string path)
-    {
-        try
-        {
-            using var zip = ZipFile.OpenRead(path);
-            byte[]? Get(string name)
-            {
-                if (zip.GetEntry(name) is not { } entry) return null;
-                using var stream = entry.Open();
-                using var copy = new MemoryStream();
-                stream.CopyTo(copy);
-                return copy.ToArray();
-            }
-            var manifest = JsonSerializer.Deserialize<Manifest>(Get("map.json") ?? throw new InvalidDataException("It has no map.json: it isn't an LBA Assembler map."), Json)
-                ?? throw new InvalidDataException("Its map.json is empty.");
-            if (manifest.Format > FormatVersion) throw new InvalidDataException($"It is a newer kind of map (format {manifest.Format}) than this version of the program reads ({FormatVersion}).");
-            var map = new LbaMap
-            {
-                Kind = manifest.Kind, Name = manifest.Name, Description = manifest.Description, IslandByte = manifest.IslandByte, Slot = manifest.Slot,
-                IslandFile = manifest.IslandFile, Grid = Get("grid.bin"), Library = Get("library.bin"), Ile = Get("island.ile"), Obl = Get("island.obl"),
-            };
-            foreach (var s in manifest.Scenes)
-                map.Scenes.Add(new MapScene(Get(s.File) ?? throw new InvalidDataException($"Its scene {s.File} is missing."), s.CubeX, s.CubeZ));
-            map.Check();
-            return map;
-        }
-        catch (Exception error) when (error is JsonException or InvalidDataException or IOException)
-        {
-            throw new InvalidDataException($"{Path.GetFileName(path)} can't be read as a map: {error.Message}", error);
-        }
+            Kind = manifest.Kind, Name = manifest.Name, Description = manifest.Description, IslandByte = manifest.IslandByte, Slot = manifest.Slot,
+            IslandFile = manifest.IslandFile, Grid = get("grid.bin"), Library = get("library.bin"), Ile = get("island.ile"), Obl = get("island.obl"),
+        };
+        foreach (var s in manifest.Scenes)
+            map.Scenes.Add(new MapScene(get(s.File) ?? throw new InvalidDataException($"Its scene {s.File} is missing."), s.CubeX, s.CubeZ));
+        return map;
     }
 
     // What a map of its kind must have.
@@ -142,6 +293,8 @@ internal sealed class LbaMap
                 break;
             case MapKind.Lba2Interior:
                 if (Grid is null) throw new InvalidDataException("An interior map needs its grid.");
+                if (Grid.Length < 34) throw new InvalidDataException("Its grid is too short.");
+                if ((Library is null) != (Bricks is null)) throw new InvalidDataException("An interior map with a block library of its own needs its bricks too, and the other way round.");
                 break;
             case MapKind.Lba1Interior:
                 if (Grid is null || Library is null) throw new InvalidDataException("An LBA1 map needs its grid and its block library.");
