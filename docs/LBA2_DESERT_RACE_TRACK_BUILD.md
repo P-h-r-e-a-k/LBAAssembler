@@ -3824,6 +3824,48 @@ the last second to guide it through the frog".
 
 ![The frog in the editor, among the island's decor](racetrack/wannies/editor_frog.png)
 
+### Fourth round: the road close over the ground, wide pit-lane mouths, a blue frog (2026-10-15, later still)
+
+The user, with a picture of the start straight and its pit lane (the two ends of the pit lane filled in green): "Let's widen up the pitlane
+entry and exit as shown. Also where our track splits we've got red/white line in the middle that we can remove, and also let's remove the
+boost panel leading up to the jump on the right path. Let's make all the track closer to the ground which means our inclines will be
+steeper exiting the frog"; then "We also need to change the colour of our frog to blue instead of green".
+
+- *Close over the ground* (wannies_design.py, the heights): the lap climbed at 13.5 % from the start straight's 6,500 to the frog's 20,400,
+  4,000 to 14,000 over the islands. Now each point has a floor -- 550 over the highest ground across the road, 1,400 over the lava, and
+  450 over the top of any decor box the builder would count in the road's space (a cell of the box with its middle within the deck's half
+  + 0.75: the builder takes such a decor away unless the deck is 320 over it) -- and the road is the lowest one over its floors that climbs
+  and falls at 17 % at the most (as Volcano Island's and Otringal's), its crests and dips rounded over 6 cells. The floors are tested
+  against the decors' boxes as the builder tests them, not their shapes: the mine's machinery on the east island leans, its shape 6,534
+  high where its box is 8,380, and the first build took the whole machine away.
+- *The frog* comes down to 13,564 (20,400): its lily pad, 2,650 under its floor and 13 cells round, clears the Wannies' house on the hill
+  under it (bodies 12 and 13, 5,613 to 10,637) by 300. Lower, the house would stand through the pad; it stays. The road before the frog
+  comes up to its ramp at 17 %; from the frog to the helix's top (25,000, over the tower's) it climbs at 34 % on average, 37 % at the
+  steepest (14 % before), eased in and out. The helix comes down to 4,920 (7,000), 15 % (14 %).
+- *The start straight* is at 4,630 (6,500), level to the start line; then the road climbs at 17 % to clear the east island's houses (body
+  83, 5,802, beside the road).
+- *The shortcut* keeps its leap up onto the lap: its lip 8,122 over the east island's plateau, the lap 11,509 where it comes down. Its boost
+  pad is gone; the leap is carried in its own time (2.4 s) whatever the car's speed, so it still lands. Where it leaves the lap the lap is
+  raised to what the shortcut needs (the lap goes down off the plateau, the shortcut stays over it: before that, a step where they parted).
+- *The pit lane's mouths* (the user's green): the pit lane is laid out in the lap's own frame, its outer edge and inner edge set across
+  the lap at each of the lap's points. Its outer edge is a straight taper from the lap's own edge out to the pit lane's straight, over
+  12.5 cells at the entry (from the helix's last straight, z 473.5 to 486) and 14 at the exit (from z 511 round the lap); its inner edge
+  lies 1.5 cells inside the lap's deck until the two part, so the mouth is one wide deck with the lap's, 3.5 cells either side at its
+  widest. The entry's taper clears the corner of the elevator's landing platform (body 20, kept) by the builder's half-cell rounding. The
+  pier's east post (body 33) stood in the pit lane's way once it was low; the island's record drops it (`DropDecors`).
+- *No line where the road splits*: where a branch's deck lies on the lap's (or the lap's on a branch's), the side's rail was flattened but
+  its curb and rail top still drawn -- a red and white line across the one deck. An open side is asphalt now, its curb, rail and edge
+  (RaceTrackRaisedBody.Tile); where the two decks part, the two rails meet in a V.
+- *A blue frog*: its skin the palette's blue ramp (192), its spots, hands and feet the slate blue (176); the lily pad and its stalk stay
+  green (RaceTrackFrog's colours).
+
+The test pilot: a lap in 75.5 s (thrown back twice by the frog, untimed as ever); round the pit lane, the lap counted in 70.1 s.
+
+![The pit lane's entry: one wide deck off the helix's last straight](racetrack/wannies/pit_entry_wide.png)
+![The pit lane's exit](racetrack/wannies/pit_exit_wide.png)
+![The blue frog](racetrack/wannies/frog_blue.png)
+![The climb from the frog to the tower's top](racetrack/wannies/climb_to_tower.png)
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

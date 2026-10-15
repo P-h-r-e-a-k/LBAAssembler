@@ -314,6 +314,8 @@ internal sealed record RaceTrackIsland(
         // foot -- while it's 0, and above 1 the cinema of his way back up)
         // (and the frog's still copy among the decor -- the editor's -- hidden: the race-track mode draws the frog, RaceTrackFrog.AddDecor)
         HeldVars = new[] { (107, 1), (RaceTrackFrog.DecorVar, 1) },
+        // (the pier's east post, body 33: the pit lane runs over the pier there, low since the road came down -- 2026-10-15)
+        DropDecors = new[] { (8, 7, 19712, 17664) },
     };
 
     // The Emperor's palace (the user, 2026-10-12: "through the palace rooms, coming out the window and around the roof tops? Point-to-point

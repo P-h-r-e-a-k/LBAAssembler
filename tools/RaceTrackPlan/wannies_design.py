@@ -6,7 +6,8 @@
 # built up to the frog's jump "which then lifts the frog higher into the air, this will then make the slope to the top of the tower less
 # steep", and a car meeting a shut mouth bounced back). Second round, 2026-10-15: twice down the tower, not three times; the start
 # straight on south from it, a thinner pit lane of its own beside it; the shortcut a real one -- a high leap over the west island's loop
-# -- and boost pads round that loop.
+# -- and boost pads round that loop. Round 4, 2026-10-15: the road close over the ground (it climbed high over the islands to the frog), the
+# frog lower and the road up from it to the tower's top steeper; the pit lane's mouths wide tapers; the shortcut's boost pad gone.
 #
 # The drawing is the editor's map turned a quarter anticlockwise and stretched (E:\dump\TEMP\wan\trace.py: u = 55 + 9 (z - 448),
 # v = 5 + 5.82 (576 - x)); its line read off it (route_points.py) and laid on the island:
@@ -19,9 +20,10 @@
 #  - twice round the tower down a helix (a stadium round it: the tower stands 15 cells from the island's north edge, cube row 6
 #    is missing), out of it straight on south onto the start straight, the pit lane beside it.
 #
-# Run with E:\dump\TEMP\wan holding H.npy and obstacles.npz (E:\dump\TEMP\otr\prep.py E:/dump/TEMP/wan 448 448 128); --write writes
+# Run with E:\dump\TEMP\wan holding H.npy and obstacles.npz (E:\dump\TEMP\otr\prep.py E:/dump/TEMP/wan 448 448 128) and boxes.txt (the
+# pristine island's decors: `LBA2_DIR=<pristine> ScriptRoundTrip decorpoints PLATFORM <csv>`, its "cube ..." lines); --write writes
 # docs/racetrack/wannies_track_plan.json; --pictures draws the lap over the island's map (E:\dump\TEMP\wan\lap.png).
-import json, math, sys
+import json, math, re, sys
 import numpy as np
 
 D = 'E:/dump/TEMP/wan/'
@@ -41,7 +43,7 @@ H0 = 4.75                               # the deck's half width to its rail (the
 ASPHALT, CURB = H0 - 1.0, H0 - 0.25
 PIT_X = 550.5                           # the pit lane: down the pier's east side, beside the start straight (2026-10-15) ...
 PIT_HALF = 2.75                         # ... thinner than the road (2.25 at first: "short, narrow" -- longer and wider since)
-PIT_SPOTS = (487.0, 503.0, 508.5)       # ... the opponents' waiting places along it (clear of the start line at 497)
+PIT_SPOTS = (489.0, 503.0, 508.5)       # ... the opponents' waiting places along it (clear of the start line at 497, past the entry's taper)
 TOWER = (543.5, 467.5)                  # the elevator tower's middle (its top block 537.6..549.4 x 463.9..471.1, its legs 536.6..550.4 x 462.8..472.2)
 TOWER_TOP = 24455
 # the helix round the tower: a stadium -- two half circles (radius HR, their middles HZ0 and HZ1 on the tower's line north-south) joined
@@ -51,13 +53,34 @@ HR = 15.0
 HZ0, HZ1 = 469.0, 478.0               # (the inner rail 10.25 from the middles: clear of the legs' corners, 9.3 off)
 TURNS = 2                               # (three until 2026-10-15: "reduce the downward loops around the elevator by one")
 H_TOP = 25000.0                         # the helix's top: over the tower's top
-H_BOTTOM = 7000.0                       # out of it (3,300 until 2026-10-15: the start higher, the lap's climb to the frog shorter -- the
-                                        # shortcut's leap onto the lap is up, not down)
-START_H = 6500.0                        # the start straight (over the lava; the pier's ground 2,000)
-CLIMB = 0.135                           # the lap's grade up to the frog but round the loop the shortcut leaps
-H_FROG = 20400.0                        # the frog's floor (the jump's lip and landing)
-GRADE = 0.17
-CLEAR, LAVA, LAVA_MIN = 400.0, 700.0, 1400.0
+# (round 4: the start straight's height, the helix's foot's and the frog's worked out from the ground -- the heights below)
+GRADE_LOW = 0.17                        # the road close over the ground: its steepest, up and down (Volcano Island's, Otringal's)
+CLEAR, LAVA, LAVA_MIN = 550.0, 700.0, 1400.0   # over the highest ground across the road (the builder cuts the ground to 450 under a deck); ground under
+                                        # LAVA is lava, the road LAVA_MIN over it
+DECOR_CLEAR = 450.0                     # over the top of a decor's box the builder would count in the road's space -- a cell of the box with its middle
+                                        # within the deck's half + 0.75 -- and take away unless the deck is 320 over it
+JUMP_UP = 400.0                         # the shortcut's leap comes down at least this much over its lip
+PAD_DROP, PAD_R, PAD_CLEAR = 2650.0, 6800 / 512, 300.0   # the frog's lily pad: its underside under the frog's floor, its radius (cells) -- RaceTrackFrog's
+                                        # PadTop + PadThick, PadRadius -- and how far it stays over what is under it
+# (the island's decors dropped -- RaceTrackIsland.DropDecors -- the box they stand in, their body: the pier's east post, in the pit lane's
+# way now the lane is low)
+DROPPED = [((549.0, 481.0), (552.0, 484.0), 33)]
+DROP_ORIGINS = [(8, 7, 19712, 17664)]   # (... the same, as the island's record names it: cube, origin)
+KEEP = {19, 20, 21, 27, 28, 29, 30, 31} # the plan's keepBodies (the Wannies' elevator): kept whatever the road does
+# (the decors' boxes in island cells, as the builder tests them -- the middles of the box's cells -- from the island's origin, and their tops)
+BOXES = []
+for _line in open(D + 'boxes.txt'):
+    _m = re.match(r'cube \((\d+),(\d+)\) decor \d+: body (\d+) at \((-?\d+),(-?\d+),(-?\d+)\).*box x (-?\d+)\.\.(-?\d+) y (-?\d+)\.\.(-?\d+) z (-?\d+)\.\.(-?\d+)', _line)
+    if not _m: continue
+    _cx, _cz, _body, _ox, _oy, _oz, _x0, _x1, _y0, _y1, _z0, _z1 = map(int, _m.groups())
+    if _body in KEEP or (_cx, _cz, _ox, _oz) in DROP_ORIGINS: continue
+    BOXES.append((math.floor((_cx * 32768 + _x0) / 512) + 0.5 - OX, math.floor((_cx * 32768 + _x1) / 512) + 0.5 - OX,
+                  math.floor((_cz * 32768 + _z0) / 512) + 0.5 - OZ, math.floor((_cz * 32768 + _z1) / 512) + 0.5 - OZ, _y1, _y0, _body))
+BOXA = np.array(BOXES, float)
+def box_near(x, z, reach):
+    """The decors' boxes a deck's point at (x, z) reaches (reach: its half + 0.75), as a mask over BOXA."""
+    dx = np.maximum(0, np.maximum(BOXA[:, 0] - x, x - BOXA[:, 1])); dz = np.maximum(0, np.maximum(BOXA[:, 2] - z, z - BOXA[:, 3]))
+    return dx * dx + dz * dz <= reach * reach
 
 def C(x, z): return (x - OX, z - OZ)
 
@@ -196,8 +219,13 @@ SC_LIP = np.array([510.0, 533.0])                                         # its 
 SC_D = nearest_after((484.0, 507.8), SC_F, 400)                           # ... its landing: on the S, west past its turn (the other pink)
 SC_J = (SC_D + int(7 / STEP)) % N                                         # ... back on the lap's own road
 
-# ---- heights: up from the start straight to the frog at the same grade all the way (the road high over the islands), the frog level from
-# its lip through it, up to the helix's top, down the helix at an even grade, down to the start straight
+# ---- heights (2026-10-15, round 4 -- the user: "Let's make all the track closer to the ground which means our inclines will be steeper
+# exiting the frog"; the lap climbed at 13.5 % from the start straight's 6,500 to the frog's 20,400 before, high over the islands): the road
+# as low as the island lets it -- CLEAR over the highest ground across it, LAVA_MIN over the lava, DECOR_CLEAR over the top of any decor
+# near it (the builder takes away a decor that reaches into a raised road's space: the Wannies' houses and posts stay) -- rising and falling
+# at GRADE_LOW at the most, as Volcano Island's and Otringal's roads close over the ground; round the loop the shortcut leaps over, up to
+# where the leap comes down, JUMP_UP over its lip; up to the frog, as high as its lily pad needs to clear the Wannies' house on the hill
+# under it (bodies 12 and 13: 5,613 to 10,637); level through the frog; from it up to the helix's top, steeply; down the helix to the start.
 HALF = np.full(N, H0)
 Y = np.zeros(N)
 def climb(a, b, h0, h1, shape=lambda t: t):
@@ -207,25 +235,6 @@ def climb(a, b, h0, h1, shape=lambda t: t):
         Y[k] = h0 + (h1 - h0) * shape(ahead(a, k) / L if L else 1)
         if k == b: break
         k = (k + 1) % N
-climb(MARK['pier'], MARK['start'], START_H, START_H)
-H_FORK = START_H + ahead(MARK['start'], SC_F) * 512 * CLIMB
-H_LAND = H_FROG - 900 - ahead(SC_D, MARK['foot']) * 512 * CLIMB
-climb(MARK['start'], SC_F, START_H, H_FORK)
-climb(SC_F, SC_D, H_FORK, H_LAND)                                         # round the loop the shortcut leaps: gently
-climb(SC_D, MARK['foot'], H_LAND, H_FROG - 900)
-for k in range(MARK['foot'], MARK['lip'] + 1): Y[k % N] = H_FROG - 900 + 900 * ease(ahead(MARK['foot'], k) / ahead(MARK['foot'], MARK['lip']))
-climb(MARK['lip'], MARK['back'], H_FROG, H_FROG)
-climb(MARK['back'], MARK['top'], H_FROG, H_TOP, lambda t: t * t * (3 - 2 * t) * 0.5 + t * 0.5)
-climb(MARK['top'], MARK['hOut'], H_TOP, H_BOTTOM)
-climb(MARK['hOut'], MARK['pier'], H_BOTTOM, START_H, ease)
-# (the jump into the frog: the gap from the lip to the mouth -- no road there)
-gap = np.zeros(N, bool)
-for k in range(MARK['lip'] + 1, MARK['mouth']): gap[k % N] = True
-# (the car carried only from the lip -- the user drives up the ramp: "The game takes control of the car too early ... let's wait until the
-# last second to guide it through the frog", 2026-10-15; from the ramp's foot before)
-arcs = [('frog', (MARK['lip'] - 1) % N, MARK['lip'], MARK['mouth'], (MARK['mouth'] + int(4 / STEP)) % N)]
-
-# ---- (the pit lane: a branch of its own beside the start straight -- further on, with the shortcut)
 # (narrower up the frog's ramp and through it -- into its mouth -- and back out after it)
 iWide = (MARK['back'] + int(6 / STEP)) % N
 for k in range(N):
@@ -233,17 +242,75 @@ for k in range(N):
     elif between(k, MARK['lip'], MARK['back']): HALF[k] = FROG_HALF
     elif between(k, MARK['back'], iWide): HALF[k] = FROG_HALF + (H0 - FROG_HALF) * ease(ahead(MARK['back'], k) / ahead(MARK['back'], iWide))
 
-grade = (np.roll(Y, -1) - Y) / (STEP * 512)
-ride = ~gap
+# (the floors: the decor raster without the decors dropped -- RaceTrackIsland's DropDecors)
+TOPX = TOP.copy()
+for (x0, z0), (x1, z1), body in DROPPED:
+    sl = (slice(max(0, int((z0 - OZ) * RQ)), int((z1 - OZ) * RQ) + 1), slice(max(0, int((x0 - OX) * RQ)), int((x1 - OX) * RQ) + 1))
+    sub = TOPX[sl]; sub[WHO[sl] == body] = -1
+def decor_top(x, z, reach):
+    """The highest decor top within `reach` cells of (x, z) (cells from the origin), or -1."""
+    i0, i1 = max(0, int((z - reach) * RQ)), min(TOPX.shape[0], int((z + reach) * RQ) + 1)
+    j0, j1 = max(0, int((x - reach) * RQ)), min(TOPX.shape[1], int((x + reach) * RQ) + 1)
+    if i0 >= i1 or j0 >= j1: return -1.0
+    sub = TOPX[i0:i1, j0:j1]
+    zz = (np.arange(i0, i1) + 0.5) / RQ - z; xx = (np.arange(j0, j1) + 0.5) / RQ - x
+    m = (zz[:, None] ** 2 + xx[None, :] ** 2 <= reach * reach) & (sub >= 0)
+    return float(sub[m].max()) if m.any() else -1.0
+def floor_at(x, z, half, nx, nz):
+    """How low a deck `half` wide across (nx, nz) may be at (x, z)."""
+    gs = [ground(x + nx * o, z + nz * o) for o in np.linspace(-half - 1.0, half + 1.0, 11)]
+    f = max(gs) + CLEAR
+    if min(gs) < LAVA: f = max(f, LAVA_MIN)
+    m = box_near(x, z, half + 0.85)
+    return max(f, BOXA[m, 4].max() + DECOR_CLEAR) if m.any() else f
+F = np.array([floor_at(X[k], Z[k], HALF[k], Nn[k, 0], Nn[k, 1]) for k in range(N)])
+
+def envelope(f, g):
+    """The lowest profile over f with no step steeper than g (a grade) from point to point."""
+    L = np.array(f, float); d = g * STEP * 512
+    for i in range(1, len(L)): L[i] = max(L[i], L[i - 1] - d)
+    for i in range(len(L) - 2, -1, -1): L[i] = max(L[i], L[i + 1] - d)
+    return L
+SMOOTH = 12                                 # points: crests and dips rounded over 6 cells
+def smooth(v, w):
+    pad = w // 2
+    return np.convolve(np.concatenate([np.full(pad, v[0]), v, np.full(w - 1 - pad, v[-1])]), np.ones(w) / w, mode='valid')
+def low_road(f, g, soft):
+    """The lowest road over the floors f, no steeper than g, its crests and dips rounded (the floors marked soft raised first by what
+    the rounding takes off a crest; the others -- the ends held -- as they are)."""
+    f = np.asarray(f, float)
+    L = envelope(f + soft * g * 512 * SMOOTH * STEP / 4, g * 0.9)
+    return envelope(np.maximum(smooth(L, SMOOTH), f), g)
+
+# (the frog: its lily pad clear of the ground and the decor under it)
+FMX, FMZ = (X[MARK['mouth']] + X[MARK['back']]) / 2, (Z[MARK['mouth']] + Z[MARK['back']]) / 2
+pad_ground = max(ground(FMX + r * math.cos(a), FMZ + r * math.sin(a)) for r in np.linspace(0, PAD_R, 14) for a in np.linspace(0, 2 * math.pi, 37))
+pad_decor = decor_top(FMX, FMZ, PAD_R)
+H_FROG_PAD = max(pad_ground, pad_decor) + PAD_DROP + PAD_CLEAR
+
+# (the lap from the start line to the frog's ramp: the lowest road over its floors; the start straight as high as the highest floor from
+# the helix to it; level for the last LEVEL_IN points before the ramp's foot)
+SEG = [(MARK['start'] + i) % N for i in range(int(round(ahead(MARK['start'], MARK['foot']) / STEP)) + 1)]
+LEVEL_IN = int(5 / STEP)
+start_floor = max(F[(MARK['hOut'] + i) % N] for i in range(int(round(ahead(MARK['hOut'], MARK['start']) / STEP)) + 1))
+LAPX = np.zeros(N)                         # (the lap's floors where the shortcut is on it: as high as the shortcut needs to be there)
+def lap_low(need_land, h_frog):
+    f = np.array([max(F[k], LAPX[k]) for k in SEG])
+    f[0] = max(f[0], start_floor)
+    f[SEG.index(SC_D)] = max(f[SEG.index(SC_D)], need_land)
+    f[-LEVEL_IN:] = np.maximum(f[-LEVEL_IN:], h_frog - 900)
+    soft = np.ones(len(f)); soft[0] = 0; soft[-LEVEL_IN:] = 0
+    return low_road(f, GRADE_LOW, soft)
 
 # ---- the shortcut (the user, 2026-10-15: "change the jump section so it acts as a short cut ... add some boost pads around the other loop
 # of track that the jump skips so if driven well it's the same as if not quicker than taking the jump"): a branch of the raised road.
-# Where the lap turns west at the east island's south-west corner it goes straight on north-west over its boost pad, bends north-north-west
-# up a ramp to the take-off (the user's pink), and leaps -- high, hanging in the air SC_FLIGHT_MS, curving west over the S's turn -- onto
-# the lap past the turn (the other pink): the loop round the west island's south left out. The lap climbs only gently round that loop and
-# CLIMB elsewhere, so that the leap is up onto the lap (no jump lands lower than it took off). Round the loop, stronger boost pads
-# (LOOP_PADS, SC_LOOP_LIFT times the car's top speed; the shortcut's own the engine's): driven well, the loop is as quick. Level with the lap
-# where it leaves it (a little over it while the two decks overlap), no deck of its own where it lies on the lap's road.
+# Where the lap turns west at the east island's south-west corner it goes straight on north-west, bends north-north-west up a ramp to the
+# take-off (the user's pink), and leaps -- high, hanging in the air SC_FLIGHT_MS, curving west over the S's turn -- onto the lap past the
+# turn (the other pink): the loop round the west island's south left out. The lap comes up to where the leap lands JUMP_UP over the lip (no
+# jump lands lower than it took off). Round the loop, stronger boost pads (LOOP_PADS, SC_LOOP_LIFT times the car's top speed); the shortcut's
+# own boost pad taken away (round 4: "let's remove the boost panel leading up to the jump on the right path"). Level with the lap where it
+# leaves it (a little over it while the two decks overlap), no deck of its own where it lies on the lap's road; then as low as the ground
+# lets it, as the lap.
 SC_HALF = 3.5                           # its half width
 SC_OVER = 40.0                          # over the lap's deck where they overlap
 SC_RAMP, SC_KICK, SC_ARC = 9.0, 700.0, 2500.0
@@ -274,37 +341,86 @@ DX_, DZ_, dr_len = resample(dr); FX_, FZ_, fl_len = resample(fl)
 tailK = [k % N for k in range(SC_D + 1, SC_J + 1)]
 BX = list(DX_) + list(FX_[1:]) + [X[k] + OX for k in tailK]; BZ = list(DZ_) + list(FZ_[1:]) + [Z[k] + OZ for k in tailK]
 BM = len(BX)
-sc_cum = np.array([dr_len + fl_len])
 sL = len(DX_) - 1                       # the take-off
 sF = sL - int(SC_RAMP / STEP)           # the ramp's foot
 sD = sL + len(FX_) - 1                  # the landing (on the lap)
 sDF = min(BM - 1, sD + int(4 / STEP))   # its foot
 bend_start = int((t_ - tan2) / STEP)
-bend_end = int((t_ - tan2 + turn2 * 10.0) / STEP) + 1
+def lap_k(x, z): return min(range(N), key=lambda k: (X[k] + OX - x) ** 2 + (Z[k] + OZ - z) ** 2)
 def lap_y(x, z):
-    k = min(range(N), key=lambda k: (X[k] + OX - x) ** 2 + (Z[k] + OZ - z) ** 2)
+    k = lap_k(x, z)
     return Y[k], math.hypot(X[k] + OX - x, Z[k] + OZ - z), HALF[k]
-BY = np.zeros(BM); B_HALF = np.full(BM, SC_HALF); b_hidden = np.zeros(BM, bool)
-# (with the lap -- a little over its deck, eased in -- until the two have parted, then up at CLIMB to the ramp's foot)
+def b_normal(k):
+    nx_, nz_ = -(BZ[min(k + 1, BM - 1)] - BZ[max(k - 1, 0)]), BX[min(k + 1, BM - 1)] - BX[max(k - 1, 0)]
+    ln = math.hypot(nx_, nz_) or 1
+    return nx_ / ln, nz_ / ln
+BF = np.array([floor_at(BX[k] - OX, BZ[k] - OZ, SC_HALF, *b_normal(k)) for k in range(BM)])
+# (with the lap -- a little over its deck, eased in -- until the two have parted, then as low as the ground lets it to the ramp's foot)
 def over(dist, lh, half): return SC_OVER * min(1.0, max(0.0, (dist + half - lh - 0.3) / 1.5))
 kd = next(k for k in range(BM) if lap_y(BX[k], BZ[k])[1] >= lap_y(BX[k], BZ[k])[2] + SC_HALF)
-for k in range(kd): ly, dist, lh = lap_y(BX[k], BZ[k]); BY[k] = ly + over(dist, lh, SC_HALF)
-for k in range(kd, sF + 1): BY[k] = BY[kd - 1] + CLIMB * (k - kd + 1) * STEP * 512
-yFoot = BY[sF]; yLip = yFoot + SC_KICK; yLand = Y[SC_D]
-for k in range(sF + 1, BM):
-    if k <= sL: BY[k] = yFoot + SC_KICK * ease((k - sF) / (sL - sF))
-    elif k < sD:
-        f = (k - sL) / (sD - sL)
-        BY[k] = yLip + (yLand - yLip) * f + 4 * SC_ARC * f * (1 - f)
+BY = np.zeros(BM)
+# (how high it needs to be at each point to climb no steeper than GRADE_LOW over its floors to the ramp's foot; the lap under it as high
+# while they are together -- off the east island's plateau the lap goes down, the shortcut stays over it)
+_bneed = BF[:sF + 1].copy()
+for i in range(sF - 1, -1, -1): _bneed[i] = max(_bneed[i], _bneed[i + 1] - GRADE_LOW * STEP * 512)
+for k in range(kd): LAPX[lap_k(BX[k], BZ[k])] = max(LAPX[lap_k(BX[k], BZ[k])], _bneed[k])
+def shortcut_heights():
+    for k in range(kd): ly, dist, lh = lap_y(BX[k], BZ[k]); BY[k] = ly + over(dist, lh, SC_HALF)
+    f = BF[kd - 1:sF + 1].copy(); f[0] = BY[kd - 1]
+    BY[kd - 1:sF + 1] = envelope(f, GRADE_LOW)
+    yFoot = BY[sF]; yLip = yFoot + SC_KICK
+    for k in range(sF + 1, sL + 1): BY[k] = yFoot + SC_KICK * ease((k - sF) / (sL - sF))
+    return yLip
+
+# (the lap and the shortcut together: the leap's landing up over its lip, the frog's foot up to the frog -- till they settle)
+need_land, H_FROG = 0.0, H_FROG_PAD
+for _ in range(6):
+    Lr = lap_low(need_land, H_FROG)
+    H_FROG = max(H_FROG, Lr[-1] + 900)
+    START_H = Lr[0]
+    for i, k in enumerate(SEG): Y[k] = Lr[i]
+    yLip = shortcut_heights()
+    if Y[SC_D] >= yLip + JUMP_UP - 1 and Lr[-1] <= H_FROG - 900 + 1 and all(Y[k] >= LAPX[k] - 1 for k in SEG): break
+    need_land = yLip + JUMP_UP
+H_BOTTOM = START_H + 300.0              # (out of the helix, eased down onto the start straight)
+for k in SEG[-LEVEL_IN:]: Y[k] = H_FROG - 900
+climb(MARK['pier'], MARK['start'], START_H, START_H)
+for k in range(MARK['foot'], MARK['lip'] + 1): Y[k % N] = H_FROG - 900 + 900 * ease(ahead(MARK['foot'], k) / ahead(MARK['foot'], MARK['lip']))
+climb(MARK['lip'], MARK['back'], H_FROG, H_FROG)
+# (from the frog up to the helix's top at an even grade, eased in and out over CLIMB_EASE of it)
+CLIMB_EASE = 0.08
+def even(t, e=CLIMB_EASE):
+    if t < e: return t * t / (2 * e * (1 - e))
+    if t > 1 - e: return 1 - (1 - t) ** 2 / (2 * e * (1 - e))
+    return (t - e / 2) / (1 - e)
+climb(MARK['back'], MARK['top'], H_FROG, H_TOP, even)
+climb(MARK['top'], MARK['hOut'], H_TOP, H_BOTTOM)
+climb(MARK['hOut'], MARK['pier'], H_BOTTOM, START_H, ease)
+yLip = shortcut_heights()
+H_FORK, H_LAND = Y[SC_F], Y[SC_D]
+# (the leap: from the lip to the lap where it comes down, an arc SC_ARC over the straight line; the lap's own after it)
+yLand = Y[SC_D]
+for k in range(sL + 1, BM):
+    if k < sD:
+        f_ = (k - sL) / (sD - sL)
+        BY[k] = yLip + (yLand - yLip) * f_ + 4 * SC_ARC * f_ * (1 - f_)
     else: BY[k] = lap_y(BX[k], BZ[k])[0]
+B_HALF = np.full(BM, SC_HALF); b_hidden = np.zeros(BM, bool)
 for k in range(BM):
     ly, dist, lh = lap_y(BX[k], BZ[k])
     if dist + SC_HALF <= lh + 0.3 and abs(BY[k] - ly) < 120: b_hidden[k] = True        # wholly on the lap's road, at its height
 b_gap = np.zeros(BM, bool); b_gap[sL + 1:sD] = True
 b_hidden &= ~b_gap
-SC_PAD = (max(0, bend_start - int(6 / STEP)), max(0, bend_start - int(2 / STEP)))   # its boost pad: 4 cells on the straight before the bend
 bgrade = np.diff(BY) / (STEP * 512)
 hid = [[int(a), int(b)] for a, b in zip(*[np.flatnonzero(np.diff(np.concatenate([[0], b_hidden.astype(int), [0]])) == v) - (0 if v == 1 else 1) for v in (1, -1)])]
+# (the jump into the frog: the gap from the lip to the mouth -- no road there)
+gap = np.zeros(N, bool)
+for k in range(MARK['lip'] + 1, MARK['mouth']): gap[k % N] = True
+# (the car carried only from the lip -- the user drives up the ramp: "The game takes control of the car too early ... let's wait until the
+# last second to guide it through the frog", 2026-10-15; from the ramp's foot before)
+arcs = [('frog', (MARK['lip'] - 1) % N, MARK['lip'], MARK['mouth'], (MARK['mouth'] + int(4 / STEP)) % N)]
+grade = (np.roll(Y, -1) - Y) / (STEP * 512)
+ride = ~gap
 # the loop's boost pads: just past the fork, on the lap's way west past its corner, on the S's lower leg -- each 4 cells, the road's middle
 LOOP_PADS = []
 for where, after in (((None, 14.0), SC_F), (((487.0, 547.3), None), SC_F), (((481.0, 527.0), None), SC_F)):
@@ -312,33 +428,56 @@ for where, after in (((None, 14.0), SC_F), (((487.0, 547.3), None), SC_F), (((48
     else: k = nearest_after(where[0], after, 300)
     LOOP_PADS.append([int(k), int((k + int(4 / STEP)) % N), -1.6, 1.6, SC_LOOP_LIFT])
 
-# ---- the pit lane (the user, 2026-10-15: "The main path now goes straight on, with a thinner pitlane to the side"): a branch of the raised
-# road off the start straight's west side just out of the helix, down the pier's east side past the start line -- the opponents' waiting
-# places along it -- and back onto the straight before it bends onto the east island. Level with the straight beside it (a little over it
-# where the two decks overlap), no deck of its own where it lies on the straight's.
-# (off the helix's last straight down the tower's east side -- the lap's last pass there -- and back onto the lap past its bend onto the
-# east island, heading the way it does: its straight from z 484 to 515)
-PL_F = nearest_after((558.5, 472.0), (MARK['hOut'] - int(8 / STEP)) % N, 10)
-PL_J = nearest_after((561.3, 526.0), PL_F, 80)
-_dj = T[PL_J] / np.linalg.norm(T[PL_J]); _V4 = np.array([X[PL_J] + OX, Z[PL_J] + OZ]) - _dj * 5.0
-pl = rounded([((X[PL_F] + OX, Z[PL_F] + OZ), 0.0), ((558.5, 476.0), 6.0), ((PIT_X, 484.0), 6.0), ((PIT_X, 515.0), 6.0), (tuple(_V4), 8.0),
-              ((X[PL_J] + OX, Z[PL_J] + OZ), 0.0)])
-pl = pl[np.concatenate([[True], np.hypot(*np.diff(pl, axis=0).T) > 1e-9])]
-pl_cum = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(pl, axis=0).T))])
-PM = int(round(pl_cum[-1] / STEP))
-PX = np.interp(np.linspace(0, pl_cum[-1], PM + 1), pl_cum, pl[:, 0]); PZ = np.interp(np.linspace(0, pl_cum[-1], PM + 1), pl_cum, pl[:, 1])
-straightK = [k % N for k in range(PL_F, PL_F + int(ahead(PL_F, PL_J) / STEP) + 1)]
-_sz = np.array([Z[k] + OZ for k in straightK]); _sy = np.array([Y[k] for k in straightK]); _o = np.argsort(_sz)
-def straight_y(z): return float(np.interp(z, _sz[_o], _sy[_o]))
-PY = np.array([straight_y(z) for z in PZ]); P_HALF = np.full(PM + 1, PIT_HALF); p_hidden = np.zeros(PM + 1, bool)
-for k in range(PM + 1):
-    # (how far from the lap's middle -- it bends east onto the east island where the pit lane ends -- of the stretch it runs beside: the
-    # helix passes over it)
-    _m = min(straightK, key=lambda m: (X[m] + OX - PX[k]) ** 2 + (Z[m] + OZ - PZ[k]) ** 2)
-    ly_, off = Y[_m], math.hypot(X[_m] + OX - PX[k], Z[_m] + OZ - PZ[k])
-    if off + PIT_HALF <= H0 + 0.3: PY[k] = ly_
-    if off + PIT_HALF <= H0 + 0.3: p_hidden[k] = True
-    else: PY[k] += SC_OVER * max(0.0, min(1.0, (off + PIT_HALF - H0 - 0.3) / 1.5, (H0 + PIT_HALF + 1.5 - off) / 1.5))   # (eased in and out)
+# ---- the pit lane (the user, 2026-10-15: "The main path now goes straight on, with a thinner pitlane to the side"; round 4: "Let's widen
+# up the pitlane entry and exit as shown"): a branch of the raised road beside the start straight, down the pier's east side past the start
+# line -- the opponents' waiting places along it. Laid out in the lap's own frame: at each of the lap's points from PL_F to PL_J its outer
+# edge OUT_EDGE(s) and inner edge IN_EDGE(s), cells west of the lap's middle (Nn). Its outer edge a straight taper from the lap's own edge out to
+# the pit lane's straight at each end -- the helix's last straight from z Z_A to the straight's start at Z_B, and from the straight's end at
+# Z_C round the lap EXIT_LEN -- a wide mouth, one deck with the lap's there (no rail between them, no curb: RaceTrackRaisedBody.Tile's open
+# sides); its inner edge 1.5 cells into the lap's deck until the two part. A little over the lap's deck where the two overlap; no deck of
+# its own where it lies wholly on the lap's.
+Z_A, Z_B, Z_C = 473.5, 486.0, 511.0          # (the entry's taper clear of the elevator's landing platform's corner, body 20: 549.6, 479.6)
+EXIT_LEN = 14.0
+O_PIT, I_PIT = 558.5 - (PIT_X - PIT_HALF), 558.5 - (PIT_X + PIT_HALF)    # the straight's outer and inner edges west of the lap's middle
+I_IN = H0 - 1.5
+_kA = nearest_after((558.5, Z_A), (MARK['hOut'] - int(16 / STEP)) % N, 20)
+PL_F = (_kA - int(8 / STEP)) % N
+_kB = nearest_after((558.5, Z_B), _kA, 30)
+_kC = nearest_after((558.5, Z_C), _kB, 60)
+sA, sB, sC = ahead(PL_F, _kA), ahead(PL_F, _kB), ahead(PL_F, _kC)
+sE = sC + EXIT_LEN
+PL_J = (PL_F + int(round((sE + 6.0) / STEP))) % N
+sJ = ahead(PL_F, PL_J)
+def lerp_e(a, b, t): return a + (b - a) * ease(t)
+def OUT_EDGE(s):
+    if s < sA: return lerp_e(PIT_HALF, H0, s / sA)
+    if s < sB: return H0 + (O_PIT - H0) * (s - sA) / (sB - sA)
+    if s < sC: return O_PIT
+    if s < sE: return O_PIT + (H0 - O_PIT) * (s - sC) / (sE - sC)
+    return lerp_e(H0, PIT_HALF, (s - sE) / (sJ - sE))
+def IN_EDGE(s):
+    if s < sA: return lerp_e(-PIT_HALF, I_IN, s / sA)
+    if s < sB - 1.0: return I_IN
+    if s < sB + 2.0: return lerp_e(I_IN, I_PIT, (s - sB + 1.0) / 3.0)
+    if s < sC - 1.0: return I_PIT
+    if s < sC + 2.0: return lerp_e(I_PIT, I_IN, (s - sC + 1.0) / 3.0)
+    if s < sE: return I_IN
+    return lerp_e(I_IN, -PIT_HALF, (s - sE) / (sJ - sE))
+pitK = [(PL_F + i) % N for i in range(int(round(sJ / STEP)) + 1)]
+_s = np.array([ahead(PL_F, k) for k in pitK])
+# (the outer edge's corners where the tapers meet the straight rounded: the edges smoothed over 3 cells)
+_o = smooth(np.array([OUT_EDGE(s) for s in _s]), 6); _i = smooth(np.array([IN_EDGE(s) for s in _s]), 4)
+_o[0], _o[-1], _i[0], _i[-1] = PIT_HALF, PIT_HALF, -PIT_HALF, -PIT_HALF
+PM = len(pitK) - 1
+PX = np.array([X[k] + OX + Nn[k, 0] * (_o[n] + _i[n]) / 2 for n, k in enumerate(pitK)])
+PZ = np.array([Z[k] + OZ + Nn[k, 1] * (_o[n] + _i[n]) / 2 for n, k in enumerate(pitK)])
+P_HALF = (_o - _i) / 2
+pl_cum = np.concatenate([[0], np.cumsum(np.hypot(np.diff(PX), np.diff(PZ)))])
+p_hidden = _o <= H0 + 0.3
+# (over the lap's deck while the two overlap, eased in from where its own deck begins; level with the lap beside it once apart)
+PY = np.array([Y[k] + (0.0 if p_hidden[n] else SC_OVER * min(1.0, (_o[n] - H0 - 0.3) / 2.0, max(0.0, (H0 + 0.3 - _i[n]) / 1.5)))
+               for n, k in enumerate(pitK)])
+PF = np.array([floor_at(PX[n] - OX, PZ[n] - OZ, P_HALF[n], Nn[k, 0], Nn[k, 1]) for n, k in enumerate(pitK)])
 pit_hid = [[int(a), int(b)] for a, b in zip(*[np.flatnonzero(np.diff(np.concatenate([[0], p_hidden.astype(int), [0]])) == v) - (0 if v == 1 else 1) for v in (1, -1)])]
 PIT_SPOT_LIST = []
 for zs in PIT_SPOTS:
@@ -370,10 +509,23 @@ for k in range(N):
     for o in np.linspace(-HALF[k] - 0.3, HALF[k] + 0.3, 17):
         x, z = X[k] + Nn[k, 0] * o, Z[k] + Nn[k, 1] * o
         i, j = int(z * RQ), int(x * RQ)
-        if not (0 <= i < TOP.shape[0] and 0 <= j < TOP.shape[1]) or TOP[i, j] < 0: continue
-        if TOP[i, j] > Y[k] - 350 and BOT[i, j] < Y[k] + 1400:
-            b = int(WHO[i, j]); hits.setdefault(b, []).append((round(float(x + OX), 1), round(float(z + OZ), 1), int(TOP[i, j]), int(Y[k])))
+        if not (0 <= i < TOPX.shape[0] and 0 <= j < TOPX.shape[1]) or TOPX[i, j] < 0: continue
+        if TOPX[i, j] > Y[k] - 350 and BOT[i, j] < Y[k] + 1400:
+            b = int(WHO[i, j]); hits.setdefault(b, []).append((round(float(x + OX), 1), round(float(z + OZ), 1), int(TOPX[i, j]), int(Y[k])))
 out.append('  decor in the road\'s space (body: places, e.g.): ' + '; '.join(f'{b}: {len(h)} {h[0]}' for b, h in sorted(hits.items())))
+def taken(xs, zs, ys, halfs, skip):
+    t = {}
+    for n in range(len(xs)):
+        if skip[n]: continue
+        m = box_near(xs[n] - OX, zs[n] - OZ, halfs[n] + 0.75) & (BOXA[:, 4] >= ys[n] - 320) & (BOXA[:, 5] <= ys[n] + 1400)
+        for b in np.flatnonzero(m): t.setdefault(int(BOXA[b, 6]), (round(float(xs[n]), 1), round(float(zs[n]), 1), int(ys[n])))
+    return t
+low = [k for k in SEG if Y[k] < F[k] - 1]
+out.append(f'  start straight {START_H:.0f}, out of the helix {H_BOTTOM:.0f}; the frog {H_FROG:.0f} (its pad needs {H_FROG_PAD:.0f}: the ground under it {pad_ground:.0f}, '
+           f'decor {pad_decor:.0f}); under a floor from the start to the frog: {len(low)} points' + (f' (the most {max(F[k] - Y[k] for k in low):.0f})' if low else ''))
+out.append(f'  over the ground from the start to the frog: median {np.median([Y[k] - F[k] + CLEAR for k in SEG]):.0f}, the most {max(Y[k] - F[k] + CLEAR for k in SEG):.0f} '
+           f'(was 4,000 to 14,000); steepest there {max(abs(grade[k]) for k in SEG[:-1]) * 100:.1f} %; frog to the top {max(abs(grade[k]) for k in range(MARK["back"], MARK["top"])) * 100:.1f} %; '
+           f'the helix {abs(grade[(MARK["top"] + 20) % N]) * 100:.1f} %')
 idx = np.arange(N); close = []; under = []
 for i in range(0, N, 2):
     if gap[i]: continue
@@ -392,7 +544,7 @@ for m, k in MARK.items():
 # the shortcut: its marks, steepest grade, the jump, what it passes over, its decor hits, how near the rest of the lap is
 out.append(f'  shortcut: {BM} points, {dr_len:.1f} cells to its take-off, a leap of {fl_len:.1f} (curving {math.degrees(turn3):.0f} deg, radius {R3:.1f}), then {len(tailK) * STEP:.1f} along the lap; '
            f'the lap there {ahead(SC_F, SC_J):.1f} cells; the lap {H_FORK:.0f} at the fork, {H_LAND:.0f} where the leap comes down; loop pads {LOOP_PADS}')
-for name, k in (('fork', 0), ('pad', SC_PAD[0]), ('padEnd', SC_PAD[1]), ('bend0', bend_start), ('foot', sF), ('lip', sL), ('land', sD), ('landFt', sDF), ('join', BM - 1)):
+for name, k in (('fork', 0), ('bend0', bend_start), ('foot', sF), ('lip', sL), ('land', sD), ('landFt', sDF), ('join', BM - 1)):
     out.append(f'    {name:6s} {k:4d} ({BX[k]:6.1f}, {BZ[k]:6.1f}) {BY[k]:6.0f} (ground {ground(BX[k] - OX, BZ[k] - OZ):5.0f}){" hidden" if b_hidden[k] else ""}')
 out.append(f'    steepest driven {max(abs(g) for i, g in enumerate(bgrade) if not b_gap[i] and not b_gap[i + 1]) * 100:.1f} %; the jump {BY[sD] - BY[sL]:+.0f} over {(sD - sL) * STEP:.1f} cells; hidden {hid}')
 bh = {}
@@ -403,11 +555,14 @@ for k in range(BM):
     for o in np.linspace(-SC_HALF - 0.3, SC_HALF + 0.3, 9):
         x, z = BX[k] - OX + nx_ / ln * o, BZ[k] - OZ + nz_ / ln * o
         i, j = int(z * RQ), int(x * RQ)
-        if not (0 <= i < TOP.shape[0] and 0 <= j < TOP.shape[1]) or TOP[i, j] < 0: continue
-        if TOP[i, j] > BY[k] - 350 and BOT[i, j] < BY[k] + 1400: bh.setdefault(int(WHO[i, j]), []).append((round(x + OX, 1), round(z + OZ, 1)))
+        if not (0 <= i < TOPX.shape[0] and 0 <= j < TOPX.shape[1]) or TOPX[i, j] < 0: continue
+        if TOPX[i, j] > BY[k] - 350 and BOT[i, j] < BY[k] + 1400: bh.setdefault(int(WHO[i, j]), []).append((round(x + OX, 1), round(z + OZ, 1)))
 out.append('    decor in its space: ' + '; '.join(f'{b}: {len(h)} {h[0]}' for b, h in sorted(bh.items())))
 fl = list(range(sL, sD + 1))
 out.append(f'    under the flight: the ground at most {max(ground(BX[k] - OX, BZ[k] - OZ) for k in fl):.0f}, the flight at least {min(BY[k] for k in fl):.0f}')
+_fo = [(BY[k] - Y[m], k, m) for k in fl for m in range(N) if not between(m, (SC_D - int(10 / STEP)) % N, SC_J) and math.hypot(X[m] + OX - BX[k], Z[m] + OZ - BZ[k]) < HALF[m] + 2.0]
+out.append(f'    the flight over the lap: {min(_fo)[0]:.0f} at the least (its point {min(_fo)[1]}, the lap\'s {min(_fo)[2]})' if _fo else '    the flight over the lap: nowhere')
+out.append(f'    under a floor up to its lip: {sum(1 for k in range(kd, sL + 1) if BY[k] < BF[k] - 1)} points; the lip {yLip:.0f}, the landing {Y[SC_D]:.0f}')
 cl = []
 for k in range(0, BM, 2):
     if b_hidden[k] or b_gap[k]: continue
@@ -422,12 +577,16 @@ for k in range(PM + 1):
     if p_hidden[k]: continue
     nx_, nz_ = -(PZ[min(k + 1, PM)] - PZ[max(k - 1, 0)]), PX[min(k + 1, PM)] - PX[max(k - 1, 0)]
     ln = math.hypot(nx_, nz_) or 1
-    for o in np.linspace(-PIT_HALF - 0.3, PIT_HALF + 0.3, 7):
+    for o in np.linspace(-P_HALF[k] - 0.3, P_HALF[k] + 0.3, 9):
         x, z = PX[k] - OX + nx_ / ln * o, PZ[k] - OZ + nz_ / ln * o
         i, j = int(z * RQ), int(x * RQ)
-        if not (0 <= i < TOP.shape[0] and 0 <= j < TOP.shape[1]) or TOP[i, j] < 0: continue
-        if TOP[i, j] > PY[k] - 350 and BOT[i, j] < PY[k] + 1400: ph.setdefault(int(WHO[i, j]), []).append((round(x + OX, 1), round(z + OZ, 1), int(TOP[i, j]), int(PY[k])))
+        if not (0 <= i < TOPX.shape[0] and 0 <= j < TOPX.shape[1]) or TOPX[i, j] < 0: continue
+        if TOPX[i, j] > PY[k] - 350 and BOT[i, j] < PY[k] + 1400: ph.setdefault(int(WHO[i, j]), []).append((round(x + OX, 1), round(z + OZ, 1), int(TOPX[i, j]), int(PY[k])))
 out.append('  pit lane decor in its space: ' + '; '.join(f'{b}: {len(h)} {h[0]}' for b, h in sorted(ph.items())))
+_tl = taken(X + OX, Z + OZ, Y, HALF, gap); _tb = taken(np.array(BX), np.array(BZ), BY, B_HALF, b_gap | b_hidden); _tp = taken(PX, PZ, PY, P_HALF, p_hidden)
+out.append(f'  decors the builder would take away (body: a place, the deck): lap {_tl}; shortcut {_tb}; pit lane {_tp}')
+out.append(f'  pit lane under a floor: {sum(1 for n in range(PM + 1) if not p_hidden[n] and PY[n] < PF[n] - 1)} points; its widest {P_HALF.max():.2f} either side; '
+           f'its mouths: z {Z_A:.0f} to {Z_B:.0f}, from z {Z_C:.0f} {EXIT_LEN:.0f} cells round')
 out.append(f'  pit lane: {PM + 1} points, {pl_cum[-1]:.1f} cells from the straight at ({PX[0]:.1f}, {PZ[0]:.1f}) to ({PX[-1]:.1f}, {PZ[-1]:.1f}), {PY.min():.0f} to {PY.max():.0f}, '
            f'steepest {np.abs(pgrade).max() * 100:.1f} %, hidden {pit_hid}; its spots {[(p[0] + OX, p[1] + OZ, p[4]) for p in PIT_SPOT_LIST]}; '
            f'the straight at the start line {X[MARK["start"]] + OX:.1f}, the pit lane {PX[int(np.argmin(np.abs(PZ - (Z[MARK["start"]] + OZ))))]:.1f}')
@@ -456,7 +615,6 @@ plan = {
         'halfs': [round(float(h), 3) for h in B_HALF],
         'from': int(SC_F), 'to': int(SC_J),
         'arcJumps': [[int(sL - 1), int(sL), int(sD), int(sDF), -1, SC_FLIGHT_MS]],      # (carried from its lip, as the frog's jump)
-        'boostPanels': [[int(SC_PAD[0]), int(SC_PAD[1]), -1.6, 1.6]],
         'hidden': hid,
     }, {
         # the pit lane: off the start straight at PL_F, back onto it at PL_J
@@ -491,6 +649,6 @@ if '--pictures' in sys.argv:
         d.line([P(PX[k] - OX, PZ[k] - OZ), P(PX[k + 1] - OX, PZ[k + 1] - OZ)], fill=(80, 80, 80) if p_hidden[k] else (255, 120, 0), width=3)
     for p_ in PIT_SPOT_LIST: d.ellipse([P(p_[0], p_[1])[0] - 4, P(p_[0], p_[1])[1] - 4, P(p_[0], p_[1])[0] + 4, P(p_[0], p_[1])[1] + 4], fill=(255, 255, 0))
     for k in range(BM - 1):
-        col = (255, 255, 255) if b_gap[k] else (255, 0, 255) if SC_PAD[0] <= k <= SC_PAD[1] else (80, 80, 80) if b_hidden[k] else (255, 160, 0)
+        col = (255, 255, 255) if b_gap[k] else (80, 80, 80) if b_hidden[k] else (255, 160, 0)
         d.line([P(BX[k] - OX, BZ[k] - OZ), P(BX[k + 1] - OX, BZ[k + 1] - OZ)], fill=col, width=3)
     img.save(D + 'lap.png')

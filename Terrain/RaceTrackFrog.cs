@@ -70,9 +70,10 @@ internal static class RaceTrackFrog
     // the pad it sits on (its top, its radius, the stalk's)
     private const float PadTop = -2450, PadRadius = 6800, PadThick = 200, Stalk = 650;
     // colours (lit: the light runs each up its ramp): its skin, its spots, its belly, the throat's flesh and floor, the tongue, the eyes,
-    // the pad and its stalk
-    private const int Skin = 129, Spot = 112, Belly = 36, Flesh = 65, FleshFloor = 64, Tongue = 72, TongueTip = 74, EyeBall = 103, Pupil = 48,
-        Socket = 131, Pad = 130, PadEdge = 128, StalkColour = 113;
+    // the pad and its stalk. A blue frog (the user, 2026-10-15: "change the colour of our frog to blue instead of green"; it was the
+    // greens 128 and 112): its skin the blue ramp (192), its spots, hands and feet the slate blue (176); the lily pad and its stalk green.
+    private const int Skin = 193, Spot = 176, Belly = 36, Flesh = 65, FleshFloor = 64, Tongue = 72, TongueTip = 74, EyeBall = 103, Pupil = 48,
+        Socket = 195, Pad = 130, PadEdge = 128, StalkColour = 113;
 
     // Where the frog is: the lap's points from its mouth to its back left without a deck (Hidden), and its place in the report.
     public static FrogInfo? Place(IslandFile island, TrackRoad r, int mouth, int back, RaceTrackReport report)

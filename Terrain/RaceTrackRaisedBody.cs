@@ -151,10 +151,15 @@ internal static class RaceTrackRaisedBody
             var across = Vector3.Normalize(sections[j].Across + sections[j + 1].Across);
             var block = j == line || (firstBlock + j) % 2 == 0 ? Red : White;
             void Strip(int k, int colour, Vector3 outward) => m.Quad(at[j, k], at[j, k + 1], at[j + 1, k + 1], at[j + 1, k], colour, outward);
-            Strip(0, Side, -across);          // the outer side, slab and rail
-            Strip(1, RailTop, up);
-            Strip(2, RailSide, across);       // the rail's inner face
-            Strip(3, block, up);              // the curb
+            // (a side open from section to section: asphalt to its edge, no curb and no flattened rail -- they lay as a red and white line
+            // across the one deck where a branch leaves the lap; the user, 2026-10-15: "where our track splits we've got red/white line in
+            // the middle that we can remove")
+            bool OpenCell(bool plus) => open is not null && j + 1 < open.Count && (plus ? open[j].Plus && open[j + 1].Plus : open[j].Minus && open[j + 1].Minus);
+            var openMinus = OpenCell(false); var openPlus = OpenCell(true);
+            Strip(0, openMinus ? Asphalt : Side, -across);          // the outer side, slab and rail
+            Strip(1, openMinus ? Asphalt : RailTop, up);
+            Strip(2, openMinus ? Asphalt : RailSide, across);       // the rail's inner face
+            Strip(3, openMinus ? Asphalt : block, up);              // the curb
             // (a boost panel's strips: those whose middles are within its reach across)
             int b0 = -1, b1 = -1;
             if (boost is not null && j < boost.Count && boost[j] is { } bp)
@@ -189,10 +194,10 @@ internal static class RaceTrackRaisedBody
                 var colour = white ? White : arrow && w > 0 && i > c - w && i < c + w - 1 ? Arrow : Asphalt;
                 m.Quad(qa, qb, qc, qd, colour, up);
             }
-            Strip(5, block, up);
-            Strip(6, RailSide, -across);
-            Strip(7, RailTop, up);
-            Strip(8, Side, across);
+            Strip(5, openPlus ? Asphalt : block, up);
+            Strip(6, openPlus ? Asphalt : RailSide, -across);
+            Strip(7, openPlus ? Asphalt : RailTop, up);
+            Strip(8, openPlus ? Asphalt : Side, across);
             for (var i = 0; i < below; i++) m.Quad(under[j, i], under[j, i + 1], under[j + 1, i + 1], under[j + 1, i], Under, -up);   // the underside
         }
         return m.Write();
