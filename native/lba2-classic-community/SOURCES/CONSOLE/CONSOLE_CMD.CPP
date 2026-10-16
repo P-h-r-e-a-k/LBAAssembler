@@ -2487,6 +2487,14 @@ static void cmd_racecars(int argc, const char *argv[]) {
     for (int i = 0; i < n; i++) Console_Print("%s", lines[i]);
 }
 
+/* cartrace: Twinsen's race car each frame -- its place, pitch, roll, speed, fall and the floor under it (RACEMOD.CPP RaceMod_CarTrace). */
+static void cmd_cartrace(int argc, const char *argv[]) {
+    extern void RaceMod_CarTrace(int on);
+    const int on = argc >= 2 ? atoi(argv[1]) : 1;
+    RaceMod_CarTrace(on);
+    Console_Print("cartrace: %s", on ? "ON" : "OFF");
+}
+
 static void cmd_input(int argc, const char *argv[]) {
     if (argc < 2) {
         Console_Print("Usage: input <flags> [ticks] | input seq <t:flags:dur[/...]>");
@@ -2728,6 +2736,9 @@ void Console_RegisterAll(void) {
     Console_RegisterCommandEx("racecars", cmd_racecars, "Race-track: where every car is", "racecars",
                               "Twinsen's car and each opponent's, a line each: car <n> <x> <z> <beta> <name> (island units; n -1 "
                               "Twinsen). The editor's minimap asks for it while it plays a race (RACEMOD.CPP).");
+    Console_RegisterCommandEx("cartrace", cmd_cartrace, "Race-track test: log Twinsen's car each frame", "cartrace <0|1>",
+                              "[cartrace] lines: tick, island x y z, pitch and roll (BUGGY.CPP's), speed, falling, the raised road's floor "
+                              "under the car and the ground's (RACEMOD.CPP).");
     Console_RegisterCommandEx("raceplan", cmd_raceplan, "Race-track test: the racing line planned for a car setup, its perfect lap",
                               "raceplan <top%> <accel%> <brake%> <steer%> | raceplan file <setups> <out>",
                               "Each percentage scales the race file's car (its gears' top speeds, pull, brakes, steering); the lap at a "

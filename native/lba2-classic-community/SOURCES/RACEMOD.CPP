@@ -639,6 +639,7 @@ static int s_nbRaised = 0;
 #define RAISED_LEVEL 1200                  // two parts of the road within this of each other's height are one level (a bend's segments)
 #define RAISED_PAD 96                      // the floor reaches this far past the road's edge
 #define RAISED_INSET 640                   // how far inside the edge the hero's middle is kept: a car's half width
+#define RAISED_UNDER_GROUND 300            // what asks no further than this over the deck at an `under` stretch's mouth: on it (RaisedAltitude)
 #define RAISED_NOREF 0x7FFFFFFF
 static int s_rbX0 = 0, s_rbZ0 = 0, s_rbW = 0, s_rbH = 0;
 static int s_rbExtra = 0;                  // squares more to look in for a road wider than one (the Emerald Moon's, as wide as the reactor's dish)
@@ -1394,6 +1395,13 @@ static int RaisedAt(double wx, double wz, S32 ref, double pad, S32 *y, int *seg,
 static int RaisedUnder(int seg) {
     return seg >= 0 && seg + 1 < s_nbRaised && (s_raised[seg].Under || s_raised[seg + 1].Under);
 }
+// ... or within RAISED_MOUTH points of one: the mouth, where the road goes in under the ground (RaisedAltitude)
+#define RAISED_MOUTH 4
+static int NearUnder(int seg) {
+    for (int d = -RAISED_MOUTH; d <= RAISED_MOUTH; d++)
+        if (RaisedUnder(seg + d)) return 1;
+    return 0;
+}
 static int OpenUnderAt(double wx, double wz, double y) {
     const int a = OpenAreaAt(wx, wz, y);
     return a >= 0 && s_open[a].Under;
@@ -1442,6 +1450,11 @@ static S32 RaisedAltitude(S32 x, S32 z, S32 y) {
     double lat, t;
     if (!RaisedAt(x + CurrentCubeX * 32768.0, z + CurrentCubeY * 32768.0, s_floorRef, RAISED_PAD, &f, &seg, &lat, &t)) return y;
     if (RaisedUnder(seg)) return open >= 0 && s_open[open].Under && y > f ? y : f;
+    // (at the mouth of an `under` stretch, the ground over the deck, which is about as high as what asks: that is going in under the ground,
+    // the deck its floor -- the ground's face over the mouth slopes up over the road's last half cell before the stretch: Island CX's
+    // door A, where a car was lifted for a frame onto the ground 700 over the deck, and its pitch probes (BUGGY.CPP TiltFloorY) found the
+    // plateau's edge 300-1,900 over it and dipped -- "a slight lip ... driving onto the slope to the underground section", 2026-10-16)
+    if (y > f && s_floorRef < f + RAISED_UNDER_GROUND && NearUnder(seg)) return f;
     return f > y ? f : y;
 }
 
@@ -5203,6 +5216,17 @@ static void Rescue(void) {
 #define RACE_BELOW_LAP 4500.0
 #define RACE_BELOW_REACH (16 * 512.0)
 static S32 s_belowSince = 0;
+
+// An area cars drive where they like that the line never runs through at its floor's height: a place of the race's own off the lap --
+// the palace's dungeon under rooms 159 and 163, reached by a fireplace's teleporter and left by another. A car on its floor is where it
+// was let go, not fallen (the user, 2026-10-16: "we can't currently access the underground dungeon area as the game detects us as off the
+// track and resets us" -- the upstairs lap 9,355 over it, 1,633 aside).
+static int SideArea(const T_RACE_OPPONENT *o, int a) {
+    const T_RACE_OPEN *ar = &s_open[a];
+    for (int i = 0; i < o->Count; i++)
+        if (o->X[i] >= ar->X0 && o->X[i] <= ar->X1 && o->Z[i] >= ar->Z0 && o->Z[i] <= ar->Z1 && fabs(o->Y[i] - ar->Floor) < 900) return 0;
+    return 1;
+}
 static void FallenBelow(S32 now) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     const T_RACE_OPPONENT *o = Guide();
@@ -5210,6 +5234,9 @@ static void FallenBelow(S32 now) {
             || now < s_jetUntil || s_rescue || s_rescueArrive >= 0 || (hero->WorkFlags & FALLING) || s_safeIndex < 0
             || s_wheel.DropOn || OnWheel(hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0)) { s_belowSince = 0; return; }
     const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    // (on the floor of an area of the race's own off the lap: SideArea)
+    const int area = OpenAreaAt(wx, wz, hero->Obj.Y);
+    if (area >= 0 && fabs(hero->Obj.Y - s_open[area].Floor) < 900 && SideArea(o, area)) { s_belowSince = 0; return; }
     double near2 = 1e30;
     S32 nearY = 0;
     for (int i = 0; i < o->Count; i++) {
@@ -8181,8 +8208,27 @@ void RaceMod_EdgeCross(void) {
              (int)CurrentCubeX, (int)CurrentCubeY, qx, qz, scene, (int)NewPosX, (int)NewPosY, (int)NewPosZ);
 }
 
+// The console's cartrace: Twinsen's car logged each frame -- a lip in a road shows as a jump in its height or pitch.
+static int s_carTrace = 0;
+void RaceMod_CarTrace(int on) { s_carTrace = on; }
+static void CarTraceLine(void) {
+    if (!s_carTrace || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    S32 f = -99999;
+    int seg = -1;
+    double lat = 0, t = 0;
+    if (s_nbRaised && !RaisedAt(wx, wz, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t)) f = -99999;
+    extern S32 BuggyPitchProbe[3];
+    Log_Info("[cartrace] t %u x %.0f y %d z %.0f pitch %d roll %d speed %d fall %d floor %d seg %d lat %.0f ground %d probes %d %d %d beta %d", (unsigned)TimerRefHR, wx,
+             (int)hero->Obj.Y, wz, (int)ListBuggy[0].Alpha, (int)ListBuggy[0].Gamma, (int)ListBuggy[0].Speed, (hero->WorkFlags & FALLING) ? 1 : 0,
+             (int)f, seg, lat, (int)CalculAltitudeTerrain(hero->Obj.X, hero->Obj.Z, 0), (int)BuggyPitchProbe[0], (int)BuggyPitchProbe[1],
+             (int)BuggyPitchProbe[2], (int)(hero->Obj.Beta & 4095));
+}
+
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
+    CarTraceLine();
     NoteScene();
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
     for (int i = 0; i < s_nbHeld; i++)

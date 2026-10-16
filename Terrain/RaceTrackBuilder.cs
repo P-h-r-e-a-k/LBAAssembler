@@ -1085,8 +1085,19 @@ internal static class RaceTrackBuilder
             foreach (var g in monsters)
                 report.GasMonsters.AddRange(RaceTrackGasMonster.Place(island, main, PlanPoint(plan, main, g.From), PlanPoint(plan, main, g.To), g, options, report));
         if (planned && plan.Flyers is { Length: > 0 } flyers)
+        {
+            // (how high what is built over the road's deck reaches at each point: a tunnel's roof where one of pieces stands -- the monsters
+            // keep clear of it)
+            var tops = new Dictionary<int, double>();
+            foreach (var t in plan.Tunnels ?? Array.Empty<TunnelRun>())
+            {
+                if (!t.Pieces) continue;
+                int a = PlanPoint(plan, main, t.From), b = PlanPoint(plan, main, t.To), span = ((b - a) % main.Count + main.Count) % main.Count;
+                for (var k = 0; k <= span; k++) { var i = (a + k) % main.Count; tops[i] = Math.Max(tops.GetValueOrDefault(i), t.Roof + RaceTrackTunnel.Slab); }
+            }
             foreach (var f in flyers)
-                if (RaceTrackFlyers.Place(island, main, PlanPoint(plan, main, f.From), PlanPoint(plan, main, f.To), f, options) is { } spot) report.Flyers.Add(spot);
+                if (RaceTrackFlyers.Place(island, main, PlanPoint(plan, main, f.From), PlanPoint(plan, main, f.To), f, options, tops) is { } spot) report.Flyers.Add(spot);
+        }
         if (planned && plan.Crystals is { Length: > 0 } crystals)
             RaceTrackCrystals.Place(island, main, crystals, plan.OriginCellX, plan.OriginCellZ, options, report);
         if (planned && plan.CrystalArches is { Length: > 0 } arches)

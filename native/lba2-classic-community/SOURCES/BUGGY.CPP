@@ -640,6 +640,7 @@ static S32 BuggyFloorY(T_OBJET *ptrobj, S32 x, S32 z) {
 // "After using the boost panels on platform.ile and driving into the side wall it tips the car up on its nose"). No road climbs or falls
 // that much over the 400 the points are from the car's middle (the steepest, the Elevator Platform's drop, 500), and none is banked that much
 // across (the steepest bank, 0.40: 160).
+S32 BuggyPitchProbe[3] = {0, 0, 0};
 #define RACE_TILT_PITCH 700
 #define RACE_TILT_ROLL 250
 static S32 TiltFloorY(T_OBJET *ptrobj, S32 x, S32 z, S32 own, S32 most) {
@@ -816,6 +817,8 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
 
     ptb3d->CurrentFrame[1].Alpha = (S16)(1024 - GetAngle2D(0, y, 800, y1));
     ptb->Alpha = ptb3d->CurrentFrame[1].Alpha;
+    // (for a race-track mod's cartrace: the floor the pitch was taken from, ahead and behind, and the car's own -- RACEMOD.CPP)
+    BuggyPitchProbe[0] = y; BuggyPitchProbe[1] = y1; BuggyPitchProbe[2] = yw;
 
     // inclinaison voiture (roll)
     LongRotate(400, 0, ptb3d->Beta);

@@ -4005,6 +4005,16 @@ dungeon is a plain one -- a jail's -- and nothing more.)
 ![A jailer coming at the car](racetrack/palace/dungeon_jailer.png)
 ![The way out](racetrack/palace/dungeon_way_out.png)
 
+### The dungeon, reached (2026-10-16, later)
+
+The user: "we can't currently access the underground dungeon area as the game detects us as off the track and resets us". The race's
+fall rescue (RACEMOD.CPP `FallenBelow`) puts back on the road a car that has stood 1.5 s well under the line with no line at its height
+near it -- and in the dungeon the upstairs lap runs 9,355 over the car, 1,633 aside: `fallen off the road to (194048,6801,308858), 9355
+below the lap 1633 away`, a second after the fireplace's teleporter. A car on the floor of an area of the race's own off the lap -- one the
+line never runs through at its floor's height (`SideArea`), as the dungeon -- is now where it was let go, not fallen. The rooms the lap runs
+through keep the rescue (a car fallen from upstairs into a room the closed doors cut off). Checked mid-race: down through 159's
+fireplace, past the jailers, out of the north fireplace back into 163, no reset.
+
 ## Island CX: round the island under its cannons, down through a door, twice round the halls under the gas (2026-10-15)
 
 The user: "Create a track for our CXTower island. The basic concept for this track is a loop around the tower, the track enters the
@@ -4152,6 +4162,37 @@ too hard to see".
 ![Down door A's ramp](racetrack/cxtower/door_a_down_the_ramp.png)
 ![The U-turn at the ramp's foot](racetrack/cxtower/door_a_u_turn.png)
 ![Up to door C](racetrack/cxtower/door_c_climb.png)
+
+### The fourth round: no lip into door A, smooth walls, the flying monsters clear of the ramps (2026-10-16)
+
+The user: "there's a slight lip which upsets the car very slightly when driving onto the slope to the underground section. The walls also
+need some refining, as they're a little glitchy and hard on the eye, let's smooth them out so they're all one colour with a single straight
+line down the middle instead of the current jagged gold line" -- and then "One of the flying walrus monsters currently clips through the
+track".
+
+- **The lip** (RACEMOD.CPP `RaisedAltitude`, `NearUnder`): the road's deck was smooth all the way down (a new console command, `cartrace 1`,
+  logs the car each frame: its place, pitch, roll, speed, the floor under it and what its pitch was taken from). The trouble was the
+  ground: door A's portal is sunk in the plateau, and over the road's last half cell before the `under` stretch the ground slopes from
+  the cutting up to the plateau's edge, 1,900 over the deck. A floor there was the higher of deck and ground, so a car was lifted for a
+  frame onto ground 700 over the deck, and its pitch probes (BUGGY.CPP `TiltFloorY`, 400 ahead and behind) found the slope and dipped
+  the car's nose (166 -> -17 -> 160). Within 4 points of an `under` stretch, ground over the deck is now no floor for a car about as high
+  as the deck: down through door A the pitch goes 133 -> 166 in steps of no more than 13, on every lap of three races.
+- **The walls** (RaceTrackTunnel.cs `Surfaces`, `StripHeights`): each road segment had been a level box of its own -- wall, light strip
+  and roof -- so down a 26 % ramp the strips went down in steps, and the boxes' ends showed light and dark along the walls. The pieces
+  are now surfaces through the road's own points: walls straight up beside the rails, one colour; the roof from wall to wall; and one
+  gold strip on each wall, at one height over the deck along a run of tunnels -- the middle of their height as it mostly is (1,100 in
+  CX's ramps), lowered to stay 200 under a roof too low for it (955 in the portals) and eased over 6 cells, so it never steps. Each
+  piece's origin is in whole units, so the pieces either side of a joint share their points. (Otringal's two tunnels are built the same
+  way and look the same.)
+- **The flying monsters** (RaceTrackFlyers.cs): a monster's way kept clear of the hall's pillars and walls -- decor boxes at its height --
+  but the ramps' decks and tunnel pieces have boxes with no top, which nothing touches, so the ramps weren't seen: one monster's way
+  crossed door A's U-turn at the road's own height, another's ran into door C's ramp tunnel, a third flew half a cell past the U-turn's
+  edge at the cars' height. Now the road counts too: within its half width and 1.5 cells (the monster -- entity 329, body 451 -- is 760
+  wide and flies along its way), from 600 under the deck up to a car's height over it or a tunnel's roof. A way keeps its longest run of
+  clear points (a point left out in the middle had it fly straight across the gap): 8, 13, 11 and 10 points, from 11, 13, 16 and 17.
+
+![Through door A's portal: one colour, one line](racetrack/cxtower/round4_door_a_portal.png)
+![Up the ramp to door C](racetrack/cxtower/round4_ramp_walls.png)
 
 ## The Temple of Bú: the Halloween race (2026-10-16)
 

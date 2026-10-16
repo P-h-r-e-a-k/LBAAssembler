@@ -5,7 +5,8 @@
 #   python stress.py report           summary of both
 import json, os, re, subprocess, sys, itertools, concurrent.futures as cf
 
-ROOT = 'E:/dump/TEMP/stress'
+# (STRESS_ROOT: another folder of runs, its own game in it -- one track built alone)
+ROOT = os.environ.get('STRESS_ROOT', 'E:/dump/TEMP/stress')
 GAME = ROOT + '/game'
 ENG = 'E:/dump/LBAAssembler/native/lba2-classic-community/out/build/windows_ucrt64_static/SOURCES/lba2cc.exe'
 SR = 'E:/dump/LBAAssembler/tools/ScriptRoundTrip/bin/Debug/net10.0/ScriptRoundTrip.exe'
@@ -56,8 +57,9 @@ def start_scene(key, name):
     if key == 'citabau': return tracks[name + '#twin'][0]['StartScene']
     return tracks[name][0]['StartScene']
 
-def files():
+def files(keys=None):
     for key, name, ile, env in TRACKS:
+        if keys and key not in keys: continue
         d = f'{ROOT}/{key}'
         os.makedirs(d, exist_ok=True)
         e = dict(os.environ, RT_RACE=ile, **env)
@@ -206,7 +208,7 @@ def trial(keys):
 if __name__ == '__main__':
     what = sys.argv[1]
     keys = sys.argv[2:] or [t[0] for t in TRACKS]
-    if what == 'files': files()
+    if what == 'files': files(sys.argv[2:])
     elif what == 'plan': plan(keys)
     elif what == 'pilot': pilot(keys)
     elif what == 'trial': trial(keys)
