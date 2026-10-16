@@ -1666,7 +1666,7 @@ The user's asks:
 
 - *Lit as the inventory lights them:* the light is set with the camera level (`SetAngleCamera(0,0,0)`), not with the scene's camera as the found-object display does. The box is drawn without the outside's fog filler and depth buffer, with the colour table of things near (`SetCLUT(PalLevel)`; outside, the fog is the colour table of each object's distance, and the box would have the last object's). The protection spell's beads and the clover are dark in the retail inventory too.
 - *The roulette:* an item taken goes into the first free slot and the items go by in it, slowing down over 1.5 s to the one drawn, which can't be used until it stops.
-- *Keys:* Shift uses the selected item (the other slot's if that one is empty), and Q selects the other slot. Every item is held now, not only oil and penguins, so while Twinsen has one, Shift doesn't open the inventory. With both slots full the mushrooms still give way to the car, empty. The test pilot uses each item `autodrop_ms` after its roulette stops (default 1 s, 0 never).
+- *Keys:* Shift uses the selected item (the other slot's if that one is empty), and Q selects the other slot. Every item is held now, not only oil and penguins, so while Twinsen has one, Shift doesn't open the inventory. (Since 2026-10-16 Ctrl uses it instead, and Shift is the inventory's again: see *The race game* at the end.) With both slots full the mushrooms still give way to the car, empty. The test pilot uses each item `autodrop_ms` after its roulette stops (default 1 s, 0 never).
 
 **Who draws what** (`RandomPowerUp`, `BackShare`):
 - Each power-up has a strength:
@@ -4187,3 +4187,35 @@ Extra commands in `ScriptRoundTrip`:
 - `initbuggy <game> <scene>`.
 - `scripttext <game> <scene> <actor> life|track`: a script as the editor's C text.
 - `racetrack island <n>` and `racetrack <cx> <cz> --scripts --hero`.
+
+## The race game (2026-10-16): Little Big Halloween Racing Adventure
+
+The user: a standalone build outside LBA Assembler, in the retail game's look and menus, with an installer that takes both games' folders,
+copies their data into its own folder and builds the race tracks there; "Story Mode" (in place of New game), "Track select" and "Specials",
+the first two greyed for the Halloween special; items on Ctrl instead of Shift ("this shouldn't be used when driving anyway"); a car
+selection of ten character cars, the skeleton's and other Halloween ones; and a best-times list per track, the top ten, from a time trial
+-- no opponents, no pickups, a can of Gazogem for each lap.
+
+The installer is its own project, `E:\dump\LittleBigRacingAdventure` (its README says how it installs and builds). The engine side is here:
+
+- **Ctrl uses the item** (RACEMOD.CPP `PowerUps`, `RaceMod_FilterInput` from PERSO.CPP's frame input): the behaviour key, read from the
+  frame's input before it is masked, so a key bound to it in the options and a pad's left shoulder use items too; in the car the behaviour
+  menu doesn't open (its other behaviours take Twinsen out of the car). Shift opens the inventory again, as in the game. LBA Assembler's
+  Play has the same keys.
+- **The race game** (RACEGAME.CPP, on when `RACEGAME.TXT` is beside the game's data): the main menu is the race game's -- Resume (a race
+  on), Story Mode and Track select (greyed and passed over: GAMEMENU.CPP's rows, its keys and GAMEMENU_MOUSE.CPP's hit test ask
+  `RaceGame_RowDisabled`), Specials, Best times, the game's Options, Quit. Specials -> the track -> Race or Time trial -> the car page (its
+  body turning in a box, measured by the pixels it draws: the character cars' header boxes are their template's) -> the special's race
+  file with the car's `drive_as=` and the race game's keys, written to `RACE_NOW.TXT` in the user's folder and loaded (`RaceMod_LoadFile`),
+  then a new game with no introduction. No first-launch introduction either.
+- **New race-file keys** (RACEMOD.CPP): `start_scene=` (a new game's scene: the start line's), `start_in_car=1` (Twinsen put in the car as the
+  scene opens: the car's own SET_MOVE, `AdjustDirObject`), `trial=1` (a can of Gazogem at GO and at the start of each later lap, the item box
+  shown without mushrooms, the time from GO to the last line into the best times: `RaceGame_Finished`), `end_to_menu=<ms>` (after the race,
+  back to the menu: PERSO.CPP's menu key asks `RaceMod_WantsMenu`).
+- **Best times**: `BESTTIMES.TXT` in the user's folder, `track|ms|best lap ms|car|date`, the ten fastest of each track kept.
+
+Tested from a headless install (`LBHRA-Setup.exe --install`) of the pristine assets into `E:\dump\TEMP\lbra\install`, driven through the
+engine's `--listen` socket (`key`, `autodrive`): the menus, all ten cars on the car page, a time trial (laps of 54.7, 56.5 and 54.2 s, a
+can each lap, 2:48.59 the best time), Ctrl using the can with no behaviour menu, a race against the three (1st of 4), and each back to the
+menu.
+

@@ -307,7 +307,12 @@ void RaceMod_Island(S32 island);
 double RaceMod_SpeedFactor(void);
 S32 RaceMod_Takeover(void);
 S32 RaceMod_NoHarm(void);
-S32 RaceMod_BlocksInventory(void);
+U32 RaceMod_FilterInput(U32 input);
+S32 RaceMod_WantsMenu(void);
+void RaceMod_LoadFile(const char *path);
+// The race game's (RACEGAME.CPP): a race is over -- its time from GO to the line, its best lap, the place; a time trial's time goes to
+// the track's best times (the rank it took there, 1-10, 0 none).
+S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers);
 // An opponent's car, which the race-track mode places wherever it is on the lap -- in the next cube too (EXTFUNC.CPP: not kept inside
 // the player's cube).
 S32 RaceMod_FreeOfCube(S32 numobj);

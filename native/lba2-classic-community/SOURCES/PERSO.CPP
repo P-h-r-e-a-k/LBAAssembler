@@ -627,8 +627,8 @@ restartloop:
         // a race-track mod's test pilot, when a harness turned it on (RACEMOD.CPP RaceMod_AutoInput)
         // ... or a power-up's jet-pack, which has the controls while it lasts
         { extern U32 RaceMod_AutoInput(void); if (RaceMod_Takeover()) Input &= ~(U32)(I_UP | I_DOWN | I_LEFT | I_RIGHT); Input |= RaceMod_AutoInput(); }
-        // ... and Shift drops what Twinsen holds instead of opening the inventory (RACEMOD.CPP)
-        if (RaceMod_BlocksInventory()) Input &= ~(U32)I_INVENTORY;
+        // ... and in the car Ctrl uses what Twinsen holds instead of opening the behaviour menu (RACEMOD.CPP)
+        Input = RaceMod_FilterInput(Input);
 
         ManageTime();
 
@@ -889,7 +889,8 @@ restartloop:
                 RestoreTimer();
             }
 
-            if ((MyKey == K_ESC OR Input & I_MENUS)) {
+            // (or the race game's race over: back to its menu, RACEMOD.CPP end_to_menu=)
+            if ((MyKey == K_ESC OR Input & I_MENUS OR RaceMod_WantsMenu())) {
                 if (CinemaMode > 1) {
                     ResetCinemaMode();
                 } else {

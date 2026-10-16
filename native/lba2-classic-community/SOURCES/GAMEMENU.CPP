@@ -15,6 +15,7 @@
 #include "MESSAGE.H"
 #include "IMAGE_LOAD.H"
 #include "MENU_LABELS.H"
+#include "RACEGAME.H" /* the race game's menu (RACEGAME.CPP) */
 
 #include <FILEIO/SAVEPNG.H>
 #include <SVGA/SCREEN.H>
@@ -49,9 +50,8 @@
 #define COUL_TEXT_MENU LBAWHITE // trouver blanc palette jeu
 #define COUL_LETTER_INPUT LBAWHITE
 
-#ifdef DEMO
+// (the demo's save and load rows, and the race game's rows not open yet: RACEGAME.CPP)
 #define COUL_TEXT_MENU_DISABLE (3 * 16 + 11) // trouver blanc palette jeu
-#endif
 
 #define SCREEN_SAVE_WIDTH 160
 #define SCREEN_SAVE_HEIGHT 120
@@ -397,6 +397,10 @@ const char *GetLocalizedResDialogLabel(int which) {
 }
 
 static void BuildCustomMenuText(S32 num, char *string) {
+    // the race game's rows (RACEGAME.CPP)
+    if (RaceGame_MenuText(num, string))
+        return;
+
     // Resolution sub-page rows: id in the reserved range maps to a catalog
     // entry's label (e.g. "1280x720 (16:9)"). s_resMenuCount is set by
     // GereResolutionMenu before the page is drawn.
@@ -2357,6 +2361,11 @@ void DrawGameMenu(U16 *ptrmenu, S32 justone) {
         if (n == s_menuMarkRow)
             sel |= 2;
 
+        // (a race game's row not open yet, greyed: RACEGAME.CPP)
+        const U8 keepColour = CoulTextMenu;
+        if (RaceGame_RowDisabled(num))
+            CoulTextMenu = COUL_TEXT_MENU_DISABLE;
+
         if (justone) {
             // Per-frame redraw animates the plasma. Refresh the cursor row and,
             // when set, the green marker row, so the marker persists and animates
@@ -2367,6 +2376,7 @@ void DrawGameMenu(U16 *ptrmenu, S32 justone) {
         } else {
             DrawOneChoice(UI_CENTER_X, y, type, num, sel);
         }
+        CoulTextMenu = keepColour;
 
         y += HAUTEUR_STANDARD + MENU_SPACE;
     }
@@ -2720,6 +2730,9 @@ S32 DoGameMenu(U16 *ptrmenu) {
 
             if (selected >= nb)
                 selected = 0;
+            // (past a race game's greyed rows: RACEGAME.CPP)
+            for (S32 guard = 0; guard < nb AND RaceGame_RowDisabled(ptrmenu[4 + 1 + selected * 2]); guard++)
+                selected = (S16)(selected + 1 < nb ? selected + 1 : 0);
             flag = 1;
         }
 
@@ -2737,6 +2750,8 @@ S32 DoGameMenu(U16 *ptrmenu) {
 
             if (selected < 0)
                 selected = (U16)(nb - 1);
+            for (S32 guard = 0; guard < nb AND RaceGame_RowDisabled(ptrmenu[4 + 1 + selected * 2]); guard++)
+                selected = (S16)(selected > 0 ? selected - 1 : nb - 1);
             flag = 1;
         }
 
@@ -3873,7 +3888,8 @@ S32 MainGameMenu(S32 load, S32 resumeInGame) {
         goto load_game;
     }
 #else
-    if (!resumeInGame AND IsFirstGameLaunched()) {
+    // (the race game has no introduction: its menu first, RACEGAME.CPP)
+    if (!resumeInGame AND !RaceGame_On() AND IsFirstGameLaunched()) {
         FlagPlayAcf = TRUE;
         goto new_game;
     }
@@ -4037,7 +4053,8 @@ S32 MainGameMenu(S32 load, S32 resumeInGame) {
 
         //              GetMultiText( 49, PleaseWait ) ;
 
-        select = DoGameMenu(GameMainMenu);
+        // (the race game's own main menu and its pages: RACEGAME.CPP)
+        select = RaceGame_On() ? RaceGame_Menu(!firstloop) : DoGameMenu(GameMainMenu);
         switch (select) // num mess
         {
         case 1000: // <ESC>, on reprend la partie en cours
@@ -4240,6 +4257,19 @@ S32 MainGameMenu(S32 load, S32 resumeInGame) {
             Cls();
             BoxUpdate();
             flag = 1;
+            break;
+
+        case RACEGAME_START: // the race game's race, set up (RACEGAME.CPP): a new game at its start line, no introduction
+            firstloop = FALSE;
+            strcpy(PlayerName, "");
+            PtrPal = PtrPalNormal;
+            StopMusic();
+            InitGame(1);
+            HQ_StopSample();
+            HQ_ResumeSamples();
+            FlagFade = TRUE;
+            gogame = TRUE;
+            EscTimer = 0;
             break;
 
 #ifdef DEBUG_TOOLS
