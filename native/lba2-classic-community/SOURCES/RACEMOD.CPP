@@ -3434,6 +3434,44 @@ void RaceMod_AutoDrive(int on, double lookCells, double sideCells) {
     Log_Info("[racemod] autodrive %s (looking %.1f cells ahead, %.1f to the side)", on ? "on" : "off", s_autoLook / 512, s_autoSide / 512);
 }
 
+// raceplan (tests, the console): the racing line planned again for a car setup -- the car's gears' top speeds, its pull, its brakes and
+// its steering each scaled by a percentage -- and its perfect lap (the line's own and its loops'), at a neutral character (top and grip
+// 100 %), with where the lap's time goes: flat out (at the top gear's speed), round the bends (at the steering's limit there) and between
+// (braking for a bend, pulling away). The car and the line put back after. For comparing setups on a track (the user, 2026-10-16:
+// "suggest car setup tweaks for each track"). The lap in seconds, -1 with no line.
+double RaceMod_PlanLap(double topPct, double accelPct, double brakePct, double steerPct, double *flatShare, double *bendShare) {
+    T_RACE_OPPONENT *o = s_opp[0].Count && s_opp[0].R ? &s_opp[0] : s_guide.Count && s_guide.R ? &s_guide : NULL;
+    if (!o) return -1;
+    const T_RACE_CAR keep = s_car;
+    const int keepTop = o->Top, keepGrip = o->Grip;
+    S32 *const keepV = (S32 *)malloc(o->Count * sizeof(S32));
+    memcpy(keepV, o->V, o->Count * sizeof(S32));
+    for (S32 g = 0; g < s_car.Gears; g++) s_car.GearTop[g] = (S32)(keep.GearTop[g] * topPct / 100.0);
+    s_car.Accel = (S32)(keep.Accel * accelPct / 100.0);
+    s_car.Brake = (S32)(keep.Brake * brakePct / 100.0);
+    s_car.Steer = (S32)(keep.Steer * steerPct / 100.0);
+    o->Top = o->Grip = 100;
+    PlanSpeeds(o);
+    const double top = s_car.GearTop[s_car.Gears - 1], turn = s_car.Steer * 2 * 3.14159265358979 / 4096.0;
+    double lap = 0, flat = 0, bend = 0;
+    for (int i = 0; i < o->Count; i++) {
+        const double dt = (o->Cum[i + 1] - o->Cum[i]) / (o->V[i] > 1 ? o->V[i] : 1);
+        lap += dt;
+        if (o->V[i] >= 0.97 * top) flat += dt;
+        else if (o->V[i] >= 0.97 * turn * o->R[i]) bend += dt;
+    }
+    const double loops = LoopsTime(o);
+    lap += loops;
+    bend += loops;
+    s_car = keep;
+    o->Top = keepTop; o->Grip = keepGrip;
+    memcpy(o->V, keepV, o->Count * sizeof(S32));
+    free(keepV);
+    if (flatShare) *flatShare = lap > 0 ? flat / lap : 0;
+    if (bendShare) *bendShare = lap > 0 ? bend / lap : 0;
+    return lap;
+}
+
 U32 RaceMod_AutoInput(void) {
     // (skidding on oil: the car turns round, no throttle and no brake)
     if (s_active && Comportement == C_BUGGY && TimerRefHR < s_skidUntil) return 0;   // (skidding on oil: the skid has the car, RaceMod_Skid)

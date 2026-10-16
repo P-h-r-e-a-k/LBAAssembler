@@ -2433,6 +2433,36 @@ static void cmd_autodrive(int argc, const char *argv[]) {
     Console_Print("autodrive: %s", atoi(argv[1]) ? "on" : "off");
 }
 
+/* raceplan <top%> <accel%> <brake%> <steer%> | raceplan file <setups> <out>: a race-track mod's racing line planned again for a car
+   setup scaled by those percentages, and its perfect lap (RACEMOD.CPP RaceMod_PlanLap); with a file, one setup a line ("top accel brake
+   steer") and the laps written to <out> ("top accel brake steer lap flat% bends%"). For comparing setups on a track. */
+static void cmd_raceplan(int argc, const char *argv[]) {
+    extern double RaceMod_PlanLap(double topPct, double accelPct, double brakePct, double steerPct, double *flatShare, double *bendShare);
+    double flat = 0, bend = 0;
+    if (argc == 4 && !strcmp(argv[1], "file")) {
+        FILE *in = fopen(argv[2], "r");
+        FILE *out = in ? fopen(argv[3], "w") : NULL;
+        if (!in || !out) { if (in) fclose(in); Console_Print("raceplan: can't read %s or write %s", argv[2], argv[3]); return; }
+        char line[256];
+        int n = 0;
+        while (fgets(line, sizeof(line), in)) {
+            double t, a, b, st;
+            if (sscanf(line, "%lf %lf %lf %lf", &t, &a, &b, &st) != 4) continue;
+            const double lap = RaceMod_PlanLap(t, a, b, st, &flat, &bend);
+            fprintf(out, "%g %g %g %g %.3f %.1f %.1f\n", t, a, b, st, lap, flat * 100, bend * 100);
+            n++;
+        }
+        fclose(in);
+        fclose(out);
+        Console_Print("raceplan: %d setups -> %s", n, argv[3]);
+        return;
+    }
+    if (argc < 5) { Console_Print("Usage: raceplan <top%> <accel%> <brake%> <steer%> | raceplan file <setups> <out>"); return; }
+    const double lap = RaceMod_PlanLap(atof(argv[1]), atof(argv[2]), atof(argv[3]), atof(argv[4]), &flat, &bend);
+    if (lap < 0) Console_Print("raceplan: no racing line with its bends' radii");
+    else Console_Print("raceplan: a perfect lap %.2f s (flat out %.0f%%, round the bends %.0f%%, between %.0f%%)", lap, flat * 100, bend * 100, 100 - flat * 100 - bend * 100);
+}
+
 /* raceitem <n>: Twinsen uses a race-track mod's power-up now (0 fuel, 1 protection, 2 lightning, 3 penguin, 4 super jet-pack, 5 oil);
    raceblast [cells]: a nitro penguin goes off that far ahead of his car (RACEMOD.CPP, tests). */
 static void cmd_raceitem(int argc, const char *argv[]) {
@@ -2698,6 +2728,10 @@ void Console_RegisterAll(void) {
     Console_RegisterCommandEx("racecars", cmd_racecars, "Race-track: where every car is", "racecars",
                               "Twinsen's car and each opponent's, a line each: car <n> <x> <z> <beta> <name> (island units; n -1 "
                               "Twinsen). The editor's minimap asks for it while it plays a race (RACEMOD.CPP).");
+    Console_RegisterCommandEx("raceplan", cmd_raceplan, "Race-track test: the racing line planned for a car setup, its perfect lap",
+                              "raceplan <top%> <accel%> <brake%> <steer%> | raceplan file <setups> <out>",
+                              "Each percentage scales the race file's car (its gears' top speeds, pull, brakes, steering); the lap at a "
+                              "neutral character, and its time flat out, round the bends and between (RACEMOD.CPP RaceMod_PlanLap).");
     Console_RegisterCommandEx("autodrive", cmd_autodrive, "Race-track test pilot: drive the player's car along the racing line",
                               "autodrive <0|1> [look cells]",
                               "With a race-track mod running (LBA2_RACETRACK_FILE), steers and pedals the player's "

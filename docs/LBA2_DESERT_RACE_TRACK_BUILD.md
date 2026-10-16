@@ -4219,3 +4219,6 @@ engine's `--listen` socket (`key`, `autodrive`): the menus, all ten cars on the 
 can each lap, 2:48.59 the best time), Ctrl using the can with no behaviour menu, a race against the three (1st of 4), and each back to the
 menu.
 
+
+
+The 18 tracks stress-tested and car setups scored per track (2026-10-16): docs/LBA2_RACE_TRACK_STRESS_TEST.md (`raceplan`, tools/RaceTrackStress).
