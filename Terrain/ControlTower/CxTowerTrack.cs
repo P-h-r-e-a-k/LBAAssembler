@@ -42,39 +42,68 @@ internal static class CxTowerTrack
                 File.Copy(File.Exists(from) ? from : Path.Combine(gameDirectory, f), Path.Combine(source, f), true);
             }
         }
-        try { return new() { ControlTowerIsland.Build(gameDirectory, gameDirectory, source, race: new ControlTowerIsland.RaceRoom(holes)).Log }; }
+        try { return new() { ControlTowerIsland.Build(gameDirectory, gameDirectory, source, race: new ControlTowerIsland.RaceRoom(holes, RoofLow(plan))).Log }; }
         finally { if (source != gameDirectory) try { Directory.Delete(source, true); } catch (IOException) { } }
     }
 
     // The room's cells the road comes down through its roof at (just under the gas, ControlTowerIsland.TopLayer + 1): where the road's tunnel
     // (the plan's Tunnels) -- from under its deck to over its roof -- reaches the roof, as wide as the tunnel's walls and a little more. (Not
     // where the road under the roof is out of its tunnel: the hole showed the island's ground from under it, 2026-10-15.)
-    public const double TunnelUnder = RaceTrackTunnel.Under + 200, HoleMargin = 0.3;
+    // The room's cells over the road where it runs under the roof less than CarRoom under it: the roof drawn there but nothing to hit --
+    // a car's box is taller than the car, and stopped dead under the roof where the ramp from door A comes out of its tunnel (2026-10-16).
+    public const double CarRoom = 1700;
+    public static HashSet<(int X, int Z)> RoofLow(RaceTrackPlan plan)
+    {
+        const double roofLo = ControlTowerIsland.GasLevel - ControlTowerIsland.UnderGas;
+        var cells = new HashSet<(int X, int Z)>();
+        if (plan.Heights is not { } heights || heights.Length != plan.Points.Length) return cells;
+        for (var i = 0; i < plan.Points.Length; i++)
+        {
+            if (heights[i] >= roofLo || heights[i] + CarRoom <= roofLo) continue;
+            var reach = (plan.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : plan.RaisedHalf ?? 4.5) + 1.5;
+            double x = plan.Points[i][0], z = plan.Points[i][1];
+            for (var cz = (int)Math.Floor(z - reach); cz <= (int)Math.Floor(z + reach); cz++)
+                for (var cx = (int)Math.Floor(x - reach); cx <= (int)Math.Floor(x + reach); cx++)
+                    if ((cx + 0.5 - x) * (cx + 0.5 - x) + (cz + 0.5 - z) * (cz + 0.5 - z) <= reach * reach && cx is >= 0 and < 64 && cz is >= 0 and < 64) cells.Add((cx, cz));
+        }
+        return cells;
+    }
+
+    // (Each tunnel's cells no further than its own ends: past an end the hole showed the island's inside from under the roof -- the ramp
+    // from door A goes on out of its tunnel round a U-turn under the roof, 2026-10-16.)
+    public const double TunnelUnder = RaceTrackTunnel.Under + 200, HoleMargin = 0.3, HoleEnd = 0.25;
     public static HashSet<(int X, int Z)> RoofHoles(RaceTrackPlan plan)
     {
         const double roofLo = ControlTowerIsland.GasLevel - ControlTowerIsland.UnderGas, roofHi = roofLo + 128;
         var holes = new HashSet<(int X, int Z)>();
         if (plan.Heights is not { } heights || heights.Length != plan.Points.Length) return holes;
         var n = plan.Points.Length;
-        var roofOver = new double?[n];
-        foreach (var t in (plan.Tunnels ?? Array.Empty<TunnelRun>()).Where(t => t.Pieces))   // (not one of the camera's alone)
-            for (var k = t.From; ; k = (k + 1) % n) { roofOver[k] = t.Roof + RaceTrackTunnel.Slab; if (k == t.To) break; }
-        for (var i = 0; i < n; i++)
+        (double X, double Z) P(int k) => (plan.Points[(k % n + n) % n][0], plan.Points[(k % n + n) % n][1]);
+        (double X, double Z) Way(int k) { var (ax, az) = P(k - 1); var (bx, bz) = P(k + 1); var l = Math.Max(1e-9, Math.Sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az))); return ((bx - ax) / l, (bz - az) / l); }
+        foreach (var tn in (plan.Tunnels ?? Array.Empty<TunnelRun>()).Where(t => t.Pieces))   // (not one of the camera's alone)
         {
-            var j = (i + 1) % n;
-            if (roofOver[i] is not { } over || roofOver[j] is null) continue;
-            double y0 = heights[i], y1 = heights[j];
-            if (Math.Max(y0, y1) - TunnelUnder > roofHi || Math.Min(y0, y1) + over < roofLo) continue;
-            var reach = (plan.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : plan.RaisedHalf ?? 4.5) + RaceTrackTunnel.WallOut + RaceTrackTunnel.Wall / 512 + HoleMargin;
-            for (var t = 0.0; t <= 1.0; t += 0.25)
+            var over = tn.Roof + RaceTrackTunnel.Slab;
+            var (fx, fz) = P(tn.From); var (fw, fv) = Way(tn.From);
+            var (ex, ez) = P(tn.To); var (ew, ev) = Way(tn.To);
+            for (var i = tn.From; i != tn.To; i = (i + 1) % n)
             {
-                double x = plan.Points[i][0] + (plan.Points[j][0] - plan.Points[i][0]) * t, z = plan.Points[i][1] + (plan.Points[j][1] - plan.Points[i][1]) * t;
-                for (var cz = (int)Math.Floor(z - reach); cz <= (int)Math.Floor(z + reach); cz++)
-                    for (var cx = (int)Math.Floor(x - reach); cx <= (int)Math.Floor(x + reach); cx++)
-                    {
-                        // (a cell whose middle is in reach)
-                        if ((cx + 0.5 - x) * (cx + 0.5 - x) + (cz + 0.5 - z) * (cz + 0.5 - z) <= reach * reach && cx is >= 0 and < 64 && cz is >= 0 and < 64) holes.Add((cx, cz));
-                    }
+                var j = (i + 1) % n;
+                double y0 = heights[i], y1 = heights[j];
+                if (Math.Max(y0, y1) - TunnelUnder > roofHi || Math.Min(y0, y1) + over < roofLo) continue;
+                var reach = (plan.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : plan.RaisedHalf ?? 4.5) + RaceTrackTunnel.WallOut + RaceTrackTunnel.Wall / 512 + HoleMargin;
+                for (var t = 0.0; t <= 1.0; t += 0.25)
+                {
+                    double x = plan.Points[i][0] + (plan.Points[j][0] - plan.Points[i][0]) * t, z = plan.Points[i][1] + (plan.Points[j][1] - plan.Points[i][1]) * t;
+                    for (var cz = (int)Math.Floor(z - reach); cz <= (int)Math.Floor(z + reach); cz++)
+                        for (var cx = (int)Math.Floor(x - reach); cx <= (int)Math.Floor(x + reach); cx++)
+                        {
+                            // (a cell whose middle is in reach, and between the tunnel's ends)
+                            double mx = cx + 0.5, mz = cz + 0.5;
+                            if ((mx - x) * (mx - x) + (mz - z) * (mz - z) > reach * reach || cx is < 0 or >= 64 || cz is < 0 or >= 64) continue;
+                            if ((mx - fx) * fw + (mz - fz) * fv < -HoleEnd || (mx - ex) * ew + (mz - ez) * ev > HoleEnd) continue;
+                            holes.Add((cx, cz));
+                        }
+                }
             }
         }
         return holes;

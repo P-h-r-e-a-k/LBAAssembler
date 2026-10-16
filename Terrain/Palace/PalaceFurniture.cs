@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO;
 using System.Numerics;
+using LbaBodyStudio;
 using LBAAssembler.Lba1;
 
 namespace LBAAssembler.Terrain.Palace;
@@ -231,6 +232,8 @@ internal static class PalaceFurniture
     {
         Bed, GrandBed, Wardrobe, Bookshelf, ReadingTable, Chair, Globe, Piano, Harp, MusicStand, Bathtub, DressingTable, Throne, Column,
         Candelabra, Chandelier, GoldPile, Pedestal, Chest, Armour, WeaponRack, Altar, Pew, Candle, Plant, Fireplace, BanquetTable, Bench, StairColumn,
+        // (the dungeon under the palace -- PalaceIsland's: a secret way down through room 159's fireplace)
+        Cage, WhipRack, Shackles, Torch, Cot, Barrel,
     }
 
     // A piece upstairs: its kind, room (tile), the middle of its foot (palace cells, fractions of one; the floor's layer), the way it looks
@@ -244,7 +247,8 @@ internal static class PalaceFurniture
     private static readonly (float R, float G, float B)[] Books = { (140, 40, 30), (40, 70, 120), (50, 100, 50), (170, 130, 60), (90, 50, 90), (120, 80, 40) };
 
     // The upstairs pieces' models (each room's faces) and their boxes. `place` and `colour` as Build's.
-    public static Made Upstairs(List<UpPiece> pieces, Func<double, double, double, Vector3> place, Func<(float R, float G, float B), Vector3, int> colour)
+    public static Made Upstairs(List<UpPiece> pieces, Func<double, double, double, Vector3> place, Func<(float R, float G, float B), Vector3, int> colour,
+        Body? armour = null)
     {
         var made = new Dictionary<int, List<BrickBuilding.Face>>();
         var boxes = new List<(double, double, double, double, double, double)>();
@@ -277,7 +281,7 @@ internal static class PalaceFurniture
                 case Up.GoldPile: GoldPile(kit, w); break;
                 case Up.Pedestal: Pedestal(kit, counts.GetValueOrDefault(Up.Pedestal)); break;
                 case Up.Chest: ChestModel(kit, w, d, 440); break;
-                case Up.Armour: Armour(kit); break;
+                case Up.Armour: Armour(kit, armour); break;
                 case Up.WeaponRack: WeaponRack(kit, w); break;
                 case Up.Altar: Altar(kit, d, w); break;
                 case Up.Pew: Pew(kit, d, w); break;
@@ -285,6 +289,12 @@ internal static class PalaceFurniture
                 case Up.Candle: Candle(kit); break;
                 case Up.Plant: Plant(kit, 0); break;
                 case Up.Fireplace: Fireplace(kit, d, w, h); break;
+                case Up.Cage: Cage(kit, d, w, h); break;
+                case Up.WhipRack: WhipRack(kit, w); break;
+                case Up.Shackles: Shackles(kit); break;
+                case Up.Torch: Torch(kit); break;
+                case Up.Cot: Cot(kit, d, w); break;
+                case Up.Barrel: Barrel(kit); break;
             }
             counts[p.Kind] = counts.GetValueOrDefault(p.Kind) + 1;
             if (!p.Solid) continue;
@@ -548,7 +558,51 @@ internal static class PalaceFurniture
         k.Lathe(new[] { (0.0, 610.0), (110.0, 690.0), (80.0, 740.0), (0.0, 760.0) }, 8, _ => gem, top: false, bottom: false);
     }
 
-    private static void Armour(Kit k)
+    // A suit of armour in the shape of one of the Emperor's Sup soldiers (`model`: the game's own body, BODY.HQR SupSoldier, as it stands),
+    // in steel on a plinth, facing out, a spear beside it (the user, 2026-10-16: "Improve suits of armour, perhaps we should base these on
+    // the Sup actor"; they were boxes: legs, body, arms, a helmet). Without the body (no BODY.HQR), the boxes.
+    public const int SupSoldier = 261;
+    private const double ArmourHigh = 1260;     // the suit's height over the plinth (model units: 256 a layer)
+    private static void Armour(Kit k, Body? model)
+    {
+        if (model is null || model.Vertices.Count == 0) { ArmourBoxes(k); return; }
+        k.Box(new(-170, 0, -170), new(170, 90, 170), DarkWood, DarkWood);
+        // (the body as modelled, its rest pose: it looks along +z -- turned to look along +x, the way the piece looks)
+        var world = model.World();
+        float minY = world.Min(p => p.Y), maxY = world.Max(p => p.Y);
+        float cx = (world.Min(p => p.X) + world.Max(p => p.X)) / 2, cz = (world.Min(p => p.Z) + world.Max(p => p.Z)) / 2;
+        var s = (float)(ArmourHigh / Math.Max(1, maxY - minY));
+        Vector3 M(Vector3 p) => new((p.Z - cz) * s, 90 + (p.Y - minY) * s, -(p.X - cx) * s);
+        var at = world.Select(M).ToArray();
+        // (its colours steel: lighter where the body's were light -- a colour's place in its ramp of sixteen -- and shaded as it faces)
+        (float R, float G, float B) Metal(int colour)
+        {
+            var t = (colour & 15) / 15f;
+            return (SteelDark.R + (Steel.R - SteelDark.R) * t, SteelDark.G + (Steel.G - SteelDark.G) * t, SteelDark.B + (Steel.B - SteelDark.B) * t);
+        }
+        foreach (var f in model.Faces)
+        {
+            if (f.Points.Length < 3) continue;
+            var pts = f.Points.Select(i => at[i]).ToArray();
+            var n = Vector3.Zero;
+            for (var i = 0; i < pts.Length; i++) { var a = pts[i]; var b = pts[(i + 1) % pts.Length]; n += new Vector3((a.Y - b.Y) * (a.Z + b.Z), (a.Z - b.Z) * (a.X + b.X), (a.X - b.X) * (a.Y + b.Y)); }
+            if (n.LengthSquared() < 1e-6f) continue;
+            n = Vector3.Normalize(n);
+            for (var i = 1; i + 1 < pts.Length; i++) k.Tri(pts[0], pts[i], pts[i + 1], Metal(f.Colour), n);
+        }
+        foreach (var sphere in model.Spheres)
+        {
+            var c = at[sphere.Point];
+            var r = sphere.Radius * s;
+            k.Lathe(new[] { (0.0, (double)c.Y - r), (r * 0.7, c.Y - r * 0.7), ((double)r, (double)c.Y), (r * 0.7, c.Y + r * 0.7), (0.0, (double)c.Y + r) }, 8, _ => Metal(sphere.Colour),
+                top: false, bottom: false, cx: c.X, cz: c.Z);
+        }
+        // (its spear, held up beside it)
+        k.Box(new(40, 0, 230), new(80, 1650, 270), Wood, Wood);
+        k.Leaf(new Vector3(60, 1650, 250), new Vector3(60, 1830, 250), new Vector3(0, 0, 45), Steel);
+    }
+
+    private static void ArmourBoxes(Kit k)
     {
         // a suit of armour on a plinth, facing out (+x): legs, body, arms, helmet with a red plume, a spear held up beside it
         k.Box(new(-170, 0, -170), new(170, 90, 170), DarkWood, DarkWood);
@@ -563,6 +617,95 @@ internal static class PalaceFurniture
         k.Box(new(-20, 1230, -25), new(30, 1340, 25), Royal, Royal);
         k.Box(new(40, 0, 210), new(80, 1650, 250), Wood, Wood);
         k.Leaf(new Vector3(60, 1650, 230), new Vector3(60, 1830, 230), new Vector3(0, 0, 45), Steel);
+    }
+
+    // ---- the dungeon's: an iron cage, whips on a rack, shackles, a torch, a prisoner's cot, a barrel (black iron, old wood, straw)
+    private static readonly (float R, float G, float B) CageIron = (58, 56, 60), IronLight = (92, 90, 96), OldWood = (88, 62, 38), Straw = (176, 150, 84),
+        Blanket = (96, 88, 80), Leather = (70, 40, 26), TorchFlame = (255, 170, 40), FlameCore = (255, 236, 150);
+
+    private static void Cage(Kit k, double depth, double width, double high)
+    {
+        // a cage of iron bars on a plinth of stone, a frame round its foot and its top, a roof of bars (its sides the piece's boxes: the
+        // prisoner inside stands free)
+        float d = (float)depth / 2, w = (float)width / 2, h = (float)high;
+        const float Bar = 14, Gap = 110, Rim = 30;
+        k.Box(new(-d, 0, -w), new(d, 40, w), CageIron, IronLight);
+        // (its top an open frame, bars across it)
+        foreach (var s in new[] { -1f, 1f })
+        {
+            k.Box(new(-d, h - 40, s * w - Rim), new(d, h, s * w + Rim), CageIron, IronLight, bottom: true);
+            k.Box(new(s * d - Rim, h - 40, -w), new(s * d + Rim, h, w), CageIron, IronLight, bottom: true);
+        }
+        for (var x = -d + Gap; x < d - 1; x += Gap) k.Box(new(x - Bar, h - 30, -w), new(x + Bar, h - 10, w), CageIron, CageIron, bottom: true);
+        foreach (var s in new[] { -1f, 1f })
+        {
+            for (var z = -w; z <= w + 1; z += Gap) k.Box(new(s * d - Bar, 40, z - Bar), new(s * d + Bar, h - 40, z + Bar), CageIron, CageIron, lid: false);
+            for (var x = -d + Gap; x < d - 1; x += Gap) k.Box(new(x - Bar, 40, s * w - Bar), new(x + Bar, h - 40, s * w + Bar), CageIron, CageIron, lid: false);
+            // (the bars across the middle, and a lock on the front)
+            k.Box(new(-d, h * 0.45f, s * w - Bar), new(d, h * 0.45f + 30, s * w + Bar), IronLight, IronLight);
+            k.Box(new(s * d - Bar, h * 0.45f, -w), new(s * d + Bar, h * 0.45f + 30, w), IronLight, IronLight);
+        }
+        k.Box(new(d - 4, h * 0.5f - 60, -40), new(d + 30, h * 0.5f + 20, 40), IronLight, IronLight);
+        k.Box(new(-d, 0, -w), new(d, 6, w), IronLight, IronLight);
+    }
+
+    private static void WhipRack(Kit k, double width)
+    {
+        // a board on the wall, pegs in a row, a coiled whip hanging from each: its handle, its lash in loops down the wall
+        float w = (float)width / 2;
+        k.Box(new(-30, 520, -w), new(0, 600, w), OldWood, OldWood);
+        var n = Math.Max(2, (int)(width / 160));
+        for (var i = 0; i < n; i++)
+        {
+            var z = -w + (i + 0.5f) * (2 * w / n);
+            k.Box(new(0, 560, z - 10), new(40, 580, z + 10), CageIron, CageIron);
+            k.Box(new(10, 420, z - 12), new(34, 575, z + 12), Leather, Leather);
+            // (the lash: a loop of short pieces, then its end hanging)
+            for (var a = 0; a < 10; a++)
+            {
+                var t0 = a / 10.0 * Math.PI * 2; var t1 = (a + 1) / 10.0 * Math.PI * 2;
+                Vector3 P(double t) => new(26, (float)(330 + 70 * Math.Cos(t)), (float)(z + 60 * Math.Sin(t)));
+                k.Box(Vector3.Min(P(t0), P(t1)) - new Vector3(6, 6, 6), Vector3.Max(P(t0), P(t1)) + new Vector3(6, 6, 6), Leather, Leather);
+            }
+            k.Box(new(20, 140, z - 6), new(32, 260, z + 6), Leather, Leather);
+        }
+    }
+
+    private static void Shackles(Kit k)
+    {
+        // two iron rings on the wall, chains down from them to the cuffs
+        foreach (var s in new[] { -1f, 1f })
+        {
+            k.Box(new(0, 640, s * 120 - 30), new(30, 700, s * 120 + 30), CageIron, IronLight);
+            for (var y = 640f; y > 380; y -= 50) k.Box(new(6, y - 40, s * 120 - 12), new(24, y, s * 120 + 12), IronLight, IronLight);
+            k.Box(new(0, 330, s * 120 - 34), new(36, 380, s * 120 + 34), CageIron, IronLight);
+        }
+    }
+
+    private static void Torch(Kit k)
+    {
+        // an iron bracket on the wall, a wooden torch in it, its flame
+        k.Box(new(0, 600, -20), new(60, 630, 20), CageIron, CageIron);
+        k.Box(new(40, 560, -16), new(72, 760, 16), OldWood, OldWood);
+        k.Leaf(new Vector3(56, 760, 0), new Vector3(56, 900, 0), new Vector3(0, 0, 44), TorchFlame);
+        k.Leaf(new Vector3(56, 770, 0), new Vector3(56, 860, 0), new Vector3(0, 0, 22), FlameCore);
+    }
+
+    private static void Cot(Kit k, double depth, double width)
+    {
+        // a prisoner's cot: a wooden frame on four legs, straw on it, a rough blanket over half of it
+        float d = (float)depth / 2, w = (float)width / 2;
+        foreach (var (sx, sz) in new[] { (-1, -1), (-1, 1), (1, -1), (1, 1) })
+            k.Box(new(sx * d - (sx > 0 ? 40 : 0), 0, sz * w - (sz > 0 ? 40 : 0)), new(sx * d + (sx < 0 ? 40 : 0), 160, sz * w + (sz < 0 ? 40 : 0)), OldWood, OldWood);
+        k.Box(new(-d, 160, -w), new(d, 200, w), OldWood, OldWood);
+        k.Box(new(-d + 20, 200, -w + 20), new(d - 20, 260, w - 20), Straw, Straw);
+        k.Box(new(-d + 10, 210, -w + 10), new(d - 10, 272, 0), Blanket, Blanket);
+    }
+
+    private static void Barrel(Kit k)
+    {
+        // an old barrel, iron hoops round it
+        k.Lathe(new[] { (0.0, 0.0), (120.0, 0.0), (150.0, 160.0), (150.0, 260.0), (120.0, 420.0), (0.0, 420.0) }, 10, i => i == 1 || i == 3 ? CageIron : OldWood, top: true, bottom: false);
     }
 
     private static void WeaponRack(Kit k, double width)

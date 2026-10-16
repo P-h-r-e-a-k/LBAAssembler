@@ -83,11 +83,20 @@ internal static class PalaceIsland
     private static readonly int[] TrackRow = { StartScene, 153, 152, PortalFrom };
     private static readonly int[] TrackColumn = { PortalFrom, 155, 159, 163, HallScene };
     public const int FireplaceWide = 4, FireplaceHigh = 5;   // (a fireplace made: the cells along its wall and its layers, as the grids' own)
+    // The dungeon (Build): under the stairwell 159 and room 163 north of it; DungeonDepth layers of air under the ground floor's floor; a
+    // room's walls RoomBand cells thick each side of its extent (its inside 9 x 9); the cages DungeonCage across (palace cells),
+    // DungeonCageHigh layers high; the way out's trigger DungeonExitReach island cells out from the north wall; the way back DungeonBackAhead
+    // cells on from the down-spiral's foot.
+    public const int DungeonUnder = 159, DungeonNorth = 163, DungeonDepth = 5, RoomBand = 4, DungeonCageHigh = 4;
+    public const double DungeonCage = 2.2, DungeonExitReach = 3.6, DungeonBackAhead = 12;
     public const int PortraitsPerRoom = 2;              // pictures of the game's characters on a room's walls (PalacePortraits) ...
     public const int HallPortraits = 6;                 // ... and this many more along the long hall's
     // the colours of Otringal's palace (OTRINGAL.OBL's halls, in its palette): its pale stone (walls and flat roofs), the dark teal of its
     // foot, the turquoise of its drums
     private static readonly (float R, float G, float B) Stone = (176, 164, 160), StoneShadow = (160, 144, 140), Teal = (0, 48, 60), Turquoise = (116, 156, 160);
+    // (the dungeon's: its flagstones, its walls' stone, their lowest course, its ceiling)
+    private static readonly (float R, float G, float B) DungeonFlag = (70, 66, 62), DungeonFlagDark = (54, 51, 48), DungeonStone = (78, 72, 66),
+        DungeonStoneDark = (64, 60, 55), DungeonFoot = (44, 42, 40), DungeonCeiling = (38, 36, 34);
     private const int FootLayers = 3;                   // the walls' outer faces: this many layers of teal at the foot ...
     private const int TopLayers = 1;                    // ... and this many of turquoise at the top, the stone between
     // the roofs' rock: OTRINGAL.OBL's texture page's mossy rock (64 x 64 pixels from (192, 192), its rock objects') -- the hill's ground's rock
@@ -528,6 +537,106 @@ internal static class PalaceIsland
             log.AddRange(up.Log);
             maxY = up.TopLayer;
         }
+        // ---- the dungeon (the user, 2026-10-16: "Add a basement level that serves as a ... dungeon complete with NPC's, beds, cages, and
+        // whips. This is a secret easter egg area that should only be accessible via a fire place, let's use the one by the down spiral"): a
+        // vault of dark stone under the stairwell 159 and room 163 north of it, DungeonDepth layers under the ground floor's floor -- its
+        // ceiling that floor's underside -- reached only through 159's fireplace (hollowed, a teleporter as 151's) and left by a fireplace at
+        // its north end, out onto the race's way at the down-spiral's foot. Its cages, cots, whips, shackles, torches and barrels are the
+        // upstairs' kind of furniture (PalaceFurniture.Up); the people in it the race's guards (palace_design.py: jailers, and prisoners
+        // in the cages).
+        var dungeonAir = new HashSet<(int X, int Y, int Z)>();
+        var dungeonPieces = new List<PalaceFurniture.UpPiece>();
+        var dungeonBoxes = new List<(double X0, double Y0, double Z0, double X1, double Y1, double Z1)>();
+        Dictionary<string, object>? dungeonLayout = null;
+        (int X0, int Z0, int X1, int Z1, int Floor)? vault = null;
+        int t159 = TileOf(DungeonUnder), t163 = TileOf(DungeonNorth);
+        var fire159 = furnished ? pieces.FirstOrDefault(p => p.Kind == PalaceFurniture.Kind.Fireplace && p.Tile == t159) : null;
+        if (furnished && t159 >= 0 && t163 >= 0 && fire159 is not null)
+        {
+            var (e9, e3) = (extents[t159], extents[t163]);
+            int vx0 = e9.X0 + RoomBand, vx1 = e9.X1 - RoomBand, vz0 = e3.Z0 + RoomBand, vz1 = e9.Z1 - RoomBand, fl = minY - DungeonDepth - 1;
+            vault = (vx0, vz0, vx1, vz1, fl);
+            // (its floor, the walls round it, its air; the ground floor's floor over it its ceiling -- made whole where it isn't)
+            for (var x = vx0 - 1; x <= vx1 + 1; x++)
+                for (var z = vz0 - 1; z <= vz1 + 1; z++)
+                {
+                    cells[(x, fl, z)] = shown[(x, fl, z)] = (-1, t159);
+                    var wall = x < vx0 || x > vx1 || z < vz0 || z > vz1;
+                    for (var y = fl + 1; y < minY; y++)
+                    {
+                        if (wall) cells[(x, y, z)] = shown[(x, y, z)] = (-1, t159);
+                        else { dungeonAir.Add((x, y, z)); air.Add((x, y, z)); }
+                    }
+                    if (!wall && !cells.ContainsKey((x, minY, z))) cells[(x, minY, z)] = shown[(x, minY, z)] = (-1, t159);
+                }
+            // (the shell's faces nobody sees -- out into the rock -- left out)
+            foreach (var c in cells.Keys.Where(c => c.Y < minY))
+                for (var d = 0; d < BrickBuilding.Directions.Length; d++)
+                {
+                    var (dx, dy, dz, _) = BrickBuilding.Directions[d];
+                    if (!dungeonAir.Contains((c.X + dx, c.Y + dy, c.Z + dz))) hidden.Add((c, d));
+                }
+            // (the furniture: palace cells, the floor's top layer fl + 1; the north end the way out, the south end where one comes in)
+            double fx0 = vx0, fx1 = vx1 + 1, fz0 = vz0, fz1 = vz1 + 1, mid = (fx0 + fx1) / 2;
+            var fy = fl + 1;
+            void Put(PalaceFurniture.Up kind, double x, double z, int nx, int nz, double depth, double width, double high, bool solid = true) =>
+                dungeonPieces.Add(new PalaceFurniture.UpPiece(kind, t159, x, fy, z, nx, nz, depth, width, high, solid));
+            var cages = new List<(double X, double Z, double Half)>();
+            foreach (var (side, z) in new[] { (1, fz0 + 5.0), (1, fz0 + 10.5), (1, fz0 + 16.0), (-1, fz0 + 7.5), (-1, fz0 + 13.0) })
+            {
+                var cx = side > 0 ? fx1 - DungeonCage / 2 - 0.15 : fx0 + DungeonCage / 2 + 0.15;
+                Put(PalaceFurniture.Up.Cage, cx, z, -side, 0, DungeonCage, DungeonCage, DungeonCageHigh, solid: false);
+                cages.Add((cx, z, DungeonCage / 2));
+            }
+            Put(PalaceFurniture.Up.Cot, fx0 + 0.65, fz0 + 2.6, 1, 0, 1.1, 2.4, 2, solid: true);
+            Put(PalaceFurniture.Up.Cot, fx0 + 0.65, fz0 + 18.6, 1, 0, 1.1, 2.4, 2, solid: true);
+            Put(PalaceFurniture.Up.WhipRack, fx0 + 0.1, fz0 + 10.3, 1, 0, 0.2, 2.0, 4, solid: false);
+            Put(PalaceFurniture.Up.WhipRack, fx1 - 0.1, fz0 + 19.4, -1, 0, 0.2, 1.6, 4, solid: false);
+            Put(PalaceFurniture.Up.Shackles, fx1 - 0.05, fz0 + 2.4, -1, 0, 0.2, 1.0, 4, solid: false);
+            Put(PalaceFurniture.Up.Shackles, fx0 + 0.05, fz0 + 15.6, 1, 0, 0.2, 1.0, 4, solid: false);
+            for (var z = fz0 + 1.2; z < fz1 - 0.5; z += 5.2)
+            {
+                Put(PalaceFurniture.Up.Torch, fx0 + 0.05, z, 1, 0, 0.2, 0.3, 4, solid: false);
+                Put(PalaceFurniture.Up.Torch, fx1 - 0.05, z + 2.6, -1, 0, 0.2, 0.3, 4, solid: false);
+            }
+            Put(PalaceFurniture.Up.Barrel, fx0 + 0.6, fz1 - 0.6, 1, 0, 0.7, 0.7, 2);
+            Put(PalaceFurniture.Up.Barrel, fx1 - 0.6, fz1 - 0.6, -1, 0, 0.7, 0.7, 2);
+            Put(PalaceFurniture.Up.Barrel, fx1 - 1.4, fz1 - 0.6, -1, 0, 0.7, 0.7, 2);
+            Put(PalaceFurniture.Up.Chest, fx0 + 0.7, fz0 + 21.0, 1, 0, 0.9, 1.4, 2);
+            // (its way out: a fireplace in the north wall's middle, looking south; nothing in its way)
+            Put(PalaceFurniture.Up.Fireplace, mid, fz0 + 0.3, 0, 1, 0.6, 2.4, 4, solid: false);
+            // (the cages' bars, each side a box: the prisoner inside stands free)
+            foreach (var (cx, cz, h) in cages)
+                foreach (var (ax, az, bx, bz) in new[] { (cx - h, cz - h, cx + h, cz - h + 0.1), (cx - h, cz + h - 0.1, cx + h, cz + h), (cx - h, cz - h, cx - h + 0.1, cz + h), (cx + h - 0.1, cz - h, cx + h, cz + h) })
+                    dungeonBoxes.Add((x0 + (ax - minX) * U, WY(fy), z0 + (az - minZ) * U, x0 + (bx - minX) * U, WY(fy + DungeonCageHigh), z0 + (bz - minZ) * U));
+            // (into it: 159's fireplace hollowed -- a teleporter -- out at its south end, looking north; out of it: its fireplace -- in front
+            // of it, the floor's height up -- onto the race's way at the down-spiral's foot, looking north)
+            Hollow(fire159);
+            double I(double x) => (x0 + (x - minX) * U) / 512;
+            double J(double z) => (z0 + (z - minZ) * U) / 512;
+            var (lx, lz) = Looks(fire159);
+            var (ax0, az0) = Front(fire159, lx, lz);
+            double depth = (lx != 0 ? fire159.Size.X : fire159.Size.Z) * U / 512, ahead = 1.2, halfW = U / 512 - 0.8;
+            var (ix, jz) = (I(ax0), J(az0));
+            var inBox = lx != 0
+                ? new[] { Math.Min(ix, ix - lx * depth) - (lx < 0 ? ahead : 0), jz - halfW, Math.Max(ix, ix - lx * depth) + (lx > 0 ? ahead : 0), jz + halfW }
+                : new[] { ix - halfW, Math.Min(jz, jz - lz * depth) - (lz < 0 ? ahead : 0), ix + halfW, Math.Max(jz, jz - lz * depth) + (lz > 0 ? ahead : 0) };
+            teleports.Add(new[] { inBox[0], inBox[1], inBox[2], inBox[3], WY(minY + 1) - 600, WY(minY + 1) + 2400, I(mid), J(fz1 - 1.5), WY(fy), 2048.0 });
+            double outX0 = I(mid - 1.0), outX1 = I(mid + 1.0), outZ0 = J(fz0), outZ1 = J(fz0) + DungeonExitReach;
+            var stairs = up?.Stairs.FirstOrDefault(t => t.Scene == DungeonUnder);
+            (double X, double Z) back = stairs is { } st ? (st.X + PalaceUpstairs.StairRadius, st.Z - DungeonBackAhead) : (I(mid), J(extents[t159].Z0 + RoomBand) + 2);
+            teleports.Add(new[] { outX0, outZ0, outX1, outZ1, WY(fy) - 600, WY(fy) + 2400, back.X, back.Z, WY(minY + 1), 2048.0 });
+            log.Add($"the dungeon under rooms {DungeonUnder} and {DungeonNorth}: cells x {I(fx0):0}..{I(fx1):0}, z {J(fz0):0}..{J(fz1):0}, its floor at {WY(fy):0} " +
+                    $"({DungeonDepth} layers under the ground floor's); in through room {DungeonUnder}'s fireplace (cells x {inBox[0]:0.#}..{inBox[2]:0.#}, z {inBox[1]:0.#}..{inBox[3]:0.#}), " +
+                    $"out by its own at its north end to ({back.X:0.#}, {back.Z:0.#}); {cages.Count} cages, 2 cots, 2 racks of whips, 2 pairs of shackles");
+            dungeonLayout = new Dictionary<string, object>
+            {
+                ["x0"] = I(fx0), ["z0"] = J(fz0), ["x1"] = I(fx1), ["z1"] = J(fz1), ["floorTop"] = WY(fy), ["ceiling"] = WY(minY),
+                ["cages"] = cages.Select(c => new[] { I(c.X), J(c.Z), c.Half * U / 512 }).ToList(),
+                ["arrive"] = new[] { I(mid), J(fz1 - 1.5) }, ["exit"] = new[] { I(mid), J(fz0) },
+            };
+        }
+        else if (furnished) log.Add($"WARNING: no dungeon: rooms {DungeonUnder} and {DungeonNorth} or {DungeonUnder}'s fireplace not found");
         string RoomName(int ti) => ti < area.Tiles.Count ? $"room {area.Tiles[ti].Scene}" : up is not null && ti - firstUpTile < up.Rooms.Count ? up.Rooms[ti - firstUpTile].Name : $"tile {ti}";
         // ---- the floor painted (the user, 2026-10-13: "Let's make the main road section that's mostly red at the moment pure red just with
         // the white arrows. The surrounding area varies a lot, let's keep this consistent with a check pattern based on the green"; then
@@ -578,6 +687,13 @@ internal static class PalaceIsland
         int FaceColour((int X, int Y, int Z) c, int d, int brick, float shade)
         {
             var (dx, dy, dz, _) = BrickBuilding.Directions[d];
+            // (the dungeon: flagstones in two greys, courses of dark stone -- the lowest darkest -- and a sooty ceiling)
+            if (vault is { } dv && (c.Y < minY || (c.Y == minY && dy < 0 && dungeonAir.Contains((c.X, minY - 1, c.Z)))))
+            {
+                if (dy > 0) return Shaded(((c.X + c.Z) & 1) == 0 ? DungeonFlag : DungeonFlagDark, shade);
+                if (dy < 0) return Shaded(DungeonCeiling, 1f);
+                return Shaded(c.Y - dv.Floor == 1 ? DungeonFoot : ((c.Y - dv.Floor) & 1) == 0 ? DungeonStone : DungeonStoneDark, shade);
+            }
             var outward2 = !air.Contains((c.X + dx, c.Y + dy, c.Z + dz));
             if (dy > 0 && c.Y == minY && floorPaint.TryGetValue((c.X, c.Z), out var paint)) return Shaded(paint, shade);
             // (upstairs: its floor's paint, the ground floor's ceiling under it -- the stone the roofs' undersides were -- and its walls in the
@@ -711,10 +827,25 @@ internal static class PalaceIsland
         {
             Vector3 Place(double x, double y, double z) => new((float)(x0 + (x - minX) * U), (float)(Floor + (y - minY) * V), (float)(z0 + (z - minZ) * U));
             int Seen((float R, float G, float B) c, Vector3 n) => Shaded(c, n.Y * n.Y * (n.Y > 0 ? 1f : 0.5f) + n.X * n.X * 0.84f + n.Z * n.Z * 0.70f);
-            var made = PalaceFurniture.Upstairs(up.Pieces, Place, Seen);
+            // (the suits of armour in the shape of the Emperor's Sup soldiers: the game folder's own body)
+            Body? sup = null;
+            try { sup = Body.Read(HqrArchive.Open(Path.Combine(gameDirectory, "BODY.HQR")).Read(PalaceFurniture.SupSoldier), 2, allowStatic: true); }
+            catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException) { log.Add($"the suits of armour: no Sup soldier's body ({e.Message}) -- boxes"); }
+            var made = PalaceFurniture.Upstairs(up.Pieces, Place, Seen, sup);
             foreach (var (ti, list) in made.Faces) roomFaces[ti].AddRange(list);
             chestBoxes.AddRange(made.Boxes);
             log.AddRange(made.Log);
+        }
+        // (and the dungeon's: its furniture, as the upstairs' is made, and its cages' bars)
+        if (dungeonPieces.Count > 0)
+        {
+            Vector3 Place(double x, double y, double z) => new((float)(x0 + (x - minX) * U), (float)(Floor + (y - minY) * V), (float)(z0 + (z - minZ) * U));
+            int Seen((float R, float G, float B) c, Vector3 n) => Shaded(c, n.Y * n.Y * (n.Y > 0 ? 1f : 0.5f) + n.X * n.X * 0.84f + n.Z * n.Z * 0.70f);
+            var made = PalaceFurniture.Upstairs(dungeonPieces, Place, Seen);
+            foreach (var (ti, list) in made.Faces) roomFaces[ti].AddRange(list);
+            chestBoxes.AddRange(made.Boxes);
+            chestBoxes.AddRange(dungeonBoxes);
+            log.AddRange(made.Log.Select(l => l.Replace("the upstairs' furniture", "the dungeon's furniture")));
         }
 
         // ---- the roofs: over each room, level with the top of its walls -- the hilltop over the rooms: their tops Otringal's rock (drawn apart,
@@ -876,6 +1007,19 @@ internal static class PalaceIsland
             corridors.Add(new(new() { (sqX0 - RingOut, hz0 - 4), (sqX0 - RingOut, sqZ1 + RingOut), (sqX1 - 14, sqZ1 + RingOut) }, CorridorHalf));
         }
         log.AddRange(PalaceCliff.Shape(island, cubeList, new PalaceCliff.Site(rooms, hilltop, Floor - 60, cliffAt, corridors, harbour)));
+        // (the ground under the dungeon brought down under its floor: the rock it is dug in -- the ground under the rooms is just under the
+        // ground floor's floor, and a car on the dungeon's floor would have stood under the ground, the engine putting it up on it)
+        if (vault is { } dug)
+        {
+            var low = (int)Math.Floor(WY(dug.Floor)) - 200;
+            int gx0 = (int)Math.Floor(WX(dug.X0 - 1) / 512) - 1, gx1 = (int)Math.Ceiling(WX(dug.X1 + 2) / 512) + 1;
+            int gz0 = (int)Math.Floor(WZ(dug.Z0 - 1) / 512) - 1, gz1 = (int)Math.Ceiling(WZ(dug.Z1 + 2) / 512) + 1;
+            var lowered = 0;
+            for (var gz = gz0; gz <= gz1; gz++)
+                for (var gx = gx0; gx <= gx1; gx++)
+                    if (island.HeightAt(gx, gz) is { } gh && gh > low) { island.SetHeight(gx, gz, low); lowered++; }
+            log.Add($"  the ground under the dungeon brought down to {low} at {lowered} points");
+        }
         log.Add($"  the sixteen rooms: cells x {sqX0}..{sqX1}, z {sqZ0}..{sqZ1}; the ways across the rocks: " +
                 string.Join("; ", corridors.Select(c => string.Join(" -> ", c.Points.Select(p => $"({p.X:0}, {p.Z:0})")))));
         foreach (var cube in island.Cubes.Values) cube.Info[IslandCube.InfoNbDecors] = cube.Decors.Count;
@@ -908,6 +1052,9 @@ internal static class PalaceIsland
             // first fireplace's hearth: x0, z0, x1, z1 (island cells), y0, y1; out of the second's: x, z (island cells), y, the turn])
             ["entrance"] = entrance is { } way ? new[] { way.X, way.Z0, way.Z1 } : null,
             ["teleports"] = teleports,
+            // (the dungeon: its inside and floor's top, its ceiling, its cages -- each its middle and half across -- where one comes in and
+            // the way out's middle; island cells, world heights)
+            ["dungeon"] = dungeonLayout,
             // (the upstairs: its floor's top, its ceiling, its rooms -- each its inside, island cells -- the doors, the stairwells' middles and
             // the ramp's radius round them, the ground floor's doors walled up)
             ["upstairs"] = up is null ? null : new Dictionary<string, object>

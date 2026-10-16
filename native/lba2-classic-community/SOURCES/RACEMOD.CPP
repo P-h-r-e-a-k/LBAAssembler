@@ -712,7 +712,7 @@ static int s_nbJets = 0;
 // points before the tunnel's mouth to its end (TunnelCamera) -- out at the arm's usual length the eye stood over the roof, which hid the
 // car; and the follow camera's own, its arm only shortened, looks at a point well ahead of the car (DISTANCE_VISEE): the car went out of
 // the bottom of the view.
-#define RACE_MAX_TUNNELS 8
+#define RACE_MAX_TUNNELS 16
 #define RACE_TUNNEL_LEAD 40
 #define RACE_TUNNEL_TAIL 16                // ... and this many past its end (the car out from under the roof before the eye rises)
 #define RACE_TUNNEL_EYE 900                // the eye this far under the roof at the most
@@ -721,7 +721,17 @@ static int s_nbJets = 0;
 #define RACE_TUNNEL_AHEAD 3000
 #define RACE_TUNNEL_SIGHT 700              // ... its sight line clearing the road to the car's middle
 #define RACE_TUNNEL_UNDER 250              // ... and the eye at least this far under the roof
-typedef struct { int From, To; double Roof; } T_RACE_TUNNEL;
+// (tunnel=<from> <to> <roof> <ceiling>: a fourth number, a height (world units) the eye is also kept RACE_TUNNEL_UNDER under -- a stretch
+// under a level roof of the island's own, Island CX's hall, whose height over the road changes as the road climbs or falls under it.
+// The eye is kept under the roof of the tunnel it is in itself, which may not be the car's: a ramp's tunnel up through the hall's roof)
+#define RACE_TUNNEL_NO_CEILING 1e18
+// On a climb the road behind the car is under it: an eye RACE_TUNNEL_BACK back at its height over that road looked up at the car from
+// under its deck, Island CX's way out of the hall at 26 % (2026-10-16). There the eye comes nearer, no nearer than RACE_TUNNEL_CLIMB_BACK
+// (past the near plane, CLIP_NEAR), and rises to RACE_TUNNEL_OVER over the car where the roof lets it.
+#define RACE_TUNNEL_CLIMB 0.08             // the road's rise behind the car (per unit) from which it counts as a climb
+#define RACE_TUNNEL_CLIMB_BACK 3400
+#define RACE_TUNNEL_OVER 500
+typedef struct { int From, To; double Roof, Ceiling; } T_RACE_TUNNEL;
 static T_RACE_TUNNEL s_tunnels[RACE_MAX_TUNNELS];
 static int s_nbTunnels = 0;
 // Lava balls (lavaball=<x> <y> <z> <from> <to> <every> <phase>: a source on the lava's surface, island units, and the stretch of the raised
@@ -1568,6 +1578,11 @@ static int RaisedAlong(int seg, double t, double distance, double *x, double *y,
 // level as its lead makes it: the Emperor's palace's, under the domes, 2026-10-12. At the wheels, 0, the eye always rose to 4,000 over a
 // level road, and looked steeply down to see the car)
 static double s_railSight = 0, s_railCeil = -1, s_railSightKept = 0;
+// (TunnelCamera's: the eye under the roof of the tunnel it is in itself -- its own point's, InTunnel -- rather than the car's, s_railCeil;
+// and s_railTop, a height it is kept under, the car's tunnel's ceiling)
+static int s_railEyeTunnel = 0;
+static double s_railTop = RACE_TUNNEL_NO_CEILING;
+static int InTunnel(int seg);
 // Whether a jump's gap (points with no width) lies on the raised road between segments a and b (either way round, the shorter): the rail
 // camera's eye is not let ride back over the gap the car has just flown -- under the roulette wheel, up on the wheel's lane over the car.
 static int GapBetween(int a, int b) {
@@ -1647,7 +1662,13 @@ static S32 RailCamera(S32 *eye, S32 *target) {
         if (need > lift) lift = need;
     }
     ey += lift;
-    if (s_railCeil >= 0 && ey > roadBehind + s_railCeil) ey = roadBehind + s_railCeil;
+    {
+        double ceil = s_railCeil, top = s_railTop;
+        const int own = s_railEyeTunnel ? InTunnel(behind) : -1;
+        if (own >= 0) { ceil = s_tunnels[own].Roof - RACE_TUNNEL_UNDER; top = s_tunnels[own].Ceiling - RACE_TUNNEL_UNDER; }
+        if (ceil >= 0 && ey > roadBehind + ceil) ey = roadBehind + ceil;
+        if (ey > top) ey = top;
+    }
     // (the car under the roulette wheel -- the road on from its hole runs under the bowl -- the eye under the bowl too)
     if (s_wheel.On && !carried && hy < s_wheel.HoleY - s_wheel.Under) {
         double r = sqrt((ex - s_wheel.X) * (ex - s_wheel.X) + (ez - s_wheel.Z) * (ez - s_wheel.Z));
@@ -1708,15 +1729,19 @@ static S32 RaisedArm(S32 base) {
 }
 
 // The tunnel the car is in, or coming up to (RACE_TUNNEL_LEAD points before its mouth): -1 none. `seg` a raised road segment.
+// (a tunnel whose own stretch holds it first: where tunnels follow one another -- Island CX's, from the door down a ramp into the hall --
+// the one before's tail reaches into the next)
 static int InTunnel(int seg) {
     if (seg >= LapPoints()) return -1;
     const int n = s_raisedLoop ? LapPoints() - 1 : LapPoints();
-    for (int k = 0; k < s_nbTunnels && n > 0; k++) {
-        const T_RACE_TUNNEL *tn = &s_tunnels[k];
-        const int from = ((tn->From - RACE_TUNNEL_LEAD) % n + n) % n;
-        const int span = ((tn->To + RACE_TUNNEL_TAIL - from) % n + n) % n, at = ((seg - from) % n + n) % n;
-        if (at <= span) return k;
-    }
+    for (int pass = 0; pass < 2; pass++)
+        for (int k = 0; k < s_nbTunnels && n > 0; k++) {
+            const T_RACE_TUNNEL *tn = &s_tunnels[k];
+            const int lead = pass ? RACE_TUNNEL_LEAD : 0, tail = pass ? RACE_TUNNEL_TAIL : 0;
+            const int from = ((tn->From - lead) % n + n) % n;
+            const int span = ((tn->To + tail - from) % n + n) % n, at = ((seg - from) % n + n) % n;
+            if (at <= span) return k;
+        }
     return -1;
 }
 
@@ -1761,6 +1786,53 @@ static int RaisedPastEnd(double wx, double wz, double wy) {
     return 0;
 }
 
+// Whether a place (world units) is on the road's deck there -- any stretch's, at a height within RAISED_LEVEL of `level`.
+static int OnSomeDeck(double wx, double wz, S32 level) {
+    const int bx = (int)floor(wx / RAISED_BUCKET) - s_rbX0, bz = (int)floor(wz / RAISED_BUCKET) - s_rbZ0;
+    const int reach = 1 + s_rbExtra;
+    for (int dz = -reach; dz <= reach; dz++)
+        for (int dx = -reach; dx <= reach; dx++) {
+            const int x = bx + dx, z = bz + dz;
+            if (x < 0 || z < 0 || x >= s_rbW || z >= s_rbH) continue;
+            const int b = z * s_rbW + x;
+            for (int k = s_rbStart[b]; k < s_rbStart[b + 1]; k++) {
+                const int i = s_rbItem[k];
+                if (i >= s_nbRaised - 1) continue;
+                if (s_onlyNear >= 0 && RaisedApart(i, s_onlyNear) > RAISED_SIGHT) continue;
+                const T_RACE_RAISED *a = &s_raised[i], *c = a + 1;
+                if (a->Half <= 0 || c->Half <= 0) continue;
+                const double sx = c->X - a->X, sz = c->Z - a->Z, len2 = sx * sx + sz * sz;
+                if (len2 <= 0) continue;
+                double tt = ((wx - a->X) * sx + (wz - a->Z) * sz) / len2;
+                if (RaisedOpenEnd(i, tt)) continue;
+                if (tt < 0) tt = 0; else if (tt > 1) tt = 1;
+                const double px = a->X + sx * tt, pz = a->Z + sz * tt;
+                const double d2 = (wx - px) * (wx - px) + (wz - pz) * (wz - pz);
+                const double half = a->Half + (c->Half - a->Half) * tt;
+                if (d2 > half * half) continue;
+                const double side = (sx * (wz - pz) - sz * (wx - px)) / sqrt(len2);
+                const double yy = a->Y + (c->Y - a->Y) * tt + side * (a->Bank + (c->Bank - a->Bank) * tt) / RAISED_BANK_UNITS;
+                if (fabs(yy - level) <= RAISED_LEVEL) return 1;
+            }
+        }
+    return 0;
+}
+
+// Whether the car may be at a place (world units) on decks at `level` that overlap: the place and all round it RAISED_INSET away on one
+// deck or another -- the rail's own rule, kept RAISED_INSET inside a deck's edges, for the decks taken together. Where two roads' decks
+// overlap -- a branch's tapered mouth beside the lap, Wannies Island's pit lane -- each deck's rail held the car RAISED_INSET inside its
+// own edges, and between the lap's and the mouth's lay a strip neither let it into: in the mouth it was held there, its way back onto
+// the lap a rail (the user, 2026-10-16: "Entrance of the pitlane can be driven into but not out of. Exit of pitlane partial barrier in
+// places also").
+static int RaisedHolds(double wx, double wz, S32 level) {
+    if (!OnSomeDeck(wx, wz, level)) return 0;
+    for (int k = 0; k < 12; k++) {
+        const double a = k * 2 * 3.14159265358979 / 12;
+        if (!OnSomeDeck(wx + cos(a) * RAISED_INSET, wz + sin(a) * RAISED_INSET, level)) return 0;
+    }
+    return 1;
+}
+
 // Whether the hero could stand at a place (world units, at height y) as far as the raised road's rail goes: not on the raised road there
 // (the ground, nothing to keep him off), or within its rail -- the road's own or the strip's beside it (RaceMod_Rail's bounds).
 static int RailAllows(double wx, double wz, S32 y) {
@@ -1771,6 +1843,7 @@ static int RailAllows(double wx, double wz, S32 y) {
     const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
     const double half = a->Half + (c->Half - a->Half) * t, limit = half - RAISED_INSET;
     if (fabs(lat) <= limit) return 1;
+    if (RaisedHolds(wx, wz, f)) return 1;
     const double sLo = a->StripLo + (c->StripLo - a->StripLo) * t, sHi = a->StripHi + (c->StripHi - a->StripHi) * t;
     if (sHi > sLo) {
         if (sLo <= half && sHi >= -half) return lat >= (sLo + RAISED_INSET < -limit ? sLo + RAISED_INSET : -limit) && lat <= (sHi - RAISED_INSET > limit ? sHi - RAISED_INSET : limit);
@@ -1807,6 +1880,8 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     }
     if (lat >= lo && lat <= hi) return;
     if (stripHi > stripLo && lat >= stripLo && lat <= stripHi) return;
+    // (within another stretch's rail there, one whose deck overlaps this one's)
+    if (RaisedHolds(*nx + cx, *nz + cz, f)) return;
     const double sx = c->X - a->X, sz = c->Z - a->Z, len = sqrt(sx * sx + sz * sz);
     double side = lat > hi ? hi : lo;
     if (stripHi > stripLo) {
@@ -2498,9 +2573,10 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "tunnel")) {
             T_RACE_TUNNEL *t = &s_tunnels[s_nbTunnels];
-            int from, to, roof;
-            if (s_nbTunnels < RACE_MAX_TUNNELS && sscanf(v, "%d %d %d", &from, &to, &roof) == 3 && roof > 0) {
-                t->From = from; t->To = to; t->Roof = roof; s_nbTunnels++;
+            int from, to, roof, ceiling;
+            const int got = sscanf(v, "%d %d %d %d", &from, &to, &roof, &ceiling);
+            if (s_nbTunnels < RACE_MAX_TUNNELS && got >= 3 && roof > 0) {
+                t->From = from; t->To = to; t->Roof = roof; t->Ceiling = got >= 4 ? ceiling : RACE_TUNNEL_NO_CEILING; s_nbTunnels++;
             }
         }
         else if (!strcmp(key, "jet")) {
@@ -4538,6 +4614,83 @@ static S32 JumpCamera(S32 *eye, S32 *target) {
     return FALSE;
 }
 
+// Under a level roof of the island's own (a tunnel with a ceiling: Island CX's hall), the eye behind the car along the way the road runs
+// at the car itself, RACE_TUNNEL_UP over the car's road and under the ceiling -- the rail camera's eye, on the road behind, stood off to
+// the car's side round the hairpin at the foot of door A's ramp, the car seen side on (2026-10-16). Eased in from the rail camera's eye
+// over the stretch's first RACE_HALL_EASE points, and out again over its last. Over the road where the eye is over it (a ramp's tunnel
+// it looks down from): no nearer it than RACE_HALL_OVER_ROAD, under that tunnel's roof.
+#define RACE_HALL_EASE 8
+#define RACE_HALL_OVER_ROAD 400
+// (nearer, to no nearer than RACE_HALL_NEAREST, while that place is beside a tunnel's road, in its wall: round the U-turn the eye
+// swung out through the end of the ramp's tunnel)
+#define RACE_HALL_NEAREST 3200
+#define RACE_HALL_WALL 700                 // how far past a tunnel's road its wall reaches (RaceTrackTunnel: WallOut + Wall, and a margin)
+static int InTunnelWall(double x, double z, double y) {
+    S32 under;
+    int useg;
+    double ulat, ut;
+    if (!RaisedAt(x, z, (S32)y, RACE_HALL_WALL, &under, &useg, &ulat, &ut)) return 0;
+    const int own = InTunnel(useg);
+    if (own < 0 || s_tunnels[own].Ceiling < RACE_TUNNEL_NO_CEILING / 2) return 0;
+    return fabs(ulat) > s_raised[useg].Half - 100;
+}
+// ... or in a wall of the island's objects (a decor with a box: the hall's outer walls, which the exit's arc runs along) -- cube-local
+// x and z, within RACE_HALL_SOLID of its box across (not up and down: the eye is kept just under the hall's roof, a box too)
+#define RACE_HALL_SOLID 300
+static int InSolidDecor(double x, double z, double y) {
+    for (S32 i = 0; i < NbObjDecors; i++) {
+        const T_DECORS *d = &ListDecors[i];
+        if (d->YMax <= d->YMin) continue;
+        if (x > d->XMin - RACE_HALL_SOLID && x < d->XMax + RACE_HALL_SOLID && z > d->ZMin - RACE_HALL_SOLID && z < d->ZMax + RACE_HALL_SOLID
+            && y > d->YMin && y < d->YMax) return 1;
+    }
+    return 0;
+}
+static void HallEye(int k, int seg, double t, S32 road, S32 *eye) {
+    const T_RACE_TUNNEL *tn = &s_tunnels[k];
+    const int lap = LapPoints(), n = s_raisedLoop ? lap - 1 : lap;
+    if (n <= 0 || seg >= lap) return;
+    const int span = ((tn->To - tn->From) % n + n) % n, at = ((seg - tn->From) % n + n) % n;
+    if (at > span) return;
+    const double edge = at < span - at ? at : span - at;
+    double w = edge / RACE_HALL_EASE;
+    if (w >= 1) w = 1;
+    w = w * w * (3 - 2 * w);
+    if (w <= 0) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    // (the way the road runs at the car, the way the car faces along it)
+    const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
+    const double angle = (hero->Obj.Beta & 4095) * 2 * 3.14159265358979 / 4096.0;
+    const double way = sin(angle) * (c->X - a->X) + cos(angle) * (c->Z - a->Z) >= 0 ? 1 : -1;
+    double fx, fy, fz, bx, by, bz;
+    RaisedAlong(seg, t, way * 256, &fx, &fy, &fz);
+    RaisedAlong(seg, t, -way * 256, &bx, &by, &bz);
+    double dx = fx - bx, dz = fz - bz;
+    const double len = sqrt(dx * dx + dz * dz);
+    if (len < 1) return;
+    dx /= len; dz /= len;
+    double ey = road + RACE_TUNNEL_UP;
+    if (ey > tn->Ceiling - RACE_TUNNEL_UNDER) ey = tn->Ceiling - RACE_TUNNEL_UNDER;
+    double back = RACE_TUNNEL_BACK;
+    while (back > RACE_HALL_NEAREST && (InTunnelWall(hero->Obj.X + cx - dx * back, hero->Obj.Z + cz - dz * back, ey)
+                                        || InSolidDecor(hero->Obj.X - dx * back, hero->Obj.Z - dz * back, ey))) back -= 200;
+    const double ex = hero->Obj.X + cx - dx * back, ez = hero->Obj.Z + cz - dz * back;
+    // (over a stretch of the road: over it, and under its tunnel's roof if it has one)
+    S32 under;
+    int useg;
+    double ulat, ut;
+    if (RaisedAt(ex, ez, (S32)ey, 0, &under, &useg, &ulat, &ut)) {
+        const int own = InTunnel(useg);
+        if (ey < under + RACE_HALL_OVER_ROAD) ey = under + RACE_HALL_OVER_ROAD;
+        if (own >= 0 && own != k && s_tunnels[own].Ceiling >= RACE_TUNNEL_NO_CEILING / 2 && ey > under + s_tunnels[own].Roof - RACE_TUNNEL_UNDER)
+            ey = under + s_tunnels[own].Roof - RACE_TUNNEL_UNDER;
+    }
+    eye[0] = (S32)(eye[0] + ((ex - cx) - eye[0]) * w);
+    eye[1] = (S32)(eye[1] + (ey - eye[1]) * w);
+    eye[2] = (S32)(eye[2] + ((ez - cz) - eye[2]) * w);
+}
+
 // In a tunnel (InTunnel): the rail camera's eye -- behind the car along the road, looking at it -- low enough to be under the roof.
 static S32 TunnelCamera(S32 *eye, S32 *target) {
     if (!s_nbTunnels || !s_nbRaised || CubeMode != CUBE_EXTERIEUR || Comportement != C_BUGGY) return FALSE;
@@ -4553,8 +4706,18 @@ static S32 TunnelCamera(S32 *eye, S32 *target) {
     s_railUp = s_tunnels[k].Roof - RACE_TUNNEL_EYE < RACE_TUNNEL_UP ? s_tunnels[k].Roof - RACE_TUNNEL_EYE : RACE_TUNNEL_UP;
     s_railLead = RACE_TUNNEL_AHEAD;
     s_railSight = RACE_TUNNEL_SIGHT; s_railCeil = s_tunnels[k].Roof - RACE_TUNNEL_UNDER;
+    s_railTop = s_tunnels[k].Ceiling - RACE_TUNNEL_UNDER; s_railEyeTunnel = 1;
+    // (climbing: nearer, and over the car where the roof lets it)
+    const double climb = RaisedSlope(seg, hero->Obj.Beta);
+    if (climb > RACE_TUNNEL_CLIMB) {
+        s_railBack = RACE_TUNNEL_CLIMB_BACK;
+        const double need = climb * RACE_TUNNEL_CLIMB_BACK + RACE_TUNNEL_OVER;
+        if (need > s_railUp) s_railUp = need < s_railCeil ? need : s_railCeil;
+    }
     const S32 done = RailCamera(eye, target);
+    if (done && s_tunnels[k].Ceiling < RACE_TUNNEL_NO_CEILING / 2) HallEye(k, seg, t, f, eye);
     s_railBack = back; s_railUp = upKept; s_railLead = lead; s_railAim = aim; s_railSight = s_railSightKept; s_railCeil = -1;
+    s_railTop = RACE_TUNNEL_NO_CEILING; s_railEyeTunnel = 0;
     return done;
 }
 

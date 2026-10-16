@@ -533,8 +533,9 @@ internal sealed class RaceTrackReport
     // ... and the steam jets across the road, [x, y, z (its middle), half width, reach, blowing (ms), not (ms), phase (ms), way x, way z]
     // (RACEMOD.CPP jet=)
     public List<int[]> Jets { get; } = new();
-    // the tunnels over the raised road (RaceTrackTunnel): each one's first and last point (the lap's) and its roof's height over the deck
-    public List<(int From, int To, double Roof)> Tunnels { get; } = new();
+    // the tunnels over the raised road (RaceTrackTunnel): each one's first and last point (the lap's) and its roof's height over the deck,
+    // and the height the camera's eye is kept under there (TunnelRun.Ceiling), if any
+    public List<(int From, int To, double Roof, double? Ceiling)> Tunnels { get; } = new();
     // the lava balls (RaceTrackPlan.LavaBalls): each one's source (island units, on the ground there), the lap's points of the stretch it
     // rains on, every (ms) and phase (ms)
     public List<(double X, double Y, double Z, int From, int To, int Every, int Phase)> LavaBalls { get; } = new();
@@ -1088,7 +1089,7 @@ internal static class RaceTrackBuilder
         report.WasGround = (x, z) => natural.Drawn(x, z);
         PlaceStructures(island, main, crossings, startIndex, options, report, planned);
         Relight(island, index, options);
-        if (planned) SeaEverywhere(island, report);
+        if (planned) SeaEverywhere(island, main, report);
         return report;
     }
 
@@ -4231,17 +4232,39 @@ internal static class RaceTrackBuilder
     // runs on terraces one above another, and the camera following the car sees the ground of the next terrace up from underneath, where
     // the engine draws no triangle (back faces are culled): with no sea square beneath either, that showed as a black hole in the view
     // beside the mountain lap's loops. Every square is marked, so the view through there is the sea instead, as it is round the island.
-    // Where the ground is drawn it hides the sea as ever.
-    private static void SeaEverywhere(IslandFile island, RaceTrackReport report)
+    // Where the ground is drawn it hides the sea as ever. But not a square the road runs through under the island (`under`): the sea's
+    // plane is drawn over all the square, through anything under it the ground doesn't cover -- the road's way in under the island
+    // seen from outside, its doorway, went down into the gas (Island CX, the user, 2026-10-16: "the door way is filled with gas"); such a
+    // square keeps the retail cube's mark. (With the road's sunk stretches on into the doorways, wherever they are under the sea's height.)
+    private const double SeaY = -50;   // the engine's sea height (Y_SEA, TERRAIN.H)
+    private static void SeaEverywhere(IslandFile island, TrackRoad main, RaceTrackReport report)
     {
-        var marked = 0;
+        var keep = new HashSet<(int CubeX, int CubeZ, int Bit)>();
+        if (main.Under is { } under)
+            for (var i = 0; i < main.Count; i++)
+            {
+                if (!under[i] && main.H[i] >= SeaY) continue;
+                int cx = (int)Math.Floor(main.X[i] / IslandCube.Cells), cz = (int)Math.Floor(main.Z[i] / IslandCube.Cells);
+                int sx = Math.Clamp((int)Math.Floor((main.X[i] - cx * IslandCube.Cells) / 16), 0, 3), sz = Math.Clamp((int)Math.Floor((main.Z[i] - cz * IslandCube.Cells) / 16), 0, 3);
+                keep.Add((cx, cz, sz * 4 + sx));
+            }
+        int marked = 0, kept = 0;
+        var at = IslandOps.CubeCells(island).ToDictionary(c => c.Cube.Id, c => (c.X, c.Z));
         foreach (var cube in island.Cubes.Values)
         {
             if (cube.BitField == 0xFFFF) continue;
-            marked += 16 - System.Numerics.BitOperations.PopCount((uint)cube.BitField);
-            cube.BitField = 0xFFFF;
+            var bits = cube.BitField;
+            var (cx, cz) = at.TryGetValue(cube.Id, out var p) ? p : (-1, -1);
+            for (var b = 0; b < 16; b++)
+            {
+                if ((bits & (1 << b)) != 0) continue;
+                if (keep.Contains((cx, cz, b))) { kept++; continue; }
+                bits |= 1 << b; marked++;
+            }
+            cube.BitField = bits;
         }
-        if (marked > 0) report.Notes.Add($"the sea drawn under the whole of every cube ({marked} more of the engine's sea squares): no black holes where the camera sees a terrace from below");
+        if (marked > 0) report.Notes.Add($"the sea drawn under the whole of every cube ({marked} more of the engine's sea squares): no black holes where the camera sees a terrace from below" +
+            (kept > 0 ? $"; {kept} squares the road runs through under the island left without" : ""));
     }
 
     // The corners (x, z offsets in the cell) of triangle `half` of a cell cut along `diagonal` (IslandGround's own HalfCorners).

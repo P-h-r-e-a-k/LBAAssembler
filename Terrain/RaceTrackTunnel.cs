@@ -20,6 +20,16 @@ internal sealed class TunnelRun
     public bool Sunk { get; set; }
     public double? Top { get; set; }
     public double Eave { get; set; }
+    // UnderGround: the roof's top kept this far under the island's ground over the tunnel, where the road is under the ground -- a tall
+    // tunnel down under a plateau whose edge it passes under (Island CX's ramps from its doors, 2026-10-16)
+    public double? UnderGround { get; set; }
+    // CloseAbove: at an end of the tunnel that no other tunnel goes on from, a wall across it from this height (island units) up to its
+    // roof -- a tunnel that comes out under a roof of the island's own, through which it passes: the rock over that roof isn't drawn
+    // (Island CX's ramps, out into its hall under the hall's roof)
+    public double? CloseAbove { get; set; }
+    // Ceiling: for the camera alone (RACEMOD.CPP tunnel='s fourth number), a height its eye is kept under -- a stretch under a level roof of
+    // the island's own whose height over the road changes (Island CX's ramps in its hall, under the hall's roof)
+    public double? Ceiling { get; set; }
 }
 
 // A place in the lava that shoots balls of fire onto a stretch of the lap (RaceTrackPlan.LavaBalls, RACEMOD.CPP lavaball=): Source in the
@@ -56,16 +66,24 @@ internal static class RaceTrackTunnel
             var n = r.Count;
             var span = ((to - from) % n + n) % n;
             // (the roof's height over the deck, its least: the camera's eye is kept under it)
-            double RoofAt(int i) => run.Top is { } top && r.H[i] + run.Roof + Slab > top ? top - Slab : r.H[i] + run.Roof;
+            double RoofAt(int i)
+            {
+                var roof = run.Top is { } top && r.H[i] + run.Roof + Slab > top ? top - Slab : r.H[i] + run.Roof;
+                if (run.UnderGround is { } under && GroundOver(island, r, i, o) is { } g && g > r.H[i]) roof = Math.Min(roof, g - under - Slab);
+                return roof;
+            }
             var least = run.Roof;
             for (var k = 0; k <= span; k++) { var i = (from + k) % n; least = Math.Min(least, RoofAt(i) - r.H[i]); }
             if (!run.Pieces)
             {
-                report.Tunnels.Add((from, to, least));
+                report.Tunnels.Add((from, to, least, run.Ceiling));
                 report.Notes.Add($"tunnel: {span * o.Spacing:0} cells from cell ({r.X[from]:0.0}, {r.Z[from]:0.0}) to ({r.X[to]:0.0}, {r.Z[to]:0.0}) under the island's own roof, {least:0} over the deck");
                 continue;
             }
             var cut = run.Sunk ? CutSunk(island, r, from, span, o) : (0, 0.0);
+            // (whether another tunnel of pieces goes on from either end)
+            var startFree = !tunnels.Any(t => t.Run.Pieces && t.To == from && t.Run != run);
+            var endFree = !tunnels.Any(t => t.Run.Pieces && t.From == to && t.Run != run);
             var step = Math.Max(2, (int)Math.Round(Piece / o.Spacing));
             int pieces = 0, skipped = 0;
             for (var k0 = 0; k0 < span; k0 += step)
@@ -123,6 +141,15 @@ internal static class RaceTrackTunnel
                             if (headTop > bottom + 50)
                                 RaceTrackPipes.Box(mesh, faces, hc, dir * ((float)Wall / 2 + 12), across * (half + (float)Wall + eave), bottom, headTop, WallLight, WallDark, WallTop);
                         }
+                    // (an end no other tunnel goes on from, CloseAbove: a wall across it from that height up to the roof's top)
+                    if (run.CloseAbove is { } above)
+                        foreach (var (isEnd, at, sign) in new[] { (k == span - 1 && endFree, q, 1f), (k == 0 && startFree, p, -1f) })
+                        {
+                            var bottom = (float)(above - origin.Y);
+                            if (!isEnd || roof + (float)Slab < bottom + 50) continue;
+                            var cc = new Vector3(at.X, 0, at.Z) - dir * sign * ((float)Wall / 2);
+                            RaceTrackPipes.Box(mesh, faces, cc, dir * ((float)Wall / 2 + 12), across * (half + (float)Wall + eave), bottom, roof + (float)Slab, WallLight, WallDark, WallTop);
+                        }
                     foreach (var v in new[] { p, q })
                         foreach (var side in new[] { -1f, 1f })
                         {
@@ -134,7 +161,11 @@ internal static class RaceTrackTunnel
                 if (IslandDecors.Locate(island, origin.X, origin.Z) is not { } where || where.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) { skipped++; continue; }
                 var (cube, lx, lz) = where;
                 var d = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, lx, (int)Math.Round(origin.Y), lz, 0);
-                report.NewBodies.Add(RaceTrackPipes.Write(mesh, faces, lit: false));
+                // (drawn close to the camera, BrickBuilding.CloseFlag: the camera rides inside a tunnel, and the near plane cut away the
+                // wall beside it and the roof over it -- the ground outside showed through, Island CX's tall ramps, 2026-10-16)
+                var body = RaceTrackPipes.Write(mesh, faces, lit: false);
+                System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(body, System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(body) | LBAAssembler.Terrain.Palace.BrickBuilding.CloseFlag);
+                report.NewBodies.Add(body);
                 d.XMin = (int)Math.Floor(lx + lo.X); d.XMax = (int)Math.Ceiling(lx + hi.X);
                 // (a box nothing can touch, its top far under its bottom -- as the raised road's pieces have: a box round the walls and the roof
                 // takes in the road between them, and the engine stopped the car dead at the tunnel's mouth; its bottom corners, where the
@@ -145,7 +176,7 @@ internal static class RaceTrackTunnel
                 made.Add(d.Body);
                 pieces++;
             }
-            report.Tunnels.Add((from, to, least));
+            report.Tunnels.Add((from, to, least, run.Ceiling));
             report.Notes.Add($"tunnel: {span * o.Spacing:0} cells from cell ({r.X[from]:0.0}, {r.Z[from]:0.0}) to ({r.X[to]:0.0}, {r.Z[to]:0.0}), its roof {run.Roof:0} over the deck" +
                              (run.Top is { } t ? $" (its top no higher than {t:0}: {least:0} over the deck at the least)" : "") + $", {pieces} pieces{(skipped > 0 ? $" ({skipped} left out: a cube full)" : "")}" +
                              (run.Sunk ? $"; sunk: the ground cut down between its walls at {cut.Item1} vertices, {cut.Item2:0} at the most" : ""));
@@ -194,4 +225,15 @@ internal static class RaceTrackTunnel
 
     private static double HalfAt(TrackRoad r, int i, RaceTrackOptions o) =>
         r.Raised is { } up && up[i] ? r.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : o.RaisedHalfWidth : r.CurbHalf;
+
+    // The island's ground over a tunnel at point i, its least across the tunnel from wall to wall (null: none there).
+    private static double? GroundOver(IslandFile island, TrackRoad r, int i, RaceTrackOptions o)
+    {
+        var reach = HalfAt(r, i, o) + WallOut + Wall / 512;
+        double? least = null;
+        for (var s = -1.0; s <= 1.0001; s += 0.25)
+            if (IslandOps.Altitude(island, (r.X[i] - r.Tz[i] * reach * s) * 512, (r.Z[i] + r.Tx[i] * reach * s) * 512) is { } g)
+                least = least is { } l ? Math.Min(l, g) : g;
+        return least;
+    }
 }

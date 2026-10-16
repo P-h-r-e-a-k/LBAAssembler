@@ -3886,6 +3886,22 @@ panels on platform.ile and driving into the side wall it tips the car up on its 
 
 ![The shortcut's leap, down on the S just past its turn](racetrack/wannies/leap_short.png)
 
+### Sixth round: the pit lane's mouths open both ways (2026-10-16)
+
+The user: "the right side of the jump doesn't work. Entrance of the pitlane can be driven into but not out of. Exit of pitlane partial
+barrier in places also".
+
+- *The pit lane's mouths*: the rail holds a car RAISED_INSET (640) inside a deck's edges -- the deck of the road nearest it (`RaisedAt`:
+  of a level, the nearest middle). Where the pit lane's deck leaves the lap's, tapering to 0.83 cells across, a car on the lap near the
+  mouth was put over into it (the mouth's middle the nearer) and once in held there: between the lap's 640-in edge and the mouth's lay a
+  strip neither deck let it into. The same strip at the exit was the barrier. The rail now lets a car be anywhere a circle of 640 round it
+  is on one deck or another of that level (`RaisedHolds`, `OnSomeDeck`): the decks taken together. On the release engine the pilot was
+  held 4.5 cells off the lap's middle at the exit for 100 ticks and couldn't get back onto the lap from the entrance; now both ways, at
+  once.
+- *The jump's right side*: not found. The shortcut's leap was taken from both rails at the pilot's speed and at 110 km/h, on the release
+  engine and this one, and so was the frog's (from 1.3 cells either side); every time the car flew and came down on the road. (The fork
+  into the shortcut is one of the places two decks overlap: the rail's change there applies.)
+
 ## The Emperor's palace, twelfth round: the outside dropped, an upstairs, the race through both floors (2026-10-15)
 
 The user: "The outside of the palace track just isn't working, and we've tried a few revisions, let's keep a copy of it so we can rebuild
@@ -3949,6 +3965,45 @@ drop off, we should fix this, so it's a smooth drive down".
   the foot.
 - The test pilot: down the ramp from 19,600 to the floor without a drop, three cube changes on to the long hall; won in 123.99 s, no
   rescues.
+
+## The Emperor's palace, thirteenth round: Sup armour, Zeelich portraits, a cleaner floor and minimap, a dungeon (2026-10-16)
+
+The user: "Improve suits of armour, perhaps we should base these on the Sup actor. Clean up mini-map so it nolonger shows outside. Replace
+portraits with characters from Zeelich. Clean up any arrows on the floor that aren't on the track, such as the one pointing at a fire place.
+Make sure all remaining arrows are in the centre of the track"; then: "Add a basement level ... This is a secret easter egg area that should
+only be accessible via a fire place, let's use the one by the down spiral". (Its brief also asked for things of an adult nature; the
+dungeon is a plain one -- a jail's -- and nothing more.)
+
+- *Suits of armour* (the armoury upstairs): each is one of the Emperor's Sup soldiers -- the game's own body (BODY.HQR 261, the palace's
+  guards') as it stands, turned to look out, 1,260 tall, its polygons and spheres in steel shaded by their colours' place in their ramps
+  -- on a wooden plinth, a spear beside it (`PalaceFurniture.Armour`; without the body, the boxes it was).
+- *Pictures*: the people of Zeelich -- a Sup guard of the palace, an old Sup lady, a Sup priest, the old Franco, a Franco policeman, a
+  Wannie, a Mosquibee, and the Queen of the Mosquibees by the warp's fireplaces as before (`PalacePortraits.Sitters`).
+- *Arrows on the floor*: only those on the race's own way, each moved onto its middle and turned the way it runs there
+  (`palace_design.py`): 20 of the 38. Gone: the other rooms' arrows south and the detours' (the opponents' ways), and room 151's that
+  pointed west past the turn north, at its fireplace.
+- *The minimap*: the palace's sprint goes on out of the round window in a leap over the sea, and the minimap held all of it, the palace a
+  speck. Indoors (a track with open areas) the minimap now shows the racing line only as far as a sprint's finish line, on a dark panel
+  over the island's picture (its roof), the rooms' floors on it (`MainWindow.RaceMinimap.cs`).
+- *The dungeon*: under the stairwell 159 and room 163 north of it (cells x 361..397, z 533..621), its floor at 6,800 -- 3,840 under the
+  ground floor's -- in dark stone: flagstones, courses of stone, a sooty ceiling (the ground floor's floor's underside). The ground under it
+  is brought down under its floor (the rooms' ground is just under the ground floor's floor, and a car on the dungeon's would have been
+  stood on top of it).
+  - *The way in*: room 159's fireplace, beside the down-spiral, is hollowed and a teleporter as room 151's (`PalaceIsland` `Hollow`):
+    driven into, the car comes out at the dungeon's south end, looking north. *The way out*: a fireplace in its north wall; a car that
+    drives up to it comes out on the race's way at the down-spiral's foot, 12 cells on north, looking north.
+  - *In it*: five iron cages along its walls (their sides boxes, open tops of bars), two prisoners' cots, two racks of whips, two pairs of
+    shackles, eight torches, barrels and a chest (`PalaceFurniture.Up` Cage, WhipRack, Shackles, Torch, Cot, Barrel). Its people are the
+    race's guards: two jailers -- Sup soldiers, sword out, stepping out up to 6 cells at a car -- and two pighead prisoners, leashed in
+    their cages, throwing things through the bars. Its floor is an open area of its own (an area is the one whose floor the car is near).
+  - It is off the race's way: the sprint's line, its time and its winner are unchanged (won in 123.99 s).
+
+![A suit of armour in the shape of a Sup soldier](racetrack/palace/armoury_sup_armour.png)
+![The people of Zeelich on the walls](racetrack/palace/portraits_zeelich.png)
+![The dungeon from above, its ceiling off](racetrack/palace/dungeon_from_above.png)
+![Its cages](racetrack/palace/dungeon_cages.png)
+![A jailer coming at the car](racetrack/palace/dungeon_jailer.png)
+![The way out](racetrack/palace/dungeon_way_out.png)
 
 ## Island CX: round the island under its cannons, down through a door, twice round the halls under the gas (2026-10-15)
 
@@ -4062,6 +4117,41 @@ pilot never dodges); the missiles, 45 of them, mostly came down by the cars outs
 
 ![Door A from the trench: the portal, the wall over the opening, the tunnel going down](racetrack/cxtower/door_a_doorway.png)
 ![Flying gas monsters over the ring](racetrack/cxtower/ring_flyers.png)
+
+### The third round: no gas in the doorways, a camera that sees the car (2026-10-16)
+
+The user: "Entering to go downstairs on Island CX the door way is filled with gas. Also the camera needs fixing on the entry and exit it's
+too hard to see".
+
+- *The gas*: a flat plane at the sea's height (-50) over the whole cube, the ramp under it seen through it from the trench -- the car half
+  under the gas. Island CX's cube marks only its outer ring of sixteen squares for the sea (0xf99f), but the engine drew it under the whole
+  cube: `DrawHorizon2ZBuf` loads the cubes round the camera's, and each that doesn't load sets `CubeBitField` to all sixteen (`LoadCube`)
+  -- with no neighbour loaded (a one-cube island) the camera's own cube is never loaded again, so its own mask was lost. It now keeps the
+  own cube's (`TERRAIN.CPP`). And the race-track builder's `SeaEverywhere` (every square marked: no black holes under a terrace) leaves a
+  square without where the road runs `under` the island or below the sea's height (Island CX's door squares: 0xf9df).
+- *The camera on the ramps*: a tunnel's roof was 1,200 over the deck, which kept the eye 300 over the road behind the car (4,200 back): on
+  the 26 % climb out to door C that is under the car's deck, and the car was seen from under the road. Down to door A the eye came round the
+  U-turn at the ramp's foot on the road behind -- off to the car's side, the tunnel's inner wall's end between them.
+  - The ramps' tunnels are now 2,200 tall where they run under the plateau (`TunnelRun.UnderGround`: the roof's top 40 under the ground
+    over it), each in two -- the first two cells from the door, under the plateau's face, lower -- and they end where the ramp is out of
+    the plateau: door A's at the U-turn's start, door C's at the exit arc's end. A wall closes each tunnel's free end over the ring's roof
+    (`CloseAbove`): the rock between that roof and the ground isn't drawn. The ring's roof is open only over the tunnels, to their ends
+    (`CxTowerTrack.RoofHoles`), and has no box over the road where it runs under it with less than 1,700 over the deck
+    (`CxTowerTrack.RoofLow`): a car's box is taller than the car, and the first try stopped dead there.
+  - From the tunnels into the ring (round the U-turn down to the floor, and from the outer lanes' corner up to door C's tunnel) a tunnel of
+    the camera's alone with a ceiling: `tunnel=`'s fourth number, a height the eye is kept 250 under (the ring's roof). There the eye is
+    behind the car along the road's way at the car itself, 1,500 over the car's road (`RACEMOD.CPP` `HallEye`), eased in and out over the
+    stretch's first and last 8 points; nearer (to 3,200) while that place is in a tunnel's wall or a wall of the island's objects.
+  - On a climb the tunnel camera comes nearer (3,400) and rises to 500 over the car where the roof lets it; the eye is kept under the roof
+    of the tunnel it is in itself (`InTunnel`, a tunnel's own stretch before the one before's tail).
+  - Tunnel bodies are drawn close to the camera (`BrickBuilding.CloseFlag`): the near plane cut away the wall beside the eye and the
+    ground outside showed through. (Every track's tunnel bodies have the flag now.)
+- The test pilot: down door A's ramp behind and over the car, round the U-turn from behind, up to door C over it; 3 laps 51.1 and 56.7 s
+  (fire ball and missile hits stop it, as before), no rescues, nothing on the ramps that stops a car.
+
+![Down door A's ramp](racetrack/cxtower/door_a_down_the_ramp.png)
+![The U-turn at the ramp's foot](racetrack/cxtower/door_a_u_turn.png)
+![Up to door C](racetrack/cxtower/door_c_climb.png)
 
 ## The game has the keyboard from the start (2026-10-12)
 

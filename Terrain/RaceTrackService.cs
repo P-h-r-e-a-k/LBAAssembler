@@ -100,7 +100,7 @@ internal static class RaceTrackService
         // blowing (ms), not (ms), phase (ms), its way x and z (a thousand long)] (RACEMOD.CPP jet=)
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Jets = null,
         // Tunnels: tunnels over the raised road (RaceTrackTunnel), each [its first point, its last (the raised road's), its roof's height over
-        // the deck] (RACEMOD.CPP tunnel=), since 2026-10-08
+        // the deck, and (since 2026-10-16, when it has one) the height the camera's eye is kept under] (RACEMOD.CPP tunnel=), since 2026-10-08
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Tunnels = null,
         // Shuttles: the scenes' actors the race-track mode flies (RaceTrackIsland.Shuttles), each [scene, actor (the built scene's), the pad
         // it lands on: x, y (the road's surface there), z, cube-local] (RACEMOD.CPP shuttle=), since 2026-10-08
@@ -816,7 +816,9 @@ internal static class RaceTrackService
             Steam: report.Steam.Count > 0 ? report.Steam.ToList() : null, Drips: report.Drips.Count > 0 ? report.Drips.ToList() : null,
             Jets: report.Jets.Count > 0 ? report.Jets.ToList() : null,
             Tunnels: raised && report.Tunnels.Count > 0
-                ? report.Tunnels.Select(t => new[] { report.RaisedSpan.IndexOf(t.From), report.RaisedSpan.IndexOf(t.To), (int)Math.Round(t.Roof) }).Where(t => t[0] >= 0 && t[1] >= 0).ToList()
+                ? report.Tunnels.Select(t => (t.Ceiling is { } c
+                        ? new[] { report.RaisedSpan.IndexOf(t.From), report.RaisedSpan.IndexOf(t.To), (int)Math.Round(t.Roof), (int)Math.Round(c) }
+                        : new[] { report.RaisedSpan.IndexOf(t.From), report.RaisedSpan.IndexOf(t.To), (int)Math.Round(t.Roof) })).Where(t => t[0] >= 0 && t[1] >= 0).ToList()
                 : null,
             LavaBalls: raised && report.LavaBalls.Count > 0
                 ? report.LavaBalls.Select(b => new[] { (int)Math.Round(b.X), (int)Math.Round(b.Y), (int)Math.Round(b.Z), report.RaisedSpan.IndexOf(b.From), report.RaisedSpan.IndexOf(b.To), b.Every, b.Phase })

@@ -713,6 +713,10 @@ void DrawHorizon2ZBuf() {
     S32 cx = CameraX;
     S32 cy = CameraY;
     S32 cz = CameraZ;
+    // The camera's own cube's sea squares: a neighbour that fails to load sets CubeBitField to the whole cube (LoadCube), and with no
+    // neighbour loaded the own cube is not reloaded below. Kept, or a one-cube island (Island CX) has its sea drawn under all of it,
+    // over the squares its info word leaves without and through anything under the sea's height there.
+    U16 ownBitField = CubeBitField;
 
     if (BetaCam >= 0 AND BetaCam < 1024) {
         TerrainTri = TerrSO;
@@ -780,6 +784,8 @@ void DrawHorizon2ZBuf() {
             if (RendererDrawSea)
                 DrawOneSea(Y_SEA);
         }
+    } else {
+        CubeBitField = ownBitField;
     }
 }
 

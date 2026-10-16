@@ -271,6 +271,25 @@ arrows += [(TOP_X, ROW_UP - 14, UPF, 0, 1), (col(151) + 8, ROW_UP, UPF, 1, 0), (
            (COL_T - 14, DOWN_Z, UPF, -1, 0),
            (COL_E, row(162) + 14, UPF, 0, -1), (COL_E - 12, TREASURY_Z, UPF, -1, 0), (COL_E, row(166) + 8, UPF, 0, -1), (COL_E - 12, row(166), UPF, -1, 0),
            (col(165), row(166), UPF, -1, 0), (col(164), row(166) + 12, UPF, 0, 1)]
+# (only those on the race's own way, each moved onto its middle and turned the way it runs there -- the user, 2026-10-16: "Clean up any
+# arrows on the floor that aren't on the track, such as the one pointing at a fire place. Make sure all remaining arrows are in the centre
+# of the track": the other rooms' arrows south, and the detours', were on the opponents' ways only, and room 151's pointed west past the
+# turn north, at its fireplace)
+ARROW_NEAR, ARROW_TURN = 4.0, 35.0          # an arrow this near the way (cells), pointing within this of the way's heading (degrees)
+def on_track(a):
+    x, z, y, adx, adz = a
+    floor = [i for i in range(n) if abs(h[i] - y) < 1 and 0 < i < n - 1]
+    i = min(floor, key=lambda i: math.hypot(pts[i][0] - x, pts[i][1] - z))
+    if math.hypot(pts[i][0] - x, pts[i][1] - z) > ARROW_NEAR: return None
+    t = pts[i + 1] - pts[i - 1]; t = t / np.linalg.norm(t)
+    if math.degrees(math.acos(max(-1.0, min(1.0, (t[0] * adx + t[1] * adz) / math.hypot(adx, adz))))) > ARROW_TURN: return None
+    # (square to the rooms where the way runs square to them)
+    if abs(t[0]) > 0.985: t = np.array([math.copysign(1.0, t[0]), 0.0])
+    elif abs(t[1]) > 0.985: t = np.array([0.0, math.copysign(1.0, t[1])])
+    return (float(pts[i][0]), float(pts[i][1]), y, round(float(t[0]), 3), round(float(t[1]), 3))
+arrows_all = arrows
+arrows = [b for b in (on_track(a) for a in arrows_all) if b is not None]
+print(f'floor arrows: {len(arrows)} on the race\'s way of {len(arrows_all)}')
 
 # ---- the palace's own people in the cars' way (RACEMOD.CPP guard=): each [kind, which, x, z, floor, face x, face z, leash] -- kind 0 one
 # of the Emperor's soldiers, sword out, 1 a pighead (throws things at the cars). Each stands by a room's carpets, facing where they cross,
@@ -312,6 +331,16 @@ for k, (x, z, ox, oz, room) in enumerate([(col(152), ROW_UP, -10, CARPET_HALF + 
                                           (COL_T, DOWN_Z, CARPET_HALF + 3, CARPET_HALF + 2, 'the throne room')]):
     g = post(x, z, ox if ox else 0.01, oz, SOLDIER, 0, 10.0, room, UPF)
     if g: guards.append(g)
+# (the dungeon under 159 and 163 -- PalaceIsland's, reached only through 159's fireplace, the user, 2026-10-16: "complete with NPC's":
+# its jailers, two soldiers by the way down its middle, and its prisoners, pigheads in two of the cages, leashed in them, looking out)
+DUNGEON = L.get('dungeon')
+if DUNGEON:
+    DF = DUNGEON['floorTop']
+    dmx = (DUNGEON['x0'] + DUNGEON['x1']) / 2
+    for t, side in ((0.35, 1), (0.7, -1)):
+        guards.append([SOLDIER, 0, round(dmx + side * 3.0, 2), round(DUNGEON['z0'] + (DUNGEON['z1'] - DUNGEON['z0']) * t, 2), DF, -side, 0.0, 6.0])
+    for k, (cx, cz, _) in enumerate(DUNGEON['cages'][0:3:2]):
+        guards.append([PIG, k % 2, round(cx, 2), round(cz, 2), DF, 1.0 if cx < dmx else -1.0, 0.0, 0.0])
 print('guards:', len(guards), '--', ', '.join(f'{["soldier", "pighead"][g[0]]} at ({g[2]:.1f}, {g[3]:.1f}, {g[4]:.0f})' for g in guards))
 
 # ---- checks
@@ -360,6 +389,8 @@ print('about %.0f s to the lip at the top speed (34 km/h, 9.4 cells a second)' %
 st_x1 = max(STAIR_UP['x1'], STAIR_DOWN['x1']) + 1
 open_areas = [[sq_x0, sq_z0, sq_x1, sq_z1, FLOOR], [hall['x0'], hall['z0'], hall['x1'] + 1, hall['z1'] + 1, FLOOR],
               [st_x1, sq_z0, sq_x1, sq_z1, UPF], [sq_x0, sq_z0, st_x1, STAIR_DOWN['z0'] - 1, UPF], [sq_x0, STAIR_UP['z1'] + 1, st_x1, sq_z1, UPF]]
+# (and the dungeon's floor, under the ground floor's: an area is the one whose floor the car is near, RACEMOD.CPP OpenAreaAt)
+if DUNGEON: open_areas.append([round(DUNGEON['x0'], 2), round(DUNGEON['z0'], 2), round(DUNGEON['x1'], 2), round(DUNGEON['z1'], 2), DF])
 
 plan = {
     'originCellX': 0, 'originCellZ': 0,

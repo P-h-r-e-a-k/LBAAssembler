@@ -188,22 +188,43 @@ for d, sign in ((MARK['doorA'], 1), (MARK['doorC'], -1)):
 def tunnel_needed(k): return Y[k] + TUN_ROOF + TUN_SLAB > ROOF - 300
 kA_end = next(k % N for k in range(iDoorA_in, iDoorA_in + N) if not tunnel_needed(k % N))
 kC_start = next((iDoorC_in - q) % N for q in range(N) if not tunnel_needed((iDoorC_in - q) % N))
+# (2026-10-16, the user: "the camera needs fixing on the entry and exit it's too hard to see". A tunnel's roof 1,200 over the deck kept the
+# camera's eye 300 over the road behind the car -- under the car's deck on the 26 % climb out to door C -- and door A's tunnel ran on round
+# the U-turn under the north-west tower, its inner wall's end between the eye and the car. Now each ramp's tunnel only where the ramp is
+# straight and under the plateau, TUN_HIGH tall (kept under the ground over it: underGround), and from there into the ring a tunnel of the
+# camera's alone whose eye is kept under the ring's roof -- its ceiling, RACEMOD.CPP tunnel='s fourth number)
+TUN_HIGH = 2200.0
+kA_split = MARK['uA']                                                     # door A's: on to the U-turn's start
+kC_split = nearest_after((43.5, 52.5), MARK['exitArc'], 20)               # door C's: from the exit arc's end
+# (where it comes out into the ring, closeAbove: a wall across its end over the ring's roof -- the rock over the roof isn't drawn, and
+# the gas over the island showed through it.) (Each in two: its first two cells from the door, under the plateau's face -- its roof lower
+# there, under the face's slope -- and the rest: the camera keeps its eye under a tunnel's least roof.)
+DOOR_PART = int(2.0 / STEP)
+kA_face, kC_face = (iDoorA_in + DOOR_PART) % N, (iDoorC_in - DOOR_PART) % N
 TUNNELS = [{'from': int(MARK['doorA']), 'to': int(iDoorA_in), 'roof': TUN_ROOF, 'sunk': True, 'top': PLATEAU, 'eave': 0.5},
-           {'from': int(iDoorA_in), 'to': int(kA_end), 'roof': TUN_ROOF},
-           {'from': int(kC_start), 'to': int(iDoorC_in), 'roof': TUN_ROOF},
-           {'from': int(iDoorC_in), 'to': int(MARK['doorC']), 'roof': TUN_ROOF, 'sunk': True, 'top': PLATEAU, 'eave': 0.5}]
+           {'from': int(iDoorA_in), 'to': int(kA_face), 'roof': TUN_HIGH, 'underGround': 40.0},
+           {'from': int(kC_face), 'to': int(iDoorC_in), 'roof': TUN_HIGH, 'underGround': 40.0},
+           {'from': int(iDoorC_in), 'to': int(MARK['doorC']), 'roof': TUN_ROOF, 'sunk': True, 'top': PLATEAU, 'eave': 0.5},
+           {'from': int(kA_face), 'to': int(kA_split), 'roof': TUN_HIGH, 'underGround': 40.0, 'closeAbove': ROOF},
+           {'from': int(kC_split), 'to': int(kC_face), 'roof': TUN_HIGH, 'underGround': 40.0, 'closeAbove': ROOF}]
 # (and in the ring, tunnels of the camera's alone -- no pieces -- their roofs the ring's roof over the road: the camera that follows the car
 # stood 6,000 over it, out over the ring's roof and the gas, where the island's ground near it isn't drawn: the car was seen from over the
 # island through its ground. Under them the race-track mode's tunnel camera rides behind the car under the roof)
 def camera_tunnel(a, b):
     least = min(ROOF - 250 - Y[k % N] for k in range(a, a + int(ahead(a, b) / STEP) + 1))
     return {'from': int(a), 'to': int(b), 'roof': round(float(least)), 'pieces': False}
-TUNNELS += [camera_tunnel(kA_end, MARK['sw1']), camera_tunnel(MARK['sw1'], MARK['sw2']), camera_tunnel(MARK['sw2'], kC_start)]
+TUNNELS += [camera_tunnel(MARK['sw1'], MARK['sw2'])]
+# (the ramps in the ring, from door A's tunnel round the U-turn down to the floor and from the outer lanes' corner up to door C's: the
+# eye behind the car the way the road runs at it, under the ring's roof -- its ceiling -- as high over the road as it likes, RACEMOD.CPP
+# HallEye; on the road behind the car round the U-turn, it stood off to the car's side)
+TUNNELS += [{'from': int(kA_split), 'to': int(MARK['sw1']), 'roof': 2400, 'pieces': False, 'ceiling': ROOF},
+            {'from': int(MARK['sw2']), 'to': int(kC_split), 'roof': 2400, 'pieces': False, 'ceiling': ROOF}]
 in_tunnel = np.zeros(N, bool)
-for t in TUNNELS[:4]:
+tunnel_roof = np.zeros(N)
+for t in [t for t in TUNNELS if t.get('pieces', True)]:
     k = t['from']
     while True:
-        in_tunnel[k] = True
+        in_tunnel[k] = True; tunnel_roof[k] = t['roof']
         if k == t['to']: break
         k = (k + 1) % N
 def runs(mask):
@@ -288,7 +309,7 @@ for i in range(0, N, 2):
     near_ = (sep > 40) & (dd < HALF + HALF[i] + 0.6)
     if near_.any():
         j = int(np.argmin(np.where(near_, np.abs(Y - Y[i]), 1e9)))
-        need = 2600 + (TUN_ROOF + TUN_SLAB + TUN_UNDER - 2600 if in_tunnel[i] or in_tunnel[j] else 0)
+        need = max(2600, max(tunnel_roof[i], tunnel_roof[j]) + TUN_SLAB + TUN_UNDER) if in_tunnel[i] or in_tunnel[j] else 2600
         worst.append((abs(Y[i] - Y[j]) - need, abs(Y[i] - Y[j]), i, j))
 for m, dy, i, j in sorted(worst)[:5]:
     out.append(f'  {"CLASH" if m < 0 else "over itself"}: ({X[i]:.1f}, {Z[i]:.1f}) {Y[i]:.0f} and ({X[j]:.1f}, {Z[j]:.1f}) {Y[j]:.0f}: {dy:.0f} apart ({m:+.0f})')
@@ -310,9 +331,10 @@ out.append(f'  under the ring\'s roof with less than 1,700 over the road (no tun
 poke = []
 for k in range(N):
     if not in_tunnel[k] or not under[k]: continue
-    top = Y[k] + TUN_ROOF + TUN_SLAB
     g = min(ground(X[k] + Nn[k, 0] * o, Z[k] + Nn[k, 1] * o) for o in np.linspace(-HALF[k] - 0.85, HALF[k] + 0.85, 9))
-    if top > g - 60: poke.append((top - g, k))
+    top = Y[k] + tunnel_roof[k] + TUN_SLAB
+    if tunnel_roof[k] > TUN_ROOF and g > Y[k]: top = min(top, g - 40)   # (underGround: kept under the ground over it)
+    if top > g - 60 + 20: poke.append((top - g, k))
 out.append(f'  tunnel roofs out of the ground: {len(poke)} points' + (f', the most {max(poke)[0]:.0f} at ({X[max(poke)[1]]:.1f}, {Z[max(poke)[1]]:.1f})' if poke else ''))
 # (outside: the deck under the ground -- the builder cuts the ground there)
 cutting = [(max(ground(X[k] + Nn[k, 0] * o, Z[k] + Nn[k, 1] * o) for o in np.linspace(-HALF[k], HALF[k], 7)) - Y[k], k) for k in range(N) if not under[k] and not in_tunnel[k]]

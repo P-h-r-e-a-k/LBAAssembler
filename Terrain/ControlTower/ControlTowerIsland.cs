@@ -48,7 +48,8 @@ internal static class ControlTowerIsland
     // doors' landings, the consoles, the grates' rims; the grates shut), the low outer walls built up to the tall ones' height -- under one
     // roof just under the gas, open only where the road comes down through it (RoofHoles, the room's cells: CxTowerTrack.RoofHoles). No
     // secret passage under it.
-    public sealed record RaceRoom(HashSet<(int X, int Z)> RoofHoles);
+    // (NoBox: cells of the roof drawn but with nothing to hit, over the road where it runs close under the roof: CxTowerTrack.RoofLow)
+    public sealed record RaceRoom(HashSet<(int X, int Z)> RoofHoles, HashSet<(int X, int Z)>? NoBox = null);
     public const int ControlLo = 20, ControlHi = 41;   // the control room in the room's middle (its cells, both ways): left as it is
     public const int TopLayer = 19;                     // the tall walls' top layer: the ring's walls all that high, its roof on them
     private const int Side = 64;
@@ -153,7 +154,8 @@ internal static class ControlTowerIsland
                         list.Add(new BrickBuilding.Face(new[] { new Vector3(a.X, (float)ya, a.Z), new Vector3(b.X, (float)ya, a.Z), new Vector3(b.X, (float)ya, b.Z), new Vector3(a.X, (float)ya, b.Z) },
                             roofSide, -Vector3.UnitY));
                     }
-                    foreach (var (u0, v0, u1, v1, _) in BrickBuilding.Rectangles(plane))
+                    var solid = race.NoBox is { Count: > 0 } noBox ? plane.Where(c => !noBox.Contains(c.Key)).ToDictionary(c => c.Key, c => c.Value) : plane;
+                    foreach (var (u0, v0, u1, v1, _) in BrickBuilding.Rectangles(solid))
                     {
                         var lo = Corner(u0, 0, v0); var hi = Corner(u1 + 1, 0, v1 + 1);
                         roofBoxes.Add((lo.X, ya, lo.Z, hi.X, yb, hi.Z));

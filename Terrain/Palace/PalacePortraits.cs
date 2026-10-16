@@ -35,15 +35,18 @@ internal static class PalacePortraits
     public sealed record Sitter(string Name, int Body, double Turn, double Show, (float R, float G, float B) Backdrop, double Zoom = 1);
 
     // (the last, the Queen of the Mosquibees, hangs only by the fireplaces that are a teleporter -- PalaceIsland; the user, 2026-10-13: "Let's
-    // move the queen's picture to where dinofly is, and drop the dinofly portrait")
+    // move the queen's picture to where dinofly is, and drop the dinofly portrait"). The people of Zeelich, whose Emperor's palace it is
+    // (the user, 2026-10-16: "Replace portraits with characters from Zeelich"; they were Twinsun's: Twinsen, Zoe, the Dark Monk, FunFrock,
+    // Baldino, Joe the Elf).
     public static readonly Sitter[] Sitters =
     {
-        new("Twinsen", 1, 0.45, 0.62, (44, 66, 100)),
-        new("Zoe", 26, -0.45, 0.62, (100, 44, 56)),
-        new("the Dark Monk", 311, 0.35, 0.7, (40, 40, 54)),
-        new("FunFrock", 313, -0.35, 0.62, (84, 34, 32)),
-        new("Jerome Baldino", 139, 0.6, 0.85, (44, 76, 64)),
-        new("Joe the Elf", 110, -0.45, 1.0, (66, 54, 88)),
+        new("a Sup guard of the palace", 271, 0.45, 0.62, (44, 66, 100)),
+        new("an old Sup lady", 263, -0.45, 0.62, (100, 44, 56)),
+        new("a Sup priest", 292, 0.35, 0.7, (40, 40, 54)),
+        new("the old Franco", 276, -0.35, 0.65, (84, 34, 32)),
+        new("a Franco policeman", 86, 0.45, 0.66, (44, 76, 64)),
+        new("a Wannie", 194, -0.45, 0.85, (66, 54, 88)),
+        new("a Mosquibee", 192, 0.4, 0.85, (60, 80, 44)),
         new("the Queen of the Mosquibees", 196, -0.45, 0.8, (84, 66, 34)),
     };
     public static int Queen => Sitters.Length - 1;
