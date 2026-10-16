@@ -134,3 +134,62 @@ times before a race's end, at 6 places:
 - **on the racing line with every car, still to fix: Wannies Island, lap point 384 of its raised road (cells 464, 562, height 7,113)**,
   where the car is held against the left rail (base 2, hot 2, suggested setup 1). It used to cost about 10 s
   a lap there (a 35.6 s lap against 25); the reset now gets the car out in 3 s.
+
+## The second round (the same evening)
+
+The user: "Make the fixes". Every reset left was followed to its cause, with forced super jet-packs too (`tools/RaceTrackStress/jet.py
+<track> <tag> <side> <tick>...`: `raceitem 4` at each tick and the cars' places every 10 ticks after it).
+
+- **Wannies Island, lap point 384, held against the rail** (RACEMOD.CPP `RaceMod_AutoInput`): round a tight bend the point the pilot
+  steers for, a look-ahead on along the line, is inside the bend from the car (the chord cuts the arc). Where the line takes the bend
+  near the inner rail -- 155 units short of the rail's hold here -- that point was past the rail, and the car drove into the rail nose
+  first and stood there pointing at it. On a raised road the point is now kept inside the rail's hold, half a cell in (left where it is
+  on a strip beside the road, or on another stretch's deck). The super jet-pack drives by the same pilot, so it is kept in too.
+- **The super jet-pack over Mosquibees Island's plateau's edge**: the pilot looks further ahead the faster the car goes, and at twice the
+  speed the point ahead cut the bend after the start by the plateau's edge -- over it, every jet-pack. The look-ahead is now at most 0.7
+  of the line's radius there (no nearer than two cells). The test pilot's own side offset (`autodrive 1 5 <side>`) is no longer added
+  to the jet-pack's steering (a player's jet-pack has none). A rescue on the jet-pack ends it (it drove the car off the road, and at
+  twice the speed it drove it off again at the same bend: seven rescues in one jet-pack), and the stuck-car reset now works on it too
+  (it drives into a wall as a car does, and stood there pinned until it ran out).
+- **The super jet-pack through Mosquibees Island's bridge** (EXTFUNC.CPP `GhostSkips`): since 2026-10-10 the jet-pack goes through the
+  island's objects (the user's "the jet pack needs updating so it doesn't get stuck on objects"), and that took the bridge's deck too --
+  a deck of the island's objects, not a raised road. The car fell into the valley at the bridge's start in 5 jet-packs of 6. An object
+  the car is on -- its top no more than half a brick over where the car was, the game's own "on top of it" test -- now holds it up as
+  it holds any car; walls, posts and the shuttles' sides are still gone through.
+- **Twinsen on foot after a rescue into another scene**: a car that left its scene (the jet-pack off the plateau into scene 105, or over
+  the island's edge) was rescued by setting the scene to change from the drawing, which begins the scene afresh -- and its own opening's
+  `SET_MOVE` took Twinsen out of his car. On foot the race stood still for good. The rescue's scene change is now asked for as a zone's
+  is (`RaceMod_EdgeCross`: the line point's place, the car carried over), and for 3 s after it Twinsen is put back in his car if he
+  comes in on foot (`BackInCar`).
+- **Off the island's edge** (EXTFUNC.CPP, `RaceMod_OffIsland`): the game sends a hero who moves where there is no cube into the phantom
+  cube (94) to drown, which took Twinsen out of his car too. A race car is now held at the edge and put back on the road behind.
+- **Opponents stopped for good by being run into** (RACEMOD.CPP `RaceMod_OpponentStruck`, EXTRA.CPP `RaceMod_ExtraHit`): the game
+  counts a car running into an actor as a hit (OBJECT.CPP's object collisions), and the race took every hit by Twinsen for his magic
+  ball, which stops an opponent for 1.5 s. Leant on, an opponent was stopped again each time its last stop ran out and never moved. On
+  Wannies Island the old Wannie stood on the racing line at cells (537, 488) -- the first round's "hot car" spot -- with Twinsen's car
+  against the rail behind him: four resets in a row, each putting Twinsen back behind him. Only a thrown ball's hit stops an opponent
+  now; run into, a car is no more than in the way (`Twinsen's car runs into ...'s car: no hit`, at most every 5 s in the log). The runs
+  showed 6-26 such run-ins a race.
+- **The Desert's jump cut short over its gap** (RACEMOD.CPP `RaceMod_InFlight`; EXTFUNC.CPP `InitSkating`, OBJECT.CPP `HitObj`): a jump
+  is the hero's flight animation (RACE_JUMP_ANIM_*), and anything that plays another animation on him ends the flight where he is. Two
+  did: the game's skating, which the engine starts on a buggy over a forbidden slope (EXTFUNC.CPP `ReajustPosExt`'s "blindage buggy")
+  -- at the lip, over the gap's steep edge -- and a hit in the air (his own nitro penguin going off beside him, slow after a rescue).
+  The car fell into the gap and stood against the landing ramp's stepped foot, always at (317951, 1143, 319487), the reset getting it
+  out. With jet-packs forced every 10 s, 3 of 27 jumps ended so (`jump: the flight over (now animation 33 ...)`: 33 the skate, 22 a hit,
+  0 the landing). While Twinsen flies a jump he now neither skates nor takes a hit (`... hits Twinsen's car: in a jump's flight`); all
+  24 jumps of the next six races landed. Each flight's end is logged now, with the height above the ground there.
+- The log says where each sea or lava rescue was (`into the lava or the sea at (x,y,z)[, on the super jet-pack]`); the stuck-car
+  reset adds the rail's last move on a raised road (`the rail's last move: <what> at segment <n>, <lat> across (kept <lo>..<hi>)`:
+  1 the move not made, 2 past the road's end, 3 within the rail, 4 on a strip, 5 within another stretch's rail, 6 driven off a grounded
+  end, 7 round a corner, 8 put on the rail, 9 not at the deck's height, 10 off a grounded end) and the objects within 3 cells of the
+  car. `ScriptRoundTrip altitude <ILE> <x> <z> [radius]` prints the island's ground round a place every half cell (it found the bridge's
+  valley). `report.py` now splits a log line written into the middle of another (the engine's lines and the console's are written
+  apart: one Otringal race's end was hidden that way).
+
+Checked with the 72 races and 36 time trials again on the last build: every race with opponents finished (the storm lap has none),
+no crash, no flight cut short, and the time trials ran without a reset (Otringal's and the Francos' slow laps are their hazards -- the
+gunners, a gas monster's bite, the shuttle, the steam jets on their lap's side). The reset fired 4 times before a race's end, against 12
+in the first round, all with the test pilot 1.5 cells to the left of the line: the town circuit's narrow street (1), Celebration
+Island's lap start -- where the line runs along the raised road's east edge, at ground level, and 1.5 cells beside it is the hillside --
+(2), and once into the lava lake's lava. None is on the racing line. The forced jet-packs: 6 on Mosquibees Island and 12 on Otringal,
+Wannies, the Emerald Moon and Island CX without a rescue, and six Desert races with one every 10 s, every jump landed.

@@ -15,6 +15,8 @@ PROBLEMS = {
 
 def read(run):
     text = open(run + '/run.log', encoding='utf-8', errors='replace').read()
+    # (the engine's lines and the console's are written apart, and one can land in the middle of another: each [INFO] on a line of its own)
+    text = re.sub(r'(?<=.)\[INFO\]', '\n[INFO]', text)
     lines = text.splitlines()
     out = {'crash': 'CRASH' in text}
     end = len(lines)

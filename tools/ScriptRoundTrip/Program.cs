@@ -238,6 +238,7 @@ internal static class Program
             "mapinfo" => MapCommand.Info(args),
             "mapmaps" => MapCommand.MapsFolder(args),
             "decorlist" => DecorList.Run(args),
+            "altitude" => DecorList.Altitude(args),
             "bodybox" => BodyBox.Run(args),
             "bodyroundtrip" => BodyRoundTrip.Run(args),
             "doortrace" => DoorTrace.Run(args),

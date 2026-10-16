@@ -1358,6 +1358,10 @@ void TestCameraPosObjets(void) {
 // A race-track mod's super jet-pack: the moving object Twinsen's car on it -- the island's objects aren't there for it (RACEMOD.CPP
 // RaceMod_JetGhost): it neither runs into them nor is pushed back out of them.
 static S32 JetGhost(void) { return APtObj == &ListObjet[NUM_PERSO] AND RaceMod_JetGhost(); }
+// ... but one it is on still holds it up: an object whose top is no more than half a brick over where the car was, as the game's own
+// "on top of it" test has it (DoCornerReajustDecors) -- Mosquibees Island's bridge is a deck of the island's objects, and the car on
+// the super jet-pack went through it into the valley under it, at the bridge's start, nearly every jet-pack, 2026-10-16.
+static S32 GhostSkips(const T_DECORS *d) { return JetGhost() AND OldY < d->YMax - DEMI_BRICK_Y; }
 
 U8 WorldColBrickExt(S32 xw, S32 yw, S32 zw) {
     U32 i;
@@ -1366,7 +1370,9 @@ U8 WorldColBrickExt(S32 xw, S32 yw, S32 zw) {
     PtrDecorsCol = ListDecors;
 
     // decors
-    for (i = 0; i < (JetGhost() ? 0 : NbObjDecors); i++, PtrDecorsCol++) {
+    for (i = 0; i < NbObjDecors; i++, PtrDecorsCol++) {
+        if (GhostSkips(PtrDecorsCol))
+            continue;
         if (TestZVDecors(xw, yw, zw, PtrDecorsCol)) {
             // verifie qu'il n'y ait pas de terrain au-dessus
             // de l'objet
@@ -1485,11 +1491,10 @@ U8 WorldColBrickDecors(S32 xpmin, S32 ypmin, S32 zpmin,
     U16 i;
 
     PtrDecorsCol = ListDecors;
-    if (JetGhost()) { PtrDecorsCol = NULL; return 0; }
 
     // decors
     for (i = 0; i < NbObjDecors; i++, PtrDecorsCol++) {
-        if (i == NumDecorsCol)
+        if (i == NumDecorsCol OR GhostSkips(PtrDecorsCol))
             continue;
 
         if (TestZVDecorsZV(PtrDecorsCol,
@@ -1577,6 +1582,9 @@ void InitSkating(void) {
     S32 beta;
 
     if (APtObj->WorkFlags & SKATING)
+        return;
+    // (not a race car flying a jump: the skating would end the flight in the air -- RACEMOD.CPP RaceMod_InFlight)
+    if (APtObj == &ListObjet[NUM_PERSO] AND RaceMod_InFlight())
         return;
 
     beta = GetSkateBeta(OldX, OldZ);
@@ -1781,9 +1789,7 @@ static S32 GlanceAside(S32 asideX) {
 S32 DoCornerReajustDecors() {
     S32 xpmin, ypmin, zpmin, xpmax, ypmax, zpmax;
 
-    if (JetGhost())
-        return 0;
-
+    // (the super jet-pack's car: WorldColBrickDecors finds only the objects it is on -- GhostSkips -- and it is put on top of them)
     if (Nxw < 0)
         return 0;
     if (Nzw < 0)
@@ -2565,7 +2571,12 @@ static void DoAnimExtGround(U8 numobj) {
         index = (CurrentCubeY + PhantomY) * 16 + (CurrentCubeX + PhantomX);
         index = IsleMapIndex[index] & 127; // bug compilo ou debug ?
 
-        if (!index) // pas de cube
+        // (a race car off the island's edge: held at it and put back on the road -- RACEMOD.CPP RaceMod_OffIsland -- not sent into the
+        // phantom cube, which took Twinsen out of his car: he came back from it on foot, the race at a standstill, 2026-10-16)
+        if (!index AND RaceMod_OffIsland()) {
+            Nxw = OldX;
+            Nzw = OldZ;
+        } else if (!index) // pas de cube
         {
             // allez, on va mourir dans le cube phantom !
             NewCube = NUM_CUBE_PHANTOM;

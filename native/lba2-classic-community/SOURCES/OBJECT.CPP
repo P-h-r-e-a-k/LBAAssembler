@@ -1485,6 +1485,9 @@ void HitObj(U8 numhitter, U8 num, S32 hitforce, S32 beta) {
 
     // a race-track mod's opponent hit by Twinsen (his magic ball from the car): stopped as the race's own balls stop it (RACEMOD.CPP)
     { extern S32 RaceMod_OpponentStruck(U8 num, U8 hitter); if (RaceMod_OpponentStruck(num, numhitter)) return; }
+    // ... and Twinsen's race car flying a jump: its hit animation would end the flight in the air (RACEMOD.CPP RaceMod_InFlight)
+    if (num == NUM_PERSO AND RaceMod_InFlight())
+        return;
 
     if (ptrobjt->Flags & NO_CHOC)
         return;
