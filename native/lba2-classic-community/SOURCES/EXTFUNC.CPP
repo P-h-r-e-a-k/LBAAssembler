@@ -106,6 +106,8 @@ S32 FlagHeroOutZ = FALSE; // Twinsen sort du cube en Z
 
 T_DECORS *PtrDecorsCol = 0; // Objet du decors en collision
 S16 NumDecorsCol = -1;      // avec l'objet courant
+S32 HeroDecorHit = -1;      // the last decor Twinsen's move ran into, and when (RACEMOD.CPP StuckCar says it)
+S32 HeroDecorHitAt = 0;
 
 U8 *PtrNuances; // Nuances gouraud
 
@@ -1738,6 +1740,41 @@ void ReajustPosExt(U8 col) {
     }
 
 /*──────────────────────────────────────────────────────────────────────────*/
+// A race car's glancing blow (RACEMOD.CPP RaceMod_Glance): stopped on one axis by a decor box it overlaps on the other by no more than the
+// glance -- a building's corner at the road's edge, a gantry's post, a pit wall's end met square on -- it is pushed aside along that other
+// axis, past the box, to its nearer side, instead of being held there with its wheels turning. (The stress test, 2026-10-16: the test
+// pilot held for the rest of the race by Otringal's pit wall's end, the start gantries' posts on Celebration Island and the old moon, a
+// building's corner on Citadel Island's town circuit. The boxes are all square to the island, so no shape of theirs could turn a car
+// aside.) `asideX`: blocked in z, pushed in x. Non-zero: pushed.
+
+static S32 GlanceAside(S32 asideX) {
+    const S32 glance = APtObj == &ListObjet[NUM_PERSO] ? RaceMod_Glance() : 0;
+    if (glance <= 0 || PtrDecorsCol == NULL)
+        return 0;
+    const T_DECORS *d = PtrDecorsCol;
+    // (only met head on, blocked along the way it mostly moves: blocked across it, it slides along the box as the game has it -- pushed
+    // aside to the nearer side there, a car running past a post beside it was pushed back, frame after frame, the old moon's and
+    // Celebration Island's gantries)
+    const S32 movedX = abs(Nxw - OldX), movedZ = abs(Nzw - OldZ);
+    if (asideX ? movedZ < movedX : movedX < movedZ)
+        return 0;
+    if (asideX) {
+        const S32 lo = Nxw + APtObj->XMin, hi = Nxw + APtObj->XMax;
+        const S32 over = ade_min(hi, d->XMax) - ade_max(lo, d->XMin);
+        if (over < 0 OR over > glance)
+            return 0;
+        Nxw = (lo + hi < d->XMin + d->XMax) ? d->XMin - APtObj->XMax - 1 : d->XMax - APtObj->XMin + 1;
+    } else {
+        const S32 lo = Nzw + APtObj->ZMin, hi = Nzw + APtObj->ZMax;
+        const S32 over = ade_min(hi, d->ZMax) - ade_max(lo, d->ZMin);
+        if (over < 0 OR over > glance)
+            return 0;
+        Nzw = (lo + hi < d->ZMin + d->ZMax) ? d->ZMin - APtObj->ZMax - 1 : d->ZMax - APtObj->ZMin + 1;
+    }
+    return 1;
+}
+
+/*──────────────────────────────────────────────────────────────────────────*/
 // Reajuste l'objet scénarique courant contre les objets du décors
 // probablement optimisable !
 
@@ -1767,6 +1804,10 @@ S32 DoCornerReajustDecors() {
     // appels a TestZVDecorsZV
 
     if (WorldColBrickDecors(xpmin, ypmin, zpmin, xpmax, ypmax, zpmax) == 1) {
+        if (APtObj == &ListObjet[NUM_PERSO]) {
+            HeroDecorHit = NumDecorsCol;
+            HeroDecorHitAt = TimerRefHR;
+        }
         // On est en collision avec un objet du decors
         if (OldY >= PtrDecorsCol->YMax - SIZE_BRICK_Y / 2) {
             Nyw = CalculAltitudeObjet(Nxw, Nzw, APtObj->CodeJeu >> 4);
@@ -1795,7 +1836,8 @@ S32 DoCornerReajustDecors() {
                 if (!TestZVDecorsZV(PtrDecorsCol,
                                     OldX + APtObj->XMin, ypmin, zpmin,
                                     OldX + APtObj->XMax, ypmax, zpmax)) {
-                    RecaleXExt(PtrDecorsCol);
+                    if (!GlanceAside(FALSE))
+                        RecaleXExt(PtrDecorsCol);
                 } else {
                     if (!TestZVDecorsZV(PtrDecorsCol,
                                         OldX + APtObj->XMin, ypmin, OldZ + APtObj->ZMin,
@@ -1808,7 +1850,8 @@ S32 DoCornerReajustDecors() {
                 if (TestZVDecorsZV(PtrDecorsCol,
                                    OldX + APtObj->XMin, ypmin, zpmin,
                                    OldX + APtObj->XMax, ypmax, zpmax)) {
-                    RecaleZExt(PtrDecorsCol);
+                    if (!GlanceAside(TRUE))
+                        RecaleZExt(PtrDecorsCol);
                 }
             }
         }

@@ -212,6 +212,11 @@ internal static class RaceTrackScenes
         foreach (var e in edges.Where(e => e.FromScene == scene))
         {
             int lo = (int)Math.Round((e.Along - EdgeHalfCells) * Cell), hi = (int)Math.Round((e.Along + EdgeHalfCells) * Cell);
+            // (the zone's start along the edge is also its arrival's other coordinate (Info0 of a north or south zone, Info2 of an east or
+            // west one), and the engine reads 512 and 31744 there as the marks of the other edges' zones (OBJECT.CPP GereZoneChangeCube:
+            // ZONE_EST, ZONE_OUEST, ...): a zone starting at 512 waited for the car to leave eastwards too, and never took it -- the Emerald
+            // Moon's north edge out of scene 230, every lap held at the edge till the engine's fallback carried it over, 2026-10-16)
+            if (lo == Near || lo == Far) lo--;
             int y0 = Math.Max(0, (int)Math.Round(e.Height) - EdgeBelow), y1 = (int)Math.Round(e.Height) + EdgeAbove;
             var road = (int)Math.Round(e.Height);
             bool Covers(SceneZoneModel z)

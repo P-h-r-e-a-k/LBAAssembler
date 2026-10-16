@@ -4691,6 +4691,47 @@ internal static class RaceTrackBuilder
     private const double GantryCentreOffset = 2830;      // the origin is this far from the middle of the gantry, along its beam
     private const double GantryBeam = 5378;              // the beam's length (body 64's box), post to post
     private const double GantryMargin = 0.4;             // cells between an outer curb and the post outside it
+    private const double GantryPost = 283 / 512.0;       // a retail post's width (bodies 65 and 66), cells
+    private const double GantryClear = 1.75;             // cells a post stands clear of its kerb at the least: the race car's box reaches 1.24
+                                                         // cells from its middle (RACEMOD.CPP logs it), and half a cell more
+    private const double BuiltGantryClear = 3350, BuiltGantryBeam = 640;   // a built gantry's beam's underside and depth: the retail's 3990 top
+
+    // A start gantry built to the road (RaceTrackRaisedBody.Gantry, as the raised road's): its posts GantryClear beyond the kerbs `left` and
+    // `right` cells from the line's point, as tall as the retail gantry. The frame only draws; each post is solid, a box of an empty body.
+    private static void BuiltGantry(IslandFile island, double cx, double cz, double height, double ex, double ez, double left, double right, string what,
+        RaceTrackReport report, RaceTrackOptions o, double retailClear)
+    {
+        const double postHalf = 130;                        // RaceTrackRaisedBody.Gantry's post, units
+        var y = (int)Math.Round(height);
+        var mid = (right - left) / 2;                       // the road's middle across from the line's point, cells
+        var half = (left + right) / 2 + GantryClear + postHalf / 512;
+        double ox = (cx + ex * mid) * 512, oz = (cz + ez * mid) * 512;
+        if (IslandDecors.Locate(island, ox, oz) is not { } at || at.Cube.Decors.Count + 3 > IslandDecors.MaxPerCubeRaceTrack)
+        {
+            report.Placed.Add($"{what}: no gantry -- " + (IslandDecors.Locate(island, ox, oz) is null ? "off the island" : $"its cube full ({IslandDecors.MaxPerCubeRaceTrack} decors)"));
+            return;
+        }
+        var frame = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, at.X, y, at.Z, 0);
+        frame.XMin = at.X - 16; frame.XMax = at.X + 16; frame.ZMin = at.Z - 16; frame.ZMax = at.Z + 16; frame.YMin = y - 200; frame.YMax = NoBoxTop;
+        at.Cube.Decors.Add(frame);
+        report.NewBodies.Add(RaceTrackRaisedBody.Gantry(new System.Numerics.Vector3((float)ex, 0, (float)ez), half * 512, BuiltGantryClear, BuiltGantryBeam));
+        var empty = o.NewBodyBase + report.NewBodies.Count;
+        report.NewBodies.Add(RaceTrackPipes.Write(new List<System.Numerics.Vector3> { System.Numerics.Vector3.Zero }, new List<LbaBodyStudio.Face>(), lit: false));
+        // (the posts' boxes square to the island: as wide as a post turned with the road reaches)
+        var reach = postHalf * (Math.Abs(ex) + Math.Abs(ez)) + 8;
+        var boxes = new List<(double, double, double, double, double, double)>();
+        var posts = new List<(double X0, double Z0, double X1, double Z1)>();
+        foreach (var side in new[] { -1.0, 1.0 })
+        {
+            double px = ox + ex * side * half * 512, pz = oz + ez * side * half * 512;
+            boxes.Add((px - reach, y - 200, pz - reach, px + reach, y + BuiltGantryClear + BuiltGantryBeam, pz + reach));
+            posts.Add(((px - reach) / 512, (pz - reach) / 512, (px + reach) / 512, (pz + reach) / 512));
+        }
+        Palace.BrickBuilding.AddBoxes(island, empty, boxes, IslandDecors.MaxPerCubeRaceTrack);
+        if (o.GantryFootings) PostFootings(island, o, posts, y, what, report);
+        report.Placed.Add($"{what}: gantry built to the road at cell ({cx + ex * mid:0.0}, {cz + ez * mid:0.0}), height {y}, posts {half:0.0} cells either side of " +
+                          $"the road's middle, {GantryClear:0.0} beyond its kerbs (the retail one's would have stood {Math.Max(0, retailClear):0.0} from one)");
+    }
 
     // The gantry across the start line. One beam spans a road and its curbs; where the pit lane runs beside the start line (every track's
     // start is in the pit lane's middle) as many beams end to end as reach over both, centred on them, with the posts only at the two outer
@@ -4728,6 +4769,20 @@ internal static class RaceTrackBuilder
                 pitRight ? right + GantryMargin - total / 2 : -(left + GantryMargin) + total / 2,      // beyond the lap
             };
             middle = choices.FirstOrDefault(m => Grounded(m - total / 2) && Grounded(m + total / 2), (right - left) / 2);
+        }
+        // (the retail gantry is one length, 10.5 cells post to post: over a road nearly as wide its posts stand under a car's width beyond
+        // the kerbs -- 0.2 to 0.8 cells on Celebration Island's and the old moon's 9-cell roads, where the stress test's cars running wide
+        // were held against them, 2026-10-16. Where either post would stand nearer its kerb than GantryClear, the gantry is built to the
+        // road instead: BuiltGantry)
+        if (curbs is not null && o.NewBodyBase >= 0)
+        {
+            var total = beams * beam;
+            var leftClear = total / 2 - GantryPost - middle - left; var rightClear = middle + total / 2 - GantryPost - right;
+            if (Math.Min(leftClear, rightClear) < GantryClear)
+            {
+                BuiltGantry(island, cx, cz, height, ex, ez, left, right, what, report, o, Math.Min(leftClear, rightClear));
+                return;
+            }
         }
         int placed = 0, full = 0;
         var posts = new List<(double X0, double Z0, double X1, double Z1)>();

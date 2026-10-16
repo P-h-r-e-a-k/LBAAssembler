@@ -308,6 +308,7 @@ double RaceMod_SpeedFactor(void);
 S32 RaceMod_Takeover(void);
 S32 RaceMod_NoHarm(void);
 U32 RaceMod_FilterInput(U32 input);
+S32 RaceMod_Glance(void);
 S32 RaceMod_WantsMenu(void);
 void RaceMod_LoadFile(const char *path);
 // The race game's (RACEGAME.CPP): a race is over -- its time from GO to the line, its best lap, the place; a time trial's time goes to

@@ -95,3 +95,42 @@ will:
 
 The test pilot never reverses, so a car held against a wall stays there. A player can back out, but a stuck-car rescue (held still with the
 throttle down for a few seconds: back on the road, as from the lava) would make all four holds harmless.
+
+## The fixes (the same day)
+
+The user: "Make the fixes and add the stuck car reset".
+
+- **The stuck-car reset** (RACEMOD.CPP `StuckCar`): Twinsen's car that goes no further than a cell in 3 s while it drives on -- the
+  throttle down, or its own speed still over 1,000 units/s (a car held against something keeps its speed, 70-90 km/h on the display,
+  and the test pilot, which drives by that speed, lets go of the throttle near the old moon's gap loop) -- is put back on the road behind
+  (`Rescue`), as from the sea. Not while it is held on purpose (the grid, a hit, a bite: `RaceMod_Held`), skidding, flying a jump, in a
+  loop, on the super jet-pack, on the roulette wheel's drop or falling. The log says where, and the decor it last ran into (if within the
+  last second): `stuck at (x,y,z) for 3.0 s driving on: back on the road (the last decor run into: ...)`. The car's own box is logged once
+  a run too (`the car's box: x -633..633, y 0..940, z -633..633` -- the scenery's clearances are for that).
+- **Glancing blows** (EXTFUNC.CPP `GlanceAside`, RACEMOD.CPP `RaceMod_Glance`): the decors' boxes are all square to the island, so no shape
+  of a wall's end or a post could turn a car aside -- a car meeting one square on stopped dead. Now the race car, blocked along the way it
+  mostly moves by a box it overlaps across that way by no more than 320 units (a gantry's post, 283 wide; a pit wall's end, about 200; a
+  corner the road's edge brushes), is pushed aside past it, to its nearer side. Blocked across its way it slides along the box as the
+  game has it (pushed to the nearer side there, a car running past a post beside it was pushed back, frame after frame).
+- **Start gantries built to the road** (RaceTrackBuilder.cs `BuiltGantry`): the retail gantry is one length, 10.5 cells post to post, and
+  over the 9-cell roads its posts stood 0-1.2 cells beyond the kerbs -- under the race car's half width (1.24 cells). Where either post
+  would stand nearer its kerb than 1.75 cells, the gantry is built to the road instead: RaceTrackRaisedBody's gantry (as the raised roads
+  have), as tall as the retail one, the frame drawn only and each post a solid box of an empty body. Nine tracks have one now: Desert,
+  both Citadel tracks, Mosquibees, Celebration, Sendell's Well, the old moon, Polar Island and the Emperor's palace. (Its chequered beam
+  is capped at 30 squares: the 20-cell gantries over the pit lanes would have passed the engine's 550 points.)
+- **The Emerald Moon's edge zone** (RaceTrackScenes.cs `CoverEdges`): a zone's start along the edge is also its arrival's other
+  coordinate, and the engine reads 512 and 31,744 there as the marks of the other edges' zones (OBJECT.CPP `GereZoneChangeCube`). Scene
+  230's north zone happened to start at x 512, so it waited for the car to leave eastwards too and never took it. A start on either
+  mark is now moved a unit.
+
+Checked by building all 18 tracks fresh with the last commit's code and with these changes: only the nine gantried islands' ILE and OBL
+and SCENE.HQR changed (28 of 47 files the same). Then the 72 races again: every one finished, and no car stood still. The reset fired 12
+times before a race's end, at 6 places:
+
+- off the racing line (the test pilot 1.5 cells to its left): the town circuit's narrow street, where a building's wall is the road's
+  edge (2); the start of Celebration Island's raised road (1); Polar Island (1);
+- on the racing line with the faster cars: Sendell's Well with the suggested setup (1), and Wannies Island at cells (538, 488) with the
+  hot car (2);
+- **on the racing line with every car, still to fix: Wannies Island, lap point 384 of its raised road (cells 464, 562, height 7,113)**,
+  where the car is held against the left rail (base 2, hot 2, suggested setup 1). It used to cost about 10 s
+  a lap there (a 35.6 s lap against 25); the reset now gets the car out in 3 s.

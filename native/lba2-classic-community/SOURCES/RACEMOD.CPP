@@ -5142,6 +5142,51 @@ static void FallenBelow(S32 now) {
     s_rescue = 1;
 }
 
+// EXTFUNC.CPP GlanceAside: how far across a decor box the race car may overlap it and still be pushed aside past it rather than stopped
+// (0: the game's own collision) -- Twinsen driving, in a race-track mode. A gantry's post (283 wide), a pit wall's end (about 200) and a
+// corner the road's edge brushes are under it; a wall met square on is not.
+#define RACE_GLANCE 320
+S32 RaceMod_Glance(void) {
+    return RaceMod_Active() && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR ? RACE_GLANCE : 0;
+}
+
+// A car held where it is -- against a wall, a post, a building's corner -- with the throttle down: the wheels turn, the speed shows, the
+// car goes nowhere. A driver can back out, but once it has gone no further than RACE_STUCK_REACH in RACE_STUCK_MS while he drives on, it
+// is put back on the road behind (Rescue), as from the sea. (The user, 2026-10-16: "add the stuck car reset", after the stress test found
+// cars held off the racing line by Otringal's pit wall, the start gantries' posts on Celebration Island and the old moon and a building's
+// corner on Citadel Island's town circuit -- the test pilot, which never reverses, stood there for the rest of the race.) Not while the
+// car is held on purpose (the grid, a hit, a bite: RaceMod_Held) or skids, nor in a jump's flight, a loop, the super jet-pack's flight,
+// on the roulette wheel's drop or in a fall. Driving on: the throttle down, or the car's own speed still up (held against a thing the
+// car keeps its speed -- 70-90 km/h on the display -- and the test pilot, which drives by that speed, let go of the throttle coming up
+// to the old moon's gap loop and stood at its gantry's post for the rest of the race).
+#define RACE_STUCK_MS 3000
+#define RACE_STUCK_SPEED 1000
+#define RACE_STUCK_REACH 512.0
+static S32 s_stuckSince = 0;
+static double s_stuckX = 0, s_stuckY = 0, s_stuckZ = 0;
+static void StuckCar(S32 now) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    if (!s_rescueOn || !Guide() || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || (!(Input & I_UP) && abs(ListBuggy[0].Speed) < RACE_STUCK_SPEED)
+            || RaceMod_Held() || now < s_skidUntil || now < s_jetUntil || s_flying >= 0 || s_arcOn >= 0 || s_loopOn >= 0
+            || s_loopState != LOOP_NONE || s_rescue || s_rescueArrive >= 0 || s_safeIndex < 0 || NewCube != -1
+            || (hero->WorkFlags & FALLING) || s_wheel.DropOn) { s_stuckSince = 0; return; }
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0, wy = hero->Obj.Y;
+    const double dx = wx - s_stuckX, dy = wy - s_stuckY, dz = wz - s_stuckZ;
+    if (!s_stuckSince || dx * dx + dy * dy + dz * dz > RACE_STUCK_REACH * RACE_STUCK_REACH) {
+        s_stuckSince = now; s_stuckX = wx; s_stuckY = wy; s_stuckZ = wz;
+        return;
+    }
+    if (now - s_stuckSince < RACE_STUCK_MS) return;
+    // (and what held it, the last decor the car ran into -- EXTFUNC.CPP -- for a track's builder to look at)
+    extern S32 HeroDecorHit, HeroDecorHitAt;
+    const T_DECORS *held = HeroDecorHit >= 0 && HeroDecorHit < NbObjDecors && now - HeroDecorHitAt < 1000 ? &ListDecors[HeroDecorHit] : NULL;
+    if (held) Log_Info("[racemod] stuck at (%.0f,%.0f,%.0f) for %.1f s driving on: back on the road (the last decor run into: %d, body %d, box %d..%d, %d..%d, %d..%d in the cube)",
+                       wx, wy, wz, (now - s_stuckSince) / 1000.0, (int)HeroDecorHit, (int)(held->Body & 0xFFFF), (int)held->XMin, (int)held->XMax, (int)held->YMin, (int)held->YMax, (int)held->ZMin, (int)held->ZMax);
+    else Log_Info("[racemod] stuck at (%.0f,%.0f,%.0f) for %.1f s driving on: back on the road", wx, wy, wz, (now - s_stuckSince) / 1000.0);
+    s_stuckSince = 0;
+    s_rescue = 1;
+}
+
 // ---- power-ups ---------------------------------------------------------------------------------------------------------------
 // A mushroom of this scene: its actor (-1 not here) -- the scene's copy, standing where it does (its height kept the first time it is
 // seen, as it is moved out of sight while gone).
@@ -8010,6 +8055,10 @@ void RaceMod_Frame(void) {
         }
     if (Comportement == C_BUGGY) TrackSafePlace();
     FallenBelow(TimerRefHR);
+    StuckCar(TimerRefHR);
+    // (the car's collision box, once a run: what the scenery's clearances are for -- the gantries' posts, BuiltGantry)
+    { static int boxed = 0; const T_OBJET *h = &ListObjet[NUM_PERSO];
+      if (!boxed && Comportement == C_BUGGY) { boxed = 1; Log_Info("[racemod] the car's box: x %d..%d, y %d..%d, z %d..%d", (int)h->XMin, (int)h->XMax, (int)h->YMin, (int)h->YMax, (int)h->ZMin, (int)h->ZMax); } }
     if (s_rescue) { s_rescue = 0; Rescue(); }
     RescueArrive();
     // A raised road winds round itself in the air: the classic camera, which stands still until the hero leaves the screen, would watch
@@ -8851,7 +8900,7 @@ static void ResetTrack(void) {
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0; s_railHeld = 0; s_railSight = s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;
     s_jumpLo = 0.6; s_jumpHi = 4.0; s_jumpRate = 0; s_jumpFrac = 0; s_jumpOver = 0;
     s_autoIndex = -1;
-    s_faced = 0; s_safeIndex = -1; s_safeScene = -1; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;
+    s_faced = 0; s_stuckSince = 0; s_safeIndex = -1; s_safeScene = -1; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0; s_hinted = -1;
     s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     ListVarGame[209] = 0;

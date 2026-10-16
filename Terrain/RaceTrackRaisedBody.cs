@@ -236,7 +236,9 @@ internal static class RaceTrackRaisedBody
         foreach (var side in new[] { -1f, 1f })
             Box(across * (side * (float)half), across * post, along * post, -(float)Thickness, (float)clear, postColour, 70);
         // the beam: its two faces in squares, black and white, two rows of them
-        var columns = Math.Max(2, (int)Math.Round(2 * reach / (beam / 2)));
+        // (16 points a column, the posts and the ends 48 more: at most 30 columns keeps the body within the engine's 550 -- a gantry built to
+        // a road with a pit lane beside it, 20 cells across, would have had 36, its squares longer instead)
+        var columns = Math.Clamp((int)Math.Round(2 * reach / (beam / 2)), 2, 30);
         float y0 = (float)clear, y1 = (float)(clear + beam), mid = (float)(clear + beam / 2);
         foreach (var face in new[] { -1f, 1f })
             for (var k = 0; k < columns; k++)
