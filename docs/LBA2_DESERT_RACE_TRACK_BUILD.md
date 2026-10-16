@@ -4153,6 +4153,12 @@ too hard to see".
 ![The U-turn at the ramp's foot](racetrack/cxtower/door_a_u_turn.png)
 ![Up to door C](racetrack/cxtower/door_c_climb.png)
 
+## The Temple of Bú: the Halloween race (2026-10-16)
+
+LBA1's Temple of Bú ported as an island of its own, in LBA1's own colours, and a Halloween race on it: through its rooms on a raised road with
+doorways cut through the walls, down a spiral through the dark to its crypt and back up. There are jack-o'-lanterns, gravestones, cauldrons,
+witches throwing fire balls, ghosts and bats, and mini pumpkins for mushrooms. See `docs/LBA2_TEMPLE_OF_BU.md`.
+
 ## The game has the keyboard from the start (2026-10-12)
 
 The user: "After hitting play sometimes we have to manually click the game area to get it to respond to input, let's see if we can remove

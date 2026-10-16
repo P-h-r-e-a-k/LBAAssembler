@@ -277,6 +277,11 @@ int lba2_renderer_load_island(const char *name)
     const S32 actorIsland = islandIndex;
     if (islandIndex < 0 && !strcasecmp(name, "cxtower")) islandIndex = 9;
     if (islandIndex < 0 && !strcasecmp(name, "palace")) islandIndex = 4;
+    // (TEMPLE, the Temple of Bú ported from LBA1: raced as Otringal's island 4, but in a palette and under a sky of its own -- RESS_XPL0 + 13
+    // and RESS_SKYSEA0 + 13, the slots its install fills; the race-track mod's island_palette= / island_sky= in the game)
+    const S32 temple = islandIndex < 0 && !strcasecmp(name, "temple");
+    if (temple) islandIndex = 4;
+    IslandPaletteOverride = temple ? RESS_XPL0 + 13 : -1;
     // (an island of LBA Assembler's maps -- File > New map: the game folder's ISLANDS.TXT says whose look it has, "island <file> <number>")
     if (islandIndex < 0) {
         char listPath[ADELINE_MAX_PATH];
@@ -292,6 +297,7 @@ int lba2_renderer_load_island(const char *name)
     }
 
     S32 skyResource = islandIndex >= 0 ? RESS_SKYSEA0 + islandIndex : RESS_SKYSEA0;
+    if (temple) skyResource = RESS_SKYSEA0 + 13;
     if (!strcasecmp(name, "citabau")) skyResource = RESS_SKYSEA00; // interior-only ambience, no Island slot
     if (!Load_HQR(path, SkySeaTexture, skyResource)) return 0;
 

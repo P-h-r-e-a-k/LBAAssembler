@@ -301,6 +301,8 @@ S32 RaceMod_StatueShown(S32 risen);
 S32 RaceMod_Rescue(void);
 S32 RaceMod_CarHit(void);
 const char *RaceMod_IslandFile(S32 island);
+S32 RaceMod_IslandPalette(S32 island);
+S32 RaceMod_IslandSky(S32 island);
 void RaceMod_Island(S32 island);
 double RaceMod_SpeedFactor(void);
 S32 RaceMod_Takeover(void);

@@ -116,6 +116,15 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Of(RaceTrackCharacterCars.Survivor, "The survivor", 1.8, 1.02, 0.97),
     };
 
+    // The Temple of Bú's Halloween race (2026-10-16): the Dark Monk himself (the one to beat), Ker'aooc the healer in her cauldron -- the
+    // witch of the night -- and Tabata the wizard on his spell book
+    public static readonly List<RaceDriver> Temple = new()
+    {
+        Of(RaceTrackCharacterCars.DarkMonk, "The Dark Monk", 0, 1.0, 1.0, main: true),
+        Of(RaceTrackCharacterCars.Keraooc, "Ker'aooc's cauldron", -1.2, 0.99, 1.02),
+        Of(RaceTrackCharacterCars.Tabata, "Tabata's spell book", 1.2, 1.02, 0.97),
+    };
+
     // The Emperor's palace (2026-10-12): racing out of the palace ahead of the Dark Monk to his teleporter -- Stan in his time machine (the
     // one to beat), the pighead with the broom in his road sweeper (CharactersForTrack.txt) and the Emperor himself, fleeing his own palace,
     // a little to either side of the road's middle: the rooms' doors are two bricks wide. (The user's list has the palace's two-headed

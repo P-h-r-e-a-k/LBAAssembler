@@ -115,12 +115,12 @@ internal sealed class IslandFile
     // (DECORS.CPP).
     public List<byte[]> GroundPages { get; } = new();
     public List<byte[]> ObjectPages { get; } = new();
-    public const int GroundPageShift = 10, MaxGroundPages = 8, MaxObjectPages = 16, DecorPageShift = 18, PagesMagic = 0x45474150;
+    public const int GroundPageShift = 10, MaxGroundPages = 8, MaxObjectPages = 32, DecorPageShift = 18, PagesMagic = 0x45474150;
     private bool parsedPages;
 
     // An object texture page (0: ObjectTexture), and a decor's.
     public byte[] ObjectPage(int page) => page > 0 && page <= ObjectPages.Count ? ObjectPages[page - 1] : ObjectTexture;
-    public static int ObjectPageOf(IslandDecor decor) => (decor.Body >> DecorPageShift) & 15;
+    public static int ObjectPageOf(IslandDecor decor) => (decor.Body >> DecorPageShift) & (MaxObjectPages - 1);
 
     // A ground triangle's texture as its page and its definition in the cube's list. With more ground pages a definition has an eleventh
     // bit, the triangle's Wide (the engine's Dummy: 2026-10-06, Polar Island at twice LBA1's size had cubes of road needing more than

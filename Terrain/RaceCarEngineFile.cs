@@ -53,7 +53,12 @@ internal static class RaceCarEngineFile
         // Celebration Island's file with the statue, or (the lava lake's track) the one before it rises, whatever the game's own variable says
         if (info is not null && RaceTrackIsland.ByName(info.Island) is { } raced && (raced.Statue || raced.OtherFile)) text.Append($"statue={(raced.Statue ? 1 : 0)}\n");
         // an island drawn from a file the game never loads (the old moon's MOON.ILE, as island 3), and the lap's vertical loops
-        if (info is not null && RaceTrackIsland.ByName(info.Island) is { RaceFile: { } raceFile } fileIsland) text.Append($"island_file={fileIsland.IslandByte} {raceFile}\n");
+        if (info is not null && RaceTrackIsland.ByName(info.Island) is { RaceFile: { } raceFile } fileIsland)
+        {
+            text.Append($"island_file={fileIsland.IslandByte} {raceFile}\n");
+            // (and its own palette and sky: the Temple of Bú's)
+            if (fileIsland.Look is { } look) text.Append($"island_palette={look.Palette}\nisland_sky={look.Sky}\n");
+        }
         foreach (var loop in track?.Loops ?? new()) text.Append($"loop={string.Join(' ', loop)}\n");
         // (the rail holding the car on the road even where it lies on the ground: the Emperor's palace's)
         if (raisedFile is not null && info is not null && RaceTrackIsland.ByName(info.Island) is { RailHeld: true }) text.Append("rail_held=1\n");
@@ -104,6 +109,7 @@ internal static class RaceCarEngineFile
         foreach (var monster in track?.GasMonsters ?? new()) text.Append($"gasmonster={string.Join(' ', monster)}\n");
         // the flying gas monsters, to and fro beside the road, spitting fire balls (Island CX's hall)
         foreach (var flyer in track?.Flyers ?? new()) text.Append($"flyer={string.Join(' ', flyer)}\n");
+        foreach (var spook in track?.Spooks ?? new()) text.Append($"spook={string.Join(' ', spook)}\n");
         // the people in the cars' way, stepping out at them, striking and throwing (the Emperor's palace's)
         foreach (var guard in track?.Guards ?? new()) text.Append($"guard={string.Join(' ', guard)}\n");
         if (track?.Guards is { Count: > 0 }) text.Append($"guard_size={(int)Math.Round(RaceTrackGuards.Size * 100)}\n");

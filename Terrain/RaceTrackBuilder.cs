@@ -257,6 +257,11 @@ internal sealed class RaceTrackPlan
     // Crystals (RaceTrackCrystals): the island's own crystal clusters made big, standing by the road; and arches of crystal over it.
     public CrystalRun[]? Crystals { get; set; }
     public CrystalArchRun[]? CrystalArches { get; set; }
+    // The Temple of Bú's cells the road passes through (TempleLayout's x, layer, z): doorways cut through its walls where the road goes
+    // (TempleTrack builds the island without them).
+    public int[][]? TempleCuts { get; set; }
+    // Halloween (Temple.TempleHalloween): the decor about the road, the spooks that fly over it, the mushrooms made pumpkins.
+    public LBAAssembler.Terrain.Temple.HalloweenRun? Halloween { get; set; }
     public bool Planned => Heights is { Length: > 0 } h && h.Length == Points.Length;
 
     // The plan's own road widths and sea clearance, onto the options a build uses.
@@ -644,6 +649,11 @@ internal sealed class RaceTrackReport
     public List<double[]> Teleports { get; } = new();
     // The giant frogs the lap drives through (RaceTrackFrog)
     public List<FrogInfo> Frogs { get; } = new();
+    // The spooks (Temple.TempleHalloween: RACEMOD.CPP spook=): what each is, its flags, its height, its way (island cells), its body once
+    // in BODY.HQR; and whether the power-ups' mushrooms are mini pumpkins
+    public sealed record Spook(string Kind, int Flags, double Y, List<(double X, double Z)> Way, int Body = -1);
+    public List<Spook> Spooks { get; } = new();
+    public bool Pumpkins { get; set; }
     // The raised road's branches (RaceTrackPlan.Branches) as planned -- their points in island cells, the lap's points they leave from and
     // come back onto -- and, once placed (PlaceBranch), each one's first and last point in Raised and the lap's points in Raised it leaves
     // from and comes back onto (RACEMOD.CPP raised_branch=); the lap's own points in Raised, the branches after them (raised_lap=).
@@ -1088,6 +1098,16 @@ internal static class RaceTrackBuilder
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
         report.WasGround = (x, z) => natural.Drawn(x, z);
         PlaceStructures(island, main, crossings, startIndex, options, report, planned);
+        // (Halloween: its decor about the road; its spooks, whose bodies go into BODY.HQR when the build finishes; its pumpkins)
+        if (plan.Halloween is { } halloween)
+        {
+            LBAAssembler.Terrain.Temple.TempleHalloween.PlaceDecor(island, plan, options, report);
+            foreach (var s in halloween.Spooks ?? Array.Empty<LBAAssembler.Terrain.Temple.SpookRun>())
+                if (s.Way.Length >= 1)
+                    report.Spooks.Add(new RaceTrackReport.Spook(s.Kind, s.Flags, s.Y, s.Way.Where(p => p.Length >= 2).Select(p => (p[0] + plan.OriginCellX, p[1] + plan.OriginCellZ)).ToList()));
+            report.Pumpkins = halloween.Pumpkins;
+            if (report.Spooks.Count > 0) report.Notes.Add($"the spooks: {report.Spooks.Count} flying over the lap ({string.Join(", ", report.Spooks.GroupBy(s => s.Kind).Select(g => $"{g.Count()} {g.Key}"))})");
+        }
         Relight(island, index, options);
         if (planned) SeaEverywhere(island, main, report);
         return report;
@@ -5282,7 +5302,8 @@ internal static class RaceTrackBuilder
         if (loop && startIndex >= 0)
         {
             var at = World(startIndex);
-            var gantry = RaceTrackRaisedBody.Gantry(new System.Numerics.Vector3((float)-r.Tz[startIndex], 0, (float)r.Tx[startIndex]), Half(startIndex), RaisedGantryClear, RaisedGantryBeam);
+            var gantry = RaceTrackRaisedBody.Gantry(new System.Numerics.Vector3((float)-r.Tz[startIndex], 0, (float)r.Tx[startIndex]), Half(startIndex), RaisedGantryClear, RaisedGantryBeam,
+                r.Themes?[startIndex]);
             if (Add(gantry, Math.Round(at.X), Math.Round(at.Y), Math.Round(at.Z), -16, -(int)RaceTrackRaisedBody.Thickness - 80, -16, 16, 0, 16, untouchable: true))
                 report.Placed.Add($"start line: a gantry on the raised road at cell ({r.X[startIndex]:0.0}, {r.Z[startIndex]:0.0}), height {r.H[startIndex]:0}, {RaisedGantryClear + RaisedGantryBeam:0} to its top");
             else left++;

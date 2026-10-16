@@ -549,6 +549,8 @@ internal static class PolarStudy
         var name = Environment.GetEnvironmentVariable("VIEW_ISLAND") ?? "POLAR";   // (another island: VIEW_ISLAND=KNARTAS)
         var island = LBAAssembler.Terrain.IslandFile.Load(Path.Combine(game, name + ".ILE"));
         var y = LBAAssembler.Terrain.IslandOps.Altitude(island, x, z) ?? 0;
+        // (VIEW_Y=<height>: the point looked at that high -- an island whose objects stand over its ground, the Temple of Bú's)
+        if (Environment.GetEnvironmentVariable("VIEW_Y") is { Length: > 0 } viewY) y = double.Parse(viewY);
         using var lib = new RendererLibraryApi(dll);
         if (!lib.IsLoaded || !lib.SetDataRoot(game) || !lib.Initialize()) { Console.WriteLine("native init failed"); return 2; }
         if (lib.LoadIsland(name.ToLowerInvariant()) == 0) { Console.WriteLine("LoadIsland failed"); return 2; }

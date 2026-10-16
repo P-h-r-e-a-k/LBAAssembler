@@ -397,6 +397,8 @@ void InitGrilleExt(U32 numcube) {
         // a race-track mod's track on an island file the game never loads (MOON.ILE, the Emerald Moon's older copy): raced as this
         // island's, with its sky and palette (RACEMOD.CPP RaceMod_IslandFile)
         if (const char *raced = RaceMod_IslandFile(Island)) strcpy(IslandName, raced);
+        // (and under its own sky, when the race-track mod gives it one: island_sky=)
+        if (RaceMod_IslandSky(Island) >= 0) numskysea = RaceMod_IslandSky(Island);
     }
     // (a scene drawn on an island file of its own: ISLANDS.TXT)
     if (const char *own = SceneIslandFile(NumCube)) strcpy(IslandName, own);

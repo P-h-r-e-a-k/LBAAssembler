@@ -355,6 +355,29 @@ internal sealed record RaceTrackIsland(
         Title = "Island CX: round the island under its cannons, down through a door and twice round the halls under the gas",
     };
 
+    // The Temple of Bú (the user, 2026-10-16: "Port the temple of Bu from LBA1 into LBA2 as a separate island ... generate a Halloween inspired
+    // race track for it. This will be a separate release for a Halloween special track"), LBA1's three temple scenes ported as an island of
+    // their own (Terrain/Temple: TEMPLE.ILE and TEMPLE.OBL, made by the build from the LBA1 folder in the settings -- Created; LBA1's colours
+    // in a palette of its own, RESS 40, under a night sky, RESS 24: Look), raced as Otringal's island 4 drawn from the temple's file (RaceFile),
+    // in scenes of its own from 301, a cube of the route each (TempleTrack). A lap round the temple on a raised road a little over its floors,
+    // through doorways cut where it passes the walls: west along the long corridor, through the first floor's south side and its lower hall,
+    // out over its open south edge and down a spiral through the dark to the crypt, through the crypt's rooms -- the start on the straight
+    // through its west room -- and up a spiral to the corridor. The plan: tools/RaceTrackPlan/temple_design.py.
+    public static readonly RaceTrackIsland Temple = new("The Temple of Bú", LBAAssembler.Terrain.Temple.TempleIsland.IleFile, LBAAssembler.Terrain.Temple.TempleIsland.OblFile,
+        LBAAssembler.Terrain.Temple.TempleTrack.IslandByte, LBAAssembler.Terrain.Temple.TempleTrack.FirstScene, LBAAssembler.Terrain.Temple.TempleTrack.LastScene,
+        LBAAssembler.Terrain.Temple.TempleIsland.PaletteEntry, LBAAssembler.Terrain.Temple.TempleTrack.PlanResource, null)
+    {
+        Created = true, RaceFile = "temple", Look = (LBAAssembler.Terrain.Temple.TempleIsland.PaletteEntry, LBAAssembler.Terrain.Temple.TempleIsland.SkyEntry),
+        NoHolomap = true, RailHeld = true, OwnScenes = true, FromLba1 = true, Roster = RaceDriver.Temple,
+        Title = "The Temple of Bú: the Halloween race through LBA1's temple, down to its crypt and back (LBA1's scenes, made by the build)",
+    };
+
+    // An island drawn in a palette and under a sky of its own (RESS.HQR entries: the car file's island_palette=, island_sky=) -- the Temple of
+    // Bú's, LBA1's colours.
+    public (int Palette, int Sky)? Look { get; init; }
+    // The build makes the island from LBA1's own scenes (the LBA1 folder in the settings): the Temple of Bú.
+    public bool FromLba1 { get; init; }
+
     // Guns of the island's own scene the race-track mode fires at the cars (gunner= with gunner_hunt=): their entity, kept in the scene with
     // their scripts emptied, and how far they reach (cells) -- Island CX's cannons.
     public (int Entity, double Reach)? HuntingGuns { get; init; }
@@ -368,7 +391,7 @@ internal sealed record RaceTrackIsland(
     // Emperor's palace's road along the hilltop, 60 over it, let cars drive off onto the rocks.
     public bool RailHeld { get; init; }
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace, Wannies, CxTower };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace, Wannies, CxTower, Temple };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

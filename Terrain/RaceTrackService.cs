@@ -160,6 +160,9 @@ internal static class RaceTrackService
         // Flyers: the flying gas monsters (RaceTrackFlyers; RACEMOD.CPP flyer=), each [scene, its actor, its height, then its way's points x and
         // z (island units)] -- Island CX's hall, since 2026-10-15
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Flyers = null,
+        // Spooks: the Halloween race's witches, ghosts and bats (Temple.TempleHalloween; RACEMOD.CPP spook=), each [its body, its flags, its
+        // height, then its way's points x and z (island units)] -- the Temple of Bú's, since 2026-10-16
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Spooks = null,
         // RaisedLap: the lap's own points in Raised, the branches after them; RaisedBranches: each [its first and last point in Raised, the
         // lap's points there it leaves from and comes back onto] (RACEMOD.CPP raised_lap=, raised_branch=), since 2026-10-14
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? RaisedLap = null,
@@ -320,7 +323,8 @@ internal static class RaceTrackService
         var addPolar = tracks.Any(t => t.Options.Island.Dream) && !PolarInOriginals(gameDirectory);
         var setup = 0.5 + (addPolar ? PolarAddSeconds : 0) + (tracks.Any(t => t.Options.Island == RaceTrackIsland.Sendell) ? 0.4 : 0)
                     + (tracks.Any(t => t.Options.Island == RaceTrackIsland.Palace) ? PalaceAddSeconds : 0)
-                    + (tracks.Any(t => t.Options.Island == RaceTrackIsland.CxTower) ? CxTowerAddSeconds : 0);
+                    + (tracks.Any(t => t.Options.Island == RaceTrackIsland.CxTower) ? CxTowerAddSeconds : 0)
+                    + (tracks.Any(t => t.Options.Island == RaceTrackIsland.Temple) ? TempleAddSeconds : 0);
         var whole = setup + tracks.Sum(t => BuildSeconds(t.Options.Island));
         try
         {
@@ -354,6 +358,14 @@ internal static class RaceTrackService
                 progress?.Report(new((setup - 0.3) / whole, "Island CX: making the island, its halls one ring under the gas"));
                 made.AddRange(LBAAssembler.Terrain.ControlTower.CxTowerTrack.Install(gameDirectory, BackupSuffix));
             }
+            if (tracks.Any(t => t.Options.Island == RaceTrackIsland.Temple))
+            {
+                progress?.Report(new((setup - 0.3) / whole, "The Temple of Bú: making the island from LBA1's scenes, and its scenes"));
+                if (Lba1Problem("The Temple of Bú's track is built on LBA1's temple, which the build makes from LBA1's own scenes") is { } noLba1) throw new InvalidDataException(noLba1);
+                made.AddRange(LBAAssembler.Terrain.Temple.TempleTrack.Install(gameDirectory, Lba1Folder()));
+            }
+            // (one a build left or Tools made, with no Halloween race this time: as Tools makes it, without its road's doorways)
+            else if (LBAAssembler.Terrain.Temple.TempleIsland.IsInstalled(gameDirectory)) PlainTemple(gameDirectory);
 
             var session = new BuildSession();
             var log = new List<string>();
@@ -707,6 +719,8 @@ internal static class RaceTrackService
         log.AddRange(RaceTrackGasMonster.InstallPoses(gameDirectory, report));
         // ... and the giant frog the lap drives through
         log.AddRange(RaceTrackFrog.Install(gameDirectory, report));
+        // ... and Halloween's spooks and pumpkins
+        log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.Install(gameDirectory, report));
         return log;
     }
 
@@ -880,6 +894,7 @@ internal static class RaceTrackService
                     new[] { f[0], f[1], (int)Math.Round(report.Flyers[f[2]].Y) }
                         .Concat(report.Flyers[f[2]].Way.SelectMany(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512) })).ToArray()).ToList()
                 : null,
+            Spooks: report.Spooks.Count(s => s.Body >= 0) > 0 ? report.Spooks.Where(s => s.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line).ToList() : null,
             RaisedLap: raised && report.RaisedBranches.Count > 0 ? report.RaisedLap : null,
             RaisedBranches: raised && report.RaisedBranches.Count > 0 ? report.RaisedBranches.ToList() : null);
     }
@@ -962,11 +977,34 @@ internal static class RaceTrackService
     private const double PalaceAddSeconds = 3.5;
     // (and making Island CX's: the control tower's halls under it)
     private const double CxTowerAddSeconds = 2;
+    // (and the Temple of Bú's, from LBA1's scenes)
+    private const double TempleAddSeconds = 2;
     private static double BuildSeconds(RaceTrackIsland island) =>
         island == RaceTrackIsland.Desert ? 16 : island == RaceTrackIsland.Citadel ? 8.3 : island == RaceTrackIsland.Knartas ? 8.1 : island == RaceTrackIsland.Otringal ? 8.4
         : island == RaceTrackIsland.Polar ? 5.4 : island == RaceTrackIsland.Volcano ? 2.5 : island == RaceTrackIsland.Palace ? 6 : island == RaceTrackIsland.Sendell || island == RaceTrackIsland.Moon ? 0.8 : 1.4;
 
     private static string Lba1Folder() => Environment.GetEnvironmentVariable("LBA1_DIR") is { Length: > 0 } env ? env : EditorSettings.Current.Lba1Directory;
+
+    // The Temple of Bú as Tools makes it (no road, no doorways, no Halloween), from the LBA1 folder in the settings; without one, taken out.
+    // True when it is there.
+    private static bool PlainTemple(string gameDirectory)
+    {
+        var lba1 = Lba1Folder();
+        if (!LBAAssembler.Lba1.Lba1Game.IsInstalled(lba1)) { LBAAssembler.Terrain.Temple.TempleIsland.Remove(gameDirectory); return false; }
+        LBAAssembler.Terrain.Temple.TempleIsland.Add(lba1, gameDirectory);
+        return true;
+    }
+
+    // Why an island the build makes from LBA1's scenes (the Temple of Bú: `what` says so) can't be built, or null: there is no LBA1 game folder
+    // (File > Settings; LBA1_DIR for the command line).
+    public static string? Lba1Problem(string what)
+    {
+        var lba1 = Lba1Folder();
+        if (LBAAssembler.Lba1.Lba1Game.IsInstalled(lba1)) return null;
+        return $"{what}, so it needs the LBA1 game folder. " +
+               (string.IsNullOrWhiteSpace(lba1) ? "No LBA1 folder is set: choose it under File > Settings (the folder with LBA1's SCENE.HQR, LBA_GRI.HQR, LBA_BLL.HQR, LBA_BRK.HQR and RESS.HQR) and build again."
+                                                : $"The LBA1 folder in the settings ({lba1}) hasn't got LBA1's SCENE.HQR, LBA_GRI.HQR, LBA_BLL.HQR, LBA_BRK.HQR and RESS.HQR: choose the right folder under File > Settings and build again.");
+    }
 
     // Why Polar Island's track can't be built into the folder, or null: the folder hasn't got the island and there is no LBA1 game folder
     // (File > Settings; LBA1_DIR for the command line) to make it from. The window asks before it builds anything -- a build that found
@@ -1025,6 +1063,11 @@ internal static class RaceTrackService
         foreach (var f in back) File.Delete(Path.Combine(gameDirectory, f + BackupSuffix));
         // (an island the build made has no originals: it goes -- the Palace island, an island of its own too, made again without its track)
         var gone = SendellWell.Remove(gameDirectory) ? $" {SendellWell.IleFile} and {SendellWell.OblFile}, which the build made, are gone." : "";
+        // (the Temple of Bú's island, made from LBA1's scenes with the track's doorways cut: the island again as Tools makes it -- or gone, with no
+        // LBA1 folder to make it from)
+        if (LBAAssembler.Terrain.Temple.TempleIsland.IsInstalled(gameDirectory))
+            gone += PlainTemple(gameDirectory) ? $" {LBAAssembler.Terrain.Temple.TempleIsland.IleFile} is the Temple of Bú again, without its track."
+                                               : $" {LBAAssembler.Terrain.Temple.TempleIsland.IleFile} and {LBAAssembler.Terrain.Temple.TempleIsland.OblFile}, which the build made, are gone (no LBA1 folder to make them again).";
         if (File.Exists(Path.Combine(gameDirectory, LBAAssembler.Terrain.Palace.PalaceIsland.IleFile)))
         {
             LBAAssembler.Terrain.Palace.PalaceIsland.Build(gameDirectory, gameDirectory);

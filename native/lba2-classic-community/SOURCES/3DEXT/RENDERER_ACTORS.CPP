@@ -1417,6 +1417,9 @@ int RendererLoadInteriorScene(int numscene)
     // shading/colours (confirmed live, 2026-09-22: an actor with a hand-authored "on fire" colour scheme rendered
     // washed out instead). Same class of bug as this function's own RazListPartFlow/CacheNativeAnimsForScene fixes
     // below: something the full game boot/scene-transition path sets up that this embedding must redo explicitly.
+    // (an inside scene in citabau's, not in the palette of an island of its own that the view showed before: the Temple of Bú's)
+    extern S32 IslandPaletteOverride;
+    IslandPaletteOverride = -1;
     ChoicePalette();
 
     // Actor animations may start particle flows while the objects initialise; nothing here ever runs or draws them, so free

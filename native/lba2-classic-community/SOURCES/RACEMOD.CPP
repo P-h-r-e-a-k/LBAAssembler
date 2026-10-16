@@ -644,6 +644,9 @@ static int s_rescueOn = 1;                 // rescue=: a car in the lava or the 
 // game never loads (MOON.ILE, the Emerald Moon's older copy, raced as island 3's)
 static int s_fileIsland = -1;
 static char s_fileName[32] = "";
+// island_palette=<RESS entry>, island_sky=<RESS entry>: and drawn in that palette (an XPL) under that sky -- an island of LBA Assembler's
+// with a look of its own (the Temple of Bú, ported from LBA1: RESS_XPL0 + 13 and RESS_SKYSEA0 + 13, slots the retail file leaves empty)
+static int s_filePalette = -1, s_fileSky = -1;
 // Vertical loops (loop=, RaceMod_Loop): a ring standing on the road, its foot at the lap's point there (X, Y, Z, cube-local) and its plane
 // along the lap's way (DirX, DirZ, a unit vector). R: from the ring's middle to its road surface. Shift: how far across the car comes
 // down from where it went in (+ to the right of the way, as the builder's lanes are: in on the left, out on the right, past the ring's
@@ -886,7 +889,7 @@ typedef struct {
     double Hunt; int Who; double LastX, LastY, LastZ; S32 LastAt;       // (a hunting gun: its reach; its car this burst, where and when last seen)
 } T_RACE_GUNNER;
 // (what the race-track mode flies: a gunner's bullet, a hunting gun's missile, a flying gas monster's fire ball -- Projectiles)
-enum { SHOT_BULLET, SHOT_MISSILE, SHOT_FIREBALL };
+enum { SHOT_BULLET, SHOT_MISSILE, SHOT_FIREBALL, SHOT_WITCHFIRE };
 typedef struct { int On, Extra, Owner, Kind; S16 Sprite, Body; double FromX, FromY, FromZ, ToX, ToY, ToZ; S32 T0, Dur; } T_RACE_BULLET;
 static T_RACE_GUNNER s_gunners[RACE_MAX_GUNNERS];
 static int s_nbGunners = 0;
@@ -1033,6 +1036,31 @@ typedef struct {
 } T_RACE_FLYER;
 static T_RACE_FLYER s_flyers[RACE_MAX_FLYERS];
 static int s_nbFlyers = 0;
+// Spooks (spook=<body> <flags> <height> <x> <z> <x> <z> ..., island units: a body of BODY.HQR, the height it flies at, its way): the Temple
+// of Bú's witches on their broomsticks, its ghosts and its bats (the user, 2026-10-16: "Add lots of typical Halloween decor, pumpkins,
+// witches, ghosts etc"), which the race-track mode flies and draws itself, as it draws the giant frog (RaceMod_DrawBackdrop: depth written,
+// the cars depth-tested against them) -- no actors, so no limit of a scene's, and no animations to fit their bodies: along the way to and
+// fro (flags 2: round and round it, its last point back to its first), bobbing, turned the way they fly; flags 1: now and then one stops
+// over the road and throws a fire ball at a car below it, as a flying gas monster spits one (SpookThrow).
+#define RACE_MAX_SPOOKS 48
+#define RACE_SPOOK_POINTS 40
+#define RACE_SPOOK_SPEED 1700.0            // units a second along its way
+#define RACE_SPOOK_BOB 260.0               // up and down this much, ...
+#define RACE_SPOOK_BOB_MS 1800.0           // ... once in this long
+#define RACE_SPOOK_EVERY 4200              // ms between a witch's throws, at the least
+#define RACE_SPOOK_THROW 250               // ms she hangs there before and after (a fast car is out of her reach after more)
+#define RACE_SPOOK_LONGEST 2.4             // (s: she doesn't throw at a car she couldn't hit sooner than this)
+#define RACE_SPOOK_BALL 150                // her fire ball: a 20 ms frame's way (7,500 units a second), faster than a gas monster's ...
+#define RACE_SPOOK_FAR 8000.0              // ... at a car no further than this (beyond, with a fast car's lead, it couldn't reach it in time)
+#define RACE_SPOOK_HAND 500                // the ball leaves her hand this far in front of her middle ...
+#define RACE_SPOOK_HAND_UP 400             // ... and this high over it
+typedef struct {
+    int Body, Flags, Np; double Y, PX[RACE_SPOOK_POINTS], PZ[RACE_SPOOK_POINTS], Len, S, X, Z; int Dir; S32 Beta;
+    int Throwing, Thrown, Target, Ready; S32 T0, Next;
+    T_OBJ_3D Obj;
+} T_RACE_SPOOK;
+static T_RACE_SPOOK s_spooks[RACE_MAX_SPOOKS];
+static int s_nbSpooks = 0;
 static S32 s_bittenUntil[RACE_MAX_OPPONENTS + 1];  // a car just bitten is let be till then -- a monster beside it doesn't bite it again
 // The giant frog (frog=: see "the giant frog" further on)
 #define RACE_FROG_CLEAR 600                // ms the mouth has to stay open once a car is in it: past the jaw, its hinge 7 cells in --
@@ -2368,6 +2396,8 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "island_file")) {
             if (sscanf(v, "%d %31s", &s_fileIsland, s_fileName) != 2) s_fileIsland = -1;
         }
+        else if (!strcmp(key, "island_palette")) s_filePalette = atoi(v);
+        else if (!strcmp(key, "island_sky")) s_fileSky = atoi(v);
         else if (!strcmp(key, "loop")) {
             T_RACE_LOOP *l = &s_loops[s_nbLoops];
             double dx, dz, gap, band = 1.3 * 512, camera = 1;
@@ -2424,6 +2454,22 @@ static void Load(const char *path, int carOnly = 0) {
                 while (f->Np < RACE_FLYER_POINTS && sscanf(rest, "%d %d%n", &x, &z, &n2) == 2) { f->PX[f->Np] = x; f->PZ[f->Np] = z; f->Np++; rest += n2; }
                 for (int k = 1; k < f->Np; k++) f->Len += sqrt((f->PX[k] - f->PX[k - 1]) * (f->PX[k] - f->PX[k - 1]) + (f->PZ[k] - f->PZ[k - 1]) * (f->PZ[k] - f->PZ[k - 1]));
                 if (f->Np >= 1) { f->X = f->PX[0]; f->Z = f->PZ[0]; f->S = (s_nbFlyers * 0.37 - floor(s_nbFlyers * 0.37)) * f->Len; s_nbFlyers++; }
+            }
+        }
+        else if (!strcmp(key, "spook")) {
+            int body, flags, y, used = 0;
+            if (s_nbSpooks < RACE_MAX_SPOOKS && sscanf(v, "%d %d %d%n", &body, &flags, &y, &used) == 3 && body >= 0) {
+                T_RACE_SPOOK *sp = &s_spooks[s_nbSpooks];
+                memset(sp, 0, sizeof(*sp));
+                sp->Body = body; sp->Flags = flags; sp->Y = y; sp->Dir = 1;
+                const char *rest = v + used;
+                int x, z, n2 = 0;
+                while (sp->Np < RACE_SPOOK_POINTS && sscanf(rest, "%d %d%n", &x, &z, &n2) == 2) { sp->PX[sp->Np] = x; sp->PZ[sp->Np] = z; sp->Np++; rest += n2; }
+                for (int k = 1; k <= sp->Np - ((flags & 2) ? 0 : 1); k++) {
+                    const int a = k - 1, b = k % sp->Np;
+                    sp->Len += sqrt((sp->PX[b] - sp->PX[a]) * (sp->PX[b] - sp->PX[a]) + (sp->PZ[b] - sp->PZ[a]) * (sp->PZ[b] - sp->PZ[a]));
+                }
+                if (sp->Np >= 1) { sp->X = sp->PX[0]; sp->Z = sp->PZ[0]; sp->S = (s_nbSpooks * 0.61 - floor(s_nbSpooks * 0.61)) * sp->Len; s_nbSpooks++; }
             }
         }
         else if (!strcmp(key, "gasmonster")) {
@@ -3719,6 +3765,8 @@ static int s_hinted = -1;
 const char *RaceMod_IslandFile(S32 island) {
     return RaceMod_Active() && s_fileName[0] && s_fileIsland == island ? s_fileName : NULL;
 }
+S32 RaceMod_IslandPalette(S32 island) { return RaceMod_IslandFile(island) && s_filePalette >= 0 ? s_filePalette : -1; }
+S32 RaceMod_IslandSky(S32 island) { return RaceMod_IslandFile(island) && s_fileSky >= 0 ? s_fileSky : -1; }
 
 // The car turned to heading `beta`, pitched `phi` (radians, nose down positive) in its own frame, and yawed `psi` about its own up axis
 // (radians, to the left positive), all three at once. The engine turns a body (and an animation's step) by M = M(Alpha) M(Gamma) M(Beta)
@@ -4174,8 +4222,12 @@ static double FrogCap(int n, const T_RACE_OPPONENT *o, S32 now) {
 }
 
 // Drawn into the background (EXTFUNC.CPP AffGrilleExt, after the ground and the decor): the frog, posed, its depth written.
+static void DrawSpooks(void);
+
 void RaceMod_DrawBackdrop(void) {
-    if (!RaceMod_Active() || !s_frog.On || CubeMode != CUBE_EXTERIEUR) return;
+    if (!RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return;
+    DrawSpooks();
+    if (!s_frog.On) return;
     T_OBJ_3D *o = &s_frog.Obj;
     if (!s_frog.Ready) {
         if (!GivePtrBody(s_frog.Body)) { Log_Info("[racemod] frog: no body %d -- left out", (int)s_frog.Body); s_frog.On = 0; return; }
@@ -4202,6 +4254,38 @@ void RaceMod_DrawBackdrop(void) {
     UnsetClip();
     ObjectDisplay(o);
     SetCLUT(clut);
+}
+
+// The spooks (spook=), where the camera is: each body as the frog's is drawn -- its fog by its distance, depth written.
+static void DrawSpooks(void) {
+    const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
+    int drawn = 0;
+    for (int i = 0; i < s_nbSpooks; i++) {
+        T_RACE_SPOOK *sp = &s_spooks[i];
+        if (sp->Body < 0) continue;
+        T_OBJ_3D *o = &sp->Obj;
+        if (!sp->Ready) {
+            if (!GivePtrBody(sp->Body)) { Log_Info("[racemod] spook %d: no body %d -- left out", i, sp->Body); sp->Body = -1; continue; }
+            ObjectClear(o);
+            o->Body.Num = -1;
+            ObjectInitBody(o, (void *)(uintptr_t)(U32)sp->Body);
+            o->Texture = BufferTexture; o->NextTexture = BufferTexture;
+            sp->Ready = 1;
+        }
+        const double y = sp->Y + RACE_SPOOK_BOB * sin((TimerRefHR + i * 731) * 2 * RACE_PI / RACE_SPOOK_BOB_MS);
+        o->X = (S32)floor(sp->X - CurrentCubeX * 32768.0 + 0.5); o->Y = (S32)floor(y + 0.5); o->Z = (S32)floor(sp->Z - CurrentCubeY * 32768.0 + 0.5);
+        o->Alpha = 0; o->Beta = sp->Beta; o->Gamma = 0;
+        memset(o->CurrentFrame, 0, sizeof(o->CurrentFrame));
+        LongWorldRotatePoint(o->X, o->Y, o->Z);
+        const S32 zr = CameraZr - Z0;
+        if (zr < -4000 || zr > ClipZFar + 4000) continue;
+        SetCLUT(PalLevel + 16 * BoundRegleTrois(0, 15, ClipZFar - StartZFog, zr - StartZFog));
+        Switch_Fillers(FILL_POLY_FOG_ZBUFFER);
+        UnsetClip();
+        ObjectDisplay(o);
+        drawn++;
+    }
+    if (drawn) SetCLUT(clut);
 }
 
 // ---- a jump the car is carried over (arcjump=, RaceArc) -----------------------------------------------------------------------------
@@ -6826,7 +6910,7 @@ static void Projectiles(S32 now, int driving) {
             if (u->Kind == SHOT_MISSILE) DoImpact(RACE_PENGUIN_IMPACT, lx, (S32)u->ToY, lz, 255);
             else InitHitExtraPof(lx, (S32)u->ToY, lz, RACE_SHOT_FORCE);
         }
-        const double reach = u->Kind == SHOT_MISSILE ? RACE_MISSILE_REACH : u->Kind == SHOT_FIREBALL ? RACE_FIREBALL_REACH : RACE_GUN_REACH;
+        const double reach = u->Kind == SHOT_MISSILE ? RACE_MISSILE_REACH : u->Kind == SHOT_FIREBALL || u->Kind == SHOT_WITCHFIRE ? RACE_FIREBALL_REACH : RACE_GUN_REACH;
         for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
             if (who < 0 && !driving) continue;
             if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes || now < s_opp[who].HitUntil)) continue;
@@ -6835,6 +6919,7 @@ static void Projectiles(S32 now, int driving) {
             if ((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ) > reach * reach || fabs(y - u->ToY) > 1400) continue;
             if (u->Kind == SHOT_MISSILE) CarStruck(who, now, "missile", "an Island CX gun");
             else if (u->Kind == SHOT_FIREBALL) CarStruckFor(who, now, "fire ball", "a flying gas monster", RACE_FIREBALL_STUN, NULL);
+            else if (u->Kind == SHOT_WITCHFIRE) CarStruckFor(who, now, "fire ball", "a witch", RACE_FIREBALL_STUN, NULL);
             else CarStruck(who, now, "machine gun", "the Franco gunner");
         }
     }
@@ -7284,6 +7369,110 @@ static void Flyers(S32 now, int driving, S32 dt) {
         CarPitch(&o->Obj, f->Beta, 0);
         const int anim = f->Spitting ? RACE_FLYER_SPIT : RACE_FLYER_IDLE;
         if (anim != f->Anim) { InitAnim((U16)anim, f->Spitting ? ANIM_THEN : ANIM_REPEAT, (U8)f->Actor); f->Anim = anim; }
+    }
+}
+
+// A witch's fire ball at a car (spook=, flags 1): from her hand, at where the car will be when it comes down there, a little either side --
+// as a flying gas monster's (FlyerSpit). The ball is the game's own fire ball sprite, thrown as Twinsen's extra with its own collisions off
+// (no actor of the scene throws it: the hit is Projectiles').
+static void SpookThrow(T_RACE_SPOOK *sp, S32 now, double y) {
+    double x, cy, z;
+    if (!CarAt(sp->Target, &x, &cy, &z)) return;
+    const int b = FreeShot();
+    if (b < 0) return;
+    const int k = sp->Target + 1;
+    const double v = RACE_SPOOK_BALL * 50.0;
+    double tx = x, tz = z, ty = cy + 300, fx = sp->X, fy = y + RACE_SPOOK_HAND_UP, fz = sp->Z, flight = 0;
+    for (int pass = 0; pass < 3; pass++) {
+        const double dx = tx - sp->X, dz = tz - sp->Z, d = sqrt(dx * dx + dz * dz);
+        if (d < 1) return;
+        fx = sp->X + dx / d * RACE_SPOOK_HAND; fz = sp->Z + dz / d * RACE_SPOOK_HAND;
+        flight = sqrt((tx - fx) * (tx - fx) + (ty - fy) * (ty - fy) + (tz - fz) * (tz - fz)) / v;
+        tx = x + s_carVX[k] * flight; tz = z + s_carVZ[k] * flight;
+    }
+    if (flight > RACE_SPOOK_LONGEST) return;
+    {
+        const double a = VentRandom() * 2 * RACE_PI, r = sqrt(VentRandom()) * RACE_FIREBALL_SPREAD;
+        tx += cos(a) * r; tz += sin(a) * r;
+    }
+    T_RACE_BULLET *u = &s_bullets[b];
+    memset(u, 0, sizeof(*u));
+    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = 0; u->Kind = SHOT_WITCHFIRE; u->Sprite = RACE_FIREBALL_SPRITE;
+    u->FromX = fx; u->FromY = fy; u->FromZ = fz; u->ToX = tx; u->ToY = ty; u->ToZ = tz; u->Dur = (S32)(flight * 1000);
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    if (CubeMode != CUBE_EXTERIEUR || fx < cx || fx >= cx + 32768 || fz < cz || fz >= cz + 32768) return;
+    const double R = sqrt((tx - fx) * (tx - fx) + (tz - fz) * (tz - fz));
+    const S32 beta = (S32)floor(atan2(tx - fx, tz - fz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    const S32 alpha = (S32)floor(atan2(ty - fy, R) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    u->Extra = ThrowExtra(0, (S32)(fx - cx), (S32)fy, (S32)(fz - cz), RACE_FIREBALL_SPRITE, alpha, beta, RACE_SPOOK_BALL, 0, 0);
+    if (u->Extra >= 0) ListExtra[u->Extra].Flags &= ~(EXTRA_END_OBJ | EXTRA_END_COL | EXTRA_IMPACT);
+}
+
+// The car a witch throws at: the nearest below her and in her reach (`keep` while it still is), -2 none.
+static int SpookTarget(const T_RACE_SPOOK *sp, double y, int driving, int keep) {
+    int best = -2; double bestD = 1e18;
+    for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+        if (who < 0 && !driving) continue;
+        if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
+        double x, cy, z;
+        if (!CarAt(who, &x, &cy, &z) || cy > y) continue;
+        double d2 = (x - sp->X) * (x - sp->X) + (z - sp->Z) * (z - sp->Z);
+        if (d2 < RACE_FLYER_NEAR * RACE_FLYER_NEAR || d2 > RACE_SPOOK_FAR * RACE_SPOOK_FAR) continue;
+        if (who == keep) d2 *= 0.25;
+        if (d2 < bestD) { best = who; bestD = d2; }
+    }
+    return best;
+}
+
+// Every frame: the spooks (spook=) -- along their ways, bobbing; the witches now and then stopping to throw a fire ball at a car below them.
+// (Drawn with the backdrop: RaceMod_DrawBackdrop.)
+static void Spooks(S32 now, int driving, S32 dt) {
+    if (!s_nbSpooks) return;
+    if (!s_nbFlyers) CarWays(now);
+    const int running = RaceRunning();
+    for (int i = 0; i < s_nbSpooks; i++) {
+        T_RACE_SPOOK *sp = &s_spooks[i];
+        const double y = sp->Y + RACE_SPOOK_BOB * sin((now + i * 731) * 2 * RACE_PI / RACE_SPOOK_BOB_MS);
+        if (sp->Throwing) {
+            const S32 t = now - sp->T0;
+            double x, cy, z;
+            if (sp->Target >= -1 && CarAt(sp->Target, &x, &cy, &z)) sp->Beta = (S32)floor(atan2(x - sp->X, z - sp->Z) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+            if (!sp->Thrown && t >= RACE_SPOOK_THROW) { sp->Thrown = 1; sp->Target = SpookTarget(sp, y, driving, sp->Target); SpookThrow(sp, now, y); }
+            if (t >= 2 * RACE_SPOOK_THROW) { sp->Throwing = 0; sp->Next = now + RACE_SPOOK_EVERY + (S32)(VentRandom() * RACE_SPOOK_EVERY / 2); }
+            continue;
+        }
+        if (sp->Np < 2 || sp->Len <= 1) continue;
+        // (along its way: round and round a loop, to and fro along a line)
+        sp->S += sp->Dir * RACE_SPOOK_SPEED * dt / 1000.0;
+        if (sp->Flags & 2) { sp->S = fmod(sp->S, sp->Len); if (sp->S < 0) sp->S += sp->Len; }
+        else {
+            if (sp->S >= sp->Len) { sp->S = 2 * sp->Len - sp->S; sp->Dir = -1; }
+            if (sp->S <= 0) { sp->S = -sp->S; sp->Dir = 1; }
+        }
+        double left = sp->S;
+        const int segs = (sp->Flags & 2) ? sp->Np : sp->Np - 1;
+        for (int k = 1; k <= segs; k++) {
+            const int a = k - 1, b = k % sp->Np;
+            const double dx = sp->PX[b] - sp->PX[a], dz = sp->PZ[b] - sp->PZ[a], d = sqrt(dx * dx + dz * dz);
+            if (left <= d || k == segs) {
+                const double u = d > 0 ? fmin(1.0, left / d) : 0;
+                sp->X = sp->PX[a] + dx * u; sp->Z = sp->PZ[a] + dz * u;
+                sp->Beta = (S32)floor(atan2(dx * sp->Dir, dz * sp->Dir) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+                break;
+            }
+            left -= d;
+        }
+        // (a throw: at the nearest car in her reach below her)
+        if (!(sp->Flags & 1)) continue;
+        if (!running) { sp->Next = 0; continue; }
+        if (!sp->Next) sp->Next = now + RACE_SPOOK_EVERY / 2 + (S32)(VentRandom() * RACE_SPOOK_EVERY);
+        if (now < sp->Next) continue;
+        const int best = SpookTarget(sp, y, driving, -3);
+        if (best >= -1) {
+            sp->Throwing = 1; sp->Thrown = 0; sp->T0 = now; sp->Target = best;
+            Log_Info("[racemod] a witch (spook %d) throws a fire ball at %s", i, best < 0 ? "Twinsen" : "an opponent");
+        }
+        else sp->Next = now + 500;
     }
 }
 
@@ -7745,6 +7934,7 @@ void RaceMod_Frame(void) {
     BoostPanels(now, driving);
     Gunners(now, driving);
     Flyers(now, driving, dt);
+    Spooks(now, driving, dt);
     Projectiles(now, driving);
     Wheel(now, driving);
     SlotMachine(now);
@@ -8448,7 +8638,7 @@ static void ResetTrack(void) {
     s_phase = PHASE_RACE; s_qualifying = 1; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
-    s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0;
+    s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0; s_nbOpen = 0; s_trailN = 0; s_trailHead = -1;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
     s_nbFalls = 0; s_nbPanels = 0; s_lavaModel = -1; s_fallFootNext = s_fallLipNext = 0;
@@ -8456,7 +8646,7 @@ static void ResetTrack(void) {
     s_shardModel = s_shardBit = -1;
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
-    s_nbFlyers = 0;
+    s_nbFlyers = 0; s_nbSpooks = 0;
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
     s_guardSize = 1.0; s_nbTeleports = 0; s_teleportedAt = 0;
     memset(&s_frog, 0, sizeof(s_frog)); s_frog.Arc = -1;

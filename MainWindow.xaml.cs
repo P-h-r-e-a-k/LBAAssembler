@@ -454,6 +454,8 @@ public partial class MainWindow : Window
         else if (name == "MOON") paletteIndex = 30;
         // island 12, Polar Island (Terrain/Polar): its own slot once installed, else the palette its ground was made in
         else if (name == "POLAR") paletteIndex = Terrain.IslandMapRenderer.PolarPaletteEntryFor(gameRoot);
+        // (the Temple of Bú, ported from LBA1: Terrain/Temple -- its own palette, LBA1's colours in it)
+        else if (name == "TEMPLE") paletteIndex = Terrain.IslandMapRenderer.TemplePaletteEntryFor(gameRoot);
         // (a map's island: the game's island whose look it has, ISLANDS.TXT)
         else if (Maps.IslandFiles.Load(gameRoot).Look.TryGetValue(name, out var look)) paletteIndex = look == 0 ? 27 : 27 + look;
         lastExteriorPaletteIndex = paletteIndex;

@@ -17,6 +17,10 @@ namespace LBAAssembler.Terrain;
 // ramps: browns 16-31, greys 48-63, reds 64-79, golds 96-111, greens 112-143, blues 192-207.
 internal sealed record DeckTheme(string Name, int Asphalt, int Red, int White, int RailTop, int RailSide, int Side, int Under, int PierLight, int PierDark, int PierCap, int Arrow)
 {
+    // The start gantry's colours on such a road -- its posts and its beam's two squares -- or null: the race's own red posts and black and
+    // white squares.
+    public (int Post, int Light, int Dark)? Gantry { get; init; }
+
     public static readonly DeckTheme Standard = new("standard", RaceTrackRaisedBody.Asphalt, RaceTrackRaisedBody.Red, RaceTrackRaisedBody.White, RaceTrackRaisedBody.RailTop,
         RaceTrackRaisedBody.RailSide, RaceTrackRaisedBody.Side, RaceTrackRaisedBody.Under, RaceTrackRaisedBody.PierLight, RaceTrackRaisedBody.PierDark, RaceTrackRaisedBody.PierCap,
         RaceTrackRaisedBody.Arrow);
@@ -27,7 +31,10 @@ internal sealed record DeckTheme(string Name, int Asphalt, int Red, int White, i
     // the rooftops its pale stone, edged and railed in the turquoise of its domes' drums
     public static readonly DeckTheme Carpet = new("carpet", 72, 105, 239, 105, 102, 83, 83, 236, 234, 105, 239);
     public static readonly DeckTheme Palace = new("palace", 236, 188, 239, 188, 197, 234, 55, 236, 234, 188, 105);
-    public static readonly DeckTheme[] All = { Standard, Dock, Refinery, Village, Carpet, Palace };
+    // the Temple of Bú's Halloween race (its own palette: Otringal's with LBA1's colours written in, TemplePalette): a road near black, its
+    // curbs pumpkin orange and black, its rails' tops glowing orange over sides of dark plum, black slabs on dark stone piers
+    public static readonly DeckTheme Halloween = new("halloween", 209, 88, 224, 89, 211, 210, 208, 213, 210, 86, 89) { Gantry = (86, 242, 224) };
+    public static readonly DeckTheme[] All = { Standard, Dock, Refinery, Village, Carpet, Palace, Halloween };
     public static DeckTheme? ByName(string? name) => All.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
 }
 
@@ -207,8 +214,9 @@ internal static class RaceTrackRaisedBody
     // over the road and `beam` high -- lower than the retail gantry (3990 to its top), which does not fit under the next level of a road
     // that winds up over its own start. `across`: the unit vector across the road; the body's origin is the road's middle at the line.
     public const int Black = 48;
-    public static byte[] Gantry(Vector3 across, double half, double clear, double beam)
+    public static byte[] Gantry(Vector3 across, double half, double clear, double beam, DeckTheme? theme = null)
     {
+        var (postColour, light, dark) = theme?.Gantry ?? (Red, White, Black);
         var m = new Mesh();
         var along = new Vector3(-across.Z, 0, across.X);
         const float post = 130, thick = 110;
@@ -226,7 +234,7 @@ internal static class RaceTrackRaisedBody
         }
         var reach = (float)half + post;
         foreach (var side in new[] { -1f, 1f })
-            Box(across * (side * (float)half), across * post, along * post, -(float)Thickness, (float)clear, Red, 70);
+            Box(across * (side * (float)half), across * post, along * post, -(float)Thickness, (float)clear, postColour, 70);
         // the beam: its two faces in squares, black and white, two rows of them
         var columns = Math.Max(2, (int)Math.Round(2 * reach / (beam / 2)));
         float y0 = (float)clear, y1 = (float)(clear + beam), mid = (float)(clear + beam / 2);
@@ -238,7 +246,7 @@ internal static class RaceTrackRaisedBody
                 for (var row = 0; row < 2; row++)
                 {
                     float a = row == 0 ? y0 : mid, b = row == 0 ? mid : y1;
-                    m.Quad(m.P(At(u0, a)), m.P(At(u1, a)), m.P(At(u1, b)), m.P(At(u0, b)), (k + row) % 2 == 0 ? Black : White, along * face);
+                    m.Quad(m.P(At(u0, a)), m.P(At(u1, a)), m.P(At(u1, b)), m.P(At(u0, b)), (k + row) % 2 == 0 ? dark : light, along * face);
                 }
             }
         // ... and its top, underside and ends

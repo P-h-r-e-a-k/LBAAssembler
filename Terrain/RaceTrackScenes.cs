@@ -774,7 +774,7 @@ internal static class RaceTrackScenes
                         // other file with it; Citadel Island's scenes carry both weathers' tracks -- and a mushroom standing on a road that
                         // isn't there hung in the air)
                         var mushroom = mushroomTemplate.Clone();
-                        mushroom.Body = RaceTrackOil.BigMushroom;      // (the game's mushroom half again its size: RaceTrackOil)
+                        mushroom.Body = report.Pumpkins ? LBAAssembler.Terrain.Temple.TempleHalloween.Pumpkin : RaceTrackOil.BigMushroom;      // (the game's mushroom half again its size: RaceTrackOil; Halloween's a mini pumpkin)
                         mushroom.Flags = OpponentFlags; mushroom.Move = 0; mushroom.Life = new byte[] { 0 }; mushroom.Track = new byte[] { 0 };
                         mushroom.X = (int)Math.Round((x - model.CubeX * 64) * 512); mushroom.Z = (int)Math.Round((z - model.CubeY * 64) * 512);
                         mushroom.Y = -20000; mushroom.Beta = 0;
@@ -801,7 +801,7 @@ internal static class RaceTrackScenes
                     for (var k = 0; k < FakesPerScene; k++)
                     {
                         var fake = mushroomTemplate.Clone();
-                        fake.Body = RaceTrackOil.BigMushroom;          // (as big as the real ones)
+                        fake.Body = report.Pumpkins ? LBAAssembler.Terrain.Temple.TempleHalloween.Pumpkin : RaceTrackOil.BigMushroom;          // (as big as the real ones; Halloween's pumpkins)
                         fake.Flags = OpponentFlags; fake.Move = 0; fake.Life = new byte[] { 0 }; fake.Track = new byte[] { 0 };
                         fake.X = IslandFile.CubeSize / 2; fake.Z = IslandFile.CubeSize / 2; fake.Y = -20000; fake.Beta = 0;
                         t.Fakes.Add(new[] { scene, SceneOps.AddActor(model, fake) });
@@ -1002,8 +1002,9 @@ void comportement_1()
     // them as the island's own. Returns a line for the build's log, or null for an island with scenes of its own.
     public static string? AddScene(string gameDirectory, RaceTrackIsland island)
     {
-        // (the Emperor's palace's scenes are made with its island, PalaceTrack.Install, before the track is built)
-        if (island == RaceTrackIsland.Palace) return null;
+        // (the Emperor's palace's scenes are made with its island, PalaceTrack.Install, before the track is built; the Temple of Bú's too,
+        // TempleTrack.Install)
+        if (island == RaceTrackIsland.Palace || island == RaceTrackIsland.Temple) return null;
         // (an island the build makes that races in a copy of a game's scene -- Island CX's, CXTOWER -- gets that copy, as below)
         if (island.Created && island.CopiesScene is null && island.CopiesScenes is null)
         {

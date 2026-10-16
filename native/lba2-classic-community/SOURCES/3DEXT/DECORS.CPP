@@ -505,7 +505,7 @@ void AffichageObjetDecorsZBuf(void) {
 
         // (an island with more object pages: the page this decor's body is textured from -- VAR_EXT.H)
         if (NbObjPages > 1) {
-            U32 page = ((U32)ptrobj->Body >> DEC_PAGE_SHIFT) & 15;
+            U32 page = ((U32)ptrobj->Body >> DEC_PAGE_SHIFT) & (MAX_OBJ_PAGES - 1);
             ObjPtrMap = (page AND page < (U32)NbObjPages) ? ObjPageBuf + (page - 1) * 256 * 256 : ObjTexture;
         }
 
