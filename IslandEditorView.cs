@@ -152,6 +152,7 @@ internal sealed class IslandEditorView
     private readonly CheckBox terrainShadowBox = new() { Content = "Terrain casts shadows", IsChecked = true };
     private readonly CheckBox decorShadowBox = new() { Content = "Objects cast shadows" };
     private readonly TextBlock info = new() { TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Consolas"), FontSize = 11 };
+    private readonly TextBlock heightmapSize = new() { TextWrapping = TextWrapping.Wrap, FontSize = 11 };
     private readonly Canvas profile = new() { Height = 96, ClipToBounds = true };
     private readonly Image atlasImage = new() { Width = 256, Height = 256, Stretch = Stretch.Fill };
     private readonly Canvas atlasCanvas = new() { Width = 256, Height = 256 };
@@ -282,6 +283,26 @@ internal sealed class IslandEditorView
             tools.Children.Add(grid);
         }
         stack.Children.Add(Section("Tools", tools, open: true, out _));
+
+        // a heightmap picture in and out (the tester SIN, 2026-10-17: "have it tell you what pixel x pixel it needs")
+        var heightmap = new StackPanel();
+        heightmapSize.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
+        heightmap.Children.Add(heightmapSize);
+        var heightmapButtons = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        foreach (var (text, tip, handler) in new (string, string, Action)[]
+        {
+            ("Import heightmap…", "Shapes the island's ground from a greyscale picture (PNG, 8 or 16 bits; raw 16-bit; numbers in a CSV): black the lowest ground, white the highest. Shows the result live; one undo step", () => ImportHeightmap()),
+            ("Export heightmap…", "Writes the island's heights as a picture of exactly the size Import wants (16-bit PNG keeps every height), to edit in a paint program and import again", ExportHeightmap),
+        })
+        {
+            var b = new Button { Content = text, ToolTip = tip, Style = ButtonStyle, Margin = new Thickness(0, 0, 6, 6) };
+            b.Click += (_, _) => handler();
+            heightmapButtons.Children.Add(b);
+        }
+        heightmap.Children.Add(heightmapButtons);
+        var heightmapSection = Section("Heightmap", heightmap, open: true, out _);
+        terrainOnlyParts.Add(heightmapSection);
+        stack.Children.Add(heightmapSection);
 
         var brush = new StackPanel();
         brush.Children.Add(SliderRow("Radius", radius, "vertices (cells); [ and ] change it"));
@@ -492,6 +513,9 @@ internal sealed class IslandEditorView
             RedrawAll(); FitView(); UpdateButtons();
             var (lo, hi) = IslandOps.HeightRange(island);
             SetStatus($"{name}: {island.Cubes.Count} cubes, height {lo}..{hi}, {island.Cubes.Values.Sum(c => c.Decors.Count)} objects. Left button edits, right/middle drag pans, wheel zooms.");
+            var layout = HeightmapLayout.Of(island);
+            heightmapSize.Text = $"{System.IO.Path.GetFileNameWithoutExtension(name)} is {layout.CubesX} × {layout.CubesZ} cubes, so its heightmap is {layout.Width} × {layout.Height} pixels "
+                + $"(64 cells a cube plus one: neighbouring cubes share their edge). It lies as the top-down map shows the island: top-left = lowest X and Z.";
             currentName = name;
             StateChanged?.Invoke();
             return true;
@@ -827,7 +851,7 @@ internal sealed class IslandEditorView
     private void Capture() { if (mapActive) viewport.CaptureMouse(); }
     private void ReleaseCapture() { if (mapActive) viewport.ReleaseMouseCapture(); }
 
-    public bool Busy => stroking || draggingDecor || rotatingDecor;
+    public bool Busy => stroking || draggingDecor || rotatingDecor || previewing;
     public bool NavigateTool => tool == Tool.Navigate;
     // tools that paint with the round brush (the host draws the brush ring for them)
     public bool BrushTool => tool is not (Tool.Navigate or Tool.Eyedropper or Tool.Ramp or Tool.SelectDecor or Tool.RotateDecor or Tool.AddDecor or Tool.ObjectShadow or Tool.ClearObjectShadow);
@@ -1358,6 +1382,133 @@ internal sealed class IslandEditorView
         atlasSelection.Stroke = Brushes.Yellow; atlasSelection.Visibility = Visibility.Visible;
         SetStatus($"Atlas tile {size}x{size} at ({x}, {y}). Choose Paint atlas tile and paint.");
         toolButtons[Tool.PaintTile].IsChecked = true;
+    }
+
+    // ---- heightmaps -------------------------------------------------------------------------------------------------------------------------
+
+    private static string? heightmapFolder;
+    private bool previewing;            // the import dialog's result is on the island for the 3D view to show (history open since the first preview)
+
+    // Import heightmap: a picture onto the island's ground (HeightmapWindow says what size it needs and shows the result, live in the host's 3D
+    // view as it is changed), applied with every option as one undo step. `path`: the picture (else a file dialog asks).
+    public void ImportHeightmap(string? path = null)
+    {
+        if (island is null || history is null || Busy) return;
+        if (path is null)
+        {
+            var open = new Microsoft.Win32.OpenFileDialog { Filter = HeightmapWindow.Filter, Title = $"Import a heightmap into {currentName}", InitialDirectory = heightmapFolder };
+            if (open.ShowDialog(Owner) != true) return;
+            path = open.FileName;
+        }
+        heightmapFolder = System.IO.Path.GetDirectoryName(path);
+        var defaults = new HeightmapWindow.Defaults(BakeSettings(), BakeLight: true, steepUnwalkableBox.IsChecked == true, Number(steepAngleBox, 45), followBox.IsChecked == true);
+        var window = new HeightmapWindow(island, currentName ?? "This island", path, defaults, PreviewHeightmap) { Owner = Owner };
+        PlaceAtRight(window, Owner);
+        var accepted = false;
+        try { accepted = window.ShowDialog() == true && window.Picture is not null; }
+        finally { if (!accepted) EndHeightmapPreview(); }
+        if (!accepted) { SetStatus("Heightmap import cancelled: the ground is as it was."); return; }
+
+        var picture = window.Picture!;
+        var options = window.Options;
+        HeightmapImportResult result;
+        Mouse.OverrideCursor = Cursors.Wait;
+        try
+        {
+            // the island as it was, then the import with every option (cast shadows too): one undo step from the state before the dialog
+            if (previewing) history.RestorePending(); else history.Begin();
+            try { result = IslandHeightmap.Apply(island, picture, options); }
+            catch (InvalidDataException e)
+            {
+                history.RestorePending(); history.Cancel(); previewing = false;
+                ReselectAfterHistory();
+                MessageBox.Show(Owner, $"Couldn't import the heightmap: {e.Message}", Caption, MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            history.Commit("import heightmap");
+            previewing = false;
+        }
+        finally { Mouse.OverrideCursor = null; }
+        ReselectAfterHistory();
+        DrawProfile();
+        SetStatus($"Imported {System.IO.Path.GetFileName(path)}: {result.Vertices:N0} height points ({result.Changed:N0} changed), ground {result.Lowest:N0} to {result.Highest:N0}, "
+                  + $"{result.SeaCells:N0} sea and {result.LandCells:N0} land cells ({result.Retextured:N0} given new ground)"
+                  + (options.SteepAngle is { } a ? $", {result.Blocked:N0} triangles over {a:F0}° blocked" : "")
+                  + (options.Bake is not null ? $", light baked again ({result.Relit:N0} points)" : "")
+                  + (result.ObjectsMoved > 0 ? $", {result.ObjectsMoved} objects moved with the ground" : "")
+                  + (result.Clamped > 0 ? $"; {result.Clamped:N0} heights cut to the game's limits" : "")
+                  + ". Undo takes it back; Save writes the island.");
+    }
+
+    // The import dialog's live preview: the island put back as it was before the dialog, then (unless null) the picture applied with the dialog's
+    // options; the host's 3D view follows through Edited (Busy while previewing, so it is pushed even when nothing is committed yet).
+    private void PreviewHeightmap(HeightmapPicture? picture, HeightmapImportOptions? options)
+    {
+        if (island is null || history is null) return;
+        if (picture is null || options is null)
+        {
+            if (!previewing) return;
+            history.RestorePending();
+        }
+        else
+        {
+            if (!previewing) { history.Begin(); previewing = true; }
+            else history.RestorePending();
+            try { IslandHeightmap.Apply(island, picture, options); }
+            catch (InvalidDataException) { history.RestorePending(); }
+        }
+        selected = null; decorPanel.IsEnabled = false;
+        RedrawAll();
+    }
+
+    // Cancel: the ground put back (and shown) as it was, nothing recorded.
+    private void EndHeightmapPreview()
+    {
+        if (!previewing || history is null) return;
+        history.RestorePending();
+        RedrawAll();               // (still previewing: the host's 3D view is given the ground back)
+        history.Cancel();
+        previewing = false;
+        UpdateButtons();
+    }
+
+    // The dialog at the right of the main window, so the 3D view showing the preview stays in sight.
+    private static void PlaceAtRight(Window window, Window? owner)
+    {
+        if (owner is null || PresentationSource.FromVisual(owner) is not { CompositionTarget: { } target }) return;
+        var topRight = target.TransformFromDevice.Transform(owner.PointToScreen(new Point(owner.ActualWidth, 0)));
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Left = Math.Max(SystemParameters.WorkArea.Left, topRight.X - window.Width - 16);
+        window.Top = Math.Max(SystemParameters.WorkArea.Top, topRight.Y + 60);
+    }
+
+    // Export heightmap: the island's heights as a picture of exactly the size Import wants, black its lowest ground and white its highest (a
+    // PNG keeps the two in a text chunk, so Import reads them back and the heights come back exactly).
+    public void ExportHeightmap()
+    {
+        if (island is null) return;
+        var stem = System.IO.Path.GetFileNameWithoutExtension(currentName ?? "island");
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "16-bit greyscale PNG, every height kept (*.png)|*.png|8-bit greyscale PNG, 256 levels (*.png)|*.png|Raw 16-bit heights, little-endian (*.r16)|*.r16|Heights as numbers, world units (*.csv)|*.csv",
+            FileName = stem.ToLowerInvariant() + "_heightmap.png", Title = $"Export {stem}'s heightmap", InitialDirectory = heightmapFolder,
+        };
+        if (dialog.ShowDialog(Owner) != true) return;
+        var format = dialog.FilterIndex switch { 2 => IslandHeightmap.ExportFormat.Png8, 3 => IslandHeightmap.ExportFormat.Raw16, 4 => IslandHeightmap.ExportFormat.Csv, _ => IslandHeightmap.ExportFormat.Png16 };
+        heightmapFolder = System.IO.Path.GetDirectoryName(dialog.FileName);
+        try
+        {
+            var (black, white) = IslandHeightmap.Export(island, dialog.FileName, format, null, currentName);
+            var layout = HeightmapLayout.Of(island);
+            SetStatus($"Exported {stem}'s heightmap to {dialog.FileName}: {layout.Width} × {layout.Height} pixels"
+                      + (format == IslandHeightmap.ExportFormat.Csv ? ", heights in world units." : $", black = {black:N0}, white = {white:N0}"
+                      + (format == IslandHeightmap.ExportFormat.Raw16 ? " (a raw file can't say so: give Import the same two)." : " (kept in the picture: Import reads them back)."))
+                      + " Edit it and use Import heightmap to bring it back.");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(Owner, $"Couldn't write the heightmap: {e.Message}", Caption, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     // ---- keyboard, info ---------------------------------------------------------------------------------------------------------------------

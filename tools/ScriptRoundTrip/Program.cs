@@ -43,6 +43,7 @@ internal static class Program
             "lba2play" => Lba2PlayTests.Run(args),
             "lba2playall" => Lba2PlayAllTest.Run(args),
             "island" => IslandTests.Run(args),
+            "heightmap" => HeightmapCommand.Run(args),
             "assets" => AssetTests.Run(args),
             "gridlayout" => GridLayoutStudy.Run(),
             "grids" => GridTests.Run(args),

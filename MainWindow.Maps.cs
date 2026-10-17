@@ -60,7 +60,7 @@ public partial class MainWindow
                 var lba2 = gameRoot; var lba1 = EditorSettings.Current.Lba1Directory;
                 map = await Task.Run(() => dialog.Kind switch
                 {
-                    MapKind.Lba2Island => MapNew.Lba2Island(lba2, dialog.MapName, dialog.IslandFileName, dialog.BaseIsland, dialog.CubesX, dialog.CubesZ, dialog.LandHeight),
+                    MapKind.Lba2Island => MapNew.Lba2Island(lba2, dialog.MapName, dialog.IslandFileName, dialog.BaseIsland, dialog.CubesX, dialog.CubesZ, dialog.LandHeight, dialog.Heightmap, dialog.HeightmapOptions),
                     MapKind.Lba2Interior => MapNew.Lba2Interior(lba2, dialog.BaseScene, dialog.MapName),
                     _ => MapNew.Lba1Interior(lba1, dialog.BaseScene, dialog.MapName),
                 });

@@ -133,6 +133,9 @@
                 <MenuItem Header="Close ma_p" Click="CloseMap_Click"/>
                 <MenuItem Header="_Export map…" Click="ExportMap_Click" ToolTip="The island or interior scene in view, out of the game folder into a map file"/>
                 <Separator/>
+                <MenuItem Header="Import _heightmap…" Click="ImportHeightmap_Click" ToolTip="Shapes the open LBA2 island's ground from a greyscale picture: says what size it needs, shows the result live in the 3D view, one undo step (Build mode's terrain tools)"/>
+                <MenuItem Header="Export hei_ghtmap…" Click="ExportHeightmap_Click" ToolTip="The open LBA2 island's heights as a greyscale picture of exactly the size Import heightmap wants, to edit in a paint program"/>
+                <Separator/>
                 <MenuItem Header="_Open…" InputGestureText="Ctrl+O" Click="Open_Click"/>
                 <MenuItem Header="_Save" InputGestureText="Ctrl+S" Click="Save_Click"/>
                 <Separator/>

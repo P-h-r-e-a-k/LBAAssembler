@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using LBAAssembler.Maps;
 
@@ -16,6 +17,9 @@ internal sealed class NewMapWindow : Window
     public int CubesZ { get; private set; } = 2;
     public int LandHeight { get; private set; } = 1200;
     public int BaseScene { get; private set; }
+    // an island's ground from a heightmap picture instead of flat land (null: flat), with its black / white heights and sea level
+    public Terrain.HeightmapPicture? Heightmap { get; private set; }
+    public Terrain.HeightmapImportOptions? HeightmapOptions { get; private set; }
 
     public NewMapWindow(bool lba2, bool lba1, IReadOnlyList<string> islands, IReadOnlyList<(int Id, string Label)> lba2Interiors, IReadOnlyList<(int Id, string Label)> lba1Scenes)
     {
@@ -67,7 +71,56 @@ internal sealed class NewMapWindow : Window
         size.Children.Add(new TextBlock { Text = "  cubes,  land", VerticalAlignment = VerticalAlignment.Center }); size.Children.Add(new TextBlock { Width = 8 }); size.Children.Add(height);
         size.Children.Add(new TextBlock { Text = "  high", VerticalAlignment = VerticalAlignment.Center });
         islandPanel.Children.Add(size);
-        islandPanel.Children.Add(Note("Flat land with a beach all round into the sea, Twinsen standing in the first cube. Shape it in Build mode."));
+        // its ground: flat land, or a heightmap picture (its size says how many cubes)
+        islandPanel.Children.Add(Label("Its ground"));
+        var flatGround = new RadioButton { Content = new TextBlock { Text = "Flat land with a beach all round into the sea, Twinsen standing in the first cube (shape it in Build mode)", TextWrapping = TextWrapping.Wrap }, GroupName = "ground", IsChecked = true, Margin = new Thickness(0, 2, 0, 2) };
+        var pictureGround = new RadioButton { Content = new TextBlock { Text = "From a heightmap picture: black the lowest ground, white the highest", TextWrapping = TextWrapping.Wrap }, GroupName = "ground", Margin = new Thickness(0, 2, 0, 2) };
+        AutomationProperties.SetName(flatGround, "Flat land with a beach"); AutomationProperties.SetName(pictureGround, "From a heightmap picture");
+        islandPanel.Children.Add(flatGround); islandPanel.Children.Add(pictureGround);
+        var picturePanel = new StackPanel { Margin = new Thickness(18, 2, 0, 0) };
+        var picturePath = new TextBox { IsReadOnly = true, Padding = new Thickness(4, 3, 4, 3) };
+        var choosePicture = new Button { Content = "Choose…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0) };
+        var pictureRow = new DockPanel();
+        DockPanel.SetDock(choosePicture, Dock.Right);
+        pictureRow.Children.Add(choosePicture); pictureRow.Children.Add(picturePath);
+        picturePanel.Children.Add(pictureRow);
+        var pictureNote = Note("One pixel per height point: 64 pixels a cube plus one, so 129 × 129 for 2 × 2 cubes, 257 × 257 for 4 × 4. The picture's size sets the cubes; another size is stretched to them.");
+        picturePanel.Children.Add(pictureNote);
+        var levels = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        var black = Box("-400", 64); var white = Box("3600", 64); var sea = Box("0", 56);
+        levels.Children.Add(new TextBlock { Text = "Black is  ", VerticalAlignment = VerticalAlignment.Center }); levels.Children.Add(black);
+        levels.Children.Add(new TextBlock { Text = "   white is  ", VerticalAlignment = VerticalAlignment.Center }); levels.Children.Add(white);
+        levels.Children.Add(new TextBlock { Text = "   sea level  ", VerticalAlignment = VerticalAlignment.Center }); levels.Children.Add(sea);
+        picturePanel.Children.Add(levels);
+        picturePanel.Children.Add(Note("World units (Twinsen is about 1,000 tall). Ground at or under the sea level is sea."));
+        islandPanel.Children.Add(picturePanel);
+        void ShowGround() { picturePanel.IsEnabled = pictureGround.IsChecked == true; height.IsEnabled = pictureGround.IsChecked != true; }
+        flatGround.Checked += (_, _) => ShowGround(); pictureGround.Checked += (_, _) => ShowGround();
+        ShowGround();
+        choosePicture.Click += (_, _) =>
+        {
+            var open = new Microsoft.Win32.OpenFileDialog { Filter = HeightmapWindow.Filter, Title = "Choose a heightmap" };
+            if (open.ShowDialog(this) != true) return;
+            try
+            {
+                var loaded = HeightmapWindow.LoadPicture(open.FileName, null);
+                Heightmap = loaded;
+                picturePath.Text = open.FileName;
+                int x = Math.Clamp(Terrain.HeightmapLayout.CubesFor(loaded.Width), 1, 6), z = Math.Clamp(Terrain.HeightmapLayout.CubesFor(loaded.Height), 1, 6);
+                cubesX.Text = x.ToString(); cubesZ.Text = z.ToString();
+                var (w, h) = Terrain.HeightmapLayout.SizeFor(x, z);
+                if (loaded.Range is { } r) { black.Text = r.Black.ToString(); white.Text = r.White.ToString(); }
+                black.IsEnabled = white.IsEnabled = !loaded.Absolute;
+                pictureNote.Text = $"{System.IO.Path.GetFileName(open.FileName)}: {loaded.Width} × {loaded.Height}, {loaded.Kind}: {x} × {z} cubes ({w} × {h} pixels"
+                                   + (loaded.Width == w && loaded.Height == h ? ", its own size)." : ", so it is resampled to that).")
+                                   + (loaded.Range is not null ? " Its black and white heights are the ones it was exported with." : "");
+            }
+            catch (Exception e) when (e is System.IO.IOException or System.IO.InvalidDataException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+            {
+                Heightmap = null; picturePath.Text = "";
+                pictureNote.Text = $"Couldn't read {System.IO.Path.GetFileName(open.FileName)}: {e.Message}";
+            }
+        };
 
         // an interior's
         var interiorPanel = new StackPanel();
@@ -117,9 +170,16 @@ internal sealed class NewMapWindow : Window
                 if (!LbaMap.ValidIslandFile(IslandFileName)) problem = "The file name is one to eight letters, digits or underscores.";
                 else if (islands.Contains(IslandFileName, StringComparer.OrdinalIgnoreCase)) problem = $"The game folder already has {IslandFileName}.ILE: choose another name.";
                 else if (!int.TryParse(cubesX.Text, out var x) || !int.TryParse(cubesZ.Text, out var z) || x is < 1 or > 6 || z is < 1 or > 6) problem = "An island is 1 to 6 cubes each way.";
-                else if (!int.TryParse(height.Text, out var h) || h is < 300 or > 20000) problem = "The land's height is 300 to 20,000.";
-                else { CubesX = x; CubesZ = z; LandHeight = h; }
+                else if (pictureGround.IsChecked != true && (!int.TryParse(height.Text, out var h) || h is < 300 or > 20000)) problem = "The land's height is 300 to 20,000.";
+                else { CubesX = x; CubesZ = z; LandHeight = int.TryParse(height.Text, out var land) ? land : 1200; }
                 if (BaseIsland.Length == 0) problem ??= "Choose the island it takes its look from.";
+                if (pictureGround.IsChecked != true) { Heightmap = null; HeightmapOptions = null; }
+                else if (Heightmap is null) problem ??= "Choose the heightmap picture (or flat land).";
+                else if (!double.TryParse(black.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var b)
+                         || !double.TryParse(white.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var w)
+                         || !int.TryParse(sea.Text, out var s) || (!Heightmap.Absolute && b == w))
+                    problem ??= "Black and white are two different heights, the sea level a whole number (world units).";
+                else HeightmapOptions = new Terrain.HeightmapImportOptions { Black = b, White = w, SeaLevel = s };
             }
             else if (interior.IsChecked == true) { Kind = MapKind.Lba2Interior; BaseScene = lba2Interiors[Math.Max(0, baseInterior.SelectedIndex)].Id; }
             else { Kind = MapKind.Lba1Interior; BaseScene = lba1Scenes[Math.Max(0, baseLba1.SelectedIndex)].Id; }

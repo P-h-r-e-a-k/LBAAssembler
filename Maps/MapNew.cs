@@ -50,7 +50,10 @@ internal static class MapNew
         ("MOSQUIBE", 7), ("KNARTAS", 8), ("ILOTCX", 9), ("ASCENCE", 10), ("SOUSCELB", 11),
     };
 
-    public static LbaMap Lba2Island(string gameDirectory, string name, string fileName, string baseIsland, int cubesX, int cubesZ, int landHeight)
+    // `heightmap`: the ground from a picture instead (IslandHeightmap: resampled to the island's size, `shape` its black and white heights and
+    // sea level), textured by slope with the base island's sea, flat and steep ground and lit from its sun as the flat island is.
+    public static LbaMap Lba2Island(string gameDirectory, string name, string fileName, string baseIsland, int cubesX, int cubesZ, int landHeight,
+        HeightmapPicture? heightmap = null, HeightmapImportOptions? shape = null)
     {
         if (!LbaMap.ValidIslandFile(fileName)) throw new SceneEditException($"\"{fileName}\" can't be an island's file name: one to eight letters or digits.");
         if (cubesX is < 1 or > 6 || cubesZ is < 1 or > 6) throw new SceneEditException("An island is 1 to 6 cubes each way.");
@@ -104,6 +107,13 @@ internal static class MapNew
         var vertices = new List<(int, int)>();
         for (var z = 0; z <= depth; z++) for (var x = 0; x <= width; x++) vertices.Add((gx0 + x, gz0 + z));
         IslandBake.Bake(island, new Cells(vertices), bake);
+        if (heightmap is not null)
+        {
+            var options = shape ?? new HeightmapImportOptions();
+            options.Fit = HeightmapFit.Resample; options.Textures = HeightmapTextures.AllBySlope; options.Ground = (sea, flat, steep);
+            options.FixDiagonals = true; options.Bake = bake; options.ObjectsFollow = false;
+            IslandHeightmap.Apply(island, heightmap, options);
+        }
 
         return IslandMap(gameDirectory, name, fileName, island.ToBytes(), File.ReadAllBytes(Path.Combine(gameDirectory, baseIsland + ".OBL")), islandByte);
     }
@@ -164,42 +174,8 @@ internal static class MapNew
     // (a cube-change zone, as the race track's scenes have them: the last cell before the edge, arriving a cell in)
     private const int Near = 512, Far = 32768 - 1024, Edge = 512, Side = 32768, ZoneTop = 32000;
 
-    // The base island's most common polygon (its texture and game code) on the sea (all four corners at 0), on flat ground (all four corners
-    // the same, over the sea) and on steep ground (over 30 degrees).
-    private static (IslandGround.Sample? Sea, IslandGround.Sample? Flat, IslandGround.Sample? Steep) Samples(IslandFile source)
-    {
-        var counts = new Dictionary<(int Kind, string Key), (int Count, IslandGround.Sample Sample)>();
-        foreach (var (key, cube) in source.Cubes)
-        {
-            if (!cube.HasPolygons) continue;
-            var (cx, cz) = CubePlace(source, key);
-            if (cx < 0) continue;
-            for (var z = 0; z < IslandCube.Cells; z++)
-                for (var x = 0; x < IslandCube.Cells; x++)
-                {
-                    int a = cube.Height(x, z), b = cube.Height(x + 1, z), c = cube.Height(x, z + 1), d = cube.Height(x + 1, z + 1);
-                    var kind = a == 0 && b == 0 && c == 0 && d == 0 ? 0
-                        : a == b && b == c && c == d ? 1
-                        : Math.Atan(Math.Max(Math.Abs(a - d), Math.Abs(b - c)) / (512 * Math.Sqrt(2))) * 180 / Math.PI > 30 ? 2 : -1;
-                    if (kind < 0) continue;
-                    if (IslandGround.Pick(source, cx * IslandCube.Cells + x, cz * IslandCube.Cells + z, 0) is not { Texture: { } texture } sample) continue;
-                    // (only the main ground page: a new island has that one)
-                    if (source.GroundTextureOf(sample.Polygon).Page != 0) continue;
-                    var k = (kind, $"{string.Join(",", texture)}/{sample.Polygon.CodeJeu}/{sample.Polygon.TexFlag}/{sample.Polygon.PolyFlag}");
-                    counts[k] = counts.TryGetValue(k, out var was) ? (was.Count + 1, was.Sample) : (1, sample);
-                }
-        }
-        IslandGround.Sample? Best(int kind) => counts.Where(c => c.Key.Kind == kind).OrderByDescending(c => c.Value.Count).Select(c => c.Value.Sample).FirstOrDefault();
-        return (Best(0), Best(1), Best(2));
-    }
-
-    // Where a cube of the island's map is (its place in the 16 x 16 map), by its id.
-    private static (int X, int Z) CubePlace(IslandFile island, int id)
-    {
-        for (var i = 0; i < island.Map.Length; i++)
-            if ((island.Map[i] & 0x7F) == id) return (i % IslandFile.MapSize, i / IslandFile.MapSize);
-        return (-1, -1);
-    }
+    // The base island's most common polygon (its texture and game code) on the sea, on flat ground and on steep ground.
+    private static (IslandGround.Sample? Sea, IslandGround.Sample? Flat, IslandGround.Sample? Steep) Samples(IslandFile source) => IslandGround.CommonGround(source);
 
     private sealed class Cells(IEnumerable<(int Gx, int Gz)> cells) : IslandRegion
     {

@@ -179,6 +179,37 @@ internal static class IslandGround
         return n;
     }
 
+    // An island's most common ground triangle (its texture and game code) on the sea (all four corners at 0), on flat ground (all four corners
+    // the same, over the sea) and on steep ground (over 30 degrees): what a new island (MapNew) and an imported heightmap (IslandHeightmap)
+    // texture their sea, flat and steep ground with. Only the main ground page's (a new island has that one).
+    public static (Sample? Sea, Sample? Flat, Sample? Steep) CommonGround(IslandFile source)
+    {
+        var counts = new Dictionary<(int Kind, string Key), (int Count, Sample Sample)>();
+        foreach (var (id, cube) in source.Cubes)
+        {
+            if (!cube.HasPolygons) continue;
+            // (where the cube first shows on the map)
+            var place = Array.FindIndex(source.Map, m => (m & 0x7F) == id);
+            if (place < 0) continue;
+            int cx = place % IslandFile.MapSize, cz = place / IslandFile.MapSize;
+            for (var z = 0; z < IslandCube.Cells; z++)
+                for (var x = 0; x < IslandCube.Cells; x++)
+                {
+                    int a = cube.Height(x, z), b = cube.Height(x + 1, z), c = cube.Height(x, z + 1), d = cube.Height(x + 1, z + 1);
+                    var kind = a == 0 && b == 0 && c == 0 && d == 0 ? 0
+                        : a == b && b == c && c == d ? 1
+                        : Math.Atan(Math.Max(Math.Abs(a - d), Math.Abs(b - c)) / (512 * Math.Sqrt(2))) * 180 / Math.PI > 30 ? 2 : -1;
+                    if (kind < 0) continue;
+                    if (Pick(source, cx * IslandCube.Cells + x, cz * IslandCube.Cells + z, 0) is not { Texture: { } texture } sample) continue;
+                    if (source.GroundTextureOf(sample.Polygon).Page != 0) continue;
+                    var k = (kind, $"{string.Join(",", texture)}/{sample.Polygon.CodeJeu}/{sample.Polygon.TexFlag}/{sample.Polygon.PolyFlag}");
+                    counts[k] = counts.TryGetValue(k, out var was) ? (was.Count + 1, was.Sample) : (1, sample);
+                }
+        }
+        Sample? Best(int kind) => counts.Where(c => c.Key.Kind == kind).OrderByDescending(c => c.Value.Count).Select(c => c.Value.Sample).FirstOrDefault();
+        return (Best(0), Best(1), Best(2));
+    }
+
     // Picks the diagonal that follows the terrain best (the one whose triangles are flatter), for cells whose heights just changed.
     public static int OptimiseDiagonals(IslandFile island, IslandRegion region)
     {

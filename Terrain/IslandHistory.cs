@@ -75,6 +75,16 @@ internal sealed class IslandHistory
 
     public void Cancel() => pending = null;
 
+    // Puts the island back as it was at Begin, leaving the edit open (a preview tried and taken back: the heightmap import shows its result live
+    // and puts it back on each change and on Cancel); then Commit or Cancel as usual.
+    public bool Pending => pending is not null;
+    public void RestorePending()
+    {
+        if (pending is null) return;
+        foreach (var (id, before) in pending)
+            if (island.Cubes.TryGetValue(id, out var cube)) before.ApplyTo(cube);
+    }
+
     public bool Undo()
     {
         if (undo.Count == 0) return false;

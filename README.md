@@ -658,6 +658,24 @@ is in the title bar). On the map a strip under it plots the heights along the ro
   the atlas), paint a *game code* (water, lava, electric, conveyors ...), re-cut cell diagonals.
 - **Objects:** select / drag / add / delete / duplicate decors, edit body, position, angle, game code and the hide variable
   (positions and ZVs are cube-local; the ZV moves with the object).
+- **Heightmaps** (the panel's *Heightmap* section, or File > Import heightmap / Export heightmap; `Terrain/IslandHeightmap`,
+  `Terrain/HeightmapFile`, `HeightmapWindow`): one pixel per height point of the island's cube bounding box, so W x H cubes need
+  **W x 64 + 1 by H x 64 + 1 pixels** (65 x 65 for one cube, 129 x 129 for 2 x 2, 257 x 321 for Desert's 4 x 5; neighbouring cubes
+  share their edge points). The picture lies as the top-down map and the minimap show the island: the top-left pixel is the box's
+  lowest world X and Z, right is +X, down is +Z, 512 units a pixel; squares with no cube are left out (exported transparent).
+  Import reads PNG (grey, colour or palette, 1-16 bits, transparency = leave the ground, interlaced), raw 16-bit little-endian
+  (`.r16`), heights as numbers (`.csv`) and, in the app, BMP / JPEG / TIFF / GIF; another size is resampled corner to corner,
+  cropped from the top-left or refused. Black / white are world heights (by default what the PNG says it was exported with, else
+  the island's own lowest / highest ground); ground at or under the sea level becomes the island's own sea ground and ground
+  rising out of it its land (or every cell again by slope); then, only where heights changed: diagonals re-cut, steep triangles
+  blocked (Col bit), light baked again (+ shadows under objects), objects moved with the ground. The dialog previews the picture
+  and the ground it makes and applies it live to the 3D view; Import is one undo step, Cancel puts the ground back. Export writes
+  16-bit PNG (black / white = the island's lowest / highest ground, kept in a tEXt chunk so Import gets every height back), 8-bit
+  PNG, `.r16` or `.csv`. File > New map can make an island from a heightmap (its size sets the cubes). Tests:
+  `-- heightmap selftest <ile>` (synthetic gradients, cone, resample / crop, transparency, sea, steep, undo, untouched areas),
+  `-- heightmap roundtrip <folder>` (every island: export -> import is byte-identical in PNG, raw and CSV), `-- heightmap size
+  <folder>`, `-- heightmap engine <sandbox game>` (a map island from a hill-and-crater picture, played headless from MAPS:
+  Twinsen walks up the hill and stays on the ground).
 
 Tests: `dotnet run --project tools/ScriptRoundTrip -c Release -- island all` parses and rewrites all 14 retail islands byte for
 byte, checks every operation (borders stay equal, levelling recovers a synthetic plane, ramps, footprints, undo restores the
