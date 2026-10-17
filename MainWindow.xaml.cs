@@ -1220,8 +1220,10 @@ public partial class MainWindow : Window
         Lba1ActorAttributesWindow window;
         try
         {
-            window = new Lba1ActorAttributesWindow(lba1Game, lba1Images, sceneNumber, actor.Index, title,
-                edited => SaveLba1Actor(sceneNumber, edited), () => OpenLba1ScriptWindow(key)) { Owner = this };
+            Lba1ActorAttributesWindow? created = null;
+            window = created = new Lba1ActorAttributesWindow(lba1Game, lba1Images, sceneNumber, actor.Index, title,
+                edited => SaveLba1Actor(sceneNumber, edited), () => OpenLba1ScriptWindow(key),
+                () => ApplyBehaviourToLba1Actor(created!, sceneNumber, actor.Index)) { Owner = this };
         }
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)
         {
@@ -2522,6 +2524,12 @@ public partial class MainWindow : Window
         window.LoadDebugBodyRequested += LoadDebugBody;
         window.LoadDebugAnimRequested += LoadDebugAnim;
         window.SceneRenumbered += OnActorSceneRenumbered;
+        window.BehaviourRequested += actor => ApplyBehaviourToLba2Actor(window, actor);
+        window.NewActorSaved += (scene, message) => Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            ReloadScenesAfterWrite(Scenes.SceneGame.Lba2, new[] { scene });
+            SetStatus(message, StatusKind.Success);
+        });
         // The window's own Closed handler undoes RendererAddActor if this
         // was a freshly-added actor never applied -- refresh here in case
         // that just happened, so its marker doesn't linger on screen until
@@ -3555,6 +3563,8 @@ public partial class MainWindow : Window
         if (!ConfirmTerrainDiscard()) { e.Cancel = true; return; }
         // (an open map: its changes saved or let go, its copy of the game folder removed)
         if (MapOpen && !CloseMapWorkspace()) { e.Cancel = true; return; }
+        // (the script editors' unsaved edits: saved or let go, not lost without a word)
+        if (!SettleScriptEdits("closing")) { e.Cancel = true; return; }
         // Every other open window (actor attributes, script editors, the grid/object/asset editors, ...)
         // closes too, each running its own Closing handler (an unsaved script edit still asks first) -- if
         // any of them refuses, the main window's own close is cancelled rather than leaving them orphaned.
@@ -3653,6 +3663,9 @@ public partial class MainWindow : Window
         var dialog = new SettingsWindow { Owner = this };
         WindowPlacement.Attach(dialog, "SettingsWindow");
         if (dialog.ShowDialog() != true) return;
+        // (script edits belong to the folder they were made in: one that isn't open any more saves them there, or lets them go)
+        if ((dialog.GameDirectoryChanged && scriptSession.HasUnsavedEdits) || (dialog.Lba1DirectoryChanged && lba1Session.HasUnsavedEdits))
+            SettleScriptEdits("going on in the new folder");
         if (dialog.ScriptNamesChanged) RefreshScriptStyle();
         if (dialog.Lba1DirectoryChanged)
         {

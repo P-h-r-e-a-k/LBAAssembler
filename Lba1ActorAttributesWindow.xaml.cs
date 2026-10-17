@@ -46,8 +46,9 @@ public partial class Lba1ActorAttributesWindow : Window
 
     // scene / actorIndex locate the actor; apply saves the edited attributes (returning an error message,
     // or null on success); openScript opens the script editor for this actor.
+    // applyBehaviour: "Apply a behaviour…" (the main window gives the actor ready-made scripts, ActorBehaviours, and saves the scene).
     internal Lba1ActorAttributesWindow(Lba1Game game, Lba1ActorImages images, int scene, int actorIndex, string sceneTitle,
-        Func<Lba1ActorData, string?> apply, Action openScript)
+        Func<Lba1ActorData, string?> apply, Action openScript, Action? applyBehaviour = null)
     {
         InitializeComponent();
         this.game = game;
@@ -56,6 +57,8 @@ public partial class Lba1ActorAttributesWindow : Window
         this.actorIndex = actorIndex;
         this.apply = apply;
         this.openScript = openScript;
+        this.applyBehaviour = applyBehaviour;
+        BehaviourButton.IsEnabled = applyBehaviour is not null && actorIndex > 0;
 
         Title = actorIndex == 0 ? $"Twinsen - scene {scene}" : $"Actor {actorIndex} Attributes";
         TitleLabel.Text = (actorIndex == 0 ? "Twinsen (start position)" : $"Actor {actorIndex}") + $"   ·   {sceneTitle}";
@@ -352,6 +355,7 @@ public partial class Lba1ActorAttributesWindow : Window
     {
         ApplyButton.IsEnabled = false;
         ApplyButton.ToolTip = "Explore mode only looks; switch to Build mode to change the actor.";
+        BehaviourButton.IsEnabled = false;
         Title += " (view only)";
     }
     // Ctrl+S applies, the same as every other window's own "save" shortcut.
@@ -393,7 +397,9 @@ public partial class Lba1ActorAttributesWindow : Window
 
         var error = apply(edited);
         if (error is not null) { StatusLabel.Text = error; return; }
-        StatusLabel.Text = "Saved to SCENE.HQR (the first save keeps SCENE.HQR.bak).";
+        StatusLabel.Text = Maps.MapWorkspace.For(EditorSettings.Current.Lba1Directory) is { } map
+            ? $"Saved into the map \"{map.Name}\" (File > Save map writes its file)."
+            : "Saved to SCENE.HQR (the first save keeps SCENE.HQR.bak).";
         CopyFrom(edited);
     }
 
@@ -406,6 +412,9 @@ public partial class Lba1ActorAttributesWindow : Window
     }
 
     private void EditScript_Click(object sender, RoutedEventArgs e) => openScript();
+
+    private readonly Action? applyBehaviour;
+    private void Behaviour_Click(object sender, RoutedEventArgs e) => applyBehaviour?.Invoke();
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 }

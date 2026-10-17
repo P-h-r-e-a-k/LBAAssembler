@@ -111,7 +111,7 @@ public partial class Lba1SceneEditorWindow : Window
         {
             var result = doc.Save();
             var warnings = result.Issues.Where(i => i.Severity == SceneIssueSeverity.Warning).ToList();
-            SetStatus($"Saved scene {sceneNumber} ({result.RecordBytes} bytes)." + (warnings.Count > 0 ? $"  {warnings.Count} warning(s): {warnings[0]}" : ""));
+            SetStatus($"Saved scene {sceneNumber}{SavedInto()} ({result.RecordBytes} bytes)." + (warnings.Count > 0 ? $"  {warnings.Count} warning(s): {warnings[0]}" : ""));
             return true;
         }
         catch (SceneValidationException error)
@@ -172,6 +172,9 @@ public partial class Lba1SceneEditorWindow : Window
         if (doc is not null) doc.Changed -= OnDocChanged;
     }
 
+    // An open map's scene saves into the map (its working copy; File > Save map writes its file), not the game's SCENE.HQR.
+    private string SavedInto() => Maps.MapWorkspace.For(directory) is { } map ? $" into the map \"{map.Name}\" (File > Save map writes its file)" : "";
+
     private void SetStatus(string text) => StatusText.Text = pendingHint ?? text;
 
     // ---- refreshing ----
@@ -228,7 +231,7 @@ public partial class Lba1SceneEditorWindow : Window
         SaveButton.IsEnabled = doc.IsDirty;
         RevertButton.IsEnabled = doc.IsDirty;
         DuplicateButton.IsEnabled = DeleteButton.IsEnabled = selKind != Kind.None && !(selKind == Kind.Actor && selIndex == 0);
-        Title = $"LBA1 - scene editor - scene {sceneNumber}{(doc.IsDirty ? " *" : "")}";
+        Title = $"LBA1 - scene editor - scene {sceneNumber}{(Maps.MapWorkspace.For(directory) is { } map ? $" of the map \"{map.Name}\"" : "")}{(doc.IsDirty ? " *" : "")}";
     }
 
     private string DescribeActor(int i, SceneActorModel a)
@@ -685,6 +688,12 @@ public partial class Lba1SceneEditorWindow : Window
                     InspectorButtons.Children.Add(choose);
                     InspectorButtons.Children.Add(full);
                     InspectorButtons.Children.Add(script);
+                    if (!scene.Actors[i].IsSprite)
+                    {
+                        var behaviour = new Button { Content = "Behaviour…", ToolTip = "Ready-made scripts for it: the game's own actors of its kind, templates (stands, wanders, patrols, talks, attacks, keeps away), or none" };
+                        behaviour.Click += (_, _) => ChooseBehaviour();
+                        InspectorButtons.Children.Add(behaviour);
+                    }
                     InspectorNote.Text = $"Life script {scene.Actors[i].Life.Length} bytes, track script {scene.Actors[i].Track.Length} bytes.";
                 }
                 else
@@ -863,11 +872,27 @@ public partial class Lba1SceneEditorWindow : Window
             item.Click += (_, _) => click();
             return item;
         }
-        menu.Items.Add(Item("New 3D actor…", () =>
+        // (a new actor gets its kind's usual behaviour -- ActorBehaviours.DefaultFor -- or none at all)
+        foreach (var usual in new[] { true, false })
         {
-            var entity = PickEntity(0);
-            if (entity is null) return;
-            Place($"Click the map to place the new actor (entity {entity}); Esc cancels.", (x, y, z) => AddActor(SceneOps.BlankActor(SceneGame.Lba1, x, y, z, entity.Value), "Add actor"));
+            menu.Items.Add(Item(usual ? "New 3D actor…" : "New 3D actor without a script…", () =>
+            {
+                var entity = PickEntity(0);
+                if (entity is null) return;
+                Place($"Click the map to place the new actor (entity {entity}{(usual ? ", with its kind's usual behaviour" : ", no script")}); Esc cancels.",
+                    (x, y, z) => AddActor(SceneOps.BlankActor(SceneGame.Lba1, x, y, z, entity.Value), "Add actor", usual ? DefaultBehaviour(entity.Value) : null));
+            }));
+        }
+        menu.Items.Add(Item("Actor from another scene…", () =>
+        {
+            if (PickActorOfScene() is not { } picked) return;
+            Place($"Click the map to place the copy of scene {picked.Scene}'s actor {picked.Index} ({DescribeActor(picked.Index, picked.Actor)}); Esc cancels.", (x, y, z) =>
+            {
+                var copy = picked.Actor.Clone(); copy.X = x; copy.Y = y; copy.Z = z;
+                // (its scripts come with it, fitted to this scene -- ScriptRemap; from this very scene they stay as they are)
+                var carried = picked.Scene == sceneNumber ? null : ActorBehaviours.FromActor(SceneGame.Lba1, directory, picked.Model, picked.Scene, picked.Index);
+                AddActor(copy, $"Copy actor {picked.Index} of scene {picked.Scene}", carried);
+            });
         }));
         menu.Items.Add(Item("Copy of the selected actor", () =>
         {
@@ -931,15 +956,75 @@ public partial class Lba1SceneEditorWindow : Window
         SetStatus("Cancelled.");
     }
 
-    private void AddActor(SceneActorModel actor, string description)
+    // behaviour: what it does (its kind's usual behaviour, an actor of another scene carried over), put on it in the same step
+    private void AddActor(SceneActorModel actor, string description, ActorBehaviour? behaviour = null)
     {
         int index = -1;
+        List<string> notes = new();
         try
         {
-            doc.Edit(description, m => index = SceneOps.AddActor(m, actor));
+            doc.Edit(behaviour is null ? description : $"{description} ({behaviour.Name.ToLowerInvariant()})", m =>
+            {
+                index = SceneOps.AddActor(m, actor);
+                if (behaviour is not null) notes = ActorBehaviours.Apply(store, m, index, behaviour);
+            });
             Select(Kind.Actor, index);
         }
-        catch (SceneEditException error) { MessageBox.Show(this, error.Message, "Scene editor", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (SceneEditException error) { MessageBox.Show(this, error.Message, "Scene editor", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (behaviour is not null) SayBehaviour(index, behaviour, notes);
+    }
+
+    private ActorBehaviour? DefaultBehaviour(int entity)
+    {
+        try { using (UiBusy.Cursor()) return ActorBehaviours.DefaultFor(store, doc.Scene, entity); }
+        catch (Exception error) when (error is IOException or InvalidDataException or SceneEditException)
+        {
+            DebugLog.Log($"Lba1SceneEditorWindow: no usual behaviour for entity {entity}: {error.Message}");
+            return null;
+        }
+    }
+
+    private void SayBehaviour(int index, ActorBehaviour behaviour, IReadOnlyList<string> notes)
+        => SetStatus($"Actor {index}: {behaviour.Name} -- {behaviour.Description}." + (notes.Count > 0 ? $" ({notes.Count} change{(notes.Count > 1 ? "s" : "")} to fit this scene: {notes[0]}{(notes.Count > 1 ? "; ..." : "")})" : "") +
+                     " The inspector's Behaviour… gives it another (or none).");
+
+    // The inspector's Behaviour…: another behaviour for the selected actor (one undo step).
+    private void ChooseBehaviour()
+    {
+        if (selKind != Kind.Actor || selIndex <= 0) return;
+        var i = selIndex;
+        if (BehaviourPickWindow.ForActor(this, store, doc.Scene, i, $"scene {sceneNumber}") is not { } chosen) return;
+        List<string> notes = new();
+        try { doc.Edit($"Give actor {i} a behaviour ({chosen.Behaviour.Name.ToLowerInvariant()})", m => notes = ActorBehaviours.Apply(store, m, i, chosen.Behaviour, chosen.Text)); }
+        catch (SceneEditException error) { MessageBox.Show(this, error.Message, "Scene editor", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        BuildInspector();
+        SayBehaviour(i, chosen.Behaviour, notes);
+        if (notes.Count > 1)
+            MessageBox.Show(this, $"Actor {i}: {chosen.Behaviour.Name}. To fit this scene:\n\n- " + string.Join("\n- ", notes.Take(14)) + (notes.Count > 14 ? $"\n... {notes.Count - 14} more" : ""),
+                "Behaviour", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    // A scene and one of its actors (not its hero), to copy here.
+    private (int Scene, int Index, SceneActorModel Actor, SceneModel Model)? PickActorOfScene()
+    {
+        var scenes = SceneCombo.Items.OfType<SceneItem>().Select(s => (s.Scene, s.Label)).ToList();
+        var scene = ListPickWindow.Pick(this, "Copy an actor from a scene", scenes, sceneNumber,
+            "First the scene, then its actor. The copy has the actor's kind, body, animation, settings and scripts.");
+        if (scene is not { } number) return null;
+        SceneModel model;
+        try { model = store.Load(number); }
+        catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or SceneEditException)
+        {
+            MessageBox.Show(this, $"Couldn't read scene {number}: {error.Message}", "Scene editor", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return null;
+        }
+        if (model.Actors.Count < 2) { MessageBox.Show(this, $"Scene {number} has no actor but Twinsen.", "Scene editor", MessageBoxButton.OK, MessageBoxImage.Information); return null; }
+        var items = Enumerable.Range(1, model.Actors.Count - 1)
+            .Select(k => (k, $"{k,3}  {DescribeActor(k, model.Actors[k])}{(model.Actors[k].Life.Length > 1 ? "  (life script)" : "")}")).ToList();
+        var index = ListPickWindow.Pick(this, $"Copy an actor of scene {number}", items, null,
+            "Its scripts come with it, fitted to this scene: Twinsen and itself stay, the track points and zones it uses come along, what it does to other actors, " +
+            "to its old scene's zones and to the story is left out, its lines too when this scene's island isn't its own.");
+        return index is { } k2 ? (number, k2, model.Actors[k2], model) : null;
     }
 
     private void AddZone(int type, int x, int y, int z)

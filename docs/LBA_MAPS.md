@@ -71,6 +71,24 @@ found". With `MAPS` there, a map's scenes in the workspace are numbered clear of
 So the editor's island list, its scenes, the 3D view, Build mode, the scene, grid and actor editors, and Play all work on the map as on any
 of the game's own. The window's title shows the workspace's folder.
 
+**Saves go into the map (2026-10-17).** A tester: "if I was to give an npc a script it would not save it to the custom maps files but
+instead to the main game directorys scene.hqr ... the .ls2 it already gives you that file, so it'd just need to also save the npc scripts
+to it". What it did before (tried on a sandbox): the script window's save went into the workspace's SCENE.HQR, which is the map's, and File >
+Save map put it into the .LS2 -- the game's own SCENE.HQR stayed byte for byte as it was -- but every word said otherwise ("Save to
+SCENE.HQR…", "write scene 405 into ...\_MAP_WORKSPACE\SCENE.HQR ... keeps your original as SCENE.HQR.bak"). And a real bug: the script
+editor's unsaved edits outlived Close map. An LBA1 map takes a scene slot of the game, so the game's own scene 28 then showed the map's edit,
+and saving it wrote the map's scene over the game's scene 28 in the real SCENE.HQR. Now:
+- The script window, the actor attributes windows, the zone inspector and both scene editors say where a save goes: *Save to the map…*,
+  "Saved into the map "Name" (File > Save map writes its file)". The scene editors' title names the map.
+- The script editor's edits belong to the folder they were made in (`ScriptSession`): they are never shown as, or saved into, another
+  folder's scenes. Close map asks about them with the map's other changes (Yes saves them into the map and the map into its file, No drops
+  them); Save map and Install map into game ask whether to save them into the map first; opening a map, test edits, the 1996 demo, another
+  folder in Settings and closing the editor ask too.
+- While a map is open the game folder is guarded: `FileTransaction` refuses to write a file in it outside the workspace (every scene, script,
+  zone, actor and HQR entry save goes through it), File > Install map into game excepted (`FileTransaction.AllowWrites`).
+- The script editor's comments on a map's scripts travel with it: `<NAME>_COMMENTS.JSON` in the .lbamap (`comments = ` in MAP.TXT; a scene
+  by its place in the map), put beside the workspace's SCENE.HQR when the map opens, read back by Save map. The engine leaves it alone.
+
 Leaving the workspace:
 - The process's working folder is moved out first, since the renderer's data root is set by `chdir`.
 - If something still holds a file, it is removed again a little later.
@@ -90,6 +108,7 @@ engine inflates them). They are named after the map (eight letters of its name, 
 | `<NAME>.BRK` | its own bricks: an HQR, brick n its entry n, each as LBA_BKG.HQR stores it |
 | `<NAME>.GRM` | its own grid fragments (doors and the like): an HQR, fragment n its entry n |
 | `<NAME>.ILE`, `.OBL` | an island's ground and objects |
+| `<NAME>_COMMENTS.JSON` | the script editor's comments on its scenes' scripts (the editor's; the engine leaves it alone) |
 
 `MAP.TXT` ('#' a comment):
 
@@ -108,6 +127,7 @@ fragments = BRICKROO.GRM          (without it: the game's fragments its grid's h
 forbidden brick = 0               (of its own bricks, the one the engine never draws)
 ile = PACKISLE.ILE                (an island's)
 obl = PACKISLE.OBL
+comments = BRICKROO_COMMENTS.JSON (the script editor's comments; the engine leaves it alone)
 ```
 
 - The scene lines' order is the map's own. A zone into another of the map's scenes names it `30000 + k`, k its place (`LbaMap.LocalScene`):
@@ -191,6 +211,11 @@ obl = PACKISLE.OBL
   is hidden as actor 1, a skeleton is Twinsen), one as the editor makes them now (the LBA2 scene editor's New 3D actor: Zoé, a rabbibunny
   skeleton; Actor from another scene: scene 184's skeleton, which goes for Twinsen; the actor attributes window's body change to Zoé with
   her umbrella), each drawn with its body, also once saved and put in the MAPS folder.
+- `mapscripts <sandbox LBA2 folder> [<sandbox LBA1 folder>]` (2026-10-17): a map's script saved into the map by the script editor's
+  session, File > Save map's .LS2 and comments, the game's SCENE.HQR byte for byte unchanged, the guard; an LBA1 map's unsaved edit after
+  Close map neither shown as the game's scene 28 nor saved over it; behaviours (see the README's LBA2 scene editor) on every kind; a new
+  map's skeleton with its kind's usual behaviour and one with the attack template played headless (`--fixed-dt 16`): they go for Twinsen
+  and hit him; a talker says its line when he presses action.
 
 From the MAPS folder, headless (`lba2cc --headless --no-audio --game-dir <sandbox> --exec-at 6 "cube <n>" ...`), 2026-10-15, on a sandbox
 (`E:\dump\TEMP\mappack\game`):

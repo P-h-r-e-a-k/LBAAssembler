@@ -135,9 +135,68 @@ public partial class MainWindow
         return true;
     }
 
+    // ---- script edits and the folder they belong to
+    // The script editors keep their unsaved edits (ScriptSession) for the game folder they were made in. Before that folder changes -- a map
+    // opened or closed, test edits started or ended, the 1996 demo, another folder chosen in Settings -- they are saved there or dropped,
+    // never carried over: an LBA1 map's script edit, left unsaved at Close map, showed as the game's own scene 28 and was saved over it
+    // (2026-10-17). Returns false when the change is cancelled.
+    private void CommitOpenScriptWindows()
+    {
+        foreach (var window in openScriptWindows.Values.ToList()) window.CommitForRestyle();
+    }
+
+    private string PendingScriptEdits()
+    {
+        CommitOpenScriptWindows();
+        var parts = new List<string>();
+        foreach (var (session, game) in new[] { (scriptSession, "LBA2"), (lba1Session, "LBA1") })
+            if (session.HasUnsavedEdits)
+                parts.Add($"{game} scene{(session.EditedScenes.Count > 1 ? "s" : "")} {string.Join(", ", session.EditedScenes)}{(MapWorkspace.For(session.OtherFolder ?? session.Folder) is { } map ? $" of the map \"{map.Name}\"" : "")}");
+        return string.Join(" and ", parts);
+    }
+
+    // Saves every script edit into the folder it was made in; false (after saying why) when one can't be.
+    private bool SaveScriptEdits()
+    {
+        foreach (var session in new[] { scriptSession, lba1Session })
+        {
+            if (!session.HasUnsavedEdits) continue;
+            var result = session.SaveAll();
+            if (!result.Ok)
+            {
+                var detail = result.Errors.Count > 1 ? "\n\n" + string.Join("\n", result.Errors.Take(8)) : "";
+                MessageBox.Show(this, result.Message + detail, "Scripts not saved", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+            SetStatus(result.Message, StatusKind.Success);
+        }
+        return true;
+    }
+
+    private void DropScriptEdits()
+    {
+        scriptSession.DiscardAll();
+        lba1Session.DiscardAll();
+    }
+
+    private bool SettleScriptEdits(string before)
+    {
+        var pending = PendingScriptEdits();
+        if (pending.Length == 0) { DropScriptEdits(); return true; }
+        var targets = new[] { scriptSession, lba1Session }.Where(s => s.HasUnsavedEdits)
+            .Select(s => MapWorkspace.For(s.OtherFolder ?? s.Folder) is { } map ? $"the map \"{map.Name}\"" : $"{s.OtherFolder ?? s.Folder}\\SCENE.HQR").Distinct();
+        var answer = MessageBox.Show(this, $"The scripts of {pending} are edited and not saved yet.\n\nSave them into {string.Join(" and ", targets)} before {before}? No drops the edits.",
+            "Unsaved script edits", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        if (answer == MessageBoxResult.Cancel || answer == MessageBoxResult.None) return false;
+        if (answer == MessageBoxResult.Yes && !SaveScriptEdits()) return false;
+        DropScriptEdits();
+        return true;
+    }
+
     private void OpenMapWorkspace(LbaMap map, string? path)
     {
         if (!ConfirmTerrainDiscard()) return;
+        if (!SettleScriptEdits("the map opens")) return;
         StopPlay();
         StopLive();
         EndBodyPreviewLive();
@@ -158,6 +217,8 @@ public partial class MainWindow
         }
         mapRoot = root; mapRealDirectory = real;
         openMap = map; openMapPath = path; openMapInstalled = installed;
+        // (where saves go, for the editors' messages; and the game folder guarded: nothing writes it while the map is open)
+        MapWorkspace.Opened(map.Name, path, root.Directory, real, map.IsLba1);
         // (set before anything below can save the settings: EditorSettings.Save does nothing while it is)
         EditorSettings.TestModeActive = true;
         if (map.IsLba1) EditorSettings.Current.Lba1Directory = root.Directory; else EditorSettings.Current.GameDirectory = root.Directory;
@@ -192,17 +253,24 @@ public partial class MainWindow
     {
         if (!MapOpen) return true;
         if (!ConfirmTerrainDiscard()) return false;
-        if (ask && MapChanged())
+        // (the script editors' unsaved edits of the map's scenes are the map's changes too: Yes saves them into it first, No drops them --
+        // they never stay behind for the game's own scenes of those numbers)
+        var scripts = PendingScriptEdits();
+        if (ask && (scripts.Length > 0 || MapChanged()))
         {
-            var answer = MessageBox.Show(this, $"Save the changes to the map \"{openMap!.Name}\" before closing it?", "Close map", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
-            if (answer == MessageBoxResult.Cancel) return false;
-            if (answer == MessageBoxResult.Yes && !SaveMap(saveAs: false)) return false;
+            var answer = MessageBox.Show(this, $"Save the changes to the map \"{openMap!.Name}\" before closing it?" +
+                (scripts.Length > 0 ? $"\n\nThe scripts of {scripts} are edited and not saved yet: Yes saves them into the map too, No drops them." : ""),
+                "Close map", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Cancel || answer == MessageBoxResult.None) return false;
+            if (answer == MessageBoxResult.Yes && (!SaveScriptEdits() || !SaveMap(saveAs: false))) return false;
         }
+        DropScriptEdits();
         StopPlay();
         StopLive();
         EndBodyPreviewLive();
         CloseDirectoryScopedEditors();
         var lba1 = openMap!.IsLba1;
+        MapWorkspace.Closed();
         EditorSettings.TestModeActive = false;
         if (lba1) EditorSettings.Current.Lba1Directory = mapRealDirectory!; else EditorSettings.Current.GameDirectory = mapRealDirectory!;
         gameRoot = EditorSettings.Current.GameDirectory;
@@ -253,16 +321,29 @@ public partial class MainWindow
         static bool Same(byte[]? x, byte[]? y) => (x is null) == (y is null) && (x is null || x.AsSpan().SequenceEqual(y));
         return a.Scenes.Count == b.Scenes.Count && a.Scenes.Zip(b.Scenes).All(p => Same(p.First.Record, p.Second.Record))
             && Same(a.Grid, b.Grid) && Same(a.Library, b.Library) && Same(a.Ile, b.Ile) && Same(a.Obl, b.Obl)
-            && Same(a.Bricks, b.Bricks) && Same(a.Fragments, b.Fragments) && a.ForbiddenBrick == b.ForbiddenBrick;
+            && Same(a.Bricks, b.Bricks) && Same(a.Fragments, b.Fragments) && a.ForbiddenBrick == b.ForbiddenBrick && Same(a.Comments, b.Comments);
     }
 
     // ---- File > Save map / Save map as
     private void SaveMap_Click(object sender, RoutedEventArgs e) => SaveMap(saveAs: false);
     private void SaveMapAs_Click(object sender, RoutedEventArgs e) => SaveMap(saveAs: true);
 
+    // Script edits not yet saved into the map, before the map is written out (Save map, Install map into game): saved into it first (Yes),
+    // left out (No), or the whole thing called off (false).
+    private bool ScriptEditsIntoMap(string action, string without)
+    {
+        var scripts = PendingScriptEdits();
+        if (scripts.Length == 0) return true;
+        var answer = MessageBox.Show(this, $"The scripts of {scripts} are edited but not saved into the map yet.\n\nSave them into it before {action}? No {without} (they stay edited in the script editor).",
+            "Unsaved script edits", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        if (answer == MessageBoxResult.Cancel || answer == MessageBoxResult.None) return false;
+        return answer == MessageBoxResult.No || SaveScriptEdits();
+    }
+
     private bool SaveMap(bool saveAs)
     {
         if (openMapInstalled is not { } at) { SetStatus("No map is open: File > New map or File > Open map.", StatusKind.Info); return false; }
+        if (!ScriptEditsIntoMap("saving the map", "saves the map without them")) return false;
         if (terrainEditor is { Dirty: true } editor) editor.Save();       // (the island's ground into the workspace first)
         var path = openMapPath;
         if (path is null || saveAs)
@@ -277,6 +358,7 @@ public partial class MainWindow
             map.Save(path);
             openMap = map; openMapPath = path;
             openMapInstalled = at with { Map = map };
+            MapWorkspace.Saved(map.Name, path);
             SetStatus($"Map \"{map.Name}\" saved to {path}.", StatusKind.Success);
             return true;
         }
@@ -291,6 +373,7 @@ public partial class MainWindow
     private void InstallMap_Click(object sender, RoutedEventArgs e)
     {
         if (openMapInstalled is not { } at) { SetStatus("No map is open to install.", StatusKind.Info); return; }
+        if (!ScriptEditsIntoMap("installing it", "installs the map without them")) return;
         if (terrainEditor is { Dirty: true } editor) editor.Save();
         var map = MapInstall.Capture(at);
         var before = MapInstall.InstalledBefore(map, mapRealDirectory!);
@@ -325,6 +408,8 @@ public partial class MainWindow
         {
             try
             {
+                // (the one write into the game folder while a map is open: FileTransaction refuses any other)
+                using var allowed = FileTransaction.AllowWrites();
                 var (path, scenes) = MapInstall.InstallInMapsFolder(map, mapRealDirectory!, mapsFile!);
                 SetStatus($"Installed \"{map.Name}\" as {path}: the engine plays it as scene{(scenes.Count > 1 ? "s" : "")} {string.Join(", ", scenes)}.", StatusKind.Success);
             }
@@ -338,6 +423,7 @@ public partial class MainWindow
                 MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
         try
         {
+            using var allowed = FileTransaction.AllowWrites();
             var installed = MapInstall.Install(map, mapRealDirectory!);
             SetStatus($"Installed \"{map.Name}\" into your game: scene{(installed.Scenes.Count > 1 ? "s" : "")} {string.Join(", ", installed.Scenes)}" +
                       (installed.Grid is { } g ? $", grid {g}" : "") + ". Close the map to see it among the game's own.", StatusKind.Success);

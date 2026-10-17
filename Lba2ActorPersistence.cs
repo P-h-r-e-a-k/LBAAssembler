@@ -52,7 +52,10 @@ internal static class Lba2ActorPersistence
     // requested body/animation change couldn't be written (see below) so the caller can still report it.
     // newActorEntity: the "kind of actor" chosen in the window's Entity picker, needed only for an actor added
     // this session (see below) -- ignored otherwise.
-    public static string? Save(string gameRoot, int scene, int indexInScene, Snapshot original, Snapshot updated, out string? bodyAnimNote, int? newActorEntity = null)
+    // shapeNewActor: for an actor added this session, what else it gets before it is saved (its kind's usual behaviour, ActorBehaviours), in
+    // the same save and undo step
+    public static string? Save(string gameRoot, int scene, int indexInScene, Snapshot original, Snapshot updated, out string? bodyAnimNote, int? newActorEntity = null,
+        Action<SceneStore, SceneModel, int>? shapeNewActor = null)
     {
         bodyAnimNote = null;
         var store = new SceneStore(SceneGame.Lba2, gameRoot);
@@ -106,7 +109,11 @@ internal static class Lba2ActorPersistence
             // hide the actor: the actor then lands one number further on than this session has it, which the caller checks)
             SceneOps.EnsureMecaPenguinSlot(model);
             var addedAt = SceneOps.AddActor(model, added);
-            try { store.Save(scene, model, description: $"Add actor {addedAt} to scene {scene}"); }
+            try
+            {
+                shapeNewActor?.Invoke(store, model, addedAt);
+                store.Save(scene, model, description: $"Add actor {addedAt} to scene {scene}");
+            }
             catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException) { return $"Not saved: {e.Message}"; }
             return null;
         }

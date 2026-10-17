@@ -109,7 +109,7 @@ public partial class Lba2SceneEditorWindow : Window
         {
             var result = doc.Save();
             var warnings = result.Issues.Where(i => i.Severity == SceneIssueSeverity.Warning).ToList();
-            SetStatus($"Saved scene {sceneNumber} ({result.RecordBytes} bytes)." + (warnings.Count > 0 ? $"  {warnings.Count} warning(s): {warnings[0]}" : ""));
+            SetStatus($"Saved scene {sceneNumber}{SavedInto()} ({result.RecordBytes} bytes)." + (warnings.Count > 0 ? $"  {warnings.Count} warning(s): {warnings[0]}" : ""));
             return true;
         }
         catch (SceneValidationException error)
@@ -164,6 +164,9 @@ public partial class Lba2SceneEditorWindow : Window
         if (doc is not null) doc.Changed -= OnDocChanged;
     }
 
+    // An open map's scene saves into the map (its working copy; File > Save map writes its file), not the game's SCENE.HQR.
+    private string SavedInto() => Maps.MapWorkspace.For(directory) is { } map ? $" into the map \"{map.Name}\" (File > Save map writes its file)" : "";
+
     private void SetStatus(string text) => StatusText.Text = pendingHint ?? text;
 
     // ---- refreshing ----
@@ -189,7 +192,7 @@ public partial class Lba2SceneEditorWindow : Window
         RedoButton.ToolTip = doc.RedoDescription is { } r ? $"Redo: {r}" : null;
         SaveButton.IsEnabled = RevertButton.IsEnabled = doc.IsDirty;
         DuplicateButton.IsEnabled = DeleteButton.IsEnabled = selKind != Kind.None && !(selKind == Kind.Actor && selIndex == 0);
-        Title = $"LBA2 - scene editor - scene {sceneNumber}{(doc.IsDirty ? " *" : "")}";
+        Title = $"LBA2 - scene editor - scene {sceneNumber}{(Maps.MapWorkspace.For(directory) is { } map ? $" of the map \"{map.Name}\"" : "")}{(doc.IsDirty ? " *" : "")}";
     }
 
     private string BodyName(int body) => body >= 0 && body < bodyNames.Count && bodyNames[body] is { } name ? name : $"body {body}";
@@ -546,6 +549,12 @@ public partial class Lba2SceneEditorWindow : Window
                     var choose = new Button { Content = "Choose body…" };
                     choose.Click += (_, _) => ChooseBody();
                     InspectorButtons.Children.Add(choose);
+                    if (!(i == 1 && SceneOps.IsMecaPenguinSlot(scene.Actors[i])) && !scene.Actors[i].IsSprite)
+                    {
+                        var behaviour = new Button { Content = "Behaviour…", ToolTip = "Ready-made scripts for it: the game's own actors of its kind, templates (stands, wanders, patrols, talks, attacks, keeps away), or none" };
+                        behaviour.Click += (_, _) => ChooseBehaviour();
+                        InspectorButtons.Children.Add(behaviour);
+                    }
                 }
                 var script = new Button { Content = "Edit script…" };
                 script.Click += (_, _) => EditScriptOfSelection();
@@ -758,16 +767,20 @@ public partial class Lba2SceneEditorWindow : Window
     {
         var menu = new ContextMenu { PlacementTarget = AddButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
         MenuItem Item(string header, Action click, bool enabled = true) { var item = new MenuItem { Header = header, IsEnabled = enabled }; item.Click += (_, _) => click(); return item; }
-        menu.Items.Add(Item("New 3D actor…", () =>
+        // (a new actor gets its kind's usual behaviour -- ActorBehaviours.DefaultFor: a skeleton goes for Twinsen -- or none at all)
+        foreach (var usual in new[] { true, false })
         {
-            if (PickBody(0) is not { } body || KindOf(body) is not { } kind) return;
-            Place($"Click the plan to place the new actor ({BodyName(body)}); Esc or right-click cancels.", (x, y, z) =>
+            menu.Items.Add(Item(usual ? "New 3D actor…" : "New 3D actor without a script…", () =>
             {
-                var actor = SceneOps.BlankActor(SceneGame.Lba2, x, y, z, kind.Entity);
-                actor.Body = kind.Body; actor.Anim = kind.Anim;
-                AddActor(actor, "Add actor");
-            });
-        }));
+                if (PickBody(0) is not { } body || KindOf(body) is not { } kind) return;
+                Place($"Click the plan to place the new actor ({BodyName(body)}{(usual ? ", with its kind's usual behaviour" : ", no script")}); Esc or right-click cancels.", (x, y, z) =>
+                {
+                    var actor = SceneOps.BlankActor(SceneGame.Lba2, x, y, z, kind.Entity);
+                    actor.Body = kind.Body; actor.Anim = kind.Anim;
+                    AddActor(actor, "Add actor", usual ? DefaultBehaviour(kind.Entity) : null);
+                });
+            }));
+        }
         menu.Items.Add(Item("Copy of the selected actor", () =>
         {
             var source = selIndex;
@@ -779,10 +792,10 @@ public partial class Lba2SceneEditorWindow : Window
             Place($"Click the plan to place the copy of scene {picked.Scene}'s actor {picked.Index} ({DescribeActor(picked.Index, picked.Actor)}); Esc cancels.", (x, y, z) =>
             {
                 var copy = picked.Actor.Clone(); copy.X = x; copy.Y = y; copy.Z = z;
-                AddActor(copy, $"Copy actor {picked.Index} of scene {picked.Scene}");
-                // (its scripts came with it: what they name -- actors, zones, track points -- is still its own scene's)
-                if (copy.Life.Length > 1 || copy.Track.Length > 1)
-                    SetStatus($"Copied with its scripts, which still name scene {picked.Scene}'s actors, zones and track points: check them in the script editor.");
+                // (its scripts come with it, carried into this scene: what they name in its own -- actors, zones, track points, texts of
+                // another island, the story -- remapped here or left out, ScriptRemap; from this very scene they stay as they are)
+                var carried = picked.Scene == sceneNumber ? null : ActorBehaviours.FromActor(SceneGame.Lba2, directory, picked.Model, picked.Scene, picked.Index);
+                AddActor(copy, $"Copy actor {picked.Index} of scene {picked.Scene}", carried);
             });
         }));
         menu.Items.Add(new Separator());
@@ -811,13 +824,57 @@ public partial class Lba2SceneEditorWindow : Window
         SetStatus("Cancelled.");
     }
 
-    private void AddActor(SceneActorModel actor, string description)
+    // behaviour: what it does (a kind's usual behaviour, an actor of another scene carried over), put on it in the same step; null: its
+    // scripts as they are
+    private void AddActor(SceneActorModel actor, string description, ActorBehaviour? behaviour = null)
     {
         int index = -1;
         var slotPut = false;
-        try { doc.Edit(description, m => { slotPut = SceneOps.EnsureMecaPenguinSlot(m); index = SceneOps.AddActor(m, actor); }); Select(Kind.Actor, index); }
-        catch (SceneEditException error) { MessageBox.Show(this, error.Message, "Scene editor", MessageBoxButton.OK, MessageBoxImage.Warning); }
-        if (slotPut) SayPenguinSlotPut();
+        List<string> notes = new();
+        try
+        {
+            doc.Edit(behaviour is null ? description : $"{description} ({behaviour.Name.ToLowerInvariant()})", m =>
+            {
+                slotPut = SceneOps.EnsureMecaPenguinSlot(m);
+                index = SceneOps.AddActor(m, actor);
+                if (behaviour is not null) notes = ActorBehaviours.Apply(store, m, index, behaviour);
+            });
+            Select(Kind.Actor, index);
+        }
+        catch (SceneEditException error) { MessageBox.Show(this, error.Message, "Scene editor", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        if (behaviour is not null) SayBehaviour(index, behaviour, notes, slotPut);
+        else if (slotPut) SayPenguinSlotPut();
+    }
+
+    // The kind's usual behaviour (ActorBehaviours.DefaultFor), or none when it can't be worked out.
+    private ActorBehaviour? DefaultBehaviour(int entity)
+    {
+        try { using (UiBusy.Cursor()) return ActorBehaviours.DefaultFor(store, doc.Scene, entity); }
+        catch (Exception error) when (error is IOException or InvalidDataException or SceneEditException)
+        {
+            DebugLog.Log($"Lba2SceneEditorWindow: no usual behaviour for entity {entity}: {error.Message}");
+            return null;
+        }
+    }
+
+    private void SayBehaviour(int index, ActorBehaviour behaviour, IReadOnlyList<string> notes, bool slotPut = false)
+        => SetStatus($"Actor {index}: {behaviour.Name} -- {behaviour.Description}." + (notes.Count > 0 ? $" ({notes.Count} change{(notes.Count > 1 ? "s" : "")} to fit this scene: {notes[0]}{(notes.Count > 1 ? "; ..." : "")})" : "") +
+                     " The inspector's Behaviour… gives it another (or none)." + (slotPut ? " Actor 1 is the Meca-penguin's slot now, which the game hides whatever is in." : ""));
+
+    // The inspector's Behaviour…: another behaviour for the selected actor (one undo step).
+    private void ChooseBehaviour()
+    {
+        if (selKind != Kind.Actor || selIndex <= 0) return;
+        var i = selIndex;
+        if (BehaviourPickWindow.ForActor(this, store, doc.Scene, i, $"scene {sceneNumber}") is not { } chosen) return;
+        List<string> notes = new();
+        try { doc.Edit($"Give actor {i} a behaviour ({chosen.Behaviour.Name.ToLowerInvariant()})", m => notes = ActorBehaviours.Apply(store, m, i, chosen.Behaviour, chosen.Text)); }
+        catch (SceneEditException error) { MessageBox.Show(this, error.Message, "Scene editor", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        BuildInspector();
+        SayBehaviour(i, chosen.Behaviour, notes);
+        if (notes.Count > 1)
+            MessageBox.Show(this, $"Actor {i}: {chosen.Behaviour.Name}. To fit this scene:\n\n- " + string.Join("\n- ", notes.Take(14)) + (notes.Count > 14 ? $"\n... {notes.Count - 14} more" : ""),
+                "Behaviour", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     // (an actor added to a scene without the Meca-penguin's slot at actor 1 -- a new map's, before 2026-10-17 -- puts it there first)
@@ -840,8 +897,8 @@ public partial class Lba2SceneEditorWindow : Window
         var count = File.Exists(bodies) ? HqrArchive.CountEntries(bodies) : 0;
         var items = Enumerable.Range(0, count).Select(k => (k, $"{k,4}  {(k < bodyNames.Count ? bodyNames[k] : null) ?? "(unnamed)"}")).ToList();
         return ListPickWindow.Pick(this, "Choose a body", items, current,
-            "Bodies are the models of BODY.HQR. The actor becomes the kind of actor (entity) that has the body, standing still: give it scripts " +
-            "to make it do something, or add a copy of an actor of another scene (Add > Actor from another scene), which brings its own.");
+            "Bodies are the models of BODY.HQR. The actor becomes the kind of actor (entity) that has the body. New 3D actor gives it what the game's " +
+            "actors of that kind usually do (a skeleton goes for Twinsen); the inspector's Behaviour… gives it another, or none.");
     }
 
     // The kind of actor that shows BODY.HQR entry `body` (Lba2EntityTable.KindForBody), or null after saying why there is none.
@@ -877,7 +934,7 @@ public partial class Lba2SceneEditorWindow : Window
     }
 
     // A scene and one of its actors (not its hero), to copy here.
-    private (int Scene, int Index, SceneActorModel Actor)? PickActorOfScene()
+    private (int Scene, int Index, SceneActorModel Actor, SceneModel Model)? PickActorOfScene()
     {
         var scene = ListPickWindow.Pick(this, "Copy an actor from a scene", scenes.Select(s => (s.Id, s.Label)).ToList(), sceneNumber,
             "First the scene, then its actor. The copy has the actor's kind, body, animation, settings and scripts.");
@@ -892,8 +949,10 @@ public partial class Lba2SceneEditorWindow : Window
         if (model.Actors.Count < 2) { MessageBox.Show(this, $"Scene {number} has no actor but Twinsen.", "Scene editor", MessageBoxButton.OK, MessageBoxImage.Information); return null; }
         var items = Enumerable.Range(1, model.Actors.Count - 1)
             .Select(k => (k, $"{k,3}  {DescribeActor(k, model.Actors[k])}{(model.Actors[k].Life.Length > 1 ? "  (life script)" : "")}")).ToList();
-        var index = ListPickWindow.Pick(this, $"Copy an actor of scene {number}", items, null, "Its scripts come with it; what they name -- actors, zones, track points -- is still its own scene's.");
-        return index is { } k2 ? (number, k2, model.Actors[k2]) : null;
+        var index = ListPickWindow.Pick(this, $"Copy an actor of scene {number}", items, null,
+            "Its scripts come with it, fitted to this scene: Twinsen and itself stay, the track points and zones it uses come along, what it does to other actors, " +
+            "to its old scene's zones and to the story is left out, its lines too when this scene's island isn't its own.");
+        return index is { } k2 ? (number, k2, model.Actors[k2], model) : null;
     }
 
     // ---- deleting, duplicating ----

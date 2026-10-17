@@ -247,6 +247,7 @@ internal static class Program
             "mapinfo" => MapCommand.Info(args),
             "mapmaps" => MapCommand.MapsFolder(args),
             "mapactors" => MapActorsTest.Run(args),
+            "mapscripts" => MapScriptsTest.Run(args),
             "decorlist" => DecorList.Run(args),
             "altitude" => DecorList.Altitude(args),
             "bodybox" => BodyBox.Run(args),

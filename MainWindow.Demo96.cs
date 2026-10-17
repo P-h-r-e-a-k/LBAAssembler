@@ -88,6 +88,7 @@ public partial class MainWindow
     private void EnterDemo96(string root)
     {
         if (!ConfirmTerrainDiscard()) return;
+        if (!SettleScriptEdits("the 1996 demo opens")) return;
         StopLive();
         EndBodyPreviewLive();
         CloseDirectoryScopedEditors();
@@ -103,6 +104,7 @@ public partial class MainWindow
     private void CloseDemo96()
     {
         if (!ConfirmTerrainDiscard()) return;
+        if (!SettleScriptEdits("the 1996 demo closes")) return;
         StopLive();
         EndBodyPreviewLive();
         CloseDirectoryScopedEditors();

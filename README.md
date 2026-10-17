@@ -600,7 +600,7 @@ up as twinsun with no ai"):**
   change saves the same way (`Lba2ActorPersistence`): a body of another kind of actor makes the actor that kind, where it was kept for the
   session only.
 - **Add > Actor from another scene…** copies an actor of any scene, its scripts too (a skeleton of scene 184 attacks Twinsen as it does
-  there); what its scripts name -- actors, zones, track points -- is still its own scene's.
+  there), fitted to this scene since 2026-10-17 (`ScriptRemap`, below).
 - **Actor 1 is the Meca-penguin's** (`COMMON.H` `NUM_PINGOUIN`): at every scene start the engine hides and kills whatever is there, and
   every retail scene has a placeholder there (entity 14 at 0, 0, 0). A blank interior (and so a new map's) had the hero alone, so the
   first actor added was actor 1 and never appeared. Blank scenes keep the slot (`Lba2BlankScene`, `MapNew`); adding or duplicating an actor
@@ -618,6 +618,42 @@ an interior's were put back over the file at every load, so an actor moved in th
 move undone) stood where the actor window had put it. An island of a map shows its actors and zones in the 3D view, and *Add Actor Here*
 works on it: the renderer's actor scan takes an island file's own scenes from ISLANDS.TXT (`RendererScanIslandActors`; it read only the
 game's scenes 0..221 by their island number).
+
+**Behaviours (2026-10-17, a tester's "make a selection of pre existing scripts to apply to actors? so what would technically be the default
+for that npc? for example a rabbi skeleton should see, seekout, and try to kill the player?"):** ready-made scripts for an actor
+(`Scenes/ActorBehaviours.cs`, `BehaviourPickWindow`), in both scene editors (the inspector's **Behaviour…**), both actor attributes windows
+(**Apply a behaviour…**) and for new actors:
+- *No script*; templates for any kind -- *Stands still*, *Wanders about*, *Patrols back and forth* (two track points added beside it),
+  *Talks when spoken to* (a line of the scene's island's dialogue file, said when Twinsen is near and presses action), *Spots, chases and
+  attacks Twinsen*, *Keeps away from Twinsen* (kinds that can walk backwards) -- written in the script language and compiled with the kind's
+  own walking and attacking animations (`KindAnims`: each kind's animations and the actions their frames carry, a hit or a throw);
+- the game's own actors of the same kind (entity), the same scripts folded into one with their count, each with a line saying what it does
+  (goes for Twinsen, attacks, talks, walks a route, wanders, depends on the story...).
+- **A new actor gets its kind's usual behaviour** (`DefaultFor`): an enemy kind (at least half the game's actors of it attack) its most used
+  attacking one -- a new skeleton hunts Twinsen as scene 184's do; any other kind a behaviour of it whose lines this scene's island has
+  (talkers first, then what brings least along), else it stands. *Add > New 3D actor without a script…* (and the actor window's tick box)
+  leave it without.
+- A game actor's scripts are carried into the new scene by `ScriptRemap`: the actor itself and Twinsen stay (and LBA2's actor 1, the
+  Meca-penguin's slot); the track points it walks to and the scenaric zones it waits for are copied, moved with the actor (kept inside the
+  scene); its lines stay when the scene's island has the same dialogue file; its scene variables are renumbered clear of the scene's other
+  actors'; what it does to other actors, to its old scene's cameras, fragments, ladders and rails, and to the story (game flags, items,
+  holomap, money, chapter, films, scene changes) is cut out (jumps and SET_COMPORTEMENT / SET_TRACK offsets moved to match), and a condition
+  that can no longer hold compares with a value nothing is below. Every change is listed. The validator now also warns when those offsets
+  don't land on an instruction, or a condition names an actor the scene hasn't got (retail scenes: none).
+
+**A map's scripts are saved into the map (2026-10-17, a tester's "if I was to give an npc a script it would not save it to the custom maps
+files but instead to the main game directorys scene.hqr"):** with a map open, the script window saves into the map's own scene (its working
+copy; File > Save map writes the .LS2/.LS1 of the .lbamap, with the scripts' comments, `<NAME>_COMMENTS.JSON`), and says so (*Save to the
+map…*); so do the actor windows, the zone inspector and the scene editors. Unsaved script edits belong to the folder they were made in
+(`ScriptSession`): Close map, Save map, Install map, test edits, the 1996 demo and closing the editor ask about them -- before, an LBA1
+map's unsaved edit showed as the game's own scene of its slot after Close map and was saved over it. While a map is open nothing writes the
+game folder's own files (`FileTransaction.Protect`; File > Install map into game excepted).
+
+Tests: `-- mapscripts <sandbox LBA2 folder> [<sandbox LBA1 folder>]` (a map's script saved into the map and its file, the game's SCENE.HQR
+untouched, the guard, an edit kept for its folder after Close map; every template and every game actor's behaviour on a new actor of every
+kind valid; the skeleton's usual behaviour and the attack template played headless: they go for Twinsen and hit him; a talker says its line
+when he presses action; LBA1's runtime: a new soldier with the attack template hits him); `-- mapscripts kinds lba1|lba2 <folder>` lists every
+kind's usual behaviour, `-- mapscripts presets lba1|lba2 <folder> <entity> [apply <id>]` a kind's behaviours.
 
 Tests: `-- mapactors <sandbox game folder>` (the actors made the old way and the new, played headless by the engine; see docs/LBA_MAPS.md);
 `-- scenesync` (what a scene editor saves -- both games, a map's scene -- is what a fresh read sees, `SceneDocument.Saved` for every write
@@ -806,13 +842,18 @@ with an empty world (`Lba1BlankScene`): a flat 32 x 32 floor built from the slot
 Twinsen standing on it, keeping the slot's island, music, light and block library; **Scene > Save into another slot**
 copies the scene over another scene (the game's scene table is fixed, so a "new" scene always replaces one).
 
+Since 2026-10-17 a new 3D actor gets its kind's usual behaviour (*New 3D actor without a script…* none), **Add > Actor from another
+scene…** copies an actor of another scene with its scripts fitted to this one, and the inspector's **Behaviour…** gives an actor another
+behaviour -- as in the LBA2 scene editor (its "Behaviours").
+
 Tests: `dotnet run --project tools/ScriptRoundTrip -- store ops` (add / delete on every scene of both games, references
 renumbered, tables valid) and `store blank` (blank scenes built, saved and walked on).
 
 ## Actor scripts as C
 
 Actor life and track scripts open as C-style source in the actor script window (Life (C) / Track (C) tabs, with the read-only native disassembly in a pane on the left) with
-live compile checking, and can be saved back into `SCENE.HQR` (first save keeps `SCENE.HQR.bak`). The translator is
+live compile checking, and can be saved back into `SCENE.HQR` (first save keeps `SCENE.HQR.bak`; with a map open, into the map: *Save to
+the map…*, see the LBA2 scene editor's "A map's scripts are saved into the map"). The translator is
 verified byte-exact against every script in both games (LBA2: 6230 scripts, LBA1: all 1238 actors of the 120 scenes);
 see [LbaScript/README.md](LbaScript/README.md) for the language, how it maps onto the engine's opcodes, and the test
 tooling. LBA1 uses its own opcode tables (`Lba1Tables.cs`); it has no `switch`, and `a && b` compiles to consecutive

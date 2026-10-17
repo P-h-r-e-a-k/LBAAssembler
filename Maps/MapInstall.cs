@@ -31,12 +31,42 @@ internal static class MapInstall
     public static InstalledMap Install(LbaMap map, string directory)
     {
         map.Check();
-        return map.Kind switch
+        var installed = map.Kind switch
         {
             MapKind.Lba1Interior => InstallLba1(map, directory),
             MapKind.Lba2Interior => InstallLba2Interior(map, directory),
             _ => InstallLba2Island(map, directory),
         };
+        PutComments(map, directory, installed.Scenes);
+        return installed;
+    }
+
+    // ---- the script editor's comments on the map's scripts: the folder's comments file (beside SCENE.HQR, ScriptSession's) under the numbers
+    // the scenes have there, and back under their places in the map
+    private static string CommentsPath(string directory) => Path.Combine(directory, "SCENE.HQR") + ".comments.json";
+
+    private static void PutComments(LbaMap map, string directory, IReadOnlyList<int> numbers)
+    {
+        var path = CommentsPath(directory);
+        var store = LbaScript.CommentStore.Load(path);
+        // (a scene installed over is the map's now: the comments it had go, the map's take their place)
+        foreach (var (scene, actor, kind, _) in store.Entries.ToList())
+            if (numbers.Contains(scene)) store.Set(scene, actor, kind, null);
+        if (map.Comments is { } json)
+            foreach (var (k, actor, kind, set) in LbaScript.CommentStore.FromJson(System.Text.Encoding.UTF8.GetString(json), path).Entries.ToList())
+                if (k >= 0 && k < numbers.Count) store.Set(numbers[k], actor, kind, set);
+        if (store.LoadError is null) store.Save();      // (written beside and moved over: a workspace's file stays clear of the game's)
+    }
+
+    private static byte[]? TakeComments(InstalledMap at)
+    {
+        var path = CommentsPath(at.Directory);
+        if (!File.Exists(path)) return null;
+        var folder = LbaScript.CommentStore.Load(path);
+        var own = LbaScript.CommentStore.FromJson("{}", path);
+        foreach (var (scene, actor, kind, set) in folder.Entries)
+            if (at.Scenes.ToList().IndexOf(scene) is var k and >= 0) own.Set(k, actor, kind, set);
+        return own.Count == 0 ? null : System.Text.Encoding.UTF8.GetBytes(own.ToJson());
     }
 
     // ---- LBA1: into its slot
@@ -167,6 +197,7 @@ internal static class MapInstall
     {
         var map = at.Map;
         var captured = new LbaMap { Kind = map.Kind, Name = map.Name, Description = map.Description, IslandByte = map.IslandByte, Slot = map.Slot, IslandFile = map.IslandFile, SceneNumbers = map.SceneNumbers };
+        captured.Comments = TakeComments(at);
         var game = map.IsLba1 ? SceneGame.Lba1 : SceneGame.Lba2;
         var store = new SceneStore(game, at.Directory);
         for (var k = 0; k < at.Scenes.Count; k++)

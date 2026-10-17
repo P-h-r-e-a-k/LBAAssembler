@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using LBAAssembler.Maps;
 
 namespace LBAAssembler;
 
@@ -307,7 +308,9 @@ public partial class MainWindow
         }
         SelectZone(reference, showTab: false);
         RefreshZoneListIfVisible();
-        ZoneStatus.Text = "Saved to SCENE.HQR (the first save keeps SCENE.HQR.bak).";
+        ZoneStatus.Text = MapWorkspace.For(edited.Game == 1 ? EditorSettings.Current.Lba1Directory : gameRoot) is { } map
+            ? $"Saved into the map \"{map.Name}\" (File > Save map writes its file)."
+            : "Saved to SCENE.HQR (the first save keeps SCENE.HQR.bak).";
     }
 
     private void ZoneGoto_Click(object sender, RoutedEventArgs e)

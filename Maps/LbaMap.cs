@@ -27,6 +27,7 @@ internal sealed record MapScene(byte[] Record, int CubeX = 0, int CubeZ = 0);
 //   <NAME>.BRK       its own bricks, an HQR: brick n its entry n, as its library's brick numbers count them
 //   <NAME>.GRM       its own grid fragments, an HQR, fragment n its entry n
 //   <NAME>.ILE/.OBL  an island's ground and objects
+//   <NAME>_COMMENTS.JSON  the script editor's comments on its scenes' scripts (2026-10-17; the engine leaves it alone)
 // The engine plays an LBA2 map put in the game folder's MAPS folder (native MAPPACK.CPP). The editor opens it into a copy of the game folder
 // with the map installed in its HQRs (MapInstall), where every editor and Play work on it as on any of the game's own, and saves it back out
 // of it. A map of the first version -- map.json, scene<k>.bin, grid.bin, library.bin, island.ile/.obl, compressed -- still opens.
@@ -65,6 +66,9 @@ internal sealed class LbaMap
     public int? ForbiddenBrick { get; set; }
     public byte[]? Ile { get; set; }
     public byte[]? Obl { get; set; }
+    // The script editor's comments on its scenes' scripts (CommentStore's JSON, a scene by its place in Scenes), or null: none. The engine
+    // doesn't read it.
+    public byte[]? Comments { get; set; }
 
     public bool IsLba1 => Kind == MapKind.Lba1Interior;
     public string KindName => Kind switch { MapKind.Lba2Island => "LBA2 island", MapKind.Lba2Interior => "LBA2 interior", _ => "LBA1 interior" };
@@ -131,11 +135,12 @@ internal sealed class LbaMap
         var fragments = Put(".GRM", Fragments);
         var ile = Put(".ILE", Ile);
         var obl = Put(".OBL", Obl);
-        files.Insert(0, (ManifestName, Encoding.UTF8.GetBytes(ManifestText(sceneFiles, grid, library, bricks, fragments, ile, obl))));
+        var comments = Put("_COMMENTS.JSON", Comments);
+        files.Insert(0, (ManifestName, Encoding.UTF8.GetBytes(ManifestText(sceneFiles, grid, library, bricks, fragments, ile, obl, comments))));
         return files;
     }
 
-    private string ManifestText(List<string> sceneFiles, string? grid, string? library, string? bricks, string? fragments, string? ile, string? obl)
+    private string ManifestText(List<string> sceneFiles, string? grid, string? library, string? bricks, string? fragments, string? ile, string? obl, string? comments)
     {
         static string Line(string text) => text.Replace("\r", " ").Replace("\n", " ").Trim();
         var numbers = SceneNumbers is { } given && given.Count == Scenes.Count ? given
@@ -167,6 +172,7 @@ internal sealed class LbaMap
         if (ForbiddenBrick is { } forbidden && bricks is not null) t.Append($"forbidden brick = {forbidden}\r\n");
         if (ile is not null) t.Append($"ile = {ile}\r\n");
         if (obl is not null) t.Append($"obl = {obl}\r\n");
+        if (comments is not null) t.Append($"comments = {comments}\r\n");
         t.Append("program = LBA Assembler\r\n");
         return t.ToString();
     }
@@ -235,6 +241,7 @@ internal sealed class LbaMap
         }
         map.Grid = Part("grid"); map.Library = Part("library"); map.Bricks = Part("bricks"); map.Fragments = Part("fragments");
         map.Ile = Part("ile"); map.Obl = Part("obl");
+        map.Comments = Part("comments");
         if (Value("ile") is { } ile) map.IslandFile = Path.GetFileNameWithoutExtension(ile).ToUpperInvariant();
         foreach (var (_, file) in scenes)
         {
