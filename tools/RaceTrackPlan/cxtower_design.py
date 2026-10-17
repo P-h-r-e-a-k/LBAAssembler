@@ -182,6 +182,56 @@ for d, sign in ((MARK['doorA'], 1), (MARK['doorC'], -1)):
     for q in range(int(4 / STEP)):
         k = (d - sign * q) % N
         HALF[k] = HALF_IN + (HALF_OUT - HALF_IN) * ease(q / (4 / STEP))
+# ---- wider where there is room (the user, 2026-10-17: "CXTower track feels too tight let's see where there's scope for widening the track
+# slightly but let's keep the current route just making changes where we're able too"): the same middle, and the road wider where nothing
+# stands near it -- 4 cells from its middle to its rail outside, 3.5 in the ring (from 3.5 and 3) -- less where the ring's outer walls or
+# its two lanes side by side are near, and as it was round the corner towers and through the doors; eased between over the stretch from one
+# place of WIDTHS to the next (the lap's places in its order, each with its half width). The racing line is left where it was: planned
+# within the old widths (the plan's lineHalfs). What limits each (cells from the road's middle; the rail keeps a car's middle 1.25 inside
+# the deck's edge):
+#   - the start straight: the pit lane beside it (7.5 middle to middle, its half 2.75: 0.75 between the decks); the turn into the
+#     south-west trench, and the trench: the south-west tower's base at the turn's end (0.7 clear at 3.75 -- 0.45 for a car's box, which
+#     is square to the island; at 4 that would be 0.2), the trench's sides the plateau's ground, cut back to the wider road;
+#   - the doors -- their portals and the tunnels down to the ring and up from it, as they were (3): a tunnel's roof is kept under the ground
+#     over its walls (TunnelRun.UnderGround), and the plateau's edge falls away beside both ramps -- half a cell wider, its roof 240 lower,
+#     1,200-1,400 over the deck at the doors' faces (the car is 940 tall: the camera had no room over it);
+#   - the ring's west side: its inner lane (the ramp down from the U-turn) and its outer one side by side 7 apart (3.15 and 3.2: 0.65
+#     between them), the outer one beside the west wall (3.5: 0.3 clear, as this script's check of the walls asks); the north side beside
+#     the north wall (the same);
+#   - the south side: the gas monster between its two lanes -- it stands its run's out past the inner lane's rail and must be the outer
+#     lane's half and 2.5 from that lane's middle (RaceTrackGasMonster ClearOfLap), the lanes 11 apart: 2 out (from 2.5; nearer the rail
+#     the poses put its neck through the rail), the inner lane 3.4 and the outer one as it was, 3 (0.1 to spare); else the control room's
+#     wall (5 from the inner lane: 1.6 clear) and the south wall (4 from the outer one);
+#   - the east side: nothing near (the wall 7 off, the control room 13);
+#   - the north-east trench: ground, cut back; round the north-east tower and the south-east one, and between them along the east side over
+#     the gas: the towers' bases and struts (0.15-0.6 clear at 3.5: no wider) and the cube's edge (4.5: the rail 0.5 from it between them);
+#   - the S-bend onto the start straight: the south-east tower, the pit lane branching off.
+LINE_HALF = HALF.copy()
+WIDTHS = [((38.0, 52.0), 3.5), ((34.0, 52.0), 4.0),           # onto the start straight: wider ...
+          ((26.0, 52.0), 4.0), ((20.7, 47.9), 3.75),           # ... round into the trench by the south-west tower ...
+          ((20.5, 38.0), 3.75), (DOOR_A, 3.0),                 # ... narrowing to door A; its tunnels as they were
+          ((20.5, 16.0), 3.0), ((11.5, 16.0), 3.15),           # round the U-turn; down the ring's west side, its outer lane beside
+          ((11.5, 42.0), 3.15), ((16.5, 47.0), 3.4),           # round into the south side's inner lane ...
+          ((50.0, 47.0), 3.4), ((55.0, 42.0), 3.5),            # ... round the east side ...
+          ((55.0, 9.5), 3.5), ((50.0, 4.5), 3.2),              # ... round into the north side, its wall near
+          ((8.5, 4.5), 3.2), ((4.5, 8.5), 3.2),                # the west side's outer lane
+          ((4.5, 54.0), 3.2), ((8.5, 58.0), 3.0),              # the south side's outer lane as it was
+          ((38.5, 58.0), 3.0), ((43.5, 53.0), 3.0),            # round and up to door C, its tunnels as they were
+          (DOOR_C, 3.0), ((43.5, 26.3), 4.0),                  # out of it, the north-east trench wider ...
+          ((43.5, 19.5), 4.0), ((43.5, 15.5), 3.5),            # ... to before the north-east tower's base
+          ((59.5, 17.5), 3.5), ((59.5, 21.5), 4.0),            # the east side between the towers wider ...
+          ((59.5, 43.5), 4.0), ((59.5, 47.5), 3.5)]            # ... and as it was from the south-east tower to the S-bend
+# (the ring's south-west inner corner keeps its checkpoint: the builder lays a line across a corner only where it reaches past the road's
+# edge, or is stopped by another part of the lap no nearer than that edge -- probing in half cells, so 3 wide it stopped at the edge and
+# wider short of it (the west outer lane beside): a line of the plan's own there, the corner's middle)
+CHECKPOINT_TWEAKS = [{'add': True, 'at': [round(16.5 - 5 * math.sqrt(0.5), 3), round(42.0 + 5 * math.sqrt(0.5), 3)]}]
+at = [int(np.argmin((X - WIDTHS[0][0][0]) ** 2 + (Z - WIDTHS[0][0][1]) ** 2))]
+for p, _ in WIDTHS[1:]: at.append(nearest_after(p, at[-1], 120))
+for w in range(len(WIDTHS)):
+    a, b = at[w], at[(w + 1) % len(WIDTHS)]
+    ha, hb = WIDTHS[w][1], WIDTHS[(w + 1) % len(WIDTHS)][1]
+    L = ahead(a, b)
+    for q in range(int(round(L / STEP)) + 1): HALF[(a + q) % N] = ha + (hb - ha) * ease(q * STEP / L)
 
 # ---- the tunnels: at each door its first SUNK cells sunk in the plateau (the ground cut between its walls, its roof flush with the plateau),
 # then on under the island until the road is in the ring under its roof
@@ -282,9 +332,10 @@ iN = nearest_after((44.0, 4.5), iE2, 40); iN2 = nearest_after((14.0, 4.5), iN, 8
 iW2 = nearest_after((4.5, 18.0), iN2, 40); iW22 = nearest_after((4.5, 50.0), iW2, 80)
 iS2 = nearest_after((14.0, 58.0), iW22, 40); iS22 = nearest_after((33.0, 58.0), iS2, 60)
 # (fewer since 2026-10-15 later -- the user: "Let's reduce the number of gas monsters you've already added, and add some of the flying ones
-# that fire fireballs": one on the south side's inner lane, one on the north side's, one on the west outer lane)
-MONSTERS = [{'from': int(a), 'to': int(b), 'every': 9.0, 'out': 2.5, 'most': m, 'floor': GAS_MONSTER_FLOOR}
-            for a, b, m in ((iS_in, iS_in2, 1), (iN, iN2, 1), (iW2, iW22, 1))]
+# that fire fireballs": one on the south side's inner lane, one on the north side's, one on the west outer lane) (the south side's 2
+# past its lane's rail since the lane is wider, 2026-10-17: see WIDTHS)
+MONSTERS = [{'from': int(a), 'to': int(b), 'every': 9.0, 'out': o, 'most': m, 'floor': GAS_MONSTER_FLOOR}
+            for a, b, m, o in ((iS_in, iS_in2, 1, 2.0), (iN, iN2, 1, 2.5), (iW2, iW22, 1, 2.5))]
 # ---- the flying gas monsters (RaceTrackFlyers: the game's entity 329, spitting red fire balls): to and fro along the south side's inner
 # lane, the east side's, the north side's and the west outer lane, 2,600 over the floor, beside the lane on the side away from the walls --
 # between the lane and the control room or the next lane ('out': cells to the lane's left as it runs, minus to its right)
@@ -360,6 +411,8 @@ plan = {
     'maxGrade': round(float(np.abs(grade).max()) + 0.05, 3),
     'raised': [0, N - 1], 'raisedHalf': HALF_OUT, 'asphaltHalf': HALF_OUT - 1.0, 'curbHalf': HALF_OUT - 0.25,
     'raisedHalfs': [round(float(h), 3) for h in HALF],
+    'lineHalfs': [round(float(h), 3) for h in LINE_HALF],
+    'checkpointTweaks': CHECKPOINT_TWEAKS,
     'start': int(MARK['start']),
     'pitSpots': PIT_SPOT_LIST,
     'raisedCut': True,

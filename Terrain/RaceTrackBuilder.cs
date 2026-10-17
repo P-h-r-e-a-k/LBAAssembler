@@ -221,6 +221,9 @@ internal sealed class RaceTrackPlan
     // A raised road's width point by point (with Raised): cells from its middle to its rail, instead of RaisedHalf everywhere -- the
     // Emerald Moon's lap widens to the reactor's dish for its jump, to twice its width at its loops and beside its straight for the pit lane.
     public double[]? RaisedHalfs { get; set; }
+    // The widths the racing line is planned within, point by point (with RaisedHalfs), when they aren't the road's own: Island CX's road
+    // made wider where there was room (2026-10-17, the user: "let's keep the current route"), its racing line left where it was.
+    public double[]? LineHalfs { get; set; }
     // A strip of road beside a raised road, point by point (with Raised): [from, to] cells across it (the builder's Across; equal: none).
     // The Emerald Moon's pit lane (2026-10-12, the user: "remove the fence and have an extra strip of road with clear space between the
     // start/finish line and the pit straight with the pit lane being wider"): it grows out of the road's edge, then moves apart from it,
@@ -702,6 +705,8 @@ internal sealed class TrackRoad
     public double[]? RoadBank;
     // A raised road's width, point by point (RaceTrackPlan.RaisedHalfs, cells from its middle to its rail), or null: RaisedHalfWidth.
     public double[]? RaisedHalfs;
+    // ... the widths its racing line is planned within (RaceTrackPlan.LineHalfs), or null: RaisedHalfs.
+    public double[]? LineHalfs;
     // ... and a strip of road beside it (RaceTrackPlan.RaisedStrips): from and to, cells across (Across; equal: none), or null.
     public double[]? StripLo, StripHi;
     // The points in a carried jump's gap (RaceTrackPlan.ArcJumps), or null: the car is carried through the air there, nothing in the way
@@ -1133,17 +1138,21 @@ internal static class RaceTrackBuilder
         var banked = plan.Planned && plan.Raised is not null && plan.Bank is { } bank && bank.Length == plan.Points.Length && bank.Any(b => b != 0);
         var widths = plan.Planned && plan.Raised is not null && plan.RaisedHalfs is { } rh && rh.Length == plan.Points.Length ? plan.RaisedHalfs : null;
         var strips = plan.Planned && plan.Raised is not null && plan.RaisedStrips is { } rs && rs.Length == plan.Points.Length && rs.Any(s => s.Length == 2 && s[1] > s[0]) ? plan.RaisedStrips : null;
+        var lineWidths = widths is not null && plan.LineHalfs is { } lh && lh.Length == plan.Points.Length ? plan.LineHalfs : null;
         if (plan.KeepPoints && plan.Planned && plan.Heights is { } kh && kh.Length == raw.Count)
         {
             // (the plan's own points, RaceTrackPlan.KeepPoints)
             var kept = new TrackRoad { Name = name, Closed = closed, X = raw.Select(p => p.X).ToArray(), Z = raw.Select(p => p.Z).ToArray(), Planned = kh.ToArray(),
-                RoadBank = banked ? plan.Bank!.ToArray() : null, RaisedHalfs = widths?.ToArray(),
+                RoadBank = banked ? plan.Bank!.ToArray() : null, RaisedHalfs = widths?.ToArray(), LineHalfs = lineWidths?.ToArray(),
                 StripLo = strips?.Select(s => s.Length == 2 ? s[0] : 0).ToArray(), StripHi = strips?.Select(s => s.Length == 2 ? s[1] : 0).ToArray() };
             kept.AsphaltHalf = o.AsphaltHalfWidth; kept.CurbHalf = o.CurbHalfWidth; kept.VergeHalf = o.VergeHalfWidth; kept.Blend = o.BlendWidth;
             Geometry(kept, o);
             return kept;
         }
-        return Resample(name, raw, o, closed, plan.Planned ? plan.Heights : null, banked ? plan.Bank : null, widths, strips);
+        var road = Resample(name, raw, o, closed, plan.Planned ? plan.Heights : null, banked ? plan.Bank : null, widths, strips);
+        // (the racing line's widths resampled as the road's are)
+        if (lineWidths is not null) road.LineHalfs = Resample(name, raw, o, closed, halfs: lineWidths).RaisedHalfs;
+        return road;
     }
 
     // (with `heights`, one per raw point, the road's Planned heights are taken along with it; and its banking and raised widths)
@@ -2810,7 +2819,8 @@ internal static class RaceTrackBuilder
         if (report.Gravity is > 0) reach = Math.Min(reach, o.RaisedHalfWidth - RailInset - RailMargin);
         // (where a raised road is narrower than the island's own -- a tunnel's, the roulette wheel's lane, 2026-10-09 -- within the rail
         // there: the line had run outside Otringal's wheel's lane, over the bowl's floor inside it, and the test pilot drove into its wall)
-        double ReachAt(int k) => r.Raised is { } upAt && upAt[k] && r.RaisedHalfs is { } halfsAt && k < halfsAt.Length && halfsAt[k] < o.RaisedHalfWidth
+        // (or narrower than the widths the plan gives the line, LineHalfs: Island CX's line kept within its road's old widths)
+        double ReachAt(int k) => r.Raised is { } upAt && upAt[k] && (r.LineHalfs ?? r.RaisedHalfs) is { } halfsAt && k < halfsAt.Length && halfsAt[k] < o.RaisedHalfWidth
             ? Math.Max(0, Math.Min(reach, halfsAt[k] - RailInset - NarrowMargin)) : reach;
         double Turn(int m)
         {
@@ -5535,11 +5545,12 @@ internal static class RaceTrackBuilder
              (c.Item1 * (double)IslandFile.CubeSize + d.XMax) / 512, (c.Item2 * (double)IslandFile.CubeSize + d.ZMax) / 512, (double)d.YMax))).ToArray();
         bool Clear(int k, double ground)
         {
-            // not on another part of the lap (any road under this point, raised or on the ground) ...
+            // not on another part of the lap (any road under this point, raised or on the ground -- not one under the ground, `under`:
+            // Island CX's ring under its outside road, whose wider east lane took four piers away, 2026-10-17) ...
             for (var m = 0; m < n; m++)
             {
                 var sep = Math.Abs(r.S[m] - r.S[k]); sep = Math.Min(sep, r.Length - sep);
-                if (sep < 12) continue;
+                if (sep < 12 || r.Under?[m] == true) continue;
                 var reach = (up[m] ? r.RaisedHalfs?[m] ?? o.RaisedHalfWidth : r.VergeHalf) + 1.2;
                 if (Sq(r.X[m] - r.X[k]) + Sq(r.Z[m] - r.Z[k]) < reach * reach && r.H[m] < r.H[k] - 300) return false;
             }

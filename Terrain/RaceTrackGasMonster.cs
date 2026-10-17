@@ -180,9 +180,11 @@ internal static class RaceTrackGasMonster
              (c.Item1 * (double)IslandFile.CubeSize + d.XMax) / 512, (c.Item2 * (double)IslandFile.CubeSize + d.ZMax) / 512, (double)d.YMin, (double)d.YMax))).ToList();
         bool Gas(double x, double z)
         {
-            // (on a floor: nothing standing on it there -- a box over the floor within a cell)
+            // (on a floor: the floor there -- a box whose top it is: beyond a wall there is none, and Island CX's north and west monsters
+            // stood out past its hall's walls once its lanes were wider, 2026-10-17 -- and nothing standing on it, a box over it within a cell)
             if (run.Floor is { } floor)
-                return !boxes.Any(b => b.Item6 > b.Item5 && b.Item6 > floor + 100 && b.Item5 < floor + 3000 && x > b.Item1 - 1 && x < b.Item3 + 1 && z > b.Item2 - 1 && z < b.Item4 + 1);
+                return boxes.Any(b => b.Item6 > b.Item5 && Math.Abs(b.Item6 - floor) < 1 && x > b.Item1 && x < b.Item3 && z > b.Item2 && z < b.Item4)
+                    && !boxes.Any(b => b.Item6 > b.Item5 && b.Item6 > floor + 100 && b.Item5 < floor + 3000 && x > b.Item1 - 1 && x < b.Item3 + 1 && z > b.Item2 - 1 && z < b.Item4 + 1);
             for (var dz = -1; dz <= 1; dz++)
                 for (var dx = -1; dx <= 1; dx++)
                     if ((IslandOps.Altitude(island, (x + dx * 0.8) * 512, (z + dz * 0.8) * 512) ?? 0) > GasLevel) return false;

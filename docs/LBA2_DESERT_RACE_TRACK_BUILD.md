@@ -4068,8 +4068,9 @@ The route (`tools/RaceTrackPlan/cxtower_design.py`), 457 cells:
 6. Out through the north-east trench and north past the north-east tower. East round it over the gas, down the east side, round the
    south-east tower, and through the S-bend onto the start straight.
 
-The road's rails are 3 cells from the road's middle underground and 3.5 outside. The plan's `edgeMargin` is 4: the builder no longer pushes
-the lap off the cube's edges, where the ring's outer lanes and the road round the towers run.
+The road's rails are 3 cells from the road's middle underground and 3.5 outside (wider where there is room since the fifth round, below).
+The plan's `edgeMargin` is 4: the builder no longer pushes the lap off the cube's edges, where the ring's outer lanes and the road round the
+towers run.
 
 The race-track mode's part (`RACEMOD.CPP`):
 
@@ -4213,6 +4214,55 @@ track".
 
 ![Through door A's portal: one colour, one line](racetrack/cxtower/round4_door_a_portal.png)
 ![Up the ramp to door C](racetrack/cxtower/round4_ramp_walls.png)
+
+### The fifth round: wider where there is room (2026-10-17)
+
+The user: "CXTower track feels too tight let's see where there's scope for widening the track slightly but let's keep the current route
+just making changes where we're able too".
+
+The route is the same: the road's middle hasn't moved, and nor has the racing line -- the opponents and the test pilot drive the lines
+they drove, planned within the old widths (the plan's `lineHalfs`, `RaceTrackBuilder.PlanRacePath`). The road is wider wherever nothing
+stands near it, eased between one place and the next (`cxtower_design.py`, `WIDTHS`). Half widths, cells from the road's middle to its
+rail (the rail keeps a car's middle 1.25 inside it):
+
+| stretch | before | after | what limits it |
+|---|---|---|---|
+| the start straight | 3.5 | 4 | the pit lane beside it: 0.75 between the decks |
+| the turn into the south-west trench, the trench | 3.5 | 3.75 | the south-west tower's base at the turn's end, 0.7 clear (a car's box, square to the island, 0.45); the trench's sides are ground, cut back |
+| door A and door C: the portals and the tunnels down and up | 3 | 3 | a tunnel's roof is kept under the ground over its walls, and the plateau's edge falls away beside both ramps: half a cell wider, the roofs would be 240 lower, 1,200-1,400 over the deck at the doors' faces (the car is 940 tall) |
+| the U-turn and the ring's west inner lane | 3 | 3.15 | the west outer lane 7 cells over: 0.65 between the decks |
+| the ring's west outer lane and north side | 3 | 3.2 | the hall's walls, 0.3 clear |
+| the ring's south inner lane | 3 | 3.4 | the gas monster between it and the outer lane (below) |
+| the ring's south outer lane | 3 | 3 | the same gas monster |
+| the ring's east side | 3 | 3.5 | nothing near: the wall is 7 cells off |
+| the north-east trench | 3.5 | 4 | ground, cut back |
+| round the north-east and south-east towers, the S-bend | 3.5 | 3.5 | the towers' bases and struts, 0.15-0.6 clear, and the cube's edge |
+| the east side between the towers | 3.5 | 4 | the cube's edge: the rail half a cell from it |
+
+The roads narrow into the doors over 7 cells (from 3.75 to door A, from door C to 4).
+
+What else the wider road moved:
+
+- *The south side's gas monster* stands between the two lanes, its run's `out` past the inner lane's rail, and must be the outer lane's
+  half and 2.5 cells from that lane's middle (`RaceTrackGasMonster`, `ClearOfLap`); the lanes are 11 apart. It stands 2 out now (from
+  2.5): at 1.5 its poses put its neck through the rail. So the inner lane is 3.4 and the outer one stays 3.
+- *Gas monsters on a floor stand on it*: `Gas` now also asks for the floor's box under the spot. With the north and west lanes wider, their
+  monsters' far-side spots were past the hall's walls, outside the cube (a spot exactly a cell from a wall had been ruled out by rounding
+  alone). The monsters are where they were.
+- *Piers*: a pier stands on the ground, so a road `under` the ground is not in its way (`PlacePiers`). The ring's wider east lane, 4.5
+  cells from the outside road over the gas, had taken four of its piers; and two the ring kept out before stand now, on the north side
+  and in the S-bend (12 piers, none left out).
+- *A checkpoint*: the builder lays a line across a corner where it reaches past the road's edge or is stopped by another part of the lap
+  no nearer than the edge, probing in half cells; across the ring's south-west inner corner it now stopped short of the wider edge (the
+  west outer lane beside). The plan adds a line of its own there (`checkpointTweaks`), as it was: 9 checkpoints.
+
+The flying monsters' ways, the tunnels, the power-ups and the racing lines are as they were. Of the other 17 tracks, built together with
+it, every file is the same; only Island CX's own (its island, its RACETRACK.JSON entry, scene 300 and its gas monsters' animations) differ.
+
+The test pilot, three laps against the opponents with the power-ups (the stress test's car, 110 km/h): on the line and 1.5 and 2 cells
+either side of it, and the hot car (everything +20 %), 8 races and 5 time trials -- every race finished, no rescues, falls, stuck cars,
+edge holds or missed checkpoints (the same runs on the old build: one stuck car reset, the hot car 1.5 cells off the line in the ring's
+south lane). Lap times are mostly the hazards: 17-37 s laps either way, a clean one about 20.5 s.
 
 ## The Temple of Bú: the Halloween race (2026-10-16)
 
