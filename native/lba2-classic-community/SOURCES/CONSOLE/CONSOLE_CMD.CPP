@@ -2496,6 +2496,13 @@ static void cmd_racescare(int argc, const char *argv[]) {
     RaceMod_TestScare(argc >= 2 ? atoi(argv[1]) : 0);
     Console_Print("racescare");
 }
+/* raceweb [0|1|2|3]: the giant web nearest Twinsen's car (RACEMOD.CPP web=) -- 1 (none) torn now as by his car, the web over his screen
+   too; 0 whole again; 2 its spider off up its web; 3 torn now as by another car. */
+static void cmd_raceweb(int argc, const char *argv[]) {
+    extern void RaceMod_TestWeb(int what);
+    RaceMod_TestWeb(argc >= 2 ? atoi(argv[1]) : 1);
+    Console_Print("raceweb");
+}
 
 /* racecars: where every car of a race-track mod's race is (RACEMOD.CPP RaceMod_Cars) -- the editor's minimap asks while it plays one. */
 static void cmd_racecars(int argc, const char *argv[]) {
@@ -2759,6 +2766,9 @@ void Console_RegisterAll(void) {
                               "As another car's ghost power-up haunts it (RACEMOD.CPP haunt=); raceitem 12 is Twinsen's on the others.");
     Console_RegisterCommandEx("racescare", cmd_racescare, "Race-track test: a scare jumps up beside the road now", "racescare [n]",
                               "Scare n (1 the first; none: the nearest), as the Temple of Bu's do (RACEMOD.CPP scare=).");
+    Console_RegisterCommandEx("raceweb", cmd_raceweb, "Race-track test: the giant web torn now", "raceweb [0|1|2|3]",
+                              "The nearest giant web: 1 (none) torn as by Twinsen's car, the web over his screen too; 0 whole again; "
+                              "2 its spider off up its web; 3 torn as by another car (RACEMOD.CPP web=).");
     Console_RegisterCommandEx("racecars", cmd_racecars, "Race-track: where every car is", "racecars",
                               "Twinsen's car and each opponent's, a line each: car <n> <x> <z> <beta> <name> (island units; n -1 "
                               "Twinsen). The editor's minimap asks for it while it plays a race (RACEMOD.CPP).");

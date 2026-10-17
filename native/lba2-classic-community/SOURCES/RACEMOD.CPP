@@ -136,6 +136,10 @@
  *                                at Twinsen's car from, now and then, as it comes up to it -- pulling up to pass just over it (Dives)
  *     scare=<body> <x> <z> <y> <turn>   something that jumps up out of the floor beside the road as his car comes by (Scares)
  *     haunt=<ghost> <icon>       the ghost power-up: <ghost> (BODY.HQR) circling over each car it haunts, <icon> the item box's (HauntOthers)
+ *     web=<x> <y> <z> <way x> <way z> <half> <height> <hub> <hole half> <hole height> <spider> <spider>   a giant web across the road that
+ *                                the cars drive through, tearing it (Webs; its parts web_part= after it)
+ *     web_part=<kind> <body> <across> <up> <turn>   a part of the web before it: 0 always, 1 while it is whole, 2 a tatter once it is torn,
+ *                                3 a scrap the car flings along with it (DrawWebs)
  */
 #include <errno.h>
 #include <string.h>
@@ -1167,6 +1171,62 @@ static double s_oppSwayMost[RACE_MAX_OPPONENTS], s_oppEdgeLeast[RACE_MAX_OPPONEN
 static T_OBJ_3D s_hauntObj[RACE_MAX_OPPONENTS];
 static int s_hauntReady[RACE_MAX_OPPONENTS];
 static S32 s_hauntAt = 0, s_hauntUntil = 0;   // Twinsen's screen haunted since, until (0: not)
+// The giant web the lap drives through (the Temple of Bú's -- the user, 2026-10-17: "Can we also improve the temple track add in some
+// cobwebs, perhaps a giant cobweb we have to drive through"), drawn into the background as the frog is -- its depth written, so a car
+// behind its strands is hidden by them -- and touching nothing:
+//   - web=<x> <y> <z> <way x> <way z> <half> <height> <hub> <hole half> <hole height> <spider> <spider>: its foot (island units: the road's
+//     middle under it, the road's height there), the lap's way through it (thousandths), its posts either side of its foot, its top and
+//     its hub over the road, the hole a car tears through it (half an ellipse standing on the road), its spider's two bodies (its legs one
+//     way and the other);
+//   - web_part=<kind> <body> <across> <up> <turn>: a part of the web before it (BODY.HQR), drawn there -- across to the left of the way, up
+//     over its foot, turned -- 0 always (its frame and what a car leaves of it), 1 while it is whole (its middle), 2 once it is torn: a
+//     tatter hanging from a torn radial, swung along the way by the car and swinging back, dying down; 3 for RACE_WEB_SCRAP_MS after the
+//     tear: a scrap the car flings along with it, falling.
+// A car -- any -- crossing it the lap's way between its posts tears it ("Twinsen's car tears through the giant web"); it is whole again
+// RACE_WEB_MEND later, once Twinsen's car isn't coming up to it (never seen mending). Its spider sits at its hub, its back to the cars
+// coming; a car coming within RACE_WEB_SPIDER sends it scuttling up to the web's top thread, its legs in turn, and there it stays while
+// the web is torn. Twinsen's car tearing it: a web stuck over his screen as the camera goes through, see-through, RACE_WEB_SCREEN_MS
+// (DrawWebScreen). Nothing is slowed or stopped.
+#define RACE_MAX_WEBS 2
+#define RACE_MAX_WEB_PARTS 64
+#define RACE_WEB_MEND 15000                 // ms torn at the least ...
+#define RACE_WEB_SEEN (80 * 512.0)          // ... and not mended while Twinsen's car is this near, coming up to it
+#define RACE_WEB_SPIDER (34 * 512.0)        // a car this near, coming: its spider scuttles up ...
+#define RACE_WEB_SPIDER_MS 900              // ... taking this long to the top ...
+#define RACE_WEB_STEP_MS 90                 // ... its legs in turn this often
+#define RACE_WEB_SWING 1.15                 // a tatter swung this far (radians) along the way by the car tearing through ...
+#define RACE_WEB_SWING_MS 1150              // ... back and forth once in this long ...
+#define RACE_WEB_SWING_DIE 1600.0           // ... dying down over about this long (ms) ...
+#define RACE_WEB_SWAY 0.08                  // ... to a sway this big, for good
+#define RACE_WEB_SCRAP_MS 1300              // the scraps fly this long ...
+#define RACE_WEB_SCRAP_FALL 4500.0          // ... falling this fast (units a second, a second)
+#define RACE_WEB_SCREEN_MS 1700             // the web over Twinsen's screen: this long in all, ...
+#define RACE_WEB_SCREEN_IN 90               // ... coming over this long, going over the last RACE_WEB_SCREEN_OUT
+#define RACE_WEB_SCREEN_OUT 1100
+#define RACE_WEB_SCREEN_LATE 1000           // (from the tear: the camera that never goes through it -- another camera's -- has it on then)
+#define RACE_WEB_SCREEN_SHARE 0.42          // its threads this share of the way to the haunting's pale colour at their strongest
+typedef struct { int Kind, Body, Ready; double Across, Up; S32 Turn; T_OBJ_3D Obj; } T_RACE_WEB_PART;
+typedef struct {
+    double X, Y, Z, Wx, Wz, Half, Tall, Hub, HoleHalf, HoleUp;
+    S32 Beta;
+    int Spider[2], SpiderReady[2];
+    T_OBJ_3D SpiderObj[2];
+    int NbParts;
+    T_RACE_WEB_PART Parts[RACE_MAX_WEB_PARTS];
+    // torn (since, by whom, where across, how fast it was going), the cars gone through it torn since (a bit each, Twinsen's the first);
+    // its spider off up from its hub since (0: at its hub); each car's place along the way last frame (LastOk: it was seen)
+    int Torn, Tearer, Through;
+    S32 TornAt, SpiderAt;
+    double TearAcross, TearSpeed;
+    double LastD[RACE_MAX_OPPONENTS + 1];
+    int LastOk[RACE_MAX_OPPONENTS + 1];
+    // the camera after Twinsen's car tore it (1: watched for till it goes through), where it was last frame along the way
+    int CamWatch;
+    double CamLast;
+} T_RACE_WEB;
+static T_RACE_WEB s_webs[RACE_MAX_WEBS];
+static int s_nbWebs = 0;
+static S32 s_webScreenAt = 0, s_webScreenUntil = 0;   // a web over Twinsen's screen since, until (0: none)
 static S32 s_bittenUntil[RACE_MAX_OPPONENTS + 1];  // a car just bitten is let be till then -- a monster beside it doesn't bite it again
 // The giant frog (frog=: see "the giant frog" further on)
 #define RACE_FROG_CLEAR 600                // ms the mouth has to stay open once a car is in it: past the jaw, its hinge 7 cells in --
@@ -2643,6 +2703,26 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "haunt")) {
             if (sscanf(v, "%d %d", &s_hauntBody, &s_hauntIcon) != 2) s_hauntBody = s_hauntIcon = -1;
+        }
+        else if (!strcmp(key, "web")) {
+            int f[12];
+            if (s_nbWebs < RACE_MAX_WEBS && sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d", &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6], &f[7], &f[8], &f[9],
+                                                   &f[10], &f[11]) == 12 && f[5] > 0 && (f[3] || f[4])) {
+                T_RACE_WEB *w = &s_webs[s_nbWebs++];
+                memset(w, 0, sizeof(*w));
+                const double len = sqrt((double)f[3] * f[3] + (double)f[4] * f[4]);
+                w->X = f[0]; w->Y = f[1]; w->Z = f[2]; w->Wx = f[3] / len; w->Wz = f[4] / len;
+                w->Half = f[5]; w->Tall = f[6]; w->Hub = f[7]; w->HoleHalf = f[8]; w->HoleUp = f[9]; w->Spider[0] = f[10]; w->Spider[1] = f[11];
+                // (its parts' +z the way through it: the way's heading)
+                w->Beta = (S32)floor(atan2(w->Wx, w->Wz) * 4096 / (2 * 3.14159265358979) + 0.5) & 4095;
+            }
+        }
+        else if (!strcmp(key, "web_part")) {
+            int kind, body, across, up, turn;
+            if (s_nbWebs > 0 && sscanf(v, "%d %d %d %d %d", &kind, &body, &across, &up, &turn) == 5 && body >= 0 && s_webs[s_nbWebs - 1].NbParts < RACE_MAX_WEB_PARTS) {
+                T_RACE_WEB_PART *p = &s_webs[s_nbWebs - 1].Parts[s_webs[s_nbWebs - 1].NbParts++];
+                p->Kind = kind; p->Body = body; p->Across = across; p->Up = up; p->Turn = turn & 4095; p->Ready = 0;
+            }
         }
         else if (!strcmp(key, "gasmonster")) {
             int scene, neck, size, x, z, bx, bz, by, fy, anim0;
@@ -4500,10 +4580,12 @@ static double FrogCap(int n, const T_RACE_OPPONENT *o, S32 now) {
 
 // Drawn into the background (EXTFUNC.CPP AffGrilleExt, after the ground and the decor): the frog, posed, its depth written.
 static void DrawSpooks(void);
+static void DrawWebs(void);
 
 void RaceMod_DrawBackdrop(void) {
     if (!RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return;
     DrawSpooks();
+    if (s_nbWebs) DrawWebs();
     if (!s_frog.On) return;
     T_OBJ_3D *o = &s_frog.Obj;
     if (!s_frog.Ready) {
@@ -4561,6 +4643,81 @@ static void DrawSpooks(void) {
         UnsetClip();
         ObjectDisplay(o);
         drawn++;
+    }
+    if (drawn) SetCLUT(clut);
+}
+
+// A body of BODY.HQR drawn into the background where it is (island units), turned to `beta` and posed in its own frame (CarPose: `phi`
+// nose down, `psi` yawed), made ready in `obj` the first time (*ready -1: no such body, left out) -- the fog and the filler already set.
+static void BackdropBody(T_OBJ_3D *obj, int *ready, int body, double x, double y, double z, S32 beta, double phi, double psi) {
+    if (*ready < 0 || body < 0) return;
+    if (!*ready) {
+        if (!GivePtrBody(body)) { *ready = -1; Log_Info("[racemod] giant web: no body %d -- left out", body); return; }
+        ObjectClear(obj);
+        obj->Body.Num = -1;
+        ObjectInitBody(obj, (void *)(uintptr_t)(U32)body);
+        obj->Texture = BufferTexture; obj->NextTexture = BufferTexture;
+        *ready = 1;
+    }
+    obj->X = (S32)floor(x - CurrentCubeX * 32768.0 + 0.5); obj->Y = (S32)floor(y + 0.5); obj->Z = (S32)floor(z - CurrentCubeY * 32768.0 + 0.5);
+    CarPose(obj, beta & 4095, phi, psi);
+    memset(obj->CurrentFrame, 0, sizeof(obj->CurrentFrame));
+    ObjectDisplay(obj);
+}
+
+// The giant webs (web=), where the camera is, as the frog is drawn -- the fog by the web's middle's distance, the depth written: each part
+// where it is in the web (across to the left of the way, up over its foot) -- its middle while it is whole; once torn, the tatters
+// swinging from the torn threads, flung along the way and swinging back, dying down to a sway, and for a moment the scraps flung after the
+// car, falling and tumbling -- and its spider.
+static void DrawWebs(void) {
+    const S32 now = TimerRefHR;
+    const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
+    int drawn = 0;
+    for (int i = 0; i < s_nbWebs; i++) {
+        T_RACE_WEB *w = &s_webs[i];
+        const double ax = w->Wz, az = -w->Wx;
+        LongWorldRotatePoint((S32)floor(w->X - CurrentCubeX * 32768.0 + 0.5), (S32)floor(w->Y + w->Tall / 2 + 0.5), (S32)floor(w->Z - CurrentCubeY * 32768.0 + 0.5));
+        const S32 zr = CameraZr - Z0;
+        if (zr > ClipZFar + 12000) continue;
+        SetCLUT(PalLevel + 16 * BoundRegleTrois(0, 15, ClipZFar - StartZFog, zr - StartZFog));
+        Switch_Fillers(FILL_POLY_FOG_ZBUFFER);
+        UnsetClip();
+        drawn++;
+        const double ms = now - w->TornAt, t = ms / 1000.0;
+        for (int k = 0; k < w->NbParts; k++) {
+            T_RACE_WEB_PART *p = &w->Parts[k];
+            double across = p->Across, up = p->Up, along = 0, phi = 0;
+            S32 beta = w->Beta + p->Turn;
+            if (p->Kind == 1 && w->Torn) continue;
+            if (p->Kind == 2) {
+                if (!w->Torn) continue;
+                // (nose down is positive: a thread hanging down swung along the way is negative)
+                phi = -(RACE_WEB_SWING * exp(-ms / RACE_WEB_SWING_DIE) * sin(ms * 2 * RACE_PI / RACE_WEB_SWING_MS) + RACE_WEB_SWAY * sin(now * 2 * RACE_PI / 2300.0 + k * 1.7));
+            }
+            if (p->Kind == 3) {
+                if (!w->Torn || ms >= RACE_WEB_SCRAP_MS) continue;
+                // (flung from its place along the way after the car, much slower -- the camera soon past it -- up and out from where the
+                // car went through; falling, tumbling; lying on the road once down)
+                const double frac = k * 0.618 - floor(k * 0.618);
+                along = (w->TearSpeed * (0.2 + 0.3 * frac) + 1200) * t;
+                across = p->Across + (p->Across - w->TearAcross) * 1.3 * t;
+                up = p->Up + (1800 + 1800 * frac) * t - RACE_WEB_SCRAP_FALL * t * t / 2;
+                if (up < 60) up = 60;
+                beta += (S32)(t * (k % 2 ? 2600 : -2200));
+                phi = t * (3 + 2 * frac);
+            }
+            BackdropBody(&p->Obj, &p->Ready, p->Body, w->X + ax * across + w->Wx * along, w->Y + up, w->Z + az * across + w->Wz * along, beta, phi, 0);
+        }
+        // its spider: at its hub, a little out from the web towards the cars coming, its back to them; off up to its top thread from a car
+        // coming, its legs in turn, and there while the web is torn (a leg twitching now and then at rest)
+        double u = 0;
+        if (w->SpiderAt) { u = (now - w->SpiderAt) / (double)RACE_WEB_SPIDER_MS; if (u > 1) u = 1; }
+        const double rest = w->Hub - 250, top = w->Tall - 350, climb = rest + (top - rest) * u * u * (3 - 2 * u);
+        const int moving = u > 0 && u < 1;
+        const int legs = moving ? (int)((now - w->SpiderAt) / RACE_WEB_STEP_MS) % 2 : now % 2700 < 160;
+        const double wobble = moving ? 90 * sin((now - w->SpiderAt) * 0.03) : 0;
+        BackdropBody(&w->SpiderObj[legs], &w->SpiderReady[legs], w->Spider[legs], w->X + ax * wobble - w->Wx * 120, w->Y + climb, w->Z + az * wobble - w->Wz * 120,
+                     w->Beta + 2048, 0, 0);
     }
     if (drawn) SetCLUT(clut);
 }
@@ -8086,6 +8243,80 @@ static void Scares(S32 now, int driving) {
     }
 }
 
+// A car as the giant web's log lines name it: Twinsen's, or an opponent's own name (its car's: "Tabata's spell book"); RACE_MAX_OPPONENTS
+// the console's other car (raceweb 3).
+static const char *WebCar(int who) { return who < 0 ? "Twinsen's car" : who >= RACE_MAX_OPPONENTS ? "another car" : s_opp[who].Name; }
+
+// A car (`who`, -1 Twinsen's) going through giant web i this frame, `across` its middle, `speed` along the way: tearing it if it is whole;
+// Twinsen's tearing it, the web over his screen once the camera goes through it.
+static void WebThrough(int i, int who, double across, double speed, S32 now, const char *why) {
+    T_RACE_WEB *w = &s_webs[i];
+    if (w->Torn) {
+        if (!(w->Through & (1 << (who + 1)))) Log_Info("[racemod] %s goes through the torn giant web (torn %.1f s ago by %s)", WebCar(who), (now - w->TornAt) / 1000.0, WebCar(w->Tearer));
+        w->Through |= 1 << (who + 1);
+        return;
+    }
+    w->Torn = 1; w->Tearer = who; w->TornAt = now; w->TearAcross = across; w->TearSpeed = speed; w->Through = 1 << (who + 1);
+    if (!w->SpiderAt) w->SpiderAt = now;
+    Log_Info("[racemod] %s tears through the giant web%s (%.1f cells %s of its middle, %.0f km/h)", WebCar(who), why, fabs(across) / 512,
+             across >= 0 ? "left" : "right", speed * 3.6 / 512);
+    if (who < 0) { w->CamWatch = 1; w->CamLast = -1e18; }
+}
+
+// Every frame: the giant webs (web=) -- each car going through one the lap's way between its posts (crossing its plane since last frame,
+// no further than a jump of the scene's: not put there), its spider off up from a car coming, Twinsen's camera through it after his car
+// tore it, and each mended once torn long enough with Twinsen not coming up to it.
+static void Webs(S32 now) {
+    double tx, ty, tz;
+    const int twinsen = CubeMode == CUBE_EXTERIEUR && NewCube == -1 && CarAt(-1, &tx, &ty, &tz);
+    for (int i = 0; i < s_nbWebs; i++) {
+        T_RACE_WEB *w = &s_webs[i];
+        double nearest = 1e30;
+        int nearestWho = -2;
+        for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+            const int k = who + 1;
+            double x, y, z;
+            if (who < 0 ? !twinsen : !CarAt(who, &x, &y, &z)) { w->LastOk[k] = 0; continue; }
+            if (who < 0) { x = tx; y = ty; z = tz; }
+            // (along the way from its foot: negative still coming; across: to the left; up over the road)
+            const double dx = x - w->X, dz = z - w->Z, d = dx * w->Wx + dz * w->Wz, a = dx * w->Wz - dz * w->Wx, up = y - w->Y;
+            // (its speed along the way: its way's, CarWays -- the spooks' have it worked out every frame)
+            if (w->LastOk[k] && w->LastD[k] < 0 && d >= 0 && d - w->LastD[k] < 4000 && fabs(a) < w->Half && up > -800 && up < w->Tall)
+                WebThrough(i, who, a, s_carVX[k] * w->Wx + s_carVZ[k] * w->Wz, now, "");
+            if (d < 0 && -d < RACE_WEB_SPIDER && fabs(a) < w->Half + 2000 && up > -2500 && up < w->Tall && -d < nearest) { nearest = -d; nearestWho = who; }
+            w->LastD[k] = d; w->LastOk[k] = 1;
+        }
+        if (!w->SpiderAt && nearestWho > -2) {
+            w->SpiderAt = now;
+            Log_Info("[racemod] the giant web's spider scuttles up out of the way (%s %.0f cells off)", WebCar(nearestWho), nearest / 512);
+        }
+        // (the camera behind Twinsen's car going through it -- or, another camera's, never: the web over his screen all the same)
+        if (w->CamWatch) {
+            const double cd = (CameraX + CurrentCubeX * 32768.0 - w->X) * w->Wx + (CameraZ + CurrentCubeY * 32768.0 - w->Z) * w->Wz;
+            const int through = w->CamLast < 0 && cd >= 0 && w->CamLast > -1e17;
+            if (through || now - w->TornAt >= RACE_WEB_SCREEN_LATE) {
+                w->CamWatch = 0;
+                s_webScreenAt = now; s_webScreenUntil = now + RACE_WEB_SCREEN_MS;
+                Log_Info("[racemod] a web over Twinsen's screen for %.1f s (%s %.2f s after his car)", RACE_WEB_SCREEN_MS / 1000.0,
+                         through ? "the camera through the giant web" : "the camera never through it", (now - w->TornAt) / 1000.0);
+            }
+            w->CamLast = cd;
+        }
+        if (w->Torn && now - w->TornAt >= RACE_WEB_MEND) {
+            int coming = 0;
+            if (twinsen) {
+                const double dx = tx - w->X, dz = tz - w->Z, d = dx * w->Wx + dz * w->Wz, a = dx * w->Wz - dz * w->Wx;
+                coming = d < 0 && -d < RACE_WEB_SEEN && fabs(a) < RACE_WEB_SEEN / 2;
+            }
+            if (!coming) {
+                Log_Info("[racemod] the giant web is whole again (torn %.1f s), its spider back at its hub", (now - w->TornAt) / 1000.0);
+                w->Torn = 0; w->SpiderAt = 0; w->Through = 0;
+            }
+        }
+    }
+    if (s_webScreenUntil && now >= s_webScreenUntil) s_webScreenAt = s_webScreenUntil = 0;
+}
+
 // Twinsen's ghost (PU_GHOST): every other car racing haunted RACE_HAUNT_MS -- not one on a super jet-pack, which nothing catches.
 static void HauntOthers(S32 now) {
     int haunted = 0;
@@ -8166,10 +8397,11 @@ static void HauntSway(int n, T_OBJET *car, S32 now) {
     car->Obj.Beta = (car->Obj.Beta + (S32)(RACE_HAUNT_TURN * e * cos(t))) & 4095;
 }
 
-// Every frame (RaceMod_Frame): the dives, the scares, and the hauntings' ends.
+// Every frame (RaceMod_Frame): the dives, the scares, the giant webs, and the hauntings' ends.
 static void Halloween(S32 now, int driving, S32 dt) {
     if (s_nbDives) Dives(now, driving, dt);
     if (s_nbScares) Scares(now, driving);
+    if (s_nbWebs) Webs(now);
     if (s_hauntUntil && now >= s_hauntUntil) {
         Log_Info("[racemod] the ghost over Twinsen's screen is gone: %.1f s in all", (now - s_hauntAt) / 1000.0);
         s_hauntAt = s_hauntUntil = 0;
@@ -8186,7 +8418,7 @@ static void Halloween(S32 now, int driving, S32 dt) {
 
 // ResetTrack: none of them.
 static void HalloweenReset(void) {
-    s_nbDives = 0; s_nbScares = 0;
+    s_nbDives = 0; s_nbScares = 0; s_nbWebs = 0; s_webScreenAt = s_webScreenUntil = 0;
     s_diving.On = 0; s_diving.Ready = 0; s_diving.Body = -1; s_diving.Hint = -1;
     s_hauntBody = s_hauntIcon = -1;
     HauntForget();
@@ -8236,6 +8468,22 @@ void RaceMod_TestScare(int n) {
     }
     s_scares[i].T0 = TimerRefHR;
     Log_Info("[racemod] a scare jumps up beside the road (scare %d, the console's)", i + 1);
+}
+
+// Console (tests): the giant web nearest Twinsen's car (raceweb): 1 torn now as by his car (the web over his screen too), 0 whole again,
+// 2 its spider off up its web, 3 torn now as by another car (his screen spared).
+void RaceMod_TestWeb(int what) {
+    double cx, cy, cz;
+    if (!RaceMod_Active() || !s_nbWebs || !CarAt(-1, &cx, &cy, &cz)) { Log_Info("[racemod] raceweb: no giant web, or no car"); return; }
+    int i = 0;
+    for (int k = 1; k < s_nbWebs; k++)
+        if ((cx - s_webs[k].X) * (cx - s_webs[k].X) + (cz - s_webs[k].Z) * (cz - s_webs[k].Z) < (cx - s_webs[i].X) * (cx - s_webs[i].X) + (cz - s_webs[i].Z) * (cz - s_webs[i].Z)) i = k;
+    T_RACE_WEB *w = &s_webs[i];
+    if (what == 0) { w->Torn = 0; w->SpiderAt = 0; w->Through = 0; w->CamWatch = 0; Log_Info("[racemod] the giant web is whole again (the console's)"); return; }
+    if (what == 2) { if (!w->SpiderAt) w->SpiderAt = TimerRefHR; Log_Info("[racemod] the giant web's spider scuttles up out of the way (the console's)"); return; }
+    w->Torn = 0;
+    if (what == 3) { WebThrough(i, RACE_MAX_OPPONENTS, 0, 15000, TimerRefHR, ", the console's"); return; }
+    WebThrough(i, -1, (cx - w->X) * w->Wz - (cz - w->Z) * w->Wx, 15000, TimerRefHR, ", the console's");
 }
 
 // Where the cars are going: each one's way (units a second) from its last place, every frame.
@@ -9419,6 +9667,87 @@ static void DrawHaunt(S32 now, S32 width, S32 height) {
     if (bx0 <= bx1 && by0 <= by1) BoxMovingAdd(bx0, by0, bx1, by1);
 }
 
+// The web over Twinsen's screen (his car through a giant web, web=): a web stuck on the camera as it went through -- its hub off the
+// screen's top left, its radials across the screen, a spiral round them, torn here and there -- see-through: under a thread the scene
+// RACE_WEB_SCREEN_SHARE of the way to the haunting's pale colour (its tables, HauntTables) at its strongest, dithered, fading in and out
+// and sliding down a little as it goes; the car itself, low in the middle, mostly clear of it.
+static U8 *s_webMask = NULL;                          // the threads, s_webMaskW x s_webMaskH: 1 a thread
+static S32 s_webMaskW = 0, s_webMaskH = 0;
+
+// A thread from (x0, y0) to (x1, y1) into the mask, `thick` pixels.
+static void WebMaskLine(double x0, double y0, double x1, double y1, double thick) {
+    const double len = sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
+    const int steps = (int)(len * 2) + 1, r = (int)ceil(thick / 2);
+    for (int s = 0; s <= steps; s++) {
+        const double x = x0 + (x1 - x0) * s / steps, y = y0 + (y1 - y0) * s / steps;
+        for (int dy = -r; dy <= r; dy++)
+            for (int dx = -r; dx <= r; dx++) {
+                if (dx * dx + dy * dy > thick * thick / 4 + 0.3) continue;
+                const int px = (int)floor(x + 0.5) + dx, py = (int)floor(y + 0.5) + dy;
+                if (px >= 0 && py >= 0 && px < s_webMaskW && py < s_webMaskH) s_webMask[py * s_webMaskW + px] = 1;
+            }
+    }
+}
+
+// The mask for a screen `width` x `height` (made again when that changes).
+static void WebMask(S32 width, S32 height) {
+    if (s_webMask && s_webMaskW == width && s_webMaskH == height) return;
+    free(s_webMask);
+    s_webMask = (U8 *)calloc((size_t)width * height, 1);
+    s_webMaskW = width; s_webMaskH = height;
+    if (!s_webMask) { s_webMaskW = s_webMaskH = 0; return; }
+    unsigned seed = 1017u;
+    #define WEB_RAND() ((seed = seed * 1103515245u + 12345u), ((seed >> 8) & 0xFFFF) / 65536.0)
+    enum { RADIALS = 12 };
+    const double hx = width * 0.1, hy = -height * 0.06, thick = height / 240.0 > 1.5 ? height / 240.0 : 1.5;
+    double ang[RADIALS];
+    for (int k = 0; k < RADIALS; k++) {
+        ang[k] = -0.25 + 1.95 * (k + 0.5 * (WEB_RAND() - 0.5)) / (RADIALS - 1);
+        WebMaskLine(hx, hy, hx + cos(ang[k]) * width * 2, hy + sin(ang[k]) * width * 2, thick * 1.3);
+    }
+    // (the spiral: a turn from each radial to the next, sagging towards the hub, some torn away)
+    for (double r = height * 0.08; r < width * 1.4; r *= 1.24) {
+        for (int k = 0; k + 1 < RADIALS; k++) {
+            if (WEB_RAND() < 0.2) continue;
+            const double r0 = r * (0.96 + 0.08 * WEB_RAND()), r1 = r * (0.96 + 0.08 * WEB_RAND());
+            const double ax = hx + cos(ang[k]) * r0, ay = hy + sin(ang[k]) * r0, bx = hx + cos(ang[k + 1]) * r1, by = hy + sin(ang[k + 1]) * r1;
+            const double mx = hx + ((ax + bx) / 2 - hx) * 0.95, my = hy + ((ay + by) / 2 - hy) * 0.95;
+            WebMaskLine(ax, ay, mx, my, thick);
+            WebMaskLine(mx, my, bx, by, thick);
+        }
+    }
+    #undef WEB_RAND
+    Log_Info("[racemod] the web over Twinsen's screen: %d x %d pixels", (int)width, (int)height);
+}
+
+// Over the scene (RaceMod_Draw), while a web is over Twinsen's screen.
+static void DrawWebScreen(S32 now, S32 width, S32 height) {
+    if (!s_webScreenUntil || now >= s_webScreenUntil || now < s_webScreenAt) return;
+    const S32 t = now - s_webScreenAt, left = s_webScreenUntil - now;
+    double e = t < RACE_WEB_SCREEN_IN ? (double)t / RACE_WEB_SCREEN_IN : left < RACE_WEB_SCREEN_OUT ? (double)left / RACE_WEB_SCREEN_OUT : 1;
+    e = e * e * (3 - 2 * e);
+    if (e < 0.02) return;
+    WebMask(width, height);
+    HauntTables();
+    if (!s_webMask) return;
+    const double p = (double)t / RACE_WEB_SCREEN_MS;
+    const S32 y0 = (S32)(height * 0.16 * p * p);
+    static const U8 bayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+    const double l = RACE_WEB_SCREEN_SHARE * e * RACE_HAUNT_LEVELS;
+    const int level = (int)l, frac = (int)((l - level) * 16);
+    for (S32 y = y0; y < height; y++) {
+        const U8 *m = s_webMask + (y - y0) * s_webMaskW;
+        U8 *row = (U8 *)Log + TabOffLine[y];
+        for (S32 x = 0; x < width; x++) {
+            if (!m[x]) continue;
+            int lv = level + (frac > bayer[y & 3][x & 3] ? 1 : 0);
+            if (lv > RACE_HAUNT_LEVELS) lv = RACE_HAUNT_LEVELS;
+            row[x] = s_hauntTab[0][lv][row[x]];
+        }
+    }
+    if (y0 < height) BoxMovingAdd(0, y0, width - 1, height - 1);
+}
+
 // The 3D view the library draws with (LIB386 3D: CAMERA.CPP, PROJ.CPP, LIGHT.CPP), saved whole and put back.
 typedef struct {
     S32 XCentre, YCentre, NearClip, LFactorX, LFactorY, TypeProj;
@@ -9667,9 +9996,11 @@ void RaceMod_Draw(void) {
     DrawDriveAs(now);
     DrawCheckpoints(height);
     DrawBolts(now, height);
-    // (Halloween's: the diving witch, the scares, the haunted cars' ghosts; another car's ghost over the screen, under the display)
+    // (Halloween's: the diving witch, the scares, the haunted cars' ghosts; another car's ghost over the screen, and a giant web's, under
+    // the display)
     DrawHalloween(now);
     DrawHaunt(now, width, height);
+    DrawWebScreen(now, width, height);
     // the item box, top left: its two slots
     if (items) {
         const S32 size = height / 8 > 60 ? height / 8 : 60, gap = size / 5;

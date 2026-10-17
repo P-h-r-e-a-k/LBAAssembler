@@ -177,11 +177,57 @@ not make it last more than about 10 seconds".
 Console (tests): `racedive [place]` a witch dives now, `racehaunt` the screen haunted as by another car's ghost, `racescare [n]` a scare
 jumps up now, `raceitem 12` Twinsen's ghost on the others.
 
+### Cobwebs and the giant web (2026-10-17)
+
+The user: "Can we also improve the temple track add in some cobwebs, perhaps a giant cobweb we have to drive through."
+
+![The giant web: seen coming, its spider fleeing, torn through, a web over the screen](temple/giant_web.png)
+
+- *The giant web* (`TempleHalloween.Cobwebs.cs`, the plan's `giantWebs`): across the long corridor's east doorway, between the two columns
+  either side of the road there, 12 cells across and 5,600 high. The lap comes up to it out of the dark at the top of the east spiral, 60
+  cells of straight, so it is seen from across the dark. An orb web of 26 radials and a spiral sagging between them, its strands pale
+  ribbons of the palette's greys (58-60), facing the cars coming. A giant spider (dark purple, its legs banded rust, eight glowing red eyes,
+  a pale skull on its back) sits at its hub, its back to the cars.
+- *What happens* (`RACEMOD.CPP web=`, Webs): a car coming within 34 cells sends the spider scuttling up to the web's top thread, its legs
+  in turn, in 0.9 s. A car -- any, the opponents too -- crossing it between the columns tears it ("Twinsen's car tears through the giant
+  web"): its middle, half an ellipse standing on the road the road's width and the camera's height, is gone; tatters hang from the torn
+  threads round the hole, flung along the way by the car and swinging back, dying down to a sway; scraps of web fly after the car for 1.3 s,
+  tumbling and falling. The cars after it go through the hole ("... goes through the torn giant web"). 15 s after the tear it is whole
+  again, its spider back at its hub -- but never while Twinsen's car is coming up to it, so he never sees it mend.
+- *On the screen*: Twinsen's car tearing it, a web sticks over his screen as the camera goes through (0.3 s after the car): its hub off
+  the top left, its threads across the screen, torn here and there, see-through as the ghost's overlay is (the haunting's blend tables,
+  42 % of the way to its pale colour at the most), sliding down a little and fading out, 1.7 s in all. Nothing slows or stops any car: the
+  test pilot's solo laps are the same to the hundredth of a second as before.
+- *How it is drawn*: by the race-track mode, into the background as the giant frog is (its depth written: a car behind its strands is hidden
+  by them). The race file has the web (`web=`) and its parts (`web_part=`: 0 drawn always -- the frame and what a car leaves, 1 its middle
+  while whole, 2 a tatter once torn, 3 a scrap after the tear), bodies of BODY.HQR the build appends (12: the frame's and the middle's
+  pieces, three tatters, two scraps, the spider's two leg poses). Its faces are pieces of no more than 700 (the near plane; the close flag):
+  the camera goes through it. A still copy, whole with its spider, stands among the island's decor for the editor's view (the frog's way:
+  hidden while racing by game variable 212, the temple's held variable).
+
+![A web a car ahead tore, driven through; the still copy in the editor's view](temple/giant_web_torn.png)
+
+- *Cobwebs round the lap* (the plan's decor kinds 10-15, drawn only): 30 webs and 9 spiders, none over the road. In the corners of the walls
+  beside it, hanging from the walls' tops (13, two big); across a door gap (1); between two of LBA1's columns (1); flat on the walls, as
+  LBA1's own cobwebs are, either side of the doorways the road goes through and along the walls beside it (15; not the corridor's frieze,
+  nor where a skeleton hangs); and small spiders hanging on their threads in front of every third corner's and wall's. Each is an orb web:
+  radials fanned from its hub, a spiral round them, threads hanging from an old one's bottom -- three of each corner's and wall's, made
+  differently. Its strands are thin pale ribbons seen from both sides.
+
+![Cobwebs round the lap](temple/cobwebs.png)
+
+Console (tests): `raceweb [0|1|2|3]`: the giant web torn now as by Twinsen's car (1, none: the web over his screen too), whole again (0),
+its spider off up its web (2), torn as by another car (3).
+
 **Tests**:
 
 - `E:\dump\TEMP\temple\pilot\run.sh <tag> <ticks>` is the headless pilot. CARF=car_fast.txt is a fast car with no qualifying.
 - `E:\dump\TEMP\temple\ui\ui_temple.ps1` builds in the race window, opens TEMPLE.ILE and Plays.
 - A regression build of every other track gives its 44 files byte-identical to the code before.
+- The cobwebs' round: `E:\dump\TEMP\templeweb` -- `suite.sh <tag>` (a race against the opponents, the pilot off its line, solo),
+  `shots.sh <tag> <every>` (a lap of screenshots), `regress.sh head|work` (every other track: 58 built files and 17 race files the same),
+  `templecmp.sh` (the temple alone: only TEMPLE.ILE, TEMPLE.OBL, RACETRACK.JSON and BODY.HQR differ -- its entries before the giant web's the
+  same -- and the race file only gains its web lines).
 
 ![The editor: TEMPLE.ILE open](temple/editor_view.png)
 

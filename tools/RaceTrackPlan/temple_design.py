@@ -464,6 +464,159 @@ for j, i in enumerate(range(60, n, int(48 / SP))):
 print('scares', len(scares), {nm: sum(1 for s_ in scares if s_[0] == kk) for kk, nm in enumerate(('skeleton', 'ghost'))})
 
 
+# ---- the giant web (the user, 2026-10-17: "Can we also improve the temple track add in some cobwebs, perhaps a giant cobweb we have to
+# drive through"): across the long corridor's east doorway, between the two columns either side of the road there (LBA1's, layout x 111, z
+# 67 and 72: their faces 6 cells either side of the road's middle) -- the doorway the lap comes into from the dark at the top of the east
+# spiral, 60 cells of straight leading up to it: seen coming across the dark, and driven straight through (RACEMOD.CPP web=: the cars tear
+# it) -- [x, z, the road's height there, the lap's way through it x and z, the columns' faces either side of the road's middle (cells)]
+WEB_X = OX + SCALE * 111 + 1.5                  # the columns' middles
+WEB_HALF = 6.0
+i_web = nearest((WEB_X, CORR_Z))
+u_web = heading(i_web)
+giant_webs = [[round(float(WEB_X), 2), float(CORR_Z), round(float(h[i_web]), 1), round(float(u_web[0]), 3), round(float(u_web[1]), 3), WEB_HALF]]
+print('giant web', giant_webs)
+
+# ... and cobwebs about the lap (TempleHalloween.Cobwebs: decor drawn only, off the road -- never over it -- where the camera following the
+# car sees them), each [kind, x, z, y, turn (, a drape's span in cells; which of three a corner's or a wall's is)]:
+#   - hanging from the tops of two walls across the corner they make (y the lower wall's top; a big one where both walls run on for two
+#     layout cells and rise high enough): the rooms' and corridors' corners beside the road, their walls WEB_RISE layers or more over the
+#     floor the road lies on, the corner facing the road with nothing between;
+#   - across an alcove or a door gap off the road (y its floor): a layout cell of that floor between two such walls, open towards the road;
+#   - between two of LBA1's columns beside the road (block 24, `ScriptRoundTrip templeblocks`) with nothing between them (y the top
+#     thread's height): WEB_COLUMNS;
+#   - flat on a wall, as LBA1's own cobwebs are (y the wall's top): either side of each doorway the road goes through, on the wall's face
+#     the car comes up to; and on the walls beside the road where none of the others is near;
+#   - a spider hanging on its thread in front of every third corner's and every third wall's (y its middle).
+# No two nearer than WEB_APART cells, nor nearer the giant web than WEB_CLEAR.
+CW_CORNER, CW_CORNER_BIG, CW_SHEET, CW_DRAPE, CW_SPIDER, CW_WALL = range(10, 16)
+WEB_RISE = 3                                    # layers over the floor, at the least
+WEB_APART = 7.0
+WEB_CLEAR = 14.0
+WEB_EDGE = 1.0                                  # cells from the road's edge to a web's nearest point, at the least ...
+WEB_FAR = 14.0                                  # ... and from it to a corner, at the most
+CORNER_REACH = {CW_CORNER: 1700 / 512, CW_CORNER_BIG: 2700 / 512}      # how far along each wall a corner's web reaches (cells)
+WALL_HALF = 1500 / 512                          # how far either side of its middle a wall's reaches (cells)
+WALL_EVERY = 12.0                               # a wall's beside the road about every this many cells of the lap
+WEB_COLUMNS = [((107, 67), (111, 67)), ((81, 123), (81, 127)), ((94, 107), (98, 107))]
+TURN_INTO = {(1, 1): 0, (1, -1): 1024, (-1, -1): 2048, (-1, 1): 3072}  # the turn that has a corner's web face into the room that way
+
+
+def rise(lx, lz, floor_layer):
+    t = column_top(lx, lz)
+    return -99 if t is None or (lx, lz) in cut_columns else t - floor_layer
+
+
+def in_sight(x0, z0, x1, z1, floor_layer):
+    """Nothing rising two layers or more over floor_layer between (x0, z0) and (x1, z1) (island cells), the road's doorways apart."""
+    steps = int(math.hypot(x1 - x0, z1 - z0) / 0.5) + 1
+    return all(rise(*layout_of(x0 + (x1 - x0) * k / steps, z0 + (z1 - z0) * k / steps), floor_layer) < 2 for k in range(1, steps))
+
+
+def road_off(x, z):
+    """The lap's point nearest (x, z), and how far (x, z) is from the road's edge there (cells)."""
+    d = np.hypot(lap_pts[:, 0] - x, lap_pts[:, 1] - z)
+    i = int(d.argmin())
+    return i, float(d[i] - half[i])
+
+
+webs = []
+for (lx, lz) in sorted(bits):
+    t = column_top(lx, lz)
+    if t is None or (lx, lz) in cut_columns: continue
+    cx, cz = OX + SCALE * (lx + 0.5), OZ + SCALE * (lz + 0.5)
+    i, off = road_off(cx, cz)
+    if off > WEB_FAR + 3 or abs(top(t) - (h[i] - DECK)) > LAYER + 10: continue
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            walls = [rise(lx + sx, lz, t), rise(lx, lz + sz, t), rise(lx + sx, lz + sz, t)]
+            if min(walls) < WEB_RISE: continue
+            vx, vz = OX + SCALE * (lx + (sx > 0)), OZ + SCALE * (lz + (sz > 0))
+            i2, off2 = road_off(vx, vz)
+            into = np.array([-sx, -sz]) / math.sqrt(2)
+            to_road = (lap_pts[i2] - np.array([vx, vz])) / max(1e-6, off2 + half[i2])
+            if off2 > WEB_FAR or float(into @ to_road) < 0.25 or not in_sight(vx - sx, vz - sz, *lap_pts[i2], t): continue
+            low = min(walls[0], walls[1])
+            big = rise(lx + sx, lz - sz, t) >= WEB_RISE and rise(lx - sx, lz + sz, t) >= WEB_RISE and low >= 5
+            kind = CW_CORNER_BIG if big and off2 >= CORNER_REACH[CW_CORNER_BIG] + WEB_EDGE else CW_CORNER
+            if off2 < CORNER_REACH[kind] + WEB_EDGE: continue
+            webs.append((i2, [kind, float(vx), float(vz), float(top(t + low) - 40), TURN_INTO[(-sx, -sz)]], (sx, sz)))
+    for ux, uz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        vx_, vz_ = -uz, ux
+        if min(rise(lx + vx_, lz + vz_, t), rise(lx - vx_, lz - vz_, t)) < WEB_RISE or rise(lx - ux, lz - uz, t) != 0: continue
+        back = rise(lx + ux, lz + uz, t)
+        if back < WEB_RISE and (back != 0 or ux < 0 or uz < 0): continue      # (an alcove; or a door gap, once)
+        mx, mz = cx - ux * (1.2 if back > 0 else 0), cz - uz * (1.2 if back > 0 else 0)
+        i2, off2 = road_off(mx, mz)
+        to_road = (lap_pts[i2] - np.array([mx, mz])) / max(1e-6, off2 + half[i2])
+        if off2 < WEB_EDGE + 1.5 or off2 > WEB_FAR or (back > 0 and float(np.array([-ux, -uz]) @ to_road) < 0.25): continue
+        if not in_sight(mx - ux * 0.6, mz - uz * 0.6, *lap_pts[i2], t): continue
+        webs.append((i2, [CW_SHEET, round(float(mx), 2), round(float(mz), 2), float(top(t)), turn_to(0, 0, ux, uz)], None))
+for (ax_, az_), (bx_, bz_) in WEB_COLUMNS:
+    x0_, z0_ = OX + SCALE * (ax_ + 0.5), OZ + SCALE * (az_ + 0.5)
+    x1_, z1_ = OX + SCALE * (bx_ + 0.5), OZ + SCALE * (bz_ + 0.5)
+    mx, mz = (x0_ + x1_) / 2, (z0_ + z1_) / 2
+    i2, off2 = road_off(mx, mz)
+    span = math.hypot(x1_ - x0_, z1_ - z0_)
+    # (the top thread at the columns' capitals: 6.5 of their 8 layers up from the floor beside them)
+    floor_layer = min(column_top(*c) for c in ((ax_ + (bz_ - az_) // 4, az_ + (bx_ - ax_) // 4), (ax_ - (bz_ - az_) // 4, az_ - (bx_ - ax_) // 4)) if column_top(*c) is not None)
+    webs.append((i2, [CW_DRAPE, round(float(mx), 2), round(float(mz), 2), float(top(floor_layer) + 6.5 * LAYER), turn_to(0, 0, -(z1_ - z0_), x1_ - x0_), round(span, 1)], None))
+# (the picks: along the lap, none too near another or the giant web; a spider in front of every third corner's)
+cobwebs = []
+for i2, w, corner in sorted(webs, key=lambda e: (e[0], e[1][0])):
+    if any(math.hypot(w[1] - c[1], w[2] - c[2]) < WEB_APART for c in cobwebs) or math.hypot(w[1] - WEB_X, w[2] - CORR_Z) < WEB_CLEAR: continue
+    # (a corner's one of three, in turn)
+    if corner: w = w + [sum(1 for c in cobwebs if c[0] in (CW_CORNER, CW_CORNER_BIG)) % 3]
+    cobwebs.append(w)
+    if corner and sum(1 for c in cobwebs if c[0] in (CW_CORNER, CW_CORNER_BIG)) % 3 == 1:
+        # (in front of the web's middle, its back to the room)
+        sx, sz = corner
+        reach = CORNER_REACH[w[0]]
+        cobwebs.append([CW_SPIDER, round(w[1] - sx * reach * 0.6, 2), round(w[2] - sz * reach * 0.6, 2), w[3] - 1750, turn_to(0, 0, -sx, -sz)])
+# (then webs flat on the walls, where none of those is near, each on a wall rising 3 to 6 layers over the floor -- not the corridor's
+# frieze -- along its whole width: first either side of each doorway the road goes through, on the wall's face the car comes up to, clear
+# of the doorway; then on the walls beside the road about every WALL_EVERY cells of the lap, not where a skeleton hangs)
+for i in range(0, n, 2):
+    lx, lz = layout_of(*pts[i])
+    if (lx, lz) in cut_columns or (layout_of(*pts[(i + 4) % n]) not in cut_columns and layout_of(*pts[(i + 6) % n]) not in cut_columns): continue
+    u = heading(i); nrm_ = np.array([-u[1], u[0]])
+    # (the face: the first cut cell's edge ahead along the road)
+    face = next((a for a in np.arange(0.25, 4.0, 0.25) if layout_of(*(pts[i] + u * a)) in cut_columns), None)
+    floor_layer = column_top(lx, lz)
+    if face is None or floor_layer is None: continue
+    for sd in (1, -1):
+        across_ = half[i] + CUT + WALL_HALF + 0.4
+        x, z = pts[i] + u * (face - 0.3) + nrm_ * sd * across_
+        rises = [rise(*layout_of(*(pts[i] + u * (face + 0.5) + nrm_ * sd * (across_ + s_))), floor_layer) for s_ in (-WALL_HALF, 0, WALL_HALF)]
+        if min(rises) < 3 or max(rises) > 6: continue
+        if any(math.hypot(x - c[1], z - c[2]) < WEB_APART for c in cobwebs) or math.hypot(x - WEB_X, z - CORR_Z) < WEB_CLEAR: continue
+        cobwebs.append([CW_WALL, round(float(x), 2), round(float(z), 2), float(top(floor_layer + min(rises)) - 40), turn_to(0, 0, -u[0], -u[1]),
+                        sum(1 for c in cobwebs if c[0] == CW_WALL) % 3])
+last_wall = -1e9
+for i in range(0, n, 2):
+    if S[i] - last_wall < WALL_EVERY: continue
+    for sd in ((1, -1) if (i // 40) % 2 else (-1, 1)):
+        found = wall_beside(i, sd, most=8.0)
+        if found is None: continue
+        off, layer, nrm = found
+        x, z = pts[i] + nrm * (off - 0.3)
+        tang = heading(i)
+        rises = [rise(*layout_of(*(pts[i] + nrm * (off + 0.4) + tang * s_)), layer) for s_ in (-WALL_HALF, 0, WALL_HALF)]
+        if min(rises) < 3 or max(rises) > 6: continue
+        if any(math.hypot(x - c[1], z - c[2]) < WEB_APART for c in cobwebs) or math.hypot(x - WEB_X, z - CORR_Z) < WEB_CLEAR: continue
+        if any(d_[0] in (SK_HANGING, SK_SLUMPED) and math.hypot(x - d_[1], z - d_[2]) < 4 for d_ in decor): continue
+        cobwebs.append([CW_WALL, round(float(x), 2), round(float(z), 2), float(top(layer + min(rises)) - 40), turn_to(x, z, *pts[i]),
+                        sum(1 for c in cobwebs if c[0] == CW_WALL) % 3])
+        # (a spider hanging in front of every third one's middle)
+        if sum(1 for c in cobwebs if c[0] == CW_WALL) % 3 == 2:
+            sx_, sz_ = pts[i] + nrm * (off - 0.75)
+            cobwebs.append([CW_SPIDER, round(float(sx_), 2), round(float(sz_), 2), cobwebs[-1][3] - 1750, turn_to(sx_, sz_, *pts[i])])
+        last_wall = S[i]
+        break
+decor += cobwebs
+print('cobwebs', len(cobwebs), {nm: sum(1 for c in cobwebs if c[0] == kk) for kk, nm in ((CW_CORNER, 'corner'), (CW_CORNER_BIG, 'big corner'), (CW_SHEET, 'sheet'), (CW_WALL, 'wall'),
+                                                                                     (CW_DRAPE, 'drape'), (CW_SPIDER, 'spider'))})
+
+
 # ---- the start: on the straight through the crypt's west room, heading east (the grid behind it, in the room)
 i_start = nearest((410, CRYPT_Z), i_down_out)
 print('start', i_start, tuple(np.round(pts[i_start], 1)), 'height', round(h[i_start]))
@@ -493,7 +646,7 @@ plan = {
     'railCamera': [9, 2100, 7, 500, 1000],
     'templeCuts': sorted([list(c) for c in cuts]),
     'pitSpots': pit_spots,
-    'halloween': {'decor': decor, 'spooks': spooks, 'pumpkins': True, 'dives': dives, 'scares': scares, 'haunt': True},
+    'halloween': {'decor': decor, 'spooks': spooks, 'pumpkins': True, 'dives': dives, 'scares': scares, 'haunt': True, 'giantWebs': giant_webs},
     'keepAbove': 0,
 }
 json.dump(plan, open(OUT, 'w'))

@@ -30,6 +30,9 @@ internal sealed class HalloweenRun
     public double[][]? Dives { get; set; }
     public double[][]? Scares { get; set; }
     public bool Haunt { get; set; }
+    // (2026-10-17) the giant webs the lap drives through (RACEMOD.CPP web=: TempleHalloween.Cobwebs), each [x, z, the road's height there,
+    // the lap's way through it x and z, how far its posts stand either side of the road's middle (cells)]
+    public double[][]? GiantWebs { get; set; }
 }
 
 // A spook (RACEMOD.CPP spook=): what it is (witch, ghost, bat), its flags (1 throws fire balls, 2 round and round its way), the height it
@@ -44,8 +47,13 @@ internal sealed class SpookRun
 
 internal static partial class TempleHalloween
 {
-    // (and since 2026-10-17 LBA1's skeleton in four poses: TempleHalloween.Skeletons)
-    public enum Kind { Lantern, GiantLantern, Grave, Cross, Candles, Cauldron, SkeletonLying, SkeletonSlumped, SkeletonHanging, SkeletonChained }
+    // (and since 2026-10-17 LBA1's skeleton in four poses: TempleHalloween.Skeletons; and cobwebs and spiders: TempleHalloween.Cobwebs)
+    public enum Kind
+    {
+        Lantern, GiantLantern, Grave, Cross, Candles, Cauldron, SkeletonLying, SkeletonSlumped, SkeletonHanging, SkeletonChained,
+        CobwebCorner, CobwebCornerBig, CobwebSheet, CobwebDrape, Spider, CobwebWall,
+    }
+    private static bool IsCobweb(Kind kind) => kind >= Kind.CobwebCorner;
     public static readonly string[] SpookKinds = { "witch", "ghost", "bat" };
     // the mushroom's entity's body the power-ups' pumpkins are (RaceTrackOil: 0 the game's mushroom, 1 the oil slick, 2 the big mushroom)
     public const int Pumpkin = 3;
@@ -171,6 +179,44 @@ internal static partial class TempleHalloween
                 for (var k = 0; k < sides; k++) Face(new[] { c + new Vector3(0, (float)profile[last].Y, 0), Pt(last, k), Pt(last, (k + 1) % sides) }, paint(last - 1), c + new Vector3(0, (float)profile[last].Y - 10, 0));
         }
 
+        // (2026-10-17) A strand of silk along `path`, `width` wide: a thin flat ribbon facing `normal` (and the other way too when `both`),
+        // its pieces sharing their corners where they meet (mitred), each no longer than `piece` (0: as the path's) -- a big web's: a
+        // polygon the camera passes close to is cut at the near plane, and the filler loses the depth of a long one running away from it.
+        public void Strand(IReadOnlyList<Vector3> path, float width, Paint paint, Vector3 normal, bool both, float piece = 0)
+        {
+            var pts = new List<Vector3> { path[0] };
+            for (var i = 1; i < path.Count; i++)
+            {
+                var d = path[i] - pts[^1];
+                if (d.Length() < 1) continue;
+                var pieces = piece > 0 ? Math.Max(1, (int)Math.Ceiling(d.Length() / piece)) : 1;
+                var from = pts[^1];
+                for (var k = 1; k <= pieces; k++) pts.Add(from + d * (k / (float)pieces));
+            }
+            if (pts.Count < 2) return;
+            // (each piece's side: across it in the ribbon's plane; at a joint the two sides' middle, longer as the joint is sharper)
+            var sides = new Vector3[pts.Count - 1];
+            for (var i = 0; i + 1 < pts.Count; i++)
+            {
+                var s = Vector3.Cross(Vector3.Normalize(pts[i + 1] - pts[i]), normal);
+                sides[i] = s.LengthSquared() < 1e-6f ? Vector3.UnitX : Vector3.Normalize(s);
+            }
+            var offsets = new Vector3[pts.Count];
+            for (var i = 0; i < pts.Count; i++)
+            {
+                if (i == 0 || i == pts.Count - 1) { offsets[i] = sides[Math.Min(i, sides.Length - 1)] * width / 2; continue; }
+                var m = sides[i - 1] + sides[i];
+                if (m.LengthSquared() < 1e-6f) { offsets[i] = sides[i] * width / 2; continue; }
+                m = Vector3.Normalize(m);
+                offsets[i] = m * width / 2 / MathF.Max(0.4f, Vector3.Dot(m, sides[i]));
+            }
+            for (var i = 0; i + 1 < pts.Count; i++)
+            {
+                Vector3 p = pts[i], q = pts[i + 1];
+                Face(new[] { p - offsets[i], q - offsets[i + 1], q + offsets[i + 1], p + offsets[i] }, paint, (p + q) / 2 - normal * 10, both);
+            }
+        }
+
         // a box between two corners
         public void Box(Vector3 lo, Vector3 hi, Paint paint)
         {
@@ -241,6 +287,8 @@ internal static partial class TempleHalloween
             }
             return list;
         }
+
+        public int FaceCount => Faces.Sum(f => f.Both ? 2 : 1);
 
         public byte[] Write(bool moving = false)
         {
@@ -496,30 +544,34 @@ internal static partial class TempleHalloween
     };
     private static double Tall(Kind kind) => kind switch { Kind.GiantLantern => 2400, Kind.Cross => 1800, Kind.Grave => 1400, Kind.Cauldron => 1100, _ => 1100 };
 
-    // ---- into the island: the plan's decor, drawn only, a body for each kind (RaceTrackReport.NewBodies, numbered from NewBodyBase)
+    // ---- into the island: the plan's decor, drawn only, a body for each kind (RaceTrackReport.NewBodies, numbered from NewBodyBase) -- a
+    // cobweb's for each of its sixth numbers (a drape's span, which of three)
     public static void PlaceDecor(IslandFile island, RaceTrackPlan plan, RaceTrackOptions o, RaceTrackReport report)
     {
         if (plan.Halloween?.Decor is not { Length: > 0 } decor) return;
         if (o.NewBodyBase < 0) { report.Notes.Add("WARNING: no place for the Halloween decor's bodies was prepared (the island's OBL wasn't counted)"); return; }
-        var bodies = new Dictionary<Kind, int>();
+        var bodies = new Dictionary<(Kind, double), int>();
         int placed = 0, left = 0, missing = 0;
         foreach (var d in decor.Where(d => d.Length >= 4))
         {
-            var kind = (Kind)Math.Clamp((int)d[0], 0, (int)Kind.SkeletonChained);
-            if (!bodies.TryGetValue(kind, out var body))
+            var kind = (Kind)Math.Clamp((int)d[0], 0, (int)Kind.CobwebWall);
+            var size = IsCobweb(kind) && d.Length > 5 ? d[5] : 0;
+            if (!bodies.TryGetValue((kind, size), out var body))
             {
                 // (a skeleton's model is LBA1's own: none without the LBA1 folder -- those left out)
-                var model = DecorModel(kind);
+                var model = IsCobweb(kind) ? CobwebModel(kind, size) : DecorModel(kind);
                 body = model is null ? -1 : o.NewBodyBase + report.NewBodies.Count;
                 if (model is not null) report.NewBodies.Add(model.Write());
-                bodies[kind] = body;
+                bodies[(kind, size)] = body;
             }
             if (body < 0) { missing++; continue; }
             double wx = (d[1] + plan.OriginCellX) * 512, wz = (d[2] + plan.OriginCellZ) * 512;
             var y = (int)Math.Round(d[3]);
             var beta = d.Length > 4 ? (int)Math.Round(d[4]) & 4095 : 0;
-            var reach = Reach(kind);
-            var (placedHere, full) = Palace.BrickBuilding.AddToCubes(island, body, beta, wx, y, wz, wx - reach, wx + reach, y - 100, Palace.BrickBuilding.NoBoxTop, wz - reach, wz + reach,
+            var reach = IsCobweb(kind) ? CobwebReach(kind, size) : Reach(kind);
+            // (a cobweb hanging from a wall's top: its box from under it)
+            var under = IsCobweb(kind) ? (int)Math.Round(CobwebHeight(kind, size).Under) : 100;
+            var (placedHere, full) = Palace.BrickBuilding.AddToCubes(island, body, beta, wx, y, wz, wx - reach, wx + reach, y - under, Palace.BrickBuilding.NoBoxTop, wz - reach, wz + reach,
                 IslandDecors.MaxPerCubeRaceTrack);
             if (placedHere > 0) placed++; else left++;
             _ = full;

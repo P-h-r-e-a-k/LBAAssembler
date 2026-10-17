@@ -370,6 +370,8 @@ internal sealed record RaceTrackIsland(
         Created = true, RaceFile = "temple", Look = (LBAAssembler.Terrain.Temple.TempleIsland.PaletteEntry, LBAAssembler.Terrain.Temple.TempleIsland.SkyEntry),
         NoHolomap = true, RailHeld = true, OwnScenes = true, FromLba1 = true, Roster = RaceDriver.Temple,
         Title = "The Temple of Bú: the Halloween race through LBA1's temple, down to its crypt and back (LBA1's scenes, made by the build)",
+        // (the giant web's still copy among the decor -- the editor's -- hidden: the race-track mode draws the web, TempleHalloween.PlaceGiantWebs)
+        HeldVars = new[] { (LBAAssembler.Terrain.Temple.TempleHalloween.GiantWebVar, 1) },
     };
 
     // An island drawn in a palette and under a sky of its own (RESS.HQR entries: the car file's island_palette=, island_sky=) -- the Temple of

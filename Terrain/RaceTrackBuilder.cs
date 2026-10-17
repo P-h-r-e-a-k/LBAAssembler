@@ -666,6 +666,12 @@ internal sealed class RaceTrackReport
     public List<Scare> Scares { get; } = new();
     public bool Haunt { get; set; }
     public (int Ghost, int Icon)? HauntBodies { get; set; }
+    // The giant webs the lap drives through (2026-10-17, RACEMOD.CPP web=, web_part=): each its foot (island cells, the road's height), the
+    // lap's way through it, its posts' half width (cells); once in BODY.HQR, its spider's two bodies and its parts (Temple.TempleHalloween
+    // .WebPart's kind, the body, its place across and up in the web, its turn)
+    public sealed record GiantWeb(double X, double Z, double Y, double WayX, double WayZ, double Half, int SpiderA = -1, int SpiderB = -1,
+        List<(int Kind, int Body, int Across, int Up, int Turn)>? Parts = null);
+    public List<GiantWeb> GiantWebs { get; } = new();
     // The raised road's branches (RaceTrackPlan.Branches) as planned -- their points in island cells, the lap's points they leave from and
     // come back onto -- and, once placed (PlaceBranch), each one's first and last point in Raised and the lap's points in Raised it leaves
     // from and comes back onto (RACEMOD.CPP raised_branch=); the lap's own points in Raised, the branches after them (raised_lap=).
@@ -1140,6 +1146,8 @@ internal static class RaceTrackBuilder
             report.Haunt = halloween.Haunt;
             if (report.Dives.Count > 0 || report.Scares.Count > 0)
                 report.Notes.Add($"the scares: {report.Dives.Count} places a witch dives at the car from, {report.Scares.Count} things jumping up beside the road{(report.Haunt ? "; the ghost power-up" : "")}");
+            // (its giant webs: drawn by the race-track mode, their bodies into BODY.HQR when the build finishes; a still copy among the decor)
+            LBAAssembler.Terrain.Temple.TempleHalloween.PlaceGiantWebs(island, plan, options, report);
         }
         Relight(island, index, options);
         if (planned) SeaEverywhere(island, main, report);

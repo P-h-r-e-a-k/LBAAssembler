@@ -173,7 +173,13 @@ internal static class RaceTrackService
         // 2026-10-17
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Dives = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Scares = null,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Haunt = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Haunt = null,
+        // GiantWebs: the giant webs the lap drives through, each [its foot x, y, z (island units), the lap's way through it x and z (thousandths),
+        // its posts' half width, its height, its hub's, the hole a car tears in it (half width, height), its spider's two bodies]; WebParts:
+        // each [the web it is of, its kind, its body, its place across and up the web, its turn] (Temple.TempleHalloween; RACEMOD.CPP web=,
+        // web_part=) -- the Temple of Bú's, since 2026-10-17
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? GiantWebs = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? WebParts = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -732,6 +738,8 @@ internal static class RaceTrackService
         log.AddRange(RaceTrackFrog.Install(gameDirectory, report));
         // ... and Halloween's spooks and pumpkins
         log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.Install(gameDirectory, report));
+        // ... and its giant webs
+        log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.InstallGiantWebs(gameDirectory, report));
         // ... and the palace dungeon's torturers, their whips in hand: at the end of a build of several tracks (Build: every other track's
         // bodies and animations where they were), or here
         if (report.Guards.Any(g => (int)g[0] == RaceTrackGuards.Torturer) && !session.Torturers)
@@ -917,7 +925,11 @@ internal static class RaceTrackService
             RaisedBranches: raised && report.RaisedBranches.Count > 0 ? report.RaisedBranches.ToList() : null,
             Dives: report.Dives.Count(d => d.Body >= 0) > 0 ? report.Dives.Where(d => d.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line).ToList() : null,
             Scares: report.Scares.Count(s => s.Body >= 0) > 0 ? report.Scares.Where(s => s.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line).ToList() : null,
-            Haunt: report.HauntBodies is { } haunt ? new[] { haunt.Ghost, haunt.Icon } : null);
+            Haunt: report.HauntBodies is { } haunt ? new[] { haunt.Ghost, haunt.Icon } : null,
+            GiantWebs: report.GiantWebs.Count(w => w.SpiderA >= 0) > 0 ? report.GiantWebs.Where(w => w.SpiderA >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line).ToList() : null,
+            WebParts: report.GiantWebs.Count(w => w.SpiderA >= 0) > 0
+                ? report.GiantWebs.Where(w => w.SpiderA >= 0).SelectMany((w, i) => LBAAssembler.Terrain.Temple.TempleHalloween.PartLines(w).Select(p => new[] { i }.Concat(p).ToArray())).ToList()
+                : null);
     }
 
     // A machine gun on its knoll as the car file has it: its scene and actors, the muzzle (the gun stands 0.8 cells towards where it fires
