@@ -29,8 +29,12 @@ internal static class RaceCarEngineFile
         var track = info is null ? null : RaceTrackService.Raced(info);
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
         var text = new StringBuilder("# LBA Assembler race car setup (read by the engine's race-track mode, RACEMOD.CPP)\n");
+        // (the track's best setup, when the setup says so: its top speed, acceleration and steering in place of the sliders' -- a dreamt
+        // sprint's in place of the dream's own top speed too)
+        var best = car.UseTrackSetups ? BestSetup(info) : null;
+        if (best is not null) text.Append($"# the track's best setup (docs/LBA2_RACE_TRACK_STRESS_TEST.md): {best}\n");
         // (a dreamt sprint: the car's gears scaled to its own top speed -- Twinsen's car is a lot faster in his dream)
-        text.Append(car.CarKeys(track?.Dream is { TopKmh: > 0 } scaled ? scaled.TopKmh : null));
+        text.Append((best is null ? car : car.With(best)).CarKeys(best is null && track?.Dream is { TopKmh: > 0 } scaled ? scaled.TopKmh : null));
         // (a line's height, when it has one: a lap that passes over itself crosses the line's place at other heights too)
         static string Height(RaceTrackService.StartLineInfo line) => line.Y is { } y ? $" {y}" : "";
         if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}{Height(l)}\n");
@@ -226,6 +230,20 @@ internal static class RaceCarEngineFile
         return text.ToString();
     }
 
+    // The best setup (RaceCarSetup.TrackSetups) of the track a record races: its island's entry's -- of an island with a track in each
+    // file, the entry of the one raced (Citadel Island's town circuit or its storm track, as Raced picks) -- null for a track with none.
+    internal static RaceCarSetup.TrackSetup? BestSetup(RaceTrackService.TrackInfo? info)
+    {
+        // (not ByName: that takes a name it doesn't know for the Desert island's)
+        if (info is null || RaceTrackIsland.All.FirstOrDefault(i => string.Equals(i.Name, info.Island, StringComparison.OrdinalIgnoreCase)) is not { } island) return null;
+        if (island.TwinIleFile is not null)
+        {
+            var twin = info.Twin is not null && ReferenceEquals(RaceTrackService.Raced(info), info.Twin);
+            island = RaceTrackIsland.All.FirstOrDefault(i => i.IleFile == island.IleFile && i.RacesTwin == twin) ?? island;
+        }
+        return RaceCarSetup.TrackSetups.GetValueOrDefault(island.Name);
+    }
+
     // The car's handling, as the setup makes it -- with `topKmh`, every gear's top speed scaled so the top gear's is that (Polar Island's
     // dream race: 120 km/h).
     private static string CarKeys(this RaceCarSetup car, int? topKmh = null)
@@ -365,6 +383,7 @@ internal static class RaceCarEngineFile
     // The game played as a game (RaceTrackService.CarFileWriter's story): every track of the folder in a car file of its own beside `path`,
     // and `path` the set (RACEMOD.CPP track=) -- the car's handling, which of them is raced where and when (the engine loads the one of the
     // island it enters: Citadel Island's storm track in the storm, its town circuit once the storm is over), and the story's tired line.
+    // (each track's file with its best setup, when the setup says so; the set's own handling, for an island with no track, the sliders')
     internal static void WriteStorySet(this RaceCarSetup car, string path, RaceTrackService.TrackInfo info)
     {
         var folder = Path.GetDirectoryName(path) ?? ".";

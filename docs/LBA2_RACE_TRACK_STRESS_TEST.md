@@ -73,6 +73,19 @@ What it says:
 player's own car"), so a better setup makes the whole field faster and the race no easier. For per-track setups to matter in a race, the
 opponents would need a car of their own (the track's reference setup).
 
+**In the Race car window (2026-10-17).** The user: "Yesterday we calculated the optimum car setup for each track, let's add this as an
+option to override the test sliders we currently have for car setup." The Car tab's "Use each track's best setup for its top speed,
+acceleration and steering" (off unless ticked; `RaceCarSetup.UseTrackSetups` in the settings) drives the track Play races with the
+suggestion above in place of those three sliders: its top speed scales the gears as the top speed slider does, and braking, rolling,
+reverse and the gearbox stay the sliders'. The sliders keep their values, greyed while they are overridden, and drive a track with no
+suggestion (one built later) and every track once the box is cleared. The window says which setup applies (the track Play races; from
+the race track window, each of the folder's tracks). The table is `RaceCarSetup.TrackSetups`, by race track entry (Citadel Island's
+two tracks each have one). Each track's lowest planned lap in `plan3.txt` is the table's setup; Wannies Island and the Emperor's
+palace each have a tie at the third decimal place, and the table takes the first of the pair. The race file says which it
+used (`# the track's best setup ...`, then the car keys), in each track's file of the story's set too, where the set's own keys (an
+island with no track) stay the sliders'. Polar Island's dreamt sprint takes the suggestion's 143 km/h in place of the dream's own 120
+(its waking gears stay the sliders'). Test: `RT_TRACK_SETUP=1 ScriptRoundTrip racecarfile ...`.
+
 ## What the stress runs found
 
 72 races and 36 time trials: no crashes, no game-clock warnings, no missed checkpoints, every race finished (the storm lap has no

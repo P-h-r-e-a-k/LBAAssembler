@@ -69,6 +69,11 @@ public sealed class RaceCarSetup
     public const int OwnBuggy = -1, LaserGreen = -2, LaserRed = -3;
     // (that car as the folder's files have it, worked out when the car file is written: RaceTrackService.CarFileWriter)
     [System.Text.Json.Serialization.JsonIgnore] internal string? DriveAsKey { get; set; }
+    // Each track's best setup (TrackSetups) in place of the sliders' top speed, acceleration and steering on the track Play races; braking,
+    // rolling, reverse and the gearbox stay this setup's own, and a track with no best setup drives as the sliders say. Off unless asked for
+    // (2026-10-17, the user: "Yesterday we calculated the optimum car setup for each track, let's add this as an option to override the test
+    // sliders we currently have for car setup"): RaceCarEngineFile.EngineFile.
+    public bool UseTrackSetups { get; set; }
 
     public RaceCarSetup Clone()
     {
@@ -86,6 +91,69 @@ public sealed class RaceCarSetup
         new Preset("Race car (5 gears)", new RaceCarSetup()),
         new Preset("Fast race car (6 gears)", new RaceCarSetup { Gears = 6, GearTopKmh = new() { 12, 18, 24, 30, 37, 44 }, AccelerationPercent = 130, BrakingPercent = 160, CoastingPercent = 110, ReverseKmh = 16, SteeringPercent = 125 }),
     };
+
+    // A track's best setup, in the Race car window's terms: the top gear's top speed (the other gears scaled with it, as the top speed
+    // slider does: SetTopSpeed), the acceleration and the steering. Track: as the stress test's table names it.
+    public sealed record TrackSetup(string Track, int TopKmh, int AccelerationPercent, int SteeringPercent)
+    {
+        public override string ToString() => $"{Track}: top speed {TopKmh} km/h, acceleration {AccelerationPercent} %, steering {SteeringPercent} %";
+    }
+
+    // Each track's best setup (UseTrackSetups), by its race track entry's name (Terrain.RaceTrackIsland: Citadel Island's town circuit is
+    // its entry "Citadel Island", its storm track "Citadel Island, storm track"; Celebration Island's statue track and its lava lake are
+    // two islands). From the stress test of 2026-10-16 (docs/LBA2_RACE_TRACK_STRESS_TEST.md, "What each track rewards"; tools/RaceTrackStress,
+    // stress.py plan): the engine's planner's fastest lap of the setups that share a budget with the standalone game's car -- five gears to
+    // 45/57/63/97/110 km/h, acceleration 300 %, braking 300 %, steering 200 % -- top speed, acceleration and steering each 70-130 % of the
+    // car's, the three summing to 300, the braking left as it was (it was worth almost nothing). A track built later has none until it is
+    // planned too.
+    public static IReadOnlyDictionary<string, TrackSetup> TrackSetups { get; } = new (Terrain.RaceTrackIsland Island, TrackSetup Best)[]
+    {
+        (Terrain.RaceTrackIsland.Desert, new("Desert island", 110, 210, 260)),
+        (Terrain.RaceTrackIsland.CitadelStorm, new("Citadel, storm lap", 110, 210, 260)),
+        (Terrain.RaceTrackIsland.Citadel, new("Citadel, town circuit", 110, 210, 260)),
+        (Terrain.RaceTrackIsland.Mosquibe, new("Mosquibees Island", 116, 210, 250)),
+        (Terrain.RaceTrackIsland.Celebration, new("Celebration Island", 104, 225, 260)),
+        (Terrain.RaceTrackIsland.CelebrationLava, new("Celebration, lava lake", 104, 225, 260)),
+        (Terrain.RaceTrackIsland.Elevator, new("Elevator Platform", 110, 210, 260)),
+        (Terrain.RaceTrackIsland.Sendell, new("Sendell's Well", 94, 255, 260)),
+        (Terrain.RaceTrackIsland.Moon, new("The old moon", 94, 255, 260)),
+        // (a dreamt sprint: in place of the dream's own top speed, DreamInfo.TopKmh, too)
+        (Terrain.RaceTrackIsland.Polar, new("Polar Island", 143, 210, 200)),
+        (Terrain.RaceTrackIsland.Knartas, new("Island of the Francos", 116, 210, 250)),
+        (Terrain.RaceTrackIsland.Otringal, new("Otringal", 110, 210, 260)),
+        (Terrain.RaceTrackIsland.Volcano, new("Volcano Island", 116, 210, 250)),
+        (Terrain.RaceTrackIsland.Emerald, new("The Emerald Moon", 110, 210, 260)),
+        (Terrain.RaceTrackIsland.Wannies, new("Wannies Island", 116, 210, 250)),
+        (Terrain.RaceTrackIsland.Palace, new("The Emperor's palace", 126, 210, 230)),
+        (Terrain.RaceTrackIsland.CxTower, new("Island CX", 99, 240, 260)),
+        (Terrain.RaceTrackIsland.Temple, new("The Temple of Bú", 132, 210, 220)),
+    }.ToDictionary(t => t.Island.Name, t => t.Best, StringComparer.OrdinalIgnoreCase);
+
+    // This setup with a track's best top speed, acceleration and steering in place of its own.
+    public RaceCarSetup With(TrackSetup best)
+    {
+        var copy = Clone();
+        copy.SetTopSpeed(best.TopKmh);
+        copy.AccelerationPercent = best.AccelerationPercent;
+        copy.SteeringPercent = best.SteeringPercent;
+        return copy;
+    }
+
+    // The top speed slider's: every gear's top speed scaled so the top gear's is `kmh`, each still over the one below it.
+    public void SetTopSpeed(double kmh)
+    {
+        var gears = Math.Clamp(Gears, 1, MaxGears);
+        var top = TopKmh(gears - 1);
+        if (top <= 0) return;
+        while (GearTopKmh.Count < gears) GearTopKmh.Add(GearTopKmh.LastOrDefault(27));
+        var scaled = Enumerable.Range(0, gears).Select(g => TopKmh(g) * kmh / top).ToArray();
+        for (var g = 0; g < gears; g++)
+        {
+            if (g == gears - 1) { GearTopKmh[g] = (int)Math.Round(kmh); continue; }
+            var lo = g == 0 ? 1 : GearTopKmh[g - 1] + 1;
+            GearTopKmh[g] = Math.Clamp((int)Math.Round(scaled[g]), lo, Math.Max(lo, (int)Math.Round(kmh) - (gears - 1 - g)));
+        }
+    }
 
     public static int KmhToUnits(double kmh) => (int)Math.Round(kmh / 3.6 * 512);
     public static double UnitsToKmh(double units) => units * 3.6 / 512;

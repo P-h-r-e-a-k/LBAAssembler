@@ -151,7 +151,8 @@ internal static class RaceTrackCommand
     // (for looking at a place of the track in the game).
     // racecarfile <game folder> <out file> [pace]: (RT_RACE=<island file>: the track of that island, of a folder with several) the engine's car setup file Play would write for that folder (the default car, the
     // folder's RACETRACK.JSON: start line, checkpoints, the opponent's line beside it as racepath.txt), for headless tests. RT_WEATHER=rain:
-    // Citadel Island left raining (its storm track).
+    // Citadel Island left raining (its storm track). RT_TRACK_SETUP=1: the track's best setup over the default car's top speed,
+    // acceleration and steering (RaceCarSetup.UseTrackSetups).
     // baldinocar <game folder> <scratch folder>: Baldino's car built from the game folder's BODY.HQR and installed into copies of its BODY.HQR and
     // RESS.HQR in the scratch folder (for a look at it: BodyPipeline hqrpreview <scratch>\BODY.HQR <index>)
     public static int BaldinoCar(string[] args)
@@ -345,6 +346,8 @@ internal static class RaceTrackCommand
         if (Environment.GetEnvironmentVariable("RT_NO_OPPONENTS") == "1") setup.Opponent = false;
         // (RT_CHECKPOINTS=1: the checkpoints drawn as red lines across the road -- off by default)
         if (Environment.GetEnvironmentVariable("RT_CHECKPOINTS") == "1") setup.ShowCheckpoints = true;
+        // (RT_TRACK_SETUP=1: each track's best setup in place of the sliders' top speed, acceleration and steering)
+        if (Environment.GetEnvironmentVariable("RT_TRACK_SETUP") == "1") setup.UseTrackSetups = true;
         // (RT_DRIVE=<racer body>: driving as that opponent's car; -2 or -3 Twinsen's buggy firing green or red lasers)
         if (int.TryParse(Environment.GetEnvironmentVariable("RT_DRIVE"), out var drive)) { setup.DriveAs = drive; setup.DriveAsKey = RaceCarEngineFile.DriveAsLine(args[1], drive); }
         // (RT_RACE=<island file>: of a folder with several tracks, the one Play races with that island open in the editor, as RaceFor picks it)

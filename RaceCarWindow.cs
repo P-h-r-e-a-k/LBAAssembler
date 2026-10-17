@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 
 namespace LBAAssembler;
 
@@ -32,6 +34,22 @@ internal sealed class RaceCarWindow : Window
     // the race track window built it to race -- null for any other track, where the setup says
     private readonly bool? trackWeather;
     private readonly CheckBox startAtLine = new() { Content = "Start beside the car on the start/finish straight, with the editor's markings hidden" };
+    // each track's best setup in place of the top speed, acceleration and steering sliders (RaceCarSetup.UseTrackSetups): what it gives
+    // for the tracks told (TracksTold), the rows it overrides (greyed, their values kept), and a word on the gearbox tab
+    private readonly CheckBox trackSetups = new()
+    {
+        Content = "Use each track's best setup for its top speed, acceleration and steering",
+        ToolTip = "The setups the stress test found fastest on each track (docs/LBA2_RACE_TRACK_STRESS_TEST.md): the engine's planner's best lap of setups " +
+                  "trading top speed, acceleration and steering against each other, from the standalone game's car (110 km/h, acceleration 300 %, braking " +
+                  "300 %, steering 200 %). The sliders keep their values: they drive a track with no best setup, and every track when this is off.",
+    };
+    private readonly StackPanel trackSetupPanel = new() { Margin = new Thickness(18, 2, 0, 4) };
+    private readonly TextBlock trackSetupText = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly UniformGrid trackSetupGrid = new() { Columns = 2, Margin = new Thickness(0, 2, 0, 0) };
+    private readonly TextBlock gearboxNote = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6), FontStyle = FontStyles.Italic,
+        Text = "Each track's best setup is on (the Car tab): Play scales these gears so the top one is the track's top speed, as the top speed slider does." };
+    private readonly List<FrameworkElement> overridden = new();
+    private readonly List<(string Track, RaceCarSetup.TrackSetup? Best)> told;
     private readonly List<Action> refresh = new();
     private readonly TabControl tabs = new() { Margin = new Thickness(0, 0, 0, 0) };
     // the tab last shown, for the next time the window opens (this session)
@@ -79,11 +97,24 @@ internal sealed class RaceCarWindow : Window
         // (up to ten times the original buggy's, 2026-10-12, the user: "tweak them up to 1000% also expose top speed to be configured. I
         // want to test different combinations to optimise for different tracks")
         car.Children.Add(Section("Handling (the original buggy is 100 %)"));
-        car.Children.Add(SliderRow("Top speed (the top gear's; the others with it)", 5, RaceCarSetup.MaxKmh, 1, " km/h", () => setup.TopKmh(setup.Gears - 1), SetTopSpeed).Row);
-        car.Children.Add(SliderRow("Acceleration", 10, 1000, 5, " %", () => setup.AccelerationPercent, v => setup.AccelerationPercent = (int)v).Row);
+        // (each track's best setup, from the stress test of 2026-10-16, over the sliders -- 2026-10-17)
+        told = TracksTold(gameDirectory, track);
+        trackSetups.Checked += (_, _) => { setup.UseTrackSetups = true; ShowTrackSetups(); };
+        trackSetups.Unchecked += (_, _) => { setup.UseTrackSetups = false; ShowTrackSetups(); };
+        car.Children.Add(trackSetups);
+        trackSetupText.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
+        trackSetupPanel.Children.Add(trackSetupText);
+        trackSetupPanel.Children.Add(trackSetupGrid);
+        car.Children.Add(trackSetupPanel);
+        var topSpeed = SliderRow("Top speed (the top gear's; the others with it)", 5, RaceCarSetup.MaxKmh, 1, " km/h", () => setup.TopKmh(setup.Gears - 1), setup.SetTopSpeed).Row;
+        var acceleration = SliderRow("Acceleration", 10, 1000, 5, " %", () => setup.AccelerationPercent, v => setup.AccelerationPercent = (int)v).Row;
+        var steering = SliderRow("Steering", 10, 1000, 5, " %", () => setup.SteeringPercent, v => setup.SteeringPercent = (int)v).Row;
+        overridden.AddRange(new[] { topSpeed, acceleration, steering });
+        car.Children.Add(topSpeed);
+        car.Children.Add(acceleration);
         car.Children.Add(SliderRow("Braking", 10, 1000, 5, " %", () => setup.BrakingPercent, v => setup.BrakingPercent = (int)v).Row);
         car.Children.Add(SliderRow("Rolling to a stop (off the throttle)", 0, 1000, 5, " %", () => setup.CoastingPercent, v => setup.CoastingPercent = (int)v).Row);
-        car.Children.Add(SliderRow("Steering", 10, 1000, 5, " %", () => setup.SteeringPercent, v => setup.SteeringPercent = (int)v).Row);
+        car.Children.Add(steering);
         car.Children.Add(SliderRow("Top speed backwards", 5, 150, 1, " km/h", () => setup.ReverseKmh, v => setup.ReverseKmh = (int)v).Row);
 
         // ---- the gearbox
@@ -91,6 +122,8 @@ internal sealed class RaceCarWindow : Window
         gearbox.Children.Add(Text("X shifts up a gear and Z down, unless the gearbox is automatic. Each gear has its own top speed, and a low gear pulls " +
                                   "harder than a high one. Speeds are as the game's display shows them, a cell taken as a metre: the original buggy " +
                                   "tops out at 27 km/h.", new Thickness(0, 0, 0, 6)));
+        gearboxNote.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
+        gearbox.Children.Add(gearboxNote);
         for (var g = 1; g <= RaceCarSetup.MaxGears; g++) gears.Items.Add(g);
         gears.SelectionChanged += (_, _) => { if (updating || gears.SelectedItem is not int count) return; setup.Gears = count; ShowGearRows(); Edited(); };
         var gearCount = new StackPanel { Orientation = Orientation.Horizontal };
@@ -180,7 +213,7 @@ internal sealed class RaceCarWindow : Window
         play.Children.Add(showCheckpoints);
         askBeforePlay.Margin = new Thickness(0, 4, 0, 0);
         play.Children.Add(askBeforePlay);
-        foreach (var c in new Control[] { automatic, display, showCheckpoints, askBeforePlay, opponent, fightBack, powerUps, penguinsWalk, qualifying, fineWeather, startAtLine, newGame }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        foreach (var c in new Control[] { automatic, display, showCheckpoints, askBeforePlay, opponent, fightBack, powerUps, penguinsWalk, qualifying, fineWeather, startAtLine, newGame, trackSetups }) c.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
 
         foreach (var (header, page) in new[] { ("Car", car), ("Gearbox", gearbox), ("Opponents", race), ("Play", play) })
             tabs.Items.Add(new TabItem
@@ -221,10 +254,60 @@ internal sealed class RaceCarWindow : Window
         fineWeather.IsChecked = trackWeather ?? setup.FineWeather;
         startAtLine.IsChecked = setup.StartAtLine;
         driveAs.SelectedItem = driveAs.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is int g && g == setup.DriveAs) ?? driveAs.Items.OfType<ComboBoxItem>().FirstOrDefault();
+        trackSetups.IsChecked = setup.UseTrackSetups;
         foreach (var r in refresh) r();
         ShowGearRows();
+        ShowTrackSetups();
         preset.SelectedIndex = MatchingPreset();
         updating = false;
+    }
+
+    // The tracks whose best setups the window tells (RaceCarSetup.UseTrackSetups), each with its own (null: none): the one Play races,
+    // when it is known; else (from the race track window) each of the folder's, Citadel Island's two tracks each; with none built, all.
+    private static List<(string Track, RaceCarSetup.TrackSetup? Best)> TracksTold(string? gameDirectory, Terrain.RaceTrackService.TrackInfo? track)
+    {
+        if (track is not null) return new() { (track.Island, Terrain.RaceCarEngineFile.BestSetup(track)) };
+        var built = gameDirectory is null ? new List<Terrain.RaceTrackService.TrackInfo>() : Terrain.RaceTrackService.Tracks(Terrain.RaceTrackService.ReadInfo(gameDirectory));
+        if (built.Count == 0) return RaceCarSetup.TrackSetups.Values.Select(b => (b.Track, (RaceCarSetup.TrackSetup?)b)).ToList();
+        // (an island with a track in each file: each, as the story's set has them -- RaceCarEngineFile.WriteStorySet)
+        return built.SelectMany(t => t.Twin is not null
+                ? new[] { t with { Island = Terrain.RaceTrackIsland.CitadelStorm.Name }, t with { Island = Terrain.RaceTrackIsland.Citadel.Name } }
+                : new[] { t })
+            .Select(t => (t.Island, Terrain.RaceCarEngineFile.BestSetup(t))).ToList();
+    }
+
+    // The best setups over the sliders, or not: what they give, the sliders they override greyed (their own values kept for when it is
+    // off), and the gearbox's word.
+    private void ShowTrackSetups()
+    {
+        var on = setup.UseTrackSetups && told.Any(t => t.Best is not null);
+        trackSetupPanel.Visibility = setup.UseTrackSetups ? Visibility.Visible : Visibility.Collapsed;
+        trackSetupText.Inlines.Clear();
+        trackSetupGrid.Children.Clear();
+        if (told.Count == 1)
+        {
+            var (name, best) = told[0];
+            if (best is not null)
+            {
+                trackSetupText.Inlines.Add(new Run(best.ToString()) { FontWeight = FontWeights.SemiBold });
+                trackSetupText.Inlines.Add(new LineBreak());
+                trackSetupText.Inlines.Add(new Run("Play drives it so, in place of the three sliders greyed out below; braking, rolling, reverse and the gearbox are as set here."));
+            }
+            else trackSetupText.Inlines.Add(new Run($"{name} has no best setup yet: Play drives it as the sliders below say."));
+        }
+        else
+        {
+            trackSetupText.Inlines.Add(new Run("Play drives each track with its own top speed, acceleration and steering, in place of the three sliders greyed out below; " +
+                                               "braking, rolling, reverse and the gearbox are as set here."));
+            foreach (var (name, best) in told)
+                trackSetupGrid.Children.Add(Text(best is null ? $"{name}: none (the sliders')" : $"{best.Track}: {best.TopKmh} km/h, {best.AccelerationPercent} %, {best.SteeringPercent} %",
+                                                 new Thickness(0, 1, 8, 1)));
+        }
+        trackSetupGrid.Visibility = trackSetupGrid.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var row in overridden) { row.IsEnabled = !on; row.Opacity = on ? 0.5 : 1; }
+        gearboxNote.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        // (the pages as tall as the tallest again: the car's grows or shrinks by what it says)
+        if (IsLoaded) EvenTabs();
     }
 
     // The cars Twinsen can drive (RaceCarSetup.DriveAs): his buggy, and the racer entity's cars the folder's entity table has -- the
@@ -285,22 +368,6 @@ internal sealed class RaceCarWindow : Window
         setup.AccelerationPercent = chosen.AccelerationPercent; setup.BrakingPercent = chosen.BrakingPercent; setup.CoastingPercent = chosen.CoastingPercent;
         setup.SteeringPercent = chosen.SteeringPercent; setup.ReverseKmh = chosen.ReverseKmh; setup.Automatic = chosen.Automatic;
         Load();
-    }
-
-    // The top speed slider: every gear's top speed scaled so the top gear's is `kmh`, each still over the one below it.
-    private void SetTopSpeed(double kmh)
-    {
-        var gears = Math.Clamp(setup.Gears, 1, RaceCarSetup.MaxGears);
-        var top = setup.TopKmh(gears - 1);
-        if (top <= 0) return;
-        while (setup.GearTopKmh.Count < gears) setup.GearTopKmh.Add(setup.GearTopKmh.LastOrDefault(27));
-        var scaled = Enumerable.Range(0, gears).Select(g => setup.TopKmh(g) * kmh / top).ToArray();
-        for (var g = 0; g < gears; g++)
-        {
-            if (g == gears - 1) { setup.GearTopKmh[g] = (int)Math.Round(kmh); continue; }
-            var lo = g == 0 ? 1 : setup.GearTopKmh[g - 1] + 1;
-            setup.GearTopKmh[g] = Math.Clamp((int)Math.Round(scaled[g]), lo, Math.Max(lo, (int)Math.Round(kmh) - (gears - 1 - g)));
-        }
     }
 
     // Any value changed by hand: the preset box says Custom unless the values happen to be a preset's; and every slider shows its value
