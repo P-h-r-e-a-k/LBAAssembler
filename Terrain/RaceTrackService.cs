@@ -179,7 +179,11 @@ internal static class RaceTrackService
         // each [the web it is of, its kind, its body, its place across and up the web, its turn] (Temple.TempleHalloween; RACEMOD.CPP web=,
         // web_part=) -- the Temple of Bú's, since 2026-10-17
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? GiantWebs = null,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? WebParts = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? WebParts = null,
+        // Marshal: the flag marshal by the start line (Temple.TempleMarshal.Line; RACEMOD.CPP marshal=): her entity, its body and animations
+        // (ready, the raise, the drop, the wave), where she stands (island units: x, z, the top of her plinth) and the way she faces -- the
+        // Temple of Bú's, since 2026-10-17
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Marshal = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -421,6 +425,8 @@ internal static class RaceTrackService
             if (session.Torturers) log.AddRange(LBAAssembler.Terrain.Palace.PalaceTorturers.Install(gameDirectory));
             // (Twinsen's pumpkin F1, the Temple of Bú's own car and anyone's to drive, after every track's bodies: no body before it moves)
             log.AddRange(RaceTrackCharacterCars.InstallPumpkin(gameDirectory));
+            // (the Temple of Bú's flag marshal's body and animations after everything else's: Finish placed her)
+            if (session.Marshal) log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory));
             progress?.Report(new(1, "Done"));
             var count = tracks.Sum(t => t.Options.Island.Tracks);
             var built1 = count == 1 ? "The race track is built." : $"{count} race tracks are built ({string.Join(", ", tracks.Select(t => t.Options.Island.Built))}); Play races the one of the island the editor has open.";
@@ -444,7 +450,7 @@ internal static class RaceTrackService
     // all of them, and each track's record for RACETRACK.JSON, in the order built.
     public sealed class BuildSession
     {
-        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars, GuardBodies, Torturers;
+        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars, GuardBodies, Torturers, Marshal;
         // (Build's: the palace dungeon's torturers made when every track is -- Finish)
         public bool Together;
         public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel;
@@ -750,6 +756,17 @@ internal static class RaceTrackService
             session.Torturers = true;
             if (!session.Together) log.AddRange(LBAAssembler.Terrain.Palace.PalaceTorturers.Install(gameDirectory));
         }
+        // ... and the Temple of Bú's flag marshal by its start line: where she stands now (the race file's marshal=), her body and animations
+        // at the end of a build of several tracks (Build: every other track's where they were), or here
+        if (options.Island.FlagMarshal && LBAAssembler.Terrain.Temple.TempleMarshal.Place(gameDirectory, report) is { } marshal)
+        {
+            report.Marshal = marshal;
+            if (!session.Marshal)
+            {
+                session.Marshal = true;
+                if (!session.Together) log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory));
+            }
+        }
         return log;
     }
 
@@ -932,7 +949,8 @@ internal static class RaceTrackService
             GiantWebs: report.GiantWebs.Count(w => w.SpiderA >= 0) > 0 ? report.GiantWebs.Where(w => w.SpiderA >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line).ToList() : null,
             WebParts: report.GiantWebs.Count(w => w.SpiderA >= 0) > 0
                 ? report.GiantWebs.Where(w => w.SpiderA >= 0).SelectMany((w, i) => LBAAssembler.Terrain.Temple.TempleHalloween.PartLines(w).Select(p => new[] { i }.Concat(p).ToArray())).ToList()
-                : null);
+                : null,
+            Marshal: report.Marshal);
     }
 
     // A machine gun on its knoll as the car file has it: its scene and actors, the muzzle (the gun stands 0.8 cells towards where it fires

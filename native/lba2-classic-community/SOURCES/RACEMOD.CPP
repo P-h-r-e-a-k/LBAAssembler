@@ -156,6 +156,10 @@
  *                                penguin, oil or a fake mushroom dropped as he comes up behind it, a magic ball thrown with him ahead
  *                                (OpponentAims); <hazards> how often the track's own come at the cars (percent: the witches' fire balls
  *                                and their dives). With no difficulty= -- or none for that level -- the race is as the file has it.
+ *     marshal=<entity> <body> <ready> <raise> <drop> <wave> <x> <z> <y> <turn>   the flag marshal on her plinth by the start line (the
+ *                                entity's body and animations, its own numbers for them; island units, the plinth's top; the way she faces):
+ *                                the start flag raised for the count-down and dropped at GO (and for the qualifying lap as it begins), the
+ *                                chequered flag waved from the first car's finish until Twinsen's race is over (Marshal, DrawMarshal)
  */
 #include <errno.h>
 #include <string.h>
@@ -1317,6 +1321,30 @@ typedef struct {
 static T_RACE_WEB s_webs[RACE_MAX_WEBS];
 static int s_nbWebs = 0;
 static S32 s_webScreenAt = 0, s_webScreenUntil = 0;   // a web over Twinsen's screen since, until (0: none)
+// The flag marshal (marshal=<entity> <body> <ready> <raise> <drop> <wave> <x> <z> <y> <turn>): the Temple of Bú's -- the user, 2026-10-17:
+// "let's use the rabbibunny wizard assistant from the school of magic to drop a flag to start the race, and wave a chequered flag to end
+// the race" (LBA Assembler's Temple.TempleMarshal: the School of Magic's assistant on a stone plinth, the start flag in one hand and the
+// chequered flag in the other). Drawn with the backdrop as the spooks are (DrawMarshal: no actor, so seen from any scene), her body and
+// animations the entity's (found in its table: EntityEntry); her animation the race's moment (Marshal): ready; the start flag raised as
+// the count-down's 3 shows and held up; dropped at GO -- and, before a qualifying lap, held up until Twinsen's car crosses the line and
+// dropped as his timed lap begins; the chequered flag waved as the first car on its last lap comes up to the line -- out before it gets
+// there, so its driver sees it (waved from its finish on, the leader's camera had already gone past her) -- until RACE_MARSHAL_WAVE after
+// the last finish she has seen, and for as long as Twinsen hasn't finished. She touches nothing.
+#define RACE_MARSHAL_RAISE 3000            // ms before GO she raises the start flag (the count-down's 3) ...
+#define RACE_MARSHAL_DROP 1600             // ... and the drop's, from GO, before she stands ready again
+#define RACE_MARSHAL_COMING (40 * 512.0)   // the chequered flag out as a car on its last lap comes this near the line along the lap ...
+#define RACE_MARSHAL_WAVE 6000             // ... and waved on this long (ms) after a car's finish
+enum { MARSHAL_READY, MARSHAL_RAISE, MARSHAL_DROP, MARSHAL_WAVE, MARSHAL_ANIMS };
+typedef struct {
+    int On, Ready, Entity, Body, Gen[MARSHAL_ANIMS];
+    S32 BodyIndex, Index[MARSHAL_ANIMS];
+    double X, Z, Y; S32 Beta;
+    int Want, Shown;                       // the animation the moment wants, and the one she plays
+    S32 WaveUntil;                         // (0: no car has come up to the finish yet)
+    int Finished[RACE_MAX_OPPONENTS], MeFinished, Finishers;
+    T_OBJ_3D Obj;
+} T_RACE_MARSHAL;
+static T_RACE_MARSHAL s_marshal;
 static S32 s_bittenUntil[RACE_MAX_OPPONENTS + 1];  // a car just bitten is let be till then -- a monster beside it doesn't bite it again
 // The giant frog (frog=: see "the giant frog" further on)
 #define RACE_FROG_CLEAR 600                // ms the mouth has to stay open once a car is in it: past the jaw, its hinge 7 cells in --
@@ -2813,6 +2841,17 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_nbWebs > 0 && sscanf(v, "%d %d %d %d %d", &kind, &body, &across, &up, &turn) == 5 && body >= 0 && s_webs[s_nbWebs - 1].NbParts < RACE_MAX_WEB_PARTS) {
                 T_RACE_WEB_PART *p = &s_webs[s_nbWebs - 1].Parts[s_webs[s_nbWebs - 1].NbParts++];
                 p->Kind = kind; p->Body = body; p->Across = across; p->Up = up; p->Turn = turn & 4095; p->Ready = 0;
+            }
+        }
+        else if (!strcmp(key, "marshal")) {
+            int f[10];
+            memset(&s_marshal, 0, sizeof(s_marshal));
+            if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d", &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6], &f[7], &f[8], &f[9]) == 10 && f[0] >= 0) {
+                T_RACE_MARSHAL *m = &s_marshal;
+                m->Entity = f[0]; m->Body = f[1];
+                for (int k = 0; k < MARSHAL_ANIMS; k++) m->Gen[k] = f[2 + k];
+                m->X = f[6]; m->Z = f[7]; m->Y = f[8]; m->Beta = f[9] & 4095;
+                m->On = 1;
             }
         }
         else if (!strcmp(key, "gasmonster")) {
@@ -4719,6 +4758,122 @@ static double FrogCap(int n, const T_RACE_OPPONENT *o, S32 now) {
     return left > 0.1 ? d / left : -1;
 }
 
+// ---- the flag marshal (marshal=) ---------------------------------------------------------------------------------------------------
+
+// An entity's body or animation (`what`: F_BODY, F_ANIM) of a generic number: its index in BODY.HQR or ANIM.HQR, from the entity table as
+// the game has it loaded (FICHE.CPP SearchBody and SearchAnim's walk, for something with no actor of its own); -1 when it has none.
+static S32 EntityEntry(S32 entity, U8 what, S32 generic) {
+    if (entity < 0 || !BufferFile3D || (U32)entity + 1 >= *(U32 *)BufferFile3D / 4) return -1;
+    const U8 *p = LoadFile3D(entity);
+    for (U8 command; (command = *p++) != 255;) {
+        if (command == F_ANIM) {
+            const U16 g = *(const U16 *)p;
+            p += 2;
+            if (what == F_ANIM && g == generic) return *(const S16 *)(p + 1);
+        } else {
+            const U8 g = *p++;
+            if (what == F_BODY && command == F_BODY && g == generic) return *(const S16 *)(p + 1);
+        }
+        p += *p;
+    }
+    return -1;
+}
+
+// A car over the last lap's line (Marshal's): the chequered flag waved on RACE_MARSHAL_WAVE from now.
+static void MarshalFinish(S32 now, const char *who) {
+    T_RACE_MARSHAL *m = &s_marshal;
+    Log_Info("[racemod] the flag marshal waves the chequered flag: %s finishes%s", who, m->Finishers++ ? "" : " first");
+    if (m->WaveUntil < now + RACE_MARSHAL_WAVE) m->WaveUntil = now + RACE_MARSHAL_WAVE;
+}
+
+// Every frame: the flag marshal's animation for the race's moment -- the count-down and GO, a qualifying lap's start, the finish.
+static void Marshal(S32 now) {
+    T_RACE_MARSHAL *m = &s_marshal;
+    if (!m->On) return;
+    const int finishing = s_raceLaps > 0 && s_phase == PHASE_RACE && s_nbOrder > 0;
+    if (!finishing) { m->WaveUntil = 0; m->MeFinished = 0; m->Finishers = 0; memset(m->Finished, 0, sizeof(m->Finished)); }
+    else {
+        // (a car on its last lap coming up to the line: the chequered flag out, and kept out while one is -- Twinsen in his car, an opponent
+        // with a car in the race)
+        const char *coming = NULL;
+        const T_RACE_OPPONENT *guide = Guide();
+        if (guide && guide->Length > 0 && !s_place && s_laps == s_raceLaps && Comportement == C_BUGGY &&
+            s_raceLaps * guide->Length - PlayerProgress() < RACE_MARSHAL_COMING) coming = "Twinsen";
+        for (int n = 0; n < RACE_MAX_OPPONENTS && !coming; n++) {
+            const T_RACE_OPPONENT *o = &s_opp[n];
+            if (o->Count && o->Scenes && o->Length > 0 && o->Laps == s_raceLaps && s_raceLaps * o->Length - OpponentProgress(o) < RACE_MARSHAL_COMING) coming = o->Name;
+        }
+        if (coming) {
+            if (!m->WaveUntil) Log_Info("[racemod] the flag marshal waves the chequered flag: %s comes up to the finish", coming);
+            if (m->WaveUntil < now + RACE_MARSHAL_WAVE) m->WaveUntil = now + RACE_MARSHAL_WAVE;
+        }
+        // (the cars over the last lap's line since the last frame: each opponent once, as the race's place counts them -- Laps past the
+        // race's -- and Twinsen once his race is over)
+        for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+            if (!s_opp[n].Count || !s_opp[n].Scenes || m->Finished[n] || s_opp[n].Laps <= s_raceLaps) continue;
+            m->Finished[n] = 1;
+            MarshalFinish(now, s_opp[n].Name);
+        }
+        if (s_place && !m->MeFinished) { m->MeFinished = 1; MarshalFinish(now, "Twinsen"); }
+    }
+    int want = MARSHAL_READY;
+    const char *why = "";
+    if (finishing && m->WaveUntil && (now < m->WaveUntil || !m->MeFinished)) want = MARSHAL_WAVE;
+    else if (s_nbSpots && s_phase == PHASE_GRID && s_goAt && now >= s_goAt - RACE_MARSHAL_RAISE) { want = MARSHAL_RAISE; why = "the count-down"; }
+    else if (s_nbSpots && s_phase == PHASE_RACE && s_goAt && now >= s_goAt && now < s_goAt + RACE_MARSHAL_DROP) { want = MARSHAL_DROP; why = "go"; }
+    else if (s_phase == PHASE_QUALIFYING && s_laps == 0 && Comportement == C_BUGGY) { want = MARSHAL_RAISE; why = "Twinsen's qualifying lap"; }
+    else if (s_phase == PHASE_QUALIFYING && s_laps == 1 && now >= s_lapStart && now < s_lapStart + RACE_MARSHAL_DROP) { want = MARSHAL_DROP; why = "the qualifying lap begins"; }
+    if (want == m->Want) return;
+    if (want == MARSHAL_RAISE) Log_Info("[racemod] the flag marshal raises the start flag: %s", why);
+    else if (want == MARSHAL_DROP) Log_Info("[racemod] the flag marshal drops her flag: %s", why);
+    else if (m->Want == MARSHAL_WAVE) Log_Info("[racemod] the flag marshal lowers the chequered flag: the race is over");
+    m->Want = want;
+}
+
+// The flag marshal where the camera is, as the spooks are drawn -- her fog by her distance, her depth written -- her animation stepped
+// every frame (seen or not: the keyframes follow the clock), changed to the one the moment wants (ObjectInitAnim blends into it).
+static void DrawMarshal(void) {
+    T_RACE_MARSHAL *m = &s_marshal;
+    if (!m->On) return;
+    T_OBJ_3D *o = &m->Obj;
+    const S32 x = (S32)floor(m->X - CurrentCubeX * 32768.0 + 0.5), y = (S32)floor(m->Y + 0.5), z = (S32)floor(m->Z - CurrentCubeY * 32768.0 + 0.5);
+    if (!m->Ready) {
+        int ok = (m->BodyIndex = EntityEntry(m->Entity, F_BODY, m->Body)) >= 0 && GivePtrBody(m->BodyIndex);
+        for (int k = 0; k < MARSHAL_ANIMS && ok; k++) ok = (m->Index[k] = EntityEntry(m->Entity, F_ANIM, m->Gen[k])) >= 0 && GivePtrAnim(m->Index[k]);
+        if (!ok) {
+            Log_Info("[racemod] the flag marshal: entity %d has no body %d or animations %d-%d -- left out", m->Entity, m->Body, m->Gen[0], m->Gen[MARSHAL_ANIMS - 1]);
+            m->On = 0;
+            return;
+        }
+        ObjectClear(o);
+        o->Body.Num = -1;
+        ObjectInitBody(o, (void *)(uintptr_t)(U32)m->BodyIndex);
+        o->Texture = BufferTexture; o->NextTexture = BufferTexture;
+        o->X = x; o->Y = y; o->Z = z; o->Beta = m->Beta;
+        o->Anim.Num = -1;
+        ObjectInitAnim(o, (void *)(uintptr_t)(U32)m->Index[MARSHAL_READY]);
+        o->Status |= FLAG_BODY;
+        m->Shown = MARSHAL_READY;
+        m->Ready = 1;
+        Log_Info("[racemod] the flag marshal: body %d (BODY.HQR), animations %d %d %d %d (ANIM.HQR), on her plinth at (%.0f,%.0f,%.0f), turned %d", (int)m->BodyIndex,
+                 (int)m->Index[0], (int)m->Index[1], (int)m->Index[2], (int)m->Index[3], m->X, m->Y, m->Z, (int)m->Beta);
+    }
+    if (m->Want != m->Shown) { ObjectInitAnim(o, (void *)(uintptr_t)(U32)m->Index[m->Want]); m->Shown = m->Want; }
+    o->X = x; o->Y = y; o->Z = z;
+    ObjectSetInterDep(o);
+    o->X = x; o->Y = y; o->Z = z; o->Alpha = 0; o->Beta = m->Beta; o->Gamma = 0;
+    ObjectSetInterFrame(o);
+    LongWorldRotatePoint(x, y + 1500, z);
+    const S32 zr = CameraZr - Z0;
+    if (zr < -4000 || zr > ClipZFar + 4000) return;
+    const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
+    SetCLUT(PalLevel + 16 * BoundRegleTrois(0, 15, ClipZFar - StartZFog, zr - StartZFog));
+    Switch_Fillers(FILL_POLY_FOG_ZBUFFER);
+    UnsetClip();
+    ObjectDisplay(o);
+    SetCLUT(clut);
+}
+
 // Drawn into the background (EXTFUNC.CPP AffGrilleExt, after the ground and the decor): the frog, posed, its depth written.
 static void DrawSpooks(void);
 static void DrawWebs(void);
@@ -4727,6 +4882,7 @@ void RaceMod_DrawBackdrop(void) {
     if (!RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return;
     DrawSpooks();
     if (s_nbWebs) DrawWebs();
+    DrawMarshal();
     if (!s_frog.On) return;
     T_OBJ_3D *o = &s_frog.Obj;
     if (!s_frog.Ready) {
@@ -9603,6 +9759,7 @@ void RaceMod_Frame(void) {
         if (s_frog.Arc < 0) s_frog.Arc = -2;
     }
     Guards(now, driving, dt);
+    Marshal(now);
     Shuttles(now, driving);
     if (!Opponents()) return;
     // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car
@@ -10848,7 +11005,7 @@ static void ResetTrack(void) {
     s_shardModel = s_shardBit = -1;
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
-    s_nbFlyers = 0; s_nbSpooks = 0; HalloweenReset();
+    s_nbFlyers = 0; s_nbSpooks = 0; HalloweenReset(); memset(&s_marshal, 0, sizeof(s_marshal));
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
     s_guardSize = 1.0; s_nbTeleports = 0; s_teleportedAt = 0;
     memset(&s_frog, 0, sizeof(s_frog)); s_frog.Arc = -1;

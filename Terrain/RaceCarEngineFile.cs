@@ -125,6 +125,8 @@ internal static class RaceCarEngineFile
             text.Append($"web={string.Join(' ', track!.GiantWebs![i])}\n");
             foreach (var part in (track.WebParts ?? new()).Where(p => p.Length >= 6 && p[0] == i)) text.Append($"web_part={string.Join(' ', part.Skip(1))}\n");
         }
+        // the flag marshal by the start line: the start flag dropped at GO, the chequered flag waved at the finish (the Temple of Bú's)
+        if (track?.Marshal is { Length: >= 10 } marshal) text.Append($"marshal={string.Join(' ', marshal)}\n");
         // the people in the cars' way, stepping out at them, striking and throwing (the Emperor's palace's)
         foreach (var guard in track?.Guards ?? new()) text.Append($"guard={string.Join(' ', guard)}\n");
         if (track?.Guards is { Count: > 0 }) text.Append($"guard_size={(int)Math.Round(RaceTrackGuards.Size * 100)}\n");
@@ -243,6 +245,8 @@ internal static class RaceCarEngineFile
         }
         // Celebration Island's lava lake: three laps against the souvenir seller; ahead of him he tells what he knows (RaceTrackStory)
         if (lava) text.Append($"race_laps={RaceTrackStory.RaceLaps}\nwin={RaceTrackStory.SellerBeaten} 1\nfinish={RaceTrackStory.SellerRaced} 1\n");
+        // a race over laps of its own, when no story or dream has set them: the Temple of Bú's five
+        if (track?.Dream is null && !town && !lava && info is not null && RaceTrackIsland.ByName(info.Island).RaceLaps is int ownLaps and > 0) text.Append($"race_laps={ownLaps}\n");
         // the cars of the opponents the setup doesn't race: hidden, so they don't stand where a racing car lines up
         // (and all of the other weather's track's: that isn't the island the game draws)
         var parked = car.Parked(track);

@@ -678,6 +678,8 @@ internal sealed class RaceTrackReport
     public sealed record GiantWeb(double X, double Z, double Y, double WayX, double WayZ, double Half, int SpiderA = -1, int SpiderB = -1,
         List<(int Kind, int Body, int Across, int Up, int Turn)>? Parts = null);
     public List<GiantWeb> GiantWebs { get; } = new();
+    // The flag marshal by the start line (2026-10-17, Temple.TempleMarshal.Place; RACEMOD.CPP marshal=): the race file's numbers, or null
+    public int[]? Marshal { get; set; }
     // The raised road's branches (RaceTrackPlan.Branches) as planned -- their points in island cells, the lap's points they leave from and
     // come back onto -- and, once placed (PlaceBranch), each one's first and last point in Raised and the lap's points in Raised it leaves
     // from and comes back onto (RACEMOD.CPP raised_branch=); the lap's own points in Raised, the branches after them (raised_lap=).

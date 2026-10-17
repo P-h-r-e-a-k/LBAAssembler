@@ -91,6 +91,7 @@ internal static class Program
             "trackmaps" => TrackMapsCommand.Run(args),
             "castcars" => RaceTrackCommand.CastCars(args),
             "pumpkinf1" => RaceTrackCommand.PumpkinF1(args),
+            "templemarshal" => TempleMarshalCommand.Run(args),
             "polarstats" => PolarStudy.Stats(args),
             "polarzones" => PolarStudy.Zones(args),
             "polarlayout" => PolarStudy.Layout(args),

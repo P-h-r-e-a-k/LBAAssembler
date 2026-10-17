@@ -371,7 +371,8 @@ internal sealed record RaceTrackIsland(
         LBAAssembler.Terrain.Temple.TempleIsland.PaletteEntry, LBAAssembler.Terrain.Temple.TempleTrack.PlanResource, null)
     {
         Created = true, RaceFile = "temple", Look = (LBAAssembler.Terrain.Temple.TempleIsland.PaletteEntry, LBAAssembler.Terrain.Temple.TempleIsland.SkyEntry),
-        NoHolomap = true, RailHeld = true, OwnScenes = true, FromLba1 = true, Roster = RaceDriver.Temple, Levels = RaceDifficulty.Temple,
+        NoHolomap = true, RailHeld = true, OwnScenes = true, FromLba1 = true, Roster = RaceDriver.Temple, Levels = RaceDifficulty.Temple, RaceLaps = 5,
+        FlagMarshal = true,
         Title = "The Temple of Bú: the Halloween race through LBA1's temple, down to its crypt and back (LBA1's scenes, made by the build)",
         // (the giant web's still copy among the decor -- the editor's -- hidden: the race-track mode draws the web, TempleHalloween.PlaceGiantWebs)
         HeldVars = new[] { (LBAAssembler.Terrain.Temple.TempleHalloween.GiantWebVar, 1) },
@@ -382,6 +383,12 @@ internal sealed record RaceTrackIsland(
     public (int Palette, int Sky)? Look { get; init; }
     // The build makes the island from LBA1's own scenes (the LBA1 folder in the settings): the Temple of Bú.
     public bool FromLba1 { get; init; }
+    // A race over laps of its own (the race-track mode's race_laps=: the race is over at the last lap's line, the display counts them) --
+    // the Temple of Bú's five (the user, 2026-10-17: "Let's make the temple track a 5 lap race"). Not for a story's race, which has its own.
+    public int? RaceLaps { get; init; }
+    // A flag marshal by the start line, dropping a flag at GO and waving the chequered flag at the finish (Temple.TempleMarshal; the
+    // race-track mode's marshal=): the Temple of Bú's, the School of Magic's assistant.
+    public bool FlagMarshal { get; init; }
 
     // Guns of the island's own scene the race-track mode fires at the cars (gunner= with gunner_hunt=): their entity, kept in the scene with
     // their scripts emptied, and how far they reach (cells) -- Island CX's cannons.

@@ -24,11 +24,12 @@
  * RACEGAME.TXT, "key=value" lines ('#' starts a comment), UTF-8:
  *     title=<the game's name>
  *     story=0|1  tracks=0|1        Story Mode, Track select open (0: greyed)
- *     laps=<n>                     a race's laps (3)
+ *     laps=<n>                     a race's laps (3), unless its race file has its own (race_laps=: the Temple of Bú's five)
  *     end_to_menu=<ms>             a finished race back to the menu this long after its end (8000)
  *     special=<name>|<race file>|<time trial file>|<start scene>     files beside the game's data (and so are those they name)
  *     car=<name>|<drive_as value: BODY.HQR body, animation, shrunk body>
- * BESTTIMES.TXT: "<track>|<time ms>|<best lap ms>|<car>|<date>" lines, the fastest first (other tracks' lines are kept as they are).
+ * BESTTIMES.TXT: "<track>|<time ms>|<best lap ms>|<car>|<date>|<laps>" lines, the fastest first (other tracks' lines are kept as they are,
+ * and so are a track's times over another number of laps -- a line without its laps: the menu's laps= -- but not shown).
  */
 #include "C_EXTERN.H"
 #include "CONSOLE/CONSOLE.H"
@@ -83,6 +84,7 @@ typedef struct {
     char Name[96], Race[160], Trial[160];
     S32 Scene;
     int Levels;                             // its race has levels, easy to hard (difficulty_level= in its race file)
+    int Laps;                               // its race's laps once looked up (SpecialLaps; 0: not yet)
 } T_RG_SPECIAL;
 
 typedef struct {
@@ -271,6 +273,22 @@ static void WriteSettings(void) {
 
 static void TimesPath(char *path) { GetCfgPath(path, ADELINE_MAX_PATH, "BESTTIMES.TXT"); }
 
+// A special's race's laps: its race file's own (race_laps=: the Temple of Bú's five), else the menu's laps=. Its time trial is as long.
+static int SpecialLaps(int sp) {
+    T_RG_SPECIAL *s = &s_sp[sp];
+    if (s->Laps > 0) return s->Laps;
+    s->Laps = s_laps;
+    char path[ADELINE_MAX_PATH];
+    GetResPath(path, ADELINE_MAX_PATH, s->Race);
+    FILE *f = fopen(path, "r");
+    if (!f) return s->Laps;
+    char line[512];
+    while (fgets(line, sizeof(line), f))
+        if (!strncmp(line, "race_laps=", 10) && atoi(line + 10) > 0) s->Laps = atoi(line + 10);
+    fclose(f);
+    return s->Laps;
+}
+
 static void ReadTimes(void) {
     if (s_timesRead) return;
     s_timesRead = 1;
@@ -284,17 +302,21 @@ static void ReadTimes(void) {
     while (fgets(line, sizeof(line), f)) {
         Trim(line);
         if (!line[0]) continue;
-        char track[96], ms[16], lap[16];
+        char track[96], ms[16], lap[16], laps[16];
         T_RG_TIME t;
         const char *p = Field(line, track, sizeof(track));
         p = Field(p, ms, sizeof(ms));
         p = Field(p, lap, sizeof(lap));
         p = Field(p, t.Car, sizeof(t.Car));
-        Field(p, t.Date, sizeof(t.Date));
+        p = Field(p, t.Date, sizeof(t.Date));
+        Field(p, laps, sizeof(laps));
         t.Time = atoi(ms);
         t.Lap = atoi(lap);
         int sp = -1;
         for (int i = 0; i < s_nbSp && sp < 0; i++) if (!strcmp(s_sp[i].Name, track)) sp = i;
+        // (a time over another number of laps -- the track's race made longer since: the Temple of Bú's three laps, before 2026-10-17 -- is
+        // kept, not shown)
+        if (sp >= 0 && (laps[0] ? atoi(laps) : s_laps) != SpecialLaps(sp)) sp = -1;
         if (sp < 0) {
             if (strlen(s_other) + strlen(line) + 2 < sizeof(s_other)) { strcat(s_other, line); strcat(s_other, "\n"); }
             continue;
@@ -315,7 +337,7 @@ static void WriteTimes(void) {
     for (int sp = 0; sp < s_nbSp; sp++)
         for (int k = 0; k < s_nbTimes[sp]; k++) {
             const T_RG_TIME *t = &s_times[sp][k];
-            fprintf(f, "%s|%d|%d|%s|%s\n", s_sp[sp].Name, (int)t->Time, (int)t->Lap, t->Car, t->Date);
+            fprintf(f, "%s|%d|%d|%s|%s|%d\n", s_sp[sp].Name, (int)t->Time, (int)t->Lap, t->Car, t->Date, SpecialLaps(sp));
         }
     fputs(s_other, f);
     fclose(f);
@@ -391,7 +413,7 @@ static int StartRace(int sp, int trial, int car, int level) {
     fclose(in);
     if (car >= 0 && car < s_nbCars) fprintf(f, "# %s\ndrive_as=%s\n", s_cars[car].Name, s_cars[car].Drive);
     if (s->Scene >= 0) fprintf(f, "start_scene=%d\n", (int)s->Scene);
-    fprintf(f, "start_in_car=1\nrace_laps=%d\nend_to_menu=%d\n", s_laps, (int)s_endMs);
+    fprintf(f, "start_in_car=1\nrace_laps=%d\nend_to_menu=%d\n", SpecialLaps(sp), (int)s_endMs);
     if (trial) fprintf(f, "trial=1\n");
     // (a qualifying lap or none, the player's answer -- QualifyingPage: the first race always has one)
     else if (s_qualifyNow >= 0) fprintf(f, s_qualifyNow ? "qualifying=1\n" : "qualifying=0\ngrid_back=1\n");

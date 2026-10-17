@@ -81,8 +81,9 @@ internal static class PalaceTorturers
     // ---- the body -----------------------------------------------------------------------------------------------------------------
 
     // An LBA2 body's parts (T_BODY_HEADER's): its header, bones (parent, pivot point, points, face normals), points and their normals
-    // (x, y, z, bone), face normals, polygons (blocks: a type and its records), lines, spheres, textures as they are.
-    private sealed class Parts
+    // (x, y, z, bone), face normals, polygons (blocks: a type and its records), lines, spheres, textures as they are. (Temple.TempleMarshal's
+    // flags are grafted onto the School of Magic's assistant the same way.)
+    internal sealed class Parts
     {
         public byte[] Header = Array.Empty<byte>();
         public List<(int Parent, int Pivot, int Count, int FaceNormals)> Bones = new();
@@ -469,7 +470,7 @@ internal static class PalaceTorturers
 
     // A bone's own turn (in its parent's frame `m`) that points its rest direction `from` along `to`: the parent's frame turned the
     // shortest way from where the bone would point unturned to `to` -- as the engine's angles (M(Alpha) M(Gamma) M(Beta)).
-    private static (int, double, double, double) Turn(double[] m, Vector3 from, Vector3 to)
+    internal static (int, double, double, double) Turn(double[] m, Vector3 from, Vector3 to)
     {
         Vector3 Apply(double[] r, Vector3 p) => new((float)(r[0] * p.X + r[1] * p.Y + r[2] * p.Z), (float)(r[3] * p.X + r[4] * p.Y + r[5] * p.Z), (float)(r[6] * p.X + r[7] * p.Y + r[8] * p.Z));
         var u = Vector3.Normalize(Apply(m, from));
@@ -507,7 +508,7 @@ internal static class PalaceTorturers
         for (var s = 0; s < 4; s++) polys.Add(new Poly(new[] { a[s], a[(s + 1) % 4], b[(s + 1) % 4], b[s] }, colour));
     }
 
-    private static Vector3 Newell(Vector3[] p)
+    internal static Vector3 Newell(Vector3[] p)
     {
         var n = Vector3.Zero;
         for (var i = 0; i < p.Length; i++) { var (a, b) = (p[i], p[(i + 1) % p.Length]); n += new Vector3((a.Y - b.Y) * (a.Z + b.Z), (a.Z - b.Z) * (a.X + b.X), (a.X - b.X) * (a.Y + b.Y)); }
