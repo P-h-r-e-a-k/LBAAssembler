@@ -4514,24 +4514,31 @@ static S32 RaceArc(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
         }
         // (or a car on the ramp, past its foot, going up it: one that crossed the foot stopped -- held by a fake mushroom's blast, it slid
         // on over the line at no speed and was never taken; it drove up the ramp and off its lip, 2026-10-10 -- carried on from where it is)
+        // (or past the lip, over the gap, still at the lip's height and inside its width: driven off it untaken. A cube change moves the car
+        // a cell at once -- DoAnimExt keeps it half a cell inside its cube, the next cube takes it half a cell inside its own -- and where
+        // the take-off is that near a cube's edge it comes down past the foot, its next move past the lip: the right side of Wannies
+        // Island's shortcut, whose lip is a few hundred units from the edge, 2026-10-17. The raised road's floor held it there at the lip's
+        // height, the rail stopped it over the gap. Carried on from where it is)
         for (int i = 0; i < s_nbArcs && s_arcOn < 0; i++) {
             const T_RACE_ARC *a = &s_arcs[i];
-            for (int k = a->Foot; k < a->Lip; k++) {
+            const T_RACE_RAISED *lip = &s_raised[a->Lip];
+            for (int k = a->Foot; k < a->Land; k++) {
                 const T_RACE_RAISED *p = &s_raised[k], *q = p + 1;
+                const int gap = k >= a->Lip;
                 double ux = q->X - p->X, uz = q->Z - p->Z;
                 const double ul = sqrt(ux * ux + uz * uz);
                 if (ul <= 0) continue;
                 ux /= ul; uz /= ul;
                 const double px = *nx + cx - p->X, pz = *nz + cz - p->Z;
                 const double along = px * ux + pz * uz, across = -px * uz + pz * ux;
-                if (along < 0 || along > ul || fabs(across) > p->Half) continue;
-                const double y = p->Y + (q->Y - p->Y) * along / ul;
+                if (along < 0 || along > ul || fabs(across) > (gap ? lip->Half : p->Half)) continue;
+                const double y = gap ? lip->Y : p->Y + (q->Y - p->Y) * along / ul;
                 const double moved = (*nx - ox) * ux + (*nz - oz) * uz;
                 if (fabs(oy - y) > RACE_ARC_ENTRY || moved <= 0) continue;
                 s_arcOn = i; s_arcLast = i; s_arcS = a->S[k - a->Foot] + along; s_arcAcross = across;
                 ArcTaken(a, across);
-                Log_Info("[racemod] carried jump %d: on, up its ramp already (%.0f along), at %d units/s (carried at %.0f), %.0f across", i + 1, s_arcS,
-                         (int)ListBuggy[0].Speed, s_arcV, across);
+                Log_Info("[racemod] carried jump %d: on, %s (%.0f along), at %d units/s (carried at %.0f), %.0f across", i + 1,
+                         gap ? "past its lip already" : "up its ramp already", s_arcS, (int)ListBuggy[0].Speed, s_arcV, across);
                 break;
             }
         }

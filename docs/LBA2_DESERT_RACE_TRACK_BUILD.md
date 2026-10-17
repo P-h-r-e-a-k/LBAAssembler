@@ -3902,6 +3902,26 @@ barrier in places also".
   engine and this one, and so was the frog's (from 1.3 cells either side); every time the car flew and came down on the road. (The fork
   into the shortcut is one of the places two decks overlap: the rail's change there applies.)
 
+### The shortcut's jump on its right side (2026-10-17)
+
+The user, with a picture of the car past the lip and stuck there: "Jump still failing on right hand side ... Seems to be intermittent".
+Their own game, read live: the car 890 units past the shortcut's lip, 1,500 to the right of its middle, at the deck's height, speed 0;
+no carried jump.
+
+- *Why*: the shortcut's last straight crosses from cube (8,8) into cube (7,8) at x 512 cells. The game keeps a car half a cell inside
+  its cube, and a cube change puts it half a cell inside the next: a cell's jump with no move between. On the road's right side the
+  take-off -- the ramp's foot and lip, 256 units apart -- lies a few hundred units from that edge, so the change could set the car down
+  between the foot and the lip, and its next move took it past the lip. `RaceArc` takes a car as it crosses the foot, or where a move
+  ends on the ramp: neither saw it. Driven off the lip, it was held at the deck's height (the raised road's floor) and stopped by the
+  rail over the gap -- in a race the stuck-car reset brought it back after 3 s of driving on; reversing, it stayed. On the left side the
+  change comes cells before the ramp.
+- *Repro*: Twinsen put on the shortcut's straight (`teleport` in scene 99) 9-15 cells before the lip, 950-1,152 to the right, heading
+  along it or up to 8 degrees right, flat out (15,644 units/s): the release engine missed the jump in 38 of 72 runs, at 16 and 20 ms
+  frames alike. At the pilot's slower 50-70 km/h it was always taken, the cube change dropping it between foot and lip.
+- *Fix*: `RaceArc` also takes a car past the lip, over the gap, still at the lip's height and within its width, going forwards, and carries
+  it on from where it is ("carried jump 2: on, past its lip already (289 along)"). Now 144 of 144, every one landing on the lap. No other
+  road crosses any track's jump gaps at its lip's height, and Otringal's wheel lane (a lip 0 wide) is left as it was.
+
 ## The Emperor's palace, twelfth round: the outside dropped, an upstairs, the race through both floors (2026-10-15)
 
 The user: "The outside of the palace track just isn't working, and we've tried a few revisions, let's keep a copy of it so we can rebuild
