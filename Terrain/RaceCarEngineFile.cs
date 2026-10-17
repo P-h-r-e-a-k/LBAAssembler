@@ -114,6 +114,9 @@ internal static class RaceCarEngineFile
         // the flying gas monsters, to and fro beside the road, spitting fire balls (Island CX's hall)
         foreach (var flyer in track?.Flyers ?? new()) text.Append($"flyer={string.Join(' ', flyer)}\n");
         foreach (var spook in track?.Spooks ?? new()) text.Append($"spook={string.Join(' ', spook)}\n");
+        // the witches diving at Twinsen's car, and what jumps up beside the road (the Temple of Bú's)
+        foreach (var dive in track?.Dives ?? new()) text.Append($"dive={string.Join(' ', dive)}\n");
+        foreach (var scare in track?.Scares ?? new()) text.Append($"scare={string.Join(' ', scare)}\n");
         // the people in the cars' way, stepping out at them, striking and throwing (the Emperor's palace's)
         foreach (var guard in track?.Guards ?? new()) text.Append($"guard={string.Join(' ', guard)}\n");
         if (track?.Guards is { Count: > 0 }) text.Append($"guard_size={(int)Math.Round(RaceTrackGuards.Size * 100)}\n");
@@ -197,6 +200,8 @@ internal static class RaceCarEngineFile
             if (track.SuperJetModel is { } jetModel) text.Append($"superjet_model={jetModel}\n");
             // (Twinsen's buggy at half its size, for an opponent's lightning)
             if (track.TwinsenSmall is { } small) text.Append($"twinsen_small={small}\n");
+            // (the ghost power-up, the Temple of Bú's: its ghost and its icon)
+            if (track.Haunt is [var hauntGhost, var hauntIcon]) text.Append($"haunt={hauntGhost} {hauntIcon}\n");
         }
         if (ghost >= 0) text.Append($"beat={ghost + 1}{(storm ? $" {RaceTrackStory.BeatVar} 1" : "")}\n");
         // the story's gates and the town circuit's race: Mr. Paul lets no one race without racing gloves; the aliens' track is ready the day

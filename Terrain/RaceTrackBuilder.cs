@@ -657,6 +657,15 @@ internal sealed class RaceTrackReport
     public sealed record Spook(string Kind, int Flags, double Y, List<(double X, double Z)> Way, int Body = -1);
     public List<Spook> Spooks { get; } = new();
     public bool Pumpkins { get; set; }
+    // Halloween's scares (2026-10-17, RACEMOD.CPP dive=, scare=): the places a witch dives at the car from (island cells, the road's height
+    // there), and what jumps up beside the road (a "skeleton" or a "ghost", island cells, the floor's height, the way it faces) -- each its
+    // body once in BODY.HQR; the ghost power-up (haunt=) and, once in BODY.HQR, its ghost and its icon
+    public sealed record Dive(double X, double Z, double Y, int Body = -1);
+    public List<Dive> Dives { get; } = new();
+    public sealed record Scare(string Kind, double X, double Z, double Y, int Turn, int Body = -1);
+    public List<Scare> Scares { get; } = new();
+    public bool Haunt { get; set; }
+    public (int Ghost, int Icon)? HauntBodies { get; set; }
     // The raised road's branches (RaceTrackPlan.Branches) as planned -- their points in island cells, the lap's points they leave from and
     // come back onto -- and, once placed (PlaceBranch), each one's first and last point in Raised and the lap's points in Raised it leaves
     // from and comes back onto (RACEMOD.CPP raised_branch=); the lap's own points in Raised, the branches after them (raised_lap=).
@@ -1123,6 +1132,14 @@ internal static class RaceTrackBuilder
                     report.Spooks.Add(new RaceTrackReport.Spook(s.Kind, s.Flags, s.Y, s.Way.Where(p => p.Length >= 2).Select(p => (p[0] + plan.OriginCellX, p[1] + plan.OriginCellZ)).ToList()));
             report.Pumpkins = halloween.Pumpkins;
             if (report.Spooks.Count > 0) report.Notes.Add($"the spooks: {report.Spooks.Count} flying over the lap ({string.Join(", ", report.Spooks.GroupBy(s => s.Kind).Select(g => $"{g.Count()} {g.Key}"))})");
+            // (its scares: the witches' dives at the car, what jumps up beside the road; and the ghost power-up)
+            foreach (var d in halloween.Dives ?? Array.Empty<double[]>())
+                if (d.Length >= 3) report.Dives.Add(new RaceTrackReport.Dive(d[0] + plan.OriginCellX, d[1] + plan.OriginCellZ, d[2]));
+            foreach (var c in halloween.Scares ?? Array.Empty<double[]>())
+                if (c.Length >= 5) report.Scares.Add(new RaceTrackReport.Scare((int)c[0] == 1 ? "ghost" : "skeleton", c[1] + plan.OriginCellX, c[2] + plan.OriginCellZ, c[3], (int)Math.Round(c[4]) & 4095));
+            report.Haunt = halloween.Haunt;
+            if (report.Dives.Count > 0 || report.Scares.Count > 0)
+                report.Notes.Add($"the scares: {report.Dives.Count} places a witch dives at the car from, {report.Scares.Count} things jumping up beside the road{(report.Haunt ? "; the ghost power-up" : "")}");
         }
         Relight(island, index, options);
         if (planned) SeaEverywhere(island, main, report);

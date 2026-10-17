@@ -166,7 +166,14 @@ internal static class RaceTrackService
         // RaisedLap: the lap's own points in Raised, the branches after them; RaisedBranches: each [its first and last point in Raised, the
         // lap's points there it leaves from and comes back onto] (RACEMOD.CPP raised_lap=, raised_branch=), since 2026-10-14
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? RaisedLap = null,
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? RaisedBranches = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? RaisedBranches = null,
+        // Dives: the places a witch dives at Twinsen's car from, each [the witch's body, x, z (island units), the road's height there]; Scares:
+        // what jumps up out of the floor beside the road, each [its body, x, z, the floor's height, the way it faces]; Haunt: the ghost
+        // power-up's ghost and its icon (BODY.HQR) (Temple.TempleHalloween; RACEMOD.CPP dive=, scare=, haunt=) -- the Temple of Bú's, since
+        // 2026-10-17
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Dives = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Scares = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Haunt = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -896,7 +903,10 @@ internal static class RaceTrackService
                 : null,
             Spooks: report.Spooks.Count(s => s.Body >= 0) > 0 ? report.Spooks.Where(s => s.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line).ToList() : null,
             RaisedLap: raised && report.RaisedBranches.Count > 0 ? report.RaisedLap : null,
-            RaisedBranches: raised && report.RaisedBranches.Count > 0 ? report.RaisedBranches.ToList() : null);
+            RaisedBranches: raised && report.RaisedBranches.Count > 0 ? report.RaisedBranches.ToList() : null,
+            Dives: report.Dives.Count(d => d.Body >= 0) > 0 ? report.Dives.Where(d => d.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line).ToList() : null,
+            Scares: report.Scares.Count(s => s.Body >= 0) > 0 ? report.Scares.Where(s => s.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line).ToList() : null,
+            Haunt: report.HauntBodies is { } haunt ? new[] { haunt.Ghost, haunt.Icon } : null);
     }
 
     // A machine gun on its knoll as the car file has it: its scene and actors, the muzzle (the gun stands 0.8 cells towards where it fires
@@ -983,7 +993,7 @@ internal static class RaceTrackService
         island == RaceTrackIsland.Desert ? 16 : island == RaceTrackIsland.Citadel ? 8.3 : island == RaceTrackIsland.Knartas ? 8.1 : island == RaceTrackIsland.Otringal ? 8.4
         : island == RaceTrackIsland.Polar ? 5.4 : island == RaceTrackIsland.Volcano ? 2.5 : island == RaceTrackIsland.Palace ? 6 : island == RaceTrackIsland.Sendell || island == RaceTrackIsland.Moon ? 0.8 : 1.4;
 
-    private static string Lba1Folder() => Environment.GetEnvironmentVariable("LBA1_DIR") is { Length: > 0 } env ? env : EditorSettings.Current.Lba1Directory;
+    internal static string Lba1Folder() => Environment.GetEnvironmentVariable("LBA1_DIR") is { Length: > 0 } env ? env : EditorSettings.Current.Lba1Directory;
 
     // The Temple of Bú as Tools makes it (no road, no doorways, no Halloween), from the LBA1 folder in the settings; without one, taken out.
     // True when it is there.

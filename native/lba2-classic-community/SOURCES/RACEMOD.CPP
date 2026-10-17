@@ -131,6 +131,11 @@
  *     trial=1                    a time trial: no opponents, no mushrooms, a can of Gazogem at GO and at the start of every lap after;
  *                                the race's time (GO to the last lap's line) goes to the best times (RaceGame_Finished)
  *     end_to_menu=<ms>           <ms> after the race is over, back to the game's menu (RaceMod_WantsMenu)
+ *   Halloween (2026-10-17, the Temple of Bú's; the builder writes these for it alone):
+ *     dive=<body> <x> <z> <y>    a place over the lap's road (island units, the road's height there) that a witch (<body>, the spooks') dives
+ *                                at Twinsen's car from, now and then, as it comes up to it -- pulling up to pass just over it (Dives)
+ *     scare=<body> <x> <z> <y> <turn>   something that jumps up out of the floor beside the road as his car comes by (Scares)
+ *     haunt=<ghost> <icon>       the ghost power-up: <ghost> (BODY.HQR) circling over each car it haunts, <icon> the item box's (HauntOthers)
  */
 #include <errno.h>
 #include <string.h>
@@ -439,23 +444,34 @@ static T_RACE_PENGUIN s_penguins[RACE_MAX_PENGUINS];
 // (2026-10-10: the golden Gazogem, the roulette wheel's green zero's prize -- the user: "if they get the green super jackpot they get a
 // golden gazogem bottle where they can use the power up for a speedboost as many times as they like for 8 seconds"; last, and never drawn
 // from a mushroom nor the item box's roulette, PU_ROLLED)
-enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_PENGUIN, PU_SUPERJET, PU_OIL, PU_BALL_YELLOW, PU_BALL_GREEN, PU_BALL_RED, PU_BALL_FIRE, PU_FAKE, PU_GOLD, PU_COUNT };
+// (2026-10-17: the ghost, the Temple of Bú's own -- the user: "a special item to the temple track of a ghost pickup that when used targets
+// the other cars and briefly covers the screen with a ghost outline" -- after the golden Gazogem, so that every other track's items keep
+// their numbers, and drawn from a mushroom only on a track with haunt=: HauntOthers, HauntTwinsen)
+enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_PENGUIN, PU_SUPERJET, PU_OIL, PU_BALL_YELLOW, PU_BALL_GREEN, PU_BALL_RED, PU_BALL_FIRE, PU_FAKE, PU_GOLD, PU_GHOST, PU_COUNT };
 #define PU_ROLLED PU_GOLD
 static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Nitro penguin!", "Super jet-pack!", "Oil slick!",
-                                               "Yellow magic ball!", "Green magic ball!", "Red magic ball!", "Fire ball!", "Fake mushroom!", "Golden Gazogem!"};
-static const int s_puWeight[PU_COUNT] = {20, 12, 10, 16, 12, 16, 12, 10, 9, 5, 10, 0};
-static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 0, 0, 0, 0, 0, 0, 0};
+                                               "Yellow magic ball!", "Green magic ball!", "Red magic ball!", "Fire ball!", "Fake mushroom!", "Golden Gazogem!", "Ghost!"};
+static const int s_puWeight[PU_COUNT] = {20, 12, 10, 16, 12, 16, 12, 10, 9, 5, 10, 0, 11};
+static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 0, 0, 0, 0, 0, 0, 0, 0};
 // each one's weight times these for the leader and for the last car (between them by the car's place: RandomPowerUp) -- the ones to
 // drop behind (penguins, oil, a fake mushroom) for the cars in front, the ones to catch up with (the super jet-pack, lightning, the red
-// ball and the fire ball) for the cars at the back
-static const double s_puLead[PU_COUNT] = {1.0, 0.8, 0.05, 1.8, 0.0, 2.0, 1.2, 1.0, 0.3, 0.0, 1.8, 0};
-static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 0.4, 0.8, 1.0, 1.8, 2.4, 0.5, 0};
+// ball, the fire ball and the ghost) for the cars at the back
+static const double s_puLead[PU_COUNT] = {1.0, 0.8, 0.05, 1.8, 0.0, 2.0, 1.2, 1.0, 0.3, 0.0, 1.8, 0, 0.3};
+static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 0.4, 0.8, 1.0, 1.8, 2.4, 0.5, 0, 1.6};
 // what the item box shows (OBJFIX.HQR, the inventory's own: the Gazogem, the protection spell, the lightning ring, the meca-penguin,
 // the super jet-pack, the magic ball in each of its colours -- INVENT.CPP's TabObj3D for FLAG_BALLE_MAGIQUE, {1, 40, 41, 42}, picked by
 // MagicLevel - 1: until 2026-10-08 the balls had 0-3 here, OBJFIX's own 0-3, the holomap, the yellow ball, the dart and Sendell's ball;
-// -2 the oil's, oil_icon=; -3 the mushroom's own body; -4 the golden Gazogem, gold_icon=: the Gazogem in gold)
-static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2, 1, 40, 41, 42, -3, -4};
+// -2 the oil's, oil_icon=; -3 the mushroom's own body; -4 the golden Gazogem, gold_icon=: the Gazogem in gold; -5 the ghost's, haunt=)
+static const int s_puModel[PU_COUNT] = {15, 39, 19, 14, 48, -2, 1, 40, 41, 42, -3, -4, -5};
 static int s_goldIcon = -1;                // gold_icon=: the golden Gazogem's model in OBJFIX.HQR (the builder adds it)
+// haunt=<ghost> <icon> (the Temple of Bú's, 2026-10-17): the ghost power-up on this track -- the ghost BODY.HQR body drawn over each car it
+// haunts, and its icon for the item box (BODY.HQR, a fixed body); -1: no ghost (none drawn from a mushroom: RandomPowerUp)
+static int s_hauntBody = -1, s_hauntIcon = -1;
+static void HauntOthers(S32 now);
+static void HauntTwinsen(const char *by, S32 now);
+static void HauntForget(void);
+static double HauntPace(int n, S32 now);
+static void HauntSway(int n, T_OBJET *car, S32 now);
 #define RACE_GOLD_MS 8000                  // the golden Gazogem: from its first use, this long to boost with it as often as wanted ...
 #define RACE_GOLD_BURST_MS 1200            // ... each use Gazogem's boost this long ...
 #define RACE_GOLD_INJECT (10 * 5120 / 36)  // ... and 10 km/h more speed at once (the dial's km/h: speed * 36 / 5120; the user, 2026-10-10:
@@ -1077,6 +1093,80 @@ typedef struct {
 } T_RACE_SPOOK;
 static T_RACE_SPOOK s_spooks[RACE_MAX_SPOOKS];
 static int s_nbSpooks = 0;
+// The Temple of Bú's scares (the user, 2026-10-17: "Let's make the temple track creepier with some skeletons and also do visual scares,
+// perhaps a witch dive bombing at the player and pulling up at the last second to avoid a collision"), drawn over the scene as the super
+// jet-pack is (DrawHalloween) and touching nothing:
+//   - dive=<body> <x> <z> <y> (island units: a place over the lap's road, the road's height there): as Twinsen's car comes RACE_DIVE_LEAD
+//     along the lap from it, now and then a witch (the spooks' witch, <body>) sets off from high over it and dives along the lap straight
+//     at his car, pulls up at the last moment to pass just over its roof and climbs away behind it (Dives). Her place is reckoned from the
+//     car's every frame -- how far ahead of it she is along the lap, the guide line's (GuideS) -- so whatever the car does, she is never
+//     lower over it than RACE_DIVE_CLEAR over its box; nothing is hit, nothing slowed;
+//   - scare=<body> <x> <z> <y> <turn>: something -- a skeleton, a ghost -- that jumps up out of the floor beside the road as his car comes
+//     by, reaches out at it and sinks back (Scares).
+// Each its own dice (ScareRandom): the race's and the vents' stay as they were.
+#define RACE_MAX_DIVES 12
+#define RACE_DIVE_LEAD (28 * 512.0)         // she sets off from her place as the car comes this far from it along the lap ...
+#define RACE_DIVE_CHANCE 0.7                // ... this often (else she lets it go by this time) ...
+#define RACE_DIVE_AGAIN 25000               // ... and again no sooner than this (a lap is about a minute)
+#define RACE_DIVE_HIGH 6000.0               // from this high over the road (and up to RACE_DIVE_HIGH_MORE more) ...
+#define RACE_DIVE_HIGH_MORE 2000.0
+#define RACE_DIVE_SPEED 2600.0              // ... flying at the car this fast (units a second: the car's own speed brings them together faster)
+#define RACE_DIVE_SIDE (2.5 * 512)          // ... from up to this far to either side of it, over the road
+#define RACE_DIVE_STOOP 0.55                // she glides down a little until she is this share of the way to the car, then dives steeply ...
+#define RACE_DIVE_CRUISE 0.85               // ... from this share of her height ...
+#define RACE_DIVE_PULL (6 * 512.0)          // ... and pulls up out of it this far ahead of the car, a little over its roof ...
+#define RACE_DIVE_CLEAR 320.0               // ... to skim over it, her lowest point this far over the top of its box (up to RACE_DIVE_CLEAR_MORE
+#define RACE_DIVE_CLEAR_MORE 300.0          //     more) ...
+#define RACE_DIVE_CLIMB 1.0                 // ... climbing away behind it this steeply (and drifting off to a side) ...
+#define RACE_DIVE_GONE (16 * 512.0)         // ... until she is this far behind it
+#define RACE_DIVE_MOST 9000                 // (ms: a dive the car never meets -- it turned round -- is over by then)
+#define RACE_DIVE_NEAR 3000.0               // within this of the car along the lap she is never lower over it than her pass
+typedef struct { int Body; double X, Z, Y, S; int Placed; S32 Next; } T_RACE_DIVE;
+static T_RACE_DIVE s_dives[RACE_MAX_DIVES];
+static int s_nbDives = 0;
+// the dive flying: its place, when it set off; where she is along the lap (the guide line's S), how far ahead of the car she set off, her
+// height over the road then, her sides (at the start, and drifting after the pass), her pass's clearance; her place and pose this frame
+// (world units), and the closest she came to the car (Closest: her box's lowest point over the top of the car's where they were over each
+// other, Apart: the least of the gaps between the two boxes, up or across)
+typedef struct {
+    int On, Place, Body, Ready, Over;
+    S32 T0;
+    double S, Lead, High, Side0, Side1, Clear, Hint;
+    double X, Y, Z, Pitch; S32 Beta;
+    double Closest, ClosestAcross, Apart;
+    T_OBJ_3D Obj;
+} T_RACE_DIVING;
+static T_RACE_DIVING s_diving;
+#define RACE_MAX_SCARES 24
+#define RACE_SCARE_NEAR (14 * 512.0)        // one jumps up as Twinsen's car comes this near (on its level) ...
+#define RACE_SCARE_CHANCE 0.75              // ... this often ...
+#define RACE_SCARE_AGAIN 25000              // ... and again no sooner than this
+#define RACE_SCARE_RISE 300                 // ms up out of the floor, overshooting a little ...
+#define RACE_SCARE_HOLD 1400                // ... there, lunging at the road ...
+#define RACE_SCARE_SINK 700                 // ... and back down
+#define RACE_SCARE_DEPTH 2600.0             // (how far under the floor it waits: out of sight under it)
+typedef struct { int Body, Ready; double X, Z, Y; S32 Beta, T0, Next; double Last; T_OBJ_3D Obj; } T_RACE_SCARE;
+static T_RACE_SCARE s_scares[RACE_MAX_SCARES];
+static int s_nbScares = 0;
+static unsigned s_scareSeed = 20261017u;
+// The ghost power-up (haunt=, PU_GHOST): Twinsen's haunts every other car -- each RACE_HAUNT_MS slower, weaving across its road, a ghost
+// circling over it -- and another car's haunts Twinsen: a ghost over his screen, see-through, for RACE_HAUNT_SCREEN_MS (the user: "we
+// should make this translucent enough for a player to see through and not make it last more than about 10 seconds"). The protection spell
+// and the super jet-pack keep it off, as they do the other cars' attacks.
+#define RACE_HAUNT_MS 5000                  // a car Twinsen's ghost haunts: this long ...
+#define RACE_HAUNT_PACE 0.8                 // ... its pace this much of its own ...
+#define RACE_HAUNT_SWAY (1.2 * 512)         // ... weaving this far to either side (no further than its road's edge lets it) ...
+#define RACE_HAUNT_SWAY_MS 1300             // ... once each way in this long ...
+#define RACE_HAUNT_TURN 160                 // ... its nose swinging with it (4096 a turn) ...
+#define RACE_HAUNT_EASE 500                 // ... into it and out of it over this long
+#define RACE_HAUNT_SCREEN_MS 8000           // Twinsen's screen haunted: this long in all, ...
+#define RACE_HAUNT_IN 700                   // ... the ghost fading in over this long and out over its last RACE_HAUNT_OUT
+#define RACE_HAUNT_OUT 3000
+static S32 s_oppHauntAt[RACE_MAX_OPPONENTS], s_oppHauntUntil[RACE_MAX_OPPONENTS];
+static double s_oppSwayMost[RACE_MAX_OPPONENTS], s_oppEdgeLeast[RACE_MAX_OPPONENTS];   // (for the log: its widest weave, the nearest its middle came to the road's edge)
+static T_OBJ_3D s_hauntObj[RACE_MAX_OPPONENTS];
+static int s_hauntReady[RACE_MAX_OPPONENTS];
+static S32 s_hauntAt = 0, s_hauntUntil = 0;   // Twinsen's screen haunted since, until (0: not)
 static S32 s_bittenUntil[RACE_MAX_OPPONENTS + 1];  // a car just bitten is let be till then -- a monster beside it doesn't bite it again
 // The giant frog (frog=: see "the giant frog" further on)
 #define RACE_FROG_CLEAR 600                // ms the mouth has to stay open once a car is in it: past the jaw, its hinge 7 cells in --
@@ -2525,6 +2615,25 @@ static void Load(const char *path, int carOnly = 0) {
                 }
                 if (sp->Np >= 1) { sp->X = sp->PX[0]; sp->Z = sp->PZ[0]; sp->S = (s_nbSpooks * 0.61 - floor(s_nbSpooks * 0.61)) * sp->Len; s_nbSpooks++; }
             }
+        }
+        else if (!strcmp(key, "dive")) {
+            int body, x, z, y;
+            if (s_nbDives < RACE_MAX_DIVES && sscanf(v, "%d %d %d %d", &body, &x, &z, &y) == 4 && body >= 0) {
+                T_RACE_DIVE *d = &s_dives[s_nbDives++];
+                memset(d, 0, sizeof(*d));
+                d->Body = body; d->X = x; d->Z = z; d->Y = y;
+            }
+        }
+        else if (!strcmp(key, "scare")) {
+            int body, x, z, y, turn;
+            if (s_nbScares < RACE_MAX_SCARES && sscanf(v, "%d %d %d %d %d", &body, &x, &z, &y, &turn) == 5 && body >= 0) {
+                T_RACE_SCARE *c = &s_scares[s_nbScares++];
+                memset(c, 0, sizeof(*c));
+                c->Body = body; c->X = x; c->Z = z; c->Y = y; c->Beta = turn & 4095; c->Last = 1e18;
+            }
+        }
+        else if (!strcmp(key, "haunt")) {
+            if (sscanf(v, "%d %d", &s_hauntBody, &s_hauntIcon) != 2) s_hauntBody = s_hauntIcon = -1;
         }
         else if (!strcmp(key, "gasmonster")) {
             int scene, neck, size, x, z, bx, bz, by, fy, anim0;
@@ -5400,6 +5509,7 @@ static int RandomPowerUp(double back) {
         w[i] = s_puWeight[i] * (back < 0 ? 1 : s_puLead[i] + (s_puLast[i] - s_puLead[i]) * back);
         if (i == PU_FUEL && s_fuelAlways) w[i] = 0;   // (every car has it all race)
         if (i == PU_FAKE && !s_nbFakeActors) w[i] = 0;  // (a track built before them has no copies of the mushroom to show one)
+        if (i == PU_GHOST && s_hauntBody < 0) w[i] = 0;  // (the Temple of Bú's alone: haunt=)
         total += w[i];
     }
     double r = RaceRandom() * total;
@@ -5658,6 +5768,10 @@ static void UseItem(int pu, S32 now) {
         s_jetUntil = now + RACE_JETPACK_MS; s_jetFactor = s_puJet[pu]; s_autoIndex = -1;
         s_skidUntil = 0; s_hitUntil = 0; s_shrunkUntil = 0;
         break;
+    case PU_GHOST:
+        // (the other cars haunted a while: HauntOthers)
+        HauntOthers(now);
+        break;
     }
     // (its name not said on the screen: the item box shows it -- the user, 2026-10-10: "We also don't need a message for each pickup")
     Log_Info("[racemod] Twinsen uses %s%s", s_puName[pu], s_puJet[pu] > 0 && !Guide() ? " (no line: a boost, the keys his)" : "");
@@ -5698,6 +5812,7 @@ static void ForgetPowerUps(const char *why) {
     if (s_heroHidden) { ListObjet[NUM_PERSO].Flags &= ~INVISIBLE; s_heroHidden = 0; }
     if (s_heroIsSmall && Comportement == C_BUGGY) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroIsSmall = 0;
+    HauntForget();
     Log_Info("[racemod] %s: no power-up from before it lasts", why);
 }
 
@@ -5758,6 +5873,8 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
             if (!protect) s_shrunkUntil = now + ms;
             if (protect) Log_Info("[racemod] %s's lightning strikes Twinsen's car: the protection spell holds", o->Name);
             else Log_Info("[racemod] Twinsen's car struck and shrunk by %s's lightning for %.1f s", o->Name, ms / 1000.0);
+        } else if (pu == PU_GHOST) {
+            HauntTwinsen(o->Name, now);
         } else if (s_puJet[pu] > 0) {
             o->JetUntil = now + RACE_JETPACK_MS;
             o->JetFactor = s_puJet[pu];
@@ -7792,6 +7909,326 @@ static void Spooks(S32 now, int driving, S32 dt) {
     }
 }
 
+// ---- Halloween: the witches' dives at the car, the scares by the road, the ghost power-up (dive=, scare=, haunt=) ------------------
+
+static double ScareRandom(void) {
+    s_scareSeed = s_scareSeed * 1103515245u + 12345u;
+    return ((s_scareSeed >> 8) & 0xFFFFFF) / 16777216.0;
+}
+
+// How far `s` is ahead of `from` along a lap `length` long (negative: behind), the shorter way round.
+static double LapAhead(double s, double from, double length) {
+    double d = fmod(s - from, length);
+    if (d > length / 2) d -= length;
+    if (d < -length / 2) d += length;
+    return d;
+}
+
+// A body's box (its header's, BODY.HQR): its lowest point under its middle, and how far it reaches round its middle on the level, turned
+// any way.
+static void BodyReach(int body, double *low, double *reach) {
+    const U8 *shape = body >= 0 ? (const U8 *)GivePtrBody(body) : NULL;
+    *low = 0; *reach = 0;
+    if (!shape) return;
+    S32 box[6];
+    memcpy(box, shape + 8, sizeof(box));
+    const double x = abs(box[0]) > abs(box[1]) ? abs(box[0]) : abs(box[1]), z = abs(box[4]) > abs(box[5]) ? abs(box[4]) : abs(box[5]);
+    *low = box[2]; *reach = sqrt(x * x + z * z);
+}
+
+// A witch sets off from dive place `i` at Twinsen's car (along the lap at `carS`), from over the road `lead` ahead of it.
+static void DiveStart(int i, double carS, double lead, S32 now, const char *why) {
+    const T_RACE_OPPONENT *o = Guide();
+    T_RACE_DIVING *w = &s_diving;
+    if (!o || o->Length <= 0) return;
+    if (w->Body != s_dives[i].Body) w->Ready = 0;
+    w->On = 1; w->Place = i; w->Body = s_dives[i].Body; w->T0 = now; w->Over = 0; w->Pitch = 0;
+    w->S = fmod(carS + lead, o->Length);
+    if (w->S < 0) w->S += o->Length;
+    w->Lead = lead > RACE_DIVE_PULL * 1.5 ? lead : RACE_DIVE_PULL * 1.5;
+    w->High = RACE_DIVE_HIGH + ScareRandom() * RACE_DIVE_HIGH_MORE;
+    w->Side0 = (2 * ScareRandom() - 1) * RACE_DIVE_SIDE;
+    w->Side1 = (ScareRandom() < 0.5 ? -1 : 1) * (0.5 + 0.5 * ScareRandom());   // (to the side a unit for each she is behind the car)
+    w->Clear = RACE_DIVE_CLEAR + ScareRandom() * RACE_DIVE_CLEAR_MORE;
+    w->Closest = w->Apart = 1e18; w->ClosestAcross = 0;
+    Log_Info("[racemod] a witch dives at the car (place %d%s): from %.1f cells ahead along the lap, %.0f over the road, %.1f cells to its %s",
+             i + 1, why, lead / 512, w->High, fabs(w->Side0) / 512, w->Side0 >= 0 ? "left" : "right");
+}
+
+// Every frame: the witches' dives (dive=) -- one setting off now and then as Twinsen's car comes up to her place, and the one flying:
+// along the lap at the car, her height over the road by how far ahead of the car she is -- gliding, then diving steeply down at it, pulled
+// up out of the dive RACE_DIVE_PULL ahead of it to skim RACE_DIVE_CLEAR (and a little more, at random) over the top of its box, climbing
+// away behind it -- her side coming in to the car's own at the pass. Never lower over the car than that pass while she is within
+// RACE_DIVE_NEAR of it along the lap, whatever it does: the log says how close she came. (Seen from the camera behind the car, she comes
+// down at it and swerves up over the camera.)
+static void Dives(S32 now, int driving, S32 dt) {
+    T_RACE_DIVING *w = &s_diving;
+    const T_RACE_OPPONENT *o = Guide();
+    if (!s_nbDives || !o || o->Length <= 0) { w->On = 0; return; }
+    double cx, cy, cz;
+    if (!driving || CubeMode != CUBE_EXTERIEUR || NewCube != -1 || !CarAt(-1, &cx, &cy, &cz)) {
+        if (w->On) { w->On = 0; Log_Info("[racemod] the witch's dive (place %d) left off: Twinsen out of his car, or the scene changing", w->Place + 1); }
+        w->Hint = -1;
+        return;
+    }
+    double side;
+    const double carS = GuideS(o, cx, cy, cz, w->Hint, &side);
+    w->Hint = carS;
+    // (each place's own place along the lap, once)
+    for (int i = 0; i < s_nbDives; i++)
+        if (!s_dives[i].Placed) { s_dives[i].S = GuideS(o, s_dives[i].X, s_dives[i].Y, s_dives[i].Z, -1, NULL); s_dives[i].Placed = 1; }
+    if (!w->On) {
+        if (ListBuggy[0].Speed < 1500) return;
+        for (int i = 0; i < s_nbDives; i++) {
+            T_RACE_DIVE *d = &s_dives[i];
+            const double ahead = LapAhead(d->S, carS, o->Length);
+            if (ahead > RACE_DIVE_LEAD || ahead < RACE_DIVE_LEAD - 3000 || now < d->Next) continue;
+            d->Next = now + RACE_DIVE_AGAIN;
+            if (ScareRandom() >= RACE_DIVE_CHANCE) { Log_Info("[racemod] the witch at dive place %d lets the car go by this time", i + 1); continue; }
+            DiveStart(i, carS, ahead, now, "");
+            break;
+        }
+        if (!w->On) return;
+    }
+    // her place along the lap, towards the car; how far ahead of it she is
+    w->S -= RACE_DIVE_SPEED * dt / 1000.0;
+    if (w->S < 0) w->S += o->Length;
+    const double d = LapAhead(w->S, carS, o->Length);
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    double low, reach;
+    BodyReach(w->Body, &low, &reach);
+    const double top = hero->YMax, pass = top - low + w->Clear;   // (the car's roof over its middle; her middle over the car's at the pass)
+    // her height over the car's, by how far ahead of it she is: gliding down a little from her height, then diving steeply at the car,
+    // pulled up out of the dive RACE_DIVE_PULL ahead of it a little over its roof, skimming over it and climbing away behind it (the
+    // slope: her height's change for each unit she is further ahead)
+    const double stoop = w->Lead * RACE_DIVE_STOOP > RACE_DIVE_PULL * 1.5 ? w->Lead * RACE_DIVE_STOOP : RACE_DIVE_PULL * 1.5;
+    const double cruise = w->High * RACE_DIVE_CRUISE, skim = pass + 250;
+    double over, slope;
+    if (d >= stoop) {
+        const double span = w->Lead - stoop;
+        over = cruise + (w->High - cruise) * (span > 0 ? fmin(1.0, (d - stoop) / span) : 0);
+        slope = span > 0 ? (w->High - cruise) / span : 0;
+    } else if (d >= RACE_DIVE_PULL) {
+        const double span = stoop - RACE_DIVE_PULL, u = (d - RACE_DIVE_PULL) / span;
+        over = skim + (cruise - skim) * u * u * (3 - 2 * u);
+        slope = (cruise - skim) * 6 * u * (1 - u) / span;
+    } else if (d >= 0) {
+        const double u = d / RACE_DIVE_PULL;
+        over = pass + (skim - pass) * u * u;
+        slope = 2 * (skim - pass) * u / RACE_DIVE_PULL;
+    } else {
+        const double e = -d;
+        over = pass + RACE_DIVE_CLIMB * e * e / (e + 1500);
+        slope = -RACE_DIVE_CLIMB * (e * e + 3000 * e) / ((e + 1500) * (e + 1500));
+    }
+    // where that is: over the road along the lap, to its side (coming in to the car's side at the pass, drifting off after it), the
+    // road's height there and the car's own over its road where it is (a car in the air)
+    const double across = d >= 0 ? side + w->Side0 * (d < w->Lead ? d / w->Lead : 1) : side + w->Side1 * -d;
+    double x, ly, z, hx, hz, rx, ry, rz, rhx, rhz;
+    GuideAt(o, w->S, across, &x, &ly, &z, &hx, &hz);
+    GuideAt(o, carS, side, &rx, &ry, &rz, &rhx, &rhz);
+    double y = ly + (cy - ry) + over;
+    if (fabs(d) < RACE_DIVE_NEAR && y < cy + pass) y = cy + pass;
+    w->X = x; w->Y = y; w->Z = z;
+    // (facing the way she flies -- at the car, against the lap's way -- her nose down in the dive, level at the pass, up as she climbs)
+    w->Beta = (S32)floor(atan2(-hx, -hz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    double pitch = atan(slope * 1.6);
+    if (pitch > 1.1) pitch = 1.1; else if (pitch < -1.1) pitch = -1.1;
+    w->Pitch += (pitch - w->Pitch) * 0.35;
+    // how close she comes to the car: her box's lowest point over the top of the car's where the two are over each other, and the gap
+    // between the boxes, up or across (her box turned any way; the car's corners its reach)
+    const double carReach = sqrt((double)(abs(hero->XMin) > abs(hero->XMax) ? hero->XMin * hero->XMin : hero->XMax * hero->XMax)
+                                 + (double)(abs(hero->ZMin) > abs(hero->ZMax) ? hero->ZMin * hero->ZMin : hero->ZMax * hero->ZMax));
+    const double apartAcross = sqrt((x - cx) * (x - cx) + (z - cz) * (z - cz)), up = (y + low) - (cy + top);
+    const double gap = up > apartAcross - reach - carReach ? up : apartAcross - reach - carReach;
+    if (gap < w->Apart) w->Apart = gap;
+    if (apartAcross < reach + carReach && up < w->Closest) { w->Closest = up; w->ClosestAcross = apartAcross; }
+    if (!w->Over && d < 0) {
+        w->Over = 1;
+        Log_Info("[racemod] the witch pulls up over the car (place %d): her lowest point %.0f over the top of its box, %.0f across", w->Place + 1, up, apartAcross);
+    }
+    if (d < -RACE_DIVE_GONE || now - w->T0 > RACE_DIVE_MOST) {
+        w->On = 0;
+        if (w->Closest < 1e17)
+            Log_Info("[racemod] the witch's dive (place %d) over after %.1f s: at the closest her lowest point %.0f over the top of the car's box (%.0f across); the boxes %.0f apart at the least -- never touching",
+                     w->Place + 1, (now - w->T0) / 1000.0, w->Closest, w->ClosestAcross, w->Apart);
+        else Log_Info("[racemod] the witch's dive (place %d) over after %.1f s: she never came over the car; the boxes %.0f apart at the least",
+                      w->Place + 1, (now - w->T0) / 1000.0, w->Apart);
+        if (w->Apart <= 0) Log_Info("[racemod] WARNING: the witch's box met the car's");
+    }
+}
+
+// Every frame: the scares by the road (scare=) -- one jumping up now and then as Twinsen's car comes near it.
+static void Scares(S32 now, int driving) {
+    double cx, cy, cz;
+    const int seen = driving && CubeMode == CUBE_EXTERIEUR && NewCube == -1 && CarAt(-1, &cx, &cy, &cz);
+    for (int i = 0; i < s_nbScares; i++) {
+        T_RACE_SCARE *c = &s_scares[i];
+        if (c->T0 && now - c->T0 >= RACE_SCARE_RISE + RACE_SCARE_HOLD + RACE_SCARE_SINK) c->T0 = 0;
+        if (!seen) { c->Last = 1e18; continue; }
+        const double dist = sqrt((cx - c->X) * (cx - c->X) + (cz - c->Z) * (cz - c->Z));
+        const int coming = dist < c->Last;
+        c->Last = dist;
+        if (!coming || dist > RACE_SCARE_NEAR || fabs(cy - c->Y) > 2500 || now < c->Next || c->T0) continue;
+        c->Next = now + RACE_SCARE_AGAIN;
+        if (ScareRandom() >= RACE_SCARE_CHANCE) continue;
+        c->T0 = now;
+        Log_Info("[racemod] a scare jumps up beside the road (scare %d, body %d, %.1f cells from the car)", i + 1, c->Body, dist / 512);
+    }
+}
+
+// Twinsen's ghost (PU_GHOST): every other car racing haunted RACE_HAUNT_MS -- not one on a super jet-pack, which nothing catches.
+static void HauntOthers(S32 now) {
+    int haunted = 0;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        const T_RACE_OPPONENT *o = &s_opp[n];
+        if (!o->Count || !o->Scenes) continue;
+        if (now < o->JetUntil) { Log_Info("[racemod] Twinsen's ghost can't catch %s: the super jet-pack", o->Name); continue; }
+        if (now >= s_oppHauntUntil[n]) { s_oppHauntAt[n] = now; s_oppSwayMost[n] = 0; s_oppEdgeLeast[n] = 1e18; }
+        s_oppHauntUntil[n] = now + RACE_HAUNT_MS;
+        haunted++;
+        Log_Info("[racemod] Twinsen's ghost haunts %s for %.1f s", o->Name, RACE_HAUNT_MS / 1000.0);
+    }
+    if (!haunted) Log_Info("[racemod] Twinsen's ghost: no other car to haunt");
+}
+
+// Another car's ghost (`by` its driver): Twinsen's screen haunted, RACE_HAUNT_SCREEN_MS in all -- unless the protection spell or the
+// super jet-pack keeps it off. One at a time: another while one is over the screen comes to nothing (the screen never haunted longer).
+static void HauntTwinsen(const char *by, S32 now) {
+    if (now < s_protectUntil || now < s_jetUntil) {
+        Log_Info("[racemod] %s's ghost comes for Twinsen: %s", by, now < s_protectUntil ? "the protection spell holds" : "the super jet-pack");
+        return;
+    }
+    if (now < s_hauntUntil) { Log_Info("[racemod] %s's ghost comes for Twinsen: one is over his screen already", by); return; }
+    s_hauntAt = now; s_hauntUntil = now + RACE_HAUNT_SCREEN_MS;
+    Log_Info("[racemod] %s's ghost haunts Twinsen: over his screen for %.1f s (fading in over %.1f s, out over the last %.1f s)", by,
+             RACE_HAUNT_SCREEN_MS / 1000.0, RACE_HAUNT_IN / 1000.0, RACE_HAUNT_OUT / 1000.0);
+}
+
+static void HauntForget(void) {
+    s_hauntAt = s_hauntUntil = 0;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_oppHauntAt[n] = s_oppHauntUntil[n] = 0;
+}
+
+// How much opponent n is haunted now: 0 not, 1 fully -- easing in and out over RACE_HAUNT_EASE at its ends.
+static double HauntEase(int n, S32 now) {
+    if (now >= s_oppHauntUntil[n] || now < s_oppHauntAt[n]) return 0;
+    double e = (now - s_oppHauntAt[n]) / (double)RACE_HAUNT_EASE;
+    const double out = (s_oppHauntUntil[n] - now) / (double)RACE_HAUNT_EASE;
+    if (out < e) e = out;
+    return e > 1 ? 1 : e;
+}
+
+static double HauntPace(int n, S32 now) {
+    return 1.0 - (1.0 - RACE_HAUNT_PACE) * HauntEase(n, now);
+}
+
+// A haunted opponent's car where it is this frame (its line's place): weaving across its road -- no further than the raised road's edge,
+// less a car's half width, lets it (no road under it found: not at all) -- its nose swinging with it.
+static void HauntSway(int n, T_OBJET *car, S32 now) {
+    const double e = HauntEase(n, now);
+    if (e <= 0 || car->Obj.Y < -10000) return;
+    const double t = (now - s_oppHauntAt[n]) * 2 * RACE_PI / RACE_HAUNT_SWAY_MS;
+    double sway = RACE_HAUNT_SWAY * e * sin(t);
+    // (across its heading: the way turned a quarter)
+    const double b = car->Obj.Beta * 2 * RACE_PI / 4096, nx = cos(b), nz = -sin(b);
+    const double wx = car->Obj.X + CurrentCubeX * 32768.0, wz = car->Obj.Z + CurrentCubeY * 32768.0;
+    S32 ry;
+    int seg;
+    double lat, tt;
+    if (!s_nbRaised || !RaisedAt(wx, wz, car->Obj.Y + 64, 0, &ry, &seg, &lat, &tt)) return;
+    const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
+    const double sx = c->X - a->X, sz = c->Z - a->Z, len = sqrt(sx * sx + sz * sz);
+    if (len <= 0) return;
+    const double room = a->Half + (c->Half - a->Half) * tt - RAISED_INSET - 100;
+    const double k = (sx * nz - sz * nx) / len;   // (how much a unit of sway moves it across the road)
+    if (room <= 0 || fabs(k) < 0.2) return;
+    // (each way as far as its road's edge lets it -- and a car whose line is already past that keeps to its line: never moved out, nor in)
+    double most = (room - lat * (k > 0 ? 1 : -1)) / fabs(k), least = -(room + lat * (k > 0 ? 1 : -1)) / fabs(k);
+    if (most < 0) most = 0;
+    if (least > 0) least = 0;
+    if (sway > most) sway = most;
+    if (sway < least) sway = least;
+    const double edge = room + RAISED_INSET + 100 - fabs(lat + k * sway);
+    if (fabs(sway) > s_oppSwayMost[n]) s_oppSwayMost[n] = fabs(sway);
+    if (edge < s_oppEdgeLeast[n]) s_oppEdgeLeast[n] = edge;
+    car->Obj.X += (S32)(nx * sway);
+    car->Obj.Z += (S32)(nz * sway);
+    car->Obj.Beta = (car->Obj.Beta + (S32)(RACE_HAUNT_TURN * e * cos(t))) & 4095;
+}
+
+// Every frame (RaceMod_Frame): the dives, the scares, and the hauntings' ends.
+static void Halloween(S32 now, int driving, S32 dt) {
+    if (s_nbDives) Dives(now, driving, dt);
+    if (s_nbScares) Scares(now, driving);
+    if (s_hauntUntil && now >= s_hauntUntil) {
+        Log_Info("[racemod] the ghost over Twinsen's screen is gone: %.1f s in all", (now - s_hauntAt) / 1000.0);
+        s_hauntAt = s_hauntUntil = 0;
+    }
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
+        if (s_oppHauntUntil[n] && now >= s_oppHauntUntil[n]) {
+            if (s_oppEdgeLeast[n] < 1e17)
+                Log_Info("[racemod] %s is haunted no longer (%.1f s): weaving up to %.0f across its line, its middle at least %.0f inside the road's edge",
+                         s_opp[n].Name, (now - s_oppHauntAt[n]) / 1000.0, s_oppSwayMost[n], s_oppEdgeLeast[n]);
+            else Log_Info("[racemod] %s is haunted no longer (%.1f s), not seen weaving (out of this scene)", s_opp[n].Name, (now - s_oppHauntAt[n]) / 1000.0);
+            s_oppHauntAt[n] = s_oppHauntUntil[n] = 0;
+        }
+}
+
+// ResetTrack: none of them.
+static void HalloweenReset(void) {
+    s_nbDives = 0; s_nbScares = 0;
+    s_diving.On = 0; s_diving.Ready = 0; s_diving.Body = -1; s_diving.Hint = -1;
+    s_hauntBody = s_hauntIcon = -1;
+    HauntForget();
+    memset(s_hauntReady, 0, sizeof(s_hauntReady));
+}
+
+// Console (tests): a witch dives at Twinsen's car now, from place `place` (1 the first; 0 the nearest ahead) RACE_DIVE_LEAD ahead of it
+// along the lap (racedive); Twinsen's screen haunted as by another car's ghost (racehaunt); scare n (0 the nearest) jumps up now
+// (racescare).
+void RaceMod_TestDive(int place) {
+    const T_RACE_OPPONENT *o = Guide();
+    double cx, cy, cz, side;
+    if (!RaceMod_Active() || !s_nbDives || !o || o->Length <= 0 || !CarAt(-1, &cx, &cy, &cz)) { Log_Info("[racemod] racedive: no dive places, no line or no car"); return; }
+    const double carS = GuideS(o, cx, cy, cz, -1, &side);
+    int i = place - 1;
+    if (i < 0 || i >= s_nbDives) {
+        double best = 1e30;
+        i = 0;
+        for (int k = 0; k < s_nbDives; k++) {
+            if (!s_dives[k].Placed) { s_dives[k].S = GuideS(o, s_dives[k].X, s_dives[k].Y, s_dives[k].Z, -1, NULL); s_dives[k].Placed = 1; }
+            double a = LapAhead(s_dives[k].S, carS, o->Length);
+            if (a < 0) a += o->Length;
+            if (a < best) { best = a; i = k; }
+        }
+    }
+    s_diving.Hint = carS;
+    DiveStart(i, carS, RACE_DIVE_LEAD, TimerRefHR, ", the console's");
+}
+
+void RaceMod_TestHaunt(void) {
+    if (!RaceMod_Active()) return;
+    s_hauntUntil = 0;
+    HauntTwinsen("The console", TimerRefHR);
+}
+
+void RaceMod_TestScare(int n) {
+    double cx, cy, cz;
+    if (!RaceMod_Active() || !s_nbScares || !CarAt(-1, &cx, &cy, &cz)) return;
+    int i = n - 1;
+    if (i < 0 || i >= s_nbScares) {
+        double best = 1e30;
+        i = 0;
+        for (int k = 0; k < s_nbScares; k++) {
+            const double d = (cx - s_scares[k].X) * (cx - s_scares[k].X) + (cz - s_scares[k].Z) * (cz - s_scares[k].Z);
+            if (d < best) { best = d; i = k; }
+        }
+    }
+    s_scares[i].T0 = TimerRefHR;
+    Log_Info("[racemod] a scare jumps up beside the road (scare %d, the console's)", i + 1);
+}
+
 // Where the cars are going: each one's way (units a second) from its last place, every frame.
 static void CarWays(S32 now) {
     for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
@@ -8300,6 +8737,7 @@ void RaceMod_Frame(void) {
     Gunners(now, driving);
     Flyers(now, driving, dt);
     Spooks(now, driving, dt);
+    Halloween(now, driving, dt);
     Projectiles(now, driving);
     Wheel(now, driving);
     SlotMachine(now);
@@ -8334,6 +8772,7 @@ void RaceMod_Frame(void) {
             if (now < o->JetUntil) pace *= JetFactor(o->JetUntil, o->JetFactor);
             else if (now < o->BoostUntil || s_fuelAlways) pace *= RACE_BOOST * 0.9;
             if (now < o->ShrunkUntil) pace *= RACE_SHRUNK;
+            pace *= HauntPace(n, now);
             if (now < o->HitUntil) { pace = 0; o->Speed = 0; }
 
             // its line's speed at its skill, reached from a standstill no faster than the car pulls away (the plan's braking is kept)
@@ -8463,6 +8902,8 @@ void RaceMod_Frame(void) {
             const double p = (double)(now - o->SkidStart) / RACE_SKID_MS, turn = 4096.0 * (1 - (1 - p) * (1 - p));
             car->Obj.Beta = (car->Obj.Beta + o->SkidDir * (S32)turn) & 4095;
         }
+        // haunted by Twinsen's ghost: weaving across its road
+        HauntSway(n, car, now);
         // shrunk by the lightning spell: its car's half-size body while it lasts (the build's, opponent_small=)
         if (o->Small >= 0) {
             if (o->Normal < 0 && now >= o->ShrunkUntil) o->Normal = car->GenBody;
@@ -8733,6 +9174,191 @@ static void DrawBolts(S32 now, S32 height) {
     UnsetClip();
 }
 
+// A body of BODY.HQR (made ready in `obj` the first time: *ready) where it is (island units), turned to `beta` and pitched `pitch`, drawn
+// after the scene's objects as the super jet-pack is -- tested against the depth of the scene, not writing it -- in the fog by its
+// distance as the spooks are; its place on the screen marked to be drawn over next frame. (Drawn every frame, so it moves smoothly
+// whatever the frame redraws: the spooks are drawn into the background, which a frame of the objects alone keeps.)
+static void DrawOver(T_OBJ_3D *obj, int *ready, int body, double x, double y, double z, S32 beta, double pitch) {
+    if (body < 0) return;
+    if (!*ready) {
+        if (!GivePtrBody(body)) return;
+        ObjectClear(obj);
+        obj->Body.Num = -1;
+        ObjectInitBody(obj, (void *)(uintptr_t)(U32)body);
+        obj->Texture = BufferTexture; obj->NextTexture = BufferTexture;
+        *ready = 1;
+    }
+    obj->X = (S32)floor(x - CurrentCubeX * 32768.0 + 0.5); obj->Y = (S32)floor(y + 0.5); obj->Z = (S32)floor(z - CurrentCubeY * 32768.0 + 0.5);
+    CarPitch(obj, beta & 4095, pitch);
+    memset(obj->CurrentFrame, 0, sizeof(obj->CurrentFrame));
+    LongWorldRotatePoint(obj->X, obj->Y, obj->Z);
+    const S32 zr = CameraZr - Z0;
+    if (zr < -4000 || zr > ClipZFar + 4000) return;
+    const int fog = Fill_Flag_Fog, depth = Fill_Flag_ZBuffer, keep = Fill_Flag_NZW;
+    const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
+    SetCLUT(PalLevel + 16 * BoundRegleTrois(0, 15, ClipZFar - StartZFog, zr - StartZFog));
+    Switch_Fillers(FILL_POLY_FOG_NZW);
+    if (ObjectDisplay(obj)) {
+        SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
+        if (ClipXMin <= ClipXMax && ClipYMin <= ClipYMax) BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
+        UnsetClip();
+    }
+    SetCLUT(clut);
+    Switch_Fillers(depth ? (keep ? (fog ? FILL_POLY_FOG_NZW : FILL_POLY_NZW) : (fog ? FILL_POLY_FOG_ZBUFFER : FILL_POLY_ZBUFFER)) : fog ? FILL_POLY_FOG : FILL_POLY_TEXTURES);
+}
+
+// Halloween's things that move with the cars (dive=, scare=, haunt=): the diving witch, the scares jumping up out of the floor beside the
+// road, and over each car Twinsen's ghost haunts a ghost circling it.
+static void DrawHalloween(S32 now) {
+    if (CubeMode != CUBE_EXTERIEUR) return;
+    T_RACE_DIVING *w = &s_diving;
+    if (w->On) DrawOver(&w->Obj, &w->Ready, w->Body, w->X, w->Y, w->Z, w->Beta, w->Pitch);
+    for (int i = 0; i < s_nbScares; i++) {
+        T_RACE_SCARE *c = &s_scares[i];
+        if (!c->T0) continue;
+        const S32 t = now - c->T0;
+        if (t < 0 || t >= RACE_SCARE_RISE + RACE_SCARE_HOLD + RACE_SCARE_SINK) continue;
+        // (up out of the floor fast, a little past standing and back; lunging at the road while it stands; down again)
+        double up, lunge;
+        if (t < RACE_SCARE_RISE) { const double p = t / (double)RACE_SCARE_RISE; up = 1 - (1 - p) * (1 - p) * (1 - p) + 0.12 * sin(p * RACE_PI); lunge = 0.3 * p; }
+        else if (t < RACE_SCARE_RISE + RACE_SCARE_HOLD) { const double p = (t - RACE_SCARE_RISE) / (double)RACE_SCARE_HOLD; up = 1; lunge = 0.3 + 0.15 * sin(p * 3 * RACE_PI); }
+        else { const double p = (t - RACE_SCARE_RISE - RACE_SCARE_HOLD) / (double)RACE_SCARE_SINK; up = 1 - p * p; lunge = 0.3 * (1 - p); }
+        DrawOver(&c->Obj, &c->Ready, c->Body, c->X, c->Y - RACE_SCARE_DEPTH * (1 - up), c->Z, c->Beta, lunge);
+    }
+    if (s_hauntBody < 0) return;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        const double e = HauntEase(n, now);
+        if (e <= 0 || s_carActor[n] < 0 || s_carActor[n] >= NbObjets) continue;
+        const T_OBJET *car = &ListObjet[s_carActor[n]];
+        if (car->Obj.Y < -10000) continue;
+        // (round and round over the car, a little over its roof, rising out of it as the haunting starts and sinking back into it at its end)
+        const double a = (now - s_oppHauntAt[n]) * 2 * RACE_PI / 1500.0, r = 650;
+        const double x = car->Obj.X + CurrentCubeX * 32768.0 + sin(a) * r, z = car->Obj.Z + CurrentCubeY * 32768.0 + cos(a) * r;
+        const double y = car->Obj.Y + car->YMax * e + 500 * e + 120 * sin(2 * a);
+        DrawOver(&s_hauntObj[n], &s_hauntReady[n], s_hauntBody, x, y, z, (S32)floor(atan2(cos(a), -sin(a)) * 4096 / (2 * RACE_PI) + 0.5), 0.15);
+    }
+}
+
+// The ghost over Twinsen's screen (another car's ghost power-up): a sheet's ghost -- its round head, its sides widening to a wavy hem, its
+// arms raised, its hollow eyes and open mouth -- most of the screen's height, bobbing and swaying, fading in and out. See-through: under its
+// sheet the scene is blended RACE_HAUNT_FILL of the way to the sheet's pale colour at its strongest, under its outline RACE_HAUNT_EDGE,
+// under its eyes and mouth RACE_HAUNT_HOLLOW of the way to black -- each pixel the palette's nearest colour to that blend (tables of the
+// palette made when it is first seen, RACE_HAUNT_LEVELS shares of the way each, dithered between two), times how far it has faded in.
+#define RACE_HAUNT_FILL 0.22
+#define RACE_HAUNT_EDGE 0.6
+#define RACE_HAUNT_HOLLOW 0.5
+#define RACE_HAUNT_LEVELS 16
+#define RACE_HAUNT_TALL 0.84               // its height, of the screen's
+enum { HAUNT_OUTSIDE, HAUNT_SHEET, HAUNT_EDGE, HAUNT_HOLLOW };
+static U8 s_hauntTab[2][RACE_HAUNT_LEVELS + 1][256];  // [0] towards the sheet's colour, [1] towards black
+static U32 s_hauntPalSum = 0;
+static U8 *s_hauntMask = NULL;                        // the ghost's shape, s_hauntW x s_hauntH: HAUNT_OUTSIDE..HAUNT_HOLLOW
+static S32 s_hauntW = 0, s_hauntH = 0;
+
+// How far (u, v) is outside an ellipse round (cu, cv), roughly in the units of its smaller radius (negative inside).
+static double HauntEllipse(double u, double v, double cu, double cv, double ru, double rv) {
+    const double du = (u - cu) / ru, dv = (v - cv) / rv;
+    return (sqrt(du * du + dv * dv) - 1) * (ru < rv ? ru : rv);
+}
+
+// The ghost's shape at (u, v) -- v down from its top, -1, to its hem, 1; u across from its middle, in the same units: how far outside its
+// edge (negative inside), and in *hollow how far outside its eyes and mouth. (Its arms raised up and out, grown out of its sides: a smooth
+// join, `k` wide)
+static double HauntShape(double u, double v, double *hollow) {
+    const double head = HauntEllipse(u, v, 0, -0.4, 0.56, 0.58);
+    const double half = 0.56 + 0.16 * (v + 0.4), hem = 0.8 + 0.1 * cos(u * 7.2);
+    const double body = fmax(fmax(fabs(u) - half, v - hem), -0.4 - v);
+    const double c = cos(0.6), s = sin(0.6), au = fabs(u) - 0.7, av = v + 0.12;
+    const double arm = HauntEllipse(au * c - av * s, au * s + av * c, 0, 0, 0.24, 0.1);
+    const double k = 0.12, joined = fmin(head, body), h = fmax(k - fabs(joined - arm), 0.0) / k;
+    *hollow = fmin(fmin(HauntEllipse(u, v, -0.2, -0.47, 0.1, 0.15), HauntEllipse(u, v, 0.2, -0.47, 0.1, 0.15)), HauntEllipse(u, v, 0, -0.12, 0.12, 0.16));
+    return fmin(joined, arm) - h * h * k / 4;
+}
+
+// The ghost's mask for a screen `height` tall.
+static void HauntMask(S32 height) {
+    const S32 h = (S32)(height * RACE_HAUNT_TALL), w = (S32)(h * 0.98);
+    if (h == s_hauntH && s_hauntMask) return;
+    free(s_hauntMask);
+    s_hauntMask = (U8 *)malloc((size_t)w * h);
+    s_hauntW = w; s_hauntH = h;
+    if (!s_hauntMask) { s_hauntW = s_hauntH = 0; return; }
+    const double unit = h / 2.0, edge = (h / 150.0 > 2 ? h / 150.0 : 2) / unit;
+    for (S32 r = 0; r < h; r++)
+        for (S32 c = 0; c < w; c++) {
+            double hollow;
+            const double d = HauntShape((c - w / 2.0) / unit, (r - h / 2.0) / unit, &hollow);
+            s_hauntMask[r * w + c] = (U8)(fabs(d) <= edge ? HAUNT_EDGE : d > 0 ? HAUNT_OUTSIDE : fabs(hollow) <= edge ? HAUNT_EDGE : hollow < 0 ? HAUNT_HOLLOW : HAUNT_SHEET);
+        }
+    Log_Info("[racemod] the screen's ghost: %d x %d pixels", (int)w, (int)h);
+}
+
+// The blends' tables, for the palette as it is (made again when it changes).
+static void HauntTables(void) {
+    if (!PtrPal) return;
+    U32 sum = 1;
+    int six = 1;
+    for (int i = 0; i < 768; i++) { sum = sum * 31 + PtrPal[i]; if (PtrPal[i] >= 64) six = 0; }
+    if (sum == s_hauntPalSum) return;
+    s_hauntPalSum = sum;
+    // (the sheet's colour, a pale lavender, and black; the palette's own scale -- 8 bits a colour, or the VGA's 6)
+    const double k = six ? 0.25 : 1, to[2][3] = {{236 * k, 232 * k, 250 * k}, {4 * k, 2 * k, 8 * k}};
+    for (int t = 0; t < 2; t++)
+        for (int l = 0; l <= RACE_HAUNT_LEVELS; l++) {
+            const double a = (double)l / RACE_HAUNT_LEVELS;
+            for (int c = 0; c < 256; c++) {
+                if (!l) { s_hauntTab[t][l][c] = (U8)c; continue; }
+                const double r = PtrPal[c * 3] + (to[t][0] - PtrPal[c * 3]) * a, g = PtrPal[c * 3 + 1] + (to[t][1] - PtrPal[c * 3 + 1]) * a,
+                             b = PtrPal[c * 3 + 2] + (to[t][2] - PtrPal[c * 3 + 2]) * a;
+                int best = c;
+                double bd = 1e30;
+                // (the palette's own colours: not the interface's, 1-15, nor its vivid ones from 248)
+                for (int j = 0; j < 248; j++) {
+                    if (j >= 1 && j < 16) continue;
+                    const double dr = PtrPal[j * 3] - r, dg = PtrPal[j * 3 + 1] - g, db = PtrPal[j * 3 + 2] - b, dd = 3 * dr * dr + 4 * dg * dg + 2 * db * db;
+                    if (dd < bd) { bd = dd; best = j; }
+                }
+                s_hauntTab[t][l][c] = (U8)best;
+            }
+        }
+    Log_Info("[racemod] the screen's ghost: its blends made for the palette");
+}
+
+// Over the scene (RaceMod_Draw), while Twinsen's screen is haunted.
+static void DrawHaunt(S32 now, S32 width, S32 height) {
+    if (!s_hauntUntil || now >= s_hauntUntil || now < s_hauntAt) return;
+    const S32 t = now - s_hauntAt, left = s_hauntUntil - now;
+    double e = t < RACE_HAUNT_IN ? (double)t / RACE_HAUNT_IN : left < RACE_HAUNT_OUT ? (double)left / RACE_HAUNT_OUT : 1;
+    e = e * e * (3 - 2 * e);
+    if (e < 0.02) return;
+    HauntMask(height);
+    HauntTables();
+    if (!s_hauntMask) return;
+    // (its place: the screen's middle, swaying and bobbing, rising a little as it fades in)
+    const S32 x0 = width / 2 - s_hauntW / 2 + (S32)(width * 0.05 * sin(t * 2 * RACE_PI / 2600.0));
+    const S32 y0 = (height - s_hauntH) / 2 + (S32)(height * 0.025 * sin(t * 2 * RACE_PI / 1700.0) + (1 - e) * height * 0.08);
+    static const U8 bayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+    const double share[4] = {0, RACE_HAUNT_FILL * e, RACE_HAUNT_EDGE * e, RACE_HAUNT_HOLLOW * e};
+    int level[4], frac[4];
+    for (int k = 0; k < 4; k++) { const double l = share[k] * RACE_HAUNT_LEVELS; level[k] = (int)l; frac[k] = (int)((l - level[k]) * 16); }
+    for (S32 r = 0; r < s_hauntH; r++) {
+        const S32 y = y0 + r;
+        if (y < 0 || y >= height) continue;
+        U8 *row = (U8 *)Log + TabOffLine[y];
+        const U8 *m = s_hauntMask + r * s_hauntW;
+        for (S32 c = 0; c < s_hauntW; c++) {
+            const int k = m[c];
+            const S32 x = x0 + c;
+            if (!k || x < 0 || x >= width) continue;
+            int l = level[k] + (frac[k] > bayer[y & 3][x & 3] ? 1 : 0);
+            if (l > RACE_HAUNT_LEVELS) l = RACE_HAUNT_LEVELS;
+            row[x] = s_hauntTab[k == HAUNT_HOLLOW][l][row[x]];
+        }
+    }
+    const S32 bx0 = x0 < 0 ? 0 : x0, by0 = y0 < 0 ? 0 : y0, bx1 = x0 + s_hauntW - 1 >= width ? width - 1 : x0 + s_hauntW - 1, by1 = y0 + s_hauntH - 1 >= height ? height - 1 : y0 + s_hauntH - 1;
+    if (bx0 <= bx1 && by0 <= by1) BoxMovingAdd(bx0, by0, bx1, by1);
+}
+
 // The 3D view the library draws with (LIB386 3D: CAMERA.CPP, PROJ.CPP, LIGHT.CPP), saved whole and put back.
 typedef struct {
     S32 XCentre, YCentre, NearClip, LFactorX, LFactorY, TypeProj;
@@ -8770,7 +9396,10 @@ static void RestoreView(const T_RACE_VIEW *v) {
 static int ShownItem(int k, S32 now) {
     if (s_item[k] < 0 || now >= s_itemAt[k]) return s_item[k];
     const double t = 1.0 - (double)(s_itemAt[k] - now) / RACE_ITEM_ROLL_MS, p = RACE_ITEM_ROLL_STEPS * (1 - (1 - t) * (1 - t));
-    return ((s_item[k] + (int)floor(p) - RACE_ITEM_ROLL_STEPS) % PU_ROLLED + 6 * PU_ROLLED) % PU_ROLLED;
+    // (the ghost goes by among them where a track has it -- haunt=: after the others, in the golden Gazogem's place, which never does)
+    const int rolled = PU_ROLLED + (s_hauntBody >= 0 ? 1 : 0), at = s_item[k] == PU_GHOST ? PU_ROLLED : s_item[k];
+    const int shown = ((at + (int)floor(p) - RACE_ITEM_ROLL_STEPS) % rolled + 6 * rolled) % rolled;
+    return shown == PU_ROLLED ? PU_GHOST : shown;
 }
 
 #define RACE_GOLD 244                      // the palette's gold, round the selected slot
@@ -8784,8 +9413,9 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int selected, S32 now) {
     SetClip(x0, y0, x1, y1);
     BackupAngles(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
     Box(ClipXMin, ClipYMin, ClipXMax, ClipYMax, 0);
-    const int model = pu < 0 ? -1 : s_puModel[pu] == -2 ? s_oilIcon : s_puModel[pu] == -3 ? -1 : s_puModel[pu] == -4 ? (s_goldIcon >= 0 ? s_goldIcon : s_puModel[PU_FUEL]) : s_puModel[pu];
-    U8 *shape = model >= 0 ? (U8 *)GivePtrObjFix(model) : pu >= 0 && s_puModel[pu] == -3 && s_fakeIconBody >= 0 ? (U8 *)GivePtrBody(s_fakeIconBody) : NULL;
+    const int model = pu < 0 ? -1 : s_puModel[pu] == -2 ? s_oilIcon : s_puModel[pu] == -3 || s_puModel[pu] == -5 ? -1 : s_puModel[pu] == -4 ? (s_goldIcon >= 0 ? s_goldIcon : s_puModel[PU_FUEL]) : s_puModel[pu];
+    U8 *shape = model >= 0 ? (U8 *)GivePtrObjFix(model) : pu >= 0 && s_puModel[pu] == -3 && s_fakeIconBody >= 0 ? (U8 *)GivePtrBody(s_fakeIconBody)
+                : pu >= 0 && s_puModel[pu] == -5 && s_hauntIcon >= 0 ? (U8 *)GivePtrBody(s_hauntIcon) : NULL;
     if (shape) {
         // (the scene's view kept whole -- its projection, its camera and its light -- and put back exactly as it was after the item is
         // drawn. The game's own found-object display resets the view instead (PtrInit3DView): the plain follow camera, without the
@@ -8977,6 +9607,9 @@ void RaceMod_Draw(void) {
     DrawDriveAs(now);
     DrawCheckpoints(height);
     DrawBolts(now, height);
+    // (Halloween's: the diving witch, the scares, the haunted cars' ghosts; another car's ghost over the screen, under the display)
+    DrawHalloween(now);
+    DrawHaunt(now, width, height);
     // the item box, top left: its two slots
     if (items) {
         const S32 size = height / 8 > 60 ? height / 8 : 60, gap = size / 5;
@@ -9087,7 +9720,7 @@ static void ResetTrack(void) {
     s_shardModel = s_shardBit = -1;
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
-    s_nbFlyers = 0; s_nbSpooks = 0;
+    s_nbFlyers = 0; s_nbSpooks = 0; HalloweenReset();
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
     s_guardSize = 1.0; s_nbTeleports = 0; s_teleportedAt = 0;
     memset(&s_frog, 0, sizeof(s_frog)); s_frog.Arc = -1;

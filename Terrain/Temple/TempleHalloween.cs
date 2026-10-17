@@ -24,6 +24,12 @@ internal sealed class HalloweenRun
     public SpookRun[]? Spooks { get; set; }
     // the power-ups' mushrooms are mini pumpkins
     public bool Pumpkins { get; set; } = true;
+    // (2026-10-17) the places a witch dives at Twinsen's car from (RACEMOD.CPP dive=), each [x, z, the road's height there] (island cells);
+    // what jumps up out of the floor beside the road as his car comes by (scare=), each [0 a skeleton | 1 a ghost, x, z, the floor's height,
+    // the way it faces]; and the ghost power-up (haunt=)
+    public double[][]? Dives { get; set; }
+    public double[][]? Scares { get; set; }
+    public bool Haunt { get; set; }
 }
 
 // A spook (RACEMOD.CPP spook=): what it is (witch, ghost, bat), its flags (1 throws fire balls, 2 round and round its way), the height it
@@ -36,9 +42,10 @@ internal sealed class SpookRun
     public double[][] Way { get; set; } = Array.Empty<double[]>();
 }
 
-internal static class TempleHalloween
+internal static partial class TempleHalloween
 {
-    public enum Kind { Lantern, GiantLantern, Grave, Cross, Candles, Cauldron }
+    // (and since 2026-10-17 LBA1's skeleton in four poses: TempleHalloween.Skeletons)
+    public enum Kind { Lantern, GiantLantern, Grave, Cross, Candles, Cauldron, SkeletonLying, SkeletonSlumped, SkeletonHanging, SkeletonChained }
     public static readonly string[] SpookKinds = { "witch", "ghost", "bat" };
     // the mushroom's entity's body the power-ups' pumpkins are (RaceTrackOil: 0 the game's mushroom, 1 the oil slick, 2 the big mushroom)
     public const int Pumpkin = 3;
@@ -106,6 +113,31 @@ internal static class TempleHalloween
         {
             var centre = corners.Aggregate(Vector3.Zero, (s, c) => s + c) / corners.Length;
             Face(corners, paint, centre - towards, both);
+        }
+
+        // a face as a game's body has it: its corners wound outwards (their Newell normal out of the surface, Body.VertexNormals), kept so
+        public void Outward(Vector3[] corners, Paint paint)
+        {
+            var n = Vector3.Zero;
+            for (var i = 0; i < corners.Length; i++)
+            {
+                var a = corners[i]; var b = corners[(i + 1) % corners.Length];
+                n += new Vector3((a.Y - b.Y) * (a.Z + b.Z), (a.Z - b.Z) * (a.X + b.X), (a.X - b.X) * (a.Y + b.Y));
+            }
+            if (n.LengthSquared() < 1e-6f) return;
+            var centre = corners.Aggregate(Vector3.Zero, (s, c) => s + c) / corners.Length;
+            Face(corners, paint, centre - Vector3.Normalize(n) * 10);
+        }
+
+        // a chain from a to b: links `link` long and `t` thick (every other one thinner), each a little into the next
+        public void Chain(Vector3 a, Vector3 b, float link, float t)
+        {
+            var d = b - a; var len = d.Length();
+            if (len < 1) return;
+            d /= len;
+            var k = 0;
+            for (var s = 0f; s < len; s += link * 0.85f, k++)
+                Bar(a + d * s, a + d * MathF.Min(len, s + link), k % 2 == 0 ? t : t * 0.6f, Iron);
         }
 
         // A turned shape about the y axis through (cx, cz): rings of `sides` points at each (radius, height) of the profile from the bottom
@@ -439,18 +471,29 @@ internal static class TempleHalloween
         return m;
     }
 
-    private static Model DecorModel(Kind kind) => kind switch
+    // (null: a skeleton's, with no LBA1 folder to take it from)
+    private static Model? DecorModel(Kind kind) => kind switch
     {
         Kind.Lantern => Lantern(640, 900),
         Kind.GiantLantern => Lantern(1500, 2000),
         Kind.Grave => Grave(),
         Kind.Cross => Cross(),
         Kind.Candles => Candles(),
+        Kind.SkeletonLying => SkeletonModel(SkeletonPose.Lying),
+        Kind.SkeletonSlumped => SkeletonModel(SkeletonPose.Slumped),
+        Kind.SkeletonHanging => SkeletonModel(SkeletonPose.Hanging),
+        Kind.SkeletonChained => SkeletonModel(SkeletonPose.Chained),
         _ => Cauldron(),
     };
 
     // (how far each kind reaches from its middle, for its decor's box: the engine draws a decor whose box's corners are in sight)
-    private static double Reach(Kind kind) => kind switch { Kind.GiantLantern => 1700, Kind.Cauldron => 800, Kind.Cross or Kind.Grave => 700, _ => 700 };
+    private static double Reach(Kind kind) => kind switch
+    {
+        Kind.GiantLantern => 1700, Kind.Cauldron => 800, Kind.Cross or Kind.Grave => 700,
+        Kind.SkeletonLying => SkeletonReach(SkeletonPose.Lying), Kind.SkeletonSlumped => SkeletonReach(SkeletonPose.Slumped),
+        Kind.SkeletonHanging => SkeletonReach(SkeletonPose.Hanging), Kind.SkeletonChained => SkeletonReach(SkeletonPose.Chained),
+        _ => 700,
+    };
     private static double Tall(Kind kind) => kind switch { Kind.GiantLantern => 2400, Kind.Cross => 1800, Kind.Grave => 1400, Kind.Cauldron => 1100, _ => 1100 };
 
     // ---- into the island: the plan's decor, drawn only, a body for each kind (RaceTrackReport.NewBodies, numbered from NewBodyBase)
@@ -459,11 +502,19 @@ internal static class TempleHalloween
         if (plan.Halloween?.Decor is not { Length: > 0 } decor) return;
         if (o.NewBodyBase < 0) { report.Notes.Add("WARNING: no place for the Halloween decor's bodies was prepared (the island's OBL wasn't counted)"); return; }
         var bodies = new Dictionary<Kind, int>();
-        int placed = 0, left = 0;
+        int placed = 0, left = 0, missing = 0;
         foreach (var d in decor.Where(d => d.Length >= 4))
         {
-            var kind = (Kind)Math.Clamp((int)d[0], 0, (int)Kind.Cauldron);
-            if (!bodies.TryGetValue(kind, out var body)) { body = o.NewBodyBase + report.NewBodies.Count; report.NewBodies.Add(DecorModel(kind).Write()); bodies[kind] = body; }
+            var kind = (Kind)Math.Clamp((int)d[0], 0, (int)Kind.SkeletonChained);
+            if (!bodies.TryGetValue(kind, out var body))
+            {
+                // (a skeleton's model is LBA1's own: none without the LBA1 folder -- those left out)
+                var model = DecorModel(kind);
+                body = model is null ? -1 : o.NewBodyBase + report.NewBodies.Count;
+                if (model is not null) report.NewBodies.Add(model.Write());
+                bodies[kind] = body;
+            }
+            if (body < 0) { missing++; continue; }
             double wx = (d[1] + plan.OriginCellX) * 512, wz = (d[2] + plan.OriginCellZ) * 512;
             var y = (int)Math.Round(d[3]);
             var beta = d.Length > 4 ? (int)Math.Round(d[4]) & 4095 : 0;
@@ -473,36 +524,51 @@ internal static class TempleHalloween
             if (placedHere > 0) placed++; else left++;
             _ = full;
         }
-        report.Notes.Add($"the Halloween decor: {placed} pieces ({string.Join(", ", decor.GroupBy(d => (Kind)(int)d[0]).Select(g => $"{g.Count()} {g.Key}"))}), {bodies.Count} bodies" +
-                         (left > 0 ? $"; {left} left out (their cubes full)" : ""));
+        report.Notes.Add($"the Halloween decor: {placed} pieces ({string.Join(", ", decor.GroupBy(d => (Kind)(int)d[0]).Select(g => $"{g.Count()} {g.Key}"))}), {bodies.Count(b => b.Value >= 0)} bodies" +
+                         (left > 0 ? $"; {left} left out (their cubes full)" : "") + (missing > 0 ? $"; {missing} skeletons left out (no LBA1 folder to take LBA1's skeleton from)" : ""));
         _ = Tall(Kind.Lantern);
     }
 
-    // ---- into BODY.HQR: each spook kind's body (the race-track mode's spook=); and the pumpkin, the mushroom's entity's body Pumpkin.
+    // ---- into BODY.HQR: each spook kind's body (the race-track mode's spook=), the dives' witch (dive=), the scares' skeleton and ghost
+    // (scare=), the ghost power-up's ghost and its icon (haunt=); and the pumpkin, the mushroom's entity's body Pumpkin.
     public static List<string> Install(string gameDirectory, RaceTrackReport report)
     {
         var log = new List<string>();
         var path = Path.Combine(gameDirectory, "BODY.HQR");
-        if (report.Spooks.Count > 0)
+        if (report.Spooks.Count > 0 || report.Dives.Count > 0 || report.Scares.Count > 0 || report.Haunt)
         {
             var racerHeader = Body.Read(HqrArchive.Open(path).Read(RaceTrackBaldinoCar.RacerBody), 2).Header;
             var bodies = File.ReadAllBytes(path);
             var index = HqrArchive.CountEntries(path);
             var made = new Dictionary<string, int>();
-            for (var i = 0; i < report.Spooks.Count; i++)
+            // (each kind's body once: -1 a skeleton with no LBA1 folder to take it from)
+            int Moving(string kind)
             {
-                var s = report.Spooks[i];
-                if (!made.TryGetValue(s.Kind, out var body))
-                {
-                    var model = s.Kind switch { "witch" => Witch(), "bat" => Bat(), _ => Ghost() };
-                    bodies = HqrWriter.AppendEntry(bodies, HqrWriter.StoredEntry(model.WriteMoving(racerHeader)));
-                    made[s.Kind] = body = index++;
-                }
-                report.Spooks[i] = s with { Body = body };
+                if (made.TryGetValue(kind, out var body)) return body;
+                var model = kind switch { "witch" => Witch(), "bat" => Bat(), "skeleton" => SkeletonModel(SkeletonPose.Reaching), _ => Ghost() };
+                if (model is null) return made[kind] = -1;
+                bodies = HqrWriter.AppendEntry(bodies, HqrWriter.StoredEntry(model.WriteMoving(racerHeader)));
+                return made[kind] = index++;
+            }
+            for (var i = 0; i < report.Spooks.Count; i++) report.Spooks[i] = report.Spooks[i] with { Body = Moving(report.Spooks[i].Kind) };
+            for (var i = 0; i < report.Dives.Count; i++) report.Dives[i] = report.Dives[i] with { Body = Moving("witch") };
+            for (var i = 0; i < report.Scares.Count; i++) report.Scares[i] = report.Scares[i] with { Body = Moving(report.Scares[i].Kind) };
+            if (report.Haunt)
+            {
+                // (the ghost circling over a haunted car is the spooks' ghost; the item box's icon the same ghost, a fixed body)
+                var ghost = Moving("ghost");
+                bodies = HqrWriter.AppendEntry(bodies, HqrWriter.StoredEntry(Ghost().Write()));
+                report.HauntBodies = (ghost, index++);
             }
             File.WriteAllBytes(path, bodies);
-            log.Add($"the spooks: {report.Spooks.Count} ({string.Join(", ", report.Spooks.GroupBy(s => s.Kind).Select(g => $"{g.Count()} {g.Key}{(g.Count() > 1 ? (g.Key == "witch" ? "es" : "s") : "")}"))}), " +
-                    $"their bodies BODY.HQR {string.Join(", ", made.Select(m => $"{m.Value} ({m.Key})"))}");
+            if (report.Spooks.Count > 0)
+                log.Add($"the spooks: {report.Spooks.Count} ({string.Join(", ", report.Spooks.GroupBy(s => s.Kind).Select(g => $"{g.Count()} {g.Key}{(g.Count() > 1 ? (g.Key == "witch" ? "es" : "s") : "")}"))}), " +
+                        $"their bodies BODY.HQR {string.Join(", ", made.Where(m => m.Key is "witch" or "ghost" or "bat").Select(m => $"{m.Value} ({m.Key})"))}");
+            if (report.Dives.Count > 0 || report.Scares.Count > 0)
+                log.Add($"the scares: {report.Dives.Count} places a witch dives at the car from, {report.Scares.Count(s => s.Body >= 0)} things jumping up beside the road " +
+                        $"({string.Join(", ", report.Scares.GroupBy(s => s.Kind).Select(g => $"{g.Count()} {g.Key}{(g.Count() > 1 ? "s" : "")}"))})" +
+                        (made.TryGetValue("skeleton", out var sk) ? sk >= 0 ? $", the skeleton BODY.HQR {sk}" : ", the skeletons left out (no LBA1 folder)" : ""));
+            if (report.HauntBodies is { } hb) log.Add($"the ghost power-up: its ghost BODY.HQR {hb.Ghost}, its icon {hb.Icon}");
         }
         if (report.Pumpkins)
         {
@@ -523,4 +589,9 @@ internal static class TempleHalloween
     // A spook as the car file has it (RACEMOD.CPP spook=): its body, its flags, its height, its way's points (island units).
     public static int[] Line(RaceTrackReport.Spook s) =>
         new[] { s.Body, s.Flags, (int)Math.Round(s.Y) }.Concat(s.Way.SelectMany(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512) })).ToArray();
+
+    // A dive's place and a scare as the car file has them (dive=, scare=): the body, the place (island units), the road's or the floor's
+    // height, (a scare's) the way it faces.
+    public static int[] Line(RaceTrackReport.Dive d) => new[] { d.Body, (int)Math.Round(d.X * 512), (int)Math.Round(d.Z * 512), (int)Math.Round(d.Y) };
+    public static int[] Line(RaceTrackReport.Scare s) => new[] { s.Body, (int)Math.Round(s.X * 512), (int)Math.Round(s.Z * 512), (int)Math.Round(s.Y), s.Turn & 4095 };
 }

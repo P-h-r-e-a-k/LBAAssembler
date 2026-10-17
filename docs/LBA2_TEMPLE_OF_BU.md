@@ -107,6 +107,46 @@ with a car at 110 km/h.
 
 The scenes are 301-327, one for each cube the road's width crosses (`TempleTrack.SceneCubes`). The start scene is 326.
 
+### Skeletons, scares and the ghost (2026-10-17)
+
+The user: "Let's make the temple track creepier with some skeletons and also do visual scares, perhaps a witch dive bombing at the player
+and pulling up at the last second to avoid a collision", and "a special item to the temple track of a ghost pickup that when used targets
+the other cars and briefly covers the screen with a ghost outline, we should make this translucent enough for a player to see through and
+not make it last more than about 10 seconds".
+
+![A witch dives at the car and pulls up over it](temple/witch_dive.png)
+
+- *Skeletons* (`TempleHalloween.Skeletons.cs`, the plan's decor kinds 6-9): LBA1's own skeleton, the one that wakes up in LBA1's temple
+  (LBA1 BODY.HQR 55, its knife left out), posed with its own animations (ANIM.HQR 244 sleeping, 245 waking up, 246 standing) and by hand,
+  1.4 times LBA1's size, and made decor bodies of one bone in the temple's palette like the rest of Halloween (bone: the warm greys 231-239).
+  23 of them beside the lap, drawn only: 7 lying on their backs by the road, 3 slumped against walls where the wall is far enough from the
+  road for their legs, 6 hanging by their wrists in chains on the walls, 7 hanging on long chains in the dark beside the spirals and the
+  straight over the void. The build needs the LBA1 folder for them (it has it for the temple itself).
+- *The witches' dives* (`RACEMOD.CPP dive=`, Dives): six places over the lap where nothing of the temple stands over the road (the plan's
+  `dives`: the long corridor twice, the straight over the dark, both spirals, the crypt's straight). As Twinsen's car comes 28 cells along
+  the lap from one, 70 % of the times a witch (the spooks' witch body) sets off from 6,000-8,000 over the road there, glides, dives steeply
+  along the road at the car, pulls up out of the dive 6 cells ahead of it, skims over its roof and climbs away behind it, over the camera.
+  Her place is worked out from the car's own every frame (how far ahead of it she is along the guide line), so she is never lower over
+  the car than 320-620 over the top of its box, whatever it does. Nothing is hit or slowed; the log says how close each one came
+  ("the witch's dive (place 1) over after 1.2 s: at the closest her lowest point 436 over the top of the car's box ... never touching").
+- *Things jumping up* (`scare=`, Scares): eight places beside the road on the floors (the plan's `scares`): as the car comes within 14
+  cells, 75 % of the times a skeleton reaching out with both arms (LBA1's skeleton, standing) or a ghost jumps up out of the floor, lunges at
+  the road for 1.4 s and sinks back.
+- *The ghost power-up* (`haunt=`, PU_GHOST, after the golden Gazogem so every other track's items keep their numbers): drawn from the
+  pumpkins only on the temple, more often by the cars at the back. Twinsen's haunts every other car for 5 s: slowed to 80 %, weaving up to
+  1.2 cells across its road (never past its edge less a car's half width) with its nose swinging, a ghost circling over it. Another car's
+  haunts Twinsen: a ghost's outline over his screen, 84 % of its height, bobbing -- the scene under its sheet blended 22 % of the way to
+  its pale lavender, its outline 60 %, its eyes and mouth half way to black (each pixel the palette's nearest colour, dithered), fading in
+  over 0.7 s and out over the last 3 s, 8 s in all; one at a time. The protection spell and the super jet-pack keep it off, as they do the
+  other attacks; a saved game loaded forgets it (ForgetPowerUps). Its item box icon is the ghost.
+
+![Skeletons, a scare, and Twinsen's ghost on the other cars](temple/skeletons_and_scares.png)
+
+![The ghost over the screen, fading in and out](temple/ghost_overlay.png)
+
+Console (tests): `racedive [place]` a witch dives now, `racehaunt` the screen haunted as by another car's ghost, `racescare [n]` a scare
+jumps up now, `raceitem 12` Twinsen's ghost on the others.
+
 **Tests**:
 
 - `E:\dump\TEMP\temple\pilot\run.sh <tag> <ticks>` is the headless pilot. CARF=car_fast.txt is a fast car with no qualifying.

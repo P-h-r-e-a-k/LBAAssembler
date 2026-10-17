@@ -307,6 +307,78 @@ for (cx_, cz_, r_), lo_, hi_ in ((SPIRAL_W, CRYPT, FIRST), (SPIRAL_E, top(-5), F
 print('halloween decor', len(decor), {nm: sum(1 for d in decor if d[0] == kk) for kk, nm in enumerate(['lantern', 'giant', 'grave', 'cross', 'candles', 'cauldron'])})
 
 
+# ---- skeletons (the user, 2026-10-17: "Let's make the temple track creepier with some skeletons"): LBA1's own skeleton, posed
+# (TempleHalloween.Skeletons) -- lying by the road, slumped against the walls beside it, hanging in chains on those walls, and hanging on long
+# chains in the dark beside the spirals -- seen from the road, never on it (decor drawn only, nothing to bump into)
+SK_LYING, SK_SLUMPED, SK_HANGING, SK_CHAINED = range(6, 10)
+SLUMP_REACH = 2.7                               # how far a slumped skeleton's feet reach out from the wall it sits against (cells)
+HANG_LIFT = 900                                 # a skeleton hung on a wall: its feet this far over the floor
+SK_MOST = {SK_LYING: 7, SK_SLUMPED: 9, SK_HANGING: 9, SK_CHAINED: 7}
+
+
+def far_from_decor(x, z, d=2.6):
+    return all((x - e[1]) ** 2 + (z - e[2]) ** 2 >= d * d for e in decor)
+
+
+def wall_beside(i, side, most=9.0):
+    """Out from the road at point i, to its `side` (1 its left, -1 its right): the floor the road lies on, all the way to the first wall --
+    a column standing two layers or more over that floor -- within `most` cells of the road's middle; (cells out to the wall's face, the
+    floor's layer, the way out) or None (the dark, a step, a doorway cut)."""
+    u = heading(i); nrm = np.array([-u[1], u[0]]) * side
+    floor_layer = None
+    for off in np.arange(half[i] + 0.5, half[i] + most, 0.25):
+        x, z = pts[i] + nrm * off
+        lx, lz = layout_of(x, z)
+        if (lx, lz) in cut_columns: return None
+        t = column_top(lx, lz)
+        if t is None: return None
+        if floor_layer is None:
+            if abs(top(t) - (h[i] - DECK)) > LAYER + 10: return None
+            floor_layer = t; continue
+        if t >= floor_layer + 2: return off, floor_layer, nrm
+        if t != floor_layer: return None
+    return None
+
+
+skeletons = []
+for c, i in enumerate(range(19, n, int(15 / SP))):
+    side = 1 if c % 2 else -1
+    count = lambda kind: sum(1 for s_ in skeletons if s_[0] == kind)
+    placed = False
+    for sd in (side, -side):
+        w = wall_beside(i, sd)
+        if w is None: continue
+        off, layer, nrm = w
+        # (its back to the wall, facing the road: slumped where its feet stay clear of the road's edge, else hung on the wall)
+        at = off - 0.35
+        kind = SK_SLUMPED if at - SLUMP_REACH >= half[i] + 0.4 and count(SK_SLUMPED) < SK_MOST[SK_SLUMPED] else SK_HANGING
+        if kind == SK_HANGING and (count(SK_HANGING) >= SK_MOST[SK_HANGING] or c % 2): continue
+        x, z = pts[i] + nrm * at
+        if not far_from_decor(x, z) or any((x - s_[1]) ** 2 + (z - s_[2]) ** 2 < 36 for s_ in skeletons): continue
+        y = top(layer) + (HANG_LIFT if kind == SK_HANGING else 0)
+        skeletons.append([kind, round(float(x), 2), round(float(z), 2), float(y), turn_to(x, z, *(pts[i]))])
+        placed = True
+        break
+    if placed or c % 3: continue
+    # (no wall near: lying on the floor beside the road, or hung in the dark over the void beside it)
+    u = heading(i); nrm = np.array([-u[1], u[0]]) * side
+    for off in (half[i] + 2.6, half[i] + 3.6, half[i] + 5.0):
+        x, z = pts[i] + nrm * off
+        t = flat_floor(x, z, 1)
+        if count(SK_LYING) < SK_MOST[SK_LYING] and t is not None and abs(top(t) - (h[i] - DECK)) <= LAYER + 10 and clear_of_road(x, z, 2.2) and far_from_decor(x, z):
+            skeletons.append([SK_LYING, round(float(x), 2), round(float(z), 2), float(top(t)), (turn_to(x, z, *pts[i]) + 1024 * (1 if c % 2 else -1)) & 4095])
+            placed = True
+            break
+    if placed: continue
+    x, z = pts[i] + nrm * (half[i] + 3.2)
+    lx, lz = layout_of(x, z)
+    if count(SK_CHAINED) < SK_MOST[SK_CHAINED] and all(column_top(lx + a, lz + b) is None for a in (-1, 0, 1) for b in (-1, 0, 1)) \
+            and clear_of_road(x, z, 2.4) and far_from_decor(x, z, 3.0):
+        skeletons.append([SK_CHAINED, round(float(x), 2), round(float(z), 2), round(float(h[i] + 700), 1), turn_to(x, z, *pts[i])])
+decor += skeletons
+print('skeletons', len(skeletons), {nm: sum(1 for d in skeletons if d[0] == kk) for kk, nm in ((SK_LYING, 'lying'), (SK_SLUMPED, 'slumped'), (SK_HANGING, 'hanging'), (SK_CHAINED, 'chained'))})
+
+
 def circle(cx, cz, r, m=24, phase=0.0):
     return [[round(float(cx + r * math.cos(phase + 2 * math.pi * j / m)), 2), round(float(cz + r * math.sin(phase + 2 * math.pi * j / m)), 2)] for j in range(m)]
 
@@ -342,6 +414,56 @@ print('spooks', len(spooks), {kk: sum(1 for s_ in spooks if s_['kind'] == kk) fo
 assert len(spooks) <= 48
 
 
+# ---- the scares (the user, 2026-10-17: "also do visual scares, perhaps a witch dive bombing at the player and pulling up at the last second
+# to avoid a collision"): the places the witches dive at Twinsen's car from (RACEMOD.CPP dive=: as the car comes 28 cells from one along the
+# lap, now and then a witch sets off from high over it and dives along the road at the car) -- where nothing stands over the road, from a
+# few cells past the place back to where she climbs away behind the car: the long corridor, the straight over the dark, the spirals, the
+# crypt's straight -- each [x, z, the road's height there]
+DIVE_SPAN = (-24, 3)                            # cells along the lap she flies over, from the place (the car comes from behind it)
+DIVE_ROOM = 9000                                # nothing over the road this high over it
+
+
+def open_over(i):
+    """Nothing of the temple over the road at point i, its width and a cell either side, up to DIVE_ROOM over it."""
+    u = heading(i); nrm = np.array([-u[1], u[0]])
+    for off in np.arange(-half[i] - 1, half[i] + 1.01, 0.5):
+        x, z = pts[i] + nrm * off
+        b = bits.get(layout_of(x, z), 0)
+        if not b: continue
+        for y in range(MINY, L['maxY'] + 1):
+            if (b >> (y - MINY)) & 1 and top(y - 1) >= h[i] - DECK + 20 and top(y - 1) < h[i] + DIVE_ROOM: return False
+    return True
+
+
+def dive_clear(i):
+    return all(open_over((i + j) % n) for j in range(int(DIVE_SPAN[0] / SP), int(DIVE_SPAN[1] / SP) + 1, 2))
+
+
+dives = []
+for want in [nearest((412, CORR_Z)), nearest((505, CORR_Z)), nearest((276, 520), i_edge), o_down + int(0.62 * (o2 - o_down)),
+             nearest((392, CRYPT_Z), i_down_out), o_up + int(0.55 * (o3 - o_up))]:
+    # (the nearest place to the one wanted, along the lap, with the room over the road)
+    i = next((want + s * j for j in range(0, 80, 2) for s in (1, -1) if dive_clear((want + s * j) % n)), None)
+    if i is None: print('dive place near point', want, 'has no room over the road'); continue
+    i %= n
+    dives.append([round(float(pts[i][0]), 2), round(float(pts[i][1]), 2), round(float(h[i]), 1)])
+print('dives', len(dives), dives)
+
+# ... and what jumps up out of the floor beside the road as the car comes by (scare=): skeletons reaching out at it, and ghosts -- each
+# [0 skeleton | 1 ghost, x, z, the floor's height, the way it faces (at the road)]
+scares = []
+for j, i in enumerate(range(60, n, int(48 / SP))):
+    u = heading(i)
+    for sd, off in ((1, 2.3), (-1, 2.3), (1, 3.1), (-1, 3.1)):
+        nrm = np.array([-u[1], u[0]]) * sd
+        x, z = pts[i] + nrm * (half[i] + off)
+        t = flat_floor(x, z, 1)
+        if t is None or abs(top(t) - (h[i] - DECK)) > LAYER + 10 or not clear_of_road(x, z, 1.9) or not far_from_decor(x, z, 2.2): continue
+        scares.append([0 if j % 3 != 2 else 1, round(float(x), 2), round(float(z), 2), float(top(t)), turn_to(x, z, *pts[i])])
+        break
+print('scares', len(scares), {nm: sum(1 for s_ in scares if s_[0] == kk) for kk, nm in enumerate(('skeleton', 'ghost'))})
+
+
 # ---- the start: on the straight through the crypt's west room, heading east (the grid behind it, in the room)
 i_start = nearest((410, CRYPT_Z), i_down_out)
 print('start', i_start, tuple(np.round(pts[i_start], 1)), 'height', round(h[i_start]))
@@ -371,7 +493,7 @@ plan = {
     'railCamera': [9, 2100, 7, 500, 1000],
     'templeCuts': sorted([list(c) for c in cuts]),
     'pitSpots': pit_spots,
-    'halloween': {'decor': decor, 'spooks': spooks, 'pumpkins': True},
+    'halloween': {'decor': decor, 'spooks': spooks, 'pumpkins': True, 'dives': dives, 'scares': scares, 'haunt': True},
     'keepAbove': 0,
 }
 json.dump(plan, open(OUT, 'w'))
