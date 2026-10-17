@@ -13,17 +13,20 @@ namespace LBAAssembler.Terrain;
 // Then (the user: "The enemies are too easy to avoid, perhaps making them bigger would help with this?") twice their size: each kind's body
 // Size times as big (RaceTrackSmallCars.Scaled: its points, its box, its spheres), given to its entity as body BigBody (Install), and the
 // race-track mode told (guard_size=): their reach, their pace and how near a car runs into them all Size times as much.
+//
+// And the palace dungeon's torturers (the user, 2026-10-17: "Let's add some grobo torturers with bull whips etc."): Grobos with a whip
+// (Palace.PalaceTorturers: their body and animations their own, made by its Install), each cracking it at his post, never at a car.
 internal static class RaceTrackGuards
 {
-    public const int Soldier = 0, Pighead = 1, Stan = 2;
+    public const int Soldier = 0, Pighead = 1, Stan = 2, Torturer = 3;
     public const double Seen = 40;          // (cells: an actor in every scene whose cube comes this near the post)
     public const double Size = 2.0;         // how much bigger than the game's they are
     public const int BigBody = 20;          // the entity's body number for its big body (none of theirs has one so high)
 
     // A kind's actor and animations, the game's own (the palace scenes' scripts, 151-166 and 80): its entity, its body (the entity's own
     // number for it -- the game's, which BigBody is made from), standing at its post, walking, knocked back, and its strikes (a pighead's:
-    // its throw).
-    public sealed record Look(int Entity, int Body, int Idle, int Walk, int Hit, int[] Strikes);
+    // its throw; a torturer's: his whip's crack); the body its actors are drawn with (BigBody but a torturer's).
+    public sealed record Look(int Entity, int Body, int Idle, int Walk, int Hit, int[] Strikes, int Drawn = BigBody);
 
     public static Look Of(int kind, int which) => kind switch
     {
@@ -38,6 +41,9 @@ internal static class RaceTrackGuards
             1 => new(314, 0, 585, 1, 6, new[] { 142 }),
             _ => new(315, 0, 584, 1, 6, new[] { 142 }),
         },
+        // (a torturer: the grey Grobo, entity 336, hooded and his whip in hand -- standing, and the crack)
+        Torturer => new(Palace.PalaceTorturers.Entity, 0, Palace.PalaceTorturers.Idle, Palace.PalaceTorturers.Idle, Palace.PalaceTorturers.Idle,
+            new[] { Palace.PalaceTorturers.Crack }, Palace.PalaceTorturers.Body),
         // (Stan, come over from Time Commando, entity 316: standing, walking, his three blows)
         _ => new(316, 0, 0, 1, 6, new[] { 142, 277, 587 }),
     };
@@ -49,6 +55,7 @@ internal static class RaceTrackGuards
     {
         Soldier => count == 1 ? "soldier" : "soldiers",
         Pighead => count == 1 ? "pighead" : "pigheads",
+        Torturer => count == 1 ? "torturer" : "torturers",
         _ => "Stan",
     };
 

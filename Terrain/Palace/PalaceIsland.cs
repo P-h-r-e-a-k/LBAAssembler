@@ -89,6 +89,10 @@ internal static class PalaceIsland
     // cells on from the down-spiral's foot.
     public const int DungeonUnder = 159, DungeonNorth = 163, DungeonDepth = 5, RoomBand = 4, DungeonCageHigh = 4;
     public const double DungeonCage = 2.2, DungeonExitReach = 3.6, DungeonBackAhead = 12;
+    // (made medieval: its arches -- palace cells from its north wall, where both walls are free between the cages -- their pillars' depth
+    // out from the wall and width along it, and how thick an arch is)
+    private static readonly double[] DungeonArches = { 6.25, 9.0, 11.75, 14.5, 17.25 };
+    private const double PillarDeep = 0.24, PillarWide = 0.3, ArchThick = 0.2;
     public const int PortraitsPerRoom = 2;              // pictures of the game's characters on a room's walls (PalacePortraits) ...
     public const int HallPortraits = 6;                 // ... and this many more along the long hall's
     // the colours of Otringal's palace (OTRINGAL.OBL's halls, in its palette): its pale stone (walls and flat roofs), the dark teal of its
@@ -594,11 +598,39 @@ internal static class PalaceIsland
             Put(PalaceFurniture.Up.WhipRack, fx1 - 0.1, fz0 + 19.4, -1, 0, 0.2, 1.6, 4, solid: false);
             Put(PalaceFurniture.Up.Shackles, fx1 - 0.05, fz0 + 2.4, -1, 0, 0.2, 1.0, 4, solid: false);
             Put(PalaceFurniture.Up.Shackles, fx0 + 0.05, fz0 + 15.6, 1, 0, 0.2, 1.0, 4, solid: false);
-            for (var z = fz0 + 1.2; z < fz1 - 0.5; z += 5.2)
+            // (made medieval, 2026-10-17 -- the user: "Let's make our palace basement more like a medieval dungeon. Let's add some grobo
+            // torturers with bull whips etc.": stone pillars on both walls where they are free between the cages (DungeonArches), an arch
+            // across from each pair, a sconce on each pillar and either side of the ways in and out (they were torches on the walls);
+            // chains with hooks from the arches by the walls; straw in the cages; the rack, an iron maiden, a pillory, a whipping post, a
+            // wheel on the wall and braziers in the gaps by the walls -- clear of the cages, the captives and the way down the middle -- and
+            // the torturers' posts by them, looking out at the way (palace_design.py makes them the race's guards: PalaceTorturers))
+            var springs = PalaceFurniture.ArchSpring / V;
+            foreach (var dz in DungeonArches)
             {
-                Put(PalaceFurniture.Up.Torch, fx0 + 0.05, z, 1, 0, 0.2, 0.3, 4, solid: false);
-                Put(PalaceFurniture.Up.Torch, fx1 - 0.05, z + 2.6, -1, 0, 0.2, 0.3, 4, solid: false);
+                foreach (var (side, wall) in new[] { (1, fx0), (-1, fx1) })
+                {
+                    Put(PalaceFurniture.Up.Pilaster, wall + side * PillarDeep / 2, fz0 + dz, side, 0, PillarDeep, PillarWide, springs);
+                    Put(PalaceFurniture.Up.Torch, wall + side * PillarDeep, fz0 + dz, side, 0, 0.2, 0.3, 4, solid: false);
+                }
+                Put(PalaceFurniture.Up.Rib, mid, fz0 + dz, 1, 0, ArchThick, fx1 - fx0, DungeonDepth, solid: false);
             }
+            foreach (var (side, wall) in new[] { (1, fz0), (-1, fz1) })
+                foreach (var dx in new[] { -1.6, 1.6 })
+                    Put(PalaceFurniture.Up.Torch, mid + dx, wall + side * 0.05, 0, side, 0.2, 0.3, 4, solid: false);
+            foreach (var (x, dz) in new[] { (fx0 + 1.3, 9.0), (fx1 - 1.3, 11.75), (fx0 + 1.3, 17.25), (fx1 - 1.3, 6.25), (fx0 + 1.3, 14.5) })
+                Put(PalaceFurniture.Up.Chain, x, fz0 + dz, 1, 0, 0.2, 0.2, DungeonDepth, solid: false);
+            Put(PalaceFurniture.Up.Rack, fx0 + 0.95, fz0 + 10.3, 1, 0, 0.85, 2.3, 2);
+            Put(PalaceFurniture.Up.IronMaiden, fx1 - 1.1, fz0 + 0.32, 0, 1, 0.46, 0.46, 4);
+            Put(PalaceFurniture.Up.Pillory, fx1 - 1.0, fz0 + 17.9, -1, 0, 0.5, 0.72, 3);
+            Put(PalaceFurniture.Up.WhippingPost, fx0 + 0.75, fz0 + 0.75, 1, 0, 0.38, 0.38, 4);
+            Put(PalaceFurniture.Up.Wheel, fx0 + 2.25, fz0 + 0.05, 0, 1, 0.2, 1.0, 2.3, solid: false);
+            foreach (var (x, dz) in new[] { (fx0 + 1.95, 9.15), (fx1 - 2.0, 0.9), (fx1 - 2.0, 20.4) })
+                Put(PalaceFurniture.Up.Brazier, x, fz0 + dz, 1, 0, 0.46, 0.46, 2);
+            // (the torturers: each post's place and the way he looks -- palace cells)
+            var torturers = new List<(double X, double Z, double Fx, double Fz)>
+            {
+                (fx0 + 2.0, fz0 + 1.0, 0.8, 0.6), (fx1 - 1.5, fz0 + 2.5, -0.93, 0.37), (fx0 + 1.85, fz0 + 10.9, 0.93, 0.37), (fx1 - 1.7, fz0 + 19.2, -0.93, -0.37),
+            };
             Put(PalaceFurniture.Up.Barrel, fx0 + 0.6, fz1 - 0.6, 1, 0, 0.7, 0.7, 2);
             Put(PalaceFurniture.Up.Barrel, fx1 - 0.6, fz1 - 0.6, -1, 0, 0.7, 0.7, 2);
             Put(PalaceFurniture.Up.Barrel, fx1 - 1.4, fz1 - 0.6, -1, 0, 0.7, 0.7, 2);
@@ -613,6 +645,7 @@ internal static class PalaceIsland
             Put(PalaceFurniture.Up.Suspended, fx0 + 1.7, fz0 + 15.75, 0, -1, 0.6, 1.4, DungeonDepth, solid: false);
             // (its way out: a fireplace in the north wall's middle, looking south; nothing in its way)
             Put(PalaceFurniture.Up.Fireplace, mid, fz0 + 0.3, 0, 1, 0.6, 2.4, 4, solid: false);
+            foreach (var (cx, cz, h) in cages) Put(PalaceFurniture.Up.Straw, cx, cz, 1, 0, 2 * h * 0.85, 2 * h * 0.85, 1, solid: false);
             // (the cages' bars, each side a box: the prisoner inside stands free)
             foreach (var (cx, cz, h) in cages)
                 foreach (var (ax, az, bx, bz) in new[] { (cx - h, cz - h, cx + h, cz - h + 0.1), (cx - h, cz + h - 0.1, cx + h, cz + h), (cx - h, cz - h, cx - h + 0.1, cz + h), (cx + h - 0.1, cz - h, cx + h, cz + h) })
@@ -637,12 +670,16 @@ internal static class PalaceIsland
             log.Add($"the dungeon under rooms {DungeonUnder} and {DungeonNorth}: cells x {I(fx0):0}..{I(fx1):0}, z {J(fz0):0}..{J(fz1):0}, its floor at {WY(fy):0} " +
                     $"({DungeonDepth} layers under the ground floor's); in through room {DungeonUnder}'s fireplace (cells x {inBox[0]:0.#}..{inBox[2]:0.#}, z {inBox[1]:0.#}..{inBox[3]:0.#}), " +
                     $"out by its own at its north end to ({back.X:0.#}, {back.Z:0.#}); {cages.Count} cages, 2 cots, 2 racks of whips, 2 pairs of shackles, " +
-                    $"{dungeonPieces.Count(p => p.Kind is PalaceFurniture.Up.Hanging or PalaceFurniture.Up.Suspended)} captives hung from its ceiling");
+                    $"{dungeonPieces.Count(p => p.Kind is PalaceFurniture.Up.Hanging or PalaceFurniture.Up.Suspended)} captives hung from its ceiling; " +
+                    $"{DungeonArches.Length} arches on pillars, the rack, an iron maiden, a pillory, a whipping post, a wheel, 3 braziers, 5 chains; " +
+                    $"{torturers.Count} torturers' posts ({string.Join(", ", torturers.Select(t => $"({I(t.X):0.#}, {J(t.Z):0.#})"))})");
             dungeonLayout = new Dictionary<string, object>
             {
                 ["x0"] = I(fx0), ["z0"] = J(fz0), ["x1"] = I(fx1), ["z1"] = J(fz1), ["floorTop"] = WY(fy), ["ceiling"] = WY(minY),
                 ["cages"] = cages.Select(c => new[] { I(c.X), J(c.Z), c.Half * U / 512 }).ToList(),
                 ["arrive"] = new[] { I(mid), J(fz1 - 1.5) }, ["exit"] = new[] { I(mid), J(fz0) },
+                // (the torturers' posts: each [x, z, and the way he looks: x, z] -- island cells)
+                ["torturers"] = torturers.Select(t => new[] { Math.Round(I(t.X), 2), Math.Round(J(t.Z), 2), t.Fx, t.Fz }).ToList(),
             };
         }
         else if (furnished) log.Add($"WARNING: no dungeon: rooms {DungeonUnder} and {DungeonNorth} or {DungeonUnder}'s fireplace not found");
@@ -806,6 +843,10 @@ internal static class PalaceIsland
                 }
             }
         }
+        // (the dungeon's walls, floor and ceiling: its stone, textured -- PalaceDungeon -- instead of the rooms' faces there)
+        var dungeonStones = vault is not null
+            ? PalaceDungeon.Faces(cells, dungeonAir, (x, y, z) => new Vector3((float)WX(x), (float)WY(y), (float)WZ(z)), WY(minY), hidden)
+            : new List<PalaceDungeon.Stone>();
         var covered = spots.SelectMany(PalacePortraits.Covered).Concat(hidden).ToHashSet();
 
         // ---- the faces that show, merged into rectangles of one colour, room by room
@@ -964,6 +1005,17 @@ internal static class PalaceIsland
                 }
             }
         }
+
+        // ---- the dungeon's stone: its page of the island's object textures, its faces a body each cube's
+        if (dungeonStones.Count > 0 && island.ObjectPages.Count + 1 < IslandFile.MaxObjectPages)
+        {
+            island.ObjectPages.Add(PalaceDungeon.Paint(Nearest));
+            var (stoneBodies, stonesLeft) = PalaceDungeon.Add(island, dungeonStones, newBodies, next, island.ObjectPages.Count, Cap, 0);
+            decorsLeft += stonesLeft;
+            log.Add($"the dungeon's stone: {dungeonStones.Count} faces textured (its walls' ashlar, its flagstones, its ceiling's planks: object page " +
+                    $"{island.ObjectPages.Count}), {stoneBodies} bodies");
+        }
+        else if (dungeonStones.Count > 0) log.Add("WARNING: the dungeon's stone: no object page left -- its faces left out");
 
         // ---- the outside: Otringal's palace on the sixteen rooms' roof, its arch in front of its porch, a wing of towers on the long hall's
         var outsideBoxes = new List<(double X0, double Y0, double Z0, double X1, double Y1, double Z1)>();

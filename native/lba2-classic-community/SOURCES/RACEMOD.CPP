@@ -1197,6 +1197,9 @@ static T_RACE_FROG s_frog;
 // speed). Kind 1, a pighead: a car in range, he throws a thing at where it is going (one of RACE_THROWN's sprites, at random) -- a car
 // near where it comes down is stopped RACE_THROWN_STUN. Their actors are posed while their scene is the one about; elsewhere they strike
 // and throw all the same, at the opponents there.
+// Kind 3, a torturer (the palace dungeon's -- the user, 2026-10-17: "Let's add some grobo torturers with bull whips etc.", LBA Assembler's
+// PalaceTorturers): at his post for good, cracking his whip (his strike: the crack, played once) every RACE_TORTURER_EVERY or so -- every
+// RACE_TORTURER_NEAR or so with a car within RACE_TORTURER_SEE on his floor, turned to it; he touches no car, nor a car him.
 #define RACE_MAX_GUARDS 32
 #define RACE_GUARD_SEEN 8                  // the scenes a guard has an actor in, at the most
 #define RACE_GUARD_SEEN_FAR (40 * 512.0)   // drawn only with the car this near it
@@ -1222,6 +1225,12 @@ static T_RACE_FROG s_frog;
 #define RACE_THROWN_STUN 900               // ... and stopped this long
 #define RACE_THROWN_LONGEST 2.4            // (s: he doesn't throw at a car he couldn't hit sooner than this)
 #define RACE_MAX_THROWN 12
+#define RACE_TORTURER_SEE 14000.0          // a torturer turns to a car this near on his floor ...
+#define RACE_TORTURER_TURN 2600            // ... this fast (a turn's 4096ths a second) ...
+#define RACE_TORTURER_SWING 640            // ... and no further round than this from the way his post faces (his whip out at the way)
+#define RACE_TORTURER_EVERY 3200           // ms between his cracks (half of it to half again), none near ...
+#define RACE_TORTURER_NEAR 1000            // ... and with a car near
+#define RACE_TORTURER_CRACK 1500           // ms a crack takes (his animation's whole: then standing again)
 // (what they throw: raw sprites -- a vase, a key, a coin, a ring, a fruit, mushrooms, tins, a stone, a bone, a sausage, meat, a rock)
 static const S32 RACE_THROWN[] = { 5, 6, 18, 19, 20, 28, 31, 55, 57, 59, 60, 124 };
 enum { GUARD_POST, GUARD_STEP, GUARD_STRIKE, GUARD_BACK, GUARD_DOWN, GUARD_THROW };
@@ -8245,7 +8254,7 @@ static void CarWays(S32 now) {
     }
 }
 
-static const char *GuardName(const T_RACE_GUARD *g) { return g->Kind == 1 ? "pighead" : g->Kind == 2 ? "Stan" : "soldier"; }
+static const char *GuardName(const T_RACE_GUARD *g) { return g->Kind == 1 ? "pighead" : g->Kind == 2 ? "Stan" : g->Kind == 3 ? "torturer" : "soldier"; }
 
 // A car struck by one of them -- unless one of them has just struck it.
 static void GuardStrikes(int who, S32 now, const char *what, S32 hold) {
@@ -8304,6 +8313,55 @@ static void GuardThrow(T_RACE_GUARD *g, int actor, S32 now) {
     if (u->Extra >= 0) ListExtra[u->Extra].Flags &= ~(EXTRA_END_OBJ | EXTRA_END_COL | EXTRA_IMPACT);
 }
 
+// (the torturers' own random numbers: drawn from the vents' and the other guards' -- VentRandom -- they would change every draw after
+// theirs, the soldiers' strikes and the pigheads' throws, and the race with them)
+static U32 s_torturerSeed = 0x7A3C51u;
+static double TorturerRandom(void) {
+    s_torturerSeed = s_torturerSeed * 1103515245u + 12345u;
+    return ((s_torturerSeed >> 8) & 0xFFFFFF) / 16777216.0;
+}
+
+// A torturer's frame (kind 3): turned to the nearest car on his floor within RACE_TORTURER_SEE (or the way his post faces), a step of his
+// turn at a time; his whip's crack when it is time, and standing again when it is over. His animation.
+static int Torturer(T_RACE_GUARD *g, int i, S32 now, int driving, S32 dt) {
+    int target = -2;
+    double best = RACE_TORTURER_SEE * RACE_TORTURER_SEE;
+    for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+        if (who < 0 && !driving) continue;
+        if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
+        double x, y, z;
+        if (!CarAt(who, &x, &y, &z) || fabs(y - g->Y) > 1500) continue;
+        const double d2 = (g->X - x) * (g->X - x) + (g->Z - z) * (g->Z - z);
+        if (d2 < best) { best = d2; target = who; }
+    }
+    // (the first crack at a time of his own: they don't crack together)
+    if (!g->Next) g->Next = now + (S32)(TorturerRandom() * RACE_TORTURER_EVERY);
+    if (g->State == GUARD_STRIKE) {
+        if (now - g->T0 < RACE_TORTURER_CRACK) return g->Strike;
+        g->State = GUARD_POST;
+        const S32 every = target >= -1 ? RACE_TORTURER_NEAR : RACE_TORTURER_EVERY;
+        g->Next = now + every / 2 + (S32)(TorturerRandom() * every);
+    }
+    g->Target = target;
+    const S32 post = (S32)floor(atan2(g->FaceX, g->FaceZ) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    S32 want = post;
+    double x, y, z;
+    if (target >= -1 && CarAt(target, &x, &y, &z)) {
+        const S32 off = ((((S32)floor(atan2(x - g->X, z - g->Z) * 4096 / (2 * RACE_PI) + 0.5) & 4095) - post + 2048) & 4095) - 2048;
+        want = (post + (off > RACE_TORTURER_SWING ? RACE_TORTURER_SWING : off < -RACE_TORTURER_SWING ? -RACE_TORTURER_SWING : off)) & 4095;
+    }
+    S32 turn = ((want - g->Beta + 2048) & 4095) - 2048;
+    const S32 most = 1 + RACE_TORTURER_TURN * dt / 1000;
+    turn = turn > most ? most : turn < -most ? -most : turn;
+    g->Beta = (g->Beta + turn) & 4095;
+    if (g->NbStrikes && now >= g->Next) {
+        g->State = GUARD_STRIKE; g->T0 = now; g->Strike = g->Strikes[0];
+        if (target >= -1) Log_Info("[racemod] torturer %d cracks his whip at %s's car", i, CarName(target));
+        return g->Strike;
+    }
+    return g->Stand;
+}
+
 // Every frame: the people in the cars' way (guard=) -- standing at their posts, stepping out at the cars and striking, throwing; posed
 // where their scene is the one about.
 static void Guards(S32 now, int driving, S32 dt) {
@@ -8323,6 +8381,8 @@ static void Guards(S32 now, int driving, S32 dt) {
             // (before the race's GO, the grid forming, a race run again: at his post as he stood)
             g->State = GUARD_POST; g->X = g->PostX; g->Z = g->PostZ; g->Target = -2; g->Next = 0;
             g->Beta = (S32)floor(atan2(g->FaceX, g->FaceZ) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+        } else if (g->Kind == 3) {
+            anim = Torturer(g, i, now, driving, dt);
         } else {
             // the cars: the nearest coming his way (or right by him) -- and any running into him
             int target = -2;

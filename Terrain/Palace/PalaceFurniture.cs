@@ -232,8 +232,11 @@ internal static class PalaceFurniture
     {
         Bed, GrandBed, Wardrobe, Bookshelf, ReadingTable, Chair, Globe, Piano, Harp, MusicStand, Bathtub, DressingTable, Throne, Column,
         Candelabra, Chandelier, GoldPile, Pedestal, Chest, Armour, WeaponRack, Altar, Pew, Candle, Plant, Fireplace, BanquetTable, Bench, StairColumn,
-        // (the dungeon under the palace -- PalaceIsland's: a secret way down through room 159's fireplace; its captives hung from its ceiling)
+        // (the dungeon under the palace -- PalaceIsland's: a secret way down through room 159's fireplace; its captives hung from its ceiling;
+        // then made a medieval one: its stone pillars and arches, braziers, the rack, an iron maiden, a pillory, a whipping post, a wheel,
+        // chains and hooks, straw in the cages)
         Cage, WhipRack, Shackles, Torch, Cot, Barrel, Hanging, Suspended,
+        Pilaster, Rib, Brazier, Rack, IronMaiden, Pillory, WhippingPost, Wheel, Chain, Straw,
     }
 
     // A piece upstairs: its kind, room (tile), the middle of its foot (palace cells, fractions of one; the floor's layer), the way it looks
@@ -301,6 +304,16 @@ internal static class PalaceFurniture
                     var held = counts.GetValueOrDefault(p.Kind) + (p.Kind == Up.Suspended ? 1 : 0);
                     if (captives is { Count: > 0 } && palette is not null) Captive(kit, captives[held % captives.Count], p.Kind == Up.Suspended, h, palette);
                     break;
+                case Up.Pilaster: Pilaster(kit, d, w, h); break;
+                case Up.Rib: Rib(kit, d, w, h); break;
+                case Up.Brazier: Brazier(kit, counts.GetValueOrDefault(Up.Brazier)); break;
+                case Up.Rack: Rack(kit, d, w); break;
+                case Up.IronMaiden: IronMaiden(kit); break;
+                case Up.Pillory: Pillory(kit); break;
+                case Up.WhippingPost: WhippingPost(kit); break;
+                case Up.Wheel: Wheel(kit, h); break;
+                case Up.Chain: Chain(kit, h, counts.GetValueOrDefault(Up.Chain)); break;
+                case Up.Straw: StrawBed(kit, d, w, counts.GetValueOrDefault(Up.Straw)); break;
             }
             counts[p.Kind] = counts.GetValueOrDefault(p.Kind) + 1;
             if (!p.Solid) continue;
@@ -690,11 +703,243 @@ internal static class PalaceFurniture
 
     private static void Torch(Kit k)
     {
-        // an iron bracket on the wall, a wooden torch in it, its flame
-        k.Box(new(0, 600, -20), new(60, 630, 20), CageIron, CageIron);
-        k.Box(new(40, 560, -16), new(72, 760, 16), OldWood, OldWood);
-        k.Leaf(new Vector3(56, 760, 0), new Vector3(56, 900, 0), new Vector3(0, 0, 44), TorchFlame);
-        k.Leaf(new Vector3(56, 770, 0), new Vector3(56, 860, 0), new Vector3(0, 0, 22), FlameCore);
+        // a sconce on the wall (or a pillar's face): an iron plate, an arm out from it, a cup on its end and a wooden torch in it, its flame
+        // two leaves across each other round a hot core (the dungeon made medieval, 2026-10-17: it was a bracket and a stick)
+        k.Box(W(0, 1300, -130), W(60, 1800, 130), CageIron, IronLight);
+        k.Box(W(60, 1520, -35), W(330, 1580, 35), CageIron, IronLight, bottom: true);
+        k.Lathe(new[] { (W(70), U(1500)), (W(120), U(1620)), (W(130), U(1700)) }, 8, _ => CageIron, top: false, bottom: true, cx: W(380));
+        k.Lathe(new[] { (W(45), U(1600)), (W(50), U(1980)) }, 6, _ => OldWood, top: true, bottom: false, cx: W(380));
+        foreach (var side in new[] { W(0, 0, 130), W(130, 0, 0) })
+            k.Leaf(W(380, 1960, 0), W(380, 2420, 0), side, TorchFlame);
+        k.Leaf(W(380, 1980, 0), W(380, 2250, 0), W(0, 0, 65), FlameCore);
+        k.Leaf(W(380, 1980, 0), W(380, 2250, 0), W(65, 0, 0), FlameCore);
+    }
+
+    // ---- the dungeon made medieval (the user, 2026-10-17: "Let's make our palace basement more like a medieval dungeon"): stone pillars
+    // along its walls and arches across it between them, the rack, an iron maiden, a pillory, a whipping post, a wheel on the wall, braziers
+    // of glowing coals with branding irons in them, chains and hooks from the arches, straw in the cages. Their sizes in the world's units:
+    // W and U make them a model's (a quarter across, two fifths up: PalaceIsland.Across, Up).
+    private static double W(double world) => world / PalaceIsland.Across;
+    private static double U(double world) => world / PalaceIsland.Up;
+    private static Vector3 W(double x, double y, double z) => new((float)(x / PalaceIsland.Across), (float)(y / PalaceIsland.Up), (float)(z / PalaceIsland.Across));
+    private static readonly (float R, float G, float B) PillarStone = (118, 112, 104), PillarDark = (96, 92, 86), PillarLight = (132, 126, 118), ArchUnder = (176, 168, 156),
+        Ember = (236, 96, 28), EmberDark = (150, 40, 18), EmberHot = (255, 206, 90), Ash = (70, 66, 62), Rope2 = (150, 118, 74), IronFace = (132, 128, 124),
+        StrawDark = (140, 116, 62), Hole = (20, 18, 16);
+
+    // A pillar against the wall (behind it, -x: the piece's foot's middle half its depth out from the wall), up to `high` (model units): its
+    // plinth, its shaft, its capital -- an arch springs from it (Rib).
+    private static void Pilaster(Kit k, double depth, double width, double high)
+    {
+        float d = (float)depth / 2, w = (float)width / 2, h = (float)high;
+        k.Box(new(-d, 0, -w - (float)W(40)), new(d + (float)W(50), (float)U(320), w + (float)W(40)), PillarDark, PillarDark);
+        k.Box(new(-d, (float)U(320), -w), new(d, h - (float)U(180), w), PillarStone, PillarStone, lid: false);
+        k.Box(new(-d, h - (float)U(180), -w - (float)W(50)), new(d + (float)W(70), h, w + (float)W(50)), PillarLight, PillarLight, bottom: true);
+    }
+
+    // An arch across the dungeon (along x, `width` across it: from wall to wall -- the pillars at its ends), `depth` thick (along z): from
+    // the pillars' tops (ArchSpring) rising to its crown under the ceiling (`high`), in voussoirs of two stones; filled up to the ceiling.
+    public const double ArchSpring = 2300;
+    private const double ArchCrownUnder = 140;
+    private static void Rib(Kit k, double depth, double width, double high)
+    {
+        const int Stones = 16;
+        float d = (float)depth / 2, w = (float)width / 2, top = (float)high;
+        float spring = (float)U(ArchSpring), crown = top - (float)U(ArchCrownUnder);
+        float Under(float x) { var t = x / w; return spring + (crown - spring) * (1 - t * t); }
+        for (var i = 0; i < Stones; i++)
+        {
+            float x0 = -w + 2 * w * i / Stones, x1 = -w + 2 * w * (i + 1) / Stones, y0 = Under(x0), y1 = Under(x1);
+            var stone = i % 2 == 0 ? PillarStone : PillarDark;
+            var down = Vector3.Normalize(new Vector3(y1 - y0, -(x1 - x0), 0));
+            // (its underside, shaded as a face looking down is -- half -- in a lighter stone: the torches' light from below)
+            k.Quad(new(x0, y0, -d), new(x1, y1, -d), new(x1, y1, d), new(x0, y0, d), i % 2 == 0 ? ArchUnder : PillarLight, down);
+            k.Quad(new(x0, y0, -d), new(x1, y1, -d), new(x1, top, -d), new(x0, top, -d), stone, -Vector3.UnitZ);
+            k.Quad(new(x0, y0, d), new(x1, y1, d), new(x1, top, d), new(x0, top, d), stone, Vector3.UnitZ);
+        }
+    }
+
+    // A brazier: an iron bowl on three legs, heaped with glowing coals, flames over them, two branding irons in them (`which`: turned so no
+    // two are alike).
+    private static void Brazier(Kit k, int which)
+    {
+        for (var leg = 0; leg < 3; leg++)
+        {
+            var a = leg * Math.PI * 2 / 3 + 0.4;
+            double x = Math.Cos(a) * 330, z = Math.Sin(a) * 330;
+            k.Box(W(x - 40, 0, z - 40), W(x + 40, 760, z + 40), CageIron, CageIron, lid: false);
+            k.Box(W(x - 70, 0, z - 70), W(x + 70, 50, z + 70), CageIron, IronLight);
+        }
+        k.Lathe(new[] { (W(120), U(700)), (W(330), U(740)), (W(440), U(880)), (W(470), U(1000)), (W(440), U(1010)) }, 10,
+            band => band >= 3 ? IronLight : CageIron, top: false, bottom: true);
+        k.Lathe(new[] { (W(440), U(990)), (W(300), U(1040)), (W(0), U(1070)) }, 10, band => band == 0 ? EmberDark : Ember, top: false, bottom: false);
+        // (the coals: lumps, the hottest yellow; three flames over them)
+        for (var c = 0; c < 9; c++)
+        {
+            var a = c * 2.399 + which;
+            double r = 60 + (c * 37 % 5) * 60, x = Math.Cos(a) * r, z = Math.Sin(a) * r, s = 50 + c % 3 * 20;
+            k.Box(W(x - s, 1020, z - s), W(x + s, 1080 + c % 2 * 40, z + s), c % 3 == 0 ? EmberHot : c % 3 == 1 ? Ember : Ash, c % 3 == 0 ? EmberHot : Ember);
+        }
+        for (var f = 0; f < 3; f++)
+        {
+            var a = f * 2.1 + which;
+            var at = W(Math.Cos(a) * 140, 1060, Math.Sin(a) * 140);
+            k.Leaf(at, at + W(0, 380 + f * 90, 0), W(Math.Cos(a + 1.6) * 90, 0, Math.Sin(a + 1.6) * 90), f == 1 ? FlameCore : TorchFlame);
+        }
+        // (the irons: rods from the coals out over the rim, a wooden grip on each)
+        for (var i = 0; i < 2; i++)
+        {
+            var a = which * 1.3 + i * 2.6;
+            double cx = Math.Cos(a), cz = Math.Sin(a);
+            k.Rod(W(cx * 60, 1040, cz * 60), W(cx * 720, 1300, cz * 720), (float)W(22), CageIron);
+            k.Rod(W(cx * 720, 1300, cz * 720), W(cx * 960, 1395, cz * 960), (float)W(38), OldWood);
+        }
+    }
+
+    // The rack: a wooden table along z (`width` long, `depth` across), a roller at each end with spokes to turn it by, ropes from the
+    // rollers along the bed -- nobody on it.
+    private static void Rack(Kit k, double depth, double width)
+    {
+        float d = (float)depth / 2, l = (float)width / 2, top = (float)U(850), leg = (float)W(80);
+        foreach (var sx in new[] { -1, 1 })
+            foreach (var sz in new[] { -1, 1 })
+                k.Box(new(sx * (d - leg) - leg, 0, sz * (l - leg) - leg), new(sx * (d - leg) + leg, top, sz * (l - leg) + leg), DarkWood, DarkWood, lid: false);
+        foreach (var sx in new[] { -1, 1 })
+            k.Box(new(sx * d - (float)W(60), top - (float)U(140), -l), new(sx * d + (float)W(60), top, l), DarkWood, Wood, bottom: true);
+        k.Box(new(-d + (float)W(60), top - (float)U(60), -l + (float)W(320)), new(d - (float)W(60), top - (float)U(20), l - (float)W(320)), OldWood, OldWood, bottom: true);
+        // (the rollers, across the table near its ends, standing proud of it; spokes through one; the ropes to the middle)
+        foreach (var sz in new[] { -1, 1 })
+        {
+            var z = sz * (l - (float)W(170));
+            k.Rod(new(-d - (float)W(120), top + (float)U(60), z), new(d + (float)W(120), top + (float)U(60), z), (float)W(95), Wood);
+            foreach (var sx in new[] { -1f, 1f })
+                k.Rod(new(sx * (d - (float)W(160)), top + (float)U(60), z), new(sx * (d - (float)W(160)), top + (float)U(40), -sz * (float)W(900) + z * 0.55f), (float)W(20), Rope2);
+        }
+        for (var s = 0; s < 4; s++)
+        {
+            var a = s * Math.PI / 4 + 0.3;
+            var c = new Vector3(d + (float)W(60), top + (float)U(60), -l + (float)W(170));
+            k.Rod(c - new Vector3(0, (float)(Math.Sin(a) * U(380)), (float)(Math.Cos(a) * W(380))), c + new Vector3(0, (float)(Math.Sin(a) * U(380)), (float)(Math.Cos(a) * W(380))), (float)W(28), OldWood);
+        }
+    }
+
+    // An iron maiden, shut, looking out (+x): an octagonal case on a plinth, broad at the shoulders and narrower to a head, iron bands round
+    // it, its two doors' seam down the front, a stern iron face on its head.
+    private static void IronMaiden(Kit k)
+    {
+        k.Box(W(-460, 0, -460), W(460, 100, 460), PillarDark, PillarStone);
+        k.Lathe(new[] { (W(400), U(100)), (W(450), U(1450)), (W(300), U(2050)), (W(160), U(2300)), (W(0), U(2380)) }, 8, band => band == 2 ? IronLight : CageIron, top: false, bottom: false);
+        foreach (var y in new[] { 450.0, 1000, 1450 })
+        {
+            var r = y < 1450 ? 400 + 50 * (y - 100) / 1350 : 450;
+            k.Lathe(new[] { (W(r + 18), U(y - 45)), (W(r + 18), U(y + 45)) }, 8, _ => IronLight, top: false, bottom: false);
+        }
+        // (the front: the face of the octagon looking out -- its seam, the face over it)
+        float Front(double r) => (float)(W(r) * Math.Cos(Math.PI / 8)) + 1.5f;
+        k.Quad(new(Front(400), (float)U(100), (float)W(-12)), new(Front(400), (float)U(100), (float)W(12)), new(Front(440), (float)U(1720), (float)W(12)), new(Front(440), (float)U(1720), (float)W(-12)), Hole, Vector3.UnitX);
+        float fx = Front(330) + 2;
+        k.Quad(new(fx, (float)U(1760), (float)W(-150)), new(fx, (float)U(1760), (float)W(150)), new(fx, (float)U(2080), (float)W(110)), new(fx, (float)U(2080), (float)W(-110)), IronFace, Vector3.UnitX);
+        foreach (var s in new[] { -1, 1 })
+            k.Quad(new(fx + 1, (float)U(1960), (float)W(s * 40)), new(fx + 1, (float)U(1960), (float)W(s * 110)), new(fx + 1, (float)U(2000), (float)W(s * 110)), new(fx + 1, (float)U(2000), (float)W(s * 40)), Hole, Vector3.UnitX);
+        k.Quad(new(fx + 1, (float)U(1820), (float)W(-70)), new(fx + 1, (float)U(1820), (float)W(70)), new(fx + 1, (float)U(1845), (float)W(70)), new(fx + 1, (float)U(1845), (float)W(-70)), Hole, Vector3.UnitX);
+    }
+
+    // A pillory: a post, a board across it at a man's neck with holes for the head and the hands (seen from both sides), an iron hinge,
+    // the post's foot braced.
+    private static void Pillory(Kit k)
+    {
+        k.Box(W(-90, 0, -90), W(90, 2150, 90), DarkWood, DarkWood);
+        k.Box(W(-520, 0, -70), W(520, 120, 70), DarkWood, DarkWood);
+        k.Box(W(-70, 0, -520), W(70, 120, 520), DarkWood, DarkWood);
+        k.Box(W(-80, 1430, -680), W(80, 1800, 680), OldWood, Wood, bottom: true);
+        k.Box(W(-84, 1600, -680), W(84, 1625, 680), CageIron, CageIron, lid: false);
+        foreach (var s in new[] { -1, 1 })
+            foreach (var (z, r) in new[] { (0.0, 120.0), (-420.0, 70.0), (420.0, 70.0) })
+            {
+                var c = W(s * 82, 1612, z);
+                for (var i = 0; i < 8; i += 2)
+                {
+                    Vector3 P(int j) => c + W(0, Math.Sin(j * Math.PI / 4) * r, Math.Cos(j * Math.PI / 4) * r);
+                    k.Quad(c, P(i), P(i + 1), P(i + 2), Hole, new Vector3(s, 0, 0));
+                }
+            }
+        k.Box(W(80, 1540, -760), W(120, 1700, -680), CageIron, IronLight);
+    }
+
+    // A whipping post: a stone foot, a thick wooden post, two iron rings on it, a rope coiled at its foot.
+    private static void WhippingPost(Kit k)
+    {
+        k.Box(W(-380, 0, -380), W(380, 220, 380), PillarDark, PillarStone);
+        k.Lathe(new[] { (W(190), U(220)), (W(170), U(2650)), (W(210), U(2700)), (W(0), U(2760)) }, 8, band => band == 0 ? DarkWood : Wood, top: false, bottom: false);
+        foreach (var y in new[] { 1750.0, 900 })
+            k.Lathe(new[] { (W(200), U(y - 35)), (W(205), U(y + 35)) }, 8, _ => IronLight, top: false, bottom: false);
+        foreach (var y in new[] { 1750.0, 900 })
+            k.Box(W(190, y - 110, -20), W(250, y + 40, 20), CageIron, IronLight);
+        for (var turn = 0; turn < 3; turn++)
+            k.Lathe(new[] { (W(330 - turn * 40), U(220 + turn * 50)), (W(330 - turn * 40), U(260 + turn * 50)) }, 8, _ => Rope2, top: true, bottom: false, cx: W(-120), cz: W(140));
+    }
+
+    // A wheel on the wall (behind it, -x): a cartwheel of wood on an iron bracket, its rim in sixteen pieces, eight spokes, its hub; its
+    // middle `high` up (model units).
+    private static void Wheel(Kit k, double high)
+    {
+        var y0 = high * PalaceIsland.Up;   // (its middle's height, the world's)
+        const double R = 950, Out = 230;
+        Vector3 At(double a, double r) => W(Out, y0 + Math.Sin(a) * r, Math.Cos(a) * r);
+        for (var i = 0; i < 16; i++)
+            k.Rod(At(i * Math.PI / 8, R), At((i + 1) * Math.PI / 8, R), (float)W(70), i % 2 == 0 ? Wood : OldWood);
+        for (var i = 0; i < 8; i++)
+            k.Rod(At(i * Math.PI / 4, 120), At(i * Math.PI / 4, R - 60), (float)W(35), OldWood);
+        k.Box(W(Out - 90, y0 - 140, -140), W(Out + 90, y0 + 140, 140), DarkWood, DarkWood);
+        k.Box(W(0, y0 - 60, -60), W(Out - 90, y0 + 60, 60), CageIron, IronLight);
+        foreach (var i in new[] { 1, 5, 9, 13 })
+            k.Box(At(i * Math.PI / 8, R) - W(20, 50, 50), At(i * Math.PI / 8, R) + W(110, 50, 50), CageIron, IronLight);
+    }
+
+    // A chain hanging from the ceiling (`high` up, model units), link by link -- each a flat iron plate across the last, its eye dark -- a
+    // hook on its end (`which`: how long).
+    private static void Chain(Kit k, double high, int which)
+    {
+        var top = high * PalaceIsland.Up;
+        var links = 6 + which * 5 % 4;
+        const double Link = 170;
+        for (var i = 0; i < links; i++)
+        {
+            double y1 = top - i * Link, y0 = y1 - Link - 30;
+            var across = i % 2 == 0;
+            k.Box(across ? W(-75, y0, -14) : W(-14, y0, -75), across ? W(75, y1, 14) : W(14, y1, 75), CageIron, IronLight, bottom: true);
+            var n = across ? Vector3.UnitZ : Vector3.UnitX;
+            foreach (var s in new[] { -1, 1 })
+            {
+                Vector3 P(double u, double v) => across ? W(u, v, s * 16) : W(s * 16, v, u);
+                k.Quad(P(-35, y0 + 45), P(35, y0 + 45), P(35, y1 - 45), P(-35, y1 - 45), Hole, n * s);
+            }
+        }
+        // (the hook: down, round and up)
+        var foot = top - links * Link - 30;
+        k.Box(W(-18, foot - 260, -18), W(18, foot, 18), IronLight, IronLight, bottom: true);
+        k.Box(W(-18, foot - 300, -18), W(18, foot - 260, 180), IronLight, IronLight, bottom: true);
+        k.Box(W(-18, foot - 300, 150), W(18, foot - 140, 190), IronLight, IronLight);
+    }
+
+    // Straw on a cage's floor (`depth` by `width`): a few low heaps of it in two straws, tufts sticking out of them every way (`which`:
+    // strewn so that no two cages' are alike).
+    private static void StrawBed(Kit k, double depth, double width, int which)
+    {
+        float d = (float)depth / 2, w = (float)width / 2;
+        for (var i = 0; i < 4; i++)
+        {
+            float cx = (float)((((i * 7 + which * 3) % 5) / 4.0 - 0.5) * d), cz = (float)((((i * 3 + which * 5) % 7) / 6.0 - 0.5) * w);
+            float hx = d * (0.32f + 0.08f * (i % 3)), hz = w * (0.28f + 0.07f * ((i + which) % 3));
+            k.Box(new(cx - hx, 0, cz - hz), new(cx + hx, (float)U(28 + 9 * i), cz + hz), StrawDark, i % 2 == 0 ? Straw : StrawDark);
+        }
+        for (var t = 0; t < 14; t++)
+        {
+            var a = t * 2.399 + which;
+            float x = (float)(Math.Cos(a * 1.7) * d * 0.7), z = (float)(Math.Sin(a * 1.3) * w * 0.7);
+            var root = new Vector3(x, (float)U(25), z);
+            var tip = root + W(Math.Cos(a) * 260, 90 + t % 4 * 40, Math.Sin(a) * 260);
+            k.Leaf(root, tip, W(-Math.Sin(a) * 26, 0, Math.Cos(a) * 26), t % 2 == 0 ? Straw : StrawDark);
+        }
     }
 
     private static void Cot(Kit k, double depth, double width)
@@ -1320,6 +1565,22 @@ internal static class PalaceFurniture
             }
             if (top) Cap(profile.Length - 1, Vector3.UnitY);
             if (bottom) Cap(0, -Vector3.UnitY);
+        }
+
+        // A rod (a bar, a spoke, a rope): four sides from `a` to `b`, `half` its half thickness, each facing out.
+        public void Rod(Vector3 a, Vector3 b, float half, (float R, float G, float B) rgb)
+        {
+            var along = b - a;
+            if (along.LengthSquared() < 1e-6f) return;
+            along = Vector3.Normalize(along);
+            var side = Vector3.Normalize(Vector3.Cross(along, MathF.Abs(along.Y) < 0.9f ? Vector3.UnitY : Vector3.UnitX)) * half;
+            var up = Vector3.Normalize(Vector3.Cross(side, along)) * half;
+            Vector3[] c = { side + up, up - side, -side - up, side - up };
+            for (var i = 0; i < 4; i++)
+            {
+                Vector3 p = c[i], q = c[(i + 1) % 4];
+                Quad(a + p, a + q, b + q, b + p, rgb, Vector3.Normalize(p + q));
+            }
         }
 
         // A leaf (a flame, a frond): a flat diamond from its root to its tip, `side` its half width at its widest, seen from both sides.

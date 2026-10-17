@@ -4063,6 +4063,51 @@ rabbibunnies hang in ropes from the dungeon's ceiling, in the gaps between the c
 ![Two of them from the car](racetrack/palace/dungeon_captives.png)
 ![All four, close](racetrack/palace/dungeon_captives_close.png)
 
+### The dungeon made medieval, its torturers (2026-10-17, later)
+
+The user: "Let's make our palace basement more like a medieval dungeon. Let's add some grobo torturers with bull whips etc." Its layout is
+as it was -- the way up its middle, the fireplaces in and out, the cages, the captives, the jailers and the prisoners -- and round them:
+
+- *Its stone* (`PalaceDungeon`): its walls, floor and ceiling textured, a page of the island's object textures painted at the build in the
+  island's palette -- the walls courses of rough grey ashlar in dark mortar (each block's top edge lit, its foot shaded, chipped; damp and
+  green at the foot, sooty under the ceiling; as light as the rooms' walls are shaded, east and west lighter than north and south), the floor
+  big uneven flagstones in four rows, worn and cracked here and there (two of them, a cell each, turned about cell by cell), the ceiling dark
+  timber planks. One perspective-correct textured polygon a face (TEXTUREZ, the pictures' kind), the stone running on from cell to cell: as
+  many polygons as the flat faces they replace.
+- *Its vault*: five stone arches across it on pillars against both walls, where both walls are free between the cages (`DungeonArches`),
+  springing at 2,300 and rising to just under the ceiling -- over a car's camera all the way across; a sconce on each pillar and either side
+  of the ways in and out (an iron cup, a torch, its flame; they were torches on the walls); chains with hooks from the arches by the walls.
+- *Its furniture* (`PalaceFurniture.Up`), in the gaps by the walls, clear of the cages, the captives and the way down the middle: the rack
+  by the west wall (a wooden table, a roller at each end with spokes, ropes along it -- nobody on it), an iron maiden in the north-east
+  corner (shut, an iron face on it), a pillory on the east side by the south end, a whipping post in the north-west corner, a cartwheel on
+  the north wall beside the way out, three braziers of glowing coals with branding irons in them, straw in the cages. The solid ones are
+  in the collision, as the cots are.
+- *Its torturers* (`PalaceTorturers`, `RaceTrackGuards.Torturer`): four Grobos -- the game's grey Grobo near its end (BODY.HQR 459, entity
+  336: black clothes, a red sash) in an executioner's black hood (a cowl, its brim lined in red, the ears out at its sides), a bull whip in
+  his hand where his spiked club was, 1.8 times the game's size; one by the whipping post and the wheel, one by the iron maiden, one by the
+  rack, one by the pillory, each looking out at the way.
+  - *The whip* is part of his body: the club's polygons gone and its points the handle's, the lash seven bones of its own after the hand,
+    each a length of a tapering leather tube, so an animation swings it. The body's own polygons, normals and lights are kept byte for
+    byte, the new ones after them (a flat-lit polygon's light is found past all the points: theirs move on by the points added).
+  - *His animations* (the entity's 640 and 641): standing -- the game's own standing, the whip hand by his side, the lash from it to the
+    floor and along it in front of him, stirring -- and the crack: the arm up and back, the lash thrown out behind him; over the top, the
+    lash following in a loop; down and forward, the lash straight out in front and its end flicking down; the lash on the floor; standing
+    again (1.37 s). Each pose is where the arm's and the lash's bones point, each bone's turn from its parent's frame worked out as the
+    engine turns bones (M(Alpha) M(Gamma) M(Beta)).
+  - *In the race* (RACEMOD.CPP `guard=` kind 3): he stays at his post and cracks his whip every 1.6 to 4.8 s, every 0.5 to 1.5 s with a car
+    within 14,000 on his floor, turned to it (no further round than 56 degrees from the way his post looks: the whip out at the way). He
+    strikes nothing and nothing runs into him: no car is stopped, slowed or put back. His own random numbers: the race -- the jailers',
+    the prisoners' and the opponents' doings -- draws the same ones as before. The log says `torturer N cracks his whip at X's car`.
+  - His body and animations are made at the end of a build (`RaceTrackService.Build`), after every track's: a build of several tracks
+    leaves every other track's bodies and animations where they were.
+- It is off the race's way: the sprint is as it was (the pilot, power-ups off: 122.52 s, won, no rescues -- the build before this one the
+  same to the hundredth). Down in the dungeon a car drives up it and out of its north fireplace as before (four drives, no rescues).
+
+![The dungeon from the car: flagstones, ashlar, the arches, a torturer by the pillory](racetrack/palace/dungeon_medieval.png)
+![The rack's torturer, his whip across the floor; a brazier, the way to the north end](racetrack/palace/dungeon_medieval_rack.png)
+![A torturer's crack, 120 ms apart](racetrack/palace/dungeon_torturer_crack.png)
+![The dungeon from above, its ceiling off](racetrack/palace/dungeon_medieval_above.png)
+
 ## Island CX: round the island under its cannons, down through a door, twice round the halls under the gas (2026-10-15)
 
 The user: "Create a track for our CXTower island. The basic concept for this track is a loop around the tower, the track enters the

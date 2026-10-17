@@ -17,9 +17,9 @@ namespace ScriptRoundTrip;
 //   palacezones <game folder> [--inner]: the palace rooms' ways out and other scenes' ways in
 //   gridcolumn <game folder> <scene> <x> <z> [<x1> <z1>]: what a grid has in a column, layer by layer (block.place)
 //   blockface <game folder> <scene> <block> <out.png> [dx,dy]: a block's picture and its +x and +z faces looked up through it
-//   islandmesh <ile> <obl> <ress palette entry> <out.bin> [x0 z0 x1 z1] [--no-terrain] [--no-decors] [--boxes] [--caps y]: the island's
-//     ground, decor bodies (and collision boxes, or their cross-sections at height y) as coloured triangles (world units; 13 float32 each:
-//     three corners, r g b, kind 0 decor 1 ground 2 box 3 cut box)
+//   islandmesh <ile> <obl> <ress palette entry> <out.bin> [x0 z0 x1 z1] [--no-terrain] [--no-decors] [--boxes] [--caps y] [--texels]: the
+//     island's ground, decor bodies (and collision boxes, or their cross-sections at height y) as coloured triangles (world units; 13 float32
+//     each: three corners, r g b, kind 0 decor 1 ground 2 box 3 cut box); --texels: textured decor faces in pieces, their textures' colours
 //   meshshot <mesh.bin> <out.png> [...]: such a mesh drawn with a depth buffer (below)
 //   oblcheck <obl> [first]: the bodies past the engine's 550 points or primitives
 //   decorcount <ile> [obl]: each cube's decors (the engine's 200), and with the OBL whether their bodies are there
@@ -688,12 +688,16 @@ internal static class PalaceStudy
         }
         if (!args.Contains("--no-decors"))
         {
+            var texels = args.Contains("--texels");
             var bodies = new Dictionary<int, Body?>();
+            // (with --texels, a body copied into several cubes -- the palace's are, to every cube they are seen from -- drawn once)
+            var drawn = new HashSet<(int Body, double X, int Y, double Z, int Beta)>();
             foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
                 foreach (var d in cube.Decors)
                 {
                     double wx = cx * 32768.0 + d.X, wz = cz * 32768.0 + d.Z;
                     if (cx * 32768.0 + d.XMax < x0 || cx * 32768.0 + d.XMin > x1 || cz * 32768.0 + d.ZMax < z0 || cz * 32768.0 + d.ZMin > z1) continue;
+                    if (texels && !drawn.Add((d.Body, wx, d.Y, wz, d.Beta))) continue;
                     var index = d.Body & 0xFFFF;
                     if (!bodies.TryGetValue(index, out var body))
                     {
@@ -707,6 +711,31 @@ internal static class PalaceStudy
                     foreach (var f in body.Faces)
                     {
                         (byte, byte, byte) col;
+                        // (--texels: a textured face in pieces some two pixels of its texture across, each the colour of its own -- the
+                        // dungeon's stone; else in one, the colour of its middle)
+                        if (texels && f.Texture is { } tt && tt.Handle < body.Textures.Length && f.Points.Length is 3 or 4)
+                        {
+                            var info = body.Textures[tt.Handle];
+                            int offset = (int)(info & 0xFFFF), mx = (int)(info >> 16) & 0xFF, my = (int)(info >> 24) & 0xFF;
+                            var c4 = Enumerable.Range(0, 4).Select(j => Math.Min(j, f.Points.Length - 1)).ToArray();
+                            Vector3[] P = c4.Select(j => pts[f.Points[j]]).ToArray();
+                            (double U, double V)[] T = c4.Select(j => (tt.UV[j * 2] / 256.0, tt.UV[j * 2 + 1] / 256.0)).ToArray();
+                            var span = Enumerable.Range(0, 4).Max(j => Math.Max(Math.Abs(T[j].U - T[(j + 1) % 4].U), Math.Abs(T[j].V - T[(j + 1) % 4].V)));
+                            var n = Math.Clamp((int)Math.Ceiling(span / 2), 1, 64);
+                            Vector3 At(double s, double q) => Vector3.Lerp(Vector3.Lerp(P[0], P[1], (float)s), Vector3.Lerp(P[3], P[2], (float)s), (float)q);
+                            (double, double) Uv(double s, double q) => (T[0].U + (T[1].U - T[0].U) * s + (T[3].U - T[0].U) * q + (T[2].U - T[1].U - T[3].U + T[0].U) * s * q,
+                                                                       T[0].V + (T[1].V - T[0].V) * s + (T[3].V - T[0].V) * q + (T[2].V - T[1].V - T[3].V + T[0].V) * s * q);
+                            for (var a = 0; a < n; a++)
+                                for (var b = 0; b < n; b++)
+                                {
+                                    double s0 = (double)a / n, s1 = (double)(a + 1) / n, q0 = (double)b / n, q1 = (double)(b + 1) / n;
+                                    var (cu, cv) = Uv((s0 + s1) / 2, (q0 + q1) / 2);
+                                    var piece = Pal(palette, page[(offset + ((int)Math.Floor(cv) & my) * 256 + ((int)Math.Floor(cu) & mx)) & 0xFFFF]);
+                                    Tri(At(s0, q0), At(s1, q0), At(s1, q1), piece, 0);
+                                    Tri(At(s0, q0), At(s1, q1), At(s0, q1), piece, 0);
+                                }
+                            continue;
+                        }
                         if (f.Texture is { } t && t.Handle < body.Textures.Length)
                         {
                             var info = body.Textures[t.Handle];

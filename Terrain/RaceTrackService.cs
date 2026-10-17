@@ -374,7 +374,7 @@ internal static class RaceTrackService
             // (one a build left or Tools made, with no Halloween race this time: as Tools makes it, without its road's doorways)
             else if (LBAAssembler.Terrain.Temple.TempleIsland.IsInstalled(gameDirectory)) PlainTemple(gameDirectory);
 
-            var session = new BuildSession();
+            var session = new BuildSession { Together = true };
             var log = new List<string>();
             var starts = new List<string>();
             RaceTrackReport? first = null;
@@ -410,6 +410,8 @@ internal static class RaceTrackService
                     where = $"{options.Island.Name}'s track in the storm ({options.Island.IleFile}) starts in scene {scenes.StartScene}, its track once the storm is over ({options.Island.TwinIleFile}) in scene {fine.StartScene}.";
                 if (where.Length > 0) starts.Add(where);
             }
+            // (the palace dungeon's torturers' body and animations after every track's: Finish)
+            if (session.Torturers) log.AddRange(LBAAssembler.Terrain.Palace.PalaceTorturers.Install(gameDirectory));
             progress?.Report(new(1, "Done"));
             var count = tracks.Sum(t => t.Options.Island.Tracks);
             var built1 = count == 1 ? "The race track is built." : $"{count} race tracks are built ({string.Join(", ", tracks.Select(t => t.Options.Island.Built))}); Play races the one of the island the editor has open.";
@@ -433,7 +435,9 @@ internal static class RaceTrackService
     // all of them, and each track's record for RACETRACK.JSON, in the order built.
     public sealed class BuildSession
     {
-        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars, GuardBodies;
+        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars, GuardBodies, Torturers;
+        // (Build's: the palace dungeon's torturers made when every track is -- Finish)
+        public bool Together;
         public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel;
         public int[]? CrystalShardModels;
         public int[]? LaserModels;
@@ -728,6 +732,13 @@ internal static class RaceTrackService
         log.AddRange(RaceTrackFrog.Install(gameDirectory, report));
         // ... and Halloween's spooks and pumpkins
         log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.Install(gameDirectory, report));
+        // ... and the palace dungeon's torturers, their whips in hand: at the end of a build of several tracks (Build: every other track's
+        // bodies and animations where they were), or here
+        if (report.Guards.Any(g => (int)g[0] == RaceTrackGuards.Torturer) && !session.Torturers)
+        {
+            session.Torturers = true;
+            if (!session.Together) log.AddRange(LBAAssembler.Terrain.Palace.PalaceTorturers.Install(gameDirectory));
+        }
         return log;
     }
 

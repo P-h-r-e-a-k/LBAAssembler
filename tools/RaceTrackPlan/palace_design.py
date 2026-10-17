@@ -307,7 +307,7 @@ def post(cx, cz, ox, oz, kind, which, leash, room, floor=FLOOR):
     print(f'  WARNING: no free spot for a guard in room {room} at ({cx + ox:.1f}, {cz + oz:.1f})')
     return None
 guards = []
-SOLDIER, PIG = 0, 1
+SOLDIER, PIG, TORTURER = 0, 1, 3
 corner = [(1, 1), (-1, 1), (-1, -1), (1, -1)]
 # (the ground floor: a soldier in the rooms on the way and beside it; the pigheads in 152 and 163; soldiers up the long hall)
 for k, s in enumerate([153, 152, 157, 158, 156, 163]):
@@ -341,7 +341,11 @@ if DUNGEON:
         guards.append([SOLDIER, 0, round(dmx + side * 3.0, 2), round(DUNGEON['z0'] + (DUNGEON['z1'] - DUNGEON['z0']) * t, 2), DF, -side, 0.0, 6.0])
     for k, (cx, cz, _) in enumerate(DUNGEON['cages'][0:3:2]):
         guards.append([PIG, k % 2, round(cx, 2), round(cz, 2), DF, 1.0 if cx < dmx else -1.0, 0.0, 0.0])
-print('guards:', len(guards), '--', ', '.join(f'{["soldier", "pighead"][g[0]]} at ({g[2]:.1f}, {g[3]:.1f}, {g[4]:.0f})' for g in guards))
+    # (made medieval, 2026-10-17 -- the user: "Let's add some grobo torturers with bull whips etc.": its torturers at their posts by its
+    # walls, cracking their whips -- at the cars going by, never touching one: RACEMOD.CPP guard= kind 3, LBA Assembler's PalaceTorturers)
+    for x, z, fx, fz in DUNGEON.get('torturers', []):
+        guards.append([TORTURER, 0, round(x, 2), round(z, 2), DF, round(fx, 3), round(fz, 3), 0.0])
+print('guards:', len(guards), '--', ', '.join(f'{["soldier", "pighead", "Stan", "torturer"][g[0]]} at ({g[2]:.1f}, {g[3]:.1f}, {g[4]:.0f})' for g in guards))
 
 # ---- checks
 def way(i):

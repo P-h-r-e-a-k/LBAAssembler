@@ -754,7 +754,7 @@ internal static class RaceTrackScenes
                         if (model.Actors.Count + 1 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the {RaceTrackGuards.KindName((int)g[0], 1)} at ({gx:0.#}, {gz:0.#})"); continue; }
                         var look = RaceTrackGuards.Of((int)g[0], (int)g[1]);
                         var guard = mushroomTemplate.Clone();
-                        guard.Entity = look.Entity; guard.Body = RaceTrackGuards.BigBody; guard.Anim = look.Idle;   // (twice the size: RaceTrackGuards.Install)
+                        guard.Entity = look.Entity; guard.Body = look.Drawn; guard.Anim = look.Idle;   // (twice the size: RaceTrackGuards.Install; a torturer's his own)
                         guard.Flags = OpponentFlags; guard.Move = 0; guard.Life = new byte[] { 0 }; guard.Track = new byte[] { 0 };
                         guard.X = Math.Clamp((int)Math.Round((gx - model.CubeX * 64) * 512), 0, 32767); guard.Z = Math.Clamp((int)Math.Round((gz - model.CubeY * 64) * 512), 0, 32767);
                         guard.Y = -20000; guard.Beta = 0;
