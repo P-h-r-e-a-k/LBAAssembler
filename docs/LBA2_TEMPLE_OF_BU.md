@@ -258,8 +258,34 @@ not make it last more than about 10 seconds".
 
 ![The ghost over the screen, fading in and out](temple/ghost_overlay.png)
 
-Console (tests): `racedive [place]` a witch dives now, `racehaunt` the screen haunted as by another car's ghost, `racescare [n]` a scare
-jumps up now, `raceitem 12` Twinsen's ghost on the others.
+- *The ghost's flight* (2026-10-17, later -- the user: "The ghost powerup has no visual effect when a player launches it, let's have it
+  rise up, split into one ghost for each car, and then fly off to haunt them"; RACEMOD.CPP `GhostLaunch`, `GhostPlace`, `Ghosts`,
+  `HauntCar`). Twinsen's ghost rises out of his car (0.24 s, to 350 over its roof and 1,800 ahead of it, in sight of the camera behind
+  it -- straight over the car it rose out of the top of the screen), hovers turning (0.14 s: a whole turn since it set off), then splits
+  into one ghost for each car it is to haunt -- the cars it always haunted: racing, and not on a super jet-pack (checked again as each
+  gets there: a car that took a jet-pack meanwhile isn't caught) -- fanned out 0.75 rad apart. Each flies its own curve to its car
+  (out the fan's way and up, in from behind and over the car), both ends moving with their cars, in its distance at 24,000 a second:
+  0.32 s at the least, 0.76 s at the most -- a car further off, or in another scene, gets the most, its ghost off towards it into the
+  distance. It gets there where the circle round the car starts, on the side it comes from, and becomes the circling ghost: the
+  haunting starts then (5 s, as before), the ghost already at its height (it doesn't rise out of the car first, as a ghost not flown
+  there does), sinking into the car at the end. From Ctrl to each haunting: 0.70 s for the cars near, 1.14 s for the far ones (0 before:
+  at once). To a car behind Twinsen's, the curve climbs steeply first, over the camera and out of the top of the screen; none is drawn
+  within 2,200 of the camera (going by it, it filled the screen). With no other car to haunt it flies up and away. Drawn as the circling
+  ghosts are (`DrawOver`: the ghost's body, depth-tested against the scene, in its fog). Logged: "Twinsen's ghost rises out of his car:
+  3 other cars to haunt", "Twinsen's ghost splits into 3, flying to The Dark Monk (7.7 cells, 0.32 s), ... (136.6 cells, far, 0.76 s)",
+  "Twinsen's ghost reaches The Dark Monk, 0.70 s after it was used".
+- *Another car's ghost* rises out of its car the same way and flies at Twinsen's camera: it ends 2,200 in front of it on its view,
+  facing it -- about the size of the ghost then over his screen -- coming in from further along the view (from behind the camera: over
+  it first). As it gets there the screen's ghost starts, half faded in already (the flying one become it); the protection spell and the
+  super jet-pack keep it off then, as before. 0.70-1.14 s after the car took it. ("Ker'aooc's cauldron's ghost flies at Twinsen's car
+  (15.1 cells off, 0.32 s)", "... reaches Twinsen's car, 0.72 s after it was taken".)
+- Without the ghost's body (no `haunt=`: a console test elsewhere) it all happens at once, as before; no other track draws a ghost.
+
+![Twinsen's ghost to three cars ahead, behind, far ahead; an opponent's to Twinsen's camera](temple/ghost_launch.png)
+
+Console (tests): `racedive [place]` a witch dives now, `racehaunt [n]` the screen haunted as by another car's ghost (with n, opponent n's,
+1 the first, flying from its car), `racescare [n]` a scare jumps up now, `raceitem 12` Twinsen's ghost on the others. Tests:
+`E:\dump\TEMP\ghostfx` -- `ghost.sh <tag>` (AT, CMD, PILOT=0 to stand on the grid, SLOW=<k> a slower car), `sheet.sh`, `races.sh`.
 
 ### Cobwebs and the giant web (2026-10-17)
 

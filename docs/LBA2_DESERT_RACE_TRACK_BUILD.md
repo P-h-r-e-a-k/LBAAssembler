@@ -4456,4 +4456,40 @@ All in RACEMOD.CPP (`PowerUps`, `GiveItem`, `GoldIntoBox`, `BoxFree`, `WheelPriz
   not solid to Twinsen's (`RaceMod_NoCollide`, as on the super jet-pack).
 - *The Temple driving* (`run.sh temple drive`): the one box during the race, ringed while it holds an item.
 
+## A quicker roulette, its stop unmistakable (2026-10-17, later)
+
+The user: "Let's reduce the time it takes to select a powerup. Currently when selecting a powerup the last few frames show for too long,
+which can make a user think they've got a power up whilst it's still rotating."
+
+**Why the last frames lingered.** The roulette ran 4.5 s past 45 items, its place `45 (1 - (1 - t)^2)`: an ease-out whose rate falls to
+nothing at the stop. Each step lasted longer than the one before it, and the last ones most of all -- the item *before* the one drawn stood
+in the box 0.67 s, the two before it 0.28 and 0.21 s -- and since the box was ringed in gold the whole time, a standing item looked like
+the result. Then it changed.
+
+**Now** (RACEMOD.CPP `ShownItem`, `ItemBox`, every track -- the race game's too):
+- *0.9 s, 14 items* (`RACE_ITEM_ROLL_MS`, `RACE_ITEM_ROLL_STEPS`): the rate falls only to half its start's (`RACE_ITEM_ROLL_SLOW`), an
+  item every 48 ms at first and every 96 ms at the end, the last step landing on the item drawn. The odds, the rows, the one box and the
+  golden Gazogem's second box are as they were (the item is drawn as the mushroom is taken; only its showing changed).
+- *Going by, nothing looks settled*: the items are drawn at 0.8 of their size and the box has no ring.
+- *The stop*: the item pops up 1.45 times its size and comes down to it over 0.3 s (`RACE_ITEM_POP`, `RACE_ITEM_POP_MS`); the box's ring
+  comes on white and wider for 0.24 s (`RACE_ITEM_FLASH_MS`), then gold -- gold now means "ready". An item won outright (the slot
+  machine's prize, the golden Gazogem, a time trial's can) pops in the same way.
+- *Ctrl* uses the item only once it has stopped, as before (a press while it turns does nothing and isn't kept; holding the key through
+  the stop doesn't fire it: the next press does). The test pilot still uses each item 1 s after its stop (`autodrop_ms`).
+- *The slot machine's reels* (Otringal's roulette wheel, red) have their own code (`SlotShown`): they turn at a steady 70 ms an item and
+  stop dead, one after another, so nothing lingered there and their timing is unchanged. They share the drawing, so each reel is drawn
+  smaller while it turns and pops up as it stops, and the winning line's ring flashes white as the third stops.
+
+![Before: the last 1.5 s of the 4.5 s roulette; now: the whole 0.9 s roulette and its stop; the slot machine's reels](racetrack/build/item_box_quick_roulette.png)
+
+**Verified** (headless, muted, `E:\dump\TEMP\ghostfx`: `roll.sh` -- the Desert car standing on the grid, a penguin into the box with
+`racebox 3`, a picture every frame; `slot.sh` -- Otringal's slot machine, `raceprize 1`): a Ctrl press 0.2 s before the stop does nothing,
+one a frame (20 ms) after it drops the penguin; the reels pop at 1.2, 1.9 and 2.6 s. Pilot races (`races.sh`, 3 laps against the
+opponents, the pilot using each item 1 s after its stop), this build against the one before: no rescue in either; the opponents still
+take and use their items. **The item rate goes up**: the box is free 3.6 s sooner, so the pilot takes about twice as many items, and
+leading he empties the rows the opponents behind him found standing before (one item a row). Taken in the 3 laps, Twinsen's and all the
+opponents': Desert 44 and 36 (19 and 64 before; 1st of 6, 2nd before), Mosquibees 18 and 4 (6 and 27; 1st of 3, 3rd before), the Temple
+61 and 20 (26 and 29; 1st of 4 both) -- one race each, the races aren't repeatable to the frame. A player who keeps an item for a
+moment takes fewer; if the old rate is wanted back, a pause after each item before the next mushroom gives one would do it.
+
 The 18 tracks stress-tested and car setups scored per track (2026-10-16): docs/LBA2_RACE_TRACK_STRESS_TEST.md (`raceplan`, tools/RaceTrackStress).

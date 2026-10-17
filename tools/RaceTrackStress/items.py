@@ -131,7 +131,8 @@ def read(run, t):
     grid = next((l for l in info if l.startswith('grid: ')), '')
     cars = max(1, len(re.findall(r'\d+ [^;]+? [\d.]+ s;', grid)))
     s = {'finished': finished, 'cars': cars}
-    s['tw_take'] = sum(1 for l in race if re.match(r"Twinsen takes .+? \(slot", l))
+    # ("(slot N; ..." before the one item box, 2026-10-17; "(0.50 of the way back)" since)
+    s['tw_take'] = sum(1 for l in race if re.match(r"Twinsen takes .+? \((slot|[\d.]+ of the way back)", l))
     s['tw_use'] = sum(1 for l in race if re.match(r"Twinsen uses ", l))
     s['op_take'] = sum(1 for l in race if re.search(r" takes a mushroom's power-up: ", l))
     s['tw_hit'] = sum(1 for l in race if any(re.search(p, l) for p in TW_HIT))

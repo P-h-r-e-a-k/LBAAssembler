@@ -2508,17 +2508,17 @@ static void cmd_raceprize(int argc, const char *argv[]) {
 }
 
 /* The Temple of Bu's Halloween (RACEMOD.CPP dive=, scare=, haunt=; tests): racedive [place]: a witch dives at Twinsen's car now (from that
-   dive place, 1 the first; none: the nearest ahead); racehaunt: his screen haunted as by another car's ghost; racescare [n]: a scare jumps
-   up beside the road now (none: the nearest). Twinsen's own ghost on the other cars: raceitem 12. */
+   dive place, 1 the first; none: the nearest ahead); racehaunt [n]: his screen haunted as by another car's ghost -- at once, or (n, 1 the
+   first opponent) by opponent n's, flying from its car to his; racescare [n]: a scare jumps up beside the road now (none: the nearest).
+   Twinsen's own ghost on the other cars: raceitem 12. */
 static void cmd_racedive(int argc, const char *argv[]) {
     extern void RaceMod_TestDive(int place);
     RaceMod_TestDive(argc >= 2 ? atoi(argv[1]) : 0);
     Console_Print("racedive");
 }
 static void cmd_racehaunt(int argc, const char *argv[]) {
-    (void)argc; (void)argv;
-    extern void RaceMod_TestHaunt(void);
-    RaceMod_TestHaunt();
+    extern void RaceMod_TestHaunt(int from);
+    RaceMod_TestHaunt(argc >= 2 ? atoi(argv[1]) : 0);
     Console_Print("racehaunt");
 }
 static void cmd_racescare(int argc, const char *argv[]) {
@@ -2798,8 +2798,9 @@ void Console_RegisterAll(void) {
                               "(RACEMOD.CPP).");
     Console_RegisterCommandEx("racedive", cmd_racedive, "Race-track test: a witch dives at the car now", "racedive [place]",
                               "From that dive place (1 the first; none: the nearest ahead), as the Temple of Bu's witches do (RACEMOD.CPP dive=).");
-    Console_RegisterCommandEx("racehaunt", cmd_racehaunt, "Race-track test: a ghost over Twinsen's screen", "racehaunt",
-                              "As another car's ghost power-up haunts it (RACEMOD.CPP haunt=); raceitem 12 is Twinsen's on the others.");
+    Console_RegisterCommandEx("racehaunt", cmd_racehaunt, "Race-track test: a ghost over Twinsen's screen", "racehaunt [n]",
+                              "As another car's ghost power-up haunts it (RACEMOD.CPP haunt=): at once, or flying from opponent n's car "
+                              "(1 the first); raceitem 12 is Twinsen's on the others.");
     Console_RegisterCommandEx("racescare", cmd_racescare, "Race-track test: a scare jumps up beside the road now", "racescare [n]",
                               "Scare n (1 the first; none: the nearest), as the Temple of Bu's do (RACEMOD.CPP scare=).");
     Console_RegisterCommandEx("raceweb", cmd_raceweb, "Race-track test: the giant web torn now", "raceweb [0|1|2|3]",
