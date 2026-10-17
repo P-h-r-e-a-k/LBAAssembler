@@ -547,7 +547,14 @@ internal static class RaceTrackScenes
                     foreach (var p in t.Report.Pits)
                     {
                         var wpx = p.X * 512; var wpz = p.Z * 512;
-                        if ((int)Math.Floor(wpx / IslandFile.CubeSize) != cx || (int)Math.Floor(wpz / IslandFile.CubeSize) != cz) continue;
+                        // (said: the Temple of Bú's plan once had all its spots in the cube north of the start's, none was written, and the
+                        // race-track mode stood the opponents on their grid spots -- the racing lane -- through the qualifying lap, 2026-10-17)
+                        if ((int)Math.Floor(wpx / IslandFile.CubeSize) != cx || (int)Math.Floor(wpz / IslandFile.CubeSize) != cz)
+                        {
+                            log.Add($"scene {scene}: WARNING: the waiting spot at cell ({p.X:0.0}, {p.Z:0.0}) is not in the start line's cube ({cx}, {cz}): left out -- an " +
+                                    "opponent with no waiting spot stands on its grid spot, on the racing lane, while the player qualifies");
+                            continue;
+                        }
                         int px = (int)Math.Round(wpx - cx * (double)IslandFile.CubeSize), pz = (int)Math.Round(wpz - cz * (double)IslandFile.CubeSize);
                         var pbeta = (int)Math.Round(Math.Atan2(p.DirX, p.DirZ) / (2 * Math.PI) * 4096); pbeta = ((pbeta % 4096) + 4096) % 4096;
                         // (a spot whose height the plan gives stands on a deck of decor, which the ground knows nothing of)

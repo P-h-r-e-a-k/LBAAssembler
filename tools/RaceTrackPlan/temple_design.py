@@ -14,6 +14,8 @@ the black void round the temple:
   - out over the first floor's open south edge into the dark, and down a spiral to the crypt;
   - through the crypt's three rooms -- west to east along their bottom, north through the east room;
   - out of its east side into the dark, up a spiral to the long corridor's east end: the start straight.
+The start and finish line is on the straight through the crypt's west room, a slip lane beside it where the opponents wait while Twinsen
+drives his qualifying lap.
 
 Usage: temple_design.py <game folder with TEMPLE.ILE and TEMPLE.JSON: the island built on its own, `ScriptRoundTrip templebuild`> [out plan]
 """
@@ -195,6 +197,52 @@ def layout_of(cx, cz): return int(math.floor((cx - OX) / SCALE)), int(math.floor
 half = np.full(n, HALF)
 corridor = (np.abs(pts[:, 1] - CORR_Z) < 1.0) & (pts[:, 0] > W_END + 10) & (pts[:, 0] < E_END + 1)
 half[corridor] = HALF_CORRIDOR
+
+
+# ---- the slip lane (the user, 2026-10-17: "We need to add a slip lane for the temple track, currently trying to complete a qualifying lap
+# gets blocked with the other cars on the start/finish line"): where the opponents wait while Twinsen drives his qualifying lap, out of the
+# racing lane -- their grid spots, where the race-track mode stood them while it had nowhere else (the waiting spots on the crypt's floor
+# this plan gave before were in the cube north of the start's, and the build writes only the start cube's). A strip of road beside the
+# start straight (the plan's raisedStrips, as the Emerald Moon's pit lane: RaceTrackBuilder's StripPieces, RACEMOD.CPP StripLo/Hi), on its
+# north side -- the inside of the lap, away from the racing line, which keeps to the straight's middle and goes to its south side for the
+# corner after the line: out of the road's edge past the west room's doorway walls, apart from it beside the grid and through the start
+# line (clear space between them), back into it before the corner. Across, cells: negative north (the builder's Across, the left of the
+# way the lap runs, is south here). All of it in the start's cube: the cube north of it (z < 576) isn't one of the race's scenes, so the
+# engine holds a car half a cell inside the edge (z 576.5) -- the lane's rail (1.25 inside its edge) holds it no further north than that.
+SLIP_FAR, SLIP_NEAR = -10.75, -6.25          # the lane's north edge and its south one (1.75 cells of clear space from the road's edge)
+SLIP_OUT = (389.5, 394.5)                    # x: its north edge out of the road's edge, ...
+SLIP_APART = (393.5, 395.5)                  # ... then its south edge away from it -- ...
+SLIP_BACK = (414.5, 416.5)                   # ... back to it ...
+SLIP_IN = (416.0, 421.0)                     # ... and its north edge back in, before the corner (its arc from x 422)
+SLIP_SPOTS = [396.0, 400.0, 404.0, 408.0, 412.0]     # x: the waiting spots along its middle, the first opponent's first (five: a grid's)
+
+
+def ramp(x, a, b): return min(1.0, max(0.0, (x - a) / (b - a)))
+
+
+slip_lo, slip_hi = np.zeros(n), np.zeros(n)
+for i in range(n):
+    x, z = pts[i]
+    if abs(z - CRYPT_Z) > 0.01 or abs(h[i] - (CRYPT + DECK)) > 1 or not SLIP_OUT[0] <= x <= SLIP_IN[1]: continue
+    far = -half[i] + (SLIP_FAR + half[i]) * ramp(x, *SLIP_OUT) * (1 - ramp(x, *SLIP_IN))
+    near = -half[i] + (SLIP_NEAR + half[i]) * ramp(x, *SLIP_APART) * (1 - ramp(x, *SLIP_BACK))
+    if near - far > 1e-6: slip_lo[i], slip_hi[i] = round(far, 3), round(near, 3)
+slip = np.nonzero(slip_hi > slip_lo)[0]
+print('slip lane: points %d..%d, x %.1f..%.1f, %.2f..%.2f cells across' % (slip[0], slip[-1], pts[slip[0]][0], pts[slip[-1]][0], slip_lo.min(), slip_hi[slip].max()))
+
+
+def slip_off(x, z):
+    """How far (x, z) is from the slip lane (cells; 0 on it)."""
+    best = 1e9
+    if not (SLIP_OUT[0] - 30 < x < SLIP_IN[1] + 30 and abs(z - CRYPT_Z) < 30): return best
+    for i in slip:
+        u = pts[min(n - 1, i + 1)] - pts[max(0, i - 1)]; u = u / max(1e-9, np.linalg.norm(u)); nrm = np.array([-u[1], u[0]])
+        d = np.array([x, z]) - pts[i]
+        a, s = float(d @ nrm), abs(float(d @ u))
+        best = min(best, math.hypot(s, max(slip_lo[i] - a, 0.0, a - slip_hi[i])))
+    return best
+
+
 cuts = set()
 for i in range(0, n, 2):
     x, z = pts[i]
@@ -206,6 +254,16 @@ for i in range(0, n, 2):
             lx, lz = layout_of(cx, cz)
             b = bits.get((lx, lz), 0)
             if not b: continue
+            for y in range(MINY, L['maxY'] + 1):
+                if (b >> (y - MINY)) & 1 and top(y) > lo and top(y - 1) < hi: cuts.add((lx, y, lz))
+# (and over the slip lane, as over the road: CUT past its edges)
+for i in slip:
+    lo, hi = h[i] - DECK + 20, h[i] + HEAD
+    for cz in range(int(math.floor(pts[i][1] + slip_lo[i] - CUT)), int(math.floor(pts[i][1] + slip_hi[i] + CUT)) + 1):
+        for cx in range(int(math.floor(pts[i][0] - 1)), int(math.floor(pts[i][0] + 1)) + 1):
+            if slip_off(cx + 0.5, cz + 0.5) > CUT: continue
+            lx, lz = layout_of(cx, cz)
+            b = bits.get((lx, lz), 0)
             for y in range(MINY, L['maxY'] + 1):
                 if (b >> (y - MINY)) & 1 and top(y) > lo and top(y - 1) < hi: cuts.add((lx, y, lz))
 print('cells cut', len(cuts))
@@ -259,7 +317,8 @@ def flat_floor(cx, cz, r):
 
 def clear_of_road(x, z, margin):
     d = np.hypot(lap_pts[:, 0] - x, lap_pts[:, 1] - z) - half
-    return float(d.min()) >= margin
+    # (and of the slip lane beside the start straight)
+    return float(d.min()) >= margin and slip_off(x, z) >= margin
 
 
 def heading(i):
@@ -620,16 +679,16 @@ print('cobwebs', len(cobwebs), {nm: sum(1 for c in cobwebs if c[0] == kk) for kk
 # ---- the start: on the straight through the crypt's west room, heading east (the grid behind it, in the room)
 i_start = nearest((410, CRYPT_Z), i_down_out)
 print('start', i_start, tuple(np.round(pts[i_start], 1)), 'height', round(h[i_start]))
-# ---- where the opponents wait while the player qualifies (the lap has no pit lane): on the crypt room's floor north of the start straight,
-# heading the way it runs -- each a column of floor at the crypt's level with nothing over it
-PIT_Z = CRYPT_Z - 20
+# ---- where the opponents wait while the player qualifies: in the slip lane, along its middle, heading the way the lap runs, on its deck
+# (the road's height there) -- in the start's cube (the build writes no other cube's) and clear of the lane's edges and ends
+slip_mid = (SLIP_FAR + SLIP_NEAR) / 2
 pit_spots = []
-for px_ in (396, 407, 418):
-    lx, lz = layout_of(px_, PIT_Z)
-    ok = all(((bits.get((x_, z_), 0) >> (-8 - MINY)) & 1) and not any((bits.get((x_, z_), 0) >> (y - MINY)) & 1 for y in range(-7, -3))
-             for x_ in range(lx - 1, lx + 2) for z_ in range(lz - 1, lz + 2))
-    print('pit spot', px_, PIT_Z, 'clear floor' if ok else 'NOT CLEAR')
-    pit_spots.append([float(px_), float(PIT_Z), 1.0, 0.0, float(CRYPT)])
+for px_ in SLIP_SPOTS:
+    i = nearest((px_, CRYPT_Z + slip_mid), i_down_out)
+    k = [j for j in slip if abs(pts[j][0] - px_) <= 1.2]
+    ok = len(k) > 0 and all(slip_lo[j] <= slip_mid - 1.2 and slip_hi[j] >= slip_mid + 1.2 for j in k) and CRYPT_Z + slip_mid - 1.2 >= 576
+    print('pit spot', px_, CRYPT_Z + slip_mid, 'in the slip lane' if ok else 'NOT IN THE SLIP LANE')
+    pit_spots.append([float(px_), float(CRYPT_Z + slip_mid), 1.0, 0.0, float(h[i])])
 
 # ---- the lap from the start
 order = np.r_[i_start:n, 0:i_start]
@@ -642,6 +701,7 @@ plan = {
     'asphaltHalf': HALF - 1.0, 'curbHalf': HALF - 0.25, 'vergeHalf': HALF + 0.5, 'blend': 2.0,
     'raised': [0, n - 1], 'raisedHalf': HALF,
     'raisedHalfs': [round(float(v), 2) for v in HF],
+    'raisedStrips': [[float(a), float(b)] for a, b in zip(slip_lo[order], slip_hi[order])],
     'themes': [{'from': 0, 'to': n - 1, 'theme': 'halloween'}],
     'railCamera': [9, 2100, 7, 500, 1000],
     'templeCuts': sorted([list(c) for c in cuts]),

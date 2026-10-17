@@ -192,8 +192,8 @@ held). Where it passes walls, it goes through doorways cut in them: 819 cells, t
 ramps, and down to the crypt and back up on spirals through the black void round the temple. 1,719 cells, steepest 12 %; about 65 s a lap
 with a car at 110 km/h.
 
-1. The start, on the straight through the crypt's west room, heading east. The opponents wait on its floor while the player qualifies (the
-   plan's pit spots).
+1. The start, on the straight through the crypt's west room, heading east. The opponents wait in a slip lane beside it while the player
+   qualifies (the plan's pit spots; see "The slip lane" below).
 2. Through the crypt's rooms: the lower passage, the south-east room, north into the east room.
 3. Out of its east side and up a spiral to the long corridor's east end.
 4. West along the corridor: its floor is twelve cells wide, so the road is eight, and the spiral frieze on its north wall stays whole.
@@ -220,6 +220,43 @@ with a car at 110 km/h.
 - *The line-up*: the Dark Monk (the one to beat), Ker'aooc in her cauldron and Tabata on his spell book.
 
 The scenes are 301-327, one for each cube the road's width crosses (`TempleTrack.SceneCubes`). The start scene is 326.
+
+### The slip lane (2026-10-17)
+
+The user: "We need to add a slip lane for the temple track, currently trying to complete a qualifying lap gets blocked with the other cars
+on the start/finish line."
+
+*Why it was blocked.* The plan's three waiting spots were on the crypt's floor 20 cells north of the start straight, at z 566. That is
+cube (6, 8), not the start line's cube (6, 9). `RaceTrackScenes` writes only the start cube's waiting spots (`pit=`), so the race file had
+none. With no pit spot, the race-track mode stands an opponent on its grid spot behind the player through the qualifying lap: on the racing
+lane, 3 to 14 cells before the line. Twinsen's car ran into the last of them at 110 km/h, was put back on the road behind it every 3 s, and
+the qualifying lap never ended. The build now says so: "WARNING: the waiting spot ... is not in the start line's cube".
+
+*The lane.* A strip of road beside the start straight (the plan's `raisedStrips`, as the Emerald Moon's pit lane), on its north side: the
+inside of the lap, away from the racing line, which keeps to the middle and then the south side for the corner after the line. Across the
+road, cells north of its middle:
+
+- it grows out of the road's edge at x 389.5-394.5, just past the west doorway's walls, and leaves it at x 393.5-395.5;
+- it runs apart from x 395.5 to 414.5, from 6.25 to 10.75 north: 4.5 cells wide, with 1.75 cells of clear space from the road;
+- it passes through the start line, comes back to the road's edge at x 414.5-416.5, and shrinks into it by x 421, before the corner.
+
+It is all in the start's cube. The cube north of it is not one of the race's scenes, so the engine holds a car at z 576.5, and the lane's
+rail holds it there too. It has its own deck, curbs and rails in the Halloween colours. The start line is painted across it and counts
+there (the line reaches 11.25 cells north).
+
+*Waiting.* There are five spots along its middle (z 577.5; x 396, 400, 404, 408 and 412; the road's height), one for each opponent a grid
+of six holds. While the player qualifies, the opponents stand there. When he crosses the line, the race-track mode forms the grid as on
+every track: each car on its grid spot on the road, in qualifying order, then the count-down. Without qualifying the grid forms at once
+and the lane stays empty.
+
+*Unchanged:* the racing lines, the checkpoints, the item rows and the lap times. Solo laps are the same to the hundredth: 55.50, 55.00 and
+55.06 s on the line, and the same 1.5 cells either side. One ghost scare at the line (414.8, 579.2) stood on the lane and is gone: no
+other place beside the road there fitted. A jack-o'-lantern moved 3.3 cells north, off it. The road has no arrows along the lane (a piece
+with a strip draws none).
+
+Tests: `E:\dump\TEMP\templeslip` (`build.sh`, `racefile.sh`, `pilot.sh`, `suite.sh <game> <prefix>`: qualifying and no-qualifying races
+with the pilot on its line and 1.5 cells either side; `solosuite.sh`; `others.sh`: other tracks built with HEAD's and the working tree's
+`ScriptRoundTrip`, every file compared).
 
 ### Skeletons, scares and the ghost (2026-10-17)
 
