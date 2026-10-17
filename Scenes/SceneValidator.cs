@@ -102,7 +102,8 @@ internal static class SceneValidator
     {
         var where = $"{actorName} {label} script";
         if (code.Length > maxLength) { error(where, $"{code.Length} bytes; the record stores a script length in {(maxLength == ushort.MaxValue ? 16 : 15)} bits."); return; }
-        if (code.Length == 0) return;
+        // (no retail script is empty: the loader points the script at where its bytes would start, so the engine runs whatever follows it)
+        if (code.Length == 0) { warn(where, "is empty, so the game runs whatever follows it in the scene as this script; give it an end."); return; }
 
         List<Instr> instructions;
         ScriptFormatException? failure;

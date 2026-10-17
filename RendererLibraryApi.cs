@@ -34,6 +34,7 @@ internal sealed class RendererLibraryApi : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int AddActorFn(int worldX, int worldY, int worldZ, int beta, int body, int anim, int lifePoint, int armor, int hitForce, int move);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int IsActorPlaceholderFn(int index);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int RemoveActorFn(int index);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int ForgetSceneEditsFn(int scene);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int LoadInteriorSceneFn(int numscene);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int SetInteriorCameraPositionFn(int x, int y, int z);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int GetInteriorCameraPositionFn(out int x, out int y, out int z);
@@ -85,6 +86,7 @@ internal sealed class RendererLibraryApi : IDisposable
     private AddActorFn? addActor;
     private IsActorPlaceholderFn? isActorPlaceholder;
     private RemoveActorFn? removeActor;
+    private ForgetSceneEditsFn? forgetSceneEdits;
     private LoadInteriorSceneFn? loadInteriorScene;
     private SetInteriorCameraPositionFn? setInteriorCameraPosition;
     private GetInteriorCameraPositionFn? getInteriorCameraPosition;
@@ -164,6 +166,8 @@ internal sealed class RendererLibraryApi : IDisposable
         addActor = Get<AddActorFn>("lba2_renderer_add_actor");
         isActorPlaceholder = Get<IsActorPlaceholderFn>("lba2_renderer_is_actor_placeholder");
         removeActor = Get<RemoveActorFn>("lba2_renderer_remove_actor");
+        // (2026-10-17: a renderer built before it hasn't got it -- the session edits then just stay, as they always did)
+        forgetSceneEdits = NativeLibrary.TryGetExport(handle, "lba2_renderer_forget_scene_edits", out var forget) ? Marshal.GetDelegateForFunctionPointer<ForgetSceneEditsFn>(forget) : null;
         loadInteriorScene = Get<LoadInteriorSceneFn>("lba2_renderer_load_interior_scene");
         setInteriorCameraPosition = Get<SetInteriorCameraPositionFn>("lba2_renderer_set_interior_camera_position");
         getInteriorCameraPosition = Get<GetInteriorCameraPositionFn>("lba2_renderer_get_interior_camera_position");
@@ -356,6 +360,9 @@ internal sealed class RendererLibraryApi : IDisposable
     // attributes window opened for a freshly-added actor closes without an
     // Apply, so an actor a user backed out of doesn't linger in the world.
     public bool RemoveActor(int index) => removeActor?.Invoke(index) == 1;
+    // Drops a scene's session edits (scene < 0: every scene's) -- see lba2_renderer_forget_scene_edits's own doc comment (RENDERER_API.H):
+    // after the scene's file was written behind them, so the next load of it shows the file. Returns how many scenes had edits.
+    public int ForgetSceneEdits(int scene) => forgetSceneEdits?.Invoke(scene) ?? 0;
     // LBA2's older, LBA1-derived isometric interior renderer (flat sprite
     // "brick" tiles, fixed camera) -- a completely different path from
     // every exterior island/cube call above. Returns false if numscene's

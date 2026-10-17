@@ -94,7 +94,9 @@ internal static class SceneOps
         return true;
     }
 
-    // A blank 3D actor: a still figure with the given body and no scripts (an empty life script runs nothing).
+    // A blank 3D actor: a still figure of the given entity, its usual body, whose scripts do nothing. Each script is a lone END (LM_END /
+    // TM_END, 0 in both games), not empty: the loaders (DISKFUNC) point the script at the record where its bytes start, so an empty one
+    // runs whatever follows it -- the next actor's data, the zones -- as script (it took new actors' bodies away in the 3D view).
     public static SceneActorModel BlankActor(SceneGame game, int x, int y, int z, int entity = 0)
     {
         return new SceneActorModel
@@ -103,6 +105,7 @@ internal static class SceneOps
             Entity = entity, Body = 0, Anim = 0, Sprite = 0,
             X = x, Y = y, Z = z, Beta = 0, SRot = 40, Move = 0,
             CoulObj = 4, Armor = 1, LifePoints = 50,
+            Life = new byte[] { 0 }, Track = new byte[] { 0 },
         };
     }
 

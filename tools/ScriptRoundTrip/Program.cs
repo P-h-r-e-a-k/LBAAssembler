@@ -36,6 +36,8 @@ internal static class Program
             "lba1" => Lba1Tests.Run(args),
             "foundation" => FoundationTests.Run(args),
             "store" => StoreTests.Run(args),
+            "scenesync" => SceneSyncTests.Run(args),
+            "scenesyncnative" => SceneSyncNativeTest.Run(args),
             "runtime" => RuntimeTests.Run(args),
             "iso" => IsoProbe.Run(args),
             "lba2play" => Lba2PlayTests.Run(args),

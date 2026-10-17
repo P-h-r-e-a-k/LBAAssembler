@@ -38,6 +38,9 @@ public partial class ActorAttributesWindow : Window
     // walk/run/idle/jump output) -- installed into a throwaway preview copy of ANIM.HQR instead
     // (MainWindow.BodyDebugPreview.cs's own LoadDebugAnim). Requires a debug body already active.
     public event Func<byte[], int?>? LoadDebugAnimRequested;
+    // A new actor's Apply moved the scene's actor numbers (the Meca-penguin's slot put in as actor 1 first): the scene number, for the main
+    // window to read the scene again.
+    public event Action<int>? SceneRenumbered;
 
     private sealed class FlagCheckItem
     {
@@ -888,7 +891,23 @@ public partial class ActorAttributesWindow : Window
         // The actor is now in the scene file: it isn't "new" any more, so the Entity picker (only ever offered
         // for one that wasn't yet) has nothing further to do, and a later Apply falls into the ordinary
         // existing-actor path above on its own (indexInScene now points at a real Actors[] entry).
-        if (newActorEntity is not null) { newActorEntity = null; EntityPanel.Visibility = Visibility.Collapsed; }
+        if (newActorEntity is not null)
+        {
+            newActorEntity = null; EntityPanel.Visibility = Visibility.Collapsed;
+            // (a scene without the Meca-penguin's slot as actor 1 got it first -- Lba2ActorPersistence, SceneOps.EnsureMecaPenguinSlot -- so the
+            // file has this actor, and any after the slot, one number further on than this session: nothing more from here goes to the file,
+            // and the main window reads the scene again, which closes this window)
+            try
+            {
+                if (new Scenes.SceneStore(Scenes.SceneGame.Lba2, GameDirectory).Load(located.Scene).Actors.Count - 1 != located.IndexInScene + 1)
+                {
+                    savedSnapshot = null;
+                    SceneRenumbered?.Invoke(located.Scene);
+                    return "Saved to the game's files, after actor 1: the Meca-penguin's slot, which the game hides whatever is in, now in the scene too.";
+                }
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException) { DebugLog.Log($"ActorAttributesWindow: re-reading scene {located.Scene}: {e.Message}"); }
+        }
 
         savedSnapshot = updated with
         {

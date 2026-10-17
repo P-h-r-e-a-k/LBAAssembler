@@ -60,6 +60,7 @@ public partial class Lba2SceneEditorWindow : Window
         foreach (var s in scenes) SceneCombo.Items.Add(new SceneItem(s.Id, s.Label));
         loading = false;
         SceneHistory.Changed += OnStoreChanged;
+        SceneDocument.Saved += OnDocumentSaved;
         Loaded += (_, _) => OpenScene(scene);
     }
 
@@ -143,6 +144,14 @@ public partial class Lba2SceneEditorWindow : Window
         });
     }
 
+    // Another scene editor window saved this scene (its saves aren't on the undo log, so SceneHistory doesn't say).
+    private void OnDocumentSaved(SceneDocument saved, IReadOnlyList<int> scenes)
+    {
+        if (doc is null || ReferenceEquals(saved, doc) || saved.Store.Game != store.Game || !scenes.Contains(sceneNumber)
+            || !string.Equals(System.IO.Path.GetFullPath(saved.Store.Directory), System.IO.Path.GetFullPath(directory), StringComparison.OrdinalIgnoreCase)) return;
+        OnStoreChanged(saved, EventArgs.Empty);
+    }
+
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (doc is not null && doc.IsDirty && !ConfirmLeave()) e.Cancel = true;
@@ -151,6 +160,7 @@ public partial class Lba2SceneEditorWindow : Window
     private void Window_Closed(object? sender, EventArgs e)
     {
         SceneHistory.Changed -= OnStoreChanged;
+        SceneDocument.Saved -= OnDocumentSaved;
         if (doc is not null) doc.Changed -= OnDocChanged;
     }
 

@@ -167,6 +167,15 @@ LBA2_RENDERER_API int lba2_renderer_is_actor_placeholder(int index);
    this index was already removed. */
 LBA2_RENDERER_API int lba2_renderer_remove_actor(int index);
 
+/* Drops the session edits (attribute, position, script edits and actors
+   added with lba2_renderer_add_actor) of scene `scene`, or of every scene
+   for a negative one -- for after the editor wrote that scene's file behind
+   them (a scene editor's save, an undo): an interior's edits are otherwise
+   put back over the file at every load of the scene. The actors added go
+   (their indices read as removed); load the scene again to see the file.
+   Returns how many scenes had edits. */
+LBA2_RENDERER_API int lba2_renderer_forget_scene_edits(int scene);
+
 /* LBA2 indoor/interior scenes use a completely different renderer from
    every exterior island cube above: an older, LBA1-derived isometric
    "brick grid" (flat sprite tiles, fixed camera angle) rather than 3D

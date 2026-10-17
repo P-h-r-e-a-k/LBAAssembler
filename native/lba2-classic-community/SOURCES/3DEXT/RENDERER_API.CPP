@@ -36,7 +36,7 @@ extern U8 RendererDrawSky;
 extern U8 RendererDrawSea;
 extern U8 RendererDrawSeaPolys;
 extern U8 RendererDrawActors;
-extern int RendererScanIslandActors(int islandIndex);
+extern int RendererScanIslandActors(int islandIndex, const char *islandFile);
 extern int RendererGetActorCount(void);
 extern int RendererGetActor(int index, int *x, int *y, int *z, int *waypointCount);
 extern int RendererGetActorWaypoint(int actorIndex, int waypointIndex, int *x, int *y, int *z);
@@ -47,6 +47,7 @@ extern int RendererSetActorPosition(int index, int worldX, int worldY, int world
 extern int RendererAddActor(int worldX, int worldY, int worldZ, int beta, int body, int anim, int lifePoint, int armor, int hitForce, int move);
 extern int RendererIsActorPlaceholder(int index);
 extern int RendererRemoveActor(int index);
+extern int RendererForgetSceneEdits(int sceneIndex);
 extern int RendererLoadInteriorScene(int numscene);
 extern int RendererSetInteriorCameraPosition(int x, int y, int z);
 extern int RendererGetInteriorCameraPosition(int *x, int *y, int *z);
@@ -315,8 +316,10 @@ int lba2_renderer_load_island(const char *name)
     // Scans every exterior scene on this island for actors/tracks (see
     // RENDERER_ACTORS.CPP); islandIndex < 0 (e.g. citabau, which has no
     // ordinary Island slot -- see ChoicePalette()'s special case) just
-    // leaves the actor list empty rather than scanning.
-    RendererScanIslandActors(actorIsland);
+    // leaves the actor list empty rather than scanning. (A map's island
+    // has no number of its own, but scenes of its own in ISLANDS.TXT: the
+    // scan takes those, by the file's name.)
+    RendererScanIslandActors(actorIsland, name);
     return 1;
 }
 
@@ -630,6 +633,11 @@ int lba2_renderer_is_actor_placeholder(int index)
 int lba2_renderer_remove_actor(int index)
 {
     return RendererRemoveActor(index);
+}
+
+int lba2_renderer_forget_scene_edits(int scene)
+{
+    return RendererForgetSceneEdits(scene);
 }
 
 int lba2_renderer_load_interior_scene(int numscene)

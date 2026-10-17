@@ -123,6 +123,8 @@ public partial class MainWindow : Window
             "Undo cache full", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
         Scenes.SceneHistory.Load();
         Scenes.SceneHistory.Changed += (_, _) => lastSceneEditAt = Environment.TickCount64;
+        Scenes.SceneDocument.Saved += OnSceneDocumentSaved;
+        Closed += (_, _) => Scenes.SceneDocument.Saved -= OnSceneDocumentSaved;
         modeReady = true;                 // the mode buttons raise Checked while the XAML loads; only real clicks count
         Focusable = true;
         JoinAreasCheck.IsChecked = lba1JoinAreas;
@@ -1541,9 +1543,7 @@ public partial class MainWindow : Window
         if (next is null) return;
         // A step writes the files of the folder it was recorded in. The log outlives the session, so that can be another folder than the one open now --
         // above all the real game folder while "Test edits" works on a scratch copy: undoing it would then change the real files behind the test's back.
-        static string Norm(string path) => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var openFolder = next.Game == Scenes.SceneGame.Lba1 ? EditorSettings.Current.Lba1Directory : gameRoot;
-        if (!string.Equals(Norm(next.Directory), Norm(openFolder), StringComparison.OrdinalIgnoreCase))
+        if (!IsOpenFolder(next.Game, next.Directory))
         {
             MessageBox.Show(this, $"\"{next.Description}\" was recorded in another game folder:\n\n{next.Directory}\n\nOpen that folder (File > Settings, or leave test edits) to {(undo ? "undo" : "redo")} it there.", undo ? "Undo" : "Redo", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
@@ -1582,8 +1582,29 @@ public partial class MainWindow : Window
             return;
         }
 
+        ReloadScenesAfterWrite(next.Game, scenes, islandStep);
+        SetStatus($"{(undo ? "Undid" : "Redid")}: {next.Description}", StatusKind.Success);
+    }
+
+    // Whether `directory` is the game folder open for that game (the scratch copy while test edits or a map are open).
+    private bool IsOpenFolder(Scenes.SceneGame game, string directory)
+    {
+        static string Norm(string path) => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var openFolder = game == Scenes.SceneGame.Lba1 ? EditorSettings.Current.Lba1Directory : gameRoot;
+        return !string.IsNullOrEmpty(openFolder) && string.Equals(Norm(directory), Norm(openFolder), StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Scenes were written to the game files behind the views (an undo step, a nuke, a scene editor's save): everything that read them reads
+    // them again -- the zone and script caches, the LBA1 scene in view, the LBA2 joined map, interior or island in view (islandChanged: the
+    // island's own file changed too) -- and the lists of what is in view follow. The actor windows of those scenes close first (the actors
+    // they hold may have moved or gone), and the native session's edits of them go (lba2_renderer_forget_scene_edits: an interior's were put
+    // back over the file at every load -- an actor moved in its actor window, then moved in the scene editor and saved, or the move undone,
+    // stood where the actor window had put it).
+    private void ReloadScenesAfterWrite(Scenes.SceneGame game, IReadOnlyCollection<int> scenes, bool islandChanged = false)
+    {
+        CloseActorWindowsOf(game, scenes);
         zoneCache.Clear();
-        if (next.Game == Scenes.SceneGame.Lba1)
+        if (game == Scenes.SceneGame.Lba1)
         {
             foreach (var scene in scenes) lba1Session.ForgetScene(scene);
             if (currentGame == GameKind.Lba1 && lba1CurrentTiles is not null) ReloadLba1AfterEdit();
@@ -1591,22 +1612,66 @@ public partial class MainWindow : Window
         }
         else
         {
-            foreach (var scene in scenes) scriptSession.ForgetScene(scene);
+            foreach (var scene in scenes) { scriptSession.ForgetScene(scene); nativeRenderer.ForgetSceneEdits(scene); }
             ResetLba2Areas();          // (the joined interior maps are drawn from their own copy of the scenes and grids)
             if (currentGame == GameKind.Lba2)
             {
                 if (lba2JoinedView) RedrawLba2JoinedMap();          // (ShowInteriorScene would swap the map for its first scene alone)
                 else if (interiorSceneActive) ShowInteriorScene(interiorSceneNumber, keepView: true);
-                else if (islandStep) ReloadIslandFromDisk();
+                else if (islandChanged) ReloadIslandFromDisk();
                 else
                 {
                     InvalidateNativeIsland();
+                    actorMarkersIsland = null;          // (the minimap's actor dots come from the island's scan too)
                     if (nativeViewActive) RenderNativeCamera();
                 }
             }
         }
         RefreshZoneListIfVisible();
-        SetStatus($"{(undo ? "Undid" : "Redid")}: {next.Description}", StatusKind.Success);
+    }
+
+    // A scene editor window (a SceneDocument: Lba1SceneEditorWindow, Lba2SceneEditorWindow) saved scenes into the game files: the views here
+    // read them again, as after an undo step (the tester, 2026-10-17: "I can edit a scene and click save but it does not update in the main
+    // editor window, the same with actors").
+    private void OnSceneDocumentSaved(Scenes.SceneDocument document, IReadOnlyList<int> scenes)
+    {
+        var game = document.Store.Game;
+        var directory = document.Store.Directory;
+        // (raised from inside the editor's save: the views follow once it has returned)
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            if (!IsOpenFolder(game, directory)) return;
+            ReloadScenesAfterWrite(game, scenes);
+            var shown = game == Scenes.SceneGame.Lba1 ? currentGame == GameKind.Lba1 : currentGame == GameKind.Lba2;
+            if (shown) SetStatus($"Scene {string.Join(", ", scenes)} was saved in the scene editor: the view shows it as saved.", StatusKind.Success);
+        });
+    }
+
+    // Closes the actor windows showing an actor of one of these scenes (an LBA2 window's actor is a native index: the interior's, or of the
+    // island scene the scan found it in; one whose scene isn't known closes too).
+    private void CloseActorWindowsOf(Scenes.SceneGame game, IReadOnlyCollection<int> scenes)
+    {
+        if (game == Scenes.SceneGame.Lba1)
+        {
+            foreach (var (key, window) in openLba1ActorWindows.ToList()) if (scenes.Contains(key / 1000)) window.Close();
+            return;
+        }
+        foreach (var (index, window) in openAttributesWindows.ToList())
+        {
+            var scene = interiorSceneActive ? interiorSceneNumber : nativeRenderer.RendererLibrary?.GetActorScene(index) ?? -1;
+            if (scene < 0 || scenes.Contains(scene)) window.Close();
+        }
+    }
+
+    // An actor window saved a new actor into a scene whose actor numbers then moved (SceneOps.EnsureMecaPenguinSlot put the Meca-penguin's
+    // slot in as actor 1 first): this session's numbering of that scene is stale, so it is read again from the file.
+    private void OnActorSceneRenumbered(int scene)
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            ReloadScenesAfterWrite(Scenes.SceneGame.Lba2, new[] { scene });
+            SetStatus($"Scene {scene} has the Meca-penguin's slot as actor 1 now, so its other actors are one number up: the view shows the scene as saved.", StatusKind.Success);
+        });
     }
 
     // Tools > LBA1: Make surprise changes: connects the bedroom (scene 61) to Lupin Burg and adds the pink elf to it
@@ -2200,7 +2265,15 @@ public partial class MainWindow : Window
         {
             DebugLog.Log($"MainWindow: Add Actor Here clicked at world=({targetX},{targetY},{targetZ})");
             var index = library.AddActor((int)targetX, (int)targetY, (int)targetZ, 0, 0, 0, 255, 0, 0, 0);
-            if (index < 0) { DebugLog.Log("MainWindow: AddActor rejected (cube at actor limit)"); MessageBox.Show(this, "Couldn't add an actor here -- this cube may already be at its 100-actor limit.", "Add Actor", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            // (RendererAddActor refuses a spot no scene of the island covers -- a cube without a scene, the sea round the island -- and a scene
+            // with as many actors as the engine holds)
+            if (index < 0)
+            {
+                DebugLog.Log("MainWindow: AddActor rejected (no scene here, or its scene is full)");
+                MessageBox.Show(this, "Couldn't add an actor here: no scene of this island covers this spot (each outdoor scene is one cube of the island), or its scene already has as many actors as the game holds (100).",
+                    "Add Actor", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             DebugLog.Log($"MainWindow: AddActor returned index={index}");
             selectedActorIndex = index;
             RenderNativeCamera();
@@ -2448,6 +2521,7 @@ public partial class MainWindow : Window
         window.OpenScriptRequested += OpenActorScriptWindow;
         window.LoadDebugBodyRequested += LoadDebugBody;
         window.LoadDebugAnimRequested += LoadDebugAnim;
+        window.SceneRenumbered += OnActorSceneRenumbered;
         // The window's own Closed handler undoes RendererAddActor if this
         // was a freshly-added actor never applied -- refresh here in case
         // that just happened, so its marker doesn't linger on screen until

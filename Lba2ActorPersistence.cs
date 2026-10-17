@@ -102,8 +102,11 @@ internal static class Lba2ActorPersistence
             added.Body = newBody; added.Anim = newAnim; added.Beta = updated.Beta;
             added.LifePoints = Signed(updated.LifePoints); added.Armor = Signed(updated.Armor);
             added.HitForce = Signed(updated.HitForce); added.Move = Signed(updated.Move); added.Flags = updated.Flags;
-            SceneOps.AddActor(model, added);
-            try { store.Save(scene, model, description: $"Add actor {actorPos} to scene {scene}"); }
+            // (a scene without the Meca-penguin's slot as actor 1 -- a new map's from before 2026-10-17 -- gets it first, or the game would
+            // hide the actor: the actor then lands one number further on than this session has it, which the caller checks)
+            SceneOps.EnsureMecaPenguinSlot(model);
+            var addedAt = SceneOps.AddActor(model, added);
+            try { store.Save(scene, model, description: $"Add actor {addedAt} to scene {scene}"); }
             catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException) { return $"Not saved: {e.Message}"; }
             return null;
         }

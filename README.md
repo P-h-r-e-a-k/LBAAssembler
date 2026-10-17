@@ -605,9 +605,25 @@ up as twinsun with no ai"):**
   every retail scene has a placeholder there (entity 14 at 0, 0, 0). A blank interior (and so a new map's) had the hero alone, so the
   first actor added was actor 1 and never appeared. Blank scenes keep the slot (`Lba2BlankScene`, `MapNew`); adding or duplicating an actor
   in a scene without it puts it back first (`SceneOps.EnsureMecaPenguinSlot`: the actors from 1 on move up one, their scripts renumbered);
-  it can't be deleted in the scene editor; the validator warns about a scene whose actor 1 is an actor of its own.
+  it can't be deleted in the scene editor; the validator warns about a scene whose actor 1 is an actor of its own. The main window's
+  *Add Actor Here* saves through the same (`Lba2ActorPersistence`); when that moves the scene's numbers the main window reads it again.
+- A new actor's scripts are a lone END (`SceneOps.BlankActor`): the loader points a script at where its bytes start, so an empty one ran
+  whatever followed it in the record; the validator warns about an empty script (no retail one is).
 
-Test: `-- mapactors <sandbox game folder>` (the actors made the old way and the new, played headless by the engine; see docs/LBA_MAPS.md).
+**The main window shows what the scene editors save (2026-10-17, the tester's "I can edit a scene and click save but it does not update
+in the main editor window, the same with actors"):** a save of either scene editor (`SceneDocument.Saved`) has the main window read the
+scene again, as an undo step does (`ReloadScenesAfterWrite`: its view, actor lists and actor windows -- those of the scene close), and
+another scene editor open on the scene reloads too. The renderer's session edits of the scene go first (`lba2_renderer_forget_scene_edits`):
+an interior's were put back over the file at every load, so an actor moved in the actor window and then moved in the scene editor (or the
+move undone) stood where the actor window had put it. An island of a map shows its actors and zones in the 3D view, and *Add Actor Here*
+works on it: the renderer's actor scan takes an island file's own scenes from ISLANDS.TXT (`RendererScanIslandActors`; it read only the
+game's scenes 0..221 by their island number).
+
+Tests: `-- mapactors <sandbox game folder>` (the actors made the old way and the new, played headless by the engine; see docs/LBA_MAPS.md);
+`-- scenesync` (what a scene editor saves -- both games, a map's scene -- is what a fresh read sees, `SceneDocument.Saved` for every write
+and only then, new actors' kind, body and scripts, the actor window's new actor and the penguin's slot); `-- scenesyncnative <sandbox game
+folder>` (the renderer: an interior's session edit forgotten after its file was written, a map island's actors listed and Add Actor Here on
+it, a game island's scan leaving a map's scenes out).
 
 ## LBA2: island terrain editor
 

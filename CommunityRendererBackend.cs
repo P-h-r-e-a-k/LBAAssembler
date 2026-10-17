@@ -72,6 +72,16 @@ internal sealed class CommunityRendererBackend
         lock (directRenderLock) directIsland = null;
     }
 
+    // The session edits of a scene whose file was written behind them (lba2_renderer_forget_scene_edits): an interior's are otherwise put
+    // back over the file every time it loads.
+    public void ForgetSceneEdits(int scene)
+    {
+        lock (directRenderLock)
+        {
+            if (directSession && RendererLibrary is not null) RendererLibrary.ForgetSceneEdits(scene);
+        }
+    }
+
     // Live preview of unsaved island edits: the renderer reads its data from `root` (a LiveDataRoot) instead of the game folder,
     // until EndLive. The island there is rewritten as the edits are made and ReloadCubes makes the next frame read it.
     public void BeginLive(string root)
