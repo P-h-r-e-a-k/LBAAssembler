@@ -591,6 +591,24 @@ Tests: `dotnet run --project tools/ScriptRoundTrip -- lba2play` starts the engin
 islands and checks it arrives in each; adds an actor to a scene with `SceneOps`, saves with `SceneStore`, and checks the
 running engine has one more object.
 
+**Its actors (2026-10-17, a tester's "if I place zoe in a scene it does not load her in the actual game ... rabbibunny skeletons ... load
+up as twinsun with no ai"):**
+- An LBA2 actor's body and animation are numbers in its entity's lists (RESS.HQR entry 44), not BODY.HQR / ANIM.HQR entries. *New 3D
+  actor…* used to store the BODY.HQR entry picked as the body of entity 0, Twinsen's: the engine finds no such body in his entity and
+  draws his normal one. Now the body picked gives the actor the entity that has it, the body's number there and its standing animation
+  (`Lba2EntityTable.KindForBody`); *Choose body…* does the same, and the inspector shows the entity. The actor attributes window's body
+  change saves the same way (`Lba2ActorPersistence`): a body of another kind of actor makes the actor that kind, where it was kept for the
+  session only.
+- **Add > Actor from another scene…** copies an actor of any scene, its scripts too (a skeleton of scene 184 attacks Twinsen as it does
+  there); what its scripts name -- actors, zones, track points -- is still its own scene's.
+- **Actor 1 is the Meca-penguin's** (`COMMON.H` `NUM_PINGOUIN`): at every scene start the engine hides and kills whatever is there, and
+  every retail scene has a placeholder there (entity 14 at 0, 0, 0). A blank interior (and so a new map's) had the hero alone, so the
+  first actor added was actor 1 and never appeared. Blank scenes keep the slot (`Lba2BlankScene`, `MapNew`); adding or duplicating an actor
+  in a scene without it puts it back first (`SceneOps.EnsureMecaPenguinSlot`: the actors from 1 on move up one, their scripts renumbered);
+  it can't be deleted in the scene editor; the validator warns about a scene whose actor 1 is an actor of its own.
+
+Test: `-- mapactors <sandbox game folder>` (the actors made the old way and the new, played headless by the engine; see docs/LBA_MAPS.md).
+
 ## LBA2: island terrain editor
 
 The terrain editor is part of the main window: **Build mode > Terrain** (Tools > LBA2: island terrain editor... jumps there),
@@ -660,7 +678,7 @@ picture* a brand-new brick can be drawn, made a block and painted (engine-verifi
 the 34-byte header (style, fragment set, used-block bitmap) the LBA1 shape lacks; `Lba2GridBackend` converts. LBA1 grids save through the
 scene store (validated against the library and bricks), LBA2's rewrite `LBA_BKG.HQR` (a `.bak`). Reachable from the LBA1 scene editor's
 Scene menu and from the LBA2 scene editor's Scene tab, which also has **Make a blank interior** (a flat floor of the library's floor block and
-Twinsen alone in the scene; `Lba2BlankScene`, engine-verified). Blocks 1..255 only (the grid's used-block bitmap has 256 bits), bricks under
+Twinsen alone in the scene, with actor 1 the Meca-penguin's slot; `Lba2BlankScene`, engine-verified). Blocks 1..255 only (the grid's used-block bitmap has 256 bits), bricks under
 20000 in LBA2 (the engine's renumbering table).
 
 Tests: `-- grids` (both games' grids, painting, erasing, library edits, saves through the stores), `-- gridengine` / `-- newbrick` / `-- blankengine`

@@ -136,9 +136,10 @@ internal static class MapNew
             var (cx, cz) = cubes[k];
             var scene = template.Clone();
             scene.Island = islandByte; scene.CubeX = cx; scene.CubeY = cz;
-            // (the engine's placeholder for Zoe in slot 1 stays: it treats that slot specially)
-            var keepZoe = scene.Actors.Count > 1 && scene.Actors[1].Entity == 14 && scene.Actors[1].X == 0 && scene.Actors[1].Z == 0;
-            scene.Actors.RemoveRange(keepZoe ? 2 : 1, scene.Actors.Count - (keepZoe ? 2 : 1));
+            // (actor 1 stays: the Meca-penguin's slot, which the engine hides whatever is in -- SceneOps.MecaPenguinSlot)
+            var penguin = scene.Actors.Count > 1 && SceneOps.IsMecaPenguinSlot(scene.Actors[1]) ? scene.Actors[1] : SceneOps.MecaPenguinSlot();
+            scene.Actors.RemoveRange(1, scene.Actors.Count - 1);
+            scene.Actors.Add(penguin);
             scene.Zones.Clear(); scene.TrackPoints.Clear();
             foreach (var a in scene.Actors) { a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 }; }
             scene.Hero.X = IslandFile.CubeSize / 2; scene.Hero.Z = IslandFile.CubeSize / 2; scene.Hero.Beta = 0;

@@ -63,6 +63,11 @@ Opening a map makes a copy of the game folder, `<game folder>\_MAP_WORKSPACE`. T
 files are hard links until written, and every write goes beside the file and is renamed over it, so the game's own files are never written.
 The map is installed in it (`Maps/MapInstall.cs`), and it stands in for the game folder (`EditorSettings.TestModeActive`).
 
+The mirror has the folder's top-level files and its data folders the engine reads: `VIDEO`, `VOX`, `MUSIC` and `MAPS`. Until 2026-10-17 it
+had the top-level files only, and the engine doesn't start without `VIDEO\VIDEO.HQR` (`ASSET_PREFLIGHT.CPP`: "required game data is
+missing"): Play in a map's workspace (and in Test edits) went black and straight back to the editor, "The game ended: *** ERROR-> File not
+found". With `MAPS` there, a map's scenes in the workspace are numbered clear of the maps in the game's `MAPS` folder, as in the game.
+
 So the editor's island list, its scenes, the 3D view, Build mode, the scene, grid and actor editors, and Play all work on the map as on any
 of the game's own. The window's title shows the workspace's folder.
 
@@ -181,6 +186,11 @@ obl = PACKISLE.OBL
 - `mapinstall <map> <folder>`: installs the map into the folder's HQRs, reads it back, and says whether it is the same map.
 - `mapmaps <map> <folder> [file name]`: puts it in the folder's MAPS folder, printing the scene numbers it was given.
 - `mapinfo <map>`: what it is, its files and its MAP.TXT.
+- `mapactors <sandbox game folder>` (2026-10-17): the workspace's mirror has `VIDEO\VIDEO.HQR` and the engine starts on it; a new interior
+  map has actor 1, the Meca-penguin's slot; two maps in the mirror played headless -- one with actors made the old way (Zoé added first
+  is hidden as actor 1, a skeleton is Twinsen), one as the editor makes them now (the LBA2 scene editor's New 3D actor: Zoé, a rabbibunny
+  skeleton; Actor from another scene: scene 184's skeleton, which goes for Twinsen; the actor attributes window's body change to Zoé with
+  her umbrella), each drawn with its body, also once saved and put in the MAPS folder.
 
 From the MAPS folder, headless (`lba2cc --headless --no-audio --game-dir <sandbox> --exec-at 6 "cube <n>" ...`), 2026-10-15, on a sandbox
 (`E:\dump\TEMP\mappack\game`):
@@ -217,6 +227,10 @@ On sandboxes (2026-10-15):
 - LBA1 maps are for their slot: the LBA2 engine leaves them alone in MAPS.
 
 - LBA1's scenes can't be added to: an LBA1 map takes a scene slot of the game.
+- An LBA2 scene's actor 1 is the Meca-penguin's (the engine hides whatever is there): a map's own actors start at 2. A new map has the slot;
+  a map made before 2026-10-17 gets it when an actor is added in the scene editor (see the README's LBA2 scene editor, "Its actors").
+- Add Actor Here (Build mode) doesn't work on a map's island: the renderer lists no actors for it (an island of the maps has no island
+  number of its own, and its scenes are past 221), so it says the cube is full. Add a map island's actors in the LBA2 scene editor.
 - An LBA2 map island's scenes have no place on the holomap, and the renderer shows no actors on it in the 3D view outside Play: its scenes
   carry the base island's number.
 - A race track build puts SCENE.HQR back from its own copy of the originals (`.before-racetrack`), so maps installed after a race track

@@ -239,6 +239,7 @@ internal static class Program
             "mapinstall" => MapCommand.Install(args),
             "mapinfo" => MapCommand.Info(args),
             "mapmaps" => MapCommand.MapsFolder(args),
+            "mapactors" => MapActorsTest.Run(args),
             "decorlist" => DecorList.Run(args),
             "altitude" => DecorList.Altitude(args),
             "bodybox" => BodyBox.Run(args),

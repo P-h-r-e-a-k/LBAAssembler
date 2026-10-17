@@ -124,22 +124,32 @@ internal static class Lba2ActorPersistence
         // small id relative to the actor's own kind of actor (FILE3D entity), not the raw archive index the
         // picker shows (see ActorAttributesWindow's own comment on this) -- so a raw index is only writeable
         // when it is one this actor's own entity already lists (switching between a character's own body/anim
-        // variants, e.g.); anything else is refused here (kept session-only) rather than guessed at, since a
-        // wrong generic id would point the file at the wrong body for every future load of this actor, not just
-        // a display glitch.
+        // variants, e.g.), or -- a body of another kind of actor -- by making the actor that kind (below);
+        // anything else is refused here (kept session-only) rather than guessed at, since a wrong generic id
+        // would point the file at the wrong body for every future load of this actor, not just a display glitch.
         var entityTable = Lba2EntityTable.Load(gameRoot);
         var entity = entityTable?.Entities.FirstOrDefault(e => e.Id == actor.Entity);
+        var kindChanged = false;
         if (updated.Body != original.Body)
         {
             var generic = entity?.Bodies.Where(b => b.Body == updated.Body).Select(b => (int?)b.Generic).FirstOrDefault();
             if (generic is { } g) { actor.Body = g; changed = true; }
+            // A body of another kind of actor: the actor becomes that kind, the one entity the game can draw that body for (kept
+            // session-only, the game went on drawing the old kind's body in its place -- the tester's 2026-10-17 report of a Zoe who never
+            // appeared in the game), standing until an animation of its own is given.
+            else if (entityTable?.KindForBody(updated.Body) is { } kind)
+            {
+                actor.Entity = kind.Entity; actor.Body = kind.Body; actor.Anim = kind.Anim;
+                entity = entityTable.Entities[kind.Entity];
+                changed = kindChanged = true;
+            }
             else bodyAnimNote = Append(bodyAnimNote, $"body {updated.Body} isn't one of this kind of actor's own bodies");
         }
-        if (updated.Anim != original.Anim)
+        if (updated.Anim != original.Anim || kindChanged)
         {
             var generic = entity?.Anims.Where(a => a.Anim == updated.Anim).Select(a => (int?)a.Generic).FirstOrDefault();
             if (generic is { } g) { actor.Anim = g; changed = true; }
-            else bodyAnimNote = Append(bodyAnimNote, $"animation {updated.Anim} isn't one of this kind of actor's own animations");
+            else if (!kindChanged) bodyAnimNote = Append(bodyAnimNote, $"animation {updated.Anim} isn't one of this kind of actor's own animations");
         }
 
         if (!changed) return null;
