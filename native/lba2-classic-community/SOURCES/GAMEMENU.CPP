@@ -2998,6 +2998,18 @@ S32 DoGameMenu(U16 *ptrmenu) {
             }
         }
 
+        /* The console's screenshot (PERSO.CPP takes it in the game's loop) taken in a menu too: the menu as it
+           stands drawn in Log, the menu running on (unlike the harness's one-shot capture below, which closes it). */
+        {
+            char shotPath[ADELINE_MAX_PATH];
+            int is_png = 0;
+            if (Console_HasPendingScreenshot(shotPath, sizeof(shotPath), &is_png)) {
+                if (is_png)
+                    SavePNG(shotPath, Log, (S32)ModeDesiredX, (S32)ModeDesiredY, PtrPal);
+                Console_ClearPendingScreenshot();
+            }
+        }
+
         if (Input & I_RETURN OR Input & I_ACTION_M OR MyKey == K_ENTER OR MyKey == K_NUMPAD_ENTER) {
             WaitNoInput();
             AsciiMode = FALSE;
@@ -3508,11 +3520,13 @@ S32 OptionsMenu(S32 flagflip) {
 #endif
 
     GameOptionMenu[1] = 6;
+    // (the race game's own rows after the game's: its power-ups and its controls, RACEGAME.CPP)
+    U16 *const optionMenu = RaceGame_OptionsMenu(GameOptionMenu);
 
     MenuMouseAcquire();
 
     while (!flag) {
-        select = DoGameMenu(GameOptionMenu);
+        select = DoGameMenu(optionMenu);
 
         switch (select) // num mess
         {
@@ -3540,6 +3554,10 @@ S32 OptionsMenu(S32 flagflip) {
 
         case MENU_ID_DISPLAY:
             GereDisplayMenu();
+            break;
+
+        default:
+            RaceGame_OptionsRow(select);
             break;
         }
     }

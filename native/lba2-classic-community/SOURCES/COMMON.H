@@ -317,6 +317,8 @@ void RaceMod_LoadFile(const char *path);
 // The race game's (RACEGAME.CPP): a race is over -- its time from GO to the line, its best lap, the place; a time trial's time goes to
 // the track's best times (the rank it took there, 1-10, 0 none).
 S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers);
+// ... and a qualifying lap driven, its time: the race game's player may skip qualifying from then on
+void RaceGame_Qualified(S32 lap);
 // An opponent's car, which the race-track mode places wherever it is on the lap -- in the next cube too (EXTFUNC.CPP: not kept inside
 // the player's cube).
 S32 RaceMod_FreeOfCube(S32 numobj);

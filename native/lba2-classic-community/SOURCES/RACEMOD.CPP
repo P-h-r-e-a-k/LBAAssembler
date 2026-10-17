@@ -43,6 +43,8 @@
  *     weather=fine               Citadel Island's weather once the storm is over (RaceMod_FineWeather), whatever the chapter
  *     holo_arrow=<n>             the holomap arrow the mod's story points at the start line: cleared once Twinsen drives
  *     qualifying=1               a qualifying lap first (0: the grid is formed as soon as the player is in his car, he on pole)
+ *     grid_back=1                with qualifying=0: the player at the back of the grid instead, the opponents before him in their
+ *                                qualifying times' order (the race game's "skip qualifying", RACEGAME.CPP)
  *     qualifying_seed=<n>        the opponents' qualifying times' randomness (default: the clock)
  *     hide_actor=<scene> <actor> a car in a scene that isn't racing (an opponent the player left out): kept out of sight
  *     raised=<file>              a raised road: lines "x z y half", its middle point by point in lap order and half its width, world
@@ -148,8 +150,11 @@
 #include "C_EXTERN.H"
 #include "COMMON.H"
 #include "AMBIANCE.H"
+#include "DIRECTORIES.H"
+#include "HQR_NAMES.H"
 #include "INPUT.H"
 #include "RACEMOD.H"
+#include <SYSTEM/HQRLOAD.H>
 extern void ClrHoloPos(S32 num);   // HOLOGLOB.CPP (HOLO.H itself clashes with C_EXTERN.H)
 extern void DoImpact(S32 num, S32 x, S32 y, S32 z, U8 owner);   // IMPACT.CPP
 extern void InitBody(U8 gennewbody, U8 numobj);                  // OBJECT.CPP
@@ -297,6 +302,7 @@ static int s_nbPits = 0;
 enum { PHASE_RACE, PHASE_QUALIFYING, PHASE_WAIT, PHASE_GRID };
 static int s_phase = PHASE_RACE;
 static int s_qualifying = 1;
+static int s_gridBack = 0;                 // grid_back=: no qualifying, the player at the back of the grid (not on pole)
 static int s_fineWeather = 0;
 static int s_holoArrow = -1;
 static unsigned s_seed = 0;
@@ -2639,6 +2645,7 @@ static void Load(const char *path, int carOnly = 0) {
             T_RACE_SPOT *g = &s_pits[s_nbPits];
             if (s_nbPits < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbPits++;
         } else if (!strcmp(key, "qualifying")) s_qualifying = atoi(v);
+        else if (!strcmp(key, "grid_back")) s_gridBack = atoi(v);
         else if (!strcmp(key, "weather")) s_fineWeather = !strcmp(v, "fine");
         else if (!strcmp(key, "wake_flight")) s_wakeFlight = atoi(v);
         else if (!strcmp(key, "raised")) LoadRaised(v);
@@ -3515,10 +3522,12 @@ void RaceMod_Lap(S32 x, S32 z) {
             ApplySets(s_finishSet, s_nbFinishSet);
         }
         if (s_phase == PHASE_QUALIFYING) {
-            // the qualifying lap: its time decides the grid (formed before the next drawing, in the start line's scene)
+            // the qualifying lap: its time decides the grid (formed before the next drawing, in the start line's scene) -- and the race
+            // game's player has driven one (RACEGAME.CPP: the first race's is not to be skipped)
             s_qualifyTime = s_lastLap;
             s_wantGrid = 1;
             s_phase = PHASE_WAIT;
+            RaceGame_Qualified(s_lastLap);
             return;
         }
     }
@@ -4016,12 +4025,13 @@ static void PlayerOnSpot(const T_RACE_SPOT *spot) {
     s_forgetLap = 1;
 }
 
-// The grid: every racer by its time (the player's qualifying lap; without qualifying the player is on pole), each on its spot, the laps
-// counted afresh from the start line; then the grid is shown and the count-down runs.
+// The grid: every racer by its time (the player's qualifying lap; without qualifying the player is on pole -- or, grid_back=, at the
+// back), each on its spot, the laps counted afresh from the start line; then the grid is shown and the count-down runs.
+#define RACE_GRID_BACK 0x7FFFFFFF          // (the player's time at the back of the grid: slower than any qualifying time)
 static void FormGrid(S32 now) {
     s_nbOrder = 0;
     s_order[s_nbOrder] = -1;
-    s_orderTime[s_nbOrder++] = s_qualifying ? s_qualifyTime : 0;
+    s_orderTime[s_nbOrder++] = s_qualifying ? s_qualifyTime : s_gridBack ? RACE_GRID_BACK : 0;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
         if (s_opp[n].Count && s_opp[n].Scenes) { s_order[s_nbOrder] = n; s_orderTime[s_nbOrder++] = s_opp[n].QualTime; }
     for (int i = 1; i < s_nbOrder; i++)
@@ -4040,10 +4050,12 @@ static void FormGrid(S32 now) {
     s_goAt = now + (s_qualifying ? RACE_RESULTS_MS : 1000) + 3000;
     s_phase = PHASE_GRID;
     s_wantFlip = 1;
-    char text[256];
+    char text[512];
     int used = snprintf(text, sizeof(text), "[racemod] grid:");
-    for (int i = 0; i < s_nbOrder && used < (int)sizeof(text); i++)
-        used += snprintf(text + used, sizeof(text) - used, " %d %s %.2f s;", i + 1, s_order[i] < 0 ? "Twinsen" : s_opp[s_order[i]].Name, s_orderTime[i] / 1000.0);
+    for (int i = 0; i < s_nbOrder && used < (int)sizeof(text); i++) {
+        if (s_order[i] < 0 && s_orderTime[i] == RACE_GRID_BACK) used += snprintf(text + used, sizeof(text) - used, " %d Twinsen (no qualifying: at the back);", i + 1);
+        else used += snprintf(text + used, sizeof(text) - used, " %d %s %.2f s;", i + 1, s_order[i] < 0 ? "Twinsen" : s_opp[s_order[i]].Name, s_orderTime[i] / 1000.0);
+    }
     Log_Info("%s", text);
 }
 
@@ -10324,6 +10336,164 @@ void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 me
     UnsetClip();
 }
 
+// ---- the race game's pages --------------------------------------------------------------------------------------------------------
+// (RACEGAME.CPP, 2026-10-17 -- the user: "a powerup page for LBRA that shows the user all the powerups and what they do"): a track's
+// power-ups read from its race file, each one's name and what it does, its item box drawn as the race's display draws it.
+
+// Each power-up's name on the page, and what it does once Ctrl uses it (the menus' big font: two lines at most)
+static const char *const s_puPageName[PU_COUNT] = {"Gazogem fuel", "Protection spell", "Lightning spell", "Nitro penguin", "Super jet-pack",
+                                                   "Oil slick", "Yellow magic ball", "Green magic ball", "Red magic ball", "Fire ball",
+                                                   "Fake pickup", "Golden Gazogem", "Ghost"};
+static const char *const s_puHelp[PU_COUNT] = {
+    "A burst of speed for four seconds.",
+    "A shield for 12 seconds: nothing can harm your car.",
+    "Shrinks every other car, slowing it for 20 seconds.",
+    "Drop it behind you: it blows up the first car near it.",
+    "Ten seconds at twice the speed, steering itself.",
+    "Drop it behind you: a car driving onto it spins.",
+    "Thrown straight ahead: it stops the car it hits.",
+    "Rolls along the road for ten seconds, hitting cars.",
+    "Homes in on the car in front of you and stops it.",
+    "Splits up, one ball hunting down each other car.",
+    "Drop it behind you: the next car into it blows up.",
+    "Bursts of speed for eight seconds, as many as you like.",
+    "Haunts every other car: it slows down and weaves.",
+};
+
+const char *RaceMod_ItemName(S32 item) { return item >= 0 && item < PU_COUNT ? s_puPageName[item] : ""; }
+
+const char *RaceMod_ItemHelp(const T_RACE_PAGE *page, S32 item) {
+    if (item < 0 || item >= PU_COUNT) return "";
+    if (item == PU_FUEL && page && page->Trial) return "A can every lap: a burst of speed for four seconds.";
+    if (item == PU_PENGUIN && page && page->Fuse) return "Drop it behind you: a second later it blows up.";
+    return s_puHelp[item];
+}
+
+static S32 PageS16(const U8 *p) { return (S16)(p[0] | (p[1] << 8)); }
+static S32 PageU16(const U8 *p) { return p[0] | (p[1] << 8); }
+
+// An entity's (RESS.HQR's FILE3D, loaded at the start) generic body `gen`: its BODY.HQR body, as FICHE.CPP SearchBody finds it; -1 none.
+static S32 EntityBody(S32 entity, U8 gen) {
+    if (entity < 0) return -1;
+    const U8 *p = LoadFile3D(entity);
+    for (U8 command; (command = *p++) != 255;) {
+        if (command == F_BODY) {
+            const U8 g = *p++;
+            if (g == gen) return PageS16(p + 1);   // (after its size)
+            p += *p;
+        } else if (command == F_ANIM) {
+            p += 2;
+            p += *p;
+        } else {
+            p++;
+            p += *p;
+        }
+    }
+    return -1;
+}
+
+// An actor's BODY.HQR body, read from its scene in SCENE.HQR the way LoadScene reads it (DISKFUNC.CPP: the scene's header and
+// ambience, the hero's start and scripts, then each actor's fields and scripts): the pickups' look on the page, before any scene of the
+// track is loaded (in a race, MushroomActor finds it from the scene's own actor). -1: none (a sprite, or no such actor).
+static S32 SceneActorBody(S32 scene, S32 actor) {
+    if (scene < 0 || actor <= 0) return -1;
+    char path[ADELINE_MAX_PATH];
+    GetResPath(path, ADELINE_MAX_PATH, SCENE_HQR_NAME);
+    U8 *const data = (U8 *)LoadMalloc_HQR(path, scene + 1);
+    if (!data) return -1;
+    const U8 *p = data + 56;               // (INFO_WORLD 7 bytes, AMBIANCE 49)
+    p += 6;                                // the hero's start
+    p += 2 + PageU16(p);                   // ... its track script
+    p += 2 + PageU16(p);                   // ... its life script
+    const S32 nb = PageS16(p);
+    p += 2;
+    S32 body = -1;
+    for (S32 n = 1; n < nb && n <= actor; n++) {
+        const U32 flags = p[0] | (p[1] << 8) | (p[2] << 16) | ((U32)p[3] << 24);
+        if (n == actor) {
+            if (!(flags & SPRITE_3D)) body = EntityBody(PageS16(p + 4), p[6]);
+            break;
+        }
+        p += 36;                           // flags, entity, body, animation, sprite, place, hit, options, turn, speed, move, info, bonus, colour
+        if (flags & ANIM_3DS) p += 6;
+        p += 2;                            // armour, life
+        p += 2 + PageU16(p);               // its track script
+        p += 2 + PageU16(p);               // its life script
+    }
+    Free(data);
+    return body;
+}
+
+// A race file's power-ups: the ones RandomPowerUp draws from on that track (powerups=1: all but fuel_always's Gazogem, a fake
+// pickup without fake= copies, the ghost without haunt=; powerup_only='s alone), the golden Gazogem where a roulette wheel gives it;
+// a time trial's (trial=1): Gazogem alone.
+S32 RaceMod_ReadPage(const char *path, T_RACE_PAGE *page) {
+    memset(page, 0, sizeof(*page));
+    page->Pickup = page->Oil = page->Gold = page->Ghost = -1;
+    FILE *f = path && path[0] ? fopen(path, "r") : NULL;
+    if (!f) return 0;
+    int powerups = 0, fuelAlways = 0, fakes = 0, ghost = 0, wheel = 0, gears = 1, automatic = 0, only[8], nbOnly = 0;
+    S32 mushScene = -1, mushActor = -1, fakeScene = -1, fakeActor = -1;
+    char line[1024];
+    while (fgets(line, sizeof(line), f)) {
+        char *eq = strchr(line, '=');
+        if (line[0] == '#' || !eq) continue;
+        *eq = 0;
+        char key[64];
+        if (sscanf(line, " %63s", key) != 1) continue;
+        const char *v = eq + 1;
+        while (*v == ' ') v++;
+        int a, b;
+        if (!strcmp(key, "powerups")) powerups = atoi(v);
+        else if (!strcmp(key, "trial")) page->Trial = atoi(v);
+        else if (!strcmp(key, "fuel_always")) fuelAlways = atoi(v);
+        else if (!strcmp(key, "mushroom") && mushScene < 0 && sscanf(v, "%d %d", &a, &b) == 2) { mushScene = a; mushActor = b; }
+        else if (!strcmp(key, "fake") && sscanf(v, "%d %d", &a, &b) == 2) { if (!fakes++) { fakeScene = a; fakeActor = b; } }
+        else if (!strcmp(key, "haunt") && sscanf(v, "%d %d", &a, &b) == 2) { ghost = 1; page->Ghost = b; }
+        else if (!strcmp(key, "oil_icon")) page->Oil = atoi(v);
+        else if (!strcmp(key, "gold_icon")) page->Gold = atoi(v);
+        else if (!strcmp(key, "roulette")) wheel = 1;
+        else if (!strcmp(key, "penguin_mode")) page->Fuse = !strncmp(v, "fuse", 4);
+        else if (!strcmp(key, "gears")) gears = atoi(v);
+        else if (!strcmp(key, "automatic")) automatic = atoi(v);
+        else if (!strcmp(key, "grid")) page->Spots++;
+        else if (!strcmp(key, "powerup_only")) {
+            int used = 0, value;
+            nbOnly = 0;
+            for (const char *q = v; nbOnly < 8 && sscanf(q, "%d%n", &value, &used) == 1; q += used) only[nbOnly++] = value;
+        }
+    }
+    fclose(f);
+    page->Manual = gears > 1 && !automatic;
+    if (page->Trial) page->Item[page->Count++] = PU_FUEL;
+    else if (powerups && nbOnly) {
+        for (int i = 0; i < nbOnly && page->Count < RACE_PAGE_ITEMS; i++) {
+            int seen = only[i] < 0 || only[i] >= PU_COUNT;
+            for (int k = 0; k < page->Count && !seen; k++) seen = page->Item[k] == only[i];
+            if (!seen) page->Item[page->Count++] = only[i];
+        }
+    } else if (powerups)
+        for (int i = 0; i < PU_COUNT && page->Count < RACE_PAGE_ITEMS; i++) {
+            if (s_puWeight[i] <= 0 && !(i == PU_GOLD && wheel)) continue;
+            if ((i == PU_FUEL && fuelAlways) || (i == PU_FAKE && !fakes) || (i == PU_GHOST && !ghost)) continue;
+            page->Item[page->Count++] = i;
+        }
+    // (the pickups' look: a mushroom's actor -- or, with none, a fake one's, which wears the same)
+    if (powerups) page->Pickup = mushScene >= 0 ? SceneActorBody(mushScene, mushActor) : SceneActorBody(fakeScene, fakeActor);
+    Log_Info("[racemod] the page's track %s: %d power-up(s)%s, the pickups body %d, %s gears, %d grid spot(s)", path, (int)page->Count,
+             page->Trial ? " (a time trial's)" : "", (int)page->Pickup, page->Manual ? "hand-changed" : "automatic", (int)page->Spots);
+    return 1;
+}
+
+// The item box as the race draws it (ItemBox), with the page's track's models in place of the race's -- put back after
+void RaceMod_DrawItem(const T_RACE_PAGE *page, S32 item, S32 x0, S32 y0, S32 size, S32 now) {
+    if (!page || item >= PU_COUNT) return;
+    const int oil = s_oilIcon, gold = s_goldIcon, ghost = s_hauntIcon, fake = s_fakeIconBody;
+    s_oilIcon = page->Oil; s_goldIcon = page->Gold; s_hauntIcon = page->Ghost; s_fakeIconBody = page->Pickup;
+    ItemBox(x0, y0, size, item < 0 ? PU_FAKE : item, 0, RACE_ITEM_POP_MS, -1, now);   // (settled, its pop over: full size, no flash)
+    s_oilIcon = oil; s_goldIcon = gold; s_hauntIcon = ghost; s_fakeIconBody = fake;
+}
+
 // The count-down's big letters: 5 x 7 blocks each ('.' empty), drawn as filled boxes with a dark shadow.
 static const struct {
     char C;
@@ -10490,7 +10660,7 @@ static void ResetTrack(void) {
     s_messageUntil = 0;
     s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopHold = -1;
     s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0;
-    s_phase = PHASE_RACE; s_qualifying = 1; s_fineWeather = 0; s_holoArrow = -1;
+    s_phase = PHASE_RACE; s_qualifying = 1; s_gridBack = 0; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;

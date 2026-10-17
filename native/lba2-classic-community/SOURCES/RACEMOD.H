@@ -114,4 +114,22 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);
 void RaceMod_AutoDrive(int on, double lookCells, double sideCells);
 U32 RaceMod_AutoInput(void);
 
+// The race game's pages (RACEGAME.CPP: the power-ups, the controls, the qualifying): what a track's race file hands out, read from its
+// keys alone -- nothing of a race on is touched -- each power-up's name and what it does, and its item box drawn as the race draws it.
+#define RACE_PAGE_ITEMS 16
+typedef struct {
+    S32 Count, Item[RACE_PAGE_ITEMS];       // the power-ups a car can get there (RACEMOD.CPP's numbers), in the item box's order
+    S32 Trial;                              // a time trial's file: a can of Gazogem at GO and every lap, nothing else
+    S32 Manual;                             // its car's gears changed by hand (X up, Z down)
+    S32 Spots;                              // its grid's spots (grid=): with none, no qualifying lap decides anything
+    S32 Fuse;                               // penguin_mode=fuse
+    S32 Pickup, Oil, Gold, Ghost;           // the item boxes' models: the pickups' body (a mushroom's actor, from its scene in SCENE.HQR),
+                                            // oil_icon=, gold_icon=, haunt='s icon (-1 none)
+} T_RACE_PAGE;
+S32 RaceMod_ReadPage(const char *path, T_RACE_PAGE *page);   // non-zero: the file was read
+const char *RaceMod_ItemName(S32 item);                      // "Nitro penguin"
+const char *RaceMod_ItemHelp(const T_RACE_PAGE *page, S32 item);   // what it does and how it is used (Ctrl), a sentence or two
+// An item's box, `size` pixels across at (x0, y0), the item turning in it; item -1: the pickups' own look (what the cars drive into)
+void RaceMod_DrawItem(const T_RACE_PAGE *page, S32 item, S32 x0, S32 y0, S32 size, S32 now);
+
 #endif

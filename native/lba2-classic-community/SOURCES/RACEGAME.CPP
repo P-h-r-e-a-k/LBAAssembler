@@ -8,6 +8,15 @@
  * end_to_menu=, trial=) written to RACE_NOW.TXT in the user's folder and loaded (RaceMod_LoadFile), and a new game at the start line, no
  * introduction. A time trial's time goes to the track's best times, its ten fastest, kept in BESTTIMES.TXT in the user's folder; Best
  * times shows them.
+ * The first run (2026-10-17): the player's first race or time trial is preceded by the controls page, and the first race with power-ups
+ * by the power-up page (the track's own power-ups, each in its item box with what it does) -- right after the car page, as the race is
+ * loaded, before its scene: Enter turns the pages, Esc skips them. Options shows either again (its rows Power-ups and Race controls:
+ * GAMEMENU.CPP OptionsMenu asks RaceGame_OptionsMenu). The first race always starts with a qualifying lap; once one has been driven, a race asks after
+ * the car page -- a qualifying lap, or none and Twinsen at the back of the grid (RACEMOD.CPP grid_back=) -- the last answer chosen first.
+ * The player's settings, RACEGAME_SETTINGS.TXT in the user's folder ("key=value" lines; other keys are kept as they are):
+ *     controls_seen=1  powerups_seen=1     the first run's pages shown
+ *     qualified=1                         a qualifying lap driven (RaceGame_Qualified): it may be skipped from then on
+ *     skip_qualifying=0|1                 the last answer
  *
  * RACEGAME.TXT, "key=value" lines ('#' starts a comment), UTF-8:
  *     title=<the game's name>
@@ -19,12 +28,15 @@
  * BESTTIMES.TXT: "<track>|<time ms>|<best lap ms>|<car>|<date>" lines, the fastest first (other tracks' lines are kept as they are).
  */
 #include "C_EXTERN.H"
+#include "CONSOLE/CONSOLE.H"
 #include "DIRECTORIES.H"
 #include "INPUT.H"
 #include "JOYSTICK.H"
 #include "RACEGAME.H"
+#include "RACEMOD.H"
 #include "UI_LAYOUT.H"
 
+#include <FILEIO/SAVEPNG.H>
 #include <SVGA/SCREEN.H>
 #include <SYSTEM/KEYBOARD.H>
 #include <SYSTEM/KEYBOARD_KEYS.H>
@@ -52,6 +64,10 @@ extern void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta,
 #define RG_ID_RACE 2310
 #define RG_ID_TRIAL 2311
 #define RG_ID_SPECIAL 2320                  // + the special's index
+#define RG_ID_QUALIFY 2350                  // the qualifying page's rows (QualifyingPage)
+#define RG_ID_SKIP 2351
+#define RG_ID_POWERUPS 2352                 // the Options menu's rows of the race game's (RaceGame_OptionsMenu)
+#define RG_ID_CONTROLS 2353
 #define RG_ID_BACK 26                       // the game's own "Back"
 #define RG_ID_RESUME 70
 #define RG_ID_OPTIONS 74
@@ -90,6 +106,9 @@ static int s_timesRead = 0;
 
 // the race on
 static int s_raceSp = -1, s_raceTrial = 0, s_raceCar = -1, s_raceOver = 0;
+// the race to start: a qualifying lap first (1), none and Twinsen at the back of the grid (0), or as its file says (-1) -- QualifyingPage
+static int s_qualifyNow = -1;
+static void Introduction(int sp, int trial);
 
 static U16 s_mainMenu[4 + 2 * 8];
 static U16 s_spMenu[4 + 2 * (1 + RG_MAX_SPECIALS)];
@@ -162,6 +181,57 @@ static void Read(void) {
 S32 RaceGame_On(void) {
     Read();
     return s_on;
+}
+
+// ---- the player's settings ---------------------------------------------------------------------------------------------------------
+
+static int s_setRead = 0;
+static int s_controlsSeen = 0, s_powerupsSeen = 0;  // the first run's pages shown
+static int s_qualified = 0;                 // a qualifying lap driven: the next races may skip it
+static int s_skipQualifying = 0;            // the last answer to "a qualifying lap?"
+static char s_setOther[RG_OTHER_SIZE];      // RACEGAME_SETTINGS.TXT's lines of other keys, kept as they are
+
+static void SettingsPath(char *path) { GetCfgPath(path, ADELINE_MAX_PATH, "RACEGAME_SETTINGS.TXT"); }
+
+static void ReadSettings(void) {
+    if (s_setRead) return;
+    s_setRead = 1;
+    s_setOther[0] = 0;
+    char path[ADELINE_MAX_PATH];
+    SettingsPath(path);
+    FILE *f = fopen(path, "r");
+    if (!f) { Log_Info("[racegame] no settings yet (%s): the first run's pages, and a qualifying lap first", path); return; }
+    char line[512];
+    while (fgets(line, sizeof(line), f)) {
+        Trim(line);
+        if (!line[0] || line[0] == '#') continue;
+        char *eq = strchr(line, '=');
+        int *value = NULL;
+        if (eq) {
+            *eq = 0;
+            if (!strcmp(line, "controls_seen")) value = &s_controlsSeen;
+            else if (!strcmp(line, "powerups_seen")) value = &s_powerupsSeen;
+            else if (!strcmp(line, "qualified")) value = &s_qualified;
+            else if (!strcmp(line, "skip_qualifying")) value = &s_skipQualifying;
+            if (value) *value = atoi(eq + 1);
+            else *eq = '=';
+        }
+        if (!value && strlen(s_setOther) + strlen(line) + 2 < sizeof(s_setOther)) { strcat(s_setOther, line); strcat(s_setOther, "\n"); }
+    }
+    fclose(f);
+    Log_Info("[racegame] settings: controls seen %d, power-ups seen %d, qualified %d, skip qualifying %d", s_controlsSeen, s_powerupsSeen,
+             s_qualified, s_skipQualifying);
+}
+
+static void WriteSettings(void) {
+    char path[ADELINE_MAX_PATH];
+    SettingsPath(path);
+    FILE *f = fopen(path, "w");
+    if (!f) { Log_Warn("[racegame] the settings could not be written to %s", path); return; }
+    fprintf(f, "# %s: the player's settings (RACEGAME.CPP)\n", s_title[0] ? s_title : "The race game");
+    fprintf(f, "controls_seen=%d\npowerups_seen=%d\nqualified=%d\nskip_qualifying=%d\n", s_controlsSeen, s_powerupsSeen, s_qualified, s_skipQualifying);
+    fputs(s_setOther, f);
+    fclose(f);
 }
 
 // ---- the best times ----------------------------------------------------------------------------------------------------------------
@@ -288,10 +358,16 @@ static int StartRace(int sp, int trial, int car) {
     if (s->Scene >= 0) fprintf(f, "start_scene=%d\n", (int)s->Scene);
     fprintf(f, "start_in_car=1\nrace_laps=%d\nend_to_menu=%d\n", s_laps, (int)s_endMs);
     if (trial) fprintf(f, "trial=1\n");
+    // (a qualifying lap or none, the player's answer -- QualifyingPage: the first race always has one)
+    else if (s_qualifyNow >= 0) fprintf(f, s_qualifyNow ? "qualifying=1\n" : "qualifying=0\ngrid_back=1\n");
     fclose(f);
     s_raceSp = sp; s_raceTrial = trial; s_raceCar = car; s_raceOver = 0;
-    Log_Info("[racegame] %s: %s with %s", s->Name, trial ? "a time trial" : "a race", car >= 0 && car < s_nbCars ? s_cars[car].Name : "Twinsen's car");
+    Log_Info("[racegame] %s: %s with %s%s", s->Name, trial ? "a time trial" : "a race", car >= 0 && car < s_nbCars ? s_cars[car].Name : "Twinsen's car",
+             trial || s_qualifyNow < 0 ? "" : s_qualifyNow ? ", a qualifying lap first" : ", no qualifying: from the back of the grid");
+    s_qualifyNow = -1;
     RaceMod_LoadFile(out);
+    // (the first run: the controls and the power-ups before the race -- once)
+    Introduction(sp, trial);
     return 1;
 }
 
@@ -313,6 +389,10 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_TIMES: Label(string, "Best times"); return 1;
     case RG_ID_RACE: Label(string, "Race"); return 1;
     case RG_ID_TRIAL: Label(string, "Time trial"); return 1;
+    case RG_ID_QUALIFY: Label(string, "Qualifying lap"); return 1;
+    case RG_ID_SKIP: Label(string, "Skip: start at the back of the grid"); return 1;
+    case RG_ID_POWERUPS: Label(string, "Power-ups"); return 1;
+    case RG_ID_CONTROLS: Label(string, "Race controls"); return 1;   // (the game's own Controls row changes the keys)
     }
     if (num >= RG_ID_SPECIAL && num < RG_ID_SPECIAL + s_nbSp) { Label(string, s_sp[num - RG_ID_SPECIAL].Name); return 1; }
     string[0] = 0;
@@ -494,6 +574,285 @@ static void TimesPage(void) {
     Page(NULL, 0);
 }
 
+// ---- the power-ups, the controls, the qualifying -------------------------------------------------------------------------------------
+
+// The console's screenshot (PERSO.CPP takes it in the game's loop) taken on these pages too, as they stand drawn -- in the menus'
+// palette, which they are shown in
+static void Shot(void) {
+    char path[ADELINE_MAX_PATH];
+    int png = 0;
+    if (!Console_HasPendingScreenshot(path, sizeof(path), &png)) return;
+    if (png) SavePNG(path, Log, (S32)ModeDesiredX, (S32)ModeDesiredY, PtrPalNormal);
+    Console_ClearPendingScreenshot();
+    Log_Info("[racegame] screenshot %s", path);
+}
+
+// A line of text from x (its left end), with the menus' dark shadow; already in the font's code page.
+static void TextAt(S32 x, S32 y, const char *cp850, S32 colour) {
+    ColorFont(BLACK);
+    Font(x + 3, y + 3, (char *)cp850);
+    ColorFont(colour);
+    Font(x, y, (char *)cp850);
+}
+
+// A sentence from (x, y), broken between words into lines no wider than `width`, `step` apart: the lines drawn.
+static int Wrapped(S32 x, S32 y, S32 width, S32 step, const char *utf8, S32 colour) {
+    char text[512], line[512];
+    CopyUtf8ToCp850(text, sizeof(text), utf8);
+    int lines = 0;
+    const char *p = text;
+    while (*p) {
+        while (*p == ' ') p++;
+        size_t n = 0;
+        // (word by word while the line still fits: at least one word a line)
+        for (const char *q = p; *q;) {
+            const char *end = q;
+            while (*end && *end != ' ') end++;
+            const size_t len = (size_t)(end - p);
+            if (len >= sizeof(line)) break;
+            memcpy(line, p, len);
+            line[len] = 0;
+            if (n && SizeFont(line) > width) break;
+            n = len;
+            q = end;
+            while (*q == ' ') q++;
+        }
+        if (!n) break;
+        memcpy(line, p, n);
+        line[n] = 0;
+        TextAt(x, y + lines * step, line, colour);
+        lines++;
+        p += n;
+    }
+    return lines;
+}
+
+// A page's frame: the menu's backdrop, a box shaded darker than the menus' (a page of text over the menu's picture) and framed as they
+// are, the page's header in it
+#define RG_PAGE_HALF 300                    // the box's half width
+#define RG_PAGE_TOP 8                       // ... its top and bottom on the 480-tall canvas
+#define RG_PAGE_BOTTOM 472
+#define RG_PAGE_SHADE 13
+#define RG_LINE 26                          // a line of text
+static void PageFrame(const char *header) {
+    const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    Page(NULL, 0);
+    ShadeBoxBlk(cx - RG_PAGE_HALF, RG_PAGE_TOP + oy, cx + RG_PAGE_HALF, RG_PAGE_BOTTOM + oy, RG_PAGE_SHADE);
+    DrawCadre(cx - RG_PAGE_HALF, RG_PAGE_TOP + oy, cx + RG_PAGE_HALF, RG_PAGE_BOTTOM + oy, ALL_ANGLES);
+    Text(cx, RG_PAGE_TOP + oy + 8, header, RG_ORANGE);
+}
+
+// The controls: the keys the race game uses (the game's defaults -- Options, Controller changes the keyboard's), then a pad's.
+static void DrawControls(const T_RACE_PAGE *pg) {
+    static const char *const keys[][2] = {
+        {"Up arrow", "Accelerate"},
+        {"Down arrow", "Brake, reverse"},
+        {"Left, right", "Steer"},
+        {"Ctrl", "Use your item"},
+        {"", ""},                           // (the gears: by hand or by themselves)
+        {"P", "Pause"},
+        {"Esc", "Menu"},
+    };
+    static const char *const pad[][2] = {
+        {"Right trigger", "Accelerate"},
+        {"Left trigger", "Brake, reverse"},
+        {"Left stick", "Steer"},
+        {"Left shoulder", "Use your item"},
+        {"Start", "Menu"},
+    };
+    const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, kx = cx - RG_PAGE_HALF + 36, ax = cx - 40;
+    PageFrame("Controls");
+    S32 y = RG_PAGE_TOP + oy + 48;
+    char text[256];
+    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++, y += RG_LINE) {
+        const char *key = keys[i][0], *what = keys[i][1];
+        if (!key[0]) {
+            key = pg && pg->Manual ? "X, Z" : "Gears";
+            what = pg && pg->Manual ? "Gear up, down" : "Automatic";
+        }
+        Label(text, key);
+        TextAt(kx, y, text, LBAWHITE);
+        Label(text, what);
+        TextAt(ax, y, text, RG_GREY);
+    }
+    y += RG_LINE / 2;
+    Label(text, "With a gamepad");
+    TextAt(kx, y, text, RG_ORANGE);
+    y += RG_LINE + 4;
+    for (size_t i = 0; i < sizeof(pad) / sizeof(pad[0]); i++, y += RG_LINE) {
+        Label(text, pad[i][0]);
+        TextAt(kx, y, text, LBAWHITE);
+        Label(text, pad[i][1]);
+        TextAt(ax, y, text, RG_GREY);
+    }
+}
+
+// The power-ups: the pickups first (what a car drives into for an item), then the track's power-ups `first`.. (RG_PAGE_ITEMS of them a
+// page), each in its item box turning as the race shows it, its name and what it does.
+#define RG_PAGE_ITEMS 4
+#define RG_ICON 52
+#define RG_ITEM_LINE 24                     // (the items' lines a little closer, the items further apart)
+#define RG_ITEM_STEP 84
+static void DrawPowerUps(const T_RACE_PAGE *pg, int first, S32 now) {
+    const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, ix = cx - RG_PAGE_HALF + 18, tx = ix + RG_ICON + 16, width = cx + RG_PAGE_HALF - 12 - tx;
+    PageFrame("Power-ups");
+    S32 y = RG_PAGE_TOP + oy + 38;
+    if (!pg || !pg->Count) { Text(cx, y + 100, "No power-ups on this track.", LBAWHITE); return; }
+    if (pg->Trial) Wrapped(tx, y + 2, width, RG_ITEM_LINE, "A time trial: a can of Gazogem in your item box every lap. Ctrl uses it.", LBAWHITE);
+    else {
+        RaceMod_DrawItem(pg, -1, ix, y, RG_ICON, now);
+        Wrapped(tx, y + 2, width, RG_ITEM_LINE, "Drive into these for a power-up in your item box. Ctrl uses it.", LBAWHITE);
+    }
+    y += RG_ICON + 12;
+    char text[256];
+    for (int k = first; k < pg->Count && k < first + RG_PAGE_ITEMS; k++, y += RG_ITEM_STEP) {
+        RaceMod_DrawItem(pg, pg->Item[k], ix, y, RG_ICON, now);
+        Label(text, RaceMod_ItemName(pg->Item[k]));
+        TextAt(tx, y - 2, text, RG_ORANGE);
+        Wrapped(tx, y - 2 + RG_ITEM_LINE, width, RG_ITEM_LINE, RaceMod_ItemHelp(pg, pg->Item[k]), LBAWHITE);
+    }
+}
+
+// The track a page shows: the special raced last (or chosen last), its race file read -- once a special
+static T_RACE_PAGE s_page;
+static int s_pageSp = -1;
+static const T_RACE_PAGE *TrackPage(int sp) {
+    if (sp < 0 || sp >= s_nbSp) return NULL;
+    if (sp != s_pageSp) {
+        char path[ADELINE_MAX_PATH];
+        GetResPath(path, ADELINE_MAX_PATH, s_sp[sp].Race);
+        RaceMod_ReadPage(path, &s_page);
+        s_pageSp = sp;
+    }
+    return &s_page;
+}
+
+// The pages in a row: the controls (`controls`), then the power-ups (`items`: the track's, a few a page). Left and right turn them, Enter
+// the next (after the last: done), Esc done; the mouse's left button the next, its right done. `intro`: before a race (the first run's).
+static void Pages(const T_RACE_PAGE *pg, int controls, int items, int intro) {
+    const int itemPages = !items ? 0 : pg && pg->Count ? (pg->Count + RG_PAGE_ITEMS - 1) / RG_PAGE_ITEMS : 1;
+    const int pages = (controls ? 1 : 0) + itemPages;
+    if (pages <= 0) return;
+    Page(NULL, 0);
+    BoxUpdate();
+    ManageTime();
+    InitWaitNoKey();
+    InitWaitNoInput(I_JOY | I_FIRE | I_MENUS | I_ACTION);
+    S32 padDir = JoystickMenuNavOnly();
+    AsciiMode = TRUE;
+    s_clickWas = Click & 3;
+    int at = 0, done = 0;
+    const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    Log_Info("[racegame] %s: %d page(s)%s", controls && itemPages ? "the controls and the power-ups" : controls ? "the controls" : "the power-ups",
+             pages, intro ? " before the race" : "");
+    while (!done) {
+        ManageTime();
+        MyGetInput();
+        S32 mx, my;
+        const int click = Clicked(&mx, &my);
+        S32 step = pages > 1 ? Step(&padDir) : 0;
+        if (click == 2) done = 1;
+        else if (click == 1) { if (at + 1 < pages) at++; else done = 1; }
+        if (step && at + step >= 0 && at + step < pages) at += step;
+        if (done) break;
+        const S32 now = TimerRefHR;
+        if (controls && at == 0) DrawControls(pg);
+        else DrawPowerUps(pg, (at - (controls ? 1 : 0)) * RG_PAGE_ITEMS, now);
+        char keys[160];
+        const char *last = intro ? "Enter: start" : "Enter: back";
+        if (pages > 1) snprintf(keys, sizeof(keys), "Page %d of %d    %s    Esc: %s", at + 1, pages, at + 1 < pages ? "Enter: next" : last, intro ? "skip" : "back");
+        else if (intro) snprintf(keys, sizeof(keys), "%s    Esc: skip", last);
+        else snprintf(keys, sizeof(keys), "Esc: back");
+        Text(cx, RG_PAGE_BOTTOM + oy - 32, keys, RG_GREY);
+        BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+        Shot();
+        BoxUpdate();
+        if (Confirmed()) { WaitNoInput(); if (at + 1 < pages) at++; else done = 1; }
+        else if (Escaped()) { WaitNoInput(); done = 1; }
+    }
+    AsciiMode = FALSE;
+    Page(NULL, 0);
+}
+
+// The first run's: before the player's first race or time trial the controls, before the first race with power-ups its power-ups --
+// each once (the settings say so after).
+static void Introduction(int sp, int trial) {
+    ReadSettings();
+    const T_RACE_PAGE *pg = TrackPage(sp);
+    const int controls = !s_controlsSeen, items = !trial && pg && pg->Count && !s_powerupsSeen;
+    if (!controls && !items) return;
+    Pages(pg, controls, items, 1);
+    if (controls) s_controlsSeen = 1;
+    if (items) s_powerupsSeen = 1;
+    WriteSettings();
+}
+
+// After the car, before a race: a qualifying lap, or none and Twinsen at the back of the grid (the opponents before him in their usual
+// order) -- the answer last given chosen first. Not asked for a time trial, on a track with no grid, nor before the player has driven a
+// qualifying lap (the first race always has one). Zero: back (Esc), the car page again.
+static U16 s_qualMenu[4 + 2 * 3];
+static int QualifyingPage(int sp, int trial) {
+    s_qualifyNow = -1;
+    if (trial) return 1;
+    ReadSettings();
+    const T_RACE_PAGE *pg = TrackPage(sp);
+    if (!pg || !pg->Spots) return 1;
+    if (!s_qualified) {
+        s_qualifyNow = 1;
+        Log_Info("[racegame] the first race: a qualifying lap, not to be skipped");
+        return 1;
+    }
+    s_qualMenu[0] = (U16)(s_skipQualifying ? 2 : 1);
+    s_qualMenu[1] = 3;
+    s_qualMenu[2] = 280;
+    s_qualMenu[3] = 0;
+    SetRow(s_qualMenu, 0, RG_ID_BACK);
+    SetRow(s_qualMenu, 1, RG_ID_QUALIFY);
+    SetRow(s_qualMenu, 2, RG_ID_SKIP);
+    for (;;) {
+        Page("Qualifying", 128);
+        const S32 select = DoGameMenu(s_qualMenu);
+        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
+        if (select != RG_ID_QUALIFY && select != RG_ID_SKIP) continue;
+        s_skipQualifying = select == RG_ID_SKIP;
+        s_qualifyNow = !s_skipQualifying;
+        WriteSettings();
+        Page(NULL, 0);
+        return 1;
+    }
+}
+
+// RACEMOD.CPP: a qualifying lap driven (in a race the race game started). The first: qualifying may be skipped from the next race on.
+void RaceGame_Qualified(S32 lap) {
+    if (!RaceGame_On() || s_raceSp < 0) return;
+    ReadSettings();
+    if (s_qualified) return;
+    s_qualified = 1;
+    WriteSettings();
+    Log_Info("[racegame] the first qualifying lap driven (%.2f s): the next races may skip it", lap / 1000.0);
+}
+
+// GAMEMENU.CPP OptionsMenu: the race game's options -- the game's own rows, then Power-ups and Race controls (RaceGame_OptionsRow); the
+// game's own menu when the race game isn't on.
+static U16 s_optMenu[4 + 2 * 12];
+U16 *RaceGame_OptionsMenu(U16 *menu) {
+    if (!RaceGame_On() || !menu || menu[1] + 2 > 12) return menu;
+    const int nb = menu[1];
+    memcpy(s_optMenu, menu, (4 + 2 * nb) * sizeof(U16));
+    SetRow(s_optMenu, nb, RG_ID_POWERUPS);
+    SetRow(s_optMenu, nb + 1, RG_ID_CONTROLS);
+    s_optMenu[1] = (U16)(nb + 2);
+    return s_optMenu;
+}
+
+S32 RaceGame_OptionsRow(S32 num) {
+    if (!RaceGame_On() || (num != RG_ID_POWERUPS && num != RG_ID_CONTROLS)) return 0;
+    const T_RACE_PAGE *pg = TrackPage(s_raceSp >= 0 ? s_raceSp : s_lastSp >= 0 && s_lastSp < s_nbSp ? s_lastSp : 0);
+    if (num == RG_ID_POWERUPS) Pages(pg, 0, 1, 0);
+    else Pages(pg, 1, 0, 0);
+    return 1;
+}
+
 // A special's race or time trial; then the car. Non-zero: the race is set up.
 static int ModePage(int sp) {
     s_modeMenu[0] = (U16)(s_lastTrial ? 2 : 1);
@@ -510,7 +869,9 @@ static int ModePage(int sp) {
         if (select != RG_ID_RACE && select != RG_ID_TRIAL) continue;
         const int trial = select == RG_ID_TRIAL;
         s_lastTrial = trial;
-        const int car = CarPage(trial ? "a time trial" : "a race");
+        // (then a race's qualifying lap, or none: Esc there is the car page again)
+        int car;
+        while ((car = CarPage(trial ? "a time trial" : "a race")) >= 0 && !QualifyingPage(sp, trial)) {}
         if (car >= 0 && StartRace(sp, trial, car)) return 1;
     }
 }

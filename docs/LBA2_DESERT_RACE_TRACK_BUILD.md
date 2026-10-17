@@ -4403,6 +4403,43 @@ engine's `--listen` socket (`key`, `autodrive`): the menus, all ten cars on the 
 can each lap, 2:48.59 the best time), Ctrl using the can with no behaviour menu, a race against the three (1st of 4), and each back to the
 menu.
 
+### The first run: controls, power-ups, qualifying (2026-10-17)
+
+The user: "a powerup page for LBRA that shows the user all the powerups and what they do, we can show this as a flash screen the first
+time they load a race, and have a view option for it in settings if they wish to view it again, we should also the first run show the
+controls, and let's also force a qualifying lap the first time they play, with the option to skip qualifying in further runs and start
+from the back of the grid."
+
+Race game only (RACEGAME.CPP; the editor's Play is unchanged):
+
+- **The first run's pages**, right after the car page (and the qualifying answer), as the race file is loaded and before the scene: the
+  player's first race or time trial gets the **Controls** page (the keys and a pad's buttons; the gears' keys when the car's are changed by
+  hand), the first race with power-ups the **Power-ups** pages (the pickups, then the track's power-ups four a page, each in its item box
+  turning as the race draws it, its name and what it does). Enter turns the pages ("Enter: start" on the last), left and right too, Esc
+  skips the rest. Once shown they don't come back by themselves.
+- **Options** (GAMEMENU.CPP `OptionsMenu`, the game's own menu with two rows after its own: `RaceGame_OptionsMenu`/`RaceGame_OptionsRow`):
+  **Power-ups** and **Race controls** show the pages again (the game's own "Controls" row is the key remapping).
+- **The track's power-ups** come from its race file alone (RACEMOD.CPP `RaceMod_ReadPage`): the ones `RandomPowerUp` draws there
+  (`fuel_always=` drops Gazogem, no `fake=` copies the fake pickup, no `haunt=` the ghost; `powerup_only=` lists them), the golden Gazogem
+  with a `roulette=`; a time trial's Gazogem alone. The pickups' look is a mushroom actor's body, read from its scene in SCENE.HQR the way
+  `LoadScene` reads it (the Temple's: its pumpkin). `RaceMod_DrawItem` draws a box with `ItemBox`, the page's icons in place of the race's.
+- **Qualifying**: the first race always has a qualifying lap (`qualifying=1` added to `RACE_NOW.TXT`); once one has been driven
+  (`RaceGame_Qualified`, from RACEMOD's qualifying lap), a race asks after the car page: "Qualifying lap" or "Skip: start at the back of the
+  grid" (`qualifying=0` + **`grid_back=1`**: `FormGrid` puts Twinsen behind every opponent, they in their qualifying times' order; the log
+  says "Twinsen (no qualifying: at the back)"), the last answer chosen first; Esc is the car page again. Not asked for a time trial or a
+  track without grid spots.
+- **Settings**: `RACEGAME_SETTINGS.TXT` in the user's folder, beside `BESTTIMES.TXT`: `controls_seen`, `powerups_seen`, `qualified`,
+  `skip_qualifying` (other keys kept as they are). A new user folder (a reinstall) starts the first run again.
+- **Screenshots in menus**: the console's `screenshot` is taken in `DoGameMenu` and on these pages too (it was only the game loop's), so a
+  headless `--listen` run captures them.
+
+Tested headless and muted on a scratch install (`E:\dump\TEMP\lbrapages`: `LBRA-Setup.exe --install`, the worktree's engine copied over
+the game's exe, `drive.ps1` through `--listen`): a fresh user folder's first race (controls + 3 power-up pages, then a forced qualifying lap
+of 122.8 s and the grid from it), a second run (no pages, the question, skip: "4 Twinsen (no qualifying: at the back)", "Position 4th of 4"),
+a third (qualifying chosen, the skip answer pre-selected, Esc back to the car page), Options > Power-ups / Race controls, a time trial first
+(controls only) then a race (power-ups only, Esc skipping), and the editor's Play of the Temple (no `RACEGAME.TXT`) the same as the old
+engine's with `qualifying=0` (Twinsen on pole) and `qualifying=1`.
+
 
 
 ## One item box (2026-10-17)
