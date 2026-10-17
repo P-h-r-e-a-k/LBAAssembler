@@ -125,16 +125,21 @@ internal static class RaceTrackCommand
     // buildtogether <pristine> <game folder> <island>...: the islands' tracks (their built-in plans) built into one folder by one build, as
     // the race track window does with several islands ticked -- the game folder given its pristine files first, its backups removed -- and
     // for each track the start scene and line RACETRACK.JSON has. RT_CROSSING picks the crossing style of the ones that take it.
+    // RT_ITEM_SPACING spaces the power-ups' rows: "<seconds>s" of driving apart, or "<cells>" of road (RaceTrackOptions.ItemSpacing,
+    // ItemSpacingCells: "40" is the rule until 2026-10-17; tools/RaceTrackStress/items.py compares them).
     public static int BuildTogether(string[] args)
     {
         var pristine = args[1]; var game = args[2];
         foreach (var f in Directory.GetFiles(game, "*" + RaceTrackService.BackupSuffix)) File.Delete(f);
         foreach (var f in RaceTrackService.AllFiles.Append("LBA2.HQR"))
             if (File.Exists(Path.Combine(pristine, f))) RaceTrackService.CopyWritable(Path.Combine(pristine, f), Path.Combine(game, f));
+        var spacing = Environment.GetEnvironmentVariable("RT_ITEM_SPACING");
         var tracks = args.Skip(3).Select(RaceTrackIsland.ByName).Select(where =>
         {
             var options = RaceTrackOptions.For(where);
             if (Environment.GetEnvironmentVariable("RT_CROSSING") is { } cs) options.Crossing = Enum.Parse<CrossingStyle>(cs, ignoreCase: true);
+            if (spacing is { Length: > 0 } && spacing.EndsWith('s')) options.ItemSpacing = double.Parse(spacing[..^1], System.Globalization.CultureInfo.InvariantCulture);
+            else if (spacing is { Length: > 0 }) options.ItemSpacingCells = double.Parse(spacing, System.Globalization.CultureInfo.InvariantCulture);
             return new RaceTrackService.TrackBuild(RaceTrackPlan.Built(where), options);
         }).ToList();
         var watch = System.Diagnostics.Stopwatch.StartNew();

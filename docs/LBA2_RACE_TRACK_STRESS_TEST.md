@@ -13,6 +13,7 @@ driven headless by the test pilot (`autodrive`). The scripts are in `tools/RaceT
   everything +20 %, the suggested setup), with the opponents and power-ups; `report.py` reads them up to the finish, with a position
   trace (`racecars` every 5 s) to find cars standing still; `repro.py` repeats one with screenshots and state dumps.
 - `stress.py trial` drives clean time trials (no opponents, no power-ups) of the base car and the suggested one.
+- `items.py` races layouts of the power-ups' rows against each other (2026-10-17: "Item spacing", at the end).
 
 ## How a setup is scored: `raceplan`
 
@@ -314,3 +315,189 @@ in the first round, all with the test pilot 1.5 cells to the left of the line: t
 Island's lap start -- where the line runs along the raised road's east edge, at ground level, and 1.5 cells beside it is the hillside --
 (2), and once into the lava lake's lava. None is on the racing line. The forced jet-packs: 6 on Mosquibees Island and 12 on Otringal,
 Wannies, the Emerald Moon and Island CX without a rescue, and six Desert races with one every 10 s, every jump landed.
+
+## Item spacing (2026-10-17)
+
+The user: "Currently items are too close together and they make for a chaotic race, let's do some bench marking to move them further
+apart."
+
+**Until now** a row of mushrooms stood every 40 cells of road from 30 after the start line (RaceTrackScenes `MushroomSpots`): at the
+cars' speed a row every 1.4-2.1 s on every track but the loop and jump tracks, 31 rows a lap on the Desert, 39 on Polar Island, 42 on the
+Temple of Bú -- 303 rows on the 18 tracks. The test pilot took an item as fast as his two slots emptied (13 a minute, one every 4.5 s),
+and the race was mostly the items going off.
+
+### How it was measured
+
+`tools/RaceTrackStress/items.py`, the layouts built by `ScriptRoundTrip buildtogether` with `RT_ITEM_SPACING` (`"40"` the old rule,
+`"80"` cells, `"8s"` seconds; nothing set: the builder's default). Each layout is a folder of `E:\dump\TEMP\itemspacing` (`ITEMS_ROOT`)
+with all 18 tracks built into `game\`, a plain copy of `E:\dump\TEMP\stress\game` (`ITEMS_SEED`). The engine and ScriptRoundTrip are
+stress.py's (the main tree's builds) unless `ITEMS_ENG` / `ITEMS_SR` say otherwise -- these runs used copies of them in that folder:
+
+```
+python items.py build <variant> [8s|40|...]   # the 18 tracks built (log: build.log, each track's rows; files.md5)
+python items.py files <variant>          # each track's race file: the stress test's base car, its opponents and power-ups, 3 laps
+RUNS=4 PAR=7 python items.py run <variant>
+python items.py report <variant>...      # per track and overall (and <variant>\items_<SCEN>.json)
+python items.py table <variant>...       # the tables below
+itemdiff <game A> <game B>               # ScriptRoundTrip: two builds compared scene by scene with the power-ups taken out
+```
+
+Four races a track and layout, `qualifying_seed=1..4` -- the seed is the whole race's randomness (the power-ups drawn, the opponents'
+skills), so every layout races the same draws, and a track whose layout did not change raced exactly the same (the lava lake, Sendell's
+Well, the storm lap and the old moon came out identical at 8 and 12 s). No qualifying lap, the pilot on the racing line from pole, three
+laps (the sprints one). Two kinds of race:
+
+- **lead** (`SCEN=lead`, the default): the opponents at their own skills. The pilot mostly leads.
+- **pack** (`SCEN=pack`): every opponent at 96-104 % of the planned speeds, faster than the pilot: he races from among them and behind,
+  the others' items coming at him from in front.
+
+What a run counts, from GO to Twinsen's finish (`read` in items.py; the engine's own log lines):
+
+- **pickups**: `Twinsen takes ...`, `<name> takes a mushroom's power-up` (an opponent uses its item at once).
+- **item hits**: an item's effect taking hold on a car -- blown up by a penguin, skidding on a slick (not a pipe's drip), hit by a magic
+  ball, a fire ball or a fake mushroom, shrunk by lightning, haunted. A hazard's hits (steam jets, lava, gunners, the shuttle, witches)
+  are not items' and left out; a hit the protection spell or the super jet-pack shrugs off is not a hit.
+- **item hits a car a minute** -- all cars' item hits over the cars and the race's minutes: **the chaos figure**.
+- **places changed a minute**: the cars ranked every second along the racing line (`racecars` every 50 ticks, each car's place on the
+  first opponent's line, lap by lap, never backwards), each pair that swaps counted.
+- **lap spread**: the standard deviation of Twinsen's second and third laps; **laps over planned**: their mean over the engine's perfect
+  lap (`opponent line ... a perfect lap`).
+- **rescues**: `back on the road` (the sea, the lava, a stuck car's reset, a fall).
+
+### Overall
+
+| (lead, mean of the 17 tracks with opponents) | 40 cells (HEAD) | 80 cells | 5 s | **8 s** | 12 s |
+|---|---|---|---|---|---|
+| rows a lap (mean of all 18) | 16.8 | 8.4 | 5.4 | **3.3** | 2.3 |
+| Twinsen's pickups a minute | 13.2 | 10.5 | 8.2 | **5.2** | 3.5 |
+| each opponent's pickups a minute | 3.0 | 1.6 | 1.3 | **1.0** | 0.6 |
+| item hits on Twinsen a lap | 1.49 | 1.02 | 0.91 | **0.68** | 0.30 |
+| item hits on each opponent a lap | 1.29 | 0.88 | 0.63 | **0.43** | 0.30 |
+| **item hits a car a minute (chaos)** | 2.51 | 1.71 | 1.38 | **1.04** | 0.67 |
+| places changed a minute | 7.4 | 7.1 | 6.2 | **4.7** | 4.4 |
+| Twinsen's place changes a race | 3.1 | 2.2 | 2.2 | **1.8** | 1.3 |
+| Twinsen's lap spread (s) | 2.05 | 1.91 | 1.95 | **1.25** | 1.24 |
+| Twinsen's laps over the planned lap | 1.11 | 1.07 | 1.07 | **1.06** | 1.03 |
+| races finished / rescues (72 races) | 72 / 1 | 72 / 0 | 72 / 1 | **72 / 1** | 72 / 0 |
+
+| (pack, mean of the 17 tracks with opponents) | 40 cells (HEAD) | **8 s** |
+|---|---|---|
+| Twinsen's pickups a minute | 10.8 | **4.4** |
+| each opponent's pickups a minute | 5.0 | **1.4** |
+| item hits on Twinsen a lap | 1.83 | **0.51** |
+| item hits on each opponent a lap | 1.77 | **0.60** |
+| **item hits a car a minute (chaos)** | 3.32 | **1.11** |
+| places changed a minute | 9.5 | **7.6** |
+| Twinsen's place changes a race | 5.1 | **4.3** |
+| Twinsen's lap spread (s) | 2.66 | **2.02** |
+| Twinsen's laps over the planned lap | 1.10 | **1.05** |
+| races finished / rescues (72 races) | 72 / 2 | **72 / 2** |
+
+Two things the races showed about the engine (RACEMOD.CPP, unchanged):
+
+- **The leader empties the rows.** A mushroom taken is gone for 15 s (`RACE_MUSHROOM_BACK`), and an opponent takes one only in the scene
+  Twinsen is in (its car and the mushrooms are that scene's actors). Leading, the pilot took 13 items a minute while each opponent got 3;
+  in the pack the opponents' share rose to 5. The old layout's chaos was mostly the leader's own items (oil, penguins and fake mushrooms
+  dropped behind him go to the leader: `s_puLead`).
+- **On a lap shorter than 15 s the leader finds his row still empty next time round**: the storm lap (11 s), the lava lake (12 s), the
+  Elevator Platform (14 s), the old moon (13 s) and Sendell's Well (4.6 s) give him an item every other lap or less, whatever the spacing.
+  A regrowth tied to the lap (say the lesser of 15 s and two thirds of the planned lap) would be the engine's side of it.
+
+### Each track
+
+Rows a lap and the seconds between them (the builder's reckoning, below):
+
+| track | 40 cells (HEAD) | 80 cells | 5 s | **8 s** | 12 s |
+|---|---|---|---|---|---|
+| Desert island | 31 (1.5) | 15 (3.2) | 10 (4.8) | **6 (8.0)** | 4 (11.9) |
+| Citadel, storm lap | 5 (2.1) | 2 (5.2) | 2 (5.2) | **1 (10.3)** | 1 (10.3) |
+| Citadel, town circuit | 25 (1.5) | 13 (2.8) | 7 (5.3) | **5 (7.4)** | 3 (12.3) |
+| Mosquibees Island | 11 (1.6) | 6 (2.9) | 3 (5.7) | **2 (8.6)** | 1 (17.1) |
+| Celebration Island | 10 (1.7) | 5 (3.3) | 3 (5.6) | **2 (8.3)** | 1 (16.7) |
+| Celebration Island, lava lake | 1 (10.2) | 0 (-) | 2 (5.1) | **1 (10.2)** | 1 (10.2) |
+| Elevator Platform | 8 (1.6) | 4 (3.3) | 3 (4.4) | **2 (6.6)** | 1 (13.2) |
+| Sendell's Well | 2 (2.0) | 1 (4.1) | 1 (4.1) | **1 (4.1)** | 1 (4.1) |
+| The old moon | 2 (4.8) | 1 (6.6) | 1 (9.6) | **1 (9.6)** | 1 (9.6) |
+| Polar Island (sprint) | 39 (1.4) | 19 (3.0) | 11 (5.1) | **7 (8.0)** | 5 (11.3) |
+| Island of the Francos | 32 (1.5) | 16 (3.1) | 10 (5.0) | **6 (8.2)** | 4 (12.4) |
+| Otringal | 16 (1.7) | 9 (3.0) | 5 (5.4) | **3 (8.9)** | 2 (13.4) |
+| Volcano Island | 17 (1.5) | 9 (2.9) | 5 (5.2) | **3 (8.6)** | 2 (12.9) |
+| The Emerald Moon | 7 (3.8) | 2 (10.4) | 5 (5.4) | **3 (9.0)** | 2 (13.4) |
+| Wannies Island | 16 (1.5) | 8 (3.0) | 5 (4.8) | **3 (8.0)** | 2 (12.0) |
+| The Emperor's palace (sprint) | 28 (1.6) | 14 (3.1) | 9 (4.9) | **5 (8.8)** | 4 (11.0) |
+| Island CX | 11 (1.6) | 6 (2.9) | 3 (5.8) | **2 (8.7)** | 1 (17.4) |
+| The Temple of Bú | 42 (1.4) | 21 (2.7) | 12 (4.8) | **7 (8.2)** | 5 (11.5) |
+
+Twinsen's pickups a minute, and the chaos figure (item hits a car a minute), lead races; the last column the pack's, HEAD -> 8 s:
+
+| track | pickups: 40 cells (HEAD) | 80 cells | 5 s | **8 s** | 12 s | chaos: 40 cells (HEAD) | 80 cells | 5 s | **8 s** | 12 s | pack chaos |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Desert island | 17.2 | 13.4 | 10.4 | **6.7** | 4.8 | 2.08 | 1.27 | 0.99 | **0.52** | 0.25 | 2.99 -> 1.25 |
+| Citadel, storm lap | 14.6 | 6.8 | 6.0 | **3.5** | 3.5 | 1.25 | 1.63 | 1.27 | **0.83** | 0.83 | 1.66 -> 0.00 |
+| Citadel, town circuit | 18.5 | 16.4 | 9.6 | **7.3** | 4.6 | 1.33 | 1.55 | 0.56 | **0.58** | 0.21 | 2.65 -> 0.92 |
+| Mosquibees Island | 17.1 | 14.0 | 10.3 | **6.9** | 3.1 | 1.52 | 1.41 | 0.85 | **0.67** | 0.28 | 3.67 -> 1.71 |
+| Celebration Island | 7.5 | 11.1 | 9.7 | **3.4** | 3.4 | 5.60 | 2.94 | 1.71 | **1.09** | 0.84 | 5.25 -> 1.18 |
+| Celebration Island, lava lake | 1.6 | 0.0 | 2.0 | **1.7** | 1.7 | 1.80 | 0.00 | 2.40 | **1.85** | 1.85 | 1.06 -> 1.29 |
+| Elevator Platform | 9.0 | 7.1 | 5.1 | **3.6** | 1.9 | 4.47 | 2.92 | 2.75 | **1.72** | 0.66 | 5.08 -> 0.91 |
+| Sendell's Well | 9.3 | 4.6 | 4.6 | **4.6** | 4.6 | 1.45 | 1.16 | 1.16 | **1.16** | 1.16 | 2.02 -> 0.29 |
+| The old moon | 6.3 | 3.2 | 3.1 | **1.5** | 1.5 | 0.48 | 0.19 | 0.57 | **0.87** | 0.87 | 1.09 -> 0.74 |
+| Polar Island (sprint) | 16.6 | 10.8 | 7.0 | **2.4** | 3.5 | 2.90 | 3.28 | 2.24 | **1.94** | 1.11 | 2.65 -> 1.23 |
+| Island of the Francos | 17.8 | 15.6 | 11.6 | **5.7** | 5.7 | 2.71 | 2.26 | 1.95 | **1.72** | 0.72 | 4.66 -> 1.45 |
+| Otringal | 16.9 | 13.7 | 8.9 | **5.8** | 1.8 | 2.12 | 2.03 | 0.90 | **0.34** | 0.18 | 2.91 -> 1.14 |
+| Volcano Island | 16.4 | 16.2 | 12.0 | **7.0** | 4.5 | 2.32 | 1.54 | 1.20 | **0.59** | 0.64 | 3.82 -> 1.22 |
+| The Emerald Moon | 14.0 | 4.8 | 9.8 | **7.2** | 4.8 | 1.63 | 0.60 | 1.47 | **0.53** | 0.53 | 2.44 -> 1.31 |
+| Wannies Island | 12.5 | 10.0 | 8.3 | **8.6** | 3.3 | 3.03 | 2.10 | 1.34 | **0.82** | 0.34 | 3.79 -> 0.98 |
+| The Emperor's palace (sprint) | 15.5 | 12.8 | 7.0 | **4.6** | 2.8 | 2.42 | 1.66 | 1.53 | **1.14** | 0.59 | 1.98 -> 0.81 |
+| Island CX | 10.3 | 10.1 | 8.0 | **4.5** | 2.7 | 4.53 | 2.89 | 0.94 | **1.52** | 0.61 | 6.41 -> 1.38 |
+| The Temple of Bú | 17.2 | 15.5 | 12.3 | **7.5** | 5.4 | 2.28 | 1.26 | 0.92 | **0.60** | 0.60 | 3.93 -> 1.12 |
+
+(Four races a cell: single tracks swing by a factor of two from one draw to the next -- Polar Island, a 56 s sprint against one car, is
+the noisiest -- so read the means.)
+
+### The rule chosen: a row every 8 s of driving
+
+**The aim**: about one pickup every 10-12 s for the player -- five a minute, two or three a lap on a 25 s lap, much as a kart racer
+spaces its item boxes -- with the hits that make a race "chaotic" more than halved.
+
+**8 s** does that: Twinsen picks up 5.2 items a minute leading and 4.4 in the pack (13.2 and 10.8 before), the chaos figure falls from
+2.51 to 1.04 (-59 %) leading and from 3.32 to 1.11 (-67 %) in the pack, he is hit by an item 0.68 times a lap instead of 1.49 (0.51
+instead of 1.83 in the pack), and his laps are steadier (spread 2.05 -> 1.25 s) and nearer the plan (1.11 -> 1.06). The racing itself
+stays: in the pack the places still change 7.6 times a minute (9.5 before). **5 s** leaves 8 pickups a minute and only takes the chaos
+to 1.38; **12 s** takes it on to 0.67, but at 3.5 pickups a minute -- one in 17 s, and on the 17 s laps (Mosquibees Island, Celebration
+Island, Island CX) a single row -- with Otringal down to 1.8 a minute: rare. **80 cells** (twice the old spacing) is still 10.5 a minute
+and 1.71, and a fixed spacing in cells floods the fast tracks (Polar, the Temple: 19 and 21 rows) and can miss a track's few clear places
+altogether: the lava lake had no row at all.
+
+**How** (RaceTrackScenes `MushroomSpots`, `RaceTrackOptions.ItemSpacing` = 8): the lap's driving time from the start line is reckoned
+for the standalone game's car -- top gear 110 km/h, steering 200 % -- round each bend of the first opponent's line as fast as it steers
+(`RaceTrackReport.RacePath`'s radii) and no faster than its top gear, a vertical loop's ring at 60 km/h. That time is cut into the whole
+number of even stretches nearest to 8 s (at least one), and a row stands in the middle of each -- or, where the middle is on or near a
+jump, a loop or a carried jump (the same clearances as before), at the clear point of its stretch nearest the middle, at least half a
+stretch after the row before, and not in the start line's first 30 cells or the lap's last 20. The rows are the same as before: three
+across a wide road, two (or one) on a narrow one. One rule for every track -- no track needed a tweak of its own. The reckoned laps come
+within 17 % of the engine's planned ones (Desert 47.7 s against 50.4, Polar 56.3 against 56.4, the Temple 57.6 against 55.3), the old
+moon's excepted (9.6 against 12.9: its jump loop is taken at 22-39 km/h). The build's log says each track's rows: `the power-ups: 18
+mushrooms in 6 rows across the road ..., a row about every 7.9 s of driving (a lap 47.7 s)`. `ItemSpacingCells` keeps the old rule for
+comparisons (`RT_ITEM_SPACING=40` builds exactly what the last commit built).
+
+From 303 rows and 909 mushrooms on the 18 tracks to 60 rows and 180 mushrooms. The lava lake keeps its one row and the old moon has one
+(its two loops' clearances leave room for one in the 9.6 s reckoned; at 40 cells it had two).
+
+### Checked
+
+- The build with the default (no `RT_ITEM_SPACING`) is byte for byte the 8 s layout that was raced; `RT_ITEM_SPACING=40` with the new
+  code is byte for byte the last commit's build (all 47 files).
+- Against the last commit's build only `SCENE.HQR` and `RACETRACK.JSON` differ (45 of 47 files the same). `itemdiff`: 115 scenes'
+  records differ (of 317), and each of the 115 is the same as before once the power-ups' actors are taken out (the mushrooms, and the
+  penguins, slicks and fake mushrooms after them, which move up by as many places). In RACETRACK.JSON each track's `Mushrooms`,
+  `Penguins`, `Oil` and `Fakes` lists, nothing else. In the race files the `mushroom=`, `penguin=`, `oil=` and `fake=` lines, and on
+  Citadel Island's two tracks the `hide_actor=` lines that hide the other weather's power-ups (192 -> 132 on the storm lap, 87 -> 75 on
+  the town circuit); the line files the same.
+- Mushrooms per track, before -> after: Desert 93 -> 18, storm lap 15 -> 3, town circuit 75 -> 15, Mosquibees 33 -> 6, Celebration 30 -> 6,
+  lava lake 3 -> 3, Elevator 24 -> 6, Sendell's Well 6 -> 3, old moon 6 -> 3, Polar 117 -> 21, Francos 96 -> 18, Otringal 48 -> 9,
+  Volcano 51 -> 9, Emerald 21 -> 9, Wannies 48 -> 9, palace 84 -> 15, Island CX 33 -> 6, Temple 126 -> 21.
+- 144 races with the new layout (72 lead, 72 pack) all finished, as did the 144 on the old one. Rescues: 3 in each set of 144, none at a
+  mushroom row. With the new layout: the Francos (lead), Twinsen's car held 3 s against De La Fontaine's, stopped right in front of it
+  by Twinsen's own red magic ball; Mosquibees Island (pack), Twinsen's car shrunk by the Queen's lightning and stuck 3 s; Otringal
+  (pack), off the road out of scene 89 by the roulette wheel. With the old one: the lava lake (a jump flown at twice its own speed came
+  down short, into the lava), the Francos (pack: stuck 3 s just after the cars round it were hit) and the Emerald Moon (pack: a fall off the road).

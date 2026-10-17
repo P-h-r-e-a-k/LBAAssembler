@@ -336,6 +336,9 @@ internal static class RaceTrackScenes
         public List<(int X, int Z, int Beta, int Y)?> CarAt = new();
         // the power-ups: where the mushrooms go along the lap (island cells, the road's height), and the scenes' copies of them and of the penguin
         public List<(double X, double Z, double Y)> MushroomSpots = new();
+        // ... how many rows across the road they make, and the lap's driving time they are spaced by (s: MushroomSpots)
+        public int MushroomRows;
+        public double LapTime;
         public List<int[]> Mushrooms = new(), Penguins = new(), Oil = new(), Fakes = new();
         // the machine guns on their knolls: each [scene, the gun's actor, its Franco's actor, its knoll in Report.Gunners, which gun on it]
         public List<int[]> Gunners = new();
@@ -383,7 +386,7 @@ internal static class RaceTrackScenes
                 try { t.Racer = originals.Load(RacerScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == RacerEntity)?.Clone(); }
                 catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { log.Add($"no opponent: scene {RacerScene} could not be read ({e.Message})"); }
             t.Edges = EdgeCrossings(store, t.Report, t.Options, island);
-            t.MushroomSpots = MushroomSpots(t.Report, t.Options.RaisedHalfWidth);
+            t.MushroomSpots = MushroomSpots(t.Report, t.Options, out t.MushroomRows, out t.LapTime);
         }
         // the mushrooms' and the penguin's actors to copy: the game's own (Citadel Island's mushroom by the weather wizard's tent, the
         // nitro penguin in its shop)
@@ -835,7 +838,7 @@ internal static class RaceTrackScenes
         foreach (var t in tracks)
         {
             var whose = tracks.Count > 1 ? $" ({(t == tracks[0] ? options.Island.IleFile : options.Island.TwinIleFile)}'s track)" : "";
-            if (t.Mushrooms.Count > 0) log.Add($"the power-ups: {t.Mushrooms.Count} mushrooms in rows across the road (the game's own, scene {MushroomScene}), {PenguinsPerScene} nitro penguins and {OilPerScene} oil slicks in each of {t.Penguins.Count / PenguinsPerScene} scenes{whose}");
+            if (t.Mushrooms.Count > 0) log.Add($"the power-ups: {t.Mushrooms.Count} mushrooms in {t.MushroomRows} rows across the road (the game's own, scene {MushroomScene}), a row about every {t.LapTime / Math.Max(1, t.MushroomRows):0.0} s of driving (a lap {t.LapTime:0.0} s), {PenguinsPerScene} nitro penguins and {OilPerScene} oil slicks in each of {t.Penguins.Count / PenguinsPerScene} scenes{whose}");
             if (mushroomsLeftOut > 0) log.Add($"{mushroomsLeftOut} mushrooms left out: their scenes had no room for more actors");
             for (var k = 0; k < t.Drivers.Count; k++)
                 if (t.Cars[k].Count > 0) log.Add($"{t.Drivers[k].Name}: a copy of {(t.Drivers[k].Bike ? "the motorbike Rabbibunny" : $"the car (the racer's body {t.Drivers[k].Body})")} in {t.Cars[k].Count} scenes{whose}");
@@ -877,11 +880,11 @@ internal static class RaceTrackScenes
     }
 
     // The power-ups' mushrooms: the game's small brown mushroom (Citadel Island's by the weather wizard's tent, scene 45 actor 7: entity
-    // 112, BODY.HQR 171, which gives a bonus when Twinsen walks into it), copied onto the road in a row across it every MushroomSpacing
-    // cells round the lap from MushroomFirst after the start line -- three side by side where the road is wide enough, else two (or one),
-    // MushroomGap apart and MushroomEdge in from its edges -- not on or near a jump, a loop or a carried jump; the race-track mode hides a
-    // power-up in each (a car takes one from a row: the others it passes give way). And the nitro penguin a car drops: the shop's (scene
-    // 14, actor 5: entity 46).
+    // 112, BODY.HQR 171, which gives a bonus when Twinsen walks into it), copied onto the road in a row across it every few seconds of
+    // driving round the lap (RaceTrackOptions.ItemSpacing, MushroomSpots) -- three side by side where the road is wide enough, else two (or
+    // one), MushroomGap apart and MushroomEdge in from its edges -- not on or near a jump, a loop or a carried jump; the race-track mode
+    // hides a power-up in each (a car takes one from a row: the others it passes give way). And the nitro penguin a car drops: the shop's
+    // (scene 14, actor 5: entity 46).
     public const int MushroomScene = 45, MushroomActor = 7, PenguinScene = 14, PenguinActor = 5;
     // Otringal's machine gun (entity 200: its body faces +z, its muzzle 214 forward) and the Franco who mans it (entity 201, its generic
     // animation 474 sitting at the gun, 1,072 behind the gun's middle as the game has him: scene 88's points 18 and 19)
@@ -889,10 +892,16 @@ internal static class RaceTrackScenes
     private const double FrancoBehind = 1072;
     // (the oil slicks one scene can show at once: RACEMOD.CPP keeps six on the whole lap)
     private const int OilPerScene = 5, PenguinsPerScene = 3, FakesPerScene = 3;   // (oil 3 until 2026-10-07: the refinery's drips lie in slicks too)
-    private const double MushroomSpacing = 40, MushroomFirst = 30, MushroomClear = 14;
+    // (MushroomFirst: the first row's distance after the start line by the cells rule, RaceTrackOptions.ItemSpacingCells)
+    private const double MushroomFirst = 30, MushroomClear = 14;
     // (the gap is more than the engine's reach for taking one, RACEMOD.CPP RACE_MUSHROOM_REACH: 2 cells; a car down the middle of one takes
     // only that one)
     private const double MushroomGap = 2.4, MushroomEdge = 1.0;
+    // The car the rows' driving time is reckoned for: the standalone game's (and the stress test's base car, tools/RaceTrackStress) -- top
+    // gear 110 km/h, steering 200 %, half a turn a second -- round each bend of the first opponent's line as fast as it steers and no faster
+    // than its top gear, a vertical loop's ring at ItemTimingLoop (60 km/h). (Its laps come out within 17 % of the engine's planned laps
+    // for that car, which brake into the bends and pull away after them -- the old moon's 26 % short, its loops' rings slower -- 2026-10-17.)
+    private const double ItemTimingTop = 110 / 3.6 * 512, ItemTimingTurn = Math.PI, ItemTimingLoop = 60 / 3.6 * 512;
 
     // How many mushrooms a row across a road this wide (half its width, cells) has, and how far apart.
     internal static (int Count, double Gap) MushroomRow(double half)
@@ -902,9 +911,17 @@ internal static class RaceTrackScenes
         return (n, n > 1 ? Math.Min(MushroomGap, 2 * room / (n - 1)) : 0);
     }
 
-    private static List<(double X, double Z, double Y)> MushroomSpots(RaceTrackReport report, double raisedHalf)
+    // Where the power-ups' rows stand round the lap. RaceTrackOptions.ItemSpacing seconds of driving apart: the lap's driving time (from the
+    // start line, ItemTimingTop/ItemTimingTurn's car) cut into the whole number of even stretches nearest to it, at least one, and a row in
+    // the middle of each -- or, where the middle is on or near a jump, a loop or a carried jump, at the clear point of the stretch nearest
+    // it (none clear: no row). With RaceTrackOptions.ItemSpacingCells the rule until 2026-10-17: a row every that many cells from
+    // MushroomFirst after the start line, one that would stand on a jump left out. `rows`: how many rows there are, `lapTime`: the lap's
+    // driving time (s).
+    private static List<(double X, double Z, double Y)> MushroomSpots(RaceTrackReport report, RaceTrackOptions options, out int rows, out double lapTime)
     {
         var spots = new List<(double, double, double)>();
+        rows = 0; lapTime = 0;
+        var raisedHalf = options.RaisedHalfWidth;
         var xs = report.LapX; var zs = report.LapZ; var ys = report.LapY; var n = xs.Length;
         if (n < 10 || ys.Length != n || report.StartLine.Count == 0) return spots;
         var s = report.StartLine[0];
@@ -919,7 +936,7 @@ internal static class RaceTrackScenes
             return true;
             bool Near(double ax, double az) => (ax - x) * (ax - x) + (az - z) * (az - z) < MushroomClear * MushroomClear;
         }
-        double along = 0, next = MushroomFirst;
+        bool Free(int b) => !(report.LapArc is { } arc && b < arc.Length && arc[b]) && Clear(xs[b], zs[b]);
         // (the road's half width at a point of the lap: the asphalt's, or a raised road's to its rail)
         var road = report.Roads.FirstOrDefault();
         double Half(int i)
@@ -928,16 +945,9 @@ internal static class RaceTrackScenes
             if (road.Raised is { } up && up[i]) return road.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : raisedHalf;
             return road.AsphaltHalf;
         }
-        for (var step = 1; step < n; step++)
+        // the row: across the road (the lap's way at b, from a, turned a quarter), its middle on the road's
+        void Row(int a, int b)
         {
-            if (report.Open && (i0 + way * step < 0 || i0 + way * step >= n)) break;
-            int a = ((i0 + way * (step - 1)) % n + n) % n, b = ((i0 + way * step) % n + n) % n;
-            along += Math.Sqrt((xs[b] - xs[a]) * (xs[b] - xs[a]) + (zs[b] - zs[a]) * (zs[b] - zs[a]));
-            if (along < next) continue;
-            if (along > report.Length - 20) break;
-            next = along + MushroomSpacing;
-            if (report.LapArc is { } arc && b < arc.Length && arc[b] || !Clear(xs[b], zs[b])) continue;
-            // the row: across the road (the lap's way turned a quarter), its middle on the road's
             double dx = xs[b] - xs[a], dz = zs[b] - zs[a], d = Math.Sqrt(dx * dx + dz * dz) + 1e-9;
             var (count, gap) = MushroomRow(Half(b));
             for (var j = 0; j < count; j++)
@@ -945,6 +955,74 @@ internal static class RaceTrackScenes
                 var side = (j - (count - 1) / 2.0) * gap;
                 spots.Add((xs[b] - dz / d * side, zs[b] + dx / d * side, ys[b]));
             }
+        }
+        // how fast the car drives at a point of the lap (units a second): round the bend of the opponent's line there (its nearest point,
+        // looked for a little way either side of the last one found)
+        var path = report.RacePath;
+        var cursor = path.Count > 0 ? Enumerable.Range(0, path.Count).MinBy(k => (path[k].X - xs[i0]) * (path[k].X - xs[i0]) + (path[k].Z - zs[i0]) * (path[k].Z - zs[i0])) : 0;
+        double Speed(int i)
+        {
+            if (path.Count == 0) return ItemTimingTop;
+            var best = cursor; var bd = double.MaxValue;
+            for (var k = -8; k <= 24; k++)
+            {
+                var m = ((cursor + k) % path.Count + path.Count) % path.Count;
+                var d2 = (path[m].X - xs[i]) * (path[m].X - xs[i]) + (path[m].Z - zs[i]) * (path[m].Z - zs[i]);
+                if (d2 < bd) { bd = d2; best = m; }
+            }
+            cursor = best;
+            return Math.Clamp(ItemTimingTurn * path[best].Radius, 400, ItemTimingTop);
+        }
+        // the lap's points in driving order from the start line: the one before, how far along the lap (cells) and the driving time (s)
+        var steps = new List<(int A, int B, double Along, double Time)>();
+        double along = 0, time = 0;
+        for (var step = 1; step < n; step++)
+        {
+            if (report.Open && (i0 + way * step < 0 || i0 + way * step >= n)) break;
+            int a = ((i0 + way * (step - 1)) % n + n) % n, b = ((i0 + way * step) % n + n) % n;
+            var seg = Math.Sqrt((xs[b] - xs[a]) * (xs[b] - xs[a]) + (zs[b] - zs[a]) * (zs[b] - zs[a]));
+            along += seg; time += seg * 512 / Speed(b);
+            // (and round a vertical loop's ring there)
+            foreach (var l in report.Loops) if (l.Point == b) time += 2 * Math.PI * l.Radius * 512 / ItemTimingLoop;
+            steps.Add((a, b, along, time));
+        }
+        if (steps.Count == 0) return spots;
+        // (round to the start line again)
+        var end = steps[^1].B;
+        lapTime = time + (report.Open ? 0 : Math.Sqrt((xs[i0] - xs[end]) * (xs[i0] - xs[end]) + (zs[i0] - zs[end]) * (zs[i0] - zs[end])) * 512 / Speed(i0));
+        if (options.ItemSpacingCells is { } cells)
+        {
+            var next = MushroomFirst;
+            foreach (var (a, b, at, _) in steps)
+            {
+                if (at < next) continue;
+                if (at > report.Length - 20) break;
+                next = at + cells;
+                if (!Free(b)) continue;
+                Row(a, b);
+                rows++;
+            }
+            return spots;
+        }
+        var stretches = Math.Max(1, (int)Math.Round(lapTime / Math.Max(0.1, options.ItemSpacing)));
+        var every = lapTime / stretches;
+        // (each stretch's row at the clear point nearest its middle -- off the start line's first MushroomFirst cells and the lap's last 20,
+        // and at least half a stretch after the row before)
+        var last = double.NegativeInfinity;
+        for (var r = 0; r < stretches; r++)
+        {
+            var due = (r + 0.5) * every;
+            var pick = -1;
+            for (var k = 0; k < steps.Count; k++)
+            {
+                var (_, b, at, t) = steps[k];
+                if (t < r * every || t >= (r + 1) * every || t < last + every / 2 || at < MushroomFirst || at > report.Length - 20 || !Free(b)) continue;
+                if (pick < 0 || Math.Abs(t - due) < Math.Abs(steps[pick].Time - due)) pick = k;
+            }
+            if (pick < 0) continue;
+            Row(steps[pick].A, steps[pick].B);
+            last = steps[pick].Time;
+            rows++;
         }
         return spots;
     }

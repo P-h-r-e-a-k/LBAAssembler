@@ -410,6 +410,12 @@ internal sealed class RaceTrackOptions
     public double JumpMinScale { get; set; } = 1;
     // How far behind each other the grid's spots are (RaceTrackScenes.GridSpot; RaceTrackPlan.GridStep).
     public double GridStep { get; set; } = RaceTrackScenes.DefaultGridStep;
+    // How far apart the power-ups' rows of mushrooms are round the lap (RaceTrackScenes.MushroomSpots): seconds of driving, the lap cut
+    // into even stretches about this long, a row in each. With ItemSpacingCells, every that many cells of road instead -- the rule until
+    // 2026-10-17 was every 40 cells, a row every second or two (ScriptRoundTrip buildtogether's RT_ITEM_SPACING, for comparisons:
+    // tools/RaceTrackStress/items.py).
+    public double ItemSpacing { get; set; } = 8;
+    public double? ItemSpacingCells { get; set; }
     // A footing under a gantry's post that stands over a hole (RaceTrackPlan.GantryFootings).
     public bool GantryFootings { get; set; }
     // How near a missing cube the lap's middle may come (RaceTrackPlan.EdgeMargin), or null: the verge's width and half a cell more.

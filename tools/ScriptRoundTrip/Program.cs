@@ -147,6 +147,7 @@ internal static class Program
             "islandheights" => IslandHeightsCommand.Run(args),
             "decorpoints" => DecorPointsCommand.Run(args),
             "sceneactors" => SceneActorsCommand.Run(args),
+            "itemdiff" => ItemDiffCommand.Run(args),
             "cellprobe" => CellProbeCommand.Run(args),
             "holopic" => HoloPicCommand.Run(args),
             "planprobe" => PlanProbeCommand.Run(args),

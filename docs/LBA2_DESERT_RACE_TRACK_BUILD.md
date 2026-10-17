@@ -1685,7 +1685,7 @@ The user's asks:
 - Outside a race (qualifying, alone, before GO) the plain weights.
 - A car takes one item from a row: the others it passes in the next 0.7 s give way, empty.
 
-**The rows** (`RaceTrackScenes.MushroomRow`): every 40 cells as before, now a row across the road.
+**The rows** (`RaceTrackScenes.MushroomRow`): every 40 cells as before, now a row across the road. (Since 2026-10-17 a row every 8 s of driving instead: "Item spacing" in LBA2_RACE_TRACK_STRESS_TEST.md.)
 - Three mushrooms where the road is 6 cells wide or more (the default asphalt, 7 wide, has three), two where it is 3.8 or more, else one; each row keeps a cell from the road's edges.
 - They are 2.4 cells apart, more than the 2 cells a car's middle takes one from, so a car down the middle of one takes only that one.
 - On a raised road the width is its own, rail to rail.
