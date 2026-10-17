@@ -24,6 +24,10 @@ internal sealed class RaceCarWindow : Window
     private readonly WrapPanel drivers = new() { Margin = new Thickness(18, 2, 0, 0) };
     private readonly CheckBox newGame = new() { Content = "Play the story from a new game, every track raced where and when the game is", ToolTip = "Twinsen starts in his house. Citadel Island's storm track is raced in the rain, its town circuit once the storm is over and Twinsen has slept; each other island's track on its island." };
     private readonly CheckBox fightBack = new() { Content = "They push harder when they fall behind you" };
+    // the race's level on a track with levels (RaceCarSetup.Difficulty: the Temple of Bú's), and what the chosen one does
+    private readonly ComboBox difficulty = new() { Width = 140 };
+    private readonly TextBlock difficultyText = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 4) };
+    private readonly Terrain.RaceLevel[]? levels;
     private readonly CheckBox penguinsWalk = new() { Content = "Penguins walk the track until a car comes near (off: they go off a second after they are dropped)", Margin = new Thickness(18, 2, 0, 0) };
     private readonly CheckBox powerUps = new() { Content = "Power-ups in the mushrooms along the track (not on the qualifying lap)", ToolTip = "Rows of small brown mushrooms across the road, each with a power-up inside: Gazogem fuel, the protection spell, the lightning spell, a nitro penguin (it goes off at whatever it runs into), the super jet-pack (the car turns into the jet-pack and the game drives it at twice the speed, through or past any car in its way) or oil (whoever drives over it skids). A car takes one from a row; the cars at the back get the super jet-pack and lightning, the ones in front penguins and oil. They grow back. Yours goes into the item box at the top left (one item at a time, a roulette picks it) and Ctrl uses it; a mushroom you drive over while the box is full stays for the next car. On Otringal, a golden Gazogem won on the roulette wheel while you hold an item waits in a second box until you use that item." };
     private readonly CheckBox qualifying = new() { Content = "Drive a qualifying lap first: the times set the grid" };
@@ -174,6 +178,22 @@ internal sealed class RaceCarWindow : Window
         fightBack.Unchecked += (_, _) => setup.OpponentsFightBack = false;
         fightBack.Margin = new Thickness(0, 4, 0, 0);
         race.Children.Add(fightBack);
+        // (the race's level: the Temple of Bú has them, 2026-10-17 -- the track Play races, or any of the folder's)
+        race.Children.Add(Section("Difficulty"));
+        var levelled = raced is null ? Terrain.RaceTrackIsland.All.Where(i => i.Levels is not null).ToList()
+            : Terrain.RaceTrackService.Tracks(raced).Select(t => Terrain.RaceTrackIsland.ByName(t.Island)).Where(i => i.Levels is not null).Distinct().ToList();
+        levels = levelled.FirstOrDefault()?.Levels ?? Terrain.RaceDifficulty.Temple;
+        var where = levelled.Count > 0 ? string.Join(", ", levelled.Select(i => i.Name.StartsWith("The ") ? "the " + i.Name[4..] : i.Name)) : "the Temple of Bú";
+        race.Children.Add(Text($"How hard the race is on {where}: the opponents' skill, how hard they push, the items they take and how they aim them, " +
+                               "and the track's hazards -- your car stays as you set it up. Other tracks race as they are, whatever is chosen here.", new Thickness(0, 0, 0, 4)));
+        for (var n = Terrain.RaceDifficulty.Easy; n <= Terrain.RaceDifficulty.Hard; n++) difficulty.Items.Add(new ComboBoxItem { Content = Terrain.RaceDifficulty.Name(n), Tag = n });
+        difficulty.SelectionChanged += (_, _) => { if (difficulty.SelectedItem is ComboBoxItem { Tag: int n }) { if (!updating) setup.Difficulty = n; ShowDifficulty(); } };
+        var difficultyRow = new StackPanel { Orientation = Orientation.Horizontal };
+        difficultyRow.Children.Add(Text("Difficulty:", new Thickness(0, 0, 8, 0)));
+        difficultyRow.Children.Add(difficulty);
+        race.Children.Add(difficultyRow);
+        difficultyText.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
+        race.Children.Add(difficultyText);
 
         race.Children.Add(Section("The race"));
         race.Children.Add(Text("The race starts with a count-down from the grid. A lap counts once you have crossed every checkpoint (one in the middle of " +
@@ -252,6 +272,8 @@ internal sealed class RaceCarWindow : Window
         powerUps.IsChecked = setup.PowerUps;
         penguinsWalk.IsChecked = setup.PenguinsWalk;
         fightBack.IsChecked = setup.OpponentsFightBack;
+        difficulty.SelectedItem = difficulty.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is int n && n == Math.Clamp(setup.Difficulty, Terrain.RaceDifficulty.Easy, Terrain.RaceDifficulty.Hard));
+        ShowDifficulty();
         qualifying.IsChecked = setup.Qualifying;
         fineWeather.IsChecked = trackWeather ?? setup.FineWeather;
         startAtLine.IsChecked = setup.StartAtLine;
@@ -262,6 +284,14 @@ internal sealed class RaceCarWindow : Window
         ShowTrackSetups();
         preset.SelectedIndex = MatchingPreset();
         updating = false;
+    }
+
+    // What the chosen level does (Terrain.RaceDifficulty.Describe).
+    private void ShowDifficulty()
+    {
+        if (levels is null) return;
+        var n = Math.Clamp(setup.Difficulty, Terrain.RaceDifficulty.Easy, Terrain.RaceDifficulty.Hard);
+        difficultyText.Text = $"{Terrain.RaceDifficulty.Name(n)}: {Terrain.RaceDifficulty.Describe(levels[n])}";
     }
 
     // The tracks whose best setups the window tells (RaceCarSetup.UseTrackSetups), each with its own (null: none): the one Play races,

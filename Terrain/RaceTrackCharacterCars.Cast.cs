@@ -221,6 +221,13 @@ internal static partial class RaceTrackCharacterCars
 
     public static string CastName(CastMember c) => $"{c.Short}'s {Noun(StyleOf(c))}";
 
+    // A cast's car by its driver's body (BODY.HQR): its number (RACECARS.JSON), -1 none.
+    public static int CastCar(int character)
+    {
+        var i = Array.FindIndex(Cast, c => c.Character == character);
+        return i < 0 ? -1 : CastFirst + i;
+    }
+
     // The cast's cars, numbered on from the cars made by hand.
     public static Car[] CastCars => Cast.Select((c, i) => new Car(CastName(c), c.Driver, c.Character, CastFirst + i, (ch, racer) => BuildCast(c, i, ch, racer), c.Island)).ToArray();
 

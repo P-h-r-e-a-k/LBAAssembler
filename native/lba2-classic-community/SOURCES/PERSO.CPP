@@ -2195,6 +2195,17 @@ static bool ProfileNameOrExit(const char *name, const char *source) {
 static void ControlPrePresent(U32 *frameBuffer, U32 pitch, U32 width, U32 height,
                               const U8 *palette_rgb) {
     Control_ServiceListen();
+    /* A console screenshot asked for in a modal's own loop (a menu: the race game's pages,
+       2026-10-17) -- the main loop's capture below never runs there. Log is the buffer about
+       to be presented, as there. */
+    {
+        char shotPath[ADELINE_MAX_PATH];
+        int is_png = 0;
+        if (Console_HasPendingScreenshot(shotPath, sizeof(shotPath), &is_png) && is_png && Log && PtrPal) {
+            SavePNG(shotPath, Log, ModeDesiredX, ModeDesiredY, PtrPal);
+            Console_ClearPendingScreenshot();
+        }
+    }
     Console_PrePresent(frameBuffer, pitch, width, height, palette_rgb);
 }
 

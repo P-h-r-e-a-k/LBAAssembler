@@ -56,6 +56,10 @@ public sealed partial class RaceCarSetup
     // An opponent that has fallen behind pushes harder (up to CatchUpPercent more, 60 cells behind).
     public bool OpponentsFightBack { get; set; } = true;
     public const int CatchUpPercent = 8;
+    // The race's level on a track that has levels (Terrain.RaceTrackIsland.Levels: the Temple of Bú's, since 2026-10-17): 0 easy, 1 medium
+    // (the race as it was before the levels), 2 hard -- the opponents' skill over the one to beat's above, their catch-up, the items they
+    // take and how they aim them, the track's hazards (Terrain.RaceDifficulty). Any other track races as it is.
+    public int Difficulty { get; set; } = 1;
     // Play starts on the start/finish straight, Twinsen beside his car, whatever scene is open (and with the zones and routes the editor
     // draws over the game hidden).
     public bool StartAtLine { get; set; } = true;

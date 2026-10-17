@@ -112,6 +112,7 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);
 // A test pilot for headless runs (the console's `autodrive`): on, the player's car is driven along the first opponent's line. Its input,
 // ORed into the frame's own.
 void RaceMod_AutoDrive(int on, double lookCells, double sideCells);
+void RaceMod_AutoPace(double percent);     // ... at that percent of the line's speed (100: the line's own)
 U32 RaceMod_AutoInput(void);
 
 // The race game's pages (RACEGAME.CPP: the power-ups, the controls, the qualifying): what a track's race file hands out, read from its

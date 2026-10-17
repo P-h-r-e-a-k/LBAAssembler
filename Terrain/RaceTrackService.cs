@@ -686,7 +686,7 @@ internal static class RaceTrackService
         }
         // (Baldino's rocket car, when a track's line-up races it)
         var racers = options.Racers().Concat(own?.Options.Racers() ?? new List<RaceDriver>());
-        if (racers.Any(d => !d.Bike && !d.Ghost && d.Body == RaceTrackBaldinoCar.Generic) && !session.Baldino) { log.Add(RaceTrackBaldinoCar.Install(gameDirectory).Log); session.Baldino = true; }
+        if (racers.Any(d => !d.Bike && !d.Ghost && d.Cast < 0 && d.Body == RaceTrackBaldinoCar.Generic) && !session.Baldino) { log.Add(RaceTrackBaldinoCar.Install(gameDirectory).Log); session.Baldino = true; }
         // the cars after the game's characters, three or more for each island: in the game's files for whoever is to drive them (no actor
         // has one yet)
         if (!session.CharacterCars) { log.AddRange(RaceTrackCharacterCars.Install(gameDirectory).Log); session.CharacterCars = true; }

@@ -217,7 +217,8 @@ with a car at 110 km/h.
 - *Mini pumpkins*: the power-ups' mushrooms, the fakes the cars drop and the item box's icon are a jack-o'-lantern. It is the mushroom
   entity 112's body 3.
 - *The music*: the scenes play LBA2's own Temple of Bù's music (3) and its ambient sounds (scene 10).
-- *The line-up*: the Dark Monk (the one to beat), Ker'aooc in her cauldron and Tabata on his spell book.
+- *The line-up*: Halloween's monsters (since 2026-10-17; the Dark Monk, Ker'aooc and Tabata before): the skeleton in his ghost car (the
+  one to beat), the ghost in hers and the two-headed monster in his monster truck -- below.
 
 The scenes are 301-327, one for each cube the road's width crosses (`TempleTrack.SceneCubes`). The start scene is 326.
 
@@ -398,6 +399,100 @@ The user: "Let's create a pumpkin inspired F1 car for our Temple track for Twins
   opponents (same race seed) is the same to the hundredth of a second in the pumpkin F1 as in the buggy and as the build before: 57.46,
   63.97, 59.96 s, 1st of 4, no rescues.
 
+### Halloween's monsters, and easy, medium, hard (2026-10-17)
+
+The user: "I thought we'd made halloween themed opponents for our Temple track but they seem to be Dark monk, Ker'aooc, and Tabata", and
+"Let's also create an easy/medium/hard mode, but let's focus that on the temple track for now, we can worry about the other tracks at a later
+date."
+
+![The monsters from the camera behind the car: the two-headed monster, then the skeleton beside him, then the ghost going by](temple/halloween_opponents.png)
+
+**The line-up** (`RaceDriver.Temple`): Halloween's own monsters in the cast's cars (RACECARS.JSON) -- the skeleton in his ghost car (car 65,
+the one to beat: the temple's own, LBA1's skeleton wakes up in it, and its halls are full of them), the ghost in hers (114) and the
+two-headed monster in his monster truck (149) -- on the lines the Dark Monk, Ker'aooc and Tabata had (the same sides, tops and grips: the
+lines are byte for byte the same). Of the Halloween cars, these three read best from the camera behind them on the temple's near-black
+road (each tried in the race, five side by side): the ghost's pale blue figure stands out at any distance, the skeleton's pale bones show
+over his dark car's rim, the monster's two heads with their red eyes stand up over his. The giant spider sits whole and flat on its
+cockpit's floor, so from behind its truck reads as an empty purple truck; the gas monster's car and the Eye's are dark on the dark road.
+
+- *Cast cars as opponents*: until now an opponent could only drive a body of the racer's entity (157). The cast's cars are bodies of
+  entities of their own (345 and 346 in a build: copies of the racer's, its animations), so `RaceDriver` has `Cast`, the car's number: the
+  build looks the car up in the folder's RACECARS.JSON (installed earlier in the same build) and puts its copies in the scenes as that
+  entity and body (`RaceTrackScenes.Apply`); its half-size copy for the lightning is beside it in that entity (`opponentN_small=`), so the
+  engine needs nothing new. A car missing from RACECARS.JSON is left out with a warning.
+- *What changed in the files*: of a Temple build, only SCENE.HQR (the three opponents' actors in each of the 27 scenes: entity 157 bodies
+  10, 53, 54 -> entity 345 bodies 1, 50, 85), SCENE.HQD and RACETRACK.JSON (the drivers' names and bodies); BODY.HQR, RESS.HQR and
+  RACECARS.JSON are the same. The race file: the names, the `_small=` bodies, and the levels' lines.
+- *The race game*: the car page lists the three monsters' cars first after the pumpkin F1 (the installer's `GameInstall.Cars`), its
+  README says who the race is against.
+
+**The levels** (`Terrain/RaceDifficulty.cs`, `RaceTrackIsland.Levels`: the Temple's alone for now). They change the opponents and the
+track's hazards, never the player's car (his setup is his own):
+
+| | Easy | Medium (as before) | Hard |
+|---|---|---|---|
+| Opponents' skill (points on the one to beat's 86 %, and on the others' 72-98 % range) | -10 | 0 | +8 |
+| Catch-up: how much harder one pushes when behind Twinsen (at 60 cells) | 0 % | 8 % | 14 % |
+| Easing off when ahead of Twinsen (at 60 cells) | 15 % | 0 | 0 |
+| Pumpkin rows an opponent takes an item from | 40 % | all | all |
+| Attacks aimed: penguins, oil, fakes held until he comes up close behind, the yellow / green ball until he is close ahead, the red until he is the car in front | no | no | up to 6 s |
+| The witches' fire balls and dives | half as often | as ever | 1.4 times as often |
+
+The engine (`RACEMOD.CPP`): `difficulty=<0|1|2>` and `difficulty_level=<level> <skill> <catch-up> <ease> <items> <aim ms> <hazards %>`,
+read only when present -- every other track's race file has none and races exactly as before (`ApplyDifficulty` before the skills are
+drawn, `DifficultyTakes` and `DifficultyHolds` in `OpponentMushrooms`, `OpponentAims` every frame, `DifficultyEase` beside the catch-up,
+`HazardEvery`/`HazardChance` in `Spooks` and `Dives`). The last `difficulty=` counts: the editor writes the setup's, the race game's menu
+adds the player's pick after it. Medium is today's race to the tick: no extra random draws, the same numbers (with race seed 1 the
+pilot's laps and the three opponents' are the same to the hundredth as HEAD's with the old line-up: 55.24, 57.30, 57.08 s). A race with no opponents (a time trial, Play with "Race the opponents" off)
+has no levels: its witches are as before. With the setup's "They push harder when they fall behind you" off, every level's catch-up is 0.
+
+**Where it is chosen**:
+
+![The race game: Race, the difficulty page (the last one chosen first), the car page with the monsters' cars first](temple/difficulty_page.png)
+
+- *The editor*: Race car window > Opponents > Difficulty (Easy / Medium / Hard, with what the chosen one does), saved in the settings
+  (`RaceCarSetup.Difficulty`, medium by default) and written into the race file for the Temple.
+- *The race game*: Specials > Halloween Temple of Bu > Race > **Difficulty** (Easy, Medium, Hard, the last one chosen first: kept in
+  `RACEGAME_PREFS.TXT` in the user's folder) > the car. A time trial goes straight to the car (no levels: its best times are the same at
+  every level); races record nothing in the best times. RACEGAME.CPP shows the page for any special whose race file has levels.
+
+![The Race car window's Opponents tab: the line-up and the difficulty](temple/racecar_difficulty.png)
+
+**The benchmark**: the headless test pilot races three laps against the monsters at each level, in the race game's car (110 km/h,
+acceleration and brakes 300 %, steering 200 %, the pumpkin F1, no qualifying: Twinsen on pole), race seeds 1-4 or 1-8
+(`qualifying_seed=`: the others' skills, the items' draws). The pilot drives the racing line at its planned speed (100 %: the line driven
+perfectly, better than a player can), 1.5 cells off it, or at 92, 85 or 80 % of the line's speed everywhere (the console's new
+`autodrive 1 5 0 <pace>`: a slower driver; a slower car is no test, the opponents' lines are planned from the player's car). "Closest
+monster" is Twinsen's time to the line after three laps against the first monster's (+: he was ahead); "attacks taken" the magic balls,
+fake mushrooms, penguins, lightning, ghosts and witches' fire balls that hit him (not oil: his own slicks, mostly, lying there the next lap):
+
+| Level | Pilot | Races | Won | Places | Closest monster at the line, s (mean; range) | Attacks taken a race | Oil skids a race | Monsters' items a race (aimed at him) | Rescues |
+|---|---|---|---|---|---|---|---|---|---|
+| Easy | on the line, 100 % | 4 | 4 | 1, 1, 1, 1 | +43.2 (+37.2 .. +55.7) | 1.0 | 3.5 | 1.5 (0) | 0 |
+| Easy | 1.5 cells off the line | 4 | 4 | 1, 1, 1, 1 | +35.2 (+33.6 .. +38.9) | 0.0 | 3.5 | 1.5 (0) | 0 |
+| Easy | on the line, 92 % | 4 | 4 | 1, 1, 1, 1 | +28.6 (+25.3 .. +34.2) | 1.8 | 3.5 | 1.0 (0) | 0 |
+| Easy | on the line, 85 % | 8 | 7 | 1, 1, 1, 1, 1, 1, 1, 2 | +20.5 (-1.0 .. +32.7) | 0.8 | 4.4 | 1.6 (0) | 0 |
+| Easy | on the line, 80 % | 8 | 7 | 1, 1, 1, 1, 1, 1, 1, 3 | +10.0 (-7.3 .. +21.1) | 0.9 | 3.9 | 1.9 (0) | 0 |
+| Medium | on the line, 100 % | 8 | 7 | 1, 1, 1, 1, 1, 1, 1, 2 | +9.1 (-1.4 .. +16.4) | 0.6 | 4.5 | 1.8 (0) | 0 |
+| Medium | 1.5 cells off the line | 4 | 4 | 1, 1, 1, 1 | +9.7 (+2.6 .. +16.2) | 0.0 | 4.5 | 0.8 (0) | 0 |
+| Medium | on the line, 92 % | 8 | 3 | 3, 2, 1, 2, 4, 1, 1, 4 | -5.6 (-38.3 .. +7.2) | 2.6 | 3.8 | 7.1 (0) | 0 |
+| Medium | on the line, 85 % | 4 | 3 | 4, 1, 1, 1 | -0.4 (-13.5 .. +7.6) | 2.8 | 1.8 | 8.5 (0) | 0 |
+| Hard | on the line, 100 % | 8 | 5 | 1, 1, 1, 1, 1, 2, 2, 3 | -2.7 (-24.4 .. +1.6) | 3.6 | 2.6 | 7.8 (1.8) | 0 |
+| Hard | 1.5 cells off the line | 8 | 5 | 1, 1, 1, 2, 1, 1, 4, 2 | -2.7 (-19.9 .. +3.2) | 3.1 | 2.4 | 6.9 (2.1) | 0 |
+| Hard | on the line, 92 % | 8 | 1 | 4, 4, 1, 4, 3, 4, 3, 2 | -7.5 (-15.2 .. +5.2) | 4.5 | 2.4 | 11.9 (3.1) | 0 |
+| Hard | on the line, 85 % | 8 | 2 | 4, 3, 1, 4, 4, 2, 1, 3 | -8.9 (-25.8 .. +4.3) | 3.1 | 1.8 | 9.8 (2.2) | 0 |
+
+- *Easy* is won by a driver a fifth slower than the line everywhere (7 of 8, by 10 s on average); its one loss is a race where the ghost,
+  drawn quick, took three penguins and a ghost to him. The perfect line wins by 35-55 s. The monsters hardly use items: they are behind him,
+  where the leader has emptied the rows, and take from 40 % of them.
+- *Medium* is as before: the perfect line wins 7 of 8 by 9 s on average (HEAD's line-up, seeds 1-4: by 4-14 s), and a driver 8 % off the
+  line's speed wins 3 of 8.
+- *Hard* makes the perfect line fight: 5 of 8 won, never by more than 1.6 s, the three monsters within a few seconds of it at the line.
+  Pushing up to 14 % harder behind him they stay on his tail, take the rows' items he leaves and aim about two a race at him: six times
+  the attacks medium's perfect line takes. A driver 8 % slower wins 1 of 8.
+
+No race needed a rescue or was stuck, at any level (92 races).
+
 **Tests**:
 
 - `E:\dump\TEMP\temple\pilot\run.sh <tag> <ticks>` is the headless pilot. CARF=car_fast.txt is a fast car with no qualifying.
@@ -417,6 +512,13 @@ The user: "Let's create a pumpkin inspired F1 car for our Temple track for Twins
   line, on both), `perfab.sh` (both timed by turns, each frame's least time over the runs: the machine is shared), `raycast.py` (the
   survey, from a `camtrace 1` run and `templecells`), `checks.sh` (the temple alone: only TEMPLE.ILE and TEMPLE.OBL differ, the race file
   the same; every other track: its built files and its race file the same).
+- The monsters' and levels' round: `E:\dump\TEMP\templediff` -- `build.sh <game> head|work`, `racefile.sh <game> head|work`, `pilot.sh`
+  (`DIFF=`, `SEED=`, `PACE=`, `SIDE=`), `batch.sh`, `bench.sh` / `bench2.sh` and `report.py [--table]` (the table above), `cmpgames.sh`
+  (the temple alone: only SCENE.HQR, SCENE.HQD and RACETRACK.JSON differ), `sceneactors.sh <scene>` (only the three opponents' entity and
+  body), `regress.sh head|work` (every other track built together: its 251 built files, and its 51 race files -- each track at each
+  difficulty -- with their lines, the same as HEAD's), `racefile_levels.sh`, `views.sh` (the Halloween cars in the temple's palette),
+  `menudrive.ps1` (the installed race game headless through `--listen`: its pages pictured), `racewin` (the Race car window drawn in a
+  process of its own), `lbra.patch` (the race game repo's changes).
 
 ![The editor: TEMPLE.ILE open](temple/editor_view.png)
 

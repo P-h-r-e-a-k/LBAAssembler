@@ -923,7 +923,7 @@ The sheet showed what the first steps got wrong -- creatures cut away under the 
 
 **In the game's files.** Bodies of two new entities (345 and 346 in the sandbox), copies of the racer's animations, a hundred cars each -- an entity's body numbers are one byte and each car has its half-size copy beside it (+100). The build installs them once per build (`InstallCast`, after the cars made by hand and their small copies; +0.8 s; BODY.HQR 7.6 MB). **RACECARS.JSON** in the game folder lists every car by number: name, driver, island, entity, body number, BODY.HQR body and small copy. "Put the original files back" removes it.
 
-**Driving them.** Race car setup > Your car lists all 218 (by number, name and driver) from RACECARS.JSON; `drive_as=` takes the car's BODY.HQR bodies from it. They aren't raced by anyone yet: every one is a body of an entity, so a line-up can use it.
+**Driving them.** Race car setup > Your car lists all 218 (by number, name and driver) from RACECARS.JSON; `drive_as=` takes the car's BODY.HQR bodies from it. They aren't raced by anyone yet: every one is a body of an entity, so a line-up can use it. (Since 2026-10-17 one does: a `RaceDriver` with `Cast` -- its number -- is put in the scenes as its own entity and body, read from the folder's RACECARS.JSON, which the build installs before the scenes (`RaceTrackScenes.Apply`); the Temple of Bú races the skeleton's, the ghost's and the two-headed monster's: docs/LBA2_TEMPLE_OF_BU.md.)
 
 **Tools:** `ScriptRoundTrip castcars <built folder> <scratch> [numbers]` (the cast installed into a copy of BODY.HQR and RESS.HQR, each car's counts); `BodyPipeline castsheet <built folder> <out.png> [columns] [per page]` (the sheet and its pages, from RACECARS.JSON).
 
@@ -4397,6 +4397,13 @@ The installer is its own project, `E:\dump\LittleBigRacingAdventure` (its README
   shown without mushrooms, the time from GO to the last line into the best times: `RaceGame_Finished`), `end_to_menu=<ms>` (after the race,
   back to the menu: PERSO.CPP's menu key asks `RaceMod_WantsMenu`).
 - **Best times**: `BESTTIMES.TXT` in the user's folder, `track|ms|best lap ms|car|date`, the ten fastest of each track kept.
+- **Difficulty** (2026-10-17): a race on a track with levels -- its race file has `difficulty_level=` lines: the Temple of Bú's -- asks
+  Easy, Medium or Hard between Race and the car page (the last one chosen comes up first, kept in `RACEGAME_PREFS.TXT` in the user's
+  folder; Esc on the car page goes back to it); the pick goes into `RACE_NOW.TXT` after the file's own `difficulty=`, so it counts. A time
+  trial has no levels (Twinsen alone): its best times are the same at every level. What the levels do: docs/LBA2_TEMPLE_OF_BU.md.
+- **Screenshots of the menus**: the console's `screenshot` is taken in a modal's own loop too (PERSO.CPP's pre-present chain: the main
+  loop's capture never runs in a menu), so a headless run with `--listen` -- and no `--fixed-dt`, `--exec-at` or `--tick`, any of which arms
+  the automated boot that goes past the menu -- can picture every page: `E:\dump\TEMP\templediff\menudrive.ps1`.
 
 Tested from a headless install (`LBHRA-Setup.exe --install`) of the pristine assets into `E:\dump\TEMP\lbra\install`, driven through the
 engine's `--listen` socket (`key`, `autodrive`): the menus, all ten cars on the car page, a time trial (laps of 54.7, 56.5 and 54.2 s, a

@@ -3,11 +3,13 @@
  * game's (GAMEMENU.CPP MainGameMenu asks RaceGame_Menu), in the retail game's look:
  *     Resume (with a race on)   Story Mode   Track select   Specials   Best times   Options   Quit
  * Story Mode and Track select are greyed and passed over until the file opens them. Specials: the special tracks, then a race (the line-up,
- * the power-ups) or a time trial (Twinsen alone, a can of Gazogem for every lap), then the car, its body turning on the page; then the race
- * -- the special's race file with the car's and the race game's keys (RACEMOD.CPP drive_as=, start_scene=, start_in_car=, race_laps=,
- * end_to_menu=, trial=) written to RACE_NOW.TXT in the user's folder and loaded (RaceMod_LoadFile), and a new game at the start line, no
- * introduction. A time trial's time goes to the track's best times, its ten fastest, kept in BESTTIMES.TXT in the user's folder; Best
- * times shows them.
+ * the power-ups) or a time trial (Twinsen alone, a can of Gazogem for every lap); a race on a track with levels (its race file has
+ * difficulty_level= lines: the Temple of Bú's, 2026-10-17) then its difficulty, easy, medium or hard (the last one chosen first);
+ * then the car, its body turning on the page; then the race -- the special's race file with the car's and the race game's keys
+ * (RACEMOD.CPP drive_as=, start_scene=, start_in_car=, race_laps=, end_to_menu=, trial=, difficulty=) written to RACE_NOW.TXT in
+ * the user's folder and loaded (RaceMod_LoadFile), and a new game at the start line, no introduction. A time trial's time goes to
+ * the track's best times, its ten fastest, kept in BESTTIMES.TXT in the user's folder; Best times shows them (a time trial is the
+ * same at every level: Twinsen alone, no opponents' levels to it).
  * The first run (2026-10-17): the player's first race or time trial is preceded by the controls page, and the first race with power-ups
  * by the power-up page (the track's own power-ups, each in its item box with what it does) -- right after the car page, as the race is
  * loaded, before its scene: Enter turns the pages, Esc skips them. Options shows either again (its rows Power-ups and Race controls:
@@ -17,6 +19,7 @@
  *     controls_seen=1  powerups_seen=1     the first run's pages shown
  *     qualified=1                         a qualifying lap driven (RaceGame_Qualified): it may be skipped from then on
  *     skip_qualifying=0|1                 the last answer
+ *     difficulty=0|1|2                    the difficulty chosen last (LevelPage)
  *
  * RACEGAME.TXT, "key=value" lines ('#' starts a comment), UTF-8:
  *     title=<the game's name>
@@ -63,6 +66,9 @@ extern void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta,
 #define RG_ID_TIMES 2303
 #define RG_ID_RACE 2310
 #define RG_ID_TRIAL 2311
+#define RG_ID_EASY 2312                     // the difficulty's rows: easy, medium, hard
+#define RG_ID_MEDIUM 2313
+#define RG_ID_HARD 2314
 #define RG_ID_SPECIAL 2320                  // + the special's index
 #define RG_ID_QUALIFY 2350                  // the qualifying page's rows (QualifyingPage)
 #define RG_ID_SKIP 2351
@@ -76,6 +82,7 @@ extern void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta,
 typedef struct {
     char Name[96], Race[160], Trial[160];
     S32 Scene;
+    int Levels;                             // its race has levels, easy to hard (difficulty_level= in its race file)
 } T_RG_SPECIAL;
 
 typedef struct {
@@ -98,6 +105,8 @@ static T_RG_CAR s_cars[RG_MAX_CARS];
 static int s_nbCars = 0;
 static int s_car = 0;                       // the car chosen last
 static int s_lastSp = 0, s_lastTrial = 0;
+static int s_level = 1;                     // the difficulty chosen last: 0 easy, 1 medium, 2 hard (RACEGAME_SETTINGS.TXT)
+static const char *const s_levelName[3] = {"Easy", "Medium", "Hard"};
 
 static T_RG_TIME s_times[RG_MAX_SPECIALS][RG_MAX_TIMES];
 static int s_nbTimes[RG_MAX_SPECIALS];
@@ -109,10 +118,12 @@ static int s_raceSp = -1, s_raceTrial = 0, s_raceCar = -1, s_raceOver = 0;
 // the race to start: a qualifying lap first (1), none and Twinsen at the back of the grid (0), or as its file says (-1) -- QualifyingPage
 static int s_qualifyNow = -1;
 static void Introduction(int sp, int trial);
+static int s_raceLevel = -1;                // its difficulty (-1: none, a time trial or a track without levels)
 
 static U16 s_mainMenu[4 + 2 * 8];
 static U16 s_spMenu[4 + 2 * (1 + RG_MAX_SPECIALS)];
 static U16 s_modeMenu[4 + 2 * 3];
+static U16 s_levelMenu[4 + 2 * 4];
 
 // ---- RACEGAME.TXT ------------------------------------------------------------------------------------------------------------------
 
@@ -132,6 +143,21 @@ static const char *Field(const char *p, char *out, size_t size) {
     while (n > 0 && out[n - 1] == ' ') out[--n] = 0;
     return *p == '|' ? p + 1 : p;
 }
+
+// Whether a race file (beside the game's data) has levels: a difficulty_level= line.
+static int HasLevels(const char *race) {
+    char path[ADELINE_MAX_PATH];
+    GetResPath(path, ADELINE_MAX_PATH, race);
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    char line[1024];
+    int found = 0;
+    while (!found && fgets(line, sizeof(line), f)) found = !strncmp(line, "difficulty_level=", 17);
+    fclose(f);
+    return found;
+}
+
+static void ReadSettings(void);
 
 static void Read(void) {
     if (s_read) return;
@@ -163,6 +189,7 @@ static void Read(void) {
             v = Field(v, sp->Trial, sizeof(sp->Trial));
             Field(v, scene, sizeof(scene));
             sp->Scene = scene[0] ? atoi(scene) : -1;
+            sp->Levels = sp->Race[0] ? HasLevels(sp->Race) : 0;
             if (sp->Name[0] && sp->Race[0]) s_nbSp++;
         } else if (!strcmp(key, "car") && s_nbCars < RG_MAX_CARS) {
             T_RG_CAR *c = &s_cars[s_nbCars];
@@ -174,8 +201,11 @@ static void Read(void) {
     }
     fclose(f);
     s_on = 1;
-    Log_Info("[racegame] %s: %d special track(s), %d cars%s%s", s_title[0] ? s_title : "the race game", s_nbSp, s_nbCars,
-             s_story ? "" : ", Story Mode greyed", s_tracks ? "" : ", Track select greyed");
+    ReadSettings();
+    int levelled = 0;
+    for (int i = 0; i < s_nbSp; i++) levelled += s_sp[i].Levels;
+    Log_Info("[racegame] %s: %d special track(s) (%d with levels: the last difficulty %s), %d cars%s%s", s_title[0] ? s_title : "the race game", s_nbSp,
+             levelled, s_levelName[s_level], s_nbCars, s_story ? "" : ", Story Mode greyed", s_tracks ? "" : ", Track select greyed");
 }
 
 S32 RaceGame_On(void) {
@@ -213,12 +243,14 @@ static void ReadSettings(void) {
             else if (!strcmp(line, "powerups_seen")) value = &s_powerupsSeen;
             else if (!strcmp(line, "qualified")) value = &s_qualified;
             else if (!strcmp(line, "skip_qualifying")) value = &s_skipQualifying;
+            else if (!strcmp(line, "difficulty")) value = &s_level;
             if (value) *value = atoi(eq + 1);
             else *eq = '=';
         }
         if (!value && strlen(s_setOther) + strlen(line) + 2 < sizeof(s_setOther)) { strcat(s_setOther, line); strcat(s_setOther, "\n"); }
     }
     fclose(f);
+    if (s_level < 0 || s_level > 2) s_level = 1;
     Log_Info("[racegame] settings: controls seen %d, power-ups seen %d, qualified %d, skip qualifying %d", s_controlsSeen, s_powerupsSeen,
              s_qualified, s_skipQualifying);
 }
@@ -229,7 +261,8 @@ static void WriteSettings(void) {
     FILE *f = fopen(path, "w");
     if (!f) { Log_Warn("[racegame] the settings could not be written to %s", path); return; }
     fprintf(f, "# %s: the player's settings (RACEGAME.CPP)\n", s_title[0] ? s_title : "The race game");
-    fprintf(f, "controls_seen=%d\npowerups_seen=%d\nqualified=%d\nskip_qualifying=%d\n", s_controlsSeen, s_powerupsSeen, s_qualified, s_skipQualifying);
+    fprintf(f, "controls_seen=%d\npowerups_seen=%d\nqualified=%d\nskip_qualifying=%d\ndifficulty=%d\n", s_controlsSeen, s_powerupsSeen, s_qualified,
+            s_skipQualifying, s_level);
     fputs(s_setOther, f);
     fclose(f);
 }
@@ -299,7 +332,8 @@ S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers) 
     s_raceOver = 1;
     char t[24];
     TimeText(t, sizeof(t), total);
-    Log_Info("[racegame] %s over: %s, %d of %d", trial ? "the time trial" : "the race", t, (int)place, (int)racers);
+    Log_Info("[racegame] %s over: %s, %d of %d%s%s", trial ? "the time trial" : "the race", t, (int)place, (int)racers,
+             !trial && s_raceLevel >= 0 && s_raceLevel <= 2 ? ", difficulty " : "", !trial && s_raceLevel >= 0 && s_raceLevel <= 2 ? s_levelName[s_raceLevel] : "");
     if (!trial || s_raceSp < 0 || s_raceSp >= s_nbSp || total <= 0) return 0;
     ReadTimes();
     const int sp = s_raceSp;
@@ -326,8 +360,9 @@ S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers) 
 static int Absolute(const char *p) { return p[0] == '/' || p[0] == '\\' || (isalpha((unsigned char)p[0]) && p[1] == ':'); }
 
 // The race: the special's race file (or its time trial's), the files it names found beside the game's data, then the car and the race
-// game's keys -- written to RACE_NOW.TXT in the user's folder and loaded in place of any other.
-static int StartRace(int sp, int trial, int car) {
+// game's keys -- and the difficulty chosen (`level`, -1 none: after the file's own, so it counts) -- written to RACE_NOW.TXT in the user's
+// folder and loaded in place of any other.
+static int StartRace(int sp, int trial, int car, int level) {
     const T_RG_SPECIAL *s = &s_sp[sp];
     char src[ADELINE_MAX_PATH], out[ADELINE_MAX_PATH];
     GetResPath(src, ADELINE_MAX_PATH, trial && s->Trial[0] ? s->Trial : s->Race);
@@ -360,9 +395,11 @@ static int StartRace(int sp, int trial, int car) {
     if (trial) fprintf(f, "trial=1\n");
     // (a qualifying lap or none, the player's answer -- QualifyingPage: the first race always has one)
     else if (s_qualifyNow >= 0) fprintf(f, s_qualifyNow ? "qualifying=1\n" : "qualifying=0\ngrid_back=1\n");
+    if (level >= 0 && level <= 2) fprintf(f, "# the difficulty chosen: %s\ndifficulty=%d\n", s_levelName[level], level);
     fclose(f);
-    s_raceSp = sp; s_raceTrial = trial; s_raceCar = car; s_raceOver = 0;
-    Log_Info("[racegame] %s: %s with %s%s", s->Name, trial ? "a time trial" : "a race", car >= 0 && car < s_nbCars ? s_cars[car].Name : "Twinsen's car",
+    s_raceSp = sp; s_raceTrial = trial; s_raceCar = car; s_raceOver = 0; s_raceLevel = level;
+    Log_Info("[racegame] %s: %s with %s%s%s%s", s->Name, trial ? "a time trial" : "a race", car >= 0 && car < s_nbCars ? s_cars[car].Name : "Twinsen's car",
+             level >= 0 && level <= 2 ? ", difficulty " : "", level >= 0 && level <= 2 ? s_levelName[level] : "",
              trial || s_qualifyNow < 0 ? "" : s_qualifyNow ? ", a qualifying lap first" : ", no qualifying: from the back of the grid");
     s_qualifyNow = -1;
     RaceMod_LoadFile(out);
@@ -393,6 +430,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_SKIP: Label(string, "Skip: start at the back of the grid"); return 1;
     case RG_ID_POWERUPS: Label(string, "Power-ups"); return 1;
     case RG_ID_CONTROLS: Label(string, "Race controls"); return 1;   // (the game's own Controls row changes the keys)
+    case RG_ID_EASY: case RG_ID_MEDIUM: case RG_ID_HARD: Label(string, s_levelName[num - RG_ID_EASY]); return 1;
     }
     if (num >= RG_ID_SPECIAL && num < RG_ID_SPECIAL + s_nbSp) { Label(string, s_sp[num - RG_ID_SPECIAL].Name); return 1; }
     string[0] = 0;
@@ -853,7 +891,35 @@ S32 RaceGame_OptionsRow(S32 num) {
     return 1;
 }
 
-// A special's race or time trial; then the car. Non-zero: the race is set up.
+
+// A race's difficulty, on a track with levels: easy, medium or hard -- the one chosen last first -- kept for the next time. The level
+// (0-2), or -1 for Back.
+static int LevelPage(void) {
+    s_levelMenu[0] = (U16)(1 + s_level);
+    s_levelMenu[1] = 4;
+    s_levelMenu[2] = 280;
+    s_levelMenu[3] = 0;
+    SetRow(s_levelMenu, 0, RG_ID_BACK);
+    SetRow(s_levelMenu, 1, RG_ID_EASY);
+    SetRow(s_levelMenu, 2, RG_ID_MEDIUM);
+    SetRow(s_levelMenu, 3, RG_ID_HARD);
+    for (;;) {
+        Page("Difficulty", 280 - (56 * 4) / 2 - 50);
+        // (what the levels do, under the rows)
+        Text(UI_CENTER_X, 400 + UI_VCENTER_OFS, "Easy: slower monsters, fewer items", RG_GREY);
+        Text(UI_CENTER_X, 436 + UI_VCENTER_OFS, "Hard: quicker monsters, aimed attacks", RG_GREY);
+        const S32 select = DoGameMenu(s_levelMenu);
+        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return -1; }
+        if (select < RG_ID_EASY || select > RG_ID_HARD) continue;
+        s_level = select - RG_ID_EASY;
+        WriteSettings();
+        Log_Info("[racegame] difficulty: %s", s_levelName[s_level]);
+        return s_level;
+    }
+}
+
+// A special's race or time trial; then (a race on a track with levels) its difficulty; then the car -- Esc there back to the difficulty.
+// Non-zero: the race is set up.
 static int ModePage(int sp) {
     s_modeMenu[0] = (U16)(s_lastTrial ? 2 : 1);
     s_modeMenu[1] = 3;
@@ -869,10 +935,16 @@ static int ModePage(int sp) {
         if (select != RG_ID_RACE && select != RG_ID_TRIAL) continue;
         const int trial = select == RG_ID_TRIAL;
         s_lastTrial = trial;
-        // (then a race's qualifying lap, or none: Esc there is the car page again)
-        int car;
-        while ((car = CarPage(trial ? "a time trial" : "a race")) >= 0 && !QualifyingPage(sp, trial)) {}
-        if (car >= 0 && StartRace(sp, trial, car)) return 1;
+        // (a race on a track with levels: its difficulty first; then the car; then a race's qualifying lap, or none -- Esc on the
+        // qualifying page is the car page again, Esc on the car page the difficulty again)
+        for (;;) {
+            int level = -1;
+            if (!trial && s_sp[sp].Levels && (level = LevelPage()) < 0) break;
+            int car;
+            while ((car = CarPage(trial ? "a time trial" : "a race")) >= 0 && !QualifyingPage(sp, trial)) {}
+            if (car >= 0) { if (StartRace(sp, trial, car, level)) return 1; break; }
+            if (level < 0) break;
+        }
     }
 }
 

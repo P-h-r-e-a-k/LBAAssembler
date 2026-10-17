@@ -388,6 +388,17 @@ internal static class RaceTrackScenes
             t.Edges = EdgeCrossings(store, t.Report, t.Options, island);
             t.MushroomSpots = MushroomSpots(t.Report, t.Options, out t.MushroomRows, out t.LapTime);
         }
+        // the cast's cars the line-ups drive (RaceDriver.Cast): each one's entity and body there, as the folder's RACECARS.JSON lists them
+        // (RaceTrackService.Finish installs them before the scenes); one it hasn't is not raced
+        var castCars = tracks.Any(t => t.Drivers.Any(d => d.Cast >= 0))
+            ? RaceTrackCharacterCars.Catalogue(gameDirectory).GroupBy(e => e.Number).ToDictionary(g => g.Key, g => g.First())
+            : new Dictionary<int, RaceTrackCharacterCars.CatalogueEntry>();
+        foreach (var t in tracks)
+            foreach (var d in t.Drivers.Where(d => d.Cast >= 0))
+            {
+                if (!castCars.TryGetValue(d.Cast, out var e)) log.Add($"WARNING: {d.Name}'s car, car {d.Cast} of the cast's, isn't in the folder's {RaceTrackCharacterCars.CatalogueFile}: not raced");
+                else if (e.Generic != d.Body) log.Add($"WARNING: {d.Name}'s car, car {d.Cast} ({e.Name}), is body {e.Generic} of entity {e.Entity}, not {d.Body}: its half-size copy is another's");
+            }
         // the mushrooms' and the penguin's actors to copy: the game's own (Citadel Island's mushroom by the weather wizard's tent, the
         // nitro penguin in its shop)
         SceneActorModel? Template(int scene, int actor)
@@ -639,15 +650,19 @@ internal static class RaceTrackScenes
             foreach (var t in tracks)
             {
                 // each driver's car: the racer's entity with the driver's body (Baldino's rocket car, RaceTrackBaldinoCar, and the cars made
-                // after the characters, RaceTrackCharacterCars), so the racer's animations drive it; or the motorbike Rabbibunny -- the same
-                // flags and empty scripts, standing astride his bike until the race-track mode moves him
+                // after the characters, RaceTrackCharacterCars), so the racer's animations drive it -- or a cast's car, a body of an entity of
+                // its own with the racer's animations; or the motorbike Rabbibunny -- the same flags and empty scripts, standing astride his
+                // bike until the race-track mode moves him
                 for (var k = 0; k < t.Drivers.Count; k++)
                 {
                     var d = t.Drivers[k];
                     var template = d.Bike ? t.BikerTemplate : t.Racer;
                     if (template is null) continue;
+                    RaceTrackCharacterCars.CatalogueEntry? cast = null;
+                    if (d.Cast >= 0 && !castCars.TryGetValue(d.Cast, out cast)) continue;
                     var car = template.Clone();
-                    car.Body = d.Bike ? 0 : d.Body;
+                    car.Body = d.Bike ? 0 : cast?.Generic ?? d.Body;
+                    if (cast is not null) car.Entity = cast.Entity;
                     car.Flags = OpponentFlags; car.Move = 0; car.Anim = d.Bike ? BikerIdleAnim : 0; car.Life = new byte[] { 0 }; car.Track = new byte[] { 0 };
                     car.X = IslandFile.CubeSize / 2; car.Z = IslandFile.CubeSize / 2; car.Y = -20000; car.Beta = 0;
                     if (k < t.CarAt.Count && t.CarAt[k] is { } g) { car.X = g.X; car.Z = g.Z; car.Beta = g.Beta; car.Y = g.Y; }
@@ -848,7 +863,7 @@ internal static class RaceTrackScenes
             if (t.Mushrooms.Count > 0) log.Add($"the power-ups: {t.Mushrooms.Count} mushrooms in {t.MushroomRows} rows across the road (the game's own, scene {MushroomScene}), a row about every {t.LapTime / Math.Max(1, t.MushroomRows):0.0} s of driving (a lap {t.LapTime:0.0} s), {PenguinsPerScene} nitro penguins and {OilPerScene} oil slicks in each of {t.Penguins.Count / PenguinsPerScene} scenes{whose}");
             if (mushroomsLeftOut > 0) log.Add($"{mushroomsLeftOut} mushrooms left out: their scenes had no room for more actors");
             for (var k = 0; k < t.Drivers.Count; k++)
-                if (t.Cars[k].Count > 0) log.Add($"{t.Drivers[k].Name}: a copy of {(t.Drivers[k].Bike ? "the motorbike Rabbibunny" : $"the car (the racer's body {t.Drivers[k].Body})")} in {t.Cars[k].Count} scenes{whose}");
+                if (t.Cars[k].Count > 0) log.Add($"{t.Drivers[k].Name}: a copy of {(t.Drivers[k].Bike ? "the motorbike Rabbibunny" : t.Drivers[k].Cast >= 0 && castCars.TryGetValue(t.Drivers[k].Cast, out var c) ? $"{c.Name} (car {c.Number}: entity {c.Entity}'s body {c.Generic})" : $"the car (the racer's body {t.Drivers[k].Body})")} in {t.Cars[k].Count} scenes{whose}");
             if (t.Grid.Count > 0) log.Add($"the grid: {t.Grid.Count} spots, pole {GridFirst} cells behind the start line, each {t.Options.GridStep} behind the last, {GridSide} either side of the middle{whose}");
             if (t.Pits.Count > 0) log.Add($"the pits: {t.Pits.Count} spots in the pit lane, where the opponents wait while the player qualifies{whose}");
         }

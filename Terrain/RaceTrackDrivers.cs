@@ -9,7 +9,12 @@ namespace LBAAssembler.Terrain;
 // and the race's result is whether Twinsen finished ahead of him. The others' skills are drawn at random each race (RaceCarEngineFile).
 //
 // The rosters are the user's (CharactersForTrack.txt, 2026-10-03): an island with none races the retail track's racer, Baldino and the biker.
-internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.RacingLine Line, bool Main = false, bool Bike = false, bool Ghost = false)
+//
+// A driver may drive one of the cast's cars (Cast: its number in RACECARS.JSON, RaceTrackCharacterCars.CastFirst on), a body of an entity
+// of its own -- a copy of the racer's, its animations the same -- rather than the racer entity's: Body is then its body in that entity, and
+// the build puts the cars in the scenes as that entity (RaceTrackScenes, from the folder's RACECARS.JSON). (2026-10-17: the Temple of Bú's
+// Halloween monsters.)
+internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.RacingLine Line, bool Main = false, bool Bike = false, bool Ghost = false, int Cast = -1)
 {
     public const int RacerBody = 0;
 
@@ -20,6 +25,10 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
 
     private static RaceDriver Of(RaceTrackCharacterCars.Car car, string name, double side, double top, double grip, bool main = false) =>
         new(name, car.Generic, new RaceTrackBuilder.RacingLine(side, 4, top, grip), main);
+
+    // ... and in a car of the cast's, by its number (its body in its own entity: a hundred to an entity, InstallCast)
+    private static RaceDriver OfCast(int number, string name, double side, double top, double grip, bool main = false) =>
+        new(name, (number - RaceTrackCharacterCars.CastFirst) % RaceTrackCharacterCars.CastPerEntity, new RaceTrackBuilder.RacingLine(side, 4, top, grip), main, Cast: number);
 
     // Citadel Island, the storm track: Raph, the lighthouse keeper, too busy racing to let the weather wizard up the lighthouse -- "beat my
     // time" (StoryNotes.txt). His time is his lap at the setup's skill.
@@ -116,19 +125,27 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Of(RaceTrackCharacterCars.Survivor, "The survivor", 1.8, 1.02, 0.97),
     };
 
-    // The Temple of Bú's Halloween race (2026-10-16): the Dark Monk himself (the one to beat), Ker'aooc the healer in her cauldron -- the
-    // witch of the night -- and Tabata the wizard on his spell book
+    // The Temple of Bú's Halloween race: Halloween's own monsters in the cast's cars (2026-10-17, the user: "I thought we'd made halloween
+    // themed opponents for our Temple track" -- it was the Dark Monk, Ker'aooc and Tabata from 2026-10-16) -- the skeleton in his ghost car
+    // (the one to beat: the temple's own, LBA1's skeleton wakes up in it), the ghost in hers and the two-headed monster in his monster truck,
+    // on the lines the three before had. Of the Halloween cars these read best from the camera behind them on the temple's near-black
+    // road: the ghost's pale blue, the skeleton's pale bones, the monster's two heads with their red eyes over the rim; the giant spider sits
+    // flat on its cockpit's floor (an empty purple truck), the gas monster and the Eye are dark.
     public static readonly List<RaceDriver> Temple = new()
     {
-        Of(RaceTrackCharacterCars.DarkMonk, "The Dark Monk", 0, 1.0, 1.0, main: true),
-        Of(RaceTrackCharacterCars.Keraooc, "Ker'aooc's cauldron", -1.2, 0.99, 1.02),
-        Of(RaceTrackCharacterCars.Tabata, "Tabata's spell book", 1.2, 1.02, 0.97),
+        OfCast(RaceTrackCharacterCars.CastCar(TempleSkeleton), "The skeleton", 0, 1.0, 1.0, main: true),
+        OfCast(RaceTrackCharacterCars.CastCar(TempleGhost), "The ghost", -1.2, 0.99, 1.02),
+        OfCast(RaceTrackCharacterCars.CastCar(TempleMonster), "The two-headed monster", 1.2, 1.02, 0.97),
     };
+    // (their drivers' bodies, BODY.HQR: the rabbibunny skeleton of the Tralu's cave, the ghost of the School of Magic, the palace's
+    // two-headed monster)
+    public const int TempleSkeleton = 35, TempleGhost = 125, TempleMonster = 259;
 
     // The Emperor's palace (2026-10-12): racing out of the palace ahead of the Dark Monk to his teleporter -- Stan in his time machine (the
     // one to beat), the pighead with the broom in his road sweeper (CharactersForTrack.txt) and the Emperor himself, fleeing his own palace,
     // a little to either side of the road's middle: the rooms' doors are two bricks wide. (The user's list has the palace's two-headed
-    // monster too: its car is one of the cast's, bodies of entities of their own, which an opponent can't be yet.)
+    // monster too: its car is one of the cast's, bodies of entities of their own, which an opponent couldn't be then -- it can since
+    // 2026-10-17, RaceDriver.Cast, and races on the Temple of Bú; the palace's line-up is as it was.)
     public static readonly List<RaceDriver> Palace = new()
     {
         Of(RaceTrackCharacterCars.Stan, "Stan", 0, 1.0, 1.0, main: true),

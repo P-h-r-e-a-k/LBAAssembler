@@ -188,6 +188,14 @@ internal static class RaceCarEngineFile
         // the one to beat, with a car (a race's win is finishing ahead of him)
         var main = opponents.FindIndex(o => o.Main && !o.Ghost);
         if (main >= 0) text.Append($"main={main + 1}\n");
+        // the race's level, on a track with levels raced against opponents (the Temple of Bú's): the one the setup races and every level's
+        // numbers -- the race game's menu adds its own pick after them (RACEMOD.CPP difficulty=, RaceDifficulty)
+        if (opponents.Any(o => !o.Ghost) && info is not null && RaceTrackIsland.ByName(info.Island) is { Levels: { Length: 3 } levels })
+        {
+            var level = Math.Clamp(car.Difficulty, RaceDifficulty.Easy, RaceDifficulty.Hard);
+            text.Append($"# the race's level: {RaceDifficulty.Name(level)} (0 easy, 1 medium, 2 hard)\ndifficulty={level}\n");
+            for (var n = 0; n < levels.Length; n++) text.Append(levels[n].Line(n, car.OpponentsFightBack)).Append('\n');
+        }
         // the power-ups: the mushrooms along the lap and the penguin of each scene
         if (car.PowerUps && track?.Mushrooms is { Count: > 0 } mushrooms)
         {

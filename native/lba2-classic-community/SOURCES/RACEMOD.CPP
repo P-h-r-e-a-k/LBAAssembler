@@ -144,6 +144,18 @@
  *                                the cars drive through, tearing it (Webs; its parts web_part= after it)
  *     web_part=<kind> <body> <across> <up> <turn>   a part of the web before it: 0 always, 1 while it is whole, 2 a tatter once it is torn,
  *                                3 a scrap the car flings along with it (DrawWebs)
+ *   The race's level (2026-10-17, the Temple of Bú's race first; the builder writes these for a track with levels, the race game's menu
+ *   adds the level chosen after the file's -- the last difficulty= counts):
+ *     difficulty=<0 easy|1 medium|2 hard>    the level raced: its numbers below, over the opponents' own keys (ApplyDifficulty)
+ *     difficulty_level=<level> <skill> <catch-up> <ease> <items> <aim> <hazards>   a level's numbers:
+ *                                <skill> points added to every opponent's skill (the one to beat's, and the others' range);
+ *                                <catch-up> how much harder one pushes when it has fallen behind Twinsen (percent at 60 cells behind, in
+ *                                place of opponentN_catchup=); <ease> how much one ahead of him eases off (percent at 60 cells ahead);
+ *                                <items> how many of the mushroom rows an opponent takes an item from (percent); <aim> 0: an item used as
+ *                                soon as it is taken, else the longest (ms) an opponent holds an attack until it would hit Twinsen -- a
+ *                                penguin, oil or a fake mushroom dropped as he comes up behind it, a magic ball thrown with him ahead
+ *                                (OpponentAims); <hazards> how often the track's own come at the cars (percent: the witches' fire balls
+ *                                and their dives). With no difficulty= -- or none for that level -- the race is as the file has it.
  */
 #include <errno.h>
 #include <string.h>
@@ -278,8 +290,23 @@ typedef struct {
     int Small, Normal;                     // its car's shrunk generic body (-1 none) and its own (-1: not seen yet)
     S32 ShrunkUntil;                       // shrunk by Twinsen's lightning until when (ShrinkMs: longer the further ahead it is)
     double FinishS;                        // a sprint's: where its line crosses the finish line (it stops there)
+    int Holds; S32 HoldUntil;              // an attack it holds until it would hit Twinsen (the race's level: OpponentAims), its power-up + 1
+                                           // (0 none), and how long at most
 } T_RACE_OPPONENT;
 static T_RACE_OPPONENT s_opp[RACE_MAX_OPPONENTS];
+// The race's level (difficulty=, 2026-10-17, the Temple of Bú's race first -- the user: "Let's also create an easy/medium/hard mode"): the
+// level raced (-1 none: the race as the file has it), each level's numbers (difficulty_level=, the file's description) and the raced one's
+// (ApplyDifficulty).
+enum { DIFF_SKILL, DIFF_CATCHUP, DIFF_EASE, DIFF_ITEMS, DIFF_AIM, DIFF_HAZARDS, DIFF_KEYS };
+static int s_difficulty = -1;
+static int s_levels[3][DIFF_KEYS], s_hasLevel[3];
+static int s_diffEase = 0, s_diffItems = 100, s_diffAim = 0, s_diffHazards = 100;
+static void ApplyDifficulty(void);
+static int DifficultyTakes(int n);
+static int DifficultyHolds(int n, int pu, S32 now);
+static double DifficultyEase(const T_RACE_OPPONENT *o, double me);
+static S32 HazardEvery(S32 ms);
+static double HazardChance(double chance);
 // With no opponent raced, the line of the one to beat all the same (guide_path=, guide_top=, guide_grip=: the builder writes it then),
 // for what follows a line -- the jet-pack's driving, the penguins' walks, the laps, the rescue. The first opponent's when there is one.
 static T_RACE_OPPONENT s_guide;
@@ -3081,6 +3108,14 @@ static void Load(const char *path, int carOnly = 0) {
             int scene, x, y, z, beta;
             if (sscanf(v, "%d %d %d %d %d", &scene, &x, &y, &z, &beta) == 5) { s_paradeParkScene = scene; s_paradeParkX = x; s_paradeParkY = y; s_paradeParkZ = z; s_paradeParkBeta = beta; }
         }
+        else if (!strcmp(key, "difficulty")) s_difficulty = atoi(v);
+        else if (!strcmp(key, "difficulty_level")) {
+            int level, k[DIFF_KEYS];
+            if (sscanf(v, "%d %d %d %d %d %d %d", &level, &k[0], &k[1], &k[2], &k[3], &k[4], &k[5]) == 7 && level >= 0 && level <= 2) {
+                memcpy(s_levels[level], k, sizeof(k));
+                s_hasLevel[level] = 1;
+            }
+        }
         else {
             const char *rest;
             T_RACE_OPPONENT *o = OpponentKey(key, &rest);
@@ -3154,6 +3189,8 @@ static void Load(const char *path, int carOnly = 0) {
     }
     if (s_sprint) Log_Info("[racemod] a sprint: %s%s", s_hasFinish ? "to the finish line" : "to the line's end", s_wakeScene >= 0 ? ", a win wakes Twinsen up" : "");
     for (int i = 0; i < s_nbLoops; i++) LoopWindow(&s_loops[i]);
+    // (the race's level, over the opponents' own skills and catch-up: before the skills are drawn)
+    ApplyDifficulty();
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
         T_RACE_OPPONENT *o = &s_opp[n];
         // (a skill between two: drawn each time the track is loaded, so the race is never the same twice)
@@ -3518,6 +3555,7 @@ void RaceMod_Lap(S32 x, S32 z) {
             if (s_endToMenu > 0) s_menuAt = now + s_endToMenu;
             Log_Info("[racemod] race over after %d laps: %d%s of %d%s", s_raceLaps, place, Ordinal(place), racers,
                      mainOn ? (s_beatMain ? ", ahead of the main opponent" : ", behind the main opponent") : "");
+            if (total > 0) Log_Info("[racemod] Twinsen finishes the race: %.2f s from GO", total / 1000.0);
             if (s_beatMain) ApplySets(s_winSet, s_nbWinSet);
             ApplySets(s_finishSet, s_nbFinishSet);
         }
@@ -3722,6 +3760,8 @@ S32 RaceMod_NewGameScene(S32 scene) {
 static int s_auto = 0, s_autoIndex = -1;
 static double s_autoLook = 5 * 512;
 static double s_autoSide = 0;              // how far to the side of the line it drives (to the left of the way it runs, x east, z south)
+static double s_autoPace = 100;            // how fast (percent of the line's speed: a slower driver than the line's perfect one, the race's
+                                           // levels' benchmark, 2026-10-17)
 
 // How far (squared) a place is from point i of an opponent's line. With a raised road the lap passes over itself, so the height counts
 // too, and twice: the line's point on another level is then never the nearest.
@@ -3736,6 +3776,12 @@ void RaceMod_AutoDrive(int on, double lookCells, double sideCells) {
     if (lookCells > 0) s_autoLook = lookCells * 512;
     s_autoSide = sideCells * 512;
     Log_Info("[racemod] autodrive %s (looking %.1f cells ahead, %.1f to the side)", on ? "on" : "off", s_autoLook / 512, s_autoSide / 512);
+}
+
+// ... and its pace (the console's autodrive's fifth: percent of the line's speed, 100 the line's own).
+void RaceMod_AutoPace(double percent) {
+    s_autoPace = percent > 10 ? percent : 10;
+    Log_Info("[racemod] autodrive at %.0f%% of the line's speed", s_autoPace);
 }
 
 // raceplan (tests, the console): the racing line planned again for a car setup -- the car's gears' top speeds, its pull, its brakes and
@@ -3883,7 +3929,8 @@ U32 RaceMod_AutoInput(void) {
     else if (err < -24) bits |= I_RIGHT;
     // the line's speed here (the reference car's; the jet-pack's times its factor), and the car's own
     // (on Gazogem fuel all race, fuel_always=: the line's speed times its boost, as the car's own top speed is)
-    const double here = o->V[best] * JetFactor(s_jetUntil, s_jetFactor) * (s_fuelAlways && s_phase != PHASE_QUALIFYING && (S32)TimerRefHR >= s_jetUntil ? RACE_BOOST : 1.0), speed = ListBuggy[0].Speed;
+    const double here = o->V[best] * JetFactor(s_jetUntil, s_jetFactor) * (s_fuelAlways && s_phase != PHASE_QUALIFYING && (S32)TimerRefHR >= s_jetUntil ? RACE_BOOST : 1.0)
+                        * (s_auto && (S32)TimerRefHR >= s_jetUntil ? s_autoPace / 100.0 : 1.0), speed = ListBuggy[0].Speed;
     // (coming up to a ring with a gap: held close to the speed it is leapt at -- coasting a little over it, braking only well over it --
     // and no brakes in the last cell, which a car carries into the ring)
     for (int k = 0; k < s_nbLoops; k++) {
@@ -6113,7 +6160,11 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
         // (one from a row: the others it passes give way, empty)
         if (now - o->TakeAt < RACE_ROW_MS) continue;
         o->TakeAt = now;
+        // (the race's level: an item from only so many of the rows, none while it holds one -- and an attack held until it would hit
+        // Twinsen, OpponentAims)
+        if (!DifficultyTakes(n)) continue;
         const int pu = RandomPowerUp(BackShare(n));
+        if (DifficultyHolds(n, pu, now)) continue;
         if (pu >= PU_BALL_YELLOW && pu <= PU_BALL_FIRE) {
             Attack(pu, n, car->Obj.X + CurrentCubeX * 32768.0, car->Obj.Y, car->Obj.Z + CurrentCubeY * 32768.0, car->Obj.Beta * 2 * 3.14159265358979 / 4096, now);
         } else if (pu == PU_FAKE) {
@@ -6481,6 +6532,127 @@ static void Shots(S32 now, int driving) {
         }
         if (done) sh->On = 0;
     }
+}
+
+// ---- the race's level (difficulty=) ----------------------------------------------------------------------------------------------
+// An easy race, a medium one, a hard one: the same track, the same line-up, the player's car as his setup makes it -- the opponents
+// quicker or slower (their skill), pushing harder when behind him or easing off ahead of him (catch-up, ease), taking items from more or
+// fewer of the mushroom rows and aiming the attacks at him or not (items, aim), and the track's own hazards coming more or less often.
+
+#define RACE_AIM_BEHIND_NEAR (3 * 512.0)   // a drop (1,300 behind the car) aimed: Twinsen at least this far behind the car ...
+#define RACE_AIM_BEHIND_FAR (10 * 512.0)   // ... and no further than this, coming up on it
+#define RACE_AIM_OIL_ACROSS 700.0          // ... and this near its way across for oil (a car within 760 of a slick skids), ...
+#define RACE_AIM_DROP_ACROSS 1000.0        // ... this near for a penguin or a fake mushroom (they go off at 1,100)
+#define RACE_AIM_AHEAD_NEAR (2 * 512.0)    // a ball aimed: Twinsen at least this far ahead of the car ...
+#define RACE_AIM_AHEAD_FAR (20 * 512.0)    // ... and no further than this
+#define RACE_AIM_DART_ACROSS 900.0         // ... and, for the yellow dart (straight ahead), this near its way across
+
+// After the file is read, before the skills are drawn: the level raced, its numbers over the opponents' own -- or, with none (no
+// difficulty=, or the file has no numbers for it), the race as the file has it.
+static void ApplyDifficulty(void) {
+    s_diffEase = 0; s_diffItems = 100; s_diffAim = 0; s_diffHazards = 100;
+    if (s_difficulty < 0) return;
+    static const char *const names[3] = {"easy", "medium", "hard"};
+    if (s_difficulty > 2 || !s_hasLevel[s_difficulty]) {
+        Log_Info("[racemod] difficulty %d: the file has no numbers for it -- the race as the file has it", s_difficulty);
+        s_difficulty = -1;
+        return;
+    }
+    const int *l = s_levels[s_difficulty];
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        T_RACE_OPPONENT *o = &s_opp[n];
+        if (!o->Count) continue;
+        o->Pace += l[DIFF_SKILL];
+        if (o->PaceHi > 0) { o->PaceLo += l[DIFF_SKILL]; o->PaceHi += l[DIFF_SKILL]; }
+        o->Catchup = l[DIFF_CATCHUP];
+    }
+    s_diffEase = l[DIFF_EASE] > 0 ? l[DIFF_EASE] : 0;
+    s_diffItems = l[DIFF_ITEMS] < 0 ? 0 : l[DIFF_ITEMS] > 100 ? 100 : l[DIFF_ITEMS];
+    s_diffAim = l[DIFF_AIM] > 0 ? l[DIFF_AIM] : 0;
+    s_diffHazards = l[DIFF_HAZARDS] > 0 ? l[DIFF_HAZARDS] : 0;
+    char aim[48];
+    if (s_diffAim) snprintf(aim, sizeof(aim), "attacks held up to %.1f s for Twinsen", s_diffAim / 1000.0);
+    else snprintf(aim, sizeof(aim), "items used at once");
+    Log_Info("[racemod] difficulty: %s -- the opponents' skill %+d, catch-up %d%%, easing off ahead %d%%, items from %d%% of the rows, %s, the "
+             "track's hazards %d%%", names[s_difficulty], l[DIFF_SKILL], l[DIFF_CATCHUP], s_diffEase, s_diffItems, aim, s_diffHazards);
+}
+
+// Opponent n at a mushroom row: whether it takes an item from it -- none while it holds one, and with the level's items under 100 %, only
+// from that share of the rows (passed by, the row's mushrooms go all the same).
+static int DifficultyTakes(int n) {
+    if (s_difficulty < 0) return 1;
+    T_RACE_OPPONENT *o = &s_opp[n];
+    if (o->Holds) return 0;
+    if (s_diffItems >= 100) return 1;
+    if (RaceRandom() * 100 < s_diffItems) return 1;
+    Log_Info("[racemod] %s passes a mushroom row by (the race's level: items from %d%% of the rows)", o->Name, s_diffItems);
+    return 0;
+}
+
+// Opponent n has taken `pu`: with the level's aim, an attack that can miss -- a penguin, oil, a fake mushroom, the yellow, green or red
+// ball -- held until it would hit Twinsen (OpponentAims), at most the level's aim. 1 when held (not used yet).
+static int DifficultyHolds(int n, int pu, S32 now) {
+    if (s_difficulty < 0 || !s_diffAim) return 0;
+    if (!(pu == PU_PENGUIN || pu == PU_OIL || pu == PU_FAKE || pu == PU_BALL_YELLOW || pu == PU_BALL_GREEN || pu == PU_BALL_RED)) return 0;
+    T_RACE_OPPONENT *o = &s_opp[n];
+    o->Holds = pu + 1;
+    o->HoldUntil = now + s_diffAim;
+    Log_Info("[racemod] %s takes a mushroom's power-up: %s (held for Twinsen, %.1f s at most)", o->Name, s_puName[pu], s_diffAim / 1000.0);
+    return 1;
+}
+
+// Every frame, for an opponent's car in this scene (actor `car`) holding an attack: used once it would hit Twinsen -- a drop as he comes
+// up close behind the car, near its way across; the yellow dart with him close ahead on its way, the green ball with him close ahead, the
+// red with him the car in front (it goes after that one) -- or once its time is up, whatever comes of it.
+static void OpponentAims(int n, T_OBJET *car, S32 now) {
+    T_RACE_OPPONENT *o = &s_opp[n];
+    if (!o->Holds) return;
+    const int pu = o->Holds - 1;
+    // (the game clock gone back -- a saved game loaded: ForgetPowerUps -- held no longer than the level says from now)
+    if (o->HoldUntil - now > s_diffAim) o->HoldUntil = now + s_diffAim;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double b = car->Obj.Beta * 2 * RACE_PI / 4096, hx = sin(b), hz = cos(b);
+    const double dx = hero->Obj.X - car->Obj.X, dz = hero->Obj.Z - car->Obj.Z;
+    const double along = dx * hx + dz * hz, across = fabs(dx * hz - dz * hx);
+    int aimed = 0;
+    if (Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR && abs(hero->Obj.Y - car->Obj.Y) < 900) {
+        if (pu == PU_PENGUIN || pu == PU_OIL || pu == PU_FAKE)
+            aimed = along < -RACE_AIM_BEHIND_NEAR && along > -RACE_AIM_BEHIND_FAR && across < (pu == PU_OIL ? RACE_AIM_OIL_ACROSS : RACE_AIM_DROP_ACROSS);
+        else if (pu == PU_BALL_YELLOW) aimed = along > RACE_AIM_AHEAD_NEAR && along < RACE_AIM_AHEAD_FAR && across < RACE_AIM_DART_ACROSS;
+        else if (pu == PU_BALL_GREEN) aimed = along > RACE_AIM_AHEAD_NEAR && along < RACE_AIM_AHEAD_FAR;
+        else if (pu == PU_BALL_RED) aimed = CarInFront(n) == -1;
+    }
+    if (!aimed && now < o->HoldUntil) return;
+    o->Holds = 0;
+    const double x = car->Obj.X + CurrentCubeX * 32768.0, z = car->Obj.Z + CurrentCubeY * 32768.0;
+    if (pu >= PU_BALL_YELLOW && pu <= PU_BALL_FIRE) Attack(pu, n, x, car->Obj.Y, z, b, now);
+    else if (pu == PU_FAKE) DropFake(x - hx * 1300, car->Obj.Y, z - hz * 1300, n, now);
+    else if (pu == PU_OIL) DropOil(x - hx * 1300, car->Obj.Y, z - hz * 1300);
+    else if (pu == PU_PENGUIN) DropPenguin(x - hx * 1300, car->Obj.Y, z - hz * 1300, n);
+    if (aimed) Log_Info("[racemod] %s aims %s at Twinsen (%.1f cells %s, %.1f across)", o->Name, s_puName[pu], fabs(along) / 512, along < 0 ? "behind" : "ahead", across / 512);
+    else Log_Info("[racemod] %s uses %s: held its %.1f s, never aimed at Twinsen", o->Name, s_puName[pu], s_diffAim / 1000.0);
+}
+
+// How much an opponent eases off its pace for being ahead of Twinsen (`me`, his progress): 1 none, down to 1 - ease at 60 cells ahead
+// (the race's level: the rubber band of an easy race).
+static double DifficultyEase(const T_RACE_OPPONENT *o, double me) {
+    if (s_difficulty < 0 || s_diffEase <= 0 || !s_opp[0].Count || s_laps <= 0) return 1;
+    const double ahead = OpponentProgress(o) - me;
+    if (ahead <= 0) return 1;
+    return 1 - s_diffEase / 100.0 * (ahead < 60 * 512 ? ahead / (60 * 512) : 1);
+}
+
+// A hazard's wait (ms) at the level's rate: longer the less often they come (none at 0 %).
+static S32 HazardEvery(S32 ms) {
+    if (s_difficulty < 0 || s_diffHazards == 100) return ms;
+    return s_diffHazards > 0 ? (S32)(ms * 100.0 / s_diffHazards) : 0x3FFFFFFF;
+}
+
+// ... and a hazard's chance (0..1) at the level's rate, at most 0.95.
+static double HazardChance(double chance) {
+    if (s_difficulty < 0 || s_diffHazards == 100) return chance;
+    const double c = chance * s_diffHazards / 100.0;
+    return c > 0.95 ? 0.95 : c;
 }
 
 // A laser's bolt in this scene: the model as a 3D extra (EXTRA.CPP AffSpecial's case 3 draws it, its Scale the pitch), moved by Shots
@@ -8186,7 +8358,7 @@ static void Spooks(S32 now, int driving, S32 dt) {
             double x, cy, z;
             if (sp->Target >= -1 && CarAt(sp->Target, &x, &cy, &z)) sp->Beta = (S32)floor(atan2(x - sp->X, z - sp->Z) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
             if (!sp->Thrown && t >= RACE_SPOOK_THROW) { sp->Thrown = 1; sp->Target = SpookTarget(sp, y, driving, sp->Target); SpookThrow(sp, now, y); }
-            if (t >= 2 * RACE_SPOOK_THROW) { sp->Throwing = 0; sp->Next = now + RACE_SPOOK_EVERY + (S32)(VentRandom() * RACE_SPOOK_EVERY / 2); }
+            if (t >= 2 * RACE_SPOOK_THROW) { sp->Throwing = 0; sp->Next = now + HazardEvery(RACE_SPOOK_EVERY + (S32)(VentRandom() * RACE_SPOOK_EVERY / 2)); }
             continue;
         }
         if (sp->Np < 2 || sp->Len <= 1) continue;
@@ -8213,7 +8385,7 @@ static void Spooks(S32 now, int driving, S32 dt) {
         // (a throw: at the nearest car in her reach below her)
         if (!(sp->Flags & 1)) continue;
         if (!running) { sp->Next = 0; continue; }
-        if (!sp->Next) sp->Next = now + RACE_SPOOK_EVERY / 2 + (S32)(VentRandom() * RACE_SPOOK_EVERY);
+        if (!sp->Next) sp->Next = now + HazardEvery(RACE_SPOOK_EVERY / 2 + (S32)(VentRandom() * RACE_SPOOK_EVERY));
         if (now < sp->Next) continue;
         const int best = SpookTarget(sp, y, driving, -3);
         if (best >= -1) {
@@ -8299,7 +8471,7 @@ static void Dives(S32 now, int driving, S32 dt) {
             const double ahead = LapAhead(d->S, carS, o->Length);
             if (ahead > RACE_DIVE_LEAD || ahead < RACE_DIVE_LEAD - 3000 || now < d->Next) continue;
             d->Next = now + RACE_DIVE_AGAIN;
-            if (ScareRandom() >= RACE_DIVE_CHANCE) { Log_Info("[racemod] the witch at dive place %d lets the car go by this time", i + 1); continue; }
+            if (ScareRandom() >= HazardChance(RACE_DIVE_CHANCE)) { Log_Info("[racemod] the witch at dive place %d lets the car go by this time", i + 1); continue; }
             DiveStart(i, carS, ahead, now, "");
             break;
         }
@@ -8392,7 +8564,7 @@ static void Scares(S32 now, int driving) {
     }
 }
 
-// A car as the giant web's log lines name it: Twinsen's, or an opponent's own name (its car's: "Tabata's spell book"); RACE_MAX_OPPONENTS
+// A car as the giant web's log lines name it: Twinsen's, or an opponent's own name (its driver's: "The ghost"); RACE_MAX_OPPONENTS
 // the console's other car (raceweb 3).
 static const char *WebCar(int who) { return who < 0 ? "Twinsen's car" : who >= RACE_MAX_OPPONENTS ? "another car" : s_opp[who].Name; }
 
@@ -9451,6 +9623,8 @@ void RaceMod_Frame(void) {
                 const double behind = me - OpponentProgress(o);
                 if (behind > 0) pace *= 1 + o->Catchup / 100.0 * (behind < 60 * 512 ? behind / (60 * 512) : 1);
             }
+            // (and, in an easy race, easing off ahead of him)
+            pace *= DifficultyEase(o, me);
             // (a power-up's boost, shrunk by Twinsen's lightning, stopped by a penguin's blast)
             if (now < o->JetUntil) pace *= JetFactor(o->JetUntil, o->JetFactor);
             else if (now < o->BoostUntil || s_fuelAlways) pace *= RACE_BOOST * 0.9;
@@ -9502,6 +9676,8 @@ void RaceMod_Frame(void) {
                 if (!s_sprint && o->S < before) {    // past the start line
                     o->Laps++;
                     if (o->Laps > 1) Log_Info("[racemod] opponent %d: lap %d in %.2f s", n + 1, o->Laps - 1, (now - o->LapStart) / 1000.0);
+                    if (s_raceLaps > 0 && o->Laps == s_raceLaps + 1 && s_phase == PHASE_RACE && s_goAt)
+                        Log_Info("[racemod] %s finishes the race: %.2f s from GO", o->Name, (now - s_goAt) / 1000.0);
                     o->LapStart = now;
                 }
                 // (a loop's foot crossed: into its ring, at a speed it gets round at)
@@ -9593,8 +9769,9 @@ void RaceMod_Frame(void) {
             const int want = now < o->ShrunkUntil ? o->Small : o->Normal;
             if (want >= 0 && car->GenBody != want) InitBody((U8)want, (U8)index);
         }
-        // a mushroom it drives over
+        // a mushroom it drives over (and an attack it holds for Twinsen: the race's level)
         if (s_powerups && moving) OpponentMushrooms(n, car);
+        if (s_powerups && moving) OpponentAims(n, car, now);
         // the driving animation while it moves (its steps are undone every frame: the position is set here)
         const U16 anim = (U16)(o->HasAnims ? (moving ? o->AnimDrive : o->AnimIdle) : (moving ? 1 : 0));
         if (now >= o->HitUntil && car->GenAnim != anim) InitAnim(anim, ANIM_REPEAT, (U8)index);   // (a penguin's blast: its hit reaction plays)
@@ -10690,6 +10867,7 @@ static void ResetTrack(void) {
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0;
+    s_difficulty = -1; memset(s_hasLevel, 0, sizeof(s_hasLevel)); s_diffEase = 0; s_diffItems = 100; s_diffAim = 0; s_diffHazards = 100;
     s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_prizeForce = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
     s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes)); memset(s_shots, 0, sizeof(s_shots));
     s_driveLaser = 0; s_laserModel[0] = s_laserModel[1] = -1; s_skidUntil = 0;

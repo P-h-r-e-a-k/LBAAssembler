@@ -115,6 +115,9 @@ internal sealed record RaceTrackIsland(
     // Who races there (RaceDriver: the user's line-up for the track), and on the twin's track (Citadel Island's town circuit). Null: the
     // retail track's racer, Baldino and the biker.
     public List<RaceDriver>? Roster { get; init; }
+    // The race's levels, easy, medium and hard (RaceDifficulty: the Temple of Bú's, 2026-10-17); null: none -- the race as it is, whatever
+    // the car setup's difficulty.
+    public RaceLevel[]? Levels { get; init; }
     // The game's own people the story needs, by entity, kept in the island's scenes when the build takes the others off the road (the
     // souvenir seller on Celebration Island: RaceTrackStory.ApplyCelebration).
     public int[]? StoryEntities { get; init; }
@@ -368,7 +371,7 @@ internal sealed record RaceTrackIsland(
         LBAAssembler.Terrain.Temple.TempleIsland.PaletteEntry, LBAAssembler.Terrain.Temple.TempleTrack.PlanResource, null)
     {
         Created = true, RaceFile = "temple", Look = (LBAAssembler.Terrain.Temple.TempleIsland.PaletteEntry, LBAAssembler.Terrain.Temple.TempleIsland.SkyEntry),
-        NoHolomap = true, RailHeld = true, OwnScenes = true, FromLba1 = true, Roster = RaceDriver.Temple,
+        NoHolomap = true, RailHeld = true, OwnScenes = true, FromLba1 = true, Roster = RaceDriver.Temple, Levels = RaceDifficulty.Temple,
         Title = "The Temple of Bú: the Halloween race through LBA1's temple, down to its crypt and back (LBA1's scenes, made by the build)",
         // (the giant web's still copy among the decor -- the editor's -- hidden: the race-track mode draws the web, TempleHalloween.PlaceGiantWebs)
         HeldVars = new[] { (LBAAssembler.Terrain.Temple.TempleHalloween.GiantWebVar, 1) },

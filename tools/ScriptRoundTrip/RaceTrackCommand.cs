@@ -157,7 +157,8 @@ internal static class RaceTrackCommand
     // racecarfile <game folder> <out file> [pace]: (RT_RACE=<island file>: the track of that island, of a folder with several) the engine's car setup file Play would write for that folder (the default car, the
     // folder's RACETRACK.JSON: start line, checkpoints, the opponent's line beside it as racepath.txt), for headless tests. RT_WEATHER=rain:
     // Citadel Island left raining (its storm track). RT_TRACK_SETUP=1: the track's best setup over the default car's top speed,
-    // acceleration and steering (RaceCarSetup.UseTrackSetups).
+    // acceleration and steering (RaceCarSetup.UseTrackSetups). RT_DIFFICULTY=0|1|2: the race's level on a track with levels (the Temple of
+    // Bú's: RaceDifficulty).
     // baldinocar <game folder> <scratch folder>: Baldino's car built from the game folder's BODY.HQR and installed into copies of its BODY.HQR and
     // RESS.HQR in the scratch folder (for a look at it: BodyPipeline hqrpreview <scratch>\BODY.HQR <index>)
     public static int BaldinoCar(string[] args)
@@ -365,6 +366,8 @@ internal static class RaceTrackCommand
         if (Environment.GetEnvironmentVariable("RT_CHECKPOINTS") == "1") setup.ShowCheckpoints = true;
         // (RT_TRACK_SETUP=1: each track's best setup in place of the sliders' top speed, acceleration and steering)
         if (Environment.GetEnvironmentVariable("RT_TRACK_SETUP") == "1") setup.UseTrackSetups = true;
+        // (RT_DIFFICULTY=0|1|2: the race's level, easy, medium or hard, on a track with levels -- the Temple of Bú's)
+        if (int.TryParse(Environment.GetEnvironmentVariable("RT_DIFFICULTY"), out var difficulty)) setup.Difficulty = difficulty;
         // (RT_DRIVE=<racer body>: driving as that opponent's car; -2 or -3 Twinsen's buggy firing green or red lasers)
         if (int.TryParse(Environment.GetEnvironmentVariable("RT_DRIVE"), out var drive)) { setup.DriveAs = drive; setup.DriveAsKey = RaceCarEngineFile.DriveAsLine(args[1], drive); }
         // (left to his own car, as Play leaves him: the track's own -- the Temple of Bú's pumpkin F1; RT_DRIVE=-4 his buggy there too)

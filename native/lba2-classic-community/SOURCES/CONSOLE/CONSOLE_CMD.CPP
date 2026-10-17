@@ -2421,15 +2421,18 @@ static int parse_and_schedule_seq(const char *spec, int frameBased) {
      input seq 0:up:60/60:up+throw:30  walk 60 ticks, then walk+fire 30 ticks
      input fseq 3:action:4           press action on rendered frames 3-6 (a skip frame at high refresh)
      input trace 1                   log injected mask + hero anim/pos each sim tick */
-/* autodrive <0|1> [look cells] [side cells]: a race-track mod's test pilot drives the player's car along the first opponent's line
-   (RACEMOD.CPP), or that far to one side of it (to the left of the way it runs, x east and z south: a pilot against a rail). */
+/* autodrive <0|1> [look cells] [side cells] [pace %]: a race-track mod's test pilot drives the player's car along the first opponent's line
+   (RACEMOD.CPP), or that far to one side of it (to the left of the way it runs, x east and z south: a pilot against a rail) -- at that
+   percent of the line's speed (a slower driver: the race's levels' benchmark). */
 static void cmd_autodrive(int argc, const char *argv[]) {
     extern void RaceMod_AutoDrive(int on, double lookCells, double sideCells);
+    extern void RaceMod_AutoPace(double percent);
     if (argc < 2) {
-        Console_Print("Usage: autodrive <0|1> [look ahead, cells] [to the side, cells]");
+        Console_Print("Usage: autodrive <0|1> [look ahead, cells] [to the side, cells] [pace, percent of the line's speed]");
         return;
     }
     RaceMod_AutoDrive(atoi(argv[1]), argc >= 3 ? atof(argv[2]) : 0, argc >= 4 ? atof(argv[3]) : 0);
+    if (argc >= 5) RaceMod_AutoPace(atof(argv[4]));
     Console_Print("autodrive: %s", atoi(argv[1]) ? "on" : "off");
 }
 
@@ -2817,7 +2820,7 @@ void Console_RegisterAll(void) {
                               "Each percentage scales the race file's car (its gears' top speeds, pull, brakes, steering); the lap at a "
                               "neutral character, and its time flat out, round the bends and between (RACEMOD.CPP RaceMod_PlanLap).");
     Console_RegisterCommandEx("autodrive", cmd_autodrive, "Race-track test pilot: drive the player's car along the racing line",
-                              "autodrive <0|1> [look cells]",
+                              "autodrive <0|1> [look cells] [side cells] [pace %]",
                               "With a race-track mod running (LBA2_RACETRACK_FILE), steers and pedals the player's "
                               "car along the first opponent's line while he drives. For headless lap tests.");
     Console_RegisterCommandEx("objtrace", cmd_objtrace, "Trace an object's position each frame",
