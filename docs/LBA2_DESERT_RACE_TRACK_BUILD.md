@@ -1650,7 +1650,7 @@ The user's asks:
 - *With no line anywhere* (an old car file), the jet-pack is only a boost and the keys stay the player's.
 
 **The item box** (`RaceMod_Draw`, `ItemBox`):
-- *Two slots, top left,* each the retail found-object display (OBJECT.CPP's INCRUST_OBJ): black in the game's own frame, the item's OBJFIX model turning about once a second. They are 1/8 of the screen's height across (60 pixels at least, the retail size). The selected slot is ringed in the palette's gold (244).
+- *Two slots, top left,* each the retail found-object display (OBJECT.CPP's INCRUST_OBJ): black in the game's own frame, the item's OBJFIX model turning about once a second. They are 1/8 of the screen's height across (60 pixels at least, the retail size). The selected slot is ringed in the palette's gold (244). (Since 2026-10-17 one box, and no selection: see *One item box* at the end.)
 - *The models* are the inventory's own:
 
   | Power-up | Shown as |
@@ -1666,7 +1666,7 @@ The user's asks:
 
 - *Lit as the inventory lights them:* the light is set with the camera level (`SetAngleCamera(0,0,0)`), not with the scene's camera as the found-object display does. The box is drawn without the outside's fog filler and depth buffer, with the colour table of things near (`SetCLUT(PalLevel)`; outside, the fog is the colour table of each object's distance, and the box would have the last object's). The protection spell's beads and the clover are dark in the retail inventory too.
 - *The roulette:* an item taken goes into the first free slot and the items go by in it, slowing down over 1.5 s to the one drawn, which can't be used until it stops.
-- *Keys:* Shift uses the selected item (the other slot's if that one is empty), and Q selects the other slot. Every item is held now, not only oil and penguins, so while Twinsen has one, Shift doesn't open the inventory. (Since 2026-10-16 Ctrl uses it instead, and Shift is the inventory's again: see *The race game* at the end.) With both slots full the mushrooms still give way to the car, empty. The test pilot uses each item `autodrop_ms` after its roulette stops (default 1 s, 0 never).
+- *Keys:* Shift uses the selected item (the other slot's if that one is empty), and Q selects the other slot. Every item is held now, not only oil and penguins, so while Twinsen has one, Shift doesn't open the inventory. (Since 2026-10-16 Ctrl uses it instead, and Shift is the inventory's again: see *The race game* at the end. Since 2026-10-17 there is one box and no Q: see *One item box*.) With both slots full the mushrooms still give way to the car, empty. The test pilot uses each item `autodrop_ms` after its roulette stops (default 1 s, 0 never).
 
 **Who draws what** (`RandomPowerUp`, `BackShare`):
 - Each power-up has a strength:
@@ -2705,8 +2705,8 @@ The user: "We're getting random shadow images of our gas monsters at points in t
 The user: "Let's lose the numbers on the roulette wheel, half the segments, but double the width of the remaining ones. Red is win, black is lose, and green is super jackpot. For red we spin three wheels at the top middle of the screen like a fruit machine, and they spin stopping one at a time from left to right displaying a powerup, let's make it so roughly 75% of the time the user wins a power up prize, if they get the green super jackpot they get a golden gazogem bottle where they can use the power up for a speedboost as many times as they like for 8 seconds". Earlier the same day: "We don't need messages saying 'Hit by shuttle', 'bitten by gas monster', or 'Hit by gunner'" and "We also don't need a message for each pickup either" -- those are logged only now (the race-track mode's messages, `Message`, had never been drawn until the wheel's prizes needed them; results, start-line notices, loop hints, "Back on the road" and the wheel's prizes stay).
 - *The head* (`RaceTrackRoulette.Pockets`, 19): pocket 0 green, then red and black in turn (9 of each), each 18.9 degrees (the European wheel's were 9.7), no numbers, its colour in eight bands out to the wall. The race file says how many (`roulette_pockets=`); the race-track mode tells the pocket the car drops through over by its angle on the head (`PocketPrize`: 0 green, odd red, even black -- checked against a frame of the drop). A test key forces a prize: `roulette_prize=<0|1|2>`.
 - *Black:* "Black: no luck".
-- *Red: the slot machine* (`SlotSpin`, `SlotMachine`, `SlotShown`). Three reels at the top middle of the screen, item boxes a quarter bigger than the item box's, each turning over the power-ups (one every 70 ms) until it stops: the first 1.2 s after the landing, the next 0.7 s after each other. Three the same win: 75 % of the time (`RACE_SLOT_WIN`) all three are one power-up drawn as a mushroom's is (`RandomPowerUp`), ringed in gold when the last stops, "Winner!", and it goes into the item box at once (`GiveItem`: a free slot, or the one not selected); otherwise the first two are often the same and the last not, "No luck". The reels stay 1.8 s after.
-- *The green: the golden Gazogem* (`PU_GOLD`, never from a mushroom nor the item box's roulette, `PU_ROLLED`). "Super jackpot! A golden Gazogem!", into the item box. Its icon is the game's Gazogem can (OBJFIX.HQR entry 15) with every face on the palette's gold ramp (6), four steps up (`RaceTrackOil.InstallGoldIcon`, `gold_icon=`). From its first use it stays in its slot for 8 s (`RACE_GOLD_MS`), a gold bar under the slot running down; each use in that time gives Gazogem's boost for 1.2 s and kicks the car's speed up a quarter (to the boosted top speed at most). Then it is gone.
+- *Red: the slot machine* (`SlotSpin`, `SlotMachine`, `SlotShown`). Three reels at the top middle of the screen, item boxes a quarter bigger than the item box's, each turning over the power-ups (one every 70 ms) until it stops: the first 1.2 s after the landing, the next 0.7 s after each other. Three the same win: 75 % of the time (`RACE_SLOT_WIN`) all three are one power-up drawn as a mushroom's is (`RandomPowerUp`), ringed in gold when the last stops, "Winner!", and it goes into the item box at once (`GiveItem`: a free slot, or the one not selected; since 2026-10-17 the one box, kept free while the reels turn, and with it full no spin but red's boost -- see *One item box*); otherwise the first two are often the same and the last not, "No luck". The reels stay 1.8 s after.
+- *The green: the golden Gazogem* (`PU_GOLD`, never from a mushroom nor the item box's roulette, `PU_ROLLED`). "Super jackpot! A golden Gazogem!", into the item box. Its icon is the game's Gazogem can (OBJFIX.HQR entry 15) with every face on the palette's gold ramp (6), four steps up (`RaceTrackOil.InstallGoldIcon`, `gold_icon=`). From its first use it stays in its slot for 8 s (`RACE_GOLD_MS`), a gold bar under the slot running down; each use in that time gives Gazogem's boost for 1.2 s and kicks the car's speed up a quarter (to the boosted top speed at most). Then it is gone. (Since 2026-10-17, won while the item box holds something, it waits in a second box: see *One item box*.)
 - Without power-ups (`powerups=0`) red gives a 2.5 s boost and the green a 5 s one, as before.
 
 ### 18 pockets, a jet-pack that gets stuck on nothing, the golden Gazogem's kick (2026-10-10, later)
@@ -4404,5 +4404,56 @@ can each lap, 2:48.59 the best time), Ctrl using the can with no behaviour menu,
 menu.
 
 
+
+## One item box (2026-10-17)
+
+The user: "Let's also reduce item boxes from two to one. Let's keep the second item box for Otringal for when a user gets the golden
+gazogem, and only make it visible if they already have another item, when the user uses their primary item we can remove the additional
+item box again and replace the first box with the golden gazogem item, this also means that we can drop the item selection key to simplify
+the controls."
+
+All in RACEMOD.CPP (`PowerUps`, `GiveItem`, `GoldIntoBox`, `BoxFree`, `WheelPrize`, `SlotMachine`, `RaceMod_Draw`), race-track mode only:
+
+- **One box.** Twinsen holds one item. A mushroom he comes to with the box already full is not taken: it stays standing for the next car
+  (it isn't in a car's way since `RaceMod_NoCollide`, so the old "give way, empty" for the CheckObjCol jam is no longer needed). The rest
+  of a row he has just taken one from still gives way, empty, as an opponent's row does (one item a row, `RACE_ROW_MS`): left standing
+  too, they armed the cars behind a leading Twinsen far more than before (the Temple's opponents took 70 mushrooms in a test race against
+  1 at HEAD). The log says "a mushroom left standing: Twinsen's item box is full" (at most once every 5 s).
+- **Ctrl uses it**, in the editor's Play and in the race game alike (`RaceMod_FilterInput`, the behaviour key, since 2026-10-16). **Q is
+  gone**: nothing reads it, and nothing is selected. The box is ringed in gold while it holds the item Ctrl uses.
+- **The golden Gazogem's second box** (Otringal's roulette wheel, the green). Won with the box empty, it goes into the box. Won while the
+  box holds an item, it waits in a second box beside it, drawn only while it holds something. When the box's item is used (Ctrl), the
+  golden Gazogem moves into the box and the second box goes; the next press is its first boost. It stays in the box for its 8 s as
+  before (a boost at each press), and if a second golden Gazogem waits behind a running one, it moves in when the first's time is up.
+  With both boxes full, the green gives its 5 s boost instead.
+- **Red, the slot machine.** With the box empty as the car lands, the reels spin and the box is kept free for the prize (a mushroom passed
+  meanwhile stays standing: "kept for the slot machine"); a win goes into it. With the box full as the car lands there is no spin: red's
+  2.5 s boost instead, as without power-ups.
+- **The time trial's cans** (the race game): a can at GO and at each later lap, but none while Twinsen still holds the last one.
+- **Opponents** never held items: each uses what it takes at once, one from a row (`OpponentMushrooms`, `o->TakeAt`). Unchanged; they now
+  also find the mushrooms Twinsen leaves standing.
+- **Saved games**: `ForgetPowerUps` empties both boxes on a load, as before; a new track (`ResetTrack`) also ends a running golden
+  Gazogem and the slot machine.
+- **Console tests**: `racebox <n> [won]` (power-up n into the box as a mushroom's, only into a free box with the roulette turning, or with
+  `won` 1 as a prize, the golden Gazogem 11 into the second box when the box is full) and `raceprize <0|1|2>` (the wheel's prize now: 0
+  black, 1 red, 2 the green).
+
+![one box: empty, the roulette, a penguin; the golden Gazogem waiting, moved in, its gold bar; the slot machine, its prize; red with the box full](racetrack/build/item_box_one.png)
+
+**Verified** (headless, muted, `E:\dump\TEMP\itembox`: plain copies of the stress test's 18-track game and the Temple's newest build):
+- *The states* (Otringal, the car standing on the grid, `state.sh`, `slot.sh`): a penguin taken with its roulette; oil offered with the
+  box full, left standing; the green with the box full -> the second box; Q pressed -> nothing; Ctrl -> the penguin dropped and the golden
+  Gazogem moved in; its boosts and gold bar; used up after 8 s; the green with the box empty -> straight into the box; red with the box
+  empty -> the slot machine (wins: a penguin, a super jet-pack, a fire ball, the protection spell, lightning; one miss), a mushroom
+  offered meanwhile left standing; red with the box
+  full -> red's boost; the green with both full -> the green's boost; saved with both boxes full, loaded -> both empty.
+- *Pilot races* (3 laps, the opponents, power-ups, the pilot using each item a second after its roulette; `races.sh`, `otrstat.sh`):
+  every race finished. Desert, Mosquibees, Emerald and the Temple (with its ghost) twice each: no rescue. Otringal 14 times: 3 rescues,
+  all the same pile-up in scene 92 by the spaceport's pad -- cars stopped together by a penguin's blast or a ball, the opponents then
+  held again and again by the landed shuttle, Twinsen's car pinned behind them at the rail, put back on the road after 3 s (`StuckCar`).
+  At HEAD, 0 in 10. Twinsen takes about half as many items now (Otringal: 19-30 a race, 33-54 at HEAD), so he races nearer the pack;
+  the opponents' pickups are much as before (Otringal median 36, 33 at HEAD). A way out, if it recurs: an opponent's car stopped by a hit
+  not solid to Twinsen's (`RaceMod_NoCollide`, as on the super jet-pack).
+- *The Temple driving* (`run.sh temple drive`): the one box during the race, ringed while it holds an item.
 
 The 18 tracks stress-tested and car setups scored per track (2026-10-16): docs/LBA2_RACE_TRACK_STRESS_TEST.md (`raceplan`, tools/RaceTrackStress).

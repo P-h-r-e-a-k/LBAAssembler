@@ -98,8 +98,9 @@
  *   Oil (oil=<scene> <actor>: the slicks' copies in each scene): dropped behind the car, a slick lies on the road until a car drives over
  *   it, and that car skids for RACE_SKID_MS -- once round and slowing to a standstill, sliding on the way it went (Twinsen's keys left
  *   out). The protection spell and the super jet-pack keep a car off it.
- *   Twinsen holds the oil or a penguin he picks up until he drops it, with either Shift (the left one is the game's inventory key: while
- *   he holds something, and until the key is let go after a drop, it doesn't open the inventory). The test pilot drops it a second on.
+ *   Twinsen holds what he picks up in his item box, one item at a time, until he uses it with Ctrl (the behaviour key, which doesn't open
+ *   the behaviour menu in the car); a mushroom he comes to with the box already full stays for the next car. Only the golden Gazogem, won on
+ *   Otringal's roulette wheel while he holds an item, waits in a second box until that item is used. The test pilot uses each a second on.
  *   A penguin dropped (penguin_mode=walk, the default) walks the track at random -- along the first opponent's line, this way and that,
  *   a little to one side or the other -- until a car comes near it, and goes off; penguin_mode=fuse: it goes off a second after it is
  *   dropped.
@@ -419,10 +420,16 @@ static int s_penguinWalk = 1;              // penguin_mode=walk (1) or fuse (0)
 #define RACE_PENGUIN_WALK 450.0            // how fast it walks (units a second)
 #define RACE_PENGUIN_SIDE (1.5 * 512)      // how far to either side of the line it wanders
 #define RACE_PENGUIN_HOME (3 * 512)        // ... or, with no line, round where it was dropped
-// Twinsen's items: two slots, each a power-up (-1 empty) and when its roulette stops (it can be used from then); the slot Shift uses
-// (Q selects the other); when he last took a mushroom's item (a car takes one from a row: the mushrooms beside it give way, empty); and
-// Shift and Q last frame
+// Twinsen's item box: one power-up (-1 empty) and when its roulette stops (it can be used from then) -- and a second box, seen only while
+// it holds something: the golden Gazogem won on Otringal's roulette wheel while the first box held an item, waiting there until that item
+// is used, then moved into the first (GoldIntoBox); and Ctrl last frame. (Two slots until 2026-10-17, Q choosing between them -- the user:
+// "Let's also reduce item boxes from two to one. Let's keep the second item box for Otringal for when a user gets the golden gazogem, and
+// only make it visible if they already have another item, when the user uses their primary item we can remove the additional item box
+// again and replace the first box with the golden gazogem item, this also means that we can drop the item selection key to simplify the
+// controls")
 #define RACE_ITEM_SLOTS 2
+#define RACE_BOX 0                         // the item box
+#define RACE_BOX_GOLD 1                    // the second box: a golden Gazogem waiting
 // the item box's roulette: this long, this many items going by, fast at first and slowing to the one drawn (the user, 2026-10-08: "let's
 // have this go through them a lot faster so it only takes 4-5 seconds to decide on a powerup" -- 20 items; and RACE_ROLL_MS, 1,500,
 // was the green ball's 6,000 from its define on, that name's second: six seconds)
@@ -431,9 +438,9 @@ static int s_penguinWalk = 1;              // penguin_mode=walk (1) or fuse (0)
 #define RACE_ROW_MS 700                    // one item a row
 static int s_item[RACE_ITEM_SLOTS] = {-1, -1};
 static S32 s_itemAt[RACE_ITEM_SLOTS];
-static int s_sel = 0;
-static S32 s_takeAt = 0;
-static int s_useWas = 0, s_qWas = 0;
+static S32 s_takeAt = 0;                   // when he last took a mushroom's item (a car takes one from a row: the others beside it give way)
+static int s_useWas = 0;
+static S32 s_fullSaidAt = 0;               // (when the car was last at a mushroom left standing: the log says so again after 5 s away)
 static int s_useHeld = 0;                  // the behaviour key (Ctrl, the pad's left shoulder) down this frame: RaceMod_FilterInput
 static int s_oilIcon = -1;                 // oil_icon=: the oil's model in OBJFIX.HQR, for the item box (the builder adds it)
 static S32 s_autoDrop = 1000;              // autodrop_ms=<ms> (tests): how long after its roulette the test pilot uses an item (0: never)
@@ -484,7 +491,11 @@ static void HauntSway(int n, T_OBJET *car, S32 now);
                                            // let's allow the user to inject as much speed as they can handle": RaceMod_NoTopSpeed)
 #define RACE_GOLD_AUTO_MS 600              // (the test pilot: once in this long)
 static S32 s_goldUntil = 0, s_goldLast = 0;
-static int s_slotOn = 0;                   // the roulette wheel's slot machine spinning (SlotSpin)
+static int s_slotOn = 0;                   // the roulette wheel's slot machine spinning (SlotSpin) ...
+static int s_slotPaid = 0;                 // ... and its prize paid (SlotMachine)
+// The item box free for an item: empty, and not kept for the slot machine's prize while its reels turn (a mushroom passed meanwhile stays
+// for the next car, as with the box full).
+static int BoxFree(void) { return s_item[RACE_BOX] < 0 && !(s_slotOn && !s_slotPaid); }
 // oil: the slicks on the road (world units; until when), and the scenes' copies of the slick that show them
 #define RACE_MAX_SLICKS 16                 // (6 until 2026-10-07: the pipes' drips have slicks too)
 #define RACE_MAX_OIL_ACTORS 256
@@ -957,8 +968,9 @@ static T_RACE_BULLET s_bullets[RACE_MAX_BULLETS];
 #define RACE_BALL_KNOCK_MS 450             // ... over this long ...
 #define RACE_BALL_SLOW 0.6                 // ... and left this much of its speed
 #define RACE_WHEEL_DRAG 0.4                // how much of the turning floor's speed carries Twinsen's car round with it
-#define RACE_WHEEL_RED_MS 2500             // a red pocket into the hole: Gazogem's boost this long on the road under the wheel ...
-#define RACE_WHEEL_ZERO_MS 5000            // ... the green zero: this long, and an item if a slot is free
+#define RACE_WHEEL_RED_MS 2500             // a red pocket into the hole: Gazogem's boost this long on the road under the wheel (without
+                                           // power-ups, or the item box full) ...
+#define RACE_WHEEL_ZERO_MS 5000            // ... the green zero: this long (without power-ups, or both item boxes full)
 #define RACE_BALL_REACH 330                // a car is hit with its middle this much further from the ball's than the ball's radius, or nearer
 #define RACE_BALL_AGAIN 1500               // ms before a ball can knock the same car again
 #define RACE_WHEEL_TURN (-1)               // the way the wheel turns (the cars go round it anticlockwise seen from above, the ball the other way)
@@ -3321,7 +3333,7 @@ static S32 BeatTime(void) {
 
 static double PlayerProgress(void);
 static void SprintOver(S32 now, int crossed);
-static void GiveItem(int pu, S32 now);
+static int GiveItem(int pu, S32 now);
 static void Time(char *out, size_t size, S32 ms);
 void RaceMod_Lap(S32 x, S32 z) {
     // (the previous frame's position; forgotten when the car changes cube, where the coordinates jump, or is put on the grid)
@@ -3469,7 +3481,8 @@ void RaceMod_Lap(S32 x, S32 z) {
     s_lapStart = now;
     s_halfway = 0;
     s_next = 0;
-    // (a time trial: a can of Gazogem for every lap -- the first at GO, the others as each lap after it begins)
+    // (a time trial: a can of Gazogem for every lap -- the first at GO, the others as each lap after it begins; none while he still
+    // holds the last one: one item box)
     if (s_trial && s_phase == PHASE_RACE && s_laps >= 2 && (s_raceLaps <= 0 || s_laps <= s_raceLaps)) GiveItem(PU_FUEL, now);
 }
 
@@ -5872,7 +5885,7 @@ static void Strike(S32 now, const int *actors, int count) {
     HQ_3D_MixSample(SAMPLE_FOUDRE_STEP3, 0x1000, 500, 1, at->Obj.X, at->Obj.Y + 1000, at->Obj.Z);
 }
 
-// Twinsen uses an item (Shift).
+// Twinsen uses an item (Ctrl).
 static void UseItem(int pu, S32 now) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     switch (pu) {
@@ -5965,7 +5978,7 @@ static void ForgetPowerUps(const char *why) {
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0;
     s_skidUntil = s_hitUntil = 0; s_autoIndex = -1; s_boltUntil = 0; s_nbBolts = 0;
     for (int k = 0; k < RACE_ITEM_SLOTS; k++) s_item[k] = -1;
-    s_sel = 0; s_takeAt = 0; s_goldUntil = 0; s_goldLast = 0; s_slotOn = 0;
+    s_takeAt = 0; s_goldUntil = 0; s_goldLast = 0; s_slotOn = 0;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
         T_RACE_OPPONENT *o = &s_opp[n];
         o->BoostUntil = o->HitUntil = o->JetUntil = o->ShoveUntil = o->SkidUntil = o->ShrunkUntil = 0;
@@ -6483,6 +6496,16 @@ static void Fakes(S32 now, int driving) {
 // a qualifying lap"); the race has them all.
 static int Qualifying(void) { return s_phase == PHASE_QUALIFYING; }
 
+// The golden Gazogem waiting in the second box moved into the item box, once that is empty (its item used, or its own golden Gazogem's
+// time up): ready for the next press, the second box gone again.
+static void GoldIntoBox(S32 now) {
+    if (s_item[RACE_BOX] >= 0 || s_item[RACE_BOX_GOLD] < 0) return;
+    s_item[RACE_BOX] = s_item[RACE_BOX_GOLD];
+    s_itemAt[RACE_BOX] = now;
+    s_item[RACE_BOX_GOLD] = -1;
+    Log_Info("[racemod] the golden Gazogem moves into the item box");
+}
+
 static void PowerUps(S32 now, int driving) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     const int qualifying = Qualifying();
@@ -6496,47 +6519,50 @@ static void PowerUps(S32 now, int driving) {
         ListObjet[a].XMin = ListObjet[a].XMax = ListObjet[a].ZMin = ListObjet[a].ZMax = 0;
         if (m->Back || qualifying || !driving || CubeMode != CUBE_EXTERIEUR) continue;
         if (!Near(hero, ListObjet[a].Obj.X, m->Y, ListObjet[a].Obj.Z, RACE_MUSHROOM_REACH)) continue;
+        // (one item a row: the others of the row he has just taken one from give way, empty, as an opponent's do)
+        if (now - s_takeAt < RACE_ROW_MS) {
+            m->Back = now + RACE_MUSHROOM_BACK;
+            ListObjet[a].Obj.Y = -20000;
+            continue;
+        }
+        // (the item box already full as he comes to it -- or kept for the slot machine's prize: BoxFree -- the mushroom stays where it
+        // is, for the next car: it isn't in a car's way, RaceMod_NoCollide)
+        if (!BoxFree()) {
+            if (now - s_fullSaidAt >= 5000)
+                Log_Info("[racemod] a mushroom left standing: Twinsen's item box is %s", s_item[RACE_BOX] >= 0 ? "full" : "kept for the slot machine");
+            s_fullSaidAt = now;
+            continue;
+        }
         m->Back = now + RACE_MUSHROOM_BACK;
         ListObjet[a].Obj.Y = -20000;
-        // the row's first: its item into a free slot, the roulette turning (the others of the row give way, empty; so does every
-        // mushroom while both slots are full)
-        if (now - s_takeAt < RACE_ROW_MS) continue;
-        int slot = -1;
-        for (int k = 0; k < RACE_ITEM_SLOTS && slot < 0; k++) if (s_item[k] < 0) slot = k;
-        if (slot < 0) continue;
+        // its item into the box, the roulette turning
         s_takeAt = now;
         const double back = BackShare(-1);
-        s_item[slot] = RandomPowerUp(back);
-        s_itemAt[slot] = now + RACE_ITEM_ROLL_MS;
-        if (s_item[s_sel] < 0 || s_sel == slot) s_sel = slot;
-        Log_Info("[racemod] Twinsen takes %s (slot %d; %.2f of the way back)", s_puName[s_item[slot]], slot + 1, back);
+        s_item[RACE_BOX] = RandomPowerUp(back);
+        s_itemAt[RACE_BOX] = now + RACE_ITEM_ROLL_MS;
+        Log_Info("[racemod] Twinsen takes %s (%.2f of the way back)", s_puName[s_item[RACE_BOX]], back);
     }
-    // Ctrl -- the behaviour key, which does nothing else in the car (RaceMod_FilterInput) -- uses the item in the selected slot once its
-    // roulette has stopped (the other slot's when that one is empty), Q selects the other slot; the test pilot uses each item a moment
-    // after its roulette stops. (Shift until 2026-10-16, the inventory's key: the user, "let's map it to Ctrl instead as this shouldn't
-    // be used when driving anyway")
-    const int use = s_useHeld || CheckKey(K_CTRL) || CheckKey(K_CTRL_RIGHT), q = CheckKey(K_Q);
-    if (driving && q && !s_qWas && s_item[s_sel ^ 1] >= 0) { s_sel ^= 1; Log_Info("[racemod] item slot %d selected", s_sel + 1); }
-    const int k = s_item[s_sel] >= 0 ? s_sel : s_sel ^ 1;
-    // (the golden Gazogem's time over: gone from its slot)
-    for (int g = 0; g < RACE_ITEM_SLOTS; g++)
-        if (s_item[g] == PU_GOLD && s_goldUntil && now >= s_goldUntil) {
-            s_item[g] = -1; s_goldUntil = 0;
-            if (s_sel == g && s_item[g ^ 1] >= 0) s_sel = g ^ 1;
-            Log_Info("[racemod] the golden Gazogem is used up");
-        }
-    const int gold = s_item[k] == PU_GOLD;
-    if (driving && s_item[k] >= 0 && now >= s_itemAt[k] && ((use && !s_useWas)
-            || (s_auto && s_autoDrop > 0 && now >= s_itemAt[k] + s_autoDrop && (!gold || now >= s_goldLast + RACE_GOLD_AUTO_MS)))) {
-        const int pu = s_item[k];
-        if (!gold) {
-            s_item[k] = -1;
-            if (s_item[k ^ 1] >= 0) s_sel = k ^ 1;
-        }
+    // Ctrl -- the behaviour key, which does nothing else in the car (RaceMod_FilterInput) -- uses the item in the box once its roulette
+    // has stopped; the test pilot uses each item a moment after its roulette stops. (Shift until 2026-10-16, the inventory's key: the user,
+    // "let's map it to Ctrl instead as this shouldn't be used when driving anyway". No key chooses an item since 2026-10-17: there is one)
+    const int use = s_useHeld || CheckKey(K_CTRL) || CheckKey(K_CTRL_RIGHT);
+    // (the golden Gazogem's time over: gone from the box -- and one waiting in the second box moves in)
+    if (s_item[RACE_BOX] == PU_GOLD && s_goldUntil && now >= s_goldUntil) {
+        s_item[RACE_BOX] = -1; s_goldUntil = 0;
+        Log_Info("[racemod] the golden Gazogem is used up");
+        GoldIntoBox(now);
+    }
+    const int gold = s_item[RACE_BOX] == PU_GOLD;
+    if (driving && s_item[RACE_BOX] >= 0 && now >= s_itemAt[RACE_BOX] && ((use && !s_useWas)
+            || (s_auto && s_autoDrop > 0 && now >= s_itemAt[RACE_BOX] + s_autoDrop && (!gold || now >= s_goldLast + RACE_GOLD_AUTO_MS)))) {
+        const int pu = s_item[RACE_BOX];
+        // (the golden Gazogem stays in the box for its time, a boost at each press; any other item is used up, and a golden Gazogem
+        // waiting in the second box takes its place -- for the next press)
+        if (!gold) s_item[RACE_BOX] = -1;
         UseItem(pu, now);
+        if (!gold) GoldIntoBox(now);
     }
     s_useWas = use;
-    s_qWas = q;
     // the super jet-pack: the car turned into it -- hidden, the jet-pack drawn in its place (DrawSuperJet)
     // (over its last RACE_JET_EASE_MS, flashing: the car and the jet-pack in turn, so the player sees it is about to end)
     const S32 jetLeft = s_jetUntil - now;
@@ -7552,25 +7578,35 @@ static int PocketPrize(int k) { return k == 0 ? 2 : k % 2 ? 1 : 0; }
 // The slot machine the roulette wheel's red pockets spin (the user, 2026-10-10: "For red we spin three wheels at the top middle of the
 // screen like a fruit machine, and they spin stopping one at a time from left to right displaying a powerup, let's make it so roughly 75%
 // of the time the user wins a power up prize"): three reels of power-ups at the top of the screen, stopping left to right; three the same,
-// that power-up won (RACE_SLOT_WIN of the time), into a free item slot -- or the one not selected.
+// that power-up won (RACE_SLOT_WIN of the time), into the item box -- kept free for it while the reels turn (BoxFree); with the box full
+// as the car lands, no spin: red's boost instead.
 #define RACE_SLOT_WIN 0.75
 #define RACE_SLOT_STOP0 1200               // ms: the first reel stops ...
 #define RACE_SLOT_STOP_GAP 700             // ... and each next this long after ...
 #define RACE_SLOT_SHOW 1800                // ... and the reels stay this long after the last
 #define RACE_SLOT_TURN 70                  // ms an item a reel turns over
-static int s_slotReel[3], s_slotWin = 0, s_slotPaid = 0;
+static int s_slotReel[3], s_slotWin = 0;
 static S32 s_slotT0 = 0;
 
-// An item into Twinsen's item box, shown at once (no roulette): a free slot, or the one not selected.
-static void GiveItem(int pu, S32 now) {
-    int slot = -1;
-    for (int k = 0; k < RACE_ITEM_SLOTS && slot < 0; k++) if (s_item[k] < 0) slot = k;
-    if (slot < 0) slot = s_sel ^ 1;
-    if (s_item[slot] == PU_GOLD) s_goldUntil = 0;
-    s_item[slot] = pu;
-    s_itemAt[slot] = now;
-    if (s_item[s_sel] < 0 || s_sel == slot) s_sel = slot;
-    Log_Info("[racemod] Twinsen wins %s (slot %d)", s_puName[pu], slot + 1);
+// An item won into Twinsen's item box, shown at once (no roulette), if the box is empty. With it full, a golden Gazogem waits in the
+// second box -- seen only then -- until the box's item is used (GoldIntoBox); anything else isn't given (each caller says what instead).
+// Whether it went in.
+static int GiveItem(int pu, S32 now) {
+    if (s_item[RACE_BOX] < 0) {
+        s_item[RACE_BOX] = pu;
+        s_itemAt[RACE_BOX] = now;
+        Log_Info("[racemod] Twinsen wins %s, into the item box", s_puName[pu]);
+        return 1;
+    }
+    if (pu == PU_GOLD && s_item[RACE_BOX_GOLD] < 0) {
+        s_item[RACE_BOX_GOLD] = pu;
+        s_itemAt[RACE_BOX_GOLD] = now;
+        Log_Info("[racemod] Twinsen wins %s, into a second box: the item box holds %s", s_puName[pu], s_puName[s_item[RACE_BOX]]);
+        return 1;
+    }
+    if (pu == PU_GOLD) Log_Info("[racemod] Twinsen wins %s, but both boxes are full (%s, and a golden Gazogem waiting)", s_puName[pu], s_puName[s_item[RACE_BOX]]);
+    else Log_Info("[racemod] Twinsen wins %s, but the item box is full (%s)", s_puName[pu], s_puName[s_item[RACE_BOX]]);
+    return 0;
 }
 
 static void SlotSpin(S32 now) {
@@ -7593,8 +7629,11 @@ static void SlotMachine(S32 now) {
     const S32 last = s_slotT0 + RACE_SLOT_STOP0 + 2 * RACE_SLOT_STOP_GAP;
     if (!s_slotPaid && now >= last) {
         s_slotPaid = 1;
-        if (s_slotWin) { GiveItem(s_slotReel[0], now); Message("Winner!"); }
-        else { Message("No luck"); Log_Info("[racemod] slot machine: no prize"); }
+        // (into the box kept free for it; were it full after all, red's boost instead)
+        if (s_slotWin) {
+            if (!GiveItem(s_slotReel[0], now)) s_boostUntil = now + RACE_WHEEL_RED_MS;
+            Message("Winner!");
+        } else { Message("No luck"); Log_Info("[racemod] slot machine: no prize"); }
     }
     if (now >= last + RACE_SLOT_SHOW) s_slotOn = 0;
 }
@@ -7692,6 +7731,44 @@ static void Wheel(S32 now, int driving) {
     }
 }
 
+// The pocket's prize as the car lands under the wheel (2 the green, 1 red, 0 black): the green the golden Gazogem, into the item box or,
+// with it full, the second box; red the slot machine's spin, its prize for the item box -- with the box full, red's boost instead; black
+// nothing. Without power-ups, red and the green a boost; the green's boost too with both boxes full.
+static void WheelPrize(int prize, S32 now) {
+    const char *what = "black: nothing";
+    if (prize == 2) {
+        if (s_powerups && GiveItem(PU_GOLD, now)) { Message("Super jackpot! A golden Gazogem!"); what = "the green: super jackpot, a golden Gazogem"; }
+        else { s_boostUntil = now + RACE_WHEEL_ZERO_MS; Message("Super jackpot!"); what = "the green: super jackpot, a boost"; }
+    } else if (prize == 1) {
+        if (s_powerups && BoxFree()) { SlotSpin(now); what = "red: the slot machine"; }
+        else {
+            s_boostUntil = now + RACE_WHEEL_RED_MS;
+            Message("Red: a boost!");
+            what = s_powerups ? "red: a boost, the item box full (no slot machine)" : "red: a boost";
+        }
+    } else Message("Black: no luck");
+    Log_Info("[racemod] roulette wheel: %s", what);
+}
+
+// Console (tests): the roulette wheel's pocket prize now, as the car lands under the wheel (raceprize); power-up `pu` into Twinsen's
+// item box as a mushroom's -- only into a free box, its roulette turning -- or (`won`) as a prize, GiveItem's way (racebox).
+void RaceMod_TestPrize(int prize) {
+    if (!RaceMod_Active() || prize < 0 || prize > 2) return;
+    WheelPrize(prize, TimerRefHR);
+}
+void RaceMod_TestBox(int pu, int won) {
+    if (!RaceMod_Active() || pu < 0 || pu >= PU_COUNT) return;
+    const S32 now = TimerRefHR;
+    if (won) { GiveItem(pu, now); return; }
+    if (!BoxFree()) {
+        Log_Info("[racemod] a mushroom left standing: Twinsen's item box is %s", s_item[RACE_BOX] >= 0 ? "full" : "kept for the slot machine");
+        return;
+    }
+    s_item[RACE_BOX] = pu;
+    s_itemAt[RACE_BOX] = now + RACE_ITEM_ROLL_MS;
+    Log_Info("[racemod] Twinsen takes %s (the console's)", s_puName[pu]);
+}
+
 // For RaceMod_Loop, on Twinsen's car: in the roulette wheel's bowl (roulette=), drawn down it towards the hole -- as hard as it is steep --
 // and kept inside its wall; into the hole, dropped through it onto the road under it (carried: non-zero, its place this frame in *nx..*nz).
 static S32 WheelMove(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
@@ -7766,18 +7843,7 @@ static S32 WheelMove(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
         w->DropOn = 0;
         s_forgetLap = 1;
         Log_Info("[racemod] roulette wheel: down on the road at (%.0f,%.0f,%.0f)", x, y, z);
-        // (the pocket's prize: red the slot machine's spin, the green the golden Gazogem, black nothing; without power-ups, red and the
-        // green a boost)
-        if (w->Prize == 2) {
-            if (s_powerups) {
-                GiveItem(PU_GOLD, now);
-                Message("Super jackpot! A golden Gazogem!");
-            } else { s_boostUntil = now + RACE_WHEEL_ZERO_MS; Message("Super jackpot!"); }
-        } else if (w->Prize == 1) {
-            if (s_powerups) SlotSpin(now);
-            else { s_boostUntil = now + RACE_WHEEL_RED_MS; Message("Red: a boost!"); }
-        } else Message("Black: no luck");
-        Log_Info("[racemod] roulette wheel: %s", w->Prize == 2 ? "the green: super jackpot" : w->Prize ? "red: the slot machine" : "black: nothing");
+        WheelPrize(w->Prize, now);
     } else {
         const S32 beta = dx * dx + dz * dz > 1 ? (S32)floor(atan2(dx, dz) * 4096 / (2 * RACE_PI) + 0.5) & 4095 : obj->Beta;
         CarPitch(obj, beta, 0.6 * sin(RACE_PI * t));
@@ -9781,7 +9847,7 @@ static void RestoreView(const T_RACE_VIEW *v) {
     CameraXLight = v->CameraXLight; CameraYLight = v->CameraYLight; CameraZLight = v->CameraZLight;
 }
 
-// The item box (top left): a slot's item, or the roulette going by -- the items turning over, slowing to the one drawn.
+// The item box (top left) or the second box (`k`): its item, or the roulette going by -- the items turning over, slowing to the one drawn.
 static int ShownItem(int k, S32 now) {
     if (s_item[k] < 0 || now >= s_itemAt[k]) return s_item[k];
     const double t = 1.0 - (double)(s_itemAt[k] - now) / RACE_ITEM_ROLL_MS, p = RACE_ITEM_ROLL_STEPS * (1 - (1 - t) * (1 - t));
@@ -9791,10 +9857,10 @@ static int ShownItem(int k, S32 now) {
     return shown == PU_ROLLED ? PU_GHOST : shown;
 }
 
-#define RACE_GOLD 244                      // the palette's gold, round the selected slot
+#define RACE_GOLD 244                      // the palette's gold, round the item box holding the item Ctrl uses
 
-// A slot of the item box: black in the game's own frame, as the found-object display is (OBJECT.CPP, INCRUST_OBJ), and in it the item
-// turning as it does there; `size` pixels across, the selected one ringed in gold.
+// An item box: black in the game's own frame, as the found-object display is (OBJECT.CPP, INCRUST_OBJ), and in it the item turning as it
+// does there; `size` pixels across, ringed in gold if `selected`.
 static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int selected, S32 now) {
     const S32 x1 = x0 + size - 1, y1 = y0 + size - 1;
     if (selected)
@@ -10001,13 +10067,15 @@ void RaceMod_Draw(void) {
     DrawHalloween(now);
     DrawHaunt(now, width, height);
     DrawWebScreen(now, width, height);
-    // the item box, top left: its two slots
+    // the item box, top left, ringed in gold while it holds the item Ctrl uses -- and beside it the second box, only while a golden
+    // Gazogem waits in it
     if (items) {
         const S32 size = height / 8 > 60 ? height / 8 : 60, gap = size / 5;
         for (int k = 0; k < RACE_ITEM_SLOTS; k++) {
-            ItemBox(16 + k * (size + gap), top + 16, size, ShownItem(k, now), k == s_sel && s_item[k] >= 0, now);
-            // (the golden Gazogem in use: a gold bar under its slot, its time left)
-            if (s_item[k] == PU_GOLD && s_goldUntil > now) {
+            if (k == RACE_BOX_GOLD && s_item[k] < 0) continue;
+            ItemBox(16 + k * (size + gap), top + 16, size, ShownItem(k, now), k == RACE_BOX && s_item[k] >= 0, now);
+            // (the golden Gazogem in use: a gold bar under the box, its time left)
+            if (k == RACE_BOX && s_item[k] == PU_GOLD && s_goldUntil > now) {
                 const S32 x0 = 16 + k * (size + gap), w = size * (s_goldUntil - now) / RACE_GOLD_MS;
                 Box(x0, top + 16 + size + 8, x0 + w, top + 16 + size + 13, RACE_GOLD);
                 BoxMovingAdd(x0, top + 16 + size + 8, x0 + size, top + 16 + size + 13);
@@ -10140,7 +10208,7 @@ static void ResetTrack(void) {
     s_driveBody = s_driveAnim = s_driveSmall = s_driveShown = -1; s_driveSmallNow = 0;
     if (s_heroIsSmall && Comportement == C_BUGGY) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroSmall = -1; s_heroIsSmall = 0;
-    s_penguinWalk = 1; s_item[0] = s_item[1] = -1; s_sel = 0; s_takeAt = 0; s_useWas = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
+    s_penguinWalk = 1; s_item[RACE_BOX] = s_item[RACE_BOX_GOLD] = -1; s_takeAt = 0; s_useWas = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_opp[n].ShrunkUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
     s_ownTrack = 0; s_loaded[0] = 0;
     FollowCamEyeHook = NULL;

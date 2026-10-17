@@ -2477,6 +2477,22 @@ static void cmd_raceblast(int argc, const char *argv[]) {
     Console_Print("raceblast");
 }
 
+/* racebox <n> [won]: power-up n into Twinsen's item box -- as a mushroom's (only into a free box, its roulette turning), or with `won` 1 as
+   a prize (a golden Gazogem, 11, waits in a second box while the box is full); raceprize <0|1|2>: the roulette wheel's pocket prize now,
+   as the car lands under the wheel (0 black, 1 red: the slot machine, 2 the green: the golden Gazogem) (RACEMOD.CPP, tests). */
+static void cmd_racebox(int argc, const char *argv[]) {
+    extern void RaceMod_TestBox(int pu, int won);
+    if (argc < 2) { Console_Print("Usage: racebox <n> [won]"); return; }
+    RaceMod_TestBox(atoi(argv[1]), argc >= 3 ? atoi(argv[2]) : 0);
+    Console_Print("racebox: %d", atoi(argv[1]));
+}
+static void cmd_raceprize(int argc, const char *argv[]) {
+    extern void RaceMod_TestPrize(int prize);
+    if (argc < 2) { Console_Print("Usage: raceprize <0|1|2>"); return; }
+    RaceMod_TestPrize(atoi(argv[1]));
+    Console_Print("raceprize: %d", atoi(argv[1]));
+}
+
 /* The Temple of Bu's Halloween (RACEMOD.CPP dive=, scare=, haunt=; tests): racedive [place]: a witch dives at Twinsen's car now (from that
    dive place, 1 the first; none: the nearest ahead); racehaunt: his screen haunted as by another car's ghost; racescare [n]: a scare jumps
    up beside the road now (none: the nearest). Twinsen's own ghost on the other cars: raceitem 12. */
@@ -2760,6 +2776,12 @@ void Console_RegisterAll(void) {
                               "0 fuel, 1 protection, 2 lightning, 3 penguin, 4 super jet-pack, 5 oil (RACEMOD.CPP).");
     Console_RegisterCommandEx("raceblast", cmd_raceblast, "Race-track test: a nitro penguin goes off ahead of the car", "raceblast [cells]",
                               "As if another car dropped it; the blast's own rules decide what it does to Twinsen (RACEMOD.CPP).");
+    Console_RegisterCommandEx("racebox", cmd_racebox, "Race-track test: a power-up into Twinsen's item box", "racebox <n> [won]",
+                              "As a mushroom's (only into a free box, its roulette turning), or won 1 as a prize: a golden Gazogem (11) "
+                              "waits in a second box while the box is full (RACEMOD.CPP).");
+    Console_RegisterCommandEx("raceprize", cmd_raceprize, "Race-track test: the roulette wheel's prize now", "raceprize <0|1|2>",
+                              "As the car lands under the wheel: 0 black, 1 red (the slot machine), 2 the green (the golden Gazogem) "
+                              "(RACEMOD.CPP).");
     Console_RegisterCommandEx("racedive", cmd_racedive, "Race-track test: a witch dives at the car now", "racedive [place]",
                               "From that dive place (1 the first; none: the nearest ahead), as the Temple of Bu's witches do (RACEMOD.CPP dive=).");
     Console_RegisterCommandEx("racehaunt", cmd_racehaunt, "Race-track test: a ghost over Twinsen's screen", "racehaunt",
