@@ -208,6 +208,17 @@ internal static class RaceTrackCommand
         return RaceTrackCharacterCars.Catalogue(args[2]).Any(e => e.Number == RaceTrackCharacterCars.PumpkinNumber) ? 0 : 1;
     }
 
+    // toytruck <game folder> <scratch folder>: the toy dump truck (RaceTrackCharacterCars.InstallToyTruck) installed into copies of the
+    // folder's BODY.HQR and RESS.HQR (and RACECARS.JSON, a built folder's) in the scratch folder, as pumpkinf1 does
+    public static int ToyTruck(string[] args)
+    {
+        Directory.CreateDirectory(args[2]);
+        CopyWritable(args[1], args[2], "BODY.HQR", "RESS.HQR");
+        if (File.Exists(Path.Combine(args[1], RaceTrackCharacterCars.CatalogueFile))) CopyWritable(args[1], args[2], RaceTrackCharacterCars.CatalogueFile);
+        foreach (var line in RaceTrackCharacterCars.InstallToyTruck(args[2])) Console.WriteLine(line);
+        return RaceTrackCharacterCars.Catalogue(args[2]).Any(e => e.Number == RaceTrackCharacterCars.ToyTruckNumber) ? 0 : 1;
+    }
+
     // castcars <game folder> <scratch folder> [car number...]: the cast's cars (RaceTrackCharacterCars.Cast) installed into a copy of the
     // folder's BODY.HQR and RESS.HQR (a folder whose race tracks are built: the cars made by hand are in it), with RACECARS.JSON; each car's
     // points and polygons, and any not made.

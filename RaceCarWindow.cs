@@ -352,11 +352,12 @@ internal sealed class RaceCarWindow : Window
             (RaceCarSetup.BuggyAlways, "Twinsen's buggy, on every track"), (RaceCarSetup.LaserGreen, "Twinsen's buggy, firing green lasers"),
             (RaceCarSetup.LaserRed, "Twinsen's buggy, firing red lasers") };
         // (a folder built since 2026-10-05: every car by its number, the cast's too -- RACECARS.JSON; a folder built on 2026-10-08 lists the
-        // laser cars as two cars of their own, left out: the two above are they; Twinsen's own cars first -- the pumpkin F1)
+        // laser cars as two cars of their own, left out: the two above are they; Twinsen's own cars first -- the pumpkin F1 -- then the toy
+        // dump truck)
         if (gameDirectory is not null && Terrain.RaceTrackCharacterCars.Catalogue(gameDirectory) is { Count: > 0 } listed)
         {
             list.AddRange(listed.Where(e => e.Name is not (Terrain.RaceTrackCharacterCars.LaserGreenName or Terrain.RaceTrackCharacterCars.LaserRedName))
-                .OrderBy(e => e.Driver == Terrain.RaceTrackCharacterCars.Pumpkin.Driver ? 0 : 1)
+                .OrderBy(e => e.Driver == Terrain.RaceTrackCharacterCars.Pumpkin.Driver ? 0 : e.Number == Terrain.RaceTrackCharacterCars.ToyTruckNumber ? 1 : 2)
                 .Select(e => (e.Number, $"{e.Number}: {e.Name} ({e.Driver})")));
             return list;
         }

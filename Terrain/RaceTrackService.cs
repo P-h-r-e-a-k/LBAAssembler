@@ -16,6 +16,9 @@ namespace LBAAssembler.Terrain;
 internal static class RaceTrackService
 {
     public const string BackupSuffix = ".before-racetrack";
+    // Whether a build installs the private special cars (the toy dump truck) as well: the editor's builds do; the race game's installer
+    // turns it off, so the game it installs carries none of them.
+    public static bool PrivateCars { get; set; } = true;
     // What every build changes, whichever island it is on; the island's own ground and decor bodies are added to these (RaceTrackIsland).
     public static readonly string[] Files = { "SCENE.HQR" };
     // (and the holomap's pictures and arrows, and the texts the story adds to)
@@ -425,6 +428,9 @@ internal static class RaceTrackService
             if (session.Torturers) log.AddRange(LBAAssembler.Terrain.Palace.PalaceTorturers.Install(gameDirectory));
             // (Twinsen's pumpkin F1, the Temple of Bú's own car and anyone's to drive, after every track's bodies: no body before it moves)
             log.AddRange(RaceTrackCharacterCars.InstallPumpkin(gameDirectory));
+            // (the toy dump truck after it -- a private special: left out where PrivateCars is off, the race game's own install --
+            // RaceTrackCharacterCars.InstallToyTruck)
+            if (PrivateCars) log.AddRange(RaceTrackCharacterCars.InstallToyTruck(gameDirectory));
             // (the Temple of Bú's flag marshal's body and animations after everything else's: Finish placed her)
             if (session.Marshal) log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory));
             progress?.Report(new(1, "Done"));
