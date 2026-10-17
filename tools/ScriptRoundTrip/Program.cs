@@ -89,6 +89,7 @@ internal static class Program
             "islandrender" => IslandRenderCommand.Run(args),
             "trackmaps" => TrackMapsCommand.Run(args),
             "castcars" => RaceTrackCommand.CastCars(args),
+            "pumpkinf1" => RaceTrackCommand.PumpkinF1(args),
             "polarstats" => PolarStudy.Stats(args),
             "polarzones" => PolarStudy.Zones(args),
             "polarlayout" => PolarStudy.Layout(args),

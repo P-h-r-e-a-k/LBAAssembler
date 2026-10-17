@@ -190,6 +190,18 @@ internal static class RaceTrackCommand
         return failed;
     }
 
+    // pumpkinf1 <game folder> <scratch folder>: Twinsen's pumpkin F1 (RaceTrackCharacterCars.InstallPumpkin) installed into copies of the
+    // folder's BODY.HQR and RESS.HQR (and RACECARS.JSON, a built folder's) in the scratch folder (for a look at it: BodyPipeline carviews
+    // <scratch>\BODY.HQR <index> <game folder> <png> [island palette])
+    public static int PumpkinF1(string[] args)
+    {
+        Directory.CreateDirectory(args[2]);
+        CopyWritable(args[1], args[2], "BODY.HQR", "RESS.HQR");
+        if (File.Exists(Path.Combine(args[1], RaceTrackCharacterCars.CatalogueFile))) CopyWritable(args[1], args[2], RaceTrackCharacterCars.CatalogueFile);
+        foreach (var line in RaceTrackCharacterCars.InstallPumpkin(args[2])) Console.WriteLine(line);
+        return RaceTrackCharacterCars.Catalogue(args[2]).Any(e => e.Number == RaceTrackCharacterCars.PumpkinNumber) ? 0 : 1;
+    }
+
     // castcars <game folder> <scratch folder> [car number...]: the cast's cars (RaceTrackCharacterCars.Cast) installed into a copy of the
     // folder's BODY.HQR and RESS.HQR (a folder whose race tracks are built: the cars made by hand are in it), with RACECARS.JSON; each car's
     // points and polygons, and any not made.
@@ -350,6 +362,8 @@ internal static class RaceTrackCommand
         if (Environment.GetEnvironmentVariable("RT_TRACK_SETUP") == "1") setup.UseTrackSetups = true;
         // (RT_DRIVE=<racer body>: driving as that opponent's car; -2 or -3 Twinsen's buggy firing green or red lasers)
         if (int.TryParse(Environment.GetEnvironmentVariable("RT_DRIVE"), out var drive)) { setup.DriveAs = drive; setup.DriveAsKey = RaceCarEngineFile.DriveAsLine(args[1], drive); }
+        // (left to his own car, as Play leaves him: the track's own -- the Temple of Bú's pumpkin F1; RT_DRIVE=-4 his buggy there too)
+        setup.TrackCarKeys = RaceCarEngineFile.TrackCarLines(args[1], setup.DriveAs);
         // (RT_RACE=<island file>: of a folder with several tracks, the one Play races with that island open in the editor, as RaceFor picks it)
         var track = Environment.GetEnvironmentVariable("RT_RACE") is { Length: > 0 } race ? RaceTrackService.RaceFor(args[1], race) : RaceTrackService.ReadInfo(args[1]);
         // (RT_STORY=1: the game played as a game -- every track in a set, raced where and when the game is, with the story's keys)

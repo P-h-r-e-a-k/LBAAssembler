@@ -219,6 +219,38 @@ The user: "Can we also improve the temple track add in some cobwebs, perhaps a g
 Console (tests): `raceweb [0|1|2|3]`: the giant web torn now as by Twinsen's car (1, none: the web over his screen too), whole again (0),
 its spider off up its web (2), torn as by another car (3).
 
+### Twinsen's pumpkin F1 (2026-10-17)
+
+The user: "Let's create a pumpkin inspired F1 car for our Temple track for Twinsen to drive."
+
+![The pumpkin F1 from six sides; driven round the Temple (a bend, a straight, the spiral) and on the Desert track](temple/pumpkin_f1.png)
+
+- *The car* (`RaceTrackCharacterCars.Pumpkin.cs`, `BuildPumpkin`): a single-seater on the cars' kit (CarMesh, the racer's 18 bones). A
+  long, low nose rising to the cockpit; round the cockpit's back half the sidepods and the engine cover are one big pumpkin lying along
+  the car, six lobes ribbed down its length (each lobe's points its own, so the game's light shades it round, darker lines in the
+  grooves). Its colours are the fire oranges the Temple's own pumpkins are (241 on, taking 0.28 of the light: 241-243 as the light falls,
+  red-orange to amber); in other islands' palettes their tables make them those islands' oranges and golds. The pumpkin's front is a
+  jack-o'-lantern's face, glowing (244): the sidepods' inlets its eyes, the car's nose its nose, a toothy grin under it; its back a small
+  face, its grin the rain light and the exhaust's glowing ember (245) its nose -- what the chase camera sees. The airbox is the pumpkin's
+  ridged olive stalk behind Twinsen's head, bent forward, its cut end the intake; the wings are green planes between pumpkin leaves (the
+  endplates, veined), a vine's tendril curling over the rear wing. Four exposed wheels on thin black wishbones: black slicks, the rear
+  ones banded orange round the wall, green wheels with orange caps. Twinsen (BODY.HQR 1, cut at the rim, his arms down in the cockpit)
+  shows his shoulders, head and ponytail. 521 points, 455 polygons, 68 lines and 8 spheres (the engine's limits: 550 each); its box its own
+  (x ±550, y 0..750, z -776..890: longer than the racer's car it is made on).
+- *Where it is*: race car 220 of RACECARS.JSON ("Pumpkin F1", driven by Twinsen), the racer entity's body 64 and its half-size copy 164
+  (the lightning spell). Every build adds it after every track's bodies (`InstallPumpkin`, at the end of `RaceTrackService.Build`), so no
+  other body moves: a build's files differ from the build before only by BODY.HQR's two new last entries, RESS.HQR's entity table and
+  RACECARS.JSON's new last line.
+- *Twinsen's on the Temple*: the car setup's "drive as" -1 is now *Twinsen's own car*: his buggy, or the car a track has for him
+  (`RaceTrackCharacterCars.TrackCar`: the Temple of Bú's the pumpkin F1). The car file of the Temple then has its `drive_as=`
+  (`RaceCarEngineFile.TrackCarLines`, `RaceCarSetup.TrackCarKeys`); the other tracks' don't. Any other choice in the Race car window wins
+  -- a character's car, the laser buggies, or "Twinsen's buggy, on every track" (-4). Race car setup > Your car lists the pumpkin F1 at the
+  top of the cars, to drive anywhere; the race game's car page opens on it (the installer's `GameInstall.Cars`).
+- *It handles as the buggy*: it is drawn in the buggy's place (`RACEMOD.CPP drive_as=`, the opponents' driving animation: it bounces the
+  car and its wheels; no wheel spins or steers in it, as in the other cars), pitched with the road. The test pilot's race against the
+  opponents (same race seed) is the same to the hundredth of a second in the pumpkin F1 as in the buggy and as the build before: 57.46,
+  63.97, 59.96 s, 1st of 4, no rescues.
+
 **Tests**:
 
 - `E:\dump\TEMP\temple\pilot\run.sh <tag> <ticks>` is the headless pilot. CARF=car_fast.txt is a fast car with no qualifying.
@@ -228,6 +260,11 @@ its spider off up its web (2), torn as by another car (3).
   `shots.sh <tag> <every>` (a lap of screenshots), `regress.sh head|work` (every other track: 58 built files and 17 race files the same),
   `templecmp.sh` (the temple alone: only TEMPLE.ILE, TEMPLE.OBL, RACETRACK.JSON and BODY.HQR differ -- its entries before the giant web's the
   same -- and the race file only gains its web lines).
+- The pumpkin F1: `ScriptRoundTrip pumpkinf1 <game> <scratch>` installs it into copies of a folder's BODY.HQR, RESS.HQR and RACECARS.JSON
+  (then `BodyPipeline carviews <scratch>\BODY.HQR <index> <game> <png> 40`); `E:\dump\TEMP\pumpkinf1` -- `views.sh <tag>` (the views),
+  `suite.sh <tag>` (the race in HEAD's build, in this build in the buggy, `RT_DRIVE=-4`, and in the pumpkin F1, a fixed
+  `qualifying_seed=`), `others.sh head|work` (every other track built together: 59 of 62 files the same, BODY.HQR only gaining its two
+  last entries, RESS.HQR only its entry 44, RACECARS.JSON only its last line).
 
 ![The editor: TEMPLE.ILE open](temple/editor_view.png)
 

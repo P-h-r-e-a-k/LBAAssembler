@@ -212,6 +212,7 @@ internal static class RaceTrackService
         if (!HasBackups(gameDirectory)) return null;
         var car = EditorSettings.Current.RaceCar.Clone();
         car.DriveAsKey = RaceCarEngineFile.DriveAsLine(gameDirectory, car.DriveAs);
+        car.TrackCarKeys = RaceCarEngineFile.TrackCarLines(gameDirectory, car.DriveAs);
         if (story && ReadInfo(gameDirectory) is { } all) return path => car.WriteStorySet(path, all);
         return path => car.WriteEngineFile(path, track ?? ReadInfo(gameDirectory));
     }
@@ -418,6 +419,8 @@ internal static class RaceTrackService
             }
             // (the palace dungeon's torturers' body and animations after every track's: Finish)
             if (session.Torturers) log.AddRange(LBAAssembler.Terrain.Palace.PalaceTorturers.Install(gameDirectory));
+            // (Twinsen's pumpkin F1, the Temple of Bú's own car and anyone's to drive, after every track's bodies: no body before it moves)
+            log.AddRange(RaceTrackCharacterCars.InstallPumpkin(gameDirectory));
             progress?.Report(new(1, "Done"));
             var count = tracks.Sum(t => t.Options.Island.Tracks);
             var built1 = count == 1 ? "The race track is built." : $"{count} race tracks are built ({string.Join(", ", tracks.Select(t => t.Options.Island.Built))}); Play races the one of the island the editor has open.";

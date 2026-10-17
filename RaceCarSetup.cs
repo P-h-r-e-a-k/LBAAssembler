@@ -61,14 +61,18 @@ public sealed class RaceCarSetup
     // Play starts a new game -- the story from its start, Twinsen in his house -- instead (the folder's tracks each raced where and when the
     // game is: RaceCarEngineFile.WriteStorySet).
     public bool NewGame { get; set; }
-    // The car Twinsen drives: -1 his own buggy, -2 or -3 his buggy firing green or red lasers out of its gun (his laser cars), else a race
-    // car by its number -- the racer entity's bodies (RaceTrackScenes.RacerEntity: the retail racer's car 0, Baldino's rocket car 1, the cars
-    // made after the characters 2 on, Terrain.RaceTrackCharacterCars) and the cast's cars on from 64 (RACECARS.JSON) -- for a test drive of a
-    // track in it (the engine's drive_as= and drive_laser=: RaceCarEngineFile.DriveAsLine). It handles as this setup makes the car.
+    // The car Twinsen drives: -1 the track's own -- his buggy, or the car a track has for him (the Temple of Bú's pumpkin F1, since
+    // 2026-10-17: Terrain.RaceTrackCharacterCars.TrackCar) --, -4 his buggy on every track, -2 or -3 his buggy firing green or red lasers out
+    // of its gun (his laser cars), else a race car by its number -- the racer entity's bodies (RaceTrackScenes.RacerEntity: the retail racer's
+    // car 0, Baldino's rocket car 1, the cars made after the characters 2 on, Terrain.RaceTrackCharacterCars), the cast's cars on from 64
+    // (RACECARS.JSON) and the pumpkin F1, 220 -- for a test drive of a track in it (the engine's drive_as= and drive_laser=:
+    // RaceCarEngineFile.DriveAsLine). It handles as this setup makes the car.
     public int DriveAs { get; set; } = -1;
-    public const int OwnBuggy = -1, LaserGreen = -2, LaserRed = -3;
-    // (that car as the folder's files have it, worked out when the car file is written: RaceTrackService.CarFileWriter)
+    public const int OwnBuggy = -1, LaserGreen = -2, LaserRed = -3, BuggyAlways = -4;
+    // (that car as the folder's files have it, worked out when the car file is written: RaceTrackService.CarFileWriter; and with OwnBuggy,
+    // each track's own car, by the track's name: RaceCarEngineFile.TrackCarLines)
     [System.Text.Json.Serialization.JsonIgnore] internal string? DriveAsKey { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] internal Dictionary<string, string>? TrackCarKeys { get; set; }
     // Each track's best setup (TrackSetups) in place of the sliders' top speed, acceleration and steering on the track Play races; braking,
     // rolling, reverse and the gearbox stay this setup's own, and a track with no best setup drives as the sliders say. Off unless asked for
     // (2026-10-17, the user: "Yesterday we calculated the optimum car setup for each track, let's add this as an option to override the test

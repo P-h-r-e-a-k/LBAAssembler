@@ -35,6 +35,8 @@ internal static class RaceCarEngineFile
         if (best is not null) text.Append($"# the track's best setup (docs/LBA2_RACE_TRACK_STRESS_TEST.md): {best}\n");
         // (a dreamt sprint: the car's gears scaled to its own top speed -- Twinsen's car is a lot faster in his dream)
         text.Append((best is null ? car : car.With(best)).CarKeys(best is null && track?.Dream is { TopKmh: > 0 } scaled ? scaled.TopKmh : null));
+        // (his own car on a track that has one for him, when the setup leaves him his own: the Temple of Bú's pumpkin F1)
+        if (car.DriveAsKey is null && info is not null && car.TrackCarKeys?.GetValueOrDefault(RaceTrackIsland.ByName(info.Island).Name) is { } own) text.Append(own);
         // (a line's height, when it has one: a lap that passes over itself crosses the line's place at other heights too)
         static string Height(RaceTrackService.StartLineInfo line) => line.Y is { } y ? $" {y}" : "";
         if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}{Height(l)}\n");
@@ -302,6 +304,19 @@ internal static class RaceCarEngineFile
         if (body is null) return null;
         var small = racer.Bodies.Where(b => b.Generic == RaceTrackSmallCars.SmallOf(number)).Select(b => b.Body).DefaultIfEmpty(-1).First();
         return $"# driving as the racer's car body {number}\ndrive_as={body} {anim} {small}\n";
+    }
+
+    // The cars the folder's tracks have for Twinsen of their own (RaceTrackCharacterCars.TrackCar: the Temple of Bú's pumpkin F1), each as
+    // its drive_as= line (DriveAsLine) by its track's name, for a setup that leaves him his own car (RaceCarSetup.OwnBuggy); null for any
+    // other car, or a folder with none (built before them).
+    internal static Dictionary<string, string>? TrackCarLines(string gameDirectory, int driveAs)
+    {
+        if (driveAs != RaceCarSetup.OwnBuggy) return null;
+        var lines = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var island in RaceTrackIsland.All)
+            if (RaceTrackCharacterCars.TrackCar(island.Name) is { } number && DriveAsLine(gameDirectory, number) is { } line)
+                lines[island.Name] = $"# {island.Name}'s own car for Twinsen\n" + line;
+        return lines.Count > 0 ? lines : null;
     }
 
     // The scenes' copies of every opponent's car a track has.

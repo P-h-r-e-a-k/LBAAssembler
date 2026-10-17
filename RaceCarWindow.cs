@@ -84,8 +84,8 @@ internal sealed class RaceCarWindow : Window
 
         // ---- the car: which one, a preset, its handling
         car.Children.Add(Section("Your car", first: true));
-        car.Children.Add(Text("Drive the track in Twinsen's buggy, or in any of the opponents' cars the folder has -- to try a track in it. " +
-                              "It handles as this setup makes the car.", new Thickness(0, 0, 0, 4)));
+        car.Children.Add(Text("Drive the track in Twinsen's own car -- his buggy, or on the Temple of Bú his pumpkin F1 -- or in any of the cars the folder has, " +
+                              "to try a track in it. It handles as this setup makes the car.", new Thickness(0, 0, 0, 4)));
         foreach (var (generic, name) in DrivableCars(gameDirectory)) driveAs.Items.Add(new ComboBoxItem { Content = name, Tag = generic });
         driveAs.SelectionChanged += (_, _) => { if (!updating && driveAs.SelectedItem is ComboBoxItem { Tag: int generic }) setup.DriveAs = generic; };
         car.Children.Add(driveAs);
@@ -312,18 +312,21 @@ internal sealed class RaceCarWindow : Window
         if (IsLoaded) EvenTabs();
     }
 
-    // The cars Twinsen can drive (RaceCarSetup.DriveAs): his buggy, and the racer entity's cars the folder's entity table has -- the
-    // retail racer's, Baldino's rocket car and the cars made after the characters (Terrain.RaceTrackCharacterCars) -- by name.
+    // The cars Twinsen can drive (RaceCarSetup.DriveAs): his own -- his buggy, or the track's own car for him (the Temple of Bú's pumpkin
+    // F1) -- his buggy on every track, and the racer entity's cars the folder's entity table has -- the retail racer's, Baldino's rocket car
+    // and the cars made after the characters (Terrain.RaceTrackCharacterCars) -- by name.
     private static List<(int Generic, string Name)> DrivableCars(string? gameDirectory)
     {
         // (his laser cars: his buggy, its gun firing lasers -- RaceCarSetup.LaserGreen/LaserRed)
-        var list = new List<(int, string)> { (RaceCarSetup.OwnBuggy, "Twinsen's buggy"), (RaceCarSetup.LaserGreen, "Twinsen's buggy, firing green lasers"),
+        var list = new List<(int, string)> { (RaceCarSetup.OwnBuggy, "Twinsen's own car: his buggy, or the track's car for him (the Temple of Bú: the pumpkin F1)"),
+            (RaceCarSetup.BuggyAlways, "Twinsen's buggy, on every track"), (RaceCarSetup.LaserGreen, "Twinsen's buggy, firing green lasers"),
             (RaceCarSetup.LaserRed, "Twinsen's buggy, firing red lasers") };
         // (a folder built since 2026-10-05: every car by its number, the cast's too -- RACECARS.JSON; a folder built on 2026-10-08 lists the
-        // laser cars as two cars of their own, left out: the two above are they)
+        // laser cars as two cars of their own, left out: the two above are they; Twinsen's own cars first -- the pumpkin F1)
         if (gameDirectory is not null && Terrain.RaceTrackCharacterCars.Catalogue(gameDirectory) is { Count: > 0 } listed)
         {
             list.AddRange(listed.Where(e => e.Name is not (Terrain.RaceTrackCharacterCars.LaserGreenName or Terrain.RaceTrackCharacterCars.LaserRedName))
+                .OrderBy(e => e.Driver == Terrain.RaceTrackCharacterCars.Pumpkin.Driver ? 0 : 1)
                 .Select(e => (e.Number, $"{e.Number}: {e.Name} ({e.Driver})")));
             return list;
         }
