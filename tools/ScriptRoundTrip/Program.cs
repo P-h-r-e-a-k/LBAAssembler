@@ -121,6 +121,8 @@ internal static class Program
             "templemap" => TempleStudy.Map(args),
             "templebuild" => TempleStudy.BuildInto(args),
             "templebricks" => TempleStudy.Bricks(args),
+            "templeblocks" => TempleStudy.Blocks(args),
+            "templeshapes" => TempleStudy.Shapes(args),
             "polarprobe" => PolarStudy.Probe(args),
             "polarregion" => PolarStudy.Region(args),
             "polardark" => PolarStudy.Dark(args),

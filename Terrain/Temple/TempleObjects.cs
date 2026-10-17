@@ -13,9 +13,12 @@ namespace LBAAssembler.Terrain.Temple;
 // of a railing, a cobweb's strands, a skull lamp's surroundings -- the face is see-through (an LBA2 "incrusted" texture: its colour 0 is not
 // drawn), as LBA1's picture shows what is behind. A face is left out where what is beyond it hides it: a box as wide that is solid there.
 //
+// The round things' cells -- barrels, columns, amphorae, goblets, fire bowls (TempleShapes) -- are no boxes: each is its part of the thing
+// turned, textured with the thing's own picture the same way, and no box beside it counts it as solid in front of its face.
+//
 // Every face is drawn as it is (the palette's normal level: TemplePalette's row 12, LBA1's colours), unlit -- LBA1's bricks have their light
 // drawn in. The bodies only draw (their decors' boxes touch nothing, BrickBuilding.NoBoxTop); what is solid is a set of plain boxes of their
-// own, the cells merged (Boxes), each a decor with an empty body.
+// own, the cells merged (Boxes), each a decor with an empty body -- a round thing's cells' as their boxes were.
 internal static class TempleObjects
 {
     // a body's cells: at most this many LBA1 columns each way (split again while it is too big for a body)
@@ -46,8 +49,10 @@ internal static class TempleObjects
     }
 
     // `map`: each LBA1 colour's index in the island's palette (TemplePalette). `firstBody`: the OBL entry the bodies start at; `emptyBody`:
-    // an empty body for the boxes (its own entry, made by the caller).
-    public static Built Build(Lba1Game game, TempleLayout layout, IslandFile island, TempleFrame frame, int[] map, int firstBody, int emptyBody)
+    // an empty body for the boxes (its own entry, made by the caller). `shapes`: the round things' bricks (TempleShapes.Find), whose cells
+    // are the parts of turned shapes, not boxes.
+    public static Built Build(Lba1Game game, TempleLayout layout, IslandFile island, TempleFrame frame, int[] map, int firstBody, int emptyBody,
+        Dictionary<int, TempleShapes.Part> shapes)
     {
         var log = new List<string>();
         var cells = layout.Cells;
@@ -93,6 +98,15 @@ internal static class TempleObjects
             return faceTiles[(brick, face)] = (tile, solid, share);
         }
 
+        // the round things (TempleShapes): a cell of one is the part of the thing in it, not a box -- its tiles in the island's colours
+        var shapeTiles = new Dictionary<(TempleShapes.Part Of, TempleShapes.Tile Tile), (int[] Tile, bool Solid)>();
+        (int[] Tile, bool Solid) ShapeTile(TempleShapes.Part of, TempleShapes.Tile which)
+        {
+            if (shapeTiles.TryGetValue((of, which), out var known)) return known;
+            var (pixels, solid) = TempleShapes.Finished(which, TempleShapes.TileOf(of, which));
+            return shapeTiles[(of, which)] = (pixels.Select(c => c >= 0 ? map[c] : 0).ToArray(), solid);
+        }
+
         // the faces each cell shows: its top, its four sides, and its bottom where there is something under it in its column (an arch's
         // underside, a bridge's) -- each left out where it lies on its cell's side and the box beyond is solid and as wide there
         var under = new HashSet<(int X, int Z)>();
@@ -104,8 +118,8 @@ internal static class TempleObjects
             var box = BoxOf(cells[c].Brick);
             var onSide = dir switch { 1 => box.U1 >= 1, 2 => box.U0 <= 0, 3 => box.V1 >= 1, 4 => box.V0 <= 0, _ => true };
             if (!onSide || !cells.TryGetValue((c.X + dx, c.Y + dy, c.Z + dz), out var other)) return false;
-            // (the face of the box beyond that lies against this one: solid?)
-            if (!TileOf(other.Brick, FaceOf(Opposite(dir))).Solid) return false;
+            // (the face of the box beyond that lies against this one: solid? -- a round thing's cell has no box)
+            if (shapes.ContainsKey(other.Brick) || !TileOf(other.Brick, FaceOf(Opposite(dir))).Solid) return false;
             var nb = BoxOf(other.Brick);
             return dir switch
             {
@@ -117,9 +131,21 @@ internal static class TempleObjects
             };
         }
         var shown = new Dictionary<(int X, int Y, int Z), List<int>>();
+        // (a round thing's cell: no box faces, its part's faces -- its bottom where nothing is under it -- and those of its thing's parts
+        // another round thing's cells took, TempleShapes.Overlapped; each with its thing's block's point in the layout)
+        var shapeFaces = new Dictionary<(int X, int Y, int Z), List<(TempleShapes.ShapeFace Face, Vector3 Anchor)>>();
+        var orphans = TempleShapes.Overlapped(shapes, cells);
         var faceCount = 0;
         foreach (var c in cells.Keys)
         {
+            if (shapes.TryGetValue(cells[c].Brick, out var part))
+            {
+                var made = new List<(TempleShapes.ShapeFace, Vector3)>();
+                foreach (var (p, (ax, ay, az)) in orphans.GetValueOrDefault(c, new()).Prepend((part, (c.X - part.I, c.Y - part.J, c.Z - part.K))))
+                    made.AddRange(TempleShapes.CellFaces(p, bottom: !cells.ContainsKey((ax + p.I, ay + p.J - 1, az + p.K))).Select(f => (f, new Vector3(ax, ay, az))));
+                if (made.Count > 0) { shapeFaces[c] = made; shown[c] = new List<int>(); }
+                continue;
+            }
             var list = new List<int>();
             for (var d = 0; d < Dirs.Length; d++)
             {
@@ -136,6 +162,9 @@ internal static class TempleObjects
         log.Add($"{cells.Count} cells, {shown.Count} with faces to draw ({faceCount} faces); {shownFaces.Count(f => !faceTiles[f].Solid)} of the {shownFaces.Count} faces of bricks drawn see-through");
         var thin = cells.Values.Select(c => c.Brick).Distinct().Count(b => !BoxOf(b).IsFull);
         log.Add($"{thin} of the {cells.Values.Select(c => c.Brick).Distinct().Count()} bricks fill part of their cell (poles, rails, lamps): thinner boxes");
+        log.Add("the round things turned: " + string.Join(", ", shapeFaces.GroupBy(s => shapes[cells[s.Key].Brick].Shape.Kind.Name)
+            .Select(g => $"{g.Key} {g.Count()} cells ({g.Sum(s => s.Value.Count)} faces)")) +
+            $"; {orphans.Values.Sum(o => o.Count)} parts of them drawn whole where another one's cells overlap them");
 
         // the chunks: the cells with faces, by the island's cubes and Chunk x Chunk columns in them
         var chunks = shown.Keys.GroupBy(c => (CubeX: frame.IslandX(c.X) / 64, CubeZ: frame.IslandZ(c.Z) / 64, Cx: Math.DivRem(c.X - frame.FirstColumnOfCubeX(c.X), Chunk).Quotient,
@@ -152,6 +181,50 @@ internal static class TempleObjects
             var t = TileOf(brick, face).Tile;
             return contentKey[(brick, face)] = $"{(int)face}:{Convert.ToBase64String(System.Security.Cryptography.SHA1.HashData(t.Select(v => (byte)v).ToArray()))}";
         }
+        var shapeKey = new Dictionary<(TempleShapes.Part Of, TempleShapes.Tile Tile), string>();
+        string ShapeKey(TempleShapes.Part of, TempleShapes.Tile which)
+        {
+            if (shapeKey.TryGetValue((of, which), out var k)) return k;
+            var t = ShapeTile(of, which).Tile;
+            return shapeKey[(of, which)] = $"r{(int)which}:{Convert.ToBase64String(System.Security.Cryptography.SHA1.HashData(t.Select(v => (byte)v).ToArray()))}";
+        }
+        // a brick's tiles: its box's faces', or a round thing's part's (those its cells' faces use)
+        var brickFaces = shown.GroupBy(s => cells[s.Key].Brick).ToDictionary(g => g.Key, g => g.SelectMany(s => s.Value.Select(FaceOf)).Distinct().OrderBy(f => f).ToList());
+        var brickShapeTiles = shapeFaces.GroupBy(s => cells[s.Key].Brick).ToDictionary(g => g.Key, g => g.SelectMany(s => s.Value.Select(f => (f.Face.Of, f.Face.Tile))).Distinct().ToList());
+        List<(string Key, int W, int H, int[] Tile)> TilesOf(int brick)
+            => brickShapeTiles.TryGetValue(brick, out var used)
+                ? used.Select(t => (ShapeKey(t.Of, t.Tile), TempleShapes.Size(t.Tile).W, TempleShapes.Size(t.Tile).H, ShapeTile(t.Of, t.Tile).Tile)).DistinctBy(t => t.Item1).ToList()
+                : brickFaces[brick].Select(f => (KeyOf(brick, f), PolarTextures.Size(f).W, PolarTextures.Size(f).H, TileOf(brick, f).Tile)).DistinctBy(t => t.Item1).ToList();
+        // a cell's polygons: a round thing's part's faces, or its box's shown faces (corners in the layout's cells and layers)
+        List<Polygon> PolygonsOf((int X, int Y, int Z) c)
+        {
+            var brick = cells[c].Brick;
+            if (shapeFaces.TryGetValue(c, out var made))
+                return made.Select(m => new Polygon(m.Face.Corners.Select(p => p + m.Anchor).ToArray(), m.Face.Uv, m.Face.Normal, ShapeKey(m.Face.Of, m.Face.Tile),
+                    TempleShapes.Size(m.Face.Tile).W, TempleShapes.Size(m.Face.Tile).H, ShapeTile(m.Face.Of, m.Face.Tile).Solid)).ToList();
+            var b = BoxOf(brick);
+            double x = c.X + b.U0, xe = c.X + b.U1, z = c.Z + b.V0, ze = c.Z + b.V1;
+            int y0 = c.Y, y1 = c.Y + 1;
+            var list = new List<Polygon>();
+            foreach (var dir in shown[c])
+            {
+                // corners in order (outward winding) with their (u, v) in the tile: the top's u along x, v along z; a side's u along it, v down
+                (double X, int Y, double Z, double U, double V)[] corners = dir switch
+                {
+                    0 => new[] { (x, y1, ze, 0.0, 1.0), (xe, y1, ze, 1.0, 1.0), (xe, y1, z, 1.0, 0.0), (x, y1, z, 0.0, 0.0) },
+                    1 => new[] { (xe, y1, z, 0.0, 0.0), (xe, y1, ze, 1.0, 0.0), (xe, y0, ze, 1.0, 1.0), (xe, y0, z, 0.0, 1.0) },
+                    2 => new[] { (x, y0, z, 0.0, 1.0), (x, y0, ze, 1.0, 1.0), (x, y1, ze, 1.0, 0.0), (x, y1, z, 0.0, 0.0) },
+                    3 => new[] { (x, y0, ze, 0.0, 1.0), (xe, y0, ze, 1.0, 1.0), (xe, y1, ze, 1.0, 0.0), (x, y1, ze, 0.0, 0.0) },
+                    4 => new[] { (x, y1, z, 0.0, 0.0), (xe, y1, z, 1.0, 0.0), (xe, y0, z, 1.0, 1.0), (x, y0, z, 0.0, 1.0) },
+                    _ => new[] { (x, y0, z, 0.0, 0.0), (xe, y0, z, 1.0, 0.0), (xe, y0, ze, 1.0, 1.0), (x, y0, ze, 0.0, 1.0) },
+                };
+                var face = FaceOf(dir);
+                var (dx, dy, dz) = Dirs[dir];
+                list.Add(new Polygon(corners.Select(k => new Vector3((float)k.X, k.Y, (float)k.Z)).ToArray(), corners.Select(k => (k.U, k.V)).ToArray(), new Vector3(dx, dy, dz),
+                    KeyOf(brick, face), PolarTextures.Size(face).W, PolarTextures.Size(face).H, TileOf(brick, face).Solid));
+            }
+            return list;
+        }
         {
             var all = shown.SelectMany(s => s.Value.Select(d => (Key: KeyOf(cells[s.Key].Brick, FaceOf(d)), Face: FaceOf(d)))).DistinctBy(t => t.Key).ToList();
             log.Add($"the faces shown: {all.Count} different pictures ({all.Count(t => t.Face == PolarTextures.Face.Top)} tops), " +
@@ -163,14 +236,13 @@ internal static class TempleObjects
         var onPage = new List<HashSet<string>> { new() };
         var pageOf = new Dictionary<int, int>();
         var filling = 0;
-        var brickFaces = shown.GroupBy(s => cells[s.Key].Brick).ToDictionary(g => g.Key, g => g.SelectMany(s => s.Value.Select(FaceOf)).Distinct().OrderBy(f => f).ToList());
         foreach (var chunk in chunks)
             foreach (var brick in chunk.Select(c => cells[c].Brick).Distinct())
             {
                 if (pageOf.ContainsKey(brick)) continue;
-                var tiles = brickFaces[brick].Select(f => (Key: KeyOf(brick, f), Face: f)).DistinctBy(t => t.Key).ToList();
+                var tiles = TilesOf(brick);
                 // (a half-slot more than they take: a top needs a slot's two halves together)
-                if (tiles.Where(t => !onPage[filling].Contains(t.Key)).Sum(t => PolarTextures.Pages.HalvesOf(PolarTextures.Size(t.Face).H)) + 1 > pages.Free(filling))
+                if (tiles.Where(t => !onPage[filling].Contains(t.Key)).Sum(t => PolarTextures.Pages.HalvesOf(t.H)) + 1 > pages.Free(filling))
                 {
                     filling++;
                     if (filling >= IslandFile.MaxObjectPages) throw new InvalidOperationException($"The temple's textures take more than {IslandFile.MaxObjectPages} pages.");
@@ -178,14 +250,14 @@ internal static class TempleObjects
                 }
                 foreach (var t in tiles.Where(t => !onPage[filling].Contains(t.Key)))
                 {
-                    var (w, h) = PolarTextures.Size(t.Face);
-                    if (!pages.Add((t.Key, filling), TileOf(brick, t.Face).Tile, w, h, filling)) throw new InvalidOperationException("A page took fewer tiles than it had room for.");
+                    if (!pages.Add((t.Key, filling), t.Tile, t.W, t.H, filling)) throw new InvalidOperationException("A page took fewer tiles than it had room for.");
                     onPage[filling].Add(t.Key);
                 }
                 pageOf[brick] = filling;
             }
         var placedChunks = chunks.SelectMany(chunk => chunk.GroupBy(c => pageOf[cells[c].Brick]).Select(g => (Cells: g.ToList(), Page: g.Key))).ToList();
-        log.Add($"the textures: {contentKey.Values.Distinct().Count()} different brick faces ({faceTiles.Count} faces of bricks) at {PolarTextures.TileSize} pixels to a cell, on {pages.Count} pages");
+        log.Add($"the textures: {contentKey.Values.Distinct().Count()} different brick faces ({faceTiles.Count} faces of bricks) and {shapeKey.Values.Distinct().Count()} of round " +
+                $"things at {PolarTextures.TileSize} pixels to a cell, on {pages.Count} pages");
 
         // the bodies: each chunk's faces (halved while too big for a body), a drawn-only decor in its cube
         var bodies = new List<byte[]>();
@@ -194,10 +266,11 @@ internal static class TempleObjects
         while (work.Count > 0)
         {
             var (chunk, page) = work.Dequeue();
-            var body = Mesh(chunk, shown, cells, frame, key => { var (_, x, y) = pages.Place[(KeyOf(key.Brick, key.Face), page)]; return (x, y); }, BoxOf,
-                (brick, face) => TileOf(brick, face).Solid, out var lo, out var hi, out var origin);
+            var body = Mesh(chunk.SelectMany(PolygonsOf).ToList(), frame, key => { var (_, x, y) = pages.Place[(key, page)]; return (x, y); }, out var lo, out var hi, out var origin);
             if (body is null)
             {
+                // (a cell too big for a body on its own: never, but split no further)
+                if (chunk.Count == 1) throw new InvalidOperationException($"The temple's cell {chunk[0]} has too many faces for a body.");
                 var alongX = chunk.Max(c => c.X) - chunk.Min(c => c.X) >= chunk.Max(c => c.Z) - chunk.Min(c => c.Z);
                 var mid = (int)Math.Floor(alongX ? (chunk.Min(c => c.X) + chunk.Max(c => c.X)) / 2.0 : (chunk.Min(c => c.Z) + chunk.Max(c => c.Z)) / 2.0);
                 var first = chunk.Where(c => (alongX ? c.X : c.Z) <= mid).ToList();
@@ -275,36 +348,21 @@ internal static class TempleObjects
     private static int Opposite(int dir) => dir switch { 0 => 5, 1 => 2, 2 => 1, 3 => 4, 4 => 3, _ => 0 };
     private static PolarTextures.Face FaceOf(int dir) => dir switch { 0 or 5 => PolarTextures.Face.Top, 1 or 2 => PolarTextures.Face.SideX, _ => PolarTextures.Face.SideZ };
 
-    // A chunk's body: its faces as textured quads, its points relative to its origin (the middle of what it covers, island world units).
-    // Null when it is too big for a body. `lo`, `hi`: its points' extent (world units).
-    private static Body? Mesh(List<(int X, int Y, int Z)> chunk, Dictionary<(int X, int Y, int Z), List<int>> shown, Dictionary<(int X, int Y, int Z), PolarLayout.Cell> cells,
-        TempleFrame frame, Func<(int Brick, PolarTextures.Face Face), (int X, int Y)> place, Func<int, PolarTextures.Box> boxOf, Func<int, PolarTextures.Face, bool> solid,
-        out Vector3 lo, out Vector3 hi, out Vector3 origin)
+    // A face to draw: its corners in order round it, either way (the layout's cells and layers), their places in its tile (0..1), the way it
+    // faces (cells and layers), and its tile -- its key on the pages, its size, and whether it is solid.
+    private readonly record struct Polygon(Vector3[] Corners, (double U, double V)[] Uv, Vector3 Facing, string Key, int W, int H, bool Solid);
+
+    // A chunk's body: its faces as textured quads and triangles, its points relative to its origin (the middle of what it covers, island
+    // world units). Null when it is too big for a body. `lo`, `hi`: its points' extent (world units).
+    private static Body? Mesh(List<Polygon> polygons, TempleFrame frame, Func<string, (int X, int Y)> place, out Vector3 lo, out Vector3 hi, out Vector3 origin)
     {
-        var faces = new List<(Vector3[] Quad, (double U, double V)[] Uv, int Dir, int Brick)>();
+        var faces = new List<(Vector3[] Quad, Polygon Polygon)>();
         lo = new Vector3(float.MaxValue); hi = new Vector3(float.MinValue);
-        foreach (var c in chunk)
+        foreach (var polygon in polygons)
         {
-            var brick = cells[c].Brick;
-            var b = boxOf(brick);
-            double x = c.X + b.U0, xe = c.X + b.U1, z = c.Z + b.V0, ze = c.Z + b.V1;
-            int y0 = c.Y, y1 = c.Y + 1;
-            foreach (var dir in shown[c])
-            {
-                // corners in order (outward winding) with their (u, v) in the tile: the top's u along x, v along z; a side's u along it, v down
-                (double X, int Y, double Z, double U, double V)[] corners = dir switch
-                {
-                    0 => new[] { (x, y1, ze, 0.0, 1.0), (xe, y1, ze, 1.0, 1.0), (xe, y1, z, 1.0, 0.0), (x, y1, z, 0.0, 0.0) },
-                    1 => new[] { (xe, y1, z, 0.0, 0.0), (xe, y1, ze, 1.0, 0.0), (xe, y0, ze, 1.0, 1.0), (xe, y0, z, 0.0, 1.0) },
-                    2 => new[] { (x, y0, z, 0.0, 1.0), (x, y0, ze, 1.0, 1.0), (x, y1, ze, 1.0, 0.0), (x, y1, z, 0.0, 0.0) },
-                    3 => new[] { (x, y0, ze, 0.0, 1.0), (xe, y0, ze, 1.0, 1.0), (xe, y1, ze, 1.0, 0.0), (x, y1, ze, 0.0, 0.0) },
-                    4 => new[] { (x, y1, z, 0.0, 0.0), (xe, y1, z, 1.0, 0.0), (xe, y0, z, 1.0, 1.0), (x, y0, z, 0.0, 1.0) },
-                    _ => new[] { (x, y0, z, 0.0, 0.0), (xe, y0, z, 1.0, 0.0), (xe, y0, ze, 1.0, 1.0), (x, y0, ze, 0.0, 1.0) },
-                };
-                var quad = corners.Select(k => new Vector3((float)frame.WorldX(k.X), (float)frame.WorldY(k.Y), (float)frame.WorldZ(k.Z))).ToArray();
-                foreach (var p in quad) { lo = Vector3.Min(lo, p); hi = Vector3.Max(hi, p); }
-                faces.Add((quad, corners.Select(k => (k.U, k.V)).ToArray(), dir, brick));
-            }
+            var quad = polygon.Corners.Select(k => new Vector3((float)frame.WorldX(k.X), (float)frame.WorldY(k.Y), (float)frame.WorldZ(k.Z))).ToArray();
+            foreach (var p in quad) { lo = Vector3.Min(lo, p); hi = Vector3.Max(hi, p); }
+            faces.Add((quad, polygon));
         }
         origin = new Vector3(MathF.Round((lo.X + hi.X) / 2), MathF.Round((lo.Y + hi.Y) / 2), MathF.Round((lo.Z + hi.Z) / 2));
         if (hi.X - lo.X > 64000 || hi.Y - lo.Y > 64000 || hi.Z - lo.Z > 64000) return null;
@@ -321,23 +379,31 @@ internal static class TempleObjects
         var bodyFaces = new List<Face>();
         var handles = new Dictionary<(int, int), int>();
         var textures = new List<uint>();
-        foreach (var (quad, uvs, dir, brick) in faces)
+        foreach (var (corners, polygon) in faces)
         {
-            var face = FaceOf(dir);
-            var (tx, ty) = place((brick, face));
-            var (w, h) = PolarTextures.Size(face);
+            var (tx, ty) = place(polygon.Key);
+            var (w, h) = (polygon.W, polygon.H);
+            var quad = corners;
             var ids = quad.Select(P).ToArray();
+            var uvs = polygon.Uv;
+            // (corners that came out at one point, a round thing's narrowest: a quad with one fewer, a triangle; less, nothing to draw)
+            var distinct = Enumerable.Range(0, ids.Length).Where(i => !ids.Take(i).Contains(ids[i])).ToArray();
+            if (distinct.Length < 3) continue;
+            if (distinct.Length < ids.Length)
+            {
+                quad = distinct.Select(i => quad[i]).ToArray(); uvs = distinct.Select(i => uvs[i]).ToArray(); ids = distinct.Select(i => ids[i]).ToArray();
+            }
             if (!handles.TryGetValue((tx, ty), out var handle)) { handle = handles[(tx, ty)] = textures.Count; textures.Add(TileEntry(tx, ty)); }
             var uv = uvs.SelectMany(k => new[] { (int)Math.Round((0.4 + k.U * (w - 0.8)) * 256), (int)Math.Round((0.4 + k.V * (h - 0.8)) * 256) }).ToArray();
-            // (wound so the plain cross product points the way it faces: the engine's front faces)
+            // (wound so the plain cross product points the way it faces: the engine's front faces -- the frame scales a layer half as much as
+            // a cell, so a slope's facing is steeper in the world)
             var n = Vector3.Cross(quad[1] - quad[0], quad[2] - quad[0]);
-            var (dx, dy, dz) = Dirs[dir];
-            if (Vector3.Dot(n, new Vector3(dx, dy, dz)) < 0)
+            if (Vector3.Dot(n, polygon.Facing * new Vector3(1, 2, 1)) < 0)
             {
                 ids = ids.Reverse().ToArray();
-                uv = Enumerable.Range(0, 4).Reverse().SelectMany(i => new[] { uv[i * 2], uv[i * 2 + 1] }).ToArray();
+                uv = Enumerable.Range(0, ids.Length).Reverse().SelectMany(i => new[] { uv[i * 2], uv[i * 2 + 1] }).ToArray();
             }
-            bodyFaces.Add(new Face(ids, 0, Texture: new FaceTexture(handle, uv), Lba2Type: solid(brick, face) ? TextureSolid : TextureSeeThrough));
+            bodyFaces.Add(new Face(ids, 0, Texture: new FaceTexture(handle, uv), Lba2Type: polygon.Solid ? TextureSolid : TextureSeeThrough));
         }
         if (points.Count > MaxPoints || bodyFaces.Count > MaxFaces) return null;
         if (points.Any(p => Math.Abs(p.X) > 32000 || Math.Abs(p.Y) > 32000 || Math.Abs(p.Z) > 32000)) return null;

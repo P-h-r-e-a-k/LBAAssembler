@@ -39,6 +39,35 @@ colour 0 isn't drawn): the railings' gaps, the cobwebs' strands, the skull lamps
 is solid there. The bodies only draw (their decors' boxes touch nothing). What is solid is 7,663 merged boxes of their own, with LBA1's
 stairs (shapes 2-5) as four steps each. 1,108 different brick faces on 11 object pages, 74,332 faces in 1,589 bodies.
 
+**The round things** (`TempleShapes.cs`, 2026-10-17): the user: "Let's also improve the graphics for the temple track as some things like
+barrels aren't correctly reproduced in 3D." A box with a barrel's picture on each side is a crate with a barrel painted on it. So the
+temple's round things are turned instead: its barrels, its 99 columns, its amphorae, the goblets on its walls and its fire bowls.
+
+![Before and after, from the chase camera and close up](temple/round_things.png)
+
+- *The shape*: LBA1 places each as a block of its library (a column 1 × 8 × 1 cells, the barrel 2 × 4 × 2), its picture split among the
+  block's bricks. The bricks drawn together are the thing as LBA1's camera sees it, looking down at 30°: a ring about an upright axis is
+  an ellipse twice as wide as tall. Row by row, the picture's width about the axis is the thing's width at that height (with an amphora
+  only the part of each row that holds a whole ellipse: its handles, which meet its mouth, are left out). Its top and bottom are the
+  flattest the outline allows: a barrel's lid, a column's capital. 12 to 24 sides round, the profile followed to 0.02 cells.
+- *Its texture*: LBA1's picture on it. Each texel is the picture's pixel where that point falls from LBA1's angle, on the quarter of the
+  ring facing LBA1's camera, where its picture is least foreshortened. The other three quarters are its mirror images in turn, so the
+  barrel's staves and hoops go all round it. Its top is the picture's top: the barrel's lid, the fire in a bowl. Where the picture has
+  nothing (a goblet's foot, between its points), the texture is see-through.
+- *Cell by cell*: each cell draws the part of the thing in it: a layer of the ring, and of the barrel, whose axis stands between four
+  cells, the quarter in the cell. LBA1 gives no brick to the barrel's back quarter, which its camera never sees, so the brick across from
+  it draws that quarter too. Where LBA1 placed two barrels (or columns) overlapping, one's picture in front of the other's, both are drawn
+  whole. Where the race track's doorways cut through a round thing, the rest of it goes too: no column's top hangs over the road, and no
+  fire bowl stands on nothing (38 cells).
+- What is solid is unchanged: each cell's box, as before.
+- From LBA1's angle the port still draws LBA1's picture. In the race track's build the temple has about 92,500 faces in 1,725 bodies
+  (71,800 in 1,743 before), frame times are no longer, and the test pilot's laps are the same to a hundredth of a second.
+
+![Each kind: LBA1's picture, then turned, from LBA1's angle and from low down three ways round](temple/round_things_turned.png)
+
+`ScriptRoundTrip templeblocks <LBA1> <out>` lists the blocks the temple's grids place, with a picture of each and every placement
+(blocks.csv). `templeshapes <LBA1> <out>` prints each round thing's profile and draws it as above.
+
 **The colours** (`TemplePalette.cs`): an island's palette colours the cars, Twinsen and the screen's text by index too, and every retail
 island has the same palette, tuned a little. So LBA1's whole palette won't do. Instead, Otringal's has the temple's colours written into it:
 each, the most drawn first, into the nearest slot no other has taken, when it is within 24 (a colour an actor drawn there hardly sees
@@ -65,6 +94,7 @@ RESS_SKYSEA0 + 13, slots the retail file leaves empty.
 - `templeregion <LBA1> <png> [x0 x1 z0 z1]`: LBA1's own picture of the temple.
 - `templemap <LBA1> <png>`: a height map.
 - `templecolours`, `templebricks`: the colour and brick studies.
+- `templeblocks <LBA1> <out>`, `templeshapes <LBA1> <out>`: the blocks the grids place, and the round things turned (above).
 - `polarview` with `VIEW_ISLAND=TEMPLE VIEW_Y=<height>` renders it from any angle. LBA1's is pitch 341, yaw 3584.
 
 ## The Halloween race

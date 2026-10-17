@@ -31,6 +31,155 @@ internal static class TempleStudy
         return 0;
     }
 
+    // templeblocks <LBA1 folder> <out folder>: the library blocks (LBA1's layouts) the temple's grids place -- each block's size, how often
+    // placed, its bricks, and a picture of it alone (b<scene>_<block>.png), for finding the round and shaped things the boxes draw badly
+    public static int Blocks(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var outDir = args[2];
+        Directory.CreateDirectory(outDir);
+        var area = game.Areas.First(a => a.Tiles.Any(t => t.Scene == TempleLayout.FirstScene));
+        // (every placement, in the layout's cells: blocks.csv)
+        using var csv = new StreamWriter(Path.Combine(outDir, "blocks.csv"));
+        csv.WriteLine("scene,block,x,y,z,dx,dy,dz,cells");
+        foreach (var tile in area.Tiles.Where(t => TempleLayout.Scenes.Contains(t.Scene)))
+        {
+            int ox = tile.OffsetX / 512, oy = tile.OffsetY / 256, oz = tile.OffsetZ / 512;
+            var cells = Lba1GridCodec.Decode(game.ReadGrid(tile.Scene));
+            var lib = game.ReadBlocks(tile.Scene);
+            var instances = new Dictionary<(int Block, int X, int Y, int Z), int>();
+            for (var z = 0; z < 64; z++) for (var x = 0; x < 64; x++) for (var y = 0; y < 25; y++)
+            {
+                var i = ((z * 64 + x) * 25 + y) * 2;
+                int block = cells[i], pos = cells[i + 1];
+                if (block == 0 || !tile.Holds(x, z)) continue;
+                var at = BitConverter.ToInt32(lib, (block - 1) * 4);
+                int dx = lib[at], dy = lib[at + 1];
+                instances[(block, x - pos % dx, y - pos / dx % dy, z - pos / dx / dy)] = instances.GetValueOrDefault((block, x - pos % dx, y - pos / dx % dy, z - pos / dx / dy)) + 1;
+            }
+            foreach (var g in instances.GroupBy(i => i.Key.Block).OrderBy(g => g.Key))
+            {
+                var at = BitConverter.ToInt32(lib, (g.Key - 1) * 4);
+                int dx = lib[at], dy = lib[at + 1], dz = lib[at + 2];
+                var placements = new List<Lba1Placement>();
+                var bricks = new List<int>();
+                for (var p = 0; p < dx * dy * dz; p++)
+                {
+                    var number = BitConverter.ToUInt16(lib, at + 3 + p * 4 + 2);
+                    if (number == 0) continue;
+                    placements.Add(new Lba1Placement(p % dx, p / dx % dy, p / dx / dy, number - 1));
+                    bricks.Add(number - 1);
+                }
+                foreach (var ((_, x, y, z), n) in g) csv.WriteLine($"{tile.Scene},{g.Key},{x + ox},{y + oy},{z + oz},{dx},{dy},{dz},{n}");
+                var first = g.First().Key;
+                Console.WriteLine($"scene {tile.Scene} block {g.Key}: {dx} x {dy} x {dz}, {g.Count()} placed (first at {first.X},{first.Y},{first.Z}), " +
+                                  $"shape {lib[at + 3]} code {lib[at + 4]:X2}, bricks {string.Join(",", bricks.Distinct().Take(12))}");
+                if (placements.Count == 0) continue;
+                var image = Lba1GridRenderer.Render(new[] { new Lba1Tile(placements, 0, 0, 0) }, game.ReadBrick, game.Palette);
+                PngWriter.Write(Path.Combine(outDir, $"b{tile.Scene}_{g.Key}.png"), image.Bgra, image.Width, image.Height);
+            }
+        }
+        return 0;
+    }
+
+    // templeshapes <LBA1 folder> <out folder> [scale]: the round things TempleShapes turns (barrels, columns ...) -- each one's profile, and
+    // shape_<name>.png: LBA1's picture of it, then its turned shape drawn with its textures from LBA1's angle, and from low down (10
+    // degrees) from three ways round, as a chase camera sees it
+    public static int Shapes(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var outDir = args[2];
+        var k = args.Length > 3 ? int.Parse(args[3]) : 3;
+        Directory.CreateDirectory(outDir);
+        var log = new List<string>();
+        var parts = TempleShapes.Find(game, log);
+        foreach (var l in log) Console.WriteLine(l);
+        foreach (var shape in parts.Values.Select(p => p.Shape).Distinct())
+        {
+            Console.WriteLine($"{shape.Kind.Name}: rings " + string.Join(" ", shape.Rings.Select(r => $"{r.Y:0.00}:{r.R:0.00}")));
+            var mine = parts.Values.Where(p => p.Shape == shape).ToList();
+            // (each part's faces, bottoms too, with their tiles in LBA1's colours)
+            var faces = mine.SelectMany(p => TempleShapes.CellFaces(p, bottom: true).Select(f => (Face: f, Tile: TempleShapes.Finished(f.Tile, TempleShapes.TileOf(f.Of, f.Tile)).Pixels))).ToList();
+            foreach (var p in mine.OrderBy(p => p.J).ThenBy(p => p.I).ThenBy(p => p.K))
+                Console.WriteLine($"  part ({p.I},{p.J},{p.K}): " + string.Join(", ", TempleShapes.Tiles(p).Select(t => $"{t.Tile} of ({t.Of.I},{t.Of.K}) {TempleShapes.TileOf(t.Of, t.Tile).Drawn:0.00} drawn")) +
+                                  $", {TempleShapes.CellFaces(p, bottom: false).Count} faces");
+            var views = new List<(int[] Px, int W, int H)> { (shape.Pixels, shape.Width, shape.Height) };
+            foreach (var (azimuth, elevation) in new[] { (45.0, 30.0), (45.0, 10.0), (135.0, 10.0), (225.0, 10.0) })
+                views.Add(Splat(shape, faces, azimuth, elevation));
+            int w = views.Sum(v => v.W * k + 8), h = views.Max(v => v.H) * k;
+            var px = new byte[w * h * 4];
+            for (var i = 0; i < px.Length; i += 4) { px[i] = 60; px[i + 1] = 40; px[i + 2] = 40; px[i + 3] = 255; }
+            var x0 = 0;
+            foreach (var (v, vw, vh) in views)
+            {
+                for (var y = 0; y < vh * k; y++)
+                    for (var x = 0; x < vw * k; x++)
+                    {
+                        var c = v[y / k * vw + x / k];
+                        if (c < 0) continue;
+                        var (r, g, b) = PolarTextures.Colours.Rgb(game.Palette, c);
+                        var i = (y * w + x0 + x) * 4;
+                        px[i] = (byte)b; px[i + 1] = (byte)g; px[i + 2] = (byte)r;
+                    }
+                x0 += vw * k + 8;
+            }
+            PngWriter.Write(Path.Combine(outDir, $"shape_{shape.Kind.Name.Replace(' ', '_')}.png"), px, w, h);
+        }
+        return 0;
+    }
+
+    // A shape's faces drawn by points (a few to a texel) with a depth buffer, looking from `azimuth` round the upright (45: LBA1's, from +x +z)
+    // and `elevation` down, at LBA1's scale (24 pixels to a cell along x - z from LBA1's angle).
+    private static (int[] Px, int W, int H) Splat(TempleShapes.Shape shape, List<(TempleShapes.ShapeFace Face, int[] Tile)> faces, double azimuth, double elevation)
+    {
+        double a = azimuth * Math.PI / 180, e = elevation * Math.PI / 180, k = 24 * Math.Sqrt(2) / 512;
+        (double X, double Y, double D) Project(System.Numerics.Vector3 p)
+        {
+            double x = p.X * 512, y = p.Y * 256, z = p.Z * 512;
+            var right = x * Math.Sin(a) - z * Math.Cos(a);
+            var toward = x * Math.Cos(a) + z * Math.Sin(a);
+            return (right * k, (toward * Math.Sin(e) - y * Math.Cos(e)) * k, toward * Math.Cos(e) + y * Math.Sin(e));
+        }
+        var all = faces.SelectMany(f => f.Face.Corners.Select(Project)).ToList();
+        if (all.Count == 0) return (new[] { -1 }, 1, 1);
+        double minX = all.Min(p => p.X) - 4, minY = all.Min(p => p.Y) - 4;
+        int w = (int)Math.Ceiling(all.Max(p => p.X) - minX + 4), h = (int)Math.Ceiling(all.Max(p => p.Y) - minY + 4);
+        var px = new int[w * h]; var depth = new double[w * h];
+        Array.Fill(px, -1); Array.Fill(depth, double.MinValue);
+        foreach (var (face, tile) in faces)
+        {
+            var (tw, th) = TempleShapes.Size(face.Tile);
+            var c = face.Corners; var uv = face.Uv;
+            const int n = 48;
+            for (var i = 0; i <= n; i++)
+                for (var j = 0; j <= n; j++)
+                {
+                    double s = (double)i / n, t = (double)j / n;
+                    System.Numerics.Vector3 p; double u, v;
+                    if (c.Length == 4)
+                    {
+                        p = System.Numerics.Vector3.Lerp(System.Numerics.Vector3.Lerp(c[0], c[1], (float)s), System.Numerics.Vector3.Lerp(c[3], c[2], (float)s), (float)t);
+                        u = (uv[0].U * (1 - s) + uv[1].U * s) * (1 - t) + (uv[3].U * (1 - s) + uv[2].U * s) * t;
+                        v = (uv[0].V * (1 - s) + uv[1].V * s) * (1 - t) + (uv[3].V * (1 - s) + uv[2].V * s) * t;
+                    }
+                    else
+                    {
+                        if (s + t > 1) continue;
+                        p = c[0] + (c[1] - c[0]) * (float)s + (c[2] - c[0]) * (float)t;
+                        u = uv[0].U + (uv[1].U - uv[0].U) * s + (uv[2].U - uv[0].U) * t;
+                        v = uv[0].V + (uv[1].V - uv[0].V) * s + (uv[2].V - uv[0].V) * t;
+                    }
+                    var col = tile[Math.Clamp((int)(v * th), 0, th - 1) * tw + Math.Clamp((int)(u * tw), 0, tw - 1)];
+                    if (col < 0) continue;
+                    var (sx, sy, d) = Project(p);
+                    int x = (int)(sx - minX), y = (int)(sy - minY);
+                    if (x < 0 || y < 0 || x >= w || y >= h || d <= depth[y * w + x]) continue;
+                    depth[y * w + x] = d; px[y * w + x] = col;
+                }
+        }
+        return (px, w, h);
+    }
+
     public static int BuildInto(string[] args)
     {
         var watch = System.Diagnostics.Stopwatch.StartNew();
