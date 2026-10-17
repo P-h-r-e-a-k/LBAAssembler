@@ -68,6 +68,88 @@ temple's round things are turned instead: its barrels, its 99 columns, its ampho
 `ScriptRoundTrip templeblocks <LBA1> <out>` lists the blocks the temple's grids place, with a picture of each and every placement
 (blocks.csv). `templeshapes <LBA1> <out>` prints each round thing's profile and draws it as above.
 
+**The shaped things** (`TempleModels.cs` and its parts, 2026-10-17): the user: "The Temple track still has a lot of blocky objects from
+the conversion that need refining."
+
+![Before and after, from the chase camera at the same moments of the test pilot's lap](temple/shaped_things.png)
+
+*What was blocky*, from the race's point of view: the test pilot's solo lap, its camera traced every frame (`camtrace 1`), and every
+tenth frame cast through the temple's cells as the race track's build has them (`templecells`), each pixel the LBA1 block it meets first,
+the road's deck in front of them. Floors (11.9 % of the screen on average), walls (4.0 %), the frieze (1.8 %) and the wall panels (0.7 %)
+are boxes in LBA1 too, and the turned columns took 1.8 %. Of the rest, ranked:
+
+| What | Frames it shows in (of 276) | Of the screen on average | At most | Now |
+|---|---|---|---|---|
+| Rocks: clusters of rounded lobes along the walls | 107 | 2.63 % | 22.6 % | rows of lobes |
+| Grilles: the lattice fences, the crypt's galleries | 103 | 1.55 % | 13.1 % | a cut-out in their plane |
+| The seated statues | 18 | 0.32 % | 14.6 % | figures |
+| Iron fans: quarter-circle grilles in corners | 54 | 0.30 % | 3.7 % | cut-outs |
+| Spiked rails, along stairs and wall tops | 27 | 0.24 % | 7.9 % | cut-outs |
+| Stairs | 25 | 0.22 % | 6.9 % | steps |
+| The small statues | 20 | 0.21 % | 5.5 % | figures |
+| Totem posts | 17 | 0.18 % | 13.2 % | left: square posts in LBA1 too |
+| Walls with shelves | 14 | 0.18 % | 8.9 % | left: walls |
+| Rock pillars | 8 | 0.11 % | 6.4 % | left: square |
+| The dais with sloped edges | 5 | 0.05 % | 4.2 % | left |
+| Stone benches | 7 | 0.05 % | 4.2 % | left |
+| The bed of spikes in the start room | 9 | 0.04 % | 2.2 % | spikes |
+| The flame masks | 6 | 0.03 % | 2.1 % | figures |
+| The rabbit statue | 3 | 0.01 % | 0.9 % | a figure |
+
+Left too: the rocks hanging from the crypt's ceiling (always under the road, never seen from it), the tilted and lying amphorae and the
+plank slopes beside the stairs (a frame each).
+
+![The survey: each kind's LBA1 picture, and the chase camera's view where it shows most, before and after](temple/blocky_survey.png)
+
+*What they became.* Each kind is read from its block's picture, LBA1's view of it from 30 degrees up, its own way (`Make`), and each
+texel of a model is the picture's pixel where that point of it falls from LBA1's angle, as the round things' are:
+
+- *Grilles, spiked rails, iron fans* (`Panel`): flat things standing in one upright plane along the block. The picture places the plane: a
+  drawn pixel is the point of a plane at t across the block that LBA1's view sees there, and the plane is the t whose points of the
+  drawn pixels lie inside the block (of those, the one standing lowest): 0.41 of the way across a grille's cell, 0.66 a rail's. Each cell's
+  square of it is a see-through quad, front and back, with LBA1's picture unskewed onto it -- the bars, their knobs and the spikes as LBA1
+  draws them, at one depth. The boxes had unskewed them onto their faces, each at a face's own depth: crosses floating apart. 42 faces a
+  grille.
+- *Stairs* (`Steps`): the two steps a cell LBA1 draws, each a tread, a riser and its sides, and the cell's back -- a side against a step
+  of the same stairs, or against a wall, left out.
+- *Rocks* (`Lobes`): a row of upright lobes along the block, half a cell apart (6 along a 3-cell block), by turns behind and in front:
+  one behind as tall as the picture's outline over its share of the row, one in front three quarters to nine tenths of that, each a little
+  wider or narrower (by turns that look random, the same every build) -- a cluster, not a fence. A lobe: an ellipse across (no deeper than
+  the block), its top rounded to a point; 6 sides, 18 faces, two tiles.
+- *Statues, flame masks, the rabbit* (`Figure`): a figure is the same either side of the way it faces, so its other side's view is
+  LBA1's picture mirrored. Its shape is what both views leave of the block: the voxels (a twelfth of a cell, an eighth of a layer) whose
+  point falls on the figure from LBA1's angle and whose mirror image -- across the block's middle along x or z, whichever leaves more: the
+  way it faces -- does too. Slice by slice, a ring of 12 points round the slice's middle, each as far as it reaches that way, smoothed;
+  the rings kept where the shape turns: 96 to 108 faces a statue. A side's texels are the picture's where the view that sees it best sees
+  it (the mirror image's: the picture at the mirrored point); its back, which neither sees, has its sides' colours. (Lathed, the last
+  round, they came out bottles.)
+- *The bed of spikes* (`Spikes`): 8 x 8 four-sided points on a plate, as tall as the picture's farthest point (0.67 layers).
+
+![Each model: LBA1's picture, then the model from LBA1's angle and from low down four ways round](temple/shaped_models.png)
+
+![Close up in the game's renderer, before and after](temple/shaped_closeups.png)
+
+- *Cell by cell*: a model's face is drawn by the cell of its placement it lies in, so a chunk's body holds what is in its cells. A face
+  turned to a solid block a fifth of a cell out of it (a rock's back against its wall, a statue's foot on its floor) is left out: 1,338.
+- *The doorways*: where the race track's doorways cut a statue, stairs or the spikes, all of it goes, as a round thing does (no statue
+  cut in two); of a grille, a rail or a row of rocks, the columns along it they cut (no grille's top hanging over the road), the rest stays,
+  as the boxes did. 276 cells in all.
+- *What is solid* is the cells' boxes, as before, less those the doorways took with them: 7,161 boxes (7,326). The test pilot's solo laps
+  are the same to a hundredth of a second (55.50, 55.00, 55.06 s), and the race file the same.
+- From LBA1's angle the port draws much LBA1's picture still -- the statues and the grilles closely, the rocks as a cluster of lobes like
+  LBA1's, if not the same lobes.
+
+![From LBA1's angle, before and after: the statue gallery, and a wall of rocks](temple/shaped_lba1_angle.png)
+
+In the race track's build the temple has 104,700 faces in 1,587 bodies (92,500 in 1,725 before): 39,300 of boxes (68,100), 24,400 of
+round things, and 41,000 of the models (rocks 25,300, grilles 6,200, small statues 2,500, statues 2,100, iron fans 2,000, stairs 1,000,
+flame masks 600, rails 540, the rabbit 390, the spikes 260), on 11 object pages (12). Frame times are no longer: over the test
+pilot's lap, each frame's least drawing time of three runs (the two builds by turns), 11.6 ms on average, 15.9 ms at the 95th
+percentile (12.2 and 16.1 before; 640 x 480).
+
+`templemodels <LBA1> <out>` prints what each model read from its picture and draws it as above; `templecells <LBA1> <plan.json> <out.csv>`
+lists every cell as the race track's build has it (its block, brick, box, whether cut), for the survey's ray cast.
+
 **The colours** (`TemplePalette.cs`): an island's palette colours the cars, Twinsen and the screen's text by index too, and every retail
 island has the same palette, tuned a little. So LBA1's whole palette won't do. Instead, Otringal's has the temple's colours written into it:
 each, the most drawn first, into the nearest slot no other has taken, when it is within 24 (a colour an actor drawn there hardly sees
@@ -95,6 +177,8 @@ RESS_SKYSEA0 + 13, slots the retail file leaves empty.
 - `templemap <LBA1> <png>`: a height map.
 - `templecolours`, `templebricks`: the colour and brick studies.
 - `templeblocks <LBA1> <out>`, `templeshapes <LBA1> <out>`: the blocks the grids place, and the round things turned (above).
+- `templemodels <LBA1> <out>`, `templecells <LBA1> <plan.json> <out.csv>`: the shaped things made models, and every cell as the race
+  track's build has it (above).
 - `polarview` with `VIEW_ISLAND=TEMPLE VIEW_Y=<height>` renders it from any angle. LBA1's is pitch 341, yaw 3584.
 
 ## The Halloween race
@@ -265,6 +349,11 @@ The user: "Let's create a pumpkin inspired F1 car for our Temple track for Twins
   `suite.sh <tag>` (the race in HEAD's build, in this build in the buggy, `RT_DRIVE=-4`, and in the pumpkin F1, a fixed
   `qualifying_seed=`), `others.sh head|work` (every other track built together: 59 of 62 files the same, BODY.HQR only gaining its two
   last entries, RESS.HQR only its entry 44, RACECARS.JSON only its last line).
+- The shaped things' round: `E:\dump\TEMP\templerefine` -- `build.sh <game> head|work`, `racefile.sh`, `pilot.sh`, `shots.sh <tag> <every>`
+  (a lap of screenshots, HEAD's build gameH and the worktree's gameW frame for frame), `suite.sh` (solo, against the opponents, off its
+  line, on both), `perfab.sh` (both timed by turns, each frame's least time over the runs: the machine is shared), `raycast.py` (the
+  survey, from a `camtrace 1` run and `templecells`), `checks.sh` (the temple alone: only TEMPLE.ILE and TEMPLE.OBL differ, the race file
+  the same; every other track: its built files and its race file the same).
 
 ![The editor: TEMPLE.ILE open](temple/editor_view.png)
 

@@ -118,22 +118,32 @@ internal static class TempleIsland
         // ---- the objects
         var bodies = new List<byte[]> { RaceTrackPipes.Write(new List<System.Numerics.Vector3> { System.Numerics.Vector3.Zero }, new List<Face>(), lit: false) };
         var built = layout;
-        // (the round things -- barrels, columns, amphorae, goblets, fire bowls -- turned, not boxes: TempleShapes)
+        // (the round things -- barrels, columns, amphorae, goblets, fire bowls -- turned, not boxes: TempleShapes; the shaped things -- rocks,
+        // grilles, spiked rails, iron fans, statues, stairs, a bed of spikes -- models: TempleModels)
         var shapes = TempleShapes.Find(game, log);
+        var models = TempleModels.Find(game, log);
         if (cuts is not null)
         {
             var cut = cuts.Where(c => c.Length == 3).Select(c => (c[0], c[1], c[2])).ToHashSet();
             built = layout.Without(cut);
             log.Add($"{layout.Cells.Count - built.Cells.Count} cells cut where the race track's road goes through the walls");
-            // (and what the doorways leave of the round things they cut through, hanging over the road, or standing on nothing)
+            // (and what the doorways leave of the round things they cut through, hanging over the road, or standing on nothing; and of the
+            // shaped things, theirs and what stood on the round things' -- a statue whole or not at all, a grille or a row of rocks but the
+            // columns along it they cut)
             var remains = TempleShapes.CutRemains(shapes, layout.Cells, cut);
             if (remains.Count > 0)
             {
                 built = built.Without(remains);
                 log.Add($"{remains.Count} cells of round things left hanging by the cuts taken out with them");
             }
+            var modelRemains = TempleModels.CutRemains(models, layout.Cells, cut.Concat(remains).ToHashSet());
+            if (modelRemains.Count > 0)
+            {
+                built = built.Without(modelRemains);
+                log.Add($"{modelRemains.Count} cells of shaped things the cuts took part of taken out with them");
+            }
         }
-        var objects = TempleObjects.Build(game, built, island, frame, palette.Map, bodies.Count, EmptyBody, shapes);
+        var objects = TempleObjects.Build(game, built, island, frame, palette.Map, bodies.Count, EmptyBody, shapes, models);
         bodies.AddRange(objects.Bodies);
         log.AddRange(objects.Log);
         log.Add($"{OblFile}: {bodies.Count} bodies (an empty one for the boxes, then the temple's)");

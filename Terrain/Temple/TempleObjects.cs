@@ -14,7 +14,10 @@ namespace LBAAssembler.Terrain.Temple;
 // drawn), as LBA1's picture shows what is behind. A face is left out where what is beyond it hides it: a box as wide that is solid there.
 //
 // The round things' cells -- barrels, columns, amphorae, goblets, fire bowls (TempleShapes) -- are no boxes: each is its part of the thing
-// turned, textured with the thing's own picture the same way, and no box beside it counts it as solid in front of its face.
+// turned, textured with the thing's own picture the same way, and no box beside it counts it as solid in front of its face. Nor are the
+// shaped things' (TempleModels: rocks, grilles, spiked rails, iron fans, statues, stairs, spikes): a cell of one draws the faces of its
+// placement's model that lie in it -- but a face against a box that hides it (a step's side against a wall), or turned to a solid box just
+// behind it (a rock's back against its wall).
 //
 // Every face is drawn as it is (the palette's normal level: TemplePalette's row 12, LBA1's colours), unlit -- LBA1's bricks have their light
 // drawn in. The bodies only draw (their decors' boxes touch nothing, BrickBuilding.NoBoxTop); what is solid is a set of plain boxes of their
@@ -50,9 +53,9 @@ internal static class TempleObjects
 
     // `map`: each LBA1 colour's index in the island's palette (TemplePalette). `firstBody`: the OBL entry the bodies start at; `emptyBody`:
     // an empty body for the boxes (its own entry, made by the caller). `shapes`: the round things' bricks (TempleShapes.Find), whose cells
-    // are the parts of turned shapes, not boxes.
+    // are the parts of turned shapes, not boxes; `models`: the shaped things' (TempleModels.Find), whose cells draw their models.
     public static Built Build(Lba1Game game, TempleLayout layout, IslandFile island, TempleFrame frame, int[] map, int firstBody, int emptyBody,
-        Dictionary<int, TempleShapes.Part> shapes)
+        Dictionary<int, TempleShapes.Part> shapes, Dictionary<int, TempleModels.Part> models)
     {
         var log = new List<string>();
         var cells = layout.Cells;
@@ -118,8 +121,8 @@ internal static class TempleObjects
             var box = BoxOf(cells[c].Brick);
             var onSide = dir switch { 1 => box.U1 >= 1, 2 => box.U0 <= 0, 3 => box.V1 >= 1, 4 => box.V0 <= 0, _ => true };
             if (!onSide || !cells.TryGetValue((c.X + dx, c.Y + dy, c.Z + dz), out var other)) return false;
-            // (the face of the box beyond that lies against this one: solid? -- a round thing's cell has no box)
-            if (shapes.ContainsKey(other.Brick) || !TileOf(other.Brick, FaceOf(Opposite(dir))).Solid) return false;
+            // (the face of the box beyond that lies against this one: solid? -- a round thing's cell has no box, nor a shaped thing's)
+            if (shapes.ContainsKey(other.Brick) || models.ContainsKey(other.Brick) || !TileOf(other.Brick, FaceOf(Opposite(dir))).Solid) return false;
             var nb = BoxOf(other.Brick);
             return dir switch
             {
@@ -135,9 +138,49 @@ internal static class TempleObjects
         // another round thing's cells took, TempleShapes.Overlapped; each with its thing's block's point in the layout)
         var shapeFaces = new Dictionary<(int X, int Y, int Z), List<(TempleShapes.ShapeFace Face, Vector3 Anchor)>>();
         var orphans = TempleShapes.Overlapped(shapes, cells);
+        // (a shaped thing's cell: the faces of its placement's model that lie in it, with the placement's point in the layout -- but those
+        // a box hides: one beyond the cell's side the face lies on, whose own face there is solid and covers it; a whole solid block a little
+        // way out from the face, a fifth of a cell -- a rock's back against its wall, a statue's foot on its floor)
+        bool SolidBlock((int X, int Y, int Z) at) => cells.TryGetValue(at, out var o) && !shapes.ContainsKey(o.Brick) && !models.ContainsKey(o.Brick)
+            && BoxOf(o.Brick).IsFull && Enum.GetValues<PolarTextures.Face>().Any(f => TileOf(o.Brick, f).Solid);
+        bool ModelFaceHidden((int X, int Y, int Z) c, TempleModels.ModelFace face, Vector3 anchor)
+        {
+            if (face.Side >= 0)
+            {
+                var (dx, dy, dz) = Dirs[face.Side];
+                if (!cells.TryGetValue((c.X + dx, c.Y + dy, c.Z + dz), out var o) || shapes.ContainsKey(o.Brick) || models.ContainsKey(o.Brick)
+                    || !TileOf(o.Brick, FaceOf(Opposite(face.Side))).Solid) return false;
+                var nb = BoxOf(o.Brick);
+                return face.Side switch
+                {
+                    0 or 5 => nb.IsFull,
+                    1 => nb.U0 <= 0 && nb.V0 <= 0 && nb.V1 >= 1,
+                    2 => nb.U1 >= 1 && nb.V0 <= 0 && nb.V1 >= 1,
+                    3 => nb.V0 <= 0 && nb.U0 <= 0 && nb.U1 >= 1,
+                    _ => nb.V1 >= 1 && nb.U0 <= 0 && nb.U1 >= 1,
+                };
+            }
+            var mid = face.Corners.Aggregate(Vector3.Zero, (a, b) => a + b) / face.Corners.Length + anchor;
+            // (out from it: a layer is half a cell)
+            var q = mid + Vector3.Normalize(face.Normal * new Vector3(1, 2, 1)) * new Vector3(0.2f, 0.4f, 0.2f);
+            return SolidBlock(((int)Math.Floor(q.X), (int)Math.Floor(q.Y), (int)Math.Floor(q.Z)));
+        }
+        var modelFaces = new Dictionary<(int X, int Y, int Z), List<(TempleModels.ModelFace Face, TempleModels.Model Model, Vector3 Anchor)>>();
+        var modelHidden = 0;
+        foreach (var (c, placed) in TempleModels.Placed(models, cells))
+        {
+            var kept = placed.Where(f => !ModelFaceHidden(c, f.Face, f.Anchor)).ToList();
+            modelHidden += placed.Count - kept.Count;
+            if (kept.Count > 0) modelFaces[c] = kept;
+        }
         var faceCount = 0;
         foreach (var c in cells.Keys)
         {
+            if (models.ContainsKey(cells[c].Brick))
+            {
+                if (modelFaces.ContainsKey(c)) shown[c] = new List<int>();
+                continue;
+            }
             if (shapes.TryGetValue(cells[c].Brick, out var part))
             {
                 var made = new List<(TempleShapes.ShapeFace, Vector3)>();
@@ -165,6 +208,8 @@ internal static class TempleObjects
         log.Add("the round things turned: " + string.Join(", ", shapeFaces.GroupBy(s => shapes[cells[s.Key].Brick].Shape.Kind.Name)
             .Select(g => $"{g.Key} {g.Count()} cells ({g.Sum(s => s.Value.Count)} faces)")) +
             $"; {orphans.Values.Sum(o => o.Count)} parts of them drawn whole where another one's cells overlap them");
+        log.Add("the shaped things made models: " + string.Join(", ", modelFaces.SelectMany(s => s.Value).GroupBy(f => f.Model.Kind.Name)
+            .Select(g => $"{g.Key} {g.Select(f => (f.Model, f.Anchor)).Distinct().Count()} placed ({g.Count()} faces)")) + $"; {modelHidden} of their faces hidden by boxes");
 
         // the chunks: the cells with faces, by the island's cubes and Chunk x Chunk columns in them
         var chunks = shown.Keys.GroupBy(c => (CubeX: frame.IslandX(c.X) / 64, CubeZ: frame.IslandZ(c.Z) / 64, Cx: Math.DivRem(c.X - frame.FirstColumnOfCubeX(c.X), Chunk).Quotient,
@@ -188,17 +233,33 @@ internal static class TempleObjects
             var t = ShapeTile(of, which).Tile;
             return shapeKey[(of, which)] = $"r{(int)which}:{Convert.ToBase64String(System.Security.Cryptography.SHA1.HashData(t.Select(v => (byte)v).ToArray()))}";
         }
-        // a brick's tiles: its box's faces', or a round thing's part's (those its cells' faces use)
+        // (a shaped thing's tile: its key, its texels in the island's colours, solid)
+        var modelTiles = new Dictionary<(TempleModels.Model Model, int Tile), (string Key, int[] Tile, bool Solid)>();
+        (string Key, int[] Tile, bool Solid) ModelTile(TempleModels.Model model, int index)
+        {
+            if (modelTiles.TryGetValue((model, index), out var known)) return known;
+            var t = model.Tiles[index];
+            var pixels = t.Pixels.Select(c => c >= 0 ? map[c] : 0).ToArray();
+            return modelTiles[(model, index)] = ($"m{t.W}x{t.H}:{Convert.ToBase64String(System.Security.Cryptography.SHA1.HashData(pixels.Select(v => (byte)v).ToArray()))}", pixels, t.Solid);
+        }
+        // a brick's tiles: its box's faces', or a round thing's part's, or a shaped thing's (those its cells' faces use)
         var brickFaces = shown.GroupBy(s => cells[s.Key].Brick).ToDictionary(g => g.Key, g => g.SelectMany(s => s.Value.Select(FaceOf)).Distinct().OrderBy(f => f).ToList());
         var brickShapeTiles = shapeFaces.GroupBy(s => cells[s.Key].Brick).ToDictionary(g => g.Key, g => g.SelectMany(s => s.Value.Select(f => (f.Face.Of, f.Face.Tile))).Distinct().ToList());
+        var brickModelTiles = modelFaces.GroupBy(s => cells[s.Key].Brick).ToDictionary(g => g.Key, g => g.SelectMany(s => s.Value.Select(f => (f.Model, f.Face.Tile))).Distinct().ToList());
         List<(string Key, int W, int H, int[] Tile)> TilesOf(int brick)
-            => brickShapeTiles.TryGetValue(brick, out var used)
+            => brickModelTiles.TryGetValue(brick, out var modelled)
+                ? modelled.Select(t => (ModelTile(t.Model, t.Tile).Key, t.Model.Tiles[t.Tile].W, t.Model.Tiles[t.Tile].H, ModelTile(t.Model, t.Tile).Tile)).DistinctBy(t => t.Item1).ToList()
+                : brickShapeTiles.TryGetValue(brick, out var used)
                 ? used.Select(t => (ShapeKey(t.Of, t.Tile), TempleShapes.Size(t.Tile).W, TempleShapes.Size(t.Tile).H, ShapeTile(t.Of, t.Tile).Tile)).DistinctBy(t => t.Item1).ToList()
                 : brickFaces[brick].Select(f => (KeyOf(brick, f), PolarTextures.Size(f).W, PolarTextures.Size(f).H, TileOf(brick, f).Tile)).DistinctBy(t => t.Item1).ToList();
-        // a cell's polygons: a round thing's part's faces, or its box's shown faces (corners in the layout's cells and layers)
+        // a cell's polygons: a shaped thing's model's faces, a round thing's part's, or its box's shown faces (corners in the layout's cells
+        // and layers)
         List<Polygon> PolygonsOf((int X, int Y, int Z) c)
         {
             var brick = cells[c].Brick;
+            if (modelFaces.TryGetValue(c, out var modelled))
+                return modelled.Select(m => new Polygon(m.Face.Corners.Select(p => p + m.Anchor).ToArray(), m.Face.Uv, m.Face.Normal, ModelTile(m.Model, m.Face.Tile).Key,
+                    m.Model.Tiles[m.Face.Tile].W, m.Model.Tiles[m.Face.Tile].H, ModelTile(m.Model, m.Face.Tile).Solid)).ToList();
             if (shapeFaces.TryGetValue(c, out var made))
                 return made.Select(m => new Polygon(m.Face.Corners.Select(p => p + m.Anchor).ToArray(), m.Face.Uv, m.Face.Normal, ShapeKey(m.Face.Of, m.Face.Tile),
                     TempleShapes.Size(m.Face.Tile).W, TempleShapes.Size(m.Face.Tile).H, ShapeTile(m.Face.Of, m.Face.Tile).Solid)).ToList();
@@ -256,8 +317,8 @@ internal static class TempleObjects
                 pageOf[brick] = filling;
             }
         var placedChunks = chunks.SelectMany(chunk => chunk.GroupBy(c => pageOf[cells[c].Brick]).Select(g => (Cells: g.ToList(), Page: g.Key))).ToList();
-        log.Add($"the textures: {contentKey.Values.Distinct().Count()} different brick faces ({faceTiles.Count} faces of bricks) and {shapeKey.Values.Distinct().Count()} of round " +
-                $"things at {PolarTextures.TileSize} pixels to a cell, on {pages.Count} pages");
+        log.Add($"the textures: {contentKey.Values.Distinct().Count()} different brick faces ({faceTiles.Count} faces of bricks), {shapeKey.Values.Distinct().Count()} of round " +
+                $"things and {modelTiles.Values.Select(t => t.Key).Distinct().Count()} of shaped things at {PolarTextures.TileSize} pixels to a cell, on {pages.Count} pages");
 
         // the bodies: each chunk's faces (halved while too big for a body), a drawn-only decor in its cube
         var bodies = new List<byte[]>();

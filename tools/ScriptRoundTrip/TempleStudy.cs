@@ -82,6 +82,41 @@ internal static class TempleStudy
         return 0;
     }
 
+    // templecells <LBA1 folder> <plan.json> <out.csv>: every cell of the temple as the race track's build has it -- its place (the layout's
+    // cells and layers), the LBA1 block it is part of (scene, block), its brick and shape, the round thing or the shaped thing it is part
+    // of, the box of its cell it fills and the most it draws of a face (TempleObjects' reading), and whether the road's doorways cut it (1)
+    // or what they left hanging went with them (2) -- for the survey of what the chase camera sees of each kind of thing (a ray cast through
+    // the cells' boxes: the temple before its shaped things were made models)
+    public static int Cells(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var layout = TempleLayout.Build(game);
+        var plan = RaceTrackPlan.Load(args[2]);
+        var cut = (plan.TempleCuts ?? Array.Empty<int[]>()).Where(c => c.Length == 3).Select(c => (c[0], c[1], c[2])).ToHashSet();
+        var shapes = TempleShapes.Find(game);
+        var remains = TempleShapes.CutRemains(shapes, layout.Cells, cut);
+        var models = TempleModels.Find(game);
+        remains.UnionWith(TempleModels.CutRemains(models, layout.Cells, cut.Concat(remains).ToHashSet()));
+        var boxes = new Dictionary<int, (PolarTextures.Box Box, double Drawn)>();
+        using var csv = new StreamWriter(args[3]);
+        csv.WriteLine("x,y,z,scene,block,brick,shape,round,model,u0,u1,v0,v1,drawn,cut");
+        foreach (var ((x, y, z), c) in layout.Cells.OrderBy(c => c.Key.Z).ThenBy(c => c.Key.X).ThenBy(c => c.Key.Y))
+        {
+            if (!boxes.TryGetValue(c.Brick, out var b))
+            {
+                var s = PolarTextures.Sprite.Decode(game.ReadBrick(c.Brick));
+                var drawn = Enum.GetValues<PolarTextures.Face>().Max(f => s.Coverage(f));
+                boxes[c.Brick] = b = (drawn >= TempleObjects.Solid ? PolarTextures.Box.Full : s.Footprint(), drawn);
+            }
+            var round = shapes.TryGetValue(c.Brick, out var part) ? part.Shape.Kind.Name : "";
+            var model = models.TryGetValue(c.Brick, out var modelled) ? modelled.Model.Kind.Name : "";
+            var gone = cut.Contains((x, y, z)) ? 1 : remains.Contains((x, y, z)) ? 2 : 0;
+            csv.WriteLine($"{x},{y},{z},{c.Scene},{c.Block},{c.Brick},{c.Shape},{round},{model},{b.Box.U0:0.###},{b.Box.U1:0.###},{b.Box.V0:0.###},{b.Box.V1:0.###},{b.Drawn:0.###},{gone}");
+        }
+        Console.WriteLine($"{args[3]}: {layout.Cells.Count} cells ({cut.Count(layout.Cells.ContainsKey)} cut, {remains.Count} hanging); layers from {layout.MinY}");
+        return 0;
+    }
+
     // templeshapes <LBA1 folder> <out folder> [scale]: the round things TempleShapes turns (barrels, columns ...) -- each one's profile, and
     // shape_<name>.png: LBA1's picture of it, then its turned shape drawn with its textures from LBA1's angle, and from low down (10
     // degrees) from three ways round, as a chase camera sees it
@@ -128,9 +163,59 @@ internal static class TempleStudy
         return 0;
     }
 
+    // templemodels <LBA1 folder> <out folder> [scale]: the shaped things TempleModels makes (rocks, grilles, statues, stairs ...) -- what each
+    // read from its picture, and model_<name>_<brick>.png: LBA1's picture of it, then the model drawn with its textures from LBA1's angle,
+    // and from low down (10 degrees) from three ways round, as a chase camera sees it
+    public static int Models(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var outDir = args[2];
+        var k = args.Length > 3 ? int.Parse(args[3]) : 3;
+        Directory.CreateDirectory(outDir);
+        var log = new List<string>();
+        var parts = TempleModels.Find(game, log);
+        foreach (var l in log) Console.WriteLine(l);
+        foreach (var model in parts.Values.Select(p => p.Model).Distinct())
+        {
+            var faces = model.Faces.Select(f => (f.Corners, f.Uv, model.Tiles[f.Tile].Pixels, model.Tiles[f.Tile].W, model.Tiles[f.Tile].H)).ToList();
+            var views = new List<(int[] Px, int W, int H)> { (model.Picture.Pixels, model.Picture.Width, model.Picture.Height) };
+            foreach (var (azimuth, elevation) in new[] { (45.0, 30.0), (45.0, 10.0), (135.0, 10.0), (225.0, 10.0), (315.0, 10.0) })
+                views.Add(Splat(faces, azimuth, elevation));
+            WriteViews(Path.Combine(outDir, $"model_{model.Kind.Name.Replace(' ', '_')}_{model.Kind.Brick}.png"), views, k, game.Palette);
+        }
+        return 0;
+    }
+
+    // Pictures side by side, `k` times as big, in LBA1's colours.
+    private static void WriteViews(string path, List<(int[] Px, int W, int H)> views, int k, byte[] palette)
+    {
+        int w = views.Sum(v => v.W * k + 8), h = views.Max(v => v.H) * k;
+        var px = new byte[w * h * 4];
+        for (var i = 0; i < px.Length; i += 4) { px[i] = 60; px[i + 1] = 40; px[i + 2] = 40; px[i + 3] = 255; }
+        var x0 = 0;
+        foreach (var (v, vw, vh) in views)
+        {
+            for (var y = 0; y < vh * k; y++)
+                for (var x = 0; x < vw * k; x++)
+                {
+                    var c = v[y / k * vw + x / k];
+                    if (c < 0) continue;
+                    var (r, g, b) = PolarTextures.Colours.Rgb(palette, c);
+                    var i = (y * w + x0 + x) * 4;
+                    px[i] = (byte)b; px[i + 1] = (byte)g; px[i + 2] = (byte)r;
+                }
+            x0 += vw * k + 8;
+        }
+        PngWriter.Write(path, px, w, h);
+    }
+
     // A shape's faces drawn by points (a few to a texel) with a depth buffer, looking from `azimuth` round the upright (45: LBA1's, from +x +z)
     // and `elevation` down, at LBA1's scale (24 pixels to a cell along x - z from LBA1's angle).
     private static (int[] Px, int W, int H) Splat(TempleShapes.Shape shape, List<(TempleShapes.ShapeFace Face, int[] Tile)> faces, double azimuth, double elevation)
+        => Splat(faces.Select(f => (f.Face.Corners, f.Face.Uv, f.Tile, TempleShapes.Size(f.Face.Tile).W, TempleShapes.Size(f.Face.Tile).H)).ToList(), azimuth, elevation);
+
+    // Faces (corners in cells and layers, their places in their tiles, the tiles in LBA1's colours) drawn by points with a depth buffer.
+    private static (int[] Px, int W, int H) Splat(List<(System.Numerics.Vector3[] Corners, (double U, double V)[] Uv, int[] Tile, int TW, int TH)> faces, double azimuth, double elevation)
     {
         double a = azimuth * Math.PI / 180, e = elevation * Math.PI / 180, k = 24 * Math.Sqrt(2) / 512;
         (double X, double Y, double D) Project(System.Numerics.Vector3 p)
@@ -140,16 +225,14 @@ internal static class TempleStudy
             var toward = x * Math.Cos(a) + z * Math.Sin(a);
             return (right * k, (toward * Math.Sin(e) - y * Math.Cos(e)) * k, toward * Math.Cos(e) + y * Math.Sin(e));
         }
-        var all = faces.SelectMany(f => f.Face.Corners.Select(Project)).ToList();
+        var all = faces.SelectMany(f => f.Corners.Select(Project)).ToList();
         if (all.Count == 0) return (new[] { -1 }, 1, 1);
         double minX = all.Min(p => p.X) - 4, minY = all.Min(p => p.Y) - 4;
         int w = (int)Math.Ceiling(all.Max(p => p.X) - minX + 4), h = (int)Math.Ceiling(all.Max(p => p.Y) - minY + 4);
         var px = new int[w * h]; var depth = new double[w * h];
         Array.Fill(px, -1); Array.Fill(depth, double.MinValue);
-        foreach (var (face, tile) in faces)
+        foreach (var (c, uv, tile, tw, th) in faces)
         {
-            var (tw, th) = TempleShapes.Size(face.Tile);
-            var c = face.Corners; var uv = face.Uv;
             const int n = 48;
             for (var i = 0; i <= n; i++)
                 for (var j = 0; j <= n; j++)
