@@ -39,9 +39,11 @@ internal sealed class RaceCarWindow : Window
     private readonly CheckBox trackSetups = new()
     {
         Content = "Use each track's best setup for its top speed, acceleration and steering",
-        ToolTip = "The setups the stress test found fastest on each track (docs/LBA2_RACE_TRACK_STRESS_TEST.md): the engine's planner's best lap of setups " +
-                  "trading top speed, acceleration and steering against each other, from the standalone game's car (110 km/h, acceleration 300 %, braking " +
-                  "300 %, steering 200 %). The sliders keep their values: they drive a track with no best setup, and every track when this is off.",
+        ToolTip = "A setup for each track that is easy to drive there, not just quick (docs/LBA2_RACE_TRACK_STRESS_TEST.md): a light tap of the steering " +
+                  "at the setup's speed moves the car no further across the road, for the road's width, than it does on the Temple of Bú at 80 km/h with " +
+                  "steering 150 % -- and of those setups, the one with the quickest lap the engine's planner finds, trading top speed, acceleration and " +
+                  "steering from the standalone game's car (110 km/h, acceleration 300 %, braking 300 %, steering 200 %). The sliders keep their values: " +
+                  "they drive a track with no best setup, and every track when this is off.",
     };
     private readonly StackPanel trackSetupPanel = new() { Margin = new Thickness(18, 2, 0, 4) };
     private readonly TextBlock trackSetupText = new() { TextWrapping = TextWrapping.Wrap };

@@ -31,7 +31,8 @@ another. The best of the second grid is each track's suggestion.
 
 Time shares are the base car's planned lap. The three middle columns are the lap time saved by 10 % more of one attribute alone. The
 suggestion is in the Race car window's terms (base: top speed 110 km/h, acceleration 300 %, braking 300 %, steering 200 %). Planned and
-driven laps are base -> suggested; driven is the mean of three clean laps (the sprints: the run).
+driven laps are base -> suggested; driven is the mean of three clean laps (the sprints: the run). (These fastest setups were the window's
+"best setups" for a day; since 2026-10-17 they are the drivable ones of "Easy to drive, not only fast", below.)
 
 | track | flat out | bends | +10 % top | +10 % accel | +10 % steer | top speed | accel | steering | planned lap (s) | driven lap (s) |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -80,11 +81,118 @@ suggestion above in place of those three sliders: its top speed scales the gears
 reverse and the gearbox stay the sliders'. The sliders keep their values, greyed while they are overridden, and drive a track with no
 suggestion (one built later) and every track once the box is cleared. The window says which setup applies (the track Play races; from
 the race track window, each of the folder's tracks). The table is `RaceCarSetup.TrackSetups`, by race track entry (Citadel Island's
-two tracks each have one). Each track's lowest planned lap in `plan3.txt` is the table's setup; Wannies Island and the Emperor's
-palace each have a tie at the third decimal place, and the table takes the first of the pair. The race file says which it
+two tracks each have one). Each track's lowest planned lap in `plan3.txt` was the table's setup (until the next section replaced them);
+Wannies Island and the Emperor's palace each have a tie at the third decimal place, and the table takes the first of the pair. The race file says which it
 used (`# the track's best setup ...`, then the car keys), in each track's file of the story's set too, where the set's own keys (an
 island with no track) stay the sliders'. Polar Island's dreamt sprint takes the suggestion's 143 km/h in place of the dream's own 120
 (its waking gears stay the sliders'). Test: `RT_TRACK_SETUP=1 ScriptRoundTrip racecarfile ...`.
+
+## Easy to drive, not only fast (2026-10-17)
+
+The user: "We also need to refine the best setup for tracks, the best setup is not the one that gives the fastest time, the recommended
+setup for the Temple track means a slight side arrow tap takes us from one side of the narrow track to the other at the recommended speed.
+Reducing the speed to 80 and setting steering to 150 feels better to drive and allows us to more easily stay in the centre of the track."
+
+**Why the fastest lap was the wrong test.** The planner's lap is a robot's: it drives the line at exactly the speed each bend allows and
+steers as finely as it likes. Top speed and steering each make that lap quicker, so the fastest setups took as much of both as the budget
+gave (steering 250-260 % on 15 tracks; 126-143 km/h on the palace, the Temple and Polar Island). A player steers with keys, a tap at a time,
+and sees the car drift before tapping back -- and how far a tap sends the car across grows with both the speed and the turn the tap makes.
+Nothing in the lap time knows how wide the road is.
+
+**How the buggy steers** (BUGGY.CPP `MoveBuggy`, `RaceSpeed`): while a steering key is held the car turns at a fixed rate -- the race file's
+`steer` (the window's percentage of 1024) in 4096ths of a turn a second, at any speed up to the top gear's (faster than that, more in
+proportion) -- starting and stopping at once, and nothing turns it back: let go, it carries on along its new heading. A tap of t seconds turns
+it by steer x t, and it then crosses the road at v·sin(turn) until the driver taps back. In the engine (`drive.py tap`: the test pilot
+drives the Temple's long straight and lets go; `input` holds the throttle and taps left for 6 steps of 16 ms; `cartrace` logs each frame):
+
+| setup | speed | heading turned (4096ths) | steer x 96 ms | across after the tap | v·sin(turn) |
+|---|---|---|---|---|---|
+| 80 km/h, steering 150 % | 79.7 km/h | 144 (12.7°), held after it | 147 | 4.91 cells/s | 5.00 cells/s |
+| 132 km/h, steering 220 % | 128.5 km/h | 216 (19.0°), held after it | 216 | 9.44 cells/s | 10.46 cells/s |
+
+**The measure: a tap's move across the road, for the road's room.** A tap of 0.1 s, and the tap back 0.25 s after it, move the car across
+by 2v(1 - cos wt)/w + v·sin(wt)·0.25 (v the speed, w the turn rate, t the tap) -- nearly v x w x 0.1 x 0.35: the car's speed times its turn
+rate, the sideways pull of a full-lock bend. At 132 km/h with steering 220 % that is 4.4 cells; at 80 km/h with 150 %, 1.8. The room is how
+far the car's middle can move from the road's middle: on a raised road its half width less 640 (RAISED_INSET, the car's half width the
+engine keeps inside the rail), on the ground the plan's kerb half width less the car's (633). The Temple's deck is 4.5 cells from middle to
+rail (4.0 on its narrower stretches): 3.25 cells of room (2.75). The measure is the share of the room the tap takes, at every point of the
+racing line at the speed the planner drives there with that setup (the console's `raceplan file <setups> <laps> <points>` now writes each
+setup's plan point by point: RACEMOD.CPP `PlanPointsOut`), averaged over the lap's worst 2 s of driving -- one narrow gate doesn't decide
+it, a narrow straight does. Where the engine carries the car over a jump nothing is steered; where a branch leaves or joins the road, the
+widest piece there counts. `tools/RaceTrackStress/drive.py` does it all (`points`, `table`, `report`, `verify`, `tap`).
+
+**Calibrated on the user's verdict.** At 80 km/h with steering 150 % the Temple's tap takes 0.66 of the room (1.8 cells of the narrow
+stretches' 2.75, at full speed); with the old suggestion, 132 km/h and 220 %, 1.58 -- from the road's middle well past the rail, from one
+side most of the way to the other, as the user found. The standalone game's base car (110 km/h, 200 %) takes about 1.2. The limit is the
+user's: **0.66 of the room**. The tap's and the reaction's lengths cancel out in that calibration (every term goes as v x w): with 0.06 s
+and 0.2 s the same 18 setups come out, with 0.15 s and 0.4 s the same but for a step of the grid on three tracks. The window matters
+more: 1 s puts four more of the tight tracks at the floor below (Celebration Island, the Elevator Platform, the old moon, Polar Island),
+4 s lets the narrow ones up to 20 km/h faster (the old moon 99 km/h, Otringal 90).
+
+**The choice.** The grid: top speed and steering 70-130 % of the base car's in 2.5 % steps, acceleration 70-130 % in steps of 5, the three
+summing to no more than 300 -- the stress test's budget, so what the tap takes from top speed and steering goes to acceleration. Of the
+setups within the limit, the one with the fastest planned lap; top speeds rounded down to whole km/h. The Temple's is the user's own top
+speed and steering, with the acceleration that laps them fastest (the planner's own pick within the limit there is 85 km/h with steering
+140 %: 70.9 s against 73.9, for the same tap). How it was balanced:
+
+- The limit is relative to each road's room, so a wider road takes a faster car: the Francos' and the Emerald Moon's 104 km/h against the
+  Temple's 80. Narrow ground roads (the old moon's and Sendell's Well's kerbs at 3.5 cells) and raised ones (the lava lake's 3.05, Island
+  CX's 3-4) take slower or less quick-steering cars.
+- It reads the speed the car is driven at, not its top gear's: a track that never reaches its top speed is judged in its bends (Sendell's
+  Well's car is set to 101 km/h and never goes over 76), and a rollercoaster's drops count at the speed they give (the Elevator Platform's
+  car goes 91 km/h downhill with a top gear of 79).
+- Nothing goes below 70 % of the base car's top speed or steering -- 77 km/h, 140 % -- the user's own 80 km/h and 150 % are just above
+  both: slower than that would be absurd for a race car. Island CX, Otringal and the lava lake are narrower than even that floor manages
+  (their tap takes 0.70-0.81 of the room) and get the floor, marked * below. If they still feel twitchy, steering under 140 % is the next
+  thing to try.
+- Acceleration doesn't move the car across, so every setup puts the budget's rest into it: 390 % (130 % of the base car's) on all 18 --
+  at the Temple 0.2 s a lap better than 300 %.
+- Steering came out low almost everywhere (140-155 %; Volcano Island, all bends, 175 %): for the same tap the planner gains more lap from
+  top speed than from steering.
+- The perfect lap is 18-56 % slower than the fastest setup's. The opponents drive the player's car as the setup makes it (above), so a
+  race is no easier or harder for it.
+
+Each track's setup in the Race car window's terms (top speed, acceleration, steering). The room is the car's middle's either side of the
+road's middle, typical (half the lap's time) and narrowest (its narrowest tenth). The tap's move is at the car's fastest, and in brackets
+the measure (the worst 2 s, as a share of the room; the limit 0.66). Laps are old setup -> new; planned is the perfect lap, driven the
+mean of the test pilot's three clean laps (the sprints: the run).
+
+| track | room: typical / narrowest (cells) | old setup | its tap | new setup | its tap | planned lap (s) | driven lap (s) |
+|---|---|---|---|---|---|---|---|
+| Desert island | 3.26 / 3.26 | 110 km/h, 210 %, 260 % | 4.3 cells (1.31) | 99 km/h, 390 %, 140 % | 2.1 cells (0.64) | 47.4 -> 56.0 | 46.3 -> 54.0 |
+| Citadel, storm lap | 3.26 / 3.26 | 110 km/h, 210 %, 260 % | 4.3 cells (1.24) | 96 km/h, 390 %, 150 % | 2.2 cells (0.66) | 10.3 -> 12.3 | 10.5 -> 12.2 |
+| Citadel, town circuit | 3.26 / 3.26 | 110 km/h, 210 %, 260 % | 4.3 cells (1.31) | 93 km/h, 390 %, 150 % | 2.1 cells (0.65) | 36.5 -> 44.6 | 36.1 -> 43.3 |
+| Mosquibees Island | 3.26 / 3.26 | 116 km/h, 210 %, 250 % | 4.3 cells (1.33) | 99 km/h, 390 %, 140 % | 2.1 cells (0.64) | 16.2 -> 19.6 | 16.3 -> 19.5 |
+| Celebration Island | 3.50 / 2.70 | 104 km/h, 225 %, 260 % | 4.0 cells (1.26) | 82 km/h, 390 %, 140 % | 1.7 cells (0.66) | 15.5 -> 21.4 | 15.3 -> 20.9 |
+| Celebration, lava lake | 2.50 / 1.56 | 104 km/h, 225 %, 260 % | 4.0 cells (1.93) | 79 km/h, 390 %, 140 % | 1.9 cells (0.81) * | 10.6 -> 14.7 | 11.2 -> 15.1 |
+| Elevator Platform | 3.50 / 2.15 | 110 km/h, 210 %, 260 % | 4.8 cells (1.57) | 79 km/h, 390 %, 145 % | 2.3 cells (0.65) | 11.9 -> 17.7 | 11.3 -> 16.5 |
+| Sendell's Well | 2.26 / 2.26 | 94 km/h, 255 %, 260 % | 3.6 cells (1.49) | 101 km/h, 390 %, 155 % | 1.8 cells (0.66) | 3.7 -> 5.3 | 3.6 -> 5.1 |
+| The old moon | 2.26 / 2.26 | 94 km/h, 255 %, 260 % | 3.6 cells (1.57) | 79 km/h, 390 %, 140 % | 1.7 cells (0.66) | 12.1 -> 14.3 | 12.8 -> 14.3 |
+| Polar Island (sprint) | 2.76 / 2.76 | 143 km/h, 210 %, 200 % | 4.3 cells (1.58) | 77 km/h, 390 %, 140 % | 1.6 cells (0.64) | 49.6 -> 77.2 | 51.1 -> 75.2 |
+| Island of the Francos | 3.50 / 3.50 | 116 km/h, 210 %, 250 % | 4.3 cells (1.25) | 104 km/h, 390 %, 145 % | 2.3 cells (0.65) | 43.9 -> 54.8 | 39.3 -> 42.6 |
+| Otringal | 2.75 / 2.51 | 110 km/h, 210 %, 260 % | 4.3 cells (1.56) | 77 km/h, 390 %, 140 % | 1.6 cells (0.70) * | 26.0 -> 35.7 | 28.8 -> 35.7 |
+| Volcano Island | 3.50 / 3.50 | 116 km/h, 210 %, 250 % | 4.3 cells (1.24) | 85 km/h, 390 %, 175 % | 2.2 cells (0.64) | 22.2 -> 27.8 | 22.4 -> 28.1 |
+| The Emerald Moon | 3.25 / 3.25 | 110 km/h, 210 %, 260 % | 4.3 cells (1.29) | 104 km/h, 390 %, 140 % | 2.2 cells (0.66) | 23.1 -> 28.7 | 22.5 -> 29.0 |
+| Wannies Island | 3.50 / 3.50 | 116 km/h, 210 %, 250 % | 4.3 cells (1.24) | 101 km/h, 390 %, 150 % | 2.3 cells (0.66) | 21.7 -> 26.1 | 20.6 -> 21.0 |
+| The Emperor's palace (sprint) | 3.01 / 3.01 | 126 km/h, 210 %, 230 % | 4.3 cells (1.44) | 93 km/h, 390 %, 140 % | 2.0 cells (0.65) | 35.9 -> 49.6 | 34.9 -> 46.3 |
+| Island CX | 2.15 / 1.75 | 99 km/h, 240 %, 260 % | 3.8 cells (1.96) | 77 km/h, 390 %, 140 % | 1.6 cells (0.80) * | 17.8 -> 24.2 | 18.4 -> 26.6 |
+| The Temple of Bú | 3.25 / 3.25 | 132 km/h, 210 %, 220 % | 4.4 cells (1.58) | 80 km/h, 390 %, 150 % | 1.8 cells (0.66) | 49.1 -> 73.9 | 48.9 -> 73.4 |
+
+Polar Island's dreamt sprint takes the table's 77 km/h in place of the dream's own 120 while the box is ticked (as it took 143 before).
+(The Francos' and Wannies Island's driven laps are under their plans with either setup: the Francos' hazards and Wannies' branches, as in
+the first table.)
+
+**Checked.** All 18 tracks built together from the pristine data with this code (`E:\dump\TEMP\setupdrive\game`, STRESS_ROOT
+`E:\dump\TEMP\setupdrive`) and each driven by the test pilot three times (`drive.py verify`, 54 runs): a clean time trial with the old
+setup and one with the new, and a race with the new against the opponents, power-ups on. Every run reached its end with no rescue, fall,
+missed checkpoint or hold at a cube's edge before it, and every jump landed (the Desert 3 a run, the storm lap 8-9, Mosquibees 3, the lava
+lake 9); the old moon's "off the ring" lines are its first loop's gap, leapt on purpose, as many with either setup. After the finish, the
+pilot driving on with power-ups still about, the stuck-car reset fired once on Mosquibees Island (against its decor 25 at cells
+(488, 532), a nitro penguin just dropped) and once on Sendell's Well. With the new setups `RT_TRACK_SETUP=1 ScriptRoundTrip racecarfile`
+writes each track's top speed, acceleration and steering into its race file and into the story set's track files (the set's own keys
+the sliders').
+
+## What the stress runs found
 
 ## What the stress runs found
 

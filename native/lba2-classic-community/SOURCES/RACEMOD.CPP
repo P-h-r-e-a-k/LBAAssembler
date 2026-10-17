@@ -3689,6 +3689,29 @@ void RaceMod_AutoDrive(int on, double lookCells, double sideCells) {
 // 100 %), with where the lap's time goes: flat out (at the top gear's speed), round the bends (at the steering's limit there) and between
 // (braking for a bend, pulling away). The car and the line put back after. For comparing setups on a track (the user, 2026-10-16:
 // "suggest car setup tweaks for each track"). The lap in seconds, -1 with no line.
+// (raceplan file ... <points>: the plan's points written out too, while s_planPoints is set -- for measuring how the setup handles along
+// the lap, tools/RaceTrackStress/drive.py: a steering tap's move across the road at the speed planned there, 2026-10-17)
+static FILE *s_planPoints = NULL;
+void RaceMod_PlanPointsTo(FILE *f) { s_planPoints = f; }
+static void PlanPointsOut(const T_RACE_OPPONENT *o) {
+    // a header (the car as planned: the top gear's speed and the turn rate, units a second; then the point count), then each point:
+    // its place (world), the planned speed, the line's bend radius, its distance along the line, and -- on a raised road -- the road's
+    // half width there, how far the line is to the side of the road's middle, and a strip beside it (from, to across; equal: none)
+    fprintf(s_planPoints, "# top %d steer %d points %d\n", (int)s_car.GearTop[s_car.Gears - 1], (int)s_car.Steer, o->Count);
+    for (int i = 0; i < o->Count; i++) {
+        double half = 0, lat = 0, sLo = 0, sHi = 0, t = 0;
+        S32 f;
+        int seg;
+        if (s_nbRaised && RaisedAt(o->X[i], o->Z[i], o->Y[i] + 64, RAISED_PAD, &f, &seg, &lat, &t) && seg + 1 < s_nbRaised) {
+            const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
+            half = a->Half + (c->Half - a->Half) * t;
+            sLo = a->StripLo + (c->StripLo - a->StripLo) * t;
+            sHi = a->StripHi + (c->StripHi - a->StripHi) * t;
+        }
+        fprintf(s_planPoints, "%d %d %d %d %d %.0f %.0f %.0f %.0f %.0f\n", (int)o->X[i], (int)o->Z[i], (int)o->Y[i], (int)o->V[i], (int)o->R[i],
+                o->Cum[i], half, lat, sLo, sHi);
+    }
+}
 double RaceMod_PlanLap(double topPct, double accelPct, double brakePct, double steerPct, double *flatShare, double *bendShare) {
     T_RACE_OPPONENT *o = s_opp[0].Count && s_opp[0].R ? &s_opp[0] : s_guide.Count && s_guide.R ? &s_guide : NULL;
     if (!o) return -1;
@@ -3713,6 +3736,7 @@ double RaceMod_PlanLap(double topPct, double accelPct, double brakePct, double s
     const double loops = LoopsTime(o);
     lap += loops;
     bend += loops;
+    if (s_planPoints) PlanPointsOut(o);
     s_car = keep;
     o->Top = keepTop; o->Grip = keepGrip;
     memcpy(o->V, keepV, o->Count * sizeof(S32));

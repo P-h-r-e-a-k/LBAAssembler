@@ -8,8 +8,9 @@ import json, os, re, subprocess, sys, itertools, concurrent.futures as cf
 # (STRESS_ROOT: another folder of runs, its own game in it -- one track built alone)
 ROOT = os.environ.get('STRESS_ROOT', 'E:/dump/TEMP/stress')
 GAME = ROOT + '/game'
-ENG = 'E:/dump/LBAAssembler/native/lba2-classic-community/out/build/windows_ucrt64_static/SOURCES/lba2cc.exe'
-SR = 'E:/dump/LBAAssembler/tools/ScriptRoundTrip/bin/Debug/net10.0/ScriptRoundTrip.exe'
+# (STRESS_ENGINE, STRESS_SR: another engine and ScriptRoundTrip -- a worktree's own builds)
+ENG = os.environ.get('STRESS_ENGINE', 'E:/dump/LBAAssembler/native/lba2-classic-community/out/build/windows_ucrt64_static/SOURCES/lba2cc.exe')
+SR = os.environ.get('STRESS_SR', 'E:/dump/LBAAssembler/tools/ScriptRoundTrip/bin/Debug/net10.0/ScriptRoundTrip.exe')
 
 # key, the track's name in RACETRACK.JSON, its island file (RT_RACE), extra environment
 TRACKS = [

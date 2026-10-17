@@ -2433,31 +2433,45 @@ static void cmd_autodrive(int argc, const char *argv[]) {
     Console_Print("autodrive: %s", atoi(argv[1]) ? "on" : "off");
 }
 
-/* raceplan <top%> <accel%> <brake%> <steer%> | raceplan file <setups> <out>: a race-track mod's racing line planned again for a car
+/* raceplan <top%> <accel%> <brake%> <steer%> | raceplan file <setups> <out> [points]: a race-track mod's racing line planned again for a car
    setup scaled by those percentages, and its perfect lap (RACEMOD.CPP RaceMod_PlanLap); with a file, one setup a line ("top accel brake
-   steer") and the laps written to <out> ("top accel brake steer lap flat% bends%"). For comparing setups on a track. */
+   steer") and the laps written to <out> ("top accel brake steer lap flat% bends%"). For comparing setups on a track. With [points], each
+   setup's plan point by point too, one setup after another ("# setup top accel brake steer", then RACEMOD.CPP PlanPointsOut's lines: each
+   point's place, planned speed, bend radius and the raised road's width there) -- for tools/RaceTrackStress/drive.py, how the setup
+   handles along the lap. */
 static void cmd_raceplan(int argc, const char *argv[]) {
     extern double RaceMod_PlanLap(double topPct, double accelPct, double brakePct, double steerPct, double *flatShare, double *bendShare);
+    extern void RaceMod_PlanPointsTo(FILE *f);
     double flat = 0, bend = 0;
-    if (argc == 4 && !strcmp(argv[1], "file")) {
+    if ((argc == 4 || argc == 5) && !strcmp(argv[1], "file")) {
         FILE *in = fopen(argv[2], "r");
         FILE *out = in ? fopen(argv[3], "w") : NULL;
-        if (!in || !out) { if (in) fclose(in); Console_Print("raceplan: can't read %s or write %s", argv[2], argv[3]); return; }
+        FILE *points = out && argc == 5 ? fopen(argv[4], "w") : NULL;
+        if (!in || !out || (argc == 5 && !points)) {
+            if (in) fclose(in);
+            if (out) fclose(out);
+            Console_Print("raceplan: can't read %s or write %s", argv[2], argv[3]);
+            return;
+        }
         char line[256];
         int n = 0;
         while (fgets(line, sizeof(line), in)) {
             double t, a, b, st;
             if (sscanf(line, "%lf %lf %lf %lf", &t, &a, &b, &st) != 4) continue;
+            if (points) fprintf(points, "# setup %g %g %g %g\n", t, a, b, st);
+            RaceMod_PlanPointsTo(points);
             const double lap = RaceMod_PlanLap(t, a, b, st, &flat, &bend);
+            RaceMod_PlanPointsTo(NULL);
             fprintf(out, "%g %g %g %g %.3f %.1f %.1f\n", t, a, b, st, lap, flat * 100, bend * 100);
             n++;
         }
         fclose(in);
         fclose(out);
+        if (points) fclose(points);
         Console_Print("raceplan: %d setups -> %s", n, argv[3]);
         return;
     }
-    if (argc < 5) { Console_Print("Usage: raceplan <top%> <accel%> <brake%> <steer%> | raceplan file <setups> <out>"); return; }
+    if (argc < 5) { Console_Print("Usage: raceplan <top%> <accel%> <brake%> <steer%> | raceplan file <setups> <out> [points]"); return; }
     const double lap = RaceMod_PlanLap(atof(argv[1]), atof(argv[2]), atof(argv[3]), atof(argv[4]), &flat, &bend);
     if (lap < 0) Console_Print("raceplan: no racing line with its bends' radii");
     else Console_Print("raceplan: a perfect lap %.2f s (flat out %.0f%%, round the bends %.0f%%, between %.0f%%)", lap, flat * 100, bend * 100, 100 - flat * 100 - bend * 100);
