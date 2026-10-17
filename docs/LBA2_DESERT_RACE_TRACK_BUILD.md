@@ -4035,6 +4035,34 @@ line never runs through at its floor's height (`SideArea`), as the dungeon -- is
 through keep the rescue (a car fallen from upstairs into a room the closed doors cut off). Checked mid-race: down through 159's
 fireplace, past the jailers, out of the north fireplace back into 163, no reset.
 
+### The dungeon's captives (2026-10-17)
+
+The user: "The palace dungeon is a bit tame, let's add some female rabbibunny rope bunnies suspended from the ceiling". Four female
+rabbibunnies hang in ropes from the dungeon's ceiling, in the gaps between the cages (`PalaceFurniture.Captive`, `Up.Hanging` and
+`Up.Suspended`):
+
+- *Who*: the game's own bodies, in their own clothes and colours -- BODY.HQR 62 (Mrs. Brune, the Inter-Islands' rabbibunny: green top,
+  grey skirt) and 68 (the rabbibunny in blue and white), each hung both ways (`PalaceFurniture.Rabbibunnies`). Their polygons' colours are
+  the island palette's at their index, a lit one's seven steps up its ramp, a textured one's (68's striped top) its picture's at its middle.
+- *Posed*: each bone turned about its own pivot -- the arms found from the bones and each hand put by a two-bone reach (the race cars'
+  drivers' `CarDriver`), the legs (the bone turning highest in her lower half on each side) turned at the hip till the feet are
+  together, the feet pointed, the head turned. 1.5 times the game's size, as big across as up in the world (a model's units are 4 times
+  the world's across but only 2.5 times up).
+- *Hanging* (two): by her wrists, her arms up and apart, a rope from each wrist up to a wooden bar hung under the ceiling; tied under the
+  knees and at the ankles; her toes some 500 over the floor, her head bowed. Looking south, at a car coming up the dungeon.
+- *Suspended* (two): lying face down across her gap, her head towards the way, her arms bound to her sides, held up by ropes round her
+  chest, her waist, her shins and her ankles from a beam along over her; her head hangs (raised, the gap under the jaw showed from the
+  side: the game's bodies have no throat). Her underside some 2,000 over the floor.
+- *The ropes*: each a band hugging where a plane across her cuts those bones (the eight-sided outline whose sides touch the cut), the
+  ropes up to the bar and the beam and their hangers boxes, an iron plate at the ceiling.
+- *Where*: in the gaps between the cages, reaching no further out from the walls than the cages' fronts (2.35 of the palace's cells: the
+  way down the middle), drawn only -- no boxes: the race, its line, its jailers' and the cars' collision are as they were (the palace's
+  992 solid boxes identical, every other race-track file byte-identical; the pilot, power-ups off, on the build before and this one
+  started together: 124.63 s, won, no rescues, both).
+
+![Two of them from the car](racetrack/palace/dungeon_captives.png)
+![All four, close](racetrack/palace/dungeon_captives_close.png)
+
 ## Island CX: round the island under its cannons, down through a door, twice round the halls under the gas (2026-10-15)
 
 The user: "Create a track for our CXTower island. The basic concept for this track is a loop around the tower, the track enters the

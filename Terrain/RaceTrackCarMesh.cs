@@ -181,6 +181,8 @@ internal sealed class CarDriver
 
     public int BoneOf(int point) => body.Bones.FindIndex(b => point >= b.Start && point < b.Start + b.Count);
     public int Bones => body.Bones.Count;
+    // the points as posed so far (the body's own coordinates)
+    public Vector3[] Posed => posed;
     // the bones hanging from one, nearest first
     public int[] Below(int bone)
     {

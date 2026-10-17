@@ -5044,6 +5044,9 @@ static int Teleport(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
             if (scene < 0) { Log_Info("[racemod] teleporter %d: no scene for cube (%d,%d)", i + 1, qx, qz); return 0; }
         }
         ListObjet[NUM_PERSO].Obj.Beta = t->Beta;
+        // (a skid on oil under way goes on from the way out: it turns the car round from, and moves it along, the heading it began with
+        // -- a car skidding into the palace's fireplace came out into the dungeon going the way it went in, into the chest, 2026-10-17)
+        if (TimerRefHR < s_skidUntil) s_skidBeta = t->Beta;
         s_teleportedAt = TimerRefHR; s_trailN = 0; s_forgetLap = 1;
         Log_Info("[racemod] teleporter %d: taken in at (%.0f,%.0f), out at (%.0f,%.0f,%.0f) turned %d, at %d units/s", i + 1, x, z, t->X, t->Y, t->Z, (int)t->Beta,
                  (int)ListBuggy[0].Speed);

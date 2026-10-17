@@ -232,8 +232,8 @@ internal static class PalaceFurniture
     {
         Bed, GrandBed, Wardrobe, Bookshelf, ReadingTable, Chair, Globe, Piano, Harp, MusicStand, Bathtub, DressingTable, Throne, Column,
         Candelabra, Chandelier, GoldPile, Pedestal, Chest, Armour, WeaponRack, Altar, Pew, Candle, Plant, Fireplace, BanquetTable, Bench, StairColumn,
-        // (the dungeon under the palace -- PalaceIsland's: a secret way down through room 159's fireplace)
-        Cage, WhipRack, Shackles, Torch, Cot, Barrel,
+        // (the dungeon under the palace -- PalaceIsland's: a secret way down through room 159's fireplace; its captives hung from its ceiling)
+        Cage, WhipRack, Shackles, Torch, Cot, Barrel, Hanging, Suspended,
     }
 
     // A piece upstairs: its kind, room (tile), the middle of its foot (palace cells, fractions of one; the floor's layer), the way it looks
@@ -246,9 +246,10 @@ internal static class PalaceFurniture
         Ruby = (200, 30, 40), Emerald = (40, 160, 80), Sapphire = (40, 70, 190), Velvet = (96, 40, 120);
     private static readonly (float R, float G, float B)[] Books = { (140, 40, 30), (40, 70, 120), (50, 100, 50), (170, 130, 60), (90, 50, 90), (120, 80, 40) };
 
-    // The upstairs pieces' models (each room's faces) and their boxes. `place` and `colour` as Build's.
+    // The upstairs pieces' models (each room's faces) and their boxes. `place` and `colour` as Build's; `captives`: the dungeon's (Captive),
+    // in turns, `palette` an index of the island's palette as its colour.
     public static Made Upstairs(List<UpPiece> pieces, Func<double, double, double, Vector3> place, Func<(float R, float G, float B), Vector3, int> colour,
-        Body? armour = null)
+        Body? armour = null, IReadOnlyList<Body>? captives = null, Func<int, (float R, float G, float B)>? palette = null)
     {
         var made = new Dictionary<int, List<BrickBuilding.Face>>();
         var boxes = new List<(double, double, double, double, double, double)>();
@@ -295,6 +296,11 @@ internal static class PalaceFurniture
                 case Up.Torch: Torch(kit); break;
                 case Up.Cot: Cot(kit, d, w); break;
                 case Up.Barrel: Barrel(kit); break;
+                case Up.Hanging or Up.Suspended:
+                    // (the bodies in turns, each hung both ways)
+                    var held = counts.GetValueOrDefault(p.Kind) + (p.Kind == Up.Suspended ? 1 : 0);
+                    if (captives is { Count: > 0 } && palette is not null) Captive(kit, captives[held % captives.Count], p.Kind == Up.Suspended, h, palette);
+                    break;
             }
             counts[p.Kind] = counts.GetValueOrDefault(p.Kind) + 1;
             if (!p.Solid) continue;
@@ -706,6 +712,240 @@ internal static class PalaceFurniture
     {
         // an old barrel, iron hoops round it
         k.Lathe(new[] { (0.0, 0.0), (120.0, 0.0), (150.0, 160.0), (150.0, 260.0), (120.0, 420.0), (0.0, 420.0) }, 10, i => i == 1 || i == 3 ? CageIron : OldWood, top: true, bottom: false);
+    }
+
+    // ---- the dungeon's captives (the user, 2026-10-17: "The palace dungeon is a bit tame, let's add some female rabbibunny rope bunnies
+    // suspended from the ceiling"): female rabbibunnies -- the game's own bodies, in their own clothes and colours -- hung in ropes from the
+    // dungeon's ceiling, their feet well clear of its floor. Hanging: by her wrists, her arms up and apart, a rope from each wrist up to a bar
+    // under the ceiling, her legs together and tied under the knees and at the ankles, her toes down, her head bowed. Suspended: lying face
+    // down under a beam, her arms bound to her sides, held up by ropes round her chest, her waist, her shins and her ankles, her head hanging.
+    // Each posed by turning her bones about their pivots (CarDriver: the arms found from the bones, a two-bone reach for each hand), then
+    // CaptiveScale times the game's size, as big across as up in the world (a model's units are Across times the world's across but only Up
+    // times up). A rope round her is a band hugging where a plane across her cuts her (the eight-sided outline round the cut). Drawn only:
+    // they hang between the cages, off the way down the dungeon's middle, nothing to run into.
+    public static readonly int[] Rabbibunnies = { 62, 68 };   // BODY.HQR: Mrs. Brune, the Inter-Islands' rabbibunny; a rabbibunny in blue and white
+    private const float CaptiveScale = 1.5f;
+    // (radians) her arms out from upright, hanging; out from her sides and back, lying; her feet pointed; her head bowed, and hanging lower
+    // lying (raised, it showed the gap under her jaw from the side: the game's bodies have no throat, the head over the shoulders)
+    private const float Spread = 0.42f, AtSides = 0.12f, ToesDown = 1.0f, Bowed = 0.26f, Hung = 0.5f;
+    private const float FootGap = 10;           // (her own units) the inside of each foot from her middle, her legs together
+    private const int LitSteps = 7;             // a lit polygon's colour this many steps up its ramp (about the game's light on a body)
+    // (world units) the bar's (or beam's) underside under the ceiling, its half thickness, past the ropes at its ends; the ropes from it to
+    // her hands (to her back, lying); the ropes' half thickness, the bands round her: how wide, how far off her
+    private const float BarDrop = 260, BarHalf = 45, BeamDrop = 300, BeamHalf = 55, BarOver = 160, HangingRopes = 110, LyingRopes = 420;
+    private const float RopeHalf = 20, BandWide = 46, BandOff = 8;
+    private static readonly (float R, float G, float B) Rope = (160, 128, 82), RopeTop = (190, 158, 104);
+
+    // A captive (`lying`: Suspended, else Hanging) under a ceiling `ceiling` up (model units), in `palette`'s colours.
+    private static void Captive(Kit k, Body model, bool lying, double ceiling, Func<int, (float R, float G, float B)> palette)
+    {
+        if (Bound(model, lying) is not { } bound) return;
+        // (her own coordinates to the world's, about the piece's middle, up from the floor: standing she looks along +z -- turned to look out,
+        // +x; lying face down, her head along +z, her right side out)
+        var g = CaptiveScale;
+        Vector3 Turned(Vector3 p) => (lying ? new Vector3(p.X, -p.Z, p.Y) : new Vector3(p.Z, p.Y, -p.X)) * g;
+        var turned = bound.Points.Select(Turned).ToArray();
+        float top = (float)(ceiling * PalaceIsland.Up), under = top - (lying ? BeamDrop : BarDrop), reach = under - (lying ? LyingRopes : HangingRopes);
+        float x0 = turned.Min(p => p.X), x1 = turned.Max(p => p.X), z0 = turned.Min(p => p.Z), z1 = turned.Max(p => p.Z);
+        var shift = new Vector3(-(x0 + x1) / 2, reach - bound.Top.Max(i => turned[i].Y), -(z0 + z1) / 2);
+        Vector3 Q(Vector3 p) => Turned(p) + shift;
+        Vector3 Room(Vector3 w) => new(w.X / PalaceIsland.Across, w.Y / (float)PalaceIsland.Up, w.Z / PalaceIsland.Across);
+        void WorldBox(Vector3 a, Vector3 b, (float, float, float) side, (float, float, float) lid) => k.Box(Room(Vector3.Min(a, b)), Room(Vector3.Max(a, b)), side, lid, bottom: true);
+
+        // her polygons in their own colours: a lit one's some steps up its ramp, a textured one's its picture's at its middle (her lines and
+        // spheres -- these bodies have none -- left out)
+        var at = turned.Select(p => Room(p + shift)).ToArray();
+        (float R, float G, float B)? Paint(Face f)
+        {
+            int c = f.Colour, type = f.Material;
+            if (f.Texture is { } t && model.TexturePage is { } page && t.Handle < model.Textures.Length)
+            {
+                double u = 0, v = 0;
+                for (var i = 0; i < f.Points.Length; i++) { u += t.UV[i * 2]; v += t.UV[i * 2 + 1]; }
+                var info = model.Textures[t.Handle];
+                var mask = (int)(info >> 16);
+                int tx = ((int)(u / f.Points.Length) >> 8) & (mask & 0xFF), ty = ((int)(v / f.Points.Length) >> 8) & ((mask >> 8) & 0xFF);
+                c = page[((int)(info & 0xFFFF) + ty * 256 + tx) & 0xFFFF];
+                if (c == 0 && type is (>= 12 and <= 15) or (>= 20 and <= 23)) return null;
+            }
+            // (lit as the game lights its type -- PalacePortraits.Paint: not 0, 2, 3, 8 or 12)
+            if ((type & 3) == 1 || ((type & 3) >= 2 && type is not (2 or 3)) || type is >= 4 and <= 7)
+            {
+                var share = model.LightScale is { } ls ? f.Points.Average(i => i < ls.Length ? ls[i] : 1f) : 1f;
+                c = Math.Min((c & ~15) + 15, c + (int)Math.Round(LitSteps * share));
+            }
+            return palette(c);
+        }
+        foreach (var f in model.Faces)
+        {
+            if (f.Points.Length < 3 || Paint(f) is not { } rgb) continue;
+            var pts = f.Points.Select(i => at[i]).ToArray();
+            var n = Vector3.Zero;
+            for (var i = 0; i < pts.Length; i++) { var a = pts[i]; var b = pts[(i + 1) % pts.Length]; n += new Vector3((a.Y - b.Y) * (a.Z + b.Z), (a.Z - b.Z) * (a.X + b.X), (a.X - b.X) * (a.Y + b.Y)); }
+            if (n.LengthSquared() < 1e-6f) continue;
+            n = Vector3.Normalize(n);
+            for (var i = 1; i + 1 < pts.Length; i++) k.Tri(pts[0], pts[i], pts[i + 1], rgb, n);
+        }
+
+        // the ropes round her: each a band round where the plane across her cuts those bones -- the eight-sided outline whose sides touch the
+        // cut, a little out from it -- facing out; and up from the ones that hold her to the bar (or beam)
+        var ups = new List<Vector3>();
+        foreach (var (y, bones, up) in bound.Bands)
+        {
+            var cut = Section(model, bound.Points, y, bones);
+            if (cut.Count == 0) continue;
+            float cx = (cut.Min(c => c.X) + cut.Max(c => c.X)) / 2, cz = (cut.Min(c => c.Y) + cut.Max(c => c.Y)) / 2, w = BandWide / g / 2;
+            var sides = Enumerable.Range(0, 8).Select(i => new Vector2(MathF.Cos(i * MathF.PI / 4), MathF.Sin(i * MathF.PI / 4))).ToArray();
+            var reach8 = sides.Select(s => cut.Max(c => Vector2.Dot(c - new Vector2(cx, cz), s)) + BandOff / g).ToArray();
+            // (each corner where two neighbouring sides meet)
+            var corners = Enumerable.Range(0, 8).Select(i =>
+            {
+                Vector2 a = sides[i], b = sides[(i + 1) % 8];
+                float ra = reach8[i], rb = reach8[(i + 1) % 8], det = a.X * b.Y - a.Y * b.X;
+                return new Vector2(cx + (ra * b.Y - rb * a.Y) / det, cz + (a.X * rb - b.X * ra) / det);
+            }).ToArray();
+            var middle = Room(Q(new Vector3(cx, y, cz)));
+            var high = float.MinValue;
+            for (var i = 0; i < 8; i++)
+            {
+                Vector2 a = corners[(i + 7) % 8], b = corners[i];
+                var quad = new[] { new Vector3(a.X, y - w, a.Y), new Vector3(b.X, y - w, b.Y), new Vector3(b.X, y + w, b.Y), new Vector3(a.X, y + w, a.Y) }.Select(Q).ToArray();
+                high = Math.Max(high, quad.Max(p => p.Y));
+                var room = quad.Select(Room).ToArray();
+                var n = Vector3.Cross(room[1] - room[0], room[3] - room[0]);
+                if (n.LengthSquared() < 1e-6f) continue;
+                n = Vector3.Normalize(n);
+                if (Vector3.Dot(n, (room[0] + room[2]) / 2 - middle) < 0) n = -n;
+                k.Quad(room[0], room[1], room[2], room[3], Rope, n);
+            }
+            if (up) ups.Add(Q(new Vector3(cx, y, cz)) with { Y = high });
+        }
+        if (ups.Count == 0) return;
+        // (the bar across over her hands -- the beam along over her, lying -- hung from the ceiling at its ends, an iron plate at each)
+        foreach (var p in ups) WorldBox(new(p.X - RopeHalf, p.Y, p.Z - RopeHalf), new(p.X + RopeHalf, under, p.Z + RopeHalf), Rope, RopeTop);
+        float mx = ups.Average(p => p.X), half = lying ? BeamHalf : BarHalf;
+        float za = (lying ? z0 + shift.Z : ups.Min(p => p.Z)) - BarOver, zb = (lying ? z1 + shift.Z : ups.Max(p => p.Z)) + BarOver;
+        WorldBox(new(mx - half, under, za), new(mx + half, under + 2 * half, zb), OldWood, OldWood);
+        foreach (var z in new[] { za + 2 * half, zb - 2 * half })
+        {
+            WorldBox(new(mx - RopeHalf, under + 2 * half, z - RopeHalf), new(mx + RopeHalf, top - 18, z + RopeHalf), Rope, RopeTop);
+            WorldBox(new(mx - 55, top - 18, z - 55), new(mx + 55, top, z + 55), CageIron, IronLight);
+        }
+    }
+
+    // A captive posed (her own coordinates, standing -- lying, before she is laid face down): her points, the ones her height under the
+    // ropes is taken from (the hands she hangs by; lying, the whole of her) and the ropes round her: each across her at a height (y), round
+    // some of her bones, a rope from it up to the bar or not. Null for a body whose arms and legs aren't found.
+    private sealed record Captured(Vector3[] Points, int[] Top, List<(float Y, HashSet<int> Bones, bool Up)> Bands);
+
+    private static Captured? Bound(Body model, bool lying)
+    {
+        var d = new CarDriver(model);
+        if (d.FindArms() is not ({ } right, { } left)) return null;
+        var rest = model.World();
+        float floor = rest.Min(p => p.Y), height = rest.Max(p => p.Y) - floor;
+        var pose = d.Posed;
+        int[] Limb(int b) => d.Below(b).Prepend(b).ToArray();
+        IEnumerable<int> PointsOf(IEnumerable<int> bones) => bones.SelectMany(b => Enumerable.Range(model.Bones[b].Start, model.Bones[b].Count));
+        Vector3 Pivot(int b) => pose[model.Bones[b].Pivot];
+        var arms = Limb(right.Upper).Concat(Limb(left.Upper)).ToHashSet();
+        // (a leg: the bone turning highest in the lower half of her, off her middle on its side, its points reaching the floor)
+        int Leg(float side)
+        {
+            var best = -1;
+            for (var b = 1; b < model.Bones.Count; b++)
+            {
+                var at = d.PivotOf(b);
+                if (arms.Contains(b) || at.X * side < 20 || at.Y - floor > height * 0.55f) continue;
+                if (PointsOf(Limb(b)).Select(i => rest[i].Y).DefaultIfEmpty(float.MaxValue).Min() - floor > height * 0.1f) continue;
+                if (best < 0 || at.Y > d.PivotOf(best).Y) best = b;
+            }
+            return best;
+        }
+        int rightLeg = Leg(1), leftLeg = Leg(-1);
+        if (rightLeg < 0 || leftLeg < 0) return null;
+        var legs = Limb(rightLeg).Concat(Limb(leftLeg)).ToHashSet();
+        // (her head: the biggest bone turning high on her middle, with what hangs from it -- her ears)
+        var head = Enumerable.Range(1, model.Bones.Count - 1)
+            .Where(b => !arms.Contains(b) && !legs.Contains(b) && d.PivotOf(b).Y - floor > height * 0.6f && Math.Abs(d.PivotOf(b).X) < 40)
+            .DefaultIfEmpty(-1).MaxBy(b => b < 0 ? -1 : model.Bones[b].Count);
+        var middle = Enumerable.Range(0, model.Bones.Count).Where(b => !arms.Contains(b) && !legs.Contains(b) && (head < 0 || !Limb(head).Contains(b))).ToHashSet();
+
+        // her legs together -- each turned at the hip till the inside of its foot is by her middle -- her toes pointed down
+        var shins = new List<int[]>();
+        foreach (var (leg, side) in new[] { (rightLeg, 1f), (leftLeg, -1f) })
+        {
+            var limb = Limb(leg);
+            var foot = limb.MinBy(b => d.PivotOf(b).Y);
+            var feet = PointsOf(new[] { foot }).Select(i => pose[i]).ToList();
+            if (feet.Count > 0)
+            {
+                var centre = feet.Aggregate(Vector3.Zero, (s, p) => s + p) / feet.Count;
+                var inside = feet.Min(p => p.X * side);
+                d.Turn(limb, Pivot(leg), CarDriver.Between(centre - Pivot(leg), centre - new Vector3(side * (inside - FootGap), 0, 0) - Pivot(leg)));
+            }
+            d.Turn(Limb(foot), Pivot(foot), Quaternion.CreateFromAxisAngle(Vector3.UnitX, ToesDown));
+            shins.Add(limb.Length > 2 ? Limb(limb[1]) : limb);
+        }
+        // her arms straight: hanging, up and apart over her head; lying, down her sides, a little behind them
+        foreach (var (arm, side) in new[] { (right, 1f), (left, -1f) })
+        {
+            var shoulder = d.PivotOf(arm.Upper);
+            var elbow = d.PivotOf(arm.Fore[0]);
+            var length = Vector3.Distance(shoulder, elbow) + Vector3.Distance(elbow, d.Far(arm.Fore, elbow));
+            var way = lying ? Vector3.Normalize(new Vector3(side * AtSides, -1, -AtSides)) : new Vector3(side * MathF.Sin(Spread), MathF.Cos(Spread), 0);
+            d.Reach(arm.Upper, arm.Fore, shoulder + way * length * 0.98f, side);
+        }
+        var waistY = (Pivot(rightLeg).Y + Pivot(leftLeg).Y) / 2 + height * 0.06f;
+        if (head >= 0) d.Turn(Limb(head), Pivot(head), Quaternion.CreateFromAxisAngle(Vector3.UnitX, lying ? Hung : Bowed));
+
+        // the ropes: round her shins under her knees and round her ankles; and round each wrist (hanging) or her chest and her waist, her
+        // arms with them (lying)
+        var bands = new List<(float Y, HashSet<int> Bones, bool Up)>();
+        var below = shins.SelectMany(s => s).ToHashSet();
+        float knee = shins.Average(s => Pivot(s[0]).Y), ankle = shins.Average(s => Pivot(s[^1]).Y);
+        bands.Add((knee - height * 0.03f, below, lying));
+        bands.Add((ankle + height * 0.035f, below, lying));
+        int[] top;
+        if (lying)
+        {
+            var chest = (d.PivotOf(right.Upper).Y + d.PivotOf(left.Upper).Y) / 2 - height * 0.1f;
+            bands.Add((chest, middle.Concat(arms).ToHashSet(), true));
+            bands.Add((waistY, middle.Concat(arms).ToHashSet(), true));
+            top = Enumerable.Range(0, pose.Length).ToArray();
+        }
+        else
+        {
+            var hands = new List<int>();
+            foreach (var arm in new[] { right, left })
+            {
+                var hand = arm.Fore.Length > 1 ? arm.Fore[1] : arm.Fore[0];
+                bands.Add((Pivot(hand).Y + height * 0.012f, new HashSet<int> { arm.Fore[0], hand }, true));
+                hands.AddRange(PointsOf(Limb(hand)));
+            }
+            top = hands.ToArray();
+        }
+        return new Captured((Vector3[])pose.Clone(), top, bands);
+    }
+
+    // Where a plane across a posed body at a height (y) cuts the polygons of some of its bones (those wholly theirs): the points (x, z) where
+    // their sides cross it; none where it misses them.
+    private static List<Vector2> Section(Body model, Vector3[] points, float y, HashSet<int> bones)
+    {
+        var mine = bones.SelectMany(b => Enumerable.Range(model.Bones[b].Start, model.Bones[b].Count)).ToHashSet();
+        var cut = new List<Vector2>();
+        foreach (var f in model.Faces)
+        {
+            if (!f.Points.All(mine.Contains)) continue;
+            for (var i = 0; i < f.Points.Length; i++)
+            {
+                Vector3 a = points[f.Points[i]], b = points[f.Points[(i + 1) % f.Points.Length]];
+                if (a.Y == b.Y || (a.Y - y) * (b.Y - y) > 0) continue;
+                var c = a + (b - a) * ((y - a.Y) / (b.Y - a.Y));
+                cut.Add(new Vector2(c.X, c.Z));
+            }
+        }
+        return cut;
     }
 
     private static void WeaponRack(Kit k, double width)

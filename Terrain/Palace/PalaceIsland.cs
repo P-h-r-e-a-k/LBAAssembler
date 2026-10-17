@@ -603,6 +603,14 @@ internal static class PalaceIsland
             Put(PalaceFurniture.Up.Barrel, fx1 - 0.6, fz1 - 0.6, -1, 0, 0.7, 0.7, 2);
             Put(PalaceFurniture.Up.Barrel, fx1 - 1.4, fz1 - 0.6, -1, 0, 0.7, 0.7, 2);
             Put(PalaceFurniture.Up.Chest, fx0 + 0.7, fz0 + 21.0, 1, 0, 0.9, 1.4, 2);
+            // (its captives, hung from its ceiling -- two by their wrists, two lying face down, PalaceFurniture.Captive -- in the gaps between
+            // the cages, reaching as far out as the cages' fronts (DungeonCage + 0.15 from the walls) and no further: off the way down its
+            // middle, nothing to run into, but in sight of a car coming up it; those by their wrists looking south at it, the others lying
+            // across their gaps, their heads towards the way)
+            Put(PalaceFurniture.Up.Hanging, fx0 + 2.0, fz0 + 5.2, 0, 1, 0.6, 0.8, DungeonDepth, solid: false);
+            Put(PalaceFurniture.Up.Suspended, fx1 - 1.7, fz0 + 7.75, 0, 1, 0.6, 1.4, DungeonDepth, solid: false);
+            Put(PalaceFurniture.Up.Hanging, fx1 - 2.0, fz0 + 13.25, 0, 1, 0.6, 0.8, DungeonDepth, solid: false);
+            Put(PalaceFurniture.Up.Suspended, fx0 + 1.7, fz0 + 15.75, 0, -1, 0.6, 1.4, DungeonDepth, solid: false);
             // (its way out: a fireplace in the north wall's middle, looking south; nothing in its way)
             Put(PalaceFurniture.Up.Fireplace, mid, fz0 + 0.3, 0, 1, 0.6, 2.4, 4, solid: false);
             // (the cages' bars, each side a box: the prisoner inside stands free)
@@ -628,7 +636,8 @@ internal static class PalaceIsland
             teleports.Add(new[] { outX0, outZ0, outX1, outZ1, WY(fy) - 600, WY(fy) + 2400, back.X, back.Z, WY(minY + 1), 2048.0 });
             log.Add($"the dungeon under rooms {DungeonUnder} and {DungeonNorth}: cells x {I(fx0):0}..{I(fx1):0}, z {J(fz0):0}..{J(fz1):0}, its floor at {WY(fy):0} " +
                     $"({DungeonDepth} layers under the ground floor's); in through room {DungeonUnder}'s fireplace (cells x {inBox[0]:0.#}..{inBox[2]:0.#}, z {inBox[1]:0.#}..{inBox[3]:0.#}), " +
-                    $"out by its own at its north end to ({back.X:0.#}, {back.Z:0.#}); {cages.Count} cages, 2 cots, 2 racks of whips, 2 pairs of shackles");
+                    $"out by its own at its north end to ({back.X:0.#}, {back.Z:0.#}); {cages.Count} cages, 2 cots, 2 racks of whips, 2 pairs of shackles, " +
+                    $"{dungeonPieces.Count(p => p.Kind is PalaceFurniture.Up.Hanging or PalaceFurniture.Up.Suspended)} captives hung from its ceiling");
             dungeonLayout = new Dictionary<string, object>
             {
                 ["x0"] = I(fx0), ["z0"] = J(fz0), ["x1"] = I(fx1), ["z1"] = J(fz1), ["floorTop"] = WY(fy), ["ceiling"] = WY(minY),
@@ -841,7 +850,18 @@ internal static class PalaceIsland
         {
             Vector3 Place(double x, double y, double z) => new((float)(x0 + (x - minX) * U), (float)(Floor + (y - minY) * V), (float)(z0 + (z - minZ) * U));
             int Seen((float R, float G, float B) c, Vector3 n) => Shaded(c, n.Y * n.Y * (n.Y > 0 ? 1f : 0.5f) + n.X * n.X * 0.84f + n.Z * n.Z * 0.70f);
-            var made = PalaceFurniture.Upstairs(dungeonPieces, Place, Seen);
+            // (its captives: the game folder's own female rabbibunnies, the bodies' texture page with them -- RESS.HQR 6 -- and their colours'
+            // indices in the island's palette, as the game draws a body there)
+            var captives = new List<Body>();
+            try
+            {
+                var bodies = HqrArchive.Open(Path.Combine(gameDirectory, "BODY.HQR"));
+                var page = HqrArchive.Open(Path.Combine(gameDirectory, "RESS.HQR")).Read(6);
+                foreach (var b in PalaceFurniture.Rabbibunnies) { var body = Body.Read(bodies.Read(b), 2, allowStatic: true); body.TexturePage = page; captives.Add(body); }
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException) { log.Add($"the dungeon's captives: no rabbibunnies' bodies ({e.Message}) -- none hung"); }
+            (float R, float G, float B) IslandColour(int i) { var c = BrickBuilding.Colour(islandPalette, i); return (c.R, c.G, c.B); }
+            var made = PalaceFurniture.Upstairs(dungeonPieces, Place, Seen, captives: captives, palette: IslandColour);
             foreach (var (ti, list) in made.Faces) roomFaces[ti].AddRange(list);
             chestBoxes.AddRange(made.Boxes);
             chestBoxes.AddRange(dungeonBoxes);
