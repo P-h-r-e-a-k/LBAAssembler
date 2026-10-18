@@ -59,7 +59,7 @@ internal static partial class RaceTrackCharacterCars
         TtFrame = 48, TtBrow = 49, TtCigarette = 62, TtEmber = 242;
     private const float TtHeadShare = 0.7f;
     // the side he sits on: -x, the side the game draws as the car's right -- a right-hand drive (seen from the chase camera behind the car,
-    // +x is on the left; BodyPipeline's pictures show it the other way round)
+    // +x is on the left; BodyPipeline's pictures, from the front, show it on the right)
     private const float TtDriverSide = -1;
 
     // A ring across the body at z, from the points of its +x half ((x, y), from the top's edge round to the bottom's) and the -x half

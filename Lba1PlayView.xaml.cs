@@ -866,6 +866,7 @@ public partial class Lba1PlayView : UserControl
                    o.PoseFrom is null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(o.PoseFrom), blend, yawStep);
         if (posedCache.TryGetValue(key, out var cached)) return cached;
         if (posedCache.Count > 8000) posedCache.Clear();
+        // beta 128 faces the iso camera, which Renderer.Render shows at yaw 0 (a body's +Z side, its front, towards the viewer)
         var yaw = (float)((yawStep * 1024.0 / YawSteps - 128) * Math.PI * 2 / 1024);
         // the game's lighting: the actor's facing (as drawn, rounded to the same steps) and the scene's light
         var lit = ((int)(yawStep * 1024.0 / YawSteps), runtime.Scene?.AlphaLight ?? 0, runtime.Scene?.BetaLight ?? 0);

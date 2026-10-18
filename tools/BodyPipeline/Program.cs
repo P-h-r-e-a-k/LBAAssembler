@@ -19,9 +19,8 @@ namespace BodyPipeline;
 //                                            pure-black, legs-together silhouette (no lossy game-style-conversion step,
 //                                            which is what left the old asset a dark teal rather than black) run through
 //                                            New humanoid with HeadDetails/BandanaText, so the legs are guaranteed
-//                                            attached (HipAttach) and the bandana/teeth read clearly (NegativeZFront
-//                                            must be true -- see the comment at its Settings -- or the lettering and
-//                                            teeth silently render invisible while everything else still looks fine).
+//                                            attached (HipAttach) and the bandana/teeth read clearly, facing +Z like
+//                                            the games' own characters.
 //                                            Writes dummybody.lm2 (LBA2 payload, Body.Write()'s own bytes) plus 3D
 //                                            renders and a hip closeup to outDir for review before it is copied over
 //                                            the real asset.
@@ -175,7 +174,8 @@ internal static class Program
             copy.Bones.AddRange(model.Bones); copy.Faces.AddRange(model.Faces); copy.Lines.AddRange(model.Lines); copy.Spheres.AddRange(model.Spheres);
             copy.Vertices.AddRange(turned);
             copy.SetWorld(turned.Select(p => p with { Y = p.Y - lowest }).ToArray());
-            using var bmp = Renderer.Render(copy, palette, W, H, 0, false, background: Color.FromArgb(40, 60, 90), gridLine: Color.FromArgb(40, 60, 90));
+            // seen from its -Z side, which the tilt above tips towards (the renderer shows +Z at yaw 0)
+            using var bmp = Renderer.Render(copy, palette, W, H, MathF.PI, false, background: Color.FromArgb(40, 60, 90), gridLine: Color.FromArgb(40, 60, 90));
             g.DrawImageUnscaled(bmp, v % 3 * W, v / 3 * H);
         }
         sheet.Save(output, ImageFormat.Png);
@@ -869,14 +869,10 @@ internal static class Program
             ImagePath = path, Lba1Folder = Folders[0], Lba2Folder = Folders[1], Lba1Body = 0, Lba2Body = 0,
             Mask = "Dark subject", Threshold = 128, Layout = "Single front", Method = "New humanoid", AutoCrop = true, DetailBudget = 300,
             HeadDetails = true, BandanaText = "Phreak", Lit = false,
-            // HeadDecoration.Add mirrors X and Z when this is false (its own front-facing convention is the opposite of a
-            // plain "Single front" silhouette's). Left at the Settings default (false) here, the bandana/teeth geometry
-            // still builds -- same polygon and colour counts either way -- but its band-front polygons and the ordinary
-            // body polygons disagree about which way is front, so the "off" (white) cells of the letter grid and the
-            // ordinary head skin end up drawn over each other in screen space: the bandana cloth, knot and tails (which
-            // don't depend on this) still look right, but the lettering and teeth are invisible. True matches how the
-            // shipped asset was made.
-            NegativeZFront = true,
+            // The face, lettering and teeth on +Z, the way the games' characters face (the Settings default). The asset
+            // used to be made with NegativeZFront = true: the body preview then showed bodies from behind and mirrored, so
+            // only a back-to-front body with mirrored lettering looked right in it (2026-10-18, Renderer.Render).
+            NegativeZFront = false,
         };
         var generated = Generator.Generate(settings, 2);
         var written = generated.Body.Write();
