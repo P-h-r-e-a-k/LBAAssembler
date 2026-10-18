@@ -130,7 +130,7 @@ internal static class TempleIsland
             built = carved.Built;
             log.AddRange(carved.Log);
         }
-        var objects = TempleObjects.Build(game, built, island, frame, palette.Map, bodies.Count, EmptyBody, shapes, models);
+        var objects = TempleObjects.Build(game, built, island, frame, palette.Map, bodies.Count, EmptyBody, shapes, models, uncut: layout);
         bodies.AddRange(objects.Bodies);
         log.AddRange(objects.Log);
         // (LBA1's actors as its scenes start them -- doors, lifts, floor plates, the statues, the plants, the skeletons...: TempleActors; in a

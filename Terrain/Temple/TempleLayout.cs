@@ -19,6 +19,8 @@ internal sealed class TempleLayout
 
     public readonly List<Placed> Placements = new();
     public readonly Dictionary<(int X, int Y, int Z), PolarLayout.Cell> Cells = new();
+    // the cells that close the slot a join leaves (Seams): each with the cell of the scene's first row it copies
+    public readonly Dictionary<(int X, int Y, int Z), (int X, int Y, int Z)> Filled = new();
     public readonly List<string> Log = new();
     public int MinX, MaxX, MinY, MaxY, MinZ, MaxZ;
 
@@ -41,6 +43,7 @@ internal sealed class TempleLayout
         }
         if (layout.Placements.Count != Scenes.Length)
             throw new InvalidOperationException($"The joined map has {layout.Placements.Count} of the temple's {Scenes.Length} scenes.");
+        layout.Seams();
         var keys = layout.Cells.Keys;
         layout.MinX = keys.Min(k => k.X); layout.MaxX = keys.Max(k => k.X);
         layout.MinY = keys.Min(k => k.Y); layout.MaxY = keys.Max(k => k.Y);
@@ -49,13 +52,44 @@ internal sealed class TempleLayout
         return layout;
     }
 
-    // The temple with some cells left out (a race track's doorways: TempleIsland.Build), its frame the same.
+    // The slot a join leaves between two scenes: the joined map places 40 four rows further south than its zones do (48, -8, 64 against
+    // 60), so the corridor down from 8 -- 8's last row (z 63) stops at its floor, layer 8 -- has no walls or ceiling for one row, a slit
+    // the race camera looks through to the void. Where a column of a scene's first row stands against the row before it, which another
+    // scene's cells hold, the scene's cells over the other's there are copied into that row: 40's corridor walls (x 49, 53, layers 9-16)
+    // and its ceiling (x 50-52, layer 16). Nothing else moves; 41's join with 40 has no such slot (its last row is as tall as 40's first).
+    private void Seams()
+    {
+        foreach (var p in Placements)
+        {
+            var row = p.Z - 1;
+            var columns = Cells.Keys.Where(k => k.Z == p.Z && Cells[k].Scene == p.Scene).Select(k => k.X).Distinct().OrderBy(x => x).ToList();
+            var added = 0;
+            foreach (var x in columns)
+            {
+                var before = Cells.Where(c => c.Key.X == x && c.Key.Z == row && c.Value.Scene != p.Scene).Select(c => c.Key.Y).ToList();
+                if (before.Count == 0) continue;
+                var top = before.Max();
+                foreach (var y in Cells.Keys.Where(k => k.X == x && k.Z == p.Z && k.Y > top).Select(k => k.Y).OrderBy(y => y).ToList())
+                {
+                    if (!Cells.TryAdd((x, y, row), Cells[(x, y, p.Z)])) continue;
+                    Filled[(x, y, row)] = (x, y, p.Z);
+                    added++;
+                }
+            }
+            if (added > 0) Log.Add($"the join before scene {p.Scene}'s first row (z {p.Z}): {added} of its cells copied into the slot at z {row}");
+        }
+    }
+
+    // The temple with some cells left out (a race track's doorways: TempleIsland.Build), its frame the same. A cell that closes a join's slot
+    // (Filled) goes with the cell it copies: a doorway cut through the corridor's wall there is cut through its copy too.
     public TempleLayout Without(IEnumerable<(int X, int Y, int Z)> cells)
     {
         var copy = new TempleLayout { MinX = MinX, MaxX = MaxX, MinY = MinY, MaxY = MaxY, MinZ = MinZ, MaxZ = MaxZ };
         copy.Placements.AddRange(Placements);
         var gone = cells.ToHashSet();
+        foreach (var (fill, from) in Filled) if (gone.Contains(from)) gone.Add(fill);
         foreach (var (k, v) in Cells) if (!gone.Contains(k)) copy.Cells[k] = v;
+        foreach (var (k, v) in Filled) if (copy.Cells.ContainsKey(k)) copy.Filled[k] = v;
         return copy;
     }
 

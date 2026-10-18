@@ -39,6 +39,16 @@ colour 0 isn't drawn): the railings' gaps, the cobwebs' strands, the skull lamps
 is solid there. The bodies only draw (their decors' boxes touch nothing). What is solid is 7,663 merged boxes of their own, with LBA1's
 stairs (shapes 2-5) as four steps each. 1,108 different brick faces on 11 object pages, 74,332 faces in 1,589 bodies.
 
+*The faces LBA1 never showed* (2026-10-18, the full check before the release): a whole block's face that nothing covers -- a doorway's
+jamb the race cut open, a floor slab's edge at a drop, a wall's -x/-z end -- was left out or drawn see-through where its brick's picture
+had nothing there, and the chase camera looked into the black inside the walls. Such a face is drawn opaque now, with the face's own
+picture filled in, or the brick's most-drawn face (a floor edge gets the floor's colours, a wall's top its stones), unless LBA1's own
+picture shows through it there (checked against LBA1's drawing order), so LBA1's angle is unchanged. Bottoms are taken from the uncut
+layout (a lintel over a cut doorway has its underside) and drawn over open space where something lower stands within 3 columns (a
+ledge over a room). Neighbouring faces in a plane overlap by 8 units (no 1-pixel seams), and the 8|40 join's empty row at z 63 takes
+scene 40's first row (19 cells: the corridor's walls and ceiling). Over the test pilot's lap, frames with a hole went from 132 of 276 to 7
+(all deep in the fog); 4.6 % more polygons, 13 object pages, frame times the same.
+
 **The round things** (`TempleShapes.cs`, 2026-10-17): the user: "Let's also improve the graphics for the temple track as some things like
 barrels aren't correctly reproduced in 3D." A box with a barrel's picture on each side is a crate with a barrel painted on it. So the
 temple's round things are turned instead: its barrels, its 99 columns, its amphorae, the goblets on its walls and its fire bowls.

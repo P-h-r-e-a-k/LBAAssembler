@@ -132,6 +132,7 @@ internal static class Program
             "templecells" => TempleStudy.Cells(args),
             "templemodels" => TempleStudy.Models(args),
             "templeactors" => TempleActorsProbe.Run(args),
+            "templeaudit" => TempleAudit.Run(args),
             "polarprobe" => PolarStudy.Probe(args),
             "polarregion" => PolarStudy.Region(args),
             "polardark" => PolarStudy.Dark(args),
