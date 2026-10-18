@@ -150,6 +150,25 @@ percentile (12.2 and 16.1 before; 640 x 480).
 `templemodels <LBA1> <out>` prints what each model read from its picture and draws it as above; `templecells <LBA1> <plan.json> <out.csv>`
 lists every cell as the race track's build has it (its block, brick, box, whether cut), for the survey's ray cast.
 
+**LBA1's actors** (`TempleActors.cs`, 2026-10-18): the port had LBA1's grid but none of its actors, found by the full check before the
+release. They are drawn now (draw-only decor), as each scene starts them: `Lba1Runtime` runs each scene a few frames for what shows at the
+start (150 for where the doors settle); what the scripts hide at once, or what has no body yet, is left out (27 invisible turrets, 15
+unpulled wall switches -- their niche bricks draw them --, falling rocks, spike cylinders, the mechanical penguins, the pickups).
+
+| What | Made as | How many |
+|---|---|---|
+| Spiked and stone doors (sprites 50-52) | a thin panel in the picture's plane, LBA1's door clip baked into its texture | 12 |
+| Lift platforms (sprite 14) | a textured slab | 15 |
+| Floor plates (sprites 48/56) | a textured quad just over the floor | 27 |
+| Wall switch (sprite 53) | a textured box | 1 |
+| Statues of Bù (sprite 49) | a figure from LBA1's picture and its mirror image | 2 |
+| Electro-plants, skeletons, spike traps, eye creatures, the bird, the Book of Bù | LBA1's own bodies in their scene-start pose, LBA1's lighting, scale 3 | 29 |
+
+From LBA1's angle they stand where LBA1 draws them: over the pixels where LBA1 shows an actor, the mean colour distance went from 35.8 to
+3.0. In a race track's build the five on or over the road are left out (two doors, two electro-plants, an eye creature floating at the
+camera's height). 4,698 faces, 28 bodies and 3 object pages more; frame times the same. `templeactors` (ScriptRoundTrip) lists them and
+draws them.
+
 **The colours** (`TemplePalette.cs`): an island's palette colours the cars, Twinsen and the screen's text by index too, and every retail
 island has the same palette, tuned a little. So LBA1's whole palette won't do. Instead, Otringal's has the temple's colours written into it:
 each, the most drawn first, into the nearest slot no other has taken, when it is within 24 (a colour an actor drawn there hardly sees

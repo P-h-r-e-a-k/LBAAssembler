@@ -133,6 +133,11 @@ internal static class TempleIsland
         var objects = TempleObjects.Build(game, built, island, frame, palette.Map, bodies.Count, EmptyBody, shapes, models);
         bodies.AddRange(objects.Bodies);
         log.AddRange(objects.Log);
+        // (LBA1's actors as its scenes start them -- doors, lifts, floor plates, the statues, the plants, the skeletons...: TempleActors; in a
+        // race track's build those on or over its road left out)
+        var actors = TempleActors.Place(lba1Directory, game, layout, island, frame, palette.Map, bodies.Count, race: cuts is not null);
+        bodies.AddRange(actors.Bodies);
+        log.AddRange(actors.Log);
         log.Add($"{OblFile}: {bodies.Count} bodies (an empty one for the boxes, then the temple's)");
         return new Built(layout, frame, island, bodies, palette, sky, log);
     }
