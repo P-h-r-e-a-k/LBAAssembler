@@ -681,8 +681,9 @@ internal sealed class RaceTrackReport
     // The giant frogs the lap drives through (RaceTrackFrog)
     public List<FrogInfo> Frogs { get; } = new();
     // The spooks (Temple.TempleHalloween: RACEMOD.CPP spook=): what each is, its flags, its height, its way (island cells), its body once
-    // in BODY.HQR; and whether the power-ups' mushrooms are mini pumpkins
-    public sealed record Spook(string Kind, int Flags, double Y, List<(double X, double Z)> Way, int Body = -1);
+    // in BODY.HQR, (2026-10-18) its animation of ANIM.HQR and, standing, the one it plays as Twinsen's car comes (-1 none), and an entity
+    // whose body number Body is (-1: Body is BODY.HQR's); and whether the power-ups' mushrooms are mini pumpkins
+    public sealed record Spook(string Kind, int Flags, double Y, List<(double X, double Z)> Way, int Body = -1, int Anim = -1, int Action = -1, int Entity = -1);
     public List<Spook> Spooks { get; } = new();
     public bool Pumpkins { get; set; }
     // Halloween's scares (2026-10-17, RACEMOD.CPP dive=, scare=): the places a witch dives at the car from (island cells, the road's height

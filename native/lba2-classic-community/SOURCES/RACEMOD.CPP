@@ -1175,9 +1175,10 @@ typedef struct {
 static T_RACE_FLYER s_flyers[RACE_MAX_FLYERS];
 static int s_nbFlyers = 0;
 // Spooks (spook=<body> <flags> <height> <x> <z> <x> <z> ..., island units: a body of BODY.HQR, the height it flies at, its way): the Temple
-// of Bú's witches on their broomsticks, its ghosts and its bats (the user, 2026-10-16: "Add lots of typical Halloween decor, pumpkins,
-// witches, ghosts etc"), which the race-track mode flies and draws itself, as it draws the giant frog (RaceMod_DrawBackdrop: depth written,
-// the cars depth-tested against them) -- no actors, so no limit of a scene's, and no animations to fit their bodies: along the way to and
+// of Bú's witches on their broomsticks, its ghosts and its bats -- LBA2's flying rats since 2026-10-18, below -- (the user, 2026-10-16:
+// "Add lots of typical Halloween decor, pumpkins, witches, ghosts etc"), which the race-track mode flies and draws itself, as it draws the
+// giant frog (RaceMod_DrawBackdrop: depth written, the cars depth-tested against them) -- no actors, so no limit of a scene's, and no
+// animations to fit their bodies (but their own, flags 4, below): along the way to and
 // fro (flags 2: round and round it, its last point back to its first), bobbing, turned the way they fly; flags 1: now and then one stops
 // over the road and throws a fire ball at a car below it, as a flying gas monster spits one (SpookThrow).
 #define RACE_MAX_SPOOKS 48
@@ -1198,10 +1199,27 @@ static int s_nbFlyers = 0;
 // fullest), so it goes dim rather than vanishing all at once.
 #define RACE_SPOOK_EYE_CLEAR 1500.0
 #define RACE_SPOOK_EYE_FADE 1500.0
+// (2026-10-18: the user, "The game contains an actor called '36: The flying rat', and '35: Rabbibunny skeleton' let's replace the current
+// bats we have with the ones from the game and add more of the games in-built skeletons") -- flags 4: animated, an animation of ANIM.HQR
+// after the height (spook=<body> <flags> <height> <anim> ...), stepped every frame as the flag marshal's is (the flying rat flapping its
+// wings); flags 8 (with 4): standing at its way's first point, facing its second, not bobbing, a second animation after the first
+// (<anim> <action>): it plays the first (the rabbibunny skeleton fallen in a heap) until Twinsen's car comes within RACE_SPOOK_WAKE of it,
+// then the second once through (getting up and swiping at the road), then the first again (falling back down); woken again only once
+// the car has been further than RACE_SPOOK_REST from it. Standing by the road, it is drawn down to RACE_SPOOK_STAND_CLEAR from the
+// camera's eye (past its reach), fading over RACE_SPOOK_STAND_FADE before that. Flags 16: <body> is an entity's body number, the entity
+// after the animations (a body the build put at the end of BODY.HQR, as the flag marshal's).
+#define RACE_SPOOK_WAKE 12288.0
+#define RACE_SPOOK_REST 18432.0
+#define RACE_SPOOK_STAND_CLEAR 300.0
+#define RACE_SPOOK_STAND_FADE 600.0
 typedef struct {
     int Body, Flags, Np; double Y, PX[RACE_SPOOK_POINTS], PZ[RACE_SPOOK_POINTS], Len, S, X, Z; int Dir; S32 Beta;
     int Throwing, Thrown, Target, Ready; S32 T0, Next;
     double Mid, Reach;                     // its body's middle over its origin, and its box's half diagonal (DrawSpooks)
+    int Anim, Action;                      // (flags 4, 8) its animations (ANIM.HQR; -1 none)
+    int Entity;                            // (flags 16) the entity whose body number Body is (RESS.HQR 44), looked up when first drawn
+    int Want, Shown, Woken;                // (flags 8) the one it should play (0 Anim, 1 Action), the one it plays, woken till the car is away
+    S32 ActT0, ActMs;                      // ... when its Action began, and how long it is (its keyframes' times)
     T_OBJ_3D Obj;
 } T_RACE_SPOOK;
 static T_RACE_SPOOK s_spooks[RACE_MAX_SPOOKS];
@@ -2971,10 +2989,20 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_nbSpooks < RACE_MAX_SPOOKS && sscanf(v, "%d %d %d%n", &body, &flags, &y, &used) == 3 && body >= 0) {
                 T_RACE_SPOOK *sp = &s_spooks[s_nbSpooks];
                 memset(sp, 0, sizeof(*sp));
-                sp->Body = body; sp->Flags = flags; sp->Y = y; sp->Dir = 1;
+                sp->Body = body; sp->Flags = flags; sp->Y = y; sp->Dir = 1; sp->Anim = -1; sp->Action = -1; sp->Entity = -1;
                 const char *rest = v + used;
                 int x, z, n2 = 0;
+                // (its animation, and a standing one's second)
+                if ((flags & 4) && sscanf(rest, "%d%n", &x, &n2) == 1) { sp->Anim = x; rest += n2; }
+                if ((flags & 8) && sscanf(rest, "%d%n", &x, &n2) == 1) { sp->Action = x; rest += n2; }
+                if ((flags & 16) && sscanf(rest, "%d%n", &x, &n2) == 1) { sp->Entity = x; rest += n2; }
+                if (sp->Anim < 0 || ((flags & 8) && sp->Action < 0)) sp->Flags &= ~(4 | 8);
                 while (sp->Np < RACE_SPOOK_POINTS && sscanf(rest, "%d %d%n", &x, &z, &n2) == 2) { sp->PX[sp->Np] = x; sp->PZ[sp->Np] = z; sp->Np++; rest += n2; }
+                // (standing: where it stands, the way it faces, no way to go along)
+                if ((sp->Flags & 8) && sp->Np >= 2) {
+                    sp->Beta = (S32)floor(atan2(sp->PX[1] - sp->PX[0], sp->PZ[1] - sp->PZ[0]) * 4096 / (2 * 3.14159265358979) + 0.5) & 4095;
+                    sp->Np = 1;
+                }
                 for (int k = 1; k <= sp->Np - ((flags & 2) ? 0 : 1); k++) {
                     const int a = k - 1, b = k % sp->Np;
                     sp->Len += sqrt((sp->PX[b] - sp->PX[a]) * (sp->PX[b] - sp->PX[a]) + (sp->PZ[b] - sp->PZ[a]) * (sp->PZ[b] - sp->PZ[a]));
@@ -5436,6 +5464,13 @@ static void DrawSpooks(void) {
         if (sp->Body < 0) continue;
         T_OBJ_3D *o = &sp->Obj;
         if (!sp->Ready) {
+            // (an entity's body number: BODY.HQR's as the entity table has it)
+            if (sp->Flags & 16) {
+                const S32 index = EntityEntry(sp->Entity, F_BODY, sp->Body);
+                if (index < 0) { Log_Info("[racemod] spook %d: entity %d has no body %d -- left out", i, sp->Entity, sp->Body); sp->Body = -1; continue; }
+                sp->Body = index;
+                sp->Flags &= ~16;
+            }
             const T_BODY_HEADER *b = (const T_BODY_HEADER *)GivePtrBody(sp->Body);
             if (!b) { Log_Info("[racemod] spook %d: no body %d -- left out", i, sp->Body); sp->Body = -1; continue; }
             const double hx = (b->XMax - b->XMin) / 2.0, hy = (b->YMax - b->YMin) / 2.0, hz = (b->ZMax - b->ZMin) / 2.0;
@@ -5445,23 +5480,64 @@ static void DrawSpooks(void) {
             ObjectInitBody(o, (void *)(uintptr_t)(U32)sp->Body);
             o->Texture = BufferTexture; o->NextTexture = BufferTexture;
             sp->Ready = 1;
+            // (animated: its animation from the start -- a standing one's first; how long its second is, its keyframes' times added up)
+            if (sp->Flags & 4) {
+                const U16 *a = (const U16 *)GivePtrAnim(sp->Anim);
+                const U16 *b = (sp->Flags & 8) ? (const U16 *)GivePtrAnim(sp->Action) : NULL;
+                if (!a || ((sp->Flags & 8) && !b)) {
+                    Log_Info("[racemod] spook %d: no animation %d or %d -- not animated", i, sp->Anim, sp->Action);
+                    sp->Flags &= ~(4 | 8);
+                } else {
+                    if (b) {
+                        const int frames = b[0], bones = b[1];
+                        sp->ActMs = 0;
+                        for (int k = 0; k < frames; k++) sp->ActMs += *(const U16 *)((const U8 *)b + 8 + k * (8 + bones * 8));
+                    }
+                    o->X = (S32)floor(sp->X - CurrentCubeX * 32768.0 + 0.5); o->Y = (S32)floor(sp->Y + 0.5); o->Z = (S32)floor(sp->Z - CurrentCubeY * 32768.0 + 0.5);
+                    o->Beta = sp->Beta;
+                    o->Anim.Num = -1;
+                    ObjectInitAnim(o, (void *)(uintptr_t)(U32)sp->Anim);
+                    o->Status |= FLAG_BODY;
+                    sp->Shown = 0;
+                    Log_Info("[racemod] spook %d: body %d animated (ANIM.HQR %d%s)", i, sp->Body, sp->Anim,
+                             (sp->Flags & 8) ? ", standing, woken by the car" : "");
+                    if (sp->Flags & 8) Log_Info("[racemod] spook %d: woken it plays ANIM.HQR %d, %d ms", i, sp->Action, (int)sp->ActMs);
+                }
+            }
         }
-        const double y = sp->Y + RACE_SPOOK_BOB * sin((TimerRefHR + i * 731) * 2 * RACE_PI / RACE_SPOOK_BOB_MS);
-        o->X = (S32)floor(sp->X - CurrentCubeX * 32768.0 + 0.5); o->Y = (S32)floor(y + 0.5); o->Z = (S32)floor(sp->Z - CurrentCubeY * 32768.0 + 0.5);
-        o->Alpha = 0; o->Beta = sp->Beta; o->Gamma = 0;
-        memset(o->CurrentFrame, 0, sizeof(o->CurrentFrame));
-        // (none drawn by the camera's eye; faded into the fog coming to it: RACE_SPOOK_EYE_CLEAR)
+        // (a standing one doesn't bob)
+        const double y = (sp->Flags & 8) ? sp->Y : sp->Y + RACE_SPOOK_BOB * sin((TimerRefHR + i * 731) * 2 * RACE_PI / RACE_SPOOK_BOB_MS);
+        const S32 ox = (S32)floor(sp->X - CurrentCubeX * 32768.0 + 0.5), oy = (S32)floor(y + 0.5), oz = (S32)floor(sp->Z - CurrentCubeY * 32768.0 + 0.5);
+        if (sp->Flags & 4) {
+            // (its animation stepped every frame, seen or not, as the flag marshal's: the one it should play now, blended into)
+            if ((sp->Flags & 8) && sp->Want != sp->Shown) {
+                ObjectInitAnim(o, (void *)(uintptr_t)(U32)(sp->Want ? sp->Action : sp->Anim));
+                sp->Shown = sp->Want;
+            }
+            o->X = ox; o->Y = oy; o->Z = oz;
+            ObjectSetInterDep(o);
+            o->X = ox; o->Y = oy; o->Z = oz; o->Alpha = 0; o->Beta = sp->Beta; o->Gamma = 0;
+            ObjectSetInterFrame(o);
+        } else {
+            o->X = ox; o->Y = oy; o->Z = oz;
+            o->Alpha = 0; o->Beta = sp->Beta; o->Gamma = 0;
+            memset(o->CurrentFrame, 0, sizeof(o->CurrentFrame));
+        }
+        // (none drawn by the camera's eye; faded into the fog coming to it: RACE_SPOOK_EYE_CLEAR -- a standing one by the road, beside the
+        // camera's way rather than across it, down to RACE_SPOOK_STAND_CLEAR past its reach)
         const double ex = (double)o->X - CameraX, ey = y + sp->Mid - CameraY, ez = (double)o->Z - CameraZ;
         const double eye = sqrt(ex * ex + ey * ey + ez * ez);
-        double clear = sp->Reach + RACE_SPOOK_EYE_CLEAR;
-        if (clear < RACE_GHOST_EYE) clear = RACE_GHOST_EYE;
+        const int standing = (sp->Flags & 8) != 0;
+        double clear = sp->Reach + (standing ? RACE_SPOOK_STAND_CLEAR : RACE_SPOOK_EYE_CLEAR);
+        if (!standing && clear < RACE_GHOST_EYE) clear = RACE_GHOST_EYE;
+        const double fadeOver = standing ? RACE_SPOOK_STAND_FADE : RACE_SPOOK_EYE_FADE;
         if (eye < clear) continue;
         LongWorldRotatePoint(o->X, o->Y, o->Z);
         const S32 zr = CameraZr - Z0;
         if (zr < -4000 || zr > ClipZFar + 4000) continue;
         S32 level = BoundRegleTrois(0, 15, ClipZFar - StartZFog, zr - StartZFog);
-        if (eye < clear + RACE_SPOOK_EYE_FADE) {
-            const S32 fade = (S32)ceil(15 * (1 - (eye - clear) / RACE_SPOOK_EYE_FADE));
+        if (eye < clear + fadeOver) {
+            const S32 fade = (S32)ceil(15 * (1 - (eye - clear) / fadeOver));
             if (fade > level) level = fade;
         }
         SetCLUT(PalLevel + 16 * level);
@@ -9545,6 +9621,21 @@ static void Spooks(S32 now, int driving, S32 dt) {
     const int running = RaceRunning();
     for (int i = 0; i < s_nbSpooks; i++) {
         T_RACE_SPOOK *sp = &s_spooks[i];
+        if (sp->Flags & 8) {
+            // (standing: woken by Twinsen's car coming near -- its second animation once through, then its first again -- and woken again
+            // only once the car has been away)
+            double x, cy, z;
+            if (sp->Want == 1 && now - sp->ActT0 >= sp->ActMs) sp->Want = 0;
+            if (sp->ActMs > 0 && CarAt(-1, &x, &cy, &z)) {
+                const double d = sqrt((x - sp->X) * (x - sp->X) + (cy - sp->Y) * (cy - sp->Y) + (z - sp->Z) * (z - sp->Z));
+                if (!sp->Woken && d < RACE_SPOOK_WAKE) {
+                    sp->Woken = 1; sp->Want = 1; sp->ActT0 = now;
+                    Log_Info("[racemod] spook %d gets up as Twinsen's car comes (%.1f cells off)", i, d / 512);
+                }
+                else if (sp->Woken && sp->Want == 0 && d > RACE_SPOOK_REST) sp->Woken = 0;
+            }
+            continue;
+        }
         const double y = sp->Y + RACE_SPOOK_BOB * sin((now + i * 731) * 2 * RACE_PI / RACE_SPOOK_BOB_MS);
         if (sp->Throwing) {
             const S32 t = now - sp->T0;

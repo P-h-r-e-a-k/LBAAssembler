@@ -634,7 +634,8 @@ def across(i, reach):
 # least SPOOK_CLEAR over the road there, and over the road the camera comes from (its eye 2,100 over the road 9 cells behind the car: the
 # 20 points before, up a ramp higher); or, a witch's, its highest SPOOK_UNDER under the road's surface (the deck under it) -- the
 # height asked for, or the nearest that is
-SPOOK_BODY = {'witch': (390, 1420), 'ghost': (0, 1680), 'bat': (100, 250)}     # its body under and over its height (the bodies')
+# (the flying rat -- LBA2's own, BODY.HQR 36, twice its size: TempleHalloween.Creatures -- reaches 850 under its origin flapping, 660 over)
+SPOOK_BODY = {'witch': (390, 1420), 'ghost': (0, 1680), 'rat': (850, 660)}     # its body under and over its height (the bodies')
 SPOOK_BOB = 260                                                                  # RACEMOD.CPP RACE_SPOOK_BOB
 SPOOK_CLEAR, SPOOK_UNDER = 2500, 1000
 
@@ -681,15 +682,17 @@ ghost_at = [nearest(p) for p in ((420, CORR_Z), (500, CORR_Z), (W_END, 360), (30
 for j, i in enumerate(ghost_at):
     way = across(i, half[i] + 10)
     spooks.append({'kind': 'ghost', 'flags': 0, 'y': spook_height('ghost', way, False, h[i] + 2800 + 300 * (j % 3)), 'way': way})
-# bats wheeling high over the road
+# flying rats wheeling high over the road (bats until 2026-10-18 -- the user: "The game contains an actor called '36: The flying rat' ...
+# let's replace the current bats we have with the ones from the game": the same ways, each kept clear of the camera as the bats were, the
+# rat's bigger body taken into account; flapping its own wings, RACEMOD.CPP spook= flags 4)
 bat_at = [nearest(p) for p in ((450, CORR_Z), (360, 320), (270, 330), (400, 590), (500, 600), (520, 520))]
 for j, i in enumerate(bat_at):
     way = circle(pts[i][0], pts[i][1], 6 + 2 * (j % 3), 12, j)
-    spooks.append({'kind': 'bat', 'flags': 2, 'y': spook_height('bat', way, True, h[i] + 2600 + 400 * (j % 2)), 'way': way})
+    spooks.append({'kind': 'rat', 'flags': 2, 'y': spook_height('rat', way, True, h[i] + 2600 + 400 * (j % 2)), 'way': way})
 for (cx_, cz_, r_), lo_, hi_ in ((SPIRAL_W, CRYPT, FIRST), (SPIRAL_E, top(-5), FIRST)):
     for frac in (0.2, 0.62):
-        spooks.append({'kind': 'bat', 'flags': 2, 'y': round(float(lo_ + (hi_ - lo_) * frac + 1800), 1), 'way': circle(cx_, cz_, r_ * 0.5, 12, frac * 9)})
-print('spooks', len(spooks), {kk: sum(1 for s_ in spooks if s_['kind'] == kk) for kk in ('witch', 'ghost', 'bat')})
+        spooks.append({'kind': 'rat', 'flags': 2, 'y': round(float(lo_ + (hi_ - lo_) * frac + 1800), 1), 'way': circle(cx_, cz_, r_ * 0.5, 12, frac * 9)})
+print('spooks', len(spooks), {kk: sum(1 for s_ in spooks if s_['kind'] == kk) for kk in ('witch', 'ghost', 'rat')})
 assert len(spooks) <= 48
 
 
@@ -916,6 +919,100 @@ for i in range(0, n, 2):
 decor += cobwebs
 print('cobwebs', len(cobwebs), {nm: sum(1 for c in cobwebs if c[0] == kk) for kk, nm in ((CW_CORNER, 'corner'), (CW_CORNER_BIG, 'big corner'), (CW_SHEET, 'sheet'), (CW_WALL, 'wall'),
                                                                                      (CW_DRAPE, 'drape'), (CW_SPIDER, 'spider'))})
+
+
+# ---- LBA2's own skeletons (the user, 2026-10-18: "add more of the games in-built skeletons to our temple track too"): the rabbibunny
+# skeleton of the Tralu's cave (BODY.HQR 35; TempleHalloween.Creatures), decor posed by its own animations -- sitting against the walls
+# beside the road (its legs out towards it), standing guard and crouching on the floors beside it looking at it, lying on its back -- on the
+# floors the road runs over, in the rooms it passes, after all the other decor and clear of it (and of the scares, which jump up out of the
+# floor): never on the road or the slip lane, no part of it over a wall or a drop (footprint_on), each its own place along the lap
+RB_LYING, RB_SITTING, RB_STANDING, RB_CROUCHING = range(16, 20)
+RB_REACH = {RB_LYING: 1.4, RB_STANDING: 0.8, RB_CROUCHING: 1.1}         # how far each reaches round its middle (cells)
+RB_SIT_REACH = 1080 / 512                       # how far a sitting one's feet reach out from the wall behind it (cells)
+RB_MOST = {RB_LYING: 5, RB_SITTING: 5, RB_STANDING: 5, RB_CROUCHING: 4}
+RB_CYCLE = [RB_SITTING, RB_STANDING, RB_LYING, RB_CROUCHING, RB_SITTING, RB_STANDING, RB_LYING]
+RB_APART = 3.0                                  # cells from any other decor's middle, at the least
+RB_SCARE_APART = 4.0                            # ... and from a scare's place
+
+
+def rb_clear(x, z, d=RB_APART):
+    return far_from_decor(x, z, d) and all(math.hypot(x - s_[1], z - s_[2]) >= RB_SCARE_APART for s_ in scares) \
+        and math.hypot(x - WEB_X, z - CORR_Z) >= WEB_CLEAR
+
+
+rabbis = []
+for c, i in enumerate(range(37, n, int(14 / SP))):
+    want = RB_CYCLE[c % len(RB_CYCLE)]
+    count = lambda kind: sum(1 for r_ in rabbis if r_[0] == kind)
+    if any(math.hypot(*(pts[i] - np.array(r_[1:3]))) < 9 for r_ in rabbis): continue
+    side = 1 if c % 2 else -1
+    placed = None
+    for kind in [want] + [k_ for k_ in (RB_SITTING, RB_STANDING, RB_CROUCHING, RB_LYING) if k_ != want]:
+        # (each kind's share spread along the lap: no more by point i than its share of the lap so far, and one)
+        if count(kind) >= min(RB_MOST[kind], RB_MOST[kind] * i / n + 1): continue
+        for sd in (side, -side):
+            u = heading(i); nrm = np.array([-u[1], u[0]]) * sd
+            if kind == RB_SITTING:
+                w = wall_beside(i, sd)
+                if w is None: continue
+                off, layer, nrm = w
+                at = off - 0.3
+                # (its feet clear of the road's edge, the floor under its legs whole)
+                if at - RB_SIT_REACH < half[i] + 0.6: continue
+                x, z = pts[i] + nrm * at
+                lx_, lz_ = pts[i] + nrm * (at - RB_SIT_REACH / 2)
+                if not footprint_on(lx_, lz_, layer, 0.6) or not rb_clear(x, z) or not clear_of_road(lx_, lz_, 1.2): continue
+                placed = [kind, round(float(x), 2), round(float(z), 2), float(top(layer)), turn_to(x, z, *pts[i])]
+                break
+            for off in (half[i] + 2.4, half[i] + 3.2, half[i] + 4.2, half[i] + 5.5):
+                x, z = pts[i] + nrm * off
+                t = flat_floor(x, z, 1)
+                reach = RB_REACH[kind]
+                if t is None or abs(top(t) - (h[i] - DECK)) > LAYER + 10 or not clear_of_road(x, z, reach + 0.6) \
+                        or not footprint_on(x, z, t, reach) or not rb_clear(x, z): continue
+                # (lying: along the road, its head the way the lap comes from, now and then the other way; the others looking at the road)
+                turn = (turn_to(0, 0, *u) + (2048 if c % 3 == 0 else 0)) & 4095 if kind == RB_LYING else turn_to(x, z, *pts[i])
+                placed = [kind, round(float(x), 2), round(float(z), 2), float(top(t)), turn]
+                break
+            if placed: break
+        if placed: break
+    if placed: rabbis.append(placed)
+decor += rabbis
+print('rabbibunny skeletons', len(rabbis), {nm: sum(1 for d in rabbis if d[0] == kk) for kk, nm in ((RB_LYING, 'lying'), (RB_SITTING, 'sitting'), (RB_STANDING, 'standing'),
+                                                                                                (RB_CROUCHING, 'crouching'))})
+
+# ... and a few of the game's own by the road, drawn by the race-track mode (spook= flags 8: standing at its way's first point, facing its
+# second): fallen in a heap of bones until Twinsen's car comes near, then getting up and swiping at the road, and falling back down -- on
+# the floor beside the road, far enough out that its arms never reach over the road's edge, away from the scares and the other decor
+RISER_AT = [(0.12, 1), (0.47, -1), (0.8, 1)]     # where along the lap (a share of it from the start's straight) and which side first
+risers = []
+for frac, side in RISER_AT:
+    base = int(frac * n)
+    spot = None
+    for j in range(0, 300, 2):
+        for s_ in (1, -1):
+            i = (base + s_ * j) % n
+            u = heading(i)
+            for sd in (side, -side):
+                nrm = np.array([-u[1], u[0]]) * sd
+                for off in (half[i] + 2.8, half[i] + 3.6, half[i] + 4.4):
+                    x, z = pts[i] + nrm * off
+                    t = flat_floor(x, z, 1)
+                    if t is None or abs(top(t) - (h[i] - DECK)) > LAYER + 10 or not clear_of_road(x, z, 2.6) or not footprint_on(x, z, t, 1.3) \
+                            or not rb_clear(x, z, 3.5) or any(math.hypot(x - r_[1], z - r_[2]) < 3.5 for r_ in rabbis): continue
+                    # (in sight of the road beside it and of the road 8 and 15 cells before it: seen getting up as the car comes)
+                    if not all(in_sight(x, z, *pts[(i - k_) % n], t) for k_ in (0, 16, 30)): continue
+                    spot = (i, x, z, t)
+                    break
+                if spot: break
+            if spot: break
+        if spot: break
+    if spot is None: print('no place for a riser near', frac); continue
+    i, x, z, t = spot
+    risers.append({'kind': 'riser', 'flags': 8, 'y': float(top(t)), 'way': [[round(float(x), 2), round(float(z), 2)], [round(float(pts[i][0]), 2), round(float(pts[i][1]), 2)]]})
+spooks += risers
+print('risers', len(risers), [r_['way'][0] for r_ in risers])
+assert len(spooks) <= 48
 
 
 # ---- the start: on the straight through the crypt's west room, heading east (the grid behind it, in the room)

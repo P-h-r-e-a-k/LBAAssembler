@@ -11,8 +11,8 @@ namespace LBAAssembler.Terrain.Temple;
 //     at the corners, gravestones and crosses with candles, a witch's cauldron bubbling green -- each a decor of the island's, drawn only
 //     (nothing to bump into);
 //   - Spooks: what flies -- witches on their broomsticks round the spirals and over the halls, throwing fire balls at the cars below them;
-//     ghosts drifting to and fro over the road; bats wheeling under the walls' tops: bodies of BODY.HQR that the race-track mode flies and
-//     draws itself (RACEMOD.CPP spook=);
+//     ghosts drifting to and fro over the road; flying rats (bats until 2026-10-18) wheeling high over it: bodies of BODY.HQR that the
+//     race-track mode flies and draws itself (RACEMOD.CPP spook=);
 //   - the power-ups' mushrooms made mini pumpkins: the mushroom's entity's body Pumpkin (the item box shows the lap's own).
 // The models are flat polygons in the island's palette (the Temple of Bú's: Otringal's, LBA1's colours written in), each face shaded by the
 // way it faces from a light above and in front (Paint: its colours from dark to light), the carved faces, the flames and the brew in the
@@ -35,8 +35,8 @@ internal sealed class HalloweenRun
     public double[][]? GiantWebs { get; set; }
 }
 
-// A spook (RACEMOD.CPP spook=): what it is (witch, ghost, bat), its flags (1 throws fire balls, 2 round and round its way), the height it
-// flies at, and its way (island cells).
+// A spook (RACEMOD.CPP spook=): what it is (witch, ghost, rat -- a bat before 2026-10-18 --, riser), its flags (1 throws fire balls, 2
+// round and round its way, 8 standing at its way's first point, facing its second), the height it flies at, and its way (island cells).
 internal sealed class SpookRun
 {
     public string Kind { get; set; } = "ghost";
@@ -52,9 +52,12 @@ internal static partial class TempleHalloween
     {
         Lantern, GiantLantern, Grave, Cross, Candles, Cauldron, SkeletonLying, SkeletonSlumped, SkeletonHanging, SkeletonChained,
         CobwebCorner, CobwebCornerBig, CobwebSheet, CobwebDrape, Spider, CobwebWall,
+        // (2026-10-18: LBA2's rabbibunny skeleton, TempleHalloween.Creatures)
+        RabbiLying, RabbiSitting, RabbiStanding, RabbiCrouching,
     }
-    private static bool IsCobweb(Kind kind) => kind >= Kind.CobwebCorner;
-    public static readonly string[] SpookKinds = { "witch", "ghost", "bat" };
+    private static bool IsCobweb(Kind kind) => kind is >= Kind.CobwebCorner and <= Kind.CobwebWall;
+    // (a bat before 2026-10-18: the flying rat since -- a plan that still has one gets the rat; a riser is the rabbibunny skeleton by the road)
+    public static readonly string[] SpookKinds = { "witch", "ghost", "rat", "riser" };
     // the mushroom's entity's body the power-ups' pumpkins are (RaceTrackOil: 0 the game's mushroom, 1 the oil slick, 2 the big mushroom)
     public const int Pumpkin = 3;
 
@@ -494,7 +497,7 @@ internal static partial class TempleHalloween
         return m;
     }
 
-    // A bat, wings spread, flying +z.
+    // A bat, wings spread, flying +z (since 2026-10-18 only where the game folder has no flying rat: TempleHalloween.Creatures).
     private static Model Bat()
     {
         var m = new Model();
@@ -532,6 +535,10 @@ internal static partial class TempleHalloween
         Kind.SkeletonSlumped => SkeletonModel(SkeletonPose.Slumped),
         Kind.SkeletonHanging => SkeletonModel(SkeletonPose.Hanging),
         Kind.SkeletonChained => SkeletonModel(SkeletonPose.Chained),
+        Kind.RabbiLying => RabbiModel(RabbiPose.Lying),
+        Kind.RabbiSitting => RabbiModel(RabbiPose.Sitting),
+        Kind.RabbiStanding => RabbiModel(RabbiPose.Standing),
+        Kind.RabbiCrouching => RabbiModel(RabbiPose.Crouching),
         _ => Cauldron(),
     };
 
@@ -541,6 +548,8 @@ internal static partial class TempleHalloween
         Kind.GiantLantern => 1700, Kind.Cauldron => 800, Kind.Cross or Kind.Grave => 700,
         Kind.SkeletonLying => SkeletonReach(SkeletonPose.Lying), Kind.SkeletonSlumped => SkeletonReach(SkeletonPose.Slumped),
         Kind.SkeletonHanging => SkeletonReach(SkeletonPose.Hanging), Kind.SkeletonChained => SkeletonReach(SkeletonPose.Chained),
+        Kind.RabbiLying => RabbiReach(RabbiPose.Lying), Kind.RabbiSitting => RabbiReach(RabbiPose.Sitting),
+        Kind.RabbiStanding => RabbiReach(RabbiPose.Standing), Kind.RabbiCrouching => RabbiReach(RabbiPose.Crouching),
         _ => 700,
     };
     private static double Tall(Kind kind) => kind switch { Kind.GiantLantern => 2400, Kind.Cross => 1800, Kind.Grave => 1400, Kind.Cauldron => 1100, _ => 1100 };
@@ -551,11 +560,13 @@ internal static partial class TempleHalloween
     {
         if (plan.Halloween?.Decor is not { Length: > 0 } decor) return;
         if (o.NewBodyBase < 0) { report.Notes.Add("WARNING: no place for the Halloween decor's bodies was prepared (the island's OBL wasn't counted)"); return; }
+        // (the rabbibunny skeletons' body and animations: the build's game folder's, where the island's OBL is)
+        creaturesFrom = o.SceneryObl is { } obl ? Path.GetDirectoryName(obl) : null;
         var bodies = new Dictionary<(Kind, double), int>();
         int placed = 0, left = 0, missing = 0;
         foreach (var d in decor.Where(d => d.Length >= 4))
         {
-            var kind = (Kind)Math.Clamp((int)d[0], 0, (int)Kind.CobwebWall);
+            var kind = (Kind)Math.Clamp((int)d[0], 0, (int)Kind.RabbiCrouching);
             var size = IsCobweb(kind) && d.Length > 5 ? d[5] : 0;
             if (!bodies.TryGetValue((kind, size), out var body))
             {
@@ -578,7 +589,7 @@ internal static partial class TempleHalloween
             _ = full;
         }
         report.Notes.Add($"the Halloween decor: {placed} pieces ({string.Join(", ", decor.GroupBy(d => (Kind)(int)d[0]).Select(g => $"{g.Count()} {g.Key}"))}), {bodies.Count(b => b.Value >= 0)} bodies" +
-                         (left > 0 ? $"; {left} left out (their cubes full)" : "") + (missing > 0 ? $"; {missing} skeletons left out (no LBA1 folder to take LBA1's skeleton from)" : ""));
+                         (left > 0 ? $"; {left} left out (their cubes full)" : "") + (missing > 0 ? $"; {missing} skeletons left out (no LBA1 folder to take LBA1's skeleton from, or no rabbibunny skeleton in the game folder)" : ""));
         _ = Tall(Kind.Lantern);
     }
 
@@ -594,16 +605,41 @@ internal static partial class TempleHalloween
             var bodies = File.ReadAllBytes(path);
             var index = HqrArchive.CountEntries(path);
             var made = new Dictionary<string, int>();
-            // (each kind's body once: -1 a skeleton with no LBA1 folder to take it from)
+            // (each kind's body once: -1 a skeleton with no LBA1 folder to take it from; the flying rat where the bat's was -- 2026-10-18 -- so no
+            // body after it moves: the game's rat, made bigger and shaded, or the bat it took the place of when the game folder has no rat)
+            var ratIsBat = false;
             int Moving(string kind)
             {
+                if (kind == "bat") kind = "rat";
                 if (made.TryGetValue(kind, out var body)) return body;
-                var model = kind switch { "witch" => Witch(), "bat" => Bat(), "skeleton" => SkeletonModel(SkeletonPose.Reaching), _ => Ghost() };
+                if (kind == "rat" && RatBody(gameDirectory) is { } rat)
+                {
+                    bodies = HqrWriter.AppendEntry(bodies, HqrWriter.StoredEntry(rat));
+                    return made[kind] = index++;
+                }
+                ratIsBat |= kind == "rat";
+                var model = kind switch { "witch" => Witch(), "rat" => Bat(), "skeleton" => SkeletonModel(SkeletonPose.Reaching), _ => Ghost() };
                 if (model is null) return made[kind] = -1;
                 bodies = HqrWriter.AppendEntry(bodies, HqrWriter.StoredEntry(model.WriteMoving(racerHeader)));
                 return made[kind] = index++;
             }
-            for (var i = 0; i < report.Spooks.Count; i++) report.Spooks[i] = report.Spooks[i] with { Body = Moving(report.Spooks[i].Kind) };
+            // (the flying rat flaps its wings: its own animation; a riser is the game's rabbibunny skeleton fallen in a heap of bones by the
+            // road, getting up as Twinsen's car comes and swiping at it: TempleHalloween.Creatures)
+            int ratFlap = CreatureAnim(gameDirectory, FlyingRatBody, RatFly);
+            int riseHeap = CreatureAnim(gameDirectory, RabbiSkeletonBody, RabbiCollapse), riseSwipe = CreatureAnim(gameDirectory, RabbiSkeletonBody, RabbiSwipe);
+            // (its body made lighter at the end of the build, its entity's body RiserBody: InstallRisers)
+            int rabbi = RabbiEntity(gameDirectory);
+            for (var i = 0; i < report.Spooks.Count; i++)
+            {
+                var s = report.Spooks[i];
+                if (s.Kind == "riser")
+                    report.Spooks[i] = riseHeap >= 0 && riseSwipe >= 0 && rabbi >= 0 ? s with { Body = RiserBody, Entity = rabbi, Anim = riseHeap, Action = riseSwipe } : s with { Body = -1 };
+                else
+                {
+                    var body = Moving(s.Kind);
+                    report.Spooks[i] = s with { Body = body, Anim = s.Kind is "rat" or "bat" && body >= 0 && ratFlap >= 0 && !ratIsBat ? ratFlap : -1 };
+                }
+            }
             for (var i = 0; i < report.Dives.Count; i++) report.Dives[i] = report.Dives[i] with { Body = Moving("witch") };
             for (var i = 0; i < report.Scares.Count; i++) report.Scares[i] = report.Scares[i] with { Body = Moving(report.Scares[i].Kind) };
             if (report.Haunt)
@@ -616,7 +652,8 @@ internal static partial class TempleHalloween
             File.WriteAllBytes(path, bodies);
             if (report.Spooks.Count > 0)
                 log.Add($"the spooks: {report.Spooks.Count} ({string.Join(", ", report.Spooks.GroupBy(s => s.Kind).Select(g => $"{g.Count()} {g.Key}{(g.Count() > 1 ? (g.Key == "witch" ? "es" : "s") : "")}"))}), " +
-                        $"their bodies BODY.HQR {string.Join(", ", made.Where(m => m.Key is "witch" or "ghost" or "bat").Select(m => $"{m.Value} ({m.Key})"))}");
+                        $"their bodies BODY.HQR {string.Join(", ", made.Where(m => m.Key is "witch" or "ghost" or "rat").Select(m => $"{m.Value} ({m.Key}{(m.Key == "rat" && !ratIsBat ? $", flapping ANIM.HQR {ratFlap}" : "")})"))}" +
+                        (report.Spooks.Any(s => s.Kind == "riser") ? $"; the risers entity {rabbi}'s body {RiserBody} (the game's rabbibunny skeleton, made lighter at the end of the build), fallen in a heap ANIM.HQR {riseHeap}, its swipe {riseSwipe}" : ""));
             if (report.Dives.Count > 0 || report.Scares.Count > 0)
                 log.Add($"the scares: {report.Dives.Count} places a witch dives at the car from, {report.Scares.Count(s => s.Body >= 0)} things jumping up beside the road " +
                         $"({string.Join(", ", report.Scares.GroupBy(s => s.Kind).Select(g => $"{g.Count()} {g.Key}{(g.Count() > 1 ? "s" : "")}"))})" +
@@ -639,9 +676,20 @@ internal static partial class TempleHalloween
         return log;
     }
 
-    // A spook as the car file has it (RACEMOD.CPP spook=): its body, its flags, its height, its way's points (island units).
-    public static int[] Line(RaceTrackReport.Spook s) =>
-        new[] { s.Body, s.Flags, (int)Math.Round(s.Y) }.Concat(s.Way.SelectMany(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512) })).ToArray();
+    // A spook as the car file has it (RACEMOD.CPP spook=): its body, its flags, its height, (flags 4) its animation of ANIM.HQR, (flags 8:
+    // standing at its way's first point, facing its second) the one it plays as Twinsen's car comes, (flags 16: <body> is the entity's
+    // body number, not BODY.HQR's) the entity, its way's points (island units).
+    public static int[] Line(RaceTrackReport.Spook s)
+    {
+        var standing = (s.Flags & 8) != 0 && s.Anim >= 0 && s.Action >= 0;
+        var flags = (s.Anim >= 0 ? s.Flags | 4 : s.Flags & ~4) & ~16;
+        if (!standing) flags &= ~8;
+        var more = new List<int>();
+        if (s.Anim >= 0) more.Add(s.Anim);
+        if (standing) more.Add(s.Action);
+        if (s.Entity >= 0) { flags |= 16; more.Add(s.Entity); }
+        return new[] { s.Body, flags, (int)Math.Round(s.Y) }.Concat(more).Concat(s.Way.SelectMany(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512) })).ToArray();
+    }
 
     // A dive's place and a scare as the car file has them (dive=, scare=): the body, the place (island units), the road's or the floor's
     // height, (a scare's) the way it faces.

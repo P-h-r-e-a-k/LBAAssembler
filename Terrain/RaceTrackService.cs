@@ -438,6 +438,8 @@ internal static class RaceTrackService
             // (and the toy truck's violet-wheeled copy, for the islands whose palette draws the violet, after even hers: no body moves --
             // RaceTrackCharacterCars.InstallToyTruckViolet)
             if (PrivateCars) log.AddRange(RaceTrackCharacterCars.InstallToyTruckViolet(gameDirectory));
+            // (and the Temple of Bú's risers' body -- the rabbibunny skeleton made lighter -- after even that: no body moves)
+            if (session.Risers) log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.InstallRisers(gameDirectory));
             progress?.Report(new(1, "Done"));
             var count = tracks.Sum(t => t.Options.Island.Tracks);
             var built1 = count == 1 ? "The race track is built." : $"{count} race tracks are built ({string.Join(", ", tracks.Select(t => t.Options.Island.Built))}); Play races the one of the island the editor has open.";
@@ -461,7 +463,7 @@ internal static class RaceTrackService
     // all of them, and each track's record for RACETRACK.JSON, in the order built.
     public sealed class BuildSession
     {
-        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars, GuardBodies, Torturers, Marshal;
+        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars, GuardBodies, Torturers, Marshal, Risers;
         // (Build's: the palace dungeon's torturers made when every track is -- Finish)
         public bool Together;
         public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel;
@@ -777,6 +779,12 @@ internal static class RaceTrackService
                 session.Marshal = true;
                 if (!session.Together) log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory));
             }
+        }
+        // ... and the Temple of Bú's risers' body (the race file names it by its entity), at the end of a build of several tracks, or here
+        if (report.Spooks.Any(s => s.Kind == "riser" && s.Entity >= 0) && !session.Risers)
+        {
+            session.Risers = true;
+            if (!session.Together) log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.InstallRisers(gameDirectory));
         }
         return log;
     }

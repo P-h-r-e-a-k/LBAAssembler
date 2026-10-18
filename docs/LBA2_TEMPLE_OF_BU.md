@@ -262,8 +262,8 @@ up on spirals through the black void round the temple. 1,719 cells, steepest 12 
   <flags> <height> <way...>`). There are no actors, so no scene limit and no animations to fit. Witches on their broomsticks circle the
   spirals and patrol the corridor, the lower hall and the crypt. Every few seconds one stops and throws a fire ball at a car below her
   (flags 1; a hit stuns the car as a gas monster's does, "hit by a witch's fire ball"). Ghosts drift across the road over the cars and
-  the chase camera, and bats wheel high over it (flags 2: round and round their way). None comes lower over the road than 2,500 (see "The
-  cuts made good" below).
+  the chase camera, and bats wheel high over it (flags 2: round and round their way) -- LBA2's own flying rats since 2026-10-18, flapping
+  their wings (see "The game's own rats and skeletons" below). None comes lower over the road than 2,500 (see "The cuts made good" below).
 - *Mini pumpkins*: the power-ups' mushrooms, the fakes the cars drop and the item box's icon are a jack-o'-lantern. It is the mushroom
   entity 112's body 3.
 - *The music*: the scenes play LBA2's own Temple of Bù's music (3) and its ambient sounds (scene 10).
@@ -732,6 +732,60 @@ Tests: `E:\dump\TEMP\templefix_clip` -- `build.sh <game>` (the temple alone, the
 <out> [raceraised.txt]` (the measure), `pilot.sh`, `shots.sh <tag> <ticks> "<from>:<to>:<every> ..."`, `near.py` (the ticks the pilot
 passes a place, from a `camtrace` run), `diff.py` / `pairs.py` (two builds' frames compared, before and after crops), `regress.sh <game>
 <prefix>` (solo laps, five races and a time trial).
+
+### The game's own rats and skeletons (2026-10-18)
+
+The user: "The game contains an actor called '36: The flying rat', and '35: Rabbibunny skeleton' let's replace the current bats we have
+with the ones from the game and add more of the games in-built skeletons to our temple track too." (`TempleHalloween.Creatures.cs`; the
+numbers are BODY.HQR's: the flying rat of the sewers is entity 23's body, the rabbibunny skeleton of the Tralu's cave entity 22's.)
+
+![The flying rats, a riser getting up, the rabbibunny skeletons by the road](temple/rats_and_skeletons.png)
+
+- *Flying rats for the bats*: the ten bats (six wheeling over the road, two up each spiral's middle) are the game's flying rat, on the
+  same ways. It flaps its own wings -- its entity's standing animation (ANIM.HQR 266, 17 keyframes, 1.7 s a beat) -- which the race-track
+  mode now plays on a spook (`spook=` flags 4: an animation after the height, stepped every frame as the flag marshal's is). Its body is
+  where the bat's was in BODY.HQR (907 in a temple-alone build), so no other body moves: the game's, twice its size (1,600 across its
+  wings). The game draws it flat in one near-black (224) -- lost in the temple's dark -- and lighting it with the game's light didn't
+  work: its wings' two sides share their points, whose normals come out nothing (black faces, a point here and there past its ramp's
+  end). So each face is a shade of its own ramp by the way it faces as modelled, as the Halloween models are (225 to 233, 229 and 232
+  left out, mauve in the temple's palette): a dark brown-grey rat whose wings catch the light as they beat. It reaches 850 under its
+  middle and 660 over it flapping (the bat 100 and 250), so the six over the road fly 625-750 higher than the bats did -- the same rule,
+  its lowest point 2,500 over the road under the camera (`temple_design.py` SPOOK_BODY).
+- *Rabbibunny skeletons as decor* (the plan's decor kinds 16-19): 17, posed by the skeleton's own animations and made bodies of one bone
+  in the island's palette as LBA1's are -- 5 lying on their backs (its lying, generic 146), 3 sitting against the walls with their legs
+  out towards the road (half way through its getting up, 147, keyframe 5), 5 standing guard looking at the road (its standing, 0) and 4
+  crouching, an arm out (7, keyframe 1). The game's size (about 1,270 tall standing). Bone: its greys from 51 to 60, 52 left out (a teal
+  in the temple's palette: 212, the grey between 51 and 53 there, as Stone has it). Where: by the start's straight in the crypt (3 just
+  past the line, 2 before it), against the long corridor's north wall (2), the first floor's west end by the ramp down (5), the lower
+  hall (2), the west rooms (3). Each on the floor beside the road, at the road's floor, 2.4 to 5.5 cells out from its edge (a sitting
+  one's feet 0.6 clear of it), the floor under all of it whole (`footprint_on`), 3 cells or more from every other decor (the cobwebs
+  included), 4 from the scares, none by the giant web; each kind's share spread along the lap; placed after all the other decor, so
+  nothing else moved.
+- *Risers* (spooks of kind `riser`, `spook=` flags 8): 3 of the game's own skeleton by the road -- by the ramp down at the first floor's
+  west end (393.3, 424.9), in the passage of the west rooms (268.7, 438.2) and in the crypt's east room (541.7, 551.3). Each lies in a
+  heap of bones (its falling apart, 151, held at its end) until Twinsen's car comes within 24 cells, then gets up and swipes at the road
+  (its attack, 150, 1.04 s) and falls back into its heap as the car goes by; again next lap, once the car has been 36 cells away. 2.6
+  cells or more from the road's edge (its swipe never reaches over it), in sight of the road beside it and 8 and 15 cells before it.
+  The game's body drawn by the game's light was near black by the road, so it is the game's body a little lighter -- its greys from 53
+  (past the temple's teal), its lines 58 -- appended at the very end of the build (after the flag marshal's and the toy truck's: no body
+  moves), entity 22's body 40; the race file names it by the entity (flags 16), as `marshal=` does. Drawn down to 300 past its reach
+  from the camera's eye (a flying spook's rule is 1,500, or 2,200 at the least).
+- *LBA1's skeletons stay*: the 23 posed ones (lying, slumped, hung on the walls and in chains over the dark) and the scares' skeleton are
+  the temple's own -- LBA1's, warm bone -- in poses the rabbibunny's animations haven't got (hung by its wrists). The two kinds now share
+  the lap.
+- *Budget*: TEMPLE.ILE 18 decors more (one across a cube's edge; the busiest cube 601 as before), TEMPLE.OBL 4 bodies more; BODY.HQR the
+  bat's entry the rat's and one more at its end; ANIM.HQR the same; spooks 30 of 48.
+
+*Unchanged*: nothing through the deck (`templeclip`: 0 samples over the surface); the solo lap 55.38 s; the five races (medium with seeds
+1, 2 with qualifying, 3 from the back of the grid, hard, easy) and the time trial every car's every lap the same as before to the
+hundredth, no rescue, no car stuck (the risers got up 16-21 times a race); every other track's 304 built files the same as before.
+
+Tests: `E:\dump\TEMP\temple_rats` -- `build.sh <game> head|work`, `racefile.sh`, `pilot.sh`, `shots1.sh` / `shots2.sh <tag> <game>
+<ticks> "<ticks>" [racecars every] [resolution]`, `passes.py` (the ticks the pilot passes each new creature), `regress.sh <game> <engine
+dir> <prefix>`, `others.sh` (every other track, HEAD's tool and the worktree's), `decors.py` (decors per cube), `actorclash.py` (the new
+skeletons against LBA1's actors' boxes), `plancmp.py` (two plans: only the bats' kind and height and the new entries differ);
+`ScriptRoundTrip templecreatures <game> <out> <entity | b<body> | decor | rat>` draws an entity's body in every keyframe, the decor poses,
+the rat.
 
 **Tests**:
 
