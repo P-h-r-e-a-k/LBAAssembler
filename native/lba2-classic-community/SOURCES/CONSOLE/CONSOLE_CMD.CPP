@@ -2494,6 +2494,15 @@ static void cmd_raceblast(int argc, const char *argv[]) {
     Console_Print("raceblast");
 }
 
+/* raceattack <n> [item]: opponent n (1 the first) uses a ball power-up now -- 6 yellow, 7 green, 8 red (the default), 9 the fire ball --
+   wherever its car is along its line (RACEMOD.CPP, tests). */
+static void cmd_raceattack(int argc, const char *argv[]) {
+    extern void RaceMod_TestAttack(int n, int pu);
+    if (argc < 2) { Console_Print("Usage: raceattack <n> [item]"); return; }
+    RaceMod_TestAttack(atoi(argv[1]) - 1, argc >= 3 ? atoi(argv[2]) : 8);
+    Console_Print("raceattack: %d", atoi(argv[1]));
+}
+
 /* racebox <n> [won]: power-up n into Twinsen's item box -- as a mushroom's (only into a free box, its roulette turning), or with `won` 1 as
    a prize (a golden Gazogem, 11, waits in a second box while the box is full); raceprize <0|1|2>: the roulette wheel's pocket prize now,
    as the car lands under the wheel (0 black, 1 red: the slot machine, 2 the green: the golden Gazogem) (RACEMOD.CPP, tests). */
@@ -2793,6 +2802,9 @@ void Console_RegisterAll(void) {
                               "0 fuel, 1 protection, 2 lightning, 3 penguin, 4 super jet-pack, 5 oil (RACEMOD.CPP).");
     Console_RegisterCommandEx("raceblast", cmd_raceblast, "Race-track test: a nitro penguin goes off ahead of the car", "raceblast [cells]",
                               "As if another car dropped it; the blast's own rules decide what it does to Twinsen (RACEMOD.CPP).");
+    Console_RegisterCommandEx("raceattack", cmd_raceattack, "Race-track test: an opponent throws a magic ball now", "raceattack <n> [item]",
+                              "Opponent n (1 the first) uses a ball power-up wherever its car is: 6 yellow, 7 green, 8 red (the default), "
+                              "9 the fire ball (RACEMOD.CPP).");
     Console_RegisterCommandEx("racebox", cmd_racebox, "Race-track test: a power-up into Twinsen's item box", "racebox <n> [won]",
                               "As a mushroom's (only into a free box, its roulette turning), or won 1 as a prize: a golden Gazogem (11) "
                               "waits in a second box while the box is full (RACEMOD.CPP).");

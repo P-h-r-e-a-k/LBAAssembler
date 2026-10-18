@@ -4536,4 +4536,82 @@ opponents': Desert 44 and 36 (19 and 64 before; 1st of 6, 2nd before), Mosquibee
 61 and 20 (26 and 29; 1st of 4 both) -- one race each, the races aren't repeatable to the frame. A player who keeps an item for a
 moment takes fewer; if the old rate is wanted back, a pause after each item before the next mushroom gives one would do it.
 
+## The red magic ball follows the track (2026-10-18)
+
+The user: "Powerups: The Red magic ball to follow the track until it hits the car in front."
+
+**Before.** The red ball went after the car in front (by how far round the race each car was), along the *guide* line (the first
+opponent's) at 24,000 units a second. Its car's place on that line was looked for afresh every frame anywhere on it, and from 6,000 away it
+flew straight at the car, through whatever was between. It never changed its car, and a ball thrown by the leader darted straight ahead for
+112 cells, off the road at the first bend.
+
+**Now** (RACEMOD.CPP `RedBall`, `RedAim`, `RedGap`, `LineNear`, `CarAhead`/`RaceShare`, `BranchStep`, `HeroBranch`; every track, Twinsen's
+balls and the opponents' alike):
+- *Its way*: the racing line of the car it goes after. That is the car's own way round, so the ball is on that car's level of a raised road,
+  goes over its carried jumps as the line does and through every scene of the lap. The car's place on the line is the car's own (its S), in
+  sight or scenes away. After Twinsen, who has no line, the ball takes the thrower's line, and Twinsen's place on it is looked for within 40
+  points of where he was (on a raised road the height counts, so another level of the road is never taken for his). The way to the car is a
+  distance along the track (a car most of a lap ahead is that far along it), and the ball never runs past the car's place.
+- *Its speed*: twice the player's car's top speed, which is 220 km/h with the race game's car (110). It comes up on a car at the speed the
+  car itself drives: a car 20 cells ahead is reached in about 0.7 s, 100 cells ahead in about 3.3 s. It is faster than a car on Gazogem
+  fuel (1.5 times), never slower than the old 24,000, and never slower than 1.4 times its car's speed or its thrower's.
+- *The last stretch*: within 10 cells it comes over to its car's side of the road. Within 3 cells, on the car's own level, it flies straight
+  at the car, so it connects with a car anywhere across the road (the hit reach is the balls' 950). If the car gets 16 cells away (a rescue,
+  a teleporter), the ball goes back to following the track.
+- *Loops*: at a loop's foot the ball goes round the ring, inside it over its band, as a car does (the line itself steps across the road
+  there, from the lane in to the lane out). It then carries on from the lane out.
+- *A car it can't hit yet*: a car in a jump's flight, going round a loop or carried over a jump is not struck there. Struck, an opponent stood
+  in the air on its line over the gap and Twinsen's flight broke off. The ball follows 1.5 cells behind until the car is down, then hits it.
+- *Branches*: if Twinsen is on a branch of the raised road (Wannies Island's shortcut, its pit lane), a ball behind the branch's mouth turns
+  into it after him and rides the branch's own road. A ball already past the mouth waits where the branch comes back onto the lap.
+- *Another car to go after*: if its car finishes the race, is put back on the road (Twinsen's rescue) or drops out, the ball goes after the
+  car now in front of it. With none, it carries on as a leader's ball. A ball from before a new grid (a lost sprint run again) fades.
+- *No car in front* (the thrower leads): along the track 112 cells (as far as before, but round the bends), going after a car met within 16
+  cells ahead on the way (a back marker the leader is coming up to lap), then it fades with the magic ball's burst.
+- *Immunities*: as before (`CarStruck`). The protection spell holds and the super jet-pack absorbs the ball, which is used up either way.
+- *Opponents*: the same ball. On Hard (the Temple's level, `OpponentAims`), an opponent holds a red ball until Twinsen is the car directly in
+  front of it, as before, but now however far ahead and on whatever level. The 900-unit height check was for the straight balls.
+- *The car in front*: found by how far round the race each car is, each opponent's progress taken as its share of its own line's length
+  (`RaceShare`). The Emperor's palace's lines take their own ways through the rooms and are up to half as long again as each other, so a
+  car further along a longer way had been taken for one ahead. A car that has finished is no one's car in front.
+- *Seen*: Twinsen's magic ball sprite in red, as before, 450 over the road, now also drawn up to 32 cells past the edge of the scene's cube
+  (the road in sight goes on there). It leaves a trail of the red ball's own sparkle (`SPRITE_BALLE_SHADOW_3`, the ball on its way back to
+  Twinsen's hand in the game), a small see-through one every 45 ms.
+- *The log*: "Twinsen's red ball follows the track to The skeleton (24 cells ahead)", "... (160 cells ahead, out of sight in cube 10,7)", a
+  "follows the track: 26.2 cells behind Baldino (scene 231, in sight)" each second, "goes round loop 4", "turns into the raised road's
+  branch 1 after Twinsen", "closes in on The skeleton (2.6 cells)", "hits The skeleton (0.6 s, 39 cells along the track, in sight, cube
+  7,8)", "the car it went after has finished -- no car in front of it now, ...", "meets Baldino on its way (14.1 cells ahead)", "fades out:
+  no car met on its way (1.8 s, 112 cells along the track)".
+- *Console test*: `raceattack <n> [item]`: opponent n (1 the first) throws a ball power-up now (8 red, the default), wherever its car is.
+- *The race game's power-up page*: "Follows the track to the car in front and stops it."
+
+![The red ball: round a bend to the skeleton; up a ramp and round the right-hander; round a loop's ring; the leader's ball after a back marker; an opponent's ball along Wannies Island's shortcut onto Twinsen](racetrack/build/red_ball_track.png)
+
+**Verified** (headless, muted, `E:\dump\TEMP\redball`: plain copies of the stress test's 18-track game and the Temple's newest build; `run.py`,
+`scout.py`, `loopscout.py`, `batch.py`):
+- *Twinsen's ball, followed from his chase camera* (`raceitem 8` at a moment `scout.py` picked, the race's randomness fixed by
+  `qualifying_seed`): the Temple, the skeleton 17 cells ahead round a left-hander, hit after 0.4 s and 26 cells; 26 cells ahead up a ramp
+  and round a right-hander, 0.7 s and 42 cells; 24 cells ahead on a straight, 0.6 s and 39 cells. The Emerald Moon: Baldino 21 cells
+  ahead past loop 4, the ball round the ring and on, hit after 1.0 s and 59 cells; Baldino round a loop when the ball reached him, held
+  1.5 cells behind and hit as he came out.
+- *Scenes away* (the Desert, 19 scenes): Twinsen's ball at the Dino-Fly 160 cells ahead in cube 10,7, hit after 3.4 s and 205 cells; Moya's at
+  Baldino 122 cells ahead, hit after 3.9 s and 239 cells, out of sight; the log following each ball through the cubes once a second.
+- *The leader's ball* (the Emerald Moon, both opponents at 45 %): Baldino, a lap down, 14 cells ahead: "meets Baldino on its way", hit
+  after 0.3 s; with no one ahead, "fades out: no car met on its way (1.8 s, 112 cells along the track)".
+- *A branch* (Wannies Island): Twinsen standing on the shortcut, the old Wannie's ball 39 cells behind: "turns into the raised road's
+  branch 1 after Twinsen", hit after 0.6 s and 38 cells, coming at him from behind along the shortcut's road.
+- *Another car*: Baldino finishing the one-lap race before Twinsen's ball reached him: "the car it went after has finished -- no car in
+  front of it now", faded 112 cells on. Twinsen put back on the road with a ball after him (teleported off the road under the Temple's
+  deck): "was put back on the road -- after Twinsen now (36 cells ahead)", hit.
+- *Hard* (the Temple, every mushroom a red ball): an opponent holding its ball for Twinsen threw it once he was the car in front and hit him;
+  balls held 6 s without that went after their own car in front.
+- *Red balls only* (`powerup_only=8`, the pilot using each a second after its roulette; all 18 tracks, one race each, `batch.py`): every race
+  ran to its end. One rescue, on Sendell's Well: Twinsen stuck 3 s behind a car a ball had stopped on its one-car-wide road. HEAD had 10
+  (one there too). 1,313 red balls: 474 thrown at a car in front, 460 of them hit it (the rest went after another car when theirs finished,
+  or were still on their way when the run ended); 839 with no car in front (a leader's, or a car's whose race was over), 39 of those met a
+  back marker. 33 went round a ring. HEAD: 1,209 thrown, 590 at a car, 568 hits.
+- *Every power-up* (the usual draws; the Temple, the Emerald Moon, Wannies Island, the Desert, the town circuit, the Emperor's palace,
+  Otringal, Mosquibees Island; two races each, this build and HEAD): all 16 finished, no rescue in either. The opponents took 419 items
+  (413 at HEAD). Of 47 red balls, the 15 thrown at a car all hit it.
+
 The 18 tracks stress-tested and car setups scored per track (2026-10-16): docs/LBA2_RACE_TRACK_STRESS_TEST.md (`raceplan`, tools/RaceTrackStress).

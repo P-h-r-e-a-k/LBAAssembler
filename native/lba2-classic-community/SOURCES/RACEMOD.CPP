@@ -583,6 +583,36 @@ static T_RACE_SLICK s_slicks[RACE_MAX_SLICKS];
 #define RACE_HOME_MS 15000                 // ... and gone after this long -- only the red with no car in front: the red goes on till it
                                            // hits the car it is after and the fire's till each hits its own (2026-10-10, the user: "Red ball
                                            // to last until it hits the car in front, and fire balls to always hit all cars")
+// The red ball since 2026-10-18 (the user: "The Red magic ball to follow the track until it hits the car in front"): its own way along the
+// track (RedBall) -- the line of the car it goes after, round the bends, up and down the ramps, on its own level of a raised road, into a
+// branch the car took, through every scene of the lap -- at twice the car's top speed: the race car's 110 km/h makes it 220, so that it
+// comes up on a car at the speed the car itself drives, clearly gaining on it and still to be seen doing so (a car 20 cells ahead is
+// reached in two thirds of a second, 100 cells in three and a third). Faster than a car on Gazogem fuel (1.5 times), never slower than
+// the homing balls' 24,000 (the slow default car's twice is under it), nor than 1.4 times the car it goes after or the car that threw it.
+#define RACE_RED_OVER 2.0
+#define RACE_RED_LEAST RACE_HOME_SPEED
+#define RACE_RED_PASS 1.4
+#define RACE_RED_HOME (10 * 512.0)         // its last stretch: over to the car's side of the road ...
+#define RACE_RED_DIRECT (3 * 512.0)        // ... then straight at the car from this near (along the track, or across on its level) ...
+#define RACE_RED_LET_GO (16 * 512.0)       // ... until it is this far off again (rescued, through a teleporter): along the track again
+#define RACE_RED_HOLD (1.5 * 512.0)        // a car it can't hit yet -- in a jump's flight, round a loop, carried over a jump -- followed this near
+// No car in front (the thrower leads): along the track as far as the red ball darted with none (twice the yellow's), going after a car met
+// on the way -- a back marker the leader is coming up to lap -- then it fades.
+#define RACE_RED_ALONE (2 * RACE_DART_RANGE)
+#define RACE_RED_MEET (16 * 512.0)         // ... met: this near ahead of it along the track
+#define RACE_RED_MAX_MS 60000              // gone after this long, whatever (a car that never comes: four homing balls' lives, as before)
+#define RACE_RED_SIGHT (32 * 512)          // drawn this far past the edge of the scene's cube (the road ahead in sight goes on there)
+// ... and its trail: the red ball's own sparkle (SPRITE_BALLE_SHADOW_3, the ball on its way back to Twinsen's hand in the game), a small
+// see-through one left where it was every RACE_RED_SPARK_MS, gone RACE_RED_SPARK_LIFE later -- while this many extras are free
+#define RACE_RED_SPARK 14
+#define RACE_RED_SPARK_MS 45
+#define RACE_RED_SPARK_LIFE 260
+#define RACE_RED_SPARK_SCALE 30
+#define RACE_RED_SPARK_FREE 16
+#define RACE_RED_SAY_MS 1000               // the log follows it this often
+// along its line, closing in on its car, along a branch of the raised road, round a loop's ring (its line steps across the road at the
+// ring's foot, from the lane in to the lane out: the ball goes round the ring instead, as a car does, inside it over its band)
+enum { RED_FOLLOW, RED_CLOSE, RED_BRANCH, RED_RING };
 enum { SHOT_YELLOW, SHOT_GREEN, SHOT_RED, SHOT_FIRE, SHOT_LASER_GREEN, SHOT_LASER_RED };
 // Twinsen's laser cars (drive_laser=1 green, 2 red): his own car, its gun firing laser bolts instead of its magic balls -- the bolts' models
 // (laser_models=<green> <red>, OBJFIX.HQR: the builder adds them) flown straight ahead, one for each shot of the gun's firing animation
@@ -593,9 +623,16 @@ enum { SHOT_YELLOW, SHOT_GREEN, SHOT_RED, SHOT_FIRE, SHOT_LASER_GREEN, SHOT_LASE
 #define RACE_LASER_REACH 1050
 static int s_driveLaser = 0, s_laserModel[2] = {-1, -1};
 static int LaserExtra(int model, S32 x, S32 y, S32 z);
-typedef struct { int On, Kind, Owner, Target, Extra; double X, Y, Z, Hx, Hz, S, Side, SideV, Travelled; S32 T0, Trail; } T_RACE_SHOT;
+// (the red ball's own, RedBall: the line it rides -- an opponent's, RACE_MAX_OPPONENTS the guide's -- and how it goes; the way to its car
+// along the track, its car's place on its line; how far round the race the ball is; the rest of its way with no car to go after; the
+// branch of the raised road ahead it turns into for Twinsen (-1 none) and how far ahead its mouth is, the branch it rides and where on it;
+// the rescues it has seen, its least speed, its last word in the log)
+typedef struct {
+    int On, Kind, Owner, Target, Extra; double X, Y, Z, Hx, Hz, S, Side, SideV, Travelled; S32 T0, Trail;
+    int Line, Mode; double Gap, TS, Prog, Range; int Into; double Mouth; int Branch, Seg; double T; int Rescues; double Least; S32 SaidAt;
+} T_RACE_SHOT;
 static T_RACE_SHOT s_shots[RACE_MAX_SHOTS];
-static void LaunchShot(int kind, int owner, int target, double x, double y, double z, double hx, double hz, S32 now);
+static T_RACE_SHOT *LaunchShot(int kind, int owner, int target, double x, double y, double z, double hx, double hz, S32 now);
 static void Attack(int pu, int owner, double x, double y, double z, double beta, S32 now);
 // The fake mushrooms (Fakes): where each lies (world units), who dropped it and when (it can't go off under that car for a moment), the
 // scene its height was found in; shown by the scenes' copies of the mushroom (fake=), the box a point; the mushroom's body for the item box
@@ -5702,9 +5739,12 @@ S32 RaceMod_Rescue(void) {
     return 1;
 }
 
-// The car put on the line at point i, facing the way the line runs, stopped.
+// The car put on the line at point i, facing the way the line runs, stopped. (Counted: a red ball after him goes after the car in front
+// of it instead, RedBall)
+static int s_rescues = 0;
 static void RescuePlace(const T_RACE_OPPONENT *o, int i) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
+    s_rescues++;
     const int j = s_sprint ? (i + 1 < o->Count ? i + 1 : i - 1) : (i + 1) % o->Count;
     hero->Obj.Beta = (S32)(atan2((double)(o->X[j] - o->X[i]), (double)(o->Z[j] - o->Z[i])) * 4096.0 / (2 * 3.14159265358979)) & 4095;
     ClearRealAngle(hero);
@@ -6430,19 +6470,44 @@ static int CarAt(int who, double *x, double *y, double *z) {
 
 static const char *CarName(int who) { return who < 0 ? "Twinsen" : s_opp[who].Name; }
 
-// The car nearest ahead of `who` in the race (-2 none: it leads), by how far round each is.
-static int CarInFront(int who) {
-    const double mine = who < 0 ? PlayerProgress() : OpponentProgress(&s_opp[who]);
+// Whether a car has finished the race (-1 Twinsen's, else an opponent's): it drives on, out of the race -- no red ball goes after it.
+static int CarFinished(int who) {
+    if (who < 0) return s_place != 0;
+    const T_RACE_OPPONENT *o = &s_opp[who];
+    return s_sprint ? o->Laps >= 2 : s_raceLaps > 0 && o->Laps > s_raceLaps;
+}
+
+// How far round the race a car is (-1 Twinsen, else an opponent), in the guide line's lengths: each opponent's progress along its own line
+// taken as that share of the race -- the lines of the Emperor's palace take their own ways through its rooms, of lengths as much as half
+// as long again as each other, and a car further along a longer way was taken for one ahead of a car level with it.
+static double RaceShare(int who) {
+    if (who < 0) return PlayerProgress();
+    const T_RACE_OPPONENT *o = &s_opp[who], *g = Guide();
+    const double p = OpponentProgress(o);
+    return g && o->Length > 0 ? p * g->Length / o->Length : p;
+}
+
+// ... and a distance along an opponent's line in those lengths, or back
+static double ToShare(const T_RACE_OPPONENT *o, double d) { const T_RACE_OPPONENT *g = Guide(); return g && o && o->Length > 0 ? d * g->Length / o->Length : d; }
+static double FromShare(const T_RACE_OPPONENT *o, double d) { const T_RACE_OPPONENT *g = Guide(); return g && o && g->Length > 0 ? d * o->Length / g->Length : d; }
+
+// The car nearest ahead of a place `mine` in the race (RaceShare's) -- not `who`'s own, nor one that has finished; -2 none -- and how far
+// ahead it is.
+static int CarAhead(int who, double mine, double *ahead) {
     int best = -2;
     double gap = 1e30;
-    if (who >= 0) { const double p = PlayerProgress(); if (p > mine && p - mine < gap) { gap = p - mine; best = -1; } }
+    if (who >= 0 && !CarFinished(-1)) { const double p = RaceShare(-1); if (p > mine && p - mine < gap) { gap = p - mine; best = -1; } }
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
-        if (n == who || !s_opp[n].Count || !s_opp[n].Scenes) continue;
-        const double p = OpponentProgress(&s_opp[n]);
+        if (n == who || !s_opp[n].Count || !s_opp[n].Scenes || CarFinished(n)) continue;
+        const double p = RaceShare(n);
         if (p > mine && p - mine < gap) { gap = p - mine; best = n; }
     }
+    if (ahead) *ahead = best == -2 ? 0 : gap;
     return best;
 }
+
+// The car nearest ahead of `who` in the race (-2 none: it leads), by how far round each is (a car that has finished isn't in it).
+static int CarInFront(int who) { return CarAhead(who, RaceShare(who), NULL); }
 
 // Where a place is along the guide line (its S) and to the side of it -- the nearest point within `window` points of `hint` (a fresh
 // search with no hint).
@@ -6534,7 +6599,7 @@ S32 RaceMod_OpponentStruck(U8 num, U8 hitter) {
     return 0;
 }
 
-static void LaunchShot(int kind, int owner, int target, double x, double y, double z, double hx, double hz, S32 now) {
+static T_RACE_SHOT *LaunchShot(int kind, int owner, int target, double x, double y, double z, double hx, double hz, S32 now) {
     int k = -1;
     for (int i = 0; i < RACE_MAX_SHOTS && k < 0; i++) if (!s_shots[i].On) k = i;
     if (k < 0) {
@@ -6554,12 +6619,464 @@ static void LaunchShot(int kind, int owner, int target, double x, double y, doub
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     if (CubeMode == CUBE_EXTERIEUR && sh->X >= cx && sh->X < cx + 32768 && sh->Z >= cz && sh->Z < cz + 32768)
         SampleMagicBall((S32)(sh->X - cx), (S32)sh->Y, (S32)(sh->Z - cz));
+    return sh;
+}
+
+// ---- the red magic ball: along the track to the car in front (RedBall) ----------------------------------------------------------------
+// It rides a racing line: the one of the car it goes after -- the car's own way round, so the ball is on the car's level of a raised road
+// and over its carried jumps as the car's line is, and the car's place on it is the car's own (its S) wherever the car is, in sight or
+// scenes away -- or, after Twinsen (who has no line), the thrower's, Twinsen's place on it looked for about where he was. At a loop's foot
+// it goes round the ring, inside it, as a car does. Its way to its car is a distance along the track, the lap's seam and a car most of a
+// lap ahead taken into account; it never runs past its car's place on the line. In its last stretch it comes over to the car's side of the
+// road, then flies straight at it, so that it meets the car wherever it is across the road. Twinsen gone into a branch of the raised road
+// (Wannies Island's shortcut, its pit lane) is followed into it at its mouth; with the ball past the mouth, it waits where the branch comes
+// back. A car it can't hit yet -- in a jump's flight, round a loop, carried over a jump -- it follows close behind until it can.
+
+// Where a place is along a line, between its points (its S), and how far to its side (left of the way it runs, as GuideAt has it): the
+// nearest point within `window` points either way of `hint` -- a raised road's levels apart by their height, LineDistance -- or anywhere
+// on the line (no hint, none of them within 12 cells), then onto the piece of line either side of it.
+static double LineNear(const T_RACE_OPPONENT *o, double x, double y, double z, double hint, int window, double *side) {
+    int best = -1;
+    double bd = 1e30;
+    if (hint >= 0 && window > 0 && o->Length > 0) {
+        double h = fmod(hint, o->Length);
+        if (h < 0) h += o->Length;
+        int lo = 0, hi = o->Count;
+        while (hi - lo > 1) { const int mid = (lo + hi) / 2; if (o->Cum[mid] <= h) lo = mid; else hi = mid; }
+        for (int k = -window; k <= window; k++) {
+            const int i = ((lo + k) % o->Count + o->Count) % o->Count;
+            const double d = LineDistance(o, i, x, y, z);
+            if (d < bd) { bd = d; best = i; }
+        }
+    }
+    if (best < 0 || bd > 12.0 * 512 * 12 * 512)
+        for (int i = 0; i < o->Count; i++) { const double d = LineDistance(o, i, x, y, z); if (d < bd) { bd = d; best = i; } }
+    double s = o->Cum[best], sd = 1e30, sideOf = 0;
+    for (int e = 0; e < 2; e++) {
+        const int a = e ? best : (best - 1 + o->Count) % o->Count, b = (a + 1) % o->Count;
+        if (s_sprint && b == 0) continue;                // (a sprint's line has ends)
+        const double dx = o->X[b] - o->X[a], dz = o->Z[b] - o->Z[a], len2 = dx * dx + dz * dz;
+        if (len2 <= 0) continue;
+        double t = ((x - o->X[a]) * dx + (z - o->Z[a]) * dz) / len2;
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const double px = o->X[a] + dx * t, pz = o->Z[a] + dz * t, d = (x - px) * (x - px) + (z - pz) * (z - pz);
+        if (d >= sd) continue;
+        sd = d;
+        s = o->Cum[a] + (o->Cum[a + 1] - o->Cum[a]) * t;
+        sideOf = ((x - px) * dz - (z - pz) * dx) / sqrt(len2);
+    }
+    if (side) *side = sideOf;
+    return s;
+}
+
+// A distance along a lap (either way) as near `prev` as the lap's length allows -- or, along a sprint's line, as it is.
+static double NearRound(double raw, double prev, double len) {
+    if (s_sprint || len <= 0) return raw;
+    double g = fmod(raw, len);
+    if (g < 0) g += len;
+    while (g - prev > len / 2) g -= len;
+    while (prev - g > len / 2) g += len;
+    return g;
+}
+
+// ... and forwards: 0 up to the lap's length.
+static double AheadOn(double raw, double len) {
+    if (s_sprint || len <= 0) return raw;
+    double g = fmod(raw, len);
+    return g < 0 ? g + len : g;
+}
+
+static const T_RACE_OPPONENT *ShotLine(const T_RACE_SHOT *sh) {
+    if (sh->Line >= 0 && sh->Line < RACE_MAX_OPPONENTS && s_opp[sh->Line].Count) return &s_opp[sh->Line];
+    if (sh->Line == RACE_MAX_OPPONENTS && s_guide.Count) return &s_guide;
+    return Guide();
+}
+
+// The line a red ball rides after `target`: the car's own -- where that car goes -- else (after Twinsen, or no one) the thrower's, else the
+// guide's.
+static const T_RACE_OPPONENT *RedLine(int owner, int target) {
+    if (target >= 0 && s_opp[target].Count) return &s_opp[target];
+    if (owner >= 0 && s_opp[owner].Count) return &s_opp[owner];
+    return Guide();
+}
+
+// A raised road's piece from point i to the next, its length on the level.
+static double SegLen(int i) {
+    if (i < 0 || i + 1 >= s_nbRaised) return 0;
+    const T_RACE_RAISED *a = &s_raised[i], *c = a + 1;
+    return sqrt((double)(c->X - a->X) * (c->X - a->X) + (double)(c->Z - a->Z) * (c->Z - a->Z));
+}
+
+// How far along the raised road from (seg0, t0) to (seg1, t1), each a piece and how far along it, on one stretch of it (negative: back).
+static double BranchRun(int seg0, double t0, int seg1, double t1) {
+    if (seg0 > seg1 || (seg0 == seg1 && t0 > t1)) return -BranchRun(seg1, t1, seg0, t0);
+    if (seg0 == seg1) return (t1 - t0) * SegLen(seg0);
+    double d = (1 - t0) * SegLen(seg0);
+    for (int i = seg0 + 1; i < seg1; i++) d += SegLen(i);
+    return d + (t1 > 0 ? t1 * SegLen(seg1) : 0);
+}
+
+// `step` on along branch b of the raised road from (*seg, *t): 0 once past its last point (back on the lap's road, at its point To).
+// (Over a jump's gap in it -- points with no width -- straight from the lip to the landing, as the gap's points run.)
+static int BranchStep(int b, int *seg, double *t, double step) {
+    const int last = s_branches[b].Last;
+    while (*seg < last) {
+        const double len = SegLen(*seg), room = (1 - *t) * len;
+        if (step <= room && len > 0) { *t += step / len; return 1; }
+        step -= room;
+        (*seg)++;
+        *t = 0;
+    }
+    return 0;
+}
+
+// A point of the raised road's along a line (its nearest place on the line at its height).
+static double RaisedOnLine(const T_RACE_OPPONENT *line, int p) {
+    return LineNear(line, s_raised[p].X, s_raised[p].Y, s_raised[p].Z, -1, 0, NULL);
+}
+
+// Twinsen's car on a branch of the raised road (raised_branch=): the branch, -1 on the lap's road (or no branches), and the piece of it he
+// is on and how far along it. Found once a frame; carried over a jump the piece the car is over; where the road can't be found under
+// him -- over a jump's gap, in a jump's flight -- as he was last found.
+static int s_heroBranch = -1, s_heroBranchSeg = 0;
+static double s_heroBranchT = 0;
+static S32 s_heroBranchAt = -1;
+static int HeroBranch(S32 now, int *seg, double *t) {
+    if (!s_nbBranches || CubeMode != CUBE_EXTERIEUR) return -1;
+    if (s_heroBranchAt != now) {
+        s_heroBranchAt = now;
+        const T_OBJET *h = &ListObjet[NUM_PERSO];
+        const double wx = h->Obj.X + CurrentCubeX * 32768.0, wz = h->Obj.Z + CurrentCubeY * 32768.0;
+        S32 f;
+        int sg = -1;
+        double lat, tt = 0;
+        if (s_arcOn >= 0 && s_arcSeg >= 0) { sg = s_arcSeg; tt = s_arcT; }
+        else if (!RaisedAt(wx, wz, h->Obj.Y + 64, RAISED_PAD, &f, &sg, &lat, &tt)) sg = -1;
+        if (sg >= 0) { s_heroBranch = sg >= LapPoints() ? BranchOf(sg) : -1; s_heroBranchSeg = sg; s_heroBranchT = tt; }
+    }
+    *seg = s_heroBranchSeg; *t = s_heroBranchT;
+    return s_heroBranch;
+}
+
+// Whether a red ball may hit its car now: not one in a jump's flight, going round a loop or carried over a jump -- struck there, a car
+// stopped in the air (an opponent's stood on its line over the gap, Twinsen's flight broke off) -- and Twinsen only in his car.
+static int RedCanStrike(int who, S32 now) {
+    (void)now;
+    if (who < 0) return Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR && !RaceMod_InFlight() && s_loopState == LOOP_NONE && s_arcOn < 0;
+    const T_RACE_OPPONENT *o = &s_opp[who];
+    if (o->LoopOn >= 0) return 0;
+    for (int k = 0; k < s_nbArcs; k++)
+        if (o->ArcS0[k] >= 0 && o->ArcS1[k] >= 0 && o->S >= o->ArcS0[k] && o->S <= o->ArcS1[k]) return 0;
+    return 1;
+}
+
+// A place in sight in this scene: in its cube, or no further than `margin` past its edges (world units).
+static int InSight(double x, double z, double margin) {
+    if (CubeMode != CUBE_EXTERIEUR) return 0;
+    const double lx = x - CurrentCubeX * 32768.0, lz = z - CurrentCubeY * 32768.0;
+    return lx >= -margin && lx < 32768 + margin && lz >= -margin && lz < 32768 + margin;
+}
+
+// Where a place is, for the log: its scene (cube_scene=) or its cube.
+static const char *WhereIs(double x, double z, char *out, size_t size) {
+    const int qx = (int)floor(x / 32768.0), qz = (int)floor(z / 32768.0);
+    for (int c = 0; c < s_nbCubeScenes; c++)
+        if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) { snprintf(out, size, "scene %d", s_cubeScenes[c][2]); return out; }
+    snprintf(out, size, "cube %d,%d", qx, qz);
+    return out;
+}
+
+// The red ball's speed: RACE_RED_OVER times the car's top speed, no slower than RACE_RED_LEAST, than RACE_RED_PASS times its car's speed
+// now, or than at its throw (its thrower's).
+static double RedSpeed(const T_RACE_SHOT *sh) {
+    double v = s_car.Gears > 0 ? s_car.GearTop[s_car.Gears - 1] * RACE_RED_OVER : 0;
+    if (v < RACE_RED_LEAST) v = RACE_RED_LEAST;
+    const double t = sh->Target >= 0 ? s_opp[sh->Target].Speed : sh->Target == -1 && Comportement == C_BUGGY ? fabs((double)ListBuggy[0].Speed) : 0;
+    if (v < t * RACE_RED_PASS) v = t * RACE_RED_PASS;
+    return v > sh->Least ? v : sh->Least;
+}
+
+// The red ball's way to its car (Gap: along the track by the ball's own way -- its line, or a branch -- negative with the car behind it),
+// its car's place on the ball's line (TS) and how far to that line's side the car is (*tside); 0 when the car isn't anywhere to be found.
+// Twinsen in a branch: with its mouth ahead, the way in through it (Into, Mouth: the ball turns into it there); past the mouth, to where
+// he comes out of it.
+static int RedGap(T_RACE_SHOT *sh, const T_RACE_OPPONENT *line, S32 now, double *tside) {
+    const double len = line->Length;
+    double tx, ty, tz, ts;
+    *tside = 0;
+    sh->Into = -1;
+    const int placed = CarAt(sh->Target, &tx, &ty, &tz);
+    int hb = -1, hs = 0;
+    double ht = 0;
+    if (sh->Target >= 0) {
+        const T_RACE_OPPONENT *o = &s_opp[sh->Target];
+        if (!o->Count || !o->Scenes) return 0;
+        if (line == o) ts = o->S;
+        else { double x, y, z, v, dx, dz; PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz); ts = LineNear(line, x, y, z, sh->TS, 40, NULL); }
+        // (off its line: its car's own place across the road -- merging from its grid spot, pushed aside, haunted)
+        if (placed && o->LoopOn < 0) LineNear(line, tx, ty, tz, ts, 6, tside);
+    } else {
+        if (!placed) return 0;
+        hb = HeroBranch(now, &hs, &ht);
+        // (round a loop: at its foot, as an opponent going round it is)
+        if (s_loopState != LOOP_NONE && s_loopOn >= 0 && line->LoopS[s_loopOn] >= 0) ts = line->LoopS[s_loopOn];
+        else ts = LineNear(line, tx, ty, tz, sh->TS, 40, tside);
+    }
+    sh->TS = ts;
+    if (sh->Mode == RED_BRANCH) {
+        const T_RACE_BRANCH *b = &s_branches[sh->Branch];
+        if (hb == sh->Branch) { sh->Gap = BranchRun(sh->Seg, sh->T, hs, ht); return 1; }
+        // (its car on the lap: out of the branch's end, then along the line)
+        const double rest = BranchRun(sh->Seg, sh->T, b->Last, 0);
+        sh->Gap = rest + NearRound(ts - RaisedOnLine(line, b->To), sh->Gap - rest, len);
+        return 1;
+    }
+    double raw = ts - sh->S;
+    if (hb >= 0) {
+        const T_RACE_BRANCH *b = &s_branches[hb];
+        const double dFrom = AheadOn(RaisedOnLine(line, b->From) - sh->S, len), dTo = AheadOn(RaisedOnLine(line, b->To) - sh->S, len);
+        if (dFrom <= dTo) { raw = dFrom + BranchRun(b->First, 0, hs, ht); sh->Into = hb; sh->Mouth = dFrom; }
+        else raw = dTo - BranchRun(hs, ht, b->Last, 0);
+    }
+    sh->Gap = NearRound(raw, sh->Gap, len);
+    return 1;
+}
+
+// The red ball's car: `target` (-2 none: on along the track RACE_RED_ALONE, then it fades), the line it rides to it and its way there from
+// where it is -- at its throw (why NULL) and once the car it went after is out of the race (why: what became of it); or (`met`: how far
+// ahead along the track) a car met on its way, which may be a lap down.
+#define RED_NOT_MET -1e30
+static void RedAim(T_RACE_SHOT *sh, int target, const char *why, S32 now, double met = RED_NOT_MET) {
+    const T_RACE_OPPONENT *was = ShotLine(sh), *line = RedLine(sh->Owner, target);
+    if (!line) return;
+    sh->Target = target;
+    sh->Rescues = s_rescues;
+    sh->Line = line == &s_guide ? RACE_MAX_OPPONENTS : (int)(line - s_opp);
+    // (how far round the race its car is from the ball, along its line: a car most of a lap ahead is that far along the track, not just
+    // behind it)
+    const double ahead = target == -2 ? 0 : met > RED_NOT_MET ? met : FromShare(line, RaceShare(target) - sh->Prog);
+    if (sh->Mode == RED_RING && line->LoopS[sh->Seg] >= 0) sh->S = line->LoopS[sh->Seg];   // (round a ring: at its foot on the line)
+    else if (sh->Mode != RED_BRANCH) {
+        if (sh->Mode == RED_RING) sh->Mode = RED_FOLLOW;
+        // its place on its line: out of the front of its thrower's car on the thrower's own line, else looked for about where it is
+        const int throw_ = !why && met <= RED_NOT_MET;
+        double hint = !throw_ && was == line ? sh->S : -1;
+        if (throw_ && sh->Owner >= 0 && line == &s_opp[sh->Owner]) hint = s_opp[sh->Owner].S + 900;
+        else if (hint < 0 && target >= 0) hint = s_opp[target].S - ahead;
+        else if (hint < 0 && sh->Owner < 0 && line == Guide() && s_playerIndex >= 0) hint = line->Cum[s_playerIndex] + 900;
+        sh->S = LineNear(line, sh->X, sh->Y - RACE_SHOT_RISE, sh->Z, hint, 60, &sh->Side);
+        if (sh->Mode == RED_CLOSE) sh->Mode = RED_FOLLOW;
+    }
+    sh->Gap = ahead;
+    sh->TS = sh->S + ahead;
+    char where[32];
+    if (target == -2) {
+        sh->Range = RACE_RED_ALONE;
+        if (why) Log_Info("[racemod] %s's red ball: the car it went after %s -- no car in front of it now, on along the track %.0f cells at most", CarName(sh->Owner), why, sh->Range / 512);
+        else Log_Info("[racemod] %s's red ball runs on along the track: no car in front (%s%s) -- %.0f cells at most, after a car met on the way", CarName(sh->Owner),
+                      CarFinished(sh->Owner) ? "its race over, " : "", CarFinished(sh->Owner) ? "no one racing ahead" : "it leads", sh->Range / 512);
+        return;
+    }
+    double tside, tx = 0, ty, tz = 0;
+    RedGap(sh, line, now, &tside);
+    const int placed = CarAt(target, &tx, &ty, &tz);
+    // (how far ahead it is -- or alongside, a car level with the thrower, ahead of it in the race by a nose -- and where it is when that is
+    // out of sight: another scene's)
+    const int away = placed && !InSight(tx, tz, RACE_RED_SIGHT);
+    char howFar[24];
+    if (sh->Gap >= 512) snprintf(howFar, sizeof(howFar), "%.0f cells ahead", sh->Gap / 512);
+    else snprintf(howFar, sizeof(howFar), "alongside");
+    if (why) Log_Info("[racemod] %s's red ball: the car it went after %s -- after %s now (%s%s%s)", CarName(sh->Owner), why, CarName(target), howFar,
+                      away ? ", out of sight in " : "", away ? WhereIs(tx, tz, where, sizeof(where)) : "");
+    else if (met > RED_NOT_MET) Log_Info("[racemod] %s's red ball meets %s on its way (%.1f cells ahead): after it", CarName(sh->Owner), CarName(target), sh->Gap / 512);
+    else Log_Info("[racemod] %s's red ball follows the track to %s (%s%s%s)", CarName(sh->Owner), CarName(target), howFar,
+                  away ? ", out of sight in " : "", away ? WhereIs(tx, tz, where, sizeof(where)) : "");
+}
+
+// The red ball gone where it is, its sparkle bursting there if in sight.
+static int RedFade(T_RACE_SHOT *sh, S32 now, const char *why) {
+    if (InSight(sh->X, sh->Z, RACE_RED_SIGHT)) MagicBallExplo((S32)(sh->X - CurrentCubeX * 32768.0), (S32)sh->Y, (S32)(sh->Z - CurrentCubeY * 32768.0), 0);
+    Log_Info("[racemod] %s's red ball fades out: %s (%.1f s, %.0f cells along the track)", CarName(sh->Owner), why, (now - sh->T0) / 1000.0, sh->Travelled / 512);
+    return 1;
+}
+
+// Every frame, a red ball: its car out of the race -- gone after the next in front of it -- or none, a car met on its way; then on along
+// its way -- its line, a branch, or straight at its car once near -- a sparkle left behind it, and its car hit once reached. 1 when it is
+// done (it hit, or faded).
+static int RedBall(T_RACE_SHOT *sh, S32 now, double dt) {
+    const S32 age = now - sh->T0;
+    if (age >= RACE_RED_MAX_MS) return RedFade(sh, now, "never reached its car");
+    // (the race begun again -- a lost sprint run again, a grid formed anew -- its car's place in it gone)
+    if (s_gridAt && sh->T0 < s_gridAt) return RedFade(sh, now, "the race begins again");
+    if (sh->Target != -2) {
+        const char *why = NULL;
+        if (sh->Target >= 0 && (!s_opp[sh->Target].Count || !s_opp[sh->Target].Scenes)) why = "is out of the race";
+        else if (CarFinished(sh->Target)) why = "has finished";
+        else if (sh->Target == -1 && s_rescues != sh->Rescues) why = "was put back on the road";
+        if (why) RedAim(sh, CarAhead(sh->Owner, sh->Prog, NULL), why, now);
+    } else {
+        // (no car to go after: one met ahead on the way -- a back marker about to be lapped -- gone after)
+        const T_RACE_OPPONENT *line = ShotLine(sh);
+        for (int who = -1; who < RACE_MAX_OPPONENTS && line; who++) {
+            if (who == sh->Owner || CarFinished(who) || (who < 0 && Comportement != C_BUGGY)) continue;
+            if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
+            double x, y, z;
+            if (!CarAt(who, &x, &y, &z)) continue;
+            const double dx = x - sh->X, dz = z - sh->Z;
+            if (dx * dx + dz * dz > RACE_RED_MEET * RACE_RED_MEET || fabs(y + RACE_SHOT_RISE - sh->Y) > 1400) continue;
+            const double ahead = NearRound(LineNear(line, x, y, z, sh->S, 40, NULL) - sh->S, 0, line->Length);
+            if (ahead < -512 || ahead > RACE_RED_MEET) continue;
+            RedAim(sh, who, NULL, now, ahead);
+            break;
+        }
+    }
+    const T_RACE_OPPONENT *line = ShotLine(sh);
+    if (!line) return RedFade(sh, now, "no line to follow");
+    const double fromX = sh->X, fromY = sh->Y, fromZ = sh->Z, step = RedSpeed(sh) * dt;
+    double tside = 0, tx = 0, ty = 0, tz = 0;
+    const int known = sh->Target != -2 && RedGap(sh, line, now, &tside);
+    const int placed = sh->Target != -2 && CarAt(sh->Target, &tx, &ty, &tz);
+    const int strike = placed && RedCanStrike(sh->Target, now);
+    const double px = tx, py = ty + RACE_SHOT_RISE, pz = tz;
+    const double across = placed ? sqrt((px - sh->X) * (px - sh->X) + (pz - sh->Z) * (pz - sh->Z)) : 1e30, up = fabs(py - sh->Y);
+    // closing in: straight at its car once near along the track or across its level, until it gets away again
+    // (not from a ring: round it first; nor across the road to a car past a ring's foot, where the line steps from one lane to the other)
+    const int close = placed && sh->Mode != RED_RING && (sh->Mode == RED_CLOSE ? across < RACE_RED_LET_GO && up < 3000
+                                 : up < 900 && (across < RACE_RED_DIRECT || (known && sh->Gap < RACE_RED_DIRECT && across < 2 * RACE_RED_DIRECT)));
+    double moved = 0;
+    if (close) {
+        if (sh->Mode != RED_CLOSE) {
+            Log_Info("[racemod] %s's red ball closes in on %s (%.1f cells)", CarName(sh->Owner), CarName(sh->Target), across / 512);
+            sh->Mode = RED_CLOSE;
+        }
+        // (a car it can't hit yet followed RACE_RED_HOLD behind)
+        const double d = sqrt(across * across + (py - sh->Y) * (py - sh->Y));
+        double m = d - (strike ? 0 : RACE_RED_HOLD);
+        if (m > step) m = step;
+        if (m < 0) m = 0;
+        if (d > 1) { sh->X += (px - sh->X) / d * m; sh->Y += (py - sh->Y) / d * m; sh->Z += (pz - sh->Z) / d * m; }
+        moved = m;
+        sh->S = LineNear(line, sh->X, sh->Y - RACE_SHOT_RISE, sh->Z, sh->S, 8, &sh->Side);
+    } else {
+        if (sh->Mode == RED_CLOSE) sh->Mode = RED_FOLLOW;
+        // along its way: no further than its car's place (less the hold for one it can't hit yet); with its car nowhere, waiting
+        double adv = step;
+        if (sh->Target == -2) sh->Range -= adv;
+        else if (sh->Mode == RED_RING) {}                  // (round a ring, on round it)
+        else if (!known) adv = 0;
+        else {
+            const double room = sh->Gap - (strike ? 0 : RACE_RED_HOLD);
+            if (adv > room) adv = room > 0 ? room : 0;
+        }
+        moved = adv;
+        double y, hx, hz;
+        if (sh->Mode == RED_FOLLOW && sh->Into >= 0 && adv >= sh->Mouth) {
+            // into the branch Twinsen took, at its mouth
+            sh->Mode = RED_BRANCH; sh->Branch = sh->Into; sh->Seg = s_branches[sh->Into].First; sh->T = 0;
+            Log_Info("[racemod] %s's red ball turns into the raised road's branch %d after Twinsen", CarName(sh->Owner), sh->Branch + 1);
+            adv -= sh->Mouth;
+        }
+        if (sh->Mode == RED_BRANCH) {
+            if (BranchStep(sh->Branch, &sh->Seg, &sh->T, adv)) {
+                const T_RACE_RAISED *a = &s_raised[sh->Seg], *c = a + 1;
+                sh->X = a->X + (c->X - a->X) * sh->T; sh->Z = a->Z + (c->Z - a->Z) * sh->T;
+                sh->Y = a->Y + (c->Y - a->Y) * sh->T + RACE_SHOT_RISE;
+            } else {
+                // (out of its end: on along the line from where the branch comes back onto the lap)
+                sh->S = RaisedOnLine(line, s_branches[sh->Branch].To); sh->Side = 0;
+                sh->Mode = RED_FOLLOW;
+                GuideAt(line, sh->S, 0, &sh->X, &y, &sh->Z, &hx, &hz);
+                sh->Y = y + RACE_SHOT_RISE;
+                Log_Info("[racemod] %s's red ball comes out of the branch onto the lap", CarName(sh->Owner));
+            }
+        } else {
+            const double before = sh->S;
+            if (sh->Mode == RED_FOLLOW) {
+                sh->S += adv;
+                if (!s_sprint && line->Length > 0) { sh->S = fmod(sh->S, line->Length); if (sh->S < 0) sh->S += line->Length; }
+                // (a loop's foot passed: into its ring, as far round it as it went past the foot)
+                for (int k = 0; k < s_nbLoops && adv > 0; k++) {
+                    const double f = line->LoopS[k];
+                    if (f < 0 || !(sh->S >= before ? before < f && f <= sh->S : f > before || f <= sh->S)) continue;
+                    const double r = s_loops[k].R - RACE_SHOT_RISE > 256 ? s_loops[k].R - RACE_SHOT_RISE : 256;
+                    sh->Mode = RED_RING; sh->Seg = k; sh->T = AheadOn(sh->S - f, line->Length) / r; sh->S = f;
+                    Log_Info("[racemod] %s's red ball goes round loop %d", CarName(sh->Owner), k + 1);
+                    break;
+                }
+            } else {
+                // (round its ring: a whole turn, then on along the line from the lane it comes down in)
+                const double r = s_loops[sh->Seg].R - RACE_SHOT_RISE > 256 ? s_loops[sh->Seg].R - RACE_SHOT_RISE : 256;
+                sh->T += adv / r;
+                if (sh->T >= 2 * RACE_PI) {
+                    if (line->LoopOut[sh->Seg] >= 0) sh->S = line->LoopOut[sh->Seg];
+                    sh->Mode = RED_FOLLOW; sh->Side = 0;
+                }
+            }
+            if (sh->Mode == RED_RING) {
+                // inside the ring, over the middle of its band, RACE_SHOT_RISE off it
+                const T_RACE_LOOP *l = &s_loops[sh->Seg];
+                const double r = l->R - RACE_SHOT_RISE > 256 ? l->R - RACE_SHOT_RISE : 256;
+                const double along = r * sin(sh->T), up = l->R - r * cos(sh->T), side = Lane(l, sh->T);
+                sh->X = l->CubeX * 32768.0 + l->X + l->DirX * along - l->DirZ * side;
+                sh->Z = l->CubeZ * 32768.0 + l->Z + l->DirZ * along + l->DirX * side;
+                sh->Y = l->Y + up;
+            } else {
+                // (on the line's middle, over to its car's side in its last stretch)
+                const double want = known && sh->Gap < RACE_RED_HOME ? tside : 0;
+                sh->Side += (want - sh->Side) * (dt * 4 < 1 ? dt * 4 : 1);
+                GuideAt(line, sh->S, sh->Side, &sh->X, &y, &sh->Z, &hx, &hz);
+                sh->Y = y + RACE_SHOT_RISE;
+            }
+        }
+    }
+    sh->Travelled += moved;
+    sh->Prog += ToShare(line, moved);
+    // its car reached: hit, anywhere along its way this frame (fast, it can pass the car in one)
+    if (strike) {
+        const double wx = sh->X - fromX, wz = sh->Z - fromZ, w2 = wx * wx + wz * wz;
+        double along = w2 > 0 ? ((tx - fromX) * wx + (tz - fromZ) * wz) / w2 : 1;
+        along = along < 0 ? 0 : along > 1 ? 1 : along;
+        const double dx = tx - (fromX + wx * along), dz = tz - (fromZ + wz * along), dy = py - (fromY + (sh->Y - fromY) * along);
+        if (dx * dx + dz * dz <= (double)RACE_SHOT_REACH * RACE_SHOT_REACH && fabs(dy) <= 1400) {
+            if (InSight(sh->X, sh->Z, RACE_RED_SIGHT)) MagicBallExplo((S32)(sh->X - CurrentCubeX * 32768.0), (S32)sh->Y, (S32)(sh->Z - CurrentCubeY * 32768.0), 0);
+            const char *held = sh->Target < 0 ? (now < s_protectUntil ? "the protection spell holds" : now < s_jetUntil ? "the super jet-pack absorbs it" : NULL)
+                                              : now < s_opp[sh->Target].JetUntil ? "its super jet-pack absorbs it" : NULL;
+            char where[32];
+            Log_Info("[racemod] %s's red ball hits %s%s%s (%.1f s, %.0f cells along the track, %s%s)", CarName(sh->Owner), CarName(sh->Target), held ? ": " : "",
+                     held ? held : "", age / 1000.0, sh->Travelled / 512, InSight(sh->X, sh->Z, RACE_RED_SIGHT) ? "in sight, " : "out of sight, ", WhereIs(sh->X, sh->Z, where, sizeof(where)));
+            CarStruck(sh->Target, now, "red magic ball", CarName(sh->Owner));
+            return 1;
+        }
+    }
+    if (sh->Target == -2 && sh->Range <= 0) return RedFade(sh, now, "no car met on its way");
+    // its trail, while in sight
+    if (InSight(sh->X, sh->Z, RACE_RED_SIGHT) && now - sh->Trail >= RACE_RED_SPARK_MS && moved > 0) {
+        sh->Trail = now;
+        int free = 0;
+        for (int e = 0; e < MAX_EXTRAS; e++) free += ListExtra[e].Sprite == -1;
+        if (free >= RACE_RED_SPARK_FREE)
+            InitExtraAnimSprite(255, (S32)(fromX - CurrentCubeX * 32768.0), (S32)fromY, (S32)(fromZ - CurrentCubeY * 32768.0), RACE_RED_SPARK, RACE_RED_SPARK,
+                                RACE_RED_SPARK_LIFE, RACE_RED_SPARK_SCALE, 1, 0);
+    }
+    if (now - sh->SaidAt >= RACE_RED_SAY_MS) {
+        sh->SaidAt = now;
+        char where[32];
+        WhereIs(sh->X, sh->Z, where, sizeof(where));
+        if (sh->Target == -2) Log_Info("[racemod] %s's red ball runs on along the track: %.0f cells left (%s, %s)", CarName(sh->Owner), sh->Range / 512, where,
+                                       InSight(sh->X, sh->Z, RACE_RED_SIGHT) ? "in sight" : "out of sight");
+        else Log_Info("[racemod] %s's red ball follows the track: %.1f cells behind %s%s (%s, %s)", CarName(sh->Owner), known ? sh->Gap / 512 : -1.0, CarName(sh->Target),
+                      sh->Mode == RED_BRANCH ? ", along the branch" : sh->Mode == RED_RING ? ", round a loop" : sh->Mode == RED_CLOSE ? ", closing in"
+                      : !strike && placed && sh->Gap < RACE_RED_HOME ? ", held back: its car can't be hit yet" : "", where,
+                      InSight(sh->X, sh->Z, RACE_RED_SIGHT) ? "in sight" : "out of sight");
+    }
+    return 0;
 }
 
 // A ball power-up used by a car (`owner` -1 Twinsen, else an opponent) at (x, y, z) facing `beta` (radians): each out of the front of
-// the car -- the yellow darts ahead, the green rolls ahead, the red goes after the car in front (with none, it darts ahead as far again),
-// the fire ball one after every other car, every one of them going forwards round the lap to its car (the ones after the cars behind
-// went back along the track: the user, 2026-10-10, "Make all magic balls exit the car forwards instead of being dropped behind").
+// the car -- the yellow darts ahead, the green rolls ahead, the red follows the track to the car in front (RedBall; with none, along the
+// track a way, after a car met on it), the fire ball one after every other car, every one of them going forwards round the lap to its car
+// (the ones after the cars behind went back along the track: the user, 2026-10-10, "Make all magic balls exit the car forwards instead of
+// being dropped behind").
 static void Attack(int pu, int owner, double x, double y, double z, double beta, S32 now) {
     const double hx = sin(beta), hz = cos(beta);
     switch (pu) {
@@ -6567,8 +7084,13 @@ static void Attack(int pu, int owner, double x, double y, double z, double beta,
     case PU_BALL_GREEN: LaunchShot(SHOT_GREEN, owner, -2, x, y, z, hx, hz, now); break;
     case PU_BALL_RED: {
         const int target = CarInFront(owner);
-        LaunchShot(SHOT_RED, owner, target, x, y, z, hx, hz, now);
-        Log_Info("[racemod] %s's red ball goes after %s", CarName(owner), target == -2 ? "no one (in the lead)" : CarName(target));
+        T_RACE_SHOT *sh = LaunchShot(SHOT_RED, owner, target, x, y, z, hx, hz, now);
+        if (!Guide()) { Log_Info("[racemod] %s's red ball goes after %s (no line: straight ahead)", CarName(owner), target == -2 ? "no one (in the lead)" : CarName(target)); break; }
+        // (out of the front of the car, as far round the race as it is; no slower than the car that threw it)
+        sh->Target = -2; sh->Mode = RED_FOLLOW; sh->Branch = -1; sh->Into = -1; sh->SaidAt = now;
+        sh->Prog = RaceShare(owner) + 900;
+        sh->Least = RACE_RED_PASS * (owner < 0 ? fabs((double)ListBuggy[0].Speed) : s_opp[owner].Speed);
+        RedAim(sh, target, NULL, now);
         break;
     }
     case PU_BALL_FIRE: {
@@ -6581,6 +7103,17 @@ static void Attack(int pu, int owner, double x, double y, double z, double beta,
     }
     }
     if (owner >= 0) Log_Info("[racemod] %s uses %s", s_opp[owner].Name, s_puName[pu]);
+}
+
+// raceattack (tests, the console): opponent n (0 the first) uses a ball power-up now, out of the front of its car where it is -- in sight
+// or scenes away along its line -- as at a mushroom (the red ball by default).
+void RaceMod_TestAttack(int n, int pu) {
+    if (!RaceMod_Active() || n < 0 || n >= RACE_MAX_OPPONENTS || !s_opp[n].Count || !s_opp[n].Scenes || pu < PU_BALL_YELLOW || pu > PU_BALL_FIRE) return;
+    const T_RACE_OPPONENT *o = &s_opp[n];
+    double x, y, z, lx, lz, ly, v, dx, dz;
+    if (!CarAt(n, &x, &y, &z)) return;
+    PathAt(o, o->S, &lx, &lz, &ly, &v, &dx, &dz);
+    Attack(pu, n, x, y, z, atan2(dx, dz), TimerRefHR);
 }
 
 // Every frame: the balls in flight -- moved, shown where they are in this scene (a sprite each, a trail behind it), and any car they reach
@@ -6601,7 +7134,9 @@ static void Shots(S32 now, int driving) {
         const double fromX = sh->X, fromZ = sh->Z;      // (where it was: a car hit anywhere along its way since -- fast, it can pass one in a frame)
         int done = 0;
         const int laser = sh->Kind == SHOT_LASER_GREEN || sh->Kind == SHOT_LASER_RED;
-        if (sh->Kind == SHOT_YELLOW || (sh->Kind == SHOT_RED && sh->Target == -2) || laser || !o) {
+        const int red = sh->Kind == SHOT_RED && o;        // (the red ball along the track, hitting its own car: RedBall)
+        if (red) done = RedBall(sh, now, dt);
+        else if (sh->Kind == SHOT_YELLOW || (sh->Kind == SHOT_RED && sh->Target == -2) || laser || !o) {
             // straight ahead, over the road
             const double step = (laser ? RACE_LASER_SPEED : RACE_DART_SPEED) * dt;
             sh->X += sh->Hx * step; sh->Z += sh->Hz * step; sh->Travelled += step;
@@ -6649,7 +7184,7 @@ static void Shots(S32 now, int driving) {
             }
         }
         // a car it reaches (not its own: the red and the fire only their own targets)
-        if (!done && (age > 150 || sh->Kind >= SHOT_RED))
+        if (!done && !red && (age > 150 || sh->Kind >= SHOT_RED))
             for (int who = -1; who < RACE_MAX_OPPONENTS && !done; who++) {
                 if (who == sh->Owner || (sh->Kind >= SHOT_RED && sh->Target != -2 && who != sh->Target)) continue;
                 if (who < 0 && !driving) continue;
@@ -6671,9 +7206,9 @@ static void Shots(S32 now, int driving) {
                 Log_Info("[racemod] (the %s hit after %.1f s)", names[sh->Kind], age / 1000.0);
                 done = 1;
             }
-        // shown: its sprite in this scene, moved; a trail behind it
-        const S32 lx = (S32)(sh->X - cx), lz = (S32)(sh->Z - cz);
-        const int here = !done && CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768;
+        // shown: its sprite in this scene, moved; a trail behind it (the red ball's also on along the road past the cube's edge, in sight)
+        const S32 lx = (S32)(sh->X - cx), lz = (S32)(sh->Z - cz), margin = red ? RACE_RED_SIGHT : 0;
+        const int here = !done && CubeMode == CUBE_EXTERIEUR && lx >= -margin && lx < 32768 + margin && lz >= -margin && lz < 32768 + margin;
         const S16 sprite = laser ? (S16)(3 + 32768) : (S16)(8 + sh->Kind);
         if (sh->Extra >= 0 && (sh->Extra >= MAX_EXTRAS || ListExtra[sh->Extra].Sprite != sprite)) sh->Extra = -1;
         if (!here) {
@@ -6771,12 +7306,14 @@ static void OpponentAims(int n, T_OBJET *car, S32 now) {
     const double dx = hero->Obj.X - car->Obj.X, dz = hero->Obj.Z - car->Obj.Z;
     const double along = dx * hx + dz * hz, across = fabs(dx * hz - dz * hx);
     int aimed = 0;
-    if (Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR && abs(hero->Obj.Y - car->Obj.Y) < 900) {
+    // (the red ball follows the track to the car in front wherever it is -- RedBall -- so it is aimed with Twinsen that car, however far
+    // ahead, on whatever level of the road)
+    if (Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR && pu == PU_BALL_RED) aimed = CarInFront(n) == -1;
+    else if (Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR && abs(hero->Obj.Y - car->Obj.Y) < 900) {
         if (pu == PU_PENGUIN || pu == PU_OIL || pu == PU_FAKE)
             aimed = along < -RACE_AIM_BEHIND_NEAR && along > -RACE_AIM_BEHIND_FAR && across < (pu == PU_OIL ? RACE_AIM_OIL_ACROSS : RACE_AIM_DROP_ACROSS);
         else if (pu == PU_BALL_YELLOW) aimed = along > RACE_AIM_AHEAD_NEAR && along < RACE_AIM_AHEAD_FAR && across < RACE_AIM_DART_ACROSS;
         else if (pu == PU_BALL_GREEN) aimed = along > RACE_AIM_AHEAD_NEAR && along < RACE_AIM_AHEAD_FAR;
-        else if (pu == PU_BALL_RED) aimed = CarInFront(n) == -1;
     }
     if (!aimed && now < o->HoldUntil) return;
     o->Holds = 0;
@@ -6785,7 +7322,8 @@ static void OpponentAims(int n, T_OBJET *car, S32 now) {
     else if (pu == PU_FAKE) DropFake(x - hx * 1300, car->Obj.Y, z - hz * 1300, n, now);
     else if (pu == PU_OIL) DropOil(x - hx * 1300, car->Obj.Y, z - hz * 1300);
     else if (pu == PU_PENGUIN) DropPenguin(x - hx * 1300, car->Obj.Y, z - hz * 1300, n);
-    if (aimed) Log_Info("[racemod] %s aims %s at Twinsen (%.1f cells %s, %.1f across)", o->Name, s_puName[pu], fabs(along) / 512, along < 0 ? "behind" : "ahead", across / 512);
+    if (aimed && pu == PU_BALL_RED) Log_Info("[racemod] %s aims %s at Twinsen (the car in front)", o->Name, s_puName[pu]);
+    else if (aimed) Log_Info("[racemod] %s aims %s at Twinsen (%.1f cells %s, %.1f across)", o->Name, s_puName[pu], fabs(along) / 512, along < 0 ? "behind" : "ahead", across / 512);
     else Log_Info("[racemod] %s uses %s: held its %.1f s, never aimed at Twinsen", o->Name, s_puName[pu], s_diffAim / 1000.0);
 }
 
@@ -10687,7 +11225,7 @@ static const char *const s_puHelp[PU_COUNT] = {
     "Drop it behind you: a car driving onto it spins.",
     "Thrown straight ahead: it stops the car it hits.",
     "Rolls along the road for ten seconds, hitting cars.",
-    "Homes in on the car in front of you and stops it.",
+    "Follows the track to the car in front and stops it.",
     "Splits up, one ball hunting down each other car.",
     "Drop it behind you: the next car into it blows up.",
     "Bursts of speed for eight seconds, as many as you like.",
@@ -11027,6 +11565,7 @@ static void ResetTrack(void) {
     s_difficulty = -1; memset(s_hasLevel, 0, sizeof(s_hasLevel)); s_diffEase = 0; s_diffItems = 100; s_diffAim = 0; s_diffHazards = 100;
     s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_prizeForce = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
     s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes)); memset(s_shots, 0, sizeof(s_shots));
+    s_heroBranch = -1; s_heroBranchAt = -1;
     s_driveLaser = 0; s_laserModel[0] = s_laserModel[1] = -1; s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     s_noCollideScene = -1;
