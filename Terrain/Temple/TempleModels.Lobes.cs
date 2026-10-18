@@ -155,6 +155,14 @@ internal static partial class TempleModels
             return new Vector3(Math.Clamp(q.X, box.X0 + 0.01f, box.X1 - 0.01f), q.Y, Math.Clamp(q.Z, box.Z0 + 0.01f, box.Z1 - 0.01f));
         }
         public Vector3 Normal(double angle, double tilt) => Vector3.Normalize(dir * (float)Math.Cos(angle) + across * (float)Math.Sin(angle) + new Vector3(0, (float)tilt, 0));
+        // the box it stands in (the block's cells, layers): its widest ring round its axis, in the bricks' cells, from its foot to its top
+        public (Vector3 Lo, Vector3 Hi) Bounds()
+        {
+            var r = Rings.Max(g => g.A);
+            float ex = (float)(Math.Abs(dir.X) * r + Math.Abs(across.X) * r / a * b), ez = (float)(Math.Abs(dir.Z) * r + Math.Abs(across.Z) * r / a * b);
+            return (new Vector3(Math.Max(box.X0, centre.X - ex), (float)Rings[0].H, Math.Max(box.Z0, centre.Z - ez)),
+                    new Vector3(Math.Min(box.X1, centre.X + ex), (float)Rings[^1].H, Math.Min(box.Z1, centre.Z + ez)));
+        }
     }
 
     // A lobe's faces, 6 sides round, between its rings -- of the part of it between two heights (layers): where LBA1 placed only some of a

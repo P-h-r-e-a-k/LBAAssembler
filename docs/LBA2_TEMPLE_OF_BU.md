@@ -700,6 +700,39 @@ and hard races, a time trial), `frames.sh` (the race camera at the audit's place
 every measure: `tools/cutpits.py`, `classify.py`, `pits.py`, `widepits.py`, `floating.py`, `overhangs.py`, `corridor.py`), `tools/spookclear.py`,
 `pumpkins.sh` (the rows against the cube edges), `regress.sh head|work` (every other track).
 
+### Nothing through the deck (2026-10-18)
+
+The user, the day of the release: "There's something visually clipping into the track". A dark teal shape stood up through the road's
+kerb in the crypt, by the rocks under the spiral's piers. It was a lobe of a row of rocks (scene 40's, brick 2294): the road passes 60
+over the block's top, and the cuts keep what is 40 or more under its surface, but a lobe stands as tall as LBA1's picture of the row
+draws it over its share of the picture, up to 0.4 layers over the block. That one reached 247 over the deck's surface at its kerb; two
+more, in the long corridor's rows (scene 8's brick 2264, drawn twice), 104 over it.
+
+- *The measure* (`ScriptRoundTrip templeclip <game> <raceraised.txt> <out> [LBA1] [plan]`): every polygon of the race build's TEMPLE.ILE,
+  sampled every 32 units, against the deck rail to rail and the slip lane, from 120 under its surface to 1,000 over it. Of 198,935
+  polygons, three decors reached over the surface (798 samples), all rock lobes; nothing else does -- LBA1's actors, the round things,
+  the ramps, the opaque faces and the Halloween decor all stay under it (the nearest: a lift's platform 12 under, floor plates 42, the
+  floors 60).
+- *The fix* (`TempleDeck`, `TempleModels.Model.Under`): the race build gives the models its plan's road. A row of rocks the road passes
+  over has each lobe that reaches into the road's room (from 40 under the surface, the cuts' own rule, to 2,600 over it) over its own
+  footprint cut flat 40 under the deck and closed there, as the lobes of a row LBA1 placed only some layers of are cut. 11 lobes of 6
+  rows; the lobes beside the road, the rest of each row and the temple's plain build (LBA1's angle) are as they were. Measured again: no
+  sample over the surface.
+
+![The race camera at the three places, before and after](temple/deck_clear.png)
+
+*Races* (the release's engine, the race game's car, 5 laps): the test pilot alone 55.38, 55.00, 55.06, 55.06, 55.06 s; against the
+monsters at medium (seeds 1, 2 with qualifying, 3 from the back of the grid), hard and easy, and a time trial: no rescue, no car stuck,
+every lap the release build's to the hundredth.
+
+*Files*: only TEMPLE.ILE (and its .bak) and TEMPLE.OBL change; RACETRACK.JSON, the scenes, BODY.HQR and every race file are the same.
+Other tracks: nothing they build goes through this code.
+
+Tests: `E:\dump\TEMP\templefix_clip` -- `build.sh <game>` (the temple alone, the worktree's tool, and its race files), `clip.sh <game>
+<out> [raceraised.txt]` (the measure), `pilot.sh`, `shots.sh <tag> <ticks> "<from>:<to>:<every> ..."`, `near.py` (the ticks the pilot
+passes a place, from a `camtrace` run), `diff.py` / `pairs.py` (two builds' frames compared, before and after crops), `regress.sh <game>
+<prefix>` (solo laps, five races and a time trial).
+
 **Tests**:
 
 - `E:\dump\TEMP\temple\pilot\run.sh <tag> <ticks>` is the headless pilot. CARF=car_fast.txt is a fast car with no qualifying.

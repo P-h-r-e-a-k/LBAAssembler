@@ -26,6 +26,7 @@ internal sealed class TempleFrame
     public double WorldX(double x) => (OffsetX + x * Scale) * 512.0;
     public double WorldZ(double z) => (OffsetZ + z * Scale) * 512.0;
     public double WorldY(double layer) => BaseY + (layer - MinY) * 256.0 * Scale;
+    public double Layer(double worldY) => (worldY - BaseY) / (256.0 * Scale) + MinY;
     // the layout's x (or z) of an island cell, and the first layout column whose cells start in the cube of x's
     public static double LayoutX(double islandCell) => (islandCell - OffsetX) / Scale;
     public static double LayoutZ(double islandCell) => (islandCell - OffsetZ) / Scale;
@@ -73,9 +74,10 @@ internal static class TempleIsland
     public static bool IsInstalled(string gameDirectory) => File.Exists(Path.Combine(gameDirectory, IleFile));
 
     // `cuts`: cells left out (TempleLayout's x, layer, z) -- the doorways a race track's road goes through (RaceTrackPlan.TempleCuts); and
-    // `floors` and `skirts`, the floors they take laid again and the walls of their trenches (RaceTrackPlan.TempleFloors, TempleSkirts: Carve).
+    // `floors` and `skirts`, the floors they take laid again and the walls of their trenches (RaceTrackPlan.TempleFloors, TempleSkirts: Carve);
+    // `road`: that race track's plan, whose raised road the models keep out of (TempleDeck: the lobes of the rows of rocks it passes over).
     public static Built Build(string lba1Directory, string gameDirectory, string? sourceDirectory = null, IEnumerable<int[]>? cuts = null,
-        IEnumerable<int[]>? floors = null, IEnumerable<int[]>? skirts = null)
+        IEnumerable<int[]>? floors = null, IEnumerable<int[]>? skirts = null, RaceTrackPlan? road = null)
     {
         if (!Lba1Game.IsInstalled(lba1Directory)) throw new InvalidDataException($"No LBA1 game in {lba1Directory}.");
         sourceDirectory ??= gameDirectory;
@@ -130,7 +132,11 @@ internal static class TempleIsland
             built = carved.Built;
             log.AddRange(carved.Log);
         }
-        var objects = TempleObjects.Build(game, built, island, frame, palette.Map, bodies.Count, EmptyBody, shapes, models, uncut: layout);
+        TempleModels.DeckCap? deckCap = null;
+        if (cuts is not null && TempleDeck.Of(road) is { } deck)
+            deckCap = (lo, hi) => deck.Cap(TempleFrame.OffsetX + lo.X * TempleFrame.Scale, TempleFrame.OffsetX + hi.X * TempleFrame.Scale,
+                TempleFrame.OffsetZ + lo.Z * TempleFrame.Scale, TempleFrame.OffsetZ + hi.Z * TempleFrame.Scale, frame.WorldY(lo.Y), frame.WorldY(hi.Y)) is { } y ? frame.Layer(y) : null;
+        var objects = TempleObjects.Build(game, built, island, frame, palette.Map, bodies.Count, EmptyBody, shapes, models, uncut: layout, deck: deckCap);
         bodies.AddRange(objects.Bodies);
         log.AddRange(objects.Log);
         // (LBA1's actors as its scenes start them -- doors, lifts, floor plates, the statues, the plants, the skeletons...: TempleActors; in a

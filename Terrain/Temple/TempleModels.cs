@@ -88,6 +88,10 @@ internal static partial class TempleModels
     // (Model.GroupOf) -- the race track's doorways take the columns they cut, the rest stays.
     public readonly record struct ModelFace(Vector3[] Corners, (double U, double V)[] Uv, int Tile, Vector3 Normal, int Side = -1, int Group = -1);
 
+    // A race track's raised road over the temple (TempleDeck, in layout terms): the highest layer a box of the layout (cells, layers) may
+    // reach without coming into the road's room, or null where the road doesn't come near it.
+    public delegate double? DeckCap(Vector3 lo, Vector3 hi);
+
     // A kind as its block has it, made.
     public sealed class Model
     {
@@ -110,17 +114,62 @@ internal static partial class TempleModels
         // void (2026-10-18). Its tiles are the whole row's. Rows of rocks only; others are themselves.
         public Model Without(IReadOnlySet<(int I, int J, int K)> empty)
         {
-            if (Kind.How != Make.Lobes || empty.Count == 0) return this;
-            var held = Bricks.Where(b => !empty.Contains((b.I, b.J, b.K))).ToList();
-            if (held.Count == 0) return this;
-            int lo = held.Min(b => b.J), hi = held.Max(b => b.J) + 1;
-            if (lo == Bricks.Min(b => b.J) && hi == Bricks.Max(b => b.J) + 1) return this;
+            if (Held(empty) is not var (lo, hi)) return this;
             if (without.TryGetValue((lo, hi), out var made)) return made;
             made = new Model { Kind = Kind, Dx = Dx, Dy = Dy, Dz = Dz, Picture = Picture, Bricked = Bricked, Bricks = Bricks };
             made.Tiles.AddRange(Tiles);
             foreach (var lobe in Lobes) LobeFaces(made, lobe, lo == Bricks.Min(b => b.J) ? double.NegativeInfinity : lo, hi == Bricks.Max(b => b.J) + 1 ? double.PositiveInfinity : hi);
             made.Reading = $"layers {lo} to {hi} of {Reading}";
             return without[(lo, hi)] = made;
+        }
+
+        // (a row of rocks of which LBA1 placed only some layers: the lowest and the one over the highest it placed, or null -- all of them)
+        private (int Lo, int Hi)? Held(IReadOnlySet<(int I, int J, int K)> empty)
+        {
+            if (Kind.How != Make.Lobes || empty.Count == 0) return null;
+            var held = Bricks.Where(b => !empty.Contains((b.I, b.J, b.K))).ToList();
+            if (held.Count == 0) return null;
+            int lo = held.Min(b => b.J), hi = held.Max(b => b.J) + 1;
+            if (lo == Bricks.Min(b => b.J) && hi == Bricks.Max(b => b.J) + 1) return null;
+            return (lo, hi);
+        }
+
+        // The model (as Without has it) at `anchor` in the layout, where a race track's raised road passes over it (TempleIsland.Build's
+        // `road`: TempleDeck): a row of rocks' lobes that reach up into the road's room -- a lobe stands as tall as LBA1's picture draws the
+        // row over its share of it, up to 0.4 layers over the block's top, and the road passes as little as 60 over a floor's -- cut flat
+        // under the deck and closed there (as Without cuts them at the layers LBA1 placed), each at the height `deck` gives over its own
+        // footprint: those beside the road, and the rest of the row, stay as they are. `capped`: how many lobes it cut (none: Without's).
+        public Model Under(IReadOnlySet<(int I, int J, int K)> empty, Vector3 anchor, DeckCap deck, out int capped)
+        {
+            capped = 0;
+            var whole = Without(empty);
+            if (Kind.How != Make.Lobes || Lobes.Count == 0) return whole;
+            double lo = double.NegativeInfinity, hi = double.PositiveInfinity;
+            if (Held(empty) is var (l, h))
+            {
+                if (l != Bricks.Min(b => b.J)) lo = l;
+                if (h != Bricks.Max(b => b.J) + 1) hi = h;
+            }
+            var caps = new double[Lobes.Count];
+            for (var i = 0; i < Lobes.Count; i++)
+            {
+                var lobe = Lobes[i];
+                var (bLo, bHi) = lobe.Bounds();
+                var bottom = Math.Max(lo, bLo.Y); var top = Math.Min(hi, bHi.Y);
+                caps[i] = hi;
+                if (top <= bottom) continue;
+                if (deck(anchor + new Vector3(bLo.X, (float)bottom, bLo.Z), anchor + new Vector3(bHi.X, (float)top, bHi.Z)) is not { } cap) continue;
+                var c = cap - anchor.Y;
+                if (c >= top - 1e-6) continue;
+                caps[i] = c;
+                capped++;
+            }
+            if (capped == 0) return whole;
+            var made = new Model { Kind = Kind, Dx = Dx, Dy = Dy, Dz = Dz, Picture = Picture, Bricked = Bricked, Bricks = Bricks };
+            made.Tiles.AddRange(Tiles);
+            for (var i = 0; i < Lobes.Count; i++) LobeFaces(made, Lobes[i], lo, caps[i]);
+            made.Reading = $"{capped} lobes cut under the race track's deck of {Reading}";
+            return made;
         }
         public readonly List<ModelFace> Faces = new();
         public readonly List<ModelTile> Tiles = new();
@@ -279,10 +328,13 @@ internal static partial class TempleModels
     // edge cut it), or the doorways took them -- a row of rocks is the layers of it LBA1 placed (Model.Without), and a grille's, a rail's or
     // an iron fan's squares in those cells are left out, as LBA1 draws none there. (Those in cells another block's brick took stay: LBA1's
     // picture of them is split among the bricks by the screen, and drawing them only in the grille's own cells left 1.6 % of its pixels void.)
+    // `deck`: a race track's raised road over the temple -- the rows of rocks it passes over have their lobes cut flat under it (Model.Under;
+    // a line for `log`).
     public static Dictionary<(int X, int Y, int Z), List<(ModelFace Face, Model Model, Vector3 Anchor)>> Placed(Dictionary<int, Part> parts,
-        Dictionary<(int X, int Y, int Z), PolarLayout.Cell> cells)
+        Dictionary<(int X, int Y, int Z), PolarLayout.Cell> cells, DeckCap? deck = null, List<string>? log = null)
     {
         var faces = new Dictionary<(int X, int Y, int Z), List<(ModelFace, Model, Vector3)>>();
+        int cappedRows = 0, cappedLobes = 0;
         var placements = cells.Where(c => parts.ContainsKey(c.Value.Brick))
             .GroupBy(c => { var p = PartAt(parts, cells, c.Key); return (p.Model, Anchor: (X: c.Key.X - p.I, Y: c.Key.Y - p.J, Z: c.Key.Z - p.K)); });
         foreach (var placement in placements)
@@ -291,7 +343,12 @@ internal static partial class TempleModels
             var held = placement.Select(c => c.Key).OrderBy(c => c.Y).ThenBy(c => c.Z).ThenBy(c => c.X).ToList();
             var heldSet = held.ToHashSet();
             var empty = model.Bricks.Select(b => (b.I, b.J, b.K)).Where(b => !cells.ContainsKey((anchor.X + b.I, anchor.Y + b.J, anchor.Z + b.K))).ToHashSet();
-            model = model.Without(empty);
+            if (deck is not null)
+            {
+                model = model.Under(empty, new Vector3(anchor.X, anchor.Y, anchor.Z), deck, out var capped);
+                if (capped > 0) { cappedRows++; cappedLobes += capped; }
+            }
+            else model = model.Without(empty);
             foreach (var face in model.Faces)
             {
                 // (the cell it lies in: its middle, a little inside it)
@@ -316,6 +373,7 @@ internal static partial class TempleModels
                 list.Add((face, model, new Vector3(anchor.X, anchor.Y, anchor.Z)));
             }
         }
+        if (deck is not null) log?.Add($"the race track's raised road over rows of rocks: {cappedLobes} lobes of {cappedRows} rows cut flat {TempleDeck.Clear} under its deck");
         return faces;
     }
 

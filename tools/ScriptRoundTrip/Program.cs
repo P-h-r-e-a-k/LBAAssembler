@@ -133,6 +133,7 @@ internal static class Program
             "templemodels" => TempleStudy.Models(args),
             "templeactors" => TempleActorsProbe.Run(args),
             "templeaudit" => TempleAudit.Run(args),
+            "templeclip" => TempleClipProbe.Run(args),
             "fixbricks" => TempleFixProbe.Bricks(args),
             "fixplace" => TempleFixProbe.Place(args),
             "fixfit" => TempleFixProbe.Fit(args),

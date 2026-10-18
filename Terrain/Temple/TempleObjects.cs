@@ -58,9 +58,10 @@ internal static class TempleObjects
     // an empty body for the boxes (its own entry, made by the caller). `shapes`: the round things' bricks (TempleShapes.Find), whose cells
     // are the parts of turned shapes, not boxes; `models`: the shaped things' (TempleModels.Find), whose cells draw their models.
     // `uncut`: the temple as LBA1 has it, when `layout` is a race track's build of it with doorways cut (TempleIsland.Build) -- what LBA1's own
-    // picture shows, the columns' cells under a lintel the cuts took.
+    // picture shows, the columns' cells under a lintel the cuts took. `deck`: that race track's raised road, which the models keep out of
+    // (TempleModels.Placed: a row of rocks' lobes cut flat under it).
     public static Built Build(Lba1Game game, TempleLayout layout, IslandFile island, TempleFrame frame, int[] map, int firstBody, int emptyBody,
-        Dictionary<int, TempleShapes.Part> shapes, Dictionary<int, TempleModels.Part> models, TempleLayout? uncut = null)
+        Dictionary<int, TempleShapes.Part> shapes, Dictionary<int, TempleModels.Part> models, TempleLayout? uncut = null, TempleModels.DeckCap? deck = null)
     {
         var log = new List<string>();
         var cells = layout.Cells;
@@ -260,7 +261,7 @@ internal static class TempleObjects
         }
         var modelFaces = new Dictionary<(int X, int Y, int Z), List<(TempleModels.ModelFace Face, TempleModels.Model Model, Vector3 Anchor)>>();
         var modelHidden = 0;
-        foreach (var (c, placed) in TempleModels.Placed(models, cells))
+        foreach (var (c, placed) in TempleModels.Placed(models, cells, deck, log))
         {
             var kept = placed.Where(f => !ModelFaceHidden(c, f.Face, f.Anchor)).ToList();
             modelHidden += placed.Count - kept.Count;
