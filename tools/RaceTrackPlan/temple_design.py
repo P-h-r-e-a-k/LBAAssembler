@@ -168,6 +168,11 @@ i_crypt_w = nearest((372, SPIRAL_W[1] + SPIRAL_W[2]), i_down_out)
 i_turn_n = nearest((500, 612), i_crypt_w)
 i_room_e = nearest((500, SPIRAL_E[1] + SPIRAL_E[2]), i_turn_n)
 i_up_in, i_up_out = o_up, o3
+# (the climb up the east spiral ends CLIMB_EARLY cells short of the corridor's east end, before the giant web's doorway: ending there, the
+# road was still climbing through the doorway, up to 113 under the corridor's height, so its floor cells were cut from under the deck --
+# the 2026-10-18 audit's holes either side of the road under the web)
+CLIMB_EARLY = 6
+i_climbed = nearest((E_END + CLIMB_EARLY, CORR_Z), o3)
 anchors = [  # (point, height of the floor the road lies on there), in the lap's order
     (0, FIRST), (i_west, FIRST),
     (i_hall_in - 6, FIRST), (i_hall_in + int(1.5 * 3072 / (GRADE * 512) / SP), LOWER),  # down into the lower hall (eased: 1.5 times as long)
@@ -176,7 +181,7 @@ anchors = [  # (point, height of the floor the road lies on there), in the lap's
     (i_crypt_w, CRYPT),                                                                 # down: the spiral west of the crypt
     (i_turn_n, CRYPT), (i_room_e, top(-5)),                                             # up into the crypt's east room
     (i_up_in, top(-5)),
-    (n - 1, FIRST),                                                                     # up: the spiral east of it
+    (i_climbed, FIRST), (n - 1, FIRST),                                                 # up: the spiral east of it
 ]
 floor_h = np.zeros(n)
 for (a, ha), (b, hb) in zip(anchors, anchors[1:]):
@@ -243,30 +248,186 @@ def slip_off(x, z):
     return best
 
 
-cuts = set()
+# (2026-10-18, the port's audit: the cuts left black pits beside the road -- floor cells beside the ramps cut down with the walls -- and
+# thin tops of walls hanging over it) -- each island cell within reach of the road's points (every other point): a cell of a layout
+# column there is cut where it reaches into the room over the road, from DECK - 20 under the road's surface (no floor pokes through the
+# deck) to HEAD over a point's. The surface it is kept under: under the deck (within DECK_EDGE of its edge: the car's box, 633 round its
+# middle and unturned, reaches half a cell past the edge on a diagonal), the lowest of the road's within the car's length (CAR_ALONG)
+# of the point nearest the cell; past it, beside the road, the highest within reach -- so the floor beside a ramp stays where it is no
+# higher than the road beside it, the car held on its deck never reaching it. Each pass of the road by a column (its points within
+# reach SAME_PASS apart in height: the spirals' turns, the corridor over the crypt) on its own.
+SAME_PASS = 1500
+DECK_EDGE = 1.0
+CAR_ALONG = 2.0
+LAP = S[-1] + float(np.linalg.norm(pts[0] - pts[-1]))
+cell_points = {}                                # island cell -> {point: (distance squared, under the deck)}
+
+
+def near(cell, i, d2, deck):
+    e = cell_points.setdefault(cell, {})
+    if i not in e or d2 < e[i][0]: e[i] = (d2, e.get(i, (0, False))[1] or deck)
+    elif deck: e[i] = (e[i][0], True)
+
+
 for i in range(0, n, 2):
     x, z = pts[i]
     reach = half[i] + CUT
-    lo, hi = h[i] - DECK + 20, h[i] + HEAD
     for cz in range(int(math.floor(z - reach)), int(math.floor(z + reach)) + 1):
         for cx in range(int(math.floor(x - reach)), int(math.floor(x + reach)) + 1):
-            if (cx + 0.5 - x) ** 2 + (cz + 0.5 - z) ** 2 > reach * reach: continue
-            lx, lz = layout_of(cx, cz)
-            b = bits.get((lx, lz), 0)
-            if not b: continue
-            for y in range(MINY, L['maxY'] + 1):
-                if (b >> (y - MINY)) & 1 and top(y) > lo and top(y - 1) < hi: cuts.add((lx, y, lz))
+            d2 = (cx + 0.5 - x) ** 2 + (cz + 0.5 - z) ** 2
+            if d2 > reach * reach: continue
+            near((cx, cz), i, d2, d2 <= (half[i] + DECK_EDGE) ** 2)
 # (and over the slip lane, as over the road: CUT past its edges)
 for i in slip:
-    lo, hi = h[i] - DECK + 20, h[i] + HEAD
     for cz in range(int(math.floor(pts[i][1] + slip_lo[i] - CUT)), int(math.floor(pts[i][1] + slip_hi[i] + CUT)) + 1):
         for cx in range(int(math.floor(pts[i][0] - 1)), int(math.floor(pts[i][0] + 1)) + 1):
-            if slip_off(cx + 0.5, cz + 0.5) > CUT: continue
-            lx, lz = layout_of(cx, cz)
-            b = bits.get((lx, lz), 0)
-            for y in range(MINY, L['maxY'] + 1):
-                if (b >> (y - MINY)) & 1 and top(y) > lo and top(y - 1) < hi: cuts.add((lx, y, lz))
-print('cells cut', len(cuts))
+            off = slip_off(cx + 0.5, cz + 0.5)
+            if off > CUT: continue
+            near((cx, cz), i, (cx + 0.5 - pts[i][0]) ** 2 + (cz + 0.5 - pts[i][1]) ** 2, off <= DECK_EDGE)
+col_cells = {}
+for cell in cell_points: col_cells.setdefault(layout_of(*cell), []).append(cell)
+col_points = {key: sorted({i for c in cells_ for i in cell_points[c]}) for key, cells_ in col_cells.items()}
+
+
+def passes(points):
+    """The points (indices) in groups by height: each group a pass of the road (SAME_PASS apart from the next)."""
+    out = []
+    for i in sorted(points, key=lambda k: (h[k], k)):
+        if out and h[i] - h[out[-1][-1]] < SAME_PASS: out[-1].append(i)
+        else: out.append([i])
+    return out
+
+
+def along(a, b):
+    d = abs(S[a] - S[b])
+    return min(d, LAP - d)
+
+
+def room_of(key):
+    """A column's rooms over the road: each pass's (the highest a cell may top out at and not be cut, and its points' heights)."""
+    out = []
+    for p in passes(col_points[key]):
+        mine = set(p)
+        lo = math.inf
+        for cell in col_cells[key]:
+            e = {i: v for i, v in cell_points[cell].items() if i in mine}
+            if not e: continue
+            j = min(e, key=lambda i: (e[i][0], i))
+            if any(deck for _, deck in e.values()):
+                lo = min(lo, min(h[i] for i in e if along(i, j) <= CAR_ALONG) - DECK + 20)
+            else:
+                lo = min(lo, max(h[i] for i in p) - DECK + 20)
+        out.append((lo, [h[i] for i in p]))
+    return out
+
+
+def present(b, y): return (b >> (y - MINY)) & 1
+
+
+cuts = set()
+rooms = {key: room_of(key) for key in col_points}
+for key, room in rooms.items():
+    b = bits.get(key, 0)
+    for y in range(MINY, L['maxY'] + 1):
+        if present(b, y) and any(top(y) > lo and top(y - 1) < max(hs) + HEAD for lo, hs in room): cuts.add((key[0], y, key[1]))
+# ... and what a cut leaves of a column over it one or two layers thick -- a wall's top hanging over the road's edge, a thin slab of
+# lintel -- taken with it
+THIN = 2
+caps = 0
+for key in {(c[0], c[2]) for c in cuts}:
+    b = bits.get(key, 0)
+    high = max(c[1] for c in cuts if (c[0], c[2]) == key)
+    over = [y for y in range(high + 1, L['maxY'] + 1) if present(b, y)]
+    if 0 < len(over) <= THIN:
+        cuts.update((key[0], y, key[1]) for y in over)
+        caps += len(over)
+print('cells cut', len(cuts), f'({caps} of them thin tops left over the cuts)')
+
+
+# ---- the floors the cuts take (TempleIsland.Carve fills them again): for each column the road comes within reach of, the layer of the
+# floor round it -- the commonest top among its neighbours' kept cells no higher than the road's surface there (the nearest point's) --
+# and the highest a cell may stand in it without reaching into the road's room. Where the cuts (or what they took with them: a statue
+# standing on no floor, a row of rocks down to its foot) leave the column nothing from that floor up to that height, the build lays a
+# floor cell there, at the lower of the two: a doorway's floor where LBA1 had a wall standing on nothing, the ledge of a trench where a
+# ramp goes down through a floor. Each [x, z, the highest, the layer to lay it at, the floor's layer round it] -- or [x, z, the highest]
+# where no floor is round it (the build then takes away the pieces the cuts split off higher than that, hanging over the road).
+def kept(key, y): return present(bits.get(key, 0), y) and (key[0], y, key[1]) not in cuts
+
+
+def kept_top(key, surface):
+    return next((y for y in range(L['maxY'], MINY - 1, -1) if top(y) <= surface + 1 and kept(key, y)), None)
+
+
+cut_cols = {(c[0], c[2]) for c in cuts}
+SKIRT_MOST = 5                                  # a trench's wall no more than this many layers over its bottom gets a skirt
+
+
+def kept_above(key, y):
+    """The lowest kept cell of a column over layer y."""
+    return next((k for k in range(y + 1, L['maxY'] + 1) if kept(key, k)), None)
+
+
+def highest_of(key):
+    lo = min(r[0] for r in rooms[key])
+    return max((y for y in range(MINY - 1, L['maxY'] + 1) if top(y) <= lo), default=MINY - 1)
+
+
+floors, bottoms = [], {}
+for key in sorted(col_points):
+    lx, lz = key
+    highest = highest_of(key)
+    if highest < MINY: continue
+    cx, cz = OX + SCALE * (lx + 0.5), OZ + SCALE * (lz + 0.5)
+    surface = h[min(col_points[key], key=lambda i: (pts[i][0] - cx) ** 2 + (pts[i][1] - cz) ** 2)]
+    tops = [kept_top((lx + dx, lz + dz), surface) for dx in (-1, 0, 1) for dz in (-1, 0, 1)
+            if (dx or dz) and (lx + dx, lz + dz) not in cut_cols]
+    tops = [t for t in tops if t is not None]
+    if tops:
+        floor = max(set(tops), key=lambda t: (tops.count(t), t))
+        floors.append([lx, lz, highest, min(floor, highest), floor])
+        if key in cut_cols: bottoms[key] = min(floor, highest)
+        continue
+    # (no floor round it at the road's height: where the road goes down through a floor standing higher than it on both sides -- the crypt
+    # west room's stepped gallery, its steps up to four layers over the road -- a cut column's floor laid at the road's height under the
+    # deck, the steps' walls beside it skirted down to it, below; over the void, nothing)
+    walls = [kept_above((lx + dx, lz + dz), highest) for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)) if (lx + dx, lz + dz) not in cut_cols]
+    walls = [w for w in walls if w is not None and w <= highest + SKIRT_MOST]
+    if key in cut_cols and walls:
+        floors.append([lx, lz, highest, highest, min(walls)])
+        bottoms[key] = highest
+    else:
+        floors.append([lx, lz, highest])
+# (and a cut column with neither, among cut columns whose floors are laid -- under the deck where a ramp leaves a floor, all round it cut:
+# the floor its neighbours' are laid at, the commonest, no higher than its own highest)
+grew = True
+while grew:
+    grew = False
+    for f in floors:
+        if len(f) != 3 or (f[0], f[1]) not in cut_cols: continue
+        near_ = [bottoms[(f[0] + dx, f[1] + dz)] for dx in (-1, 0, 1) for dz in (-1, 0, 1) if (dx or dz) and (f[0] + dx, f[1] + dz) in bottoms]
+        near_ = [b_ for b_ in near_ if b_ <= f[2]]
+        if not near_: continue
+        lay = max(set(near_), key=lambda t: (near_.count(t), t))
+        f.extend([lay, lay])
+        bottoms[(f[0], f[1])] = lay
+        grew = True
+print('floors under the cuts', len(floors), f'({len(bottoms)} cut columns with a floor to lay)')
+# ---- the skirts: under a kept floor (a step, a ledge) beside a cut column whose floor is laid lower, the void down to that floor filled
+# (TempleIsland.Carve) -- a trench's wall from its floor up, where it showed the dark under the floor beside it. Each [x, z, from layer,
+# to layer].
+skirts = {}
+for (lx, lz), b in sorted(bottoms.items()):
+    for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        k = (lx + dx, lz + dz)
+        if k in cut_cols: continue
+        w = kept_above(k, b)
+        if w is None or w - b - 1 < 1 or w > b + SKIRT_MOST: continue
+        if any(kept(k, y) for y in range(b + 1, w)): continue
+        y1 = min(w - 1, highest_of(k)) if k in col_points else w - 1
+        if y1 <= b: continue
+        skirts[k] = (min(b + 1, skirts.get(k, (99, 0))[0]), max(y1, skirts.get(k, (99, -99))[1]))
+skirts = [[k[0], k[1], a, b_] for k, (a, b_) in sorted(skirts.items())]
+print('skirts', len(skirts), 'columns,', sum(b_ - a + 1 for _, _, a, b_ in skirts), 'cells')
 
 
 # ---- a picture of the route over the temple from above (PLOT=<png>: E:\dump\TEMP\temple\design\top.png's frame, a cell 4 pixels)
@@ -315,6 +476,17 @@ def flat_floor(cx, cz, r):
     return tops.pop() if len(tops) == 1 else None
 
 
+# how far each piece of decor standing on a floor reaches round its middle (cells: TempleHalloween's models)
+REACH = {LANTERN: 1.25, GRAVE: 1.05, CROSS: 1.0, CANDLES: 0.5, CAULDRON: 1.25}
+
+
+def footprint_on(x, z, layer, reach):
+    """Every layout column under the square `reach` cells round (x, z) a floor at `layer`, none of them cut (the 2026-10-18 audit: a
+    jack-o'-lantern by the west rooms stood part-way into a wall, the floor under its middle only looked at)."""
+    cols_ = {layout_of(x + a * reach, z + b * reach) for a in (-1, 0, 1) for b in (-1, 0, 1)}
+    return all(c not in cut_columns and column_top(*c) == layer for c in cols_)
+
+
 def clear_of_road(x, z, margin):
     d = np.hypot(lap_pts[:, 0] - x, lap_pts[:, 1] - z) - half
     # (and of the slip lane beside the start straight)
@@ -340,20 +512,24 @@ for i in range(10, n, int(18 / SP)):
     side = 1 if (i // int(18 / SP)) % 2 == 0 else -1
     nrm = np.array([-u[1], u[0]]) * side
     placed = False
+    kind = cycle[k % len(cycle)]
     for off in (half[i] + 3.2, half[i] + 4.6, half[i] + 6.5, half[i] + 8.5):
         x, z = pts[i] + nrm * off
-        kind = cycle[k % len(cycle)]
         top_ = flat_floor(x, z, 1 if kind in (CAULDRON, CROSS) else 0)
         if top_ is not None and abs(top(top_) - (h[i] - DECK)) <= LAYER + 10 and clear_of_road(x, z, 2.4):
+            # (a place for it; but where its footprint is on a wall or over a drop, the next one out -- none: this one left out, the
+            # cycle of kinds going on as if it stood there)
+            placed = True
+            if not footprint_on(x, z, top_, REACH[kind]): continue
             decor.append([kind, round(float(x), 2), round(float(z), 2), float(top(top_)), turn_to(x, z, *pts[i])])
             if kind in (GRAVE, CROSS):
                 # (a grave's candles in front of it, toward the road)
                 cx_, cz_ = pts[i] + nrm * (off - 1.4) + u * 0.8
-                if flat_floor(cx_, cz_, 0) == top_ and clear_of_road(cx_, cz_, 1.6):
+                if flat_floor(cx_, cz_, 0) == top_ and clear_of_road(cx_, cz_, 1.6) and footprint_on(cx_, cz_, top_, REACH[CANDLES]):
                     decor.append([CANDLES, round(float(cx_), 2), round(float(cz_), 2), float(top(top_)), turn_to(cx_, cz_, *pts[i])])
-            k += 1; placed = True
             break
-    if not placed:
+    if placed: k += 1
+    else:
         # (over the dark: a jack-o'-lantern floating beside the road, a little over it)
         x, z = pts[i] + nrm * (half[i] + 4.0)
         lx, lz = layout_of(x, z)
@@ -404,6 +580,9 @@ for c, i in enumerate(range(19, n, int(15 / SP))):
     side = 1 if c % 2 else -1
     count = lambda kind: sum(1 for s_ in skeletons if s_[0] == kind)
     placed = False
+    # (none by the giant web's doorway, its columns at layout x 111: there it is the web the car comes up to -- the cuts keep the doorway's
+    # floor whole since 2026-10-18, walls to hang one on)
+    if math.hypot(pts[i][0] - (OX + SCALE * 111 + 1.5), pts[i][1] - CORR_Z) < 10: continue
     for sd in (side, -side):
         w = wall_beside(i, sd)
         if w is None: continue
@@ -449,24 +628,64 @@ def across(i, reach):
     return [[round(float(a[0]), 2), round(float(a[1]), 2)], [round(float(b[0]), 2), round(float(b[1]), 2)]]
 
 
+# (2026-10-18, the port's audit: the ghosts drifted across the road 1,300-1,900 over it, the chase camera's eye 2,100 over it went through
+# them and the screen filled with their sheets; witches crossed ramps at the cars' height and passed through the deck) -- every spook's
+# height is kept clear of the road wherever its way comes over it (within its half width and two cells): its body's lowest (bobbing) at
+# least SPOOK_CLEAR over the road there, and over the road the camera comes from (its eye 2,100 over the road 9 cells behind the car: the
+# 20 points before, up a ramp higher); or, a witch's, its highest SPOOK_UNDER under the road's surface (the deck under it) -- the
+# height asked for, or the nearest that is
+SPOOK_BODY = {'witch': (390, 1420), 'ghost': (0, 1680), 'bat': (100, 250)}     # its body under and over its height (the bodies')
+SPOOK_BOB = 260                                                                  # RACEMOD.CPP RACE_SPOOK_BOB
+SPOOK_CLEAR, SPOOK_UNDER = 2500, 1000
+
+
+def way_points(way, loop):
+    w = [np.array(p, float) for p in way]
+    segs = list(zip(w, w[1:] + ([w[0]] if loop else [])))
+    out = []
+    for a, b in segs:
+        m = max(1, int(np.linalg.norm(b - a) / 0.5))
+        out.extend(a + (b - a) * k / m for k in range(m + 1))
+    return out
+
+
+def spook_height(kind, way, loop, y0, under=False):
+    over = set()
+    for q in way_points(way, loop):
+        d = np.hypot(pts[:, 0] - q[0], pts[:, 1] - q[1])
+        over.update(int(i) for i in np.nonzero(d < half + 2)[0])
+    if not over: return round(float(y0), 1)
+    low, tall = SPOOK_BODY[kind]
+    road = [(h[i], max(h[(i - k) % n] for k in range(21))) for i in sorted(over)]
+    def clear(y):
+        return all(y - low - SPOOK_BOB >= cam + SPOOK_CLEAR or (under and y + tall + SPOOK_BOB <= r - SPOOK_UNDER) for r, cam in road)
+    y = next(y0 + s * d for d in range(0, 30000, 25) for s in (1, -1) if clear(y0 + s * d))
+    return round(float(y), 1)
+
+
 spooks = []
 # witches round the spirals, outside the road, a third and two thirds of the way up, throwing fire balls at the cars below them
 for (cx_, cz_, r_), lo_, hi_ in ((SPIRAL_W, CRYPT, FIRST), (SPIRAL_E, top(-5), FIRST)):
     for frac, ph in ((0.42, 0.0), (0.85, math.pi)):
-        spooks.append({'kind': 'witch', 'flags': 3, 'y': round(float(lo_ + (hi_ - lo_) * frac + 2500), 1), 'way': circle(cx_, cz_, r_ + 13, 24, ph)})
-# witches over the halls: along the long corridor and across the lower hall, the crypt's rooms
-for p0, p1, hy in (((W_END + 30, CORR_Z), (E_END - 20, CORR_Z), FIRST + 3200), ((330, 300), (395, 380), LOWER + 3400),
+        way = circle(cx_, cz_, r_ + 13, 24, ph)
+        spooks.append({'kind': 'witch', 'flags': 3, 'y': spook_height('witch', way, True, lo_ + (hi_ - lo_) * frac + 2500, under=True), 'way': way})
+# witches over the halls: along the long corridor and across the lower hall (over its floor, where the road is down on it, not the ramps
+# either side), the crypt's rooms
+for p0, p1, hy in (((W_END + 30, CORR_Z), (E_END - 20, CORR_Z), FIRST + 3200), ((360, 300), (392, 328), LOWER + 3400),
                    ((380, 560), (440, 600), CRYPT + 3400), ((470, 585), (530, 630), CRYPT + 3400)):
-    spooks.append({'kind': 'witch', 'flags': 1, 'y': round(float(hy), 1), 'way': [list(map(float, p0)), list(map(float, p1))]})
-# ghosts drifting across the road, a little over the cars (the crypt's west room's past the start line and the flag marshal's places by it:
-# across at the line, it drifted through her -- RACEMOD.CPP marshal=)
+    way = [list(map(float, p0)), list(map(float, p1))]
+    spooks.append({'kind': 'witch', 'flags': 1, 'y': spook_height('witch', way, False, hy), 'way': way})
+# ghosts drifting across the road, over the cars and the camera (the crypt's west room's past the start line and the flag marshal's places
+# by it: across at the line, it drifted through her -- RACEMOD.CPP marshal=)
 ghost_at = [nearest(p) for p in ((420, CORR_Z), (500, CORR_Z), (W_END, 360), (300, 340), (262, 372), (417, CRYPT_Z), (470, 618), (500, 560), (540, SPIRAL_E[1] + SPIRAL_E[2]))]
 for j, i in enumerate(ghost_at):
-    spooks.append({'kind': 'ghost', 'flags': 0, 'y': round(float(h[i] + 1300 + 300 * (j % 3)), 1), 'way': across(i, half[i] + 10)})
+    way = across(i, half[i] + 10)
+    spooks.append({'kind': 'ghost', 'flags': 0, 'y': spook_height('ghost', way, False, h[i] + 2800 + 300 * (j % 3)), 'way': way})
 # bats wheeling high over the road
 bat_at = [nearest(p) for p in ((450, CORR_Z), (360, 320), (270, 330), (400, 590), (500, 600), (520, 520))]
 for j, i in enumerate(bat_at):
-    spooks.append({'kind': 'bat', 'flags': 2, 'y': round(float(h[i] + 2600 + 400 * (j % 2)), 1), 'way': circle(pts[i][0], pts[i][1], 6 + 2 * (j % 3), 12, j)})
+    way = circle(pts[i][0], pts[i][1], 6 + 2 * (j % 3), 12, j)
+    spooks.append({'kind': 'bat', 'flags': 2, 'y': spook_height('bat', way, True, h[i] + 2600 + 400 * (j % 2)), 'way': way})
 for (cx_, cz_, r_), lo_, hi_ in ((SPIRAL_W, CRYPT, FIRST), (SPIRAL_E, top(-5), FIRST)):
     for frac in (0.2, 0.62):
         spooks.append({'kind': 'bat', 'flags': 2, 'y': round(float(lo_ + (hi_ - lo_) * frac + 1800), 1), 'way': circle(cx_, cz_, r_ * 0.5, 12, frac * 9)})
@@ -499,11 +718,23 @@ def dive_clear(i):
     return all(open_over((i + j) % n) for j in range(int(DIVE_SPAN[0] / SP), int(DIVE_SPAN[1] / SP) + 1, 2))
 
 
+# ... and the start gantry (its beam over the road at the line) no nearer than GANTRY_CLEAR cells to where she flies (the 2026-10-18 audit:
+# the crypt straight's witch, her place 1 cell past the line, dived through the beam)
+GANTRY_CLEAR = 10
+i_line = nearest((410, CRYPT_Z), i_down_out)
+
+
+def gantry_clear(i):
+    ahead = S[i_line] - S[i]
+    ahead = (ahead + LAP / 2) % LAP - LAP / 2
+    return not (DIVE_SPAN[0] - GANTRY_CLEAR <= ahead <= DIVE_SPAN[1] + GANTRY_CLEAR)
+
+
 dives = []
 for want in [nearest((412, CORR_Z)), nearest((505, CORR_Z)), nearest((276, 520), i_edge), o_down + int(0.62 * (o2 - o_down)),
              nearest((392, CRYPT_Z), i_down_out), o_up + int(0.55 * (o3 - o_up))]:
     # (the nearest place to the one wanted, along the lap, with the room over the road)
-    i = next((want + s * j for j in range(0, 80, 2) for s in (1, -1) if dive_clear((want + s * j) % n)), None)
+    i = next((want + s * j for j in range(0, 80, 2) for s in (1, -1) if dive_clear((want + s * j) % n) and gantry_clear((want + s * j) % n)), None)
     if i is None: print('dive place near point', want, 'has no room over the road'); continue
     i %= n
     dives.append([round(float(pts[i][0]), 2), round(float(pts[i][1]), 2), round(float(h[i]), 1)])
@@ -622,8 +853,18 @@ for (ax_, az_), (bx_, bz_) in WEB_COLUMNS:
     webs.append((i2, [CW_DRAPE, round(float(mx), 2), round(float(mz), 2), float(top(floor_layer) + 6.5 * LAYER), turn_to(0, 0, -(z1_ - z0_), x1_ - x0_), round(span, 1)], None))
 # (the picks: along the lap, none too near another or the giant web; a spider in front of every third corner's)
 cobwebs = []
+
+
+def by_skeleton(x, z):
+    """A skeleton sitting or hanging against a wall within SKELETON_CLEAR cells (the 2026-10-18 audit: corner webs drawn through the crypt's
+    slumped skeletons)."""
+    return any(d_[0] in (SK_HANGING, SK_SLUMPED) and math.hypot(x - d_[1], z - d_[2]) < SKELETON_CLEAR for d_ in decor)
+
+
+SKELETON_CLEAR = 4.0
 for i2, w, corner in sorted(webs, key=lambda e: (e[0], e[1][0])):
     if any(math.hypot(w[1] - c[1], w[2] - c[2]) < WEB_APART for c in cobwebs) or math.hypot(w[1] - WEB_X, w[2] - CORR_Z) < WEB_CLEAR: continue
+    if by_skeleton(w[1], w[2]): continue
     # (a corner's one of three, in turn)
     if corner: w = w + [sum(1 for c in cobwebs if c[0] in (CW_CORNER, CW_CORNER_BIG)) % 3]
     cobwebs.append(w)
@@ -648,7 +889,7 @@ for i in range(0, n, 2):
         x, z = pts[i] + u * (face - 0.3) + nrm_ * sd * across_
         rises = [rise(*layout_of(*(pts[i] + u * (face + 0.5) + nrm_ * sd * (across_ + s_))), floor_layer) for s_ in (-WALL_HALF, 0, WALL_HALF)]
         if min(rises) < 3 or max(rises) > 6: continue
-        if any(math.hypot(x - c[1], z - c[2]) < WEB_APART for c in cobwebs) or math.hypot(x - WEB_X, z - CORR_Z) < WEB_CLEAR: continue
+        if any(math.hypot(x - c[1], z - c[2]) < WEB_APART for c in cobwebs) or math.hypot(x - WEB_X, z - CORR_Z) < WEB_CLEAR or by_skeleton(x, z): continue
         cobwebs.append([CW_WALL, round(float(x), 2), round(float(z), 2), float(top(floor_layer + min(rises)) - 40), turn_to(0, 0, -u[0], -u[1]),
                         sum(1 for c in cobwebs if c[0] == CW_WALL) % 3])
 last_wall = -1e9
@@ -663,7 +904,7 @@ for i in range(0, n, 2):
         rises = [rise(*layout_of(*(pts[i] + nrm * (off + 0.4) + tang * s_)), layer) for s_ in (-WALL_HALF, 0, WALL_HALF)]
         if min(rises) < 3 or max(rises) > 6: continue
         if any(math.hypot(x - c[1], z - c[2]) < WEB_APART for c in cobwebs) or math.hypot(x - WEB_X, z - CORR_Z) < WEB_CLEAR: continue
-        if any(d_[0] in (SK_HANGING, SK_SLUMPED) and math.hypot(x - d_[1], z - d_[2]) < 4 for d_ in decor): continue
+        if by_skeleton(x, z): continue
         cobwebs.append([CW_WALL, round(float(x), 2), round(float(z), 2), float(top(layer + min(rises)) - 40), turn_to(x, z, *pts[i]),
                         sum(1 for c in cobwebs if c[0] == CW_WALL) % 3])
         # (a spider hanging in front of every third one's middle)
@@ -686,6 +927,10 @@ print('start', i_start, tuple(np.round(pts[i_start], 1)), 'height', round(h[i_st
 # a car's middle half a cell inside its rail (1.25 inside the 4.5-cell road's edge) -- pole GRID_FIRST behind the line, its nose (1.74
 # cells ahead of its middle) a cell and a quarter behind her (RaceTrackScenes.GridSpot; the usual: 3 back, 1.75 across)
 GRID_FIRST, GRID_SIDE = 5.0, 2.75
+# ---- the pumpkin rows (RaceTrackScenes.MushroomSpots, a row every ~8 s of driving): each pumpkin of a row at least this far from its
+# cube's edges (the 2026-10-18 audit: the row on the ramp down into the lower hall stood across x 384, the ramp running along that cube
+# edge, so the car in one cube's scene saw only the two pumpkins in it)
+ITEM_CUBE_MARGIN = 3.0
 # ---- where the opponents wait while the player qualifies: in the slip lane, along its middle, heading the way the lap runs, on its deck
 # (the road's height there) -- in the start's cube (the build writes no other cube's) and clear of the lane's edges and ends
 slip_mid = (SLIP_FAR + SLIP_NEAR) / 2
@@ -712,8 +957,11 @@ plan = {
     'themes': [{'from': 0, 'to': n - 1, 'theme': 'halloween'}],
     'railCamera': [9, 2100, 7, 500, 1000],
     'templeCuts': sorted([list(c) for c in cuts]),
+    'templeFloors': floors,
+    'templeSkirts': skirts,
     'pitSpots': pit_spots,
     'gridFirst': GRID_FIRST, 'gridSide': GRID_SIDE,
+    'itemCubeMargin': ITEM_CUBE_MARGIN,
     'halloween': {'decor': decor, 'spooks': spooks, 'pumpkins': True, 'dives': dives, 'scares': scares, 'haunt': True, 'giantWebs': giant_webs},
     'keepAbove': 0,
 }

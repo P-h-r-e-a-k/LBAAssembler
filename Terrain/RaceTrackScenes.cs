@@ -971,15 +971,30 @@ internal static class RaceTrackScenes
             return road.AsphaltHalf;
         }
         // the row: across the road (the lap's way at b, from a, turned a quarter), its middle on the road's
-        void Row(int a, int b)
+        IEnumerable<(double X, double Z)> RowAt(int a, int b)
         {
             double dx = xs[b] - xs[a], dz = zs[b] - zs[a], d = Math.Sqrt(dx * dx + dz * dz) + 1e-9;
             var (count, gap) = MushroomRow(Half(b));
             for (var j = 0; j < count; j++)
             {
                 var side = (j - (count - 1) / 2.0) * gap;
-                spots.Add((xs[b] - dz / d * side, zs[b] + dx / d * side, ys[b]));
+                yield return (xs[b] - dz / d * side, zs[b] + dx / d * side);
             }
+        }
+        void Row(int a, int b)
+        {
+            foreach (var (x, z) in RowAt(a, b)) spots.Add((x, z, ys[b]));
+        }
+        // (and, where the plan asks, every one of the row options.ItemCubeMargin from its cube's edges: one actor's scene is its cube's)
+        bool OffEdges(int a, int b)
+        {
+            if (options.ItemCubeMargin <= 0) return true;
+            foreach (var (x, z) in RowAt(a, b))
+            {
+                double ex = x - Math.Floor(x / 64) * 64, ez = z - Math.Floor(z / 64) * 64;
+                if (Math.Min(ex, 64 - ex) < options.ItemCubeMargin || Math.Min(ez, 64 - ez) < options.ItemCubeMargin) return false;
+            }
+            return true;
         }
         // how fast the car drives at a point of the lap (units a second): round the bend of the opponent's line there (its nearest point,
         // looked for a little way either side of the last one found)
@@ -1023,7 +1038,7 @@ internal static class RaceTrackScenes
                 if (at < next) continue;
                 if (at > report.Length - 20) break;
                 next = at + cells;
-                if (!Free(b)) continue;
+                if (!Free(b) || !OffEdges(a, b)) continue;
                 Row(a, b);
                 rows++;
             }
@@ -1040,8 +1055,8 @@ internal static class RaceTrackScenes
             var pick = -1;
             for (var k = 0; k < steps.Count; k++)
             {
-                var (_, b, at, t) = steps[k];
-                if (t < r * every || t >= (r + 1) * every || t < last + every / 2 || at < MushroomFirst || at > report.Length - 20 || !Free(b)) continue;
+                var (a, b, at, t) = steps[k];
+                if (t < r * every || t >= (r + 1) * every || t < last + every / 2 || at < MushroomFirst || at > report.Length - 20 || !Free(b) || !OffEdges(a, b)) continue;
                 if (pick < 0 || Math.Abs(t - due) < Math.Abs(steps[pick].Time - due)) pick = k;
             }
             if (pick < 0) continue;

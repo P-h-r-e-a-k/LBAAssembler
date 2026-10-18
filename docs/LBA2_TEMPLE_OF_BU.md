@@ -188,9 +188,9 @@ RESS_SKYSEA0 + 13, slots the retail file leaves empty.
 The plan is `docs/racetrack/temple_track_plan.json`, from `tools/RaceTrackPlan/temple_design.py`, which reads a plain build's `TEMPLE.JSON`.
 LBA1's temple is a dungeon at three heights: the first floor and its corridor at 14,080, scene 8's lower hall at 11,008, and the crypt at
 1,792. In LBA1 these are joined by narrow stairs, with dead ends and no way round. The lap is a raised road a little over the floors (rail
-held). Where it passes walls, it goes through doorways cut in them: 819 cells, the plan's `templeCuts`. Between the heights it runs on
-ramps, and down to the crypt and back up on spirals through the black void round the temple. 1,719 cells, steepest 12 %; about 65 s a lap
-with a car at 110 km/h.
+held). Where it passes walls, it goes through doorways cut in them: 844 cells, the plan's `templeCuts`, and the floors they took laid
+again (`templeFloors`, `templeSkirts`: see "The cuts made good" below). Between the heights it runs on ramps, and down to the crypt and back
+up on spirals through the black void round the temple. 1,719 cells, steepest 12 %; about 65 s a lap with a car at 110 km/h.
 
 1. The start, on the straight through the crypt's west room, heading east. The opponents wait in a slip lane beside it while the player
    qualifies (the plan's pit spots; see "The slip lane" below).
@@ -212,8 +212,9 @@ with a car at 110 km/h.
 - *Spooks*, 27: bodies of BODY.HQR the race-track mode flies and draws itself, as it draws the Wannies' frog (`RACEMOD.CPP spook=<body>
   <flags> <height> <way...>`). There are no actors, so no scene limit and no animations to fit. Witches on their broomsticks circle the
   spirals and patrol the corridor, the lower hall and the crypt. Every few seconds one stops and throws a fire ball at a car below her
-  (flags 1; a hit stuns the car as a gas monster's does, "hit by a witch's fire ball"). Ghosts drift across the road a little over the
-  cars, and bats wheel high over it (flags 2: round and round their way).
+  (flags 1; a hit stuns the car as a gas monster's does, "hit by a witch's fire ball"). Ghosts drift across the road over the cars and
+  the chase camera, and bats wheel high over it (flags 2: round and round their way). None comes lower over the road than 2,500 (see "The
+  cuts made good" below).
 - *Mini pumpkins*: the power-ups' mushrooms, the fakes the cars drop and the item box's icon are a jack-o'-lantern. It is the mushroom
   entity 112's body 3.
 - *The music*: the scenes play LBA2's own Temple of Bù's music (3) and its ambient sounds (scene 10).
@@ -557,6 +558,98 @@ Tests: `E:\dump\TEMP\templeflag2`: `build.sh <game> head|work` (the temple alone
 `engbuild.sh "" <folder>` (the worktree's engine), `pilot.sh` (`NOPILOT=1`, `PILOTAT=<tick>`, `CAM=1`; a straight start with
 `--exec-at <tick> "input up <ticks>"`), `batch.sh` and `report.py` (full races, `WHICH=base|new`), `ticks.py <tag>` (each event's tick from
 the camera trace), `solo2.sh` (solo laps, HEAD's build and this one), `regress_both.sh` (every other track), `sheet2.py` (the pictures).
+
+### The cuts made good (2026-10-18)
+
+Before the release, an audit of the race build measured what the doorways the road cuts leave, and where the race's additions sit. The
+fixes, all in the plan (`temple_design.py`) and in what the build does with it (`TempleIsland.Carve`):
+
+*Pits beside the road.* LBA1 puts no floor under a wall, a statue, the dais or the bed of spikes by the grid: the brick standing on the
+floor is the floor there. Cut out, they left holes to the void beside the road, and a row of rocks cut whole took its foot, the floor
+cell, with it. The cuts also took floor cells beside the ramps: a cell was cut wherever it reached into the room over any road point
+within 6 cells, so a ramp's lower points cut the floor beside its higher ones. Of the 302 columns the cuts took cells of, 109 were left
+lower than the floor round them, 96 with nothing under them at all.
+
+- *The rule* is now per island cell. Under the deck (and a cell past its edge: the car's box, 633 round its middle and not turned, reaches
+  half a cell past it on a diagonal), a cell is cut from 40 under the road's lowest surface within the car's length of the point nearest
+  it. Past that, beside the road, it is cut only from the highest surface within reach, on the same pass of the road (points within
+  1,500 in height of each other). So the floor beside a ramp stays where it is no higher than the road beside it.
+- *Thin tops*: what a cut leaves of a column over it, one or two layers (a wall's top over the road's edge, a thin lintel), goes with it:
+  51 cells.
+- *Floors laid again* (the plan's `templeFloors`: for each column the road comes within reach of, the highest a cell may stand there, and
+  the floor round it at the road's height). Where a column the cuts took cells of (or the round and shaped things that went with them) has
+  nothing from that floor up, the build lays a floor cell there, the brick the floor round it has most: 194 cells. Where no floor is round
+  it at the road's height (the road going down through a floor that stands higher on both sides), one is laid at the highest under the
+  deck, if a wall stands within five layers of it.
+- *Skirts* (`templeSkirts`): under a floor kept beside such a column, the dark down to the laid floor is filled, with the bricks of the
+  wall the cuts took there, else the floor's own. The crypt west room's stepped gallery, which the road crosses up to four layers under
+  its steps, is now a cutting with walls; so are the lower hall's sides by its ramps, and the west rooms' wall tops, whose foot the cuts
+  took: 101 cells.
+- *Pieces split off* over the road (no more than 12 cells, every one higher than a floor may stand in its column) are taken out: 11 cells.
+  With the thin tops, the 12 single cells that hung 3,780-6,084 over the road are gone.
+
+*The giant web's doorway.* The climb up the east spiral reached the corridor's height only at the corridor's east end, so through the
+doorway the road was still climbing, its surface up to 113 under the corridor's, and the doorway's floor cells were cut from under the deck
+down to the structure far below. The climb now ends 6 cells sooner (`CLIMB_EARLY`): the floor stays whole. This is the only change to the
+road: its line is the same, its heights on the climb up to 178 higher, its grade 6.5 % instead of 6.3 %. The solo laps are the same to the
+hundredth.
+
+| Measured on the race build's cells (`templecells`) | Before | After |
+|---|---|---|
+| Cut columns lower than the floor round them | 109 (96 bottomless) | 22 (none bottomless: 19 one-layer steps where a ramp starts down through a floor, two trenches by the lower hall's ramps with walls, one column wholly under the deck) |
+| Samples beside the road (to 8 cells out) where the build has nothing within 1,500 under the road and LBA1 had | 429 (87 places) | 0 |
+| Small pieces the cuts split off | 13 (12 single cells hanging over the road) | 3, all lying at floor level |
+| Columns with one or two layers left over a cut | 12 | 0 |
+| Temple cells in the road's room (the deck and slip lane, from 40 under the surface to 3,600 over it); least headroom | 0; 3,780 | 0; 3,780 |
+| Solid boxes | 7,161 | 7,199 |
+
+![The race camera at the audit's places: HEAD's build and this one](temple/cuts_made_good.png)
+
+*The spooks.* The ghosts drifted 1,300-1,900 over the road, and the chase camera's eye is 2,100 over it, so the camera flew through them and
+the screen filled with their sheets. A spook's height is now kept clear wherever its way comes over the road: its lowest point, bobbing,
+at least 2,500 over the road there and over the road the camera comes from (the highest of the 20 points before), or a witch's highest
+point at least 1,000 under the deck. Each keeps the height it was given, or the nearest that is clear:
+
+- the ghosts fly 2,800-3,400 over the road (2,540-3,140 at their lowest);
+- the witch patrolling the lower hall crossed the ramp down into it at the cars' height: she now patrols over its floor, (360, 300) to
+  (392, 328), where the road is down on it;
+- the witches circling the spirals a third of the way up passed through the deck where the roads in and out of the spirals cross their
+  circles: 8,453 and 8,264 now, a thousand under those roads and well over the crypt's;
+- the bats wheel at least 2,500 over the road under their circles (the one over the crypt's east ramp was at the camera's height).
+
+The least clearance of any spook over the camera's eye went from -2,430 (the lower hall's witch) to +401.
+
+*The crypt straight's witch dive* started 1 cell past the start line and dived through the gantry's beam. A dive place now keeps the line
+10 cells or more outside the stretch she flies over (`GANTRY_CLEAR`): it is at (367.8, 586), on the straight in from the dark, 42 cells
+before the line.
+
+*The pumpkin rows.* An actor belongs to its cube's scene, and the ramp down into the lower hall runs along the edge of cube x 384, so the
+row there had a pumpkin in scene 307 while the car was in 308, and showed two. A plan may now keep every pumpkin of a row a distance from
+its cube's edges (`itemCubeMargin`, RaceTrackOptions.ItemCubeMargin, RaceTrackScenes.MushroomSpots: the row goes to the clear point of its
+stretch nearest the middle that also keeps it); the Temple's is 3 cells. That row is now at the ramp's foot (378.5-380.8, 311.3-315.5), and
+one at the west spiral's foot moved a cell (it was 2.1 cells from an edge). Still 7 rows of 3, each about 8 s of driving apart. Other
+tracks have no margin, and their rows are where they were.
+
+*Decor.* A piece of floor decor stands where its footprint is all on the floor at its height and none of it cut (`footprint_on`); when the
+first place out from the road is not, it takes the next, or none -- the cycle of kinds goes on as before, so every other piece is as it was.
+A jack-o'-lantern part-way into a wall by the west rooms, one in a row of rocks and a grave with its candles on a gallery step are gone;
+four pieces partly over drops (three graves, a lantern) moved a little. No cobweb is within 4 cells of a skeleton slumped or hanging on a
+wall (three corner webs over slumped skeletons, two of them the crypt's, are gone), and no skeleton hangs by the giant web's doorway (the
+doorway's walls, whole now, would have had one). The gravestones' grey ramp had the temple's teal (slot 52) in it: 212, the grey between
+its neighbours in the temple's palette, now.
+
+*Races* (`E:\dump\TEMP\templefix_cuts`, the race game's car, the pumpkin F1, 5 laps, no qualifying): the test pilot alone on its line
+55.38, 55.00, 55.06, 55.06, 55.06 s, HEAD's to the hundredth. Against the monsters at medium (race seeds 1, 2) and hard (1, 2), and a time
+trial: no rescue, no car stuck, as in HEAD's build. The races go their own ways from the moved pumpkin row on (other items drawn): medium
+seed 2's first three laps are HEAD's to the hundredth (55.37, 55.00, 57.25), the later ones within 0.16 s.
+
+*Other tracks*: built together with HEAD's tool and this one, every file and every race file at each difficulty the same (485
+checksums).
+
+Tests: `E:\dump\TEMP\templefix_cuts` -- `build.sh <game> head|work`, `racefile.sh`, `pilot.sh`, `batch.sh <game> <prefix>` (solo, medium
+and hard races, a time trial), `frames.sh` (the race camera at the audit's places), `full.sh <v>` (the plan made afresh, `templecells`, and
+every measure: `tools/cutpits.py`, `classify.py`, `pits.py`, `widepits.py`, `floating.py`, `overhangs.py`, `corridor.py`), `tools/spookclear.py`,
+`pumpkins.sh` (the rows against the cube edges), `regress.sh head|work` (every other track).
 
 **Tests**:
 

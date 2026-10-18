@@ -72,8 +72,10 @@ internal static class TempleIsland
 
     public static bool IsInstalled(string gameDirectory) => File.Exists(Path.Combine(gameDirectory, IleFile));
 
-    // `cuts`: cells left out (TempleLayout's x, layer, z) -- the doorways a race track's road goes through (RaceTrackPlan.TempleCuts).
-    public static Built Build(string lba1Directory, string gameDirectory, string? sourceDirectory = null, IEnumerable<int[]>? cuts = null)
+    // `cuts`: cells left out (TempleLayout's x, layer, z) -- the doorways a race track's road goes through (RaceTrackPlan.TempleCuts); and
+    // `floors` and `skirts`, the floors they take laid again and the walls of their trenches (RaceTrackPlan.TempleFloors, TempleSkirts: Carve).
+    public static Built Build(string lba1Directory, string gameDirectory, string? sourceDirectory = null, IEnumerable<int[]>? cuts = null,
+        IEnumerable<int[]>? floors = null, IEnumerable<int[]>? skirts = null)
     {
         if (!Lba1Game.IsInstalled(lba1Directory)) throw new InvalidDataException($"No LBA1 game in {lba1Directory}.");
         sourceDirectory ??= gameDirectory;
@@ -124,30 +126,141 @@ internal static class TempleIsland
         var models = TempleModels.Find(game, log);
         if (cuts is not null)
         {
-            var cut = cuts.Where(c => c.Length == 3).Select(c => (c[0], c[1], c[2])).ToHashSet();
-            built = layout.Without(cut);
-            log.Add($"{layout.Cells.Count - built.Cells.Count} cells cut where the race track's road goes through the walls");
-            // (and what the doorways leave of the round things they cut through, hanging over the road, or standing on nothing; and of the
-            // shaped things, theirs and what stood on the round things' -- a statue whole or not at all, a grille or a row of rocks but the
-            // columns along it they cut)
-            var remains = TempleShapes.CutRemains(shapes, layout.Cells, cut);
-            if (remains.Count > 0)
-            {
-                built = built.Without(remains);
-                log.Add($"{remains.Count} cells of round things left hanging by the cuts taken out with them");
-            }
-            var modelRemains = TempleModels.CutRemains(models, layout.Cells, cut.Concat(remains).ToHashSet());
-            if (modelRemains.Count > 0)
-            {
-                built = built.Without(modelRemains);
-                log.Add($"{modelRemains.Count} cells of shaped things the cuts took part of taken out with them");
-            }
+            var carved = Carve(layout, shapes, models, cuts, floors, skirts);
+            built = carved.Built;
+            log.AddRange(carved.Log);
         }
         var objects = TempleObjects.Build(game, built, island, frame, palette.Map, bodies.Count, EmptyBody, shapes, models);
         bodies.AddRange(objects.Bodies);
         log.AddRange(objects.Log);
         log.Add($"{OblFile}: {bodies.Count} bodies (an empty one for the boxes, then the temple's)");
         return new Built(layout, frame, island, bodies, palette, sky, log);
+    }
+
+    // What a race track's road leaves of the temple (Build, and ScriptRoundTrip templecells): the layout less
+    //   - the cells its doorways cut (`cuts`: the plan's TempleCuts);
+    //   - what those leave of the round things they cut through, hanging over the road or standing on nothing; and of the shaped things,
+    //     theirs and what stood on the round things' -- a statue whole or not at all, a grille or a row of rocks but the columns along it
+    //     they cut (Remains: TempleShapes and TempleModels' CutRemains);
+    //   - the pieces the cuts split off from the rest and left over the road's room -- a cell of a wall's top, a stub of lintel (Loose: no
+    //     more than LooseMost cells, each of them higher than a floor may stand in its column);
+    // with the floors they took laid again (`floors`: the plan's TempleFloors, each column the road comes within reach of, [x, z, the
+    // highest a cell may stand in it without reaching into the road's room, the layer to lay a floor at, the layer of the floor round it],
+    // the last two left out where no floor is round it): where
+    // a column the cuts (or what went with them) took cells of has nothing from that layer up to that height -- a doorway through a wall
+    // LBA1 stood on no floor, a statue or a row of rocks taken down to its foot, a ramp's trench down through a floor -- a cell there (Fills),
+    // the brick the floor round it has most (a plain box: no round or shaped thing's); and where a trench's floor is laid lower than a floor
+    // kept beside it -- a step of the crypt's gallery, the cornice of a wall whose foot the cuts took, a ledge -- the dark under that floor
+    // filled down to it (`skirts`: the plan's TempleSkirts, [x, z, from layer, to layer]: Skirts), with the bricks of the wall the cuts took
+    // beside it at each layer, else of the kept cell over it.
+    public sealed record Carved(TempleLayout Built, HashSet<(int X, int Y, int Z)> Cut, HashSet<(int X, int Y, int Z)> Remains,
+        HashSet<(int X, int Y, int Z)> Loose, Dictionary<(int X, int Y, int Z), PolarLayout.Cell> Fills,
+        Dictionary<(int X, int Y, int Z), PolarLayout.Cell> Skirts, List<string> Log);
+    public const int LooseMost = 12;
+
+    public static Carved Carve(TempleLayout layout, Dictionary<int, TempleShapes.Part> shapes, Dictionary<int, TempleModels.Part> models,
+        IEnumerable<int[]> cuts, IEnumerable<int[]>? floors, IEnumerable<int[]>? skirts = null)
+    {
+        var log = new List<string>();
+        var cut = cuts.Where(c => c.Length == 3).Select(c => (X: c[0], Y: c[1], Z: c[2])).ToHashSet();
+        var built = layout.Without(cut);
+        log.Add($"{layout.Cells.Count - built.Cells.Count} cells cut where the race track's road goes through the walls");
+        var remains = TempleShapes.CutRemains(shapes, layout.Cells, cut);
+        if (remains.Count > 0)
+        {
+            built = built.Without(remains);
+            log.Add($"{remains.Count} cells of round things left hanging by the cuts taken out with them");
+        }
+        var modelRemains = TempleModels.CutRemains(models, layout.Cells, cut.Concat(remains).ToHashSet());
+        if (modelRemains.Count > 0)
+        {
+            built = built.Without(modelRemains);
+            log.Add($"{modelRemains.Count} cells of shaped things the cuts took part of taken out with them");
+        }
+        remains.UnionWith(modelRemains);
+        var floorOf = new Dictionary<(int X, int Z), (int Highest, int? Lay, int? Floor)>();
+        foreach (var f in floors ?? Array.Empty<int[]>())
+            if (f.Length >= 3) floorOf[(f[0], f[1])] = (f[2], f.Length >= 5 ? f[3] : null, f.Length >= 5 ? f[4] : null);
+
+        // ---- the pieces split off over the road: the built cells' parts (six neighbours), the small ones next to a cell taken, each of whose
+        // cells is over the road's room
+        var gone = cut.Where(layout.Cells.ContainsKey).Concat(remains).ToHashSet();
+        var loose = new HashSet<(int X, int Y, int Z)>();
+        var seen = new HashSet<(int X, int Y, int Z)>();
+        var queue = new Queue<(int X, int Y, int Z)>();
+        foreach (var start in built.Cells.Keys)
+        {
+            if (!seen.Add(start)) continue;
+            var part = new List<(int X, int Y, int Z)>();
+            queue.Enqueue(start);
+            while (queue.Count > 0)
+            {
+                var c = queue.Dequeue();
+                part.Add(c);
+                foreach (var n in Six(c))
+                    if (built.Cells.ContainsKey(n) && seen.Add(n)) queue.Enqueue(n);
+            }
+            if (part.Count > LooseMost || !part.Any(c => Six(c).Any(gone.Contains))) continue;
+            if (part.All(c => floorOf.TryGetValue((c.X, c.Z), out var f) && c.Y > f.Highest)) loose.UnionWith(part);
+        }
+        if (loose.Count > 0)
+        {
+            built = built.Without(loose);
+            log.Add($"{loose.Count} cells the cuts split off over the road taken out with them");
+        }
+
+        // ---- the floors laid again
+        var lost = gone.Concat(loose).Select(c => (c.X, c.Z)).ToHashSet();
+        var fills = new Dictionary<(int X, int Y, int Z), PolarLayout.Cell>();
+        bool Plain(PolarLayout.Cell c) => c.Shape == 1 && !shapes.ContainsKey(c.Brick) && !models.ContainsKey(c.Brick);
+        foreach (var ((x, z), (highest, layAt, floorAt)) in floorOf.OrderBy(f => f.Key.Z).ThenBy(f => f.Key.X))
+        {
+            if (layAt is not { } lay || floorAt is not { } floor || !lost.Contains((x, z))) continue;
+            var held = false;
+            for (var y = lay; y <= highest && !held; y++) held = built.Cells.ContainsKey((x, y, z));
+            if (held) continue;
+            // (the floor round it, a ring further out at a time: a row of rocks or a grille may stand all round it)
+            var around = new List<PolarLayout.Cell>();
+            for (var r = 1; r <= 3 && around.Count == 0; r++)
+                foreach (var layer in new[] { floor, lay })
+                {
+                    for (var dz = -r; dz <= r; dz++)
+                        for (var dx = -r; dx <= r; dx++)
+                            if (Math.Max(Math.Abs(dx), Math.Abs(dz)) == r && built.Cells.TryGetValue((x + dx, layer, z + dz), out var n) && Plain(n)) around.Add(n);
+                    if (around.Count > 0) break;
+                }
+            if (around.Count == 0) continue;
+            fills[(x, lay, z)] = around.GroupBy(c => c).OrderByDescending(g => g.Count()).ThenBy(g => g.Key.Brick).ThenBy(g => g.Key.Scene).First().Key;
+        }
+        foreach (var (at, cell) in fills) built.Cells[at] = cell;
+        if (fills.Count > 0) log.Add($"{fills.Count} floor cells laid again where the cuts left pits beside or under the road");
+
+        // ---- the trenches' walls
+        var skirted = new Dictionary<(int X, int Y, int Z), PolarLayout.Cell>();
+        foreach (var s in (skirts ?? Array.Empty<int[]>()).Where(s => s.Length == 4))
+        {
+            int x = s[0], z = s[1];
+            for (var y = s[2]; y <= s[3]; y++)
+            {
+                if (built.Cells.ContainsKey((x, y, z))) continue;
+                PolarLayout.Cell? brick = null;
+                foreach (var (dx, dz) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                    if (brick is null && layout.Cells.TryGetValue((x + dx, y, z + dz), out var was) && !built.Cells.ContainsKey((x + dx, y, z + dz)) && Plain(was)) brick = was;
+                for (var k = s[3] + 1; k <= s[3] + 8 && brick is null; k++)
+                    if (built.Cells.TryGetValue((x, k, z), out var over) && Plain(over)) brick = over;
+                if (brick is { } b) skirted[(x, y, z)] = b;
+            }
+        }
+        foreach (var (at, cell) in skirted) built.Cells[at] = cell;
+        if (skirted.Count > 0) log.Add($"{skirted.Count} cells of wall under the floors beside the trenches the cuts left");
+        return new Carved(built, cut, remains, loose, fills, skirted, log);
+    }
+
+    private static IEnumerable<(int X, int Y, int Z)> Six((int X, int Y, int Z) c)
+    {
+        yield return (c.X + 1, c.Y, c.Z); yield return (c.X - 1, c.Y, c.Z);
+        yield return (c.X, c.Y + 1, c.Z); yield return (c.X, c.Y - 1, c.Z);
+        yield return (c.X, c.Y, c.Z + 1); yield return (c.X, c.Y, c.Z - 1);
     }
 
     // Writes a built island into a game folder: its files, and its palette and sky into RESS.HQR. Returns lines for the log.

@@ -63,7 +63,8 @@ internal static partial class TempleHalloween
     private static readonly Paint PumpkinSkin = new(new[] { 85, 86, 241, 242, 243 });
     private static readonly Paint Carved = new(new[] { 244 }, Glow: true);
     private static readonly Paint Stem = new(new[] { 113, 115, 116, 117, 118 });
-    private static readonly Paint Stone = new(new[] { 49, 50, 51, 52, 53, 54, 55 });
+    // (52 is a temple colour now, a teal: the grey between 51 and 53 in the temple's palette is 212 -- the 2026-10-18 audit's teal step)
+    private static readonly Paint Stone = new(new[] { 49, 50, 51, 212, 53, 54, 55 });
     private static readonly Paint StoneDark = new(new[] { 48, 49, 50, 51 });
     private static readonly Paint Moss = new(new[] { 112, 114, 116 });
     private static readonly Paint Wax = new(new[] { 57, 58, 59, 60, 61, 62 });

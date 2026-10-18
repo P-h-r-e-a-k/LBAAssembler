@@ -85,22 +85,21 @@ internal static class TempleStudy
     // templecells <LBA1 folder> <plan.json> <out.csv>: every cell of the temple as the race track's build has it -- its place (the layout's
     // cells and layers), the LBA1 block it is part of (scene, block), its brick and shape, the round thing or the shaped thing it is part
     // of, the box of its cell it fills and the most it draws of a face (TempleObjects' reading), and whether the road's doorways cut it (1)
-    // or what they left hanging went with them (2) -- for the survey of what the chase camera sees of each kind of thing (a ray cast through
-    // the cells' boxes: the temple before its shaped things were made models)
+    // or what they left hanging went with them (2), or it was a piece they split off over the road (3) -- for the survey of what the chase
+    // camera sees of each kind of thing (a ray cast through the cells' boxes: the temple before its shaped things were made models); then
+    // the floor cells the build lays again where the cuts left pits (TempleIsland.Carve), each a row of its own (cut 0, fill 1)
     public static int Cells(string[] args)
     {
         var game = new Lba1Game(args[1]);
         var layout = TempleLayout.Build(game);
         var plan = RaceTrackPlan.Load(args[2]);
-        var cut = (plan.TempleCuts ?? Array.Empty<int[]>()).Where(c => c.Length == 3).Select(c => (c[0], c[1], c[2])).ToHashSet();
         var shapes = TempleShapes.Find(game);
-        var remains = TempleShapes.CutRemains(shapes, layout.Cells, cut);
         var models = TempleModels.Find(game);
-        remains.UnionWith(TempleModels.CutRemains(models, layout.Cells, cut.Concat(remains).ToHashSet()));
+        var carved = TempleIsland.Carve(layout, shapes, models, plan.TempleCuts ?? Array.Empty<int[]>(), plan.TempleFloors, plan.TempleSkirts);
         var boxes = new Dictionary<int, (PolarTextures.Box Box, double Drawn)>();
         using var csv = new StreamWriter(args[3]);
-        csv.WriteLine("x,y,z,scene,block,brick,shape,round,model,u0,u1,v0,v1,drawn,cut");
-        foreach (var ((x, y, z), c) in layout.Cells.OrderBy(c => c.Key.Z).ThenBy(c => c.Key.X).ThenBy(c => c.Key.Y))
+        csv.WriteLine("x,y,z,scene,block,brick,shape,round,model,u0,u1,v0,v1,drawn,cut,fill");
+        void Row((int X, int Y, int Z) at, PolarLayout.Cell c, int gone, int fill)
         {
             if (!boxes.TryGetValue(c.Brick, out var b))
             {
@@ -110,10 +109,15 @@ internal static class TempleStudy
             }
             var round = shapes.TryGetValue(c.Brick, out var part) ? part.Shape.Kind.Name : "";
             var model = models.TryGetValue(c.Brick, out var modelled) ? modelled.Model.Kind.Name : "";
-            var gone = cut.Contains((x, y, z)) ? 1 : remains.Contains((x, y, z)) ? 2 : 0;
-            csv.WriteLine($"{x},{y},{z},{c.Scene},{c.Block},{c.Brick},{c.Shape},{round},{model},{b.Box.U0:0.###},{b.Box.U1:0.###},{b.Box.V0:0.###},{b.Box.V1:0.###},{b.Drawn:0.###},{gone}");
+            csv.WriteLine($"{at.X},{at.Y},{at.Z},{c.Scene},{c.Block},{c.Brick},{c.Shape},{round},{model},{b.Box.U0:0.###},{b.Box.U1:0.###},{b.Box.V0:0.###},{b.Box.V1:0.###},{b.Drawn:0.###},{gone},{fill}");
         }
-        Console.WriteLine($"{args[3]}: {layout.Cells.Count} cells ({cut.Count(layout.Cells.ContainsKey)} cut, {remains.Count} hanging); layers from {layout.MinY}");
+        foreach (var (at, c) in layout.Cells.OrderBy(c => c.Key.Z).ThenBy(c => c.Key.X).ThenBy(c => c.Key.Y))
+            Row(at, c, carved.Cut.Contains(at) ? 1 : carved.Remains.Contains(at) ? 2 : carved.Loose.Contains(at) ? 3 : 0, 0);
+        foreach (var (at, c) in carved.Fills.OrderBy(c => c.Key.Z).ThenBy(c => c.Key.X).ThenBy(c => c.Key.Y)) Row(at, c, 0, 1);
+        foreach (var (at, c) in carved.Skirts.OrderBy(c => c.Key.Z).ThenBy(c => c.Key.X).ThenBy(c => c.Key.Y)) Row(at, c, 0, 2);
+        foreach (var line in carved.Log) Console.WriteLine(line);
+        Console.WriteLine($"{args[3]}: {layout.Cells.Count} cells ({carved.Cut.Count(layout.Cells.ContainsKey)} cut, {carved.Remains.Count} hanging, {carved.Loose.Count} split off), " +
+                          $"{carved.Fills.Count} floors laid again, {carved.Skirts.Count} cells of trench walls; layers from {layout.MinY}");
         return 0;
     }
 

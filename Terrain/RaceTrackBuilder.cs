@@ -64,6 +64,10 @@ internal sealed class RaceTrackPlan
     // when not the usual 3 and 1.75: the Temple of Bú's columns stand apart, its flag marshal between them ahead of the front row.
     public double? GridFirst { get; set; }
     public double? GridSide { get; set; }
+    // How far every power-up of a row stands from the edges of its cube at the least (cells; RaceTrackScenes.MushroomSpots), when a row
+    // may not stand across one: an actor is in one scene, the cube it stands in, so a row across an edge shows the car only the ones in its
+    // own scene -- the Temple of Bú's ramp down into the lower hall runs along a cube's edge.
+    public double? ItemCubeMargin { get; set; }
     // A footing of ground under a start gantry's post that stands over a hole (RaceTrackBuilder.PostFootings): the lava lake's dock is
     // narrower than its gantry.
     public bool GantryFootings { get; set; }
@@ -267,6 +271,11 @@ internal sealed class RaceTrackPlan
     // The Temple of Bú's cells the road passes through (TempleLayout's x, layer, z): doorways cut through its walls where the road goes
     // (TempleTrack builds the island without them).
     public int[][]? TempleCuts { get; set; }
+    // ... and the floors they take, laid again (TempleIsland.Carve): each column the road comes within reach of, [x, z, the highest a cell
+    // may stand there, the layer to lay a floor at, the floor's layer round it] (the last two left out where there is none).
+    public int[][]? TempleFloors { get; set; }
+    // ... and the skirts under the floors kept beside them: each [x, z, from layer, to layer].
+    public int[][]? TempleSkirts { get; set; }
     // Halloween (Temple.TempleHalloween): the decor about the road, the spooks that fly over it, the mushrooms made pumpkins.
     public LBAAssembler.Terrain.Temple.HalloweenRun? Halloween { get; set; }
     public bool Planned => Heights is { Length: > 0 } h && h.Length == Points.Length;
@@ -286,6 +295,7 @@ internal sealed class RaceTrackPlan
         if (GridStep is { } gs) o.GridStep = gs;
         if (GridFirst is { } gf) o.GridFirst = gf;
         if (GridSide is { } gsd) o.GridSide = gsd;
+        if (ItemCubeMargin is { } icm) o.ItemCubeMargin = icm;
         if (GridShift is { } gsh) o.GridShift = gsh;
         if (RaisedPiece is { } rp && rp >= 1) o.RaisedPiece = rp;
         o.PitFence = PitFence && PitStripe is { Length: 3 };
@@ -426,6 +436,8 @@ internal sealed class RaceTrackOptions
     // tools/RaceTrackStress/items.py).
     public double ItemSpacing { get; set; } = 8;
     public double? ItemSpacingCells { get; set; }
+    // How far each power-up of a row stands from its cube's edges at the least, or 0: anywhere (RaceTrackPlan.ItemCubeMargin).
+    public double ItemCubeMargin { get; set; }
     // A footing under a gantry's post that stands over a hole (RaceTrackPlan.GantryFootings).
     public bool GantryFootings { get; set; }
     // How near a missing cube the lap's middle may come (RaceTrackPlan.EdgeMargin), or null: the verge's width and half a cell more.
