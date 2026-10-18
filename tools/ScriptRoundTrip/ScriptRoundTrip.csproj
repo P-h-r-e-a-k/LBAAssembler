@@ -14,6 +14,11 @@
     <RootNamespace>ScriptRoundTrip</RootNamespace>
   </PropertyGroup>
 
+  <!-- the MP3 decoder Terrain/Temple/TempleMusicAudio.cs uses (LBAAssembler.csproj says why) -->
+  <ItemGroup>
+    <PackageReference Include="NLayer" Version="3.0.0" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Include="..\..\LbaScript\**\*.cs" Link="LbaScript\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\HqrArchive.cs" Link="HqrArchive.cs" />

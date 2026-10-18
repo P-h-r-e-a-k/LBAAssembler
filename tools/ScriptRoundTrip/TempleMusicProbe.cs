@@ -12,6 +12,10 @@ namespace ScriptRoundTrip;
 //     converted WAV written to <out dir> (as the build writes it) with its whole track beside it (untrimmed), their lengths, and a picture of
 //     each (waveform over spectrogram); the trimmed track checked to be the image's own bytes
 //   templemusic picture <wav> <png>: a WAV's waveform over its spectrogram
+//   templemusic installs: the LBA1s GOG and Steam installed on this PC (TempleMusic.InstalledLba1Folders), and what each one's music is
+//   templemusic decode <wav|mp3> <out wav>: an audio file as TempleMusic reads it (the CD's format: 16-bit stereo 44.1 kHz)
+//   templemusic compare <a wav> <b wav>: whether two recordings are the same music -- the lag that lines them up (FFT cross-correlation),
+//     their correlation there (whole, and the worst 10 s), the gain between them and what is left when one is taken from the other
 //   templemusic capture <raw> <source wav> <png> [rate]: a recording of the engine's output (SDL's disk audio driver: 16-bit stereo, the
 //     rate given, 44100 by default) against the music it should be: where it is silent, and which stretch of the source each stretch of it
 //     is (the music played again behind itself shows as the source's end followed by its start)
@@ -22,19 +26,30 @@ internal static class TempleMusicProbe
         "find" => Find(args[2], args[3]),
         "picture" => PictureCommand(args[2], args[3]),
         "capture" => Capture(args),
-        _ => throw new ArgumentException("templemusic find|picture|capture"),
+        "installs" => Installs(),
+        "decode" => Decode(args[2], args[3]),
+        "compare" => Compare(args[2], args[3]),
+        _ => throw new ArgumentException("templemusic find|picture|capture|installs|decode|compare"),
     };
 
     private static int Find(string lba1, string outDir)
     {
         Directory.CreateDirectory(outDir);
-        var archive = HqrArchive.Open(Path.Combine(lba1, "SCENE.HQR"));
-        foreach (var s in new[] { 8, 40, 41 })
-            Console.WriteLine($"LBA1 scene {s}: music {Lba1Scene.Parse(s, archive.Read(s)).Music}");
+        if (File.Exists(Path.Combine(lba1, "SCENE.HQR")))
+        {
+            var archive = HqrArchive.Open(Path.Combine(lba1, "SCENE.HQR"));
+            foreach (var s in new[] { 8, 40, 41 })
+                Console.WriteLine($"LBA1 scene {s}: music {Lba1Scene.Parse(s, archive.Read(s)).Music}");
+        }
+        else Console.WriteLine($"(no SCENE.HQR in {lba1}: the temple's music taken as 5)");
         var music = TempleMusic.MusicNumber(lba1);
         Console.WriteLine($"the temple's music (scene {TempleMusic.TempleScene}): {music} -> CD track {music + 1}");
         Console.WriteLine($"looked in: {string.Join(" | ", TempleMusic.Places(lba1))}");
-        var found = TempleMusic.Find(TempleMusic.Places(lba1), music + 1);
+        var notes = new List<string>();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var found = TempleMusic.Find(TempleMusic.Places(lba1), music + 1, notes);
+        Console.WriteLine($"find took {watch.Elapsed.TotalSeconds:0.00} s");
+        foreach (var n in notes) Console.WriteLine($"note: {n}");
         if (found is null) { Console.WriteLine("NOT FOUND"); return 1; }
         var (source, pcm, ogg, lead) = found.Value;
         Console.WriteLine($"found: {source}{(ogg is not null ? " (an OGG, copied as it is)" : "")}");
@@ -54,6 +69,126 @@ internal static class TempleMusicProbe
         Stats("trimmed", trimmed);
         Picture(pcm, 44100, Path.Combine(outDir, "track_whole.png"), $"LBA1 CD track {music + 1} (music {music}) as the image has it");
         Picture(trimmed, 44100, Path.Combine(outDir, "LBA1_TEMPLE.png"), "LBA1_TEMPLE.WAV (trimmed)");
+        return 0;
+    }
+
+    private static int Installs()
+    {
+        var installs = TempleMusic.InstalledLba1Folders();
+        Console.WriteLine($"{installs.Count} LBA1 install(s) on this PC");
+        foreach (var dir in installs)
+        {
+            var notes = new List<string>();
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var found = TempleMusic.Find(TempleMusic.Places(dir), TempleMusic.MusicNumber(dir) + 1, notes);
+            Console.WriteLine($"  {dir}: {(found is { } f ? f.Source : "no music")} ({watch.Elapsed.TotalSeconds:0.0} s)");
+            foreach (var note in notes) Console.WriteLine($"    note: {note}");
+        }
+        return 0;
+    }
+
+    private static int Decode(string input, string output)
+    {
+        var pcm = TempleMusic.ReadAudio(input) ?? throw new InvalidDataException($"{input}: not a WAV or MP3 this reads");
+        TempleMusic.WriteWav(output, pcm);
+        Console.WriteLine($"{output}: {pcm.Length / 4 / 44100.0:0.000} s (sha256 {Convert.ToHexString(SHA256.HashData(pcm))[..16]})");
+        return 0;
+    }
+
+    // Two recordings lined up (mono, 11025 Hz, FFT cross-correlation; then to the sample at 44.1 kHz) and compared where they overlap
+    private static int Compare(string a, string b)
+    {
+        var pa = ReadWavPcm(a, out _); var pb = ReadWavPcm(b, out _);
+        float[] Mono(byte[] p) { var n = p.Length / 4; var m = new float[n]; for (var i = 0; i < n; i++) m[i] = ((short)(p[4 * i] | p[4 * i + 1] << 8) + (short)(p[4 * i + 2] | p[4 * i + 3] << 8)) / 65536f; return m; }
+        float[] Quarter(float[] m) { var q = new float[m.Length / 4]; for (var i = 0; i < q.Length; i++) q[i] = (m[4 * i] + m[4 * i + 1] + m[4 * i + 2] + m[4 * i + 3]) / 4; return q; }
+        var ma = Mono(pa); var mb = Mono(pb);
+        Console.WriteLine($"a {a}: {ma.Length / 44100.0:0.000} s; b {b}: {mb.Length / 44100.0:0.000} s (b - a: {(mb.Length - ma.Length) / 44100.0:+0.000;-0.000} s)");
+        var qa = Quarter(ma); var qb = Quarter(mb);
+        var n = 1; while (n < qa.Length + qb.Length) n <<= 1;
+        var fa = new Complex[n]; var fb = new Complex[n];
+        for (var i = 0; i < qa.Length; i++) fa[i] = qa[i];
+        for (var i = 0; i < qb.Length; i++) fb[i] = qb[i];
+        Fft(fa); Fft(fb);
+        // (correlation c[k] = sum a[i + k] b[i]: the inverse FFT of A conj(B), as the conjugate of the forward FFT of its conjugate)
+        for (var i = 0; i < n; i++) fa[i] = Complex.Conjugate(fa[i] * Complex.Conjugate(fb[i]));
+        Fft(fa);
+        var best = 0; var bestV = double.MinValue;
+        for (var k = 0; k < n; k++) if (fa[k].Real > bestV) { bestV = fa[k].Real; best = k; }
+        var lag = (best > n / 2 ? best - n : best) * 4;
+        // (to the sample: the best of the 6 either side)
+        double Corr(int shift, out double gain, out double snr, int from = 0, int to = int.MaxValue)
+        {
+            double sab = 0, saa = 0, sbb = 0;
+            var i0 = Math.Max(Math.Max(0, shift), from); var i1 = Math.Min(Math.Min(ma.Length, mb.Length + shift), to);
+            for (var i = i0; i < i1; i++) { double x = ma[i], y = mb[i - shift]; sab += x * y; saa += x * x; sbb += y * y; }
+            gain = sbb > 0 ? sab / sbb : 0;
+            var residual = saa - 2 * gain * sab + gain * gain * sbb;
+            snr = 10 * Math.Log10(saa / Math.Max(1e-12, residual));
+            return saa > 0 && sbb > 0 ? sab / Math.Sqrt(saa * sbb) : 0;
+        }
+        var bestShift = lag; var bestC = double.MinValue;
+        for (var s = lag - 6; s <= lag + 6; s++) { var c = Corr(s, out _, out _); if (c > bestC) { bestC = c; bestShift = s; } }
+        var whole = Corr(bestShift, out var g, out var snr);
+        Console.WriteLine($"lined up: b starts {bestShift / 44100.0:+0.0000;-0.0000} s into a ({bestShift} samples); correlation {whole:0.00000}; gain a/b {g:0.0000} ({20 * Math.Log10(Math.Abs(g)):+0.00;-0.00} dB); " +
+                          $"what's left of a with b taken out: {snr:0.0} dB below it");
+        var worst = 1.0; var worstAt = 0;
+        var overlapTo = Math.Min(ma.Length, mb.Length + bestShift);
+        for (var t = Math.Max(0, bestShift); t + 441000 <= overlapTo; t += 441000)
+        {
+            var c = Corr(bestShift, out _, out _, t, t + 441000);
+            if (c < worst) { worst = c; worstAt = t; }
+        }
+        Console.WriteLine($"worst 10 s: correlation {worst:0.00000} at {worstAt / 44100.0:0.0} s of a");
+        // (stretch by stretch: 5 s of a every 10 s lined up on its own with b, within 0.5 s of the whole's lag -- a recording played at
+        // another speed shows as a lag that grows; then the loudness envelopes, 50 ms windows in dB, which a different master or mix keeps)
+        const int W = 5 * 44100, R = 22050;
+        var m = 1; while (m < 2 * (W + 2 * R)) m <<= 1;
+        var locals = new List<(double At, int Lag, double C)>();
+        for (var t = Math.Max(0, bestShift + R); t + W <= Math.Min(ma.Length, mb.Length + bestShift - R); t += 441000)
+        {
+            var x = new Complex[m]; var y = new Complex[m];
+            for (var i = 0; i < W; i++) x[i] = ma[t + i];
+            var b0 = t - bestShift - R;
+            for (var i = 0; i < W + 2 * R; i++) y[i] = mb[b0 + i];
+            Fft(x); Fft(y);
+            for (var i = 0; i < m; i++) x[i] = Complex.Conjugate(Complex.Conjugate(x[i]) * y[i]);
+            Fft(x);
+            var bk = 0; var bv = double.MinValue;
+            for (var k = 0; k <= 2 * R; k++) if (x[k].Real > bv) { bv = x[k].Real; bk = k; }
+            // (a[t + i] lines up with b[b0 + bk + i]: a's shift over b there)
+            var shift = t - (b0 + bk);
+            locals.Add((t / 44100.0, shift, Corr(shift, out _, out _, t, t + W)));
+        }
+        foreach (var (at, l, c) in locals) Console.WriteLine($"  at {at,6:0.0} s of a: lag {l - bestShift,+5} samples from the whole's, correlation {c:0.0000}");
+        double[] Envelope(float[] mono, int shift)
+        {
+            var e = new double[Math.Max(0, (Math.Min(ma.Length, mono.Length + shift) - Math.Max(0, shift)) / 2205)];
+            for (var w = 0; w < e.Length; w++)
+            {
+                double sum = 0;
+                for (var i = 0; i < 2205; i++) { double v = mono[Math.Max(0, shift) + w * 2205 + i - shift]; sum += v * v; }
+                e[w] = 10 * Math.Log10(sum / 2205 + 1e-10);
+            }
+            return e;
+        }
+        var ea = Envelope(ma, 0)[(Math.Max(0, bestShift) / 2205)..]; var eb = Envelope(mb, bestShift);
+        var ne = Math.Min(ea.Length, eb.Length);
+        double Mean(double[] v) => v.Take(ne).Average();
+        double mA = Mean(ea), mB = Mean(eb), sab2 = 0, saa2 = 0, sbb2 = 0;
+        for (var i = 0; i < ne; i++) { sab2 += (ea[i] - mA) * (eb[i] - mB); saa2 += (ea[i] - mA) * (ea[i] - mA); sbb2 += (eb[i] - mB) * (eb[i] - mB); }
+        var envelope = sab2 / Math.Sqrt(saa2 * sbb2);
+        Console.WriteLine($"loudness envelopes (50 ms, dB): correlation {envelope:0.0000}; b is {mB - mA:+0.0;-0.0;0.0} dB against a on average");
+        var localMean = locals.Count > 0 ? locals.Average(l => l.C) : whole;
+        // (the lag's drift: a straight line through the stretches' lags, in samples per second -- parts per million of the speed)
+        double drift = 0;
+        if (locals.Count > 2)
+        {
+            double mt = locals.Average(l => l.At), ml = locals.Average(l => (double)l.Lag);
+            drift = locals.Sum(l => (l.At - mt) * (l.Lag - ml)) / locals.Sum(l => (l.At - mt) * (l.At - mt));
+        }
+        Console.WriteLine(whole > 0.9 ? "SAME RECORDING (sample for sample)"
+            : localMean > 0.95 ? $"SAME RECORDING, stretch by stretch (correlation {localMean:0.000} on average), b's clock {-drift / 44100 * 1e6:+0.0;-0.0} ppm against a's (its lag drifts {drift:0.00} samples a second) -- resampled; {mB - mA:+0.0;-0.0;0.0} dB"
+            : envelope > 0.9 ? $"SAME MUSIC (its envelope; sample for sample: {localMean:0.00} on average stretch by stretch -- another master or mix)" : "DIFFERENT");
         return 0;
     }
 

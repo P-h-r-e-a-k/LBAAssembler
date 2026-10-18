@@ -109,4 +109,13 @@
     <EmbeddedResource Include="Assets\FileDesc\*.HQD" LogicalName="FileDesc.%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!--
+    NLayer (MIT, a managed MPEG audio decoder, no dependencies): the Temple of Bu's race music from Steam's/GOG's LBA1 Classic, whose CD
+    tracks are MP3s (Terrain/Temple/TempleMusicAudio.cs decodes them to the WAV the engine streams). Every project compiling Terrain/ needs it:
+    tools/ScriptRoundTrip, and LBRA's installer (LittleBigRacingAdventure/Installer/LBRAInstaller.csproj).
+  -->
+  <ItemGroup>
+    <PackageReference Include="NLayer" Version="3.0.0" />
+  </ItemGroup>
+
 </Project>
