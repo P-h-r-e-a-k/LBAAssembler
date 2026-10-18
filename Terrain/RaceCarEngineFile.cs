@@ -13,7 +13,11 @@ internal static class RaceCarEngineFile
     // (Top, Grip: shares of the car's top speed and cornering, as its line was planned with: RaceTrackBuilder), the scenes' copies of its
     // car, whether it is the motorbike, only a time to beat (no car) or the one to beat, and its car's body (-1: not one of the racer's).
     internal sealed record Racing(string Name, List<int[]> Path, int Grid, int Pace, double Top, double Grip, Dictionary<int, int> Actors, bool Bike, bool Ghost,
-        bool Main = false, int PaceHi = 0, int Body = -1);
+        bool Main = false, int PaceHi = 0, int Body = -1)
+    {
+        // (a car that flies, bobbing over its line this far: RaceDriver.Hover; 0 none)
+        public int Hover { get; init; }
+    }
 
     // The others' skills, against the car setup's (the one to beat's): drawn at random between these, each race.
     public const int RandomBelow = 14, RandomAbove = 12;
@@ -180,6 +184,9 @@ internal static class RaceCarEngineFile
             text.Append($"# {o.Name}{(o.Main ? " (the one to beat)" : "")}\n{key}_path={pathFiles[i]}\n{key}_grid={o.Grid}\n{key}_pace={pace}\n");
             // (its car at half its size, for the lightning spell: RaceTrackSmallCars)
             if (!o.Bike && o.Body >= 0 && !o.Ghost) text.Append($"{key}_small={RaceTrackSmallCars.SmallOf(o.Body)}\n");
+            // (a car that flies -- the Temple of Bú's witch on her broomstick, no wheels --: bobbing gently over its line as it goes, drawn
+            // only: its place along the line and what meets it are any car's)
+            if (o.Hover > 0 && !o.Ghost) text.Append($"{key}_hover={o.Hover} {RaceDriver.HoverMs}\n");
             text.Append($"{key}_top={(int)Math.Round(o.Top * 100)}\n{key}_grip={(int)Math.Round(o.Grip * 100)}\n{key}_catchup={(car.OpponentsFightBack ? RaceCarSetup.CatchUpPercent : 0)}\n");
             text.Append($"{key}_name={o.Name}\n");
             // (the animations it stands and drives with: the cars' are the racer entity's 0 and 1, the bike's his own)
@@ -385,7 +392,7 @@ internal static class RaceCarEngineFile
         {
             foreach (var d in drivers)
                 if (d.Ghost || car.Opponent && !car.LeftOut.Contains(d.Name))
-                    list.Add(Of(d.Name, d.Path, d.Grid, d.Top, d.Grip, d.Actors, d.Bike, d.Ghost, d.Main, d.Body));
+                    list.Add(Of(d.Name, d.Path, d.Grid, d.Top, d.Grip, d.Actors, d.Bike, d.Ghost, d.Main, d.Body) with { Hover = d.Hover });
             return list;
         }
         if (car.Opponent && track?.Path is { Count: > 0 } path && track.Opponent is { Count: > 0 } actors && !car.LeftOut.Contains(RaceDriver.Racer.Name))

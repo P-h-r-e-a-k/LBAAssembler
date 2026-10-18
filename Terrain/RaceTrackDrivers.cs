@@ -18,6 +18,11 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
 {
     public const int RacerBody = 0;
 
+    // A car that flies (2026-10-18: the Temple of Bú's witch on her broomstick, no wheels): how far it bobs up and down over its line (units;
+    // 0 none), once every HoverMs -- drawn only (RACEMOD.CPP opponent_hover=): its line, its box and what meets it are any car's.
+    public int Hover { get; init; }
+    public const int HoverMs = RaceTrackCharacterCars.WitchBobMs;
+
     // the racer, Baldino and the biker: every track's before the rosters, and still any track's with none (the racer the one to beat)
     public static readonly RaceDriver Racer = new("The racer", RacerBody, RaceTrackBuilder.RacerLine, Main: true);
     public static readonly RaceDriver Baldino = new("Baldino", RaceTrackBaldinoCar.Generic, RaceTrackBuilder.BaldinoLine);
@@ -125,27 +130,24 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Of(RaceTrackCharacterCars.Survivor, "The survivor", 1.8, 1.02, 0.97),
     };
 
-    // The Temple of Bú's Halloween race: Halloween's own monsters in the cast's cars (2026-10-17, the user: "I thought we'd made halloween
-    // themed opponents for our Temple track" -- it was the Dark Monk, Ker'aooc and Tabata from 2026-10-16) -- the skeleton in his ghost car
-    // (the one to beat: the temple's own, LBA1's skeleton wakes up in it), the ghost in hers and the two-headed monster in his monster truck,
-    // on the lines the three before had. Of the Halloween cars these read best from the camera behind them on the temple's near-black
-    // road: the ghost's pale blue, the skeleton's pale bones, the monster's two heads with their red eyes over the rim; the giant spider sits
-    // flat on its cockpit's floor (an empty purple truck), the gas monster and the Eye are dark.
+    // The Temple of Bú's Halloween race: Halloween's own monsters in cars made for them (2026-10-18, the user: "Let's also create different
+    // opponents for Twinsen, a vampire driving a coffin, A witch flying on a broom (so no wheels), A zombie driving a hurst") -- the vampire
+    // in his coffin (the one to beat), the witch on her broomstick (flying: it bobs over its line, Hover) and the zombie in his hearse
+    // (RaceTrackCharacterCars.Monsters), on the lines, the places on the grid and with the characters the three before them had: the
+    // skeleton in his ghost car, the ghost in hers and the two-headed monster in his monster truck, the cast's cars (2026-10-17; the Dark
+    // Monk, Ker'aooc and Tabata before them), which stay in the catalogue, anyone's to drive.
     public static readonly List<RaceDriver> Temple = new()
     {
-        OfCast(RaceTrackCharacterCars.CastCar(TempleSkeleton), "The skeleton", 0, 1.0, 1.0, main: true),
-        OfCast(RaceTrackCharacterCars.CastCar(TempleGhost), "The ghost", -1.2, 0.99, 1.02),
-        OfCast(RaceTrackCharacterCars.CastCar(TempleMonster), "The two-headed monster", 1.2, 1.02, 0.97),
+        Of(RaceTrackCharacterCars.Coffin, "The vampire", 0, 1.0, 1.0, main: true),
+        Of(RaceTrackCharacterCars.Broomstick, "The witch", -1.2, 0.99, 1.02) with { Hover = RaceTrackCharacterCars.WitchBob },
+        Of(RaceTrackCharacterCars.Hearse, "The zombie", 1.2, 1.02, 0.97),
     };
-    // (their drivers' bodies, BODY.HQR: the rabbibunny skeleton of the Tralu's cave, the ghost of the School of Magic, the palace's
-    // two-headed monster)
-    public const int TempleSkeleton = 35, TempleGhost = 125, TempleMonster = 259;
 
     // The Emperor's palace (2026-10-12): racing out of the palace ahead of the Dark Monk to his teleporter -- Stan in his time machine (the
     // one to beat), the pighead with the broom in his road sweeper (CharactersForTrack.txt) and the Emperor himself, fleeing his own palace,
     // a little to either side of the road's middle: the rooms' doors are two bricks wide. (The user's list has the palace's two-headed
     // monster too: its car is one of the cast's, bodies of entities of their own, which an opponent couldn't be then -- it can since
-    // 2026-10-17, RaceDriver.Cast, and races on the Temple of Bú; the palace's line-up is as it was.)
+    // 2026-10-17, RaceDriver.Cast, and raced on the Temple of Bú until 2026-10-18; the palace's line-up is as it was.)
     public static readonly List<RaceDriver> Palace = new()
     {
         Of(RaceTrackCharacterCars.Stan, "Stan", 0, 1.0, 1.0, main: true),

@@ -202,7 +202,13 @@ internal static class RaceTrackService
     // A driver: its name, its line ([x, z, y, speed, bend radius] as Path's), how many points before the start line it starts without a
     // grid, the scenes' copies of its car (none for a time to beat: Ghost), its character (Top, Grip: shares of the player's car's top
     // speed and cornering), whether it is the one to beat (Main), the motorbike, and its car's body (the racer entity's generic body).
-    public sealed record DriverInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors, double Top, double Grip, bool Main, bool Bike, bool Ghost, int Body = -1);
+    public sealed record DriverInfo(string Name, List<int[]> Path, int Grid, Dictionary<int, int> Actors, double Top, double Grip, bool Main, bool Bike, bool Ghost, int Body = -1)
+    {
+        // (a car that flies -- the Temple of Bú's witch on her broomstick --: how far it bobs over its line, RaceDriver.Hover; left out of
+        // the file for every other driver)
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public int Hover { get; init; }
+    }
     // The story's: the tired line everyone says until Twinsen sleeps (a text of Citadel Island's), and the holomap arrow to the town
     // circuit's start line.
     // (Seller: Celebration Island's lava lake, whose race the souvenir seller has to lose: RaceTrackStory.ApplyCelebration)
@@ -440,6 +446,10 @@ internal static class RaceTrackService
             if (PrivateCars) log.AddRange(RaceTrackCharacterCars.InstallToyTruckViolet(gameDirectory));
             // (and the Temple of Bú's risers' body -- the rabbibunny skeleton made lighter -- after even that: no body moves)
             if (session.Risers) log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.InstallRisers(gameDirectory));
+            // (Halloween's monsters' cars -- the Temple of Bú's opponents' and anyone's to drive -- after even that: no body moves, the race
+            // game's install (PrivateCars off) the same but for the toy truck's -- RaceTrackCharacterCars.InstallMonsters. The Temple's
+            // scenes have their cars already: the racer entity's bodies VampireGeneric.., which this gives it.)
+            log.AddRange(RaceTrackCharacterCars.InstallMonsters(gameDirectory));
             progress?.Report(new(1, "Done"));
             var count = tracks.Sum(t => t.Options.Island.Tracks);
             var built1 = count == 1 ? "The race track is built." : $"{count} race tracks are built ({string.Join(", ", tracks.Select(t => t.Options.Island.Built))}); Play races the one of the island the editor has open.";
@@ -878,7 +888,7 @@ internal static class RaceTrackService
             var d = racers[k];
             var actors = d.Ghost ? new Dictionary<int, int>() : scenes.Drivers.FirstOrDefault(c => c.Driver == d).Actors;
             if (actors is null || !d.Ghost && actors.Count == 0 || report.DriverPaths[k].Count == 0) continue;
-            drivers.Add(new DriverInfo(d.Name, Points(report.DriverPaths[k]), 4 * (k + 1), actors, d.Line.Top, d.Line.Grip, d.Main, d.Bike, d.Ghost, d.Bike ? -1 : d.Body));
+            drivers.Add(new DriverInfo(d.Name, Points(report.DriverPaths[k]), 4 * (k + 1), actors, d.Line.Top, d.Line.Grip, d.Main, d.Bike, d.Ghost, d.Bike ? -1 : d.Body) { Hover = d.Hover });
         }
         return new TrackInfo(options.Crossing.ToString(), line, checkpoints, path.Count > 0 ? path : null, 4, null, scenes.StartScene,
             null, scenes.Grid.Count > 0 ? scenes.Grid : null, scenes.Pits.Count > 0 ? scenes.Pits : null, options.Island.Name,

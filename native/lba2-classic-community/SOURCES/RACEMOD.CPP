@@ -90,6 +90,8 @@
  *     finish=<var> <value>...    what the race's end sets, won or not
  *   The opponents (2026-10-03, later): opponent_pace=<lo> <hi> draws its skill between the two each time the track is loaded (the main
  *   opponent's is one number); opponent_small=<generic body> its car shrunk to half its size (the lightning spell).
+ *   opponent_hover=<units> <ms> (2026-10-18, the Temple of Bu's witch on her broomstick): a car that flies -- it bobs up and down that far
+ *   over its line, once in that long. Drawn only: its line, its box, the grid and what meets it are any car's.
  *   Power-ups (powerups=1, mushroom=<scene> <actor> [<y>], penguin=<scene> <actor>): small brown mushrooms along the lap, the game's own
  *   (built out of sight, stood on the road at <y> here),
  *   each with a power-up inside that a car driving over it gets -- Gazogem fuel (a boost), the protection spell (30 s: no mine, penguin or
@@ -301,6 +303,7 @@ typedef struct {
     double FinishS;                        // a sprint's: where its line crosses the finish line (it stops there)
     int Holds; S32 HoldUntil;              // an attack it holds until it would hit Twinsen (the race's level: OpponentAims), its power-up + 1
                                            // (0 none), and how long at most
+    int HoverUp, HoverMs;                  // a car that flies (opponent_hover=): how far it bobs over its line, once in how long (0: none)
 } T_RACE_OPPONENT;
 static T_RACE_OPPONENT s_opp[RACE_MAX_OPPONENTS];
 // The race's level (difficulty=, 2026-10-17, the Temple of Bú's race first -- the user: "Let's also create an easy/medium/hard mode"): the
@@ -3387,6 +3390,10 @@ static void Load(const char *path, int carOnly = 0) {
                 else o->Pace = atoi(v);
             }
             else if (!strcmp(rest, "small")) o->Small = atoi(v);
+            else if (!strcmp(rest, "hover")) {
+                int up, ms;
+                if (sscanf(v, "%d %d", &up, &ms) == 2 && up > 0 && ms > 0) { o->HoverUp = up; o->HoverMs = ms; }
+            }
             else if (!strcmp(rest, "top")) o->Top = atoi(v);
             else if (!strcmp(rest, "grip")) o->Grip = atoi(v);
             else if (!strcmp(rest, "catchup")) o->Catchup = atoi(v);
@@ -11018,6 +11025,9 @@ void RaceMod_Frame(void) {
             car->Obj.Z += (S32)(o->ShoveZ * RACE_SHOVE_SIDE * out);
         }
         car->Obj.Y = (S32)(y + o->MergeY * f);
+        // (a car that flies -- the witch on her broomstick: opponent_hover= -- bobbing gently over its line, on the grid too; each opponent
+        // a little out of step with the others)
+        if (o->HoverUp > 0) car->Obj.Y += (S32)(o->HoverUp * sin(2 * RACE_PI * (double)((now + n * 431) % o->HoverMs) / o->HoverMs));
         MarshalKeepOff(n, car);
         S32 beta = (S32)(atan2(dx, dz) * 4096.0 / (2 * 3.14159265358979)) & 4095;
         car->Obj.Beta = f >= 1 ? o->SpotBeta : beta;

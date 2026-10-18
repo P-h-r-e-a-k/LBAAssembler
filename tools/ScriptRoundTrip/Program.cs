@@ -93,6 +93,7 @@ internal static class Program
             "pumpkinf1" => RaceTrackCommand.PumpkinF1(args),
             "templemarshal" => TempleMarshalCommand.Run(args),
             "toytruck" => RaceTrackCommand.ToyTruck(args),
+            "monstercars" => RaceTrackCommand.MonsterCars(args),
             "polarstats" => PolarStudy.Stats(args),
             "polarzones" => PolarStudy.Zones(args),
             "polarlayout" => PolarStudy.Layout(args),

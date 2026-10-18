@@ -267,8 +267,9 @@ up on spirals through the black void round the temple. 1,719 cells, steepest 12 
 - *Mini pumpkins*: the power-ups' mushrooms, the fakes the cars drop and the item box's icon are a jack-o'-lantern. It is the mushroom
   entity 112's body 3.
 - *The music*: the scenes play LBA2's own Temple of Bù's music (3) and its ambient sounds (scene 10).
-- *The line-up*: Halloween's monsters (since 2026-10-17; the Dark Monk, Ker'aooc and Tabata before): the skeleton in his ghost car (the
-  one to beat), the ghost in hers and the two-headed monster in his monster truck -- below.
+- *The line-up*: Halloween's monsters in cars made for them (since 2026-10-18): the vampire in his coffin (the one to beat), the witch on
+  her broomstick and the zombie in his hearse -- "The vampire, the witch and the zombie" below. (2026-10-17 to 18 the skeleton in his ghost
+  car, the ghost in hers and the two-headed monster in his monster truck; the Dark Monk, Ker'aooc and Tabata before them.)
 
 The scenes are 301-327, one for each cube the road's width crosses (`TempleTrack.SceneCubes`). The start scene is 326.
 
@@ -450,6 +451,9 @@ The user: "Let's create a pumpkin inspired F1 car for our Temple track for Twins
   63.97, 59.96 s, 1st of 4, no rescues.
 
 ### Halloween's monsters, and easy, medium, hard (2026-10-17)
+
+(Since 2026-10-18 the monsters drive cars of their own: the vampire, the witch and the zombie, on these same lines and grid places with these
+same levels -- "The vampire, the witch and the zombie" below.)
 
 The user: "I thought we'd made halloween themed opponents for our Temple track but they seem to be Dark monk, Ker'aooc, and Tabata", and
 "Let's also create an easy/medium/hard mode, but let's focus that on the temple track for now, we can worry about the other tracks at a later
@@ -786,6 +790,66 @@ dir> <prefix>`, `others.sh` (every other track, HEAD's tool and the worktree's),
 skeletons against LBA1's actors' boxes), `plancmp.py` (two plans: only the bats' kind and height and the new entries differ);
 `ScriptRoundTrip templecreatures <game> <out> <entity | b<body> | decor | rat>` draws an entity's body in every keyframe, the decor poses,
 the rat.
+
+### The vampire, the witch and the zombie (2026-10-18)
+
+The user: "Let's also create different opponents for Twinsen, a vampire driving a coffin, A witch flying on a broom (so no wheels), A
+zombie driving a hurst". Three cars made for them (`Terrain/RaceTrackCharacterCars.Monsters.cs`), the Temple's line-up since:
+
+![The three cars in the temple's palette](temple/monster_cars.png)
+
+- *The vampire's coffin* (race car 222, the one to beat): a six-sided coffin of dark wood on four wheels with brass hubs, the lid's foot
+  end closed over the front as the bonnet with a brass cross and two candle lamps, the head end open and lined with red velvet. The
+  vampire sits up in it at the wheel -- pale, black hair slicked back to a widow's peak, pointed ears, red eyes, fangs, a tall collar black
+  outside and red inside, his cape streaming back over the coffin (black, lined and hemmed red). Brass handles down its sides; at its tail
+  six brass organ pipes for exhausts, the middle ones tallest -- from the camera behind it, the pipes and the collar.
+- *The witch's broomstick* (223): no wheels. A gnarled broomstick, its golden bristles bound with red twine, its handle 430 over the road,
+  a dark oval for its shadow under it; the witch astride it leaning into the wind -- green as the temple's own witches, her ginger hair
+  streaming, a tall black hat bent back with an orange band and a gold buckle, a purple robe and cape, orange-and-black striped stockings
+  and pointed black boots -- her black cat with yellow eyes riding on the bristles, green sparks in her wake.
+- *The zombie's hearse* (224): a long black 1930s hearse on whitewall wheels under flowing wings and running boards, a long bonnet with a
+  chrome grille and lamps, a steep windscreen, the tall rear compartment with wine-red curtains at its windows and chrome landau bars,
+  a wreath of greens, roses and lilies on its back door, chrome along it and marker lamps on its roof. The zombie leans out of the driver's
+  window (the car's right, the side the chase camera sees him on), grey-green, his sunken eyes glowing, teeth bared, stitches on a cheek,
+  one ear gone and his skull showing, his rotting arm reaching out ahead of the car.
+
+The drivers are made in the cars' low-poly style (no body of LBA2's is a vampire, a witch on a broom or a zombie). The colours are those
+every island's palette keeps alike -- the browns, the reds, the golds, the greys, the greens 117-141, the purples 210-217 -- with a part of
+the light (`CarMesh.Light`) where a whole ramp would run past its colour, so they read on the temple's near-black road and look the same on
+any island (drawn in the Desert's palette too). Points 533, 439 and 522 (the limit 550); primitives 421, 393 and 446.
+
+![The race from the back of the grid: GO, the hearse's wreath and the coffin's pipes ahead, the witch alongside, past her](temple/monster_race.png)
+
+- *In the build*: bodies of the racer's entity, 66, 67 and 68 (their half-size copies, for the lightning, 166-168), installed at the very
+  end of every build (`InstallMonsters`, after the flag marshal and the toy truck's violet copy: no body before them moves), with their
+  lines at the end of RACECARS.JSON; anyone's to drive (Race car window, the race game's car page). The Temple's scenes put the
+  opponents' copies in as the racer's entity with those bodies (as every track's character-car opponents), so its build only changes
+  SCENE.HQR's 27 scenes (the three actors' entity and body), RACETRACK.JSON (names, bodies, the witch's hover), and gains the six bodies,
+  RESS.HQR's entity table entry and the three catalogue lines. Other tracks gain the same bodies, table entries and lines and nothing
+  else (Desert island and Island CX built together: their files and race files the same as HEAD's but for those).
+- *The line-up* (`RaceDriver.Temple`): the vampire, the witch and the zombie on the skeleton's, the ghost's and the two-headed monster's
+  lines, grid places, tops and grips (the line files byte for byte the same), so the levels are as they were. The race shows their names:
+  "The vampire" (the one to beat), "The witch", "The zombie". The cast's cars the monsters drove before stay in the catalogue.
+- *The box*: the engine meets the cars by their bodies' boxes, which a body's writing makes its own reach. The coffin's (922 across, 1,351
+  long) and the hearse's (791 across, 1,507 long) are a car's, as the old monsters' were (1,052-1,142 across, 1,230 long); the broomstick's
+  own would be a sliver 460 across reaching back to the sparks, so it is given a car's (`MonsterBox`: 922 across, 1,450 long, 1,203 high).
+- *The hover* (`RACEMOD.CPP opponent_hover=<units> <ms>`, generic and off unless a race file names it): the broomstick bobs 45 up and down
+  over its line every 1.6 s, on the grid too, a little out of step with any other flier -- the actor's height only, set where the race places
+  the car each frame; its line, box, speed and what meets it are any car's. `RaceDriver.Hover` -> RACETRACK.JSON's `Hover` (left out for
+  every other driver) -> the race file. A back-of-the-grid race with the key taken out is the same race to the hundredth.
+
+*Races* (the race game's car, 5 laps, the worktree's engine; HEAD's build and engine beside them): no rescue, no car stuck, no crash in
+any of 12 races. From pole (seed 1), with qualifying (seed 2), easy (seed 5), off the line from the back (seed 8) and the time trial --
+Twinsen's laps the same as HEAD's to the hundredth (the trial 55.30, 54.90, 54.95, 54.87, 54.97: 275.87 s). Where Twinsen passes or
+meets the cars the races go a little differently from the old cars' (contacts and the ghost power-up's start differ with the bodies),
+every one placed as HEAD's: from the back (seeds 3, 2, 1) 308.1, 330.7, 328.4 s against 319.8, 338.4, 324.9 (1st, 1st, 4th); hard 292.3
+against 290.7 (2nd); hard from the back 282.3 against 282.5; at 85 % of the line's speed 319.4 against 317.4. (The test pilot doesn't steer round a pack: from the back at easy it follows the eased-off pack all race, with the
+old cars as with the new.) `templeclip`: nothing through the deck.
+
+Tests: `E:\dump\TEMP\temple_monsters` -- `cars.sh [palette]` (`ScriptRoundTrip monstercars <game> <scratch>`, then the three cars'
+views), `build.sh <game> base|new [islands...]`, `racefile.sh <game> base|new`, `pilot.sh`, `regress.sh <prefix> <game> <engine>`,
+`extra.sh` (six more from the back, hard, easy, off the line, slow), `summary.sh`, `cmpgames.py <A> <B>` (two builds file by file,
+HQRs entry by entry, RACECARS.JSON line by line), `cmprace.sh <ILE>...` (other tracks' race files), `engbuild.sh`, `sheet.py`.
 
 **Tests**:
 
