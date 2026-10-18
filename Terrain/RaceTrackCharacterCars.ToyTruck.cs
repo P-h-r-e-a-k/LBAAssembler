@@ -10,12 +10,15 @@ namespace LBAAssembler.Terrain;
 // the person in the second picture, either driving with their head out of the window smoking, or riding in the back of the truck"): the
 // chunky toy at race-car size --
 //
-//   the body     glossy yellow, one rounded tub from the cab's bluff front to the dump bed's back: the cab tall and round-roofed, a notch
-//                behind it, the bed's flat top with a round hole in it, as the toy's (its maker's name on the side left off)
-//   the windows  big and teal: the windscreen over the front, a window each side of the cab -- the driver's open, dark inside, its glass
-//                wound down (a teal line along the sill)
-//   the lamps    two round red headlights low on the front
-//   the wheels   four oversized glossy purple balls on white hubs, standing out beside the body
+//   the body     glossy yellow: the cab tall and round-roofed with a bluff front, and behind it (since 2026-10-18: "the back of the truck
+//                shouldn't be square and should be a flat bed") a low open flat bed -- its deck at the balls' tops, a thick rounded rail
+//                round its sides and tailgate (the toy's maker's name on the side left off)
+//   the windows  big and teal with round corners (2026-10-18: "round the windows more"), let into the cab's skin: the windscreen across
+//                the front's slope, wrapping round its shoulders, a window each side leaning back as the windscreen does -- the driver's
+//                open, dark inside, its glass wound down (a teal line along its bottom)
+//   the lamps    two round red headlights low on the front, two small ones on the tail
+//   the wheels   four oversized glossy purple balls on white hubs, standing out beside the body (as purple as the islands' palettes
+//                go: see TtPurple)
 //   the driver   made here, not taken from a body of the game's: a fond caricature in the cars' low-poly style -- thick wavy
 //                salt-and-pepper hair, rectangular glasses, a dark moustache over a cheeky grin, a white T-shirt with a dark print --
 //                leaning his head out of the driver's window, his elbow out over the door, a cigarette in the corner of his mouth, its tip
@@ -32,11 +35,15 @@ internal static partial class RaceTrackCharacterCars
     public const int ToyTruckNumber = 221, ToyTruckGeneric = 65;
     public const string ToyTruckName = "Toy dump truck", ToyTruckDriver = "the toy truck's driver";
 
-    // The truck's colours: the body in the golds' top (96 on: the yellowest ramp every island's palette has) and the windows in the teals,
-    // both taking a part of the light so they stay bright; the balls in the purples (208 on), more of the light (dark underneath, lavender
-    // on top), a lavender glint; red lamps, white hubs.
-    private const int TtYellow = 105, TtWindow = 153, TtGlass = 156, TtInside = 178, TtPurple = 211, TtShine = 221, TtLamp = 73, TtHub = WhiteFlat;
-    private const float TtBodyShare = 0.42f, TtBallShare = 0.65f;
+    // The truck's colours: the body in the golds' top (96 on: the yellowest ramp every island's palette has), its flat bed's deck a step
+    // darker, and the windows in the teals, all taking a part of the light so they stay bright; the balls in the purples, a lavender glint;
+    // red lamps, white hubs.
+    // (No island's palette has a strong purple: the purples, 208 on, are greyish -- a fifth saturated at most -- on all but Wannies Island,
+    // the Mosquibees' and Volcano Island, where they are plum, and on Citadel's storm palette they turn slate blue past 212; the Temple's
+    // palette has 212 and 218 taken by the temple's own greys. So the balls keep to 213-215, the ramp's most purple stretch on every
+    // island, with little of the light: 213 is #443c48 and 215 #585060 on the daylight islands.)
+    private const int TtYellow = 105, TtDeck = 104, TtWindow = 153, TtGlass = 156, TtInside = 178, TtPurple = 213, TtShine = 221, TtLamp = 73, TtHub = WhiteFlat;
+    private const float TtBodyShare = 0.42f, TtBallShare = 0.3f;
     // The driver's: skin (the ramp Twinsen's is in), hair and moustache greys, the grin's dark red and its teeth, the ears', nose's and hand's
     // skin drawn flat, the T-shirt's white (a part of the light) and its print, the glasses' black frames, the cigarette, its ember and smoke.
     private const int TtSkin = 34, TtHair = 49, TtMoustache = 48, TtMouth = 67, TtTeeth = 62, TtSkinFlat = 38, TtShirt = 60, TtPrint = 49, TtPrintLine = 58,
@@ -46,12 +53,101 @@ internal static partial class RaceTrackCharacterCars
     // +x is on the left; BodyPipeline's pictures show it the other way round)
     private const float TtDriverSide = -1;
 
-    // A ring across the body at z, from the five points of its +x half ((x, y), from the top's edge round to the bottom's) and the -x half
-    // mirrored: ten points, from the top's edge down the +x side, across the bottom and up the -x side -- so its panels (each between point
-    // k and k + 1) are 0-3 the +x side's shoulder, window, door and sill, 4 the bottom, 5-8 the -x side's sill, door, window and shoulder,
-    // and 9 the top.
+    // A ring across the body at z, from the points of its +x half ((x, y), from the top's edge round to the bottom's) and the -x half
+    // mirrored: from the top's edge down the +x side, across the bottom and up the -x side -- so with n points a half its panels (each
+    // between point k and k + 1) are 0 to n - 2 down the +x side, n - 1 the bottom, n to 2n - 2 up the -x side and 2n - 1 the top. (The
+    // cab's, five a half: 0-3 the +x side's shoulder, window, door and sill, 4 the bottom, 5-8 the -x side's sill, door, window and
+    // shoulder, 9 the roof. The bed's, seven: 0 the +x rail's inner side, 1-3 its rounded top, 4 and 5 the +x side, 6 the bottom, 7-12
+    // the -x side and rail, 13 the deck.)
     private static int[] TtRing(CarMesh m, float z, (float X, float Y)[] half)
         => half.Select(p => new Vector3(p.X, p.Y, z)).Concat(half.Reverse().Select(p => new Vector3(-p.X, p.Y, z))).Select(v => m.P(2, v)).ToArray();
+
+    // A window with round corners let into the skin: the patch of panels between two rows of the skin's points (`bottom` and `top`, as many
+    // each, running the same way) made into a frame (`frame`) round the window (`glass`, unlit with `unlit`). The window's outline is the
+    // polygon `corners` -- (s, t) as shares of the patch: s across it from its first points, t up it from the bottom row; anticlockwise --
+    // each corner rounded `radius` (car units) by `arc` points; the frame is the band between the patch's edge and the outline (a polygon
+    // from each edge point or outline point to the next, round the outline's middle, two of them a quad where they make one), the window
+    // strips across the outline from its first edge. Every polygon faces away from `inside`. Returns the outline's points, from the first
+    // corner's arc round.
+    private static int[] TtRoundWindow(CarMesh m, int[] bottom, int[] top, (float S, float T)[] corners, float radius, int arc, int frame, int glass, bool unlit, Vector3 inside)
+    {
+        var n = bottom.Length - 1;
+        var b = bottom.Select(m.At).ToArray(); var t = top.Select(m.At).ToArray();
+        // (s measured along the patch's middle, t across it)
+        var along = new float[n + 1];
+        for (var i = 1; i <= n; i++) along[i] = along[i - 1] + Vector3.Distance((b[i] + t[i]) / 2, (b[i - 1] + t[i - 1]) / 2);
+        float width = along[n], height = (float)Enumerable.Range(0, n + 1).Average(i => Vector3.Distance(b[i], t[i]));
+        Vector3 On(Vector2 p)
+        {
+            var i = Math.Clamp(Array.FindLastIndex(along, a => a <= p.X), 0, n - 1);
+            var f = (p.X - along[i]) / (along[i + 1] - along[i]);
+            return Vector3.Lerp(Vector3.Lerp(b[i], b[i + 1], f), Vector3.Lerp(t[i], t[i + 1], f), p.Y / height);
+        }
+        // the outline: each corner's arc, from where it leaves the edge before it to where it meets the edge after it
+        var at = corners.Select(c => new Vector2(c.S * width, c.T * height)).ToArray();
+        var outline = new List<Vector2>();
+        for (var c = 0; c < at.Length; c++)
+        {
+            var d1 = Vector2.Normalize(at[(c + at.Length - 1) % at.Length] - at[c]); var d2 = Vector2.Normalize(at[(c + 1) % at.Length] - at[c]);
+            var half = MathF.Acos(Math.Clamp(Vector2.Dot(d1, d2), -1, 1)) / 2;
+            var centre = at[c] + Vector2.Normalize(d1 + d2) * radius / MathF.Sin(half);
+            Vector2 from = at[c] + d1 * radius / MathF.Tan(half) - centre, to = at[c] + d2 * radius / MathF.Tan(half) - centre;
+            var a0 = MathF.Atan2(from.Y, from.X);
+            var sweep = MathF.Atan2(to.Y, to.X) - a0;
+            while (sweep > MathF.PI) sweep -= MathF.Tau;
+            while (sweep < -MathF.PI) sweep += MathF.Tau;
+            for (var k = 0; k < arc; k++) { var a = a0 + sweep * k / (arc - 1); outline.Add(centre + radius * new Vector2(MathF.Cos(a), MathF.Sin(a))); }
+        }
+        var inner = outline.Select(p => m.P(2, On(p))).ToArray();
+        int count = inner.Length;
+
+        // the frame: the patch's edge (along the bottom row, back along the top: anticlockwise too) and the outline, walked round together
+        var edge = Enumerable.Range(0, n + 1).Select(i => (Point: bottom[i], At: new Vector2(along[i], 0)))
+            .Concat(Enumerable.Range(0, n + 1).Reverse().Select(i => (Point: top[i], At: new Vector2(along[i], height)))).ToArray();
+        var middle = outline.Aggregate(Vector2.Zero, (s, p) => s + p) / count;
+        var start = MathF.Atan2(outline[0].Y - middle.Y, outline[0].X - middle.X);
+        float Angle(Vector2 p) { var a = MathF.Atan2(p.Y - middle.Y, p.X - middle.X) - start; while (a < 0) a += MathF.Tau; while (a >= MathF.Tau) a -= MathF.Tau; return a; }
+        var first = Enumerable.Range(0, edge.Length).MinBy(i => Angle(edge[i].At));
+        (int Point, Vector2 At) E(int k) => edge[(first + k) % edge.Length];
+        float EdgeAngle(int k) => Angle(E(k).At) + (k == edge.Length ? MathF.Tau : 0);
+        float InnerAngle(int l) => l == count ? MathF.Tau : l == 0 ? 0 : Angle(outline[l]);
+        // (each step one triangle: true when it moves along the edge, false along the outline; k and l where it starts)
+        var steps = new List<(bool Edge, int K, int L)>();
+        for (int k = 0, l = 0; k < edge.Length || l < count;)
+        {
+            if (l == count || (k < edge.Length && EdgeAngle(k + 1) <= InnerAngle(l + 1))) steps.Add((true, k++, l));
+            else steps.Add((false, k, l++));
+        }
+        static bool Convex(params Vector2[] q)
+        {
+            var sign = 0;
+            for (var i = 0; i < q.Length; i++)
+            {
+                Vector2 e1 = q[(i + 1) % q.Length] - q[i], e2 = q[(i + 2) % q.Length] - q[(i + 1) % q.Length];
+                var cross = e1.X * e2.Y - e1.Y * e2.X;
+                if (MathF.Abs(cross) < 1e-3f) return false;
+                if (sign == 0) sign = MathF.Sign(cross); else if (MathF.Sign(cross) != sign) return false;
+            }
+            return true;
+        }
+        for (var i = 0; i < steps.Count; i++)
+        {
+            var (alongEdge, k, l) = steps[i];
+            if (i + 1 < steps.Count && steps[i + 1].Edge != alongEdge
+                && Convex(E(k).At, E(k + 1).At, outline[(l + 1) % count], outline[l % count]))
+            {
+                m.Out(new[] { E(k).Point, E(k + 1).Point, inner[(l + 1) % count], inner[l % count] }, frame, inside);
+                i++;
+            }
+            else if (alongEdge) m.Out(new[] { E(k).Point, E(k + 1).Point, inner[l % count] }, frame, inside);
+            else m.Out(new[] { E(k).Point, inner[(l + 1) % count], inner[l] }, frame, inside);
+        }
+
+        // the window: strips across, from the outline's first edge (between the first corner's arc and the second's) to the opposite one
+        for (var k = 0; k + 2 <= count / 2; k++)
+            m.Out(new[] { inner[arc + k], inner[(arc + k + 1) % count], inner[(arc - 2 - k + count) % count], inner[(arc - 1 - k + count) % count] }, glass, inside, unlit);
+        return inner;
+    }
 
     // A ball on a wheel's bone: its poles on the axle (x), `rings` rings of `meridians` points between them, faced out.
     private static void TtBall(CarMesh m, int bone, Vector3 centre, float radius, int meridians, int rings, int colour)
@@ -102,64 +198,82 @@ internal static partial class RaceTrackCharacterCars
         var m = new CarMesh(ToyTruckName);
         Roots(m);
 
-        // ---- the body: rings from the front back -- the front's rim, the windscreen's top, the cab's side windows' back, the cab's back
-        // edge, the notch behind it, the bed's front, middle and back, the tail's rounding
+        // ---- the cab: rings from the front back -- the front's rim, the windscreen's top, the side windows' back, the roof's back, the
+        // cab's back (against the bed)
         var profile = new (float Z, (float X, float Y)[] Half)[]
         {
             (700, new[] { (115f, 470f), (210f, 455f), (250f, 395f), (258f, 300f), (205f, 178f) }),
             (545, new[] { (150f, 768f), (268f, 738f), (304f, 530f), (311f, 330f), (250f, 168f) }),
             (280, new[] { (150f, 775f), (270f, 742f), (306f, 530f), (311f, 330f), (250f, 168f) }),
-            (175, new[] { (145f, 738f), (262f, 712f), (305f, 560f), (311f, 330f), (250f, 168f) }),
-            (135, new[] { (150f, 690f), (270f, 676f), (304f, 560f), (311f, 330f), (250f, 168f) }),
-            (100, new[] { (170f, 728f), (300f, 708f), (320f, 560f), (322f, 330f), (255f, 168f) }),
-            (-210, new[] { (170f, 728f), (300f, 708f), (320f, 560f), (322f, 330f), (255f, 168f) }),
-            (-470, new[] { (168f, 724f), (296f, 704f), (318f, 560f), (320f, 330f), (252f, 170f) }),
-            (-535, new[] { (130f, 680f), (240f, 666f), (270f, 560f), (276f, 330f), (220f, 190f) }),
+            (180, new[] { (145f, 745f), (264f, 718f), (306f, 545f), (311f, 330f), (250f, 168f) }),
+            (140, new[] { (115f, 705f), (236f, 688f), (306f, 545f), (310f, 330f), (246f, 170f) }),
         };
-        const int Windscreen = 0, Cab = 1, BedFront = 5, BedBack = 6;
+        const int Windscreen = 0, Cab = 1;
         m.Light = TtBodyShare;
         var rings = profile.Select(r => TtRing(m, r.Z, r.Half)).ToArray();
-        // (the side windows' panels: 1 on +x, 7 on -x -- the driver's open, the other teal)
-        int driverWindow = TtDriverSide > 0 ? 1 : 7, otherWindow = 8 - driverWindow;
+        Vector3 Inside(int i) => new(0, 470, (profile[i].Z + profile[i + 1].Z) / 2);
         for (var i = 0; i + 1 < rings.Length; i++)
-        {
-            float Middle(int r) => (profile[r].Half[0].Y + profile[r].Half[4].Y) / 2;
-            var inside = new Vector3(0, (Middle(i) + Middle(i + 1)) / 2, (profile[i].Z + profile[i + 1].Z) / 2);
             for (var k = 0; k < 10; k++)
             {
-                // (the bed's top: its lid with the hole, below)
-                if (k == 9 && i is BedFront or BedBack) continue;
-                var quad = new[] { rings[i][k], rings[i][(k + 1) % 10], rings[i + 1][(k + 1) % 10], rings[i + 1][k] };
-                if (i == Cab && k == driverWindow) m.Out(quad, TtInside, inside, unlit: true);
-                else m.Out(quad, (i == Windscreen && k is 8 or 9 or 0) || (i == Cab && k == otherWindow) ? TtWindow : TtYellow, inside);
+                // (the windows' panels -- the windscreen's 8, 9 and 0 between the front's rim and the roof, the side windows' 1 and 7 -- are
+                // made with their frames, below)
+                if ((i == Windscreen && k is 8 or 9 or 0) || (i == Cab && k is 1 or 7)) continue;
+                m.Out(new[] { rings[i][k], rings[i][(k + 1) % 10], rings[i + 1][(k + 1) % 10], rings[i + 1][k] }, TtYellow, Inside(i));
             }
-        }
-        // the front and the back closed: the front's face (its lamps on it, below) and the tail
+        // the front and the back closed: the front's face (its lamps on it, below) and the cab's back, flat, the bed against it
         m.Cap(rings[0], m.P(2, new(0, 320, 716)), TtYellow, new Vector3(0, 320, 640));
-        m.Cap(rings[^1], m.P(2, new(0, 440, -553)), TtYellow, new Vector3(0, 440, -485));
-        // the bed's lid: from the bed's top edges in to the hole's rim, round the hole (dark) -- one surface, so nothing on it is drawn over
-        // anything else of it
+        m.Cap(rings[^1], m.P(2, new(0, 440, profile[^1].Z)), TtYellow, new Vector3(0, 440, profile[^1].Z + 80));
+        // the windows, big and round-cornered as the toy's: the windscreen across the front's slope, wrapping round its shoulders, and a
+        // window each side, its front edge leaning back as the windscreen does -- the driver's open, dark inside, the other teal
+        TtRoundWindow(m, new[] { rings[0][8], rings[0][9], rings[0][0], rings[0][1] }, new[] { rings[1][8], rings[1][9], rings[1][0], rings[1][1] },
+            new[] { (0.09f, 0.08f), (0.91f, 0.08f), (0.945f, 0.9f), (0.055f, 0.9f) }, 72, 4, TtYellow, TtWindow, false, Inside(Windscreen));
+        // (three points round each of their corners: they are smaller)
+        const int SideArc = 3;
+        var sideWindow = new[] { (0.07f, 0.08f), (0.93f, 0.08f), (0.93f, 0.91f), (0.36f, 0.91f) };
+        int[] driverWindow = null!;
+        foreach (var side in Sides)
         {
-            var outer = new[] { rings[BedFront][0], rings[BedBack][0], rings[BedBack + 1][0], rings[BedBack + 1][9], rings[BedBack][9], rings[BedFront][9] };
-            var centre = new Vector3(0, 727, -185);
-            var rim = outer.Select(o =>
-            {
-                var d = m.At(o) - centre; d.Y = 0;
-                var a = MathF.Atan2(d.X, d.Z);
-                return m.P(2, centre + new Vector3(118 * MathF.Sin(a), 0, 132 * MathF.Cos(a)));
-            }).ToArray();
-            for (var k = 0; k < 6; k++) m.Up(new[] { outer[k], outer[(k + 1) % 6], rim[(k + 1) % 6], rim[k] }, TtYellow);
-            m.Light = 1;
-            m.Up(new[] { rim[0], rim[1], rim[2], rim[3] }, HoleDark, unlit: true);
-            m.Up(new[] { rim[3], rim[4], rim[5], rim[0] }, HoleDark, unlit: true);
+            int sill = side > 0 ? 2 : 7, top = side > 0 ? 1 : 8;
+            var open = side == TtDriverSide;
+            var outline = TtRoundWindow(m, new[] { rings[Cab][sill], rings[Cab + 1][sill] }, new[] { rings[Cab][top], rings[Cab + 1][top] }, sideWindow, 44, SideArc,
+                TtYellow, open ? TtInside : TtWindow, open, Inside(Cab));
+            if (open) driverWindow = outline;
         }
+
+        // ---- the flat bed behind the cab: a low open deck, a little darker, with a thick rounded rail round it -- rings from the cab's
+        // back to the tail: the deck's front and back, the tailgate's inside, its top and the tail's rounding (the bed's front against the
+        // cab's back, all of it inside the cab's outline)
+        (float, float)[] Rail(float deck) => new[] { (256f, deck), (262f, 462f), (274f, 484f), (294f, 486f), (304f, 466f), (306f, 330f), (246f, 172f) };
+        var bed = new (float Z, (float X, float Y)[] Half)[]
+        {
+            (profile[^1].Z, Rail(396)), (-385, Rail(396)), (-412, Rail(462)),
+            (-440, new[] { (256f, 484f), (262f, 486f), (274f, 486f), (294f, 486f), (304f, 466f), (306f, 330f), (246f, 172f) }),
+            (-464, new[] { (240f, 466f), (248f, 468f), (260f, 468f), (278f, 466f), (288f, 452f), (290f, 330f), (232f, 182f) }),
+        };
+        var bedRings = bed.Select(r => TtRing(m, r.Z, r.Half)).ToArray();
+        var around = bedRings[0].Length;
+        for (var i = 0; i + 1 < bedRings.Length; i++)
+            for (var k = 0; k < around; k++)
+            {
+                // (the ring isn't round -- the deck is in a hollow -- so each panel faces the way its edge of the ring does: in x and y the
+                // ring goes clockwise, down the +x side and back along the deck, so out is the edge's direction turned a quarter the other way)
+                var quad = new[] { bedRings[i][k], bedRings[i][(k + 1) % around], bedRings[i + 1][(k + 1) % around], bedRings[i + 1][k] };
+                var d = m.At(quad[1]) - m.At(quad[0]) + m.At(quad[2]) - m.At(quad[3]);
+                var centre = quad.Aggregate(Vector3.Zero, (s, h) => s + m.At(h)) / 4;
+                m.In(quad, i == 0 && k == around - 1 ? TtDeck : TtYellow, centre + new Vector3(-d.Y, d.X, 0));
+            }
+        m.Cap(bedRings[^1], m.P(2, new(0, 320, bed[^1].Z - 6)), TtYellow, new Vector3(0, 320, bed[^1].Z + 80));
+
         m.Light = 1;
-        // the driver's window's glass, wound down: its top edge along the sill
-        m.Line(rings[Cab][driverWindow == 1 ? 2 : 7], rings[Cab + 1][driverWindow == 1 ? 2 : 7], TtGlass);
+        // the driver's window's glass, wound down: its top edge along the opening's bottom
+        {
+            var outward = new Vector3(TtDriverSide * 4, 2, 0);
+            m.Line(m.P(2, m.At(driverWindow[SideArc - 1]) + outward), m.P(2, m.At(driverWindow[SideArc]) + outward), TtGlass);
+        }
         // the headlights: round and red, low on the front
         foreach (var side in Sides) m.Ball(2, new Vector3(side * 160, 262, 713), 50, TtLamp);
-        // (and small ones at the back, for the cars behind)
-        foreach (var side in Sides) m.Ball(2, new Vector3(side * 190, 300, -552), 30, TtLamp);
+        // (and small ones on the tail, for the cars behind)
+        foreach (var side in Sides) m.Ball(2, new Vector3(side * 180, 330, bed[^1].Z - 8), 30, TtLamp);
 
         // ---- the wheels: four big balls
         var front = new Vector3(480, 200, 400); var rear = new Vector3(480, 200, -270);
