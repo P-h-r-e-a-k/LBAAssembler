@@ -60,10 +60,12 @@ temple's round things are turned instead: its barrels, its 99 columns, its ampho
   an ellipse twice as wide as tall. Row by row, the picture's width about the axis is the thing's width at that height (with an amphora
   only the part of each row that holds a whole ellipse: its handles, which meet its mouth, are left out). Its top and bottom are the
   flattest the outline allows: a barrel's lid, a column's capital. 12 to 24 sides round, the profile followed to 0.02 cells.
-- *Its texture*: LBA1's picture on it. Each texel is the picture's pixel where that point falls from LBA1's angle, on the quarter of the
-  ring facing LBA1's camera, where its picture is least foreshortened. The other three quarters are its mirror images in turn, so the
-  barrel's staves and hoops go all round it. Its top is the picture's top: the barrel's lid, the fire in a bowl. Where the picture has
-  nothing (a goblet's foot, between its points), the texture is see-through.
+- *Its texture*: LBA1's picture on it. Each texel is the picture's pixel where that point falls from LBA1's angle, over the whole half of
+  the ring LBA1's camera sees (-45 to 135 degrees, two tiles); only the back half, which it never sees, is the front's mirror image, so
+  the barrel's staves and hoops go all round it and the rims keep LBA1's dark shading (until 2026-10-18 only the front quarter was the
+  picture and the rest mirrors of it: light rims). Its top is the picture's top: the barrel's lid, the fire in a bowl. Where the picture
+  has nothing (a goblet's foot, between its points), the texture is see-through. A column's square plinth, read from the picture, is a
+  square plate under it, and the capital may reach past the cell's half width (1.12 times) as LBA1 draws it.
 - *Cell by cell*: each cell draws the part of the thing in it: a layer of the ring, and of the barrel, whose axis stands between four
   cells, the quarter in the cell. LBA1 gives no brick to the barrel's back quarter, which its camera never sees, so the brick across from
   it draws that quarter too. Where LBA1 placed two barrels (or columns) overlapping, one's picture in front of the other's, both are drawn
@@ -106,8 +108,8 @@ are boxes in LBA1 too, and the turned columns took 1.8 %. Of the rest, ranked:
 | The flame masks | 6 | 0.03 % | 2.1 % | figures |
 | The rabbit statue | 3 | 0.01 % | 0.9 % | a figure |
 
-Left too: the rocks hanging from the crypt's ceiling (always under the road, never seen from it), the tilted and lying amphorae and the
-plank slopes beside the stairs (a frame each).
+Left too: the rocks hanging from the crypt's ceiling (always under the road, never seen from it) and the tilted and lying amphorae (a
+frame each). The plank slopes beside the stairs became ramps on 2026-10-18 (below).
 
 ![The survey: each kind's LBA1 picture, and the chase camera's view where it shows most, before and after](temple/blocky_survey.png)
 
@@ -121,11 +123,17 @@ texel of a model is the picture's pixel where that point of it falls from LBA1's
   draws them, at one depth. The boxes had unskewed them onto their faces, each at a face's own depth: crosses floating apart. 42 faces a
   grille.
 - *Stairs* (`Steps`): the two steps a cell LBA1 draws, each a tread, a riser and its sides, and the cell's back -- a side against a step
-  of the same stairs, or against a wall, left out.
-- *Rocks* (`Lobes`): a row of upright lobes along the block, half a cell apart (6 along a 3-cell block), by turns behind and in front:
-  one behind as tall as the picture's outline over its share of the row, one in front three quarters to nine tenths of that, each a little
-  wider or narrower (by turns that look random, the same every build) -- a cluster, not a fence. A lobe: an ellipse across (no deeper than
-  the block), its top rounded to a point; 6 sides, 18 faces, two tiles.
+  of the same stairs, or against a wall, left out. Sides and backs take the riser's texels at their height (not the tread's nose).
+- *Plank ramps* (`Ramp`, 2026-10-18; bricks 2341 and 5682): a slope with the picture on it, its sides see-through outside the planks'
+  ends, its underside read from the picture. Solid: three steps under the slope a cell (nothing solid above it).
+- *Rocks* (`Lobes`): a row of upright lobes spread over the picture's whole width on screen (the end lobes reach the block's corners),
+  by turns behind and in front: one behind as tall as the picture's outline over its share of the row, one in front three quarters to
+  nine tenths of that, each 1.15 to 1.35 times its share wide so neighbours overlap (no slits onto the void; by turns that look random, the
+  same every build) -- a cluster, not a fence. Each stands on the ground line LBA1's view sees in its share, its bottom rounded where the
+  picture's foot is above the floor (the rows hanging off floor edges); where LBA1 placed only part of a block, its lobes are cut flat and
+  closed at the layers placed. A lobe: an ellipse across (no deeper than the block), its top rounded to a point; 6 sides, 18 faces.
+- A brick a block holds twice (a lattice fence's post, brick 2383 of block 30) is placed where the cells round it say: the fences used to
+  draw their first post's column a second time a layer lower.
 - *Statues, flame masks, the rabbit* (`Figure`): a figure is the same either side of the way it faces, so its other side's view is
   LBA1's picture mirrored. Its shape is what both views leave of the block: the voxels (a twelfth of a cell, an eighth of a layer) whose
   point falls on the figure from LBA1's angle and whose mirror image -- across the block's middle along x or z, whichever leaves more: the

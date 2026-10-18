@@ -291,8 +291,9 @@ internal static class TempleObjects
                 if (modelFaces.ContainsKey(c)) shown[c] = new List<int>();
                 continue;
             }
-            if (shapes.TryGetValue(cells[c].Brick, out var part))
+            if (shapes.ContainsKey(cells[c].Brick))
             {
+                var part = TempleShapes.PartAt(shapes, cells, c);
                 var made = new List<(TempleShapes.ShapeFace, Vector3)>();
                 foreach (var (p, (ax, ay, az)) in orphans.GetValueOrDefault(c, new()).Prepend((part, (c.X - part.I, c.Y - part.J, c.Z - part.K))))
                     made.AddRange(TempleShapes.CellFaces(p, bottom: !cells.ContainsKey((ax + p.I, ay + p.J - 1, az + p.K))).Select(f => (f, new Vector3(ax, ay, az))));
@@ -523,7 +524,9 @@ internal static class TempleObjects
             if (drawn < Wisp) { wisps++; continue; }
             if (cell.Shape is >= 2 and <= 5)
             {
-                foreach (var step in Steps(c, cell.Shape, frame)) solidBoxes.Add(step);
+                // (a plank ramp's -- TempleModels' planks -- under its slope, none over it)
+                var underSlope = models.TryGetValue(cell.Brick, out var ramp) && ramp.Model.Kind.How == TempleModels.Make.Ramp;
+                foreach (var step in Steps(c, cell.Shape, frame, underSlope)) solidBoxes.Add(step);
                 continue;
             }
             if (box.IsFull) { full.Add(c); continue; }
@@ -539,12 +542,13 @@ internal static class TempleObjects
 
     // A stair's cell (LBA1's slopes, shapes 2-5) as four steps, each a quarter of the cell along the way up and that much of its layer higher.
     // (LBA1's OBJECT.C ReajustPos: shape 2 rises toward +x, 3 toward +z, 4 toward -z, 5 toward -x; 6-13, two slopes meeting, are left whole)
-    private static IEnumerable<(double, double, double, double, double, double)> Steps((int X, int Y, int Z) c, int shape, TempleFrame frame)
+    // `under`: a plank ramp's slope (TempleModels' ramp) -- each step a quarter further up, so that none stands over the slope (three steps).
+    private static IEnumerable<(double, double, double, double, double, double)> Steps((int X, int Y, int Z) c, int shape, TempleFrame frame, bool under = false)
     {
-        for (var k = 0; k < 4; k++)
+        for (var k = 0; k < (under ? 3 : 4); k++)
         {
             var top = frame.WorldY(c.Y + (k + 1) / 4.0);
-            var a = k / 4.0;
+            var a = (under ? k + 1 : k) / 4.0;
             yield return shape switch
             {
                 2 => (frame.WorldX(c.X + a), frame.WorldY(c.Y), frame.WorldZ(c.Z), frame.WorldX(c.X + 1), top, frame.WorldZ(c.Z + 1)),

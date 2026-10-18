@@ -79,11 +79,19 @@ internal static partial class TempleModels
             Face(m, riser, -upW, new[] { (P(w0, top, 0), 0.0, 0.0), (P(w0, top, 1), 1.0, 0.0), (P(w0, low, 1), 1.0, 1.0), (P(w0, low, 0), 0.0, 1.0) },
                 k == 0 ? SideOf(-upW) : -1);
         }
-        // (each side one tile -- the stairs' outline on it, u up the stairs, v down the cell -- its steps' rectangles parts of it)
+        // (each side one tile -- the stairs' outline on it, u up the stairs, v down the cell -- its steps' rectangles parts of it. LBA1 draws
+        // no side: where one shows, at a flight's end, its texels are the riser's at that height, across it as far as up its step -- the
+        // picture's own there was the tread's nose in front, pink wedges; 2026-10-18)
+        Vector3 Riser(double w, double y)
+        {
+            var k = Math.Clamp((int)Math.Floor(y * n), 0, n - 1);
+            var f = w * n - Math.Floor(w * n);
+            return P((double)k / n, Math.Clamp(y, (double)k / n + 0.01, (k + 1.0) / n - 0.01), 0.1 + 0.8 * f);
+        }
+        var sideTile = m.AddTile(32, 16, (u, v) => Riser(u, 1 - v), m.Paint, solid: true);
         foreach (var s in new[] { 0.0, 1.0 })
         {
-            var s0 = s;
-            var tile = m.AddTile(32, 16, (u, v) => P(u, 1 - v, s0), m.Paint, solid: true);
+            var tile = sideTile;
             var normal = s == 0 ? -acrossS : acrossS;
             for (var k = 0; k < n; k++)
             {
@@ -91,9 +99,53 @@ internal static partial class TempleModels
                 Face(m, tile, normal, new[] { (P(w0, top, s), w0, 1 - top), (P(w1, top, s), w1, 1 - top), (P(w1, 0, s), w1, 1.0), (P(w0, 0, s), w0, 1.0) }, SideOf(normal));
             }
         }
-        var back = m.AddTile(32, 16, (u, v) => P(1, 1 - v, u), m.Paint, solid: true);
+        // (its back, which LBA1 never shows either: the risers' too)
+        var back = m.AddTile(32, 16, (u, v) => Riser(u, 1 - v), m.Paint, solid: true);
         Face(m, back, upW, new[] { (P(1, 1, 0), 0.0, 0.0), (P(1, 1, 1), 1.0, 0.0), (P(1, 0, 1), 1.0, 1.0), (P(1, 0, 0), 0.0, 1.0) }, SideOf(upW));
         m.Reading = $"slope shape {shape}: {n} steps rising toward {(shape switch { 2 => "+x", 3 => "+z", 4 => "-z", _ => "-x" })}";
+    }
+
+    // A plank ramp (a cell of LBA1's slope bricks 2341, 5682 -- shape 2 rises toward +x, 3 toward +z, a layer over the cell): planks as
+    // LBA1's picture draws them -- the slope, the picture unskewed onto it; its sides, the one LBA1's camera sees and its mirror image, from
+    // the slope down to the lowest the picture's side reaches (the planks' ends, see-through between); its high end and its underside,
+    // from the slope's low edge to that far under its high edge. Its slope seen from LBA1's angle, rising toward the camera nearly
+    // edge on, is a band a few pixels tall, so its texels stretch the picture's few rows up it: planks across it. (2026-10-18: boxes of the
+    // band's outline, flat and thin, stepped down the ramp with the void between them.) What is solid is TempleObjects' steps under the
+    // slope -- LBA1's slopes are solid wedges.
+    private static void MakeRamp(Model m, int shape)
+    {
+        // (w up the slope, s across it, y up)
+        Vector3 P(double w, double y, double s) => shape switch
+        {
+            2 => new((float)w, (float)y, (float)s), 3 => new((float)s, (float)y, (float)w), 4 => new((float)s, (float)y, (float)(1 - w)), _ => new((float)(1 - w), (float)y, (float)s),
+        };
+        var upW = P(1, 0, 0) - P(0, 0, 0); var acrossS = P(0, 0, 1) - P(0, 0, 0);
+        int SideOf(Vector3 d) => d.X > 0.5 ? 1 : d.X < -0.5 ? 2 : d.Z > 0.5 ? 3 : d.Z < -0.5 ? 4 : d.Y > 0.5 ? 0 : 5;
+        // (the underside: y = under * w -- how far down the picture's side reaches from the slope, over the upper half of the slope)
+        var reach = new List<double>();
+        for (var w = 0.5; w <= 0.951; w += 0.05)
+        {
+            var low = w;
+            for (var h = w - 0.02; h >= 0 && m.Paint(P(w, h, 0.999)) >= 0; h -= 0.02) low = h;
+            reach.Add(low / w);
+        }
+        var under = Math.Clamp(reach.Min() - 0.03, 0, 0.85);
+        // (the slope: u across it, v down it from its high end)
+        var slope = m.AddTile(32, 32, (u, v) => P(1 - v, 1 - v, u), m.Paint, solid: true);
+        Face(m, slope, Vector3.Normalize(Vector3.UnitY - upW * 0.5f), new[] { (P(1, 1, 0), 0.0, 0.0), (P(1, 1, 1), 1.0, 0.0), (P(0, 0, 1), 1.0, 1.0), (P(0, 0, 0), 0.0, 1.0) });
+        // (its sides: the one LBA1's camera sees, toward +x or +z, the other its mirror image -- u up the slope, v down the cell; see-through
+        // where the picture has nothing: the planks' ends as LBA1 draws them)
+        var side = m.AddTile(32, 16, (u, v) => 1 - v <= u + 0.03 && 1 - v >= under * u - 0.03 ? P(u, 1 - v, 0.999) : null, m.Paint, solid: false);
+        foreach (var s in new[] { 0.0, 1.0 })
+        {
+            var normal = s == 0 ? -acrossS : acrossS;
+            Face(m, side, normal, new[] { (P(0, 0, s), 0.0, 1.0), (P(1, under, s), 1.0, 1 - under), (P(1, 1, s), 1.0, 0.0) }, SideOf(normal));
+        }
+        // (its high end and its underside, which LBA1 never shows: its side's colours near its high end)
+        var end = m.AddTile(32, 16, (u, v) => P(0.97, Math.Min(0.96, Math.Max(under * 0.97 + 0.02, 1 - v)), 0.999), m.Paint, solid: true);
+        Face(m, end, upW, new[] { (P(1, 1, 0), 0.0, 0.0), (P(1, 1, 1), 1.0, 0.0), (P(1, under, 1), 1.0, 1.0), (P(1, under, 0), 0.0, 1.0) }, SideOf(upW));
+        Face(m, end, Vector3.Normalize(upW * (float)under - Vector3.UnitY), new[] { (P(0, 0, 0), 0.0, 0.0), (P(0, 0, 1), 1.0, 0.0), (P(1, under, 1), 1.0, 1.0), (P(1, under, 0), 0.0, 1.0) });
+        m.Reading = $"slope shape {shape}: a plank ramp rising toward {(shape switch { 2 => "+x", 3 => "+z", 4 => "-z", _ => "-x" })}, its underside {under:0.00} layers up at its high end";
     }
 
     // the spikes of a bed of them, each way in a cell, and its plate's height (layers)

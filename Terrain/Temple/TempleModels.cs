@@ -23,7 +23,7 @@ namespace LBAAssembler.Terrain.Temple;
 // (TempleObjects), but those of what the doorways took with them.
 internal static partial class TempleModels
 {
-    public enum Make { Panel, Steps, Spikes, Lobes, Figure }
+    public enum Make { Panel, Steps, Spikes, Lobes, Figure, Ramp }
 
     // a kind: its name, a brick its block has and no other (LBA_BRK entry; the blocks of the three scenes that share a picture share its
     // bricks), how it is made, and (Steps) how many steps a cell has
@@ -38,7 +38,7 @@ internal static partial class TempleModels
         new("rocks", 2303, Make.Lobes), new("rocks", 2306, Make.Lobes), new("rocks", 2309, Make.Lobes), new("rocks", 5670, Make.Lobes),
         new("statue", 2403, Make.Figure), new("statue", 5683, Make.Figure), new("small statue", 2420, Make.Figure),
         new("small statue", 2423, Make.Figure), new("flame mask", 2412, Make.Figure), new("flame mask", 5692, Make.Figure),
-        new("rabbit", 5705, Make.Figure),
+        new("rabbit", 5705, Make.Figure), new("plank ramp", 2341, Make.Ramp), new("plank ramp", 5682, Make.Ramp),
     };
     private static readonly int[] LibraryScenes = TempleLayout.Scenes;
 
@@ -96,6 +96,32 @@ internal static partial class TempleModels
         public required Picture Picture { get; init; }
         // the block's cells that have a brick that draws something
         public HashSet<(int I, int J, int K)> Bricked = new();
+        // those bricks, each at its place in the block -- a brick may be at more than one (LBA1's grille block along z has its foot's brick
+        // at its two lowest cells)
+        public List<(int Brick, int I, int J, int K)> Bricks = new();
+        public List<(int I, int J, int K)> Places(int brick) => Bricks.Where(b => b.Brick == brick).Select(b => (b.I, b.J, b.K)).ToList();
+        // a row of rocks' lobes (MakeLobes)
+        public readonly List<Lobe> Lobes = new();
+        private readonly Dictionary<(int, int), Model> without = new();
+
+        // The model of what LBA1 placed of the block where it left some of its layers empty -- a row of rocks of which the grid holds only
+        // the upper layers (its floor, or a floor's edge over the void, cut it), or the lower: its lobes between the layers LBA1 placed, cut
+        // flat and closed where they end, as LBA1's picture of them ends at those bricks' outline -- not a layer or three lower over the
+        // void (2026-10-18). Its tiles are the whole row's. Rows of rocks only; others are themselves.
+        public Model Without(IReadOnlySet<(int I, int J, int K)> empty)
+        {
+            if (Kind.How != Make.Lobes || empty.Count == 0) return this;
+            var held = Bricks.Where(b => !empty.Contains((b.I, b.J, b.K))).ToList();
+            if (held.Count == 0) return this;
+            int lo = held.Min(b => b.J), hi = held.Max(b => b.J) + 1;
+            if (lo == Bricks.Min(b => b.J) && hi == Bricks.Max(b => b.J) + 1) return this;
+            if (without.TryGetValue((lo, hi), out var made)) return made;
+            made = new Model { Kind = Kind, Dx = Dx, Dy = Dy, Dz = Dz, Picture = Picture, Bricked = Bricked, Bricks = Bricks };
+            made.Tiles.AddRange(Tiles);
+            foreach (var lobe in Lobes) LobeFaces(made, lobe, lo == Bricks.Min(b => b.J) ? double.NegativeInfinity : lo, hi == Bricks.Max(b => b.J) + 1 ? double.PositiveInfinity : hi);
+            made.Reading = $"layers {lo} to {hi} of {Reading}";
+            return without[(lo, hi)] = made;
+        }
         public readonly List<ModelFace> Faces = new();
         public readonly List<ModelTile> Tiles = new();
         // what was read from the picture, for the log
@@ -146,8 +172,26 @@ internal static partial class TempleModels
     // A cell of a model's block: its model and its place in the block.
     public readonly record struct Part(Model Model, int I, int J, int K);
 
-    // The models' bricks: each, its model and its place in the model's block. (Kinds whose block no library has are left out; a brick that
-    // draws nothing -- LBA1's empty filler brick, in many blocks -- is no model's.)
+    // The part a cell of the layout is: its brick's (Find) -- or, of a brick its block has at more than one place, the place whose block's
+    // other bricks the layout has round it (Place). Else a grille's foot was taken for the cell over it, and its placement one layer lower
+    // drew a column of the grille again (2026-10-18).
+    public static Part PartAt(Dictionary<int, Part> parts, Dictionary<(int X, int Y, int Z), PolarLayout.Cell> cells, (int X, int Y, int Z) at)
+    {
+        var part = parts[cells[at].Brick];
+        var places = part.Model.Places(cells[at].Brick);
+        if (places.Count < 2) return part;
+        var (i, j, k) = Place(part.Model.Bricks, places, at, cells);
+        return part with { I = i, J = j, K = k };
+    }
+
+    // Of a brick's places in its block, the one whose block, placed so that the brick there is at `at`, has the most of its other bricks in
+    // the layout where it puts them (the first of those as good).
+    public static (int I, int J, int K) Place(IReadOnlyList<(int Brick, int I, int J, int K)> bricks, IReadOnlyList<(int I, int J, int K)> places,
+        (int X, int Y, int Z) at, Dictionary<(int X, int Y, int Z), PolarLayout.Cell> cells)
+        => places.MaxBy(q => bricks.Count(b => cells.TryGetValue((at.X - q.I + b.I, at.Y - q.J + b.J, at.Z - q.K + b.K), out var c) && c.Brick == b.Brick));
+
+    // The models' bricks: each, its model and its place in the model's block (its first, of a brick at more than one: PartAt). (Kinds whose
+    // block no library has are left out; a brick that draws nothing -- LBA1's empty filler brick, in many blocks -- is no model's.)
     public static Dictionary<int, Part> Find(Lba1Game game, List<string>? log = null)
     {
         var parts = new Dictionary<int, Part>();
@@ -172,16 +216,18 @@ internal static partial class TempleModels
                     }
                     if (!bricks.Any(b => b.Brick == kind.Brick)) continue;
                     bricks = bricks.Where(b => Draws(b.Brick)).ToList();
-                    var model = new Model { Kind = kind, Dx = dx, Dy = dy, Dz = dz, Picture = Picture.Draw(game, bricks), Bricked = bricks.Select(b => (b.I, b.J, b.K)).ToHashSet() };
+                    var model = new Model { Kind = kind, Dx = dx, Dy = dy, Dz = dz, Picture = Picture.Draw(game, bricks), Bricked = bricks.Select(b => (b.I, b.J, b.K)).ToHashSet(), Bricks = bricks };
                     switch (kind.How)
                     {
                         case Make.Panel: MakePanel(model); break;
                         case Make.Steps: MakeSteps(model, lib[at + 3]); break;
                         case Make.Spikes: MakeSpikes(model); break;
                         case Make.Lobes: MakeLobes(model); break;
+                        case Make.Ramp: MakeRamp(model, lib[at + 3]); break;
                         default: MakeFigure(model); break;
                     }
-                    foreach (var (brick, i, j, k) in bricks) parts[brick] = new Part(model, i, j, k);
+                    foreach (var (brick, i, j, k) in bricks)
+                        if (!parts.TryGetValue(brick, out var had) || had.Model != model) parts[brick] = new Part(model, i, j, k);
                     log?.Add($"{kind.Name} (brick {kind.Brick}): block of {dx} x {dy} x {dz} cells, {model.Faces.Count} faces, {model.Tiles.Count} tiles; {model.Reading}");
                     found = true;
                 }
@@ -199,7 +245,6 @@ internal static partial class TempleModels
     public static HashSet<(int X, int Y, int Z)> CutRemains(Dictionary<int, Part> parts, Dictionary<(int X, int Y, int Z), PolarLayout.Cell> cells,
         ICollection<(int X, int Y, int Z)> cut)
     {
-        var bricksOf = parts.GroupBy(p => p.Value.Model).ToDictionary(g => g.Key, g => g.Select(p => (Brick: p.Key, p.Value.I, p.Value.J, p.Value.K)).ToList());
         var gone = new HashSet<(int X, int Y, int Z)>(cut.Where(cells.ContainsKey));
         var remains = new HashSet<(int X, int Y, int Z)>();
         var hit = new Queue<(int X, int Y, int Z)>(gone);
@@ -208,11 +253,12 @@ internal static partial class TempleModels
             var c = hit.Dequeue();
             foreach (var at in new (int X, int Y, int Z)[] { c, (c.X, c.Y + 1, c.Z) })
             {
-                if (!cells.TryGetValue(at, out var cell) || !parts.TryGetValue(cell.Brick, out var part)) continue;
+                if (!cells.TryGetValue(at, out var cell) || !parts.ContainsKey(cell.Brick)) continue;
+                var part = PartAt(parts, cells, at);
                 if (at != c && (part.J != 0 || gone.Contains(at))) continue;
                 var anchor = (X: at.X - part.I, Y: at.Y - part.J, Z: at.Z - part.K);
                 var model = part.Model;
-                foreach (var (brick, i, j, k) in bricksOf[model])
+                foreach (var (brick, i, j, k) in model.Bricks)
                 {
                     if (model.Grouped && model.GroupOf(i, k) != model.GroupOf(part.I, part.K)) continue;
                     var other = (anchor.X + i, anchor.Y + j, anchor.Z + k);
@@ -227,30 +273,37 @@ internal static partial class TempleModels
 
     // The faces each cell draws of the models the temple places: each face of a placement drawn by the cell of the placement it lies in, or
     // where the layout has some other brick there (LBA1 placing a block over another's cells), by the placement's nearest cell -- with the
-    // placement's point (0, 0, 0) in the layout. A step's side against a step of the same stairs is left out, and a face of a group (a
-    // column of a grille, of a row of rocks) whose cells the layout has none of (the race track's doorways took them: CutRemains).
+    // placement's point (0, 0, 0) in the layout. A step's side against a step of the same stairs (a ramp's against the same ramp's) is left
+    // out, and a face of a group (a column of a grille, of a row of rocks) whose cells the layout has none of (the race track's doorways took
+    // them: CutRemains). Where the layout leaves cells of the block empty -- LBA1 placed only part of it (the grid's floor or the joined map's
+    // edge cut it), or the doorways took them -- a row of rocks is the layers of it LBA1 placed (Model.Without), and a grille's, a rail's or
+    // an iron fan's squares in those cells are left out, as LBA1 draws none there. (Those in cells another block's brick took stay: LBA1's
+    // picture of them is split among the bricks by the screen, and drawing them only in the grille's own cells left 1.6 % of its pixels void.)
     public static Dictionary<(int X, int Y, int Z), List<(ModelFace Face, Model Model, Vector3 Anchor)>> Placed(Dictionary<int, Part> parts,
         Dictionary<(int X, int Y, int Z), PolarLayout.Cell> cells)
     {
         var faces = new Dictionary<(int X, int Y, int Z), List<(ModelFace, Model, Vector3)>>();
         var placements = cells.Where(c => parts.ContainsKey(c.Value.Brick))
-            .GroupBy(c => { var p = parts[c.Value.Brick]; return (p.Model, Anchor: (X: c.Key.X - p.I, Y: c.Key.Y - p.J, Z: c.Key.Z - p.K)); });
+            .GroupBy(c => { var p = PartAt(parts, cells, c.Key); return (p.Model, Anchor: (X: c.Key.X - p.I, Y: c.Key.Y - p.J, Z: c.Key.Z - p.K)); });
         foreach (var placement in placements)
         {
             var (model, anchor) = placement.Key;
             var held = placement.Select(c => c.Key).OrderBy(c => c.Y).ThenBy(c => c.Z).ThenBy(c => c.X).ToList();
             var heldSet = held.ToHashSet();
+            var empty = model.Bricks.Select(b => (b.I, b.J, b.K)).Where(b => !cells.ContainsKey((anchor.X + b.I, anchor.Y + b.J, anchor.Z + b.K))).ToHashSet();
+            model = model.Without(empty);
             foreach (var face in model.Faces)
             {
                 // (the cell it lies in: its middle, a little inside it)
                 var mid = face.Corners.Aggregate(Vector3.Zero, (a, b) => a + b) / face.Corners.Length - face.Normal * 0.01f;
                 var cell = (X: anchor.X + Math.Clamp((int)Math.Floor(mid.X), 0, model.Dx - 1), Y: anchor.Y + Math.Clamp((int)Math.Floor(mid.Y), 0, model.Dy - 1),
                     Z: anchor.Z + Math.Clamp((int)Math.Floor(mid.Z), 0, model.Dz - 1));
+                if (model.Kind.How == Make.Panel && empty.Contains((cell.X - anchor.X, cell.Y - anchor.Y, cell.Z - anchor.Z))) continue;
                 if (face.Side >= 0)
                 {
                     var (dx, dy, dz) = Sides[face.Side];
-                    if (cells.TryGetValue((cell.X + dx, cell.Y + dy, cell.Z + dz), out var beyond) && parts.TryGetValue(beyond.Brick, out var bp) && bp.Model.Kind.How == Make.Steps
-                        && bp.Model == model) continue;
+                    if (cells.TryGetValue((cell.X + dx, cell.Y + dy, cell.Z + dz), out var beyond) && parts.TryGetValue(beyond.Brick, out var bp)
+                        && bp.Model.Kind.How is Make.Steps or Make.Ramp && bp.Model == model) continue;
                 }
                 var candidates = face.Group < 0 ? held : held.Where(c => model.GroupOf(c.X - anchor.X, c.Z - anchor.Z) == face.Group).ToList();
                 if (candidates.Count == 0) continue;
