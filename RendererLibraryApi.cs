@@ -292,6 +292,28 @@ internal sealed class RendererLibraryApi : IDisposable
     public int RenderFrameArea(int cubeX0, int cubeZ0, int cubeX1, int cubeZ1) => renderFrameArea?.Invoke(cubeX0, cubeZ0, cubeX1, cubeZ1) ?? RenderFrameWide(2);
     // Where the fog starts and the view ends (world units from the camera).
     public void SetViewDistance(int startFog, int clipFar) => setViewDistance?.Invoke(startFog, clipFar);
+
+    // The editor's 3D view's fog start and far clip for a camera `distance` back from (worldX, worldZ), drawing the cubes `cubeArea`:
+    // lba2_renderer_initialize's 200,000 / 250,000 at the default camera distance (30,000) and nearer -- the view as it always was --
+    // further out, as much further as the camera went back, and once it is far enough back, as far as the drawn cubes' farthest corner
+    // from the point looked at too. With the fixed 250,000 the island went out of reach at about 10 % zoom: every island zoomed fully out
+    // was the fog colour alone (the Temple of Bú's all palette index 0, which the editor then took for a failed render -- 2026-10-18).
+    public const int DefaultStartFog = 200000, DefaultClipFar = 250000, DefaultViewDistance = 30000;
+    public static (int StartFog, int ClipFar) EditorViewDistance(int distance, int worldX, int worldZ, (int X0, int Z0, int X1, int Z1)? cubeArea)
+    {
+        const long reach = DefaultClipFar - DefaultViewDistance;
+        long further = 0;
+        if (cubeArea is { } a)
+        {
+            // (the horizontal distance from the point looked at to the area's farthest corner, past the default reach)
+            long dx = Math.Max(Math.Abs((long)worldX - a.X0 * 32768L), Math.Abs((a.X1 + 1) * 32768L - worldX));
+            long dz = Math.Max(Math.Abs((long)worldZ - a.Z0 * 32768L), Math.Abs((a.Z1 + 1) * 32768L - worldZ));
+            further = Math.Max(0, (long)Math.Sqrt((double)(dx * dx + dz * dz)) - reach);
+        }
+        var back = Math.Max(0L, (long)distance - DefaultViewDistance);
+        var clipFar = Math.Min(Math.Max(DefaultClipFar, distance + reach + Math.Min(back, further)), int.MaxValue / 2);
+        return ((int)(clipFar - (DefaultClipFar - DefaultStartFog)), (int)clipFar);
+    }
     public void SetCamera(int alpha, int beta, int gamma, int distance) => setCamera?.Invoke(alpha, beta, gamma, distance);
     public void SetDrawSky(bool enabled) => setDrawSky?.Invoke(enabled ? 1 : 0);
     public void SetDrawSea(bool enabled) => setDrawSea?.Invoke(enabled ? 1 : 0);

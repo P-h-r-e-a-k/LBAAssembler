@@ -181,29 +181,41 @@ internal sealed class CommunityRendererBackend
                 if (RendererLibrary.LoadIsland(baseName) == 0) { directFailure = $"load island failed: {baseName}"; return null; }
                 directIsland = baseName;
             }
-            if (RendererLibrary.SetViewTarget(worldX, worldY, worldZ) == 0) { directFailure = $"set view target failed: {baseName} {worldX},{worldY},{worldZ}"; return null; }
-            RendererLibrary.SetCamera(alpha, beta, gamma, distance);
-            // wideRadiusCubes>0 loads and draws neighboring cubes into the
-            // same frame (AffGrilleExtWide) instead of just the one under
-            // the camera target -- see its own comment for why that doesn't
-            // need the terrain/decor/actor arrays resized. Reserved for
-            // zoomed-out views where a single cube's terrain would otherwise
-            // visibly run out before the horizon does; the extra cube loads
-            // cost real time (roughly (2*radius+1)^2 vs. 1 per frame), so
-            // callers should only ask for it at distances that need it.
-            // (cubeArea: those cubes whichever the camera is over -- the editor's whole island and the sea round it)
-            var renderOk = cubeArea is { } area ? RendererLibrary.RenderFrameArea(area.X0, area.Z0, area.X1, area.Z1)
-                : wideRadiusCubes > 0 ? RendererLibrary.RenderFrameWide(wideRadiusCubes) : RendererLibrary.RenderFrame();
-            if (renderOk == 0) { directFailure = "native render returned failure"; return null; }
-            afterRenderBeforeUnlock?.Invoke();
-            var pointer = RendererLibrary.GetFramebuffer(out var width, out var height, out var pitch);
-            if (pointer == IntPtr.Zero || width <= 0 || height <= 0) { directFailure = $"framebuffer invalid: {width}x{height}, {pitch}"; return null; }
-            var pixels = new byte[width * height];
-            for (var row = 0; row < height; row++) Marshal.Copy(pointer + row * pitch, pixels, row * width, width);
-            if (!pixels.Any(value => value != 0)) { directFailure = "native framebuffer contains only zero indices"; return null; }
-            var bitmap = BitmapSource.Create(width, height, 96, 96, PixelFormats.Indexed8, CreatePalette(paletteBytes), pixels, width);
-            bitmap.Freeze();
-            return bitmap;
+            // (the view reaches as far as the camera went back -- RendererLibraryApi.EditorViewDistance -- and is back to the renderer's own
+            // once this frame and its projections, afterRenderBeforeUnlock, are done: the minimap, the interiors and the previews share the
+            // renderer and never had it further)
+            var (startFog, clipFar) = RendererLibraryApi.EditorViewDistance(distance, worldX, worldZ, cubeArea);
+            RendererLibrary.SetViewDistance(startFog, clipFar);
+            try
+            {
+                if (RendererLibrary.SetViewTarget(worldX, worldY, worldZ) == 0) { directFailure = $"set view target failed: {baseName} {worldX},{worldY},{worldZ}"; return null; }
+                RendererLibrary.SetCamera(alpha, beta, gamma, distance);
+                // wideRadiusCubes>0 loads and draws neighboring cubes into the
+                // same frame (AffGrilleExtWide) instead of just the one under
+                // the camera target -- see its own comment for why that doesn't
+                // need the terrain/decor/actor arrays resized. Reserved for
+                // zoomed-out views where a single cube's terrain would otherwise
+                // visibly run out before the horizon does; the extra cube loads
+                // cost real time (roughly (2*radius+1)^2 vs. 1 per frame), so
+                // callers should only ask for it at distances that need it.
+                // (cubeArea: those cubes whichever the camera is over -- the editor's whole island and the sea round it)
+                var renderOk = cubeArea is { } area ? RendererLibrary.RenderFrameArea(area.X0, area.Z0, area.X1, area.Z1)
+                    : wideRadiusCubes > 0 ? RendererLibrary.RenderFrameWide(wideRadiusCubes) : RendererLibrary.RenderFrame();
+                if (renderOk == 0) { directFailure = "native render returned failure"; return null; }
+                afterRenderBeforeUnlock?.Invoke();
+                var pointer = RendererLibrary.GetFramebuffer(out var width, out var height, out var pitch);
+                if (pointer == IntPtr.Zero || width <= 0 || height <= 0) { directFailure = $"framebuffer invalid: {width}x{height}, {pitch}"; return null; }
+                var pixels = new byte[width * height];
+                for (var row = 0; row < height; row++) Marshal.Copy(pointer + row * pitch, pixels, row * width, width);
+                // (A frame all of index 0 is a frame: the screen is cleared to the island's fog colour, and the Temple of Bú's palette has its
+                // night black there, so its view zoomed out until nothing was in reach came back all 0. Taken for a failed render, that sent
+                // the editor to its software view -- a flat yellow-green plane -- for good, until another island was opened: the user,
+                // 2026-10-18, "zooming fully out on the temple island causes the screen to go yellow".)
+                var bitmap = BitmapSource.Create(width, height, 96, 96, PixelFormats.Indexed8, CreatePalette(paletteBytes), pixels, width);
+                bitmap.Freeze();
+                return bitmap;
+            }
+            finally { RendererLibrary.SetViewDistance(RendererLibraryApi.DefaultStartFog, RendererLibraryApi.DefaultClipFar); }
         }
     }
 

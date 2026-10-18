@@ -3353,6 +3353,7 @@ public partial class MainWindow : Window
                         // instead of leaving a frozen frame on screen, and
                         // stop this loop -- nativeViewActive is now false, so
                         // there's nothing left for it to render.
+                        DebugLog.Log($"MainWindow: native view of {islandName} returned null ({nativeRenderer.DirectFailure}): software view instead");
                         nativeViewActive = false;
                         DocumentSummary.Text = DocumentSummary.Text.Replace("native 3D", "software 3D (native unavailable)");
                         RenderSoftwareTerrain();
