@@ -34,7 +34,8 @@ internal static class RaceCarEngineFile
         var best = car.UseTrackSetups ? BestSetup(info) : null;
         if (best is not null) text.Append($"# the track's best setup (docs/LBA2_RACE_TRACK_STRESS_TEST.md): {best}\n");
         // (a dreamt sprint: the car's gears scaled to its own top speed -- Twinsen's car is a lot faster in his dream)
-        text.Append((best is null ? car : car.With(best)).CarKeys(best is null && track?.Dream is { TopKmh: > 0 } scaled ? scaled.TopKmh : null));
+        text.Append((best is null ? car : car.With(best)).CarKeys(best is null && track?.Dream is { TopKmh: > 0 } scaled ? scaled.TopKmh : null,
+            info is null ? null : RaceTrackIsland.ByName(info.Island).Name));
         // (his own car on a track that has one for him, when the setup leaves him his own: the Temple of Bú's pumpkin F1)
         if (car.DriveAsKey is null && info is not null && car.TrackCarKeys?.GetValueOrDefault(RaceTrackIsland.ByName(info.Island).Name) is { } own) text.Append(own);
         // (a line's height, when it has one: a lap that passes over itself crosses the line's place at other heights too)
@@ -270,8 +271,8 @@ internal static class RaceCarEngineFile
     }
 
     // The car's handling, as the setup makes it -- with `topKmh`, every gear's top speed scaled so the top gear's is that (Polar Island's
-    // dream race: 120 km/h).
-    private static string CarKeys(this RaceCarSetup car, int? topKmh = null)
+    // dream race: 120 km/h); `island`: the island raced, for a car drawn as another copy there (DriveAsIslandKeys).
+    private static string CarKeys(this RaceCarSetup car, int? topKmh = null, string? island = null)
     {
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
         var gears = Math.Clamp(car.Gears, 1, RaceCarSetup.MaxGears);
@@ -285,8 +286,8 @@ internal static class RaceCarEngineFile
         text.Append($"steer={(int)Math.Round(RaceCarSetup.OriginalSteer * Math.Clamp(car.SteeringPercent, 10, 1000) / 100.0)}\n");
         text.Append($"automatic={(car.Automatic ? 1 : 0)}\n");
         text.Append($"hud={(car.ShowDisplay ? 1 : 0)}\n");
-        // (driving as another car)
-        if (car.DriveAsKey is { } drive) text.Append(drive);
+        // (driving as another car -- on the island raced, its copy for there when it has one)
+        if (((island is null ? null : car.DriveAsIslandKeys?.GetValueOrDefault(island)) ?? car.DriveAsKey) is { } drive) text.Append(drive);
         return text.ToString();
     }
 
@@ -295,7 +296,8 @@ internal static class RaceCarEngineFile
     // (RaceTrackSmallCars) where the folder has one. The number is the racer entity's body for the cars made by hand, on from
     // RaceTrackCharacterCars.CastFirst the cast's, as the folder's RACECARS.JSON lists them (a folder built before it: the entity table).
     // Null when the folder hasn't that car (built before it was made).
-    internal static string? DriveAsLine(string gameDirectory, int number)
+    // `violet`: the car's copy for the islands whose palette draws the violet, when it has one (DriveAsIslandLines).
+    internal static string? DriveAsLine(string gameDirectory, int number, bool violet = false)
     {
         // (Twinsen's laser cars: his own buggy, its gun firing laser bolts instead of magic balls -- RACEMOD.CPP drive_laser=)
         if (number == RaceCarSetup.LaserGreen) return "# Twinsen's buggy firing green lasers\ndrive_laser=1\n";
@@ -310,12 +312,25 @@ internal static class RaceCarEngineFile
             // (the laser cars as a folder built on 2026-10-08 lists them: his buggy firing lasers now)
             if (listed.Name == RaceTrackCharacterCars.LaserGreenName) return DriveAsLine(gameDirectory, RaceCarSetup.LaserGreen);
             if (listed.Name == RaceTrackCharacterCars.LaserRedName) return DriveAsLine(gameDirectory, RaceCarSetup.LaserRed);
+            if (violet && listed.Violet is [var body1, var small1])
+                return $"# driving as car {number}, {listed.Name}: its violet-wheeled copy (the island's palette draws the violet)\ndrive_as={body1} {anim} {small1}\n";
             return $"# driving as car {number}, {listed.Name}\ndrive_as={listed.Body} {anim} {listed.Small}\n";
         }
         var body = racer.Bodies.Where(b => b.Generic == number).Select(b => (int?)b.Body).FirstOrDefault();
         if (body is null) return null;
         var small = racer.Bodies.Where(b => b.Generic == RaceTrackSmallCars.SmallOf(number)).Select(b => b.Body).DefaultIfEmpty(-1).First();
         return $"# driving as the racer's car body {number}\ndrive_as={body} {anim} {small}\n";
+    }
+
+    // The drive_as= lines for race car `number` that are not DriveAsLine's on some islands, by the island's name: a car with a copy for the
+    // islands whose palette draws the violet (RACECARS.JSON's Violet: the toy truck's violet-wheeled copy) has that copy's on those islands
+    // (RaceTrackCharacterCars.VioletIslands, from the folder's palettes: the Temple of Bú's). Null for any other car, or where none does.
+    internal static Dictionary<string, string>? DriveAsIslandLines(string gameDirectory, int number)
+    {
+        if (number < 0 || RaceTrackCharacterCars.Catalogue(gameDirectory).FirstOrDefault(e => e.Number == number) is not { Violet: [_, _] }) return null;
+        if (DriveAsLine(gameDirectory, number, violet: true) is not { } line) return null;
+        var islands = RaceTrackCharacterCars.VioletIslands(gameDirectory);
+        return islands.Count == 0 ? null : islands.ToDictionary(n => n, _ => line, StringComparer.OrdinalIgnoreCase);
     }
 
     // The cars the folder's tracks have for Twinsen of their own (RaceTrackCharacterCars.TrackCar: the Temple of Bú's pumpkin F1), each as

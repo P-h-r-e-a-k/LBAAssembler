@@ -77,6 +77,9 @@ public sealed partial class RaceCarSetup
     // (that car as the folder's files have it, worked out when the car file is written: RaceTrackService.CarFileWriter; and with OwnBuggy,
     // each track's own car, by the track's name: RaceCarEngineFile.TrackCarLines)
     [System.Text.Json.Serialization.JsonIgnore] internal string? DriveAsKey { get; set; }
+    // (and that car's line on the islands where another copy of it is drawn, by the island's name: the toy truck's violet-wheeled copy on
+    // the islands whose palette draws the violet -- RaceCarEngineFile.DriveAsIslandLines)
+    [System.Text.Json.Serialization.JsonIgnore] internal Dictionary<string, string>? DriveAsIslandKeys { get; set; }
     [System.Text.Json.Serialization.JsonIgnore] internal Dictionary<string, string>? TrackCarKeys { get; set; }
     // Each track's best setup (TrackSetups) in place of the sliders' top speed, acceleration and steering on the track Play races; braking,
     // rolling, reverse and the gearbox stay this setup's own, and a track with no best setup drives as the sliders say. Off unless asked for

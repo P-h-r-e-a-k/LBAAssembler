@@ -28,7 +28,9 @@ namespace LBAAssembler.Terrain;
 // neither one of the characters' cars (All) nor the race game's: like the pumpkin F1 it goes into a game folder at the very end of every
 // build (InstallToyTruck, after InstallPumpkin: no body before it moves), with its half-size copy, as race car ToyTruckNumber of
 // RACECARS.JSON. Twinsen drives it on any track by picking it in the Race car window's list (RaceCarSetup.DriveAs); it is drawn in his
-// buggy's place (RACEMOD.CPP drive_as=), so it handles as his buggy does. No track has it as its own car.
+// buggy's place (RACEMOD.CPP drive_as=), so it handles as his buggy does. No track has it as its own car. On the islands whose palette has
+// a violet free (2026-10-18: the Temple of Bú's) he drives its copy with violet ball wheels instead (InstallToyTruckViolet, at the very end
+// of the build; RaceCarEngineFile.DriveAsIslandLines).
 internal static partial class RaceTrackCharacterCars
 {
     // race car 221 (RACECARS.JSON: after the pumpkin F1's 220), the racer entity's body 65 (its half-size copy 165)
@@ -44,6 +46,13 @@ internal static partial class RaceTrackCharacterCars
     // island, with little of the light: 213 is #443c48 and 215 #585060 on the daylight islands.)
     private const int TtYellow = 105, TtDeck = 104, TtWindow = 153, TtGlass = 156, TtInside = 178, TtPurple = 213, TtShine = 221, TtLamp = 73, TtHub = WhiteFlat;
     private const float TtBodyShare = 0.42f, TtBallShare = 0.3f;
+    // (Then the user, 2026-10-18, chose "purple on some islands only": the truck has a copy whose balls are a strong violet, drawn on the
+    // islands whose palette has one free -- InstallToyTruckViolet, VioletIslands --, the balls unlit in TtViolet. The Temple of Bú's palette (RESS 40: Otringal's with the temple's colours in it, which go only into its slots
+    // 16-239) keeps the island palette's placeholder violet, #7c00dc, in slots 1-14 and draws them as they are; nothing the temple draws
+    // uses them -- not its ground, decor, object pages or sky, no sprite, none of the bodies its scenes and race use; only the textures of
+    // a few bodies raced elsewhere, in 8 and 12 -- so 11, the middle of 8-14. The retail islands' tables draw the slot as a grey or another
+    // colour of theirs: there the mauve copy.)
+    private const int TtViolet = 11;
     // The driver's: skin (the ramp Twinsen's is in), hair and moustache greys, the grin's dark red and its teeth, the ears', nose's and hand's
     // skin drawn flat, the T-shirt's white (a part of the light) and its print, the glasses' black frames, the cigarette, its ember and smoke.
     private const int TtSkin = 34, TtHair = 49, TtMoustache = 48, TtMouth = 67, TtTeeth = 62, TtSkinFlat = 38, TtShirt = 60, TtPrint = 49, TtPrintLine = 58,
@@ -149,8 +158,9 @@ internal static partial class RaceTrackCharacterCars
         return inner;
     }
 
-    // A ball on a wheel's bone: its poles on the axle (x), `rings` rings of `meridians` points between them, faced out.
-    private static void TtBall(CarMesh m, int bone, Vector3 centre, float radius, int meridians, int rings, int colour)
+    // A ball on a wheel's bone: its poles on the axle (x), `rings` rings of `meridians` points between them, faced out (`unlit`: drawn in
+    // `colour` itself, whatever the light).
+    private static void TtBall(CarMesh m, int bone, Vector3 centre, float radius, int meridians, int rings, int colour, bool unlit)
     {
         var lat = Enumerable.Range(1, rings).Select(j =>
         {
@@ -161,14 +171,17 @@ internal static partial class RaceTrackCharacterCars
                 return m.P(bone, centre + new Vector3(radius * MathF.Cos(th), radius * MathF.Sin(th) * MathF.Cos(ph), radius * MathF.Sin(th) * MathF.Sin(ph)));
             }).ToArray();
         }).ToArray();
-        m.Cap(lat[0], m.P(bone, centre + new Vector3(radius, 0, 0)), colour, centre);
-        for (var j = 0; j + 1 < lat.Length; j++) m.Skin(lat[j], lat[j + 1], _ => colour, centre);
-        m.Cap(lat[^1], m.P(bone, centre - new Vector3(radius, 0, 0)), colour, centre);
+        m.Cap(lat[0], m.P(bone, centre + new Vector3(radius, 0, 0)), colour, centre, unlit);
+        for (var j = 0; j + 1 < lat.Length; j++)
+            for (var k = 0; k < meridians; k++)
+                m.Out(new[] { lat[j][k], lat[j][(k + 1) % meridians], lat[j + 1][(k + 1) % meridians], lat[j + 1][k] }, colour, centre, unlit);
+        m.Cap(lat[^1], m.P(bone, centre - new Vector3(radius, 0, 0)), colour, centre, unlit);
     }
 
     // A wheel: the strut (from inside the body, where it turns; the white hub on the ball's inner side), the hub (a front wheel's, which
-    // steers about the ball's middle) and the ball itself; a lavender glint high on its outer side (on a bone that doesn't roll it round).
-    private static void TtWheel(CarMesh m, (float Side, int Strut, int Hub, int Wheel) bones, Vector3 centre, float radius)
+    // steers about the ball's middle) and the ball itself -- the violet copy's (TtViolet) unlit violet, else lit mauve --; a lavender glint
+    // high on its outer side (on a bone that doesn't roll it round).
+    private static void TtWheel(CarMesh m, (float Side, int Strut, int Hub, int Wheel) bones, Vector3 centre, float radius, bool violet)
     {
         var (side, strutBone, hubBone, wheelBone) = bones;
         centre = centre with { X = side * centre.X };
@@ -187,13 +200,13 @@ internal static partial class RaceTrackCharacterCars
         }
         else m.Pivot(wheelBone, middle);
         m.Light = TtBallShare;
-        TtBall(m, wheelBone, centre, radius, 10, 4, TtPurple);
+        TtBall(m, wheelBone, centre, radius, 10, 4, violet ? TtViolet : TtPurple, unlit: violet);
         m.Light = 1;
         m.Ball(still, centre + Vector3.Normalize(new Vector3(side * 0.7f, 0.65f, 0.1f)) * radius * 1.02f, (int)(radius * 0.12f), TtShine);
     }
 
-    // The toy dump truck.
-    public static Body BuildToyTruck(Body racer)
+    // The toy dump truck; `violet`: its copy with violet ball wheels (TtViolet), everything else the same.
+    public static Body BuildToyTruck(Body racer, bool violet = false)
     {
         var m = new CarMesh(ToyTruckName);
         Roots(m);
@@ -278,10 +291,10 @@ internal static partial class RaceTrackCharacterCars
         // ---- the wheels: four big balls
         var front = new Vector3(480, 200, 400); var rear = new Vector3(480, 200, -270);
         const float Radius = 200;
-        TtWheel(m, (1, 3, 4, 5), front, Radius);
-        TtWheel(m, (-1, 6, 7, 8), front, Radius);
-        TtWheel(m, (-1, 9, -1, 10), rear, Radius);
-        TtWheel(m, (1, 11, -1, 12), rear, Radius);
+        TtWheel(m, (1, 3, 4, 5), front, Radius, violet);
+        TtWheel(m, (-1, 6, 7, 8), front, Radius, violet);
+        TtWheel(m, (-1, 9, -1, 10), rear, Radius, violet);
+        TtWheel(m, (1, 11, -1, 12), rear, Radius, violet);
 
         // ---- the driver (bone 13, turning at the window's sill)
         m.Pivot(13, m.P(2, new Vector3(TtDriverSide * 304, 530, 410)));
@@ -470,5 +483,81 @@ internal static partial class RaceTrackCharacterCars
             $"{ToyTruckName} (race car {ToyTruckNumber}, anyone's to drive): BODY.HQR entry {own} ({car.Faces.Count} polygons, {car.Lines.Count} lines, {car.Spheres.Count} spheres, " +
             $"{car.Vertices.Count} points), its half-size copy {small}; the racer's entity ({RaceTrackBaldinoCar.RacerEntity}) bodies {ToyTruckGeneric} and {RaceTrackSmallCars.SmallOf(ToyTruckGeneric)}",
         };
+    }
+
+    // Adds the toy truck's violet-wheeled copy (BuildToyTruck's violet) and its half-size copy to a game folder InstallToyTruck has put the
+    // truck in: at the very end of BODY.HQR -- after everything a build installs (RaceTrackService.Build: after the Temple of Bú's flag
+    // marshal), so no other body moves -- and named in the truck's RACECARS.JSON line (Violet). Not in the entity table: the engine's
+    // drive_as= names BODY.HQR bodies, and Play's car file names this copy's on the islands VioletIslands finds
+    // (RaceCarEngineFile.DriveAsIslandLines); the Race car window still lists the one truck. Returns lines for the build's log.
+    public static List<string> InstallToyTruckViolet(string gameDirectory)
+    {
+        var catalogue = Catalogue(gameDirectory);
+        var index = catalogue.FindIndex(e => e.Number == ToyTruckNumber);
+        if (index < 0) return new() { $"{ToyTruckName}'s violet copy: not made -- the folder has no {ToyTruckName}" };
+        var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
+        var racer = Body.Read(HqrArchive.Open(bodyPath).Read(RaceTrackBaldinoCar.RacerBody), 2);
+        Body car;
+        try { car = BuildToyTruck(racer, violet: true); }
+        catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException) { return new() { $"{ToyTruckName}'s violet copy: not made -- {e.Message}" }; }
+        var bytes = car.Write();
+        var file = File.ReadAllBytes(bodyPath);
+        var own = HqrArchive.CountEntries(bodyPath);
+        file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(bytes));
+        file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(RaceTrackSmallCars.Halved(bytes)));
+        File.WriteAllBytes(bodyPath, file);
+        catalogue[index] = catalogue[index] with { Violet = new[] { own, own + 1 } };
+        File.WriteAllText(Path.Combine(gameDirectory, CatalogueFile), JsonSerializer.Serialize(catalogue, new JsonSerializerOptions { WriteIndented = true }));
+        var islands = VioletIslands(gameDirectory);
+        return new()
+        {
+            $"{ToyTruckName}'s violet-wheeled copy: BODY.HQR entry {own}, its half-size copy {own + 1}; drawn on " +
+            (islands.Count == 0 ? "no island (no race track's palette here draws the violet)" : string.Join(", ", islands.OrderBy(n => n))) + ", the mauve one everywhere else",
+        };
+    }
+
+    // Whether a palette (an island's RESS.HQR XPL entry) draws TtViolet as a strong violet: the colour its shading table's ShadeNormalLevel
+    // row turns the slot into -- the colour a polygon in it is drawn in -- of a hue 255-295 degrees, at least 60 % saturated and 40 % bright.
+    internal static bool DrawsViolet(byte[] xpl)
+    {
+        if (xpl.Length < 28) return false;
+        int at = BinaryPrimitives.ReadInt32LittleEndian(xpl.AsSpan(4)), table = BinaryPrimitives.ReadInt32LittleEndian(xpl.AsSpan(12)),
+            level = BinaryPrimitives.ReadInt32LittleEndian(xpl.AsSpan(24));
+        var row = table + level * 256 + TtViolet;
+        if (at < 0 || at + 768 > xpl.Length || row < 0 || row >= xpl.Length) return false;
+        var c = xpl[row];
+        float r = xpl[at + c * 3] / 255f, g = xpl[at + c * 3 + 1] / 255f, b = xpl[at + c * 3 + 2] / 255f;
+        float max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b));
+        if (max < 0.4f || max - min < 0.6f * max) return false;
+        var hue = max == r ? 60 * ((g - b) / (max - min)) : max == g ? 60 * (2 + (b - r) / (max - min)) : 60 * (4 + (r - g) / (max - min));
+        if (hue < 0) hue += 360;
+        return hue is >= 255 and <= 295;
+    }
+
+    // The race tracks' islands, by name, whose palette -- the one their race draws with: the island's own look (island_palette=, the Temple
+    // of Bú's) or its PaletteEntry -- draws the violet (DrawsViolet), as the game folder's RESS.HQR has them: decided from the palettes, so
+    // an island given a palette with the violet free gets the violet copy. 2026-10-18: the Temple of Bú's alone.
+    internal static HashSet<string> VioletIslands(string gameDirectory)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var path = Path.Combine(gameDirectory, "RESS.HQR");
+        if (!File.Exists(path)) return names;
+        HqrArchive ress; int count;
+        try { ress = HqrArchive.Open(path); count = HqrArchive.CountEntries(path); }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException) { DebugLog.Log($"RaceTrackCharacterCars.VioletIslands: {e.Message}"); return names; }
+        var known = new Dictionary<int, bool>();
+        foreach (var island in RaceTrackIsland.All)
+        {
+            var entry = island.Look?.Palette ?? island.PaletteEntry;
+            if (!known.TryGetValue(entry, out var violet))
+            {
+                // (a palette the folder hasn't -- an island built after it, Polar Island's own -- draws none)
+                try { violet = entry >= 0 && entry < count && DrawsViolet(ress.Read(entry)); }
+                catch (Exception e) when (e is IOException or InvalidDataException or ArgumentException or IndexOutOfRangeException) { violet = false; }
+                known[entry] = violet;
+            }
+            if (violet) names.Add(island.Name);
+        }
+        return names;
     }
 }

@@ -219,6 +219,7 @@ internal static class RaceTrackService
         if (!HasBackups(gameDirectory)) return null;
         var car = EditorSettings.Current.RaceCar.Clone();
         car.DriveAsKey = RaceCarEngineFile.DriveAsLine(gameDirectory, car.DriveAs);
+        car.DriveAsIslandKeys = RaceCarEngineFile.DriveAsIslandLines(gameDirectory, car.DriveAs);
         car.TrackCarKeys = RaceCarEngineFile.TrackCarLines(gameDirectory, car.DriveAs);
         if (story && ReadInfo(gameDirectory) is { } all) return path => car.WriteStorySet(path, all);
         return path => car.WriteEngineFile(path, track ?? ReadInfo(gameDirectory));
@@ -433,6 +434,9 @@ internal static class RaceTrackService
             if (PrivateCars) log.AddRange(RaceTrackCharacterCars.InstallToyTruck(gameDirectory));
             // (the Temple of Bú's flag marshal's body and animations after everything else's: Finish placed her)
             if (session.Marshal) log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory));
+            // (and the toy truck's violet-wheeled copy, for the islands whose palette draws the violet, after even hers: no body moves --
+            // RaceTrackCharacterCars.InstallToyTruckViolet)
+            if (PrivateCars) log.AddRange(RaceTrackCharacterCars.InstallToyTruckViolet(gameDirectory));
             progress?.Report(new(1, "Done"));
             var count = tracks.Sum(t => t.Options.Island.Tracks);
             var built1 = count == 1 ? "The race track is built." : $"{count} race tracks are built ({string.Join(", ", tracks.Select(t => t.Options.Island.Built))}); Play races the one of the island the editor has open.";
