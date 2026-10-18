@@ -134,7 +134,8 @@
  *     start_scene=<scene>        a new game starts in <scene>, the start line's, with no introduction (RaceMod_NewGameScene)
  *     start_in_car=1             Twinsen is in his car as the scene opens, not on foot beside it (FaceTheCar)
  *     trial=1                    a time trial: no opponents, no mushrooms, a can of Gazogem at GO and at the start of every lap after;
- *                                the race's time (GO to the last lap's line) goes to the best times (RaceGame_Finished)
+ *                                its fastest lap (line to line, RaceMod_Lap) goes to the best laps, with the race's time (GO to the
+ *                                last lap's line) beside it (RaceGame_Finished)
  *     end_to_menu=<ms>           <ms> after the race is over, back to the game's menu (RaceMod_WantsMenu)
  *   Halloween (2026-10-17, the Temple of Bú's; the builder writes these for it alone):
  *     dive=<body> <x> <z> <y>    a place over the lap's road (island units, the road's height there) that a witch (<body>, the spooks') dives
@@ -3774,7 +3775,8 @@ void RaceMod_Lap(S32 x, S32 z) {
     }
     if (s_laps > 0) {
         s_lastLap = now - s_lapStart;
-        if (!s_bestLap || s_lastLap < s_bestLap) s_bestLap = s_lastLap;
+        // (the race's fastest lap -- a time trial's goes to the race game's best laps -- a qualifying lap's never)
+        if (s_phase != PHASE_QUALIFYING && (!s_bestLap || s_lastLap < s_bestLap)) s_bestLap = s_lastLap;
         Log_Info("[racemod] lap %d in %.2f s%s", (int)s_laps, s_lastLap / 1000.0, s_phase == PHASE_QUALIFYING ? " (qualifying)" : "");
         // the time to beat: under it, the story moves on (once)
         if (const S32 target = BeatTime()) {
@@ -3805,16 +3807,16 @@ void RaceMod_Lap(S32 x, S32 z) {
             if (mainOn) snprintf(text, sizeof(text), s_beatMain ? "You beat %s!" : "%s beat you", s_opp[s_main].Name);
             else if (place == 1) snprintf(text, sizeof(text), "You win!");
             else snprintf(text, sizeof(text), "You finished %d%s", place, Ordinal(place));
-            // (the race game's: the race's time, GO to the line -- a time trial's goes to the best times)
+            // (the race game's: the race's time, GO to the line, and its fastest lap -- a time trial's goes to the best laps)
             const S32 total = s_goAt && now > s_goAt ? now - s_goAt : 0;
             s_raceTime = total;
             const int rank = RaceGame_Finished(s_trial, total, s_bestLap, place, racers);
             if (s_trial) {
                 char t[24];
-                Time(t, sizeof(t), total);
-                if (rank == 1) snprintf(text, sizeof(text), "%s  A new best time!", t);
-                else if (rank > 1) snprintf(text, sizeof(text), "%s  %d%s best", t, rank, Ordinal(rank));
-                else snprintf(text, sizeof(text), "Time  %s", t);
+                Time(t, sizeof(t), s_bestLap);
+                if (rank == 1) snprintf(text, sizeof(text), "Best lap %s  A new record!", t);
+                else if (rank > 1) snprintf(text, sizeof(text), "Best lap %s  %d%s best", t, rank, Ordinal(rank));
+                else snprintf(text, sizeof(text), "Best lap  %s", t);
             }
             Message(text);
             s_messageUntil = now + 6000;
@@ -3872,7 +3874,7 @@ static void SprintOver(S32 now, int crossed) {
     ApplySets(s_finishSet, s_nbFinishSet);
     s_endAt = now + after;
     s_endWon = s_beatMain;
-    RaceGame_Finished(s_trial, s_goAt && now > s_goAt ? now - s_goAt : 0, 0, place, racers);
+    RaceGame_Finished(s_trial, s_goAt && now > s_goAt ? now - s_goAt : 0, crossed && s_laps > 0 ? now - s_lapStart : 0, place, racers);
     if (s_endToMenu > 0) s_menuAt = now + s_endToMenu;
 }
 
@@ -12072,7 +12074,17 @@ void RaceMod_Draw(void) {
         // the lap and its time, bottom left -- before the start what the start line wants, after the race the place
         text[0] = 0;
         if (s_car.HasLine) {
-            if (s_place && s_trial) { Time(a, sizeof(a), s_raceTime); snprintf(text, sizeof(text), "Finished in %s", a); }
+            if (s_place && s_trial) {
+                Time(a, sizeof(a), s_raceTime);
+                snprintf(text, sizeof(text), "Finished in %s", a);
+                // (a time trial's fastest lap over it: what its best laps keep)
+                if (s_bestLap > 0) {
+                    char best[48];
+                    Time(b, sizeof(b), s_bestLap);
+                    snprintf(best, sizeof(best), "Best lap %s", b);
+                    HudLine(16, bottom - RACE_LINE_STEP, best, -1);
+                }
+            }
             else if (s_place) snprintf(text, sizeof(text), "Finished %d%s of %d", s_place, Ordinal(s_place), s_racers);
             else if (s_phase == PHASE_WAIT) snprintf(text, sizeof(text), "Drive to the start line");
             else if (s_phase == PHASE_GRID) text[0] = 0;

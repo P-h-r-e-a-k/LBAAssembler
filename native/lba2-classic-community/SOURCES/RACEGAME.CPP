@@ -1,15 +1,16 @@
 /* RACEGAME: the race game -- LBA Assembler's race tracks played as a game of their own, the standalone Little Big Halloween Racing
  * Adventure (2026-10-16), on when RACEGAME.TXT is beside the game's data (its installer writes it). The game's main menu is then the race
  * game's (GAMEMENU.CPP MainGameMenu asks RaceGame_Menu), in the retail game's look:
- *     Resume (with a race on)   Story Mode   Track select   Specials   Best times   Options   Quit
+ *     Resume (with a race on)   Story Mode   Track select   Specials   Best laps   Options   Quit
  * Story Mode and Track select are greyed and passed over until the file opens them. Specials: the special tracks, then a race (the line-up,
  * the power-ups) or a time trial (Twinsen alone, a can of Gazogem for every lap); a race on a track with levels (its race file has
  * difficulty_level= lines: the Temple of Bú's, 2026-10-17) then its difficulty, easy, medium or hard (the last one chosen first);
  * then the car, its body turning on the page; then the race -- the special's race file with the car's and the race game's keys
  * (RACEMOD.CPP drive_as=, start_scene=, start_in_car=, race_laps=, end_to_menu=, trial=, difficulty=) written to RACE_NOW.TXT in
- * the user's folder and loaded (RaceMod_LoadFile), and a new game at the start line, no introduction. A time trial's time goes to
- * the track's best times, its ten fastest, kept in BESTTIMES.TXT in the user's folder; Best times shows them (a time trial is the
- * same at every level: Twinsen alone, no opponents' levels to it).
+ * the user's folder and loaded (RaceMod_LoadFile), and a new game at the start line, no introduction. A time trial's fastest single lap
+ * (2026-10-18; before, its whole time) goes to the track's best laps, its ten fastest, kept in BESTTIMES.TXT in the user's folder; Best
+ * laps shows them (a time trial is the same at every level: Twinsen alone, no opponents' levels to it). A race's laps, and a qualifying
+ * lap's, never go there.
  * The first run (2026-10-17): the player's first race or time trial is preceded by the controls page, and the first race with power-ups
  * by the power-up page (the track's own power-ups, each in its item box with what it does) -- right after the car page, as the race is
  * loaded, before its scene: Enter turns the pages, Esc skips them. Options shows either again (its rows Power-ups and Race controls:
@@ -28,8 +29,10 @@
  *     end_to_menu=<ms>             a finished race back to the menu this long after its end (8000)
  *     special=<name>|<race file>|<time trial file>|<start scene>     files beside the game's data (and so are those they name)
  *     car=<name>|<drive_as value: BODY.HQR body, animation, shrunk body>
- * BESTTIMES.TXT: "<track>|<time ms>|<best lap ms>|<car>|<date>|<laps>" lines, the fastest first (other tracks' lines are kept as they are,
- * and so are a track's times over another number of laps -- a line without its laps: the menu's laps= -- but not shown).
+ * BESTTIMES.TXT: "<track>|<trial's time ms>|<best lap ms>|<car>|<date>|<laps>|lap" lines, a time trial's fastest single lap (and its
+ * whole time, GO to the last lap's line, over <laps> laps), the fastest lap first. A line without "lap" at its end -- the whole trials'
+ * times kept before 2026-10-18, "<track>|<time ms>|<best lap ms>|<car>|<date>[|<laps>]" -- is kept as it is but not shown, as are other
+ * tracks' lines and lines that can't be read: a whole trial's time is never taken for a lap's.
  */
 #include "C_EXTERN.H"
 #include "CONSOLE/CONSOLE.H"
@@ -93,7 +96,7 @@ typedef struct {
 } T_RG_CAR;
 
 typedef struct {
-    S32 Time, Lap;
+    S32 Time, Lap, Laps;                    // the trial's whole time, its fastest lap (what ranks it), its laps
     char Car[96], Date[16];
 } T_RG_TIME;
 
@@ -110,9 +113,9 @@ static int s_lastSp = 0, s_lastTrial = 0;
 static int s_level = 1;                     // the difficulty chosen last: 0 easy, 1 medium, 2 hard (RACEGAME_SETTINGS.TXT)
 static const char *const s_levelName[3] = {"Easy", "Medium", "Hard"};
 
-static T_RG_TIME s_times[RG_MAX_SPECIALS][RG_MAX_TIMES];
+static T_RG_TIME s_times[RG_MAX_SPECIALS][RG_MAX_TIMES];   // each special's best laps, the fastest first
 static int s_nbTimes[RG_MAX_SPECIALS];
-static char s_other[RG_OTHER_SIZE];         // BESTTIMES.TXT's lines of other tracks
+static char s_other[RG_OTHER_SIZE];         // BESTTIMES.TXT's other lines: other tracks', the whole trials' times of before 2026-10-18
 static int s_timesRead = 0;
 
 // the race on
@@ -289,6 +292,17 @@ static int SpecialLaps(int sp) {
     return s->Laps;
 }
 
+// A best lap into its track's ten fastest, in its place (a lap as fast as one already there after it): its rank (1-10), 0 for none.
+static int AddLap(int sp, const T_RG_TIME *t) {
+    int k = 0;
+    while (k < s_nbTimes[sp] && s_times[sp][k].Lap <= t->Lap) k++;
+    if (k >= RG_MAX_TIMES) return 0;
+    if (s_nbTimes[sp] < RG_MAX_TIMES) s_nbTimes[sp]++;
+    for (int j = s_nbTimes[sp] - 1; j > k; j--) s_times[sp][j] = s_times[sp][j - 1];
+    s_times[sp][k] = *t;
+    return k + 1;
+}
+
 static void ReadTimes(void) {
     if (s_timesRead) return;
     s_timesRead = 1;
@@ -299,45 +313,47 @@ static void ReadTimes(void) {
     FILE *f = fopen(path, "r");
     if (!f) return;
     char line[512];
+    int laps = 0, kept = 0;
     while (fgets(line, sizeof(line), f)) {
         Trim(line);
         if (!line[0]) continue;
-        char track[96], ms[16], lap[16], laps[16];
+        char track[96], ms[16], lap[16], nb[16], kind[16];
         T_RG_TIME t;
         const char *p = Field(line, track, sizeof(track));
         p = Field(p, ms, sizeof(ms));
         p = Field(p, lap, sizeof(lap));
         p = Field(p, t.Car, sizeof(t.Car));
         p = Field(p, t.Date, sizeof(t.Date));
-        Field(p, laps, sizeof(laps));
+        p = Field(p, nb, sizeof(nb));
+        Field(p, kind, sizeof(kind));
         t.Time = atoi(ms);
         t.Lap = atoi(lap);
+        t.Laps = nb[0] ? atoi(nb) : s_laps;
+        // (a best lap's line ends in "lap"; one without it -- a whole trial's time, as they were kept before 2026-10-18 -- is kept, never
+        // shown as a lap. A lap is a lap however long its trial was: the Temple of Bú's three-lap trials' too.)
         int sp = -1;
-        for (int i = 0; i < s_nbSp && sp < 0; i++) if (!strcmp(s_sp[i].Name, track)) sp = i;
-        // (a time over another number of laps -- the track's race made longer since: the Temple of Bú's three laps, before 2026-10-17 -- is
-        // kept, not shown)
-        if (sp >= 0 && (laps[0] ? atoi(laps) : s_laps) != SpecialLaps(sp)) sp = -1;
+        if (!strcmp(kind, "lap") && t.Lap > 0)
+            for (int i = 0; i < s_nbSp && sp < 0; i++) if (!strcmp(s_sp[i].Name, track)) sp = i;
         if (sp < 0) {
-            if (strlen(s_other) + strlen(line) + 2 < sizeof(s_other)) { strcat(s_other, line); strcat(s_other, "\n"); }
+            if (strlen(s_other) + strlen(line) + 2 < sizeof(s_other)) { strcat(s_other, line); strcat(s_other, "\n"); kept++; }
             continue;
         }
-        if (t.Time <= 0 || s_nbTimes[sp] >= RG_MAX_TIMES) continue;
-        int k = s_nbTimes[sp]++;
-        for (; k > 0 && s_times[sp][k - 1].Time > t.Time; k--) s_times[sp][k] = s_times[sp][k - 1];
-        s_times[sp][k] = t;
+        AddLap(sp, &t);
+        laps++;
     }
     fclose(f);
+    Log_Info("[racegame] best laps read: %d lap line(s), %d other line(s) kept as they are (other tracks', whole trials' times)", laps, kept);
 }
 
 static void WriteTimes(void) {
     char path[ADELINE_MAX_PATH];
     TimesPath(path);
     FILE *f = fopen(path, "w");
-    if (!f) { Log_Warn("[racegame] the best times could not be written to %s", path); return; }
+    if (!f) { Log_Warn("[racegame] the best laps could not be written to %s", path); return; }
     for (int sp = 0; sp < s_nbSp; sp++)
         for (int k = 0; k < s_nbTimes[sp]; k++) {
             const T_RG_TIME *t = &s_times[sp][k];
-            fprintf(f, "%s|%d|%d|%s|%s|%d\n", s_sp[sp].Name, (int)t->Time, (int)t->Lap, t->Car, t->Date, SpecialLaps(sp));
+            fprintf(f, "%s|%d|%d|%s|%s|%d|lap\n", s_sp[sp].Name, (int)t->Time, (int)t->Lap, t->Car, t->Date, (int)t->Laps);
         }
     fputs(s_other, f);
     fclose(f);
@@ -348,33 +364,34 @@ static void TimeText(char *out, size_t size, S32 ms) {
     snprintf(out, size, "%d:%02d.%02d", (int)(ms / 60000), (int)(ms / 1000 % 60), (int)(ms / 10 % 100));
 }
 
-// RACEMOD.CPP: a race is over. A time trial's time into its track's best times: the rank it took (1-10), 0 for none.
+// RACEMOD.CPP: a race is over -- `total` its time from GO to the last lap's line, `bestLap` its fastest lap (the lap clock's: line to
+// line, a qualifying lap's never). A time trial's fastest lap into its track's best laps: the rank it took (1-10), 0 for none.
 S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers) {
     if (!RaceGame_On()) return 0;
     s_raceOver = 1;
-    char t[24];
+    char t[24], l[24];
     TimeText(t, sizeof(t), total);
-    Log_Info("[racegame] %s over: %s, %d of %d%s%s", trial ? "the time trial" : "the race", t, (int)place, (int)racers,
-             !trial && s_raceLevel >= 0 && s_raceLevel <= 2 ? ", difficulty " : "", !trial && s_raceLevel >= 0 && s_raceLevel <= 2 ? s_levelName[s_raceLevel] : "");
-    if (!trial || s_raceSp < 0 || s_raceSp >= s_nbSp || total <= 0) return 0;
+    TimeText(l, sizeof(l), bestLap);
+    Log_Info("[racegame] %s over: %s, best lap %s, %d of %d%s%s", trial ? "the time trial" : "the race", t, bestLap > 0 ? l : "none", (int)place,
+             (int)racers, !trial && s_raceLevel >= 0 && s_raceLevel <= 2 ? ", difficulty " : "",
+             !trial && s_raceLevel >= 0 && s_raceLevel <= 2 ? s_levelName[s_raceLevel] : "");
+    if (!trial || s_raceSp < 0 || s_raceSp >= s_nbSp || bestLap <= 0) return 0;
     ReadTimes();
     const int sp = s_raceSp;
-    int k = 0;
-    while (k < s_nbTimes[sp] && s_times[sp][k].Time <= total) k++;
-    if (k >= RG_MAX_TIMES) return 0;
-    if (s_nbTimes[sp] < RG_MAX_TIMES) s_nbTimes[sp]++;
-    for (int j = s_nbTimes[sp] - 1; j > k; j--) s_times[sp][j] = s_times[sp][j - 1];
-    T_RG_TIME *e = &s_times[sp][k];
-    e->Time = total;
-    e->Lap = bestLap;
-    snprintf(e->Car, sizeof(e->Car), "%s", s_raceCar >= 0 && s_raceCar < s_nbCars ? s_cars[s_raceCar].Name : "");
+    T_RG_TIME e;
+    e.Time = total;
+    e.Lap = bestLap;
+    e.Laps = SpecialLaps(sp);
+    snprintf(e.Car, sizeof(e.Car), "%s", s_raceCar >= 0 && s_raceCar < s_nbCars ? s_cars[s_raceCar].Name : "");
     const time_t now = time(NULL);
     const struct tm *tm = localtime(&now);
-    if (tm) strftime(e->Date, sizeof(e->Date), "%Y-%m-%d", tm);
-    else e->Date[0] = 0;
+    if (tm) strftime(e.Date, sizeof(e.Date), "%Y-%m-%d", tm);
+    else e.Date[0] = 0;
+    const int rank = AddLap(sp, &e);
+    if (!rank) { Log_Info("[racegame] best laps of %s: %s not among the ten fastest", s_sp[sp].Name, l); return 0; }
     WriteTimes();
-    Log_Info("[racegame] best times of %s: %d%s", s_sp[sp].Name, k + 1, k == 0 ? " (the best)" : "");
-    return k + 1;
+    Log_Info("[racegame] best laps of %s: %s is %d%s", s_sp[sp].Name, l, rank, rank == 1 ? " (the best)" : "");
+    return rank;
 }
 
 // ---- the race ----------------------------------------------------------------------------------------------------------------------
@@ -445,7 +462,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_TRACKS: Label(string, "Track select"); return 1;
     case RG_ID_SPECIALS: Label(string, "Specials"); return 1;
-    case RG_ID_TIMES: Label(string, "Best times"); return 1;
+    case RG_ID_TIMES: Label(string, "Best laps"); return 1;
     case RG_ID_RACE: Label(string, "Race"); return 1;
     case RG_ID_TRIAL: Label(string, "Time trial"); return 1;
     case RG_ID_QUALIFY: Label(string, "Qualifying lap"); return 1;
@@ -578,7 +595,8 @@ static int CarPage(const char *what) {
     return chosen;
 }
 
-// Best times: a track's ten fastest time trials (left and right go through the tracks); Esc, Enter or a click goes back.
+// Best laps: a track's ten fastest laps of a time trial, with the car (left and right go through the tracks); Esc, Enter or a click
+// goes back.
 static void TimesPage(void) {
     ReadTimes();
     Page(NULL, 0);
@@ -604,13 +622,16 @@ static void TimesPage(void) {
             Page(NULL, 0);
             ShadeBoxBlk(x0, y0, x1, y1, MENU_SHADE_LVL);
             DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
-            Text(cx, y0 + 12, "Best times", RG_ORANGE);
+            Text(cx, y0 + 12, "Best laps", RG_ORANGE);
             Text(cx, y0 + 48, s_nbSp ? s_sp[sp].Name : "No tracks", LBAWHITE);
-            if (sp < s_nbSp && !s_nbTimes[sp]) Text(cx, y0 + 150, "No times yet: drive a time trial!", RG_GREY);
+            if (sp < s_nbSp && !s_nbTimes[sp]) {
+                Text(cx, y0 + 150, "No laps yet: drive a time trial!", RG_GREY);
+                Text(cx, y0 + 186, "Its fastest lap goes here.", RG_GREY);
+            }
             for (int k = 0; sp < s_nbSp && k < s_nbTimes[sp]; k++) {
                 const T_RG_TIME *t = &s_times[sp][k];
                 char time[24], line[200];
-                TimeText(time, sizeof(time), t->Time);
+                TimeText(time, sizeof(time), t->Lap);
                 snprintf(line, sizeof(line), "%2d.  %s   %s", k + 1, time, t->Car);
                 char text[256];
                 Label(text, line);
