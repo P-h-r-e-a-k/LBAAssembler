@@ -458,8 +458,9 @@ for (cx_, cz_, r_), lo_, hi_ in ((SPIRAL_W, CRYPT, FIRST), (SPIRAL_E, top(-5), F
 for p0, p1, hy in (((W_END + 30, CORR_Z), (E_END - 20, CORR_Z), FIRST + 3200), ((330, 300), (395, 380), LOWER + 3400),
                    ((380, 560), (440, 600), CRYPT + 3400), ((470, 585), (530, 630), CRYPT + 3400)):
     spooks.append({'kind': 'witch', 'flags': 1, 'y': round(float(hy), 1), 'way': [list(map(float, p0)), list(map(float, p1))]})
-# ghosts drifting across the road, a little over the cars
-ghost_at = [nearest(p) for p in ((420, CORR_Z), (500, CORR_Z), (W_END, 360), (300, 340), (262, 372), (410, CRYPT_Z), (470, 618), (500, 560), (540, SPIRAL_E[1] + SPIRAL_E[2]))]
+# ghosts drifting across the road, a little over the cars (the crypt's west room's past the start line and the flag marshal's places by it:
+# across at the line, it drifted through her -- RACEMOD.CPP marshal=)
+ghost_at = [nearest(p) for p in ((420, CORR_Z), (500, CORR_Z), (W_END, 360), (300, 340), (262, 372), (417, CRYPT_Z), (470, 618), (500, 560), (540, SPIRAL_E[1] + SPIRAL_E[2]))]
 for j, i in enumerate(ghost_at):
     spooks.append({'kind': 'ghost', 'flags': 0, 'y': round(float(h[i] + 1300 + 300 * (j % 3)), 1), 'way': across(i, half[i] + 10)})
 # bats wheeling high over the road
@@ -679,6 +680,12 @@ print('cobwebs', len(cobwebs), {nm: sum(1 for c in cobwebs if c[0] == kk) for kk
 # ---- the start: on the straight through the crypt's west room, heading east (the grid behind it, in the room)
 i_start = nearest((410, CRYPT_Z), i_down_out)
 print('start', i_start, tuple(np.round(pts[i_start], 1)), 'height', round(h[i_start]))
+# ... the grid in two columns with a lane between them (the user, 2026-10-18: "let's have her start the race from the grid between the
+# cars, with cars going either side of her"): the flag marshal stands in the road's middle ahead of the front row (Temple.TempleMarshal),
+# the cars GRID_SIDE either side of it -- 2.75 cells: a gap of 3 cells between the columns' car boxes (1.24 cells round a car's middle), and
+# a car's middle half a cell inside its rail (1.25 inside the 4.5-cell road's edge) -- pole GRID_FIRST behind the line, its nose (1.74
+# cells ahead of its middle) a cell and a quarter behind her (RaceTrackScenes.GridSpot; the usual: 3 back, 1.75 across)
+GRID_FIRST, GRID_SIDE = 5.0, 2.75
 # ---- where the opponents wait while the player qualifies: in the slip lane, along its middle, heading the way the lap runs, on its deck
 # (the road's height there) -- in the start's cube (the build writes no other cube's) and clear of the lane's edges and ends
 slip_mid = (SLIP_FAR + SLIP_NEAR) / 2
@@ -706,6 +713,7 @@ plan = {
     'railCamera': [9, 2100, 7, 500, 1000],
     'templeCuts': sorted([list(c) for c in cuts]),
     'pitSpots': pit_spots,
+    'gridFirst': GRID_FIRST, 'gridSide': GRID_SIDE,
     'halloween': {'decor': decor, 'spooks': spooks, 'pumpkins': True, 'dives': dives, 'scares': scares, 'haunt': True, 'giantWebs': giant_webs},
     'keepAbove': 0,
 }

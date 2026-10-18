@@ -185,7 +185,8 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? WebParts = null,
         // Marshal: the flag marshal by the start line (Temple.TempleMarshal.Line; RACEMOD.CPP marshal=): her entity, its body and animations
         // (ready, the raise, the drop, the wave), where she stands (island units: x, z, the top of her plinth) and the way she faces -- the
-        // Temple of Bú's, since 2026-10-17
+        // Temple of Bú's, since 2026-10-17; then (2026-10-18) her plinth's body (marshal_plinth=) and, when she gives the start from the
+        // road between the grid's columns, where she stands for it (x, z, the road's height, the way she faces: marshal_start=)
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Marshal = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
@@ -768,7 +769,7 @@ internal static class RaceTrackService
         }
         // ... and the Temple of Bú's flag marshal by its start line: where she stands now (the race file's marshal=), her body and animations
         // at the end of a build of several tracks (Build: every other track's where they were), or here
-        if (options.Island.FlagMarshal && LBAAssembler.Terrain.Temple.TempleMarshal.Place(gameDirectory, report) is { } marshal)
+        if (options.Island.FlagMarshal && LBAAssembler.Terrain.Temple.TempleMarshal.Place(gameDirectory, report, options.GridFirst, options.GridSide) is { } marshal)
         {
             report.Marshal = marshal;
             if (!session.Marshal)

@@ -8,7 +8,8 @@ using LBAAssembler.Terrain.Temple;
 namespace ScriptRoundTrip;
 
 // templemarshal <game folder> <out folder> [yaw degrees] [palette entry]: the Temple of Bú's flag marshal (Temple.TempleMarshal) made from
-// the folder's BODY.HQR 124 and entity 77's standing -- read back and checked (bones, points, polygons, the animations' sizes) -- and drawn
+// the folder's BODY.HQR 124 and entity 77's standing -- read back and checked (bones, points, polygons, the animations' sizes; her plinth's
+// body) -- and drawn
 // offline (meshshot) in every keyframe of each of his animations, from in front a little to one side: <out>/<animation>_<keyframe>.png;
 // and the game's own body as its standing has it (<out>/retail.png). The island's palette: the Temple of Bú's (or Otringal's) by default.
 internal static class TempleMarshalCommand
@@ -30,6 +31,10 @@ internal static class TempleMarshalCommand
         var built = LbaBodyStudio.Body.Read(bytes, 2, allowStatic: true);
         Console.WriteLine($"body: {bytes.Length} bytes, {built.Bones.Count} bones, {built.Vertices.Count} points, {built.Faces.Count} polygons, {built.Lines.Count} lines, " +
                           $"{built.Spheres.Count} spheres ({built.Faces.Count + built.Lines.Count + built.Spheres.Count} of 550); the game's: {LbaBodyStudio.Body.Read(retailBytes, 2, allowStatic: true).Faces.Count} polygons");
+        // (her plinth, a body of its own: read back too)
+        var plinthBytes = TempleMarshal.MakePlinth(retailBytes);
+        var plinth = LbaBodyStudio.Body.Read(plinthBytes, 2, allowStatic: true);
+        Console.WriteLine($"plinth: {plinthBytes.Length} bytes, {plinth.Bones.Count} bone, {plinth.Vertices.Count} points, {plinth.Faces.Count} polygons");
         var names = new[] { "ready", "raise", "drop", "wave" };
         for (var k = 0; k < anims.Length; k++)
         {

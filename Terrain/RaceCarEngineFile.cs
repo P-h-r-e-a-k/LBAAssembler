@@ -126,8 +126,14 @@ internal static class RaceCarEngineFile
             text.Append($"web={string.Join(' ', track!.GiantWebs![i])}\n");
             foreach (var part in (track.WebParts ?? new()).Where(p => p.Length >= 6 && p[0] == i)) text.Append($"web_part={string.Join(' ', part.Skip(1))}\n");
         }
-        // the flag marshal by the start line: the start flag dropped at GO, the chequered flag waved at the finish (the Temple of Bú's)
-        if (track?.Marshal is { Length: >= 10 } marshal) text.Append($"marshal={string.Join(' ', marshal)}\n");
+        // the flag marshal by the start line: the start flag dropped at GO, the chequered flag waved at the finish -- on her plinth beside the
+        // road, and for the start on the road between the grid's columns (the Temple of Bú's)
+        if (track?.Marshal is { Length: >= 10 } marshal)
+        {
+            text.Append($"marshal={string.Join(' ', marshal.Take(10))}\n");
+            if (marshal.Length >= 11) text.Append($"marshal_plinth={marshal[10]}\n");
+            if (marshal.Length >= 15) text.Append($"marshal_start={string.Join(' ', marshal.Skip(11).Take(4))}\n");
+        }
         // the people in the cars' way, stepping out at them, striking and throwing (the Emperor's palace's)
         foreach (var guard in track?.Guards ?? new()) text.Append($"guard={string.Join(' ', guard)}\n");
         if (track?.Guards is { Count: > 0 }) text.Append($"guard_size={(int)Math.Round(RaceTrackGuards.Size * 100)}\n");

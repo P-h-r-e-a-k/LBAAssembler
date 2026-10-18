@@ -160,6 +160,11 @@
  *                                entity's body and animations, its own numbers for them; island units, the plinth's top; the way she faces):
  *                                the start flag raised for the count-down and dropped at GO (and for the qualifying lap as it begins), the
  *                                chequered flag waved from the first car's finish until Twinsen's race is over (Marshal, DrawMarshal)
+ *     marshal_plinth=<body>      her plinth, a body of its own (the entity's number for it), standing where marshal= has her (its top there)
+ *     marshal_start=<x> <z> <y> <turn>   where she gives the start from (island units, the road's height; the way she faces): on the road
+ *                                between the grid's columns, ahead of the front row -- there for the count-down and GO (and a qualifying
+ *                                lap's start), the cars set off past her on either side (kept off her: MarshalPost, MarshalKeepOff), and
+ *                                once they have she hops off the road onto her plinth (Marshal)
  */
 #include <errno.h>
 #include <string.h>
@@ -1366,20 +1371,57 @@ static S32 s_webScreenAt = 0, s_webScreenUntil = 0;   // a web over Twinsen's sc
 // the count-down's 3 shows and held up; dropped at GO -- and, before a qualifying lap, held up until Twinsen's car crosses the line and
 // dropped as his timed lap begins; the chequered flag waved as the first car on its last lap comes up to the line -- out before it gets
 // there, so its driver sees it (waved from its finish on, the leader's camera had already gone past her) -- until RACE_MARSHAL_WAVE after
-// the last finish she has seen, and for as long as Twinsen hasn't finished. She touches nothing.
+// the last finish she has seen, and for as long as Twinsen hasn't finished.
+// Where she stands (the user, 2026-10-18: "The magicians assistant who waves the flag isn't visible behind the start finish line, let's
+// have her start the race from the grid between the cars, with cars going either side of her. Then have her standing close to the track to
+// wave the flag at the end of the race"): with marshal_start= and a grid, she gives the start from the road -- between the grid's columns
+// ahead of the front row, facing the cars, in the middle of the view of the camera behind every car on the grid -- from the grid's forming
+// (and before a qualifying lap) to GO's drop; once every car has driven past her (or RACE_MARSHAL_STAY after GO, whatever they do) she hops
+// off the road onto her plinth beside it (marshal_plinth=, drawn there all the while), where she stands the rest of the race and waves the
+// chequered flag. While she is on the road nothing drives through her: Twinsen's car glances off her as off a post (MarshalPost, with the
+// rail -- put out across the lap to RACE_MARSHAL_POST from her middle, on its own side, going on at its speed: never stopped), and each
+// opponent keeps to its grid column until it is past her (MarshalColumn) and is put out the same way were it ever nearer (MarshalKeepOff);
+// the log says how close each car came. The camera behind Twinsen's car sees her: pulled back on the grid behind pole, and swerving round
+// her as the car sets off -- it rides the road's middle, where she stands (MarshalBack, MarshalEye). Without marshal_start= (or a grid)
+// she stays on her plinth, as she did before.
 #define RACE_MARSHAL_RAISE 3000            // ms before GO she raises the start flag (the count-down's 3) ...
 #define RACE_MARSHAL_DROP 1600             // ... and the drop's, from GO, before she stands ready again
 #define RACE_MARSHAL_COMING (40 * 512.0)   // the chequered flag out as a car on its last lap comes this near the line along the lap ...
 #define RACE_MARSHAL_WAVE 6000             // ... and waved on this long (ms) after a car's finish
+#define RACE_MARSHAL_POST 1000.0           // on the road nothing's middle comes nearer hers than this: a car's box (633 round its middle) and her
+                                           // (330 round hers, 1.6 times the game's assistant) apart
+#define RACE_MARSHAL_PAST (3 * 512.0)      // a car is past her once its middle is this far beyond hers along the lap (its tail, 1.5 cells
+                                           // behind its middle, clear of her) ...
+#define RACE_MARSHAL_STAY 15000            // ... and she leaves the road this long after GO whether or not every car has
+#define RACE_MARSHAL_HOP_LEN (1.5 * 512.0) // her hops off the road onto her plinth: this long at most ...
+#define RACE_MARSHAL_HOP_MS 380            // ... each this long (ms) ...
+#define RACE_MARSHAL_HOP_UP 380.0          // ... and this high over the line between where it is from and to
 enum { MARSHAL_READY, MARSHAL_RAISE, MARSHAL_DROP, MARSHAL_WAVE, MARSHAL_ANIMS };
+enum { MARSHAL_AT_START, MARSHAL_HOPPING, MARSHAL_AT_PLINTH };
 typedef struct {
     int On, Ready, Entity, Body, Gen[MARSHAL_ANIMS];
     S32 BodyIndex, Index[MARSHAL_ANIMS];
-    double X, Z, Y; S32 Beta;
+    double X, Z, Y; S32 Beta;              // her plinth's top, the way she faces there
     int Want, Shown;                       // the animation the moment wants, and the one she plays
     S32 WaveUntil;                         // (0: no car has come up to the finish yet)
     int Finished[RACE_MAX_OPPONENTS], MeFinished, Finishers;
     T_OBJ_3D Obj;
+    int HasPlinth, Plinth, PlinthReady;    // her plinth (marshal_plinth=; PlinthReady -1: no such body)
+    S32 PlinthIndex;
+    T_OBJ_3D PlinthObj;
+    int HasStart;                          // where she gives the start from (marshal_start=)
+    double StartX, StartZ, StartY; S32 StartBeta;
+    int Where;                             // MARSHAL_AT_START, _HOPPING, _AT_PLINTH
+    double CX, CZ, CY; S32 CBeta;          // where she is now (island units), the way she faces
+    S32 HopAt;                             // her hops: since, from where, how many
+    double HopX, HopZ, HopY; S32 HopBeta;
+    int Hops;
+    int Passed[RACE_MAX_OPPONENTS], MePassed, Kept[RACE_MAX_OPPONENTS], Glanced;
+    double Closest[RACE_MAX_OPPONENTS + 1];   // each car's nearest to her middle on the road (the opponents', Twinsen's last)
+    double Column[RACE_MAX_OPPONENTS];     // each opponent's way across from her middle on its grid spot (HasColumn: known)
+    int HasColumn[RACE_MAX_OPPONENTS];
+    double EyeBack; int EyeSide;           // the rail camera: how far behind the car its eye is on the grid (0: as usual), the side it swerves to
+    S32 EyeFrom;                           // ... and since when it eases back to the usual (0: not yet)
 } T_RACE_MARSHAL;
 static T_RACE_MARSHAL s_marshal;
 static S32 s_bittenUntil[RACE_MAX_OPPONENTS + 1];  // a car just bitten is let be till then -- a monster beside it doesn't bite it again
@@ -1983,6 +2025,8 @@ static int GapBetween(int a, int b) {
     return 0;
 }
 
+static double MarshalBack(double back, double hx, double hz);
+static void MarshalEye(double *ex, double *ez, double hx, double hz);
 static S32 RailCamera(S32 *eye, S32 *target) {
     if (s_railBack <= 0 || !s_nbRaised || CubeMode != CUBE_EXTERIEUR || Comportement != C_BUGGY) return FALSE;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -2004,7 +2048,8 @@ static S32 RailCamera(S32 *eye, S32 *target) {
     // (round a tight bend the road s_railBack behind the car is off to its side: the eye comes nearer, until it looks along the way
     // the car faces within RAIL_CAMERA_SIDE)
     const double fx = sin(angle), fz = cos(angle);
-    double back = s_railBack;
+    // (the flag marshal on the road for the start: further back on the grid behind a car near behind her, to see her flag raised)
+    double back = MarshalBack(s_railBack, hx, hz);
     int behind = RaisedAlong(seg, t, -way * back, &ex, &ey, &ez);
     // (... and nearer still, past RAIL_CAMERA_NEAREST, while it would ride over a jump's gap the car has just flown)
     while (back > 512) {
@@ -2050,6 +2095,8 @@ static S32 RailCamera(S32 *eye, S32 *target) {
     // under a level of the road over the eye
     double over;
     if (RaisedBetween(ex, ez, ey - up - lift + 800.0, ey + RAISED_UNDER, behind, &over) && ey > over - RAISED_UNDER) ey = over - RAISED_UNDER;
+    // (... and round her, not through her, as the car sets off past her)
+    MarshalEye(&ex, &ez, hx, hz);
     eye[0] = (S32)(ex - cx); eye[1] = (S32)ey; eye[2] = (S32)(ez - cz);
     target[0] = (S32)(tx - cx); target[1] = (S32)(ty + s_railAim); target[2] = (S32)(tz - cz);
     FollowCamEyeWho = "rail";
@@ -2229,7 +2276,10 @@ static int s_railWhy = 0, s_railSeg = -1;
 static double s_railLat = 0, s_railLo = 0, s_railHi = 0;
 static S32 s_railAt = 0;
 #define RAIL_NOTE(w) (s_railWhy = (w), s_railAt = TimerRefHR)
+static void MarshalPost(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
+    // (the flag marshal on the road for the start: a post the car glances off)
+    MarshalPost(ox, oy, oz, nx, nz);
     if (!s_nbRaised || CubeMode != CUBE_EXTERIEUR) return;
     if (s_flying >= 0 || s_arcOn >= 0) return; // (a jump's flight is scripted: the rail held a car on it back at the lip, and the flight went nowhere)
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
@@ -2888,7 +2938,21 @@ static void Load(const char *path, int carOnly = 0) {
                 m->Entity = f[0]; m->Body = f[1];
                 for (int k = 0; k < MARSHAL_ANIMS; k++) m->Gen[k] = f[2 + k];
                 m->X = f[6]; m->Z = f[7]; m->Y = f[8]; m->Beta = f[9] & 4095;
+                m->CX = m->X; m->CZ = m->Z; m->CY = m->Y; m->CBeta = m->Beta; m->Where = MARSHAL_AT_PLINTH;
                 m->On = 1;
+            }
+        }
+        else if (!strcmp(key, "marshal_plinth")) {
+            // (after marshal=, which starts her afresh)
+            int body;
+            if (sscanf(v, "%d", &body) == 1 && body >= 0) { s_marshal.Plinth = body; s_marshal.HasPlinth = 1; }
+        }
+        else if (!strcmp(key, "marshal_start")) {
+            int f[4];
+            if (sscanf(v, "%d %d %d %d", &f[0], &f[1], &f[2], &f[3]) == 4) {
+                T_RACE_MARSHAL *m = &s_marshal;
+                m->StartX = f[0]; m->StartZ = f[1]; m->StartY = f[2]; m->StartBeta = f[3] & 4095;
+                m->HasStart = 1;
             }
         }
         else if (!strcmp(key, "gasmonster")) {
@@ -4816,6 +4880,240 @@ static S32 EntityEntry(S32 entity, U8 what, S32 generic) {
     return -1;
 }
 
+// ---- where she stands: on the road for the start, hopping off it, on her plinth
+
+// Whether she stands on the road now (for the start, or hopping off it): nothing drives through her.
+static int MarshalOnRoad(void) {
+    const T_RACE_MARSHAL *m = &s_marshal;
+    return m->On && m->HasStart && m->Where != MARSHAL_AT_PLINTH && CubeMode == CUBE_EXTERIEUR;
+}
+
+// The lap's way where she gives the start (she faces back along it there): x and z.
+static void MarshalWay(double *fx, double *fz) {
+    const double b = s_marshal.StartBeta * 2 * RACE_PI / 4096.0;
+    *fx = -sin(b); *fz = -cos(b);
+}
+
+// Something's middle at (x, z) (island units; at height y) kept RACE_MARSHAL_POST from hers while she stands on the road: put out across
+// the lap to that, on its own side (`was`: how far across it was, for one right in line with her), its place along the lap kept -- a car
+// glances off her, it isn't stopped. 1: put out.
+static int MarshalOff(double *x, double *z, double y, double was) {
+    const T_RACE_MARSHAL *m = &s_marshal;
+    if (!MarshalOnRoad() || fabs(y - m->CY) > 1500) return 0;
+    const double rx = *x - m->CX, rz = *z - m->CZ;
+    if (rx * rx + rz * rz >= RACE_MARSHAL_POST * RACE_MARSHAL_POST) return 0;
+    double fx, fz;
+    MarshalWay(&fx, &fz);
+    const double along = rx * fx + rz * fz, across = -rx * fz + rz * fx;
+    const double side = fabs(across) > 1 ? across : fabs(was) > 1 ? was : 1;
+    const double out = sqrt(RACE_MARSHAL_POST * RACE_MARSHAL_POST - along * along) * (side > 0 ? 1 : -1);
+    *x = m->CX + fx * along - fz * out;
+    *z = m->CZ + fz * along + fx * out;
+    return 1;
+}
+
+// RaceMod_Rail's: the hero's move from (ox, oy, oz) to (*nx, *nz) (cube-local) kept off the flag marshal while she stands on the road -- a
+// post his car glances off (MarshalOff), going on at its speed.
+static void MarshalPost(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
+    T_RACE_MARSHAL *m = &s_marshal;
+    if (!MarshalOnRoad()) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    double x = *nx + cx, z = *nz + cz, fx, fz;
+    MarshalWay(&fx, &fz);
+    const double was = -(ox + cx - m->CX) * fz + (oz + cz - m->CZ) * fx;
+    const double d = sqrt((x - m->CX) * (x - m->CX) + (z - m->CZ) * (z - m->CZ));
+    if (!MarshalOff(&x, &z, oy, was)) return;
+    static S32 said = 0;
+    if (TimerRefHR - said > 1000) Log_Info("[racemod] the flag marshal: Twinsen's car glances off her (its middle %.0f from hers, put out to %.0f)", d, RACE_MARSHAL_POST);
+    said = TimerRefHR;
+    m->Glanced++;
+    *nx = (S32)floor(x - cx + 0.5); *nz = (S32)floor(z - cz + 0.5);
+}
+
+// While she stands on the road for the start, an opponent that hasn't driven past her keeps to its grid column -- its line runs across the
+// road there, to where it takes the corner after the line: through her, some of them -- its way across from its line (MergeX, MergeZ, which
+// fade out over RACE_MERGE as it drives) set every frame to put it where its line has it along the lap and its grid spot had it across
+// (`x`, `z`: its line's point, island units); past her (its middle RACE_MARSHAL_PAST beyond hers) it is let go, onto its line from there.
+static void MarshalColumn(int n, T_RACE_OPPONENT *o, double x, double z) {
+    T_RACE_MARSHAL *m = &s_marshal;
+    if (!MarshalOnRoad() || m->Where != MARSHAL_AT_START || m->Passed[n] || s_phase != PHASE_RACE) return;
+    double fx, fz;
+    MarshalWay(&fx, &fz);
+    const double f = o->MergeLeft / RACE_MERGE, px = x + o->MergeX * f - m->CX, pz = z + o->MergeZ * f - m->CZ;
+    const double along = px * fx + pz * fz;
+    if (!m->HasColumn[n]) { m->Column[n] = -px * fz + pz * fx; m->HasColumn[n] = 1; }
+    if (along > RACE_MARSHAL_PAST) { m->Passed[n] = 1; return; }
+    o->MergeX = m->CX + fx * along - fz * m->Column[n] - x;
+    o->MergeZ = m->CZ + fz * along + fx * m->Column[n] - z;
+    o->MergeLeft = RACE_MERGE;
+}
+
+// An opponent's car (its actor, placed this frame) put out of her way while she stands on the road (MarshalOff), on its grid column's side
+// -- were its column too near her; the nearest it comes kept for the log.
+static void MarshalKeepOff(int n, T_OBJET *car) {
+    T_RACE_MARSHAL *m = &s_marshal;
+    if (!MarshalOnRoad()) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    double x = car->Obj.X + cx, z = car->Obj.Z + cz, fx, fz;
+    MarshalWay(&fx, &fz);
+    const double d = sqrt((x - m->CX) * (x - m->CX) + (z - m->CZ) * (z - m->CZ));
+    if (MarshalOff(&x, &z, car->Obj.Y, m->HasColumn[n] ? m->Column[n] : -s_opp[n].MergeX * fz + s_opp[n].MergeZ * fx)) {
+        if (!m->Kept[n]++) Log_Info("[racemod] the flag marshal: %s's car kept off her (its line %.0f from her middle, put out to %.0f)", s_opp[n].Name, d, RACE_MARSHAL_POST);
+        car->Obj.X = (S32)floor(x - cx + 0.5); car->Obj.Z = (S32)floor(z - cz + 0.5);
+    }
+    const double e = sqrt((x - m->CX) * (x - m->CX) + (z - m->CZ) * (z - m->CZ));
+    if (s_phase == PHASE_RACE && e < m->Closest[n]) m->Closest[n] = e;
+}
+
+// The rail camera (RailCamera) by her on the road. On the grid -- and on pole before a qualifying lap, while the car stands -- the eye of a
+// car near behind her (pole's) RACE_MARSHAL_SEEN behind her at least, not the camera's usual distance behind the car (`back`): nearer, her
+// start flag raised was over the top of its view; eased back to the usual over RACE_MARSHAL_EASE once the car is off (GO). Returns how far
+// behind the car the eye is.
+#define RACE_MARSHAL_SEEN (15.5 * 512.0)
+#define RACE_MARSHAL_EASE 1500
+static double MarshalBack(double back, double hx, double hz) {
+    T_RACE_MARSHAL *m = &s_marshal;
+    if (!MarshalOnRoad() || m->Where != MARSHAL_AT_START) { m->EyeBack = 0; return back; }
+    if (s_phase == PHASE_GRID || (s_phase == PHASE_QUALIFYING && s_laps == 0 && abs(ListBuggy[0].Speed) < 100)) {
+        double fx, fz;
+        MarshalWay(&fx, &fz);
+        const double ahead = (m->CX - hx) * fx + (m->CZ - hz) * fz;
+        m->EyeBack = ahead > 0 && RACE_MARSHAL_SEEN - ahead > back ? RACE_MARSHAL_SEEN - ahead : 0;
+        m->EyeFrom = 0;
+        return m->EyeBack > back ? m->EyeBack : back;
+    }
+    if (m->EyeBack <= back) return back;
+    if (!m->EyeFrom) m->EyeFrom = TimerRefHR;
+    double k = 1 - (TimerRefHR - m->EyeFrom) / (double)RACE_MARSHAL_EASE;
+    if (k <= 0) { m->EyeBack = 0; return back; }
+    k = k * k * (3 - 2 * k);
+    return back + (m->EyeBack - back) * k;
+}
+
+// ... and as the cars set off: its eye rides the road's middle behind the car, where she stands -- it passed through her. Within
+// RACE_MARSHAL_EYE_NEAR of her along the lap the eye (island units) is RACE_MARSHAL_EYE across from her middle at least (her flags reach
+// out to her sides), on the car's side of her, eased in and out over RACE_MARSHAL_EYE_FAR: a swerve round her, the car still in the middle
+// of its view.
+#define RACE_MARSHAL_EYE (3.6 * 512.0)
+#define RACE_MARSHAL_EYE_NEAR (2.5 * 512.0)
+#define RACE_MARSHAL_EYE_FAR (9.0 * 512.0)
+static void MarshalEye(double *ex, double *ez, double hx, double hz) {
+    T_RACE_MARSHAL *m = &s_marshal;
+    if (!MarshalOnRoad()) { m->EyeSide = 0; return; }
+    double fx, fz;
+    MarshalWay(&fx, &fz);
+    const double rx = *ex - m->CX, rz = *ez - m->CZ, a = fabs(rx * fx + rz * fz), across = -rx * fz + rz * fx;
+    if (a >= RACE_MARSHAL_EYE_FAR) { m->EyeSide = 0; return; }
+    double w = a <= RACE_MARSHAL_EYE_NEAR ? 1 : 1 - (a - RACE_MARSHAL_EYE_NEAR) / (RACE_MARSHAL_EYE_FAR - RACE_MARSHAL_EYE_NEAR);
+    w = w * w * (3 - 2 * w);
+    // (the car's side of her, kept while the eye goes by)
+    if (!m->EyeSide) m->EyeSide = -(hx - m->CX) * fz + (hz - m->CZ) * fx >= 0 ? 1 : -1;
+    const double want = m->EyeSide * RACE_MARSHAL_EYE;
+    if (m->EyeSide > 0 ? across >= want : across <= want) return;
+    const double move = (want - across) * w;
+    *ex += -fz * move; *ez += fx * move;
+}
+
+// She stands on the road for the start (the grid formed, the race or a qualifying lap to come): there at once, the cars' passing her
+// counted afresh.
+static void MarshalToStart(const char *why) {
+    T_RACE_MARSHAL *m = &s_marshal;
+    m->Where = MARSHAL_AT_START;
+    m->CX = m->StartX; m->CZ = m->StartZ; m->CY = m->StartY; m->CBeta = m->StartBeta;
+    memset(m->Passed, 0, sizeof(m->Passed)); memset(m->Kept, 0, sizeof(m->Kept)); memset(m->HasColumn, 0, sizeof(m->HasColumn));
+    m->MePassed = 0; m->Glanced = 0; m->EyeSide = 0; m->EyeBack = 0;
+    for (int k = 0; k <= RACE_MAX_OPPONENTS; k++) m->Closest[k] = 1e9;
+    Log_Info("[racemod] the flag marshal stands on the road for the start (%s): at (%.0f,%.0f,%.0f), turned %d, the grid's columns either side of her", why,
+             m->StartX, m->StartY, m->StartZ, (int)m->StartBeta);
+}
+
+// ... and hops off it onto her plinth: from where she is, hops no longer than RACE_MARSHAL_HOP_LEN (the log says how near each car came).
+static void MarshalHopOff(S32 now, const char *why) {
+    T_RACE_MARSHAL *m = &s_marshal;
+    const double dx = m->X - m->CX, dz = m->Z - m->CZ, d = sqrt(dx * dx + dz * dz);
+    m->Hops = (int)ceil(d / RACE_MARSHAL_HOP_LEN);
+    if (m->Hops < 2) m->Hops = 2;
+    m->HopAt = now; m->HopX = m->CX; m->HopZ = m->CZ; m->HopY = m->CY; m->HopBeta = m->CBeta;
+    m->Where = MARSHAL_HOPPING;
+    char text[512];
+    int used = 0;
+    text[0] = 0;
+    for (int n = 0; n <= RACE_MAX_OPPONENTS && used < (int)sizeof(text) - 64; n++) {
+        // (the cars racing -- a qualifying lap's opponents wait in the pits)
+        if (n < RACE_MAX_OPPONENTS && (!s_opp[n].Count || !s_opp[n].Scenes || s_phase == PHASE_QUALIFYING)) continue;
+        const double c = m->Closest[n];
+        if (c > 1e8) used += snprintf(text + used, sizeof(text) - used, "%s%s -", used ? ", " : "", n < RACE_MAX_OPPONENTS ? s_opp[n].Name : "Twinsen");
+        else used += snprintf(text + used, sizeof(text) - used, "%s%s %.0f (%.2f cells)", used ? ", " : "", n < RACE_MAX_OPPONENTS ? s_opp[n].Name : "Twinsen", c, c / 512.0);
+    }
+    Log_Info("[racemod] the flag marshal hops off the road onto her plinth (%s): %d hops; the nearest each car's middle came to hers: %s%s", why, m->Hops, text,
+             m->Glanced ? " -- Twinsen's car glanced off her" : "");
+}
+
+// Her hops (each the same share of the way, from the road's height up to her plinth's top, an arc RACE_MARSHAL_HOP_UP high), turning to
+// where she hops on the first and to the way she faces on her plinth on the last; on it, where she stands for the race.
+static void MarshalHop(S32 now) {
+    T_RACE_MARSHAL *m = &s_marshal;
+    const double t = (now - m->HopAt) / (double)RACE_MARSHAL_HOP_MS;
+    if (t >= m->Hops) {
+        m->Where = MARSHAL_AT_PLINTH;
+        m->CX = m->X; m->CZ = m->Z; m->CY = m->Y; m->CBeta = m->Beta;
+        Log_Info("[racemod] the flag marshal is on her plinth beside the road at (%.0f,%.0f,%.0f)", m->X, m->Y, m->Z);
+        return;
+    }
+    const int k = (int)t;
+    const double u = t - k, a = t / m->Hops;
+    m->CX = m->HopX + (m->X - m->HopX) * a;
+    m->CZ = m->HopZ + (m->Z - m->HopZ) * a;
+    m->CY = m->HopY + (m->Y - m->HopY) * a + RACE_MARSHAL_HOP_UP * 4 * u * (1 - u);
+    const S32 way = (S32)floor(atan2(m->X - m->HopX, m->Z - m->HopZ) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    const S32 from = k == 0 ? m->HopBeta : way, to = k == m->Hops - 1 ? m->Beta : way;
+    const S32 turn = ((to - from + 2048) & 4095) - 2048;
+    m->CBeta = k == 0 || k == m->Hops - 1 ? (S32)(from + turn * (u < 0.5 ? 2 * u : 1)) & 4095 : way;
+}
+
+// The count-down's place across the screen (its middle, x): the screen's middle -- but with her on the road for the start, in the middle
+// of the camera's view with her flag raised over its upper third, where the count-down was drawn over her, it goes to the side of the
+// screen the car is on (the camera aims along the car's grid column: she stands to the other side of the middle).
+static S32 MarshalCountX(S32 width) {
+    const T_RACE_MARSHAL *m = &s_marshal;
+    if (!MarshalOnRoad() || m->Where != MARSHAL_AT_START) return width / 2;
+    const T_OBJET *h = &ListObjet[NUM_PERSO];
+    double fx, fz;
+    MarshalWay(&fx, &fz);
+    const double across = -(h->Obj.X + CurrentCubeX * 32768.0 - m->CX) * fz + (h->Obj.Z + CurrentCubeY * 32768.0 - m->CZ) * fx;
+    return width / 2 + (across >= 0 ? 1 : -1) * width * 3 / 10;
+}
+
+// Every frame: where she is -- on the road from the grid's forming (or before a qualifying lap) until every car has driven past her (each
+// car's middle RACE_MARSHAL_PAST beyond hers along the lap, the nearest it came kept), her drop over; then hopping off it onto her plinth.
+static void MarshalWhere(S32 now) {
+    T_RACE_MARSHAL *m = &s_marshal;
+    if (!m->HasStart || !s_nbSpots) return;
+    const int qualifying = s_phase == PHASE_QUALIFYING;
+    const int toStart = s_phase == PHASE_WAIT || s_phase == PHASE_GRID || (qualifying && s_laps == 0);
+    if (toStart && m->Where != MARSHAL_AT_START)
+        MarshalToStart(s_phase == PHASE_GRID ? "the grid formed" : qualifying ? "Twinsen's qualifying lap to come" : "the race to come");
+    if (m->Where == MARSHAL_HOPPING) { MarshalHop(now); return; }
+    if (m->Where != MARSHAL_AT_START) return;
+    double fx, fz;
+    MarshalWay(&fx, &fz);
+    // (Twinsen's car past her -- before a qualifying lap, on its way to the line -- and the nearest it comes)
+    if (Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR && !m->MePassed && s_phase != PHASE_GRID) {
+        const T_OBJET *h = &ListObjet[NUM_PERSO];
+        const double rx = h->Obj.X + CurrentCubeX * 32768.0 - m->CX, rz = h->Obj.Z + CurrentCubeY * 32768.0 - m->CZ, d = sqrt(rx * rx + rz * rz);
+        if (d < m->Closest[RACE_MAX_OPPONENTS]) m->Closest[RACE_MAX_OPPONENTS] = d;
+        if (rx * fx + rz * fz > RACE_MARSHAL_PAST && fabs(-rx * fz + rz * fx) < 16 * 512.0) m->MePassed = 1;
+    }
+    if (toStart) return;
+    // (the opponents' passing her is MarshalColumn's -- a qualifying lap's wait in the pits)
+    int all = m->MePassed;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
+        if (s_opp[n].Count && s_opp[n].Scenes && !qualifying) all &= m->Passed[n];
+    const S32 from = qualifying ? s_lapStart : s_goAt;
+    if (now >= from + RACE_MARSHAL_DROP && (all || now >= from + RACE_MARSHAL_STAY))
+        MarshalHopOff(now, all ? "every car past her" : "long enough after the start, not every car past her");
+}
+
 // A car over the last lap's line (Marshal's): the chequered flag waved on RACE_MARSHAL_WAVE from now.
 static void MarshalFinish(S32 now, const char *who) {
     T_RACE_MARSHAL *m = &s_marshal;
@@ -4823,10 +5121,15 @@ static void MarshalFinish(S32 now, const char *who) {
     if (m->WaveUntil < now + RACE_MARSHAL_WAVE) m->WaveUntil = now + RACE_MARSHAL_WAVE;
 }
 
-// Every frame: the flag marshal's animation for the race's moment -- the count-down and GO, a qualifying lap's start, the finish.
+// Every frame: where the flag marshal stands (MarshalWhere), and her animation for the race's moment -- the count-down and GO, a
+// qualifying lap's start, the finish.
 static void Marshal(S32 now) {
     T_RACE_MARSHAL *m = &s_marshal;
     if (!m->On) return;
+    MarshalWhere(now);
+    // (drawn with the background, which a frame of the objects alone leaves as it was: the whole picture drawn while she is on the road
+    // -- the count-down's camera stands still -- and hopping off it)
+    if (m->Where != MARSHAL_AT_PLINTH && Comportement == C_BUGGY) s_wantFlip = 1;
     const int finishing = s_raceLaps > 0 && s_phase == PHASE_RACE && s_nbOrder > 0;
     if (!finishing) { m->WaveUntil = 0; m->MeFinished = 0; m->Finishers = 0; memset(m->Finished, 0, sizeof(m->Finished)); }
     else {
@@ -4867,13 +5170,44 @@ static void Marshal(S32 now) {
     m->Want = want;
 }
 
-// The flag marshal where the camera is, as the spooks are drawn -- her fog by her distance, her depth written -- her animation stepped
-// every frame (seen or not: the keyframes follow the clock), changed to the one the moment wants (ObjectInitAnim blends into it).
+// The flag marshal where the camera is, as the spooks are drawn -- her fog by her distance, her depth written -- where she is now (on the
+// road, hopping off it, on her plinth), her animation stepped every frame (seen or not: the keyframes follow the clock), changed to the
+// one the moment wants (ObjectInitAnim blends into it); and her plinth beside the road, all the while.
 static void DrawMarshal(void) {
     T_RACE_MARSHAL *m = &s_marshal;
     if (!m->On) return;
+    const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
+    if (m->HasPlinth && m->PlinthReady >= 0) {
+        T_OBJ_3D *p = &m->PlinthObj;
+        if (!m->PlinthReady) {
+            if ((m->PlinthIndex = EntityEntry(m->Entity, F_BODY, m->Plinth)) < 0 || !GivePtrBody(m->PlinthIndex)) {
+                Log_Info("[racemod] the flag marshal: entity %d has no body %d, her plinth -- left out", m->Entity, m->Plinth);
+                m->PlinthReady = -1;
+            } else {
+                ObjectClear(p);
+                p->Body.Num = -1;
+                ObjectInitBody(p, (void *)(uintptr_t)(U32)m->PlinthIndex);
+                p->Texture = BufferTexture; p->NextTexture = BufferTexture;
+                m->PlinthReady = 1;
+            }
+        }
+        if (m->PlinthReady > 0) {
+            p->X = (S32)floor(m->X - CurrentCubeX * 32768.0 + 0.5); p->Y = (S32)floor(m->Y + 0.5); p->Z = (S32)floor(m->Z - CurrentCubeY * 32768.0 + 0.5);
+            p->Alpha = 0; p->Beta = m->Beta; p->Gamma = 0;
+            memset(p->CurrentFrame, 0, sizeof(p->CurrentFrame));
+            LongWorldRotatePoint(p->X, p->Y, p->Z);
+            const S32 zr = CameraZr - Z0;
+            if (zr >= -4000 && zr <= ClipZFar + 4000) {
+                SetCLUT(PalLevel + 16 * BoundRegleTrois(0, 15, ClipZFar - StartZFog, zr - StartZFog));
+                Switch_Fillers(FILL_POLY_FOG_ZBUFFER);
+                UnsetClip();
+                ObjectDisplay(p);
+                SetCLUT(clut);
+            }
+        }
+    }
     T_OBJ_3D *o = &m->Obj;
-    const S32 x = (S32)floor(m->X - CurrentCubeX * 32768.0 + 0.5), y = (S32)floor(m->Y + 0.5), z = (S32)floor(m->Z - CurrentCubeY * 32768.0 + 0.5);
+    const S32 x = (S32)floor(m->CX - CurrentCubeX * 32768.0 + 0.5), y = (S32)floor(m->CY + 0.5), z = (S32)floor(m->CZ - CurrentCubeY * 32768.0 + 0.5);
     if (!m->Ready) {
         int ok = (m->BodyIndex = EntityEntry(m->Entity, F_BODY, m->Body)) >= 0 && GivePtrBody(m->BodyIndex);
         for (int k = 0; k < MARSHAL_ANIMS && ok; k++) ok = (m->Index[k] = EntityEntry(m->Entity, F_ANIM, m->Gen[k])) >= 0 && GivePtrAnim(m->Index[k]);
@@ -4886,24 +5220,23 @@ static void DrawMarshal(void) {
         o->Body.Num = -1;
         ObjectInitBody(o, (void *)(uintptr_t)(U32)m->BodyIndex);
         o->Texture = BufferTexture; o->NextTexture = BufferTexture;
-        o->X = x; o->Y = y; o->Z = z; o->Beta = m->Beta;
+        o->X = x; o->Y = y; o->Z = z; o->Beta = m->CBeta;
         o->Anim.Num = -1;
         ObjectInitAnim(o, (void *)(uintptr_t)(U32)m->Index[MARSHAL_READY]);
         o->Status |= FLAG_BODY;
         m->Shown = MARSHAL_READY;
         m->Ready = 1;
-        Log_Info("[racemod] the flag marshal: body %d (BODY.HQR), animations %d %d %d %d (ANIM.HQR), on her plinth at (%.0f,%.0f,%.0f), turned %d", (int)m->BodyIndex,
+        Log_Info("[racemod] the flag marshal: body %d (BODY.HQR), animations %d %d %d %d (ANIM.HQR), her plinth at (%.0f,%.0f,%.0f), turned %d", (int)m->BodyIndex,
                  (int)m->Index[0], (int)m->Index[1], (int)m->Index[2], (int)m->Index[3], m->X, m->Y, m->Z, (int)m->Beta);
     }
     if (m->Want != m->Shown) { ObjectInitAnim(o, (void *)(uintptr_t)(U32)m->Index[m->Want]); m->Shown = m->Want; }
     o->X = x; o->Y = y; o->Z = z;
     ObjectSetInterDep(o);
-    o->X = x; o->Y = y; o->Z = z; o->Alpha = 0; o->Beta = m->Beta; o->Gamma = 0;
+    o->X = x; o->Y = y; o->Z = z; o->Alpha = 0; o->Beta = m->CBeta; o->Gamma = 0;
     ObjectSetInterFrame(o);
     LongWorldRotatePoint(x, y + 1500, z);
     const S32 zr = CameraZr - Z0;
     if (zr < -4000 || zr > ClipZFar + 4000) return;
-    const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
     SetCLUT(PalLevel + 16 * BoundRegleTrois(0, 15, ClipZFar - StartZFog, zr - StartZFog));
     Switch_Fillers(FILL_POLY_FOG_ZBUFFER);
     UnsetClip();
@@ -10393,6 +10726,8 @@ void RaceMod_Frame(void) {
                 }
             }
             PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
+            // (past the flag marshal on the road first, in its grid column)
+            MarshalColumn(n, o, x, z);
         }
         if (CubeMode != CUBE_EXTERIEUR) continue;
         const int index = OpponentActor(o);
@@ -10425,6 +10760,7 @@ void RaceMod_Frame(void) {
             car->Obj.Z += (S32)(o->ShoveZ * RACE_SHOVE_SIDE * out);
         }
         car->Obj.Y = (S32)(y + o->MergeY * f);
+        MarshalKeepOff(n, car);
         S32 beta = (S32)(atan2(dx, dz) * 4096.0 / (2 * 3.14159265358979)) & 4095;
         car->Obj.Beta = f >= 1 ? o->SpotBeta : beta;
         car->Obj.Alpha = 0; car->Obj.Gamma = 0;
@@ -11498,7 +11834,7 @@ void RaceMod_Draw(void) {
         else if (s_nbSpots && s_phase == PHASE_RACE && s_goAt && now < s_goAt + 1000) count = "GO!";
         if (count) {
             const S32 k = height / 48 > 3 ? height / 48 : 3;
-            BigText(width / 2, height / 3, count, k, count[0] == 'G' ? RACE_GREEN : RACE_RED);
+            BigText(MarshalCountX(width), height / 3, count, k, count[0] == 'G' ? RACE_GREEN : RACE_RED);
         }
     }
     // a message of the race-track mode's (Message: "Back on the road", the roulette wheel's prize), in the middle near the top -- set

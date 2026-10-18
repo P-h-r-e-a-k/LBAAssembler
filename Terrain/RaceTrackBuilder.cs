@@ -60,6 +60,10 @@ internal sealed class RaceTrackPlan
     // How far behind each other the grid's spots are (RaceTrackScenes.GridSpot), when not the usual 3.5: the lava lake's lap comes down a
     // ramp onto its dock just behind the grid, which stands two abreast there (1.75).
     public double? GridStep { get; set; }
+    // How far behind the start line pole is and how far either side of the road's middle the grid's two columns are (RaceTrackScenes.GridSpot),
+    // when not the usual 3 and 1.75: the Temple of Bú's columns stand apart, its flag marshal between them ahead of the front row.
+    public double? GridFirst { get; set; }
+    public double? GridSide { get; set; }
     // A footing of ground under a start gantry's post that stands over a hole (RaceTrackBuilder.PostFootings): the lava lake's dock is
     // narrower than its gantry.
     public bool GantryFootings { get; set; }
@@ -280,6 +284,8 @@ internal sealed class RaceTrackPlan
         if (JumpLandingLength is { } jl) o.JumpLandingLength = jl;
         if (JumpMinScale is { } js) o.JumpMinScale = js;
         if (GridStep is { } gs) o.GridStep = gs;
+        if (GridFirst is { } gf) o.GridFirst = gf;
+        if (GridSide is { } gsd) o.GridSide = gsd;
         if (GridShift is { } gsh) o.GridShift = gsh;
         if (RaisedPiece is { } rp && rp >= 1) o.RaisedPiece = rp;
         o.PitFence = PitFence && PitStripe is { Length: 3 };
@@ -410,6 +416,10 @@ internal sealed class RaceTrackOptions
     public double JumpMinScale { get; set; } = 1;
     // How far behind each other the grid's spots are (RaceTrackScenes.GridSpot; RaceTrackPlan.GridStep).
     public double GridStep { get; set; } = RaceTrackScenes.DefaultGridStep;
+    // How far behind the start line pole is, and the grid's columns either side of the road's middle (RaceTrackScenes.GridSpot;
+    // RaceTrackPlan.GridFirst, GridSide).
+    public double GridFirst { get; set; } = RaceTrackScenes.GridFirst;
+    public double GridSide { get; set; } = RaceTrackScenes.GridSide;
     // How far apart the power-ups' rows of mushrooms are round the lap (RaceTrackScenes.MushroomSpots): seconds of driving, the lap cut
     // into even stretches about this long, a row in each. With ItemSpacingCells, every that many cells of road instead -- the rule until
     // 2026-10-17 was every 40 cells, a row every second or two (ScriptRoundTrip buildtogether's RT_ITEM_SPACING, for comparisons:

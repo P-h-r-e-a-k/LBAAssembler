@@ -303,10 +303,13 @@ internal static class RaceTrackScenes
     // before, GridSide cells to its side -- so two cars side by side are 2 x GridSide apart across (the cars are 2.6 cells wide: 0.9 cells
     // between them) and a car is 2 x GridStep behind the one on its own side. The race-track mode puts the cars on them in the order the
     // qualifying decides; the build puts Twinsen's buggy on pole, the racer on the second spot and Baldino on the third.
-    // (A plan may stand them nearer: RaceTrackOptions.GridStep.)
+    // (A plan may stand them nearer: RaceTrackOptions.GridStep; or pole further back and the columns further apart: GridFirst, GridSide --
+    // the Temple of Bú's, its flag marshal between them.)
     public const double GridFirst = 3, DefaultGridStep = 3.5, GridSide = 1.75;
     public const int GridSpots = 6;
-    public static (double Back, double Side) GridSpot(int k, double step = DefaultGridStep) => (GridFirst + step * k, k % 2 == 0 ? -GridSide : GridSide);
+    public static (double Back, double Side) GridSpot(int k, double step = DefaultGridStep, double first = GridFirst, double side = GridSide) =>
+        (first + step * k, k % 2 == 0 ? -side : side);
+    private static (double Back, double Side) GridSpot(int k, RaceTrackOptions o) => GridSpot(k, o.GridStep, o.GridFirst, o.GridSide);
     // The opponents' actors: no shock animation, not clipped before drawing, drawn against the depth buffer (so the bridge and the hills hide
     // them as they should) and, as every actor the game itself draws that way (Twinsen's buggy: BUGGY.CPP), without a shadow -- the engine
     // draws a depth-buffered actor's shadow over it, a dark patch across the car.
@@ -514,7 +517,7 @@ internal static class RaceTrackScenes
                 var y = (int)Math.Round(s.Y);
                 // the buggy stands a few cells before the line, Twinsen beside it; each on the ground at its own spot (the road climbs there).
                 // Straight back from the line, or, where the lap bends behind it (the lava lake's line is just out of a corner), on the lap.
-                var curved = Behind(t.Report, s, GridSpot(GridSpots - 1, t.Options.GridStep).Back + 2, 0) is { } far && Math.Abs((far.X - s.X) * -s.DirZ + (far.Z - s.Z) * s.DirX) > 0.25;
+                var curved = Behind(t.Report, s, GridSpot(GridSpots - 1, t.Options).Back + 2, 0) is { } far && Math.Abs((far.X - s.X) * -s.DirZ + (far.Z - s.Z) * s.DirX) > 0.25;
                 int At(double back, double side, bool z)
                 {
                     if (curved && Behind(t.Report, s, back, side) is { } on) return (int)Math.Round(((z ? on.Z : on.X) - (z ? cz : cx) * 64.0) * 512);
@@ -547,7 +550,7 @@ internal static class RaceTrackScenes
                 if (racing)
                     for (var k = 0; k < GridSpots; k++)
                     {
-                        var (back, side) = GridSpot(k, t.Options.GridStep);
+                        var (back, side) = GridSpot(k, t.Options);
                         side += shift;
                         int gx = At(back, side, false), gz = At(back, side, true);
                         t.Grid.Add(new[] { cx, cz, gx, Ground(gx, gz), gz, Facing(back) });
@@ -571,7 +574,7 @@ internal static class RaceTrackScenes
                         // (a spot whose height the plan gives stands on a deck of decor, which the ground knows nothing of)
                         t.Pits.Add(new[] { cx, cz, px, t.Report.PitHeights ? (int)Math.Round(p.Y) : Ground(px, pz), pz, pbeta });
                     }
-                var pole = GridSpot(0);
+                var pole = GridSpot(0, t.Options);
                 if (buggy is not null) { buggy.X = At(pole.Back, pole.Side + shift, false); buggy.Z = At(pole.Back, pole.Side + shift, true); buggy.Y = Ground(buggy.X, buggy.Z); buggy.Beta = Facing(pole.Back); }
                 // Twinsen right behind his car: he comes into the scene facing the way the lap runs (the scene's start keeps no
                 // facing), so he faces the car and the action key gets him in. (Beside it, 1.3 cells from its middle, the car's box
@@ -864,7 +867,7 @@ internal static class RaceTrackScenes
             if (mushroomsLeftOut > 0) log.Add($"{mushroomsLeftOut} mushrooms left out: their scenes had no room for more actors");
             for (var k = 0; k < t.Drivers.Count; k++)
                 if (t.Cars[k].Count > 0) log.Add($"{t.Drivers[k].Name}: a copy of {(t.Drivers[k].Bike ? "the motorbike Rabbibunny" : t.Drivers[k].Cast >= 0 && castCars.TryGetValue(t.Drivers[k].Cast, out var c) ? $"{c.Name} (car {c.Number}: entity {c.Entity}'s body {c.Generic})" : $"the car (the racer's body {t.Drivers[k].Body})")} in {t.Cars[k].Count} scenes{whose}");
-            if (t.Grid.Count > 0) log.Add($"the grid: {t.Grid.Count} spots, pole {GridFirst} cells behind the start line, each {t.Options.GridStep} behind the last, {GridSide} either side of the middle{whose}");
+            if (t.Grid.Count > 0) log.Add($"the grid: {t.Grid.Count} spots, pole {t.Options.GridFirst} cells behind the start line, each {t.Options.GridStep} behind the last, {t.Options.GridSide} either side of the middle{whose}");
             if (t.Pits.Count > 0) log.Add($"the pits: {t.Pits.Count} spots in the pit lane, where the opponents wait while the player qualifies{whose}");
         }
         var main = tracks[0];

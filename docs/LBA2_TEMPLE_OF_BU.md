@@ -493,6 +493,71 @@ fake mushrooms, penguins, lightning, ghosts and witches' fire balls that hit him
 
 No race needed a rescue or was stuck, at any level (92 races).
 
+### The flag marshal on the grid (2026-10-18)
+
+The race is five laps, with a flag marshal since 2026-10-17: the School of Magic's rabbibunny assistant (entity 77, BODY.HQR 124), a green
+start flag and a chequered flag in her hands (`Temple/TempleMarshal.cs`, RACEMOD.CPP `marshal=`). She stood on a plinth 6 cells past the
+line and 7 out beside the slip lane, at the edge of the grid camera's view. The user: "The magicians assistant who waves the flag isn't
+visible behind the start finish line, let's have her start the race from the grid between the cars, with cars going either side of her.
+Then have her standing close to the track to wave the flag at the end of the race."
+
+![From pole: the count-down with her flag raised between the grid's columns, GO, the cars either side of her](temple/marshal_start.png)
+
+**The grid** (the plan's new `gridFirst` and `gridSide`: RaceTrackPlan, RaceTrackOptions, `RaceTrackScenes.GridSpot`; every other track
+keeps 3 and 1.75). There are two columns, 2.75 cells either side of the road's middle. That leaves 3 cells between the columns' car boxes,
+and each car's middle half a cell inside its rail. Pole is 5 cells behind the line, then the spots are 3.5 apart as before. The slip lane
+and its waiting spots are unchanged.
+
+**The start.** She stands in the road's middle, 2 cells short of the line and 3 ahead of pole's middle (pole's nose is 1.25 cells behind
+her). She has no plinth here and faces the cars. From the grid's forming she raises the green flag for the count-down and sweeps it down
+at GO. Before a qualifying lap she does the same as Twinsen's car crosses the line. The race file has `marshal_start=<x> <z> <road y>
+<turn>`. The drop now comes down in front of her, towards the grid. Swept out to her side as before, its pole (three cells long at her
+size) came down over a column, and the cars drove through its cloth.
+
+- *Nothing drives through her.* Each opponent keeps to its grid column until its middle is 3 cells past her (`MarshalColumn`). Its way
+  across from its line is set to the column every frame, then faded out over the usual 12 cells. The lines run across the road there,
+  towards the corner after the line, and the skeleton's line went within 1.76 cells of her. A car that comes nearer than 1,000 units (a
+  car's box, 633, and her 330) is put out across the lap (`MarshalKeepOff`); the tests never needed it.
+- *Twinsen's car glances off her like a post* (`MarshalPost`, in `RaceMod_Rail`). A move that ends within 1,000 of her middle is put out
+  across the lap to 1,000, on its own side, keeping its place along the lap and its speed. It is never stopped and never rescued. The test
+  pilot drives its racing line through the road's middle and glances off her at every start.
+- *Leaving the road.* Once every car is 3 cells past her she hops off in four bunny hops (0.38 s each, an arc 380 high) onto her plinth
+  beside the road. If some car never passes, she goes 15 s after GO anyway.
+- *The camera.* The rail camera rides the road's middle 9 cells behind the car, which is where she stands. On the grid, a car close
+  behind her (pole) has its eye at least 15.5 cells behind her, so her raised flag is in view. The eye eases back over 1.5 s once the car
+  moves off. As the cars set off, the eye keeps 3.6 cells across from her middle, on the car's side, eased in and out over 9 cells
+  (`MarshalBack`, `MarshalEye`). Without that it passed through her. While she is on the road, the count-down moves to the side of the
+  screen the car is on (`MarshalCountX`), because in the middle it was drawn over her.
+
+![The last lap: on her plinth right beside the road at the line, waving the chequered flag as the car comes up](temple/marshal_finish.png)
+
+**The finish.** She stands on her plinth right beside the road: its edge 0.35 cells off the road's south edge, 1.5 cells short of the
+line, on the side away from the slip lane. The gantry's post is behind her as the cars come up. The plinth is now a body of its own
+(`marshal_plinth=`: entity 77's body 41), standing there all race; her own body 40 has none. The camera behind a car coming up the straight
+sees her until the car is a few cells from the line. She waves the chequered flag as before. A ghost that drifted across the road at the
+line now crosses 7 cells past it, because at the line it drifted through her.
+
+**Unchanged.** Every other track's built files and race files are the same as HEAD's: 17 tracks at each difficulty, 485 checksums. In the
+Temple's race file only the grid, the marshal's lines and that ghost's way change. The opponents' lines, the checkpoints and the items are
+the same.
+
+- *Solo laps* (no opponents, no items) after the first: on the line 55.00, 55.06, 55.06 s and 1.5 cells right 56.47, 56.33, 56.47 s, the
+  same as HEAD's to the hundredth. The first lap is 0.12 s quicker, because pole is 2 cells further back and the car crosses the line
+  faster. At 1.5 cells left the later laps are 0.06-0.11 s quicker. With HEAD's grid lines the new build gives HEAD's laps exactly (56.59,
+  56.10, 56.10, 56.10), so the difference comes from the start position, not from anything on the lap.
+- *Races* against the monsters: race seeds 1-3, each with no qualifying (from pole), with a qualifying lap, and from the back of the grid.
+  That is nine races on this build and the same nine on the old one. No race needed a rescue or had a car stuck. Every opponent passed her
+  in its column, its middle 2.75 cells from hers, and none needed putting out. With seeds 2 and 3 and no qualifying, laps 2-5 are the old
+  build's to within 0.01 s (55.00, 57.25, 61.60, 54.91 and 54.82, 57.00, 64.25, 57.18) and lap 1 is 0.12 s quicker. The other races go
+  their own ways through the items' chances.
+- *Left on the grid*: with Twinsen sitting at the back of the grid, she hops off 15 s after GO, in his view. On pole, a stationary car is
+  shunted forward past her by the car starting behind it.
+
+Tests: `E:\dump\TEMP\templeflag2`: `build.sh <game> head|work` (the temple alone from `templegfx\game0`), `racefile.sh <game> head|work`,
+`engbuild.sh "" <folder>` (the worktree's engine), `pilot.sh` (`NOPILOT=1`, `PILOTAT=<tick>`, `CAM=1`; a straight start with
+`--exec-at <tick> "input up <ticks>"`), `batch.sh` and `report.py` (full races, `WHICH=base|new`), `ticks.py <tag>` (each event's tick from
+the camera trace), `solo2.sh` (solo laps, HEAD's build and this one), `regress_both.sh` (every other track), `sheet2.py` (the pictures).
+
 **Tests**:
 
 - `E:\dump\TEMP\temple\pilot\run.sh <tag> <ticks>` is the headless pilot. CARF=car_fast.txt is a fast car with no qualifying.
