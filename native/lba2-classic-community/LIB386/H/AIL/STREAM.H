@@ -104,6 +104,26 @@ S32 IsStreamPlaying();
 char *StreamName();
 
 //--------------------------------------------------------------------------
+//	SetStreamLoop :			keep the music going (LBA Assembler,
+//					2026-10-18): while on, PumpStreamLoop
+//					plays the stream again behind itself
+//
+//			on:		non-zero to keep it going
+//
+//	Returns	:			nothing
+//--------------------------------------------------------------------------
+void SetStreamLoop(S32 on);
+
+//--------------------------------------------------------------------------
+//	PumpStreamLoop :		once a frame: with SetStreamLoop on, the
+//					track queued again before it runs out (or
+//					started again once it has ended)
+//
+//	Returns	:			1 when it queued or started the track again
+//--------------------------------------------------------------------------
+S32 PumpStreamLoop(void);
+
+//--------------------------------------------------------------------------
 //	MusicLogEnable :		toggle the [MUSIC]/[CD] trace channel
 //
 //			enable:		non-zero to turn tracing on

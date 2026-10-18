@@ -135,6 +135,7 @@ internal static class Program
             "templeactors" => TempleActorsProbe.Run(args),
             "templeaudit" => TempleAudit.Run(args),
             "templeclip" => TempleClipProbe.Run(args),
+            "templemusic" => TempleMusicProbe.Run(args),
             "templecreatures" => TempleCreaturesProbe.Run(args),
             "fixbricks" => TempleFixProbe.Bricks(args),
             "fixplace" => TempleFixProbe.Place(args),

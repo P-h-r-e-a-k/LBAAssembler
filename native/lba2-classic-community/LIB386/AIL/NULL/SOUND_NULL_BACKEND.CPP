@@ -68,5 +68,7 @@ void SuspendStreamOutput() {}
 void ResumeStreamOutput() {}
 S32 IsStreamPlaying() { return FALSE; }
 char *StreamName() { return ""; }
+void SetStreamLoop(S32 on) { (void)on; }
+S32 PumpStreamLoop(void) { return 0; }
 void MusicLogEnable(int enable) { (void)enable; }
 int MusicLogIsEnabled(void) { return 0; }

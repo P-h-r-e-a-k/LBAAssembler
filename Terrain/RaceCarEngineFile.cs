@@ -70,6 +70,8 @@ internal static class RaceCarEngineFile
             // (and its own palette and sky: the Temple of Bú's)
             if (fileIsland.Look is { } look) text.Append($"island_palette={look.Palette}\nisland_sky={look.Sky}\n");
         }
+        // the race's own music in place of its scenes' (the Temple of Bú's: LBA1's temple music), a file in the game folder
+        if (track?.Music is { } music) text.Append($"music={music}\n");
         foreach (var loop in track?.Loops ?? new()) text.Append($"loop={string.Join(' ', loop)}\n");
         // (the rail holding the car on the road even where it lies on the ground: the Emperor's palace's)
         if (raisedFile is not null && info is not null && RaceTrackIsland.ByName(info.Island) is { RailHeld: true }) text.Append("rail_held=1\n");

@@ -55,6 +55,8 @@ internal static class TempleTrack
         var log = new List<string>(built.Log);
         log.AddRange(TempleIsland.Install(gameDirectory, built));
         log.AddRange(AddScenes(gameDirectory));
+        // (the race's music: LBA1's temple music from the player's LBA1, when it has it -- the scenes' own, LBA2's Temple of Bù's, else)
+        log.AddRange(TempleMusic.Install(gameDirectory, lba1Directory));
         return log;
     }
 
@@ -126,7 +128,7 @@ internal static class TempleTrack
             names = HqdWriter.Describe(gameDirectory, "SCENE.HQR", SceneGame.Lba2, SceneOf(cx, cz) + 1, $"The Temple of Bú's Halloween race: cube ({cx}, {cz})", names);
         if (names is not null) File.WriteAllText(Path.Combine(gameDirectory, HqdWriter.SidecarName("SCENE.HQR")), names, System.Text.Encoding.Latin1);
         log.Add($"SCENE.HQR: scenes {FirstScene}-{LastScene}, the temple island's cubes the road runs through ({zones} cube-change zones), Otringal's scene {SourceScene}'s light, " +
-                $"LBA2's Temple of Bù's music ({sound.Music}) and sounds (scene {SoundScene})");
+                $"LBA2's Temple of Bù's music ({sound.Music}: the race's when LBA1's isn't there, TempleMusic) and sounds (scene {SoundScene})");
         return log;
     }
 }

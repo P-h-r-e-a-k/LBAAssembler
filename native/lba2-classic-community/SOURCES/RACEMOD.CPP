@@ -168,6 +168,9 @@
  *                                between the grid's columns, ahead of the front row -- there for the count-down and GO (and a qualifying
  *                                lap's start), the cars set off past her on either side (kept off her: MarshalPost, MarshalKeepOff), and
  *                                once they have she hops off the road onto her plinth (Marshal)
+ *   The music (2026-10-18): music=<file>   the race's own music in place of its scenes' (a WAV or OGG; not a full path: the game folder's)
+ *                                -- the Temple of Bú's LBA1 temple music. And every race's music keeps going until the race is over: played
+ *                                again behind itself when it runs out (RaceMusicFrame; MUSIC.CPP LoopMusic), left to end after the finish.
  */
 #include <errno.h>
 #include <string.h>
@@ -2849,6 +2852,44 @@ static int ReadSets(const char *v, int *sets) {
     return n;
 }
 
+// The race's music (LBA Assembler, 2026-10-18). music=<file>: its own music in place of its scenes' -- a WAV or OGG file, a name that isn't
+// a full path the game folder's (as the race game's files are) -- LBA1's temple music for the Temple of Bú, which LBA2's music numbers
+// can't name (the race track's build makes the file from the player's LBA1: Temple.TempleMusic). A file that isn't there leaves the scenes'
+// own music. And whatever plays keeps going until the race is over (the user, 2026-10-18: "the sound track stops after a few laps and
+// doesn't last the entire race"): played again behind itself when it runs out (MUSIC.CPP LoopMusic) -- the qualifying lap, the wait for
+// the grid, the race -- then, past the finish, left to end as it ends.
+static char s_music[260] = "";                // music= as the file has it ("": none)
+static int s_musicSet = 0;                    // music= looked at since the file was loaded
+static int s_musicKept = -1;                  // the music kept going (-1: not said yet)
+
+static void RaceMusicFrame(void) {
+    const int keep = !(s_place && s_phase == PHASE_RACE);
+    if (keep != s_musicKept) {
+        s_musicKept = keep;
+        LoopMusic(keep);
+        Log_Info("[racemod] music %s", keep ? "kept going until the race is over" : "left to end as it ends: the race is over");
+    }
+    if (!s_musicSet) {
+        s_musicSet = 1;
+        char full[ADELINE_MAX_PATH] = "";
+        if (s_music[0]) {
+            if (s_music[0] == '/' || s_music[0] == '\\' || (isalpha((unsigned char)s_music[0]) && s_music[1] == ':')) snprintf(full, sizeof(full), "%s", s_music);
+            else GetResPath(full, ADELINE_MAX_PATH, s_music);
+            if (FILE *f = fopen(full, "rb")) fclose(f);
+            else {
+                Log_Warn("[racemod] music: %s isn't there -- the scenes' own music plays", full);
+                full[0] = 0;
+            }
+        }
+        const int had = RaceMusic()[0] != 0;
+        SetRaceMusic(full);
+        if (full[0]) {
+            Log_Info("[racemod] music: %s, in place of the scenes' own", full);
+            PlayRaceMusic();
+        } else if (had) StopMusic();      // (another race's own music: the scenes' plays from the next change of cube)
+    }
+}
+
 static void Load(const char *path, int carOnly = 0) {
     FILE *f = fopen(path, "r");
     // (said: a race file the game can't open left the race-track mode on with nothing in it -- no start line, no grid, Twinsen where the
@@ -2856,6 +2897,9 @@ static void Load(const char *path, int carOnly = 0) {
     if (!f) { Log_Warn("[racemod] the race file %s could not be read (%s): no race", path, strerror(errno)); return; }
     Log_Info("[racemod] race file %s", path);
     snprintf(s_loaded, sizeof(s_loaded), "%s", path);
+    // (the music kept going from the first that plays: RaceMusicFrame -- on before it starts, the whole track is kept to play again behind
+    // itself with no gap)
+    if (!carOnly) { LoopMusic(1); s_musicKept = -1; }
     // (the set's own keys are read once: a track's file loaded later doesn't add to them)
     const int setRead = s_nbTracks > 0 || s_tiredVar >= 0;
     char line[512];
@@ -2929,6 +2973,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %31s", &s_fileIsland, s_fileName) != 2) s_fileIsland = -1;
         }
         else if (!strcmp(key, "island_palette")) s_filePalette = atoi(v);
+        else if (!strcmp(key, "music")) { snprintf(s_music, sizeof(s_music), "%s", v); s_musicSet = 0; }
         else if (!strcmp(key, "island_sky")) s_fileSky = atoi(v);
         else if (!strcmp(key, "loop")) {
             T_RACE_LOOP *l = &s_loops[s_nbLoops];
@@ -10823,6 +10868,7 @@ static void CarTraceLine(void) {
 
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
+    RaceMusicFrame();
     CarTraceLine();
     NoteScene();
     ListVarGame[RACE_GATE_VAR] = (S16)(ClosedGate() ? 1 : 0);
@@ -12155,6 +12201,7 @@ static void ResetTrack(void) {
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
+    s_music[0] = 0; s_musicSet = 0;
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0; s_nbOpen = 0; s_trailN = 0; s_trailHead = -1;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
     s_nbFalls = 0; s_nbPanels = 0; s_lavaModel = -1; s_fallFootNext = s_fallLipNext = 0;

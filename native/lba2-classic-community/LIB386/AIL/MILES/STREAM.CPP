@@ -210,6 +210,12 @@ char *StreamName() {
 
 // ████████████████████████████████████████████████████████████████████████████
 
+// (music that keeps going: the SDL backend's -- not done here)
+void SetStreamLoop(S32 on) { (void)on; }
+S32 PumpStreamLoop(void) { return 0; }
+
+// ████████████████████████████████████████████████████████████████████████████
+
 static int musicLogEnabled = 0;
 
 void MusicLogEnable(int enable) {

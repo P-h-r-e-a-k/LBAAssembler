@@ -187,7 +187,10 @@ internal static class RaceTrackService
         // (ready, the raise, the drop, the wave), where she stands (island units: x, z, the top of her plinth) and the way she faces -- the
         // Temple of Bú's, since 2026-10-17; then (2026-10-18) her plinth's body (marshal_plinth=) and, when she gives the start from the
         // road between the grid's columns, where she stands for it (x, z, the road's height, the way she faces: marshal_start=)
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Marshal = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Marshal = null,
+        // Music: the race's own music, a file in the game folder (RACEMOD.CPP music=) -- the Temple of Bú's LBA1 temple music, which the build
+        // makes from the player's LBA1 (Temple.TempleMusic), since 2026-10-18
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Music = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -809,6 +812,8 @@ internal static class RaceTrackService
             LaserModels = session.LaserModels, LavaBallModel = session.LavaBallModel, CrystalShardModels = session.CrystalShardModels };
         if (info.ArcJumps is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
         if (Shuttles(gameDirectory, report, options) is { Count: > 0 } shuttles) info = info with { Shuttles = shuttles };
+        // (the race's own music: the Temple of Bú's LBA1 temple music, when the build found it)
+        if (options.Island == RaceTrackIsland.Temple && LBAAssembler.Terrain.Temple.TempleMusic.Installed(gameDirectory) is { } music) info = info with { Music = music };
         if (twin is { Own: true } && scenes.Twin is { } twinScenes)
         {
             // (the story belongs to the twin's track, which carries the race; either race clears its arrow once Twinsen drives)

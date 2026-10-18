@@ -53,6 +53,31 @@ static bool hasRemembered = false;
 S32 streamVolume = 0;
 static int musicLogEnabled = 0;
 
+/* Music that keeps going (SetStreamLoop / PumpStreamLoop; LBA Assembler, 2026-10-18: a race track's music stopped after a few laps of a
+   five-lap race). While looping is on, the track's PCM is queued again behind itself before the device runs out, so it plays on with no
+   gap; a source whose PCM is not at hand (a resume from a seek) is started again from its beginning once it has ended. streamFreq: the
+   source's sample rate (the backlog in seconds); streamStartBytes: where in the track the stream began (a resume's seek); streamTrackBytes:
+   the whole track's length once known (a looped stream's position is within the track); loopPcm: a copy of the WAV-ish source's whole
+   PCM while looping is on (an OGG's is its decoded cache, oggCache); streamOggPath: the OGG file the stream plays; loopName: the stream
+   to start again after it ended (cleared by StopStream: a stream stopped on purpose stays stopped). */
+static bool loopOn = false;
+static int streamFreq = 0;
+static Uint32 streamStartBytes = 0;
+static Uint32 streamTrackBytes = 0;
+static Uint8 *loopPcm = NULL;
+static Uint32 loopPcmLen = 0;
+static char streamOggPath[ADELINE_MAX_PATH] = "";
+static char loopName[ADELINE_MAX_PATH] = "";
+static int loopCount = 0;
+
+static void LoopPcmFree(void) {
+    if (loopPcm) {
+        free(loopPcm);
+        loopPcm = NULL;
+    }
+    loopPcmLen = 0;
+}
+
 /* ── Path resolution cache ─────────────────────────────────────────────── */
 
 #define PATH_CACHE_MAX 32
@@ -218,7 +243,11 @@ static S32 StreamPositionFrames(void) {
     int consumed = pushed - queued;
     if (consumed < 0)
         consumed = 0;
-    return (S32)(consumed / streamBytesPerFrame);
+    /* (counted from where the stream began, and within the track once it has looped) */
+    Uint64 at = (Uint64)streamStartBytes + (Uint64)consumed;
+    if (streamTrackBytes > 0)
+        at %= streamTrackBytes;
+    return (S32)(at / (Uint64)streamBytesPerFrame);
 }
 
 /* ── Init / Stop ───────────────────────────────────────────────────────── */
@@ -233,8 +262,14 @@ static void StopStreamInternal(void) {
     streamPaused = false;
     streamBytesPerFrame = 0;
     SDL_SetAtomicInt(&streamPushedBytes, 0);
+    streamFreq = 0;
+    streamStartBytes = 0;
+    streamTrackBytes = 0;
+    streamOggPath[0] = '\0';
+    LoopPcmFree();
     /* Deliberately keep rememberedPath/Frame: a StopStream here may be the menu
-       theme replacing parked game music, which ResumeStream must still restore. */
+       theme replacing parked game music, which ResumeStream must still restore.
+       (and loopName: a stream that ended is started again, PumpStreamLoop) */
 }
 
 void OpenStream() {
@@ -253,6 +288,12 @@ void OpenStream() {
     pathCacheN = 0;
     missCacheN = 0;
     ClearOggCache();
+    streamFreq = 0;
+    streamStartBytes = 0;
+    streamTrackBytes = 0;
+    streamOggPath[0] = '\0';
+    LoopPcmFree();
+    loopName[0] = '\0';
     if (musicLogEnabled)
         SDL_Log("[MUSIC] OpenStream init");
 }
@@ -384,6 +425,11 @@ static bool PlayOggFile(const char *oggPath, S32 startFrame) {
         SDL_PutAudioStreamData(stream, oggCache.pcm + offsetBytes / sizeof(short), playBytes);
         SDL_AddAtomicInt(&streamPushedBytes, (int)playBytes);
         SDL_FlushAudioStream(stream); // all input pushed -> let the converter drain to 0 at EOF (#406)
+        streamFreq = oggCache.sample_rate;
+        streamStartBytes = offsetBytes;
+        streamTrackBytes = oggCache.numBytes;
+        strncpy(streamOggPath, oggPath, ADELINE_MAX_PATH - 1);
+        streamOggPath[ADELINE_MAX_PATH - 1] = '\0';
         return true;
     }
 
@@ -398,6 +444,7 @@ static bool PlayOggFile(const char *oggPath, S32 startFrame) {
         return false;
     }
 
+    Uint32 seekBytes = 0;
     if (startFrame > 0) {
         /* Clamp a slightly-overestimated resume frame (StreamPositionFrames can
            read a device-buffer ahead of true playback) so a seek past end-of-file
@@ -407,6 +454,7 @@ static bool PlayOggFile(const char *oggPath, S32 startFrame) {
         if (lenFrames > 0 && seekFrame >= lenFrames)
             seekFrame = lenFrames - 1;
         stb_vorbis_seek_frame(v, seekFrame);
+        seekBytes = (Uint32)seekFrame * (Uint32)info.channels * (Uint32)sizeof(short);
     }
 
     SDL_AudioSpec spec;
@@ -420,6 +468,14 @@ static bool PlayOggFile(const char *oggPath, S32 startFrame) {
         return false;
     }
     streamBytesPerFrame = (int)info.channels * (int)sizeof(short);
+    streamFreq = (int)info.sample_rate;
+    streamStartBytes = seekBytes;
+    {
+        const unsigned int lenFrames = stb_vorbis_stream_length_in_samples(v);
+        streamTrackBytes = (Uint32)lenFrames * (Uint32)streamBytesPerFrame;
+    }
+    strncpy(streamOggPath, oggPath, ADELINE_MAX_PATH - 1);
+    streamOggPath[ADELINE_MAX_PATH - 1] = '\0';
 
     DecodeThreadData *d = (DecodeThreadData *)malloc(sizeof(DecodeThreadData));
     if (!d) {
@@ -472,6 +528,18 @@ static bool SetupWavStream(const SDL_AudioSpec *spec, const Uint8 *wavData,
     SDL_PutAudioStreamData(stream, wavData + offsetBytes, wavLen - offsetBytes);
     SDL_AddAtomicInt(&streamPushedBytes, (int)(wavLen - offsetBytes));
     SDL_FlushAudioStream(stream); // all input pushed -> let the converter drain to 0 at EOF (#406)
+    streamFreq = spec->freq;
+    streamStartBytes = offsetBytes;
+    streamTrackBytes = wavLen;
+    /* (music that keeps going: the whole track kept, to be queued again behind itself -- PumpStreamLoop) */
+    LoopPcmFree();
+    if (loopOn && wavLen > 0) {
+        loopPcm = (Uint8 *)malloc(wavLen);
+        if (loopPcm) {
+            memcpy(loopPcm, wavData, wavLen);
+            loopPcmLen = wavLen;
+        }
+    }
     return true;
 }
 
@@ -487,6 +555,14 @@ static void FinishStream(const char *name) {
 
     strncpy(streamPathName, name, ADELINE_MAX_PATH - 1);
     streamPathName[ADELINE_MAX_PATH - 1] = '\0';
+    strncpy(loopName, name, ADELINE_MAX_PATH - 1);
+    loopName[ADELINE_MAX_PATH - 1] = '\0';
+    if (musicLogEnabled || loopOn)
+        SDL_Log("[MUSIC] stream %s: %.1f s%s", name,
+                (streamFreq > 0 && streamBytesPerFrame > 0 && streamTrackBytes > 0)
+                    ? (double)streamTrackBytes / ((double)streamFreq * streamBytesPerFrame)
+                    : -1.0,
+                loopOn ? ", kept going (looping)" : "");
 }
 
 /* Read a whole file out of the mounted disc image into a malloc'd buffer (caller
@@ -940,6 +1016,8 @@ static void PlayStreamInternal(const char *name, S32 startFrame) {
         return;
 
     StopStreamInternal();
+    loopName[0] = '\0';
+    loopCount = 0;
 
     /* (a name already looked for everywhere and not found: missCache) */
     if (MissCacheHas(name))
@@ -1071,6 +1149,7 @@ void StopStream() {
     if (musicLogEnabled)
         SDL_Log("[MUSIC] StopStream");
     StopStreamInternal();
+    loopName[0] = '\0'; // (stopped on purpose: not started again, PumpStreamLoop)
 }
 
 void PauseStream() {
@@ -1166,6 +1245,80 @@ S32 IsStreamPlaying() {
 
 char *StreamName() {
     return streamPathName;
+}
+
+/* ── Music that keeps going ────────────────────────────────────────────── */
+
+#define STREAM_LOOP_AHEAD_S 5 // the track queued again when less than this is left to play (s): a cube's load is a long frame
+
+void SetStreamLoop(S32 on) {
+    const bool want = on != 0;
+    if (want == loopOn)
+        return;
+    loopOn = want;
+    if (loopOn || !stream || streamFreq <= 0)
+        SDL_Log("[MUSIC] music %s", loopOn ? "kept going: played again behind itself until told otherwise"
+                                           : "no longer kept going: it ends when it ends");
+    else
+        SDL_Log("[MUSIC] music no longer kept going: it ends when it ends -- %s at %.2f s of %.2f s, %.2f s queued, played again %d times",
+                streamPathName, StreamPositionFrames() / (double)streamFreq,
+                streamBytesPerFrame > 0 ? streamTrackBytes / ((double)streamFreq * streamBytesPerFrame) : 0.0,
+                streamBytesPerFrame > 0 ? SDL_GetAudioStreamQueued(stream) / ((double)streamFreq * streamBytesPerFrame) : 0.0, loopCount);
+    if (!loopOn)
+        LoopPcmFree();
+}
+
+S32 PumpStreamLoop(void) {
+    if (!loopOn)
+        return 0;
+    if (stream && (streamPaused || SDL_GetAtomicInt(&decodeActive)))
+        return 0; // (paused: nothing played; an OGG still decoding: still being queued)
+    if (stream) {
+        const int queued = SDL_GetAudioStreamQueued(stream);
+        /* the whole track at hand: a WAV-ish source's copy, or the OGG's decoded cache */
+        const Uint8 *pcm = NULL;
+        Uint32 len = 0;
+        if (loopPcm && loopPcmLen > 0) {
+            pcm = loopPcm;
+            len = loopPcmLen;
+        } else if (oggCache.pcm && streamOggPath[0] && strcmp(oggCache.path, streamOggPath) == 0) {
+            pcm = (const Uint8 *)oggCache.pcm;
+            len = oggCache.numBytes;
+        }
+        if (pcm && streamFreq > 0 && streamBytesPerFrame > 0 && len >= (Uint32)streamBytesPerFrame) {
+            const double perSecond = (double)streamFreq * streamBytesPerFrame;
+            if (queued >= 0 && (double)queued >= perSecond * STREAM_LOOP_AHEAD_S)
+                return 0;
+            /* (the count of bytes pushed kept well inside an int: whole tracks already played taken off it, which leaves the position
+               within the track -- StreamPositionFrames -- as it was) */
+            const int pushed = SDL_GetAtomicInt(&streamPushedBytes);
+            if (pushed > (1 << 30) && pushed - queued > 0)
+                SDL_AddAtomicInt(&streamPushedBytes, -((pushed - queued) / (int)len) * (int)len);
+            SDL_PutAudioStreamData(stream, pcm, (int)len);
+            SDL_AddAtomicInt(&streamPushedBytes, (int)len);
+            SDL_FlushAudioStream(stream);
+            streamTrackBytes = len;
+            loopCount++;
+            SDL_Log("[MUSIC] %s queued again behind itself (%d times now): %.1f s, %.2f s of it still to play", streamPathName, loopCount,
+                    len / perSecond, queued > 0 ? queued / perSecond : 0.0);
+            return 1;
+        }
+        if (queued > 0)
+            return 0; // (still playing: started again once it has ended)
+    }
+    /* it ended (or never had its whole track at hand): started again from its beginning */
+    if (!loopName[0])
+        return 0;
+    char name[ADELINE_MAX_PATH];
+    strncpy(name, loopName, ADELINE_MAX_PATH - 1);
+    name[ADELINE_MAX_PATH - 1] = '\0';
+    const int count = loopCount;
+    PlayStreamInternal(name, 0);
+    loopCount = count + 1;
+    SDL_Log("[MUSIC] %s ended: started again (%d times now)%s", name, loopCount, stream ? "" : " -- could not be played");
+    if (!stream)
+        loopName[0] = '\0'; // (not tried again every frame)
+    return 1;
 }
 
 void MusicLogEnable(int enable) {

@@ -266,7 +266,17 @@ up on spirals through the black void round the temple. 1,719 cells, steepest 12 
   their wings (see "The game's own rats and skeletons" below). None comes lower over the road than 2,500 (see "The cuts made good" below).
 - *Mini pumpkins*: the power-ups' mushrooms, the fakes the cars drop and the item box's icon are a jack-o'-lantern. It is the mushroom
   entity 112's body 3.
-- *The music*: the scenes play LBA2's own Temple of Bù's music (3) and its ambient sounds (scene 10).
+- *The music* (since 2026-10-18): LBA1's own temple music -- music 5, which LBA1's scenes 8 and 40 play (scene 41's is 2), CD track 6 --
+  made by the build from the player's LBA1 (`Temple/TempleMusic.cs`): the cue sheet's audio track out of the disc image (GOG: `LBA.DAT` over
+  `LBA.GOG`; also any `*.cue` over BIN/WAV/OGG files, or a loose `Track06.wav`/`.ogg`), its silent ends trimmed, written as
+  `RACEMUSIC\LBA1_TEMPLE.WAV` (2:44.6, 27.7 MB) in the game folder and named by the race file (`music=`, `RACETRACK.JSON` `Music`). Never in
+  the repo or an installer. GOG's cue sheet lists no pregaps: every track of its image starts 2 s before its `INDEX 01` (and the cue's
+  track runs 2 s into the next one), so the track is read from 4 s before it and cut at the gaps either side. It looks in
+  `LBA1_MUSIC_DIR`, the LBA1 folder and the two above it. Without LBA1's audio (the floppy release: its music is MIDI only) the scenes'
+  own music plays, LBA2's Temple of Bù's (3), as before; the ambient sounds are LBA2's Temple of Bù's (scene 10) either way. Every race's
+  music, this one's or a scene's, now keeps going until the race is over (`MUSIC.CPP` `LoopMusic`, `STREAM.CPP` `PumpStreamLoop`: the
+  track queued again behind itself 2 s before it runs out, no gap) and is left to end as it ends after the finish. Probe:
+  `templemusic find|picture|capture` (ScriptRoundTrip).
 - *The line-up*: Halloween's monsters in cars made for them (since 2026-10-18): the vampire in his coffin (the one to beat), the witch on
   her broomstick and the zombie in his hearse -- "The vampire, the witch and the zombie" below. (2026-10-17 to 18 the skeleton in his ghost
   car, the ghost in hers and the two-headed monster in his monster truck; the Dark Monk, Ker'aooc and Tabata before them.)

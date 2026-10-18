@@ -1,0 +1,253 @@
+using System.Buffers.Binary;
+using System.Numerics;
+using System.Security.Cryptography;
+using LBAAssembler;
+using LBAAssembler.Lba1;
+using LBAAssembler.Terrain.Temple;
+
+namespace ScriptRoundTrip;
+
+// PROBE (2026-10-18): the Temple of Bú's race music (Temple.TempleMusic), checked.
+//   templemusic find <LBA1 folder> <out dir>: LBA1's temple scenes' music numbers, where the build finds LBA1's CD track for it, the
+//     converted WAV written to <out dir> (as the build writes it) with its whole track beside it (untrimmed), their lengths, and a picture of
+//     each (waveform over spectrogram); the trimmed track checked to be the image's own bytes
+//   templemusic picture <wav> <png>: a WAV's waveform over its spectrogram
+//   templemusic capture <raw> <source wav> <png> [rate]: a recording of the engine's output (SDL's disk audio driver: 16-bit stereo, the
+//     rate given, 44100 by default) against the music it should be: where it is silent, and which stretch of the source each stretch of it
+//     is (the music played again behind itself shows as the source's end followed by its start)
+internal static class TempleMusicProbe
+{
+    public static int Run(string[] args) => args[1] switch
+    {
+        "find" => Find(args[2], args[3]),
+        "picture" => PictureCommand(args[2], args[3]),
+        "capture" => Capture(args),
+        _ => throw new ArgumentException("templemusic find|picture|capture"),
+    };
+
+    private static int Find(string lba1, string outDir)
+    {
+        Directory.CreateDirectory(outDir);
+        var archive = HqrArchive.Open(Path.Combine(lba1, "SCENE.HQR"));
+        foreach (var s in new[] { 8, 40, 41 })
+            Console.WriteLine($"LBA1 scene {s}: music {Lba1Scene.Parse(s, archive.Read(s)).Music}");
+        var music = TempleMusic.MusicNumber(lba1);
+        Console.WriteLine($"the temple's music (scene {TempleMusic.TempleScene}): {music} -> CD track {music + 1}");
+        Console.WriteLine($"looked in: {string.Join(" | ", TempleMusic.Places(lba1))}");
+        var found = TempleMusic.Find(TempleMusic.Places(lba1), music + 1);
+        if (found is null) { Console.WriteLine("NOT FOUND"); return 1; }
+        var (source, pcm, ogg, lead) = found.Value;
+        Console.WriteLine($"found: {source}{(ogg is not null ? " (an OGG, copied as it is)" : "")}");
+        if (pcm is null) return 0;
+        var (trimmed, note) = TempleMusic.Cut(pcm, lead);
+        Console.WriteLine($"read from {lead / 44100.0:0.000} s before the cue's INDEX 01; cut: {note}");
+        var whole = Path.Combine(outDir, "track_whole.wav");
+        var cut = Path.Combine(outDir, "LBA1_TEMPLE.WAV");
+        TempleMusic.WriteWav(whole, pcm);
+        TempleMusic.WriteWav(cut, trimmed);
+        var at = pcm.AsSpan().IndexOf(trimmed.AsSpan(0, 1 << 16));
+        var same = at >= 0 && pcm.AsSpan(at, trimmed.Length).SequenceEqual(trimmed);
+        Console.WriteLine($"whole track: {pcm.Length} bytes = {pcm.Length / 4 / 44100.0:0.000} s; trimmed: {trimmed.Length} bytes = {trimmed.Length / 4 / 44100.0:0.000} s " +
+                          $"(from {at / 4 / 44100.0:0.000} s; {(pcm.Length - at - trimmed.Length) / 4 / 44100.0:0.000} s off the end); the image's own bytes: {(same ? "yes" : "NO")}");
+        Console.WriteLine($"sha256 of the trimmed samples: {Convert.ToHexString(SHA256.HashData(trimmed))[..16]}");
+        Stats("whole", pcm);
+        Stats("trimmed", trimmed);
+        Picture(pcm, 44100, Path.Combine(outDir, "track_whole.png"), $"LBA1 CD track {music + 1} (music {music}) as the image has it");
+        Picture(trimmed, 44100, Path.Combine(outDir, "LBA1_TEMPLE.png"), "LBA1_TEMPLE.WAV (trimmed)");
+        return 0;
+    }
+
+    private static void Stats(string name, byte[] pcm)
+    {
+        var frames = pcm.Length / 4;
+        double sum = 0; var peak = 0;
+        for (var i = 0; i < frames * 2; i++)
+        {
+            int v = (short)(pcm[2 * i] | pcm[2 * i + 1] << 8);
+            sum += (double)v * v; peak = Math.Max(peak, Math.Abs(v));
+        }
+        Console.WriteLine($"{name}: peak {peak} ({20 * Math.Log10(Math.Max(1, peak) / 32768.0):0.0} dBFS), rms {20 * Math.Log10(Math.Sqrt(sum / (frames * 2)) / 32768.0):0.0} dBFS; " +
+                          $"first/last 0.5 s rms {Rms(pcm, 0, 22050):0}/{Rms(pcm, frames - 22050, frames):0}");
+    }
+
+    private static double Rms(byte[] pcm, int from, int to)
+    {
+        double sum = 0; var n = 0;
+        for (var f = Math.Max(0, from); f < Math.Min(to, pcm.Length / 4); f++)
+            for (var c = 0; c < 2; c++) { int v = (short)(pcm[4 * f + 2 * c] | pcm[4 * f + 2 * c + 1] << 8); sum += (double)v * v; n++; }
+        return n > 0 ? Math.Sqrt(sum / n) : 0;
+    }
+
+    private static byte[] ReadWavPcm(string path, out int rate)
+    {
+        var d = File.ReadAllBytes(path);
+        rate = 44100;
+        var p = 12;
+        while (p + 8 <= d.Length)
+        {
+            var id = System.Text.Encoding.ASCII.GetString(d, p, 4);
+            var size = BinaryPrimitives.ReadInt32LittleEndian(d.AsSpan(p + 4));
+            if (id == "fmt ") rate = BinaryPrimitives.ReadInt32LittleEndian(d.AsSpan(p + 12));
+            if (id == "data") return d.AsSpan(p + 8, Math.Min(size, d.Length - p - 8)).ToArray();
+            p += 8 + size + (size & 1);
+        }
+        throw new InvalidDataException("no data chunk");
+    }
+
+    private static int PictureCommand(string wav, string png)
+    {
+        var pcm = ReadWavPcm(wav, out var rate);
+        Picture(pcm, rate, png, Path.GetFileName(wav));
+        return 0;
+    }
+
+    // Waveform (top, 160 px: min/max per column) over a spectrogram (0-11 kHz, log magnitude), 1600 px wide whatever the length; a tick
+    // every 10 s; `marks`: seconds to draw a red line at
+    public static void Picture(byte[] pcm, int rate, string png, string title, IReadOnlyList<double>? marks = null)
+    {
+        const int W = 1600, WaveH = 160, SpecH = 256, N = 1024;
+        var H = WaveH + SpecH + 4;
+        var frames = pcm.Length / 4;
+        var img = new byte[W * H * 4];
+        void Px(int x, int y, byte r, byte g, byte b) { if (x < 0 || y < 0 || x >= W || y >= H) return; var i = (y * W + x) * 4; img[i] = b; img[i + 1] = g; img[i + 2] = r; img[i + 3] = 255; }
+        for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) Px(x, y, 16, 16, 20);
+        short Mono(int f) => (short)(((short)(pcm[4 * f] | pcm[4 * f + 1] << 8) + (short)(pcm[4 * f + 2] | pcm[4 * f + 3] << 8)) / 2);
+        for (var x = 0; x < W; x++)
+        {
+            int f0 = (int)((long)frames * x / W), f1 = Math.Max(f0 + 1, (int)((long)frames * (x + 1) / W));
+            int lo = 0, hi = 0;
+            for (var f = f0; f < f1 && f < frames; f++) { var v = Mono(f); lo = Math.Min(lo, v); hi = Math.Max(hi, v); }
+            int y0 = WaveH / 2 - hi * (WaveH / 2) / 32768, y1 = WaveH / 2 - lo * (WaveH / 2) / 32768;
+            for (var y = y0; y <= y1; y++) Px(x, y, 120, 200, 255);
+            Px(x, WaveH / 2, 60, 60, 70);
+        }
+        var window = new double[N];
+        for (var i = 0; i < N; i++) window[i] = 0.5 - 0.5 * Math.Cos(2 * Math.PI * i / (N - 1));
+        var buf = new Complex[N];
+        var maxBin = (int)(N / 2 * Math.Min(1.0, 11025.0 / (rate / 2.0)));
+        for (var x = 0; x < W; x++)
+        {
+            var at = (int)((long)(frames - N) * x / W);
+            if (at < 0) break;
+            for (var i = 0; i < N; i++) buf[i] = new Complex(Mono(at + i) / 32768.0 * window[i], 0);
+            Fft(buf);
+            for (var y = 0; y < SpecH; y++)
+            {
+                var bin = 1 + (int)((long)(maxBin - 1) * y / SpecH);
+                var db = 20 * Math.Log10(buf[bin].Magnitude + 1e-9);
+                var t = Math.Clamp((db + 40) / 70, 0, 1);
+                Px(x, H - 1 - y, (byte)(255 * Math.Min(1, t * 1.6)), (byte)(255 * Math.Clamp(t * 1.6 - 0.6, 0, 1)), (byte)(255 * Math.Clamp(0.5 - Math.Abs(t - 0.3), 0, 1)));
+            }
+        }
+        var seconds = frames / (double)rate;
+        for (var s = 10; s < seconds; s += 10)
+        {
+            var x = (int)(W * s / seconds);
+            for (var y = 0; y < 8; y++) Px(x, WaveH + y - 4, 255, 255, 255);
+        }
+        foreach (var m in marks ?? Array.Empty<double>())
+        {
+            var x = (int)(W * m / seconds);
+            for (var y = 0; y < H; y += 2) Px(x, y, 255, 40, 40);
+        }
+        PngWriter.Write(png, img, W, H);
+        Console.WriteLine($"{png}: {title}, {seconds:0.0} s ({W} px, a tick every 10 s{(marks is { Count: > 0 } ? $", {marks.Count} red marks" : "")})");
+    }
+
+    private static void Fft(Complex[] a)
+    {
+        var n = a.Length;
+        for (int i = 1, j = 0; i < n; i++)
+        {
+            var bit = n >> 1;
+            for (; (j & bit) != 0; bit >>= 1) j ^= bit;
+            j ^= bit;
+            if (i < j) (a[i], a[j]) = (a[j], a[i]);
+        }
+        for (var len = 2; len <= n; len <<= 1)
+        {
+            var w = Complex.FromPolarCoordinates(1, -2 * Math.PI / len);
+            for (var i = 0; i < n; i += len)
+            {
+                var wn = Complex.One;
+                for (var k = 0; k < len / 2; k++)
+                {
+                    var u = a[i + k]; var v = a[i + k + len / 2] * wn;
+                    a[i + k] = u + v; a[i + k + len / 2] = u - v;
+                    wn *= w;
+                }
+            }
+        }
+    }
+
+    // A recording of the game's output against the music it plays: silences (50 ms windows quieter than -60 dBFS, a run of them 0.2 s or
+    // more), and the source's stretches it is made of -- found by matching 16-frame fingerprints of the source (every 32nd frame of it
+    // indexed) and followed sample by sample (within 2 of the source: SDL's mix of one stream at full volume is the source itself)
+    private static int Capture(string[] args)
+    {
+        var raw = File.ReadAllBytes(args[2]);
+        var source = ReadWavPcm(args[3], out _);
+        var png = args[4];
+        var rate = args.Length > 5 ? int.Parse(args[5]) : 44100;
+        int cf = raw.Length / 4, sf = source.Length / 4;
+        Console.WriteLine($"capture {args[2]}: {cf} frames = {cf / (double)rate:0.00} s; source {args[3]}: {sf} frames = {sf / 44100.0:0.00} s");
+        short S(byte[] b, int f, int c) => (short)(b[4 * f + 2 * c] | b[4 * f + 2 * c + 1] << 8);
+        // silences
+        var win = rate / 20;
+        var silentRun = 0; var runStart = 0;
+        var silences = new List<(double From, double To)>();
+        for (var w = 0; w * win < cf; w++)
+        {
+            double sum = 0; var n = 0;
+            for (var f = w * win; f < Math.Min(cf, (w + 1) * win); f++) for (var c = 0; c < 2; c++) { double v = S(raw, f, c); sum += v * v; n++; }
+            var db = 20 * Math.Log10(Math.Sqrt(sum / Math.Max(1, n)) / 32768 + 1e-12);
+            if (db < -60) { if (silentRun++ == 0) runStart = w; }
+            else
+            {
+                if (silentRun >= 4) silences.Add((runStart * win / (double)rate, w * win / (double)rate));
+                silentRun = 0;
+            }
+        }
+        if (silentRun >= 4) silences.Add((runStart * win / (double)rate, cf / (double)rate));
+        Console.WriteLine($"silences of 0.2 s or more: {silences.Count}");
+        foreach (var (from, to) in silences) Console.WriteLine($"  silent {from:0.00}-{to:0.00} s ({to - from:0.00} s)");
+        // the source's stretches
+        const int K = 32, L = 16;
+        long Key(byte[] b, int f) { long h = 1469598103934665603; for (var i = 0; i < L; i++) { h = (h ^ (ushort)S(b, f + i, 0)) * 1099511628211; h = (h ^ (ushort)S(b, f + i, 1)) * 1099511628211; } return h; }
+        // (quiet stretches -- silence, a fade -- match anything: not fingerprinted)
+        bool Loud(byte[] b, int f) { for (var i = 0; i < L; i++) if (Math.Abs((int)S(b, f + i, 0)) > 64 || Math.Abs((int)S(b, f + i, 1)) > 64) return true; return false; }
+        var index = new Dictionary<long, int>();
+        for (var f = 0; f + L < sf; f += K) if (Loud(source, f)) index.TryAdd(Key(source, f), f);
+        bool Near(int c, int s) => Math.Abs(S(raw, c, 0) - S(source, s, 0)) <= 2 && Math.Abs(S(raw, c, 1) - S(source, s, 1)) <= 2;
+        var marks = new List<double>();
+        var stretches = 0;
+        var p = 0;
+        while (p + L + K < cf)
+        {
+            // find where the source is at p (exact fingerprints: the first of K positions that hits)
+            var hit = -1; var at = -1;
+            for (var q = p; q < p + 4096 && q + L < cf && hit < 0; q++)
+                if (Loud(raw, q) && index.TryGetValue(Key(raw, q), out var s)) { hit = q; at = s; }
+            if (hit < 0) { p += 4096; continue; }
+            // back to where this stretch began (the frames before the fingerprint)
+            var c0 = hit; var s0 = at;
+            while (c0 > p && s0 > 0 && Near(c0 - 1, s0 - 1)) { c0--; s0--; }
+            // ... and on, round the end of the source to its start (played again behind itself)
+            var c = hit; var sPos = at; var wraps = 0; var miss = 0;
+            while (c < cf)
+            {
+                if (Near(c, sPos)) miss = 0;
+                else if (++miss > 8) break;
+                c++; sPos++;
+                if (sPos == sf) { sPos = 0; wraps++; marks.Add(c / (double)rate); Console.WriteLine($"    at {c / (double)rate:0.000} s of the capture: the source's end, straight on into its start"); }
+            }
+            var c1 = c - miss;
+            stretches++;
+            Console.WriteLine($"  capture {c0 / (double)rate:0.000}-{c1 / (double)rate:0.000} s = the source from {s0 / 44100.0:0.000} s, {(c1 - c0) / (double)rate:0.000} s long{(wraps > 0 ? $", round its end {wraps} time(s)" : "")}");
+            p = Math.Max(c1, p + 1);
+        }
+        Console.WriteLine($"{stretches} stretch(es) of the source");
+        Picture(raw, rate, png, $"capture {Path.GetFileName(args[2])}", marks);
+        return 0;
+    }
+}
