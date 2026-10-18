@@ -1192,9 +1192,16 @@ static int s_nbFlyers = 0;
 #define RACE_SPOOK_FAR 8000.0              // ... at a car no further than this (beyond, with a fast car's lead, it couldn't reach it in time)
 #define RACE_SPOOK_HAND 500                // the ball leaves her hand this far in front of her middle ...
 #define RACE_SPOOK_HAND_UP 400             // ... and this high over it
+// None is drawn with the camera's eye nearer its middle than its body's reach (its box's half diagonal) and RACE_SPOOK_EYE_CLEAR more, nor
+// than RACE_GHOST_EYE -- the haunting ghosts' rule (GhostPlace): a ghost drifting through the chase camera filled the screen with its flat
+// inner faces (audit, 2026-10-18) -- and over the RACE_SPOOK_EYE_FADE before that it fades into the fog (its fog level eased up to the
+// fullest), so it goes dim rather than vanishing all at once.
+#define RACE_SPOOK_EYE_CLEAR 1500.0
+#define RACE_SPOOK_EYE_FADE 1500.0
 typedef struct {
     int Body, Flags, Np; double Y, PX[RACE_SPOOK_POINTS], PZ[RACE_SPOOK_POINTS], Len, S, X, Z; int Dir; S32 Beta;
     int Throwing, Thrown, Target, Ready; S32 T0, Next;
+    double Mid, Reach;                     // its body's middle over its origin, and its box's half diagonal (DrawSpooks)
     T_OBJ_3D Obj;
 } T_RACE_SPOOK;
 static T_RACE_SPOOK s_spooks[RACE_MAX_SPOOKS];
@@ -1421,6 +1428,7 @@ typedef struct {
     double Column[RACE_MAX_OPPONENTS];     // each opponent's way across from her middle on its grid spot (HasColumn: known)
     int HasColumn[RACE_MAX_OPPONENTS];
     double EyeBack; int EyeSide;           // the rail camera: how far behind the car its eye is on the grid (0: as usual), the side it swerves to
+    double EyeAcross;                      // ... and how far across from her middle (MarshalEyeAcross: clear of the gantry's posts)
     S32 EyeFrom;                           // ... and since when it eases back to the usual (0: not yet)
 } T_RACE_MARSHAL;
 static T_RACE_MARSHAL s_marshal;
@@ -2025,6 +2033,87 @@ static int GapBetween(int a, int b) {
     return 0;
 }
 
+// The start line's gantry, kept off the rail camera's eye (2026-10-18). The Temple of Bu's gantry is low -- its beam 2,300 over the
+// road, the eye 2,100: every lap the eye went under the beam by 200, the beam a line across the middle of the view and a wedge in its
+// corner -- and at GO the swerve round the flag marshal (MarshalEye) took the eye past a post at 330 (audit: "the start gantry's post
+// flashes as an orange wedge in the top-right corner at GO"). Its posts are not solid (no boxes), so the camera has the gantry from its
+// body: the points of LBA Assembler's drawn-only frames across the start line (their origins within RACE_GANTRY_NEAR of it, in its cube,
+// thin along the lap, wide and tall), read once in island units (GantryRead). Near the line the eye is kept RACE_GANTRY_UNDER under any
+// of them over it -- within RACE_GANTRY_FULL of it across the ground, eased in and out from RACE_GANTRY_REACH (GantryEye) -- no lower
+// than RACE_GANTRY_LOWEST over the road. (The other tracks' eyes go by their gantries further under -- or, the Elevator Platform's, over
+// it: left as they were.)
+#define RACE_GANTRY_NEAR 1000.0
+#define RACE_GANTRY_THIN 800.0             // (a gantry's body: no thicker than this along the lap, ...
+#define RACE_GANTRY_WIDE 1500.0            // ... at least this wide across it ...
+#define RACE_GANTRY_TALL 1500.0            // ... and this tall)
+#define RACE_GANTRY_POINTS 4096
+#define RACE_GANTRY_UNDER 800.0
+#define RACE_GANTRY_FULL 1200.0
+#define RACE_GANTRY_REACH 4000.0
+#define RACE_GANTRY_LOWEST 900.0
+static float s_gantryPt[RACE_GANTRY_POINTS][3];
+static int s_gantryPts = -1;               // (-1: not read yet)
+static void GantryRead(void) {
+    if (s_gantryPts >= 0 || !s_car.HasLine || CurrentCubeX != s_car.LineCubeX || CurrentCubeY != s_car.LineCubeZ) return;
+    s_gantryPts = 0;
+    const double lx = s_car.LineX1 - s_car.LineX0, lz = s_car.LineZ1 - s_car.LineZ0, ll = lx * lx + lz * lz;
+    int bodies = 0;
+    for (S32 i = 0; i < NbObjDecors; i++) {
+        const T_DECORS *d = &ListDecors[i];
+        if (d->YMax >= d->YMin) continue;
+        double t = ll > 0 ? ((d->Xworld - s_car.LineX0) * lx + (d->Zworld - s_car.LineZ0) * lz) / ll : 0;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        const double dx = d->Xworld - (s_car.LineX0 + lx * t), dz = d->Zworld - (s_car.LineZ0 + lz * t);
+        if (dx * dx + dz * dz > RACE_GANTRY_NEAR * RACE_GANTRY_NEAR) continue;
+        const T_BODY_HEADER *b = (const T_BODY_HEADER *)HQR_Get(HQR_Isle_Obj, d->Body & 0xFFFF);
+        if (!b || b->NbGroupes > 1 || b->NbPoints <= 0 || ll <= 0) continue;
+        const T_OBJ_POINT *p = (const T_OBJ_POINT *)((const U8 *)b + b->OffPoints);
+        const double a = (d->Beta & 4095) * 2 * 3.14159265358979 / 4096, ca = cos(a), sa = sin(a);
+        // (a gantry: a frame across the road -- thin along the lap, wide across it, tall; the road's decks by the line, a level of it
+        // over the line -- the Elevator Platform's helix -- are not)
+        const double l = sqrt(ll), ux = lx / l, uz = lz / l;
+        double t0 = 1e18, t1 = -1e18, w0 = 1e18, w1 = -1e18, y0 = 1e18, y1 = -1e18;
+        for (S32 k = 0; k < b->NbPoints; k++) {
+            const double x = p[k].X * ca + p[k].Z * sa, z = p[k].Z * ca - p[k].X * sa;
+            const double along = -x * uz + z * ux, across = x * ux + z * uz;
+            if (along < t0) t0 = along;
+            if (along > t1) t1 = along;
+            if (across < w0) w0 = across;
+            if (across > w1) w1 = across;
+            if (p[k].Y < y0) y0 = p[k].Y;
+            if (p[k].Y > y1) y1 = p[k].Y;
+        }
+        if (t1 - t0 > RACE_GANTRY_THIN || w1 - w0 < RACE_GANTRY_WIDE || y1 - y0 < RACE_GANTRY_TALL) continue;
+        for (S32 k = 0; k < b->NbPoints && s_gantryPts < RACE_GANTRY_POINTS; k++) {
+            float *q = s_gantryPt[s_gantryPts++];
+            q[0] = (float)(CurrentCubeX * 32768.0 + d->Xworld + p[k].X * ca + p[k].Z * sa);
+            q[1] = (float)(d->Yworld + p[k].Y);
+            q[2] = (float)(CurrentCubeY * 32768.0 + d->Zworld + p[k].Z * ca - p[k].X * sa);
+        }
+        bodies++;
+    }
+    Log_Info("[racemod] the start line's gantry: %d drawn-only frame%s across the line, %d points (kept off the rail camera)", bodies, bodies == 1 ? "" : "s", s_gantryPts);
+}
+// The eye's height (island units, at ex, ez) kept under the gantry's points over it.
+static void GantryEye(double ex, double *ey, double ez) {
+    if (s_gantryPts <= 0) return;
+    const double road = s_lineHasY ? s_lineY : *ey - s_railUp, lowest = road + RACE_GANTRY_LOWEST;
+    double want = *ey;
+    for (int k = 0; k < s_gantryPts; k++) {
+        const float *q = s_gantryPt[k];
+        const double dx = q[0] - ex, dz = q[2] - ez;
+        if (fabs(dx) >= RACE_GANTRY_REACH || fabs(dz) >= RACE_GANTRY_REACH || q[1] < *ey - 100 || q[1] - RACE_GANTRY_UNDER >= *ey) continue;
+        const double d = sqrt(dx * dx + dz * dz);
+        if (d >= RACE_GANTRY_REACH) continue;
+        double w = d <= RACE_GANTRY_FULL ? 1 : 1 - (d - RACE_GANTRY_FULL) / (RACE_GANTRY_REACH - RACE_GANTRY_FULL);
+        w = w * w * (3 - 2 * w);
+        const double y = *ey - (*ey - (q[1] - RACE_GANTRY_UNDER)) * w;
+        if (y < want) want = y;
+    }
+    if (want < lowest) want = lowest;
+    if (want < *ey) *ey = want;
+}
+
 static double MarshalBack(double back, double hx, double hz);
 static void MarshalEye(double *ex, double *ez, double hx, double hz);
 static S32 RailCamera(S32 *eye, S32 *target) {
@@ -2095,8 +2184,10 @@ static S32 RailCamera(S32 *eye, S32 *target) {
     // under a level of the road over the eye
     double over;
     if (RaisedBetween(ex, ez, ey - up - lift + 800.0, ey + RAISED_UNDER, behind, &over) && ey > over - RAISED_UNDER) ey = over - RAISED_UNDER;
-    // (... and round her, not through her, as the car sets off past her)
+    // (... and round her, not through her, as the car sets off past her -- and under the start line's gantry, not grazing it)
+    GantryRead();
     MarshalEye(&ex, &ez, hx, hz);
+    GantryEye(ex, &ey, ez);
     eye[0] = (S32)(ex - cx); eye[1] = (S32)ey; eye[2] = (S32)(ez - cz);
     target[0] = (S32)(tx - cx); target[1] = (S32)(ty + s_railAim); target[2] = (S32)(tz - cz);
     FollowCamEyeWho = "rail";
@@ -4997,6 +5088,56 @@ static double MarshalBack(double back, double hx, double hz) {
 #define RACE_MARSHAL_EYE (3.6 * 512.0)
 #define RACE_MARSHAL_EYE_NEAR (2.5 * 512.0)
 #define RACE_MARSHAL_EYE_FAR (9.0 * 512.0)
+// The swerve's way across from her middle, on the car's side: RACE_MARSHAL_EYE, but RACE_MARSHAL_EYE_POST clear of anything standing
+// there at the eye's usual height within RACE_MARSHAL_EYE_FAR of her along the lap -- a box of the island's objects across that way from
+// her, a post of the start line's gantry (GantryRead): the Temple of Bu's left post stood 330 from where the swerve took the eye at GO,
+// under its low beam (audit, 2026-10-18). Not nearer her than RACE_MARSHAL_EYE_LEAST.
+#define RACE_MARSHAL_EYE_POST 600.0
+#define RACE_MARSHAL_EYE_LEAST (1.6 * 512.0)
+static double MarshalEyeAcross(int side, double ey, double fx, double fz) {
+    const T_RACE_MARSHAL *m = &s_marshal;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    double want = RACE_MARSHAL_EYE;
+    for (int pass = 0, moved = 1; pass < 8 && moved; pass++) {
+        moved = 0;
+        for (S32 i = 0; i < NbObjDecors; i++) {
+            const T_DECORS *d = &ListDecors[i];
+            if (d->YMax <= d->YMin || ey < d->YMin - 300 || ey > d->YMax + 300) continue;
+            double lo = 1e18, hi = -1e18, alo = 1e18, ahi = -1e18;
+            for (int c = 0; c < 4; c++) {
+                const double x = cx + ((c & 1) ? d->XMax : d->XMin) - m->CX, z = cz + ((c & 2) ? d->ZMax : d->ZMin) - m->CZ;
+                const double across = (-x * fz + z * fx) * side, along = x * fx + z * fz;
+                if (across < lo) lo = across;
+                if (across > hi) hi = across;
+                if (along < alo) alo = along;
+                if (along > ahi) ahi = along;
+            }
+            // (by her along the lap, wholly on the eye's side of her middle)
+            if (ahi < -RACE_MARSHAL_EYE_FAR || alo > RACE_MARSHAL_EYE_FAR || lo <= 0) continue;
+            if (want > lo - RACE_MARSHAL_EYE_POST && want < hi + RACE_MARSHAL_EYE_POST) { want = lo - RACE_MARSHAL_EYE_POST; moved = 1; }
+        }
+        // ... and the start line's gantry's posts, drawn only (GantryRead): its points with another straight over or under them across
+        // the eye's height
+        for (int k = 0; k < s_gantryPts; k++) {
+            const float *p = s_gantryPt[k];
+            if (p[1] >= ey - 100) continue;
+            int column = 0;
+            for (int j = 0; j < s_gantryPts && !column; j++) {
+                const float *q = s_gantryPt[j];
+                column = q[1] > ey + 100 && fabs(q[0] - p[0]) < 40 && fabs(q[2] - p[2]) < 40;
+            }
+            if (!column) continue;
+            const double x = p[0] - m->CX, z = p[2] - m->CZ, across = (-x * fz + z * fx) * side, along = x * fx + z * fz;
+            if (fabs(along) > RACE_MARSHAL_EYE_FAR || across <= 0) continue;
+            if (want > across - RACE_MARSHAL_EYE_POST && want < across + RACE_MARSHAL_EYE_POST) { want = across - RACE_MARSHAL_EYE_POST; moved = 1; }
+        }
+    }
+    if (want < RACE_MARSHAL_EYE_LEAST) want = RACE_MARSHAL_EYE_LEAST;
+    if (want < RACE_MARSHAL_EYE)
+        Log_Info("[racemod] the flag marshal: the camera swerves round her %.2f cells across (not %.2f): clear of a post", want / 512.0, RACE_MARSHAL_EYE / 512.0);
+    return side * want;
+}
+
 static void MarshalEye(double *ex, double *ez, double hx, double hz) {
     T_RACE_MARSHAL *m = &s_marshal;
     if (!MarshalOnRoad()) { m->EyeSide = 0; return; }
@@ -5006,9 +5147,13 @@ static void MarshalEye(double *ex, double *ez, double hx, double hz) {
     if (a >= RACE_MARSHAL_EYE_FAR) { m->EyeSide = 0; return; }
     double w = a <= RACE_MARSHAL_EYE_NEAR ? 1 : 1 - (a - RACE_MARSHAL_EYE_NEAR) / (RACE_MARSHAL_EYE_FAR - RACE_MARSHAL_EYE_NEAR);
     w = w * w * (3 - 2 * w);
-    // (the car's side of her, kept while the eye goes by)
-    if (!m->EyeSide) m->EyeSide = -(hx - m->CX) * fz + (hz - m->CZ) * fx >= 0 ? 1 : -1;
-    const double want = m->EyeSide * RACE_MARSHAL_EYE;
+    // (the car's side of her, kept while the eye goes by -- and how far across, clear of the gantry's posts)
+    if (!m->EyeSide) {
+        m->EyeSide = -(hx - m->CX) * fz + (hz - m->CZ) * fx >= 0 ? 1 : -1;
+        // (at the rail eye's usual height over the road where she stands: on the grid it is higher, pulled back -- MarshalBack)
+        m->EyeAcross = MarshalEyeAcross(m->EyeSide, m->CY + s_railUp, fx, fz);
+    }
+    const double want = m->EyeAcross;
     if (m->EyeSide > 0 ? across >= want : across <= want) return;
     const double move = (want - across) * w;
     *ex += -fz * move; *ez += fx * move;
@@ -5291,7 +5436,10 @@ static void DrawSpooks(void) {
         if (sp->Body < 0) continue;
         T_OBJ_3D *o = &sp->Obj;
         if (!sp->Ready) {
-            if (!GivePtrBody(sp->Body)) { Log_Info("[racemod] spook %d: no body %d -- left out", i, sp->Body); sp->Body = -1; continue; }
+            const T_BODY_HEADER *b = (const T_BODY_HEADER *)GivePtrBody(sp->Body);
+            if (!b) { Log_Info("[racemod] spook %d: no body %d -- left out", i, sp->Body); sp->Body = -1; continue; }
+            const double hx = (b->XMax - b->XMin) / 2.0, hy = (b->YMax - b->YMin) / 2.0, hz = (b->ZMax - b->ZMin) / 2.0;
+            sp->Mid = (b->YMin + b->YMax) / 2.0; sp->Reach = sqrt(hx * hx + hy * hy + hz * hz);
             ObjectClear(o);
             o->Body.Num = -1;
             ObjectInitBody(o, (void *)(uintptr_t)(U32)sp->Body);
@@ -5302,10 +5450,21 @@ static void DrawSpooks(void) {
         o->X = (S32)floor(sp->X - CurrentCubeX * 32768.0 + 0.5); o->Y = (S32)floor(y + 0.5); o->Z = (S32)floor(sp->Z - CurrentCubeY * 32768.0 + 0.5);
         o->Alpha = 0; o->Beta = sp->Beta; o->Gamma = 0;
         memset(o->CurrentFrame, 0, sizeof(o->CurrentFrame));
+        // (none drawn by the camera's eye; faded into the fog coming to it: RACE_SPOOK_EYE_CLEAR)
+        const double ex = (double)o->X - CameraX, ey = y + sp->Mid - CameraY, ez = (double)o->Z - CameraZ;
+        const double eye = sqrt(ex * ex + ey * ey + ez * ez);
+        double clear = sp->Reach + RACE_SPOOK_EYE_CLEAR;
+        if (clear < RACE_GHOST_EYE) clear = RACE_GHOST_EYE;
+        if (eye < clear) continue;
         LongWorldRotatePoint(o->X, o->Y, o->Z);
         const S32 zr = CameraZr - Z0;
         if (zr < -4000 || zr > ClipZFar + 4000) continue;
-        SetCLUT(PalLevel + 16 * BoundRegleTrois(0, 15, ClipZFar - StartZFog, zr - StartZFog));
+        S32 level = BoundRegleTrois(0, 15, ClipZFar - StartZFog, zr - StartZFog);
+        if (eye < clear + RACE_SPOOK_EYE_FADE) {
+            const S32 fade = (S32)ceil(15 * (1 - (eye - clear) / RACE_SPOOK_EYE_FADE));
+            if (fade > level) level = fade;
+        }
+        SetCLUT(PalLevel + 16 * level);
         Switch_Fillers(FILL_POLY_FOG_ZBUFFER);
         UnsetClip();
         ObjectDisplay(o);
@@ -7787,6 +7946,24 @@ static void GoldIntoBox(S32 now) {
     Log_Info("[racemod] the golden Gazogem moves into the item box");
 }
 
+// Every frame, power-ups or not: Twinsen's car hidden while another body is drawn in its place -- the super jet-pack's (DrawSuperJet) or
+// the car he drives as (drive_as=, DrawDriveAs). (In PowerUps until 2026-10-18, which runs only with power-ups or a time trial: a race
+// file without them -- Play solo, the solo tests -- showed his buggy where the Temple's pumpkin F1 should have been.)
+static void HeroLook(S32 now, int driving) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    // the super jet-pack: the car turned into it -- hidden, the jet-pack drawn in its place (DrawSuperJet)
+    // (over its last RACE_JET_EASE_MS, flashing: the car and the jet-pack in turn, so the player sees it is about to end)
+    const S32 jetLeft = s_jetUntil - now;
+    const int superJet = driving && jetLeft > 0 && s_superModel >= 0 && CubeMode == CUBE_EXTERIEUR
+                         && (jetLeft >= RACE_JET_EASE_MS || (jetLeft / RACE_JET_FLASH_MS) % 2 == 0);
+    // (every frame: the game sets the car's flags again as it drives -- hidden once, it showed under the jet-pack; and hidden while it is
+    // driven as another car, drawn in its place: DrawDriveAs)
+    const int driveAs = driving && s_driveBody >= 0 && s_driveAnim >= 0 && CubeMode == CUBE_EXTERIEUR;
+    s_superShown = superJet;
+    if (superJet || driveAs) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
+    else if (s_heroHidden) { hero->Flags &= ~INVISIBLE; s_heroHidden = 0; }
+}
+
 static void PowerUps(S32 now, int driving) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     const int qualifying = Qualifying();
@@ -7845,17 +8022,6 @@ static void PowerUps(S32 now, int driving) {
         if (!gold) GoldIntoBox(now);
     }
     s_useWas = use;
-    // the super jet-pack: the car turned into it -- hidden, the jet-pack drawn in its place (DrawSuperJet)
-    // (over its last RACE_JET_EASE_MS, flashing: the car and the jet-pack in turn, so the player sees it is about to end)
-    const S32 jetLeft = s_jetUntil - now;
-    const int superJet = driving && jetLeft > 0 && s_superModel >= 0 && CubeMode == CUBE_EXTERIEUR
-                         && (jetLeft >= RACE_JET_EASE_MS || (jetLeft / RACE_JET_FLASH_MS) % 2 == 0);
-    // (every frame: the game sets the car's flags again as it drives -- hidden once, it showed under the jet-pack; and hidden while it is
-    // driven as another car, drawn in its place: DrawDriveAs)
-    const int driveAs = driving && s_driveBody >= 0 && s_driveAnim >= 0 && CubeMode == CUBE_EXTERIEUR;
-    s_superShown = superJet;
-    if (superJet || driveAs) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
-    else if (s_heroHidden) { hero->Flags &= ~INVISIBLE; s_heroHidden = 0; }
     // shrunk by an opponent's lightning: Twinsen's car at half its size while it lasts
     const int small = driving && s_heroSmall >= 0 && now < s_shrunkUntil && now >= s_jetUntil;
     s_driveSmallNow = driving && now < s_shrunkUntil && now >= s_jetUntil;
@@ -10610,6 +10776,7 @@ void RaceMod_Frame(void) {
     }
     // the power-ups: the mushrooms in this scene, the player's car over one, the penguins' fuses (a time trial: its cans of Gazogem alone)
     if (s_powerups || s_trial) PowerUps(now, driving);
+    HeroLook(now, driving);
     Vents(now);
     Jets(now, driving);
     LavaGeysers(now);
@@ -11743,7 +11910,10 @@ void RaceMod_Draw(void) {
     if (!RaceMod_Active() || !LbaFont) return;
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
     const int items = ((s_powerups && s_nbMush > 0) || s_trial) && !Qualifying();
-    if (!s_car.Hud && !items) return;
+    // (the display off -- hud=0 -- and no items: no display, but the scene's own drawn things all the same -- the car Twinsen drives as,
+    // the super jet-pack, Halloween's scares; all of it was left out with the display until 2026-10-18, his car hidden and nothing drawn
+    // in its place)
+    const int hud = s_car.Hud || items;
     const S32 speed = ListBuggy[0].Speed;
 
     void *font = PtrFont;
@@ -11839,7 +12009,7 @@ void RaceMod_Draw(void) {
     }
     // a message of the race-track mode's (Message: "Back on the road", the roulette wheel's prize), in the middle near the top -- set
     // since the first tracks and never drawn till 2026-10-10
-    if (now < s_messageUntil && s_message[0]) HudLine(width / 2 - SizeFont(s_message) / 2, height / 5, s_message, -1);
+    if (hud && now < s_messageUntil && s_message[0]) HudLine(width / 2 - SizeFont(s_message) / 2, height / 5, s_message, -1);
 
     RestoreClipWindow();
     UnsetClip();
@@ -11879,7 +12049,7 @@ static void ResetTrack(void) {
     s_shardModel = s_shardBit = -1;
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
-    s_nbFlyers = 0; s_nbSpooks = 0; HalloweenReset(); memset(&s_marshal, 0, sizeof(s_marshal));
+    s_nbFlyers = 0; s_nbSpooks = 0; HalloweenReset(); memset(&s_marshal, 0, sizeof(s_marshal)); s_gantryPts = -1;
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
     s_guardSize = 1.0; s_nbTeleports = 0; s_teleportedAt = 0;
     memset(&s_frog, 0, sizeof(s_frog)); s_frog.Arc = -1;

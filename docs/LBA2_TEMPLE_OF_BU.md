@@ -206,6 +206,18 @@ RESS_SKYSEA0 + 13, slots the retail file leaves empty.
 - `EXTFUNC.CPP` takes `island_sky=`.
 - `RENDERER_API.CPP` maps "temple" to island 4 with entries 40 and 24.
 - Object pages: 32, the decor's page in its Body's bits 18-22 (`MAX_OBJ_PAGES`, `IslandFile.MaxObjectPages`).
+- The full check's engine round (2026-10-18):
+  - *Fog by depth* for LBA Assembler's draw-only decors (`DECORS.CPP`, `AFF_OBJ.CPP` `ObjFogPolygon`, per-pixel fillers in
+    `POLYTEXT.CPP`/`POLYFLAT.CPP`): a temple chunk is up to 6 x 6 columns and the full height, and one fog level per body made far walls
+    a patchwork that jumped a level at a time as the camera moved. A polygon within one level keeps it; one spanning levels is fogged
+    pixel by pixel. The game's own decors keep one level a body; other tracks' long road pieces now grade with depth too.
+  - *The island's body cache*: 4,096 slots (it had 1,024 for the temple's 2,147 bodies, and entering the lower hall reloaded ~220 of them
+    every lap: a 41 ms frame), and `HQR_Preload` unpacks an island's bodies in one go when it loads (12-23 ms for the temple).
+  - *Spooks* fade into the fog over the last 1,500 before the camera and aren't drawn nearer than their size + 1,500 (at least 2,200).
+  - *The start gantry*: the rail camera's eye stays 800 under a draw-only frame across the start line (`GantryEye`), and the swerve past
+    the marshal keeps 600 from posts.
+  - `drive_as` applies without power-ups too (`HeroLook`), and `hud=0` no longer hides the car with nothing drawn in its place.
+  - A music file not found is remembered (`STREAM.CPP`): headless runs paid 150-390 ms a cube change looking for it again.
 
 **Commands** (ScriptRoundTrip):
 

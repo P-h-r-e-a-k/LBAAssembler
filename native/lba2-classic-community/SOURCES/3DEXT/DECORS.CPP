@@ -278,19 +278,28 @@ void (*DecorPoseHook)(T_DECORS *list, S32 count) = NULL;
 // from, some 380 a cube -- and a decor drawn has every point of its body turned and projected before anything of it shows. One wholly out
 // of the view -- behind the camera, off to a side, past the far plane -- is left out first, by its body's box: its points' own, worked out
 // once a body (a body of several groups has its points about their pivots: never left out this way).
+// (A slot a body number, as many as the island's bodies kept unpacked -- ISLE_OBJ_SLOTS: the Temple of Bu's 2,147 bodies, two to a slot
+// of the 1,024 there were, had a box worked out again each frame both were in view; and emptied as an island loads -- DecorsIslandLoaded:
+// its bodies are unpacked in order from the cache's start, so another island's body went to where one of the last island's had been.)
 typedef struct {
     const void *Body;
+    S32 Num;
     S32 Ok;
     S32 Min[3], Max[3];
 } T_BODY_BOX;
-#define BODY_BOX_CACHE 1024
+#define BODY_BOX_CACHE ISLE_OBJ_SLOTS
 static T_BODY_BOX BodyBoxes[BODY_BOX_CACHE];
+
+void DecorsIslandLoaded(void) {
+    memset(BodyBoxes, 0, sizeof(BodyBoxes));
+}
 
 static const T_BODY_BOX *BodyBoxOf(S32 num, const T_BODY_HEADER *body) {
     T_BODY_BOX *b = &BodyBoxes[num & (BODY_BOX_CACHE - 1)];
-    if (b->Body == body)
+    if (b->Body == body && b->Num == num)
         return b;
     b->Body = body;
+    b->Num = num;
     b->Ok = body->NbGroupes <= 1 && body->NbPoints > 0;
     if (b->Ok) {
         const TYPE_VT16 *p = (const TYPE_VT16 *)((const U8 *)body + body->OffPoints);
@@ -498,10 +507,11 @@ void AffichageObjetDecorsZBuf(void) {
         UnsetClip();
         ptrobj = ptrtri->PtrDec;
 
-        SetCLUT(PalLevel +
-                16 * BoundRegleTrois(0, 15,
-                                     clipzstart,
-                                     ptrtri->Zrot - StartZFog));
+        const U32 clut = PalLevel +
+                         16 * BoundRegleTrois(0, 15,
+                                              clipzstart,
+                                              ptrtri->Zrot - StartZFog);
+        SetCLUT(clut);
 
         // (an island with more object pages: the page this decor's body is textured from -- VAR_EXT.H)
         if (NbObjPages > 1) {
@@ -509,6 +519,13 @@ void AffichageObjetDecorsZBuf(void) {
             ObjPtrMap = (page AND page < (U32)NbObjPages) ? ObjPageBuf + (page - 1) * 256 * 256 : ObjTexture;
         }
 
+        // One of LBA Assembler's drawn-only decors is fogged by depth -- each polygon in its own band, one spanning bands pixel by pixel
+        // (AFF_OBJ.H ObjFogByDepth) -- not one level for the whole body by its origin's: the Temple of Bu's chunks of wall and floor, up
+        // to 6 x 6 of its columns (9,216 units) across and its full height, came out a patchwork beyond the fog's start -- a step of
+        // brightness at each chunk's edge, each chunk going a sixteenth darker or lighter at once as the camera moved, several times a
+        // second at speed (audit, 2026-10-18). The game's own decors keep the game's look: one level each.
+        const int ours = ptrobj->YMax < ptrobj->YMin;
+        ObjFogByDepth = ours;
         if (BodyDisplay(ptrobj->Xworld,
                         ptrobj->Yworld,
                         ptrobj->Zworld,
@@ -520,6 +537,11 @@ void AffichageObjetDecorsZBuf(void) {
                                 AND ClipYMin <= ClipYMax) {
                 ptrobj->Body |= DEC_DRAWN;
             }
+        }
+        if (ours) {
+            ObjFogByDepth = 0;
+            Fill_FogPerPixel = 0;
+            SetCLUT(clut); // (its polygons took their own bands: AFF_OBJ.CPP ObjFogPolygon)
         }
     }
     ObjPtrMap = ObjTexture; // (back to the first page: what is drawn next expects it)

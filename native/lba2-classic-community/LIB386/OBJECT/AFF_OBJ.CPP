@@ -289,7 +289,41 @@ static inline U16 ZBufferDepth(S32 z) {
 static S32 ClipOn = 0;
 static S32 ClipFill(S32 type, S32 colour, S32 n, Struc_Point *points);
 static S32 (*const RealFillPoly)(S32, S32, S32, Struc_Point *) = Fill_Poly;
+// A body fogged by depth (ObjFogByDepth, AFF_OBJ.H), a polygon at a time: its corners all in one fog band -- most, the whole view
+// nearer than the fog's start among them -- that band, as every pixel of it would have (the filler's depths lie between its corners');
+// across bands, the solid, flat and textured types fogged pixel by pixel (Fill_FogPerPixel, POLY.H), any other type -- Gouraud,
+// textured flat or Gouraud, perspective -- its corners' mean depth's band. The palette row stays the CLUT's. (A polygon cut at the near
+// plane: its corners as its handler has them, one behind the camera at depth 0 -- the cut one's depths lie between those too.)
+S32 ObjFogByDepth = 0;
+static void ObjFogPolygon(S32 type, S32 n, const Struc_Point *points) {
+    Fill_FogPerPixel = 0;
+    if (!Fill_Flag_Fog || !Fill_Flag_ZBuffer || Fill_Flag_NZW || n <= 0 || !PtrCLUTFog || !PtrTruePal)
+        return;
+    if (type == 2 || type == 25) // (transparent, the hidden test: no colour of their own)
+        return;
+    S32 lo = 15, hi = 0;
+    U32 sum = 0;
+    for (S32 i = 0; i < n; i++) {
+        const S32 level = FILL_FOG_LEVEL_OF(points[i].Pt_ZO);
+        if (level < lo) lo = level;
+        if (level > hi) hi = level;
+        sum += points[i].Pt_ZO;
+    }
+    S32 level = lo;
+    if (lo != hi) {
+        if (type == 0 || type == 1 || type == 8 || type == 12) {
+            Fill_FogPerPixel = 1;
+            return;
+        }
+        level = FILL_FOG_LEVEL_OF(sum / n);
+    }
+    const U32 row = ((U32)(PtrTruePal - PtrCLUTFog) >> 8) & 0x0F;
+    SetCLUT(row + 16 * level);
+}
+
 static S32 ObjFillPoly(S32 type, S32 colour, S32 n, Struc_Point *points) {
+    if (ObjFogByDepth)
+        ObjFogPolygon(type, n, points);
     return ClipOn ? ClipFill(type, colour, n, points) : RealFillPoly(type, colour, n, points);
 }
 #define Fill_Poly ObjFillPoly

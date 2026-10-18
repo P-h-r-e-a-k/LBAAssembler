@@ -62,6 +62,31 @@ static struct {
 } pathCache[PATH_CACHE_MAX];
 static int pathCacheN = 0;
 
+/* Names no source had (PlayStreamInternal's every step tried and nothing found):
+   not looked for again until the next OpenStream. A missing theme was searched
+   for in full -- filesystem, OGG names, disc image, the disc's audio tracks, the
+   cue's -- each time the game asked for it again, which a scene asks on every
+   change of cube: 150-390 ms a cube change for a race track's music the install
+   does not have (LBA Assembler, 2026-10-18). A name found plays as before. */
+#define MISS_CACHE_MAX 32
+static char missCache[MISS_CACHE_MAX][ADELINE_MAX_PATH];
+static int missCacheN = 0;
+
+static bool MissCacheHas(const char *name) {
+    for (int i = 0; i < missCacheN; i++)
+        if (strcmp(missCache[i], name) == 0)
+            return true;
+    return false;
+}
+
+static void MissCachePut(const char *name) {
+    if (missCacheN >= MISS_CACHE_MAX || MissCacheHas(name))
+        return;
+    strncpy(missCache[missCacheN], name, ADELINE_MAX_PATH - 1);
+    missCache[missCacheN][ADELINE_MAX_PATH - 1] = '\0';
+    missCacheN++;
+}
+
 /* ── Decoded PCM cache (most recently decoded OGG) ─────────────────────── */
 
 static struct {
@@ -226,6 +251,7 @@ void OpenStream() {
     rememberedFrame = 0;
     hasRemembered = false;
     pathCacheN = 0;
+    missCacheN = 0;
     ClearOggCache();
     if (musicLogEnabled)
         SDL_Log("[MUSIC] OpenStream init");
@@ -915,6 +941,10 @@ static void PlayStreamInternal(const char *name, S32 startFrame) {
 
     StopStreamInternal();
 
+    /* (a name already looked for everywhere and not found: missCache) */
+    if (MissCacheHas(name))
+        return;
+
     /* 1) Filesystem WAV. PlayJingle/PlayCD request "*.WAV"; some installs ship it. */
     SDL_AudioSpec spec;
     Uint8 *wav_data = NULL;
@@ -975,8 +1005,10 @@ static void PlayStreamInternal(const char *name, S32 startFrame) {
         FinishStream(name);
         return;
     }
-    if (redbook == REDBOOK_HANDLED)
+    if (redbook == REDBOOK_HANDLED) {
+        MissCachePut(name);
         return;
+    }
 
     /* 6) Cue external audio: a redbook track shipped as a standalone file the
           data image does not contain (GOG's LBA2.OGG = music track 6, listed in
@@ -1010,8 +1042,9 @@ static void PlayStreamInternal(const char *name, S32 startFrame) {
     }
 
     SDL_Log("SDL AIL: Could not find '%s' (filesystem, OGG fallback, disc image, cue audio, "
-            "or the disc's own audio track)",
+            "or the disc's own audio track) -- not looked for again",
             name);
+    MissCachePut(name);
 }
 
 void PlayStream(char *name) {
