@@ -13,14 +13,24 @@
  * lap's, never go there.
  * The first run (2026-10-17): the player's first race or time trial is preceded by the controls page, and the first race with power-ups
  * by the power-up page (the track's own power-ups, each in its item box with what it does) -- right after the car page, as the race is
- * loaded, before its scene: Enter turns the pages, Esc skips them. Options shows either again (its rows Power-ups and Race controls:
- * GAMEMENU.CPP OptionsMenu asks RaceGame_OptionsMenu). The first race always starts with a qualifying lap; once one has been driven, a race asks after
+ * loaded, before its scene: Enter turns the pages, Esc skips them. Options shows them again (its row "Race controls, power-ups"
+ * -- two rows, Power-ups and Race controls, until 2026-10-19, when Updates took the menu's last place: GAMEMENU.CPP OptionsMenu asks
+ * RaceGame_OptionsMenu). The first race always starts with a qualifying lap; once one has been driven, a race asks after
  * the car page -- a qualifying lap, or none and Twinsen at the back of the grid (RACEMOD.CPP grid_back=) -- the last answer chosen first.
  * The player's settings, RACEGAME_SETTINGS.TXT in the user's folder ("key=value" lines; other keys are kept as they are):
  *     controls_seen=1  powerups_seen=1     the first run's pages shown
  *     qualified=1                         a qualifying lap driven (RaceGame_Qualified): it may be skipped from then on
  *     skip_qualifying=0|1                 the last answer
  *     difficulty=0|1|2                    the difficulty chosen last (LevelPage)
+ *     updates=auto|ask|off                new versions installed when the game is closed, asked first, or not looked for (auto)
+ *     update_checked=<unix time>          when the game last started the updater (0: never)
+ * Updates (2026-10-19): the installer leaves a copy of itself in the game's folder, Update\LBRA-Setup.exe. At the start (the race game
+ * as a player runs it: none of the command harness's flags, so never an editor's Play or a scripted test -- those skip the menu), if
+ * updates aren't off and a week has gone by since the last check (or there was none), the game starts it hidden --
+ * `--check-update "<install dir>" --wait-pid <its pid>` (RACEUPDATE.CPP) -- and goes on: the updater looks for a new version
+ * (https://lbabirthdayevent.com/LBRA-Setup.exe), downloads it, and installs it once the game is closed (or asks first), keeping the
+ * player's User\ folder. Options, Updates: the mode (Automatic, Ask first, Off) and "Check for updates now" (`--manual`: a check even
+ * with updates off, asked first then); the updater's last word (Update\status.txt, "<unix time>|<text>") under them.
  *
  * RACEGAME.TXT, "key=value" lines ('#' starts a comment), UTF-8:
  *     title=<the game's name>
@@ -37,11 +47,13 @@
 #include "C_EXTERN.H"
 #include "CONFIG_FILE.H"
 #include "CONSOLE/CONSOLE.H"
+#include "CONTROL.H"
 #include "DIRECTORIES.H"
 #include "INPUT.H"
 #include "JOYSTICK.H"
 #include "RACEGAME.H"
 #include "RACEMOD.H"
+#include "RACEUPDATE.H"
 #include "UI_LAYOUT.H"
 
 #include <FILEIO/SAVEPNG.H>
@@ -79,7 +91,10 @@ extern void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta,
 #define RG_ID_SKIP 2351
 #define RG_ID_POWERUPS 2352                 // the Options menu's rows of the race game's (RaceGame_OptionsMenu)
 #define RG_ID_CONTROLS 2353
-#define RG_ID_WINDOW 2354                   // full screen <-> a window (CONFIG_FILE.CPP ToggleDisplayFullscreen; F11 / Alt+Enter too)
+#define RG_ID_UPDATES 2354
+#define RG_ID_UPDATE_MODE 2355              // the Updates page's rows (UpdatesPage)
+#define RG_ID_UPDATE_NOW 2356
+#define RG_ID_WINDOW 2357                   // the Updates page's full screen <-> a window row (CONFIG_FILE.CPP ToggleDisplayFullscreen; F11 / Alt+Enter too)
 #define RG_ID_BACK 26                       // the game's own "Back"
 #define RG_ID_RESUME 70
 #define RG_ID_OPTIONS 74
@@ -165,6 +180,7 @@ static int HasLevels(const char *race) {
 }
 
 static void ReadSettings(void);
+static void UpdateAtStart(void);
 
 static void Read(void) {
     if (s_read) return;
@@ -209,6 +225,7 @@ static void Read(void) {
     fclose(f);
     s_on = 1;
     ReadSettings();
+    UpdateAtStart();
     int levelled = 0;
     for (int i = 0; i < s_nbSp; i++) levelled += s_sp[i].Levels;
     Log_Info("[racegame] %s: %d special track(s) (%d with levels: the last difficulty %s), %d cars%s%s", s_title[0] ? s_title : "the race game", s_nbSp,
@@ -226,6 +243,10 @@ static int s_setRead = 0;
 static int s_controlsSeen = 0, s_powerupsSeen = 0;  // the first run's pages shown
 static int s_qualified = 0;                 // a qualifying lap driven: the next races may skip it
 static int s_skipQualifying = 0;            // the last answer to "a qualifying lap?"
+static int s_updates = 0;                   // new versions: 0 installed when the game is closed, 1 asked first, 2 not looked for
+static long long s_updateChecked = 0;       // when the updater was last started (unix time; 0 never)
+static const char *const s_updateKey[3] = {"auto", "ask", "off"};
+static const char *const s_updateLabel[3] = {"Updates: Automatic", "Updates: Ask first", "Updates: Off"};
 static char s_setOther[RG_OTHER_SIZE];      // RACEGAME_SETTINGS.TXT's lines of other keys, kept as they are
 
 static void SettingsPath(char *path) { GetCfgPath(path, ADELINE_MAX_PATH, "RACEGAME_SETTINGS.TXT"); }
@@ -251,6 +272,15 @@ static void ReadSettings(void) {
             else if (!strcmp(line, "qualified")) value = &s_qualified;
             else if (!strcmp(line, "skip_qualifying")) value = &s_skipQualifying;
             else if (!strcmp(line, "difficulty")) value = &s_level;
+            else if (!strcmp(line, "updates")) {
+                value = &s_updates;
+                *value = 0;
+                for (int k = 0; k < 3; k++) if (!strcmp(eq + 1, s_updateKey[k])) *value = k;
+                continue;
+            } else if (!strcmp(line, "update_checked")) {
+                s_updateChecked = strtoll(eq + 1, NULL, 10);
+                continue;
+            }
             if (value) *value = atoi(eq + 1);
             else *eq = '=';
         }
@@ -258,8 +288,71 @@ static void ReadSettings(void) {
     }
     fclose(f);
     if (s_level < 0 || s_level > 2) s_level = 1;
-    Log_Info("[racegame] settings: controls seen %d, power-ups seen %d, qualified %d, skip qualifying %d", s_controlsSeen, s_powerupsSeen,
-             s_qualified, s_skipQualifying);
+    Log_Info("[racegame] settings: controls seen %d, power-ups seen %d, qualified %d, skip qualifying %d, updates %s (checked %lld)", s_controlsSeen,
+             s_powerupsSeen, s_qualified, s_skipQualifying, s_updateKey[s_updates], s_updateChecked);
+}
+
+// ---- updates -----------------------------------------------------------------------------------------------------------------------
+
+#define RG_UPDATE_EVERY (7 * 24 * 3600)     // a check a week
+#define RG_UPDATER "Update\\LBRA-Setup.exe"  // the installer's copy of itself (the installer's Updater.cs)
+static long long s_updateStarted = 0;       // the updater started this run (by the page's "Check for updates now": the page says so)
+static void WriteSettings(void);
+
+// The updater started: `manual` from the Updates page (a check even with updates off). Non-zero: started.
+static int UpdateSpawn(int manual) {
+    char exe[ADELINE_MAX_PATH], dir[ADELINE_MAX_PATH];
+    GetResPath(exe, ADELINE_MAX_PATH, RG_UPDATER);
+    if (!RaceUpdate_Exists(exe)) {
+        Log_Info("[racegame] no updater (%s): no update check", exe);
+        return 0;
+    }
+    // (the game's folder: RACEGAME.TXT's)
+    GetResPath(dir, ADELINE_MAX_PATH, "RACEGAME.TXT");
+    char *cut = dir + strlen(dir);
+    while (cut > dir && cut[-1] != '\\' && cut[-1] != '/') cut--;
+    *cut = 0;
+    if (!dir[0]) snprintf(dir, sizeof(dir), ".");
+    if (!RaceUpdate_Spawn(exe, dir, manual)) return 0;
+    ReadSettings();
+    s_updateChecked = (long long)time(NULL);
+    WriteSettings();
+    return 1;
+}
+
+// At the start: the updater, when updates aren't off and the last check is a week old (or there was none, or it is in the future: a clock
+// put back). Only as a player runs the game: an editor's Play and the tests run with the command harness.
+static void UpdateAtStart(void) {
+    if (Control_IsActive()) return;
+    if (s_updates == 2) { Log_Info("[racegame] updates off: no update check"); return; }
+    const long long now = (long long)time(NULL);
+    if (s_updateChecked > 0 && now >= s_updateChecked && now - s_updateChecked < RG_UPDATE_EVERY) {
+        Log_Info("[racegame] updates %s: checked %lld h ago, the next check in %lld h", s_updateKey[s_updates], (now - s_updateChecked) / 3600,
+                 (s_updateChecked + RG_UPDATE_EVERY - now + 3599) / 3600);
+        return;
+    }
+    if (UpdateSpawn(0)) Log_Info("[racegame] updates %s: a week since the last check (or none): checking", s_updateKey[s_updates]);
+}
+
+// The updater's last word (Update\status.txt: "<unix time>|<text>"), its text into `out` and its time; 0: none.
+static long long UpdateStatus(char *out, size_t size) {
+    out[0] = 0;
+    char path[ADELINE_MAX_PATH];
+    GetResPath(path, ADELINE_MAX_PATH, "Update\\status.txt");
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    char line[512];
+    long long at = 0;
+    if (fgets(line, sizeof(line), f)) {
+        Trim(line);
+        const char *bar = strchr(line, '|');
+        if (bar) {
+            at = strtoll(line, NULL, 10);
+            snprintf(out, size, "%s", bar + 1);
+        }
+    }
+    fclose(f);
+    return at;
 }
 
 static void WriteSettings(void) {
@@ -270,6 +363,7 @@ static void WriteSettings(void) {
     fprintf(f, "# %s: the player's settings (RACEGAME.CPP)\n", s_title[0] ? s_title : "The race game");
     fprintf(f, "controls_seen=%d\npowerups_seen=%d\nqualified=%d\nskip_qualifying=%d\ndifficulty=%d\n", s_controlsSeen, s_powerupsSeen, s_qualified,
             s_skipQualifying, s_level);
+    fprintf(f, "updates=%s\nupdate_checked=%lld\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0], s_updateChecked);
     fputs(s_setOther, f);
     fclose(f);
 }
@@ -481,7 +575,10 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_QUALIFY: Label(string, "Qualifying lap"); return 1;
     case RG_ID_SKIP: Label(string, "Skip: start at the back of the grid"); return 1;
     case RG_ID_POWERUPS: Label(string, "Power-ups"); return 1;
-    case RG_ID_CONTROLS: Label(string, "Race controls"); return 1;   // (the game's own Controls row changes the keys)
+    case RG_ID_CONTROLS: Label(string, "Race controls, power-ups"); return 1;   // (the game's own Controls row changes the keys)
+    case RG_ID_UPDATES: Label(string, "Window mode, updates"); return 1;
+    case RG_ID_UPDATE_MODE: Label(string, s_updateLabel[s_updates >= 0 && s_updates <= 2 ? s_updates : 0]); return 1;
+    case RG_ID_UPDATE_NOW: Label(string, "Check for updates now"); return 1;
     case RG_ID_WINDOW: Label(string, DisplayFullScreen ? "Window mode: full screen (F11)" : "Window mode: window (F11)"); return 1;
     case RG_ID_EASY: case RG_ID_MEDIUM: case RG_ID_HARD: Label(string, s_levelName[num - RG_ID_EASY]); return 1;
     }
@@ -931,26 +1028,77 @@ void RaceGame_Qualified(S32 lap) {
     Log_Info("[racegame] the first qualifying lap driven (%.2f s): the next races may skip it", lap / 1000.0);
 }
 
-// GAMEMENU.CPP OptionsMenu: the race game's options -- the game's own rows, then Power-ups and Race controls (RaceGame_OptionsRow); the
-// game's own menu when the race game isn't on.
+// Options, "Window mode, updates": full screen or a window (F11 / Alt+Enter too), then the update mode (Automatic, Ask first, Off: Enter goes round them) and "Check for updates now", what the mode does and the
+// updater's last word under them.
+static U16 s_updMenu[4 + 2 * 4];
+// (two lines each at most, and the updater's word two more: the page's text below the rows fits the 480-tall canvas)
+static const char *const s_updateHelp[3] = {
+    "Weekly: a new version is installed when you close the game.",
+    "Weekly: you are asked before a new version is installed.",
+    "No weekly check. Check for updates here when you like.",
+};
+#define RG_UPD_Y 240                        // the rows' centre
+static void UpdatesPage(void) {
+    ReadSettings();
+    s_updMenu[0] = 1;
+    s_updMenu[1] = 4;
+    s_updMenu[2] = RG_UPD_Y;
+    s_updMenu[3] = 0;
+    SetRow(s_updMenu, 0, RG_ID_BACK);
+    SetRow(s_updMenu, 1, RG_ID_WINDOW);
+    SetRow(s_updMenu, 2, RG_ID_UPDATE_MODE);
+    SetRow(s_updMenu, 3, RG_ID_UPDATE_NOW);
+    char exe[ADELINE_MAX_PATH];
+    GetResPath(exe, ADELINE_MAX_PATH, RG_UPDATER);
+    for (;;) {
+        const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+        Page("Window mode, updates", RG_UPD_Y - (56 * 4) / 2 - 50);
+        const S32 textY = RG_UPD_Y + (56 * 4) / 2 + 6 + oy;
+        const int lines = Wrapped(cx - 280, textY, 560, RG_LINE, s_updateHelp[s_updates], LBAWHITE);
+        // (the updater's last word -- or, while a check started here hasn't said anything yet, that it is checking)
+        char status[400], said[400];
+        const long long at = UpdateStatus(said, sizeof(said));
+        if (!RaceUpdate_Exists(exe)) snprintf(status, sizeof(status), "No updater in the game's folder: install the game again.");
+        else if (s_updateStarted && at < s_updateStarted) snprintf(status, sizeof(status), "Checking for a new version...");
+        else if (said[0]) snprintf(status, sizeof(status), "%s", said);
+        else status[0] = 0;
+        if (status[0]) Wrapped(cx - 280, textY + lines * RG_LINE + 6, 560, RG_LINE, status, RG_GREY);
+        const S32 select = DoGameMenu(s_updMenu);
+        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return; }
+        for (S32 i = 0; i < 4; i++) if (s_updMenu[4 + 2 * i + 1] == (U16)select) s_updMenu[0] = (U16)i;
+        if (select == RG_ID_WINDOW) ToggleDisplayFullscreen();
+        else if (select == RG_ID_UPDATE_MODE) {
+            s_updates = (s_updates + 1) % 3;
+            WriteSettings();
+            Log_Info("[racegame] updates: %s", s_updateKey[s_updates]);
+        } else if (select == RG_ID_UPDATE_NOW && UpdateSpawn(1)) {
+            s_updateStarted = (long long)time(NULL);
+        }
+    }
+}
+
+// GAMEMENU.CPP OptionsMenu: the race game's options -- the game's own rows, then the race's controls and power-ups (one row: the menu has
+// room for eight) and Updates (RaceGame_OptionsRow); the game's own menu when the race game isn't on.
 static U16 s_optMenu[4 + 2 * 12];
 U16 *RaceGame_OptionsMenu(U16 *menu) {
     if (!RaceGame_On() || !menu || menu[1] + 3 > 12) return menu;
     const int nb = menu[1];
     memcpy(s_optMenu, menu, (4 + 2 * nb) * sizeof(U16));
-    SetRow(s_optMenu, nb, RG_ID_POWERUPS);
-    SetRow(s_optMenu, nb + 1, RG_ID_CONTROLS);
-    SetRow(s_optMenu, nb + 2, RG_ID_WINDOW);
-    s_optMenu[1] = (U16)(nb + 3);
+    SetRow(s_optMenu, nb, RG_ID_CONTROLS);
+    SetRow(s_optMenu, nb + 1, RG_ID_UPDATES);
+    s_optMenu[1] = (U16)(nb + 2);
     return s_optMenu;
 }
 
 S32 RaceGame_OptionsRow(S32 num) {
-    if (!RaceGame_On() || (num != RG_ID_POWERUPS && num != RG_ID_CONTROLS && num != RG_ID_WINDOW)) return 0;
-    if (num == RG_ID_WINDOW) { ToggleDisplayFullscreen(); return 1; }
+    if (!RaceGame_On() || (num != RG_ID_POWERUPS && num != RG_ID_CONTROLS && num != RG_ID_UPDATES)) return 0;
+    if (num == RG_ID_UPDATES) {
+        UpdatesPage();
+        return 1;
+    }
     const T_RACE_PAGE *pg = TrackPage(s_raceSp >= 0 ? s_raceSp : s_lastSp >= 0 && s_lastSp < s_nbSp ? s_lastSp : 0);
     if (num == RG_ID_POWERUPS) Pages(pg, 0, 1, 0);
-    else Pages(pg, 1, 0, 0);
+    else Pages(pg, 1, 1, 0);
     return 1;
 }
 
