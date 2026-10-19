@@ -92,11 +92,14 @@ void InitJingle(void) {
 /*──────────────────────────────────────────────────────────────────────────*/
 
 S32 GetNumJingle(char *name) {
-    char filename[9];
+    /* (the retail jingles' names are DOS 8.3 ones, and this was 9 bytes with a strcpy: a longer music file's name -- the race's own,
+       RACEMUSIC/LBA1_TEMPLE.WAV, 2026-10-18 -- ran past it over the caller's saved registers, and opening the menu in a race crashed
+       the game, 2026-10-19. Any name now fits, and one that long is no jingle anyway.) */
+    char filename[ADELINE_MAX_PATH];
     S32 n;
 
     if (name AND strcmp(name, "")) {
-        strcpy(filename, GetFileName(name));
+        snprintf(filename, sizeof(filename), "%s", GetFileName(name));
 
         for (n = 1; n < NB_JINGLE; n++) {
             if (!strcasecmp(ListJingle[n], filename)) {

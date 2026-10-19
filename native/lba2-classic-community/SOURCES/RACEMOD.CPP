@@ -3598,6 +3598,14 @@ static void Load(const char *path, int carOnly = 0) {
         }
         s_phase = s_qualifying ? PHASE_QUALIFYING : PHASE_WAIT;
         if (s_qualifying && (s_powerups || s_fuelAlways)) Log_Info("[racemod] the qualifying lap: no power-ups until the race");
+    } else if (s_raceLaps > 0) {
+        // no grid (a track built with no line-up): the player alone in the order from the start, so the race still ends after its laps.
+        // (The race game's Temple of Bú installed from an LBA2 folder an old editor build had changed came with no grid lines, and its
+        // time trial went on lapping for ever, 2026-10-19.)
+        s_nbOrder = 0;
+        s_order[s_nbOrder] = -1;
+        s_orderTime[s_nbOrder++] = 0;
+        Log_Info("[racemod] no grid: Twinsen races his %d laps alone from where he starts", s_raceLaps);
     }
     s_ownTrack = s_car.HasLine;
 }
@@ -3940,6 +3948,8 @@ void RaceMod_Lap(S32 x, S32 z) {
             return;
         }
     }
+    // (no grid, no GO: the race's time from the start line's first crossing)
+    if (s_laps == 0 && !s_goAt && !s_nbSpots && s_phase == PHASE_RACE) s_goAt = now;
     s_laps++;
     s_lapStart = now;
     s_halfway = 0;
