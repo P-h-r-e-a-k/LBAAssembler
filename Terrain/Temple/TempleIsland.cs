@@ -75,9 +75,10 @@ internal static class TempleIsland
 
     // `cuts`: cells left out (TempleLayout's x, layer, z) -- the doorways a race track's road goes through (RaceTrackPlan.TempleCuts); and
     // `floors` and `skirts`, the floors they take laid again and the walls of their trenches (RaceTrackPlan.TempleFloors, TempleSkirts: Carve);
+    // `walls`, cells the race fills (RaceTrackPlan.TempleWalls: Carve -- LBA1's actors in them left out, TempleActors);
     // `road`: that race track's plan, whose raised road the models keep out of (TempleDeck: the lobes of the rows of rocks it passes over).
     public static Built Build(string lba1Directory, string gameDirectory, string? sourceDirectory = null, IEnumerable<int[]>? cuts = null,
-        IEnumerable<int[]>? floors = null, IEnumerable<int[]>? skirts = null, RaceTrackPlan? road = null)
+        IEnumerable<int[]>? floors = null, IEnumerable<int[]>? skirts = null, RaceTrackPlan? road = null, IEnumerable<int[]>? walls = null)
     {
         if (!Lba1Game.IsInstalled(lba1Directory)) throw new InvalidDataException($"No LBA1 game in {lba1Directory}.");
         sourceDirectory ??= gameDirectory;
@@ -128,7 +129,7 @@ internal static class TempleIsland
         var models = TempleModels.Find(game, log);
         if (cuts is not null)
         {
-            var carved = Carve(layout, shapes, models, cuts, floors, skirts);
+            var carved = Carve(layout, shapes, models, cuts, floors, skirts, walls);
             built = carved.Built;
             log.AddRange(carved.Log);
         }
@@ -141,7 +142,7 @@ internal static class TempleIsland
         log.AddRange(objects.Log);
         // (LBA1's actors as its scenes start them -- doors, lifts, floor plates, the statues, the plants, the skeletons...: TempleActors; in a
         // race track's build those on or over its road left out)
-        var actors = TempleActors.Place(lba1Directory, game, layout, island, frame, palette.Map, bodies.Count, race: cuts is not null);
+        var actors = TempleActors.Place(lba1Directory, game, layout, island, frame, palette.Map, bodies.Count, race: cuts is not null, walls: walls);
         bodies.AddRange(actors.Bodies);
         log.AddRange(actors.Log);
         log.Add($"{OblFile}: {bodies.Count} bodies (an empty one for the boxes, then the temple's)");
@@ -163,14 +164,16 @@ internal static class TempleIsland
     // the brick the floor round it has most (a plain box: no round or shaped thing's); and where a trench's floor is laid lower than a floor
     // kept beside it -- a step of the crypt's gallery, the cornice of a wall whose foot the cuts took, a ledge -- the dark under that floor
     // filled down to it (`skirts`: the plan's TempleSkirts, [x, z, from layer, to layer]: Skirts), with the bricks of the wall the cuts took
-    // beside it at each layer, else of the kept cell over it.
+    // beside it at each layer, else of the kept cell over it. And `walls` (the plan's TempleWalls, [x, z, from layer, to layer, the column
+    // whose bricks they take x, z]): cells filled where LBA1 has none -- the hidden passage's door walled up, the Temple of Bú's secret
+    // shortcut -- each with the brick that column has at its layer.
     public sealed record Carved(TempleLayout Built, HashSet<(int X, int Y, int Z)> Cut, HashSet<(int X, int Y, int Z)> Remains,
         HashSet<(int X, int Y, int Z)> Loose, Dictionary<(int X, int Y, int Z), PolarLayout.Cell> Fills,
         Dictionary<(int X, int Y, int Z), PolarLayout.Cell> Skirts, List<string> Log);
     public const int LooseMost = 12;
 
     public static Carved Carve(TempleLayout layout, Dictionary<int, TempleShapes.Part> shapes, Dictionary<int, TempleModels.Part> models,
-        IEnumerable<int[]> cuts, IEnumerable<int[]>? floors, IEnumerable<int[]>? skirts = null)
+        IEnumerable<int[]> cuts, IEnumerable<int[]>? floors, IEnumerable<int[]>? skirts = null, IEnumerable<int[]>? walls = null)
     {
         var log = new List<string>();
         var cut = cuts.Where(c => c.Length == 3).Select(c => (X: c[0], Y: c[1], Z: c[2])).ToHashSet();
@@ -264,6 +267,18 @@ internal static class TempleIsland
         }
         foreach (var (at, cell) in skirted) built.Cells[at] = cell;
         if (skirted.Count > 0) log.Add($"{skirted.Count} cells of wall under the floors beside the trenches the cuts left");
+
+        // ---- the race's own walls
+        var walled = 0;
+        foreach (var w in (walls ?? Array.Empty<int[]>()).Where(w => w.Length >= 6))
+            for (var y = w[2]; y <= w[3]; y++)
+                if (!built.Cells.ContainsKey((w[0], y, w[1])) && layout.Cells.TryGetValue((w[4], y, w[5]), out var brick))
+                {
+                    built.Cells[(w[0], y, w[1])] = brick;
+                    fills[(w[0], y, w[1])] = brick;
+                    walled++;
+                }
+        if (walled > 0) log.Add($"{walled} cells of wall the race fills (the hidden passage's door walled up)");
         return new Carved(built, cut, remains, loose, fills, skirted, log);
     }
 

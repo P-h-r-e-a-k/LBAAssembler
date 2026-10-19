@@ -204,7 +204,8 @@ internal sealed class RaceTrackPlan
     // units over the road, cells ahead of the car that it looks at] -- instead of hanging on an arm behind the car, which the road's
     // other levels, a drop's crest and a tight bend all get in the way of. Two more, both or the first: [..., units over the road its
     // sight line ends at the car (0: its wheels -- the eye then rises to some 4,000 over a level road to see them; at the car's middle
-    // it stays as low as asked), units over the road ahead it looks at (300)] -- the Emperor's palace's, a level view under the domes.
+    // it stays as low as asked), units over the road ahead it looks at (300)] -- the Emperor's palace's, a level view under the domes. A sixth, 1:
+    // the camera goes across with the car where it drives off the road onto a floor beside it (RaisedFloors: the Temple of Bú's).
     public double[]? RailCamera { get; set; }
     // Decor bodies a raised road's piers may stand on (a platform's decks); with this given, the piers are placed by the island's real
     // shapes (RaceTrackScenery) -- on the sea, the ground or one of these, clear of everything else, beside the road where they cannot
@@ -276,6 +277,20 @@ internal sealed class RaceTrackPlan
     public int[][]? TempleFloors { get; set; }
     // ... and the skirts under the floors kept beside them: each [x, z, from layer, to layer].
     public int[][]? TempleSkirts { get; set; }
+    // ... and cells the race fills, each [x, z, from layer, to layer, the x and z of the column whose bricks they take, layer by layer]: the
+    // hidden passage's door walled up (the Temple of Bú's secret shortcut, 2026-10-19: TempleIsland.Carve; LBA1's door in there left out).
+    public int[][]? TempleWalls { get; set; }
+    // The floor beside a raised road, point by point (with Raised): [from, to] cells across it (the builder's Across), as RaisedStrips, but
+    // never drawn -- the race-track mode's floor and rail only (RACEMOD.CPP's strip): where the road lies on a floor level with it, the cars
+    // drive off it onto that floor as far as it goes (the Temple of Bú's ground stretch, the user, 2026-10-19: "let's have it sit on the
+    // ground ... drop the track guard rails where it's level with the ground"). [0, 0]: none.
+    public double[][]? RaisedFloors { get; set; }
+    // A raised road's sides with no rail, point by point (with Raised): [the -Across side, the +Across side], 1 none -- its curb flat to the
+    // road's edge (RaceTrackRaisedBody.Tile's flush): where it lies level with the floor beside it.
+    public double[][]? RaisedFlush { get; set; }
+    // Stretches of the lap a shortcut skips -- a teleporter's (the Temple of Bú's hidden passage) -- each [first, last], the plan's points:
+    // no checkpoint on them, so a lap through the shortcut counts.
+    public int[][]? Shortcuts { get; set; }
     // Halloween (Temple.TempleHalloween): the decor about the road, the spooks that fly over it, the mushrooms made pumpkins.
     public LBAAssembler.Terrain.Temple.HalloweenRun? Halloween { get; set; }
     public bool Planned => Heights is { Length: > 0 } h && h.Length == Points.Length;
@@ -676,8 +691,11 @@ internal sealed class RaceTrackReport
     public List<double[]> FloorArrows { get; } = new();
     // The people in the cars' way (RaceTrackPlan.Guards: kind, which, x, z cells, the floor's height, the way they face, their leash cells)
     public List<double[]> Guards { get; } = new();
-    // The teleporters (RaceTrackPlan.Teleports, cells from the island's own origin)
+    // The teleporters (RaceTrackPlan.Teleports, cells from the island's own origin; and, when the plan gives them, the speed a car comes out at
+    // the most and its passage's time)
     public List<double[]> Teleports { get; } = new();
+    // The stretches of the lap a shortcut skips (RaceTrackPlan.Shortcuts): the road's first and last points
+    public List<(int From, int To)> Shortcuts { get; } = new();
     // The giant frogs the lap drives through (RaceTrackFrog)
     public List<FrogInfo> Frogs { get; } = new();
     // The spooks (Temple.TempleHalloween: RACEMOD.CPP spook=): what each is, its flags, its height, its way (island cells), its body once
@@ -771,6 +789,10 @@ internal sealed class TrackRoad
     // A raised road's points with no rail on one side (OpenMinus: the side -Across, OpenPlus: +Across), or null: where another road's
     // deck runs on from it -- a branch leaving the lap or coming back onto it.
     public bool[]? OpenMinus, OpenPlus;
+    // A raised road's floor beside it that isn't drawn (RaceTrackPlan.RaisedFloors): from and to, cells across (Across; equal: none), or null;
+    // and its sides with no rail, its curb flat to its edge (RaceTrackPlan.RaisedFlush), or null.
+    public double[]? FloorLo, FloorHi;
+    public bool[]? FlushMinus, FlushPlus;
     // A white stripe along a raised road (RaceTrackPlan.PitStripe): its first and last point and how far across (cells), or null.
     public (int From, int To, double Offset)? Stripe;
     // Boost panels on a raised road (RaceTrackPlan.BoostPanels): each one's first and last point and how far across it reaches (cells).
@@ -986,8 +1008,11 @@ internal static class RaceTrackBuilder
                 report.Notes.Add($"people in the cars' way: {string.Join(", ", report.Guards.GroupBy(g => (int)g[0]).Select(k => $"{k.Count()} {RaceTrackGuards.KindName((int)k.Key, k.Count())}"))}");
             foreach (var t in (plan.Teleports ?? Array.Empty<double[]>()).Where(t => t.Length >= 10))
                 report.Teleports.Add(new[] { t[0] + plan.OriginCellX, t[1] + plan.OriginCellZ, t[2] + plan.OriginCellX, t[3] + plan.OriginCellZ, t[4], t[5],
-                                             t[6] + plan.OriginCellX, t[7] + plan.OriginCellZ, t[8], t[9] });
+                                             t[6] + plan.OriginCellX, t[7] + plan.OriginCellZ, t[8], t[9] }.Concat(t.Skip(10).Take(2)).ToArray());
             if (report.Teleports.Count > 0) report.Notes.Add($"{report.Teleports.Count} teleporter{(report.Teleports.Count == 1 ? "" : "s")}");
+            // (the stretches of the lap a shortcut skips: the road's points)
+            foreach (var s in (plan.Shortcuts ?? Array.Empty<int[]>()).Where(s => s.Length >= 2))
+                report.Shortcuts.Add((PlanPoint(plan, main, s[0]), PlanPoint(plan, main, s[1])));
         }
         if (planned && main.Raised is not null && plan.PitStripe is [var stripeFrom, var stripeTo, var stripeAt])
             main.Stripe = (PlanPoint(plan, main, (int)stripeFrom), PlanPoint(plan, main, (int)stripeTo), stripeAt);
@@ -1048,7 +1073,7 @@ internal static class RaceTrackBuilder
         }
         report.Roads.AddRange(roads);
         report.Gravity = planned && main.Raised is not null ? plan.Gravity : null;
-        report.RailCamera = planned && main.Raised is not null && plan.RailCamera is { Length: >= 3 and <= 5 } ? plan.RailCamera : null;
+        report.RailCamera = planned && main.Raised is not null && plan.RailCamera is { Length: >= 3 and <= 6 } ? plan.RailCamera : null;
         if (main.Raised is not null) report.RaisedFloor = (x, z, near) => RaisedFloor(main, options, x, z, near);
         // each driver's racing line (with none, the retail racer's: the test pilot and the rescue go by it)
         var drivers = options.Racers();
@@ -1203,12 +1228,39 @@ internal static class RaceTrackBuilder
                 StripLo = strips?.Select(s => s.Length == 2 ? s[0] : 0).ToArray(), StripHi = strips?.Select(s => s.Length == 2 ? s[1] : 0).ToArray() };
             kept.AsphaltHalf = o.AsphaltHalfWidth; kept.CurbHalf = o.CurbHalfWidth; kept.VergeHalf = o.VergeHalfWidth; kept.Blend = o.BlendWidth;
             Geometry(kept, o);
+            FloorsFromPlan(kept, plan, raw, closed);
             return kept;
         }
         var road = Resample(name, raw, o, closed, plan.Planned ? plan.Heights : null, banked ? plan.Bank : null, widths, strips);
         // (the racing line's widths resampled as the road's are)
         if (lineWidths is not null) road.LineHalfs = Resample(name, raw, o, closed, halfs: lineWidths).RaisedHalfs;
+        FloorsFromPlan(road, plan, raw, closed);
         return road;
+    }
+
+    // The floor beside a raised road that isn't drawn and its sides with no rail (RaceTrackPlan.RaisedFloors, RaisedFlush): each of the road's
+    // points the plan's nearest along the line (not between two: a floor ends where the plan's does).
+    private static void FloorsFromPlan(TrackRoad road, RaceTrackPlan plan, List<(double X, double Z)> raw, bool closed)
+    {
+        var n = plan.Points.Length;
+        var floors = plan.Planned && plan.Raised is not null && plan.RaisedFloors is { } rf && rf.Length == n && rf.Any(f => f.Length == 2 && f[1] > f[0] + 1e-6) ? rf : null;
+        var flush = plan.Planned && plan.Raised is not null && plan.RaisedFlush is { } rl && rl.Length == n && rl.Any(f => f.Length == 2 && (f[0] != 0 || f[1] != 0)) ? rl : null;
+        if (floors is null && flush is null) return;
+        var pts = closed ? raw.Append(raw[0]).ToList() : raw;
+        var cum = new List<double> { 0 };
+        for (var i = 1; i < pts.Count; i++) cum.Add(cum[^1] + Math.Sqrt(Sq(pts[i].X - pts[i - 1].X) + Sq(pts[i].Z - pts[i - 1].Z)));
+        var count = road.Count;
+        if (floors is not null) { road.FloorLo = new double[count]; road.FloorHi = new double[count]; }
+        if (flush is not null) { road.FlushMinus = new bool[count]; road.FlushPlus = new bool[count]; }
+        var j = 0;
+        for (var k = 0; k < count; k++)
+        {
+            var d = road.Length > 0 && road.S is { } s ? s[k] * cum[^1] / Math.Max(1e-9, road.Length) : 0;
+            while (j < cum.Count - 2 && cum[j + 1] < d) j++;
+            var p = (d - cum[j] <= cum[j + 1] - d ? j : j + 1) % n;
+            if (floors is not null && floors[p] is [var lo, var hi] && hi > lo + 1e-6) { road.FloorLo![k] = lo; road.FloorHi![k] = hi; }
+            if (flush is not null && flush[p] is [var minus, var plus]) { road.FlushMinus![k] = minus != 0; road.FlushPlus![k] = plus != 0; }
+        }
     }
 
     // (with `heights`, one per raw point, the road's Planned heights are taken along with it; and its banking and raised widths)
@@ -2628,6 +2680,15 @@ internal static class RaceTrackBuilder
             if (a < 0) avoid.Add((a + r.Length, r.Length));
             if (b > r.Length) avoid.Add((0, b - r.Length));
         }
+        // (nor on the stretch a shortcut skips -- the Temple of Bú's hidden passage: a car through it doesn't cross it)
+        foreach (var (from, to) in report.Shortcuts)
+        {
+            double a = Ahead(from) - 4, b = Ahead(to) + 4;
+            if (Ahead(from) > Ahead(to)) { avoid.Add((a, r.Length)); avoid.Add((0, b)); continue; }
+            avoid.Add((a, b));
+            if (a < 0) avoid.Add((a + r.Length, r.Length));
+            if (b > r.Length) avoid.Add((0, b - r.Length));
+        }
         // (the roulette wheel's way round its bowl: the cars drive it freely, not along the line -- a line there would be missed)
         if (r.Bare is { } bare)
             for (var k = 0; k < r.Count; k++)
@@ -2690,6 +2751,9 @@ internal static class RaceTrackBuilder
         }
         // the road's edge at a point: its curbs, or a raised road's rail
         double Edge(int k) => r.Raised is { } up && up[k] ? r.RaisedHalfs is { } halfs && k < halfs.Length ? halfs[k] : o.RaisedHalfWidth : r.CurbHalf;
+        // ... and on a side where a floor beside the road reaches further -- the cars drive off the road onto it (RaceTrackPlan.RaisedFloors):
+        // that floor's edge (the driver's left, way -1, the floor's -Across end)
+        double SideEdge(int k, int way) => r.FloorLo is { } fl && r.FloorHi is { } fh && fh[k] > fl[k] + 1e-6 ? Math.Max(Edge(k), way < 0 ? -fl[k] : fh[k]) : Edge(k);
         // A line across the road at point k: how far each side reaches from its middle (the driver's left, -Across, and right), and whether
         // that is far enough -- past the road's edge, or, stopped by another part of the lap, at least to the edge.
         (double Left, bool LeftEnough, double Right, bool RightEnough, int Inside) LineAt(int k)
@@ -2722,14 +2786,16 @@ internal static class RaceTrackBuilder
             (double Reach, bool Enough) Side(int way)
             {
                 var reach = 0.0; var stop = 0;
-                var most = way == inside ? Edge(k) + CheckpointInsidePastEdge : full;
+                // (across a floor beside the road, to its edge and half a cell past it)
+                var floor = SideEdge(k, way) > Edge(k) ? SideEdge(k, way) + 0.5 : 0;
+                var most = Math.Max(way == inside ? Edge(k) + CheckpointInsidePastEdge : full, floor);
                 for (var t = 0.5; t <= most + 1e-9; t += 0.5)
                 {
                     stop = Stop(way * t);
                     if (stop != 0) break;
                     reach = t;
                 }
-                return (reach, reach >= full - 0.5 || stop == 2 && reach >= Edge(k));
+                return (reach, reach >= Math.Max(full, floor) - 0.5 || stop == 2 && reach >= SideEdge(k, way));
             }
             var (left, leftEnough) = Side(-1); var (right, rightEnough) = Side(1);
             return (left, leftEnough, right, rightEnough, inside);
@@ -5256,14 +5322,17 @@ internal static class RaceTrackBuilder
         double Half(int k) => (r.RaisedHalfs?[k] ?? o.RaisedHalfWidth) * 512;
         // (the strip beside the road there, cells across, or null)
         (double Lo, double Hi)? StripAt(int k) => r.StripLo is { } sl && r.StripHi is { } sh && sh[k] > sl[k] + 1e-6 ? (sl[k], sh[k]) : null;
+        // (the floor beside it there that isn't drawn, cells across, or null: the race-track mode's as a strip's)
+        (double Lo, double Hi)? FloorAt(int k) => r.FloorLo is { } fl && r.FloorHi is { } fh && fh[k] > fl[k] + 1e-6 ? (fl[k], fh[k]) : null;
         var banks = r.RoadBank;
         // (a jump's gap in it -- between the lips, r.Gap -- has no width: the engine's floor isn't there)
         foreach (var k in span)
         {
             // (no width where it is bare too: the roulette wheel's way round its bowl, whose floor is the race-track mode's own, without rails)
             var width = r.Gap[k] || !up[k] || r.Bare?[k] == true ? 0 : (int)Math.Round(Half(k));
-            // (a strip beside it: two more numbers, from and to across -- the bank's before them, 0 if none)
-            if (width > 0 && StripAt(k) is { } strip)
+            // (a strip beside it: two more numbers, from and to across -- the bank's before them, 0 if none; the floor beside it that isn't
+            // drawn the same, for the engine)
+            if (width > 0 && (StripAt(k) ?? FloorAt(k)) is { } strip)
                 report.Raised.Add(new[] { (int)Math.Round(r.X[k] * 512), (int)Math.Round(r.Z[k] * 512), (int)Math.Round(r.H[k]), width,
                                           (int)Math.Round((banks?[k] ?? 0) * RaisedBankUnits), (int)Math.Round(strip.Lo * 512), (int)Math.Round(strip.Hi * 512) });
             else report.Raised.Add(banks is null
@@ -5366,10 +5435,11 @@ internal static class RaceTrackBuilder
                 continue;
             }
             var opened = r.OpenMinus is null && r.OpenPlus is null ? null : ids.Select(k => (r.OpenMinus?[k] == true, r.OpenPlus?[k] == true)).ToList();
+            var flushed = r.FlushMinus is null && r.FlushPlus is null ? null : ids.Select(k => (r.FlushMinus?[k] == true, r.FlushPlus?[k] == true)).ToList();
             var body = RaceTrackRaisedBody.Tile(sections, t / per, r.AsphaltHalf * 512, r.CurbHalf * 512, half, arrow, line,
                 r.RaisedHalfs is null ? null : ids.Select(k => Half(k) - half).ToArray(),
                 r.Stripe is { } st && !o.PitFence ? st.Offset * 512 : double.NaN, striped, strips, r.Themes?[ids[ids.Count / 2]],   // (under a fence, no stripe)
-                boosted.Any(b => b is not null) ? boosted : null, opened);
+                boosted.Any(b => b is not null) ? boosted : null, opened, flushed);
             // (its box over its footprint, touching nothing: the engine leaves out a decor whose middle is behind the camera unless a corner
             // of its box is in front of it -- 3DEXT/DECORS.CPP -- and a piece whose middle had just passed under the camera was a hole)
             var corners = ids.SelectMany(k => new[] { -1, 1 }.Select(side => World(k) + new System.Numerics.Vector3((float)-r.Tz[k], 0, (float)r.Tx[k]) * (float)(side * (Half(k) + 64)) - origin)).ToList();

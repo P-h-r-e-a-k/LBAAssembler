@@ -55,7 +55,7 @@ internal static class RaceTrackService
         // fifth number, its banking in ten-thousandths).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] double? Gravity = null,
         // RailCamera: the camera rides the raised road behind the car (RaceTrackPlan.RailCamera: cells behind, units up, cells ahead[, sight,
-        // aim]).
+        // aim[, side]]).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] double[]? RailCamera = null,
         // Others: the tracks of the other islands built into the folder with this one, each a record of its own (with no Others).
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<TrackInfo>? Others = null,
@@ -153,7 +153,7 @@ internal static class RaceTrackService
         // strikes (-1 none), then the scene and actor of each scene it has one in, its own first], since 2026-10-13
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Guards = null,
         // Teleports: each [the box a car is taken in by: x0, z0, x1, z1, y0, y1; where it comes out: x, y, z, the way it looks] in island units
-        // (RACEMOD.CPP teleport=), since 2026-10-13
+        // (RACEMOD.CPP teleport=), since 2026-10-13; and the speed it comes out at the most, its passage's time (ms), where the plan gives them
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Teleports = null,
         // Frogs: the giant frogs the lap drives through (RaceTrackFrog.Line; RACEMOD.CPP frog=), since 2026-10-14
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Frogs = null,
@@ -966,7 +966,9 @@ internal static class RaceTrackService
                 : null,
             Teleports: report.Teleports.Count > 0
                 ? report.Teleports.Select(t => new[] { (int)Math.Round(t[0] * 512), (int)Math.Round(t[1] * 512), (int)Math.Round(t[2] * 512), (int)Math.Round(t[3] * 512),
-                    (int)Math.Round(t[4]), (int)Math.Round(t[5]), (int)Math.Round(t[6] * 512), (int)Math.Round(t[8]), (int)Math.Round(t[7] * 512), (int)Math.Round(t[9]) }).ToList()
+                    (int)Math.Round(t[4]), (int)Math.Round(t[5]), (int)Math.Round(t[6] * 512), (int)Math.Round(t[8]), (int)Math.Round(t[7] * 512), (int)Math.Round(t[9]) }
+                    // (the speed it comes out at the most and its passage's time, when the plan gives them: teleport='s eleventh and twelfth)
+                    .Concat(t.Skip(10).Take(2).Select(v => (int)Math.Round(v))).ToArray()).ToList()
                 : null,
             Frogs: report.Frogs.Count(f => f.Body >= 0) > 0 ? report.Frogs.Where(f => f.Body >= 0).Select(RaceTrackFrog.Line).ToList() : null,
             Hunters: scenes.Hunters is { Count: > 0 } hunters ? hunters.ToList() : null,

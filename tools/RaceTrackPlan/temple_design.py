@@ -19,15 +19,20 @@ drives his qualifying lap.
 
 The east route (2026-10-19, the user's test: "the green line is the proposed new track route for us to try, and the red dots are teleport
 points to act as a shortcut to match a hidden door that's in the original game"; TEMPLE_ROUTE_EAST=0 gives the lap as it was): off the long
-straight north up the first floor's east side instead -- over the sunken room with the hidden door, round a hairpin in the room north of
-it -- back west along the gallery north of the lower hall and over the hall, into the U-bend, all of it at the first floor's height (the lap
-no longer goes down into the lower hall). And LBA1's hidden passage as a shortcut (TEMPLE_SHORTCUT=0: none): a spur off the east side to
-the hidden door at the sunken room's north end (LBA1's stone door, scene 8 actor 29; walking into the passage behind it, zone 36, puts
-Twinsen at point 30 in the west rooms -- Twinsen's life script), a teleporter there (RACEMOD.CPP teleport=) putting the car out of a
-door in the west rooms' north wall (the user's red dot), on a road back onto the lap past the U-bend: a branch of the raised road (its two
-roads, the teleporter's gap between them) that the lap's checkpoints keep off, so a lap through it counts; the opponents keep to the lap.
+straight north up the first floor's east side instead -- down the stairs into the sunken room with the hidden door and up its stairs
+at the far end, round a hairpin in the room north of it -- back west along the gallery north of the lower hall and over the hall, into the
+U-bend (the lap no longer goes down into the lower hall). After the user drove it (the same day: "let's have it sit on the ground and follow
+the stairs down and back up again instead of being elevated. This should allow us to drop the track guard rails where it's level with the
+ground"), that stretch lies on the temple's floors, down and up the stairs, with no rails where the floor beside it is level with it: the
+cars may drive off it onto the floor there (the ground stretch, below). And LBA1's hidden passage as a secret shortcut (TEMPLE_SHORTCUT=0:
+none): the hidden door at the sunken room's north end (LBA1's stone door, scene 8 actor 29; walking into the passage behind it, zone 36,
+puts Twinsen at point 30 in the west rooms -- Twinsen's life script) walled up, plain wall; a car driven off the road across the room's
+floor into that stretch of wall is taken by a teleporter (RACEMOD.CPP teleport=) through the passage -- a moment in the dark -- and comes
+out on the west rooms' floor in front of their north wall (the user's red dot), plain wall too, from where it drives back onto the lap past
+the U-bend; the lap's checkpoints keep off the stretch it skips, so a lap through it counts; the opponents keep to the lap.
 
-Usage: temple_design.py <game folder with TEMPLE.ILE and TEMPLE.JSON: the island built on its own, `ScriptRoundTrip templebuild`> [out plan]
+Usage: temple_design.py <game folder with TEMPLE.JSON (and TEMPLE.ILE)> <out plan>, with TEMPLE_SOLIDS=<a folder `ScriptRoundTrip
+templebuild` built the island into on its own> -- its TEMPLE.ILE's solid boxes are the floors the ground stretch lies on (else GAME's).
 """
 import json, math, os, sys
 import numpy as np
@@ -60,10 +65,13 @@ GRADE = 0.12                                 # the ramps' steepest
 CAR_BOX = 2.8
 
 
-# ---- the collision boxes (decors with a real box; world units)
+# ---- the collision boxes (decors with a real box; world units) -- the temple's solid cells as LBA1 has them, nothing cut: the TEMPLE.ILE of
+# TEMPLE_SOLIDS (a folder `ScriptRoundTrip templebuild` built the island into on its own), else GAME's (the ground stretch's floors are read
+# from them: a race track's build of the island has its cuts in them)
+SOLIDS = os.environ.get('TEMPLE_SOLIDS', GAME)
 boxes = []
-read, _ = hqr_entries(GAME + r'\TEMPLE.ILE')
-_, _, _, CUBES = load_ile(GAME + r'\TEMPLE.ILE')
+read, _ = hqr_entries(SOLIDS + r'\TEMPLE.ILE')
+_, _, _, CUBES = load_ile(SOLIDS + r'\TEMPLE.ILE')
 cubemap = np.frombuffer(read(0)[:256], dtype=np.uint8).reshape(16, 16)
 for cz in range(16):
     for cx in range(16):
@@ -149,7 +157,8 @@ def spiral(cx, cz, r, phi0, turns, sp=SP):
 # gallery north of the lower hall (GALLERY_Z) and on over the hall into the U-bend's way down, all at the first floor's height)
 ROUTE_EAST = os.environ.get('TEMPLE_ROUTE_EAST', '1') != '0'
 SHORTCUT = ROUTE_EAST and os.environ.get('TEMPLE_SHORTCUT', '1') != '0'
-EAST_X, HAIR_Z, HAIR_W, GALLERY_Z, S_FROM, S_TO = 407, 266, 385, 296, 426, 404
+# (EAST_X: the north stairs' middle -- they are 9 cells across between their walls, x 404..413, the road's width; the south stairs 18)
+EAST_X, HAIR_Z, HAIR_W, GALLERY_Z, S_FROM, S_TO = 408.5, 266, 385, 296, 426, 404
 if ROUTE_EAST:
     lap1 = path([(E_END, CORR_Z), (W_END, CORR_Z), (W_END, S_FROM), (EAST_X, S_TO), (EAST_X, HAIR_Z), (HAIR_W, HAIR_Z), (HAIR_W, GALLERY_Z),
                  (340, GALLERY_Z), (340, 372), (300, 372), (300, 312), (248, 312), (248, 400), (276, 400), (SPIRAL_W[0] - SPIRAL_W[2], SPIRAL_W[1])],
@@ -213,6 +222,86 @@ for (a, ha), (b, hb) in zip(anchors, anchors[1:]):
         t = (S[i] - S[a]) / max(1e-9, S[b] - S[a])
         floor_h[i] = ha + (hb - ha) * (ease(t) if abs(hb - ha) < 4000 else t)
 h = floor_h + DECK
+
+
+# ---- the ground stretch (ROUTE_EAST, the user, 2026-10-19, after driving the east route: "Our new stretch of road, let's have it sit on
+# the ground and follow the stairs down and back up again instead of being elevated. This should allow us to drop the track guard rails
+# where it's level with the ground"): from the first floor's south side (GROUND_FROM) round the east side, the hairpin and along the gallery
+# to the lower hall's parapet (GROUND_TO), the road lies on the temple's own floors -- its deck DECK over the highest floor under it -- down
+# the sunken room's south stairs, through the room and back up its north stairs, a ramp laid on the stairs' nosings (the stairs are as steep
+# as LBA1 built them, 50 %). Its rise and fall smoothed over GROUND_SMOOTH points (a Gaussian's sigma), then lifted -- by as little as
+# keeps it over every floor under it, that lift smoothed the same way -- so its slope is even down the steps and its crests and feet are
+# rounded, never under the floor; past the gallery it is the first floor's height over the lower hall, as before (a bridge: rails). Beside it, where the floor is level with it, no rails -- the cars may drive off it onto the floor there: the
+# race-track mode's floor reaches across that floor (RACEMOD.CPP's strips: the plan's raisedFloors, never drawn) to the walls round it, or
+# to a drop's lip (its rail there, unseen); and the deck's pieces have flat curbs and no rails on those sides (raisedFlush).
+GROUND_FROM, GROUND_TO = (W_END, 438), (360, GALLERY_Z)
+GROUND_SMOOTH = 3
+ground = np.zeros(n, bool)
+if ROUTE_EAST:
+    ground[nearest(GROUND_FROM, i_west):nearest(GROUND_TO, i_west) + 1] = True
+gpts = np.flatnonzero(ground)
+# the solid boxes by island cell (world units), for the floors under the road and beside it
+box_at = {}
+for b_, (bx0, by0, bz0, bx1, by1, bz1) in enumerate(boxes):
+    for cz_ in range(int(math.floor(bz0 / 512)), int(math.floor((bz1 - 1) / 512)) + 1):
+        for cx_ in range(int(math.floor(bx0 / 512)), int(math.floor((bx1 - 1) / 512)) + 1):
+            box_at.setdefault((cx_, cz_), []).append(b_)
+# (cells the race fills -- the hidden passage's wall, below: TEMPLE_WALLS -- solid for the floors beside the road)
+extra_solid = []
+
+
+def boxes_at(x, z):
+    wx, wz = x * 512, z * 512
+    out = [boxes[b_] for b_ in box_at.get((int(math.floor(x)), int(math.floor(z))), ()) if boxes[b_][0] <= wx <= boxes[b_][3] and boxes[b_][2] <= wz <= boxes[b_][5]]
+    out += [e for e in extra_solid if e[0] <= wx <= e[3] and e[2] <= wz <= e[5]]
+    return out
+
+
+def floor_top(x, z, ceil):
+    """The highest solid top under island cell place (x, z) no higher than ceil (world units), or None."""
+    tops = [b_[4] for b_ in boxes_at(x, z) if b_[4] <= ceil]
+    return max(tops) if tops else None
+
+
+def tangent(i):
+    a, b = pts[max(0, i - 1)], pts[min(n - 1, i + 1)]
+    d = b - a
+    return d / max(1e-9, np.linalg.norm(d))
+
+
+# (the floor under the road: the highest solid top within GROUND_ALONG of the point along the road and across its width -- the stairs'
+# drawn steps stand up to a step further up them than their solid ones, so a road laid on the solid nosings had the drawn ones through it)
+GROUND_ALONG = 0.9
+gfloor = np.zeros(n)
+if ROUTE_EAST:
+    for i in gpts:
+        u = tangent(i); nrm = np.array([-u[1], u[0]])
+        tops = [floor_top(*(pts[i] + nrm * a + u * b), FIRST + 100) for a in np.linspace(-(HALF - 0.3), HALF - 0.3, 13)
+                for b in np.linspace(-GROUND_ALONG, GROUND_ALONG, 7)]
+        tops = [t for t in tops if t is not None]
+        gfloor[i] = max(tops) if tops else FIRST
+    g = gfloor[gpts] + DECK
+    xs = S[gpts] * 512
+    kern = np.exp(-0.5 * (np.arange(-4 * GROUND_SMOOTH, 4 * GROUND_SMOOTH + 1) / GROUND_SMOOTH) ** 2)
+    kern /= kern.sum()
+    def smooth(f):
+        w = len(kern) // 2
+        return np.convolve(np.r_[np.full(w, f[0]), f, np.full(w, f[-1])], kern, 'valid')
+    def widest(f, w=GROUND_SMOOTH):
+        return np.array([f[max(0, k - w):k + w + 1].max() for k in range(len(f))])
+    hg = smooth(g)
+    lift = np.zeros(len(g))
+    for _ in range(60):
+        short = g - (hg + lift)
+        if short.max() <= 0.5: break
+        lift += smooth(widest(np.clip(short, 0, None)))
+    hg = hg + lift
+    assert (hg >= g - 0.5).all()
+    h[gpts] = hg
+    gd = np.diff(hg) / (np.diff(xs) + 1e-9)
+    print('ground stretch: points %d..%d, %.0f cells; floors %d..%d; the road %d..%d over them (over the nosings at the most %d), grades to %.0f %%'
+          % (gpts[0], gpts[-1], S[gpts[-1]] - S[gpts[0]], gfloor[gpts].min(), gfloor[gpts].max(), (hg - gfloor[gpts]).min(), (hg - gfloor[gpts]).max(),
+             (hg - g).max(), 100 * np.abs(gd).max()))
 grade = np.abs(np.diff(h)) / (np.maximum(np.diff(S), 1e-6) * 512)
 print('steepest %.3f at point %d; the drop %d over %d cells, the climb %d over %d' % (grade.max(), grade.argmax(), FIRST - CRYPT, round(S[i_crypt_w] - S[i_edge]),
       FIRST - top(-5), round(S[n - 1] - S[i_up_in])))
@@ -232,49 +321,37 @@ half[corridor] = HALF_CORRIDOR
 # stone door at its north end (scene 8 actor 29, sprite 52, at LBA1's (29024, 256, 8464): island (394.1, 305.6); it stays only while the
 # statue of Bù stands in its place, zone 18 -- Twinsen moves the statue and the door is gone); the alcove behind it is zone 36 (sceneric 16,
 # island x 393.5..399.5, z 293.5..299.5): walking into it, Twinsen's life script puts him at point 30 (island (264.6, 273.6)) in the west
-# rooms, through a stone door in their north wall (actor 21), and zone 37 behind that door takes him back to point 29 by the first door. The
-# race's: a spur off the east side north to that door (SPUR_X: the alcove's middle, DOOR_Z: the door's plane), at the road's height over the
-# sunken room, its end a doorway the car drives into (TempleHalloween's SecretDoor) -- a teleporter there (RACEMOD.CPP teleport=) puts it out
-# of a doorway in the west rooms' north wall where the user's red dot is (OUT_X: the east room's middle; LBA1's own door is 41 cells further
-# west, where the road would come out by the lap's corner), heading south (OUT_Z: far enough out of the doorway that the chase camera, 9
-# cells behind the car, is in front of it), on a road round onto the lap's way west past the U-bend. One branch of the raised road
-# (RaceTrackPlan.Branches): the spur, the teleporter's gap (no road), the way out, the lap's own road where they meet it (no deck of its own).
-SPUR_X, DOOR_Z, SPUR_HALF, SPUR_FORK = 395.5, 304.5, 3.5, 352
-OUT_X, OUT_DOOR_Z, OUT_Z = 306.0, 272.5, 282.5
-BRANCH_OVER = 40                                # its deck over the lap's where they overlap (no fighting for the same depth)
-DOOR_PAST = 2.5                                 # the spur's deck on past the doorway (the car is taken in before it gets there)
-if SHORTCUT:
-    i_fork = nearest((EAST_X, SPUR_FORK))
-    spur = path([tuple(pts[i_fork]), (EAST_X, 340), (SPUR_X, 322), (SPUR_X, DOOR_Z - DOOR_PAST)], [0, 18, 18, 0])
-    way_out = path([(OUT_X, OUT_DOOR_Z), (OUT_X, 312), (288.5, 312)], [0, 12, 0])
-    i_merge = nearest((288.5, 312)) + 1
-    i_back = nearest((274, 312))
-    gap_a, gap_b = spur[-1] + np.array([0, -0.5]), way_out[0] + np.array([0, -0.5])
-    gap = resample(np.array([gap_a, gap_b]))
-    bpts = np.concatenate([spur, gap, way_out, pts[i_merge:i_back + 1]])
-    NB = len(bpts)
-    b_gap = np.zeros(NB, bool); b_gap[len(spur):len(spur) + len(gap)] = True
-    b_spur = np.zeros(NB, bool); b_spur[:len(spur)] = True
-    bhalf = np.where(b_gap, 0.0, np.where(b_spur, SPUR_HALF, HALF))
-    # (each point's lap point -- the nearest -- and how far from its middle: on the lap's road, at its height, no deck of its own)
-    b_lap = np.array([int(np.hypot(pts[:, 0] - x, pts[:, 1] - z).argmin()) for x, z in bpts])
-    b_off = np.hypot(pts[b_lap, 0] - bpts[:, 0], pts[b_lap, 1] - bpts[:, 1])
-    b_hidden = ~b_gap & (b_off + bhalf <= half[b_lap] + 0.3)
-    bh = h[b_lap] + BRANCH_OVER * np.clip((b_off + bhalf - half[b_lap] - 0.3) / 1.5, 0, 1)
-    # (the gap at the spur's end's height: nothing is there)
-    bh[b_gap] = bh[len(spur) - 1]
-    # (the way out's road cuts nothing behind its doorway: the west rooms' north wall stands, the doorway on it)
-    b_out0 = len(spur) + len(gap)
-    print('shortcut: off the lap at point %d (%.1f, %.1f), the spur %.0f cells to the door at (%.1f, %.1f), out at (%.1f, %.1f), %.0f cells back onto '
-          'the lap at point %d (%.1f, %.1f); skips %.0f cells of the lap' % (i_fork, *pts[i_fork], len(spur) * SP, SPUR_X, DOOR_Z, OUT_X, OUT_Z,
-                                                                         (NB - b_out0) * SP, i_back, *pts[i_back], S[i_back] - S[i_fork]))
-else:
-    bpts, bh, bhalf, b_gap, NB = np.zeros((0, 2)), np.zeros(0), np.zeros(0), np.zeros(0, bool), 0
+# rooms, through a stone door in their north wall (actor 21), and zone 37 behind that door takes him back to point 29 by the first door.
+# The race's, a secret (the user, 2026-10-19: "Remove the section of track leading to the shortcut, and replace the highlighted portal with
+# just plain wall. When we drive into the wall at the correct point we should teleport. Let's also do the same with the shortcut exit, this
+# is to be a secret hidden shortcut so we don't wish to highlight it"): no road to it and no doorway -- the alcove's mouth walled up
+# (TEMPLE_WALLS: its two columns of the room's north wall filled with the bricks of the wall beside them, layout column (59, 16), up to the
+# lintel; LBA1's door, in there, left out), the room's floor in front of it the ground road's floor (the cars drive off the road onto it:
+# raisedFloors). A car driven into that stretch of wall -- its middle within SECRET_DEEP of the wall's face, between SECRET_X -- is taken
+# (RACEMOD.CPP teleport=) and comes out in the west rooms where the user's red dot is (OUT_X, OUT_Z: in front of their north wall, plain
+# wall -- no doorway there either), heading south at OUT_SPEED at the most (world units a second), after OUT_PASSAGE ms in the passage --
+# the screen black, then fading in, the car held where it comes out (a car out at once at its own speed saved 7.8 s of the lap, "very
+# strong"), on their floor (an open area: OPEN_EXIT, its floor the race-track mode's, the camera on the car's trail) down to the lap's corner
+# into the U-bend's way west, whose rails on that side are left off (REENTRY: the floor beside it). The lap's checkpoints keep off the
+# stretch the passage skips (the plan's shortcuts), so a lap through it counts; the opponents keep to the lap.
+SECRET_X, SECRET_FACE, SECRET_DEEP = (395.4, 400.6), 307.0, 2.0
+TEMPLE_WALLS = [[57, 16, 1, 6, 59, 16], [58, 16, 1, 6, 59, 16]] if SHORTCUT else []
+OUT_X, OUT_Z, OUT_SPEED, OUT_PASSAGE = 306.0, 282.5, 0, 3500
+OPEN_EXIT = [299.2, 271.2, 313.8, 309.0] if SHORTCUT else None
+REENTRY = ((300, 334), (296, 315))              # the lap's points between these (the x 300 leg's last stretch, the corner): floor beside, no rail
+SKIP_TO = (280, 312)                            # ... and the lap's point past where the car comes back onto it (the stretch it skips ends there)
+for lx_, lz_, y0_, y1_, _, _ in TEMPLE_WALLS:
+    extra_solid.append(((OX + SCALE * lx_) * 512, top(y0_ - 1), (OZ + SCALE * lz_) * 512, (OX + SCALE * (lx_ + 1)) * 512, top(y1_), (OZ + SCALE * (lz_ + 1)) * 512))
 
 
-def b_cuts(k, cx, cz):
-    """Whether branch point k's road takes island cell (cx, cz) -- not behind the way out's doorway."""
-    return k < b_out0 or cz + 0.5 >= OUT_DOOR_Z if SHORTCUT else True
+def secret_off(x, z):
+    """How far (x, z) is from the places the shortcut's car drives off the road -- the floor before the walled-up door, the west rooms'
+    floor it comes out on (cells; 0 in them): no decor there."""
+    if not SHORTCUT: return 1e9
+    best = 1e9
+    for x0, z0, x1, z1 in ((SECRET_X[0] - 2, SECRET_FACE, EAST_X - HALF, SECRET_FACE + 16), (OPEN_EXIT[0], OPEN_EXIT[1], OPEN_EXIT[2], OPEN_EXIT[3])):
+        best = min(best, math.hypot(max(x0 - x, 0, x - x1), max(z0 - z, 0, z - z1)))
+    return best
 
 
 # ---- the slip lane (the user, 2026-10-17: "We need to add a slip lane for the temple track, currently trying to complete a qualifying lap
@@ -343,6 +420,8 @@ def near(cell, i, d2, deck):
 
 
 for i in range(0, n, 2):
+    # (the ground stretch's own rule, below: GROUND_CUT)
+    if ground[i]: continue
     x, z = pts[i]
     reach = half[i] + CUT
     for cz in range(int(math.floor(z - reach)), int(math.floor(z + reach)) + 1):
@@ -357,19 +436,6 @@ for i in slip:
             off = slip_off(cx + 0.5, cz + 0.5)
             if off > CUT: continue
             near((cx, cz), i, (cx + 0.5 - pts[i][0]) ** 2 + (cz + 0.5 - pts[i][1]) ** 2, off <= DECK_EDGE)
-# (and over the shortcut's roads, as over the lap's: their points after the lap's -- xpts, xh, xhalf -- each along its own branch)
-xpts, xh, xhalf = np.concatenate([pts, bpts]), np.r_[h, bh], np.r_[half, bhalf]
-bS = np.r_[0, np.cumsum(np.linalg.norm(np.diff(bpts, axis=0), axis=1))] if NB else np.zeros(0)
-for k in range(0, NB, 2):
-    if b_gap[k]: continue
-    i = n + k
-    x, z = bpts[k]
-    reach = bhalf[k] + CUT
-    for cz in range(int(math.floor(z - reach)), int(math.floor(z + reach)) + 1):
-        for cx in range(int(math.floor(x - reach)), int(math.floor(x + reach)) + 1):
-            d2 = (cx + 0.5 - x) ** 2 + (cz + 0.5 - z) ** 2
-            if d2 > reach * reach or not b_cuts(k, cx, cz): continue
-            near((cx, cz), i, d2, d2 <= (bhalf[k] + DECK_EDGE) ** 2)
 col_cells = {}
 for cell in cell_points: col_cells.setdefault(layout_of(*cell), []).append(cell)
 col_points = {key: sorted({i for c in cells_ for i in cell_points[c]}) for key, cells_ in col_cells.items()}
@@ -378,14 +444,13 @@ col_points = {key: sorted({i for c in cells_ for i in cell_points[c]}) for key, 
 def passes(points):
     """The points (indices) in groups by height: each group a pass of the road (SAME_PASS apart from the next)."""
     out = []
-    for i in sorted(points, key=lambda k: (xh[k], k)):
-        if out and xh[i] - xh[out[-1][-1]] < SAME_PASS: out[-1].append(i)
+    for i in sorted(points, key=lambda k: (h[k], k)):
+        if out and h[i] - h[out[-1][-1]] < SAME_PASS: out[-1].append(i)
         else: out.append([i])
     return out
 
 
 def along(a, b):
-    if a >= n or b >= n: return abs(bS[a - n] - bS[b - n]) if a >= n and b >= n else math.inf
     d = abs(S[a] - S[b])
     return min(d, LAP - d)
 
@@ -401,10 +466,10 @@ def room_of(key):
             if not e: continue
             j = min(e, key=lambda i: (e[i][0], i))
             if any(deck for _, deck in e.values()):
-                lo = min(lo, min(xh[i] for i in e if along(i, j) <= CAR_ALONG) - DECK + 20)
+                lo = min(lo, min(h[i] for i in e if along(i, j) <= CAR_ALONG) - DECK + 20)
             else:
-                lo = min(lo, max(xh[i] for i in p) - DECK + 20)
-        out.append((lo, [xh[i] for i in p]))
+                lo = min(lo, max(h[i] for i in p) - DECK + 20)
+        out.append((lo, [h[i] for i in p]))
     return out
 
 
@@ -417,6 +482,26 @@ for key, room in rooms.items():
     b = bits.get(key, 0)
     for y in range(MINY, L['maxY'] + 1):
         if present(b, y) and any(top(y) > lo and top(y - 1) < max(hs) + HEAD for lo, hs in room): cuts.add((key[0], y, key[1]))
+# (the ground stretch: the road on the floor, its walls standing beside it -- the north stairs' between them, as wide as the road -- so only
+# what stands on the floor under the road and GROUND_CUT past its edge, up to HEAD over it, is cut: each island cell there by the road's
+# point nearest it, a cell whose foot is the floor there or higher -- never a stair under the deck, whose foot is its step below)
+GROUND_CUT = 0.3
+ground_cells = {}
+for i in gpts:
+    x, z = pts[i]
+    reach = half[i] + GROUND_CUT
+    for cz in range(int(math.floor(z - reach)), int(math.floor(z + reach)) + 1):
+        for cx in range(int(math.floor(x - reach)), int(math.floor(x + reach)) + 1):
+            d2 = (cx + 0.5 - x) ** 2 + (cz + 0.5 - z) ** 2
+            if d2 <= reach * reach and d2 < ground_cells.get((cx, cz), (1e9, 0))[0]: ground_cells[(cx, cz)] = (d2, i)
+ground_cut = 0
+for (cx, cz), (_, i) in ground_cells.items():
+    key = layout_of(cx + 0.5, cz + 0.5)
+    b = bits.get(key, 0)
+    for y in range(MINY, L['maxY'] + 1):
+        if present(b, y) and top(y - 1) >= gfloor[i] - 20 and top(y - 1) < h[i] + HEAD and (key[0], y, key[1]) not in cuts:
+            cuts.add((key[0], y, key[1])); ground_cut += 1
+if ROUTE_EAST: print('ground stretch: %d cells cut where something stands on the floor under the road' % ground_cut)
 # ... and what a cut leaves of a column over it one or two layers thick -- a wall's top hanging over the road's edge, a thin slab of
 # lintel -- taken with it
 THIN = 2
@@ -465,7 +550,7 @@ for key in sorted(col_points):
     highest = highest_of(key)
     if highest < MINY: continue
     cx, cz = OX + SCALE * (lx + 0.5), OZ + SCALE * (lz + 0.5)
-    surface = xh[min(col_points[key], key=lambda i: (xpts[i][0] - cx) ** 2 + (xpts[i][1] - cz) ** 2)]
+    surface = h[min(col_points[key], key=lambda i: (pts[i][0] - cx) ** 2 + (pts[i][1] - cz) ** 2)]
     tops = [kept_top((lx + dx, lz + dz), surface) for dx in (-1, 0, 1) for dz in (-1, 0, 1)
             if (dx or dz) and (lx + dx, lz + dz) not in cut_cols]
     tops = [t for t in tops if t is not None]
@@ -576,15 +661,8 @@ def footprint_on(x, z, layer, reach):
 
 def clear_of_road(x, z, margin):
     d = np.hypot(lap_pts[:, 0] - x, lap_pts[:, 1] - z) - half
-    # (and of the slip lane beside the start straight; and of the shortcut's roads)
-    return float(d.min()) >= margin and slip_off(x, z) >= margin and branch_off(x, z) >= margin
-
-
-def branch_off(x, z):
-    """How far (x, z) is from the shortcut's roads' edges (cells; negative on them)."""
-    if not NB: return 1e9
-    road = ~b_gap
-    return float((np.hypot(bpts[road, 0] - x, bpts[road, 1] - z) - bhalf[road]).min())
+    # (and of the slip lane beside the start straight; and of where the shortcut's car drives off the road)
+    return float(d.min()) >= margin and slip_off(x, z) >= margin and secret_off(x, z) >= margin
 
 
 def heading(i):
@@ -745,16 +823,13 @@ def way_points(way, loop):
 
 
 def spook_height(kind, way, loop, y0, under=False):
-    over, over_b = set(), set()
+    over = set()
     for q in way_points(way, loop):
         d = np.hypot(pts[:, 0] - q[0], pts[:, 1] - q[1])
         over.update(int(i) for i in np.nonzero(d < half + 2)[0])
-        if NB: over_b.update(int(k) for k in np.nonzero((np.hypot(bpts[:, 0] - q[0], bpts[:, 1] - q[1]) < bhalf + 2) & ~b_gap)[0])
-    if not over and not over_b: return round(float(y0), 1)
+    if not over: return round(float(y0), 1)
     low, tall = SPOOK_BODY[kind]
     road = [(h[i], max(h[(i - k) % n] for k in range(21))) for i in sorted(over)]
-    # (over the shortcut's roads: the camera over them as over the lap's)
-    road += [(bh[k], max(bh[max(0, k - kk)] for kk in range(21))) for k in sorted(over_b)]
     def clear(y):
         return all(y - low - SPOOK_BOB >= cam + SPOOK_CLEAR or (under and y + tall + SPOOK_BOB <= r - SPOOK_UNDER) for r, cam in road)
     y = next(y0 + s * d for d in range(0, 30000, 25) for s in (1, -1) if clear(y0 + s * d))
@@ -962,10 +1037,10 @@ def by_skeleton(x, z):
 
 
 SKELETON_CLEAR = 4.0
-WEB_BRANCH = WEB_EDGE + 3.0                     # (and none hanging over the shortcut's roads: its middle this far from their edges)
+WEB_SECRET = WEB_EDGE + 3.0                     # (and none where the shortcut's car drives off the road: its middle this far from there)
 for i2, w, corner in sorted(webs, key=lambda e: (e[0], e[1][0])):
     if any(math.hypot(w[1] - c[1], w[2] - c[2]) < WEB_APART for c in cobwebs) or math.hypot(w[1] - WEB_X, w[2] - CORR_Z) < WEB_CLEAR: continue
-    if by_skeleton(w[1], w[2]) or branch_off(w[1], w[2]) < WEB_BRANCH: continue
+    if by_skeleton(w[1], w[2]) or secret_off(w[1], w[2]) < WEB_SECRET: continue
     # (a corner's one of three, in turn)
     if corner: w = w + [sum(1 for c in cobwebs if c[0] in (CW_CORNER, CW_CORNER_BIG)) % 3]
     cobwebs.append(w)
@@ -990,7 +1065,7 @@ for i in range(0, n, 2):
         x, z = pts[i] + u * (face - 0.3) + nrm_ * sd * across_
         rises = [rise(*layout_of(*(pts[i] + u * (face + 0.5) + nrm_ * sd * (across_ + s_))), floor_layer) for s_ in (-WALL_HALF, 0, WALL_HALF)]
         if min(rises) < 3 or max(rises) > 6: continue
-        if any(math.hypot(x - c[1], z - c[2]) < WEB_APART for c in cobwebs) or math.hypot(x - WEB_X, z - CORR_Z) < WEB_CLEAR or by_skeleton(x, z) or branch_off(x, z) < WEB_BRANCH: continue
+        if any(math.hypot(x - c[1], z - c[2]) < WEB_APART for c in cobwebs) or math.hypot(x - WEB_X, z - CORR_Z) < WEB_CLEAR or by_skeleton(x, z) or secret_off(x, z) < WEB_SECRET: continue
         cobwebs.append([CW_WALL, round(float(x), 2), round(float(z), 2), float(top(floor_layer + min(rises)) - 40), turn_to(0, 0, -u[0], -u[1]),
                         sum(1 for c in cobwebs if c[0] == CW_WALL) % 3])
 last_wall = -1e9
@@ -1005,7 +1080,7 @@ for i in range(0, n, 2):
         rises = [rise(*layout_of(*(pts[i] + nrm * (off + 0.4) + tang * s_)), layer) for s_ in (-WALL_HALF, 0, WALL_HALF)]
         if min(rises) < 3 or max(rises) > 6: continue
         if any(math.hypot(x - c[1], z - c[2]) < WEB_APART for c in cobwebs) or math.hypot(x - WEB_X, z - CORR_Z) < WEB_CLEAR: continue
-        if by_skeleton(x, z) or branch_off(x, z) < WEB_BRANCH: continue
+        if by_skeleton(x, z) or secret_off(x, z) < WEB_SECRET: continue
         cobwebs.append([CW_WALL, round(float(x), 2), round(float(z), 2), float(top(layer + min(rises)) - 40), turn_to(x, z, *pts[i]),
                         sum(1 for c in cobwebs if c[0] == CW_WALL) % 3])
         # (a spider hanging in front of every third one's middle)
@@ -1137,26 +1212,153 @@ for px_ in SLIP_SPOTS:
     print('pit spot', px_, CRYPT_Z + slip_mid, 'in the slip lane' if ok else 'NOT IN THE SLIP LANE')
     pit_spots.append([float(px_), float(CRYPT_Z + slip_mid), 1.0, 0.0, float(h[i])])
 
-# ---- the shortcut as the plan has it: the branch of the raised road (its points from the lap's road at the fork: the spur, the teleporter's
-# gap -- no road -- the way out, the lap's own road where it comes back onto it, no deck of its own there), the teleporter (its box over the
-# spur's end, the car's centre taken in a cell short of the doorway: its nose in it), the doorways at both ends (TempleHalloween's
-# SecretDoor, [kind, x, z, the deck's height, the way its front looks, its opening's half width]: the spur's facing the car coming, the way
-# out's the way the car goes)
-SECRET_DOOR = 20
-branches, teleports = [], []
+# ---- the floor beside the ground stretch (the plan's raisedFloors: [from, to] cells across each point, the builder's Across -- the left of
+# the way the lap runs -- as raisedStrips; the race-track mode's floor there, never drawn) and its sides with no rail (raisedFlush: [the
+# -Across side, the +Across side], 1 no rail -- a flat curb). Out from each side of the road, the floor level with the road's (the highest
+# under it, gfloor: within FLOOR_UNDER under it, nothing over it to FLOOR_HEAD) as far as it goes, FLOOR_MOST at the most: to a wall (or
+# another stretch of the lap), where the race-track mode's rail stands in its face, or to a drop's lip, where it stands at the lip, unseen.
+# A side keeps its rail where a drop (or another stretch of the lap) is within FLOOR_RAIL of the road's edge; a run of either of fewer than
+# FLOOR_RUN points goes with the runs round it. And the lap's points by the shortcut's way back onto it (REENTRY): the floor on the side it
+# comes from, no rail.
+FLOOR_UNDER, FLOOR_HEAD, FLOOR_MOST, FLOOR_RAIL, FLOOR_RUN, FLOOR_STEP, FLOOR_ALONG = 230, 1400, 20.0, 3.0, 8, 0.25, 0.4
+FLOOR_SHORT = 0.4
+lap_grid = {}
+for j in range(n): lap_grid.setdefault((int(pts[j][0] // 2), int(pts[j][1] // 2)), []).append(j)
+
+
+def other_road(i, p, t):
+    """Whether place p is on another stretch of the lap than point i's (by more than t cells along it), at about its height."""
+    gx, gz = int(p[0] // 2), int(p[1] // 2)
+    for dz in (-3, -2, -1, 0, 1, 2, 3):
+        for dx in (-3, -2, -1, 0, 1, 2, 3):
+            for j in lap_grid.get((gx + dx, gz + dz), ()):
+                if along(i, j) > t + HALF + 2 and abs(h[j] - h[i]) < 1500 and math.hypot(pts[j][0] - p[0], pts[j][1] - p[1]) < half[j] + 0.5: return True
+    return False
+
+
+def solid_in(x, z, lo, hi):
+    """Whether something solid at (x, z) reaches between heights lo and hi -- not what the cuts take: a solid box there, and a cell of its
+    layout column there between those heights not cut (or the race's own wall, TEMPLE_WALLS)."""
+    if any(e[0] <= x * 512 <= e[3] and e[2] <= z * 512 <= e[5] and e[1] < hi and e[4] > lo for e in extra_solid): return True
+    key = layout_of(x, z)
+    b = bits.get(key, 0)
+    kept_ = [y for y in range(MINY, L['maxY'] + 1) if present(b, y) and (key[0], y, key[1]) not in cuts and top(y - 1) < hi and top(y) > lo]
+    # (and a cell standing on the floor there with no box of its own -- a railing, a grille: LBA1 draws a wall)
+    if any(top(y - 1) >= lo - 100 for y in kept_): return True
+    return bool(kept_) and any(b_[1] < hi and b_[4] > lo for b_ in boxes_at(x, z))
+
+
+def floor_reach(i, sd, f0):
+    """How far the floor level with the road reaches across from point i's middle on side sd (cells), and what stops it. (The floor at a
+    place the highest within FLOOR_ALONG of it along the road: the stairs' solid steps leave a gap of half a cell in each of their cells.)"""
+    u = tangent(i); nrm = np.array([-u[1], u[0]]) * sd
+    t, good = half[i], half[i]
+    while t < half[i] + FLOOR_MOST:
+        t += FLOOR_STEP
+        p = pts[i] + nrm * t
+        if other_road(i, p, t): return good, 'road'
+        if solid_in(p[0], p[1], f0 + 80, f0 + FLOOR_HEAD): return good, 'wall'
+        tops = [floor_top(*(p + u * a), f0 + 80) for a in (-FLOOR_ALONG, 0.0, FLOOR_ALONG)]
+        tops = [ft for ft in tops if ft is not None]
+        if not tops or max(tops) < f0 - FLOOR_UNDER: return good, 'drop'
+        good = t
+    return good, 'most'
+
+
+floor_lo, floor_hi = np.zeros(n), np.zeros(n)
+flush = np.zeros((n, 2), bool)
+reentry = np.zeros(n, bool)
+if SHORTCUT:
+    a_, b_ = nearest(REENTRY[0], i_west, o_down), nearest(REENTRY[1], i_west, o_down)
+    reentry[a_:b_ + 1] = True
+sides = {}
+for i in np.flatnonzero(ground | reentry):
+    f0 = gfloor[i] if ground[i] else h[i] - DECK
+    for s_, sd in enumerate((-1, 1)):
+        if reentry[i] and not ground[i] and sd != 1: continue
+        sides[(i, s_)] = floor_reach(i, sd, f0)
+for s_ in (0, 1):
+    idx = [i for i in range(n) if (i, s_) in sides]
+    reach = np.array([sides[(i, s_)][0] for i in idx])
+    rail = np.array([sides[(i, s_)][1] in ('drop', 'road') and sides[(i, s_)][0] - half[i] < FLOOR_RAIL for i in idx])
+    # (short runs of either go with the runs round them; the reach the least of the points round it)
+    for _ in range(2):
+        runs = np.split(np.arange(len(idx)), np.flatnonzero(np.diff(rail.astype(int))) + 1)
+        for r_ in runs:
+            if 0 < len(r_) < FLOOR_RUN and r_[0] > 0 and r_[-1] < len(idx) - 1: rail[r_] = ~rail[r_]
+    reach = np.array([reach[max(0, k - 2):k + 3].min() for k in range(len(idx))])
+    for k, i in enumerate(idx):
+        flush[i, s_] = not rail[k]
+        # (FLOOR_SHORT short of what stops it: the reach is found a FLOOR_STEP at a time, and the road's points between the plan's take theirs)
+        out = reach[k] - FLOOR_SHORT if not rail[k] and reach[k] > half[i] + FLOOR_SHORT + 0.25 else half[i]
+        if s_ == 0: floor_lo[i] = -out
+        else: floor_hi[i] = out
+# (and between two points, where the race-track mode takes the floor's edge across each segment of the road from one point's to the next's:
+# that floor clear of walls and drops too -- round a bend, the edge cuts across a corner the points' own ways out didn't see -- or both ends
+# brought in a little, until it is)
+def floor_clear(i, j, s_):
+    a, c = pts[i], pts[j]
+    sv = c - a; ln = float(np.linalg.norm(sv))
+    if ln < 1e-6: return True
+    u = sv / ln; nseg = np.array([-u[1], u[0]]) * (1 if s_ else -1)
+    f0 = min(gfloor[i] if ground[i] else h[i] - DECK, gfloor[j] if ground[j] else h[j] - DECK)
+    f1 = max(gfloor[i] if ground[i] else h[i] - DECK, gfloor[j] if ground[j] else h[j] - DECK)
+    for t in (0.0, 0.25, 0.5, 0.75, 1.0):
+        out = abs((floor_lo if not s_ else floor_hi)[i] * (1 - t) + (floor_lo if not s_ else floor_hi)[j] * t)
+        hw = half[i] * (1 - t) + half[j] * t
+        d = hw + 0.25
+        while d <= out + 1e-6:
+            q = a + sv * t + nseg * d
+            if solid_in(q[0], q[1], f1 + 80, f1 + FLOOR_HEAD): return False
+            tops = [ft for ft in (floor_top(*(q + u * b), f1 + 80) for b in (-FLOOR_ALONG, 0.0, FLOOR_ALONG)) if ft is not None]
+            if not tops or max(tops) < f0 - FLOOR_UNDER: return False
+            d += 0.5
+    return True
+
+
+shrunk = 0
+for _ in range(80):
+    bad = 0
+    for s_ in (0, 1):
+        arr = floor_lo if not s_ else floor_hi
+        for i in np.flatnonzero(ground | reentry)[:-1]:
+            j = i + 1
+            if abs(arr[i]) <= half[i] + 1e-6 and abs(arr[j]) <= half[j] + 1e-6: continue
+            if floor_clear(i, j, s_): continue
+            bad += 1
+            for k in (i, j):
+                if abs(arr[k]) > half[k] + 1e-6: arr[k] = (1 if s_ else -1) * max(half[k], abs(arr[k]) - 0.25); shrunk += 1
+    if not bad: break
+if ROUTE_EAST: print('floors beside the road: brought in %d times where the edge between two points crossed a wall or a drop (%d passes)' % (shrunk, _ + 1))
+has_floor = (floor_lo < -half - 1e-6) | (floor_hi > half + 1e-6)
+floor_lo = np.where(has_floor, np.where(floor_lo == 0, -half, floor_lo), 0.0)
+floor_hi = np.where(has_floor, np.where(floor_hi == 0, half, floor_hi), 0.0)
+if ROUTE_EAST:
+    why = {}
+    for (i, s_), (r_, w_) in sides.items(): why[w_] = why.get(w_, 0) + 1
+    print('floors beside the road: %d points (%d of them the shortcut\'s way back), no rail on %d sides of %d; the floor reaching %.1f cells past the edge at the most, '
+          'stopped by %s' % (int(has_floor.sum()), int(reentry.sum()), int(flush.sum()), len(sides), max(0.0, float((-floor_lo - half).max()), float((floor_hi - half).max())), why))
+
+# ---- the shortcut as the plan has it: the teleporter (its box: the car's middle within SECRET_DEEP of the walled-up door's face, between
+# SECRET_X, about the room's floor; where the car comes out, its height, the way it looks -- south -- and its speed), the wall (TEMPLE_WALLS:
+# templeWalls, [x, z, from layer, to layer, the column whose bricks it takes]), the open area it comes out into (openAreas: [x0, z0, x1, z1,
+# its floor]) and the stretch of the lap it skips, from the point nearest the walled-up door to the lap's way west past where it comes back
+# (shortcuts: [first, last], the plan's points) -- the checkpoints keep off it
+teleports, shortcuts = [], []
 if SHORTCUT:
     def plan_index(i): return int((i - i_start) % n)
-    def spans(mask): return [[int(a), int(b)] for a, b in zip(*[np.flatnonzero(np.diff(np.r_[0, mask.astype(int), 0]) == v) - (0 if v == 1 else 1) for v in (1, -1)])]
-    branches.append({'points': [[round(float(x), 3), round(float(z), 3)] for x, z in bpts], 'heights': [round(float(v), 1) for v in bh],
-                     'halfs': [round(float(v), 3) for v in bhalf], 'from': plan_index(i_fork), 'to': plan_index(i_back),
-                     'hidden': spans(b_hidden), 'gaps': spans(b_gap)})
-    y_in, y_out = float(bh[len(spur) - 1]), float(bh[b_out0 + int(round((OUT_Z - OUT_DOOR_Z) / SP))])
-    teleports.append([SPUR_X - SPUR_HALF - 0.5, DOOR_Z - DOOR_PAST - 3.0, SPUR_X + SPUR_HALF + 0.5, DOOR_Z + 1.0, y_in - 600, y_in + 2400,
-                      OUT_X, OUT_Z, y_out, 0])
-    decor.append([SECRET_DOOR, SPUR_X, DOOR_Z, y_in, 0, SPUR_HALF + 0.3])
-    decor.append([SECRET_DOOR, OUT_X, OUT_DOOR_Z, float(bh[b_out0]), 0, HALF + 0.3])
-    print('shortcut branch: %d points, from plan point %d to %d, hidden %s, gap %s; teleporter %s' % (NB, branches[0]['from'], branches[0]['to'],
-          branches[0]['hidden'], branches[0]['gaps'], teleports[0]))
+    room = top(0)
+    teleports.append([SECRET_X[0], SECRET_FACE, SECRET_X[1], SECRET_FACE + SECRET_DEEP, room - 600, room + 2400, OUT_X, OUT_Z, FIRST + 20, 0, OUT_SPEED, OUT_PASSAGE])
+    i_in, i_back = nearest((EAST_X, SECRET_FACE + 3), i_west, o_down), nearest(SKIP_TO, i_west, o_down)
+    shortcuts.append([plan_index(i_in), plan_index(i_back)])
+    print('shortcut: the walled-up door (x %.1f..%.1f, its face z %.1f), the lap left at point %d (%.1f, %.1f), out at (%.1f, %.1f) at %d units/s after %d ms, back on the lap by '
+          'point %d (%.1f, %.1f): skips %.0f cells of the lap' % (*SECRET_X, SECRET_FACE, i_in, *pts[i_in], OUT_X, OUT_Z, OUT_SPEED, OUT_PASSAGE, i_back, *pts[i_back], S[i_back] - S[i_in]))
+    # (no decor where the car drives off the road for it, nor where it comes out)
+    before = len(decor) + len(scares) + len(spooks)
+    decor = [d for d in decor if secret_off(d[1], d[2]) >= 1.5]
+    scares = [s_ for s_ in scares if secret_off(s_[1], s_[2]) >= 1.5]
+    spooks = [s_ for s_ in spooks if s_['kind'] != 'riser' or secret_off(*s_['way'][0]) >= 1.5]
+    print('shortcut: %d pieces of decor left out where its car drives' % (before - len(decor) - len(scares) - len(spooks)))
 
 # ---- the lap from the start
 order = np.r_[i_start:n, 0:i_start]
@@ -1181,6 +1383,12 @@ plan = {
     'halloween': {'decor': decor, 'spooks': spooks, 'pumpkins': True, 'dives': dives, 'scares': scares, 'haunt': True, 'giantWebs': giant_webs},
     'keepAbove': 0,
 }
-if SHORTCUT: plan.update({'branches': branches, 'teleports': teleports})
+if ROUTE_EAST:
+    # (and the camera across with the car where it drives off the road onto the floor beside it: RACEMOD.CPP railcam='s sixth)
+    plan['railCamera'] = plan['railCamera'] + [1]
+    plan.update({'raisedFloors': [[round(float(a), 2), round(float(b), 2)] for a, b in zip(floor_lo[order], floor_hi[order])],
+                 'raisedFlush': [[int(a), int(b)] for a, b in flush[order]]})
+if SHORTCUT:
+    plan.update({'teleports': teleports, 'shortcuts': shortcuts, 'templeWalls': TEMPLE_WALLS, 'openAreas': [OPEN_EXIT + [FIRST]]})
 json.dump(plan, open(OUT, 'w'))
 print('wrote', OUT, len(P), 'points')

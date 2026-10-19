@@ -54,9 +54,6 @@ internal static partial class TempleHalloween
         CobwebCorner, CobwebCornerBig, CobwebSheet, CobwebDrape, Spider, CobwebWall,
         // (2026-10-18: LBA2's rabbibunny skeleton, TempleHalloween.Creatures)
         RabbiLying, RabbiSitting, RabbiStanding, RabbiCrouching,
-        // (2026-10-19: the hidden passage's doorways at the shortcut's teleporter -- SecretDoor; the decor's sixth number its opening's half
-        // width, cells)
-        SecretDoor,
     }
     private static bool IsCobweb(Kind kind) => kind is >= Kind.CobwebCorner and <= Kind.CobwebWall;
     // (a bat before 2026-10-18: the flying rat since -- a plan that still has one gets the rat; a riser is the rabbibunny skeleton by the road)
@@ -526,35 +523,8 @@ internal static partial class TempleHalloween
         return m;
     }
 
-    // A doorway of the hidden passage (the race's shortcut, temple_design.py SHORTCUT: LBA1's stone door at the sunken room's north end, and
-    // the one the teleporter puts the car out of in the west rooms' north wall): a stone frame round an opening `half` cells either side of
-    // its middle -- the road's width and a little, its posts standing beside the deck -- DoorHigh high, black inside, its inner rim glowing
-    // the witches' brew green. Its foot (0) the deck's surface, its front +z. The black is seen from the front only: the car drives into it
-    // and is gone, and the chase camera coming out of the other one behind the car looks through its back.
-    public const float DoorHigh = 3000;
-    private static Model SecretDoor(double half)
-    {
-        var m = new Model();
-        float w = (float)(half * 512), post = 600, deep = 520, lintel = 700, foot = -700, rim = 90;
-        foreach (var s in new[] { -1f, 1f })
-            m.Box(new Vector3(s < 0 ? -w - post : w, foot, -deep / 2), new Vector3(s < 0 ? -w : w + post, DoorHigh + lintel, deep / 2), Stone);
-        m.Box(new Vector3(-w - post, DoorHigh, -deep / 2), new Vector3(w + post, DoorHigh + lintel, deep / 2), Stone);
-        // (its keystone, and a step of darker stone over the lintel)
-        m.Box(new Vector3(-320, DoorHigh + lintel, -deep / 2 - 40), new Vector3(320, DoorHigh + lintel + 420, deep / 2 + 40), StoneDark);
-        m.Box(new Vector3(-w - post - 120, DoorHigh + lintel - 160, -deep / 2 - 60), new Vector3(w + post + 120, DoorHigh + lintel, deep / 2 + 60), StoneDark);
-        // the opening: black, facing the front
-        var front = new Vector3(0, DoorHigh / 2, 50000);
-        m.Facing(new[] { new Vector3(-w, 0, 0), new Vector3(w, 0, 0), new Vector3(w, DoorHigh, 0), new Vector3(-w, DoorHigh, 0) }, Hollow, front);
-        // ... its rim glowing round it on the frame's front
-        float z = deep / 2 + 8;
-        m.Facing(new[] { new Vector3(-w, 0, z), new Vector3(-w + rim, 0, z), new Vector3(-w + rim, DoorHigh - rim, z), new Vector3(-w, DoorHigh - rim, z) }, Brew, front);
-        m.Facing(new[] { new Vector3(w - rim, 0, z), new Vector3(w, 0, z), new Vector3(w, DoorHigh - rim, z), new Vector3(w - rim, DoorHigh - rim, z) }, Brew, front);
-        m.Facing(new[] { new Vector3(-w, DoorHigh - rim, z), new Vector3(w, DoorHigh - rim, z), new Vector3(w, DoorHigh, z), new Vector3(-w, DoorHigh, z) }, Brew, front);
-        return m;
-    }
-
     // (null: a skeleton's, with no LBA1 folder to take it from)
-    private static Model? DecorModel(Kind kind, double size = 0) => kind switch
+    private static Model? DecorModel(Kind kind) => kind switch
     {
         Kind.Lantern => Lantern(640, 900),
         Kind.GiantLantern => Lantern(1500, 2000),
@@ -569,7 +539,6 @@ internal static partial class TempleHalloween
         Kind.RabbiSitting => RabbiModel(RabbiPose.Sitting),
         Kind.RabbiStanding => RabbiModel(RabbiPose.Standing),
         Kind.RabbiCrouching => RabbiModel(RabbiPose.Crouching),
-        Kind.SecretDoor => SecretDoor(size > 0 ? size : 4.8),
         _ => Cauldron(),
     };
 
@@ -597,12 +566,12 @@ internal static partial class TempleHalloween
         int placed = 0, left = 0, missing = 0;
         foreach (var d in decor.Where(d => d.Length >= 4))
         {
-            var kind = (Kind)Math.Clamp((int)d[0], 0, (int)Kind.SecretDoor);
-            var size = (IsCobweb(kind) || kind == Kind.SecretDoor) && d.Length > 5 ? d[5] : 0;
+            var kind = (Kind)Math.Clamp((int)d[0], 0, (int)Kind.RabbiCrouching);
+            var size = IsCobweb(kind) && d.Length > 5 ? d[5] : 0;
             if (!bodies.TryGetValue((kind, size), out var body))
             {
                 // (a skeleton's model is LBA1's own: none without the LBA1 folder -- those left out)
-                var model = IsCobweb(kind) ? CobwebModel(kind, size) : DecorModel(kind, size);
+                var model = IsCobweb(kind) ? CobwebModel(kind, size) : DecorModel(kind);
                 body = model is null ? -1 : o.NewBodyBase + report.NewBodies.Count;
                 if (model is not null) report.NewBodies.Add(model.Write());
                 bodies[(kind, size)] = body;
@@ -611,9 +580,9 @@ internal static partial class TempleHalloween
             double wx = (d[1] + plan.OriginCellX) * 512, wz = (d[2] + plan.OriginCellZ) * 512;
             var y = (int)Math.Round(d[3]);
             var beta = d.Length > 4 ? (int)Math.Round(d[4]) & 4095 : 0;
-            var reach = IsCobweb(kind) ? CobwebReach(kind, size) : kind == Kind.SecretDoor ? (size > 0 ? size : 4.8) * 512 + 800 : Reach(kind);
+            var reach = IsCobweb(kind) ? CobwebReach(kind, size) : Reach(kind);
             // (a cobweb hanging from a wall's top: its box from under it)
-            var under = IsCobweb(kind) ? (int)Math.Round(CobwebHeight(kind, size).Under) : kind == Kind.SecretDoor ? 800 : 100;
+            var under = IsCobweb(kind) ? (int)Math.Round(CobwebHeight(kind, size).Under) : 100;
             var (placedHere, full) = Palace.BrickBuilding.AddToCubes(island, body, beta, wx, y, wz, wx - reach, wx + reach, y - under, Palace.BrickBuilding.NoBoxTop, wz - reach, wz + reach,
                 IslandDecors.MaxPerCubeRaceTrack);
             if (placedHere > 0) placed++; else left++;

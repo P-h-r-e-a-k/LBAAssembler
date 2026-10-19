@@ -12,7 +12,9 @@ namespace ScriptRoundTrip;
 // The race build's TEMPLE.ILE decoded (TEMPLE.ILE.bak: the temple alone -- the temple's own decors and LBA1's actors; the rest: the race's
 // road, gantry and decor), every polygon sampled every 32 units, each sample against the raised road (raceraised.txt: x z y half [bank lo
 // hi]: the deck's surface between consecutive points, its width rail to rail, the slip lane's strip). A sample is IN the deck's room when it
-// is over the deck's width (or the strip) and from BELOW (default 120) under its surface to 1,000 over it.
+// is over the deck's width (or the strip) and from BELOW (default 120) under its surface to 1,000 over it -- and, with CLIP_INSIDE (units, 0
+// by default), at least that far inside the deck's edges or the strip's: walls standing at a road's edge, where it has no rail and nothing is
+// cut back from it (the Temple of Bú's ground stretch, 2026-10-19), or round a floor beside it, are not in it.
 // -> clip.csv: one row per decor reaching in (its body, place, kind -- box/round/model by the LBA1 cell its samples are in, actor, race --,
 //    how far over the surface its highest sample is, how many samples over / just under, where: island cell, road point, across)
 internal static class TempleClipProbe
@@ -28,6 +30,7 @@ internal static class TempleClipProbe
         var over = double.Parse(Environment.GetEnvironmentVariable("CLIP_OVER") ?? "1000");
         var step = float.Parse(Environment.GetEnvironmentVariable("CLIP_STEP") ?? "32");
         var actorsFrom = int.Parse(Environment.GetEnvironmentVariable("CLIP_ACTORS") ?? "1915");
+        var inside = float.Parse(Environment.GetEnvironmentVariable("CLIP_INSIDE") ?? "0");
         Directory.CreateDirectory(outDir);
 
         // ---- the road
@@ -69,8 +72,8 @@ internal static class TempleClipProbe
                 var t = Vector2.Dot(q, u);
                 if (t < -1 || t > len + 1) continue;
                 var across = -q.X * u.Y + q.Y * u.X;
-                var onDeck = Math.Abs(across) <= s.Half;
-                var onStrip = !onDeck && s.Hi > s.Lo && across >= s.Lo && across <= s.Hi;
+                var onDeck = Math.Abs(across) <= s.Half - inside;
+                var onStrip = !onDeck && s.Hi > s.Lo && across >= s.Lo + inside && across <= s.Hi - inside;
                 if (!onDeck && !onStrip) continue;
                 var y = s.Ya + (s.Yb - s.Ya) * Math.Clamp(t / len, 0, 1);
                 var o = p.Y - y;

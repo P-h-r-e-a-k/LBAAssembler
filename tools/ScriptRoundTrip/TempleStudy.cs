@@ -95,7 +95,7 @@ internal static class TempleStudy
         var plan = RaceTrackPlan.Load(args[2]);
         var shapes = TempleShapes.Find(game);
         var models = TempleModels.Find(game);
-        var carved = TempleIsland.Carve(layout, shapes, models, plan.TempleCuts ?? Array.Empty<int[]>(), plan.TempleFloors, plan.TempleSkirts);
+        var carved = TempleIsland.Carve(layout, shapes, models, plan.TempleCuts ?? Array.Empty<int[]>(), plan.TempleFloors, plan.TempleSkirts, plan.TempleWalls);
         var boxes = new Dictionary<int, (PolarTextures.Box Box, double Drawn)>();
         using var csv = new StreamWriter(args[3]);
         csv.WriteLine("x,y,z,scene,block,brick,shape,round,model,u0,u1,v0,v1,drawn,cut,fill");

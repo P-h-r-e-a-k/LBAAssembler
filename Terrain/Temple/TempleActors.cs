@@ -641,8 +641,10 @@ internal static class TempleActors
     public sealed record Result(List<byte[]> Bodies, int Decors, int Faces, int Pages, List<string> Log);
 
     // The actors' decors into the island (its cubes, its object pages after the temple's: `island.ObjectPages` as TempleObjects left them),
-    // their bodies numbered from `firstBody`. `race`: the race track's build -- the actors on or over its road (RaceTrackPlan.Built's) left out.
-    public static Result Place(string lba1Directory, Lba1Game game, TempleLayout layout, IslandFile island, TempleFrame frame, int[] map, int firstBody, bool race)
+    // their bodies numbered from `firstBody`. `race`: the race track's build -- the actors on or over its road (RaceTrackPlan.Built's) left out,
+    // and those in the cells it fills (`walls`, the plan's TempleWalls: the hidden passage's stone door, walled up).
+    public static Result Place(string lba1Directory, Lba1Game game, TempleLayout layout, IslandFile island, TempleFrame frame, int[] map, int firstBody, bool race,
+        IEnumerable<int[]>? walls = null)
     {
         var log = new List<string>();
         List<Actor> actors;
@@ -695,10 +697,18 @@ internal static class TempleActors
             var plan = RaceTrackPlan.Built(RaceTrackIsland.Temple);
             var kept = new List<(Actor, Model, Vector3)>();
             var gone = new List<string>();
+            // (the cells the race fills: island world units)
+            var filled = (walls ?? Array.Empty<int[]>()).Where(w => w.Length >= 4)
+                .Select(w => (Lo: new Vector3((float)frame.WorldX(w[0]), (float)frame.WorldY(w[2]), (float)((TempleFrame.OffsetZ + w[1] * TempleFrame.Scale) * 512.0)),
+                              Hi: new Vector3((float)frame.WorldX(w[0] + 1), (float)frame.WorldY(w[3] + 1), (float)((TempleFrame.OffsetZ + (w[1] + 1) * TempleFrame.Scale) * 512.0))))
+                .ToList();
             foreach (var (a, m, at) in made)
             {
                 var (lo, hi) = m.Box();
-                if (NearRoad(plan, at + lo * TempleFrame.Scale, at + hi * TempleFrame.Scale) is { } near) gone.Add($"{a.Name} {a.Kind} ({near})");
+                Vector3 alo = at + lo * TempleFrame.Scale, ahi = at + hi * TempleFrame.Scale;
+                if (filled.Any(f => alo.X < f.Hi.X && ahi.X > f.Lo.X && alo.Y < f.Hi.Y && ahi.Y > f.Lo.Y && alo.Z < f.Hi.Z && ahi.Z > f.Lo.Z))
+                    gone.Add($"{a.Name} {a.Kind} (in the wall the race fills)");
+                else if (NearRoad(plan, alo, ahi) is { } near) gone.Add($"{a.Name} {a.Kind} ({near})");
                 else kept.Add((a, m, at));
             }
             log.Add($"the race track: {gone.Count} of LBA1's actors left out on or over the road -- {string.Join("; ", gone)}");

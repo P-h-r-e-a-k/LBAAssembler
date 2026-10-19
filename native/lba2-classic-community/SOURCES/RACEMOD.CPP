@@ -1541,15 +1541,21 @@ static double s_guardSize = 1.0;
 // the way it then looks): the Emperor's palace's fireplaces -- the user, 2026-10-13: "Our fireplace that's here ... let's turn it into a
 // teleporter so driving into it brings us out of a second fire place" (LBA Assembler's PalaceIsland). The player's car: driven into the
 // box, it comes out at the other end at its speed, looking the way out (into another cube: its scene, as a carried jump's).
+// Two more numbers (2026-10-19, the Temple of Bu's hidden passage, a secret shortcut -- the user found it "very strong" with the car out at
+// its own speed): <speed> the most it comes out at (world units a second; -1 its own), <passage> how long it takes going through (ms): the
+// screen black and the car held where it comes out (RaceMod_Held), the picture fading in over the last RACE_PASSAGE_FADE of it (DrawPassage).
 #define RACE_MAX_TELEPORTS 8
 #define RACE_TELEPORT_AGAIN 1500           // ms after coming out before a car is taken again
+#define RACE_PASSAGE_FADE 0.6              // the share of a passage's time the picture fades in over (from black), at its end
 typedef struct {
     double X0, Z0, X1, Z1, Y0, Y1, X, Y, Z;
     S32 Beta;
+    S32 Speed, Passage;
 } T_RACE_TELEPORT;
 static T_RACE_TELEPORT s_teleports[RACE_MAX_TELEPORTS];
 static int s_nbTeleports = 0;
 static S32 s_teleportedAt = 0;
+static S32 s_passageAt = 0, s_passageUntil = 0;   // the passage the car is going through (TimerRefHR), 0 none
 typedef struct { int On, Extra, Owner, Sprite; double ToX, ToY, ToZ; S32 T0, Dur; } T_RACE_THROWN;
 static T_RACE_THROWN s_thrown[RACE_MAX_THROWN];
 static S32 s_guardGrace[RACE_MAX_OPPONENTS + 1];   // a car just struck by one of them is let be till then
@@ -1678,9 +1684,14 @@ static int RaisedApart(int i, int j) {
     return viaFrom < viaTo ? viaFrom : viaTo;
 }
 static double s_gravity = 0;               // gravity=<k>: a car on the raised road is pulled down its slopes (RaceMod_Gravity), k times as hard as RACE_GRAVITY
-// railcam=<back> <up> <lead> [sight] [aim]: the camera that follows the car rides the raised road behind it (RailCamera); sight: its
-// line to the car ends this far over the road (s_railSight); aim: it looks at a point this far over the road ahead (RAIL_CAMERA_AIM)
+// railcam=<back> <up> <lead> [sight] [aim] [side]: the camera that follows the car rides the raised road behind it (RailCamera); sight: its
+// line to the car ends this far over the road (s_railSight); aim: it looks at a point this far over the road ahead (RAIL_CAMERA_AIM); side:
+// 1, it goes across with the car off the road onto a floor beside it (s_railSide)
 static double s_railBack = 0, s_railUp = 0, s_railLead = 0, s_railAim = RAIL_CAMERA_AIM;
+// (railcam='s sixth number, 1: the camera goes across with the car where it drives off the road onto a floor beside it -- the raised road's
+// strip, the Temple of Bu's ground stretch, 2026-10-19 -- its eye and where it looks moved across by how far the car is past the road's
+// edge; 0, or none: they ride the road, as before)
+static int s_railSide = 0;
 static int s_railTouch = 0;                // the rail held the hero back since RaceMod_RailTouched was last asked
 // rail_held=1: the rail holds a car on the raised road even where the road lies on the ground (RaceMod_Rail's grounded): a car on a road
 // laid over flat ground otherwise drives off it there -- the Emperor's palace's, along the hilltop, ended up on the rocks (2026-10-12)
@@ -2175,6 +2186,13 @@ static S32 RailCamera(S32 *eye, S32 *target) {
         behind = RaisedAlong(seg, t, -way * back, &ex, &ey, &ez);
     }
     RaisedAlong(seg, t, way * s_railLead, &tx, &ty, &tz);
+    // (railcam='s sixth: the car off the road on a floor beside it -- the eye and the road ahead moved across with it, by how far it is past
+    // the road's edge)
+    if (s_railSide && !carried) {
+        const double half = a->Half + (c->Half - a->Half) * t, past = lat > half ? lat - half : lat < -half ? lat + half : 0;
+        const double sx = c->X - a->X, sz = c->Z - a->Z, len = sqrt(sx * sx + sz * sz);
+        if (past != 0 && len > 0) { ex += -sz / len * past; ez += sx / len * past; tx += -sz / len * past; tz += sx / len * past; }
+    }
     // (it looks between the car and the road ahead of it: the car stays in the middle of the view, the road ahead above it)
     tx = hx + (tx - hx) * RAIL_CAMERA_LOOK; ty = hy + (ty - hy) * RAIL_CAMERA_LOOK; tz = hz + (tz - hz) * RAIL_CAMERA_LOOK;
     // (lower too when nearer, so the view is no steeper)
@@ -2962,10 +2980,12 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "rail_held")) s_railHeld = atoi(v) != 0;
         else if (!strcmp(key, "railcam")) {
             s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;
-            const int n = sscanf(v, "%lf %lf %lf %lf %lf", &s_railBack, &s_railUp, &s_railLead, &s_railSightKept, &s_railAim);
+            double side = 0;
+            const int n = sscanf(v, "%lf %lf %lf %lf %lf %lf", &s_railBack, &s_railUp, &s_railLead, &s_railSightKept, &s_railAim, &side);
             if (n < 3) s_railBack = 0;
             if (n < 4) s_railSightKept = 0;
             if (n < 5) s_railAim = RAIL_CAMERA_AIM;
+            s_railSide = n >= 6 && side != 0;
             s_railSight = s_railSightKept;
         }
         else if (!strcmp(key, "holo_arrow")) s_holoArrow = atoi(v);
@@ -3176,10 +3196,11 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "guard_size")) s_guardSize = atoi(v) > 0 ? atoi(v) / 100.0 : 1.0;
         else if (!strcmp(key, "teleport")) {
-            int x0, z0, x1, z1, y0, y1, x, y, z, beta;
-            if (s_nbTeleports < RACE_MAX_TELEPORTS && sscanf(v, "%d %d %d %d %d %d %d %d %d %d", &x0, &z0, &x1, &z1, &y0, &y1, &x, &y, &z, &beta) == 10) {
+            int x0, z0, x1, z1, y0, y1, x, y, z, beta, speed = -1, passage = 0;
+            if (s_nbTeleports < RACE_MAX_TELEPORTS && sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d", &x0, &z0, &x1, &z1, &y0, &y1, &x, &y, &z, &beta, &speed, &passage) >= 10) {
                 T_RACE_TELEPORT *t = &s_teleports[s_nbTeleports++];
                 t->X0 = x0; t->Z0 = z0; t->X1 = x1; t->Z1 = z1; t->Y0 = y0; t->Y1 = y1; t->X = x; t->Y = y; t->Z = z; t->Beta = beta & 4095;
+                t->Speed = speed; t->Passage = passage > 0 ? passage : 0;
             }
         }
         else if (!strcmp(key, "roulette")) {
@@ -6278,8 +6299,12 @@ static int Teleport(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
         // -- a car skidding into the palace's fireplace came out into the dungeon going the way it went in, into the chest, 2026-10-17)
         if (TimerRefHR < s_skidUntil) s_skidBeta = t->Beta;
         s_teleportedAt = TimerRefHR; s_trailN = 0; s_forgetLap = 1;
-        Log_Info("[racemod] teleporter %d: taken in at (%.0f,%.0f), out at (%.0f,%.0f,%.0f) turned %d, at %d units/s", i + 1, x, z, t->X, t->Y, t->Z, (int)t->Beta,
-                 (int)ListBuggy[0].Speed);
+        const S32 in = ListBuggy[0].Speed;
+        // (its speed out, at the most; and its passage: the car held where it comes out, the screen black)
+        if (t->Speed >= 0 && ListBuggy[0].Speed > t->Speed) ListBuggy[0].Speed = t->Speed;
+        if (t->Passage > 0) { s_passageAt = TimerRefHR; s_passageUntil = TimerRefHR + t->Passage; }
+        Log_Info("[racemod] teleporter %d: taken in at (%.0f,%.0f), out at (%.0f,%.0f,%.0f) turned %d, at %d units/s (in at %d)%s", i + 1, x, z, t->X, t->Y, t->Z, (int)t->Beta,
+                 (int)ListBuggy[0].Speed, (int)in, t->Passage > 0 ? ", through its passage" : "");
         if (scene >= 0) {
             NewCube = scene;
             NewPosX = (S32)floor(t->X - qx * 32768.0 + 0.5); NewPosY = (S32)floor(t->Y + 0.5); NewPosZ = (S32)floor(t->Z - qz * 32768.0 + 0.5);
@@ -6921,7 +6946,7 @@ static void ForgetPowerUps(const char *why) {
     // (a protection spell the save had on while Twinsen drives: the race's is the power-up's, gone with it)
     if (ProtectActif && Comportement == C_BUGGY) ToggleSortProtection();
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0;
-    s_skidUntil = s_hitUntil = 0; s_autoIndex = -1; s_boltUntil = 0; s_nbBolts = 0;
+    s_skidUntil = s_hitUntil = 0; s_autoIndex = -1; s_boltUntil = 0; s_nbBolts = 0; s_passageAt = s_passageUntil = 0;
     for (int k = 0; k < RACE_ITEM_SLOTS; k++) s_item[k] = -1;
     s_takeAt = 0; s_goldUntil = 0; s_goldLast = 0; s_slotOn = 0;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
@@ -11126,7 +11151,7 @@ void RaceMod_Frame(void) {
 // The player's car stands on the grid until the count-down's GO (BUGGY.CPP RaceSpeed).
 S32 RaceMod_Held(void) {
     // (not a won dream's car over its jump: wake_flight=)
-    return RaceMod_Active() && (s_phase == PHASE_GRID || TimerRefHR < s_hitUntil || (s_sprint && s_place && !(s_endWon && s_wakeFlight > 0)));
+    return RaceMod_Active() && (s_phase == PHASE_GRID || TimerRefHR < s_hitUntil || TimerRefHR < s_passageUntil || (s_sprint && s_place && !(s_endWon && s_wakeFlight > 0)));
 }
 
 // Citadel Island's weather, for the scenes' scripts (2026-10-06): game variable RACE_WEATHER_VAR is 1 while its fine-weather file
@@ -11651,6 +11676,28 @@ static void DrawWebScreen(S32 now, S32 width, S32 height) {
     if (y0 < height) BoxMovingAdd(0, y0, width - 1, height - 1);
 }
 
+// Over the scene (RaceMod_Draw), while the car goes through a teleporter's passage (teleport='s twelfth number): the screen black, then
+// fading in over the passage's last RACE_PASSAGE_FADE (the haunting's blends towards black, HauntTables, dithered).
+static void DrawPassage(S32 now, S32 width, S32 height) {
+    if (!s_passageUntil || now >= s_passageUntil || now < s_passageAt) return;
+    const S32 whole = s_passageUntil - s_passageAt, fade = (S32)(whole * RACE_PASSAGE_FADE), left = s_passageUntil - now;
+    double e = left >= fade || fade <= 0 ? 1 : (double)left / fade;
+    e = e * e * (3 - 2 * e);
+    HauntTables();
+    static const U8 bayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+    const double l = e * RACE_HAUNT_LEVELS;
+    const int level = (int)l, frac = (int)((l - level) * 16);
+    for (S32 y = 0; y < height; y++) {
+        U8 *row = (U8 *)Log + TabOffLine[y];
+        for (S32 x = 0; x < width; x++) {
+            int lv = level + (frac > bayer[y & 3][x & 3] ? 1 : 0);
+            if (lv > RACE_HAUNT_LEVELS) lv = RACE_HAUNT_LEVELS;
+            row[x] = s_hauntTab[1][lv][row[x]];
+        }
+    }
+    BoxMovingAdd(0, 0, width - 1, height - 1);
+}
+
 // The 3D view the library draws with (LIB386 3D: CAMERA.CPP, PROJ.CPP, LIGHT.CPP), saved whole and put back.
 typedef struct {
     S32 XCentre, YCentre, NearClip, LFactorX, LFactorY, TypeProj;
@@ -12079,6 +12126,7 @@ void RaceMod_Draw(void) {
     DrawHalloween(now);
     DrawHaunt(now, width, height);
     DrawWebScreen(now, width, height);
+    DrawPassage(now, width, height);
     // the item box, top left, ringed in gold once its roulette has stopped on the item Ctrl uses -- and beside it the second box, only
     // while a golden Gazogem waits in it
     if (items) {
@@ -12208,12 +12256,12 @@ static void ResetTrack(void) {
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_nbFlyers = 0; s_nbSpooks = 0; HalloweenReset(); memset(&s_marshal, 0, sizeof(s_marshal)); s_gantryPts = -1;
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
-    s_guardSize = 1.0; s_nbTeleports = 0; s_teleportedAt = 0;
+    s_guardSize = 1.0; s_nbTeleports = 0; s_teleportedAt = 0; s_passageAt = s_passageUntil = 0;
     memset(&s_frog, 0, sizeof(s_frog)); s_frog.Arc = -1;
     s_nbLap = 0; s_nbBranches = 0;
     s_arcOn = s_arcLast = -1; s_arcS = s_arcV = s_arcAcross = s_arcAcross1 = 0; s_arcTime = s_arcLandedAt = 0;
     s_flying = -1; s_landed = -1; s_landedAt = 0; s_statue = -1; s_raisedLoop = 0; s_gravity = 0;
-    s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0; s_railHeld = 0; s_railSight = s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;
+    s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0; s_railHeld = 0; s_railSight = s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM; s_railSide = 0;
     s_jumpLo = 0.6; s_jumpHi = 4.0; s_jumpRate = 0; s_jumpFrac = 0; s_jumpOver = 0;
     s_autoIndex = -1;
     s_faced = 0; s_stuckSince = 0; s_rescueScene = -1; s_backInCarUntil = 0; s_safeIndex = -1; s_safeScene = -1; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;

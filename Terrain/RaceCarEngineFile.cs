@@ -58,8 +58,9 @@ internal static class RaceCarEngineFile
         }
         // ... and how much its grade changes a car's speed (a rollercoaster of a lap)
         if (raisedFile is not null && track?.Gravity is { } gravity and > 0) text.Append($"gravity={N(gravity)}\n");
-        // ... and the camera that rides the road behind the car: how far behind (units), how high, how far ahead it looks
-        if (raisedFile is not null && track?.RailCamera is { Length: >= 3 and <= 5 } cam)
+        // ... and the camera that rides the road behind the car: how far behind (units), how high, how far ahead it looks (and whether it goes
+        // across with the car off the road onto a floor beside it: the Temple of Bú's)
+        if (raisedFile is not null && track?.RailCamera is { Length: >= 3 and <= 6 } cam)
             text.Append($"railcam={N(cam[0] * 512)} {N(cam[1])} {N(cam[2] * 512)}{string.Concat(cam.Skip(3).Select(v => " " + N(v)))}\n");
         // Celebration Island's file with the statue, or (the lava lake's track) the one before it rises, whatever the game's own variable says
         if (info is not null && RaceTrackIsland.ByName(info.Island) is { } raced && (raced.Statue || raced.OtherFile)) text.Append($"statue={(raced.Statue ? 1 : 0)}\n");

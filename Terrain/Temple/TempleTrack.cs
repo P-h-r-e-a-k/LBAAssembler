@@ -62,7 +62,8 @@ internal static class TempleTrack
     public static List<string> Install(string gameDirectory, string lba1Directory)
     {
         var plan = RaceTrackPlan.Built(RaceTrackIsland.Temple);
-        var built = TempleIsland.Build(lba1Directory, gameDirectory, cuts: plan.TempleCuts, floors: plan.TempleFloors, skirts: plan.TempleSkirts, road: plan);
+        var built = TempleIsland.Build(lba1Directory, gameDirectory, cuts: plan.TempleCuts, floors: plan.TempleFloors, skirts: plan.TempleSkirts, road: plan,
+            walls: plan.TempleWalls);
         var log = new List<string>(built.Log);
         log.AddRange(TempleIsland.Install(gameDirectory, built));
         log.AddRange(AddScenes(gameDirectory));

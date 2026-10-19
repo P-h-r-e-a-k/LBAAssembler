@@ -114,10 +114,14 @@ internal static class RaceTrackRaisedBody
     // sections run (RACEMOD.CPP boostpanel=).
     public static byte[] Tile(IReadOnlyList<(Vector3 Mid, Vector3 Across)> sections, int firstBlock, double asphalt, double curb, double edge, bool arrow = false, int line = -1,
         IReadOnlyList<double>? wider = null, double stripe = double.NaN, IReadOnlyList<bool>? striped = null, int strips = 0, DeckTheme? theme = null,
-        IReadOnlyList<(double Lo, double Hi, int Q)?>? boost = null, IReadOnlyList<(bool Minus, bool Plus)>? open = null)
+        IReadOnlyList<(double Lo, double Hi, int Q)?>? boost = null, IReadOnlyList<(bool Minus, bool Plus)>? open = null,
+        IReadOnlyList<(bool Minus, bool Plus)>? flush = null)
     {
         // (open: a section with no rail on that side -- down to the curb -- where another road's deck runs on from it: a branch of the
         // raised road leaving the lap or coming back onto it, Wannies Island's shortcut)
+        // (flush: a section with no rail on that side, its curb flat out to the road's edge, where the road lies level with the floor beside
+        // it -- the cars drive off it there: the Temple of Bú's ground stretch, the user, 2026-10-19: "drop the track guard rails where it's
+        // level with the ground")
         var m = new Mesh();
         var (Asphalt, Red, White, RailTop, RailSide, Side, Under, Arrow) = theme is { } th
             ? (th.Asphalt, th.Red, th.White, th.RailTop, th.RailSide, th.Side, th.Under, th.Arrow)
@@ -138,7 +142,8 @@ internal static class RaceTrackRaisedBody
         for (var j = 0; j < sections.Count; j++)
             for (var k = 0; k < profile.Length; k++)
             {
-                var flat = open is not null && j < open.Count && (k is 1 or 2 ? open[j].Minus : k is 7 or 8 && open[j].Plus);
+                var flat = open is not null && j < open.Count && (k is 1 or 2 ? open[j].Minus : k is 7 or 8 && open[j].Plus)
+                           || flush is not null && j < flush.Count && (k is 1 or 2 ? flush[j].Minus : k is 7 or 8 && flush[j].Plus);
                 at[j, k] = On(j, profile[k].U + Math.Sign(profile[k].U) * Wider(j), flat ? 0 : profile[k].Y);
             }
         // the asphalt's strips, their edges evenly across it at every section; and the underside's, two to each of them
@@ -163,9 +168,12 @@ internal static class RaceTrackRaisedBody
             // the middle that we can remove")
             bool OpenCell(bool plus) => open is not null && j + 1 < open.Count && (plus ? open[j].Plus && open[j + 1].Plus : open[j].Minus && open[j + 1].Minus);
             var openMinus = OpenCell(false); var openPlus = OpenCell(true);
+            // (a side flush from section to section: the slab's edge, the curb out to it where the rail was, no rail's face)
+            bool FlushCell(bool plus) => flush is not null && j + 1 < flush.Count && (plus ? flush[j].Plus && flush[j + 1].Plus : flush[j].Minus && flush[j + 1].Minus);
+            var flushMinus = !openMinus && FlushCell(false); var flushPlus = !openPlus && FlushCell(true);
             Strip(0, openMinus ? Asphalt : Side, -across);          // the outer side, slab and rail
-            Strip(1, openMinus ? Asphalt : RailTop, up);
-            Strip(2, openMinus ? Asphalt : RailSide, across);       // the rail's inner face
+            Strip(1, openMinus ? Asphalt : flushMinus ? block : RailTop, up);
+            if (!flushMinus) Strip(2, openMinus ? Asphalt : RailSide, across);       // the rail's inner face
             Strip(3, openMinus ? Asphalt : block, up);              // the curb
             // (a boost panel's strips: those whose middles are within its reach across)
             int b0 = -1, b1 = -1;
@@ -202,8 +210,8 @@ internal static class RaceTrackRaisedBody
                 m.Quad(qa, qb, qc, qd, colour, up);
             }
             Strip(5, openPlus ? Asphalt : block, up);
-            Strip(6, openPlus ? Asphalt : RailSide, -across);
-            Strip(7, openPlus ? Asphalt : RailTop, up);
+            if (!flushPlus) Strip(6, openPlus ? Asphalt : RailSide, -across);
+            Strip(7, openPlus ? Asphalt : flushPlus ? block : RailTop, up);
             Strip(8, openPlus ? Asphalt : Side, across);
             for (var i = 0; i < below; i++) m.Quad(under[j, i], under[j, i + 1], under[j + 1, i + 1], under[j + 1, i], Under, -up);   // the underside
         }
