@@ -9,9 +9,11 @@
 #include "FOLLOWCAM.H"       /* the Auto camera's settings */
 #include "FOLLOWCAM_CFG.H"   /* and their defaults */
 #include "INPUT.H"           /* Read/WriteInputConfig, Read/WriteGamepadConfig */
+#include "RACEGAME.H"        /* RaceGame_On: F11 / Alt+Enter in the race game only */
 #include "RES_SWITCH.H"
 #include <POLYGON/POLYFILT.H> /* PolyTexFilter / EnvTexFilter */
 #include <SVGA/SCREEN.H>
+#include <SYSTEM/KEYBOARD.H>      /* Keyboard_ToggleFullscreen: F11 / Alt+Enter */
 #include <SYSTEM/KEYBOARD_KEYS.H> /* K_F12, the console toggle default */
 #include <SYSTEM/LOG.H>
 #include <SYSTEM/STRING.H>
@@ -135,6 +137,20 @@ void ConfigFile_MarkFixedTimestepSetThisRun(void) {
     Settings_MarkSetThisRun(&SourceFixedTimestep);
 }
 
+/* F11 / Alt+Enter: only in the race game (its RACEGAME.TXT): the editor's Play has the engine's window inside its own, and its F11 is the
+   editor's full screen */
+static void HotkeyFullscreen(void) {
+    if (RaceGame_On()) ToggleDisplayFullscreen();
+}
+
+void ToggleDisplayFullscreen(void) {
+    if (!Window_SupportsWindowedMode()) return;
+    DisplayFullScreen ^= 1;
+    SetWindowFullscreen(DisplayFullScreen != FALSE);
+    WriteConfigValue("DisplayFullScreen", DisplayFullScreen);
+    Log_Info("[display] %s", DisplayFullScreen ? "full screen" : "a window");
+}
+
 void ReadConfigFile(void) {
     const char *ptr;
 
@@ -159,6 +175,8 @@ void ReadConfigFile(void) {
 
     /* The settings above are values; these are the side effects taking them. */
     SetWindowFullscreen(DisplayFullScreen != FALSE);
+    /* F11 / Alt+Enter switch between full screen and a window from anywhere, kept as the Display menu's toggle keeps it */
+    if (Window_SupportsWindowedMode()) Keyboard_ToggleFullscreen = HotkeyFullscreen;
 
     /* An explicit request for this run beats the stored preference, the same
        precedence the resolution and the language use. */

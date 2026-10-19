@@ -133,7 +133,7 @@
  *   The race game (RACEGAME.CPP, 2026-10-16: the standalone Little Big Halloween Racing Adventure composes the file it races from its menu):
  *     start_scene=<scene>        a new game starts in <scene>, the start line's, with no introduction (RaceMod_NewGameScene)
  *     start_in_car=1             Twinsen is in his car as the scene opens, not on foot beside it (FaceTheCar)
- *     trial=1                    a time trial: no opponents, no mushrooms, a can of Gazogem at GO and at the start of every lap after;
+ *     trial=1                    a time trial: no opponents, no mushrooms, no power-ups (no Gazogem since 2026-10-19);
  *                                its fastest lap (line to line, RaceMod_Lap) goes to the best laps, with the race's time (GO to the
  *                                last lap's line) beside it (RaceGame_Finished)
  *     end_to_menu=<ms>           <ms> after the race is over, back to the game's menu (RaceMod_WantsMenu)
@@ -3886,9 +3886,8 @@ void RaceMod_Lap(S32 x, S32 z) {
     s_lapStart = now;
     s_halfway = 0;
     s_next = 0;
-    // (a time trial: a can of Gazogem for every lap -- the first at GO, the others as each lap after it begins; none while he still
-    // holds the last one: one item box)
-    if (s_trial && s_phase == PHASE_RACE && s_laps >= 2 && (s_raceLaps <= 0 || s_laps <= s_raceLaps)) GiveItem(PU_FUEL, now);
+    // (a time trial has no power-ups at all since 2026-10-19 -- its can of Gazogem a lap gone: the user, "let's also drop the gazogem
+    // powerup from Time trial's" -- so its laps and the qualifying laps are driven alike for the best laps)
 }
 
 // A sprint is over (`crossed`: the player crossed the finish line; else the one to beat got there first): the player's place, the result,
@@ -10917,8 +10916,6 @@ void RaceMod_Frame(void) {
         s_phase = PHASE_RACE;
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_opp[n].LapStart = now;
         Log_Info("[racemod] go");
-        // (a time trial's first can of Gazogem)
-        if (s_trial) GiveItem(PU_FUEL, now);
     }
     // the power-ups: the mushrooms in this scene, the player's car over one, the penguins' fuses (a time trial: its cans of Gazogem alone)
     if (s_powerups || s_trial) PowerUps(now, driving);
@@ -12058,7 +12055,7 @@ static void BigText(S32 cx, S32 cy, const char *text, S32 k, S32 colour) {
 void RaceMod_Draw(void) {
     if (!RaceMod_Active() || !LbaFont) return;
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
-    const int items = ((s_powerups && s_nbMush > 0) || s_trial) && !Qualifying();
+    const int items = s_powerups && s_nbMush > 0 && !s_trial && !Qualifying();
     // (the display off -- hud=0 -- and no items: no display, but the scene's own drawn things all the same -- the car Twinsen drives as,
     // the super jet-pack, Halloween's scares; all of it was left out with the display until 2026-10-18, his car hidden and nothing drawn
     // in its place)

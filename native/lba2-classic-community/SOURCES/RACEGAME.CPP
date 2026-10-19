@@ -3,7 +3,7 @@
  * game's (GAMEMENU.CPP MainGameMenu asks RaceGame_Menu), in the retail game's look:
  *     Resume (with a race on)   Story Mode   Track select   Specials   Best laps   Options   Quit
  * Story Mode and Track select are greyed and passed over until the file opens them. Specials: the special tracks, then a race (the line-up,
- * the power-ups) or a time trial (Twinsen alone, a can of Gazogem for every lap); a race on a track with levels (its race file has
+ * the power-ups) or a time trial (Twinsen alone, no power-ups); a race on a track with levels (its race file has
  * difficulty_level= lines: the Temple of Bú's, 2026-10-17) then its difficulty, easy, medium or hard (the last one chosen first);
  * then the car, its body turning on the page; then the race -- the special's race file with the car's and the race game's keys
  * (RACEMOD.CPP drive_as=, start_scene=, start_in_car=, race_laps=, end_to_menu=, trial=, difficulty=) written to RACE_NOW.TXT in
@@ -35,6 +35,7 @@
  * tracks' lines and lines that can't be read: a whole trial's time is never taken for a lap's.
  */
 #include "C_EXTERN.H"
+#include "CONFIG_FILE.H"
 #include "CONSOLE/CONSOLE.H"
 #include "DIRECTORIES.H"
 #include "INPUT.H"
@@ -78,6 +79,7 @@ extern void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta,
 #define RG_ID_SKIP 2351
 #define RG_ID_POWERUPS 2352                 // the Options menu's rows of the race game's (RaceGame_OptionsMenu)
 #define RG_ID_CONTROLS 2353
+#define RG_ID_WINDOW 2354                   // full screen <-> a window (CONFIG_FILE.CPP ToggleDisplayFullscreen; F11 / Alt+Enter too)
 #define RG_ID_BACK 26                       // the game's own "Back"
 #define RG_ID_RESUME 70
 #define RG_ID_OPTIONS 74
@@ -364,6 +366,8 @@ static void TimeText(char *out, size_t size, S32 ms) {
     snprintf(out, size, "%d:%02d.%02d", (int)(ms / 60000), (int)(ms / 1000 % 60), (int)(ms / 10 % 100));
 }
 
+static int RecordLap(S32 total, S32 lap, int laps);
+
 // RACEMOD.CPP: a race is over -- `total` its time from GO to the last lap's line, `bestLap` its fastest lap (the lap clock's: line to
 // line, a qualifying lap's never). A time trial's fastest lap into its track's best laps: the rank it took (1-10), 0 for none.
 S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers) {
@@ -375,13 +379,22 @@ S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers) 
     Log_Info("[racegame] %s over: %s, best lap %s, %d of %d%s%s", trial ? "the time trial" : "the race", t, bestLap > 0 ? l : "none", (int)place,
              (int)racers, !trial && s_raceLevel >= 0 && s_raceLevel <= 2 ? ", difficulty " : "",
              !trial && s_raceLevel >= 0 && s_raceLevel <= 2 ? s_levelName[s_raceLevel] : "");
-    if (!trial || s_raceSp < 0 || s_raceSp >= s_nbSp || bestLap <= 0) return 0;
+    if (!trial) return 0;
+    return RecordLap(total, bestLap, SpecialLaps(s_raceSp >= 0 && s_raceSp < s_nbSp ? s_raceSp : 0));
+}
+
+// A lap into the race's track's best laps (a time trial's fastest; a qualifying lap: RaceGame_Qualified -- no power-ups on either): the
+// rank it took (1-10), 0 for none. `total` the whole run's time (a qualifying lap's own), `laps` how many laps that was.
+static int RecordLap(S32 total, S32 lap, int laps) {
+    if (s_raceSp < 0 || s_raceSp >= s_nbSp || lap <= 0) return 0;
+    char l[24];
+    TimeText(l, sizeof(l), lap);
     ReadTimes();
     const int sp = s_raceSp;
     T_RG_TIME e;
     e.Time = total;
-    e.Lap = bestLap;
-    e.Laps = SpecialLaps(sp);
+    e.Lap = lap;
+    e.Laps = laps;
     snprintf(e.Car, sizeof(e.Car), "%s", s_raceCar >= 0 && s_raceCar < s_nbCars ? s_cars[s_raceCar].Name : "");
     const time_t now = time(NULL);
     const struct tm *tm = localtime(&now);
@@ -469,6 +482,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_SKIP: Label(string, "Skip: start at the back of the grid"); return 1;
     case RG_ID_POWERUPS: Label(string, "Power-ups"); return 1;
     case RG_ID_CONTROLS: Label(string, "Race controls"); return 1;   // (the game's own Controls row changes the keys)
+    case RG_ID_WINDOW: Label(string, DisplayFullScreen ? "Window mode: full screen (F11)" : "Window mode: window (F11)"); return 1;
     case RG_ID_EASY: case RG_ID_MEDIUM: case RG_ID_HARD: Label(string, s_levelName[num - RG_ID_EASY]); return 1;
     }
     if (num >= RG_ID_SPECIAL && num < RG_ID_SPECIAL + s_nbSp) { Label(string, s_sp[num - RG_ID_SPECIAL].Name); return 1; }
@@ -779,7 +793,8 @@ static void DrawPowerUps(const T_RACE_PAGE *pg, int first, S32 now) {
     PageFrame("Power-ups");
     S32 y = RG_PAGE_TOP + oy + 38;
     if (!pg || !pg->Count) { Text(cx, y + 100, "No power-ups on this track.", LBAWHITE); return; }
-    if (pg->Trial) Wrapped(tx, y + 2, width, RG_ITEM_LINE, "A time trial: a can of Gazogem in your item box every lap. Ctrl uses it.", LBAWHITE);
+    // (a time trial has no power-ups since 2026-10-19: its laps, as the qualifying laps, go to the best laps)
+    if (pg->Trial) { Wrapped(ix, y + 2, cx + RG_PAGE_HALF - 12 - ix, RG_ITEM_LINE, "A time trial: no power-ups, just you and the clock. Its fastest lap goes to Best laps.", LBAWHITE); return; }
     else {
         RaceMod_DrawItem(pg, -1, ix, y, RG_ICON, now);
         Wrapped(tx, y + 2, width, RG_ITEM_LINE, "Drive into these for a power-up in your item box. Ctrl uses it.", LBAWHITE);
@@ -904,8 +919,11 @@ static int QualifyingPage(int sp, int trial) {
 }
 
 // RACEMOD.CPP: a qualifying lap driven (in a race the race game started). The first: qualifying may be skipped from the next race on.
+// Every one goes to the track's best laps too (the user, 2026-10-19: "qualifying laps also count for Best laps, as these don't contain
+// powerups"), as a lap of its own.
 void RaceGame_Qualified(S32 lap) {
     if (!RaceGame_On() || s_raceSp < 0) return;
+    RecordLap(lap, lap, 1);
     ReadSettings();
     if (s_qualified) return;
     s_qualified = 1;
@@ -917,17 +935,19 @@ void RaceGame_Qualified(S32 lap) {
 // game's own menu when the race game isn't on.
 static U16 s_optMenu[4 + 2 * 12];
 U16 *RaceGame_OptionsMenu(U16 *menu) {
-    if (!RaceGame_On() || !menu || menu[1] + 2 > 12) return menu;
+    if (!RaceGame_On() || !menu || menu[1] + 3 > 12) return menu;
     const int nb = menu[1];
     memcpy(s_optMenu, menu, (4 + 2 * nb) * sizeof(U16));
     SetRow(s_optMenu, nb, RG_ID_POWERUPS);
     SetRow(s_optMenu, nb + 1, RG_ID_CONTROLS);
-    s_optMenu[1] = (U16)(nb + 2);
+    SetRow(s_optMenu, nb + 2, RG_ID_WINDOW);
+    s_optMenu[1] = (U16)(nb + 3);
     return s_optMenu;
 }
 
 S32 RaceGame_OptionsRow(S32 num) {
-    if (!RaceGame_On() || (num != RG_ID_POWERUPS && num != RG_ID_CONTROLS)) return 0;
+    if (!RaceGame_On() || (num != RG_ID_POWERUPS && num != RG_ID_CONTROLS && num != RG_ID_WINDOW)) return 0;
+    if (num == RG_ID_WINDOW) { ToggleDisplayFullscreen(); return 1; }
     const T_RACE_PAGE *pg = TrackPage(s_raceSp >= 0 ? s_raceSp : s_lastSp >= 0 && s_lastSp < s_nbSp ? s_lastSp : 0);
     if (num == RG_ID_POWERUPS) Pages(pg, 0, 1, 0);
     else Pages(pg, 1, 0, 0);
