@@ -835,6 +835,9 @@ static void PageFrame(const char *header) {
 }
 
 // The controls: the keys the race game uses (the game's defaults -- Options, Controller changes the keyboard's), then a pad's.
+// (2026-10-19: and, on a track whose race lets Twinsen out of his car to explore -- RACEMOD.CPP on_foot=, the Temple of Bú's secret
+// party -- the action key's row, its lines a little closer: two more rows over the page's own keys at its foot)
+#define RG_ON_FOOT "Get out / back in"
 static void DrawControls(const T_RACE_PAGE *pg) {
     static const char *const keys[][2] = {
         {"Up arrow", "Accelerate"},
@@ -842,6 +845,7 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         {"Left, right", "Steer"},
         {"Ctrl", "Use your item"},
         {"", ""},                           // (the gears: by hand or by themselves)
+        {"Space", RG_ON_FOOT},
         {"P", "Pause"},
         {"Esc", "Menu"},
     };
@@ -850,14 +854,18 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         {"Left trigger", "Brake, reverse"},
         {"Left stick", "Steer"},
         {"Left shoulder", "Use your item"},
+        {"X button", RG_ON_FOOT},
         {"Start", "Menu"},
     };
     const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, kx = cx - RG_PAGE_HALF + 36, ax = cx - 40;
+    const int onFoot = pg && pg->OnFoot;
+    const S32 line = onFoot ? RG_LINE - 3 : RG_LINE;
     PageFrame("Controls");
     S32 y = RG_PAGE_TOP + oy + 48;
     char text[256];
-    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++, y += RG_LINE) {
+    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
         const char *key = keys[i][0], *what = keys[i][1];
+        if (!onFoot && !strcmp(what, RG_ON_FOOT)) continue;
         if (!key[0]) {
             key = pg && pg->Manual ? "X, Z" : "Gears";
             what = pg && pg->Manual ? "Gear up, down" : "Automatic";
@@ -866,16 +874,19 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         TextAt(kx, y, text, LBAWHITE);
         Label(text, what);
         TextAt(ax, y, text, RG_GREY);
+        y += line;
     }
-    y += RG_LINE / 2;
+    y += line / 2;
     Label(text, "With a gamepad");
     TextAt(kx, y, text, RG_ORANGE);
-    y += RG_LINE + 4;
-    for (size_t i = 0; i < sizeof(pad) / sizeof(pad[0]); i++, y += RG_LINE) {
+    y += line + 4;
+    for (size_t i = 0; i < sizeof(pad) / sizeof(pad[0]); i++) {
+        if (!onFoot && !strcmp(pad[i][1], RG_ON_FOOT)) continue;
         Label(text, pad[i][0]);
         TextAt(kx, y, text, LBAWHITE);
         Label(text, pad[i][1]);
         TextAt(ax, y, text, RG_GREY);
+        y += line;
     }
 }
 

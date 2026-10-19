@@ -2436,6 +2436,32 @@ static void cmd_autodrive(int argc, const char *argv[]) {
     Console_Print("autodrive: %s", atoi(argv[1]) ? "on" : "off");
 }
 
+/* racewalk [+] <x z>... [car] | racewalk off: with a race file's on_foot=, Twinsen out of his car walked on foot through the points (island
+   units), then -- with "car" -- to his car and into it (RACEMOD.CPP RaceMod_Walk); "+" first: more points after those given before (a
+   command line holds a few). For headless tests of the Temple of Bu's party. */
+static void cmd_racewalk(int argc, const char *argv[]) {
+    extern void RaceMod_Walk(int n, const double *xz, int car, int more);
+    double xz[64];
+    int n = 0, car = 0, more = 0;
+    for (int i = 1; i < argc; i++) {
+        if (i == 1 && !strcmp(argv[i], "+")) { more = 1; continue; }
+        if (!strcasecmp(argv[i], "car")) { car = 1; continue; }
+        if (!strcasecmp(argv[i], "off")) { n = 0; car = 0; more = 0; break; }
+        if (i + 1 < argc && n < 32) { xz[2 * n] = atof(argv[i]); xz[2 * n + 1] = atof(argv[i + 1]); n++; i++; }
+    }
+    RaceMod_Walk(n, xz, car, more);
+    Console_Print("racewalk: %d point(s)%s%s", n, more ? " more" : "", car ? ", then into the car" : "");
+}
+
+/* racestop <x> <z> <reach>: with a race file's on_foot=, the test pilot's car stopped once it comes within <reach> of the place (island
+   units) and Twinsen got out (RACEMOD.CPP RaceMod_StopAt) -- then any racewalk given walks him. */
+static void cmd_racestop(int argc, const char *argv[]) {
+    extern void RaceMod_StopAt(double x, double z, double reach);
+    if (argc < 4) { Console_Print("Usage: racestop <x> <z> <reach>"); return; }
+    RaceMod_StopAt(atof(argv[1]), atof(argv[2]), atof(argv[3]));
+    Console_Print("racestop: within %s of (%s, %s)", argv[3], argv[1], argv[2]);
+}
+
 /* raceplan <top%> <accel%> <brake%> <steer%> | raceplan file <setups> <out> [points]: a race-track mod's racing line planned again for a car
    setup scaled by those percentages, and its perfect lap (RACEMOD.CPP RaceMod_PlanLap); with a file, one setup a line ("top accel brake
    steer") and the laps written to <out> ("top accel brake steer lap flat% bends%"). For comparing setups on a track. With [points], each
@@ -2831,6 +2857,14 @@ void Console_RegisterAll(void) {
                               "raceplan <top%> <accel%> <brake%> <steer%> | raceplan file <setups> <out>",
                               "Each percentage scales the race file's car (its gears' top speeds, pull, brakes, steering); the lap at a "
                               "neutral character, and its time flat out, round the bends and between (RACEMOD.CPP RaceMod_PlanLap).");
+    Console_RegisterCommandEx("racestop", cmd_racestop, "Race-track test: stop the pilot's car near a place and get out",
+                              "racestop <x> <z> <reach>",
+                              "With a race file's on_foot=1, the test pilot stops the car once it comes within <reach> of the "
+                              "place (island units) and gets Twinsen out of it. For headless tests.");
+    Console_RegisterCommandEx("racewalk", cmd_racewalk, "Race-track test: walk Twinsen on foot through points, then to his car",
+                              "racewalk [+] <x z>... [car] | racewalk off",
+                              "With a race file's on_foot=1 and Twinsen out of his car, walks him through the points (island "
+                              "units) and, with car, back to his car and into it. For headless tests.");
     Console_RegisterCommandEx("autodrive", cmd_autodrive, "Race-track test pilot: drive the player's car along the racing line",
                               "autodrive <0|1> [look cells] [side cells] [pace %]",
                               "With a race-track mod running (LBA2_RACETRACK_FILE), steers and pedals the player's "

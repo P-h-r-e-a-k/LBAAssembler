@@ -1815,7 +1815,11 @@ S32 DoCornerReajustDecors() {
             HeroDecorHitAt = TimerRefHR;
         }
         // On est en collision avec un objet du decors
-        if (OldY >= PtrDecorsCol->YMax - SIZE_BRICK_Y / 2) {
+        // (a race-track mod's Twinsen out of his car exploring -- on_foot=, RACEMOD.CPP RaceMod_StepUp: up a step as high as a stair's of
+        // the Temple of Bú's, a quarter of LBA1's layer three times as big -- 192 -- not half a brick only)
+        extern S32 RaceMod_StepUp(void);
+        const S32 stepUp = APtObj == &ListObjet[NUM_PERSO] ? RaceMod_StepUp() : 0;
+        if (OldY >= PtrDecorsCol->YMax - (stepUp > 0 ? stepUp : SIZE_BRICK_Y / 2)) {
             Nyw = CalculAltitudeObjet(Nxw, Nzw, APtObj->CodeJeu >> 4);
 
             if (Nyw <= PtrDecorsCol->YMax) {

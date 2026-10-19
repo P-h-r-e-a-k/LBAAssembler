@@ -704,6 +704,8 @@ internal sealed class RaceTrackReport
     public sealed record Spook(string Kind, int Flags, double Y, List<(double X, double Z)> Way, int Body = -1, int Anim = -1, int Action = -1, int Entity = -1);
     public List<Spook> Spooks { get; } = new();
     public bool Pumpkins { get; set; }
+    // (2026-10-19) Twinsen may get out of his car and explore (RACEMOD.CPP on_foot=): the Temple of Bú's secret party (Temple.TempleParty)
+    public bool OnFoot { get; set; }
     // Halloween's scares (2026-10-17, RACEMOD.CPP dive=, scare=): the places a witch dives at the car from (island cells, the road's height
     // there), and what jumps up beside the road (a "skeleton" or a "ghost", island cells, the floor's height, the way it faces) -- each its
     // body once in BODY.HQR; the ghost power-up (haunt=) and, once in BODY.HQR, its ghost and its icon
@@ -1204,6 +1206,8 @@ internal static class RaceTrackBuilder
                 report.Notes.Add($"the scares: {report.Dives.Count} places a witch dives at the car from, {report.Scares.Count} things jumping up beside the road{(report.Haunt ? "; the ghost power-up" : "")}");
             // (its giant webs: drawn by the race-track mode, their bodies into BODY.HQR when the build finishes; a still copy among the decor)
             LBAAssembler.Terrain.Temple.TempleHalloween.PlaceGiantWebs(island, plan, options, report);
+            // (the Temple of Bú's secret party, reached on foot: its decor, its bodies after every other -- TempleParty)
+            LBAAssembler.Terrain.Temple.TempleHalloween.PlaceParty(island, plan, options, report);
         }
         Relight(island, index, options);
         if (planned) SeaEverywhere(island, main, report);

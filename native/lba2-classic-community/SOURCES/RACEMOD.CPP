@@ -143,6 +143,9 @@
  *     scare=<body> <x> <z> <y> <turn>   something that jumps up out of the floor beside the road as his car comes by (Scares)
  *     haunt=<ghost> <icon>       the ghost power-up: <ghost> (BODY.HQR) rising out of the car that uses it, flying to each car it haunts
  *                                and circling over it, <icon> the item box's (GhostLaunch, HauntCar)
+ *     on_foot=1                  (2026-10-19, the secret party) Space gets Twinsen out of his car once it has all but stopped, and he walks
+ *                                about while the race goes on; Space by the car, Ctrl anywhere, a fall, the sea or 5 minutes put him
+ *                                back in it (OnFoot); spook= flags 32/64/128/256 are the party's guests (DrawSpooks)
  *     web=<x> <y> <z> <way x> <way z> <half> <height> <hub> <hole half> <hole height> <spider> <spider>   a giant web across the road that
  *                                the cars drive through, tearing it (Webs; its parts web_part= after it)
  *     web_part=<kind> <body> <across> <up> <turn>   a part of the web before it: 0 always, 1 while it is whole, 2 a tatter once it is torn,
@@ -428,6 +431,25 @@ static int s_dreamScene = -1;              // dream=: the scene a new game start
 // the race game's keys (RACEGAME.CPP)
 static int s_startScene = -1;              // start_scene=
 static int s_startInCar = 0;               // start_in_car=
+// (on_foot=: out of the car to explore -- the Temple of Bú's secret party; OnFoot, RaceMod_FilterInput)
+static int s_onFoot = 0;                   // on_foot=
+static int s_footArmed = 0;                // he has driven since the race file was read (a start on foot beside the car isn't "out")
+static S32 s_footSince = 0;                // when he got out (0: in his car)
+static S32 s_footGroundY = 0;              // his height when he last stood on something
+static const char *s_footBack = NULL;      // asked for: back in the car, and why (the message)
+static int s_footScene = -1;               // ... into the car's scene first: its change still to ask for (FootCross)
+static int s_footArrive = -1;              // ... asked for: the scene, once it is in (OnFoot)
+static int s_footActWas = 0;               // the action key held last frame (one press, one go)
+// (the console's racewalk: Twinsen walked through points on foot, island units, or to his car and into it -- the test of the party's way)
+#define RACE_WALK_POINTS 64
+static int s_walkN = 0, s_walkAt = 0, s_walkCar = 0;
+static double s_walkX[RACE_WALK_POINTS], s_walkZ[RACE_WALK_POINTS];
+static double s_stopX = 0, s_stopZ = 0, s_stopReach = 0;   // (the console's racestop: where the test pilot stops the car and gets out)
+static int s_stopping = 0, s_stopResume = 0;   // (... and the pilot driving on once he is back in: IntoCar)
+S32 RaceMod_OnFoot(void);
+static int FootRescue(const char *where);
+static int FootCross(void);
+static U32 WalkInput(void);
 static int s_trial = 0;                    // trial=
 static S32 s_endToMenu = 0;                // end_to_menu=
 static S32 s_menuAt = 0;                   // when the finished race goes back to the menu (0: not yet)
@@ -1188,7 +1210,7 @@ static int s_nbFlyers = 0;
 // animations to fit their bodies (but their own, flags 4, below): along the way to and
 // fro (flags 2: round and round it, its last point back to its first), bobbing, turned the way they fly; flags 1: now and then one stops
 // over the road and throws a fire ball at a car below it, as a flying gas monster spits one (SpookThrow).
-#define RACE_MAX_SPOOKS 48
+#define RACE_MAX_SPOOKS 96
 #define RACE_SPOOK_POINTS 40
 #define RACE_SPOOK_SPEED 1700.0            // units a second along its way
 #define RACE_SPOOK_BOB 260.0               // up and down this much, ...
@@ -1219,6 +1241,18 @@ static int s_nbFlyers = 0;
 #define RACE_SPOOK_REST 18432.0
 #define RACE_SPOOK_STAND_CLEAR 300.0
 #define RACE_SPOOK_STAND_FADE 600.0
+// (2026-10-19, the Temple of Bú's secret Halloween party -- Temple.TempleParty, reached on foot: on_foot=) Flags 32: a party guest, drawn
+// only while Twinsen is about the party (within RACE_PARTY_MARGIN of the box round every guest, and RACE_PARTY_HIGH of their heights: no
+// cost to the race, nothing of it seen from the road), along its way at RACE_PARTY_SPEED, a dancer's pace; flags 64: on the floor, not
+// bobbing; flags 128: dancing on the spot, turned to and fro (RACE_PARTY_SWAY either side, once in RACE_PARTY_SWAY_MS); flags 256: standing
+// at its way's first point facing its second (as flags 8 without the car's waking it); flags 512: spinning (RACE_PARTY_SPIN a second: the
+// disco ball).
+#define RACE_PARTY_SPIN 700
+#define RACE_PARTY_MARGIN (24 * 512.0)
+#define RACE_PARTY_HIGH 3000.0
+#define RACE_PARTY_SPEED 520.0
+#define RACE_PARTY_SWAY 420.0
+#define RACE_PARTY_SWAY_MS 1600.0
 typedef struct {
     int Body, Flags, Np; double Y, PX[RACE_SPOOK_POINTS], PZ[RACE_SPOOK_POINTS], Len, S, X, Z; int Dir; S32 Beta;
     int Throwing, Thrown, Target, Ready; S32 T0, Next;
@@ -2412,6 +2446,8 @@ static S32 s_railAt = 0;
 #define RAIL_NOTE(w) (s_railWhy = (w), s_railAt = TimerRefHR)
 static void MarshalPost(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
+    // (on foot, exploring: nothing holds him on the road -- on_foot=, OnFoot)
+    if (RaceMod_OnFoot()) return;
     // (the flag marshal on the road for the start: a post the car glances off)
     MarshalPost(ox, oy, oz, nx, nz);
     if (!s_nbRaised || CubeMode != CUBE_EXTERIEUR) return;
@@ -3067,8 +3103,8 @@ static void Load(const char *path, int carOnly = 0) {
                 if ((flags & 16) && sscanf(rest, "%d%n", &x, &n2) == 1) { sp->Entity = x; rest += n2; }
                 if (sp->Anim < 0 || ((flags & 8) && sp->Action < 0)) sp->Flags &= ~(4 | 8);
                 while (sp->Np < RACE_SPOOK_POINTS && sscanf(rest, "%d %d%n", &x, &z, &n2) == 2) { sp->PX[sp->Np] = x; sp->PZ[sp->Np] = z; sp->Np++; rest += n2; }
-                // (standing: where it stands, the way it faces, no way to go along)
-                if ((sp->Flags & 8) && sp->Np >= 2) {
+                // (standing: where it stands, the way it faces, no way to go along -- a party guest standing too, flags 256)
+                if ((sp->Flags & (8 | 256)) && sp->Np >= 2) {
                     sp->Beta = (S32)floor(atan2(sp->PX[1] - sp->PX[0], sp->PZ[1] - sp->PZ[0]) * 4096 / (2 * 3.14159265358979) + 0.5) & 4095;
                     sp->Np = 1;
                 }
@@ -3350,6 +3386,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "race_laps")) s_raceLaps = atoi(v);
         else if (!strcmp(key, "start_scene")) s_startScene = atoi(v);
         else if (!strcmp(key, "start_in_car")) s_startInCar = atoi(v);
+        else if (!strcmp(key, "on_foot")) s_onFoot = atoi(v);
         else if (!strcmp(key, "trial")) s_trial = atoi(v);
         else if (!strcmp(key, "end_to_menu")) s_endToMenu = atoi(v);
         else if (!strcmp(key, "main")) s_main = atoi(v) - 1;
@@ -4180,6 +4217,24 @@ double RaceMod_PlanLap(double topPct, double accelPct, double brakePct, double s
 }
 
 U32 RaceMod_AutoInput(void) {
+    // (the console's racewalk: on foot, through its points -- on_foot=)
+    if ((s_walkN > 0 || s_walkCar) && RaceMod_OnFoot()) return CubeMode == CUBE_EXTERIEUR ? WalkInput() : 0;
+    // (the console's racestop: the test pilot's car stopped where it comes within reach of a place, and Twinsen out of it)
+    if (s_stopReach > 0 && s_active && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) {
+        const T_OBJET *h = &ListObjet[NUM_PERSO];
+        const double dx = h->Obj.X + CurrentCubeX * 32768.0 - s_stopX, dz = h->Obj.Z + CurrentCubeY * 32768.0 - s_stopZ;
+        if (s_stopping || dx * dx + dz * dz < s_stopReach * s_stopReach) {
+            if (!s_stopping) Log_Info("[racemod] racestop: the car within %.0f of (%.0f,%.0f) at %d -- stopping", sqrt(dx * dx + dz * dz), s_stopX, s_stopZ, (int)ListBuggy[0].Speed);
+            if (!s_stopping) s_stopResume = s_auto;
+            s_stopping = 1; s_auto = 0;
+            if (abs(ListBuggy[0].Speed) > 300) return ListBuggy[0].Speed > 0 ? I_DOWN : I_UP;
+            // (the action key pressed every other frame till he is out -- OnFoot ends it: a car on the super jet-pack, or skidding, doesn't
+            // let him out until it is over)
+            static int tries = 0;
+            if (s_stopping == 1) { s_stopping = 2; tries = 0; Log_Info("[racemod] racestop: stopped at (%.0f,%d,%.0f) -- out of the car", h->Obj.X + CurrentCubeX * 32768.0, (int)h->Obj.Y, h->Obj.Z + CurrentCubeY * 32768.0); }
+            return (tries++ & 1) ? 0 : I_ACTION_M;
+        }
+    }
     // (skidding on oil: the car turns round, no throttle and no brake)
     if (s_active && Comportement == C_BUGGY && TimerRefHR < s_skidUntil) return 0;   // (skidding on oil: the skid has the car, RaceMod_Skid)
     if (!(s_auto || TimerRefHR < s_jetUntil) || !s_active || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return 0;
@@ -5529,13 +5584,44 @@ void RaceMod_DrawBackdrop(void) {
     SetCLUT(clut);
 }
 
+// Whether Twinsen is about the party (flags 32): within RACE_PARTY_MARGIN of the box round its guests, at about their heights.
+static int s_partyBox = 0;                 // 0 not worked out, 1 there is one, -1 no guests
+static double s_partyX0, s_partyX1, s_partyZ0, s_partyZ1, s_partyY0, s_partyY1;
+static int AtParty(void) {
+    if (!s_partyBox) {
+        s_partyBox = -1;
+        for (int i = 0; i < s_nbSpooks; i++) {
+            const T_RACE_SPOOK *sp = &s_spooks[i];
+            if (!(sp->Flags & 32)) continue;
+            for (int k = 0; k < (sp->Np > 0 ? sp->Np : 1); k++) {
+                const double x = sp->Np > 0 ? sp->PX[k] : sp->X, z = sp->Np > 0 ? sp->PZ[k] : sp->Z;
+                if (s_partyBox < 0) { s_partyX0 = s_partyX1 = x; s_partyZ0 = s_partyZ1 = z; s_partyY0 = s_partyY1 = sp->Y; s_partyBox = 1; }
+                s_partyX0 = fmin(s_partyX0, x); s_partyX1 = fmax(s_partyX1, x);
+                s_partyZ0 = fmin(s_partyZ0, z); s_partyZ1 = fmax(s_partyZ1, z);
+                s_partyY0 = fmin(s_partyY0, sp->Y); s_partyY1 = fmax(s_partyY1, sp->Y);
+            }
+        }
+        if (s_partyBox > 0)
+            Log_Info("[racemod] the party: its guests x %.0f..%.0f, z %.0f..%.0f, heights %.0f..%.0f -- drawn while Twinsen is about it", s_partyX0, s_partyX1,
+                     s_partyZ0, s_partyZ1, s_partyY0, s_partyY1);
+    }
+    if (s_partyBox < 0 || CubeMode != CUBE_EXTERIEUR) return 0;
+    const T_OBJET *h = &ListObjet[NUM_PERSO];
+    const double x = h->Obj.X + CurrentCubeX * 32768.0, z = h->Obj.Z + CurrentCubeY * 32768.0, y = h->Obj.Y;
+    return x >= s_partyX0 - RACE_PARTY_MARGIN && x <= s_partyX1 + RACE_PARTY_MARGIN && z >= s_partyZ0 - RACE_PARTY_MARGIN && z <= s_partyZ1 + RACE_PARTY_MARGIN
+           && y >= s_partyY0 - RACE_PARTY_HIGH && y <= s_partyY1 + RACE_PARTY_HIGH;
+}
+
 // The spooks (spook=), where the camera is: each body as the frog's is drawn -- its fog by its distance, depth written.
 static void DrawSpooks(void) {
     const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
     int drawn = 0;
+    const int party = AtParty();
     for (int i = 0; i < s_nbSpooks; i++) {
         T_RACE_SPOOK *sp = &s_spooks[i];
         if (sp->Body < 0) continue;
+        // (a party guest: only about the party -- flags 32)
+        if ((sp->Flags & 32) && !party) continue;
         T_OBJ_3D *o = &sp->Obj;
         if (!sp->Ready) {
             // (an entity's body number: BODY.HQR's as the entity table has it)
@@ -5579,9 +5665,11 @@ static void DrawSpooks(void) {
                 }
             }
         }
-        // (a standing one doesn't bob)
-        const double y = (sp->Flags & 8) ? sp->Y : sp->Y + RACE_SPOOK_BOB * sin((TimerRefHR + i * 731) * 2 * RACE_PI / RACE_SPOOK_BOB_MS);
+        // (a standing one doesn't bob, nor a party guest on the floor; a dancer sways to and fro -- flags 64, 128)
+        const double y = (sp->Flags & (8 | 64)) ? sp->Y : sp->Y + RACE_SPOOK_BOB * sin((TimerRefHR + i * 731) * 2 * RACE_PI / RACE_SPOOK_BOB_MS);
         const S32 ox = (S32)floor(sp->X - CurrentCubeX * 32768.0 + 0.5), oy = (S32)floor(y + 0.5), oz = (S32)floor(sp->Z - CurrentCubeY * 32768.0 + 0.5);
+        S32 beta = (sp->Flags & 128) ? (S32)floor(sp->Beta + RACE_PARTY_SWAY * sin((TimerRefHR + i * 389) * 2 * RACE_PI / RACE_PARTY_SWAY_MS) + 0.5) & 4095 : sp->Beta;
+        if (sp->Flags & 512) beta = (S32)((sp->Beta + (S64)TimerRefHR * RACE_PARTY_SPIN / 1000) & 4095);
         if (sp->Flags & 4) {
             // (its animation stepped every frame, seen or not, as the flag marshal's: the one it should play now, blended into)
             if ((sp->Flags & 8) && sp->Want != sp->Shown) {
@@ -5590,18 +5678,18 @@ static void DrawSpooks(void) {
             }
             o->X = ox; o->Y = oy; o->Z = oz;
             ObjectSetInterDep(o);
-            o->X = ox; o->Y = oy; o->Z = oz; o->Alpha = 0; o->Beta = sp->Beta; o->Gamma = 0;
+            o->X = ox; o->Y = oy; o->Z = oz; o->Alpha = 0; o->Beta = beta; o->Gamma = 0;
             ObjectSetInterFrame(o);
         } else {
             o->X = ox; o->Y = oy; o->Z = oz;
-            o->Alpha = 0; o->Beta = sp->Beta; o->Gamma = 0;
+            o->Alpha = 0; o->Beta = beta; o->Gamma = 0;
             memset(o->CurrentFrame, 0, sizeof(o->CurrentFrame));
         }
         // (none drawn by the camera's eye; faded into the fog coming to it: RACE_SPOOK_EYE_CLEAR -- a standing one by the road, beside the
-        // camera's way rather than across it, down to RACE_SPOOK_STAND_CLEAR past its reach)
+        // camera's way rather than across it, down to RACE_SPOOK_STAND_CLEAR past its reach; a party guest as a standing one)
         const double ex = (double)o->X - CameraX, ey = y + sp->Mid - CameraY, ez = (double)o->Z - CameraZ;
         const double eye = sqrt(ex * ex + ey * ey + ez * ez);
-        const int standing = (sp->Flags & 8) != 0;
+        const int standing = (sp->Flags & (8 | 32)) != 0;
         double clear = sp->Reach + (standing ? RACE_SPOOK_STAND_CLEAR : RACE_SPOOK_EYE_CLEAR);
         if (!standing && clear < RACE_GHOST_EYE) clear = RACE_GHOST_EYE;
         const double fadeOver = standing ? RACE_SPOOK_STAND_FADE : RACE_SPOOK_EYE_FADE;
@@ -6375,6 +6463,7 @@ static S32 RaceCameraEye(S32 *eye, S32 *target) {
 }
 
 S32 RaceMod_Rescue(void) {
+    if (FootRescue("into the sea or the lava")) return 1;
     if (!RaceMod_Active() || !s_rescueOn || Comportement != C_BUGGY || !Guide() || s_safeIndex < 0) return 0;
     if (!s_rescue) {
         const T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -6525,6 +6614,7 @@ static void FallenBelow(S32 now) {
 // (Rescue, as from the sea) -- non-zero -- instead of going into the phantom cube, the game's way to drown Twinsen, which took him out of
 // his car: he came back from it on foot and the race stood still (the super jet-pack over Mosquibees Island's plateau's edge, 2026-10-16).
 S32 RaceMod_OffIsland(void) {
+    if (FootRescue("off the island's edge")) return 1;
     if (!RaceMod_Active() || Comportement != C_BUGGY || !s_rescueOn || !Guide()) return 0;
     if (!s_rescue) Log_Info("[racemod] off the island's edge: back on the road");
     s_rescue = 1;
@@ -8401,6 +8491,14 @@ S32 RaceMod_NoCollide(S32 numobj) {
                 if (s_guards[i].SeenScene[k] == (S32)NumCube && s_guards[i].SeenActor[k] == numobj) return 1;
     // (nothing runs into Twinsen's car on the super jet-pack either: a shuttle coming down onto it)
     if (numobj == NUM_PERSO && RaceMod_JetGhost()) return 1;
+    // (on foot, exploring -- on_foot=: the opponents' cars race on through him, and he walks through them; they pushed him along the road
+    // at their speed, and off its edge)
+    if (RaceMod_OnFoot() && numobj >= 0 && numobj < MAX_OBJETS) {
+        if (numobj == NUM_PERSO) return 1;
+        if (s_carsScene == (S32)NumCube)
+            for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
+                if (s_carActor[n] == numobj) return 1;
+    }
     if (!RaceMod_Active() || !s_powerups || numobj <= 0 || numobj >= MAX_OBJETS) return 0;
     // (a super jet-pack goes through the cars: Twinsen's through any in its way -- it pushes them aside, RACE_SHOVE_* -- and an
     // opponent's through Twinsen's; on the same line, the jet-pack sat stuck behind the car in front)
@@ -8439,12 +8537,252 @@ S32 RaceMod_FreeOfCube(S32 numobj) {
     return 0;
 }
 
+// ---- on foot: out of the car to explore (on_foot=) ----------------------------------------------------------------------------------
+// The Temple of Bú's secret Halloween party (the user, 2026-10-19: "let's create a secret halloween party area ... that the user can find
+// if they get out of the car and explore"): with on_foot=1 Twinsen gets out of his car with the action key (Space) once it has all but
+// stopped (RaceMod_FilterInput: as the behaviour menu takes him out; sporty, so he runs) and walks about the temple, and the race goes on
+// without him: the opponents keep racing, through him (RaceMod_Frame, RaceMod_NoCollide), the clock runs. On foot nothing of the race's
+// holds him: the raised road's rail lets him off it (RaceMod_Rail), the rescues are the car's; he steps up the temple's stairs
+// (RaceMod_StepUp) and comes into a scene on its floor (RaceMod_FootArrive). He is put back in his car where it stands (IntoCar), carried
+// into its scene when it is in another (FootCross),
+//   - with the action key near it (RACE_FOOT_REACH, in its scene): in, from any side, in any behaviour;
+//   - with the item key (Ctrl) anywhere -- the behaviour menu has no use in a race;
+//   - fallen further than RACE_FOOT_FALL (off a ledge into the dark under the temple), into the sea or off the island's edge, where the
+//     game would drown him -- the race isn't to end in his death;
+//   - and after RACE_FOOT_MS on foot.
+// Without on_foot= (every other track) nothing changes: the car's script still lets him out, the race waits for him.
+#define RACE_FOOT_STOPPED 700              // units a second: the car slower than this lets him out
+#define RACE_FOOT_REACH 1900.0             // the action key this near the car's middle gets him in
+#define RACE_FOOT_FALL 2300                // fallen this far below where he last stood: back to the car
+#define RACE_FOOT_MS 300000                // on foot this long: back to the car
+#define RACE_FOOT_NOTE_MS 5000             // the message as he gets out, this long
+static int Explore(void) { return RaceMod_Active() && s_onFoot; }
+S32 RaceMod_OnFoot(void) { return Explore() && s_footArmed && Comportement != C_BUGGY; }
+
+// The car where it stands: its scene's actor (the scene it was left in, or another that shows it from there -- BUGGY.CPP InitBuggy), and
+// how far the hero is from it (-1: not in his scene).
+static double CarReach(void) {
+    const S_BUGGY *ptb = &ListBuggy[0];
+    if (!IsBuggyPresent() || ptb->Cube != (S32)NumCube) return -1;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double dx = (double)ptb->X - hero->Obj.X, dz = (double)ptb->Z - hero->Obj.Z;
+    if (abs(ptb->Y - hero->Obj.Y) > 1200) return -1;
+    return sqrt(dx * dx + dz * dz);
+}
+
+// Twinsen into his car where it stands (in his scene), stopped, facing its way.
+static void IntoCar(const char *why) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const S_BUGGY *ptb = &ListBuggy[0];
+    if (IsBuggyPresent() && ptb->Cube == (S32)NumCube) {
+        hero->Obj.X = ptb->X; hero->Obj.Y = ptb->Y; hero->Obj.Z = ptb->Z; hero->Obj.Beta = ptb->Beta;
+    }
+    hero->WorkFlags &= ~FALLING;
+    ClearRealAngle(hero);
+    BackInCar();
+    ListBuggy[0].Speed = 0;
+    Log_Info("[racemod] on foot %.1f s: %s -- in his car at (%d,%d,%d) in scene %d", s_footSince ? (TimerRefHR - s_footSince) / 1000.0 : 0.0, why,
+             (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z, (int)NumCube);
+    s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_walkN = 0; s_walkCar = 0;
+    if (s_stopResume) { s_auto = 1; s_stopResume = 0; s_autoIndex = -1; Log_Info("[racemod] racestop: the pilot drives on"); }
+    Message(why);
+}
+
+// Every frame (RaceMod_Frame): on foot, what takes him back to his car.
+static void OnFoot(S32 now) {
+    if (!s_onFoot || CubeMode != CUBE_EXTERIEUR) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    if (Comportement == C_BUGGY) { s_footArmed = 1; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; return; }
+    if (!s_footArmed) return;
+    // (carried into the car's scene: in, once it is there)
+    if (s_footArrive >= 0) {
+        if (NewCube != -1 || (S32)NumCube != s_footArrive) return;
+        s_footArrive = -1;
+        IntoCar(s_footBack ? s_footBack : "Back in your car");
+        return;
+    }
+    // (nothing on foot is to end the race in his death -- a jump down a ledge, a blow: his life as he got out)
+    static S16 footLife = 0;
+    if (!s_footSince) footLife = hero->LifePoint;
+    else if (hero->LifePoint < footLife) hero->LifePoint = footLife;
+    if (!s_footSince) {
+        s_footSince = now; s_footGroundY = hero->Obj.Y;
+        s_stopping = 0; s_stopReach = 0;   // (the console's racestop: done)
+        Message("On foot: Space by your car to drive, Ctrl to go back");
+        s_messageUntil = now + RACE_FOOT_NOTE_MS;
+        Log_Info("[racemod] Twinsen gets out of his car at (%d,%d,%d) in scene %d: on foot, the race goes on", (int)hero->Obj.X, (int)hero->Obj.Y,
+                 (int)hero->Obj.Z, (int)NumCube);
+    }
+    // (each scene he walks into, said: the way to the party crosses several)
+    static S32 footScene = -1;
+    if ((S32)NumCube != footScene) {
+        if (footScene >= 0) Log_Info("[racemod] on foot into scene %d at (%d,%d,%d)", (int)NumCube, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z);
+        footScene = (S32)NumCube;
+    }
+    if (!(hero->WorkFlags & FALLING)) s_footGroundY = hero->Obj.Y;
+    else if (hero->Obj.Y < s_footGroundY - RACE_FOOT_FALL && !s_footBack) {
+        s_footBack = "Back to your car";
+        Log_Info("[racemod] on foot: fallen %d from (%d,%d,%d) -- back to his car", (int)(s_footGroundY - hero->Obj.Y), (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z);
+    }
+    if (now - s_footSince > RACE_FOOT_MS && !s_footBack) {
+        s_footBack = "Back to your car";
+        Log_Info("[racemod] on foot for %d s: back to his car", RACE_FOOT_MS / 1000);
+    }
+    if (!s_footBack || s_footScene >= 0 || NewCube != -1) return;
+    const S_BUGGY *ptb = &ListBuggy[0];
+    if (ptb->Cube == (S32)NumCube || ptb->Cube < 0) { IntoCar(s_footBack); return; }
+    // (the car in another scene: carried there as a zone's change carries him -- asked for from the actors' loop, FootCross)
+    s_footScene = ptb->Cube;
+}
+
+// RaceMod_EdgeCross (the actors' loop): his move into the car's scene, its place there the car's. Non-zero: asked for.
+static int FootCross(void) {
+    if (s_footScene < 0) return 0;
+    const int scene = s_footScene;
+    s_footScene = -1;
+    if (!Explore() || NewCube != -1) return 0;
+    const S_BUGGY *ptb = &ListBuggy[0];
+    // (the car's scene, however far: its place in it is the car's own -- LoadSceneCubeXY knows only the cubes round his)
+    NewCube = scene;
+    NewPosX = ptb->X; NewPosY = ptb->Y + 64; NewPosZ = ptb->Z;
+    FlagChgCube = 1;
+    FlagReajustPosTwinsen = FALSE;
+    s_footArrive = scene;
+    Log_Info("[racemod] on foot in scene %d: carried to his car in scene %d", (int)NumCube, scene);
+    return 1;
+}
+
+// The top of the solid box of the island's decor he is in, its top no more than `reach` over his feet (cube-local units) -- 0: none. A
+// change of scene on foot keeps his height (OBJECT.CPP), and where the floor's box in the scene he comes into stands higher than the one
+// he left -- the race lowered the long corridor's floor under its road, LBA1's side passage off it keeps its own, the scenes' edge between
+// them -- he came in inside it, under its top, and the game took the sea under the temple for his ground.
+static int FootFloorUp(S32 reach, S32 *top) {
+    const T_OBJET *h = &ListObjet[NUM_PERSO];
+    int found = 0;
+    for (S32 i = 0; i < (S32)NbObjDecors; i++) {
+        const T_DECORS *d = &ListDecors[i];
+        if (d->YMax < d->YMin || (d->Body & DEC_INVISIBLE)) continue;
+        if (h->Obj.X < d->XMin || h->Obj.X > d->XMax || h->Obj.Z < d->ZMin || h->Obj.Z > d->ZMax) continue;
+        if (d->YMax < h->Obj.Y || d->YMax > h->Obj.Y + reach || d->YMin > h->Obj.Y + 64) continue;
+        if (!found || d->YMax > *top) { *top = d->YMax; found = 1; }
+    }
+    return found;
+}
+#define RACE_FOOT_STEP 700                 // a floor this much over his feet he is put onto
+
+// EXTFUNC.CPP DoCornerReajustDecors: on foot, the step he walks up onto a box of the island's decor (0: the game's half brick, 128) -- the
+// temple's stairs are steps of 192 (LBA1's layer, three times as high, in four).
+#define RACE_FOOT_STEP_UP 220
+S32 RaceMod_StepUp(void) { return RaceMod_OnFoot() ? RACE_FOOT_STEP_UP : 0; }
+
+// OBJECT.CPP ChangeCube, as he comes into a scene on foot (his height kept): onto the floor he came in inside (FootFloorUp).
+void RaceMod_FootArrive(void) {
+    if (!RaceMod_OnFoot() || CubeMode != CUBE_EXTERIEUR) return;
+    S32 top = 0;
+    T_OBJET *h = &ListObjet[NUM_PERSO];
+    if (!FootFloorUp(RACE_FOOT_STEP, &top)) return;
+    Log_Info("[racemod] on foot into scene %d at (%d,%d,%d), inside a floor whose top is %d: put onto it", (int)NumCube, (int)h->Obj.X, (int)h->Obj.Y,
+             (int)h->Obj.Z, (int)top);
+    h->Obj.Y = top + 1;
+    h->WorkFlags &= ~FALLING;
+}
+
+// OBJECT.CPP GereCodesJeu (the sea, lava) and EXTFUNC.CPP (the island's edge) on foot: back to the car instead of his death. Non-zero: his.
+static int FootRescue(const char *where) {
+    if (!RaceMod_OnFoot()) return 0;
+    // (in a floor's box, just under its top: onto it -- FootFloorUp)
+    S32 top = 0;
+    if (!s_footBack && FootFloorUp(RACE_FOOT_STEP, &top)) {
+        T_OBJET *h = &ListObjet[NUM_PERSO];
+        Log_Info("[racemod] on foot: %s at (%d,%d,%d) in scene %d, inside a floor whose top is %d -- put onto it", where, (int)h->Obj.X, (int)h->Obj.Y,
+                 (int)h->Obj.Z, (int)NumCube, (int)top);
+        h->Obj.Y = top + 1;
+        h->WorkFlags &= ~FALLING;
+        h->CodeJeu = 0;
+        return 1;
+    }
+    if (!s_footBack) {
+        s_footBack = "Back to your car";
+        const T_OBJET *h = &ListObjet[NUM_PERSO];
+        Log_Info("[racemod] on foot: %s at (%d,%d,%d) in scene %d -- back to his car", where, (int)h->Obj.X, (int)h->Obj.Y, (int)h->Obj.Z, (int)NumCube);
+    }
+    return 1;
+}
+
+// The console's racestop <x> <z> <reach>: the test pilot (autodrive) stops the car once it comes within reach of the place (island units)
+// and gets Twinsen out (on_foot=); its autodrive off till he is back in.
+void RaceMod_StopAt(double x, double z, double reach) {
+    s_stopX = x; s_stopZ = z; s_stopReach = reach; s_stopping = 0;
+    Log_Info("[racemod] racestop: the car to stop within %.0f of (%.0f,%.0f)", reach, x, z);
+}
+
+// The console's racewalk [+] <x z>... [car]: on foot, through the points (island units; "+" after those given before), then with "car"
+// to his car and into it -- the test of the party's way (WalkInput).
+void RaceMod_Walk(int n, const double *xz, int car, int more) {
+    if (!more) { s_walkN = 0; s_walkAt = 0; }
+    for (int k = 0; k < n && s_walkN < RACE_WALK_POINTS; k++) { s_walkX[s_walkN] = xz[2 * k]; s_walkZ[s_walkN] = xz[2 * k + 1]; s_walkN++; }
+    s_walkCar = car;
+    // (a test that starts on foot -- straight into a scene of the party's -- walks as though he had got out of his car there)
+    if (s_onFoot && Comportement != C_BUGGY) s_footArmed = 1;
+    Log_Info("[racemod] racewalk: %d point(s)%s", s_walkN, car ? ", then to the car" : "");
+}
+
+// (RaceMod_AutoInput, on foot: turned towards the next point, walking once it is about ahead; the next once within reach of it)
+static U32 WalkInput(void) {
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    double tx, tz;
+    if (s_walkAt < s_walkN) { tx = s_walkX[s_walkAt]; tz = s_walkZ[s_walkAt]; }
+    else if (s_walkCar && IsBuggyPresent()) {
+        const S_BUGGY *ptb = &ListBuggy[0];
+        if (ptb->Cube != (S32)NumCube) return 0;
+        tx = ptb->X + CurrentCubeX * 32768.0; tz = ptb->Z + CurrentCubeY * 32768.0;
+        if (CarReach() >= 0 && CarReach() < RACE_FOOT_REACH - 300) { s_walkCar = 0; s_walkN = 0; Log_Info("[racemod] racewalk: by the car"); return I_ACTION_M; }
+    } else { s_walkN = 0; return 0; }
+    const double dx = tx - wx, dz = tz - wz, d = sqrt(dx * dx + dz * dz);
+    if (s_walkAt < s_walkN && d < 400) { Log_Info("[racemod] racewalk: point %d at (%.0f,%d,%.0f)", s_walkAt + 1, wx, (int)hero->Obj.Y, wz); s_walkAt++; return 0; }
+    const S32 want = (S32)floor(atan2(dx, dz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    S32 turn = ((want - (S32)(hero->Obj.Beta & 4095)) + 6144) % 4096 - 2048;
+    U32 in = 0;
+    if (turn > 60) in |= I_LEFT; else if (turn < -60) in |= I_RIGHT;
+    if (abs(turn) < 500) in |= I_UP;
+    return in;
+}
+
 // PERSO.CPP, the frame's input: Ctrl is the game's behaviour key, and the items' in the car (PowerUps) -- there it doesn't open the
 // behaviour menu, whose other behaviours take Twinsen out of his car (PERSO.CPP, the menu's choice). Noted for PowerUps first, so a
 // pad's left shoulder, or the key bound to it in the options, uses the items too.
+// (on_foot=: the action key gets him out of a car all but stopped, never one that drives; on foot it gets him in by the car, and Ctrl
+// takes him back to it -- OnFoot)
 U32 RaceMod_FilterInput(U32 input) {
     s_useHeld = (input & I_COMPORTEMENT) != 0;
     if (RaceMod_Active() && Comportement == C_BUGGY) input &= ~(U32)I_COMPORTEMENT;
+    if (Explore() && CubeMode == CUBE_EXTERIEUR) {
+        const int act = (input & I_ACTION_M) != 0, pressed = act && !s_footActWas;
+        s_footActWas = act;
+        const T_OBJET *hero = &ListObjet[NUM_PERSO];
+        if (Comportement == C_BUGGY) {
+            const int still = abs(ListBuggy[0].Speed) < RACE_FOOT_STOPPED && !(hero->WorkFlags & FALLING) && s_phase != PHASE_GRID
+                              && !(s_goAt && TimerRefHR < s_goAt) && s_flying < 0 && s_arcOn < 0 && s_loopOn < 0 && s_loopState == LOOP_NONE
+                              && TimerRefHR >= s_jetUntil && TimerRefHR >= s_skidUntil && hero->GenAnim < RACE_JUMP_ANIM_FIRST;
+            // (out as the behaviour menu takes him out -- COMPORTE.CPP; the car's own script lets him out only from the state it is in when
+            // he got in by its action key, not when the race put him in it)
+            // (sporty: he runs -- the way to the party is long -- and Space jumps)
+            if (still && pressed && NewCube == -1) {
+                ListObjet[NUM_PERSO].Move = MOVE_MANUAL;
+                LeaveBuggy(C_SPORTIF);
+                s_footArmed = 1;
+            }
+            input &= ~(U32)I_ACTION_M;
+        } else if (s_footArmed) {
+            if (input & I_COMPORTEMENT) { input &= ~(U32)I_COMPORTEMENT; if (!s_footBack) { s_footBack = "Back in your car"; Log_Info("[racemod] on foot: Ctrl -- back to his car"); } }
+            const double reach = CarReach();
+            if (act && reach >= 0 && reach < RACE_FOOT_REACH) {
+                input &= ~(U32)I_ACTION_M;
+                if (pressed && !s_footBack && NewCube == -1) IntoCar("Back in your car");
+            }
+        }
+    }
     return input;
 }
 
@@ -8518,6 +8856,7 @@ double RaceMod_JetSteer(void) {
 // PERSO.CPP: the jet-pack has the controls (the player's own keys are left out while it lasts) -- when there is a line for it to drive
 // by (with none it is only a boost: it had the keys and gave none back, and the car stood still until it ran out); skidding on oil too.
 S32 RaceMod_Takeover(void) {
+    if ((s_walkN > 0 || s_walkCar) && RaceMod_OnFoot()) return 1;   // (the console's racewalk)
     return RaceMod_Active() && Comportement == C_BUGGY && ((TimerRefHR < s_jetUntil && Guide()) || TimerRefHR < s_skidUntil);
 }
 
@@ -9725,7 +10064,7 @@ static void Spooks(S32 now, int driving, S32 dt) {
         }
         if (sp->Np < 2 || sp->Len <= 1) continue;
         // (along its way: round and round a loop, to and fro along a line)
-        sp->S += sp->Dir * RACE_SPOOK_SPEED * dt / 1000.0;
+        sp->S += sp->Dir * ((sp->Flags & 32) ? RACE_PARTY_SPEED : RACE_SPOOK_SPEED) * dt / 1000.0;
         if (sp->Flags & 2) { sp->S = fmod(sp->S, sp->Len); if (sp->S < 0) sp->S += sp->Len; }
         else {
             if (sp->S >= sp->Len) { sp->S = 2 * sp->Len - sp->S; sp->Dir = -1; }
@@ -10822,6 +11161,8 @@ S32 RaceMod_CubeChangeAllowed(S32 scene) {
 void RaceMod_EdgeCross(void) {
     const int heldX = s_edgeX, heldZ = s_edgeZ;
     s_edgeX = s_edgeZ = 0;
+    // (on foot, back to the car in another scene: on_foot=)
+    if (FootCross()) return;
     // (a rescue back into the scene the car was last safe in: asked for here, with the line point's place, as a zone's change -- the car
     // carried over; the scene's cube from the island's scene list)
     if (s_rescueScene >= 0 && RaceMod_Active()) {
@@ -10902,6 +11243,7 @@ void RaceMod_Frame(void) {
             Log_Info("[racemod] game variable %d held at %d", s_held[i][0], s_held[i][1]);
         }
     if (Comportement == C_BUGGY) TrackSafePlace();
+    OnFoot(TimerRefHR);
     FallenBelow(TimerRefHR);
     StuckCar(TimerRefHR);
     if (s_backInCarUntil) {
@@ -10968,9 +11310,10 @@ void RaceMod_Frame(void) {
     Marshal(now);
     Shuttles(now, driving);
     if (!Opponents()) return;
-    // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car
+    // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car -- but for
+    // on_foot=, where he gets out to explore and they race on (OnFoot)
     if (!s_nbSpots && !s_oppStarted && driving && (Input & I_UP)) s_oppStarted = 1;
-    const int moving = driving && (s_nbSpots ? s_phase == PHASE_RACE : s_oppStarted);
+    const int moving = (driving || RaceMod_OnFoot()) && (s_nbSpots ? s_phase == PHASE_RACE : s_oppStarted);
     // (how far round the player is, for the opponents that push harder when they have fallen behind)
     const double me = moving && s_opp[0].Count ? PlayerProgress() : 0;
     s_carsScene = NumCube;
@@ -12025,6 +12368,7 @@ S32 RaceMod_ReadPage(const char *path, T_RACE_PAGE *page) {
         else if (!strcmp(key, "gears")) gears = atoi(v);
         else if (!strcmp(key, "automatic")) automatic = atoi(v);
         else if (!strcmp(key, "grid")) page->Spots++;
+        else if (!strcmp(key, "on_foot")) page->OnFoot = atoi(v);
         else if (!strcmp(key, "powerup_only")) {
             int used = 0, value;
             nbOnly = 0;
@@ -12254,7 +12598,7 @@ static void ResetTrack(void) {
     s_shardModel = s_shardBit = -1;
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
-    s_nbFlyers = 0; s_nbSpooks = 0; HalloweenReset(); memset(&s_marshal, 0, sizeof(s_marshal)); s_gantryPts = -1;
+    s_nbFlyers = 0; s_nbSpooks = 0; s_partyBox = 0; HalloweenReset(); memset(&s_marshal, 0, sizeof(s_marshal)); s_gantryPts = -1;
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
     s_guardSize = 1.0; s_nbTeleports = 0; s_teleportedAt = 0; s_passageAt = s_passageUntil = 0;
     memset(&s_frog, 0, sizeof(s_frog)); s_frog.Arc = -1;
@@ -12273,6 +12617,7 @@ static void ResetTrack(void) {
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0;
+    s_onFoot = 0; s_footArmed = 0; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_footActWas = 0; s_walkN = 0; s_walkCar = 0; s_stopReach = 0; s_stopping = 0; s_stopResume = 0;
     s_difficulty = -1; memset(s_hasLevel, 0, sizeof(s_hasLevel)); s_diffEase = 0; s_diffItems = 100; s_diffAim = 0; s_diffHazards = 100;
     s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_prizeForce = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
     s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes)); memset(s_shots, 0, sizeof(s_shots));

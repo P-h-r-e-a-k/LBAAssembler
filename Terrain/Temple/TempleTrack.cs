@@ -21,7 +21,11 @@ internal static class TempleTrack
     // past the retail game's scenes and the other tracks' (the palace's 265-299, Island CX's 300)
     public const int FirstScene = 301;
     public const string PlanResource = "RaceTrackPlan.Temple.json";
-    public static readonly (int Cx, int Cz)[] SceneCubes = CubesOf(PlanResource);
+    // (and, after the route's, the cubes of the secret party's way and its hall, walked on foot -- TempleHalloween.PartyCubes: after them so
+    // that no scene of the route's moves)
+    private static readonly (int Cx, int Cz)[] RouteCubes = CubesOf(PlanResource);
+    public static readonly (int Cx, int Cz)[] SceneCubes = WithParty(RouteCubes);
+    private static (int Cx, int Cz)[] WithParty((int Cx, int Cz)[] route) => route.Length == 0 ? route : route.Concat(TempleHalloween.PartyCubes.Where(c => !route.Contains(c))).ToArray();
     public static int LastScene => FirstScene + Math.Max(1, SceneCubes.Length) - 1;
     public const int IslandByte = TempleIsland.IslandByte;
     // Otringal's scene outside the palace: every scene's header (its light) -- and LBA2's own Temple of Bù's first scene (scene 10) their
@@ -62,8 +66,9 @@ internal static class TempleTrack
     public static List<string> Install(string gameDirectory, string lba1Directory)
     {
         var plan = RaceTrackPlan.Built(RaceTrackIsland.Temple);
-        var built = TempleIsland.Build(lba1Directory, gameDirectory, cuts: plan.TempleCuts, floors: plan.TempleFloors, skirts: plan.TempleSkirts, road: plan,
-            walls: plan.TempleWalls);
+        // (the secret party's doorway and bridge with the road's doorways and walls: TempleHalloween.PartyCuts, PartyWalls)
+        var built = TempleIsland.Build(lba1Directory, gameDirectory, cuts: (plan.TempleCuts ?? Array.Empty<int[]>()).Concat(TempleHalloween.PartyCuts()).ToArray(),
+            floors: plan.TempleFloors, skirts: plan.TempleSkirts, road: plan, walls: (plan.TempleWalls ?? Array.Empty<int[]>()).Concat(TempleHalloween.PartyWalls()).ToArray());
         var log = new List<string>(built.Log);
         log.AddRange(TempleIsland.Install(gameDirectory, built));
         log.AddRange(AddScenes(gameDirectory));

@@ -1304,6 +1304,7 @@ void ChangeCube() {
     SaveComportement = Comportement;
     //	ValideBeta = ptrobj->Obj.Beta ;
 
+    extern S32 RaceMod_OnFoot(void);
     if (FlagReajustPosTwinsen
             AND !(ptrobj->WorkFlags & ANIM_MASTER_GRAVITY)
                 AND(ptrobj->CarryBy == -1 OR !(ptrobj->CarryBy & CARRY_BY_DECORS))) {
@@ -1312,7 +1313,9 @@ void ChangeCube() {
             ShadowX = SceneStartX;
             // (a scene that starts on a race-track mod's raised road starts on it, not on the ground under it)
             RaceMod_FloorFor(SceneStartY);
-            ShadowY = CalculAltitudeObjet(SceneStartX, SceneStartZ, 0);
+            // (a race-track mod's Twinsen out of his car exploring -- on_foot=, RACEMOD.CPP: from the height he came in at, onto the top of
+            // the floor he is in there; from the ground he went through the temple's floors into the sea under them)
+            ShadowY = RaceMod_OnFoot() ? SceneStartY : CalculAltitudeObjet(SceneStartX, SceneStartZ, 0);
             ShadowZ = SceneStartZ;
         } else
             GetShadow(SceneStartX, SceneStartY, SceneStartZ);
@@ -1332,6 +1335,8 @@ void ChangeCube() {
         ptrobj->Obj.Y = SceneStartY;
         ptrobj->Obj.Z = SceneStartZ;
     }
+    // (... and onto the floor he came in inside, carried by the decor or not: RACEMOD.CPP RaceMod_FootArrive)
+    { extern void RaceMod_FootArrive(void); RaceMod_FootArrive(); }
 
     RestartPerso();
 

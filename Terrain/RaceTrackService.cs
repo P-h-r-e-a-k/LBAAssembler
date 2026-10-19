@@ -190,7 +190,10 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Marshal = null,
         // Music: the race's own music, a file in the game folder (RACEMOD.CPP music=) -- the Temple of Bú's LBA1 temple music, which the build
         // makes from the player's LBA1 (Temple.TempleMusic), since 2026-10-18
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Music = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Music = null,
+        // OnFoot: Twinsen may get out of his car and walk about while the race goes on (RACEMOD.CPP on_foot=) -- the Temple of Bú's secret
+        // party (Temple.TempleParty), since 2026-10-19
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] bool? OnFoot = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -453,6 +456,8 @@ internal static class RaceTrackService
             // game's install (PrivateCars off) the same but for the toy truck's -- RaceTrackCharacterCars.InstallMonsters. The Temple's
             // scenes have their cars already: the racer entity's bodies VampireGeneric.., which this gives it.)
             log.AddRange(RaceTrackCharacterCars.InstallMonsters(gameDirectory));
+            // (and the Temple of Bú's secret party's disco ball and bubbles after even those: no body moves -- TempleParty)
+            if (session.Party) log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.PartyInstall(gameDirectory));
             progress?.Report(new(1, "Done"));
             var count = tracks.Sum(t => t.Options.Island.Tracks);
             var built1 = count == 1 ? "The race track is built." : $"{count} race tracks are built ({string.Join(", ", tracks.Select(t => t.Options.Island.Built))}); Play races the one of the island the editor has open.";
@@ -476,7 +481,7 @@ internal static class RaceTrackService
     // all of them, and each track's record for RACETRACK.JSON, in the order built.
     public sealed class BuildSession
     {
-        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars, GuardBodies, Torturers, Marshal, Risers;
+        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars, GuardBodies, Torturers, Marshal, Risers, Party;
         // (Build's: the palace dungeon's torturers made when every track is -- Finish)
         public bool Together;
         public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel;
@@ -775,6 +780,17 @@ internal static class RaceTrackService
         log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.Install(gameDirectory, report));
         // ... and its giant webs
         log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.InstallGiantWebs(gameDirectory, report));
+        // ... and the guests of its secret party (the spooks' bodies are in now); their own bodies at the end of a build of several tracks
+        // (Build: every other track's bodies where they were), or here
+        if (report.OnFoot)
+        {
+            log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.PartyGuests(gameDirectory, report));
+            if (!session.Party)
+            {
+                session.Party = true;
+                if (!session.Together) log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.PartyInstall(gameDirectory));
+            }
+        }
         // ... and the palace dungeon's torturers, their whips in hand: at the end of a build of several tracks (Build: every other track's
         // bodies and animations where they were), or here
         if (report.Guards.Any(g => (int)g[0] == RaceTrackGuards.Torturer) && !session.Torturers)
@@ -987,7 +1003,8 @@ internal static class RaceTrackService
             WebParts: report.GiantWebs.Count(w => w.SpiderA >= 0) > 0
                 ? report.GiantWebs.Where(w => w.SpiderA >= 0).SelectMany((w, i) => LBAAssembler.Terrain.Temple.TempleHalloween.PartLines(w).Select(p => new[] { i }.Concat(p).ToArray())).ToList()
                 : null,
-            Marshal: report.Marshal);
+            Marshal: report.Marshal,
+            OnFoot: report.OnFoot ? true : null);
     }
 
     // A machine gun on its knoll as the car file has it: its scene and actors, the muzzle (the gun stands 0.8 cells towards where it fires

@@ -148,6 +148,11 @@ internal static class TempleObjects
         // left out where it lies on its cell's side and the box beyond is solid and as wide there
         var lowest = new Dictionary<(int X, int Z), int>();
         foreach (var (x, y, z) in whole.Keys) lowest[(x, z)] = lowest.TryGetValue((x, z), out var l) ? Math.Min(l, y) : y;
+        // (a column the race fills where LBA1 has none -- the secret party's bridge, TempleHalloween.PartyWalls: its own lowest)
+        var own = new Dictionary<(int X, int Z), int>();
+        foreach (var (x, y, z) in layout.Cells.Keys)
+            if (!lowest.ContainsKey((x, z))) own[(x, z)] = own.TryGetValue((x, z), out var o) ? Math.Min(o, y) : y;
+        foreach (var (column, y) in own) lowest[column] = y;
 
         // LBA1's own picture of the temple as it has it (Lba1GridRenderer's order: by z, by x, up the layers; not the cells that close the
         // 8|40 join's slot, TempleLayout.Filled), each pixel the last brick to draw it (its place in that order, from 1; 0 none) -- where a

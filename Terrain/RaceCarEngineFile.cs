@@ -141,6 +141,8 @@ internal static class RaceCarEngineFile
             if (marshal.Length >= 11) text.Append($"marshal_plinth={marshal[10]}\n");
             if (marshal.Length >= 15) text.Append($"marshal_start={string.Join(' ', marshal.Skip(11).Take(4))}\n");
         }
+        // Twinsen may get out of his car (Space, stopped) and explore while the race goes on (the Temple of Bú's secret party)
+        if (track?.OnFoot == true) text.Append("on_foot=1\n");
         // the people in the cars' way, stepping out at them, striking and throwing (the Emperor's palace's)
         foreach (var guard in track?.Guards ?? new()) text.Append($"guard={string.Join(' ', guard)}\n");
         if (track?.Guards is { Count: > 0 }) text.Append($"guard_size={(int)Math.Round(RaceTrackGuards.Size * 100)}\n");

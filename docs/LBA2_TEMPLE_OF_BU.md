@@ -856,6 +856,65 @@ every one placed as HEAD's: from the back (seeds 3, 2, 1) 308.1, 330.7, 328.4 s 
 against 290.7 (2nd); hard from the back 282.3 against 282.5; at 85 % of the line's speed 319.4 against 317.4. (The test pilot doesn't steer round a pack: from the back at easy it follows the eased-off pack all race, with the
 old cars as with the new.) `templeclip`: nothing through the deck.
 
+### The secret party (2026-10-19)
+
+The user, with a picture of the hall: "let's create a secret halloween party area, complete with traditional halloween characters and
+accompanyments here that the user can find if they get out of the car and explore". The hall is LBA1 scene 41's great hall, the temple's
+north-east building (island cells 548..658 x 259..321, floor layer 12 -- 17,152): walls a layer and a half high dividing it, a stair down
+out of its south side (LBA1's way in, from its lower east hall), a raised dais with a stair at its east end. No road comes near it: its
+nearest is the long corridor 150 cells south and 3,000 lower, and nothing of it shows from the road but a jack-o'-lantern at the mouth of
+the side passage that opens off the corridor.
+
+![The user's picture, the hall before and after](temple/party_before_after.png)
+
+- *The way there, on foot* (RACEMOD.CPP `on_foot=1`, the Temple's race file alone): Space gets Twinsen out of his car once it has all but
+  stopped (never at the start, in a jump, a loop or a skid), as the behaviour menu would -- sporty, so he runs. From the corridor up the
+  side passage (LBA1 scene 41's west wing, floor 8), up its stair onto the gallery (12), through a doorway the build cuts in the gallery's
+  north wall, over a short bridge it lays across the dark (`TempleHalloween.PartyCuts`, `PartyWalls`: TempleIsland's cuts and walls) and
+  into the hall: about a minute's run. The way's cubes get scenes of their own after the route's (`TempleHalloween.PartyCubes`: scenes
+  328-334, no route scene moves), with cube-change zones like the route's. The hall's south side is open to the dark, as LBA1 draws no
+  wall on the side its camera looks from: boxes nothing draws keep a guest from walking off (but at the doorway and the stair).
+- *On foot the race goes on*: the opponents keep racing (through him: they pushed him along the road at their speed), the clock runs.
+  Nothing of the race's holds him: the raised road's rail lets him off it, the rescues and the stuck-car reset are the car's. The engine
+  lets him up the temple's stairs (steps of 192: `RaceMod_StepUp`, 220 on foot, the game's 128 otherwise) and puts him on the floor he
+  comes into a scene inside (`RaceMod_FootArrive`: the race lowered the corridor's floor under its road, 320 under the passage's, at the
+  cubes' edge between them). Back in his car where it stands -- carried into its scene, however far -- with Space by it, with Ctrl
+  anywhere, when he falls further than 2,300 (off a ledge into the dark), into the sea or off the island's edge, and after five minutes on
+  foot; his life is kept. Every other track: nothing changes (Space keeps the game's own doing, the race waits for him).
+- *The party* (`Terrain/Temple/TempleParty.cs`, `PlaceParty`: 83 pieces of the island's decor, 22 of them solid, 45 bodies of TEMPLE.OBL
+  after every other, 9,372 faces): a banquet of two tables -- a punch bowl of glowing green punch with an eye floating in it, a three-tier
+  cake with candles and a pumpkin, cookies, candy corn, goblets of red wine, a skull with a candle, candelabras; the witch stirring her
+  cauldron of green brew over a fire, her black cat and her broom; a glowing dance floor; the vampire at the door greeting his guests (his
+  goblet raised), Frankenstein's monster, the mummy at the banquet, a howling werewolf, two zombies (one after the punch), the grim reaper
+  with his scythe among the gravestones and crosses; an open coffin against the wall, LBA1's skeletons slumped and fallen, black cats,
+  jack-o'-lanterns, a pile of pumpkins, candles, balloons, orange, purple and green bunting across the hall, cobwebs and spiders.
+- *The guests the race draws* (`PartyGuests`, `spook=` flags 32: drawn only while Twinsen is about the party; 64 on the floor, 128 swaying,
+  256 standing, 512 spinning): five of the game's rabbibunny skeletons (the risers' lighter body) dancing a conga round the dance floor
+  and three more dancing on the spot, the band on the dais -- the franco drummer and two guitarists, the old rabbibunny and the desert
+  sphero, each in its own animation -- the race's ghosts over the dance floor and the banquet, three flying rats round high over the hall,
+  a witch on her broomstick round it, a spinning disco ball and bubbles out of the cauldron (their two bodies at the very end of the build,
+  the rabbibunny skeleton's entity's bodies 60 and 61: no body before them moves).
+
+![The party, the island's decor](temple/party_overview.png)
+
+![The party in the engine](temple/party_views.png)
+
+- *The race game*: its controls page shows "Space / X button: Get out / back in" for a track whose race lets him out (`on_foot=`), the
+  page as it was for any other.
+
+![The controls page](temple/party_controls.png)
+
+*Tests* (`E:\dump\TEMP\temple_party`): `walkparty.sh <tag> <ticks>` -- the race, the test pilot stopping the car on the corridor (console
+`racestop <x> <z> <reach>`), Twinsen out, through the passage, the stair, the gallery and the bridge, round the hall (the dance floor, the
+banquet, the graveyard, the dais) and back (console `racewalk [+] <x z>... [car]`), into his car with Space, the pilot driving on to the end
+of the race: 169.5 s on foot, the opponents racing on meanwhile, no rescue, no car stuck, no crash. A Ctrl from the hall carries him to his
+car three scenes away; a fall off the gallery puts him back in it. Race behaviour unchanged: from pole, with qualifying, hard, easy and the
+time trial (`regress.sh`) every lap to the hundredth as HEAD's build and engine. Every other track built together: its 304 files the same
+as HEAD's; every other track's race the same (17 tracks, `others.sh`). `templeclip`: as before. Frame times: a solo lap 11.40 ms a frame
+against HEAD's 11.27 (the machine shared); the hall at the dance floor 12.5 ms (p95 16.1). Other scripts: `build.sh`, `racefile.sh`,
+`rebuild.sh`, `pilot.sh`, `roomtest.sh`, `views.sh` (the engine's shots round a place), `occ.py` (where one can walk round a height, from
+the island's boxes), `topall.sh`, `beforeafter.py`, `menudrive.ps1` (the race game's pages, headless).
+
 Tests: `E:\dump\TEMP\temple_monsters` -- `cars.sh [palette]` (`ScriptRoundTrip monstercars <game> <scratch>`, then the three cars'
 views), `build.sh <game> base|new [islands...]`, `racefile.sh <game> base|new`, `pilot.sh`, `regress.sh <prefix> <game> <engine>`,
 `extra.sh` (six more from the back, hard, easy, off the line, slow), `summary.sh`, `cmpgames.py <A> <B>` (two builds file by file,
