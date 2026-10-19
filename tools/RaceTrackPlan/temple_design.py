@@ -27,9 +27,10 @@ ground"), that stretch lies on the temple's floors, down and up the stairs, with
 cars may drive off it onto the floor there (the ground stretch, below). And LBA1's hidden passage as a secret shortcut (TEMPLE_SHORTCUT=0:
 none): the hidden door at the sunken room's north end (LBA1's stone door, scene 8 actor 29; walking into the passage behind it, zone 36,
 puts Twinsen at point 30 in the west rooms -- Twinsen's life script) walled up, plain wall; a car driven off the road across the room's
-floor into that stretch of wall is taken by a teleporter (RACEMOD.CPP teleport=) through the passage -- a moment in the dark -- and comes
-out on the west rooms' floor in front of their north wall (the user's red dot), plain wall too, from where it drives back onto the lap past
-the U-bend; the lap's checkpoints keep off the stretch it skips, so a lap through it counts; the opponents keep to the lap.
+floor into that stretch of wall is taken by a teleporter (RACEMOD.CPP teleport=) and is at once on the west rooms' floor in front of their
+north wall (the user's red dot), plain wall too, from where it drives a short way back onto the lap -- the U-bend's way north moved east
+under that room, its corner west across the room's mouth; the lap's checkpoints keep off the stretch it skips, so a lap through it counts;
+the opponents keep to the lap.
 
 Usage: temple_design.py <game folder with TEMPLE.JSON (and TEMPLE.ILE)> <out plan>, with TEMPLE_SOLIDS=<a folder `ScriptRoundTrip
 templebuild` built the island into on its own> -- its TEMPLE.ILE's solid boxes are the floors the ground stretch lies on (else GAME's).
@@ -159,9 +160,15 @@ ROUTE_EAST = os.environ.get('TEMPLE_ROUTE_EAST', '1') != '0'
 SHORTCUT = ROUTE_EAST and os.environ.get('TEMPLE_SHORTCUT', '1') != '0'
 # (EAST_X: the north stairs' middle -- they are 9 cells across between their walls, x 404..413, the road's width; the south stairs 18)
 EAST_X, HAIR_Z, HAIR_W, GALLERY_Z, S_FROM, S_TO = 408.5, 266, 385, 296, 426, 404
+# (the U-bend's way north, LEG_X: x 300 -- with the shortcut, moved east under the room its car comes out in (the user, 2026-10-19, after
+# driving it: "let's also tweak the track near the shortcut exit to make it easier to rejoin, I've added a basic track outline, but let's
+# keep the smooth turn we already have" -- their outline the way north 11 cells further east, against the room's east wall): x 307, as far
+# east as it goes with that wall standing (x 313: the road's half width and CUT short of it, nothing of it cut -- past it the black pit,
+# x 316..326), so the corner west at its top lies across the room's mouth, under the car coming out; its corners' radii as they were)
+LEG_X = 307 if SHORTCUT else 300
 if ROUTE_EAST:
     lap1 = path([(E_END, CORR_Z), (W_END, CORR_Z), (W_END, S_FROM), (EAST_X, S_TO), (EAST_X, HAIR_Z), (HAIR_W, HAIR_Z), (HAIR_W, GALLERY_Z),
-                 (340, GALLERY_Z), (340, 372), (300, 372), (300, 312), (248, 312), (248, 400), (276, 400), (SPIRAL_W[0] - SPIRAL_W[2], SPIRAL_W[1])],
+                 (340, GALLERY_Z), (340, 372), (LEG_X, 372), (LEG_X, 312), (248, 312), (248, 400), (276, 400), (SPIRAL_W[0] - SPIRAL_W[2], SPIRAL_W[1])],
                 [0, 12, 14, 14, 11, 11, 10, 10, 10, 10, 12, 10, 10, 10, 0])
 else:
     lap1 = path([(E_END, CORR_Z), (W_END, CORR_Z), (W_END, 312), (340, 312), (340, 372), (300, 372), (300, 312), (248, 312), (248, 400),
@@ -191,7 +198,7 @@ i_west = nearest((W_END, CORR_Z))
 i_hall_in = nearest((W_END, 392), i_west)            # the lower hall's south wall
 i_hall_n = nearest((W_END, 312), i_west)
 i_hall_sw = nearest((340, 372), i_hall_n)
-i_west_rooms = nearest((300, 372), i_hall_sw)
+i_west_rooms = nearest((LEG_X, 372), i_hall_sw)
 i_edge = nearest((276, EDGE_Z), i_west_rooms)
 i_down_in, i_down_out = o_down, o2
 i_crypt_w = nearest((372, SPIRAL_W[1] + SPIRAL_W[2]), i_down_out)
@@ -329,27 +336,39 @@ half[corridor] = HALF_CORRIDOR
 # lintel; LBA1's door, in there, left out), the room's floor in front of it the ground road's floor (the cars drive off the road onto it:
 # raisedFloors). A car driven into that stretch of wall -- its middle within SECRET_DEEP of the wall's face, between SECRET_X -- is taken
 # (RACEMOD.CPP teleport=) and comes out in the west rooms where the user's red dot is (OUT_X, OUT_Z: in front of their north wall, plain
-# wall -- no doorway there either), heading south at OUT_SPEED at the most (world units a second), after OUT_PASSAGE ms in the passage --
-# the screen black, then fading in, the car held where it comes out (a car out at once at its own speed saved 7.8 s of the lap, "very
-# strong"), on their floor (an open area: OPEN_EXIT, its floor the race-track mode's, the camera on the car's trail) down to the lap's corner
-# into the U-bend's way west, whose rails on that side are left off (REENTRY: the floor beside it). The lap's checkpoints keep off the
-# stretch the passage skips (the plan's shortcuts), so a lap through it counts; the opponents keep to the lap.
+# wall -- no doorway there either), looking OUT_BETA (south), on their floor (an open area: OPEN_EXIT, its floor the race-track mode's, the
+# camera on the car's trail) a short drive down onto the lap's corner west across the room's mouth (the way north moved under it: LEG_X),
+# whose rails on that side are left off (REENTRY: the floor beside it). Out at once (the user, after driving it with a passage of 3.5 s in
+# the dark: "the screen fades to black for too long, we need to instantly come out of the exit"): OUT_PASSAGE 0 -- no black screen, the car
+# out the frame it drives into the wall, the camera behind it there -- at OUT_SPEED at the most (world units a second: 10,000 is 70 km/h,
+# the race car's 110 km/h kept to two thirds of it, slow enough to turn onto the corner 25 cells on). The test pilot's lap through it: 8.6 s
+# quicker than its 59.1 s round the lap (out standing, OUT_SPEED 0: 7.5 s; at its own speed, -1: 8.8 s -- most of it the 307 cells it
+# skips). The lap's checkpoints keep off the stretch it skips (the plan's shortcuts), so a lap through it counts; the opponents keep to the lap.
 SECRET_X, SECRET_FACE, SECRET_DEEP = (395.4, 400.6), 307.0, 2.0
 TEMPLE_WALLS = [[57, 16, 1, 6, 59, 16], [58, 16, 1, 6, 59, 16]] if SHORTCUT else []
-OUT_X, OUT_Z, OUT_SPEED, OUT_PASSAGE = 306.0, 282.5, 0, 3500
+OUT_X, OUT_Z, OUT_BETA, OUT_SPEED, OUT_PASSAGE = 306.0, 282.5, 0, 10000, 0
 OPEN_EXIT = [299.2, 271.2, 313.8, 309.0] if SHORTCUT else None
-REENTRY = ((300, 334), (296, 315))              # the lap's points between these (the x 300 leg's last stretch, the corner): floor beside, no rail
+REENTRY = ((LEG_X, 334), (298, 312))            # the lap's points between these (the way north's last stretch, the corner -- to the room's
+                                                # railing, x 296..299: past it, the west rooms' wide floor): floor beside, no rail
 SKIP_TO = (280, 312)                            # ... and the lap's point past where the car comes back onto it (the stretch it skips ends there)
+# (no decor where the shortcut's car drives: on the sunken room's floor between the road and the walled-up door, from its face APPROACH
+# cells south -- the user: "clean up the decor immediately on the approach to the shortcut to make it easier to enter" -- the floor strip
+# beside the road past the niches in the room's west wall, the niches' fronts; and from where it comes out down onto the road, EXIT_WAY)
+APPROACH = 43.0
+EXIT_WAY = [OPEN_EXIT[0], OPEN_EXIT[1], OPEN_EXIT[2], 316.0] if SHORTCUT else None
 for lx_, lz_, y0_, y1_, _, _ in TEMPLE_WALLS:
     extra_solid.append(((OX + SCALE * lx_) * 512, top(y0_ - 1), (OZ + SCALE * lz_) * 512, (OX + SCALE * (lx_ + 1)) * 512, top(y1_), (OZ + SCALE * (lz_ + 1)) * 512))
 
 
-def secret_off(x, z):
+def secret_off(x, z, wide=False):
     """How far (x, z) is from the places the shortcut's car drives off the road -- the floor before the walled-up door, the west rooms'
-    floor it comes out on (cells; 0 in them): no decor there."""
+    floor it comes out on (cells; 0 in them): no decor there. (Each piece of decor is placed clear of those, as since the shortcut was made;
+    `wide`, the approach's APPROACH cells and the way from the room down onto the road, EXIT_WAY: what is in them is taken away after, so that
+    the decor along the rest of the lap stays as it was.)"""
     if not SHORTCUT: return 1e9
     best = 1e9
-    for x0, z0, x1, z1 in ((SECRET_X[0] - 2, SECRET_FACE, EAST_X - HALF, SECRET_FACE + 16), (OPEN_EXIT[0], OPEN_EXIT[1], OPEN_EXIT[2], OPEN_EXIT[3])):
+    places = ((SECRET_X[0] - 2, SECRET_FACE, EAST_X - HALF, SECRET_FACE + (APPROACH if wide else 16)), tuple(EXIT_WAY if wide else OPEN_EXIT))
+    for x0, z0, x1, z1 in places:
         best = min(best, math.hypot(max(x0 - x, 0, x - x1), max(z0 - z, 0, z - z1)))
     return best
 
@@ -850,7 +869,7 @@ for p0, p1, hy in (((W_END + 30, CORR_Z), (E_END - 20, CORR_Z), FIRST + 3200), (
     spooks.append({'kind': 'witch', 'flags': 1, 'y': spook_height('witch', way, False, hy), 'way': way})
 # ghosts drifting across the road, over the cars and the camera (the crypt's west room's past the start line and the flag marshal's places
 # by it: across at the line, it drifted through her -- RACEMOD.CPP marshal=)
-ghost_at = [nearest(p) for p in ((420, CORR_Z), (500, CORR_Z), (W_END, 360), (300, 340), (262, 372), (417, CRYPT_Z), (470, 618), (500, 560), (540, SPIRAL_E[1] + SPIRAL_E[2]))]
+ghost_at = [nearest(p) for p in ((420, CORR_Z), (500, CORR_Z), (W_END, 360), (LEG_X, 340), (262, 372), (417, CRYPT_Z), (470, 618), (500, 560), (540, SPIRAL_E[1] + SPIRAL_E[2]))]
 for j, i in enumerate(ghost_at):
     way = across(i, half[i] + 10)
     spooks.append({'kind': 'ghost', 'flags': 0, 'y': spook_height('ghost', way, False, h[i] + 2800 + 300 * (j % 3)), 'way': way})
@@ -1348,16 +1367,16 @@ teleports, shortcuts = [], []
 if SHORTCUT:
     def plan_index(i): return int((i - i_start) % n)
     room = top(0)
-    teleports.append([SECRET_X[0], SECRET_FACE, SECRET_X[1], SECRET_FACE + SECRET_DEEP, room - 600, room + 2400, OUT_X, OUT_Z, FIRST + 20, 0, OUT_SPEED, OUT_PASSAGE])
+    teleports.append([SECRET_X[0], SECRET_FACE, SECRET_X[1], SECRET_FACE + SECRET_DEEP, room - 600, room + 2400, OUT_X, OUT_Z, FIRST + 20, OUT_BETA, OUT_SPEED, OUT_PASSAGE])
     i_in, i_back = nearest((EAST_X, SECRET_FACE + 3), i_west, o_down), nearest(SKIP_TO, i_west, o_down)
     shortcuts.append([plan_index(i_in), plan_index(i_back)])
     print('shortcut: the walled-up door (x %.1f..%.1f, its face z %.1f), the lap left at point %d (%.1f, %.1f), out at (%.1f, %.1f) at %d units/s after %d ms, back on the lap by '
           'point %d (%.1f, %.1f): skips %.0f cells of the lap' % (*SECRET_X, SECRET_FACE, i_in, *pts[i_in], OUT_X, OUT_Z, OUT_SPEED, OUT_PASSAGE, i_back, *pts[i_back], S[i_back] - S[i_in]))
-    # (no decor where the car drives off the road for it, nor where it comes out)
+    # (no decor where the car drives off the road for it -- the whole approach -- nor where it comes out and on its way down to the road)
     before = len(decor) + len(scares) + len(spooks)
-    decor = [d for d in decor if secret_off(d[1], d[2]) >= 1.5]
-    scares = [s_ for s_ in scares if secret_off(s_[1], s_[2]) >= 1.5]
-    spooks = [s_ for s_ in spooks if s_['kind'] != 'riser' or secret_off(*s_['way'][0]) >= 1.5]
+    decor = [d for d in decor if secret_off(d[1], d[2], wide=True) >= 1.5]
+    scares = [s_ for s_ in scares if secret_off(s_[1], s_[2], wide=True) >= 1.5]
+    spooks = [s_ for s_ in spooks if s_['kind'] != 'riser' or secret_off(*s_['way'][0], wide=True) >= 1.5]
     print('shortcut: %d pieces of decor left out where its car drives' % (before - len(decor) - len(scares) - len(spooks)))
 
 # ---- the lap from the start
