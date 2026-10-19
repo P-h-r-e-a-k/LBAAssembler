@@ -43,6 +43,17 @@ internal static class TempleTrack
                 for (var dx = -1; dx <= 1; dx++)
                     cubes.Add(((int)Math.Floor((x + dx * reach) / 64), (int)Math.Floor((z + dz * reach) / 64)));
         }
+        // (and its branches' roads -- the hidden passage's shortcut: its spur and its way out -- not their gaps, where there is no road)
+        foreach (var b in plan.Branches ?? Array.Empty<BranchRun>())
+            for (var i = 0; i < b.Points.Length; i++)
+            {
+                var half = b.Halfs is { } halfs && i < halfs.Length ? halfs[i] : plan.RaisedHalf ?? 4.5;
+                if (half <= 0) continue;
+                double x = plan.OriginCellX + b.Points[i][0], z = plan.OriginCellZ + b.Points[i][1];
+                for (var dz = -1; dz <= 1; dz++)
+                    for (var dx = -1; dx <= 1; dx++)
+                        cubes.Add(((int)Math.Floor((x + dx * (half + 1)) / 64), (int)Math.Floor((z + dz * (half + 1)) / 64)));
+            }
         return cubes.OrderBy(c => c.Cz).ThenBy(c => c.Cx).ToArray();
     }
     public static int SceneOf(int cx, int cz) => Array.IndexOf(SceneCubes, (cx, cz)) is var i and >= 0 ? FirstScene + i : -1;

@@ -779,6 +779,32 @@ internal static class TempleActors
             var gap = Math.Max(0, Math.Max(cMin - to, from - cMax));
             if (gap < best) { best = gap; why = $"road point {i}, {(gap > 0 ? $"{gap:0.0} cells beside its deck" : "over its deck")}, {lo.Y - h:0} to {hi.Y - h:0} over it"; }
         }
+        // (and the branches' roads -- the hidden passage's shortcut: its spur and its way out; not their gaps)
+        foreach (var b in plan.Branches ?? Array.Empty<BranchRun>())
+            for (var i = 0; i < b.Points.Length && i < b.Heights.Length; i++)
+            {
+                var half = b.Halfs is { } halfs && i < halfs.Length ? halfs[i] : plan.RaisedHalf ?? 4.5;
+                if (half <= 0) continue;
+                int j = Math.Min(i + 1, b.Points.Length - 1), k = Math.Max(0, j - 1);
+                double px = plan.OriginCellX + b.Points[i][0], pz = plan.OriginCellZ + b.Points[i][1];
+                double dx = b.Points[j][0] - b.Points[k][0], dz = b.Points[j][1] - b.Points[k][1], len = Math.Sqrt(dx * dx + dz * dz);
+                if (len < 1e-9 || len > 2) continue;
+                dx /= len; dz /= len;
+                double x0 = lo.X / 512.0 - px, x1 = hi.X / 512.0 - px, z0 = lo.Z / 512.0 - pz, z1 = hi.Z / 512.0 - pz;
+                double aMin = double.MaxValue, aMax = double.MinValue, cMin = double.MaxValue, cMax = double.MinValue;
+                foreach (var (cx, cz) in new[] { (x0, z0), (x1, z0), (x0, z1), (x1, z1) })
+                {
+                    var along = cx * dx + cz * dz; var across = -cx * dz + cz * dx;
+                    aMin = Math.Min(aMin, along); aMax = Math.Max(aMax, along); cMin = Math.Min(cMin, across); cMax = Math.Max(cMax, across);
+                }
+                if (aMin > 0.3 || aMax < -0.3) continue;
+                var h = b.Heights[i];
+                if (hi.Y <= h + DeckSurface || lo.Y > h + DeckOver) continue;
+                var margin = hi.Y > h + RailTop ? RoadMargin : 0;
+                if (cMin > half + margin || cMax < -half - margin) continue;
+                var gap = Math.Max(0, Math.Max(cMin - half, -half - cMax));
+                if (gap < best) { best = gap; why = $"branch road point {i}, {(gap > 0 ? $"{gap:0.0} cells beside its deck" : "over its deck")}, {lo.Y - h:0} to {hi.Y - h:0} over it"; }
+            }
         return why;
     }
 

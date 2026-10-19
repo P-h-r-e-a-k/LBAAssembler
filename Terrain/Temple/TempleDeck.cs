@@ -34,15 +34,30 @@ internal sealed class TempleDeck
             if (len < 1e-6 || len > 2) continue;
             var (sa, sb) = (Strip(i), Strip(j));
             var strip = sa is { } p ? sb is { } q ? (Math.Min(p.Lo, q.Lo), Math.Max(p.Hi, q.Hi)) : p : sb ?? (0, 0);
-            var seg = new Seg(ax, az, bx, bz, hs[i], hs[j], Math.Max(Half(i), Half(j)) + Edge, strip.Item1 - Edge, strip.Item2 + Edge);
-            var reach = Math.Max(seg.Half, Math.Max(Math.Abs(seg.Lo), Math.Abs(seg.Hi))) + 0.5;
-            for (var x = (int)Math.Floor(Math.Min(ax, bx) - reach); x <= (int)Math.Floor(Math.Max(ax, bx) + reach); x++)
-                for (var z = (int)Math.Floor(Math.Min(az, bz) - reach); z <= (int)Math.Floor(Math.Max(az, bz) + reach); z++)
-                {
-                    if (!grid.TryGetValue((x, z), out var list)) grid[(x, z)] = list = new List<Seg>();
-                    list.Add(seg);
-                }
+            Add(new Seg(ax, az, bx, bz, hs[i], hs[j], Math.Max(Half(i), Half(j)) + Edge, strip.Item1 - Edge, strip.Item2 + Edge));
         }
+        // (and the branches' roads -- the hidden passage's shortcut: its spur and its way out; not their gaps, where there is no road)
+        foreach (var b in plan.Branches ?? Array.Empty<BranchRun>())
+            for (var i = 0; i + 1 < b.Points.Length && i + 1 < b.Heights.Length; i++)
+            {
+                double BHalf(int k) => b.Halfs is { } halfs && k < halfs.Length ? halfs[k] : plan.RaisedHalf ?? 4.5;
+                if (BHalf(i) <= 0 || BHalf(i + 1) <= 0) continue;
+                double ax = plan.OriginCellX + b.Points[i][0], az = plan.OriginCellZ + b.Points[i][1], bx = plan.OriginCellX + b.Points[i + 1][0], bz = plan.OriginCellZ + b.Points[i + 1][1];
+                var len = Math.Sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az));
+                if (len < 1e-6 || len > 2) continue;
+                Add(new Seg(ax, az, bx, bz, b.Heights[i], b.Heights[i + 1], Math.Max(BHalf(i), BHalf(i + 1)) + Edge, 0, 0));
+            }
+    }
+
+    private void Add(Seg seg)
+    {
+        var reach = Math.Max(seg.Half, Math.Max(Math.Abs(seg.Lo), Math.Abs(seg.Hi))) + 0.5;
+        for (var x = (int)Math.Floor(Math.Min(seg.Ax, seg.Bx) - reach); x <= (int)Math.Floor(Math.Max(seg.Ax, seg.Bx) + reach); x++)
+            for (var z = (int)Math.Floor(Math.Min(seg.Az, seg.Bz) - reach); z <= (int)Math.Floor(Math.Max(seg.Az, seg.Bz) + reach); z++)
+            {
+                if (!grid.TryGetValue((x, z), out var list)) grid[(x, z)] = list = new List<Seg>();
+                list.Add(seg);
+            }
     }
 
     // The plan's deck, or null: a plan without heights point by point has no raised road to keep out of.

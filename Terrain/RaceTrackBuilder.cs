@@ -5470,6 +5470,11 @@ internal static class RaceTrackBuilder
         b.Arc = new bool[n];
         foreach (var j in run.ArcJumps ?? Array.Empty<int[]>())
             if (j.Length >= 4) for (var k = Math.Max(0, j[1] + 1); k < Math.Min(n, j[2]); k++) { b.Gap[k] = true; b.Void[k] = true; b.Arc[k] = true; }
+        // (a teleporter's gap: no road, nothing flown)
+        foreach (var g in (run.Gaps ?? Array.Empty<int[]>()).Where(g => g.Length >= 2))
+            for (var k = Math.Max(0, g[0]); k <= Math.Min(n - 1, g[1]); k++) { b.Gap[k] = true; b.Void[k] = true; }
+        // (the lap's colours, where it has one theme all round -- the Temple of Bú's Halloween deck)
+        if (main.Themes is { Length: > 0 } themes && themes.All(t => t is not null && t == themes[0])) b.Themes = Enumerable.Repeat(themes[0], n).ToArray();
         foreach (var p in (run.BoostPanels ?? Array.Empty<double[]>()).Where(p => p.Length >= 4))
             b.Boosts.Add(((int)p[0], (int)p[1], Math.Min(p[2], p[3]), Math.Max(p[2], p[3]), p.Length > 4 ? p[4] : 0));
         b.Hidden = new bool[n];

@@ -17,9 +17,19 @@ the black void round the temple:
 The start and finish line is on the straight through the crypt's west room, a slip lane beside it where the opponents wait while Twinsen
 drives his qualifying lap.
 
+The east route (2026-10-19, the user's test: "the green line is the proposed new track route for us to try, and the red dots are teleport
+points to act as a shortcut to match a hidden door that's in the original game"; TEMPLE_ROUTE_EAST=0 gives the lap as it was): off the long
+straight north up the first floor's east side instead -- over the sunken room with the hidden door, round a hairpin in the room north of
+it -- back west along the gallery north of the lower hall and over the hall, into the U-bend, all of it at the first floor's height (the lap
+no longer goes down into the lower hall). And LBA1's hidden passage as a shortcut (TEMPLE_SHORTCUT=0: none): a spur off the east side to
+the hidden door at the sunken room's north end (LBA1's stone door, scene 8 actor 29; walking into the passage behind it, zone 36, puts
+Twinsen at point 30 in the west rooms -- Twinsen's life script), a teleporter there (RACEMOD.CPP teleport=) putting the car out of a
+door in the west rooms' north wall (the user's red dot), on a road back onto the lap past the U-bend: a branch of the raised road (its two
+roads, the teleporter's gap between them) that the lap's checkpoints keep off, so a lap through it counts; the opponents keep to the lap.
+
 Usage: temple_design.py <game folder with TEMPLE.ILE and TEMPLE.JSON: the island built on its own, `ScriptRoundTrip templebuild`> [out plan]
 """
-import json, math, sys
+import json, math, os, sys
 import numpy as np
 sys.path.insert(0, __file__.rsplit('\\', 1)[0] if '\\' in __file__ else '.')
 from ile import load_ile, hqr_entries
@@ -134,8 +144,19 @@ def spiral(cx, cz, r, phi0, turns, sp=SP):
     return resample(np.stack([cx + r * np.cos(phi), cz + r * np.sin(phi)], 1), sp)
 
 
-lap1 = path([(E_END, CORR_Z), (W_END, CORR_Z), (W_END, 312), (340, 312), (340, 372), (300, 372), (300, 312), (248, 312), (248, 400),
-             (276, 400), (SPIRAL_W[0] - SPIRAL_W[2], SPIRAL_W[1])], [0, 12, 12, 10, 10, 10, 12, 10, 10, 10, 0])
+# (the east route, ROUTE_EAST: off the first floor's road north from the corridor's west end -- an S to the east side, EAST_X -- north up
+# it over the sunken room (layer 0) and its stairs, a hairpin round in the room north of it (its top HAIR_Z), back south and west along the
+# gallery north of the lower hall (GALLERY_Z) and on over the hall into the U-bend's way down, all at the first floor's height)
+ROUTE_EAST = os.environ.get('TEMPLE_ROUTE_EAST', '1') != '0'
+SHORTCUT = ROUTE_EAST and os.environ.get('TEMPLE_SHORTCUT', '1') != '0'
+EAST_X, HAIR_Z, HAIR_W, GALLERY_Z, S_FROM, S_TO = 407, 266, 385, 296, 426, 404
+if ROUTE_EAST:
+    lap1 = path([(E_END, CORR_Z), (W_END, CORR_Z), (W_END, S_FROM), (EAST_X, S_TO), (EAST_X, HAIR_Z), (HAIR_W, HAIR_Z), (HAIR_W, GALLERY_Z),
+                 (340, GALLERY_Z), (340, 372), (300, 372), (300, 312), (248, 312), (248, 400), (276, 400), (SPIRAL_W[0] - SPIRAL_W[2], SPIRAL_W[1])],
+                [0, 12, 14, 14, 11, 11, 10, 10, 10, 10, 12, 10, 10, 10, 0])
+else:
+    lap1 = path([(E_END, CORR_Z), (W_END, CORR_Z), (W_END, 312), (340, 312), (340, 372), (300, 372), (300, 312), (248, 312), (248, 400),
+                 (276, 400), (SPIRAL_W[0] - SPIRAL_W[2], SPIRAL_W[1])], [0, 12, 12, 10, 10, 10, 12, 10, 10, 10, 0])
 down = spiral(SPIRAL_W[0], SPIRAL_W[1], SPIRAL_W[2], math.pi, 1.25)
 CRYPT_Z = SPIRAL_W[1] + SPIRAL_W[2]          # the straight through the crypt's west room (the start's)
 lap2 = path([tuple(down[-1]), (432, CRYPT_Z), (432, 618), (500, 618), (500, SPIRAL_E[1] + SPIRAL_E[2]),
@@ -183,6 +204,9 @@ anchors = [  # (point, height of the floor the road lies on there), in the lap's
     (i_up_in, top(-5)),
     (i_climbed, FIRST), (n - 1, FIRST),                                                 # up: the spiral east of it
 ]
+if ROUTE_EAST:
+    # (round the east side and over the lower hall at the first floor's height: not down into the hall and up again)
+    anchors = [a for a in anchors if a[0] <= i_west or a[0] >= i_edge]
 floor_h = np.zeros(n)
 for (a, ha), (b, hb) in zip(anchors, anchors[1:]):
     for i in range(a, b + 1):
@@ -202,6 +226,55 @@ def layout_of(cx, cz): return int(math.floor((cx - OX) / SCALE)), int(math.floor
 half = np.full(n, HALF)
 corridor = (np.abs(pts[:, 1] - CORR_Z) < 1.0) & (pts[:, 0] > W_END + 10) & (pts[:, 0] < E_END + 1)
 half[corridor] = HALF_CORRIDOR
+
+
+# ---- the shortcut (SHORTCUT): LBA1's hidden passage. In LBA1 the sunken room under the first floor's east side (layer 0, LBA1's y 256) has a
+# stone door at its north end (scene 8 actor 29, sprite 52, at LBA1's (29024, 256, 8464): island (394.1, 305.6); it stays only while the
+# statue of Bù stands in its place, zone 18 -- Twinsen moves the statue and the door is gone); the alcove behind it is zone 36 (sceneric 16,
+# island x 393.5..399.5, z 293.5..299.5): walking into it, Twinsen's life script puts him at point 30 (island (264.6, 273.6)) in the west
+# rooms, through a stone door in their north wall (actor 21), and zone 37 behind that door takes him back to point 29 by the first door. The
+# race's: a spur off the east side north to that door (SPUR_X: the alcove's middle, DOOR_Z: the door's plane), at the road's height over the
+# sunken room, its end a doorway the car drives into (TempleHalloween's SecretDoor) -- a teleporter there (RACEMOD.CPP teleport=) puts it out
+# of a doorway in the west rooms' north wall where the user's red dot is (OUT_X: the east room's middle; LBA1's own door is 41 cells further
+# west, where the road would come out by the lap's corner), heading south (OUT_Z: far enough out of the doorway that the chase camera, 9
+# cells behind the car, is in front of it), on a road round onto the lap's way west past the U-bend. One branch of the raised road
+# (RaceTrackPlan.Branches): the spur, the teleporter's gap (no road), the way out, the lap's own road where they meet it (no deck of its own).
+SPUR_X, DOOR_Z, SPUR_HALF, SPUR_FORK = 395.5, 304.5, 3.5, 352
+OUT_X, OUT_DOOR_Z, OUT_Z = 306.0, 272.5, 282.5
+BRANCH_OVER = 40                                # its deck over the lap's where they overlap (no fighting for the same depth)
+DOOR_PAST = 2.5                                 # the spur's deck on past the doorway (the car is taken in before it gets there)
+if SHORTCUT:
+    i_fork = nearest((EAST_X, SPUR_FORK))
+    spur = path([tuple(pts[i_fork]), (EAST_X, 340), (SPUR_X, 322), (SPUR_X, DOOR_Z - DOOR_PAST)], [0, 18, 18, 0])
+    way_out = path([(OUT_X, OUT_DOOR_Z), (OUT_X, 312), (288.5, 312)], [0, 12, 0])
+    i_merge = nearest((288.5, 312)) + 1
+    i_back = nearest((274, 312))
+    gap_a, gap_b = spur[-1] + np.array([0, -0.5]), way_out[0] + np.array([0, -0.5])
+    gap = resample(np.array([gap_a, gap_b]))
+    bpts = np.concatenate([spur, gap, way_out, pts[i_merge:i_back + 1]])
+    NB = len(bpts)
+    b_gap = np.zeros(NB, bool); b_gap[len(spur):len(spur) + len(gap)] = True
+    b_spur = np.zeros(NB, bool); b_spur[:len(spur)] = True
+    bhalf = np.where(b_gap, 0.0, np.where(b_spur, SPUR_HALF, HALF))
+    # (each point's lap point -- the nearest -- and how far from its middle: on the lap's road, at its height, no deck of its own)
+    b_lap = np.array([int(np.hypot(pts[:, 0] - x, pts[:, 1] - z).argmin()) for x, z in bpts])
+    b_off = np.hypot(pts[b_lap, 0] - bpts[:, 0], pts[b_lap, 1] - bpts[:, 1])
+    b_hidden = ~b_gap & (b_off + bhalf <= half[b_lap] + 0.3)
+    bh = h[b_lap] + BRANCH_OVER * np.clip((b_off + bhalf - half[b_lap] - 0.3) / 1.5, 0, 1)
+    # (the gap at the spur's end's height: nothing is there)
+    bh[b_gap] = bh[len(spur) - 1]
+    # (the way out's road cuts nothing behind its doorway: the west rooms' north wall stands, the doorway on it)
+    b_out0 = len(spur) + len(gap)
+    print('shortcut: off the lap at point %d (%.1f, %.1f), the spur %.0f cells to the door at (%.1f, %.1f), out at (%.1f, %.1f), %.0f cells back onto '
+          'the lap at point %d (%.1f, %.1f); skips %.0f cells of the lap' % (i_fork, *pts[i_fork], len(spur) * SP, SPUR_X, DOOR_Z, OUT_X, OUT_Z,
+                                                                         (NB - b_out0) * SP, i_back, *pts[i_back], S[i_back] - S[i_fork]))
+else:
+    bpts, bh, bhalf, b_gap, NB = np.zeros((0, 2)), np.zeros(0), np.zeros(0), np.zeros(0, bool), 0
+
+
+def b_cuts(k, cx, cz):
+    """Whether branch point k's road takes island cell (cx, cz) -- not behind the way out's doorway."""
+    return k < b_out0 or cz + 0.5 >= OUT_DOOR_Z if SHORTCUT else True
 
 
 # ---- the slip lane (the user, 2026-10-17: "We need to add a slip lane for the temple track, currently trying to complete a qualifying lap
@@ -284,6 +357,19 @@ for i in slip:
             off = slip_off(cx + 0.5, cz + 0.5)
             if off > CUT: continue
             near((cx, cz), i, (cx + 0.5 - pts[i][0]) ** 2 + (cz + 0.5 - pts[i][1]) ** 2, off <= DECK_EDGE)
+# (and over the shortcut's roads, as over the lap's: their points after the lap's -- xpts, xh, xhalf -- each along its own branch)
+xpts, xh, xhalf = np.concatenate([pts, bpts]), np.r_[h, bh], np.r_[half, bhalf]
+bS = np.r_[0, np.cumsum(np.linalg.norm(np.diff(bpts, axis=0), axis=1))] if NB else np.zeros(0)
+for k in range(0, NB, 2):
+    if b_gap[k]: continue
+    i = n + k
+    x, z = bpts[k]
+    reach = bhalf[k] + CUT
+    for cz in range(int(math.floor(z - reach)), int(math.floor(z + reach)) + 1):
+        for cx in range(int(math.floor(x - reach)), int(math.floor(x + reach)) + 1):
+            d2 = (cx + 0.5 - x) ** 2 + (cz + 0.5 - z) ** 2
+            if d2 > reach * reach or not b_cuts(k, cx, cz): continue
+            near((cx, cz), i, d2, d2 <= (bhalf[k] + DECK_EDGE) ** 2)
 col_cells = {}
 for cell in cell_points: col_cells.setdefault(layout_of(*cell), []).append(cell)
 col_points = {key: sorted({i for c in cells_ for i in cell_points[c]}) for key, cells_ in col_cells.items()}
@@ -292,13 +378,14 @@ col_points = {key: sorted({i for c in cells_ for i in cell_points[c]}) for key, 
 def passes(points):
     """The points (indices) in groups by height: each group a pass of the road (SAME_PASS apart from the next)."""
     out = []
-    for i in sorted(points, key=lambda k: (h[k], k)):
-        if out and h[i] - h[out[-1][-1]] < SAME_PASS: out[-1].append(i)
+    for i in sorted(points, key=lambda k: (xh[k], k)):
+        if out and xh[i] - xh[out[-1][-1]] < SAME_PASS: out[-1].append(i)
         else: out.append([i])
     return out
 
 
 def along(a, b):
+    if a >= n or b >= n: return abs(bS[a - n] - bS[b - n]) if a >= n and b >= n else math.inf
     d = abs(S[a] - S[b])
     return min(d, LAP - d)
 
@@ -314,10 +401,10 @@ def room_of(key):
             if not e: continue
             j = min(e, key=lambda i: (e[i][0], i))
             if any(deck for _, deck in e.values()):
-                lo = min(lo, min(h[i] for i in e if along(i, j) <= CAR_ALONG) - DECK + 20)
+                lo = min(lo, min(xh[i] for i in e if along(i, j) <= CAR_ALONG) - DECK + 20)
             else:
-                lo = min(lo, max(h[i] for i in p) - DECK + 20)
-        out.append((lo, [h[i] for i in p]))
+                lo = min(lo, max(xh[i] for i in p) - DECK + 20)
+        out.append((lo, [xh[i] for i in p]))
     return out
 
 
@@ -378,7 +465,7 @@ for key in sorted(col_points):
     highest = highest_of(key)
     if highest < MINY: continue
     cx, cz = OX + SCALE * (lx + 0.5), OZ + SCALE * (lz + 0.5)
-    surface = h[min(col_points[key], key=lambda i: (pts[i][0] - cx) ** 2 + (pts[i][1] - cz) ** 2)]
+    surface = xh[min(col_points[key], key=lambda i: (xpts[i][0] - cx) ** 2 + (xpts[i][1] - cz) ** 2)]
     tops = [kept_top((lx + dx, lz + dz), surface) for dx in (-1, 0, 1) for dz in (-1, 0, 1)
             if (dx or dz) and (lx + dx, lz + dz) not in cut_cols]
     tops = [t for t in tops if t is not None]
@@ -489,8 +576,15 @@ def footprint_on(x, z, layer, reach):
 
 def clear_of_road(x, z, margin):
     d = np.hypot(lap_pts[:, 0] - x, lap_pts[:, 1] - z) - half
-    # (and of the slip lane beside the start straight)
-    return float(d.min()) >= margin and slip_off(x, z) >= margin
+    # (and of the slip lane beside the start straight; and of the shortcut's roads)
+    return float(d.min()) >= margin and slip_off(x, z) >= margin and branch_off(x, z) >= margin
+
+
+def branch_off(x, z):
+    """How far (x, z) is from the shortcut's roads' edges (cells; negative on them)."""
+    if not NB: return 1e9
+    road = ~b_gap
+    return float((np.hypot(bpts[road, 0] - x, bpts[road, 1] - z) - bhalf[road]).min())
 
 
 def heading(i):
@@ -651,13 +745,16 @@ def way_points(way, loop):
 
 
 def spook_height(kind, way, loop, y0, under=False):
-    over = set()
+    over, over_b = set(), set()
     for q in way_points(way, loop):
         d = np.hypot(pts[:, 0] - q[0], pts[:, 1] - q[1])
         over.update(int(i) for i in np.nonzero(d < half + 2)[0])
-    if not over: return round(float(y0), 1)
+        if NB: over_b.update(int(k) for k in np.nonzero((np.hypot(bpts[:, 0] - q[0], bpts[:, 1] - q[1]) < bhalf + 2) & ~b_gap)[0])
+    if not over and not over_b: return round(float(y0), 1)
     low, tall = SPOOK_BODY[kind]
     road = [(h[i], max(h[(i - k) % n] for k in range(21))) for i in sorted(over)]
+    # (over the shortcut's roads: the camera over them as over the lap's)
+    road += [(bh[k], max(bh[max(0, k - kk)] for kk in range(21))) for k in sorted(over_b)]
     def clear(y):
         return all(y - low - SPOOK_BOB >= cam + SPOOK_CLEAR or (under and y + tall + SPOOK_BOB <= r - SPOOK_UNDER) for r, cam in road)
     y = next(y0 + s * d for d in range(0, 30000, 25) for s in (1, -1) if clear(y0 + s * d))
@@ -865,9 +962,10 @@ def by_skeleton(x, z):
 
 
 SKELETON_CLEAR = 4.0
+WEB_BRANCH = WEB_EDGE + 3.0                     # (and none hanging over the shortcut's roads: its middle this far from their edges)
 for i2, w, corner in sorted(webs, key=lambda e: (e[0], e[1][0])):
     if any(math.hypot(w[1] - c[1], w[2] - c[2]) < WEB_APART for c in cobwebs) or math.hypot(w[1] - WEB_X, w[2] - CORR_Z) < WEB_CLEAR: continue
-    if by_skeleton(w[1], w[2]): continue
+    if by_skeleton(w[1], w[2]) or branch_off(w[1], w[2]) < WEB_BRANCH: continue
     # (a corner's one of three, in turn)
     if corner: w = w + [sum(1 for c in cobwebs if c[0] in (CW_CORNER, CW_CORNER_BIG)) % 3]
     cobwebs.append(w)
@@ -892,7 +990,7 @@ for i in range(0, n, 2):
         x, z = pts[i] + u * (face - 0.3) + nrm_ * sd * across_
         rises = [rise(*layout_of(*(pts[i] + u * (face + 0.5) + nrm_ * sd * (across_ + s_))), floor_layer) for s_ in (-WALL_HALF, 0, WALL_HALF)]
         if min(rises) < 3 or max(rises) > 6: continue
-        if any(math.hypot(x - c[1], z - c[2]) < WEB_APART for c in cobwebs) or math.hypot(x - WEB_X, z - CORR_Z) < WEB_CLEAR or by_skeleton(x, z): continue
+        if any(math.hypot(x - c[1], z - c[2]) < WEB_APART for c in cobwebs) or math.hypot(x - WEB_X, z - CORR_Z) < WEB_CLEAR or by_skeleton(x, z) or branch_off(x, z) < WEB_BRANCH: continue
         cobwebs.append([CW_WALL, round(float(x), 2), round(float(z), 2), float(top(floor_layer + min(rises)) - 40), turn_to(0, 0, -u[0], -u[1]),
                         sum(1 for c in cobwebs if c[0] == CW_WALL) % 3])
 last_wall = -1e9
@@ -907,7 +1005,7 @@ for i in range(0, n, 2):
         rises = [rise(*layout_of(*(pts[i] + nrm * (off + 0.4) + tang * s_)), layer) for s_ in (-WALL_HALF, 0, WALL_HALF)]
         if min(rises) < 3 or max(rises) > 6: continue
         if any(math.hypot(x - c[1], z - c[2]) < WEB_APART for c in cobwebs) or math.hypot(x - WEB_X, z - CORR_Z) < WEB_CLEAR: continue
-        if by_skeleton(x, z): continue
+        if by_skeleton(x, z) or branch_off(x, z) < WEB_BRANCH: continue
         cobwebs.append([CW_WALL, round(float(x), 2), round(float(z), 2), float(top(layer + min(rises)) - 40), turn_to(x, z, *pts[i]),
                         sum(1 for c in cobwebs if c[0] == CW_WALL) % 3])
         # (a spider hanging in front of every third one's middle)
@@ -1039,6 +1137,27 @@ for px_ in SLIP_SPOTS:
     print('pit spot', px_, CRYPT_Z + slip_mid, 'in the slip lane' if ok else 'NOT IN THE SLIP LANE')
     pit_spots.append([float(px_), float(CRYPT_Z + slip_mid), 1.0, 0.0, float(h[i])])
 
+# ---- the shortcut as the plan has it: the branch of the raised road (its points from the lap's road at the fork: the spur, the teleporter's
+# gap -- no road -- the way out, the lap's own road where it comes back onto it, no deck of its own there), the teleporter (its box over the
+# spur's end, the car's centre taken in a cell short of the doorway: its nose in it), the doorways at both ends (TempleHalloween's
+# SecretDoor, [kind, x, z, the deck's height, the way its front looks, its opening's half width]: the spur's facing the car coming, the way
+# out's the way the car goes)
+SECRET_DOOR = 20
+branches, teleports = [], []
+if SHORTCUT:
+    def plan_index(i): return int((i - i_start) % n)
+    def spans(mask): return [[int(a), int(b)] for a, b in zip(*[np.flatnonzero(np.diff(np.r_[0, mask.astype(int), 0]) == v) - (0 if v == 1 else 1) for v in (1, -1)])]
+    branches.append({'points': [[round(float(x), 3), round(float(z), 3)] for x, z in bpts], 'heights': [round(float(v), 1) for v in bh],
+                     'halfs': [round(float(v), 3) for v in bhalf], 'from': plan_index(i_fork), 'to': plan_index(i_back),
+                     'hidden': spans(b_hidden), 'gaps': spans(b_gap)})
+    y_in, y_out = float(bh[len(spur) - 1]), float(bh[b_out0 + int(round((OUT_Z - OUT_DOOR_Z) / SP))])
+    teleports.append([SPUR_X - SPUR_HALF - 0.5, DOOR_Z - DOOR_PAST - 3.0, SPUR_X + SPUR_HALF + 0.5, DOOR_Z + 1.0, y_in - 600, y_in + 2400,
+                      OUT_X, OUT_Z, y_out, 0])
+    decor.append([SECRET_DOOR, SPUR_X, DOOR_Z, y_in, 0, SPUR_HALF + 0.3])
+    decor.append([SECRET_DOOR, OUT_X, OUT_DOOR_Z, float(bh[b_out0]), 0, HALF + 0.3])
+    print('shortcut branch: %d points, from plan point %d to %d, hidden %s, gap %s; teleporter %s' % (NB, branches[0]['from'], branches[0]['to'],
+          branches[0]['hidden'], branches[0]['gaps'], teleports[0]))
+
 # ---- the lap from the start
 order = np.r_[i_start:n, 0:i_start]
 P, H, HF = pts[order], h[order], half[order]
@@ -1062,5 +1181,6 @@ plan = {
     'halloween': {'decor': decor, 'spooks': spooks, 'pumpkins': True, 'dives': dives, 'scares': scares, 'haunt': True, 'giantWebs': giant_webs},
     'keepAbove': 0,
 }
+if SHORTCUT: plan.update({'branches': branches, 'teleports': teleports})
 json.dump(plan, open(OUT, 'w'))
 print('wrote', OUT, len(P), 'points')

@@ -151,7 +151,8 @@ internal static class RaceCarEngineFile
         // the jumps the engine carries the car over (places in the raised road's file), and the island's scenes by cube for the cube
         // changes their flights make
         if (raisedFile is not null) foreach (var arc in track?.ArcJumps ?? new()) text.Append($"arcjump={string.Join(' ', arc)}\n");
-        if (raisedFile is not null && track?.ArcJumps is { Count: > 0 }) foreach (var c in track.CubeScenes ?? new()) text.Append($"cube_scene={string.Join(' ', c)}\n");
+        // (and the teleporters' into another cube: the Temple of Bú's hidden passage)
+        if (raisedFile is not null && (track?.ArcJumps is { Count: > 0 } || track?.Teleports is { Count: > 0 })) foreach (var c in track!.CubeScenes ?? new()) text.Append($"cube_scene={string.Join(' ', c)}\n");
         // where the cars drive where they like: its floor, the camera on the car's trail (the Emperor's palace's rooms)
         foreach (var area in track?.OpenAreas ?? new()) text.Append($"open_area={string.Join(' ', area)}\n");
         // the grid spots, and whether a qualifying lap sets the order the cars line up in (RACEMOD.CPP)

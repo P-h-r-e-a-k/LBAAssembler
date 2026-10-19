@@ -31,6 +31,9 @@ internal sealed class BranchRun
     public double[][]? BoostPanels { get; set; }
     // its stretches on the lap's own road ([first, last], its own points): no deck of its own there, the lap's is
     public int[][]? Hidden { get; set; }
+    // its stretches with no road at all ([first, last], its own points) that no carried jump flies: a teleporter's gap -- its road runs up
+    // to the teleporter (RACEMOD.CPP teleport=) and on from where the teleporter puts the car out (the Temple of Bú's hidden passage)
+    public int[][]? Gaps { get; set; }
 }
 
 // The frog as placed: its mouth (island cells, the road's middle there) and the road's height there, the way the lap runs into it (a unit

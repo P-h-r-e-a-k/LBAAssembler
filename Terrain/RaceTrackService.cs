@@ -810,7 +810,8 @@ internal static class RaceTrackService
         session ??= new BuildSession();
         var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, Dream = dream,
             LaserModels = session.LaserModels, LavaBallModel = session.LavaBallModel, CrystalShardModels = session.CrystalShardModels };
-        if (info.ArcJumps is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
+        // (and for a teleporter into another cube -- the Temple of Bú's hidden passage: the scene it puts the car into)
+        if (info.ArcJumps is not null || info.Teleports is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
         if (Shuttles(gameDirectory, report, options) is { Count: > 0 } shuttles) info = info with { Shuttles = shuttles };
         // (the race's own music: the Temple of Bú's LBA1 temple music, when the build found it)
         if (options.Island == RaceTrackIsland.Temple && LBAAssembler.Terrain.Temple.TempleMusic.Installed(gameDirectory) is { } music) info = info with { Music = music };
