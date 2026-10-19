@@ -458,6 +458,9 @@ internal static class RaceTrackService
             log.AddRange(RaceTrackCharacterCars.InstallMonsters(gameDirectory));
             // (and the Temple of Bú's secret party's disco ball and bubbles after even those: no body moves -- TempleParty)
             if (session.Party) log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.PartyInstall(gameDirectory));
+            // (the race items' sounds, every track's: RACESOUNDS\, which the engine plays as an item comes into the item box and as one is
+            // used -- RaceSounds)
+            log.AddRange(RaceSounds.Install(gameDirectory));
             progress?.Report(new(1, "Done"));
             var count = tracks.Sum(t => t.Options.Island.Tracks);
             var built1 = count == 1 ? "The race track is built." : $"{count} race tracks are built ({string.Join(", ", tracks.Select(t => t.Options.Island.Built))}); Play races the one of the island the editor has open.";

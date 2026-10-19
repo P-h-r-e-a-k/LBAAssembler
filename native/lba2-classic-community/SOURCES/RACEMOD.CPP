@@ -174,6 +174,10 @@
  *   The music (2026-10-18): music=<file>   the race's own music in place of its scenes' (a WAV or OGG; not a full path: the game folder's)
  *                                -- the Temple of Bú's LBA1 temple music. And every race's music keeps going until the race is over: played
  *                                again behind itself when it runs out (RaceMusicFrame; MUSIC.CPP LoopMusic), left to end after the finish.
+ *   The items' sounds (2026-10-19): no key -- the game folder's RACESOUNDS/PICKUP_<NAME>.WAV as an item comes into Twinsen's item box,
+ *                                RACESOUNDS/USE_<NAME>.WAV as one is used (his, or an opponent's nearby), the names s_puSoundName's; a
+ *                                file that isn't there is silence (the race track's build writes them: Terrain/RaceSounds.cs) -- or for
+ *                                the magic balls the game's own throw (LaunchShot); the super jet-pack hums while it lasts (JetHum)
  */
 #include <errno.h>
 #include <string.h>
@@ -185,6 +189,7 @@
 #include "INPUT.H"
 #include "RACEMOD.H"
 #include <SYSTEM/HQRLOAD.H>
+#include <AIL/SAMPLE.H>
 extern void ClrHoloPos(S32 num);   // HOLOGLOB.CPP (HOLO.H itself clashes with C_EXTERN.H)
 extern void DoImpact(S32 num, S32 x, S32 y, S32 z, U8 owner);   // IMPACT.CPP
 extern void InitBody(U8 gennewbody, U8 numobj);                  // OBJECT.CPP
@@ -2946,6 +2951,130 @@ static void RaceMusicFrame(void) {
             PlayRaceMusic();
         } else if (had) StopMusic();      // (another race's own music: the scenes' plays from the next change of cube)
     }
+}
+
+// The race items' sounds (LBA Assembler, 2026-10-19; the user: a sound for each item as Twinsen gets it into his item box, and for some as
+// they're used). The race track's build writes them into the game folder (Terrain/RaceSounds.cs, from the repo's sounds\PickUp and
+// sounds\OnUse): RACESOUNDS/PICKUP_<NAME>.WAV and RACESOUNDS/USE_<NAME>.WAV, 16-bit mono 44.1 kHz WAVs, each read once a race and played
+// with PlaySample as the game's own samples are (HQ_MixSample: at the sound effects' volume, none with the samples off). Which item plays
+// which file is this table, by name: a name with no file is silence -- so a sound for an item with none yet is only a file of its name in
+// sounds\OnUse (or sounds\PickUp) and a build. The pick-up: Twinsen's alone, as the item box's roulette stops on it (PickupSoundFrame), one
+// at a time (the one before stopped). The use: Twinsen's at full volume, an opponent's where its car is -- to the side of the screen it
+// is on, as the game's 3D samples are (HQ_3D_MixSample's GiveBalance; the middle for a car off the screen: one close behind is heard too,
+// which the game's own leave silent) and heard only nearby (fading from RACE_SOUND_NEAR to nothing at RACE_SOUND_FAR from the camera;
+// inside, GiveBalance's own). No use sound for the lightning (Strike's thunder) nor the protection
+// spell (its hum): NULL. The golden Gazogem without its own files takes the Gazogem's (s_puSoundAlt).
+static const char *const s_puSoundName[2][PU_COUNT] = {
+    // pick-up: RACESOUNDS/PICKUP_<name>.WAV (the user's sounds\PickUp\<name>.mp3)
+    {"GAZOGEM", "PROTECTION", "LIGHTNING", "NITROPENGUIN", "JETPACK", "OIL", "YELLOWBALL", "GREENBALL", "REDBALL", "FIREBALL", "FAKE", "GOLDGAZOGEM", "GHOST"},
+    // use: RACESOUNDS/USE_<name>.WAV (sounds\OnUse\<name>.mp3)
+    {"GAZOGEM", NULL, NULL, "PENGUIN", "JETPACK", "OIL", "YELLOWBALL", "GREENBALL", "REDBALL", "FIREBALL", "FAKE", "GOLDGAZOGEM", "GHOST"}};
+static const char *const s_puSoundKind[2] = {"PICKUP", "USE"};
+static const int s_puSoundAlt[PU_COUNT] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, PU_FUEL, -1};
+// (The magic balls without a file of their own sound the game's throw as each ball sets off -- LaunchShot: the magic ball's sample, the
+// fire ball the fire magic's -- and the super jet-pack hums as long as it lasts: JetHum. Both the game's own samples, SAMPLES.HQR.)
+#define RACE_SOUND_USER 0xF000             // PlaySample's user handle for them: RACE_SOUND_USER + 16 * kind + item (above every SAMPLES.HQR number)
+#define RACE_SOUND_NEAR 2560               // an opponent's use: at full volume this near the camera (5 cells) ...
+#define RACE_SOUND_FAR 15360               // ... and nothing from this far (30 cells)
+typedef struct { U8 *Data; S32 Size; } T_RACE_SOUND;
+static T_RACE_SOUND s_puSound[2][PU_COUNT];
+static int s_puSoundsRead = 0;             // read since the race file was (ResetTrack frees them)
+static U32 s_pickupVoice = 0xFFFFFFFF;     // the pick-up sound playing (PlaySample's handle)
+static int s_pickupItem[RACE_ITEM_SLOTS] = {-1, -1};   // what the item box showed with its sound played ...
+static S32 s_pickupAt[RACE_ITEM_SLOTS];                 // ... and from when (s_itemAt): a new item, a new sound
+
+static void RaceSoundsFree(void) {
+    for (int k = 0; k < 2; k++)
+        for (int i = 0; i < PU_COUNT; i++) { free(s_puSound[k][i].Data); s_puSound[k][i].Data = NULL; s_puSound[k][i].Size = 0; }
+    s_puSoundsRead = 0; s_pickupVoice = 0xFFFFFFFF;
+    for (int k = 0; k < RACE_ITEM_SLOTS; k++) s_pickupItem[k] = -1;
+}
+
+static void RaceSoundsRead(void) {
+    if (s_puSoundsRead) return;
+    s_puSoundsRead = 1;
+    int found[2] = {0, 0};
+    for (int k = 0; k < 2; k++)
+        for (int i = 0; i < PU_COUNT; i++) {
+            if (!s_puSoundName[k][i]) continue;
+            char name[64], full[ADELINE_MAX_PATH];
+            snprintf(name, sizeof(name), "RACESOUNDS/%s_%s.WAV", s_puSoundKind[k], s_puSoundName[k][i]);
+            GetResPath(full, ADELINE_MAX_PATH, name);
+            FILE *f = fopen(full, "rb");
+            if (!f) continue;
+            fseek(f, 0, SEEK_END);
+            const long size = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            U8 *data = size > 44 && size < 16L * 1024 * 1024 ? (U8 *)malloc((size_t)size) : NULL;
+            if (data && fread(data, 1, (size_t)size, f) == (size_t)size && !memcmp(data, "RIFF", 4) && !memcmp(data + 8, "WAVE", 4)) {
+                s_puSound[k][i].Data = data; s_puSound[k][i].Size = (S32)size;
+                found[k]++;
+            } else {
+                Log_Warn("[racemod] item sound %s: not a WAV the game reads -- silent", full);
+                free(data);
+            }
+            fclose(f);
+        }
+    if (found[0] || found[1]) Log_Info("[racemod] item sounds: %d for picking items up, %d for using them (RACESOUNDS)", found[0], found[1]);
+}
+
+// Item `pu`'s sound of `kind` (0 the pick-up, 1 the use): its own, or the one it takes (s_puSoundAlt); NULL none
+static const T_RACE_SOUND *RaceSound(int kind, int pu) {
+    if (pu < 0 || pu >= PU_COUNT) return NULL;
+    RaceSoundsRead();
+    if (s_puSound[kind][pu].Data) return &s_puSound[kind][pu];
+    const int alt = s_puSoundAlt[pu];
+    return alt >= 0 && s_puSound[kind][alt].Data ? &s_puSound[kind][alt] : NULL;
+}
+
+// Played as the game plays its samples (HQ_MixSample): at the sound effects' volume, nothing with the samples off. PlaySample's handle.
+static U32 RacePlaySound(const T_RACE_SOUND *s, int user, S32 volume, S32 pan) {
+    if (!s || !SamplesEnable || volume <= 0) return 0xFFFFFFFF;
+    volume = RegleTrois(0, SampleVolume, 127, volume);
+    return PlaySample(s->Data, s->Size, RACE_SOUND_USER + user, 0x1000, 1, volume, pan);
+}
+
+// Every frame (PowerUps): the item box's item (and the second box's golden Gazogem) with its roulette stopped -- the item shown -- its
+// pick-up sound played, once; the pick-up sound before it stopped. (The golden Gazogem moving from the second box into the first was
+// heard already: GoldIntoBox.)
+static void PickupSoundFrame(S32 now) {
+    for (int k = 0; k < RACE_ITEM_SLOTS; k++) {
+        const int pu = s_item[k];
+        if (pu < 0) { s_pickupItem[k] = -1; continue; }
+        if (now < s_itemAt[k] || (pu == s_pickupItem[k] && s_itemAt[k] == s_pickupAt[k])) continue;
+        s_pickupItem[k] = pu; s_pickupAt[k] = s_itemAt[k];
+        const T_RACE_SOUND *s = RaceSound(0, pu);
+        if (!s) continue;
+        if (s_pickupVoice != 0xFFFFFFFF) StopOneSample(s_pickupVoice);
+        s_pickupVoice = RacePlaySound(s, pu, 127, 64);
+        Log_Info("[racemod] item sound: %s into the item box", s_puName[pu]);
+    }
+}
+
+// Item `pu` used: by Twinsen (car NULL) at full volume, or by an opponent's car in this scene (`who`) where it is, heard nearby.
+static void UseSound(int pu, const T_OBJET *car, const char *who = NULL) {
+    const T_RACE_SOUND *s = RaceSound(1, pu);
+    if (!s) return;
+    if (!car) {
+        RacePlaySound(s, 16 + pu, 127, 64);
+        Log_Info("[racemod] item sound: Twinsen uses %s", s_puName[pu]);
+        return;
+    }
+    const S32 x = car->Obj.X, y = car->Obj.Y + 300, z = car->Obj.Z;
+    const int seen = PtrProjectPoint(x, y, z);
+    const S32 distance = CubeMode == CUBE_INTERIEUR ? Distance2D((S32)ModeDesiredX / 2, (S32)ModeDesiredY / 2, Xp, Yp) : Distance3D(x, y, z, CameraX, CameraY, CameraZ);
+    U32 pan = 64;
+    S32 volume = 0;
+    const int balanced = seen && GiveBalance(Xp, Yp, distance, &pan, &volume);
+    if (CubeMode == CUBE_INTERIEUR) {
+        if (!balanced) return;
+    } else {
+        if (!balanced) pan = 64;
+        volume = distance <= RACE_SOUND_NEAR ? 127 : distance >= RACE_SOUND_FAR ? 0 : BoundRegleTrois(127, 0, RACE_SOUND_FAR - RACE_SOUND_NEAR, distance - RACE_SOUND_NEAR);
+    }
+    if (volume <= 0) return;
+    RacePlaySound(s, 16 + pu, volume, (S32)pan);
+    Log_Info("[racemod] item sound: %s uses %s, %d away (volume %d, pan %d)", who ? who : "an opponent", s_puName[pu], (int)distance, (int)volume, (int)pan);
 }
 
 static void Load(const char *path, int carOnly = 0) {
@@ -7040,6 +7169,7 @@ static void UseItem(int pu, S32 now) {
     }
     // (its name not said on the screen: the item box shows it -- the user, 2026-10-10: "We also don't need a message for each pickup")
     Log_Info("[racemod] Twinsen uses %s%s", s_puName[pu], s_puJet[pu] > 0 && !Guide() ? " (no line: a boost, the keys his)" : "");
+    UseSound(pu, NULL);
 }
 
 // EXTRA.CPP: the protection spell is the power-up's -- no magic taken while it lasts; it blinks for its last seconds.
@@ -7151,6 +7281,7 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
         } else
             o->BoostUntil = now + RACE_BOOST_MS;
         Log_Info("[racemod] %s takes a mushroom's power-up: %s", o->Name, s_puName[pu]);
+        UseSound(pu, car, o->Name);
     }
 }
 
@@ -7379,8 +7510,21 @@ static T_RACE_SHOT *LaunchShot(int kind, int owner, int target, double x, double
     if (o) sh->S = GuideS(o, sh->X, y, sh->Z, -1, &sh->Side);
     sh->SideV = RaceRandom() < 0.5 ? RACE_ROLL_ACROSS : -RACE_ROLL_ACROSS;
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
-    if (CubeMode == CUBE_EXTERIEUR && sh->X >= cx && sh->X < cx + 32768 && sh->Z >= cz && sh->Z < cz + 32768)
-        SampleMagicBall((S32)(sh->X - cx), (S32)sh->Y, (S32)(sh->Z - cz));
+    // (the game's throw, where the ball sets off -- FICHE.CPP SampleMagicBall's way, an opponent's far off faint or not heard -- by the
+    // ball's colour: the fire ball the fire magic's, the others the magic ball's, whatever Twinsen's own magic level (SampleMagicBall's
+    // choice until 2026-10-19). A ball power-up whose use has a file of its own -- sounds\OnUse, UseSound -- plays that instead. The
+    // lasers keep SampleMagicBall's.)
+    if (CubeMode == CUBE_EXTERIEUR && sh->X >= cx && sh->X < cx + 32768 && sh->Z >= cz && sh->Z < cz + 32768) {
+        const S32 lx = (S32)(sh->X - cx), ly = (S32)sh->Y, lz = (S32)(sh->Z - cz);
+        if (kind > SHOT_FIRE) SampleMagicBall(lx, ly, lz);
+        else if (!RaceSound(1, PU_BALL_YELLOW + kind)) {
+            const S32 sample = kind == SHOT_FIRE ? SAMPLE_MAGIC_BALL_FIRE : SAMPLE_MAGIC_BALL;
+            const U32 h = HQ_3D_MixSample(sample, 0x1000, 0, 1, lx, ly, lz);
+            Log_Info("[racemod] item sound: %s's %s ball sets off -- the game's sample %d%s", CarName(owner),
+                     kind == SHOT_FIRE ? "fire" : kind == SHOT_RED ? "red" : kind == SHOT_GREEN ? "green" : "yellow", (int)sample,
+                     h && h != 0xFFFFFFFFu ? "" : " (not heard: too far, or just played)");
+        }
+    }
     return sh;
 }
 
@@ -8084,6 +8228,7 @@ static void OpponentAims(int n, T_OBJET *car, S32 now) {
     else if (pu == PU_FAKE) DropFake(x - hx * 1300, car->Obj.Y, z - hz * 1300, n, now);
     else if (pu == PU_OIL) DropOil(x - hx * 1300, car->Obj.Y, z - hz * 1300);
     else if (pu == PU_PENGUIN) DropPenguin(x - hx * 1300, car->Obj.Y, z - hz * 1300, n);
+    UseSound(pu, car, o->Name);
     if (aimed && pu == PU_BALL_RED) Log_Info("[racemod] %s aims %s at Twinsen (the car in front)", o->Name, s_puName[pu]);
     else if (aimed) Log_Info("[racemod] %s aims %s at Twinsen (%.1f cells %s, %.1f across)", o->Name, s_puName[pu], fabs(along) / 512, along < 0 ? "behind" : "ahead", across / 512);
     else Log_Info("[racemod] %s uses %s: held its %.1f s, never aimed at Twinsen", o->Name, s_puName[pu], s_diffAim / 1000.0);
@@ -8213,6 +8358,8 @@ static void GoldIntoBox(S32 now) {
     s_item[RACE_BOX] = s_item[RACE_BOX_GOLD];
     s_itemAt[RACE_BOX] = now;
     s_item[RACE_BOX_GOLD] = -1;
+    // (its pick-up sound played as it came into the second box: PickupSoundFrame)
+    s_pickupItem[RACE_BOX] = s_item[RACE_BOX]; s_pickupAt[RACE_BOX] = now;
     Log_Info("[racemod] the golden Gazogem moves into the item box");
 }
 
@@ -8234,9 +8381,42 @@ static void HeroLook(S32 now, int driving) {
     else if (s_heroHidden) { hero->Flags &= ~INVISIBLE; s_heroHidden = 0; }
 }
 
+// The super jet-pack's hum (the user, 2026-10-19): the game's Proto-Pack sample (SAMPLE_PROTOPACK, the one Twinsen's own jet-pack loops),
+// looped while his super jet-pack lasts (s_jetUntil) and stopped as it ends -- or as he leaves the car, a scene changes (played again in
+// the next), the power-ups are forgotten (ForgetPowerUps: s_jetUntil 0), the race is reset (ResetTrack) or goes back to the menu
+// (RaceMod_WantsMenu). The game's pause pauses it with every sample (PauseSamples). The game itself starts and stops that sample only
+// in the Proto-Pack's and the jet-pack's behaviours (COMPORTE.CPP, OBJECT.CPP SetComportement, INVENT.CPP), never in the car's (C_BUGGY).
+static U32 s_jetHum = 0xFFFFFFFFu;         // PlaySample's handle for it (none: 0xFFFFFFFF) ...
+static S32 s_jetHumFrom = 0;               // ... and since when
+
+static void JetHumStop(const char *why) {
+    if (s_jetHum == 0xFFFFFFFFu) return;
+    StopOneSample(s_jetHum);
+    s_jetHum = 0xFFFFFFFFu;
+    Log_Info("[racemod] the jet-pack's hum stopped after %.1f s: %s", (TimerRefHR - s_jetHumFrom) / 1000.0, why);
+}
+
+// Every frame the race-track mode runs
+static void JetHumFrame(S32 now) {
+    if (!(Comportement == C_BUGGY && s_jetUntil && now < s_jetUntil && NewCube == -1)) {
+        JetHumStop(!s_jetUntil || now >= s_jetUntil ? "the jet-pack is over" : Comportement != C_BUGGY ? "out of the car" : "a scene changing");
+        return;
+    }
+    if (s_jetHum != 0xFFFFFFFFu && IsSamplePlaying(s_jetHum)) return;
+    // (repeat 0: looped until stopped)
+    const U32 h = HQ_MixSample(SAMPLE_PROTOPACK, 0x1000, 0, 0, 64, 127);
+    if (h == 0 || h == 0xFFFFFFFFu) return;
+    if (s_jetHum == 0xFFFFFFFFu) {
+        s_jetHumFrom = now;
+        Log_Info("[racemod] the jet-pack's hum (the game's sample %d) for %.1f s", SAMPLE_PROTOPACK, (s_jetUntil - now) / 1000.0);
+    }
+    s_jetHum = h;
+}
+
 static void PowerUps(S32 now, int driving) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     const int qualifying = Qualifying();
+    RaceSoundsRead();
     for (int i = 0; i < s_nbMush; i++) {
         T_RACE_MUSHROOM *m = &s_mush[i];
         if (m->Back && now >= m->Back) m->Back = 0;
@@ -8270,6 +8450,8 @@ static void PowerUps(S32 now, int driving) {
         s_itemAt[RACE_BOX] = now + RACE_ITEM_ROLL_MS;
         Log_Info("[racemod] Twinsen takes %s (%.2f of the way back)", s_puName[s_item[RACE_BOX]], back);
     }
+    // (its sound as the item box's roulette stops on an item)
+    PickupSoundFrame(now);
     // Ctrl -- the behaviour key, which does nothing else in the car (RaceMod_FilterInput) -- uses the item in the box once its roulette
     // has stopped (a press while it turns does nothing, nor does holding the key on past its stop: a press from then on, the box ringed in
     // gold); the test pilot uses each item a moment after its roulette stops. (Shift until 2026-10-16, the inventory's key: the user,
@@ -8817,6 +8999,7 @@ S32 RaceMod_WantsMenu(void) {
     if (!RaceMod_Active() || !s_menuAt || TimerRefHR < s_menuAt || NewCube != -1) return 0;
     s_menuAt = 0;
     Log_Info("[racemod] the race is over: back to the menu");
+    JetHumStop("back to the menu");
     return 1;
 }
 
@@ -11312,6 +11495,7 @@ void RaceMod_Frame(void) {
     }
     // the power-ups: the mushrooms in this scene, the player's car over one, the penguins' fuses (a time trial: its cans of Gazogem alone)
     if (s_powerups || s_trial) PowerUps(now, driving);
+    JetHumFrame(now);
     HeroLook(now, driving);
     Vents(now);
     Jets(now, driving);
@@ -12643,6 +12827,7 @@ static void ResetTrack(void) {
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;
+    RaceSoundsFree(); JetHumStop("the race reset");
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0; s_nbOpen = 0; s_trailN = 0; s_trailHead = -1;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
     s_nbFalls = 0; s_nbPanels = 0; s_lavaModel = -1; s_fallFootNext = s_fallLipNext = 0;

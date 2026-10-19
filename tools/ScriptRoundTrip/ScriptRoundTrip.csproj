@@ -79,6 +79,8 @@
     <EmbeddedResource Include="..\..\docs\racetrack\polar_track_plan.json" LogicalName="RaceTrackPlan.Polar.json" />
     <EmbeddedResource Include="..\..\docs\racetrack\cxtower_track_plan.json" LogicalName="RaceTrackPlan.CxTower.json" />
     <EmbeddedResource Include="..\..\docs\racetrack\temple_track_plan.json" LogicalName="RaceTrackPlan.Temple.json" />
+    <!-- the race items' sounds, as the app carries them (Terrain/RaceSounds.cs) -->
+    <EmbeddedResource Include="..\..\sounds\**\*.mp3;..\..\sounds\**\*.wav" LogicalName="RaceSounds/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\LiveDataRoot.cs" Link="LiveDataRoot.cs" />
     <Compile Include="..\..\AudioLevels.cs" Link="AudioLevels.cs" />
     <Compile Include="..\..\RaceCarSetup.cs" Link="RaceCarSetup.cs" />

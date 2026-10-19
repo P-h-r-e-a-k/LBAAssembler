@@ -35,8 +35,14 @@ internal static partial class TempleMusic
     // this reads.
     private static byte[]? ReadWav(string path, long fromSector = 0, long toSector = -1)
     {
-        using var f = File.OpenRead(path);
-        using var r = new BinaryReader(f);
+        using var file = File.OpenRead(path);
+        return ReadWav(file, fromSector, toSector);
+    }
+
+    // ... or a WAV in a stream (a seekable one: the race items' sounds, the program's own -- RaceSounds)
+    public static byte[]? ReadWav(Stream f, long fromSector = 0, long toSector = -1)
+    {
+        using var r = new BinaryReader(f, Encoding.ASCII, true);
         if (f.Length < 12 || Encoding.ASCII.GetString(r.ReadBytes(4)) != "RIFF") return null;
         r.ReadInt32();
         if (Encoding.ASCII.GetString(r.ReadBytes(4)) != "WAVE") return null;
@@ -92,9 +98,16 @@ internal static partial class TempleMusic
     // An MP3 file decoded to the CD's samples (NLayer; resampled when it isn't 44.1 kHz)
     private static byte[] DecodeMp3(string path)
     {
-        using var mp3 = new NLayer.MpegFile(path);
+        using var file = File.OpenRead(path);
+        return DecodeMp3(file, Path.GetFileName(path));
+    }
+
+    // ... or an MP3 in a stream (the race items' sounds, the program's own: RaceSounds), `name` for the errors
+    public static byte[] DecodeMp3(Stream stream, string name)
+    {
+        using var mp3 = new NLayer.MpegFile(stream);
         int channels = mp3.Channels, rate = mp3.SampleRate;
-        if (channels < 1 || rate < 8000) throw new InvalidDataException($"{Path.GetFileName(path)}: {channels} channels at {rate} Hz");
+        if (channels < 1 || rate < 8000) throw new InvalidDataException($"{name}: {channels} channels at {rate} Hz");
         var samples = new float[Math.Max(1 << 16, (int)Math.Min(int.MaxValue / 2, (long)(mp3.Duration.TotalSeconds + 2) * rate * channels))];
         var count = 0;
         var chunk = new float[8192 * channels];
@@ -105,7 +118,7 @@ internal static partial class TempleMusic
             Array.Copy(chunk, 0, samples, count, n);
             count += n;
         }
-        if (count < rate * channels / 10) throw new InvalidDataException($"{Path.GetFileName(path)}: no MPEG audio in it");
+        if (count < rate * channels / 10) throw new InvalidDataException($"{name}: no MPEG audio in it");
         Array.Resize(ref samples, count - count % channels);
         return ToCd(samples, channels, rate);
     }

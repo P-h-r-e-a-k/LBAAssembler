@@ -110,6 +110,15 @@
   </ItemGroup>
 
   <!--
+    The race items' sounds (sounds\PickUp\<name>.mp3 as an item comes into the item box, sounds\OnUse\<name>.mp3 as it is used): the race
+    track's build writes them into the game folder as the engine plays them (Terrain/RaceSounds.cs). A glob: a file dropped into either
+    folder is carried from the next build on. LBRA's installer (LittleBigRacingAdventure/Installer/LBRAInstaller.csproj) carries them the same.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="sounds\**\*.mp3;sounds\**\*.wav" LogicalName="RaceSounds/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!--
     NLayer (MIT, a managed MPEG audio decoder, no dependencies): the Temple of Bu's race music from Steam's/GOG's LBA1 Classic, whose CD
     tracks are MP3s (Terrain/Temple/TempleMusicAudio.cs decodes them to the WAV the engine streams). Every project compiling Terrain/ needs it:
     tools/ScriptRoundTrip, and LBRA's installer (LittleBigRacingAdventure/Installer/LBRAInstaller.csproj).
