@@ -60,6 +60,7 @@
 #include <SVGA/SCREEN.H>
 #include <SYSTEM/KEYBOARD.H>
 #include <SYSTEM/KEYBOARD_KEYS.H>
+#include <SYSTEM/WINDOW.H>
 #include <SYSTEM/LOG.H>
 #include <SYSTEM/MOUSE.H>
 #include <SYSTEM/STRING.H>
@@ -119,6 +120,7 @@ typedef struct {
 
 static int s_read = 0, s_on = 0;
 static char s_title[96] = "";
+static char s_windowTitle[96] = "";        // window_title=: the window's title bar ("Little Big Racing Adventure"; the engine's own otherwise)
 static int s_story = 0, s_tracks = 0, s_laps = 3;
 static S32 s_endMs = 8000;
 static T_RG_SPECIAL s_sp[RG_MAX_SPECIALS];
@@ -182,6 +184,26 @@ static int HasLevels(const char *race) {
 static void ReadSettings(void);
 static void UpdateAtStart(void);
 
+// The window's title for INITADEL.C, before the window is made (RACEGAME.TXT's window_title= alone, read on its own: the race game's
+// Read waits for the game's paths and settings); NULL without the file or the key -- the engine's own title then.
+extern "C" const char *RaceGame_WindowTitle(void) {
+    static char title[96];
+    char path[ADELINE_MAX_PATH];
+    GetResPath(path, ADELINE_MAX_PATH, "RACEGAME.TXT");
+    FILE *f = fopen(path, "r");
+    if (!f) return NULL;
+    char line[512];
+    title[0] = 0;
+    while (fgets(line, sizeof(line), f))
+        if (!strncmp(line, "window_title=", 13)) {
+            snprintf(title, sizeof(title), "%s", line + 13);
+            Trim(title);
+            break;
+        }
+    fclose(f);
+    return title[0] ? title : NULL;
+}
+
 static void Read(void) {
     if (s_read) return;
     s_read = 1;
@@ -200,6 +222,7 @@ static void Read(void) {
         const char *key = line, *v = eq + 1;
         while (*v == ' ') v++;
         if (!strcmp(key, "title")) snprintf(s_title, sizeof(s_title), "%s", v);
+        else if (!strcmp(key, "window_title")) snprintf(s_windowTitle, sizeof(s_windowTitle), "%s", v);
         else if (!strcmp(key, "story")) s_story = atoi(v);
         else if (!strcmp(key, "tracks")) s_tracks = atoi(v);
         else if (!strcmp(key, "laps")) s_laps = atoi(v) > 0 ? atoi(v) : 3;
@@ -224,6 +247,7 @@ static void Read(void) {
     }
     fclose(f);
     s_on = 1;
+    if (s_windowTitle[0]) SetWindowTitle(s_windowTitle);
     ReadSettings();
     UpdateAtStart();
     int levelled = 0;

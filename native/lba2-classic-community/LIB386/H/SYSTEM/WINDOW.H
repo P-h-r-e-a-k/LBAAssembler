@@ -61,6 +61,8 @@ bool Window_IsRendererTextureLocked(void);
 void WindowToSurfaceCoords(S32 windowX, S32 windowY, S32 *surfaceX, S32 *surfaceY);
 void SetWindowFullscreen(bool fullscreen);
 bool GetWindowFullscreen();
+// The window's title bar text, after InitWindow (the race game names its window: RACEGAME.TXT window_title=). Kept for a window made later.
+void SetWindowTitle(const char *title);
 // Actual SDL window fullscreen state (queries SDL_GetWindowFlags), not the
 // cached request flag — for accurate reporting.
 bool Window_IsFullscreen(void);

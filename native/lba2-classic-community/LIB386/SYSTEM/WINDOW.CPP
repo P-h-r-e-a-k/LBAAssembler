@@ -405,6 +405,14 @@ void SetWindowRelativeMouse(bool enable) {
         SDL_SetWindowRelativeMouseMode(sdlWindow, enable);
 }
 
+void SetWindowTitle(const char *title) {
+    static char kept[128];
+    if (!title || !title[0]) return;
+    snprintf(kept, sizeof(kept), "%s", title);
+    windowTitle = kept;
+    if (sdlWindow) SDL_SetWindowTitle(sdlWindow, kept);
+}
+
 void SetWindowFullscreen(bool fullscreen) {
     fullscreen = CoerceFullscreenForPlatform(fullscreen);
     windowFullscreenEnabled = fullscreen;
