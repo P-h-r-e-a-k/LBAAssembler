@@ -515,32 +515,26 @@ U32 PlaySample(void *buffer, S32 sizeBytes, U32 userhandle, S32 pitchbend,
         }
     }
     if (slot < 0) {
-        U32 bestHandle = 0xFFFFFFFF;
+        /* Every voice busy: the quietest one gives way (the oldest of the quietest), and none louder than the new sound -- that
+           one is not played. (Before: a one-shot first, the lowest handle -- whose top byte is a counter that wraps, so not the
+           oldest. A race's cars each keep an engine loop going (SampleAlways), most of them far off or hidden at a volume of 0 to 9,
+           twelve of them filled every voice, and a loop restarted the next frame took the voice of whatever one-shot had just
+           started: the race items' pick-up sounds were cut off at once or part-way, 2026-10-19.) */
         int bestSlot = -1;
         for (int i = 0; i < NUM_VOICES; i++) {
-            if (voices[i].repeat == 1 && voices[i].handle < bestHandle) {
-                bestHandle = voices[i].handle;
+            if (bestSlot < 0 || voices[i].baseVolume < voices[bestSlot].baseVolume
+                || (voices[i].baseVolume == voices[bestSlot].baseVolume && (S32)(voices[i].timer - voices[bestSlot].timer) < 0))
                 bestSlot = i;
-            }
         }
-        if (bestSlot < 0) {
-            for (int i = 0; i < NUM_VOICES; i++) {
-                if (voices[i].repeat != 0 && voices[i].handle < bestHandle) {
-                    bestHandle = voices[i].handle;
-                    bestSlot = i;
-                }
-            }
+        const S32 newVolume = (volume > 127) ? 127 : volume;
+        if (bestSlot < 0 || voices[bestSlot].baseVolume > newVolume) {
+            if (sfxLogEnabled)
+                SDL_Log("[SFX] DROP user=0x%04X vol=%d: every voice louder | %d/%d active",
+                        userhandle & 0xFFFF, volume, activeCount, NUM_VOICES);
+            UnlockVoices();
+            return 0xFFFFFFFF;
         }
-        if (bestSlot < 0) {
-            bestHandle = 0xFFFFFFFF;
-            for (int i = 0; i < NUM_VOICES; i++) {
-                if (voices[i].handle < bestHandle) {
-                    bestHandle = voices[i].handle;
-                    bestSlot = i;
-                }
-            }
-        }
-        slot = (bestSlot >= 0) ? bestSlot : 0;
+        slot = bestSlot;
         if (sfxLogEnabled)
             SDL_Log("[SFX] STEAL voice %d (repeat=%d user=0x%04X) for user=0x%04X repeat=%d | %d/%d active",
                     slot, voices[slot].repeat, (voices[slot].handle >> 8) & 0xFFFF,

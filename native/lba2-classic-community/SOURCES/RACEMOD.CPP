@@ -11484,8 +11484,19 @@ void RaceMod_Frame(void) {
     // the grid: after the qualifying lap, or (without qualifying) as soon as the player is in his car; formed in the start line's scene
     if (inStartScene && driving && !ClosedGate() && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
     // the cars that aren't racing, out of sight
+    // (and silent: a hidden car's engine loop -- its SampleAlways, which the game keeps going for every car -- held a voice of the
+    // twelve the mixer has for nothing, and with the racing cars' they filled every one, 2026-10-19)
+    static int silenced = 0;
     for (int i = 0; i < s_nbHidden; i++)
-        if (s_hideScene[i] == NumCube && s_hideActor[i] > 0 && s_hideActor[i] < NbObjets) ListObjet[s_hideActor[i]].Obj.Y = -20000;
+        if (s_hideScene[i] == NumCube && s_hideActor[i] > 0 && s_hideActor[i] < NbObjets) {
+            T_OBJET *hidden = &ListObjet[s_hideActor[i]];
+            hidden->Obj.Y = -20000;
+            if (hidden->SampleAlways) {
+                HQ_StopOneSample(hidden->SampleAlways);
+                hidden->SampleAlways = 0;
+                if (++silenced <= 3 || silenced % 500 == 0) Log_Info("[racemod] a hidden car's engine sound stopped (actor %d; %d so far)", s_hideActor[i], silenced);
+            }
+        }
     // (and a driver lapping on his own: parade=)
     ParadeStep(now, dt);
     if (s_phase == PHASE_GRID && now >= s_goAt) {
