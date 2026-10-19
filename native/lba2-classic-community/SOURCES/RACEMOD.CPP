@@ -226,6 +226,10 @@ static int s_lastX = 0, s_lastZ = 0;       // the shift keys' state last frame
 
 static S32 s_laps = 0;                     // laps started (0: the start line not crossed yet)
 static S32 s_lapStart = 0, s_lastLap = 0, s_bestLap = 0;
+// the lap just driven, held on the display's lap line a moment (RACE_LAP_HOLD_MS) before the new lap's clock runs: when it ended, its
+// number, its time, and whether it was a time trial's new best time (the track's record and the trial's own laps beaten: in gold)
+static S32 s_heldAt = 0, s_heldLap = 0, s_heldTime = 0;
+static int s_heldBest = 0;
 
 // a line across the road: the start line, the checkpoints
 typedef struct {
@@ -3798,6 +3802,13 @@ static S32 BeatTime(void) {
     return (S32)(s_opp[s_beatOpp].PlannedLap * 1000 + 0.5);
 }
 
+// A time trial's best time, ms (0: none yet): the track's best lap in the race game's Best laps (RaceGame_BestLap: the trial's own laps
+// go there only at its end) or the trial's fastest lap so far, whichever is quicker -- what the display shows over the lap.
+static S32 TrialBestTime(void) {
+    const S32 record = RaceGame_BestLap();
+    return record > 0 && (!s_bestLap || record < s_bestLap) ? record : s_bestLap;
+}
+
 static double PlayerProgress(void);
 static void SprintOver(S32 now, int crossed);
 static int GiveItem(int pu, S32 now);
@@ -3886,8 +3897,13 @@ void RaceMod_Lap(S32 x, S32 z) {
     }
     if (s_laps > 0) {
         s_lastLap = now - s_lapStart;
+        // (a time trial's best time as the display showed it before this lap: the track's record or the trial's fastest lap so far)
+        const S32 bestBefore = TrialBestTime();
         // (the race's fastest lap -- a time trial's goes to the race game's best laps -- a qualifying lap's never)
         if (s_phase != PHASE_QUALIFYING && (!s_bestLap || s_lastLap < s_bestLap)) s_bestLap = s_lastLap;
+        // the lap's time held on the display a moment -- in gold when it is a time trial's new best time
+        s_heldAt = now; s_heldLap = s_laps; s_heldTime = s_lastLap;
+        s_heldBest = s_trial && s_phase != PHASE_QUALIFYING && (!bestBefore || s_lastLap < bestBefore);
         Log_Info("[racemod] lap %d in %.2f s%s", (int)s_laps, s_lastLap / 1000.0, s_phase == PHASE_QUALIFYING ? " (qualifying)" : "");
         // the time to beat: under it, the story moves on (once)
         if (const S32 target = BeatTime()) {
@@ -4489,7 +4505,7 @@ static void FormGrid(S32 now) {
         if (s_order[i] < 0) PlayerOnSpot(spot);
         else OnSpot(&s_opp[s_order[i]], spot);
     }
-    s_laps = 0; s_halfway = 0; s_next = 0; s_lastLap = 0; s_bestLap = 0;
+    s_laps = 0; s_halfway = 0; s_next = 0; s_lastLap = 0; s_bestLap = 0; s_heldAt = 0;
     s_place = 0;
     s_gridAt = now;
     s_goAt = now + (s_qualifying ? RACE_RESULTS_MS : 1000) + 3000;
@@ -11571,16 +11587,17 @@ static void Time(char *out, size_t size, S32 ms) {
 // One line of the display at y: starting at x (align < 0) or ending there (align > 0), with a dark shadow so it reads on sand and on
 // asphalt alike; its place marked to redraw.
 #define RACE_LINE_STEP 34
-static void HudLine(S32 x, S32 y, const char *text, int align) {
+static void HudLineIn(S32 x, S32 y, const char *text, int align, S32 colour) {
     char buf[96];
     snprintf(buf, sizeof(buf), "%s", text);
     const S32 w = SizeFont(buf), x0 = align > 0 ? x - w : x;
     ColorFont(0);
     Font(x0 + 2, y + 2, buf);
-    ColorFont(LBAWHITE);
+    ColorFont(colour);
     Font(x0, y, buf);
     BoxMovingAdd(x0 - 4, y - 4, x0 + w + 6, y + RACE_LINE_STEP + 4);
 }
+static void HudLine(S32 x, S32 y, const char *text, int align) { HudLineIn(x, y, text, align, LBAWHITE); }
 
 // The super jet-pack in the car's place (Twinsen's car hidden: PowerUps): the model at the car's size, lying flat and a little over the
 // road, drawn after the scene's objects as they are drawn -- tested against the depth of the ground and the decor, in the colours of
@@ -12200,6 +12217,9 @@ void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 me
     SetAngleCamera(0, 0, 0);
     SetLightVector(OBJ_ALPHA_LIGHT, OBJ_BETA_LIGHT, 0);
     const S32 w = x1 - x0 + 1, h = y1 - y0 + 1, cx = x0 + w / 2, cy = y0 + h / 2;
+    // (a perspective view first, as the item box has it: SetFollowCamera backs the camera off only in one -- after a resolution switch
+    // on the menu, Init3DView's isometric one was left, and the car was drawn from inside it)
+    SetProjection(cx, cy, 128, RACE_BODY_FIT_LF, RACE_BODY_FIT_LF);
     SetFollowCamera(0, 600, 0, 60 * MUL_ANGLE, 0, 0, 9000);
     const int fog = Fill_Flag_Fog, depth = Fill_Flag_ZBuffer, keep = Fill_Flag_NZW;
     // (from the objects' own texture page, as the item box draws -- for the measuring too: on the menu before any scene the map is unset,
@@ -12453,6 +12473,13 @@ static void BigText(S32 cx, S32 cy, const char *text, S32 k, S32 colour) {
 #define RACE_RED 72
 #define RACE_GREEN 141
 
+// A lap just driven is held on the display's lap line this long, still (its number and its time), before the new lap's clock shows --
+// the user, 2026-10-19: "at the end of a lap hold the last lap's time static for a couple of seconds"; races and time trials alike.
+#define RACE_LAP_HOLD_MS 2000
+static int Held(S32 now) {
+    return s_heldAt && now >= s_heldAt && now - s_heldAt < RACE_LAP_HOLD_MS && s_heldLap == s_laps - 1 && s_phase == PHASE_RACE && !s_sprint;
+}
+
 void RaceMod_Draw(void) {
     if (!RaceMod_Active() || !LbaFont) return;
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
@@ -12518,6 +12545,7 @@ void RaceMod_Draw(void) {
         HudLine(width - 16, bottom, text, 1);
         // the lap and its time, bottom left -- before the start what the start line wants, after the race the place
         text[0] = 0;
+        S32 colour = LBAWHITE;
         if (s_car.HasLine) {
             if (s_place && s_trial) {
                 Time(a, sizeof(a), s_raceTime);
@@ -12534,21 +12562,35 @@ void RaceMod_Draw(void) {
             else if (s_phase == PHASE_WAIT) snprintf(text, sizeof(text), "Drive to the start line");
             else if (s_phase == PHASE_GRID) text[0] = 0;
             else if (s_laps > 0) {
-                Time(a, sizeof(a), now - s_lapStart);
+                // (a lap just driven: its number and time held a moment, still, before the new lap's clock -- a time trial's new best
+                // time in gold)
+                const int held = Held(now);
+                const S32 lap = held ? s_heldLap : s_laps;
+                if (held && s_heldBest) colour = RACE_GOLD;
+                Time(a, sizeof(a), held ? s_heldTime : now - s_lapStart);
                 if (s_phase == PHASE_QUALIFYING) snprintf(text, sizeof(text), "Qualifying lap  %s", a);
                 else if (s_sprint) snprintf(text, sizeof(text), "Race  %s", a);
-                else if (s_raceLaps > 0 && s_nbOrder > 0 && s_laps <= s_raceLaps) snprintf(text, sizeof(text), "Lap %d/%d  %s", (int)s_laps, s_raceLaps, a);
+                else if (s_raceLaps > 0 && s_nbOrder > 0 && lap <= s_raceLaps) snprintf(text, sizeof(text), "Lap %d/%d  %s", (int)lap, s_raceLaps, a);
                 else if (const S32 target = BeatTime()) {
                     // (a time to beat: Raph's)
                     Time(b, sizeof(b), target);
-                    snprintf(text, sizeof(text), "Lap %d  %s  to beat %s", (int)s_laps, a, b);
-                } else snprintf(text, sizeof(text), "Lap %d  %s", (int)s_laps, a);
+                    snprintf(text, sizeof(text), "Lap %d  %s  to beat %s", (int)lap, a, b);
+                } else snprintf(text, sizeof(text), "Lap %d  %s", (int)lap, a);
             } else if (const T_RACE_GATE *gate = ClosedGate())
                 snprintf(text, sizeof(text), "%s", gate->Text);
             else
                 snprintf(text, sizeof(text), "Cross the start line");
         }
-        if (text[0]) HudLine(16, bottom, text, -1);
+        if (text[0]) HudLineIn(16, bottom, text, -1, colour);
+        // a time trial's best time over the lap, until it is over (then its best lap is there): the track's record or the trial's own
+        // fastest lap, whichever is quicker -- in gold while a new one is held on the lap line
+        if (s_car.HasLine && s_trial && !s_place && s_phase != PHASE_QUALIFYING) {
+            const S32 best = TrialBestTime();
+            if (best > 0) Time(b, sizeof(b), best);
+            else snprintf(b, sizeof(b), "--:--.--");
+            snprintf(text, sizeof(text), "Best time  %s", b);
+            HudLineIn(16, bottom - RACE_LINE_STEP, text, -1, Held(now) && s_heldBest ? RACE_GOLD : LBAWHITE);
+        }
         // the place as the race stands, over the lap
         int racers = 0;
         if (s_car.HasLine && !s_place) if (const int place = RacePlace(&racers)) {
@@ -12591,7 +12633,7 @@ static void ResetTrack(void) {
     s_floorRef = RAISED_NOREF; s_onlyNear = -1;
     Defaults(&s_car);                       // (the opponents too)
     s_gear = 1;
-    s_laps = 0; s_lapStart = s_lastLap = s_bestLap = 0;
+    s_laps = 0; s_lapStart = s_lastLap = s_bestLap = 0; s_heldAt = s_heldLap = s_heldTime = 0; s_heldBest = 0;
     s_lineY = s_lineHasY = 0; s_halfway = 0; s_nbCheckpoints = 0; s_next = 0; s_showCheckpoints = 0; s_checkpointAtFor = 0; s_missIndex = -1; s_missLap = -1; s_missAt = -1;
     s_messageUntil = 0;
     s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopHold = -1;

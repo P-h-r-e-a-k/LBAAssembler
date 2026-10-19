@@ -177,6 +177,8 @@ void ReadConfigFile(void) {
     SetWindowFullscreen(DisplayFullScreen != FALSE);
     /* F11 / Alt+Enter switch between full screen and a window from anywhere, kept as the Display menu's toggle keeps it */
     if (Window_SupportsWindowedMode()) Keyboard_ToggleFullscreen = HotkeyFullscreen;
+    /* The race game's window back at the size the player left it (its picture fitted to it: RES_SWITCH.CPP Res_ApplyWindowFit) */
+    Res_RestoreWindowSize();
 
     /* An explicit request for this run beats the stored preference, the same
        precedence the resolution and the language use. */
@@ -368,6 +370,8 @@ void WriteConfigFile(void) {
         DefFileBufferWriteValue("ResolutionX", (S32)baseW);
         DefFileBufferWriteValue("ResolutionY", (S32)baseH);
     }
+    /* the race game's window size, as the player left it (Res_RestoreWindowSize puts it back) */
+    Res_WriteWindowSize();
 
     if (FlagDisplayText)
         DefFileBufferWriteString("FlagDisplayText", "ON");

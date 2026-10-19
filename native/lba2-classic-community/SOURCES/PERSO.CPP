@@ -503,6 +503,9 @@ restartloop:
            loop, so by the time control returns the user has chosen Keep or
            Revert (or the 15 s timeout fired). No-op when nothing is pending. */
         Res_RunRevertDialogIfPending();
+        /* The race game's window resized: the picture fitted to its shape (RES_SWITCH.CPP); the switch redraws the
+           whole frame next (FirstTime = AFF_ALL_FLIP). */
+        Res_ApplyWindowFit();
 
         /*#ifdef  THOMAS
 		if( DefKeys[0].Key1==0 )

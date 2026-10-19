@@ -532,7 +532,30 @@ static void ApplyResolutionChoice(U32 w, U32 h) {
         // Persist immediately so the next launch boots at the chosen
         // resolution. Mirrors the Phase 0 keep/revert "Keep" path.
         WriteConfigFile();
+        Menu_RepaintAfterResolutionSwitch();
+    }
+}
 
+S32 MenuRelayoutReturns = 0;
+
+void Menu_RepaintAfterWindowFit(void) {
+    // (the switch showed the scene's palette -- ChoicePalette, Palette(PtrPal) -- and the menus are shown in the menu's own; before
+    // any race PtrPal is the menu's too, as MainGameMenu set it)
+    if (!FlagShadeMenu)
+        PtrPal = PtrPalNormal;
+    Palette(PtrPalNormal);
+    // (in a race, the scene behind the menu drawn again at the game's time as the menu stopped it -- Esc's EscTimer, or a SaveTimer --
+    // not the menu's running clock: the race's own per-frame checks run with the drawing (AffScene: RaceMod_Frame), and saw a car
+    // standing still for as long as the menu had been open -- stuck, put back on the road)
+    const U32 live = TimerRefHR;
+    if (FlagShadeMenu)
+        TimerRefHR = EscTimer ? (U32)EscTimer : Timer_SavedRefHR();
+    Menu_RepaintAfterResolutionSwitch();
+    TimerRefHR = live;
+}
+
+void Menu_RepaintAfterResolutionSwitch(void) {
+    {
         // Res_Switch tears down Log/Screen and the cube reload inside
         // it may have clobbered SkySeaTexture (where the plasma fire
         // bar lives), so the next DoGameMenu redraw would show the
@@ -2624,6 +2647,17 @@ S32 DoGameMenu(U16 *ptrmenu) {
     while (TRUE) {
         ManageTime();
         MyGetInput();
+
+        // (the race game's window resized: its picture fitted to the window, RES_SWITCH.CPP -- the backdrop made again at the new size,
+        // and the rows drawn again on it; a race game's page draws itself again first: MENU_RELAYOUT)
+        if (Res_ApplyWindowFit()) {
+            Menu_RepaintAfterWindowFit();
+            if (MenuRelayoutReturns) {
+                AsciiMode = FALSE;
+                return MENU_RELAYOUT;
+            }
+            flag = 1;
+        }
 
         // Gamepad D-pad / left stick feed the same codes as keyboard arrows.
         // Edge-only: fire one K_GRAY_* on the direction change so a held

@@ -54,6 +54,7 @@
 #include "RACEGAME.H"
 #include "RACEMOD.H"
 #include "RACEUPDATE.H"
+#include "RES_SWITCH.H"
 #include "UI_LAYOUT.H"
 
 #include <FILEIO/SAVEPNG.H>
@@ -501,6 +502,14 @@ S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers) 
     return RecordLap(total, bestLap, SpecialLaps(s_raceSp >= 0 && s_raceSp < s_nbSp ? s_raceSp : 0));
 }
 
+// RACEMOD.CPP: the race's track's best lap, Best laps' first (ms; 0 for none or no race of the race game's) -- a time trial's display
+// shows it over the lap, or the trial's own fastest lap when that is quicker.
+S32 RaceGame_BestLap(void) {
+    if (!RaceGame_On() || s_raceSp < 0 || s_raceSp >= s_nbSp) return 0;
+    ReadTimes();
+    return s_nbTimes[s_raceSp] > 0 ? s_times[s_raceSp][0].Lap : 0;
+}
+
 // A lap into the race's track's best laps (a time trial's fastest; a qualifying lap: RaceGame_Qualified -- no power-ups on either): the
 // rank it took (1-10), 0 for none. `total` the whole run's time (a qualifying lap's own), `laps` how many laps that was.
 static int RecordLap(S32 total, S32 lap, int laps) {
@@ -627,6 +636,26 @@ static void Page(const char *header, S32 y) {
     }
 }
 
+// DoGameMenu for a page of the race game's: MENU_RELAYOUT when the window was resized and the picture fitted to it -- the backdrop made
+// again at the new size, the page (its header, its text) to be drawn again over it before the menu is asked again (each page's loop
+// goes round for any row it doesn't know)
+static S32 Menu(U16 *menu) {
+    const S32 was = MenuRelayoutReturns;
+    MenuRelayoutReturns = 1;
+    const S32 select = DoGameMenu(menu);
+    MenuRelayoutReturns = was;
+    return select;
+}
+
+// A page's own loop (the car, Best laps, the controls and power-ups): the window resized and the picture fitted to it -- the backdrop
+// made again at the new size, the page to be laid out and drawn again (non-zero)
+static int Refitted(void) {
+    if (!Res_ApplyWindowFit()) return 0;
+    Menu_RepaintAfterWindowFit();
+    Page(NULL, 0);
+    return 1;
+}
+
 // A line of text centred on x, with the menus' dark shadow.
 static void Text(S32 x, S32 y, const char *utf8, S32 colour) {
     char text[256];
@@ -684,14 +713,19 @@ static int CarPage(const char *what) {
     InitWaitNoInput(I_JOY | I_FIRE | I_MENUS | I_ACTION);
     S32 padDir = JoystickMenuNavOnly();
     AsciiMode = TRUE;
-    const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
-    const S32 x0 = cx - 230, x1 = cx + 230, y0 = 130 + oy, y1 = 330 + oy;
+    S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    S32 x0 = cx - 230, x1 = cx + 230, y0 = 130 + oy, y1 = 330 + oy;
     int chosen = -2;
     S32 start = TimerRefHR;
     s_clickWas = Click & 3;
     while (chosen == -2) {
         ManageTime();
         MyGetInput();
+        // (the window resized: the page laid out again at the new size)
+        if (Refitted()) {
+            cx = UI_CENTER_X; oy = UI_VCENTER_OFS;
+            x0 = cx - 230; x1 = cx + 230; y0 = 130 + oy; y1 = 330 + oy;
+        }
         S32 step = Step(&padDir);
         // (the mouse: a click on the box's left or right quarter the car before or after, in its middle this one; the right button back)
         S32 mx, my;
@@ -742,12 +776,18 @@ static void TimesPage(void) {
     S32 padDir = JoystickMenuNavOnly();
     AsciiMode = TRUE;
     int sp = s_lastSp >= 0 && s_lastSp < s_nbSp ? s_lastSp : 0, flag = 1, done = 0;
-    const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
-    const S32 x0 = cx - 280, x1 = cx + 280, y0 = 60 + oy, y1 = 440 + oy;
+    S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    S32 x0 = cx - 280, x1 = cx + 280, y0 = 60 + oy, y1 = 440 + oy;
     s_clickWas = Click & 3;
     while (!done) {
         ManageTime();
         MyGetInput();
+        // (the window resized: the page laid out and drawn again at the new size)
+        if (Refitted()) {
+            cx = UI_CENTER_X; oy = UI_VCENTER_OFS;
+            x0 = cx - 280; x1 = cx + 280; y0 = 60 + oy; y1 = 440 + oy;
+            flag = 1;
+        }
         S32 mx, my;
         if (Clicked(&mx, &my)) done = 1;
         const S32 step = s_nbSp > 1 ? Step(&padDir) : 0;
@@ -970,12 +1010,14 @@ static void Pages(const T_RACE_PAGE *pg, int controls, int items, int intro) {
     AsciiMode = TRUE;
     s_clickWas = Click & 3;
     int at = 0, done = 0;
-    const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
     Log_Info("[racegame] %s: %d page(s)%s", controls && itemPages ? "the controls and the power-ups" : controls ? "the controls" : "the power-ups",
              pages, intro ? " before the race" : "");
     while (!done) {
         ManageTime();
         MyGetInput();
+        // (the window resized: the page laid out again at the new size -- it is drawn whole every pass)
+        if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; }
         S32 mx, my;
         const int click = Clicked(&mx, &my);
         S32 step = pages > 1 ? Step(&padDir) : 0;
@@ -1039,7 +1081,7 @@ static int QualifyingPage(int sp, int trial) {
     SetRow(s_qualMenu, 2, RG_ID_SKIP);
     for (;;) {
         Page("Qualifying", 128);
-        const S32 select = DoGameMenu(s_qualMenu);
+        const S32 select = Menu(s_qualMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
         if (select != RG_ID_QUALIFY && select != RG_ID_SKIP) continue;
         s_skipQualifying = select == RG_ID_SKIP;
@@ -1098,7 +1140,7 @@ static void UpdatesPage(void) {
         else if (said[0]) snprintf(status, sizeof(status), "%s", said);
         else status[0] = 0;
         if (status[0]) Wrapped(cx - 280, textY + lines * RG_LINE + 6, 560, RG_LINE, status, RG_GREY);
-        const S32 select = DoGameMenu(s_updMenu);
+        const S32 select = Menu(s_updMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return; }
         for (S32 i = 0; i < 4; i++) if (s_updMenu[4 + 2 * i + 1] == (U16)select) s_updMenu[0] = (U16)i;
         if (select == RG_ID_WINDOW) ToggleDisplayFullscreen();
@@ -1154,7 +1196,7 @@ static int LevelPage(void) {
         // (what the levels do, under the rows)
         Text(UI_CENTER_X, 400 + UI_VCENTER_OFS, "Easy: slower monsters, fewer items", RG_GREY);
         Text(UI_CENTER_X, 436 + UI_VCENTER_OFS, "Hard: quicker monsters, aimed attacks", RG_GREY);
-        const S32 select = DoGameMenu(s_levelMenu);
+        const S32 select = Menu(s_levelMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return -1; }
         if (select < RG_ID_EASY || select > RG_ID_HARD) continue;
         s_level = select - RG_ID_EASY;
@@ -1176,7 +1218,7 @@ static int ModePage(int sp) {
     SetRow(s_modeMenu, 2, RG_ID_TRIAL);
     for (;;) {
         Page(s_sp[sp].Name, 128);
-        const S32 select = DoGameMenu(s_modeMenu);
+        const S32 select = Menu(s_modeMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
         if (select != RG_ID_RACE && select != RG_ID_TRIAL) continue;
         const int trial = select == RG_ID_TRIAL;
@@ -1204,7 +1246,7 @@ static int SpecialsPage(void) {
     for (int i = 0; i < s_nbSp; i++) SetRow(s_spMenu, 1 + i, (U16)(RG_ID_SPECIAL + i));
     for (;;) {
         Page("Specials", 280 - (56 * (1 + s_nbSp)) / 2 - 50);
-        const S32 select = DoGameMenu(s_spMenu);
+        const S32 select = Menu(s_spMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
         if (select < RG_ID_SPECIAL || select >= RG_ID_SPECIAL + s_nbSp) continue;
         s_lastSp = select - RG_ID_SPECIAL;
@@ -1229,7 +1271,9 @@ S32 RaceGame_Menu(S32 inGame) {
     s_mainMenu[2] = (U16)(nb > 6 ? 290 : 300);
     s_mainMenu[3] = 0;
     for (;;) {
-        const S32 select = DoGameMenu(s_mainMenu);
+        const S32 select = Menu(s_mainMenu);
+        // (the window resized: the backdrop is made again -- shaded in a race -- and the rows go on it)
+        if (select == MENU_RELAYOUT) continue;
         switch (select) {
         case 1000:
             if (resume) return 1000;
