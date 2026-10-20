@@ -380,6 +380,10 @@ static int DifficultyTakes(int n);
 static int DifficultyHolds(int n, int pu, S32 now);
 static double DifficultyEase(const T_RACE_OPPONENT *o, double me);
 static int PackTakes(int n, double back);
+#define RACE_RUNAWAY_S 5.0                  // Twinsen this many seconds clear of every car: the opponents gang up on him (TwinsenLead) ...
+#define RACE_RUNAWAY_BOOST 4.0              // ... their attacks on him this many times as likely
+static double TwinsenLead(void);
+static int Runaway(void);
 static S32 HazardEvery(S32 ms);
 static double HazardChance(double chance);
 // With no opponent raced, the line of the one to beat all the same (guide_path=, guide_top=, guide_grip=: the builder writes it then),
@@ -611,7 +615,9 @@ static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 0, 0, 0, 0, 0, 0, 0, 0
 // on ahead of it, its Gazogem fuel a third as often and its drops fewer -- they held up the cars chasing it -- and the back's boosts and
 // the attacks on the cars in front more often: until then the leader drew a boost one time in seven, a strong item one in five, the
 // last car a strong item two times in three; now one in fourteen, one in ten, and four in five)
-static const double s_puLead[PU_COUNT] = {0.35, 1.8, 0.0, 1.0, 0.0, 1.1, 1.3, 1.1, 0.1, 0.0, 1.0, 0, 0.15};
+// (the leader's protection spell hardly ever, its drops more -- the user, 2026-10-20: "minimise the amount of protection spells the car
+// in first place gets, but instead give them more penguins, oil, fake item boxes")
+static const double s_puLead[PU_COUNT] = {0.35, 0.2, 0.0, 2.2, 0.0, 2.4, 1.3, 1.1, 0.1, 0.0, 2.4, 0, 0.15};
 // (the back's strong items more often still, later on 2026-10-20 -- the user: "let's also increase the more powerful powerups cars at the
 // back are getting": the last car's jet-pack, lightning, red ball, fire ball and ghost three in four times, with its Gazogem nine in ten;
 // its protection spell, drops and yellow and green balls half as often)
@@ -7255,6 +7261,7 @@ static void GhostDrawn(S32 now) {
 // go to the cars at the back and hardly ever to the leader, who draws the weak ones (DrawPowerUp); on the ghost's track the ghost when
 // it is due (GhostDue).
 static int DrawPowerUp(double back);
+static int s_drawRunaway = 0;             // an opponent drawing with Twinsen running away (RACE_RUNAWAY_S): DrawPowerUp's attacks on him more often
 static int RandomPowerUp(double back) {
     const S32 now = TimerRefHR;
     int pu;
@@ -7276,6 +7283,7 @@ static int DrawPowerUp(double back) {
         if (i == PU_FUEL && s_fuelAlways) w[i] = 0;   // (every car has it all race)
         if (i == PU_FAKE && !s_nbFakeActors) w[i] = 0;  // (a track built before them has no copies of the mushroom to show one)
         if (i == PU_GHOST && s_hauntBody < 0) w[i] = 0;  // (the Temple of Bú's alone: haunt=)
+        if (s_drawRunaway && (i == PU_BALL_FIRE || i == PU_BALL_RED || i == PU_LIGHTNING || i == PU_GHOST)) w[i] *= RACE_RUNAWAY_BOOST;
         total += w[i];
     }
     double r = RaceRandom() * total;
@@ -7755,7 +7763,11 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
         const double back = BackShare(n);
         // (the pack kept together: the cars at the front pass more of the rows by -- PackTakes)
         if (!PackTakes(n, back)) continue;
+        // (Twinsen running away: its draw leans to the attacks on him -- DrawPowerUp)
+        s_drawRunaway = Runaway();
         const int pu = RandomPowerUp(back);
+        if (s_drawRunaway) Log_Info("[racemod] %s draws %s: Twinsen %.1f s clear of every car (the attacks on him %.0f times as likely)", o->Name, s_puName[pu], TwinsenLead(), RACE_RUNAWAY_BOOST);
+        s_drawRunaway = 0;
         if (DifficultyHolds(n, pu, now)) continue;
         if (pu >= PU_BALL_YELLOW && pu <= PU_BALL_FIRE) {
             Attack(pu, n, car->Obj.X + CurrentCubeX * 32768.0, car->Obj.Y, car->Obj.Z + CurrentCubeY * 32768.0, car->Obj.Beta * 2 * 3.14159265358979 / 4096, now);
@@ -7917,6 +7929,22 @@ static int PackCars(int *who, double *at) {
         if (s_opp[n].Count && s_opp[n].Scenes && !CarFinished(n)) { who[count] = n; at[count++] = RaceShare(n); }
     return count;
 }
+// How far Twinsen leads every other car racing, in seconds (the guide's planned lap; <= 0: he doesn't lead, or no race). Past
+// RACE_RUNAWAY_S the opponents gang up on him (the user, 2026-10-20: "If Twinsen gets too far ahead, more than 5 seconds, let's make sure
+// he's getting attacked with more fireballs and redballs, along with lightning and ghosts to help the opponents catch up"): their draws
+// RACE_RUNAWAY_BOOST times as often those four (DrawPowerUp), an item from every row they reach (DifficultyTakes), and their red balls
+// after him wherever they are (Attack).
+static double TwinsenLead(void) {
+    const T_RACE_OPPONENT *g = Guide();
+    if (!RaceOn() || !g || s_plannedLap <= 0 || CarFinished(-1)) return 0;
+    const double mine = RaceShare(-1);
+    double best = -1e30;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
+        if (s_opp[n].Count && s_opp[n].Scenes && !CarFinished(n) && RaceShare(n) > best) best = RaceShare(n);
+    return best > -1e29 ? (mine - best) / (g->Length / s_plannedLap) : 0;
+}
+static int Runaway(void) { return TwinsenLead() > RACE_RUNAWAY_S; }
+
 static void PackWatch(void) {
     if (!RaceOn()) return;
     if (s_packGo != s_goAt) { s_packGo = s_goAt; memset(s_packAhead, 0, sizeof(s_packAhead)); s_packPasses = s_packPassesTwinsen = 0; }
@@ -8636,7 +8664,8 @@ static void Attack(int pu, int owner, double x, double y, double z, double beta,
     case PU_BALL_YELLOW: LaunchShot(SHOT_YELLOW, owner, -2, x, y, z, hx, hz, now); break;
     case PU_BALL_GREEN: LaunchShot(SHOT_GREEN, owner, -2, x, y, z, hx, hz, now); break;
     case PU_BALL_RED: {
-        const int target = CarInFront(owner);
+        // (an opponent's with Twinsen running away: after him, wherever it is -- TwinsenLead)
+        const int target = owner >= 0 && Runaway() ? -1 : CarInFront(owner);
         T_RACE_SHOT *sh = LaunchShot(SHOT_RED, owner, target, x, y, z, hx, hz, now);
         if (!Guide()) { Log_Info("[racemod] %s's red ball goes after %s (no line: straight ahead)", CarName(owner), target == -2 ? "no one (in the lead)" : CarName(target)); break; }
         // (out of the front of the car, as far round the race as it is; no slower than the car that threw it)
@@ -8660,6 +8689,45 @@ static void Attack(int pu, int owner, double x, double y, double z, double beta,
 
 // raceattack (tests, the console): opponent n (0 the first) uses a ball power-up now, out of the front of its car where it is -- in sight
 // or scenes away along its line -- as at a mushroom (the red ball by default).
+// Every frame of a race: Twinsen running away (RACE_RUNAWAY_S clear of every car) and the car nearest behind him attacks him every so
+// often, wherever it is -- the opponents only take items from mushrooms in Twinsen's scene, and a car far behind is scenes away, so the
+// rows alone never reached him (2026-10-20: in six laps 21-34 s clear, the opponents drew two items): a red ball after him along the track,
+// a fire ball, the lightning or a ghost, the first RACE_RUNAWAY_FIRST after he gets clear, then every s_runawayEvery of the race's level.
+#define RACE_RUNAWAY_FIRST 2000
+static const S32 s_runawayEvery[3] = {14000, 10000, 7000};   // easy, medium (and no level), hard
+static S32 s_runawayNext = 0;
+static void RunawayAttacks(S32 now) {
+    if (!Runaway()) { s_runawayNext = 0; return; }
+    if (!s_runawayNext) { s_runawayNext = now + RACE_RUNAWAY_FIRST; return; }
+    if (now < s_runawayNext) return;
+    s_runawayNext = now + s_runawayEvery[PackLevel()];
+    // (the nearest behind him)
+    int n = -1;
+    for (int k = 0; k < RACE_MAX_OPPONENTS; k++)
+        if (s_opp[k].Count && s_opp[k].Scenes && !CarFinished(k) && (n < 0 || RaceShare(k) > RaceShare(n))) n = k;
+    if (n < 0) return;
+    T_RACE_OPPONENT *o = &s_opp[n];
+    double x, y, z, lx, lz, ly, v, dx, dz;
+    if (!CarAt(n, &x, &y, &z)) return;
+    PathAt(o, o->S, &lx, &lz, &ly, &v, &dx, &dz);
+    // (the red ball most, then the fire ball, the lightning and the ghost -- the ghost on its track only)
+    const double w[4] = {4, 3, 2, s_hauntBody >= 0 ? 2.0 : 0.0};
+    const int kinds[4] = {PU_BALL_RED, PU_BALL_FIRE, PU_LIGHTNING, PU_GHOST};
+    double r = RaceRandom() * (w[0] + w[1] + w[2] + w[3]);
+    int pu = kinds[0];
+    for (int i = 0; i < 4; i++) { if (r < w[i]) { pu = kinds[i]; break; } r -= w[i]; }
+    Log_Info("[racemod] %s attacks Twinsen, %.1f s clear of every car: %s", o->Name, TwinsenLead(), s_puName[pu]);
+    if (pu == PU_BALL_RED || pu == PU_BALL_FIRE) Attack(pu, n, x, y, z, atan2(dx, dz), now);
+    else if (pu == PU_GHOST) GhostLaunch(n, now);
+    else if (now >= s_jetUntil) {
+        const int me = NUM_PERSO;
+        Strike(now, &me, 1);
+        const S32 ms = ShrinkMs(BackShare(-1));
+        if (now < s_protectUntil) Log_Info("[racemod] %s's lightning strikes Twinsen's car: the protection spell holds", o->Name);
+        else { s_shrunkUntil = now + ms; Log_Info("[racemod] Twinsen's car struck and shrunk by %s's lightning for %.1f s", o->Name, ms / 1000.0); }
+    }
+}
+
 void RaceMod_TestAttack(int n, int pu) {
     if (!RaceMod_Active() || n < 0 || n >= RACE_MAX_OPPONENTS || !s_opp[n].Count || !s_opp[n].Scenes || pu < PU_BALL_YELLOW || pu > PU_BALL_FIRE) return;
     const T_RACE_OPPONENT *o = &s_opp[n];
@@ -8829,7 +8897,7 @@ static int DifficultyTakes(int n) {
     if (s_difficulty < 0) return 1;
     T_RACE_OPPONENT *o = &s_opp[n];
     if (o->Holds) return 0;
-    if (s_diffItems >= 100) return 1;
+    if (s_diffItems >= 100 || Runaway()) return 1;   // (Twinsen running away: every row)
     if (RaceRandom() * 100 < s_diffItems) return 1;
     Log_Info("[racemod] %s passes a mushroom row by (the race's level: items from %d%% of the rows)", o->Name, s_diffItems);
     return 0;
@@ -12572,6 +12640,7 @@ void RaceMod_Frame(void) {
     if (moving) PackWatch();
     // (the pack kept together: each opponent's factor and Twinsen's slipstream)
     PackFactors(now, moving ? dt : 0);
+    if (moving) RunawayAttacks(now);
     s_carsScene = NumCube;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
