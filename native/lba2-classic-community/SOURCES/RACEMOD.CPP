@@ -492,6 +492,7 @@ typedef struct {
     double X, Y, Z; S32 At; int On;
     double S, Side, SideTo, HomeX, HomeZ, Heading; int Dir; S32 NextTurn, Dropped;
     int Dropper;                           // the car that dropped it: -1 Twinsen's, else the opponent's
+    int Caught;                            // a car that came into it as it landed (PenguinHits' code), set off by it at RACE_DROP_SHOW; 0 none
 } T_RACE_PENGUIN;
 static int s_penguinWalk = 1;              // penguin_mode=walk (1) or fuse (0)
 #define RACE_PENGUIN_ARM 1000              // the car that dropped it can't set it off for this long (it is away by then); any other car at once ...
@@ -604,7 +605,9 @@ static int BoxFree(void) { return s_item[RACE_BOX] < 0 && !(s_slotOn && !s_slotP
 // (Y: the road's height under it once it is in sight -- PoseSlick -- before that the dropping car's; Posed: the scene it was posed in,
 // -1 not yet; Alpha, Gamma: tilted to the road's slope; Lift: its middle over the road, so that no part of it is under the road)
 // Until: when it dries up (a drip's), 0 never
-typedef struct { double X, Y, Z; S32 Dropped; int On; S32 Posed, Alpha, Gamma; double Lift; S32 Until; } T_RACE_SLICK;
+// Dropper: the car that dropped it (-1 Twinsen's, else the opponent's; -3 none: a drip's), not taken by it for RACE_OIL_ARM
+#define RACE_OIL_ARM 1000
+typedef struct { double X, Y, Z; S32 Dropped; int On; S32 Posed, Alpha, Gamma; double Lift; S32 Until; int Dropper; } T_RACE_SLICK;
 static T_RACE_SLICK s_slicks[RACE_MAX_SLICKS];
 // The magic balls in flight (Shots): each one's kind (its colour), whose (-1 Twinsen's, else the opponent's), what it is after (-1
 // Twinsen, an opponent, -2 none), where it is (world units) and which way it goes; the guide line's S and how far to its side for those
@@ -690,7 +693,8 @@ static void Attack(int pu, int owner, double x, double y, double z, double beta,
 #define RACE_MAX_FAKES 8
 #define RACE_MAX_FAKE_ACTORS 256
 #define RACE_FAKE_ARM 1200
-typedef struct { int On, Dropper; double X, Y, Z; S32 Dropped, Posed; } T_RACE_FAKE;
+// (Caught: the car that came into it as it landed, + 2 -- 0 none -- set off under it at RACE_DROP_SHOW)
+typedef struct { int On, Dropper; double X, Y, Z; S32 Dropped, Posed; int Caught; } T_RACE_FAKE;
 static T_RACE_FAKE s_fakes[RACE_MAX_FAKES];
 static int s_fakeScene[RACE_MAX_FAKE_ACTORS], s_fakeActor[RACE_MAX_FAKE_ACTORS];
 static int s_nbFakeActors = 0, s_fakeIconBody = -1;
@@ -6952,15 +6956,34 @@ static int DrawPowerUp(double back) {
     return s_fuelAlways ? PU_PROTECT : PU_FUEL;
 }
 
-// An oil slick dropped at (x, y, z) (world units): on the road until a car drives over it (the oldest goes when there are too many).
-static void DropOil(double x, double y, double z) {
+// An oil slick dropped at (x, y, z) (world units) by `dropper` (-1 Twinsen's car, else the opponent's): on the road until a car drives
+// over it -- not the one that dropped it, for RACE_OIL_ARM (DropSpot can put it nearer the car than 1,300) -- the oldest gone when there
+// are too many, or when this scene's slicks are all on its road: the oldest of them, a pipe's drip first.
+static int InThisCube(double wx, double wz);
+static int SceneFull(int actors, int shown);
+static void DropOil(double x, double y, double z, int dropper) {
+    if (InThisCube(x, z)) {
+        int actors = 0, shown = 0, oldest = -1;
+        for (int a = 0; a < s_nbOilActors; a++) if (s_oilScene[a] == NumCube && s_oilActor[a] > 0 && s_oilActor[a] < NbObjets) actors++;
+        for (int i = 0; i < RACE_MAX_SLICKS; i++) {
+            const T_RACE_SLICK *sl = &s_slicks[i];
+            if (!sl->On || !InThisCube(sl->X, sl->Z)) continue;
+            shown++;
+            if (oldest < 0 || (sl->Until != 0) > (s_slicks[oldest].Until != 0)
+                || ((sl->Until != 0) == (s_slicks[oldest].Until != 0) && sl->Dropped < s_slicks[oldest].Dropped)) oldest = i;
+        }
+        if (SceneFull(actors, shown) && oldest >= 0) {
+            Log_Info("[racemod] the scene's %d slicks all on the road: the oldest%s goes for the new one", actors, s_slicks[oldest].Until ? " (a drip's)" : "");
+            s_slicks[oldest].On = 0;
+        }
+    }
     int k = 0;
     for (int i = 0; i < RACE_MAX_SLICKS; i++) {
         if (!s_slicks[i].On) { k = i; break; }
         if (s_slicks[i].Dropped < s_slicks[k].Dropped) k = i;
     }
     s_slicks[k].X = x; s_slicks[k].Y = y; s_slicks[k].Z = z; s_slicks[k].Dropped = TimerRefHR; s_slicks[k].On = 1; s_slicks[k].Posed = -1;
-    s_slicks[k].Until = 0;
+    s_slicks[k].Until = 0; s_slicks[k].Dropper = dropper;
 }
 
 // A drip's slick (drip=) at (x, y, z), lying RACE_DRIP_SLICK_MS unless a car takes it first -- only where there is room for it: a free
@@ -6978,7 +7001,7 @@ static int DripOil(double x, double y, double z, S32 now) {
     }
     if (free < 0 || shown >= actors) return 0;
     T_RACE_SLICK *sl = &s_slicks[free];
-    sl->X = x; sl->Y = y; sl->Z = z; sl->Dropped = now; sl->On = 1; sl->Posed = -1; sl->Until = now + RACE_DRIP_SLICK_MS;
+    sl->X = x; sl->Y = y; sl->Z = z; sl->Dropped = now; sl->On = 1; sl->Posed = -1; sl->Until = now + RACE_DRIP_SLICK_MS; sl->Dropper = -3;
     return 1;
 }
 
@@ -7071,12 +7094,108 @@ static void PoseSlick(T_RACE_SLICK *sl, S32 lx, S32 lz) {
     sl->Lift = 14 + lift;
 }
 
+// ---- where a dropped item lands ------------------------------------------------------------------------------------------------------
+// An oil slick, a nitro penguin or a fake mushroom always comes out of the car that uses it, wherever the car is (the user, 2026-10-20:
+// "Currently if we're too close to the track edge or an enemy it can stop an object spawning, we should change this so it always fires").
+// What went wrong (the Temple of Bú, headless, an item every 3 s): a penguin dropped with a car right behind went off at once, unseen,
+// and its blast -- 2,048 round it, the penguin 1,300 behind -- stopped the car that dropped it as well (4-7 of 20 a lap; at a standstill
+// beside the car behind, every one: the two cars blew each other up for the rest of the race); a fake mushroom with a car right behind went
+// off unseen; an item dropped 1,300 behind a car that had just come into a scene lay in the scene behind, never drawn; and an item past the
+// scene's copies of it (3 penguins, 5 slicks, 3 fake mushrooms) was never drawn either. Nor was anything made sure of where it landed:
+// straight behind the car, whatever was there -- by a rail, on a bend's outside, a wall, a bank, the ground under a raised road's edge.
+// Now: it lands on the road in this scene (DropSpot); a car that runs into a penguin or a fake mushroom as it lands -- the one right behind
+// -- sets it off only once it has been seen (RACE_DROP_SHOW), that car caught all the same; the car that dropped a penguin is out of its
+// blast while it gets away (RACE_PENGUIN_ARM), and just dropped, a penguin is set off by no wall, mushroom or other penguin; and a scene
+// whose copies are all in use makes way for the new one: the oldest there goes (a penguin off), not the new one unseen.
+#define RACE_DROP_BACK 1300.0              // dropped this far behind the car ...
+#define RACE_DROP_STEP 700                 // ... where the road is no more than this over or under the car (a ramp's 1,300 is ~600)
+#define RACE_DROP_SHOW 250                 // a car that comes into a penguin or a fake mushroom as it lands sets it off at this age
+static double GuideS(const T_RACE_OPPONENT *o, double x, double y, double z, double hint, double *side);
+static void GuideAt(const T_RACE_OPPONENT *o, double s, double side, double *x, double *y, double *z, double *hx, double *hz);
+
+// Whether a place (world units) is on this scene's cube.
+static int InThisCube(double wx, double wz) {
+    const double lx = wx - CurrentCubeX * 32768.0, lz = wz - CurrentCubeY * 32768.0;
+    return CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768;
+}
+
+// Whether a place (world units) is on the road at about the height `ref`: 1 yes (*h the road's height there: a raised road's, or the
+// ground's), 0 no -- a wall or a bank over it, the ground far under it (off a raised road's edge), off the island -- -1 not known (not in
+// this scene's cube).
+static int DropRoad(double wx, double wz, S32 ref, S32 *h) {
+    if (!InThisCube(wx, wz)) return -1;
+    int ok;
+    *h = SlickGround((S32)(wx - CurrentCubeX * 32768.0), (S32)(wz - CurrentCubeY * 32768.0), ref, &ok);
+    return ok && abs(*h - ref) <= RACE_DROP_STEP;
+}
+
+// Where an item dropped by a car at (cx, cy, cz) facing `beta` (radians) lands (world units): RACE_DROP_BACK straight behind it, as
+// always, where that is on the road; else as far back along the track, as far to the side of the guide line as the car is; else half as
+// far straight behind it; else under the car (none of them taken by the car that dropped it for a moment: RACE_OIL_ARM,
+// RACE_PENGUIN_ARM, RACE_FAKE_ARM); else -- a car in a jump's flight over a gap, nothing under it -- on the guide line RACE_DROP_BACK
+// back, at its height. Straight behind the car but over the edge of this scene's cube -- the scene behind, not drawn: an item there was
+// never seen, the pool's oldest gone before the car came back to it -- it lands as far behind the car as this scene goes, or one of the
+// nearer places, on the road in this scene; with none of them, behind the car as before.
+static void DropSpot(const char *who, double cx, double cy, double cz, double beta, double *x, double *y, double *z) {
+    const double bx = sin(beta), bz = cos(beta);
+    const S32 ref = (S32)cy;
+    S32 h;
+    *x = cx - bx * RACE_DROP_BACK; *y = cy; *z = cz - bz * RACE_DROP_BACK;
+    const int first = DropRoad(*x, *z, ref, &h);
+    if (first == 1) return;
+    const double fx = *x, fz = *z;
+    // (how far straight behind the car this scene's cube goes, less a little)
+    double edge = RACE_DROP_BACK;
+    {
+        const double lx = cx - CurrentCubeX * 32768.0, lz = cz - CurrentCubeY * 32768.0;
+        if (bx > 1e-6 && lx / bx < edge) edge = lx / bx;
+        if (bx < -1e-6 && (lx - 32768) / bx < edge) edge = (lx - 32768) / bx;
+        if (bz > 1e-6 && lz / bz < edge) edge = lz / bz;
+        if (bz < -1e-6 && (lz - 32768) / bz < edge) edge = (lz - 32768) / bz;
+        edge -= 128;
+    }
+    const char *how;
+    const T_RACE_OPPONENT *o = Guide();
+    double s = 0, side = 0, gx = 0, gy = 0, gz = 0, hx, hz;
+    if (o) {
+        s = GuideS(o, cx, cy, cz, -1, &side);
+        GuideAt(o, s - RACE_DROP_BACK, side, &gx, &gy, &gz, &hx, &hz);
+    }
+    if (o && DropRoad(gx, gz, ref, &h) == 1) { *x = gx; *y = h; *z = gz; how = "back along the track"; }
+    else if (first < 0 && edge > 256 && DropRoad(cx - bx * edge, cz - bz * edge, ref, &h) == 1) {
+        *x = cx - bx * edge; *y = h; *z = cz - bz * edge; how = "as far behind as this scene goes";
+    } else if (DropRoad(cx - bx * RACE_DROP_BACK / 2, cz - bz * RACE_DROP_BACK / 2, ref, &h) == 1) {
+        *x = cx - bx * RACE_DROP_BACK / 2; *y = h; *z = cz - bz * RACE_DROP_BACK / 2; how = "half as far behind";
+    } else if (DropRoad(cx, cz, ref, &h) == 1) { *x = cx; *y = h; *z = cz; how = "under the car"; }
+    else if (first < 0) { *x = fx; *y = cy; *z = fz; return; }    // (in the scene behind, nothing nearer in this one: there, as always)
+    else if (o) { GuideAt(o, s - RACE_DROP_BACK, 0, x, y, z, &hx, &hz); how = "on the guide line behind (nothing under the car)"; }
+    else { *x = cx; *y = cy; *z = cz; how = "where the car is (no road found, no line)"; }
+    Log_Info("[racemod] %s's drop: %s %.0f straight behind the car -- %s", who, first < 0 ? "the scene behind" : "no road", RACE_DROP_BACK, how);
+}
+
+// A dropped item's place in this scene, its copies there all in use (`actors` of them, `shown` items in this cube): 1 when the oldest has
+// to make way.
+static int SceneFull(int actors, int shown) { return actors > 0 && shown >= actors; }
+
 // A nitro penguin dropped at (x, y, z) (world units): a walker, or on its fuse (RACE_PENGUIN_FUSE). With all of them out, the oldest goes
-// off first.
+// off first -- and with all of this scene's penguins out, the oldest in it.
 static double LineDistance(const T_RACE_OPPONENT *o, int i, double wx, double wy, double wz);
 static void PenguinOff(int i, S32 now);
 static int DropPenguin(double x, double y, double z, int dropper) {
     const S32 now = TimerRefHR;
+    if (InThisCube(x, z)) {
+        int actors = 0, shown = 0, oldest = -1;
+        for (int k = 0; k < s_nbPenguinActors; k++) if (s_penguinScene[k] == NumCube && s_penguinActor[k] > 0 && s_penguinActor[k] < NbObjets) actors++;
+        for (int i = 0; i < RACE_MAX_PENGUINS; i++) {
+            if (!s_penguins[i].On || !InThisCube(s_penguins[i].X, s_penguins[i].Z)) continue;
+            shown++;
+            if (oldest < 0 || s_penguins[i].Dropped < s_penguins[oldest].Dropped) oldest = i;
+        }
+        if (SceneFull(actors, shown) && oldest >= 0) {
+            Log_Info("[racemod] the scene's %d penguins all out: the oldest goes off for the new one", actors);
+            PenguinOff(oldest, now);
+        }
+    }
     int k = -1;
     for (int i = 0; i < RACE_MAX_PENGUINS && k < 0; i++) if (!s_penguins[i].On) k = i;
     if (k < 0) {
@@ -7091,12 +7210,21 @@ static int DropPenguin(double x, double y, double z, int dropper) {
     pg->Dir = RaceRandom() < 0.5 ? 1 : -1;
     pg->NextTurn = now + 2000 + (S32)(RaceRandom() * 3000);
     pg->Heading = RaceRandom() * 2 * 3.14159265358979;
-    // (its place along the line, and to the side of it)
+    // (its place along the line, and to the side of it -- nearer the line where that side of it is off the road: a rail, a wall)
     const T_RACE_OPPONENT *o = Guide();
     if (s_penguinWalk && o) {
         int best = 0;
         double bd = 1e30;
-        for (int i = 0; i < o->Count; i++) { const double d = LineDistance(o, i, x, y, z); if (d < bd) { bd = d; best = i; } }
+        // (dropped in this scene, onto the line in it where that is about as near: the nearest point, in the scene behind, was never drawn)
+        int inBest = -1;
+        double inD = 1e30;
+        const int here = InThisCube(x, z);
+        for (int i = 0; i < o->Count; i++) {
+            const double d = LineDistance(o, i, x, y, z);
+            if (d < bd) { bd = d; best = i; }
+            if (here && d < inD && InThisCube(o->X[i], o->Z[i])) { inD = d; inBest = i; }
+        }
+        if (inBest >= 0 && inBest != best && sqrt(inD) < sqrt(bd) + 1024) best = inBest;
         pg->S = o->Cum[best];
         double lx, lz, ly, v, dx, dz;
         PathAt(o, pg->S, &lx, &lz, &ly, &v, &dx, &dz);
@@ -7104,9 +7232,22 @@ static int DropPenguin(double x, double y, double z, int dropper) {
         pg->Side = len > 0 ? ((x - lx) * dz - (z - lz) * dx) / len : 0;
         if (pg->Side > RACE_PENGUIN_SIDE) pg->Side = RACE_PENGUIN_SIDE;
         if (pg->Side < -RACE_PENGUIN_SIDE) pg->Side = -RACE_PENGUIN_SIDE;
+        S32 h;
+        for (int t = 0; t < 2 && len > 0 && pg->Side != 0 && DropRoad(lx + dz / len * pg->Side, lz - dx / len * pg->Side, (S32)ly, &h) == 0; t++)
+            pg->Side = t ? 0 : pg->Side / 2;
         pg->SideTo = pg->Side;
     }
     return k;
+}
+
+// A car drops an item (`pu`: oil, a penguin, a fake mushroom): `who` -1 Twinsen, else the opponent, its car at (cx, cy, cz) (world
+// units) facing `beta` (radians) -- where it lands, DropSpot.
+static void CarDrop(int who, int pu, double cx, double cy, double cz, double beta, S32 now) {
+    double x, y, z;
+    DropSpot(who < 0 ? "Twinsen" : s_opp[who].Name, cx, cy, cz, beta, &x, &y, &z);
+    if (pu == PU_OIL) DropOil(x, y, z, who);
+    else if (pu == PU_PENGUIN) DropPenguin(x, y, z, who);
+    else if (pu == PU_FAKE) DropFake(x, y, z, who, now);
 }
 
 // Console (tests): Twinsen uses power-up `pu` now, as from his item box (raceitem); a nitro penguin goes off `cells` ahead of his car
@@ -7121,7 +7262,7 @@ void RaceMod_TestBlast(double cells) {
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     const double b = hero->Obj.Beta * 2 * 3.14159265358979 / 4096;
     const int k = DropPenguin(hero->Obj.X + CurrentCubeX * 32768.0 + sin(b) * cells * 512, hero->Obj.Y,
-                              hero->Obj.Z + CurrentCubeY * 32768.0 + cos(b) * cells * 512, 0);
+                              hero->Obj.Z + CurrentCubeY * 32768.0 + cos(b) * cells * 512, -2);   // (-2: no car's)
     PenguinOff(k, TimerRefHR);
 }
 
@@ -7179,25 +7320,17 @@ static void UseItem(int pu, S32 now) {
         break;
     }
     case PU_PENGUIN:
-    case PU_OIL: {
-        // dropped behind the car
-        const double b = hero->Obj.Beta * 2 * 3.14159265358979 / 4096;
-        const double x = hero->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1300, z = hero->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1300;
-        if (pu == PU_OIL) DropOil(x, hero->Obj.Y, z); else DropPenguin(x, hero->Obj.Y, z, -1);
+    case PU_OIL:
+    case PU_FAKE:
+        // dropped behind the car, on the road (DropSpot)
+        CarDrop(-1, pu, hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0, hero->Obj.Beta * 2 * 3.14159265358979 / 4096, now);
         break;
-    }
     case PU_BALL_YELLOW:
     case PU_BALL_GREEN:
     case PU_BALL_RED:
     case PU_BALL_FIRE:
         Attack(pu, -1, hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0, hero->Obj.Beta * 2 * 3.14159265358979 / 4096, now);
         break;
-    case PU_FAKE: {
-        // dropped behind the car, where it is now
-        const double b = hero->Obj.Beta * 2 * 3.14159265358979 / 4096;
-        DropFake(hero->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1300, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1300, -1, now);
-        break;
-    }
     case PU_SUPERJET:
         // (nothing touches it: a skid, a blast's stop, a shrinking are over)
         s_jetUntil = now + RACE_JETPACK_MS; s_jetFactor = s_puJet[pu]; s_autoIndex = -1;
@@ -7296,13 +7429,8 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
         if (DifficultyHolds(n, pu, now)) continue;
         if (pu >= PU_BALL_YELLOW && pu <= PU_BALL_FIRE) {
             Attack(pu, n, car->Obj.X + CurrentCubeX * 32768.0, car->Obj.Y, car->Obj.Z + CurrentCubeY * 32768.0, car->Obj.Beta * 2 * 3.14159265358979 / 4096, now);
-        } else if (pu == PU_FAKE) {
-            const double b = car->Obj.Beta * 2 * 3.14159265358979 / 4096;
-            DropFake(car->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1300, car->Obj.Y, car->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1300, n, now);
-        } else if (pu == PU_PENGUIN || pu == PU_OIL) {
-            const double b = car->Obj.Beta * 2 * 3.14159265358979 / 4096;
-            const double x = car->Obj.X + CurrentCubeX * 32768.0 - sin(b) * 1300, z = car->Obj.Z + CurrentCubeY * 32768.0 - cos(b) * 1300;
-            if (pu == PU_OIL) DropOil(x, car->Obj.Y, z); else DropPenguin(x, car->Obj.Y, z, n);
+        } else if (pu == PU_FAKE || pu == PU_PENGUIN || pu == PU_OIL) {
+            CarDrop(n, pu, car->Obj.X + CurrentCubeX * 32768.0, car->Obj.Y, car->Obj.Z + CurrentCubeY * 32768.0, car->Obj.Beta * 2 * 3.14159265358979 / 4096, now);
         } else if (pu == PU_LIGHTNING && now >= s_jetUntil) {
             // (struck as Twinsen's spell strikes the others: the flash, the thunder and a bolt onto his car -- which the protection spell
             // shrugs off)
@@ -7349,8 +7477,10 @@ static void Slicks(S32 now, int driving) {
             k++;
             break;
         }
-        // Twinsen's car over it: it skids, unless the protection spell is on
-        if (driving && CubeMode == CUBE_EXTERIEUR && now >= s_skidUntil && now >= s_protectUntil && now >= s_jetUntil && Near(hero, lx, (S32)sl->Y, lz, RACE_OIL_REACH)) {
+        // Twinsen's car over it: it skids, unless the protection spell is on (or it is the oil he has just dropped)
+        const int fresh = now - sl->Dropped < RACE_OIL_ARM;
+        if (driving && CubeMode == CUBE_EXTERIEUR && now >= s_skidUntil && now >= s_protectUntil && now >= s_jetUntil && !(fresh && sl->Dropper == -1)
+            && Near(hero, lx, (S32)sl->Y, lz, RACE_OIL_REACH)) {
             s_skidUntil = now + RACE_SKID_MS; s_skidStart = now; s_skidBeta = hero->Obj.Beta; s_skidSpeed = ListBuggy[0].Speed;
             s_skidDir = RaceRandom() < 0.5 ? 1 : -1;
             Log_Info("[racemod] Twinsen skids on oil%s", sl->Until ? " (a pipe's drip)" : "");
@@ -7363,7 +7493,7 @@ static void Slicks(S32 now, int driving) {
         // an opponent's
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
             T_RACE_OPPONENT *o = &s_opp[n];
-            if (!o->Count || !o->Scenes || now < o->SkidUntil || !RaceOn()) continue;   // (none waiting on its spot)
+            if (!o->Count || !o->Scenes || now < o->SkidUntil || !RaceOn() || (fresh && sl->Dropper == n)) continue;   // (none waiting on its spot)
             double x, z, y, v, dx, dz;
             PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
             if ((x - sl->X) * (x - sl->X) + (z - sl->Z) * (z - sl->Z) >= (double)RACE_OIL_REACH * RACE_OIL_REACH || fabs(y - sl->Y) > 900) continue;
@@ -8130,8 +8260,10 @@ static void Shots(S32 now, int driving) {
                 }
             }
         }
-        // a car it reaches (not its own: the red and the fire only their own targets)
-        if (!done && !red && (age > 150 || sh->Kind >= SHOT_RED))
+        // a car it reaches (not its own: the red and the fire only their own targets) -- from the moment it is thrown: the yellow and the
+        // green went through a car right in front of the one that threw them for their first 150 ms (from when some were dropped behind
+        // the car), 3,300 of the yellow's way
+        if (!done && !red)
             for (int who = -1; who < RACE_MAX_OPPONENTS && !done; who++) {
                 if (who == sh->Owner || (sh->Kind >= SHOT_RED && sh->Target != -2 && who != sh->Target)) continue;
                 if (who < 0 && !driving) continue;
@@ -8266,9 +8398,7 @@ static void OpponentAims(int n, T_OBJET *car, S32 now) {
     o->Holds = 0;
     const double x = car->Obj.X + CurrentCubeX * 32768.0, z = car->Obj.Z + CurrentCubeY * 32768.0;
     if (pu >= PU_BALL_YELLOW && pu <= PU_BALL_FIRE) Attack(pu, n, x, car->Obj.Y, z, b, now);
-    else if (pu == PU_FAKE) DropFake(x - hx * 1300, car->Obj.Y, z - hz * 1300, n, now);
-    else if (pu == PU_OIL) DropOil(x - hx * 1300, car->Obj.Y, z - hz * 1300);
-    else if (pu == PU_PENGUIN) DropPenguin(x - hx * 1300, car->Obj.Y, z - hz * 1300, n);
+    else if (pu == PU_FAKE || pu == PU_OIL || pu == PU_PENGUIN) CarDrop(n, pu, x, car->Obj.Y, z, b, now);
     UseSound(pu, car, o->Name);
     if (aimed && pu == PU_BALL_RED) Log_Info("[racemod] %s aims %s at Twinsen (the car in front)", o->Name, s_puName[pu]);
     else if (aimed) Log_Info("[racemod] %s aims %s at Twinsen (%.1f cells %s, %.1f across)", o->Name, s_puName[pu], fabs(along) / 512, along < 0 ? "behind" : "ahead", across / 512);
@@ -8332,12 +8462,27 @@ S32 RaceMod_LaserThrow(S32 numobj) {
     return 1;
 }
 
+// A fake mushroom dropped at (x, y, z) (world units) by `dropper` (-1 Twinsen's car, else the opponent's): the oldest gone when there are
+// too many -- or when this scene's copies of the mushroom all show one, the oldest of those.
 static void DropFake(double x, double y, double z, int dropper, S32 now) {
+    if (InThisCube(x, z)) {
+        int actors = 0, shown = 0, oldest = -1;
+        for (int a = 0; a < s_nbFakeActors; a++) if (s_fakeScene[a] == NumCube && s_fakeActor[a] > 0 && s_fakeActor[a] < NbObjets) actors++;
+        for (int i = 0; i < RACE_MAX_FAKES; i++) {
+            if (!s_fakes[i].On || !InThisCube(s_fakes[i].X, s_fakes[i].Z)) continue;
+            shown++;
+            if (oldest < 0 || s_fakes[i].Dropped < s_fakes[oldest].Dropped) oldest = i;
+        }
+        if (SceneFull(actors, shown) && oldest >= 0) {
+            Log_Info("[racemod] the scene's %d fake mushrooms all on the road: the oldest goes for the new one", actors);
+            s_fakes[oldest].On = 0;
+        }
+    }
     int k = -1;
     for (int i = 0; i < RACE_MAX_FAKES && k < 0; i++) if (!s_fakes[i].On) k = i;
     if (k < 0) { k = 0; for (int i = 1; i < RACE_MAX_FAKES; i++) if (s_fakes[i].Dropped < s_fakes[k].Dropped) k = i; }
     T_RACE_FAKE *f = &s_fakes[k];
-    f->On = 1; f->Dropper = dropper; f->X = x; f->Y = y; f->Z = z; f->Dropped = now; f->Posed = -1;
+    f->On = 1; f->Dropper = dropper; f->X = x; f->Y = y; f->Z = z; f->Dropped = now; f->Posed = -1; f->Caught = 0;
     Log_Info("[racemod] %s drops a fake mushroom", CarName(dropper));
 }
 
@@ -8376,6 +8521,16 @@ static void Fakes(S32 now, int driving) {
             if (!CarAt(who, &x, &y, &z)) continue;
             if ((x - f->X) * (x - f->X) + (z - f->Z) * (z - f->Z) < (double)RACE_MUSHROOM_REACH * RACE_MUSHROOM_REACH && fabs(y - f->Y) < 900) hit = who;
         }
+        // (a car into it as it lands -- the one right behind: it is seen first, and goes off under that car at RACE_DROP_SHOW, wherever the
+        // car has got to by then)
+        if (now - f->Dropped < RACE_DROP_SHOW) {
+            if (hit != -3 && !f->Caught) {
+                f->Caught = hit + 2;
+                Log_Info("[racemod] %s's car runs into a fake mushroom as it lands: it goes off in %d ms", CarName(hit), (int)(f->Dropped + RACE_DROP_SHOW - now));
+            }
+            continue;
+        }
+        if (f->Caught) hit = f->Caught - 2;
         if (hit == -3) continue;
         if (here) DoImpact(RACE_PENGUIN_IMPACT, lx, (S32)f->Y, lz, 255);
         CarStruck(hit, now, "a fake mushroom", NULL);
@@ -8559,11 +8714,16 @@ static void PenguinOff(int i, S32 now) {
         // on): HitObj -- the hit animation, the stars, the car stopped and no life lost (RaceMod_CarHit); an opponent's car its own hit
         // animation (the racer entity's 6) and the stars
         const int flying = RaceMod_InFlight();
-        if (driving && Near(hero, lx, (S32)pg->Y, lz, RACE_PENGUIN_REACH) && (now < s_protectUntil || now < s_jetUntil || (hero->Flags & NO_CHOC) || hero->Armure > RACE_BLAST_FORCE || flying))
+        // (the car that dropped it is spared while it gets away -- RACE_PENGUIN_ARM -- and a car that came into it as it landed is caught
+        // however far it has got since: Caught, RACE_DROP_SHOW)
+        const int own = now < pg->Dropped + RACE_PENGUIN_ARM ? pg->Dropper : -3;
+        int heroIn = driving && (Near(hero, lx, (S32)pg->Y, lz, RACE_PENGUIN_REACH) || pg->Caught == 1);
+        if (heroIn && own == -1) { heroIn = 0; Log_Info("[racemod] the blast spares Twinsen's car: his own penguin, %d ms after he dropped it", (int)(now - pg->Dropped)); }
+        if (heroIn && (now < s_protectUntil || now < s_jetUntil || (hero->Flags & NO_CHOC) || hero->Armure > RACE_BLAST_FORCE || flying))
             Log_Info("[racemod] the blast leaves Twinsen's car as it is: %s", now < s_protectUntil ? "the protection spell" : now < s_jetUntil ? "the super jet-pack"
                      : flying ? "in a jump's flight"
                      : (hero->Flags & NO_CHOC) ? (ProtectActif ? "the game's protection spell is on" : "he can't be hit (NO_CHOC)") : "his armour");
-        if (driving && now >= s_protectUntil && now >= s_jetUntil && !flying && Near(hero, lx, (S32)pg->Y, lz, RACE_PENGUIN_REACH)) {
+        if (heroIn && now >= s_protectUntil && now >= s_jetUntil && !flying) {
             HitObj(PenguinHitter(), NUM_PERSO, RACE_BLAST_FORCE, -1);
             ListBuggy[0].Speed = 0;
             if (s_hitUntil < now + RACE_PENGUIN_HOLD) s_hitUntil = now + RACE_PENGUIN_HOLD;
@@ -8574,7 +8734,8 @@ static void PenguinOff(int i, S32 now) {
             if (!o->Count) continue;
             double x, z, y2, v, dx, dz;
             PathAt(o, o->S, &x, &z, &y2, &v, &dx, &dz);
-            if ((x - pg->X) * (x - pg->X) + (z - pg->Z) * (z - pg->Z) >= (double)RACE_PENGUIN_REACH * RACE_PENGUIN_REACH) continue;
+            if ((x - pg->X) * (x - pg->X) + (z - pg->Z) * (z - pg->Z) >= (double)RACE_PENGUIN_REACH * RACE_PENGUIN_REACH && pg->Caught != 2 + n) continue;
+            if (own == n) { Log_Info("[racemod] the blast spares %s's car: its own penguin, %d ms after it dropped it", o->Name, (int)(now - pg->Dropped)); continue; }
             o->HitUntil = now + RACE_PENGUIN_HOLD;
             const int index = OpponentActor(o);
             if (index < 0) continue;
@@ -8587,8 +8748,8 @@ static void PenguinOff(int i, S32 now) {
 }
 
 // Whether a penguin has run into something: a car (the one that dropped it not for its first RACE_PENGUIN_ARM; every other at once: a car
-// right behind the one that dropped it drove through it), another penguin (`other`: which), a mushroom standing on the road (taken with
-// it), or a wall -- the ground higher than it stands.
+// right behind the one that dropped it drove through it -- set off at RACE_DROP_SHOW, PenguinCheck), and after its first RACE_PENGUIN_ARM
+// another penguin (`other`: which), a mushroom standing on the road (taken with it), or a wall -- the ground higher than it stands.
 static int PenguinHits(int i, S32 now, int driving, int *other) {
     const T_RACE_PENGUIN *pg = &s_penguins[i];
     const int fresh = now < pg->Dropped + RACE_PENGUIN_ARM;
@@ -8603,9 +8764,12 @@ static int PenguinHits(int i, S32 now, int driving, int *other) {
         PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
         if ((x - pg->X) * (x - pg->X) + (z - pg->Z) * (z - pg->Z) < (double)RACE_PENGUIN_TRIGGER * RACE_PENGUIN_TRIGGER && fabs(y - pg->Y) < 900) return 2 + n;
     }
+    // (just dropped, it stands where it landed -- by a rail, on a ramp, by another penguin or a mushroom -- waiting for a car: nothing else
+    // sets it off yet, nor does it set off another just dropped)
+    if (fresh) return 0;
     for (int j = 0; j < RACE_MAX_PENGUINS; j++) {
         const T_RACE_PENGUIN *b = &s_penguins[j];
-        if (j == i || !b->On || (pg->X - b->X) * (pg->X - b->X) + (pg->Z - b->Z) * (pg->Z - b->Z) >= (double)RACE_PENGUIN_BUMP * RACE_PENGUIN_BUMP || fabs(pg->Y - b->Y) > 900) continue;
+        if (j == i || !b->On || now < b->Dropped + RACE_PENGUIN_ARM || (pg->X - b->X) * (pg->X - b->X) + (pg->Z - b->Z) * (pg->Z - b->Z) >= (double)RACE_PENGUIN_BUMP * RACE_PENGUIN_BUMP || fabs(pg->Y - b->Y) > 900) continue;
         *other = j;
         return 10;
     }
@@ -8633,6 +8797,24 @@ static void PenguinHitLog(int code) {
     else if (code == 12) Log_Info("[racemod] a nitro penguin walks into a wall");
 }
 
+// What a penguin goes off at now (PenguinHits' code, 0 nothing): a car that runs into it as it lands -- the one right behind -- caught,
+// the penguin seen first: it goes off at RACE_DROP_SHOW, that car blown up wherever it has got to (PenguinOff).
+static int PenguinCheck(int i, S32 now, int driving, int *other) {
+    T_RACE_PENGUIN *pg = &s_penguins[i];
+    int hit = PenguinHits(i, now, driving, other);
+    if (now < pg->Dropped + RACE_DROP_SHOW) {
+        if (hit && hit < 10 && !pg->Caught) {
+            pg->Caught = hit;
+            Log_Info("[racemod] %s's car runs into a nitro penguin as it lands: it goes off in %d ms", hit == 1 ? "Twinsen" : s_opp[hit - 2].Name,
+                     (int)(pg->Dropped + RACE_DROP_SHOW - now));
+        }
+        *other = -1;
+        return 0;
+    }
+    if (pg->Caught) { hit = pg->Caught; *other = -1; }
+    return hit;
+}
+
 // Every frame: each penguin walking (along the first opponent's line, this way and that, a little to one side or the other; with no line,
 // round where it was dropped), going off at whatever it runs into (or when its fuse is out), and shown by this scene's penguins, facing
 // the way it walks.
@@ -8651,7 +8833,7 @@ static void Penguins(S32 now, int driving) {
         if (!pg->On) continue;
         int other;
         if (!s_penguinWalk) {
-            const int hit = now >= pg->At ? 0 : PenguinHits(i, now, driving, &other);
+            const int hit = now >= pg->At ? 0 : PenguinCheck(i, now, driving, &other);
             if (now >= pg->At || hit) {
                 PenguinHitLog(hit);
                 if (now < pg->At && other >= 0) PenguinOff(other, now);
@@ -8691,7 +8873,7 @@ static void Penguins(S32 now, int driving) {
                 }
             }
             // whatever it has run into
-            if (const int hit = PenguinHits(i, now, driving, &other)) {
+            if (const int hit = PenguinCheck(i, now, driving, &other)) {
                 PenguinHitLog(hit);
                 if (other >= 0) PenguinOff(other, now);
                 PenguinOff(i, now);
