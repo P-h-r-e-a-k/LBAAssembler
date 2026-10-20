@@ -354,6 +354,7 @@ static void MixVoices(S16 *out, int numFrames) {
 /* ── SDL3 audio callback ─────────────────────────────────────────────────── */
 
 static S16 mixChunkBuf[MIX_CHUNK_FRAMES * 2];
+static volatile U32 mixedFrames = 0; /* SampleMixedFrames: for logs only */
 
 static void SDLCALL SampleStreamCallback(void *userdata, SDL_AudioStream *stream,
                                          int additional_amount, int total_amount) {
@@ -371,6 +372,7 @@ static void SDLCALL SampleStreamCallback(void *userdata, SDL_AudioStream *stream
         if (frames <= 0)
             break;
         MixVoices(mixChunkBuf, frames);
+        mixedFrames += (U32)frames;
         SDL_PutAudioStreamData(stream, mixChunkBuf, frames * 2 * (int)sizeof(S16));
         bytesLeft -= frames * 2 * (int)sizeof(S16);
     }
@@ -711,6 +713,11 @@ void ResumeSamples() {
 
 S32 GetSamplesPausedCount() {
     return samplesPaused;
+}
+
+/* The mixer's own count of frames made (SampleStreamCallback): a log line's place in what was heard. */
+U32 SampleMixedFrames(void) {
+    return mixedFrames;
 }
 
 U32 IsSamplePlaying(U32 sample) {

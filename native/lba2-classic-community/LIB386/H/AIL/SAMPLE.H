@@ -185,6 +185,16 @@ int SfxLogIsEnabled(void);
 S32 GetSamplesPausedCount(void);
 
 //--------------------------------------------------------------------------
+//	SampleMixedFrames :		how many stereo frames the mixer has made
+//
+//	For logs: with SDL's disk audio driver, the place in its output file
+//	(44.1 kHz) a moment of the game is heard at. 0 where nothing is mixed.
+//
+//	Returns	:			frames mixed since the driver started
+//--------------------------------------------------------------------------
+U32 SampleMixedFrames(void);
+
+//--------------------------------------------------------------------------
 #ifdef __cplusplus
 }
 #endif

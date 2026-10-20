@@ -1786,7 +1786,9 @@ restartloop:
             if (i == NUM_PERSO) { extern void RaceMod_EdgeCross(void); RaceMod_EdgeCross(); }
 
             // Samples Always
-            if (pansample AND ptrobj->SampleAlways) {
+            // (not a race's opponent car: its engine is heard from Twinsen's car instead, RACEMOD.CPP EnginesHeard)
+            extern S32 RaceMod_EngineHeard(S32 num);
+            if (pansample AND ptrobj->SampleAlways AND !RaceMod_EngineHeard(i)) {
                 ParmSampleVolume = ptrobj->SampleVolume;
 
                 if (!(ptrobj->SampleAlways & 0xFF000000)

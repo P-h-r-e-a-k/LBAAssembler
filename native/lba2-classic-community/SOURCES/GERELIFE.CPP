@@ -2040,18 +2040,29 @@ void DoLife(U8 numobj) {
                 ptrobj->SampleAlways = 0;
             }
 
-            if (!ptrobj->SampleAlways
-                     OR !IsSamplePlaying(ptrobj->SampleAlways)) {
-                ptrobj->SampleVolume = (U8)ParmSampleVolume;
+            {
+                // (a race's opponent car: its engine started, panned and let go by RACEMOD.CPP EnginesHeard, heard from Twinsen's car)
+                extern S32 RaceMod_EngineHeard(S32 num);
+                extern void InitParmSample(void);
+                const S32 heard = RaceMod_EngineHeard(numobj);
 
-                ptrobj->SampleAlways = HQ_3D_MixSample(num, 0x1000, 0, 0,
-                                                       ptrobj->Obj.X, ptrobj->Obj.Y, ptrobj->Obj.Z);
-            } else {
-                if (ptrobj->SampleAlways)
-                    num = ptrobj->SampleAlways;
+                if (!ptrobj->SampleAlways
+                         OR !IsSamplePlaying(ptrobj->SampleAlways)) {
+                    ptrobj->SampleVolume = (U8)ParmSampleVolume;
 
-                HQ_3D_ChangePanSample(num,
-                                      ptrobj->Obj.X, ptrobj->Obj.Y, ptrobj->Obj.Z);
+                    if (heard) {
+                        ptrobj->SampleAlways = (U32)num << 8;
+                        InitParmSample();
+                    } else
+                        ptrobj->SampleAlways = HQ_3D_MixSample(num, 0x1000, 0, 0,
+                                                               ptrobj->Obj.X, ptrobj->Obj.Y, ptrobj->Obj.Z);
+                } else if (!heard) {
+                    if (ptrobj->SampleAlways)
+                        num = ptrobj->SampleAlways;
+
+                    HQ_3D_ChangePanSample(num,
+                                          ptrobj->Obj.X, ptrobj->Obj.Y, ptrobj->Obj.Z);
+                }
             }
             break;
 

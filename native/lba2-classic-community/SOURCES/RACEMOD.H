@@ -43,6 +43,10 @@ void RaceMod_Lap(S32 x, S32 z);
 // in the player's scene.
 void RaceMod_Frame(void);
 
+// TRUE for an opponent's car in this scene: its engine loop (SampleAlways) is heard from Twinsen's car -- panned, louder and pitched by
+// RaceMod_Frame -- and the game's own screen-based panning (PERSO.CPP, the scripts' SAMPLE_ALWAYS) leaves it alone.
+S32 RaceMod_EngineHeard(S32 num);
+
 // TRUE while the player's car stands on the grid, before the count-down's GO, and for a moment after a hit (RaceMod_CarHit).
 S32 RaceMod_Held(void);
 S32 RaceMod_FadeFromWhite(void);

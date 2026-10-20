@@ -1121,9 +1121,10 @@ typedef struct {
     S32 Next, BurstAt; int Fired, Firing, Ready;
     double Hunt; int Who; double LastX, LastY, LastZ; S32 LastAt;       // (a hunting gun: its reach; its car this burst, where and when last seen)
 } T_RACE_GUNNER;
-// (what the race-track mode flies: a gunner's bullet, a hunting gun's missile, a flying gas monster's fire ball -- Projectiles)
+// (what the race-track mode flies: a gunner's bullet, a hunting gun's missile, a flying gas monster's fire ball -- Projectiles; and the
+// car it was thrown at, + 2 -- 1 Twinsen's, 0 none: a burst's bullet -- for the sound of one coming at him, IncomingHeard)
 enum { SHOT_BULLET, SHOT_MISSILE, SHOT_FIREBALL, SHOT_WITCHFIRE };
-typedef struct { int On, Extra, Owner, Kind; S16 Sprite, Body; double FromX, FromY, FromZ, ToX, ToY, ToZ; S32 T0, Dur; } T_RACE_BULLET;
+typedef struct { int On, Extra, Owner, Kind; S16 Sprite, Body; double FromX, FromY, FromZ, ToX, ToY, ToZ; S32 T0, Dur; int Aim; } T_RACE_BULLET;
 static T_RACE_GUNNER s_gunners[RACE_MAX_GUNNERS];
 static int s_nbGunners = 0;
 static T_RACE_BULLET s_bullets[RACE_MAX_BULLETS];
@@ -10170,7 +10171,7 @@ static void GunnerMissile(T_RACE_GUNNER *g, S32 now) {
     tx += cos(a) * r; tz += sin(a) * r;
     T_RACE_BULLET *u = &s_bullets[b];
     memset(u, 0, sizeof(*u));
-    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = g->Gun > 0 ? g->Gun : 255; u->Kind = SHOT_MISSILE;
+    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = g->Gun > 0 ? g->Gun : 255; u->Kind = SHOT_MISSILE; u->Aim = g->Who + 2;
     u->FromX = fx; u->FromY = fy; u->FromZ = fz; u->ToX = tx; u->ToY = ty; u->ToZ = tz;
     const double R = sqrt((tx - fx) * (tx - fx) + (tz - fz) * (tz - fz)), dy = ty - fy;
     u->Dur = (S32)(sqrt(R * R + dy * dy) / v * 1000);
@@ -10720,7 +10721,7 @@ static void FlyerSpit(T_RACE_FLYER *f, S32 now, double y) {
     }
     T_RACE_BULLET *u = &s_bullets[b];
     memset(u, 0, sizeof(*u));
-    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = f->Actor > 0 ? f->Actor : 255; u->Kind = SHOT_FIREBALL; u->Sprite = RACE_FIREBALL_SPRITE;
+    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = f->Actor > 0 ? f->Actor : 255; u->Kind = SHOT_FIREBALL; u->Sprite = RACE_FIREBALL_SPRITE; u->Aim = f->Target + 2;
     u->FromX = fx; u->FromY = fy; u->FromZ = fz; u->ToX = tx; u->ToY = ty; u->ToZ = tz; u->Dur = (S32)(flight * 1000);
     if (f->Scene != (S32)NumCube || CubeMode != CUBE_EXTERIEUR || f->Actor <= 0 || f->Actor >= NbObjets) return;
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
@@ -10825,7 +10826,7 @@ static void SpookThrow(T_RACE_SPOOK *sp, S32 now, double y) {
     }
     T_RACE_BULLET *u = &s_bullets[b];
     memset(u, 0, sizeof(*u));
-    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = 0; u->Kind = SHOT_WITCHFIRE; u->Sprite = RACE_FIREBALL_SPRITE;
+    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = 0; u->Kind = SHOT_WITCHFIRE; u->Sprite = RACE_FIREBALL_SPRITE; u->Aim = sp->Target + 2;
     u->FromX = fx; u->FromY = fy; u->FromZ = fz; u->ToX = tx; u->ToY = ty; u->ToZ = tz; u->Dur = (S32)(flight * 1000);
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     if (CubeMode != CUBE_EXTERIEUR || fx < cx || fx >= cx + 32768 || fz < cz || fz >= cz + 32768) return;
@@ -12036,6 +12037,318 @@ void RaceMod_EdgeCross(void) {
              (int)CurrentCubeX, (int)CurrentCubeY, qx, qz, scene, (int)NewPosX, (int)NewPosY, (int)NewPosZ);
 }
 
+// ---- the race heard from Twinsen's car: the opponents' engines, the balls coming at him -------------------------------------------
+// (2026-10-20, the user: "not knowing which side of us a car is coming from to overtake us, let's tweak the car engine sound to give the
+// player an audio indication of which side they're about to be overtaken from. Let's also have the magic ball sound do the same when
+// it's about to hit the player so they know what's about to happen.") The game pans an actor's engine loop (its SampleAlways, PERSO.CPP)
+// by where the actor is on the screen and how far it is from the camera -- and one off the screen not at all: its loop stopped, silent.
+// A car coming up from behind the chase camera was not heard until it was in sight. An opponent's car in this scene (s_carActor) is heard
+// from Twinsen's car instead (RaceMod_EngineHeard keeps the game's own panning off it, EnginesHeard): on his left or his right by where
+// it is across his car's way, crossing over as it passes, louder the nearer it is, and a little louder and higher while it closes on him,
+// quieter and lower while it drops back. Anything thrown at him -- an opponent's magic ball, a witch's fire ball, a gas monster's, a CX
+// gun's missile -- is heard in its last second and a half (IncomingHeard): the game's magic ball sound (the fire magic's for the fire
+// ones) again and again, more often, louder and higher as it comes, from the side it comes from. Logged: each car coming up on him (once
+// an overtake), each thing heard coming at him and its sound's end; with LBA2_RACE_HEAR_TRACE=1 in the environment every car heard and
+// every incoming sound ten times a second too. Each line's [mix n] is the mixer's frame count then (SampleMixedFrames): where it is in a
+// recording of the sound (SDL's disk audio, 44.1 kHz).
+#define RACE_HEAR_AHEAD 0.4                // the side heard: the way ahead or behind counts this much of the way across ...
+#define RACE_HEAR_PAN 56                   // ... the pan (0 his left, 127 his right) this far from the middle at most: a little in the other ear
+#define RACE_ENGINE_NEAR (2 * 512.0)       // an opponent's engine at its loudest this near Twinsen's car ...
+#define RACE_ENGINE_FAR (24 * 512.0)       // ... and not heard from this far (it falls off as the square of the way between)
+#define RACE_ENGINE_LOUD 2.2               // its loudest: this much of its own volume (the actor's SampleVolume, which the game gives a
+                                           // car on the screen near the camera -- 15 for the Temple's racers, Twinsen's own 20 -- 127 at
+                                           // most; the sound effects' volume over it): a car right beside him over his own engine
+#define RACE_ENGINE_QUIET 3                // under this its voice is let go (another sound can have it), taken again as it comes nearer
+#define RACE_ENGINE_CLOSING 1500.0         // closing on him (or dropping back) this fast, units a second: ...
+#define RACE_ENGINE_UP 0.25                // ... this much louder (dropping back: RACE_ENGINE_DOWN quieter) ...
+#define RACE_ENGINE_DOWN 0.3
+#define RACE_ENGINE_PITCH_UP 0.08          // ... and pitched this much higher (dropping back: lower)
+#define RACE_ENGINE_PITCH_DOWN 0.06
+#define RACE_ENGINE_SMOOTH 200.0           // (its closing speed smoothed over about this many ms)
+#define RACE_OVERTAKE_BEHIND (6 * 512.0)   // logged: a car coming up within this far behind him ...
+#define RACE_OVERTAKE_SIDE (0.3 * 512)     // ... this far or more to a side of his way ...
+#define RACE_OVERTAKE_CLOSING 200.0        // ... closing this fast; again once it is past him (2 cells ahead) or dropped back (10 cells),
+#define RACE_OVERTAKE_AGAIN 3000           // ... and no sooner than this (ms: a duel side by side said once)
+#define RACE_INCOMING_SECS 1.5             // a thing thrown at Twinsen heard this long before it reaches him ...
+#define RACE_INCOMING_RANGE (64 * 512.0)   // ... no further off than this
+#define RACE_INCOMING_EVERY_FAR 380        // ms between its sounds as it starts ...
+#define RACE_INCOMING_EVERY_NEAR 90        // ... and as it reaches him
+#define RACE_INCOMING_QUIET 40             // its volume as it starts ...
+#define RACE_INCOMING_LOUD 110             // ... and as it reaches him (of 127; the sound effects' volume over it) ...
+#define RACE_INCOMING_PITCH_FAR 0.85       // ... its pitch as it starts ...
+#define RACE_INCOMING_PITCH_NEAR 1.35      // ... and as it reaches him
+#define RACE_INCOMING_VOICES 2             // so many heard at once at most: those soonest to reach him
+#define RACE_INCOMING_CLOSING 1500.0       // a ball not after him (the yellow, the green) heard only while it closes on him this fast ...
+#define RACE_INCOMING_MISS (3 * 512.0)     // ... the yellow's straight way passing this near him; a thrown fire ball, a missile, heard
+                                           // only while it comes down this near where he will be then (his way kept on)
+#define RACE_INCOMING_LEAST 3000.0         // (a ball after him gains on him at least this fast, units a second, for its time to reach him)
+#define RACE_HEAR_SAY 400                  // lines of each kind a race at most
+// (an opponent's engine: its sample and pitch -- its driving animation's, 4096 none given -- the voice this drives (its car's
+// SampleAlways) in which scene for which actor, its distance and closing speed a frame ago, ready to be logged coming up again, when it
+// last was, logged once a race)
+typedef struct { S32 Num, Base, At, Scene, Actor; U32 Voice; double Dist, Closing; int Armed; S32 SaidAt, TraceAt; int Told; } T_RACE_ENGINE;
+static T_RACE_ENGINE s_engine[RACE_MAX_OPPONENTS];
+typedef struct { S32 T0, Next, At, TraceAt; U32 Voice; double Dist, Closing; int Said; } T_RACE_INCOMING;
+static T_RACE_INCOMING s_incoming[RACE_MAX_SHOTS + RACE_MAX_BULLETS];
+static int s_engineSaid = 0, s_incomingSaid = 0, s_hearTrace = -1;
+static double s_heardX, s_heardZ, s_heardVX, s_heardVZ;   // (Twinsen's car a frame ago and its way, IncomingHeard)
+static S32 s_heardAt = 0;
+
+static void HeardReset(void) {
+    memset(s_engine, 0, sizeof(s_engine)); memset(s_incoming, 0, sizeof(s_incoming));
+    s_engineSaid = s_incomingSaid = 0;
+    s_heardAt = 0; s_heardVX = s_heardVZ = 0;
+}
+
+static int HearTrace(void) {
+    if (s_hearTrace < 0) { const char *t = getenv("LBA2_RACE_HEAR_TRACE"); s_hearTrace = t && atoi(t) > 0; }
+    return s_hearTrace;
+}
+
+// Where a place (world units) is as heard in Twinsen's car: how far ahead of it along its way (negative behind), how far to its right
+// (negative its left), how far off -- and the pan of a sound there (0 his left .. 127 his right). His car's right: z sin b - x cos b of
+// its heading b (sin b, cos b) -- the screen's right behind it, measured: a car on that side drawn right of the screen's middle (the
+// [heartrace] lines' "screen").
+static int Heard(double x, double y, double z, double *along, double *lat, double *dist, S32 *pan) {
+    double hx, hy, hz;
+    if (!CarAt(-1, &hx, &hy, &hz)) return 0;
+    const double b = (ListObjet[NUM_PERSO].Obj.Beta & 4095) * 2 * RACE_PI / 4096, fx = sin(b), fz = cos(b);
+    const double dx = x - hx, dy = y - hy, dz = z - hz;
+    *along = dx * fx + dz * fz;
+    *lat = dz * fx - dx * fz;
+    *dist = sqrt(dx * dx + dy * dy + dz * dz);
+    const double a = *along * RACE_HEAR_AHEAD, r = sqrt(a * a + *lat * *lat);
+    *pan = 64 + (S32)floor((r > 1 ? *lat / r : 0) * RACE_HEAR_PAN + 0.5);
+    return 1;
+}
+
+// (this scene's actor of each opponent, found from the race file's own list as s_carActor is in RaceMod_Frame -- here also while the
+// scene is loaded, before the first RaceMod_Frame in it: ChangeCube sets each actor's first animation going, whose first frame starts
+// its engine (FICHE.CPP), and then clears the actor's SampleAlways (OBJECT.CPP StartInitObj) with that voice still playing -- the loop
+// went on for the rest of the race where the car stood as the scene was loaded, heard from nowhere, 2026-10-20)
+static int EngineOf(S32 num) {
+    if (!RaceMod_Active() || CubeMode != CUBE_EXTERIEUR || num <= 0) return -1;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) if (s_opp[n].Count && OpponentActor(&s_opp[n]) == num) return n;
+    return -1;
+}
+
+S32 RaceMod_EngineHeard(S32 num) { return EngineOf(num) >= 0; }
+
+// FICHE.CPP: an opponent's car's driving animation sounding its engine (F_SAMPLE_REPEAT) at that pitch -- started by EnginesHeard
+void RaceMod_EngineAnim(S32 num, S32 pitch) {
+    const int n = EngineOf(num);
+    if (n >= 0 && pitch > 0) s_engine[n].Base = pitch;
+}
+
+// Every frame: each opponent's car in this scene with an engine loop, heard from Twinsen's car -- its loop panned, its volume and its
+// pitch set; let go while it is too far off to hear, started again as it comes nearer.
+static void EnginesHeard(S32 now) {
+    const int here = CubeMode == CUBE_EXTERIEUR && s_carsScene == (S32)NumCube;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        T_RACE_ENGINE *e = &s_engine[n];
+        const int a = here ? s_carActor[n] : -1;
+        // (the voice it drove for its car in another scene -- a new scene's objects are loaded with no word to the mixer, ChangeCube, and
+        // that loop went on where the car last was, as loud: a car beside him as he crossed into the next scene was heard there for the
+        // rest of the race -- or for a car gone from this one: stopped)
+        if (e->Voice && (a <= 0 || a >= NbObjets || e->Actor != a || e->Scene != (S32)NumCube)) { HQ_StopOneSample(e->Voice); e->Voice = 0; }
+        if (a <= 0 || a >= NbObjets) continue;
+        T_OBJET *car = &ListObjet[a];
+        const U32 h = car->SampleAlways;
+        if (!h) { e->Voice = 0; continue; }                 // (no engine: its scripts gave it none, or stopped it)
+        if (h != 0xFFFFFFFFu) e->Num = (S32)((h >> 8) & 0xFFFF);
+        if (e->Num <= 0) continue;
+        const S32 own = car->SampleVolume ? car->SampleVolume : 127;
+        if (!e->Told) {
+            e->Told = 1;
+            Log_Info("[racemod] overtake audio: %s's engine (sample %d, its volume %d) heard from Twinsen's car", s_opp[n].Name, (int)e->Num, (int)own);
+        }
+        double along, lat, dist;
+        S32 pan;
+        if (!Heard(car->Obj.X + CurrentCubeX * 32768.0, car->Obj.Y + 300, car->Obj.Z + CurrentCubeY * 32768.0, &along, &lat, &dist, &pan)) continue;
+        // (how fast it closes on him, from its distance a frame ago, smoothed: afresh in a new scene, for another actor, after a gap)
+        if (!e->At || e->Scene != (S32)NumCube || e->Actor != a || now < e->At || now - e->At > 250) { e->Closing = 0; e->Armed = 1; }
+        else if (now > e->At) {
+            const double dt = now - e->At, raw = (e->Dist - dist) * 1000.0 / dt;
+            e->Closing += (raw - e->Closing) * dt / (dt + RACE_ENGINE_SMOOTH);
+        }
+        if (now != e->At || e->Actor != a) { e->Dist = dist; e->At = now; }
+        e->Scene = NumCube; e->Actor = a;
+        double f = (RACE_ENGINE_FAR - dist) / (RACE_ENGINE_FAR - RACE_ENGINE_NEAR);
+        f = f < 0 ? 0 : f > 1 ? 1 : f;
+        double k = e->Closing / RACE_ENGINE_CLOSING;
+        k = k < -1 ? -1 : k > 1 ? 1 : k;
+        const double v = own * RACE_ENGINE_LOUD * f * f * (k >= 0 ? 1 + RACE_ENGINE_UP * k : 1 + RACE_ENGINE_DOWN * k);
+        const S32 volume = v > 127 ? 127 : (S32)v;
+        const S32 base = e->Base > 0 ? e->Base : 4096;
+        const S32 pitch = (S32)(base * (k >= 0 ? 1 + RACE_ENGINE_PITCH_UP * k : 1 + RACE_ENGINE_PITCH_DOWN * k));
+        if (SamplesEnable) {
+            const int playing = (h & 0xFF000000u) && h != 0xFFFFFFFFu && IsSamplePlaying(h);
+            // (let go under RACE_ENGINE_QUIET, taken again only a little over it: not stopped and started frame after frame)
+            if (volume < RACE_ENGINE_QUIET || (!playing && volume < RACE_ENGINE_QUIET + 2)) {
+                if (playing) HQ_StopOneSample(h);
+                car->SampleAlways = (U32)e->Num << 8;
+                e->Voice = 0;
+            } else if (playing) {
+                ChangeVolumePanSample(h, RegleTrois(0, SampleVolume, 127, volume), pan);
+                ChangePitchbendSample(h, pitch);
+                e->Voice = h;
+            } else {
+                ParmSampleVolume = 127;
+                const U32 got = HQ_MixSample(e->Num, pitch, 0, 0, pan, volume);
+                car->SampleAlways = got && got != 0xFFFFFFFFu ? got : (U32)e->Num << 8;
+                e->Voice = got && got != 0xFFFFFFFFu ? got : 0;
+            }
+        }
+        // (logged: coming up on him, once an overtake)
+        const int coming = along < 512 && along > -RACE_OVERTAKE_BEHIND && dist < RACE_OVERTAKE_BEHIND && fabs(lat) >= RACE_OVERTAKE_SIDE
+                           && e->Closing >= RACE_OVERTAKE_CLOSING;
+        if (coming && e->Armed && (now - e->SaidAt >= RACE_OVERTAKE_AGAIN || now < e->SaidAt || !e->SaidAt)) {
+            e->Armed = 0;
+            e->SaidAt = now;
+            if (++s_engineSaid <= RACE_HEAR_SAY)
+                Log_Info("[racemod] overtake audio: %s coming up on Twinsen's %s (%.1f cells behind, %.1f to the side, closing %.0f a second): pan %d, "
+                         "volume %d, pitch %+.0f%% [mix %u]", s_opp[n].Name, lat < 0 ? "left" : "right", -along / 512, fabs(lat) / 512, e->Closing,
+                         (int)pan, (int)volume, (pitch - base) * 100.0 / base, (unsigned)SampleMixedFrames());
+        } else if (!e->Armed && (along > 2 * 512 || dist > 10 * 512)) e->Armed = 1;
+        if (HearTrace() && volume > 0 && (now - e->TraceAt >= 100 || now < e->TraceAt)) {
+            e->TraceAt = now;
+            // (and where the car is on the screen, if it is: x against the screen's middle, ModeDesiredX / 2 -- its side seen)
+            const int seen = PtrProjectPoint(car->Obj.X, car->Obj.Y + 300, car->Obj.Z) && Xp >= 0 && Xp < (S32)ModeDesiredX;
+            Log_Info("[heartrace] engine %d t %d along %.0f lat %.0f dist %.0f closing %.0f pan %d vol %d pitch %d screen %d [mix %u]", n + 1, (int)now, along, lat,
+                     dist, e->Closing, (int)pan, (int)volume, (int)pitch, seen ? (int)(Xp - (S32)ModeDesiredX / 2) : 9999, (unsigned)SampleMixedFrames());
+        }
+    }
+}
+
+// Every frame: what is coming at Twinsen -- an opponent's magic ball after him (the red, the fire ball's share), one of theirs on its
+// way through him (the yellow, the green), a witch's, a gas monster's fire ball, a CX gun's missile thrown at him -- heard in its last
+// RACE_INCOMING_SECS, from its side of his car: the soonest to reach him, RACE_INCOMING_VOICES of them, a voice each at most.
+static void IncomingHeard(S32 now, int driving) {
+    static const char *const shotName[] = {"yellow magic ball", "green magic ball", "red magic ball", "fire ball"};
+    static const char *const bulletName[] = {"bullet", "missile", "gas monster's fire ball", "witch's fire ball"};
+    const int total = RACE_MAX_SHOTS + RACE_MAX_BULLETS;
+    double soon[RACE_MAX_SHOTS + RACE_MAX_BULLETS];
+    S32 pans[RACE_MAX_SHOTS + RACE_MAX_BULLETS];
+    double lats[RACE_MAX_SHOTS + RACE_MAX_BULLETS], dists[RACE_MAX_SHOTS + RACE_MAX_BULLETS];
+    const int hearing = driving && CubeMode == CUBE_EXTERIEUR;
+    const T_RACE_OPPONENT *guide = Guide();
+    const double mine = fabs((double)ListBuggy[0].Speed);
+    // (his car's way, units a second, from where it was a frame ago, smoothed: where he will be as a thrown thing comes down)
+    double hx = 0, hy = 0, hz = 0;
+    if (CarAt(-1, &hx, &hy, &hz)) {
+        if (s_heardAt && now > s_heardAt && now - s_heardAt < 250) {
+            const double dt = now - s_heardAt;
+            double vx = (hx - s_heardX) * 1000.0 / dt, vz = (hz - s_heardZ) * 1000.0 / dt;
+            if (vx * vx + vz * vz > 40000.0 * 40000.0) vx = vz = 0;    // (put somewhere else: a rescue)
+            s_heardVX += (vx - s_heardVX) * dt / (dt + 150.0); s_heardVZ += (vz - s_heardVZ) * dt / (dt + 150.0);
+        } else if (now != s_heardAt) s_heardVX = s_heardVZ = 0;
+        s_heardX = hx; s_heardZ = hz; s_heardAt = now;
+    }
+    for (int k = 0; k < total; k++) {
+        T_RACE_INCOMING *in = &s_incoming[k];
+        soon[k] = -1;
+        int on;
+        double x, y, z;
+        S32 t0;
+        const T_RACE_SHOT *sh = k < RACE_MAX_SHOTS ? &s_shots[k] : NULL;
+        const T_RACE_BULLET *u = sh ? NULL : &s_bullets[k - RACE_MAX_SHOTS];
+        if (sh) {
+            on = sh->On && sh->Owner >= 0 && sh->Kind <= SHOT_FIRE && (sh->Target == -1 || sh->Target == -2);
+            x = sh->X; y = sh->Y; z = sh->Z; t0 = sh->T0;
+        } else {
+            on = u->On && u->Aim == 1 && u->Dur > 0;
+            t0 = u->T0;
+            double p = (double)(now - u->T0) / u->Dur;
+            p = p < 0 ? 0 : p > 1 ? 1 : p;
+            x = u->FromX + (u->ToX - u->FromX) * p; y = u->FromY + (u->ToY - u->FromY) * p; z = u->FromZ + (u->ToZ - u->FromZ) * p;
+        }
+        // (gone -- it hit, missed, faded -- or another in its place: its sound stopped)
+        if (!on || !hearing || t0 != in->T0) {
+            if (in->Voice) HQ_StopOneSample(in->Voice);
+            if (in->Said && ++s_incomingSaid <= RACE_HEAR_SAY) Log_Info("[racemod] incoming audio: its sound stops (%s) [mix %u]", on && hearing ? "another in its place" : !hearing ? "Twinsen out of his car" : "it hit or went", (unsigned)SampleMixedFrames());
+            memset(in, 0, sizeof(*in));
+            if (!on || !hearing) continue;
+            in->T0 = t0;
+        }
+        double along, lat, dist;
+        S32 pan;
+        if (!Heard(x, y, z, &along, &lat, &dist, &pan)) continue;
+        if (in->At && now > in->At) {
+            const double dt = now - in->At, raw = (in->Dist - dist) * 1000.0 / dt;
+            in->Closing += (raw - in->Closing) * dt / (dt + 100.0);
+        }
+        if (!in->At || now > in->At) { in->Dist = dist; in->At = now; }
+        if (dist > RACE_INCOMING_RANGE) continue;
+        // how soon it reaches him
+        double secs = -1;
+        if (u) {
+            // (thrown at where he was going to be: heard while it comes down near where he will be)
+            secs = (u->Dur - (now - u->T0)) / 1000.0;
+            const double px = hx + s_heardVX * secs, pz = hz + s_heardVZ * secs;
+            if ((u->ToX - px) * (u->ToX - px) + (u->ToZ - pz) * (u->ToZ - pz) > RACE_INCOMING_MISS * RACE_INCOMING_MISS) secs = -1;
+        } else if (sh->Target == -1) {
+            // (after him: along the track, at its own speed less his)
+            double d = dist, gain = (sh->Kind == SHOT_RED && guide ? RedSpeed(sh) : RACE_HOME_SPEED) - mine;
+            if (sh->Kind == SHOT_RED && guide && sh->Mode != RED_CLOSE && sh->Gap > d) d = sh->Gap;
+            if (in->Closing > gain) gain = in->Closing;
+            secs = d / (gain > RACE_INCOMING_LEAST ? gain : RACE_INCOMING_LEAST);
+        } else if (in->Closing >= RACE_INCOMING_CLOSING) {
+            // (not after him: only while it closes on him -- the yellow's straight way through him)
+            int through = 1;
+            if (sh->Kind == SHOT_YELLOW) {
+                const double rx = hx - x, rz = hz - z, ahead = rx * sh->Hx + rz * sh->Hz, miss = fabs(rx * sh->Hz - rz * sh->Hx);
+                through = ahead > 0 && miss < RACE_INCOMING_MISS;
+            }
+            if (through) secs = dist / in->Closing;
+        }
+        if (secs < 0 || secs > RACE_INCOMING_SECS) continue;
+        soon[k] = secs; pans[k] = pan; lats[k] = lat; dists[k] = dist;
+    }
+    // the soonest RACE_INCOMING_VOICES heard, the others' voices let go
+    int chosen[RACE_MAX_SHOTS + RACE_MAX_BULLETS] = {0};
+    for (int c = 0; c < RACE_INCOMING_VOICES; c++) {
+        int best = -1;
+        for (int k = 0; k < total; k++) if (soon[k] >= 0 && !chosen[k] && (best < 0 || soon[k] < soon[best])) best = k;
+        if (best >= 0) chosen[best] = 1;
+    }
+    for (int k = 0; k < total; k++) {
+        T_RACE_INCOMING *in = &s_incoming[k];
+        if (!chosen[k]) {
+            if (in->Voice) { HQ_StopOneSample(in->Voice); in->Voice = 0; in->Next = 0; }
+            continue;
+        }
+        const T_RACE_SHOT *sh = k < RACE_MAX_SHOTS ? &s_shots[k] : NULL;
+        const T_RACE_BULLET *u = sh ? NULL : &s_bullets[k - RACE_MAX_SHOTS];
+        const int fire = sh ? sh->Kind == SHOT_FIRE : 1;
+        double c = 1 - soon[k] / RACE_INCOMING_SECS;
+        c = c < 0 ? 0 : c > 1 ? 1 : c;
+        const S32 every = (S32)(RACE_INCOMING_EVERY_FAR + (RACE_INCOMING_EVERY_NEAR - RACE_INCOMING_EVERY_FAR) * c);
+        const S32 volume = (S32)(RACE_INCOMING_QUIET + (RACE_INCOMING_LOUD - RACE_INCOMING_QUIET) * c);
+        const S32 pitch = (S32)(4096 * (RACE_INCOMING_PITCH_FAR + (RACE_INCOMING_PITCH_NEAR - RACE_INCOMING_PITCH_FAR) * c));
+        if (SamplesEnable) {
+            if (!in->Voice || now >= in->Next || now < in->Next - 1000) {
+                if (in->Voice) HQ_StopOneSample(in->Voice);
+                ParmSampleVolume = 127;
+                const U32 got = HQ_MixSample(fire ? SAMPLE_MAGIC_BALL_FIRE : SAMPLE_MAGIC_BALL, pitch, 0, 1, pans[k], volume);
+                in->Voice = got && got != 0xFFFFFFFFu ? got : 0;
+                if (in->Voice) in->Next = now + every;
+            } else ChangeVolumePanSample(in->Voice, RegleTrois(0, SampleVolume, 127, volume), pans[k]);
+        }
+        if (!in->Said) {
+            in->Said = 1;
+            if (++s_incomingSaid <= RACE_HEAR_SAY)
+                Log_Info("[racemod] incoming audio: %s%s %s coming at Twinsen from his %s (%.1f s off, %.1f cells, %.1f to the side): pan %d [mix %u]",
+                         sh ? CarName(sh->Owner) : "", sh ? "'s" : "a", sh ? shotName[sh->Kind] : bulletName[u->Kind], lats[k] < 0 ? "left" : "right",
+                         soon[k], dists[k] / 512, fabs(lats[k]) / 512, (int)pans[k], (unsigned)SampleMixedFrames());
+        }
+        if (HearTrace() && (now - in->TraceAt >= 100 || now < in->TraceAt)) {
+            in->TraceAt = now;
+            Log_Info("[heartrace] incoming %d t %d secs %.2f lat %.0f dist %.0f pan %d vol %d pitch %d [mix %u]", k, (int)now, soon[k], lats[k], dists[k], (int)pans[k],
+                     (int)volume, (int)pitch, (unsigned)SampleMixedFrames());
+        }
+    }
+}
+
 // The console's cartrace: Twinsen's car logged each frame -- a lip in a road shows as a jump in its height or pitch.
 static int s_carTrace = 0;
 void RaceMod_CarTrace(int on) { s_carTrace = on; }
@@ -12144,6 +12457,8 @@ void RaceMod_Frame(void) {
     Guards(now, driving, dt);
     Marshal(now);
     Shuttles(now, driving);
+    // (what is thrown at him, heard coming from its side)
+    IncomingHeard(now, driving);
     if (!Opponents()) return;
     // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car -- but for
     // on_foot=, where he gets out to explore and they race on (OnFoot)
@@ -12332,6 +12647,8 @@ void RaceMod_Frame(void) {
         if (now >= o->HitUntil && car->GenAnim != anim) InitAnim(anim, ANIM_REPEAT, (U8)index);   // (a penguin's blast: its hit reaction plays)
         if (moving) s_wantFlip = 1;
     }
+    // (their engines heard from Twinsen's car: which side one comes up on)
+    EnginesHeard(now);
 }
 
 // The player's car stands on the grid until the count-down's GO (BUGGY.CPP RaceSpeed).
@@ -13825,7 +14142,7 @@ static void ResetTrack(void) {
     s_onFoot = 0; s_footArmed = 0; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_footActWas = 0; s_walkN = 0; s_walkCar = 0; s_stopReach = 0; s_stopping = 0; s_stopResume = 0;
     s_difficulty = -1; memset(s_hasLevel, 0, sizeof(s_hasLevel)); s_diffEase = 0; s_diffItems = 100; s_diffAim = 0; s_diffHazards = 100;
     s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_prizeForce = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
-    s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes)); memset(s_shots, 0, sizeof(s_shots));
+    s_nbFakeActors = 0; s_fakeIconBody = -1; memset(s_fakes, 0, sizeof(s_fakes)); memset(s_shots, 0, sizeof(s_shots)); HeardReset();
     s_heroBranch = -1; s_heroBranchAt = -1;
     s_driveLaser = 0; s_laserModel[0] = s_laserModel[1] = -1; s_skidUntil = 0;
     s_carsScene = -1; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;

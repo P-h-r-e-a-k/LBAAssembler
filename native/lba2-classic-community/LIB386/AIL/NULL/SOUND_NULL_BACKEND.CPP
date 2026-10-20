@@ -53,6 +53,7 @@ S32 Sample_DriverPlaysSound(void) { return FALSE; }
 void SfxLogEnable(int enable) { (void)enable; }
 int SfxLogIsEnabled(void) { return 0; }
 S32 GetSamplesPausedCount(void) { return 0; }
+U32 SampleMixedFrames(void) { return 0; }
 
 // === STREAM ==================================================================
 S32 streamVolume = 0;
