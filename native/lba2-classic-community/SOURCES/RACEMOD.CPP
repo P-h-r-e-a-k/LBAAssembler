@@ -137,7 +137,12 @@
  *     trial=1                    a time trial: no opponents, no mushrooms, no power-ups (no Gazogem since 2026-10-19);
  *                                its fastest lap (line to line, RaceMod_Lap) goes to the best laps, with the race's time (GO to the
  *                                last lap's line) beside it (RaceGame_Finished)
- *     end_to_menu=<ms>           <ms> after the race is over, back to the game's menu (RaceMod_WantsMenu)
+ *     end_to_menu=<ms>           <ms> after the race is over, back to the game's menu (RaceMod_WantsMenu) -- a win that unlocks a car
+ *                                sooner, RACE_CELEBRATE_MS, for the race game's congratulations (RaceGame_Celebrate; 2026-10-20). In
+ *                                the race game a win says "You win!" (ahead of the one to beat but not first: the place), not "You beat
+ *                                <him>!" (the user, 2026-10-20)
+ *     twinsen_body=<generic> [<firing>] [<half size>]   Twinsen's own buggy with bodies of its entity of the builder's in place of its own
+ *                                while he drives (the Halloween buggy, painted orange with bats, 2026-10-20: HeroLook)
  *   Halloween (2026-10-17, the Temple of Bú's; the builder writes these for it alone):
  *     dive=<body> <x> <z> <y>    a place over the lap's road (island units, the road's height there) that a witch (<body>, the spooks') dives
  *                                at Twinsen's car from, now and then, as it comes up to it -- pulling up to pass just over it (Dives)
@@ -193,6 +198,7 @@
 #include "HQR_NAMES.H"
 #include "INPUT.H"
 #include "RACEMOD.H"
+#include "RACEGAME.H"
 #include <SYSTEM/HQRLOAD.H>
 #include <AIL/SAMPLE.H>
 extern void ClrHoloPos(S32 num);   // HOLOGLOB.CPP (HOLO.H itself clashes with C_EXTERN.H)
@@ -503,6 +509,7 @@ static int FootCross(void);
 static U32 WalkInput(void);
 static int s_trial = 0;                    // trial=
 static S32 s_endToMenu = 0;                // end_to_menu=
+#define RACE_CELEBRATE_MS 2500             // ... or this soon, a win that unlocks a car: the race game's congratulations (RaceGame_Celebrate)
 static S32 s_menuAt = 0;                   // when the finished race goes back to the menu (0: not yet)
 static S32 s_raceTime = 0;                 // the finished race's time, GO to the line (ms)
 
@@ -784,6 +791,12 @@ static S32 s_drivePrevX, s_drivePrevY, s_drivePrevZ;
 // Twinsen's car at half its size, while an opponent's lightning has him shrunk (twinsen_small=: the buggy's own body -- the buggy
 // behaviour's entity's GEN_BODY_TUNIQUE -- halved, its generic body; the builder adds it)
 static int s_heroSmall = -1, s_heroIsSmall = 0;
+// Twinsen's own car painted (twinsen_body=<generic> [<firing generic>] [<half-size generic>]: the race game's Halloween buggy, 2026-10-20 --
+// bodies of the buggy behaviour's entity, its own painted orange with bats, which the builder adds: RaceTrackCharacterCars.
+// InstallHalloweenBuggy): put on him in place of the buggy's own while he drives (HeroLook), the firing one while he fires, the half-size
+// one while an opponent's lightning has him shrunk (in twinsen_small='s place). Still his buggy -- the game's code turns its wheels, its
+// steering wheel and his head as he drives -- not a car drawn in its place (drive_as=). -1: none (the buggy's own).
+static int s_heroBody = -1, s_heroFire = -1, s_heroBodyChecked = 0;
 #define RACE_SUPERJET_LEAN 0.0             // radians more it leans forward: none -- the build lays the model flat (RaceTrackSuperJet.LaidFlat)
 #define RACE_JET_EASE_MS 2500              // its last this long: the speed eased back to the car's own, and the jet-pack flashing
 #define RACE_JET_FLASH_MS 250              // ... the car and the jet-pack this long each in turn
@@ -3169,6 +3182,51 @@ static U32 RacePlaySound(const T_RACE_SOUND *s, int user, S32 volume, S32 pan) {
     return PlaySample(s->Data, s->Size, RACE_SOUND_USER + user, 0x1000, 1, volume, pan);
 }
 
+// The race game's own sounds (RACEGAME.CPP, 2026-10-20: the congratulations' fireworks, RACESOUNDS/FIREWORK.WAV -- the repo's
+// sounds\firework.mp3, which the race track's build writes there: Terrain/RaceSounds.cs): RACESOUNDS/<name>, read once and kept, played as
+// the items' are (RacePlaySound: at the sound effects' volume, none with the samples off), in the middle. PlaySample's handle (0xFFFFFFFF:
+// none -- no file, or the samples off) and, in *ms, how long it plays (0 none).
+#define RACE_GAME_SOUNDS 4
+static struct { char Name[32]; T_RACE_SOUND Sound; } s_gameSound[RACE_GAME_SOUNDS];
+static int s_nbGameSounds = 0;
+U32 RaceMod_PlaySound(const char *name, S32 *ms) {
+    if (ms) *ms = 0;
+    T_RACE_SOUND *s = NULL;
+    for (int i = 0; i < s_nbGameSounds && !s; i++) if (!strcmp(s_gameSound[i].Name, name)) s = &s_gameSound[i].Sound;
+    if (!s && s_nbGameSounds < RACE_GAME_SOUNDS) {
+        s = &s_gameSound[s_nbGameSounds].Sound;
+        snprintf(s_gameSound[s_nbGameSounds].Name, sizeof(s_gameSound[0].Name), "%s", name);
+        s_nbGameSounds++;
+        s->Data = NULL; s->Size = 0;
+        char rel[64], full[ADELINE_MAX_PATH];
+        snprintf(rel, sizeof(rel), "RACESOUNDS/%s", name);
+        GetResPath(full, ADELINE_MAX_PATH, rel);
+        FILE *f = fopen(full, "rb");
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            const long size = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            U8 *data = size > 44 && size < 16L * 1024 * 1024 ? (U8 *)malloc((size_t)size) : NULL;
+            if (data && fread(data, 1, (size_t)size, f) == (size_t)size && !memcmp(data, "RIFF", 4) && !memcmp(data + 8, "WAVE", 4)) { s->Data = data; s->Size = (S32)size; }
+            else { Log_Warn("[racemod] %s: not a WAV the game reads -- silent", full); free(data); }
+            fclose(f);
+        } else Log_Info("[racemod] no sound %s: silent", full);
+    }
+    if (!s || !s->Data) return 0xFFFFFFFF;
+    // (its length: the data's bytes over the format's bytes a second -- a 16-bit mono 44.1 kHz WAV as the build writes them, 88200)
+    if (ms) {
+        const S32 rate = s->Size > 40 ? *(const S32 *)(s->Data + 28) : 0;
+        *ms = rate > 0 ? (S32)((s->Size - 44) * 1000LL / rate) : 0;
+    }
+    const U32 h = RacePlaySound(s, 0xFF, 127, 64);
+    Log_Info("[racemod] sound %s%s", name, h == 0xFFFFFFFF ? ": not played (the samples are off)" : "");
+    return h;
+}
+
+void RaceMod_StopSound(U32 handle) {
+    if (handle != 0xFFFFFFFF) StopOneSample(handle);
+}
+
 // Every frame (PowerUps): the item box's item (and the second box's golden Gazogem) with its roulette stopped -- the item shown -- its
 // pick-up sound played, once; the pick-up sound before it stopped. (The golden Gazogem moving from the second box into the first was
 // heard already: GoldIntoBox.)
@@ -3689,6 +3747,16 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "gold_icon")) s_goldIcon = atoi(v);
         else if (!strcmp(key, "superjet_model")) s_superModel = atoi(v);
         else if (!strcmp(key, "twinsen_small")) s_heroSmall = atoi(v);
+        else if (!strcmp(key, "twinsen_body")) {
+            int body = -1, fire = -1, small = -1;
+            const int n = sscanf(v, "%d %d %d", &body, &fire, &small);
+            s_heroBody = n >= 1 && body > 0 && body < 255 ? body : -1;
+            s_heroFire = n >= 2 && fire > 0 && fire < 255 ? fire : -1;
+            if (n >= 3 && small > 0 && small < 255) s_heroSmall = small;
+            // (his own car, painted: not another drawn in its place)
+            if (s_heroBody >= 0) s_driveBody = s_driveAnim = s_driveSmall = -1;
+            s_heroBodyChecked = 0;
+        }
         else if (!strcmp(key, "drive_as")) {
             s_driveSmall = -1;
             if (sscanf(v, "%d %d %d", &s_driveBody, &s_driveAnim, &s_driveSmall) < 2) s_driveBody = s_driveAnim = -1;
@@ -4232,10 +4300,19 @@ void RaceMod_Lap(S32 x, S32 z) {
             if (mainOn) snprintf(text, sizeof(text), s_beatMain ? "You beat %s!" : "%s beat you", s_opp[s_main].Name);
             else if (place == 1) snprintf(text, sizeof(text), "You win!");
             else snprintf(text, sizeof(text), "You finished %d%s", place, Ordinal(place));
+            // (the race game's, 2026-10-20 -- the user: "We need to stop displaying the 'You beat the skeleton' at the end of the race":
+            // a win is "You win!", ahead of the one to beat but not first the place; behind him as before)
+            if (RaceGame_On() && mainOn && s_beatMain) {
+                if (place == 1) snprintf(text, sizeof(text), "You win!");
+                else snprintf(text, sizeof(text), "You finished %d%s", place, Ordinal(place));
+            }
             // (the race game's: the race's time, GO to the line, and its fastest lap -- a time trial's goes to the best laps)
             const S32 total = s_goAt && now > s_goAt ? now - s_goAt : 0;
             s_raceTime = total;
             const int rank = RaceGame_Finished(s_trial, total, s_bestLap, place, racers);
+            // (a win that unlocks a car: the race game's congratulations follow -- its fireworks and the car unlocked -- after a moment
+            // at the line, not end_to_menu= later: RACEGAME.CPP RaceGame_Celebrate)
+            const int celebrate = !s_trial && RaceGame_Celebrate();
             if (s_trial) {
                 char t[24];
                 Time(t, sizeof(t), s_bestLap);
@@ -4245,7 +4322,7 @@ void RaceMod_Lap(S32 x, S32 z) {
             }
             Message(text);
             s_messageUntil = now + 6000;
-            if (s_endToMenu > 0) s_menuAt = now + s_endToMenu;
+            if (s_endToMenu > 0) s_menuAt = now + (celebrate && s_endToMenu > RACE_CELEBRATE_MS ? RACE_CELEBRATE_MS : s_endToMenu);
             Log_Info("[racemod] race over after %d laps: %d%s of %d%s", s_raceLaps, place, Ordinal(place), racers,
                      mainOn ? (s_beatMain ? ", ahead of the main opponent" : ", behind the main opponent") : "");
             if (total > 0) Log_Info("[racemod] Twinsen finishes the race: %.2f s from GO", total / 1000.0);
@@ -8974,6 +9051,22 @@ static void HeroLook(S32 now, int driving) {
     s_superShown = superJet;
     if (superJet || driveAs) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
     else if (s_heroHidden) { hero->Flags &= ~INVISIBLE; s_heroHidden = 0; }
+    // his own car painted (twinsen_body=): its bodies on him in place of the buggy's own -- every frame, as the game puts the buggy's back
+    // whenever he gets in, stops firing or is grown back after the lightning (GEN_BODY_TUNIQUE: the buggy's, or GEN_BODY_NORMAL / _MAGE as
+    // ChoiceHeroBody makes it); this runs before the frame is drawn (AffScene), so the buggy's own is never seen. A folder without them
+    // (built before 2026-10-20): the buggy's own, said once.
+    if (driving && s_heroBody >= 0 && !s_heroIsSmall && NewCube == -1) {
+        if (!s_heroBodyChecked) {
+            s_heroBodyChecked = 1;
+            if (SearchBody((U8)s_heroBody, NUM_PERSO) < 0) { Log_Warn("[racemod] twinsen_body: the buggy has no body %d -- his own buggy", s_heroBody); s_heroBody = s_heroFire = -1; return; }
+            if (s_heroFire >= 0 && SearchBody((U8)s_heroFire, NUM_PERSO) < 0) s_heroFire = -1;
+            Log_Info("[racemod] twinsen_body: his buggy's bodies %d (firing %d, shrunk %d)", s_heroBody, s_heroFire, s_heroSmall);
+        }
+        const S32 g = hero->GenBody;
+        const int firing = g == GEN_BODY_TUNIQUE_TIR || g == GEN_BODY_MAGE_TIR || (s_heroFire >= 0 && g == s_heroFire);
+        const S32 want = firing ? s_heroFire : g == GEN_BODY_NORMAL || g == GEN_BODY_TUNIQUE || g == GEN_BODY_MAGE ? s_heroBody : -1;
+        if (want >= 0 && g != want) InitBody((U8)want, NUM_PERSO);
+    }
 }
 
 // The super jet-pack's hum (the user, 2026-10-19): the game's Proto-Pack sample (SAMPLE_PROTOPACK, the one Twinsen's own jet-pack loops),
@@ -14214,6 +14307,10 @@ static void ResetTrack(void) {
     free(s_autoV); s_autoV = NULL; s_autoVCount = 0;
     if (s_heroIsSmall && Comportement == C_BUGGY) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroSmall = -1; s_heroIsSmall = 0;
+    // (his painted buggy's bodies off him: the buggy's own again)
+    if (s_heroBody >= 0 && Comportement == C_BUGGY && (ListObjet[NUM_PERSO].GenBody == s_heroBody || (s_heroFire >= 0 && ListObjet[NUM_PERSO].GenBody == s_heroFire)))
+        InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
+    s_heroBody = s_heroFire = -1; s_heroBodyChecked = 0;
     s_penguinWalk = 1; s_item[RACE_BOX] = s_item[RACE_BOX_GOLD] = -1; s_takeAt = 0; s_useWas = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_opp[n].ShrunkUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
     s_heroDraft = 1;

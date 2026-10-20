@@ -445,6 +445,9 @@ internal static class RaceTrackService
             if (session.Torturers) log.AddRange(LBAAssembler.Terrain.Palace.PalaceTorturers.Install(gameDirectory));
             // (Twinsen's pumpkin F1, the Temple of Bú's own car and anyone's to drive, after every track's bodies: no body before it moves)
             log.AddRange(RaceTrackCharacterCars.InstallPumpkin(gameDirectory));
+            // (Twinsen's Halloween buggy -- his own buggy painted orange, with bats: the race game's first car while the pumpkin F1 waits
+            // to be won -- bodies of the buggy's entity, after it: RaceTrackCharacterCars.InstallHalloweenBuggy)
+            log.AddRange(RaceTrackCharacterCars.InstallHalloweenBuggy(gameDirectory));
             // (the toy dump truck after it -- a private special: left out where PrivateCars is off, the race game's own install --
             // RaceTrackCharacterCars.InstallToyTruck)
             if (PrivateCars) log.AddRange(RaceTrackCharacterCars.InstallToyTruck(gameDirectory));

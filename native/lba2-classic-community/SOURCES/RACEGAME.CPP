@@ -26,6 +26,14 @@
  *     update_checked=<unix time>          when the game last started the updater (0: never)
  *     minimap=1|0                         the race's mini-map, bottom right, on (the first time) or off (Options, "Window,
  *                                         mini-map, updates"; RACEMOD.CPP DrawMinimap asks RaceGame_Minimap)
+ *     <id>_unlocked=1                     a car won (its car= line's unlock=<id>: pumpkin_unlocked=1, the pumpkin F1)
+ * Unlocking a car (2026-10-20 -- the user: a congratulations "featuring the F1 Pumpkin car, with a message saying they've unlocked the
+ * pumpkin for use in time trials. Let's hold this car back until it's unlocked"): a car whose car= line says unlock=<id> is shown on the
+ * car page dark, a padlock over it and how it is won (hint=), and can't be taken until the player wins a race -- first over the line, at
+ * any difficulty (RaceGame_Finished: a race, not a time trial). That win unlocks it for good (<id>_unlocked=1) and, once, the
+ * congratulations follow the race (RaceGame_Celebrate: RACEMOD.CPP goes to the menu a moment after the line, without its "You beat ...!"):
+ * the car turning, fireworks over the page and RACESOUNDS/FIREWORK.WAV (CelebratePage). A car unlocked "for trial" is taken for time trials
+ * only: on the page for a race it is shown, "For time trials", and not taken.
  * Updates (2026-10-19): the installer leaves a copy of itself in the game's folder, Update\LBRA-Setup.exe. At the start (the race game
  * as a player runs it: none of the command harness's flags, so never an editor's Play or a scripted test -- those skip the menu), if
  * updates aren't off and a week has gone by since the last check (or there was none), the game starts it hidden --
@@ -40,10 +48,17 @@
  *     laps=<n>                     a race's laps (3), unless its race file has its own (race_laps=: the Temple of Bú's five)
  *     end_to_menu=<ms>             a finished race back to the menu this long after its end (8000)
  *     special=<name>|<race file>|<time trial file>|<start scene>     files beside the game's data (and so are those they name)
- *     car=<name>|<drive_as value: BODY.HQR body, animation, shrunk body>[|<acceleration> <top speed> <handling>]
+ *     car=<name>|<drive_as value: BODY.HQR body, animation, shrunk body>[|<acceleration> <top speed> <handling>][|<option>...]
  *                                  the car's stats (2026-10-20), stars from 0 to 5 in half stars: shown on the car page, and the race
  *                                  drives the car by them (RACEMOD.CPP car_accel=, car_top=, car_handling=: 2.5 the track's own
  *                                  setup). A line without them: a car with no stars shown, driven as the track sets it.
+ *                                  In place of the drive_as value, a line of the race file's own (it has a '='): written to the race as
+ *                                  it is -- twinsen_body=<generics>, Twinsen's own buggy painted (the Halloween buggy, 2026-10-20).
+ *                                  Options after the stats, each "key=value":
+ *                                    page=<BODY.HQR body> <animation>   the body the car page shows (a car with a race file's line)
+ *                                    unlock=<id>[ trial]                won by winning a race (<id>_unlocked=1); "trial": then for
+ *                                                                       time trials only
+ *                                    hint=<text>                        how it is won, under the padlock ("Win a race to unlock")
  * BESTTIMES.TXT: "<track>|<trial's time ms>|<best lap ms>|<car>|<date>|<laps>|lap" lines, a time trial's fastest single lap (and its
  * whole time, GO to the last lap's line, over <laps> laps), the fastest lap first. A line without "lap" at its end -- the whole trials'
  * times kept before 2026-10-18, "<track>|<time ms>|<best lap ms>|<car>|<date>[|<laps>]" -- is kept as it is but not shown, as are other
@@ -54,6 +69,7 @@
 #include "CONSOLE/CONSOLE.H"
 #include "CONTROL.H"
 #include "DIRECTORIES.H"
+#include "IMAGE_LOAD.H"
 #include "INPUT.H"
 #include "JOYSTICK.H"
 #include "RACEGAME.H"
@@ -78,6 +94,8 @@
 #include <ctime>
 
 extern void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 measure, S32 anim);   // RACEMOD.CPP
+extern U32 RaceMod_PlaySound(const char *name, S32 *ms);                                                   // ...
+extern void RaceMod_StopSound(U32 handle);
 
 #define RG_MAX_SPECIALS 8
 #define RG_MAX_CARS 16
@@ -121,6 +139,10 @@ typedef struct {
     S32 Body, Anim;                         // drive_as='s body and driving animation (the car page poses the car by it)
     int Rated;                              // its stats given (the car= line's third field)
     float Stars[3];                         // ... acceleration, top speed, handling: 0 to 5 stars, in halves
+    int Line;                               // Drive is a line of the race file's own (twinsen_body=...), not a drive_as value
+    char Unlock[24];                        // won by winning a race (unlock=<id>; empty: always there) ...
+    int TrialOnly;                          // ... and then for time trials only
+    char Hint[96];                          // ... how (hint=)
 } T_RG_CAR;
 
 typedef struct {
@@ -261,6 +283,22 @@ static void Read(void) {
                 const float st = c->Rated ? c->Stars[k] : 2.5f;
                 c->Stars[k] = (float)(floor((st < 0 ? 0 : st > 5 ? 5 : st) * 2 + 0.5) / 2);
             }
+            // (a line of the race file's own in place of a drive_as value: no body to pose, but page= gives one)
+            c->Line = strchr(c->Drive, '=') != NULL;
+            if (c->Line) c->Body = c->Anim = -1;
+            c->Unlock[0] = 0; c->TrialOnly = 0; c->Hint[0] = 0;
+            // (its options: page=, unlock=, hint=)
+            v = Field(v, stars, sizeof(stars));
+            while (*v) {
+                char option[128];
+                v = Field(v, option, sizeof(option));
+                if (!strncmp(option, "page=", 5) && sscanf(option + 5, "%d %d", &c->Body, &c->Anim) < 2) c->Anim = -1;
+                else if (!strncmp(option, "unlock=", 7)) {
+                    char what[16] = "";
+                    sscanf(option + 7, "%23s %15s", c->Unlock, what);
+                    c->TrialOnly = !strcmp(what, "trial");
+                } else if (!strncmp(option, "hint=", 5)) snprintf(c->Hint, sizeof(c->Hint), "%s", option + 5);
+            }
             if (c->Name[0] && c->Drive[0]) s_nbCars++;
         }
     }
@@ -292,6 +330,9 @@ static long long s_updateChecked = 0;       // when the updater was last started
 static const char *const s_updateKey[3] = {"auto", "ask", "off"};
 static const char *const s_updateLabel[3] = {"Updates: Automatic", "Updates: Ask first", "Updates: Off"};
 static char s_setOther[RG_OTHER_SIZE];      // RACEGAME_SETTINGS.TXT's lines of other keys, kept as they are
+#define RG_MAX_UNLOCKED 8
+static char s_unlocked[RG_MAX_UNLOCKED][24]; // the cars won: their unlock=<id>s (<id>_unlocked=1)
+static int s_nbUnlocked = 0;
 
 static void SettingsPath(char *path) { GetCfgPath(path, ADELINE_MAX_PATH, "RACEGAME_SETTINGS.TXT"); }
 
@@ -324,6 +365,11 @@ static void ReadSettings(void) {
                 continue;
             } else if (!strcmp(line, "update_checked")) {
                 s_updateChecked = strtoll(eq + 1, NULL, 10);
+                continue;
+            } else if (strlen(line) > 9 && !strcmp(line + strlen(line) - 9, "_unlocked")) {
+                // (a car won: <id>_unlocked=1)
+                line[strlen(line) - 9] = 0;
+                if (atoi(eq + 1) && s_nbUnlocked < RG_MAX_UNLOCKED && line[0]) snprintf(s_unlocked[s_nbUnlocked++], sizeof(s_unlocked[0]), "%s", line);
                 continue;
             }
             if (value) *value = atoi(eq + 1);
@@ -411,9 +457,18 @@ static void WriteSettings(void) {
             s_skipQualifying, s_level);
     fprintf(f, "updates=%s\nupdate_checked=%lld\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0], s_updateChecked);
     fprintf(f, "minimap=%d\n", s_minimap);
+    for (int i = 0; i < s_nbUnlocked; i++) fprintf(f, "%s_unlocked=1\n", s_unlocked[i]);
     fputs(s_setOther, f);
     fclose(f);
 }
+
+// Whether a car is there to take: one with unlock= only once it is won; one unlocked "for trial" only for a time trial.
+static int Unlocked(const char *id) {
+    for (int i = 0; i < s_nbUnlocked; i++) if (!strcmp(s_unlocked[i], id)) return 1;
+    return 0;
+}
+static int CarLocked(int car) { return car >= 0 && car < s_nbCars && s_cars[car].Unlock[0] && (ReadSettings(), !Unlocked(s_cars[car].Unlock)); }
+static int CarFor(int car, int trial) { return car >= 0 && car < s_nbCars && !CarLocked(car) && (trial || !(s_cars[car].Unlock[0] && s_cars[car].TrialOnly)); }
 
 // ---- the best times ----------------------------------------------------------------------------------------------------------------
 
@@ -511,9 +566,24 @@ static int RecordLap(S32 total, S32 lap, int laps);
 
 // RACEMOD.CPP: a race is over -- `total` its time from GO to the last lap's line, `bestLap` its fastest lap (the lap clock's: line to
 // line, a qualifying lap's never). A time trial's fastest lap into its track's best laps: the rank it took (1-10), 0 for none.
+static int s_celebrate = -1;                // the car a race has just unlocked: the congratulations to show (CelebratePage), -1 none
+
 S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers) {
     if (!RaceGame_On()) return 0;
     s_raceOver = 1;
+    // (a race won -- first over the line, at any difficulty: the cars still locked are unlocked, for good; the first of them is the
+    // congratulations' -- RaceGame_Celebrate)
+    s_celebrate = -1;
+    if (!trial && place == 1 && s_raceSp >= 0) {
+        ReadSettings();
+        for (int i = 0; i < s_nbCars; i++) {
+            if (!CarLocked(i) || s_nbUnlocked >= RG_MAX_UNLOCKED) continue;
+            snprintf(s_unlocked[s_nbUnlocked++], sizeof(s_unlocked[0]), "%s", s_cars[i].Unlock);
+            if (s_celebrate < 0) s_celebrate = i;
+            Log_Info("[racegame] the race won: %s unlocked%s", s_cars[i].Name, s_cars[i].TrialOnly ? " for time trials" : "");
+        }
+        if (s_celebrate >= 0) WriteSettings();
+    }
     char t[24], l[24];
     TimeText(t, sizeof(t), total);
     TimeText(l, sizeof(l), bestLap);
@@ -523,6 +593,10 @@ S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers) 
     if (!trial) return 0;
     return RecordLap(total, bestLap, SpecialLaps(s_raceSp >= 0 && s_raceSp < s_nbSp ? s_raceSp : 0));
 }
+
+// RACEMOD.CPP: whether the race just over unlocked a car -- the congratulations follow it (RaceGame_Menu: CelebratePage), so the race
+// goes back to the menu a moment after the line
+S32 RaceGame_Celebrate(void) { return RaceGame_On() && s_celebrate >= 0; }
 
 // RACEMOD.CPP: the race's track's best lap, Best laps' first (ms; 0 for none or no race of the race game's) -- a time trial's display
 // shows it over the lap, or the trial's own fastest lap when that is quicker.
@@ -597,7 +671,7 @@ static int StartRace(int sp, int trial, int car, int level) {
         } else fputs(line, f);
     }
     fclose(in);
-    if (car >= 0 && car < s_nbCars) fprintf(f, "# %s\ndrive_as=%s\n", s_cars[car].Name, s_cars[car].Drive);
+    if (car >= 0 && car < s_nbCars) fprintf(f, s_cars[car].Line ? "# %s\n%s\n" : "# %s\ndrive_as=%s\n", s_cars[car].Name, s_cars[car].Drive);
     // (its stats, which the race drives it by: RACEMOD.CPP car_accel= car_top= car_handling=)
     if (car >= 0 && car < s_nbCars && s_cars[car].Rated)
         fprintf(f, "# its stats, in stars of 5\ncar_accel=%.1f\ncar_top=%.1f\ncar_handling=%.1f\n", s_cars[car].Stars[0], s_cars[car].Stars[1], s_cars[car].Stars[2]);
@@ -698,6 +772,23 @@ static void Text(S32 x, S32 y, const char *utf8, S32 colour) {
     Font(x - w / 2 + 3, y + 3, text);
     ColorFont(colour);
     Font(x - w / 2, y, text);
+}
+
+// The same no wider than `width`: on two lines (y the first's, the second's a line under it) broken at the space nearest its middle when
+// it doesn't fit on one -- else on one, a line down.
+static void TextFitted(S32 x, S32 y, S32 width, const char *utf8, S32 colour) {
+    char text[256];
+    Label(text, utf8);
+    const size_t n = strlen(utf8);
+    if (SizeFont(text) <= width || n < 3) { Text(x, y + 13, utf8, colour); return; }
+    size_t cut = 0;
+    for (size_t i = 1; i + 1 < n; i++)
+        if (utf8[i] == ' ' && (!cut || (i > n / 2 ? i - n / 2 : n / 2 - i) < (cut > n / 2 ? cut - n / 2 : n / 2 - cut))) cut = i;
+    if (!cut) { Text(x, y + 13, utf8, colour); return; }
+    char first[256];
+    snprintf(first, sizeof(first), "%.*s", (int)cut, utf8);
+    Text(x, y, first, colour);
+    Text(x, y + 26, utf8 + cut + 1, colour);
 }
 
 // A key that steps a page's choice (the arrows, the pad's d-pad or stick, edge-only as DoGameMenu has them): -1 left, 1 right, 0 none.
@@ -818,9 +909,17 @@ static void Stats(S32 cx, S32 y, S32 step, const T_RG_CAR *c) {
 // race" was under the name -- the keys still on the 480-tall canvas)
 #define RG_CAR_BOTTOM 286
 #define RG_STAT_LINE 26
-static int CarPage(const char *what) {
+static void Padlock(S32 cx, S32 cy);
+static int CarPage(const char *what, int trial) {
     if (s_nbCars <= 0) return -1;
     if (s_car < 0 || s_car >= s_nbCars) s_car = 0;
+    // (2026-10-20: a car locked -- the pumpkin F1 until a race is won -- or for time trials only is shown but can't be taken: the page
+    // opens on the car chosen last if it can be, else on the first that can, the Halloween buggy)
+    if (!CarFor(s_car, trial)) {
+        s_car = 0;
+        while (s_car + 1 < s_nbCars && !CarFor(s_car, trial)) s_car++;
+        if (!CarFor(s_car, trial)) s_car = 0;
+    }
     Page(NULL, 0);
     BoxUpdate();
     ManageTime();
@@ -853,7 +952,7 @@ static int CarPage(const char *what) {
         else if (click == 1 && my >= y0 && my <= y1 && mx >= x0 && mx <= x1) {
             if (mx < x0 + (x1 - x0) / 4) step = -1;
             else if (mx > x1 - (x1 - x0) / 4) step = 1;
-            else { WaitNoInput(); chosen = s_car; }
+            else if (CarFor(s_car, trial)) { WaitNoInput(); chosen = s_car; }
         }
         if (step) { s_car = (s_car + step + s_nbCars) % s_nbCars; start = TimerRefHR; }
         // (a car not seen yet measured first, under the backdrop drawn next: RaceMod_DrawBody)
@@ -867,10 +966,17 @@ static int CarPage(const char *what) {
         Text(cx, y0 - 34, header, RG_ORANGE);
         ShadeBoxBlk(x0, y0, x1, y1, MENU_SHADE_LVL);
         RaceMod_DrawBody(x0 + 2, y0 + 2, x1 - 2, y1 - 2, s_cars[s_car].Body, (S32)(((TimerRefHR - start) / 3 + 3072) & 4095), 0, s_cars[s_car].Anim);
+        // (a car locked: dark, a padlock over it and how it is won; one for time trials only, on the page for a race: dimmed, and so said)
+        const int locked = CarLocked(s_car), takeable = CarFor(s_car, trial);
+        if (!takeable) ShadeBoxBlk(x0 + 2, y0 + 2, x1 - 2, y1 - 2, locked ? 10 : 7);
+        if (locked) {
+            Padlock(cx, (y0 + y1) / 2 - 28);
+            TextFitted(cx, y1 - 62, x1 - x0 - 24, s_cars[s_car].Hint[0] ? s_cars[s_car].Hint : "Win a race to unlock", RG_ORANGE);
+        } else if (!takeable) Text(cx, y1 - 38, "For time trials", RG_ORANGE);
         DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
         char name[160];
         snprintf(name, sizeof(name), "%s", s_cars[s_car].Name);
-        Text(cx, y1 + 8, name, LBAWHITE);
+        Text(cx, y1 + 8, name, takeable ? LBAWHITE : RG_GREY);
         char count[64];
         if (rated) {
             if (s_cars[s_car].Rated) Stats(cx, y1 + 42, RG_STAT_LINE, &s_cars[s_car]);
@@ -882,11 +988,11 @@ static int CarPage(const char *what) {
             snprintf(count, sizeof(count), "Car %d of %d, for %s", s_car + 1, s_nbCars, what);
             Text(cx, y1 + 46, count, RG_GREY);
         }
-        Text(cx, last, "Left, right: car    Enter: race    Esc: back", RG_GREY);
+        Text(cx, last, takeable ? "Left, right: car    Enter: race    Esc: back" : "Left, right: car    Esc: back", RG_GREY);
         BoxStaticAdd(0, top, (S32)ModeDesiredX - 1, bottom);
         BoxUpdate();
         if (chosen != -2) break;
-        if (Confirmed()) { WaitNoInput(); chosen = s_car; }
+        if (Confirmed()) { WaitNoInput(); if (takeable) chosen = s_car; }
         else if (Escaped()) chosen = -1;
     }
     AsciiMode = FALSE;
@@ -1366,7 +1472,7 @@ static int ModePage(int sp) {
             int level = -1;
             if (!trial && s_sp[sp].Levels && (level = LevelPage()) < 0) break;
             int car;
-            while ((car = CarPage(trial ? "a time trial" : "a race")) >= 0 && !QualifyingPage(sp, trial)) {}
+            while ((car = CarPage(trial ? "a time trial" : "a race", trial)) >= 0 && !QualifyingPage(sp, trial)) {}
             if (car >= 0) { if (StartRace(sp, trial, car, level)) return 1; break; }
             if (level < 0) break;
         }
@@ -1391,8 +1497,282 @@ static int SpecialsPage(void) {
     }
 }
 
+// ---- the congratulations ------------------------------------------------------------------------------------------------------------
+
+// A pixel block of the page (Log), clipped to the screen.
+static void Plot(S32 x, S32 y, U8 colour, S32 size) {
+    for (S32 dy = 0; dy < size; dy++)
+        for (S32 dx = 0; dx < size; dx++) {
+            const S32 px = x + dx, py = y + dy;
+            if (px >= 0 && py >= 0 && px < (S32)ModeDesiredX && py < (S32)ModeDesiredY) ((U8 *)Log)[TabOffLine[py] + px] = colour;
+        }
+}
+
+// A padlock centred on (cx, cy), in gold with the menus' dark shadow: its shackle (a thick ring's upper half and its legs), its body and
+// its keyhole. Drawn straight into the page, as the stars are.
+static void Padlock(S32 cx, S32 cy) {
+    static U8 gold = 0, dark = 0, shadow = 0;
+    static const U8 *paletteWas = NULL;
+    const U8 *pal = PtrPalNormal ? PtrPalNormal : PtrPal;
+    if (pal != paletteWas) {
+        paletteWas = pal;
+        gold = NearestColour(235, 185, 60);
+        dark = NearestColour(70, 45, 15);
+        shadow = NearestColour(0, 0, 0);
+    }
+    const S32 halfW = 22, top = cy - 4, bottom = cy + 26, ringY = top, outer = 17, inner = 10;
+    for (int pass = 0; pass < 2; pass++) {
+        const S32 off = pass ? 0 : 3;
+        const U8 c = pass ? gold : shadow;
+        for (S32 dy = -outer; dy <= bottom - cy; dy++)
+            for (S32 dx = -halfW; dx <= halfW; dx++) {
+                const S32 y = cy + dy;
+                // (the body)
+                int in = y >= top && y <= bottom;
+                // (the shackle: the ring's upper half over the body, its legs down into it)
+                const S32 ry = y - ringY, d2 = dx * dx + ry * ry;
+                if (!in && ry <= 0 && d2 <= outer * outer && d2 >= inner * inner) in = 1;
+                if (in) Plot(cx + dx + off, y + off, c, 1);
+            }
+    }
+    // the keyhole
+    for (S32 dy = -4; dy <= 4; dy++)
+        for (S32 dx = -4; dx <= 4; dx++)
+            if (dx * dx + dy * dy <= 16) Plot(cx + dx, top + 11 + dy, dark, 1);
+    for (S32 dy = 0; dy < 10; dy++) Plot(cx - 1, top + 13 + dy, dark, 3);
+}
+
+// Fireworks over the page (2026-10-20 -- the user: "Let's also add some on screen fireworks to accompany the firework.mp3 sound"): rockets
+// rising from the foot of the screen with a spark of a trail, bursting near their top into a ring of sparks that fly out, fall, fade
+// through their colour's shades and twinkle out -- red, gold, green, blue, violet, orange or white, the menus' palette's nearest. Drawn
+// into the page (Log) like the stars, a few pixels each.
+#define RG_FW_SPARKS 640
+#define RG_FW_ROCKETS 8
+#define RG_FW_KINDS 7
+#define RG_FW_SHADES 4
+typedef struct { float X, Y, VX, VY; S32 Born, Life; U8 Kind, On; } T_RG_SPARK;
+typedef struct { float X, Y, VX, VY, Top; U8 Kind, On; } T_RG_ROCKET;
+static T_RG_SPARK s_spark[RG_FW_SPARKS];
+static T_RG_ROCKET s_rocket[RG_FW_ROCKETS];
+static U8 s_fwShade[RG_FW_KINDS][RG_FW_SHADES];
+static U32 s_fwSeed = 1;
+
+static float FwRandom(void) {
+    s_fwSeed = s_fwSeed * 1664525u + 1013904223u;
+    return (float)(s_fwSeed >> 8) / 16777216.0f;
+}
+
+static void FwColours(void) {
+    static const U8 *paletteWas = NULL;
+    const U8 *pal = PtrPalNormal ? PtrPalNormal : PtrPal;
+    if (pal == paletteWas) return;
+    paletteWas = pal;
+    static const int rgb[RG_FW_KINDS][3] = {{255, 70, 50}, {255, 205, 60}, {90, 255, 110}, {100, 165, 255}, {215, 110, 255}, {255, 140, 30}, {255, 255, 255}};
+    // (dimmed no further than this: the menu picture's night is a dark violet, and a spark dimmer still came out in its colours, lost in it)
+    static const float level[RG_FW_SHADES] = {1.0f, 0.88f, 0.74f, 0.6f};
+    for (int k = 0; k < RG_FW_KINDS; k++)
+        for (int l = 0; l < RG_FW_SHADES; l++)
+            s_fwShade[k][l] = NearestColour((int)(rgb[k][0] * level[l]), (int)(rgb[k][1] * level[l]), (int)(rgb[k][2] * level[l]));
+}
+
+// A rocket off the foot of the screen, in its left or right third (the car's box is in the middle), to burst two fifths to nine tenths of
+// the way up.
+static void FwLaunch(void) {
+    static int left = 0;
+    for (int i = 0; i < RG_FW_ROCKETS; i++) {
+        T_RG_ROCKET *r = &s_rocket[i];
+        if (r->On) continue;
+        const float w = (float)ModeDesiredX, h = (float)ModeDesiredY, across = 0.04f + 0.24f * FwRandom();
+        left = !left;
+        r->X = w * (left ? across : 1 - across);
+        r->Y = h + 4;
+        r->VX = (FwRandom() - 0.5f) * 0.05f;
+        r->VY = -(0.42f + 0.16f * FwRandom()) * h / 480;
+        r->Top = h * (0.1f + 0.5f * FwRandom());
+        r->Kind = (U8)(FwRandom() * RG_FW_KINDS) % RG_FW_KINDS;
+        r->On = 1;
+        return;
+    }
+}
+
+// A burst where a rocket got to: a ring of sparks flying out, a few of them white.
+static void FwBurst(const T_RG_ROCKET *r, S32 now) {
+    const int n = 60 + (int)(FwRandom() * 36);
+    const float speed = (0.13f + 0.08f * FwRandom()) * (float)ModeDesiredY / 480;
+    for (int k = 0, i = 0; k < n && i < RG_FW_SPARKS; i++) {
+        T_RG_SPARK *p = &s_spark[i];
+        if (p->On) continue;
+        const float a = 6.2831853f * (k + FwRandom() * 0.6f) / n, v = speed * (0.55f + 0.45f * FwRandom());
+        p->X = r->X; p->Y = r->Y;
+        p->VX = cosf(a) * v; p->VY = sinf(a) * v;
+        p->Born = now; p->Life = 900 + (S32)(FwRandom() * 700);
+        p->Kind = FwRandom() < 0.12f ? (U8)(RG_FW_KINDS - 1) : r->Kind;
+        p->On = 1;
+        k++;
+    }
+}
+
+// The rockets and the sparks `dt` ms on: rising (slowing) and bursting, flying out (slowing) and falling.
+static void FwStep(S32 now, S32 dt) {
+    const float g = 0.00030f * (float)ModeDesiredY / 480;
+    for (int i = 0; i < RG_FW_ROCKETS; i++) {
+        T_RG_ROCKET *r = &s_rocket[i];
+        if (!r->On) continue;
+        r->VY += g * dt;
+        r->X += r->VX * dt; r->Y += r->VY * dt;
+        if (r->Y <= r->Top || r->VY >= -0.05f) { FwBurst(r, now); r->On = 0; }
+    }
+    const float drag = 1 - 0.0011f * dt;
+    for (int i = 0; i < RG_FW_SPARKS; i++) {
+        T_RG_SPARK *p = &s_spark[i];
+        if (!p->On) continue;
+        if (now - p->Born >= p->Life) { p->On = 0; continue; }
+        p->VX *= drag; p->VY = p->VY * drag + g * 0.4f * dt;
+        p->X += p->VX * dt; p->Y += p->VY * dt;
+    }
+}
+
+static void FwDraw(S32 now) {
+    for (int i = 0; i < RG_FW_ROCKETS; i++) {
+        const T_RG_ROCKET *r = &s_rocket[i];
+        if (!r->On) continue;
+        // (its head white, a trail of gold sparks under it)
+        Plot((S32)r->X - 1, (S32)r->Y - 1, s_fwShade[RG_FW_KINDS - 1][0], 3);
+        for (int k = 1; k <= 5; k++)
+            if (FwRandom() < 0.8f) Plot((S32)(r->X - r->VX * k * 10 + (FwRandom() - 0.5f) * 3), (S32)(r->Y - r->VY * k * 10), s_fwShade[1][k < 3 ? k - 1 : 3], 1 + (k < 3));
+    }
+    for (int i = 0; i < RG_FW_SPARKS; i++) {
+        const T_RG_SPARK *p = &s_spark[i];
+        if (!p->On) continue;
+        const float age = (float)(now - p->Born) / p->Life;
+        // (bright for half its life, then a shade darker in steps -- twinkling out over its last third)
+        if (age > 0.66f && FwRandom() < 0.4f) continue;
+        const int shade = age < 0.5f ? 0 : age < 0.68f ? 1 : age < 0.84f ? 2 : 3;
+        Plot((S32)p->X - (age < 0.2f), (S32)p->Y - (age < 0.2f), s_fwShade[p->Kind][shade], age < 0.2f ? 3 : age < 0.6f ? 2 : 1);
+        // (and a streak behind it, a shade darker)
+        const int tail = shade + 1 < RG_FW_SHADES ? shade + 1 : RG_FW_SHADES - 1;
+        Plot((S32)(p->X - p->VX * 18), (S32)(p->Y - p->VY * 18), s_fwShade[p->Kind][tail], 1);
+    }
+}
+
+// The congratulations for a car a race has just unlocked (the user, 2026-10-20: "play this sound E:\dump\LBAAssembler\sounds\firework.mp3
+// and play a congratulations message on screen featuring the F1 Pumpkin car, with a message saying they've unlocked the pumpkin for use
+// in time trials"): on the menu's own picture (the Halloween night the race game opens on -- not the race's scene, its display and its
+// last message left in it, which the menu after a race has behind it) fireworks, "Congratulations!", the car turning in its box, the race
+// won and the car unlocked -- RACESOUNDS/FIREWORK.WAV playing. Enter, Esc or a click (after a moment: the keys the race was driven with
+// aren't taken for it) or the sound's end and a little more: the menu, its backdrop as it was.
+#define RG_CELEBRATE_LEAST 9000             // shown this long at least ...
+#define RG_CELEBRATE_MOST 32000             // ... and at most (the fireworks sound and RG_CELEBRATE_AFTER: 30 s)
+#define RG_CELEBRATE_AFTER 1500
+#define RG_CELEBRATE_ARMED 800              // the keys taken from this far in
+static void CelebratePage(int car) {
+    if (car < 0 || car >= s_nbCars) return;
+    const T_RG_CAR *c = &s_cars[car];
+    Page(NULL, 0);
+    BoxUpdate();
+    ManageTime();
+    InitWaitNoKey();
+    InitWaitNoInput(I_JOY | I_FIRE | I_MENUS | I_ACTION);
+    AsciiMode = TRUE;
+    s_clickWas = Click & 3;
+    FwColours();
+    memset(s_spark, 0, sizeof(s_spark));
+    memset(s_rocket, 0, sizeof(s_rocket));
+    s_fwSeed = (U32)time(NULL) * 2654435761u + 1;
+    // (the menu's picture in the backdrop's place -- the backdrop kept, and put back after)
+    const size_t screenBytes = (size_t)TabOffLine[1] * (size_t)ModeDesiredY;
+    U8 *backdrop = (U8 *)malloc(screenBytes);
+    if (backdrop) memcpy(backdrop, Screen, screenBytes);
+    char picture[ADELINE_MAX_PATH];
+    GetResPath(picture, ADELINE_MAX_PATH, SCREEN_HQR_NAME);
+    Image_LoadStretched(picture, Screen, PCR_MENU);
+    int refitted = 0;
+    S32 soundMs = 0;
+    const U32 sound = RaceMod_PlaySound("FIREWORK.WAV", &soundMs);
+    S32 length = soundMs + RG_CELEBRATE_AFTER;
+    if (length < RG_CELEBRATE_LEAST) length = RG_CELEBRATE_LEAST;
+    if (length > RG_CELEBRATE_MOST) length = RG_CELEBRATE_MOST;
+    const S32 start = TimerRefHR;
+    S32 last = start, nextLaunch = start + 150;
+    int salvo = 3, done = 0, frames = 0;
+    S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    char won[160], line1[160], line2[160];
+    snprintf(won, sizeof(won), "You won the %s race!", s_raceSp >= 0 && s_raceSp < s_nbSp ? s_sp[s_raceSp].Name : "");
+    if (s_raceSp < 0 || s_raceSp >= s_nbSp) snprintf(won, sizeof(won), "You won the race!");
+    snprintf(line1, sizeof(line1), "%s is unlocked", c->Name);
+    snprintf(line2, sizeof(line2), c->TrialOnly ? "for your time trials!" : "for your races!");
+    Log_Info("[racegame] congratulations: %s (%s %s), fireworks for %.1f s%s", won, line1, line2, length / 1000.0,
+             sound == 0xFFFFFFFF ? ", no sound" : "");
+    while (!done) {
+        ManageTime();
+        MyGetInput();
+        // (the window resized: the picture again at the new size -- the backdrop made again after, not the one kept)
+        if (Refitted()) {
+            cx = UI_CENTER_X; oy = UI_VCENTER_OFS; FwColours();
+            Image_LoadStretched(picture, Screen, PCR_MENU);
+            refitted = 1;
+        }
+        const S32 now = TimerRefHR;
+        S32 dt = now - last;
+        if (dt < 0) dt = 0;
+        if (dt > 250) dt = 250;
+        last = now;
+        // the rockets: a salvo of four, then one every half second or so (now and then two), none over the last two seconds
+        if (now - start < length - 2000 && now >= nextLaunch) {
+            FwLaunch();
+            if (FwRandom() < 0.3f) FwLaunch();
+            nextLaunch = now + (salvo > 0 ? 150 + (S32)(FwRandom() * 150) : 280 + (S32)(FwRandom() * 480));
+            if (salvo > 0) salvo--;
+        }
+        // (in steps of a 60th of a second at most, however long the frame took: the sparks fly as far in a slow frame as in quick ones)
+        for (S32 done = 0; done < dt;) {
+            const S32 step = dt - done > 16 ? 16 : dt - done;
+            done += step;
+            FwStep(now - dt + done, step);
+        }
+        frames++;
+        // (laid out as the car page is, under the picture's title: the header, the box, the words under it)
+        const S32 x0 = cx - 175, x1 = cx + 175, y0 = 130 + oy, y1 = 280 + oy;
+        // (the car measured first, under the backdrop: RaceMod_DrawBody)
+        RaceMod_DrawBody(x0 + 2, y0 + 2, x1 - 2, y1 - 2, c->Body, 0, 1, c->Anim);
+        // the page: the picture, the fireworks over its night sky, the car in its box, the words
+        CopyScreen(Screen, Log);
+        FwDraw(now);
+        Text(cx, y0 - 34, "Congratulations!", RG_ORANGE);
+        ShadeBoxBlk(x0, y0, x1, y1, MENU_SHADE_LVL);
+        RaceMod_DrawBody(x0 + 2, y0 + 2, x1 - 2, y1 - 2, c->Body, (S32)(((now - start) / 3 + 3072) & 4095), 0, c->Anim);
+        DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
+        TextFitted(cx, y1 + 6, (S32)ModeDesiredX - 40, won, LBAWHITE);
+        Text(cx, y1 + 66, line1, RG_ORANGE);
+        Text(cx, y1 + 92, line2, RG_ORANGE);
+        Text(cx, y1 + 150, "Enter: continue", RG_GREY);
+        BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+        Shot();
+        BoxUpdate();
+        S32 mx, my;
+        const int click = Clicked(&mx, &my);
+        if (now - start >= length) done = 1;
+        else if (now - start >= RG_CELEBRATE_ARMED && (click || Confirmed() || Escaped())) { WaitNoInput(); done = 1; }
+    }
+    RaceMod_StopSound(sound);
+    // (the menu's backdrop as it was -- or, the window resized meanwhile, made again at its size)
+    if (refitted) Menu_RepaintAfterWindowFit();
+    else if (backdrop) memcpy(Screen, backdrop, screenBytes);
+    free(backdrop);
+    AsciiMode = FALSE;
+    InitWaitNoKey();
+    Page(NULL, 0);
+    Log_Info("[racegame] congratulations over after %.1f s (%d frames)", (TimerRefHR - start) / 1000.0, frames);
+}
+
 S32 RaceGame_Menu(S32 inGame) {
     Read();
+    // (a race that has just unlocked a car: the congratulations first, once)
+    if (s_celebrate >= 0) {
+        const int car = s_celebrate;
+        s_celebrate = -1;
+        CelebratePage(car);
+    }
     const int resume = inGame && !s_raceOver;
     S32 nb = 0;
     if (resume) SetRow(s_mainMenu, nb++, RG_ID_RESUME);

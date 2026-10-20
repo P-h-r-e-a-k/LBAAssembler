@@ -18,6 +18,12 @@ namespace LBAAssembler.Terrain;
 // magic balls play the game's own throw, SAMPLES.HQR's, which a file of theirs replaces; the super jet-pack hums the game's Proto-Pack
 // sample as long as it lasts, a jetpack file played once beside it as it is used. The golden Gazogem without files of its own takes the
 // Gazogem's.)
+//
+// A sound at the root of the repo's sounds\ folder (2026-10-20: sounds\firework.mp3, the race game's congratulations) is the race's own,
+// not an item's: RACESOUNDS\<NAME>.WAV (FIREWORK.WAV), which the engine plays by that name (RACEMOD.CPP RaceMod_PlaySound). Its loudest
+// 100 ms brought to Loud too, but its peaks held under Peak by a limiter rather than the whole sound kept under it (Limited): the fireworks
+// are faint crackling between a few sharp bangs whose peaks stand 20 dB over their loudness, and kept under Peak as they were the whole
+// sound came out at -43 dB, inaudible beside the music.
 internal static class RaceSounds
 {
     public const string Folder = "RACESOUNDS";
@@ -35,8 +41,11 @@ internal static class RaceSounds
     // after its end, and its last few milliseconds faded out: no click where the cut is)
     private const double Silence = 0.003;
     private const int KeepBeforeMs = 5, KeepAfterMs = 30, FadeMs = 10;
+    // (the limiter: a sample over Peak brought down to it, the gain falling LimitAheadMs before it and rising back over LimitReleaseMs)
+    private const int LimitAheadMs = 2, LimitReleaseMs = 80;
 
-    // The sounds the program carries: (kind, name, resource), kind "PICKUP" or "USE", name as its file has it
+    // The sounds the program carries: (kind, name, resource), kind "PICKUP" or "USE" -- or "" for one at the folder's root, the race's own
+    // -- name as its file has it
     public static List<(string Kind, string Name, string Resource)> Carried()
     {
         var list = new List<(string, string, string)>();
@@ -44,7 +53,7 @@ internal static class RaceSounds
         {
             var rel = res[ResourcePrefix.Length..].Replace('\\', '/');
             var slash = rel.IndexOf('/');
-            if (slash < 0) continue;
+            if (slash < 0) { list.Add(("", Path.GetFileNameWithoutExtension(rel), res)); continue; }
             var kind = rel[..slash].ToLowerInvariant() switch { "pickup" => "PICKUP", "onuse" => "USE", _ => null };
             if (kind is null) continue;
             list.Add((kind, Path.GetFileNameWithoutExtension(rel[(slash + 1)..]), res));
@@ -53,7 +62,7 @@ internal static class RaceSounds
     }
 
     // The file a sound is written to, as the engine looks for it (relative to the game folder)
-    public static string FileName(string kind, string name) => $"{kind}_{name.ToUpperInvariant()}.WAV";
+    public static string FileName(string kind, string name) => kind.Length == 0 ? $"{name.ToUpperInvariant()}.WAV" : $"{kind}_{name.ToUpperInvariant()}.WAV";
 
     // The sounds into the game folder (RACESOUNDS, made afresh: one the program no longer carries goes). Lines for the build's log.
     public static List<string> Install(string gameDirectory)
@@ -71,7 +80,7 @@ internal static class RaceSounds
             {
                 var pcm = Read(res);
                 if (pcm is null) { log.Add($"The race items' sounds: {res} isn't an MP3 or a WAV -- left out"); continue; }
-                var (mono, note) = Prepare(pcm);
+                var (mono, note) = Prepare(pcm, limit: kind.Length == 0);
                 if (mono.Length == 0) { log.Add($"The race items' sounds: {res} is silent -- left out"); continue; }
                 WriteWav(Path.Combine(folder, FileName(kind, name)), mono);
                 made.Add($"{FileName(kind, name)} ({mono.Length / 2 / (double)Rate:0.00} s{note})");
@@ -98,9 +107,9 @@ internal static class RaceSounds
         return null;
     }
 
-    // 16-bit stereo samples as the engine's: mono (the two channels' mean), the silence at the ends trimmed, brought to Loud (or Peak). A
-    // note for the log (how much it was raised or lowered)
-    public static (byte[] Mono, string Note) Prepare(byte[] stereo)
+    // 16-bit stereo samples as the engine's: mono (the two channels' mean), the silence at the ends trimmed, brought to Loud (or Peak; with
+    // `limit`, to Loud, its peaks held under Peak: Limited). A note for the log (how much it was raised or lowered)
+    public static (byte[] Mono, string Note) Prepare(byte[] stereo, bool limit = false)
     {
         var frames = stereo.Length / 4;
         var v = new double[frames];
@@ -127,16 +136,38 @@ internal static class RaceSounds
             if (i >= win - 1) loudest = Math.Max(loudest, acc / win);
         }
         loudest = Math.Sqrt(Math.Max(loudest, 0));
-        var gain = Math.Min(Peak / peak, loudest > 0 ? Loud / loudest : double.MaxValue);
+        var gain = limit && loudest > 0 ? Loud / loudest : Math.Min(Peak / peak, loudest > 0 ? Loud / loudest : double.MaxValue);
+        var gains = limit ? Limited(v, first, count, gain) : null;
         var fade = Math.Min(count, FadeMs * Rate / 1000);
         var mono = new byte[count * 2];
         for (var i = 0; i < count; i++)
         {
-            var g = gain * (i >= count - fade ? (count - i) / (double)fade : 1.0);
+            var g = (gains is null ? gain : gains[i]) * (i >= count - fade ? (count - i) / (double)fade : 1.0);
             BinaryPrimitives.WriteInt16LittleEndian(mono.AsSpan(i * 2), (short)Math.Clamp((int)Math.Round(v[first + i] * g * 32767), -32768, 32767));
         }
         var db = 20 * Math.Log10(gain);
-        return (mono, $", {(db >= 0 ? "+" : "")}{db:0.0} dB");
+        var held = gains is null ? "" : $", its peaks held by up to {-20 * Math.Log10(gains.Min() / gain):0.0} dB";
+        return (mono, $", {(db >= 0 ? "+" : "")}{db:0.0} dB{held}");
+    }
+
+    // A peak limiter's gain for each of `count` samples of `v` from `first`: `gain`, or less where a sample times it would be over Peak --
+    // falling to that LimitAheadMs before it (the least a sample over the next few needs), rising back to `gain` over LimitReleaseMs.
+    private static double[] Limited(double[] v, int first, int count, double gain)
+    {
+        var need = new double[count];
+        for (var i = 0; i < count; i++) need[i] = Math.Min(gain, Peak / Math.Max(Math.Abs(v[first + i]), 1e-9));
+        var ahead = Math.Max(1, LimitAheadMs * Rate / 1000);
+        var rise = 1 - Math.Exp(-1.0 / (Rate * LimitReleaseMs / 1000.0));
+        var gains = new double[count];
+        var now = gain;
+        for (var i = 0; i < count; i++)
+        {
+            var least = need[i];
+            for (var k = 1; k <= ahead && i + k < count; k++) least = Math.Min(least, need[i + k]);
+            now = Math.Min(least, now + (gain - now) * rise);
+            gains[i] = now;
+        }
+        return gains;
     }
 
     // A 16-bit mono 44.1 kHz WAV
