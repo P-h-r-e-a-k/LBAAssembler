@@ -804,8 +804,12 @@ static char s_loaded[260] = "";            // the car file loaded ("": none yet)
 static int s_ownTrack = 0;                 // it has a track of its own (a start line), not only the car and the set
 static void ResetTrack(void);
 
+// speedometer=1: the gear and the speed on the race's display, bottom right (off since 2026-10-20 -- the user: "Let's drop the gear and
+// speed indication in race mode"; kept for tests)
+static int s_speedo = 0;
 static void Defaults(T_RACE_CAR *c) {
     memset(c, 0, sizeof(*c));
+    s_speedo = 0;
     memset(s_opp, 0, sizeof(s_opp));
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) { s_opp[n].Grid = 4; s_opp[n].Pace = 100; s_opp[n].Top = 100; s_opp[n].Grip = 100; s_opp[n].Small = -1; s_opp[n].Normal = -1; }
     memset(&s_guide, 0, sizeof(s_guide));
@@ -3243,6 +3247,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "steer")) s_car.Steer = atoi(v);
         else if (!strcmp(key, "automatic")) s_car.Automatic = atoi(v);
         else if (!strcmp(key, "hud")) s_car.Hud = atoi(v);
+        else if (!strcmp(key, "speedometer")) s_speedo = atoi(v);
         else if (!strcmp(key, "startline")) {
             T_RACE_LINE l;
             if (ReadLine(v, &l)) {
@@ -14010,12 +14015,14 @@ void RaceMod_Draw(void) {
         const S32 bottom = height - 16 - RACE_LINE_STEP;
         // the mini-map in the corner, bottom right (with it on), and the gear and the speed over it -- bottom right without it
         const S32 mapTop = DrawMinimap(width, height), speedY = mapTop < height ? mapTop - 2 - RACE_LINE_STEP : bottom;
+        if (s_speedo) {
         if (speed < 0) snprintf(text, sizeof(text), "Gear R");
         else snprintf(text, sizeof(text), s_car.Automatic ? "Gear %d/%d auto" : "Gear %d/%d", (int)s_gear, (int)s_car.Gears);
         HudLine(width - 16, speedY - RACE_LINE_STEP, text, 1);
         // (a cell taken as a metre: the original buggy's top speed, 3800 units a second, is 27 km/h)
         snprintf(text, sizeof(text), "%d km/h", (int)((abs(speed) * 36 + 2560) / 5120));
         HudLine(width - 16, speedY, text, 1);
+        }
         // the lap and its time, bottom left -- before the start what the start line wants, after the race the place
         text[0] = 0;
         S32 colour = LBAWHITE;
