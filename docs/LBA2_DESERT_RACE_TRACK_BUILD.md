@@ -4615,3 +4615,42 @@ balls and the opponents' alike):
   (413 at HEAD). Of 47 red balls, the 15 thrown at a car all hit it.
 
 The 18 tracks stress-tested and car setups scored per track (2026-10-16): docs/LBA2_RACE_TRACK_STRESS_TEST.md (`raceplan`, tools/RaceTrackStress).
+
+## The pack kept together (2026-10-20)
+
+The user: "Let's tweak the car behaviour to keep them more bunched so there's more overtaking, let's also change powerups that are given
+to cars to help keep cars bunched more too." Every race with opponents, every track (`RACEMOD.CPP`, the pack kept together):
+
+- **The pack's middle** (`PackFactors`): the median of every car's place in the race, Twinsen's among them. An opponent more than 0.5 s
+  ahead of it eases off, one behind it pushes, up to the level's share at 7 s (easy eases 12 % / pushes 8 %, medium -- and a track with no
+  levels -- 9 % / 9 %, hard 6 % / 11 %). Behind Twinsen the push and the level's catch-up don't stack: the more of the two.
+- **The slipstream**: a car 1 to 12 cells behind another (full from 2.5 to 6 cells) is 3.5 % quicker -- Twinsen's car too
+  (`RaceMod_SpeedFactor`, its top speed and pull).
+- **Form**: each opponent 3.5 % quicker and slower in turn, each on its own beat of 50 to 85 s.
+- All of it eased in over 1.5 s (`o->Pack`, `o->Band`): no car brakes on a straight nor shoots off.
+- **Skills drawn nearer the middle** of `opponent_pace=<lo> <hi>` (0.6 of the way out: 72-98 is drawn as 77-93); a fixed skill as given.
+- **Items by place**: the leader draws mostly the protection spell and the balls that go on ahead of it, Gazogem fuel a third as often
+  and fewer drops; the back draws the super jet-pack, lightning, the red ball and the fire ball more. The opponents at the front pass
+  rows by (`PackTakes`: the leader 60 / 50 / 35 % of them by level, the second about a fifth); Twinsen takes from every row. The
+  Temple's ghost when due is untouched.
+- **The log**: at each of Twinsen's race laps `pack at Twinsen's lap N: <order, each car's gap to the leader in s>; spread, Twinsen to the
+  nearest, passes so far` (a pass counted once a car is a cell clear), and each opponent's item with its place (`0.33 of the way back`).
+
+**Measured** (the Temple, 5 laps, no qualifying, the test pilot at 100 % -- the perfect line -- and 88 %, seeds 101, 202, 303; means over
+the three; spread = first to last at Twinsen's lap lines, s):
+
+| Level, pilot | Spread | The opponents' spread | Twinsen to the nearest | Passes among the opponents | Passes with Twinsen | Twinsen's places |
+|---|---|---|---|---|---|---|
+| Easy, 88 % | 49.4 → 39.5 | 15.4 → 3.8 | 34.0 → 35.7 | 9.7 → 12.7 | 0 → 0 | 1 1 1 → 1 1 1 |
+| Easy, 100 % | 63.8 → 56.4 | 14.8 → 4.0 | 49.0 → 52.4 | 5.3 → 13.7 | 0 → 0 | 1 1 1 → 1 1 1 |
+| Medium, 88 % | 12.8 → 6.8 | 9.6 → 3.5 | 3.4 → 3.3 | 16.3 → 21.0 | 2.0 → 5.7 | 3 1 1 → 4 1 1 |
+| Medium, 100 % | 27.2 → 16.9 | 14.5 → 8.5 | 12.8 → 8.5 | 8.7 → 11.3 | 1.3 → 0.7 | 1 1 1 → 1 1 1 |
+| Hard, 88 % | 8.0 → 4.0 | 5.7 → 2.7 | 2.5 → 1.4 | 16.7 → 28.0 | 12.3 → 16.0 | 4 3 1 → 4 4 1 |
+| Hard, 100 % | 8.5 → 5.4 | 6.3 → 3.7 | 2.3 → 2.0 | 15.3 → 25.3 | 9.7 → 12.0 | 1 1 4 → 4 4 1 |
+
+Hard's losses are close: the three opponents 1 to 5 s ahead at the line. Easy keeps its runaway lead for Twinsen (no catch-up there by
+design); its opponents race each other in a pack. The leader's strong items (a boost, lightning, the red and fire balls, the ghost)
+went from a quarter of its draws to a sixth, its Gazogem fuel from 12 % to 6 %; the ghost still came 4 to 6 times a race.
+
+The Desert (five opponents, no levels: medium's numbers; 3 laps, seed 101; the test pilot stuck far behind there in both builds, so the
+opponents alone): they finished 428.6 to 558.8 s from GO, the first four within 52 s; now 462.2 to 492.8 s, the first four within 2.8 s.

@@ -324,8 +324,11 @@ typedef struct {
     int Holds; S32 HoldUntil;              // an attack it holds until it would hit Twinsen (the race's level: OpponentAims), its power-up + 1
                                            // (0 none), and how long at most
     int HoverUp, HoverMs;                  // a car that flies (opponent_hover=): how far it bobs over its line, once in how long (0: none)
+    double Pack, Band;                     // its pace's factors from the pack (PackFactors; 0 not set yet: 1): for its place against the
+                                           // pack's middle, and for a slipstream and its form
 } T_RACE_OPPONENT;
 static T_RACE_OPPONENT s_opp[RACE_MAX_OPPONENTS];
+#define RACE_PACK_SKILL 0.6                // a skill drawn between two (opponent_pace=<lo> <hi>): this share of the way out from their middle
 // The race's level (difficulty=, 2026-10-17, the Temple of Bú's race first -- the user: "Let's also create an easy/medium/hard mode"): the
 // level raced (-1 none: the race as the file has it), each level's numbers (difficulty_level=, the file's description) and the raced one's
 // (ApplyDifficulty).
@@ -337,6 +340,7 @@ static void ApplyDifficulty(void);
 static int DifficultyTakes(int n);
 static int DifficultyHolds(int n, int pu, S32 now);
 static double DifficultyEase(const T_RACE_OPPONENT *o, double me);
+static int PackTakes(int n, double back);
 static S32 HazardEvery(S32 ms);
 static double HazardChance(double chance);
 // With no opponent raced, the line of the one to beat all the same (guide_path=, guide_top=, guide_grip=: the builder writes it then),
@@ -562,9 +566,13 @@ static const int s_puWeight[PU_COUNT] = {20, 12, 10, 16, 12, 16, 12, 10, 9, 5, 1
 static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 0, 0, 0, 0, 0, 0, 0, 0};
 // each one's weight times these for the leader and for the last car (between them by the car's place: RandomPowerUp) -- the ones to
 // drop behind (penguins, oil, a fake mushroom) for the cars in front, the ones to catch up with (the super jet-pack, lightning, the red
-// ball, the fire ball and the ghost) for the cars at the back
-static const double s_puLead[PU_COUNT] = {1.0, 0.8, 0.05, 1.8, 0.0, 2.0, 1.2, 1.0, 0.3, 0.0, 1.8, 0, 0.3};
-static const double s_puLast[PU_COUNT] = {1.0, 1.2, 2.0, 0.4, 2.5, 0.4, 0.8, 1.0, 1.8, 2.4, 0.5, 0, 1.6};
+// ball, the fire ball and the ghost) for the cars at the back. (2026-10-20, the pack kept together -- the user: "let's also change
+// powerups that are given to cars to help keep cars bunched more too": the leader's mostly the protection spell and the balls that go
+// on ahead of it, its Gazogem fuel a third as often and its drops fewer -- they held up the cars chasing it -- and the back's boosts and
+// the attacks on the cars in front more often: until then the leader drew a boost one time in seven, a strong item one in five, the
+// last car a strong item two times in three; now one in fourteen, one in ten, and four in five)
+static const double s_puLead[PU_COUNT] = {0.35, 1.8, 0.0, 1.0, 0.0, 1.1, 1.3, 1.1, 0.1, 0.0, 1.0, 0, 0.15};
+static const double s_puLast[PU_COUNT] = {1.6, 0.5, 2.4, 0.3, 3.2, 0.3, 0.6, 0.8, 2.4, 2.8, 0.3, 0, 1.8};
 // what the item box shows (OBJFIX.HQR, the inventory's own: the Gazogem, the protection spell, the lightning ring, the meca-penguin,
 // the super jet-pack, the magic ball in each of its colours -- INVENT.CPP's TabObj3D for FLAG_BALLE_MAGIQUE, {1, 40, 41, 42}, picked by
 // MagicLevel - 1: until 2026-10-08 the balls had 0-3 here, OBJFIX's own 0-3, the holomap, the yellow ball, the dart and Sendell's ball;
@@ -3761,10 +3769,16 @@ static void Load(const char *path, int carOnly = 0) {
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
         T_RACE_OPPONENT *o = &s_opp[n];
         // (a skill between two: drawn each time the track is loaded, so the race is never the same twice)
-        if (o->PaceHi > 0) o->Pace = o->PaceLo + (int)(RaceRandom() * (o->PaceHi - o->PaceLo + 1));
+        // (2026-10-20, the pack kept together: drawn nearer the middle of the two -- RACE_PACK_SKILL of the way out to them -- so that the
+        // cars are close enough in pace to race each other rather than spread out lap by lap: 72-98 is drawn as 77-93)
+        if (o->PaceHi > 0) {
+            const int drawn = o->PaceLo + (int)(RaceRandom() * (o->PaceHi - o->PaceLo + 1));
+            const double mid = (o->PaceLo + o->PaceHi) / 2.0;
+            o->Pace = (int)floor(mid + (drawn - mid) * RACE_PACK_SKILL + 0.5);
+        }
         if (o->Pace < 10) o->Pace = 10;
         if (!o->Name[0]) snprintf(o->Name, sizeof(o->Name), "Opponent %d", n + 1);
-        if (o->Count && o->PaceHi > 0) Log_Info("[racemod] %s: skill %d%% (drawn from %d-%d%%)", o->Name, o->Pace, o->PaceLo, o->PaceHi);
+        if (o->Count && o->PaceHi > 0) Log_Info("[racemod] %s: skill %d%% (drawn from %d-%d%%, nearer the middle for the pack)", o->Name, o->Pace, o->PaceLo, o->PaceHi);
         OpponentLoops(o);
         if (!o->Count) continue;
         PlanSpeeds(o);
@@ -4006,6 +4020,7 @@ static double PlayerProgress(void);
 static void SprintOver(S32 now, int crossed);
 static int GiveItem(int pu, S32 now);
 static void Time(char *out, size_t size, S32 ms);
+static void PackLapLog(int lap);
 void RaceMod_Lap(S32 x, S32 z) {
     // (the previous frame's position; forgotten when the car changes cube, where the coordinates jump, or is put on the grid)
     static S32 px = 0, pz = 0, pcx = -1, pcz = -1;
@@ -4098,6 +4113,7 @@ void RaceMod_Lap(S32 x, S32 z) {
         s_heldAt = now; s_heldLap = s_laps; s_heldTime = s_lastLap;
         s_heldBest = s_trial && s_phase != PHASE_QUALIFYING && (!bestBefore || s_lastLap < bestBefore);
         Log_Info("[racemod] lap %d in %.2f s%s", (int)s_laps, s_lastLap / 1000.0, s_phase == PHASE_QUALIFYING ? " (qualifying)" : "");
+        if (s_phase == PHASE_RACE) PackLapLog((int)s_laps);
         // the time to beat: under it, the story moves on (once)
         if (const S32 target = BeatTime()) {
             char text[64];
@@ -7569,7 +7585,10 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
         // (the race's level: an item from only so many of the rows, none while it holds one -- and an attack held until it would hit
         // Twinsen, OpponentAims)
         if (!DifficultyTakes(n)) continue;
-        const int pu = RandomPowerUp(BackShare(n));
+        const double back = BackShare(n);
+        // (the pack kept together: the cars at the front pass more of the rows by -- PackTakes)
+        if (!PackTakes(n, back)) continue;
+        const int pu = RandomPowerUp(back);
         if (DifficultyHolds(n, pu, now)) continue;
         if (pu >= PU_BALL_YELLOW && pu <= PU_BALL_FIRE) {
             Attack(pu, n, car->Obj.X + CurrentCubeX * 32768.0, car->Obj.Y, car->Obj.Z + CurrentCubeY * 32768.0, car->Obj.Beta * 2 * 3.14159265358979 / 4096, now);
@@ -7593,7 +7612,7 @@ static void OpponentMushrooms(int n, T_OBJET *car) {
             o->JetFactor = s_puJet[pu];
         } else
             o->BoostUntil = now + RACE_BOOST_MS;
-        Log_Info("[racemod] %s takes a mushroom's power-up: %s", o->Name, s_puName[pu]);
+        Log_Info("[racemod] %s takes a mushroom's power-up: %s (%.2f of the way back)", o->Name, s_puName[pu], back);
         UseSound(pu, car, o->Name);
     }
 }
@@ -7716,6 +7735,152 @@ static int CarAhead(int who, double mine, double *ahead) {
 
 // The car nearest ahead of `who` in the race (-2 none: it leads), by how far round each is (a car that has finished isn't in it).
 static int CarInFront(int who) { return CarAhead(who, RaceShare(who), NULL); }
+
+// The pack as the race goes (2026-10-20, for tuning how close together the cars race): every frame, which of each two cars is ahead --
+// a pass counted once the other is a cell clear ahead (PlayerProgress wavers by a little) -- and at each of Twinsen's laps a line of the
+// order, each car's gap to the leader in seconds (the guide's planned lap), the spread and the passes so far.
+#define RACE_PACK_CARS (RACE_MAX_OPPONENTS + 1)
+static S8 s_packAhead[RACE_PACK_CARS][RACE_PACK_CARS];   // [a][b]: 1 a ahead of b, -1 behind, 0 not seen yet (0 Twinsen, n + 1 opponent n)
+static int s_packPasses = 0, s_packPassesTwinsen = 0;
+static S32 s_packGo = 0;
+static int PackCars(int *who, double *at) {
+    int count = 0;
+    if (!CarFinished(-1)) { who[count] = -1; at[count++] = RaceShare(-1); }
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
+        if (s_opp[n].Count && s_opp[n].Scenes && !CarFinished(n)) { who[count] = n; at[count++] = RaceShare(n); }
+    return count;
+}
+static void PackWatch(void) {
+    if (!RaceOn()) return;
+    if (s_packGo != s_goAt) { s_packGo = s_goAt; memset(s_packAhead, 0, sizeof(s_packAhead)); s_packPasses = s_packPassesTwinsen = 0; }
+    int who[RACE_PACK_CARS]; double at[RACE_PACK_CARS];
+    const int count = PackCars(who, at);
+    for (int i = 0; i < count; i++)
+        for (int j = i + 1; j < count; j++) {
+            const int a = who[i] + 1, b = who[j] + 1;
+            const double d = at[i] - at[j];
+            const int now = d > 512 ? 1 : d < -512 ? -1 : 0;
+            if (!now) continue;
+            if (s_packAhead[a][b] && s_packAhead[a][b] != now) {
+                if (a == 0 || b == 0) s_packPassesTwinsen++; else s_packPasses++;
+            }
+            s_packAhead[a][b] = (S8)now; s_packAhead[b][a] = (S8)-now;
+        }
+}
+static void PackLapLog(int lap) {
+    if (!RaceOn()) return;
+    const T_RACE_OPPONENT *g = Guide();
+    if (!g || s_plannedLap <= 0) return;
+    const double perS = g->Length / s_plannedLap;
+    int who[RACE_PACK_CARS]; double at[RACE_PACK_CARS];
+    // (Twinsen just over the line: he hasn't finished for this)
+    int count = 0;
+    who[count] = -1; at[count++] = RaceShare(-1);
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
+        if (s_opp[n].Count && s_opp[n].Scenes) { who[count] = n; at[count++] = RaceShare(n); }
+    for (int i = 1; i < count; i++)
+        for (int j = i; j > 0 && at[j] > at[j - 1]; j--) { double t = at[j]; at[j] = at[j - 1]; at[j - 1] = t; int w = who[j]; who[j] = who[j - 1]; who[j - 1] = w; }
+    char line[400]; int len = 0; double mine = 0, nearest = 1e30;
+    for (int i = 0; i < count; i++) if (who[i] < 0) mine = at[i];
+    for (int i = 0; i < count; i++) {
+        len += snprintf(line + len, sizeof(line) - len, "%s%s %.1f", i ? ", " : "", CarName(who[i]), (at[0] - at[i]) / perS);
+        if (who[i] >= 0 && fabs(at[i] - mine) < nearest) nearest = fabs(at[i] - mine);
+        if (len >= (int)sizeof(line) - 1) break;
+    }
+    Log_Info("[racemod] pack at Twinsen's lap %d: %s; spread %.1f s, Twinsen to the nearest %.1f s; passes %d among the others, %d with Twinsen",
+             lap, line, (at[0] - at[count - 1]) / perS, nearest / perS, s_packPasses, s_packPassesTwinsen);
+}
+
+// ---- the pack kept together (2026-10-20, the user: "Let's tweak the car behaviour to keep them more bunched so there's more overtaking")
+// Every frame of a race, each opponent's pace times a factor of three parts, all small and eased in over a second or two (o->Pack,
+// o->Band), so that no car is seen to brake on a straight nor to shoot off:
+//   the pack -- ahead of the pack's middle (the median of every car's place in the race, Twinsen's among them) by more than RACE_PACK_DEAD
+//     seconds it eases off, behind it it pushes, each by up to the level's share at RACE_PACK_FULL seconds (s_packEase, s_packPush: an easy race
+//     eases the most, a hard one pushes the most and eases the least) -- its push and the level's catch-up behind Twinsen not both: the
+//     more of the two;
+//   the slipstream -- close behind any car (RACE_DRAFT_*: from a car's length, full at 2.5 cells, gone at 12) a car is quicker by
+//     RACE_DRAFT, Twinsen's own too (RaceMod_SpeedFactor), so a car that has caught another can go by it;
+//   its form -- each opponent a little quicker and slower in turn over a minute or so (RACE_FORM, each its own beat), so that two cars of
+//     much the same pace swap places now and then rather than lapping nose to tail.
+// Twinsen's own car only ever gets the slipstream. Over the race's level's catch-up and easing off (which go by Twinsen alone).
+#define RACE_PACK_DEAD 0.5                 // seconds either way of the pack's middle with no easing off nor pushing ...
+#define RACE_PACK_FULL 7.0                 // ... and from how far it is all of the level's
+#define RACE_DRAFT 0.035                   // the slipstream's lift
+#define RACE_DRAFT_NEAR (1.0 * 512)        // (no slipstream nearer than this: alongside, passing)
+#define RACE_DRAFT_FULL (2.5 * 512)
+#define RACE_DRAFT_HOLD (6.0 * 512)
+#define RACE_DRAFT_FAR (12.0 * 512)
+#define RACE_FORM 0.035                    // an opponent's form, either way
+#define RACE_BAND_MS 1500.0                // how quickly a car's factor follows (eased in, not jumped)
+static const double s_packEase[3] = {0.12, 0.09, 0.06};   // easy, medium (and a race with no level), hard
+static const double s_packPush[3] = {0.08, 0.09, 0.11};
+static double s_heroDraft = 1;             // Twinsen's slipstream now (RaceMod_SpeedFactor)
+static int PackLevel(void) { return s_difficulty >= 0 && s_difficulty <= 2 ? s_difficulty : 1; }
+
+// The slipstream for a car `gap` behind the car in front (world units; < 0: none in front).
+static double Draft(double gap) {
+    if (gap < RACE_DRAFT_NEAR || gap >= RACE_DRAFT_FAR) return 0;
+    if (gap < RACE_DRAFT_FULL) return RACE_DRAFT * (gap - RACE_DRAFT_NEAR) / (RACE_DRAFT_FULL - RACE_DRAFT_NEAR);
+    if (gap <= RACE_DRAFT_HOLD) return RACE_DRAFT;
+    return RACE_DRAFT * (RACE_DRAFT_FAR - gap) / (RACE_DRAFT_FAR - RACE_DRAFT_HOLD);
+}
+
+// Each frame of a race, before the opponents move: each one's factors (o->Pack, o->Band) and Twinsen's slipstream eased towards what the
+// pack makes them now. Outside a race (qualifying, the grid, no other car) all of them 1.
+static void PackFactors(S32 now, S32 dt) {
+    const T_RACE_OPPONENT *g = Guide();
+    const int racing = RaceOn() && g && s_plannedLap > 0;
+    const double k = dt > 0 ? (dt >= RACE_BAND_MS ? 1 : dt / RACE_BAND_MS) : 0;
+    double heroTarget = 1;
+    if (racing) {
+        int who[RACE_PACK_CARS]; double at[RACE_PACK_CARS], sorted[RACE_PACK_CARS];
+        const int count = PackCars(who, at);
+        const double perS = g->Length / s_plannedLap;
+        for (int i = 0; i < count; i++) sorted[i] = at[i];
+        for (int i = 1; i < count; i++)
+            for (int j = i; j > 0 && sorted[j] < sorted[j - 1]; j--) { const double t = sorted[j]; sorted[j] = sorted[j - 1]; sorted[j - 1] = t; }
+        const double middle = count ? (count % 2 ? sorted[count / 2] : (sorted[count / 2 - 1] + sorted[count / 2]) / 2) : 0;
+        const int level = PackLevel();
+        for (int i = 0; i < count; i++) {
+            // (the car nearest in front of this one, and how far)
+            double gap = -1;
+            for (int j = 0; j < count; j++) if (j != i && at[j] > at[i] && (gap < 0 || at[j] - at[i] < gap)) gap = at[j] - at[i];
+            const double draft = gap >= 0 ? Draft(gap) : 0;
+            if (who[i] < 0) { heroTarget = 1 + draft; continue; }
+            T_RACE_OPPONENT *o = &s_opp[who[i]];
+            // (the pack: off the middle by more than the dead band, up to the level's at RACE_PACK_FULL)
+            const double off = (at[i] - middle) / perS;
+            const double u = fabs(off) <= RACE_PACK_DEAD ? 0 : fabs(off) >= RACE_PACK_FULL ? 1 : (fabs(off) - RACE_PACK_DEAD) / (RACE_PACK_FULL - RACE_PACK_DEAD);
+            const double band = u * u * (3 - 2 * u);
+            const double pack = off > 0 ? 1 - s_packEase[level] * band : 1 + s_packPush[level] * band;
+            // (the slipstream, and its form: each its own beat, 50 to 85 s)
+            const double f = (1 + draft) * (1 + RACE_FORM * sin(2 * RACE_PI * now / (1000.0 * (50 + 7 * who[i])) + 1.9 * who[i]));
+            if (o->Pack <= 0) o->Pack = 1;
+            if (o->Band <= 0) o->Band = 1;
+            o->Pack += (pack - o->Pack) * k;
+            o->Band += (f - o->Band) * k;
+        }
+    }
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        T_RACE_OPPONENT *o = &s_opp[n];
+        if (o->Pack <= 0) o->Pack = 1;
+        if (o->Band <= 0) o->Band = 1;
+        if (!racing || !o->Count || CarFinished(n)) { o->Pack += (1 - o->Pack) * k; o->Band += (1 - o->Band) * k; }
+    }
+    s_heroDraft += (heroTarget - s_heroDraft) * k;
+}
+
+// Opponent n at a mushroom row, `back` of the way back in the race (BackShare: 0 leading, 1 last): whether it takes an item from it -- the
+// leader passes the level's share of the rows by (s_packSkip), the next less (by the square of the way forward), the back half hardly
+// ever. (Twinsen takes one from every row he drives through, wherever he is: his leading draws are the weak ones, RandomPowerUp.)
+static const double s_packSkip[3] = {0.6, 0.5, 0.35};
+static int PackTakes(int n, double back) {
+    if (back < 0) return 1;
+    const double skip = s_packSkip[PackLevel()] * (1 - back) * (1 - back);
+    if (RaceRandom() >= skip) return 1;
+    Log_Info("[racemod] %s passes a mushroom row by (%.2f of the way back: the pack kept together)", s_opp[n].Name, back);
+    return 0;
+}
 
 // Where a place is along the guide line (its S) and to the side of it -- the nearest point within `window` points of `hint` (a fresh
 // search with no hint).
@@ -8511,7 +8676,7 @@ static int DifficultyHolds(int n, int pu, S32 now) {
     T_RACE_OPPONENT *o = &s_opp[n];
     o->Holds = pu + 1;
     o->HoldUntil = now + s_diffAim;
-    Log_Info("[racemod] %s takes a mushroom's power-up: %s (held for Twinsen, %.1f s at most)", o->Name, s_puName[pu], s_diffAim / 1000.0);
+    Log_Info("[racemod] %s takes a mushroom's power-up: %s (held for Twinsen, %.1f s at most; %.2f of the way back)", o->Name, s_puName[pu], s_diffAim / 1000.0, BackShare(n));
     return 1;
 }
 
@@ -9417,6 +9582,8 @@ double RaceMod_SpeedFactor(void) {
     const double panel = PanelFactor(now);
     if (panel > f) f = panel;
     if (now < s_shrunkUntil && now >= s_jetUntil) f *= RACE_SHRUNK;
+    // (close behind another car: its slipstream -- PackFactors)
+    if (s_heroDraft > 1 && RaceOn()) f *= s_heroDraft;
     return f;
 }
 
@@ -11905,6 +12072,9 @@ void RaceMod_Frame(void) {
     const int moving = (driving || RaceMod_OnFoot()) && (s_nbSpots ? s_phase == PHASE_RACE : s_oppStarted);
     // (how far round the player is, for the opponents that push harder when they have fallen behind)
     const double me = moving && s_opp[0].Count ? PlayerProgress() : 0;
+    if (moving) PackWatch();
+    // (the pack kept together: each opponent's factor and Twinsen's slipstream)
+    PackFactors(now, moving ? dt : 0);
     s_carsScene = NumCube;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
@@ -11913,11 +12083,16 @@ void RaceMod_Frame(void) {
         double x, z, y, v, dx, dz;
         PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
         if (moving) {
-            double pace = o->Pace;
+            double pace = o->Pace, catchup = 1;
             if (o->Catchup > 0 && s_opp[0].Count && s_laps > 0) {
                 const double behind = me - OpponentProgress(o);
-                if (behind > 0) pace *= 1 + o->Catchup / 100.0 * (behind < 60 * 512 ? behind / (60 * 512) : 1);
+                if (behind > 0) catchup = 1 + o->Catchup / 100.0 * (behind < 60 * 512 ? behind / (60 * 512) : 1);
             }
+            // (the pack kept together -- PackFactors: easing off ahead of its middle, pushing behind it, though not on top of the
+            // catch-up, the more of the two; the slipstream and its form)
+            const double pack = o->Pack > 0 ? o->Pack : 1;
+            pace *= pack > 1 ? (catchup > pack ? catchup : pack) : catchup * pack;
+            pace *= o->Band > 0 ? o->Band : 1;
             // (and, in an easy race, easing off ahead of him)
             pace *= DifficultyEase(o, me);
             // (a power-up's boost, shrunk by Twinsen's lightning, stopped by a penguin's blast)
@@ -13583,6 +13758,7 @@ static void ResetTrack(void) {
     s_heroSmall = -1; s_heroIsSmall = 0;
     s_penguinWalk = 1; s_item[RACE_BOX] = s_item[RACE_BOX_GOLD] = -1; s_takeAt = 0; s_useWas = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_opp[n].ShrunkUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
+    s_heroDraft = 1;
     s_ownTrack = 0; s_loaded[0] = 0;
     FollowCamEyeHook = NULL;
 }
