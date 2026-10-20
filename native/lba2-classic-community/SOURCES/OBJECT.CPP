@@ -2689,8 +2689,11 @@ void ReceptionObj() {
             return;
         }
 
-        // (a race-track mod's race: no fall kills or hurts Twinsen in his car -- it stops a moment, as on a land mine: RACEMOD.CPP)
-        if (StartYFalling - Nyw >= 16 * SIZE_BRICK_Y AND !RaceMod_NoHarm()) { // trop haut mort directe
+        // (a race-track mod's race: no fall kills or hurts Twinsen in his car -- it stops a moment, as on a land mine: RACEMOD.CPP; and
+        // off the raised road where its rail lets go -- rail_open=, the Temple of Bu's spiral drop -- he lands as from a step)
+        if (RaceMod_SoftLanding()) {
+            InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
+        } else if (StartYFalling - Nyw >= 16 * SIZE_BRICK_Y AND !RaceMod_NoHarm()) { // trop haut mort directe
             InitHitExtraPof(APtObj->Obj.X,
                             APtObj->Obj.Y + APtObj->YMax + 1,
                             APtObj->Obj.Z,

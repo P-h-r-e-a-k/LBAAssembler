@@ -2169,6 +2169,14 @@ static void DoAnimExtGround(U8 numobj) {
         validepos = FALSE;
         goto findoanimext;
     }
+    // ... and off the raised road's edge where its rail lets go (RACEMOD.CPP rail_open=, RaceMod_Drop) the car falls to the road below at
+    // its own speed: nothing else moves it on the way down
+    // (past its collisions, its floor and its rail to the cube's edges -- crossing into the next cube on the way down as on the road)
+    if (numobj == NUM_PERSO AND RaceMod_Drop(OldX, OldY, OldZ, &Nxw, &Nyw, &Nzw)) {
+        APtObj->WorkFlags &= ~(FALLING | SKATING);
+        validepos = FALSE;
+        goto racedropext;
+    }
 
     if (!(APtObj->WorkFlags & FALLING)
             AND(APtObj->Flags & PUSHABLE)) {
@@ -2489,6 +2497,7 @@ static void DoAnimExtGround(U8 numobj) {
         RaceMod_Floor(OldX, OldY, OldZ, Nxw, &Nyw, Nzw);
     }
 
+racedropext:
     /* protege sortie du cube */
 
     // à virer puisqu'on pourra descendre en dessous de 0

@@ -291,6 +291,10 @@ internal sealed class RaceTrackPlan
     // Stretches of the lap a shortcut skips -- a teleporter's (the Temple of Bú's hidden passage) -- each [first, last], the plan's points:
     // no checkpoint on them, so a lap through the shortcut counts.
     public int[][]? Shortcuts { get; set; }
+    // Where the raised road's rail lets a car go off its edge (RACEMOD.CPP rail_open=), each [y0, y1 (world), then the corners x, z of a
+    // polygon (cells from the origin)]: a car between those heights driven past the road's edge in it goes off it and falls to the road
+    // under it -- the Temple of Bú's spiral drop, 2026-10-20.
+    public double[][]? RailOpens { get; set; }
     // Halloween (Temple.TempleHalloween): the decor about the road, the spooks that fly over it, the mushrooms made pumpkins.
     public LBAAssembler.Terrain.Temple.HalloweenRun? Halloween { get; set; }
     public bool Planned => Heights is { Length: > 0 } h && h.Length == Points.Length;
@@ -697,6 +701,8 @@ internal sealed class RaceTrackReport
     public List<double[]> Teleports { get; } = new();
     // The stretches of the lap a shortcut skips (RaceTrackPlan.Shortcuts): the road's first and last points
     public List<(int From, int To)> Shortcuts { get; } = new();
+    // Where the rail lets a car go off the road's edge (RaceTrackPlan.RailOpens): each [y0, y1, then a polygon's corners x, z], world units
+    public List<int[]> RailOpens { get; } = new();
     // The giant frogs the lap drives through (RaceTrackFrog)
     public List<FrogInfo> Frogs { get; } = new();
     // The spooks (Temple.TempleHalloween: RACEMOD.CPP spook=): what each is, its flags, its height, its way (island cells), its body once
@@ -1016,6 +1022,10 @@ internal static class RaceTrackBuilder
             // (the stretches of the lap a shortcut skips: the road's points)
             foreach (var s in (plan.Shortcuts ?? Array.Empty<int[]>()).Where(s => s.Length >= 2))
                 report.Shortcuts.Add((PlanPoint(plan, main, s[0]), PlanPoint(plan, main, s[1])));
+            foreach (var o in (plan.RailOpens ?? Array.Empty<double[]>()).Where(o => o.Length >= 8 && o.Length % 2 == 0))
+                report.RailOpens.Add(new[] { (int)Math.Round(o[0]), (int)Math.Round(o[1]) }
+                    .Concat(o.Skip(2).Select((v, k) => (int)Math.Round((v + (k % 2 == 0 ? plan.OriginCellX : plan.OriginCellZ)) * 512))).ToArray());
+            if (report.RailOpens.Count > 0) report.Notes.Add($"{report.RailOpens.Count} place{(report.RailOpens.Count == 1 ? "" : "s")} where the rail lets a car off the road's edge");
         }
         if (planned && main.Raised is not null && plan.PitStripe is [var stripeFrom, var stripeTo, var stripeAt])
             main.Stripe = (PlanPoint(plan, main, (int)stripeFrom), PlanPoint(plan, main, (int)stripeTo), stripeAt);

@@ -307,6 +307,8 @@ void RaceMod_Island(S32 island);
 double RaceMod_SpeedFactor(void);
 S32 RaceMod_Takeover(void);
 S32 RaceMod_NoHarm(void);
+S32 RaceMod_SoftLanding(void);
+S32 RaceMod_Drop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);
 U32 RaceMod_FilterInput(U32 input);
 S32 RaceMod_Glance(void);
 S32 RaceMod_OffIsland(void);

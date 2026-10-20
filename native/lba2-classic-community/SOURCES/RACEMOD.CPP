@@ -147,6 +147,9 @@
  *     on_foot=1                  (2026-10-19, the secret party) Space gets Twinsen out of his car once it has all but stopped, and he walks
  *                                about while the race goes on; Space by the car, Ctrl anywhere, a fall, the sea or 5 minutes put him
  *                                back in it (OnFoot); spook= flags 32/64/128/256 are the party's guests (DrawSpooks)
+ *     rail_open=<y0> <y1> <x> <z> <x> <z> ...   (2026-10-20, the spiral drop) a polygon (world units, a car between heights y0 and y1)
+ *                                where the raised road's rail lets the car off its edge: it falls to the road under it, landing softly
+ *                                (RailOpenAt, RaceMod_Drop)
  *     web=<x> <y> <z> <way x> <way z> <half> <height> <hub> <hole half> <hole height> <spider> <spider>   a giant web across the road that
  *                                the cars drive through, tearing it (Webs; its parts web_part= after it)
  *     web_part=<kind> <body> <across> <up> <turn>   a part of the web before it: 0 always, 1 while it is whole, 2 a tatter once it is torn,
@@ -1684,6 +1687,34 @@ static int OpenAreaAt(double wx, double wz, double y) {
     }
     return -1;
 }
+// Where the raised road's rail lets the car go (rail_open=<y0> <y1> <x> <z> <x> <z> ...: a polygon of 3 to RACE_RAIL_OPEN_CORNERS
+// corners, world units, for a car between heights y0 and y1): driven past the road's edge there it is not held but goes off it, and falls
+// to what is under it -- the Temple of Bu's spiral drop, the edge of a turn of its spiral over the road a turn further on (the user,
+// 2026-10-20: "The upward spiral, let's remove the guard rail where we're over the track below to add in a shortcut"). Its landing is a
+// step's (RaceMod_SoftLanding): no hit, however far it fell.
+#define RACE_MAX_RAIL_OPEN 4
+#define RACE_RAIL_OPEN_CORNERS 48
+#define RACE_RAIL_OPEN_FALL 8000            // (ms: a landing this soon after the rail let go is that fall's)
+typedef struct { double Y0, Y1; int N; double X[RACE_RAIL_OPEN_CORNERS], Z[RACE_RAIL_OPEN_CORNERS]; } T_RACE_RAIL_OPEN;
+static T_RACE_RAIL_OPEN s_railOpen[RACE_MAX_RAIL_OPEN];
+static int s_nbRailOpen = 0;
+static S32 s_railLetGo = 0, s_railLetY = 0;  // when the rail last let the hero go there (TimerRefHR; 0: not since he last landed), his height
+static int RailOpenAt(double wx, double wz, double y) {
+    for (int k = 0; k < s_nbRailOpen; k++) {
+        const T_RACE_RAIL_OPEN *o = &s_railOpen[k];
+        if (y < o->Y0 || y > o->Y1) continue;
+        int in = 0;
+        for (int i = 0, j = o->N - 1; i < o->N; j = i++)
+            if ((o->Z[i] > wz) != (o->Z[j] > wz) && wx < (o->X[j] - o->X[i]) * (wz - o->Z[i]) / (o->Z[j] - o->Z[i]) + o->X[i]) in = !in;
+        if (in) return 1;
+    }
+    return 0;
+}
+static void RailLetGo(double wx, S32 y, double wz) {
+    if (!s_railLetGo) Log_Info("[racemod] the rail lets go at (%.0f,%d,%.0f): off the road's edge, down to the road below", wx, (int)y, wz);
+    s_railLetGo = TimerRefHR; if (!s_railLetGo) s_railLetGo = 1;
+    s_railLetY = y;
+}
 static int s_arcOn = -1, s_arcLast = -1;
 static double s_arcS = 0, s_arcV = 0, s_arcAcross = 0;
 static double s_arcAcross1 = 0;
@@ -2452,6 +2483,7 @@ static int RailAllows(double wx, double wz, S32 y) {
     const double half = a->Half + (c->Half - a->Half) * t, limit = half - RAISED_INSET;
     if (fabs(lat) <= limit) return 1;
     if (RaisedHolds(wx, wz, f)) return 1;
+    if (RailOpenAt(wx, wz, y)) return 1;
     const double sLo = a->StripLo + (c->StripLo - a->StripLo) * t, sHi = a->StripHi + (c->StripHi - a->StripHi) * t;
     if (sHi > sLo) {
         if (sLo <= half && sHi >= -half) return lat >= (sLo + RAISED_INSET < -limit ? sLo + RAISED_INSET : -limit) && lat <= (sHi - RAISED_INSET > limit ? sHi - RAISED_INSET : limit);
@@ -2484,6 +2516,8 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     const int grounded = !s_railHeld && f - CalculAltitudeTerrain(ox, oz, 0) < RAISED_GROUNDED;
     if (!RaisedAt(*nx + cx, *nz + cz, oy + 64, 4 * 512, &f, &seg, &lat, &t)) {
         if (grounded) { RAIL_NOTE(10); return; }
+        // (where the rail lets go -- rail_open=: off the edge he goes)
+        if (RailOpenAt(*nx + cx, *nz + cz, oy)) { RailLetGo(*nx + cx, oy, *nz + cz); RAIL_NOTE(11); return; }
         *nx = ox; *nz = oz; s_railTouch = 1; RAIL_NOTE(1); return;
     }
     s_railSeg = seg; s_railLat = lat;
@@ -2504,6 +2538,8 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     if (stripHi > stripLo && lat >= stripLo && lat <= stripHi) { RAIL_NOTE(4); return; }
     // (within another stretch's rail there, one whose deck overlaps this one's)
     if (RaisedHolds(*nx + cx, *nz + cz, f)) { RAIL_NOTE(5); return; }
+    // (where the rail lets go -- rail_open=, the Temple of Bu's spiral drop: past the edge, off the road)
+    if (RailOpenAt(*nx + cx, *nz + cz, oy)) { RailLetGo(*nx + cx, oy, *nz + cz); RAIL_NOTE(11); return; }
     const double sx = c->X - a->X, sz = c->Z - a->Z, len = sqrt(sx * sx + sz * sz);
     double side = lat > hi ? hi : lo;
     if (stripHi > stripLo) {
@@ -3199,6 +3235,18 @@ static void Load(const char *path, int carOnly = 0) {
             T_RACE_ARC *a = &s_arcs[s_nbArcs];
             a->Side = 1; a->FlightMs = 0;
             if (s_nbArcs < RACE_MAX_ARCS && sscanf(v, "%d %d %d %d %d %d", &a->Foot, &a->Lip, &a->Land, &a->LandFoot, &a->Side, &a->FlightMs) >= 4) s_nbArcs++;
+        }
+        else if (!strcmp(key, "rail_open")) {
+            T_RACE_RAIL_OPEN *o = &s_railOpen[s_nbRailOpen];
+            const char *p = v;
+            int used = 0;
+            double a, b;
+            if (s_nbRailOpen < RACE_MAX_RAIL_OPEN && sscanf(p, "%lf %lf%n", &o->Y0, &o->Y1, &used) == 2) {
+                p += used;
+                o->N = 0;
+                while (o->N < RACE_RAIL_OPEN_CORNERS && sscanf(p, "%lf %lf%n", &a, &b, &used) == 2) { o->X[o->N] = a; o->Z[o->N] = b; o->N++; p += used; }
+                if (o->N >= 3) s_nbRailOpen++;
+            }
         }
         else if (!strcmp(key, "open_area")) {
             T_RACE_OPEN *a = &s_open[s_nbOpen];
@@ -6631,6 +6679,99 @@ static S32 RaceCameraEye(S32 *eye, S32 *target) {
     if (WheelCamera(eye, target)) { FollowCamEyeWho = "wheel"; return TRUE; }
     if (OpenCamera(eye, target)) { FollowCamEyeWho = "open"; return TRUE; }
     return RailCamera(eye, target);
+}
+
+// The car off the road's edge where the rail let it go (rail_open=), falling to the road below: the engine's floor for a race car is the
+// highest deck under it, and it stood on the road a turn of the spiral further down the moment its middle was past the edge -- 5,300
+// lower in one frame. So from there its height falls as a thrown thing's (RACE_DROP_G, world units a second squared, about three times
+// the world's: a fall of 5,300 takes 0.8 s, 18 cells at 80 km/h) while it goes on at its own speed the way it went off (no steering in
+// the air), kept over the road below, nothing else moving it (EXTFUNC.CPP, as RaceMod_Loop's ring), until it reaches the road under it
+// -- set down within that road's rail -- or the ground.
+#define RACE_DROP_G 16000.0
+#define RACE_DROP_START 600                // a floor this far under the car where the rail let it go: it falls
+#define RACE_DROP_SINCE 2000               // (ms after the rail let go: past that, an edge is an edge again)
+static int s_dropOn = 0;
+static double s_dropV = 0, s_dropY = 0;
+static S32 s_dropAt = 0, s_dropFrom = 0, s_dropBeta = 0;
+#define RACE_DROP_HOLD (6 * 512.0)         // the road below looked for this far past its edges: the falling car is kept over it
+#define RACE_DROP_BELOW 2500               // ... and no higher than this under where the car went off (not the level it left)
+S32 RaceMod_Drop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
+    if (!RaceMod_Active() || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) { s_dropOn = 0; return 0; }
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const double wx = *nx + cx, wz = *nz + cz;
+    S32 f = -99999;
+    int seg = -1;
+    double lat = 0, t = 0;
+    if (!s_dropOn) {
+        // (let go, and his middle past the edge of the level he was on -- no deck there at his height, not even the floor's pad: falling)
+        if (!s_railLetGo || TimerRefHR - s_railLetGo > RACE_DROP_SINCE) return 0;
+        if (RaisedAt(wx, wz, oy + 64, 0, &f, &seg, &lat, &t) && f > oy - RACE_DROP_START) return 0;
+        s_dropOn = 1; s_dropV = 0; s_dropY = oy; s_dropAt = TimerRefHR; s_dropFrom = oy; s_dropBeta = ListObjet[NUM_PERSO].Obj.Beta;
+        Log_Info("[racemod] off the edge at (%.0f,%d,%.0f): falling", wx, (int)oy, wz);
+    }
+    // (in the air the car goes on the way it went off -- no steering there -- and over the road below it, within its rail: the road's place
+    // under it looked for RACE_DROP_HOLD past its edges, at the height it falls to)
+    {
+        T_OBJET *hero = &ListObjet[NUM_PERSO];
+        hero->Obj.Beta = s_dropBeta;
+        const double a = (s_dropBeta & 4095) * 2 * 3.14159265358979 / 4096.0, step = sqrt((double)(*nx - ox) * (*nx - ox) + (double)(*nz - oz) * (*nz - oz));   // (the car's own move this frame)
+        *nx = (S32)floor(ox + sin(a) * step + 0.5); *nz = (S32)floor(oz + cos(a) * step + 0.5);
+        double bx = *nx + cx, bz = *nz + cz;
+        S32 bf;
+        int bs;
+        double bl, bt;
+        if (RaisedAt(bx, bz, s_dropFrom - RACE_DROP_BELOW, RACE_DROP_HOLD, &bf, &bs, &bl, &bt) && bs >= 0 && bs < s_nbRaised - 1) {
+            const T_RACE_RAISED *ra = &s_raised[bs], *rc = ra + 1;
+            const double half = ra->Half + (rc->Half - ra->Half) * bt, limit = half - RAISED_INSET;
+            if (limit > 0 && fabs(bl) > limit) {
+                const double sx = rc->X - ra->X, sz = rc->Z - ra->Z, len = sqrt(sx * sx + sz * sz);
+                const double px = ra->X + sx * bt, pz = ra->Z + sz * bt, side = bl > 0 ? limit : -limit;
+                if (len > 0) { *nx = (S32)floor(px - sz / len * side - cx + 0.5); *nz = (S32)floor(pz + sx / len * side - cz + 0.5); }
+            }
+        }
+    }
+    const double wx2 = *nx + cx, wz2 = *nz + cz;
+    // the floor under him: the highest deck under his height now (and its pad), or the island's ground
+    const double look = s_dropY + 64 < s_dropFrom - RACE_DROP_BELOW ? s_dropY + 64 : s_dropFrom - RACE_DROP_BELOW;
+    const int road = RaisedAt(wx2, wz2, (S32)look, RAISED_PAD, &f, &seg, &lat, &t);
+    S32 under = road ? f : -99999;
+    const S32 gx = *nx < 0 ? 0 : *nx > 32767 ? 32767 : *nx, gz = *nz < 0 ? 0 : *nz > 32767 ? 32767 : *nz;
+    const S32 ground = CalculAltitudeTerrain(gx, gz, 0);
+    if (ground > under) under = ground;
+    double dt = (TimerRefHR - s_dropAt) / 1000.0;
+    if (dt < 0) dt = 0; else if (dt > 0.1) dt = 0.1;
+    s_dropAt = TimerRefHR;
+    s_dropV += RACE_DROP_G * dt;
+    s_dropY -= s_dropV * dt;
+    if (s_dropY > under) { *ny = (S32)floor(s_dropY); return 1; }
+    // landed: on the road under it, within its rail
+    *ny = under;
+    if (road && seg >= 0 && seg < s_nbRaised - 1) {
+        const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
+        const double half = a->Half + (c->Half - a->Half) * t, limit = half - RAISED_INSET;
+        if (fabs(lat) > limit && limit > 0) {
+            const double sx = c->X - a->X, sz = c->Z - a->Z, len = sqrt(sx * sx + sz * sz);
+            const double px = a->X + sx * t, pz = a->Z + sz * t, side = lat > 0 ? limit : -limit;
+            if (len > 0) { *nx = (S32)floor(px - sz / len * side - cx + 0.5); *nz = (S32)floor(pz + sx / len * side - cz + 0.5); }
+        }
+    }
+    Log_Info("[racemod] landed at (%.0f,%d,%.0f) on %s, %d below where it went off, %d ms on, %d units a second", *nx + cx, (int)*ny, *nz + cz,
+             road ? "the road below" : "the ground", (int)(s_dropFrom - *ny), (int)(TimerRefHR - s_railLetGo), (int)ListBuggy[0].Speed);
+    s_dropOn = 0; s_railLetGo = 0;
+    return 1;
+}
+
+// A landing after the rail let the hero go (rail_open=): soft, however far he fell -- no hit, the car on its way (OBJECT.CPP ReceptionObj).
+// Once: the next landing is its own.
+S32 RaceMod_SoftLanding(void) {
+    if (!RaceMod_Active() || !s_railLetGo) return 0;
+    const S32 since = TimerRefHR - s_railLetGo;
+    s_railLetGo = 0;
+    if (since > RACE_RAIL_OPEN_FALL) return 0;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    Log_Info("[racemod] landed from the rail's opening at (%.0f,%d,%.0f), %d below where it let go, %d ms on", hero->Obj.X + CurrentCubeX * 32768.0,
+             (int)hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0, (int)(s_railLetY - hero->Obj.Y), (int)since);
+    return 1;
 }
 
 S32 RaceMod_Rescue(void) {
@@ -13400,7 +13541,7 @@ static void ResetTrack(void) {
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;
     RaceSoundsFree(); JetHumStop("the race reset");
-    s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0; s_nbOpen = 0; s_trailN = 0; s_trailHead = -1;
+    s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0; s_nbOpen = 0; s_nbRailOpen = 0; s_railLetGo = 0; s_dropOn = 0; s_trailN = 0; s_trailHead = -1;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
     s_nbFalls = 0; s_nbPanels = 0; s_lavaModel = -1; s_fallFootNext = s_fallLipNext = 0;
     s_nbGeysers = 0; for (int i = 0; i < RACE_MAX_COLUMN; i++) s_column[i].Extra = -1;

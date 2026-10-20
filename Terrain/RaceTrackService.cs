@@ -193,7 +193,10 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Music = null,
         // OnFoot: Twinsen may get out of his car and walk about while the race goes on (RACEMOD.CPP on_foot=) -- the Temple of Bú's secret
         // party (Temple.TempleParty), since 2026-10-19
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] bool? OnFoot = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] bool? OnFoot = null,
+        // RailOpens: where the raised road's rail lets a car go off its edge, down to the road under it (RACEMOD.CPP rail_open=), each [y0, y1,
+        // then a polygon's corners x, z] in island units -- the Temple of Bú's spiral drop, since 2026-10-20
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? RailOpens = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -1007,7 +1010,8 @@ internal static class RaceTrackService
                 ? report.GiantWebs.Where(w => w.SpiderA >= 0).SelectMany((w, i) => LBAAssembler.Terrain.Temple.TempleHalloween.PartLines(w).Select(p => new[] { i }.Concat(p).ToArray())).ToList()
                 : null,
             Marshal: report.Marshal,
-            OnFoot: report.OnFoot ? true : null);
+            OnFoot: report.OnFoot ? true : null,
+            RailOpens: report.RailOpens.Count > 0 ? report.RailOpens.ToList() : null);
     }
 
     // A machine gun on its knoll as the car file has it: its scene and actors, the muzzle (the gun stands 0.8 cells towards where it fires

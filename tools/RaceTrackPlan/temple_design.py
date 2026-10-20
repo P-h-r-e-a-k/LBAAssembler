@@ -394,15 +394,21 @@ SLIP_SPOTS = [396.0, 400.0, 404.0, 408.0, 412.0]     # x: the waiting spots alon
 def ramp(x, a, b): return min(1.0, max(0.0, (x - a) / (b - a)))
 
 
-slip_lo, slip_hi = np.zeros(n), np.zeros(n)
-for i in range(n):
-    x, z = pts[i]
-    if abs(z - CRYPT_Z) > 0.01 or abs(h[i] - (CRYPT + DECK)) > 1 or not SLIP_OUT[0] <= x <= SLIP_IN[1]: continue
-    far = -half[i] + (SLIP_FAR + half[i]) * ramp(x, *SLIP_OUT) * (1 - ramp(x, *SLIP_IN))
-    near = -half[i] + (SLIP_NEAR + half[i]) * ramp(x, *SLIP_APART) * (1 - ramp(x, *SLIP_BACK))
-    if near - far > 1e-6: slip_lo[i], slip_hi[i] = round(far, 3), round(near, 3)
-slip = np.nonzero(slip_hi > slip_lo)[0]
-print('slip lane: points %d..%d, x %.1f..%.1f, %.2f..%.2f cells across' % (slip[0], slip[-1], pts[slip[0]][0], pts[slip[-1]][0], slip_lo.min(), slip_hi[slip].max()))
+def slip_lane(half, quiet=False):
+    """The slip lane beside a road of these half widths: its edges at each point (cells across, 0 0 where there is none) and its points."""
+    lo, hi = np.zeros(n), np.zeros(n)
+    for i in range(n):
+        x, z = pts[i]
+        if abs(z - CRYPT_Z) > 0.01 or abs(h[i] - (CRYPT + DECK)) > 1 or not SLIP_OUT[0] <= x <= SLIP_IN[1]: continue
+        far = -half[i] + (SLIP_FAR + half[i]) * ramp(x, *SLIP_OUT) * (1 - ramp(x, *SLIP_IN))
+        near = -half[i] + (SLIP_NEAR + half[i]) * ramp(x, *SLIP_APART) * (1 - ramp(x, *SLIP_BACK))
+        if near - far > 1e-6: lo[i], hi[i] = round(far, 3), round(near, 3)
+    on = np.nonzero(hi > lo)[0]
+    if not quiet: print('slip lane: points %d..%d, x %.1f..%.1f, %.2f..%.2f cells across' % (on[0], on[-1], pts[on[0]][0], pts[on[-1]][0], lo.min(), hi[on].max()))
+    return lo, hi, on
+
+
+slip_lo, slip_hi, slip = slip_lane(half, quiet=True)
 
 
 def slip_off(x, z):
@@ -429,35 +435,9 @@ SAME_PASS = 1500
 DECK_EDGE = 1.0
 CAR_ALONG = 2.0
 LAP = S[-1] + float(np.linalg.norm(pts[0] - pts[-1]))
-cell_points = {}                                # island cell -> {point: (distance squared, under the deck)}
-
-
-def near(cell, i, d2, deck):
-    e = cell_points.setdefault(cell, {})
-    if i not in e or d2 < e[i][0]: e[i] = (d2, e.get(i, (0, False))[1] or deck)
-    elif deck: e[i] = (e[i][0], True)
-
-
-for i in range(0, n, 2):
-    # (the ground stretch's own rule, below: GROUND_CUT)
-    if ground[i]: continue
-    x, z = pts[i]
-    reach = half[i] + CUT
-    for cz in range(int(math.floor(z - reach)), int(math.floor(z + reach)) + 1):
-        for cx in range(int(math.floor(x - reach)), int(math.floor(x + reach)) + 1):
-            d2 = (cx + 0.5 - x) ** 2 + (cz + 0.5 - z) ** 2
-            if d2 > reach * reach: continue
-            near((cx, cz), i, d2, d2 <= (half[i] + DECK_EDGE) ** 2)
-# (and over the slip lane, as over the road: CUT past its edges)
-for i in slip:
-    for cz in range(int(math.floor(pts[i][1] + slip_lo[i] - CUT)), int(math.floor(pts[i][1] + slip_hi[i] + CUT)) + 1):
-        for cx in range(int(math.floor(pts[i][0] - 1)), int(math.floor(pts[i][0] + 1)) + 1):
-            off = slip_off(cx + 0.5, cz + 0.5)
-            if off > CUT: continue
-            near((cx, cz), i, (cx + 0.5 - pts[i][0]) ** 2 + (cz + 0.5 - pts[i][1]) ** 2, off <= DECK_EDGE)
-col_cells = {}
-for cell in cell_points: col_cells.setdefault(layout_of(*cell), []).append(cell)
-col_points = {key: sorted({i for c in cells_ for i in cell_points[c]}) for key, cells_ in col_cells.items()}
+def along(a, b):
+    d = abs(S[a] - S[b])
+    return min(d, LAP - d)
 
 
 def passes(points):
@@ -469,70 +449,241 @@ def passes(points):
     return out
 
 
-def along(a, b):
-    d = abs(S[a] - S[b])
-    return min(d, LAP - d)
-
-
-def room_of(key):
-    """A column's rooms over the road: each pass's (the highest a cell may top out at and not be cut, and its points' heights)."""
-    out = []
-    for p in passes(col_points[key]):
-        mine = set(p)
-        lo = math.inf
-        for cell in col_cells[key]:
-            e = {i: v for i, v in cell_points[cell].items() if i in mine}
-            if not e: continue
-            j = min(e, key=lambda i: (e[i][0], i))
-            if any(deck for _, deck in e.values()):
-                lo = min(lo, min(h[i] for i in e if along(i, j) <= CAR_ALONG) - DECK + 20)
-            else:
-                lo = min(lo, max(h[i] for i in p) - DECK + 20)
-        out.append((lo, [h[i] for i in p]))
-    return out
-
-
 def present(b, y): return (b >> (y - MINY)) & 1
 
 
-cuts = set()
-rooms = {key: room_of(key) for key in col_points}
-for key, room in rooms.items():
-    b = bits.get(key, 0)
-    for y in range(MINY, L['maxY'] + 1):
-        if present(b, y) and any(top(y) > lo and top(y - 1) < max(hs) + HEAD for lo, hs in room): cuts.add((key[0], y, key[1]))
-# (the ground stretch: the road on the floor, its walls standing beside it -- the north stairs' between them, as wide as the road -- so only
-# what stands on the floor under the road and GROUND_CUT past its edge, up to HEAD over it, is cut: each island cell there by the road's
-# point nearest it, a cell whose foot is the floor there or higher -- never a stair under the deck, whose foot is its step below)
+def road_cuts(half, reach, quiet=False):
+    """The cells cut for a road of these half widths, each island cell within `reach` of a point (and CUT of the slip lane's edges, as it
+    is now: slip_lo, slip_hi) -- and the maps the floors under them are worked out from: (cuts, cell_points, col_cells, col_points,
+    rooms)."""
+    cell_points = {}                                # island cell -> {point: (distance squared, under the deck)}
+
+    def near(cell, i, d2, deck):
+        e = cell_points.setdefault(cell, {})
+        if i not in e or d2 < e[i][0]: e[i] = (d2, e.get(i, (0, False))[1] or deck)
+        elif deck: e[i] = (e[i][0], True)
+
+    for i in range(0, n, 2):
+        # (the ground stretch's own rule, below: GROUND_CUT)
+        if ground[i]: continue
+        x, z = pts[i]
+        r_ = reach[i]
+        for cz in range(int(math.floor(z - r_)), int(math.floor(z + r_)) + 1):
+            for cx in range(int(math.floor(x - r_)), int(math.floor(x + r_)) + 1):
+                d2 = (cx + 0.5 - x) ** 2 + (cz + 0.5 - z) ** 2
+                if d2 > r_ * r_: continue
+                near((cx, cz), i, d2, d2 <= (half[i] + DECK_EDGE) ** 2)
+    # (and over the slip lane, as over the road: CUT past its edges)
+    for i in slip:
+        for cz in range(int(math.floor(pts[i][1] + slip_lo[i] - CUT)), int(math.floor(pts[i][1] + slip_hi[i] + CUT)) + 1):
+            for cx in range(int(math.floor(pts[i][0] - 1)), int(math.floor(pts[i][0] + 1)) + 1):
+                off = slip_off(cx + 0.5, cz + 0.5)
+                if off > CUT: continue
+                near((cx, cz), i, (cx + 0.5 - pts[i][0]) ** 2 + (cz + 0.5 - pts[i][1]) ** 2, off <= DECK_EDGE)
+    col_cells = {}
+    for cell in cell_points: col_cells.setdefault(layout_of(*cell), []).append(cell)
+    col_points = {key: sorted({i for c in cells_ for i in cell_points[c]}) for key, cells_ in col_cells.items()}
+
+    def room_of(key):
+        """A column's rooms over the road: each pass's (the highest a cell may top out at and not be cut, and its points' heights)."""
+        out = []
+        for p in passes(col_points[key]):
+            mine = set(p)
+            lo = math.inf
+            for cell in col_cells[key]:
+                e = {i: v for i, v in cell_points[cell].items() if i in mine}
+                if not e: continue
+                j = min(e, key=lambda i: (e[i][0], i))
+                if any(deck for _, deck in e.values()):
+                    lo = min(lo, min(h[i] for i in e if along(i, j) <= CAR_ALONG) - DECK + 20)
+                else:
+                    lo = min(lo, max(h[i] for i in p) - DECK + 20)
+            out.append((lo, [h[i] for i in p]))
+        return out
+
+    cuts = set()
+    rooms = {key: room_of(key) for key in col_points}
+    for key, room in rooms.items():
+        b = bits.get(key, 0)
+        for y in range(MINY, L['maxY'] + 1):
+            if present(b, y) and any(top(y) > lo and top(y - 1) < max(hs) + HEAD for lo, hs in room): cuts.add((key[0], y, key[1]))
+    # (the ground stretch: the road on the floor, its walls standing beside it -- the north stairs' between them, as wide as the road -- so
+    # only what stands on the floor under the road and GROUND_CUT past its edge, up to HEAD over it, is cut: each island cell there by the
+    # road's point nearest it, a cell whose foot is the floor there or higher -- never a stair under the deck, whose foot is its step below)
+    ground_cells = {}
+    for i in gpts:
+        x, z = pts[i]
+        r_ = half[i] + GROUND_CUT
+        for cz in range(int(math.floor(z - r_)), int(math.floor(z + r_)) + 1):
+            for cx in range(int(math.floor(x - r_)), int(math.floor(x + r_)) + 1):
+                d2 = (cx + 0.5 - x) ** 2 + (cz + 0.5 - z) ** 2
+                if d2 <= r_ * r_ and d2 < ground_cells.get((cx, cz), (1e9, 0))[0]: ground_cells[(cx, cz)] = (d2, i)
+    ground_cut = 0
+    for (cx, cz), (_, i) in ground_cells.items():
+        key = layout_of(cx + 0.5, cz + 0.5)
+        b = bits.get(key, 0)
+        for y in range(MINY, L['maxY'] + 1):
+            if present(b, y) and top(y - 1) >= gfloor[i] - 20 and top(y - 1) < h[i] + HEAD and (key[0], y, key[1]) not in cuts:
+                cuts.add((key[0], y, key[1])); ground_cut += 1
+    if ROUTE_EAST and not quiet: print('ground stretch: %d cells cut where something stands on the floor under the road' % ground_cut)
+    # ... and what a cut leaves of a column over it one or two layers thick -- a wall's top hanging over the road's edge, a thin slab of
+    # lintel -- taken with it
+    caps = 0
+    for key in {(c[0], c[2]) for c in cuts}:
+        b = bits.get(key, 0)
+        high = max(c[1] for c in cuts if (c[0], c[2]) == key)
+        over = [y for y in range(high + 1, L['maxY'] + 1) if present(b, y)]
+        if 0 < len(over) <= THIN:
+            cuts.update((key[0], y, key[1]) for y in over)
+            caps += len(over)
+    if not quiet: print('cells cut', len(cuts), f'({caps} of them thin tops left over the cuts)')
+    return cuts, cell_points, col_cells, col_points, rooms
+
+
 GROUND_CUT = 0.3
-ground_cells = {}
-for i in gpts:
-    x, z = pts[i]
-    reach = half[i] + GROUND_CUT
-    for cz in range(int(math.floor(z - reach)), int(math.floor(z + reach)) + 1):
-        for cx in range(int(math.floor(x - reach)), int(math.floor(x + reach)) + 1):
-            d2 = (cx + 0.5 - x) ** 2 + (cz + 0.5 - z) ** 2
-            if d2 <= reach * reach and d2 < ground_cells.get((cx, cz), (1e9, 0))[0]: ground_cells[(cx, cz)] = (d2, i)
-ground_cut = 0
-for (cx, cz), (_, i) in ground_cells.items():
-    key = layout_of(cx + 0.5, cz + 0.5)
-    b = bits.get(key, 0)
-    for y in range(MINY, L['maxY'] + 1):
-        if present(b, y) and top(y - 1) >= gfloor[i] - 20 and top(y - 1) < h[i] + HEAD and (key[0], y, key[1]) not in cuts:
-            cuts.add((key[0], y, key[1])); ground_cut += 1
-if ROUTE_EAST: print('ground stretch: %d cells cut where something stands on the floor under the road' % ground_cut)
-# ... and what a cut leaves of a column over it one or two layers thick -- a wall's top hanging over the road's edge, a thin slab of
-# lintel -- taken with it
 THIN = 2
-caps = 0
-for key in {(c[0], c[2]) for c in cuts}:
+# (the cuts the road as it was before 2026-10-20 made, 4.5 cells either side of its middle (4 along the long corridor) and CUT past that:
+# the doorways the wider road fills, WIDEN below)
+cuts0 = road_cuts(half, half + CUT, quiet=True)[0]
+
+
+# ---- the road's width (the user, 2026-10-20: "Our Temple track is too narrow, let's widen it at every possible point but keep the same
+# layout. For example the start/finish lane could be widened to fill the entire gap we've made in the wall, this should be mirrored in as
+# many places as possible to add extra track width"): the lap's middle as it was, the raised road as wide as the temple lets it be --
+# out from each side of its middle, a ray every point, to the first thing standing in the road's room (from DECK - 20 under its surface
+# to HEAD over it) that the road's doorways as they were (cuts0) left standing -- a wall's face, a doorway's jamb, a column, a step
+# up, the walled-up door (TEMPLE_WALLS) -- WALL_GAP short of it: the doorways the road went through filled, their walls left as they
+# were, and in the halls and over the dark out to HALF_MOST at the most. Short of another pass of the lap at about its height -- each
+# of the two to the middle between them, ROAD_GAP apart -- and of the slip lane beside the start straight (SLIP_GAP from it, where it is
+# apart from the road); within the bends' radii (BEND_GAP inside their middles). The narrower side's for both (the middle stays where it
+# is), never narrower than before, changing by WIDEN_RATE a cell along at the most -- the road narrows before a doorway, widens after
+# it. The ground stretch keeps its width: its kerbs are flat where the floor beside it is level, the cars drive onto that floor.
+# TEMPLE_WIDE=0: the road as it was.
+WIDE = os.environ.get('TEMPLE_WIDE', '1') != '0'
+HALF_MOST = 8.0
+WALL_GAP = 0.5                                  # a wall's face from the road's edge, at the least: a car held 1.25 inside its rail, its
+                                                # box (1.24 round its middle) half a cell past it on a diagonal
+ROAD_GAP = 2.5
+SLIP_GAP = 0.75
+BEND_GAP = 2.0
+WIDEN_RATE = 0.2
+WIDEN_STEP = 0.25
+CUT_WIDE = 0.0                                  # the wider road's own cuts: what is under its deck (nothing stands there but what its
+                                                # old cuts took -- the rays saw to that) and CUT past its old edge, as before
+
+
+# (and LBA1's actors standing beside the lap that the build would leave out under a road over them -- TempleActors.NearRoad, within its
+# RoadMargin of the deck's edge -- each [x0, z0, x1, z1, its foot, its top] (island cells, world units), from `ScriptRoundTrip templeactors
+# models`: the spike trap at the west rooms' south-west corner, 8:2; the others near the road lie under its deck or were left out already)
+ACTORS_BESIDE = [[239.4, 310.5, 243.2, 312.1, 14050, 21610]]
+ACTOR_GAP = 0.75                                # past WALL_GAP: NearRoad's margin is half a cell, from the built road's edge
+
+
+def stands_in(p, lo, hi, cutset):
+    """Whether something of the temple left standing (not in cutset) at island place p reaches between heights lo and hi."""
+    if any(x0 - ACTOR_GAP <= p[0] <= x1 + ACTOR_GAP and z0 - ACTOR_GAP <= p[1] <= z1 + ACTOR_GAP and y0 < hi and y1 > lo for x0, z0, x1, z1, y0, y1 in ACTORS_BESIDE):
+        return True
+    key = layout_of(*p)
     b = bits.get(key, 0)
-    high = max(c[1] for c in cuts if (c[0], c[2]) == key)
-    over = [y for y in range(high + 1, L['maxY'] + 1) if present(b, y)]
-    if 0 < len(over) <= THIN:
-        cuts.update((key[0], y, key[1]) for y in over)
-        caps += len(over)
-print('cells cut', len(cuts), f'({caps} of them thin tops left over the cuts)')
+    if b and any(present(b, y) and (key[0], y, key[1]) not in cutset and top(y) > lo and top(y - 1) < hi for y in range(MINY, L['maxY'] + 1)):
+        return True
+    return any(e[0] <= p[0] * 512 <= e[3] and e[2] <= p[1] * 512 <= e[5] and e[1] < hi and e[4] > lo for e in extra_solid)
+
+
+def bend_radius(i, k=6):
+    """The lap's radius of turn at point i (cells; inf on a straight) and the side its middle is to (1 the normal's, -1 the other)."""
+    a, b, c = pts[(i - k) % n], pts[i], pts[(i + k) % n]
+    ab, bc, ca = np.linalg.norm(b - a), np.linalg.norm(c - b), np.linalg.norm(a - c)
+    cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
+    if abs(cross) < 1e-9: return math.inf, 0
+    return ab * bc * ca / (2 * abs(cross)), (1 if cross > 0 else -1)
+
+
+def widths(half0):
+    """The wider road's half widths, the room at each point before the tapers, and what holds each point ('wall', 'road', 'slip',
+    'bend', 'most', 'ground')."""
+    room = np.full(n, HALF_MOST)
+    side_room = np.zeros((n, 2))
+    why = np.array(['most'] * n, dtype=object)
+    for i in range(n):
+        if ground[i]:
+            room[i], why[i] = half0[i], 'ground'
+            continue
+        u = tangent(i); nrm = np.array([-u[1], u[0]])
+        # (the room over the deck as the cuts have it: from the lowest of the road's within a car's length, CAR_ALONG)
+        k_ = int(CAR_ALONG / SP)
+        lo, hi = min(h[(i + k) % n] for k in range(-k_, k_ + 1)) - DECK + 20, h[i] + HEAD
+        r_, side_ = bend_radius(i)
+        # (the lap's other passes near it at about its height)
+        d_ = np.hypot(pts[:, 0] - pts[i][0], pts[:, 1] - pts[i][1])
+        a_ = np.abs(S - S[i]); a_ = np.minimum(a_, LAP - a_)
+        others = np.flatnonzero((d_ < 2 * HALF_MOST + ROAD_GAP + 1) & (a_ > 2 * ROAD_GAP + 2) & (np.abs(h - h[i]) < HEAD + DECK))
+        # (beside the start straight: the slip lane where it is apart from the road -- the road SLIP_GAP short of its near edge; where it
+        # leaves the road and comes back to it, it is the road's side, wherever that is)
+        x_, z_ = pts[i]
+        by_slip = abs(z_ - CRYPT_Z) < 0.01 and abs(h[i] - (CRYPT + DECK)) <= 1 and SLIP_OUT[0] - 1 <= x_ <= SLIP_IN[1] + 1
+        for sd in (-1, 1):
+            t = half0[i]
+            got, what = HALF_MOST, 'most'
+            while t < HALF_MOST + WALL_GAP:
+                t += WIDEN_STEP
+                p = pts[i] + nrm * sd * t
+                if stands_in(p, lo, hi, cuts0):
+                    # (the face: between the last clear step and this one, to a fiftieth of a cell)
+                    a_t, b_t = t - WIDEN_STEP, t
+                    while b_t - a_t > 0.02:
+                        m_t = (a_t + b_t) / 2
+                        if stands_in(pts[i] + nrm * sd * m_t, lo, hi, cuts0): b_t = m_t
+                        else: a_t = m_t
+                    got, what = a_t - WALL_GAP, 'wall'
+                    break
+                if t > HALF_MOST: continue
+                # (another pass of the lap: each to the middle between them, less half ROAD_GAP)
+                if len(others) and any(a_[j] > 2 * (t + ROAD_GAP) + 2 and math.hypot(pts[j][0] - p[0], pts[j][1] - p[1]) < t + ROAD_GAP for j in others):
+                    got, what = t - WIDEN_STEP, 'road'
+                    break
+                if not by_slip and slip_off(*p) < SLIP_GAP:
+                    got, what = t - WIDEN_STEP, 'slip'
+                    break
+            # (from the west room's doorway, 4 cells before the lane leaves the road: no wider there than beside the lane -- the road
+            # through the doorway as wide as the lane lets it be all along the grid, not wider and narrower again)
+            if by_slip and sd == -1 and SLIP_OUT[0] - 4 <= x_ <= SLIP_BACK[1] and -SLIP_NEAR - SLIP_GAP < got:
+                got, what = -SLIP_NEAR - SLIP_GAP, 'slip'
+            if sd == side_ and r_ - BEND_GAP < got:
+                got, what = r_ - BEND_GAP, 'bend'
+            side_room[i, (sd + 1) // 2] = got
+            if got < room[i]: room[i], why[i] = got, what
+        room[i] = max(room[i], half0[i])
+    # (no wider than a point's room any further along than WIDEN_RATE lets it narrow to the next's: the least over the lap of each
+    # point's room and WIDEN_RATE a cell from it)
+    out = room.copy()
+    for i in np.argsort(room):
+        span = int((HALF_MOST - out[i]) / WIDEN_RATE / SP) + 2
+        for k in range(-span, span + 1):
+            j = (i + k) % n
+            lim = out[i] + WIDEN_RATE * along(i, j)
+            if lim < out[j]: out[j] = lim
+    out = np.maximum(out, half0)
+    widths.sides = side_room
+    return out, room, why
+
+
+half0 = half.copy()
+if WIDE:
+    half, room_, why_ = widths(half0)
+    slip_lo, slip_hi, slip = slip_lane(half)
+    # (two passes of the lap side by side, edge to edge, after the narrowing's tapers)
+    tight = min(((math.hypot(*(pts[i] - pts[j])) - half[i] - half[j], i, j) for i in range(0, n, 4) for j in range(0, n, 4)
+                 if i < j and along(i, j) > 2 * (half[i] + half[j] + ROAD_GAP) + 2 and abs(h[i] - h[j]) < HEAD + DECK), default=(math.inf, -1, -1))
+    raised_ = ~ground
+    print('the road widened: %.2f..%.2f cells either side of its middle (%.2f on average) from %.2f..%.2f (%.2f); held by %s; two passes of the lap '
+          'side by side %.1f cells apart at the least (points %d, %d)' % (half[raised_].min(), half[raised_].max(), half[raised_].mean(), half0[raised_].min(),
+          half0[raised_].max(), half0[raised_].mean(), {w: int((why_ == w).sum()) for w in sorted(set(why_))}, *tight))
+    cuts, cell_points, col_cells, col_points, rooms = road_cuts(half, np.maximum(half0 + CUT, half + CUT_WIDE))
+    print('cells cut for the wider road: %d more than before (%d), %d fewer' % (len(cuts - cuts0), len(cuts0), len(cuts0 - cuts)))
+else:
+    slip_lo, slip_hi, slip = slip_lane(half)
+    cuts, cell_points, col_cells, col_points, rooms = road_cuts(half, half + CUT)
 
 
 # ---- the floors the cuts take (TempleIsland.Carve fills them again): for each column the road comes within reach of, the layer of the
@@ -897,9 +1048,10 @@ DIVE_ROOM = 9000                                # nothing over the road this hig
 
 
 def open_over(i):
-    """Nothing of the temple over the road at point i, its width and a cell either side, up to DIVE_ROOM over it."""
+    """Nothing of the temple over the road at point i, its width and a cell either side, up to DIVE_ROOM over it. (The road's width as it
+    was before it was widened, half0: her way is along its middle -- the long corridor's walls, 6 cells from it, kept its dives out.)"""
     u = heading(i); nrm = np.array([-u[1], u[0]])
-    for off in np.arange(-half[i] - 1, half[i] + 1.01, 0.5):
+    for off in np.arange(-half0[i] - 1, half0[i] + 1.01, 0.5):
         x, z = pts[i] + nrm * off
         b = bits.get(layout_of(x, z), 0)
         if not b: continue
@@ -939,7 +1091,8 @@ print('dives', len(dives), dives)
 scares = []
 for j, i in enumerate(range(60, n, int(48 / SP))):
     u = heading(i)
-    for sd, off in ((1, 2.3), (-1, 2.3), (1, 3.1), (-1, 3.1)):
+    # (and, where the wider road took the floor those had, further out)
+    for sd, off in ((1, 2.3), (-1, 2.3), (1, 3.1), (-1, 3.1), (1, 4.0), (-1, 4.0), (1, 5.0), (-1, 5.0)):
         nrm = np.array([-u[1], u[0]]) * sd
         x, z = pts[i] + nrm * (half[i] + off)
         t = flat_floor(x, z, 1)
@@ -1379,6 +1532,73 @@ if SHORTCUT:
     spooks = [s_ for s_ in spooks if s_['kind'] != 'riser' or secret_off(*s_['way'][0], wide=True) >= 1.5]
     print('shortcut: %d pieces of decor left out where its car drives' % (before - len(decor) - len(scares) - len(spooks)))
 
+# ---- the spiral's drop (the user, 2026-10-20: "The upward spiral, let's remove the guard rail where we're over the track below to add in
+# a shortcut", their picture the spiral west of the crypt -- turned as their pictures are, east up -- the road out of its foot heading east
+# to the crypt, and the turn of the spiral one over it, where it passes over that road just after its south point): along the outer edge
+# of that turn where it lies over the road below -- the road out of the spiral's foot, a turn (DROP_LOW..DROP_HIGH) under it -- no rail
+# (raisedFlush) and the race-track mode's rail lets the car go there (railOpens: RACEMOD.CPP rail_open=, a polygon from DROP_IN inside the
+# edge to DROP_OUT past it, at the turn's height): a car steered off that edge falls onto the road below, a turn of the spiral further
+# on (LBA2 drops a falling car straight down: it lands under where it left), and lands as softly as from a step (rail_open='s fall hurts
+# no car). Only where the road below is under the edge, DROP_LAND cells and more inside its own edges either side of where the car goes
+# over (DROP_OVER past the edge: a car held on the road has its middle RAISED_INSET inside it, let go it is past it a little before it
+# drops). The lap's checkpoints keep off the turn it skips (the plan's shortcuts, as the hidden passage's); the opponents keep to the lap.
+# TEMPLE_DROP=0: none.
+DROP = os.environ.get('TEMPLE_DROP', '1') != '0'
+DROP_LOW, DROP_HIGH = HEAD + DECK, 7000
+DROP_IN, DROP_OUT = 2.0, 5.0
+DROP_OVER = (0.5, 2.5)
+DROP_LAND = 1.0
+rail_opens = []
+
+
+def plan_index(i): return int((i - i_start) % n)
+
+
+if DROP:
+    def lower_road(p, i):
+        """The point of the road a turn under point i nearest place p, and how far p is inside its edge (cells; negative: outside it)."""
+        d = np.hypot(pts[:, 0] - p[0], pts[:, 1] - p[1])
+        dh = h[i] - h
+        ok = (dh >= DROP_LOW) & (dh <= DROP_HIGH)
+        if not ok.any(): return None, -1e9
+        j = int(np.flatnonzero(ok)[d[ok].argmin()])
+        return j, float(half[j] - d[j])
+    cx_, cz_, r_ = SPIRAL_W
+    run, lands = [], []
+    for i in range(o_down, o2):
+        u = tangent(i); nrm = np.array([-u[1], u[0]])
+        # (the outer side: away from the spiral's middle)
+        sd = 1 if float(nrm @ (pts[i] - np.array([cx_, cz_]))) > 0 else -1
+        got = [lower_road(pts[i] + nrm * sd * (half[i] + o), i) for o in DROP_OVER]
+        if all(j is not None and inside >= DROP_LAND for j, inside in got):
+            run.append((i, sd)); lands.append(max(j for j, _ in got))
+    if run:
+        # (one stretch: the longest run of points in a row)
+        idx = [i for i, _ in run]
+        runs_ = np.split(np.arange(len(idx)), np.flatnonzero(np.diff(idx) != 1) + 1)
+        best = max(runs_, key=len)
+        run = [run[k] for k in best]; lands = [lands[k] for k in best]
+        a_, b_ = run[0][0], run[-1][0]
+        sd = run[0][1]
+        poly = []
+        for i, _ in run[::4] + [run[-1]]:
+            u = tangent(i); nrm = np.array([-u[1], u[0]])
+            poly.append(pts[i] + nrm * sd * (half[i] - DROP_IN))
+        for i, _ in (run[::4] + [run[-1]])[::-1]:
+            u = tangent(i); nrm = np.array([-u[1], u[0]])
+            poly.append(pts[i] + nrm * sd * (half[i] + DROP_OUT))
+        y0, y1 = float(h[a_:b_ + 1].min() - 300), float(h[a_:b_ + 1].max() + 1500)
+        rail_opens.append([round(y0), round(y1)] + [round(float(v), 2) for q in poly for v in q])
+        for i in range(a_, b_ + 1): flush[i, (sd + 1) // 2] = True
+        land = max(lands)
+        shortcuts.append([plan_index(a_), plan_index(land)])
+        print('the spiral\'s drop: no rail along the outer edge of its turn over the road out of its foot, points %d..%d (plan %d..%d, cells (%.1f, %.1f)..(%.1f, %.1f), '
+              '%.1f cells), %.0f..%.0f over the road below (landing by point %d, plan %d: skips %.0f cells of the lap); its polygon %d corners'
+              % (a_, b_, plan_index(a_), plan_index(b_), *pts[a_], *pts[b_], S[b_] - S[a_], min(h[i] - h[j] for (i, _), j in zip(run, lands)),
+                 max(h[i] - h[j] for (i, _), j in zip(run, lands)), land, plan_index(land), S[land] - S[a_], len(poly)))
+    else:
+        print('the spiral\'s drop: nowhere over the road below')
+
 # ---- the lap from the start
 order = np.r_[i_start:n, 0:i_start]
 P, H, HF = pts[order], h[order], half[order]
@@ -1409,5 +1629,7 @@ if ROUTE_EAST:
                  'raisedFlush': [[int(a), int(b)] for a, b in flush[order]]})
 if SHORTCUT:
     plan.update({'teleports': teleports, 'shortcuts': shortcuts, 'templeWalls': TEMPLE_WALLS, 'openAreas': [OPEN_EXIT + [FIRST]]})
+if shortcuts: plan['shortcuts'] = shortcuts
+if rail_opens: plan['railOpens'] = rail_opens
 json.dump(plan, open(OUT, 'w'))
 print('wrote', OUT, len(P), 'points')
