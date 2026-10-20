@@ -3040,17 +3040,19 @@ static int ReadSets(const char *v, int *sets) {
 // can't name (the race track's build makes the file from the player's LBA1: Temple.TempleMusic). A file that isn't there leaves the scenes'
 // own music. And whatever plays keeps going until the race is over (the user, 2026-10-18: "the sound track stops after a few laps and
 // doesn't last the entire race"): played again behind itself when it runs out (MUSIC.CPP LoopMusic) -- the qualifying lap, the wait for
-// the grid, the race -- then, past the finish, left to end as it ends.
+// the grid, the race -- and past the finish too (until 2026-10-20 it was left to end as it ended there: in LBA Assembler's Play the
+// player drives on after the finish, and the music stopped a minute later -- the user, "the music has cut out again"; the race game
+// goes to its menu at the finish, which plays its own).
 static char s_music[260] = "";                // music= as the file has it ("": none)
 static int s_musicSet = 0;                    // music= looked at since the file was loaded
 static int s_musicKept = -1;                  // the music kept going (-1: not said yet)
 
 static void RaceMusicFrame(void) {
-    const int keep = !(s_place && s_phase == PHASE_RACE);
+    const int keep = 1;
     if (keep != s_musicKept) {
         s_musicKept = keep;
         LoopMusic(keep);
-        Log_Info("[racemod] music %s", keep ? "kept going until the race is over" : "left to end as it ends: the race is over");
+        Log_Info("[racemod] music kept going as long as the race-track mode is on");
     }
     if (!s_musicSet) {
         s_musicSet = 1;
