@@ -24,6 +24,8 @@
  *     difficulty=0|1|2                    the difficulty chosen last (LevelPage)
  *     updates=auto|ask|off                new versions installed when the game is closed, asked first, or not looked for (auto)
  *     update_checked=<unix time>          when the game last started the updater (0: never)
+ *     minimap=1|0                         the race's mini-map, bottom right, on (the first time) or off (Options, "Window,
+ *                                         mini-map, updates"; RACEMOD.CPP DrawMinimap asks RaceGame_Minimap)
  * Updates (2026-10-19): the installer leaves a copy of itself in the game's folder, Update\LBRA-Setup.exe. At the start (the race game
  * as a player runs it: none of the command harness's flags, so never an editor's Play or a scripted test -- those skip the menu), if
  * updates aren't off and a week has gone by since the last check (or there was none), the game starts it hidden --
@@ -97,6 +99,7 @@ extern void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta,
 #define RG_ID_UPDATE_MODE 2355              // the Updates page's rows (UpdatesPage)
 #define RG_ID_UPDATE_NOW 2356
 #define RG_ID_WINDOW 2357                   // the Updates page's full screen <-> a window row (CONFIG_FILE.CPP ToggleDisplayFullscreen; F11 / Alt+Enter too)
+#define RG_ID_MINIMAP 2358                  // ... and its mini-map on <-> off row (RaceGame_Minimap)
 #define RG_ID_BACK 26                       // the game's own "Back"
 #define RG_ID_RESUME 70
 #define RG_ID_OPTIONS 74
@@ -270,6 +273,7 @@ static int s_controlsSeen = 0, s_powerupsSeen = 0;  // the first run's pages sho
 static int s_qualified = 0;                 // a qualifying lap driven: the next races may skip it
 static int s_skipQualifying = 0;            // the last answer to "a qualifying lap?"
 static int s_updates = 0;                   // new versions: 0 installed when the game is closed, 1 asked first, 2 not looked for
+static int s_minimap = 1;                   // the race's mini-map, bottom right (RACEMOD.CPP DrawMinimap)
 static long long s_updateChecked = 0;       // when the updater was last started (unix time; 0 never)
 static const char *const s_updateKey[3] = {"auto", "ask", "off"};
 static const char *const s_updateLabel[3] = {"Updates: Automatic", "Updates: Ask first", "Updates: Off"};
@@ -298,6 +302,7 @@ static void ReadSettings(void) {
             else if (!strcmp(line, "qualified")) value = &s_qualified;
             else if (!strcmp(line, "skip_qualifying")) value = &s_skipQualifying;
             else if (!strcmp(line, "difficulty")) value = &s_level;
+            else if (!strcmp(line, "minimap")) value = &s_minimap;
             else if (!strcmp(line, "updates")) {
                 value = &s_updates;
                 *value = 0;
@@ -314,8 +319,9 @@ static void ReadSettings(void) {
     }
     fclose(f);
     if (s_level < 0 || s_level > 2) s_level = 1;
-    Log_Info("[racegame] settings: controls seen %d, power-ups seen %d, qualified %d, skip qualifying %d, updates %s (checked %lld)", s_controlsSeen,
-             s_powerupsSeen, s_qualified, s_skipQualifying, s_updateKey[s_updates], s_updateChecked);
+    s_minimap = s_minimap != 0;
+    Log_Info("[racegame] settings: controls seen %d, power-ups seen %d, qualified %d, skip qualifying %d, updates %s (checked %lld), mini-map %s",
+             s_controlsSeen, s_powerupsSeen, s_qualified, s_skipQualifying, s_updateKey[s_updates], s_updateChecked, s_minimap ? "on" : "off");
 }
 
 // ---- updates -----------------------------------------------------------------------------------------------------------------------
@@ -390,6 +396,7 @@ static void WriteSettings(void) {
     fprintf(f, "controls_seen=%d\npowerups_seen=%d\nqualified=%d\nskip_qualifying=%d\ndifficulty=%d\n", s_controlsSeen, s_powerupsSeen, s_qualified,
             s_skipQualifying, s_level);
     fprintf(f, "updates=%s\nupdate_checked=%lld\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0], s_updateChecked);
+    fprintf(f, "minimap=%d\n", s_minimap);
     fputs(s_setOther, f);
     fclose(f);
 }
@@ -511,6 +518,13 @@ S32 RaceGame_BestLap(void) {
     return s_nbTimes[s_raceSp] > 0 ? s_times[s_raceSp][0].Lap : 0;
 }
 
+// RACEMOD.CPP DrawMinimap: the race's mini-map on (1) or off (0) as the player set it (Options); -1 when this isn't the race game.
+S32 RaceGame_Minimap(void) {
+    if (!RaceGame_On()) return -1;
+    ReadSettings();
+    return s_minimap;
+}
+
 // A lap into the race's track's best laps (a time trial's fastest; a qualifying lap: RaceGame_Qualified -- no power-ups on either): the
 // rank it took (1-10), 0 for none. `total` the whole run's time (a qualifying lap's own), `laps` how many laps that was.
 static int RecordLap(S32 total, S32 lap, int laps) {
@@ -610,7 +624,8 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_SKIP: Label(string, "Skip: start at the back of the grid"); return 1;
     case RG_ID_POWERUPS: Label(string, "Power-ups"); return 1;
     case RG_ID_CONTROLS: Label(string, "Race controls, power-ups"); return 1;   // (the game's own Controls row changes the keys)
-    case RG_ID_UPDATES: Label(string, "Window mode, updates"); return 1;
+    case RG_ID_UPDATES: Label(string, "Window, mini-map, updates"); return 1;   // (the row's width: "Window mode, mini-map, updates" ran over it)
+    case RG_ID_MINIMAP: Label(string, s_minimap ? "Mini-map: On" : "Mini-map: Off"); return 1;
     case RG_ID_UPDATE_MODE: Label(string, s_updateLabel[s_updates >= 0 && s_updates <= 2 ? s_updates : 0]); return 1;
     case RG_ID_UPDATE_NOW: Label(string, "Check for updates now"); return 1;
     case RG_ID_WINDOW: Label(string, DisplayFullScreen ? "Window mode: full screen (F11)" : "Window mode: window (F11)"); return 1;
@@ -1106,32 +1121,35 @@ void RaceGame_Qualified(S32 lap) {
     Log_Info("[racegame] the first qualifying lap driven (%.2f s): the next races may skip it", lap / 1000.0);
 }
 
-// Options, "Window mode, updates": full screen or a window (F11 / Alt+Enter too), then the update mode (Automatic, Ask first, Off: Enter goes round them) and "Check for updates now", what the mode does and the
-// updater's last word under them.
-static U16 s_updMenu[4 + 2 * 4];
+// Options, "Window, mini-map, updates" ("Window mode, updates" until the mini-map, 2026-10-20): full screen or a window (F11 / Alt+Enter too), the race's mini-map on or off (2026-10-20:
+// RACEMOD.CPP DrawMinimap), then the update mode (Automatic, Ask first, Off: Enter goes round them) and "Check for updates now", what the
+// mode does and the updater's last word under them.
+#define RG_UPD_ROWS 5
+static U16 s_updMenu[4 + 2 * RG_UPD_ROWS];
 // (two lines each at most, and the updater's word two more: the page's text below the rows fits the 480-tall canvas)
 static const char *const s_updateHelp[3] = {
     "Weekly: a new version is installed when you close the game.",
     "Weekly: you are asked before a new version is installed.",
     "No weekly check. Check for updates here when you like.",
 };
-#define RG_UPD_Y 240                        // the rows' centre
+#define RG_UPD_Y 220                        // the rows' centre (five rows: the header at 30, the text under them to 470)
 static void UpdatesPage(void) {
     ReadSettings();
     s_updMenu[0] = 1;
-    s_updMenu[1] = 4;
+    s_updMenu[1] = RG_UPD_ROWS;
     s_updMenu[2] = RG_UPD_Y;
     s_updMenu[3] = 0;
     SetRow(s_updMenu, 0, RG_ID_BACK);
     SetRow(s_updMenu, 1, RG_ID_WINDOW);
-    SetRow(s_updMenu, 2, RG_ID_UPDATE_MODE);
-    SetRow(s_updMenu, 3, RG_ID_UPDATE_NOW);
+    SetRow(s_updMenu, 2, RG_ID_MINIMAP);
+    SetRow(s_updMenu, 3, RG_ID_UPDATE_MODE);
+    SetRow(s_updMenu, 4, RG_ID_UPDATE_NOW);
     char exe[ADELINE_MAX_PATH];
     GetResPath(exe, ADELINE_MAX_PATH, RG_UPDATER);
     for (;;) {
         const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
-        Page("Window mode, updates", RG_UPD_Y - (56 * 4) / 2 - 50);
-        const S32 textY = RG_UPD_Y + (56 * 4) / 2 + 6 + oy;
+        Page("Window, mini-map, updates", RG_UPD_Y - (56 * RG_UPD_ROWS) / 2 - 50);
+        const S32 textY = RG_UPD_Y + (56 * RG_UPD_ROWS) / 2 + 6 + oy;
         const int lines = Wrapped(cx - 280, textY, 560, RG_LINE, s_updateHelp[s_updates], LBAWHITE);
         // (the updater's last word -- or, while a check started here hasn't said anything yet, that it is checking)
         char status[400], said[400];
@@ -1143,9 +1161,13 @@ static void UpdatesPage(void) {
         if (status[0]) Wrapped(cx - 280, textY + lines * RG_LINE + 6, 560, RG_LINE, status, RG_GREY);
         const S32 select = Menu(s_updMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return; }
-        for (S32 i = 0; i < 4; i++) if (s_updMenu[4 + 2 * i + 1] == (U16)select) s_updMenu[0] = (U16)i;
+        for (S32 i = 0; i < RG_UPD_ROWS; i++) if (s_updMenu[4 + 2 * i + 1] == (U16)select) s_updMenu[0] = (U16)i;
         if (select == RG_ID_WINDOW) ToggleDisplayFullscreen();
-        else if (select == RG_ID_UPDATE_MODE) {
+        else if (select == RG_ID_MINIMAP) {
+            s_minimap = !s_minimap;
+            WriteSettings();
+            Log_Info("[racegame] the mini-map: %s", s_minimap ? "on" : "off");
+        } else if (select == RG_ID_UPDATE_MODE) {
             s_updates = (s_updates + 1) % 3;
             WriteSettings();
             Log_Info("[racegame] updates: %s", s_updateKey[s_updates]);

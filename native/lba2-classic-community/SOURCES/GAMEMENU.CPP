@@ -4069,6 +4069,8 @@ S32 MainGameMenu(S32 load, S32 resumeInGame) {
                 break;
             }
 
+            // (a race's mini-map taken off the scene behind the menu, and kept off while it is up: RACEMOD.CPP)
+            { extern void RaceMod_MinimapHide(S32 hide); RaceMod_MinimapHide(TRUE); }
             CopyScreen(Log, Screen);
             BoxReset();
 

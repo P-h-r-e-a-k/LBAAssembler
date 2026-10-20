@@ -24,6 +24,7 @@
  *     gears=5
  *     gear1=1500  gear2=2300  ...          top speed of each gear
  *     accel=4  brake=12  coast=7  reverse=2000  steer=1024  automatic=0  hud=1
+ *     minimap=1                  the mini-map in the display, bottom right (DrawMinimap; the race game's own setting decides there)
  *     startline=<cube x> <cube z> <x0> <z0> <x1> <z1> <dir x> <dir z>     cube-local ends, and the way a lap crosses it
  *     checkpoint=<the same>                                                  one per line, in the order a lap crosses them
  *     opponent_path=<file>       lines "x z y speed [radius]": world units from the island's corner (32768 to a cube), from the start
@@ -424,6 +425,7 @@ static int s_finishSet[2 * RACE_MAX_SETS], s_nbFinishSet = 0;
 #define RACE_WAKE_DIAL_MS 15000            // the wake line: before the waking scene's actor's first line, or this long after Twinsen wakes up
 static int s_sprint = 0, s_hasFinish = 0;
 static T_RACE_LINE s_finishLine;
+static int s_mapKey = 0;                   // minimap=: the race's mini-map (DrawMinimap) outside the race game, which has its own setting
 static S32 s_endAt = 0;                    // when the race's end is followed up (0: not yet)
 static int s_endWon = 0;
 static int s_wakeFlight = 0;                // wake_flight= (ms; 0: RACE_SPRINT_END_MS, the car held at the line)
@@ -3147,6 +3149,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "grid_back")) s_gridBack = atoi(v);
         else if (!strcmp(key, "weather")) s_fineWeather = !strcmp(v, "fine");
         else if (!strcmp(key, "wake_flight")) s_wakeFlight = atoi(v);
+        else if (!strcmp(key, "minimap")) s_mapKey = atoi(v);
         else if (!strcmp(key, "raised")) LoadRaised(v);
         else if (!strcmp(key, "raised_lap")) s_nbLap = atoi(v);
         else if (!strcmp(key, "raised_branch")) {
@@ -12926,7 +12929,313 @@ static int Held(S32 now) {
     return s_heldAt && now >= s_heldAt && now - s_heldAt < RACE_LAP_HOLD_MS && s_heldLap == s_laps - 1 && s_phase == PHASE_RACE && !s_sprint;
 }
 
+// ---- the mini-map -----------------------------------------------------------------------------------------------------------------
+// The editor's race minimap (MainWindow.RaceMinimap.cs) in the race's own display, bottom right -- the user, 2026-10-20: "The mini-map
+// that we have in the editor that shows where all the cars are, let's see if we can port this over into LBRA so there's a small map
+// showing the whole track in the bottom right corner. Let's add a setting so this can be toggled on/off." Laid out as the editor's: the
+// island's x across, its z down, the whole lap fitted into the box; the road white-edged dark grey (the raised road's points with its
+// jumps' gaps left open, else the guide line), the start line (and a sprint's finish line) chequered, and a dot for each car racing --
+// Twinsen's yellow and bigger, each opponent's the editor's colour for it -- over a darkened patch of the scene. The road is drawn once
+// into a mask of the box's size (again when the screen's size or the track changes): a frame only darkens the box, puts the mask's
+// pixels and the dots. Shown while the race game's setting says so (RACEGAME_SETTINGS.TXT minimap=, Options, "Window, mini-map,
+// updates"; on at first); elsewhere -- LBA Assembler's Play, whose window has a minimap of its own -- only with the race file's
+// minimap=1. Not over the race's end (finished: the results), nor behind the menu or the pause (RaceMod_MinimapHide).
+enum { MAP_NONE, MAP_EDGE, MAP_ROAD, MAP_LINE_A, MAP_LINE_B, MAP_BLACK, MAP_COLOURS, MAP_OUT = 255 };
+#define RACE_MAP_SHADE 9                  // how much the scene under the box is darkened (ShadeBoxBlk's levels: the menus' 8)
+static int s_mapHidden = 0;                // behind the menu or the pause
+static U32 s_mapSig = 0;                   // the road the map was laid out for (0: none)
+static double s_mapX0, s_mapZ0, s_mapX1, s_mapZ1;   // the road's extent, world units
+static U8 *s_mapMask = NULL, *s_mapUnder = NULL;    // the road at the box's size; the scene under the box as last drawn
+static S32 s_mapW = 0, s_mapH = 0, s_mapForW = 0, s_mapForH = 0, s_mapRoad = 1;
+static U32 s_mapMaskSig = 0;
+static double s_mapK = 1, s_mapOX = 0, s_mapOZ = 0;   // the world to the box: (x - X0) * K + OX across, (z - Z0) * K + OZ down
+static S32 s_mapAtX = -1, s_mapAtY = 0, s_mapAtW = 0, s_mapAtH = 0;   // where it was last drawn (-1: not on the screen) ...
+static void *s_mapAtLog = NULL;            // ... into which picture
+static U8 s_mapCol[MAP_COLOURS], s_mapCar[RACE_MAX_OPPONENTS + 1];  // the palette's colours for them (Twinsen's car first)
+static U32 s_mapPalSum = 0;
+
+static int MapOn(void) {
+    const S32 game = RaceGame_Minimap();
+    return game >= 0 ? game != 0 : s_mapKey != 0;
+}
+
+// The road as the map has it: the raised road's points (the lap's, then its branches'), else the guide line's (a sprint's to its finish
+// line). How many points; a sprint's or an open road's last point isn't joined to its first.
+static int MapPoints(int *closed) {
+    *closed = 0;
+    if (s_nbRaised > 1) {
+        const int lap = LapPoints();
+        const double dx = s_raised[lap - 1].X - s_raised[0].X, dz = s_raised[lap - 1].Z - s_raised[0].Z;
+        *closed = !s_sprint && s_raised[0].Half > 0 && s_raised[lap - 1].Half > 0 && dx * dx + dz * dz < 4096.0 * 4096.0;
+        return s_nbRaised;
+    }
+    const T_RACE_OPPONENT *o = Guide();
+    if (!o || o->Count < 2) return 0;
+    if (!s_sprint) { *closed = 1; return o->Count; }
+    int n = o->Count;
+    while (n > 2 && o->Cum[n - 1] > o->FinishS + 1) n--;
+    return n;
+}
+static void MapPoint(int i, double *x, double *z, int *floor) {
+    if (s_nbRaised > 1) { *x = s_raised[i].X; *z = s_raised[i].Z; *floor = s_raised[i].Half > 0; return; }
+    const T_RACE_OPPONENT *o = Guide();
+    *x = o->X[i]; *z = o->Z[i]; *floor = 1;
+}
+// ... and whether the road runs on from point i to point j (both with a floor, the same stretch: not from the lap into a branch)
+static int MapJoined(int i, int j) {
+    double x, z;
+    int a, b;
+    MapPoint(i, &x, &z, &a);
+    MapPoint(j, &x, &z, &b);
+    if (!a || !b) return 0;
+    if (s_nbRaised <= 1) return 1;
+    const int lap = LapPoints();
+    return (i < lap) == (j < lap) && BranchOf(i) == BranchOf(j);
+}
+
+// A line's ends in world units (cube-local ends + its cube)
+static void MapLineEnds(S32 cubeX, S32 cubeZ, S32 x0, S32 z0, S32 x1, S32 z1, double *e) {
+    e[0] = cubeX * 32768.0 + x0; e[1] = cubeZ * 32768.0 + z0; e[2] = cubeX * 32768.0 + x1; e[3] = cubeZ * 32768.0 + z1;
+}
+
+// What the map was laid out for: the road's points, the lines -- a new track, a new map.
+static U32 MapSignature(void) {
+    int closed;
+    const int n = MapPoints(&closed);
+    if (n < 2) return 0;
+    double x, z;
+    int f;
+    U32 sig = 2166136261u;
+    const int at[3] = {0, n / 2, n - 1};
+    for (int k = 0; k < 3; k++) {
+        MapPoint(at[k], &x, &z, &f);
+        sig = (sig ^ (U32)(S32)x) * 16777619u;
+        sig = (sig ^ (U32)(S32)z) * 16777619u;
+    }
+    sig = (sig ^ (U32)n) * 16777619u;
+    sig = (sig ^ (U32)(closed | s_sprint << 1 | s_car.HasLine << 2 | s_hasFinish << 3)) * 16777619u;
+    sig = (sig ^ (U32)(s_car.LineX0 + s_car.LineZ1 * 7)) * 16777619u;
+    return sig ? sig : 1;
+}
+
+static void MapLayout(void) {
+    int closed;
+    const int n = MapPoints(&closed);
+    s_mapX0 = s_mapZ0 = 1e30;
+    s_mapX1 = s_mapZ1 = -1e30;
+    for (int i = 0; i < n; i++) {
+        double x, z;
+        int f;
+        MapPoint(i, &x, &z, &f);
+        if (x < s_mapX0) s_mapX0 = x;
+        if (x > s_mapX1) s_mapX1 = x;
+        if (z < s_mapZ0) s_mapZ0 = z;
+        if (z > s_mapZ1) s_mapZ1 = z;
+    }
+    Log_Info("[racemod] the mini-map: %d road points%s, %.0f x %.0f units", n, closed ? " (a lap)" : "", s_mapX1 - s_mapX0, s_mapZ1 - s_mapZ0);
+}
+
+// A round spot of the mask (r 0: a pixel)
+static void MapSpot(S32 cx, S32 cy, S32 r, U8 value) {
+    for (S32 dy = -r; dy <= r; dy++)
+        for (S32 dx = -r; dx <= r; dx++) {
+            const S32 x = cx + dx, y = cy + dy;
+            if (dx * dx + dy * dy > r * r + r || x < 0 || y < 0 || x >= s_mapW || y >= s_mapH || s_mapMask[y * s_mapW + x] == MAP_OUT) continue;
+            s_mapMask[y * s_mapW + x] = value;
+        }
+}
+static void MapStroke(double ax, double az, double bx, double bz, S32 r, U8 value) {
+    const double x0 = (ax - s_mapX0) * s_mapK + s_mapOX, y0 = (az - s_mapZ0) * s_mapK + s_mapOZ;
+    const double x1 = (bx - s_mapX0) * s_mapK + s_mapOX, y1 = (bz - s_mapZ0) * s_mapK + s_mapOZ;
+    const int steps = (int)(fabs(x1 - x0) > fabs(y1 - y0) ? fabs(x1 - x0) : fabs(y1 - y0)) + 1;
+    for (int s = 0; s <= steps; s++) {
+        const double t = (double)s / steps;
+        MapSpot((S32)floor(x0 + (x1 - x0) * t + 0.5), (S32)floor(y0 + (y1 - y0) * t + 0.5), r, value);
+    }
+}
+// A start or finish line across the road, chequered (two pixels thick, its squares two long), two pixels past the road's edges
+static void MapLine(const double *e, S32 r) {
+    double cx = (e[0] + e[2]) / 2, cz = (e[1] + e[3]) / 2, hx = (e[2] - e[0]) / 2, hz = (e[3] - e[1]) / 2;
+    const double half = sqrt(hx * hx + hz * hz) * s_mapK, want = r + 2.5;
+    if (half <= 0) return;
+    hx *= want / half; hz *= want / half;
+    const double x0 = (cx - hx - s_mapX0) * s_mapK + s_mapOX, y0 = (cz - hz - s_mapZ0) * s_mapK + s_mapOZ;
+    const double x1 = (cx + hx - s_mapX0) * s_mapK + s_mapOX, y1 = (cz + hz - s_mapZ0) * s_mapK + s_mapOZ;
+    const int steep = fabs(y1 - y0) > fabs(x1 - x0), steps = (int)(steep ? fabs(y1 - y0) : fabs(x1 - x0)) + 1;
+    for (int s = 0; s <= steps; s++) {
+        const double t = (double)s / steps;
+        const S32 x = (S32)floor(x0 + (x1 - x0) * t + 0.5), y = (S32)floor(y0 + (y1 - y0) * t + 0.5);
+        for (S32 k = 0; k < 2; k++) {
+            const S32 px = x + (steep ? k : 0), py = y + (steep ? 0 : k);
+            MapSpot(px, py, 0, ((steep ? py : px) / 2 + k) & 1 ? MAP_LINE_A : MAP_LINE_B);
+        }
+    }
+}
+
+// The box's size for this screen, and the road drawn into its mask.
+static int MapMask(S32 width, S32 height, U32 sig) {
+    if (s_mapMask && sig == s_mapMaskSig && width == s_mapForW && height == s_mapForH) return 1;
+    // (about a quarter of the screen's height: 134 pixels at 480 -- within a third of its width on a narrow one)
+    S32 side = height * 28 / 100;
+    if (side > width * 32 / 100) side = width * 32 / 100;
+    if (side > 300) side = 300;
+    if (side < 80) side = 80;
+    const S32 pad = side / 14 + 3;
+    const double ex = s_mapX1 - s_mapX0 > 1 ? s_mapX1 - s_mapX0 : 1, ez = s_mapZ1 - s_mapZ0 > 1 ? s_mapZ1 - s_mapZ0 : 1;
+    s_mapK = (side - 2 * pad) / (ex > ez ? ex : ez);
+    S32 w = (S32)(ex * s_mapK) + 2 * pad + 1, h = (S32)(ez * s_mapK) + 2 * pad + 1;
+    if (w < side / 2) w = side / 2;
+    if (h < side / 2) h = side / 2;
+    s_mapOX = (w - ex * s_mapK) / 2;
+    s_mapOZ = (h - ez * s_mapK) / 2;
+    free(s_mapMask); free(s_mapUnder);
+    s_mapMask = (U8 *)malloc((size_t)w * h);
+    s_mapUnder = (U8 *)malloc((size_t)w * h);
+    if (!s_mapMask || !s_mapUnder) { free(s_mapMask); free(s_mapUnder); s_mapMask = s_mapUnder = NULL; return 0; }
+    s_mapW = w; s_mapH = h; s_mapForW = width; s_mapForH = height; s_mapMaskSig = sig;
+    memset(s_mapMask, MAP_NONE, (size_t)w * h);
+    // (its corners rounded)
+    const S32 round = 5;
+    for (S32 y = 0; y < round; y++)
+        for (S32 x = 0; x < round; x++) {
+            const S32 dx = round - x, dy = round - y;
+            if (dx * dx + dy * dy <= round * round) continue;
+            s_mapMask[y * w + x] = s_mapMask[y * w + (w - 1 - x)] = s_mapMask[(h - 1 - y) * w + x] = s_mapMask[(h - 1 - y) * w + (w - 1 - x)] = MAP_OUT;
+        }
+    // the road: its white edge, then the asphalt over it (a pixel either side of the asphalt is the edge)
+    s_mapRoad = side >= 200 ? 2 : 1;
+    int closed;
+    const int n = MapPoints(&closed);
+    for (int pass = 0; pass < 2; pass++)
+        for (int i = 0; i < n; i++) {
+            const int j = i + 1 < n ? i + 1 : closed ? 0 : -1;
+            if (j < 0 || !MapJoined(i, j)) continue;
+            double ax, az, bx, bz;
+            int f;
+            MapPoint(i, &ax, &az, &f);
+            MapPoint(j, &bx, &bz, &f);
+            MapStroke(ax, az, bx, bz, pass ? s_mapRoad : s_mapRoad + 1, pass ? MAP_ROAD : MAP_EDGE);
+        }
+    // (a branch of the raised road joined to the lap at its ends)
+    for (int b = 0; b < s_nbBranches && s_nbRaised > 1; b++)
+        for (int pass = 0; pass < 2; pass++) {
+            const int ends[2][2] = {{s_branches[b].From, s_branches[b].First}, {s_branches[b].Last, s_branches[b].To}};
+            for (int k = 0; k < 2; k++) {
+                const int i = ends[k][0], j = ends[k][1];
+                if (i < 0 || j < 0 || i >= s_nbRaised || j >= s_nbRaised || s_raised[i].Half <= 0 || s_raised[j].Half <= 0) continue;
+                MapStroke(s_raised[i].X, s_raised[i].Z, s_raised[j].X, s_raised[j].Z, pass ? s_mapRoad : s_mapRoad + 1, pass ? MAP_ROAD : MAP_EDGE);
+            }
+        }
+    double e[4];
+    if (s_car.HasLine) {
+        MapLineEnds(s_car.LineCubeX, s_car.LineCubeZ, s_car.LineX0, s_car.LineZ0, s_car.LineX1, s_car.LineZ1, e);
+        MapLine(e, s_mapRoad + 1);
+    }
+    if (s_sprint && s_hasFinish) {
+        MapLineEnds(s_finishLine.CubeX, s_finishLine.CubeZ, s_finishLine.X0, s_finishLine.Z0, s_finishLine.X1, s_finishLine.Z1, e);
+        MapLine(e, s_mapRoad + 1);
+    }
+    Log_Info("[racemod] the mini-map: %d x %d pixels for a %d x %d screen", (int)w, (int)h, (int)width, (int)height);
+    return 1;
+}
+
+// The palette's nearest colours to the map's (again when the palette changes: a scene's own, lightning)
+static void MapColours(void) {
+    if (!PtrPal) return;
+    U32 sum = 1;
+    int six = 1;
+    for (int i = 0; i < 768; i++) { sum = sum * 31 + PtrPal[i]; if (PtrPal[i] >= 64) six = 0; }
+    if (sum == s_mapPalSum) return;
+    s_mapPalSum = sum;
+    static const U8 want[MAP_COLOURS + RACE_MAX_OPPONENTS + 1][3] = {
+        {0, 0, 0}, {235, 235, 235}, {62, 62, 68}, {250, 250, 250}, {16, 16, 16}, {0, 0, 0},
+        // Twinsen's yellow, then the editor's opponents' colours (MainWindow.RaceMinimap.cs RaceMinimapColours)
+        {255, 230, 0}, {230, 40, 40}, {40, 200, 230}, {230, 60, 220}, {250, 140, 20}, {90, 220, 60}, {245, 245, 245},
+    };
+    const double k = six ? 0.25 : 1;
+    for (int c = 0; c < MAP_COLOURS + RACE_MAX_OPPONENTS + 1; c++) {
+        int best = 0;
+        double bd = 1e30;
+        for (int j = 0; j < 256; j++) {
+            const double dr = PtrPal[j * 3] - want[c][0] * k, dg = PtrPal[j * 3 + 1] - want[c][1] * k, db = PtrPal[j * 3 + 2] - want[c][2] * k;
+            const double dd = 3 * dr * dr + 4 * dg * dg + 2 * db * db;
+            if (dd < bd) { bd = dd; best = j; }
+        }
+        if (c < MAP_COLOURS) s_mapCol[c] = (U8)best;
+        else s_mapCar[c - MAP_COLOURS] = (U8)best;
+    }
+}
+
+// A car's dot on the screen, kept inside the box: black round it
+static void MapDot(S32 x0, S32 y0, double wx, double wz, S32 r, U8 colour) {
+    const S32 cx = x0 + (S32)floor((wx - s_mapX0) * s_mapK + s_mapOX + 0.5), cy = y0 + (S32)floor((wz - s_mapZ0) * s_mapK + s_mapOZ + 0.5);
+    for (int pass = 0; pass < 2; pass++) {
+        const S32 rr = pass ? r : r + 1;
+        for (S32 dy = -rr; dy <= rr; dy++)
+            for (S32 dx = -rr; dx <= rr; dx++) {
+                const S32 x = cx + dx, y = cy + dy;
+                if (dx * dx + dy * dy > rr * rr + rr || x < x0 || y < y0 || x >= x0 + s_mapW || y >= y0 + s_mapH) continue;
+                ((U8 *)Log)[TabOffLine[y] + x] = pass ? colour : s_mapCol[MAP_BLACK];
+            }
+    }
+}
+
+// The map drawn, bottom right; its top (the display's gear and speed go over it), or the screen's height when it isn't drawn.
+static S32 DrawMinimap(S32 width, S32 height) {
+    s_mapAtX = -1;
+    const U32 sig = s_mapHidden || s_place || !s_car.Hud || !MapOn() ? 0 : MapSignature();
+    if (!sig) return height;
+    if (sig != s_mapSig) { s_mapSig = sig; MapLayout(); }
+    if (!MapMask(width, height, sig)) return height;
+    const S32 x0 = width - 16 - s_mapW, y0 = height - 16 - s_mapH;
+    if (x0 < 0 || y0 < 0 || !Log || !PtrCLUTGouraud) return height;
+    MapColours();
+    // the box: the scene under it kept (RaceMod_MinimapHide), darkened, the road over it
+    const U8 *clut = PtrCLUTGouraud + ((15 - RACE_MAP_SHADE) << 8);
+    for (S32 r = 0; r < s_mapH; r++) {
+        U8 *row = (U8 *)Log + TabOffLine[y0 + r] + x0;
+        const U8 *m = s_mapMask + r * s_mapW;
+        memcpy(s_mapUnder + r * s_mapW, row, (size_t)s_mapW);
+        for (S32 c = 0; c < s_mapW; c++) {
+            if (m[c] == MAP_OUT) continue;
+            row[c] = m[c] == MAP_NONE ? clut[row[c]] : s_mapCol[m[c]];
+        }
+    }
+    // the cars: the opponents' (as the editor's racecars has them: its car where this scene has it, else where its line has it in the
+    // race; one waiting out of sight left out), then Twinsen's over them
+    const S32 r = s_mapRoad + 1;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        T_RACE_OPPONENT *o = &s_opp[n];
+        if (!o->Count || !o->Scenes) continue;
+        double x, y, z, v, dx, dz;
+        const int index = OpponentActor(o);
+        if (index >= 0 && ListObjet[index].Obj.Y > -10000) { x = ListObjet[index].Obj.X + cx; z = ListObjet[index].Obj.Z + cz; }
+        else if (RaceOn()) PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
+        else continue;
+        MapDot(x0, y0, x, z, r, s_mapCar[1 + n]);
+    }
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    MapDot(x0, y0, hero->Obj.X + cx, hero->Obj.Z + cz, r + 1, s_mapCar[0]);
+    BoxMovingAdd(x0, y0, x0 + s_mapW - 1, y0 + s_mapH - 1);
+    s_mapAtX = x0; s_mapAtY = y0; s_mapAtW = s_mapW; s_mapAtH = s_mapH; s_mapAtLog = Log;
+    return y0;
+}
+
+// The menu or the pause is coming up over the race (GAMEMENU.CPP, PERSO.CPP GamePaused): the map taken off the screen -- the scene under
+// it put back -- and not drawn while it is up (`hide`); 0 when the game goes on.
+void RaceMod_MinimapHide(S32 hide) {
+    if (hide && s_mapAtX >= 0 && s_mapUnder && s_mapAtLog == Log && s_mapAtW == s_mapW && s_mapAtH == s_mapH
+            && s_mapAtX + s_mapAtW <= (S32)ModeDesiredX && s_mapAtY + s_mapAtH <= (S32)ModeDesiredY) {
+        for (S32 r = 0; r < s_mapAtH; r++) memcpy((U8 *)Log + TabOffLine[s_mapAtY + r] + s_mapAtX, s_mapUnder + r * s_mapAtW, (size_t)s_mapAtW);
+        BoxMovingAdd(s_mapAtX, s_mapAtY, s_mapAtX + s_mapAtW - 1, s_mapAtY + s_mapAtH - 1);
+    }
+    if (hide) s_mapAtX = -1;
+    s_mapHidden = hide != 0;
+}
+
 void RaceMod_Draw(void) {
+    s_mapAtX = -1;                          // (the mini-map not on this frame's picture until DrawMinimap puts it there)
     if (!RaceMod_Active() || !LbaFont) return;
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
     const int items = s_powerups && s_nbMush > 0 && !s_trial && !Qualifying();
@@ -12982,13 +13291,14 @@ void RaceMod_Draw(void) {
     if (s_car.Hud) {
         char text[96], a[24], b[24];
         const S32 bottom = height - 16 - RACE_LINE_STEP;
-        // the gear and the speed, bottom right
+        // the mini-map in the corner, bottom right (with it on), and the gear and the speed over it -- bottom right without it
+        const S32 mapTop = DrawMinimap(width, height), speedY = mapTop < height ? mapTop - 2 - RACE_LINE_STEP : bottom;
         if (speed < 0) snprintf(text, sizeof(text), "Gear R");
         else snprintf(text, sizeof(text), s_car.Automatic ? "Gear %d/%d auto" : "Gear %d/%d", (int)s_gear, (int)s_car.Gears);
-        HudLine(width - 16, bottom - RACE_LINE_STEP, text, 1);
+        HudLine(width - 16, speedY - RACE_LINE_STEP, text, 1);
         // (a cell taken as a metre: the original buggy's top speed, 3800 units a second, is 27 km/h)
         snprintf(text, sizeof(text), "%d km/h", (int)((abs(speed) * 36 + 2560) / 5120));
-        HudLine(width - 16, bottom, text, 1);
+        HudLine(width - 16, speedY, text, 1);
         // the lap and its time, bottom left -- before the start what the start line wants, after the race the place
         text[0] = 0;
         S32 colour = LBAWHITE;
@@ -13095,6 +13405,7 @@ static void ResetTrack(void) {
     s_nbFalls = 0; s_nbPanels = 0; s_lavaModel = -1; s_fallFootNext = s_fallLipNext = 0;
     s_nbGeysers = 0; for (int i = 0; i < RACE_MAX_COLUMN; i++) s_column[i].Extra = -1;
     s_shardModel = s_shardBit = -1;
+    s_mapKey = 0;
     s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_nbFlyers = 0; s_nbSpooks = 0; s_partyBox = 0; HalloweenReset(); memset(&s_marshal, 0, sizeof(s_marshal)); s_gantryPts = -1;

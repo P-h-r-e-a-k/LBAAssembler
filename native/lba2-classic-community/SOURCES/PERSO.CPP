@@ -355,6 +355,7 @@ void GamePaused(U32 flags) {
     S32 fin = FALSE;
 
     SaveTimer();
+    { extern void RaceMod_MinimapHide(S32 hide); RaceMod_MinimapHide(TRUE); }    /* a race's mini-map off the paused scene (RACEMOD.CPP) */
 
     if (flags & PAUSE_CLOVER) {
         n = InitIncrustDisp(INCRUST_OBJ | INCRUST_YCLIP,
@@ -416,6 +417,7 @@ void GamePaused(U32 flags) {
     PersoFlashTimer = 0;
 
     ClearWaitNoInput();
+    { extern void RaceMod_MinimapHide(S32 hide); RaceMod_MinimapHide(FALSE); }
 }
 
 /*══════════════════════════════════════════════════════════════════════════*
@@ -449,6 +451,7 @@ static S32 SpellKeyDown(S32 n) {
 S32 MainLoop() {
     /* The exit reason belongs to this entry. See Control_NoteMainLoopEntered. */
     Control_NoteMainLoopEntered();
+    { extern void RaceMod_MinimapHide(S32 hide); RaceMod_MinimapHide(FALSE); }   /* a race's mini-map back after the menu (RACEMOD.CPP) */
     S32 xm, ym, zm;
     T_OBJET *ptrobj;
     U8 i;

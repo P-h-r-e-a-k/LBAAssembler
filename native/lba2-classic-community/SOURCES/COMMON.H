@@ -321,6 +321,8 @@ S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers);
 void RaceGame_Qualified(S32 lap);
 // ... and the race's track's best lap in its Best laps, ms (0: none, or not the race game's race): a time trial's display shows it
 S32 RaceGame_BestLap(void);
+// ... and its mini-map setting (Options): 1 on, 0 off, -1 not the race game (the race file's minimap= decides)
+S32 RaceGame_Minimap(void);
 // An opponent's car, which the race-track mode places wherever it is on the lap -- in the next cube too (EXTFUNC.CPP: not kept inside
 // the player's cube).
 S32 RaceMod_FreeOfCube(S32 numobj);
