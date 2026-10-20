@@ -568,6 +568,14 @@ static int s_goldIcon = -1;                // gold_icon=: the golden Gazogem's m
 // haunt=<ghost> <icon> (the Temple of Bú's, 2026-10-17): the ghost power-up on this track -- the ghost BODY.HQR body drawn over each car it
 // haunts, and its icon for the item box (BODY.HQR, a fixed body); -1: no ghost (none drawn from a mushroom: RandomPowerUp)
 static int s_hauntBody = -1, s_hauntIcon = -1;
+// The ghost comes along often on its own track (the user, 2026-10-20: "at least 2 instances of it over every 3 laps on average, this
+// includes both us picking it up, or having it used upon us"): once the race has gone RACE_GHOST_DUE laps (the opponents' planned lap) with
+// no ghost -- Twinsen's drawn from a mushroom, or another car's drawn to use on him -- the next item anyone draws is the ghost. With its
+// plain chance beside it, about one a lap.
+#define RACE_GHOST_DUE 1.1                 // (1.2: 4 in 6 laps, the least asked for -- 1.1 for some room)
+static S32 s_ghostSeenAt = 0;              // the race's last ghost drawn (0: none since the GO)
+static int s_ghostSeen = 0, s_ghostForced = 0;
+static double s_plannedLap = 0;            // the longest of the opponents' planned laps, s
 static void HauntOthers(S32 now);
 static void HauntTwinsen(const char *by, S32 now);
 static void GhostLaunch(int from, S32 now);
@@ -2859,6 +2867,7 @@ static void PlanSpeeds(T_RACE_OPPONENT *o) {
         lap += (o->Cum[i + 1] - o->Cum[i]) / v[i];
     }
     free(v);
+    if (o->Pace > 0 && lap * 100.0 / o->Pace > s_plannedLap) s_plannedLap = lap * 100.0 / o->Pace;
     Log_Info("[racemod] opponent line of %d points planned from the car: a perfect lap %.1f s (skill %d%%: %.1f s)", count, lap,
              o->Pace, lap * 100.0 / o->Pace);
 }
@@ -6893,9 +6902,41 @@ static S32 ShrinkMs(double back) {
     return back < 0 ? RACE_SHRINK_MS : (S32)(RACE_SHRINK_MS * (1 + RACE_SHRINK_SPREAD * (1 - 2 * back)));
 }
 
+// The ghost due (RACE_GHOST_DUE): its track's race running, none for that long since the GO or the last one.
+static int GhostDue(S32 now) {
+    if (s_hauntBody < 0 || !RaceRunning() || s_plannedLap <= 0) return 0;
+    if (!s_ghostSeenAt) s_ghostSeenAt = now;      // (the race's clock for it starts with the first item drawn after the GO)
+    // (laps as Twinsen drives them: his last, or before he has driven one most of the opponents' slowest planned lap -- by that alone the
+    // ghost came every 1.5 of his laps, 3 or 4 in 6, 2026-10-20)
+    const double lap = s_lastLap > 0 ? s_lastLap / 1000.0 : s_plannedLap * 0.9;
+    return now - s_ghostSeenAt >= (S32)(lap * RACE_GHOST_DUE * 1000);
+}
+// A ghost drawn -- Twinsen's into his box, another car's to use on him, the slot machine's: the race's count of them, and the clock for
+// the next.
+static void GhostDrawn(S32 now) {
+    s_ghostSeen++;
+    Log_Info("[racemod] the ghost drawn: %d this race (%d of them due), %.1f s since the last", s_ghostSeen, s_ghostForced,
+             s_ghostSeenAt ? (now - s_ghostSeenAt) / 1000.0 : 0.0);
+    s_ghostSeenAt = now;
+}
+
 // A mushroom's power-up, at random -- the weights by how far back the car is (`back`, BackShare: -1 the plain weights): the strong ones
-// go to the cars at the back and hardly ever to the leader, who draws the weak ones.
+// go to the cars at the back and hardly ever to the leader, who draws the weak ones (DrawPowerUp); on the ghost's track the ghost when
+// it is due (GhostDue).
+static int DrawPowerUp(double back);
 static int RandomPowerUp(double back) {
+    const S32 now = TimerRefHR;
+    int pu;
+    if (s_nbOnly <= 1 && !(s_powerupOnly >= 0 && s_powerupOnly < PU_COUNT) && GhostDue(now)) {
+        s_ghostForced++;
+        Log_Info("[racemod] the ghost is due: %.1f laps without one", RACE_GHOST_DUE);
+        pu = PU_GHOST;
+    } else pu = DrawPowerUp(back);
+    if (pu == PU_GHOST && s_hauntBody >= 0 && RaceRunning()) GhostDrawn(now);
+    return pu;
+}
+
+static int DrawPowerUp(double back) {
     if (s_nbOnly > 1) { const int pick = s_onlyList[(int)(RaceRandom() * s_nbOnly) % s_nbOnly]; if (pick >= 0 && pick < PU_COUNT) return pick; }
     if (s_powerupOnly >= 0 && s_powerupOnly < PU_COUNT) return s_powerupOnly;
     double w[PU_COUNT], total = 0;
@@ -10876,6 +10917,7 @@ static void HalloweenReset(void) {
     s_nbDives = 0; s_nbScares = 0; s_nbWebs = 0; s_webScreenAt = s_webScreenUntil = 0;
     s_diving.On = 0; s_diving.Ready = 0; s_diving.Body = -1; s_diving.Hint = -1;
     s_hauntBody = s_hauntIcon = -1;
+    s_ghostSeenAt = 0; s_ghostSeen = s_ghostForced = 0; s_plannedLap = 0;
     HauntForget();
     memset(s_hauntReady, 0, sizeof(s_hauntReady));
     memset(s_ghosts, 0, sizeof(s_ghosts));
@@ -12400,9 +12442,36 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int ring, S32 settled, S32
 // what it draws: once for each body, on black, turned eight ways at a known projection, the box round the pixels it drew -- then scaled
 // and moved to fit, which is exact for the projection's factor and middle. `measure`: only that (the page draws its backdrop after it).
 #define RACE_BODY_FIT_LF 500
-static S32 s_fitBody = -1;
+static S32 s_fitBody = -1, s_fitAnim = -1;
 static double s_fitW = 0, s_fitH = 0, s_fitX = 0, s_fitY = 0;   // its extent there, and its middle off the projection's
-void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 measure) {
+// The body drawn in place, facing `beta`: posed by `anim`'s first frame when it has one (the car page's cars, by their driving animation --
+// the race poses them so: DrawDriveAs; unposed, their bones' parts -- the drivers, the pumpkin F1's wheels, the witch's broom -- lay where
+// the body file leaves them, the broom through the witch's chest and the F1 with no wheels, 2026-10-20), else as the body file has it.
+static T_OBJ_3D s_pageObj;
+static S32 s_pageBody = -1, s_pageAnim = -1;
+static void PageBodyDisplay(U8 *shape, S32 body, S32 anim, S32 beta) {
+    if (anim >= 0 && (s_pageBody != body || s_pageAnim != anim)) {
+        s_pageBody = s_pageAnim = -1;
+        if (GivePtrAnim(anim)) {
+            ObjectClear(&s_pageObj);
+            s_pageObj.Body.Num = -1;
+            ObjectInitBody(&s_pageObj, (void *)(uintptr_t)(U32)body);
+            s_pageObj.Texture = BufferTexture; s_pageObj.NextTexture = BufferTexture;
+            s_pageObj.Anim.Num = -1;
+            ObjectInitAnim(&s_pageObj, (void *)(uintptr_t)(U32)anim);
+            s_pageObj.Status |= FLAG_BODY;
+            s_pageBody = body; s_pageAnim = anim;
+        }
+    }
+    if (anim < 0 || s_pageBody != body || s_pageAnim != anim) { BodyDisplay(0, 0, 0, 0, beta & 4095, 0, shape); return; }
+    s_pageObj.X = s_pageObj.Y = s_pageObj.Z = 0;
+    s_pageObj.Alpha = s_pageObj.Gamma = 0; s_pageObj.Beta = beta & 4095;
+    s_pageObj.Texture = BufferTexture; s_pageObj.NextTexture = BufferTexture;
+    ObjectSetInterFrame(&s_pageObj);
+    ObjectDisplay(&s_pageObj);
+}
+
+void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 measure, S32 anim) {
     U8 *shape = body >= 0 ? (U8 *)GivePtrBody(body) : NULL;
     if (!shape || x1 <= x0 || y1 <= y0) return;
     T_RACE_VIEW view;
@@ -12424,12 +12493,12 @@ void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 me
     const S32 rep = RepMask;
     PtrMap = ObjPtrMap = BufferTexture;
     RepMask = 0xFFFF;
-    if (body != s_fitBody) {
+    if (body != s_fitBody || anim != s_fitAnim) {
         S32 xmin = 0x7FFFFFFF, ymin = 0x7FFFFFFF, xmax = -0x7FFFFFFF, ymax = -0x7FFFFFFF;
         SetProjection(cx, cy, 128, RACE_BODY_FIT_LF, RACE_BODY_FIT_LF);
         Switch_Fillers(FILL_POLY_TEXTURES);
         Box(x0, y0, x1, y1, 0);
-        for (S32 k = 0; k < 8; k++) BodyDisplay(0, 0, 0, 0, k * 512, 0, shape);
+        for (S32 k = 0; k < 8; k++) PageBodyDisplay(shape, body, anim, k * 512);
         for (S32 y = y0; y <= y1; y++) {
             const U8 *row = (const U8 *)Log + TabOffLine[y];
             for (S32 x = x0; x <= x1; x++)
@@ -12440,7 +12509,7 @@ void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 me
                     if (y > ymax) ymax = y;
                 }
         }
-        s_fitBody = body;
+        s_fitBody = body; s_fitAnim = anim;
         s_fitW = xmax > xmin ? xmax - xmin : 0; s_fitH = ymax > ymin ? ymax - ymin : 0;
         s_fitX = (xmin + xmax) / 2.0 - cx; s_fitY = (ymin + ymax) / 2.0 - cy;
         Log_Info("[racemod] body %d measured: %.0f x %.0f at %d, its middle %.0f, %.0f off", (int)body, s_fitW, s_fitH, RACE_BODY_FIT_LF, s_fitX, s_fitY);
@@ -12463,7 +12532,7 @@ void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 me
     const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
     Switch_Fillers(FILL_POLY_TEXTURES);
     if (CubeMode == CUBE_EXTERIEUR) SetCLUT(PalLevel);
-    BodyDisplay(0, 0, 0, 0, beta & 4095, 0, shape);
+    PageBodyDisplay(shape, body, anim, beta);
     PtrMap = map; ObjPtrMap = objMap; RepMask = rep;
     if (CubeMode == CUBE_EXTERIEUR) SetCLUT(clut);
     Switch_Fillers(depth ? (keep ? (fog ? FILL_POLY_FOG_NZW : FILL_POLY_NZW) : (fog ? FILL_POLY_FOG_ZBUFFER : FILL_POLY_ZBUFFER)) : fog ? FILL_POLY_FOG : FILL_POLY_TEXTURES);

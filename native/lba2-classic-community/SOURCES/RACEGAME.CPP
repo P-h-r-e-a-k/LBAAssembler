@@ -71,7 +71,7 @@
 #include <cstring>
 #include <ctime>
 
-extern void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 measure);   // RACEMOD.CPP
+extern void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 measure, S32 anim);   // RACEMOD.CPP
 
 #define RG_MAX_SPECIALS 8
 #define RG_MAX_CARS 16
@@ -111,7 +111,7 @@ typedef struct {
 
 typedef struct {
     char Name[96], Drive[64];
-    S32 Body;
+    S32 Body, Anim;                         // drive_as='s body and driving animation (the car page poses the car by it)
 } T_RG_CAR;
 
 typedef struct {
@@ -243,6 +243,7 @@ static void Read(void) {
             v = Field(v, c->Name, sizeof(c->Name));
             Field(v, c->Drive, sizeof(c->Drive));
             c->Body = c->Drive[0] ? atoi(c->Drive) : -1;
+            if (!c->Drive[0] || sscanf(c->Drive, "%*d %d", &c->Anim) != 1) c->Anim = -1;
             if (c->Name[0] && c->Drive[0]) s_nbCars++;
         }
     }
@@ -738,13 +739,13 @@ static int CarPage(const char *what) {
         }
         if (step) { s_car = (s_car + step + s_nbCars) % s_nbCars; start = TimerRefHR; }
         // (a car not seen yet measured first, under the backdrop drawn next: RaceMod_DrawBody)
-        RaceMod_DrawBody(x0 + 2, y0 + 2, x1 - 2, y1 - 2, s_cars[s_car].Body, 0, 1);
+        RaceMod_DrawBody(x0 + 2, y0 + 2, x1 - 2, y1 - 2, s_cars[s_car].Body, 0, 1, s_cars[s_car].Anim);
         // the page: the backdrop, the header, the box with the car, its name and the keys
         const S32 top = y0 - 36, bottom = y1 + 120 < (S32)ModeDesiredY ? y1 + 120 : (S32)ModeDesiredY - 1;
         CopyBlock(0, top, (S32)ModeDesiredX - 1, bottom, Screen, 0, top, Log);
         Text(cx, y0 - 34, "Choose your car", RG_ORANGE);
         ShadeBoxBlk(x0, y0, x1, y1, MENU_SHADE_LVL);
-        RaceMod_DrawBody(x0 + 2, y0 + 2, x1 - 2, y1 - 2, s_cars[s_car].Body, (S32)(((TimerRefHR - start) / 3 + 3072) & 4095), 0);
+        RaceMod_DrawBody(x0 + 2, y0 + 2, x1 - 2, y1 - 2, s_cars[s_car].Body, (S32)(((TimerRefHR - start) / 3 + 3072) & 4095), 0, s_cars[s_car].Anim);
         DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
         char name[160];
         snprintf(name, sizeof(name), "%s", s_cars[s_car].Name);
