@@ -10,14 +10,16 @@ namespace LBAAssembler.Terrain.Temple;
 // level, let's use the one from LBA1 instead"). LBA1's scenes 8 and 40 -- the temple, the crypt and the long corridor -- play its music 5
 // (scene 41, the hall in front, its music 2: TempleScene says which scene's music is the race's). LBA1 plays music 1-9 off its CD's audio
 // tracks, music N CD track N + 1 (the first track is the data: native/lba1-classic AMBIANCE.C PlayMusic, PlayCdTrack); the floppy release,
-// and anything above 9, plays MIDI (MIDI_MI.HQR / MIDI_SB.HQR: a score, not a recording -- nothing here to play it with).
+// and anything above 9, plays MIDI (MIDI_MI.HQR / MIDI_SB.HQR: a score, not a recording -- since 2026-10-20 the race plays it when no
+// recording is found: TempleMusicMidi).
 //
 // The race track's build takes the CD track out of the player's own LBA1, trims the silence at its ends (the next track's two-second
 // pregap: the race plays it again behind itself) and writes it into the game folder as a WAV (16-bit stereo 44.1 kHz, the CD's own format;
 // the engine's STREAM.CPP streams WAV and OGG only), or copies an OGG, which the race file names (RaceTrackService.TrackInfo.Music; the
 // engine's music=, RACEMOD.CPP). The music is never in the repo or an installer: it is made from the player's copy when the track is built.
-// Without LBA1's audio (a floppy LBA1, a folder of its data with no disc image beside it) the race plays LBA2's Temple of Bù's music, as
-// before (the scenes' own: TempleTrack).
+// Without LBA1's audio (a floppy LBA1, a folder of its data with no disc image beside it) the race plays LBA1's score of it, MIDI_MI.HQR's
+// (RACEMUSIC\LBA1_TEMPLE.MID: TempleMusicMidi, 2026-10-20) -- and with neither, LBA2's Temple of Bù's music, as before (the scenes' own:
+// TempleTrack).
 //
 // How LBA1 is installed, and what each gives (2026-10-18, checked against the installs on the user's PC):
 //   - GOG's DOS release ("Little Big Adventure", and "Little Big AdventureLBAWin"): LBA.DAT, a cue sheet, over LBA.GOG, a raw image of the
@@ -49,10 +51,11 @@ internal static partial class TempleMusic
     // (a sample this quiet or quieter counts as silence at the track's ends: dither, the pregap)
     private const int Silence = 24;
 
-    // The race's music, as the race file names it: the file a build put in the game folder (the WAV, or the OGG), or null.
+    // The race's music, as the race file names it: the file a build put in the game folder (the WAV, or the OGG -- a recording -- else the
+    // score, the MID: TempleMusicMidi), or null.
     public static string? Installed(string gameDirectory)
     {
-        foreach (var ext in new[] { ".WAV", ".OGG" })
+        foreach (var ext in new[] { ".WAV", ".OGG", ".MID" })
             if (File.Exists(Path.Combine(gameDirectory, Folder, Stem + ext))) return $"{Folder}/{Stem}{ext}";
         return null;
     }
@@ -69,20 +72,29 @@ internal static partial class TempleMusic
     {
         var log = new List<string>();
         var music = MusicNumber(lba1Directory);
+        var places = Places(lba1Directory);
+        var folder = Path.Combine(gameDirectory, Folder);
+        // (the LBA1s GOG and Steam installed on this PC, looked in when the build's own LBA1 hasn't the music -- not with LBA1_MUSIC_SKIP_INSTALLED)
+        List<string>? installed = null;
+        List<string> Installs() => installed ??= SkipInstalled ? new List<string>() : InstalledLba1Folders();
         if (music is < 1 or > 9)
         {
-            log.Add($"The race's music: LBA1's temple plays music {music}, which LBA1 has only as MIDI -- the race plays LBA2's Temple of Bù's music");
+            // (no CD track: LBA1 plays it as MIDI wherever it is)
+            var kept = Installed(gameDirectory);
+            if (kept is not null && !kept.EndsWith(".MID", StringComparison.OrdinalIgnoreCase))
+                log.Add($"The race's music: LBA1's temple plays music {music}, which LBA1 has only as MIDI: the {kept} an earlier build made plays");
+            else if (!InstallMidi(folder, places.Concat(Installs()), music, $"LBA1's temple plays music {music}, which LBA1 has only as MIDI", log))
+                log.Add($"The race's music: LBA1's temple plays music {music}, which LBA1 has only as MIDI, and no {MidiArchiveName} has it -- the race plays LBA2's Temple of Bù's music");
             return log;
         }
         var track = music + 1;
-        var places = Places(lba1Directory);
         var notes = new List<string>();
         var found = Find(places, track, notes);
         if (found is null)
         {
             // (a copy of LBA1's data files alone has no music -- the CD's music is its audio tracks, not files: the LBA1 GOG or Steam installed
             // on this PC gives it, the best of them)
-            var others = InstalledLba1Folders().SelectMany(Places).Distinct(StringComparer.OrdinalIgnoreCase).Where(d => !places.Contains(d, StringComparer.OrdinalIgnoreCase)).ToList();
+            var others = Installs().SelectMany(Places).Distinct(StringComparer.OrdinalIgnoreCase).Where(d => !places.Contains(d, StringComparer.OrdinalIgnoreCase)).ToList();
             if (others.Count > 0 && Find(others, track) is { } elsewhere)
             {
                 log.Add($"The race's music: LBA1's music {music} (CD track {track}) isn't with {lba1Directory} ({string.Join("; ", notes.DefaultIfEmpty("no CD image with its audio tracks, nor its track as a file"))}) " +
@@ -90,17 +102,23 @@ internal static partial class TempleMusic
                 found = elsewhere;
             }
         }
-        var folder = Path.Combine(gameDirectory, Folder);
         if (found is null)
         {
             var kept = Installed(gameDirectory);
-            log.Add($"The race's music: LBA1's music {music} (CD track {track}, the temple's) isn't with this LBA1 -- no CD image with its audio tracks, nor its track as a file, " +
-                    $"in {string.Join(", ", places)} ({EnvDirectory} names another folder to look in), nor in a GOG or Steam LBA1 on this PC: " +
-                    (kept is not null ? $"the {kept} an earlier build made plays" : "the race plays LBA2's Temple of Bù's music"));
+            var why = $"LBA1's music {music} (CD track {track}, the temple's) isn't with this LBA1 -- no CD image with its audio tracks, nor its track as a file, " +
+                      $"in {string.Join(", ", places)} ({EnvDirectory} names another folder to look in), nor in a GOG or Steam LBA1 on this PC" +
+                      (SkipInstalled ? $" (not looked in: {EnvSkipInstalled})" : "");
+            // (a recording an earlier build made still beats the score)
+            if (kept is not null && !kept.EndsWith(".MID", StringComparison.OrdinalIgnoreCase))
+                log.Add($"The race's music: {why}: the {kept} an earlier build made plays");
+            else if (!InstallMidi(folder, places.Concat(Installs()), music, why, log))
+                log.Add($"The race's music: {why}, nor its score ({MidiArchiveName}): the race plays LBA2's Temple of Bù's music");
             foreach (var n in notes) log.Add($"  ({n})");
             return log;
         }
         Directory.CreateDirectory(folder);
+        // (a recording found: the score an earlier build wrote goes)
+        Delete(Path.Combine(folder, Stem + ".MID"));
         var (source, pcm, ogg, lead) = found.Value;
         string written;
         if (ogg is not null)

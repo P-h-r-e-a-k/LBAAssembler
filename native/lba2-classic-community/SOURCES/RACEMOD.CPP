@@ -175,7 +175,8 @@
  *                                between the grid's columns, ahead of the front row -- there for the count-down and GO (and a qualifying
  *                                lap's start), the cars set off past her on either side (kept off her: MarshalPost, MarshalKeepOff), and
  *                                once they have she hops off the road onto her plinth (Marshal)
- *   The music (2026-10-18): music=<file>   the race's own music in place of its scenes' (a WAV or OGG; not a full path: the game folder's)
+ *   The music (2026-10-18): music=<file>   the race's own music in place of its scenes' (a WAV or OGG, or a MIDI file -- 2026-10-20 --
+ *                                played through the PC's MIDI synth: LIB386/AIL/SDL/MIDI.CPP; not a full path: the game folder's)
  *                                -- the Temple of Bú's LBA1 temple music. And every race's music keeps going until the race is over: played
  *                                again behind itself when it runs out (RaceMusicFrame; MUSIC.CPP LoopMusic), left to end after the finish.
  *   The items' sounds (2026-10-19): no key -- the game folder's RACESOUNDS/PICKUP_<NAME>.WAV as an item comes into Twinsen's item box,
@@ -2974,7 +2975,9 @@ static int ReadSets(const char *v, int *sets) {
     return n;
 }
 
-// The race's music (LBA Assembler, 2026-10-18). music=<file>: its own music in place of its scenes' -- a WAV or OGG file, a name that isn't
+// The race's music (LBA Assembler, 2026-10-18). music=<file>: its own music in place of its scenes' -- a WAV or OGG file (or, 2026-10-20,
+// a MIDI file: LBA1's score of it, played through the PC's MIDI synth -- LIB386/AIL/SDL/MIDI.CPP, kept going, paused and at the music's
+// volume as the others are; where there is no MIDI output, the scenes' own music), a name that isn't
 // a full path the game folder's (as the race game's files are) -- LBA1's temple music for the Temple of Bú, which LBA2's music numbers
 // can't name (the race track's build makes the file from the player's LBA1: Temple.TempleMusic). A file that isn't there leaves the scenes'
 // own music. And whatever plays keeps going until the race is over (the user, 2026-10-18: "the sound track stops after a few laps and
@@ -3000,6 +3003,12 @@ static void RaceMusicFrame(void) {
             if (FILE *f = fopen(full, "rb")) fclose(f);
             else {
                 Log_Warn("[racemod] music: %s isn't there -- the scenes' own music plays", full);
+                full[0] = 0;
+            }
+            // (a MIDI file -- LBA1's temple music as its score, where the player's LBA1 has no CD music: LIB386/AIL/SDL/MIDI.CPP -- where
+            // there is no MIDI output: the scenes' own)
+            if (full[0] && !StreamCanPlay(full)) {
+                Log_Warn("[racemod] music: %s is a MIDI file, which this platform can't play -- the scenes' own music plays", full);
                 full[0] = 0;
             }
         }

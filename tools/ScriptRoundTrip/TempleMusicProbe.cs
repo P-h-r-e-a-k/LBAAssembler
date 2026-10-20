@@ -29,8 +29,122 @@ internal static class TempleMusicProbe
         "installs" => Installs(),
         "decode" => Decode(args[2], args[3]),
         "compare" => Compare(args[2], args[3]),
-        _ => throw new ArgumentException("templemusic find|picture|capture|installs|decode|compare"),
+        "midi" => Midi(args[2], args[3]),
+        "mididump" => MidiDump(args[2], args[3]),
+        _ => throw new ArgumentException("templemusic find|picture|capture|installs|decode|compare|midi"),
     };
+
+    // templemusic midi <LBA1 folder> <out dir>: MIDI_MI.HQR's scores -- each one's length, notes, and what its XMIDI stream holds besides
+    // notes (meta events by type, sysex, controllers XMIDI gives a meaning of its own: 110-120), each written as entry_NN.mid; and the
+    // temple's (TempleMusic.MidiScore) as the build writes it
+    private static int Midi(string lba1, string outDir)
+    {
+        Directory.CreateDirectory(outDir);
+        var archive = HqrArchive.Open(Path.Combine(lba1, TempleMusic.MidiArchiveName));
+        Console.WriteLine($"{TempleMusic.MidiArchiveName}: {archive.Count} entries");
+        foreach (var i in archive.ValidIndices)
+        {
+            var xmi = archive.Read(i);
+            var smf = LBAAssembler.Lba1.Runtime.Lba1Xmi.ToMidi(xmi);
+            var (seconds, notes, events) = smf is null ? (0.0, 0, 0) : TempleMusic.MidiFacts(smf);
+            var extra = XmiExtras(xmi);
+            if (smf is not null) File.WriteAllBytes(Path.Combine(outDir, $"entry_{i:00}.mid"), smf);
+            Console.WriteLine($"  {i,2}: {xmi.Length,6} bytes XMI -> {(smf is null ? "not XMIDI" : $"{(int)(seconds / 60)}:{seconds % 60:00.0} ({seconds:0.0} s), {notes} notes, {events} channel events")}{extra}");
+        }
+        var music = TempleMusic.MusicNumber(lba1);
+        var score = TempleMusic.MidiScore(new[] { lba1 }, music);
+        Console.WriteLine($"the temple's music {music}: {(score is { } s ? $"{s.Archive} entry {music}, {s.Midi.Length} bytes as a MIDI file" : "none")}");
+        if (score is { } got) File.WriteAllBytes(Path.Combine(outDir, "LBA1_TEMPLE.MID"), got.Midi);
+        return 0;
+    }
+
+    // templemusic mididump <mid> <dump>: the engine's MIDI sequencer's messages (LBA2_MIDI_DUMP: "<wall ms> ms  at <place ms> ms  <bytes>")
+    // against the file's own events (its one track at 120 ticks a second, as Lba1Xmi writes it): each of the file's channel messages found
+    // in order in the dump, how late it was sent (the sequencer's place when it sent it, less the event's time), the wall clock against the
+    // place (a steady clock: their difference constant, but for whole loops of the music), and the dump's other lines (volumes, notes off)
+    private static int MidiDump(string midPath, string dumpPath)
+    {
+        var smf = File.ReadAllBytes(midPath);
+        var division = smf[12] << 8 | smf[13];
+        var expected = new List<(double Ms, string Bytes)>();
+        var p = 22; var stop = smf.Length; long tick = 0; byte status = 0;
+        int Vlq() { var v = 0; for (var i = 0; i < 4 && p < stop; i++) { var b = smf[p++]; v = v << 7 | (b & 0x7F); if ((b & 0x80) == 0) break; } return v; }
+        var usPerTick = 500000.0 / division;
+        double endMs = 0;
+        while (p < stop)
+        {
+            tick += Vlq();
+            if (smf[p] >= 0x80) status = smf[p++];
+            if (status == 0xFF) { var type = smf[p++]; var len = Vlq(); if (type == 0x51) usPerTick = (smf[p] << 16 | smf[p + 1] << 8 | smf[p + 2]) / (double)division; p += len; if (type == 0x2F) { endMs = tick * usPerTick / 1000; break; } continue; }
+            if (status is 0xF0 or 0xF7) { p += Vlq(); continue; }
+            var n = (status & 0xF0) is 0xC0 or 0xD0 ? 1 : 2;
+            expected.Add((tick * usPerTick / 1000, n == 1 ? $"{status:X2} {smf[p]:X2}" : $"{status:X2} {smf[p]:X2} {smf[p + 1]:X2}"));
+            p += n;
+        }
+        Console.WriteLine($"{midPath}: {expected.Count} channel messages, {endMs / 1000:0.000} s");
+        var lines = new List<(double Wall, double At, string Bytes, string Why)>();
+        var rx = new System.Text.RegularExpressions.Regex(@"^\s*([\d.]+) ms\s+at\s+([\d.]+) ms\s+((?:[0-9A-F]{2} ?)+)\s*(.*)$");
+        foreach (var line in File.ReadLines(dumpPath))
+        {
+            var m = rx.Match(line);
+            if (m.Success) lines.Add((double.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), double.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture), m.Groups[3].Value.Trim(), m.Groups[4].Value.Trim()));
+            else if (line.StartsWith('#') || line.StartsWith('(')) Console.WriteLine($"  dump: {line}");
+        }
+        Console.WriteLine($"{dumpPath}: {lines.Count} messages");
+        foreach (var why in lines.Where(l => l.Why.Length > 0).GroupBy(l => l.Why)) Console.WriteLine($"  '{why.Key}': {why.Count()} time(s), first at {why.First().Wall / 1000:0.000} s (wall), the music at {why.First().At / 1000:0.000} s");
+        // the file's events in order, through the loops
+        var found = 0; var late = new List<double>(); var at = 0; var loops = 0; var drift = new List<double>();
+        double? offset = null;
+        for (var li = 0; li < lines.Count && found < 100000; li++)
+        {
+            var e = expected[at];
+            if (lines[li].Bytes != e.Bytes) continue;
+            late.Add(lines[li].At - e.Ms);
+            var o = lines[li].Wall - lines[li].At - loops * endMs;
+            offset ??= o;
+            drift.Add(o - offset.Value);
+            found++;
+            if (++at == expected.Count) { at = 0; loops++; }
+        }
+        late.Sort();
+        Console.WriteLine($"the file's messages found in order: {found} ({loops} whole loops and {at} more)");
+        if (late.Count > 0)
+            Console.WriteLine($"  sent late by (the sequencer's place less the event's time): median {late[late.Count / 2]:0.000} ms, 99th percentile {late[(int)(late.Count * 0.99)]:0.000} ms, " +
+                              $"most {late[^1]:0.000} ms, least {late[0]:0.000} ms");
+        if (drift.Count > 0) Console.WriteLine($"  wall clock less the music's place (less whole loops), from its first: {drift.Min():0.000} to {drift.Max():0.000} ms");
+        return 0;
+    }
+
+    // What an XMIDI score's events hold besides notes: meta events by type, sysex, XMIDI's own controllers (110-120: channel lock, patch
+    // bank, callback, FOR/NEXT loops ...), and its channels' programs
+    private static string XmiExtras(byte[] d)
+    {
+        var start = -1; var length = 0;
+        for (var p = 0; p + 8 <= d.Length; p++)
+            if (d[p] == 'E' && d[p + 1] == 'V' && d[p + 2] == 'N' && d[p + 3] == 'T') { start = p + 8; length = d[p + 4] << 24 | d[p + 5] << 16 | d[p + 6] << 8 | d[p + 7]; break; }
+        if (start < 0) return "";
+        var metas = new SortedDictionary<int, int>(); var xcc = new SortedDictionary<int, int>(); var programs = new SortedSet<string>();
+        var sysex = 0;
+        var q = start; var end = Math.Min(d.Length, start + length);
+        int Vlq() { var v = 0; for (var i = 0; i < 4 && q < end; i++) { var b = d[q++]; v = v << 7 | (b & 0x7F); if ((b & 0x80) == 0) break; } return v; }
+        while (q < end)
+        {
+            var b = d[q];
+            if (b < 0x80) { q++; continue; }
+            q++;
+            if (b == 0xFF) { var type = d[q++]; var len = Vlq(); metas[type] = metas.GetValueOrDefault(type) + 1; if (type == 0x51 && len == 3) programs.Add($"tempo {d[q] << 16 | d[q + 1] << 8 | d[q + 2]}"); q += len; if (type == 0x2F) break; continue; }
+            if (b is 0xF0 or 0xF7) { sysex++; q += Vlq(); continue; }
+            switch (b & 0xF0)
+            {
+                case 0x90: q += 2; Vlq(); break;
+                case 0xC0: programs.Add($"ch{(b & 15) + 1}:{d[q]}"); q++; break;
+                case 0xD0: q++; break;
+                case 0xB0: if (d[q] is >= 110 and <= 120) xcc[d[q]] = xcc.GetValueOrDefault(d[q]) + 1; q += 2; break;
+                default: q += 2; break;
+            }
+        }
+        return $"; meta {string.Join(" ", metas.Select(m => $"{m.Key:X2}x{m.Value}"))}; sysex {sysex}; XMIDI CCs {string.Join(" ", xcc.Select(m => $"{m.Key}x{m.Value}"))}; {string.Join(" ", programs)}";
+    }
 
     private static int Find(string lba1, string outDir)
     {

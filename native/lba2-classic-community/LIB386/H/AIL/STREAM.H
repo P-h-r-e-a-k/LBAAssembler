@@ -124,6 +124,19 @@ void SetStreamLoop(S32 on);
 S32 PumpStreamLoop(void);
 
 //--------------------------------------------------------------------------
+//	StreamCanPlay :			whether this backend can play a music
+//					file of this kind at all (LBA Assembler,
+//					2026-10-20): FALSE for a MIDI file
+//					(.mid) where there is no MIDI output
+//					-- the caller plays other music instead
+//
+//			name:		the file's name
+//
+//	Returns	:			TRUE/FALSE
+//--------------------------------------------------------------------------
+S32 StreamCanPlay(const char *name);
+
+//--------------------------------------------------------------------------
 //	MusicLogEnable :		toggle the [MUSIC]/[CD] trace channel
 //
 //			enable:		non-zero to turn tracing on

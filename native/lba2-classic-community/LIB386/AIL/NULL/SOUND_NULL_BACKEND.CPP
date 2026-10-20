@@ -70,5 +70,6 @@ S32 IsStreamPlaying() { return FALSE; }
 char *StreamName() { return ""; }
 void SetStreamLoop(S32 on) { (void)on; }
 S32 PumpStreamLoop(void) { return 0; }
+S32 StreamCanPlay(const char *name) { (void)name; return TRUE; }
 void MusicLogEnable(int enable) { (void)enable; }
 int MusicLogIsEnabled(void) { return 0; }
