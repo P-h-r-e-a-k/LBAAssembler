@@ -453,8 +453,10 @@ internal sealed class RaceTrackOptions
     // into even stretches about this long, a row in each. With ItemSpacingCells, every that many cells of road instead -- the rule until
     // 2026-10-17 was every 40 cells, a row every second or two (ScriptRoundTrip buildtogether's RT_ITEM_SPACING, for comparisons:
     // tools/RaceTrackStress/items.py).
-    // (8 s until 2026-10-20, when the user asked for about 1.5 times the power-ups: 16/3 s -- every track's rows 168 to 255 in all)
-    public double ItemSpacing { get; set; } = 16.0 / 3;
+    // (8 s until 2026-10-20, when the user asked for about 1.5 times the power-ups: 16/3 s -- every track's rows 168 to 255 in all; then,
+    // the same day, rows spread across a wide road's width and the user: "spread item pickups out slightly more, currently the second we've
+    // used one powerup there's another one almost instantly": 6.5 s)
+    public double ItemSpacing { get; set; } = 6.5;
     public double? ItemSpacingCells { get; set; }
     // How far each power-up of a row stands from its cube's edges at the least, or 0: anywhere (RaceTrackPlan.ItemCubeMargin).
     public double ItemCubeMargin { get; set; }

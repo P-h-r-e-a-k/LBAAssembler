@@ -922,6 +922,10 @@ internal static class RaceTrackScenes
     // (the gap is more than the engine's reach for taking one, RACEMOD.CPP RACE_MUSHROOM_REACH: 2 cells; a car down the middle of one takes
     // only that one)
     private const double MushroomGap = 2.4, MushroomEdge = 1.0;
+    // (a wide road's row spread evenly across it, its mushrooms at least MushroomSpread apart, MushroomMost at the most -- the Temple of Bu's
+    // widened road had its three in the middle, 2.4 apart, 2026-10-20: "spread them out evenly across the track")
+    private const double MushroomSpread = 2.6;
+    private const int MushroomMost = 5;
     // The car the rows' driving time is reckoned for: the standalone game's (and the stress test's base car, tools/RaceTrackStress) -- top
     // gear 110 km/h, steering 200 %, half a turn a second -- round each bend of the first opponent's line as fast as it steers and no faster
     // than its top gear, a vertical loop's ring at ItemTimingLoop (60 km/h). (Its laps come out within 17 % of the engine's planned laps
@@ -932,8 +936,9 @@ internal static class RaceTrackScenes
     internal static (int Count, double Gap) MushroomRow(double half)
     {
         var room = half - MushroomEdge;
-        var n = room >= 2.0 ? 3 : room >= 0.9 ? 2 : 1;
-        return (n, n > 1 ? Math.Min(MushroomGap, 2 * room / (n - 1)) : 0);
+        if (room < 2.0) { var few = room >= 0.9 ? 2 : 1; return (few, few > 1 ? Math.Min(MushroomGap, 2 * room / (few - 1)) : 0); }
+        var n = Math.Clamp((int)Math.Floor(2 * room / MushroomSpread) + 1, 3, MushroomMost);
+        return (n, 2 * room / (n - 1));
     }
 
     // Where the power-ups' rows stand round the lap. RaceTrackOptions.ItemSpacing seconds of driving apart: the lap's driving time (from the

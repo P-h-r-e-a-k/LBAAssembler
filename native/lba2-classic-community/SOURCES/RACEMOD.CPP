@@ -605,7 +605,10 @@ static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 0, 0, 0, 0, 0, 0, 0, 0
 // the attacks on the cars in front more often: until then the leader drew a boost one time in seven, a strong item one in five, the
 // last car a strong item two times in three; now one in fourteen, one in ten, and four in five)
 static const double s_puLead[PU_COUNT] = {0.35, 1.8, 0.0, 1.0, 0.0, 1.1, 1.3, 1.1, 0.1, 0.0, 1.0, 0, 0.15};
-static const double s_puLast[PU_COUNT] = {1.6, 0.5, 2.4, 0.3, 3.2, 0.3, 0.6, 0.8, 2.4, 2.8, 0.3, 0, 1.8};
+// (the back's strong items more often still, later on 2026-10-20 -- the user: "let's also increase the more powerful powerups cars at the
+// back are getting": the last car's jet-pack, lightning, red ball, fire ball and ghost three in four times, with its Gazogem nine in ten;
+// its protection spell, drops and yellow and green balls half as often)
+static const double s_puLast[PU_COUNT] = {1.6, 0.3, 3.2, 0.15, 4.0, 0.15, 0.3, 0.4, 3.2, 4.0, 0.15, 0, 2.4};
 // what the item box shows (OBJFIX.HQR, the inventory's own: the Gazogem, the protection spell, the lightning ring, the meca-penguin,
 // the super jet-pack, the magic ball in each of its colours -- INVENT.CPP's TabObj3D for FLAG_BALLE_MAGIQUE, {1, 40, 41, 42}, picked by
 // MagicLevel - 1: until 2026-10-08 the balls had 0-3 here, OBJFIX's own 0-3, the holomap, the yellow ball, the dart and Sendell's ball;

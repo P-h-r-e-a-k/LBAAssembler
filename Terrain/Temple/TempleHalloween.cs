@@ -662,7 +662,8 @@ internal static partial class TempleHalloween
         }
         if (report.Pumpkins)
         {
-            var model = Lantern(240, 320, sides: 12, rings: 6);
+            // (30 % bigger than the first ones, 240 by 320, on the widened road: the user, 2026-10-20, "enlarge the item boxes slightly")
+            var model = Lantern(312, 416, sides: 12, rings: 6);
             var mushroom = Body.Read(HqrArchive.Open(path).Read(RaceTrackOil.MushroomBody), 2, allowStatic: true);
             var pumpkin = Body.Read(model.Write(), 2, allowStatic: true);
             pumpkin.Header = mushroom.Header; pumpkin.Static = true;
