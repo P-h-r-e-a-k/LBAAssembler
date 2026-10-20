@@ -40,7 +40,10 @@
  *     laps=<n>                     a race's laps (3), unless its race file has its own (race_laps=: the Temple of Bú's five)
  *     end_to_menu=<ms>             a finished race back to the menu this long after its end (8000)
  *     special=<name>|<race file>|<time trial file>|<start scene>     files beside the game's data (and so are those they name)
- *     car=<name>|<drive_as value: BODY.HQR body, animation, shrunk body>
+ *     car=<name>|<drive_as value: BODY.HQR body, animation, shrunk body>[|<acceleration> <top speed> <handling>]
+ *                                  the car's stats (2026-10-20), stars from 0 to 5 in half stars: shown on the car page, and the race
+ *                                  drives the car by them (RACEMOD.CPP car_accel=, car_top=, car_handling=: 2.5 the track's own
+ *                                  setup). A line without them: a car with no stars shown, driven as the track sets it.
  * BESTTIMES.TXT: "<track>|<trial's time ms>|<best lap ms>|<car>|<date>|<laps>|lap" lines, a time trial's fastest single lap (and its
  * whole time, GO to the last lap's line, over <laps> laps), the fastest lap first. A line without "lap" at its end -- the whole trials'
  * times kept before 2026-10-18, "<track>|<time ms>|<best lap ms>|<car>|<date>[|<laps>]" -- is kept as it is but not shown, as are other
@@ -69,6 +72,7 @@
 #include <SYSTEM/STRING.H>
 
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -115,6 +119,8 @@ typedef struct {
 typedef struct {
     char Name[96], Drive[64];
     S32 Body, Anim;                         // drive_as='s body and driving animation (the car page poses the car by it)
+    int Rated;                              // its stats given (the car= line's third field)
+    float Stars[3];                         // ... acceleration, top speed, handling: 0 to 5 stars, in halves
 } T_RG_CAR;
 
 typedef struct {
@@ -243,10 +249,18 @@ static void Read(void) {
             if (sp->Name[0] && sp->Race[0]) s_nbSp++;
         } else if (!strcmp(key, "car") && s_nbCars < RG_MAX_CARS) {
             T_RG_CAR *c = &s_cars[s_nbCars];
+            char stars[64];
             v = Field(v, c->Name, sizeof(c->Name));
-            Field(v, c->Drive, sizeof(c->Drive));
+            v = Field(v, c->Drive, sizeof(c->Drive));
+            Field(v, stars, sizeof(stars));
             c->Body = c->Drive[0] ? atoi(c->Drive) : -1;
             if (!c->Drive[0] || sscanf(c->Drive, "%*d %d", &c->Anim) != 1) c->Anim = -1;
+            // (its stats: three numbers, each kept to 0..5 in half stars; none, or not three, and the car has none)
+            c->Rated = sscanf(stars, "%f %f %f", &c->Stars[0], &c->Stars[1], &c->Stars[2]) == 3;
+            for (int k = 0; k < 3; k++) {
+                const float st = c->Rated ? c->Stars[k] : 2.5f;
+                c->Stars[k] = (float)(floor((st < 0 ? 0 : st > 5 ? 5 : st) * 2 + 0.5) / 2);
+            }
             if (c->Name[0] && c->Drive[0]) s_nbCars++;
         }
     }
@@ -584,6 +598,9 @@ static int StartRace(int sp, int trial, int car, int level) {
     }
     fclose(in);
     if (car >= 0 && car < s_nbCars) fprintf(f, "# %s\ndrive_as=%s\n", s_cars[car].Name, s_cars[car].Drive);
+    // (its stats, which the race drives it by: RACEMOD.CPP car_accel= car_top= car_handling=)
+    if (car >= 0 && car < s_nbCars && s_cars[car].Rated)
+        fprintf(f, "# its stats, in stars of 5\ncar_accel=%.1f\ncar_top=%.1f\ncar_handling=%.1f\n", s_cars[car].Stars[0], s_cars[car].Stars[1], s_cars[car].Stars[2]);
     if (s->Scene >= 0) fprintf(f, "start_scene=%d\n", (int)s->Scene);
     fprintf(f, "start_in_car=1\nrace_laps=%d\nend_to_menu=%d\n", SpecialLaps(sp), (int)s_endMs);
     if (trial) fprintf(f, "trial=1\n");
@@ -717,8 +734,90 @@ static int Escaped(void) { return MyKey == K_ESC || Input & I_MENUS; }
 #define RG_ORANGE 243                       // the palette's fire orange, for the pages' headers
 #define RG_GREY (3 * 16 + 11)               // the greyed rows' colour (GAMEMENU.CPP COUL_TEXT_MENU_DISABLE)
 
-// The car: its body turning on the page, its name under it; left and right go through the cars, Enter takes it, Esc goes back.
-// The car taken (its index), or -1.
+// The palette's colour nearest to (r, g, b) (0..255 each), in the menus' palette (LBA2's own: the menu's picture is drawn in it)
+static U8 NearestColour(int r, int g, int b) {
+    const U8 *pal = PtrPalNormal ? PtrPalNormal : PtrPal;
+    if (!pal) return LBAWHITE;
+    int best = 0;
+    long bd = 0x7FFFFFFF;
+    for (int j = 1; j < 256; j++) {
+        const long dr = pal[j * 3] - r, dg = pal[j * 3 + 1] - g, db = pal[j * 3 + 2] - b;
+        const long d = 3 * dr * dr + 4 * dg * dg + 2 * db * db;
+        if (d < bd) { bd = d; best = j; }
+    }
+    return (U8)best;
+}
+
+// A five-pointed star, point up, centred on (cx, cy), `r` its points' radius: filled `fill` (0 to 1, from the left: half a star is its
+// left half) in gold, the rest dim, with the menus' dark shadow under it. Drawn straight into the page (Log), clipped to the screen.
+#define RG_STAR_R 11                        // a star's radius
+#define RG_STAR_STEP 26                     // ... one to the next
+static void Star(S32 cx, S32 cy, S32 r, double fill, U8 gold, U8 dim, U8 shadow) {
+    double px[10], py[10];
+    for (int k = 0; k < 10; k++) {
+        const double a = -3.14159265358979 / 2 + k * 3.14159265358979 / 5, rr = k & 1 ? r * 0.42 : r;
+        px[k] = rr * cos(a);
+        py[k] = rr * sin(a);
+    }
+    const S32 split = (S32)floor(-r + fill * 2 * r + 0.5);
+    for (int pass = 0; pass < 2; pass++) {
+        const S32 off = pass ? 0 : 2;       // (the shadow first, 2 pixels down and right)
+        for (S32 dy = -r - 1; dy <= r + 1; dy++)
+            for (S32 dx = -r - 1; dx <= r + 1; dx++) {
+                const S32 x = cx + dx + off, y = cy + dy + off;
+                if (x < 0 || y < 0 || x >= (S32)ModeDesiredX || y >= (S32)ModeDesiredY) continue;
+                // (the pixel's centre inside the star: even-odd crossings of its ten edges)
+                const double tx = dx, ty = dy;
+                int inside = 0;
+                for (int i = 0, j = 9; i < 10; j = i++)
+                    if ((py[i] > ty) != (py[j] > ty) && tx < (px[j] - px[i]) * (ty - py[i]) / (py[j] - py[i]) + px[i]) inside = !inside;
+                if (!inside) continue;
+                ((U8 *)Log)[TabOffLine[y] + x] = pass ? (dx < split ? gold : dim) : shadow;
+            }
+    }
+}
+
+// A car's stats under its name: a row each -- its label, then five stars, full, half or empty -- the rows `step` apart from y. The
+// rows' labels and stars a block centred on cx.
+static const char *const s_statName[3] = {"Acceleration", "Top speed", "Handling"};
+static void TextAt(S32 x, S32 y, const char *cp850, S32 colour);
+static void Stats(S32 cx, S32 y, S32 step, const T_RG_CAR *c) {
+    static U8 gold = 0, dim = 0, shadow = 0;
+    static const U8 *paletteWas = NULL;
+    const U8 *pal = PtrPalNormal ? PtrPalNormal : PtrPal;
+    if (pal != paletteWas) {
+        paletteWas = pal;
+        gold = NearestColour(255, 200, 40);
+        dim = NearestColour(64, 58, 52);
+        shadow = NearestColour(0, 0, 0);
+    }
+    char text[256];
+    S32 labels = 0;
+    for (int k = 0; k < 3; k++) {
+        Label(text, s_statName[k]);
+        const S32 w = SizeFont(text);
+        if (w > labels) labels = w;
+    }
+    const S32 gap = 18, stars = 4 * RG_STAR_STEP + 2 * RG_STAR_R + 2, x0 = cx - (labels + gap + stars) / 2, sx = x0 + labels + gap + RG_STAR_R;
+    for (int k = 0; k < 3; k++) {
+        Label(text, s_statName[k]);
+        TextAt(x0, y + k * step, text, RG_GREY);
+        // (the stars' middle level with the text's: its capitals about 26 pixels tall from where it is drawn)
+        const S32 sy = y + k * step + 13;
+        for (int n = 0; n < 5; n++) {
+            const double fill = c->Stars[k] - n;
+            Star(sx + n * RG_STAR_STEP, sy, RG_STAR_R, fill <= 0 ? 0 : fill >= 1 ? 1 : fill, gold, dim, shadow);
+        }
+    }
+}
+
+// The car: its body turning on the page, its name under it, its stats (when RACEGAME.TXT gives them) under that; left and right go
+// through the cars, Enter takes it, Esc goes back. The car taken (its index), or -1.
+// (2026-10-20, the stats' three rows: the box 156 tall where it was 200, under the menu picture's title as before; what it is for in
+// the header, "Choose your car for a race", and the car's number in the box's top right corner, where the line "Car 1 of 12, for a
+// race" was under the name -- the keys still on the 480-tall canvas)
+#define RG_CAR_BOTTOM 286
+#define RG_STAT_LINE 26
 static int CarPage(const char *what) {
     if (s_nbCars <= 0) return -1;
     if (s_car < 0 || s_car >= s_nbCars) s_car = 0;
@@ -730,7 +829,11 @@ static int CarPage(const char *what) {
     S32 padDir = JoystickMenuNavOnly();
     AsciiMode = TRUE;
     S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
-    S32 x0 = cx - 230, x1 = cx + 230, y0 = 130 + oy, y1 = 330 + oy;
+    // (the cars with stats: the box higher and shorter, their three rows under the name -- a list without them laid out as before)
+    int rated = 0;
+    for (int i = 0; i < s_nbCars; i++) rated |= s_cars[i].Rated;
+    const S32 boxTop = 130, boxBottom = rated ? RG_CAR_BOTTOM : 330;
+    S32 x0 = cx - 230, x1 = cx + 230, y0 = boxTop + oy, y1 = boxBottom + oy;
     int chosen = -2;
     S32 start = TimerRefHR;
     s_clickWas = Click & 3;
@@ -740,7 +843,7 @@ static int CarPage(const char *what) {
         // (the window resized: the page laid out again at the new size)
         if (Refitted()) {
             cx = UI_CENTER_X; oy = UI_VCENTER_OFS;
-            x0 = cx - 230; x1 = cx + 230; y0 = 130 + oy; y1 = 330 + oy;
+            x0 = cx - 230; x1 = cx + 230; y0 = boxTop + oy; y1 = boxBottom + oy;
         }
         S32 step = Step(&padDir);
         // (the mouse: a click on the box's left or right quarter the car before or after, in its middle this one; the right button back)
@@ -756,19 +859,30 @@ static int CarPage(const char *what) {
         // (a car not seen yet measured first, under the backdrop drawn next: RaceMod_DrawBody)
         RaceMod_DrawBody(x0 + 2, y0 + 2, x1 - 2, y1 - 2, s_cars[s_car].Body, 0, 1, s_cars[s_car].Anim);
         // the page: the backdrop, the header, the box with the car, its name and the keys
-        const S32 top = y0 - 36, bottom = y1 + 120 < (S32)ModeDesiredY ? y1 + 120 : (S32)ModeDesiredY - 1;
+        const S32 last = rated ? y1 + 3 * RG_STAT_LINE + 66 : y1 + 82;   // (the keys' line)
+        const S32 top = y0 - 36, bottom = last + 38 < (S32)ModeDesiredY ? last + 38 : (S32)ModeDesiredY - 1;
         CopyBlock(0, top, (S32)ModeDesiredX - 1, bottom, Screen, 0, top, Log);
-        Text(cx, y0 - 34, "Choose your car", RG_ORANGE);
+        char header[96];
+        snprintf(header, sizeof(header), rated ? "Choose your car for %s" : "Choose your car", what);
+        Text(cx, y0 - 34, header, RG_ORANGE);
         ShadeBoxBlk(x0, y0, x1, y1, MENU_SHADE_LVL);
         RaceMod_DrawBody(x0 + 2, y0 + 2, x1 - 2, y1 - 2, s_cars[s_car].Body, (S32)(((TimerRefHR - start) / 3 + 3072) & 4095), 0, s_cars[s_car].Anim);
         DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
         char name[160];
         snprintf(name, sizeof(name), "%s", s_cars[s_car].Name);
-        Text(cx, y1 + 10, name, LBAWHITE);
+        Text(cx, y1 + 8, name, LBAWHITE);
         char count[64];
-        snprintf(count, sizeof(count), "Car %d of %d, for %s", s_car + 1, s_nbCars, what);
-        Text(cx, y1 + 46, count, RG_GREY);
-        Text(cx, y1 + 82, "Left, right: car    Enter: race    Esc: back", RG_GREY);
+        if (rated) {
+            if (s_cars[s_car].Rated) Stats(cx, y1 + 42, RG_STAT_LINE, &s_cars[s_car]);
+            char text[256];
+            snprintf(count, sizeof(count), "%d of %d", s_car + 1, s_nbCars);
+            Label(text, count);
+            TextAt(x1 - 12 - SizeFont(text), y0 + 6, text, RG_GREY);
+        } else {
+            snprintf(count, sizeof(count), "Car %d of %d, for %s", s_car + 1, s_nbCars, what);
+            Text(cx, y1 + 46, count, RG_GREY);
+        }
+        Text(cx, last, "Left, right: car    Enter: race    Esc: back", RG_GREY);
         BoxStaticAdd(0, top, (S32)ModeDesiredX - 1, bottom);
         BoxUpdate();
         if (chosen != -2) break;

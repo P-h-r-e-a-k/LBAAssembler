@@ -231,6 +231,38 @@ static int s_checked = 0;
 static int s_active = 0;
 static T_RACE_CAR s_car;
 
+// The player's car's stats (2026-10-20: the race game's car page -- RACEGAME.CPP -- writes the chosen car's, car_accel= car_top=
+// car_handling=, 0 to 5 stars, 2.5 the track's setup as it is): its pull, top speed and steering over the track's setup, s_car, which the
+// opponents' lines stay planned from. At 5 stars RACE_STAT_* more, at 0 as much less, in a straight line between. (The ranges by what a
+// star is worth on a lap of the Temple of Bú, raceplan: 1 % of top speed 0.4 s, of steering 0.15 s, of pull 0.02 s -- the pull's wide
+// so it shows off the line and after every hit that stops the car; with every car's stars adding up to the same, their perfect laps
+// within 2.6 s of each other, 57.8 to 60.4 s, the track's own setup 58.9 s.)
+#define RACE_STAT_ACCEL 0.50
+#define RACE_STAT_TOP 0.08
+#define RACE_STAT_STEER 0.20
+static double s_statAccel = 1, s_statTop = 1, s_statSteer = 1;
+static T_RACE_CAR s_player;
+static S32 *s_autoV = NULL;                 // the console's autodrive: the guide line's speeds planned for the player's car (PlayerPlan)
+static int s_autoVCount = 0;
+static double StatScale(const char *v, double range) {
+    double stars = atof(v);
+    if (stars < 0) stars = 0;
+    if (stars > 5) stars = 5;
+    return 1 + (stars - 2.5) / 2.5 * range;
+}
+static int Rated(void) { return s_statAccel != 1 || s_statTop != 1 || s_statSteer != 1; }
+// The player's car: the track's setup with its stats -- every gear's top speed, the pull (given back the share the taller gears take
+// off it, BUGGY.CPP RaceSpeed's pull going against the gear's top speed: the acceleration stat alone says how quick it is away) and the
+// steering
+static const T_RACE_CAR *PlayerCar(void) {
+    s_player = s_car;
+    if (!Rated()) return &s_player;
+    for (S32 g = 0; g < s_player.Gears && g < RACE_MAX_GEARS; g++) s_player.GearTop[g] = (S32)(s_car.GearTop[g] * s_statTop + 0.5);
+    s_player.Accel = (S32)(s_car.Accel * s_statAccel * s_statTop + 0.5);
+    s_player.Steer = (S32)(s_car.Steer * s_statSteer + 0.5);
+    return &s_player;
+}
+
 static S32 s_gear = 1;
 static int s_lastX = 0, s_lastZ = 0;       // the shift keys' state last frame
 
@@ -2961,6 +2993,31 @@ static void OnSpot(T_RACE_OPPONENT *o, const T_RACE_SPOT *spot) {
 
 static S32 RaceCameraEye(S32 *eye, S32 *target);
 
+// The console's autodrive with the car's stats (car_accel= car_top= car_handling=): the guide line's speeds planned again for the player's
+// car -- faster on the straights, quicker through the bends, as the car is -- kept in s_autoV; the line's own speeds (the opponents') left
+// as they are. None without stats: the autodrive drives the line's.
+static void PlanSpeeds(T_RACE_OPPONENT *o);
+static void PlayerPlan(void) {
+    free(s_autoV);
+    s_autoV = NULL;
+    s_autoVCount = 0;
+    T_RACE_OPPONENT *o = s_opp[0].Count ? &s_opp[0] : s_guide.Count ? &s_guide : NULL;
+    if (!Rated() || !o || !o->R || !o->V) return;
+    const T_RACE_CAR keep = s_car;
+    const double keepPlanned = s_plannedLap;
+    S32 *const keepV = (S32 *)malloc(o->Count * sizeof(S32));
+    if (!keepV) return;
+    memcpy(keepV, o->V, o->Count * sizeof(S32));
+    s_car = *PlayerCar();
+    PlanSpeeds(o);
+    s_car = keep;
+    s_plannedLap = keepPlanned;
+    s_autoV = (S32 *)malloc(o->Count * sizeof(S32));
+    if (s_autoV) { memcpy(s_autoV, o->V, o->Count * sizeof(S32)); s_autoVCount = o->Count; }
+    memcpy(o->V, keepV, o->Count * sizeof(S32));
+    free(keepV);
+}
+
 // The keys an island with no track keeps from the set (Load's carOnly): the car's handling, and the set's own.
 static int CarKey(const char *key) {
     static const char *const keys[] = {"gears", "accel", "brake", "coast", "reverse", "steer", "automatic", "hud", "track", "tired"};
@@ -3625,6 +3682,9 @@ static void Load(const char *path, int carOnly = 0) {
             s_driveSmall = -1;
             if (sscanf(v, "%d %d %d", &s_driveBody, &s_driveAnim, &s_driveSmall) < 2) s_driveBody = s_driveAnim = -1;
         }
+        else if (!strcmp(key, "car_accel")) s_statAccel = StatScale(v, RACE_STAT_ACCEL);
+        else if (!strcmp(key, "car_top")) s_statTop = StatScale(v, RACE_STAT_TOP);
+        else if (!strcmp(key, "car_handling")) s_statSteer = StatScale(v, RACE_STAT_STEER);
         else if (!strcmp(key, "superjet_lean")) s_superLean = atof(v);
         else if (!strcmp(key, "superjet_turn")) s_superTurn = atoi(v);
         else if (!strcmp(key, "mushroom")) {
@@ -3808,6 +3868,13 @@ static void Load(const char *path, int carOnly = 0) {
         PlanSpeeds(&s_guide);
         Log_Info("[racemod] no opponent raced: the guide line (%d points)", s_guide.Count);
     }
+    // (the player's car's stats: its handling over the track's setup, and the autodrive's speeds for it)
+    if (Rated()) {
+        const T_RACE_CAR *pc = PlayerCar();
+        Log_Info("[racemod] the car's stats: pull x%.2f, top speed x%.2f (%d km/h), steering x%.2f (%d)", s_statAccel, s_statTop,
+                 (int)(pc->GearTop[pc->Gears - 1] * 36 / 5120.0 + 0.5), s_statSteer, (int)pc->Steer);
+    }
+    PlayerPlan();
     if (s_nbSpots && s_car.HasLine) {
         // where they wait until the grid is formed: their pit spots, or (with no pit lane) the grid spots behind the player
         int waiting = 0, spot = 1;
@@ -3850,9 +3917,10 @@ S32 RaceMod_FineWeather(void) {
     return RaceMod_Active() && s_fineWeather;
 }
 
+// (the player's car: the track's setup with the car's stats -- PlayerCar)
 const T_RACE_CAR *RaceMod_Car(void) {
     RaceMod_Active();
-    return &s_car;
+    return PlayerCar();
 }
 
 S32 RaceMod_Gear(void) { return s_gear; }
@@ -3866,10 +3934,11 @@ void RaceMod_ResetGear(void) {
 void RaceMod_UpdateGear(S32 speed) {
     const int x = CheckKey(K_X) ? 1 : 0, z = CheckKey(K_Z) ? 1 : 0;
     const S32 was = s_gear;
+    const T_RACE_CAR *car = PlayerCar();
     if (s_car.Automatic) {
         // up at the gear's top speed, down when the car has slowed well into the gear below's range
-        if (s_gear < s_car.Gears && speed >= s_car.GearTop[s_gear - 1] - 40) s_gear++;
-        else if (s_gear > 1 && speed < s_car.GearTop[s_gear - 2] * 7 / 10) s_gear--;
+        if (s_gear < car->Gears && speed >= car->GearTop[s_gear - 1] - 40) s_gear++;
+        else if (s_gear > 1 && speed < car->GearTop[s_gear - 2] * 7 / 10) s_gear--;
     } else {
         if (x && !s_lastX && s_gear < s_car.Gears) s_gear++;
         if (z && !s_lastZ && s_gear > 1) s_gear--;
@@ -4505,7 +4574,7 @@ U32 RaceMod_AutoInput(void) {
     // (looking further ahead the faster the car goes over its top gear's speed: a rollercoaster of a lap, gravity= -- over the jet-pack's
     // own top speed: the jet-pack steers the car as much quicker, BUGGY.CPP, and looking further ahead at its speed it cut inside the
     // corners' checkpoints, and into a wall on Mosquibees Island)
-    const double fastest = s_car.GearTop[s_car.Gears - 1] * JetFactor(s_jetUntil, s_jetFactor);
+    const double fastest = PlayerCar()->GearTop[s_car.Gears - 1] * JetFactor(s_jetUntil, s_jetFactor);
     double look = ListBuggy[0].Speed > fastest ? s_autoLook * ListBuggy[0].Speed / fastest : s_autoLook;
     // (and nearer round a tight bend: the point on along the line is inside the bend from the car by the chord's cut, which grows with
     // the look over the bend's radius -- the super jet-pack, at twice the speed, cut Mosquibees Island's bend by its plateau's edge and
@@ -4561,7 +4630,8 @@ U32 RaceMod_AutoInput(void) {
     else if (err < -24) bits |= I_RIGHT;
     // the line's speed here (the reference car's; the jet-pack's times its factor), and the car's own
     // (on Gazogem fuel all race, fuel_always=: the line's speed times its boost, as the car's own top speed is)
-    const double here = o->V[best] * JetFactor(s_jetUntil, s_jetFactor) * (s_fuelAlways && s_phase != PHASE_QUALIFYING && (S32)TimerRefHR >= s_jetUntil ? RACE_BOOST : 1.0)
+    // (with the car's stats, the line's speeds planned for the car: PlayerPlan)
+    const double here = (s_autoV && best < s_autoVCount ? s_autoV[best] : o->V[best]) * JetFactor(s_jetUntil, s_jetFactor) * (s_fuelAlways && s_phase != PHASE_QUALIFYING && (S32)TimerRefHR >= s_jetUntil ? RACE_BOOST : 1.0)
                         * (s_auto && (S32)TimerRefHR >= s_jetUntil ? s_autoPace / 100.0 : 1.0), speed = ListBuggy[0].Speed;
     // (coming up to a ring with a gap: held close to the speed it is leapt at -- coasting a little over it, braking only well over it --
     // and no brakes in the last cell, which a car carries into the ring)
@@ -13763,6 +13833,8 @@ static void ResetTrack(void) {
     if (s_heroHidden) { ListObjet[NUM_PERSO].Flags &= ~INVISIBLE; s_heroHidden = 0; }
     s_superModel = -1; s_superLean = RACE_SUPERJET_LEAN; s_superTurn = 0; s_superShown = 0;
     s_driveBody = s_driveAnim = s_driveSmall = s_driveShown = -1; s_driveSmallNow = 0;
+    s_statAccel = s_statTop = s_statSteer = 1;
+    free(s_autoV); s_autoV = NULL; s_autoVCount = 0;
     if (s_heroIsSmall && Comportement == C_BUGGY) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroSmall = -1; s_heroIsSmall = 0;
     s_penguinWalk = 1; s_item[RACE_BOX] = s_item[RACE_BOX_GOLD] = -1; s_takeAt = 0; s_useWas = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
