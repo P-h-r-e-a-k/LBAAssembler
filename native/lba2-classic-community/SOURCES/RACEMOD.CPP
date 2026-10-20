@@ -12743,6 +12743,54 @@ static void HudLineIn(S32 x, S32 y, const char *text, int align, S32 colour) {
 }
 static void HudLine(S32 x, S32 y, const char *text, int align) { HudLineIn(x, y, text, align, LBAWHITE); }
 
+// A display line at 3/4 of the font's size (the user, 2026-10-20: "decrease the font size for Lap information and best time"): the font
+// has one size, so the line is drawn at it over a patch filled with a colour the text hasn't got, read back, the scene put back, and drawn
+// again a quarter smaller, nearest pixel -- its bottom where the full-size line's is, so lines RACE_SMALL_STEP apart stack as before.
+#define RACE_SMALL_NUM 3
+#define RACE_SMALL_DEN 4
+#define RACE_SMALL_STEP (RACE_LINE_STEP * RACE_SMALL_NUM / RACE_SMALL_DEN)
+#define RACE_SMALL_MAXW 1024
+#define RACE_SMALL_MAXH (RACE_LINE_STEP + 8)
+static void HudSmallIn(S32 x, S32 y, const char *text, int align, S32 colour) {
+    static U8 saved[RACE_SMALL_MAXH][RACE_SMALL_MAXW], drawn[RACE_SMALL_MAXH][RACE_SMALL_MAXW];
+    char buf[96];
+    snprintf(buf, sizeof(buf), "%s", text);
+    const S32 fw = SizeFont(buf) + 2, fh = RACE_SMALL_MAXH;
+    const S32 sw = fw * RACE_SMALL_NUM / RACE_SMALL_DEN, sh = fh * RACE_SMALL_NUM / RACE_SMALL_DEN;
+    const S32 sx0 = align > 0 ? x - sw : x, sy0 = y + RACE_LINE_STEP - sh + 4;
+    // (drawn full size where it will go, its patch first kept: inside the screen, or the line as it was)
+    const S32 px0 = sx0, py0 = y, sw0 = (S32)ModeDesiredX, sh0 = (S32)ModeDesiredY;
+    if (fw > RACE_SMALL_MAXW || px0 < 0 || py0 < 0 || px0 + fw > sw0 || py0 + fh > sh0) { HudLineIn(x, y, text, align, colour); return; }
+    const U8 none = (U8)(colour == 1 || colour == 0 ? 2 : 1);
+    for (S32 r = 0; r < fh; r++) {
+        U8 *row = (U8 *)Log + TabOffLine[py0 + r] + px0;
+        memcpy(saved[r], row, (size_t)fw);
+        memset(row, none, (size_t)fw);
+    }
+    ColorFont(0);
+    Font(px0 + 2, py0 + 2, buf);
+    ColorFont(colour);
+    Font(px0, py0, buf);
+    for (S32 r = 0; r < fh; r++) {
+        U8 *row = (U8 *)Log + TabOffLine[py0 + r] + px0;
+        memcpy(drawn[r], row, (size_t)fw);
+        memcpy(row, saved[r], (size_t)fw);
+    }
+    for (S32 r = 0; r < sh; r++) {
+        const S32 dy = sy0 + r;
+        if (dy < 0 || dy >= sh0) continue;
+        U8 *row = (U8 *)Log + TabOffLine[dy];
+        const U8 *src = drawn[r * RACE_SMALL_DEN / RACE_SMALL_NUM];
+        for (S32 c = 0; c < sw; c++) {
+            const S32 dx = sx0 + c;
+            const U8 p = src[c * RACE_SMALL_DEN / RACE_SMALL_NUM];
+            if (p != none && dx >= 0 && dx < sw0) row[dx] = p;
+        }
+    }
+    BoxMovingAdd(px0 - 4, py0 - 4, px0 + fw + 6, py0 + fh + 4);
+}
+static void HudSmall(S32 x, S32 y, const char *text, int align) { HudSmallIn(x, y, text, align, LBAWHITE); }
+
 // The super jet-pack in the car's place (Twinsen's car hidden: PowerUps): the model at the car's size, lying flat and a little over the
 // road, drawn after the scene's objects as they are drawn -- tested against the depth of the ground and the decor, in the colours of
 // things near -- its place on the screen marked to be drawn over next frame.
@@ -14035,7 +14083,7 @@ void RaceMod_Draw(void) {
                     char best[48];
                     Time(b, sizeof(b), s_bestLap);
                     snprintf(best, sizeof(best), "Best lap %s", b);
-                    HudLine(16, bottom - RACE_LINE_STEP, best, -1);
+                    HudSmall(16, bottom - RACE_SMALL_STEP, best, -1);
                 }
             }
             else if (s_place) snprintf(text, sizeof(text), "Finished %d%s of %d", s_place, Ordinal(s_place), s_racers);
@@ -14061,7 +14109,7 @@ void RaceMod_Draw(void) {
             else
                 snprintf(text, sizeof(text), "Cross the start line");
         }
-        if (text[0]) HudLineIn(16, bottom, text, -1, colour);
+        if (text[0]) HudSmallIn(16, bottom, text, -1, colour);
         // a time trial's best time over the lap, until it is over (then its best lap is there): the track's record or the trial's own
         // fastest lap, whichever is quicker -- in gold while a new one is held on the lap line
         if (s_car.HasLine && s_trial && !s_place && s_phase != PHASE_QUALIFYING) {
@@ -14069,13 +14117,13 @@ void RaceMod_Draw(void) {
             if (best > 0) Time(b, sizeof(b), best);
             else snprintf(b, sizeof(b), "--:--.--");
             snprintf(text, sizeof(text), "Best time  %s", b);
-            HudLineIn(16, bottom - RACE_LINE_STEP, text, -1, Held(now) && s_heldBest ? RACE_GOLD : LBAWHITE);
+            HudSmallIn(16, bottom - RACE_SMALL_STEP, text, -1, Held(now) && s_heldBest ? RACE_GOLD : LBAWHITE);
         }
         // the place as the race stands, over the lap
         int racers = 0;
         if (s_car.HasLine && !s_place) if (const int place = RacePlace(&racers)) {
             snprintf(text, sizeof(text), "Position %d%s of %d", place, Ordinal(place), racers);
-            HudLine(16, bottom - RACE_LINE_STEP, text, -1);
+            HudSmall(16, bottom - RACE_SMALL_STEP, text, -1);
         }
 
         // the count-down in the middle of the screen: 3, 2, 1 a second each, then GO for a second
