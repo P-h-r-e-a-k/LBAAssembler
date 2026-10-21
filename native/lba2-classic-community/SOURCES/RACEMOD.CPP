@@ -589,6 +589,7 @@ static int s_item[RACE_ITEM_SLOTS] = {-1, -1};
 static S32 s_itemAt[RACE_ITEM_SLOTS];
 static S32 s_takeAt = 0;                   // when he last took a mushroom's item (a car takes one from a row: the others beside it give way)
 static int s_useWas = 0;
+static S32 s_usedAt = 0;                    // when Twinsen last used an item (the press log: PowerUps)
 static S32 s_fullSaidAt = 0;               // (when the car was last at a mushroom left standing: the log says so again after 5 s away)
 static int s_useHeld = 0;                  // the behaviour key (Ctrl, the pad's left shoulder) down this frame: RaceMod_FilterInput
 static int s_oilIcon = -1;                 // oil_icon=: the oil's model in OBJFIX.HQR, for the item box (the builder adds it)
@@ -9399,6 +9400,7 @@ static void PowerUps(S32 now, int driving) {
         GoldIntoBox(now);
     }
     const int gold = s_item[RACE_BOX] == PU_GOLD;
+    int used = 0;
     if (driving && s_item[RACE_BOX] >= 0 && now >= s_itemAt[RACE_BOX] && ((use && !s_useWas)
             || (s_auto && s_autoDrop > 0 && now >= s_itemAt[RACE_BOX] + s_autoDrop && (!gold || now >= s_goldLast + RACE_GOLD_AUTO_MS)))) {
         const int pu = s_item[RACE_BOX];
@@ -9407,7 +9409,27 @@ static void PowerUps(S32 now, int driving) {
         if (!gold) s_item[RACE_BOX] = -1;
         UseItem(pu, now);
         if (!gold) GoldIntoBox(now);
+        used = 1;
     }
+    // (a press that used nothing, and why -- the user, 2026-10-21: items sometimes failing when the button is pressed; a press, unlike a
+    // drop, wasn't logged at all: "Twinsen uses ..." is a press that worked)
+    if (use && !s_useWas && !used) {
+        const char *key = s_useHeld ? "the item key" : "Ctrl";
+        if (!driving) Log_Info("[racemod] item press (%s) not used: not driving (Comportement %d, %s)", key, (int)Comportement, s_item[RACE_BOX] >= 0 ? s_puName[s_item[RACE_BOX]] : "box empty");
+        else if (s_item[RACE_BOX] < 0) {
+            if (s_usedAt) Log_Info("[racemod] item press (%s) not used: the item box is empty (the last item used %.1f s ago)", key, (now - s_usedAt) / 1000.0);
+            else Log_Info("[racemod] item press (%s) not used: the item box is empty (none used yet)", key);
+        }
+        else if (now < s_itemAt[RACE_BOX]) Log_Info("[racemod] item press (%s) not used: the item box still turning (%s, %d ms left) -- press again once it stops", key, s_puName[s_item[RACE_BOX]], (int)(s_itemAt[RACE_BOX] - now));
+        else Log_Info("[racemod] item press (%s) not used: %s (why not known)", key, s_puName[s_item[RACE_BOX]]);
+    }
+    // (the key held on past the roulette's stop: it needs letting go and pressing again -- said once a stop)
+    static S32 heldSaid = 0;
+    if (use && s_useWas && driving && s_item[RACE_BOX] >= 0 && now >= s_itemAt[RACE_BOX] && heldSaid != s_itemAt[RACE_BOX]) {
+        heldSaid = s_itemAt[RACE_BOX];
+        Log_Info("[racemod] item key held as the item box stopped on %s: not used until it is let go and pressed again", s_puName[s_item[RACE_BOX]]);
+    }
+    if (used) s_usedAt = now;
     s_useWas = use;
     // shrunk by an opponent's lightning: Twinsen's car at half its size while it lasts
     const int small = driving && s_heroSmall >= 0 && now < s_shrunkUntil && now >= s_jetUntil;
@@ -14860,7 +14882,7 @@ static void ResetTrack(void) {
     if (s_heroBody >= 0 && Comportement == C_BUGGY && (ListObjet[NUM_PERSO].GenBody == s_heroBody || (s_heroFire >= 0 && ListObjet[NUM_PERSO].GenBody == s_heroFire)))
         InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroBody = s_heroFire = -1; s_heroBodyChecked = 0;
-    s_penguinWalk = 1; s_item[RACE_BOX] = s_item[RACE_BOX_GOLD] = -1; s_takeAt = 0; s_useWas = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
+    s_penguinWalk = 1; s_item[RACE_BOX] = s_item[RACE_BOX_GOLD] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_opp[n].ShrunkUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
     s_heroDraft = 1;
     s_ownTrack = 0; s_loaded[0] = 0;
