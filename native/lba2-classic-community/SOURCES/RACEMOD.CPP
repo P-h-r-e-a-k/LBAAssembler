@@ -10102,7 +10102,7 @@ static int s_skidWavRead = 0;
 // own rule -- so the repeats don't drone, at up to full volume times how hard the car slides. (Its own random numbers: the race's, which
 // the simulation draws, untouched.)
 #define RACE_SKID_GAME_DECAL 200
-#define RACE_SKID_GAME_VOLUME 127
+#define RACE_SKID_GAME_VOLUME 80           // (127 until later on 2026-10-21: "too loud compared to the engine, let's lower it slightly" -- ~4 dB)
 // (played from a copy a little louder -- RACE_SKID_GAME_BOOST times, soft-limited -- to be heard over the engines and the music: the
 // user, 2026-10-21, "I couldn't trigger any wheel squeal"; a steady tone takes less of a lift than 252's spike did before it distorts)
 #define RACE_SKID_GAME_BOOST 1.5
