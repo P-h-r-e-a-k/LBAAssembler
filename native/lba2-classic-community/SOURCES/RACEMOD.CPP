@@ -775,7 +775,8 @@ static S32 s_skidUntil = 0, s_skidStart = 0, s_skidBeta = 0, s_skidSpeed = 0;
 static int s_skidDir = 1;
 // The handbrake (2026-10-21, RaceMod_Handbrake): what it does, the race file's handbrake= or these --
 //   handbrake=<on 0|1> [brake] [steer] [grip] [slip]
-#define RACE_HB_BRAKE 0.22                 // brake: its braking, a share of the car's own brake (brake=; the pedal's)
+#define RACE_HB_BRAKE 0.06                 // brake: its braking, a share of the car's own brake (brake=; the pedal's) -- 0.22 until 2026-10-21: the
+                                           // user, "too much of a slow down effect, let's have it do less braking but still help to slide the back end round"
 #define RACE_HB_STEER 1.5                  // steer: the car turns this much quicker while it is held
 #define RACE_HB_GRIP_HELD 1.5              // grip: how quickly the way the car goes swings round to the way it points while it is held, a second
 #define RACE_HB_SLIP 640                   // slip: the most the way it goes lags the way it points, 4096ths of a turn (56 degrees)
@@ -9964,7 +9965,9 @@ static U32 WalkInput(void) {
 #define RACE_HB_RECOVER_MS 450             // ... over this long once it is let go
 #define RACE_HB_WALL_GRIP 5.0              // ... and this much more while the rail, or a wall, holds the car back ...
 #define RACE_HB_WALL_SHORT 0.6             // ... its last move along the way it went short of this share of the move meant
-#define RACE_HB_SCRUB 0.6                  // the speed lost a second sliding: this share of it times the sine of the slide's angle
+#define RACE_HB_SCRUB 0.15                 // the speed lost a second sliding: this share of it times the sine of the slide's angle (0.6 until 2026-10-21)
+#define RACE_HB_COUNTER_GRIP 6.0           // steered against the slide -- the nose turned back towards the way the car goes -- the grip back this much
+                                           // quicker a second, held or let go: counter-steering straightens it (the user, 2026-10-21)
 #define RACE_HB_END 6                      // the slide over, let go, once the way it goes is this close to its heading (4096ths) --
 #define RACE_HB_END_GRIP 40                // ... or this close with the grip all back (steering on, the way it goes lags its heading a little)
 #define RACE_HB_LOG_MS 200                 // a [racemod] handbrake line this often while it slides
@@ -9974,6 +9977,7 @@ static U32 WalkInput(void) {
 static int s_hbInput = 0;                  // the inventory's key or button down this frame (RaceMod_FilterInput: kept out of Input in the car)
 static S32 s_slideFrom = 0, s_slideLet = 0, s_slideLog = 0, s_slideSmoke = 0, s_slideV0 = 0;
 static double s_slideMost = 0;
+static S32 s_slidePrevBeta = -1;           // (the heading a frame ago: which way the player steers -- against the slide or with it)
 static double s_slideX = 0, s_slideZ = 0, s_slideMeant = 0, s_slideWent = 0;  // (where the car was, how far it meant to go and which way)
 static int s_slideWheel = 0;               // (the back wheel the next puff comes from)
 static unsigned s_smokeSeed = 20261021u;   // (the smoke's own dice: the race's, RaceRandom, stay as they were)
@@ -10025,7 +10029,7 @@ void RaceMod_Slide(S32 beta, S32 *speed, S32 deltatimer, S32 airborne) {
     if (!s_slide) {
         if (!key || *speed < RACE_HB_MIN_SPEED || airborne) return;
         s_slide = 1; s_slideBeta = beta & 4095; s_slideFrom = now; s_slideLet = 0; s_slideLog = 0; s_slideMost = 0; s_slideV0 = *speed;
-        s_slideSmoke = now; s_slideMeant = 0;
+        s_slideSmoke = now; s_slideMeant = 0; s_slidePrevBeta = beta & 4095;
         Log_Info("[racemod] handbrake on at %d km/h, heading %d", Kmh(*speed), (int)(beta & 4095));
     }
     if (!free) { SlideEnd(Comportement != C_BUGGY ? "out of the car" : "the car taken over"); return; }
@@ -10047,7 +10051,14 @@ void RaceMod_Slide(S32 beta, S32 *speed, S32 deltatimer, S32 airborne) {
     const double went = s_slideWent * 2 * RACE_PI / 4096, along = (wx - s_slideX) * sin(went) + (wz - s_slideZ) * cos(went);
     const int railed = s_slideMeant > 20 && along < RACE_HB_WALL_SHORT * s_slideMeant;
     if (railed) grip += RACE_HB_WALL_GRIP;
-    double gap = SlideGap(beta) * exp(-grip * dt);
+    // (counter-steering: the heading turned this frame back towards the way it goes)
+    const double gapNow = SlideGap(beta);
+    double turned = s_slidePrevBeta < 0 ? 0 : fmod((beta & 4095) - s_slidePrevBeta + 4096.0, 4096.0);
+    if (turned > 2048) turned -= 4096;
+    s_slidePrevBeta = beta & 4095;
+    const int counter = (gapNow > 0 && turned < 0) || (gapNow < 0 && turned > 0);
+    if (counter) grip += RACE_HB_COUNTER_GRIP;
+    double gap = gapNow * exp(-grip * dt);
     if (gap > s_hbSlip) gap = s_hbSlip; else if (gap < -s_hbSlip) gap = -s_hbSlip;
     s_slideBeta = fmod((beta & 4095) - gap + 4096.0, 4096.0);
     if (fabs(gap) > s_slideMost) s_slideMost = fabs(gap);
@@ -10057,8 +10068,8 @@ void RaceMod_Slide(S32 beta, S32 *speed, S32 deltatimer, S32 airborne) {
     s_slideX = wx; s_slideZ = wz; s_slideMeant = *speed * dt; s_slideWent = s_slideBeta;
     if (now - s_slideLog >= RACE_HB_LOG_MS) {
         s_slideLog = now;
-        Log_Info("[racemod] handbrake t %u key %d heading %d way %.0f slip %.1f deg speed %d km/h grip %.1f%s at %.0f,%d,%.0f", (unsigned)now, key,
-                 (int)(beta & 4095), s_slideBeta, gap * 360 / 4096, Kmh(*speed), grip, railed ? " held back" : "", wx, (int)hero->Obj.Y, wz);
+        Log_Info("[racemod] handbrake t %u key %d heading %d way %.0f slip %.1f deg speed %d km/h grip %.1f%s%s at %.0f,%d,%.0f", (unsigned)now, key,
+                 (int)(beta & 4095), s_slideBeta, gap * 360 / 4096, Kmh(*speed), grip, railed ? " held back" : "", counter ? " counter-steered" : "", wx, (int)hero->Obj.Y, wz);
     }
     if (fabs(gap) >= RACE_HB_SMOKE_SLIP && *speed >= RACE_HB_SMOKE_SPEED && now - s_slideSmoke >= RACE_HB_SMOKE_MS) {
         s_slideSmoke = now;
