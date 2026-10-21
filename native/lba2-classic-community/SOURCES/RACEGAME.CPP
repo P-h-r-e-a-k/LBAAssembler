@@ -24,8 +24,11 @@
  *     difficulty=0|1|2                    the difficulty chosen last (LevelPage)
  *     updates=auto|ask|off                new versions installed when the game is closed, asked first, or not looked for (auto)
  *     update_checked=<unix time>          when the game last started the updater (0: never)
- *     minimap=1|0                         the race's mini-map, bottom right, on (the first time) or off (Options, "Window,
- *                                         mini-map, updates"; RACEMOD.CPP DrawMinimap asks RaceGame_Minimap)
+ *     minimap=1|0                         the race's mini-map, bottom right, on (the first time) or off (Options, "Camera,
+ *                                         window, updates"; RACEMOD.CPP DrawMinimap asks RaceGame_Minimap)
+ *     camera=0|1|2                        the race camera's view: inside the car, just behind it, further back (the first
+ *                                         time: Further back, 2026-10-21) -- Options, "Camera, window, updates", or V (a pad's
+ *                                         Back button) during a race (RACEMOD.CPP camera=; RaceGame_CameraChosen)
  *     <id>_unlocked=1                     a car won (its car= line's unlock=<id>: pumpkin_unlocked=1, the pumpkin F1)
  * Unlocking a car (2026-10-20 -- the user: a congratulations "featuring the F1 Pumpkin car, with a message saying they've unlocked the
  * pumpkin for use in time trials. Let's hold this car back until it's unlocked"): a car whose car= line says unlock=<id> is shown on the
@@ -122,6 +125,7 @@ extern void RaceMod_StopSound(U32 handle);
 #define RG_ID_UPDATE_NOW 2356
 #define RG_ID_WINDOW 2357                   // the Updates page's full screen <-> a window row (CONFIG_FILE.CPP ToggleDisplayFullscreen; F11 / Alt+Enter too)
 #define RG_ID_MINIMAP 2358                  // ... and its mini-map on <-> off row (RaceGame_Minimap)
+#define RG_ID_CAMERA 2359                   // ... and its camera's view row: inside the car, just behind, further back (camera=)
 #define RG_ID_BACK 26                       // the game's own "Back"
 #define RG_ID_RESUME 70
 #define RG_ID_OPTIONS 74
@@ -326,6 +330,10 @@ static int s_qualified = 0;                 // a qualifying lap driven: the next
 static int s_skipQualifying = 0;            // the last answer to "a qualifying lap?"
 static int s_updates = 0;                   // new versions: 0 installed when the game is closed, 1 asked first, 2 not looked for
 static int s_minimap = 1;                   // the race's mini-map, bottom right (RACEMOD.CPP DrawMinimap)
+// the race camera's view (RACEMOD.CPP camera=): 0 inside the car, 1 just behind it -- the camera as it always was -- or 2 further back,
+// the first time (2026-10-21: the user found the car too close, the road ahead hard to see past Twinsen's Halloween buggy)
+static int s_camera = 2;
+static const char *const s_cameraLabel[3] = {"Camera: inside the car", "Camera: just behind", "Camera: further back"};
 static long long s_updateChecked = 0;       // when the updater was last started (unix time; 0 never)
 static const char *const s_updateKey[3] = {"auto", "ask", "off"};
 static const char *const s_updateLabel[3] = {"Updates: Automatic", "Updates: Ask first", "Updates: Off"};
@@ -358,6 +366,7 @@ static void ReadSettings(void) {
             else if (!strcmp(line, "skip_qualifying")) value = &s_skipQualifying;
             else if (!strcmp(line, "difficulty")) value = &s_level;
             else if (!strcmp(line, "minimap")) value = &s_minimap;
+            else if (!strcmp(line, "camera")) value = &s_camera;
             else if (!strcmp(line, "updates")) {
                 value = &s_updates;
                 *value = 0;
@@ -380,8 +389,9 @@ static void ReadSettings(void) {
     fclose(f);
     if (s_level < 0 || s_level > 2) s_level = 1;
     s_minimap = s_minimap != 0;
-    Log_Info("[racegame] settings: controls seen %d, power-ups seen %d, qualified %d, skip qualifying %d, updates %s (checked %lld), mini-map %s",
-             s_controlsSeen, s_powerupsSeen, s_qualified, s_skipQualifying, s_updateKey[s_updates], s_updateChecked, s_minimap ? "on" : "off");
+    if (s_camera < 0 || s_camera > 2) s_camera = 2;
+    Log_Info("[racegame] settings: controls seen %d, power-ups seen %d, qualified %d, skip qualifying %d, updates %s (checked %lld), mini-map %s, camera %d",
+             s_controlsSeen, s_powerupsSeen, s_qualified, s_skipQualifying, s_updateKey[s_updates], s_updateChecked, s_minimap ? "on" : "off", s_camera);
 }
 
 // ---- updates -----------------------------------------------------------------------------------------------------------------------
@@ -456,7 +466,7 @@ static void WriteSettings(void) {
     fprintf(f, "controls_seen=%d\npowerups_seen=%d\nqualified=%d\nskip_qualifying=%d\ndifficulty=%d\n", s_controlsSeen, s_powerupsSeen, s_qualified,
             s_skipQualifying, s_level);
     fprintf(f, "updates=%s\nupdate_checked=%lld\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0], s_updateChecked);
-    fprintf(f, "minimap=%d\n", s_minimap);
+    fprintf(f, "minimap=%d\ncamera=%d\n", s_minimap, s_camera);
     for (int i = 0; i < s_nbUnlocked; i++) fprintf(f, "%s_unlocked=1\n", s_unlocked[i]);
     fputs(s_setOther, f);
     fclose(f);
@@ -606,6 +616,15 @@ S32 RaceGame_BestLap(void) {
     return s_nbTimes[s_raceSp] > 0 ? s_times[s_raceSp][0].Lap : 0;
 }
 
+// RACEMOD.CPP: the player changed the race camera's view during a race (V, a pad's Back button): the next race starts with it.
+void RaceGame_CameraChosen(S32 view) {
+    if (!RaceGame_On() || view < 0 || view > 2) return;
+    ReadSettings();
+    if (s_camera == view) return;
+    s_camera = (int)view;
+    WriteSettings();
+}
+
 // RACEMOD.CPP DrawMinimap: the race's mini-map on (1) or off (0) as the player set it (Options); -1 when this isn't the race game.
 S32 RaceGame_Minimap(void) {
     if (!RaceGame_On()) return -1;
@@ -681,6 +700,9 @@ static int StartRace(int sp, int trial, int car, int level) {
     // (a qualifying lap or none, the player's answer -- QualifyingPage: the first race always has one)
     else if (s_qualifyNow >= 0) fprintf(f, s_qualifyNow ? "qualifying=1\n" : "qualifying=0\ngrid_back=1\n");
     if (level >= 0 && level <= 2) fprintf(f, "# the difficulty chosen: %s\ndifficulty=%d\n", s_levelName[level], level);
+    // (the camera's view the player chose: Options, or V in the race before)
+    ReadSettings();
+    fprintf(f, "# the camera's view: 0 inside the car, 1 just behind, 2 further back\ncamera=%d\n", s_camera);
     fclose(f);
     s_raceSp = sp; s_raceTrial = trial; s_raceCar = car; s_raceOver = 0; s_raceLevel = level;
     Log_Info("[racegame] %s: %s with %s%s%s%s", s->Name, trial ? "a time trial" : "a race", car >= 0 && car < s_nbCars ? s_cars[car].Name : "Twinsen's car",
@@ -715,7 +737,8 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_SKIP: Label(string, "Skip: start at the back of the grid"); return 1;
     case RG_ID_POWERUPS: Label(string, "Power-ups"); return 1;
     case RG_ID_CONTROLS: Label(string, "Race controls, power-ups"); return 1;   // (the game's own Controls row changes the keys)
-    case RG_ID_UPDATES: Label(string, "Window, mini-map, updates"); return 1;   // (the row's width: "Window mode, mini-map, updates" ran over it)
+    case RG_ID_UPDATES: Label(string, "Camera, window, updates"); return 1;     // (the row's width: "Window mode, mini-map, updates" ran over it)
+    case RG_ID_CAMERA: Label(string, s_cameraLabel[s_camera >= 0 && s_camera <= 2 ? s_camera : 2]); return 1;
     case RG_ID_MINIMAP: Label(string, s_minimap ? "Mini-map: On" : "Mini-map: Off"); return 1;
     case RG_ID_UPDATE_MODE: Label(string, s_updateLabel[s_updates >= 0 && s_updates <= 2 ? s_updates : 0]); return 1;
     case RG_ID_UPDATE_NOW: Label(string, "Check for updates now"); return 1;
@@ -1145,7 +1168,8 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         {"Left, right", "Steer"},
         {"Ctrl", "Use your item"},
         {"", ""},                           // (the gears: by hand or by themselves)
-        {"Space", RG_ON_FOOT},
+        {"V", "Camera view"},               // (2026-10-21: RACEMOD.CPP RaceCameraKey -- and the gears' row only for gears by hand, so
+        {"Space", RG_ON_FOOT},              // that the page still fits)
         {"P", "Pause"},
         {"Esc", "Menu"},
     };
@@ -1155,7 +1179,7 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         {"Left stick", "Steer"},
         {"Left shoulder", "Use your item"},
         {"X button", RG_ON_FOOT},
-        {"Start", "Menu"},
+        {"Back, Start", "Camera view, menu"},
     };
     const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, kx = cx - RG_PAGE_HALF + 36, ax = cx - 40;
     const int onFoot = pg && pg->OnFoot;
@@ -1167,6 +1191,7 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         const char *key = keys[i][0], *what = keys[i][1];
         if (!onFoot && !strcmp(what, RG_ON_FOOT)) continue;
         if (!key[0]) {
+            if (!(pg && pg->Manual)) continue;
             key = pg && pg->Manual ? "X, Z" : "Gears";
             what = pg && pg->Manual ? "Gear up, down" : "Automatic";
         }
@@ -1344,15 +1369,18 @@ void RaceGame_Qualified(S32 lap) {
 // Options, "Window, mini-map, updates" ("Window mode, updates" until the mini-map, 2026-10-20): full screen or a window (F11 / Alt+Enter too), the race's mini-map on or off (2026-10-20:
 // RACEMOD.CPP DrawMinimap), then the update mode (Automatic, Ask first, Off: Enter goes round them) and "Check for updates now", what the
 // mode does and the updater's last word under them.
-#define RG_UPD_ROWS 5
+// (2026-10-21: and first the camera's view -- inside the car, just behind it, further back: Enter goes round them -- the page "Camera,
+// window, updates", its six rows a little higher)
+#define RG_UPD_ROWS 6
 static U16 s_updMenu[4 + 2 * RG_UPD_ROWS];
 // (two lines each at most, and the updater's word two more: the page's text below the rows fits the 480-tall canvas)
 static const char *const s_updateHelp[3] = {
-    "Weekly: a new version is installed when you close the game.",
-    "Weekly: you are asked before a new version is installed.",
-    "No weekly check. Check for updates here when you like.",
+    // (a line each since the camera's row, 2026-10-21: the updater's word under it still fits)
+    "Weekly: installed as you quit.",
+    "Weekly: asked before installing.",
+    "No weekly check: check here.",
 };
-#define RG_UPD_Y 220                        // the rows' centre (five rows: the header at 30, the text under them to 470)
+#define RG_UPD_Y 222                        // the rows' centre (six rows: the header at 8, the text under them from 392 to 470)
 static void UpdatesPage(void) {
     ReadSettings();
     s_updMenu[0] = 1;
@@ -1360,16 +1388,17 @@ static void UpdatesPage(void) {
     s_updMenu[2] = RG_UPD_Y;
     s_updMenu[3] = 0;
     SetRow(s_updMenu, 0, RG_ID_BACK);
-    SetRow(s_updMenu, 1, RG_ID_WINDOW);
-    SetRow(s_updMenu, 2, RG_ID_MINIMAP);
-    SetRow(s_updMenu, 3, RG_ID_UPDATE_MODE);
-    SetRow(s_updMenu, 4, RG_ID_UPDATE_NOW);
+    SetRow(s_updMenu, 1, RG_ID_CAMERA);
+    SetRow(s_updMenu, 2, RG_ID_WINDOW);
+    SetRow(s_updMenu, 3, RG_ID_MINIMAP);
+    SetRow(s_updMenu, 4, RG_ID_UPDATE_MODE);
+    SetRow(s_updMenu, 5, RG_ID_UPDATE_NOW);
     char exe[ADELINE_MAX_PATH];
     GetResPath(exe, ADELINE_MAX_PATH, RG_UPDATER);
     for (;;) {
         const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
-        Page("Window, mini-map, updates", RG_UPD_Y - (56 * RG_UPD_ROWS) / 2 - 50);
-        const S32 textY = RG_UPD_Y + (56 * RG_UPD_ROWS) / 2 + 6 + oy;
+        Page("Camera, window, mini-map, updates", RG_UPD_Y - (56 * RG_UPD_ROWS) / 2 - 46);
+        const S32 textY = RG_UPD_Y + (56 * RG_UPD_ROWS) / 2 + 2 + oy;
         const int lines = Wrapped(cx - 280, textY, 560, RG_LINE, s_updateHelp[s_updates], LBAWHITE);
         // (the updater's last word -- or, while a check started here hasn't said anything yet, that it is checking)
         char status[400], said[400];
@@ -1378,12 +1407,18 @@ static void UpdatesPage(void) {
         else if (s_updateStarted && at < s_updateStarted) snprintf(status, sizeof(status), "Checking for a new version...");
         else if (said[0]) snprintf(status, sizeof(status), "%s", said);
         else status[0] = 0;
-        if (status[0]) Wrapped(cx - 280, textY + lines * RG_LINE + 6, 560, RG_LINE, status, RG_GREY);
+        if (status[0]) Wrapped(cx - 280, textY + lines * RG_LINE + 2, 560, RG_LINE, status, RG_GREY);
         const S32 select = Menu(s_updMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return; }
         for (S32 i = 0; i < RG_UPD_ROWS; i++) if (s_updMenu[4 + 2 * i + 1] == (U16)select) s_updMenu[0] = (U16)i;
         if (select == RG_ID_WINDOW) ToggleDisplayFullscreen();
-        else if (select == RG_ID_MINIMAP) {
+        else if (select == RG_ID_CAMERA) {
+            // (inside the car, just behind, further back, and round again; a race on takes it at once -- RACEMOD.CPP)
+            s_camera = (s_camera + 1) % 3;
+            WriteSettings();
+            if (s_raceSp >= 0 && !s_raceOver) RaceMod_SetCameraView(s_camera);
+            Log_Info("[racegame] the camera: %s", s_cameraLabel[s_camera]);
+        } else if (select == RG_ID_MINIMAP) {
             s_minimap = !s_minimap;
             WriteSettings();
             Log_Info("[racegame] the mini-map: %s", s_minimap ? "on" : "off");

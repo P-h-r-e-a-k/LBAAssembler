@@ -18,5 +18,7 @@ S32 RaceGame_RowDisabled(S32 num);          // a row greyed and passed over (Sto
 // controls, power-ups; Updates); and a row picked there that isn't the game's: its page shown (non-zero), or 0 (not the race game's)
 U16 *RaceGame_OptionsMenu(U16 *menu);
 S32 RaceGame_OptionsRow(S32 num);
+// RACEMOD.CPP: the player changed the race camera's view during a race (V): kept for the next race (RACEGAME_SETTINGS.TXT camera=)
+void RaceGame_CameraChosen(S32 view);
 
 #endif

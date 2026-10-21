@@ -1861,7 +1861,48 @@ extern S32 FollowCamera;                                 // FOLLOWCAM.CPP
 extern S32 (*FollowCamArmHook)(S32 base);
 extern S32 (*FollowCamEyeHook)(S32 *eye, S32 *target);
 extern const char *FollowCamEyeWho;                      // FOLLOWCAM.CPP: which camera of the hook placed the eye (camtrace)
+extern S32 FollowCamArmPercent;                          // ... the arm's length for a view further back (camera=)
+extern S32 FollowCamEyeTurn;                             // ... the hook's eye at its own angles (the inside view round a loop)
+extern S32 FollowCamEyeAngle[3];
+extern S32 FollowCamEyeCut;                              // ... onto or off the hook's eye at once (the view changed)
 extern S32 CalculAltitudeTerrain(S32 x, S32 z, S32 cj);
+
+// camera=<0|1|2>: the race camera's view (2026-10-21; the user, the evening before: "In LBRA the car seems closer to the camera making it
+// harder to see where we're going", and then: "perhaps add camera options for inside car, just behind car, and slightly further back") --
+//   0  inside the car (InsideCamera): the eye over the driver's seat, looking the way the car points and pitches; it rides with the car
+//      round loops, over jumps and arcs, through tunnels and teleports -- the tracks' own cameras for those don't take over -- the car and
+//      Twinsen not drawn (HeroLook) and the near plane brought in (RACE_INSIDE_NEAR) so that the road just ahead is drawn;
+//   1  just behind the car: the track's own camera, as it always was (the default without camera=: LBA Assembler's Play);
+//   2  further back: the rail camera's eye (railcam=, and the open areas' that share it) RACE_VIEW_FAR_BACK times as far behind the car,
+//      RACE_VIEW_FAR_UP times as high and looking RACE_VIEW_FAR_LEAD times as far ahead, the follow camera's arm RACE_VIEW_FAR_ARM percent
+//      as long -- the car smaller and lower in the picture, more of the road ahead over it. The tracks' own cameras for loops, jumps,
+//      arcs and the roulette wheel keep their eyes; in a tunnel the rail camera eases back to the tunnel's own distance (s_viewW).
+// The race game writes the player's choice (RACEGAME.CPP camera=, Further back until one is chosen); V -- or a pad's Back button --
+// goes round them during a race (RaceCameraKey), the race game keeping the one chosen.
+// (Why it was asked for: the camera had not moved -- the Temple of Bu's rail camera 4,608 behind the car and 2,100 over the road since
+// the track was built, the same in the 2026-10-19 engine -- but the car had: Twinsen's Halloween buggy, the car page's first car since
+// 2026-10-20, in place of the low pumpkin F1, is about twice its size on the screen from the same eye -- taller and wider, over the
+// road just ahead of it.)
+#define RACE_VIEW_INSIDE 0
+#define RACE_VIEW_BEHIND 1
+#define RACE_VIEW_FAR 2
+#define RACE_VIEW_FAR_BACK 1.4
+#define RACE_VIEW_FAR_UP 1.55
+#define RACE_VIEW_FAR_LEAD 1.25
+#define RACE_VIEW_FAR_ARM 130
+#define RACE_VIEW_EASE 0.06                // (the far view's share eased this much of the way each camera update: a tunnel's camera in or out)
+static int s_camView = RACE_VIEW_BEHIND;
+static int s_viewChosen = 0;               // changed during the race (V): the race file's camera= no longer counts (a track's file loaded again)
+static double s_viewW = 0;                 // how far the view is the far one, 0..1 (eased: a tunnel's camera has its own distance)
+static int s_viewTunnel = 0;               // the tunnel's camera had the view at the last update
+static int s_viewKeyWas = 0;               // V or the pad's Back held the frame before
+static int s_insideOn = 0;                 // the inside camera placed the eye at the last update: the car is hidden (InsideView)
+static int s_insideNear = 0;               // the near plane brought in for it (NearClip)
+static int s_followForView = 0;            // the follow camera turned on for a view (a track whose own camera is the classic one)
+static const char *const s_viewName[3] = {"inside the car", "just behind", "further back"};   // (as Options has them: RACEGAME.CPP)
+static int InsideView(void) {
+    return s_insideOn && s_camView == RACE_VIEW_INSIDE && CubeMode == CUBE_EXTERIEUR && Comportement == C_BUGGY;
+}
 
 // Whether a place `tt` along segment i (its projection, unclamped) is past an open end of the road -- the road's own last point, or a
 // jump's take-off lip, where a gap (Half 0) follows: there is no floor out there (a segment's ends are otherwise round, so the deck
@@ -2329,8 +2370,11 @@ static S32 RailCamera(S32 *eye, S32 *target) {
     // (round a tight bend the road s_railBack behind the car is off to its side: the eye comes nearer, until it looks along the way
     // the car faces within RAIL_CAMERA_SIDE)
     const double fx = sin(angle), fz = cos(angle);
+    // (the view further back -- camera=2, s_viewW: its share -- as far again behind, as high again and looking as far again ahead)
+    const double viewBack = 1 + (RACE_VIEW_FAR_BACK - 1) * s_viewW, viewUp = 1 + (RACE_VIEW_FAR_UP - 1) * s_viewW;
+    const double viewLead = 1 + (RACE_VIEW_FAR_LEAD - 1) * s_viewW, railBack = s_railBack * viewBack;
     // (the flag marshal on the road for the start: further back on the grid behind a car near behind her, to see her flag raised)
-    double back = MarshalBack(s_railBack, hx, hz);
+    double back = MarshalBack(railBack, hx, hz);
     int behind = RaisedAlong(seg, t, -way * back, &ex, &ey, &ez);
     // (... and nearer still, past RAIL_CAMERA_NEAREST, while it would ride over a jump's gap the car has just flown)
     while (back > 512) {
@@ -2341,7 +2385,7 @@ static S32 RailCamera(S32 *eye, S32 *target) {
         back -= 256;
         behind = RaisedAlong(seg, t, -way * back, &ex, &ey, &ez);
     }
-    RaisedAlong(seg, t, way * s_railLead, &tx, &ty, &tz);
+    RaisedAlong(seg, t, way * s_railLead * viewLead, &tx, &ty, &tz);
     // (railcam='s sixth: the car off the road on a floor beside it -- the eye and the road ahead moved across with it, by how far it is past
     // the road's edge)
     if (s_railSide && !carried) {
@@ -2352,7 +2396,7 @@ static S32 RailCamera(S32 *eye, S32 *target) {
     // (it looks between the car and the road ahead of it: the car stays in the middle of the view, the road ahead above it)
     tx = hx + (tx - hx) * RAIL_CAMERA_LOOK; ty = hy + (ty - hy) * RAIL_CAMERA_LOOK; tz = hz + (tz - hz) * RAIL_CAMERA_LOOK;
     // (lower too when nearer, so the view is no steeper)
-    const double up = s_railUp * sqrt(back / s_railBack);
+    const double up = s_railUp * viewUp * sqrt(back / railBack);
     const double roadBehind = ey;
     ey += up;
     // over a crest between the eye and the car: the line to the car clears the road by RAIL_CAMERA_CLEAR all the way
@@ -3735,6 +3779,11 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "on_foot")) s_onFoot = atoi(v);
         else if (!strcmp(key, "trial")) s_trial = atoi(v);
         else if (!strcmp(key, "end_to_menu")) s_endToMenu = atoi(v);
+        else if (!strcmp(key, "camera")) {
+            // (the race camera's view, s_camView -- unless the player has changed it since the race file was loaded)
+            const int view = atoi(v);
+            if (!s_viewChosen && view >= RACE_VIEW_INSIDE && view <= RACE_VIEW_FAR) { s_camView = view; s_viewW = view == RACE_VIEW_FAR ? 1 : 0; }
+        }
         else if (!strcmp(key, "main")) s_main = atoi(v) - 1;
         else if (!strcmp(key, "finish")) s_nbFinishSet = ReadSets(v, s_finishSet);
         else if (!strcmp(key, "powerups")) s_powerups = atoi(v);
@@ -3884,7 +3933,8 @@ static void Load(const char *path, int carOnly = 0) {
     for (int i = 0; i < s_nbArcs; i++)
         if (!ArcPrepare(&s_arcs[i])) { Log_Info("[racemod] carried jump %d: not along the raised road -- left out", i + 1); s_arcs[i--] = s_arcs[--s_nbArcs]; }
     if (s_nbArcs) Log_Info("[racemod] %d carried jump(s), %d cube scenes", s_nbArcs, s_nbCubeScenes);
-    if (s_nbLoops || s_nbJumpCams || s_nbArcs || s_nbTunnels || s_nbOpen) FollowCamEyeHook = RaceCameraEye;
+    // (every track's: the views -- camera= -- are its, whatever cameras of its own the track has; without any it gives the arm's eye)
+    FollowCamEyeHook = RaceCameraEye;
     // (a roulette wheel: its head and its ball posed as their cube's decors are drawn)
     DecorPoseHook = s_wheel.On ? WheelDecors : NULL;
     if (s_wheel.On) Log_Info("[racemod] roulette wheel at (%.0f,%.0f): %d turning pieces, its floor %.0f at the hole to %.0f at the wall, the drop onto place %d", s_wheel.X, s_wheel.Z,
@@ -6838,8 +6888,11 @@ static S32 OpenCamera(S32 *eye, S32 *target) {
     if (OpenAreaAt(hx, hz, hy) < 0) return FALSE;
     // (as far behind and as high as the rail camera has its eye, and looking as far ahead: from the rooms out onto the road it is the
     // same view -- railcam=, else its defaults)
-    const double back = s_railBack > 0 ? s_railBack : 9 * 512.0, up = s_railBack > 0 ? s_railUp : 2100.0;
-    const double lead = s_railBack > 0 ? s_railLead : 7 * 512.0, aim = s_railBack > 0 ? s_railAim : 1000.0;
+    // (... and further back with it: camera=2)
+    const double viewBack = 1 + (RACE_VIEW_FAR_BACK - 1) * s_viewW, viewUp = 1 + (RACE_VIEW_FAR_UP - 1) * s_viewW;
+    const double viewLead = 1 + (RACE_VIEW_FAR_LEAD - 1) * s_viewW;
+    const double back = (s_railBack > 0 ? s_railBack : 9 * 512.0) * viewBack, up = (s_railBack > 0 ? s_railUp : 2100.0) * viewUp;
+    const double lead = (s_railBack > 0 ? s_railLead : 7 * 512.0) * viewLead, aim = s_railBack > 0 ? s_railAim : 1000.0;
     // the eye: `back` along the trail from the car, through its points newest first
     double px = hx, py = hy, pz = hz, left = back;
     int k = s_trailHead, n = s_trailN;
@@ -6858,13 +6911,109 @@ static S32 OpenCamera(S32 *eye, S32 *target) {
     return TRUE;
 }
 
+// camera=0, inside the car (s_camView): the eye RACE_INSIDE_UP over the car's floor and RACE_INSIDE_AHEAD ahead of its middle -- over the
+// driver's seat, just over Twinsen's head -- looking the way the car points: its heading, and its pitch -- how it climbs or falls, from its
+// height over the way it has gone, smoothed (as the car Twinsen drives as is pitched: DrawDriveAs) -- or, where the car is itself turned
+// (round a loop, by a flight's master rotation), its own. The eye's angles are given (FollowCamEyeTurn), not a point to look at: round a
+// loop the view goes past straight up and over, upside down at the top, as the car does. Nothing keeps it back -- it is where the driver is.
+#define RACE_INSIDE_UP 1150
+#define RACE_INSIDE_AHEAD 150
+#define RACE_INSIDE_LOOK 4096.0
+// (the near plane meanwhile: CLIP_NEAR, 3,000 in front of the eye -- the road's first six cells, and a car just ahead, not drawn)
+#define RACE_INSIDE_NEAR 300
+static double s_insidePitch = 0;           // the car's pitch for the eye (radians, nose up), smoothed
+static double s_insidePrevX = 0, s_insidePrevY = 0, s_insidePrevZ = 0;
+static int s_insidePrimed = 0;
+
+static void InsideNear(int on) {
+    if (on) {
+        if (NearClip > RACE_INSIDE_NEAR) NearClip = RACE_INSIDE_NEAR;
+        s_insideNear = 1;
+    } else if (s_insideNear) {
+        // (the exterior's own, as EXTFUNC.CPP Init3DExtView sets it)
+        NearClip = ModeDesiredY > 480 ? CLIP_NEAR * 480 / (S32)ModeDesiredY : CLIP_NEAR;
+        s_insideNear = 0;
+    }
+}
+
+static S32 InsideCamera(S32 *eye, S32 *target) {
+    if (CubeMode != CUBE_EXTERIEUR || Comportement != C_BUGGY) { s_insidePrimed = 0; return FALSE; }
+    const T_OBJ_3D *car = &ListObjet[NUM_PERSO].Obj;
+    const double b = (car->Beta & 4095) * 2 * RACE_PI / 4096, sb = sin(b), cb = cos(b);
+    double f[3], u[3];
+    if ((car->Alpha & 4095) || (car->Gamma & 4095)) {
+        // turned: the engine's M = M(Alpha) M(Gamma) M(Beta) (CarPose) on its forward (0, 0, 1) and its up (0, 1, 0)
+        const double a = (car->Alpha & 4095) * 2 * RACE_PI / 4096, g = (car->Gamma & 4095) * 2 * RACE_PI / 4096;
+        const double sa = sin(a), ca = cos(a), sg = sin(g), cg = cos(g);
+        f[0] = cg * sb; f[1] = ca * sg * sb - sa * cb; f[2] = sa * sg * sb + ca * cb;
+        u[0] = -sg; u[1] = ca * cg; u[2] = sa * cg;
+        // (the pitch below carried on from this one when the car stands level again: no jump)
+        if (u[1] > 0) s_insidePitch = atan2(f[1], sqrt(f[0] * f[0] + f[2] * f[2]));
+        s_insidePrimed = 1;
+        s_insidePrevX = car->X; s_insidePrevY = car->Y; s_insidePrevZ = car->Z;
+    } else {
+        // the height it has gained over the way it has gone, along its heading (DrawDriveAs's pitch), smoothed; a jump of its place -- a
+        // teleport, a new cube, the grid again -- starts it afresh
+        const double dx = car->X - s_insidePrevX, dz = car->Z - s_insidePrevZ, way = sqrt(dx * dx + dz * dz);
+        if (!s_insidePrimed || way > 2048) {
+            s_insidePrimed = 1; s_insidePitch = 0;
+            s_insidePrevX = car->X; s_insidePrevY = car->Y; s_insidePrevZ = car->Z;
+        } else if (way > 48) {
+            const double along = dx * sb + dz * cb;
+            if (fabs(along) >= RACE_DRIVE_ALONG_LEAST * way) {
+                double slope = (car->Y - s_insidePrevY) / (along < 0 ? -way : way);
+                if (slope > RACE_DRIVE_SLOPE_MOST) slope = RACE_DRIVE_SLOPE_MOST;
+                if (slope < -RACE_DRIVE_SLOPE_MOST) slope = -RACE_DRIVE_SLOPE_MOST;
+                s_insidePitch += (atan(slope) - s_insidePitch) * 0.35;
+            }
+            s_insidePrevX = car->X; s_insidePrevY = car->Y; s_insidePrevZ = car->Z;
+        }
+        const double sp = sin(s_insidePitch), cp = cos(s_insidePitch);
+        f[0] = sb * cp; f[1] = sp; f[2] = cb * cp;
+        u[0] = -sb * sp; u[1] = cp; u[2] = -cb * sp;
+    }
+    double e[3];
+    const double at[3] = {(double)car->X, (double)car->Y, (double)car->Z};
+    for (int k = 0; k < 3; k++) {
+        e[k] = at[k] + u[k] * RACE_INSIDE_UP + f[k] * RACE_INSIDE_AHEAD;
+        eye[k] = (S32)floor(e[k] + 0.5);
+        target[k] = (S32)floor(e[k] + f[k] * RACE_INSIDE_LOOK + 0.5);
+    }
+    // the eye's angles (LIB386 SetAngleCamera: the view along M^T (0, 0, -1) of M = M(alpha) M(gamma) M(beta) -- beta turning it to
+    // (sin beta, 0, -cos beta), alpha pitching it down): the way the car goes, whichever way up it is -- its forward's flat part when
+    // upright, its up's when it points straight up or down, reversed when it is upside down (f_h u_y - u_h f_y) -- and its pitch over that
+    double hx = f[0] * u[1] - u[0] * f[1], hz = f[2] * u[1] - u[2] * f[1];
+    const double hl = sqrt(hx * hx + hz * hz);
+    if (hl < 1e-6) { hx = sb; hz = cb; } else { hx /= hl; hz /= hl; }
+    const double pitch = atan2(f[1], f[0] * hx + f[2] * hz);
+    FollowCamEyeAngle[0] = (S32)floor(-pitch * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    FollowCamEyeAngle[1] = (S32)floor(atan2(hx, -hz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
+    FollowCamEyeAngle[2] = 0;
+    FollowCamEyeTurn = TRUE;
+    return TRUE;
+}
+
 static S32 RaceCameraEye(S32 *eye, S32 *target) {
     TrailStep();
+    // (the view's own first: inside the car, it rides with the car -- the tracks' cameras for loops, jumps and arcs don't take over -- and
+    // the view goes in or out of the car at once)
+    const int wasInside = s_insideOn;
+    s_insideOn = s_camView == RACE_VIEW_INSIDE && InsideCamera(eye, target);
+    InsideNear(s_insideOn);
+    if (s_insideOn != wasInside) FollowCamEyeCut = TRUE;
+    // (the far view's share for the cameras that follow it -- the rail camera, the open areas', the arm -- eased to the view's, or, while
+    // the tunnel's camera has the view, to the tunnel's own distance)
+    const double want = s_camView == RACE_VIEW_FAR && !s_viewTunnel ? 1 : 0;
+    s_viewW += (want - s_viewW) * RACE_VIEW_EASE;
+    if (fabs(want - s_viewW) < 0.002) s_viewW = want;
+    FollowCamArmPercent = Comportement == C_BUGGY ? (S32)floor(100 + (RACE_VIEW_FAR_ARM - 100) * s_viewW + 0.5) : 100;
+    s_viewTunnel = 0;
+    if (s_insideOn) { FollowCamEyeWho = "inside"; return TRUE; }
     // (which of them placed the eye: the camera trace's, FOLLOWCAM.CPP camtrace)
     if (ArcCamera(eye, target)) { FollowCamEyeWho = "arc"; return TRUE; }
     if (JumpCamera(eye, target)) { FollowCamEyeWho = "jump"; return TRUE; }
     if (LoopCamera(eye, target)) { FollowCamEyeWho = "loop"; return TRUE; }
-    if (TunnelCamera(eye, target)) { FollowCamEyeWho = "tunnel"; return TRUE; }
+    if (TunnelCamera(eye, target)) { FollowCamEyeWho = "tunnel"; s_viewTunnel = 1; return TRUE; }
     if (WheelCamera(eye, target)) { FollowCamEyeWho = "wheel"; return TRUE; }
     if (OpenCamera(eye, target)) { FollowCamEyeWho = "open"; return TRUE; }
     return RailCamera(eye, target);
@@ -9117,7 +9266,9 @@ static void HeroLook(S32 now, int driving) {
     // driven as another car, drawn in its place: DrawDriveAs)
     const int driveAs = driving && s_driveBody >= 0 && s_driveAnim >= 0 && CubeMode == CUBE_EXTERIEUR;
     s_superShown = superJet;
-    if (superJet || driveAs) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
+    // (and seen from inside -- camera=0: InsideCamera -- not drawn at all, nor its shadow, nor what is drawn in its place)
+    const int inside = driving && InsideView();
+    if (superJet || driveAs || inside) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
     else if (s_heroHidden) { hero->Flags &= ~INVISIBLE; s_heroHidden = 0; }
     // his own car painted (twinsen_body=): its bodies on him in place of the buggy's own -- every frame, as the game puts the buggy's back
     // whenever he gets in, stops firing or is grown back after the lightning (GEN_BODY_TUNIQUE: the buggy's, or GEN_BODY_NORMAL / _MAGE as
@@ -9748,6 +9899,8 @@ static U32 WalkInput(void) {
 U32 RaceMod_FilterInput(U32 input) {
     s_useHeld = (input & I_COMPORTEMENT) != 0;
     if (RaceMod_Active() && Comportement == C_BUGGY) input &= ~(U32)I_COMPORTEMENT;
+    // (a pad's Back button changes the camera's view in the car -- RaceCameraKey -- not the holomap)
+    if (RaceMod_Active() && Comportement == C_BUGGY && CheckKey(K_GAMEPAD_BACK)) input &= ~(U32)I_HOLOMAP;
     if (Explore() && CubeMode == CUBE_EXTERIEUR) {
         const int act = (input & I_ACTION_M) != 0, pressed = act && !s_footActWas;
         s_footActWas = act;
@@ -9792,6 +9945,8 @@ void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
     s_nbTracks = 0; s_tiredVar = -1; s_dreamScene = -1;
+    // (the camera's view: the new race file's camera=, or just behind the car)
+    s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
     s_active = path && path[0];
     if (!s_active) return;
@@ -12538,8 +12693,42 @@ static void CarTraceLine(void) {
              (int)BuggyPitchProbe[2], (int)(hero->Obj.Beta & 4095));
 }
 
+// The race camera's view changed (camera=: s_camView) -- by V, or a pad's Back, during a race (RaceCameraKey), or the console's raceview
+// -- its name on the display a moment, and the race game told (it keeps the player's choice for the next race: RACEGAME.CPP).
+static void SetCameraView(int view, const char *how) {
+    if (view < RACE_VIEW_INSIDE || view > RACE_VIEW_FAR) view = RACE_VIEW_BEHIND;
+    s_viewChosen = 1;
+    if (view == s_camView) return;
+    // (into or out of the car at once; between behind and further back the camera glides -- s_viewW)
+    if (view == RACE_VIEW_INSIDE || s_camView == RACE_VIEW_INSIDE) { FollowCamEyeCut = TRUE; s_viewW = view == RACE_VIEW_FAR ? 1 : 0; }
+    s_camView = view;
+    char text[48];
+    snprintf(text, sizeof(text), "Camera: %s", s_viewName[view]);
+    Message(text);
+    Log_Info("[racemod] camera view: %s (%s)", s_viewName[view], how);
+    RaceGame_CameraChosen(view);
+}
+
+void RaceMod_SetCameraView(int view) {
+    if (!RaceMod_Active()) return;
+    SetCameraView(view, "raceview");
+}
+
+// Every frame: V, or a pad's Back button, goes round the camera's views while Twinsen drives -- inside, just behind, further back.
+static void RaceCameraKey(void) {
+    const int down = CheckKey(K_V) || CheckKey(K_GAMEPAD_BACK);
+    if (down && !s_viewKeyWas && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR && NewCube == -1)
+        SetCameraView((s_camView + 1) % 3, "V");
+    s_viewKeyWas = down;
+    // (a view of its own -- inside the car, further back -- on a track whose camera is the classic one: the follow camera for it, the
+    // view's hook its own -- RaceCameraEye -- and back to the classic one just behind)
+    if (s_camView != RACE_VIEW_BEHIND && !FollowCamera && CubeMode == CUBE_EXTERIEUR && !s_nbRaised && !s_nbLoops) { FollowCamera = TRUE; s_followForView = 1; }
+    else if (s_camView == RACE_VIEW_BEHIND && s_followForView) { FollowCamera = FALSE; s_followForView = 0; }
+}
+
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
+    RaceCameraKey();
     RaceMusicFrame();
     CarTraceLine();
     NoteScene();
@@ -12957,7 +13146,7 @@ static void HudSmall(S32 x, S32 y, const char *text, int align) { HudSmallIn(x, 
 // road, drawn after the scene's objects as they are drawn -- tested against the depth of the ground and the decor, in the colours of
 // things near -- its place on the screen marked to be drawn over next frame.
 static void DrawSuperJet(S32 now) {
-    if (!s_superShown || s_superModel < 0 || CubeMode != CUBE_EXTERIEUR) return;
+    if (!s_superShown || s_superModel < 0 || CubeMode != CUBE_EXTERIEUR || InsideView()) return;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     T_OBJ_3D pose = hero->Obj;
     CarPose(&pose, (hero->Obj.Beta + s_superTurn) & 4095, s_superLean, 0);
@@ -12979,7 +13168,7 @@ static void DrawSuperJet(S32 now) {
 // his car's way and pitched with the way it climbs or falls (the slope it has just driven, smoothed), drawn after the scene's objects
 // as the super jet-pack is.
 static void DrawDriveAs(S32 now) {
-    if (!s_heroHidden || s_superShown || s_driveBody < 0 || s_driveAnim < 0 || CubeMode != CUBE_EXTERIEUR) return;
+    if (!s_heroHidden || s_superShown || s_driveBody < 0 || s_driveAnim < 0 || CubeMode != CUBE_EXTERIEUR || InsideView()) return;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     const int body = s_driveSmallNow && s_driveSmall >= 0 ? s_driveSmall : s_driveBody;
     if (s_driveShown != body) {
@@ -14385,6 +14574,9 @@ static void ResetTrack(void) {
     s_heroDraft = 1;
     s_ownTrack = 0; s_loaded[0] = 0;
     FollowCamEyeHook = NULL;
+    // (the views' hold on the camera let go -- the view itself, s_camView, is the player's and stays: RaceMod_LoadFile sets it)
+    InsideNear(0); s_insideOn = 0; s_insidePrimed = 0; s_viewTunnel = 0; FollowCamArmPercent = 100; FollowCamEyeTurn = FALSE;
+    if (s_followForView) { FollowCamera = FALSE; s_followForView = 0; }
 }
 
 // An outside scene of `island` is loading (EXTFUNC.CPP InitGrilleExt, before the island's file is chosen): with a set of tracks (track=),

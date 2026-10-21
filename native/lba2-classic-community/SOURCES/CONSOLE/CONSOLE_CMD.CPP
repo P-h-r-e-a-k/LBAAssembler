@@ -2436,6 +2436,18 @@ static void cmd_autodrive(int argc, const char *argv[]) {
     Console_Print("autodrive: %s", atoi(argv[1]) ? "on" : "off");
 }
 
+/* raceview <0|1|2>: the race camera's view -- 0 inside the car, 1 just behind it, 2 further back -- as V changes it during a race
+   (RACEMOD.CPP camera=). For headless tests. */
+static void cmd_raceview(int argc, const char *argv[]) {
+    extern void RaceMod_SetCameraView(int view);
+    if (argc < 2) {
+        Console_Print("Usage: raceview <0 inside the car|1 just behind|2 further back>");
+        return;
+    }
+    RaceMod_SetCameraView(atoi(argv[1]));
+    Console_Print("raceview: %d", atoi(argv[1]));
+}
+
 /* racewalk [+] <x z>... [car] | racewalk off: with a race file's on_foot=, Twinsen out of his car walked on foot through the points (island
    units), then -- with "car" -- to his car and into it (RACEMOD.CPP RaceMod_Walk); "+" first: more points after those given before (a
    command line holds a few). For headless tests of the Temple of Bu's party. */
@@ -2865,6 +2877,10 @@ void Console_RegisterAll(void) {
                               "racewalk [+] <x z>... [car] | racewalk off",
                               "With a race file's on_foot=1 and Twinsen out of his car, walks him through the points (island "
                               "units) and, with car, back to his car and into it. For headless tests.");
+    Console_RegisterCommandEx("raceview", cmd_raceview, "Race-track camera view: inside the car, just behind, further back",
+                              "raceview <0|1|2>",
+                              "With a race-track mod running, changes the race camera's view as the V key does: 0 inside the "
+                              "car, 1 just behind it, 2 further back. For headless tests.");
     Console_RegisterCommandEx("autodrive", cmd_autodrive, "Race-track test pilot: drive the player's car along the racing line",
                               "autodrive <0|1> [look cells] [side cells] [pace %]",
                               "With a race-track mod running (LBA2_RACETRACK_FILE), steers and pedals the player's "

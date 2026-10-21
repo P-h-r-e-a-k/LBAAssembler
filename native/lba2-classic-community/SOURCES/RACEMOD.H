@@ -119,6 +119,10 @@ void RaceMod_AutoDrive(int on, double lookCells, double sideCells);
 void RaceMod_AutoPace(double percent);     // ... at that percent of the line's speed (100: the line's own)
 U32 RaceMod_AutoInput(void);
 
+// The race camera's view (race file camera=): 0 inside the car, 1 just behind it, 2 further back -- as V changes it during a race (the
+// console's `raceview`, for headless tests).
+void RaceMod_SetCameraView(int view);
+
 // The race game's pages (RACEGAME.CPP: the power-ups, the controls, the qualifying): what a track's race file hands out, read from its
 // keys alone -- nothing of a race on is touched -- each power-up's name and what it does, and its item box drawn as the race draws it.
 #define RACE_PAGE_ITEMS 16

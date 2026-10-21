@@ -73,6 +73,14 @@ extern S32 FollowCamBaseDist;      /* player's chosen zoom distance (0 = uniniti
 extern S32 FollowCamReengageDelay; /* frames before auto-center resumes after manual pan */
 extern S32 FollowCamManualHold;    /* frames the pitch/distance auto-assist yields after a manual nudge */
 
+/* A mod's own say in the view (RACEMOD.CPP's camera views): the arm's length in percent of the zoom chosen (100); the hook's eye at its
+ * own angles (FollowCamEyeTurn set by FollowCamEyeHook with its eye, FollowCamEyeAngle: SetAngleCamera's alpha, beta, gamma); and a
+ * cut onto or off the hook's eye at the next update instead of the ease (FollowCamEyeCut). */
+extern S32 FollowCamArmPercent;
+extern S32 FollowCamEyeTurn;
+extern S32 FollowCamEyeAngle[3];
+extern S32 FollowCamEyeCut;
+
 /* Console `camtrace`: log the Auto-camera angle state each frame. */
 extern S32 DbgCamTrace;
 
