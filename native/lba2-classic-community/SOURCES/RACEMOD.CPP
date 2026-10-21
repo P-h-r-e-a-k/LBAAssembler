@@ -10055,6 +10055,12 @@ void RaceMod_Slide(S32 beta, S32 *speed, S32 deltatimer, S32 airborne) {
 #define RACE_SKID_USER 0xFE                // PlaySample's user handle: RACE_SOUND_USER + this
 static T_RACE_SOUND s_skidWav = {NULL, 0};
 static int s_skidWavRead = 0;
+// The game's own tyre squeal: SAMPLES.HQR 252, the one the retail race's racer plays as it brakes to a stop (its entity's (157) animation
+// 1073 -- ANIM.HQR's generic 5, 6, 10 and 22 -- a new sample at its first frame: RESS.HQR 44's record 27 01 FC 00 ..., at volume 80; the
+// user, 2026-10-21: "The game definitely has a wheel squeal sound, the racer in the retail race track uses it when coming to a stop").
+// Used when the game folder has no RACESOUNDS/SKID.WAV; made only when neither is there.
+#define RACE_SKID_GAME_SAMPLE 252
+static int s_skidGame = 0;
 static U32 s_skidVoice = 0xFFFFFFFFu;
 static void SkidWavMake(void) {
     if (s_skidWavRead) return;
@@ -10072,6 +10078,16 @@ static void SkidWavMake(void) {
         } else free(data);
         fclose(f);
         if (s_skidWav.Data) { Log_Info("[racemod] the tyres' squeal: %s", full); return; }
+    }
+    // (the game's own: SAMPLES.HQR 252, the racer's squeal as it stops)
+    {
+        S32 bytes = 0;
+        HQRGetDelFunc = DelBlocHQRSample;
+        if (GivePtrSample(RACE_SKID_GAME_SAMPLE, &bytes) && bytes > 0) {
+            s_skidGame = 1;
+            Log_Info("[racemod] the tyres' squeal: the game's sample %d (the racer's as it stops), %d bytes", RACE_SKID_GAME_SAMPLE, (int)bytes);
+            return;
+        }
     }
     const S32 n = RACE_SKID_RATE / 2, fade = 1024, size = 44 + 2 * n;
     U8 *d = (U8 *)malloc((size_t)size);
@@ -10126,7 +10142,7 @@ static void SkidSound(void) {
     }
     if (share < 0.03 || !SamplesEnable) { SkidSoundStop(); return; }
     SkidWavMake();
-    if (!s_skidWav.Data) return;
+    if (!s_skidWav.Data && !s_skidGame) return;
     const S32 volume = RegleTrois(0, SampleVolume, 127, (S32)(RACE_SKID_VOLUME * (0.4 + 0.6 * share)));
     const S32 pitch = (S32)(0x1000 * (0.9 + 0.2 * share));
     if (s_skidVoice != 0xFFFFFFFFu && IsSamplePlaying(s_skidVoice)) {
@@ -10134,7 +10150,14 @@ static void SkidSound(void) {
         ChangePitchbendSample(s_skidVoice, pitch);
         return;
     }
-    // (repeat 0: looped until stopped)
+    // (repeat 0: looped until stopped -- the game's sample fetched as the game plays its own, the mixer keeping its own copy)
+    if (s_skidGame) {
+        S32 bytes = 0;
+        HQRGetDelFunc = DelBlocHQRSample;
+        void *game = GivePtrSample(RACE_SKID_GAME_SAMPLE, &bytes);
+        if (game && bytes > 0) s_skidVoice = PlaySample(game, bytes, RACE_SOUND_USER + RACE_SKID_USER, pitch, 0, volume, 64);
+        return;
+    }
     s_skidVoice = PlaySample(s_skidWav.Data, s_skidWav.Size, RACE_SOUND_USER + RACE_SKID_USER, pitch, 0, volume, 64);
 }
 
