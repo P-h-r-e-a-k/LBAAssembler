@@ -188,6 +188,11 @@
  *                                RACESOUNDS/USE_<NAME>.WAV as one is used (his, or an opponent's nearby), the names s_puSoundName's; a
  *                                file that isn't there is silence (the race track's build writes them: Terrain/RaceSounds.cs) -- or for
  *                                the magic balls the game's own throw (LaunchShot); the super jet-pack hums while it lasts (JetHum)
+ *   The handbrake (2026-10-21): Shift (or the inventory's key, a pad's Y) held in the car -- RaceMod_Handbrake, RaceMod_Slide.
+ *     handbrake=<on 0|1> [brake] [steer] [grip] [slip]   off, or its numbers: its braking (a share of brake=), the steering's
+ *                                quickening, how quickly the way the car goes follows its heading while it is held (a second) and the
+ *                                most it lags behind (4096ths of a turn) -- 1 0.22 1.5 1.5 640 without the key. The tyres' squeal:
+ *                                RACESOUNDS/SKID.WAV if there is one (SkidSound), else one made by the engine.
  */
 #include <errno.h>
 #include <string.h>
@@ -767,6 +772,16 @@ static int s_oilScene[RACE_MAX_OIL_ACTORS], s_oilActor[RACE_MAX_OIL_ACTORS];
 static int s_nbOilActors = 0;
 static S32 s_skidUntil = 0, s_skidStart = 0, s_skidBeta = 0, s_skidSpeed = 0;
 static int s_skidDir = 1;
+// The handbrake (2026-10-21, RaceMod_Handbrake): what it does, the race file's handbrake= or these --
+//   handbrake=<on 0|1> [brake] [steer] [grip] [slip]
+#define RACE_HB_BRAKE 0.22                 // brake: its braking, a share of the car's own brake (brake=; the pedal's)
+#define RACE_HB_STEER 1.5                  // steer: the car turns this much quicker while it is held
+#define RACE_HB_GRIP_HELD 1.5              // grip: how quickly the way the car goes swings round to the way it points while it is held, a second
+#define RACE_HB_SLIP 640                   // slip: the most the way it goes lags the way it points, 4096ths of a turn (56 degrees)
+static int s_hbOn = 1;
+static int s_slide = 0;                    // sliding: the car goes s_slideBeta's way (RaceMod_MoveBeta, RailCamera), not its heading's
+static double s_slideBeta = 0;
+static double s_hbBrake = RACE_HB_BRAKE, s_hbSteer = RACE_HB_STEER, s_hbGrip = RACE_HB_GRIP_HELD, s_hbSlip = RACE_HB_SLIP;
 #define RACE_BOOST_MS 4000
 #define RACE_PROTECT_MS 12000              // (30 s until 2026-10-10: the user, "decrease the length the protection spell lasts for, perhaps
                                            // 12 seconds, let's also have it no longer cancel a shrink" -- it still keeps a new strike off)
@@ -2361,9 +2376,10 @@ static S32 RailCamera(S32 *eye, S32 *target) {
     const int carried = s_arcOn >= 0 && s_arcSeg >= 0 && s_arcs[s_arcOn].Side == 0;
     if (carried) { seg = s_arcSeg; t = s_arcT; }
     else if (!RaisedAt(hero->Obj.X + cx, hero->Obj.Z + cz, hero->Obj.Y + 64, RAISED_PAD, &f, &seg, &lat, &t) || abs(f - hero->Obj.Y) > 300) return FALSE;
-    // which way along the road the car faces
+    // which way along the road the car faces -- or, sliding on the handbrake, goes (RaceMod_Slide: the car swung across the road as it goes
+    // on along it, the camera stays behind it, not flipped round in front of it as the car's nose passes square to the road)
     const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
-    const double angle = (hero->Obj.Beta & 4095) * 2 * 3.14159265358979 / 4096.0;
+    const double angle = (s_slide ? s_slideBeta : (double)(hero->Obj.Beta & 4095)) * 2 * 3.14159265358979 / 4096.0;
     const double way = sin(angle) * (c->X - a->X) + cos(angle) * (c->Z - a->Z) >= 0 ? 1 : -1;
     double ex, ey, ez, tx, ty, tz;
     const double hx = hero->Obj.X + cx, hy = hero->Obj.Y, hz = hero->Obj.Z + cz;
@@ -3392,6 +3408,18 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%lf %lf", &s_jumpLo, &s_jumpHi) != 2) s_jumpHi = 0;
         }
         else if (!strcmp(key, "rail_held")) s_railHeld = atoi(v) != 0;
+        else if (!strcmp(key, "handbrake")) {
+            // (handbrake=<on 0|1> [brake] [steer] [grip] [slip]: RaceMod_Handbrake; a number left out keeps its default)
+            int on = 1;
+            double brake = RACE_HB_BRAKE, steer = RACE_HB_STEER, grip = RACE_HB_GRIP_HELD, slip = RACE_HB_SLIP;
+            sscanf(v, "%d %lf %lf %lf %lf", &on, &brake, &steer, &grip, &slip);
+            s_hbOn = on != 0;
+            s_hbBrake = brake < 0 ? 0 : brake > 1 ? 1 : brake;
+            s_hbSteer = steer < 0.5 ? 0.5 : steer > 4 ? 4 : steer;
+            s_hbGrip = grip < 0.1 ? 0.1 : grip > 20 ? 20 : grip;
+            s_hbSlip = slip < 64 ? 64 : slip > 1400 ? 1400 : slip;
+            Log_Info("[racemod] handbrake: %s, brake %.2f of the car's, steering x%.2f, grip %.2f/s, slip at most %.0f/4096", s_hbOn ? "on" : "off", s_hbBrake, s_hbSteer, s_hbGrip, s_hbSlip);
+        }
         else if (!strcmp(key, "railcam")) {
             s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM;
             double side = 0;
@@ -9891,6 +9919,225 @@ static U32 WalkInput(void) {
     return in;
 }
 
+// The handbrake (2026-10-21; the user: "Let's modify the engine to allow us to have access to a 'handbrake' so we can use it to skid
+// around corners. Let's initially map this to shift."). Held while Twinsen drives -- Shift, either one, or the key Options gives the
+// inventory, which has no use in the car (the buggy's behaviour has no inventory: OBJECT.CPP ListComportement), or a pad's Y, the
+// inventory's button -- the back wheels lock: no drive, a brake gentler than the pedal's (s_hbBrake of it: BUGGY.CPP RaceSpeed), the car
+// turning s_hbSteer times as quickly for the same steering, and the way it goes no longer the way it points: that way (s_slideBeta)
+// follows its heading round only slowly (the gap between them shrinking by e^-s_hbGrip a second), never more than s_hbSlip behind it,
+// and the car loses speed as it slides sideways (RACE_HB_SCRUB). Let go, the grip comes back over RACE_HB_RECOVER_MS (to RACE_HB_GRIP)
+// and the way it goes swings round to its heading -- the slide over once they are within RACE_HB_END (RACE_HB_END_GRIP with the grip all
+// back: steering on, the way it goes lags a little behind the heading even then -- and from there the car goes as it always did). A
+// powerslide: the back steps out round a hairpin and the car comes out of it pointing down the road. The player's car only (the
+// opponents drive their lines), and only
+// while he has it: not on the grid, in the air, over a jump or round a loop, skidding on oil or on the super jet-pack. Never pressed,
+// nothing changes: the car goes the way it points, as it always did.
+// The raised road's rail holds a sliding car as any other (RaceMod_Rail: where the car comes to, whichever way it went), as walls do, and
+// the grip comes back quicker against them (RACE_HB_WALL_GRIP, while the car's last move came up short of the way it was going): the car
+// scrapes along rather than pressing on into the rail. Each frame's move is the speed's, as ever -- only its direction is the slide's --
+// so a slide goes through no wall a car driving straight wouldn't.
+// Heard: a tyre squeal looped while it slides, the louder the further sideways (SkidSound); seen: a puff of tyre smoke from a back wheel.
+#define RACE_HB_MIN_SPEED 1400             // a slide begins only faster than this (units/s: 10 km/h) -- slower, the handbrake only brakes
+#define RACE_HB_GRIP 9.0                   // the grip back, a second (as s_hbGrip) ...
+#define RACE_HB_RECOVER_MS 450             // ... over this long once it is let go
+#define RACE_HB_WALL_GRIP 5.0              // ... and this much more while the rail, or a wall, holds the car back ...
+#define RACE_HB_WALL_SHORT 0.6             // ... its last move along the way it went short of this share of the move meant
+#define RACE_HB_SCRUB 0.6                  // the speed lost a second sliding: this share of it times the sine of the slide's angle
+#define RACE_HB_END 6                      // the slide over, let go, once the way it goes is this close to its heading (4096ths) --
+#define RACE_HB_END_GRIP 40                // ... or this close with the grip all back (steering on, the way it goes lags its heading a little)
+#define RACE_HB_LOG_MS 200                 // a [racemod] handbrake line this often while it slides
+#define RACE_HB_SMOKE_MS 90                // a puff of tyre smoke this often while it slides ...
+#define RACE_HB_SMOKE_SLIP 200             // ... at least this far sideways (4096ths: 18 degrees) ...
+#define RACE_HB_SMOKE_SPEED 3500           // ... and this fast (units/s: 25 km/h)
+static int s_hbInput = 0;                  // the inventory's key or button down this frame (RaceMod_FilterInput: kept out of Input in the car)
+static S32 s_slideFrom = 0, s_slideLet = 0, s_slideLog = 0, s_slideSmoke = 0, s_slideV0 = 0;
+static double s_slideMost = 0;
+static double s_slideX = 0, s_slideZ = 0, s_slideMeant = 0, s_slideWent = 0;  // (where the car was, how far it meant to go and which way)
+static int s_slideWheel = 0;               // (the back wheel the next puff comes from)
+static unsigned s_smokeSeed = 20261021u;   // (the smoke's own dice: the race's, RaceRandom, stay as they were)
+static int Kmh(S32 speed) { return (int)(speed * 36 / 5120); }
+// The way the car points less the way it goes, -2048..2048 (4096ths)
+static double SlideGap(S32 beta) {
+    double gap = fmod((beta & 4095) - s_slideBeta, 4096.0);
+    if (gap > 2048) gap -= 4096; else if (gap < -2048) gap += 4096;
+    return gap;
+}
+static int HandbrakeKey(void) {
+    return s_hbInput || CheckKey(K_SHIFT_LEFT) || CheckKey(K_SHIFT_RIGHT);
+}
+// Whether the player has the car: nothing drives it for him, and it isn't flying or going round a loop. (Across a cube's edge -- the
+// next scene, NewCube -- the slide goes on.)
+static int HandbrakeFree(void) {
+    return RaceMod_Active() && s_hbOn && Comportement == C_BUGGY && !RaceMod_Takeover() && !RaceMod_Held() && TimerRefHR >= s_skidUntil
+           && s_flying < 0 && s_arcOn < 0 && s_loopOn < 0 && s_loopState == LOOP_NONE;
+}
+S32 RaceMod_Handbrake(void) {
+    return HandbrakeFree() && HandbrakeKey();
+}
+double RaceMod_HandbrakeSteer(S32 on) { return on ? s_hbSteer : 1; }
+double RaceMod_HandbrakeBrake(void) { return s_hbBrake; }
+
+static void SlideEnd(const char *why) {
+    if (!s_slide) return;
+    s_slide = 0;
+    Log_Info("[racemod] handbrake: the slide over after %.2f s (%s) -- %d to %d km/h, %.0f degrees sideways at most", (TimerRefHR - s_slideFrom) / 1000.0, why,
+             Kmh(s_slideV0), Kmh(ListBuggy[0].Speed), s_slideMost * 360 / 4096);
+}
+
+// A puff of tyre smoke from one of the back wheels (as DoAnimBuggy places them: 400 to the side, 350 behind the middle), rising and
+// growing as it fades
+static void SlideSmoke(const T_OBJET *hero) {
+    s_smokeSeed = s_smokeSeed * 1103515245u + 12345u;
+    const double r = ((s_smokeSeed >> 8) & 0xFFFF) / 65536.0;
+    const double a = (hero->Obj.Beta & 4095) * 2 * RACE_PI / 4096, fx = sin(a), fz = cos(a);
+    const double side = (s_slideWheel ^= 1) ? 400 : -400, back = -350;
+    const S32 x = (S32)(hero->Obj.X + fx * back + fz * side), z = (S32)(hero->Obj.Z + fz * back - fx * side);
+    // (a pof's scale is how far off it looks: from 760 down to 280, growing almost three times over its 0.55 s)
+    InitExtraPof(x, hero->Obj.Y + 200, z, 1, 1024 - 96 + (S32)(r * 192), (S32)(r * 4096), 8, 0, 760, 280, 550, 0, 550);
+}
+
+// BUGGY.CPP MoveBuggy, every frame of the player's car after its steering: the slide the handbrake starts, and its end.
+void RaceMod_Slide(S32 beta, S32 *speed, S32 deltatimer, S32 airborne) {
+    const S32 now = TimerRefHR;
+    const int free = HandbrakeFree(), key = free && HandbrakeKey();
+    if (!s_slide) {
+        if (!key || *speed < RACE_HB_MIN_SPEED || airborne) return;
+        s_slide = 1; s_slideBeta = beta & 4095; s_slideFrom = now; s_slideLet = 0; s_slideLog = 0; s_slideMost = 0; s_slideV0 = *speed;
+        s_slideSmoke = now; s_slideMeant = 0;
+        Log_Info("[racemod] handbrake on at %d km/h, heading %d", Kmh(*speed), (int)(beta & 4095));
+    }
+    if (!free) { SlideEnd(Comportement != C_BUGGY ? "out of the car" : "the car taken over"); return; }
+    if (airborne) { s_slideMeant = 0; return; }   // (in the air it goes on the way it went)
+    if (*speed <= 0) { SlideEnd("stopped"); return; }
+    if (key) s_slideLet = 0;
+    else if (!s_slideLet) { s_slideLet = now; Log_Info("[racemod] handbrake let go at %d km/h, %.0f degrees sideways", Kmh(*speed), fabs(SlideGap(beta)) * 360 / 4096); }
+    double dt = deltatimer / 1000.0;
+    if (dt < 0) dt = 0; else if (dt > 0.1) dt = 0.1;
+    double grip = s_hbGrip;
+    if (!key) {
+        double u = (double)(now - s_slideLet) / RACE_HB_RECOVER_MS;
+        if (u > 1) u = 1;
+        grip += (RACE_HB_GRIP - s_hbGrip) * u;
+    }
+    // (held back -- the rail, a wall: the last move short of the one meant, along the way it went)
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    const double went = s_slideWent * 2 * RACE_PI / 4096, along = (wx - s_slideX) * sin(went) + (wz - s_slideZ) * cos(went);
+    const int railed = s_slideMeant > 20 && along < RACE_HB_WALL_SHORT * s_slideMeant;
+    if (railed) grip += RACE_HB_WALL_GRIP;
+    double gap = SlideGap(beta) * exp(-grip * dt);
+    if (gap > s_hbSlip) gap = s_hbSlip; else if (gap < -s_hbSlip) gap = -s_hbSlip;
+    s_slideBeta = fmod((beta & 4095) - gap + 4096.0, 4096.0);
+    if (fabs(gap) > s_slideMost) s_slideMost = fabs(gap);
+    // (sideways the tyres scrub the speed off)
+    *speed -= (S32)(dt * RACE_HB_SCRUB * sin(fabs(gap) * 2 * RACE_PI / 4096) * *speed);
+    if (*speed < 0) *speed = 0;
+    s_slideX = wx; s_slideZ = wz; s_slideMeant = *speed * dt; s_slideWent = s_slideBeta;
+    if (now - s_slideLog >= RACE_HB_LOG_MS) {
+        s_slideLog = now;
+        Log_Info("[racemod] handbrake t %u key %d heading %d way %.0f slip %.1f deg speed %d km/h grip %.1f%s at %.0f,%d,%.0f", (unsigned)now, key,
+                 (int)(beta & 4095), s_slideBeta, gap * 360 / 4096, Kmh(*speed), grip, railed ? " held back" : "", wx, (int)hero->Obj.Y, wz);
+    }
+    if (fabs(gap) >= RACE_HB_SMOKE_SLIP && *speed >= RACE_HB_SMOKE_SPEED && now - s_slideSmoke >= RACE_HB_SMOKE_MS) {
+        s_slideSmoke = now;
+        SlideSmoke(hero);
+    }
+    if (!key && (fabs(gap) < RACE_HB_END || (now - s_slideLet >= RACE_HB_RECOVER_MS && fabs(gap) < RACE_HB_END_GRIP))) SlideEnd("the grip back");
+}
+
+// The tyres' squeal while the car slides (RaceMod_Slide): RACESOUNDS/SKID.WAV if the game folder has one, else one made here -- a squeal
+// half a second long, looped: a tone round RACE_SKID_TONE Hz that wavers, over a band of hiss. Louder the further sideways and the
+// faster (to RACE_SKID_VOLUME), a little higher the faster; played as the race's own sounds are (at the sound effects' volume, none with
+// the samples off), in the middle.
+#define RACE_SKID_RATE 22050
+#define RACE_SKID_TONE 1180                // (a whole number of its waves in the half second: the loop has no seam)
+#define RACE_SKID_VOLUME 62                // (of 127: under the engine's own)
+#define RACE_SKID_USER 0xFE                // PlaySample's user handle: RACE_SOUND_USER + this
+static T_RACE_SOUND s_skidWav = {NULL, 0};
+static int s_skidWavRead = 0;
+static U32 s_skidVoice = 0xFFFFFFFFu;
+static void SkidWavMake(void) {
+    if (s_skidWavRead) return;
+    s_skidWavRead = 1;
+    char full[ADELINE_MAX_PATH];
+    GetResPath(full, ADELINE_MAX_PATH, "RACESOUNDS/SKID.WAV");
+    FILE *f = fopen(full, "rb");
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        const long size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        U8 *data = size > 44 && size < 16L * 1024 * 1024 ? (U8 *)malloc((size_t)size) : NULL;
+        if (data && fread(data, 1, (size_t)size, f) == (size_t)size && !memcmp(data, "RIFF", 4) && !memcmp(data + 8, "WAVE", 4)) {
+            s_skidWav.Data = data; s_skidWav.Size = (S32)size;
+        } else free(data);
+        fclose(f);
+        if (s_skidWav.Data) { Log_Info("[racemod] the tyres' squeal: %s", full); return; }
+    }
+    const S32 n = RACE_SKID_RATE / 2, fade = 1024, size = 44 + 2 * n;
+    U8 *d = (U8 *)malloc((size_t)size);
+    float *hiss = (float *)malloc(sizeof(float) * (size_t)(n + fade));
+    if (!d || !hiss) { free(d); free(hiss); return; }
+    // (the hiss: white noise band-passed -- a quick low pass less a slow one -- its end faded into its start, so the loop has no seam)
+    unsigned seed = 0x5EEDu;
+    double fast = 0, slow = 0, power = 0;
+    for (S32 i = 0; i < n + fade; i++) {
+        seed = seed * 1103515245u + 12345u;
+        const double white = ((seed >> 8) & 0xFFFF) / 32768.0 - 1;
+        fast += 0.55 * (white - fast);
+        slow += 0.06 * (fast - slow);
+        hiss[i] = (float)(fast - slow);
+        power += hiss[i] * hiss[i];
+    }
+    const double rms = sqrt(power / (n + fade)) + 1e-9;
+    memcpy(d, "RIFF", 4); *(U32 *)(d + 4) = (U32)(size - 8); memcpy(d + 8, "WAVEfmt ", 8);
+    *(U32 *)(d + 16) = 16; *(U16 *)(d + 20) = 1; *(U16 *)(d + 22) = 1; *(U32 *)(d + 24) = RACE_SKID_RATE; *(U32 *)(d + 28) = RACE_SKID_RATE * 2;
+    *(U16 *)(d + 32) = 2; *(U16 *)(d + 34) = 16; memcpy(d + 36, "data", 4); *(U32 *)(d + 40) = (U32)(2 * n);
+    S16 *pcm = (S16 *)(d + 44);
+    for (S32 i = 0; i < n; i++) {
+        const double t = (double)i / RACE_SKID_RATE;
+        // (the tone wavering 60 Hz either way six times a second, and fluttering 14 times a second: whole numbers of each in the loop)
+        const double ph = 2 * RACE_PI * RACE_SKID_TONE * t + 10 * sin(2 * RACE_PI * 6 * t);
+        const double tone = sin(ph) + 0.35 * sin(2 * ph + 0.7) + 0.15 * sin(3 * ph + 1.9);
+        const double flutter = 0.75 + 0.25 * sin(2 * RACE_PI * 14 * t);
+        double h = hiss[i];
+        if (i < fade) h = h * i / fade + hiss[n + i] * (fade - i) / fade;
+        double v = 0.42 * tone * flutter / 1.5 + 0.30 * h / rms / 3;
+        if (v > 1) v = 1; else if (v < -1) v = -1;
+        pcm[i] = (S16)(v * 30000);
+    }
+    free(hiss);
+    s_skidWav.Data = d; s_skidWav.Size = size;
+    Log_Info("[racemod] the tyres' squeal: made (no %s)", full);
+}
+static void SkidSoundStop(void) {
+    if (s_skidVoice == 0xFFFFFFFFu) return;
+    StopOneSample(s_skidVoice);
+    s_skidVoice = 0xFFFFFFFFu;
+}
+// Every frame the race-track mode runs
+static void SkidSound(void) {
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    double share = 0;
+    if (s_slide && Comportement == C_BUGGY && NewCube == -1 && !(hero->WorkFlags & FALLING)) {
+        double side = (fabs(SlideGap(hero->Obj.Beta)) - 40) / 360, fast = ListBuggy[0].Speed / 7000.0;
+        if (side > 1) side = 1;
+        if (fast > 1) fast = 1;
+        if (side > 0 && fast > 0) share = side * fast;
+    }
+    if (share < 0.03 || !SamplesEnable) { SkidSoundStop(); return; }
+    SkidWavMake();
+    if (!s_skidWav.Data) return;
+    const S32 volume = RegleTrois(0, SampleVolume, 127, (S32)(RACE_SKID_VOLUME * (0.4 + 0.6 * share)));
+    const S32 pitch = (S32)(0x1000 * (0.9 + 0.2 * share));
+    if (s_skidVoice != 0xFFFFFFFFu && IsSamplePlaying(s_skidVoice)) {
+        ChangeVolumePanSample(s_skidVoice, volume, 64);
+        ChangePitchbendSample(s_skidVoice, pitch);
+        return;
+    }
+    // (repeat 0: looped until stopped)
+    s_skidVoice = PlaySample(s_skidWav.Data, s_skidWav.Size, RACE_SOUND_USER + RACE_SKID_USER, pitch, 0, volume, 64);
+}
+
 // PERSO.CPP, the frame's input: Ctrl is the game's behaviour key, and the items' in the car (PowerUps) -- there it doesn't open the
 // behaviour menu, whose other behaviours take Twinsen out of his car (PERSO.CPP, the menu's choice). Noted for PowerUps first, so a
 // pad's left shoulder, or the key bound to it in the options, uses the items too.
@@ -9899,6 +10146,9 @@ static U32 WalkInput(void) {
 U32 RaceMod_FilterInput(U32 input) {
     s_useHeld = (input & I_COMPORTEMENT) != 0;
     if (RaceMod_Active() && Comportement == C_BUGGY) input &= ~(U32)I_COMPORTEMENT;
+    // (the inventory's key -- Shift -- and a pad's Y are the handbrake in the car: RaceMod_Handbrake)
+    s_hbInput = (input & I_INVENTORY) != 0;
+    if (RaceMod_Active() && Comportement == C_BUGGY) input &= ~(U32)I_INVENTORY;
     // (a pad's Back button changes the camera's view in the car -- RaceCameraKey -- not the holomap)
     if (RaceMod_Active() && Comportement == C_BUGGY && CheckKey(K_GAMEPAD_BACK)) input &= ~(U32)I_HOLOMAP;
     if (Explore() && CubeMode == CUBE_EXTERIEUR) {
@@ -9936,6 +10186,7 @@ S32 RaceMod_WantsMenu(void) {
     s_menuAt = 0;
     Log_Info("[racemod] the race is over: back to the menu");
     JetHumStop("back to the menu");
+    SkidSoundStop(); SlideEnd("back to the menu");
     return 1;
 }
 
@@ -10024,7 +10275,11 @@ void RaceMod_Skid(S32 *beta, S32 *speed) {
     *speed = (S32)(s_skidSpeed * (1 - p) * (1 - p));
 }
 S32 RaceMod_MoveBeta(S32 beta) {
-    return RaceMod_Active() && Comportement == C_BUGGY && TimerRefHR < s_skidUntil ? s_skidBeta : beta;
+    if (!RaceMod_Active() || Comportement != C_BUGGY) return beta;
+    if (TimerRefHR < s_skidUntil) return s_skidBeta;
+    // (the handbrake's slide: the way it goes, lagging its heading -- RaceMod_Slide)
+    if (s_slide) return (S32)floor(s_slideBeta + 0.5) & 4095;
+    return beta;
 }
 
 // Game variable RACE_GATE_VAR: 1 while one of the track's gates (gate=) is shut -- the story's start line until Twinsen has his gloves --
@@ -12794,6 +13049,7 @@ void RaceMod_Frame(void) {
     // the power-ups: the mushrooms in this scene, the player's car over one, the penguins' fuses (a time trial: its cans of Gazogem alone)
     if (s_powerups || s_trial) PowerUps(now, driving);
     JetHumFrame(now);
+    SkidSound();
     HeroLook(now, driving);
     Vents(now);
     Jets(now, driving);
@@ -14522,7 +14778,8 @@ static void ResetTrack(void) {
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;
-    RaceSoundsFree(); JetHumStop("the race reset");
+    RaceSoundsFree(); JetHumStop("the race reset"); SkidSoundStop(); SlideEnd("the race reset");
+    s_hbOn = 1; s_hbBrake = RACE_HB_BRAKE; s_hbSteer = RACE_HB_STEER; s_hbGrip = RACE_HB_GRIP_HELD; s_hbSlip = RACE_HB_SLIP;
     s_nbLoops = 0; s_nbJumpCams = 0; s_nbArcs = 0; s_nbCubeScenes = 0; s_nbOpen = 0; s_nbRailOpen = 0; s_railLetGo = 0; s_dropOn = 0; s_trailN = 0; s_trailHead = -1;
     s_nbVents = s_nbDrips = 0; memset(s_puffEnd, 0, sizeof(s_puffEnd));
     s_nbFalls = 0; s_nbPanels = 0; s_lavaModel = -1; s_fallFootNext = s_fallLipNext = 0;

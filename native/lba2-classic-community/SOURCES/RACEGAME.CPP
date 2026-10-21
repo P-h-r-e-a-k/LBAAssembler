@@ -1160,6 +1160,11 @@ static void PageFrame(const char *header) {
 // The controls: the keys the race game uses (the game's defaults -- Options, Controller changes the keyboard's), then a pad's.
 // (2026-10-19: and, on a track whose race lets Twinsen out of his car to explore -- RACEMOD.CPP on_foot=, the Temple of Bú's secret
 // party -- the action key's row, its lines a little closer: two more rows over the page's own keys at its foot)
+// (2026-10-21: and the handbrake's -- Shift, a pad's Y: RACEMOD.CPP RaceMod_Handbrake -- P and Esc on one row as a pad's Back and Start
+// are, the rows a little higher and the gamepad's heading closer: the lines as far apart as the rows shown leave room for, RG_LINE at the
+// most -- 23 with the action key's rows, as before -- so that the page fits at 480 high whichever rows it shows)
+#define RG_CONTROLS_TOP 44                  // (the first row's top under the page's top)
+#define RG_CONTROLS_FOOT 412                // (... and the last row's top no lower than this: clear of the page's keys at its foot)
 #define RG_ON_FOOT "Get out / back in"
 static void DrawControls(const T_RACE_PAGE *pg) {
     static const char *const keys[][2] = {
@@ -1167,33 +1172,38 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         {"Down arrow", "Brake, reverse"},
         {"Left, right", "Steer"},
         {"Ctrl", "Use your item"},
+        {"Shift", "Handbrake"},
         {"", ""},                           // (the gears: by hand or by themselves)
         {"V", "Camera view"},               // (2026-10-21: RACEMOD.CPP RaceCameraKey -- and the gears' row only for gears by hand, so
         {"Space", RG_ON_FOOT},              // that the page still fits)
-        {"P", "Pause"},
-        {"Esc", "Menu"},
+        {"P, Esc", "Pause, menu"},
     };
     static const char *const pad[][2] = {
         {"Right trigger", "Accelerate"},
         {"Left trigger", "Brake, reverse"},
         {"Left stick", "Steer"},
         {"Left shoulder", "Use your item"},
+        {"Y button", "Handbrake"},
         {"X button", RG_ON_FOOT},
         {"Back, Start", "Camera view, menu"},
     };
     const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, kx = cx - RG_PAGE_HALF + 36, ax = cx - 40;
-    const int onFoot = pg && pg->OnFoot;
-    const S32 line = onFoot ? RG_LINE - 3 : RG_LINE;
+    const int onFoot = pg && pg->OnFoot, manual = pg && pg->Manual;
+    // (the rows shown and the room for them: the last row's top is the first's, a line for each row, a quarter more and 2 -- the gamepad's
+    // heading -- at most RG_CONTROLS_FOOT)
+    const int rows = (int)(sizeof(keys) / sizeof(keys[0]) + sizeof(pad) / sizeof(pad[0])) - (onFoot ? 0 : 2) - (manual ? 0 : 1);
+    S32 line = (S32)((RG_CONTROLS_FOOT - RG_CONTROLS_TOP - RG_PAGE_TOP - 2) * 4 / (4 * rows + 1));
+    if (line > RG_LINE) line = RG_LINE;
     PageFrame("Controls");
-    S32 y = RG_PAGE_TOP + oy + 48;
+    S32 y = RG_PAGE_TOP + oy + RG_CONTROLS_TOP;
     char text[256];
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
         const char *key = keys[i][0], *what = keys[i][1];
         if (!onFoot && !strcmp(what, RG_ON_FOOT)) continue;
         if (!key[0]) {
-            if (!(pg && pg->Manual)) continue;
-            key = pg && pg->Manual ? "X, Z" : "Gears";
-            what = pg && pg->Manual ? "Gear up, down" : "Automatic";
+            if (!manual) continue;
+            key = "X, Z";
+            what = "Gear up, down";
         }
         Label(text, key);
         TextAt(kx, y, text, LBAWHITE);
@@ -1201,10 +1211,10 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         TextAt(ax, y, text, RG_GREY);
         y += line;
     }
-    y += line / 2;
+    y += line / 4;
     Label(text, "With a gamepad");
     TextAt(kx, y, text, RG_ORANGE);
-    y += line + 4;
+    y += line + 2;
     for (size_t i = 0; i < sizeof(pad) / sizeof(pad[0]); i++) {
         if (!onFoot && !strcmp(pad[i][1], RG_ON_FOOT)) continue;
         Label(text, pad[i][0]);

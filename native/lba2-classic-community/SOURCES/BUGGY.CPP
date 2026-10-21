@@ -253,10 +253,11 @@ static void RaceSpeedOnSlope(S_BUGGY *ptb, S32 deltatimer, S32 flagattack, doubl
     double v = ptb->Speed;
 
     // (over the top gear's speed the car steers as much quicker as it goes faster: its tightest turn stays what it is; and a banked
-    // bend turns it; and skidding on oil it turns round -- RACEMOD.CPP)
+    // bend turns it; and skidding on oil it turns round; and the handbrake held, it turns quicker -- RACEMOD.CPP)
     const double fastest = car->GearTop[car->Gears - 1];
     const double quick = v > fastest ? v / fastest : 1, jet = RaceMod_JetSteer();
-    ptb->SpeedRot = (S32)(car->Steer * (quick > jet ? quick : jet) * (1 + RACE_BANK_STEER * bank) * RaceMod_SkidSteer());
+    const S32 handbrake = RaceMod_Handbrake();
+    ptb->SpeedRot = (S32)(car->Steer * (quick > jet ? quick : jet) * (1 + RACE_BANK_STEER * bank) * RaceMod_SkidSteer() * RaceMod_HandbrakeSteer(handbrake));
     const S32 touched = RaceMod_RailTouched();
 
     if (RaceMod_Held()) {
@@ -267,7 +268,12 @@ static void RaceSpeedOnSlope(S_BUGGY *ptb, S32 deltatimer, S32 flagattack, doubl
     // the slope's own pull, the way the car faces
     v -= dt * gravity * RACE_GRAVITY * slope / sqrt(1 + slope * slope);
 
-    if ((Input & I_UP) AND !flagattack) {
+    // (the handbrake held: the rear wheels locked -- no drive, and a brake gentler than the pedal's, RACEMOD.CPP RaceMod_Handbrake)
+    if (handbrake AND !((Input & I_DOWN) AND !flagattack) AND v > 0) {
+        v -= dt * car->Brake * RaceMod_HandbrakeBrake();
+        if (v < 0)
+            v = 0;
+    } else if ((Input & I_UP) AND !flagattack) {
         if (v <= engineTop) {
             double pull = (double)RACE_REF_TOP / gearTop;
             if (pull > 4.0)
@@ -324,10 +330,11 @@ static void RaceSpeed(S_BUGGY *ptb, S32 deltatimer, S32 flagattack) {
     // (over the top gear's speed -- Gazogem fuel, a jet-pack -- it steers as much quicker as it goes faster: its tightest turn stays what
     // it is, as on a slope, RaceSpeedOnSlope; the jet-pack drives the line at twice the speed round its bends -- and steers as much
     // quicker below the top gear's speed too, RaceMod_JetSteer: through a hairpin taken at twice the line's speed, still under the top
-    // speed, it turned on a circle twice as wide)
+    // speed, it turned on a circle twice as wide) -- and the handbrake held, it turns quicker (RACEMOD.CPP RaceMod_Handbrake)
     const double fastest = car->GearTop[car->Gears - 1];
     const double quick = ptb->Speed > fastest ? ptb->Speed / fastest : 1, jet = RaceMod_JetSteer();
-    ptb->SpeedRot = (S32)(car->Steer * (quick > jet ? quick : jet) * RaceMod_SkidSteer());
+    const S32 handbrake = RaceMod_Handbrake();
+    ptb->SpeedRot = (S32)(car->Steer * (quick > jet ? quick : jet) * RaceMod_SkidSteer() * RaceMod_HandbrakeSteer(handbrake));
 
     // on the grid until the count-down's GO
     if (RaceMod_Held()) {
@@ -335,7 +342,12 @@ static void RaceSpeed(S_BUGGY *ptb, S32 deltatimer, S32 flagattack) {
         return;
     }
 
-    if ((Input & I_UP) AND !flagattack) {
+    // (the handbrake held: the rear wheels locked -- no drive, and a brake gentler than the pedal's; the pedal's brake still the stronger)
+    if (handbrake AND !((Input & I_DOWN) AND !flagattack) AND ptb->Speed > 0) {
+        ptb->Speed -= (S32)(deltatimer * car->Brake * RaceMod_HandbrakeBrake() / 1000);
+        if (ptb->Speed < 0)
+            ptb->Speed = 0;
+    } else if ((Input & I_UP) AND !flagattack) {
         if (ptb->Speed <= top) {
             double pull = (double)RACE_REF_TOP / top;
             if (pull > 4.0)
@@ -554,6 +566,8 @@ void MoveBuggy(T_OBJET *ptrobj) {
     ptb->SpeedInc = speedinc;
 
     if (RaceMod_Active()) {
+        // (the handbrake's slide: the way the car goes lagging the way it points, swinging back as the grip returns -- RACEMOD.CPP)
+        RaceMod_Slide(ptb3d->Beta, &ptb->Speed, deltatimer, (ptrobj->WorkFlags & (FALLING | ANIM_MASTER_GRAVITY)) != 0);
         RaceMod_Lap(ptb3d->X, ptb3d->Z);
     }
 
@@ -675,7 +689,7 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
         return;
     }
 
-    LongRotate(0, ptb->SpeedInc * 1024, RaceMod_MoveBeta(ptb3d->Beta));   // (skidding on oil it slides on the way it was going: RACEMOD.CPP)
+    LongRotate(0, ptb->SpeedInc * 1024, RaceMod_MoveBeta(ptb3d->Beta));   // (skidding on oil, or the handbrake's slide, it goes the way it was going: RACEMOD.CPP)
     Nxw = ptb3d->X + X0 / 1024;
     Nzw = ptb3d->Z + Z0 / 1024;
 

@@ -349,6 +349,14 @@ double RaceMod_JetSteer(void);
 // the way it was going (the heading it moves along).
 void RaceMod_Skid(S32 *beta, S32 *speed);
 S32 RaceMod_MoveBeta(S32 beta);
+// BUGGY.CPP: the handbrake (Shift -- the inventory's key, which has no use in the car -- or a pad's Y): whether it is on this frame (1, or
+// 0), the car's steering times RaceMod_HandbrakeSteer while it is, its braking the car's brake times RaceMod_HandbrakeBrake; and every
+// frame after the steering (RaceMod_Slide) the slide it starts: the way the car goes lagging the way it points, its speed scrubbed off
+// sideways, until the grip is back.
+S32 RaceMod_Handbrake(void);
+double RaceMod_HandbrakeSteer(S32 on);
+double RaceMod_HandbrakeBrake(void);
+void RaceMod_Slide(S32 beta, S32 *speed, S32 deltatimer, S32 airborne);
 double RaceMod_SkidCoast(void);
 S32 RaceMod_Dial(S32 num);
 S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);

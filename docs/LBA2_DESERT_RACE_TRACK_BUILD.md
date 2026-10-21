@@ -4654,3 +4654,39 @@ went from a quarter of its draws to a sixth, its Gazogem fuel from 12 % to 6 %; 
 
 The Desert (five opponents, no levels: medium's numbers; 3 laps, seed 101; the test pilot stuck far behind there in both builds, so the
 opponents alone): they finished 428.6 to 558.8 s from GO, the first four within 52 s; now 462.2 to 492.8 s, the first four within 2.8 s.
+
+## The handbrake (2026-10-21)
+
+The user: "Let's modify the engine to allow us to have access to a 'handbrake' so we can use it to skid around corners. Let's
+initially map this to shift." In the race-track mode only (the race game and the editor's Play), the player's car only.
+
+- **The key**: Shift, either one -- or whatever key Options gives the inventory, which the car has no use for (the buggy's
+  behaviour has no `CF_INVENTORY`), and a pad's **Y**, the inventory's button (`RaceMod_FilterInput` notes `I_INVENTORY` and keeps
+  it out of `Input` in the car). Nothing else reads Shift while driving (Ctrl took the items off it on 2026-10-16).
+- **The model** (RACEMOD.CPP `RaceMod_Handbrake`, `RaceMod_Slide`, `RaceMod_MoveBeta`; BUGGY.CPP `RaceSpeed`, `MoveBuggy`): held,
+  the back wheels lock -- no drive, a brake 0.22 of the pedal's (the Temple's car: about 56 km/h a second), the steering 1.5 times
+  as quick -- and the way the car goes (`s_slideBeta`) parts from the way it points: it follows the heading round only slowly (the
+  gap shrinking by e^-1.5 a second), never more than 56 degrees behind it, and the car loses speed sliding sideways (0.6 of it a
+  second times the sine of the slide's angle). Let go, the grip comes back over 0.45 s (to 9 a second) and the way it goes swings
+  round to the heading; the slide is over once they are within half a degree (3.5 with the grip all back and the steering still
+  on). A slide starts only above 10 km/h; not on the grid, in the air, over a jump or round a loop, skidding on oil or on the super
+  jet-pack. The car moves each frame by its speed as ever -- only the direction is the slide's -- so the rail and the walls hold a
+  sliding car as any other; while they hold it back (its last move short of 0.6 of the one meant) the grip comes back 5 a second
+  quicker, so it scrapes along rather than pressing on. Across a cube's edge the slide goes on.
+- **Tuning**: the race file's `handbrake=<on 0|1> [brake] [steer] [grip] [slip]` (defaults `1 0.22 1.5 1.5 640`; slip in 4096ths of
+  a turn); `handbrake=0` turns it off for a track.
+- **The camera**: the rail camera keeps behind the way the car goes while it slides (it chose its side of the car by the heading:
+  swung square across the road, the car had the eye flip round in front of it).
+- **Heard and seen**: a tyre squeal looped while it slides, louder the further sideways and the faster, a little higher the faster
+  (`SkidSound`: `RACESOUNDS/SKID.WAV` if the game folder has one, else made by the engine -- a wavering 1,180 Hz tone over hiss, half a
+  second looped); a puff of the game's smoke from a back wheel every 90 ms while it slides past 18 degrees above 25 km/h.
+- **The Controls page** (RACEGAME.CPP): "Shift -- Handbrake" and "Y button -- Handbrake"; P and Esc share a row as a pad's Back and
+  Start do, and the lines are as far apart as the rows leave room for (23 on the Temple's page, as before).
+- **The log**: `[racemod] handbrake on at <km/h>`, every 0.2 s while it slides `handbrake t <ms> key heading way slip speed grip
+  [held back] at x,y,z`, `let go`, `the slide over after <s> (<why>) -- <from> to <to> km/h, <most> degrees sideways at most`.
+
+**Measured** (the Temple, `--fixed-dt 20`): never pressed, nothing changes -- a time trial lap 58.12 s and a seeded race lap 70.26 s
+(the opponents' laps too), every cartrace and racemod line the same as the engine before. The test pilot through the U-turn hairpin
+with Shift held 15 / 25 / 40 frames: slides of 33 / 53 / 56 degrees, 109 km/h down to 80 / 69 / 55, the lap 0.2 to 0.7 s slower than
+the pilot's own line (it brakes there anyway) and the car out of the bend on the road each time. Swung square across the straight with
+the handbrake held, the car slid sideways into the rail and was held there on the deck, no rescue.
