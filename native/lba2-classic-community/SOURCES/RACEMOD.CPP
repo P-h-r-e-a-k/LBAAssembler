@@ -10090,20 +10090,22 @@ void RaceMod_Slide(S32 beta, S32 *speed, S32 deltatimer, S32 airborne) {
 #define RACE_SKID_USER 0xFE                // PlaySample's user handle: RACE_SOUND_USER + this
 static T_RACE_SOUND s_skidWav = {NULL, 0};
 static int s_skidWavRead = 0;
-// The game's own tyre squeal: SAMPLES.HQR 252, the one the retail race's racer plays as it brakes to a stop (its entity's (157) animation
-// 1073 -- ANIM.HQR's generic 5, 6, 10 and 22 -- a new sample at its first frame: RESS.HQR 44's record 27 01 FC 00 ..., at volume 80; the
-// user, 2026-10-21: "The game definitely has a wheel squeal sound, the racer in the retail race track uses it when coming to a stop").
+// The game's own tyre squeal: SAMPLES.HQR 254, the one the retail race's racer plays as it brakes to a stop (its entity's (157) animation
+// 1076 -- generic 394 -- a new sample at its first frame beside its engine: RESS.HQR 44's record 27 01 FE 00 00 00 3C 00 10, at volume 60;
+// the user, 2026-10-21: "The game definitely has a wheel squeal sound, the racer in the retail race track uses it when coming to a stop").
+// A steady, strongly pitched tone (~1.3 kHz, 0.76 s) -- a squeal. (252 was taken first, from animation 1073 -- the racer's generic 5, 6,
+// 10 and 22: being hit -- a spike dying away in half a second, "the sound of when the racer gets hit", the user said.)
 // Used when the game folder has no RACESOUNDS/SKID.WAV; made only when neither is there.
-#define RACE_SKID_GAME_SAMPLE 252
-// ... and varied as the racer varies it (the user, 2026-10-21: "Vary it the same way the racer does"): played once at a time, again as
-// each ends, each at 0x1000 less half the racer's decal (200) plus a random share of it -- HQ_MixSample's own rule -- at the racer's
-// volume (80 of 127) times how hard the car slides. (Its own random numbers: the race's, which the simulation draws, untouched.)
+#define RACE_SKID_GAME_SAMPLE 254
+// ... and varied (the user, 2026-10-21: "Vary it the same way the racer does" -- the racer's hit sample's way; its squeal plays once, as
+// it is): played once at a time, again as each ends, each at 0x1000 less half a decal of 200 plus a random share of it -- HQ_MixSample's
+// own rule -- so the repeats don't drone, at up to full volume times how hard the car slides. (Its own random numbers: the race's, which
+// the simulation draws, untouched.)
 #define RACE_SKID_GAME_DECAL 200
 #define RACE_SKID_GAME_VOLUME 127
-// (the sample is quiet -- its loudest 100 ms -14 dB, the engine's -7 -- and at the racer's 80 of 127 it was lost under the engines and the
-// music: the user, 2026-10-21, "I couldn't trigger any wheel squeal". So it is played from a copy made louder -- RACE_SKID_GAME_BOOST
-// times, soft-limited, about +8 dB -- at up to full volume.)
-#define RACE_SKID_GAME_BOOST 2.5
+// (played from a copy a little louder -- RACE_SKID_GAME_BOOST times, soft-limited -- to be heard over the engines and the music: the
+// user, 2026-10-21, "I couldn't trigger any wheel squeal"; a steady tone takes less of a lift than 252's spike did before it distorts)
+#define RACE_SKID_GAME_BOOST 1.5
 static int s_skidGame = 0;
 static U32 s_skidRnd = 0x5EED1234u;
 static U32 s_skidVoice = 0xFFFFFFFFu;
