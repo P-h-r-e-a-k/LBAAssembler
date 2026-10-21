@@ -775,7 +775,9 @@ static S32 s_skidUntil = 0, s_skidStart = 0, s_skidBeta = 0, s_skidSpeed = 0;
 static int s_skidDir = 1;
 // The handbrake (2026-10-21, RaceMod_Handbrake): what it does, the race file's handbrake= or these --
 //   handbrake=<on 0|1> [brake] [steer] [grip] [slip]
-#define RACE_HB_BRAKE 0.06                 // brake: its braking, a share of the car's own brake (brake=; the pedal's) -- 0.22 until 2026-10-21: the
+#define RACE_HB_BRAKE 0.0                  // brake: its braking, a share of the car's own brake (brake=; the pedal's) -- none, and the accelerator still
+                                           // drives (later on 2026-10-21: "it's more just for fun to slide the car around corners than to actually slow down");
+                                           // 0.06 before that, and 0.22 until 2026-10-21: the
                                            // user, "too much of a slow down effect, let's have it do less braking but still help to slide the back end round"
 #define RACE_HB_STEER 1.5                  // steer: the car turns this much quicker while it is held
 #define RACE_HB_GRIP_HELD 1.5              // grip: how quickly the way the car goes swings round to the way it points while it is held, a second
@@ -9965,7 +9967,7 @@ static U32 WalkInput(void) {
 #define RACE_HB_RECOVER_MS 450             // ... over this long once it is let go
 #define RACE_HB_WALL_GRIP 5.0              // ... and this much more while the rail, or a wall, holds the car back ...
 #define RACE_HB_WALL_SHORT 0.6             // ... its last move along the way it went short of this share of the move meant
-#define RACE_HB_SCRUB 0.15                 // the speed lost a second sliding: this share of it times the sine of the slide's angle (0.6 until 2026-10-21)
+#define RACE_HB_SCRUB 0.05                 // the speed lost a second sliding: this share of it times the sine of the slide's angle (0.6, then 0.15, on 2026-10-21)
 #define RACE_HB_COUNTER_GRIP 6.0           // steered against the slide -- the nose turned back towards the way the car goes -- the grip back this much
                                            // quicker a second, held or let go: counter-steering straightens it (the user, 2026-10-21)
 #define RACE_HB_END 6                      // the slide over, let go, once the way it goes is this close to its heading (4096ths) --
@@ -10097,7 +10099,11 @@ static int s_skidWavRead = 0;
 // each ends, each at 0x1000 less half the racer's decal (200) plus a random share of it -- HQ_MixSample's own rule -- at the racer's
 // volume (80 of 127) times how hard the car slides. (Its own random numbers: the race's, which the simulation draws, untouched.)
 #define RACE_SKID_GAME_DECAL 200
-#define RACE_SKID_GAME_VOLUME 80
+#define RACE_SKID_GAME_VOLUME 127
+// (the sample is quiet -- its loudest 100 ms -14 dB, the engine's -7 -- and at the racer's 80 of 127 it was lost under the engines and the
+// music: the user, 2026-10-21, "I couldn't trigger any wheel squeal". So it is played from a copy made louder -- RACE_SKID_GAME_BOOST
+// times, soft-limited, about +8 dB -- at up to full volume.)
+#define RACE_SKID_GAME_BOOST 2.5
 static int s_skidGame = 0;
 static U32 s_skidRnd = 0x5EED1234u;
 static U32 s_skidVoice = 0xFFFFFFFFu;
@@ -10122,9 +10128,36 @@ static void SkidWavMake(void) {
     {
         S32 bytes = 0;
         HQRGetDelFunc = DelBlocHQRSample;
-        if (GivePtrSample(RACE_SKID_GAME_SAMPLE, &bytes) && bytes > 0) {
+        const U8 *src = (const U8 *)GivePtrSample(RACE_SKID_GAME_SAMPLE, &bytes);
+        // (a plain PCM WAV -- 8-bit or 16-bit, mono -- copied louder: 16-bit, each sample soft-limited, tanh(k x) / tanh(k))
+        S32 rate = 0, bits = 0, dataAt = -1, dataLen = 0, chans = 0, tag = 0;
+        if (src && bytes > 44 && !memcmp(src, "RIFF", 4) && !memcmp(src + 8, "WAVE", 4))
+            for (S32 p = 12; p + 8 <= bytes;) {
+                const S32 len = *(const S32 *)(src + p + 4);
+                if (!memcmp(src + p, "fmt ", 4) && p + 24 <= bytes) { tag = *(const U16 *)(src + p + 8); chans = *(const U16 *)(src + p + 10); rate = *(const S32 *)(src + p + 12); bits = *(const U16 *)(src + p + 22); }
+                if (!memcmp(src + p, "data", 4)) { dataAt = p + 8; dataLen = len < bytes - dataAt ? len : bytes - dataAt; break; }
+                if (len < 0) break;
+                p += 8 + len + (len & 1);
+            }
+        if (dataAt > 0 && tag == 1 && chans == 1 && (bits == 8 || bits == 16) && rate > 0) {
+            const S32 n = bits == 8 ? dataLen : dataLen / 2, size = 44 + 2 * n;
+            U8 *d = (U8 *)malloc((size_t)size);
+            if (d) {
+                memcpy(d, "RIFF", 4); *(U32 *)(d + 4) = (U32)(size - 8); memcpy(d + 8, "WAVEfmt ", 8);
+                *(U32 *)(d + 16) = 16; *(U16 *)(d + 20) = 1; *(U16 *)(d + 22) = 1; *(U32 *)(d + 24) = (U32)rate; *(U32 *)(d + 28) = (U32)rate * 2;
+                *(U16 *)(d + 32) = 2; *(U16 *)(d + 34) = 16; memcpy(d + 36, "data", 4); *(U32 *)(d + 40) = (U32)(2 * n);
+                S16 *pcm = (S16 *)(d + 44);
+                const double norm = tanh(RACE_SKID_GAME_BOOST);
+                for (S32 i = 0; i < n; i++) {
+                    const double x = bits == 8 ? (src[dataAt + i] - 128) / 128.0 : *(const S16 *)(src + dataAt + 2 * i) / 32768.0;
+                    pcm[i] = (S16)(tanh(RACE_SKID_GAME_BOOST * x) / norm * 32000);
+                }
+                s_skidWav.Data = d; s_skidWav.Size = size;
+            }
+        }
+        if (s_skidWav.Data) {
             s_skidGame = 1;
-            Log_Info("[racemod] the tyres' squeal: the game's sample %d (the racer's as it stops), %d bytes", RACE_SKID_GAME_SAMPLE, (int)bytes);
+            Log_Info("[racemod] the tyres' squeal: the game's sample %d (the racer's as it stops), %d bytes, played %.1f times louder (soft-limited)", RACE_SKID_GAME_SAMPLE, (int)bytes, RACE_SKID_GAME_BOOST);
             return;
         }
     }
@@ -10188,10 +10221,8 @@ static void SkidSound(void) {
         // (once, then again as it ends: each at its own pitch, as the racer's)
         s_skidRnd = s_skidRnd * 1103515245u + 12345u;
         const S32 pitch = 0x1000 - RACE_SKID_GAME_DECAL / 2 + (S32)((s_skidRnd >> 16) % RACE_SKID_GAME_DECAL);
-        S32 bytes = 0;
-        HQRGetDelFunc = DelBlocHQRSample;
-        void *game = GivePtrSample(RACE_SKID_GAME_SAMPLE, &bytes);
-        s_skidVoice = game && bytes > 0 ? PlaySample(game, bytes, RACE_SOUND_USER + RACE_SKID_USER, pitch, 1, gameVolume, 64) : 0xFFFFFFFFu;
+        // (the louder copy of it: SkidWavMake)
+        s_skidVoice = PlaySample(s_skidWav.Data, s_skidWav.Size, RACE_SOUND_USER + RACE_SKID_USER, pitch, 1, gameVolume, 64);
         return;
     }
     const S32 volume = RegleTrois(0, SampleVolume, 127, (S32)(RACE_SKID_VOLUME * (0.4 + 0.6 * share)));

@@ -268,8 +268,9 @@ static void RaceSpeedOnSlope(S_BUGGY *ptb, S32 deltatimer, S32 flagattack, doubl
     // the slope's own pull, the way the car faces
     v -= dt * gravity * RACE_GRAVITY * slope / sqrt(1 + slope * slope);
 
-    // (the handbrake held: the rear wheels locked -- no drive, and a brake gentler than the pedal's, RACEMOD.CPP RaceMod_Handbrake)
-    if (handbrake AND !((Input & I_DOWN) AND !flagattack) AND v > 0) {
+    // (the handbrake held: a brake gentler than the pedal's, RACEMOD.CPP RaceMod_Handbrake -- none by default since 2026-10-21, when the
+    // accelerator drives on through the slide)
+    if (handbrake AND RaceMod_HandbrakeBrake() > 0 AND !((Input & I_DOWN) AND !flagattack) AND v > 0) {
         v -= dt * car->Brake * RaceMod_HandbrakeBrake();
         if (v < 0)
             v = 0;
@@ -342,8 +343,9 @@ static void RaceSpeed(S_BUGGY *ptb, S32 deltatimer, S32 flagattack) {
         return;
     }
 
-    // (the handbrake held: the rear wheels locked -- no drive, and a brake gentler than the pedal's; the pedal's brake still the stronger)
-    if (handbrake AND !((Input & I_DOWN) AND !flagattack) AND ptb->Speed > 0) {
+    // (the handbrake held: a brake gentler than the pedal's, the pedal's still the stronger -- none by default since 2026-10-21, the
+    // accelerator driving on through the slide)
+    if (handbrake AND RaceMod_HandbrakeBrake() > 0 AND !((Input & I_DOWN) AND !flagattack) AND ptb->Speed > 0) {
         ptb->Speed -= (S32)(deltatimer * car->Brake * RaceMod_HandbrakeBrake() / 1000);
         if (ptb->Speed < 0)
             ptb->Speed = 0;
