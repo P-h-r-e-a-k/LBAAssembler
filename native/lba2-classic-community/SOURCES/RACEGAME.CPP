@@ -1663,7 +1663,9 @@ static int CodePage(void) {
 
 // Track select's tracks, in RACEGAME.TXT's order, each with its best lap: up and down (or the mouse) to choose, Enter the track's race or
 // time trial (ModePage), Esc back. Non-zero: a race is set up.
-#define RG_TRACK_LINE 24
+// (30, was 24: at 24 a name's apostrophe -- "14. Emperor's Palace" -- reached up to the line above's, the user, 2026-10-22; spaced out, the
+// list scrolls)
+#define RG_TRACK_LINE 30
 static int TracksPage(void) {
     int list[RG_MAX_ENTRIES], n = 0, at = 0;
     for (int i = 0; i < s_nbSp; i++)
@@ -1683,10 +1685,10 @@ static int TracksPage(void) {
             ManageTime();
             MyGetInput();
             if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; }
-            // (the rows that fit between the header and the best lap's line over the keys: all fifteen at 480 high, the list scrolling
-            // past them)
-            const S32 top = RG_PAGE_TOP + oy + 40, keysY = RG_PAGE_BOTTOM + oy - 32, bestY = keysY - 30;
-            const int rows = (int)((bestY - 2 - top) / RG_TRACK_LINE);
+            // (the rows that fit between the header and the best lap's line over the keys, the list scrolling past them -- room kept above
+            // and below for its "..." marks)
+            const S32 top = RG_PAGE_TOP + oy + 50, keysY = RG_PAGE_BOTTOM + oy - 32, bestY = keysY - 30;
+            const int rows = (int)((bestY - 16 - top) / RG_TRACK_LINE);
             S32 dx, dy;
             if (Nav(&padDir, &dx, &dy) && dy) at = (at + dy + n) % n;
             if (at < first) first = at;
@@ -1710,7 +1712,7 @@ static int TracksPage(void) {
                 TextAt(lx0 + 12, y, text, k == at ? RG_ORANGE : LBAWHITE);
             }
             // (more above or below: the list scrolls)
-            if (first > 0) Text(cx, top - 26, "...", RG_GREY);
+            if (first > 0) Text(cx, top - 30, "...", RG_GREY);
             if (first + rows < n) Text(cx, top + rows * RG_TRACK_LINE - 8, "...", RG_GREY);
             // the track's best lap, under the list (the names take the page's width)
             {
