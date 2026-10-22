@@ -64,7 +64,12 @@ public partial class MainWindow
         }
         OpenMapWorkspace(built.Map, path);
         if (openMapInstalled is { } installed && built.StartScene >= 0 && built.StartScene < installed.Scenes.Count)
+        {
+            // (the harbour's scene in view, where Twinsen starts: Play plays it)
+            if (allSceneEntries.FirstOrDefault(s => s.Option.Index == installed.Scenes[built.StartScene]) is { } start)
+                OpenLba2Area(IslandDisplayOf(start), installed.Scenes[built.StartScene]);
             SetStatus($"The snow island: {path}, scenes {installed.Scenes[0]}-{installed.Scenes[^1]}. Twinsen starts on the harbour's quay in scene {installed.Scenes[built.StartScene]} -- " +
                       "Play it there. File > Install map into game puts it into your game.", StatusKind.Success);
+        }
     }
 }

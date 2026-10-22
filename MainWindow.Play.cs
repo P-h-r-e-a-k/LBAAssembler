@@ -73,6 +73,8 @@ public partial class MainWindow
         }
         // (of a folder with several race tracks, the one of the island the editor has open)
         raceToPlay = game == GameKind.Lba2 ? RaceTrackToPlay() : null;
+        // (an open map plays its own scene as a game: no race car, no race -- RaceTrackToPlay)
+        if (game == GameKind.Lba2 && MapOpen) askRaceCar = raceStart = false;
         if (game == GameKind.Lba2 && askRaceCar && !RaceTrackUpToDate()) return;
         if (game == GameKind.Lba2 && askRaceCar && !AskRaceCar()) return;
         // the story from a new game (every track raced where and when the game is), or a race track on its start/finish straight, Twinsen
@@ -92,6 +94,9 @@ public partial class MainWindow
 
     private Terrain.RaceTrackService.TrackInfo? RaceTrackToPlay()
     {
+        // (none for an open map: its workspace is a copy of a folder that may have race tracks built, and a map's island carries a game
+        // island's number -- the snow island's the Desert's -- so Play raced the Desert's track instead of playing the map, 2026-10-22)
+        if (MapOpen) return null;
         if (!Lba2Configured || !Terrain.RaceTrackService.HasBackups(gameRoot)) return null;
         var shown = currentGame == GameKind.Lba2 && !interiorSceneActive && currentIsland is not null ? activeFile : null;
         var sceneIsland = allSceneEntries.FirstOrDefault(s => s.Option.Index == Lba2SceneToPlay())?.IslandFile;
@@ -267,9 +272,10 @@ public partial class MainWindow
         options.NewGame = newGame;
         newGame = false;
         var story = options.NewGame || !EditorSettings.Current.RaceCar.StartAtLine || raceToPlay?.Dream is not null;
-        options.RaceCarFile = Terrain.RaceTrackService.CarFileWriter(gameRoot, raceToPlay, story);
+        options.RaceCarFile = MapOpen ? null : Terrain.RaceTrackService.CarFileWriter(gameRoot, raceToPlay, story);
         // (whether this play races, and which -- the first thing to know about a race that didn't start)
-        DebugLog.Log(options.RaceCarFile is null
+        DebugLog.Log(MapOpen ? $"Lba2Play: scene {scene}, the map \"{openMap!.Name}\"'s: no race-track mode"
+            : options.RaceCarFile is null
             ? $"Lba2Play: scene {scene}, no race-track mode (no race track built in the folder: its RACETRACK.JSON and *{Terrain.RaceTrackService.BackupSuffix} originals)"
             : $"Lba2Play: scene {scene}, racing {raceToPlay?.Island ?? "the folder's first track"}{(options.NewGame ? ", a new game" : story ? ", the story's set of tracks" : ", from the grid")}");
         raceOverlayHidden = options.RaceCarFile is not null && (EditorSettings.Current.RaceCar.StartAtLine || options.NewGame);
