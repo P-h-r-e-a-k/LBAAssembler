@@ -1703,7 +1703,7 @@ static int TracksPage(void) {
             for (int r = 0; r < rows && first + r < n; r++) {
                 const int k = first + r, sp = list[k];
                 const S32 y = top + r * RG_TRACK_LINE;
-                if (k == at) DrawCadre(lx0, y - 5, lx1, y + RG_TRACK_LINE - 1, ALL_ANGLES);
+                // (the chosen one in orange -- no frame round it: it didn't fit the line, the user, 2026-10-22)
                 char line[160], text[256];
                 snprintf(line, sizeof(line), "%d. %s", k + 1, s_sp[sp].Name);
                 Label(text, line);
