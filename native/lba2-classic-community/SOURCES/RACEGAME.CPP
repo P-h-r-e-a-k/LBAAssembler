@@ -107,6 +107,7 @@
 extern void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 measure, S32 anim);   // RACEMOD.CPP
 extern U32 RaceMod_PlaySound(const char *name, S32 *ms);                                                   // ...
 extern void RaceMod_StopSound(U32 handle);
+extern S32 FollowCamera;                                                                                    // FOLLOWCAM.CPP
 
 #define RG_MAX_SPECIALS 8
 #define RG_MAX_ENTRIES 40                   // the specials and Track select's tracks together (s_sp)
@@ -349,6 +350,9 @@ static void Read(void) {
     if (s_windowTitle[0]) SetWindowTitle(s_windowTitle);
     ReadSettings();
     UpdateAtStart();
+    // (the Auto camera on, whatever lba2.cfg says -- the user, 2026-10-22: "Let's force Auto camera on by default"; read after the config,
+    // and the game's Options can still turn it off for the run)
+    if (!FollowCamera) { FollowCamera = TRUE; Log_Info("[racegame] the Auto camera turned on (the race game's default)"); }
     if (s_nbSpecials > 0) s_lastSp = s_spIndex[0];
     int levelled = 0;
     for (int i = 0; i < s_nbSp; i++) levelled += s_sp[i].Levels;
