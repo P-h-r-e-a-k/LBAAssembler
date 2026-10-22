@@ -2,7 +2,10 @@
  * Adventure (2026-10-16), on when RACEGAME.TXT is beside the game's data (its installer writes it). The game's main menu is then the race
  * game's (GAMEMENU.CPP MainGameMenu asks RaceGame_Menu), in the retail game's look:
  *     Resume (with a race on)   Story Mode   Track select   Specials   Best laps   Options   Quit
- * Story Mode and Track select are greyed and passed over until the file opens them. Specials: the special tracks, then a race (the line-up,
+ * Story Mode and Track select are greyed and passed over until the file opens them. Track select (2026-10-22): the code RACEGAME.TXT
+ * asks for first (tracks_code=; once a run, CodePage), then its tracks in the file's order (TracksPage), each a race or a time trial as a
+ * special is -- but its car from the car grid (GridPage: every gridcar= of the file, 7 by 7 a page, each drawn small once as its page
+ * opens), not the specials' car page. Specials: the special tracks, then a race (the line-up,
  * the power-ups) or a time trial (Twinsen alone, no power-ups); a race on a track with levels (its race file has
  * difficulty_level= lines: the Temple of Bú's, 2026-10-17) then its difficulty, easy, medium or hard (the last one chosen first);
  * then the car, its body turning on the page; then the race -- the special's race file with the car's and the race game's keys
@@ -51,6 +54,11 @@
  *     laps=<n>                     a race's laps (3), unless its race file has its own (race_laps=: the Temple of Bú's five)
  *     end_to_menu=<ms>             a finished race back to the menu this long after its end (8000)
  *     special=<name>|<race file>|<time trial file>|<start scene>     files beside the game's data (and so are those they name)
+ *     track=<name>|<race file>|<time trial file>|<start scene>       one of Track select's, the same (a race file with sprint=1: no
+ *                                  qualifying lap asked; a race won on a track unlocks no car -- the hints name the special's race)
+ *     tracks_code=<digits>         Track select asks for them first (none: it doesn't); given right, open for the rest of the run
+ *     gridcar=<as car=>            a car of Track select's car grid (the specials keep car='s); grid_car=<its name> in the player's
+ *                                  settings the one taken last
  *     car=<name>|<drive_as value: BODY.HQR body, animation, shrunk body>[|<acceleration> <top speed> <handling>][|<option>...]
  *                                  the car's stats (2026-10-20), stars from 0 to 5 in half stars: shown on the car page, and the race
  *                                  drives the car by them (RACEMOD.CPP car_accel=, car_top=, car_handling=: 2.5 the track's own
@@ -101,7 +109,9 @@ extern U32 RaceMod_PlaySound(const char *name, S32 *ms);                        
 extern void RaceMod_StopSound(U32 handle);
 
 #define RG_MAX_SPECIALS 8
+#define RG_MAX_ENTRIES 40                   // the specials and Track select's tracks together (s_sp)
 #define RG_MAX_CARS 16
+#define RG_MAX_GRID 320                     // Track select's cars (gridcar=)
 #define RG_MAX_TIMES 10
 #define RG_OTHER_SIZE 16384
 
@@ -136,6 +146,8 @@ typedef struct {
     S32 Scene;
     int Levels;                             // its race has levels, easy to hard (difficulty_level= in its race file)
     int Laps;                               // its race's laps once looked up (SpecialLaps; 0: not yet)
+    int Track;                              // one of Track select's (track=), not a special
+    int Sprint;                             // a sprint, start line to finish line once (sprint=1 in its race file): no qualifying lap
 } T_RG_SPECIAL;
 
 typedef struct {
@@ -159,22 +171,31 @@ static char s_title[96] = "";
 static char s_windowTitle[96] = "";        // window_title=: the window's title bar ("Little Big Racing Adventure"; the engine's own otherwise)
 static int s_story = 0, s_tracks = 0, s_laps = 3;
 static S32 s_endMs = 8000;
-static T_RG_SPECIAL s_sp[RG_MAX_SPECIALS];
+static T_RG_SPECIAL s_sp[RG_MAX_ENTRIES];   // the specials and the tracks, as RACEGAME.TXT lists them
 static int s_nbSp = 0;
-static T_RG_CAR s_cars[RG_MAX_CARS];
+static int s_spIndex[RG_MAX_SPECIALS];      // the specials (Specials' rows): their places in s_sp
+static int s_nbSpecials = 0, s_nbTracks = 0;
+static T_RG_CAR s_cars[RG_MAX_CARS];        // the specials' cars (car=: the car page)
 static int s_nbCars = 0;
 static int s_car = 0;                       // the car chosen last
+static T_RG_CAR s_grid[RG_MAX_GRID];        // Track select's cars (gridcar=: the car grid)
+static int s_nbGrid = 0;
+static int s_gridCar = 0;                   // the one chosen last (RACEGAME_SETTINGS.TXT grid_car=, by its name)
+static char s_tracksCode[24] = "";          // tracks_code=: Track select asks for it (none: open)
+static int s_tracksOpen = 0;                // ... given right this run
 static int s_lastSp = 0, s_lastTrial = 0;
+static int s_lastTrack = -1;                // the track chosen last (its place in s_sp)
 static int s_level = 1;                     // the difficulty chosen last: 0 easy, 1 medium, 2 hard (RACEGAME_SETTINGS.TXT)
 static const char *const s_levelName[3] = {"Easy", "Medium", "Hard"};
 
-static T_RG_TIME s_times[RG_MAX_SPECIALS][RG_MAX_TIMES];   // each special's best laps, the fastest first
-static int s_nbTimes[RG_MAX_SPECIALS];
+static T_RG_TIME s_times[RG_MAX_ENTRIES][RG_MAX_TIMES];    // each special's and track's best laps, the fastest first
+static int s_nbTimes[RG_MAX_ENTRIES];
 static char s_other[RG_OTHER_SIZE];         // BESTTIMES.TXT's other lines: other tracks', the whole trials' times of before 2026-10-18
 static int s_timesRead = 0;
 
 // the race on
-static int s_raceSp = -1, s_raceTrial = 0, s_raceCar = -1, s_raceOver = 0;
+static int s_raceSp = -1, s_raceTrial = 0, s_raceOver = 0;
+static const T_RG_CAR *s_raceCar = NULL;    // its car (s_cars' or s_grid's)
 // the race to start: a qualifying lap first (1), none and Twinsen at the back of the grid (0), or as its file says (-1) -- QualifyingPage
 static int s_qualifyNow = -1;
 static void Introduction(int sp, int trial);
@@ -204,17 +225,52 @@ static const char *Field(const char *p, char *out, size_t size) {
     return *p == '|' ? p + 1 : p;
 }
 
-// Whether a race file (beside the game's data) has levels: a difficulty_level= line.
-static int HasLevels(const char *race) {
+// Whether a race file (beside the game's data) has a line starting `start`: levels (difficulty_level=), a sprint (sprint=1).
+static int FileHas(const char *race, const char *start) {
     char path[ADELINE_MAX_PATH];
     GetResPath(path, ADELINE_MAX_PATH, race);
     FILE *f = fopen(path, "r");
     if (!f) return 0;
     char line[1024];
     int found = 0;
-    while (!found && fgets(line, sizeof(line), f)) found = !strncmp(line, "difficulty_level=", 17);
+    const size_t n = strlen(start);
+    while (!found && fgets(line, sizeof(line), f)) found = !strncmp(line, start, n);
     fclose(f);
     return found;
+}
+static int HasLevels(const char *race) { return FileHas(race, "difficulty_level="); }
+
+// A car= (or gridcar=) line's value into `c`; non-zero: a car (its name and its drive_as value or race file's line given).
+static int ParseCar(T_RG_CAR *c, const char *v) {
+    char stars[64];
+    v = Field(v, c->Name, sizeof(c->Name));
+    v = Field(v, c->Drive, sizeof(c->Drive));
+    Field(v, stars, sizeof(stars));
+    c->Body = c->Drive[0] ? atoi(c->Drive) : -1;
+    if (!c->Drive[0] || sscanf(c->Drive, "%*d %d", &c->Anim) != 1) c->Anim = -1;
+    // (its stats: three numbers, each kept to 0..5 in half stars; none, or not three, and the car has none)
+    c->Rated = sscanf(stars, "%f %f %f", &c->Stars[0], &c->Stars[1], &c->Stars[2]) == 3;
+    for (int k = 0; k < 3; k++) {
+        const float st = c->Rated ? c->Stars[k] : 2.5f;
+        c->Stars[k] = (float)(floor((st < 0 ? 0 : st > 5 ? 5 : st) * 2 + 0.5) / 2);
+    }
+    // (a line of the race file's own in place of a drive_as value: no body to pose, but page= gives one)
+    c->Line = strchr(c->Drive, '=') != NULL;
+    if (c->Line) c->Body = c->Anim = -1;
+    c->Unlock[0] = 0; c->TrialOnly = 0; c->Hint[0] = 0;
+    // (its options: page=, unlock=, hint=)
+    v = Field(v, stars, sizeof(stars));
+    while (*v) {
+        char option[128];
+        v = Field(v, option, sizeof(option));
+        if (!strncmp(option, "page=", 5) && sscanf(option + 5, "%d %d", &c->Body, &c->Anim) < 2) c->Anim = -1;
+        else if (!strncmp(option, "unlock=", 7)) {
+            char what[16] = "";
+            sscanf(option + 7, "%23s %15s", c->Unlock, what);
+            c->TrialOnly = !strcmp(what, "trial");
+        } else if (!strncmp(option, "hint=", 5)) snprintf(c->Hint, sizeof(c->Hint), "%s", option + 5);
+    }
+    return c->Name[0] && c->Drive[0];
 }
 
 static void ReadSettings(void);
@@ -263,7 +319,9 @@ static void Read(void) {
         else if (!strcmp(key, "tracks")) s_tracks = atoi(v);
         else if (!strcmp(key, "laps")) s_laps = atoi(v) > 0 ? atoi(v) : 3;
         else if (!strcmp(key, "end_to_menu")) s_endMs = atoi(v);
-        else if (!strcmp(key, "special") && s_nbSp < RG_MAX_SPECIALS) {
+        else if (!strcmp(key, "tracks_code")) snprintf(s_tracksCode, sizeof(s_tracksCode), "%s", v);
+        else if (((!strcmp(key, "special") && s_nbSpecials < RG_MAX_SPECIALS) || !strcmp(key, "track")) && s_nbSp < RG_MAX_ENTRIES) {
+            // (a special, or one of Track select's tracks: the same fields)
             T_RG_SPECIAL *sp = &s_sp[s_nbSp];
             char scene[16];
             v = Field(v, sp->Name, sizeof(sp->Name));
@@ -272,38 +330,18 @@ static void Read(void) {
             Field(v, scene, sizeof(scene));
             sp->Scene = scene[0] ? atoi(scene) : -1;
             sp->Levels = sp->Race[0] ? HasLevels(sp->Race) : 0;
-            if (sp->Name[0] && sp->Race[0]) s_nbSp++;
+            sp->Sprint = sp->Race[0] ? FileHas(sp->Race, "sprint=1") : 0;
+            sp->Laps = 0;
+            sp->Track = !strcmp(key, "track");
+            if (sp->Name[0] && sp->Race[0]) {
+                if (sp->Track) s_nbTracks++;
+                else s_spIndex[s_nbSpecials++] = s_nbSp;
+                s_nbSp++;
+            }
         } else if (!strcmp(key, "car") && s_nbCars < RG_MAX_CARS) {
-            T_RG_CAR *c = &s_cars[s_nbCars];
-            char stars[64];
-            v = Field(v, c->Name, sizeof(c->Name));
-            v = Field(v, c->Drive, sizeof(c->Drive));
-            Field(v, stars, sizeof(stars));
-            c->Body = c->Drive[0] ? atoi(c->Drive) : -1;
-            if (!c->Drive[0] || sscanf(c->Drive, "%*d %d", &c->Anim) != 1) c->Anim = -1;
-            // (its stats: three numbers, each kept to 0..5 in half stars; none, or not three, and the car has none)
-            c->Rated = sscanf(stars, "%f %f %f", &c->Stars[0], &c->Stars[1], &c->Stars[2]) == 3;
-            for (int k = 0; k < 3; k++) {
-                const float st = c->Rated ? c->Stars[k] : 2.5f;
-                c->Stars[k] = (float)(floor((st < 0 ? 0 : st > 5 ? 5 : st) * 2 + 0.5) / 2);
-            }
-            // (a line of the race file's own in place of a drive_as value: no body to pose, but page= gives one)
-            c->Line = strchr(c->Drive, '=') != NULL;
-            if (c->Line) c->Body = c->Anim = -1;
-            c->Unlock[0] = 0; c->TrialOnly = 0; c->Hint[0] = 0;
-            // (its options: page=, unlock=, hint=)
-            v = Field(v, stars, sizeof(stars));
-            while (*v) {
-                char option[128];
-                v = Field(v, option, sizeof(option));
-                if (!strncmp(option, "page=", 5) && sscanf(option + 5, "%d %d", &c->Body, &c->Anim) < 2) c->Anim = -1;
-                else if (!strncmp(option, "unlock=", 7)) {
-                    char what[16] = "";
-                    sscanf(option + 7, "%23s %15s", c->Unlock, what);
-                    c->TrialOnly = !strcmp(what, "trial");
-                } else if (!strncmp(option, "hint=", 5)) snprintf(c->Hint, sizeof(c->Hint), "%s", option + 5);
-            }
-            if (c->Name[0] && c->Drive[0]) s_nbCars++;
+            if (ParseCar(&s_cars[s_nbCars], v)) s_nbCars++;
+        } else if (!strcmp(key, "gridcar") && s_nbGrid < RG_MAX_GRID) {
+            if (ParseCar(&s_grid[s_nbGrid], v)) s_nbGrid++;
         }
     }
     fclose(f);
@@ -311,10 +349,13 @@ static void Read(void) {
     if (s_windowTitle[0]) SetWindowTitle(s_windowTitle);
     ReadSettings();
     UpdateAtStart();
+    if (s_nbSpecials > 0) s_lastSp = s_spIndex[0];
     int levelled = 0;
     for (int i = 0; i < s_nbSp; i++) levelled += s_sp[i].Levels;
-    Log_Info("[racegame] %s: %d special track(s) (%d with levels: the last difficulty %s), %d cars%s%s", s_title[0] ? s_title : "the race game", s_nbSp,
-             levelled, s_levelName[s_level], s_nbCars, s_story ? "" : ", Story Mode greyed", s_tracks ? "" : ", Track select greyed");
+    Log_Info("[racegame] %s: %d special track(s), %d track(s) (%d with levels: the last difficulty %s), %d cars, %d in the car grid%s%s%s",
+             s_title[0] ? s_title : "the race game", s_nbSpecials, s_nbTracks, levelled, s_levelName[s_level], s_nbCars, s_nbGrid,
+             s_story ? "" : ", Story Mode greyed", s_tracks && s_nbTracks ? "" : ", Track select greyed",
+             s_tracks && s_nbTracks && s_tracksCode[0] ? ", Track select behind a code" : "");
 }
 
 S32 RaceGame_On(void) {
@@ -338,6 +379,7 @@ static long long s_updateChecked = 0;       // when the updater was last started
 static const char *const s_updateKey[3] = {"auto", "ask", "off"};
 static const char *const s_updateLabel[3] = {"Updates: Automatic", "Updates: Ask first", "Updates: Off"};
 static char s_setOther[RG_OTHER_SIZE];      // RACEGAME_SETTINGS.TXT's lines of other keys, kept as they are
+static char s_gridCarName[96] = "";         // the car grid's car chosen last (grid_car=), by its name
 #define RG_MAX_UNLOCKED 8
 static char s_unlocked[RG_MAX_UNLOCKED][24]; // the cars won: their unlock=<id>s (<id>_unlocked=1)
 static int s_nbUnlocked = 0;
@@ -374,6 +416,9 @@ static void ReadSettings(void) {
                 continue;
             } else if (!strcmp(line, "update_checked")) {
                 s_updateChecked = strtoll(eq + 1, NULL, 10);
+                continue;
+            } else if (!strcmp(line, "grid_car")) {
+                snprintf(s_gridCarName, sizeof(s_gridCarName), "%s", eq + 1);
                 continue;
             } else if (strlen(line) > 9 && !strcmp(line + strlen(line) - 9, "_unlocked")) {
                 // (a car won: <id>_unlocked=1)
@@ -467,6 +512,7 @@ static void WriteSettings(void) {
             s_skipQualifying, s_level);
     fprintf(f, "updates=%s\nupdate_checked=%lld\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0], s_updateChecked);
     fprintf(f, "minimap=%d\ncamera=%d\n", s_minimap, s_camera);
+    if (s_gridCarName[0]) fprintf(f, "grid_car=%s\n", s_gridCarName);
     for (int i = 0; i < s_nbUnlocked; i++) fprintf(f, "%s_unlocked=1\n", s_unlocked[i]);
     fputs(s_setOther, f);
     fclose(f);
@@ -477,8 +523,10 @@ static int Unlocked(const char *id) {
     for (int i = 0; i < s_nbUnlocked; i++) if (!strcmp(s_unlocked[i], id)) return 1;
     return 0;
 }
-static int CarLocked(int car) { return car >= 0 && car < s_nbCars && s_cars[car].Unlock[0] && (ReadSettings(), !Unlocked(s_cars[car].Unlock)); }
-static int CarFor(int car, int trial) { return car >= 0 && car < s_nbCars && !CarLocked(car) && (trial || !(s_cars[car].Unlock[0] && s_cars[car].TrialOnly)); }
+static int Locked(const T_RG_CAR *c) { return c && c->Unlock[0] && (ReadSettings(), !Unlocked(c->Unlock)); }
+static int TakenFor(const T_RG_CAR *c, int trial) { return c && !Locked(c) && (trial || !(c->Unlock[0] && c->TrialOnly)); }
+static int CarLocked(int car) { return car >= 0 && car < s_nbCars && Locked(&s_cars[car]); }
+static int CarFor(int car, int trial) { return car >= 0 && car < s_nbCars && TakenFor(&s_cars[car], trial); }
 
 // ---- the best times ----------------------------------------------------------------------------------------------------------------
 
@@ -584,7 +632,8 @@ S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers) 
     // (a race won -- first over the line, at any difficulty: the cars still locked are unlocked, for good; the first of them is the
     // congratulations' -- RaceGame_Celebrate)
     s_celebrate = -1;
-    if (!trial && place == 1 && s_raceSp >= 0) {
+    // (a special's race: the cars' hints say "Win the Halloween race" -- Track select's races don't unlock them, 2026-10-22)
+    if (!trial && place == 1 && s_raceSp >= 0 && s_raceSp < s_nbSp && !s_sp[s_raceSp].Track) {
         ReadSettings();
         for (int i = 0; i < s_nbCars; i++) {
             if (!CarLocked(i) || s_nbUnlocked >= RG_MAX_UNLOCKED) continue;
@@ -644,7 +693,7 @@ static int RecordLap(S32 total, S32 lap, int laps) {
     e.Time = total;
     e.Lap = lap;
     e.Laps = laps;
-    snprintf(e.Car, sizeof(e.Car), "%s", s_raceCar >= 0 && s_raceCar < s_nbCars ? s_cars[s_raceCar].Name : "");
+    snprintf(e.Car, sizeof(e.Car), "%s", s_raceCar ? s_raceCar->Name : "");
     const time_t now = time(NULL);
     const struct tm *tm = localtime(&now);
     if (tm) strftime(e.Date, sizeof(e.Date), "%Y-%m-%d", tm);
@@ -663,7 +712,7 @@ static int Absolute(const char *p) { return p[0] == '/' || p[0] == '\\' || (isal
 // The race: the special's race file (or its time trial's), the files it names found beside the game's data, then the car and the race
 // game's keys -- and the difficulty chosen (`level`, -1 none: after the file's own, so it counts) -- written to RACE_NOW.TXT in the user's
 // folder and loaded in place of any other.
-static int StartRace(int sp, int trial, int car, int level) {
+static int StartRace(int sp, int trial, const T_RG_CAR *car, int level) {
     const T_RG_SPECIAL *s = &s_sp[sp];
     char src[ADELINE_MAX_PATH], out[ADELINE_MAX_PATH];
     GetResPath(src, ADELINE_MAX_PATH, trial && s->Trial[0] ? s->Trial : s->Race);
@@ -690,10 +739,10 @@ static int StartRace(int sp, int trial, int car, int level) {
         } else fputs(line, f);
     }
     fclose(in);
-    if (car >= 0 && car < s_nbCars) fprintf(f, s_cars[car].Line ? "# %s\n%s\n" : "# %s\ndrive_as=%s\n", s_cars[car].Name, s_cars[car].Drive);
+    if (car) fprintf(f, car->Line ? "# %s\n%s\n" : "# %s\ndrive_as=%s\n", car->Name, car->Drive);
     // (its stats, which the race drives it by: RACEMOD.CPP car_accel= car_top= car_handling=)
-    if (car >= 0 && car < s_nbCars && s_cars[car].Rated)
-        fprintf(f, "# its stats, in stars of 5\ncar_accel=%.1f\ncar_top=%.1f\ncar_handling=%.1f\n", s_cars[car].Stars[0], s_cars[car].Stars[1], s_cars[car].Stars[2]);
+    if (car && car->Rated)
+        fprintf(f, "# its stats, in stars of 5\ncar_accel=%.1f\ncar_top=%.1f\ncar_handling=%.1f\n", car->Stars[0], car->Stars[1], car->Stars[2]);
     if (s->Scene >= 0) fprintf(f, "start_scene=%d\n", (int)s->Scene);
     fprintf(f, "start_in_car=1\nrace_laps=%d\nend_to_menu=%d\n", SpecialLaps(sp), (int)s_endMs);
     if (trial) fprintf(f, "trial=1\n");
@@ -705,7 +754,7 @@ static int StartRace(int sp, int trial, int car, int level) {
     fprintf(f, "# the camera's view: 0 inside the car, 1 just behind, 2 further back\ncamera=%d\n", s_camera);
     fclose(f);
     s_raceSp = sp; s_raceTrial = trial; s_raceCar = car; s_raceOver = 0; s_raceLevel = level;
-    Log_Info("[racegame] %s: %s with %s%s%s%s", s->Name, trial ? "a time trial" : "a race", car >= 0 && car < s_nbCars ? s_cars[car].Name : "Twinsen's car",
+    Log_Info("[racegame] %s: %s with %s%s%s%s", s->Name, trial ? "a time trial" : "a race", car ? car->Name : "Twinsen's car",
              level >= 0 && level <= 2 ? ", difficulty " : "", level >= 0 && level <= 2 ? s_levelName[level] : "",
              trial || s_qualifyNow < 0 ? "" : s_qualifyNow ? ", a qualifying lap first" : ", no qualifying: from the back of the grid");
     s_qualifyNow = -1;
@@ -719,7 +768,7 @@ static int StartRace(int sp, int trial, int car, int level) {
 
 S32 RaceGame_RowDisabled(S32 num) {
     if (!s_on) return 0;
-    return (num == RG_ID_STORY && !s_story) || (num == RG_ID_TRACKS && !s_tracks);
+    return (num == RG_ID_STORY && !s_story) || (num == RG_ID_TRACKS && (!s_tracks || !s_nbTracks));
 }
 
 static void Label(char *string, const char *utf8) { CopyUtf8ToCp850(string, 256, utf8); }
@@ -745,7 +794,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_WINDOW: Label(string, DisplayFullScreen ? "Window mode: full screen (F11)" : "Window mode: window (F11)"); return 1;
     case RG_ID_EASY: case RG_ID_MEDIUM: case RG_ID_HARD: Label(string, s_levelName[num - RG_ID_EASY]); return 1;
     }
-    if (num >= RG_ID_SPECIAL && num < RG_ID_SPECIAL + s_nbSp) { Label(string, s_sp[num - RG_ID_SPECIAL].Name); return 1; }
+    if (num >= RG_ID_SPECIAL && num < RG_ID_SPECIAL + s_nbSpecials) { Label(string, s_sp[s_spIndex[num - RG_ID_SPECIAL]].Name); return 1; }
     string[0] = 0;
     return 1;
 }
@@ -895,7 +944,10 @@ static void Star(S32 cx, S32 cy, S32 r, double fill, U8 gold, U8 dim, U8 shadow)
 // rows' labels and stars a block centred on cx.
 static const char *const s_statName[3] = {"Acceleration", "Top speed", "Handling"};
 static void TextAt(S32 x, S32 y, const char *cp850, S32 colour);
-static void Stats(S32 cx, S32 y, S32 step, const T_RG_CAR *c) {
+// (the stars' radius, one to the next, and the gap after the labels: the car grid's smaller -- StatsSized)
+static void StatsSized(S32 cx, S32 y, S32 step, const T_RG_CAR *c, S32 starR, S32 starStep, S32 gap);
+static void Stats(S32 cx, S32 y, S32 step, const T_RG_CAR *c) { StatsSized(cx, y, step, c, RG_STAR_R, RG_STAR_STEP, 18); }
+static void StatsSized(S32 cx, S32 y, S32 step, const T_RG_CAR *c, S32 starR, S32 starStep, S32 gap) {
     static U8 gold = 0, dim = 0, shadow = 0;
     static const U8 *paletteWas = NULL;
     const U8 *pal = PtrPalNormal ? PtrPalNormal : PtrPal;
@@ -912,7 +964,7 @@ static void Stats(S32 cx, S32 y, S32 step, const T_RG_CAR *c) {
         const S32 w = SizeFont(text);
         if (w > labels) labels = w;
     }
-    const S32 gap = 18, stars = 4 * RG_STAR_STEP + 2 * RG_STAR_R + 2, x0 = cx - (labels + gap + stars) / 2, sx = x0 + labels + gap + RG_STAR_R;
+    const S32 stars = 4 * starStep + 2 * starR + 2, x0 = cx - (labels + gap + stars) / 2, sx = x0 + labels + gap + starR;
     for (int k = 0; k < 3; k++) {
         Label(text, s_statName[k]);
         TextAt(x0, y + k * step, text, RG_GREY);
@@ -920,7 +972,7 @@ static void Stats(S32 cx, S32 y, S32 step, const T_RG_CAR *c) {
         const S32 sy = y + k * step + 13;
         for (int n = 0; n < 5; n++) {
             const double fill = c->Stars[k] - n;
-            Star(sx + n * RG_STAR_STEP, sy, RG_STAR_R, fill <= 0 ? 0 : fill >= 1 ? 1 : fill, gold, dim, shadow);
+            Star(sx + n * starStep, sy, starR, fill <= 0 ? 0 : fill >= 1 ? 1 : fill, gold, dim, shadow);
         }
     }
 }
@@ -1023,6 +1075,11 @@ static int CarPage(const char *what, int trial) {
     return chosen;
 }
 
+// Track select open: on (tracks=1, with tracks), and its code given this run (or none asked: no tracks_code=).
+static int TracksOpen(void) { return s_tracks && s_nbTracks > 0 && (!s_tracksCode[0] || s_tracksOpen); }
+// A special or track Best laps shows: Track select's only once it is open.
+static int TimesShown(int sp) { return sp >= 0 && sp < s_nbSp && (!s_sp[sp].Track || TracksOpen()); }
+
 // Best laps: a track's ten fastest laps of a time trial, with the car (left and right go through the tracks); Esc, Enter or a click
 // goes back.
 static void TimesPage(void) {
@@ -1034,7 +1091,11 @@ static void TimesPage(void) {
     InitWaitNoInput(I_JOY | I_FIRE | I_MENUS | I_ACTION);
     S32 padDir = JoystickMenuNavOnly();
     AsciiMode = TRUE;
-    int sp = s_lastSp >= 0 && s_lastSp < s_nbSp ? s_lastSp : 0, flag = 1, done = 0;
+    // (the track raced or chosen last -- a special, or one of Track select's once it is open)
+    int sp = s_raceSp >= 0 && TimesShown(s_raceSp) ? s_raceSp : TimesShown(s_lastSp) ? s_lastSp : 0, flag = 1, done = 0;
+    while (sp + 1 < s_nbSp && !TimesShown(sp)) sp++;
+    int shown = 0;
+    for (int i = 0; i < s_nbSp; i++) shown += TimesShown(i);
     S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
     S32 x0 = cx - 280, x1 = cx + 280, y0 = 60 + oy, y1 = 440 + oy;
     s_clickWas = Click & 3;
@@ -1049,8 +1110,12 @@ static void TimesPage(void) {
         }
         S32 mx, my;
         if (Clicked(&mx, &my)) done = 1;
-        const S32 step = s_nbSp > 1 ? Step(&padDir) : 0;
-        if (step) { sp = (sp + step + s_nbSp) % s_nbSp; flag = 1; }
+        const S32 step = shown > 1 ? Step(&padDir) : 0;
+        if (step) {
+            do sp = (sp + step + s_nbSp) % s_nbSp;
+            while (!TimesShown(sp));
+            flag = 1;
+        }
         if (flag) {
             flag = 0;
             Page(NULL, 0);
@@ -1075,7 +1140,16 @@ static void TimesPage(void) {
                 ColorFont(k == 0 ? RG_ORANGE : LBAWHITE);
                 Font(x0 + 34, y, text);
             }
-            Text(cx, y1 - 36, s_nbSp > 1 ? "Left, right: track    Esc: back" : "Esc: back", RG_GREY);
+            // (which of how many: 16 tracks once Track select is open)
+            if (shown > 2) {
+                int at = 0;
+                for (int i = 0; i <= sp && i < s_nbSp; i++) at += TimesShown(i);
+                char count[32], text[64];
+                snprintf(count, sizeof(count), "%d of %d", at, shown);
+                Label(text, count);
+                TextAt(x1 - 16 - SizeFont(text), y0 + 12, text, RG_GREY);
+            }
+            Text(cx, y1 - 36, shown > 1 ? "Left, right: track    Esc: back" : "Esc: back", RG_GREY);
             BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
         }
         // (a frame every pass, drawn or not -- a box of it put up again: a present happens only for one -- the mouse's pointer goes with
@@ -1334,7 +1408,8 @@ static void Introduction(int sp, int trial) {
 static U16 s_qualMenu[4 + 2 * 3];
 static int QualifyingPage(int sp, int trial) {
     s_qualifyNow = -1;
-    if (trial) return 1;
+    // (a sprint has no lap to qualify on: its file's own start, qualifying=0)
+    if (trial || s_sp[sp].Sprint) return 1;
     ReadSettings();
     const T_RACE_PAGE *pg = TrackPage(sp);
     if (!pg || !pg->Spots) return 1;
@@ -1467,6 +1542,364 @@ S32 RaceGame_OptionsRow(S32 num) {
     return 1;
 }
 
+// ---- Track select ------------------------------------------------------------------------------------------------------------------
+// (2026-10-22 -- the user: "Pull all tracks into LBRA under Track select, but temporarily password gate them with the password 1234", in
+// the order RACEGAME.TXT's track= lines give; "a car selection dialogue that displays more than one car ... 7 cars x 7, let's pull all
+// cars into LBRA, and give them all their own stats"; "Car selection should only be for 'Track select'": the specials keep their car page)
+
+static int ModePage(int sp);
+static void Plot(S32 x, S32 y, U8 colour, S32 size);
+
+// A key of the four ways (the arrows, the pad's d-pad or stick; edge-only, as Step): *dx, *dy -1, 0 or 1. Non-zero: one was struck.
+static int Nav(S32 *padDir, S32 *dx, S32 *dy) {
+    *dx = *dy = 0;
+    S32 key = MyKey;
+    if (!key) {
+        const S32 raw = JoystickMenuNavOnly();
+        if (raw != *padDir) {
+            *padDir = raw;
+            key = raw;                      // (K_UP .. K_RIGHT: the arrows' own scancodes)
+        }
+    }
+    if (Input & I_LEFT || key == K_GRAY_LEFT) { *dx = -1; InitWaitNoInput(I_LEFT); }
+    else if (Input & I_RIGHT || key == K_GRAY_RIGHT) { *dx = 1; InitWaitNoInput(I_RIGHT); }
+    else if (Input & I_UP || key == K_GRAY_UP) { *dy = -1; InitWaitNoInput(I_UP); }
+    else if (Input & I_DOWN || key == K_GRAY_DOWN) { *dy = 1; InitWaitNoInput(I_DOWN); }
+    else return 0;
+    InitWaitNoKey();
+    return 1;
+}
+
+// A page's own loop begins: the backdrop up, the keys of the page before let go.
+static void PageLoopStart(S32 *padDir) {
+    Page(NULL, 0);
+    BoxUpdate();
+    ManageTime();
+    InitWaitNoKey();
+    InitWaitNoInput(I_JOY | I_FIRE | I_MENUS | I_ACTION);
+    *padDir = JoystickMenuNavOnly();
+    AsciiMode = TRUE;
+    s_clickWas = Click & 3;
+}
+
+// The code Track select asks for (RACEGAME.TXT tracks_code=): digits (the keyboard's row or its keypad), Backspace, Enter to try it,
+// Esc back. Each digit shown as a star; a wrong code says so and empties. Non-zero: given right -- Track select is open for the rest of
+// the run (not kept: the user, "temporarily password gate them").
+#define RG_CODE_MAX 12
+static int CodePage(void) {
+    S32 padDir;
+    PageLoopStart(&padDir);
+    char code[RG_CODE_MAX + 1] = "";
+    int n = 0, wrong = 0, result = -1;
+    S32 lastKey = 0, cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    Log_Info("[racegame] Track select: asking for its code");
+    while (result < 0) {
+        ManageTime();
+        MyGetInput();
+        if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; }
+        // (a key struck: MyKey is the key held, pass after pass -- a digit taken as it goes down)
+        const S32 key = MyKey;
+        if (key != lastKey) {
+            lastKey = key;
+            int digit = -1;
+            if (key >= K_1 && key <= K_9) digit = 1 + (int)(key - K_1);
+            else if (key == K_0) digit = 0;
+            else if (key >= K_NUMPAD_1 && key <= K_NUMPAD_9) digit = 1 + (int)(key - K_NUMPAD_1);
+            else if (key == K_NUMPAD_0) digit = 0;
+            if (digit >= 0 && n < RG_CODE_MAX) { code[n++] = (char)('0' + digit); code[n] = 0; wrong = 0; }
+            else if (key == K_BACKSPACE && n > 0) code[--n] = 0;
+        }
+        S32 mx, my;
+        const int click = Clicked(&mx, &my);
+        // the page: a box with what it asks, the stars, and the keys
+        const S32 x0 = cx - 230, x1 = cx + 230, y0 = 150 + oy, y1 = 352 + oy;
+        Page(NULL, 0);
+        ShadeBoxBlk(x0, y0, x1, y1, RG_PAGE_SHADE);
+        DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
+        Text(cx, y0 + 14, "Track select", RG_ORANGE);
+        Text(cx, y0 + 52, "Enter the code", LBAWHITE);
+        // (a gold dot for each digit, then a dim one blinking where the next goes; the font's '*' sits too high and small)
+        static U8 gold = 0, dim = 0, shadow = 0;
+        static const U8 *paletteWas = NULL;
+        const U8 *pal = PtrPalNormal ? PtrPalNormal : PtrPal;
+        if (pal != paletteWas) {
+            paletteWas = pal;
+            gold = NearestColour(255, 200, 40);
+            dim = NearestColour(110, 100, 90);
+            shadow = NearestColour(0, 0, 0);
+        }
+        const int dots = n + (n < RG_CODE_MAX ? 1 : 0);
+        const S32 step = 30, dx0 = cx - (dots - 1) * step / 2, dy = y0 + 108;
+        for (int k = 0; k < dots; k++) {
+            if (k == n && (TimerRefHR / 400) % 2) continue;
+            const U8 c = k < n ? gold : dim;
+            for (int pass = 0; pass < 2; pass++)
+                for (S32 ry = -8; ry <= 8; ry++)
+                    for (S32 rx = -8; rx <= 8; rx++)
+                        if (rx * rx + ry * ry <= (k < n ? 64 : 20)) Plot(dx0 + k * step + rx + (pass ? 0 : 2), dy + ry + (pass ? 0 : 2), pass ? c : shadow, 1);
+        }
+        if (wrong) Text(cx, y0 + 132, "Wrong code", RG_ORANGE);
+        Text(cx, y1 - 38, "Enter: open    Esc: back", RG_GREY);
+        BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+        Shot();
+        BoxUpdate();
+        if (click == 2 || Escaped()) result = 0;
+        else if (Confirmed()) {
+            WaitNoInput();
+            if (n && !strcmp(code, s_tracksCode)) result = 1;
+            else if (n) {
+                wrong = 1;
+                Log_Info("[racegame] Track select: a wrong code (%d digits)", n);
+                n = 0;
+                code[0] = 0;
+            }
+        }
+    }
+    AsciiMode = FALSE;
+    Page(NULL, 0);
+    if (result) Log_Info("[racegame] Track select: the code given, open for this run");
+    return result;
+}
+
+// Track select's tracks, in RACEGAME.TXT's order, each with its best lap: up and down (or the mouse) to choose, Enter the track's race or
+// time trial (ModePage), Esc back. Non-zero: a race is set up.
+#define RG_TRACK_LINE 24
+static int TracksPage(void) {
+    int list[RG_MAX_ENTRIES], n = 0, at = 0;
+    for (int i = 0; i < s_nbSp; i++)
+        if (s_sp[i].Track) {
+            if (i == s_lastTrack) at = n;
+            list[n++] = i;
+        }
+    if (n <= 0) return 0;
+    ReadTimes();
+    int first = 0;
+    for (;;) {
+        S32 padDir;
+        PageLoopStart(&padDir);
+        S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+        int chosen = -2;
+        while (chosen == -2) {
+            ManageTime();
+            MyGetInput();
+            if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; }
+            // (the rows that fit between the header and the best lap's line over the keys: all fifteen at 480 high, the list scrolling
+            // past them)
+            const S32 top = RG_PAGE_TOP + oy + 40, keysY = RG_PAGE_BOTTOM + oy - 32, bestY = keysY - 30;
+            const int rows = (int)((bestY - 2 - top) / RG_TRACK_LINE);
+            S32 dx, dy;
+            if (Nav(&padDir, &dx, &dy) && dy) at = (at + dy + n) % n;
+            if (at < first) first = at;
+            if (at >= first + rows) first = at - rows + 1;
+            const S32 lx0 = cx - RG_PAGE_HALF + 14, lx1 = cx + RG_PAGE_HALF - 14;
+            S32 mx, my;
+            const int click = Clicked(&mx, &my);
+            if (click == 2) chosen = -1;
+            else if (click == 1 && mx >= lx0 && mx <= lx1 && my >= top - 4) {
+                const int row = (int)((my - (top - 4)) / RG_TRACK_LINE);
+                if (row < rows && first + row < n) { at = first + row; chosen = list[at]; }
+            }
+            PageFrame("Track select");
+            for (int r = 0; r < rows && first + r < n; r++) {
+                const int k = first + r, sp = list[k];
+                const S32 y = top + r * RG_TRACK_LINE;
+                if (k == at) DrawCadre(lx0, y - 5, lx1, y + RG_TRACK_LINE - 1, ALL_ANGLES);
+                char line[160], text[256];
+                snprintf(line, sizeof(line), "%d. %s", k + 1, s_sp[sp].Name);
+                Label(text, line);
+                TextAt(lx0 + 12, y, text, k == at ? RG_ORANGE : LBAWHITE);
+            }
+            // (more above or below: the list scrolls)
+            if (first > 0) Text(cx, top - 26, "...", RG_GREY);
+            if (first + rows < n) Text(cx, top + rows * RG_TRACK_LINE - 8, "...", RG_GREY);
+            // the track's best lap, under the list (the names take the page's width)
+            {
+                const int sp = list[at];
+                char line[160], best[24];
+                if (s_nbTimes[sp] > 0) {
+                    TimeText(best, sizeof(best), s_times[sp][0].Lap);
+                    snprintf(line, sizeof(line), "Best lap: %s", best);
+                } else snprintf(line, sizeof(line), "No best lap yet");
+                Text(cx, bestY, line, RG_GREY);
+            }
+            Text(cx, keysY, "Enter: choose    Esc: back", RG_GREY);
+            BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+            Shot();
+            BoxUpdate();
+            if (chosen != -2) break;
+            if (Confirmed()) { WaitNoInput(); chosen = list[at]; }
+            else if (Escaped()) chosen = -1;
+        }
+        AsciiMode = FALSE;
+        Page(NULL, 0);
+        if (chosen < 0) return 0;
+        s_lastTrack = chosen;
+        Log_Info("[racegame] Track select: %s", s_sp[chosen].Name);
+        if (ModePage(chosen)) return 1;
+    }
+}
+
+// Track select from the main menu: its code first when RACEGAME.TXT asks one (once a run), then its tracks. Non-zero: a race is set up.
+static int TrackSelect(void) {
+    if (!s_tracks || s_nbTracks <= 0) return 0;
+    if (s_tracksCode[0] && !s_tracksOpen) {
+        if (!CodePage()) return 0;
+        s_tracksOpen = 1;
+    }
+    return TracksPage();
+}
+
+// The car grid (Track select's): every car of the game, 7 by 7 a page, each drawn small -- once, as its page opens, kept (s_thumb) -- the
+// one chosen large on the right, turning as the car page's do, its name and its stats under it. The arrows (or a pad) go through the
+// cars, a row up and down, page to page past the ends; Page up and Page down a page; Enter (or a click on the car chosen, or its big
+// box) takes it, Esc goes back. The car taken (its place in s_grid), or -1.
+#define RG_GRID_COLS 7
+#define RG_GRID_ROWS 7
+#define RG_GRID_PAGE (RG_GRID_COLS * RG_GRID_ROWS)
+#define RG_CELL_W 44
+#define RG_CELL_H 40
+#define RG_THUMB_BETA 3456                  // the small cars' turn: three quarters from the front
+static U8 s_thumb[RG_GRID_PAGE][RG_CELL_W * RG_CELL_H];
+static int s_thumbPage = -1;                // the page s_thumb holds (-1: none) ...
+static S32 s_thumbX = 0, s_thumbY = 0;      // ... drawn with its grid here
+
+// The page's small cars drawn into s_thumb: each measured in the car page's box (RaceMod_DrawBody keeps it), its cell's backdrop put
+// back and shaded, the car drawn in it, a car still locked dimmed.
+static void GridThumbs(int page, S32 gx, S32 gy, S32 cx, S32 oy) {
+    const clock_t start = clock();
+    int drawn = 0;
+    for (int k = 0; k < RG_GRID_PAGE; k++) {
+        const int idx = page * RG_GRID_PAGE + k;
+        if (idx >= s_nbGrid) break;
+        const T_RG_CAR *c = &s_grid[idx];
+        const S32 x = gx + (k % RG_GRID_COLS) * RG_CELL_W, y = gy + (k / RG_GRID_COLS) * RG_CELL_H;
+        if (c->Body >= 0) RaceMod_DrawBody(cx - 228, 132 + oy, cx + 228, RG_CAR_BOTTOM - 2 + oy, c->Body, 0, 1, c->Anim);
+        CopyBlock(x, y, x + RG_CELL_W - 1, y + RG_CELL_H - 1, Screen, x, y, Log);
+        ShadeBoxBlk(x, y, x + RG_CELL_W - 1, y + RG_CELL_H - 1, MENU_SHADE_LVL);
+        if (c->Body >= 0) { RaceMod_DrawBody(x + 2, y + 2, x + RG_CELL_W - 3, y + RG_CELL_H - 3, c->Body, RG_THUMB_BETA, 0, c->Anim); drawn++; }
+        if (Locked(c)) ShadeBoxBlk(x + 1, y + 1, x + RG_CELL_W - 2, y + RG_CELL_H - 2, 10);
+        for (S32 r = 0; r < RG_CELL_H; r++) memcpy(&s_thumb[k][r * RG_CELL_W], (U8 *)Log + TabOffLine[y + r] + x, RG_CELL_W);
+    }
+    s_thumbPage = page; s_thumbX = gx; s_thumbY = gy;
+    Log_Info("[racegame] the car grid: page %d, %d cars drawn small in %d ms", page + 1, drawn, (int)((clock() - start) * 1000 / CLOCKS_PER_SEC));
+}
+
+// A frame two pixels wide inside (x0, y0)-(x1, y1).
+static void FrameBox(S32 x0, S32 y0, S32 x1, S32 y1, U8 colour) {
+    for (S32 x = x0; x <= x1; x++) { Plot(x, y0, colour, 2); Plot(x, y1 - 1, colour, 2); }
+    for (S32 y = y0; y <= y1; y++) { Plot(x0, y, colour, 2); Plot(x1 - 1, y, colour, 2); }
+}
+
+static int GridPage(const char *what, int trial) {
+    if (s_nbGrid <= 0) return -1;
+    // (the car chosen last, by its name; one that can't be taken for this -- the pumpkin F1 still locked -- the first that can)
+    ReadSettings();
+    if (s_gridCarName[0])
+        for (int i = 0; i < s_nbGrid; i++) if (!strcmp(s_grid[i].Name, s_gridCarName)) { s_gridCar = i; break; }
+    int sel = s_gridCar >= 0 && s_gridCar < s_nbGrid ? s_gridCar : 0;
+    if (!TakenFor(&s_grid[sel], trial)) {
+        sel = 0;
+        while (sel + 1 < s_nbGrid && !TakenFor(&s_grid[sel], trial)) sel++;
+    }
+    const int pages = (s_nbGrid + RG_GRID_PAGE - 1) / RG_GRID_PAGE;
+    S32 padDir;
+    PageLoopStart(&padDir);
+    // (the backdrop may not be the one the small cars were drawn on: a race's, a window resized)
+    s_thumbPage = -1;
+    S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    int chosen = -2, was = -1;
+    S32 start = TimerRefHR;
+    Log_Info("[racegame] the car grid: %d cars on %d page(s), %s chosen", s_nbGrid, pages, s_grid[sel].Name);
+    while (chosen == -2) {
+        ManageTime();
+        MyGetInput();
+        if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; s_thumbPage = -1; }
+        // the layout: the grid on the left, the car chosen on the right
+        // (the stats' labels in the menus' font are about 200 wide: the panel takes half the canvas, the grid the other half)
+        const S32 gx = cx - 314, gy = 50 + oy, gx1 = gx + RG_GRID_COLS * RG_CELL_W, gy1 = gy + RG_GRID_ROWS * RG_CELL_H;
+        const S32 px0 = cx + 4, px1 = cx + 316, py0 = 46 + oy, py1 = 198 + oy, pcx = (px0 + px1) / 2;
+        S32 dx, dy;
+        if (Nav(&padDir, &dx, &dy)) {
+            const int d = dx ? dx : dy * RG_GRID_COLS;
+            sel = ((sel + d) % s_nbGrid + s_nbGrid) % s_nbGrid;
+        } else if (MyKey == K_PAGE_DOWN || MyKey == K_PAGE_UP) {
+            const int page = ((sel / RG_GRID_PAGE + (MyKey == K_PAGE_DOWN ? 1 : -1)) % pages + pages) % pages;
+            sel = page * RG_GRID_PAGE + sel % RG_GRID_PAGE;
+            if (sel >= s_nbGrid) sel = s_nbGrid - 1;
+            InitWaitNoKey();
+        }
+        // (the mouse: a click on a car chooses it, on the car chosen -- or its big box -- takes it; the right button back)
+        S32 mx, my;
+        const int click = Clicked(&mx, &my);
+        int take = 0;
+        if (click == 2) chosen = -1;
+        else if (click == 1 && mx >= gx && mx < gx1 && my >= gy && my < gy1) {
+            const int idx = (sel / RG_GRID_PAGE) * RG_GRID_PAGE + (int)((my - gy) / RG_CELL_H) * RG_GRID_COLS + (int)((mx - gx) / RG_CELL_W);
+            if (idx < s_nbGrid) { if (idx == sel) take = 1; else sel = idx; }
+        } else if (click == 1 && mx >= px0 && mx <= px1 && my >= py0 && my <= py1) take = 1;
+        if (sel != was) { was = sel; start = TimerRefHR; }
+        const T_RG_CAR *c = &s_grid[sel];
+        const int page = sel / RG_GRID_PAGE;
+        // (the car chosen measured first, in the car page's box, under the backdrop drawn next; then the page's small cars when it is new)
+        RaceMod_DrawBody(cx - 228, 132 + oy, cx + 228, RG_CAR_BOTTOM - 2 + oy, c->Body, 0, 1, c->Anim);
+        if (page != s_thumbPage || gx != s_thumbX || gy != s_thumbY) GridThumbs(page, gx, gy, cx, oy);
+        // the page: the backdrop, the header, the grid
+        CopyScreen(Screen, Log);
+        char header[96];
+        snprintf(header, sizeof(header), "Choose your car for %s", what);
+        // (the header over the menu picture's title: a shaded strip under it)
+        ShadeBoxBlk(cx - 318, 4 + oy, cx + 316, 38 + oy, MENU_SHADE_LVL);
+        Text(cx, 8 + oy, header, RG_ORANGE);
+        ShadeBoxBlk(gx - 4, gy - 4, gx1 + 3, gy1 + 3, MENU_SHADE_LVL);
+        for (int k = 0; k < RG_GRID_PAGE && page * RG_GRID_PAGE + k < s_nbGrid; k++) {
+            const S32 x = gx + (k % RG_GRID_COLS) * RG_CELL_W, y = gy + (k / RG_GRID_COLS) * RG_CELL_H;
+            for (S32 r = 0; r < RG_CELL_H; r++) memcpy((U8 *)Log + TabOffLine[y + r] + x, &s_thumb[k][r * RG_CELL_W], RG_CELL_W);
+        }
+        DrawCadre(gx - 4, gy - 4, gx1 + 3, gy1 + 3, ALL_ANGLES);
+        {
+            const int k = sel % RG_GRID_PAGE;
+            const S32 x = gx + (k % RG_GRID_COLS) * RG_CELL_W, y = gy + (k / RG_GRID_COLS) * RG_CELL_H;
+            FrameBox(x, y, x + RG_CELL_W - 1, y + RG_CELL_H - 1, RG_ORANGE);
+        }
+        char text[256], line[96];
+        snprintf(line, sizeof(line), "Page %d of %d", page + 1, pages);
+        Text((gx + gx1) / 2, gy1 + 10, line, RG_GREY);
+        // the car chosen: turning in its box, dark and padlocked while it is locked, its name and stats under it
+        const int locked = Locked(c), takeable = TakenFor(c, trial);
+        ShadeBoxBlk(px0, py0, px1, py1, MENU_SHADE_LVL);
+        RaceMod_DrawBody(px0 + 2, py0 + 2, px1 - 2, py1 - 2, c->Body, (S32)(((TimerRefHR - start) / 3 + 3072) & 4095), 0, c->Anim);
+        if (!takeable) ShadeBoxBlk(px0 + 2, py0 + 2, px1 - 2, py1 - 2, locked ? 10 : 7);
+        if (locked) {
+            Padlock(pcx, (py0 + py1) / 2 - 32);
+            TextFitted(pcx, py1 - 60, px1 - px0 - 20, c->Hint[0] ? c->Hint : "Win a race to unlock", RG_ORANGE);
+        } else if (!takeable) Text(pcx, py1 - 36, "For time trials", RG_ORANGE);
+        DrawCadre(px0, py0, px1, py1, ALL_ANGLES);
+        snprintf(line, sizeof(line), "%d of %d", sel + 1, s_nbGrid);
+        Label(text, line);
+        TextAt(px1 - 10 - SizeFont(text), py0 + 6, text, RG_GREY);
+        TextFitted(pcx, py1 + 6, px1 - px0 - 8, c->Name, takeable ? LBAWHITE : RG_GREY);
+        if (c->Rated) StatsSized(pcx, py1 + 64, RG_STAT_LINE, c, 8, 18, 8);
+        // the keys
+        Text(cx, 404 + oy, "Arrows: car    Page up, down: page", RG_GREY);
+        Text(cx, 440 + oy, takeable ? "Enter: race    Esc: back" : "Esc: back", RG_GREY);
+        BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+        Shot();
+        BoxUpdate();
+        if (chosen != -2) break;
+        if (take && takeable) { WaitNoInput(); chosen = sel; }
+        else if (Confirmed()) { WaitNoInput(); if (takeable) chosen = sel; }
+        else if (Escaped()) chosen = -1;
+    }
+    AsciiMode = FALSE;
+    Page(NULL, 0);
+    if (chosen >= 0) {
+        s_gridCar = chosen;
+        snprintf(s_gridCarName, sizeof(s_gridCarName), "%s", s_grid[chosen].Name);
+        WriteSettings();
+    }
+    return chosen;
+}
+
 
 // A race's difficulty, on a track with levels: easy, medium or hard -- the one chosen last first -- kept for the next time. The level
 // (0-2), or -1 for Back.
@@ -1516,28 +1949,32 @@ static int ModePage(int sp) {
         for (;;) {
             int level = -1;
             if (!trial && s_sp[sp].Levels && (level = LevelPage()) < 0) break;
+            // (a special's car page -- its own few cars, one at a time -- or Track select's car grid, every car: 2026-10-22)
+            const char *what = trial ? "a time trial" : "a race";
             int car;
-            while ((car = CarPage(trial ? "a time trial" : "a race", trial)) >= 0 && !QualifyingPage(sp, trial)) {}
-            if (car >= 0) { if (StartRace(sp, trial, car, level)) return 1; break; }
+            while ((car = s_sp[sp].Track ? GridPage(what, trial) : CarPage(what, trial)) >= 0 && !QualifyingPage(sp, trial)) {}
+            if (car >= 0) { if (StartRace(sp, trial, s_sp[sp].Track ? &s_grid[car] : &s_cars[car], level)) return 1; break; }
             if (level < 0) break;
         }
     }
 }
 
 static int SpecialsPage(void) {
-    if (s_nbSp <= 0) return 0;
-    s_spMenu[0] = (U16)(1 + (s_lastSp >= 0 && s_lastSp < s_nbSp ? s_lastSp : 0));
-    s_spMenu[1] = (U16)(1 + s_nbSp);
+    if (s_nbSpecials <= 0) return 0;
+    int last = 0;
+    for (int k = 0; k < s_nbSpecials; k++) if (s_spIndex[k] == s_lastSp) last = k;
+    s_spMenu[0] = (U16)(1 + last);
+    s_spMenu[1] = (U16)(1 + s_nbSpecials);
     s_spMenu[2] = 280;
     s_spMenu[3] = 0;
     SetRow(s_spMenu, 0, RG_ID_BACK);
-    for (int i = 0; i < s_nbSp; i++) SetRow(s_spMenu, 1 + i, (U16)(RG_ID_SPECIAL + i));
+    for (int i = 0; i < s_nbSpecials; i++) SetRow(s_spMenu, 1 + i, (U16)(RG_ID_SPECIAL + i));
     for (;;) {
-        Page("Specials", 280 - (56 * (1 + s_nbSp)) / 2 - 50);
+        Page("Specials", 280 - (56 * (1 + s_nbSpecials)) / 2 - 50);
         const S32 select = Menu(s_spMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
-        if (select < RG_ID_SPECIAL || select >= RG_ID_SPECIAL + s_nbSp) continue;
-        s_lastSp = select - RG_ID_SPECIAL;
+        if (select < RG_ID_SPECIAL || select >= RG_ID_SPECIAL + s_nbSpecials) continue;
+        s_lastSp = s_spIndex[select - RG_ID_SPECIAL];
         if (ModePage(s_lastSp)) return 1;
     }
 }
@@ -1844,6 +2281,9 @@ S32 RaceGame_Menu(S32 inGame) {
         case RG_ID_OPTIONS:
         case RG_ID_QUIT:
             return select;
+        case RG_ID_TRACKS:
+            if (TrackSelect()) return RACEGAME_START;
+            break;
         case RG_ID_SPECIALS:
             if (SpecialsPage()) return RACEGAME_START;
             break;

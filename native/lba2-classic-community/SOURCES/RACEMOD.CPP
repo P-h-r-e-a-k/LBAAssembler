@@ -140,7 +140,8 @@
  *     end_to_menu=<ms>           <ms> after the race is over, back to the game's menu (RaceMod_WantsMenu) -- a win that unlocks a car
  *                                sooner, RACE_CELEBRATE_MS, for the race game's congratulations (RaceGame_Celebrate; 2026-10-20). In
  *                                the race game a win says "You win!" (ahead of the one to beat but not first: the place), not "You beat
- *                                <him>!" (the user, 2026-10-20)
+ *                                <him>!" (the user, 2026-10-20). A lost sprint isn't run again with it (2026-10-22: Track select's
+ *                                Polar Island and palace sprints): the menu follows
  *     twinsen_body=<generic> [<firing>] [<half size>]   Twinsen's own buggy with bodies of its entity of the builder's in place of its own
  *                                while he drives (the Halloween buggy, painted orange with bats, 2026-10-20: HeroLook)
  *   Halloween (2026-10-17, the Temple of Bú's; the builder writes these for it alone):
@@ -4578,6 +4579,9 @@ void RaceMod_Story(void) {
         return;
     }
     if (s_endWon) return;
+    // (a race that goes back to the menu once it is over -- the race game's, end_to_menu=: Polar Island's and the Emperor's palace's
+    // sprints in its Track select, 2026-10-22 -- isn't run again: the menu follows)
+    if (s_endToMenu > 0) return;
     // a loss: the race again, from the grid in the start line's scene (the car taken there) -- out of a carried jump too: still flying, the
     // car was put back on the jump's way the next frame and carried on into its next cube, the grid's scene forgotten (the Emperor's
     // palace's leap out of the round window, the finish line at its lip, 2026-10-13)
@@ -14104,8 +14108,21 @@ static void ItemBox(S32 x0, S32 y0, S32 size, int pu, int ring, S32 settled, S32
 // what it draws: once for each body, on black, turned eight ways at a known projection, the box round the pixels it drew -- then scaled
 // and moved to fit, which is exact for the projection's factor and middle. `measure`: only that (the page draws its backdrop after it).
 #define RACE_BODY_FIT_LF 500
-static S32 s_fitBody = -1, s_fitAnim = -1;
-static double s_fitW = 0, s_fitH = 0, s_fitX = 0, s_fitY = 0;   // its extent there, and its middle off the projection's
+// (each body's measure kept, 2026-10-22: the race game's car grid draws 49 cars a page, and each was measured again every time another
+// was drawn -- the box measured in with it, a car measured in a bigger box than another's (less of it clipped) the one drawn by)
+#define RACE_FIT_MAX 512
+typedef struct {
+    S32 Body, Anim, BoxW, BoxH;
+    double W, H, X, Y;                      // its extent at RACE_BODY_FIT_LF, and its middle off the projection's
+} T_RACE_FIT;
+static T_RACE_FIT s_fit[RACE_FIT_MAX];
+static int s_nbFit = 0, s_fitNext = 0;
+static T_RACE_FIT *FitOf(S32 body, S32 anim) {
+    T_RACE_FIT *best = NULL;
+    for (int i = 0; i < s_nbFit; i++)
+        if (s_fit[i].Body == body && s_fit[i].Anim == anim && (!best || s_fit[i].BoxW * s_fit[i].BoxH > best->BoxW * best->BoxH)) best = &s_fit[i];
+    return best;
+}
 // The body drawn in place, facing `beta`: posed by `anim`'s first frame when it has one (the car page's cars, by their driving animation --
 // the race poses them so: DrawDriveAs; unposed, their bones' parts -- the drivers, the pumpkin F1's wheels, the witch's broom -- lay where
 // the body file leaves them, the broom through the witch's chest and the F1 with no wheels, 2026-10-20), else as the body file has it.
@@ -14155,7 +14172,9 @@ void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 me
     const S32 rep = RepMask;
     PtrMap = ObjPtrMap = BufferTexture;
     RepMask = 0xFFFF;
-    if (body != s_fitBody || anim != s_fitAnim) {
+    T_RACE_FIT *fit = FitOf(body, anim);
+    // (measured again only when it hasn't been, or -- asked to measure -- in a smaller box than this one)
+    if (!fit || (measure && (fit->BoxW < w || fit->BoxH < h))) {
         S32 xmin = 0x7FFFFFFF, ymin = 0x7FFFFFFF, xmax = -0x7FFFFFFF, ymax = -0x7FFFFFFF;
         SetProjection(cx, cy, 128, RACE_BODY_FIT_LF, RACE_BODY_FIT_LF);
         Switch_Fillers(FILL_POLY_TEXTURES);
@@ -14171,15 +14190,20 @@ void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 me
                     if (y > ymax) ymax = y;
                 }
         }
-        s_fitBody = body; s_fitAnim = anim;
-        s_fitW = xmax > xmin ? xmax - xmin : 0; s_fitH = ymax > ymin ? ymax - ymin : 0;
-        s_fitX = (xmin + xmax) / 2.0 - cx; s_fitY = (ymin + ymax) / 2.0 - cy;
-        Log_Info("[racemod] body %d measured: %.0f x %.0f at %d, its middle %.0f, %.0f off", (int)body, s_fitW, s_fitH, RACE_BODY_FIT_LF, s_fitX, s_fitY);
+        if (!fit) {
+            if (s_nbFit < RACE_FIT_MAX) fit = &s_fit[s_nbFit++];
+            else { fit = &s_fit[s_fitNext]; s_fitNext = (s_fitNext + 1) % RACE_FIT_MAX; }
+        }
+        fit->Body = body; fit->Anim = anim; fit->BoxW = w; fit->BoxH = h;
+        fit->W = xmax > xmin ? xmax - xmin : 0; fit->H = ymax > ymin ? ymax - ymin : 0;
+        fit->X = (xmin + xmax) / 2.0 - cx; fit->Y = (ymin + ymax) / 2.0 - cy;
+        Log_Info("[racemod] body %d measured: %.0f x %.0f at %d, its middle %.0f, %.0f off", (int)body, fit->W, fit->H, RACE_BODY_FIT_LF, fit->X, fit->Y);
     }
+    const double fitW = fit->W, fitH = fit->H, fitX = fit->X, fitY = fit->Y;
     double scale = 1;
-    if (s_fitW > 0 && s_fitH > 0) {
-        scale = 0.9 * w / s_fitW;
-        if (0.86 * h / s_fitH < scale) scale = 0.86 * h / s_fitH;
+    if (fitW > 0 && fitH > 0) {
+        scale = 0.9 * w / fitW;
+        if (0.86 * h / fitH < scale) scale = 0.86 * h / fitH;
     }
     if (measure) {
         PtrMap = map; ObjPtrMap = objMap; RepMask = rep;
@@ -14190,7 +14214,7 @@ void RaceMod_DrawBody(S32 x0, S32 y0, S32 x1, S32 y1, S32 body, S32 beta, S32 me
         return;
     }
     const S32 lf = (S32)(RACE_BODY_FIT_LF * scale);
-    SetProjection((S32)(cx - s_fitX * scale), (S32)(cy - s_fitY * scale), 128, lf, lf);
+    SetProjection((S32)(cx - fitX * scale), (S32)(cy - fitY * scale), 128, lf, lf);
     const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
     Switch_Fillers(FILL_POLY_TEXTURES);
     if (CubeMode == CUBE_EXTERIEUR) SetCLUT(PalLevel);
