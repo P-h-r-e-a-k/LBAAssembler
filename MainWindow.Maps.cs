@@ -24,12 +24,13 @@ public partial class MainWindow
 
     private bool MapOpen => openMap is not null;
 
-    // Where map files go by default: the open map's own folder, else Documents\LBA Assembler\Maps (made when first wanted).
+    // Where map files go by default: the open map's own folder, else a Maps folder beside the program (made when first wanted) -- not
+    // Documents on the system drive (the user, 2026-10-22: nothing goes on C:\ without asking; until then it was Documents\LBA Assembler\Maps).
     private string MapsFolder()
     {
         if (openMapPath is not null && Path.GetDirectoryName(openMapPath) is { Length: > 0 } own && Directory.Exists(own)) return own;
-        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "LBA Assembler", "Maps");
-        try { Directory.CreateDirectory(folder); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments); }
+        var folder = Path.Combine(AppContext.BaseDirectory, "Maps");
+        try { Directory.CreateDirectory(folder); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return AppContext.BaseDirectory; }
         return folder;
     }
 

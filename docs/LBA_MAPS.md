@@ -55,7 +55,8 @@ zip but a zip with a custom extension so it can keep .lbamap but it is actually 
 - **Close map**: asks to save unsaved changes, then goes back to the game folder.
 - **Export map…**: the island or interior scene in view, out of the game folder into a `.lbamap`.
 
-Map files are saved by default in the open map's own folder, else in `Documents\LBA Assembler\Maps`.
+Map files are saved by default in the open map's own folder, else in a `Maps` folder beside the program (`release\Maps` for the
+published editor). Until 2026-10-22 it was `Documents\LBA Assembler\Maps`; nothing goes on the system drive now.
 
 ## The workspace
 

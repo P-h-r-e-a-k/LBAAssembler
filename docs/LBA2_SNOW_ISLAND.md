@@ -7,8 +7,8 @@ LBA1's Hamalayi Mountains, let's introduce some snowmen, and perhaps a small ski
 but for now let's build it into LBAAssembler for testing."
 
 **To use it:** Tools > **LBA2: Snow island (Hamalayi)…**. It needs both game folders set under File > Settings: the ground is textured with
-LBA1's own Hamalayi bricks. It builds the island as a map of its own, `SNOWISLE.lbamap` (in the maps folder: `Documents\LBA Assembler\Maps`,
-or the open map's folder), and opens it in a map workspace, as File > Open map would. The status bar names its scenes and the one Twinsen
+LBA1's own Hamalayi bricks. It builds the island as a map of its own, `SNOWISLE.lbamap` (in the maps folder: `Maps` beside the program --
+`release\Maps` -- or the open map's folder), and opens it in a map workspace, as File > Open map would. The status bar names its scenes and the one Twinsen
 starts in, on the harbour's quay. Play that scene. File > Install map into game puts it into the game (its `MAPS` folder, or the game's own
 files).
 
