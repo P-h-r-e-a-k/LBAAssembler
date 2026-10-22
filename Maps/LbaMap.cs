@@ -66,6 +66,8 @@ internal sealed class LbaMap
     public int? ForbiddenBrick { get; set; }
     public byte[]? Ile { get; set; }
     public byte[]? Obl { get; set; }
+    // An island's weather, or null: "snow" -- snow falls on it (the engine's SNOW.CPP; MAP.TXT's weather =, ISLANDS.TXT's weather lines)
+    public string? Weather { get; set; }
     // The script editor's comments on its scenes' scripts (CommentStore's JSON, a scene by its place in Scenes), or null: none. The engine
     // doesn't read it.
     public byte[]? Comments { get; set; }
@@ -172,6 +174,7 @@ internal sealed class LbaMap
         if (ForbiddenBrick is { } forbidden && bricks is not null) t.Append($"forbidden brick = {forbidden}\r\n");
         if (ile is not null) t.Append($"ile = {ile}\r\n");
         if (obl is not null) t.Append($"obl = {obl}\r\n");
+        if (Weather is { Length: > 0 } weather) t.Append($"weather = {Line(weather)}\r\n");
         if (comments is not null) t.Append($"comments = {comments}\r\n");
         t.Append("program = LBA Assembler\r\n");
         return t.ToString();
@@ -242,6 +245,7 @@ internal sealed class LbaMap
         map.Grid = Part("grid"); map.Library = Part("library"); map.Bricks = Part("bricks"); map.Fragments = Part("fragments");
         map.Ile = Part("ile"); map.Obl = Part("obl");
         map.Comments = Part("comments");
+        map.Weather = Value("weather");
         if (Value("ile") is { } ile) map.IslandFile = Path.GetFileNameWithoutExtension(ile).ToUpperInvariant();
         foreach (var (_, file) in scenes)
         {

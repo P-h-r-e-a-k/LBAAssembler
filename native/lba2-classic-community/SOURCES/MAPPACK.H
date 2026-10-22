@@ -19,6 +19,8 @@ S32 MapPack_ZoneScene(S32 scene, S32 num);
 
 // The island name a map's island scene is drawn from (its ILE and OBL are virtual files under that name), or NULL.
 const char *MapPack_IslandFile(S32 scene);
+// ... whether snow falls on it (MAP.TXT weather = snow)
+S32 MapPack_Snows(S32 scene);
 
 // The biggest scene record of the maps (0 if none): SCENE.HQR's entry 0 only knows the game's.
 U32 MapPack_MaxSceneSize(void);

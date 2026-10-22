@@ -150,6 +150,35 @@ static const char *SceneIslandFile(S32 scene) {
     return NULL;
 }
 
+// Whether snow falls on a scene's island (SNOW.CPP; LBA Assembler's snow island, 2026-10-22): a map's in the MAPS folder by its MAP.TXT's
+// "weather = snow", one installed into the game's files by ISLANDS.TXT's "weather <file> snow" lines.
+#define MAX_SNOW_ISLANDS 64
+S32 SceneSnows(S32 scene) {
+    if (MapPack_IslandFile(scene)) return MapPack_Snows(scene);
+    const char *file = SceneIslandFile(scene);
+    if (!file) return FALSE;
+    static int loaded = 0, count = 0;
+    static char names[MAX_SNOW_ISLANDS][16];
+    if (!loaded) {
+        loaded = 1;
+        char path[ADELINE_MAX_PATH];
+        GetResPath(path, ADELINE_MAX_PATH, "ISLANDS.TXT");
+        FILE *f = fopen(path, "r");
+        if (f) {
+            char line[128];
+            while (count < MAX_SNOW_ISLANDS && fgets(line, sizeof(line), f)) {
+                char name[16], kind[16];
+                if (line[0] == '#' || sscanf(line, "weather %15s %15s", name, kind) != 2 || strcasecmp(kind, "snow")) continue;
+                strcpy(names[count++], name);
+            }
+            fclose(f);
+        }
+    }
+    for (int i = 0; i < count; i++)
+        if (!strcasecmp(names[i], file)) return TRUE;
+    return FALSE;
+}
+
 #ifdef LBA_EDITOR
 char *GenAnimSkate; /* identificateur anim en cours */
 #else

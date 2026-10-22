@@ -245,7 +245,9 @@ public partial class MainWindow
             if (lba1Game?.Scenes.FirstOrDefault(s => s.Index == at.FirstScene) is { } scene) OpenLba1Area(scene.Island, at.FirstScene);
             return;
         }
-        if (allSceneEntries.FirstOrDefault(s => s.Option.Index == at.FirstScene) is { } entry) OpenLba2Area(IslandDisplayOf(entry), at.FirstScene);
+        // (read again even when an island of that name is in view: the folder's own of that name, or the map's last workspace's -- the snow
+        // island built again over itself showed nothing, 2026-10-22)
+        if (allSceneEntries.FirstOrDefault(s => s.Option.Index == at.FirstScene) is { } entry) OpenLba2Area(IslandDisplayOf(entry), at.FirstScene, reload: true);
     }
 
     // Back to the game folder; false when kept open (unsaved changes kept, or the close cancelled).

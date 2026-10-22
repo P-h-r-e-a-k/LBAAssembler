@@ -1717,6 +1717,8 @@ restartloop:
         if (CubeMode == CUBE_EXTERIEUR) {
             if (Island == 0 AND TEMPETE_ACTIVE AND RainEnable)
                 GereRain();
+            if (SnowFalls())
+                GereSnow();
 
             DoAnimatedPolys();
         }

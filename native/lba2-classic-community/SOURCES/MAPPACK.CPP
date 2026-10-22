@@ -21,6 +21,7 @@
 //                 fragments = <file>.GRM    its own grid fragments, an HQR (else: the game's its grid's header names)
 //                 forbidden brick = <n>     of its own bricks, the one never drawn (LBA_BKG.HQR's header's ForbidenBrick)
 //                 ile = <file>.ILE, obl = <file>.OBL    an island's: its scenes are drawn from them
+//                 weather = snow            an island's: snow falls on it (SNOW.CPP)
 //   and those files. Members are stored or deflated (ZIPREAD.CPP).
 //
 // A scene number another map took first is left to it (maps are read in their file names' order). A map's scene numbered as one of the
@@ -59,6 +60,7 @@ typedef struct {
     S32 Grid, Library, Bricks, Fragments, Ile, Obl; // members, -1 none
     U32 NbBricks;
     S32 Forbidden;
+    S32 Snow; // weather = snow
     char Island[ADELINE_MAX_PATH]; // the island name its ILE and OBL are virtual files under
     S32 NeedsDone;
     T_MAP_GRID_NEEDS Needs;
@@ -191,6 +193,8 @@ static void ReadPack(const char *zip, const char *file) {
             p->Ile = Member(p, key, value);
         } else if (!strcasecmp(key, "obl")) {
             p->Obl = Member(p, key, value);
+        } else if (!strcasecmp(key, "weather")) {
+            p->Snow = !strcasecmp(value, "snow");
         }
     }
     free(text);
@@ -333,6 +337,11 @@ S32 MapPack_ZoneScene(S32 scene, S32 num) {
 const char *MapPack_IslandFile(S32 scene) {
     T_MAP_PACK *p = PackOf(scene, NULL);
     return p && p->Island[0] ? p->Island : NULL;
+}
+
+S32 MapPack_Snows(S32 scene) {
+    T_MAP_PACK *p = PackOf(scene, NULL);
+    return p && p->Snow;
 }
 
 U32 MapPack_MaxSceneSize(void) {

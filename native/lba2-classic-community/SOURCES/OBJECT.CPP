@@ -5892,6 +5892,8 @@ startaffscene:
     if (CubeMode == CUBE_EXTERIEUR) {
         if (Island == 0 AND TEMPETE_ACTIVE AND RainEnable)
             AffRain();
+        if (SnowFalls())
+            AffSnow();
 
         SetCLUT(PalLevel);
         Switch_Fillers(FILL_POLY_TEXTURES);

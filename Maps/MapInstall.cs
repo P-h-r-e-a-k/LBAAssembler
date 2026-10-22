@@ -158,6 +158,7 @@ internal static class MapInstall
         }
         for (var k = 0; k < map.Scenes.Count; k++) PutScene(scenes, numbers[k], WithSceneNumbers(map.Scenes[k].Record, SceneGame.Lba2, numbers));
         islands.Look[name] = map.IslandByte;
+        if (map.Weather is { Length: > 0 } weather) islands.Weather[name] = weather; else islands.Weather.Remove(name);
         foreach (var n in numbers) islands.Scenes[n] = name;
         var transaction = new FileTransaction()
             .Write(Path.Combine(directory, name + ".ILE"), map.Ile!)
@@ -196,7 +197,8 @@ internal static class MapInstall
     public static LbaMap Capture(InstalledMap at)
     {
         var map = at.Map;
-        var captured = new LbaMap { Kind = map.Kind, Name = map.Name, Description = map.Description, IslandByte = map.IslandByte, Slot = map.Slot, IslandFile = map.IslandFile, SceneNumbers = map.SceneNumbers };
+        var captured = new LbaMap { Kind = map.Kind, Name = map.Name, Description = map.Description, IslandByte = map.IslandByte, Slot = map.Slot, IslandFile = map.IslandFile, SceneNumbers = map.SceneNumbers,
+            Weather = map.Weather };
         captured.Comments = TakeComments(at);
         var game = map.IsLba1 ? SceneGame.Lba1 : SceneGame.Lba2;
         var store = new SceneStore(game, at.Directory);
@@ -384,6 +386,8 @@ internal sealed class IslandFiles
 {
     public SortedDictionary<int, string> Scenes { get; } = new();
     public SortedDictionary<string, int> Look { get; } = new(StringComparer.OrdinalIgnoreCase);
+    // ("weather <file> snow": snow falls on it -- EXTFUNC.CPP SceneSnows)
+    public SortedDictionary<string, string> Weather { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public static IslandFiles Load(string directory)
     {
@@ -396,6 +400,7 @@ internal sealed class IslandFiles
             if (parts.Length < 3 || parts[0].StartsWith('#')) continue;
             if (parts[0] == "scene" && int.TryParse(parts[1], out var scene)) files.Scenes[scene] = parts[2].ToUpperInvariant();
             else if (parts[0] == "island" && int.TryParse(parts[2], out var look)) files.Look[parts[1].ToUpperInvariant()] = look;
+            else if (parts[0] == "weather") files.Weather[parts[1].ToUpperInvariant()] = parts[2];
         }
         return files;
     }
@@ -405,6 +410,7 @@ internal sealed class IslandFiles
         var text = new System.Text.StringBuilder("# LBA Assembler's maps: islands of their own (File > New map) -- each one's look (its sky and palette: an island\r\n" +
                                                   "# of the game's), then the scenes drawn on it\r\n");
         foreach (var (file, look) in Look) text.Append($"island {file} {look}\r\n");
+        foreach (var (file, weather) in Weather) text.Append($"weather {file} {weather}\r\n");
         foreach (var (scene, file) in Scenes) text.Append($"scene {scene} {file}\r\n");
         return text.ToString();
     }
