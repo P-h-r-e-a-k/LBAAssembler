@@ -55,6 +55,8 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        // (temporary files on E:, not the system drive's %TEMP% -- the user, 2026-10-22)
+        if (Directory.Exists(@"E:\dump\TEMP")) { Environment.SetEnvironmentVariable("TMP", @"E:\dump\TEMP"); Environment.SetEnvironmentVariable("TEMP", @"E:\dump\TEMP"); }
         if (args.Length == 0) { Console.WriteLine("usage: BodyPipeline stats|sheet|sheets|style|roundtrip ..."); return 2; }
         var game = args.Length > 1 && int.TryParse(args[1], out var parsedGame) ? parsedGame : 2;
         return args[0] switch

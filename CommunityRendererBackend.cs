@@ -49,7 +49,7 @@ internal sealed class CommunityRendererBackend
         // at all -- it points at the dynamically-linked dev build instead.
         rendererLibraryPath = Path.Combine(repoRoot, "out", "build", "windows_ucrt64", "SOURCES", "3DEXT", "liblba2_renderer.dll");
         this.gameDirectory = gameDirectory;
-        saveDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Twinsen", "LBA2", "save");
+        saveDirectory = Path.Combine(DataPaths.RoamingAppData, "Twinsen", "LBA2", "save");
         outputDirectory = Path.Combine(Path.GetTempPath(), "LBAAssembler", "native-renders");
         try { RendererLibrary = new RendererLibraryApi(rendererLibraryPath); } catch { RendererLibrary = null; }
     }

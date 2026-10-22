@@ -86,6 +86,7 @@
     <Compile Include="..\..\RaceCarSetup.cs" Link="RaceCarSetup.cs" />
     <Compile Include="..\..\RaceCarSetup.TrackSetups.cs" Link="RaceCarSetup.TrackSetups.cs" />
     <Compile Include="..\..\EditorSettings.cs" Link="EditorSettings.cs" />
+    <Compile Include="..\..\DataPaths.cs" Link="DataPaths.cs" />
     <Compile Include="..\..\Assets\**\*.cs" Link="Assets\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\Grids\**\*.cs" Link="Grids\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\Maps\**\*.cs" Link="Maps\%(RecursiveDir)%(Filename)%(Extension)" />

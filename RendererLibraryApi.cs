@@ -240,7 +240,7 @@ internal sealed class RendererLibraryApi : IDisposable
                 var candidates = new[]
                 {
                     Path.Combine(AppContext.BaseDirectory, "native"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LBAAssembler", "native"),
+                    Path.Combine(DataPaths.LocalAppData, "LBAAssembler", "native"),
                 };
                 foreach (var cacheDir in candidates)
                 {

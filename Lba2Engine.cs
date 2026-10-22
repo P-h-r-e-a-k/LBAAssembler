@@ -33,7 +33,7 @@ internal static class Lba2Engine
                 foreach (var dir in new[]
                 {
                     Path.Combine(AppContext.BaseDirectory, "native"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LBAAssembler", "native"),
+                    Path.Combine(DataPaths.LocalAppData, "LBAAssembler", "native"),
                 })
                 {
                     var path = Path.Combine(dir, $"lba2cc.{key}.exe");
@@ -173,7 +173,7 @@ internal static class Lba2Play
         try { Directory.CreateDirectory(user); return user; }
         catch (Exception error) when (error is UnauthorizedAccessException or IOException)
         {
-            user = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LBAAssembler", "lba2-play");
+            user = Path.Combine(DataPaths.LocalAppData, "LBAAssembler", "lba2-play");
             try { Directory.CreateDirectory(user); return user; }
             catch (Exception second) when (second is UnauthorizedAccessException or IOException) { problem = $"Couldn't create {user}: {second.Message}"; return null; }
         }

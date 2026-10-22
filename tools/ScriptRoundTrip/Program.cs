@@ -9,6 +9,8 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        // (temporary files on E:, not the system drive's %TEMP% -- the user, 2026-10-22)
+        if (Directory.Exists(@"E:\dump\TEMP")) { Environment.SetEnvironmentVariable("TMP", @"E:\dump\TEMP"); Environment.SetEnvironmentVariable("TEMP", @"E:\dump\TEMP"); }
         var command = args.Length > 0 ? args[0] : "stats";
         // (RT_CULTURE=ru-RU: run as a machine with that language set does -- its decimal comma -- to test what the editor writes there)
         if (Environment.GetEnvironmentVariable("RT_CULTURE") is { Length: > 0 } culture)
