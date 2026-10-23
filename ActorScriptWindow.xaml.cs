@@ -367,6 +367,10 @@ public partial class ActorScriptWindow : Window
         }
 
         var text = EditorText;
+        // (the text into the session as it is checked, not only when the view changes or the window saves or closes: another actor's
+        // window -- its check, its Save -- then knows this one's labels and comportements; 2026-10-23, the ski resort's Twinsen and
+        // snowboarder name each other's, and a Save from one window left the other's text out)
+        CommitEditor();
         var (size, error, warnings) = sceneScripts!.CheckTextFull(source.Slot, CurrentKind, text);
         var edited = text != sceneScripts.OriginalText(source.Slot, CurrentKind);
         StatusText.ToolTip = null;

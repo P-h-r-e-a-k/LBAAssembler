@@ -150,6 +150,9 @@ static const char *SceneIslandFile(S32 scene) {
     return NULL;
 }
 
+// (for MAPPACK.CPP MapPack_Text: an installed island map's own text, beside its file)
+const char *SceneIslandFileName(S32 scene) { return SceneIslandFile(scene); }
+
 // Whether snow falls on a scene's island (SNOW.CPP; LBA Assembler's snow island, 2026-10-22): a map's in the MAPS folder by its MAP.TXT's
 // "weather = snow", one installed into the game's files by ISLANDS.TXT's "weather <file> snow" lines.
 #define MAX_SNOW_ISLANDS 64
@@ -177,6 +180,51 @@ S32 SceneSnows(S32 scene) {
     for (int i = 0; i < count; i++)
         if (!strcasecmp(names[i], file)) return TRUE;
     return FALSE;
+}
+
+// Whether a scene's cliffs can be walked off (LBA Assembler, 2026-10-23: LBA1's Hamalayi ski resort, whose snowboarder rides off its
+// ledges -- and Twinsen can walk off them -- where the game's islands' cliffs are walls unless jumped): a map's in the MAPS folder by its
+// MAP.TXT's "ledges = drop", one installed into the game's files by ISLANDS.TXT's "ledges <file> drop" lines.
+static S32 SceneDropLedges(S32 scene) {
+    if (MapPack_IslandFile(scene)) return MapPack_DropLedges(scene);
+    const char *file = SceneIslandFile(scene);
+    if (!file) return FALSE;
+    static int loaded = 0, count = 0;
+    static char names[MAX_SNOW_ISLANDS][16];
+    if (!loaded) {
+        loaded = 1;
+        char path[ADELINE_MAX_PATH];
+        GetResPath(path, ADELINE_MAX_PATH, "ISLANDS.TXT");
+        FILE *f = fopen(path, "r");
+        if (f) {
+            char line[128];
+            while (count < MAX_SNOW_ISLANDS && fgets(line, sizeof(line), f)) {
+                char name[16], kind[16];
+                if (line[0] == '#' || sscanf(line, "ledges %15s %15s", name, kind) != 2 || strcasecmp(kind, "drop")) continue;
+                strcpy(names[count++], name);
+            }
+            fclose(f);
+        }
+    }
+    for (int i = 0; i < count; i++)
+        if (!strcasecmp(names[i], file)) return TRUE;
+    return FALSE;
+}
+
+// ... for the scene being played (asked again when it changes)
+static S32 DropLedgesHere(void) {
+    static S32 scene = -2, drop = FALSE;
+    if (CubeMode != CUBE_EXTERIEUR) return FALSE;
+    if (NumCube != scene) {
+        scene = NumCube;
+        drop = SceneDropLedges(NumCube);
+    }
+    return drop;
+}
+
+// A ledge at (x, z): the cliff's ground there no higher than `y`, where the object was -- it is going over the cliff or down it, not up.
+static S32 LedgeBelow(S32 x, S32 z, S32 y) {
+    return CalculAltitudeObjet(x, z, 0) <= y;
 }
 
 #ifdef LBA_EDITOR
@@ -1913,6 +1961,11 @@ S32 DoCornerReajustExtPt(void) {
     S32 modif = FALSE;
 
     // teste des decors en meme temps ?
+
+    // (an island whose ledges can be walked off: a cliff cell the object is going over or down -- its ground no higher than it was -- doesn't push it
+    // back; past the edge it falls, as the move's own test has it, an object over a forbidden polygon)
+    if (DropLedgesHere() AND GiveTerrainCol(Nxw, Nzw) == 1 AND LedgeBelow(Nxw, Nzw, OldY))
+        return FALSE;
 
     if (GiveTerrainCol(Nxw, Nzw) == 1) {
         // s'il y a un objet du decors entre le sol et nous,

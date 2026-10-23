@@ -22,6 +22,21 @@
 //                 forbidden brick = <n>     of its own bricks, the one never drawn (LBA_BKG.HQR's header's ForbidenBrick)
 //                 ile = <file>.ILE, obl = <file>.OBL    an island's: its scenes are drawn from them
 //                 weather = snow            an island's: snow falls on it (SNOW.CPP)
+//                 ledges = drop             an island's: its cliffs -- ground too steep to walk on -- can be walked or ridden off as LBA1's
+//                                           ledges can, the one going over falling (EXTFUNC.CPP DoCornerReajustExtPt); without it they are
+//                                           walls whichever way, as the game's islands' (but in a jump)
+//                 characters = <file>.TXT   its own characters (LBA Assembler's Character maker; the editor's list of them), with
+//                 character bodies = <file>.HQR, character anims = <file>.HQR, character entities = <file>.HQR
+//                                           their bodies, animations and entity records (RESS.HQR 44's kind: its bodies' and animations'
+//                                           numbers its own HQRs' entries), stored HQRs. At boot the entities go after the game's (and
+//                                           the maps' before it), their bodies and animations numbered after BODY.HQR's and ANIM.HQR's
+//                                           (MapPack_AddEntities; the HQF hook serves them); a scene's actor of entity 30000 + k is of
+//                                           the map's k-th (MapPack_Entity)
+//                 text = <file>.TXT         its own lines of dialogue (UTF-8): "<number> = <line>" a line, or "<number>:<attribute> =
+//                                           <line>" (the attribute MESSAGE.CPP's FlagDial: 1 an ordinary line, the default); its scenes'
+//                                           messages of those numbers are its lines, not the island's (GetText, MapPack_Text), and
+//                                           are shown, not spoken. (An island map installed into the game's files has them in
+//                                           <file>_TEXT.TXT beside its <file>.ILE, ISLANDS.TXT's.)
 //   and those files. Members are stored or deflated (ZIPREAD.CPP).
 //
 // A scene number another map took first is left to it (maps are read in their file names' order). A map's scene numbered as one of the
@@ -30,6 +45,7 @@
 #include "C_EXTERN.H"
 #include "DIRECTORIES.H"
 #include "MAPPACK.H"
+#include "HQR_NAMES.H"
 
 #include <SYSTEM/HQFILE.H>
 #include <SYSTEM/HQRLOAD.H>
@@ -37,6 +53,7 @@
 #include <SYSTEM/ZIPREAD.H>
 
 #include <dirent.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -47,7 +64,25 @@
 #define MAX_PACK_MEMBERS 1100 // an island of 16 x 16 cubes has 256 scenes
 #define MAX_PACK_SCENES 256
 #define MAP_LOCAL_SCENE 30000
+#define MAP_LOCAL_ENTITY 30000
 #define MAX_PACK_BRICKS 20000 // GRILLE.CPP MAX_BRICK_GAME: LoadUsedBrick's renumbering table
+
+// A map's lines of dialogue: number, attribute (MESSAGE.CPP FlagDial), the line (the game's characters, 0-ended, in Data)
+typedef struct {
+    S32 Read, Nb;
+    S32 *Ids;
+    U8 *Attributes;
+    char **Lines;
+    char *Data;
+} T_MAP_TEXTS;
+
+static void FreeTexts(T_MAP_TEXTS *t) {
+    free(t->Ids);
+    free(t->Attributes);
+    free(t->Lines);
+    free(t->Data);
+    memset(t, 0, sizeof(*t));
+}
 
 typedef struct {
     char Zip[ADELINE_MAX_PATH];
@@ -61,6 +96,14 @@ typedef struct {
     U32 NbBricks;
     S32 Forbidden;
     S32 Snow; // weather = snow
+    S32 Ledges; // ledges = drop
+    S32 CharBodies, CharAnims, CharEntities; // character bodies / anims / entities = (members, -1 none) ...
+    U8 *BodiesHqr, *AnimsHqr;                // ... the two first in memory once the entities are added (stored HQRs)
+    U32 BodiesSize, AnimsSize;
+    S32 EntityBase, NbEntities;              // ... where the entities went in the table (-1: not added), how many
+    S32 BodyBase, NbBodies, AnimBase, NbAnims; // ... and where their bodies and animations are numbered from
+    S32 Text;          // text = (a member, -1 none) ...
+    T_MAP_TEXTS Texts; // ... its lines, read when first asked for
     char Island[ADELINE_MAX_PATH]; // the island name its ILE and OBL are virtual files under
     S32 NeedsDone;
     T_MAP_GRID_NEEDS Needs;
@@ -75,6 +118,7 @@ static U32 BkgBllStart = 0, BkgBrkStart = 0, BkgMaxBrk = 0;
 static S32 BkgKnown = FALSE;
 
 static U8 *SceneHook(const char *name, S32 index, U32 *size);
+extern const char *SceneIslandFileName(S32 scene); // EXTFUNC.CPP: the island file ISLANDS.TXT draws a scene on, or NULL
 
 // (installed with the program: HQF_Init asks it for every entry)
 static struct HookInstaller {
@@ -83,7 +127,12 @@ static struct HookInstaller {
 
 //──────────────────────────────────────────────────────────────────────────
 static void FreePacks(void) {
-    for (S32 i = 0; i < NbPacks; i++) free(Packs[i].Members);
+    for (S32 i = 0; i < NbPacks; i++) {
+        free(Packs[i].Members);
+        FreeTexts(&Packs[i].Texts);
+        free(Packs[i].BodiesHqr);
+        free(Packs[i].AnimsHqr);
+    }
     free(Packs);
     Packs = NULL;
     NbPacks = 0;
@@ -129,7 +178,8 @@ static void ReadPack(const char *zip, const char *file) {
     memset(p, 0, sizeof(*p));
     strncpy(p->Zip, zip, ADELINE_MAX_PATH - 1);
     strncpy(p->File, file, sizeof(p->File) - 1);
-    p->Grid = p->Library = p->Bricks = p->Fragments = p->Ile = p->Obl = -1;
+    p->Grid = p->Library = p->Bricks = p->Fragments = p->Ile = p->Obl = p->Text = -1;
+    p->CharBodies = p->CharAnims = p->CharEntities = p->EntityBase = -1;
     p->Forbidden = -1;
 
     p->Members = (T_ZIP_MEMBER *)malloc(sizeof(T_ZIP_MEMBER) * MAX_PACK_MEMBERS);
@@ -195,6 +245,16 @@ static void ReadPack(const char *zip, const char *file) {
             p->Obl = Member(p, key, value);
         } else if (!strcasecmp(key, "weather")) {
             p->Snow = !strcasecmp(value, "snow");
+        } else if (!strcasecmp(key, "ledges")) {
+            p->Ledges = !strcasecmp(value, "drop");
+        } else if (!strcasecmp(key, "text")) {
+            p->Text = Member(p, key, value);
+        } else if (!strcasecmp(key, "character bodies")) {
+            p->CharBodies = Member(p, key, value);
+        } else if (!strcasecmp(key, "character anims")) {
+            p->CharAnims = Member(p, key, value);
+        } else if (!strcasecmp(key, "character entities")) {
+            p->CharEntities = Member(p, key, value);
         }
     }
     free(text);
@@ -304,11 +364,148 @@ static T_MAP_PACK *PackOf(S32 scene, S32 *k) {
 }
 
 //──────────────────────────────────────────────────────────────────────────
+// A map's own characters (character entities / bodies / anims =).
+
+// Entry `index` of an HQR in memory whose entries are stored (as the editor writes them): its bytes and their count, or NULL.
+static U8 *StoredEntry(U8 *hqr, U32 size, S32 index, U32 *len) {
+    if (!hqr || size < 8) return NULL;
+    const U32 first = *(U32 *)hqr;
+    const S32 count = (S32)(first / 4) - 1;
+    if (index < 0 || index >= count || first > size) return NULL;
+    const U32 at = ((U32 *)hqr)[index];
+    if (!at || at + 10 > size) return NULL;
+    const U32 n = *(U32 *)(hqr + at);
+    if (*(U16 *)(hqr + at + 8) != 0 || at + 10 + n > size) {
+        Log_Warn("MAPS: a character entry isn't stored (the map's HQR is packed: save the map again)");
+        return NULL;
+    }
+    if (len) *len = n;
+    return hqr + at + 10;
+}
+
+static S32 StoredCount(const U8 *hqr, U32 size) { return hqr && size >= 4 ? (S32)(*(const U32 *)hqr / 4) - 1 : 0; }
+
+void MapPack_AddEntities(U8 **table) {
+    Ensure();
+    if (!table || !*table) return;
+    char path[ADELINE_MAX_PATH];
+    GetResPath(path, ADELINE_MAX_PATH, BODY_HQR_NAME);
+    S32 bodies = HQF_NbRes(path);
+    GetResPath(path, ADELINE_MAX_PATH, ANIM_HQR_NAME);
+    S32 anims = HQF_NbRes(path);
+    U32 *offs = (U32 *)*table;
+    const S32 count = (S32)(offs[0] / 4) - 1;
+    const U32 end = offs[count];
+    // (the records to add, in order: each pack's entities, renumbered)
+    S32 added = 0;
+    U32 addedBytes = 0;
+    for (S32 i = 0; i < NbPacks; i++) {
+        T_MAP_PACK *p = &Packs[i];
+        if (p->CharEntities < 0 || p->CharBodies < 0 || p->CharAnims < 0) continue;
+        U8 *ents = Zip_LoadMember(p->Zip, &p->Members[p->CharEntities], 0);
+        p->BodiesHqr = Zip_LoadMember(p->Zip, &p->Members[p->CharBodies], 0);
+        p->AnimsHqr = Zip_LoadMember(p->Zip, &p->Members[p->CharAnims], 0);
+        p->BodiesSize = p->Members[p->CharBodies].Size;
+        p->AnimsSize = p->Members[p->CharAnims].Size;
+        if (!ents || !p->BodiesHqr || !p->AnimsHqr) {
+            Log_Warn("MAPS: %s: its characters can't be read", p->File);
+            free(ents);
+            continue;
+        }
+        const U32 entsSize = p->Members[p->CharEntities].Size;
+        p->NbEntities = StoredCount(ents, entsSize);
+        p->NbBodies = StoredCount(p->BodiesHqr, p->BodiesSize);
+        p->NbAnims = StoredCount(p->AnimsHqr, p->AnimsSize);
+        p->EntityBase = count + added;
+        p->BodyBase = bodies;
+        p->AnimBase = anims;
+        bodies += p->NbBodies;
+        anims += p->NbAnims;
+        for (S32 k = 0; k < p->NbEntities; k++) {
+            U32 len = 0;
+            if (StoredEntry(ents, entsSize, k, &len)) addedBytes += len;
+        }
+        added += p->NbEntities;
+        free(ents);
+    }
+    if (!added) return;
+    // the new table: the offsets one an entity more, the game's records as they were, the maps' after them
+    const U32 head = (U32)(count + added + 1) * 4;
+    U8 *result = (U8 *)malloc(head + (end - offs[0]) + addedBytes + RECOVER_AREA);
+    if (!result) return;
+    U32 *ro = (U32 *)result;
+    for (S32 i = 0; i < count; i++) ro[i] = offs[i] - offs[0] + head;
+    memcpy(result + head, *table + offs[0], end - offs[0]);
+    U32 at = head + (end - offs[0]);
+    S32 e = count;
+    for (S32 i = 0; i < NbPacks; i++) {
+        T_MAP_PACK *p = &Packs[i];
+        if (p->EntityBase < 0) continue;
+        U8 *ents = Zip_LoadMember(p->Zip, &p->Members[p->CharEntities], 0);
+        const U32 entsSize = p->Members[p->CharEntities].Size;
+        for (S32 k = 0; k < p->NbEntities; k++, e++) {
+            U32 len = 0;
+            U8 *rec = StoredEntry(ents, entsSize, k, &len);
+            ro[e] = at;
+            if (!rec) continue;
+            memcpy(result + at, rec, len);
+            // (its bodies' and animations' numbers: the map's own HQRs' entries, made the game's)
+            for (U32 q = at; q + 2 < at + len && result[q] != 255;) {
+                const U8 command = result[q];
+                if (command == 1) *(S16 *)(result + q + 3) = (S16)(*(S16 *)(result + q + 3) + p->BodyBase);
+                else if (command == 3) *(S16 *)(result + q + 4) = (S16)(*(S16 *)(result + q + 4) + p->AnimBase);
+                q += command == 3 ? 3 + result[q + 3] : 2 + result[q + 2];
+            }
+            at += len;
+        }
+        free(ents);
+        Log_Info("MAPS: %s: %d characters (entities %d on, bodies %d on, animations %d on)", p->File, (int)p->NbEntities, (int)p->EntityBase,
+                 (int)p->BodyBase, (int)p->AnimBase);
+    }
+    ro[count + added] = at;
+    *table = result; // (the game's table, loaded once at boot, is left: its buffer is the allocator's)
+}
+
+S32 MapPack_Entity(S32 scene, S32 entity) {
+    if (entity < MAP_LOCAL_ENTITY) return entity;
+    T_MAP_PACK *p = PackOf(scene, NULL);
+    if (!p || p->EntityBase < 0 || entity - MAP_LOCAL_ENTITY >= p->NbEntities) {
+        Log_Warn("MAPS: scene %d: an actor of the map's character %d, which it hasn't", (int)scene, (int)(entity - MAP_LOCAL_ENTITY));
+        return 0;
+    }
+    return p->EntityBase + entity - MAP_LOCAL_ENTITY;
+}
+
+// A map character's body or animation: BODY.HQR's / ANIM.HQR's entry past the game's.
+static U8 *CharacterHook(const char *base, S32 index, U32 *size) {
+    const S32 body = !strcasecmp(base, BODY_HQR_NAME);
+    if (!body && strcasecmp(base, ANIM_HQR_NAME)) return NULL;
+    for (S32 i = 0; i < NbPacks; i++) {
+        T_MAP_PACK *p = &Packs[i];
+        if (p->EntityBase < 0) continue;
+        const S32 from = body ? p->BodyBase : p->AnimBase, n = body ? p->NbBodies : p->NbAnims;
+        if (index < from || index >= from + n) continue;
+        U32 len = 0;
+        U8 *data = body ? StoredEntry(p->BodiesHqr, p->BodiesSize, index - from, &len) : StoredEntry(p->AnimsHqr, p->AnimsSize, index - from, &len);
+        if (!data) return NULL;
+        free(HookEntry);
+        HookEntry = (U8 *)malloc(len);
+        if (!HookEntry) return NULL;
+        memcpy(HookEntry, data, len);
+        *size = len;
+        return HookEntry;
+    }
+    return NULL;
+}
+
+//──────────────────────────────────────────────────────────────────────────
 // SCENE.HQR's entry n + 1 (scene n) for a map's scene: its LS2.
 static U8 *SceneHook(const char *name, S32 index, U32 *size) {
-    if (index < 1 || !name) return NULL;
+    if (index < 0 || !name) return NULL;
     const char *base = name + strlen(name);
     while (base > name && base[-1] != '/' && base[-1] != '\\') base--;
+    if (U8 *character = CharacterHook(base, index, size)) return character;
+    if (index < 1) return NULL;
     if (strcasecmp(base, SCENE_HQR_NAME)) return NULL;
     S32 k;
     T_MAP_PACK *p = PackOf(index - 1, &k);
@@ -342,6 +539,124 @@ const char *MapPack_IslandFile(S32 scene) {
 S32 MapPack_Snows(S32 scene) {
     T_MAP_PACK *p = PackOf(scene, NULL);
     return p && p->Snow;
+}
+
+S32 MapPack_DropLedges(S32 scene) {
+    T_MAP_PACK *p = PackOf(scene, NULL);
+    return p && p->Ledges;
+}
+
+//──────────────────────────────────────────────────────────────────────────
+// A map's lines of dialogue (text = TEXT.TXT): UTF-8 made the game's characters (code page 850, as TEXT.HQR's are) -- the Latin-1
+// letters each its CP850 byte, anything else '?'.
+static const U8 Cp850OfLatin1[96] = {
+    0xFF, 0xAD, 0xBD, 0x9C, 0xCF, 0xBE, 0xDD, 0xF5, 0xF9, 0xB8, 0xA6, 0xAE, 0xAA, 0xF0, 0xA9, 0xEE, 0xF8, 0xF1, 0xFD, 0xFC,
+    0xEF, 0xE6, 0xF4, 0xFA, 0xF7, 0xFB, 0xA7, 0xAF, 0xAC, 0xAB, 0xF3, 0xA8, 0xB7, 0xB5, 0xB6, 0xC7, 0x8E, 0x8F, 0x92, 0x80,
+    0xD4, 0x90, 0xD2, 0xD3, 0xDE, 0xD6, 0xD7, 0xD8, 0xD1, 0xA5, 0xE3, 0xE0, 0xE2, 0xE5, 0x99, 0x9E, 0x9D, 0xEB, 0xE9, 0xEA,
+    0x9A, 0xED, 0xE8, 0xE1, 0x85, 0xA0, 0x83, 0xC6, 0x84, 0x86, 0x91, 0x87, 0x8A, 0x82, 0x88, 0x89, 0x8D, 0xA1, 0x8C, 0x8B,
+    0xD0, 0xA4, 0x95, 0xA2, 0x93, 0xE4, 0x94, 0xF6, 0x9B, 0x97, 0xA3, 0x96, 0x81, 0xEC, 0xE7, 0x98};
+
+// (in place: the result is never longer than the UTF-8)
+static void Utf8ToGame(char *s) {
+    const U8 *r = (const U8 *)s;
+    U8 *w = (U8 *)s;
+    if (r[0] == 0xEF && r[1] == 0xBB && r[2] == 0xBF) r += 3; // (a byte-order mark)
+    while (*r) {
+        U32 c = *r++;
+        if (c >= 0x80) {
+            S32 more = (c & 0xE0) == 0xC0 ? 1 : (c & 0xF0) == 0xE0 ? 2 : (c & 0xF8) == 0xF0 ? 3 : 0;
+            c &= more == 1 ? 0x1F : more == 2 ? 0x0F : 0x07;
+            for (S32 i = 0; i < more && (*r & 0xC0) == 0x80; i++) c = (c << 6) | (*r++ & 0x3F);
+            if (c == 0x2019 || c == 0x2018) c = '\'';
+            else if (c == 0x201C || c == 0x201D) c = '"';
+            else if (c == 0x2026) c = '.';
+            *w++ = c >= 0xA0 && c <= 0xFF ? Cp850OfLatin1[c - 0xA0] : c < 0x80 ? (U8)c : '?';
+        } else {
+            *w++ = (U8)c;
+        }
+    }
+    *w = 0;
+}
+
+// The lines of a text file (`data`, 0-ended UTF-8, kept: the lines point into it) -- "<number> = <line>" or "<number>:<attribute> = <line>".
+static void ParseTexts(T_MAP_TEXTS *t, char *data, const char *what) {
+    t->Data = data;
+    Utf8ToGame(data);
+    S32 lines = 1;
+    for (const char *c = data; *c; c++)
+        if (*c == '\n') lines++;
+    t->Ids = (S32 *)malloc(sizeof(S32) * lines);
+    t->Attributes = (U8 *)malloc(lines);
+    t->Lines = (char **)malloc(sizeof(char *) * lines);
+    if (!t->Ids || !t->Attributes || !t->Lines) return;
+    char *line = data;
+    while (line && *line) {
+        char *next = strchr(line, '\n');
+        if (next) *next++ = '\0';
+        char *l = Trim(line);
+        char *eq = strchr(l, '=');
+        line = next;
+        if (l[0] == '#' || !eq || l[0] < '0' || l[0] > '9') continue;
+        *eq = '\0';
+        char *colon = strchr(l, ':');
+        t->Ids[t->Nb] = atoi(l);
+        t->Attributes[t->Nb] = (U8)(colon ? atoi(colon + 1) : 1);
+        t->Lines[t->Nb] = Trim(eq + 1);
+        t->Nb++;
+    }
+    Log_Info("MAPS: %s: %d lines of its own text", what, (int)t->Nb);
+}
+
+static S32 FindLine(const T_MAP_TEXTS *t, S32 text, U8 **line, S32 *size, U8 *attribute) {
+    for (S32 i = 0; i < t->Nb; i++)
+        if (t->Ids[i] == text) {
+            if (line) *line = (U8 *)t->Lines[i];
+            if (size) *size = (S32)strlen(t->Lines[i]) + 1; // (with its 0, as GetText's SizeText)
+            if (attribute) *attribute = t->Attributes[i];
+            return TRUE;
+        }
+    return FALSE;
+}
+
+// (an island map installed into the game's files: its <file>_TEXT.TXT, the last island's kept)
+static char InstalledTextIsland[64] = "";
+static T_MAP_TEXTS InstalledTexts;
+
+S32 MapPack_Text(S32 scene, S32 text, U8 **line, S32 *size, U8 *attribute) {
+    T_MAP_PACK *p = PackOf(scene, NULL);
+    if (p) {
+        if (p->Text < 0) return FALSE;
+        if (!p->Texts.Read) {
+            p->Texts.Read = TRUE;
+            char *data = (char *)Zip_LoadMember(p->Zip, &p->Members[p->Text], 1);
+            if (data) ParseTexts(&p->Texts, data, p->File);
+            else Log_Warn("MAPS: %s: its text %s can't be read", p->File, p->Members[p->Text].Name);
+        }
+        return FindLine(&p->Texts, text, line, size, attribute);
+    }
+    const char *island = SceneIslandFileName(scene);
+    if (!island) return FALSE;
+    if (strcasecmp(island, InstalledTextIsland)) {
+        FreeTexts(&InstalledTexts);
+        strncpy(InstalledTextIsland, island, sizeof(InstalledTextIsland) - 1);
+        InstalledTexts.Read = TRUE;
+        char name[ADELINE_MAX_PATH], path[ADELINE_MAX_PATH];
+        snprintf(name, sizeof(name), "%s_TEXT.TXT", island);
+        GetResPath(path, ADELINE_MAX_PATH, name);
+        FILE *f = fopen(path, "rb");
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            long n = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            char *data = (char *)malloc(n + 1);
+            if (data && fread(data, 1, n, f) == (size_t)n) {
+                data[n] = 0;
+                ParseTexts(&InstalledTexts, data, name);
+            } else free(data);
+            fclose(f);
+        }
+    }
+    return FindLine(&InstalledTexts, text, line, size, attribute);
 }
 
 U32 MapPack_MaxSceneSize(void) {

@@ -49,7 +49,21 @@
             </WrapPanel>
         </Border>
         <Border DockPanel.Dock="Bottom" Background="{DynamicResource ThemeWindowBrush}" BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="0,1,0,0" Padding="12,5">
-            <TextBlock x:Name="StatusText" Foreground="{DynamicResource ThemeTextBrush}" FontSize="11.5" TextWrapping="Wrap"/>
+            <StackPanel>
+                <!-- (while Add waits for a click on the plan: the place typed in instead: exact, and from the keyboard) -->
+                <WrapPanel x:Name="PlaceBar" Visibility="Collapsed" Margin="0,0,0,4">
+                    <TextBlock Text="Or type where (world units):" Foreground="{DynamicResource ThemeTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,8,4"/>
+                    <TextBlock Text="X" VerticalAlignment="Center" Margin="0,0,4,4"/>
+                    <TextBox x:Name="PlaceXBox" Width="70" Margin="0,0,8,4" AutomationProperties.Name="Place X"/>
+                    <TextBlock Text="Y" VerticalAlignment="Center" Margin="0,0,4,4"/>
+                    <TextBox x:Name="PlaceYBox" Width="70" Margin="0,0,8,4" AutomationProperties.Name="Place Y"/>
+                    <TextBlock Text="Z" VerticalAlignment="Center" Margin="0,0,4,4"/>
+                    <TextBox x:Name="PlaceZBox" Width="70" Margin="0,0,8,4" AutomationProperties.Name="Place Z"/>
+                    <Button x:Name="PlaceHereButton" Content="Place here" Click="PlaceHere_Click" ToolTip="Places what Add is placing at the X, Y, Z typed in"/>
+                    <Button Content="Cancel" Click="PlaceCancel_Click"/>
+                </WrapPanel>
+                <TextBlock x:Name="StatusText" Foreground="{DynamicResource ThemeTextBrush}" FontSize="11.5" TextWrapping="Wrap"/>
+            </StackPanel>
         </Border>
         <Border DockPanel.Dock="Left" Width="290" Background="{DynamicResource ThemeWindowBrush}" BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="0,0,1,0" Padding="10,8">
             <TabControl x:Name="ListTabs" Background="Transparent" BorderThickness="0">

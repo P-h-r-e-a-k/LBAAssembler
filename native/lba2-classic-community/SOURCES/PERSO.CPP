@@ -1,4 +1,5 @@
 #include "C_EXTERN.H"
+#include "MAPPACK.H"
 
 #include <SYSTEM/INPUT_FLOW.H>
 #include <POLYGON/POLYFILT.H>
@@ -2834,6 +2835,8 @@ int main(int argc, char *argv[]) {
     GetResPath(tmpFilePath, ADELINE_MAX_PATH, RESS_HQR_NAME);
     if (!Load_HQR(tmpFilePath, BufferFile3D, RESS_FILE3D))
         TheEndCheckFile(tmpFilePath);
+    // (the maps' own characters after the game's: MAPPACK.CPP)
+    MapPack_AddEntities(&BufferFile3D);
 
     LoadFicPerso();
     InitObjects(BufferAnim, SIZE_BUFFER_ANIM, GivePtrBody, GivePtrAnim);

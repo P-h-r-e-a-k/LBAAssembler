@@ -28,6 +28,12 @@ internal sealed record MapScene(byte[] Record, int CubeX = 0, int CubeZ = 0);
 //   <NAME>.GRM       its own grid fragments, an HQR, fragment n its entry n
 //   <NAME>.ILE/.OBL  an island's ground and objects
 //   <NAME>_COMMENTS.JSON  the script editor's comments on its scenes' scripts (2026-10-17; the engine leaves it alone)
+//   <NAME>_CHARACTERS.TXT, _BODIES.HQR, _ANIMS.HQR, _ENTITIES.HQR  its own characters (the Character maker, 2026-10-23): their list
+//                    (MapCharacters's lines, numbered as the map's own: entity k, body and animation entries k of its HQRs), their bodies,
+//                    their animations and their entity records (those entries' numbers the map's own too); a scene's actor of the map's
+//                    character k is of entity LocalEntity + k
+//   <NAME>_TEXT.TXT  its own lines of dialogue (2026-10-23), UTF-8, "<number> = <line>" a line ("<number>:<attribute> = ..." for a line
+//                    shown other than as an ordinary one): its scenes' messages of those numbers are its lines (MAPPACK.CPP MapPack_Text)
 // The engine plays an LBA2 map put in the game folder's MAPS folder (native MAPPACK.CPP). The editor opens it into a copy of the game folder
 // with the map installed in its HQRs (MapInstall), where every editor and Play work on it as on any of the game's own, and saves it back out
 // of it. A map of the first version -- map.json, scene<k>.bin, grid.bin, library.bin, island.ile/.obl, compressed -- still opens.
@@ -39,6 +45,8 @@ internal sealed class LbaMap
     public const int FormatVersion = 2;
     // (a zone's number from LocalScene on: the map's own scene, by its place in Scenes)
     public const int LocalScene = 30000;
+    // (an actor's entity from LocalEntity on: the map's own character, by its place in its list)
+    public const int LocalEntity = 30000;
 
     public MapKind Kind { get; set; }
     public string Name { get; set; } = "New map";
@@ -68,9 +76,19 @@ internal sealed class LbaMap
     public byte[]? Obl { get; set; }
     // An island's weather, or null: "snow" -- snow falls on it (the engine's SNOW.CPP; MAP.TXT's weather =, ISLANDS.TXT's weather lines)
     public string? Weather { get; set; }
+    // An island's cliffs, or null: walls, as the game's islands' (but in a jump); "drop": they can be walked or ridden off, as LBA1's
+    // ledges can (the engine's EXTFUNC.CPP DropLedgesHere; MAP.TXT's ledges =, ISLANDS.TXT's ledges lines; 2026-10-23)
+    public string? Ledges { get; set; }
     // The script editor's comments on its scenes' scripts (CommentStore's JSON, a scene by its place in Scenes), or null: none. The engine
     // doesn't read it.
     public byte[]? Comments { get; set; }
+    // Its own lines of dialogue (TEXT.TXT's UTF-8: MapText), or null: none -- its scenes say the island's
+    public byte[]? Text { get; set; }
+    // Its own characters (MapCharacters, numbered as the map's own), their bodies, animations and entity records, or null: none
+    public byte[]? Characters { get; set; }
+    public List<byte[]> CharacterBodies { get; set; } = new();
+    public List<byte[]> CharacterAnims { get; set; } = new();
+    public List<byte[]> CharacterEntities { get; set; } = new();
 
     public bool IsLba1 => Kind == MapKind.Lba1Interior;
     public string KindName => Kind switch { MapKind.Lba2Island => "LBA2 island", MapKind.Lba2Interior => "LBA2 interior", _ => "LBA1 interior" };
@@ -138,11 +156,21 @@ internal sealed class LbaMap
         var ile = Put(".ILE", Ile);
         var obl = Put(".OBL", Obl);
         var comments = Put("_COMMENTS.JSON", Comments);
-        files.Insert(0, (ManifestName, Encoding.UTF8.GetBytes(ManifestText(sceneFiles, grid, library, bricks, fragments, ile, obl, comments))));
+        var text = Put(MapText.Suffix, Text);
+        string? characters = null, characterBodies = null, characterAnims = null, characterEntities = null;
+        if (Characters is not null)
+        {
+            characters = Put(LBAAssembler.Characters.MapCharacters.Suffix, Characters);
+            characterBodies = Put("_BODIES.HQR", HqrFileOf(CharacterBodies));
+            characterAnims = Put("_ANIMS.HQR", HqrFileOf(CharacterAnims));
+            characterEntities = Put("_ENTITIES.HQR", HqrFileOf(CharacterEntities));
+        }
+        files.Insert(0, (ManifestName, Encoding.UTF8.GetBytes(ManifestText(sceneFiles, grid, library, bricks, fragments, ile, obl, comments, text) +
+                                                              (characters is null ? "" : $"characters = {characters}\r\ncharacter bodies = {characterBodies}\r\ncharacter anims = {characterAnims}\r\ncharacter entities = {characterEntities}\r\n"))));
         return files;
     }
 
-    private string ManifestText(List<string> sceneFiles, string? grid, string? library, string? bricks, string? fragments, string? ile, string? obl, string? comments)
+    private string ManifestText(List<string> sceneFiles, string? grid, string? library, string? bricks, string? fragments, string? ile, string? obl, string? comments, string? text)
     {
         static string Line(string text) => text.Replace("\r", " ").Replace("\n", " ").Trim();
         var numbers = SceneNumbers is { } given && given.Count == Scenes.Count ? given
@@ -175,9 +203,26 @@ internal sealed class LbaMap
         if (ile is not null) t.Append($"ile = {ile}\r\n");
         if (obl is not null) t.Append($"obl = {obl}\r\n");
         if (Weather is { Length: > 0 } weather) t.Append($"weather = {Line(weather)}\r\n");
+        if (Ledges is { Length: > 0 } ledges) t.Append($"ledges = {Line(ledges)}\r\n");
         if (comments is not null) t.Append($"comments = {comments}\r\n");
+        if (text is not null) t.Append($"text = {text}\r\n");
         t.Append("program = LBA Assembler\r\n");
         return t.ToString();
+    }
+
+    // An HQR of entries (stored), and back.
+    private static byte[] HqrFileOf(List<byte[]> entries)
+    {
+        // (an empty one: its table, the one slot that is its end)
+        var hqr = BitConverter.GetBytes(4);
+        foreach (var e in entries) hqr = HqrWriter.AppendEntry(hqr, HqrWriter.StoredEntry(e));
+        return hqr;
+    }
+    private static List<byte[]> EntriesOf(byte[]? hqr)
+    {
+        if (hqr is null) return new List<byte[]>();
+        var archive = HqrArchive.FromBytes(hqr);
+        return Enumerable.Range(0, archive.Slots - 1).Select(archive.Read).ToList();   // (Slots: Count is four times the entries)
     }
 
     // ---- reading
@@ -245,7 +290,16 @@ internal sealed class LbaMap
         map.Grid = Part("grid"); map.Library = Part("library"); map.Bricks = Part("bricks"); map.Fragments = Part("fragments");
         map.Ile = Part("ile"); map.Obl = Part("obl");
         map.Comments = Part("comments");
+        map.Text = Part("text");
+        map.Characters = Part("characters");
+        if (map.Characters is not null)
+        {
+            map.CharacterBodies = EntriesOf(Part("character bodies"));
+            map.CharacterAnims = EntriesOf(Part("character anims"));
+            map.CharacterEntities = EntriesOf(Part("character entities"));
+        }
         map.Weather = Value("weather");
+        map.Ledges = Value("ledges");
         if (Value("ile") is { } ile) map.IslandFile = Path.GetFileNameWithoutExtension(ile).ToUpperInvariant();
         foreach (var (_, file) in scenes)
         {

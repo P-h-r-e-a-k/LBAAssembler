@@ -130,6 +130,8 @@
                 <MenuItem Header="Save m_ap" Click="SaveMap_Click"/>
                 <MenuItem Header="Save map a_s…" Click="SaveMapAs_Click"/>
                 <MenuItem Header="_Install map into game…" Click="InstallMap_Click" ToolTip="Puts the open map into your game folder: LBA2's as new scenes, LBA1's in the scene slot it takes"/>
+                <MenuItem Header="Map setti_ngs…" Click="MapSettings_Click" ToolTip="The open map's name and description and, an island's, its weather and whether its cliffs can be walked off (as LBA1's ledges)"/>
+                <MenuItem Header="Map _text…" Click="MapText_Click" ToolTip="The open map's own lines of dialogue: what its scenes' characters say (a script's message of that number)"/>
                 <MenuItem Header="Close ma_p" Click="CloseMap_Click"/>
                 <MenuItem Header="_Export map…" Click="ExportMap_Click" ToolTip="The island or interior scene in view, out of the game folder into a map file"/>
                 <Separator/>
@@ -440,6 +442,8 @@
                                                 <Button x:Name="BuildExportButton" Content="Export 3D models (glTF, OBJ, PLY, STL)…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="Export3D_Click"
                                                         ToolTip="Export islands, buildings, interiors, actors, bodies, furniture and items to common 3D formats (for other tools, not for the game)"/>
                                                 <Button x:Name="BuildObjectButton" Content="Objects and bodies…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="ObjectBrowser_Click"/>
+                                                <Button x:Name="BuildCharacterButton" Content="Character maker…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="CharacterMaker_Click"
+                                                        ToolTip="A character of the open map's own: a body from the game's or from nothing, parts added to it, its animations keyframe by keyframe -- for the scene editor's actors"/>
                                                 <Button Content="Body Studio…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="BodyStudio_Click"/>
                                                 <Button Content="Animation Studio…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="AnimationStudio_Click"/>
                                             </StackPanel>

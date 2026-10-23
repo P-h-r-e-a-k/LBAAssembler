@@ -53,7 +53,16 @@ public partial class Lba2SceneEditorWindow : Window
         store = new SceneStore(SceneGame.Lba2, directory);
         scenes = Lba2SceneList.Load(directory);
         var bodyPath = System.IO.Path.Combine(directory, "BODY.HQR");
-        bodyNames = File.Exists(bodyPath) ? HqdDescriptions.Load("BODY2.HQD", HqrArchive.CountEntries(bodyPath)).Names : Array.Empty<string?>();
+        var names = (File.Exists(bodyPath) ? HqdDescriptions.Load("BODY2.HQD", HqrArchive.CountEntries(bodyPath)).Names : Array.Empty<string?>()).ToList();
+        // (a map's own characters' bodies by their names: the Character maker's, past the game's -- <stem>_CHARACTERS.TXT beside its files)
+        foreach (var sidecar in Directory.EnumerateFiles(directory, "*" + Characters.MapCharacters.Suffix))
+            foreach (var c in Characters.MapCharacters.Load(sidecar))
+                foreach (var b in c.Bodies)
+                {
+                    while (names.Count <= b.Entry) names.Add(null);
+                    names[b.Entry] = $"{c.Name}: {b.Name} (the map's own)";
+                }
+        bodyNames = names;
         entities = Lba2EntityTable.Load(directory);
 
         loading = true;
@@ -78,7 +87,7 @@ public partial class Lba2SceneEditorWindow : Window
         }
         sceneNumber = scene;
         doc.Changed += OnDocChanged;
-        selKind = Kind.None; selIndex = -1; pending = null; pendingHint = null;
+        selKind = Kind.None; selIndex = -1; pending = null; pendingHint = null; PlaceBar.Visibility = Visibility.Collapsed;
         SelectSceneItem(scene);
         RefreshAll();
         BuildInspector();
@@ -413,7 +422,7 @@ public partial class Lba2SceneEditorWindow : Window
         if (pending is { } place)
         {
             var world = World(e);
-            pending = null; pendingHint = null;
+            pending = null; pendingHint = null; PlaceBar.Visibility = Visibility.Collapsed;
             place(world.X, doc.Scene.Hero.Y, world.Z);
             return;
         }
@@ -457,6 +466,8 @@ public partial class Lba2SceneEditorWindow : Window
         var caption = new TextBlock { Text = label, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
         caption.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextMutedBrush");
         var box = new TextBox { Text = get(), Margin = new Thickness(0, 1, 0, 1), ToolTip = hint };
+        // (named as its label: reachable by name from the keyboard's and accessibility tools' side)
+        System.Windows.Automation.AutomationProperties.SetName(box, label);
         Grid.SetRow(caption, row); Grid.SetColumn(caption, 0);
         Grid.SetRow(box, row); Grid.SetColumn(box, 1);
         grid.Children.Add(caption); grid.Children.Add(box);
@@ -815,14 +826,36 @@ public partial class Lba2SceneEditorWindow : Window
         menu.IsOpen = true;
     }
 
-    private void Place(string hint, Action<int, int, int> place) { pending = place; pendingHint = hint; StatusText.Text = hint; }
+    private void Place(string hint, Action<int, int, int> place)
+    {
+        pending = place; pendingHint = hint; StatusText.Text = hint;
+        // (the place typed in instead of clicked: the bar under the plan, Twinsen's height to start with)
+        PlaceYBox.Text = doc.Scene.Hero.Y.ToString();
+        if (PlaceXBox.Text.Length == 0) { PlaceXBox.Text = doc.Scene.Hero.X.ToString(); PlaceZBox.Text = doc.Scene.Hero.Z.ToString(); }
+        PlaceBar.Visibility = Visibility.Visible;
+    }
 
     private void CancelPlacement()
     {
+        PlaceBar.Visibility = Visibility.Collapsed;
         if (pending is null) return;
         pending = null; pendingHint = null;
         SetStatus("Cancelled.");
     }
+
+    private void PlaceHere_Click(object sender, RoutedEventArgs e)
+    {
+        if (pending is not { } place) return;
+        if (!int.TryParse(PlaceXBox.Text.Trim(), out var x) || !int.TryParse(PlaceYBox.Text.Trim(), out var y) || !int.TryParse(PlaceZBox.Text.Trim(), out var z))
+        {
+            StatusText.Text = $"{pendingHint}   (type X, Y and Z as whole numbers)";
+            return;
+        }
+        pending = null; pendingHint = null; PlaceBar.Visibility = Visibility.Collapsed;
+        place(x, y, z);
+    }
+
+    private void PlaceCancel_Click(object sender, RoutedEventArgs e) => CancelPlacement();
 
     // behaviour: what it does (a kind's usual behaviour, an actor of another scene carried over), put on it in the same step; null: its
     // scripts as they are

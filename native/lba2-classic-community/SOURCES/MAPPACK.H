@@ -21,6 +21,18 @@ S32 MapPack_ZoneScene(S32 scene, S32 num);
 const char *MapPack_IslandFile(S32 scene);
 // ... whether snow falls on it (MAP.TXT weather = snow)
 S32 MapPack_Snows(S32 scene);
+// ... whether its cliffs can be walked off (MAP.TXT ledges = drop)
+S32 MapPack_DropLedges(S32 scene);
+
+// A map scene's own line of dialogue `text` (MAP.TXT text = ...): the line (the game's characters, 0-ended), its size with the 0, and
+// its attribute (MESSAGE.CPP FlagDial). FALSE: not a map's line -- the island's text of that number.
+S32 MapPack_Text(S32 scene, S32 text, U8 **line, S32 *size, U8 *attribute);
+
+// The maps' own characters added to the entity table (RESS.HQR 44, loaded once at boot): `*table` becomes the table with them after the
+// game's (a new buffer); their bodies and animations are BODY.HQR's and ANIM.HQR's entries past the game's (the HQF hook serves them).
+void MapPack_AddEntities(U8 **table);
+// A map scene's actor's entity as the table has it: 30000 + k, the map's k-th character, made its number there.
+S32 MapPack_Entity(S32 scene, S32 entity);
 
 // The biggest scene record of the maps (0 if none): SCENE.HQR's entry 0 only knows the game's.
 U32 MapPack_MaxSceneSize(void);

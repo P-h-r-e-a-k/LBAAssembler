@@ -129,7 +129,22 @@ forbidden brick = 0               (of its own bricks, the one the engine never d
 ile = PACKISLE.ILE                (an island's)
 obl = PACKISLE.OBL
 comments = BRICKROO_COMMENTS.JSON (the script editor's comments; the engine leaves it alone)
+text = SKIRESRT_TEXT.TXT          (the map's own lines of dialogue: File > Map text…)
+ledges = drop                     (an island's: Twinsen walks off a terrain cliff and falls instead of stopping: File > Map settings…)
+characters = SKIRESRT_CHARACTERS.TXT   (the map's own characters: the Character maker; with the three below)
+character bodies = SKIRESRT_BODIES.HQR
+character anims = SKIRESRT_ANIMS.HQR
+character entities = SKIRESRT_ENTITIES.HQR
 ```
+
+- **Text** (`Maps/MapText.cs`, `MapTextWindow.cs`): `<number> = <words>` lines, UTF-8 (`<number>:<attribute> = <words>`: 2 a big
+  message, 4 full screen, 8 said in a bubble). A script's `message(n)` in the map's scenes says the map's line n before the game's text
+  (`MapPack_Text`, MESSAGE.CPP `GetText`); there is no voice for it. Number new lines from 1000 so they don't hide the island's own.
+- **Characters** (`Characters/*.cs`, `CharacterMakerWindow.cs`): an entity -- a kind of actor -- with its bodies and keyframe animations
+  (milliseconds a keyframe; a keyframe can be "in the air", LBA2's gravity-free frame). `<STEM>_CHARACTERS.TXT` names them:
+  `character <k> <name>`, `body <k> <generic> <entry> <name>`, `anim <k> <generic> <entry> <name>`, the entries the map's own (its
+  `_BODIES.HQR`, `_ANIMS.HQR`; `_ENTITIES.HQR` holds each entity's record). A scene's actor of the map's k-th character names entity
+  `30000 + k` in the map file, as a zone names a scene; scripts name its bodies and animations by their generic numbers (`anim(190)`).
 
 - The scene lines' order is the map's own. A zone into another of the map's scenes names it `30000 + k`, k its place (`LbaMap.LocalScene`):
   the map works whatever numbers its scenes get. Change a number in `MAP.TXT` to move a scene.
@@ -156,6 +171,11 @@ comments = BRICKROO_COMMENTS.JSON (the script editor's comments; the engine leav
 - **An LBA2 island's** ILE and OBL are written under its file name. The game folder's **`ISLANDS.TXT`** gets:
   - `island <file> <number>`: whose look it has (the editor's renderer and palette)
   - `scene <number> <file>`: each of its scenes (the engine draws them from that file)
+  - `ledges <file> drop`: when the map has `ledges = drop`
+- **Text**: beside the island's files as `<STEM>_TEXT.TXT`; the engine finds it through the scene's island file.
+- **Characters**: their bodies and animations appended to BODY.HQR and ANIM.HQR, their entities to RESS.HQR entry 44's table, the
+  entries renumbered to where they went (`MapCharacters.Renumber`); the scenes' actors of entity `30000 + k` take the k-th one's number.
+  `<STEM>_CHARACTERS.TXT` beside the island's files names them, so Save map takes them back out.
 - **LBA1**: the scene, grid and library entries of its slot are replaced.
 
 ## The engine (`native/lba2-classic-community`)
@@ -179,6 +199,12 @@ comments = BRICKROO_COMMENTS.JSON (the script editor's comments; the engine leav
   sizes added up from their headers); a map read later that doesn't fit (the renderer's data root changed) is refused with a warning.
 - **Islands**: the ILE and OBL are virtual files under a name no game file can have (`<map file>|<NAME>.ile`); `SceneIslandFile` gives
   that name for the map's scenes.
+- **Text**: `MapPack_Text(scene, number)` gives a map scene's line, UTF-8 turned into the game's code page.
+- **Characters**: `MapPack_AddEntities` (PERSO.CPP, after the entity table is loaded) appends the maps' entities to it and their bodies and
+  animations after BODY.HQR's and ANIM.HQR's entries (served by `HQF_Hook`); `MapPack_Entity` (DISKFUNC.CPP) turns a map scene's
+  `30000 + k` into the k-th one's number.
+- **Ledges** (`ledges = drop`): `DoCornerReajustExtPt` (EXTFUNC.CPP) lets an actor off the edge of a terrain wall cell whose ground is
+  below its feet, so it falls rather than being pushed back.
 - The renderer's `set_data_root` forgets the maps read (`MapPack_Reset`).
 
 **Maps in the game's own files** (the other install):

@@ -304,6 +304,45 @@ public partial class MainWindow
         timer.Start();
     }
 
+    // ---- File > Map text: the open map's own lines of dialogue (MapTextWindow), in the workspace's <stem>_TEXT.TXT until Save map
+    private void MapText_Click(object sender, RoutedEventArgs e)
+    {
+        if (!MapOpen || openMapInstalled is null) { SetStatus("Open a map first: File > Open map or New map. Its text is its own lines of dialogue.", StatusKind.Info); return; }
+        var window = new MapTextWindow(MapInstall.TextPath(openMapInstalled.Map, openMapInstalled.Directory), openMapInstalled.Map.Name) { Owner = this };
+        window.Show();
+    }
+
+    // ---- Build > Actors and zones > Character maker: the open map's own characters (CharacterMakerWindow), in the workspace until Save map
+    private void CharacterMaker_Click(object sender, RoutedEventArgs e)
+    {
+        if (!MapOpen || openMapInstalled is null)
+        {
+            MessageBox.Show(this, "The Character maker makes a map's own characters: open a map first (File > Open map or New map).", "Character maker", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var window = new CharacterMakerWindow(openMapInstalled.Directory, Characters.MapCharacters.SidecarPath(openMapInstalled.Directory, openMapInstalled.Map.Stem)) { Owner = this };
+        window.Show();
+    }
+
+    // ---- File > Map settings: the open map's name, description and, an island's, weather and cliffs
+    private void MapSettings_Click(object sender, RoutedEventArgs e)
+    {
+        if (!MapOpen || openMapInstalled is null) { SetStatus("Open a map first: File > Open map or New map.", StatusKind.Info); return; }
+        var map = openMapInstalled.Map;
+        var window = new MapSettingsWindow(map) { Owner = this };
+        if (window.ShowDialog() != true) return;
+        try
+        {
+            MapInstall.PutIslandSettings(map, openMapInstalled.Directory);
+            InvalidateNativeIsland();
+            SetStatus($"Map settings of \"{map.Name}\" changed (File > Save map writes them into its file).", StatusKind.Info);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            SetStatus($"The map's settings couldn't be put into its workspace: {error.Message}", StatusKind.Warning);
+        }
+    }
+
     private void CloseMap_Click(object sender, RoutedEventArgs e)
     {
         if (!MapOpen) { SetStatus("No map is open.", StatusKind.Info); return; }
@@ -324,7 +363,7 @@ public partial class MainWindow
         static bool Same(byte[]? x, byte[]? y) => (x is null) == (y is null) && (x is null || x.AsSpan().SequenceEqual(y));
         return a.Scenes.Count == b.Scenes.Count && a.Scenes.Zip(b.Scenes).All(p => Same(p.First.Record, p.Second.Record))
             && Same(a.Grid, b.Grid) && Same(a.Library, b.Library) && Same(a.Ile, b.Ile) && Same(a.Obl, b.Obl)
-            && Same(a.Bricks, b.Bricks) && Same(a.Fragments, b.Fragments) && a.ForbiddenBrick == b.ForbiddenBrick && Same(a.Comments, b.Comments);
+            && Same(a.Bricks, b.Bricks) && Same(a.Fragments, b.Fragments) && a.ForbiddenBrick == b.ForbiddenBrick && Same(a.Comments, b.Comments) && Same(a.Text, b.Text) && a.Name == b.Name && a.Description == b.Description && a.Weather == b.Weather && a.Ledges == b.Ledges && Same(a.Characters, b.Characters) && a.CharacterBodies.Count == b.CharacterBodies.Count && a.CharacterBodies.Zip(b.CharacterBodies).All(p => Same(p.First, p.Second)) && a.CharacterAnims.Count == b.CharacterAnims.Count && a.CharacterAnims.Zip(b.CharacterAnims).All(p => Same(p.First, p.Second));
     }
 
     // ---- File > Save map / Save map as

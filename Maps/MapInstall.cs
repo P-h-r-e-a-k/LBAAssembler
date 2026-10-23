@@ -3,6 +3,8 @@ using System.IO;
 using LBAAssembler.Grids;
 using LBAAssembler.Scenes;
 
+using LBAAssembler.Characters;
+
 namespace LBAAssembler.Maps;
 
 // Where a map is in a game folder once installed there: its scenes' numbers (its own scenes in order), an LBA2 interior's grid, an island's
@@ -31,18 +33,42 @@ internal static class MapInstall
     public static InstalledMap Install(LbaMap map, string directory)
     {
         map.Check();
+        // (its characters first: its scenes' actors of them get their numbers here)
+        var entities = map.IsLba1 ? new List<int>() : PutCharacters(map, directory);
         var installed = map.Kind switch
         {
             MapKind.Lba1Interior => InstallLba1(map, directory),
-            MapKind.Lba2Interior => InstallLba2Interior(map, directory),
-            _ => InstallLba2Island(map, directory),
+            MapKind.Lba2Interior => InstallLba2Interior(map, directory, entities),
+            _ => InstallLba2Island(map, directory, entities),
         };
         PutComments(map, directory, installed.Scenes);
+        PutText(map, directory);
         return installed;
     }
 
     // ---- the script editor's comments on the map's scripts: the folder's comments file (beside SCENE.HQR, ScriptSession's) under the numbers
     // the scenes have there, and back under their places in the map
+    // ---- an installed island's settings changed (File > Map settings): ISLANDS.TXT's lines for it, the engine reads them there
+    public static void PutIslandSettings(LbaMap map, string directory)
+    {
+        if (map.Kind != MapKind.Lba2Island || map.IslandFile is not { Length: > 0 } file) return;
+        var name = file.ToUpperInvariant();
+        var islands = IslandFiles.Load(directory);
+        if (map.Weather is { Length: > 0 } weather) islands.Weather[name] = weather; else islands.Weather.Remove(name);
+        if (map.Ledges is { Length: > 0 } ledges) islands.Ledges[name] = ledges; else islands.Ledges.Remove(name);
+        new FileTransaction().Write(Path.Combine(directory, IslandsFile), System.Text.Encoding.ASCII.GetBytes(islands.Text())).Commit();
+    }
+
+    // ---- the map's own lines of dialogue: <stem>_TEXT.TXT beside its files (an island's, the engine reads there: MAPPACK.CPP MapPack_Text)
+    public static string TextPath(LbaMap map, string directory) => Path.Combine(directory, map.Stem + MapText.Suffix);
+
+    private static void PutText(LbaMap map, string directory)
+    {
+        var path = TextPath(map, directory);
+        if (map.Text is { } text) new FileTransaction().Write(path, text).Commit();
+        else if (File.Exists(path)) File.Delete(path);
+    }
+
     private static string CommentsPath(string directory) => Path.Combine(directory, "SCENE.HQR") + ".comments.json";
 
     private static void PutComments(LbaMap map, string directory, IReadOnlyList<int> numbers)
@@ -88,7 +114,7 @@ internal static class MapInstall
     }
 
     // ---- LBA2 interior: a new scene and a new grid
-    private static InstalledMap InstallLba2Interior(LbaMap map, string directory)
+    private static InstalledMap InstallLba2Interior(LbaMap map, string directory, IReadOnlyList<int> entities)
     {
         var scenePath = Path.Combine(directory, "SCENE.HQR");
         var scenes = HqrFile.Parse(File.ReadAllBytes(scenePath));
@@ -108,7 +134,7 @@ internal static class MapInstall
             bkg.SetStored(gri + beforeGrid.Value, gridBytes);
             if (header.Length >= 16 && BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(12)) < (uint)gridBytes.Length)
             { BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(12), (uint)gridBytes.Length); bkg.SetStored(0, header); }
-            PutScene(scenes, before, WithSceneNumbers(map.Scenes[0].Record, SceneGame.Lba2, new[] { before }));
+            PutScene(scenes, before, WithSceneNumbers(map.Scenes[0].Record, SceneGame.Lba2, new[] { before }, entities));
             new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes()).Commit();
             return new InstalledMap(map, directory, new[] { before }, beforeGrid);
         }
@@ -133,7 +159,7 @@ internal static class MapInstall
         table[number * 2] = type; table[number * 2 + 1] = (byte)grid;
         bkg.SetStored(brk + 1 + maxBrk, table);
 
-        PutScene(scenes, number, WithSceneNumbers(map.Scenes[0].Record, SceneGame.Lba2, new[] { number }));
+        PutScene(scenes, number, WithSceneNumbers(map.Scenes[0].Record, SceneGame.Lba2, new[] { number }, entities));
         var transaction = new FileTransaction().Write(bkgPath, bkg.ToBytes()).Write(scenePath, scenes.ToBytes());
         Name(transaction, directory, new[] { (number, map.Name) });
         transaction.Commit();
@@ -141,7 +167,7 @@ internal static class MapInstall
     }
 
     // ---- LBA2 island: its files, its scenes, ISLANDS.TXT
-    private static InstalledMap InstallLba2Island(LbaMap map, string directory)
+    private static InstalledMap InstallLba2Island(LbaMap map, string directory, IReadOnlyList<int> entities)
     {
         var name = map.IslandFile!.ToUpperInvariant();
         var scenePath = Path.Combine(directory, "SCENE.HQR");
@@ -156,9 +182,10 @@ internal static class MapInstall
             foreach (var n in before) { islands.Scenes.Remove(n); if (n + 1 < scenes.Count) scenes.Clear(n + 1); }
             numbers = FreeScenes(scenes, map.Scenes.Count, MapsFolderScenes(directory));
         }
-        for (var k = 0; k < map.Scenes.Count; k++) PutScene(scenes, numbers[k], WithSceneNumbers(map.Scenes[k].Record, SceneGame.Lba2, numbers));
+        for (var k = 0; k < map.Scenes.Count; k++) PutScene(scenes, numbers[k], WithSceneNumbers(map.Scenes[k].Record, SceneGame.Lba2, numbers, entities));
         islands.Look[name] = map.IslandByte;
         if (map.Weather is { Length: > 0 } weather) islands.Weather[name] = weather; else islands.Weather.Remove(name);
+        if (map.Ledges is { Length: > 0 } ledges) islands.Ledges[name] = ledges; else islands.Ledges.Remove(name);
         foreach (var n in numbers) islands.Scenes[n] = name;
         var transaction = new FileTransaction()
             .Write(Path.Combine(directory, name + ".ILE"), map.Ile!)
@@ -198,12 +225,16 @@ internal static class MapInstall
     {
         var map = at.Map;
         var captured = new LbaMap { Kind = map.Kind, Name = map.Name, Description = map.Description, IslandByte = map.IslandByte, Slot = map.Slot, IslandFile = map.IslandFile, SceneNumbers = map.SceneNumbers,
-            Weather = map.Weather };
+            Weather = map.Weather, Ledges = map.Ledges };
         captured.Comments = TakeComments(at);
+        if (!map.IsLba1) TakeCharacters(captured, at.Directory);
+        var ownEntities = map.IsLba1 ? null : MapCharacters.Load(MapCharacters.SidecarPath(at.Directory, map.Stem)).Select(c => c.Entity).ToList();
+        var textPath = TextPath(map, at.Directory);
+        captured.Text = File.Exists(textPath) ? File.ReadAllBytes(textPath) : null;
         var game = map.IsLba1 ? SceneGame.Lba1 : SceneGame.Lba2;
         var store = new SceneStore(game, at.Directory);
         for (var k = 0; k < at.Scenes.Count; k++)
-            captured.Scenes.Add(new MapScene(WithLocalScenes(store.LoadRecord(at.Scenes[k]), game, at.Scenes), map.Scenes[k].CubeX, map.Scenes[k].CubeZ));
+            captured.Scenes.Add(new MapScene(WithLocalScenes(store.LoadRecord(at.Scenes[k]), game, at.Scenes, ownEntities), map.Scenes[k].CubeX, map.Scenes[k].CubeZ));
         switch (map.Kind)
         {
             case MapKind.Lba1Interior:
@@ -343,17 +374,21 @@ internal static class MapInstall
     }
 
     // A scene record with its zones into the map's own scenes (LbaMap.LocalScene + k) given the numbers they have.
-    private static byte[] WithSceneNumbers(byte[] record, SceneGame game, IReadOnlyList<int> numbers)
+    private static byte[] WithSceneNumbers(byte[] record, SceneGame game, IReadOnlyList<int> numbers, IReadOnlyList<int>? entities = null)
     {
         var model = SceneSerializer.Parse(game, record);
         var changed = false;
         foreach (var zone in model.Zones.Where(z => z.Type == 0 && z.Num >= LbaMap.LocalScene && z.Num - LbaMap.LocalScene < numbers.Count))
         { zone.Num = numbers[zone.Num - LbaMap.LocalScene]; changed = true; }
+        // (actors of the map's own characters: their entities as installed)
+        if (entities is not null)
+            foreach (var actor in model.Actors.Where(a => a.Entity >= LbaMap.LocalEntity && a.Entity - LbaMap.LocalEntity < entities.Count))
+            { actor.Entity = entities[actor.Entity - LbaMap.LocalEntity]; changed = true; }
         return changed ? SceneSerializer.Write(model) : record;
     }
 
     // ... and back: zones into those numbers named as the map's own scenes.
-    private static byte[] WithLocalScenes(byte[] record, SceneGame game, IReadOnlyList<int> numbers)
+    private static byte[] WithLocalScenes(byte[] record, SceneGame game, IReadOnlyList<int> numbers, IReadOnlyList<int>? entities = null)
     {
         if (game == SceneGame.Lba1) return record;
         var model = SceneSerializer.Parse(game, record);
@@ -364,7 +399,59 @@ internal static class MapInstall
             if (k < 0) continue;
             zone.Num = LbaMap.LocalScene + k; changed = true;
         }
+        if (entities is not null)
+            foreach (var actor in model.Actors)
+            {
+                var k = entities.ToList().IndexOf(actor.Entity);
+                if (k < 0) continue;
+                actor.Entity = LbaMap.LocalEntity + k; changed = true;
+            }
         return changed ? SceneSerializer.Write(model) : record;
+    }
+
+    // ---- the map's own characters (MapCharacters): into the folder -- each as the character it was there before (an install of the
+    // map again: the same entity, its entries reused) or a new one -- and back out, numbered as the map's own
+    private static List<int> PutCharacters(LbaMap map, string directory)
+    {
+        var entities = new List<int>();
+        var sidecar = MapCharacters.SidecarPath(directory, map.Stem);
+        if (map.Characters is null) return entities;
+        var own = MapCharacters.Parse(System.Text.Encoding.UTF8.GetString(map.Characters));
+        var there = MapCharacters.Load(sidecar);
+        for (var k = 0; k < own.Count; k++)
+        {
+            var c = own[k];
+            var record = k < map.CharacterEntities.Count ? map.CharacterEntities[k] : Array.Empty<byte>();
+            var boxes = MapCharacters.BodyBoxes(record);
+            var bodies = c.Bodies.Select(b => new MapCharacters.MadeBody(b.Generic, b.Name, map.CharacterBodies[b.Entry],
+                boxes.TryGetValue(b.Generic, out var box) ? box : ((short)-256, (short)0, (short)-256, (short)256, (short)1500, (short)256))).ToList();
+            var anims = c.Anims.Select(a => new MapCharacters.MadeAnim(a.Generic, a.Name, map.CharacterAnims[a.Entry])).ToList();
+            var put = MapCharacters.Put(directory, sidecar, k < there.Count ? there[k].Entity : -1, c.Name, bodies, anims);
+            there = MapCharacters.Load(sidecar);
+            entities.Add(put.Entity);
+        }
+        return entities;
+    }
+
+    private static void TakeCharacters(LbaMap captured, string directory)
+    {
+        var characters = MapCharacters.Load(MapCharacters.SidecarPath(directory, captured.Stem));
+        if (characters.Count == 0) return;
+        var bodyHqr = HqrArchive.Open(Path.Combine(directory, "BODY.HQR"));
+        var animHqr = HqrArchive.Open(Path.Combine(directory, "ANIM.HQR"));
+        var table = HqrArchive.Open(Path.Combine(directory, "RESS.HQR")).Read(44);
+        var local = new List<MapCharacters.Character>();
+        foreach (var c in characters)
+        {
+            var l = new MapCharacters.Character { Entity = local.Count, Name = c.Name };
+            var bodyOf = new Dictionary<int, int>(); var animOf = new Dictionary<int, int>();
+            foreach (var b in c.Bodies) { bodyOf[b.Entry] = captured.CharacterBodies.Count; l.Bodies.Add(b with { Entry = captured.CharacterBodies.Count }); captured.CharacterBodies.Add(bodyHqr.Read(b.Entry)); }
+            foreach (var a in c.Anims) { animOf[a.Entry] = captured.CharacterAnims.Count; l.Anims.Add(a with { Entry = captured.CharacterAnims.Count }); captured.CharacterAnims.Add(animHqr.Read(a.Entry)); }
+            // (its record's entries the map's own: the engine numbers them after the game folder's it plays in -- MAPPACK.CPP)
+            captured.CharacterEntities.Add(MapCharacters.Renumber(MapCharacters.EntityOf(table, c.Entity), e => bodyOf.GetValueOrDefault(e, 0), e => animOf.GetValueOrDefault(e, 0)));
+            local.Add(l);
+        }
+        captured.Characters = System.Text.Encoding.UTF8.GetBytes(MapCharacters.Text(local));
     }
 
     // The scenes' names in the folder's SCENE.HQD (the editor's scene list shows them).
@@ -388,6 +475,8 @@ internal sealed class IslandFiles
     public SortedDictionary<string, int> Look { get; } = new(StringComparer.OrdinalIgnoreCase);
     // ("weather <file> snow": snow falls on it -- EXTFUNC.CPP SceneSnows)
     public SortedDictionary<string, string> Weather { get; } = new(StringComparer.OrdinalIgnoreCase);
+    // ("ledges <file> drop": its cliffs can be walked off -- EXTFUNC.CPP SceneDropLedges)
+    public SortedDictionary<string, string> Ledges { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public static IslandFiles Load(string directory)
     {
@@ -401,6 +490,7 @@ internal sealed class IslandFiles
             if (parts[0] == "scene" && int.TryParse(parts[1], out var scene)) files.Scenes[scene] = parts[2].ToUpperInvariant();
             else if (parts[0] == "island" && int.TryParse(parts[2], out var look)) files.Look[parts[1].ToUpperInvariant()] = look;
             else if (parts[0] == "weather") files.Weather[parts[1].ToUpperInvariant()] = parts[2];
+            else if (parts[0] == "ledges") files.Ledges[parts[1].ToUpperInvariant()] = parts[2];
         }
         return files;
     }
@@ -411,6 +501,7 @@ internal sealed class IslandFiles
                                                   "# of the game's), then the scenes drawn on it\r\n");
         foreach (var (file, look) in Look) text.Append($"island {file} {look}\r\n");
         foreach (var (file, weather) in Weather) text.Append($"weather {file} {weather}\r\n");
+        foreach (var (file, ledges) in Ledges) text.Append($"ledges {file} {ledges}\r\n");
         foreach (var (scene, file) in Scenes) text.Append($"scene {scene} {file}\r\n");
         return text.ToString();
     }

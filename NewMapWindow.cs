@@ -88,6 +88,13 @@ internal sealed class NewMapWindow : Window
         picturePanel.Children.Add(pictureNote);
         var levels = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
         var black = Box("-400", 64); var white = Box("3600", 64); var sea = Box("0", 56);
+        // (each box named for screen readers and UI Automation -- its label is a separate text beside it, 2026-10-23)
+        foreach (var (control, label) in new (Control, string)[]
+                 {
+                     (name, "Name"), (file, "File name"), (baseIsland, "Look: the game's island"), (cubesX, "Cubes across (X)"), (cubesZ, "Cubes down (Z)"),
+                     (height, "Land height"), (picturePath, "Heightmap picture"), (black, "Height of black"), (white, "Height of white"), (sea, "Sea level"),
+                 })
+            System.Windows.Automation.AutomationProperties.SetName(control, label);
         levels.Children.Add(new TextBlock { Text = "Black is  ", VerticalAlignment = VerticalAlignment.Center }); levels.Children.Add(black);
         levels.Children.Add(new TextBlock { Text = "   white is  ", VerticalAlignment = VerticalAlignment.Center }); levels.Children.Add(white);
         levels.Children.Add(new TextBlock { Text = "   sea level  ", VerticalAlignment = VerticalAlignment.Center }); levels.Children.Add(sea);

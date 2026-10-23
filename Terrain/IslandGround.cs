@@ -163,6 +163,51 @@ internal static class IslandGround
         return n;
     }
 
+    // Paints a tile onto the cells of a region stood up their slope: the tile's top along each cell's high edge, its bottom along the low
+    // one -- a cliff's picture (icicles, a rock face's streaks) hangs down the cliff whichever way it faces, where PaintTile lays every tile
+    // the same way round (2026-10-23, recreating LBA1's Hamalayi: its ice cliffs). A level cell gets the tile as PaintTile would.
+    public static int PaintTileOnSlope(IslandFile island, IslandRegion region, int x, int y, int width, int height)
+    {
+        var n = 0;
+        var cells = new HashSet<(int, int)>(region.Vertices(island).Where(v => v.Weight >= 0.5).Select(v => (v.Gx, v.Gz)));
+        foreach (var (gx, gz) in cells)
+        {
+            if (gx >= IslandFile.GridSize || gz >= IslandFile.GridSize) continue;
+            if (island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } cube) continue;
+            if (island.HeightAt(gx, gz) is not { } h00 || island.HeightAt(gx, gz + 1) is not { } h01 || island.HeightAt(gx + 1, gz + 1) is not { } h11 || island.HeightAt(gx + 1, gz) is not { } h10) continue;
+            // (the way up the cell: 0 +x, 1 -x, 2 +z, 3 -z)
+            double dx = (h11 + h10 - h00 - h01) / 2.0, dz = (h01 + h11 - h00 - h10) / 2.0;
+            var level = Math.Abs(dx) < 1 && Math.Abs(dz) < 1;
+            var up = Math.Abs(dx) >= Math.Abs(dz) ? (dx >= 0 ? 0 : 1) : (dz >= 0 ? 2 : 3);
+            var lx = gx % IslandCube.Cells; var lz = gz % IslandCube.Cells;
+            var diagonal = new IslandPolygon(cube.Polygon(lx, lz, 0)).Diagonal;
+            for (var half = 0; half < 2; half++)
+            {
+                var polygon = new IslandPolygon(cube.Polygon(lx, lz, half));
+                var definition = level ? TileDefinition(x, y, width, height, diagonal, half) : SlopeDefinition(x, y, width, height, diagonal, half, up);
+                var index = TextureIndexFor(cube, definition);
+                cube.SetPolygon(lx, lz, half, island.WithGroundTexture(polygon.With(texFlag: polygon.TexFlag == 0 ? 3 : polygon.TexFlag), 0, index).Raw);
+            }
+            n++;
+        }
+        return n;
+    }
+
+    // A tile's corners on a slope: its top (v = 0) along the cell's high edge, `up` the way up (0 +x, 1 -x, 2 +z, 3 -z), u along the edge.
+    public static ushort[] SlopeDefinition(int x, int y, int width, int height, bool diagonal, int half, int up)
+    {
+        var straight = TileDefinition(0, 0, 1, 1, diagonal, half);
+        var result = new ushort[6];
+        for (var i = 0; i < 3; i++)
+        {
+            int ox = straight[i * 2] > 128 ? 1 : 0, oz = straight[i * 2 + 1] > 128 ? 1 : 0;
+            var (u, v) = up switch { 0 => (oz, 1 - ox), 1 => (1 - oz, ox), 2 => (ox, 1 - oz), _ => (1 - ox, oz) };
+            result[i * 2] = (ushort)(u == 0 ? x * 256 + 27 : (x + width) * 256 - 14);
+            result[i * 2 + 1] = (ushort)(v == 0 ? y * 256 + 13 : (y + height) * 256 - 14);
+        }
+        return result;
+    }
+
     // Sets only the game code (water, lava ...) of the cells of a region.
     public static int PaintGameCode(IslandFile island, IslandRegion region, int codeJeu)
     {
@@ -242,7 +287,11 @@ internal static class IslandGround
     {
         var n = 0;
         var limitCos = Math.Cos(Math.Clamp(maxDegrees, 0, 90) * Math.PI / 180);
-        var cells = new HashSet<(int, int)>(region.Vertices(island).Select(v => (v.Gx, v.Gz)));
+        // (the cells round each vertex: a vertex is a corner of four, and any of them may have turned steep or flat -- not only the one
+        // it is the first corner of. Taking only that one left three cells of every one-vertex dab stale: recreating LBA1's Hamalayi
+        // vertex by vertex, 2026-10-23, left over half the island marked blocked from heights its neighbours didn't have yet)
+        var cells = new HashSet<(int, int)>(region.Vertices(island).SelectMany(v => new[] { (v.Gx, v.Gz), (v.Gx - 1, v.Gz), (v.Gx, v.Gz - 1), (v.Gx - 1, v.Gz - 1) })
+            .Where(c => c.Item1 >= 0 && c.Item2 >= 0));
         var corner = new (double X, double Y, double Z)[4];
         foreach (var (gx, gz) in cells)
         {

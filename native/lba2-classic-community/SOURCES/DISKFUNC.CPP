@@ -1,4 +1,5 @@
 #include "C_EXTERN.H"
+#include "MAPPACK.H"
 #include "DIRECTORIES.H"
 
 #include <SYSTEM/ADELINE.H>
@@ -163,6 +164,8 @@ S32 LoadScene(S32 numscene) {
         ptrobj->Flags = GET_U32;
 
         indexfile3d = GET_S16;
+        // (a map's own character: its number in the entity table, MAPPACK.CPP)
+        indexfile3d = MapPack_Entity(numscene, indexfile3d);
 
         if (!(ptrobj->Flags & SPRITE_3D)) {
             if (!FlagLoadGame) {

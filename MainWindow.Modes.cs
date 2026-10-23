@@ -150,6 +150,7 @@ public partial class MainWindow
             terrainEditor.Saved += OnTerrainSaved;
             terrainEditor.StateChanged += OnTerrainStateChanged;
             terrainEditor.Edited += OnTerrainEdited;
+            terrainEditor.BodiesAdded += OnTerrainBodiesAdded;
             terrainEditor.MapRequested += on => { terrainMapWanted = on; ApplyMode(); };
             TerrainPanelHost.Content = terrainEditor.Panel;
             TerrainMapHost.Child = terrainEditor.MapArea;
@@ -186,6 +187,14 @@ public partial class MainWindow
     }
 
     // The island was written: the native 3D view reads the file again and the minimap / software view are rebuilt from it.
+    // The Object maker added a body to the island's OBL: the 3D view reads the bodies again (and the island as edited, its new object page).
+    private void OnTerrainBodiesAdded()
+    {
+        InvalidateNativeIsland();
+        if (live is not null) PushLive();
+        else if (nativeViewActive && !interiorSceneActive) RenderNativeCamera();
+    }
+
     private void OnTerrainSaved()
     {
         InvalidateNativeIsland();
