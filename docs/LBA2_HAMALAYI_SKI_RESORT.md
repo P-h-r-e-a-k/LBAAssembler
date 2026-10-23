@@ -5,6 +5,9 @@ driving the editor as a user would -- every control reached through UI Automatio
 couldn't do something, the interface was extended (below). Tools outside the editor were used only to check the result against LBA1
 (`tools/ScriptRoundTrip`: `lba1ground`, `lba1sceneactors`, `hamalayiscripts`).
 
+Every step, with every value typed, to build it again yourself: [hamalayi/RECREATE.md](hamalayi/RECREATE.md), with the scripts and plan
+files in [hamalayi/recipe/](hamalayi/recipe/).
+
 ## What it has
 
 - **Ground**: every vertex of the 64 x 64 cube set by brush strokes (Flatten at a typed vertex), to LBA1's brick columns; 50 atlas
