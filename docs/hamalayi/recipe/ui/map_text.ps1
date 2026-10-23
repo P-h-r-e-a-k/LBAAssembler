@@ -19,4 +19,5 @@ $put = ByNameType "Put this line" $Button $r
 foreach ($l in $lines) { V $number $l[0]; V $words $l[1]; Invoke $put }
 Invoke (ByNameType "Save" $Button $r); Start-Sleep 1
 (ById "MapTextStatus" $r).Current.Name
-Shot $w.H map_text
+Shot $w.H "09_map_text"
+Menu File "Save map"; Start-Sleep 6

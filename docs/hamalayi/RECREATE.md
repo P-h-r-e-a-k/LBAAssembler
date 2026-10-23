@@ -3,6 +3,9 @@
 This is the full recipe for building `skiresort.lbamap` from nothing, the way it was built on 2026-10-23: LBA1's scene 96 (Hamalayi's ski
 resort) as an LBA2 island map, using only the editor's interface. Every value typed is here or in [recipe/](recipe/).
 
+This is the reference: every value, in tables. For a walk through the editor's windows with a picture of each, read
+[HOWTO.md](HOWTO.md) first.
+
 You can follow it two ways:
 
 - **By hand:** the numbered steps below say which window, which control and what to type. The long lists (875 ground strokes, 3,828 paint
@@ -135,8 +138,8 @@ blocks that become objects (the trees, the hut, the small trees, the snowman, th
 python plan\ground_fix.py <sandbox>\game\_MAP_WORKSPACE\SKIRESRT.ILE
 ```
 
-It writes `plan\ground_fix.json`: runs of vertices to lower, and the cells round them with their tiles. On the finished island it reports
-0 vertices different. Then, in Terrain:
+It writes `plan\ground_fix.json`: runs of vertices to lower, and the cells round them with their tiles. The sea's corner cells keep the
+island's sea tile. On the finished island it reports 0 vertices different. Then, in Terrain:
 
 1. **Flatten to level**, square brush, radius 0, strength 100. For each of `runs`: Level, Vertex, **Apply the tool here**, and **Stroke
    to here** to `x1` (as step 2).
@@ -325,8 +328,9 @@ scripts' actor numbers hold.
 | 12 | hidden bonus (invisible) | `Snowboard: Snowboard` | 11968, 6016, 1680 | 0x1200 | 1 | 51 | Bonus option 48, Bonus count 3 |
 | 13 | Twinsen on his snowboard | `Twinsen on his snowboard` | 4320, 6400, 384 | 0x8803 | 1 | 51 | **Move 3** |
 
-**Move 3** (track) makes an actor's track script run from the start. The other actors keep Move 0 and wait for their life script. The two
-Move values were typed after the rest, by choosing each actor in the **Actors** list. Press the scene editor's **Save**.
+**Move 3** (track) makes an actor's track script run from the start. The other actors keep Move 0 and wait for their life script. (On the
+first run I typed the two Move values after the rest. `actors.ps1` now types them with the other fields.) Press the scene editor's
+**Save**.
 
 **Zones** (*`zones.ps1`*). Use **Add > Zone > ***type***. Place it at the box's centre X, its **Y min** and its centre Z. Then type
 **X min**, **X max**, **Y min**, **Y max**, **Z min**, **Z max** and the zone's own field.
@@ -405,7 +409,9 @@ The steps above are the cleaned-up order. My run went the same way except for th
 | The hut's roof used LBA1's blank brick 222 (cells 0,8,0 and 0,8,1) and showed black. | The recipe's `hut.lbaobject` has 7870 and 7880 there. I added a second hut body (120) and deleted the first, so my OBL still holds the unused body 108. |
 | Two small trees at X 32512 weren't placed: vertex 512 is outside the cube. | Step 7 uses vertex 511. |
 | Keyframe times were typed as 50ths of a second: the snowboarder rode 20 times too fast. | Step 10 gives milliseconds. I retyped each keyframe ×20. |
-| The Landing animation (8) was missed by that retyping: my map's keeps 6 ms and 10 ms. | Step 10 gives 120 ms and 200 ms. |
+| The Landing animation (8) was missed by that retyping: the Character maker's list only realizes the items in view, and the script never scrolled to the ninth. | Step 10 gives 120 ms and 200 ms. The released map was fixed through the Character maker. |
+| Remaking the flag's pennant lost its Waving animation's bone turns: the released flags didn't wave. | Step 10 sets them. The released map was fixed through the Character maker. |
+| The pickup snowboard's still frame kept a tick time (50 ms). | A fresh map makes it 1000 ms. The released map was fixed. |
 | Animation 1 was first made standing still and named "Getting ready". | Step 10 has it pushing off: 300 forward a keyframe. |
 | The rider stopped at cliff edges. | Step 10's jump keyframes are in the air, and step 8 makes the cliffs ledges. |
 | The flag's pennant was lit on one side only. | Fixed in the Character maker. I remade the pennant; a fresh run gets it right the first time. |
@@ -425,18 +431,22 @@ The steps above are the cleaned-up order. My run went the same way except for th
 
 ## How far this was checked
 
-- **Checked against the finished map:**
-  - The actors, zones and track points (`sceneactors`, `zonedump`) match the tables.
-  - The 66 objects match the object table.
-  - The ground matches `ground_fix.py`'s target exactly.
-  - The animations' times, moves, loops and in-the-air keyframes match step 10, apart from the Landing difference above.
-- **Ran as they are:** the recipe scripts `paint_ground`, `texture_ground`, `fix_hut`, `fix_ground2`, `bake`, `map_text`, `zones`,
-  `actors`, `scripts`, `char_rider_body` and `char_flag_board`. Only their paths were changed, and the flag's keyframe time is now typed
-  as milliseconds.
-- **Not yet run:**
-  - `new_map`, `map_settings` and `char_rider_anims` were written or rewritten from what I did step by step.
-  - `make_objects` now opens the designs instead of typing them.
-  - All of these pass PowerShell's parser, but a full run from an empty sandbox hasn't been done.
+The whole recipe was run end to end from an empty sandbox (a fresh copy of the game folder) on 2026-10-23, and its map was compared with
+the released one, file by file:
+
+- **Identical:**
+  - the ground's heights, light and atlas;
+  - the 66 objects (every body, X, Y and Z);
+  - the scene (actors, zones, track points and all five scripts, byte for byte);
+  - all eleven animations;
+  - the entity records, the characters list and the map text.
+- **Different:**
+  - 13 cells round the tree clumps carry another snow tile (both from LBA1's bricks: the first run's painting plan and `ground_fix.py`
+    chose differently).
+  - The rider's body differs by rounding in 14 bytes.
+  - The released map's OBL still holds the unused first hut body (108).
+
+For the step-by-step walk through the editor, with pictures of each window, see [HOWTO.md](HOWTO.md).
 
 ## Checking against LBA1
 

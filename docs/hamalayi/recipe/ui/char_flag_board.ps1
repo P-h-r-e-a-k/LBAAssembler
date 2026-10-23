@@ -39,6 +39,7 @@ CMSet "Pose bone" 2; CMSet "Turn X" 0; CMSet "Turn Y" 12; CMSet "Turn Z" 0; CMPr
 CMPick "Keyframes" 1; CMSet "Milliseconds" 300; SetButton "The keyframe's time"
 CMSet "Pose bone" 2; CMSet "Turn X" 0; CMSet "Turn Y" -12; CMSet "Turn Z" 0; CMPress "Set the bone" | Out-Null
 CMPress "Save into the map"
+CMShot "10_flag"
 
 # ---- the snowboard to pick up: the board on its end (red, its edge green), two bindings across it
 NewCharacter "Snowboard"
@@ -48,3 +49,6 @@ Part "Box" 0 0 650 30 220 70 16 0 48
 Part "Box" 0 0 350 30 220 70 16 0 48
 CMSet "Body name" "Snowboard"; SetButton "Gives the body chosen"
 CMPress "Save into the map"
+CMShot "10_snowboard"
+Menu File "Save map"; Start-Sleep 6
+"saved"

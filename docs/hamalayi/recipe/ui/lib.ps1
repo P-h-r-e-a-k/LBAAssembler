@@ -54,6 +54,15 @@ function Main() {
   return $m
 }
 function Root() { $A::FromHandle((Main).H) }
+# the terrain editor's Save ("Save *" while there are changes), then File > Save map: after every step
+function SaveAll() {
+  $s = (Root).FindAll($TS::Descendants, (Cond $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Button))) | Where-Object { $_.Current.Name -eq 'Save *' } | Select-Object -First 1
+  if ($s) { Invoke $s; Start-Sleep 3 }
+  Menu File "Save map"; Start-Sleep 6
+  "saved"
+}
+# a picture of the main window (into $Global:Shots), to check a step by
+function Snap($name) { Start-Sleep -Milliseconds 800; Shot (Main).H $name | Out-Null }
 function Win($title) { AppWindows | Where-Object { $_.Title -eq $title } | Select-Object -First 1 }
 
 function Shot($h, $name) {

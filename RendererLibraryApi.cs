@@ -57,7 +57,9 @@ internal sealed class RendererLibraryApi : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int ProjectPointFn(int worldX, int worldY, int worldZ, out int screenX, out int screenY);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int ReloadBodiesFn([MarshalAs(UnmanagedType.LPStr)] string path);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int ReloadAnimsFn([MarshalAs(UnmanagedType.LPStr)] string path);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int ReloadEntitiesFn([MarshalAs(UnmanagedType.LPStr)] string ressPath);
     private IntPtr handle;
+    private ReloadEntitiesFn? reloadEntities;
     private VersionFn? version;
     private InitializeFn? initialize;
     private SetDataRootFn? setDataRoot;
@@ -189,6 +191,7 @@ internal sealed class RendererLibraryApi : IDisposable
         setBodyPreviewAnimationPaused = Get<SetBodyPreviewAnimationPausedFn>("lba2_renderer_set_body_preview_animation_paused");
         reloadBodies = Get<ReloadBodiesFn>("lba2_renderer_reload_bodies");
         reloadAnims = Get<ReloadAnimsFn>("lba2_renderer_reload_anims");
+        reloadEntities = NativeLibrary.TryGetExport(handle, "lba2_renderer_reload_entities", out var entities) ? Marshal.GetDelegateForFunctionPointer<ReloadEntitiesFn>(entities) : null;
         projectPoint = Get<ProjectPointFn>("lba2_renderer_project_point");
     }
 
@@ -499,6 +502,9 @@ internal sealed class RendererLibraryApi : IDisposable
     // Same as ReloadBodies, for HQR_Anims (ANIM.HQR's own cache) -- see lba2_renderer_reload_anims's
     // own doc comment (RENDERER_API.H) for why this exists alongside the body one.
     public bool ReloadAnims(string path) => reloadAnims?.Invoke(path) == 1;
+    // The entity table (RESS.HQR 44) read again from that RESS.HQR -- after a map's Character maker added an entity
+    // (lba2_renderer_reload_entities).
+    public bool ReloadEntities(string ressPath) => reloadEntities?.Invoke(ressPath) == 1;
 
     public bool IsRendererReady => IsLoaded && initialize is not null && setDataRoot is not null && loadIsland is not null && loadCube is not null && setViewTarget is not null && renderFrame is not null && framebuffer is not null;
 

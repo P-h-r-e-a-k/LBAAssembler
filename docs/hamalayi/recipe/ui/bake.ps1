@@ -9,7 +9,8 @@ SetText (EditBox "Gain" $root) $Gain
 SetText (EditBox "Offset" $root) $Offset
 Invoke (ByNameType "Bake all light" $Button $root)
 Start-Sleep 2
-$s = $root.FindAll($TS::Descendants, (Cond $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Button))) | Where-Object { $_.Current.Name -eq 'Save *' } | Select-Object -First 1
+Snap "06_baked"
+$s =$root.FindAll($TS::Descendants, (Cond $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Button))) | Where-Object { $_.Current.Name -eq 'Save *' } | Select-Object -First 1
 if ($s) { Invoke $s; Start-Sleep 3 }
 Menu File "Save map"; Start-Sleep 4
 "baked gain $Gain offset $Offset; saved"

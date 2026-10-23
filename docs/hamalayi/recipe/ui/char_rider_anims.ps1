@@ -77,3 +77,4 @@ Key 1; Timing 200 0; B 3 15 0 0; B 4 0 0 40; B 6 0 0 -40
 CMPick "Keyframes" 1; CMPress "Loop back to it" | Out-Null
 
 CMPress "Save into the map"
+CMShot "10_rider_anims"

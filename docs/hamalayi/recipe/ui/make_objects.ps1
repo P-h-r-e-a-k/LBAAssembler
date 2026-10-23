@@ -55,6 +55,7 @@ foreach ($o in $plan.objects) {
   if ($said -notmatch "^Body (\d+) added") { throw "$($o.name): $said" }
   $body = [int]$Matches[1]; $made[$o.name] = $body
   "$($o.name): $said"
+  if ($o.name -eq "hut") { Start-Sleep -Milliseconds 800; Shot $mw.H "07_object_maker_hut" | Out-Null }
   }
   if ($NoPlace) { continue }
   foreach ($p in $o.places) {
@@ -67,3 +68,8 @@ foreach ($o in $plan.objects) {
   "  placed $($o.places.Count)"
 }
 $made | ConvertTo-Json
+Snap "07_objects"
+$s = $root.FindAll($TS::Descendants, (Cond $A::ControlTypeProperty $Button)) | Where-Object { $_.Current.Name -eq 'Save *' } | Select-Object -First 1
+if ($s) { Invoke $s; Start-Sleep 3 }
+Menu File "Save map"; Start-Sleep 6
+"saved"

@@ -15,6 +15,7 @@ Start-Sleep 1
 $r = $A::FromHandle($w.H)
 Choose (ByNameType "Weather" $ComboBox $r) "Clear*"
 Choose (ByNameType "Cliffs" $ComboBox $r) "Ledges to walk or ride off*"
+Start-Sleep -Milliseconds 500; Shot $w.H "08_map_settings" | Out-Null
 Invoke (ByNameType "OK" $Button $r); Start-Sleep 1
 Menu File "Save map"; Start-Sleep 6
 "saved"

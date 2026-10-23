@@ -10,7 +10,7 @@ function V($e, $s) { $e.SetFocus(); $e.GetCurrentPattern([System.Windows.Automat
 $w = AppWindows | Where-Object { $_.Title -like "LBA2 - scene editor*" } | Select-Object -First 1
 if (-not $w) { throw "open the scene editor first" }
 $se = $A::FromHandle($w.H)
-function PopupItem($name) {
+function PopupItem($name, [switch]$Try) {
   for ($i = 0; $i -lt 20; $i++) {
     foreach ($win in AppWindows) {
       $it = $A::FromHandle($win.H).FindAll($TS::Descendants, (Cond $A::ControlTypeProperty $MenuItem)) | Where-Object { $_.Current.Name -like "$name*" } | Select-Object -First 1
@@ -18,11 +18,18 @@ function PopupItem($name) {
     }
     Start-Sleep -Milliseconds 150
   }
+  if ($Try) { return $null }
   throw "no menu item $name"
 }
+# Add ▾ pressed and the item chosen in its menu -- pressed again if the menu didn't open (the editor still busy with the last one)
 function AddMenu($item) {
-  Invoke ($se.FindAll($TS::Descendants, (Cond $A::ControlTypeProperty $Button)) | Where-Object { $_.Current.Name -like "Add*" } | Select-Object -First 1); Start-Sleep -Milliseconds 400
-  Invoke (PopupItem $item); Start-Sleep -Milliseconds 400
+  for ($attempt = 0; $attempt -lt 4; $attempt++) {
+    Invoke ($se.FindAll($TS::Descendants, (Cond $A::ControlTypeProperty $Button)) | Where-Object { $_.Current.Name -like "Add*" } | Select-Object -First 1); Start-Sleep -Milliseconds 400
+    $it = PopupItem $item -Try
+    if ($it) { Invoke $it; Start-Sleep -Milliseconds 400; return }
+    Start-Sleep 1
+  }
+  throw "no menu item $item"
 }
 function PlaceAt($x, $y, $z) {
   V (EditBox "Place X" $se) $x; V (EditBox "Place Y" $se) $y; V (EditBox "Place Z" $se) $z
@@ -70,8 +77,12 @@ foreach ($act in $ref.actors | Where-Object { [int]$_.n -ge 2 }) {
   Field "Life" $act.life; Field "Armour" $act.armor
   if ($act.n -eq "12") { Field "Bonus option" 48; Field "Bonus count" 3 }
   if ($act.n -eq "2") { Field "Bonus option" 48; Field "Bonus count" 2 }
+  # (the instructor and the rider move by their track scripts from the start: Move 3, track)
+  if ($act.n -eq "2" -or $act.n -eq "13") { Field "Move" 3 }
   "actor $($act.n) put"
 }
 Invoke (ByNameType "Save" $Button $se); Start-Sleep 2
 (ById "StatusText" $se).Current.Name
-Shot $w.H actors_done
+Shot $w.H "11_actors"
+Menu File "Save map"; Start-Sleep 6
+"map saved"

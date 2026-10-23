@@ -5,8 +5,11 @@ driving the editor as a user would -- every control reached through UI Automatio
 couldn't do something, the interface was extended (below). Tools outside the editor were used only to check the result against LBA1
 (`tools/ScriptRoundTrip`: `lba1ground`, `lba1sceneactors`, `hamalayiscripts`).
 
-Every step, with every value typed, to build it again yourself: [hamalayi/RECREATE.md](hamalayi/RECREATE.md), with the scripts and plan
-files in [hamalayi/recipe/](hamalayi/recipe/).
+To build it again yourself:
+
+- [hamalayi/HOWTO.md](hamalayi/HOWTO.md): a step-by-step guide through the editor, with a picture of each window.
+- [hamalayi/RECREATE.md](hamalayi/RECREATE.md): every value, in tables.
+- [hamalayi/recipe/](hamalayi/recipe/): the scripts that drive the same buttons, and the plan files.
 
 ## What it has
 
@@ -28,6 +31,9 @@ files in [hamalayi/recipe/](hamalayi/recipe/).
 - Object maker (`ObjectMakerWindow`, `Terrain/BrickObject.cs`): an object built brick by brick from LBA1's bricks, saved as a design
   (`.lbaobject`), added to the island's OBL as a body. Its object pages are in undo.
 - Objects: selecting again at the very same point steps through every object under it, so one standing in another can be reached.
+- Scene editor: Choose a body reads the bodies again each time, so a character saved while the window is open is offered. The 3D view's
+  renderer reads the entity table, bodies and animations again when the Character maker saves
+  (`lba2_renderer_reload_entities`). Engine: an actor's entity past the table falls back to entity 0 (DISKFUNC.CPP).
 - Map text (`MapTextWindow`), Map settings (`MapSettingsWindow`: ledges that drop).
 - Character maker (`CharacterMakerWindow`, `Characters/`): bodies, keyframes in milliseconds, keyframes in the air.
 - Scene editor: Place X/Y/Z typed for a new actor or zone; accessible names on the inspector's rows.

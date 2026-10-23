@@ -10,7 +10,7 @@ if (-not $w) { throw "open the scene editor first" }
 $se = $A::FromHandle($w.H)
 $typeNames = @("cube change", "camera", "scenaric", "grid", "giver", "message", "ladder", "escalator", "hit", "rail")
 # (a popup menu's item: searched in every top-level window of the editor's process)
-function PopupItem($name) {
+function PopupItem($name, [switch]$Try) {
   for ($i = 0; $i -lt 20; $i++) {
     foreach ($win in AppWindows) {
       $it = $A::FromHandle($win.H).FindAll($TS::Descendants, (Cond $A::ControlTypeProperty $MenuItem)) | Where-Object { $_.Current.Name -like "$name*" } | Select-Object -First 1
@@ -18,11 +18,18 @@ function PopupItem($name) {
     }
     Start-Sleep -Milliseconds 150
   }
+  if ($Try) { return $null }
   throw "no menu item $name"
 }
 foreach ($z in $plan.zones) {
-  Invoke ($se.FindAll($TS::Descendants, (Cond $A::ControlTypeProperty $Button)) | Where-Object { $_.Current.Name -like "Add*" } | Select-Object -First 1); Start-Sleep -Milliseconds 400
-  $zoneMenu = PopupItem "Zone"
+  # (Add ▾ pressed again if its menu didn't open: the editor still busy with the last one)
+  $zoneMenu = $null
+  for ($attempt = 0; $attempt -lt 4 -and -not $zoneMenu; $attempt++) {
+    Invoke ($se.FindAll($TS::Descendants, (Cond $A::ControlTypeProperty $Button)) | Where-Object { $_.Current.Name -like "Add*" } | Select-Object -First 1); Start-Sleep -Milliseconds 400
+    $zoneMenu = PopupItem "Zone" -Try
+    if (-not $zoneMenu) { Start-Sleep 1 }
+  }
+  if (-not $zoneMenu) { throw "no Zone menu" }
   $zoneMenu.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand(); Start-Sleep -Milliseconds 400
   Invoke (PopupItem $typeNames[$z.type]); Start-Sleep -Milliseconds 300
   $b = $z.box
@@ -41,5 +48,7 @@ foreach ($z in $plan.zones) {
 }
 Invoke (ByNameType "Save" $Button $se); Start-Sleep 2
 (ById "StatusText" $se).Current.Name
-Shot $w.H zones_done
+Shot $w.H "11_zones"
 
+Menu File "Save map"; Start-Sleep 6
+"map saved"

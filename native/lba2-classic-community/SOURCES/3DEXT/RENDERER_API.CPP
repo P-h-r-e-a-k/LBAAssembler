@@ -741,6 +741,8 @@ void lba2_renderer_set_body_preview_animation_paused(int paused)
 // new #include, avoids MEM.H's own double-inclusion landmine (see this file's other comments).
 extern T_HQR_HEADER *HQR_Bodys;
 extern T_HQR_HEADER *HQR_Anims;
+extern U8 *BufferFile3D;       // (GLOBAL.CPP, C_EXTERN.H: the entity table)
+extern S32 BufferFile3DMem;    // (MEM.CPP: its buffer's size)
 extern void NativeDebugLog(const char *fmt, ...);
 
 int lba2_renderer_reload_bodies(const char *path)
@@ -756,6 +758,29 @@ int lba2_renderer_reload_anims(const char *path)
     if (!path || !path[0] || !HQR_Anims) { NativeDebugLog("lba2_renderer_reload_anims: bad path or HQR_Anims not open"); return 0; }
     int ok = HQR_Change_Ressource(HQR_Anims, path) ? 1 : 0;
     NativeDebugLog("lba2_renderer_reload_anims(%s) -> %d, old Name was now '%s', NbIndex=%d, FreeSize=%d", path, ok, HQR_Anims->Name, HQR_Anims->NbIndex, HQR_Anims->FreeSize);
+    return ok;
+}
+
+// The entity table (RESS.HQR entry 44) read again -- from ressPath, a full file path, or the data root's RESS.HQR when it is empty:
+// RendererBootAssets reads it once, so a character a map's Character maker adds afterwards (an entity appended to the table) was past the
+// end of the one in memory, and loading a scene with an actor of it read a garbage offset (2026-10-23). The buffer grows when the table
+// has; the old one is kept, as the actors loaded from it still point into it until their scene is loaded again.
+int lba2_renderer_reload_entities(const char *ressPath)
+{
+    if (!BufferFile3D) { NativeDebugLog("lba2_renderer_reload_entities: the renderer isn't initialized"); return 0; }
+    char path[ADELINE_MAX_PATH];
+    if (ressPath && ressPath[0]) { strncpy(path, ressPath, ADELINE_MAX_PATH - 1); path[ADELINE_MAX_PATH - 1] = 0; }
+    else GetResPath(path, ADELINE_MAX_PATH, RESS_HQR_NAME);
+    S32 size = HQF_ResSize(path, RESS_FILE3D);
+    if (size <= 0) { NativeDebugLog("lba2_renderer_reload_entities: no entity table in %s", path); return 0; }
+    if (size + RECOVER_AREA > BufferFile3DMem) {
+        U8 *grown = (U8 *)Malloc(size + RECOVER_AREA);
+        if (!grown) { NativeDebugLog("lba2_renderer_reload_entities: no memory for %d bytes", size + RECOVER_AREA); return 0; }
+        BufferFile3D = grown;
+        BufferFile3DMem = size + RECOVER_AREA;
+    }
+    int ok = Load_HQR(path, BufferFile3D, RESS_FILE3D) ? 1 : 0;
+    NativeDebugLog("lba2_renderer_reload_entities(%s) -> %d, %d entities", path, ok, ok ? (int)(*(U32 *)BufferFile3D / 4 - 1) : 0);
     return ok;
 }
 

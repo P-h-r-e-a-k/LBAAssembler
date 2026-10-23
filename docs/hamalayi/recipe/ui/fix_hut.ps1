@@ -29,3 +29,5 @@ foreach ($c in $fix.cells) {
   V $vx (448 + $c.x); V $vz (448 + $c.z); Invoke $apply
 }
 "painted $($fix.cells.Count) cells"
+Snap "04_hut"
+SaveAll

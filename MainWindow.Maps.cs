@@ -320,7 +320,11 @@ public partial class MainWindow
             MessageBox.Show(this, "The Character maker makes a map's own characters: open a map first (File > Open map or New map).", "Character maker", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        var window = new CharacterMakerWindow(openMapInstalled.Directory, Characters.MapCharacters.SidecarPath(openMapInstalled.Directory, openMapInstalled.Map.Stem)) { Owner = this };
+        var directory = openMapInstalled.Directory;
+        var window = new CharacterMakerWindow(directory, Characters.MapCharacters.SidecarPath(directory, openMapInstalled.Map.Stem)) { Owner = this };
+        // (the 3D view's renderer read the entity table, bodies and animations when it started: a character saved now is read again, or
+        // placing an actor of it crashed the editor -- 2026-10-23)
+        window.Saved += () => nativeRenderer.ReloadCharacters(directory);
         window.Show();
     }
 

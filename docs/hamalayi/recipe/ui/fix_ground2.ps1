@@ -32,6 +32,7 @@ foreach ($c in $fix.tiles) {
   V $vx (448 + $c.x); V $vz (448 + $c.z); Invoke $apply
 }
 "painted: $($fix.tiles.Count) cells"
+Snap "05_tree_ground"
 SetText (EditBox "Unwalkable angle °" $root) "45"
 Invoke (ByNameType "Block steep ground on the whole island" $Button $root); Start-Sleep 2
 $s = $root.FindAll($TS::Descendants, (Cond $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Button))) | Where-Object { $_.Current.Name -eq 'Save *' } | Select-Object -First 1

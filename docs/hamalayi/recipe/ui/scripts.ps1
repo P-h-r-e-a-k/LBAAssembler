@@ -40,6 +40,7 @@ foreach ($n in $(if ($Only.Count) { $Only } else { $actors })) {
   # from the last one's window, the others' windows left open with their edits)
   $last = if ($Only.Count) { $Only[-1] } else { $actors[-1] }
   if ($SaveLast -and $n -ne $last) { continue }
+  Shot $sw.H "12_script_$n" | Out-Null
   Invoke (ById "SaveButton" $swr); Start-Sleep -Milliseconds 800
   $confirm = AppWindows | Where-Object { $_.Title -like "Save scripts*" } | Select-Object -First 1
   if ($confirm) { [void](DlgButton $confirm.Title 1); Start-Sleep 1 }
@@ -48,3 +49,5 @@ foreach ($n in $(if ($Only.Count) { $Only } else { $actors })) {
   "  saved: $((ById "StatusText" $swr).Current.Name)"
   [void][HW]::PostMessage($sw.H, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero); Start-Sleep -Milliseconds 800
 }
+Menu File "Save map"; Start-Sleep 6
+"map saved"

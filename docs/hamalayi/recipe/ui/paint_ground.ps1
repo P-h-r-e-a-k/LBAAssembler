@@ -28,3 +28,5 @@ foreach ($r in $runs) {
   if ($n % 100 -eq 0) { "$n strokes, $([int]$watch.Elapsed.TotalSeconds) s" }
 }
 "done: $n strokes in $([int]$watch.Elapsed.TotalSeconds) s"
+Snap "02_heights"
+SaveAll

@@ -35,10 +35,12 @@ if (-not $SkipAtlas) {
       V (EditBox "Brick under it" $dr) $e.cliff[1]
     } else { V (EditBox "Brick number" $dr) $e.brick }
     Start-Sleep -Milliseconds 200
+    if ($e.slot -eq 0 -or $e.slot -eq 4) { Start-Sleep -Milliseconds 600; Shot $d.H ("03_put_brick_slot{0}" -f $e.slot) | Out-Null }
     Invoke (ByNameType "Put it in" $Button $dr)
     for ($i = 0; $i -lt 40 -and (Win "Put an LBA1 brick in the ground atlas"); $i++) { Start-Sleep -Milliseconds 100 }
   }
   "atlas: $($plan.slots.Count) tiles put in"
+  Snap "03_atlas"
 }
 
 if (-not $SkipPaint) {
@@ -71,4 +73,6 @@ if (-not $SkipPaint) {
   SelectItem (($code.FindAll($TS::Descendants, (Cond $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::ListItem))))[1]); $code.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Collapse()
   foreach ($c in $plan.sea_cells) { V $vx (448 + $c[0]); V $vz (448 + $c[1]); Invoke $apply }
   "game codes painted"
+  Snap "03_painted"
+  SaveAll
 }

@@ -22,3 +22,10 @@ function CMPick($list, $index) {
 }
 function CMView($degrees) { SetRange (ByNameType "Turn the view" ([System.Windows.Automation.ControlType]::Slider) (CM)) $degrees; Start-Sleep -Milliseconds 300 }
 function CMShot($name) { Shot (CMWin).H $name }
+# (the Character maker opened if it isn't: Build > Actors and zones > Character maker...)
+if (-not (CMWin)) {
+  SelectItem (ById "BuildSceneRadio"); Start-Sleep 2
+  Invoke (ById "BuildCharacterButton")
+  for ($i = 0; $i -lt 40 -and -not (CMWin); $i++) { Start-Sleep -Milliseconds 250 }
+  Start-Sleep 2
+}

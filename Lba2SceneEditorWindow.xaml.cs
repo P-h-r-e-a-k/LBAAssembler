@@ -25,10 +25,10 @@ public partial class Lba2SceneEditorWindow : Window
     private readonly SceneStore store;
     private readonly Action<int, int>? editScript;
     private readonly List<(int Id, string Label)> scenes;
-    private readonly IReadOnlyList<string?> bodyNames;
+    private IReadOnlyList<string?> bodyNames = Array.Empty<string?>();
     // The kinds of actor (RESS.HQR's entity table): an actor's body and animation are numbers within its entity's lists, not BODY.HQR and
     // ANIM.HQR entries (null: the folder has none)
-    private readonly Lba2EntityTable? entities;
+    private Lba2EntityTable? entities;
 
     private SceneDocument doc = null!;
     private int sceneNumber = -1;
@@ -52,18 +52,7 @@ public partial class Lba2SceneEditorWindow : Window
         this.editScript = editScript;
         store = new SceneStore(SceneGame.Lba2, directory);
         scenes = Lba2SceneList.Load(directory);
-        var bodyPath = System.IO.Path.Combine(directory, "BODY.HQR");
-        var names = (File.Exists(bodyPath) ? HqdDescriptions.Load("BODY2.HQD", HqrArchive.CountEntries(bodyPath)).Names : Array.Empty<string?>()).ToList();
-        // (a map's own characters' bodies by their names: the Character maker's, past the game's -- <stem>_CHARACTERS.TXT beside its files)
-        foreach (var sidecar in Directory.EnumerateFiles(directory, "*" + Characters.MapCharacters.Suffix))
-            foreach (var c in Characters.MapCharacters.Load(sidecar))
-                foreach (var b in c.Bodies)
-                {
-                    while (names.Count <= b.Entry) names.Add(null);
-                    names[b.Entry] = $"{c.Name}: {b.Name} (the map's own)";
-                }
-        bodyNames = names;
-        entities = Lba2EntityTable.Load(directory);
+        LoadBodies();
 
         loading = true;
         foreach (var s in scenes) SceneCombo.Items.Add(new SceneItem(s.Id, s.Label));
@@ -924,8 +913,27 @@ public partial class Lba2SceneEditorWindow : Window
         catch (SceneEditException error) { MessageBox.Show(this, error.Message, "Scene editor", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
+    // The bodies' names and the entity table read from the folder -- again each time a body is picked, so a character the Character maker
+    // saved while this window was open is among them (2026-10-23).
+    private void LoadBodies()
+    {
+        var bodyPath = System.IO.Path.Combine(directory, "BODY.HQR");
+        var names = (File.Exists(bodyPath) ? HqdDescriptions.Load("BODY2.HQD", HqrArchive.CountEntries(bodyPath)).Names : Array.Empty<string?>()).ToList();
+        // (a map's own characters' bodies by their names: the Character maker's, past the game's -- <stem>_CHARACTERS.TXT beside its files)
+        foreach (var sidecar in Directory.EnumerateFiles(directory, "*" + Characters.MapCharacters.Suffix))
+            foreach (var c in Characters.MapCharacters.Load(sidecar))
+                foreach (var b in c.Bodies)
+                {
+                    while (names.Count <= b.Entry) names.Add(null);
+                    names[b.Entry] = $"{c.Name}: {b.Name} (the map's own)";
+                }
+        bodyNames = names;
+        entities = Lba2EntityTable.Load(directory);
+    }
+
     private int? PickBody(int? current)
     {
+        LoadBodies();
         var bodies = System.IO.Path.Combine(directory, "BODY.HQR");
         var count = File.Exists(bodies) ? HqrArchive.CountEntries(bodies) : 0;
         var items = Enumerable.Range(0, count).Select(k => (k, $"{k,4}  {(k < bodyNames.Count ? bodyNames[k] : null) ?? "(unnamed)"}")).ToList();

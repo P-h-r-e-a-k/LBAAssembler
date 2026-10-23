@@ -130,6 +130,22 @@ internal sealed class CommunityRendererBackend
         }
     }
 
+    // A map's characters changed in its folder (the Character maker): the renderer's entity table, bodies and animations read again
+    // from it, then the island -- an actor of a character made this session would otherwise index past the tables read at start.
+    public void ReloadCharacters(string directory)
+    {
+        lock (directRenderLock)
+        {
+            if (directSession && RendererLibrary is not null)
+            {
+                RendererLibrary.ReloadEntities(Path.Combine(directory, "RESS.HQR"));
+                RendererLibrary.ReloadBodies(Path.Combine(directory, "BODY.HQR"));
+                RendererLibrary.ReloadAnims(Path.Combine(directory, "ANIM.HQR"));
+            }
+            directIsland = null;
+        }
+    }
+
     // The renderer keeps the cubes it has read in a cache that only loading the island again empties: the next frame does that.
     public void ReloadCubes()
     {

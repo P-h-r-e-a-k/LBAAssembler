@@ -14,3 +14,4 @@ CMSet "Body name" "Twinsen on his snowboard"
 Invoke ((CM).FindAll($TS::Descendants, (Cond $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Button))) | Where-Object { $_.Current.Name -eq "Set" } | Select-Object -First 1)
 CMSet "Character name" "Twinsen with snowboard"
 CMPress "Save into the map"
+CMShot "10_rider_body"

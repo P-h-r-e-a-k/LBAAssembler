@@ -42,7 +42,10 @@ for r in csv.DictReader(open(os.path.join(HERE, 'bricks.csv'))):
     if GROUND_CODE(c) and b not in OBJECT_BLOCKS and (x, z) in top and y + 1 >= top[(x, z)] - 0.5:
         ground_brick[(x, z)] = int(r['brick'])
 tiles = []
+# (the sea's corner cells keep the island's sea tile: they have no LBA1 ground to take a tile from)
+sea = {tuple(c) for c in plan['sea_cells']}
 for (x, z) in cells:
+    if (x, z) in sea: continue
     c = [want[(x, z)], want[(x + 1, z)], want[(x, z + 1)], want[(x + 1, z + 1)]]
     if max(c) - min(c) >= 256: tiles.append({'x': x, 'z': z, 'tile': cliff_tiles[(x * 7 + z * 13) % 4], 'cliff': True})
     else: tiles.append({'x': x, 'z': z, 'tile': brick_tile.get(ground_brick.get((x, z)), brick_tile[2713]), 'cliff': False})

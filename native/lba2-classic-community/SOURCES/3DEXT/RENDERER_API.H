@@ -335,6 +335,11 @@ LBA2_RENDERER_API int lba2_renderer_reload_bodies(const char *path);
    if missing or HQR_Anims was never opened, 1 on success. */
 LBA2_RENDERER_API int lba2_renderer_reload_anims(const char *path);
 
+/* Reads the entity table (RESS.HQR entry 44) again, growing its buffer if the table has grown -- after a map's Character maker added an
+   entity, whose actors would otherwise index past the table read at initialize. ressPath is a full file path (empty: the data root's
+   RESS.HQR). Returns 1 on success. */
+LBA2_RENDERER_API int lba2_renderer_reload_entities(const char *ressPath);
+
 /* Projects a world point through the camera set up by the most recent
    lba2_renderer_render_frame() call (see RENDERER_API.CPP for exactly which
    engine functions this reuses). Returns 0 if the point is beyond the far

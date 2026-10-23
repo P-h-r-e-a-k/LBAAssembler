@@ -168,6 +168,9 @@ S32 LoadScene(S32 numscene) {
         indexfile3d = MapPack_Entity(numscene, indexfile3d);
 
         if (!(ptrobj->Flags & SPRITE_3D)) {
+            // (an entity past the table in memory -- a number typed too high, or one added after it was read -- would read a garbage
+            // offset: entity 0 stands in, 2026-10-23)
+            if (BufferFile3D && (indexfile3d < 0 || (U32)indexfile3d + 1 >= *(U32 *)BufferFile3D / 4)) indexfile3d = 0;
             if (!FlagLoadGame) {
                 ptrobj->PtrFile3D = LoadFile3D(indexfile3d);
             }

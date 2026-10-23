@@ -11,7 +11,9 @@ SetText (EditBox "File name" $r) "SKIRESRT"
 SetText (EditBox "Cubes across (X)" $r) "1"
 SetText (EditBox "Cubes down (Z)" $r) "1"
 SetText (EditBox "Land height" $r) "512"
+Start-Sleep -Milliseconds 800; Shot $w.H "01_new_map" | Out-Null
 Invoke ($r.FindFirst($TS::Descendants, (Cond $A::NameProperty "Create"))); Start-Sleep -Seconds 15
 Menu "File" "Save map as"; Start-Sleep -Seconds 2
 FileDialog "Save the map" "$Global:AppDir\Maps\skiresort.lbamap"; Start-Sleep -Seconds 6
 (Main).Title
+Snap "01_map_created"
