@@ -50,6 +50,9 @@ public partial class MainWindow
         buildDecorView = BuildDecorRadio.IsChecked == true;
         buildTerrainView = BuildTerrainRadio.IsChecked == true || buildDecorView;      // (buildings and decor use the terrain editor's own pointer tools)
         ApplyMode();
+        // (the status line says what the view does now, as a change of mode does)
+        if (editMode == EditMode.Build && !buildTerrainView)
+            FileLabel.Text = "Build: click an actor, a zone's outline or a track point to edit it in the Build tab, drag it to move it; Add (or right-click the ground) places a new one where you click.";
     }
 
     private void SetMode(EditMode next)
