@@ -4727,3 +4727,30 @@ best lap, or share their best lap with somebody else." They suggested logging th
   replaced it. Otringal with a character car (`drive_as=`), three scenes and two carried jumps a lap: kept, raced, played back
   through its scenes. Polar Island's sprint: kept at the finish (52.64 s), played back through 20 scene changes and round again
   from the start's scene. A copy renamed with a faster time showed as "Shared ghost car" and was played back.
+
+**Smoothing the playback, and no flashes** (the same evening -- the user: "the car position seems to move very slightly backwards and
+forwards, and appears a little jerky and we also have occasional screen flashing"):
+
+- **The clocks**: the engine simulates in 16 ms steps (`FixedTimestep`, PERSO.CPP's sub-step loop) while a 60 Hz frame is 16.7 ms, so
+  a frame runs one step, and every 0.4 s two. The samples were stamped with the frame's clock (`RaceMod_Frame`), a millisecond or two
+  off the step that moved the car, and every 0.4 s one went twice as far in the same time. And the replay put the car where the ghost
+  was in the frame's time, while the camera follows it in the steps: the camera lagged and caught up, the car slid back and forth.
+  Both now happen in the step itself (`RaceMod_EdgeCross`, after the hero's move, before the camera): `GhostRecord` stamps each
+  sample with the step's clock (a lap's samples now exactly 16 ms apart), and `GhostWatch` puts the car there, where `DrawGhost` then
+  draws it. A ghost raced is drawn at the last step's clock (`SimNow`: `LastSimRefHR`), as the car on the screen is.
+- **The first files** (`ghost=1`): their times are rebuilt as they load (`GhostRetime`). Each sample counts as a whole number of 16 ms
+  steps (its distance against its neighbours' typical step), then the times are nudged towards the old stamps over half a second
+  either side. On the user's Emerald Moon ghost, the samples whose speed jumped more than 10 % went from 264 to 50 of 1,159. New files
+  are `ghost=2`.
+- **The cube changes**: a change of cube puts the car half a cell on, so the two sides' places don't join. Slid between them, the
+  played-back car kept crossing back and forth between two scenes, and the engine's own zones and edge hold changed scenes too.
+  Each change was a flash. Now a sample is never slid across a change of cube. While a ghost plays back, the only scene changes are
+  its own, at its samples (zones refused: `RaceMod_CubeChangeAllowed`). Its car is never rescued off the island's edge
+  (`RaceMod_OffIsland`) and never stopped by a hit (`RaceMod_CarHit`). The user's Emerald Moon replay had all three: three "back on
+  the road" rescues, an edge hold and a hit. Played back now: exactly the lap's 8 scene changes a lap, nothing else.
+- **What is left**: the engine's own step against the frame, one frame in 25 at 60 Hz moving the car two steps, as it does when you
+  drive.
+
+**The game's icon** (LBRA installer, `GameIcon.cs`): the installed `LBRA.exe` had the engine's icon, so its window, the taskbar and
+Explorer showed it. The installer now replaces the exe's icon groups with `pumpkin.ico`'s pictures through Windows' resource update,
+before it marks the exe a windowed program. SDL takes the window's icon from the exe's first icon.
