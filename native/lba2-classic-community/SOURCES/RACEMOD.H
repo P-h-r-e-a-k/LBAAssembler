@@ -54,6 +54,11 @@ S32 RaceMod_FadeFromWhite(void);
 // The display (gear, speed, lap times, checkpoints, race position), drawn over the scene while the hero drives.
 void RaceMod_Draw(void);
 
+// The ghost car (RACEMOD.CPP's ghost section): a track's ghost to race -- `mode` 1 the player's own, 2 the fastest in the ghosts' folder --
+// its file, lap (ms), car, and whether it is the player's own; non-zero when there is one. The ghosts' folder (the user's GHOSTS).
+S32 RaceMod_GhostFind(const char *track, S32 mode, char *path, S32 size, S32 *lap, char *car, S32 carSize, S32 *mine);
+void RaceMod_GhostFolder(char *out, S32 size);
+
 // A raised road (the car file's raised=<file>): a floor of its own, over the ground. While an object is moved the ground's height under
 // it is the road's where the road passes (RaceMod_FloorFor: for something at height y; RaceMod_FloorForNothing afterwards: the ground
 // alone again), and the hero is kept inside its edges (RaceMod_Rail: moving from (ox, oy, oz) to (*nx, *nz), cube-local).

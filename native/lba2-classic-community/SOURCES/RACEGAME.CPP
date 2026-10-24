@@ -32,6 +32,8 @@
  *     camera=0|1|2                        the race camera's view: inside the car, just behind it, further back (the first
  *                                         time: Further back, 2026-10-21) -- Options, "Camera, window, updates", or V (a pad's
  *                                         Back button) during a race (RACEMOD.CPP camera=; RaceGame_CameraChosen)
+ *     ghost=2|1|0                         a time trial's ghost car: the track's fastest (the player's own or one shared; the first
+ *                                         time), the player's own best lap, or none -- G on Best laps (RACEMOD.CPP ghost=)
  *     <id>_unlocked=1                     a car won (its car= line's unlock=<id>: pumpkin_unlocked=1, the pumpkin F1)
  * Unlocking a car (2026-10-20 -- the user: a congratulations "featuring the F1 Pumpkin car, with a message saying they've unlocked the
  * pumpkin for use in time trials. Let's hold this car back until it's unlocked"): a car whose car= line says unlock=<id> is shown on the
@@ -98,6 +100,7 @@
 #include <SYSTEM/MOUSE.H>
 #include <SYSTEM/STRING.H>
 
+#include <SDL3/SDL.h>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -378,6 +381,10 @@ static int s_minimap = 1;                   // the race's mini-map, bottom right
 // the race camera's view (RACEMOD.CPP camera=): 0 inside the car, 1 just behind it -- the camera as it always was -- or 2 further back,
 // the first time (2026-10-21: the user found the car too close, the road ahead hard to see past Twinsen's Halloween buggy)
 static int s_camera = 2;
+// a time trial's ghost car (RACEMOD.CPP ghost=, 2026-10-24): 2 the track's fastest -- the player's own or one shared -- 1 the player's own best lap,
+// 0 none
+static int s_ghost = 2;
+static const char *const s_ghostLabel[3] = {"no ghost", "your best lap", "the fastest ghost"};
 static const char *const s_cameraLabel[3] = {"Camera: inside the car", "Camera: just behind", "Camera: further back"};
 static long long s_updateChecked = 0;       // when the updater was last started (unix time; 0 never)
 static const char *const s_updateKey[3] = {"auto", "ask", "off"};
@@ -413,6 +420,7 @@ static void ReadSettings(void) {
             else if (!strcmp(line, "difficulty")) value = &s_level;
             else if (!strcmp(line, "minimap")) value = &s_minimap;
             else if (!strcmp(line, "camera")) value = &s_camera;
+            else if (!strcmp(line, "ghost")) value = &s_ghost;
             else if (!strcmp(line, "updates")) {
                 value = &s_updates;
                 *value = 0;
@@ -439,6 +447,7 @@ static void ReadSettings(void) {
     if (s_level < 0 || s_level > 2) s_level = 1;
     s_minimap = s_minimap != 0;
     if (s_camera < 0 || s_camera > 2) s_camera = 2;
+    if (s_ghost < 0 || s_ghost > 2) s_ghost = 2;
     Log_Info("[racegame] settings: controls seen %d, power-ups seen %d, qualified %d, skip qualifying %d, updates %s (checked %lld), mini-map %s, camera %d",
              s_controlsSeen, s_powerupsSeen, s_qualified, s_skipQualifying, s_updateKey[s_updates], s_updateChecked, s_minimap ? "on" : "off", s_camera);
 }
@@ -515,7 +524,7 @@ static void WriteSettings(void) {
     fprintf(f, "controls_seen=%d\npowerups_seen=%d\nqualified=%d\nskip_qualifying=%d\ndifficulty=%d\n", s_controlsSeen, s_powerupsSeen, s_qualified,
             s_skipQualifying, s_level);
     fprintf(f, "updates=%s\nupdate_checked=%lld\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0], s_updateChecked);
-    fprintf(f, "minimap=%d\ncamera=%d\n", s_minimap, s_camera);
+    fprintf(f, "minimap=%d\ncamera=%d\nghost=%d\n", s_minimap, s_camera, s_ghost);
     if (s_gridCarName[0]) fprintf(f, "grid_car=%s\n", s_gridCarName);
     for (int i = 0; i < s_nbUnlocked; i++) fprintf(f, "%s_unlocked=1\n", s_unlocked[i]);
     fputs(s_setOther, f);
@@ -715,8 +724,8 @@ static int Absolute(const char *p) { return p[0] == '/' || p[0] == '\\' || (isal
 
 // The race: the special's race file (or its time trial's), the files it names found beside the game's data, then the car and the race
 // game's keys -- and the difficulty chosen (`level`, -1 none: after the file's own, so it counts) -- written to RACE_NOW.TXT in the user's
-// folder and loaded in place of any other.
-static int StartRace(int sp, int trial, const T_RG_CAR *car, int level) {
+// folder and loaded in place of any other. `watch`: a ghost of the track's to play back (Best laps), not a race.
+static int StartRace(int sp, int trial, const T_RG_CAR *car, int level, const char *watch = NULL) {
     const T_RG_SPECIAL *s = &s_sp[sp];
     char src[ADELINE_MAX_PATH], out[ADELINE_MAX_PATH];
     GetResPath(src, ADELINE_MAX_PATH, trial && s->Trial[0] ? s->Trial : s->Race);
@@ -750,6 +759,12 @@ static int StartRace(int sp, int trial, const T_RG_CAR *car, int level) {
     if (s->Scene >= 0) fprintf(f, "start_scene=%d\n", (int)s->Scene);
     fprintf(f, "start_in_car=1\nrace_laps=%d\nend_to_menu=%d\n", SpecialLaps(sp), (int)s_endMs);
     if (trial) fprintf(f, "trial=1\n");
+    // (a time trial's ghost car: the track it is of, the car it names, which ghost is raced -- or the ghost played back)
+    if (trial) {
+        ReadSettings();
+        fprintf(f, "ghost_name=%s\nghost_car=%s\nghost=%d\n", s->Name, car ? car->Name : "Twinsen's car", s_ghost);
+        if (watch && watch[0]) fprintf(f, "ghost_watch=%s\n", watch);
+    }
     // (a qualifying lap or none, the player's answer -- QualifyingPage: the first race always has one)
     else if (s_qualifyNow >= 0) fprintf(f, s_qualifyNow ? "qualifying=1\n" : "qualifying=0\ngrid_back=1\n");
     if (level >= 0 && level <= 2) fprintf(f, "# the difficulty chosen: %s\ndifficulty=%d\n", s_levelName[level], level);
@@ -758,7 +773,7 @@ static int StartRace(int sp, int trial, const T_RG_CAR *car, int level) {
     fprintf(f, "# the camera's view: 0 inside the car, 1 just behind, 2 further back\ncamera=%d\n", s_camera);
     fclose(f);
     s_raceSp = sp; s_raceTrial = trial; s_raceCar = car; s_raceOver = 0; s_raceLevel = level;
-    Log_Info("[racegame] %s: %s with %s%s%s%s", s->Name, trial ? "a time trial" : "a race", car ? car->Name : "Twinsen's car",
+    Log_Info("[racegame] %s: %s with %s%s%s%s", s->Name, watch ? "its ghost played back" : trial ? "a time trial" : "a race", car ? car->Name : "Twinsen's car",
              level >= 0 && level <= 2 ? ", difficulty " : "", level >= 0 && level <= 2 ? s_levelName[level] : "",
              trial || s_qualifyNow < 0 ? "" : s_qualifyNow ? ", a qualifying lap first" : ", no qualifying: from the back of the grid");
     s_qualifyNow = -1;
@@ -1084,9 +1099,10 @@ static int TracksOpen(void) { return s_tracks && s_nbTracks > 0 && (!s_tracksCod
 // A special or track Best laps shows: Track select's only once it is open.
 static int TimesShown(int sp) { return sp >= 0 && sp < s_nbSp && (!s_sp[sp].Track || TracksOpen()); }
 
-// Best laps: a track's ten fastest laps of a time trial, with the car (left and right go through the tracks); Esc, Enter or a click
-// goes back.
-static void TimesPage(void) {
+// Best laps: a track's ten fastest laps of a time trial, with the car (left and right go through the tracks), and its ghost car (2026-10-24):
+// Enter plays it back -- non-zero: the race game starts it -- G changes which ghost a time trial races (the fastest, the player's own,
+// none), O opens the ghosts' folder (to share a ghost, or put one in). Esc or a click goes back; Enter too with no ghost.
+static int TimesPage(void) {
     ReadTimes();
     Page(NULL, 0);
     BoxUpdate();
@@ -1101,15 +1117,44 @@ static void TimesPage(void) {
     int shown = 0;
     for (int i = 0; i < s_nbSp; i++) shown += TimesShown(i);
     S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
-    S32 x0 = cx - 280, x1 = cx + 280, y0 = 60 + oy, y1 = 440 + oy;
+    S32 x0 = cx - 280, x1 = cx + 280, y0 = 20 + oy, y1 = 466 + oy;
     s_clickWas = Click & 3;
+    ReadSettings();
+    char ghostPath[ADELINE_MAX_PATH], ghostCar[96];
+    S32 ghostLap = 0, ghostMine = 0;
+    int ghostOf = -1, watch = 0;
     while (!done) {
         ManageTime();
         MyGetInput();
         // (the window resized: the page laid out and drawn again at the new size)
         if (Refitted()) {
             cx = UI_CENTER_X; oy = UI_VCENTER_OFS;
-            x0 = cx - 280; x1 = cx + 280; y0 = 60 + oy; y1 = 440 + oy;
+            x0 = cx - 280; x1 = cx + 280; y0 = 20 + oy; y1 = 466 + oy;
+            flag = 1;
+        }
+        // (G: which ghost a time trial races; O: the ghosts' folder opened)
+        if (MyKey == K_G) {
+            InitWaitNoKey();
+            s_ghost = (s_ghost + 2) % 3;
+            WriteSettings();
+            Log_Info("[racegame] the ghost car: %s", s_ghostLabel[s_ghost]);
+            ghostOf = -1;
+            flag = 1;
+        } else if (MyKey == K_O) {
+            InitWaitNoKey();
+            char folder[ADELINE_MAX_PATH], url[ADELINE_MAX_PATH + 16];
+            RaceMod_GhostFolder(folder, sizeof(folder));
+            AddDirIfNot(folder);
+            snprintf(url, sizeof(url), "file:///%s", folder[0] == '/' ? folder + 1 : folder);
+            for (char *c = url; *c; c++) if (*c == '\\') *c = '/';
+            Log_Info("[racegame] the ghosts' folder opened: %s", folder);
+            if (!Control_IsActive() && !SDL_OpenURL(url)) Log_Warn("[racegame] the ghosts' folder could not be opened: %s", SDL_GetError());
+        }
+        // (the track's ghost, looked for as the page turns to it)
+        if (sp < s_nbSp && ghostOf != sp) {
+            ghostOf = sp;
+            ghostLap = 0; ghostMine = 0; ghostCar[0] = 0; ghostPath[0] = 0;
+            RaceMod_GhostFind(s_sp[sp].Name, 2, ghostPath, sizeof(ghostPath), &ghostLap, ghostCar, sizeof(ghostCar), &ghostMine);
             flag = 1;
         }
         S32 mx, my;
@@ -1125,11 +1170,11 @@ static void TimesPage(void) {
             Page(NULL, 0);
             ShadeBoxBlk(x0, y0, x1, y1, MENU_SHADE_LVL);
             DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
-            Text(cx, y0 + 12, "Best laps", RG_ORANGE);
-            Text(cx, y0 + 48, s_nbSp ? s_sp[sp].Name : "No tracks", LBAWHITE);
+            Text(cx, y0 + 8, "Best laps", RG_ORANGE);
+            Text(cx, y0 + 40, s_nbSp ? s_sp[sp].Name : "No tracks", LBAWHITE);
             if (sp < s_nbSp && !s_nbTimes[sp]) {
-                Text(cx, y0 + 150, "No laps yet: drive a time trial!", RG_GREY);
-                Text(cx, y0 + 186, "Its fastest lap goes here.", RG_GREY);
+                Text(cx, y0 + 140, "No laps yet: drive a time trial!", RG_GREY);
+                Text(cx, y0 + 176, "Its fastest lap goes here.", RG_GREY);
             }
             for (int k = 0; sp < s_nbSp && k < s_nbTimes[sp]; k++) {
                 const T_RG_TIME *t = &s_times[sp][k];
@@ -1138,7 +1183,9 @@ static void TimesPage(void) {
                 snprintf(line, sizeof(line), "%2d.  %s   %s", k + 1, time, t->Car);
                 char text[256];
                 Label(text, line);
-                const S32 y = y0 + 86 + k * 26;
+                // (a long car name cut to the page's width: "Twinsen's Halloween buggy" ran past its edge)
+                for (size_t n = strlen(text); n > 12 && SizeFont(text) > x1 - x0 - 48; n--) snprintf(text + n - 3, 4, "...");
+                const S32 y = y0 + 74 + k * 24;
                 ColorFont(BLACK);
                 Font(x0 + 34 + 3, y + 3, text);
                 ColorFont(k == 0 ? RG_ORANGE : LBAWHITE);
@@ -1151,20 +1198,41 @@ static void TimesPage(void) {
                 char count[32], text[64];
                 snprintf(count, sizeof(count), "%d of %d", at, shown);
                 Label(text, count);
-                TextAt(x1 - 16 - SizeFont(text), y0 + 12, text, RG_GREY);
+                TextAt(x1 - 16 - SizeFont(text), y0 + 8, text, RG_GREY);
             }
-            Text(cx, y1 - 36, shown > 1 ? "Left, right: track    Esc: back" : "Esc: back", RG_GREY);
+            // the track's ghost car (the fastest in the ghosts' folder) and the keys -- short lines: the font is wide
+            char line[240];
+            if (ghostLap > 0) {
+                char time[24];
+                TimeText(time, sizeof(time), ghostLap);
+                snprintf(line, sizeof(line), "%s  %s", ghostMine ? "Your ghost car" : "Shared ghost car", time);
+                Text(cx, y0 + 322, line, RG_ORANGE);
+                Text(cx, y0 + 350, "Enter: watch it    O: folder", RG_GREY);
+            } else {
+                Text(cx, y0 + 322, "No ghost car yet", RG_GREY);
+                Text(cx, y0 + 350, "O: the ghosts' folder", RG_GREY);
+            }
+            snprintf(line, sizeof(line), "G: race %s", s_ghostLabel[s_ghost]);
+            Text(cx, y0 + 376, line, RG_GREY);
+            Text(cx, y0 + 402, shown > 1 ? "Left, right: track    Esc: back" : "Esc: back", RG_GREY);
             BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
         }
         // (a frame every pass, drawn or not -- a box of it put up again: a present happens only for one -- the mouse's pointer goes with
         // it, and the engine's control socket is served at a present)
         BoxStaticAdd(x0, y1 - 40, x1, y1 - 8);
         BoxUpdate();
-        if (Confirmed()) { WaitNoInput(); done = 1; }
+        if (Confirmed()) { WaitNoInput(); done = 1; watch = ghostLap > 0 && sp < s_nbSp; }
         else if (Escaped()) done = 1;
     }
     AsciiMode = FALSE;
     Page(NULL, 0);
+    // (the ghost played back: the track's time trial, its car driven along the ghost)
+    if (watch) {
+        Log_Info("[racegame] Best laps: %s's ghost played back (%s)", s_sp[sp].Name, ghostPath);
+        s_lastSp = sp;
+        return StartRace(sp, 1, NULL, -1, ghostPath);
+    }
+    return 0;
 }
 
 // ---- the power-ups, the controls, the qualifying -------------------------------------------------------------------------------------
@@ -2294,7 +2362,7 @@ S32 RaceGame_Menu(S32 inGame) {
             if (SpecialsPage()) return RACEGAME_START;
             break;
         case RG_ID_TIMES:
-            TimesPage();
+            if (TimesPage()) return RACEGAME_START;
             break;
         }
         // (the main menu again: its page put back; DoGameMenu draws its rows)

@@ -4690,3 +4690,40 @@ initially map this to shift." In the race-track mode only (the race game and the
 with Shift held 15 / 25 / 40 frames: slides of 33 / 53 / 56 degrees, 109 km/h down to 80 / 69 / 55, the lap 0.2 to 0.7 s slower than
 the pilot's own line (it brakes there anyway) and the car out of the bend on the road each time. Swung square across the straight with
 the handbrake held, the car slid sideways into the rail and was held there on the deck, no rescue.
+
+## The ghost car (2026-10-24)
+
+The user: "Add a function that records a "ghost" car for a track ... either so a user can watch their lap back, compete against their
+best lap, or share their best lap with somebody else." They suggested logging the keys, since a time trial has no power-ups.
+
+- **Why not the keys**: the engine moves everything by the real time each frame took (`TimerRefHR`, a variable step), so the same
+  keys drive a different lap at a different frame rate. Two headless runs of the same input already drift by seconds. The ghost
+  keeps where the car was instead: exact on any PC, at any frame rate.
+- **Recording** (RACEMOD.CPP, the ghost section before `RaceMod_Frame`): every frame of a time trial's lap, after the frame's moves
+  (`GhostRecord`, at most every 15 ms), one sample: the lap's clock, the car's place in island units, its angles as drawn, its body
+  and animation, the island. With `drive_as=` it is the car drawn in Twinsen's place, pitched as `DrawDriveAs` pitches it. The lap's
+  clock at each checkpoint goes with it (`GhostSplit`).
+- **Kept** (`GhostLapDone`, from `RaceMod_Lap` and from `SprintOver` for a sprint's run): a lap quicker than the player's own best ghost
+  is written to `<user folder>\GHOSTS\<track>.ghost`. The track is `ghost_name=` (the race game writes its track's name), else the race
+  file's name. A lap quicker than the ghost raced so far is raced from the next lap on.
+- **The file**: text. A head (`ghost=1`, `track=`, `lap=` ms, `car=`, `date=`, `splits=`, `points=`), then one line a sample:
+  `t x y z alpha beta gamma body anim island`. A 57 s Temple lap is about 3,400 lines, 155 KB. Written to `.new`, then renamed.
+- **Raced** (`ghost=2` the track's fastest file in `GHOSTS`, any name; `1` the player's own; `0` none): `DrawGhost` in `RaceMod_Draw`,
+  after `DrawDriveAs`. It is interpolated between samples (not across a jump of more than 4096 units: a rescue, a teleporter). It is
+  drawn tested against the scene's depth without writing it (`FILL_POLY_FOG_NZW`), into a screen copied just before. Every pixel it
+  changed is mixed with the one under it (`GhostMix`: 55 % of the ghost's colour, tinted 30 % to pale blue, the palette's nearest,
+  made as needed and again when the palette changes). The display's line over Best time shows the ghost's lap. For 3 s after a
+  checkpoint or the line it shows the gap in words, "0.44 ahead" or "1.37 behind": the font has no `+`.
+- **Played back** (`ghost_watch=<file>`, `GhostWatch`): Twinsen's car hidden, the ghost drawn solid where it is, the car put there
+  every frame so the camera follows. No laps counted, no grid, no rescues, no keys but the menu's. Past the cube's edge, the car goes
+  into that cube's scene as a carried jump's car does (`FrogCarry`, now with a `why`). After the lap's end it rests 2.5 s and goes
+  round again, back to the start's scene if the run ended elsewhere (a sprint).
+- **The race game** (RACEGAME.CPP): `StartRace` writes `ghost_name=`, `ghost_car=` and `ghost=` for a time trial. Best laps shows the
+  track's fastest ghost ("Your ghost car" / "Shared ghost car" and its time): Enter plays it back (`StartRace` with `ghost_watch=`),
+  G goes round the fastest / your best lap / none (`ghost=` in `RACEGAME_SETTINGS.TXT`), O opens the folder (`SDL_OpenURL`, not under
+  the control socket). The page moved up and its car names are cut to its width: "Twinsen's Halloween buggy" ran past the edge.
+- **Tested** (an LBRA install from this build, `E:\dump\TEMP\lbra\ghost_inst`, driven by `--listen`): the Temple with Twinsen's
+  buggy. Lap 1 (57.67 s) was kept; the next laps raced it, the ghost seen ahead after a stop, the splits shown; lap 5 (57.16 s)
+  replaced it. Otringal with a character car (`drive_as=`), three scenes and two carried jumps a lap: kept, raced, played back
+  through its scenes. Polar Island's sprint: kept at the finish (52.64 s), played back through 20 scene changes and round again
+  from the start's scene. A copy renamed with a faster time showed as "Shared ghost car" and was played back.

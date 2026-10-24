@@ -142,6 +142,12 @@
  *                                the race game a win says "You win!" (ahead of the one to beat but not first: the place), not "You beat
  *                                <him>!" (the user, 2026-10-20). A lost sprint isn't run again with it (2026-10-22: Track select's
  *                                Polar Island and palace sprints): the menu follows
+ *     ghost=<0|1|2>              (2026-10-24) a time trial races a ghost car: 0 none, 1 the player's own best lap, 2 (with none) the
+ *                                track's fastest in the user's GHOSTS folder, the player's own or one shared. Each lap is recorded -- where the car
+ *                                was, not the keys -- and one quicker than the player's own best is kept, GHOSTS/<track>.ghost (the ghost's section)
+ *     ghost_name=<track>         the track the ghosts are of (the race game's track; else the race file's own name)
+ *     ghost_car=<name>           the car driven, as the ghost names it
+ *     ghost_watch=<file>         a ghost played back: Twinsen's car driven along it, round and round, no laps counted (GhostWatch)
  *     twinsen_body=<generic> [<firing>] [<half size>]   Twinsen's own buggy with bodies of its entity of the builder's in place of its own
  *                                while he drives (the Halloween buggy, painted orange with bats, 2026-10-20: HeroLook)
  *   Halloween (2026-10-17, the Temple of Bú's; the builder writes these for it alone):
@@ -233,6 +239,8 @@ extern void AdjustDirObject(T_OBJET *ptrobj, S32 oldmove);       // GERELIFE.CPP
 #include <SVGA/SCREEN.H>
 #include <SYSTEM/KEYBOARD.H>
 #include <SYSTEM/KEYBOARD_KEYS.H>
+#include <SDL3/SDL.h>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -518,6 +526,16 @@ static int FootRescue(const char *where);
 static int FootCross(void);
 static U32 WalkInput(void);
 static int s_trial = 0;                    // trial=
+// the ghost car (2026-10-24: the ghost's section, before RaceMod_Frame)
+static int s_ghostMode = 2;                // ghost=: 0 none, 1 the player's own best lap, 2 the track's fastest ghost (the player's own or one shared)
+static int s_ghostWatch = 0;               // ghost_watch=: this run plays a ghost back, the car driven along it
+static char s_ghostName[96] = "";          // ghost_name=: the track the ghosts are of (else the race file's name)
+static char s_ghostCar[96] = "";           // ghost_car=: the car driven, as its ghost names it
+static char s_ghostWatchPath[ADELINE_MAX_PATH] = "";
+static void GhostSplit(int checkpoint);
+static void GhostLapDone(S32 lap);
+static void GhostLapStart(void);
+static void GhostReset(void);
 static S32 s_endToMenu = 0;                // end_to_menu=
 #define RACE_CELEBRATE_MS 2500             // ... or this soon, a win that unlocks a car: the race game's congratulations (RaceGame_Celebrate)
 static S32 s_menuAt = 0;                   // when the finished race goes back to the menu (0: not yet)
@@ -3811,6 +3829,10 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "start_in_car")) s_startInCar = atoi(v);
         else if (!strcmp(key, "on_foot")) s_onFoot = atoi(v);
         else if (!strcmp(key, "trial")) s_trial = atoi(v);
+        else if (!strcmp(key, "ghost")) s_ghostMode = atoi(v);
+        else if (!strcmp(key, "ghost_watch")) { snprintf(s_ghostWatchPath, sizeof(s_ghostWatchPath), "%s", v); s_ghostWatch = v[0] != 0; }
+        else if (!strcmp(key, "ghost_name")) snprintf(s_ghostName, sizeof(s_ghostName), "%s", v);
+        else if (!strcmp(key, "ghost_car")) snprintf(s_ghostCar, sizeof(s_ghostCar), "%s", v);
         else if (!strcmp(key, "end_to_menu")) s_endToMenu = atoi(v);
         else if (!strcmp(key, "camera")) {
             // (the race camera's view, s_camView -- unless the player has changed it since the race file was loaded)
@@ -4279,6 +4301,8 @@ void RaceMod_Lap(S32 x, S32 z) {
     const int same = pcx == CurrentCubeX && pcz == CurrentCubeY;
     px = x; pz = z; pcx = CurrentCubeX; pcz = CurrentCubeY;
     if (!same || (x == x0 && z == z0)) return;
+    // (a ghost played back: the car is driven along it, and no lap is counted -- RaceMod_Frame, GhostWatch)
+    if (s_ghostWatch) return;
 
     // halfway round the lap (the line it follows, a third to two thirds along): the next crossing of the start line is a lap
     if (s_laps > 0 && !s_halfway) {
@@ -4295,6 +4319,7 @@ void RaceMod_Lap(S32 x, S32 z) {
             if (i == s_next && CrossLine(&s_checkpoints[i], x0, z0, x, z) > 0) {
                 s_next++;
                 Log_Info("[racemod] checkpoint %d of %d", s_next, s_nbCheckpoints);
+                GhostSplit(s_next - 1);
             } else if (i == s_next - 1 && CrossLine(&s_checkpoints[i], x0, z0, x, z) < 0) {
                 s_next--;
                 Log_Info("[racemod] checkpoint %d crossed backwards", s_next + 1);
@@ -4360,6 +4385,8 @@ void RaceMod_Lap(S32 x, S32 z) {
         s_heldBest = s_trial && s_phase != PHASE_QUALIFYING && (!bestBefore || s_lastLap < bestBefore);
         Log_Info("[racemod] lap %d in %.2f s%s", (int)s_laps, s_lastLap / 1000.0, s_phase == PHASE_QUALIFYING ? " (qualifying)" : "");
         if (s_phase == PHASE_RACE) PackLapLog((int)s_laps);
+        // (a time trial's lap: its ghost kept when it is the track's best -- GhostLapDone)
+        if (s_trial && s_phase == PHASE_RACE) GhostLapDone(s_lastLap);
         // the time to beat: under it, the story moves on (once)
         if (const S32 target = BeatTime()) {
             char text[64];
@@ -4434,6 +4461,7 @@ void RaceMod_Lap(S32 x, S32 z) {
     s_lapStart = now;
     s_halfway = 0;
     s_next = 0;
+    GhostLapStart();
     // (a time trial has no power-ups at all since 2026-10-19 -- its can of Gazogem a lap gone: the user, "let's also drop the gazogem
     // powerup from Time trial's" -- so its laps and the qualifying laps are driven alike for the best laps)
 }
@@ -4466,6 +4494,8 @@ static void SprintOver(S32 now, int crossed) {
     ApplySets(s_finishSet, s_nbFinishSet);
     s_endAt = now + after;
     s_endWon = s_beatMain;
+    // (a sprint's time trial: its run, start line to finish line, is its lap -- its ghost kept as a lap's is, GhostLapDone)
+    if (crossed && s_trial && s_laps > 0) GhostLapDone(now - s_lapStart);
     RaceGame_Finished(s_trial, s_goAt && now > s_goAt ? now - s_goAt : 0, crossed && s_laps > 0 ? now - s_lapStart : 0, place, racers);
     if (s_endToMenu > 0) s_menuAt = now + s_endToMenu;
 }
@@ -4710,6 +4740,7 @@ double RaceMod_PlanLap(double topPct, double accelPct, double brakePct, double s
 }
 
 U32 RaceMod_AutoInput(void) {
+    if (s_ghostWatch) return 0;
     // (the console's racewalk: on foot, through its points -- on_foot=)
     if ((s_walkN > 0 || s_walkCar) && RaceMod_OnFoot()) return CubeMode == CUBE_EXTERIEUR ? WalkInput() : 0;
     // (the console's racestop: the test pilot's car stopped where it comes within reach of a place, and Twinsen out of it)
@@ -5513,8 +5544,9 @@ static int FrogArc(void) {
 }
 
 // The car put where a frame of the race-track mode's has it (world units): in the cube about, or -- out past its edge -- into the next
-// cube's scene (cube_scene=), this frame at the edge (as a carried jump's car is: RaceArc).
-static void FrogCarry(double x, double y, double z, S32 *nx, S32 *ny, S32 *nz) {
+// cube's scene (cube_scene=), this frame at the edge (as a carried jump's car is: RaceArc). `why` for the log: the frog's throw, a ghost
+// played back (GhostWatch).
+static void FrogCarry(double x, double y, double z, S32 *nx, S32 *ny, S32 *nz, const char *why = "thrown back by the frog") {
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     const int qx = (int)floor(x / 32768.0), qz = (int)floor(z / 32768.0);
     if (qx != CurrentCubeX || qz != CurrentCubeY) {
@@ -5526,7 +5558,7 @@ static void FrogCarry(double x, double y, double z, S32 *nx, S32 *ny, S32 *nz) {
             NewPosX = (S32)floor(x - qx * 32768.0 + 0.5); NewPosY = (S32)floor(y + 0.5); NewPosZ = (S32)floor(z - qz * 32768.0 + 0.5);
             FlagChgCube = 1;
             FlagReajustPosTwinsen = FALSE;
-            Log_Info("[racemod] thrown back by the frog: into cube (%d,%d), scene %d", qx, qz, scene);
+            Log_Info("[racemod] %s: into cube (%d,%d), scene %d", why, qx, qz, scene);
         }
         x = x - cx < 1 ? cx + 1 : x - cx > 32767 ? cx + 32767 : x;
         z = z - cz < 1 ? cz + 1 : z - cz > 32767 ? cz + 32767 : z;
@@ -9304,7 +9336,8 @@ static void HeroLook(S32 now, int driving) {
     s_superShown = superJet;
     // (and seen from inside -- camera=0: InsideCamera -- not drawn at all, nor its shadow, nor what is drawn in its place)
     const int inside = driving && InsideView();
-    if (superJet || driveAs || inside) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
+    // (and a ghost played back: the ghost drawn in his car's place -- DrawGhost)
+    if (superJet || driveAs || inside || (driving && s_ghostWatch)) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
     else if (s_heroHidden) { hero->Flags &= ~INVISIBLE; s_heroHidden = 0; }
     // his own car painted (twinsen_body=): its bodies on him in place of the buggy's own -- every frame, as the game puts the buggy's back
     // whenever he gets in, stops firing or is grown back after the lightning (GEN_BODY_TUNIQUE: the buggy's, or GEN_BODY_NORMAL / _MAGE as
@@ -10255,6 +10288,8 @@ U32 RaceMod_FilterInput(U32 input) {
     if (RaceMod_Active() && Comportement == C_BUGGY) input &= ~(U32)I_INVENTORY;
     // (a pad's Back button changes the camera's view in the car -- RaceCameraKey -- not the holomap)
     if (RaceMod_Active() && Comportement == C_BUGGY && CheckKey(K_GAMEPAD_BACK)) input &= ~(U32)I_HOLOMAP;
+    // (a ghost played back: the car is the ghost's -- nothing gets Twinsen out of it, nor fires, jumps or dodges)
+    if (RaceMod_Active() && s_ghostWatch && Comportement == C_BUGGY) input &= ~(U32)(I_JOY | I_FIRE | I_ACTION | I_ESQUIVE);
     if (Explore() && CubeMode == CUBE_EXTERIEUR) {
         const int act = (input & I_ACTION_M) != 0, pressed = act && !s_footActWas;
         s_footActWas = act;
@@ -10361,6 +10396,7 @@ double RaceMod_JetSteer(void) {
 // by (with none it is only a boost: it had the keys and gave none back, and the car stood still until it ran out); skidding on oil too.
 S32 RaceMod_Takeover(void) {
     if ((s_walkN > 0 || s_walkCar) && RaceMod_OnFoot()) return 1;   // (the console's racewalk)
+    if (RaceMod_Active() && s_ghostWatch && Comportement == C_BUGGY) return 1;   // (a ghost played back drives the car: GhostWatch)
     return RaceMod_Active() && Comportement == C_BUGGY && ((TimerRefHR < s_jetUntil && Guide()) || TimerRefHR < s_skidUntil);
 }
 
@@ -13085,6 +13121,517 @@ static void RaceCameraKey(void) {
     else if (s_camView == RACE_VIEW_BEHIND && s_followForView) { FollowCamera = FALSE; s_followForView = 0; }
 }
 
+// ---- the ghost car ------------------------------------------------------------------------------------------------------------------
+// (2026-10-24 -- the user: "Add a function that records a "ghost" car for a track ... so a user can watch their lap back, compete against
+// their best lap, or share their best lap with somebody else".) The keys aren't what is kept: the engine moves the car by the time each
+// frame took (TimerRefHR), so the same keys drive another lap at another frame rate, and on another PC. What is kept is where the car
+// was: every frame of a time trial's lap (RaceMod_Frame, after the frame's moves), its place (island units), its angles, the body it
+// showed and its animation, at the lap's clock -- and the lap's time at each checkpoint. A lap faster than the player's own best ghost of
+// the track is written to the user's folder, GHOSTS\<track>.ghost: a text file, which another player puts in their own GHOSTS folder
+// (under another name) to race against it. The laps after it -- and the trials after it -- race against the track's fastest ghost (or
+// the player's own, or none: ghost=), drawn see-through over the scene (DrawGhost); a checkpoint says how far ahead of it or behind it
+// the car is. And a run with ghost_watch= plays a ghost back: Twinsen's car driven along it, round and round, the camera behind it (the
+// race game's Best laps: Enter).
+#define RACE_GHOST_EVERY 15                // a sample at most this often (ms)
+#define RACE_GHOST_MAX 120000              // ... and no more than this many a lap (30 minutes of them)
+#define RACE_GHOST_JUMP 4096               // samples further apart than this (a rescue, a teleporter): not slid between
+#define RACE_GHOST_SPLIT_MS 3000           // a checkpoint's time against the ghost shown this long
+#define RACE_GHOST_SHARE 0.55              // how much of the ghost's colour is over the scene behind it ...
+#define RACE_GHOST_TINT 0.3                // ... that colour this much of the way to a pale blue
+#define RACE_GHOST_WATCH_REST 2500         // played back: the car at the line this long before it goes round again (ms)
+#define RACE_GHOST_FOLDER "GHOSTS"         // in the user's folder (GetCfgPath)
+
+typedef struct {
+    S32 T, X, Y, Z;                        // the lap's clock (ms); the car's place, island units
+    S16 Alpha, Beta, Gamma;                // its angles as drawn
+    S16 Body, Anim;                        // the body shown (BODY.HQR) and its animation (ANIM.HQR; -1 none)
+    S16 Island;                            // the island it was on
+} T_RACE_LAPGHOST_PT;
+
+typedef struct {
+    T_RACE_LAPGHOST_PT *P;
+    int N, Cap;
+    S32 Lap;                               // the lap's time (ms; 0: no ghost)
+    S32 Split[RACE_MAX_CHECKPOINTS];       // the lap's clock at each checkpoint
+    int NbSplits;
+    char Track[96], Car[96], Date[16];
+} T_RACE_LAPGHOST;
+
+static T_RACE_LAPGHOST s_ghostRec;            // the lap being recorded ...
+static int s_ghostRecLap = 0;              // ... which lap that is (0: none)
+static T_RACE_LAPGHOST s_ghost;               // the ghost raced, or played back
+static char s_ghostFile[ADELINE_MAX_PATH] = "";   // ... the file it came from
+static S32 s_ghostOwnLap = 0;              // the player's own best ghost of the track (ms; 0: none yet)
+static int s_ghostChecked = 0;             // the track's ghosts looked for (GhostStart)
+static int s_ghostAt = 0;                  // the sample the ghost is at (GhostAt: from it onwards)
+static S32 s_ghostSplitAt = 0, s_ghostSplitDiff = 0;   // the last checkpoint's time against the ghost: when, and by how much (ms, + behind)
+static S32 s_ghostWatchT0 = 0;             // played back: when its lap began
+static double s_ghostSpeed = 0;            // ... the speed it is going (units/s, for the display)
+static T_OBJ_3D s_ghostObj;
+static int s_ghostBody = -1, s_ghostAnim = -1;   // the body and animation s_ghostObj is ready with
+
+static void GhostFree(T_RACE_LAPGHOST *g) { free(g->P); memset(g, 0, sizeof(*g)); }
+
+static void GhostReset(void) {
+    GhostFree(&s_ghostRec); GhostFree(&s_ghost);
+    s_ghostRecLap = 0; s_ghostFile[0] = 0; s_ghostOwnLap = 0; s_ghostChecked = 0; s_ghostAt = 0; s_ghostSplitAt = 0; s_ghostWatchT0 = 0;
+    s_ghostMode = 2; s_ghostWatch = 0; s_ghostName[0] = 0; s_ghostCar[0] = 0; s_ghostWatchPath[0] = 0;
+    s_ghostBody = s_ghostAnim = -1;
+}
+
+// The track the ghosts are of: ghost_name= (the race game's track), else the race file's own name.
+static void GhostTrack(char *out, size_t size) {
+    if (s_ghostName[0]) { snprintf(out, size, "%s", s_ghostName); return; }
+    const char *path = getenv("LBA2_RACETRACK_FILE");
+    const char *base = path ? path : "";
+    for (const char *p = base; *p; p++) if (*p == '/' || *p == '\\') base = p + 1;
+    snprintf(out, size, "%s", base);
+    char *dot = strrchr(out, '.');
+    if (dot && dot != out) *dot = 0;
+}
+
+void RaceMod_GhostFolder(char *out, S32 size) {
+    char path[ADELINE_MAX_PATH];
+    GetCfgPath(path, ADELINE_MAX_PATH, RACE_GHOST_FOLDER);
+    snprintf(out, (size_t)size, "%s", path);
+}
+
+// The player's own ghost of a track: GHOSTS\<track>.ghost, the track's name kept to letters, digits, spaces and - _ (others '_').
+static void GhostOwnPath(const char *track, char *out, size_t size) {
+    char name[100];
+    size_t n = 0;
+    for (const char *p = track; *p && n + 1 < sizeof(name) - 6; p++) {
+        const unsigned char c = (unsigned char)*p;
+        name[n++] = (isalnum(c) && c < 128) || c == ' ' || c == '-' || c == '_' ? (char)c : '_';
+    }
+    name[n] = 0;
+    if (!n) snprintf(name, sizeof(name), "track");
+    char file[128];
+    snprintf(file, sizeof(file), RACE_GHOST_FOLDER "/%s.ghost", name);
+    GetCfgPath(out, (U16)size, file);
+}
+
+static void GhostTrim(char *s) {
+    size_t n = strlen(s);
+    while (n && (s[n - 1] == '\n' || s[n - 1] == '\r' || s[n - 1] == ' ')) s[--n] = 0;
+}
+
+// A ghost file read: its head alone (`points` 0) or its samples too. Non-zero: a ghost of a lap.
+static int GhostRead(const char *path, T_RACE_LAPGHOST *g, int points) {
+    memset(g, 0, sizeof(*g));
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    char line[512];
+    int ok = 0, want = 0;
+    while (fgets(line, sizeof(line), f)) {
+        GhostTrim(line);
+        if (!line[0] || line[0] == '#') continue;
+        char *eq = strchr(line, '=');
+        if (!eq) break;
+        *eq = 0;
+        const char *v = eq + 1;
+        if (!strcmp(line, "ghost")) ok = atoi(v) >= 1;
+        else if (!strcmp(line, "track")) snprintf(g->Track, sizeof(g->Track), "%s", v);
+        else if (!strcmp(line, "lap")) g->Lap = atoi(v);
+        else if (!strcmp(line, "car")) snprintf(g->Car, sizeof(g->Car), "%s", v);
+        else if (!strcmp(line, "date")) snprintf(g->Date, sizeof(g->Date), "%s", v);
+        else if (!strcmp(line, "splits")) {
+            const char *p = v;
+            char *end;
+            g->NbSplits = 0;
+            while (g->NbSplits < RACE_MAX_CHECKPOINTS) {
+                const long t = strtol(p, &end, 10);
+                if (end == p) break;
+                g->Split[g->NbSplits++] = (S32)t;
+                p = end;
+            }
+        } else if (!strcmp(line, "points")) { want = atoi(v); break; }
+    }
+    if (!ok || g->Lap <= 0 || want < 2 || want > RACE_GHOST_MAX) { fclose(f); g->Lap = 0; return 0; }
+    if (!points) { fclose(f); return 1; }
+    g->P = (T_RACE_LAPGHOST_PT *)malloc(sizeof(T_RACE_LAPGHOST_PT) * want);
+    if (!g->P) { fclose(f); g->Lap = 0; return 0; }
+    g->Cap = want;
+    while (g->N < want && fgets(line, sizeof(line), f)) {
+        int t, x, y, z, a, b, c, body, anim, island;
+        if (sscanf(line, "%d %d %d %d %d %d %d %d %d %d", &t, &x, &y, &z, &a, &b, &c, &body, &anim, &island) != 10) continue;
+        T_RACE_LAPGHOST_PT *p = &g->P[g->N++];
+        p->T = t; p->X = x; p->Y = y; p->Z = z;
+        p->Alpha = (S16)(a & 4095); p->Beta = (S16)(b & 4095); p->Gamma = (S16)(c & 4095);
+        p->Body = (S16)body; p->Anim = (S16)anim; p->Island = (S16)island;
+    }
+    fclose(f);
+    if (g->N < 2) { GhostFree(g); return 0; }
+    return 1;
+}
+
+static int GhostWrite(const char *path, const T_RACE_LAPGHOST *g) {
+    char folder[ADELINE_MAX_PATH], tmp[ADELINE_MAX_PATH];
+    RaceMod_GhostFolder(folder, sizeof(folder));
+    AddDirIfNot(folder);
+    snprintf(tmp, sizeof(tmp), "%s.new", path);
+    FILE *f = fopen(tmp, "w");
+    if (!f) { Log_Warn("[racemod] ghost: %s could not be written", tmp); return 0; }
+    fprintf(f, "# A ghost car (LBA2 race tracks, RACEMOD.CPP): one lap of a time trial -- where the car was at each moment of it.\n");
+    fprintf(f, "# Put it in another player's %s folder (under a name of its own) and their time trials race against it.\n", RACE_GHOST_FOLDER);
+    fprintf(f, "# Each line after points=: ms into the lap, x y z (island units), alpha beta gamma, body, animation, island.\n");
+    fprintf(f, "ghost=1\ntrack=%s\nlap=%d\ncar=%s\ndate=%s\nsplits=", g->Track, (int)g->Lap, g->Car, g->Date);
+    for (int i = 0; i < g->NbSplits; i++) fprintf(f, i ? " %d" : "%d", (int)g->Split[i]);
+    fprintf(f, "\npoints=%d\n", g->N);
+    for (int i = 0; i < g->N; i++) {
+        const T_RACE_LAPGHOST_PT *p = &g->P[i];
+        fprintf(f, "%d %d %d %d %d %d %d %d %d %d\n", (int)p->T, (int)p->X, (int)p->Y, (int)p->Z, p->Alpha, p->Beta, p->Gamma, p->Body, p->Anim, p->Island);
+    }
+    const int good = !ferror(f);
+    fclose(f);
+    if (!good) { remove(tmp); return 0; }
+    remove(path);
+    if (rename(tmp, path)) { Log_Warn("[racemod] ghost: %s could not be put in place", path); remove(tmp); return 0; }
+    return 1;
+}
+
+// A track's ghost to race (RACEGAME.CPP's Best laps too): `mode` 1 the player's own, 2 the fastest in the ghosts' folder (his own or one
+// shared). Its file into `path`, its lap, its car, and whether it is the player's own. Non-zero: one found.
+S32 RaceMod_GhostFind(const char *track, S32 mode, char *path, S32 size, S32 *lap, char *car, S32 carSize, S32 *mine) {
+    char own[ADELINE_MAX_PATH];
+    GhostOwnPath(track, own, sizeof(own));
+    T_RACE_LAPGHOST g;
+    S32 best = 0;
+    if (GhostRead(own, &g, 0) && !strcmp(g.Track, track)) {
+        best = g.Lap;
+        snprintf(path, (size_t)size, "%s", own);
+        if (car) snprintf(car, (size_t)carSize, "%s", g.Car);
+        if (mine) *mine = 1;
+    }
+    if (mode >= 2) {
+        char folder[ADELINE_MAX_PATH];
+        RaceMod_GhostFolder(folder, sizeof(folder));
+        int count = 0;
+        char **files = SDL_GlobDirectory(folder, "*.ghost", SDL_GLOB_CASEINSENSITIVE, &count);
+        for (int i = 0; files && i < count; i++) {
+            char full[ADELINE_MAX_PATH];
+            const size_t n = strlen(folder);
+            snprintf(full, sizeof(full), "%s%s%s", folder, n && folder[n - 1] != '/' && folder[n - 1] != '\\' ? "/" : "", files[i]);
+            if (!GhostRead(full, &g, 0) || strcmp(g.Track, track) || (best && g.Lap >= best)) continue;
+            // (the player's own, found again by its other spelling of the path, is theirs)
+            const char *a = strrchr(own, '/'), *b = strrchr(own, '\\');
+            const char *ownName = a > b ? a + 1 : b ? b + 1 : own;
+            best = g.Lap;
+            snprintf(path, (size_t)size, "%s", full);
+            if (car) snprintf(car, (size_t)carSize, "%s", g.Car);
+            if (mine) *mine = !SDL_strcasecmp(files[i], ownName);
+        }
+        SDL_free(files);
+    }
+    if (lap) *lap = best;
+    return best > 0;
+}
+
+// The race's ghosts looked for, once a run: a time trial's to race against (ghost=), or the one to play back (ghost_watch=).
+static void GhostStart(void) {
+    if (s_ghostChecked) return;
+    s_ghostChecked = 1;
+    if (!s_trial && !s_ghostWatch) return;
+    char track[96], path[ADELINE_MAX_PATH];
+    GhostTrack(track, sizeof(track));
+    if (s_ghostWatch) {
+        if (GhostRead(s_ghostWatchPath, &s_ghost, 1)) {
+            snprintf(s_ghostFile, sizeof(s_ghostFile), "%s", s_ghostWatchPath);
+            Log_Info("[racemod] ghost: playing back %s's lap of %.2f s (%s, %s; %d points)", s_ghost.Track, s_ghost.Lap / 1000.0, s_ghost.Car, s_ghost.Date, s_ghost.N);
+        } else {
+            s_ghostWatch = 0;
+            Log_Warn("[racemod] ghost: %s is no ghost to play back", s_ghostWatchPath);
+        }
+        return;
+    }
+    S32 lap = 0, mine = 0;
+    char own[ADELINE_MAX_PATH];
+    GhostOwnPath(track, own, sizeof(own));
+    T_RACE_LAPGHOST head;
+    if (GhostRead(own, &head, 0) && !strcmp(head.Track, track)) s_ghostOwnLap = head.Lap;
+    if (s_ghostMode <= 0) { Log_Info("[racemod] ghost: none raced (ghost=0); %s's own best %.2f s", track, s_ghostOwnLap / 1000.0); return; }
+    if (RaceMod_GhostFind(track, s_ghostMode, path, sizeof(path), &lap, NULL, 0, &mine) && GhostRead(path, &s_ghost, 1)) {
+        snprintf(s_ghostFile, sizeof(s_ghostFile), "%s", path);
+        Log_Info("[racemod] ghost: racing %s %s lap of %.2f s (%s, %s; %d points, %s)", track, mine ? "the player's own" : "a shared", s_ghost.Lap / 1000.0,
+                 s_ghost.Car, s_ghost.Date, s_ghost.N, path);
+    } else Log_Info("[racemod] ghost: none of %s yet -- the trial's best lap makes one", track);
+}
+
+// The car's sample now, `t` into the lap.
+static void GhostSampleNow(T_RACE_LAPGHOST_PT *p, S32 t) {
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    p->T = t;
+    p->X = hero->Obj.X + CurrentCubeX * 32768; p->Y = hero->Obj.Y; p->Z = hero->Obj.Z + CurrentCubeY * 32768;
+    p->Island = (S16)Island;
+    if (s_driveBody >= 0 && s_driveAnim >= 0) {
+        // (driven as another car, drive_as=: that car, pitched as DrawDriveAs pitches it)
+        static T_OBJ_3D pose;
+        CarPitch(&pose, hero->Obj.Beta, s_drivePitch);
+        p->Alpha = (S16)pose.Alpha; p->Beta = (S16)pose.Beta; p->Gamma = (S16)pose.Gamma;
+        p->Body = (S16)(s_driveSmallNow && s_driveSmall >= 0 ? s_driveSmall : s_driveBody);
+        p->Anim = (S16)s_driveAnim;
+    } else {
+        p->Alpha = (S16)(hero->Obj.Alpha & 4095); p->Beta = (S16)(hero->Obj.Beta & 4095); p->Gamma = (S16)(hero->Obj.Gamma & 4095);
+        p->Body = (S16)hero->Obj.Body.Num; p->Anim = (S16)hero->Obj.Anim.Num;
+    }
+}
+
+static void GhostAdd(S32 t, int force) {
+    T_RACE_LAPGHOST *g = &s_ghostRec;
+    if (!force && g->N && t - g->P[g->N - 1].T < RACE_GHOST_EVERY) return;
+    if (g->N >= RACE_GHOST_MAX) return;
+    if (g->N >= g->Cap) {
+        const int cap = g->Cap ? g->Cap * 2 : 4096;
+        T_RACE_LAPGHOST_PT *p = (T_RACE_LAPGHOST_PT *)realloc(g->P, sizeof(T_RACE_LAPGHOST_PT) * (cap < RACE_GHOST_MAX ? cap : RACE_GHOST_MAX));
+        if (!p) return;
+        g->P = p; g->Cap = cap < RACE_GHOST_MAX ? cap : RACE_GHOST_MAX;
+    }
+    GhostSampleNow(&g->P[g->N++], t);
+}
+
+// A time trial's lap begins (RaceMod_Lap): its recording from the line.
+static void GhostLapStart(void) {
+    if (!s_trial || s_ghostWatch) return;
+    s_ghostRec.N = 0; s_ghostRec.NbSplits = 0;
+    s_ghostRecLap = s_laps;
+    s_ghostAt = 0;
+    GhostAdd(0, 1);
+}
+
+// Every frame (RaceMod_Frame): the lap's sample, while a time trial's lap is driven.
+static void GhostRecord(S32 now) {
+    if (!s_trial || s_ghostWatch || s_ghostRecLap != s_laps || s_laps <= 0 || s_place || s_phase != PHASE_RACE) return;
+    if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || NewCube != -1) return;
+    GhostAdd(now - s_lapStart, 0);
+}
+
+// A checkpoint crossed the lap's way (RaceMod_Lap): the lap's time there, and against the ghost's.
+static void GhostSplit(int checkpoint) {
+    if (!s_trial || s_ghostWatch || checkpoint < 0 || checkpoint >= RACE_MAX_CHECKPOINTS || s_laps <= 0) return;
+    const S32 now = TimerRefHR, t = now - s_lapStart;
+    if (s_ghostRecLap == s_laps) {
+        s_ghostRec.Split[checkpoint] = t;
+        if (s_ghostRec.NbSplits < checkpoint + 1) s_ghostRec.NbSplits = checkpoint + 1;
+    }
+    if (s_ghost.Lap && s_ghostMode > 0 && checkpoint < s_ghost.NbSplits) {
+        s_ghostSplitDiff = t - s_ghost.Split[checkpoint];
+        s_ghostSplitAt = now;
+    }
+}
+
+// A time trial's lap driven (RaceMod_Lap, `lap` its time): against the ghost; kept as the player's ghost when it is their best, and raced
+// from the next lap when it is quicker than the ghost raced.
+static void GhostLapDone(S32 lap) {
+    if (!s_trial || s_ghostWatch || lap <= 0) return;
+    const S32 now = TimerRefHR;
+    if (s_ghost.Lap && s_ghostMode > 0) { s_ghostSplitDiff = lap - s_ghost.Lap; s_ghostSplitAt = now; }
+    if (s_ghostRecLap != s_laps || s_ghostRec.N < 2) return;
+    T_RACE_LAPGHOST *g = &s_ghostRec;
+    GhostAdd(lap, 1);
+    g->Lap = lap;
+    GhostTrack(g->Track, sizeof(g->Track));
+    snprintf(g->Car, sizeof(g->Car), "%s", s_ghostCar[0] ? s_ghostCar : "Twinsen's car");
+    const time_t clock = time(NULL);
+    const struct tm *tm = localtime(&clock);
+    if (tm) strftime(g->Date, sizeof(g->Date), "%Y-%m-%d", tm);
+    else g->Date[0] = 0;
+    if (!s_ghostOwnLap || lap < s_ghostOwnLap) {
+        char path[ADELINE_MAX_PATH];
+        GhostOwnPath(g->Track, path, sizeof(path));
+        if (GhostWrite(path, g)) {
+            Log_Info("[racemod] ghost: %.2f s is %s's best lap -- kept (%d points, %s)", lap / 1000.0, g->Track, g->N, path);
+            s_ghostOwnLap = lap;
+            if (!s_ghost.Lap || lap < s_ghost.Lap) snprintf(s_ghostFile, sizeof(s_ghostFile), "%s", path);
+        }
+    }
+    // (raced from the next lap on: the quicker of it and the ghost raced so far -- the player's own best, or the track's fastest)
+    if (s_ghostMode > 0 && (!s_ghost.Lap || lap < s_ghost.Lap)) {
+        const T_RACE_LAPGHOST old = s_ghost;
+        s_ghost = s_ghostRec;
+        s_ghostRec = old;
+        s_ghostRec.N = 0; s_ghostRec.Lap = 0; s_ghostRec.NbSplits = 0;
+        Log_Info("[racemod] ghost: the next laps race this one (%.2f s)", lap / 1000.0);
+    }
+    s_ghostRecLap = 0;
+}
+
+// The ghost `t` into its lap: where it is, its angles, body and animation, between the samples either side. Zero: before or after it.
+static int GhostAt(const T_RACE_LAPGHOST *g, S32 t, double *x, double *y, double *z, S32 *alpha, S32 *beta, S32 *gamma, int *body, int *anim, int *island) {
+    if (g->N < 2 || t < 0 || t > g->P[g->N - 1].T) return 0;
+    if (s_ghostAt >= g->N || s_ghostAt < 0 || g->P[s_ghostAt].T > t) s_ghostAt = 0;
+    while (s_ghostAt + 1 < g->N && g->P[s_ghostAt + 1].T <= t) s_ghostAt++;
+    const T_RACE_LAPGHOST_PT *a = &g->P[s_ghostAt], *b = &g->P[s_ghostAt + 1 < g->N ? s_ghostAt + 1 : s_ghostAt];
+    double u = b->T > a->T ? (double)(t - a->T) / (b->T - a->T) : 0;
+    const double dx = b->X - a->X, dy = b->Y - a->Y, dz = b->Z - a->Z, d = sqrt(dx * dx + dy * dy + dz * dz);
+    if (a->Island != b->Island || d > RACE_GHOST_JUMP) u = 0;
+    if (u < 0) u = 0; else if (u > 1) u = 1;
+    *x = a->X + dx * u; *y = a->Y + dy * u; *z = a->Z + dz * u;
+    const S16 *from[3] = {&a->Alpha, &a->Beta, &a->Gamma}, *to[3] = {&b->Alpha, &b->Beta, &b->Gamma};
+    S32 *out[3] = {alpha, beta, gamma};
+    for (int k = 0; k < 3; k++) {
+        const S32 diff = ((*to[k] - *from[k] + 2048) & 4095) - 2048;
+        *out[k] = ((S32)floor(*from[k] + diff * u + 0.5)) & 4095;
+    }
+    const T_RACE_LAPGHOST_PT *near = u < 0.5 ? a : b;
+    *body = near->Body; *anim = near->Anim; *island = near->Island;
+    s_ghostSpeed = b->T > a->T && d <= RACE_GHOST_JUMP ? d * 1000.0 / (b->T - a->T) : s_ghostSpeed;
+    return 1;
+}
+
+// The ghost's see-through colours: a pixel of the scene under it and the ghost's own there, mixed -- RACE_GHOST_SHARE of the ghost's,
+// tinted pale blue -- to the palette's nearest (not the interface's 1-15, nor its vivid ones from 248). Made as they are first needed, and
+// again when the palette changes.
+static U8 s_ghostMix[256 * 256];
+static U8 s_ghostMixMade[256 * 256 / 8];
+static U32 s_ghostPalSum = 0;
+static int s_ghostSix = 0;
+
+static void GhostMixCheck(void) {
+    if (!PtrPal) return;
+    U32 sum = 1;
+    int six = 1;
+    for (int i = 0; i < 768; i++) { sum = sum * 31 + PtrPal[i]; if (PtrPal[i] >= 64) six = 0; }
+    if (sum == s_ghostPalSum) return;
+    s_ghostPalSum = sum;
+    s_ghostSix = six;
+    memset(s_ghostMixMade, 0, sizeof(s_ghostMixMade));
+}
+
+static U8 GhostMix(U8 under, U8 over) {
+    const int i = under << 8 | over;
+    if (s_ghostMixMade[i >> 3] & (1 << (i & 7))) return s_ghostMix[i];
+    const double k = s_ghostSix ? 0.25 : 1, tint[3] = {190 * k, 215 * k, 255 * k};
+    double want[3];
+    for (int c = 0; c < 3; c++) {
+        const double ghost = PtrPal[over * 3 + c] * (1 - RACE_GHOST_TINT) + tint[c] * RACE_GHOST_TINT;
+        want[c] = PtrPal[under * 3 + c] * (1 - RACE_GHOST_SHARE) + ghost * RACE_GHOST_SHARE;
+    }
+    int best = under;
+    double bd = 1e30;
+    for (int j = 0; j < 248; j++) {
+        if (j >= 1 && j < 16) continue;
+        const double dr = PtrPal[j * 3] - want[0], dg = PtrPal[j * 3 + 1] - want[1], db = PtrPal[j * 3 + 2] - want[2], dd = 3 * dr * dr + 4 * dg * dg + 2 * db * db;
+        if (dd < bd) { bd = dd; best = j; }
+    }
+    s_ghostMix[i] = (U8)best;
+    s_ghostMixMade[i >> 3] |= (U8)(1 << (i & 7));
+    return (U8)best;
+}
+
+// The ghost drawn over the scene (RaceMod_Draw, after the car Twinsen drives as): tested against the scene's depth, not writing it, as
+// the super jet-pack is -- see-through (the screen kept before it is drawn, each pixel it changed mixed with the one under it: GhostMix),
+// or solid when it is played back (`solid`: it is the car the camera follows).
+static U8 *s_ghostUnder = NULL;
+static size_t s_ghostUnderSize = 0;
+
+static void DrawGhost(S32 now, S32 width, S32 height) {
+    if (CubeMode != CUBE_EXTERIEUR || !s_ghost.N) return;
+    S32 t;
+    const int solid = s_ghostWatch;
+    if (solid) {
+        if (!s_ghostWatchT0) return;
+        t = now - s_ghostWatchT0;
+        if (t > s_ghost.P[s_ghost.N - 1].T) t = s_ghost.P[s_ghost.N - 1].T;
+    } else {
+        if (!s_trial || s_ghostMode <= 0 || s_phase != PHASE_RACE || s_laps <= 0 || s_place) return;
+        t = now - s_lapStart;
+    }
+    double x, y, z;
+    S32 alpha, beta, gamma;
+    int body, anim, island;
+    if (!GhostAt(&s_ghost, t, &x, &y, &z, &alpha, &beta, &gamma, &body, &anim, &island) || island != Island || body < 0) return;
+    if (body != s_ghostBody || anim != s_ghostAnim) {
+        if (!GivePtrBody(body) || (anim >= 0 && !GivePtrAnim(anim))) {
+            static int said = 0;
+            if (!said++) Log_Info("[racemod] ghost: no body %d or animation %d to draw it with", body, anim);
+            return;
+        }
+        ObjectClear(&s_ghostObj);
+        s_ghostObj.Body.Num = -1;
+        ObjectInitBody(&s_ghostObj, (void *)(uintptr_t)(U32)body);
+        s_ghostObj.Texture = BufferTexture; s_ghostObj.NextTexture = BufferTexture;
+        s_ghostObj.Anim.Num = -1;
+        if (anim >= 0) ObjectInitAnim(&s_ghostObj, (void *)(uintptr_t)(U32)anim);
+        s_ghostObj.Status |= FLAG_BODY;
+        s_ghostBody = body; s_ghostAnim = anim;
+    }
+    const S32 lx = (S32)floor(x - CurrentCubeX * 32768.0 + 0.5), ly = (S32)floor(y + 0.5), lz = (S32)floor(z - CurrentCubeY * 32768.0 + 0.5);
+    s_ghostObj.X = lx; s_ghostObj.Y = ly; s_ghostObj.Z = lz;
+    if (anim >= 0) {
+        // (its animation stepped in place, as the car Twinsen drives as is: DrawDriveAs)
+        ObjectSetInterDep(&s_ghostObj);
+        if (s_ghostObj.Status & FLAG_LAST_FRAME) { s_ghostObj.Anim.Num = -1; ObjectInitAnim(&s_ghostObj, (void *)(uintptr_t)(U32)anim); }
+        s_ghostObj.X = lx; s_ghostObj.Y = ly; s_ghostObj.Z = lz;
+    }
+    s_ghostObj.Alpha = alpha; s_ghostObj.Beta = beta; s_ghostObj.Gamma = gamma;
+    if (anim >= 0) ObjectSetInterFrame(&s_ghostObj);
+    else memset(s_ghostObj.CurrentFrame, 0, sizeof(s_ghostObj.CurrentFrame));
+    LongWorldRotatePoint(lx, ly, lz);
+    const S32 zr = CameraZr - Z0;
+    if (zr < -4000 || zr > ClipZFar + 4000) return;
+    // (the screen as it is before the ghost: what it is seen through)
+    const size_t size = height > 0 ? (size_t)TabOffLine[height - 1] + (size_t)width : 0;
+    if (!solid) {
+        if (!size || !PtrPal) return;
+        if (s_ghostUnderSize < size) {
+            U8 *p = (U8 *)realloc(s_ghostUnder, size);
+            if (!p) return;
+            s_ghostUnder = p; s_ghostUnderSize = size;
+        }
+        memcpy(s_ghostUnder, Log, size);
+        GhostMixCheck();
+    }
+    const int fog = Fill_Flag_Fog, depth = Fill_Flag_ZBuffer, keep = Fill_Flag_NZW;
+    const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
+    SetCLUT(PalLevel + 16 * BoundRegleTrois(0, 15, ClipZFar - StartZFog, zr - StartZFog));
+    Switch_Fillers(FILL_POLY_FOG_NZW);
+    if (ObjectDisplay(&s_ghostObj)) {
+        SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
+        if (ClipXMin <= ClipXMax && ClipYMin <= ClipYMax) {
+            if (!solid) {
+                const S32 x0 = ClipXMin < 0 ? 0 : ClipXMin, x1 = ClipXMax >= width ? width - 1 : ClipXMax;
+                const S32 y0 = ClipYMin < 0 ? 0 : ClipYMin, y1 = ClipYMax >= height ? height - 1 : ClipYMax;
+                for (S32 r = y0; r <= y1; r++) {
+                    U8 *row = (U8 *)Log + TabOffLine[r];
+                    const U8 *was = s_ghostUnder + TabOffLine[r];
+                    for (S32 c = x0; c <= x1; c++)
+                        if (row[c] != was[c]) row[c] = GhostMix(was[c], row[c]);
+                }
+            }
+            BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
+        }
+        UnsetClip();
+    }
+    SetCLUT(clut);
+    Switch_Fillers(depth ? (keep ? (fog ? FILL_POLY_FOG_NZW : FILL_POLY_NZW) : (fog ? FILL_POLY_FOG_ZBUFFER : FILL_POLY_ZBUFFER)) : fog ? FILL_POLY_FOG : FILL_POLY_TEXTURES);
+}
+
+// Played back (ghost_watch=), every frame: Twinsen's car -- hidden, the ghost drawn in its place (HeroLook, DrawGhost) -- put where the
+// ghost is, so the camera follows it; round again RACE_GHOST_WATCH_REST after its lap's end.
+static void GhostWatch(S32 now) {
+    if (!s_ghostWatch || s_ghost.N < 2 || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || NewCube != -1) return;
+    const S32 end = s_ghost.P[s_ghost.N - 1].T;
+    if (!s_ghostWatchT0 || now - s_ghostWatchT0 > end + RACE_GHOST_WATCH_REST) {
+        if (s_ghostWatchT0) Log_Info("[racemod] ghost: played back -- round again");
+        s_ghostWatchT0 = now; s_ghostAt = 0;
+    }
+    S32 t = now - s_ghostWatchT0;
+    if (t > end) t = end;
+    double x, y, z;
+    S32 alpha, beta, gamma;
+    int body, anim, island;
+    if (!GhostAt(&s_ghost, t, &x, &y, &z, &alpha, &beta, &gamma, &body, &anim, &island) || island != Island) return;
+    if (t >= end) s_ghostSpeed = 0;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    // (out past the cube's edge -- driven on into the next, over a carried jump, or back to the start for the next time round: into that
+    // cube's scene, as a carried jump's car is -- FrogCarry)
+    S32 lx, ly, lz;
+    FrogCarry(x, y, z, &lx, &ly, &lz, "ghost played back");
+    hero->Obj.X = lx; hero->Obj.Y = ly; hero->Obj.Z = lz;
+    hero->Obj.Beta = beta;
+    ListBuggy[0].Speed = 0;
+}
+
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) return;
     RaceCameraKey();
@@ -13098,9 +13645,15 @@ void RaceMod_Frame(void) {
             Log_Info("[racemod] game variable %d held at %d", s_held[i][0], s_held[i][1]);
         }
     if (Comportement == C_BUGGY) TrackSafePlace();
+    // (the ghost car: the track's looked for, the lap recorded -- or, played back, the car put where it is: GhostWatch)
+    GhostStart();
+    GhostRecord(TimerRefHR);
+    GhostWatch(TimerRefHR);
+    if (!s_ghostWatch) {
     OnFoot(TimerRefHR);
     FallenBelow(TimerRefHR);
     StuckCar(TimerRefHR);
+    }
     if (s_backInCarUntil) {
         if (TimerRefHR >= s_backInCarUntil) s_backInCarUntil = 0;
         else if (CubeMode == CUBE_EXTERIEUR && NewCube == -1) BackInCar();
@@ -13128,7 +13681,7 @@ void RaceMod_Frame(void) {
     const int driving = Comportement == C_BUGGY;
     const int inStartScene = s_nbSpots && CubeMode == CUBE_EXTERIEUR && CurrentCubeX == s_spots[0].CubeX && CurrentCubeY == s_spots[0].CubeZ;
     // the grid: after the qualifying lap, or (without qualifying) as soon as the player is in his car; formed in the start line's scene
-    if (inStartScene && driving && !ClosedGate() && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
+    if (inStartScene && driving && !s_ghostWatch && !ClosedGate() && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
     // the cars that aren't racing, out of sight
     // (and silent: a hidden car's engine loop -- its SampleAlways, which the game keeps going for every car -- held a voice of the
     // twelve the mixer has for nothing, and with the racing cars' they filled every one, 2026-10-19)
@@ -13528,7 +14081,7 @@ static void DrawSuperJet(S32 now) {
 // his car's way and pitched with the way it climbs or falls (the slope it has just driven, smoothed), drawn after the scene's objects
 // as the super jet-pack is.
 static void DrawDriveAs(S32 now) {
-    if (!s_heroHidden || s_superShown || s_driveBody < 0 || s_driveAnim < 0 || CubeMode != CUBE_EXTERIEUR || InsideView()) return;
+    if (!s_heroHidden || s_superShown || s_driveBody < 0 || s_driveAnim < 0 || CubeMode != CUBE_EXTERIEUR || InsideView() || s_ghostWatch) return;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     const int body = s_driveSmallNow && s_driveSmall >= 0 ? s_driveSmall : s_driveBody;
     if (s_driveShown != body) {
@@ -14744,7 +15297,7 @@ void RaceMod_Draw(void) {
     // the super jet-pack, Halloween's scares; all of it was left out with the display until 2026-10-18, his car hidden and nothing drawn
     // in its place)
     const int hud = s_car.Hud || items;
-    const S32 speed = ListBuggy[0].Speed;
+    const S32 speed = s_ghostWatch ? (S32)s_ghostSpeed : ListBuggy[0].Speed;
 
     void *font = PtrFont;
     const S32 leave = InterLeave, space = InterSpace;
@@ -14756,6 +15309,7 @@ void RaceMod_Draw(void) {
     const S32 now = TimerRefHR, width = (S32)ModeDesiredX, height = (S32)ModeDesiredY;
     DrawSuperJet(now);
     DrawDriveAs(now);
+    DrawGhost(now, width, height);
     DrawCheckpoints(height);
     DrawBolts(now, height);
     // (Halloween's: the diving witch, the scares, the haunted cars' ghosts; another car's ghost over the screen, and a giant web's, under
@@ -14806,7 +15360,18 @@ void RaceMod_Draw(void) {
         text[0] = 0;
         S32 colour = LBAWHITE;
         if (s_car.HasLine) {
-            if (s_place && s_trial) {
+            if (s_ghostWatch && s_ghost.N) {
+                // (a ghost played back: its lap's clock, its time, and whose it is)
+                S32 t = s_ghostWatchT0 ? now - s_ghostWatchT0 : 0;
+                if (t > s_ghost.Lap) t = s_ghost.Lap;
+                Time(a, sizeof(a), t);
+                Time(b, sizeof(b), s_ghost.Lap);
+                snprintf(text, sizeof(text), "Ghost lap  %s / %s", a, b);
+                char about[200];
+                snprintf(about, sizeof(about), "%s  %s", s_ghost.Car, s_ghost.Date);
+                HudSmall(16, bottom - RACE_SMALL_STEP, about, -1);
+            }
+            else if (s_place && s_trial) {
                 Time(a, sizeof(a), s_raceTime);
                 snprintf(text, sizeof(text), "Finished in %s", a);
                 // (a time trial's fastest lap over it: what its best laps keep)
@@ -14843,12 +15408,25 @@ void RaceMod_Draw(void) {
         if (text[0]) HudSmallIn(16, bottom, text, -1, colour);
         // a time trial's best time over the lap, until it is over (then its best lap is there): the track's record or the trial's own
         // fastest lap, whichever is quicker -- in gold while a new one is held on the lap line
-        if (s_car.HasLine && s_trial && !s_place && s_phase != PHASE_QUALIFYING) {
+        if (s_car.HasLine && s_trial && !s_place && s_phase != PHASE_QUALIFYING && !s_ghostWatch) {
             const S32 best = TrialBestTime();
             if (best > 0) Time(b, sizeof(b), best);
             else snprintf(b, sizeof(b), "--:--.--");
             snprintf(text, sizeof(text), "Best time  %s", b);
             HudSmallIn(16, bottom - RACE_SMALL_STEP, text, -1, Held(now) && s_heldBest ? RACE_GOLD : LBAWHITE);
+            // ... and over it the ghost raced, its lap's time -- and at a checkpoint, and the line, how far ahead of it (green) or behind it
+            // (red) the car is, a moment
+            if (s_ghost.Lap && s_ghostMode > 0) {
+                Time(b, sizeof(b), s_ghost.Lap);
+                S32 colour = LBAWHITE;
+                if (s_ghostSplitAt && now - s_ghostSplitAt < RACE_GHOST_SPLIT_MS) {
+                    const S32 d = s_ghostSplitDiff < 0 ? -s_ghostSplitDiff : s_ghostSplitDiff;
+                    // (in words: the font has no '+')
+                    snprintf(text, sizeof(text), "Ghost  %s   %d.%02d %s", b, (int)(d / 1000), (int)(d / 10 % 100), s_ghostSplitDiff <= 0 ? "ahead" : "behind");
+                    colour = s_ghostSplitDiff <= 0 ? RACE_GREEN : RACE_RED;
+                } else snprintf(text, sizeof(text), "Ghost  %s", b);
+                HudSmallIn(16, bottom - 2 * RACE_SMALL_STEP, text, -1, colour);
+            }
         }
         // the place as the race stands, over the lap
         int racers = 0;
@@ -14931,6 +15509,7 @@ static void ResetTrack(void) {
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0;
+    GhostReset();
     s_onFoot = 0; s_footArmed = 0; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_footActWas = 0; s_walkN = 0; s_walkCar = 0; s_stopReach = 0; s_stopping = 0; s_stopResume = 0;
     s_difficulty = -1; memset(s_hasLevel, 0, sizeof(s_hasLevel)); s_diffEase = 0; s_diffItems = 100; s_diffAim = 0; s_diffHazards = 100;
     s_powerups = 0; s_fuelAlways = 0; s_powerupOnly = -1; s_prizeForce = -1; s_nbOnly = 0; s_nbMush = 0; s_nbOilActors = 0; memset(s_slicks, 0, sizeof(s_slicks));
