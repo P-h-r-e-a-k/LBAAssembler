@@ -295,7 +295,7 @@ internal sealed class CharacterMakerWindow : Window
         ListAnims();
         Saved?.Invoke();
         Say($"{name} saved into the map: entity {entity}, bodies {string.Join(", ", put.Bodies.Select(b => $"{b.Generic} (BODY.HQR {b.Entry})"))}, " +
-            $"animations {string.Join(", ", put.Anims.Select(a => a.Generic))}. The scene editor's Add > New 3D actor shows it among the bodies.");
+            $"animations {string.Join(", ", put.Anims.Select(a => a.Generic))}. Build > Actors and zones: Add > New 3D actor shows it among the bodies.");
     }
 
     public event Action? Saved;

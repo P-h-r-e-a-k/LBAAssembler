@@ -54,6 +54,12 @@ function Main() {
   return $m
 }
 function Root() { $A::FromHandle((Main).H) }
+# Build > Actors and zones: the "Help and other editors" expander under the scene panel opened (the Character maker's button is in it)
+function OpenOtherEditors() {
+  $x = (Root).FindAll($TS::Descendants, (Cond $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Group))) | Where-Object { $_.Current.Name -like "Help and other editors*" } | Select-Object -First 1
+  if (-not $x) { $x = ByName "Help and other editors" }
+  if ($x) { try { $x.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand(); Start-Sleep -Milliseconds 600 } catch {} }
+}
 # the terrain editor's Save ("Save *" while there are changes), then File > Save map: after every step
 function SaveAll() {
   $s = (Root).FindAll($TS::Descendants, (Cond $A::ControlTypeProperty ([System.Windows.Automation.ControlType]::Button))) | Where-Object { $_.Current.Name -eq 'Save *' } | Select-Object -First 1

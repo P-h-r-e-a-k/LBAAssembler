@@ -31,12 +31,12 @@ To build it again yourself:
 - Object maker (`ObjectMakerWindow`, `Terrain/BrickObject.cs`): an object built brick by brick from LBA1's bricks, saved as a design
   (`.lbaobject`), added to the island's OBL as a body. Its object pages are in undo.
 - Objects: selecting again at the very same point steps through every object under it, so one standing in another can be reached.
-- Scene editor: Choose a body reads the bodies again each time, so a character saved while the window is open is offered. The 3D view's
+- Scene panel (then the scene editor window): Choose a body reads the bodies again each time, so a character saved while the window is open is offered. The 3D view's
   renderer reads the entity table, bodies and animations again when the Character maker saves
   (`lba2_renderer_reload_entities`). Engine: an actor's entity past the table falls back to entity 0 (DISKFUNC.CPP).
 - Map text (`MapTextWindow`), Map settings (`MapSettingsWindow`: ledges that drop).
 - Character maker (`CharacterMakerWindow`, `Characters/`): bodies, keyframes in milliseconds, keyframes in the air.
-- Scene editor: Place X/Y/Z typed for a new actor or zone; accessible names on the inspector's rows.
+- Scene panel (then the scene editor window): Place X/Y/Z typed for a new actor or zone; accessible names on the inspector's rows.
 - Script window: Check commits the text being edited; a script's labels laid out on demand, so scripts can name each other's before save.
 
 The map format and engine side: [LBA_MAPS.md](LBA_MAPS.md) (text, ledges, characters).

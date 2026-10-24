@@ -54,6 +54,15 @@ public partial class MainWindow
     {
         if (((FrameworkElement)sender).Tag is not ZoneRef zone) return;
         e.Handled = true;
+        selectedPoint = null;
+        // (Build: the scene panel shows the zone, and dragging its outline moves it)
+        if (ScenePanelActive)
+        {
+            SelectZone(zone, showTab: false);
+            SceneItemPickedInView(zone.Scene, SceneItemKind.Zone, zone.Index);
+            BeginSceneDrag(SceneItemKind.Zone, zone.Scene, zone.Index, e.GetPosition(ActorMarkerCanvas));
+            return;
+        }
         SelectZone(zone, showTab: true);
     }
 
@@ -78,6 +87,7 @@ public partial class MainWindow
 
     private void RefreshZoneListIfVisible()
     {
+        SyncScenePanelToView();
         if (ZoneDetailsTab.IsSelected) RefreshZoneList();
         // The Zones tab's own "Actors in view" list (MainWindow.Modes.cs) needs refreshing at the same
         // points as the zone list above -- both go stale for the same reason (the view changed) -- so

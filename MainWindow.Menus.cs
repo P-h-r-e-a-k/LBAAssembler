@@ -32,8 +32,7 @@ public partial class MainWindow
         AssetEditorMenuItem.IsEnabled = eitherConfigured;
         GridEditorMenuItem.IsEnabled = eitherConfigured;
         ExportMenuItem.IsEnabled = eitherConfigured;
-        Lba1EditorMenuItem.IsEnabled = Lba1Configured;
-        Lba2EditorMenuItem.IsEnabled = Lba2Configured;
+        SceneEditMenuItem.IsEnabled = eitherConfigured;
         IslandEditorMenuItem.IsEnabled = Lba2Configured;
         Lba1PlayMenuItem.IsEnabled = Lba1Configured;
         Lba2PlayMenuItem.IsEnabled = Lba2Configured;

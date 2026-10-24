@@ -50,7 +50,7 @@ bricks. The map's workspace (the copy of the game the editor installs the map in
 3. **The terrain panel** (Terrain, or Buildings and decor): a long column of sections you open and close by their headers. It's short in
    the main window: press **Float** on the dock (the ⧉ icon at its top right) to pop it out into a window you can make tall, as in these
    pictures, and **Dock** to put it back.
-4. **The scene editor** (Actors and zones > **Scene editor (actors, zones, points)…**): actors, zones, track points and scripts.
+4. **The scene panel** (Build > **Actors and zones**): the scene's actors, zones and track points, edited where the view shows them.
 5. **The File menu:** **New map…**, **Open map…**, **Save map** (Ctrl+S), **Map settings…**, **Map text…**.
 
 | The terrain panel, top | The middle | The bottom |
@@ -59,7 +59,8 @@ bricks. The map's workspace (the copy of the game the editor installs the map in
 
 **Two kinds of save.**
 
-- The terrain panel's **Save** (it reads **Save \*** while there are changes) and the scene editor's **Save** write into the workspace.
+- The terrain panel's **Save** (it reads **Save \*** while there are changes) writes the ground into the workspace. The scene panel
+  writes each change into it at once.
 - **File > Save map** writes the map file.
 
 Opening a map rebuilds the workspace from the map file, so **anything not in the map file is lost** the next time you open it. Do File >
@@ -278,7 +279,7 @@ Without this setting, the snowboarder stops dead at every cliff edge instead of 
 
 ## 10. The characters
 
-**What to edit > Actors and zones**, then **Character maker…**:
+**What to edit > Actors and zones**. Under the scene panel, open **Help and other editors**, then press **Character maker…**:
 
 ![](howto/panel_scene.png)
 
@@ -363,26 +364,32 @@ animation**, and drag to turn it. Press **Save into the map** at the end.
 
 ## 11. Track points, actors and zones
 
-**Actors and zones > Scene editor (actors, zones, points)…**. In this window:
+**Build > What to edit > Actors and zones.** The Build tab becomes the scene panel, and you edit the scene in the 3D view itself:
 
-- The left side has the lists, in tabs: Actors, Zones, Points, Scene.
-- The middle is a plan of the scene.
-- The right side is the inspector of whatever is selected.
-- **Add ▾** places something new. Either click the plan, or type **Place X/Y/Z** in the bar that appears and press **Place here** (Esc
-  cancels).
-- An inspector field takes its value when you leave it: press Tab or click elsewhere.
+- **The scene box** at the top says which scene is listed (405: Ski resort). Under it: **Add ▾**, **Delete**, **Duplicate**.
+- **The lists**, in tabs: Actors, Zones, Points, and Scene (the scene's header). Pick an item there and the view shows it, with a ring
+  round it; it moves the view only if the item is off screen.
+- **The inspector** below them: the selected item's fields. A field is written when you leave it: press Tab or Enter, or click elsewhere.
+- **In the view:** click an actor, a zone's outline or a track point (gold diamonds while the panel is up) to select it, and drag it to
+  move it.
+- **Add ▾** places something new where you click the ground in the view: a yellow ring follows the ground under the pointer, and the
+  status line shows the scene and the spot. Or type **Place X/Y/Z** in the bar that appears and press **Place here**. Esc or a right-click
+  cancels. Right-clicking the ground offers the same, right there.
+- **Every change is written at once**, and is one step on **Edit > Undo** (Ctrl+Z).
 
 All the values are in [RECREATE.md step 11](RECREATE.md#11-points-actors-and-zones) and its track-point appendix. *Scripts: `actors.ps1`,
 then `zones.ps1`.*
 
 ### 11a. Track points
 
-**Add ▾ > Track point**, then Place X/Y/Z, **Place here**. Do this 34 times, in order: the scripts name the points by their numbers
-(0-33).
+**Add ▾ > Track point**, then click the spot in the view, or type its Place X/Y/Z and press **Place here** (the exact values are in the
+appendix). Do this 34 times, in order: the scripts name the points by their numbers (0-33).
+
+![](howto/11_placing.png)
 
 ### 11b. Twinsen's start
 
-In the **Actors** tab, choose **0: Twinsen (start position)** and type **X** 517, **Y** 6400, **Z** 1292.
+In the **Actors** tab, choose **0: Twinsen (start position)** and type **X** 517, **Y** 6400, **Z** 1292. Or drag him in the view.
 
 ### 11c. The actors
 
@@ -390,12 +397,12 @@ For each actor, from 2 to 13 in order:
 
 1. Press **Add ▾ > New 3D actor without a script…**.
 2. In **Choose a body**, type the filter from the table (for example `Slalom flag: Blue flag`), choose the body and press **OK**.
-3. Type its place and press **Place here**.
+3. Click its spot in the view, or type its place and press **Place here**.
 4. In the inspector, type **Flags**, **Life**, **Armour**, and where the table says so, **Bonus option**, **Bonus count** and **Move**.
    Actors 2 and 13 need **Move 3**, so that their track scripts run from the start.
 
 The first actor you add also fills slot 1 with the meca-penguin's placeholder (the game clears that slot in every scene). So your actors
-get the numbers the scripts expect, 2 to 13. Press **Save**, then **File > Save map**.
+get the numbers the scripts expect, 2 to 13. Then **File > Save map**.
 
 ![](howto/11_actors.png)
 
@@ -404,10 +411,11 @@ get the numbers the scripts expect, 2 to 13. Press **Save**, then **File > Save 
 For each zone, press **Add ▾ > Zone ▸** *cube change* or *scenaric*. Place it at the middle of its box (X and Z) and its Y min. Then type
 **X min** to **Z max**, plus:
 
-- the cube change: **Destination scene** = your scene's own number (the window title shows it) and **Arrival X/Y/Z**;
+- the cube change: **Destination scene** = your scene's own number (the scene box shows it) and **Arrival X/Y/Z**;
 - a scenaric zone: its **Zone number**.
 
-Press **Save**, then **File > Save map**.
+A zone is drawn as a box in its type's colour. Drag its outline to move it: a yellow copy of the box follows the pointer (below, in a
+Citadel interior). Then **File > Save map**.
 
 ![](howto/11_zones.png)
 
@@ -418,7 +426,7 @@ Press **Save**, then **File > Save map**.
 The five scripts are in [recipe/scripts/](recipe/scripts/). They name each other's labels: Twinsen's script starts the rider's track, and
 the rider's script ends Twinsen's. So type all five before saving. Do the actors in the order 3, 2, 12, 13, 0:
 
-1. In the scene editor's **Actors** list, choose the actor and press **Edit script…** (bottom of the inspector).
+1. In the scene panel's **Actors** list (or in the view), choose the actor and press **Edit script…** (under the inspector).
 2. If it has a `_track.c` file: press **Track (C)** and paste the file in.
 3. Press **Life (C)** and paste `actor<N>_life.c` in. Leave the window open.
 
@@ -486,7 +494,7 @@ Repeating the build from an empty sandbox found these, all now fixed:
   only realizes the items in view, so the script that retyped the times never reached the ninth one. A user scrolls to it.
 - **The pickup snowboard's still frame** is now 1000 ms, as a fresh map makes it.
 - **`ground_fix.py` repainted two of the sea's corner cells with snow.** It now leaves the sea cells alone.
-- **The scene editor's body list didn't include a character made while the editor was open.** It's now read again each time you choose a
+- **The body list didn't include a character made while the scene editor (now the scene panel) was open.** It's now read again each time you choose a
   body.
 - **The 3D view's renderer now reads the entity table, bodies and animations again when the Character maker saves.** It used to keep
   what it read at start.

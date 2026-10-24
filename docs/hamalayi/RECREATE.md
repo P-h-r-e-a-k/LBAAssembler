@@ -300,16 +300,17 @@ Then File > Save map. The characters travel in the map file and are put after th
 
 ## 11. Points, actors and zones
 
-Open **Build > Scene editor (actors, zones, points)…**. Its title says which scene it is (405 in mine). Everything is placed with **Add**:
-the **Place X / Y / Z** bar appears, you type the place and press **Place here**, then type the inspector's fields. A field takes its value
-when it loses focus.
+Choose **Build > What to edit > Actors and zones**: the Build tab becomes the scene panel, its scene box saying which scene it is (405
+in mine). Everything is placed with **Add ▾**: click the spot in the view, or type the place into the **Place X / Y / Z** bar that appears
+and press **Place here**; then type the inspector's fields. A field takes its value when it loses focus. Each change is written at once
+(one step on Edit > Undo).
 
 **Track points** (*`actors.ps1`*). Use **Add > Track point** 34 times, in order, at the points in the appendix (LBA1's points 0-33).
 
 **Twinsen's start.** In the **Actors** tab, choose actor 0 and type **X** 517, **Y** 6400, **Z** 1292.
 
 **Actors** (*`actors.ps1`*). For each actor, use **Add > New 3D actor without a script…**. In **Choose a body**, type the filter, take the
-first match and press **OK**. Then place it and type its fields. When you add the first actor, the editor fills slot 1 with the
+first match and press **OK**. Then place it and type its fields. When you add the first actor, the panel fills slot 1 with the
 meca-penguin's placeholder (the game clears slot 1 at every scene start), so the actors below get the numbers LBA1 gave them and the
 scripts' actor numbers hold.
 
@@ -329,15 +330,14 @@ scripts' actor numbers hold.
 | 13 | Twinsen on his snowboard | `Twinsen on his snowboard` | 4320, 6400, 384 | 0x8803 | 1 | 51 | **Move 3** |
 
 **Move 3** (track) makes an actor's track script run from the start. The other actors keep Move 0 and wait for their life script. (On the
-first run I typed the two Move values after the rest. `actors.ps1` now types them with the other fields.) Press the scene editor's
-**Save**.
+first run I typed the two Move values after the rest. `actors.ps1` now types them with the other fields.)
 
 **Zones** (*`zones.ps1`*). Use **Add > Zone > ***type***. Place it at the box's centre X, its **Y min** and its centre Z. Then type
 **X min**, **X max**, **Y min**, **Y max**, **Z min**, **Z max** and the zone's own field.
 
 | LBA1 zone | Type | X min-max | Y min-max | Z min-max | Field |
 | --- | --- | --- | --- | --- | --- |
-| 0 | cube change | 31488-31999 | 256-1535 | 8960-11519 | **Destination scene** = this scene's number (the title's), **Arrival X/Y/Z** 1504, 6144, 1408 |
+| 0 | cube change | 31488-31999 | 256-1535 | 8960-11519 | **Destination scene** = this scene's number (the scene box's), **Arrival X/Y/Z** 1504, 6144, 1408 |
 | 1 | scenaric | 21248-22271 | 256-1535 | 27616-28639 | **Zone number** 5 (the ski lift) |
 | 2 | scenaric | 768-2815 | 6144-7423 | 4352-5887 | Zone number 1 (a run's start) |
 | 3 | scenaric | 4352-5887 | 5632-6911 | 4864-6911 | Zone number 2 (a run's start) |
@@ -346,8 +346,8 @@ first run I typed the two Move values after the rest. `actors.ps1` now types the
 | 6 | scenaric | 11520-12543 | 4352-5631 | 1792-2815 | Zone number 6 (the hidden bonus) |
 | 7 | scenaric | 21760-23807 | 2816-4095 | 9472-11007 | Zone number 4 (a run's start) |
 
-Press **Save** in the scene editor, then File > Save map. On save, the map stores zone 0's destination as its own scene (30000), so the
-zone still works wherever the map is installed.
+Then File > Save map. On save, the map stores zone 0's destination as its own scene (30000), so the zone still works wherever the map is
+installed.
 
 ## 12. Scripts
 
@@ -356,7 +356,7 @@ zone still works wherever the map is installed.
 Five actors have scripts: 0 (Twinsen), 2 (the instructor), 3 (the board to pick up), 12 (the hidden bonus) and 13 (the rider). For each,
 in the order 3, 2, 12, 13, 0:
 
-1. In the scene editor's **Actors** tab, choose the actor and press **Edit script…**.
+1. In the scene panel's **Actors** tab, choose the actor and press **Edit script…**.
 2. If it has a `_track.c`: switch to **Track (C)** and paste it in. Do the track first, because the life script names its labels.
 3. Switch to **Life (C)** and paste `actor<N>_life.c` in.
 4. Leave the window open.

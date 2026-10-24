@@ -41,7 +41,7 @@ internal static class SceneValidator
         // ---- counts ----
         if (scene.Actors.Count < 1) { Error("scene", "the scene has no hero."); return issues; }
         if (SceneOps.MecaPenguinSlotTaken(scene))
-            Warn("actor 1", "actor 1 is the slot the game keeps for the Meca-penguin, and it hides whatever is there: this actor never appears (adding an actor in the scene editor puts the slot back).");
+            Warn("actor 1", "actor 1 is the slot the game keeps for the Meca-penguin, and it hides whatever is there: this actor never appears (adding an actor in Build > Actors and zones puts the slot back).");
         if (scene.Actors.Count > MaxObjects) Error("scene", $"{scene.Actors.Count} actors; the engine holds at most {MaxObjects} (the hero counts as one).");
         if (scene.Zones.Count > MaxZones) Error("scene", $"{scene.Zones.Count} zones; the engine's limit is {MaxZones}.");
         if (scene.TrackPoints.Count > MaxTrackPoints) Error("scene", $"{scene.TrackPoints.Count} track points; the engine's limit is {MaxTrackPoints}.");

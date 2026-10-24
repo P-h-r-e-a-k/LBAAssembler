@@ -115,6 +115,7 @@ public partial class MainWindow : Window
         nativeRenderer = new CommunityRendererBackend(gameRoot);
         InitializeComponent();
         BuildDockLayout();
+        CreateScenePanel();
         WindowPlacement.Attach(this, "MainWindow");
         softwareRenderTimer.Tick += (_, _) => { softwareRenderTimer.Stop(); RenderSoftwareTerrain(); };
         Scenes.SceneHistory.PersistPath = Path.Combine(AppContext.BaseDirectory, "undo_history.dat");
@@ -1629,10 +1630,12 @@ public partial class MainWindow : Window
                 }
             }
         }
+        sceneTops.Clear();
+        scenePanel?.Reload();
         RefreshZoneListIfVisible();
     }
 
-    // A scene editor window (a SceneDocument: Lba1SceneEditorWindow, Lba2SceneEditorWindow) saved scenes into the game files: the views here
+    // Another window's SceneDocument saved scenes into the game files: the views here
     // read them again, as after an undo step (the tester, 2026-10-17: "I can edit a scene and click save but it does not update in the main
     // editor window, the same with actors").
     private void OnSceneDocumentSaved(Scenes.SceneDocument document, IReadOnlyList<int> scenes)
@@ -1645,7 +1648,7 @@ public partial class MainWindow : Window
             if (!IsOpenFolder(game, directory)) return;
             ReloadScenesAfterWrite(game, scenes);
             var shown = game == Scenes.SceneGame.Lba1 ? currentGame == GameKind.Lba1 : currentGame == GameKind.Lba2;
-            if (shown) SetStatus($"Scene {string.Join(", ", scenes)} was saved in the scene editor: the view shows it as saved.", StatusKind.Success);
+            if (shown) SetStatus($"Scene {string.Join(", ", scenes)} was saved in another window: the view shows it as saved.", StatusKind.Success);
         });
     }
 
@@ -1814,23 +1817,6 @@ public partial class MainWindow : Window
         catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException) { return false; }
     }
 
-    // Tools > LBA2: edit a scene as data on a plan of it (Lba2SceneEditorWindow).
-    private void Lba2Editor_Click(object sender, RoutedEventArgs e)
-    {
-        if (!Lba2Engine.IsGameFolder(gameRoot))
-        {
-            MessageBox.Show(this, "The LBA2 game folder isn't set. Choose it under File > Settings.", "LBA2", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-        var start = Lba2SceneToPlay();
-        try { var w = new Lba2SceneEditorWindow(gameRoot, start, EditLba2ScriptFromEditor) { Owner = this }; WindowLifecycle.Register(w, "Lba2SceneEditorWindow"); w.Show(); }
-        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
-        {
-            DebugLog.Log($"MainWindow: LBA2 scene editor failed: {error}");
-            MessageBox.Show(this, $"Couldn't open the scene editor: {error.Message}", "LBA2: scene editor", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
     // Tools > interior grid editor: the isometric maps of both games' interiors (paint blocks, edit the block library).
     private void GridEditor_Click(object sender, RoutedEventArgs e)
     {
@@ -1908,7 +1894,7 @@ public partial class MainWindow : Window
         }
     }
 
-    // The scene editor hands an actor's scripts to the script editor (which saves through the scene store).
+    // The scene panel hands an actor's scripts to the script editor (which saves through the scene store).
     private void EditLba2ScriptFromEditor(int scene, int actor)
     {
         var key = 1_000_000 + scene * 1000 + actor;        // its own key range: the LBA2 editor windows don't collide with the LBA1 ones
@@ -1919,30 +1905,7 @@ public partial class MainWindow : Window
         window.ShowActor(key);
     }
 
-    // Tools > LBA1: edit a scene as data (Lba1SceneEditorWindow): actors, zones and track points on its map.
-    private void Lba1Editor_Click(object sender, RoutedEventArgs e)
-    {
-        var directory = EditorSettings.Current.Lba1Directory;
-        if (!Lba1Game.IsInstalled(directory))
-        {
-            MessageBox.Show(this, "The LBA1 game folder isn't set. Choose it under File > Settings.", "LBA1", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-        var start = currentGame == GameKind.Lba1 && lba1CurrentTiles is { Count: > 0 } tiles ? tiles[0].Scene : 0;
-        try
-        {
-            var sceneWindow = new Lba1SceneEditorWindow(directory, start, EditLba1ActorFromEditor) { Owner = this };
-            WindowLifecycle.Register(sceneWindow, "Lba1SceneEditorWindow");
-            sceneWindow.Show();
-        }
-        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
-        {
-            DebugLog.Log($"MainWindow: LBA1 scene editor failed: {error}");
-            MessageBox.Show(this, $"Couldn't open the scene editor: {error.Message}", "LBA1: scene editor", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
-    // The scene editor hands an actor over to the full attribute dialog or the script editor, which work on the scene shown here.
+    // The scene panel hands an LBA1 actor over to the full attribute dialog or the script editor, which work on the scene shown here.
     private void EditLba1ActorFromEditor(int scene, int actor, bool script)
     {
         // Used to just refuse with "switch to LBA1 yourself" -- IslandEditor_Click's own equivalent (the
@@ -2036,6 +1999,7 @@ public partial class MainWindow : Window
             Canvas.SetTop(hit, sy - hit.Height / 2);
             ActorMarkerCanvas.Children.Add(hit);
         }
+        DrawSceneItems();
         UpdatePlacementMarker();
     }
 
@@ -2234,6 +2198,7 @@ public partial class MainWindow : Window
             Canvas.SetTop(hit, screenY - hit.Height / 2);
             ActorMarkerCanvas.Children.Add(hit);
         }
+        DrawSceneItems();
     }
 
     // Re-draws whichever overlay is active for the current view (dots for
@@ -2246,44 +2211,15 @@ public partial class MainWindow : Window
         if (interiorSceneActive) DrawInteriorActorOverlay(); else if (nativeViewActive) DrawNativeActorOverlay(); else UpdateActorMarkersOverlay();
     }
 
-    // Right-clicking empty terrain (anywhere that isn't an actor marker --
-    // ActorMarker_MouseRightButtonDown handles those and marks the event
-    // Handled, which stops it bubbling up to this container handler) offers
-    // adding a new actor. It spawns at the current camera target rather than
-    // the exact clicked point -- this editor has no screen-to-world terrain
-    // raycast today, only the camera-target/pan math already used elsewhere
-    // -- so the new actor lands where the camera is looking, with the
-    // attributes window open right away to reposition it precisely.
+    // Right-clicking the ground (anywhere that isn't an actor marker -- ActorMarker_MouseRightButtonDown handles those and marks the event
+    // Handled) in Build offers adding an actor, a zone or a track point right where it was clicked (ShowSceneGroundMenu: the ground under
+    // the pointer in any view -- an island, an interior, an LBA1 scene, a joined map). While the scene panel's Add waits for a click, the
+    // right button cancels it.
     private void TerrainViewport_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (currentIsland is null || !nativeViewActive || editMode != EditMode.Build || TerrainPaintActive) return;
-        var library = nativeRenderer.RendererLibrary;
-        if (library is null) return;
-        e.Handled = true;
-
-        var menu = new ContextMenu();
-        var addHere = new MenuItem { Header = "Add Actor Here" };
-        addHere.Click += (_, _) =>
-        {
-            DebugLog.Log($"MainWindow: Add Actor Here clicked at world=({targetX},{targetY},{targetZ})");
-            var index = library.AddActor((int)targetX, (int)targetY, (int)targetZ, 0, 0, 0, 255, 0, 0, 0);
-            // (RendererAddActor refuses a spot no scene of the island covers -- a cube without a scene, the sea round the island -- and a scene
-            // with as many actors as the engine holds)
-            if (index < 0)
-            {
-                DebugLog.Log("MainWindow: AddActor rejected (no scene here, or its scene is full)");
-                MessageBox.Show(this, "Couldn't add an actor here: no scene of this island covers this spot (each outdoor scene is one cube of the island), or its scene already has as many actors as the game holds (100).",
-                    "Add Actor", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-            DebugLog.Log($"MainWindow: AddActor returned index={index}");
-            selectedActorIndex = index;
-            RenderNativeCamera();
-            OpenActorAttributesWindow(index);
-        };
-        menu.Items.Add(addHere);
-        ((FrameworkElement)sender).ContextMenu = menu;
-        menu.IsOpen = true;
+        if (scenePlace is not null) { e.Handled = true; scenePanel?.CancelPlacement(); return; }
+        if (editMode != EditMode.Build || TerrainPaintActive) return;
+        ShowSceneGroundMenu(e);
     }
 
     private void ActorMarker_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -2291,6 +2227,9 @@ public partial class MainWindow : Window
         if (((FrameworkElement)sender).Tag is not int index) return;
         e.Handled = true;
         selectedActorIndex = index;
+        selectedPoint = null;
+        // (Build: the scene panel shows the actor, in its scene)
+        if (SceneOfActorKey(index) is { } picked) SceneItemPickedInView(picked.Scene, SceneItemKind.Actor, picked.Index);
         RefreshActorOverlayForSelection();
         // Keep an already-open script window in sync with whichever actor is
         // now selected, but don't pop one open on every click -- only
@@ -2564,6 +2503,13 @@ public partial class MainWindow : Window
             var editAttributes = new MenuItem { Header = "Edit Attributes…" };
             editAttributes.Click += (_, _) => { if (lba1) OpenLba1ActorWindow(index, edit: true); else OpenActorAttributesWindow(index, edit: true); };
             menu.Items.Add(editAttributes);
+            // (deleting goes through the scene panel: its scripts' references are checked, and it is one undo step)
+            if (ScenePanelActive && SceneOfActorKey(index) is { Index: > 0 } picked)
+            {
+                var delete = new MenuItem { Header = "Delete actor" };
+                delete.Click += (_, _) => { SceneItemPickedInView(picked.Scene, SceneItemKind.Actor, picked.Index); scenePanel?.DeleteSelected(); };
+                menu.Items.Add(delete);
+            }
         }
         var editScript = new MenuItem { Header = editMode == EditMode.Build ? "Edit Script… (switches to Script mode)" : "Edit Script…" };
         editScript.Click += (_, _) => { SetMode(EditMode.Script); OpenActorScriptWindow(index); };
@@ -3031,6 +2977,8 @@ public partial class MainWindow : Window
     // spinning the camera underneath whatever else is being clicked.
     private void TerrainViewport_MouseDown(object sender, MouseButtonEventArgs e)
     {
+        // (the scene panel's Add waiting for a click on the ground)
+        if (HandleScenePlacementDown(e)) return;
         // Interior scenes are only ever meant to be viewed from the one
         // fixed isometric angle Init3DView/CameraCenter set up natively --
         // rotate/tilt-with-mouse only ever makes sense for the outdoor 3D
@@ -3070,6 +3018,8 @@ public partial class MainWindow : Window
     private bool interiorPanning;
     private void TerrainViewport_MouseMove(object sender, MouseEventArgs e)
     {
+        if (sceneDrag is not null) { UpdateSceneDrag(e.GetPosition(ActorMarkerCanvas)); return; }
+        if (HandleScenePlacementMove(e)) return;
         if (draggingActorIndex is int dragIndex)
         {
             var interiorDrag = actorDragKind != ActorDragKind.Exterior;
@@ -3116,6 +3066,7 @@ public partial class MainWindow : Window
     }
     private void TerrainViewport_MouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (sceneDrag is not null) { EndSceneDrag(); return; }
         if (draggingActorIndex is int dragIndex)
         {
             if (actorDragKind != ActorDragKind.Exterior) EndInteriorActorDrag(dragIndex);
@@ -3218,6 +3169,7 @@ public partial class MainWindow : Window
             List<(int, double, double, double, double)>? projected = null;
             List<(int ActorIndex, List<Point> ScreenPoints)>? projectedRoutes = null;
             HashSet<int>? projectedInvisible = null;
+            Dictionary<int, (int, int)>? projectedSceneSlots = null;
             List<ProjectedZone>? projectedZones = null;
 
             int camX = (int)targetX, camY = (int)targetY, camZ = (int)targetZ, camDistance = nativeDistance;
@@ -3304,6 +3256,18 @@ public partial class MainWindow : Window
                         .ToList();
                     projectedRoutes = routes;
                     projectedInvisible = invisibleSet;
+                    // (each actor's scene and its slot there: a scene's actors are listed together and in its file's order, after Twinsen)
+                    var sceneSlots = new Dictionary<int, (int, int)>();
+                    var slotCounts = new Dictionary<int, int>();
+                    for (var i = 0; i < count; i++)
+                    {
+                        var actorScene = library.GetActorScene(i);
+                        if (actorScene < 0) continue;
+                        var slot = slotCounts.GetValueOrDefault(actorScene) + 1;
+                        slotCounts[actorScene] = slot;
+                        sceneSlots[i] = (actorScene, slot);
+                    }
+                    projectedSceneSlots = sceneSlots;
 
                     // Scene trigger boxes of every cube in the drawn radius, projected with the same
                     // camera as the frame (like the actors above).
@@ -3368,6 +3332,7 @@ public partial class MainWindow : Window
                     }
                     lastNativeActorScreens = projected;
                     lastNativeInvisibleActors = projectedInvisible;
+                    if (projectedSceneSlots is not null) lastNativeActorScenes = projectedSceneSlots;
                     lastNativeZones = projectedZones;
                     lastNativeActorRoutes = projectedRoutes;
                     DrawNativeActorOverlay();

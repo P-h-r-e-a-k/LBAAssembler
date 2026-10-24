@@ -34,7 +34,7 @@ public partial class MainWindow
     private void CloseDirectoryScopedEditors()
     {
         foreach (var window in OwnedWindows.OfType<Window>()
-                     .Where(w => w is Lba2SceneEditorWindow or Lba1SceneEditorWindow or GridEditorWindow or ObjectBrowserWindow or AssetEditorWindow).ToList())
+                     .Where(w => w is GridEditorWindow or ObjectBrowserWindow or AssetEditorWindow).ToList())
             window.Close();
         BodyStudioLauncher.Close();
         AnimationStudioLauncher.Close();

@@ -71,11 +71,11 @@ public partial class MainWindow
         finally { modeSyncing = false; }
         ApplyMode(selectTab: changed);
         if (changed) FileLabel.Text = next == EditMode.Build && lba2JoinedView
-            ? "Build: a joined map isn't edited here (double-click an actor to open its scene on its own); Nuke this scene... blows up every scene of it."
+            ? "Build: click an actor, a zone or a track point of any scene of the map to edit it in the Build tab, drag it to move it; Add places a new one where you click. Nuke this scene... blows up every scene of the map."
             : next switch
         {
             EditMode.Explore => "Explore: move around the scene. Nothing is changed in this mode.",
-            EditMode.Build => terrainToolsActive && buildDecorView ? "Build: click a building or object to select it, drag to move it, drag with the Rotate tool (or press Q and E) to turn it. Add object places a copy of the selected one. The view shows your edits live." : terrainToolsActive ? "Build: pick a terrain tool in the Build tab and paint on the view; the view shows your edits live. Right drag orbits while a tool is chosen, middle drag pans." : "Build: right-click the view to add an actor, double-click an actor to edit it, change zones under Details.",
+            EditMode.Build => terrainToolsActive && buildDecorView ? "Build: click a building or object to select it, drag to move it, drag with the Rotate tool (or press Q and E) to turn it. Add object places a copy of the selected one. The view shows your edits live." : terrainToolsActive ? "Build: pick a terrain tool in the Build tab and paint on the view; the view shows your edits live. Right drag orbits while a tool is chosen, middle drag pans." : "Build: click an actor, a zone's outline or a track point to edit it in the Build tab, drag it to move it; Add (or right-click the ground) places a new one where you click.",
             _ => "Script: click an actor (or pick one in the Script tab) to open its script.",
         };
         Keyboard.Focus(this);
@@ -126,17 +126,22 @@ public partial class MainWindow
         SyncAudioControls();
         if (editMode == EditMode.Script) RefreshScriptActors();
         UpdatePlayButton();
+        // The scene panel follows the view; leaving it (another mode, the terrain tools) stops any placing and drops its track points.
+        if (!ScenePanelActive && scenePlace is not null) scenePanel?.CancelPlacement();
+        SyncScenePanelToView();
+        RefreshActorOverlayForSelection();
     }
 
     private string BuildHelpText()
     {
+        const string scene = "Click an actor, a zone's outline or a track point in the view to edit it above; drag it to move it. Add places a new one where you click the ground, or right-click the ground. Every change is written at once (Edit > Undo takes it back).";
         if (currentGame == GameKind.Lba2 && lba2JoinedView)
-            return "A joined map is not edited here: double-click an actor to open its scene on its own and edit it there. Nuke this scene... below blows up every scene of the map, in a chain reaction from the one in the middle of the view.";
+            return scene + " Double-click an actor to open its scene on its own. Nuke this scene... below blows up every scene of the map, in a chain reaction from the one in the middle of the view.";
         if (currentGame == GameKind.Lba1)
-            return "Right-click an actor for its attributes; double-click it to edit. Change zones under Details. The scene editor opens the scene as data (add, move, delete, duplicate, undo, save). Buildings and other blocks are placed and moved in the interior map (grid editor). Scripts are edited in Script mode.";
+            return scene + " Buildings and other blocks are placed and moved in the grid editor (the Scene tab's Edit the map). Scripts: Edit script…, or Script mode.";
         if (interiorSceneActive)
-            return "Right-click the view to add an actor, double-click an actor to edit it, change zones under Details. The interior's map (its bricks and blocks: place, move and copy buildings and furniture) is edited in the grid editor. Scripts are edited in Script mode.";
-        return "Right-click the view and choose Add Actor Here to place an actor; double-click an actor to change it; change zones under Details. Scripts are edited in Script mode. Pick 'Terrain' above to sculpt the island itself.";
+            return scene + " The interior's map (its bricks and blocks) is edited in the grid editor (the Scene tab's Edit the interior's map). Scripts: Edit script…, or Script mode.";
+        return scene + " Pick 'Terrain' above to sculpt the island itself, 'Buildings and decor' for its objects.";
     }
 
     // ---- the terrain editor, hosted -------------------------------------------------------------------------------------------------------------
@@ -356,10 +361,13 @@ public partial class MainWindow
 
     // ---- Build tab buttons -----------------------------------------------------------------------------------------------------------------------
 
-    private void BuildSceneEditor_Click(object sender, RoutedEventArgs e)
+    // Tools > Editors > Scene: Build > Actors and zones, where the scene's actors, zones and track points are edited in the view.
+    private void SceneEdit_Click(object sender, RoutedEventArgs e)
     {
-        if (currentGame == GameKind.Lba1) Lba1Editor_Click(sender, e);
-        else Lba2Editor_Click(sender, e);
+        if (currentGame == GameKind.Lba2 && TerrainEditable) BuildSceneRadio.IsChecked = true;
+        SetMode(EditMode.Build);
+        ActivatePanel(BuildTab);
+        if (SceneStoreInView() is null) SetStatus("Open a scene first (an island, an interior or an LBA1 scene): its actors, zones and track points are edited where the view shows them.");
     }
 
     // ---- keys -------------------------------------------------------------------------------------------------------------------------------------
@@ -369,6 +377,11 @@ public partial class MainWindow
         // While a scene is played the keys belong to the game (the LBA1 play view gets them from here; LBA2's engine has its own window).
         if (placing && e.Key == Key.Escape) { CancelPlacement(); e.Handled = true; return; }
         if (playing) { lba1Play?.ForwardKey(e, true); return; }
+        // The scene panel: Esc stops placing; Delete deletes what is selected (not while typing in a box).
+        if (scenePlace is not null && e.Key == Key.Escape) { scenePanel?.CancelPlacement(); e.Handled = true; return; }
+        if (e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None && ScenePanelActive && scenePanel is not null && scenePanel.SelectedKind != SceneItemKind.None
+            && Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase && !(terrainToolsActive && terrainEditor is not null))
+        { scenePanel.DeleteSelected(); e.Handled = true; return; }
         if (Keyboard.Modifiers == ModifierKeys.Control)
         {
             EditMode? wanted = e.Key switch

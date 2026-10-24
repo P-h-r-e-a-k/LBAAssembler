@@ -187,8 +187,8 @@
                     <MenuItem x:Name="GridEditorMenuItem" Header="LBA1 / LBA2: interior _grid editor…" Click="GridEditor_Click"/>
                     <MenuItem x:Name="ExportMenuItem" Header="LBA1 / LBA2: e_xport 3D models…" Click="Export3D_Click" ToolTip="Islands (with their objects and the Desert island race track), buildings, interiors, every actor and body, furniture and items, as glTF, OBJ, PLY or STL"/>
                     <Separator/>
-                    <MenuItem x:Name="Lba1EditorMenuItem" Header="LBA1: scene _editor…" Click="Lba1Editor_Click"/>
-                    <MenuItem x:Name="Lba2EditorMenuItem" Header="LBA2: scene e_ditor…" Click="Lba2Editor_Click"/>
+                    <MenuItem x:Name="SceneEditMenuItem" Header="LBA1 / LBA2: _scene: actors, zones, track points (in the view)" Click="SceneEdit_Click"
+                              ToolTip="Build > Actors and zones: the scene's actors, zones and track points, picked, dragged and placed in the view"/>
                     <MenuItem x:Name="IslandEditorMenuItem" Header="LBA2: island _terrain editor (Build mode)" Click="IslandEditor_Click"/>
                 </MenuItem>
                 <MenuItem Header="_Play" ToolTip="Plays a specific game's open scene regardless of which one the Game selector currently shows -- for the game that's already showing, the Play tab's own button does the same thing">
@@ -432,20 +432,27 @@
                                         </StackPanel>
                                         <ContentControl x:Name="TerrainPanelHost" Grid.Row="1"/>
                                         <ScrollViewer x:Name="BuildScenePanel" Grid.Row="1" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
-                                            <StackPanel Margin="16,10,16,16">
-                                                <TextBlock x:Name="BuildSceneHelp" TextWrapping="Wrap" FontFamily="Consolas" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted2Brush}"/>
-                                                <TextBlock Text="Editors" Style="{StaticResource Eyebrow}" Margin="0,16,0,6"/>
-                                                <Button x:Name="BuildSceneEditorButton" Content="Scene editor (actors, zones, points)…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="BuildSceneEditor_Click"/>
-                                                <Button x:Name="BuildGridButton" Content="Buildings and decor: interior map (grid editor)…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="GridEditor_Click"
-                                                        ToolTip="Place, move, copy and remove the blocks (buildings, walls, furniture) of an interior or an LBA1 scene. Buildings on an LBA2 island are placed, moved and turned in the 3D view: pick the island, then Build > Buildings and decor"/>
-                                                <Button x:Name="BuildAssetButton" Content="Bricks and sprites…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="AssetEditor_Click"/>
-                                                <Button x:Name="BuildExportButton" Content="Export 3D models (glTF, OBJ, PLY, STL)…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="Export3D_Click"
-                                                        ToolTip="Export islands, buildings, interiors, actors, bodies, furniture and items to common 3D formats (for other tools, not for the game)"/>
-                                                <Button x:Name="BuildObjectButton" Content="Objects and bodies…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="ObjectBrowser_Click"/>
-                                                <Button x:Name="BuildCharacterButton" Content="Character maker…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="CharacterMaker_Click"
-                                                        ToolTip="A character of the open map's own: a body from the game's or from nothing, parts added to it, its animations keyframe by keyframe -- for the scene editor's actors"/>
-                                                <Button Content="Body Studio…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="BodyStudio_Click"/>
-                                                <Button Content="Animation Studio…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="AnimationStudio_Click"/>
+                                            <StackPanel>
+                                            <!-- the scene panel (ScenePanel, MainWindow.SceneEdit.cs): the scene's actors, zones and track points, edited in the view -->
+                                            <ContentControl x:Name="ScenePanelHost" Margin="16,8,16,4"/>
+                                            <Expander Header="Help and other editors" Margin="16,4,16,8" Foreground="{DynamicResource ThemeTextBrush}">
+                                                <ScrollViewer VerticalScrollBarVisibility="Disabled">
+                                                    <StackPanel Margin="0,6,0,0">
+                                                        <TextBlock x:Name="BuildSceneHelp" TextWrapping="Wrap" FontFamily="Consolas" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted2Brush}"/>
+                                                        <TextBlock Text="Editors" Style="{StaticResource Eyebrow}" Margin="0,12,0,6"/>
+                                                        <Button x:Name="BuildGridButton" Content="Buildings and decor: interior map (grid editor)…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="GridEditor_Click"
+                                                                ToolTip="Place, move, copy and remove the blocks (buildings, walls, furniture) of an interior or an LBA1 scene. Buildings on an LBA2 island are placed, moved and turned in the 3D view: pick the island, then Build > Buildings and decor"/>
+                                                        <Button x:Name="BuildAssetButton" Content="Bricks and sprites…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="AssetEditor_Click"/>
+                                                        <Button x:Name="BuildExportButton" Content="Export 3D models (glTF, OBJ, PLY, STL)…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="Export3D_Click"
+                                                                ToolTip="Export islands, buildings, interiors, actors, bodies, furniture and items to common 3D formats (for other tools, not for the game)"/>
+                                                        <Button x:Name="BuildObjectButton" Content="Objects and bodies…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="ObjectBrowser_Click"/>
+                                                        <Button x:Name="BuildCharacterButton" Content="Character maker…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="CharacterMaker_Click"
+                                                                ToolTip="A character of the open map's own: a body from the game's or from nothing, parts added to it, its animations keyframe by keyframe -- for the scene's actors (Build > Actors and zones)"/>
+                                                        <Button Content="Body Studio…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="BodyStudio_Click"/>
+                                                        <Button Content="Animation Studio…" Style="{StaticResource QuietButton}" HorizontalContentAlignment="Left" Padding="10,6" Margin="0,0,0,6" Click="AnimationStudio_Click"/>
+                                                    </StackPanel>
+                                                </ScrollViewer>
+                                            </Expander>
                                             </StackPanel>
                                         </ScrollViewer>
                                     </Grid>

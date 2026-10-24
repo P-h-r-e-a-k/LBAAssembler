@@ -79,8 +79,8 @@ Save map put it into the .LS2 -- the game's own SCENE.HQR stayed byte for byte a
 SCENE.HQR…", "write scene 405 into ...\_MAP_WORKSPACE\SCENE.HQR ... keeps your original as SCENE.HQR.bak"). And a real bug: the script
 editor's unsaved edits outlived Close map. An LBA1 map takes a scene slot of the game, so the game's own scene 28 then showed the map's edit,
 and saving it wrote the map's scene over the game's scene 28 in the real SCENE.HQR. Now:
-- The script window, the actor attributes windows, the zone inspector and both scene editors say where a save goes: *Save to the map…*,
-  "Saved into the map "Name" (File > Save map writes its file)". The scene editors' title names the map.
+- The script window, the actor attributes windows, the zone inspector and the scene panel say where a save goes: *Save to the map…*,
+  "Saved into the map "Name" (File > Save map writes its file)".
 - The script editor's edits belong to the folder they were made in (`ScriptSession`): they are never shown as, or saved into, another
   folder's scenes. Close map asks about them with the map's other changes (Yes saves them into the map and the map into its file, No drops
   them); Save map and Install map into game ask whether to save them into the map first; opening a map, test edits, the 1996 demo, another
@@ -280,9 +280,9 @@ On sandboxes (2026-10-15):
 
 - LBA1's scenes can't be added to: an LBA1 map takes a scene slot of the game.
 - An LBA2 scene's actor 1 is the Meca-penguin's (the engine hides whatever is there): a map's own actors start at 2. A new map has the slot;
-  a map made before 2026-10-17 gets it when an actor is added in the scene editor (see the README's LBA2 scene editor, "Its actors").
+  a map made before 2026-10-17 gets it when an actor is added in Build > Actors and zones (see the README's "Its actors").
 - Add Actor Here (Build mode) doesn't work on a map's island: the renderer lists no actors for it (an island of the maps has no island
-  number of its own, and its scenes are past 221), so it says the cube is full. Add a map island's actors in the LBA2 scene editor.
+  number of its own, and its scenes are past 221), so it says the cube is full. Add a map island's actors in Build > Actors and zones.
 - An LBA2 map island's scenes have no place on the holomap, and the renderer shows no actors on it in the 3D view outside Play: its scenes
   carry the base island's number.
 - A race track build puts SCENE.HQR back from its own copy of the originals (`.before-racetrack`), so maps installed after a race track

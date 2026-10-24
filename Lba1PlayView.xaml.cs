@@ -940,18 +940,3 @@ public partial class Lba1PlayView : UserControl
         ScriptBreakpoints.ClearPause();
     }
 }
-
-// The LBA1 play view in a window of its own, for the scene editor's Play button (the main window shows it in its own view).
-internal sealed class Lba1PlayHostWindow : Window
-{
-    public Lba1PlayHostWindow(Lba1Game game, Lba1ActorImages images, string directory, int scene)
-    {
-        Title = "LBA1 - play scene";
-        Width = 1180; Height = 780; MinWidth = 760; MinHeight = 480;
-        this.SetResourceReference(Control.BackgroundProperty, "ThemeFieldBrush");
-        var view = new Lba1PlayView(game, images, directory);
-        Content = view;
-        Loaded += (_, _) => view.Start(scene);
-        Closed += (_, _) => view.Stop();
-    }
-}
