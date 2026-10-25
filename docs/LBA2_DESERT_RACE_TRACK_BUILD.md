@@ -4848,3 +4848,26 @@ optimised for best lines using the best car for the specific track."
   in its scene; the race over goes back to the menu over the track.
 - **Not the cause** (tried first, reverted): the zones into a scene inside, and holding the race's way back to the menu while a cinema
   was on.
+
+## Racing a ghost: its own page, levels unlocked in turn; Best laps simplified (2026-10-25)
+
+The user: "Let's change this interface because it's terrible ... first have the user select the track, then Time Trial, then add a
+screen so they can choose to race a ghost ... force them to beat easy to unlock medium, and to beat medium to unlock hard ... simplify
+the Best laps screen ... top 5 times ... a watch section ... Remove "O to open the ghosts folder"".
+
+- **Race a ghost** (RACEGAME.CPP `GhostPage`, after a Time trial is chosen, before the car page): Back, No ghost, Your best lap, Easy,
+  Medium, Hard (IDs `RG_ID_GHOST_NONE` 2360 .. `_HARD` 2364), each with its lap. A missing ghost is greyed; a locked level reads "Medium
+  ghost: beat Easy" and is greyed. The rows sit lower than other pages' (centre 308, header at 92) so the header clears the menu
+  picture's second title line. The choice is saved as `ghost=0|1|3|4|5`; Esc on the car page comes back here.
+- **Unlocks**: `ghost_beaten=<n>|<track>` lines in `RACEGAME_SETTINGS.TXT` (1 Easy beaten, 2 Medium, 3 Hard). RACEMOD's GhostLapDone
+  calls `RaceGame_GhostBeaten(level)` (COMMON.H), which keeps it and returns the level it opens: "You beat the Easy ghost! Medium
+  unlocked".
+- **Your best lap** is the GhostFind mode 6 (the player's own or a shared one, the quicker): the race file gets `ghost=6` for it, and
+  RACEMOD swaps in a new best lap for mode 6 as for 1 and 2. The row reads **Shared ghost** when the quicker one is shared, and **Your
+  recorded lap** when Best laps holds a faster lap with no ghost (laps from before ghosts were kept).
+- **Best laps** (`TimesPage`): three rows -- the track (Left/Right: tracks), Your best lap, Ghost: Easy/Medium/Hard (Left/Right go round
+  the levels there are) -- the selected one framed and orange; the five fastest laps between the track and the Watch header. Enter
+  watches; any level can be watched, locked or not. G and O are gone, and with them the ghost-order cycling.
+- **Tested** (sandbox, Otringal): the page with Medium/Hard locked; Easy raced with the autodrive, "the Easy ghost beaten, Medium open",
+  `ghost_beaten=1|Otringal`, Medium open on the page after; Best laps' rows, Left/Right round the levels, the Easy ghost watched; the
+  Temple's page (its own unlocks); a shared ghost faster than the player's shown and raced.

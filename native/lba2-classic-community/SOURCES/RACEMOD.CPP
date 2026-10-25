@@ -529,7 +529,8 @@ static int FootCross(void);
 static U32 WalkInput(void);
 static int s_trial = 0;                    // trial=
 // the ghost car (2026-10-24: the ghost's section, before RaceMod_Frame)
-static int s_ghostMode = 2;                // ghost=: 0 none, 1 the player's own best lap, 2 the track's fastest ghost (the player's own or one shared)
+static int s_ghostMode = 2;                // ghost=: 0 none, 1 the player's own best lap, 2 the track's fastest ghost (the player's own or one shared); 3, 4, 5 the game's
+                                           // Easy, Medium, Hard; 6 the player's own or one shared (the menu's "Your best lap")
 static int s_ghostWatch = 0;               // ghost_watch=: this run plays a ghost back, the car driven along it
 static char s_ghostName[96] = "";          // ghost_name=: the track the ghosts are of (else the race file's name)
 static char s_ghostCar[96] = "";           // ghost_car=: the car driven, as its ghost names it
@@ -13765,7 +13766,10 @@ static void GhostLapDone(S32 lap) {
     if (s_ghost.Lap && s_ghost.Level[0] && lap < s_ghost.Lap && !s_ghostBeaten) {
         s_ghostBeaten = 1;
         char text[64];
-        snprintf(text, sizeof(text), "You beat the %s ghost!", s_ghost.Level);
+        // (the race game keeps it, and opens the next level: Medium once Easy is beaten, Hard once Medium is -- RACEGAME.CPP GhostPage)
+        const char *opened = RaceGame_GhostBeaten(s_ghost.Level);
+        if (opened) snprintf(text, sizeof(text), "You beat the %s ghost! %s unlocked", s_ghost.Level, opened);
+        else snprintf(text, sizeof(text), "You beat the %s ghost!", s_ghost.Level);
         Message(text);
         Log_Info("[racemod] ghost: %s (%.2f s against %.2f s)", text, lap / 1000.0, s_ghost.Lap / 1000.0);
     }
@@ -13790,7 +13794,7 @@ static void GhostLapDone(S32 lap) {
     }
     // (raced from the next lap on: the quicker of it and the ghost raced so far -- the player's own best, or the track's fastest; one of the
     // game's levels stays raced, beaten or not: it is the one chosen to beat)
-    if ((s_ghostMode == 1 || s_ghostMode == 2) && (!s_ghost.Lap || lap < s_ghost.Lap)) {
+    if ((s_ghostMode == 1 || s_ghostMode == 2 || s_ghostMode == 6) && (!s_ghost.Lap || lap < s_ghost.Lap)) {
         const T_RACE_LAPGHOST old = s_ghost;
         s_ghost = s_ghostRec;
         s_ghostRec = old;
