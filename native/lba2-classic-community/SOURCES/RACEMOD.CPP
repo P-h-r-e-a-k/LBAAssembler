@@ -5204,6 +5204,15 @@ static void CarPose(T_OBJ_3D *obj, S32 beta, double phi, double psi) {
 
 static void CarPitch(T_OBJ_3D *obj, S32 beta, double phi) { CarPose(obj, beta, phi, 0); }
 
+// The car Twinsen drives as (drive_as=): turned his car's way and pitched with the way it climbs (s_drivePitch, DrawDriveAs) -- or, round
+// a loop, posed as his own car is there (RaceMod_Loop's CarPose on him). Pitched by the climb alone (2026-10-25 -- the user: "On Emerald
+// Moon the car appears to be going around the outside of the loop instead of the inside"), a climb no steeper than
+// RACE_DRIVE_SLOPE_MOST, it stayed nearly upright going round: its roof to the ring, its wheels to the sky. The ghost car is recorded so.
+static void DriveAsPose(T_OBJ_3D *obj, const T_OBJET *hero, double pitch) {
+    if (s_loopState != LOOP_NONE) { obj->Alpha = hero->Obj.Alpha; obj->Beta = hero->Obj.Beta; obj->Gamma = hero->Obj.Gamma; return; }
+    CarPitch(obj, hero->Obj.Beta, pitch);
+}
+
 // The middle of the ring's band `theta` round from its foot, across the road: from Shift/2 left of the road's middle at the foot round to
 // Shift/2 right of it (+ is right of the lap's way).
 static double Lane(const T_RACE_LOOP *l, double theta) {
@@ -13437,9 +13446,9 @@ static void GhostSampleNow(T_RACE_LAPGHOST_PT *p, S32 t) {
     p->X = hero->Obj.X + CurrentCubeX * 32768; p->Y = hero->Obj.Y; p->Z = hero->Obj.Z + CurrentCubeY * 32768;
     p->Island = (S16)Island;
     if (s_driveBody >= 0 && s_driveAnim >= 0) {
-        // (driven as another car, drive_as=: that car, pitched as DrawDriveAs pitches it)
+        // (driven as another car, drive_as=: that car, posed as DrawDriveAs poses it -- round a loop, as Twinsen's car is)
         static T_OBJ_3D pose;
-        CarPitch(&pose, hero->Obj.Beta, s_drivePitch);
+        DriveAsPose(&pose, hero, s_drivePitch);
         p->Alpha = (S16)pose.Alpha; p->Beta = (S16)pose.Beta; p->Gamma = (S16)pose.Gamma;
         p->Body = (S16)(s_driveSmallNow && s_driveSmall >= 0 ? s_driveSmall : s_driveBody);
         p->Anim = (S16)s_driveAnim;
@@ -13551,9 +13560,13 @@ static int GhostAt(const T_RACE_LAPGHOST *g, S32 t, double *x, double *y, double
     *x = a->X + dx * u; *y = a->Y + dy * u; *z = a->Z + dz * u;
     const S16 *from[3] = {&a->Alpha, &a->Beta, &a->Gamma}, *to[3] = {&b->Alpha, &b->Beta, &b->Gamma};
     S32 *out[3] = {alpha, beta, gamma};
+    // (the angles not slid between two samples where one of them turns over a quarter of a turn: going over a loop's top the three angles
+    // swap round -- heading turned back, rolled upside down -- and slid each on its own, the car tumbled between them for a frame)
+    double ua = u;
+    for (int k = 0; k < 3; k++) if (abs(((*to[k] - *from[k] + 2048) & 4095) - 2048) > 1024) ua = u < 0.5 ? 0 : 1;
     for (int k = 0; k < 3; k++) {
         const S32 diff = ((*to[k] - *from[k] + 2048) & 4095) - 2048;
-        *out[k] = ((S32)floor(*from[k] + diff * u + 0.5)) & 4095;
+        *out[k] = ((S32)floor(*from[k] + diff * ua + 0.5)) & 4095;
     }
     const T_RACE_LAPGHOST_PT *near = u < 0.5 ? a : b;
     *body = near->Body; *anim = near->Anim; *island = near->Island;
@@ -14212,7 +14225,7 @@ static void DrawDriveAs(S32 now) {
     ObjectSetInterDep(&s_driveObj);
     if (s_driveObj.Status & FLAG_LAST_FRAME) { s_driveObj.Anim.Num = -1; ObjectInitAnim(&s_driveObj, (void *)(uintptr_t)(U32)s_driveAnim); }
     s_driveObj.X = hero->Obj.X; s_driveObj.Y = hero->Obj.Y; s_driveObj.Z = hero->Obj.Z;
-    CarPitch(&s_driveObj, hero->Obj.Beta, s_drivePitch);
+    DriveAsPose(&s_driveObj, hero, s_drivePitch);
     ObjectSetInterFrame(&s_driveObj);
     const int fog = Fill_Flag_Fog, depth = Fill_Flag_ZBuffer, keep = Fill_Flag_NZW;
     const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;

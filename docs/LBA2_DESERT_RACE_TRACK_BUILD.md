@@ -4754,3 +4754,19 @@ forwards, and appears a little jerky and we also have occasional screen flashing
 **The game's icon** (LBRA installer, `GameIcon.cs`): the installed `LBRA.exe` had the engine's icon, so its window, the taskbar and
 Explorer showed it. The installer now replaces the exe's icon groups with `pumpkin.ico`'s pictures through Windows' resource update,
 before it marks the exe a windowed program. SDL takes the window's icon from the exe's first icon.
+
+**Round the loops, and the exe's icon in Explorer** (2026-10-25 -- the user: "On Emerald Moon the car appears to be going around the
+outside of the loop instead of the inside"; "the exe icon for LBRA still retains the engine icon"):
+
+- **The car Twinsen drives as** (`drive_as=`) was drawn pitched with the road's climb alone (`s_drivePitch`, no steeper than
+  `RACE_DRIVE_SLOPE_MOST`), so round a loop it stayed nearly upright: roof to the ring, wheels to the sky. Twinsen's own buggy was
+  posed right, because `RaceMod_Loop`'s `CarPose` turns him round the ring. `DriveAsPose` now gives the car drawn in his place his
+  pose while a loop has him (`s_loopState`), and the slope's pitch otherwise. `DrawDriveAs` and the ghost's recording both use it, so
+  ghosts recorded from now on go round the inside too. A ghost recorded before this keeps the upright pose in its samples.
+- **The ghost's angles** are not slid between two samples where one turns over a quarter of a turn. Over a loop's top the three
+  angles swap round, and slid each on its own the car tumbled for a frame.
+- **Tested**: Emerald Moon with the vampire's coffin. Live, the car rides the inside of loop 1, wheels on the ring. A new ghost lap
+  played back rides the inside of loop 2.
+- **The icon**: the installed exe already held only the pumpkin's five pictures, 16 to 256 pixels. Explorer was showing the icon it
+  had cached for that path before the update. The installer (`GameIcon.Refresh`) now tells the shell the exe changed and empties its
+  icon cache (`SHChangeNotify`: `SHCNE_UPDATEITEM`, `SHCNE_ASSOCCHANGED`).
