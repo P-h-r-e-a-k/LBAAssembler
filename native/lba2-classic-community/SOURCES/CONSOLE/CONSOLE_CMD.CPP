@@ -2436,6 +2436,18 @@ static void cmd_autodrive(int argc, const char *argv[]) {
     Console_Print("autodrive: %s", atoi(argv[1]) ? "on" : "off");
 }
 
+/* autoshort <0|1>: the test pilot (autodrive) drives a line with the track's shortcuts taken -- the raised road's branches shorter than
+   the way round, the teleporters that come out further round the lap (RACEMOD.CPP BuildShortLine). For the game's Hard ghosts. */
+static void cmd_autoshort(int argc, const char *argv[]) {
+    extern void RaceMod_AutoShort(int on);
+    if (argc < 2) {
+        Console_Print("Usage: autoshort <0|1>");
+        return;
+    }
+    RaceMod_AutoShort(atoi(argv[1]));
+    Console_Print("autoshort: %s", atoi(argv[1]) ? "on" : "off");
+}
+
 /* raceview <0|1|2>: the race camera's view -- 0 inside the car, 1 just behind it, 2 further back -- as V changes it during a race
    (RACEMOD.CPP camera=). For headless tests. */
 static void cmd_raceview(int argc, const char *argv[]) {
@@ -2881,6 +2893,10 @@ void Console_RegisterAll(void) {
                               "raceview <0|1|2>",
                               "With a race-track mod running, changes the race camera's view as the V key does: 0 inside the "
                               "car, 1 just behind it, 2 further back. For headless tests.");
+    Console_RegisterCommandEx("autoshort", cmd_autoshort, "Race-track test pilot: drive a line with the track's shortcuts taken",
+                              "autoshort <0|1>",
+                              "The autodrive's line with the raised road's branches that are shorter than the way round, and the "
+                              "teleporters that come out further round the lap, spliced in (RACEMOD.CPP BuildShortLine).");
     Console_RegisterCommandEx("autodrive", cmd_autodrive, "Race-track test pilot: drive the player's car along the racing line",
                               "autodrive <0|1> [look cells] [side cells] [pace %]",
                               "With a race-track mod running (LBA2_RACETRACK_FILE), steers and pedals the player's "

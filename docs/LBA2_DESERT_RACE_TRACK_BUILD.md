@@ -4787,3 +4787,44 @@ dying. I think it was the Citabau track"):
 - **Tested**: the user's own Citadel town ghost (the flying carpet, 31.81 s) in the sandbox. "Island 0: the scenes of 9 of its cubes",
   then all 15 of the lap's changes (scenes 46, 49, 42, 48, 47, 45, 47, 50, ...) and round again. No clock going back, no falling, no
   rescue; the carpet on the road all the way.
+
+## Ghosts to beat: Easy, Medium and Hard on every track (2026-10-25)
+
+The user: "Let's generate easy medium and hard ghosts to beat for each track. Hard tracks should make use of any shortcuts and be
+optimised for best lines using the best car for the specific track."
+
+- **The game side**:
+  - The game folder's `ghosts\` holds the game's own ghosts, each with `level=Easy|Medium|Hard` in its head.
+  - `RaceMod_GhostFind` modes: 1 own, 2 fastest of all (own, shared, game's), 3/4/5 the game's Easy/Medium/Hard, 6 the fastest of the
+    player's and the shared ones. `ghost=` in the race file takes 0-5.
+  - Racing a game's ghost: the display names it ("Hard ghost 0:46.28"), and a lap under it says "You beat the Hard ghost!" once a trial.
+    A level ghost stays raced, rather than giving way to the player's own quicker lap.
+  - The lap's time against the ghost stays on the display its 3 s: a checkpoint just past the line had covered it at once.
+  - Best laps: Up, Down go through the player's/shared ghost and the three levels; Enter plays the one shown back. G goes round the
+    fastest, your best lap, Easy, Medium, Hard, none.
+- **The shortcuts** (`autoshort 1`, the console; `BuildShortLine`): a line for the autodrive alone. The lap's counting keeps the racing
+  line. Spliced in:
+  - each raised-road branch under 0.9 of the way round it saves;
+  - each teleporter within 12 cells of the line that comes out further round the lap, turned in towards from as far back as it is off;
+  - each rail opening, over the edge at its middle and on along the road below.
+
+  On the Temple of Bú the hidden passage and the spiral drop are both taken, every lap counted: 46.28 s against 54.53 s on the racing
+  line. Wannies Island's branch is taken, but its lap is slower there (the frog). Island CX's branch is a pit lane, longer, and is left.
+  The palace's teleporters save nothing.
+- **The cars**: `raceplan file` gives each car's star profile's perfect lap on the track loaded (top x(1+0.08 d), pull x(1+0.5 d)(1+0.08 d),
+  steering x(1+0.2 d), d = (stars - 2.5) / 2.5). Hard takes the quickest unlocked car: mostly the first quetch child's kart (2.5/1/4) or
+  the undergas bulldozer (1/1.5/5). The Temple: the Tralu's cave. Polar Island: the Dark Monk's car. Island CX: the firefly tart.
+  The Francos: the nomad grobo's truck. The palace: Mr. Kurtz's laboratory.
+- **Made by** `E:\dump\TEMP\lbralltracks\gen.ps1` on an LBRA install (the menus driven through `--listen`):
+  - Easy: Twinsen's Halloween buggy at 70 % of the line's speed, its laps 1-2.
+  - Medium: the same car at 85 %, lap 3.
+  - Hard: the best car on the shortcut line at 100 %, then 104/100/108/102 % with the look-ahead varied, its fastest lap.
+  - The pace's effect isn't linear: on Otringal 60 % gave 46 s, 78-92 % all about 32-34 s.
+  - Wannies Island: a trial per level of 6 laps, best kept, labelled by time.
+- **Times** (Easy / Medium / Hard, s): Temple 80.9/65.6/46.3, Polar 70.9/58.9/52.9, Citadel storm 14.8/12.6/10.2, Citadel town
+  52.6/43.6/36.1, Desert 65.4/54.2/46.7, Emerald 33.9/28.2/22.9, Otringal 38.4/32.6/25.9, lava lake 17.2/14.6/11.3, Francos
+  45.0/38.5/31.7, Elevator 18.1/15.2/11.3, Wannies 11.7/11.6/11.4, Mosquibees 23.7/19.8/16.5, Volcano 34.0/28.5/23.0, CX 30.9/23.0/18.3,
+  palace 51.3/42.4/37.2, statue 24.0/20.0/15.6.
+- **Shipped**: the LBRA installer embeds `Game\ghosts\*.ghost` as `game/ghosts/...`, so they go into the install's `ghosts\`.
+- **Found on the way**: on Wannies Island the race game's menu during or after a race can leave the game in hall 123 (scene 123, island
+  6) with no menu. The menu's resume reloads the current save there, and a car driven on past the finish goes in. Not fixed yet.

@@ -142,8 +142,9 @@
  *                                the race game a win says "You win!" (ahead of the one to beat but not first: the place), not "You beat
  *                                <him>!" (the user, 2026-10-20). A lost sprint isn't run again with it (2026-10-22: Track select's
  *                                Polar Island and palace sprints): the menu follows
- *     ghost=<0|1|2>              (2026-10-24) a time trial races a ghost car: 0 none, 1 the player's own best lap, 2 (with none) the
- *                                track's fastest in the user's GHOSTS folder, the player's own or one shared. Each lap is recorded -- where the car
+ *     ghost=<0..5>               (2026-10-24) a time trial races a ghost car: 0 none, 1 the player's own best lap, 2 (with none) the
+ *                                track's fastest -- the player's own, one shared in the user's GHOSTS folder, or the game's own; 3, 4, 5 the
+ *                                game's Easy, Medium or Hard ghost to beat (its ghosts folder, level= in the file). Each lap is recorded -- where the car
  *                                was, not the keys -- and one quicker than the player's own best is kept, GHOSTS/<track>.ghost (the ghost's section)
  *     ghost_name=<track>         the track the ghosts are of (the race game's track; else the race file's own name)
  *     ghost_car=<name>           the car driven, as the ghost names it
@@ -4742,6 +4743,178 @@ double RaceMod_PlanLap(double topPct, double accelPct, double brakePct, double s
     return lap;
 }
 
+// ---- the test pilot's shortcuts (autoshort) ------------------------------------------------------------------------------------------
+// (2026-10-25 -- the user: "Let's generate easy medium and hard ghosts to beat for each track. Hard tracks should make use of any shortcuts
+// and be optimised for best lines".) The line the autodrive drives with the track's shortcuts taken: each branch of the raised road
+// (raised_branch=) shorter than the lap's own way between its ends, and each teleporter that comes out further round the lap than it is
+// driven into, spliced into the guide line in place of the way round they save -- the branch's points, or a straight way off the line into
+// the teleporter's box and on from where it comes out. Its bends' radii from its points, its speeds planned for the player's car. The
+// race's own line, which the lap's counting goes by, is left as it is. (And the rail's openings, rail_open=: the line off the edge there
+// and on along the road below where the car comes down -- the Temple of Bu's spiral drop, the user asking for it and the hidden passage
+// both, 2026-10-25.)
+static T_RACE_OPPONENT s_autoLine;
+static int s_autoShort = 0;
+#define RACE_SHORT_GAIN 0.9                // a branch taken when it is under this share of the way round
+#define RACE_SHORT_REACH (12 * 512.0)     // a teleporter taken only this near the line (driven straight there) ...
+#define RACE_SHORT_LEAD 1.0                // ... the line left this many times that far before the point nearest it (a turn in, not a corner)
+#define RACE_SHORT_BELOW 600               // a rail opening's road below: this far under its lowest
+
+static void FreeAutoLine(void) {
+    T_RACE_OPPONENT *o = &s_autoLine;
+    free(o->X); free(o->Z); free(o->Y); free(o->V); free(o->R); free(o->Cum);
+    memset(o, 0, sizeof(*o));
+}
+
+static int NearestOnLine(const T_RACE_OPPONENT *o, double x, double y, double z) {
+    int best = -1;
+    double bd = 1e30;
+    for (int i = 0; i < o->Count; i++) {
+        const double d = LineDistance(o, i, x, y, z);
+        if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+}
+
+static double RaisedStep(int a, int b) {
+    const double dx = s_raised[b].X - s_raised[a].X, dz = s_raised[b].Z - s_raised[a].Z;
+    return sqrt(dx * dx + dz * dz);
+}
+
+typedef struct { int From, To, Kind, Which; } T_RACE_CUT;   // the guide's points it leaves after and joins at; 0 a branch, 1 a teleporter,
+                                                             // 2 a rail opening
+
+static void BuildShortLine(void) {
+    FreeAutoLine();
+    const T_RACE_OPPONENT *g = Guide();
+    if (!g || !g->R || g->Count < 3) { Log_Info("[racemod] autoshort: no racing line"); return; }
+    T_RACE_CUT cuts[RACE_MAX_BRANCHES + RACE_MAX_TELEPORTS + RACE_MAX_RAIL_OPEN];
+    int n = 0, extra = 0;
+    for (int b = 0; b < s_nbBranches; b++) {
+        const T_RACE_BRANCH *br = &s_branches[b];
+        double way = RaisedStep(br->From, br->First) + RaisedStep(br->Last, br->To), round = 0;
+        for (int i = br->First; i < br->Last; i++) way += RaisedStep(i, i + 1);
+        for (int i = br->From; i != br->To && s_nbLap > 1; i = (i + 1) % s_nbLap) round += RaisedStep(i, (i + 1) % s_nbLap);
+        const int from = NearestOnLine(g, s_raised[br->From].X, s_raised[br->From].Y, s_raised[br->From].Z);
+        const int to = NearestOnLine(g, s_raised[br->To].X, s_raised[br->To].Y, s_raised[br->To].Z);
+        const int take = way < RACE_SHORT_GAIN * round && from >= 0 && to > from;
+        Log_Info("[racemod] autoshort: branch %d, %.0f cells against %.0f the way round%s", b + 1, way / 512, round / 512,
+                 take ? ": taken" : to <= from ? ": over the line's start -- left" : ": not shorter -- left");
+        if (!take) continue;
+        cuts[n].From = from; cuts[n].To = to; cuts[n].Kind = 0; cuts[n].Which = b; n++;
+        extra += br->Last - br->First + 1;
+    }
+    for (int k = 0; k < s_nbTeleports; k++) {
+        const T_RACE_TELEPORT *t = &s_teleports[k];
+        const double cx = (t->X0 + t->X1) / 2, cz = (t->Z0 + t->Z1) / 2, cy = t->Y0;
+        const int nearest = NearestOnLine(g, cx, cy, cz), to = NearestOnLine(g, t->X, t->Y, t->Z);
+        const double off = nearest >= 0 ? sqrt((g->X[nearest] - cx) * (g->X[nearest] - cx) + (g->Z[nearest] - cz) * (g->Z[nearest] - cz)) : 1e30;
+        // (left that far before the nearest point: turned in towards it, not cornered at a right angle)
+        int from = nearest;
+        while (from > 0 && g->Cum[nearest] - g->Cum[from] < RACE_SHORT_LEAD * off) from--;
+        const double saved = from >= 0 && to > from ? g->Cum[to] - g->Cum[from] : 0;
+        const int take = from >= 0 && to > from + 4 && off < RACE_SHORT_REACH && saved > 2 * off;
+        Log_Info("[racemod] autoshort: teleporter %d, %.0f cells off the line, %.0f cells of it saved%s", k + 1, off / 512, saved / 512,
+                 take ? ": taken" : ": left");
+        if (!take) continue;
+        cuts[n].From = from; cuts[n].To = to; cuts[n].Kind = 1; cuts[n].Which = k; n++;
+        extra += 1;
+    }
+    for (int k = 0; k < s_nbRailOpen; k++) {
+        const T_RACE_RAIL_OPEN *r = &s_railOpen[k];
+        if (r->N < 3) continue;
+        double cx = 0, cz = 0;
+        for (int i = 0; i < r->N; i++) { cx += r->X[i]; cz += r->Z[i]; }
+        cx /= r->N; cz /= r->N;
+        // (the line's last point on the road the opening is in -- between its heights -- nearest it, and the nearest further on on the road
+        // under it)
+        int from = -1, to = -1;
+        double bf = 1e30, bt = 1e30;
+        for (int i = 0; i < g->Count; i++) {
+            const double d = (g->X[i] - cx) * (g->X[i] - cx) + (g->Z[i] - cz) * (g->Z[i] - cz);
+            if (g->Y[i] >= r->Y0 - 200 && g->Y[i] <= r->Y1 && d < bf) { bf = d; from = i; }
+        }
+        for (int i = from + 1; from >= 0 && i < g->Count; i++) {
+            const double d = (g->X[i] - cx) * (g->X[i] - cx) + (g->Z[i] - cz) * (g->Z[i] - cz);
+            if (g->Y[i] < r->Y0 - RACE_SHORT_BELOW && d < bt) { bt = d; to = i; }
+        }
+        const double saved = from >= 0 && to > from ? g->Cum[to] - g->Cum[from] : 0;
+        const int take = from >= 0 && to > from + 4 && saved > 4 * 512.0 && sqrt(bt) < RACE_SHORT_REACH;
+        Log_Info("[racemod] autoshort: the rail's opening %d, %.0f cells of the line saved, the road below %.0f cells from it%s", k + 1, saved / 512,
+                 to >= 0 ? sqrt(bt) / 512 : -1.0, take ? ": taken" : ": left");
+        if (!take) continue;
+        cuts[n].From = from; cuts[n].To = to; cuts[n].Kind = 2; cuts[n].Which = k; n++;
+        extra += 1;
+    }
+    // (in the order the line meets them; one overlapping another left out)
+    for (int i = 1; i < n; i++) for (int j = i; j > 0 && cuts[j].From < cuts[j - 1].From; j--) { const T_RACE_CUT c = cuts[j]; cuts[j] = cuts[j - 1]; cuts[j - 1] = c; }
+    for (int i = 1; i < n; i++) if (cuts[i].From < cuts[i - 1].To) { for (int j = i; j + 1 < n; j++) cuts[j] = cuts[j + 1]; n--; i--; }
+    if (!n) { Log_Info("[racemod] autoshort: no shortcut on this track -- the racing line as it is"); return; }
+    const int cap = g->Count + extra + 4;
+    T_RACE_OPPONENT *o = &s_autoLine;
+    o->X = (S32 *)malloc(cap * sizeof(S32)); o->Z = (S32 *)malloc(cap * sizeof(S32)); o->Y = (S32 *)malloc(cap * sizeof(S32));
+    o->V = (S32 *)malloc(cap * sizeof(S32)); o->R = (S32 *)malloc(cap * sizeof(S32)); o->Cum = (double *)malloc((cap + 1) * sizeof(double));
+    if (!o->X || !o->Z || !o->Y || !o->V || !o->R || !o->Cum) { FreeAutoLine(); return; }
+    int m = 0, c = 0;
+    for (int i = 0; i < g->Count; i++) {
+        if (c < n && i > cuts[c].From && i < cuts[c].To) continue;
+        o->X[m] = g->X[i]; o->Z[m] = g->Z[i]; o->Y[m] = g->Y[i]; m++;
+        if (c < n && i == cuts[c].From) {
+            if (cuts[c].Kind == 0) {
+                const T_RACE_BRANCH *br = &s_branches[cuts[c].Which];
+                for (int k = br->First; k <= br->Last; k++) { o->X[m] = s_raised[k].X; o->Z[m] = s_raised[k].Z; o->Y[m] = s_raised[k].Y; m++; }
+            } else if (cuts[c].Kind == 1) {
+                const T_RACE_TELEPORT *t = &s_teleports[cuts[c].Which];
+                o->X[m] = (S32)((t->X0 + t->X1) / 2); o->Z[m] = (S32)((t->Z0 + t->Z1) / 2); o->Y[m] = (S32)t->Y0; m++;
+            } else {
+                // (the opening's middle: over the edge there, and down)
+                const T_RACE_RAIL_OPEN *r = &s_railOpen[cuts[c].Which];
+                double cx = 0, cz = 0;
+                for (int i = 0; i < r->N; i++) { cx += r->X[i]; cz += r->Z[i]; }
+                o->X[m] = (S32)(cx / r->N); o->Z[m] = (S32)(cz / r->N); o->Y[m] = (S32)r->Y0; m++;
+            }
+        }
+        if (c < n && i == cuts[c].To) c++;
+    }
+    o->Count = m;
+    // (each point's bend: the circle through it and its neighbours -- a straight, no bend)
+    for (int i = 0; i < m; i++) {
+        const int a = s_sprint ? (i ? i - 1 : 0) : (i + m - 1) % m, b = s_sprint ? (i + 1 < m ? i + 1 : m - 1) : (i + 1) % m;
+        const double ax = o->X[a], az = o->Z[a], bx = o->X[i], bz = o->Z[i], cx = o->X[b], cz = o->Z[b];
+        const double ab = hypot(bx - ax, bz - az), bc = hypot(cx - bx, cz - bz), ca = hypot(ax - cx, az - cz);
+        const double cross = fabs((bx - ax) * (cz - az) - (bz - az) * (cx - ax));
+        const double r = cross > 1e-6 ? ab * bc * ca / (2 * cross) : 1e7;
+        o->R[i] = (S32)(r > 1e7 ? 1e7 : r);
+    }
+    o->Cum[0] = 0;
+    for (int i = 1; i <= m; i++) {
+        const int a = i - 1, b = i % m;
+        o->Cum[i] = o->Cum[i - 1] + hypot((double)o->X[b] - o->X[a], (double)o->Z[b] - o->Z[a]);
+    }
+    o->Length = s_sprint ? o->Cum[m - 1] : o->Cum[m];
+    if (s_sprint) o->Cum[m] = o->Cum[m - 1];
+    o->Top = g->Top; o->Grip = g->Grip; o->Pace = g->Pace;
+    // (its speeds: as the guide's for the player's car -- PlayerPlan)
+    const T_RACE_CAR keep = s_car;
+    const double keepPlanned = s_plannedLap;
+    s_car = *PlayerCar();
+    for (int i = 0; i < m; i++) o->V[i] = s_car.GearTop[s_car.Gears - 1];
+    PlanSpeeds(o);
+    s_car = keep;
+    s_plannedLap = keepPlanned;
+    OpponentLoops(o);
+    Log_Info("[racemod] autoshort: %d shortcut(s) taken -- the line %.0f cells (the racing line's %.0f), %d points", n, o->Length / 512, g->Length / 512, m);
+}
+
+void RaceMod_AutoShort(int on) {
+    s_autoShort = on;
+    s_autoIndex = -1;
+    if (on) BuildShortLine();
+    Log_Info("[racemod] autoshort %s", on && s_autoLine.Count ? "on" : "off");
+}
+
+// The line the autodrive drives: the shortcuts' (autoshort) or the racing line.
+static const T_RACE_OPPONENT *AutoGuide(void) { return s_autoShort && s_autoLine.Count ? &s_autoLine : Guide(); }
+
 U32 RaceMod_AutoInput(void) {
     if (s_ghostWatch) return 0;
     // (the console's racewalk: on foot, through its points -- on_foot=)
@@ -4766,7 +4939,7 @@ U32 RaceMod_AutoInput(void) {
     if (s_active && Comportement == C_BUGGY && TimerRefHR < s_skidUntil) return 0;   // (skidding on oil: the skid has the car, RaceMod_Skid)
     if (!(s_auto || TimerRefHR < s_jetUntil) || !s_active || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return 0;
     if (s_loopState != LOOP_NONE) return I_UP;
-    const T_RACE_OPPONENT *o = Guide();
+    const T_RACE_OPPONENT *o = AutoGuide();
     if (!o) return 0;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0, wy = hero->Obj.Y;
@@ -4845,7 +5018,7 @@ U32 RaceMod_AutoInput(void) {
     // the line's speed here (the reference car's; the jet-pack's times its factor), and the car's own
     // (on Gazogem fuel all race, fuel_always=: the line's speed times its boost, as the car's own top speed is)
     // (with the car's stats, the line's speeds planned for the car: PlayerPlan)
-    const double here = (s_autoV && best < s_autoVCount ? s_autoV[best] : o->V[best]) * JetFactor(s_jetUntil, s_jetFactor) * (s_fuelAlways && s_phase != PHASE_QUALIFYING && (S32)TimerRefHR >= s_jetUntil ? RACE_BOOST : 1.0)
+    const double here = (o != &s_autoLine && s_autoV && best < s_autoVCount ? s_autoV[best] : o->V[best]) * JetFactor(s_jetUntil, s_jetFactor) * (s_fuelAlways && s_phase != PHASE_QUALIFYING && (S32)TimerRefHR >= s_jetUntil ? RACE_BOOST : 1.0)
                         * (s_auto && (S32)TimerRefHR >= s_jetUntil ? s_autoPace / 100.0 : 1.0), speed = ListBuggy[0].Speed;
     // (coming up to a ring with a gap: held close to the speed it is leapt at -- coasting a little over it, braking only well over it --
     // and no brakes in the last cell, which a car carries into the ring)
@@ -13219,6 +13392,7 @@ typedef struct {
     S32 Split[RACE_MAX_CHECKPOINTS];       // the lap's clock at each checkpoint
     int NbSplits;
     char Track[96], Car[96], Date[16];
+    char Level[16];                        // a ghost to beat's level (level=: Easy, Medium, Hard -- the game's own, its ghosts\ folder)
 } T_RACE_LAPGHOST;
 
 static T_RACE_LAPGHOST s_ghostRec;            // the lap being recorded ...
@@ -13235,6 +13409,8 @@ static struct { int On; double X, Y, Z; S32 Alpha, Beta, Gamma; int Body, Anim; 
 static double s_ghostSpeed = 0;            // ... the speed it is going (units/s, for the display)
 static T_OBJ_3D s_ghostObj;
 static int s_ghostBody = -1, s_ghostAnim = -1;   // the body and animation s_ghostObj is ready with
+static int s_ghostBeaten = 0;              // the game's ghost to beat beaten this trial (said once)
+static S32 s_ghostLapDiffUntil = 0;        // the lap's time against the ghost's shown until then (no checkpoint's over it)
 
 static void GhostFree(T_RACE_LAPGHOST *g) { free(g->P); memset(g, 0, sizeof(*g)); }
 
@@ -13243,7 +13419,7 @@ static void GhostReset(void) {
     s_ghostRecLap = 0; s_ghostFile[0] = 0; s_ghostOwnLap = 0; s_ghostChecked = 0; s_ghostAt = 0; s_ghostSplitAt = 0; s_ghostWatchT0 = 0;
     s_ghostMode = 2; s_ghostWatch = 0; s_ghostName[0] = 0; s_ghostCar[0] = 0; s_ghostWatchPath[0] = 0;
     s_ghostBody = s_ghostAnim = -1;
-    s_watchPose.On = 0;
+    s_watchPose.On = 0; s_ghostBeaten = 0; s_ghostLapDiffUntil = 0;
 }
 
 // The track the ghosts are of: ghost_name= (the race game's track), else the race file's own name.
@@ -13356,6 +13532,7 @@ static int GhostRead(const char *path, T_RACE_LAPGHOST *g, int points) {
         else if (!strcmp(line, "lap")) g->Lap = atoi(v);
         else if (!strcmp(line, "car")) snprintf(g->Car, sizeof(g->Car), "%s", v);
         else if (!strcmp(line, "date")) snprintf(g->Date, sizeof(g->Date), "%s", v);
+        else if (!strcmp(line, "level")) snprintf(g->Level, sizeof(g->Level), "%s", v);
         else if (!strcmp(line, "splits")) {
             const char *p = v;
             char *end;
@@ -13397,7 +13574,9 @@ static int GhostWrite(const char *path, const T_RACE_LAPGHOST *g) {
     fprintf(f, "# A ghost car (LBA2 race tracks, RACEMOD.CPP): one lap of a time trial -- where the car was at each moment of it.\n");
     fprintf(f, "# Put it in another player's %s folder (under a name of its own) and their time trials race against it.\n", RACE_GHOST_FOLDER);
     fprintf(f, "# Each line after points=: ms into the lap, x y z (island units), alpha beta gamma, body, animation, island.\n");
-    fprintf(f, "ghost=2\ntrack=%s\nlap=%d\ncar=%s\ndate=%s\nsplits=", g->Track, (int)g->Lap, g->Car, g->Date);
+    fprintf(f, "ghost=2\ntrack=%s\nlap=%d\ncar=%s\ndate=%s\n", g->Track, (int)g->Lap, g->Car, g->Date);
+    if (g->Level[0]) fprintf(f, "level=%s\n", g->Level);
+    fprintf(f, "splits=");
     for (int i = 0; i < g->NbSplits; i++) fprintf(f, i ? " %d" : "%d", (int)g->Split[i]);
     fprintf(f, "\npoints=%d\n", g->N);
     for (int i = 0; i < g->N; i++) {
@@ -13412,36 +13591,56 @@ static int GhostWrite(const char *path, const T_RACE_LAPGHOST *g) {
     return 1;
 }
 
-// A track's ghost to race (RACEGAME.CPP's Best laps too): `mode` 1 the player's own, 2 the fastest in the ghosts' folder (his own or one
-// shared). Its file into `path`, its lap, its car, and whether it is the player's own. Non-zero: one found.
-S32 RaceMod_GhostFind(const char *track, S32 mode, char *path, S32 size, S32 *lap, char *car, S32 carSize, S32 *mine) {
+// The game's own ghosts to beat (2026-10-25 -- the user: "Let's generate easy medium and hard ghosts to beat for each track"): the game
+// folder's ghosts\, each one's level in its head (level=Easy, Medium or Hard), beside the player's own and the ones shared with him in his
+// GHOSTS folder.
+#define RACE_GHOST_GAME_FOLDER "ghosts"
+
+// A track's ghost to race (RACEGAME.CPP's Best laps too) -- `mode`:
+//   1 the player's own; 2 the fastest of all (his own, the shared ones, the game's own); 3, 4, 5 the game's Easy, Medium, Hard one;
+//   6 the fastest of his own and the shared ones (not the game's).
+// Its file into `path`, its lap, its car, whether it is the player's own, and its level (the game's: "Easy", "Medium", "Hard"; "" else).
+// Non-zero: one found.
+S32 RaceMod_GhostFind(const char *track, S32 mode, char *path, S32 size, S32 *lap, char *car, S32 carSize, S32 *mine, char *level, S32 levelSize) {
+    static const char *const levels[3] = {"Easy", "Medium", "Hard"};
+    const char *want = mode >= 3 && mode <= 5 ? levels[mode - 3] : NULL;
     char own[ADELINE_MAX_PATH];
     GhostOwnPath(track, own, sizeof(own));
+    const char *a = strrchr(own, '/'), *b = strrchr(own, '\\');
+    const char *ownName = a > b ? a + 1 : b ? b + 1 : own;
     T_RACE_LAPGHOST g;
     S32 best = 0;
-    if (GhostRead(own, &g, 0) && !strcmp(g.Track, track)) {
+    if (mine) *mine = 0;
+    if (level && levelSize > 0) level[0] = 0;
+    if (!want && GhostRead(own, &g, 0) && !strcmp(g.Track, track)) {
         best = g.Lap;
         snprintf(path, (size_t)size, "%s", own);
         if (car) snprintf(car, (size_t)carSize, "%s", g.Car);
         if (mine) *mine = 1;
     }
-    if (mode >= 2) {
+    // (the player's folder for the fastest -- his own and the shared ones -- the game's for its own, the fastest of all or one level)
+    for (int where = 0; where < 2; where++) {
+        if (where == 0 && (want || mode < 2)) continue;
+        if (where == 1 && !want && mode != 2) continue;
         char folder[ADELINE_MAX_PATH];
-        RaceMod_GhostFolder(folder, sizeof(folder));
+        if (where == 0) RaceMod_GhostFolder(folder, sizeof(folder));
+        else GetResPath(folder, ADELINE_MAX_PATH, RACE_GHOST_GAME_FOLDER);
         int count = 0;
         char **files = SDL_GlobDirectory(folder, "*.ghost", SDL_GLOB_CASEINSENSITIVE, &count);
         for (int i = 0; files && i < count; i++) {
             char full[ADELINE_MAX_PATH];
             const size_t n = strlen(folder);
             snprintf(full, sizeof(full), "%s%s%s", folder, n && folder[n - 1] != '/' && folder[n - 1] != '\\' ? "/" : "", files[i]);
-            if (!GhostRead(full, &g, 0) || strcmp(g.Track, track) || (best && g.Lap >= best)) continue;
-            // (the player's own, found again by its other spelling of the path, is theirs)
-            const char *a = strrchr(own, '/'), *b = strrchr(own, '\\');
-            const char *ownName = a > b ? a + 1 : b ? b + 1 : own;
+            if (!GhostRead(full, &g, 0) || strcmp(g.Track, track)) continue;
+            if (want && SDL_strcasecmp(g.Level, want)) continue;
+            if (!want && best && g.Lap >= best) continue;
             best = g.Lap;
             snprintf(path, (size_t)size, "%s", full);
             if (car) snprintf(car, (size_t)carSize, "%s", g.Car);
-            if (mine) *mine = !SDL_strcasecmp(files[i], ownName);
+            // (the player's own, found again by its other spelling of the path, is theirs)
+            if (mine) *mine = where == 0 && !SDL_strcasecmp(files[i], ownName);
+            if (level && levelSize > 0) snprintf(level, (size_t)levelSize, "%s", where == 1 ? g.Level : "");
+            if (want) break;
         }
         SDL_free(files);
     }
@@ -13472,11 +13671,17 @@ static void GhostStart(void) {
     T_RACE_LAPGHOST head;
     if (GhostRead(own, &head, 0) && !strcmp(head.Track, track)) s_ghostOwnLap = head.Lap;
     if (s_ghostMode <= 0) { Log_Info("[racemod] ghost: none raced (ghost=0); %s's own best %.2f s", track, s_ghostOwnLap / 1000.0); return; }
-    if (RaceMod_GhostFind(track, s_ghostMode, path, sizeof(path), &lap, NULL, 0, &mine) && GhostRead(path, &s_ghost, 1)) {
+    char level[16];
+    if (RaceMod_GhostFind(track, s_ghostMode, path, sizeof(path), &lap, NULL, 0, &mine, level, sizeof(level)) && GhostRead(path, &s_ghost, 1)) {
         snprintf(s_ghostFile, sizeof(s_ghostFile), "%s", path);
-        Log_Info("[racemod] ghost: racing %s %s lap of %.2f s (%s, %s; %d points, %s)", track, mine ? "the player's own" : "a shared", s_ghost.Lap / 1000.0,
-                 s_ghost.Car, s_ghost.Date, s_ghost.N, path);
-    } else Log_Info("[racemod] ghost: none of %s yet -- the trial's best lap makes one", track);
+        // (the game's own carries its level; the player's, and one shared with him, none -- the display says "Ghost" for those)
+        snprintf(s_ghost.Level, sizeof(s_ghost.Level), "%s", level);
+        char whose[48];
+        snprintf(whose, sizeof(whose), "%s%s", level[0] ? level : mine ? "the player's own" : "a shared", level[0] ? " ghost's" : "");
+        Log_Info("[racemod] ghost: racing %s %s lap of %.2f s (%s, %s; %d points, %s)", track, whose, s_ghost.Lap / 1000.0, s_ghost.Car, s_ghost.Date,
+                 s_ghost.N, path);
+    } else if (s_ghostMode >= 3 && s_ghostMode <= 5) Log_Info("[racemod] ghost: %s has no ghost of that level", track);
+    else Log_Info("[racemod] ghost: none of %s yet -- the trial's best lap makes one", track);
 }
 
 // The car's sample now, `t` into the lap.
@@ -13535,7 +13740,9 @@ static void GhostSplit(int checkpoint) {
         s_ghostRec.Split[checkpoint] = t;
         if (s_ghostRec.NbSplits < checkpoint + 1) s_ghostRec.NbSplits = checkpoint + 1;
     }
-    if (s_ghost.Lap && s_ghostMode > 0 && checkpoint < s_ghost.NbSplits) {
+    // (not over the lap's own, the moment after the line: a checkpoint just past it came at once, and the lap's time against the ghost's
+    // was gone before it could be read)
+    if (s_ghost.Lap && s_ghostMode > 0 && checkpoint < s_ghost.NbSplits && !(s_ghostLapDiffUntil && now < s_ghostLapDiffUntil)) {
         s_ghostSplitDiff = t - s_ghost.Split[checkpoint];
         s_ghostSplitAt = now;
     }
@@ -13546,7 +13753,15 @@ static void GhostSplit(int checkpoint) {
 static void GhostLapDone(S32 lap) {
     if (!s_trial || s_ghostWatch || lap <= 0) return;
     const S32 now = TimerRefHR;
-    if (s_ghost.Lap && s_ghostMode > 0) { s_ghostSplitDiff = lap - s_ghost.Lap; s_ghostSplitAt = now; }
+    if (s_ghost.Lap && s_ghostMode > 0) { s_ghostSplitDiff = lap - s_ghost.Lap; s_ghostSplitAt = now; s_ghostLapDiffUntil = now + RACE_GHOST_SPLIT_MS; }
+    // (the game's ghost to beat, beaten: said, once a trial)
+    if (s_ghost.Lap && s_ghost.Level[0] && lap < s_ghost.Lap && !s_ghostBeaten) {
+        s_ghostBeaten = 1;
+        char text[64];
+        snprintf(text, sizeof(text), "You beat the %s ghost!", s_ghost.Level);
+        Message(text);
+        Log_Info("[racemod] ghost: %s (%.2f s against %.2f s)", text, lap / 1000.0, s_ghost.Lap / 1000.0);
+    }
     if (s_ghostRecLap != s_laps || s_ghostRec.N < 2) return;
     T_RACE_LAPGHOST *g = &s_ghostRec;
     GhostAdd(lap, 1);
@@ -13566,8 +13781,9 @@ static void GhostLapDone(S32 lap) {
             if (!s_ghost.Lap || lap < s_ghost.Lap) snprintf(s_ghostFile, sizeof(s_ghostFile), "%s", path);
         }
     }
-    // (raced from the next lap on: the quicker of it and the ghost raced so far -- the player's own best, or the track's fastest)
-    if (s_ghostMode > 0 && (!s_ghost.Lap || lap < s_ghost.Lap)) {
+    // (raced from the next lap on: the quicker of it and the ghost raced so far -- the player's own best, or the track's fastest; one of the
+    // game's levels stays raced, beaten or not: it is the one chosen to beat)
+    if ((s_ghostMode == 1 || s_ghostMode == 2) && (!s_ghost.Lap || lap < s_ghost.Lap)) {
         const T_RACE_LAPGHOST old = s_ghost;
         s_ghost = s_ghostRec;
         s_ghostRec = old;
@@ -15514,7 +15730,8 @@ void RaceMod_Draw(void) {
                 Time(b, sizeof(b), s_ghost.Lap);
                 snprintf(text, sizeof(text), "Ghost lap  %s / %s", a, b);
                 char about[200];
-                snprintf(about, sizeof(about), "%s  %s", s_ghost.Car, s_ghost.Date);
+                if (s_ghost.Level[0]) snprintf(about, sizeof(about), "%s ghost  %s", s_ghost.Level, s_ghost.Car);
+                else snprintf(about, sizeof(about), "%s  %s", s_ghost.Car, s_ghost.Date);
                 HudSmall(16, bottom - RACE_SMALL_STEP, about, -1);
             }
             else if (s_place && s_trial) {
@@ -15568,9 +15785,10 @@ void RaceMod_Draw(void) {
                 if (s_ghostSplitAt && now - s_ghostSplitAt < RACE_GHOST_SPLIT_MS) {
                     const S32 d = s_ghostSplitDiff < 0 ? -s_ghostSplitDiff : s_ghostSplitDiff;
                     // (in words: the font has no '+')
-                    snprintf(text, sizeof(text), "Ghost  %s   %d.%02d %s", b, (int)(d / 1000), (int)(d / 10 % 100), s_ghostSplitDiff <= 0 ? "ahead" : "behind");
+                    snprintf(text, sizeof(text), "%s%s  %s   %d.%02d %s", s_ghost.Level, s_ghost.Level[0] ? " ghost" : "Ghost", b, (int)(d / 1000), (int)(d / 10 % 100),
+                             s_ghostSplitDiff <= 0 ? "ahead" : "behind");
                     colour = s_ghostSplitDiff <= 0 ? RACE_GREEN : RACE_RED;
-                } else snprintf(text, sizeof(text), "Ghost  %s", b);
+                } else snprintf(text, sizeof(text), "%s%s  %s", s_ghost.Level, s_ghost.Level[0] ? " ghost" : "Ghost", b);
                 HudSmallIn(16, bottom - 2 * RACE_SMALL_STEP, text, -1, colour);
             }
         }
@@ -15669,6 +15887,7 @@ static void ResetTrack(void) {
     s_driveBody = s_driveAnim = s_driveSmall = s_driveShown = -1; s_driveSmallNow = 0;
     s_statAccel = s_statTop = s_statSteer = 1;
     free(s_autoV); s_autoV = NULL; s_autoVCount = 0;
+    FreeAutoLine(); s_autoShort = 0;
     if (s_heroIsSmall && Comportement == C_BUGGY) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroSmall = -1; s_heroIsSmall = 0;
     // (his painted buggy's bodies off him: the buggy's own again)
