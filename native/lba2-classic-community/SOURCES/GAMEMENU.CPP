@@ -4024,6 +4024,8 @@ S32 MainGameMenu(S32 load, S32 resumeInGame) {
 
             BackupScreen(FALSE);
 
+            Log_Info("[menu] the game left for the menu: %s (saving %s, life %d, cube %d)", ret == 0 ? "the menu key" : ret == 1 ? "won" : ret == 2 ? "game over" : "?",
+                     SavingEnable ? "on" : "off", (int)ListObjet[NUM_PERSO].LifePoint, (int)NumCube);
             switch (ret) {
             case 0: // <ESC>
                 if (SavingEnable)
@@ -4109,6 +4111,7 @@ S32 MainGameMenu(S32 load, S32 resumeInGame) {
 
         // (the race game's own main menu and its pages: RACEGAME.CPP)
         select = RaceGame_On() ? RaceGame_Menu(!firstloop) : DoGameMenu(GameMainMenu);
+        Log_Info("[menu] chosen %d (first loop %d, game in progress %d, demo %d)", (int)select, (int)firstloop, (int)GameInProgress, (int)DemoSlide);
         switch (select) // num mess
         {
         case 1000: // <ESC>, on reprend la partie en cours
@@ -4134,6 +4137,7 @@ S32 MainGameMenu(S32 load, S32 resumeInGame) {
                 RestoreTimer();
             } else {
                 GetSavePath(tmpFilePathSave, ADELINE_MAX_PATH, CURRENTSAVE_FILENAME);
+                Log_Info("[menu] resumed from the current save, %s", tmpFilePathSave);
                 if (ExistsFileOrDir(tmpFilePathSave)) {
                     char memoplayername[256];
                     char memogamepathname[256];

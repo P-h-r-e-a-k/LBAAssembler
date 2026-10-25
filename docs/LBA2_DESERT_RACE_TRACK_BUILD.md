@@ -4828,3 +4828,23 @@ optimised for best lines using the best car for the specific track."
 - **Shipped**: the LBRA installer embeds `Game\ghosts\*.ghost` as `game/ghosts/...`, so they go into the install's `ghosts\`.
 - **Found on the way**: on Wannies Island the race game's menu during or after a race can leave the game in hall 123 (scene 123, island
   6) with no menu. The menu's resume reloads the current save there, and a car driven on past the finish goes in. Not fixed yet.
+
+**Wannies Island: the race sent to the hall** (2026-10-25 -- the user: "Look into it properly please"):
+
+- **What happened**: on Wannies Island, Esc during a race (or the race over going back to the menu) left the game in hall 123 with no
+  menu, the race gone.
+- **Why**:
+  - Wannies Island is made on LBA2's scenes 96-99. Twinsen's own life script in its start scene, 98, begins the arrival's cinema:
+    `CINEMA_MODE 123`, a cinema whose destination is the hall.
+  - The race takes the scene over, so the cinema never runs its course. `CinemaMode` stayed 123 all race; no bands showed.
+  - PERSO.CPP's menu key, while a cinema with a destination is on, calls `ResetCinemaMode`: "skip the cinema", `NumCube = -1;
+    NewCube = CinemaMode`. That made the jump to the hall, which cubetrace showed as `-1 -> 123`. The race's own way back to the menu
+    (`RaceMod_WantsMenu`) goes through the same key.
+  - Found with `cubetrace`, new logs of the menu's decisions (GAMEMENU.CPP `[menu]`), Twinsen's life while racing (`[racemod]
+    Twinsen's life a -> b`; it never changed: no death) and of every script cinema (GERELIFE.CPP `[life] ... cinema mode`).
+- **The fix**: GERELIFE.CPP `LM_CINEMA_MODE` asks `RaceMod_NoCinema`. While a race is on -- the car on a track with a start line, or
+  `start_in_car=` -- a script's cinema is left out and said.
+- **Tested**: Wannies Island's trial, "cinema mode 123 left out (a race)". Esc during lap 2 opens the menu; Resume goes on with the race
+  in its scene; the race over goes back to the menu over the track.
+- **Not the cause** (tried first, reverted): the zones into a scene inside, and holding the race's way back to the menu while a cinema
+  was on.

@@ -10547,6 +10547,13 @@ U32 RaceMod_FilterInput(U32 input) {
     return input;
 }
 
+// GERELIFE.CPP LM_CINEMA_MODE: no cinema while a race is on -- Twinsen in his car on a track with a start line, or put in it as the scene
+// opens (start_in_car=). A scene of LBA2's that a track's island is made on can start one in its scripts -- Wannies Island's start scene
+// Twinsen's arrival, its destination the hall -- and the menu key skips a cinema into its destination.
+S32 RaceMod_NoCinema(void) {
+    return RaceMod_Active() && s_car.HasLine && (Comportement == C_BUGGY || s_startInCar) ? 1 : 0;
+}
+
 // The race game (RACEGAME.CPP, PERSO.CPP's menu key): a finished race back to the game's menu, end_to_menu= after it is over. Once.
 S32 RaceMod_WantsMenu(void) {
     if (!RaceMod_Active() || !s_menuAt || TimerRefHR < s_menuAt || NewCube != -1) return 0;
@@ -14009,6 +14016,14 @@ void RaceMod_Frame(void) {
             Log_Info("[racemod] game variable %d held at %d", s_held[i][0], s_held[i][1]);
         }
     if (Comportement == C_BUGGY) TrackSafePlace();
+    // (Twinsen's life while racing: any change said -- a race is not to end in his death, and one that did, a clover used and the game
+    // taken back to its last save, was found only by where it ended up: Wannies Island's hall, 2026-10-25)
+    { static S32 life = -1; const S32 now = ListObjet[NUM_PERSO].LifePoint;
+      if (life >= 0 && now != life) { const T_OBJET *h = &ListObjet[NUM_PERSO];
+          Log_Info("[racemod] Twinsen's life %d -> %d at (%.0f,%d,%.0f), cube %d, %s, anim %d, work flags 0x%x, code %d", (int)life, (int)now,
+                   h->Obj.X + CurrentCubeX * 32768.0, (int)h->Obj.Y, h->Obj.Z + CurrentCubeY * 32768.0, (int)NumCube, Comportement == C_BUGGY ? "in his car" : "on foot",
+                   (int)h->GenAnim, (unsigned)h->WorkFlags, (int)(h->CodeJeu >> 4)); }
+      life = now; }
     // (the ghost car: the track's looked for -- its laps recorded and played back in the simulation's step, RaceMod_EdgeCross)
     GhostStart();
     if (!s_ghostWatch) {

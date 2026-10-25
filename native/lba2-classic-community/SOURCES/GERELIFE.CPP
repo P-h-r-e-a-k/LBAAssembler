@@ -2422,7 +2422,14 @@ HERCULE( HPrintf( "errno= %d: %s\n", errno, strerror(errno) ) ) ;
         case LM_CINEMA_MODE:
             num = *PtrPrg++;
 
+            // (not in a race: a cinema with a destination cube is skipped by the menu key into that cube -- OBJECT.CPP ResetCinemaMode --
+            // and on Wannies Island, a race track made on LBA2's scenes, Twinsen's own script in its start scene, 98, set the arrival's
+            // (to the hall, scene 123) as the race began and nothing ended it: Esc, or the race over going back to the menu, sent the game
+            // to the hall, the race left behind, 2026-10-25. RACEMOD.CPP RaceMod_NoCinema)
+            { extern S32 RaceMod_NoCinema(void);
+              if (num && RaceMod_NoCinema()) { Log_Info("[life] actor %d of scene %d: cinema mode %d left out (a race)", (int)numobj, (int)NumCube, (int)num); break; } }
             if (num != CinemaMode) {
+                Log_Info("[life] actor %d of scene %d: cinema mode %d (was %d)", (int)numobj, (int)NumCube, (int)num, (int)CinemaMode);
                 CinemaMode = (U8)num;
 
                 if (!num) {
