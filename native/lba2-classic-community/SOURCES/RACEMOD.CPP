@@ -5557,16 +5557,54 @@ static int FrogArc(void) {
     return best;
 }
 
+// A cube's scene on this island: the race file's (cube_scene=) -- else the island's own, read once an island from SCENE.HQR's scenes'
+// heads (each one's island, cube and kind, as LoadSceneCubeXY reads them -- which answers only for the cubes round the current one). Where
+// two outside scenes share a cube (a scene of the story's and one of a race track's), the one nearest in number to the scene this is.
+// -1: none. (2026-10-25: a race file with no cube_scene= -- Citadel Island's town -- left a ghost played back at its cube's edge, over
+// the sea, where Twinsen drowned; the zones that take a car on in a race are shut while a ghost plays back.)
+static S16 s_islandScene[16][16];
+static int s_islandScenesOf = -1;
+static int CubeScene(int qx, int qz) {
+    for (int c = 0; c < s_nbCubeScenes; c++)
+        if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) return s_cubeScenes[c][2];
+    if (qx < 0 || qz < 0 || qx >= 16 || qz >= 16) return -1;
+    if (s_islandScenesOf != Island) {
+        s_islandScenesOf = Island;
+        for (int a = 0; a < 16; a++) for (int b = 0; b < 16; b++) s_islandScene[a][b] = -1;
+        char path[ADELINE_MAX_PATH];
+        GetResPath(path, ADELINE_MAX_PATH, SCENE_HQR_NAME);
+        U32 first = 0, biggest = 0;
+        FILE *f = fopen(path, "rb");
+        if (f) { if (fread(&first, 4, 1, f) != 1) first = 0; fclose(f); }
+        // (the HQR's entry 0: the biggest scene's size)
+        U8 head[64];
+        if (Load_HQR(path, head, 0)) memcpy(&biggest, head, 4);
+        U8 *buffer = first >= 8 && biggest > 0 && biggest < 4 * 1024 * 1024 ? (U8 *)malloc(biggest + 4096) : NULL;
+        int found = 0;
+        for (U32 i = 1; buffer && i < first / 4; i++) {
+            if (!Load_HQR(path, buffer, (S32)i)) continue;
+            const int island = buffer[0], x = (S8)buffer[1], y = (S8)buffer[2], mode = buffer[5], scene = (int)i - 1;
+            if (mode != CUBE_EXTERIEUR || island != Island || x < 0 || y < 0 || x >= 16 || y >= 16) continue;
+            S16 *at = &s_islandScene[x][y];
+            if (*at < 0) found++;
+            if (*at < 0 || abs(scene - (S32)NumCube) < abs(*at - (S32)NumCube)) *at = (S16)scene;
+        }
+        free(buffer);
+        if (CubeMode == CUBE_EXTERIEUR && CurrentCubeX >= 0 && CurrentCubeY >= 0 && CurrentCubeX < 16 && CurrentCubeY < 16)
+            s_islandScene[CurrentCubeX][CurrentCubeY] = (S16)NumCube;
+        Log_Info("[racemod] island %d: the scenes of %d of its cubes read from %s", (int)Island, found, path);
+    }
+    return s_islandScene[qx][qz];
+}
+
 // The car put where a frame of the race-track mode's has it (world units): in the cube about, or -- out past its edge -- into the next
-// cube's scene (cube_scene=), this frame at the edge (as a carried jump's car is: RaceArc). `why` for the log: the frog's throw, a ghost
+// cube's scene (CubeScene), this frame at the edge (as a carried jump's car is: RaceArc). `why` for the log: the frog's throw, a ghost
 // played back (GhostWatch).
 static void FrogCarry(double x, double y, double z, S32 *nx, S32 *ny, S32 *nz, const char *why = "thrown back by the frog") {
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     const int qx = (int)floor(x / 32768.0), qz = (int)floor(z / 32768.0);
     if (qx != CurrentCubeX || qz != CurrentCubeY) {
-        int scene = -1;
-        for (int c = 0; c < s_nbCubeScenes; c++)
-            if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) scene = s_cubeScenes[c][2];
+        const int scene = CubeScene(qx, qz);
         if (scene >= 0 && NewCube == -1) {
             NewCube = scene;
             NewPosX = (S32)floor(x - qx * 32768.0 + 0.5); NewPosY = (S32)floor(y + 0.5); NewPosZ = (S32)floor(z - qz * 32768.0 + 0.5);
@@ -7196,6 +7234,8 @@ S32 RaceMod_SoftLanding(void) {
 
 S32 RaceMod_Rescue(void) {
     if (FootRescue("into the sea or the lava")) return 1;
+    // (a ghost played back: never drowned, nor put back on the road -- it is where its lap had it, GhostWatch)
+    if (RaceMod_Active() && Comportement == C_BUGGY && s_ghostWatch) return 1;
     if (!RaceMod_Active() || !s_rescueOn || Comportement != C_BUGGY || !Guide() || s_safeIndex < 0) return 0;
     if (!s_rescue) {
         const T_OBJET *hero = &ListObjet[NUM_PERSO];

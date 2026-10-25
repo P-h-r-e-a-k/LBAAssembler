@@ -4770,3 +4770,20 @@ outside of the loop instead of the inside"; "the exe icon for LBRA still retains
 - **The icon**: the installed exe already held only the pumpkin's five pictures, 16 to 256 pixels. Explorer was showing the icon it
   had cached for that path before the update. The installer (`GameIcon.Refresh`) now tells the shell the exe changed and empties its
   icon cache (`SHChangeNotify`: `SHCNE_UPDATEITEM`, `SHCNE_ASSOCCHANGED`).
+
+**A ghost that drowned** (2026-10-25 -- the user: "One of the ghosts I recorded yesterday isn't playing back correctly, the ghost car was
+dying. I think it was the Citabau track"):
+
+- **The cause**: Citadel Island's town's race file has no `cube_scene=` lines, and they were the only cube-to-scene table the playback
+  had. Its lap changes cube 15 times. While a ghost plays back, the engine's own zones are shut (`RaceMod_CubeChangeAllowed`), so the
+  car stayed at the edge of its cube. 448 ms in, the ghost goes into cube (7,10) along the shore. Twinsen, held at the edge over the
+  sea, drowned: the life gauge, then the death's restore, the game clock wound back 5 s. `RaceMod_Rescue` didn't save him, because
+  with no safe place on record it lets the engine have him.
+- **The fixes**:
+  - `CubeScene` is a cube's scene: `cube_scene=` first, else the island's, read once an island from SCENE.HQR's scene heads (island,
+    cube, kind; the nearest in number where two outside scenes share a cube). `LoadSceneCubeXY` only answers for the cubes round the
+    current one. `FrogCarry` uses it, so the frog's throw does too.
+  - While a ghost plays back, `RaceMod_Rescue` holds the car, so Twinsen is never drowned or put back on the road.
+- **Tested**: the user's own Citadel town ghost (the flying carpet, 31.81 s) in the sandbox. "Island 0: the scenes of 9 of its cubes",
+  then all 15 of the lap's changes (scenes 46, 49, 42, 48, 47, 45, 47, 50, ...) and round again. No clock going back, no falling, no
+  rescue; the carpet on the road all the way.
