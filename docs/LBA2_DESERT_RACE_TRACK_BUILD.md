@@ -4892,3 +4892,57 @@ the Best laps screen ... top 5 times ... a watch section ... Remove "O to open t
 - **Tested** in the sandbox: the start camera after leaving round a loop and while easing out of one; an endless trial against Easy
   (lap 1 beat Medium's time: "You beat Easy and Medium! Medium and Hard unlocked", `ghost_beaten=2`; Best laps' entry replaced as
   the laps got faster; "Lap 5" on the display); 1 lap chosen on the page, the trial over after it, the menu back on Track select.
+
+## Extreme ghosts: the test pilot's racing line and handbrake slides (2026-10-25)
+
+The user: "All the hard ghosts I've raced so far have seemed quite easy to beat, let's add an extra difficulty ghost called "Extreme"
+that is almost impossible to beat. Make sure we're using the best car for the track, taking all the optimum lines, and sliding around
+corners where that's quicker".
+
+- **The level**: GhostFind mode 7 (`level=Extreme` in a game ghost's head; mode 6 was taken by own + shared). RACEGAME: the ghost page's
+  seventh row (`RG_ID_GHOST_EXTREME` 2370, rows centred at 290 as the in-race main menu's, the header in white over the picture's
+  title -- a shaded strip there never showed over the menu picture), opened by beating Hard (`ghost_beaten=` up to 4); Best laps'
+  ghost line goes round four levels; `RaceGame_GhostBeaten` returns every level a lap opens ("Hard and Extreme"). GhostLapDone checks
+  every harder level, Extreme too.
+- **autoslide** `<0|1> [on degrees] [plan]`: the pilot's speeds planned with the steering `plan` times as quick (`s_autoSteerPlan`, in
+  PlayerPlan and FinishAutoLine), and the handbrake (I_INVENTORY from RaceMod_AutoInput) held while the way the car goes (`s_slideBeta`
+  while sliding) is more than `on` degrees off the bearing to the line ahead, let go within a third of that. A held slide turns the
+  car's path RACE_HB_STEER (1.5) times as fast once the slip is full, with no drive and almost no scrub: a bend the steering limits
+  is taken half as fast again. Emerald Moon, the bulldozer: 23.24 s a lap without, 21.1 with.
+- **autoline** `<0|1> [margin cells]`: the pilot's line (a copy of the racing line when autoshort takes no shortcut) moved across the
+  raised road to the least-bending line: each free point only along its normal, towards (-p[i-2k] + 4p[i-k] + 4p[i+k] - p[i+2k]) / 6,
+  k = 16, 8, 4, 2, 1, held inside its room on the road found once up front (`RAISED_INSET` + margin from the edge, the same level).
+  Points stay off the raised road, in or near a jump's span, within 10 cells of a loop, by teleporters and rail openings, at steps in
+  the line. A moved point keeps the racing line's banking (its radius times the racing line's over the plain circle's). Kept only if
+  its planned lap is quicker. Emerald: planned 24.75 -> 23.59 s; driven with slides, about 0.2 s a lap. `LBA2_AUTOLINE_DUMP=<file>`
+  writes both lines' points.
+- **Fixed on the way**: the pilot's own line (FinishAutoLine) planned its speeds before OpponentLoops placed the loops on it, so every
+  ring's speed cap and the steering into it went by a loop at the line's start -- an autoshort line on a track with loops lapped 50 %
+  slower. Loops are now placed first.
+- **Generator** `E:\dump\TEMP\lbra\alltracks\xgen.ps1 [-Only 'a|b'] [-Root <sandbox>] [-Port n]`: the top 3 cars by raceplan (locked
+  ones too), each 3 laps of an endless trial on `autoshort 1; autoline 1 0.25; autoslide 1 14 1.35; autodrive 1 5 0 100`, then the
+  best car with six variations (slide plan 1.5, on 18 or 10 degrees, look 6, pace 104, no autoline), two laps each. The own ghost keeps
+  the fastest lap of the lot; it becomes `<track> - Extreme.ghost`. Two run at once on `ghost_inst` / `ghost_inst2` (ports 27123/4).
+  `trycfg.ps1` tries settings by hand.
+
+## Polar Island's mini-map, sprint runs, a missed checkpoint's lap, Restart (2026-10-25)
+
+- **Mini-map** (the user: Polar Island's "only has the raised track section on it and not the part that's ground level"): the map drew
+  the raised road whenever a track had one. `MapGuideOverRaised`: when a tenth or more of the guide line's points are off the raised
+  road (RaisedAt, 1024 padding) it draws the guide line instead -- Polar: 1330 of 1661 off -- and the raised road's branches beside it.
+- **Sprint runs** (the user: "In time trial mode for our two point to point tracks, let's respawn the user back at the start line after
+  they complete a lap so they don't have to restart"): the laps page asks **How many runs?** for a sprint (1, 3, 5, 10, endless);
+  RACEGAME writes `trial_runs=`. Over the finish with runs to go, `SprintRunAgain` keeps the run (GhostLapDone, RaceGame_TrialBest,
+  `s_runsBest` -- the grid clears s_bestLap), holds its time on the display, and RaceMod_Story sends the car back with `RaceFromGrid`
+  (the old loss restart, made a function) RACE_RUN_AGAIN_MS later once it isn't flying: Polar's finish is at carried jump 2's lip, and
+  sent back at once the jump caught the car again the next frame and carried it into the scene past it, where it stuck. HUD "Run 2/3".
+  The last run ends as before (SprintOver, with the runs' best); RaceGame_Finished takes the interim Best laps entry out first.
+- **A missed checkpoint in a time trial** (the user: "have the time reset if a user passes the start/finish line after missing a check
+  point"): RaceMod_Lap starts the lap again from the line -- clock, checkpoints from the first, ghost recording -- "Missed checkpoint 3:
+  the lap starts again". A race keeps its old rule (the lap uncounted until the checkpoint is taken).
+- **Restart** (the user: "We should also add in a restart menu option"): RG_ID_RESTART 2371 under Resume in a race of the race
+  game's (going on or just over), "Restart the race / the time trial" or "Watch again from the start": StartRace again with the race's
+  own setup (`s_raceWatch` kept for a ghost played back). The greyed Story Mode row is left out while it shows: seven rows.
+- **Tested** (sandbox 3): Polar 3 runs (52.7 / 52.9 / 52.9 s, the respawn after each, the trial over after the third); Otringal: over the
+  line, teleported back onto the grid and over it again -- "Missed checkpoint 3: the lap starts again", checkpoints from 1; Esc in the
+  trial, "Restart the time trial", the trial again.

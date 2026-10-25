@@ -2448,6 +2448,30 @@ static void cmd_autoshort(int argc, const char *argv[]) {
     Console_Print("autoshort: %s", atoi(argv[1]) ? "on" : "off");
 }
 
+/* autoline <0|1> [margin]: the test pilot's line pulled tight across the raised road, its bends cut as wide as the road gives, `margin`
+   cells inside its edges (RACEMOD.CPP SmoothAutoLine). For the game's Extreme ghosts. */
+static void cmd_autoline(int argc, const char *argv[]) {
+    extern void RaceMod_AutoLine(int on, double marginCells);
+    if (argc < 2) {
+        Console_Print("Usage: autoline <0|1> [margin cells]");
+        return;
+    }
+    RaceMod_AutoLine(atoi(argv[1]), argc > 2 ? atof(argv[2]) : 0);
+    Console_Print("autoline: %s", atoi(argv[1]) ? "on" : "off");
+}
+
+/* autoslide <0|1> [on degrees] [plan]: the test pilot slides round the bends on the handbrake -- held while the way the car goes is more
+   than `on` degrees off the line's bearing, the bends planned at `plan` times the steering's speed (RACEMOD.CPP). */
+static void cmd_autoslide(int argc, const char *argv[]) {
+    extern void RaceMod_AutoSlide(int on, double onDeg, double plan);
+    if (argc < 2) {
+        Console_Print("Usage: autoslide <0|1> [on degrees] [plan]");
+        return;
+    }
+    RaceMod_AutoSlide(atoi(argv[1]), argc > 2 ? atof(argv[2]) : 0, argc > 3 ? atof(argv[3]) : 0);
+    Console_Print("autoslide: %s", atoi(argv[1]) ? "on" : "off");
+}
+
 /* raceview <0|1|2>: the race camera's view -- 0 inside the car, 1 just behind it, 2 further back -- as V changes it during a race
    (RACEMOD.CPP camera=). For headless tests. */
 static void cmd_raceview(int argc, const char *argv[]) {
@@ -2897,6 +2921,14 @@ void Console_RegisterAll(void) {
                               "autoshort <0|1>",
                               "The autodrive's line with the raised road's branches that are shorter than the way round, and the "
                               "teleporters that come out further round the lap, spliced in (RACEMOD.CPP BuildShortLine).");
+    Console_RegisterCommandEx("autoline", cmd_autoline, "Race-track test pilot: drive a line pulled tight across the raised road",
+                              "autoline <0|1> [margin cells]",
+                              "The autodrive's line smoothed within the raised road's width, the bends cut as wide as the road "
+                              "gives, `margin` cells inside its edges (RACEMOD.CPP SmoothAutoLine).");
+    Console_RegisterCommandEx("autoslide", cmd_autoslide, "Race-track test pilot: slide round the bends on the handbrake",
+                              "autoslide <0|1> [on degrees] [plan]",
+                              "The handbrake held while the way the car goes is more than `on` degrees off the line's bearing; "
+                              "the bends planned at `plan` times the steering's speed (RACEMOD.CPP RaceMod_AutoInput).");
     Console_RegisterCommandEx("autodrive", cmd_autodrive, "Race-track test pilot: drive the player's car along the racing line",
                               "autodrive <0|1> [look cells] [side cells] [pace %]",
                               "With a race-track mod running (LBA2_RACETRACK_FILE), steers and pedals the player's "

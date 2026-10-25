@@ -266,6 +266,7 @@ static double s_statAccel = 1, s_statTop = 1, s_statSteer = 1;
 static T_RACE_CAR s_player;
 static S32 *s_autoV = NULL;                 // the console's autodrive: the guide line's speeds planned for the player's car (PlayerPlan)
 static int s_autoVCount = 0;
+static double s_autoSteerPlan = 1;           // the test pilot's bends planned at this times the steering's speed (autoslide: a slide turns the car quicker)
 static double StatScale(const char *v, double range) {
     double stars = atof(v);
     if (stars < 0) stars = 0;
@@ -479,6 +480,13 @@ static int s_paradeActorNow = -1;          // (its car in this scene: nothing co
 static int s_paradeFlip = 0;               // (the next frame drawn whole: RaceMod_Story)
 static int s_beatSet[2 * RACE_MAX_SETS], s_nbBeatSet = 0;
 static int s_raceLaps = 0;                 // the race's laps (0: laps go on being counted, no finish)
+// A sprint's time trial run again from the start (trial_runs=, the race game's laps page: 1, 3, 5, 10, 0 endless -- 2026-10-25, the user: "In time
+// trial mode for our two point to point tracks, let's respawn the user back at the start line after they complete a lap so they don't have to
+// restart"): how many runs, and how many driven so far (SprintRunAgain)
+static int s_trialRuns = 1, s_runs = 0;
+static S32 s_runsBest = 0;                  // ... the fastest of them so far (the grid, formed for each, clears s_bestLap)
+static S32 s_runAgainAt = 0;                // ... when the car goes back to the start for the next run (0: not waiting to)
+#define RACE_RUN_AGAIN_MS 1500             // ... this long after its finish line
 static int s_winSet[2 * RACE_MAX_SETS], s_nbWinSet = 0;
 static int s_place = 0, s_racers = 0;      // the player's place when he finished the race (0: not finished)
 static int s_main = -1;                    // the opponent to beat (main=; -1 none) ...
@@ -3125,6 +3133,7 @@ static void PlayerPlan(void) {
     if (!keepV) return;
     memcpy(keepV, o->V, o->Count * sizeof(S32));
     s_car = *PlayerCar();
+    s_car.Steer = (S32)(s_car.Steer * s_autoSteerPlan);
     PlanSpeeds(o);
     s_car = keep;
     s_plannedLap = keepPlanned;
@@ -3831,6 +3840,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d%n", &n, &used) == 1 && n >= 1 && n <= RACE_MAX_OPPONENTS) { s_beatOpp = n - 1; s_nbBeatSet = ReadSets(v + used, s_beatSet); }
         }
         else if (!strcmp(key, "race_laps")) s_raceLaps = atoi(v);
+        else if (!strcmp(key, "trial_runs")) s_trialRuns = atoi(v);
         else if (!strcmp(key, "start_scene")) s_startScene = atoi(v);
         else if (!strcmp(key, "start_in_car")) s_startInCar = atoi(v);
         else if (!strcmp(key, "on_foot")) s_onFoot = atoi(v);
@@ -4292,6 +4302,8 @@ static S32 TrialBestTime(void) {
 
 static double PlayerProgress(void);
 static void SprintOver(S32 now, int crossed);
+static void RaceFromGrid(void);
+static int SprintRunAgain(S32 now);
 static int GiveItem(int pu, S32 now);
 static void Time(char *out, size_t size, S32 ms);
 static void PackLapLog(int lap);
@@ -4352,6 +4364,9 @@ void RaceMod_Lap(S32 x, S32 z) {
 
     // a sprint's finish line, once the race is on
     if (s_sprint && s_hasFinish && s_laps > 0 && !s_place && s_phase == PHASE_RACE && CrossLine(&s_finishLine, x0, z0, x, z) > 0) {
+        // (a time trial's run with more to come: back to the start for the next -- SprintRunAgain)
+        if (s_runAgainAt) return;   // (over it already, going back to the start)
+        if (SprintRunAgain(TimerRefHR)) return;
         SprintOver(TimerRefHR, 1);
         return;
     }
@@ -4369,6 +4384,19 @@ void RaceMod_Lap(S32 x, S32 z) {
         }
     }
     // (a checkpoint missed -- a corner cut -- or, with none, the start line crossed again before the car has been round: no lap)
+    // (a time trial's lap: its clock starts again from the line -- the lap and its ghost, the checkpoints from the first -- 2026-10-25, the
+    // user: "Let's also have the time reset if a user passes the start/finish line after missing a check point". A race's goes on
+    // uncounted, as it always did: back for the checkpoint, then over the line)
+    if (s_laps > 0 && s_trial && !s_ghostWatch && ((s_nbCheckpoints && s_next < s_nbCheckpoints) || (!s_nbCheckpoints && !s_halfway && Guide()))) {
+        char text[64];
+        if (s_nbCheckpoints) snprintf(text, sizeof(text), "Missed checkpoint %d: the lap starts again", s_next + 1);
+        else snprintf(text, sizeof(text), "Not all the way round: the lap starts again");
+        Message(text);
+        Log_Info("[racemod] %s (lap %d, %.2f s thrown away)", text, (int)s_laps, (now - s_lapStart) / 1000.0);
+        s_lapStart = now; s_next = 0; s_halfway = 0;
+        GhostLapStart();
+        return;
+    }
     if (s_laps > 0 && s_nbCheckpoints && s_next < s_nbCheckpoints) {
         char text[64];
         snprintf(text, sizeof(text), "Missed checkpoint %d: no lap", s_next + 1);
@@ -4504,8 +4532,37 @@ static void SprintOver(S32 now, int crossed) {
     s_endWon = s_beatMain;
     // (a sprint's time trial: its run, start line to finish line, is its lap -- its ghost kept as a lap's is, GhostLapDone)
     if (crossed && s_trial && s_laps > 0) GhostLapDone(now - s_lapStart);
-    RaceGame_Finished(s_trial, s_goAt && now > s_goAt ? now - s_goAt : 0, crossed && s_laps > 0 ? now - s_lapStart : 0, place, racers);
+    // (its best run: this one, or one before it in a trial of several -- SprintRunAgain)
+    S32 run = crossed && s_laps > 0 ? now - s_lapStart : 0;
+    if (s_trial && s_runsBest > 0 && (!run || s_runsBest < run)) run = s_runsBest;
+    RaceGame_Finished(s_trial, s_goAt && now > s_goAt ? now - s_goAt : 0, run, place, racers);
     if (s_endToMenu > 0) s_menuAt = now + s_endToMenu;
+}
+
+// A sprint's time trial over its finish line with runs still to go (trial_runs= more than those driven, or 0: endless): its run kept as
+// a lap's is -- the ghost (GhostLapDone), the trial's best into Best laps (RaceGame_TrialBest) -- said, and the car back on the grid
+// for the next (RaceFromGrid: its count-down, then the start line starts the run). 0: the trial's last run -- SprintOver ends it.
+static int SprintRunAgain(S32 now) {
+    if (!s_trial || s_ghostWatch || !s_sprint) return 0;
+    s_runs++;
+    if (s_trialRuns > 0 && s_runs >= s_trialRuns) return 0;
+    const S32 run = now - s_lapStart;
+    const int best = !s_runsBest || run < s_runsBest;
+    if (best) s_runsBest = run;
+    GhostLapDone(run);
+    if (best) RaceGame_TrialBest(run);
+    char a[24], text[96];
+    Time(a, sizeof(a), run);
+    snprintf(text, sizeof(text), best ? "%s: your best run! Again from the start" : "%s: again from the start", a);
+    Message(text);
+    Log_Info("[racemod] sprint run %d in %.2f s%s: again from the start (%d of %s)", s_runs, run / 1000.0, best ? ", the trial's best" : "",
+             s_runs, s_trialRuns > 0 ? "its runs" : "endless");
+    // (the run's time held on the display -- gold when it is the trial's best -- and back to the start a moment later, once the car is
+    // down: a finish line at a jump's lip (Polar Island's) has the car in the air over it, and put back on the grid there it was caught by
+    // the jump again the next frame and carried on into the scene past it -- RaceMod_Story)
+    s_heldAt = now; s_heldLap = s_laps; s_heldTime = run; s_heldBest = best;
+    s_runAgainAt = now + RACE_RUN_AGAIN_MS;
+    return 1;
 }
 
 // The scene the start line is in (cube_scene=), -1 when the file doesn't say.
@@ -4568,6 +4625,8 @@ void RaceMod_Story(void) {
         s_wantFlip = 1;
         return;
     }
+    // (a sprint's time trial: back to the start for the next run once the car is down -- SprintRunAgain)
+    if (s_runAgainAt && now >= s_runAgainAt && s_arcOn < 0 && s_flying < 0 && NewCube == -1) { s_runAgainAt = 0; RaceFromGrid(); return; }
     if (!s_place || !s_endAt || now < s_endAt || NewCube != -1) return;
     s_endAt = 0;
     if (s_endWon && s_wakeScene >= 0) {
@@ -4620,12 +4679,17 @@ void RaceMod_Story(void) {
     // (a race that goes back to the menu once it is over -- the race game's, end_to_menu=: Polar Island's and the Emperor's palace's
     // sprints in its Track select, 2026-10-22 -- isn't run again: the menu follows)
     if (s_endToMenu > 0) return;
-    // a loss: the race again, from the grid in the start line's scene (the car taken there) -- out of a carried jump too: still flying, the
-    // car was put back on the jump's way the next frame and carried on into its next cube, the grid's scene forgotten (the Emperor's
-    // palace's leap out of the round window, the finish line at its lip, 2026-10-13)
+    // a loss: the race again, from the grid
+    if (s_loseText >= 0) s_pendLose = s_loseText;
+    RaceFromGrid();
+}
+
+// The race again, from the grid in the start line's scene (the car taken there) -- a loss's, or a sprint's time trial run again
+// (SprintRunAgain) -- out of a carried jump too: still flying, the car was put back on the jump's way the next frame and carried on into
+// its next cube, the grid's scene forgotten (the Emperor's palace's leap out of the round window, the finish line at its lip, 2026-10-13)
+static void RaceFromGrid(void) {
     const int scene = StartScene();
     s_arcOn = s_arcLast = -1;
-    if (s_loseText >= 0) s_pendLose = s_loseText;
     s_place = 0; s_laps = 0; s_halfway = 0; s_next = 0; s_beatMain = 0;
     s_phase = PHASE_WAIT; s_wantGrid = 1;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) if (s_opp[n].Count) { s_opp[n].Laps = 1; s_opp[n].S = 0; s_opp[n].Speed = 0; }
@@ -4787,6 +4851,8 @@ static double RaisedStep(int a, int b) {
     return sqrt(dx * dx + dz * dz);
 }
 
+static void FinishAutoLine(const T_RACE_OPPONENT *g, int m);
+
 typedef struct { int From, To, Kind, Which; } T_RACE_CUT;   // the guide's points it leaves after and joins at; 0 a branch, 1 a teleporter,
                                                              // 2 a rail opening
 
@@ -4882,6 +4948,14 @@ static void BuildShortLine(void) {
         }
         if (c < n && i == cuts[c].To) c++;
     }
+    FinishAutoLine(g, m);
+    Log_Info("[racemod] autoshort: %d shortcut(s) taken -- the line %.0f cells (the racing line's %.0f), %d points", n, o->Length / 512, g->Length / 512, m);
+}
+
+// The test pilot's line (s_autoLine), its `m` points placed: its bends, its distances and its speeds -- planned for the player's car, its
+// steering's bends as fast as a slide takes them with autoslide (s_autoSteerPlan) -- and its loops. `g` the racing line it is made from.
+static void FinishAutoLine(const T_RACE_OPPONENT *g, int m) {
+    T_RACE_OPPONENT *o = &s_autoLine;
     o->Count = m;
     // (each point's bend: the circle through it and its neighbours -- a straight, no bend)
     for (int i = 0; i < m; i++) {
@@ -4891,6 +4965,17 @@ static void BuildShortLine(void) {
         const double cross = fabs((bx - ax) * (cz - az) - (bz - az) * (cx - ax));
         const double r = cross > 1e-6 ? ab * bc * ca / (2 * cross) : 1e7;
         o->R[i] = (S32)(r > 1e7 ? 1e7 : r);
+        // (the racing line's own point i -- the same line, a point moved across the road or not: its radius has a banked bend's banking in
+        // it, as much more than the circle's through its points as the banking gives -- moved, the line's new circle times as much)
+        if (m == g->Count && g->R) {
+            const double gax = g->X[a], gaz = g->Z[a], gbx = g->X[i], gbz = g->Z[i], gcx = g->X[b], gcz = g->Z[b];
+            const double gab = hypot(gbx - gax, gbz - gaz), gbc = hypot(gcx - gbx, gcz - gbz), gca = hypot(gax - gcx, gaz - gcz);
+            const double gcross = fabs((gbx - gax) * (gcz - gaz) - (gbz - gaz) * (gcx - gax));
+            const double gr = gcross > 1e-6 ? gab * gbc * gca / (2 * gcross) : 1e7;
+            const double bank = gr < 1e7 && g->R[i] > gr ? g->R[i] / gr : 1;
+            const double rr = (r > 1e7 ? 1e7 : r) * bank;
+            o->R[i] = o->X[i] == g->X[i] && o->Z[i] == g->Z[i] ? g->R[i] : (S32)(rr > 1e7 ? 1e7 : rr);
+        }
     }
     o->Cum[0] = 0;
     for (int i = 1; i <= m; i++) {
@@ -4900,27 +4985,211 @@ static void BuildShortLine(void) {
     o->Length = s_sprint ? o->Cum[m - 1] : o->Cum[m];
     if (s_sprint) o->Cum[m] = o->Cum[m - 1];
     o->Top = g->Top; o->Grip = g->Grip; o->Pace = g->Pace;
+    // (its loops first: the speeds' caps round them go by where they are along it -- planned before them, every ring was at its start)
+    OpponentLoops(o);
     // (its speeds: as the guide's for the player's car -- PlayerPlan)
     const T_RACE_CAR keep = s_car;
     const double keepPlanned = s_plannedLap;
     s_car = *PlayerCar();
+    s_car.Steer = (S32)(s_car.Steer * s_autoSteerPlan);
     for (int i = 0; i < m; i++) o->V[i] = s_car.GearTop[s_car.Gears - 1];
     PlanSpeeds(o);
     s_car = keep;
     s_plannedLap = keepPlanned;
-    OpponentLoops(o);
-    Log_Info("[racemod] autoshort: %d shortcut(s) taken -- the line %.0f cells (the racing line's %.0f), %d points", n, o->Length / 512, g->Length / 512, m);
+}
+
+// ---- the test pilot's racing line and slides (autoline, autoslide) ------------------------------------------------------------------
+// (2026-10-25 -- the user: "add an extra difficulty ghost called "Extreme" that is almost impossible to beat. Make sure we're using the
+// best car for the track, taking all the optimum lines, and sliding around corners where that's quicker".)
+// autoline: the line pulled tight across the raised road -- each point moved towards the middle of its neighbours, a few cells apart and
+// then nearer, over and over, so the bends open out to the widest the road gives (kept s_autoMargin inside its edges, on the same level of
+// it): the corners cut, their apexes clipped, as a driver takes them -- and so taken faster. Where the line must stay -- off the raised road,
+// in a jump's gap or on its ramps, round a loop's foot, by a teleporter or a rail opening, at a sprint's ends -- it stays.
+// autoslide: the bends planned as fast as a slide on the handbrake turns the car (the steering s_autoSteerPlan times as quick: a held
+// slide turns it RACE_HB_STEER times as quickly, BUGGY.CPP), and the handbrake held while the way the car goes is more than s_autoSlideOn
+// off the bearing to the line ahead -- let go once it is within s_autoSlideOff. Each lap's time says whether it was quicker.
+static int s_autoSmooth = 0;
+static double s_autoMargin = 1.5 * 512;
+static int s_autoSlide = 0, s_autoSliding = 0;
+static double s_autoSlideOn = 160, s_autoSlideOff = 50;   // (4096ths: 14 and 4 degrees)
+
+// Whether point i of the pilot's line may move: on the raised road, clear of what it must go through as it is
+static int SmoothFree(const T_RACE_OPPONENT *o, int i, int *segOut) {
+    S32 f;
+    int seg;
+    double lat, t;
+    if (!RaisedAt(o->X[i], o->Z[i], o->Y[i] + 64, RAISED_PAD, &f, &seg, &lat, &t) || seg + 1 >= s_nbRaised) return 0;
+    if (s_raised[seg].Half <= 0 || s_raised[seg + 1].Half <= 0) return 0;
+    for (int k = 0; k < s_nbArcs; k++)
+        if (seg >= s_arcs[k].Foot - 6 && seg <= s_arcs[k].LandFoot + 6) return 0;
+    const double near2 = 10.0 * 512 * 10 * 512;
+    for (int k = 0; k < s_nbLoops; k++) {
+        const double dx = o->X[i] - (s_loops[k].CubeX * 32768.0 + s_loops[k].X), dz = o->Z[i] - (s_loops[k].CubeZ * 32768.0 + s_loops[k].Z);
+        if (dx * dx + dz * dz < near2) return 0;
+    }
+    for (int k = 0; k < s_nbTeleports; k++) {
+        const double dx = o->X[i] - (s_teleports[k].X0 + s_teleports[k].X1) / 2, dz = o->Z[i] - (s_teleports[k].Z0 + s_teleports[k].Z1) / 2;
+        const double ex = o->X[i] - s_teleports[k].X, ez = o->Z[i] - s_teleports[k].Z;
+        if (dx * dx + dz * dz < near2 / 4 || ex * ex + ez * ez < near2 / 4) return 0;
+    }
+    for (int k = 0; k < s_nbRailOpen; k++)
+        for (int c = 0; c < s_railOpen[k].N; c++) {
+            const double dx = o->X[i] - s_railOpen[k].X[c], dz = o->Z[i] - s_railOpen[k].Z[c];
+            if (dx * dx + dz * dz < near2 / 4) return 0;
+        }
+    // (a step in the line -- a drop, a teleporter's way through -- stays where it is)
+    const int a = (i + o->Count - 1) % o->Count, b = (i + 1) % o->Count;
+    if (abs(o->Y[a] - o->Y[i]) > 400 || abs(o->Y[b] - o->Y[i]) > 400) return 0;
+    if (hypot((double)o->X[b] - o->X[i], (double)o->Z[b] - o->Z[i]) > 4 * 512 || hypot((double)o->X[a] - o->X[i], (double)o->Z[a] - o->Z[i]) > 4 * 512) return 0;
+    if (s_sprint && (i < 3 || i > o->Count - 4)) return 0;
+    *segOut = seg;
+    return 1;
+}
+
+// Whether a place is on the road's same level as point i's (its segment near the point's own) and s_autoMargin inside its edges
+static int SmoothOnRoad(double x, double z, S32 y, int seg0) {
+    S32 f;
+    int seg;
+    double lat, t;
+    if (!RaisedAt(x, z, y + 64, RAISED_PAD, &f, &seg, &lat, &t) || seg + 1 >= s_nbRaised || abs(seg - seg0) > 24) return 0;
+    const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
+    if (a->Half <= 0 || c->Half <= 0) return 0;
+    const double half = a->Half + (c->Half - a->Half) * t, keep = half - RAISED_INSET - s_autoMargin;
+    return keep > 0 && fabs(lat) <= keep;
+}
+
+static double AutoLineLap(const T_RACE_OPPONENT *o) {
+    double lap = 0;
+    for (int i = 0; i < o->Count; i++) lap += (o->Cum[i + 1] - o->Cum[i]) / (o->V[i] > 1 ? o->V[i] : 1);
+    return lap + LoopsTime(o);
+}
+
+// The line's bends opened out: each free point moved only across the road (along the line's normal there, so the points never bunch up
+// along it), towards the place that bends the line least through it -- the one that makes the second differences with its neighbours,
+// k points off, smallest: (-p[i-2k] + 4 p[i-k] + 4 p[i+k] - p[i+2k]) / 6 -- as far as the road lets it. Over and over, from neighbours 16
+// points off down to the next: a whole bend's shape first, then the line's own. A hairpin is taken from the outside, clipping the inside
+// at its apex, out to the outside again: the widest arc the road holds. (Pulled towards its neighbours' middle instead, a point slid along
+// the line, the points bunched, and round a hairpin the line was no wider -- the Emerald Moon's lap planned 4.6 s slower, 2026-10-25.)
+static void SmoothAutoLine(const T_RACE_OPPONENT *g) {
+    T_RACE_OPPONENT *o = &s_autoLine;
+    const int m = o->Count;
+    if (!s_nbRaised || m < 16) { Log_Info("[racemod] autoline: no raised road to take the bends across"); return; }
+    const double before = AutoLineLap(o);
+    int *seg = (int *)malloc(m * sizeof(int));
+    double *x0 = (double *)malloc(m * sizeof(double)), *z0 = (double *)malloc(m * sizeof(double));
+    double *nx = (double *)malloc(m * sizeof(double)), *nz = (double *)malloc(m * sizeof(double)), *d = (double *)malloc(m * sizeof(double));
+    if (!seg || !x0 || !z0 || !nx || !nz || !d) { free(seg); free(x0); free(z0); free(nx); free(nz); free(d); return; }
+    int movable = 0;
+    for (int i = 0; i < m; i++) {
+        x0[i] = o->X[i]; z0[i] = o->Z[i]; d[i] = 0;
+        const int a = s_sprint ? (i ? i - 1 : 0) : (i + m - 1) % m, b = s_sprint ? (i + 1 < m ? i + 1 : m - 1) : (i + 1) % m;
+        const double tx = o->X[b] - o->X[a], tz = o->Z[b] - o->Z[a], tl = sqrt(tx * tx + tz * tz);
+        nx[i] = tl > 0 ? tz / tl : 0; nz[i] = tl > 0 ? -tx / tl : 0;
+        if (tl <= 0 || !SmoothFree(o, i, &seg[i])) seg[i] = -1; else movable++;
+    }
+    // (each free point's room across the road, either way, found once: the moves are held inside it -- a point held back partway by the
+    // road while its neighbours went on left a kink, a bend of a few hundred units the line's speeds slowed right down for)
+    double *lo = (double *)malloc(m * sizeof(double)), *hi = (double *)malloc(m * sizeof(double));
+    if (!lo || !hi) { free(lo); free(hi); free(seg); free(x0); free(z0); free(nx); free(nz); free(d); return; }
+    for (int i = 0; i < m; i++) {
+        lo[i] = hi[i] = 0;
+        if (seg[i] < 0) continue;
+        for (double s = 64; s <= 8 * 512 && SmoothOnRoad(x0[i] + nx[i] * s, z0[i] + nz[i] * s, o->Y[i], seg[i]); s += 64) hi[i] = s;
+        for (double s = 64; s <= 8 * 512 && SmoothOnRoad(x0[i] - nx[i] * s, z0[i] - nz[i] * s, o->Y[i], seg[i]); s += 64) lo[i] = -s;
+    }
+    static const int reach[5] = {16, 8, 4, 2, 1};
+    for (int r = 0; r < 5; r++) {
+        const int k = reach[r];
+        for (int it = 0; it < 60; it++)
+            for (int i = 0; i < m; i++) {
+                if (seg[i] < 0) continue;
+                int idx[4] = {i - 2 * k, i - k, i + k, i + 2 * k};
+                for (int q = 0; q < 4; q++) idx[q] = s_sprint ? (idx[q] < 0 ? 0 : idx[q] >= m ? m - 1 : idx[q]) : ((idx[q] % m) + m) % m;
+                double px[4], pz[4];
+                for (int q = 0; q < 4; q++) { px[q] = x0[idx[q]] + nx[idx[q]] * d[idx[q]]; pz[q] = z0[idx[q]] + nz[idx[q]] * d[idx[q]]; }
+                const double tx = (-px[0] + 4 * px[1] + 4 * px[2] - px[3]) / 6, tz = (-pz[0] + 4 * pz[1] + 4 * pz[2] - pz[3]) / 6;
+                const double want = (tx - x0[i]) * nx[i] + (tz - z0[i]) * nz[i];
+                const double to = d[i] + (want - d[i]) * 0.7;
+                d[i] = to < lo[i] ? lo[i] : to > hi[i] ? hi[i] : to;
+            }
+    }
+    double moved = 0;
+    for (int i = 0; i < m; i++) {
+        if (fabs(d[i]) > moved) moved = fabs(d[i]);
+        o->X[i] = (S32)floor(x0[i] + nx[i] * d[i] + 0.5); o->Z[i] = (S32)floor(z0[i] + nz[i] * d[i] + 0.5);
+    }
+    FinishAutoLine(g, m);
+    const double after = AutoLineLap(o);
+    // (LBA2_AUTOLINE_DUMP=<file>: both lines' points written out, for drawing them -- x z before, x z after, y, free, radius)
+    if (const char *dump = getenv("LBA2_AUTOLINE_DUMP")) {
+        if (FILE *f = fopen(dump, "w")) {
+            for (int i = 0; i < m; i++) fprintf(f, "%d %.0f %.0f %d %d %d %d %d\n", i, x0[i], z0[i], (int)o->X[i], (int)o->Z[i], (int)o->Y[i], seg[i], (int)o->R[i]);
+            fclose(f);
+        }
+    }
+    Log_Info("[racemod] autoline: %d of %d points free to move, at most %.1f cells across; the line %.0f cells, its perfect lap %.2f s (was %.2f s)%s",
+             movable, m, moved / 512, o->Length / 512, after, before, after < before ? "" : " -- no quicker: the line as it was");
+    if (after >= before) {
+        for (int i = 0; i < m; i++) { o->X[i] = (S32)x0[i]; o->Z[i] = (S32)z0[i]; }
+        FinishAutoLine(g, m);
+    }
+    free(seg); free(x0); free(z0); free(nx); free(nz); free(d); free(lo); free(hi);
+}
+
+// The racing line copied for the pilot (no shortcuts taken), its points placed
+static void CopyGuideLine(void) {
+    FreeAutoLine();
+    const T_RACE_OPPONENT *g = Guide();
+    if (!g || !g->R || g->Count < 3) return;
+    T_RACE_OPPONENT *o = &s_autoLine;
+    const int m = g->Count;
+    o->X = (S32 *)malloc(m * sizeof(S32)); o->Z = (S32 *)malloc(m * sizeof(S32)); o->Y = (S32 *)malloc(m * sizeof(S32));
+    o->V = (S32 *)malloc(m * sizeof(S32)); o->R = (S32 *)malloc(m * sizeof(S32)); o->Cum = (double *)malloc((m + 1) * sizeof(double));
+    if (!o->X || !o->Z || !o->Y || !o->V || !o->R || !o->Cum) { FreeAutoLine(); return; }
+    memcpy(o->X, g->X, m * sizeof(S32)); memcpy(o->Z, g->Z, m * sizeof(S32)); memcpy(o->Y, g->Y, m * sizeof(S32));
+    FinishAutoLine(g, m);
+}
+
+// The pilot's line made again, as autoshort and autoline have it (none: the racing line itself, AutoGuide)
+static void BuildAutoLine(void) {
+    FreeAutoLine();
+    s_autoIndex = -1;
+    if (s_autoShort) BuildShortLine();
+    // (no shortcut to take -- BuildShortLine leaves none -- or none asked for: the racing line's copy)
+    if (!s_autoLine.Count && (s_autoSmooth || s_autoSlide)) CopyGuideLine();
+    if (s_autoSmooth && s_autoLine.Count) SmoothAutoLine(Guide());
+    if (s_autoLine.Count) Log_Info("[racemod] the pilot's line: %.0f cells, its perfect lap %.2f s", s_autoLine.Length / 512, AutoLineLap(&s_autoLine));
 }
 
 void RaceMod_AutoShort(int on) {
     s_autoShort = on;
-    s_autoIndex = -1;
-    if (on) BuildShortLine();
+    BuildAutoLine();
     Log_Info("[racemod] autoshort %s", on && s_autoLine.Count ? "on" : "off");
 }
 
-// The line the autodrive drives: the shortcuts' (autoshort) or the racing line.
-static const T_RACE_OPPONENT *AutoGuide(void) { return s_autoShort && s_autoLine.Count ? &s_autoLine : Guide(); }
+// autoline <0|1> [margin]: the pilot's line pulled tight across the raised road, `margin` cells inside its edges
+void RaceMod_AutoLine(int on, double marginCells) {
+    s_autoSmooth = on;
+    if (marginCells > 0) s_autoMargin = marginCells * 512;
+    BuildAutoLine();
+    Log_Info("[racemod] autoline %s (%.1f cells inside the edges)", on && s_autoLine.Count ? "on" : "off", s_autoMargin / 512);
+}
+
+// autoslide <0|1> [on degrees] [plan]: the pilot slides round the bends on the handbrake -- held from `on` degrees off the line's bearing,
+// the bends planned at `plan` times the steering's speed
+void RaceMod_AutoSlide(int on, double onDeg, double plan) {
+    s_autoSlide = on;
+    s_autoSliding = 0;
+    if (onDeg > 0) { s_autoSlideOn = onDeg * 4096 / 360; s_autoSlideOff = s_autoSlideOn / 3; }
+    s_autoSteerPlan = on ? (plan > 0 ? plan : s_autoSteerPlan > 1 ? s_autoSteerPlan : 1.35) : 1;
+    PlayerPlan();
+    BuildAutoLine();
+    Log_Info("[racemod] autoslide %s (the handbrake from %.0f degrees off, the bends planned at %.2f times the steering)", on ? "on" : "off",
+             s_autoSlideOn * 360 / 4096, s_autoSteerPlan);
+}
+
+// The line the autodrive drives: the pilot's own (autoshort, autoline, autoslide) or the racing line.
+static const T_RACE_OPPONENT *AutoGuide(void) { return (s_autoShort || s_autoSmooth || s_autoSlide) && s_autoLine.Count ? &s_autoLine : Guide(); }
 
 U32 RaceMod_AutoInput(void) {
     if (s_ghostWatch) return 0;
@@ -5038,6 +5307,16 @@ U32 RaceMod_AutoInput(void) {
         // (the car's own pull in a low gear adds a couple of hundred a frame: coasting is the gentlest way down)
         const double want = LoopAim(l);
         return bits | (speed > want + 150 ? I_DOWN : speed > want - 60 ? 0 : I_UP);
+    }
+    // (autoslide: the handbrake held while the way the car goes -- sliding, not the way it points -- is well off the bearing to the line
+    // ahead, from twice the speed a slide starts at; no brakes meanwhile. Let go once it is back on it)
+    if (s_autoSlide && (S32)TimerRefHR >= s_jetUntil) {
+        double wayErr = want - (s_slide ? s_slideBeta : (double)(hero->Obj.Beta & 4095));
+        while (wayErr >= 2048) wayErr -= 4096;
+        while (wayErr < -2048) wayErr += 4096;
+        if (!s_autoSliding && fabs(wayErr) > s_autoSlideOn && speed > 2800) s_autoSliding = 1;
+        else if (s_autoSliding && (fabs(wayErr) < s_autoSlideOff || speed < 1400)) s_autoSliding = 0;
+        if (s_autoSliding) return bits | I_INVENTORY | I_UP;
     }
     // (the golden Gazogem running, or just off a boost panel: no brakes -- a player holds the accelerator, keeping every 10 km/h it gives)
     bits |= speed > here * 1.05 + 150 && !RaceMod_NoTopSpeed() && (S32)TimerRefHR - s_panelAt > RACE_PANEL_PILOT_MS ? I_DOWN : I_UP;
@@ -13612,12 +13891,12 @@ static int GhostWrite(const char *path, const T_RACE_LAPGHOST *g) {
 
 // A track's ghost to race (RACEGAME.CPP's Best laps too) -- `mode`:
 //   1 the player's own; 2 the fastest of all (his own, the shared ones, the game's own); 3, 4, 5 the game's Easy, Medium, Hard one;
-//   6 the fastest of his own and the shared ones (not the game's).
+//   6 the fastest of his own and the shared ones (not the game's); 7 the game's Extreme one (2026-10-25).
 // Its file into `path`, its lap, its car, whether it is the player's own, and its level (the game's: "Easy", "Medium", "Hard"; "" else).
 // Non-zero: one found.
 S32 RaceMod_GhostFind(const char *track, S32 mode, char *path, S32 size, S32 *lap, char *car, S32 carSize, S32 *mine, char *level, S32 levelSize) {
-    static const char *const levels[3] = {"Easy", "Medium", "Hard"};
-    const char *want = mode >= 3 && mode <= 5 ? levels[mode - 3] : NULL;
+    static const char *const levels[4] = {"Easy", "Medium", "Hard", "Extreme"};
+    const char *want = mode >= 3 && mode <= 5 ? levels[mode - 3] : mode == 7 ? levels[3] : NULL;
     char own[ADELINE_MAX_PATH];
     GhostOwnPath(track, own, sizeof(own));
     const char *a = strrchr(own, '/'), *b = strrchr(own, '\\');
@@ -13694,7 +13973,7 @@ static void GhostStart(void) {
         snprintf(whose, sizeof(whose), "%s%s", level[0] ? level : mine ? "the player's own" : "a shared", level[0] ? " ghost's" : "");
         Log_Info("[racemod] ghost: racing %s %s lap of %.2f s (%s, %s; %d points, %s)", track, whose, s_ghost.Lap / 1000.0, s_ghost.Car, s_ghost.Date,
                  s_ghost.N, path);
-    } else if (s_ghostMode >= 3 && s_ghostMode <= 5) Log_Info("[racemod] ghost: %s has no ghost of that level", track);
+    } else if ((s_ghostMode >= 3 && s_ghostMode <= 5) || s_ghostMode == 7) Log_Info("[racemod] ghost: %s has no ghost of that level", track);
     else Log_Info("[racemod] ghost: none of %s yet -- the trial's best lap makes one", track);
 }
 
@@ -13771,22 +14050,26 @@ static void GhostLapDone(S32 lap) {
     // (the game's ghost to beat, beaten: said once a trial -- and again when a later lap beats a harder ghost's time too (2026-10-25, the
     // user: "If when racing an Easy ghost we beat the time for a harder ghost, let's unlock those too"))
     if (s_ghost.Lap && s_ghost.Level[0] && lap < s_ghost.Lap) {
-        static const char *const levels[3] = {"Easy", "Medium", "Hard"};
+        static const char *const levels[4] = {"Easy", "Medium", "Hard", "Extreme"};
         int raced = 0;
-        while (raced < 2 && SDL_strcasecmp(s_ghost.Level, levels[raced])) raced++;
+        while (raced < 3 && SDL_strcasecmp(s_ghost.Level, levels[raced])) raced++;
         int top = raced;
-        for (int k = raced + 1; k < 3; k++) {
+        for (int k = raced + 1; k < 4; k++) {
             char path[ADELINE_MAX_PATH];
             S32 harder = 0;
-            if (RaceMod_GhostFind(s_ghost.Track, 3 + k, path, sizeof(path), &harder, NULL, 0, NULL, NULL, 0) && lap < harder) top = k;
+            if (RaceMod_GhostFind(s_ghost.Track, k < 3 ? 3 + k : 7, path, sizeof(path), &harder, NULL, 0, NULL, NULL, 0) && lap < harder) top = k;
         }
         if (top + 1 > s_ghostBeaten) {
             // (the race game keeps it, and opens the next level: Medium once Easy is beaten, Hard once Medium is -- RACEGAME.CPP GhostPage)
             const char *opened = RaceGame_GhostBeaten(levels[top]);
-            char beat[48], text[120];
+            char beat[64], text[140];
+            // (the levels beaten, the raced one to the hardest: "the Easy ghost", "Easy and Medium", "Easy, Medium and Hard" ...)
             if (top == raced) snprintf(beat, sizeof(beat), "the %s ghost", levels[raced]);
-            else if (top == raced + 1) snprintf(beat, sizeof(beat), "%s and %s", levels[raced], levels[top]);
-            else snprintf(beat, sizeof(beat), "Easy, Medium and Hard");
+            else {
+                beat[0] = 0;
+                for (int k = raced; k <= top; k++)
+                    snprintf(beat + strlen(beat), sizeof(beat) - strlen(beat), "%s%s", k == raced ? "" : k == top ? " and " : ", ", levels[k]);
+            }
             // (a later lap: only the harder ones it adds)
             if (s_ghostBeaten > raced) snprintf(beat, sizeof(beat), "%s's time", levels[top]);
             s_ghostBeaten = top + 1;
@@ -15417,11 +15700,34 @@ static int MapOn(void) {
     return game >= 0 ? game != 0 : s_mapKey != 0;
 }
 
+// Whether the map draws the guide line though the track has a raised road: the road is only part of the way -- a tenth or more of the
+// guide line's points nowhere near it, on the ground. (Polar Island's sprint, half on the ice: its map had only the raised half, 2026-10-25.)
+// Found once a track.
+static int MapGuideOverRaised(void) {
+    static const void *forX = NULL;
+    static int forCount = -1, forRaised = -1, answer = 0;
+    const T_RACE_OPPONENT *o = Guide();
+    if (!o || o->Count < 2 || s_nbRaised <= 1) return 0;
+    if (forX == (const void *)o->X && forCount == o->Count && forRaised == s_nbRaised) return answer;
+    forX = (const void *)o->X; forCount = o->Count; forRaised = s_nbRaised;
+    int off = 0;
+    for (int i = 0; i < o->Count; i++) {
+        S32 f;
+        int seg;
+        double lat, t;
+        if (!RaisedAt(o->X[i], o->Z[i], o->Y[i] + 64, 1024, &f, &seg, &lat, &t)) off++;
+    }
+    answer = off * 10 >= o->Count;
+    if (answer) Log_Info("[racemod] the mini-map: %d of the guide line's %d points off the raised road -- the guide line drawn", off, o->Count);
+    return answer;
+}
+
 // The road as the map has it: the raised road's points (the lap's, then its branches'), else the guide line's (a sprint's to its finish
-// line). How many points; a sprint's or an open road's last point isn't joined to its first.
+// line) -- the guide line's too where the raised road is only part of the way (MapGuideOverRaised). How many points; a sprint's or an
+// open road's last point isn't joined to its first.
 static int MapPoints(int *closed) {
     *closed = 0;
-    if (s_nbRaised > 1) {
+    if (s_nbRaised > 1 && !MapGuideOverRaised()) {
         const int lap = LapPoints();
         const double dx = s_raised[lap - 1].X - s_raised[0].X, dz = s_raised[lap - 1].Z - s_raised[0].Z;
         *closed = !s_sprint && s_raised[0].Half > 0 && s_raised[lap - 1].Half > 0 && dx * dx + dz * dz < 4096.0 * 4096.0;
@@ -15435,7 +15741,7 @@ static int MapPoints(int *closed) {
     return n;
 }
 static void MapPoint(int i, double *x, double *z, int *floor) {
-    if (s_nbRaised > 1) { *x = s_raised[i].X; *z = s_raised[i].Z; *floor = s_raised[i].Half > 0; return; }
+    if (s_nbRaised > 1 && !MapGuideOverRaised()) { *x = s_raised[i].X; *z = s_raised[i].Z; *floor = s_raised[i].Half > 0; return; }
     const T_RACE_OPPONENT *o = Guide();
     *x = o->X[i]; *z = o->Z[i]; *floor = 1;
 }
@@ -15446,7 +15752,7 @@ static int MapJoined(int i, int j) {
     MapPoint(i, &x, &z, &a);
     MapPoint(j, &x, &z, &b);
     if (!a || !b) return 0;
-    if (s_nbRaised <= 1) return 1;
+    if (s_nbRaised <= 1 || MapGuideOverRaised()) return 1;
     const int lap = LapPoints();
     return (i < lap) == (j < lap) && BranchOf(i) == BranchOf(j);
 }
@@ -15583,6 +15889,11 @@ static int MapMask(S32 width, S32 height, U32 sig) {
                 if (i < 0 || j < 0 || i >= s_nbRaised || j >= s_nbRaised || s_raised[i].Half <= 0 || s_raised[j].Half <= 0) continue;
                 MapStroke(s_raised[i].X, s_raised[i].Z, s_raised[j].X, s_raised[j].Z, pass ? s_mapRoad : s_mapRoad + 1, pass ? MAP_ROAD : MAP_EDGE);
             }
+            // (the guide line drawn in place of the raised road: the branch's own way, which it doesn't take)
+            if (MapGuideOverRaised())
+                for (int i = s_branches[b].First; i < s_branches[b].Last && i + 1 < s_nbRaised; i++)
+                    if (i >= 0 && s_raised[i].Half > 0 && s_raised[i + 1].Half > 0)
+                        MapStroke(s_raised[i].X, s_raised[i].Z, s_raised[i + 1].X, s_raised[i + 1].Z, pass ? s_mapRoad : s_mapRoad + 1, pass ? MAP_ROAD : MAP_EDGE);
         }
     double e[4];
     if (s_car.HasLine) {
@@ -15798,7 +16109,11 @@ void RaceMod_Draw(void) {
                 if (held && s_heldBest) colour = RACE_GOLD;
                 Time(a, sizeof(a), held ? s_heldTime : now - s_lapStart);
                 if (s_phase == PHASE_QUALIFYING) snprintf(text, sizeof(text), "Qualifying lap  %s", a);
-                else if (s_sprint) snprintf(text, sizeof(text), "Race  %s", a);
+                else if (s_sprint && s_trial && s_trialRuns != 1 && !s_ghostWatch) {
+                    // (a time trial of several runs: which run this is -- SprintRunAgain)
+                    if (s_trialRuns > 0) snprintf(text, sizeof(text), "Run %d/%d  %s", s_runs + 1, s_trialRuns, a);
+                    else snprintf(text, sizeof(text), "Run %d  %s", s_runs + 1, a);
+                } else if (s_sprint) snprintf(text, sizeof(text), "Race  %s", a);
                 else if (s_raceLaps > 0 && s_nbOrder > 0 && lap <= s_raceLaps) snprintf(text, sizeof(text), "Lap %d/%d  %s", (int)lap, s_raceLaps, a);
                 else if (const S32 target = BeatTime()) {
                     // (a time to beat: Raph's)
@@ -15908,7 +16223,7 @@ static void ResetTrack(void) {
     s_autoIndex = -1;
     s_faced = 0; s_stuckSince = 0; s_rescueScene = -1; s_backInCarUntil = 0; s_safeIndex = -1; s_safeScene = -1; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0; s_hinted = -1;
-    s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_nbWinSet = 0; s_place = s_racers = 0;
+    s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     ListVarGame[209] = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
@@ -15929,7 +16244,7 @@ static void ResetTrack(void) {
     s_driveBody = s_driveAnim = s_driveSmall = s_driveShown = -1; s_driveSmallNow = 0;
     s_statAccel = s_statTop = s_statSteer = 1;
     free(s_autoV); s_autoV = NULL; s_autoVCount = 0;
-    FreeAutoLine(); s_autoShort = 0;
+    FreeAutoLine(); s_autoShort = 0; s_autoSmooth = 0; s_autoSlide = 0; s_autoSliding = 0; s_autoSteerPlan = 1;
     if (s_heroIsSmall && Comportement == C_BUGGY) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroSmall = -1; s_heroIsSmall = 0;
     // (his painted buggy's bodies off him: the buggy's own again)
