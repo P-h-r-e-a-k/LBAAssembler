@@ -50,6 +50,10 @@ extern void FollowCamResetToView(void);
  * camera already is. This one writes the target the lerp is heading for. */
 extern void FollowCamSyncTarget(void);
 
+/* A mod's own eye (FollowCamEyeHook) and the ease back from it forgotten: a new game, a race
+ * begun again -- they are places in the cube the hero was in. */
+extern void FollowCamDropOwnEye(void);
+
 /* Settings. Read from the cfg by ReadConfigFile and written back by
  * WriteConfigFile (both PERSO.CPP); most are also console cvars. Defaults in
  * FOLLOWCAM_CFG.H. */

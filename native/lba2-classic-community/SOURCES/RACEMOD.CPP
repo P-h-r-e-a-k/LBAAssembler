@@ -1908,6 +1908,7 @@ extern S32 FollowCamArmPercent;                          // ... the arm's length
 extern S32 FollowCamEyeTurn;                             // ... the hook's eye at its own angles (the inside view round a loop)
 extern S32 FollowCamEyeAngle[3];
 extern S32 FollowCamEyeCut;                              // ... onto or off the hook's eye at once (the view changed)
+extern void FollowCamDropOwnEye(void);                   // ... its eye and the ease back from it forgotten (a new race)
 extern S32 CalculAltitudeTerrain(S32 x, S32 z, S32 cj);
 
 // camera=<0|1|2>: the race camera's view (2026-10-21; the user, the evening before: "In LBRA the car seems closer to the camera making it
@@ -4392,6 +4393,8 @@ void RaceMod_Lap(S32 x, S32 z) {
         if (s_phase == PHASE_RACE) PackLapLog((int)s_laps);
         // (a time trial's lap: its ghost kept when it is the track's best -- GhostLapDone)
         if (s_trial && s_phase == PHASE_RACE) GhostLapDone(s_lastLap);
+        // (an endless time trial -- race_laps=0, the laps page's "Endless": no end to wait for, its fastest lap into Best laps as it comes)
+        if (s_trial && s_phase == PHASE_RACE && s_raceLaps <= 0 && !s_ghostWatch && s_bestLap == s_lastLap) RaceGame_TrialBest(s_lastLap);
         // the time to beat: under it, the story moves on (once)
         if (const S32 target = BeatTime()) {
             char text[64];
@@ -4636,12 +4639,15 @@ void RaceMod_Story(void) {
         FlagReajustPosTwinsen = FALSE;
     }
     s_forgetLap = 1;
+    FollowCamDropOwnEye();
     Log_Info("[racemod] the race again, from the grid in scene %d", scene);
 }
 
 // A new game (PERSO.CPP InitGame): the scene it starts in -- a set's dream= (Polar Island's dream race), else `scene`, the game's own.
 S32 RaceMod_NewGameScene(S32 scene) {
     if (!RaceMod_Active()) return scene;
+    // (the camera's last race's eye forgotten: it opened on it, the car out of the picture -- FOLLOWCAM.CPP FollowCamDropOwnEye)
+    FollowCamDropOwnEye();
     if (s_startScene >= 0) {
         Log_Info("[racemod] a new game starts at the start line: scene %d", s_startScene);
         return s_startScene;
@@ -13417,7 +13423,7 @@ static struct { int On; double X, Y, Z; S32 Alpha, Beta, Gamma; int Body, Anim; 
 static double s_ghostSpeed = 0;            // ... the speed it is going (units/s, for the display)
 static T_OBJ_3D s_ghostObj;
 static int s_ghostBody = -1, s_ghostAnim = -1;   // the body and animation s_ghostObj is ready with
-static int s_ghostBeaten = 0;              // the game's ghost to beat beaten this trial (said once)
+static int s_ghostBeaten = 0;              // the game's ghosts beaten this trial: 0 none, else the hardest one's level + 1 (said once each)
 static S32 s_ghostLapDiffUntil = 0;        // the lap's time against the ghost's shown until then (no checkpoint's over it)
 
 static void GhostFree(T_RACE_LAPGHOST *g) { free(g->P); memset(g, 0, sizeof(*g)); }
@@ -13762,16 +13768,33 @@ static void GhostLapDone(S32 lap) {
     if (!s_trial || s_ghostWatch || lap <= 0) return;
     const S32 now = TimerRefHR;
     if (s_ghost.Lap && s_ghostMode > 0) { s_ghostSplitDiff = lap - s_ghost.Lap; s_ghostSplitAt = now; s_ghostLapDiffUntil = now + RACE_GHOST_SPLIT_MS; }
-    // (the game's ghost to beat, beaten: said, once a trial)
-    if (s_ghost.Lap && s_ghost.Level[0] && lap < s_ghost.Lap && !s_ghostBeaten) {
-        s_ghostBeaten = 1;
-        char text[64];
-        // (the race game keeps it, and opens the next level: Medium once Easy is beaten, Hard once Medium is -- RACEGAME.CPP GhostPage)
-        const char *opened = RaceGame_GhostBeaten(s_ghost.Level);
-        if (opened) snprintf(text, sizeof(text), "You beat the %s ghost! %s unlocked", s_ghost.Level, opened);
-        else snprintf(text, sizeof(text), "You beat the %s ghost!", s_ghost.Level);
-        Message(text);
-        Log_Info("[racemod] ghost: %s (%.2f s against %.2f s)", text, lap / 1000.0, s_ghost.Lap / 1000.0);
+    // (the game's ghost to beat, beaten: said once a trial -- and again when a later lap beats a harder ghost's time too (2026-10-25, the
+    // user: "If when racing an Easy ghost we beat the time for a harder ghost, let's unlock those too"))
+    if (s_ghost.Lap && s_ghost.Level[0] && lap < s_ghost.Lap) {
+        static const char *const levels[3] = {"Easy", "Medium", "Hard"};
+        int raced = 0;
+        while (raced < 2 && SDL_strcasecmp(s_ghost.Level, levels[raced])) raced++;
+        int top = raced;
+        for (int k = raced + 1; k < 3; k++) {
+            char path[ADELINE_MAX_PATH];
+            S32 harder = 0;
+            if (RaceMod_GhostFind(s_ghost.Track, 3 + k, path, sizeof(path), &harder, NULL, 0, NULL, NULL, 0) && lap < harder) top = k;
+        }
+        if (top + 1 > s_ghostBeaten) {
+            // (the race game keeps it, and opens the next level: Medium once Easy is beaten, Hard once Medium is -- RACEGAME.CPP GhostPage)
+            const char *opened = RaceGame_GhostBeaten(levels[top]);
+            char beat[48], text[120];
+            if (top == raced) snprintf(beat, sizeof(beat), "the %s ghost", levels[raced]);
+            else if (top == raced + 1) snprintf(beat, sizeof(beat), "%s and %s", levels[raced], levels[top]);
+            else snprintf(beat, sizeof(beat), "Easy, Medium and Hard");
+            // (a later lap: only the harder ones it adds)
+            if (s_ghostBeaten > raced) snprintf(beat, sizeof(beat), "%s's time", levels[top]);
+            s_ghostBeaten = top + 1;
+            if (opened) snprintf(text, sizeof(text), "You beat %s! %s unlocked", beat, opened);
+            else snprintf(text, sizeof(text), "You beat %s!", beat);
+            Message(text);
+            Log_Info("[racemod] ghost: %s (%.2f s against %.2f s)", text, lap / 1000.0, s_ghost.Lap / 1000.0);
+        }
     }
     if (s_ghostRecLap != s_laps || s_ghostRec.N < 2) return;
     T_RACE_LAPGHOST *g = &s_ghostRec;

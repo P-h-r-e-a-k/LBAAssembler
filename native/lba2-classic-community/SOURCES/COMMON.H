@@ -327,6 +327,8 @@ void RaceGame_Qualified(S32 lap);
 S32 RaceGame_BestLap(void);
 // RACEMOD.CPP: the game's ghost of a level ("Easy", "Medium", "Hard") beaten in a time trial: kept; the level it opens, or NULL
 const char *RaceGame_GhostBeaten(const char *level);
+// RACEGAME.CPP: an endless time trial's new fastest lap (ms), into Best laps as it is driven
+void RaceGame_TrialBest(S32 lap);
 // ... and its mini-map setting (Options): 1 on, 0 off, -1 not the race game (the race file's minimap= decides)
 S32 RaceGame_Minimap(void);
 // An opponent's car, which the race-track mode places wherever it is on the lap -- in the next cube too (EXTFUNC.CPP: not kept inside

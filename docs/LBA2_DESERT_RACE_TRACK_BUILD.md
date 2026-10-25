@@ -4871,3 +4871,24 @@ the Best laps screen ... top 5 times ... a watch section ... Remove "O to open t
 - **Tested** (sandbox, Otringal): the page with Medium/Hard locked; Easy raced with the autodrive, "the Easy ghost beaten, Medium open",
   `ghost_beaten=1|Otringal`, Medium open on the page after; Best laps' rows, Left/Right round the levels, the Easy ghost watched; the
   Temple's page (its own unlocks); a shared ghost faster than the player's shown and raced.
+
+## The next fixes: start camera, menu row, harder ghosts' times, a time trial's laps (2026-10-25)
+
+- **Emerald Moon's start camera** (the user: "up in the air and at the side"): only after another run had been left through the menu
+  while the race camera's hook had the view (round a loop, or easing back from it). `FollowCamOwnEyeAt` and the ease back
+  (`FollowCamLeave`) are places in the cube the car was in, and `FollowCamReapplyLift` put the view back on them every frame, so the
+  new race opened looking from the old run's spot, the car out of the picture, until it moved. New `FollowCamDropOwnEye`
+  (FOLLOWCAM.CPP/H) forgets both; RACEMOD calls it in `RaceMod_NewGameScene` and when a race is begun again from the grid.
+  `FollowCamResetToView` now clears the leave too. Repro script: `E:\dump\TEMP\lbra\alltracks\emcam.ps1 [-After 2]`.
+- **The main menu's row**: `RaceGame_Menu` builds its rows each time and opened on Specials; now on the row chosen last (Track select,
+  Specials, Best laps) unless a race is paused (Resume first). The sub-pages already kept theirs.
+- **Harder ghosts' times**: GhostLapDone looks up the Medium and Hard ghosts' laps (`RaceMod_GhostFind` 4, 5) when a lap beats the
+  raced ghost, and passes the hardest one beaten; `s_ghostBeaten` is now that level + 1, so a later lap beating a harder time is
+  said too. `RaceGame_GhostBeaten` returns what opens ("Medium", "Hard", "Medium and Hard").
+- **A time trial's laps**: `LapsPage` (IDs 2365..2369) after Time trial, before the ghost page: 1, 3, 5, 10, Endless.
+  `trial_laps=` kept; the race file gets `race_laps=` from it (0 endless: RACEMOD counts laps with no end, "Lap 7"). Sprints and a
+  ghost played back keep the track's own. An endless trial's fastest lap goes into Best laps as it is driven
+  (`RaceGame_TrialBest`, COMMON.H), replacing the one it put there before (kept with laps 0).
+- **Tested** in the sandbox: the start camera after leaving round a loop and while easing out of one; an endless trial against Easy
+  (lap 1 beat Medium's time: "You beat Easy and Medium! Medium and Hard unlocked", `ghost_beaten=2`; Best laps' entry replaced as
+  the laps got faster; "Lap 5" on the display); 1 lap chosen on the page, the trial over after it, the menu back on Track select.

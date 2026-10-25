@@ -698,11 +698,24 @@ void FollowCamResetToView(void) {
     FollowCamAppliedLift = 0;
     FollowCamGroundSettling = 0;
     FollowCamOwnEye = 0;
+    FollowCamLeave = 0;
     FollowCamOwnTurn = FALSE;
 }
 
 void FollowCamSyncTarget(void) {
     FollowCamTargetBeta = BetaCam;
+}
+
+/* A mod's own eye forgotten, and the ease back from it: a new game, or a race begun again
+ * (RACEMOD.CPP). Both are held as places in the cube the hero was in, and FollowCamReapplyLift
+ * puts the view back on them every frame -- a race started again from the menu after one left
+ * round a loop opened on the old run's eye, the car out of the picture, until it moved
+ * (the Emerald Moon, 2026-10-25). */
+void FollowCamDropOwnEye(void) {
+    FollowCamOwnEye = 0;
+    FollowCamLeave = 0;
+    FollowCamOwnTurn = FALSE;
+    FollowCamEyeWho = NULL;
 }
 
 /* The cfg keys this module owns. Declared in FOLLOWCAM.H, called by
