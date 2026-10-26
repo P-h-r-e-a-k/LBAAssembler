@@ -164,6 +164,7 @@ extern S32 FollowCamera;                                                        
 
 typedef struct {
     char Name[96], Race[160], Trial[160];
+    char Was[96];                           // the name it had before (was=, its track= line's fifth field: a track renamed -- RenamedTracks)
     S32 Scene;
     int Levels;                             // its race has levels, easy to hard (difficulty_level= in its race file)
     int Laps;                               // its race's laps once looked up (SpecialLaps; 0: not yet)
@@ -298,6 +299,7 @@ static int ParseCar(T_RG_CAR *c, const char *v) {
 }
 
 static void ReadSettings(void);
+static void RenamedTracks(void);
 static void UpdateAtStart(void);
 
 // The window's title for INITADEL.C, before the window is made (RACEGAME.TXT's window_title= alone, read on its own: the race game's
@@ -351,7 +353,11 @@ static void Read(void) {
             v = Field(v, sp->Name, sizeof(sp->Name));
             v = Field(v, sp->Race, sizeof(sp->Race));
             v = Field(v, sp->Trial, sizeof(sp->Trial));
-            Field(v, scene, sizeof(scene));
+            v = Field(v, scene, sizeof(scene));
+            // (was=<its old name>: a track renamed -- its best laps, unlocks and ghosts moved over, RenamedTracks)
+            char was[112];
+            Field(v, was, sizeof(was));
+            snprintf(sp->Was, sizeof(sp->Was), "%s", !strncmp(was, "was=", 4) ? was + 4 : "");
             sp->Scene = scene[0] ? atoi(scene) : -1;
             sp->Levels = sp->Race[0] ? HasLevels(sp->Race) : 0;
             sp->Sprint = sp->Race[0] ? FileHas(sp->Race, "sprint=1") : 0;
@@ -372,6 +378,7 @@ static void Read(void) {
     s_on = 1;
     if (s_windowTitle[0]) SetWindowTitle(s_windowTitle);
     ReadSettings();
+    RenamedTracks();
     UpdateAtStart();
     // (the Auto camera on, whatever lba2.cfg says -- the user, 2026-10-22: "Let's force Auto camera on by default"; read after the config,
     // and the game's Options can still turn it off for the run)
@@ -471,7 +478,7 @@ static void ReadSettings(void) {
                 // (<level>|<track>; a track no longer in the game kept as it is)
                 const char *bar = strchr(eq + 1, '|');
                 int sp = -1;
-                for (int i = 0; bar && i < s_nbSp && sp < 0; i++) if (!strcmp(s_sp[i].Name, bar + 1)) sp = i;
+                for (int i = 0; bar && i < s_nbSp && sp < 0; i++) if (!strcmp(s_sp[i].Name, bar + 1) || (s_sp[i].Was[0] && !strcmp(s_sp[i].Was, bar + 1))) sp = i;
                 if (sp >= 0) { const int n = atoi(eq + 1); if (n > s_beaten[sp]) s_beaten[sp] = n > 4 ? 4 : n; continue; }
                 *eq = '=';
                 value = NULL;
@@ -649,7 +656,7 @@ static void ReadTimes(void) {
         // shown as a lap. A lap is a lap however long its trial was: the Temple of Bú's three-lap trials' too.)
         int sp = -1;
         if (!strcmp(kind, "lap") && t.Lap > 0)
-            for (int i = 0; i < s_nbSp && sp < 0; i++) if (!strcmp(s_sp[i].Name, track)) sp = i;
+            for (int i = 0; i < s_nbSp && sp < 0; i++) if (!strcmp(s_sp[i].Name, track) || (s_sp[i].Was[0] && !strcmp(s_sp[i].Was, track))) sp = i;
         if (sp < 0) {
             if (strlen(s_other) + strlen(line) + 2 < sizeof(s_other)) { strcat(s_other, line); strcat(s_other, "\n"); kept++; }
             continue;
@@ -673,6 +680,68 @@ static void WriteTimes(void) {
         }
     fputs(s_other, f);
     fclose(f);
+}
+
+// A track's name as a ghost file's (RACEMOD.CPP GhostOwnPath: letters, digits, spaces and - _ kept, the rest '_')
+static void GhostFileName(const char *track, char *out, size_t size) {
+    size_t n = 0;
+    for (const char *p = track; *p && n + 1 < size; p++) {
+        const unsigned char c = (unsigned char)*p;
+        out[n++] = (isalnum(c) && c < 128) || c == ' ' || c == '-' || c == '_' ? (char)c : '_';
+    }
+    out[n] = 0;
+}
+
+// Tracks renamed (2026-10-26 -- the user: "Citadel Island: the storm" to "Citadel 1", and five more): a track= line with was=<the old
+// name> -- the player's best laps and ghosts beaten under the old name read as the new one and written again under it, and the ghosts in
+// the user's GHOSTS of the old name (the player's own, "<old>.ghost", and the ones shared with them, "<old> - <whose>.ghost") moved to
+// the new one, their track= line with it. Once a run, at the start; nothing to do once moved.
+static void RenamedTracks(void) {
+    int any = 0;
+    for (int sp = 0; sp < s_nbSp; sp++) if (s_sp[sp].Was[0]) any = 1;
+    if (!any) return;
+    // (best laps and ghosts beaten: the old names taken as the new as they are read -- ReadTimes, ReadSettings -- and written new)
+    ReadTimes();
+    WriteTimes();
+    WriteSettings();
+    char folder[ADELINE_MAX_PATH];
+    RaceMod_GhostFolder(folder, sizeof(folder));
+    int count = 0, moved = 0;
+    char **files = SDL_GlobDirectory(folder, "*.ghost", SDL_GLOB_CASEINSENSITIVE, &count);
+    for (int i = 0; files && i < count; i++)
+        for (int sp = 0; sp < s_nbSp; sp++) {
+            if (!s_sp[sp].Was[0]) continue;
+            char oldName[112], newName[112];
+            GhostFileName(s_sp[sp].Was, oldName, sizeof(oldName));
+            GhostFileName(s_sp[sp].Name, newName, sizeof(newName));
+            const size_t on = strlen(oldName);
+            // ("<old>.ghost" or "<old> - <whose>.ghost")
+            if (SDL_strncasecmp(files[i], oldName, on) || (SDL_strcasecmp(files[i] + on, ".ghost") && strncmp(files[i] + on, " - ", 3))) continue;
+            char from[ADELINE_MAX_PATH], to[ADELINE_MAX_PATH];
+            snprintf(from, sizeof(from), "%s/%s", folder, files[i]);
+            snprintf(to, sizeof(to), "%s/%s%s", folder, newName, files[i] + on);
+            FILE *in = fopen(from, "r");
+            if (!in) continue;
+            FILE *out = fopen(to, "wx");
+            if (!out) { fclose(in); Log_Info("[racegame] renamed track: %s left as it is (%s is there already)", files[i], to); break; }
+            char line[1024];
+            int head = 1;
+            while (fgets(line, sizeof(line), in)) {
+                if (head && !strncmp(line, "track=", 6)) { fprintf(out, "track=%s\n", s_sp[sp].Name); continue; }
+                if (head && !strncmp(line, "points=", 7)) head = 0;
+                fputs(line, out);
+            }
+            fclose(in);
+            const int good = !ferror(out);
+            fclose(out);
+            if (good) { remove(from); moved++; }
+            else remove(to);
+            break;
+        }
+    SDL_free(files);
+    for (int sp = 0; sp < s_nbSp; sp++)
+        if (s_sp[sp].Was[0]) Log_Info("[racegame] renamed track: \"%s\" was \"%s\"", s_sp[sp].Name, s_sp[sp].Was);
+    if (moved) Log_Info("[racegame] renamed tracks: %d ghost file(s) moved to the new names", moved);
 }
 
 static void TimeText(char *out, size_t size, S32 ms) {
@@ -1026,15 +1095,16 @@ static void TextFitted(S32 x, S32 y, S32 width, const char *utf8, S32 colour) {
 }
 
 // A key that steps a page's choice (the arrows, the pad's d-pad or stick, edge-only as DoGameMenu has them): -1 left, 1 right, 0 none.
+// (the pad's way followed every pass: the pass it is pushed, MyKey holds the pad's own scancode, K_GAMEPAD_BASE up, for "press any
+// key" -- the way left unrecorded then, the next pass took it for a new push and stepped again: "it skips over 1 car in every
+// horizontal step", a player on a controller, 2026-10-26)
 static S32 Step(S32 *padDir) {
-    S32 key = MyKey;
-    if (!key) {
-        const S32 raw = JoystickMenuNavOnly();
-        if (raw != *padDir) {
-            *padDir = raw;
-            if (raw == K_LEFT) key = K_GRAY_LEFT;
-            else if (raw == K_RIGHT) key = K_GRAY_RIGHT;
-        }
+    S32 key = MyKey >= K_GAMEPAD_BASE ? 0 : MyKey;
+    const S32 raw = JoystickMenuNavOnly();
+    if (raw != *padDir) {
+        *padDir = raw;
+        if (!key && raw == K_LEFT) key = K_GRAY_LEFT;
+        else if (!key && raw == K_RIGHT) key = K_GRAY_RIGHT;
     }
     if (Input & I_LEFT || key == K_GRAY_LEFT) { InitWaitNoInput(I_LEFT); InitWaitNoKey(); return -1; }
     if (Input & I_RIGHT || key == K_GRAY_RIGHT) { InitWaitNoInput(I_RIGHT); InitWaitNoKey(); return 1; }
@@ -1799,13 +1869,11 @@ static void Plot(S32 x, S32 y, U8 colour, S32 size);
 // A key of the four ways (the arrows, the pad's d-pad or stick; edge-only, as Step): *dx, *dy -1, 0 or 1. Non-zero: one was struck.
 static int Nav(S32 *padDir, S32 *dx, S32 *dy) {
     *dx = *dy = 0;
-    S32 key = MyKey;
-    if (!key) {
-        const S32 raw = JoystickMenuNavOnly();
-        if (raw != *padDir) {
-            *padDir = raw;
-            key = raw;                      // (K_UP .. K_RIGHT: the arrows' own scancodes)
-        }
+    S32 key = MyKey >= K_GAMEPAD_BASE ? 0 : MyKey;   // (the pad's way followed every pass, as Step)
+    const S32 raw = JoystickMenuNavOnly();
+    if (raw != *padDir) {
+        *padDir = raw;
+        if (!key) key = raw;                // (K_UP .. K_RIGHT: the arrows' own scancodes)
     }
     if (Input & I_LEFT || key == K_GRAY_LEFT) { *dx = -1; InitWaitNoInput(I_LEFT); }
     else if (Input & I_RIGHT || key == K_GRAY_RIGHT) { *dx = 1; InitWaitNoInput(I_RIGHT); }
@@ -1940,10 +2008,25 @@ static int TracksPage(void) {
             if (at < first) first = at;
             if (at >= first + rows) first = at - rows + 1;
             const S32 lx0 = cx - RG_PAGE_HALF + 14, lx1 = cx + RG_PAGE_HALF - 14;
+            // the scrollbar (2026-10-26 -- the user: "add a scrollbar to the "Track Select" window"): down the list's right edge, its thumb
+            // the rows shown of them all, where they are; a click or a drag on it scrolls there, as the mouse wheel does over the page --
+            // the track chosen kept among the rows shown
+            const S32 bx0 = lx1 - 16, bx1 = lx1 - 2, by0 = top - 2, by1 = top + rows * RG_TRACK_LINE - 10;
+            const int scrolls = n > rows;
+            if (scrolls) {
+                const S32 wheel = ConsumeMouseWheelY();
+                if (wheel) first -= wheel;
+                if (FlagMenuMouse && (Click & 1) && (S32)MouseX >= bx0 - 6 && (S32)MouseX <= bx1 + 6 && (S32)MouseY >= by0 && (S32)MouseY <= by1)
+                    first = (int)(((S32)MouseY - by0) * (n - rows + 1) / (by1 - by0 + 1));
+                if (first < 0) first = 0;
+                if (first > n - rows) first = n - rows;
+                if (at < first) at = first;
+                if (at >= first + rows) at = first + rows - 1;
+            }
             S32 mx, my;
             const int click = Clicked(&mx, &my);
             if (click == 2) chosen = -1;
-            else if (click == 1 && mx >= lx0 && mx <= lx1 && my >= top - 4) {
+            else if (click == 1 && mx >= lx0 && mx <= (scrolls ? bx0 - 8 : lx1) && my >= top - 4) {
                 const int row = (int)((my - (top - 4)) / RG_TRACK_LINE);
                 if (row < rows && first + row < n) { at = first + row; chosen = list[at]; }
             }
@@ -1957,9 +2040,14 @@ static int TracksPage(void) {
                 Label(text, line);
                 TextAt(lx0 + 12, y, text, k == at ? RG_ORANGE : LBAWHITE);
             }
-            // (more above or below: the list scrolls)
-            if (first > 0) Text(cx, top - 30, "...", RG_GREY);
-            if (first + rows < n) Text(cx, top + rows * RG_TRACK_LINE - 8, "...", RG_GREY);
+            // (more above or below: the scrollbar, its thumb the rows shown -- in the place of the "..." marks it had)
+            if (scrolls) {
+                ShadeBoxBlk(bx0, by0, bx1, by1, 10);
+                DrawCadre(bx0, by0, bx1, by1, ALL_ANGLES);
+                const S32 h = by1 - by0 - 4, thumb = h * rows / n > 18 ? h * rows / n : 18;
+                const S32 ty = by0 + 2 + (h - thumb) * first / (n - rows);
+                Box(bx0 + 3, ty, bx1 - 3, ty + thumb, RG_ORANGE);
+            }
             // the track's best lap, under the list (the names take the page's width)
             {
                 const int sp = list[at];

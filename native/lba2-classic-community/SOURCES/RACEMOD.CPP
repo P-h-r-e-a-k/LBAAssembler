@@ -3122,6 +3122,7 @@ static S32 RaceCameraEye(S32 *eye, S32 *target);
 // car -- faster on the straights, quicker through the bends, as the car is -- kept in s_autoV; the line's own speeds (the opponents') left
 // as they are. None without stats: the autodrive drives the line's.
 static void PlanSpeeds(T_RACE_OPPONENT *o);
+static void TrialStartSpot(void);
 static void PlayerPlan(void) {
     free(s_autoV);
     s_autoV = NULL;
@@ -4083,6 +4084,10 @@ static void Load(const char *path, int carOnly = 0) {
                  (int)(pc->GearTop[pc->Gears - 1] * 36 / 5120.0 + 0.5), s_statSteer, (int)pc->Steer);
     }
     PlayerPlan();
+    // (no qualifying lap in a time trial -- the Citadel storm's trial file doesn't say qualifying=0, and the game's own default, a qualifying lap
+    // first, left it with no count-down)
+    if (s_trial) s_qualifying = 0;
+    if (s_trial && s_car.HasLine && !s_ghostWatch) TrialStartSpot();
     if (s_nbSpots && s_car.HasLine) {
         // where they wait until the grid is formed: their pit spots, or (with no pit lane) the grid spots behind the player
         int waiting = 0, spot = 1;
@@ -4305,6 +4310,7 @@ static S32 TrialBestTime(void) {
 static double PlayerProgress(void);
 static void SprintOver(S32 now, int crossed);
 static void RaceFromGrid(void);
+static void TrialStartSpot(void);
 static int SprintRunAgain(S32 now);
 static int GiveItem(int pu, S32 now);
 static void Time(char *out, size_t size, S32 ms);
@@ -5510,6 +5516,49 @@ static int Opponents(void) {
 }
 
 // The player's car on a grid spot (in the start line's scene only), standing.
+// A time trial's start (2026-10-26 -- the user: "for Time trial's let's start further back from the start/finish line to give the users car
+// time to accellerate before crossing the start line. Apparently all tracks in time trial have a count down from 3..2..1 except for
+// Citadel rain track"): the car on the racing line RACE_TRIAL_RUNUP back from the start line, facing the way the line runs, so it is up
+// to speed as it crosses it -- as far back as that stays in the start line's cube (the scene the race starts in), no nearer than 2
+// cells. Its grid spot: the count-down as any grid's -- the Citadel storm's track, with no grid of its own, had none, the car standing
+// wherever its scene put it. (Placed a little over the line's own height, the road's: it settles onto it.)
+#define RACE_TRIAL_RUNUP (10 * 512.0)
+static int s_trialSpot = 0;                // the start spot set so (the car taken to its scene, if the game starts in another: RaceMod_Frame)
+static void TrialStartSpot(void) {
+    const T_RACE_OPPONENT *g = Guide();
+    if (!g || g->Count < 3 || g->Length <= 0) return;
+    // (the line's point nearest the start line -- the segment across the road, which may be long: the Desert's is 10 cells)
+    const double ax = s_car.LineCubeX * 32768.0 + s_car.LineX0, az = s_car.LineCubeZ * 32768.0 + s_car.LineZ0;
+    const double bx = s_car.LineCubeX * 32768.0 + s_car.LineX1, bz = s_car.LineCubeZ * 32768.0 + s_car.LineZ1;
+    const double sx = bx - ax, sz = bz - az, s2 = sx * sx + sz * sz;
+    int at = -1;
+    double bd = 1e30;
+    for (int i = 0; i < g->Count; i++) {
+        double u = s2 > 0 ? ((g->X[i] - ax) * sx + (g->Z[i] - az) * sz) / s2 : 0;
+        u = u < 0 ? 0 : u > 1 ? 1 : u;
+        const double px = ax + sx * u - g->X[i], pz = az + sz * u - g->Z[i], d = px * px + pz * pz;
+        if (d < bd) { bd = d; at = i; }
+    }
+    if (at < 0 || bd > 3.0 * 512 * 3 * 512) { Log_Info("[racemod] time trial: the racing line doesn't cross the start line -- the track's own start"); return; }
+    for (double back = RACE_TRIAL_RUNUP; back >= 2 * 512; back -= 512) {
+        double x, z, y, v, dx, dz;
+        PathAt(g, g->Cum[at] - back, &x, &z, &y, &v, &dx, &dz);
+        const int cx = (int)floor(x / 32768.0), cz = (int)floor(z / 32768.0);
+        // (in the start line's cube, and not across a drop or a ring from the line's height there)
+        if (cx != s_car.LineCubeX || cz != s_car.LineCubeZ || fabs(y - g->Y[at]) > 1500 || (dx == 0 && dz == 0)) continue;
+        T_RACE_SPOT *s = &s_spots[0];
+        s->CubeX = cx; s->CubeZ = cz;
+        s->X = (S32)(x - cx * 32768.0); s->Z = (S32)(z - cz * 32768.0); s->Y = (S32)y + 100;
+        s->Beta = (S32)floor(atan2(dx, dz) * 4096.0 / (2 * 3.14159265358979) + 0.5) & 4095;
+        if (!s_nbSpots) s_nbSpots = 1;
+        s_trialSpot = 1;
+        Log_Info("[racemod] time trial: the car %.1f cells before the start line, on the racing line (%d,%d,%d in cube %d,%d), the count-down from there",
+                 back / 512, (int)s->X, (int)s->Y, (int)s->Z, cx, cz);
+        return;
+    }
+    Log_Info("[racemod] time trial: no room on the line before the start line in its cube -- the track's own start");
+}
+
 static void PlayerOnSpot(const T_RACE_SPOT *spot) {
     if (CurrentCubeX != spot->CubeX || CurrentCubeY != spot->CubeZ) return;
     T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -14520,6 +14569,20 @@ void RaceMod_Frame(void) {
     if (dt > 100) dt = 100;
     const int driving = Comportement == C_BUGGY;
     const int inStartScene = s_nbSpots && CubeMode == CUBE_EXTERIEUR && CurrentCubeX == s_spots[0].CubeX && CurrentCubeY == s_spots[0].CubeZ;
+    // (a time trial's start spot in another scene than the one the game starts in -- the Citadel storm's: its start scene is 42, the
+    // line's cube another -- the car taken there, as the race again from the grid does; once)
+    if (s_trialSpot && !inStartScene && driving && s_phase == PHASE_WAIT && NewCube == -1 && CubeMode == CUBE_EXTERIEUR && !s_ghostWatch) {
+        s_trialSpot = 0;
+        const int scene = StartScene();
+        if (scene >= 0) {
+            SaveTimer();
+            NewCube = scene;
+            NewPosX = s_spots[0].X; NewPosY = s_spots[0].Y; NewPosZ = s_spots[0].Z;
+            FlagChgCube = 1;
+            FlagReajustPosTwinsen = FALSE;
+            Log_Info("[racemod] time trial: the start spot is in scene %d -- the car taken there for the count-down", scene);
+        }
+    }
     // the grid: after the qualifying lap, or (without qualifying) as soon as the player is in his car; formed in the start line's scene
     if (inStartScene && driving && !s_ghostWatch && !ClosedGate() && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
     // the cars that aren't racing, out of sight
@@ -16353,7 +16416,7 @@ static void ResetTrack(void) {
     s_lineY = s_lineHasY = 0; s_halfway = 0; s_nbCheckpoints = 0; s_next = 0; s_showCheckpoints = 0; s_checkpointAtFor = 0; s_missIndex = -1; s_missLap = -1; s_missAt = -1;
     s_messageUntil = 0;
     s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopHold = -1;
-    s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0;
+    s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_trialSpot = 0;
     s_phase = PHASE_RACE; s_qualifying = 1; s_gridBack = 0; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;

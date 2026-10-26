@@ -5001,3 +5001,24 @@ corners where that's quicker".
   `<track> - <driver>.ghost`.
 - Also: a time trial's best lap goes into Best laps the moment it is over the line (RaceGame_TrialBest for every trial, not only an
   endless one) -- a player's report: leaving a trial before its end lost the lap.
+
+## Time trial run-up, renamed tracks, Track select's scrollbar, the pad's double step (2026-10-26)
+
+- **A run-up in a time trial** (the user: "start further back from the start/finish line to give the users car time to accellerate
+  before crossing the start line"): RACEMOD `TrialStartSpot` puts the player's car on the car's guide line 10 cells before the start
+  line (the guide line's point nearest the line's segment, within 3 cells; walked back 10 cells down to 2 while it is in the start's
+  cube and within 1500 of the line's height), facing along the line. A trial outside the start scene (Polar, the Palace) sends the car
+  to that spot as the grid waits. Desert: 10 cells back, the countdown, GO, checkpoint 1 as before.
+- **The storm's countdown**: Citadel 1's trial file had no `qualifying=0`, so its trial began as a qualifying lap (PHASE_QUALIFYING)
+  and never counted down. A time trial is never a qualifying lap now (`if (s_trial) s_qualifying = 0`).
+- **Renamed tracks** (Citadel 1, Citadel 2, Emerald Moon, Celebration 1, The Palace, Celebration 2): RACEGAME.TXT's `track=` line takes
+  a fifth field `was=<old name>`; RACEGAME `RenamedTracks` moves the old name's best laps and ghost_beaten to the new, and the
+  player's GHOSTS files (`<old>.ghost`, `<old> - X.ghost`) to the new name with their `track=` line rewritten. The setup writes the
+  was= field (GameInstall.cs `Renamed`) and clears the shipped ghosts before copying the renamed ones.
+- **Track select's scrollbar**: down the list's right edge, its thumb the rows shown out of all of them; a click or a drag on it
+  scrolls there, as the mouse wheel does (ConsumeMouseWheelY), the track chosen kept among the rows shown. It replaces the "..." marks.
+- **The pad's double step** (a player: "when I navigate the car selection menu with the D-pad or left stick, it skips over 1 car in
+  every horizontal step"): the pass a pad way is pushed, MyGetInput hands the pad's own scancode (K_GAMEPAD_BASE up) on in MyKey
+  for "press any key"; RACEGAME Nav/Step only looked at the pad with MyKey 0, so the way went unrecorded, Input stepped once, and the
+  next pass took the still-held way for a new push and stepped again. Nav/Step follow the pad's way every pass and take a pad
+  scancode in MyKey for no key; DoGameMenu's two pad readers (GAMEMENU) too.

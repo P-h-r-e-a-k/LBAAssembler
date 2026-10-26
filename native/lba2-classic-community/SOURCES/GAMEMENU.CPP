@@ -1598,7 +1598,8 @@ S32 ChoosePlayerName(S32 mess, S32 flagflip, S32 flagnew) {
             if (MyKey == K_GRAY_UP || MyKey == K_GRAY_DOWN)
                 MyKey = 0;
             Input &= ~(I_UP | I_DOWN);
-        } else if (!MyKey) {
+        } else if (!MyKey || MyKey >= K_GAMEPAD_BASE) {
+            /* (a pad scancode in MyKey too -- the pass the pad is pushed: its way recorded then, or the next pass steps again) */
             S32 jdir = JoystickMenuNavOnly();
             if (jdir != padNavDir) {
                 padNavDir = jdir;
@@ -2671,7 +2672,10 @@ S32 DoGameMenu(U16 *ptrmenu) {
         // Gamepad D-pad / left stick feed the same codes as keyboard arrows.
         // Edge-only: fire one K_GRAY_* on the direction change so a held
         // stick/dpad behaves like a held keyboard arrow (one step, stay).
-        if (!MyKey) {
+        // (MyKey a pad scancode too: the pass the pad is pushed MyGetInput hands
+        // its own scancode on; the way left unrecorded then, the next pass took
+        // it for a new push and stepped twice)
+        if (!MyKey || MyKey >= K_GAMEPAD_BASE) {
             S32 rawDir = JoystickMenuNavOnly();
             if (rawDir != padNavDir) {
                 padNavDir = rawDir;
