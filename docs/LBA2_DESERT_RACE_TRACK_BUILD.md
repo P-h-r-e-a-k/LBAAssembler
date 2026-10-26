@@ -5095,3 +5095,9 @@ corners where that's quicker".
   whose road climbs to 25,000, through the sheet (GameInstall.cs `NoSky`).
 - The Temple's flag marshal: RACE_MARSHAL_SOLID 0 -- MarshalPost and MarshalKeepOff no longer put cars out round her (the opponents
   still keep their grid columns past her).
+- Then (the user: "We need to smooth out the mini-map for Emerald moon, it's a bit jagged in places. Where we've added the jump section
+  in the line is totally offset. The pitlane isn't well smoothed in to the rest of the track"): the racing line cuts the road's corners,
+  so drawing it over the raised road's floorless runs offset the dish jump and jagged the loops. Now `MapFloor`/`MapFillFind`: a run of
+  floorless raised points under 60 cells long with floor both ends, on one stretch, is drawn by the road's own points (the jump, the
+  loops' sideways steps); the guide line only where no raised point of any kind is within three cells at its height (true ground
+  stretches); the loop bridging dropped. The raised road's strip eased onto the road's line over 5 cells at each end (a smoothstep).

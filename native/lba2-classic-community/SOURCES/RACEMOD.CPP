@@ -16064,8 +16064,37 @@ static int MapPoints(int *closed) {
     while (n > 2 && o->Cum[n - 1] > o->FinishS + 1) n--;
     return n;
 }
+// The raised road's points with no floor the map draws through all the same (1 each): a short run of them with floor both sides, on one
+// stretch -- a vertical loop's ring, a jump's flight -- whose points are the road's own line (the Emerald Moon's dish jump, 51 cells, its
+// loops' sideways steps: drawn by the racing line instead they were offset from the road and jagged, the user, 2026-10-26)
+#define RACE_MAP_FILL_CELLS 60
+static U8 *s_mapFill = NULL;
+static int s_mapFillN = -1;
+static const void *s_mapFillFor = NULL;
+static void MapFillFind(void) {
+    if (s_mapFillFor == (const void *)s_raised && s_mapFillN == s_nbRaised) return;
+    free(s_mapFill);
+    s_mapFill = (U8 *)calloc((size_t)(s_nbRaised > 0 ? s_nbRaised : 1), 1);
+    s_mapFillFor = (const void *)s_raised; s_mapFillN = s_nbRaised;
+    if (!s_mapFill) return;
+    const int lap = LapPoints();
+    for (int i = 1; i + 1 < s_nbRaised; i++) {
+        if (s_raised[i].Half > 0 || s_raised[i - 1].Half <= 0) continue;
+        int j = i;
+        double len = 0;
+        while (j + 1 < s_nbRaised && s_raised[j].Half <= 0) {
+            len += sqrt((double)(s_raised[j + 1].X - s_raised[j].X) * (s_raised[j + 1].X - s_raised[j].X) + (double)(s_raised[j + 1].Z - s_raised[j].Z) * (s_raised[j + 1].Z - s_raised[j].Z));
+            j++;
+        }
+        if (s_raised[j].Half > 0 && len < RACE_MAP_FILL_CELLS * 512.0 && (i - 1 < lap) == (j < lap) && BranchOf(i - 1) == BranchOf(j))
+            for (int k = i; k < j; k++) s_mapFill[k] = 1;
+        i = j;
+    }
+}
+static int MapFloor(int i) { MapFillFind(); return s_raised[i].Half > 0 || (s_mapFill && i < s_mapFillN && s_mapFill[i]); }
+
 static void MapPoint(int i, double *x, double *z, int *floor) {
-    if (s_nbRaised > 1 && !MapGuideOverRaised()) { *x = s_raised[i].X; *z = s_raised[i].Z; *floor = s_raised[i].Half > 0; return; }
+    if (s_nbRaised > 1 && !MapGuideOverRaised()) { *x = s_raised[i].X; *z = s_raised[i].Z; *floor = MapFloor(i); return; }
     const T_RACE_OPPONENT *o = Guide();
     *x = o->X[i]; *z = o->Z[i]; *floor = 1;
 }
@@ -16202,6 +16231,37 @@ static void MapExtras(int pass) {
                 const double nx = -sz / len, nz = sx / len, ma = (a->StripLo + a->StripHi) / 2.0, mc = (c->StripLo + c->StripHi) / 2.0;
                 MapStroke(a->X + nx * ma, a->Z + nz * ma, c->X + nx * mc, c->Z + nz * mc, r, value);
             }
+            // ... eased into the road at its ends: from its first (last) point's middle to the road's own line 5 cells before (after) it --
+            // it began and ended square beside the road (the Emerald Moon's, the user, 2026-10-26: "isn't well smoothed in")
+            for (int i = 0; i < s_nbRaised; i++) {
+                const T_RACE_RAISED *a = &s_raised[i];
+                const int has = a->Half > 0 && a->StripHi > a->StripLo;
+                const int before = i > 0 && s_raised[i - 1].Half > 0 && s_raised[i - 1].StripHi > s_raised[i - 1].StripLo;
+                const int after = i + 1 < s_nbRaised && s_raised[i + 1].Half > 0 && s_raised[i + 1].StripHi > s_raised[i + 1].StripLo;
+                if (!has || (before && after)) continue;
+                const int way = before ? 1 : -1;               // (the strip's start: back along the road; its end: on)
+                const int n2 = i + way >= 0 && i + way < s_nbRaised ? i + way : i;
+                const double sx = (s_raised[n2].X - a->X) * way, sz = (s_raised[n2].Z - a->Z) * way, len = sqrt(sx * sx + sz * sz);
+                if (len <= 0) continue;
+                // (sx, sz: the way the raised road runs there, forwards either way; its left as the strip's own stroke has it)
+                const double mx = a->X + (-sz / len) * (a->StripLo + a->StripHi) / 2.0, mz = a->Z + (sx / len) * (a->StripLo + a->StripHi) / 2.0;
+                double run = 0;
+                int k = i;
+                while (run < 5 * 512.0 && k - way >= 0 && k - way < s_nbRaised && s_raised[k - way].Half > 0) {
+                    run += sqrt((double)(s_raised[k - way].X - s_raised[k].X) * (s_raised[k - way].X - s_raised[k].X) + (double)(s_raised[k - way].Z - s_raised[k].Z) * (s_raised[k - way].Z - s_raised[k].Z));
+                    k -= way;
+                }
+                // (a curve: the strip's middle eased onto the road's line over those points)
+                const int steps = abs(k - i);
+                double px = mx, pz = mz;
+                for (int q = 1; q <= steps; q++) {
+                    const T_RACE_RAISED *b = &s_raised[i - way * q];
+                    const double u = (double)q / steps, e = 1 - u * u * (3 - 2 * u);
+                    const double qx = b->X + (mx - a->X) * e, qz = b->Z + (mz - a->Z) * e;
+                    MapStroke(px, pz, qx, qz, r, value);
+                    px = qx; pz = qz;
+                }
+            }
             // the raised road widened by the start line for the pits (Volcano Island's deck, Otringal's): drawn as wide, its usual width's
             // a third more, the run of them the start line is on
             if (s_car.HasLine) {
@@ -16230,22 +16290,6 @@ static void MapExtras(int pass) {
                     for (int i = a0; i < a1; i++) MapStroke(s_raised[i].X, s_raised[i].Z, s_raised[i + 1].X, s_raised[i + 1].Z, r * 2 + 1, value);
                 }
             }
-            // a loop's gap: from the floor before it to the floor after it
-            for (int k = 0; k < s_nbLoops; k++) {
-                const double fx = s_loops[k].CubeX * 32768.0 + s_loops[k].X, fz = s_loops[k].CubeZ * 32768.0 + s_loops[k].Z;
-                int at = -1;
-                double bd = 1e30;
-                for (int i = 0; i < s_nbRaised; i++) {
-                    const double d = (s_raised[i].X - fx) * (s_raised[i].X - fx) + (s_raised[i].Z - fz) * (s_raised[i].Z - fz);
-                    if (d < bd) { bd = d; at = i; }
-                }
-                if (at < 0 || bd > 4096.0 * 4096.0) continue;
-                int a = at, b = at;
-                while (a > 0 && s_raised[a].Half <= 0) a--;
-                while (b + 1 < s_nbRaised && s_raised[b].Half <= 0) b++;
-                if (a != b && s_raised[a].Half > 0 && s_raised[b].Half > 0 && b - a < 200)
-                    MapStroke(s_raised[a].X, s_raised[a].Z, s_raised[b].X, s_raised[b].Z, r, value);
-            }
             // the guide line where it is on the ground (a stretch of it off the raised road, joined to the road at its ends)
             const T_RACE_OPPONENT *o = Guide();
             if (o && o->Count > 1) {
@@ -16258,7 +16302,13 @@ static void MapExtras(int pass) {
                     S32 f;
                     int seg;
                     double lat, t;
+                    // (and no raised point, floor or none, within three cells at its height: the racing line over a jump or round a
+                    // ring cuts the road's corners -- the road's own points are drawn there)
                     off[i] = !RaisedAt(o->X[i], o->Z[i], o->Y[i] + 600, 0, &f, &seg, &lat, &t);
+                    for (int q = 0; off[i] && q < s_nbRaised; q++) {
+                        const double dx = s_raised[q].X - o->X[i], dz = s_raised[q].Z - o->Z[i];
+                        if (dx * dx + dz * dz < 3.0 * 512 * 3 * 512 && fabs(s_raised[q].Y - o->Y[i]) < 1500) off[i] = 0;
+                    }
                 }
                 for (int i = 0; off && i < n; i++) {
                     const int j = i + 1 < n ? i + 1 : s_sprint ? -1 : 0;
