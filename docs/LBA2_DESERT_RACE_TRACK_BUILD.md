@@ -5055,3 +5055,11 @@ corners where that's quicker".
   within six cells ahead and 1.7 cells either side of the pilot's lane takes the pilot out to the side the other leaves (up to `cells`,
   1.2 by default; the trailer used 1.3), eased 30 units a tick, and back onto its line once it is by. Desert, from 6th on the grid:
   1st in 17 s, the cars side by side through the dunes. For footage and tests only; nothing turns it on in play.
+
+## A sprint's time trial started on the line (2026-10-26)
+
+- A player: Polar Island's time trial "starting on the start line, rather than behind it, so the lap never starts". TrialStartSpot
+  walked back along the guide line from the start line, but a sprint's line starts there and PathAt holds a place before its start at
+  its first point -- the car went onto the line itself, never crossed it, and the lap never began (Polar Island and The Palace, the two
+  sprints). Now a sprint only goes back as far as its line goes, else keeps the track's own start (behind the line). Checked every
+  track's time trial to "halfway round lap 1": all 16 start their lap (14 with the run-up, the two sprints from their own start).

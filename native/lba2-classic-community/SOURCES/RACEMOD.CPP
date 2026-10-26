@@ -5589,6 +5589,10 @@ static void TrialStartSpot(void) {
     }
     if (at < 0 || bd > 3.0 * 512 * 3 * 512) { Log_Info("[racemod] time trial: the racing line doesn't cross the start line -- the track's own start"); return; }
     for (double back = RACE_TRIAL_RUNUP; back >= 2 * 512; back -= 512) {
+        // (a sprint's line starts at the start line: PathAt holds a place before its start at its first point -- on the line, which the
+        // car then never crossed and the trial never started: Polar Island, a player's report, 2026-10-26. Only back as far as the line
+        // goes; none: the track's own start, behind the line)
+        if (s_sprint && g->Cum[at] - back < 0) continue;
         double x, z, y, v, dx, dz;
         PathAt(g, g->Cum[at] - back, &x, &z, &y, &v, &dx, &dz);
         const int cx = (int)floor(x / 32768.0), cz = (int)floor(z / 32768.0);
