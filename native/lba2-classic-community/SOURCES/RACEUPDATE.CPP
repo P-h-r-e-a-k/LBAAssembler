@@ -57,6 +57,34 @@ int RaceUpdate_Spawn(const char *exeUtf8, const char *installDirUtf8, int manual
     return 1;
 }
 
+int RaceUpdate_Tool(const char *exeUtf8, const char *what, const char *folderUtf8) {
+    wchar_t exe[MAX_PATH * 4], folder[MAX_PATH * 4], work[MAX_PATH * 4], verb[64];
+    if (!Wide(exeUtf8, exe, MAX_PATH * 4) || !Wide(folderUtf8, folder, MAX_PATH * 4)) return 0;
+    if (!MultiByteToWideChar(CP_UTF8, 0, what, -1, verb, 64)) return 0;
+    const DWORD attr = GetFileAttributesW(exe);
+    if (attr == INVALID_FILE_ATTRIBUTES || (attr & FILE_ATTRIBUTE_DIRECTORY)) return 0;
+    wcscpy(work, exe);
+    wchar_t *slash = wcsrchr(work, L'\\');
+    if (slash) *slash = 0;
+    static wchar_t cmd[MAX_PATH * 10];
+    swprintf(cmd, sizeof(cmd) / sizeof(cmd[0]), L"\"%ls\" %ls \"%ls\"", exe, verb, folder);
+    STARTUPINFOW si;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&pi, sizeof(pi));
+    if (!CreateProcessW(exe, cmd, NULL, NULL, FALSE, CREATE_NEW_PROCESS_GROUP, NULL, slash ? work : NULL, &si, &pi)) {
+        Log_Warn("[racegame] %s %s could not be started: error %lu", exeUtf8, what, (unsigned long)GetLastError());
+        return 0;
+    }
+    // (its window brought in front of the game's: started by the program in front, it may take the foreground)
+    AllowSetForegroundWindow(pi.dwProcessId);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    Log_Info("[racegame] %s %s started (pid %lu)", exeUtf8, what, (unsigned long)pi.dwProcessId);
+    return 1;
+}
+
 #else
 
 int RaceUpdate_Exists(const char *pathUtf8) {
@@ -68,6 +96,13 @@ int RaceUpdate_Spawn(const char *exeUtf8, const char *installDirUtf8, int manual
     (void)exeUtf8;
     (void)installDirUtf8;
     (void)manual;
+    return 0;
+}
+
+int RaceUpdate_Tool(const char *exeUtf8, const char *what, const char *folderUtf8) {
+    (void)exeUtf8;
+    (void)what;
+    (void)folderUtf8;
     return 0;
 }
 

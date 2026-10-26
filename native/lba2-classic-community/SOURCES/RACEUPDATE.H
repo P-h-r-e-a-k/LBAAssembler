@@ -9,5 +9,8 @@
 int RaceUpdate_Exists(const char *pathUtf8);
 // The updater started (non-zero), or not (its exe missing, CreateProcess failed). Paths in UTF-8 (the engine's code page).
 int RaceUpdate_Spawn(const char *exeUtf8, const char *installDirUtf8, int manual);
+// The same copy started for something else with its window, detached (2026-10-26: the ghosts' "Share my ghosts" and "Import ghosts" --
+// `LBRA-Setup.exe --export-ghosts|--import-ghosts "<ghosts folder>"`): `what` its first argument, `folder` its second. Non-zero: started.
+int RaceUpdate_Tool(const char *exeUtf8, const char *what, const char *folderUtf8);
 
 #endif

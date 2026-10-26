@@ -543,6 +543,7 @@ static int s_ghostWatch = 0;               // ghost_watch=: this run plays a gho
 static char s_ghostName[96] = "";          // ghost_name=: the track the ghosts are of (else the race file's name)
 static char s_ghostCar[96] = "";           // ghost_car=: the car driven, as its ghost names it
 static char s_ghostWatchPath[ADELINE_MAX_PATH] = "";
+static char s_ghostOtherPath[ADELINE_MAX_PATH] = "";   // ghost_file=: another player's ghost to race (ghost=8)
 static void GhostSplit(int checkpoint);
 static void GhostLapDone(S32 lap);
 static void GhostLapStart(void);
@@ -3847,6 +3848,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "trial")) s_trial = atoi(v);
         else if (!strcmp(key, "ghost")) s_ghostMode = atoi(v);
         else if (!strcmp(key, "ghost_watch")) { snprintf(s_ghostWatchPath, sizeof(s_ghostWatchPath), "%s", v); s_ghostWatch = v[0] != 0; }
+        else if (!strcmp(key, "ghost_file")) snprintf(s_ghostOtherPath, sizeof(s_ghostOtherPath), "%s", v);
         else if (!strcmp(key, "ghost_name")) snprintf(s_ghostName, sizeof(s_ghostName), "%s", v);
         else if (!strcmp(key, "ghost_car")) snprintf(s_ghostCar, sizeof(s_ghostCar), "%s", v);
         else if (!strcmp(key, "end_to_menu")) s_endToMenu = atoi(v);
@@ -13760,6 +13762,7 @@ typedef struct {
     int NbSplits;
     char Track[96], Car[96], Date[16];
     char Level[16];                        // a ghost to beat's level (level=: Easy, Medium, Hard -- the game's own, its ghosts\ folder)
+    char Driver[48];                       // whose it is (driver=: a ghost shared in a zip -- the race game's "Share my ghosts", 2026-10-26)
 } T_RACE_LAPGHOST;
 
 static T_RACE_LAPGHOST s_ghostRec;            // the lap being recorded ...
@@ -13784,7 +13787,7 @@ static void GhostFree(T_RACE_LAPGHOST *g) { free(g->P); memset(g, 0, sizeof(*g))
 static void GhostReset(void) {
     GhostFree(&s_ghostRec); GhostFree(&s_ghost);
     s_ghostRecLap = 0; s_ghostFile[0] = 0; s_ghostOwnLap = 0; s_ghostChecked = 0; s_ghostAt = 0; s_ghostSplitAt = 0; s_ghostWatchT0 = 0;
-    s_ghostMode = 2; s_ghostWatch = 0; s_ghostName[0] = 0; s_ghostCar[0] = 0; s_ghostWatchPath[0] = 0;
+    s_ghostMode = 2; s_ghostWatch = 0; s_ghostName[0] = 0; s_ghostCar[0] = 0; s_ghostWatchPath[0] = 0; s_ghostOtherPath[0] = 0;
     s_ghostBody = s_ghostAnim = -1;
     s_watchPose.On = 0; s_ghostBeaten = 0; s_ghostLapDiffUntil = 0;
 }
@@ -13900,6 +13903,7 @@ static int GhostRead(const char *path, T_RACE_LAPGHOST *g, int points) {
         else if (!strcmp(line, "car")) snprintf(g->Car, sizeof(g->Car), "%s", v);
         else if (!strcmp(line, "date")) snprintf(g->Date, sizeof(g->Date), "%s", v);
         else if (!strcmp(line, "level")) snprintf(g->Level, sizeof(g->Level), "%s", v);
+        else if (!strcmp(line, "driver")) snprintf(g->Driver, sizeof(g->Driver), "%s", v);
         else if (!strcmp(line, "splits")) {
             const char *p = v;
             char *end;
@@ -13943,6 +13947,7 @@ static int GhostWrite(const char *path, const T_RACE_LAPGHOST *g) {
     fprintf(f, "# Each line after points=: ms into the lap, x y z (island units), alpha beta gamma, body, animation, island.\n");
     fprintf(f, "ghost=2\ntrack=%s\nlap=%d\ncar=%s\ndate=%s\n", g->Track, (int)g->Lap, g->Car, g->Date);
     if (g->Level[0]) fprintf(f, "level=%s\n", g->Level);
+    if (g->Driver[0]) fprintf(f, "driver=%s\n", g->Driver);
     fprintf(f, "splits=");
     for (int i = 0; i < g->NbSplits; i++) fprintf(f, i ? " %d" : "%d", (int)g->Split[i]);
     fprintf(f, "\npoints=%d\n", g->N);
@@ -14015,6 +14020,68 @@ S32 RaceMod_GhostFind(const char *track, S32 mode, char *path, S32 size, S32 *la
     return best > 0;
 }
 
+// Other players' ghosts of a track (2026-10-26 -- the user: "update the "Race a ghost" screen so they can select a specific person's ghost
+// relevant to the track they're about to drive ... an "Other" option"): every ghost of the track in the user's GHOSTS but his own, each
+// person's quickest, the quickest first. Whose: its driver= (a ghost shared in a zip, "Share my ghosts"), else its file's name after the
+// last " - " (named by hand: "Otringal - Sam.ghost"), else the file's name.
+S32 RaceMod_GhostOthers(const char *track, T_RACE_GHOST_OTHER *out, S32 max) {
+    char own[ADELINE_MAX_PATH], folder[ADELINE_MAX_PATH];
+    GhostOwnPath(track, own, sizeof(own));
+    const char *a = strrchr(own, '/'), *b = strrchr(own, '\\');
+    const char *ownName = a > b ? a + 1 : b ? b + 1 : own;
+    RaceMod_GhostFolder(folder, sizeof(folder));
+    int count = 0, n = 0;
+    char **files = SDL_GlobDirectory(folder, "*.ghost", SDL_GLOB_CASEINSENSITIVE, &count);
+    for (int i = 0; files && i < count; i++) {
+        if (!SDL_strcasecmp(files[i], ownName)) continue;
+        char full[ADELINE_MAX_PATH];
+        const size_t len = strlen(folder);
+        snprintf(full, sizeof(full), "%s%s%s", folder, len && folder[len - 1] != '/' && folder[len - 1] != '\\' ? "/" : "", files[i]);
+        T_RACE_LAPGHOST g;
+        if (!GhostRead(full, &g, 0) || strcmp(g.Track, track)) continue;
+        char who[48];
+        if (g.Driver[0]) snprintf(who, sizeof(who), "%s", g.Driver);
+        else {
+            const char *dash = NULL;
+            for (const char *p = files[i]; (p = strstr(p, " - ")) != NULL; p += 3) dash = p;
+            snprintf(who, sizeof(who), "%s", dash ? dash + 3 : files[i]);
+            char *dot = strrchr(who, '.');
+            if (dot && !SDL_strcasecmp(dot, ".ghost")) *dot = 0;
+        }
+        // (a person already listed: the quicker of the two kept)
+        int at = -1;
+        for (int k = 0; k < n && at < 0; k++) if (!SDL_strcasecmp(out[k].Driver, who)) at = k;
+        if (at >= 0 && out[at].Lap <= g.Lap) continue;
+        if (at < 0) { if (n >= max) { int worst = 0; for (int k = 1; k < n; k++) if (out[k].Lap > out[worst].Lap) worst = k; if (out[worst].Lap <= g.Lap) continue; at = worst; } else at = n++; }
+        T_RACE_GHOST_OTHER *e = &out[at];
+        snprintf(e->Path, sizeof(e->Path), "%s", full);
+        e->Lap = g.Lap;
+        snprintf(e->Car, sizeof(e->Car), "%s", g.Car);
+        snprintf(e->Driver, sizeof(e->Driver), "%s", who);
+    }
+    SDL_free(files);
+    for (int i = 1; i < n; i++) for (int j = i; j > 0 && out[j].Lap < out[j - 1].Lap; j--) { const T_RACE_GHOST_OTHER t = out[j]; out[j] = out[j - 1]; out[j - 1] = t; }
+    return n;
+}
+
+// The user's GHOSTS folder as it is: how many ghosts, and the newest one's change -- the "Other" page drawn again when it changes (an
+// import done while it waits)
+U32 RaceMod_GhostFolderSignature(void) {
+    char folder[ADELINE_MAX_PATH];
+    RaceMod_GhostFolder(folder, sizeof(folder));
+    int count = 0;
+    char **files = SDL_GlobDirectory(folder, "*.ghost", SDL_GLOB_CASEINSENSITIVE, &count);
+    U32 sig = 2166136261u ^ (U32)count;
+    for (int i = 0; files && i < count; i++) {
+        char full[ADELINE_MAX_PATH];
+        snprintf(full, sizeof(full), "%s/%s", folder, files[i]);
+        SDL_PathInfo info;
+        if (SDL_GetPathInfo(full, &info)) sig = (sig ^ (U32)(info.modify_time / 1000000) ^ (U32)info.size) * 16777619u;
+    }
+    SDL_free(files);
+    return sig;
+}
+
 // The race's ghosts looked for, once a run: a time trial's to race against (ghost=), or the one to play back (ghost_watch=).
 static void GhostStart(void) {
     if (s_ghostChecked) return;
@@ -14038,6 +14105,18 @@ static void GhostStart(void) {
     T_RACE_LAPGHOST head;
     if (GhostRead(own, &head, 0) && !strcmp(head.Track, track)) s_ghostOwnLap = head.Lap;
     if (s_ghostMode <= 0) { Log_Info("[racemod] ghost: none raced (ghost=0); %s's own best %.2f s", track, s_ghostOwnLap / 1000.0); return; }
+    // (ghost=8: one of another player's, its file named -- the race game's "Other" page, ghost_file=)
+    if (s_ghostMode == 8) {
+        if (GhostRead(s_ghostOtherPath, &s_ghost, 1) && !strcmp(s_ghost.Track, track)) {
+            snprintf(s_ghostFile, sizeof(s_ghostFile), "%s", s_ghostOtherPath);
+            Log_Info("[racemod] ghost: racing %s's lap of %.2f s on %s (%s, %s; %d points, %s)", s_ghost.Driver[0] ? s_ghost.Driver : "another player",
+                     s_ghost.Lap / 1000.0, track, s_ghost.Car, s_ghost.Date, s_ghost.N, s_ghostOtherPath);
+        } else {
+            GhostFree(&s_ghost);
+            Log_Warn("[racemod] ghost: %s is no ghost of %s to race", s_ghostOtherPath, track);
+        }
+        return;
+    }
     char level[16];
     if (RaceMod_GhostFind(track, s_ghostMode, path, sizeof(path), &lap, NULL, 0, &mine, level, sizeof(level)) && GhostRead(path, &s_ghost, 1)) {
         snprintf(s_ghostFile, sizeof(s_ghostFile), "%s", path);
@@ -16158,6 +16237,7 @@ void RaceMod_Draw(void) {
                 snprintf(text, sizeof(text), "Ghost lap  %s / %s", a, b);
                 char about[200];
                 if (s_ghost.Level[0]) snprintf(about, sizeof(about), "%s ghost  %s", s_ghost.Level, s_ghost.Car);
+                else if (s_ghost.Driver[0]) snprintf(about, sizeof(about), "%s  %s", s_ghost.Driver, s_ghost.Car);
                 else snprintf(about, sizeof(about), "%s  %s", s_ghost.Car, s_ghost.Date);
                 HudSmall(16, bottom - RACE_SMALL_STEP, about, -1);
             }
@@ -16213,13 +16293,17 @@ void RaceMod_Draw(void) {
             if (s_ghost.Lap && s_ghostMode > 0) {
                 Time(b, sizeof(b), s_ghost.Lap);
                 S32 colour = LBAWHITE;
+                // (whose: the game's level ghost, another player's by name, or the player's own)
+                char who[64];
+                if (s_ghost.Level[0]) snprintf(who, sizeof(who), "%s ghost", s_ghost.Level);
+                else snprintf(who, sizeof(who), "%s", s_ghost.Driver[0] ? s_ghost.Driver : "Ghost");
                 if (s_ghostSplitAt && now - s_ghostSplitAt < RACE_GHOST_SPLIT_MS) {
                     const S32 d = s_ghostSplitDiff < 0 ? -s_ghostSplitDiff : s_ghostSplitDiff;
                     // (in words: the font has no '+')
-                    snprintf(text, sizeof(text), "%s%s  %s   %d.%02d %s", s_ghost.Level, s_ghost.Level[0] ? " ghost" : "Ghost", b, (int)(d / 1000), (int)(d / 10 % 100),
+                    snprintf(text, sizeof(text), "%s  %s   %d.%02d %s", who, b, (int)(d / 1000), (int)(d / 10 % 100),
                              s_ghostSplitDiff <= 0 ? "ahead" : "behind");
                     colour = s_ghostSplitDiff <= 0 ? RACE_GREEN : RACE_RED;
-                } else snprintf(text, sizeof(text), "%s%s  %s", s_ghost.Level, s_ghost.Level[0] ? " ghost" : "Ghost", b);
+                } else snprintf(text, sizeof(text), "%s  %s", who, b);
                 HudSmallIn(16, bottom - 2 * RACE_SMALL_STEP, text, -1, colour);
             }
         }

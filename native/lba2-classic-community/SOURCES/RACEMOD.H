@@ -55,10 +55,20 @@ S32 RaceMod_FadeFromWhite(void);
 void RaceMod_Draw(void);
 
 // The ghost car (RACEMOD.CPP's ghost section): a track's ghost to race -- `mode` 1 the player's own, 2 the fastest of all, 3/4/5 the game's
-// Easy/Medium/Hard, 6 the fastest of the player's own and the shared ones -- its file, lap (ms), car, whether it is the player's own and
-// its level (the game's ghosts'); non-zero when there is one. The ghosts' folder (the user's GHOSTS).
+// Easy/Medium/Hard, 6 the fastest of the player's own and the shared ones, 7 the game's Extreme -- its file, lap (ms), car, whether it is
+// the player's own and its level (the game's ghosts'); non-zero when there is one. The ghosts' folder (the user's GHOSTS).
 S32 RaceMod_GhostFind(const char *track, S32 mode, char *path, S32 size, S32 *lap, char *car, S32 carSize, S32 *mine, char *level, S32 levelSize);
 void RaceMod_GhostFolder(char *out, S32 size);
+// Another player's ghost of a track, in the user's GHOSTS (shared with him: the race game's "Import ghosts"): its file, lap, car and whose.
+typedef struct {
+    char Path[260];
+    S32 Lap;
+    char Car[96], Driver[48];
+} T_RACE_GHOST_OTHER;
+// A track's ghosts from other people -- the quickest of each person's, the quickest first, at most `max`; how many there are in all.
+S32 RaceMod_GhostOthers(const char *track, T_RACE_GHOST_OTHER *out, S32 max);
+// What the user's GHOSTS folder holds now (its ghosts' count and newest change): a page showing them sees one come in
+U32 RaceMod_GhostFolderSignature(void);
 
 // A raised road (the car file's raised=<file>): a floor of its own, over the ground. While an object is moved the ground's height under
 // it is the road's where the road passes (RaceMod_FloorFor: for something at height y; RaceMod_FloorForNothing afterwards: the ground

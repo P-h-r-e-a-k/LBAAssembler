@@ -152,6 +152,11 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_LAPS_ENDLESS 2369
 #define RG_ID_GHOST_EXTREME 2370            // the game's Extreme ghost (2026-10-25): after Hard, opened by beating it
 #define RG_ID_RESTART 2371                  // the main menu in a race: the race (or time trial) again from its start, as it was set up
+#define RG_ID_GHOST_OTHER 2372            // the ghost page's "Other": another player's ghost of the track (OthersPage, 2026-10-26)
+#define RG_ID_OTHER_FIRST 2380            // ... its rows: the ghosts, 2380 .. 2384 (RG_OTHERS_SHOWN) ...
+#define RG_ID_GHOST_IMPORT 2385           // ... "Import ghosts..." (the setup's --import-ghosts) ...
+#define RG_ID_GHOST_SHARE 2386            // ... "Share my ghosts..." (the setup's --export-ghosts)
+#define RG_OTHERS_SHOWN 5
 #define RG_ID_BACK 26                       // the game's own "Back"
 #define RG_ID_RESUME 70
 #define RG_ID_OPTIONS 74
@@ -400,6 +405,8 @@ static int s_camera = 2;
 // best lap, 3, 4, 5 the game's Easy, Medium, Hard ghost to beat, 7 its Extreme one (2 the fastest of all: no longer offered, the ghost page's first choice
 // instead)
 static int s_ghost = 0;
+// ... 8: another player's ghost, this file (the "Other" page, OthersPage; ghost_other= -- RACEMOD.CPP ghost_file=)
+static char s_ghostOther[ADELINE_MAX_PATH] = "";
 // the game's ghosts beaten, each track's: 0 none, 1 Easy, 2 Medium, 3 Hard -- beating one opens the next (2026-10-25, the user: "force them to
 // beat easy to unlock medium, and to beat medium to unlock hard"); ghost_beaten=<level>|<track> lines (RaceGame_GhostBeaten)
 static int s_beaten[RG_MAX_ENTRIES];
@@ -457,6 +464,9 @@ static void ReadSettings(void) {
             } else if (!strcmp(line, "grid_car")) {
                 snprintf(s_gridCarName, sizeof(s_gridCarName), "%s", eq + 1);
                 continue;
+            } else if (!strcmp(line, "ghost_other")) {
+                snprintf(s_ghostOther, sizeof(s_ghostOther), "%s", eq + 1);
+                continue;
             } else if (!strcmp(line, "ghost_beaten")) {
                 // (<level>|<track>; a track no longer in the game kept as it is)
                 const char *bar = strchr(eq + 1, '|');
@@ -482,7 +492,7 @@ static void ReadSettings(void) {
     if (s_level < 0 || s_level > 2) s_level = 1;
     s_minimap = s_minimap != 0;
     if (s_camera < 0 || s_camera > 2) s_camera = 2;
-    if (s_ghost < 0 || s_ghost > 7 || s_ghost == 2 || s_ghost == 6) s_ghost = 0;
+    if (s_ghost < 0 || s_ghost > 8 || s_ghost == 2 || s_ghost == 6) s_ghost = 0;
     Log_Info("[racegame] settings: controls seen %d, power-ups seen %d, qualified %d, skip qualifying %d, updates %s (checked %lld), mini-map %s, camera %d",
              s_controlsSeen, s_powerupsSeen, s_qualified, s_skipQualifying, s_updateKey[s_updates], s_updateChecked, s_minimap ? "on" : "off", s_camera);
 }
@@ -560,6 +570,7 @@ static void WriteSettings(void) {
             s_skipQualifying, s_level);
     fprintf(f, "updates=%s\nupdate_checked=%lld\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0], s_updateChecked);
     fprintf(f, "minimap=%d\ncamera=%d\nghost=%d\ntrial_laps=%d\n", s_minimap, s_camera, s_ghost, s_trialLaps);
+    if (s_ghostOther[0]) fprintf(f, "ghost_other=%s\n", s_ghostOther);
     if (s_gridCarName[0]) fprintf(f, "grid_car=%s\n", s_gridCarName);
     for (int sp = 0; sp < s_nbSp; sp++) if (s_beaten[sp] > 0) fprintf(f, "ghost_beaten=%d|%s\n", s_beaten[sp], s_sp[sp].Name);
     for (int i = 0; i < s_nbUnlocked; i++) fprintf(f, "%s_unlocked=1\n", s_unlocked[i]);
@@ -832,7 +843,9 @@ static int StartRace(int sp, int trial, const T_RG_CAR *car, int level, const ch
     // (a time trial's ghost car: the track it is of, the car it names, which ghost is raced -- or the ghost played back)
     if (trial) {
         ReadSettings();
-        fprintf(f, "ghost_name=%s\nghost_car=%s\nghost=%d\n", s->Name, car ? car->Name : "Twinsen's car", s_ghost == 1 ? 6 : s_ghost);   // (the player's best: theirs or one shared, the quicker)
+        fprintf(f, "ghost_name=%s\nghost_car=%s\nghost=%d\n", s->Name, car ? car->Name : "Twinsen's car", s_ghost);
+        // (another player's: its file -- the "Other" page)
+        if (s_ghost == 8) fprintf(f, "ghost_file=%s\n", s_ghostOther);
         if (watch && watch[0]) fprintf(f, "ghost_watch=%s\n", watch);
     }
     // (a qualifying lap or none, the player's answer -- QualifyingPage: the first race always has one)
@@ -858,6 +871,9 @@ static int StartRace(int sp, int trial, const T_RG_CAR *car, int level, const ch
 
 // The ghost page's track and what it has (GhostPage): the laps of the player's best and the game's three (0: none), and how many beaten
 static S32 s_gpLap[5];
+// ... and the other players' ghosts of it (RaceMod_GhostOthers: the "Other" row says how many; OthersPage lists them)
+static T_RACE_GHOST_OTHER s_others[RG_OTHERS_SHOWN];
+static int s_nbOthers = 0, s_gpOthers = 0;
 static int s_gpBeaten = 0;
 static int GhostLevelOpen(int level) { return level == 0 || s_gpBeaten >= level; }   // (0 Easy, 1 Medium, 2 Hard, 3 Extreme)
 // A ghost page row's place in s_gpLap: 1 Easy .. 4 Extreme (0 the player's own)
@@ -898,6 +914,26 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_WINDOW: Label(string, DisplayFullScreen ? "Window mode: full screen (F11)" : "Window mode: window (F11)"); return 1;
     case RG_ID_EASY: case RG_ID_MEDIUM: case RG_ID_HARD: Label(string, s_levelName[num - RG_ID_EASY]); return 1;
     case RG_ID_GHOST_NONE: Label(string, "No ghost"); return 1;
+    case RG_ID_GHOST_OTHER: {
+        char line[64];
+        if (s_gpOthers > 0) snprintf(line, sizeof(line), "Other people's ghosts (%d)", s_gpOthers);
+        else snprintf(line, sizeof(line), "Other people's ghosts");
+        Label(string, line);
+        return 1;
+    }
+    case RG_ID_GHOST_IMPORT: Label(string, "Import ghosts..."); return 1;
+    case RG_ID_GHOST_SHARE: Label(string, "Share my ghosts..."); return 1;
+    case RG_ID_OTHER_FIRST: case RG_ID_OTHER_FIRST + 1: case RG_ID_OTHER_FIRST + 2: case RG_ID_OTHER_FIRST + 3: case RG_ID_OTHER_FIRST + 4: {
+        // (whose, and the lap: a long name cut to fit the row)
+        const T_RACE_GHOST_OTHER *o = &s_others[num - RG_ID_OTHER_FIRST];
+        char who[24], time[24], line[64];
+        snprintf(who, sizeof(who), "%s", o->Driver);
+        if (strlen(o->Driver) >= sizeof(who) - 1) snprintf(who + sizeof(who) - 4, 4, "...");
+        TimeText(time, sizeof(time), o->Lap);
+        snprintf(line, sizeof(line), "%s  %s", who, time);
+        Label(string, line);
+        return 1;
+    }
     case RG_ID_LAPS_1: case RG_ID_LAPS_1 + 1: case RG_ID_LAPS_1 + 2: case RG_ID_LAPS_1 + 3: {
         char line[32];
         const int n = s_trialLapsChoice[num - RG_ID_LAPS_1];
@@ -1248,7 +1284,7 @@ static int TimesPage(void) {
         if (sp < s_nbSp && of != sp) {
             of = sp;
             ownLap = 0;
-            RaceMod_GhostFind(s_sp[sp].Name, 6, ownPath, ADELINE_MAX_PATH, &ownLap, NULL, 0, &ownMine, NULL, 0);
+            RaceMod_GhostFind(s_sp[sp].Name, 1, ownPath, ADELINE_MAX_PATH, &ownLap, NULL, 0, &ownMine, NULL, 0);
             for (int k = 0; k < 4; k++) {
                 levelLap[k] = 0;
                 RaceMod_GhostFind(s_sp[sp].Name, k < 3 ? 3 + k : 7, levelPath[k], ADELINE_MAX_PATH, &levelLap[k], NULL, 0, NULL, NULL, 0);
@@ -2171,36 +2207,112 @@ static int LapsPage(int runs) {
 // a screen so they can choose to race a ghost, either their best time, or the easy/medium/hard ghost"): no ghost, the player's best lap
 // (once there is one), or the game's Easy ghost -- its Medium once Easy is beaten, its Hard once Medium is, its Extreme once Hard is. The
 // one chosen last first. The ghost (RACEMOD.CPP ghost=: 0, 1, 3, 4, 5, 7), or -1 for Back.
-static U16 s_ghostMenu[4 + 2 * 7];
+// "Other" (2026-10-26 -- the user: "update the "Race a ghost" screen so they can select a specific person's ghost relevant to the track
+// they're about to drive. Let's add this as an "Other" option, that then lists all of the installed ghosts from other people relevant to
+// that track"): OthersPage -- ghost=8, the file chosen.
+//
+// The other players' ghosts of a track (RACEMOD.CPP RaceMod_GhostOthers: each person's quickest, the quickest first), a row each, and
+// "Import ghosts..." and "Share my ghosts..." under them -- the setup beside the game (Update\LBRA-Setup.exe) does those, its own window
+// over the game's: a zip a friend shared, or .ghost files, into the user's GHOSTS; the player's own ghosts into a zip, under their name.
+// The page drawn again when the GHOSTS folder changes (an import done while it waits). Non-zero: a ghost chosen (s_ghostOther).
+static U32 s_othersSig = 0;
+static S32 OthersChanged(void) {
+    static S32 lastLook = 0;
+    if ((S32)TimerRefHR - lastLook >= 0 && (S32)TimerRefHR - lastLook < 1000) return 0;
+    lastLook = TimerRefHR;
+    return RaceMod_GhostFolderSignature() != s_othersSig;
+}
+static int OthersPage(int sp) {
+    static U16 menu[4 + 2 * 9];
+    char exe[ADELINE_MAX_PATH], folder[ADELINE_MAX_PATH];
+    GetResPath(exe, ADELINE_MAX_PATH, RG_UPDATER);
+    RaceMod_GhostFolder(folder, sizeof(folder));
+    AddDirIfNot(folder);
+    const char *said = NULL;
+    menu[0] = 1;
+    for (;;) {
+        s_othersSig = RaceMod_GhostFolderSignature();
+        s_nbOthers = RaceMod_GhostOthers(s_sp[sp].Name, s_others, RG_OTHERS_SHOWN);
+        int nb = 0;
+        SetRow(menu, nb++, RG_ID_BACK);
+        for (int k = 0; k < s_nbOthers; k++) SetRow(menu, nb++, (U16)(RG_ID_OTHER_FIRST + k));
+        SetRow(menu, nb++, RG_ID_GHOST_IMPORT);
+        SetRow(menu, nb++, RG_ID_GHOST_SHARE);
+        // (the one chosen last first, when it is still there)
+        if (menu[0] >= nb) menu[0] = 1;
+        for (int k = 0; k < s_nbOthers; k++) if (!SDL_strcasecmp(s_others[k].Path, s_ghostOther) && menu[0] == 1) menu[0] = (U16)(1 + k);
+        menu[1] = (U16)nb;
+        menu[2] = (U16)(nb > 6 ? 270 : 250);
+        menu[3] = 0;
+        Page(NULL, 0);
+        Text(UI_CENTER_X, 8 + UI_VCENTER_OFS, "Other people's ghosts", LBAWHITE);
+        const S32 below = menu[2] + (nb * 56) / 2 + 8 + UI_VCENTER_OFS;
+        const char *line = said ? said : !s_nbOthers ? "None of this track yet. Import a zip of ghosts a friend shared, or share yours." : NULL;
+        if (line) Wrapped(UI_CENTER_X - 280, below, 560, RG_LINE, line, RG_GREY);
+        MenuRedrawHook = OthersChanged;
+        const S32 select = Menu(menu);
+        MenuRedrawHook = NULL;
+        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
+        if (select == RG_ID_GHOST_IMPORT || select == RG_ID_GHOST_SHARE) {
+            const int import = select == RG_ID_GHOST_IMPORT;
+            if (!RaceUpdate_Exists(exe)) said = "The game's folder has no setup to do that: install the game again.";
+            else if (RaceUpdate_Tool(exe, import ? "--import-ghosts" : "--export-ghosts", folder))
+                said = import ? "Choose the zip (or .ghost files) in the window that opened." : "Give your name and where to save the zip in the window that opened.";
+            else said = "It couldn't be started.";
+            continue;
+        }
+        if (select >= RG_ID_OTHER_FIRST && select < RG_ID_OTHER_FIRST + s_nbOthers) {
+            const T_RACE_GHOST_OTHER *o = &s_others[select - RG_ID_OTHER_FIRST];
+            snprintf(s_ghostOther, sizeof(s_ghostOther), "%s", o->Path);
+            Log_Info("[racegame] %s's time trial: against %s's ghost (%.2f s, %s)", s_sp[sp].Name, o->Driver, o->Lap / 1000.0, o->Path);
+            Page(NULL, 0);
+            return 1;
+        }
+    }
+}
+
+static U16 s_ghostMenu[4 + 2 * 8];
 static int GhostPage(int sp) {
     ReadSettings();
     S32 mine = 1;
     for (int k = 0; k < 5; k++) {
         char path[ADELINE_MAX_PATH];
         s_gpLap[k] = 0;
-        RaceMod_GhostFind(s_sp[sp].Name, k == 0 ? 6 : k < 4 ? 2 + k : 7, path, sizeof(path), &s_gpLap[k], NULL, 0, k ? NULL : &mine, NULL, 0);
+        RaceMod_GhostFind(s_sp[sp].Name, k == 0 ? 1 : k < 4 ? 2 + k : 7, path, sizeof(path), &s_gpLap[k], NULL, 0, k ? NULL : &mine, NULL, 0);
     }
     s_gpBeaten = s_beaten[sp];
     s_gpOwnName = OwnLapName(sp, s_gpLap[0], mine);
-    static const U16 ids[6] = {RG_ID_GHOST_NONE, RG_ID_GHOST_OWN, RG_ID_GHOST_EASY, RG_ID_GHOST_MEDIUM, RG_ID_GHOST_HARD, RG_ID_GHOST_EXTREME};
-    static const int modes[6] = {0, 1, 3, 4, 5, 7};
+    s_gpOthers = RaceMod_GhostOthers(s_sp[sp].Name, s_others, RG_OTHERS_SHOWN);
+    static const U16 ids[7] = {RG_ID_GHOST_NONE, RG_ID_GHOST_OWN, RG_ID_GHOST_EASY, RG_ID_GHOST_MEDIUM, RG_ID_GHOST_HARD, RG_ID_GHOST_EXTREME, RG_ID_GHOST_OTHER};
+    static const int modes[7] = {0, 1, 3, 4, 5, 7, 8};
     static const char *const what[6] = {"no ghost", "against the player's best lap", "against the Easy ghost", "against the Medium ghost",
                                         "against the Hard ghost", "against the Extreme ghost"};
-    s_ghostMenu[1] = 7;
-    s_ghostMenu[2] = 290;
+    // (eight rows, 50 high with 6 between: centred lower than the main menu's seven, the last just inside the 480-tall canvas)
+    s_ghostMenu[1] = 8;
+    s_ghostMenu[2] = 284;
     s_ghostMenu[3] = 0;
     SetRow(s_ghostMenu, 0, RG_ID_BACK);
-    for (int r = 0; r < 6; r++) SetRow(s_ghostMenu, r + 1, ids[r]);
+    for (int r = 0; r < 7; r++) SetRow(s_ghostMenu, r + 1, ids[r]);
     // (the row chosen last, if it is there to choose -- else no ghost)
     s_ghostMenu[0] = 1;
-    for (int r = 0; r < 6; r++) if (modes[r] == s_ghost && !RaceGame_RowDisabled(ids[r])) s_ghostMenu[0] = (U16)(r + 1);
+    for (int r = 0; r < 7; r++) if (modes[r] == s_ghost && !RaceGame_RowDisabled(ids[r])) s_ghostMenu[0] = (U16)(r + 1);
     for (;;) {
-        // (seven rows, as the main menu's in a race: the header over the menu picture's title, in white -- orange was lost in the title's
-        // own orange letters, and a shaded strip under it doesn't show over the picture)
+        // (the header over the menu picture's title, in white -- orange was lost in the title's own orange letters, and a shaded strip
+        // under it doesn't show over the picture)
         Page(NULL, 0);
         Text(UI_CENTER_X, 8 + UI_VCENTER_OFS, "Race a ghost", LBAWHITE);
         const S32 select = Menu(s_ghostMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return -1; }
+        if (select == RG_ID_GHOST_OTHER) {
+            // (another player's: chosen on its own page -- or Back, this page again)
+            if (OthersPage(sp)) {
+                s_ghost = 8;
+                WriteSettings();
+                return s_ghost;
+            }
+            s_gpOthers = RaceMod_GhostOthers(s_sp[sp].Name, s_others, RG_OTHERS_SHOWN);
+            continue;
+        }
         for (int r = 0; r < 6; r++)
             if (select == ids[r] && !RaceGame_RowDisabled(ids[r])) {
                 s_ghost = modes[r];

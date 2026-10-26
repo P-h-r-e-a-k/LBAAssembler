@@ -4982,3 +4982,22 @@ corners where that's quicker".
   20 s later, wasn't shown till something was pressed. GAMEMENU `MenuRedrawHook`: with MenuRelayoutReturns set, DoGameMenu asks it while
   it waits and returns MENU_RELAYOUT when it says the page's text changed (the row chosen kept in the menu's first word -- the resize's
   return now keeps it too). RACEGAME `UpdateWordChanged` looks at status.txt twice a second against the time the page drew.
+
+## Ghost sharing: a zip of a player's ghosts, and racing another person's (2026-10-26)
+
+- The user: "update ghost sharing so a user can share a zip file with all of their ghosts in, exported with their name, then update the
+  "Race a ghost" screen so they can select a specific person's ghost ... an "Other" option, that then lists all of the installed ghosts
+  from other people relevant to that track".
+- Ghost files may carry `driver=<name>`. RACEMOD `RaceMod_GhostOthers` lists a track's ghosts in GHOSTS but the player's own, each
+  person's quickest (driver=, else the file name after the last " - "), the quickest first; `ghost=8` + `ghost_file=` races that file
+  (the display: "Sam  0:27.15"). `RaceMod_GhostFolderSignature`: the folder's count and newest change.
+- RACEGAME: the ghost page's eighth row, **Other people's ghosts (n)** (8 rows at centre 284, the canvas's 480 just holding them);
+  OthersPage: Back, up to 5 ghosts, Import ghosts..., Share my ghosts...; the choice kept as `ghost_other=`. The page drawn again
+  when the GHOSTS folder changes (MenuRedrawHook). "Your best lap" is now the player's own only (GhostFind mode 1, not 6).
+- Import and Share are the setup's: RACEUPDATE `RaceUpdate_Tool` starts `Update\LBRA-Setup.exe --export-ghosts|--import-ghosts
+  "<GHOSTS>"` (LBRA Installer\GhostShare.cs): Share asks the name (GHOST_NAME.TXT beside GHOSTS) and where to save
+  `LBRA ghosts - <name>.zip` (each own ghost as `<track> - <name>.ghost` with driver=, and a README); Import takes zips or .ghost
+  files (an OpenFileDialog, or files after the folder on the command line; LBRA_GHOSTS_QUIET=1 for tests) into GHOSTS as
+  `<track> - <driver>.ghost`.
+- Also: a time trial's best lap goes into Best laps the moment it is over the line (RaceGame_TrialBest for every trial, not only an
+  endless one) -- a player's report: leaving a trial before its end lost the lap.
