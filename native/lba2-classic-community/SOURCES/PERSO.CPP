@@ -1,5 +1,6 @@
 #include "C_EXTERN.H"
 #include "MAPPACK.H"
+#include "FRAMEDUMP.H"
 
 #include <SYSTEM/INPUT_FLOW.H>
 #include <POLYGON/POLYFILT.H>
@@ -2206,6 +2207,10 @@ static bool ProfileNameOrExit(const char *name, const char *source) {
 static void ControlPrePresent(U32 *frameBuffer, U32 pitch, U32 width, U32 height,
                               const U8 *palette_rgb) {
     Control_ServiceListen();
+    /* (a video being recorded -- the console's framedump, FRAMEDUMP.CPP: the frame as the window gets it, before the console's
+       overlay) */
+    if (FrameDump_Active())
+        FrameDump_Frame(frameBuffer, pitch, width, height);
     /* A console screenshot asked for in a modal's own loop (a menu: the race game's pages,
        2026-10-17) -- the main loop's capture below never runs there. Log is the buffer about
        to be presented, as there. */

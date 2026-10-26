@@ -356,6 +356,59 @@ static void MixVoices(S16 *out, int numFrames) {
 static S16 mixChunkBuf[MIX_CHUNK_FRAMES * 2];
 static volatile U32 mixedFrames = 0; /* SampleMixedFrames: for logs only */
 
+/* Capture (FRAMEDUMP.CPP, a video of the game recorded frame by frame on the fixed-dt clock):
+   with LBA2_AUDIO_CAPTURE set the device is given silence -- nothing heard on the machine --
+   and, while a dump runs, the mixer is pulled by the dump instead, one game frame's worth of
+   samples a frame, so the effects keep step with the picture however slowly the frames go. */
+static int captureSilent = -1;     /* -1: the environment not read yet */
+static volatile int captureActive = 0;
+
+static int CaptureSilent(void) {
+    if (captureSilent < 0) {
+        const char *e = getenv("LBA2_AUDIO_CAPTURE");
+        captureSilent = (e && *e && *e != '0') ? 1 : 0;
+    }
+    return captureSilent;
+}
+
+void Sample_CaptureBegin(void) {
+    LockVoices();
+    captureActive = 1;
+    UnlockVoices();
+}
+
+void Sample_CaptureEnd(void) {
+    LockVoices();
+    captureActive = 0;
+    UnlockVoices();
+}
+
+/* The next numFrames stereo frames of the effects' mix (44100 Hz, S16) into out; 0 when there is no mixer. */
+S32 Sample_CaptureMix(S16 *out, S32 numFrames) {
+    if (!sampleStream) {
+        memset(out, 0, (size_t)numFrames * 2 * sizeof(S16));
+        return 0;
+    }
+    LockVoices();
+    S32 done = 0;
+    while (done < numFrames) {
+        S32 n = numFrames - done;
+        if (n > MIX_CHUNK_FRAMES)
+            n = MIX_CHUNK_FRAMES;
+        if (samplesPaused)
+            memset(out + done * 2, 0, (size_t)n * 2 * sizeof(S16));
+        else
+            MixVoices(out + done * 2, n);
+        done += n;
+    }
+    UnlockVoices();
+    return 1;
+}
+
+S32 Sample_CaptureRate(void) {
+    return SAMPLE_RATE;
+}
+
 static void SDLCALL SampleStreamCallback(void *userdata, SDL_AudioStream *stream,
                                          int additional_amount, int total_amount) {
     (void)userdata;
@@ -364,6 +417,7 @@ static void SDLCALL SampleStreamCallback(void *userdata, SDL_AudioStream *stream
     Crash_PrepareThread();
     if (samplesPaused || additional_amount <= 0)
         return;
+    const int silent = CaptureSilent();
     int bytesLeft = additional_amount;
     while (bytesLeft > 0) {
         int frames = bytesLeft / (2 * (int)sizeof(S16));
@@ -371,7 +425,15 @@ static void SDLCALL SampleStreamCallback(void *userdata, SDL_AudioStream *stream
             frames = MIX_CHUNK_FRAMES;
         if (frames <= 0)
             break;
+        if (silent && captureActive) {
+            memset(mixChunkBuf, 0, (size_t)frames * 2 * sizeof(S16));
+            SDL_PutAudioStreamData(stream, mixChunkBuf, frames * 2 * (int)sizeof(S16));
+            bytesLeft -= frames * 2 * (int)sizeof(S16);
+            continue;
+        }
         MixVoices(mixChunkBuf, frames);
+        if (silent)
+            memset(mixChunkBuf, 0, (size_t)frames * 2 * sizeof(S16));
         mixedFrames += (U32)frames;
         SDL_PutAudioStreamData(stream, mixChunkBuf, frames * 2 * (int)sizeof(S16));
         bytesLeft -= frames * 2 * (int)sizeof(S16);

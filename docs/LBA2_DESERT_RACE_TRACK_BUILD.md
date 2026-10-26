@@ -5022,3 +5022,19 @@ corners where that's quicker".
   for "press any key"; RACEGAME Nav/Step only looked at the pad with MyKey 0, so the way went unrecorded, Input stepped once, and the
   next pass took the still-held way for a new push and stepped again. Nav/Step follow the pad's way every pass and take a pad
   scancode in MyKey for no key; DoGameMenu's two pad readers (GAMEMENU) too.
+
+## Recording a video from inside the engine: framedump (2026-10-26)
+
+- The user: "Record an interesting video of game footage with clips from all tracks including showing off power ups to be uploaded
+  to YouTube". Console `framedump start <video.mp4> [seconds] [fps] [wall]` (FRAMEDUMP.CPP) pipes every presented frame -- the
+  engine's own, before the console's overlay; nothing of the screen is read -- to ffmpeg (LBA2_FFMPEG) as an x264 MP4, and the
+  effects' mix to `<video.mp4>.wav`. `framedump at <seconds> <command>` runs a console command on that frame of the recording
+  (`raceitem 9` at 3 s); `framedump stop` ends it early.
+- The game's own time: the dump arms the fixed-dt clock (16 ms a tick, as `rec start` arms it mid-session -- TimerRefHR kept, or a
+  race on the grid waited 27 s for its countdown), each frame is placed by that clock (repeated or left out to hold `fps`) and that
+  span of the effects mixed with it (AIL Sample_CaptureMix), so picture and sound keep step however slowly ffmpeg takes frames.
+  `wall` leaves the clock alone: a menu's loop never runs the tick hook that moves an armed clock.
+- LBA2_AUDIO_CAPTURE=1 gives the sound device silence (the effects mixed for the dump only: nothing heard on a shared machine);
+  LBA2_NO_ATTRACT=1 keeps the main menu from its idle demo (a test run's menu clock can reach the minute before a script picks).
+- The video's scripts (record.ps1, shoot.ps1, menu_shot.ps1, edit.py: 1080p60, captions, LBA2's CD track under the game's sound,
+  -14 LUFS) are scratch in E:\dump\TEMP\lbra\video.

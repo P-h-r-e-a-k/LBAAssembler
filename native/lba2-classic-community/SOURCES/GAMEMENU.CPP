@@ -2706,7 +2706,12 @@ S32 DoGameMenu(U16 *ptrmenu) {
 
         // rustine Démo non jouable ...
         if (ptrmenu == GameMainMenu) {
-            if ((TimerRefHR - chrono > 50 * 20 * 60)
+            /* (LBA2_NO_ATTRACT: no idle demo -- a recording run on the fixed-dt clock, FRAMEDUMP.CPP, whose menu clock
+               outruns the wall's and reached the minute before a script could pick a track) */
+            static int noAttract = -1;
+            if (noAttract < 0)
+                noAttract = getenv("LBA2_NO_ATTRACT") && *getenv("LBA2_NO_ATTRACT") && *getenv("LBA2_NO_ATTRACT") != '0';
+            if ((!noAttract && TimerRefHR - chrono > 50 * 20 * 60)
                     OR(CheckKey(K_D) AND(CheckKey(K_SHIFT) OR CheckKey(K_SHIFT_LEFT) OR CheckKey(K_SHIFT_RIGHT)))) {
 #ifdef DEMO
                 //                                if( SlideShow() )

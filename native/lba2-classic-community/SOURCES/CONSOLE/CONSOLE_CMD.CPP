@@ -2564,6 +2564,30 @@ static void cmd_raceplan(int argc, const char *argv[]) {
 
 /* raceitem <n>: Twinsen uses a race-track mod's power-up now (0 fuel, 1 protection, 2 lightning, 3 penguin, 4 super jet-pack, 5 oil);
    raceblast [cells]: a nitro penguin goes off that far ahead of his car (RACEMOD.CPP, tests). */
+/* framedump start <video.mp4> [seconds] [fps] | framedump stop: a video of the game recorded from inside it (FRAMEDUMP.CPP). */
+static void cmd_framedump(int argc, const char *argv[]) {
+    extern int FrameDump_Start(const char *path, int seconds, int fps, int wallClock);
+    extern void FrameDump_Stop(void);
+    extern int FrameDump_Active(void);
+    if (argc >= 3 && !strcmp(argv[1], "start")) {
+        const int ok = FrameDump_Start(argv[2], argc >= 4 ? atoi(argv[3]) : 0, argc >= 5 ? atoi(argv[4]) : 60,
+                                       argc >= 6 && !strcmp(argv[5], "wall"));
+        Console_Print("framedump: %s", ok ? "started" : "failed");
+    } else if (argc >= 4 && !strcmp(argv[1], "at")) {
+        extern int FrameDump_At(double seconds, const char *cmd);
+        char cmd[200] = "";
+        for (int i = 3; i < argc; i++) {
+            if (i > 3) strncat(cmd, " ", sizeof(cmd) - strlen(cmd) - 1);
+            strncat(cmd, argv[i], sizeof(cmd) - strlen(cmd) - 1);
+        }
+        Console_Print("framedump at %s: %s", argv[2], FrameDump_At(atof(argv[2]), cmd) ? cmd : "(full)");
+    } else if (argc >= 2 && !strcmp(argv[1], "stop")) {
+        FrameDump_Stop();
+        Console_Print("framedump: stopped");
+    } else {
+        Console_Print("framedump: %s", FrameDump_Active() ? "recording" : "idle");
+    }
+}
 static void cmd_raceitem(int argc, const char *argv[]) {
     extern void RaceMod_TestItem(int pu);
     if (argc < 2) { Console_Print("Usage: raceitem <0..5>"); return; }
@@ -2880,6 +2904,10 @@ void Console_RegisterAll(void) {
                               "lifetrace <objN> | lifetrace off",
                               "Logs the object's comportement/track/zone each frame and every LF_ "
                               "condition it evaluates.");
+    Console_RegisterCommandEx("framedump", cmd_framedump, "Record a video of the game from inside it (ffmpeg)",
+                              "framedump start <video.mp4> [seconds] [fps] [wall] | framedump at <seconds> <command> | framedump stop | framedump",
+                              "Every frame piped to ffmpeg (LBA2_FFMPEG) and the effects' mix to <video.mp4>.wav, placed by the "
+                              "engine's clock (run with --fixed-dt for the game's own time); LBA2_AUDIO_CAPTURE=1 silences the device.");
     Console_RegisterCommandEx("raceitem", cmd_raceitem, "Race-track test: Twinsen uses a power-up now", "raceitem <0..5>",
                               "0 fuel, 1 protection, 2 lightning, 3 penguin, 4 super jet-pack, 5 oil (RACEMOD.CPP).");
     Console_RegisterCommandEx("raceblast", cmd_raceblast, "Race-track test: a nitro penguin goes off ahead of the car", "raceblast [cells]",
