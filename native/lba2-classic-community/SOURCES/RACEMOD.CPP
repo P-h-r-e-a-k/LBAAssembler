@@ -4825,6 +4825,8 @@ double RaceMod_PlanLap(double topPct, double accelPct, double brakePct, double s
 // both, 2026-10-25.)
 static T_RACE_OPPONENT s_autoLine;
 static int s_autoShort = 0;
+static unsigned s_shortSkip = 0;           // the raised road's branches autoshort leaves out though shorter: slower to drive (BuildAutoLine)
+static unsigned s_shortForce = 0;          // ... or, when it names some (autoshort's `branches`, 1 the first), those and no others, over the line's start too
 #define RACE_SHORT_GAIN 0.9                // a branch taken when it is under this share of the way round
 #define RACE_SHORT_REACH (12 * 512.0)     // a teleporter taken only this near the line (driven straight there) ...
 #define RACE_SHORT_LEAD 1.0                // ... the line left this many times that far before the point nearest it (a turn in, not a corner)
@@ -4856,25 +4858,63 @@ static void FinishAutoLine(const T_RACE_OPPONENT *g, int m);
 typedef struct { int From, To, Kind, Which; } T_RACE_CUT;   // the guide's points it leaves after and joins at; 0 a branch, 1 a teleporter,
                                                              // 2 a rail opening
 
+// The racing line turned round to start at its point `off` (a copy: its points, bends and speeds; its distances from there) -- for a
+// branch over the line's start: the line the pilot drives then starts where the branch comes back to it, and ends where it leaves.
+static void RotatedLine(const T_RACE_OPPONENT *g, int off, T_RACE_OPPONENT *r) {
+    memset(r, 0, sizeof(*r));
+    const int n = g->Count;
+    r->X = (S32 *)malloc(n * sizeof(S32)); r->Z = (S32 *)malloc(n * sizeof(S32)); r->Y = (S32 *)malloc(n * sizeof(S32));
+    r->V = (S32 *)malloc(n * sizeof(S32)); r->R = (S32 *)malloc(n * sizeof(S32)); r->Cum = (double *)malloc((n + 1) * sizeof(double));
+    if (!r->X || !r->Z || !r->Y || !r->V || !r->R || !r->Cum) return;
+    for (int i = 0; i < n; i++) {
+        const int j = (i + off) % n;
+        r->X[i] = g->X[j]; r->Z[i] = g->Z[j]; r->Y[i] = g->Y[j]; r->V[i] = g->V[j]; r->R[i] = g->R[j];
+    }
+    r->Cum[0] = 0;
+    for (int i = 1; i <= n; i++) r->Cum[i] = r->Cum[i - 1] + hypot((double)r->X[i % n] - r->X[i - 1], (double)r->Z[i % n] - r->Z[i - 1]);
+    r->Count = n; r->Length = r->Cum[n];
+    r->Top = g->Top; r->Grip = g->Grip; r->Pace = g->Pace;
+}
+
 static void BuildShortLine(void) {
     FreeAutoLine();
     const T_RACE_OPPONENT *g = Guide();
     if (!g || !g->R || g->Count < 3) { Log_Info("[racemod] autoshort: no racing line"); return; }
     T_RACE_CUT cuts[RACE_MAX_BRANCHES + RACE_MAX_TELEPORTS + RACE_MAX_RAIL_OPEN];
     int n = 0, extra = 0;
+    // (a branch over the line's start, taken -- autoshort's `branches`, s_shortForce: the line turned round to start where the branch
+    // comes back to it, and the cuts found again on it -- Wannies Island's high leap onto the lap above, the user asking for it to be
+    // tried, 2026-10-26)
+    T_RACE_OPPONENT rot;
+    memset(&rot, 0, sizeof(rot));
+    for (int pass = 0; pass < 2; pass++) {
+    n = 0; extra = 0;
+    int turn = -1;
     for (int b = 0; b < s_nbBranches; b++) {
         const T_RACE_BRANCH *br = &s_branches[b];
         double way = RaisedStep(br->From, br->First) + RaisedStep(br->Last, br->To), round = 0;
         for (int i = br->First; i < br->Last; i++) way += RaisedStep(i, i + 1);
         for (int i = br->From; i != br->To && s_nbLap > 1; i = (i + 1) % s_nbLap) round += RaisedStep(i, (i + 1) % s_nbLap);
         const int from = NearestOnLine(g, s_raised[br->From].X, s_raised[br->From].Y, s_raised[br->From].Z);
-        const int to = NearestOnLine(g, s_raised[br->To].X, s_raised[br->To].Y, s_raised[br->To].Z);
-        const int take = way < RACE_SHORT_GAIN * round && from >= 0 && to > from;
+        int to = NearestOnLine(g, s_raised[br->To].X, s_raised[br->To].Y, s_raised[br->To].Z);
+        // (on the line turned round: the branch comes back to its start -- its end)
+        if (pass && to == 0 && from > 0) to = g->Count;
+        const int slower = (s_shortSkip >> b) & 1, forced = (s_shortForce >> b) & 1;
+        const int wraps = from >= 0 && to >= 0 && to <= from;
+        if (forced && wraps && !pass && !s_sprint && turn < 0) turn = to;
+        const int take = from >= 0 && !wraps && (s_shortForce ? forced : way < RACE_SHORT_GAIN * round && !slower);
         Log_Info("[racemod] autoshort: branch %d, %.0f cells against %.0f the way round%s", b + 1, way / 512, round / 512,
-                 take ? ": taken" : to <= from ? ": over the line's start -- left" : ": not shorter -- left");
+                 take ? (forced ? ": taken, as asked" : ": taken") : wraps ? ": over the line's start -- left" : s_shortForce ? ": not asked for -- left" : slower ? ": shorter, but slower to drive -- left"
+                 : ": not shorter -- left");
         if (!take) continue;
         cuts[n].From = from; cuts[n].To = to; cuts[n].Kind = 0; cuts[n].Which = b; n++;
         extra += br->Last - br->First + 1;
+    }
+    if (turn < 0) break;
+    RotatedLine(g, turn, &rot);
+    if (!rot.Cum) break;
+    g = &rot;
+    Log_Info("[racemod] autoshort: the line turned round to start at its point %d, where the branch over its start comes back", turn);
     }
     for (int k = 0; k < s_nbTeleports; k++) {
         const T_RACE_TELEPORT *t = &s_teleports[k];
@@ -4921,12 +4961,12 @@ static void BuildShortLine(void) {
     // (in the order the line meets them; one overlapping another left out)
     for (int i = 1; i < n; i++) for (int j = i; j > 0 && cuts[j].From < cuts[j - 1].From; j--) { const T_RACE_CUT c = cuts[j]; cuts[j] = cuts[j - 1]; cuts[j - 1] = c; }
     for (int i = 1; i < n; i++) if (cuts[i].From < cuts[i - 1].To) { for (int j = i; j + 1 < n; j++) cuts[j] = cuts[j + 1]; n--; i--; }
-    if (!n) { Log_Info("[racemod] autoshort: no shortcut on this track -- the racing line as it is"); return; }
+    if (!n) { Log_Info("[racemod] autoshort: no shortcut on this track -- the racing line as it is"); free(rot.X); free(rot.Z); free(rot.Y); free(rot.V); free(rot.R); free(rot.Cum); return; }
     const int cap = g->Count + extra + 4;
     T_RACE_OPPONENT *o = &s_autoLine;
     o->X = (S32 *)malloc(cap * sizeof(S32)); o->Z = (S32 *)malloc(cap * sizeof(S32)); o->Y = (S32 *)malloc(cap * sizeof(S32));
     o->V = (S32 *)malloc(cap * sizeof(S32)); o->R = (S32 *)malloc(cap * sizeof(S32)); o->Cum = (double *)malloc((cap + 1) * sizeof(double));
-    if (!o->X || !o->Z || !o->Y || !o->V || !o->R || !o->Cum) { FreeAutoLine(); return; }
+    if (!o->X || !o->Z || !o->Y || !o->V || !o->R || !o->Cum) { FreeAutoLine(); free(rot.X); free(rot.Z); free(rot.Y); free(rot.V); free(rot.R); free(rot.Cum); return; }
     int m = 0, c = 0;
     for (int i = 0; i < g->Count; i++) {
         if (c < n && i > cuts[c].From && i < cuts[c].To) continue;
@@ -4950,6 +4990,7 @@ static void BuildShortLine(void) {
     }
     FinishAutoLine(g, m);
     Log_Info("[racemod] autoshort: %d shortcut(s) taken -- the line %.0f cells (the racing line's %.0f), %d points", n, o->Length / 512, g->Length / 512, m);
+    free(rot.X); free(rot.Z); free(rot.Y); free(rot.V); free(rot.R); free(rot.Cum);
 }
 
 // The test pilot's line (s_autoLine), its `m` points placed: its bends, its distances and its speeds -- planned for the player's car, its
@@ -4965,16 +5006,27 @@ static void FinishAutoLine(const T_RACE_OPPONENT *g, int m) {
         const double cross = fabs((bx - ax) * (cz - az) - (bz - az) * (cx - ax));
         const double r = cross > 1e-6 ? ab * bc * ca / (2 * cross) : 1e7;
         o->R[i] = (S32)(r > 1e7 ? 1e7 : r);
-        // (the racing line's own point i -- the same line, a point moved across the road or not: its radius has a banked bend's banking in
-        // it, as much more than the circle's through its points as the banking gives -- moved, the line's new circle times as much)
-        if (m == g->Count && g->R) {
-            const double gax = g->X[a], gaz = g->Z[a], gbx = g->X[i], gbz = g->Z[i], gcx = g->X[b], gcz = g->Z[b];
+        // (the racing line's point there -- its own point i on the same line, a point moved across the road or not, or on a line with
+        // shortcuts spliced in the racing line's nearest: its radius has a banked bend's banking in it, as much more than the circle's
+        // through its points as the banking gives -- here the line's own circle times as much. Without it a shortcut's line round
+        // Wannies Island's banked rollercoaster planned every bend as flat: 20-25 s laps against the racing line's 11.5, 2026-10-26)
+        if (g->R && g->Count > 2) {
+            int j = i;
+            if (m != g->Count) {
+                double bd = 1e30;
+                for (int k = 0; k < g->Count; k++) {
+                    const double d = LineDistance(g, k, o->X[i], o->Y[i], o->Z[i]);
+                    if (d < bd) { bd = d; j = k; }
+                }
+            }
+            const int n = g->Count, ga = s_sprint ? (j ? j - 1 : 0) : (j + n - 1) % n, gb = s_sprint ? (j + 1 < n ? j + 1 : n - 1) : (j + 1) % n;
+            const double gax = g->X[ga], gaz = g->Z[ga], gbx = g->X[j], gbz = g->Z[j], gcx = g->X[gb], gcz = g->Z[gb];
             const double gab = hypot(gbx - gax, gbz - gaz), gbc = hypot(gcx - gbx, gcz - gbz), gca = hypot(gax - gcx, gaz - gcz);
             const double gcross = fabs((gbx - gax) * (gcz - gaz) - (gbz - gaz) * (gcx - gax));
             const double gr = gcross > 1e-6 ? gab * gbc * gca / (2 * gcross) : 1e7;
-            const double bank = gr < 1e7 && g->R[i] > gr ? g->R[i] / gr : 1;
+            const double bank = gr < 1e7 && g->R[j] > gr ? g->R[j] / gr : 1;
             const double rr = (r > 1e7 ? 1e7 : r) * bank;
-            o->R[i] = o->X[i] == g->X[i] && o->Z[i] == g->Z[i] ? g->R[i] : (S32)(rr > 1e7 ? 1e7 : rr);
+            o->R[i] = o->X[i] == g->X[j] && o->Z[i] == g->Z[j] ? g->R[j] : (S32)(rr > 1e7 ? 1e7 : rr);
         }
     }
     o->Cum[0] = 0;
@@ -5154,15 +5206,35 @@ static void CopyGuideLine(void) {
 static void BuildAutoLine(void) {
     FreeAutoLine();
     s_autoIndex = -1;
-    if (s_autoShort) BuildShortLine();
+    if (s_autoShort) {
+        // (each branch the line takes, left out in turn: kept out when the line's perfect lap is quicker without it -- shorter isn't always
+        // quicker: Wannies Island's way through the giant frog, 68 cells against 181, planned 21.2 s a lap against the racing line's 12,
+        // and driven so, 2026-10-26. The teleporters are in both lines alike.)
+        s_shortSkip = 0;
+        BuildShortLine();
+        double best = s_autoLine.Count ? AutoLineLap(&s_autoLine) : 0;
+        for (int b = 0; b < s_nbBranches && b < 31 && s_autoLine.Count; b++) {
+            s_shortSkip |= 1u << b;
+            FreeAutoLine();
+            BuildShortLine();
+            const double lap = s_autoLine.Count ? AutoLineLap(&s_autoLine) : 0;
+            if (!s_autoLine.Count) CopyGuideLine();
+            const double without = s_autoLine.Count ? (lap > 0 ? lap : AutoLineLap(&s_autoLine)) : 0;
+            if (without > 0 && without < best) { best = without; Log_Info("[racemod] autoshort: branch %d left out -- the lap planned %.2f s without it", b + 1, without); }
+            else s_shortSkip &= ~(1u << b);
+        }
+        FreeAutoLine();
+        BuildShortLine();
+    }
     // (no shortcut to take -- BuildShortLine leaves none -- or none asked for: the racing line's copy)
     if (!s_autoLine.Count && (s_autoSmooth || s_autoSlide)) CopyGuideLine();
     if (s_autoSmooth && s_autoLine.Count) SmoothAutoLine(Guide());
     if (s_autoLine.Count) Log_Info("[racemod] the pilot's line: %.0f cells, its perfect lap %.2f s", s_autoLine.Length / 512, AutoLineLap(&s_autoLine));
 }
 
-void RaceMod_AutoShort(int on) {
+void RaceMod_AutoShort(int on, unsigned force) {
     s_autoShort = on;
+    s_shortForce = force;
     BuildAutoLine();
     Log_Info("[racemod] autoshort %s", on && s_autoLine.Count ? "on" : "off");
 }
@@ -10833,7 +10905,7 @@ U32 RaceMod_FilterInput(U32 input) {
     return input;
 }
 
-// GERELIFE.CPP LM_CINEMA_MODE: no cinema while a race is on -- Twinsen in his car on a track with a start line, or put in it as the scene
+// GERELIFE.CPP LM_CINEMA_MODE, LM_PLAY_ACF: no cinema and no film while a race is on -- Twinsen in his car on a track with a start line, or put in it as the scene
 // opens (start_in_car=). A scene of LBA2's that a track's island is made on can start one in its scripts -- Wannies Island's start scene
 // Twinsen's arrival, its destination the hall -- and the menu key skips a cinema into its destination.
 S32 RaceMod_NoCinema(void) {
@@ -16244,7 +16316,7 @@ static void ResetTrack(void) {
     s_driveBody = s_driveAnim = s_driveSmall = s_driveShown = -1; s_driveSmallNow = 0;
     s_statAccel = s_statTop = s_statSteer = 1;
     free(s_autoV); s_autoV = NULL; s_autoVCount = 0;
-    FreeAutoLine(); s_autoShort = 0; s_autoSmooth = 0; s_autoSlide = 0; s_autoSliding = 0; s_autoSteerPlan = 1;
+    FreeAutoLine(); s_autoShort = 0; s_shortForce = 0; s_autoSmooth = 0; s_autoSlide = 0; s_autoSliding = 0; s_autoSteerPlan = 1;
     if (s_heroIsSmall && Comportement == C_BUGGY) InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroSmall = -1; s_heroIsSmall = 0;
     // (his painted buggy's bodies off him: the buggy's own again)

@@ -1783,6 +1783,14 @@ void DoLife(U8 numobj) {
 
             //---------------------------------------------------------------------------
         case LM_PLAY_ACF:
+            // (a race-track mod's race: the scene's film left out, as its cinema is -- Wannies Island's start scene plays the lift's,
+            // 20 s of it before every race and time trial there, 2026-10-26. RACEMOD.CPP RaceMod_NoCinema)
+            { extern S32 RaceMod_NoCinema(void);
+              if (RaceMod_NoCinema()) {
+                  Log_Info("[life] actor %d of scene %d: film %s left out (a race)", (int)numobj, (int)NumCube, (char *)PtrPrg);
+                  PtrPrg += strlen((char *)PtrPrg) + 1;
+                  break;
+              } }
             SaveTimer();
             if (!FlagFade)
                 FadeToBlackAndSamples(PtrPal);

@@ -2436,15 +2436,23 @@ static void cmd_autodrive(int argc, const char *argv[]) {
     Console_Print("autodrive: %s", atoi(argv[1]) ? "on" : "off");
 }
 
-/* autoshort <0|1>: the test pilot (autodrive) drives a line with the track's shortcuts taken -- the raised road's branches shorter than
-   the way round, the teleporters that come out further round the lap (RACEMOD.CPP BuildShortLine). For the game's Hard ghosts. */
+/* autoshort <0|1> [branches]: the test pilot (autodrive) drives a line with the track's shortcuts taken -- the raised road's branches
+   shorter than the way round, the teleporters that come out further round the lap (RACEMOD.CPP BuildShortLine). For the game's Hard
+   ghosts. `branches` (1 the first, comma-separated: "2", "1,2"): those branches and no others, over the line's start too -- to try one. */
 static void cmd_autoshort(int argc, const char *argv[]) {
-    extern void RaceMod_AutoShort(int on);
+    extern void RaceMod_AutoShort(int on, unsigned force);
     if (argc < 2) {
-        Console_Print("Usage: autoshort <0|1>");
+        Console_Print("Usage: autoshort <0|1> [branches]");
         return;
     }
-    RaceMod_AutoShort(atoi(argv[1]));
+    unsigned force = 0;
+    for (const char *p = argc > 2 ? argv[2] : ""; *p; p++)
+        if (*p >= '0' && *p <= '9') {
+            const int b = atoi(p);
+            if (b >= 1 && b <= 32) force |= 1u << (b - 1);
+            while (p[1] >= '0' && p[1] <= '9') p++;
+        }
+    RaceMod_AutoShort(atoi(argv[1]), force);
     Console_Print("autoshort: %s", atoi(argv[1]) ? "on" : "off");
 }
 
@@ -2918,7 +2926,7 @@ void Console_RegisterAll(void) {
                               "With a race-track mod running, changes the race camera's view as the V key does: 0 inside the "
                               "car, 1 just behind it, 2 further back. For headless tests.");
     Console_RegisterCommandEx("autoshort", cmd_autoshort, "Race-track test pilot: drive a line with the track's shortcuts taken",
-                              "autoshort <0|1>",
+                              "autoshort <0|1> [branches]",
                               "The autodrive's line with the raised road's branches that are shorter than the way round, and the "
                               "teleporters that come out further round the lap, spliced in (RACEMOD.CPP BuildShortLine).");
     Console_RegisterCommandEx("autoline", cmd_autoline, "Race-track test pilot: drive a line pulled tight across the raised road",

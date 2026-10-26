@@ -4946,3 +4946,31 @@ corners where that's quicker".
 - **Tested** (sandbox 3): Polar 3 runs (52.7 / 52.9 / 52.9 s, the respawn after each, the trial over after the third); Otringal: over the
   line, teleported back onto the grid and over it again -- "Missed checkpoint 3: the lap starts again", checkpoints from 1; Esc in the
   trial, "Restart the time trial", the trial again.
+
+## Extreme ghosts, the second day: Wannies Island and the pilot's lines (2026-10-26)
+
+- **First pass, all tracks** (xgen.ps1): 13 of 16 beat Hard by 3-13 %. The Elevator Platform, Wannies Island and the palace didn't.
+  The second pass (`-Second`: the Hard ghost's car and the Extreme ghost's, plain settings at 100-110 % besides slides, seeded with
+  the Extreme ghost so only a quicker lap replaces it) took the Elevator Platform to 10.69 s (Hard 11.33).
+- **Wannies Island**: Hard's 11.4 s laps were the racing line's; the pilot's line with autoshort took branch 1 (68 cells against 181)
+  and lapped in 21-25 s however it was driven -- shorter on the map, far slower on the rollercoaster. Fixed for the generator with
+  `-NoShort` (autoshort 0). In the engine:
+  - `BuildAutoLine` leaves out, one at a time, each branch whose leaving out plans the lap quicker (`s_shortSkip`; teleporters stay in
+    both). The plan didn't see Wannies' case (the racing line planned no quicker), so it changes nothing there, but holds elsewhere.
+  - `FinishAutoLine` takes each point's banking from the racing line's nearest point when the line has shortcuts spliced in (point
+    counts differ) -- before, a shortcut line planned every banked bend as flat.
+  - Tried and taken out again: the pilot slowing to come to the giant frog's mouth while it is open, as the opponents do (learning
+    how late it came). Its arrival was erratic (+-2.5 s), and the slowing cost more than the mouth did: the pace hardly matters on
+    Wannies (Easy at 60 % lapped 11.71 s, Hard at 100 % 11.43) -- what is quickest is driving on and taking the mouth as it comes.
+- On Wannies the slides and the line pulled tight cost time (14.8-16.7 s against the plain racing line's 12.2): the plain settings
+  at higher paces are its Extreme.
+- Also tried and taken out: the pilot braking as late as it can (only for a slower point ahead): no quicker on the Emerald Moon,
+  and on Wannies Island the speed it carried into the carried jumps cost 8-12 s a lap.
+- **Wannies Island's lift film** (the user: "the lift cut scene is displaying before every test, is this a bug?"): the start scene's
+  script plays ACF ASCENSEU (the lift, ~20 s) before every race and trial there. GERELIFE LM_PLAY_ACF now asks RaceMod_NoCinema
+  and leaves it out in a race, as LM_CINEMA_MODE is: "[life] actor 0 of scene 98: film ASCENSEU left out (a race)".
+- **The high leap** (the user: "None of your test laps on the Wannie's race track are taking the shorter jump route, perhaps this is
+  quicker?"): branch 2 runs over the line's start, and autoshort left every such branch. `autoshort 1 <branches>` now takes those
+  branches and no others (s_shortForce); one over the start turns the pilot's copy of the racing line round to start where the
+  branch comes back to it (RotatedLine) and splices it in at the end. Driven: the vampire's coffin 10.85 s (the racing line's best
+  11.36 s, the frog's way 21+ s) -- the Extreme ghost. The branch is 71 cells against 65 the way round but skips the climb.
