@@ -5063,3 +5063,13 @@ corners where that's quicker".
   its first point -- the car went onto the line itself, never crossed it, and the lap never began (Polar Island and The Palace, the two
   sprints). Now a sprint only goes back as far as its line goes, else keeps the track's own start (behind the line). Checked every
   track's time trial to "halfway round lap 1": all 16 start their lap (14 with the run-up, the two sprints from their own start).
+
+## A time trial's run-up doubled; Polar Island's own trial start (2026-10-26)
+
+- The user: "double how far back a car starts for a time trial, and let's set Polar as far back as we can do"; then "The Temple track
+  had the same issue as Polar island, so we need to start the car further back with this track too". RACE_TRIAL_RUNUP 10 -> 20 cells
+  (TrialStartSpot still walks down to 2 cells where the start line's cube or a drop cuts it short); the Temple of Bú: 20 cells.
+- A sprint's racing line begins on its start line, so it has no run-up to walk back along. New race-file key `trial_start=<cube x>
+  <cube z> <x> <y> <z> <beta>`: a time trial's own start, used before the run-up. LBRA's installer writes it (GameInstall.cs
+  `TrialStarts`) for Polar Island: 8 10 5888 1300 27136 2048 -- the dock straight's last grid row, 20.5 cells behind the line; probed
+  with the engine's own screenshots, the road's rounded end is about a cell further and the sea past it.

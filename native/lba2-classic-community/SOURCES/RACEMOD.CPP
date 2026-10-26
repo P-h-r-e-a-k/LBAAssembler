@@ -27,6 +27,7 @@
  *     minimap=1                  the mini-map in the display, bottom right (DrawMinimap; the race game's own setting decides there)
  *     startline=<cube x> <cube z> <x0> <z0> <x1> <z1> <dir x> <dir z>     cube-local ends, and the way a lap crosses it
  *     checkpoint=<the same>                                                  one per line, in the order a lap crosses them
+ *     trial_start=<cube x> <cube z> <x> <y> <z> <beta>   a time trial's start, where the line gives no run-up (a sprint's: Polar Island)
  *     opponent_path=<file>       lines "x z y speed [radius]": world units from the island's corner (32768 to a cube), from the start
  *                                line round; with the line's bend radius at each point the speeds are planned from the player's car,
  *                                without it the file's speeds are driven
@@ -419,6 +420,7 @@ typedef struct {
     S32 CubeX, CubeZ, X, Y, Z, Beta;
 } T_RACE_SPOT;
 static T_RACE_SPOT s_spots[RACE_MAX_SPOTS];
+static T_RACE_SPOT s_trialStart = {-1};            // trial_start=: a time trial's own start (its CubeX -1: none, the run-up found on the line)
 static int s_nbSpots = 0;
 static T_RACE_SPOT s_pits[RACE_MAX_SPOTS];
 static int s_nbPits = 0;
@@ -3430,6 +3432,9 @@ static void Load(const char *path, int carOnly = 0) {
         } else if (!strcmp(key, "pit")) {
             T_RACE_SPOT *g = &s_pits[s_nbPits];
             if (s_nbPits < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbPits++;
+        } else if (!strcmp(key, "trial_start")) {
+            if (sscanf(v, "%d %d %d %d %d %d", &s_trialStart.CubeX, &s_trialStart.CubeZ, &s_trialStart.X, &s_trialStart.Y, &s_trialStart.Z, &s_trialStart.Beta) != 6)
+                s_trialStart.CubeX = -1;
         } else if (!strcmp(key, "qualifying")) s_qualifying = atoi(v);
         else if (!strcmp(key, "grid_back")) s_gridBack = atoi(v);
         else if (!strcmp(key, "weather")) s_fineWeather = !strcmp(v, "fine");
@@ -5570,9 +5575,19 @@ static int Opponents(void) {
 // to speed as it crosses it -- as far back as that stays in the start line's cube (the scene the race starts in), no nearer than 2
 // cells. Its grid spot: the count-down as any grid's -- the Citadel storm's track, with no grid of its own, had none, the car standing
 // wherever its scene put it. (Placed a little over the line's own height, the road's: it settles onto it.)
-#define RACE_TRIAL_RUNUP (10 * 512.0)
+#define RACE_TRIAL_RUNUP (20 * 512.0)       // (10 till 2026-10-26: "double how far back a car starts for a time trial")
 static int s_trialSpot = 0;                // the start spot set so (the car taken to its scene, if the game starts in another: RaceMod_Frame)
 static void TrialStartSpot(void) {
+    // (the track's own, trial_start=: where the line gives no run-up -- a sprint's starts on its start line: Polar Island's, the
+    // dock's straight behind it, 2026-10-26: "set Polar as far back as we can do")
+    if (s_trialStart.CubeX >= 0) {
+        s_spots[0] = s_trialStart;
+        if (!s_nbSpots) s_nbSpots = 1;
+        s_trialSpot = 1;
+        Log_Info("[racemod] time trial: the car at the track's own trial start (%d,%d,%d in cube %d,%d), the count-down from there",
+                 (int)s_trialStart.X, (int)s_trialStart.Y, (int)s_trialStart.Z, s_trialStart.CubeX, s_trialStart.CubeZ);
+        return;
+    }
     const T_RACE_OPPONENT *g = Guide();
     if (!g || g->Count < 3 || g->Length <= 0) return;
     // (the line's point nearest the start line -- the segment across the road, which may be long: the Desert's is 10 cells)
@@ -16479,7 +16494,7 @@ static void ResetTrack(void) {
     s_lineY = s_lineHasY = 0; s_halfway = 0; s_nbCheckpoints = 0; s_next = 0; s_showCheckpoints = 0; s_checkpointAtFor = 0; s_missIndex = -1; s_missLap = -1; s_missAt = -1;
     s_messageUntil = 0;
     s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopHold = -1;
-    s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_trialSpot = 0;
+    s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_trialSpot = 0; s_trialStart.CubeX = -1;
     s_phase = PHASE_RACE; s_qualifying = 1; s_gridBack = 0; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
