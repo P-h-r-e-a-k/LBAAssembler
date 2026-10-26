@@ -5038,3 +5038,12 @@ corners where that's quicker".
   LBA2_NO_ATTRACT=1 keeps the main menu from its idle demo (a test run's menu clock can reach the minute before a script picks).
 - The video's scripts (record.ps1, shoot.ps1, menu_shot.ps1, edit.py: 1080p60, captions, LBA2's CD track under the game's sound,
   -14 LUFS) are scratch in E:\dump\TEMP\lbra\video.
+
+## A game ghost's time beaten with any ghost raced (2026-10-26)
+
+- A player: the Island of the Francos' Extreme ghost was "not unlocking when they beat the time". The Extreme ghost is there (30.28 s;
+  Hard 31.67 s) and racing the Hard ghost unlocks it (tested: 30.43 s, "You beat the Hard ghost! Extreme unlocked"); but GhostLapDone
+  only looked at the game's ghost times while one of them was raced -- a lap under 31.67 s with No ghost, Your best lap or another
+  person's ghost opened nothing. Now every time trial lap is held against the track's game ghosts (RaceMod_GhostFind modes 3, 4, 5, 7):
+  "You beat the Hard ghost's time! Extreme unlocked" (tested with ghost=0: 31.01 s). With no game ghost raced it speaks only of a level
+  not beaten before (RACEGAME `RaceGame_GhostBeatenLevel`), not of a known one every trial.

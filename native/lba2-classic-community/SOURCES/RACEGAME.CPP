@@ -2433,6 +2433,13 @@ const char *RaceGame_GhostBeaten(const char *level) {
     return opened;
 }
 
+// RACEMOD.CPP: the race's track's game's ghosts beaten so far: 0 none, 1 Easy .. 4 Extreme (0 outside the race game).
+int RaceGame_GhostBeatenLevel(void) {
+    if (!RaceGame_On() || s_raceSp < 0 || s_raceSp >= s_nbSp) return 0;
+    ReadSettings();
+    return s_beaten[s_raceSp];
+}
+
 // A special's race or time trial; then (a race on a track with levels) its difficulty, or (a time trial) its ghost; then the car -- Esc
 // there back to the difficulty or the ghost. Non-zero: the race is set up.
 static int ModePage(int sp) {

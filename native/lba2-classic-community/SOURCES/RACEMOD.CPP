@@ -14251,35 +14251,46 @@ static void GhostLapDone(S32 lap) {
     if (s_ghost.Lap && s_ghostMode > 0) { s_ghostSplitDiff = lap - s_ghost.Lap; s_ghostSplitAt = now; s_ghostLapDiffUntil = now + RACE_GHOST_SPLIT_MS; }
     // (the game's ghost to beat, beaten: said once a trial -- and again when a later lap beats a harder ghost's time too (2026-10-25, the
     // user: "If when racing an Easy ghost we beat the time for a harder ghost, let's unlock those too"))
-    if (s_ghost.Lap && s_ghost.Level[0] && lap < s_ghost.Lap) {
-        static const char *const levels[4] = {"Easy", "Medium", "Hard", "Extreme"};
-        int raced = 0;
+    // (and whichever ghost is raced -- none, the player's own, another person's: a lap quicker than a game's ghost's time beats it (2026-10-26,
+    // a player: the Island of the Francos' Extreme ghost "not unlocking when they beat the time" -- Hard's time beaten with no game's ghost
+    // raced opened nothing))
+    static const char *const levels[4] = {"Easy", "Medium", "Hard", "Extreme"};
+    int raced = -1;                     // the game's ghost raced: its level, -1 none
+    if (s_ghost.Lap && s_ghost.Level[0]) {
+        raced = 0;
         while (raced < 3 && SDL_strcasecmp(s_ghost.Level, levels[raced])) raced++;
-        int top = raced;
-        for (int k = raced + 1; k < 4; k++) {
-            char path[ADELINE_MAX_PATH];
-            S32 harder = 0;
-            if (RaceMod_GhostFind(s_ghost.Track, k < 3 ? 3 + k : 7, path, sizeof(path), &harder, NULL, 0, NULL, NULL, 0) && lap < harder) top = k;
+    }
+    int top = raced >= 0 && lap < s_ghost.Lap ? raced : -1;
+    char ghostTrack[sizeof(s_ghost.Track)];
+    if (raced >= 0) snprintf(ghostTrack, sizeof(ghostTrack), "%s", s_ghost.Track);
+    else GhostTrack(ghostTrack, sizeof(ghostTrack));
+    for (int k = raced + 1; k < 4; k++) {
+        char path[ADELINE_MAX_PATH];
+        S32 harder = 0;
+        if (RaceMod_GhostFind(ghostTrack, k < 3 ? 3 + k : 7, path, sizeof(path), &harder, NULL, 0, NULL, NULL, 0) && lap < harder) top = k;
+    }
+    // (no game's ghost raced: said only when it beats one not beaten before -- not a known one again every trial)
+    if (top >= 0 && raced < 0 && top + 1 <= RaceGame_GhostBeatenLevel()) top = -1;
+    if (top >= 0 && top + 1 > s_ghostBeaten) {
+        // (the race game keeps it, and opens the next level: Medium once Easy is beaten, Hard once Medium is -- RACEGAME.CPP GhostPage)
+        const char *opened = RaceGame_GhostBeaten(levels[top]);
+        char beat[64], text[140];
+        // (the levels beaten, the raced one to the hardest: "the Easy ghost", "Easy and Medium", "Easy, Medium and Hard" ...; no game's
+        // ghost raced: "the Hard ghost's time")
+        if (raced < 0) snprintf(beat, sizeof(beat), "the %s ghost's time", levels[top]);
+        else if (top == raced) snprintf(beat, sizeof(beat), "the %s ghost", levels[raced]);
+        else {
+            beat[0] = 0;
+            for (int k = raced; k <= top; k++)
+                snprintf(beat + strlen(beat), sizeof(beat) - strlen(beat), "%s%s", k == raced ? "" : k == top ? " and " : ", ", levels[k]);
         }
-        if (top + 1 > s_ghostBeaten) {
-            // (the race game keeps it, and opens the next level: Medium once Easy is beaten, Hard once Medium is -- RACEGAME.CPP GhostPage)
-            const char *opened = RaceGame_GhostBeaten(levels[top]);
-            char beat[64], text[140];
-            // (the levels beaten, the raced one to the hardest: "the Easy ghost", "Easy and Medium", "Easy, Medium and Hard" ...)
-            if (top == raced) snprintf(beat, sizeof(beat), "the %s ghost", levels[raced]);
-            else {
-                beat[0] = 0;
-                for (int k = raced; k <= top; k++)
-                    snprintf(beat + strlen(beat), sizeof(beat) - strlen(beat), "%s%s", k == raced ? "" : k == top ? " and " : ", ", levels[k]);
-            }
-            // (a later lap: only the harder ones it adds)
-            if (s_ghostBeaten > raced) snprintf(beat, sizeof(beat), "%s's time", levels[top]);
-            s_ghostBeaten = top + 1;
-            if (opened) snprintf(text, sizeof(text), "You beat %s! %s unlocked", beat, opened);
-            else snprintf(text, sizeof(text), "You beat %s!", beat);
-            Message(text);
-            Log_Info("[racemod] ghost: %s (%.2f s against %.2f s)", text, lap / 1000.0, s_ghost.Lap / 1000.0);
-        }
+        // (a later lap: only the harder ones it adds)
+        if (raced >= 0 && s_ghostBeaten > raced) snprintf(beat, sizeof(beat), "%s's time", levels[top]);
+        s_ghostBeaten = top + 1;
+        if (opened) snprintf(text, sizeof(text), "You beat %s! %s unlocked", beat, opened);
+        else snprintf(text, sizeof(text), "You beat %s!", beat);
+        Message(text);
+        Log_Info("[racemod] ghost: %s (%.2f s; the ghost raced %.2f s)", text, lap / 1000.0, s_ghost.Lap / 1000.0);
     }
     if (s_ghostRecLap != s_laps || s_ghostRec.N < 2) return;
     T_RACE_LAPGHOST *g = &s_ghostRec;
