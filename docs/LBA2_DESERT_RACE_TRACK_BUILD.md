@@ -5047,3 +5047,11 @@ corners where that's quicker".
   person's ghost opened nothing. Now every time trial lap is held against the track's game ghosts (RaceMod_GhostFind modes 3, 4, 5, 7):
   "You beat the Hard ghost's time! Extreme unlocked" (tested with ghost=0: 31.01 s). With no game ghost raced it speaks only of a level
   not beaten before (RACEGAME `RaceGame_GhostBeatenLevel`), not of a known one every trial.
+
+## The test pilot overtakes: autopass (2026-10-26)
+
+- The user, of the trailer: "lots of places ... where one car is directly behind the one in front instead of trying to over take".
+  The pilot drove the opponents' own line, so it sat in their wake. Console `autopass <0|1> [cells]` (RACEMOD `PassOffset`): a car
+  within six cells ahead and 1.7 cells either side of the pilot's lane takes the pilot out to the side the other leaves (up to `cells`,
+  1.2 by default; the trailer used 1.3), eased 30 units a tick, and back onto its line once it is by. Desert, from 6th on the grid:
+  1st in 17 s, the cars side by side through the dunes. For footage and tests only; nothing turns it on in play.

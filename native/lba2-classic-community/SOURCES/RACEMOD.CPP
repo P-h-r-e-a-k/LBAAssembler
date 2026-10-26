@@ -4740,6 +4740,52 @@ static double s_autoLook = 5 * 512;
 static double s_autoSide = 0;              // how far to the side of the line it drives (to the left of the way it runs, x east, z south)
 static double s_autoPace = 100;            // how fast (percent of the line's speed: a slower driver than the line's perfect one, the race's
                                            // levels' benchmark, 2026-10-17)
+// autopass (2026-10-26, the user, of the trailer's footage: "lots of places ... where one car is directly behind the one in front instead
+// of trying to over take"): a car close ahead in the pilot's lane takes it out to the side the other leaves, up to s_autoPass, and back
+// onto the line once it is by
+static double s_autoPass = 0;              // how far out it goes to pass (units; 0: it stays on its line)
+static double s_passOffset = 0;            // where it is now, to the left of the line (eased towards where it wants to be)
+static double s_passSide = 1;              // the side it went last (it keeps to it while a car is still beside)
+static int OpponentActor(const T_RACE_OPPONENT *o);
+
+void RaceMod_AutoPass(double cells) {
+    s_autoPass = cells > 0 ? cells * 512 : 0;
+    s_passOffset = 0;
+    Log_Info("[racemod] autopass %s (%.1f cells out)", s_autoPass > 0 ? "on" : "off", s_autoPass / 512);
+}
+
+// The pilot's way out round a car close ahead in its lane, to the left of the line (units): eased from where it is, a step a tick.
+static double PassOffset(const T_RACE_OPPONENT *o, int best, double wx, double wz) {
+    if (s_autoPass <= 0 || best < 0) return s_passOffset = 0;
+    double px, pz, py, pv, fdx, fdz;
+    PathAt(o, o->Cum[best], &px, &pz, &py, &pv, &fdx, &fdz);
+    const double fl = sqrt(fdx * fdx + fdz * fdz);
+    if (fl <= 0) return s_passOffset;
+    const double fx = fdx / fl, fz = fdz / fl, lx = fz, lz = -fx;   // (ahead, and to the left as the side offset has it)
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    double want = 0;
+    for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
+        const T_RACE_OPPONENT *op = &s_opp[n];
+        if (!op->Count || !op->Scenes) continue;
+        const int index = OpponentActor(op);
+        if (index < 0 || ListObjet[index].Obj.Y < -10000) continue;
+        const double rx = ListObjet[index].Obj.X + cx - wx, rz = ListObjet[index].Obj.Z + cz - wz;
+        const double along = rx * fx + rz * fz, lat = rx * lx + rz * lz;   // (from the car: ahead of it, to its left)
+        // (close ahead, or still beside after going out: within the lane it would hit)
+        if (along < -1.5 * 512 || along > 6 * 512 || fabs(lat) > 1.7 * 512) continue;
+        if (along < 0 && s_passOffset == 0) continue;
+        // (the side away from the other: its place to the line's left (lat + where the pilot is now) -- or the last side, near the middle)
+        const double other = lat + s_passOffset;
+        if (fabs(other) > 0.25 * 512) s_passSide = other > 0 ? -1 : 1;
+        want = s_passSide * s_autoPass;
+        break;
+    }
+    const double step = 30;            // (units a tick: a cell in about a quarter of a second at 60 ticks -- a lane change, not a swerve)
+    if (want > s_passOffset + step) s_passOffset += step;
+    else if (want < s_passOffset - step) s_passOffset -= step;
+    else s_passOffset = want;
+    return s_passOffset;
+}
 
 // How far (squared) a place is from point i of an opponent's line. With a raised road the lap passes over itself, so the height counts
 // too, and twice: the line's point on another level is then never the nearest.
@@ -4751,6 +4797,7 @@ static double LineDistance(const T_RACE_OPPONENT *o, int i, double wx, double wy
 void RaceMod_AutoDrive(int on, double lookCells, double sideCells) {
     s_auto = on;
     s_autoIndex = -1;
+    s_passOffset = 0;
     if (lookCells > 0) s_autoLook = lookCells * 512;
     s_autoSide = sideCells * 512;
     Log_Info("[racemod] autodrive %s (looking %.1f cells ahead, %.1f to the side)", on ? "on" : "off", s_autoLook / 512, s_autoSide / 512);
@@ -5342,7 +5389,8 @@ U32 RaceMod_AutoInput(void) {
     const double dl = sqrt(dx * dx + dz * dz);
     // (the test pilot's side offset is the pilot's own: the super jet-pack drives the line itself, as it does for a player -- with the
     // offset it carried the pilot's car off Mosquibees Island's plateau, 2026-10-16)
-    if (s_autoSide != 0 && dl > 0 && TimerRefHR >= s_jetUntil) { x += dz / dl * s_autoSide; z -= dx / dl * s_autoSide; }
+    const double side = s_autoSide + PassOffset(o, best, wx, wz);
+    if (side != 0 && dl > 0 && TimerRefHR >= s_jetUntil) { x += dz / dl * side; z -= dx / dl * side; }
     // (on a raised road, the point steered for kept inside the rail's hold, half a cell in: round a tight bend the point on along the line
     // is well inside the bend from the car -- the chord cuts the arc -- and where the line takes the bend near the inner rail the car was
     // steered for a point past the rail, drove into it nose first and stood there, pointing at it: Wannies Island's bend after lap point

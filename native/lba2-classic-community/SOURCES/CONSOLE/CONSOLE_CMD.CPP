@@ -2588,6 +2588,13 @@ static void cmd_framedump(int argc, const char *argv[]) {
         Console_Print("framedump: %s", FrameDump_Active() ? "recording" : "idle");
     }
 }
+/* autopass <0|1> [cells]: the test pilot takes a car close ahead in its lane on the side the other leaves (RACEMOD.CPP). */
+static void cmd_autopass(int argc, const char *argv[]) {
+    extern void RaceMod_AutoPass(double cells);
+    if (argc < 2) { Console_Print("Usage: autopass <0|1> [cells]"); return; }
+    RaceMod_AutoPass(atoi(argv[1]) ? (argc >= 3 ? atof(argv[2]) : 1.2) : 0);
+    Console_Print("autopass: %s", atoi(argv[1]) ? "on" : "off");
+}
 static void cmd_raceitem(int argc, const char *argv[]) {
     extern void RaceMod_TestItem(int pu);
     if (argc < 2) { Console_Print("Usage: raceitem <0..5>"); return; }
@@ -2957,6 +2964,10 @@ void Console_RegisterAll(void) {
                               "autoshort <0|1> [branches]",
                               "The autodrive's line with the raised road's branches that are shorter than the way round, and the "
                               "teleporters that come out further round the lap, spliced in (RACEMOD.CPP BuildShortLine).");
+    Console_RegisterCommandEx("autopass", cmd_autopass, "Race-track test pilot: overtake a car close ahead instead of following it",
+                              "autopass <0|1> [cells]",
+                              "A car within six cells ahead in the pilot's lane takes it out to the side the other leaves, up to "
+                              "`cells` (1.2) from its line, and back once it is by (RACEMOD.CPP PassOffset).");
     Console_RegisterCommandEx("autoline", cmd_autoline, "Race-track test pilot: drive a line pulled tight across the raised road",
                               "autoline <0|1> [margin cells]",
                               "The autodrive's line smoothed within the raised road's width, the bends cut as wide as the road "
