@@ -537,6 +537,7 @@ static void ApplyResolutionChoice(U32 w, U32 h) {
 }
 
 S32 MenuRelayoutReturns = 0;
+S32 (*MenuRedrawHook)(void) = NULL;
 
 void Menu_RepaintAfterWindowFit(void) {
     // (the switch showed the scene's palette -- ChoicePalette, Palette(PtrPal) -- and the menus are shown in the menu's own; before
@@ -2653,10 +2654,18 @@ S32 DoGameMenu(U16 *ptrmenu) {
         if (Res_ApplyWindowFit()) {
             Menu_RepaintAfterWindowFit();
             if (MenuRelayoutReturns) {
+                ptrmenu[0] = selected;
                 AsciiMode = FALSE;
                 return MENU_RELAYOUT;
             }
             flag = 1;
+        }
+        // (a race game's page whose own text has changed while the menu waits -- the updater's word on the Updates page: drawn again,
+        // MENU_RELAYOUT, the row chosen kept)
+        if (MenuRelayoutReturns && MenuRedrawHook && MenuRedrawHook()) {
+            ptrmenu[0] = selected;
+            AsciiMode = FALSE;
+            return MENU_RELAYOUT;
         }
 
         // Gamepad D-pad / left stick feed the same codes as keyboard arrows.

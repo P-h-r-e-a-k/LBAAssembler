@@ -4974,3 +4974,11 @@ corners where that's quicker".
   branches and no others (s_shortForce); one over the start turns the pilot's copy of the racing line round to start where the
   branch comes back to it (RotatedLine) and splices it in at the end. Driven: the vampire's coffin 10.85 s (the racing line's best
   11.36 s, the frog's way 21+ s) -- the Extreme ghost. The branch is 71 cells against 65 the way round but skips the climb.
+
+## The Updates page's word kept up to date (2026-10-26)
+
+- The user: the page "never seems to change from 'Checking for a new version...', but did install correctly on exit". The page drew
+  the updater's word (Update\status.txt) once, as its menu was entered, and the menu then waited for a key: the check's answer, written
+  20 s later, wasn't shown till something was pressed. GAMEMENU `MenuRedrawHook`: with MenuRelayoutReturns set, DoGameMenu asks it while
+  it waits and returns MENU_RELAYOUT when it says the page's text changed (the row chosen kept in the menu's first word -- the resize's
+  return now keeps it too). RACEGAME `UpdateWordChanged` looks at status.txt twice a second against the time the page drew.

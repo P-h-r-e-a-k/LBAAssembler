@@ -1660,6 +1660,16 @@ static const char *const s_updateHelp[3] = {
     "No weekly check: check here.",
 };
 #define RG_UPD_Y 222                        // the rows' centre (six rows: the header at 8, the text under them from 392 to 470)
+// The updater's word as the Updates page drew it (its time), and whether Update\status.txt has a newer one -- looked at twice a second
+// while the page's menu waits (GAMEMENU.CPP MenuRedrawHook)
+static long long s_updDrawnAt = 0;
+static S32 UpdateWordChanged(void) {
+    static S32 lastLook = 0;
+    if ((S32)TimerRefHR - lastLook >= 0 && (S32)TimerRefHR - lastLook < 500) return 0;
+    lastLook = TimerRefHR;
+    char said[400];
+    return UpdateStatus(said, sizeof(said)) != s_updDrawnAt;
+}
 static void UpdatesPage(void) {
     ReadSettings();
     s_updMenu[0] = 1;
@@ -1687,7 +1697,12 @@ static void UpdatesPage(void) {
         else if (said[0]) snprintf(status, sizeof(status), "%s", said);
         else status[0] = 0;
         if (status[0]) Wrapped(cx - 280, textY + lines * RG_LINE + 2, 560, RG_LINE, status, RG_GREY);
+        // (the updater's word watched while the menu waits: a new one -- the check's answer -- and the page is drawn again. Drawn only
+        // as the menu was entered, it said "Checking for a new version..." until a key was pressed, the check long over, 2026-10-26)
+        s_updDrawnAt = at;
+        MenuRedrawHook = UpdateWordChanged;
         const S32 select = Menu(s_updMenu);
+        MenuRedrawHook = NULL;
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return; }
         for (S32 i = 0; i < RG_UPD_ROWS; i++) if (s_updMenu[4 + 2 * i + 1] == (U16)select) s_updMenu[0] = (U16)i;
         if (select == RG_ID_WINDOW) ToggleDisplayFullscreen();
