@@ -303,6 +303,7 @@ S32 RaceMod_CarHit(void);
 const char *RaceMod_IslandFile(S32 island);
 S32 RaceMod_IslandPalette(S32 island);
 S32 RaceMod_IslandSky(S32 island);
+int RaceMod_NoSky(void);   // RACEMOD.CPP sky=0: the island's sky layer not drawn in this race (Wannies Island's road climbs through it)
 void RaceMod_Island(S32 island);
 double RaceMod_SpeedFactor(void);
 S32 RaceMod_Takeover(void);

@@ -124,6 +124,7 @@ const char *RaceMod_IslandFile(S32 island);
 // ... and the palette (RESS.HQR entry, an XPL) and sky (a SKYSEA entry) it is drawn with there, or -1: its island's own
 S32 RaceMod_IslandPalette(S32 island);
 S32 RaceMod_IslandSky(S32 island);
+int RaceMod_NoSky(void);
 
 // While racing, the hero's car carried round a vertical loop (the car file's loop=): non-zero when it is, with its new place in
 // *nx..*nz (DoAnimExt). Stands the car level again whenever nothing pitches it.

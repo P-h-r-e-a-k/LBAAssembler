@@ -420,7 +420,13 @@ typedef struct {
     S32 CubeX, CubeZ, X, Y, Z, Beta;
 } T_RACE_SPOT;
 static T_RACE_SPOT s_spots[RACE_MAX_SPOTS];
-static T_RACE_SPOT s_trialStart = {-1};            // trial_start=: a time trial's own start (its CubeX -1: none, the run-up found on the line)
+static T_RACE_SPOT s_trialStart = {-1};
+// map_road=<n> <x z>...: a road the mini-map draws that the race doesn't drive by -- the pit lanes on the ground (LBA Assembler's build,
+// RaceTrackBuilder's "pit" road; the user, 2026-10-26: "All tracks appear to be missing the pitlane"), island units, several lines a road
+#define RACE_MAP_ROADS 4
+#define RACE_MAP_ROAD_POINTS 512
+static float s_mapRoadX[RACE_MAP_ROADS][RACE_MAP_ROAD_POINTS], s_mapRoadZ[RACE_MAP_ROADS][RACE_MAP_ROAD_POINTS];
+static int s_mapRoadN[RACE_MAP_ROADS];            // trial_start=: a time trial's own start (its CubeX -1: none, the run-up found on the line)
 static int s_nbSpots = 0;
 static T_RACE_SPOT s_pits[RACE_MAX_SPOTS];
 static int s_nbPits = 0;
@@ -960,6 +966,10 @@ static char s_fileName[32] = "";
 // island_palette=<RESS entry>, island_sky=<RESS entry>: and drawn in that palette (an XPL) under that sky -- an island of LBA Assembler's
 // with a look of its own (the Temple of Bú, ported from LBA1: RESS_XPL0 + 13 and RESS_SKYSEA0 + 13, slots the retail file leaves empty)
 static int s_filePalette = -1, s_fileSky = -1;
+// sky=0: the island's sky layer (EXTFUNC.CPP DrawSkySeaZBuf, a flat sheet at the island's Sky_Y) not drawn in this race -- Wannies Island's
+// road climbs to 25,000, up through it (the user, 2026-10-26: "Let's remove the sky layer for Wannies Island")
+static int s_noSky = 0;
+int RaceMod_NoSky(void) { return RaceMod_Active() && s_noSky; }
 // Vertical loops (loop=, RaceMod_Loop): a ring standing on the road, its foot at the lap's point there (X, Y, Z, cube-local) and its plane
 // along the lap's way (DirX, DirZ, a unit vector). R: from the ring's middle to its road surface. Shift: how far across the car comes
 // down from where it went in (+ to the right of the way, as the builder's lanes are: in on the left, out on the right, past the ring's
@@ -3432,6 +3442,20 @@ static void Load(const char *path, int carOnly = 0) {
         } else if (!strcmp(key, "pit")) {
             T_RACE_SPOT *g = &s_pits[s_nbPits];
             if (s_nbPits < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbPits++;
+        } else if (!strcmp(key, "map_road")) {
+            char *q = v;
+            const int r = (int)strtol(q, &q, 10);
+            if (r >= 0 && r < RACE_MAP_ROADS)
+                for (;;) {
+                    char *e;
+                    const double x = strtod(q, &e);
+                    if (e == q) break;
+                    q = e;
+                    const double z = strtod(q, &e);
+                    if (e == q || s_mapRoadN[r] >= RACE_MAP_ROAD_POINTS) break;
+                    q = e;
+                    s_mapRoadX[r][s_mapRoadN[r]] = (float)x; s_mapRoadZ[r][s_mapRoadN[r]] = (float)z; s_mapRoadN[r]++;
+                }
         } else if (!strcmp(key, "trial_start")) {
             if (sscanf(v, "%d %d %d %d %d %d", &s_trialStart.CubeX, &s_trialStart.CubeZ, &s_trialStart.X, &s_trialStart.Y, &s_trialStart.Z, &s_trialStart.Beta) != 6)
                 s_trialStart.CubeX = -1;
@@ -3482,6 +3506,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "island_palette")) s_filePalette = atoi(v);
         else if (!strcmp(key, "music")) { snprintf(s_music, sizeof(s_music), "%s", v); s_musicSet = 0; }
         else if (!strcmp(key, "island_sky")) s_fileSky = atoi(v);
+        else if (!strcmp(key, "sky")) s_noSky = !atoi(v);
         else if (!strcmp(key, "loop")) {
             T_RACE_LOOP *l = &s_loops[s_nbLoops];
             double dx, dz, gap, band = 1.3 * 512, camera = 1;
@@ -6359,6 +6384,11 @@ static S32 EntityEntry(S32 entity, U8 what, S32 generic) {
 
 // ---- where she stands: on the road for the start, hopping off it, on her plinth
 
+// Whether the cars glance off her (MarshalPost, MarshalKeepOff): no since 2026-10-26 -- the user: "The magicians assistant on the start line
+// for the Temple track, let's remove her collision so cars can drive through her". (The opponents still keep to their grid columns past
+// her: MarshalColumn.)
+#define RACE_MARSHAL_SOLID 0
+
 // Whether she stands on the road now (for the start, or hopping off it): nothing drives through her.
 static int MarshalOnRoad(void) {
     const T_RACE_MARSHAL *m = &s_marshal;
@@ -6393,7 +6423,7 @@ static int MarshalOff(double *x, double *z, double y, double was) {
 // post his car glances off (MarshalOff), going on at its speed.
 static void MarshalPost(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     T_RACE_MARSHAL *m = &s_marshal;
-    if (!MarshalOnRoad()) return;
+    if (!RACE_MARSHAL_SOLID || !MarshalOnRoad()) return;
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     double x = *nx + cx, z = *nz + cz, fx, fz;
     MarshalWay(&fx, &fz);
@@ -6429,7 +6459,7 @@ static void MarshalColumn(int n, T_RACE_OPPONENT *o, double x, double z) {
 // -- were its column too near her; the nearest it comes kept for the log.
 static void MarshalKeepOff(int n, T_OBJET *car) {
     T_RACE_MARSHAL *m = &s_marshal;
-    if (!MarshalOnRoad()) return;
+    if (!RACE_MARSHAL_SOLID || !MarshalOnRoad()) return;
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     double x = car->Obj.X + cx, z = car->Obj.Z + cz, fx, fz;
     MarshalWay(&fx, &fz);
@@ -16090,6 +16120,15 @@ static void MapLayout(void) {
         if (z < s_mapZ0) s_mapZ0 = z;
         if (z > s_mapZ1) s_mapZ1 = z;
     }
+    // (and the pit lanes beside it, map_road=)
+    for (int r = 0; r < RACE_MAP_ROADS; r++)
+        for (int i = 0; i < s_mapRoadN[r]; i++) {
+            const double x = s_mapRoadX[r][i], z = s_mapRoadZ[r][i];
+            if (x < s_mapX0) s_mapX0 = x;
+            if (x > s_mapX1) s_mapX1 = x;
+            if (z < s_mapZ0) s_mapZ0 = z;
+            if (z > s_mapZ1) s_mapZ1 = z;
+        }
     Log_Info("[racemod] the mini-map: %d road points%s, %.0f x %.0f units", n, closed ? " (a lap)" : "", s_mapX1 - s_mapX0, s_mapZ1 - s_mapZ0);
 }
 
@@ -16111,9 +16150,22 @@ static void MapStroke(double ax, double az, double bx, double bz, S32 r, U8 valu
         MapSpot((S32)floor(x0 + (x1 - x0) * t + 0.5), (S32)floor(y0 + (y1 - y0) * t + 0.5), r, value);
     }
 }
-// A start or finish line across the road, chequered (two pixels thick, its squares two long), two pixels past the road's edges
+// A start or finish line across the road, chequered (two pixels thick, its squares two long), two pixels past the road's edges -- across
+// the road where the guide line crosses it, not at its middle: a line much wider than the road (Celebration 2's on the ground, 9 cells,
+// the road two cells off its middle) was drawn beside it
 static void MapLine(const double *e, S32 r) {
     double cx = (e[0] + e[2]) / 2, cz = (e[1] + e[3]) / 2, hx = (e[2] - e[0]) / 2, hz = (e[3] - e[1]) / 2;
+    if (const T_RACE_OPPONENT *o = Guide()) {
+        const double sx = e[2] - e[0], sz = e[3] - e[1], s2 = sx * sx + sz * sz;
+        double bd = 3.0 * 512 * 3 * 512, bx = cx, bz = cz;
+        for (int i = 0; s2 > 0 && i < o->Count; i++) {
+            double u = ((o->X[i] - e[0]) * sx + (o->Z[i] - e[1]) * sz) / s2;
+            u = u < 0 ? 0 : u > 1 ? 1 : u;
+            const double px = e[0] + sx * u, pz = e[1] + sz * u, d = (px - o->X[i]) * (px - o->X[i]) + (pz - o->Z[i]) * (pz - o->Z[i]);
+            if (d < bd) { bd = d; bx = px; bz = pz; }
+        }
+        cx = bx; cz = bz;
+    }
     const double half = sqrt(hx * hx + hz * hz) * s_mapK, want = r + 2.5;
     if (half <= 0) return;
     hx *= want / half; hz *= want / half;
@@ -16127,6 +16179,107 @@ static void MapLine(const double *e, S32 r) {
             const S32 px = x + (steep ? k : 0), py = y + (steep ? 0 : k);
             MapSpot(px, py, 0, ((steep ? py : px) / 2 + k) & 1 ? MAP_LINE_A : MAP_LINE_B);
         }
+    }
+}
+
+// What the map draws besides the road's points, edge then asphalt as the road: the pit lanes -- the raised road's strip beside it (the
+// Emerald Moon's, the Temple of Bu's) and map_road='s on the ground (LBA Assembler's build writes them) --, the raised road's gaps where
+// a vertical loop stands (its points have no floor in the ring: the Emerald Moon's four), a circle where a roulette wheel turns (Otringal's:
+// the lap drops through its hole, no road there), and the guide line where it runs on the ground off the raised road (the Celebration
+// tracks' start straights, their start lines drawn over nothing).
+// Pass 0 the edge, 1 the asphalt, in step with the road's own (MapMask): an edge drawn after the road's asphalt crossed it in white.
+static void MapExtras(int pass) {
+    {
+        const S32 r = pass ? s_mapRoad : s_mapRoad + 1;
+        const U8 value = pass ? MAP_ROAD : MAP_EDGE;
+        if (s_nbRaised > 1 && !MapGuideOverRaised()) {
+            // the strip: its middle across, the way the raised road's own segment runs
+            for (int i = 0; i + 1 < s_nbRaised; i++) {
+                const T_RACE_RAISED *a = &s_raised[i], *c = a + 1;
+                if (a->Half <= 0 || c->Half <= 0 || a->StripHi <= a->StripLo || c->StripHi <= c->StripLo) continue;
+                const double sx = c->X - a->X, sz = c->Z - a->Z, len = sqrt(sx * sx + sz * sz);
+                if (len <= 0) continue;
+                const double nx = -sz / len, nz = sx / len, ma = (a->StripLo + a->StripHi) / 2.0, mc = (c->StripLo + c->StripHi) / 2.0;
+                MapStroke(a->X + nx * ma, a->Z + nz * ma, c->X + nx * mc, c->Z + nz * mc, r, value);
+            }
+            // the raised road widened by the start line for the pits (Volcano Island's deck, Otringal's): drawn as wide, its usual width's
+            // a third more, the run of them the start line is on
+            if (s_car.HasLine) {
+                static S32 halves[64];
+                int nh = 0;
+                for (int i = 0; i < s_nbRaised && nh < 64; i += s_nbRaised / 64 + 1) if (s_raised[i].Half > 0) halves[nh++] = s_raised[i].Half;
+                S32 usual = 0;
+                for (int k = 0; k < nh; k++) {
+                    int same = 0, best = 0;
+                    for (int m = 0; m < nh; m++) same += halves[m] == halves[k];
+                    for (int m = 0; m < nh; m++) { int c = 0; for (int q = 0; q < nh; q++) c += halves[q] == halves[m]; if (c > best) best = c; }
+                    if (same == best) { usual = halves[k]; break; }
+                }
+                const double lx = s_car.LineCubeX * 32768.0 + (s_car.LineX0 + s_car.LineX1) / 2.0, lz = s_car.LineCubeZ * 32768.0 + (s_car.LineZ0 + s_car.LineZ1) / 2.0;
+                // (only the wide run the start line is on -- the lava lake's causeways are wide too)
+                int near = -1;
+                double nd = 4.0 * 512 * 4 * 512;
+                for (int i = 0; i < s_nbRaised; i++) {
+                    const double d = (s_raised[i].X - lx) * (s_raised[i].X - lx) + (s_raised[i].Z - lz) * (s_raised[i].Z - lz);
+                    if (s_raised[i].Half > usual * 4 / 3 && d < nd) { nd = d; near = i; }
+                }
+                if (usual > 0 && near >= 0) {
+                    int a0 = near, a1 = near;
+                    while (a0 > 0 && s_raised[a0 - 1].Half > usual * 4 / 3) a0--;
+                    while (a1 + 1 < s_nbRaised && s_raised[a1 + 1].Half > usual * 4 / 3) a1++;
+                    for (int i = a0; i < a1; i++) MapStroke(s_raised[i].X, s_raised[i].Z, s_raised[i + 1].X, s_raised[i + 1].Z, r * 2 + 1, value);
+                }
+            }
+            // a loop's gap: from the floor before it to the floor after it
+            for (int k = 0; k < s_nbLoops; k++) {
+                const double fx = s_loops[k].CubeX * 32768.0 + s_loops[k].X, fz = s_loops[k].CubeZ * 32768.0 + s_loops[k].Z;
+                int at = -1;
+                double bd = 1e30;
+                for (int i = 0; i < s_nbRaised; i++) {
+                    const double d = (s_raised[i].X - fx) * (s_raised[i].X - fx) + (s_raised[i].Z - fz) * (s_raised[i].Z - fz);
+                    if (d < bd) { bd = d; at = i; }
+                }
+                if (at < 0 || bd > 4096.0 * 4096.0) continue;
+                int a = at, b = at;
+                while (a > 0 && s_raised[a].Half <= 0) a--;
+                while (b + 1 < s_nbRaised && s_raised[b].Half <= 0) b++;
+                if (a != b && s_raised[a].Half > 0 && s_raised[b].Half > 0 && b - a < 200)
+                    MapStroke(s_raised[a].X, s_raised[a].Z, s_raised[b].X, s_raised[b].Z, r, value);
+            }
+            // the guide line where it is on the ground (a stretch of it off the raised road, joined to the road at its ends)
+            const T_RACE_OPPONENT *o = Guide();
+            if (o && o->Count > 1) {
+                int n = o->Count;
+                if (s_sprint) while (n > 2 && o->Cum[n - 1] > o->FinishS + 1) n--;
+                // (and a few points on into the raised road at each end of such a stretch: the road's own line is not the guide's there,
+                // and the two ended a pixel apart)
+                U8 *off = (U8 *)calloc((size_t)n, 1);
+                for (int i = 0; off && i < n; i++) {
+                    S32 f;
+                    int seg;
+                    double lat, t;
+                    off[i] = !RaisedAt(o->X[i], o->Z[i], o->Y[i] + 600, 0, &f, &seg, &lat, &t);
+                }
+                for (int i = 0; off && i < n; i++) {
+                    const int j = i + 1 < n ? i + 1 : s_sprint ? -1 : 0;
+                    if (j < 0) continue;
+                    int near = 0;
+                    for (int k = -3; k <= 4 && !near; k++) near = off[((i + k) % n + n) % n];
+                    if (near) MapStroke(o->X[i], o->Z[i], o->X[j], o->Z[j], r, value);
+                }
+                free(off);
+            }
+        }
+        // the pit lanes on the ground
+        for (int m = 0; m < RACE_MAP_ROADS; m++)
+            for (int i = 0; i + 1 < s_mapRoadN[m]; i++)
+                MapStroke(s_mapRoadX[m][i], s_mapRoadZ[m][i], s_mapRoadX[m][i + 1], s_mapRoadZ[m][i + 1], r, value);
+        // the roulette wheel: a ring at its wall
+        if (s_wheel.On && s_wheel.Rim > 0)
+            for (int k = 0; k < 64; k++) {
+                const double a0 = k * 2 * RACE_PI / 64, a1 = (k + 1) * 2 * RACE_PI / 64, rr = s_wheel.Rim * 0.92;
+                MapStroke(s_wheel.X + cos(a0) * rr, s_wheel.Z + sin(a0) * rr, s_wheel.X + cos(a1) * rr, s_wheel.Z + sin(a1) * rr, r, value);
+            }
     }
 }
 
@@ -16164,7 +16317,7 @@ static int MapMask(S32 width, S32 height, U32 sig) {
     s_mapRoad = side >= 200 ? 2 : 1;
     int closed;
     const int n = MapPoints(&closed);
-    for (int pass = 0; pass < 2; pass++)
+    for (int pass = 0; pass < 2; pass++) {
         for (int i = 0; i < n; i++) {
             const int j = i + 1 < n ? i + 1 : closed ? 0 : -1;
             if (j < 0 || !MapJoined(i, j)) continue;
@@ -16174,6 +16327,9 @@ static int MapMask(S32 width, S32 height, U32 sig) {
             MapPoint(j, &bx, &bz, &f);
             MapStroke(ax, az, bx, bz, pass ? s_mapRoad : s_mapRoad + 1, pass ? MAP_ROAD : MAP_EDGE);
         }
+        // (the user, 2026-10-26, of the maps: the pit lanes, the vertical loops' gaps, the roulette wheel's, the stretches on the ground)
+        MapExtras(pass);
+    }
     // (a branch of the raised road joined to the lap at its ends)
     for (int b = 0; b < s_nbBranches && s_nbRaised > 1; b++)
         for (int pass = 0; pass < 2; pass++) {
@@ -16495,6 +16651,8 @@ static void ResetTrack(void) {
     s_messageUntil = 0;
     s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopHold = -1;
     s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_trialSpot = 0; s_trialStart.CubeX = -1;
+    for (int r = 0; r < RACE_MAP_ROADS; r++) s_mapRoadN[r] = 0;
+    s_noSky = 0;
     s_phase = PHASE_RACE; s_qualifying = 1; s_gridBack = 0; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;

@@ -4755,7 +4755,13 @@ internal static class RaceTrackBuilder
         if (roads.Count > 1)
         {
             var pit = roads[1];
-            var best = Enumerable.Range(0, pit.Count).MinBy(i => Sq(pit.X[i] - x) + Sq(pit.Z[i] - z));
+            // (where the pit lane crosses the line itself -- level with it along the lap -- not its point nearest the line's middle: a
+            // short pit lane still moving out from the lap there (Mosquibees Island's) had its nearest point further along, nearer the
+            // lap, and the gantry's post stood in the pit lane, the user, 2026-10-26)
+            var level = Enumerable.Range(0, pit.Count).Where(i => Math.Abs((pit.X[i] - x) * nx + (pit.Z[i] - z) * nz) < 30).ToList();
+            var best = level.Count > 0
+                ? level.MinBy(i => Math.Abs((pit.X[i] - x) * dx + (pit.Z[i] - z) * dz))
+                : Enumerable.Range(0, pit.Count).MinBy(i => Sq(pit.X[i] - x) + Sq(pit.Z[i] - z));
             var across = (pit.X[best] - x) * nx + (pit.Z[best] - z) * nz;
             if (across > 0) right = Math.Max(right, across + pit.VergeHalf); else left = Math.Max(left, -across + pit.VergeHalf);
             if (across > 0) rightCurb = Math.Max(rightCurb, across + pit.CurbHalf); else leftCurb = Math.Max(leftCurb, -across + pit.CurbHalf);

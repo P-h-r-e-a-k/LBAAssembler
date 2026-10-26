@@ -5073,3 +5073,25 @@ corners where that's quicker".
   <cube z> <x> <y> <z> <beta>`: a time trial's own start, used before the run-up. LBRA's installer writes it (GameInstall.cs
   `TrialStarts`) for Polar Island: 8 10 5888 1300 27136 2048 -- the dock straight's last grid row, 20.5 cells behind the line; probed
   with the engine's own screenshots, the road's rounded end is about a cell further and the sea past it.
+
+## Mini-maps, the Mosquibees gantry, Wannies' sky, the Temple's flag marshal (2026-10-26)
+
+- The user: "All tracks appear to be missing the pitlane. Emerald Moon has gaps where the vertical loops are, Otringal has a gap where
+  the roulette wheel, let's add in a large circle to match it, Celebration 1 has a stretch of the pitlane missing where the car drives
+  on the ground, Let's remove the sky layer for Wannies Island, Mosquibees track has the post of the start/finish line in the middle of
+  the pitlane, this needs widening. Celebration 2, the start finish line that's on the ground isn't mapped. The magicians assistant on
+  the start line for the Temple track, let's remove her collision so cars can drive through her".
+- RACEMOD `MapExtras` draws, in step with the road's edge and asphalt passes: the raised road's strip (the Emerald Moon's and the Temple's
+  pit lanes); the new key `map_road=<n> <x z>...` (the build's "pit" road on the ground -- RaceTrackService `MapRoads`, RaceCarEngineFile:
+  Citadel 1 and 2, the Desert, Mosquibees); the raised road's wide run by the start line twice as thick (Volcano's and Otringal's pit
+  decks); a loop's floorless points bridged (the Emerald Moon's four rings); a ring at the roulette wheel's wall (Otringal); and the guide
+  line wherever it runs off the raised road's own floor at its height, a few points on into the road (the Celebration tracks' ground
+  straights). MapLine centres a start or finish line where the guide line crosses it (Celebration 2's ground line, 9 cells wide, the
+  road two cells off its middle).
+- Mosquibees' gantry: the start line's curbs took the pit lane's point nearest the line's middle -- on a short pit lane still moving out,
+  further along and nearer the lap -- so a post stood in the pit lane (posts 8.1 cells either side). Now the pit lane's point level with
+  the line along the lap: posts 11.3 cells either side, two cells past the pit lane.
+- `sky=0` (RACEMOD `RaceMod_NoSky`, EXTFUNC's two DrawSkySeaZBuf calls): no sky layer; LBRA's installer writes it for Wannies Island,
+  whose road climbs to 25,000, through the sheet (GameInstall.cs `NoSky`).
+- The Temple's flag marshal: RACE_MARSHAL_SOLID 0 -- MarshalPost and MarshalKeepOff no longer put cars out round her (the opponents
+  still keep their grid columns past her).

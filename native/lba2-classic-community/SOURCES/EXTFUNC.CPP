@@ -1254,7 +1254,7 @@ void AffGrilleExtArea(int x0, int z0, int x1, int z1) {
 
     ManageSystem();
 
-    if (RendererDrawSky)
+    if (RendererDrawSky && !RaceMod_NoSky())
         DrawSkySeaZBuf();
 
     ManageSystem();
@@ -1310,7 +1310,7 @@ void AffGrilleExt() {
 
     ManageSystem(); // for streaming
 
-    if (RendererDrawSky)
+    if (RendererDrawSky && !RaceMod_NoSky())
         DrawSkySeaZBuf();
 
     ManageSystem(); // for streaming

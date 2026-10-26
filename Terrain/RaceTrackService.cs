@@ -196,7 +196,11 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] bool? OnFoot = null,
         // RailOpens: where the raised road's rail lets a car go off its edge, down to the road under it (RACEMOD.CPP rail_open=), each [y0, y1,
         // then a polygon's corners x, z] in island units -- the Temple of Bú's spiral drop, since 2026-10-20
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? RailOpens = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? RailOpens = null,
+        // MapRoads: the roads the race's mini-map draws that the race doesn't drive by -- the pit lane on the ground (RaceTrackBuilder's
+        // "pit" road), each [x, z, x, z, ...] in world units (RACEMOD.CPP map_road=); since 2026-10-26, the user: "All tracks appear to be
+        // missing the pitlane"
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? MapRoads = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -1014,7 +1018,8 @@ internal static class RaceTrackService
                 : null,
             Marshal: report.Marshal,
             OnFoot: report.OnFoot ? true : null,
-            RailOpens: report.RailOpens.Count > 0 ? report.RailOpens.ToList() : null);
+            RailOpens: report.RailOpens.Count > 0 ? report.RailOpens.ToList() : null,
+            MapRoads: MapRoads(report));
     }
 
     // A machine gun on its knoll as the car file has it: its scene and actors, the muzzle (the gun stands 0.8 cells towards where it fires
@@ -1028,6 +1033,21 @@ internal static class RaceTrackService
         double mx = g.X * 512 + fx * (0.8 * 512 + 214) + fz * side, mz = g.Z * 512 + fz * (0.8 * 512 + 214) - fx * side, my = g.Top + 420;
         return placed.Take(3).Concat(new[] { (int)Math.Round(mx), (int)Math.Round(my), (int)Math.Round(mz) })
             .Concat(g.Targets.SelectMany(t => new[] { (int)Math.Round(t.X), (int)Math.Round(t.Z), (int)Math.Round(t.Y), (int)Math.Round(t.R) })).ToArray();
+    }
+
+    // The pit lanes as built (the report's "pit" roads), for the race's mini-map: [x, z, ...] world units, a point every cell or so
+    private static List<int[]>? MapRoads(RaceTrackReport report)
+    {
+        var roads = new List<int[]>();
+        foreach (var road in report.Roads.Where(r => r.Name == "pit" && r.Count > 1))
+        {
+            var step = Math.Max(1, road.Count / 200);
+            var xz = new List<int>();
+            for (var i = 0; i < road.Count; i += step) { xz.Add((int)Math.Round(road.X[i] * 512)); xz.Add((int)Math.Round(road.Z[i] * 512)); }
+            if ((road.Count - 1) % step != 0) { xz.Add((int)Math.Round(road.X[^1] * 512)); xz.Add((int)Math.Round(road.Z[^1] * 512)); }
+            roads.Add(xz.ToArray());
+        }
+        return roads.Count > 0 ? roads : null;
     }
 
     private static int[] LoopRecord(LoopInfo l)
