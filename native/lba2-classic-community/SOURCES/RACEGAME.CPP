@@ -723,8 +723,9 @@ static void TrialKeptOut(void) {
     }
 }
 
-// RACEMOD.CPP: a time trial's new fastest lap while it goes on -- an endless one's (race_laps=0: it has no end, RaceGame_Finished never
-// comes), a sprint's run with more to come -- into Best laps as it is driven, in place of the one this trial put there before.
+// RACEMOD.CPP: a time trial's new fastest lap while it goes on -- any trial's, kept for good the moment it is over the line (a trial left
+// before its end lost it, 2026-10-26; an endless one has no end), a sprint's run with more to come -- into Best laps as it is driven,
+// in place of the one this trial put there before. The trial's end (RaceGame_Finished) puts its own entry in that one's place.
 void RaceGame_TrialBest(S32 lap) {
     if (!RaceGame_On() || !s_raceTrial || s_raceSp < 0 || s_raceSp >= s_nbSp || lap <= 0) return;
     TrialKeptOut();

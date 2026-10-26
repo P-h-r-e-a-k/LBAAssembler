@@ -4421,8 +4421,10 @@ void RaceMod_Lap(S32 x, S32 z) {
         if (s_phase == PHASE_RACE) PackLapLog((int)s_laps);
         // (a time trial's lap: its ghost kept when it is the track's best -- GhostLapDone)
         if (s_trial && s_phase == PHASE_RACE) GhostLapDone(s_lastLap);
-        // (an endless time trial -- race_laps=0, the laps page's "Endless": no end to wait for, its fastest lap into Best laps as it comes)
-        if (s_trial && s_phase == PHASE_RACE && s_raceLaps <= 0 && !s_ghostWatch && s_bestLap == s_lastLap) RaceGame_TrialBest(s_lastLap);
+        // (a time trial's fastest lap into Best laps as it comes -- over the line, kept for good: an endless one has no end to wait for,
+        // and a player who left a trial of laps before its end lost the lap -- a player's report, 2026-10-26: "my best lap time doesn't get
+        // recorded unless I finish all the remaining laps". The trial's end puts its own entry in its place, RaceGame_Finished)
+        if (s_trial && s_phase == PHASE_RACE && !s_ghostWatch && s_bestLap == s_lastLap) RaceGame_TrialBest(s_lastLap);
         // the time to beat: under it, the story moves on (once)
         if (const S32 target = BeatTime()) {
             char text[64];
