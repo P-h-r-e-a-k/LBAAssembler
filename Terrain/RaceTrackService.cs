@@ -232,7 +232,9 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? MapRoads = null,
         // DoorsOff: the doors shut while one of the island's files is shown, each "<file> <scene> <x0> <z0> <x1> <z1>" (RaceTrackScenes
         // Result.DoorsOff, RACEMOD.CPP door_off=); since 2026-10-27
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<string>? DoorsOff = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<string>? DoorsOff = null,
+        // ActorsAt: actors put aside while one of the island's files is shown (RaceTrackScenes Result.ActorsAt, RACEMOD.CPP actor_at=)
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<string>? ActorsAt = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -259,7 +261,7 @@ internal static class RaceTrackService
     // (Seller: Celebration Island's lava lake, whose race the souvenir seller has to lose: RaceTrackStory.ApplyCelebration)
     // (RaphTime: Raph's line with the time to beat in it, RACEMOD.CPP beat_text=; RaphPark: where his car stands once he has stopped lapping
     // the storm track, [scene, x, y, z, turn] -- RaceTrackStory)
-    public sealed record StoryInfo(int TiredText, int TownArrow, bool Seller = false, int RaphTime = -1, int[]? RaphPark = null);
+    public sealed record StoryInfo(int TiredText, int TownArrow, bool Seller = false, int RaphTime = -1, int[]? RaphPark = null, int RaphYell = -1);
 
     // Play's race-track mode on a folder with a race track built: writes the engine's car file (the car setup in the settings, and the track's
     // start line, checkpoints and opponents from RACETRACK.JSON: `track`, one of the folder's tracks as RaceFor picks it, or else the
@@ -1062,7 +1064,7 @@ internal static class RaceTrackService
             Marshal: report.Marshal,
             OnFoot: report.OnFoot ? true : null,
             RailOpens: report.RailOpens.Count > 0 ? report.RailOpens.ToList() : null,
-            MapRoads: MapRoads(report), DoorsOff: scenes.DoorsOff);
+            MapRoads: MapRoads(report), DoorsOff: scenes.DoorsOff, ActorsAt: scenes.ActorsAt);
     }
 
     // A machine gun on its knoll as the car file has it: its scene and actors, the muzzle (the gun stands 0.8 cells towards where it fires

@@ -1938,6 +1938,15 @@ static void cmd_flags(int argc, const char *argv[]) {
    3=Discreet 4=Protopack ...). Routes through SetComportement so the weapon/body side-effects match a
    real in-game switch. Lets a headless test reach the melee (Aggressive), jump (Sportif) and hide
    (Discreet) input paths without a save fixture in that behaviour. */
+/* newgame: what the main menu's New Game does (GAMEMENU.CPP InitGame(1)) -- for a headless test of a game started again in one session
+   (a race-track mod's new game after a race: RACEMOD.CPP RaceMod_NewGameScene). */
+static void cmd_newgame(int argc, const char *argv[]) {
+    (void)argc; (void)argv;
+    extern void InitGame(S32 flagload);
+    InitGame(1);
+    Console_Print("newgame: a new game, scene %d", (int)NewCube);
+}
+
 static void cmd_behaviour(int argc, const char *argv[]) {
     if (argc >= 2) {
         S32 n = atoi(argv[1]);
@@ -2891,6 +2900,7 @@ void Console_RegisterAll(void) {
                               "teleport <x> <y> <z> [beta [alpha [gamma]]] | teleport actor <n>",
                               "Sets the hero's coords directly; next frame re-runs zones/collision. "
                               "'actor <n>' jumps onto actor n. Within-cube only.");
+    Console_RegisterCommandEx("newgame", cmd_newgame, "Start a new game, as the main menu's New Game", "newgame", "InitGame(1).");
     Console_RegisterCommandEx("behaviour", cmd_behaviour, "Read/set hero behaviour (comportement)",
                               "behaviour [0..13]", "0=Normal 1=Sportif 2=Aggressive 3=Discreet 4=Protopack. Routes through SetComportement.");
     Console_RegisterCommandEx("weapon", cmd_weapon, "Read/set hero active weapon",

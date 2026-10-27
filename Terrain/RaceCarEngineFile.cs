@@ -268,6 +268,8 @@ internal static class RaceCarEngineFile
                 text.Append($"parade={ghost + 1} {RaceTrackStory.RaphHere} 1\n");
                 foreach (var (scene, actor) in laps.Actors) text.Append($"parade_actor={scene} {actor}\n");
                 if (st.RaphPark is [var ps, var px, var py, var pz, var pb]) text.Append($"parade_park={ps} {px} {py} {pz} {pb}\n");
+                // (he pulls up beside Twinsen on the start line, tyres screeching, and yells at him to get off the track)
+                if (st.RaphYell >= 0) text.Append($"parade_stop={st.RaphYell}\n");
             }
         }
         if (town)
@@ -286,6 +288,8 @@ internal static class RaceCarEngineFile
         foreach (var (scene, actor) in parked) text.Append($"hide_actor={scene} {actor}\n");
         // the doors one of the island's files has lost, shut while it is shown (RaceTrackScenes Result.DoorsOff)
         foreach (var d in info?.DoorsOff ?? new()) text.Append($"door_off={d}\n");
+        // ... and the actors put aside while it is shown (Result.ActorsAt)
+        foreach (var a in info?.ActorsAt ?? new()) text.Append($"actor_at={a}\n");
         return text.ToString();
     }
 

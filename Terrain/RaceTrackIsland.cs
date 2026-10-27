@@ -19,6 +19,17 @@ internal sealed record RaceTrackIsland(
         "RaceTrackPlan.Desert.json", (7, 10))
     {
         Crossing = CrossingStyle.Jump, Roster = RaceDriver.Desert,
+        // (the island's people and animals away from the road stay -- the camel: the user, 2026-10-27, "Let's make sure with Desert island
+        // we're not removing any actors or zones we don't need the same as we checked with citadel")
+        KeepOffRoadActors = true,
+        // (the School of Magic's gates open from the start -- the game unlocks them later, game variable 65, which also shows the open gates'
+        // decor: the user, 2026-10-27, "The gates to the school of magic are initially closed on Desert island and get unlocked later in the
+        // game, let's just start the game with them open")
+        HeldVars = new[] { (65, 1) },
+        // (the School of Magic's canyon: its rim back up where the levelling cut it down beside the road -- in only through the gate, as
+        // the game has it: the user, 2026-10-27, "Let's raise the terrain slightly around the school of magic to force the user to access
+        // it via the gate, but let's make sure we don't change the near track terrain height")
+        OwnRimsAt = new[] { (535, 590, 571, 630) },
     };
 
     // Citadel Island: two tracks, one for each of its files, no retail track to clear, and no buggy in its scenes (the build puts one at each
@@ -129,6 +140,9 @@ internal sealed record RaceTrackIsland(
     // The build keeps every actor that is off the road -- it stands clear of it, and its scripts put it nowhere on it (RaceTrackScenes
     // OffRoad) -- taking only those on it away; without, every actor goes but the story's and the cutscenes'
     public bool KeepOffRoadActors { get; init; }
+    // Places (island cells, x0 z0 x1 z1) where the island's own ground comes back up to its height after the road's levelling, clear of the
+    // road: rims that kept people to a gate (RaceTrackBuilder)
+    public (int X0, int Z0, int X1, int Z1)[]? OwnRimsAt { get; init; }
     // The entity of the one the island's story has waiting at the start, whatever the build's story setting: brought from the scene the
     // island has him in to stand just behind Twinsen on the grid (Polar Island's grobo with the digger's key, 2026-10-27)
     public int? StartPerson { get; init; }

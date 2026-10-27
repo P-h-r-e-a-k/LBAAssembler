@@ -5424,3 +5424,20 @@ corners where that's quicker".
   has a track support in the way") -- the one at cell (519, 595), 4,073 high.
 - The ferry (scene 43): invisible, and the ticket does nothing at the quay or to the ferryman, until the town circuit is won and the
   weather is fine ("lets Twinsen take the ferry in the rain by selecting his ferry ticket from his inventory").
+
+## New Game, Raph's pull-up, the bike taxi, Desert's actors, the school's gates and rim (2026-10-27)
+
+- New Game after a run reads the race file afresh (RaceMod_NewGameScene, from the second game of a session): Polar Island's dream and its
+  chase opening start again ("Selecting new game after starting Polar island in play mode doesn't initialise the track correctly"). The
+  console's `newgame` runs the menu's New Game for headless tests.
+- Raph (parade_stop=<text>, RaceTrackStory RaphYell): the variable set when Twinsen stands on the start line on foot (its zone), he laps on
+  until he comes up to him, brakes from 14 cells with the tyres' squeal, pulls up 2.6 cells to his side, yells "Get off the track", and
+  rolls on to his park.
+- One weather's road only: an actor in the way of one file's road and not the other's stays where it is, and actor_at=<file> <scene>
+  <actor> <x> <y> <z> puts it aside while that file is shown (RaceTrackScenes Result.ActorsAt) -- Citadel's bike taxi under the shelter by
+  the shop in the storm, the town circuit running through the shelter.
+- Desert island keeps its actors off the road (KeepOffRoadActors) -- the camel, the garden balsam (scene 62's actor 7: removed with the
+  rest, it couldn't be picked up). An actor that stands clear but walks onto the road keeps its way, the points on the road moved off it
+  (PointsOffRoad). 41 actors still go, every one standing on the road; no zone goes but 16 fixed cameras along the track.
+- The School of Magic's gates open from the start (HeldVars 65 = 1, which also shows the open gates' decor), and its canyon's rim comes
+  back up to the island's own height where the levelling cut it, clear of the road by its curbs and 0.75 cells (OwnRimsAt, 253 points).

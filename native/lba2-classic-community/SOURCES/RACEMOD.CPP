@@ -79,6 +79,9 @@
  *     beat=<n> <var> <value> [<var> <value>]...  opponent n (1 the first) has no car on the track: its lap, at its skill, is the time to
  *                                beat (shown with its name); a lap under it sets the variables, once
  *     beat_text=<text>           the island's text that tells the time to beat: its "##" is that time (MESSAGE.CPP GetText, RaceMod_Text)
+ *     parade_stop=<text>         (2026-10-27) the variable set with Twinsen on foot in the park's scene: the car laps on until it comes up
+ *                                to him, pulls up beside him with a screech of its tyres, its driver says <text>, and it rolls on to its
+ *                                park (ParadeStep's s_pull: Raph and Twinsen on the storm track's start line)
  *     parade=<n> <var> <value>   (2026-10-06) opponent n -- the time to beat's -- laps on its own at its skill in the scenes' copies of a
  *                                car (parade_actor=<scene> <actor>, each scene's) while game variable <var> is below <value>, then its
  *                                car stands parked (parade_park=<scene> <x> <y> <z> <turn>) or out of sight (ParadeStep): Raph on
@@ -136,6 +139,9 @@
  *                                and no grid -- Twinsen gets in his car when he likes and chases (ChaseOpening)
  *     chase_lead=<cells>         the one to beat holds this lead over Twinsen: easing right off far ahead, pushing harder behind (ChaseLead)
  *     dream_any_end=1            a sprint's end wakes Twinsen up (wake=) whoever got there first; the one to beat goes on over the finish
+ *     actor_at=<island file> <scene> <actor> <x> <y> <z>
+ *                                the scene's actor put there as the scene starts while that island file is shown (ActorsAt): in the way of
+ *                                that file's road, not of the other's (Citadel Island's bike taxi under the shelter by the shop, 2026-10-27)
  *     door_off=<island file> <scene> <x0> <z0> <x1> <z1>
  *                                the scene's door zone with that box shut while that island file is shown (RaceMod_DoorShut): its lift or
  *                                wall is gone from it, not from the island's other file (Citadel Island's two weathers share their scenes,
@@ -497,6 +503,16 @@ static S32 s_paradeParkX, s_paradeParkY, s_paradeParkZ, s_paradeParkBeta;
 static double s_paradeS = 0, s_paradeSpeed = 0;
 static int s_paradeActorNow = -1;          // (its car in this scene: nothing collides with it, RaceMod_NoCollide)
 static int s_paradeFlip = 0;               // (the next frame drawn whole: RaceMod_Story)
+// parade_stop= (ParadeStep): the pull-up's step -- 0 none, 1 lapping on to Twinsen, 2 braking, 3 stopped (its line said once), 4 rolling to
+// its park, 5 parked -- and where it stops (along its line, and to the side of it), how hard it brakes, and when its step began
+static int s_paradeStopText = -1, s_pull = 0, s_pullSay = 0;
+static double s_pullS = 0, s_pullLat = 0, s_pullAcc = 0, s_pullFrom = 0;
+static S32 s_pullAt = 0, s_pullX = 0, s_pullY = 0, s_pullZ = 0, s_pullBeta = 0;
+#define RACE_PULL_BRAKE (14 * 512.0)       // it brakes this far before Twinsen
+#define RACE_PULL_SIDE (2.6 * 512.0)       // and stops this far to his side
+#define RACE_PULL_WAIT_MS 700              // after its driver's line, this long before it rolls on
+#define RACE_PULL_ROLL_MS 2600             // the roll to its park
+#define RACE_PULL_SKID_USER 0xFD           // the squeal's PlaySample user handle: RACE_SOUND_USER + this
 static int s_beatSet[2 * RACE_MAX_SETS], s_nbBeatSet = 0;
 static int s_raceLaps = 0;                 // the race's laps (0: laps go on being counted, no finish)
 // A sprint's time trial run again from the start (trial_runs=, the race game's laps page: 1, 3, 5, 10, 0 endless -- 2026-10-25, the user: "In time
@@ -532,6 +548,10 @@ static int s_dreamAnyEnd = 0;
 #define RACE_MAX_DOORS_OFF 24
 static struct { char File[16]; int Scene, X0, Z0, X1, Z1; } s_doorsOff[RACE_MAX_DOORS_OFF];
 static int s_nbDoorsOff = 0;
+// actor_at= (ActorsAt): the actors, and the scene they were last put in
+#define RACE_MAX_ACTORS_AT 24
+static struct { char File[16]; int Scene, Actor, X, Y, Z; } s_actorsAt[RACE_MAX_ACTORS_AT];
+static int s_nbActorsAt = 0, s_actorsAtScene = -1;
 #define RACE_CHASE_PAUSE_MS 2600           // FunFrock driving off before Twinsen speaks
 #define RACE_DREAM_END_FLIGHT_MS 1600      // dream_any_end=: the one to beat over the jump this long before the dream fades
 static int s_fadeFromWhite = 0;             // the waking scene fades in from white (set by the wake; RaceMod_FadeFromWhite takes it)
@@ -3526,6 +3546,10 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "chase_lead")) s_chaseLead = atof(v) * 512;
         else if (!strcmp(key, "dream_any_end")) s_dreamAnyEnd = atoi(v);
+        else if (!strcmp(key, "actor_at") && s_nbActorsAt < RACE_MAX_ACTORS_AT) {
+            if (sscanf(v, "%15s %d %d %d %d %d", s_actorsAt[s_nbActorsAt].File, &s_actorsAt[s_nbActorsAt].Scene, &s_actorsAt[s_nbActorsAt].Actor,
+                       &s_actorsAt[s_nbActorsAt].X, &s_actorsAt[s_nbActorsAt].Y, &s_actorsAt[s_nbActorsAt].Z) == 6) s_nbActorsAt++;
+        }
         else if (!strcmp(key, "door_off") && s_nbDoorsOff < RACE_MAX_DOORS_OFF) {
             if (sscanf(v, "%15s %d %d %d %d %d", s_doorsOff[s_nbDoorsOff].File, &s_doorsOff[s_nbDoorsOff].Scene, &s_doorsOff[s_nbDoorsOff].X0, &s_doorsOff[s_nbDoorsOff].Z0,
                        &s_doorsOff[s_nbDoorsOff].X1, &s_doorsOff[s_nbDoorsOff].Z1) == 6) s_nbDoorsOff++;
@@ -4047,6 +4071,7 @@ static void Load(const char *path, int carOnly = 0) {
             int n, var, value;
             if (sscanf(v, "%d %d %d", &n, &var, &value) == 3 && n >= 1 && n <= RACE_MAX_OPPONENTS) { s_paradeOpp = n - 1; s_paradeVar = var; s_paradeValue = value; }
         }
+        else if (!strcmp(key, "parade_stop")) s_paradeStopText = atoi(v);
         else if (!strcmp(key, "parade_actor")) {
             if (s_nbParade < RACE_MAX_PARADE && sscanf(v, "%d %d", &s_paradeScene[s_nbParade], &s_paradeActor[s_nbParade]) == 2) s_nbParade++;
         }
@@ -4772,6 +4797,15 @@ void RaceMod_Story(void) {
     }
     if (!RaceMod_Active()) return;
     const S32 now = TimerRefHR;
+    // (the parade car pulled up beside Twinsen: its driver's line -- parade_stop=; said from the car)
+    if (s_pullSay && NewCube == -1) {
+        s_pullSay = 0;
+        NumObjDial = (U8)(s_paradeActorNow > 0 && s_paradeActorNow < NbObjets ? s_paradeActorNow : NUM_PERSO);
+        Log_Info("[racemod] parade: the driver says text %d", s_paradeStopText);
+        Dial(s_paradeStopText, TRUE);
+        s_wantFlip = 1;
+        s_pullAt = TimerRefHR;
+    }
     // (the wake line, if the waking scene's actor has said nothing since Twinsen woke up: RaceMod_Dial says it before her first line)
     if (s_pendWakeScene >= 0 && NewCube == -1) {
         if ((S32)NumCube != s_pendWakeScene) { if (s_pendWakeAt && now - s_pendWakeAt > 20000) s_pendWakeScene = -1; }
@@ -4892,8 +4926,19 @@ static void RaceFromGrid(void) {
 }
 
 // A new game (PERSO.CPP InitGame): the scene it starts in -- a set's dream= (Polar Island's dream race), else `scene`, the game's own.
+void RaceMod_LoadFile(const char *path);
 S32 RaceMod_NewGameScene(S32 scene) {
+    static int games = 0;
     if (!RaceMod_Active()) return scene;
+    // (a new game after the first -- the menu's New Game once a race was raced or a dream dreamt -- reads the race file afresh: the race
+    // was over, the opening's steps done, and the dream's end had read it again for the car alone, its dream= gone. Polar Island in Play,
+    // the user, 2026-10-27: "Selecting new game after starting Polar island in play mode doesn't initialise the track correctly")
+    if (games++ > 0) {
+        char path[260];
+        const char *env = getenv("LBA2_RACETRACK_FILE");
+        snprintf(path, sizeof(path), "%s", env ? env : "");
+        if (path[0]) { Log_Info("[racemod] a new game: the race file read afresh (%s)", path); RaceMod_LoadFile(path); }
+    }
     // (the camera's last race's eye forgotten: it opened on it, the car out of the picture -- FOLLOWCAM.CPP FollowCamDropOwnEye)
     FollowCamDropOwnEye();
     if (s_startScene >= 0) {
@@ -5646,6 +5691,8 @@ static void PathAt(const T_RACE_OPPONENT *o, double s, double *x, double *z, dou
     *dz = o->Z[b] - o->Z[a];
 }
 
+static void ParadeScreech(void);
+
 // Every frame (parade=): the driver lapping on his own -- along his line at his skill, from a standstill as the opponents pull away -- in
 // this scene's copy of his car while the variable is below the value, then parked (parade_park=) or out of sight.
 static double Pull(double speed);
@@ -5655,17 +5702,64 @@ static void ParadeStep(S32 now, S32 dt) {
     if (s_paradeOpp < 0 || s_paradeVar < 0 || s_paradeVar > 255) return;
     const T_RACE_OPPONENT *o = &s_opp[s_paradeOpp];
     if (!o->Count || o->Length <= 0) return;
-    const int going = ListVarGame[s_paradeVar] < s_paradeValue;
+    const int wanted = ListVarGame[s_paradeVar] < s_paradeValue;
     double x, z, y, v, dx, dz;
+    // (parade_stop=: the variable set with Twinsen on foot where the car parks -- he laps on until he comes up to him; anywhere else, or
+    // with no copy of his car there, he is parked)
+    if (wanted) s_pull = 0;
+    else if (s_paradeStopText >= 0 && s_pull == 0) {
+        int here = 0;
+        for (int i = 0; i < s_nbParade; i++) if (s_paradeScene[i] == (S32)NumCube && s_paradeActor[i] > 0 && s_paradeActor[i] < NbObjets) here = 1;
+        s_pull = here && s_paradeParkScene == (S32)NumCube && CubeMode == CUBE_EXTERIEUR && Comportement != C_BUGGY && NewCube == -1 ? 1 : 5;
+        if (s_pull == 1) Log_Info("[racemod] parade: Twinsen on foot on the line -- the car laps on to him");
+    }
+    const int going = wanted || s_pull == 1 || s_pull == 2;
     if (going) {
         PathAt(o, s_paradeS, &x, &z, &y, &v, &dx, &dz);
-        const double target = v * o->Pace / 100.0;
+        double target = v * o->Pace / 100.0;
+        if (s_pull == 1) {
+            // (where he stands along the line, and to its side; close enough on, it brakes to stop beside him)
+            const T_OBJET *hero = &ListObjet[NUM_PERSO];
+            const double hx = hero->Obj.X + CurrentCubeX * 32768.0, hz = hero->Obj.Z + CurrentCubeY * 32768.0;
+            int best = 0;
+            double bd = 1e30;
+            for (int i = 0; i < o->Count; i++) {
+                const double d = (o->X[i] - hx) * (o->X[i] - hx) + (o->Z[i] - hz) * (o->Z[i] - hz);
+                if (d < bd) { bd = d; best = i; }
+            }
+            double ahead = o->Cum[best] - s_paradeS;
+            if (ahead < 0) ahead += o->Length;
+            if (ahead < RACE_PULL_BRAKE && ahead > 256 && s_paradeSpeed > 0) {
+                double px, pz, py, pv, fx, fz;
+                PathAt(o, o->Cum[best], &px, &pz, &py, &pv, &fx, &fz);
+                const double fl = sqrt(fx * fx + fz * fz) > 0 ? sqrt(fx * fx + fz * fz) : 1;
+                const double across = ((hx - px) * fz - (hz - pz) * fx) / fl;          // (to the right of the way it runs)
+                s_pullS = o->Cum[best];
+                s_pullLat = across + (across >= 0 ? -RACE_PULL_SIDE : RACE_PULL_SIDE);
+                s_pullFrom = ahead;
+                s_pullAcc = s_paradeSpeed * s_paradeSpeed / (2 * ahead);
+                s_pull = 2;
+                ParadeScreech();
+                Log_Info("[racemod] parade: the car brakes %.1f cells before Twinsen, at %.0f units a second", ahead / 512, s_paradeSpeed);
+            }
+        }
+        if (s_pull == 2) {
+            double ahead = s_pullS - s_paradeS;
+            if (ahead < 0) ahead += o->Length;
+            if (ahead > o->Length / 2) ahead = 0;
+            s_paradeSpeed -= s_pullAcc * dt / 1000.0;
+            if (ahead <= 16 || s_paradeSpeed <= 0) {
+                s_paradeSpeed = 0; s_paradeS = s_pullS; s_pull = 3; s_pullSay = 1; s_pullAt = now;
+                Log_Info("[racemod] parade: the car pulls up beside Twinsen");
+            }
+            target = s_paradeSpeed;
+        }
         if (s_paradeSpeed < target) {
             s_paradeSpeed += s_car.Accel * Pull(s_paradeSpeed) * o->Top / 100.0 * o->Pace / 100.0 * dt / 1000.0;
             if (s_paradeSpeed > target) s_paradeSpeed = target;
         } else
             s_paradeSpeed = target;
-        s_paradeS += s_paradeSpeed * dt / 1000.0;
+        if (s_pull != 3) s_paradeS += s_paradeSpeed * dt / 1000.0;
         while (s_paradeS >= o->Length) s_paradeS -= o->Length;
     }
     if (CubeMode != CUBE_EXTERIEUR) return;
@@ -5676,13 +5770,40 @@ static void ParadeStep(S32 now, S32 dt) {
     T_OBJET *car = &ListObjet[index];
     s_paradeActorNow = index;
     U16 anim = (U16)(o->HasAnims ? o->AnimIdle : 0);
-    if (going) {
+    if (going || s_pull == 3 || s_pull == 4) {
         PathAt(o, s_paradeS, &x, &z, &y, &v, &dx, &dz);
-        car->Obj.X = (S32)(x - CurrentCubeX * 32768.0);
-        car->Obj.Z = (S32)(z - CurrentCubeY * 32768.0);
-        car->Obj.Y = (S32)y;
-        car->Obj.Beta = (S32)(atan2(dx, dz) * 4096.0 / (2 * 3.14159265358979)) & 4095;
-        anim = (U16)(o->HasAnims ? o->AnimDrive : 1);
+        // (pulling up: eased over to its stop beside Twinsen as it brakes)
+        if (s_pull >= 2) {
+            double f = 1;
+            if (s_pull == 2) {
+                double ahead = s_pullS - s_paradeS;
+                if (ahead < 0) ahead += o->Length;
+                f = s_pullFrom > 0 ? 1 - ahead / s_pullFrom : 1;
+                if (f < 0) f = 0; else if (f > 1) f = 1;
+                f = f * f * (3 - 2 * f);
+            }
+            const double fl = sqrt(dx * dx + dz * dz) > 0 ? sqrt(dx * dx + dz * dz) : 1;
+            x += dz / fl * s_pullLat * f; z -= dx / fl * s_pullLat * f;
+        }
+        S32 cx = (S32)(x - CurrentCubeX * 32768.0), cz = (S32)(z - CurrentCubeY * 32768.0), cy = (S32)y;
+        S32 beta = (S32)(atan2(dx, dz) * 4096.0 / (2 * 3.14159265358979)) & 4095;
+        if (s_pull == 3) {
+            s_pullX = cx; s_pullY = cy; s_pullZ = cz; s_pullBeta = beta;
+            if (!s_pullSay && now - s_pullAt >= RACE_PULL_WAIT_MS) { s_pull = 4; s_pullAt = now; }
+        } else if (s_pull == 4) {
+            // (rolled on to its park, after its driver's line)
+            double t = (double)(now - s_pullAt) / RACE_PULL_ROLL_MS;
+            if (t >= 1) { t = 1; s_pull = 5; }
+            t = t * t * (3 - 2 * t);
+            if (s_paradeParkScene == (S32)NumCube) {
+                cx = (S32)(s_pullX + (s_paradeParkX - s_pullX) * t); cz = (S32)(s_pullZ + (s_paradeParkZ - s_pullZ) * t);
+                cy = (S32)(s_pullY + (s_paradeParkY - s_pullY) * t);
+                const S32 turn = ((s_paradeParkBeta - s_pullBeta) % 4096 + 4096 + 2048) % 4096 - 2048;
+                beta = (s_pullBeta + (S32)(turn * t)) & 4095;
+            } else { cx = s_pullX; cz = s_pullZ; cy = s_pullY; beta = s_pullBeta; }
+        }
+        car->Obj.X = cx; car->Obj.Z = cz; car->Obj.Y = cy; car->Obj.Beta = beta;
+        anim = (U16)(o->HasAnims ? (s_pull == 3 ? o->AnimIdle : o->AnimDrive) : 1);
     } else if (s_paradeParkScene == (S32)NumCube) {
         car->Obj.X = s_paradeParkX; car->Obj.Y = s_paradeParkY; car->Obj.Z = s_paradeParkZ; car->Obj.Beta = s_paradeParkBeta & 4095;
     } else
@@ -5691,8 +5812,9 @@ static void ParadeStep(S32 now, S32 dt) {
     // the request the opponents make, s_wantFlip, is only taken up while Twinsen drives -- on foot, its first picture stayed on the road.
     // This runs inside the frame's drawing, which has its picture's kind already: RaceMod_Story asks for the next one)
     static int wasGoing = -1;
-    if (going || going != wasGoing) s_paradeFlip = 1;
-    wasGoing = going;
+    const int moving = going || s_pull == 3 || s_pull == 4;
+    if (moving || moving != wasGoing) s_paradeFlip = 1;
+    wasGoing = moving;
     if (car->Obj.Y <= -10000) return;
     car->Obj.Alpha = 0; car->Obj.Gamma = 0;
     ClearRealAngle(car);
@@ -11123,6 +11245,13 @@ static void SkidWavMake(void) {
     s_skidWav.Data = d; s_skidWav.Size = size;
     Log_Info("[racemod] the tyres' squeal: made (no %s)", full);
 }
+// The parade car's tyres as it pulls up (parade_stop=, ParadeStep): the race's squeal, once
+static void ParadeScreech(void) {
+    if (!SamplesEnable) return;
+    SkidWavMake();
+    if (!s_skidWav.Data) return;
+    PlaySample(s_skidWav.Data, s_skidWav.Size, RACE_SOUND_USER + RACE_PULL_SKID_USER, 0x1000, 1, RegleTrois(0, SampleVolume, 127, 110), 64);
+}
 static void SkidSoundStop(void) {
     if (s_skidVoice == 0xFFFFFFFFu) return;
     StopOneSample(s_skidVoice);
@@ -14848,6 +14977,19 @@ static void IslandCarDraw(void) {
     else if (s_islandParked) DrawDriveAsOn(TimerRefHR, &ListObjet[NUM_BUGGY], 1);
 }
 
+// The actors in the way of this weather's road only (actor_at=), put aside as their scene starts: its first frame, after the scripts'
+// own first placing
+static void ActorsAt(void) {
+    if (NewCube != -1 || (S32)NumCube == s_actorsAtScene) return;
+    s_actorsAtScene = NumCube;
+    for (int i = 0; i < s_nbActorsAt; i++) {
+        if (s_actorsAt[i].Scene != (S32)NumCube || strcasecmp(s_actorsAt[i].File, IslandName) || s_actorsAt[i].Actor <= 0 || s_actorsAt[i].Actor >= NbObjets) continue;
+        T_OBJET *a = &ListObjet[s_actorsAt[i].Actor];
+        a->Obj.X = s_actorsAt[i].X; a->Obj.Y = s_actorsAt[i].Y; a->Obj.Z = s_actorsAt[i].Z;
+        Log_Info("[racemod] actor %d put aside in %s's scene %d, at (%d,%d,%d)", s_actorsAt[i].Actor, IslandName, (int)NumCube, s_actorsAt[i].X, s_actorsAt[i].Y, s_actorsAt[i].Z);
+    }
+}
+
 // Whether a door zone is one this weather's island file has lost (door_off=): GereZoneChangeCube (OBJECT.CPP) doesn't take Twinsen
 // through it, whatever switched it on (Twinsen's own script, standing on the lift's place: Citadel Island's by the storm track's start line)
 S32 RaceMod_DoorShut(const T_ZONE *zn) {
@@ -14860,6 +15002,7 @@ S32 RaceMod_DoorShut(const T_ZONE *zn) {
 
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) { IslandCarFrame(); return; }
+    ActorsAt();
     RaceCameraKey();
     RaceMusicFrame();
     CarTraceLine();
@@ -17048,11 +17191,12 @@ static void ResetTrack(void) {
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0; s_hinted = -1;
     s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     ListVarGame[209] = 0;
+    s_paradeStopText = -1; s_pull = 0; s_pullSay = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
-    s_nbDoorsOff = 0;
+    s_nbDoorsOff = 0; s_nbActorsAt = 0; s_actorsAtScene = -1;
     s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0;
     GhostReset();

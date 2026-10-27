@@ -875,6 +875,10 @@ internal static class RaceTrackBuilder
         var report = new RaceTrackReport();
         var field = new Field(island);
         var roads = new List<TrackRoad>();
+        // (the island's own ground where it comes back away from the road: RaceTrackIsland.OwnRimsAt)
+        var ownRims = (options.Island.OwnRimsAt ?? Array.Empty<(int X0, int Z0, int X1, int Z1)>())
+            .SelectMany(b => from gz in Enumerable.Range(b.Z0, b.Z1 - b.Z0 + 1) from gx in Enumerable.Range(b.X0, b.X1 - b.X0 + 1) select (gx, gz))
+            .Where(g => island.HeightAt(g.gx, g.gz) is not null).Select(g => (g.gx, g.gz, H: (int)island.HeightAt(g.gx, g.gz)!.Value)).ToList();
         // A plan with its own heights (Mosquibees Island's mountain lap) is built as it is drawn: its bridge and its jump are where the plan
         // puts them, so no crossing is re-shaped, and its heights are limited to the plan's own steepest grade.
         var planned = plan.Planned;
@@ -1092,6 +1096,17 @@ internal static class RaceTrackBuilder
         if (plan.TrimKept && keepBodies is { Length: > 0 }) { keepBodies = keepBodies.Concat(TrimKept(island, roads, keepBodies, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
         var natural = new Field(island);
         ModifyGround(island, field, index, roads, options, report, plan.KeepGroundUnder ? KeptGround(island, keptBoxes) : null);
+        // (and up again to the island's own height where the levelling cut it down, clear of the road -- its curbs and OwnRimClear cells
+        // more: the road and the ground beside it as they are)
+        var rimsBack = 0;
+        foreach (var (gx, gz, h) in ownRims)
+        {
+            if (island.HeightAt(gx, gz) is not { } now || now >= h) continue;
+            if (index.Near(gx, gz, 14, 4).Any(hit => hit.Dist <= (hit.Raised && hit.Half > 0 ? hit.Half : roads[hit.Road].CurbHalf) + OwnRimClear)) continue;
+            island.SetHeight(gx, gz, h);
+            rimsBack++;
+        }
+        if (rimsBack > 0) report.Notes.Add($"{rimsBack} points of the island's own ground put back up to their height, clear of the road (its rims round the places the island keeps)");
         // (not under a sunk tunnel's stretch: RaceTrackTunnel cuts the ground there itself, straight down beside its walls)
         var sunk = new HashSet<int>();
         if (planned && plan.Tunnels is { Length: > 0 } sunkRuns)
@@ -3363,6 +3378,8 @@ internal static class RaceTrackBuilder
 
     // A raised road's own space: from under its slab to over a car's roof.
     private const double RaisedBelow = 320, RaisedAbove = 1400;
+    // RaceTrackIsland.OwnRimsAt: the ground put back this far past the road's curbs (cells)
+    private const double OwnRimClear = 0.75;
 
     // The island's own decors its record says go whatever the road does (RaceTrackIsland.DropDecors): the pieces placed at each origin.
     private static void DropDecors(IslandFile island, RaceTrackOptions o, RaceTrackReport report)

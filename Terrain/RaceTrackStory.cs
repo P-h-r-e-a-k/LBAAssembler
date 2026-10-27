@@ -84,7 +84,7 @@ internal static class RaceTrackStory
 
     // The story's lines (Citadel Island's texts), in English, French, German, Spanish, Italian, Portuguese: TEXT.HQR's own order. The game's
     // own names: the Weather Wizard is the Mage Météo, the Wettermagier, the Mago Meteo, the Mago Metereologo, the Mago do Tempo.
-    private enum Line { Zoe, Wizard, WizardAfter, Raph, RaphBeaten, PaulGloves, PaulReady, Aliens, Tired, Sleep, PaulTicket, RaphTime, PaulStop, ZoeJoins }
+    private enum Line { Zoe, Wizard, WizardAfter, Raph, RaphBeaten, PaulGloves, PaulReady, Aliens, Tired, Sleep, PaulTicket, RaphTime, PaulStop, ZoeJoins, RaphYell }
     private static readonly string[][] Lines =
     {
         new[]
@@ -213,6 +213,15 @@ internal static class RaceTrackStory
             "¡Twinsen, lo has conseguido! Raph va hacia el faro, y el Mago Meteo nos espera allí. ¡Vamos, vayamos juntos!",
             "Twinsen, ce l'hai fatta! Raph sta andando al faro, e il Mago Metereologo ci aspetta là. Dai, andiamo insieme!",
             "Twinsen, conseguiste! O Raph vai a caminho do farol, e o Mago do Tempo espera-nos lá. Anda, vamos juntos!",
+        },
+        new[]
+        {
+            "Hey! Get off the track, Twinsen! Are you trying to get yourself run over?!",
+            "Hé ! Sors de la piste, Twinsen ! Tu veux te faire écraser ?!",
+            "He! Runter von der Strecke, Twinsen! Willst du dich überfahren lassen?!",
+            "¡Eh! ¡Sal de la pista, Twinsen! ¿Quieres que te atropellen?!",
+            "Ehi! Esci dalla pista, Twinsen! Vuoi farti investire?!",
+            "Ei! Sai da pista, Twinsen! Queres ser atropelado?!",
         },
     };
     // the holomap labels: the storm track's start line, the town circuit's
@@ -686,8 +695,10 @@ void comportement_1()
                     raph.X = raphPark[1]; raph.Y = raphPark[2]; raph.Z = raphPark[3]; raph.Beta = raphPark[4];
                 }
                 var shown = raphPark is null ? 0 : 1;
-                // Raph laps the track in his car (the race-track mode's parade=, RaphHere 0), until Twinsen comes by on foot (within 20
-                // cells: the start line's end) -- then he has stopped, his car parked by the start line, and he talks from it (the game's own
+                // Raph laps the track in his car (the race-track mode's parade=, RaphHere 0), until Twinsen stands on the start line on foot
+                // (its zone; the user, 2026-10-27: "let's have him keep driving laps until Twinsen is standing on the start/finish line when he
+                // drives by, then have him pulling up next to Twinsen with a screech of the tyres and yelling at Twinsen to get off the track":
+                // parade_stop=, RaphYell) -- then he pulls up beside him, yells, and parks by the start line, and he talks from it (the game's own
                 // Raph is the one who speaks, out of sight where the car stands; with no room for the car, he stands by the start line, seen
                 // only once he has stopped). With a car and driving gloves (HasCar, the gloves' slot) he says his time; without, what it takes. Raph's time beaten (BeatVar 1, the race-track mode's beat=) and Twinsen out of his car: he is
                 // off to the lighthouse, and Zoe joins Twinsen -- the two of them walking together, as when the game's Raph was freed from
@@ -709,7 +720,7 @@ void comportement_1()
     if (0 == var_game({RaphHere}))
     {{
         invisible(1);
-        if ({Driving} != comportement_hero() && 10000 > distance(0))
+        if ({Driving} != comportement_hero() && {startZone} == zone_obj(0))
         {{
             set_var_game({RaphHere}, 1);
             invisible({shown});
@@ -913,6 +924,6 @@ void comportement_1()
         log.Add($"the race-track mode: Mr. Paul's gloves gate the storm track (variable {GlovesSlot}), Raph's time beaten sets {BeatVar}; the town circuit opens once {DayVar} is {Rested}, " +
                 $"{RaceLaps} laps, a win sets {WonVar}; while {DayVar} is {Tired} everyone says text {Id(Line.Tired)}");
         log.Add($"Raph laps the storm track in his car until Twinsen comes to the start line on foot (variable {RaphHere}){(raphPark is null ? " -- no room for his car by the start line: it goes out of sight" : "")}; he tells his time (text {Id(Line.RaphTime)}) once Twinsen has a car (variable {HasCar}) and driving gloves; Mr. Paul puts Twinsen out of his car on the start line without them");
-        return (log, new RaceTrackService.StoryInfo(Id(Line.Tired), TownArrow, RaphTime: Id(Line.RaphTime), RaphPark: raphPark));
+        return (log, new RaceTrackService.StoryInfo(Id(Line.Tired), TownArrow, RaphTime: Id(Line.RaphTime), RaphPark: raphPark, RaphYell: Id(Line.RaphYell)));
     }
 }

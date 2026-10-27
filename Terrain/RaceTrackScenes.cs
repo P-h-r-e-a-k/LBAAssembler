@@ -27,6 +27,8 @@ internal static class RaceTrackScenes
         // the doors one weather's island file has lost and the other's has not, each "<file> <scene> <x0> <z0> <x1> <z1>" (RACEMOD.CPP
         // door_off=): the scenes keep the zone, the race-track mode shuts it while that file is shown
         public List<string>? DoorsOff { get; init; }
+        // the actors put aside while one weather's island file is shown, each "<file> <scene> <actor> <x> <y> <z>" (RACEMOD.CPP actor_at=)
+        public List<string>? ActorsAt { get; init; }
     }
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
@@ -388,6 +390,7 @@ internal static class RaceTrackScenes
         var changes = new List<SceneChange>();
         var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0; var mushroomsLeftOut = 0;
         var doorsOff = new List<string>();
+        var actorsAt = new List<(string File, int Scene, int Actor, int X, int Y, int Z)>();
         foreach (var t in tracks)
         {
             t.Drivers = t.Options.Racers().Where(d => !d.Ghost).ToList();
@@ -506,6 +509,10 @@ internal static class RaceTrackScenes
                     {
                         if (storyKept.Contains(i) || model.Actors[i].Entity == BuggyEntity || biking && model.Actors[i].Entity == BikerEntity) continue;
                         if (OffRoad(model, i, inTheWay, out var onIt)) offRoad.Add(i);
+                        // (one that stands clear of the road but walks onto it -- the Desert island's camel, 2026-10-27: its way's points on
+                        // the road moved off it, to the nearest clear place)
+                        else if (onIt?.StartsWith("its scripts take it") == true
+                                 && PointsOffRoad(model, i, inTheWay, report.GroundBefore, groundAfter, report.WasGround, scene, log)) offRoad.Add(i);
                         else log.Add($"scene {scene}: actor {i} (entity {model.Actors[i].Entity}) goes -- {onIt}");
                     }
                 if (offRoad.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", offRoad.Order())} kept -- off the road, and their scripts keep them off it");
@@ -519,12 +526,33 @@ internal static class RaceTrackScenes
                 needed.RemoveWhere(i => biking && i < model.Actors.Count && model.Actors[i].Entity == BikerEntity);
                 if (needed.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", needed.Order())} kept -- Twinsen's own script waits on them in its travel cutscenes (the ferry, the Dino-Fly), which would never end without them");
                 if (storyKept.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", storyKept.Order())} kept where they are -- the story needs them");
+                // (one in the way of one weather's road only -- the island's two files share the scenes -- stays where it is, and is put aside
+                // while that file is shown: Result.ActorsAt. Citadel Island's bike taxi waits under the shelter by the shop in the storm, the
+                // storm track's deck far over him; the town circuit runs through the shelter -- moved for it, he stood by a lamp post in the
+                // rain, 2026-10-27)
+                void Aside(int i)
+                {
+                    var a = model.Actors[i];
+                    double cx = model.CubeX * 64 + a.X / 512.0, cz = model.CubeY * 64 + a.Z / 512.0;
+                    var way = tracks.Select(t => t.Report.InTheWay(cx, cz, a.Y, a.Y + 1500)).ToList();
+                    if (tracks.Count == 2 && way[0] != way[1])
+                    {
+                        var moved = a.Clone();
+                        ShiftOffRoad(moved, model, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
+                        if (moved.X == a.X && moved.Z == a.Z) return;
+                        var file = Path.GetFileNameWithoutExtension(way[0] ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
+                        actorsAt.Add((file, scene, i - doomed.Count(d => d < i), moved.X, moved.Y, moved.Z));
+                        log.Add($"scene {scene}: ... only while {file} is shown: in the other weather it stays where it was, at ({a.X},{a.Y},{a.Z})");
+                        return;
+                    }
+                    ShiftOffRoad(a, model, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
+                }
                 foreach (var i in needed.Order())
-                    if (i < model.Actors.Count) ShiftOffRoad(model.Actors[i], model, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
+                    if (i < model.Actors.Count) Aside(i);
                 // (the story's people stay, but not on the road: Polar Island's grobo with the digger's key stands on the dock)
                 foreach (var i in storyKept.Order())
                     if (options.Island.KeptEntities?.Contains(model.Actors[i].Entity) == true && !offRoad.Contains(i))
-                        ShiftOffRoad(model.Actors[i], model, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
+                        Aside(i);
                 var standIn = AddStandIn(model, doomed);
                 foreach (var i in doomed.OrderByDescending(i => i))
                 {
@@ -974,7 +1002,8 @@ internal static class RaceTrackScenes
         }
         var main = tracks[0];
         var off = doorsOff.Count > 0 ? doorsOff : null;
-        return main.Result(log, changes.Count, removed, tracks.Count > 1 ? tracks[1].Result(log, changes.Count, removed) with { DoorsOff = off } : null) with { DoorsOff = off };
+        var putAside = actorsAt.Count > 0 ? actorsAt.Select(a => $"{a.File} {a.Scene} {a.Actor} {a.X} {a.Y} {a.Z}").ToList() : null;
+        return main.Result(log, changes.Count, removed, tracks.Count > 1 ? tracks[1].Result(log, changes.Count, removed) with { DoorsOff = off, ActorsAt = putAside } : null) with { DoorsOff = off, ActorsAt = putAside };
     }
 
     // The place `back` cells behind the start line along the lap's centre line (the built one: RaceTrackReport.LapX/LapZ), `side` cells
@@ -1484,19 +1513,66 @@ void comportement_1()
         bool Clear(int x, int y, int z) => !inTheWay(ox + x / 512.0, oz + z / 512.0, y, y + 1500);
         onIt = null;
         if (!Clear(actor.X, actor.Y, actor.Z)) { onIt = $"it stands on the road, at ({actor.X},{actor.Y},{actor.Z})"; return false; }
-        var points = new HashSet<int>(PosPoints(actor, index));
-        try
-        {
-            foreach (var i in LbaScript.Bytecode.DecodeTrack(actor.Track))
-                if (i.Op is 4 or 8 or 12 or 15 && i.A.Length > 0) points.Add((int)i.A[0]);
-        }
-        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { onIt = "its move script can't be read"; return false; }
+        if (ScriptPoints(actor, index) is not { } points) { onIt = "its move script can't be read"; return false; }
         foreach (var p in points.Order())
             if (p >= 0 && p < model.TrackPoints.Count && !Clear(model.TrackPoints[p].X, model.TrackPoints[p].Y, model.TrackPoints[p].Z))
             {
                 onIt = $"its scripts take it to point {p}, on the road at ({model.TrackPoints[p].X},{model.TrackPoints[p].Y},{model.TrackPoints[p].Z})";
                 return false;
             }
+        return true;
+    }
+
+    // The points an actor's scripts send or put it to: its move script's goto/pos points, its life script's pos_point (null: unreadable)
+    private static HashSet<int>? ScriptPoints(SceneActorModel actor, int index)
+    {
+        var points = new HashSet<int>(PosPoints(actor, index));
+        try
+        {
+            foreach (var i in LbaScript.Bytecode.DecodeTrack(actor.Track))
+                if (i.Op is 4 or 8 or 12 or 15 && i.A.Length > 0) points.Add((int)i.A[0]);
+        }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { return null; }
+        return points;
+    }
+
+    // The points of an actor's way that are in the way of the cars moved off the road, each to the nearest clear place on the ground (its
+    // own cube, not the sea; at its height over the ground there): false where one has nowhere to go
+    private static bool PointsOffRoad(SceneModel model, int index, Func<double, double, double, double, bool> inTheWay, Func<double, double, double>? groundBefore,
+        Func<double, double, double>? ground, Func<double, double, bool>? wasGround, int scene, List<string> log)
+    {
+        var actor = model.Actors[index];
+        double ox = model.CubeX * 64.0, oz = model.CubeY * 64.0;
+        if (ScriptPoints(actor, index) is not { } points) return false;
+        var moves = new List<(int Point, SceneTrackPoint To, double Out)>();
+        foreach (var point in points.Where(p => p >= 0 && p < model.TrackPoints.Count).Order())
+        {
+            var p = model.TrackPoints[point];
+            if (!inTheWay(ox + p.X / 512.0, oz + p.Z / 512.0, p.Y, p.Y + 1500)) continue;
+            SceneTrackPoint? to = null;
+            var by = 0.0;
+            for (var out_ = 1.0; out_ <= 24 && to is null; out_ += 0.5)
+            for (var turn = 0; turn < 24 && to is null; turn++)
+            {
+                var angle = turn * Math.PI / 12;
+                int x = (int)Math.Round(p.X + Math.Cos(angle) * out_ * 512), z = (int)Math.Round(p.Z + Math.Sin(angle) * out_ * 512);
+                if (x < 512 || z < 512 || x > IslandFile.CubeSize - 512 || z > IslandFile.CubeSize - 512) continue;
+                double cx = ox + x / 512.0, cz = oz + z / 512.0;
+                if (wasGround is not null && !wasGround(cx, cz)) continue;
+                var b = groundBefore is null ? 0 : groundBefore(ox + p.X / 512.0, oz + p.Z / 512.0);
+                var y = ground is null ? p.Y : (int)Math.Round(ground(cx, cz) + (p.Y - b));
+                if (inTheWay(cx, cz, y, y + 1500)) continue;
+                to = p with { X = x, Y = y, Z = z };
+                by = out_;
+            }
+            if (to is null) return false;
+            moves.Add((point, to.Value, by));
+        }
+        foreach (var (point, to, by) in moves)
+        {
+            model.TrackPoints[point] = to;
+            log.Add($"scene {scene}: point {point} of actor {index}'s (entity {actor.Entity}) way was on the road and is moved {by:0.#} cells aside");
+        }
         return true;
     }
 
