@@ -34,6 +34,7 @@ extern U8 RendererDrawSky;
 extern U8 RendererDrawSea;
 extern U8 RendererDrawSeaPolys;
 extern U8 RendererDrawActors;
+extern U8 RendererShowHiddenActors;
 extern U8 SavingEnable;
 extern U8 FlagPlayAcf;
 extern U8 RainEnable;

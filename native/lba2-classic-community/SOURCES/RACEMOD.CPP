@@ -136,6 +136,10 @@
  *                                and no grid -- Twinsen gets in his car when he likes and chases (ChaseOpening)
  *     chase_lead=<cells>         the one to beat holds this lead over Twinsen: easing right off far ahead, pushing harder behind (ChaseLead)
  *     dream_any_end=1            a sprint's end wakes Twinsen up (wake=) whoever got there first; the one to beat goes on over the finish
+ *     door_off=<island file> <scene> <x0> <z0> <x1> <z1>
+ *                                the scene's door zone with that box shut while that island file is shown (RaceMod_DoorShut): its lift or
+ *                                wall is gone from it, not from the island's other file (Citadel Island's two weathers share their scenes,
+ *                                2026-10-27)
  *     wake_flight=<ms>           a win wakes Twinsen up <ms> after the line instead, the car not held there -- the finish line at a carried
  *                                jump's lip: he never lands -- the picture fading to white (WhiteFade) and the waking scene fading in
  *                                from white (RaceMod_FadeFromWhite: Polar Island's jump into the rocky peak, 2026-10-06)
@@ -524,6 +528,10 @@ static int s_chaseOn = 0, s_chaseText[3] = {-1, -1, -1}, s_chaseHelper = -1, s_c
 static S32 s_chaseAt = 0;
 static double s_chaseLead = 0;
 static int s_dreamAnyEnd = 0;
+// door_off= (RaceMod_DoorShut)
+#define RACE_MAX_DOORS_OFF 24
+static struct { char File[16]; int Scene, X0, Z0, X1, Z1; } s_doorsOff[RACE_MAX_DOORS_OFF];
+static int s_nbDoorsOff = 0;
 #define RACE_CHASE_PAUSE_MS 2600           // FunFrock driving off before Twinsen speaks
 #define RACE_DREAM_END_FLIGHT_MS 1600      // dream_any_end=: the one to beat over the jump this long before the dream fades
 static int s_fadeFromWhite = 0;             // the waking scene fades in from white (set by the wake; RaceMod_FadeFromWhite takes it)
@@ -955,6 +963,11 @@ static T_RACE_RAISED *s_raised = NULL;
 static int s_nbRaised = 0;
 #define RAISED_BUCKET 2048                 // the road's points are kept in squares of four cells
 #define RAISED_STEP 700                    // how far above an object the road may be and still be its floor
+// ... and above Twinsen on foot (RaceMod_FloorForFoot): a step he goes up. The road at his chest was his floor, and walking into its side
+// he sank into it and then stood on top of it (Citadel, the user, 2026-10-27: "walking into the raised track about chest height causes
+// him to initialy clip into the track then spawn on top of it"); higher than this its side is a wall to him (FootDeckWall)
+#define RAISED_FOOT_STEP 300
+static S32 s_raisedStep = RAISED_STEP;
 #define RAISED_LEVEL 1200                  // two parts of the road within this of each other's height are one level (a bend's segments)
 #define RAISED_PAD 96                      // the floor reaches this far past the road's edge
 #define RAISED_INSET 640                   // how far inside the edge the hero's middle is kept: a car's half width
@@ -2051,7 +2064,7 @@ static int RaisedAt(double wx, double wz, S32 ref, double pad, S32 *y, int *seg,
                     // (or on the strip beside it: across within it, along within the segment)
                     if (d2 > half * half && !OnStrip(a, c, tt, side, d2, pad)) continue;
                     const double yy = a->Y + (c->Y - a->Y) * tt + side * (a->Bank + (c->Bank - a->Bank) * tt) / RAISED_BANK_UNITS;
-                    if (yy > ref + RAISED_STEP) continue;
+                    if (yy > ref + s_raisedStep) continue;
                     if (!pass) { if (yy > top) top = yy; continue; }
                     if (yy < top - RAISED_LEVEL || d2 >= bestD) continue;
                     bestD = d2;
@@ -2578,8 +2591,35 @@ static int InTunnel(int seg) {
     return -1;
 }
 
-void RaceMod_FloorFor(S32 y) { s_floorRef = s_nbRaised ? y : RAISED_NOREF; }
-void RaceMod_FloorForNothing(void) { s_floorRef = RAISED_NOREF; }
+void RaceMod_FloorFor(S32 y) { s_floorRef = s_nbRaised ? y : RAISED_NOREF; s_raisedStep = RAISED_STEP; }
+void RaceMod_FloorForNothing(void) { s_floorRef = RAISED_NOREF; s_raisedStep = RAISED_STEP; }
+// (EXTFUNC.CPP DoAnimExt, the hero moved: on foot the road is his floor only a step up, RAISED_FOOT_STEP)
+void RaceMod_FloorForFoot(void) { if (Comportement != C_BUGGY) s_raisedStep = RAISED_FOOT_STEP; }
+
+// The raised road's side a wall to Twinsen on foot: a move to where the road's deck stands higher than a step over his feet and not over
+// his head is not made -- along the side he slides, as along a wall (Citadel, 2026-10-27). Where he already was in it (a scene's start,
+// put there) he may move as he likes, out of it.
+#define FOOT_WALL_PAD 192                  // how far from the deck's edge his middle is kept: about his half width
+static int FootDeckIn(double wx, double wz, S32 y, S32 head) {
+    S32 f;
+    int seg;
+    double lat, t;
+    const S32 step = s_raisedStep;
+    s_raisedStep = RAISED_STEP;
+    const int in = RaisedAt(wx, wz, y + head - RAISED_STEP, FOOT_WALL_PAD, &f, &seg, &lat, &t) && f > y + RAISED_FOOT_STEP;
+    s_raisedStep = step;
+    return in;
+}
+static void FootDeckWall(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
+    if (!s_nbRaised || CubeMode != CUBE_EXTERIEUR || (*nx == ox && *nz == oz)) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const S32 head = hero->YMax > 400 ? hero->YMax : 1200;
+    if (!FootDeckIn(*nx + cx, *nz + cz, oy, head) || FootDeckIn(ox + cx, oz + cz, oy, head)) return;
+    if (!FootDeckIn(*nx + cx, oz + cz, oy, head)) *nz = oz;
+    else if (!FootDeckIn(ox + cx, *nz + cz, oy, head)) *nx = ox;
+    else { *nx = ox; *nz = oz; }
+}
 
 // The hero kept on the raised road: standing on it at (ox, oy, oz) (cube-local) -- not under it -- a move to (*nx, *nz) that would take
 // his middle nearer than RAISED_INSET to an edge ends on that line instead, beside the same point of the road; a move that leaves the
@@ -2695,8 +2735,10 @@ static S32 s_railAt = 0;
 #define RAIL_NOTE(w) (s_railWhy = (w), s_railAt = TimerRefHR)
 static void MarshalPost(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
-    // (on foot, exploring: nothing holds him on the road -- on_foot=, OnFoot)
-    if (RaceMod_OnFoot()) return;
+    // (on foot -- exploring, on_foot=, or anywhere out of his car: nothing holds him on the road, he jumps or walks off its edge as off any
+    // ledge; its side a wall to him. The rail is the car's: the user, 2026-10-27, "Twinsen is unable to jump off the track at the raised
+    // sections, are we able to fix this whilst still preventing the car from falling off?")
+    if (Comportement != C_BUGGY) { FootDeckWall(ox, oy, oz, nx, nz); return; }
     // (the flag marshal on the road for the start: a post the car glances off)
     MarshalPost(ox, oy, oz, nx, nz);
     if (!s_nbRaised || CubeMode != CUBE_EXTERIEUR) return;
@@ -3484,6 +3526,10 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "chase_lead")) s_chaseLead = atof(v) * 512;
         else if (!strcmp(key, "dream_any_end")) s_dreamAnyEnd = atoi(v);
+        else if (!strcmp(key, "door_off") && s_nbDoorsOff < RACE_MAX_DOORS_OFF) {
+            if (sscanf(v, "%15s %d %d %d %d %d", s_doorsOff[s_nbDoorsOff].File, &s_doorsOff[s_nbDoorsOff].Scene, &s_doorsOff[s_nbDoorsOff].X0, &s_doorsOff[s_nbDoorsOff].Z0,
+                       &s_doorsOff[s_nbDoorsOff].X1, &s_doorsOff[s_nbDoorsOff].Z1) == 6) s_nbDoorsOff++;
+        }
         else if (!strcmp(key, "minimap")) s_mapKey = atoi(v);
         else if (!strcmp(key, "raised")) LoadRaised(v);
         else if (!strcmp(key, "raised_lap")) s_nbLap = atoi(v);
@@ -14767,6 +14813,16 @@ static int IslandCar(void) {
     for (int i = 0; i < s_nbIslandCars; i++) if (s_islandCars[i].Island == Island) return i;
     return -1;
 }
+// The car Twinsen drives as (drive_as=, or the island's own car: ISLANDCARS.TXT), its body and animation -- the behaviour menu shows it
+// in the driving box in place of his buggy (COMPORTE.CPP; the user, 2026-10-27: "pressing a behaviour key seemed to switch the digger back
+// to Twinsen's buggy"); -1: none
+S32 RaceMod_DrivenBody(S32 *anim) {
+    if (!RaceMod_Active() && IslandCar() < 0) return -1;
+    if (s_driveBody < 0 || s_driveAnim < 0) return -1;
+    *anim = s_driveAnim;
+    return s_driveBody;
+}
+
 S32 RaceMod_StoryAccel(void) {
     if (RaceMod_Active()) return 100;
     const int c = IslandCar();
@@ -14790,6 +14846,16 @@ static void IslandCarDraw(void) {
     if (IslandCar() < 0 || s_driveBody < 0 || CubeMode != CUBE_EXTERIEUR) return;
     if (s_heroHidden) DrawDriveAsOn(TimerRefHR, &ListObjet[NUM_PERSO]);
     else if (s_islandParked) DrawDriveAsOn(TimerRefHR, &ListObjet[NUM_BUGGY], 1);
+}
+
+// Whether a door zone is one this weather's island file has lost (door_off=): GereZoneChangeCube (OBJECT.CPP) doesn't take Twinsen
+// through it, whatever switched it on (Twinsen's own script, standing on the lift's place: Citadel Island's by the storm track's start line)
+S32 RaceMod_DoorShut(const T_ZONE *zn) {
+    if (!RaceMod_Active()) return 0;
+    for (int i = 0; i < s_nbDoorsOff; i++)
+        if (s_doorsOff[i].Scene == (S32)NumCube && !strcasecmp(s_doorsOff[i].File, IslandName) && zn->X0 == s_doorsOff[i].X0 && zn->Z0 == s_doorsOff[i].Z0 && zn->X1 == s_doorsOff[i].X1 && zn->Z1 == s_doorsOff[i].Z1)
+            return 1;
+    return 0;
 }
 
 void RaceMod_Frame(void) {
@@ -16725,6 +16791,9 @@ void RaceMod_MinimapHide(S32 hide) {
 
 void RaceMod_Draw(void) {
     s_mapAtX = -1;                          // (the mini-map not on this frame's picture until DrawMinimap puts it there)
+    // (the whole screen to draw on: the scene's last drawn text -- a behaviour key's name, OBJECT.CPP INCRUST_SYS_TEXT -- leaves the clip
+    // round itself, and the car he drives as, or parked, was cut away while it was up: Polar Island's digger gone, 2026-10-27)
+    UnsetClip();
     if (!RaceMod_Active()) { IslandCarDraw(); return; }
     if (!LbaFont) return;
     // (LBA2_CARVIS=1: the first opponent's car's state logged as it changes -- in this scene or not, out of sight at Y -20000, hidden,
@@ -16983,6 +17052,7 @@ static void ResetTrack(void) {
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
+    s_nbDoorsOff = 0;
     s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0;
     GhostReset();

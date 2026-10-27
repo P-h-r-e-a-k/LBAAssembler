@@ -591,6 +591,7 @@ void AffichageActorsZBuf(void) {
         // SPRITE_3D branch. Left for later; this covers real 3D-bodied NPCs.
         if (ptrobj->Flags & SPRITE_3D) continue;
         if (ptrobj->Obj.Body.Num < 0) continue; // no body assigned/loaded
+        if (!RendererShowHiddenActors && ((ptrobj->Flags & INVISIBLE) || ptrobj->Obj.Y <= -10000)) continue; // (hidden: the game's, GLOBAL.CPP)
 
         LongWorldRotatePoint(ptrobj->Obj.X, ptrobj->Obj.Y, ptrobj->Obj.Z);
         if (!LongProjectPoint(X0, Y0, Z0)) continue;
@@ -2171,6 +2172,7 @@ static void DoAnimExtGround(U8 numobj);
 // passes at its height.)
 void DoAnimExt(U8 numobj) {
     RaceMod_FloorFor(ListObjet[numobj].Obj.Y);
+    if (numobj == NUM_PERSO) RaceMod_FloorForFoot();      // (Twinsen on foot: the road his floor a step up only)
     DoAnimExtGround(numobj);
     RaceMod_FloorForNothing();
 }

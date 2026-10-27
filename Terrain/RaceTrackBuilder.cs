@@ -526,6 +526,27 @@ internal sealed class RaceTrackOptions
     public bool RemoveTrackCameras { get; set; } = true;
     public double CameraMargin { get; set; } = 2;
     public bool RemoveSolidDecors { get; set; } = true;
+    // The island's doors into inside scenes (its outside scenes' cube-change zones to the others: a lift down into the sewers, a cave's
+    // mouth, a house's door), island cells and heights, as the game has them (RaceTrackService.DoorBoxes): the decor that makes one -- the
+    // lift, the cave's rock, the house -- stays unless it stands on the asphalt itself. Citadel Island's lift by the start line went with
+    // the town circuit's verge, and walking onto its place took Twinsen down into the sewers (the user, 2026-10-27)
+    public List<(double X0, double Z0, double X1, double Z1, double Y0, double Y1)> DoorBoxes { get; set; } = new();
+    public const double DoorDecorReach = 1.5;
+
+    // The island's decor pieces that stand at a door (DoorBoxes, DoorDecorReach round it)
+    public static HashSet<IslandDecor> DecorsAtDoor(IslandFile island, (double X0, double Z0, double X1, double Z1, double Y0, double Y1) b)
+    {
+        var n = new HashSet<IslandDecor>(ReferenceEqualityComparer.Instance);
+        const double r = DoorDecorReach;
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            foreach (var d in cube.Decors)
+            {
+                double x0 = (cx * (double)IslandFile.CubeSize + d.XMin) / 512, x1 = (cx * (double)IslandFile.CubeSize + d.XMax) / 512;
+                double z0 = (cz * (double)IslandFile.CubeSize + d.ZMin) / 512, z1 = (cz * (double)IslandFile.CubeSize + d.ZMax) / 512;
+                if (x1 >= b.X0 - r && x0 <= b.X1 + r && z1 >= b.Z0 - r && z0 <= b.Z1 + r && d.YMax >= b.Y0 - 512 && d.YMin <= b.Y1 + 512) n.Add(d);
+            }
+        return n;
+    }
     // The track drawn into the island's holomap picture(s) (RaceTrackHolomap).
     public bool DrawOnHolomap { get; set; } = true;
     // Citadel Island's opening sends Twinsen to the start line (RaceTrackStory): Zoe's line and a holomap arrow.
@@ -623,6 +644,10 @@ internal sealed class RaceTrackReport
     public List<string> Notes { get; } = new();
     public List<(int Start, int End)> BridgeSpans { get; } = new();
     public List<(int CubeX, int CubeZ, int Body, string Kind)> Removed { get; } = new();
+    // The island's doors into inside scenes (RaceTrackOptions.DoorBoxes) whose every piece of decor the road took away -- a lift under the
+    // road's deck: the scenes' door zone goes with it (RaceTrackScenes), or walking onto its empty place took Twinsen down into the sewers,
+    // and the ride back up straight down again (Citadel Island, by the storm track's start line, 2026-10-27)
+    public List<(double X0, double Z0, double X1, double Z1)> LostDoors { get; } = new();
     public List<double[]> Arrows { get; } = new();
     // Where the lap crosses itself (island cell coordinates, the height there, the angle between the two roads in degrees).
     public List<(double X, double Z, double Y, double Angle)> Crossings { get; } = new();
@@ -743,6 +768,13 @@ internal sealed class RaceTrackReport
     public RoadBridgeInfo? RoadBridge { get; set; }
     // How far (cells) an island cell position is from the nearest road's centre line, 1e9 when far away.
     public Func<double, double, double> DistanceToRoad { get; set; } = (_, _) => 1e9;
+    // Whether something at an island cell (x, z), from height lo to hi (world units), is in the way of the cars: on a road there -- within
+    // its width (the curbs', or a raised road's own) and a cell more -- and within the height a car on it takes up, from a little under
+    // the road's surface to RoadHeadroom over it. A lift over a road on the ground, a cave's door in the cliff beside a raised road, a
+    // townsman under a bridge: not in the way (the user, 2026-10-27: "make sure we're keeping all zones that don't directly interfere with
+    // the tracks on all levels")
+    public Func<double, double, double, double, bool> InTheWay { get; set; } = (_, _, _, _) => false;
+    public const double RoadHeadroom = 1600;
     // The ground's height at an island cell position before and after the build (the scenes re-seat what stood on reshaped ground).
     public Func<double, double, double>? GroundBefore { get; set; }
     public Func<double, double, double>? GroundAfter { get; set; }
@@ -1042,6 +1074,8 @@ internal static class RaceTrackBuilder
         if (planned && main.Raised is not null && plan.RaisedHalfs is null) WidenRaised(island, main, plan, options, report);
         var index = new RoadIndex(roads);
         report.DistanceToRoad = (x, z) => { var h = index.Near(x, z, 14, 1); return h.Count == 0 ? 1e9 : h[0].Dist; };
+        report.InTheWay = (x, z, lo, hi) => index.Near(x, z, 14, 4).Any(h =>
+            h.Dist <= (h.Raised && h.Half > 0 ? h.Half : roads[h.Road].CurbHalf) + 1 && hi >= h.H - 400 && lo <= h.H + RaceTrackReport.RoadHeadroom);
         var startIndex = roads.Count > 1 ? PitMiddle : planned && plan.Start is { } startPoint ? PlanPoint(plan, main, startPoint) : -1;
         ClearOldTrack(island, options, report);
         DropDecors(island, options, report);
@@ -3355,6 +3389,18 @@ internal static class RaceTrackBuilder
         bool Protected(int body) => o.Island.OldTrackCube is not null && o.ProtectedBodies.Contains(body);
         var keepSet = keepBodies?.ToHashSet() ?? new HashSet<int>();
         bool Kept(IslandDecor d) => keepSet.Contains(d.Body & 0xFFFF) || keepAbove is { } high && d.YMax >= high;
+        // (the decor at the island's doors: RaceTrackOptions.DoorBoxes)
+        var atDoor = new HashSet<IslandDecor>(ReferenceEqualityComparer.Instance);
+        if (o.DoorBoxes.Count > 0)
+            foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+                foreach (var d in cube.Decors)
+                {
+                    double x0 = (cx * (double)IslandFile.CubeSize + d.XMin) / 512, x1 = (cx * (double)IslandFile.CubeSize + d.XMax) / 512;
+                    double z0 = (cz * (double)IslandFile.CubeSize + d.ZMin) / 512, z1 = (cz * (double)IslandFile.CubeSize + d.ZMax) / 512;
+                    const double r = RaceTrackOptions.DoorDecorReach;
+                    if (o.DoorBoxes.Any(b => x1 >= b.X0 - r && x0 <= b.X1 + r && z1 >= b.Z0 - r && z0 <= b.Z1 + r && d.YMax >= b.Y0 - 512 && d.YMin <= b.Y1 + 512))
+                        atDoor.Add(d);
+                }
         var raised = roads is { Count: > 0 } && roads[0].Raised is not null;
         // (a raised road wider than a ground road's verge -- the Emerald Moon's, as wide as the reactor's dish -- is looked for further out)
         var look = raised ? Math.Max(8, (roads![0].RaisedHalfs is { Length: > 0 } wide ? wide.Max() : o.RaisedHalfWidth) + 1.5) : 8;
@@ -3390,7 +3436,8 @@ internal static class RaceTrackBuilder
                             roof = Math.Min(roof, h.H - lean);
                             hit = true;
                         }
-                        else if (h.Dist <= (h.Road == 0 ? 6.5 : 4.5)) hit = true;
+                        // (a door's decor only on the asphalt itself: Citadel Island's lift by the storm track's start line stands on the curb)
+                        else if (h.Dist <= (atDoor.Contains(d) ? (roads is { } rs && h.Road < rs.Count ? rs[h.Road].AsphaltHalf : o.AsphaltHalfWidth) : h.Road == 0 ? 6.5 : 4.5)) hit = true;
                     }
                 if (!hit) continue;
                 if (asIs?.Contains(body) == true) continue;
@@ -3425,7 +3472,8 @@ internal static class RaceTrackBuilder
             foreach (var d in remove) { cube.Decors.Remove(d); taken.Add((cx, cz, d)); }
         }
         if (cut > 0) report.Notes.Add($"{cut} kept decor objects' collision boxes cut down to end under the raised road that passes over them");
-        ClearRuins(island, index, taken, o, report, Kept);
+        if (atDoor.Count > 0) report.Notes.Add($"{atDoor.Count} decor pieces at the island's doors into its inside scenes (lifts, caves, houses) kept unless on the asphalt");
+        ClearRuins(island, index, taken, o, report, d => Kept(d) || atDoor.Contains(d));
     }
 
     // The rest of a structure the road ran through. A building is several decor pieces placed apart (walls, pillars, a roof beam), so
@@ -5715,6 +5763,8 @@ internal static class RaceTrackBuilder
 
     // The piers under the road's middle, on the ground: one every RaisedPier cells, moved a few cells along the road where it would stand
     // on another part of the lap, where an opponent waits or in a decor object's box.
+    // (a lane between buildings: walls this high within PierLane cells either side of a pier's place; a door: PierDoor cells round it)
+    private const double PierLane = 3.5, PierLaneWall = 1200, PierDoor = 3;
     private static (int Piers, int None) PlacePiers(IslandFile island, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, List<int> span,
         Func<int, System.Numerics.Vector3> across, AddDecor add, ref int left, IReadOnlyList<TrackRoad>? others = null)
     {
@@ -5750,6 +5800,15 @@ internal static class RaceTrackBuilder
             // ... nor in a decor object that stands there
             foreach (var b in boxes)
                 if (r.X[k] > b.X0 - 0.7 && r.X[k] < b.X1 + 0.7 && r.Z[k] > b.Z0 - 0.7 && r.Z[k] < b.Z1 + 0.7 && b.Y1 > ground + 50) return false;
+            // ... nor in the way of those on foot: in a lane between buildings -- walls close on both sides of it, across or along -- nor
+            // at a door into an inside scene (the user, 2026-10-27, Citadel Island: "The entrance to the port area on Citadel has a track
+            // support in the way, let's just remove the support")
+            bool Wall(double x0, double z0, double x1, double z1) => boxes.Any(b => b.X1 > x0 && b.X0 < x1 && b.Z1 > z0 && b.Z0 < z1 && b.Y1 > ground + PierLaneWall);
+            double x = r.X[k], z = r.Z[k];
+            if (Wall(x - PierLane, z - 1, x - 0.7, z + 1) && Wall(x + 0.7, z - 1, x + PierLane, z + 1)) return false;
+            if (Wall(x - 1, z - PierLane, x + 1, z - 0.7) && Wall(x - 1, z + 0.7, x + 1, z + PierLane)) return false;
+            foreach (var d in o.DoorBoxes)
+                if (x > d.X0 - PierDoor && x < d.X1 + PierDoor && z > d.Z0 - PierDoor && z < d.Z1 + PierDoor) return false;
             return true;
         }
         int piers = 0, none = 0;
@@ -5777,7 +5836,12 @@ internal static class RaceTrackBuilder
                 if (!Clear(k, ground)) continue;
                 var body = RaceTrackRaisedBody.Pier(height, PierHalf, across(k), (r.RaisedHalfs?[k] ?? o.RaisedHalfWidth) * 512 - 150, PierBeam, PierHalf, r.Themes?[k]);
                 var top = (int)Math.Round(Math.Min(height - PierBeam - 60, lowest - ground - 420));
-                if (add(body, r.X[k] * 512, ground, r.Z[k] * 512, -(int)PierHalf, 0, -(int)PierHalf, (int)PierHalf, Math.Max(1, top), (int)PierHalf)) piers++; else left++;
+                if (add(body, r.X[k] * 512, ground, r.Z[k] * 512, -(int)PierHalf, 0, -(int)PierHalf, (int)PierHalf, Math.Max(1, top), (int)PierHalf))
+                {
+                    piers++;
+                    report.Notes.Add(FormattableString.Invariant($"  a pier at cell ({r.X[k]:0.0}, {r.Z[k]:0.0}), {height:0} high"));
+                }
+                else left++;
                 placed = true;
                 break;
             }

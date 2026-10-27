@@ -46,6 +46,9 @@ internal sealed record RaceTrackIsland(
         // after Twinsen until the keeper is back -- after the car; no script of the scene's refers to her)
         StoryEntities = new[] { RaceTrackStory.LighthouseRaph, RaceTrackStory.CoupleOnTop },
         OwnGroundAt = new[] { (46, 481.5, 661.8, 10.0) },
+        // (the island's people and things away from both roads stay: the cow, the sewer lifts by the start line and over the school -- without
+        // them the lift's zone took Twinsen down into the sewers and the ride back up took him straight down again -- the user, 2026-10-27)
+        KeepOffRoadActors = true,
     };
 
     public static readonly RaceTrackIsland CitadelStorm = Citadel with
@@ -123,6 +126,9 @@ internal sealed record RaceTrackIsland(
     public int[]? StoryEntities { get; init; }
     // The entities whose actors every build keeps, story or not (and moves off the road): the island's own story outside a race
     public int[]? KeptEntities { get; init; }
+    // The build keeps every actor that is off the road -- it stands clear of it, and its scripts put it nowhere on it (RaceTrackScenes
+    // OffRoad) -- taking only those on it away; without, every actor goes but the story's and the cutscenes'
+    public bool KeepOffRoadActors { get; init; }
     // The entity of the one the island's story has waiting at the start, whatever the build's story setting: brought from the scene the
     // island has him in to stand just behind Twinsen on the grid (Polar Island's grobo with the digger's key, 2026-10-27)
     public int? StartPerson { get; init; }

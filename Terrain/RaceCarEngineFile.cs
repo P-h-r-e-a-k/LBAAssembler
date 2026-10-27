@@ -284,6 +284,8 @@ internal static class RaceCarEngineFile
         var parked = car.Parked(track);
         if (info?.Twin is { } fine) parked.AddRange(AllCars(ReferenceEquals(track, fine) ? info : fine));
         foreach (var (scene, actor) in parked) text.Append($"hide_actor={scene} {actor}\n");
+        // the doors one of the island's files has lost, shut while it is shown (RaceTrackScenes Result.DoorsOff)
+        foreach (var d in info?.DoorsOff ?? new()) text.Append($"door_off={d}\n");
         return text.ToString();
     }
 

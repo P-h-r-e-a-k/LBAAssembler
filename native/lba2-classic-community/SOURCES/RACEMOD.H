@@ -28,7 +28,8 @@ typedef struct {
 
 // TRUE when the engine was started for a race-track mod.
 S32 RaceMod_Active(void);
-S32 RaceMod_StoryAccel(void);   // with no race on: the share (%) of the buggy's acceleration an island's own car has (ISLANDCARS.TXT)
+S32 RaceMod_StoryAccel(void);
+S32 RaceMod_DrivenBody(S32 *anim);   // with no race on: the share (%) of the buggy's acceleration an island's own car has (ISLANDCARS.TXT)
 const T_RACE_CAR *RaceMod_Car(void);
 
 // The current gear (1..Gears), and gear changes: X up, Z down (edges of the keys), or by themselves.

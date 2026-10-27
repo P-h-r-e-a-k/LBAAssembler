@@ -54,6 +54,11 @@ U8 RendererDrawSeaPolys = TRUE;
 // (EXTFUNC.CPP), the dedicated actor-draw pass -- terrain and decor objects are drawn by separate code
 // and are unaffected.
 U8 RendererDrawActors = TRUE;
+// The editor's renderer only (RendererBootAssets): AffichageActorsZBuf draws hidden actors too -- INVISIBLE ones, and those put out of
+// sight at Y -20000 -- for the level editor to see and pick. The game leaves them out: that pass is the game's own exterior drawing too,
+// and a car hidden there still showed (an island's own car parked in the buggy's place, RACEMOD.CPP: the buggy under Polar Island's
+// digger, its wheels showing, and the buggy alone as a behaviour key's name was up -- the user, 2026-10-27)
+U8 RendererShowHiddenActors = FALSE;
 U8 SavingEnable = TRUE;
 U8 FlagPlayAcf = FALSE;
 U8 RainEnable = FALSE;

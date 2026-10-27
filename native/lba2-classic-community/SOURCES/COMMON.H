@@ -370,6 +370,7 @@ S32 RaceMod_Dial(S32 num);
 S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);
 void RaceMod_FloorFor(S32 y);
 void RaceMod_FloorForNothing(void);
+void RaceMod_FloorForFoot(void);
 // OBJECT.CPP ChangeCube's fade-in: from white, once, at a dream's end (RACEMOD.CPP wake_flight=)
 S32 RaceMod_FadeFromWhite(void);
 // EXTFUNC.CPP InitGrilleExt: Citadel Island's weather as its file is chosen (1 fine, CITABAU; 0 the storm, CITADEL) -- game variable 206

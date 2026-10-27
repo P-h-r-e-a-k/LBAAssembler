@@ -5396,3 +5396,31 @@ corners where that's quicker".
   (the standing rule). Every remap made in such a session was lost; the user's lba2-play\lba2.cfg held the defaults. Now leaving the
   keyboard and the gamepad configuration screens saves the cfg at once (CONFIG.CPP MenuConfig, MenuGamepadConfig). Publishing never
   touches release\lba2-play (checked), and a headless run keeps the keys (tested).
+
+## The digger and the buggy; on foot by the raised road; Citadel's actors, doors, lifts, piers and ferry (2026-10-27)
+
+- The parked digger showed the buggy's wheels under it, and the buggy alone while a behaviour key's name was up (the user: "I was
+  behaviour switching with the F keys outside of the vehicle, this caused the digger to display as the buggy"). Two causes: the exterior
+  terrain pass's actor drawing (EXTFUNC.CPP AffichageActorsZBuf, the renderer's) drew INVISIBLE actors and those out of sight at Y -20000 in
+  the game too -- now only in the editor's renderer (GLOBAL.CPP RendererShowHiddenActors, set by RendererBootAssets); and the behaviour
+  name's text (OBJECT.CPP INCRUST_SYS_TEXT) left the clip round itself, cutting away the car drawn after it -- RaceMod_Draw unsets it.
+- On foot by the raised road (Citadel: "walking into the raised track about chest height causes him to initialy clip into the track then
+  spawn on top of it ... Twinsen is unable to jump off the track at the raised sections"): the deck is Twinsen's floor only a step up on foot
+  (RAISED_FOOT_STEP 300, RaceMod_FloorForFoot) and its side a wall he slides along (FootDeckWall); the rail holds the car only -- on foot
+  he walks or jumps off the edge as off any ledge.
+- Citadel Island keeps the actors off the roads (RaceTrackIsland.KeepOffRoadActors; "make sure we've not removed any actors that aren't
+  directly on the track such as the cow"): an actor goes only where it, or a point its scripts send it to, is in the way of the cars --
+  RaceTrackReport.InTheWay: within a road's width (the curbs', a raised road's own) and a cell, from under its surface to RoadHeadroom over
+  it. Every island keeps whoever switches doors (SET_CHANGE_CUBE) and the actors those scripts wait on, where they keep off the road; kept
+  cutscene actors are moved aside only when in the way in 3D (a lift's platform beside the road was moved 12 cells from its zone).
+- Zones ("keeping all zones that don't directly interfere with the tracks on all levels"): other than the fixed cameras, a zone goes only
+  where it is in the way (InTheWay at its own heights).
+- Doors into inside scenes (RaceTrackService.DoorBoxes, the original scenes' cube changes to scenes off the island): their decor -- a lift,
+  a cave's rock, a house -- stays unless on the asphalt itself. A door whose every original piece of decor went: gone from the scenes if
+  lost in all of the island's files; one walked into its wall (ZONE_TEST_BRICK) and lost in one weather's file only is shut while that
+  file is shown (door_off=<file> <scene> <box>, RACEMOD.CPP RaceMod_DoorShut in GereZoneChangeCube) -- the storm track's deck over the lift
+  by its start line; the museum's door, its building's top taken by the storm track and the whole of it by the town circuit.
+- Piers: none in a lane between buildings (walls within 3.5 cells both sides) nor at a door ("The entrance to the port area on Citadel
+  has a track support in the way") -- the one at cell (519, 595), 4,073 high.
+- The ferry (scene 43): invisible, and the ticket does nothing at the quay or to the ferryman, until the town circuit is won and the
+  weather is fine ("lets Twinsen take the ferry in the rain by selecting his ferry ticket from his inventory").

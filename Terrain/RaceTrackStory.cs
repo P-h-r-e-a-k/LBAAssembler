@@ -51,6 +51,9 @@ internal static class RaceTrackStory
     // Twinsen has slept: the town circuit is open), the town circuit won (1; 2 once the ticket is handed over) and Raph's time beaten
     // (1; 2 once Raph has said so). 200-202 are game variables nothing in the game uses.
     public const int GlovesSlot = 7, FerryTicket = 13;
+    // the harbour (scene 43): the ferry, and Twinsen's own script that takes him aboard with the ticket; Citadel Island's weather (1 fine:
+    // RACEMOD.CPP RaceMod_CitadelWeather)
+    private const int FerryScene = 43, WeatherVar = 206;
     public const int DayVar = 200, Tired = 1, Rested = 2, WonVar = 201, BeatVar = 202;
     // Celebration Island's lava lake: the souvenir seller beaten (1; 2 once he has told what he saw) and his race run (won or not), 203-204
     public const int SellerBeaten = 203, SellerRaced = 204;
@@ -876,6 +879,35 @@ void comportement_1()
 ");
             });
         }
+
+        // 7. the ferry: not there in the storm, nor before the town circuit is won (the user, 2026-10-27: "Citadel island has a bug that lets
+        // Twinsen take the ferry in the rain by selecting his ferry ticket from his inventory, let's add a fix so this doesn't happen, and
+        // keep the ferry invisible until after the Citabau track is beaten") -- the ferry hidden, and the ticket shown to the ferryman or
+        // used at the quay doing nothing, until then
+        Edit(FerryScene, "the ferry is there, and the ticket takes Twinsen aboard, only in the fine weather once the town circuit is won", _ => scripts =>
+        {
+            var hero = scripts.GetText(0, ScriptKind.Life);
+            var board = System.Text.RegularExpressions.Regex.Match(hero, $@"if \(1 == var_game\({FerryTicket}\) && \(0 == l_track_obj\((\d+)\) \|\| 1 == use_inventory\({FerryTicket}\)\)\)");
+            if (!board.Success) throw new NotTheGames("the ferry's boarding");
+            var ferry = int.Parse(board.Groups[1].Value);
+            var open = $"0 < var_game({WonVar}) && 1 == var_game({WeatherVar})";
+            hero = Once(hero, $"if (1 == use_inventory({FerryTicket}))", $"if (1 == use_inventory({FerryTicket}) && {open})");
+            hero = Once(hero, board.Value, $"if (1 == var_game({FerryTicket}) && (0 == l_track_obj({ferry}) || 1 == use_inventory({FerryTicket})) && {open})");
+            scripts.SetText(0, ScriptKind.Life, hero);
+            if (scripts.GetText(ferry, ScriptKind.Life).Contains("comportement_1")) throw new NotTheGames("the ferry's own script");
+            scripts.SetText(ferry, ScriptKind.Life, $@"void comportement_0()
+{{
+    if ({open})
+    {{
+        invisible(0);
+    }}
+    else
+    {{
+        invisible(1);
+    }}
+}}
+");
+        });
 
         store.SaveMany(models.Select(m => new SceneChange(m.Key, m.Value, null)).ToList(), allowErrors: true);
         log.Add($"the race-track mode: Mr. Paul's gloves gate the storm track (variable {GlovesSlot}), Raph's time beaten sets {BeatVar}; the town circuit opens once {DayVar} is {Rested}, " +

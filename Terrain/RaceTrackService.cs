@@ -16,6 +16,35 @@ namespace LBAAssembler.Terrain;
 internal static class RaceTrackService
 {
     public const string BackupSuffix = ".before-racetrack";
+
+    // The doors whose decor the build took away, every piece of it (RaceTrackReport.LostDoors)
+    // (the pieces it had: the build's own new ones there -- the road's deck over a lift -- are no door)
+    private static void NoteLostDoors(IslandFile island, List<(double X0, double Z0, double X1, double Z1, double Y0, double Y1)> doors, List<HashSet<IslandDecor>> before, RaceTrackReport report)
+    {
+        var still = new HashSet<IslandDecor>(IslandOps.CubeCells(island).SelectMany(c => c.Item3.Decors), ReferenceEqualityComparer.Instance);
+        for (var i = 0; i < doors.Count; i++)
+            if (before[i].Count > 0 && !before[i].Any(still.Contains)) report.LostDoors.Add((doors[i].X0, doors[i].Z0, doors[i].X1, doors[i].Z1));
+    }
+
+    // The island's doors into inside scenes, as its scenes have them before any build (RaceTrackOptions.DoorBoxes): each of its outside
+    // scenes' cube-change zones to a scene that isn't one of them, in island cells and heights
+    public static List<(double X0, double Z0, double X1, double Z1, double Y0, double Y1)> DoorBoxes(string gameDirectory, RaceTrackIsland island)
+    {
+        var boxes = new List<(double, double, double, double, double, double)>();
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, gameDirectory);
+        if (File.Exists(store.ScenePath + BackupSuffix)) store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, gameDirectory, "SCENE.HQR" + BackupSuffix);
+        for (var scene = island.FirstScene; scene <= island.LastScene; scene++)
+        {
+            LBAAssembler.Scenes.SceneModel model;
+            try { if (!store.SceneExists(scene)) continue; model = store.Load(scene); }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { continue; }
+            if (model.Island != island.IslandByte || model.CubeMode != 1) continue;
+            foreach (var z in model.Zones)
+                if (z.Type == 0 && !island.HasScene(z.Num))
+                    boxes.Add((model.CubeX * 64 + z.X0 / 512.0, model.CubeY * 64 + z.Z0 / 512.0, model.CubeX * 64 + z.X1 / 512.0, model.CubeY * 64 + z.Z1 / 512.0, z.Y0, z.Y1));
+        }
+        return boxes;
+    }
     // Whether a build installs the private special cars (the toy dump truck) as well: the editor's builds do; the race game's installer
     // turns it off, so the game it installs carries none of them.
     public static bool PrivateCars { get; set; } = true;
@@ -200,7 +229,10 @@ internal static class RaceTrackService
         // MapRoads: the roads the race's mini-map draws that the race doesn't drive by -- the pit lane on the ground (RaceTrackBuilder's
         // "pit" road), each [x, z, x, z, ...] in world units (RACEMOD.CPP map_road=); since 2026-10-26, the user: "All tracks appear to be
         // missing the pitlane"
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? MapRoads = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? MapRoads = null,
+        // DoorsOff: the doors shut while one of the island's files is shown, each "<file> <scene> <x0> <z0> <x1> <z1>" (RaceTrackScenes
+        // Result.DoorsOff, RACEMOD.CPP door_off=); since 2026-10-27
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<string>? DoorsOff = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -548,7 +580,10 @@ internal static class RaceTrackService
         options.Theme = themed.Theme;
         if (themed.Log.Length > 0) extra.Add(themed.Log);
         session.Step(0.1, "the road, its ground and its scenery");
+        options.DoorBoxes = DoorBoxes(gameDirectory, options.Island);
+        var atDoors = options.DoorBoxes.Select(b => RaceTrackOptions.DecorsAtDoor(island, b)).ToList();
         var report = RaceTrackBuilder.Build(island, plan, options);
+        NoteLostDoors(island, options.DoorBoxes, atDoors, report);
         // (an island with more ground pages -- POLAR.ILE -- has a texture index of a page and a definition, IslandFile.GroundPageShift, and
         // the triangle's Wide bit: the road's definitions, the smooth kerbs' a triangle each on a bend, must fit in a cube's 2,048)
         if (island.GroundPages.Count > 0)
@@ -606,6 +641,7 @@ internal static class RaceTrackService
         var source = Path.Combine(gameDirectory, ile + BackupSuffix);
         var twin = IslandFile.Load(File.Exists(source) ? source : Path.Combine(gameDirectory, ile));
         twinOptions = own ? twinOptions.Copy() : options.Copy();
+        twinOptions.DoorBoxes = options.DoorBoxes;      // (the same scenes, the same doors)
         if (own) FollowPlan(plan, twinOptions);
         // (a track of its own has a jump of its own: a flight of its own too)
         if (own) twinOptions.JumpAnim = RaceTrackJumpAnim.GenericFor(options.Island, twin: true);
@@ -616,7 +652,9 @@ internal static class RaceTrackService
         twinOptions.Theme = RaceTrackTextures.Import(twin, options.Island, gameDirectory, ile).Theme;
         twinOptions.NewBodyBase = HqrArchive.CountEntries(Path.Combine(gameDirectory, obl));
         twinOptions.SceneryObl = Path.Combine(gameDirectory, obl);
+        var atDoors = twinOptions.DoorBoxes.Select(b => RaceTrackOptions.DecorsAtDoor(twin, b)).ToList();
         var report = RaceTrackBuilder.Build(twin, plan, twinOptions);
+        NoteLostDoors(twin, twinOptions.DoorBoxes, atDoors, report);
         twin.Save(Path.Combine(gameDirectory, ile));
         AppendBodies(Path.Combine(gameDirectory, obl), report, twinOptions);
         if (own)
@@ -1024,7 +1062,7 @@ internal static class RaceTrackService
             Marshal: report.Marshal,
             OnFoot: report.OnFoot ? true : null,
             RailOpens: report.RailOpens.Count > 0 ? report.RailOpens.ToList() : null,
-            MapRoads: MapRoads(report));
+            MapRoads: MapRoads(report), DoorsOff: scenes.DoorsOff);
     }
 
     // A machine gun on its knoll as the car file has it: its scene and actors, the muzzle (the gun stands 0.8 cells towards where it fires

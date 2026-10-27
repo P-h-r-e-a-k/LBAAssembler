@@ -22,7 +22,12 @@ internal static class RaceTrackScenes
     public sealed record Result(List<string> Log, int ScenesChanged, int ActorsRemoved, List<(RaceDriver Driver, Dictionary<int, int> Actors)> Drivers, int StartScene,
         List<int[]> Grid, List<int[]> Pits, Result? Twin = null, List<int[]>? Mushrooms = null, List<int[]>? Penguins = null, List<int[]>? Oil = null,
         List<int[]>? Fakes = null, List<int[]>? Gunners = null, List<int[]>? GasMonsters = null, List<int[]>? Guards = null, List<int[]>? Hunters = null,
-        List<int[]>? Flyers = null);
+        List<int[]>? Flyers = null)
+    {
+        // the doors one weather's island file has lost and the other's has not, each "<file> <scene> <x0> <z0> <x1> <z1>" (RACEMOD.CPP
+        // door_off=): the scenes keep the zone, the race-track mode shuts it while that file is shown
+        public List<string>? DoorsOff { get; init; }
+    }
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
     //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
@@ -371,6 +376,8 @@ internal static class RaceTrackScenes
         var roadReach = 6.5;
         // (with two tracks: the nearer road, and the ground its file has there -- the scenes' actors stand in both)
         Func<double, double, double> distanceToRoad = tracks.Count == 1 ? report.DistanceToRoad : (x, z) => tracks.Min(t => t.Report.DistanceToRoad(x, z));
+        // (in the way of either road's cars: RaceTrackReport.InTheWay)
+        Func<double, double, double, double, bool> inTheWay = (x, z, lo, hi) => tracks.Any(t => t.Report.InTheWay(x, z, lo, hi));
         Func<double, double, double>? groundAfter = tracks.Count == 1 ? report.GroundAfter
             : report.GroundAfter is null ? null : (x, z) => (tracks.MinBy(t => t.Report.DistanceToRoad(x, z))!.Report.GroundAfter ?? report.GroundAfter)(x, z);
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
@@ -380,6 +387,7 @@ internal static class RaceTrackScenes
         var log = new List<string>();
         var changes = new List<SceneChange>();
         var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0; var mushroomsLeftOut = 0;
+        var doorsOff = new List<string>();
         foreach (var t in tracks)
         {
             t.Drivers = t.Options.Racers().Where(d => !d.Ghost).ToList();
@@ -469,6 +477,39 @@ internal static class RaceTrackScenes
                 // (and the island's guns that fire at the cars: Island CX's cannons)
                 if (options.Island.HuntingGuns is { } hunting)
                     for (var i = 1; i < model.Actors.Count; i++) if (model.Actors[i].Entity == hunting.Entity) storyKept.Add(i);
+                // (and whoever switches a door on or off -- SET_CHANGE_CUBE: a lift, which opens the way down into the sewers once Twinsen
+                // has ridden it down and shuts it as he comes back up, or whoever lets him into a cave. Taken away, the door stays as the scene
+                // starts it: Citadel Island's lifts by the start line and over the school took Twinsen down as he walked onto their place, and
+                // back up straight down again, 2026-10-27)
+                var doorKeepers = new HashSet<int>();
+                for (var i = 1; i < model.Actors.Count; i++)
+                    if (!storyKept.Contains(i) && model.Actors[i].Entity != BuggyEntity && SwitchesDoors(model.Actors[i], i)) doorKeepers.Add(i);
+                // (and the actors their scripts wait on or move, where those keep off the road: a script that takes Twinsen out of a door
+                // waits for the actors walking him -- l_track_obj(6) -- before it lets the door back on. Citadel's scene 48's escorts walk
+                // the road, and go)
+                for (var grew = true; grew;)
+                {
+                    grew = false;
+                    foreach (var k in doorKeepers.ToList())
+                        foreach (var r in ActorsReferred(model.Actors[k], k))
+                            if (r > 1 && r < model.Actors.Count && model.Actors[r].Entity != BuggyEntity && !storyKept.Contains(r) && !doorKeepers.Contains(r)
+                                && OffRoad(model, r, inTheWay, out _) && doorKeepers.Add(r)) grew = true;
+                }
+                if (doorKeepers.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", doorKeepers.Order())} kept where they are -- their scripts switch doors on and off");
+                foreach (var i in doorKeepers.Order())
+                    if (!OffRoad(model, i, inTheWay, out var why)) log.Add($"scene {scene}: WARNING: actor {i} (entity {model.Actors[i].Entity}), kept for the doors it switches, is in the way: {why}");
+                storyKept.UnionWith(doorKeepers);
+                // (and on an island that keeps them, everything off the road: KeepOffRoadActors)
+                var offRoad = new HashSet<int>();
+                if (options.Island.KeepOffRoadActors)
+                    for (var i = 1; i < model.Actors.Count; i++)
+                    {
+                        if (storyKept.Contains(i) || model.Actors[i].Entity == BuggyEntity || biking && model.Actors[i].Entity == BikerEntity) continue;
+                        if (OffRoad(model, i, inTheWay, out var onIt)) offRoad.Add(i);
+                        else log.Add($"scene {scene}: actor {i} (entity {model.Actors[i].Entity}) goes -- {onIt}");
+                    }
+                if (offRoad.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", offRoad.Order())} kept -- off the road, and their scripts keep them off it");
+                storyKept.UnionWith(offRoad);
                 var doomed = Enumerable.Range(1, model.Actors.Count - 1)
                     .Where(i => model.Actors[i].Entity != BuggyEntity && !(i == 1 && model.Actors[i].Entity == ZoeEntity && model.Actors[i].X == 0 && model.Actors[i].Z == 0))
                     .Where(i => !needed.Contains(i) && !storyKept.Contains(i) || biking && model.Actors[i].Entity == BikerEntity)
@@ -479,11 +520,11 @@ internal static class RaceTrackScenes
                 if (needed.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", needed.Order())} kept -- Twinsen's own script waits on them in its travel cutscenes (the ferry, the Dino-Fly), which would never end without them");
                 if (storyKept.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", storyKept.Order())} kept where they are -- the story needs them");
                 foreach (var i in needed.Order())
-                    if (i < model.Actors.Count) ShiftOffRoad(model.Actors[i], model, i, distanceToRoad, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
+                    if (i < model.Actors.Count) ShiftOffRoad(model.Actors[i], model, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
                 // (the story's people stay, but not on the road: Polar Island's grobo with the digger's key stands on the dock)
                 foreach (var i in storyKept.Order())
-                    if (options.Island.KeptEntities?.Contains(model.Actors[i].Entity) == true)
-                        ShiftOffRoad(model.Actors[i], model, i, distanceToRoad, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
+                    if (options.Island.KeptEntities?.Contains(model.Actors[i].Entity) == true && !offRoad.Contains(i))
+                        ShiftOffRoad(model.Actors[i], model, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
                 var standIn = AddStandIn(model, doomed);
                 foreach (var i in doomed.OrderByDescending(i => i))
                 {
@@ -653,14 +694,43 @@ internal static class RaceTrackScenes
                     // (only cameras that are on from the start: one that starts off is switched on only by a cutscene's script -- the
                     // ferry's arrival, a call of the car -- which then needs it, and the car never meets it)
                     var camera = kind == 1 && options.RemoveTrackCameras && zone.Info.Length > 7 && (zone.Info[7] & 1) != 0;
+                    // (a door whose lift or house the road took away, every piece of it: RaceTrackReport.LostDoors -- in every file of the
+                    // island's. Where the island has two weathers' files the scenes' one zone is both's door: one lost in one file only and
+                    // walked into its wall (ZONE_TEST_BRICK) is shut while that file is shown (Result.DoorsOff) -- the storm track's deck runs
+                    // over the lift by its start line, and walking onto its place took Twinsen down into the sewers and back up straight down
+                    // again, while the museum's door, the top of the building taken for the storm track's deck, stands in the storm's file
+                    // and not in the town's; one without a wall stays -- the town circuit takes the top of the Tralu's cave's mouth)
+                    if (door)
+                    {
+                        double bx0 = model.CubeX * 64 + zone.X0 / 512.0, bz0 = model.CubeY * 64 + zone.Z0 / 512.0;
+                        double bx1 = model.CubeX * 64 + zone.X1 / 512.0, bz1 = model.CubeY * 64 + zone.Z1 / 512.0;
+                        var walled = zone.Info.Length > 5 && (zone.Info[5] & 1) != 0;
+                        bool Lost(Track t) => t.Report.LostDoors.Any(l => Math.Abs(l.X0 - bx0) < 0.01 && Math.Abs(l.Z0 - bz0) < 0.01 && Math.Abs(l.X1 - bx1) < 0.01 && Math.Abs(l.Z1 - bz1) < 0.01);
+                        if (walled && !tracks.All(Lost))
+                            foreach (var t in tracks.Where(Lost))
+                            {
+                                var file = Path.GetFileNameWithoutExtension(ReferenceEquals(t, tracks[0]) ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
+                                doorsOff.Add($"{file} {scene} {zone.X0} {zone.Z0} {zone.X1} {zone.Z1}");
+                                log.Add($"scene {scene}: door zone {z} (into scene {zone.Num}) shut while {file} is shown -- the lift or building it was the door of went with that file's road");
+                            }
+                        if (tracks.All(Lost))
+                        {
+                            log.Add($"scene {scene}: door zone {z} (into scene {zone.Num}) is removed -- the lift or building it was the door of went with the road");
+                            SceneOps.DeleteZone(model, z);
+                            zonesRemoved++;
+                            continue;
+                        }
+                    }
                     if (!(camera || options.RemoveRoadZones && (door || kind is 3 or 6 or 7 or 8 or 9))) continue;
-                    // (tested at the centres of the cells the box covers: half a cell's diagonal more makes it the box itself that counts)
-                    var reach = camera ? roadReach + options.CameraMargin + Math.Sqrt(0.5) : roadReach;
+                    // (tested at the centres of the cells the box covers: half a cell's diagonal more makes it the box itself that counts. A camera
+                    // by its reach round the road; any other zone only where it is in the way of the cars, at its own heights -- InTheWay: a zone
+                    // beside the road, or over or under it, stays, 2026-10-27)
+                    var reach = roadReach + options.CameraMargin + Math.Sqrt(0.5);
                     var ox = model.CubeX * (double)IslandFile.CubeSize; var oz = model.CubeY * (double)IslandFile.CubeSize;
                     var hit = false;
                     for (var cz = (int)Math.Floor((oz + zone.Z0) / 512); cz <= (int)Math.Floor((oz + zone.Z1) / 512) && !hit; cz++)
                     for (var cx = (int)Math.Floor((ox + zone.X0) / 512); cx <= (int)Math.Floor((ox + zone.X1) / 512) && !hit; cx++)
-                        if (distanceToRoad(cx + 0.5, cz + 0.5) <= reach) hit = true;
+                        if (camera ? distanceToRoad(cx + 0.5, cz + 0.5) <= reach : inTheWay(cx + 0.5, cz + 0.5, zone.Y0, zone.Y1)) hit = true;
                     if (!hit) continue;
                     // A door into a building stays (2026-10-06: the user wanted every entrance kept whose building is still there). The engine
                     // never takes the car through one (OBJECT.CPP GereZoneChangeCube: from the buggy only into an outside scene), and most
@@ -903,7 +973,8 @@ internal static class RaceTrackScenes
             if (t.Pits.Count > 0) log.Add($"the pits: {t.Pits.Count} spots in the pit lane, where the opponents wait while the player qualifies{whose}");
         }
         var main = tracks[0];
-        return main.Result(log, changes.Count, removed, tracks.Count > 1 ? tracks[1].Result(log, changes.Count, removed) : null);
+        var off = doorsOff.Count > 0 ? doorsOff : null;
+        return main.Result(log, changes.Count, removed, tracks.Count > 1 ? tracks[1].Result(log, changes.Count, removed) with { DoorsOff = off } : null) with { DoorsOff = off };
     }
 
     // The place `back` cells behind the start line along the lap's centre line (the built one: RaceTrackReport.LapX/LapZ), `side` cells
@@ -1330,6 +1401,7 @@ void comportement_1()
     }
 
     private static void ShiftOffRoad(SceneActorModel actor, SceneModel model, int index, Func<double, double, double> distanceToRoad,
+        Func<double, double, double, double, bool> inTheWay,
         Func<double, double, double>? groundBefore, Func<double, double, double>? ground, Func<double, double, bool>? wasGround,
         double roadReach, int scene, List<string> log)
     {
@@ -1341,7 +1413,10 @@ void comportement_1()
         var stood = groundBefore is null ? 0 : groundBefore(fromX, fromZ);
         if ((actor.Flags & Fallable) == 0 && stood <= 0) return;
         if (wasGround is not null && !wasGround(fromX, fromZ)) return;
-        if (distanceToRoad(fromX, fromZ) > clear) { PointsOffRoad(); return; }
+        // (only what is in the way of the cars, at its own height: Citadel Island's lifts down into the sewers, by the town circuit's start
+        // line and over the school, stand under the raised road or beside it -- moved 12 and 20 cells away, their doors stayed where they
+        // were, and Twinsen walking there went down, 2026-10-27)
+        if (distanceToRoad(fromX, fromZ) > clear || !inTheWay(fromX, fromZ, actor.Y, actor.Y + 1500)) { PointsOffRoad(); return; }
         var offset = (actor.Flags & Fallable) != 0 || groundBefore is null ? 0 : actor.Y - stood;
         for (var out_ = 1.0; out_ <= 24; out_ += 0.5)
         for (var turn = 0; turn < 24; turn++)
@@ -1378,7 +1453,7 @@ void comportement_1()
             foreach (var point in PosPoints(actor, index).Where(p => p < model.TrackPoints.Count))
             {
                 var p = model.TrackPoints[point];
-                if (distanceToRoad(ox + p.X / 512.0, oz + p.Z / 512.0) > clear) continue;
+                if (distanceToRoad(ox + p.X / 512.0, oz + p.Z / 512.0) > clear || !inTheWay(ox + p.X / 512.0, oz + p.Z / 512.0, p.Y, p.Y + 1500)) continue;
                 var moved = false;
                 for (var out_ = 1.0; out_ <= 24 && !moved; out_ += 0.5)
                 for (var turn = 0; turn < 24 && !moved; turn++)
@@ -1396,6 +1471,50 @@ void comportement_1()
                 }
             }
         }
+    }
+
+    // Whether an actor is off the road (KeepOffRoadActors): it stands further than `reach` cells from the road's middle, and so does every
+    // point its scripts send or put it to -- its move script's goto/pos points, its life script's pos_point -- a townsman who walks across
+    // the road, or Raph's fiancee wandering behind the lighthouse on the town circuit, is on it.
+    private static bool OffRoad(SceneModel model, int index, Func<double, double, double, double, bool> inTheWay, out string? onIt)
+    {
+        var actor = model.Actors[index];
+        double ox = model.CubeX * 64.0, oz = model.CubeY * 64.0;
+        // (as tall as a person, from where it stands)
+        bool Clear(int x, int y, int z) => !inTheWay(ox + x / 512.0, oz + z / 512.0, y, y + 1500);
+        onIt = null;
+        if (!Clear(actor.X, actor.Y, actor.Z)) { onIt = $"it stands on the road, at ({actor.X},{actor.Y},{actor.Z})"; return false; }
+        var points = new HashSet<int>(PosPoints(actor, index));
+        try
+        {
+            foreach (var i in LbaScript.Bytecode.DecodeTrack(actor.Track))
+                if (i.Op is 4 or 8 or 12 or 15 && i.A.Length > 0) points.Add((int)i.A[0]);
+        }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { onIt = "its move script can't be read"; return false; }
+        foreach (var p in points.Order())
+            if (p >= 0 && p < model.TrackPoints.Count && !Clear(model.TrackPoints[p].X, model.TrackPoints[p].Y, model.TrackPoints[p].Z))
+            {
+                onIt = $"its scripts take it to point {p}, on the road at ({model.TrackPoints[p].X},{model.TrackPoints[p].Y},{model.TrackPoints[p].Z})";
+                return false;
+            }
+        return true;
+    }
+
+    // Whether an actor's life script switches the scene's doors on or off (SET_CHANGE_CUBE)
+    private static bool SwitchesDoors(SceneActorModel actor, int index)
+    {
+        try { return LbaScript.LifeText.Decompile(actor.Life, index, LbaScript.NoSymbols.Instance).Contains("set_change_cube(", StringComparison.OrdinalIgnoreCase); }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { return false; }
+    }
+
+    // The actors an actor's life script refers to by number -- what it asks of them or does with them (l_track_obj(6), set_dir_obj(3, ...)) --
+    // other than the hero (0); not those it only kills (kill_obj: Citadel Island's townsmen on the road, 2026-10-27)
+    private static IEnumerable<int> ActorsReferred(SceneActorModel actor, int index)
+    {
+        string text;
+        try { text = LbaScript.LifeText.Decompile(actor.Life, index, LbaScript.NoSymbols.Instance); }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { return Array.Empty<int>(); }
+        return System.Text.RegularExpressions.Regex.Matches(text, @"\b(?!kill_)\w+_obj\((\d+)").Select(m => int.Parse(m.Groups[1].Value)).Where(n => n > 0).Distinct().ToList();
     }
 
     // The scene's points an actor's life script puts it on (pos_point), read from the script's text.
