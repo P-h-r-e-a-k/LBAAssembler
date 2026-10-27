@@ -36,7 +36,12 @@ internal static partial class RaceTrackCharacterCars
 
     // The car a track has for Twinsen of its own (RaceCarSetup.OwnBuggy: the track's own car), by its race track entry's name: its race car
     // number, or null -- his buggy.
-    public static int? TrackCar(string island) => string.Equals(island, RaceTrackIsland.Temple.Name, StringComparison.OrdinalIgnoreCase) ? PumpkinNumber : null;
+    public static int? TrackCar(string island) => string.Equals(island, RaceTrackIsland.Temple.Name, StringComparison.OrdinalIgnoreCase) ? PumpkinNumber
+        : string.Equals(island, RaceTrackIsland.Polar.Name, StringComparison.OrdinalIgnoreCase) ? DiggerNumber : null;
+    // Whether a track's own car takes the place of `driveAs`: his own buggy -- and on Polar Island his laser buggies too, the digger his car
+    // on the island whatever buggy he has (the user, 2026-10-27: "Twinsen's buggy is supposed to be swapped out for the tractor")
+    public static bool TrackCarFor(string island, int driveAs) => driveAs == RaceCarSetup.OwnBuggy ||
+        string.Equals(island, RaceTrackIsland.Polar.Name, StringComparison.OrdinalIgnoreCase) && driveAs is RaceCarSetup.LaserGreen or RaceCarSetup.LaserRed;
 
     // The pumpkin's skin and the glow (the fire colours, 240..247, the same in every island's palette: the Temple's are as they are, other
     // islands' tables take 241-244 to their own oranges and golds), the grooves' lines, the stalk's olive greens and the leaves' greens, the

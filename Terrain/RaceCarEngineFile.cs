@@ -41,7 +41,8 @@ internal static class RaceCarEngineFile
         text.Append((best is null ? car : car.With(best)).CarKeys(best is null && track?.Dream is { TopKmh: > 0 } scaled ? scaled.TopKmh : null,
             info is null ? null : RaceTrackIsland.ByName(info.Island).Name));
         // (his own car on a track that has one for him, when the setup leaves him his own: the Temple of Bú's pumpkin F1)
-        if (car.DriveAsKey is null && info is not null && car.TrackCarKeys?.GetValueOrDefault(RaceTrackIsland.ByName(info.Island).Name) is { } own) text.Append(own);
+        if ((car.DriveAsKey is null || car.DriveAs is RaceCarSetup.LaserGreen or RaceCarSetup.LaserRed) && info is not null &&
+            car.TrackCarKeys?.GetValueOrDefault(RaceTrackIsland.ByName(info.Island).Name) is { } own) text.Append(own);
         // (a line's height, when it has one: a lap that passes over itself crosses the line's place at other heights too)
         static string Height(RaceTrackService.StartLineInfo line) => line.Y is { } y ? $" {y}" : "";
         if (track?.StartLine is { } l) text.Append($"startline={l.CubeX} {l.CubeZ} {l.X0} {l.Z0} {l.X1} {l.Z1} {l.DirX} {l.DirZ}{Height(l)}\n");
@@ -362,10 +363,9 @@ internal static class RaceCarEngineFile
     // other car, or a folder with none (built before them).
     internal static Dictionary<string, string>? TrackCarLines(string gameDirectory, int driveAs)
     {
-        if (driveAs != RaceCarSetup.OwnBuggy) return null;
         var lines = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var island in RaceTrackIsland.All)
-            if (RaceTrackCharacterCars.TrackCar(island.Name) is { } number && DriveAsLine(gameDirectory, number) is { } line)
+            if (RaceTrackCharacterCars.TrackCarFor(island.Name, driveAs) && RaceTrackCharacterCars.TrackCar(island.Name) is { } number && DriveAsLine(gameDirectory, number) is { } line)
                 lines[island.Name] = $"# {island.Name}'s own car for Twinsen\n" + line;
         return lines.Count > 0 ? lines : null;
     }

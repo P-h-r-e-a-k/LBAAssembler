@@ -118,11 +118,13 @@ internal static partial class RaceTrackCharacterCars
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var bodies = HqrArchive.Open(bodyPath);
         Body car;
+        byte[] empty;
         try
         {
             var lba1 = Body.Read(HqrArchive.Open(Path.Combine(lba1Directory, "BODY.HQR")).Read(Lba1DiggerBody), 1);
             car = BuildDigger(lba1, HqrArchive.Open(Path.Combine(lba1Directory, "RESS.HQR")).Read(0), HqrArchive.Open(ressPath).Read(0),
                               Body.Read(bodies.Read(TwinsenBody), 2), Body.Read(bodies.Read(RaceTrackBaldinoCar.RacerBody), 2));
+            empty = EmptyDigger(lba1Directory, bodies, ressPath);
         }
         catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException or IOException) { return new() { $"{DiggerName}: not made -- {e.Message}" }; }
         var bytes = car.Write();
@@ -130,7 +132,9 @@ internal static partial class RaceTrackCharacterCars
         var own = HqrArchive.CountEntries(bodyPath);
         file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(bytes));
         file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(RaceTrackSmallCars.Halved(bytes)));
+        file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(empty));
         var small = own + 1;
+        var parked = own + 2;
         File.WriteAllBytes(bodyPath, file);
         var table = HqrArchive.Open(ressPath).Read(44);
         table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, DiggerGeneric, own);
@@ -140,11 +144,11 @@ internal static partial class RaceTrackCharacterCars
         catalogue.Add(new CatalogueEntry(DiggerNumber, DiggerName, Digger.Driver, Digger.Island, RaceTrackBaldinoCar.RacerEntity, DiggerGeneric, own, small));
         File.WriteAllText(Path.Combine(gameDirectory, CatalogueFile), JsonSerializer.Serialize(catalogue, new JsonSerializerOptions { WriteIndented = true }));
         // (and Polar Island's car outside a race: RACEMOD.CPP ISLANDCARS.TXT)
-        if (RacerDrive(gameDirectory) is { } drive) SetIslandCar(gameDirectory, PolarIslandNumber, own, drive, DiggerStoryAccel);
+        if (RacerDrive(gameDirectory) is { } drive) SetIslandCar(gameDirectory, PolarIslandNumber, own, drive, DiggerStoryAccel, parked);
         return new()
         {
             $"{DiggerName} (race car {DiggerNumber}, LBA1's Polar Island tractor, body {Lba1DiggerBody}): BODY.HQR entry {own} ({car.Faces.Count} polygons, " +
-            $"{car.Vertices.Count} points), its half-size copy {small}; the racer's entity ({RaceTrackBaldinoCar.RacerEntity}) bodies {DiggerGeneric} and {RaceTrackSmallCars.SmallOf(DiggerGeneric)}",
+            $"{car.Vertices.Count} points), its half-size copy {small}, parked with nobody in it {parked}; the racer's entity ({RaceTrackBaldinoCar.RacerEntity}) bodies {DiggerGeneric} and {RaceTrackSmallCars.SmallOf(DiggerGeneric)}",
         };
     }
 }
@@ -156,16 +160,25 @@ internal static partial class RaceTrackCharacterCars
     // the digger's acceleration outside a race, a share of the buggy's: "slightly worse"
     public const int DiggerStoryAccel = 85;
 
-    // The island's own car outside a race (RACEMOD.CPP ISLANDCARS.TXT: "island_car=<island> <body> <animation> <acceleration %>"): the
-    // line for `island` put in (or taken out, body < 0), the others kept.
-    public static void SetIslandCar(string gameDirectory, int island, int body, int anim, int accel)
+    // The island's own car outside a race (RACEMOD.CPP ISLANDCARS.TXT: "island_car=<island> <body> <animation> <acceleration %> [<parked
+    // body>]" -- the parked one with nobody in it, drawn while it stands, in a race too): the line for `island` put in (or taken out,
+    // body < 0), the others kept.
+    public static void SetIslandCar(string gameDirectory, int island, int body, int anim, int accel, int parked = -1)
     {
         var path = Path.Combine(gameDirectory, IslandCarsFile);
         var lines = File.Exists(path) ? File.ReadAllLines(path).Where(l => !l.StartsWith($"island_car={island} ")).ToList() : new List<string>();
         if (lines.Count == 0) lines.Add("# LBA Assembler: each island's own car outside a race -- island, BODY.HQR body, ANIM.HQR animation, acceleration (% of the buggy's)");
-        if (body >= 0) lines.Add($"island_car={island} {body} {anim} {accel}");
+        if (body >= 0) lines.Add($"island_car={island} {body} {anim} {accel}" + (parked >= 0 ? $" {parked}" : ""));
         if (lines.All(l => l.StartsWith('#'))) { if (File.Exists(path)) File.Delete(path); return; }
         File.WriteAllLines(path, lines);
+    }
+
+    // The digger with nobody in it, written: parked, him on foot beside it (ISLANDCARS.TXT's parked body)
+    private static byte[] EmptyDigger(string lba1Directory, HqrArchive bodies, string ressPath)
+    {
+        var lba1 = Body.Read(HqrArchive.Open(Path.Combine(lba1Directory, "BODY.HQR")).Read(Lba1DiggerBody), 1);
+        return BuildDigger(lba1, HqrArchive.Open(Path.Combine(lba1Directory, "RESS.HQR")).Read(0), HqrArchive.Open(ressPath).Read(0),
+                           Body.Read(bodies.Read(TwinsenBody), 2), Body.Read(bodies.Read(RaceTrackBaldinoCar.RacerBody), 2), driver: false).Write();
     }
 
     // The racer's driving animation (the racer entity's generic 1) in the folder's ANIM.HQR, or null
@@ -180,10 +193,11 @@ internal static partial class RaceTrackCharacterCars
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var anim = RacerDrive(gameDirectory);
         if (anim is null) return new() { $"{DiggerName}: not put on Polar Island -- the folder has no racer's driving animation" };
-        byte[] bytes;
+        byte[] bytes, empty;
         try
         {
             var bodies = HqrArchive.Open(bodyPath);
+            empty = EmptyDigger(lba1Directory, bodies, ressPath);
             var lba1 = Body.Read(HqrArchive.Open(Path.Combine(lba1Directory, "BODY.HQR")).Read(Lba1DiggerBody), 1);
             bytes = BuildDigger(lba1, HqrArchive.Open(Path.Combine(lba1Directory, "RESS.HQR")).Read(0), HqrArchive.Open(ressPath).Read(0),
                                 Body.Read(bodies.Read(TwinsenBody), 2), Body.Read(bodies.Read(RaceTrackBaldinoCar.RacerBody), 2)).Write();
@@ -196,11 +210,20 @@ internal static partial class RaceTrackCharacterCars
         var count = HqrArchive.CountEntries(bodyPath);
         if (listed >= 0 && listed < count)
         {
-            try { if (HqrArchive.Open(bodyPath).Read(listed).AsSpan().SequenceEqual(bytes)) { SetIslandCar(gameDirectory, PolarIslandNumber, listed, anim.Value, DiggerStoryAccel); return new() { $"{DiggerName}: Polar Island's car already (BODY.HQR entry {listed})" }; } }
+            try
+            {
+                var store = HqrArchive.Open(bodyPath);
+                if (store.Read(listed).AsSpan().SequenceEqual(bytes) && listed + 1 < count && store.Read(listed + 1).AsSpan().SequenceEqual(empty))
+                {
+                    SetIslandCar(gameDirectory, PolarIslandNumber, listed, anim.Value, DiggerStoryAccel, listed + 1);
+                    return new() { $"{DiggerName}: Polar Island's car already (BODY.HQR entry {listed}, parked {listed + 1})" };
+                }
+            }
             catch (InvalidDataException) { }
         }
-        File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(bytes)));
-        SetIslandCar(gameDirectory, PolarIslandNumber, count, anim.Value, DiggerStoryAccel);
+        var file = HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(bytes));
+        File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(empty)));
+        SetIslandCar(gameDirectory, PolarIslandNumber, count, anim.Value, DiggerStoryAccel, count + 1);
         return new() { $"{DiggerName}: Twinsen's car on Polar Island outside a race (BODY.HQR entry {count}, {IslandCarsFile}: {DiggerStoryAccel}% of the buggy's acceleration)" };
     }
 }

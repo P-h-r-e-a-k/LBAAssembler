@@ -5198,3 +5198,33 @@ corners where that's quicker".
   turns the story on for Citadel Island only (LBRA's installer leaves it on, which is why its test passed). He is now in KeptEntities,
   kept by every build, story or not. `ScriptRoundTrip buildhere` now sets the story as the window does, so it builds what the editor builds
   (the island's name as RaceTrackIsland has it: "Polar Island"; an unknown name builds the Desert's).
+
+## Polar Island's story start: the grobo behind the grid, his grey face, the digger parked and driven; mushrooms over a cube's edge (2026-10-27)
+
+- The user: "The grobo on Polar is too far away from the start/finish line, let's have him spawn in behind the cars closer to Twinsen,
+  the grobo's face colour is also wrong, it's black when it should be grey. Twinsen's buggy is supposed to be swapped out for the tractor
+  that we've made for Polar Island when in story mode"; "sometimes Funfrock's car vanishes from view and then comes back, the same with
+  some of the mushrooms not visible until the last second".
+- Story mode is the dream: a new game starts Twinsen on foot behind his car on the grid of scene 252.
+  - The grobo: RaceTrackIsland.StartPerson (entity 33) -- the race build takes every scene's copy out and brings one, from the island's
+    scene of him, five cells behind the pole and 1.2 to the side away from the next car, facing Twinsen (RaceTrackScenes, StartPersonActor):
+    just out of his script's reach (1500) from Twinsen's start, so the Action key at the car isn't his.
+  - His face: PolarGrobo.BuildBody wrote the body unlit (Body.Lit false: no normals, every polygon flat at its ramp's dark end), so his
+    grey skin was near black and his vest dark. Now written lit, each polygon its retail type (Lba2Type = Material). Every race build
+    installs the body again (RaceTrackService, after the digger), so a folder whose originals have the old one gets the new.
+  - The digger: Polar Island's own car for Twinsen (RaceTrackCharacterCars.TrackCar, as the Temple's pumpkin F1), with his own buggy or
+    either laser buggy (TrackCarFor; the lasers stay). The race file's drive_as= is the digger's.
+  - Parked: race mode drew the car he drives as only while he drove; on foot beside it the buggy showed. HeroLook now hides the parked
+    buggy (s_raceParked) and DrawDriveAs draws the car in its place, before RaceMod_Draw's "not driving" return. And the digger parked
+    has nobody in it: ISLANDCARS.TXT takes a fifth number, the island car's empty body (the build appends the digger without Twinsen,
+    driver: false), which DrawDriveAsOn draws for a parked car that is the island's own (in a race and out of one).
+  - Tested headless (a sandbox built with `buildhere`, the window's story setting): at the start the empty digger, Twinsen, the grobo
+    behind; Action at the car: no key, he stays out; at the grobo: game variable 230 set; at the car: in (behaviour 12), the digger driven.
+- Mushrooms: each is an actor of its cube's scene, stood on the road only while Twinsen is in that scene -- a row just over a cube's edge
+  (Polar Island's 21 small scenes; scenes 236 and 240 share a row across their edge) came into sight as he crossed. The build now writes
+  each mushroom's place on the island (mushroom=scene actor y x z), and DrawFarMushrooms draws those of other scenes within 40,000 units
+  with the body this scene's mushrooms have (as the jet-pack and drive_as are drawn: after the scene, depth-tested). A race: up to six
+  drawn from the next cubes at once.
+- FunFrock's car: not seen vanishing yet. LBA2_CARVIS=1 logs the first opponent's car's state as it changes (out of sight, hidden,
+  bodiless, behind the camera, off the screen) and the far mushrooms drawn; an autodriven race showed his car never hidden, on the screen
+  whenever it was in view.

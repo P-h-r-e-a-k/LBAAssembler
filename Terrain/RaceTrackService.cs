@@ -468,6 +468,9 @@ internal static class RaceTrackService
             log.AddRange(RaceTrackCharacterCars.InstallMonsters(gameDirectory));
             // (and LBA1's digger, Polar Island's tractor, from the LBA1 folder -- RaceTrackCharacterCars.InstallDigger -- after even those)
             log.AddRange(RaceTrackCharacterCars.InstallDigger(gameDirectory, Lba1Folder()));
+            // (and Polar Island's grobo's body as this version makes it -- the folder's originals may have an earlier one: until 2026-10-27
+            // it was written unlit, his grey skin black)
+            if (LBAAssembler.Terrain.Polar.PolarIsland.IsInstalled(gameDirectory)) log.AddRange(LBAAssembler.Terrain.Polar.PolarGrobo.InstallBody(gameDirectory));
             // (and the Temple of Bú's secret party's disco ball and bubbles after even those: no body moves -- TempleParty)
             if (session.Party) log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.PartyInstall(gameDirectory));
             // (the race items' sounds, every track's: RACESOUNDS\, which the engine plays as an item comes into the item box and as one is

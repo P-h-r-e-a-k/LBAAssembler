@@ -61,12 +61,15 @@ internal static class PolarGrobo
     // His body: the baggage-claim grobo's, recoloured
     public static byte[] BuildBody(byte[] baseBody)
     {
+        // (written lit, each polygon its own type as the retail body has it -- Gouraud: written as read, the body came out unlit, every
+        // polygon flat at its ramp's dark end, his grey skin black, 2026-10-27)
         var body = Body.Read(baseBody, 2);
+        body.Lit = true;
         for (var i = 0; i < body.Faces.Count; i++)
         {
-            var f = body.Faces[i];
+            var f = body.Faces[i] with { Lba2Type = body.Faces[i].Material };
             var bank = f.Colour >> 4;
-            if (bank == TealBank || bank == RedBank) body.Faces[i] = f with { Colour = GreenBank * 16 + (f.Colour & 15) };
+            body.Faces[i] = bank == TealBank || bank == RedBank ? f with { Colour = GreenBank * 16 + (f.Colour & 15) } : f;
         }
         for (var i = 0; i < body.Lines.Count; i++)
         {

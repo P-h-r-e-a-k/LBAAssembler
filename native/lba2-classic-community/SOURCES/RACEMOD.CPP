@@ -570,7 +570,8 @@ static S32 s_raceTime = 0;                 // the finished race's time, GO to th
 // CheckObjCol, so a mushroom has to be gone before the car touches it -- the lava lake's test pilot sat jammed against one)
 #define RACE_MUSHROOM_REACH 1000
 #define RACE_MUSHROOM_BACK 15000           // ms until it grows back
-typedef struct { int Scene, Actor; S32 Y; int HasY; S32 Back; } T_RACE_MUSHROOM;
+// (WX, WZ: where it stands on the island, HasWorld -- a mushroom of another cube's scene drawn from there, DrawFarMushrooms)
+typedef struct { int Scene, Actor; S32 Y; int HasY; S32 Back; S32 WX, WZ; int HasWorld; } T_RACE_MUSHROOM;
 static T_RACE_MUSHROOM s_mush[RACE_MAX_MUSHROOMS];
 static int s_nbMush = 0;
 static int s_powerups = 0;
@@ -844,7 +845,7 @@ static double s_jetFactor = 1;             // the jet-pack on: the car's speed t
 static double JetFactor(S32 until, double full);
 // ... and the car turned into it: the super jet-pack's model at about the car's size (superjet_model=, OBJFIX.HQR: the builder adds it),
 // drawn in the car's place, lying flat (the build lays it so), while Twinsen's car is hidden
-static int s_superModel = -1, s_heroHidden = 0, s_superShown = 0;
+static int s_superModel = -1, s_heroHidden = 0, s_superShown = 0, s_raceParked = 0;
 // Driving as another car (drive_as=<BODY.HQR body> <ANIM.HQR animation> [<BODY.HQR shrunk body>]: a test drive in one of the opponents'
 // cars): Twinsen's car hidden as it is under the super jet-pack, that car drawn in its place with the opponents' driving animation,
 // pitched with the way the car climbs or falls (DrawDriveAs) -- and its shrunk body while an opponent's lightning has him shrunk.
@@ -3928,10 +3929,11 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "mushroom")) {
             // (the height it stands at: built out of sight since 2026-10-05, so another island file's scene never shows it in the air;
             // without one, an older build's, where its actor stands)
+            // (and since 2026-10-27 its place on the island, x and z: drawn from the next cube before Twinsen comes into its scene)
             T_RACE_MUSHROOM *m = &s_mush[s_nbMush];
-            int y = 0, got = 0;
-            if (s_nbMush < RACE_MAX_MUSHROOMS && (got = sscanf(v, "%d %d %d", &m->Scene, &m->Actor, &y)) >= 2) {
-                m->Y = got == 3 ? y : 0; m->HasY = got == 3; m->Back = 0; s_nbMush++;
+            int y = 0, wx = 0, wz = 0, got = 0;
+            if (s_nbMush < RACE_MAX_MUSHROOMS && (got = sscanf(v, "%d %d %d %d %d", &m->Scene, &m->Actor, &y, &wx, &wz)) >= 2) {
+                m->Y = got >= 3 ? y : 0; m->HasY = got >= 3; m->Back = 0; m->WX = wx; m->WZ = wz; m->HasWorld = got >= 5; s_nbMush++;
             }
         }
         else if (!strcmp(key, "drive_laser")) s_driveLaser = atoi(v);
@@ -10075,6 +10077,13 @@ static void HeroLook(S32 now, int driving) {
     // (and a ghost played back: the ghost drawn in his car's place -- DrawGhost)
     if (superJet || driveAs || inside || (driving && s_ghostWatch)) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
     else if (s_heroHidden) { hero->Flags &= ~INVISIBLE; s_heroHidden = 0; }
+    // (and his car parked, him on foot beside it -- Polar Island's dream starts so: the car he drives as drawn in its place, not the buggy
+    // until he gets in -- the user, 2026-10-27: "Twinsen's buggy is supposed to be swapped out for the tractor")
+    const int parked = !driving && s_driveBody >= 0 && s_driveAnim >= 0 && CubeMode == CUBE_EXTERIEUR && NewCube == -1 && !s_ghostWatch &&
+                       IsBuggyPresent() && NUM_BUGGY < NbObjets;
+    if (parked) ListObjet[NUM_BUGGY].Flags |= INVISIBLE;
+    else if (s_raceParked && NUM_BUGGY < NbObjets && !driving) ListObjet[NUM_BUGGY].Flags &= ~INVISIBLE;
+    s_raceParked = parked;
     // his own car painted (twinsen_body=): its bodies on him in place of the buggy's own -- every frame, as the game puts the buggy's back
     // whenever he gets in, stops firing or is grown back after the lightning (GEN_BODY_TUNIQUE: the buggy's, or GEN_BODY_NORMAL / _MAGE as
     // ChoiceHeroBody makes it); this runs before the frame is drawn (AffScene), so the buggy's own is never seen. A folder without them
@@ -14634,9 +14643,10 @@ static void GhostWatch(S32 now) {
 // "island_car=<island> <body> <animation> <acceleration %>" -- on that island, with no race on, Twinsen's car is drawn as that body (the
 // racer's driving animation, as drive_as= draws a car in a race: DrawDriveAs), driving or parked, and it picks up speed at that share of
 // the buggy's (BUGGY.CPP: RaceMod_StoryAccel).
-static void DrawDriveAsOn(S32 now, const T_OBJET *hero);
+static void DrawDriveAsOn(S32 now, const T_OBJET *hero, int parked = 0);
 #define RACE_MAX_ISLAND_CARS 8
-static struct { int Island, Body, Anim, Accel; } s_islandCars[RACE_MAX_ISLAND_CARS];
+// (Parked: the car with nobody in it, drawn while it stands parked -- him on foot beside it; -1: the car itself)
+static struct { int Island, Body, Anim, Accel, Parked; } s_islandCars[RACE_MAX_ISLAND_CARS];
 static int s_nbIslandCars = -1, s_islandParked = 0;
 static int IslandCar(void) {
     if (s_nbIslandCars < 0) {
@@ -14646,11 +14656,12 @@ static int IslandCar(void) {
         if (FILE *f = fopen(path, "r")) {
             char line[256];
             while (fgets(line, sizeof(line), f) && s_nbIslandCars < RACE_MAX_ISLAND_CARS) {
-                int island, body, anim, accel = 100;
-                if (sscanf(line, "island_car=%d %d %d %d", &island, &body, &anim, &accel) >= 3) {
+                int island, body, anim, accel = 100, parked = -1;
+                if (sscanf(line, "island_car=%d %d %d %d %d", &island, &body, &anim, &accel, &parked) >= 3) {
                     s_islandCars[s_nbIslandCars].Island = island; s_islandCars[s_nbIslandCars].Body = body;
                     s_islandCars[s_nbIslandCars].Anim = anim; s_islandCars[s_nbIslandCars].Accel = accel;
-                    Log_Info("[racemod] island %d's own car: body %d (animation %d), %d%% of the buggy's acceleration", island, body, anim, accel);
+                    s_islandCars[s_nbIslandCars].Parked = parked;
+                    Log_Info("[racemod] island %d's own car: body %d (animation %d), %d%% of the buggy's acceleration, parked %d", island, body, anim, accel, parked);
                     s_nbIslandCars++;
                 }
             }
@@ -14682,7 +14693,7 @@ static void IslandCarFrame(void) {
 static void IslandCarDraw(void) {
     if (IslandCar() < 0 || s_driveBody < 0 || CubeMode != CUBE_EXTERIEUR) return;
     if (s_heroHidden) DrawDriveAsOn(TimerRefHR, &ListObjet[NUM_PERSO]);
-    else if (s_islandParked) DrawDriveAsOn(TimerRefHR, &ListObjet[NUM_BUGGY]);
+    else if (s_islandParked) DrawDriveAsOn(TimerRefHR, &ListObjet[NUM_BUGGY], 1);
 }
 
 void RaceMod_Frame(void) {
@@ -15131,6 +15142,45 @@ static void HudSmall(S32 x, S32 y, const char *text, int align) { HudSmallIn(x, 
 // The super jet-pack in the car's place (Twinsen's car hidden: PowerUps): the model at the car's size, lying flat and a little over the
 // road, drawn after the scene's objects as they are drawn -- tested against the depth of the ground and the decor, in the colours of
 // things near -- its place on the screen marked to be drawn over next frame.
+// The mushrooms of the scenes round this one's cube (the scenes' own actors, each shown only while Twinsen is in its scene: a row just
+// over a cube's edge came into sight at the last moment, the user, 2026-10-27: "some of the mushrooms not visible until the last second"),
+// drawn where they stand -- as far as the island draws, RACE_FAR_MUSHROOMS -- the body the mushrooms of this scene have.
+#define RACE_FAR_MUSHROOMS 40000
+static int s_mushBody = -1;
+static void DrawFarMushrooms(void) {
+    if (!s_powerups || s_trial || Qualifying() || CubeMode != CUBE_EXTERIEUR || NewCube != -1 || InsideView()) return;
+    if (s_mushBody < 0)
+        for (int i = 0; i < s_nbMush && s_mushBody < 0; i++) {
+            const int a = MushroomActor(&s_mush[i]);
+            if (a >= 0 && ListObjet[a].Obj.Body.Num >= 0) s_mushBody = ListObjet[a].Obj.Body.Num;
+        }
+    if (s_mushBody < 0) return;
+    U8 *shape = (U8 *)GivePtrBody(s_mushBody);
+    if (!shape) return;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const int fog = Fill_Flag_Fog, depth = Fill_Flag_ZBuffer, keep = Fill_Flag_NZW;
+    const U32 clut = PtrTruePal && PtrCLUTFog ? (U32)((PtrTruePal - PtrCLUTFog) >> 8) : (U32)PalLevel;
+    int drawn = 0;
+    for (int i = 0; i < s_nbMush; i++) {
+        const T_RACE_MUSHROOM *m = &s_mush[i];
+        if (!m->HasWorld || !m->HasY || m->Scene == (int)NumCube || m->Back) continue;
+        const S32 x = m->WX - CurrentCubeX * 32768, z = m->WZ - CurrentCubeY * 32768;
+        const double dx = x - hero->Obj.X, dz = z - hero->Obj.Z;
+        if (dx * dx + dz * dz > (double)RACE_FAR_MUSHROOMS * RACE_FAR_MUSHROOMS) continue;
+        if (!drawn++) { Switch_Fillers(FILL_POLY_FOG_NZW); SetCLUT(PalLevel); }
+        if (BodyDisplay(x, m->Y, z, 0, 0, 0, shape)) {
+            SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
+            if (ClipXMin <= ClipXMax && ClipYMin <= ClipYMax) BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
+            UnsetClip();
+        }
+    }
+    if (getenv("LBA2_CARVIS")) { static int lastDrawn = -1; if (drawn != lastDrawn) { Log_Info("[carvis] far mushrooms drawn %d (scene %d, body %d)", drawn, (int)NumCube, s_mushBody); lastDrawn = drawn; } }
+    if (drawn) {
+        SetCLUT(clut);
+        Switch_Fillers(depth ? (keep ? (fog ? FILL_POLY_FOG_NZW : FILL_POLY_NZW) : (fog ? FILL_POLY_FOG_ZBUFFER : FILL_POLY_ZBUFFER)) : fog ? FILL_POLY_FOG : FILL_POLY_TEXTURES);
+    }
+}
+
 static void DrawSuperJet(S32 now) {
     if (!s_superShown || s_superModel < 0 || CubeMode != CUBE_EXTERIEUR || InsideView()) return;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -15153,14 +15203,18 @@ static void DrawSuperJet(S32 now) {
 // The car Twinsen drives as (drive_as=), in his car's place -- hidden: the frame's update -- with the opponents' driving animation, facing
 // his car's way and pitched with the way it climbs or falls (the slope it has just driven, smoothed), drawn after the scene's objects
 // as the super jet-pack is.
-static void DrawDriveAsOn(S32 now, const T_OBJET *hero);
+static void DrawDriveAsOn(S32 now, const T_OBJET *hero, int parked);
 static void DrawDriveAs(S32 now) {
-    if (!s_heroHidden || s_superShown || s_driveBody < 0 || s_driveAnim < 0 || CubeMode != CUBE_EXTERIEUR || InsideView() || s_ghostWatch) return;
-    DrawDriveAsOn(now, &ListObjet[NUM_PERSO]);
+    if (s_driveBody < 0 || s_driveAnim < 0 || CubeMode != CUBE_EXTERIEUR || InsideView() || s_ghostWatch) return;
+    if (s_heroHidden && !s_superShown) DrawDriveAsOn(now, &ListObjet[NUM_PERSO]);
+    else if (s_raceParked && !s_heroHidden) DrawDriveAsOn(now, &ListObjet[NUM_BUGGY], 1);
 }
 // ... the car drawn where `hero` is (Twinsen, or his car parked: an island's own car outside a race, IslandCarDraw)
-static void DrawDriveAsOn(S32 now, const T_OBJET *hero) {
-    const int body = s_driveSmallNow && s_driveSmall >= 0 ? s_driveSmall : s_driveBody;
+// (`parked`: nobody in it -- the island's car's empty one, ISLANDCARS.TXT, when the car is that island's own)
+static void DrawDriveAsOn(S32 now, const T_OBJET *hero, int parked) {
+    const int own = parked ? IslandCar() : -1;
+    const int body = own >= 0 && s_islandCars[own].Body == s_driveBody && s_islandCars[own].Parked >= 0 ? s_islandCars[own].Parked
+                     : s_driveSmallNow && s_driveSmall >= 0 ? s_driveSmall : s_driveBody;
     if (s_driveShown != body) {
         if (!GivePtrBody(body) || !GivePtrAnim(s_driveAnim)) { Log_Info("[racemod] drive_as: no body %d or animation %d", body, s_driveAnim); s_driveBody = -1; return; }
         if (s_driveShown < 0) { s_drivePrevX = hero->Obj.X; s_drivePrevY = hero->Obj.Y; s_drivePrevZ = hero->Obj.Z; s_drivePitch = 0; }
@@ -16573,6 +16627,32 @@ void RaceMod_Draw(void) {
     s_mapAtX = -1;                          // (the mini-map not on this frame's picture until DrawMinimap puts it there)
     if (!RaceMod_Active()) { IslandCarDraw(); return; }
     if (!LbaFont) return;
+    // (LBA2_CARVIS=1: the first opponent's car's state logged as it changes -- in this scene or not, out of sight at Y -20000, hidden,
+    // bodiless, behind the camera (16), off the screen (32) -- and how many mushrooms of the next cubes are drawn: the user saw FunFrock's
+    // car vanish and come back, 2026-10-27, not yet seen here)
+    if (getenv("LBA2_CARVIS")) {
+        static int last = -99;
+        const int a = s_carActor[0];
+        int st = 0;
+        if (a < 0 || a >= (int)NbObjets) st = 1;
+        else {
+            const T_OBJET *c = &ListObjet[a];
+            if (c->Obj.Y <= -10000) st |= 2;
+            if (c->Flags & INVISIBLE) st |= 4;
+            if (c->Obj.Body.Num < 0) st |= 8;
+            if (!PtrProjectPoint(c->Obj.X, c->Obj.Y, c->Obj.Z)) st |= 16;
+            else if (Xp < 0 || Xp >= (S32)ModeDesiredX || Yp < 0 || Yp >= (S32)ModeDesiredY) st |= 32;
+        }
+        if (st != last) {
+            const T_OBJET *h = &ListObjet[NUM_PERSO];
+            Log_Info("[carvis] t %d state %d actor %d scene %d cube %d,%d hero %d,%d,%d car %d,%d,%d", (int)TimerRefHR, st, a, (int)NumCube, (int)CurrentCubeX, (int)CurrentCubeY,
+                     (int)h->Obj.X, (int)h->Obj.Y, (int)h->Obj.Z, a >= 0 ? (int)ListObjet[a].Obj.X : 0, a >= 0 ? (int)ListObjet[a].Obj.Y : 0, a >= 0 ? (int)ListObjet[a].Obj.Z : 0);
+            last = st;
+        }
+    }
+    // (his car parked, him on foot: the car he drives as drawn in its place -- HeroLook)
+    if (Comportement != C_BUGGY && s_raceParked) DrawDriveAs(TimerRefHR);
+    DrawFarMushrooms();
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
     const int items = s_powerups && s_nbMush > 0 && !s_trial && !Qualifying();
     // (the display off -- hud=0 -- and no items: no display, but the scene's own drawn things all the same -- the car Twinsen drives as,

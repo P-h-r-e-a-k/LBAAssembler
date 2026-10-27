@@ -590,6 +590,20 @@ internal static class RaceTrackScenes
                 model.Hero.X = At(pole.Back + 1.8, pole.Side + shift, false); model.Hero.Z = At(pole.Back + 1.8, pole.Side + shift, true); model.Hero.Y = Ground(model.Hero.X, model.Hero.Z) + 100;
                 model.Hero.Beta = beta;
                 t.StartScene = scene;
+                // (the one the island's story has waiting at the start -- Polar Island's grobo with the digger's key, the user, 2026-10-27:
+                // "have him spawn in behind the cars closer to Twinsen": three cells behind Twinsen and one to the side away from the next
+                // car, facing him -- just out of the reach of his script, 1500, a few steps from him: the Action key at the car isn't his --
+                // brought from the island's own scene of him
+                // (every scene's copy goes: RemoveActors))
+                if (options.Island.StartPerson is { } person && StartPersonActor(store, options.Island, person) is { } waiting)
+                {
+                    var away = Math.Sign(pole.Side - GridSpot(1, t.Options).Side) is var sg && sg != 0 ? sg : 1;
+                    waiting.X = At(pole.Back + 5, pole.Side + shift + 1.2 * away, false); waiting.Z = At(pole.Back + 5, pole.Side + shift + 1.2 * away, true);
+                    waiting.Y = Ground(waiting.X, waiting.Z);
+                    waiting.Beta = ((int)Math.Round(Math.Atan2(model.Hero.X - waiting.X, model.Hero.Z - waiting.Z) * 4096 / (2 * Math.PI)) % 4096 + 4096) % 4096;
+                    SceneOps.AddActor(model, waiting);
+                    log.Add($"scene {scene}: entity {person} (the island's story's, at the start) behind Twinsen at ({waiting.X},{waiting.Y},{waiting.Z})");
+                }
                 // the opponents wait in the pit lane (the race-track mode puts them on the grid when the race is about to start); with
                 // no pit lane they stand on the grid spots behind the player
                 var grid = t.Grid; var pits = t.Pits;
@@ -819,7 +833,8 @@ internal static class RaceTrackScenes
                         mushroom.Flags = OpponentFlags; mushroom.Move = 0; mushroom.Life = new byte[] { 0 }; mushroom.Track = new byte[] { 0 };
                         mushroom.X = (int)Math.Round((x - model.CubeX * 64) * 512); mushroom.Z = (int)Math.Round((z - model.CubeY * 64) * 512);
                         mushroom.Y = -20000; mushroom.Beta = 0;
-                        t.Mushrooms.Add(new[] { scene, SceneOps.AddActor(model, mushroom), (int)Math.Round(y) });
+                        // (and where it stands on the island: the race-track mode draws it from the next cube too, DrawFarMushrooms)
+                        t.Mushrooms.Add(new[] { scene, SceneOps.AddActor(model, mushroom), (int)Math.Round(y), (int)Math.Round(x * 512), (int)Math.Round(z * 512) });
                     }
                     // (a few: the penguins dropped walk the track, several in one scene at once)
                     for (var k = 0; k < PenguinsPerScene; k++)
@@ -1290,6 +1305,21 @@ void comportement_1()
     // Mosquibee's nest, which then sat on the asphalt) is moved to the nearest place clear of it, on the new ground: the actors kept
     // are the ones Twinsen's own script waits on in a cutscene, so they stay in the scene rather than being deleted with the rest.
     // Searched outwards from where it stood, in its own cube.
+    // The island's own actor of `entity`, as its scenes have it before the build (the store's records: the build saves its scenes at the
+    // end), a copy -- or null
+    private static SceneActorModel? StartPersonActor(SceneStore store, RaceTrackIsland island, int entity)
+    {
+        foreach (var scene in island.Scenes)
+        {
+            if (!store.SceneExists(scene)) continue;
+            SceneModel model;
+            try { model = store.Load(scene); } catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { continue; }
+            if (model.Island != island.IslandByte) continue;
+            if (model.Actors.Skip(1).FirstOrDefault(a => a.Entity == entity) is { } found) return found.Clone();
+        }
+        return null;
+    }
+
     private static void ShiftOffRoad(SceneActorModel actor, SceneModel model, int index, Func<double, double, double> distanceToRoad,
         Func<double, double, double>? groundBefore, Func<double, double, double>? ground, Func<double, double, bool>? wasGround,
         double roadReach, int scene, List<string> log)
