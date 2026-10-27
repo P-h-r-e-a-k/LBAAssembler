@@ -407,12 +407,21 @@ public partial class MainWindow
     // The scene Play should start: the scene that is open. An interior is its own scene; on an island it is the scene of the cube
     // the camera is over (each outdoor scene is one cube of its island), else the one picked in the Scene box, else the first
     // outdoor scene of the island (never just scene 0).
+    // The island file whose scenes an open island file shows: Citadel Island's two files share their scenes, which the game names the
+    // storm's (CITADEL) -- with the town circuit's file (CITABAU) open, Play found no scene under the camera and started the last one
+    // played, after a restart the house's (scene 0): the user, 2026-10-27, "it's only letting me start in scene 0"
+    internal static string SceneIsland(string file)
+    {
+        var name = Path.GetFileNameWithoutExtension(file);
+        return string.Equals(name, "CITABAU", StringComparison.OrdinalIgnoreCase) ? "CITADEL" : name;
+    }
+
     private int Lba2SceneToPlay()
     {
         if (interiorSceneActive && interiorSceneNumber >= 0) return interiorSceneNumber;
         if (SceneUnderCamera() is { } here) return here.Option.Index;
         if (selectedLba2Scene is { } picked) return picked;
-        var island = Path.GetFileNameWithoutExtension(activeFile);
+        var island = SceneIsland(activeFile);
         var first = allSceneEntries.FirstOrDefault(s => !s.IsInterior && string.Equals(s.IslandFile, island, StringComparison.OrdinalIgnoreCase));
         return first?.Option.Index ?? Lba2Play.LastOptions?.Scene ?? 0;
     }
@@ -420,7 +429,7 @@ public partial class MainWindow
     private SceneEntry? SceneUnderCamera()
     {
         if (currentGame != GameKind.Lba2 || interiorSceneActive || currentIsland is null) return null;
-        var island = Path.GetFileNameWithoutExtension(activeFile);
+        var island = SceneIsland(activeFile);
         var cubeX = (int)Math.Floor(targetX / 32768.0);
         var cubeZ = (int)Math.Floor(targetZ / 32768.0);
         return allSceneEntries.FirstOrDefault(s => !s.IsInterior && s.CubeX == cubeX && s.CubeY == cubeZ && string.Equals(s.IslandFile, island, StringComparison.OrdinalIgnoreCase));

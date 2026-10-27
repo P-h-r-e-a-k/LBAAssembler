@@ -49,7 +49,7 @@ public partial class MainWindow : IScenePanelHost
         if (lba2JoinedView && lba2CurrentTiles is { } tiles)
             return tiles.Select(t => t.Scene).Distinct().Select(s => (s, allSceneEntries.FirstOrDefault(e => e.Option.Index == s)?.Option.Display ?? $"{s}")).ToList();
         if (interiorSceneActive) return interiorSceneNumber >= 0 ? new[] { (interiorSceneNumber, allSceneEntries.FirstOrDefault(e => e.Option.Index == interiorSceneNumber)?.Option.Display ?? $"{interiorSceneNumber}") } : Array.Empty<(int, string)>();
-        var island = Path.GetFileNameWithoutExtension(activeFile);
+        var island = SceneIsland(activeFile);
         return allSceneEntries.Where(e => !e.IsInterior && string.Equals(e.IslandFile, island, StringComparison.OrdinalIgnoreCase)).Select(e => (e.Option.Index, e.Option.Display)).ToList();
     }
 
@@ -111,7 +111,7 @@ public partial class MainWindow : IScenePanelHost
     {
         if (currentGame == GameKind.Lba1) { SetStatus(GoToLba1Scene(scene)); return; }
         if (allSceneEntries.FirstOrDefault(e => e.Option.Index == scene) is { IsInterior: false } outdoor
-            && string.Equals(outdoor.IslandFile, Path.GetFileNameWithoutExtension(activeFile), StringComparison.OrdinalIgnoreCase))
+            && string.Equals(outdoor.IslandFile, SceneIsland(activeFile), StringComparison.OrdinalIgnoreCase))
         {
             FocusExteriorScene(outdoor);
             if (SceneStoreInView() is { } store) scenePanel?.Show(store, scene);
@@ -262,7 +262,7 @@ public partial class MainWindow : IScenePanelHost
         var (lo, hi) = IslandOps.HeightRange(ground);
         if (!PickGroundWith(view, lo, hi, (x, z) => IslandOps.Altitude(ground, x, z) ?? double.NaN, out var wx, out var wz)) return null;
         if (IslandOps.Altitude(ground, wx, wz) is not { } altitude) return null;
-        var island = Path.GetFileNameWithoutExtension(activeFile);
+        var island = SceneIsland(activeFile);
         int cubeX = (int)Math.Floor(wx / 32768.0), cubeZ = (int)Math.Floor(wz / 32768.0);
         if (allSceneEntries.FirstOrDefault(s => !s.IsInterior && s.CubeX == cubeX && s.CubeY == cubeZ && string.Equals(s.IslandFile, island, StringComparison.OrdinalIgnoreCase)) is not { } there) return null;
         return (there.Option.Index, Math.Clamp((int)Math.Round(wx - cubeX * 32768.0), 0, 32767), (int)Math.Round(altitude), Math.Clamp((int)Math.Round(wz - cubeZ * 32768.0), 0, 32767));

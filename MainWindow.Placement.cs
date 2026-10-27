@@ -272,7 +272,7 @@ public partial class MainWindow
             // outdoors each cube of the island has its own scene: dropped in another cube, that cube's scene is played
             var cubeX = Math.Clamp((int)Math.Floor(world.X / 32768.0), 0, 15);
             var cubeZ = Math.Clamp((int)Math.Floor(world.Z / 32768.0), 0, 15);
-            var island = System.IO.Path.GetFileNameWithoutExtension(activeFile);
+            var island = SceneIsland(activeFile);
             var there = allSceneEntries.FirstOrDefault(s => !s.IsInterior && s.CubeX == cubeX && s.CubeY == cubeZ && string.Equals(s.IslandFile, island, StringComparison.OrdinalIgnoreCase));
             if (there is not null) scene = there.Option.Index;
             else (cubeX, cubeZ) = allSceneEntries.Where(s => s.Option.Index == scene).Select(s => (s.CubeX, s.CubeY)).FirstOrDefault();

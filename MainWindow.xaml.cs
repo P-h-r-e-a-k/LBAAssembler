@@ -347,7 +347,7 @@ public partial class MainWindow : Window
         else if (selected.Display == OtherIslandLabel) matching = allSceneEntries.Where(e => e.IslandFile is null);
         else
         {
-            var islandName = Path.GetFileNameWithoutExtension(selected.Display);
+            var islandName = SceneIsland(selected.Display);
             matching = allSceneEntries.Where(e => e.IslandFile is not null && string.Equals(e.IslandFile, islandName, StringComparison.OrdinalIgnoreCase));
         }
 
