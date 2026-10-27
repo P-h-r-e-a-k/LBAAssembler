@@ -1764,7 +1764,22 @@ public partial class MainWindow : Window
     }
 
     // Tools > LBA2: race track (RaceTrackWindow): builds an island's track into the game folder, or puts the folder back.
-    private void Lba2RaceTrack_Click(object sender, RoutedEventArgs e)
+    // The race track generator: a track drawn on an island's map, handed to the race track window to build (TrackGeneratorWindow)
+    private void Lba2TrackGenerator_Click(object sender, RoutedEventArgs e)
+    {
+        if (!Lba2Engine.IsGameFolder(gameRoot))
+        {
+            MessageBox.Show(this, "The LBA2 game folder isn't set. Choose it under File > Settings.", "Race track generator", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var generator = new TrackGeneratorWindow(gameRoot) { Owner = this };
+        if (generator.ShowDialog() == true && generator.BuildIsland is { } island && generator.BuildPlan is { } plan)
+            OpenRaceTrackWindow(window => window.UsePlan(island, plan));
+    }
+
+    private void Lba2RaceTrack_Click(object sender, RoutedEventArgs e) => OpenRaceTrackWindow(null);
+
+    private void OpenRaceTrackWindow(Action<RaceTrackWindow>? setup)
     {
         if (!Lba2Engine.IsGameFolder(gameRoot))
         {
@@ -1779,6 +1794,7 @@ public partial class MainWindow : Window
         }
         if (playing) StopPlay();
         var window = new RaceTrackWindow(gameRoot, RaceTrackChanged) { Owner = this };
+        setup?.Invoke(window);
         window.ShowDialog();
     }
 

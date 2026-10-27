@@ -97,6 +97,8 @@ internal static class Program
             "lba1says" => Lba1Says.Run(args),
             "entityof" => EntityOfCommand.Run(args),
             "floaters" => FloatersCommand.Run(args),
+            "trackmap" => TrackSketchCommand.MapCommand(args),
+            "sketchtest" => TrackSketchCommand.Test(args),
             "pumpkinf1" => RaceTrackCommand.PumpkinF1(args),
             "templemarshal" => TempleMarshalCommand.Run(args),
             "toytruck" => RaceTrackCommand.ToyTruck(args),

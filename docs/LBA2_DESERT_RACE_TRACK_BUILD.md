@@ -5252,3 +5252,41 @@ corners where that's quicker".
 - Tested: `ScriptRoundTrip buildhere <folder> "Desert island" --plan docs/racetrack/sample_track_plan.json` (buildhere's new --plan, as the
   window's plan file builds) on a copy of the pristine test folder: a 1288-cell lap, its pit lane, 16 checkpoints (the plan's tweak
   applied), the grid, five opponents' lines; the top view shows the road round the island as the built-in lap.
+
+## The race track generator: a track drawn on the map, or placed in sections (2026-10-27)
+
+- The user: "The track plan format isn't feasible for a user to hand generate. Let's update LBAAssembler with the ability to take a
+  screenshot of an island with a map drawn on it, then we can automatically generate the track accordingly. Let's have this as a new
+  track generator wizard. The user selects an island, then with an image of the map they draw the track in one colour, let's go with
+  green, jumps in pink, pitlane in orange, and vertical loops in blue. Let's also let the user place track sections onto an island by
+  hand, and automatically snap them together so the user doesn't have to perfectly align them".
+- Tools > LBA2: race track generator (TrackGeneratorWindow), three pages:
+  1. The island (the race track window's list, but the Temple and the palace, whose roads the build makes; the island as it was before
+     a build: its *.before-racetrack file).
+  2. The drawing, on the island's map (IslandMapRenderer, 3 pixels a cell): pens -- road green, jump pink (over the road where it flies),
+     loop blue (over the road where it stands), pit lane orange (beside the road) -- an eraser, pen width, undo (Ctrl+Z), Ctrl+wheel zoom.
+     Track sections (straights, 45/90-degree bends, hairpins, a jump, a loop, a pit lane): pick one, click on the map; within 8 cells of an
+     open end it snaps onto it, turned to go on from it (and its end onto an open start); the wheel turns it, "Move or turn sections"
+     drags and turns placed ones (let go near an open end: snapped), a right click removes one. "Save the map as a picture" / "Load a
+     drawn picture": draw in any paint program; what differs from the map in the pens' colours (TrackSketch.Classify, by hue, strong
+     colours only) is taken, the picture scaled to the map.
+  3. The track: followed (TrackSketchTracer), drawn over the map (its way, jumps magenta, loops cyan, the pit lane, the start), what was
+     found and any problem; "The other way round"; "Save the plan…"; "Build…" saves it beside the editor (TrackPlans\) and opens the race
+     track window with the island ticked and the plan chosen (RaceTrackWindow.UsePlan).
+- TrackSketchTracer: the road (green, pink, blue) closed over small gaps, its biggest piece; a start on a straight in the stroke's middle;
+  marched both ways a step at a time, each step the way that stays on the road and bends least, set back to the stroke's middle -- where
+  the stroke is wider than a road across (a crossing) straight on, not to the middle; a lap when it comes back round (or both ends meet),
+  else a sprint. Into cells a cell apart, smoothed. Each point's kind from what is drawn round it. Jumps: up to 22 cells of each pink
+  stretch, slid along it to where the ramp, flight and landing are all in one cube (a flight over a cube's edge breaks), the road straight
+  under them; loops at a blue stretch's middle, the road straight 14 cells either side (old moon's: radius 4, 3 across); heights from the
+  ground, smoothed, level over each jump and loop, grade 15 %. The pit lane: the orange stroke's two farthest ends. Start: the pit lane's
+  middle (the builder's), else the longest straight. Crossings noted (the build makes its own jump there).
+- Placed sections with nothing drawn by hand on the road are followed as they are (their exact middle line, chained end to nearest start
+  within 14 cells), not through the picture -- a small square of wide strokes traced as a sprint cutting across its inside.
+- Tested: `ScriptRoundTrip sketchtest` draws an island's built-in lap on its map as a user would (green, a pink, a blue and an orange
+  stroke), reads it back as a picture and traces it: the Desert lap (crossing itself once) a 1374-cell lap, a jump, a loop and the pit
+  lane, which builds (a 19.5-cell gap jump, the road straight under it, the loop's ring standing); Mosquibees' 502 for its 500. A UI test
+  on a sandbox (env LBA2_TRACKGEN_PICTURE / _SECTIONS / _SAVE drive it without dialogs): the picture -> the same lap; nine sections
+  dropped a few pixels and degrees off, snapped -> a 255-cell lap with a jump and a loop, which builds (the ring on the road in the 3D view).
+- Not yet: Otringal's drawn lap traced as a 641-cell sprint for its 711 -- a tight double hairpin inside the town drawn in wide strokes
+  merges; draw such places with a thinner pen or further apart.

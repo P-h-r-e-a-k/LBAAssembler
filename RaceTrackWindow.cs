@@ -90,7 +90,7 @@ internal sealed class RaceTrackWindow : Window
     }
 
     // The islands the window lists, two to a row, each with what its track is: the box's label and its tooltip.
-    private static readonly (RaceTrackIsland Island, string Label, string Tip)[] Listed =
+    internal static readonly (RaceTrackIsland Island, string Label, string Tip)[] Listed =
     {
         (RaceTrackIsland.Desert, "Desert island", "A jump where the lap crosses itself; what is left of the original race track (its road paint, start gantry, arch and billboard in cube 7,10) is cleared"),
         (RaceTrackIsland.Mosquibe, "Mosquibees Island", "Round the mountain: its plan draws its own bridge and jump"),
@@ -256,6 +256,16 @@ internal sealed class RaceTrackWindow : Window
         {
             MessageBox.Show(this, $"The sample can't be saved: {error.Message}", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    // A plan file made elsewhere (the track generator) to build: its island ticked (the others as they are), the file chosen for it
+    public void UsePlan(RaceTrackIsland island, string path)
+    {
+        foreach (var box in islandChecks) if (box.Tag == island) box.IsChecked = true;
+        planPath.Text = path;
+        filePlan.IsChecked = true;
+        foreach (ComboBoxItem item in planIsland.Items) if (item.Tag == island) planIsland.SelectedItem = item;
+        status.Text = $"The track drawn in the generator, {System.IO.Path.GetFileName(path)}, is chosen as {island.Name}'s: Build builds it (with the other islands ticked).";
     }
 
     private RaceTrackIsland? PlanIsland() => planIsland.SelectedItem is ComboBoxItem { Tag: RaceTrackIsland island } ? island : null;
