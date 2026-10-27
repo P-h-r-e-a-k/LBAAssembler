@@ -1111,7 +1111,14 @@ internal static class RaceTrackBuilder
         if (plan.ThinKept is { Length: > 0 } thin) { keepBodies = (keepBodies ?? Array.Empty<int>()).Concat(ThinKept(island, thin, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
         if (plan.TrimKept && keepBodies is { Length: > 0 }) { keepBodies = keepBodies.Concat(TrimKept(island, roads, keepBodies, options, report)).ToArray(); keptBoxes = KeptBoxes(island, keepBodies); }
         var natural = new Field(island);
-        ModifyGround(island, field, index, roads, options, report, plan.KeepGroundUnder ? KeptGround(island, keptBoxes) : null);
+        // (and the ground in front of the island's doors, DoorGroundReach round each: the road's bank stops there in a step, room to walk
+        // up to the door -- Citadel Island's pharmacy, the town circuit's bank climbing from its doorstep, the user, 2026-10-27: "if we need
+        // to we could make the side of the road a vertical wall instead of a sloped bank to give more room to access the pharmacy")
+        var groundKept = plan.KeepGroundUnder
+            ? KeptGround(island, keptBoxes.Concat(options.DoorBoxes.Select(d => (d.X0 - DoorGroundReach + KeepGroundMargin, d.Z0 - DoorGroundReach + KeepGroundMargin,
+                                                                                  d.X1 + DoorGroundReach - KeepGroundMargin, d.Z1 + DoorGroundReach - KeepGroundMargin))).ToList())
+            : null;
+        ModifyGround(island, field, index, roads, options, report, groundKept);
         // (and up again to the island's own height where the levelling cut it down, clear of the road -- its curbs and OwnRimClear cells
         // more: the road and the ground beside it as they are)
         var rimsBack = 0;
@@ -1131,7 +1138,7 @@ internal static class RaceTrackBuilder
                 int a = PlanPoint(plan, main, t.From), b = PlanPoint(plan, main, t.To);
                 for (var k = a; ; k = (k + 1) % main.Count) { sunk.Add(k); if (k == b) break; }
             }
-        if (main.Raised is not null && plan.RaisedCut) CutUnderRaised(island, field, main, options, report, plan.KeepGroundUnder ? KeptGround(island, keptBoxes) : null, sunk);
+        if (main.Raised is not null && plan.RaisedCut) CutUnderRaised(island, field, main, options, report, groundKept, sunk);
         var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned);
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
@@ -3849,12 +3856,21 @@ internal static class RaceTrackBuilder
                     var alongX = side < 2;
                     var depth = alongX ? x1 - x0 : z1 - z0;
                     if (cut + 0.25 > TrimMost * depth) { report.Notes.Add($"a kept building in cube ({cx},{cz}) at ({group.Key.X}, {group.Key.Z}): the road runs {(cut > 1e8 ? "through" : $"{cut:0.0} cells into")} it, more than it can be made shallower by"); continue; }
-                    // the far side stays: world units from the origin along the axis, and the squeeze
-                    var anchor = alongX ? (side == 0 ? x1 * 512 - ox : x0 * 512 - ox) - group.Key.X : (side == 2 ? z1 * 512 - oz : z0 * 512 - oz) - group.Key.Z;
-                    var k = (depth - cut - 0.25) / depth;
+                    // the new near side (cube-local units), and each piece squeezed toward its own far side -- not the building's: one less
+                    // deep than the building, the pharmacy's piece with its door, had its door's face pushed 0.4 cells out over the doorway,
+                    // and Twinsen couldn't step into the door's zone any more (Citadel Island's town circuit, 2026-10-27)
+                    var near = alongX ? (side == 0 ? (x0 + cut + 0.25) * 512 - ox : (x1 - cut - 0.25) * 512 - ox)
+                                      : (side == 2 ? (z0 + cut + 0.25) * 512 - oz : (z1 - cut - 0.25) * 512 - oz);
                     var made = new List<string>();
                     foreach (var d in group.ToList())
                     {
+                        double far = alongX ? (side == 0 ? d.XMax : d.XMin) : (side == 2 ? d.ZMax : d.ZMin);
+                        double nearFace = alongX ? (side == 0 ? d.XMin : d.XMax) : (side == 2 ? d.ZMin : d.ZMax);
+                        // (a piece wholly past the new side stays as it is)
+                        if (side % 2 == 0 ? nearFace >= near : nearFace <= near) continue;
+                        var k = (far - near) / (far - nearFace);
+                        if (k <= 0.05) { made.Add($"body {d.Body & 0xFFFF} left (wholly in the road's way)"); continue; }
+                        var anchor = far - (alongX ? d.X : d.Z);
                         var body = Squeezed(hqr.Read(d.Body & 0xFFFF), d, alongX, anchor, k);
                         if (body is null) { made.Add($"body {d.Body & 0xFFFF} left (not a body of one bone)"); continue; }
                         var was = d.Body & 0xFFFF;
@@ -3958,7 +3974,7 @@ internal static class RaceTrackBuilder
     }
 
     // How far round a kept building the ground stays as it is (RaceTrackPlan.KeepGroundUnder): its doorstep and the path to it.
-    private const double KeepGroundMargin = 2;
+    private const double KeepGroundMargin = 2, DoorGroundReach = 4;
 
     // The ground vertices under the kept buildings and KeepGroundMargin round them.
     private static HashSet<(int, int)> KeptGround(IslandFile island, List<(double X0, double Z0, double X1, double Z1)> boxes)
