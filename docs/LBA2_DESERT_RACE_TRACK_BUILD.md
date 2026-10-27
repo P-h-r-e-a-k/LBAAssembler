@@ -5360,3 +5360,27 @@ corners where that's quicker".
   drawing and the spiral lap as before; the 3D view shown and turned to and from. Fixed on the way: a raised drawing without sections hit a
   null (the lap-closing check read the sections' climbs); the profile's first edit raised the whole lap (compared with the bare ground,
   under the jump's level run-up); it was rotated to the start twice.
+
+## Polar Island's story start: FunFrock drives off, the grobo gives the key, the chase, the end either way (2026-10-27)
+
+- The user: "Let's start story mode on Polar Island with FunFrock speaking "You'll never catch me, whoever makes it to the Sendells first
+  will get all of their magical powers" at which point Funfrock starts driving off into the distance, let's start with the digger off the
+  track next to the grobo. Twinsen speaks aloud "No, Funfrock come back, what am I going to do I need to stop him". The grobo turns to
+  Twinsen and says "Quick, Twinsen, take my vehicle, the fate of the world rests upon your shoulders". This causes the grobo to give
+  Twinsen the key ... We should slow Funfrock a little to allow Twinsen to catch up ... we should try to have Funfrock win just ahead of
+  Twinsen, so Twinsen watches Funfrock take the jump first. At which point regardless of who wins the end of the race triggers and
+  Twinsen is in bed at home with Zoe waking him up".
+- Engine (RACEMOD.CPP), three race-file keys, written only into the story's dream file for Polar Island (RaceCarEngineFile; the race
+  game's Track select race is as it was -- tested: Twinsen starts in his car, on the grid):
+  - chase=<his text> <Twinsen's> <helper entity> <helper's text> <game var>: ChaseOpening in place of the grid and the intro -- in the
+    start line's scene the one to beat on pole (OnSpot), his line, "go" (no count); RACE_CHASE_PAUSE_MS of him driving off; Twinsen's
+    line; the grobo (the actor of entity 33) turned to Twinsen, his line, game variable 230 set (the key). The opponents drive while
+    Twinsen is on foot (`moving` in a chase).
+  - chase_lead=<cells> (14): ChaseLead scales his pace by 1 + (lead wanted - lead) / (1.5 x lead wanted), 0.3 to 1.4.
+  - dream_any_end=1: he goes on over the finish (the jump into the peak) to his line's end; his finish ends the dream too,
+    RACE_DREAM_END_FLIGHT_MS (1.6 s) later -- the win's sets applied all the same (game variable 205: scene 0's opening, Twinsen in bed).
+- Build: the texts 23-25 in the island's file (six languages, PolarDream), sorted by id; the digger parked off the road 5.5 cells to the
+  side of the pole's column, beside the grobo, facing the way the lap runs (RaceTrackScenes, the StartPerson block).
+- Tested headless (the story set, autodrive): FunFrock on pole says his line and drives off, Twinsen and the grobo speak, the key is
+  given; Twinsen gets in, crosses the start line and chases; FunFrock, held a little ahead, finishes first ("FunFrock got there first"),
+  over the jump, Twinsen watching just behind; the picture fades to white and Twinsen wakes up in scene 0, Zoe there.

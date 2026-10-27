@@ -603,6 +603,15 @@ internal static class RaceTrackScenes
                     waiting.Beta = ((int)Math.Round(Math.Atan2(model.Hero.X - waiting.X, model.Hero.Z - waiting.Z) * 4096 / (2 * Math.PI)) % 4096 + 4096) % 4096;
                     SceneOps.AddActor(model, waiting);
                     log.Add($"scene {scene}: entity {person} (the island's story's, at the start) behind Twinsen at ({waiting.X},{waiting.Y},{waiting.Z})");
+                    // (and Twinsen's car parked off the road beside him -- the story's start, chase=: FunFrock takes pole and drives off, and
+                    // Twinsen takes the car the grobo gives him the key of. A race that starts in the car -- the race game's -- puts it on the
+                    // grid as it forms)
+                    if (buggy is not null)
+                    {
+                        buggy.X = At(pole.Back + 5, pole.Side + shift + 5.5 * away, false); buggy.Z = At(pole.Back + 5, pole.Side + shift + 5.5 * away, true);
+                        buggy.Y = Ground(buggy.X, buggy.Z); buggy.Beta = Facing(pole.Back + 5);
+                        log.Add($"scene {scene}: the car parked off the road beside it at ({buggy.X},{buggy.Y},{buggy.Z})");
+                    }
                 }
                 // the opponents wait in the pit lane (the race-track mode puts them on the grid when the race is about to start); with
                 // no pit lane they stand on the grid spots behind the player

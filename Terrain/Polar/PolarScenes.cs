@@ -314,7 +314,7 @@ internal static class PolarScenes
         if (text.Count < Languages * RetailFiles * 2) throw new InvalidDataException($"TEXT.HQR has {text.Count} entries, fewer than the game's {Languages * RetailFiles * 2}.");
         for (var lang = 0; lang < Languages; lang++)
         {
-            var (ids, data) = Bank(PolarDream.IslandTexts(lang).Concat(PolarGrobo.IslandTexts(lang)).Prepend((0, "Polar Island")).ToList());
+            var (ids, data) = Bank(PolarDream.IslandTexts(lang).Concat(PolarGrobo.IslandTexts(lang)).Prepend((0, "Polar Island")).OrderBy(t => t.Item1).ToList());
             foreach (var (k, payload) in new[] { (0, ids), (1, data) })
             {
                 var at = TextEntry(lang) + k;

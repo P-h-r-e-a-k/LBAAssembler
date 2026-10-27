@@ -173,7 +173,13 @@ internal static class RaceCarEngineFile
         {
             var f = dream.Finish;
             text.Append($"sprint=1\nrace_laps=1\nfinishline={f.CubeX} {f.CubeZ} {f.X0} {f.Z0} {f.X1} {f.Z1} {f.DirX} {f.DirZ}{Height(f)}\n");
-            text.Append($"intro={dream.IntroText}\nlose={dream.LoseText}\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n");
+            // (Polar Island's: the story's start in place of the intro -- FunFrock drives off, the grobo gives Twinsen the key -- and the end
+            // of the race the end of the dream whoever gets there first: PolarDream's chase)
+            if (info is not null && RaceTrackIsland.ByName(info.Island) == RaceTrackIsland.Polar)
+                text.Append($"chase={LBAAssembler.Terrain.Polar.PolarDream.ChaseFunFrockText} {LBAAssembler.Terrain.Polar.PolarDream.ChaseTwinsenText} " +
+                            $"{LBAAssembler.Terrain.Polar.PolarGrobo.Entity} {LBAAssembler.Terrain.Polar.PolarDream.ChaseGroboText} {LBAAssembler.Terrain.Polar.PolarGrobo.KeyVar}\n" +
+                            $"chase_lead={LBAAssembler.Terrain.Polar.PolarDream.ChaseLeadCells}\ndream_any_end=1\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n");
+            else text.Append($"intro={dream.IntroText}\nlose={dream.LoseText}\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n");
             // (won: scene 0's opening wakes Twinsen up in his bed)
             if (dream.WinVar >= 0) text.Append($"win={dream.WinVar} 1\n");
             // (and the finish line a jump's lip: he wakes up in mid-flight)

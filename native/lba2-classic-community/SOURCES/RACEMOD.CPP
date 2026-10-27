@@ -129,6 +129,13 @@
  *     after_gears=<top>...       the gears' top speeds once Twinsen has woken up (the race's own are faster: a dream's car): at the wake
  *                                the race's track is put away -- its finished race, the power-ups' effects, its weather -- and the car
  *                                keeps its handling with these gears
+ *     chase=<said by the one to beat> <said by Twinsen> <helper entity> <said by the helper> <game var>
+ *                                a story start instead of the grid (Polar Island's dream, 2026-10-27): in the start line's scene the one to
+ *                                beat takes pole, says his line and drives off; Twinsen says his; the helper (an actor of that entity in the
+ *                                scene) turns to him, says its line and the game variable is set (the car's key); the race is on, no count
+ *                                and no grid -- Twinsen gets in his car when he likes and chases (ChaseOpening)
+ *     chase_lead=<cells>         the one to beat holds this lead over Twinsen: easing right off far ahead, pushing harder behind (ChaseLead)
+ *     dream_any_end=1            a sprint's end wakes Twinsen up (wake=) whoever got there first; the one to beat goes on over the finish
  *     wake_flight=<ms>           a win wakes Twinsen up <ms> after the line instead, the car not held there -- the finish line at a carried
  *                                jump's lip: he never lands -- the picture fading to white (WhiteFade) and the waking scene fading in
  *                                from white (RaceMod_FadeFromWhite: Polar Island's jump into the rocky peak, 2026-10-06)
@@ -511,6 +518,14 @@ static int s_mapKey = 0;                   // minimap=: the race's mini-map (Dra
 static S32 s_endAt = 0;                    // when the race's end is followed up (0: not yet)
 static int s_endWon = 0;
 static int s_wakeFlight = 0;                // wake_flight= (ms; 0: RACE_SPRINT_END_MS, the car held at the line)
+// chase=, chase_lead=, dream_any_end= (ChaseOpening, ChaseLead): the texts, the helper's entity and the variable it sets; the opening's
+// step and when the next is due; the lead (world units)
+static int s_chaseOn = 0, s_chaseText[3] = {-1, -1, -1}, s_chaseHelper = -1, s_chaseVar = -1, s_chaseStep = 0;
+static S32 s_chaseAt = 0;
+static double s_chaseLead = 0;
+static int s_dreamAnyEnd = 0;
+#define RACE_CHASE_PAUSE_MS 2600           // FunFrock driving off before Twinsen speaks
+#define RACE_DREAM_END_FLIGHT_MS 1600      // dream_any_end=: the one to beat over the jump this long before the dream fades
 static int s_fadeFromWhite = 0;             // the waking scene fades in from white (set by the wake; RaceMod_FadeFromWhite takes it)
 static S32 s_whiteUntil = 0;                // ... once its opening has laid Twinsen in his bed: the picture held white till then (RaceMod_Story)
 #define RACE_WHITE_HOLD_MS 400
@@ -3464,6 +3479,11 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "grid_back")) s_gridBack = atoi(v);
         else if (!strcmp(key, "weather")) s_fineWeather = !strcmp(v, "fine");
         else if (!strcmp(key, "wake_flight")) s_wakeFlight = atoi(v);
+        else if (!strcmp(key, "chase")) {
+            if (sscanf(v, "%d %d %d %d %d", &s_chaseText[0], &s_chaseText[1], &s_chaseHelper, &s_chaseText[2], &s_chaseVar) == 5) { s_chaseOn = 1; s_chaseStep = 0; }
+        }
+        else if (!strcmp(key, "chase_lead")) s_chaseLead = atof(v) * 512;
+        else if (!strcmp(key, "dream_any_end")) s_dreamAnyEnd = atoi(v);
         else if (!strcmp(key, "minimap")) s_mapKey = atoi(v);
         else if (!strcmp(key, "raised")) LoadRaised(v);
         else if (!strcmp(key, "raised_lap")) s_nbLap = atoi(v);
@@ -4340,8 +4360,10 @@ static S32 TrialBestTime(void) {
 }
 
 static double PlayerProgress(void);
+static double OpponentProgress(const T_RACE_OPPONENT *o);
 static void SprintOver(S32 now, int crossed);
 static void RaceFromGrid(void);
+static void OnSpot(T_RACE_OPPONENT *o, const T_RACE_SPOT *spot);
 static void TrialStartSpot(void);
 static int SprintRunAgain(S32 now);
 static int GiveItem(int pu, S32 now);
@@ -4565,10 +4587,14 @@ static void SprintOver(S32 now, int crossed) {
     else snprintf(text, sizeof(text), "You finished %d%s", place, Ordinal(place));
     Message(text);
     // (a won dream with wake_flight=: Twinsen wakes up in mid-flight, the car not held at the line)
-    const S32 after = s_beatMain && s_wakeFlight > 0 && s_wakeScene >= 0 ? s_wakeFlight : RACE_SPRINT_END_MS;
+    // (dream_any_end=: the one to beat there first -- over the jump, Twinsen watching -- the dream fades a moment later all the same)
+    const S32 after = s_beatMain && s_wakeFlight > 0 && s_wakeScene >= 0 ? s_wakeFlight
+                      : s_dreamAnyEnd && s_wakeScene >= 0 ? (crossed ? (s_wakeFlight > 0 ? s_wakeFlight : RACE_SPRINT_END_MS) : RACE_DREAM_END_FLIGHT_MS)
+                      : RACE_SPRINT_END_MS;
     s_messageUntil = now + after;
     Log_Info("[racemod] sprint over in %.2f s: %d%s of %d%s", (now - s_lapStart) / 1000.0, place, Ordinal(place), racers, s_beatMain ? ", won" : ", lost");
-    if (s_beatMain) ApplySets(s_winSet, s_nbWinSet);
+    // (and in a dream that ends either way, dream_any_end=, what a win sets all the same: it wakes Twinsen up in his bed)
+    if (s_beatMain || (s_dreamAnyEnd && s_wakeScene >= 0)) ApplySets(s_winSet, s_nbWinSet);
     ApplySets(s_finishSet, s_nbFinishSet);
     s_endAt = now + after;
     s_endWon = s_beatMain;
@@ -4615,6 +4641,74 @@ static int StartScene(void) {
     return -1;
 }
 
+// A story start instead of the grid (chase=; Polar Island's dream, the user, 2026-10-27: "Let's start story mode on Polar Island with
+// FunFrock speaking ... at which point Funfrock starts driving off into the distance ... Twinsen speaks aloud ... The grobo turns to Twinsen
+// and says ... This causes the grobo to give Twinsen the key"), a step at a time as the scene runs (a line is a dialog box: the game waits
+// for it):
+//   0  in the start line's scene: a moment;
+//   1  the one to beat on pole, says his line; the race is on -- he drives off, the clock running, no count and no grid;
+//   2  RACE_CHASE_PAUSE_MS later, Twinsen says his;
+//   3  the helper turns to face him;
+//   4  and says its line, and the game variable is set: the car's key. Twinsen gets in when he likes and gives chase.
+static void ChaseOpening(S32 now) {
+    if (NewCube != -1 || (S32)NumCube != StartScene() || !s_nbSpots) return;
+    if (s_chaseStep == 0) { s_chaseAt = now + 700; s_chaseStep = 1; return; }
+    if (now < s_chaseAt) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    switch (s_chaseStep) {
+    case 1: {
+        const int n = s_main >= 0 ? s_main : 0;
+        if (s_opp[n].Count) OnSpot(&s_opp[n], &s_spots[0]);
+        s_phase = PHASE_GRID; s_goAt = now;           // (RaceMod_Frame: "go" -- the clock and his run from now)
+        s_wantGrid = 0; s_place = 0; s_laps = 0;
+        const int actor = s_carActor[n];
+        NumObjDial = (U8)(actor > 0 && actor < NbObjets ? actor : NUM_PERSO);
+        Log_Info("[racemod] chase: %s says text %d and drives off", s_opp[n].Count ? s_opp[n].Name : "the one to beat", s_chaseText[0]);
+        if (s_chaseText[0] >= 0) Dial(s_chaseText[0], TRUE);
+        s_wantFlip = 1;
+        s_chaseAt = TimerRefHR + RACE_CHASE_PAUSE_MS; s_chaseStep = 2;
+        break;
+    }
+    case 2:
+        NumObjDial = NUM_PERSO;
+        Log_Info("[racemod] chase: Twinsen says text %d", s_chaseText[1]);
+        if (s_chaseText[1] >= 0) Dial(s_chaseText[1], TRUE);
+        s_wantFlip = 1;
+        s_chaseAt = TimerRefHR + 500; s_chaseStep = 3;
+        break;
+    case 3:
+        for (int i = 1; i < NbObjets; i++)
+            if (ListObjet[i].IndexFile3D == s_chaseHelper && ListObjet[i].Obj.Y > -10000) {
+                T_OBJET *h = &ListObjet[i];
+                h->Obj.Beta = (S32)(atan2((double)(hero->Obj.X - h->Obj.X), (double)(hero->Obj.Z - h->Obj.Z)) * 4096.0 / (2 * 3.14159265358979)) & 4095;
+                ClearRealAngle(h);
+                s_chaseHelper = -1000 - i;    // (found: its actor, from now)
+                break;
+            }
+        s_chaseAt = now + 600; s_chaseStep = 4;
+        break;
+    case 4: {
+        const int actor = s_chaseHelper <= -1000 ? -1000 - s_chaseHelper : -1;
+        NumObjDial = (U8)(actor > 0 && actor < NbObjets ? actor : NUM_PERSO);
+        Log_Info("[racemod] chase: the helper (actor %d) says text %d and gives the key (game variable %d)", actor, s_chaseText[2], s_chaseVar);
+        if (s_chaseText[2] >= 0) Dial(s_chaseText[2], TRUE);
+        if (s_chaseVar >= 0 && s_chaseVar < MAX_VARS_GAME) ListVarGame[s_chaseVar] = 1;
+        s_wantFlip = 1;
+        s_chaseStep = 5;
+        break;
+    }
+    }
+}
+
+// The one to beat's pace in a chase (chase_lead=): his lead over Twinsen held -- far ahead (Twinsen still on foot, the car just away) he
+// eases right off, behind he pushes, so Twinsen catches him up and the two come to the end close together, he a little ahead
+static double ChaseLead(const T_RACE_OPPONENT *o, int n) {
+    if (s_chaseLead <= 0 || n != (s_main >= 0 ? s_main : 0)) return 1;
+    const double lead = OpponentProgress(o) - PlayerProgress();
+    double f = 1 + (s_chaseLead - lead) / (s_chaseLead * 1.5);
+    return f < 0.3 ? 0.3 : f > 1.4 ? 1.4 : f;
+}
+
 // Called once a frame from the main loop, before the scene is drawn (PERSO.CPP), where a dialog can be opened as the life scripts do:
 // the intro as the grid forms, a sprint's end followed up -- a win wakes Twinsen up (out of the car, in the waking scene), a loss runs
 // the race again from the grid -- and the wake line said a moment after he has woken up.
@@ -4647,6 +4741,8 @@ void RaceMod_Story(void) {
         }
     }
     if (!s_sprint || CubeMode != CUBE_EXTERIEUR) return;
+    // (a story start, chase=: the opening in turn, in the start line's scene)
+    if (s_chaseOn && s_chaseStep < 5) { ChaseOpening(now); if (s_chaseStep < 5) return; }
     // the intro, as the grid forms (the count-down from when it is read)
     if (s_introText >= 0 && !s_introShown && s_phase == PHASE_GRID) {
         s_introShown = 1;
@@ -4671,7 +4767,7 @@ void RaceMod_Story(void) {
     if (s_runAgainAt && now >= s_runAgainAt && s_arcOn < 0 && s_flying < 0 && NewCube == -1) { s_runAgainAt = 0; RaceFromGrid(); return; }
     if (!s_place || !s_endAt || now < s_endAt || NewCube != -1) return;
     s_endAt = 0;
-    if (s_endWon && s_wakeScene >= 0) {
+    if ((s_endWon || s_dreamAnyEnd) && s_wakeScene >= 0) {
         // the dream is over: Twinsen wakes up, out of his car (the car is no one's: a new game's) -- in mid-flight with wake_flight=, the
         // picture fading to white there and the waking scene fading in from it
         if (s_wakeFlight > 0) {
@@ -14820,7 +14916,8 @@ void RaceMod_Frame(void) {
     // the race starts at GO (without a grid: when the player first drives off); the opponents wait while he is out of his car -- but for
     // on_foot=, where he gets out to explore and they race on (OnFoot)
     if (!s_nbSpots && !s_oppStarted && driving && (Input & I_UP)) s_oppStarted = 1;
-    const int moving = (driving || RaceMod_OnFoot()) && (s_nbSpots ? s_phase == PHASE_RACE : s_oppStarted);
+    // (and in a chase, chase=: the one to beat drives off while Twinsen is still on foot)
+    const int moving = (driving || RaceMod_OnFoot() || s_chaseOn) && (s_nbSpots ? s_phase == PHASE_RACE : s_oppStarted);
     // (how far round the player is, for the opponents that push harder when they have fallen behind)
     const double me = moving && s_opp[0].Count ? PlayerProgress() : 0;
     if (moving) PackWatch();
@@ -14852,6 +14949,7 @@ void RaceMod_Frame(void) {
             else if (now < o->BoostUntil || s_fuelAlways) pace *= RACE_BOOST * 0.9;
             if (now < o->ShrunkUntil) pace *= RACE_SHRUNK;
             pace *= HauntPace(n, now);
+            pace *= ChaseLead(o, n);
             if (now < o->HitUntil) { pace = 0; o->Speed = 0; }
 
             // its line's speed at its skill, reached from a standstill no faster than the car pulls away (the plan's braking is kept)
@@ -14887,7 +14985,9 @@ void RaceMod_Frame(void) {
                     // (a sprint: at the finish line it stops, finished -- ahead of the player, who hasn't; the one to beat there first
                     // has won)
                     if (o->S >= o->FinishS) {
-                        o->S = o->FinishS; o->Speed = 0;
+                        // (dream_any_end=: on over the finish -- the jump into the peak -- as Twinsen watches, to his line's end)
+                        if (s_dreamAnyEnd) { if (o->S > o->Length) { o->S = o->Length; o->Speed = 0; } }
+                        else { o->S = o->FinishS; o->Speed = 0; }
                         if (o->Laps <= 1) {
                             o->Laps = 2;
                             Log_Info("[racemod] %s finished in %.2f s", o->Name, (now - o->LapStart) / 1000.0);
@@ -16883,6 +16983,7 @@ static void ResetTrack(void) {
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
+    s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0;
     GhostReset();
     s_onFoot = 0; s_footArmed = 0; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_footActWas = 0; s_walkN = 0; s_walkCar = 0; s_stopReach = 0; s_stopping = 0; s_stopResume = 0;
