@@ -5977,6 +5977,9 @@ internal static class RaceTrackBuilder
         for (var t = every / 2; t < span.Count; t += every)
         {
             if (!up[span[t]]) continue;                                                      // (a sprint's ground road between its stretches)
+            // (one due at or near a place no pier stands, RaceTrackIsland.NoPiersAt: none at all -- moved along, it stood a few cells down
+            // the same alley, 2026-10-27)
+            if ((o.Island?.NoPiersAt ?? Array.Empty<(double, double, double)>()).Any(np => Sq(r.X[span[t]] - np.Item1) + Sq(r.Z[span[t]] - np.Item2) < Sq(np.Item3 + 4))) { none++; continue; }
             var placed = false;
             foreach (var shift in new[] { 0, 2, -2, 4, -4, 6, -6, 8, -8 })
             {

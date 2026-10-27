@@ -65,7 +65,9 @@ internal sealed record RaceTrackIsland(
         DeckWalls = new[] { (518.7, 568.5, 523.1, 572.6, 2618) },
         // (no support for the storm track's deck in the walk into the port beside the big wall, its other side open park: the user,
         // 2026-10-27, "This post blocking access to the port ... it's a track support, but let's just remove the post")
-        NoPiersAt = new[] { (519.0, 582.0, 3.0) },
+        // ... and in the alley between the curved wall and the lattice-walled shop south of it, at cell (518.9, 614.0) (the user, 2026-10-27,
+        // "the post on citadel.ile is still ... there")
+        NoPiersAt = new[] { (519.0, 582.0, 3.0), (518.9, 614.0, 4.0) },
         // (Twinsen's car in the story where he left it, first under the carport at his house -- not on a start line: the user, 2026-10-27)
         CarHome = (544.125, 654.75, 1024),
         // (its steep banks beside the road its own ground, walked on by Twinsen, walls to the cars only: RaceTrackBuilder.WallSteepBanks)
