@@ -270,7 +270,9 @@ internal static class RaceCarEngineFile
                 foreach (var (scene, actor) in laps.Actors) text.Append($"parade_actor={scene} {actor}\n");
                 if (st.RaphPark is [var ps, var px, var py, var pz, var pb]) text.Append($"parade_park={ps} {px} {py} {pz} {pb}\n");
                 // (he pulls up beside Twinsen on the start line, tyres screeching, and yells at him to get off the track)
-                if (st.RaphYell >= 0) text.Append($"parade_stop={st.RaphYell}\n");
+                // (and stays there, beside him on the road, Raph to be talked to at his car, until Twinsen drives with his gloves on: then to
+                // his park)
+                if (st.RaphYell >= 0) text.Append($"parade_stop={st.RaphYell} {st.RaphEntity} {RaceTrackStory.GlovesSlot}\n");
             }
         }
         if (town)

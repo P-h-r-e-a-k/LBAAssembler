@@ -5457,3 +5457,22 @@ corners where that's quicker".
   car, empty"), FunFrock himself beside it (RaceTrackIsland.ChaseDriver: scene 95's actor 14, entity 217, scripts emptied); he says his
   line, walks to it (RACE_CHASE_WALK_MS) and gets in, and the car drives off. The camera looks at the opening from the other side
   (the classic camera's angle turned half round through AddBetaCam), and back once Twinsen is in his car.
+
+## The bridge raised for the ferry, arrows alike, Raph waits on the road, the museum lift both ways, the car at home (2026-10-27)
+
+- Desert's bridge (WaterDeck): "the top of the ferry still clips through it, let's have a road ramp up, the bridge over, then a ramp back
+  down again" -- a ramp up on the ground at 15 %, the deck over the water only (its sea and 2 cells either side) at 3,400, a ramp down: 76
+  cells in all, 23 of deck.
+- Arrows (RaceTrackRaisedBody.Tile): "raised road sections have tended to have small triangles, and Desert track featured arrows instead,
+  let's be consistent across all tracks" -- the deck's arrow is the ground's: a shaft (its first cell, ArrowShaftHalf either side) and a
+  head (three cells, ArrowHalfWidth either side at its base), orange.
+- Raph (parade_stop=<text> <entity> <var>): stopped beside Twinsen he stays on the road -- the game's Raph, who talks for him, moved with
+  his car -- until Twinsen drives with his gloves (game variable 7); then he drives to his park, facing the way he goes, and turns as he
+  parks ("during the cut scene had his car slide sideways to the edge of the track").
+- The start line's car: in only with the action key -- its script's carry_obj_by clause (the car's number in the game's scene, another
+  actor's once the build took some away) put Twinsen in it as he stood by it.
+- The museum lift: one pad 2.5 cells across, level with the road, no post; the museum's window out (scene 15's door into 48 nearest the
+  lift's arrival) brings Twinsen up onto the road beside it.
+- Twinsen's car on Citadel (RaceTrackIsland.CarHome; RACEMOD.CPP game variable 211, RACE_GRID_CAR_VAR): on the start line only when the
+  race file starts the game there (the race game's start_in_car=, start_scene=); otherwise made under the carport at his house the first
+  time (scene 49, INIT_BUGGY 1) and shown where he left it in the start scenes (INIT_BUGGY 0).

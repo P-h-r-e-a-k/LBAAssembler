@@ -63,6 +63,8 @@ internal sealed record RaceTrackIsland(
         // a lift on the deck where its upper window was, down into the museum where the window took Twinsen -- scene 15, at the window's own
         // place: the user, 2026-10-27)
         DeckWalls = new[] { (518.7, 568.5, 523.1, 572.6, 2618) },
+        // (Twinsen's car in the story where he left it, first under the carport at his house -- not on a start line: the user, 2026-10-27)
+        CarHome = (544.125, 654.75, 1024),
         DeckLifts = new[] { (520.8, 568.1, 15, 12288, 3000, 13312) },
         // (the island's people and things away from both roads stay: the cow, the sewer lifts by the start line and over the school -- without
         // them the lift's zone took Twinsen down into the sewers and the ride back up took him straight down again -- the user, 2026-10-27)
@@ -163,6 +165,9 @@ internal sealed record RaceTrackIsland(
     // The one to beat of the island's story's start, standing beside his car on pole before he gets in (RACEMOD.CPP chase_car=): the
     // game's actor brought from its scene, and its entity
     public (int Scene, int Actor, int Entity)? ChaseDriver { get; init; }
+    // Where Twinsen's car first stands in the story (island cell, turn): its scene's car made there the first time, and every start scene's
+    // car where he left it -- on the start line only when the race file starts the game there (RACEMOD.CPP RACE_GRID_CAR_VAR)
+    public (double X, double Z, int Beta)? CarHome { get; init; }
     // For an island with a track in each weather: places whose scene's people and track points belong to the own file's story (the storm's,
     // gone once it is over), each the scene, the island cell and a reach in cells -- the build seats them on the own file's reshaped ground,
     // not on the ground of whichever file's road is nearer (RaceTrackScenes.Reseat).

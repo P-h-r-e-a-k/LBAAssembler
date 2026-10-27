@@ -101,7 +101,8 @@ internal static class RaceTrackRaisedBody
     // over StripWidth, an even number and ArrowStrips at the least), so two pieces meet on the same points -- where they don't, the engine
     // leaves a seam of missing pixels. For the same reason an arrow is the strips' own quads coloured, halved along their diagonals at its
     // edges (a triangle four cells long, ArrowStrips wide at its base), not cut into them; drawn over them it flickered with them.
-    public const double StripeHalf = 50, StripWidth = 512, PieceOverlap = 24, ArrowHalfWidth = 896;
+    public const double StripeHalf = 50, StripWidth = 512, PieceOverlap = 24, ArrowHalfWidth = 1024, ArrowShaftHalf = 512;
+    public const int ArrowHeadCells = 3;
     public const int ArrowStrips = 8;
     public static int StripsFor(double widestAsphalt)
     {
@@ -197,11 +198,20 @@ internal static class RaceTrackRaisedBody
                     else m.Quad(qa, qb, qc, qd, White, up);
                     continue;
                 }
-                // (an arrow over the strips from the section's middle, w0 - j either side of it at section j, to its point: w0 strips about
-                // ArrowHalfWidth, ArrowStrips / 2 at the most -- on a wide deck its strips are wide, and its arrow shorter)
+                // (an arrow as the ground's are -- a shaft and a head, the user, 2026-10-27: "raised road sections have tended to have small
+                // triangles, and Desert track featured arrows instead, let's be consistent across all tracks": its first cell the shaft,
+                // ArrowShaftHalf either side of the middle; then the head over the strips from w0 either side of the middle at its base,
+                // a strip less each cell, to its point -- w0 strips about ArrowHalfWidth, ArrowHeadCells at the most)
                 var c = strips / 2;
-                var w0 = Math.Clamp((int)Math.Round(ArrowHalfWidth / (2 * (asphalt + Wider(0)) / strips)), 1, ArrowStrips / 2);
-                var w = w0 - j;
+                var sw = 2 * (asphalt + Wider(0)) / strips;
+                var w0 = Math.Clamp((int)Math.Round(ArrowHalfWidth / sw), 1, ArrowHeadCells);
+                var shaft = Math.Clamp((int)Math.Round(ArrowShaftHalf / sw), 1, Math.Max(1, w0 - 1));
+                if (arrow && j == 0)
+                {
+                    m.Quad(qa, qb, qc, qd, i >= c - shaft && i < c + shaft ? Arrow : j == line ? White : Asphalt, up);
+                    continue;
+                }
+                var w = w0 - (j - 1);
                 if (arrow && w > 0 && i == c - w) { m.Tri(qa, qb, qc, Arrow, up); m.Tri(qa, qc, qd, Asphalt, up); continue; }
                 if (arrow && w > 0 && i == c + w - 1) { m.Tri(qa, qb, qd, Arrow, up); m.Tri(qb, qc, qd, Asphalt, up); continue; }
                 var white = j == line || !double.IsNaN(stripe) && striped is { } st && j < st.Count && st[j]

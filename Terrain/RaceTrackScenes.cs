@@ -717,7 +717,15 @@ internal static class RaceTrackScenes
                         park = (px, py, pz, pk.Beta, pk.When);
                     }
                 }
-                if (buggyIndex > 0 && StartBuggyScript(model, scene, buggyIndex, log, park) is { } withBuggy) model = withBuggy;
+                // (the story's car: first at Twinsen's house, then where he left it -- CarHome)
+                (int X, int Y, int Z, int Beta, bool Here)? home = null;
+                if (options.Island.CarHome is { } ch)
+                {
+                    var here = (int)Math.Floor(ch.X / 64) == cx && (int)Math.Floor(ch.Z / 64) == cz;
+                    int hx = (int)Math.Round((ch.X - cx * 64) * 512), hz = (int)Math.Round((ch.Z - cz * 64) * 512);
+                    home = (hx, here ? Ground(hx, hz) : 0, hz, ch.Beta, here);
+                }
+                if (buggyIndex > 0 && StartBuggyScript(model, scene, buggyIndex, log, park, home) is { } withBuggy) model = withBuggy;
             }
             // zones that would act on a car driving along the road: doors into buildings (cube changes to scenes that are not part of the island's
             // outside), hit, ladder, escalator, grid and rail zones; and, with RemoveTrackCameras, the fixed cameras (type 1) the car would
@@ -800,9 +808,21 @@ internal static class RaceTrackScenes
                     model.Zones.Add(new SceneZoneModel
                     {
                         Type = 0, Num = l.Scene, Info = new[] { l.ToX, l.ToY, l.ToZ, 0, 0, 0, 0, 1 },
-                        X0 = lx - 300, X1 = lx + 300, Z0 = lz - 300, Z1 = lz + 300, Y0 = ly - 100, Y1 = ly + 1200,
+                        X0 = lx - RaceTrackBuilder.LiftZoneHalf, X1 = lx + RaceTrackBuilder.LiftZoneHalf, Z0 = lz - RaceTrackBuilder.LiftZoneHalf, Z1 = lz + RaceTrackBuilder.LiftZoneHalf,
+                        Y0 = ly - 100, Y1 = ly + 1200,
                     });
                     log.Add($"scene {scene}: a lift on the raised road at ({lx},{ly},{lz}): a door zone into scene {l.Scene}");
+                    // (and back up: the building's way out by its window -- its door into this scene nearest the place the lift brings him
+                    // down to -- brings him onto the road beside the pad. The user, 2026-10-27: "If Twinsen leaves the museum by the window then
+                    // the elevator should take him back up and onto the track")
+                    if (!store.SceneExists(l.Scene)) continue;
+                    var inside = store.Load(l.Scene);
+                    var window = inside.Zones.Where(zz => zz.Type == 0 && zz.Num == scene)
+                        .MinBy(zz => Math.Pow((zz.X0 + zz.X1) / 2.0 - l.ToX, 2) + Math.Pow((zz.Y0 + zz.Y1) / 2.0 - l.ToY, 2) + Math.Pow((zz.Z0 + zz.Z1) / 2.0 - l.ToZ, 2));
+                    if (window is null || window.Info.Length < 3) continue;
+                    window.Info[0] = (int)Math.Round((l.BackX - model.CubeX * 64) * 512); window.Info[1] = ly + 50; window.Info[2] = (int)Math.Round((l.BackZ - model.CubeY * 64) * 512);
+                    changes.Add(new SceneChange(l.Scene, inside, null));
+                    log.Add($"scene {l.Scene}: its window's way out into scene {scene} now the lift's: onto the raised road at ({window.Info[0]},{window.Info[1]},{window.Info[2]})");
                 }
             foreach (var t in tracks)
             {
@@ -1682,20 +1702,35 @@ void comportement_1()
     // for the car to crash into.
     // `park`: in the other weather (game variable 206 is When: RACEMOD.CPP RaceMod_CitadelWeather), the car stands there instead (a track
     // point of its own).
-    private static SceneModel? StartBuggyScript(SceneModel model, int scene, int buggy, List<string> log, (int X, int Y, int Z, int Beta, int When)? park = null)
+    // (`home`: the story's car -- RaceTrackIsland.CarHome: on the start line only when the race file starts the game there, game variable
+    // GridCarVar 1; otherwise made at home the first time, in home's scene, and anywhere else shown where Twinsen left it)
+    public const int GridCarVar = 211;
+    private static SceneModel? StartBuggyScript(SceneModel model, int scene, int buggy, List<string> log, (int X, int Y, int Z, int Beta, int When)? park = null,
+        (int X, int Y, int Z, int Beta, bool Here)? home = null)
     {
         try
         {
             var parkPoint = -1;
             if (park is { } pk) { parkPoint = model.TrackPoints.Count; model.TrackPoints.Add(new SceneTrackPoint(pk.X, pk.Y, pk.Z)); }
+            var homePoint = -1;
+            if (home is { Here: true } hm) { homePoint = model.TrackPoints.Count; model.TrackPoints.Add(new SceneTrackPoint(hm.X, hm.Y, hm.Z)); }
             var scripts = SceneScripts.Load(SceneSerializer.Write(model), scene);
             var text = scripts.GetText(buggy, ScriptKind.Life);
             // (Polar Island's buggy has INIT_BUGGY 1, which makes the car the first time: Polar.PolarScenes)
             var pattern = new System.Text.RegularExpressions.Regex(@"init_buggy\(([01])\);\s*if \(12 == comportement_hero\(\)\)\s*\{\s*set_comportement\(comportement_2\);\s*\}\s*else\s*\{\s*set_comportement\(comportement_1\);\s*\}");
             if (!pattern.IsMatch(text)) { log.Add($"scene {scene}: the buggy's script isn't the expected one; it is left to show the buggy where it is"); return null; }
             var parked = park is { } p ? $"            if ({p.When} == var_game(206))\n            {{\n                pos_point({parkPoint});\n                beta({p.Beta});\n            }}\n" : "";
-            text = pattern.Replace(text, "if (12 == comportement_hero())\n        {\n            init_buggy($1);\n            set_comportement(comportement_2);\n        }\n        else\n        {\n" + parked +
+            var story = home is { } h
+                ? $"        else if (0 == var_game({GridCarVar}))\n        {{\n" +
+                  (h.Here ? $"            pos_point({homePoint});\n            beta({h.Beta});\n            init_buggy(1);\n" : "            init_buggy(0);\n") +
+                  "            set_comportement(comportement_1);\n        }\n"
+                : "";
+            text = pattern.Replace(text, "if (12 == comportement_hero())\n        {\n            init_buggy($1);\n            set_comportement(comportement_2);\n        }\n" + story + "        else\n        {\n" + parked +
                 "            init_buggy(2);\n            set_comportement(comportement_1);\n        }", 1);
+            // (and in only with the action key: the script also put Twinsen in when he stood on an actor -- carry_obj_by, the car's number
+            // in the game's scene, another actor's once the build has taken some away -- the user, 2026-10-27: "Twinsen is currently getting
+            // automatically put into his car on the start/finish line on Citadel if he's next to it")
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"if \(\d+ == carry_obj_by\(0\)\)\s*\{\s*set_dir_obj\(0, MOVE_BUGGY_MANUAL\);\s*set_comportement\(comportement_2\);\s*\}", "");
             scripts.SetText(buggy, ScriptKind.Life, text);
             var built = scripts.Build();
             if (!built.Ok) { foreach (var e in built.Errors) log.Add($"scene {scene}: buggy script: {e}"); return null; }
