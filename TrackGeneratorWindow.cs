@@ -143,13 +143,17 @@ internal sealed class TrackGeneratorWindow : Window
         {
             case 0:
                 stepText.Text = "1 of 3 -- the island";
-                var p = new DockPanel();
-                var intro = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Text =
-                    "Draw a race track on an island's map and the generator makes it: the road in green, jumps in pink, vertical loops in blue and the pit lane in orange. " +
-                    "Draw with the pens here, place track sections that snap together, or save the map as a picture, draw on it in any paint program and load it back. Which island?" };
-                DockPanel.SetDock(intro, Dock.Top);
-                p.Children.Add(intro); p.Children.Add(islandList);
-                page.Content = p;
+                // (made once: the list can belong to one page only -- made again on Back, adding it to a second page crashed the editor, 2026-10-27)
+                if (islandPage is null)
+                {
+                    islandPage = new DockPanel();
+                    var intro = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Text =
+                        "Draw a race track on an island's map and the generator makes it: the road in green, jumps in pink, vertical loops in blue and the pit lane in orange. " +
+                        "Draw with the pens here, place track sections that snap together, or save the map as a picture, draw on it in any paint program and load it back. Which island?" };
+                    DockPanel.SetDock(intro, Dock.Top);
+                    islandPage.Children.Add(intro); islandPage.Children.Add(islandList);
+                }
+                page.Content = islandPage;
                 break;
             case 1:
                 stepText.Text = $"2 of 3 -- draw the track on {island?.Name}";
@@ -196,6 +200,7 @@ internal sealed class TrackGeneratorWindow : Window
 
     // ---- page 2: the drawing
 
+    private DockPanel? islandPage;
     private DockPanel drawPage = new();
     private DockPanel trackPage = new();
 

@@ -1772,8 +1772,21 @@ public partial class MainWindow : Window
             MessageBox.Show(this, "The LBA2 game folder isn't set. Choose it under File > Settings.", "Race track generator", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        var generator = new TrackGeneratorWindow(gameRoot) { Owner = this };
-        if (generator.ShowDialog() == true && generator.BuildIsland is { } island && generator.BuildPlan is { } plan)
+        // (a fault in the generator, a new window, said and logged -- not the whole editor gone with it)
+        TrackGeneratorWindow? generator = null;
+        try
+        {
+            generator = new TrackGeneratorWindow(gameRoot) { Owner = this };
+            if (generator.ShowDialog() != true) return;
+        }
+        catch (Exception error) when (error is InvalidOperationException or ArgumentException or IOException or NullReferenceException or IndexOutOfRangeException)
+        {
+            DebugLog.Log($"TrackGenerator: {error}");
+            try { generator?.Close(); } catch (InvalidOperationException) { }
+            MessageBox.Show(this, $"The race track generator ran into a problem and was closed: {error.Message}", "Race track generator", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (generator.BuildIsland is { } island && generator.BuildPlan is { } plan)
             OpenRaceTrackWindow(window => window.UsePlan(island, plan));
     }
 
