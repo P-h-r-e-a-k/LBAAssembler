@@ -5194,3 +5194,7 @@ corners where that's quicker".
   4 x 7-pixel speck has a whole footprint, and filling with it drew a black slab by a tank on the cliff).
 - Checked with `ScriptRoundTrip polarview` from four sides on every land cube, before and after (all 21); the three white sheds (cubes
   (7,4), (7,7), (7,9)) are closed. 604 inside cells, 93 back cells, 234 cells down to the sea.
+- Still no grobo after the user rebuilt in the editor: StoryEntities are kept only with the build's story on, and the race track window
+  turns the story on for Citadel Island only (LBRA's installer leaves it on, which is why its test passed). He is now in KeptEntities,
+  kept by every build, story or not. `ScriptRoundTrip buildhere` now sets the story as the window does, so it builds what the editor builds
+  (the island's name as RaceTrackIsland has it: "Polar Island"; an unknown name builds the Desert's).

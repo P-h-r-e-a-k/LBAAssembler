@@ -121,6 +121,8 @@ internal sealed record RaceTrackIsland(
     // The game's own people the story needs, by entity, kept in the island's scenes when the build takes the others off the road (the
     // souvenir seller on Celebration Island: RaceTrackStory.ApplyCelebration).
     public int[]? StoryEntities { get; init; }
+    // The entities whose actors every build keeps, story or not (and moves off the road): the island's own story outside a race
+    public int[]? KeptEntities { get; init; }
     // For an island with a track in each weather: places whose scene's people and track points belong to the own file's story (the storm's,
     // gone once it is over), each the scene, the island cell and a reach in cells -- the build seats them on the own file's reshaped ground,
     // not on the ground of whichever file's road is nearer (RaceTrackScenes.Reseat).
@@ -193,7 +195,7 @@ internal sealed record RaceTrackIsland(
     {
         Roster = RaceDriver.Polar, Dream = true, Title = "Polar Island: the dream race to Sendell (LBA1's island, added when missing)",
         // (the grobo with the digger's key, on the dock: Twinsen's car outside a race asks for it -- Polar.PolarGrobo)
-        StoryEntities = new[] { LBAAssembler.Terrain.Polar.PolarGrobo.Entity },
+        KeptEntities = new[] { LBAAssembler.Terrain.Polar.PolarGrobo.Entity },
     };
 
     // A sprint dreamt at the start of the game (Polar Island's): won, Twinsen wakes up at home (RaceTrackService.DreamInfo).

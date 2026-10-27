@@ -115,7 +115,13 @@ internal static class RaceTrackCommand
     public static int BuildHere(string[] args)
     {
         var game = args[1];
-        var tracks = args.Skip(2).Select(RaceTrackIsland.ByName).Select(where => new RaceTrackService.TrackBuild(RaceTrackPlan.Built(where), RaceTrackOptions.For(where))).ToList();
+        // (the story on for Citadel Island only, as the window has it -- RaceTrackWindow)
+        var tracks = args.Skip(2).Select(RaceTrackIsland.ByName).Select(where =>
+        {
+            var options = RaceTrackOptions.For(where);
+            options.Story = options.Story && where.IleFile == RaceTrackIsland.Citadel.IleFile;
+            return new RaceTrackService.TrackBuild(RaceTrackPlan.Built(where), options);
+        }).ToList();
         var result = RaceTrackService.Build(game, tracks);
         Console.WriteLine(result.Summary);
         foreach (var l in result.Log) Console.WriteLine("  " + l);

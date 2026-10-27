@@ -462,6 +462,10 @@ internal static class RaceTrackScenes
                 var storyKept = new HashSet<int>();
                 if (options.Story && options.Island.StoryEntities is { } story)
                     for (var i = 1; i < model.Actors.Count; i++) if (story.Contains(model.Actors[i].Entity)) storyKept.Add(i);
+                // (and those the island's own story outside a race needs, whatever the build's story setting -- Polar Island's grobo with the
+                // digger's key: the editor's track window has the story on for Citadel Island only, and he went, 2026-10-27)
+                if (options.Island.KeptEntities is { } keep)
+                    for (var i = 1; i < model.Actors.Count; i++) if (keep.Contains(model.Actors[i].Entity)) storyKept.Add(i);
                 // (and the island's guns that fire at the cars: Island CX's cannons)
                 if (options.Island.HuntingGuns is { } hunting)
                     for (var i = 1; i < model.Actors.Count; i++) if (model.Actors[i].Entity == hunting.Entity) storyKept.Add(i);
@@ -478,7 +482,7 @@ internal static class RaceTrackScenes
                     if (i < model.Actors.Count) ShiftOffRoad(model.Actors[i], model, i, distanceToRoad, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
                 // (the story's people stay, but not on the road: Polar Island's grobo with the digger's key stands on the dock)
                 foreach (var i in storyKept.Order())
-                    if (options.Island.StoryEntities?.Contains(model.Actors[i].Entity) == true)
+                    if (options.Island.KeptEntities?.Contains(model.Actors[i].Entity) == true)
                         ShiftOffRoad(model.Actors[i], model, i, distanceToRoad, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
                 var standIn = AddStandIn(model, doomed);
                 foreach (var i in doomed.OrderByDescending(i => i))
