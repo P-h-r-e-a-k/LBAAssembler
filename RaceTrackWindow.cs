@@ -25,6 +25,12 @@ internal sealed class RaceTrackWindow : Window
     private readonly RadioButton filePlan = new() { Content = "A plan file:" };
     private readonly TextBox planPath = new() { Padding = new Thickness(3), IsEnabled = false };
     private readonly Button browseButton = new() { Content = "Browse…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0), IsEnabled = false };
+    // (the island a plan file is the track of, of those ticked -- a plan doesn't say which it is: the others are built with their own tracks;
+    // and the island's built-in track saved as a plan file, to start one from. Until 2026-10-27 a plan file wanted its island ticked alone,
+    // and with every island ticked the option was greyed with nothing to say why)
+    private readonly ComboBox planIsland = new() { MinWidth = 260, Margin = new Thickness(6, 0, 0, 0), IsEnabled = false };
+    private readonly Button saveBuiltIn = new() { Content = "Save its built-in track as a plan file…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0), IsEnabled = false,
+        ToolTip = "The track built into the program for the island chosen, as a plan file to change and build from" };
     private readonly CheckBox removeActors = new() { Content = "Remove the actors of the island's outside scenes, except Twinsen, the buggy and those the travel cutscenes need", IsChecked = true, ToolTip = "The engine's hidden Zoe placeholder in slot 1 stays (the buggy needs that slot), and so do the ferry, the Dino-Fly and the actors Twinsen's own script waits on in the cutscenes of arriving, leaving and the game's ending." };
     private readonly CheckBox buggyAlways = new() { Content = "The buggy is there from the start of any game (skip the car quest)", IsChecked = true, ToolTip = "The island's scenes delete the buggy until game variable 74 reaches 3; this makes that test always pass" };
     private readonly CheckBox startAtLine = new() { Content = "Twinsen and the buggy start on the grid", IsChecked = true };
@@ -69,6 +75,8 @@ internal sealed class RaceTrackWindow : Window
         builtInPlan.Checked += (_, _) => PlanChoiceChanged();
         filePlan.Checked += (_, _) => PlanChoiceChanged();
         browseButton.Click += (_, _) => Browse();
+        saveBuiltIn.Click += (_, _) => SaveBuiltIn();
+        planIsland.SelectionChanged += (_, _) => PlanChoiceChanged();
         buildButton.Click += async (_, _) => await BuildAsync();
         restoreButton.Click += (_, _) => Restore();
         carButton.Click += (_, _) => new RaceCarWindow(forPlay: false, gameRoot) { Owner = this }.ShowDialog();
@@ -113,9 +121,14 @@ internal sealed class RaceTrackWindow : Window
         if (story.IsEnabled != citadel) story.IsChecked = citadel;
         story.IsEnabled = citadel;
         var one = islands.Count == 1;
-        filePlan.IsEnabled = one;
-        filePlan.ToolTip = one ? null : "A plan file is one island's track: tick that island alone";
-        if (!one && filePlan.IsChecked == true) builtInPlan.IsChecked = true;
+        // (a plan file is one island's: which, of those ticked)
+        var chosen = planIsland.SelectedItem is ComboBoxItem { Tag: RaceTrackIsland was } ? was : null;
+        planIsland.Items.Clear();
+        foreach (var i in islands) planIsland.Items.Add(new ComboBoxItem { Content = Listed.First(l => l.Island == i).Label, Tag = i });
+        planIsland.SelectedIndex = chosen is not null && islands.IndexOf(chosen) is var k and >= 0 ? k : islands.Count > 0 ? 0 : -1;
+        filePlan.IsEnabled = islands.Count > 0;
+        if (islands.Count == 0 && filePlan.IsChecked == true) builtInPlan.IsChecked = true;
+        PlanChoiceChanged();
         var tracks = islands.Sum(i => i.Tracks);
         buildButton.Content = tracks > 1 ? $"Build the {tracks} tracks" : "Build the track";
         buildButton.IsEnabled = islands.Count > 0;
@@ -185,6 +198,13 @@ internal sealed class RaceTrackWindow : Window
         fileRow.Children.Add(filePlan); fileRow.Children.Add(browseButton); fileRow.Children.Add(planPath);
         filePlan.Margin = new Thickness(0, 0, 8, 0);
         root.Children.Add(fileRow);
+        var forRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 4, 0, 0) };
+        var forText = new TextBlock { Text = "the track of", VerticalAlignment = VerticalAlignment.Center };
+        forText.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
+        forRow.Children.Add(forText); forRow.Children.Add(planIsland); forRow.Children.Add(saveBuiltIn);
+        root.Children.Add(forRow);
+        ToolTipService.SetShowOnDisabled(filePlan, true);
+        filePlan.ToolTip = "Tick an island first: a plan file is the track of one of the islands ticked (the others are built with their own)";
 
         root.Children.Add(Section("The scenes"));
         foreach (var c in new CheckBox[] { removeActors, buggyAlways, startAtLine, roadZones, trackCameras, story }) { c.Margin = new Thickness(0, 2, 0, 2); root.Children.Add(c); }
@@ -210,8 +230,30 @@ internal sealed class RaceTrackWindow : Window
 
     private void PlanChoiceChanged()
     {
-        var file = filePlan.IsChecked == true;
-        planPath.IsEnabled = file; browseButton.IsEnabled = file;
+        var file = filePlan.IsChecked == true && filePlan.IsEnabled;
+        planPath.IsEnabled = file; browseButton.IsEnabled = file; planIsland.IsEnabled = file; saveBuiltIn.IsEnabled = file && planIsland.SelectedItem is not null;
+    }
+
+    private RaceTrackIsland? PlanIsland() => planIsland.SelectedItem is ComboBoxItem { Tag: RaceTrackIsland island } ? island : null;
+
+    // The island's built-in track (its other-weather file's for Citadel Island: the town circuit, the track a plan file is) as a plan file
+    private void SaveBuiltIn()
+    {
+        if (PlanIsland() is not { } island) return;
+        var resource = island.RacesTwin && island.TwinPlanResource is { } twin ? twin : island.PlanResource;
+        var dialog = new SaveFileDialog { Title = "Save the built-in track as a plan file", Filter = "Race track plan (*.json)|*.json", FileName = Path.GetFileNameWithoutExtension(island.IleFile).ToLowerInvariant() + "_track_plan.json" };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            using var stream = typeof(RaceTrackPlan).Assembly.GetManifestResourceStream(resource) ?? throw new InvalidDataException($"This build of the program has no built-in track plan for {island.Name}.");
+            using var file = File.Create(dialog.FileName);
+            stream.CopyTo(file);
+            planPath.Text = dialog.FileName;
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"The plan can't be saved: {error.Message}", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void Browse()
@@ -256,9 +298,10 @@ internal sealed class RaceTrackWindow : Window
             foreach (var island in islands)
             {
                 var plan = RaceTrackPlan.Built(island);
-                // (a plan file is the track of the one island ticked: for Citadel Island, its town circuit's -- the fine-weather file's -- the storm track built in)
+                // (a plan file is the track of the island chosen for it: for Citadel Island, its town circuit's -- the fine-weather file's -- the storm
+                // track built in)
                 RaceTrackPlan? twinPlan = null;
-                if (filePlan.IsChecked == true && islands.Count == 1)
+                if (filePlan.IsChecked == true && ReferenceEquals(island, PlanIsland()))
                 {
                     if (island.RacesTwin) twinPlan = RaceTrackPlan.Load(planPath.Text.Trim());
                     else plan = RaceTrackPlan.Load(planPath.Text.Trim());

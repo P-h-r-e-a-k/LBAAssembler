@@ -5228,3 +5228,14 @@ corners where that's quicker".
 - FunFrock's car: not seen vanishing yet. LBA2_CARVIS=1 logs the first opponent's car's state as it changes (out of sight, hidden,
   bodiless, behind the camera, off the screen) and the far mushrooms drawn; an autodriven race showed his car never hidden, on the screen
   whenever it was in view.
+
+## The race track window's plan file, with several islands ticked (2026-10-27)
+
+- The user: "We have the option of building a race track in LBAAssembler, but the option to select a plan file to do this with isn't
+  selectable, is this properly implemented with all recent updates?"
+- A plan file doesn't say which island it is, so "A plan file:" was enabled only with one island ticked -- and with all of them ticked
+  (the usual build) it was greyed, its tooltip (why) never shown on a disabled control. Now it is there whenever an island is ticked: a
+  "the track of" list picks which of the ticked islands the file is (Citadel Island: its town circuit, as before), the others built with
+  their own tracks; "Save its built-in track as a plan file…" writes the program's own plan for that island (the embedded
+  docs/racetrack/*_track_plan.json) to start a new one from, and fills the path in. The build reads a file with the same reader as the
+  built-in plans (RaceTrackPlan.Read), so everything a built-in plan can say a file can.
