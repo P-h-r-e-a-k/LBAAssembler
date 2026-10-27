@@ -192,6 +192,8 @@ internal sealed record RaceTrackIsland(
         LBAAssembler.Terrain.Polar.PolarScenes.FirstScene + LBAAssembler.Terrain.Polar.PolarScenes.Count - 1, LBAAssembler.Terrain.Polar.PolarIsland.PaletteEntry, "RaceTrackPlan.Polar.json", null)
     {
         Roster = RaceDriver.Polar, Dream = true, Title = "Polar Island: the dream race to Sendell (LBA1's island, added when missing)",
+        // (the grobo with the digger's key, on the dock: Twinsen's car outside a race asks for it -- Polar.PolarGrobo)
+        StoryEntities = new[] { LBAAssembler.Terrain.Polar.PolarGrobo.Entity },
     };
 
     // A sprint dreamt at the start of the game (Polar Island's): won, Twinsen wakes up at home (RaceTrackService.DreamInfo).

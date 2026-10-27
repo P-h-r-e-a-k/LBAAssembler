@@ -1176,13 +1176,22 @@ internal static class RaceTrackService
                 var old = scenes.Read(n + 1);
                 if (old.Length > 0 && old[0] == island.IslandByte) return false;
             }
+            // (and as this version builds it: an earlier build's island, kept in the originals, is made again -- 2026-10-27, the user tested the
+            // island in the editor and found no grobo: the folder's originals had the island from before him. Its sea ring of cubes and the
+            // grobo in its start scene are this version's)
+            var ile = IslandFile.Load(Original(LBAAssembler.Terrain.Polar.PolarTerrain.IleFile));
+            if (ile.CubeAt(LBAAssembler.Terrain.Polar.PolarTerrain.CubeX0, LBAAssembler.Terrain.Polar.PolarTerrain.CubeZ0) is null) return false;
+            bool? numbered = null;
+            var grobo = false;
             for (var n = island.FirstScene; n <= island.LastScene && n + 1 < count; n++)
             {
                 var record = scenes.Read(n + 1);
                 if (record.Length == 0 || record[0] != island.IslandByte) continue;
                 var model = LBAAssembler.Scenes.SceneSerializer.Parse(LBAAssembler.Scenes.SceneGame.Lba2, record);
-                return LBAAssembler.Terrain.Polar.PolarScenes.SceneOf(model.CubeX, model.CubeY) == n;
+                numbered ??= LBAAssembler.Terrain.Polar.PolarScenes.SceneOf(model.CubeX, model.CubeY) == n;
+                grobo |= model.Actors.Any(a => a.Entity == LBAAssembler.Terrain.Polar.PolarGrobo.Entity);
             }
+            return numbered == true && grobo;
         }
         catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException) { }
         return false;

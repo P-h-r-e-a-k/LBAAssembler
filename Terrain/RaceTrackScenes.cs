@@ -476,6 +476,10 @@ internal static class RaceTrackScenes
                 if (storyKept.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", storyKept.Order())} kept where they are -- the story needs them");
                 foreach (var i in needed.Order())
                     if (i < model.Actors.Count) ShiftOffRoad(model.Actors[i], model, i, distanceToRoad, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
+                // (the story's people stay, but not on the road: Polar Island's grobo with the digger's key stands on the dock)
+                foreach (var i in storyKept.Order())
+                    if (options.Island.StoryEntities?.Contains(model.Actors[i].Entity) == true)
+                        ShiftOffRoad(model.Actors[i], model, i, distanceToRoad, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
                 var standIn = AddStandIn(model, doomed);
                 foreach (var i in doomed.OrderByDescending(i => i))
                 {

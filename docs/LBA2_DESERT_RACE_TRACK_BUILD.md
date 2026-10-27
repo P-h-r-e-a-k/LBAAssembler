@@ -5172,3 +5172,25 @@ corners where that's quicker".
   of a cell, something held up -- spread till nothing changes; "strict": resting on only); `floaters <ILE> strip <out> <cx> <cz> [x0 x1 z0
   z1 | body n]` writes a copy without some of a cube's decors, to find which one a picture shows. Polar's race build had 21 such decors,
   now 4 (small gaps, 450-770, over the hillsides' slopes, away from the road).
+
+## Polar Island: the grobo through the race build; the backs and insides of buildings (2026-10-27)
+
+- The user: "I just tried to test Polar Island in the editor, and there's no grobo visible for Twinsen to talk to for the key. Let's also
+  improve the decor, for example some of our buildings have no back to them. We should check everything".
+- The grobo: the race build's actor clearing (RaceTrackScenes, RemoveActors) took him out of scene 251 with every other actor. Polar
+  Island's StoryEntities now name his entity (33): kept, and moved off the road if he were on it. And a folder whose originals
+  (*.before-racetrack) have the island from before him -- the user's editor folder -- gets it made again: PolarInOriginals now also asks
+  for this version's sea ring (cube (CubeX0, CubeZ0)) and the grobo in a scene; otherwise the build puts the folder back and adds the
+  island again (EnsurePolar). Tested headless in an LBRA install: Action beside him sets game variable 230.
+- Floors LBA1 never drew: under a building's roof LBA1's grids often have no brick at all (its camera never looked down there), and the
+  island showed the sea there, a pool inside the walls. PolarTerrain.Columns gives such a place (no brick, ground or water all round
+  within 10 cells along x and z, land on two sides at least) the lowest of that land's ground, and never over what stands there.
+  Shut-in water went from 240 cells to 8.
+- Insides: over such a floor, up to the roof (10 layers at most), each cell takes the nearest wall's brick along x or z (PolarObjects).
+- Backs: an empty cell in a run of at most 2 along x or z, over ground, closed in at both ends -- one a wall brick standing end-on to the
+  run, the other a wall brick or ground -- takes the nearer wall's brick. Not over water, not within 2 cells of LBA1's car tracks, not
+  where LBA1 has any brick, even an invisible one.
+- "Wall brick": whole footprint and both sides at least 80 % drawn (a fence's slats, posts and specks of a few pixels are not -- a
+  4 x 7-pixel speck has a whole footprint, and filling with it drew a black slab by a tank on the cliff).
+- Checked with `ScriptRoundTrip polarview` from four sides on every land cube, before and after (all 21); the three white sheds (cubes
+  (7,4), (7,7), (7,9)) are closed. 604 inside cells, 93 back cells, 234 cells down to the sea.
