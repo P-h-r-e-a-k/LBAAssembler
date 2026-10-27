@@ -245,7 +245,9 @@ internal sealed class TrackGeneratorWindow : Window
         drawHelp.Text = "Draw the road as one line round the island (a lap: back to where it began; a sprint: two ends). Cross it over itself where you " +
                         "like: the build makes a jump there. Pink over the road is a jump, blue a loop; the orange pit lane beside the road, along a straight. " +
                         "Sections: pick one, then click on the map -- near the open end of a section it snaps on. The mouse wheel turns a section; Ctrl+wheel zooms; " +
-                        "a right click takes a section away; Esc stops placing.";
+                        "a right click takes a section away; Esc stops placing. " +
+                        "Climbs: the Ramp, Steep and Spiral sections go up and down, and the track then becomes a raised road on piers that can pass over itself " +
+                        "(a lap must come back down to where it began). A drawing has no heights: climbs need the track made of sections.";
         foreach (var t in bar.Children.OfType<TextBlock>()) t.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
 
         board.Children.Add(mapImage); board.Children.Add(overlayImage); board.Children.Add(pieceCanvas);
@@ -651,17 +653,24 @@ internal sealed class TrackGeneratorWindow : Window
         // (nothing drawn by hand on the road -- only sections, in one chain: the chain's own middle, as it is)
         var handRoad = drawn.Any(k => k is SketchKind.Road or SketchKind.Jump or SketchKind.Loop);
         var chainClosed = false;
-        var chain = handRoad ? null : Chain(out chainClosed);
-        result = chain is not null ? TrackSketchTracer.Trace(sketch, islandFile, reverse.IsChecked == true, chain, chainClosed)
+        List<double> chainRise = new();
+        var chain = handRoad ? null : Chain(out chainClosed, out chainRise);
+        result = chain is not null ? TrackSketchTracer.Trace(sketch, islandFile, reverse.IsChecked == true, chain, chainClosed, chainRise)
             : TrackSketchTracer.Trace(sketch, islandFile, reverse.IsChecked == true);
+        // (climbs drawn by hand can't be: a picture has no heights)
+        if (chain is null && placed.Any(p => p.Section.Rise != 0))
+            result.Notes.Add("the sections' climbs and spirals are left flat: the track is drawn by hand too, and a drawing has no heights -- make it of sections alone for them");
         ShowTrack();
         return result.Plan is not null;
     }
 
     // The road sections placed, end to start, in one chain (each joined to the nearest open start within BridgeCells of its end): their
     // middle line in order, and whether the chain comes back round to its first; null when they aren't one chain
-    private List<(double X, double Y)>? Chain(out bool closed)
+    private List<(double X, double Y)>? Chain(out bool closed) => Chain(out closed, out _);
+
+    private List<(double X, double Y)>? Chain(out bool closed, out List<double> rise)
     {
+        rise = new List<double>();
         closed = false;
         var roads = placed.Where(p => p.Section.Kind != SketchKind.Pit).ToList();
         if (roads.Count == 0) return null;
@@ -675,10 +684,18 @@ internal sealed class TrackGeneratorWindow : Window
         if (order.Count != roads.Count) return null;
         closed = order.Count > 1 && Gap(order[^1], order[0]) < bridge;
         var line = new List<(double X, double Y)>();
+        double at = 0;
         foreach (var p in order)
-            foreach (var (_, pts) in p.Strokes())
-                foreach (var pt in pts)
-                    if (line.Count == 0 || Math.Abs(line[^1].X - pt.X) + Math.Abs(line[^1].Y - pt.Y) > 0.5) line.Add((pt.X, pt.Y));
+        {
+            var strokes = p.Strokes(); var rises = p.Rises();
+            for (var s = 0; s < strokes.Count; s++)
+                for (var k = 0; k < strokes[s].Points.Count; k++)
+                {
+                    var pt = strokes[s].Points[k];
+                    if (line.Count == 0 || Math.Abs(line[^1].X - pt.X) + Math.Abs(line[^1].Y - pt.Y) > 0.5) { line.Add((pt.X, pt.Y)); rise.Add(at + rises[s][k]); }
+                }
+            at += p.Section.Rise;
+        }
         return line;
     }
 
@@ -774,12 +791,15 @@ internal sealed class TrackGeneratorWindow : Window
     // ---- track sections
 
     // A section's parts in turn: a straight (length, cells) or an arc (radius, cells, and its turn, radians: + to the right), each of a kind
-    internal sealed record Part(SketchKind Kind, double Length, double Radius = 0, double Turn = 0);
+    // (and how much it climbs over its length, world units: a ramp, a spiral -- the user, 2026-10-27: "make sure the track builder allows
+    // for slopes, and upward spirals, along with other over lapping sections of track")
+    internal sealed record Part(SketchKind Kind, double Length, double Radius = 0, double Turn = 0, double Rise = 0);
 
     internal sealed record Section(string Name, string Tip, Part[] Parts)
     {
         public SketchKind Kind => Parts.Any(p => p.Kind == SketchKind.Pit) ? SketchKind.Pit : SketchKind.Road;
         public double Turn => Parts.Sum(p => p.Turn);
+        public double Rise => Parts.Sum(p => p.Rise);
 
         public static readonly Section[] All =
         {
@@ -794,9 +814,18 @@ internal sealed class TrackGeneratorWindow : Window
             new("Jump", "Road, a jump over 18 cells, road", new[] { new Part(SketchKind.Road, 12), new Part(SketchKind.Jump, 18), new Part(SketchKind.Road, 14) }),
             new("Loop", "Road, a vertical loop, road", new[] { new Part(SketchKind.Road, 16), new Part(SketchKind.Loop, 6), new Part(SketchKind.Road, 16) }),
             new("Pit lane", "40 cells of pit lane: place it beside a straight", new[] { new Part(SketchKind.Pit, 40) }),
+            // climbs and drops: the track becomes a raised road on piers (the Elevator Platform's, Volcano Island's)
+            new("Ramp up", "Climbs 1500 over 30 cells (10 %): the track becomes a raised road", new[] { new Part(SketchKind.Road, 30, Rise: 1500) }),
+            new("Ramp down", "Drops 1500 over 30 cells", new[] { new Part(SketchKind.Road, 30, Rise: -1500) }),
+            new("Steep up", "Climbs 2000 over 20 cells (20 %)", new[] { new Part(SketchKind.Road, 20, Rise: 2000) }),
+            new("Steep down", "Drops 2000 over 20 cells", new[] { new Part(SketchKind.Road, 20, Rise: -2000) }),
+            new("Spiral up left", "A turn and a quarter to the left, 12 cells round, climbing 4000: it passes over itself", new[] { Arc(12, -450, 4000) }),
+            new("Spiral up right", "A turn and a quarter to the right, 12 cells round, climbing 4000", new[] { Arc(12, 450, 4000) }),
+            new("Spiral down left", "A turn and a quarter to the left, dropping 4000", new[] { Arc(12, -450, -4000) }),
+            new("Spiral down right", "A turn and a quarter to the right, dropping 4000", new[] { Arc(12, 450, -4000) }),
         };
 
-        private static Part Arc(double radius, double degrees) => new(SketchKind.Road, Math.Abs(degrees) * Math.PI / 180 * radius, radius, degrees * Math.PI / 180);
+        private static Part Arc(double radius, double degrees, double rise = 0) => new(SketchKind.Road, Math.Abs(degrees) * Math.PI / 180 * radius, radius, degrees * Math.PI / 180, rise);
     }
 
     // A section placed: where it begins (map pixels) and its way (radians, 0 along +x, + clockwise on the map)
@@ -822,6 +851,21 @@ internal sealed class TrackGeneratorWindow : Window
                 strokes.Add((part.Kind, pts));
             }
             return strokes;
+        }
+
+        // How high each point of Strokes() is over the section's start (world units), in the same order
+        public List<List<double>> Rises()
+        {
+            var rises = new List<List<double>>(); double h = 0;
+            foreach (var part in Section.Parts)
+            {
+                var n = Math.Max(2, (int)Math.Ceiling(part.Length * 2));
+                var list = new List<double> { h };
+                for (var i = 1; i <= n; i++) list.Add(h + part.Rise * i / n);
+                h += part.Rise;
+                rises.Add(list);
+            }
+            return rises;
         }
 
         public (double X, double Y, double Heading) End

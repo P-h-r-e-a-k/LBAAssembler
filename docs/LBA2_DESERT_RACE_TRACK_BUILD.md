@@ -5290,3 +5290,26 @@ corners where that's quicker".
   dropped a few pixels and degrees off, snapped -> a 255-cell lap with a jump and a loop, which builds (the ring on the road in the 3D view).
 - Not yet: Otringal's drawn lap traced as a 641-cell sprint for its 711 -- a tight double hairpin inside the town drawn in wide strokes
   merges; draw such places with a thinner pen or further apart.
+
+## The race track generator: slopes, spirals and roads passing over each other (2026-10-27)
+
+- The user: "We should make sure the track builder allows for slopes, and upward spirals, along with other over lapping sections of
+  track". The builder has done so for a while (the raised road: Volcano Island's double spiral, Wannies' helix, the Elevator Platform);
+  the generator now says it. Also fixed the same day: Back to the generator's first page crashed the editor (its island list added to a
+  second page; v2026-10-27i).
+- Sections that climb (Part.Rise): Ramp up / down (1500 over 30 cells), Steep up / down (2000 over 20), Spiral up / down left / right (a
+  turn and a quarter, 12 cells round, 4000: one turn over the other; the quarter more so its end is clear of its start -- a whole turn
+  ended where it began and the chain couldn't tell what followed what). The chain (TrackGeneratorWindow.Chain) carries each point's height
+  over the first.
+- Any climb and the plan is a raised road from start to finish (Raised [0, n-1], RaisedHalf 4.75, RaisedCut, grade 25 %), as the Elevator
+  Platform's: each point the ground averaged 20 cells round it (so two roads at one place have one base, their climb between them whole)
+  plus 900, plus the climb, smoothed along the way, lifted where it would be under the ground. No pit lane on it (said). A lap whose climbs
+  don't come back down is a problem; where the road passes over itself (centres within 7 cells, decks overlapping by half and more) the two
+  decks must be 1600 apart, else a problem naming the place and the heights.
+- First tries, kept for why: the whole lap lifted over its highest ground (5400 to 8600 everywhere); heights max(ground, start + climb)
+  (the lower turn lifted by the ground under it to 1577 under the upper); the ground smoothed along the way (a spiral's turns have
+  different neighbours along it); the overlap test at 9 cells (roads side by side, rails touching); 3200 spirals (the spiral's way out
+  passes under its first quarter turn at two thirds of its climb).
+- Tested: a lap of sections with a spiral up and a spiral down (LBA2_TRACKGEN_SECTIONS, the UI test) -> 474 cells, a raised road 4054 to
+  8851, "passes over itself with room"; built on the Desert island: 119 deck pieces, 38 piers, steepest 15 %, the spiral standing over
+  itself in the 3D view. LBA2_TRACKGEN_DUMP=<csv> writes each point's place, climb, height and ground.
