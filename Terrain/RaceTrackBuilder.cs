@@ -5968,6 +5968,8 @@ internal static class RaceTrackBuilder
             if (Wall(x - 1, z - PierLane, x + 1, z - 0.7) && Wall(x - 1, z + 0.7, x + 1, z + PierLane)) return false;
             foreach (var d in o.DoorBoxes)
                 if (x > d.X0 - PierDoor && x < d.X1 + PierDoor && z > d.Z0 - PierDoor && z < d.Z1 + PierDoor) return false;
+            foreach (var (nx, nz, reach) in o.Island?.NoPiersAt ?? Array.Empty<(double, double, double)>())
+                if (Sq(x - nx) + Sq(z - nz) < reach * reach) return false;
             return true;
         }
         int piers = 0, none = 0;

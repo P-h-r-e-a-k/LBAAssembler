@@ -478,11 +478,13 @@ internal static class RaceCarEngineFile
     // and `path` the set (RACEMOD.CPP track=) -- the car's handling, which of them is raced where and when (the engine loads the one of the
     // island it enters: Citadel Island's storm track in the storm, its town circuit once the storm is over), and the story's tired line.
     // (each track's file with its best setup, when the setup says so; the set's own handling, for an island with no track, the sliders')
-    internal static void WriteStorySet(this RaceCarSetup car, string path, RaceTrackService.TrackInfo info)
+    // (`fine`: the story in the weather once the storm is over, whatever the game's chapter -- Play from Citadel Island's town circuit file)
+    internal static void WriteStorySet(this RaceCarSetup car, string path, RaceTrackService.TrackInfo info, bool fine = false)
     {
         var folder = Path.GetDirectoryName(path) ?? ".";
         var text = new StringBuilder("# LBA Assembler race car setup: the folder's tracks, each raced where and when the game is (RACEMOD.CPP track=)\n");
         text.Append(car.CarKeys());
+        if (fine) text.Append("set_weather=fine\n");
         var n = 0;
         foreach (var t in RaceTrackService.Tracks(info))
         {

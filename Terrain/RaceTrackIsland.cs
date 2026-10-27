@@ -63,6 +63,9 @@ internal sealed record RaceTrackIsland(
         // a lift on the deck where its upper window was, down into the museum where the window took Twinsen -- scene 15, at the window's own
         // place: the user, 2026-10-27)
         DeckWalls = new[] { (518.7, 568.5, 523.1, 572.6, 2618) },
+        // (no support for the storm track's deck in the walk into the port beside the big wall, its other side open park: the user,
+        // 2026-10-27, "This post blocking access to the port ... it's a track support, but let's just remove the post")
+        NoPiersAt = new[] { (519.0, 582.0, 3.0) },
         // (Twinsen's car in the story where he left it, first under the carport at his house -- not on a start line: the user, 2026-10-27)
         CarHome = (544.125, 654.75, 1024),
         // (its steep banks beside the road its own ground, walked on by Twinsen, walls to the cars only: RaceTrackBuilder.WallSteepBanks)
@@ -159,6 +162,9 @@ internal sealed record RaceTrackIsland(
     // Walls built up under the raised road where it passes over a building cut down for it: island cells x0 z0 x1 z1 and the height they
     // stand on (the building's top), up to the deck's underside (RaceTrackBuilder)
     public (double X0, double Z0, double X1, double Z1, int BaseY)[]? DeckWalls { get; init; }
+    // Places a raised road's pier never stands (island cells, a reach round each): a walkway the build's own rules (a lane between
+    // buildings, a door) don't see (RaceTrackBuilder.PlacePiers)
+    public (double X, double Z, double Reach)[]? NoPiersAt { get; init; }
     // Lifts on the raised road down into a building: island cell, and the scene and place there they take Twinsen to (a door zone on the deck)
     public (double X, double Z, int Scene, int ToX, int ToY, int ToZ)[]? DeckLifts { get; init; }
     // The entity of the one the island's story has waiting at the start, whatever the build's story setting: brought from the scene the

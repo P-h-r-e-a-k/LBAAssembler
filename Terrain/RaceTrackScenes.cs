@@ -393,6 +393,23 @@ internal static class RaceTrackScenes
         var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0; var mushroomsLeftOut = 0;
         var doorsOff = new List<string>();
         var actorsAt = new List<(string File, int Scene, int Actor, int X, int Y, int Z)>();
+        // ... and the scene's points their scripts stand them on (pos_point), moved with them in that weather only: shared by both files'
+        // scenes, moved for the town circuit they stood the storm's Felix the fisherman by the ferry 17 cells off too, every frame (the
+        // user, 2026-10-27: "Felix the fisherman seems to be spawning a long way from his normal spawn point on Citadel.ile")
+        var pointsAt = new List<(string File, int Scene, int Point, int X, int Y, int Z)>();
+        // (a weather's shift of an actor's copy: the scene's points it moved put back, and kept for that weather alone)
+        void ShiftOneWeather(SceneModel m, string file, int sceneNumber, Action shift)
+        {
+            var before = m.TrackPoints.ToList();
+            shift();
+            for (var k = 0; k < before.Count && k < m.TrackPoints.Count; k++)
+                if (m.TrackPoints[k] != before[k])
+                {
+                    var q = m.TrackPoints[k];
+                    pointsAt.Add((file, sceneNumber, k, q.X, q.Y, q.Z));
+                    m.TrackPoints[k] = before[k];
+                }
+        }
         var deckLifts = new List<string>();
         foreach (var t in tracks)
         {
@@ -548,9 +565,9 @@ internal static class RaceTrackScenes
                     if (tracks.Count == 2 && way[0] != way[1])
                     {
                         var moved = a.Clone();
-                        ShiftOffRoad(moved, model, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
-                        if (moved.X == a.X && moved.Z == a.Z) return;
                         var file = Path.GetFileNameWithoutExtension(way[0] ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
+                        ShiftOneWeather(model, file, scene, () => ShiftOffRoad(moved, model, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log));
+                        if (moved.X == a.X && moved.Z == a.Z) return;
                         actorsAt.Add((file, scene, i - doomed.Count(d => d < i), moved.X, moved.Y, moved.Z));
                         log.Add($"scene {scene}: ... only while {file} is shown: in the other weather it stays where it was, at ({a.X},{a.Y},{a.Z})");
                         return;
@@ -573,8 +590,8 @@ internal static class RaceTrackScenes
                         if (way[0] != way[1])
                         {
                             var moved = a.Clone();
-                            ShiftOffRoad(moved, m, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, new List<string>());
                             var file = Path.GetFileNameWithoutExtension(way[0] ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
+                            ShiftOneWeather(m, file, scene, () => ShiftOffRoad(moved, m, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, new List<string>()));
                             if (moved.X != a.X || moved.Z != a.Z) pendingAt.Add((i, file, moved.X, moved.Y, moved.Z));
                             log.Add($"scene {scene}: actor {i} (entity {a.Entity}) is on {file}'s road only: kept where it is, and put aside to ({moved.X},{moved.Y},{moved.Z}) while {file} is shown");
                             return true;
@@ -1116,7 +1133,10 @@ internal static class RaceTrackScenes
         }
         var main = tracks[0];
         var off = doorsOff.Count > 0 ? doorsOff : null;
-        var putAside = actorsAt.Count > 0 ? actorsAt.Select(a => $"{a.File} {a.Scene} {a.Actor} {a.X} {a.Y} {a.Z}").ToList() : null;
+        // (a point as "p<number>" in the actor's place: RACEMOD.CPP actor_at=)
+        var putAside = actorsAt.Count + pointsAt.Count > 0
+            ? actorsAt.Select(a => $"{a.File} {a.Scene} {a.Actor} {a.X} {a.Y} {a.Z}").Concat(pointsAt.Distinct().Select(q => $"{q.File} {q.Scene} p{q.Point} {q.X} {q.Y} {q.Z}")).ToList()
+            : null;
         var lifts = deckLifts.Count > 0 ? deckLifts : null;
         return main.Result(log, changes.Count, removed, tracks.Count > 1 ? tracks[1].Result(log, changes.Count, removed) with { DoorsOff = off, ActorsAt = putAside, DeckLifts = lifts } : null) with { DoorsOff = off, ActorsAt = putAside, DeckLifts = lifts };
     }

@@ -131,6 +131,7 @@
  *                                Zoe shakes him awake as she comes up to him in the game's own opening -- or, if it says none, a while
  *                                after he woke. A loss: the race is run again from the grid (lose=<text>: said first, of the race's
  *                                island's texts)
+ *     set_weather=fine           (a set's key, 2026-10-27) the story in the weather once the storm is over, whatever the chapter
  *     dream=<scene>              (a set's key) a new game starts in <scene> instead of Twinsen's house (RaceMod_NewGameScene)
  *     after_gears=<top>...       the gears' top speeds once Twinsen has woken up (the race's own are faster: a dream's car): at the wake
  *                                the race's track is put away -- its finished race, the power-ups' effects, its weather -- and the car
@@ -147,7 +148,7 @@
  *                                his own car
  *     chase_lead=<cells>         the one to beat holds this lead over Twinsen: easing right off far ahead, pushing harder behind (ChaseLead)
  *     dream_any_end=1            a sprint's end wakes Twinsen up (wake=) whoever got there first; the one to beat goes on over the finish
- *     actor_at=<island file> <scene> <actor> <x> <y> <z>
+ *     actor_at=<island file> <scene> <actor> <x> <y> <z>   (<actor> p<n>: the scene's point n, which its script stands it on)
  *                                the scene's actor put there as the scene starts while that island file is shown (ActorsAt): in the way of
  *                                that file's road, not of the other's (Citadel Island's bike taxi under the shelter by the shop, 2026-10-27)
  *     deck_lift=<scene> <x> <y> <z> <half> <pad body> <to scene> <to x> <to y> <to z>
@@ -464,6 +465,10 @@ static int s_phase = PHASE_RACE;
 static int s_qualifying = 1;
 static int s_gridBack = 0;                 // grid_back=: no qualifying, the player at the back of the grid (not on pole)
 static int s_fineWeather = 0;
+// set_weather=fine (a set's key): the story played in the weather once the storm is over, whatever the game's chapter -- Play from the
+// town circuit's file (CITABAU), which a story from a scene started in the storm's (the user, 2026-10-27: "Attempting to spawn into the
+// Citabau track keeps spawning Twinsen into citadel instead")
+static int s_setFine = 0;
 static int s_holoArrow = -1;
 static unsigned s_seed = 0;
 static S32 s_qualifyTime = 0;              // the player's, ms
@@ -521,7 +526,7 @@ static int s_paradeStopText = -1, s_paradeTalker = -1, s_paradeGoVar = -1, s_pul
 static double s_pullS = 0, s_pullLat = 0, s_pullAcc = 0, s_pullFrom = 0;
 static S32 s_pullAt = 0, s_pullX = 0, s_pullY = 0, s_pullZ = 0, s_pullBeta = 0;
 #define RACE_PULL_BRAKE (14 * 512.0)       // it brakes this far before Twinsen
-#define RACE_PULL_SIDE (2.6 * 512.0)       // and stops this far to his side
+#define RACE_PULL_SIDE (1.8 * 512.0)       // and stops on its own line, or this far to his side where he stands on it
 #define RACE_PULL_WAIT_MS 700              // after its driver's line, this long before it rolls on
 #define RACE_PULL_ROLL_MS 2600             // the roll to its park
 #define RACE_PULL_SKID_USER 0xFD           // the squeal's PlaySample user handle: RACE_SOUND_USER + this
@@ -575,8 +580,8 @@ static S32 s_liftAt = 0;
 static double s_liftOff = 0;
 static int DeckLiftAction(int pressed);
 // actor_at= (ActorsAt): the actors, and the scene they were last put in
-#define RACE_MAX_ACTORS_AT 24
-static struct { char File[16]; int Scene, Actor, X, Y, Z; } s_actorsAt[RACE_MAX_ACTORS_AT];
+#define RACE_MAX_ACTORS_AT 64
+static struct { char File[16]; int Scene, Actor, X, Y, Z; } s_actorsAt[RACE_MAX_ACTORS_AT];      // (Actor -1 - n: the scene's point n)
 static int s_nbActorsAt = 0, s_actorsAtScene = -1;
 #define RACE_CHASE_PAUSE_MS 2600           // FunFrock driving off before Twinsen speaks
 #define RACE_DREAM_END_FLIGHT_MS 1600      // dream_any_end=: the one to beat over the jump this long before the dream fades
@@ -3579,8 +3584,12 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "dream_any_end")) s_dreamAnyEnd = atoi(v);
         else if (!strcmp(key, "actor_at") && s_nbActorsAt < RACE_MAX_ACTORS_AT) {
-            if (sscanf(v, "%15s %d %d %d %d %d", s_actorsAt[s_nbActorsAt].File, &s_actorsAt[s_nbActorsAt].Scene, &s_actorsAt[s_nbActorsAt].Actor,
-                       &s_actorsAt[s_nbActorsAt].X, &s_actorsAt[s_nbActorsAt].Y, &s_actorsAt[s_nbActorsAt].Z) == 6) s_nbActorsAt++;
+            char who[16];
+            if (sscanf(v, "%15s %d %15s %d %d %d", s_actorsAt[s_nbActorsAt].File, &s_actorsAt[s_nbActorsAt].Scene, who,
+                       &s_actorsAt[s_nbActorsAt].X, &s_actorsAt[s_nbActorsAt].Y, &s_actorsAt[s_nbActorsAt].Z) == 6) {
+                s_actorsAt[s_nbActorsAt].Actor = who[0] == 'p' ? -1 - atoi(who + 1) : atoi(who);
+                s_nbActorsAt++;
+            }
         }
         else if (!strcmp(key, "deck_lift") && s_nbLifts < RACE_MAX_LIFTS) {
             if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d", &s_lifts[s_nbLifts].Scene, &s_lifts[s_nbLifts].X, &s_lifts[s_nbLifts].Y, &s_lifts[s_nbLifts].Z,
@@ -4084,6 +4093,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %d %d", &s_wakeScene, &s_wakeText, &s_wakeActor) < 2) s_wakeScene = s_wakeText = -1;
         }
         else if (!strcmp(key, "dream")) { if (!setRead) s_dreamScene = atoi(v); }
+        else if (!strcmp(key, "set_weather")) { if (!setRead) s_setFine = !strcmp(v, "fine"); }
         else if (!strcmp(key, "after_gears")) {
             int used = 0, top;
             s_nbAfterGears = 0;
@@ -4290,7 +4300,7 @@ S32 RaceMod_Active(void) {
 // its own light and palette, the clear sky). Asked by COMMON.H's storm macros whenever the island loads -- which can be before anything
 // else has asked for the race file, so this reads it too.
 S32 RaceMod_FineWeather(void) {
-    return RaceMod_Active() && s_fineWeather;
+    return RaceMod_Active() && (s_fineWeather || s_setFine);
 }
 
 // (the player's car: the track's setup with the car's stats -- PlayerCar)
@@ -5857,7 +5867,10 @@ static void ParadeStep(S32 now, S32 dt) {
                 const double fl = sqrt(fx * fx + fz * fz) > 0 ? sqrt(fx * fx + fz * fz) : 1;
                 const double across = ((hx - px) * fz - (hz - pz) * fx) / fl;          // (to the right of the way it runs)
                 s_pullS = o->Cum[best];
-                s_pullLat = across + (across >= 0 ? -RACE_PULL_SIDE : RACE_PULL_SIDE);
+                // (on its own line, which is on the road: stopping a set way to his side took it off the road where he stood
+                // between the line and the road's far edge -- the user, 2026-10-27: "Raph pulled up on the outside of the track next
+                // to Twinsen, but he's off the track, let's have him just stop on the track when Twinsen is close by")
+                s_pullLat = fabs(across) >= RACE_PULL_SIDE ? 0 : across + (across >= 0 ? -RACE_PULL_SIDE : RACE_PULL_SIDE);
                 s_pullFrom = ahead;
                 s_pullAcc = s_paradeSpeed * s_paradeSpeed / (2 * ahead);
                 s_pull = 2;
@@ -11500,7 +11513,7 @@ S32 RaceMod_WantsMenu(void) {
 void RaceMod_LoadFile(const char *path) {
     RaceMod_Active();
     ResetTrack();
-    s_nbTracks = 0; s_tiredVar = -1; s_dreamScene = -1;
+    s_nbTracks = 0; s_tiredVar = -1; s_dreamScene = -1; s_setFine = 0;
     // (the camera's view: the new race file's camera=, or just behind the car)
     s_camView = RACE_VIEW_BEHIND; s_viewChosen = 0; s_viewW = 0;
     s_checked = 1;
@@ -15192,7 +15205,16 @@ static void ActorsAt(void) {
     if (NewCube != -1 || (S32)NumCube == s_actorsAtScene) return;
     s_actorsAtScene = NumCube;
     for (int i = 0; i < s_nbActorsAt; i++) {
-        if (s_actorsAt[i].Scene != (S32)NumCube || strcasecmp(s_actorsAt[i].File, IslandName) || s_actorsAt[i].Actor <= 0 || s_actorsAt[i].Actor >= NbObjets) continue;
+        if (s_actorsAt[i].Scene != (S32)NumCube || strcasecmp(s_actorsAt[i].File, IslandName)) continue;
+        // (a point its script stands it on: "p<n>" -- Citadel Island's Felix, pos_point every frame)
+        if (s_actorsAt[i].Actor < 0) {
+            const int n = -1 - s_actorsAt[i].Actor;
+            if (n >= NbBrickTrack) continue;
+            ListBrickTrack[n].X = s_actorsAt[i].X; ListBrickTrack[n].Y = s_actorsAt[i].Y; ListBrickTrack[n].Z = s_actorsAt[i].Z;
+            Log_Info("[racemod] point %d put aside in %s's scene %d, at (%d,%d,%d)", n, IslandName, (int)NumCube, s_actorsAt[i].X, s_actorsAt[i].Y, s_actorsAt[i].Z);
+            continue;
+        }
+        if (s_actorsAt[i].Actor <= 0 || s_actorsAt[i].Actor >= NbObjets) continue;
         T_OBJET *a = &ListObjet[s_actorsAt[i].Actor];
         a->Obj.X = s_actorsAt[i].X; a->Obj.Y = s_actorsAt[i].Y; a->Obj.Z = s_actorsAt[i].Z;
         Log_Info("[racemod] actor %d put aside in %s's scene %d, at (%d,%d,%d)", s_actorsAt[i].Actor, IslandName, (int)NumCube, s_actorsAt[i].X, s_actorsAt[i].Y, s_actorsAt[i].Z);
@@ -17454,7 +17476,7 @@ static void ResetTrack(void) {
 // none, the car alone.
 void RaceMod_Island(S32 island) {
     if (!RaceMod_Active() || !s_nbTracks) return;
-    const int fine = ListVarGame[FLAG_CHAPTER] >= 2, risen = ListVarGame[FLAG_CELEBRATION] != 0;
+    const int fine = ListVarGame[FLAG_CHAPTER] >= 2 || s_setFine, risen = ListVarGame[FLAG_CELEBRATION] != 0;
     const char *want = NULL;
     // (a track raced in scenes of its own before one raced in any of the island's: the set lists them in the order they were built, and
     // Otringal's own track -- every scene of island 4 -- took the Emperor's palace's scenes too, island 4's: the palace's grid on

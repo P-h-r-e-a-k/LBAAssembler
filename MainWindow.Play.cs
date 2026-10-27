@@ -272,7 +272,10 @@ public partial class MainWindow
         options.NewGame = newGame;
         newGame = false;
         var story = options.NewGame || !EditorSettings.Current.RaceCar.StartAtLine || raceToPlay?.Dream is not null;
-        options.RaceCarFile = MapOpen ? null : Terrain.RaceTrackService.CarFileWriter(gameRoot, raceToPlay, story);
+        // (the story from the town circuit's file -- CITABAU.ILE open -- in the weather once the storm is over: a scene entered as it is
+        // starts in the storm's chapter, and loaded the storm's file, 2026-10-27. A new game keeps the game's own weather)
+        var fine = story && !options.NewGame && raceToPlay?.Dream is null && Terrain.RaceTrackService.FineWeather(raceToPlay, false);
+        options.RaceCarFile = MapOpen ? null : Terrain.RaceTrackService.CarFileWriter(gameRoot, raceToPlay, story, fine);
         // (whether this play races, and which -- the first thing to know about a race that didn't start)
         DebugLog.Log(MapOpen ? $"Lba2Play: scene {scene}, the map \"{openMap!.Name}\"'s: no race-track mode"
             : options.RaceCarFile is null

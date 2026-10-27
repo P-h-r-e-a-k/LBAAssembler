@@ -359,6 +359,14 @@ S32 LoadSceneCubeXY(S32 numcube, S32 *cubex, S32 *cubey) {
         return FALSE;
 }
 
+// The island a scene is on, from its header (into ScreenAux, as LoadSceneCubeXY); -1 for no such scene
+S32 LoadSceneIsland(S32 numcube) {
+    char tmpFilePath[ADELINE_MAX_PATH];
+    GetResPath(tmpFilePath, ADELINE_MAX_PATH, SCENE_HQR_NAME);
+    if (numcube < 0 OR !Load_HQR(tmpFilePath, ScreenAux, numcube + 1)) return -1;
+    return (S32)(U8)ScreenAux[0];
+}
+
 /*──────────────────────────────────────────────────────────────────────────*/
 
 /* A folder the engine needs, made here or named here.

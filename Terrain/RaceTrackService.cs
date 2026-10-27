@@ -284,14 +284,15 @@ internal static class RaceTrackService
     // first); null for any other folder, which plays the game as it is.
     // `story`: the game played as a game (a new game, or a scene entered as it is, not a race started on its line): every track of the
     // folder in a set, each raced where and when the game is, with the story's gates and results (RaceCarEngineFile.WriteStorySet).
-    public static Action<string>? CarFileWriter(string gameDirectory, TrackInfo? track = null, bool story = false)
+    // (`fine`: the story in the weather once the storm is over -- Play from Citadel Island's town circuit file, CITABAU.ILE)
+    public static Action<string>? CarFileWriter(string gameDirectory, TrackInfo? track = null, bool story = false, bool fine = false)
     {
         if (!HasBackups(gameDirectory)) return null;
         var car = EditorSettings.Current.RaceCar.Clone();
         car.DriveAsKey = RaceCarEngineFile.DriveAsLine(gameDirectory, car.DriveAs);
         car.DriveAsIslandKeys = RaceCarEngineFile.DriveAsIslandLines(gameDirectory, car.DriveAs);
         car.TrackCarKeys = RaceCarEngineFile.TrackCarLines(gameDirectory, car.DriveAs);
-        if (story && ReadInfo(gameDirectory) is { } all) return path => car.WriteStorySet(path, all);
+        if (story && ReadInfo(gameDirectory) is { } all) return path => car.WriteStorySet(path, all, fine);
         return path => car.WriteEngineFile(path, track ?? ReadInfo(gameDirectory));
     }
 

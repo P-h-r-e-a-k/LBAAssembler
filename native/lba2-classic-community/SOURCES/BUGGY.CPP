@@ -38,9 +38,20 @@ void InitBuggy(U8 numobj, U32 flaginit) {
     // par le buggy (tant pis, il sera poussé)
     ptrobj->Flags |= (PUSHABLE | CHECK_CODE_JEU);
 
+    // (a first initialisation too where the car there is is parked on another island -- it never crosses the sea without Twinsen in
+    // it: a race-track mod's new game makes its car in the dream's race, and Citadel Island's house never had its own, the user,
+    // 2026-10-27: "Twinsen's car no longer spawns on the track, this is correct, but it wasn't under the car port either")
+    S32 offIsland = FALSE;
+#ifndef LBA_EDITOR
+    if (flaginit AND NumBuggy AND ptb->Cube != NumCube
+        AND ListObjet[NUM_PERSO].Move != MOVE_BUGGY_MANUAL AND ListObjet[NUM_PERSO].Move != MOVE_BUGGY) {
+        const S32 island = LoadSceneIsland(ptb->Cube);
+        offIsland = island >= 0 AND island != Island;
+    }
+#endif
     if ((flaginit == 2) // on force le repositionnement du buggy
         OR(flaginit
-               AND !NumBuggy)) // premiere initialisation
+               AND (!NumBuggy OR offIsland))) // premiere initialisation
                                // car le buggy vide ne peut pas etre Twinsen
     {
         ptb->Cube = NumCube; // Port-Ludo (Désert)

@@ -184,6 +184,7 @@ internal static class Program
             "leftovers" => LeftoverProbe.Run(args),
             "trackleftovers" => TrackLeftoverProbe.Run(args),
             "zonedump" => ZoneDumpCommand.Run(args),
+            "zoneon" => ZoneDumpCommand.On(args),
             "lba2text" => Lba2TextCommand.Run(args),
             "lba2sprite" => Lba2SpriteCommand.Run(args),
             "demo96" => Demo96Command.Run(args),
