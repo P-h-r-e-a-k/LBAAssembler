@@ -101,7 +101,9 @@ static const T_SETTING BootSettings[] = {
     /* User-facing name: "Auto camera" (menu/docs); the legacy spelling is read
        so an existing cfg keeps working. The camera module owns its cvar. */
     {"FollowCamera", "AutoCameraCenter", NULL, &FollowCamera, SETTING_OR_DEFAULT, FALSE, 0, 1, NULL, NULL, NULL},
-    {"AutoCameraInCar", NULL, NULL, &FollowCameraInCar, SETTING_OR_DEFAULT, FALSE, 0, 1, NULL, NULL, NULL},
+    /* (Auto in a car the default since 2026-10-27, the user: "Let's have the camera for Story mode, and in LBAAssembler to default to
+       'Auto camera in a car'"; and once for a cfg written before -- ReadConfigFile) */
+    {"AutoCameraInCar", NULL, NULL, &FollowCameraInCar, SETTING_OR_DEFAULT, TRUE, 0, 1, NULL, NULL, NULL},
     {"DetailLevel", NULL, NULL, &DetailLevel, SETTING_CLAMP, MAX_DETAIL_LEVEL, 0, MAX_DETAIL_LEVEL, NULL, NULL, NULL},
     {"FullScreen", NULL, NULL, &VideoFullScreen, SETTING_OR_DEFAULT, TRUE, 0, 1, NULL, NULL, NULL},
     {"DisplayFullScreen", NULL, NULL, &DisplayFullScreen, SETTING_OR_DEFAULT, TRUE, 0, 1, NULL, NULL, NULL},
@@ -304,6 +306,15 @@ void ReadConfigFile(void) {
         ManualCameraSmoothing = 16;
 
     FollowCam_ReadConfig();
+
+    /* "Auto camera in a car" the default (2026-10-27): a cfg from before held AutoCameraInCar 0 only because the option was new and its
+       default was written out; turned on once -- CameraDefaults marks it done, so a camera chosen after is kept */
+    if (DefFileBufferReadValueDefault("CameraDefaults", 0) < 1) {
+        FollowCameraInCar = TRUE;
+        WriteConfigValue("AutoCameraInCar", 1);
+        WriteConfigValue("CameraDefaults", 1);
+        Log_Info("[camera] Auto camera in a car: the default, set once");
+    }
 }
 
 /*──────────────────────────────────────────────────────────────────────────*/

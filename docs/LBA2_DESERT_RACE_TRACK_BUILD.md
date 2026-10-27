@@ -5384,3 +5384,15 @@ corners where that's quicker".
 - Tested headless (the story set, autodrive): FunFrock on pole says his line and drives off, Twinsen and the grobo speak, the key is
   given; Twinsen gets in, crosses the start line and chases; FunFrock, held a little ahead, finishes first ("FunFrock got there first"),
   over the jump, Twinsen watching just behind; the picture fades to white and Twinsen wakes up in scene 0, Zoe there.
+
+## Auto camera in a car the default; key remaps kept (2026-10-27)
+
+- The user: "Let's have the camera for Story mode, and in LBAAssembler to default to "Auto camera in a car". LBA2 also allows keys to be
+  reconfigured, is it possible to stop my key configuration being over ridden by a new release of LBAAssembler".
+- Camera: AutoCameraInCar's default TRUE (CONFIG_FILE.CPP); a cfg from before -- its 0 only the option's old default written out -- turned
+  on once at ReadConfigFile, CameraDefaults: 1 marking it done (a camera chosen afterwards is kept; tested both ways).
+- Keys: the remaps were in lba2.cfg only once the engine exited cleanly (BOOT_EXIT WriteConfigFile; resolution changes aside), and the
+  editor stops Play by ending the engine's process, as a crash does -- and a release's publish closes the running editor and its engine
+  (the standing rule). Every remap made in such a session was lost; the user's lba2-play\lba2.cfg held the defaults. Now leaving the
+  keyboard and the gamepad configuration screens saves the cfg at once (CONFIG.CPP MenuConfig, MenuGamepadConfig). Publishing never
+  touches release\lba2-play (checked), and a headless run keeps the keys (tested).
