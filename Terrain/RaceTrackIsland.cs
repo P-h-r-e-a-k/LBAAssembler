@@ -30,6 +30,8 @@ internal sealed record RaceTrackIsland(
         // the game has it: the user, 2026-10-27, "Let's raise the terrain slightly around the school of magic to force the user to access
         // it via the gate, but let's make sure we don't change the near track terrain height")
         OwnRimsAt = new[] { (535, 590, 571, 630) },
+        // (its water crossing a deck over the water, the ferry's channel open under it: RaceTrackBuilder.WaterDeck)
+        WaterDeck = true,
     };
 
     // Citadel Island: two tracks, one for each of its files, no retail track to clear, and no buggy in its scenes (the build puts one at each
@@ -57,6 +59,11 @@ internal sealed record RaceTrackIsland(
         // after Twinsen until the keeper is back -- after the car; no script of the scene's refers to her)
         StoryEntities = new[] { RaceTrackStory.LighthouseRaph, RaceTrackStory.CoupleOnTop },
         OwnGroundAt = new[] { (46, 481.5, 661.8, 10.0) },
+        // (the museum (scene 48, its building's top taken for the storm track's deck): walls built up from what is left of it to the deck, and
+        // a lift on the deck where its upper window was, down into the museum where the window took Twinsen -- scene 15, at the window's own
+        // place: the user, 2026-10-27)
+        DeckWalls = new[] { (518.7, 568.5, 523.1, 572.6, 2618) },
+        DeckLifts = new[] { (520.8, 568.1, 15, 12288, 3000, 13312) },
         // (the island's people and things away from both roads stay: the cow, the sewer lifts by the start line and over the school -- without
         // them the lift's zone took Twinsen down into the sewers and the ride back up took him straight down again -- the user, 2026-10-27)
         KeepOffRoadActors = true,
@@ -143,9 +150,19 @@ internal sealed record RaceTrackIsland(
     // Places (island cells, x0 z0 x1 z1) where the island's own ground comes back up to its height after the road's levelling, clear of the
     // road: rims that kept people to a gate (RaceTrackBuilder)
     public (int X0, int Z0, int X1, int Z1)[]? OwnRimsAt { get; init; }
+    // The lap's longest water crossing a raised deck over the water, humped for a boat to pass under (RaceTrackBuilder.WaterDeck)
+    public bool WaterDeck { get; init; }
+    // Walls built up under the raised road where it passes over a building cut down for it: island cells x0 z0 x1 z1 and the height they
+    // stand on (the building's top), up to the deck's underside (RaceTrackBuilder)
+    public (double X0, double Z0, double X1, double Z1, int BaseY)[]? DeckWalls { get; init; }
+    // Lifts on the raised road down into a building: island cell, and the scene and place there they take Twinsen to (a door zone on the deck)
+    public (double X, double Z, int Scene, int ToX, int ToY, int ToZ)[]? DeckLifts { get; init; }
     // The entity of the one the island's story has waiting at the start, whatever the build's story setting: brought from the scene the
     // island has him in to stand just behind Twinsen on the grid (Polar Island's grobo with the digger's key, 2026-10-27)
     public int? StartPerson { get; init; }
+    // The one to beat of the island's story's start, standing beside his car on pole before he gets in (RACEMOD.CPP chase_car=): the
+    // game's actor brought from its scene, and its entity
+    public (int Scene, int Actor, int Entity)? ChaseDriver { get; init; }
     // For an island with a track in each weather: places whose scene's people and track points belong to the own file's story (the storm's,
     // gone once it is over), each the scene, the island cell and a reach in cells -- the build seats them on the own file's reshaped ground,
     // not on the ground of whichever file's road is nearer (RaceTrackScenes.Reseat).
@@ -219,6 +236,8 @@ internal sealed record RaceTrackIsland(
         Roster = RaceDriver.Polar, Dream = true, Title = "Polar Island: the dream race to Sendell (LBA1's island, added when missing)",
         // (the grobo with the digger's key, on the dock: Twinsen's car outside a race asks for it -- Polar.PolarGrobo)
         StartPerson = LBAAssembler.Terrain.Polar.PolarGrobo.Entity,
+        // (FunFrock himself beside his car on pole, talking to Twinsen before he gets in: the game's own, scene 95's actor 14)
+        ChaseDriver = (95, 14, 217),
     };
 
     // A sprint dreamt at the start of the game (Polar Island's): won, Twinsen wakes up at home (RaceTrackService.DreamInfo).

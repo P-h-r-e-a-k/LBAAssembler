@@ -5441,3 +5441,19 @@ corners where that's quicker".
   (PointsOffRoad). 41 actors still go, every one standing on the road; no zone goes but 16 fixed cameras along the track.
 - The School of Magic's gates open from the start (HeldVars 65 = 1, which also shows the open gates' decor), and its canyon's rim comes
   back up to the island's own height where the levelling cut it, clear of the road by its curbs and 0.75 cells (OwnRimsAt, 253 points).
+
+## Desert's water deck, Citadel's museum lift, FunFrock outside his car (2026-10-27)
+
+- Desert's water crossing (RaceTrackIsland.WaterDeck; "a two sided draw bridge ... If a draw bridge isn't feasible let's change it into a
+  small raised track section with a slight ramp up and down"): the lap's longest water span a raised road from shore to shore, humped to
+  2,200 over the sea with 18 % ramps, as wide as the road (RaceTrackBuilder.WaterDeck), and the island's own sea back under it -- every cell
+  that was sea before, near the deck and no ground road, its triangles and heights as they were (WaterUnderDeck, 523 cells). The ferry sails
+  under it. A drawbridge would need decks the engine moves; the hump is the fallback the user named.
+- Citadel's museum (scene 48; its top taken for the storm track's deck): walls built up from what is left of it, 2,618, to the deck's
+  underside (DeckWalls, RaceTrackRaisedBody.Block), and a lift on the deck where its upper window was (DeckLifts: a draw-only pad and post,
+  a door zone over it into scene 15 at the window's own place, 12288 3000 13312). Tested: Twinsen walks onto the pad and is in the museum.
+- Polar Island's story start (chase_car=<body> <anim> <entity>): FunFrock's car stands empty on pole (RaceTrackCharacterCars
+  BuildFunFrockEmpty -- the car with its driver's polygons taken out, his bones kept for the racer's animations -- installed as "FunFrock's
+  car, empty"), FunFrock himself beside it (RaceTrackIsland.ChaseDriver: scene 95's actor 14, entity 217, scripts emptied); he says his
+  line, walks to it (RACE_CHASE_WALK_MS) and gets in, and the car drives off. The camera looks at the opening from the other side
+  (the classic camera's angle turned half round through AddBetaCam), and back once Twinsen is in his car.

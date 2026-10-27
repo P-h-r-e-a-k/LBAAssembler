@@ -234,7 +234,10 @@ internal static class RaceTrackService
         // Result.DoorsOff, RACEMOD.CPP door_off=); since 2026-10-27
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<string>? DoorsOff = null,
         // ActorsAt: actors put aside while one of the island's files is shown (RaceTrackScenes Result.ActorsAt, RACEMOD.CPP actor_at=)
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<string>? ActorsAt = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<string>? ActorsAt = null,
+        // ChaseCar: the story's start's one to beat outside his car -- the car's empty body (BODY.HQR), its animation, and the entity of him
+        // standing beside it (RaceTrackIsland.ChaseDriver, RACEMOD.CPP chase_car=); since 2026-10-27
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? ChaseCar = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -538,6 +541,8 @@ internal static class RaceTrackService
         public bool Together;
         public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel;
         public int[]? CrystalShardModels;
+        // FunFrock's car empty: its BODY.HQR entry and the racer's driving animation (TrackInfo.ChaseCar)
+        public int[]? FunFrockEmpty;
         public int[]? LaserModels;
         public List<TrackInfo> Tracks { get; } = new();
         // where the track being built has got to (the part of it done, 0..1, and what it is doing), for Build's progress; null: no one asks
@@ -784,7 +789,14 @@ internal static class RaceTrackService
         if (racers.Any(d => !d.Bike && !d.Ghost && d.Cast < 0 && d.Body == RaceTrackBaldinoCar.Generic) && !session.Baldino) { log.Add(RaceTrackBaldinoCar.Install(gameDirectory).Log); session.Baldino = true; }
         // the cars after the game's characters, three or more for each island: in the game's files for whoever is to drive them (no actor
         // has one yet)
-        if (!session.CharacterCars) { log.AddRange(RaceTrackCharacterCars.Install(gameDirectory).Log); session.CharacterCars = true; }
+        if (!session.CharacterCars)
+        {
+            var (carIndex, carLog) = RaceTrackCharacterCars.Install(gameDirectory);
+            log.AddRange(carLog);
+            if (carIndex.TryGetValue(RaceTrackCharacterCars.FunFrockEmptyName, out var emptyCar) && RaceTrackCharacterCars.RacerDrive(gameDirectory) is { } drive)
+                session.FunFrockEmpty = new[] { emptyCar, drive };
+            session.CharacterCars = true;
+        }
         // ... and the people in the cars' way twice their size (RaceTrackGuards), when a track has them
         if (report.Guards.Count > 0 && !session.GuardBodies) { log.AddRange(RaceTrackGuards.Install(gameDirectory)); session.GuardBodies = true; }
         // ... and each of the racer entity's cars shrunk to half its size, for the lightning spell (RaceTrackSmallCars)
@@ -883,6 +895,7 @@ internal static class RaceTrackService
     {
         session ??= new BuildSession();
         var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, Dream = dream,
+            ChaseCar = options.Island.ChaseDriver is { } chaseDriver && session.FunFrockEmpty is [var ce, var ca] ? new[] { ce, ca, chaseDriver.Entity } : null,
             LaserModels = session.LaserModels, LavaBallModel = session.LavaBallModel, CrystalShardModels = session.CrystalShardModels };
         // (and for a teleporter into another cube -- the Temple of Bú's hidden passage: the scene it puts the car into)
         if (info.ArcJumps is not null || info.Teleports is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };

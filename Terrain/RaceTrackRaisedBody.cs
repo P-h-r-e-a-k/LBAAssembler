@@ -300,4 +300,23 @@ internal static class RaceTrackRaisedBody
         Box(across * (float)((lo + hi) / 2), across * (float)((hi - lo) / 2), along * (float)beamHalf, h - t, h, PierCap, PierDark, PierCap);
         return m.Write();
     }
+
+    // A block: `halfX` by `halfZ` (units) round its middle, from 0 up to `height`, its sides in two colours and its top in a third -- the
+    // walls built up under a raised road where it passes over a building cut down for it, a lift's pad and post (RaceTrackBuilder DeckWalls,
+    // DeckLifts)
+    public static byte[] Block(double halfX, double halfZ, double height, int light = PierLight, int dark = PierDark, int top = PierCap)
+    {
+        var m = new Mesh();
+        float x = (float)halfX, z = (float)halfZ, h = (float)height;
+        var c = new[] { new Vector3(-x, 0, -z), new Vector3(x, 0, -z), new Vector3(x, 0, z), new Vector3(-x, 0, z) };
+        var lo = c.Select(p => m.P(p)).ToArray(); var hi = c.Select(p => m.P(p + new Vector3(0, h, 0))).ToArray();
+        for (var k = 0; k < 4; k++)
+        {
+            var n = (k + 1) % 4;
+            m.Quad(lo[k], lo[n], hi[n], hi[k], k % 2 == 0 ? light : dark, (c[k] + c[n]) / 2);
+        }
+        m.Quad(hi[0], hi[1], hi[2], hi[3], top, Vector3.UnitY);
+        m.Quad(lo[0], lo[1], lo[2], lo[3], dark, -Vector3.UnitY);
+        return m.Write();
+    }
 }

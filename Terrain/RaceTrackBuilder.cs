@@ -644,6 +644,9 @@ internal sealed class RaceTrackReport
     public List<string> Notes { get; } = new();
     public List<(int Start, int End)> BridgeSpans { get; } = new();
     public List<(int CubeX, int CubeZ, int Body, string Kind)> Removed { get; } = new();
+    // The lifts on the raised road (RaceTrackIsland.DeckLifts): where (island cells), the deck's height there, and the scene and place they
+    // take Twinsen down to -- a door zone over each (RaceTrackScenes)
+    public List<(double X, double Z, double Y, int Scene, int ToX, int ToY, int ToZ)> DeckLifts { get; } = new();
     // The island's doors into inside scenes (RaceTrackOptions.DoorBoxes) whose every piece of decor the road took away -- a lift under the
     // road's deck: the scenes' door zone goes with it (RaceTrackScenes), or walking onto its empty place took Twinsen down into the sewers,
     // and the ride back up straight down again (Citadel Island, by the storm track's start line, 2026-10-27)
@@ -875,6 +878,10 @@ internal static class RaceTrackBuilder
         var report = new RaceTrackReport();
         var field = new Field(island);
         var roads = new List<TrackRoad>();
+        // (the island's ground as it was, for the water under a deck over the water to come back: WaterUnderDeck)
+        var seaBefore = options.Island.WaterDeck
+            ? IslandOps.CubeCells(island).ToDictionary(c => (c.X, c.Z), c => ((uint[])c.Cube.Polygons.Clone(), (short[])c.Cube.Heights.Clone()))
+            : null;
         // (the island's own ground where it comes back away from the road: RaceTrackIsland.OwnRimsAt)
         var ownRims = (options.Island.OwnRimsAt ?? Array.Empty<(int X0, int Z0, int X1, int Z1)>())
             .SelectMany(b => from gz in Enumerable.Range(b.Z0, b.Z1 - b.Z0 + 1) from gx in Enumerable.Range(b.X0, b.X1 - b.X0 + 1) select (gx, gz))
@@ -981,6 +988,7 @@ internal static class RaceTrackBuilder
             if (options.Crossing == CrossingStyle.Bridge && crossings.Count > 0) report.RoadBridge = PlanRoadBridge(main, BridgeSpan(main, crossings, options), options, report);
         }
         foreach (var (a, b) in report.BridgeSpans) report.BridgeCoords.Add((main.X[a], main.Z[a], main.X[b], main.Z[b]));
+        if (!planned && options.Island.WaterDeck && main.Raised is null && report.BridgeSpans.Count > 0) WaterDeck(main, options, report);
         // (the raised road's colours, stretch by stretch)
         if (planned && plan.Themes is { Length: > 0 } themes)
         {
@@ -1272,10 +1280,39 @@ internal static class RaceTrackBuilder
             // (the Temple of Bú's secret party, reached on foot: its decor, its bodies after every other -- TempleParty)
             LBAAssembler.Terrain.Temple.TempleHalloween.PlaceParty(island, plan, options, report);
         }
+        if (seaBefore is not null && main.Raised is not null) WaterUnderDeck(island, index, roads, seaBefore, report);
         Relight(island, index, options);
         if (planned) SeaEverywhere(island, main, report);
         return report;
     }
+
+    // Under a deck over the water (WaterDeck): the island's own sea back where the road's levelling filled it in -- every cell that was sea
+    // before the build, within a road's verge and blend of the deck and of no road on the ground: its triangles and its corners' heights as
+    // they were (the Desert island's ferry channel open under the road again)
+    private static void WaterUnderDeck(IslandFile island, RoadIndex index, List<TrackRoad> roads, Dictionary<(int, int), (uint[] Polygons, short[] Heights)> before, RaceTrackReport report)
+    {
+        var back = 0;
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+        {
+            if (!before.TryGetValue((cx, cz), out var was)) continue;
+            for (var z = 0; z < IslandCube.Cells; z++)
+                for (var x = 0; x < IslandCube.Cells; x++)
+                {
+                    var cell = z * IslandCube.Cells + x;
+                    // (sea before: both its triangles not drawn)
+                    if (Drawn(was.Polygons[cell * 2]) || Drawn(was.Polygons[cell * 2 + 1])) continue;
+                    var hits = index.Near(cx * 64 + x + 0.5, cz * 64 + z + 0.5, 14, 4);
+                    if (!hits.Any(h => h.Raised && h.Dist <= roads[h.Road].VergeHalf + roads[h.Road].Blend)) continue;
+                    if (hits.Any(h => !h.Raised && h.Dist <= roads[h.Road].VergeHalf + roads[h.Road].Blend)) continue;
+                    cube.Polygons[cell * 2] = was.Polygons[cell * 2]; cube.Polygons[cell * 2 + 1] = was.Polygons[cell * 2 + 1];
+                    foreach (var (vx, vz) in new[] { (x, z), (x + 1, z), (x, z + 1), (x + 1, z + 1) })
+                        cube.Heights[vz * IslandCube.Vertices + vx] = was.Heights[vz * IslandCube.Vertices + vx];
+                    back++;
+                }
+        }
+        if (back > 0) report.Notes.Add($"the water under the deck over the water: {back} cells of sea as they were");
+    }
+    private static bool Drawn(uint polygon) { var p = new IslandPolygon(polygon); return p.TexFlag != 0 || p.PolyFlag != 0; }
 
     // ---------------------------------------------------------------------------------------------------------------------
     // the centre line
@@ -1531,6 +1568,37 @@ internal static class RaceTrackBuilder
         // water bridges keep their clearance: raised where they fell short, and the approaches filled up to meet them at the limit
         for (var i = 0; i < n; i++) if (bridge[i] && r.H[i] < o.BridgeClearance) r.H[i] = o.BridgeClearance;
         r.H = Envelope(r, o.MaxGrade, below: false);
+    }
+
+    // The lap's longest water crossing as a deck over the water (RaceTrackIsland.WaterDeck): a stretch of raised road from shore to shore,
+    // humped WaterDeckTop over the sea with ramps up and down at WaterDeckGrade, the water left under it -- the Desert island's ferry seen
+    // to sail through under the road (the user, 2026-10-27: "If a draw bridge isn't feasible let's change it into a small raised track
+    // section with a slight ramp up and down to give us the height we need for the ferry to pass"). The road as wide as on the ground.
+    private const double WaterDeckTop = 2200, WaterDeckGrade = 0.18;
+    private static void WaterDeck(TrackRoad r, RaceTrackOptions o, RaceTrackReport report)
+    {
+        var n = r.Count;
+        int Len((int A, int B) s) => ((s.B - s.A) % n + n) % n;
+        var (a, b) = report.BridgeSpans.MaxBy(Len);
+        r.Raised = new bool[n];
+        r.RaisedHalfs = Enumerable.Repeat(r.CurbHalf, n).ToArray();
+        double ha = r.H[a], hb = r.H[b];
+        var steps = Len((a, b));
+        var top = 0.0;
+        for (var j = 0; j <= steps; j++)
+        {
+            var k = At(r, a + j);
+            r.Raised[k] = true;
+            // (up from either shore at the grade, to the top)
+            double fromA = j * o.Spacing * 512, fromB = (steps - j) * o.Spacing * 512;
+            var hump = Math.Min(WaterDeckTop, Math.Min(ha + fromA * WaterDeckGrade, hb + fromB * WaterDeckGrade));
+            r.H[k] = Math.Max(r.H[k], hump);
+            top = Math.Max(top, r.H[k]);
+        }
+        // (the ramps' feet and crest rounded off)
+        var sm = Smooth(r.H, 2 / o.Spacing, r.Closed);
+        for (var j = 1; j < steps; j++) { var k = At(r, a + j); r.H[k] = Math.Max(r.H[k], sm[k]); }
+        report.Notes.Add($"the water crossing a deck over the water: {steps * o.Spacing:0} cells from shore to shore, up to {top:0} high, ramps at {WaterDeckGrade:P0}");
     }
 
     // The profile with no stretch steeper than MaxGrade that is closest to the road's own: the average of its two grade-limited
@@ -3378,6 +3446,8 @@ internal static class RaceTrackBuilder
 
     // A raised road's own space: from under its slab to over a car's roof.
     private const double RaisedBelow = 320, RaisedAbove = 1400;
+    // DeckLifts: the pad's half width (units)
+    private const double LiftPad = 380;
     // RaceTrackIsland.OwnRimsAt: the ground put back this far past the road's curbs (cells)
     private const double OwnRimClear = 0.75;
 
@@ -5499,6 +5569,41 @@ internal static class RaceTrackBuilder
         }
 
         bool Striped(int k) => r.Stripe is { } st && (st.From <= st.To ? k >= st.From && k <= st.To : k >= st.From || k <= st.To);
+
+        // (where the island says so, and this raised road passes over: walls built up from a building cut down for it to the deck's
+        // underside, and a lift on the deck down into a building -- RaceTrackIsland.DeckWalls, DeckLifts: Citadel Island's museum, 2026-10-27,
+        // "add in an elevator into the track that Twinsen can take when he's on foot to go down and into the museum ... and build up the
+        // walls under neath the track so they look like the track is supported by them")
+        if (!isBranch)
+        {
+            int? Over(double x0, double z0, double x1, double z1) => span.Where(k => r.X[k] >= x0 && r.X[k] <= x1 && r.Z[k] >= z0 && r.Z[k] <= z1)
+                .Select(k => (int?)k).FirstOrDefault();
+            foreach (var w in o.Island.DeckWalls ?? Array.Empty<(double X0, double Z0, double X1, double Z1, int BaseY)>())
+            {
+                // (the deck over the building, the lowest of it there, a little past its edges)
+                var over = span.Where(k => r.X[k] >= w.X0 - 3 && r.X[k] <= w.X1 + 3 && r.Z[k] >= w.Z0 - 3 && r.Z[k] <= w.Z1 + 3).ToList();
+                if (over.Count == 0) continue;
+                var top = over.Min(k => r.H[k]) - RaceTrackRaisedBody.Thickness - 20 - w.BaseY;
+                if (top < 200) continue;
+                double hx = (w.X1 - w.X0) / 2 * 512, hz = (w.Z1 - w.Z0) / 2 * 512;
+                if (Add(RaceTrackRaisedBody.Block(hx, hz, top), (w.X0 + w.X1) / 2 * 512, w.BaseY, (w.Z0 + w.Z1) / 2 * 512, -(int)hx, 0, -(int)hz, (int)hx, (int)top, (int)hz))
+                    report.Notes.Add($"walls built up under the raised road on a building cut down for it: cells ({w.X0}, {w.Z0}) to ({w.X1}, {w.Z1}), from {w.BaseY} to {w.BaseY + top:0}");
+            }
+            foreach (var l in o.Island.DeckLifts ?? Array.Empty<(double X, double Z, int Scene, int ToX, int ToY, int ToZ)>())
+            {
+                if (Over(l.X - 4, l.Z - 4, l.X + 4, l.Z + 4) is not { } near) continue;
+                // (its place on the deck: nearest the deck's point there, its height the deck's)
+                var k = span.Where(q => Math.Abs(r.X[q] - l.X) < 6 && Math.Abs(r.Z[q] - l.Z) < 6).MinBy(q => (r.X[q] - l.X) * (r.X[q] - l.X) + (r.Z[q] - l.Z) * (r.Z[q] - l.Z));
+                var y = r.H[k];
+                // (drawn only: the cars run over the pad, and through the post's spot)
+                Add(RaceTrackRaisedBody.Block(LiftPad, LiftPad, 50, RaceTrackRaisedBody.RailTop, RaceTrackRaisedBody.RailSide, RaceTrackRaisedBody.RailTop), l.X * 512, y, l.Z * 512,
+                    -(int)LiftPad, 0, -(int)LiftPad, (int)LiftPad, 50, (int)LiftPad, untouchable: true);
+                Add(RaceTrackRaisedBody.Block(60, 60, 1300, RaceTrackRaisedBody.RailTop, RaceTrackRaisedBody.RailSide, RaceTrackRaisedBody.RailTop), l.X * 512 + LiftPad - 60, y, l.Z * 512 + LiftPad - 60,
+                    -60, 0, -60, 60, 1300, 60, untouchable: true);
+                report.DeckLifts.Add((l.X, l.Z, y, l.Scene, l.ToX, l.ToY, l.ToZ));
+                report.Notes.Add($"a lift on the raised road at cell ({l.X}, {l.Z}), {y:0} high, down into scene {l.Scene}");
+            }
+        }
 
         // the pieces: cross-sections a cell apart, along each stretch of the road between its jumps' gaps (each ends at a lip), every one
         // with as many strips across its asphalt as the widest needs (RaceTrackRaisedBody.Tile: they meet on the same points)

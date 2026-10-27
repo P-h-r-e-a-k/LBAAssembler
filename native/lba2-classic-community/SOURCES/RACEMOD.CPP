@@ -137,6 +137,11 @@
  *                                beat takes pole, says his line and drives off; Twinsen says his; the helper (an actor of that entity in the
  *                                scene) turns to him, says its line and the game variable is set (the car's key); the race is on, no count
  *                                and no grid -- Twinsen gets in his car when he likes and chases (ChaseOpening)
+ *     chase_car=<body> <anim> <entity>
+ *                                (2026-10-27) the one to beat starts outside his car: it stands on pole empty (BODY.HQR <body>, ANIM.HQR
+ *                                <anim>) with him beside it (an actor of <entity>); he says his line, walks to it and gets in, and only
+ *                                then drives off. The camera looks at the opening from the other side (AddBetaCam), until Twinsen is in
+ *                                his own car
  *     chase_lead=<cells>         the one to beat holds this lead over Twinsen: easing right off far ahead, pushing harder behind (ChaseLead)
  *     dream_any_end=1            a sprint's end wakes Twinsen up (wake=) whoever got there first; the one to beat goes on over the finish
  *     actor_at=<island file> <scene> <actor> <x> <y> <z>
@@ -544,6 +549,11 @@ static int s_chaseOn = 0, s_chaseText[3] = {-1, -1, -1}, s_chaseHelper = -1, s_c
 static S32 s_chaseAt = 0;
 static double s_chaseLead = 0;
 static int s_dreamAnyEnd = 0;
+// chase_car= (ChaseOpening): his car's empty body and animation, his entity, his actor once found (-1 none), the car's own body and
+// animation while it stands empty, where he walks from, and the camera turned round for the opening
+static int s_chaseEmpty = -1, s_chaseEmptyAnim = -1, s_chaseDriverEnt = -1, s_chaseDriver = -1, s_chaseCarActor = -1, s_chaseFlipped = 0;
+static S32 s_chaseCarBody = -1, s_chaseCarAnim = -1, s_chaseWalkX = 0, s_chaseWalkZ = 0, s_chaseCamWas = 0;
+#define RACE_CHASE_WALK_MS 1600            // his walk to his car
 // door_off= (RaceMod_DoorShut)
 #define RACE_MAX_DOORS_OFF 24
 static struct { char File[16]; int Scene, X0, Z0, X1, Z1; } s_doorsOff[RACE_MAX_DOORS_OFF];
@@ -3545,6 +3555,9 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %d %d %d %d", &s_chaseText[0], &s_chaseText[1], &s_chaseHelper, &s_chaseText[2], &s_chaseVar) == 5) { s_chaseOn = 1; s_chaseStep = 0; }
         }
         else if (!strcmp(key, "chase_lead")) s_chaseLead = atof(v) * 512;
+        else if (!strcmp(key, "chase_car")) {
+            if (sscanf(v, "%d %d %d", &s_chaseEmpty, &s_chaseEmptyAnim, &s_chaseDriverEnt) != 3) s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = -1;
+        }
         else if (!strcmp(key, "dream_any_end")) s_dreamAnyEnd = atoi(v);
         else if (!strcmp(key, "actor_at") && s_nbActorsAt < RACE_MAX_ACTORS_AT) {
             if (sscanf(v, "%15s %d %d %d %d %d", s_actorsAt[s_nbActorsAt].File, &s_actorsAt[s_nbActorsAt].Scene, &s_actorsAt[s_nbActorsAt].Actor,
@@ -4723,11 +4736,87 @@ static int StartScene(void) {
 //   4  and says its line, and the game variable is set: the car's key. Twinsen gets in when he likes and gives chase.
 static void ChaseOpening(S32 now) {
     if (NewCube != -1 || (S32)NumCube != StartScene() || !s_nbSpots) return;
-    if (s_chaseStep == 0) { s_chaseAt = now + 700; s_chaseStep = 1; return; }
-    if (now < s_chaseAt) return;
     T_OBJET *hero = &ListObjet[NUM_PERSO];
+    if (s_chaseStep == 0) {
+        // (chase_car=: his car on pole now, empty, and him beside it, turned to Twinsen; the camera from the other side -- once the scene
+        // has given his car its actor, a frame or two in)
+        const int n = s_main >= 0 ? s_main : 0;
+        static S32 waitFrom = 0;
+        if (s_chaseEmpty >= 0 && s_opp[n].Count && !(s_carActor[n] > 0 && s_carActor[n] < NbObjets)) {
+            if (!waitFrom) waitFrom = now;
+            if (now - waitFrom < 2000) return;
+        }
+        waitFrom = 0;
+        s_chaseAt = now + 700; s_chaseStep = 1;
+        if (s_chaseEmpty >= 0 && s_opp[n].Count) {
+            OnSpot(&s_opp[n], &s_spots[0]);
+            const int a = s_carActor[n];
+            if (a > 0 && a < NbObjets && GivePtrBody(s_chaseEmpty) && GivePtrAnim(s_chaseEmptyAnim)) {
+                T_OBJ_3D *car = &ListObjet[a].Obj;
+                s_chaseCarActor = a; s_chaseCarBody = car->Body.Num; s_chaseCarAnim = car->Anim.Num;
+                car->Body.Num = -1; ObjectInitBody(car, (void *)(uintptr_t)(U32)s_chaseEmpty);
+                car->Anim.Num = -1; ObjectInitAnim(car, (void *)(uintptr_t)(U32)s_chaseEmptyAnim);
+            }
+            for (int i = 1; i < NbObjets; i++)
+                if (ListObjet[i].IndexFile3D == s_chaseDriverEnt && ListObjet[i].Obj.Y > -10000) { s_chaseDriver = i; break; }
+            if (s_chaseDriver > 0) {
+                T_OBJET *d = &ListObjet[s_chaseDriver];
+                d->Obj.Beta = (S32)(atan2((double)(hero->Obj.X - d->Obj.X), (double)(hero->Obj.Z - d->Obj.Z)) * 4096.0 / (2 * 3.14159265358979)) & 4095;
+                ClearRealAngle(d);
+            }
+            Log_Info("[racemod] chase: %s stands beside his empty car (actor %d, body %d), himself actor %d", s_opp[n].Name, s_chaseCarActor, s_chaseEmpty, s_chaseDriver);
+        }
+        if (s_chaseEmpty >= 0 && !s_chaseFlipped) {
+            // (the camera's angle turned half round: the offset from Twinsen's facing that gives it -- CameraCenter(2) sets BetaCam to
+            // 2048 - (AddBetaCam + his facing) -- the classic camera's angle on foot being its own, not his facing's)
+            const S32 want = (BetaCam + 2048) & 4095;
+            s_chaseCamWas = AddBetaCam;
+            AddBetaCam = (2048 - want - hero->Obj.Beta) & 4095;
+            CameraCenter(2);
+            s_chaseFlipped = 1;
+            Log_Info("[racemod] chase: the camera turned round for the opening (BetaCam %d)", (int)BetaCam);
+        }
+        return;
+    }
+    // (his walk to his car, every frame: then in, and away)
+    if (s_chaseStep == 11) {
+        const int n = s_main >= 0 ? s_main : 0;
+        T_OBJET *d = &ListObjet[s_chaseDriver];
+        const T_OBJET *car = &ListObjet[s_chaseCarActor];
+        double t = (double)(now - (s_chaseAt - RACE_CHASE_WALK_MS)) / RACE_CHASE_WALK_MS;
+        if (t > 1) t = 1;
+        d->Obj.X = (S32)(s_chaseWalkX + (car->Obj.X - s_chaseWalkX) * t);
+        d->Obj.Z = (S32)(s_chaseWalkZ + (car->Obj.Z - s_chaseWalkZ) * t);
+        d->Obj.Beta = (S32)(atan2((double)(car->Obj.X - s_chaseWalkX), (double)(car->Obj.Z - s_chaseWalkZ)) * 4096.0 / (2 * 3.14159265358979)) & 4095;
+        ClearRealAngle(d);
+        if (now < s_chaseAt) return;
+        // (in: him gone from beside it, the car with him at its wheel again, and off)
+        d->Obj.Y = -20000; d->Flags |= INVISIBLE;
+        T_OBJ_3D *c3 = &ListObjet[s_chaseCarActor].Obj;
+        if (s_chaseCarBody >= 0) { c3->Body.Num = -1; ObjectInitBody(c3, (void *)(uintptr_t)(U32)s_chaseCarBody); }
+        if (s_chaseCarAnim >= 0) { c3->Anim.Num = -1; ObjectInitAnim(c3, (void *)(uintptr_t)(U32)s_chaseCarAnim); }
+        s_phase = PHASE_GRID; s_goAt = now;
+        s_wantGrid = 0; s_place = 0; s_laps = 0;
+        s_wantFlip = 1;
+        Log_Info("[racemod] chase: %s gets in and drives off", s_opp[n].Count ? s_opp[n].Name : "the one to beat");
+        s_chaseAt = now + RACE_CHASE_PAUSE_MS; s_chaseStep = 2;
+        return;
+    }
+    if (now < s_chaseAt) return;
     switch (s_chaseStep) {
     case 1: {
+        if (s_chaseDriver > 0 && s_chaseCarActor > 0) {
+            // (outside his car: he says his line from where he stands, then walks to it -- step 11)
+            NumObjDial = (U8)s_chaseDriver;
+            Log_Info("[racemod] chase: the one to beat, beside his car, says text %d", s_chaseText[0]);
+            if (s_chaseText[0] >= 0) Dial(s_chaseText[0], TRUE);
+            s_wantFlip = 1;
+            T_OBJET *d = &ListObjet[s_chaseDriver];
+            s_chaseWalkX = d->Obj.X; s_chaseWalkZ = d->Obj.Z;
+            InitAnim(GEN_ANIM_MARCHE, ANIM_REPEAT, (U8)s_chaseDriver);
+            s_chaseAt = TimerRefHR + RACE_CHASE_WALK_MS; s_chaseStep = 11;
+            break;
+        }
         const int n = s_main >= 0 ? s_main : 0;
         if (s_opp[n].Count) OnSpot(&s_opp[n], &s_spots[0]);
         s_phase = PHASE_GRID; s_goAt = now;           // (RaceMod_Frame: "go" -- the clock and his run from now)
@@ -4822,7 +4911,13 @@ void RaceMod_Story(void) {
     }
     if (!s_sprint || CubeMode != CUBE_EXTERIEUR) return;
     // (a story start, chase=: the opening in turn, in the start line's scene)
-    if (s_chaseOn && s_chaseStep < 5) { ChaseOpening(now); if (s_chaseStep < 5) return; }
+    if (s_chaseOn && (s_chaseStep < 5 || s_chaseStep == 11)) { ChaseOpening(now); if (s_chaseStep < 5 || s_chaseStep == 11) return; }
+    // (him gone from beside his car once he has driven off -- the start's scene come into again: chase_car=)
+    if (s_chaseOn && s_chaseEmpty >= 0 && s_chaseStep >= 2 && s_chaseStep != 11 && (S32)NumCube == StartScene())
+        for (int i = 1; i < NbObjets; i++)
+            if (ListObjet[i].IndexFile3D == s_chaseDriverEnt && ListObjet[i].Obj.Y > -10000) { ListObjet[i].Obj.Y = -20000; ListObjet[i].Flags |= INVISIBLE; }
+    // (the camera turned back round once Twinsen is in his car: chase_car=)
+    if (s_chaseFlipped && Comportement == C_BUGGY) { AddBetaCam = s_chaseCamWas; s_chaseFlipped = 0; }
     // the intro, as the grid forms (the count-down from when it is read)
     if (s_introText >= 0 && !s_introShown && s_phase == PHASE_GRID) {
         s_introShown = 1;
@@ -17197,6 +17292,7 @@ static void ResetTrack(void) {
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
     s_nbDoorsOff = 0; s_nbActorsAt = 0; s_actorsAtScene = -1;
+    s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = s_chaseDriver = s_chaseCarActor = -1; s_chaseFlipped = 0; s_chaseCarBody = s_chaseCarAnim = -1;
     s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0;
     GhostReset();

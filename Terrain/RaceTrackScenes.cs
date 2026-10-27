@@ -566,6 +566,7 @@ internal static class RaceTrackScenes
                 }
             }
             removed += count;
+
             if (report.GroundBefore is { } groundBefore && groundAfter is not null && report.WasGround is { } wasGround)
             {
                 // (the own file's story places: on its ground -- Citadel Island's lighthouse door, scene 46)
@@ -672,6 +673,17 @@ internal static class RaceTrackScenes
                     waiting.Beta = ((int)Math.Round(Math.Atan2(model.Hero.X - waiting.X, model.Hero.Z - waiting.Z) * 4096 / (2 * Math.PI)) % 4096 + 4096) % 4096;
                     SceneOps.AddActor(model, waiting);
                     log.Add($"scene {scene}: entity {person} (the island's story's, at the start) behind Twinsen at ({waiting.X},{waiting.Y},{waiting.Z})");
+                    // (and the one to beat beside his car on pole, his scripts gone -- the race-track mode walks him into it: chase_car=)
+                    if (options.Island.ChaseDriver is { } cd && ChaseDriverActor(originals, cd) is { } own)
+                    {
+                        var driver = own.Clone();
+                        driver.Life = new byte[] { 0 }; driver.Track = new byte[] { 0 }; driver.Move = 0;
+                        driver.X = At(pole.Back + 0.3, pole.Side + shift - 1.9 * away, false); driver.Z = At(pole.Back + 0.3, pole.Side + shift - 1.9 * away, true);
+                        driver.Y = Ground(driver.X, driver.Z);
+                        driver.Beta = ((int)Math.Round(Math.Atan2(model.Hero.X - driver.X, model.Hero.Z - driver.Z) * 4096 / (2 * Math.PI)) % 4096 + 4096) % 4096;
+                        SceneOps.AddActor(model, driver);
+                        log.Add($"scene {scene}: entity {cd.Entity} (the one to beat himself, scene {cd.Scene}'s actor {cd.Actor}) beside his car on pole at ({driver.X},{driver.Y},{driver.Z})");
+                    }
                     // (and Twinsen's car parked off the road beside him -- the story's start, chase=: FunFrock takes pole and drives off, and
                     // Twinsen takes the car the grobo gives him the key of. A race that starts in the car -- the race game's -- puts it on the
                     // grid as it forms)
@@ -778,6 +790,19 @@ internal static class RaceTrackScenes
                                    : $"scene {scene}: zone {z} (type {kind}, number {zone.Num}) lies on the road and is removed");
                     SceneOps.DeleteZone(model, z);
                     if (camera) camerasRemoved++; else zonesRemoved++;
+                }
+            // (a lift on the raised road, RaceTrackReport.DeckLifts: a door zone over its pad, into its building's scene)
+            foreach (var t in tracks)
+                foreach (var l in t.Report.DeckLifts)
+                {
+                    if ((int)Math.Floor(l.X / 64) != model.CubeX || (int)Math.Floor(l.Z / 64) != model.CubeY) continue;
+                    int lx = (int)Math.Round((l.X - model.CubeX * 64) * 512), lz = (int)Math.Round((l.Z - model.CubeY * 64) * 512), ly = (int)Math.Round(l.Y);
+                    model.Zones.Add(new SceneZoneModel
+                    {
+                        Type = 0, Num = l.Scene, Info = new[] { l.ToX, l.ToY, l.ToZ, 0, 0, 0, 0, 1 },
+                        X0 = lx - 300, X1 = lx + 300, Z0 = lz - 300, Z1 = lz + 300, Y0 = ly - 100, Y1 = ly + 1200,
+                    });
+                    log.Add($"scene {scene}: a lift on the raised road at ({lx},{ly},{lz}): a door zone into scene {l.Scene}");
                 }
             foreach (var t in tracks)
             {
@@ -1500,6 +1525,30 @@ void comportement_1()
                 }
             }
         }
+    }
+
+    // The one to beat of a story's start, as the game has him (RaceTrackIsland.ChaseDriver): its scene's actor; else any of his entity's,
+    // given his own body, animation and an ordinary actor's flags (a folder whose scenes another island's track has rebuilt)
+    private static SceneActorModel? ChaseDriverActor(SceneStore originals, (int Scene, int Actor, int Entity) cd)
+    {
+        SceneActorModel? Of(int scene, Func<SceneActorModel, bool> want)
+        {
+            try { return originals.SceneExists(scene) ? originals.Load(scene).Actors.Skip(1).FirstOrDefault(want) : null; }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { return null; }
+        }
+        try
+        {
+            if (originals.SceneExists(cd.Scene) && originals.Load(cd.Scene).Actors.ElementAtOrDefault(cd.Actor) is { } own && own.Entity == cd.Entity) return own;
+        }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
+        for (var scene = 0; scene < originals.SceneCount; scene++)
+            if (Of(scene, a => a.Entity == cd.Entity) is { } any)
+            {
+                var copy = any.Clone();
+                copy.Body = 0; copy.Anim = 0; copy.Flags = 0x1807;
+                return copy;
+            }
+        return null;
     }
 
     // Whether an actor is off the road (KeepOffRoadActors): it stands further than `reach` cells from the road's middle, and so does every

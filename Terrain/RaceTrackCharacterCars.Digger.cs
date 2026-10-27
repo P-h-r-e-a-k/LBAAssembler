@@ -182,7 +182,7 @@ internal static partial class RaceTrackCharacterCars
     }
 
     // The racer's driving animation (the racer entity's generic 1) in the folder's ANIM.HQR, or null
-    private static int? RacerDrive(string gameDirectory) =>
+    internal static int? RacerDrive(string gameDirectory) =>
         Lba2EntityTable.Load(gameDirectory)?.Entities.FirstOrDefault(e => e.Id == RaceTrackScenes.RacerEntity)?.Anims.Where(a => a.Generic == 1).Select(a => (int?)a.Anim).FirstOrDefault();
 
     // Polar Island in a story game (Tools > Polar Island: PolarIsland.Add): the digger in BODY.HQR -- once: an ISLANDCARS.TXT line already
