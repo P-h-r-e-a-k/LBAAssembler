@@ -513,6 +513,11 @@ internal static class RaceTrackScenes
                         // the road moved off it, to the nearest clear place)
                         else if (onIt?.StartsWith("its scripts take it") == true
                                  && PointsOffRoad(model, i, inTheWay, report.GroundBefore, groundAfter, report.WasGround, scene, log)) offRoad.Add(i);
+                        // (one seen -- a body, not hidden -- that stands on the road: moved aside, its way's points with it, and kept: Citadel
+                        // Island's cow in its pasture, the town circuit through it -- the user, 2026-10-27, "The cow is still missing from the
+                        // citadel track". The hidden ones on the road -- a script's helpers -- still go)
+                        else if (onIt?.StartsWith("it stands on the road") == true && model.Actors[i].Body >= 0 && (model.Actors[i].Flags & 0x200) == 0
+                                 && MovedOffRoad(model, i)) offRoad.Add(i);
                         else log.Add($"scene {scene}: actor {i} (entity {model.Actors[i].Entity}) goes -- {onIt}");
                     }
                 if (offRoad.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", offRoad.Order())} kept -- off the road, and their scripts keep them off it");
@@ -549,6 +554,16 @@ internal static class RaceTrackScenes
                 }
                 foreach (var i in needed.Order())
                     if (i < model.Actors.Count) Aside(i);
+                bool MovedOffRoad(SceneModel m, int i)
+                {
+                    var a = m.Actors[i];
+                    var (x, y, z) = (a.X, a.Y, a.Z);
+                    ShiftOffRoad(a, m, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
+                    if (OffRoad(m, i, inTheWay, out _)) return true;
+                    if (PointsOffRoad(m, i, inTheWay, report.GroundBefore, groundAfter, report.WasGround, scene, log) && OffRoad(m, i, inTheWay, out _)) return true;
+                    a.X = x; a.Y = y; a.Z = z;
+                    return false;
+                }
                 // (the story's people stay, but not on the road: Polar Island's grobo with the digger's key stands on the dock)
                 foreach (var i in storyKept.Order())
                     if (options.Island.KeptEntities?.Contains(model.Actors[i].Entity) == true && !offRoad.Contains(i))
@@ -760,6 +775,20 @@ internal static class RaceTrackScenes
                                 var file = Path.GetFileNameWithoutExtension(ReferenceEquals(t, tracks[0]) ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
                                 doorsOff.Add($"{file} {scene} {zone.X0} {zone.Z0} {zone.X1} {zone.Z1}");
                                 log.Add($"scene {scene}: door zone {z} (into scene {zone.Num}) shut while {file} is shown -- the lift or building it was the door of went with that file's road");
+                                // (and the way back out of there to this door's place -- a lift's ride up onto a platform that isn't there: Twinsen
+                                // up in the air and dropping to the ground, the user, 2026-10-27, "taking the elevator platform back up from the sewers
+                                // by the track start line causes twinsen to momentarily be up in the air")
+                                try
+                                {
+                                    if (!store.SceneExists(zone.Num)) continue;
+                                    foreach (var back in store.Load(zone.Num).Zones.Where(bz => bz.Type == 0 && bz.Num == scene && bz.Info.Length >= 3
+                                                 && bz.Info[0] >= zone.X0 - 1536 && bz.Info[0] <= zone.X1 + 1536 && bz.Info[2] >= zone.Z0 - 1536 && bz.Info[2] <= zone.Z1 + 1536))
+                                    {
+                                        doorsOff.Add($"{file} {zone.Num} {back.X0} {back.Z0} {back.X1} {back.Z1}");
+                                        log.Add($"scene {zone.Num}: its way out to scene {scene}'s door zone {z} shut while {file} is shown too");
+                                    }
+                                }
+                                catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
                             }
                         if (tracks.All(Lost))
                         {

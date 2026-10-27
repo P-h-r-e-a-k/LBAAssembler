@@ -5476,3 +5476,8 @@ corners where that's quicker".
 - Twinsen's car on Citadel (RaceTrackIsland.CarHome; RACEMOD.CPP game variable 211, RACE_GRID_CAR_VAR): on the start line only when the
   race file starts the game there (the race game's start_in_car=, start_scene=); otherwise made under the carport at his house the first
   time (scene 49, INIT_BUGGY 1) and shown where he left it in the start scenes (INIT_BUGGY 0).
+- The cow (2026-10-27, "The cow is still missing from the citadel track"): an actor seen -- a body, not hidden -- that stands on the road, on
+  an island that keeps its actors, is moved aside (ShiftOffRoad, its way's points with it) and kept; only the hidden ones on the road
+  still go. Citadel: 25 actors removed (87 before), the cow moved 8 cells off the town circuit.
+- A door shut in one weather's file (door_off=) shuts the way back to its place from the scene it leads to as well: the sewers' ride up
+  to the start line's lift, whose platform the storm track's deck took ("causes twinsen to momentarily be up in the air").
