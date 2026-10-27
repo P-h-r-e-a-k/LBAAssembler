@@ -5335,3 +5335,28 @@ corners where that's quicker".
   joint within reach needing it turned least from the way it lies, then the nearest. A left hairpin dropped with its far end at another's
   end goes on from there as an S; driven the same way as the other it closed into a circle. The next section to place starts turned to go
   on from the last placed.
+
+## The race track generator: drawing in the air -- a height for the pens, a 3D view, a height profile (2026-10-27)
+
+- The user: "We need to also enhance map generation to allow us to easily draw track in the air, perhaps we should allow the map image to
+  be rotatable?"; asked which way (a height profile, a rotatable 3D view, height pens): "Let's implement both option 1 and 2".
+- Height: a slider on the drawing page (0: on the ground). The pens lay what they draw at it (TrackSketch.Heights, per pixel, NaN on the
+  ground); on the map it shows lighter and striped; the ground's height under the mouse is shown, and how far over it the pen draws.
+- 3D view (Track3DView, a WPF Viewport3D): the island's surface (a vertex every few cells, IslandOps.Altitude) with the map and what is drawn
+  on the ground on it; what is drawn in the air as squares at its height in the pens' colours, its shadow on the ground under it; a
+  see-through plane at the pens' height (none at 0). Right button turns it, Shift + right (or the middle) moves it, the wheel zooms; the left
+  draws where the mouse meets the plane (the ground at 0: hit tests of the one model). Sections are placed on the 2D map.
+- Height profile (page 3): the track's height (yellow) over the ground (brown) along it, jumps and loops marked; dragging sets the height
+  under the mouse and eases it 30 points either side; the point is marked on the map; let go, the track is made again with it; "Heights as
+  drawn" forgets it. The profile is matched to the new route by where its points are (the route's start moves with its pit lane, and
+  raising it drops the pit lane), not by number.
+- The plan (TrackSketchTracer.Plan): each point's drawn height the highest drawn round it. Raised road: from sections' climbs the whole
+  track (as before); from heights drawn or dragged, only that stretch -- RaiseRamp (40) points of ramp each end, the ground road's own
+  heights (its jumps' and loops' level stretches) elsewhere, one stretch (a lap's can't run through its start: then the whole lap, said).
+  No steeper than 25 %: a hill widened, never cut (GradeLimited), the raised stretch then out over its slopes. Roads over each other: room
+  checked only where one of them is raised (two on the ground are the build's crossroads).
+- Tested (the UI test with LBA2_TRACKGEN_AIR / LBA2_TRACKGEN_PROFILE hooks, the Desert drawing): a stretch drawn at 6000 -> points
+  1035-1146 raised, the rest on the ground, built (112 cells on piers); a profile dragged to 7000 -> 131 cells on piers, built; the plain
+  drawing and the spiral lap as before; the 3D view shown and turned to and from. Fixed on the way: a raised drawing without sections hit a
+  null (the lap-closing check read the sections' climbs); the profile's first edit raised the whole lap (compared with the bare ground,
+  under the jump's level run-up); it was rotated to the start twice.

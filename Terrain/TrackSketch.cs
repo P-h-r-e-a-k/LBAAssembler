@@ -21,11 +21,16 @@ internal sealed class TrackSketch
     public int OriginX { get; }
     public int OriginZ { get; }
     public SketchKind[] Kinds { get; }
+    // How high what is drawn at each pixel is (world units), NaN on the ground: drawn in the air -- the generator's height, its 3D view's
+    // height plane (the user, 2026-10-27: "enhance map generation to allow us to easily draw track in the air")
+    public float[] Heights { get; }
 
     public TrackSketch(int width, int height, int scale, int originX, int originZ)
     {
         Width = width; Height = height; Scale = Math.Max(1, scale); OriginX = originX; OriginZ = originZ;
         Kinds = new SketchKind[width * height];
+        Heights = new float[width * height];
+        Array.Fill(Heights, float.NaN);
     }
 
     // The pens' colours, as the generator draws them and as a picture is read
@@ -77,7 +82,12 @@ internal sealed class TrackSketch
 }
 
 internal sealed record SketchResult(RaceTrackPlan? Plan, List<(double X, double Z)> Route, List<SketchKind> RouteKinds, bool Closed, int Start,
-    (double X, double Z)? PitA, (double X, double Z)? PitB, List<string> Notes, List<string> Problems);
+    (double X, double Z)? PitA, (double X, double Z)? PitB, List<string> Notes, List<string> Problems)
+{
+    // each point's height as the plan has it (a raised road's), or null: on the ground; and the ground under each point (the height profile)
+    public double[]? Heights { get; init; }
+    public double[] Ground { get; init; } = Array.Empty<double>();
+}
 
 internal static class TrackSketchTracer
 {
@@ -90,12 +100,17 @@ internal static class TrackSketchTracer
     private const int LongestJump = 22, JumpRamp = 9, JumpLanding = 13;
     // a raised road at least this high over the ground under it, and two of its decks this far apart where it passes over itself
     private const double RaisedClear = 900, DeckRoom = 1600;
+    // a stretch drawn in the air: its ramps up and down, points (cells) at either end
+    private const int RaiseRamp = 40;
+    // the steepest a raised road climbs (a share: 0.25 is a quarter of a cell's length up for each cell along)
+    private const double MostGrade = 0.25;
 
     // `given`: the road's middle already known (track sections placed in a chain, map pixels, in order) -- followed as it is, not from
     // the picture; `givenClosed` whether it comes back round
     // `givenRise`: with `given`, how high each of its points is over its first (world units) -- climbs and spirals: the track a raised road
+    // `profile`: each point's height, edited in the height profile (as many as the route the drawing gives: else not used)
     public static SketchResult Trace(TrackSketch sketch, IslandFile? island, bool reverse = false, List<(double X, double Y)>? given = null, bool givenClosed = false,
-        List<double>? givenRise = null)
+        List<double>? givenRise = null, double[]? profile = null, List<(double X, double Z)>? profileAt = null)
     {
         var notes = new List<string>(); var problems = new List<string>();
         int w = sketch.Width, h = sketch.Height;
@@ -108,7 +123,7 @@ internal static class TrackSketchTracer
             line = given.ToList(); closed = givenClosed; half = 3 * sketch.Scale;
             var rise = givenRise is { } gr && gr.Count == line.Count ? gr.ToList() : null;
             if (reverse) { line.Reverse(); rise?.Reverse(); }
-            return Plan(sketch, island, line, closed, half, notes, problems, empty, rise);
+            return Plan(sketch, island, line, closed, half, notes, problems, empty, rise, profile, profileAt);
         }
 
         // the road: green, pink and blue together, small gaps closed, its biggest piece
@@ -137,12 +152,12 @@ internal static class TrackSketchTracer
             if ((ax - bx) * (ax - bx) + (ay - by) * (ay - by) < Math.Pow(Math.Max(step * 2, half * 3), 2) && line.Count > 20) closed = true;
         }
         if (reverse) line.Reverse();
-        return Plan(sketch, island, line, closed, half, notes, problems, empty);
+        return Plan(sketch, island, line, closed, half, notes, problems, empty, null, profile, profileAt);
     }
 
     // The plan from the road's middle (map pixels, in order)
     private static SketchResult Plan(TrackSketch sketch, IslandFile? island, List<(double X, double Y)> line, bool closed, double half, List<string> notes, List<string> problems, SketchResult empty,
-        List<double>? lineRise = null)
+        List<double>? lineRise = null, double[]? profile = null, List<(double X, double Z)>? profileAt = null)
     {
         // into cells, a cell apart, smoothed
         var cells = line.Select(p => (X: sketch.OriginX + p.X / sketch.Scale, Z: sketch.OriginZ + p.Y / sketch.Scale)).ToList();
@@ -171,8 +186,25 @@ internal static class TrackSketchTracer
                 rises[k] = lineRise[j - 1] + (lineRise[j] - lineRise[j - 1]) * Math.Clamp(f, 0, 1);
             }
         }
-        var raised = rises.Any(r => Math.Abs(r) > 100);
-        if (raised && closed && Math.Abs(lineRise![^1] - lineRise[0]) > 200)
+        // (and how high the drawing says each point is: the highest drawn in the air round it, NaN where it's all on the ground)
+        var wanted = route.Select(p =>
+        {
+            double cx = (p.X - sketch.OriginX) * sketch.Scale, cy = (p.Z - sketch.OriginZ) * sketch.Scale;
+            var best = double.NaN; var r = (int)Math.Ceiling(half + 1);
+            for (var yy = (int)cy - r; yy <= (int)cy + r; yy++)
+                for (var xx = (int)cx - r; xx <= (int)cx + r; xx++)
+                {
+                    if (xx < 0 || yy < 0 || xx >= sketch.Width || yy >= sketch.Height) continue;
+                    var v = sketch.Heights[yy * sketch.Width + xx];
+                    if (!float.IsNaN(v) && (double.IsNaN(best) || v > best)) best = v;
+                }
+            return best;
+        }).ToArray();
+        // (the profile's points where they were when it was edited: put to this route's by where they are -- the route may begin elsewhere
+        // now, its start following its pit lane)
+        var usable = profile is not null && profile.Length == route.Count && profileAt is not null && profileAt.Count == route.Count;
+        var raised = rises.Any(r => Math.Abs(r) > 100) || wanted.Any(v => !double.IsNaN(v)) || usable;
+        if (raised && closed && lineRise is { Count: > 1 } && Math.Abs(lineRise[^1] - lineRise[0]) > 200)
             problems.Add($"The lap ends {lineRise[^1] - lineRise[0]:+0;-0} higher than it starts: its climbs and drops must come back to where it began (add a ramp or a spiral the other way).");
 
         // what each point of the road is: a jump's, a loop's, or road
@@ -197,6 +229,7 @@ internal static class TrackSketchTracer
             route = route.Skip(start).Concat(route.Take(start)).ToList();
             kinds = kinds.Skip(start).Concat(kinds.Take(start)).ToList();
             rises = rises.Skip(start).Concat(rises.Take(start)).ToArray();
+            wanted = wanted.Skip(start).Concat(wanted.Take(start)).ToArray();
             jumps = Runs(kinds, SketchKind.Jump, closed).Where(r => r.Length >= ShortestJump).Take(RaceTrackJumpAnim.MaxJumps).ToList();
             loops = Runs(kinds, SketchKind.Loop, closed).Where(r => r.Length >= 2).ToList();
             start = 0;
@@ -270,12 +303,33 @@ internal static class TrackSketchTracer
             if (jumpPairs.Count > 0) plan.GapJumps = jumpPairs.ToArray();
             if (loopFeet.Count > 0) plan.Loops = loopFeet.Select(f => new[] { (double)f, LoopRadius, LoopAcross, 0 }).ToArray();
         }
+        // (the profile matched to the route as it now runs: the turn of the one against the other that puts their points nearest)
+        if (usable)
+        {
+            int n3 = route.Count, bestOffset = 0; var bestSum = double.MaxValue;
+            for (var o = 0; o < n3; o++)
+            {
+                double sum = 0;
+                for (var q = 0; q < 8 && sum < bestSum; q++)
+                {
+                    var k = q * n3 / 8; var a2 = route[k]; var b2 = profileAt![(k + o) % n3];
+                    sum += (a2.X - b2.X) * (a2.X - b2.X) + (a2.Z - b2.Z) * (a2.Z - b2.Z);
+                }
+                if (sum < bestSum) { bestSum = sum; bestOffset = o; }
+            }
+            if (bestSum / 8 > 9) usable = false;
+            else profile = Enumerable.Range(0, n3).Select(k => profile![(k + bestOffset) % n3]).ToArray();
+        }
+        double[]? heightsOut = null;
+        var groundOut = island is null ? new double[route.Count] : route.Select(p => Math.Max(0.0, IslandOps.Altitude(island, p.X * 512, p.Z * 512) ?? 0)).ToArray();
         // a raised road: the whole track on piers (as the Elevator Platform's, Volcano Island's), each point the sections' height over the
         // start, the whole lifted so it is clear of the ground everywhere -- RaisedClear over the highest ground under it, the ground cut
         // down where it would come up into the deck (RaisedCut); where it passes over itself, room for a car between the decks
         if (raised && island is not null)
         {
             var ground = route.Select(p => Math.Max(0.0, IslandOps.Altitude(island, p.X * 512, p.Z * 512) ?? 0)).ToArray();
+            // (the heights the track has on the ground: its jumps' and loops' level stretches, the ground's elsewhere)
+            var onGround = plan.Heights is { } gh && gh.Length == route.Count ? gh.ToArray() : SmoothHeights(ground, 6, closed);
             // (each point the sections' climb over the start's height, or the ground's height and a little where the ground is higher --
             // the road follows the ground where the sections are level, and climbs over it as they climb -- smoothed, never under the ground)
             // (the ground averaged round each point, 20 cells every way -- the turns of a spiral, one over the other, are over the same ground
@@ -293,10 +347,85 @@ internal static class TrackSketchTracer
             }
             var floor = route.Select(p => Around(p.X, p.Z) + RaisedClear).ToArray();
             var hs = Enumerable.Range(0, route.Count).Select(k => floor[k] + rises[k] - rises[0]).ToArray();
-            // (and smoothed along the way: the ground's own ups and downs under a climb don't make it dip)
+            // (drawn in the air: there, the height it was drawn at)
+            var drawnAny = wanted.Any(v => !double.IsNaN(v));
+            for (var k = 0; k < hs.Length; k++) if (!double.IsNaN(wanted[k])) hs[k] = wanted[k];
+            // (and smoothed along the way: the ground's own ups and downs under a climb don't make it dip; a drawn height eased into)
             for (var pass = 0; pass < 3; pass++) hs = SmoothHeights(hs, 8, closed);
-            var under = Enumerable.Range(0, route.Count).Max(k => ground[k] + RaisedClear * 0.6 - hs[k]);
-            if (under > 0) for (var k = 0; k < hs.Length; k++) hs[k] += under;
+            // (the height profile, edited: as it says)
+            if (usable) hs = profile!.ToArray();
+            if (!drawnAny && !usable)
+            {
+                var under = Enumerable.Range(0, route.Count).Max(k => ground[k] + RaisedClear * 0.6 - hs[k]);
+                if (under > 0) for (var k = 0; k < hs.Length; k++) hs[k] += under;
+            }
+            for (var k = 0; k < hs.Length; k++) if (hs[k] < ground[k] + RaisedClear * 0.5) hs[k] = ground[k] + RaisedClear * 0.5;
+            // (only some of it in the air -- drawn there, or lifted in the profile -- and none of the sections climbing: that stretch raised,
+            // ramps RaiseRamp points long either side, the rest a road on the ground as it would be: a bridge over the road, not the whole lap
+            // on piers. A lap has one raised stretch at the most, and not through its start)
+            var span = (From: 0, To: route.Count - 1);
+            var whole = true;
+            if (!rises.Any(r => Math.Abs(r) > 100))
+            {
+                var lifted = Enumerable.Range(0, route.Count).Where(k => !double.IsNaN(wanted[k]) || usable && profile![k] > onGround[k] + 500).ToList();
+                var n2 = route.Count;
+                (int From, int To)? found = null;
+                if (lifted.Count == 0) found = (-1, -1);
+                else if (!closed) found = (Math.Max(0, lifted[0] - RaiseRamp), Math.Min(n2 - 1, lifted[^1] + RaiseRamp));
+                else
+                {
+                    // (the stretch round the lap that holds them all: the lap less its longest stretch with none)
+                    var gapAt = 0; var gapLen = -1;
+                    for (var i = 0; i < lifted.Count; i++)
+                    {
+                        var next = lifted[(i + 1) % lifted.Count] + (i + 1 == lifted.Count ? n2 : 0);
+                        if (next - lifted[i] > gapLen) { gapLen = next - lifted[i]; gapAt = i; }
+                    }
+                    int from = lifted[(gapAt + 1) % lifted.Count] - RaiseRamp, to = lifted[gapAt] + RaiseRamp;
+                    if (from >= 0 && to < n2 && from < to && to - from < n2 - 20) found = (from, to);
+                    else notes.Add("the stretch in the air runs through the start: the whole lap is a raised road (draw it away from the start to keep the rest on the ground)");
+                }
+                if (found is { } f2)
+                {
+                    whole = false;
+                    span = f2;
+                    var groundRoad = onGround;
+                    var air = hs;
+                    hs = new double[n2];
+                    for (var k = 0; k < n2; k++)
+                    {
+                        if (k < span.From || k > span.To) { hs[k] = groundRoad[k]; continue; }
+                        // (up and down its ramps: from the ground at its ends to the height in the air RaiseRamp points in)
+                        var t = Math.Min(1.0, Math.Min(k - span.From, span.To - k) / (double)RaiseRamp);
+                        t = t * t * (3 - 2 * t);
+                        hs[k] = groundRoad[k] + (air[k] - groundRoad[k]) * t;
+                    }
+                }
+            }
+            // (no steeper than MostGrade: a height drawn or dragged up too steeply is kept, the slopes either side of it made longer -- a hill
+            // widened, not cut down; the profile shows it so)
+            hs = GradeLimited(hs, closed);
+            // (and the raised stretch out over the slopes that made: as far as the road is over the road on the ground)
+            if (!whole && span.From >= 0)
+            {
+                while (span.From > 0 && hs[span.From - 1] > onGround[span.From - 1] + 100) span.From--;
+                while (span.To < hs.Length - 1 && hs[span.To + 1] > onGround[span.To + 1] + 100) span.To++;
+                if (closed && (span.From == 0 || span.To == hs.Length - 1))
+                {
+                    whole = true; span = (0, hs.Length - 1);
+                    notes.Add("its slopes run through the start: the whole lap is a raised road");
+                }
+            }
+            // (the raised stretch never into the ground: a point drawn or dragged under it is put just over it)
+            var raisedTo = 0;
+            if (span.From >= 0)
+                for (var k = span.From; k <= span.To; k++)
+                {
+                    var t = Math.Min(1.0, Math.Min(k - span.From, span.To - k) / (double)RaiseRamp);
+                    if (!whole && t < 1) continue;
+                    if (hs[k] < ground[k] + RaisedClear * 0.5) { hs[k] = ground[k] + RaisedClear * 0.5; raisedTo++; }
+                }
+            if (raisedTo > 0 && (drawnAny || usable)) notes.Add($"{raisedTo} points were drawn under the ground and are put just over it");
             foreach (var pair in plan.GapJumps ?? Array.Empty<int[]>())
             {
                 int from = pair[0] - JumpRamp, to = pair[0] + Wrap(pair[1] - pair[0], route.Count) + JumpLanding;
@@ -308,22 +437,28 @@ internal static class TrackSketchTracer
                 var level = hs[foot];
                 for (var k = foot - (int)LoopStraight; k <= foot + (int)LoopStraight; k++) hs[Wrap(k, hs.Length)] = level;
             }
+            heightsOut = hs;
             if (Environment.GetEnvironmentVariable("LBA2_TRACKGEN_DUMP") is { Length: > 0 } dump)
                 System.IO.File.WriteAllLines(dump, Enumerable.Range(0, route.Count).Select(k => FormattableString.Invariant($"{k},{route[k].X:0.00},{route[k].Z:0.00},{rises[k]:0},{hs[k]:0},{ground[k]:0},{floor[k]:0}")));
             plan.Heights = hs.Select(v => Math.Round(v)).ToArray();
             plan.MaxGrade = 0.25;
-            plan.Raised = new[] { 0, route.Count - 1 };
+            plan.Raised = span.From < 0 ? null : new[] { span.From, span.To };
             plan.RaisedHalf = 4.75; plan.AsphaltHalf = 3.75; plan.CurbHalf = 4.5;
             plan.RaisedCut = true;
             plan.PitA = plan.PitB = null;
             plan.Start ??= start;
-            notes.Add($"a raised road on piers, from {hs.Min():0} to {hs.Max():0} high, up to {Enumerable.Range(0, hs.Length).Max(k => hs[k] - ground[k]):0} over the ground");
+            if (span.From < 0) notes.Add("on the ground, at the heights the profile gives it");
+            else notes.Add((whole ? "a raised road on piers" : $"points {span.From} to {span.To} a raised road on piers (ramps up and down at its ends), the rest on the ground") +
+                           $", from {hs.Min():0} to {hs.Max():0} high, up to {Enumerable.Range(0, hs.Length).Max(k => hs[k] - ground[k]):0} over the ground");
             // (passing over itself: how much room between the decks)
             var tight = 0; var crossOver = 0; (int I, int J)? where = null;
             for (var i = 0; i < route.Count; i += 2)
                 for (var j = i + 30; j < route.Count; j += 2)
                 {
                     if (closed && route.Count - (j - i) < 30) continue;
+                    // (two stretches on the ground: a crossroads, the build's to deal with)
+                    bool Up(int q) => span.From >= 0 && q >= span.From && q <= span.To;
+                    if (!Up(i) && !Up(j)) continue;
                     double dx = route[i].X - route[j].X, dz = route[i].Z - route[j].Z;
                     // (decks over each other by half a deck's width and more -- side by side, rails touching, is no passing over)
                     if (dx * dx + dz * dz > 49) continue;
@@ -339,10 +474,24 @@ internal static class TrackSketchTracer
             notes.Add($"the track crosses itself {crossings} time{(crossings == 1 ? "" : "s")}: the roads meet there, a crossroads (with no jump or loop the build makes a jump there itself)");
         notes.Add($"{plan.Points.Length} points; {(plan.GapJumps?.Length ?? 0)} jump{((plan.GapJumps?.Length ?? 0) == 1 ? "" : "s")}, {(plan.Loops?.Length ?? 0)} loop{((plan.Loops?.Length ?? 0) == 1 ? "" : "s")}, " +
                   (plan.PitA is not null ? "a pit lane (the start line in its middle)" : $"no pit lane (the start line at point {start})"));
-        return new SketchResult(problems.Count == 0 ? plan : null, route, kinds, closed, plan.Start ?? -1, pitA, pitB, notes, problems);
+        return new SketchResult(problems.Count == 0 ? plan : null, route, kinds, closed, plan.Start ?? -1, pitA, pitB, notes, problems)
+            { Heights = heightsOut ?? plan.Heights, Ground = groundOut };
     }
 
     private static int Wrap(int k, int n) => ((k % n) + n) % n;
+
+    // Heights a cell apart no steeper than MostGrade: each point at least as high as its neighbours less a grade's worth (both ways, twice
+    // round a lap)
+    private static double[] GradeLimited(double[] hs, bool closed)
+    {
+        var h = hs.ToArray(); var n = h.Length; var most = MostGrade * 512;
+        for (var round = 0; round < (closed ? 2 : 1); round++)
+        {
+            for (var k = closed ? 0 : 1; k < n; k++) h[k] = Math.Max(h[k], h[Wrap(k - 1, n)] - most);
+            for (var k = closed ? n - 1 : n - 2; k >= 0; k--) h[k] = Math.Max(h[k], h[Wrap(k + 1, n)] - most);
+        }
+        return h;
+    }
 
     // How many times the route crosses itself: places where two parts of it far apart along it come within two cells
     private static int Crossings(List<(double X, double Z)> route, bool closed)
