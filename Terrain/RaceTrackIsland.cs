@@ -65,6 +65,8 @@ internal sealed record RaceTrackIsland(
         DeckWalls = new[] { (518.7, 568.5, 523.1, 572.6, 2618) },
         // (Twinsen's car in the story where he left it, first under the carport at his house -- not on a start line: the user, 2026-10-27)
         CarHome = (544.125, 654.75, 1024),
+        // (its steep banks beside the road its own ground, walked on by Twinsen, walls to the cars only: RaceTrackBuilder.WallSteepBanks)
+        SoftBanks = true,
         DeckLifts = new[] { (520.8, 568.1, 15, 12288, 3000, 13312) },
         // (the island's people and things away from both roads stay: the cow, the sewer lifts by the start line and over the school -- without
         // them the lift's zone took Twinsen down into the sewers and the ride back up took him straight down again -- the user, 2026-10-27)
@@ -168,6 +170,8 @@ internal sealed record RaceTrackIsland(
     // Where Twinsen's car first stands in the story (island cell, turn): its scene's car made there the first time, and every start scene's
     // car where he left it -- on the start line only when the race file starts the game there (RACEMOD.CPP RACE_GRID_CAR_VAR)
     public (double X, double Z, int Beta)? CarHome { get; init; }
+    // The steep banks the shaping leaves beside the road kept as the island's own ground, walls to the cars only (RaceTrackBuilder)
+    public bool SoftBanks { get; init; }
     // For an island with a track in each weather: places whose scene's people and track points belong to the own file's story (the storm's,
     // gone once it is over), each the scene, the island cell and a reach in cells -- the build seats them on the own file's reshaped ground,
     // not on the ground of whichever file's road is nearer (RaceTrackScenes.Reseat).

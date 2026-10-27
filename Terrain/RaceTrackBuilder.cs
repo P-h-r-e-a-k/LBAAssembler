@@ -647,7 +647,7 @@ internal sealed class RaceTrackReport
     // The lifts on the raised road (RaceTrackIsland.DeckLifts): where (island cells), the deck's height there, and the scene and place they
     // take Twinsen down to -- a door zone over each (RaceTrackScenes)
     // ... and where it brings him back up, on the road beside it (island cells)
-    public List<(double X, double Z, double Y, int Scene, int ToX, int ToY, int ToZ, double BackX, double BackZ)> DeckLifts { get; } = new();
+    public List<(double X, double Z, double Y, int Scene, int ToX, int ToY, int ToZ, double BackX, double BackZ, int Pad)> DeckLifts { get; } = new();
     // The island's doors into inside scenes (RaceTrackOptions.DoorBoxes) whose every piece of decor the road took away -- a lift under the
     // road's deck: the scenes' door zone goes with it (RaceTrackScenes), or walking onto its empty place took Twinsen down into the sewers,
     // and the ride back up straight down again (Citadel Island, by the storm track's start line, 2026-10-27)
@@ -4550,6 +4550,8 @@ internal static class RaceTrackBuilder
     // the cliff to the next terrace. So every cell of the shaping that it left steeper than SteepBank (rise over run) is painted as the
     // blocking rock. A verge cell holding a step of more than SteepVerge is the same (PaintRoad).
     private const double SteepBank = 1.0, SteepVerge = 300;
+    // the game code of a triangle walled for the cars only (RaceTrackIsland.SoftBanks; the engine's CJ_CAR_WALL)
+    public const int CarWall = 10;
 
     private static void WallSteepBanks(IslandFile island, Field natural, Field field, RoadIndex index, HashSet<(int, int)> painted, RaceTrackOptions o, RaceTrackReport report)
     {
@@ -4570,6 +4572,22 @@ internal static class RaceTrackBuilder
                 steep = moved >= 50 && Slope(field, gx, gz, corners) >= SteepBank;
             }
             if (steep) walls.Add((gx, gz));
+        }
+        // (an island whose banks Twinsen walks on -- RaceTrackIsland.SoftBanks -- keeps their own ground, grass where it was grass, and walls them
+        // for the cars only: the blocking bit and game code 10, which the engine opens to Twinsen on foot -- MAPTOOLS.CPP GiveTerrainCol. The
+        // user, 2026-10-27, of Citadel Island: "The steep section on the right on the citadel track can we make it grass terrain and walkable
+        // as currently Twinsen slides on it and it looks ugly")
+        if (o.Island.SoftBanks)
+        {
+            foreach (var (gx, gz) in walls)
+            {
+                if (island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } cube) continue;
+                int x = gx % IslandCube.Cells, z = gz % IslandCube.Cells;
+                for (var half = 0; half < 2; half++) cube.SetPolygon(x, z, half, new IslandPolygon(cube.Polygon(x, z, half)).With(col: true, codeJeu: CarWall).Raw);
+                painted.Add((gx, gz));
+            }
+            if (walls.Count > 0) report.Notes.Add($"{walls.Count} cells of steep bank the shaping left beside the road walled for the cars only, their own ground kept (steeper than {SteepBank:0.#} rise over run)");
+            return;
         }
         foreach (var (gx, gz) in walls) { painter.Paint(gx, gz, Kind.Wall); painted.Add((gx, gz)); }
         if (walls.Count > 0) report.Notes.Add($"{walls.Count} cells of steep bank the shaping left beside the road painted as blocking rock (steeper than {SteepBank:0.#} rise over run)");
@@ -5611,7 +5629,8 @@ internal static class RaceTrackBuilder
                 // or he went straight back down; along the road where the pad is on its middle)
                 double bx = r.X[k], bz = r.Z[k];
                 if (Math.Sqrt((bx - l.X) * (bx - l.X) + (bz - l.Z) * (bz - l.Z)) < LiftPad / 512 + 1) { bx += r.Tx[k] * 3; bz += r.Tz[k] * 3; }
-                report.DeckLifts.Add((l.X, l.Z, y, l.Scene, l.ToX, l.ToY, l.ToZ, bx, bz));
+                // (the pad goes down and up with the lift: the race-track mode moves its decor -- deck_lift=)
+                report.DeckLifts.Add((l.X, l.Z, y, l.Scene, l.ToX, l.ToY, l.ToZ, bx, bz, o.NewBodyBase + report.NewBodies.Count - 1));
                 report.Notes.Add($"a lift on the raised road at cell ({l.X}, {l.Z}), {y:0} high, down into scene {l.Scene}");
             }
         }

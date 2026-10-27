@@ -150,6 +150,10 @@
  *     actor_at=<island file> <scene> <actor> <x> <y> <z>
  *                                the scene's actor put there as the scene starts while that island file is shown (ActorsAt): in the way of
  *                                that file's road, not of the other's (Citadel Island's bike taxi under the shelter by the shop, 2026-10-27)
+ *     deck_lift=<scene> <x> <y> <z> <half> <pad body> <to scene> <to x> <to y> <to z>
+ *                                (2026-10-27) a lift on the raised road (DeckLift): its pad (decor body <pad body>, <half> either side of
+ *                                x z, the road's height y), the action key on it takes Twinsen down with it through the road into <to
+ *                                scene> at its place; coming into <scene> on the pad (the building's way out to it), he rises with it
  *     door_off=<island file> <scene> <x0> <z0> <x1> <z1>
  *                                the scene's door zone with that box shut while that island file is shown (RaceMod_DoorShut): its lift or
  *                                wall is gone from it, not from the island's other file (Citadel Island's two weathers share their scenes,
@@ -561,6 +565,15 @@ static S32 s_chaseCarBody = -1, s_chaseCarAnim = -1, s_chaseWalkX = 0, s_chaseWa
 #define RACE_MAX_DOORS_OFF 24
 static struct { char File[16]; int Scene, X0, Z0, X1, Z1; } s_doorsOff[RACE_MAX_DOORS_OFF];
 static int s_nbDoorsOff = 0;
+// deck_lift= (DeckLift): the lifts; the one moving, which way, since when, and how far down its pad is
+#define RACE_MAX_LIFTS 4
+#define RACE_LIFT_MS 1800                  // its ride, down or up
+#define RACE_LIFT_DROP 2000.0              // how far down through the road it goes
+static struct { int Scene, X, Y, Z, Half, Pad, To, ToX, ToY, ToZ; } s_lifts[RACE_MAX_LIFTS];
+static int s_nbLifts = 0, s_lift = -1, s_liftDir = 0, s_liftScene = -1;
+static S32 s_liftAt = 0;
+static double s_liftOff = 0;
+static int DeckLiftAction(int pressed);
 // actor_at= (ActorsAt): the actors, and the scene they were last put in
 #define RACE_MAX_ACTORS_AT 24
 static struct { char File[16]; int Scene, Actor, X, Y, Z; } s_actorsAt[RACE_MAX_ACTORS_AT];
@@ -1352,6 +1365,7 @@ static int OnWheel(double wx, double wy, double wz) {
     return wy > f - 1500 && wy < f + 1500;
 }
 extern void (*DecorPoseHook)(T_DECORS *list, S32 count);  // 3DEXT/DECORS.CPP
+static void RaceDecorPose(T_DECORS *list, S32 count);      // (the roulette wheel's decors and the lifts' pads: WheelDecors, LiftDecors)
 static void WheelDecors(T_DECORS *list, S32 count);
 // Gas monsters (gasmonster=<scene> <its actor> <its body> <x> <z> <bite x> <bite z> <bite y> <foot y> <first anim> [<scene> <actor>]...,
 // island units: where it stands out of the gas, its place on the road and the road's height there, its foot's height; the first of its
@@ -2624,10 +2638,12 @@ static int InTunnel(int seg) {
     return -1;
 }
 
-void RaceMod_FloorFor(S32 y) { s_floorRef = s_nbRaised ? y : RAISED_NOREF; s_raisedStep = RAISED_STEP; }
-void RaceMod_FloorForNothing(void) { s_floorRef = RAISED_NOREF; s_raisedStep = RAISED_STEP; }
-// (EXTFUNC.CPP DoAnimExt, the hero moved: on foot the road is his floor only a step up, RAISED_FOOT_STEP)
-void RaceMod_FloorForFoot(void) { if (Comportement != C_BUGGY) s_raisedStep = RAISED_FOOT_STEP; }
+extern S32 TerrainFootOpen;                 // 3DEXT/MAPTOOLS.CPP: the cars' walls open to Twinsen on foot
+void RaceMod_FloorFor(S32 y) { s_floorRef = s_nbRaised ? y : RAISED_NOREF; s_raisedStep = RAISED_STEP; TerrainFootOpen = 0; }
+void RaceMod_FloorForNothing(void) { s_floorRef = RAISED_NOREF; s_raisedStep = RAISED_STEP; TerrainFootOpen = 0; }
+// (EXTFUNC.CPP DoAnimExt, the hero moved: on foot the road is his floor only a step up, RAISED_FOOT_STEP; and the banks walled for the cars
+// only, game code 10, are ground he walks on -- GiveTerrainCol)
+void RaceMod_FloorForFoot(void) { if (Comportement != C_BUGGY) { s_raisedStep = RAISED_FOOT_STEP; TerrainFootOpen = RaceMod_Active() ? 1 : 0; } }
 
 // The raised road's side a wall to Twinsen on foot: a move to where the road's deck stands higher than a step over his feet and not over
 // his head is not made -- along the side he slides, as along a wall (Citadel, 2026-10-27). Where he already was in it (a scene's start,
@@ -3566,6 +3582,11 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%15s %d %d %d %d %d", s_actorsAt[s_nbActorsAt].File, &s_actorsAt[s_nbActorsAt].Scene, &s_actorsAt[s_nbActorsAt].Actor,
                        &s_actorsAt[s_nbActorsAt].X, &s_actorsAt[s_nbActorsAt].Y, &s_actorsAt[s_nbActorsAt].Z) == 6) s_nbActorsAt++;
         }
+        else if (!strcmp(key, "deck_lift") && s_nbLifts < RACE_MAX_LIFTS) {
+            if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d", &s_lifts[s_nbLifts].Scene, &s_lifts[s_nbLifts].X, &s_lifts[s_nbLifts].Y, &s_lifts[s_nbLifts].Z,
+                       &s_lifts[s_nbLifts].Half, &s_lifts[s_nbLifts].Pad, &s_lifts[s_nbLifts].To, &s_lifts[s_nbLifts].ToX, &s_lifts[s_nbLifts].ToY, &s_lifts[s_nbLifts].ToZ) == 10)
+                s_nbLifts++;
+        }
         else if (!strcmp(key, "door_off") && s_nbDoorsOff < RACE_MAX_DOORS_OFF) {
             if (sscanf(v, "%15s %d %d %d %d %d", s_doorsOff[s_nbDoorsOff].File, &s_doorsOff[s_nbDoorsOff].Scene, &s_doorsOff[s_nbDoorsOff].X0, &s_doorsOff[s_nbDoorsOff].Z0,
                        &s_doorsOff[s_nbDoorsOff].X1, &s_doorsOff[s_nbDoorsOff].Z1) == 6) s_nbDoorsOff++;
@@ -4152,7 +4173,7 @@ static void Load(const char *path, int carOnly = 0) {
     // (every track's: the views -- camera= -- are its, whatever cameras of its own the track has; without any it gives the arm's eye)
     FollowCamEyeHook = RaceCameraEye;
     // (a roulette wheel: its head and its ball posed as their cube's decors are drawn)
-    DecorPoseHook = s_wheel.On ? WheelDecors : NULL;
+    DecorPoseHook = s_wheel.On || s_nbLifts ? RaceDecorPose : NULL;
     if (s_wheel.On) Log_Info("[racemod] roulette wheel at (%.0f,%.0f): %d turning pieces, its floor %.0f at the hole to %.0f at the wall, the drop onto place %d", s_wheel.X, s_wheel.Z,
                              s_wheel.NbParts, WheelFloorAt(s_wheel.Hole), WheelFloorAt(s_wheel.Rim), s_wheel.Landing);
     if (s_car.Gears < 1) s_car.Gears = 1;
@@ -11420,6 +11441,14 @@ U32 RaceMod_FilterInput(U32 input) {
     if (RaceMod_Active() && Comportement == C_BUGGY && CheckKey(K_GAMEPAD_BACK)) input &= ~(U32)I_HOLOMAP;
     // (a ghost played back: the car is the ghost's -- nothing gets Twinsen out of it, nor fires, jumps or dodges)
     if (RaceMod_Active() && s_ghostWatch && Comportement == C_BUGGY) input &= ~(U32)(I_JOY | I_FIRE | I_ACTION | I_ESQUIVE);
+    // (a lift on the raised road: the action key on its pad takes him down; while it moves, no key does anything -- deck_lift=)
+    if (RaceMod_Active() && s_nbLifts && CubeMode == CUBE_EXTERIEUR) {
+        static int liftActWas = 0;
+        const int act = (input & I_ACTION_M) != 0, pressed = act && !liftActWas;
+        liftActWas = act;
+        if (DeckLiftAction(pressed)) input &= ~(U32)I_ACTION_M;
+        if (s_lift >= 0) return 0;
+    }
     if (Explore() && CubeMode == CUBE_EXTERIEUR) {
         const int act = (input & I_ACTION_M) != 0, pressed = act && !s_footActWas;
         s_footActWas = act;
@@ -15091,6 +15120,72 @@ static void IslandCarDraw(void) {
     else if (s_islandParked) DrawDriveAsOn(TimerRefHR, &ListObjet[NUM_BUGGY], 1);
 }
 
+// A lift on the raised road (deck_lift=), every frame: Twinsen on its pad on foot, the action key takes him down through the road with
+// it (DeckLiftAction) and on into its building; come into its scene on the pad -- the building's way out -- he rises with it. While it
+// moves he is held on it, his keys taken (RaceMod_FilterInput), and the pad's decor goes down and up with him (RaceDecorPose). The user,
+// 2026-10-27: "The elevator we've added to the road to get into the museum is just acting as a teleporter block instead of an elevator
+// that goes up and down, let's address this so Twinsen has to manually trigger it with action like the other elevators to the sewers"
+static int OnLiftPad(int i) {
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    return s_lifts[i].Scene == (S32)NumCube && CubeMode == CUBE_EXTERIEUR && Comportement != C_BUGGY
+           && abs(hero->Obj.X - s_lifts[i].X) <= s_lifts[i].Half && abs(hero->Obj.Z - s_lifts[i].Z) <= s_lifts[i].Half;
+}
+static void DeckLiftFrame(S32 now) {
+    if (!s_nbLifts) return;
+    // (into a lift's scene on its pad: up)
+    if ((S32)NumCube != s_liftScene && NewCube == -1) {
+        s_liftScene = NumCube;
+        for (int i = 0; i < s_nbLifts && s_lift < 0; i++)
+            if (OnLiftPad(i)) { s_lift = i; s_liftDir = 1; s_liftAt = now; s_liftOff = -RACE_LIFT_DROP; Log_Info("[racemod] lift: up onto the road in scene %d", (int)NumCube); }
+    }
+    if (s_lift < 0) return;
+    const int i = s_lift;
+    if (s_lifts[i].Scene != (S32)NumCube || NewCube != -1) { s_lift = -1; s_liftOff = 0; return; }
+    double t = (double)(now - s_liftAt) / RACE_LIFT_MS;
+    if (t > 1) t = 1;
+    const double e = t * t * (3 - 2 * t);
+    s_liftOff = s_liftDir < 0 ? -RACE_LIFT_DROP * e : -RACE_LIFT_DROP * (1 - e);
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    hero->Obj.X = s_lifts[i].X; hero->Obj.Z = s_lifts[i].Z; hero->Obj.Y = s_lifts[i].Y + (S32)s_liftOff;
+    hero->WorkFlags &= ~FALLING;
+    // (standing on it as it moves: not the fall the engine would play below the road)
+    if (hero->GenAnim != GEN_ANIM_RIEN) InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
+    s_wantFlip = 1;
+    if (t < 1) return;
+    if (s_liftDir > 0) { s_lift = -1; s_liftOff = 0; ClearRealAngle(hero); Log_Info("[racemod] lift: up"); return; }
+    // (down: into its building, at its place)
+    Log_Info("[racemod] lift: down into scene %d", s_lifts[i].To);
+    SaveTimer();
+    NewCube = s_lifts[i].To;
+    NewPosX = s_lifts[i].ToX; NewPosY = s_lifts[i].ToY; NewPosZ = s_lifts[i].ToZ;
+    FlagChgCube = 1;
+    s_lift = -1; s_liftOff = 0;
+}
+// (the action key on a lift's pad, on foot: down; RaceMod_FilterInput. Non-zero: the key taken)
+static int DeckLiftAction(int pressed) {
+    if (s_lift >= 0) return 1;
+    if (!pressed || NewCube != -1) return 0;
+    for (int i = 0; i < s_nbLifts; i++)
+        if (OnLiftPad(i)) { s_lift = i; s_liftDir = -1; s_liftAt = TimerRefHR; s_liftOff = 0; Log_Info("[racemod] lift: down from the road in scene %d", (int)NumCube); return 1; }
+    return 0;
+}
+// The lifts' pads as the cube's decors are drawn (3DEXT/DECORS.CPP DecorPoseHook): down and up with the lift
+static void LiftDecors(T_DECORS *list, S32 count) {
+    for (int i = 0; i < s_nbLifts; i++) {
+        if (s_lifts[i].Scene != (S32)NumCube) continue;
+        const S32 y = s_lifts[i].Y + (i == s_lift ? (S32)s_liftOff : 0);
+        for (S32 k = 0; k < count; k++) {
+            T_DECORS *d = &list[k];
+            if ((d->Body & 0xFFFF) != s_lifts[i].Pad || abs(d->Xworld - s_lifts[i].X) > 600 || abs(d->Zworld - s_lifts[i].Z) > 600) continue;
+            d->YMin += y - d->Yworld; d->YMax += y - d->Yworld;
+            d->Yworld = y;
+        }
+    }
+}
+
+static void WheelDecors(T_DECORS *list, S32 count);
+static void RaceDecorPose(T_DECORS *list, S32 count) { WheelDecors(list, count); LiftDecors(list, count); }
+
 // The actors in the way of this weather's road only (actor_at=), put aside as their scene starts: its first frame, after the scripts'
 // own first placing
 static void ActorsAt(void) {
@@ -15117,6 +15212,7 @@ S32 RaceMod_DoorShut(const T_ZONE *zn) {
 void RaceMod_Frame(void) {
     if (!RaceMod_Active()) { IslandCarFrame(); return; }
     ActorsAt();
+    DeckLiftFrame(TimerRefHR);
     RaceCameraKey();
     RaceMusicFrame();
     CarTraceLine();
@@ -17318,6 +17414,7 @@ static void ResetTrack(void) {
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
     s_nbDoorsOff = 0; s_nbActorsAt = 0; s_actorsAtScene = -1;
+    s_nbLifts = 0; s_lift = -1; s_liftDir = 0; s_liftScene = -1; s_liftOff = 0;
     s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = s_chaseDriver = s_chaseCarActor = -1; s_chaseFlipped = 0; s_chaseCarBody = s_chaseCarAnim = -1;
     s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0;

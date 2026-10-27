@@ -293,6 +293,8 @@ internal static class RaceCarEngineFile
         foreach (var d in info?.DoorsOff ?? new()) text.Append($"door_off={d}\n");
         // ... and the actors put aside while it is shown (Result.ActorsAt)
         foreach (var a in info?.ActorsAt ?? new()) text.Append($"actor_at={a}\n");
+        // ... and the lifts on the raised road (Result.DeckLifts)
+        foreach (var lift in info?.DeckLifts ?? new()) text.Append($"deck_lift={lift}\n");
         return text.ToString();
     }
 

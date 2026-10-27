@@ -5481,3 +5481,17 @@ corners where that's quicker".
   still go. Citadel: 25 actors removed (87 before), the cow moved 8 cells off the town circuit.
 - A door shut in one weather's file (door_off=) shuts the way back to its place from the scene it leads to as well: the sewers' ride up
   to the start line's lift, whose platform the storm track's deck took ("causes twinsen to momentarily be up in the air").
+
+## The cow and the bike taxi in their weather, the museum lift a real lift, banks walked on (2026-10-27)
+
+- An actor in the way of one weather's road only stays where it is in the other, its scripts' points untouched, and is put aside
+  (actor_at=) while that weather's file is shown: Citadel Island's cow ("you've moved the cow, even though the rain track goes nowhere
+  near its position"), the bike taxi under the shop's shelter. On an island with two files, actors and points follow the reshaped ground
+  up, never down (Reseat raiseOnly): lowered for one file they stood buried in the other's.
+- The museum lift (deck_lift=, RACEMOD.CPP DeckLift): no door zone -- the action key on the pad takes Twinsen down with it through the
+  road (RACE_LIFT_MS, RACE_LIFT_DROP; its decor moved by DecorPoseHook, now RaceDecorPose for it and the roulette wheel) into the museum;
+  the museum's window brings him onto the pad from below, and it rises with him. His keys held while it moves, standing.
+- Citadel's steep banks (SoftBanks): the island's own ground kept, walled for the cars only -- the blocking bit and game code 10
+  (MAPTOOLS.CPP CJ_CAR_WALL), open to Twinsen on foot (TerrainFootOpen, set by RaceMod_FloorForFoot): he walks on them, the cars still
+  can't climb them.
+- Twinsen placed at a scene's start or back after a clover (OBJECT.CPP) takes the raised road as his floor only a step up, as he walks.

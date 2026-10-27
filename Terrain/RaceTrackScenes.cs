@@ -29,6 +29,8 @@ internal static class RaceTrackScenes
         public List<string>? DoorsOff { get; init; }
         // the actors put aside while one weather's island file is shown, each "<file> <scene> <actor> <x> <y> <z>" (RACEMOD.CPP actor_at=)
         public List<string>? ActorsAt { get; init; }
+        // the lifts on the raised road, each "<scene> <x> <y> <z> <half> <pad body> <to scene> <to x> <to y> <to z>" (RACEMOD.CPP deck_lift=)
+        public List<string>? DeckLifts { get; init; }
     }
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
@@ -391,6 +393,7 @@ internal static class RaceTrackScenes
         var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0; var mushroomsLeftOut = 0;
         var doorsOff = new List<string>();
         var actorsAt = new List<(string File, int Scene, int Actor, int X, int Y, int Z)>();
+        var deckLifts = new List<string>();
         foreach (var t in tracks)
         {
             t.Drivers = t.Options.Racers().Where(d => !d.Ghost).ToList();
@@ -504,6 +507,8 @@ internal static class RaceTrackScenes
                 storyKept.UnionWith(doorKeepers);
                 // (and on an island that keeps them, everything off the road: KeepOffRoadActors)
                 var offRoad = new HashSet<int>();
+                // (the ones put aside in one weather only, by their index before the removals: Result.ActorsAt once those are known)
+                var pendingAt = new List<(int I, string File, int X, int Y, int Z)>();
                 if (options.Island.KeepOffRoadActors)
                     for (var i = 1; i < model.Actors.Count; i++)
                     {
@@ -558,6 +563,23 @@ internal static class RaceTrackScenes
                 {
                     var a = m.Actors[i];
                     var (x, y, z) = (a.X, a.Y, a.Z);
+                    // (in the way of one weather's road only -- Citadel Island's cow, the town circuit through its pasture and the storm track
+                    // nowhere near it: "please put it back along with its scripts of giving Twinsen a clover and talking to Twinsen correctly",
+                    // the user, 2026-10-27 -- it stays where it is, its scripts' points too, and is put aside while that weather's file is shown)
+                    if (tracks.Count == 2)
+                    {
+                        double ax = m.CubeX * 64 + a.X / 512.0, az = m.CubeY * 64 + a.Z / 512.0;
+                        var way = tracks.Select(t => t.Report.InTheWay(ax, az, a.Y, a.Y + 1500)).ToList();
+                        if (way[0] != way[1])
+                        {
+                            var moved = a.Clone();
+                            ShiftOffRoad(moved, m, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, new List<string>());
+                            var file = Path.GetFileNameWithoutExtension(way[0] ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
+                            if (moved.X != a.X || moved.Z != a.Z) pendingAt.Add((i, file, moved.X, moved.Y, moved.Z));
+                            log.Add($"scene {scene}: actor {i} (entity {a.Entity}) is on {file}'s road only: kept where it is, and put aside to ({moved.X},{moved.Y},{moved.Z}) while {file} is shown");
+                            return true;
+                        }
+                    }
                     ShiftOffRoad(a, m, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
                     if (OffRoad(m, i, inTheWay, out _)) return true;
                     if (PointsOffRoad(m, i, inTheWay, report.GroundBefore, groundAfter, report.WasGround, scene, log) && OffRoad(m, i, inTheWay, out _)) return true;
@@ -568,6 +590,7 @@ internal static class RaceTrackScenes
                 foreach (var i in storyKept.Order())
                     if (options.Island.KeptEntities?.Contains(model.Actors[i].Entity) == true && !offRoad.Contains(i))
                         Aside(i);
+                foreach (var p in pendingAt) actorsAt.Add((p.File, scene, p.I - doomed.Count(d => d < p.I), p.X, p.Y, p.Z));
                 var standIn = AddStandIn(model, doomed);
                 foreach (var i in doomed.OrderByDescending(i => i))
                 {
@@ -589,7 +612,7 @@ internal static class RaceTrackScenes
                 var after = own is { Count: > 0 } && report.GroundAfter is { } ownGround
                     ? (x, z) => own.Any(o => (x - o.X) * (x - o.X) + (z - o.Z) * (z - o.Z) <= o.Reach * o.Reach) ? ownGround(x, z) : groundAfter(x, z)
                     : groundAfter;
-                Reseat(model, groundBefore, after, wasGround, scene, log);
+                Reseat(model, groundBefore, after, wasGround, scene, log, raiseOnly: tracks.Count > 1);
             }
             // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
             //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
@@ -834,13 +857,9 @@ internal static class RaceTrackScenes
                 {
                     if ((int)Math.Floor(l.X / 64) != model.CubeX || (int)Math.Floor(l.Z / 64) != model.CubeY) continue;
                     int lx = (int)Math.Round((l.X - model.CubeX * 64) * 512), lz = (int)Math.Round((l.Z - model.CubeY * 64) * 512), ly = (int)Math.Round(l.Y);
-                    model.Zones.Add(new SceneZoneModel
-                    {
-                        Type = 0, Num = l.Scene, Info = new[] { l.ToX, l.ToY, l.ToZ, 0, 0, 0, 0, 1 },
-                        X0 = lx - RaceTrackBuilder.LiftZoneHalf, X1 = lx + RaceTrackBuilder.LiftZoneHalf, Z0 = lz - RaceTrackBuilder.LiftZoneHalf, Z1 = lz + RaceTrackBuilder.LiftZoneHalf,
-                        Y0 = ly - 100, Y1 = ly + 1200,
-                    });
-                    log.Add($"scene {scene}: a lift on the raised road at ({lx},{ly},{lz}): a door zone into scene {l.Scene}");
+                    // (no door zone: the action key on the pad takes Twinsen down with it, the race-track mode's lift -- deck_lift=)
+                    deckLifts.Add($"{scene} {lx} {ly} {lz} {RaceTrackBuilder.LiftZoneHalf} {l.Pad} {l.Scene} {l.ToX} {l.ToY} {l.ToZ}");
+                    log.Add($"scene {scene}: a lift on the raised road at ({lx},{ly},{lz}), down into scene {l.Scene} with the action key");
                     // (and back up: the building's way out by its window -- its door into this scene nearest the place the lift brings him
                     // down to -- brings him onto the road beside the pad. The user, 2026-10-27: "If Twinsen leaves the museum by the window then
                     // the elevator should take him back up and onto the track")
@@ -849,7 +868,8 @@ internal static class RaceTrackScenes
                     var window = inside.Zones.Where(zz => zz.Type == 0 && zz.Num == scene)
                         .MinBy(zz => Math.Pow((zz.X0 + zz.X1) / 2.0 - l.ToX, 2) + Math.Pow((zz.Y0 + zz.Y1) / 2.0 - l.ToY, 2) + Math.Pow((zz.Z0 + zz.Z1) / 2.0 - l.ToZ, 2));
                     if (window is null || window.Info.Length < 3) continue;
-                    window.Info[0] = (int)Math.Round((l.BackX - model.CubeX * 64) * 512); window.Info[1] = ly + 50; window.Info[2] = (int)Math.Round((l.BackZ - model.CubeY * 64) * 512);
+                    // (onto the pad, below the road: the lift brings him up)
+                    window.Info[0] = lx; window.Info[1] = ly; window.Info[2] = lz;
                     changes.Add(new SceneChange(l.Scene, inside, null));
                     log.Add($"scene {l.Scene}: its window's way out into scene {scene} now the lift's: onto the raised road at ({window.Info[0]},{window.Info[1]},{window.Info[2]})");
                 }
@@ -1077,7 +1097,8 @@ internal static class RaceTrackScenes
         var main = tracks[0];
         var off = doorsOff.Count > 0 ? doorsOff : null;
         var putAside = actorsAt.Count > 0 ? actorsAt.Select(a => $"{a.File} {a.Scene} {a.Actor} {a.X} {a.Y} {a.Z}").ToList() : null;
-        return main.Result(log, changes.Count, removed, tracks.Count > 1 ? tracks[1].Result(log, changes.Count, removed) with { DoorsOff = off, ActorsAt = putAside } : null) with { DoorsOff = off, ActorsAt = putAside };
+        var lifts = deckLifts.Count > 0 ? deckLifts : null;
+        return main.Result(log, changes.Count, removed, tracks.Count > 1 ? tracks[1].Result(log, changes.Count, removed) with { DoorsOff = off, ActorsAt = putAside, DeckLifts = lifts } : null) with { DoorsOff = off, ActorsAt = putAside, DeckLifts = lifts };
     }
 
     // The place `back` cells behind the start line along the lap's centre line (the built one: RaceTrackReport.LapX/LapZ), `side` cells
@@ -1700,7 +1721,11 @@ void comportement_1()
         return System.Text.RegularExpressions.Regex.Matches(text, @"pos_point\((\d+)\)").Select(m => int.Parse(m.Groups[1].Value)).Distinct().ToList();
     }
 
-    private static void Reseat(SceneModel model, Func<double, double, double> before, Func<double, double, double> after, Func<double, double, bool> wasGround, int scene, List<string> log)
+    // (`raiseOnly`: an island with a file for each weather sharing the scenes -- what the one file's road lowered is the other's ground still,
+    // and lowered there it stood buried in it: Citadel Island's cow in its pasture, the town circuit's cut through it, under the storm's
+    // ground. Raised only: in the file whose ground is lower it falls onto it)
+    private static void Reseat(SceneModel model, Func<double, double, double> before, Func<double, double, double> after, Func<double, double, bool> wasGround, int scene, List<string> log,
+        bool raiseOnly = false)
     {
         var ox = model.CubeX * 64.0; var oz = model.CubeY * 64.0;
         int Rise(int x, int y, int z)
@@ -1714,13 +1739,13 @@ void comportement_1()
         for (var i = 0; i < model.TrackPoints.Count; i++)
         {
             var p = model.TrackPoints[i]; var d = Rise(p.X, p.Y, p.Z);
-            if (d != 0) { model.TrackPoints[i] = p with { Y = p.Y + d }; moved++; }
+            if (d > 0 || d < 0 && !raiseOnly) { model.TrackPoints[i] = p with { Y = p.Y + d }; moved++; }
         }
         foreach (var a in model.Actors)
         {
             if ((a.Flags & Fallable) == 0 && a != model.Hero) continue;
             var d = Rise(a.X, a.Y, a.Z);
-            if (d != 0) { a.Y += d; moved++; }
+            if (d > 0 || d < 0 && !raiseOnly) { a.Y += d; moved++; }
         }
         if (moved > 0) log.Add($"scene {scene}: {moved} track points and actors moved up or down with the reshaped ground");
     }

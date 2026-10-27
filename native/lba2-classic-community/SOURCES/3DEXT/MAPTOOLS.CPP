@@ -214,6 +214,12 @@ S32	GiveTriangle( S32 x, S32 z )
 // demande si une coor x,z est sur un poly interdit (collision)
 // retourne true ou false
 
+// While Twinsen on foot is moved (a race-track mod: RACEMOD.CPP RaceMod_FloorForFoot), a triangle of game code CJ_CAR_WALL blocks nothing:
+// a bank beside a race track walled for the cars only -- the engine lifts a car up any higher ground it drives into -- that Twinsen walks
+// on (the user, 2026-10-27, Citadel Island: "make it grass terrain and walkable as currently Twinsen slides on it")
+S32	TerrainFootOpen = 0 ;
+#define	CJ_CAR_WALL	10
+
 S32	GiveTerrainCol( S32 x, S32 z )
 {
 	S32	dx,dz;
@@ -237,6 +243,7 @@ S32	GiveTerrainCol( S32 x, S32 z )
 
 	{
 		S32	col = MapPolyGround[IndexMapPolyTested+GiveTriangle(x,z)].Col ;
+		if( col AND TerrainFootOpen AND MapPolyGround[IndexMapPolyTested+GiveTriangle(x,z)].CodeJeu == CJ_CAR_WALL ) col = 0 ;
 
 		return TerrainColHook ? TerrainColHook( x, z, col ) : col ;
 	}
