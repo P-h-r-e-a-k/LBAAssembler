@@ -28,6 +28,7 @@ internal sealed class TrackGeneratorWindow : Window
     public const int MapScale = 3;
     private const double RoadCells = 3;          // a pen's stroke and a section's, half its width (cells): the road's middle is what counts
     private const double SnapCells = 8;          // a section within this of an open end snaps onto it
+    private const double SnapTurn = 70 * Math.PI / 180;   // turning a section this much to snap it weighs as much as moving it SnapCells
     private const double BridgeCells = 14;       // open ends of sections this near are joined when the track is made
 
     private readonly string gameRoot;
@@ -62,13 +63,15 @@ internal sealed class TrackGeneratorWindow : Window
     private readonly ScaleTransform zoom = new(1, 1);
     private readonly Slider penWidth = new() { Minimum = 1, Maximum = 6, Value = RoadCells, Width = 150, TickFrequency = 0.5, IsSnapToTickEnabled = true };
     private readonly List<RadioButton> tools = new();
-    private enum Tool { Road, Jump, Pit, Loop, Eraser, Move }
+    private enum Tool { Road, Jump, Pit, Loop, Eraser, Move, Turn }
     private Tool tool = Tool.Road;
     private readonly List<Placed> placed = new();
     private Section? placing;
     private double placingHeading;
     private Placed? ghost;
     private Placed? dragging;
+    // (Turn: the angle from the section's start to the mouse as it was pressed, and the section's heading then)
+    private double turnFrom, turnHeading;
     private Point dragFrom;
     private Point? lastPen;
     private readonly TextBlock drawHelp = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0), FontSize = 11 };
@@ -213,7 +216,10 @@ internal sealed class TrackGeneratorWindow : Window
         AddTool(bar, "A vertical loop (blue): over the road where it stands", Tool.Loop, SketchKind.Loop);
         AddTool(bar, "The pit lane (orange): beside the road", Tool.Pit, SketchKind.Pit);
         AddTool(bar, "Eraser", Tool.Eraser, SketchKind.None);
-        AddTool(bar, "Move or turn sections", Tool.Move, SketchKind.None);
+        // (the user, 2026-10-27: "I can't seem to turn a section of track when turn is selected, it just moves the track instead" -- one tool
+        // that moved on a drag and turned only on the mouse wheel; now two)
+        AddTool(bar, "Move sections (drag)", Tool.Move, SketchKind.None);
+        AddTool(bar, "Turn sections (drag round; Q / E turn 15°)", Tool.Turn, SketchKind.None);
         var widthRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
         widthRow.Children.Add(new TextBlock { Text = "Pen width ", VerticalAlignment = VerticalAlignment.Center });
         widthRow.Children.Add(penWidth);
@@ -244,7 +250,7 @@ internal sealed class TrackGeneratorWindow : Window
         bar.Children.Add(drawHelp);
         drawHelp.Text = "Draw the road as one line round the island (a lap: back to where it began; a sprint: two ends). Cross it over itself where you " +
                         "like: the build makes a jump there. Pink over the road is a jump, blue a loop; the orange pit lane beside the road, along a straight. " +
-                        "Sections: pick one, then click on the map -- near the open end of a section it snaps on. The mouse wheel turns a section; Ctrl+wheel zooms; " +
+                        "Sections: pick one, then click on the map -- near the open end of a section it snaps on. Q / E or the mouse wheel turn a section; Turn sections turns a placed one by dragging round it; Ctrl+wheel zooms; " +
                         "a right click takes a section away; Esc stops placing. " +
                         "Climbs: the Ramp, Steep and Spiral sections go up and down, and the track then becomes a raised road on piers that can pass over itself " +
                         "(a lap must come back down to where it began). A drawing has no heights: climbs need the track made of sections.";
@@ -371,13 +377,19 @@ internal sealed class TrackGeneratorWindow : Window
         {
             Remember();
             placed.Add(ghost with { });
+            // (the next one turned to go on from this one)
+            placingHeading = ghost.End.Heading;
             RedrawPieces();
             return;
         }
-        if (tool == Tool.Move)
+        if (tool is Tool.Move or Tool.Turn)
         {
             dragging = placed.LastOrDefault(pc => pc.Near(p, RoadCells * MapScale * 2));
-            if (dragging is not null) { Remember(); dragFrom = p; board.CaptureMouse(); }
+            if (dragging is not null)
+            {
+                Remember(); dragFrom = p; board.CaptureMouse();
+                turnFrom = Math.Atan2(p.Y - dragging.Y, p.X - dragging.X); turnHeading = dragging.Heading;
+            }
             return;
         }
         Remember();
@@ -392,7 +404,10 @@ internal sealed class TrackGeneratorWindow : Window
         if (placing is not null) { ghost = Snapped(new Placed(placing, p.X, p.Y, placingHeading), null); RedrawPieces(); return; }
         if (dragging is not null && e.LeftButton == MouseButtonState.Pressed)
         {
-            var moved = dragging with { X = dragging.X + p.X - dragFrom.X, Y = dragging.Y + p.Y - dragFrom.Y };
+            // (turned about its start -- joined there, it stays joined -- by as much as the mouse has gone round it; else moved)
+            var moved = tool == Tool.Turn
+                ? dragging with { Heading = turnHeading + Math.Atan2(p.Y - dragging.Y, p.X - dragging.X) - turnFrom }
+                : dragging with { X = dragging.X + p.X - dragFrom.X, Y = dragging.Y + p.Y - dragFrom.Y };
             var i = placed.IndexOf(dragging);
             if (i >= 0) { placed[i] = moved; dragging = moved; }
             dragFrom = p;
@@ -406,9 +421,9 @@ internal sealed class TrackGeneratorWindow : Window
     {
         if (dragging is not null)
         {
-            // (let go near an open end: snapped onto it)
+            // (let go near an open end: snapped onto it -- moved, not turned: a turned one keeps the way it was turned to)
             var i = placed.IndexOf(dragging);
-            if (i >= 0) placed[i] = Snapped(dragging, dragging);
+            if (i >= 0 && tool == Tool.Move) placed[i] = Snapped(dragging, dragging);
             dragging = null; RedrawPieces();
         }
         lastPen = null;
@@ -439,7 +454,7 @@ internal sealed class TrackGeneratorWindow : Window
             ghost = Snapped(new Placed(placing, e.GetPosition(board).X, e.GetPosition(board).Y, placingHeading), null);
             RedrawPieces(); e.Handled = true;
         }
-        else if (tool == Tool.Move && placed.LastOrDefault(pc => pc.Near(e.GetPosition(board), RoadCells * MapScale * 2)) is { } hit)
+        else if (tool is Tool.Move or Tool.Turn && placed.LastOrDefault(pc => pc.Near(e.GetPosition(board), RoadCells * MapScale * 2)) is { } hit)
         {
             Remember();
             placed[placed.IndexOf(hit)] = hit with { Heading = hit.Heading + turn };
@@ -451,6 +466,24 @@ internal sealed class TrackGeneratorWindow : Window
     {
         if (e.Key == Key.Escape && placing is not null) { StopPlacing(); e.Handled = true; }
         if (e.Key == Key.Z && Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && step == 1) { Undo(); e.Handled = true; }
+        // (Q and E: 15 degrees left and right -- the section being placed, or the one under the mouse)
+        if (step == 1 && e.Key is Key.Q or Key.E && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            var turn = (e.Key == Key.E ? 1 : -1) * Math.PI / 12;
+            var at = Mouse.GetPosition(board);
+            if (placing is not null)
+            {
+                placingHeading += turn;
+                ghost = Snapped(new Placed(placing, at.X, at.Y, placingHeading), null);
+                RedrawPieces(); e.Handled = true;
+            }
+            else if (placed.LastOrDefault(pc => pc.Near(at, RoadCells * MapScale * 2)) is { } hit)
+            {
+                Remember();
+                placed[placed.IndexOf(hit)] = hit with { Heading = hit.Heading + turn };
+                RedrawPieces(); e.Handled = true;
+            }
+        }
     }
 
     // (LBA2_TRACKGEN_SECTIONS="x,y,degrees|name|name|...": those sections placed as the user would place them -- the first at (x, y) turned
@@ -462,8 +495,15 @@ internal sealed class TrackGeneratorWindow : Window
         var at = parts[0].Split(',').Select(v => double.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
         double x = at[0], y = at[1], heading = at[2] * Math.PI / 180;
         var jitter = 0;
-        foreach (var name in parts.Skip(1))
+        foreach (var item in parts.Skip(1))
         {
+            // ("name@x,y,degrees": dropped there, turned so, instead of after the last)
+            var name = item.Split('@')[0];
+            if (item.Contains('@'))
+            {
+                var at2 = item.Split('@')[1].Split(',').Select(v => double.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                x = at2[0]; y = at2[1]; heading = at2[2] * Math.PI / 180;
+            }
             var section = Section.All.First(c => c.Name == name);
             var piece = Snapped(new Placed(section, x + (jitter % 3 - 1) * 4, y + (jitter % 2) * 5, heading + (jitter % 2) * 0.2), null);
             placed.Add(piece);
@@ -475,6 +515,8 @@ internal sealed class TrackGeneratorWindow : Window
     private void StartPlacing(Section s)
     {
         placing = s;
+        // (turned to go on from the last section placed)
+        if (placed.LastOrDefault(p => p.Section.Kind != SketchKind.Pit) is { } last) placingHeading = last.End.Heading;
         tools.First(t => t.IsChecked == true).IsChecked = true;
         board.Cursor = Cursors.Cross;
     }
@@ -486,24 +528,37 @@ internal sealed class TrackGeneratorWindow : Window
     }
 
     // A section near an open end of another (one placed: its start; or its end near another's start): put onto it, as it goes on from there
+    // A section near an open joint of the others snapped onto it, one joint only: its start onto an open end (it goes on from there), or
+    // its end onto an open start (it leads into it) -- dropped by an open start, it leads into it. Of the joints within reach, the one that needs it turned least from the way it is
+    // turned now, and the nearest of those (SnapTurn of turning weighs as much as a snap's reach): the way it is turned says which joint is
+    // meant -- the next section to place starts turned to go on from the last one placed, so it goes on after it (the user,
+    // 2026-10-27: a turned hairpin put to one end of another hairpin snapped on the other way, its start on the other's end, and closed the
+    // two into a circle, both ends joined)
     private Placed Snapped(Placed piece, Placed? self)
     {
         var snap = SnapCells * MapScale;
-        Placed? best = null; var bestD = snap;
-        foreach (var (x, y, heading) in OpenEnds(self))
+        Placed? best = null; var bestScore = double.MaxValue;
+        static double TurnBetween(double a, double b) => Math.Abs(Math.IEEERemainder(a - b, 2 * Math.PI));
+        // (either way round: a piece of road has no way of its own -- dropped with its far end at an open end, it is driven from there, the
+        // way it is turned kept: a left hairpin put that way to a hairpin's end goes on as an S, not round into a circle -- the user, 2026-10-27)
+        foreach (var way in new[] { piece, piece.Flipped() })
         {
-            var d = Math.Sqrt((piece.X - x) * (piece.X - x) + (piece.Y - y) * (piece.Y - y));
-            if (d < bestD) { bestD = d; best = piece with { X = x, Y = y, Heading = heading }; }
-        }
-        if (best is not null) return best;
-        // (its end onto another's open start: placed so it runs into it)
-        foreach (var (x, y, heading) in OpenStarts(self))
-        {
-            var d = Math.Sqrt((piece.End.X - x) * (piece.End.X - x) + (piece.End.Y - y) * (piece.End.Y - y));
-            if (d >= bestD) continue;
-            var turned = piece with { Heading = heading - piece.Section.Turn };
-            var (ex, ey, _) = turned.End;
-            bestD = d; best = turned with { X = turned.X + x - ex, Y = turned.Y + y - ey };
+            void Consider(Placed candidate, double distance)
+            {
+                if (distance >= snap) return;
+                var score = TurnBetween(candidate.Heading, way.Heading) / SnapTurn * snap + distance;
+                if (score < bestScore) { bestScore = score; best = candidate; }
+            }
+            // (its start onto an open end)
+            foreach (var (x, y, heading) in OpenEnds(self))
+                Consider(way with { X = x, Y = y, Heading = heading }, Math.Sqrt((way.X - x) * (way.X - x) + (way.Y - y) * (way.Y - y)));
+            // (its end onto an open start: turned so its end runs into it, moved so it meets it)
+            foreach (var (x, y, heading) in OpenStarts(self))
+            {
+                var turned = way with { Heading = heading - way.Section.Turn };
+                var (ex, ey, _) = turned.End;
+                Consider(turned with { X = turned.X + x - ex, Y = turned.Y + y - ey }, Math.Sqrt((way.End.X - x) * (way.End.X - x) + (way.End.Y - y) * (way.End.Y - y)));
+            }
         }
         return best ?? piece;
     }
@@ -800,6 +855,13 @@ internal sealed class TrackGeneratorWindow : Window
         public SketchKind Kind => Parts.Any(p => p.Kind == SketchKind.Pit) ? SketchKind.Pit : SketchKind.Road;
         public double Turn => Parts.Sum(p => p.Turn);
         public double Rise => Parts.Sum(p => p.Rise);
+        // The same piece of road driven the other way: its parts in the other order, each turning and climbing the other way (a left hairpin
+        // driven backwards is a right one, a ramp up a ramp down)
+        public Section Reversed() => this with
+        {
+            Name = Name.EndsWith(" (reversed)") ? Name[..^11] : Name + " (reversed)",
+            Parts = Parts.Reverse().Select(p => p with { Turn = -p.Turn, Rise = -p.Rise }).ToArray(),
+        };
 
         public static readonly Section[] All =
         {
@@ -875,6 +937,13 @@ internal sealed class TrackGeneratorWindow : Window
                 var s = Strokes(); var last = s[^1].Points[^1];
                 return (last.X, last.Y, Heading + Section.Turn);
             }
+        }
+
+        // The same road, driven from its other end: starting where this ends, the other way
+        public Placed Flipped()
+        {
+            var (ex, ey, eh) = End;
+            return new Placed(Section.Reversed(), ex, ey, eh + Math.PI);
         }
 
         public bool Near(Point p, double within) => Strokes().Any(s => s.Points.Any(q => (q - p).Length < within));

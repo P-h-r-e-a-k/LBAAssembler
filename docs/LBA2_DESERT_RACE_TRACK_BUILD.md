@@ -5313,3 +5313,25 @@ corners where that's quicker".
 - Tested: a lap of sections with a spiral up and a spiral down (LBA2_TRACKGEN_SECTIONS, the UI test) -> 474 cells, a raised road 4054 to
   8851, "passes over itself with room"; built on the Desert island: 119 deck pieces, 38 piers, steepest 15 %, the spiral standing over
   itself in the 3D view. LBA2_TRACKGEN_DUMP=<csv> writes each point's place, climb, height and ground.
+
+## The race track generator: hairpins in a drawing, turning sections, snapping either way round (2026-10-27)
+
+- The user: a lap drawn on Wannies Island "doesn't appear joined up" on page 3 (two pictures); "I can't seem to turn a section of track
+  when turn is selected, it just moves the track instead"; "When attempting to snap a turned section to one end of a piece of track such
+  as a hairpin left, to another hairpin piece it snaps both ends together instead of just the intended one".
+- Drawing: the march looked 50 degrees either side and stopped where nothing lay ahead -- the drawing's two hairpins (the stroke's tip at
+  the top left, the turn over the fortress) were its "ends", a 276-cell sprint. Now, nothing ahead and not at a crossing, it looks round to
+  170 degrees for road not yet gone along (marked 1.4 times the stroke's half width round each step: narrower, the stroke's own edges read
+  as fresh road and it went back round the lap the wrong way); at a crossing never round the corner (the crossing road is fresh too: the
+  Desert test drawing went round its lower half three times) but straight on with a little more room. The user's drawing: a 520-cell lap.
+  Desert 1375, Mosquibees 502, Wannies 461, Volcano 397 as before; Otringal, a sprint before, a 676-cell lap.
+  `ScriptRoundTrip sketchimage <game> <ILE> <picture.bgra> <w> <h> <out>` traces a picture as the generator does (ffmpeg -f rawvideo
+  -pix_fmt bgra makes the raw file from a screenshot).
+- Turning: "Move or turn sections" moved on a drag and turned on the mouse wheel only. Now "Move sections (drag)" and "Turn sections (drag
+  round; Q / E turn 15°)": a drag turns it about its start (a joined start stays joined); Q and E turn the one being placed or the one under
+  the mouse.
+- Snapping: a section snaps by one joint, either way round -- a piece of road has no way of its own (Section.Reversed: its parts in the
+  other order, each turning and climbing the other way; Placed.Flipped) -- its start onto an open end or its end onto an open start, the
+  joint within reach needing it turned least from the way it lies, then the nearest. A left hairpin dropped with its far end at another's
+  end goes on from there as an S; driven the same way as the other it closed into a circle. The next section to place starts turned to go
+  on from the last placed.

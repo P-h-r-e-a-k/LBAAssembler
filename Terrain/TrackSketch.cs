@@ -406,6 +406,18 @@ internal static class TrackSketchTracer
         closed = false;
         double px = x, py = y, hx = dx, hy = dy, travelled = 0;
         var most = (int)(m.Count(v => v) / Math.Max(1.0, step) * 3) + 50;
+        // (the road it has been along: a sharp corner is followed round onto road not yet gone along, a dead end isn't turned back from)
+        var visited = new bool[m.Length];
+        void Visit(double cx0, double cy0)
+        {
+            // (the whole stroke's width and a little: its own edges aren't road not yet gone along -- marked narrower, a turn back
+            // along them read as fresh road and the march went back round the lap the wrong way)
+            var r = half * 1.4;
+            for (var yy = (int)(cy0 - r); yy <= (int)(cy0 + r); yy++)
+                for (var xx = (int)(cx0 - r); xx <= (int)(cx0 + r); xx++)
+                    if (xx >= 0 && yy >= 0 && xx < w && yy < h && (xx - cx0) * (xx - cx0) + (yy - cy0) * (yy - cy0) <= r * r) visited[yy * w + xx] = true;
+        }
+        Visit(px, py);
         for (var n = 0; n < most; n++)
         {
             // (where the road crosses itself the stroke is wider across than a road: there it goes straight on, as near as the road lets
@@ -424,6 +436,41 @@ internal static class TrackSketchTracer
                 var score = crossing ? -Math.Abs(a) : inside + Dt(dt, w, h, px + cx * step, py + cy * step) / Math.Max(1, half) * 0.5 - Math.Abs(a) / 50.0 * 2;
                 if (score > bestScore) { bestScore = score; bx = cx; by = cy; }
             }
+            // (nothing ahead: a sharp corner -- a hairpin, the stroke's own tip where it turns back -- looked for further round, up to
+            // nearly back the way it came, on road not gone along yet; none: the road's end. The user, 2026-10-27: a lap drawn on Wannies
+            // Island with two hairpins was followed as a sprint between them)
+            // (at a crossing: straight on, a little less far and a little more round -- never round the corner onto the crossing road, which
+            // is road not gone along yet too: the Desert lap's crossing sent it round its lower half three times)
+            if (bestScore == double.MinValue && crossing)
+                for (var a = -35.0; a <= 35.0; a += 2.5)
+                {
+                    var r = a * Math.PI / 180;
+                    double cx = hx * Math.Cos(r) - hy * Math.Sin(r), cy = hx * Math.Sin(r) + hy * Math.Cos(r);
+                    var inside = 0;
+                    for (var s = 1; s <= 12; s++) if (On(m, w, h, px + cx * step * 2 * s / 12, py + cy * step * 2 * s / 12)) inside++;
+                    if (inside < 10) continue;
+                    var score = -Math.Abs(a);
+                    if (score > bestScore) { bestScore = score; bx = cx; by = cy; }
+                }
+            if (bestScore == double.MinValue && !crossing)
+                for (var a = 55.0; a <= 170.0 && bestScore == double.MinValue; a += 5)
+                    foreach (var sign in new[] { 1, -1 })
+                    {
+                        var r = sign * a * Math.PI / 180;
+                        double cx = hx * Math.Cos(r) - hy * Math.Sin(r), cy = hx * Math.Sin(r) + hy * Math.Cos(r);
+                        var fresh = 0; var on = 0;
+                        for (var s = 1; s <= 12; s++)
+                        {
+                            double sx = px + cx * step * 2.5 * s / 12, sy = py + cy * step * 2.5 * s / 12;
+                            if (!On(m, w, h, sx, sy)) continue;
+                            on++;
+                            int xi = (int)Math.Round(sx), yi = (int)Math.Round(sy);
+                            if (!visited[yi * w + xi]) fresh++;
+                        }
+                        if (on < 10 || fresh < 7) continue;
+                        var score = Dt(dt, w, h, px + cx * step, py + cy * step) + fresh * 0.2 - a / 30.0;
+                        if (score > bestScore) { bestScore = score; bx = cx; by = cy; }
+                    }
             if (bestScore == double.MinValue) break;
             double qx = px + bx * step, qy = py + by * step;
             if (!crossing)
@@ -445,6 +492,7 @@ internal static class TrackSketchTracer
             travelled += ml;
             px = qx; py = qy;
             pts.Add((px, py));
+            Visit(px, py);
             // (back round to the start, going the way it set off)
             if (travelled > step * 12)
             {

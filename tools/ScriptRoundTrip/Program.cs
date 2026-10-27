@@ -99,6 +99,7 @@ internal static class Program
             "floaters" => FloatersCommand.Run(args),
             "trackmap" => TrackSketchCommand.MapCommand(args),
             "sketchtest" => TrackSketchCommand.Test(args),
+            "sketchimage" => TrackSketchCommand.Image(args),
             "pumpkinf1" => RaceTrackCommand.PumpkinF1(args),
             "templemarshal" => TempleMarshalCommand.Run(args),
             "toytruck" => RaceTrackCommand.ToyTruck(args),

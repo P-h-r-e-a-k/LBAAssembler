@@ -30,6 +30,34 @@ internal static class TrackSketchCommand
         return 0;
     }
 
+    // sketchimage <game> <ILE name> <picture.bgra> <width> <height> <out folder>: a picture drawn on the island's map (raw BGRA -- ffmpeg -i
+    // x.png -f rawvideo -pix_fmt bgra; any size: taken to the map's) traced as the generator traces it -- traced.png and the notes
+    public static int Image(string[] args)
+    {
+        var (island, map) = Map(args[1], args[2].ToUpperInvariant(), MapScale);
+        var pic = File.ReadAllBytes(args[3]); int pw = int.Parse(args[4]), ph = int.Parse(args[5]);
+        var sketch = TrackSketch.FromImage(pic, pw, ph, map.Pixels, map.PixelWidth, map.PixelHeight, MapScale, map.OriginX, map.OriginZ);
+        Console.WriteLine($"{sketch.Kinds.Count(k => k != SketchKind.None)} pixels drawn");
+        var result = TrackSketchTracer.Trace(sketch, island);
+        foreach (var n in result.Notes) Console.WriteLine("  " + n);
+        foreach (var p in result.Problems) Console.WriteLine("  PROBLEM: " + p);
+        Directory.CreateDirectory(args[6]);
+        var traced = (byte[])map.Pixels.Clone();
+        int w = map.PixelWidth, h = map.PixelHeight;
+        for (var i = 0; i < w * h; i++) if (sketch.Kinds[i] != SketchKind.None) { traced[i * 4] = 60; traced[i * 4 + 1] = 160; traced[i * 4 + 2] = 60; }
+        for (var i = 0; i < result.Route.Count; i++)
+        {
+            var (cx, cz) = result.Route[i];
+            int x = (int)((cx - map.OriginX) * MapScale), y = (int)((cz - map.OriginZ) * MapScale);
+            var rad = i == result.Start ? 3 : 1;
+            for (var yy = y - rad; yy <= y + rad; yy++)
+                for (var xx = x - rad; xx <= x + rad; xx++)
+                    if (xx >= 0 && yy >= 0 && xx < w && yy < h) { var o = (yy * w + xx) * 4; traced[o] = 0; traced[o + 1] = 230; traced[o + 2] = 255; }
+        }
+        PngWriter.Write(Path.Combine(args[6], "traced.png"), traced, w, h);
+        return result.Plan is null ? 1 : 0;
+    }
+
     public static int Test(string[] args)
     {
         var game = args[1];
