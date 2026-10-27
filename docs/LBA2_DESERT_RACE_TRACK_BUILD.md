@@ -5101,3 +5101,29 @@ corners where that's quicker".
   floorless raised points under 60 cells long with floor both ends, on one stretch, is drawn by the road's own points (the jump, the
   loops' sideways steps); the guide line only where no raised point of any kind is within three cells at its height (true ground
   stretches); the loop bridging dropped. The raised road's strip eased onto the road's line over 5 cells at each end (a smoothstep).
+
+## Best laps' page 17, the sum of best played back, the picture; restart in qualifying; Citadel 2's checkpoint 8; the camera in a car (2026-10-27)
+
+- The user: "Under "Best Laps" Let's add a new page in at the end of loop so it's page 17 that's a list of each track name, along with a
+  users best time, then at the bottom show the total time to complete all the laps. Also add a button in that generates an image to the
+  clipboard in the format "Track name", "Time", "Car used", along with a sum of best at the bottom of the image"; "If a user selects
+  their sum of best, then play back all track ghosts in order"; "When a user goes through the best laps page, let's have the ghost time
+  shown to be the time of the highest ghost they've unlocked".
+- RACEGAME TimesPage: after the tracks shown (with two or more) the page "All tracks" -- each track's best lap (SmallText: the font drawn
+  at two-thirds), the sum of best (SumOfBest; "(n without a lap)"), Copy as an image. `AllBestPicture` draws a card -- the player's name
+  from GHOST_NAME.TXT, Track name / Time / Car used, the sum -- as wide as the screen allows (up to 800), takes it, saves "Best laps.png"
+  beside the settings (SavePNG reads rows a screen's width apart) and puts it on the clipboard: RACEUPDATE `RaceUpdate_ClipboardImage`,
+  CF_DIB and the PNG as "PNG" (LBA2_NO_CLIPBOARD=1 for tests: the clipboard is the person's at the machine).
+- Enter on the sum of best: `WatchListStart` plays the player's best lap of every track in turn. RACEMOD GhostWatch asks
+  `RaceGame_WatchDone` at the lap's end; non-zero sets s_menuAt, and RaceGame_Menu starts the next track's straight away (no menu shown);
+  choosing anything but Resume from the menu ends the list. Tested: Temple, Polar Island, Citadel 1 in turn.
+- A track's page shows the ghost of the hardest level unlocked there (ghost_beaten: Easy, then Medium, Hard, Extreme).
+- Restart during a qualifying lap ("it starts the race with Twinsen first on the grid"): the qualifying choice went into the race file
+  once (s_qualifyNow, then -1); a restart wrote none and the race file's own put Twinsen on pole. `s_raceQualify` keeps it and Restart
+  uses it again. Tested: Desert, restarted in the qualifying lap -- "a qualifying lap first" again.
+- "Extend checkpoint 8 on Citabau further into the inside of the corner": citadel_track_plan.json `checkpointTweaks`
+  [{number 8, right 4}] -- a right-hand corner, the line's right end 4.7 cells from the racing line; now 10.5 cells right of the
+  road's middle (was 6.5).
+- "Let's add a camera option for Story mode ... Auto when in a car, and classic when out": the Options' camera cycles Classic -> Auto ->
+  Auto camera in a car -> Classic (MENU_LABEL_AUTO_CAMERA_IN_CAR, six languages; cfg AutoCameraInCar). PERSO.CPP's main loop sets
+  FollowCamera from Comportement == C_BUGGY when it is on (FollowCamResetToView on the way in; "[camera] ..." in the log).

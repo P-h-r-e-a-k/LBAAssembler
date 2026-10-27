@@ -12,5 +12,8 @@ int RaceUpdate_Spawn(const char *exeUtf8, const char *installDirUtf8, int manual
 // The same copy started for something else with its window, detached (2026-10-26: the ghosts' "Share my ghosts" and "Import ghosts" --
 // `LBRA-Setup.exe --export-ghosts|--import-ghosts "<ghosts folder>"`): `what` its first argument, `folder` its second. Non-zero: started.
 int RaceUpdate_Tool(const char *exeUtf8, const char *what, const char *folderUtf8);
+// A picture onto the clipboard (2026-10-27: Best laps' "Copy as an image"): `rgb` w x h, 3 bytes a pixel, top row first, as a DIB, and the
+// PNG file at `pngUtf8` (if any) as the clipboard's "PNG" too -- what chat programs paste. Non-zero: put there.
+int RaceUpdate_ClipboardImage(const unsigned char *rgb, int w, int h, const char *pngUtf8);
 
 #endif

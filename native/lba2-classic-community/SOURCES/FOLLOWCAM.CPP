@@ -20,6 +20,9 @@
 /* Settings, read from the cfg and mostly exposed as console cvars. Defaults in
  * FOLLOWCAM_CFG.H. Declared in FOLLOWCAM.H. */
 S32 FollowCamera = FALSE;
+/* The Options' third camera (2026-10-27, the user: "add an option for Auto when in a car, and classic when out"): FollowCamera set each
+   frame by whether Twinsen drives (PERSO.CPP's main loop) */
+S32 FollowCameraInCar = FALSE;
 S32 FollowCamReengageFrames = FOLLOW_CAM_REENGAGE_FRAMES_DEFAULT;
 S32 FollowCamDriftDivisor = FOLLOW_CAM_DRIFT_DIVISOR_DEFAULT;
 S32 FollowCamHDRecompose = FOLLOW_CAM_HD_RECOMPOSE_DEFAULT;

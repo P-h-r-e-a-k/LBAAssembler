@@ -223,6 +223,10 @@ static const T_RG_CAR *s_raceCar = NULL;    // its car (s_cars' or s_grid's)
 static char s_raceWatch[ADELINE_MAX_PATH];  // the ghost it plays back (Best laps' watch; "" a race or a time trial)
 // the race to start: a qualifying lap first (1), none and Twinsen at the back of the grid (0), or as its file says (-1) -- QualifyingPage
 static int s_qualifyNow = -1;
+// ... and the race's own, kept for Restart (2026-10-27, the user: "when we select to "Restart the race" during a qualifying lap, it starts
+// the race with Twinsen first on the grid even though we haven't completed a qualifying lap": the restart wrote no qualifying= line and the
+// race file's own, none, put him on pole)
+static int s_raceQualify = -1;
 static void Introduction(int sp, int trial);
 static int s_raceLevel = -1;                // its difficulty (-1: none, a time trial or a track without levels)
 
@@ -929,6 +933,7 @@ static int StartRace(int sp, int trial, const T_RG_CAR *car, int level, const ch
     Log_Info("[racegame] %s: %s with %s%s%s%s", s->Name, watch ? "its ghost played back" : trial ? "a time trial" : "a race", car ? car->Name : "Twinsen's car",
              level >= 0 && level <= 2 ? ", difficulty " : "", level >= 0 && level <= 2 ? s_levelName[level] : "",
              trial || s_qualifyNow < 0 ? "" : s_qualifyNow ? ", a qualifying lap first" : ", no qualifying: from the back of the grid");
+    s_raceQualify = trial ? -1 : s_qualifyNow;
     s_qualifyNow = -1;
     RaceMod_LoadFile(out);
     // (the first run: the controls and the power-ups before the race -- once)
@@ -1312,6 +1317,203 @@ static int TracksOpen(void) { return s_tracks && s_nbTracks > 0 && (!s_tracksCod
 // A special or track Best laps shows: Track select's only once it is open.
 static int TimesShown(int sp) { return sp >= 0 && sp < s_nbSp && (!s_sp[sp].Track || TracksOpen()); }
 
+// ---- Best laps' last page: every track's best lap, and their sum (2026-10-27) --------------------------------------------------------
+// The user: "Under "Best Laps" Let's add a new page in at the end of loop so it's page 17 that's a list of each track name, along with a
+// users best time, then at the bottom show the total time to complete all the laps. Also add a button in that generates an image to the
+// clipboard in the format "Track name", "Time", "Car used", along with a sum of best at the bottom of the image"; then "If a user selects
+// their sum of best, then play back all track ghosts in order".
+
+// A line two-thirds the font's size (the font has one size: drawn full size where it goes, read back over a colour the text hasn't got,
+// the picture put back, then drawn two-thirds down, nearest pixel -- as RACEMOD.CPP's display lines are). `align`: -1 from x, 0 centred
+// on it, 1 ending at it.
+#define RG_SMALL_NUM 2
+#define RG_SMALL_DEN 3
+#define RG_SMALL_H 40
+static void SmallText(S32 x, S32 y, const char *utf8, S32 colour, int align) {
+    static U8 saved[RG_SMALL_H][1024], drawn[RG_SMALL_H][1024];
+    char buf[256];
+    Label(buf, utf8);
+    const S32 fw = SizeFont(buf) + 4, fh = RG_SMALL_H, sw = fw * RG_SMALL_NUM / RG_SMALL_DEN, sh = fh * RG_SMALL_NUM / RG_SMALL_DEN;
+    const S32 W = (S32)ModeDesiredX, H = (S32)ModeDesiredY;
+    const S32 sx0 = align < 0 ? x : align > 0 ? x - sw : x - sw / 2;
+    S32 px0 = sx0, py0 = y;
+    if (px0 + fw > W) px0 = W - fw;
+    if (py0 + fh > H) py0 = H - fh;
+    if (fw > 1024 || px0 < 0 || py0 < 0) return;
+    const U8 none = (U8)(colour == 1 || colour == 0 ? 2 : 1);
+    for (S32 r = 0; r < fh; r++) {
+        U8 *row = (U8 *)Log + TabOffLine[py0 + r] + px0;
+        memcpy(saved[r], row, (size_t)fw);
+        memset(row, none, (size_t)fw);
+    }
+    ColorFont(BLACK);
+    Font(px0 + 3, py0 + 3, buf);
+    ColorFont(colour);
+    Font(px0, py0, buf);
+    for (S32 r = 0; r < fh; r++) {
+        U8 *row = (U8 *)Log + TabOffLine[py0 + r] + px0;
+        memcpy(drawn[r], row, (size_t)fw);
+        memcpy(row, saved[r], (size_t)fw);
+    }
+    for (S32 r = 0; r < sh; r++) {
+        const S32 dy = y + r;
+        if (dy < 0 || dy >= H) continue;
+        U8 *row = (U8 *)Log + TabOffLine[dy];
+        const U8 *src = drawn[r * RG_SMALL_DEN / RG_SMALL_NUM];
+        for (S32 c = 0; c < sw; c++) {
+            const S32 dx = sx0 + c;
+            const U8 v = src[c * RG_SMALL_DEN / RG_SMALL_NUM];
+            if (v != none && dx >= 0 && dx < W) row[dx] = v;
+        }
+    }
+}
+// ... cut with "..." to no wider than `width` (at its small size)
+static void SmallFitted(S32 x, S32 y, S32 width, const char *utf8, S32 colour, int align) {
+    char text[256], cut[260], probe[256];
+    snprintf(text, sizeof(text), "%s", utf8);
+    snprintf(cut, sizeof(cut), "%s", text);
+    Label(probe, text);
+    size_t n = strlen(text);
+    while (n > 4 && SizeFont(probe) * RG_SMALL_NUM / RG_SMALL_DEN > width) {
+        n--;
+        while (n > 0 && (text[n] & 0xC0) == 0x80) n--;      // (not inside a UTF-8 letter)
+        snprintf(cut, sizeof(cut), "%.*s...", (int)n, text);
+        Label(probe, cut);
+    }
+    SmallText(x, y, cut, colour, align);
+}
+
+// The player's name, as Share my ghosts keeps it (GHOST_NAME.TXT beside the ghosts); "" none
+static void GhostOwnerName(char *out, size_t size) {
+    out[0] = 0;
+    char path[ADELINE_MAX_PATH];
+    GetCfgPath(path, ADELINE_MAX_PATH, "GHOST_NAME.TXT");
+    FILE *f = fopen(path, "r");
+    if (!f) return;
+    if (fgets(out, (int)size, f)) {
+        size_t n = strlen(out);
+        while (n && (out[n - 1] == '\n' || out[n - 1] == '\r' || out[n - 1] == ' ')) out[--n] = 0;
+    }
+    fclose(f);
+}
+
+// The sum of best: every track shown's best lap added up (ms), and how many have none
+static S32 SumOfBest(int *missing) {
+    S32 sum = 0;
+    *missing = 0;
+    for (int sp = 0; sp < s_nbSp; sp++) {
+        if (!TimesShown(sp)) continue;
+        if (s_nbTimes[sp] > 0) sum += s_times[sp][0].Lap;
+        else (*missing)++;
+    }
+    return sum;
+}
+
+// The list drawn in (x0..x1) from y: each track shown, its best lap -- and with `cars`, the car it was driven in (the picture) -- rows
+// `step` apart. The y under the last.
+static S32 AllBestRows(S32 x0, S32 x1, S32 y, S32 step, int cars, S32 nameW = 190) {
+    const S32 timeX = cars ? x0 + 24 + nameW + 84 : x1 - 24, carX = timeX + 22;
+    for (int sp = 0; sp < s_nbSp; sp++) {
+        if (!TimesShown(sp)) continue;
+        char time[24];
+        if (s_nbTimes[sp] > 0) TimeText(time, sizeof(time), s_times[sp][0].Lap);
+        else snprintf(time, sizeof(time), "--:--.--");
+        SmallFitted(x0 + 24, y, cars ? nameW : x1 - x0 - 150, s_sp[sp].Name, LBAWHITE, -1);
+        SmallText(timeX, y, time, s_nbTimes[sp] > 0 ? RG_ORANGE : RG_GREY, 1);
+        if (cars && s_nbTimes[sp] > 0) SmallFitted(carX, y, x1 - 16 - carX, s_times[sp][0].Car, LBAWHITE, -1);
+        y += step;
+    }
+    return y;
+}
+
+// The picture of it (Copy as an image): drawn over the screen, taken, saved as "Best laps.png" beside the settings and put on the
+// clipboard; the page is drawn again after. Non-zero: on the clipboard.
+static int AllBestPicture(void) {
+    const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    // (as wide as the screen gives, up to 800: the tracks' and the cars' names whole)
+    const S32 W = (S32)ModeDesiredX - 16 < 800 ? (S32)ModeDesiredX - 16 : 800, nameW = W >= 740 ? 290 : 190;
+    const S32 x0 = cx - W / 2, x1 = cx + W / 2, y0 = 8 + oy;
+    int shownTracks = 0;
+    for (int sp = 0; sp < s_nbSp; sp++) shownTracks += TimesShown(sp);
+    const S32 step = 20, y1 = y0 + 100 + shownTracks * step + 46;
+    if (x0 < 0 || y1 >= (S32)ModeDesiredY || !Log || !PtrPalNormal) return 0;
+    Page(NULL, 0);
+    ShadeBoxBlk(x0, y0, x1, y1, MENU_SHADE_LVL);
+    DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
+    char name[64], title[128];
+    GhostOwnerName(name, sizeof(name));
+    if (name[0]) snprintf(title, sizeof(title), "%s's best laps", name);
+    else snprintf(title, sizeof(title), "Best laps");
+    Text(cx, y0 + 8, title, RG_ORANGE);
+    SmallText(cx, y0 + 44, "Little Big Halloween Racing Adventure", RG_GREY, 0);
+    SmallText(x0 + 24, y0 + 74, "Track name", RG_GREY, -1);
+    SmallText(x0 + 24 + nameW + 84, y0 + 74, "Time", RG_GREY, 1);
+    SmallText(x0 + 24 + nameW + 106, y0 + 74, "Car used", RG_GREY, -1);
+    const S32 y = AllBestRows(x0, x1, y0 + 100, step, 1, nameW);
+    int missing;
+    const S32 sum = SumOfBest(&missing);
+    char time[24], line[96];
+    TimeText(time, sizeof(time), sum);
+    if (missing) snprintf(line, sizeof(line), "Sum of best  %s  (%d without a lap)", time, missing);
+    else snprintf(line, sizeof(line), "Sum of best  %s", time);
+    Text(cx, y + 6, line, RG_ORANGE);
+    // taken: the box's pixels, through the menus' palette
+    const S32 w = x1 - x0 + 1, h = y1 - y0 + 1;
+    U8 *idx = (U8 *)malloc((size_t)w * h), *rgb = (U8 *)malloc((size_t)w * h * 3);
+    int ok = 0;
+    if (idx && rgb) {
+        for (S32 r = 0; r < h; r++) memcpy(idx + (size_t)r * w, (U8 *)Log + TabOffLine[y0 + r] + x0, (size_t)w);
+        for (S32 i = 0; i < w * h; i++) memcpy(rgb + (size_t)i * 3, PtrPalNormal + idx[i] * 3, 3);
+        char path[ADELINE_MAX_PATH];
+        GetCfgPath(path, ADELINE_MAX_PATH, "Best laps.png");
+        // (SavePNG reads its rows a screen's width apart)
+        U8 *rows = (U8 *)malloc((size_t)ModeDesiredX * h);
+        if (rows) {
+            for (S32 r = 0; r < h; r++) memcpy(rows + (size_t)r * ModeDesiredX, idx + (size_t)r * w, (size_t)w);
+            SavePNG(path, rows, w, h, PtrPalNormal);
+            free(rows);
+        }
+        ok = RaceUpdate_ClipboardImage(rgb, w, h, path);
+        Log_Info("[racegame] Best laps: the sum of best %s as a picture (%d x %d) -- %s, saved as %s", time, (int)w, (int)h,
+                 ok ? "on the clipboard" : "NOT on the clipboard", path);
+    }
+    free(idx);
+    free(rgb);
+    return ok;
+}
+
+// "Watch the sum of best": the player's best lap of every track played back, one after another -- each once (RACEMOD.CPP GhostWatch asks
+// RaceGame_WatchDone at its end), then the next track's.
+static int s_watchList[RG_MAX_ENTRIES], s_watchListN = 0, s_watchListAt = 0, s_watchNext = 0;
+static char s_watchListPath[RG_MAX_ENTRIES][ADELINE_MAX_PATH];
+
+static int WatchListStart(void) {
+    s_watchListN = s_watchListAt = s_watchNext = 0;
+    for (int sp = 0; sp < s_nbSp && s_watchListN < RG_MAX_ENTRIES; sp++) {
+        S32 lap = 0, mine = 1;
+        if (!TimesShown(sp) || !RaceMod_GhostFind(s_sp[sp].Name, 1, s_watchListPath[s_watchListN], ADELINE_MAX_PATH, &lap, NULL, 0, &mine, NULL, 0) || lap <= 0)
+            continue;
+        s_watchList[s_watchListN++] = sp;
+    }
+    Log_Info("[racegame] Best laps: the sum of best played back -- %d track(s) with a best lap of the player's", s_watchListN);
+    if (!s_watchListN) return 0;
+    s_lastSp = s_watchList[0];
+    return StartRace(s_watchList[0], 1, NULL, -1, s_watchListPath[0]);
+}
+
+// RACEMOD.CPP: a ghost played back has come to its lap's end. Non-zero: one of the sum of best's -- the race goes back to the menu, which
+// starts the next (RaceGame_Menu); zero: it goes round again.
+S32 RaceGame_WatchDone(void) {
+    if (!RaceGame_On() || s_watchListN <= 0) return 0;
+    if (s_watchListAt + 1 >= s_watchListN) {
+        Log_Info("[racegame] the sum of best played back: the last track's done");
+        s_watchListN = 0;
+        return 1;
+    }
+    s_watchNext = 1;
+    return 1;
+}
+
 // Best laps (2026-10-25, the user: "Let's simplify the Best laps screen, let's show the users top 5 times for each track. At the bottom have a
 // watch section, where they can either watch their best time, or watch a ghost, and when "Watch ghost" is selected left/right goes from
 // easy/medium/hard in a loop. If the user has the track name selected, then left/right cycle through tracks instead"): the track's five
@@ -1333,6 +1535,10 @@ static int TimesPage(void) {
     while (sp + 1 < s_nbSp && !TimesShown(sp)) sp++;
     int shown = 0;
     for (int i = 0; i < s_nbSp; i++) shown += TimesShown(i);
+    // (and after them, with two or more, the page of every track's best lap: page s_nbSp -- "page 17" with Track select open)
+    const int all = s_nbSp;
+    const int pages = shown + (shown > 1);
+    int copied = 0;                         // (the picture just put on the clipboard: said under the keys till the page changes)
     S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
     S32 x0 = cx - 280, x1 = cx + 280, y0 = 20 + oy, y1 = 466 + oy;
     s_clickWas = Click & 3;
@@ -1359,12 +1565,21 @@ static int TimesPage(void) {
                 levelLap[k] = 0;
                 RaceMod_GhostFind(s_sp[sp].Name, k < 3 ? 3 + k : 7, levelPath[k], ADELINE_MAX_PATH, &levelLap[k], NULL, 0, NULL, NULL, 0);
             }
-            if (!levelLap[level]) for (int k = 0; k < 4; k++) if (levelLap[k]) { level = k; break; }
+            // (the ghost shown: the hardest the player has unlocked on the track -- Easy at first, Medium once Easy is beaten, ... Extreme
+            // once Hard is: the user, 2026-10-27, "let's have the ghost time shown to be the time of the highest ghost they've unlocked")
+            ReadSettings();
+            const int open = s_beaten[sp] < 3 ? s_beaten[sp] : 3;
+            level = -1;
+            for (int k = open; k >= 0 && level < 0; k--) if (levelLap[k]) level = k;
+            if (level < 0) { level = 0; for (int k = 0; k < 4; k++) if (levelLap[k]) { level = k; break; } }
             flag = 1;
         }
-        const int anyGhost = levelLap[0] || levelLap[1] || levelLap[2] || levelLap[3];
-        // (a row there is something on: the track always, the best lap once there is one, a ghost once there is one)
-        const int rowOpen[3] = {1, ownLap > 0, anyGhost};
+        const int anyGhost = sp < s_nbSp && (levelLap[0] || levelLap[1] || levelLap[2] || levelLap[3]);
+        // (a row there is something on: the track always, the best lap once there is one, a ghost once there is one; on the last page the
+        // sum of best -- watched -- and Copy as an image)
+        int missingLaps = 0;
+        const S32 sumOfBest = sp == all ? SumOfBest(&missingLaps) : 0;
+        const int rowOpen[3] = {1, sp == all ? sumOfBest > 0 : ownLap > 0, sp == all ? sumOfBest > 0 : anyGhost};
         if (!rowOpen[row]) row = 0;
         S32 mx, my;
         if (Clicked(&mx, &my)) done = 1;
@@ -1378,11 +1593,12 @@ static int TimesPage(void) {
         }
         // left and right: the track, or the ghost
         const S32 step = Step(&padDir);
-        if (step && row == 0 && shown > 1) {
-            do sp = (sp + step + s_nbSp) % s_nbSp;
-            while (!TimesShown(sp));
+        if (step && row == 0 && pages > 1) {
+            do sp = (sp + step + s_nbSp + 1) % (s_nbSp + 1);
+            while (!(sp == all ? shown > 1 : TimesShown(sp)));
+            copied = 0;
             flag = 1;
-        } else if (step && row == 2) {
+        } else if (step && row == 2 && sp < s_nbSp) {
             for (int k = 1; k <= 4; k++) {
                 const int l = ((level + step * k) % 4 + 4) % 4;
                 if (levelLap[l]) { level = l; break; }
@@ -1396,14 +1612,36 @@ static int TimesPage(void) {
             DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
             Text(cx, y0 + 8, "Best laps", RG_ORANGE);
             // (which of how many: 16 tracks once Track select is open)
-            if (shown > 2) {
+            if (pages > 2) {
                 int at = 0;
-                for (int i = 0; i <= sp && i < s_nbSp; i++) at += TimesShown(i);
+                for (int i = 0; i <= sp && i <= s_nbSp; i++) at += i == all ? shown > 1 : TimesShown(i);
                 char count[32], text[64];
-                snprintf(count, sizeof(count), "%d of %d", at, shown);
+                snprintf(count, sizeof(count), "%d of %d", at, pages);
                 Label(text, count);
                 TextAt(x1 - 16 - SizeFont(text), y0 + 8, text, RG_GREY);
             }
+            if (sp == all) {
+                // the last page: every track's best lap, the sum of best -- Enter watches them all, one after another -- and the picture
+                const S32 allY[3] = {y0 + 44, y0 + 344, y0 + 378};
+                DrawCadre(x0 + 36, allY[row] - 5, x1 - 36, allY[row] + 31, ALL_ANGLES);
+                Text(cx, allY[0], "All tracks", row == 0 ? RG_ORANGE : LBAWHITE);
+                AllBestRows(x0 + 24, x1 - 24, y0 + 80, 16, 0);
+                char time[24], line[96];
+                // (the sum as the page is drawn: the one worked out above was for the page before a left or right)
+                const S32 sumNow = SumOfBest(&missingLaps);
+                TimeText(time, sizeof(time), sumNow);
+                if (missingLaps) snprintf(line, sizeof(line), "Sum of best  %s  (%d without a lap)", time, missingLaps);
+                else snprintf(line, sizeof(line), "Sum of best  %s", time);
+                Text(cx, allY[1], line, row == 1 ? RG_ORANGE : sumNow > 0 ? LBAWHITE : RG_GREY);
+                Text(cx, allY[2], copied > 0 ? "Copied to the clipboard!" : copied < 0 ? "Couldn't copy it" : "Copy as an image",
+                     row == 2 ? RG_ORANGE : sumNow > 0 ? LBAWHITE : RG_GREY);
+                SmallText(cx, y0 + 418, row == 0 ? "Left, right: track    Up, down: choose    Esc: back"
+                                        : row == 1 ? "Enter: watch every best lap, one after another    Esc: back"
+                                                   : "Enter: copy a picture of them    Esc: back", RG_GREY, 0);
+                BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+                goto drawn;
+            }
+            {
             // the rows that can be chosen framed when chosen: the track, the two to watch
             const S32 rowY[3] = {y0 + 44, y0 + 286, y0 + 324};
             DrawCadre(x0 + 36, rowY[row] - 5, x1 - 36, rowY[row] + 31, ALL_ANGLES);
@@ -1442,6 +1680,8 @@ static int TimesPage(void) {
                                                                                    : "Up, down: choose", RG_GREY);
             Text(cx, y0 + 410, row == 0 ? "Esc: back" : "Enter: watch    Esc: back", RG_GREY);
             BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+            }
+        drawn:;
         }
         // (a frame every pass, drawn or not -- a box of it put up again: a present happens only for one -- the mouse's pointer goes with
         // it, and the engine's control socket is served at a present)
@@ -1449,11 +1689,16 @@ static int TimesPage(void) {
         BoxUpdate();
         if (Confirmed()) {
             WaitNoInput();
-            if ((row == 1 && ownLap > 0) || (row == 2 && levelLap[level] > 0)) { watch = row; done = 1; }
+            if (sp == all) {
+                if (row == 1 && sumOfBest > 0) { watch = 3; done = 1; }
+                else if (row == 2 && sumOfBest > 0) { copied = AllBestPicture() ? 1 : -1; flag = 1; }
+            } else if ((row == 1 && ownLap > 0) || (row == 2 && levelLap[level] > 0)) { watch = row; done = 1; }
         } else if (Escaped()) done = 1;
     }
     AsciiMode = FALSE;
     Page(NULL, 0);
+    // (the sum of best: every track's best lap of the player's played back in turn)
+    if (watch == 3) return WatchListStart();
     // (the lap played back: the track's time trial, its car driven along the ghost)
     if (watch && sp < s_nbSp) {
         const char *path = watch == 1 ? ownPath : levelPath[level];
@@ -2770,6 +3015,17 @@ static void CelebratePage(int car) {
 
 S32 RaceGame_Menu(S32 inGame) {
     Read();
+    // (the sum of best played back: a track's best lap over -- the next track's straight on, no menu)
+    if (s_watchNext && s_watchListN > 0) {
+        s_watchNext = 0;
+        s_watchListAt++;
+        const int sp = s_watchList[s_watchListAt];
+        Log_Info("[racegame] the sum of best played back: %d of %d, %s", s_watchListAt + 1, s_watchListN, s_sp[sp].Name);
+        s_lastSp = sp;
+        if (StartRace(sp, 1, NULL, -1, s_watchListPath[s_watchListAt])) { Page(NULL, 0); return RACEGAME_START; }
+        s_watchListN = 0;
+    }
+    // (the menu shown in a played-back list's run -- Esc -- leaves the list where it is: Resume goes on with it; anything else, below, ends it)
     // (a race that has just unlocked a car: the congratulations first, once)
     if (s_celebrate >= 0) {
         const int car = s_celebrate;
@@ -2803,6 +3059,7 @@ S32 RaceGame_Menu(S32 inGame) {
         // (the window resized: the backdrop is made again -- shaded in a race -- and the rows go on it)
         if (select == MENU_RELAYOUT) continue;
         if (select == RG_ID_TRACKS || select == RG_ID_SPECIALS || select == RG_ID_TIMES) lastChosen = (U16)select;
+        if (select != 1000 && select != RG_ID_RESUME && select != MENU_RELAYOUT) s_watchListN = 0;
         switch (select) {
         case 1000:
             if (resume) return 1000;
@@ -2823,6 +3080,8 @@ S32 RaceGame_Menu(S32 inGame) {
         case RG_ID_RESTART:
             // (the race as it was set up: its track, race or time trial, car, difficulty, ghost and laps -- or the ghost played back again)
             Log_Info("[racegame] restart: %s's %s again", s_sp[s_raceSp].Name, s_raceWatch[0] ? "ghost played back" : s_raceTrial ? "time trial" : "race");
+            // (a race restarted as it was chosen: its qualifying lap again, or from the back of the grid again)
+            if (!s_raceTrial && !s_raceWatch[0]) s_qualifyNow = s_raceQualify;
             if (StartRace(s_raceSp, s_raceTrial, s_raceCar, s_raceLevel, s_raceWatch[0] ? s_raceWatch : NULL)) { Page(NULL, 0); return RACEGAME_START; }
             break;
         }

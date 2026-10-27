@@ -14597,6 +14597,12 @@ static void DrawGhost(S32 now, S32 width, S32 height) {
 static void GhostWatch(S32 now) {
     if (!s_ghostWatch || s_ghost.N < 2 || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || NewCube != -1) return;
     const S32 end = s_ghost.P[s_ghost.N - 1].T;
+    // (Best laps' sum of best: each track's lap played back once, then the next track's -- RACEGAME.CPP)
+    if (s_ghostWatchT0 && now - s_ghostWatchT0 > end + RACE_GHOST_WATCH_REST / 2 && !s_menuAt && RaceGame_WatchDone()) {
+        Log_Info("[racemod] ghost: played back -- the next track's (the sum of best)");
+        s_menuAt = now;
+        return;
+    }
     if (!s_ghostWatchT0 || now - s_ghostWatchT0 > end + RACE_GHOST_WATCH_REST) {
         if (s_ghostWatchT0) Log_Info("[racemod] ghost: played back -- round again");
         s_ghostWatchT0 = now; s_ghostAt = 0;

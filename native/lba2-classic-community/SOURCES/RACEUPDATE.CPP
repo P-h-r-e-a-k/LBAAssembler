@@ -8,6 +8,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <cstdlib>
 #include <cwchar>
 
 // A UTF-8 path as a full wide one, its trailing separators off (a "dir\" before a closing quote would escape it). Zero: it can't be.
@@ -85,7 +86,61 @@ int RaceUpdate_Tool(const char *exeUtf8, const char *what, const char *folderUtf
     return 1;
 }
 
+int RaceUpdate_ClipboardImage(const unsigned char *rgb, int w, int h, const char *pngUtf8) {
+    if (!rgb || w <= 0 || h <= 0) return 0;
+    // (tests: LBA2_NO_CLIPBOARD set -- the clipboard is the person's at the machine; the PNG is saved all the same)
+    const char *no = getenv("LBA2_NO_CLIPBOARD");
+    if (no && *no && *no != '0') { Log_Info("[raceupdate] clipboard: a %d x %d picture -- left off it (LBA2_NO_CLIPBOARD)", w, h); return 1; }
+    if (!OpenClipboard(NULL)) return 0;
+    EmptyClipboard();
+    int ok = 0;
+    // the DIB: bottom row first, BGR, rows padded to four bytes
+    const int stride = (w * 3 + 3) & ~3;
+    HGLOBAL dib = GlobalAlloc(GMEM_MOVEABLE, sizeof(BITMAPINFOHEADER) + (SIZE_T)stride * h);
+    if (dib) {
+        BITMAPINFOHEADER *bi = (BITMAPINFOHEADER *)GlobalLock(dib);
+        ZeroMemory(bi, sizeof(*bi));
+        bi->biSize = sizeof(*bi); bi->biWidth = w; bi->biHeight = h; bi->biPlanes = 1; bi->biBitCount = 24; bi->biCompression = BI_RGB;
+        bi->biSizeImage = (DWORD)stride * h;
+        unsigned char *px = (unsigned char *)(bi + 1);
+        for (int y = 0; y < h; y++) {
+            const unsigned char *src = rgb + (size_t)(h - 1 - y) * w * 3;
+            unsigned char *dst = px + (size_t)y * stride;
+            for (int x = 0; x < w; x++) { dst[x * 3] = src[x * 3 + 2]; dst[x * 3 + 1] = src[x * 3 + 1]; dst[x * 3 + 2] = src[x * 3]; }
+        }
+        GlobalUnlock(dib);
+        if (SetClipboardData(CF_DIB, dib)) ok = 1;
+        else GlobalFree(dib);
+    }
+    // the PNG as it was saved
+    wchar_t path[MAX_PATH * 4];
+    if (pngUtf8 && pngUtf8[0] && Wide(pngUtf8, path, MAX_PATH * 4)) {
+        HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+        if (f != INVALID_HANDLE_VALUE) {
+            const DWORD size = GetFileSize(f, NULL);
+            HGLOBAL png = size != INVALID_FILE_SIZE && size > 0 ? GlobalAlloc(GMEM_MOVEABLE, size) : NULL;
+            if (png) {
+                DWORD got = 0;
+                void *p = GlobalLock(png);
+                const BOOL read = ReadFile(f, p, size, &got, NULL);
+                GlobalUnlock(png);
+                const UINT format = RegisterClipboardFormatW(L"PNG");
+                if (!read || got != size || !format || !SetClipboardData(format, png)) GlobalFree(png);
+            }
+            CloseHandle(f);
+        }
+    }
+    CloseClipboard();
+    Log_Info("[raceupdate] clipboard: a %d x %d picture%s", w, h, ok ? "" : " -- not put there");
+    return ok;
+}
+
 #else
+
+int RaceUpdate_ClipboardImage(const unsigned char *rgb, int w, int h, const char *pngUtf8) {
+    (void)rgb; (void)w; (void)h; (void)pngUtf8;
+    return 0;
+}
 
 int RaceUpdate_Exists(const char *pathUtf8) {
     (void)pathUtf8;

@@ -478,7 +478,8 @@ static void BuildCustomMenuText(S32 num, char *string) {
         break;
 
     case MENU_ID_FOLLOW_CAMERA:
-        CopyUtf8ToCp850(string, 256, GetLocalizedMenuLabel(FollowCamera ? MENU_LABEL_AUTO_CAMERA : MENU_LABEL_CLASSIC_CAMERA));
+        CopyUtf8ToCp850(string, 256, GetLocalizedMenuLabel(FollowCameraInCar ? MENU_LABEL_AUTO_CAMERA_IN_CAR
+                                                           : FollowCamera ? MENU_LABEL_AUTO_CAMERA : MENU_LABEL_CLASSIC_CAMERA));
         break;
 
     case MENU_ID_DISPLAY_TEXT:
@@ -3444,7 +3445,15 @@ S32 GereAdvancedOptionsMenu(void) {
             break;
 
         case MENU_ID_FOLLOW_CAMERA:
-            FollowCamera ^= 1;
+            /* Classic -> Auto -> Auto in a car (Classic on foot) -> Classic */
+            if (FollowCameraInCar) {
+                FollowCameraInCar = FALSE;
+                FollowCamera = FALSE;
+            } else if (FollowCamera) {
+                FollowCameraInCar = TRUE;
+            } else {
+                FollowCamera = TRUE;
+            }
             break;
 
         case MENU_ID_VIDEO_SIZE:

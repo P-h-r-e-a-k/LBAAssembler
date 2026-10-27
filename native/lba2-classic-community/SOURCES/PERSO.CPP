@@ -1924,6 +1924,13 @@ restartloop:
                     RestoreTimer();
                 }
 
+                /* (Auto camera in a car: on while Twinsen drives, Classic on foot -- picked up as he gets in or out) */
+                if (FollowCameraInCar AND (Comportement == C_BUGGY) != (FollowCamera != 0)) {
+                    FollowCamera = Comportement == C_BUGGY;
+                    if (FollowCamera)
+                        FollowCamResetToView();
+                    Log_Info("[camera] %s camera: Twinsen %s", FollowCamera ? "Auto" : "Classic", FollowCamera ? "in his car" : "on foot");
+                }
                 if (FollowCamera AND CubeMode == CUBE_EXTERIEUR)
                     UpdateFollowCameraExt();
             }
