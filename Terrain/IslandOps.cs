@@ -333,14 +333,16 @@ internal static class IslandOps
 
         // (`stay`: bodies whose decors stay where they are whatever the ground does -- Otringal's gatehouse over the race track's tunnel;
         // `near`: only the decors whose origin (island world x, z) it accepts -- the ones over the ground an edit will change, so a big island's
-        // thousands of others aren't measured for nothing: the heightmap import)
-        public DecorFollow(IslandFile island, ISet<int>? stay = null, Func<double, double, bool>? near = null)
+        // thousands of others aren't measured for nothing: the heightmap import; `keep`: single decors that stay where they are -- the race
+        // track's door decor, whose inside scene brings Twinsen out at the height the game has it)
+        public DecorFollow(IslandFile island, ISet<int>? stay = null, Func<double, double, bool>? near = null, ISet<IslandDecor>? keep = null)
         {
             this.island = island;
             foreach (var (cx, cz, cube) in CubeCells(island))
                 foreach (var decor in cube.Decors)
                 {
                     if (stay?.Contains(decor.Body & 0xFFFF) == true) continue;
+                    if (keep?.Contains(decor) == true) continue;
                     if (near is not null && !near(cx * (double)IslandFile.CubeSize + decor.X, cz * (double)IslandFile.CubeSize + decor.Z)) continue;
                     if (Altitude(island, cx * IslandFile.CubeSize + decor.X, cz * IslandFile.CubeSize + decor.Z) is not { } y) continue;
                     if (!StandsOnGround(island, cx, cz, decor)) continue;

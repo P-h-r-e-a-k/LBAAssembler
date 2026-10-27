@@ -612,7 +612,12 @@ internal static class RaceTrackScenes
                 var after = own is { Count: > 0 } && report.GroundAfter is { } ownGround
                     ? (x, z) => own.Any(o => (x - o.X) * (x - o.X) + (z - o.Z) * (z - o.Z) <= o.Reach * o.Reach) ? ownGround(x, z) : groundAfter(x, z)
                     : groundAfter;
-                Reseat(model, groundBefore, after, wasGround, scene, log, raiseOnly: tracks.Count > 1);
+                // (not at a door: its decor keeps its height, and the inside scene's way out brings Twinsen up onto it -- the hero's place on
+                // Citadel Island's sewer lift by the storm track's start line, carried up 1,562 by the town circuit's bridge ramp beside it, had
+                // him in the air for a frame coming up in the storm, the user 2026-10-27)
+                const double reach = RaceTrackOptions.DoorDecorReach;
+                Reseat(model, groundBefore, after, wasGround, scene, log, raiseOnly: tracks.Count > 1,
+                    keep: (x, z) => options.DoorBoxes.Any(b => x >= b.X0 - reach && x <= b.X1 + reach && z >= b.Z0 - reach && z <= b.Z1 + reach));
             }
             // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
             //   IF VAR_GAME(74) >= 3   =   0C 0F 4A 03 03 00 ..
@@ -791,20 +796,35 @@ internal static class RaceTrackScenes
                         double bx0 = model.CubeX * 64 + zone.X0 / 512.0, bz0 = model.CubeY * 64 + zone.Z0 / 512.0;
                         double bx1 = model.CubeX * 64 + zone.X1 / 512.0, bz1 = model.CubeY * 64 + zone.Z1 / 512.0;
                         var walled = zone.Info.Length > 5 && (zone.Info[5] & 1) != 0;
-                        bool Lost(Track t) => t.Report.LostDoors.Any(l => Math.Abs(l.X0 - bx0) < 0.01 && Math.Abs(l.Z0 - bz0) < 0.01 && Math.Abs(l.X1 - bx1) < 0.01 && Math.Abs(l.Z1 - bz1) < 0.01);
+                        bool Same((double X0, double Z0, double X1, double Z1) l) => Math.Abs(l.X0 - bx0) < 0.01 && Math.Abs(l.Z0 - bz0) < 0.01 && Math.Abs(l.X1 - bx1) < 0.01 && Math.Abs(l.Z1 - bz1) < 0.01;
+                        bool Lost(Track t) => t.Report.LostDoors.Any(Same);
+                        // (a door buried under one file's raised ground is shut there with or without a wall: its way back out brought
+                        // Twinsen up inside the ground -- Citadel Island's sewer lift by the storm track's start line, under the town
+                        // circuit's bridge ramp in the fine weather)
+                        if (tracks.Where(Lost).All(t => t.Report.BuriedDoors.Any(Same))) walled = true;
                         if (walled && !tracks.All(Lost))
                             foreach (var t in tracks.Where(Lost))
                             {
                                 var file = Path.GetFileNameWithoutExtension(ReferenceEquals(t, tracks[0]) ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
                                 doorsOff.Add($"{file} {scene} {zone.X0} {zone.Z0} {zone.X1} {zone.Z1}");
-                                log.Add($"scene {scene}: door zone {z} (into scene {zone.Num}) shut while {file} is shown -- the lift or building it was the door of went with that file's road");
+                                var buried = t.Report.BuriedDoors.Any(Same);
+                                log.Add($"scene {scene}: door zone {z} (into scene {zone.Num}) shut while {file} is shown -- the lift or building it was the door of " + (buried ? "is under that file's raised ground" : "went with that file's road"));
                                 // (and the way back out of there to this door's place -- a lift's ride up onto a platform that isn't there: Twinsen
                                 // up in the air and dropping to the ground, the user, 2026-10-27, "taking the elevator platform back up from the sewers
                                 // by the track start line causes twinsen to momentarily be up in the air")
+                                // ... not where the door is buried, or where the inside scene's own script takes Twinsen out (a lift's ride
+                                // up, which ends his script for the change of scene): shut, he was left at the top of the shaft for good --
+                                // Citadel Island's sewer lift by the storm track's start line, under the town circuit's bridge ramp in the
+                                // fine weather. He comes out onto the ground there instead
                                 try
                                 {
-                                    if (!store.SceneExists(zone.Num)) continue;
-                                    foreach (var back in store.Load(zone.Num).Zones.Where(bz => bz.Type == 0 && bz.Num == scene && bz.Info.Length >= 3
+                                    if (buried || !store.SceneExists(zone.Num)) continue;
+                                    var inside = store.Load(zone.Num);
+                                    string heroLife;
+                                    try { heroLife = LbaScript.LifeText.Decompile(inside.Hero.Life, 0, LbaScript.NoSymbols.Instance); }
+                                    catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { heroLife = ""; }
+                                    if (heroLife.Contains($"set_change_cube({scene},")) { log.Add($"scene {zone.Num}: its way out to scene {scene}'s door zone {z} stays -- Twinsen's own script rides him out that way"); continue; }
+                                    foreach (var back in inside.Zones.Where(bz => bz.Type == 0 && bz.Num == scene && bz.Info.Length >= 3
                                                  && bz.Info[0] >= zone.X0 - 1536 && bz.Info[0] <= zone.X1 + 1536 && bz.Info[2] >= zone.Z0 - 1536 && bz.Info[2] <= zone.Z1 + 1536))
                                     {
                                         doorsOff.Add($"{file} {zone.Num} {back.X0} {back.Z0} {back.X1} {back.Z1}");
@@ -1725,13 +1745,13 @@ void comportement_1()
     // and lowered there it stood buried in it: Citadel Island's cow in its pasture, the town circuit's cut through it, under the storm's
     // ground. Raised only: in the file whose ground is lower it falls onto it)
     private static void Reseat(SceneModel model, Func<double, double, double> before, Func<double, double, double> after, Func<double, double, bool> wasGround, int scene, List<string> log,
-        bool raiseOnly = false)
+        bool raiseOnly = false, Func<double, double, bool>? keep = null)
     {
         var ox = model.CubeX * 64.0; var oz = model.CubeY * 64.0;
         int Rise(int x, int y, int z)
         {
             var cx = ox + x / 512.0; var cz = oz + z / 512.0;
-            if (!wasGround(cx, cz)) return 0;
+            if (!wasGround(cx, cz) || keep?.Invoke(cx, cz) == true) return 0;
             var b = before(cx, cz); var a = after(cx, cz);
             return Math.Abs(a - b) > 100 && Math.Abs(y - b) < 400 ? (int)Math.Round(a - b) : 0;
         }

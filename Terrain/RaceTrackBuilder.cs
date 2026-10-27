@@ -652,6 +652,8 @@ internal sealed class RaceTrackReport
     // road's deck: the scenes' door zone goes with it (RaceTrackScenes), or walking onto its empty place took Twinsen down into the sewers,
     // and the ride back up straight down again (Citadel Island, by the storm track's start line, 2026-10-27)
     public List<(double X0, double Z0, double X1, double Z1)> LostDoors { get; } = new();
+    // ... of them, the ones whose decor is still there, under the ground the build raised (RaceTrackService.NoteLostDoors)
+    public List<(double X0, double Z0, double X1, double Z1)> BuriedDoors { get; } = new();
     public List<double[]> Arrows { get; } = new();
     // Where the lap crosses itself (island cell coordinates, the height there, the angle between the two roads in degrees).
     public List<(double X, double Z, double Y, double Angle)> Crossings { get; } = new();
@@ -1093,7 +1095,12 @@ internal static class RaceTrackBuilder
         ClearOldTrack(island, options, report);
         DropDecors(island, options, report);
         var adrift = AdriftDecors(island);
-        var follow = new IslandOps.DecorFollow(island, plan.StayPut?.ToHashSet());
+        // (the decor at the island's doors keeps its height: the inside scene's way out brings Twinsen up at the height the game has --
+        // Citadel Island's sewer lift by the start line, its platform carried up 119 with the ground, had him in the air for a frame on the
+        // way back up, the user 2026-10-27)
+        var doorDecors = new HashSet<IslandDecor>(ReferenceEqualityComparer.Instance);
+        foreach (var b in options.DoorBoxes) doorDecors.UnionWith(RaceTrackOptions.DecorsAtDoor(island, b));
+        var follow = new IslandOps.DecorFollow(island, plan.StayPut?.ToHashSet(), keep: doorDecors);
         var keepBodies = plan.KeepBodies;
         // (the huts the road drives through, made after the ground's followers are counted: their parts keep their heights -- the road's
         // middle, where the ground is cut, is their origin -- and kept by the clearing)

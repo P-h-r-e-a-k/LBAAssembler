@@ -19,12 +19,23 @@ internal static class RaceTrackService
 
     // The doors whose decor the build took away, every piece of it (RaceTrackReport.LostDoors)
     // (the pieces it had: the build's own new ones there -- the road's deck over a lift -- are no door)
+    // ... or buried, every piece left of it under the ground the build raised: Citadel Island's sewer lift by the storm track's start line,
+    // under the town circuit's bridge ramp in the fine weather's file
     private static void NoteLostDoors(IslandFile island, List<(double X0, double Z0, double X1, double Z1, double Y0, double Y1)> doors, List<HashSet<IslandDecor>> before, RaceTrackReport report)
     {
-        var still = new HashSet<IslandDecor>(IslandOps.CubeCells(island).SelectMany(c => c.Item3.Decors), ReferenceEqualityComparer.Instance);
+        var at = new Dictionary<IslandDecor, (int X, int Z)>(ReferenceEqualityComparer.Instance);
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            foreach (var d in cube.Decors) at[d] = (cx, cz);
+        bool Standing(IslandDecor d) => at.TryGetValue(d, out var c)
+            && !(IslandOps.Altitude(island, c.X * (double)IslandFile.CubeSize + (d.XMin + d.XMax) / 2.0, c.Z * (double)IslandFile.CubeSize + (d.ZMin + d.ZMax) / 2.0) is { } g && g > d.YMax + BuriedDoor);
         for (var i = 0; i < doors.Count; i++)
-            if (before[i].Count > 0 && !before[i].Any(still.Contains)) report.LostDoors.Add((doors[i].X0, doors[i].Z0, doors[i].X1, doors[i].Z1));
+            if (before[i].Count > 0 && !before[i].Any(Standing))
+            {
+                report.LostDoors.Add((doors[i].X0, doors[i].Z0, doors[i].X1, doors[i].Z1));
+                if (before[i].Any(at.ContainsKey)) report.BuriedDoors.Add((doors[i].X0, doors[i].Z0, doors[i].X1, doors[i].Z1));
+            }
     }
+    private const int BuriedDoor = 256;
 
     // The island's doors into inside scenes, as its scenes have them before any build (RaceTrackOptions.DoorBoxes): each of its outside
     // scenes' cube-change zones to a scene that isn't one of them, in island cells and heights
