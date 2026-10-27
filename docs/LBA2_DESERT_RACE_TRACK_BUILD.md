@@ -5239,3 +5239,16 @@ corners where that's quicker".
   their own tracks; "Save its built-in track as a plan file…" writes the program's own plan for that island (the embedded
   docs/racetrack/*_track_plan.json) to start a new one from, and fills the path in. The build reads a file with the same reader as the
   built-in plans (RaceTrackPlan.Read), so everything a built-in plan can say a file can.
+
+## A sample plan file (2026-10-27)
+
+- The user: "Let's provide a sample plan file so users know what to create".
+- docs/racetrack/sample_track_plan.json: the Desert island's lap in 63 points (every 15th of the built-in plan's 945; the builder spaces
+  and smooths them again), its pit lane, the usual road widths and one checkpoint tweak, with a // comment on each part saying what it
+  is, what is required (originCellX, originCellZ, points) and what else a plan can say. Plans now read with comments and trailing commas
+  allowed (RaceTrackPlan.Read).
+- Embedded in the program (RaceTrackPlan.Sample.json); the race track window's "Sample…" button saves it where the user says, fills in
+  the path, chooses "A plan file" and the Desert island as the track of (when ticked).
+- Tested: `ScriptRoundTrip buildhere <folder> "Desert island" --plan docs/racetrack/sample_track_plan.json` (buildhere's new --plan, as the
+  window's plan file builds) on a copy of the pristine test folder: a 1288-cell lap, its pit lane, 16 checkpoints (the plan's tweak
+  applied), the grid, five opponents' lines; the top view shows the road round the island as the built-in lap.

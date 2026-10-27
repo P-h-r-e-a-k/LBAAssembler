@@ -331,7 +331,8 @@ internal sealed class RaceTrackPlan
 
     public static RaceTrackPlan Read(Stream stream)
     {
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        // (comments and trailing commas allowed: a plan file written by hand -- docs/racetrack/sample_track_plan.json explains itself in them)
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
         try { return JsonSerializer.Deserialize<RaceTrackPlan>(stream, options) ?? throw new InvalidDataException("The plan is empty."); }
         catch (JsonException error) { throw new InvalidDataException($"The plan is not a race track plan: {error.Message}", error); }
     }

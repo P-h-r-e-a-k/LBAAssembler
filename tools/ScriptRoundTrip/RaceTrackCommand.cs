@@ -110,17 +110,23 @@ internal static class RaceTrackCommand
         return 0;
     }
 
-    // buildhere <game folder> <island>...: the islands' tracks built into the folder as it is -- as the race track window's Build does, its
+    // buildhere <game folder> <island>... [--plan <file>]: the islands' tracks built into the folder as it is -- as the race track window's Build does, its
     // backups and all (2026-10-06: Polar Island at twice its size over a folder with the earlier island and its track)
     public static int BuildHere(string[] args)
     {
         var game = args[1];
+        // (--plan <file>: the first island's track from a plan file, as the window's "A plan file" builds it)
+        var at = Array.IndexOf(args, "--plan");
+        var planFile = at > 0 && at + 1 < args.Length ? args[at + 1] : null;
+        var names = args.Skip(2).Where((a, i) => at < 0 || (i + 2 != at && i + 2 != at + 1)).ToList();
         // (the story on for Citadel Island only, as the window has it -- RaceTrackWindow)
-        var tracks = args.Skip(2).Select(RaceTrackIsland.ByName).Select(where =>
+        var tracks = names.Select(RaceTrackIsland.ByName).Select((where, i) =>
         {
             var options = RaceTrackOptions.For(where);
             options.Story = options.Story && where.IleFile == RaceTrackIsland.Citadel.IleFile;
-            return new RaceTrackService.TrackBuild(RaceTrackPlan.Built(where), options);
+            var plan = planFile is not null && i == 0 && !where.RacesTwin ? RaceTrackPlan.Load(planFile) : RaceTrackPlan.Built(where);
+            var twin = planFile is not null && i == 0 && where.RacesTwin ? RaceTrackPlan.Load(planFile) : null;
+            return new RaceTrackService.TrackBuild(plan, options, twin);
         }).ToList();
         var result = RaceTrackService.Build(game, tracks);
         Console.WriteLine(result.Summary);

@@ -29,6 +29,8 @@ internal sealed class RaceTrackWindow : Window
     // and the island's built-in track saved as a plan file, to start one from. Until 2026-10-27 a plan file wanted its island ticked alone,
     // and with every island ticked the option was greyed with nothing to say why)
     private readonly ComboBox planIsland = new() { MinWidth = 260, Margin = new Thickness(6, 0, 0, 0), IsEnabled = false };
+    private readonly Button sampleButton = new() { Content = "Sample…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0),
+        ToolTip = "Save a sample plan file -- the Desert island's lap, with a comment on every part saying what it is -- to see what a plan is, change and build from" };
     private readonly Button saveBuiltIn = new() { Content = "Save its built-in track as a plan file…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0), IsEnabled = false,
         ToolTip = "The track built into the program for the island chosen, as a plan file to change and build from" };
     private readonly CheckBox removeActors = new() { Content = "Remove the actors of the island's outside scenes, except Twinsen, the buggy and those the travel cutscenes need", IsChecked = true, ToolTip = "The engine's hidden Zoe placeholder in slot 1 stays (the buggy needs that slot), and so do the ferry, the Dino-Fly and the actors Twinsen's own script waits on in the cutscenes of arriving, leaving and the game's ending." };
@@ -76,6 +78,7 @@ internal sealed class RaceTrackWindow : Window
         filePlan.Checked += (_, _) => PlanChoiceChanged();
         browseButton.Click += (_, _) => Browse();
         saveBuiltIn.Click += (_, _) => SaveBuiltIn();
+        sampleButton.Click += (_, _) => SaveSample();
         planIsland.SelectionChanged += (_, _) => PlanChoiceChanged();
         buildButton.Click += async (_, _) => await BuildAsync();
         restoreButton.Click += (_, _) => Restore();
@@ -194,8 +197,8 @@ internal sealed class RaceTrackWindow : Window
         root.Children.Add(Section("The track"));
         root.Children.Add(builtInPlan);
         var fileRow = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
-        DockPanel.SetDock(browseButton, Dock.Right);
-        fileRow.Children.Add(filePlan); fileRow.Children.Add(browseButton); fileRow.Children.Add(planPath);
+        DockPanel.SetDock(browseButton, Dock.Right); DockPanel.SetDock(sampleButton, Dock.Right);
+        fileRow.Children.Add(filePlan); fileRow.Children.Add(sampleButton); fileRow.Children.Add(browseButton); fileRow.Children.Add(planPath);
         filePlan.Margin = new Thickness(0, 0, 8, 0);
         root.Children.Add(fileRow);
         var forRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 4, 0, 0) };
@@ -232,6 +235,27 @@ internal sealed class RaceTrackWindow : Window
     {
         var file = filePlan.IsChecked == true && filePlan.IsEnabled;
         planPath.IsEnabled = file; browseButton.IsEnabled = file; planIsland.IsEnabled = file; saveBuiltIn.IsEnabled = file && planIsland.SelectedItem is not null;
+    }
+
+    // The sample plan file (docs/racetrack/sample_track_plan.json: the Desert island's lap in 63 points, each part commented) saved where the
+    // user says, its path filled in -- and, the Desert island ticked, it the island the file is the track of
+    private void SaveSample()
+    {
+        var dialog = new SaveFileDialog { Title = "Save the sample plan file", Filter = "Race track plan (*.json)|*.json", FileName = "sample_track_plan.json" };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            using (var stream = typeof(RaceTrackPlan).Assembly.GetManifestResourceStream("RaceTrackPlan.Sample.json") ?? throw new InvalidDataException("This build of the program has no sample plan."))
+            using (var file = File.Create(dialog.FileName)) stream.CopyTo(file);
+            planPath.Text = dialog.FileName;
+            if (filePlan.IsEnabled) filePlan.IsChecked = true;
+            foreach (ComboBoxItem item in planIsland.Items) if (item.Tag == RaceTrackIsland.Desert) planIsland.SelectedItem = item;
+            status.Text = $"The sample plan is saved as {dialog.FileName}: open it in a text editor to see what each part of a plan is. With the Desert island ticked and it chosen as the track of, Build builds it.";
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"The sample can't be saved: {error.Message}", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private RaceTrackIsland? PlanIsland() => planIsland.SelectedItem is ComboBoxItem { Tag: RaceTrackIsland island } ? island : null;
