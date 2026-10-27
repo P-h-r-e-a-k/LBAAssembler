@@ -527,6 +527,9 @@ static double s_pullS = 0, s_pullLat = 0, s_pullAcc = 0, s_pullFrom = 0;
 static S32 s_pullAt = 0, s_pullX = 0, s_pullY = 0, s_pullZ = 0, s_pullBeta = 0;
 #define RACE_PULL_BRAKE (14 * 512.0)       // it brakes this far before Twinsen
 #define RACE_PULL_SIDE (1.8 * 512.0)       // and stops on its own line, or this far to his side where he stands on it
+#define RACE_PULL_NEAR (7.5 * 512.0)       // only for Twinsen on the road: this near its line, across (it keeps to one side of a wide straight)
+#define RACE_PULL_LEVEL 600                // ... and at its height (not under the raised road, nor the car over him in a jump)
+#define RACE_PULL_TALK (7.5 * 512.0)       // its driver speaks to him stopped this near him
 #define RACE_PULL_WAIT_MS 700              // after its driver's line, this long before it rolls on
 #define RACE_PULL_ROLL_MS 2600             // the roll to its park
 #define RACE_PULL_SKID_USER 0xFD           // the squeal's PlaySample user handle: RACE_SOUND_USER + this
@@ -4926,11 +4929,19 @@ void RaceMod_Story(void) {
     // (the parade car pulled up beside Twinsen: its driver's line -- parade_stop=; said from the car)
     if (s_pullSay && NewCube == -1) {
         s_pullSay = 0;
-        NumObjDial = (U8)(s_paradeActorNow > 0 && s_paradeActorNow < NbObjets ? s_paradeActorNow : NUM_PERSO);
-        Log_Info("[racemod] parade: the driver says text %d", s_paradeStopText);
-        Dial(s_paradeStopText, TRUE);
-        s_wantFlip = 1;
-        s_pullAt = TimerRefHR;
+        // (and still near him, both on the road: walked off while it braked, it laps on)
+        const T_OBJET *car = s_paradeActorNow > 0 && s_paradeActorNow < NbObjets ? &ListObjet[s_paradeActorNow] : NULL, *hero = &ListObjet[NUM_PERSO];
+        if (!car || (double)(car->Obj.X - hero->Obj.X) * (car->Obj.X - hero->Obj.X) + (double)(car->Obj.Z - hero->Obj.Z) * (car->Obj.Z - hero->Obj.Z) > RACE_PULL_TALK * RACE_PULL_TALK
+            || abs(car->Obj.Y - hero->Obj.Y) > RACE_PULL_LEVEL) {
+            s_pull = 1;
+            Log_Info("[racemod] parade: Twinsen walked off the road -- the car laps on");
+        } else {
+            NumObjDial = (U8)(s_paradeActorNow > 0 && s_paradeActorNow < NbObjets ? s_paradeActorNow : NUM_PERSO);
+            Log_Info("[racemod] parade: the driver says text %d", s_paradeStopText);
+            Dial(s_paradeStopText, TRUE);
+            s_wantFlip = 1;
+            s_pullAt = TimerRefHR;
+        }
     }
     // (the wake line, if the waking scene's actor has said nothing since Twinsen woke up: RaceMod_Dial says it before her first line)
     if (s_pendWakeScene >= 0 && NewCube == -1) {
@@ -5861,9 +5872,13 @@ static void ParadeStep(S32 now, S32 dt) {
             }
             double ahead = o->Cum[best] - s_paradeS;
             if (ahead < 0) ahead += o->Length;
-            if (ahead < RACE_PULL_BRAKE && ahead > 256 && s_paradeSpeed > 0) {
-                double px, pz, py, pv, fx, fz;
-                PathAt(o, o->Cum[best], &px, &pz, &py, &pv, &fx, &fz);
+            // (Twinsen on the road, by the car's line at its height: the user, 2026-10-27, "Raph talking at Twinsen from here mid-jump is
+            // probably a little far away, especially when Twinsen wasn't on the track, let's limit Raph talking to Twinsen when Twinsen's
+            // actually in close proximity to Raph and they're both on the track")
+            double px, pz, py, pv, fx, fz;
+            PathAt(o, o->Cum[best], &px, &pz, &py, &pv, &fx, &fz);
+            const int onRoad = bd < RACE_PULL_NEAR * RACE_PULL_NEAR && fabs(py - hero->Obj.Y) < RACE_PULL_LEVEL;
+            if (onRoad && ahead < RACE_PULL_BRAKE && ahead > 256 && s_paradeSpeed > 0) {
                 const double fl = sqrt(fx * fx + fz * fz) > 0 ? sqrt(fx * fx + fz * fz) : 1;
                 const double across = ((hx - px) * fz - (hz - pz) * fx) / fl;          // (to the right of the way it runs)
                 s_pullS = o->Cum[best];

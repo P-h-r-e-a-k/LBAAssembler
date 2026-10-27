@@ -2526,6 +2526,14 @@ HERCULE( HPrintf( "errno= %d: %s\n", errno, strerror(errno) ) ) ;
         case LM_ECLAIR: // Eclair n/10s
             num = *PtrPrg++;
 
+            // (no lightning on Citadel Island in a race-track mod's weather once the storm is over: its storm's actors, which go from
+            // chapter 2 on, still ran in the earlier chapters it is raced in -- the user, 2026-10-27, "Our Citabau track still has
+            // lightning even though the rain is stopped")
+            if (Island == 0 AND RaceMod_FineWeather()) {
+                Log_Info("[life] obj=%d: lightning left out, the storm is over (race-track mod)", (int)numobj);
+                break;
+            }
+
             n = InitIncrustDisp(INCRUST_ECLAIR, 0, 0, 0, 0, 0, 1);
 
             if (n != -1) {

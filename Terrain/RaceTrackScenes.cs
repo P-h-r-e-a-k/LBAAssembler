@@ -537,8 +537,11 @@ internal static class RaceTrackScenes
                                  && PointsOffRoad(model, i, inTheWay, report.GroundBefore, groundAfter, report.WasGround, scene, log)) offRoad.Add(i);
                         // (one seen -- a body, not hidden -- that stands on the road: moved aside, its way's points with it, and kept: Citadel
                         // Island's cow in its pasture, the town circuit through it -- the user, 2026-10-27, "The cow is still missing from the
-                        // citadel track". The hidden ones on the road -- a script's helpers -- still go)
-                        else if (onIt?.StartsWith("it stands on the road") == true && model.Actors[i].Body >= 0 && (model.Actors[i].Flags & 0x200) == 0
+                        // citadel track". The hidden ones on the road -- a script's helpers, with no body -- still go; one hidden with a body
+                        // of its own shows up later: Felix's crab, which he fishes up and which then walks about -- gone, his rod threw the
+                        // stand-in under the ground, the user, 2026-10-27)
+                        else if (onIt?.StartsWith("it stands on the road") == true && model.Actors[i].Body >= 0
+                                 && ((model.Actors[i].Flags & 0x200) == 0 || model.Actors[i].Body > 0)
                                  && MovedOffRoad(model, i)) offRoad.Add(i);
                         else log.Add($"scene {scene}: actor {i} (entity {model.Actors[i].Entity}) goes -- {onIt}");
                     }
