@@ -123,6 +123,7 @@ internal static class Program
             // hqrentry <file.hqr> <index> <out>: one entry, uncompressed, to a file
             "hqrentry" => HqrEntry(args[1], int.Parse(args[2]), args[3]),
             "lba1lit" => Lba1Lit(args.Length > 1 ? int.Parse(args[1]) : 0),
+            "extent" => Extent(int.Parse(args[1]), int.Parse(args[2])),
             "winding" => Winding(game, args.Length > 2 ? int.Parse(args[2]) : 0, args.Length > 3 ? int.Parse(args[3]) : 20),
             _ => 2,
         };
@@ -191,6 +192,17 @@ internal static class Program
         using var bmp = Renderer.Render(model, Generator.Palette(folder), 600, 600, yaw, false, background: Color.FromArgb(40, 60, 90));
         bmp.Save(output, ImageFormat.Png);
         Console.WriteLine($"{output}: {hqr}[{index}]");
+        return 0;
+    }
+
+    // extent <game> <body>: a body's size as it stands (its points' world box), bones, polygons -- for scaling one game's body to the other's
+    private static int Extent(int game, int body)
+    {
+        var model = Body.Read(new Hqr(Generator.BodyArchive(Folder(game))).Read(body), game, allowStatic: true);
+        var w = model.World();
+        Console.WriteLine($"game {game} body {body}: x {w.Min(v => v.X):0}..{w.Max(v => v.X):0}  y {w.Min(v => v.Y):0}..{w.Max(v => v.Y):0}  z {w.Min(v => v.Z):0}..{w.Max(v => v.Z):0}; " +
+                          $"{model.Bones.Count} bones, {model.Faces.Count} polygons, {model.Lines.Count} lines, {model.Spheres.Count} spheres; materials " +
+                          string.Join(",", model.Faces.GroupBy(f => f.Material).Select(g => $"{g.Key}x{g.Count()}")));
         return 0;
     }
 

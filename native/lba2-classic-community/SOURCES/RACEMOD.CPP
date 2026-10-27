@@ -14629,8 +14629,64 @@ static void GhostWatch(S32 now) {
     s_watchPose.Alpha = alpha; s_watchPose.Beta = beta; s_watchPose.Gamma = gamma; s_watchPose.Body = body; s_watchPose.Anim = anim;
 }
 
+// ---- an island's own car outside a race (2026-10-27, the user: LBA1's digger "should then be used in Polar Island in story mode instead of
+// Twinsen's car"): ISLANDCARS.TXT in the game folder (LBA Assembler's build writes it: RaceTrackCharacterCars.InstallDigger), lines
+// "island_car=<island> <body> <animation> <acceleration %>" -- on that island, with no race on, Twinsen's car is drawn as that body (the
+// racer's driving animation, as drive_as= draws a car in a race: DrawDriveAs), driving or parked, and it picks up speed at that share of
+// the buggy's (BUGGY.CPP: RaceMod_StoryAccel).
+static void DrawDriveAsOn(S32 now, const T_OBJET *hero);
+#define RACE_MAX_ISLAND_CARS 8
+static struct { int Island, Body, Anim, Accel; } s_islandCars[RACE_MAX_ISLAND_CARS];
+static int s_nbIslandCars = -1, s_islandParked = 0;
+static int IslandCar(void) {
+    if (s_nbIslandCars < 0) {
+        s_nbIslandCars = 0;
+        char path[ADELINE_MAX_PATH];
+        GetResPath(path, ADELINE_MAX_PATH, "ISLANDCARS.TXT");
+        if (FILE *f = fopen(path, "r")) {
+            char line[256];
+            while (fgets(line, sizeof(line), f) && s_nbIslandCars < RACE_MAX_ISLAND_CARS) {
+                int island, body, anim, accel = 100;
+                if (sscanf(line, "island_car=%d %d %d %d", &island, &body, &anim, &accel) >= 3) {
+                    s_islandCars[s_nbIslandCars].Island = island; s_islandCars[s_nbIslandCars].Body = body;
+                    s_islandCars[s_nbIslandCars].Anim = anim; s_islandCars[s_nbIslandCars].Accel = accel;
+                    Log_Info("[racemod] island %d's own car: body %d (animation %d), %d%% of the buggy's acceleration", island, body, anim, accel);
+                    s_nbIslandCars++;
+                }
+            }
+            fclose(f);
+        }
+    }
+    for (int i = 0; i < s_nbIslandCars; i++) if (s_islandCars[i].Island == Island) return i;
+    return -1;
+}
+S32 RaceMod_StoryAccel(void) {
+    if (RaceMod_Active()) return 100;
+    const int c = IslandCar();
+    return c >= 0 ? s_islandCars[c].Accel : 100;
+}
+// Every frame with no race on (RaceMod_Frame): Twinsen's car hidden on its island -- him in it, driving; or it parked -- the island's car
+// drawn in its place (IslandCarDraw).
+static void IslandCarFrame(void) {
+    const int c = IslandCar();
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const int outside = CubeMode == CUBE_EXTERIEUR && NewCube == -1;
+    const int driving = c >= 0 && outside && Comportement == C_BUGGY;
+    if (driving) { hero->Flags |= INVISIBLE; s_heroHidden = 1; }
+    else if (s_heroHidden) { hero->Flags &= ~INVISIBLE; s_heroHidden = 0; }
+    s_islandParked = c >= 0 && outside && !driving && IsBuggyPresent() && NUM_BUGGY < NbObjets;
+    if (s_islandParked) ListObjet[NUM_BUGGY].Flags |= INVISIBLE;
+    if (c >= 0) { s_driveBody = s_islandCars[c].Body; s_driveAnim = s_islandCars[c].Anim; s_driveSmall = -1; s_driveSmallNow = 0; }
+    else if (s_nbIslandCars > 0 && !RaceMod_Active()) s_driveBody = -1;
+}
+static void IslandCarDraw(void) {
+    if (IslandCar() < 0 || s_driveBody < 0 || CubeMode != CUBE_EXTERIEUR) return;
+    if (s_heroHidden) DrawDriveAsOn(TimerRefHR, &ListObjet[NUM_PERSO]);
+    else if (s_islandParked) DrawDriveAsOn(TimerRefHR, &ListObjet[NUM_BUGGY]);
+}
+
 void RaceMod_Frame(void) {
-    if (!RaceMod_Active()) return;
+    if (!RaceMod_Active()) { IslandCarFrame(); return; }
     RaceCameraKey();
     RaceMusicFrame();
     CarTraceLine();
@@ -15097,9 +15153,13 @@ static void DrawSuperJet(S32 now) {
 // The car Twinsen drives as (drive_as=), in his car's place -- hidden: the frame's update -- with the opponents' driving animation, facing
 // his car's way and pitched with the way it climbs or falls (the slope it has just driven, smoothed), drawn after the scene's objects
 // as the super jet-pack is.
+static void DrawDriveAsOn(S32 now, const T_OBJET *hero);
 static void DrawDriveAs(S32 now) {
     if (!s_heroHidden || s_superShown || s_driveBody < 0 || s_driveAnim < 0 || CubeMode != CUBE_EXTERIEUR || InsideView() || s_ghostWatch) return;
-    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    DrawDriveAsOn(now, &ListObjet[NUM_PERSO]);
+}
+// ... the car drawn where `hero` is (Twinsen, or his car parked: an island's own car outside a race, IslandCarDraw)
+static void DrawDriveAsOn(S32 now, const T_OBJET *hero) {
     const int body = s_driveSmallNow && s_driveSmall >= 0 ? s_driveSmall : s_driveBody;
     if (s_driveShown != body) {
         if (!GivePtrBody(body) || !GivePtrAnim(s_driveAnim)) { Log_Info("[racemod] drive_as: no body %d or animation %d", body, s_driveAnim); s_driveBody = -1; return; }
@@ -16511,7 +16571,8 @@ void RaceMod_MinimapHide(S32 hide) {
 
 void RaceMod_Draw(void) {
     s_mapAtX = -1;                          // (the mini-map not on this frame's picture until DrawMinimap puts it there)
-    if (!RaceMod_Active() || !LbaFont) return;
+    if (!RaceMod_Active()) { IslandCarDraw(); return; }
+    if (!LbaFont) return;
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
     const int items = s_powerups && s_nbMush > 0 && !s_trial && !Qualifying();
     // (the display off -- hud=0 -- and no items: no display, but the scene's own drawn things all the same -- the car Twinsen drives as,

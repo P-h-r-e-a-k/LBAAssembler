@@ -5127,3 +5127,26 @@ corners where that's quicker".
 - "Let's add a camera option for Story mode ... Auto when in a car, and classic when out": the Options' camera cycles Classic -> Auto ->
   Auto camera in a car -> Classic (MENU_LABEL_AUTO_CAMERA_IN_CAR, six languages; cfg AutoCameraInCar). PERSO.CPP's main loop sets
   FollowCamera from Comportement == C_BUGGY when it is on (FollowCamResetToView on the way in; "[camera] ..." in the log).
+
+## LBA1's digger on Polar Island, and the grobo with its key (2026-10-27)
+
+- The user: "Let's pull the digger vehicle from LBA1 into LBA2, this vehicle is featured on Polar Island and Twinsen rides in it, let's
+  give it the same stats as Twinsen's buggy, but make the acceleration slightly worse"; "This car should then be used in Polar Island in
+  story mode instead of Twinsen's car"; "We also need to pull across the grobo character that gives Twinsen the key to the tractor into
+  Polar Island near the start line. LBA2 already has grobo's so we could base it on one of those and change the clothing".
+- The digger: LBA1's BODY.HQR 130 ("Bulldozer", the Tractor entity 80's body; LBA1 and LBA2 bodies share one scale and facing --
+  Twinsen measures the same in both). RaceTrackCharacterCars.BuildDigger puts it as it stands on the racer's hull bone, each colour
+  moved to the LBA2 ramp nearest its own ramp (Lba1ToLba2Colours: bank to bank, so a lit polygon runs a ramp of its hue; LBA1's gold
+  has no match in LBA2 and comes out ochre), the wheels' bones a point each, Twinsen in the cab behind the windscreen. Race car 225 of
+  RACECARS.JSON, the racer entity's body 69 (InstallDigger, after the monsters'), LBRA's car grid at 2 / 2.5 / 2.5 (the Halloween
+  buggy's 2.5 / 2.5 / 2.5, slower away).
+- Outside a race: ISLANDCARS.TXT ("island_car=<island> <body> <anim> <accel %>", RaceTrackCharacterCars.SetIslandCar; the race build
+  and Tools > Polar Island write it). RACEMOD IslandCarFrame / IslandCarDraw (RaceMod_Frame and RaceMod_Draw with no race on): on that
+  island Twinsen and his car hidden -- him driving, or it parked (NUM_BUGGY) -- and the body drawn in their place (DrawDriveAsOn, the
+  racer's animation); BUGGY.CPP's acceleration times RaceMod_StoryAccel (85 %).
+- The grobo (Terrain/Polar/PolarGrobo.cs): LBA1's scene 109 actor 6 (entity 11, BODY.HQR 17, "Grobo: Green vest") says LBA1 texts 12
+  and 11 and gives the key; Twinsen says 10 without it. Here LBA2's baggage-claim grobo (entity 33, body 54) with his teal top and its
+  red trim moved to the green ramp (the entity's body 1), on the dock four cells and more from Twinsen's start, on the far side from the
+  car; spoken to, he says texts 20 and 21 (the island's text file, LBA1's lines in its five languages and a Portuguese one) and sets game
+  variable 230. Every scene's copy of the car's script (the Desert buggy's) asks for it: Action beside the car without it, Twinsen says
+  text 22 (message_obj). Tested headless: no key, he stays out; the grobo, then the car, he drives.

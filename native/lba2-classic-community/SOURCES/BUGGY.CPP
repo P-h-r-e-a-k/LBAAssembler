@@ -471,7 +471,7 @@ void MoveBuggy(T_OBJET *ptrobj) {
             RaceMod_Skid(&ptb3d->Beta, &ptb->Speed);
         } else if ((Input & I_UP) // j'accelere
                    AND !flagattack) {
-            ptb->Speed += deltatimer * 4;
+            ptb->Speed += deltatimer * 4 * RaceMod_StoryAccel() / 100;   // (an island's own car slower away: RACEMOD.CPP ISLANDCARS.TXT)
 
             if (!TimerGear)
                 TimerGear = TimerRefHR + TEMPO_GEAR;

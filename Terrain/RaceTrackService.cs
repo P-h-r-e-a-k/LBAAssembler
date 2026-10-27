@@ -466,6 +466,8 @@ internal static class RaceTrackService
             // game's install (PrivateCars off) the same but for the toy truck's -- RaceTrackCharacterCars.InstallMonsters. The Temple's
             // scenes have their cars already: the racer entity's bodies VampireGeneric.., which this gives it.)
             log.AddRange(RaceTrackCharacterCars.InstallMonsters(gameDirectory));
+            // (and LBA1's digger, Polar Island's tractor, from the LBA1 folder -- RaceTrackCharacterCars.InstallDigger -- after even those)
+            log.AddRange(RaceTrackCharacterCars.InstallDigger(gameDirectory, Lba1Folder()));
             // (and the Temple of Bú's secret party's disco ball and bubbles after even those: no body moves -- TempleParty)
             if (session.Party) log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.PartyInstall(gameDirectory));
             // (the race items' sounds, every track's: RACESOUNDS\, which the engine plays as an item comes into the item box and as one is
