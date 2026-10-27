@@ -24,8 +24,10 @@ internal static class PolarTerrain
     // the island's place in the cube map, twice LBA1's size (PolarLayout.Scale): a cell of the layout at (Scale * x + OffsetX, Scale * z +
     // OffsetZ) in the island's cells, so each LBA1 scene's grid (64 x 64 cells, at whole grids from 107's but for 106, 109 and the dock) is
     // two cubes by two or a little over -- 21 cubes have land, the fewest any placement gives -- and the island in cubes (5..9, 4..10), 107's
-    // grid in cubes (7..8, 6..7)
-    public const int CubeX0 = 5, CubeZ0 = 4, CubesX = 5, CubesZ = 7;
+    // grid in cubes (7..8, 6..7). Round them a cube of sea each way, (4..10, 3..11): past the island's last cubes the engine drew no sea --
+    // the race's start, in cube (8, 10), looked out at the edge of the world (the user, 2026-10-27: "connects to another scene without a
+    // water segment")
+    public const int CubeX0 = 4, CubeZ0 = 3, CubesX = 7, CubesZ = 9;
     public const int Scale = PolarLayout.Scale, OffsetX = 7 * 64, OffsetZ = 6 * 64;
     // a cell of the layout's first cell of the island (it has Scale x Scale), and an island cell's of the layout
     public static int IslandX(int x) => x * Scale + OffsetX;

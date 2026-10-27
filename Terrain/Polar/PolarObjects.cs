@@ -23,6 +23,9 @@ internal static class PolarObjects
     // textures are all on one page of the island's object pages, the decor's (IslandFile.DecorPageShift).
     private static uint TileEntry(int x, int y) => 0x1F1F0000u | (uint)(y * 256 + x);
 
+    // LBA1's sea: the water bricks' layer (its top the surface), the engine's sea at its bottom
+    private const int SeaLayer = 1, MaxSunk = 11;
+
     public sealed record Built(List<byte[]> Bodies, int Decors, List<string> Log);
 
     public static Built Build(Lba1Game game, PolarLayout layout, IReadOnlyDictionary<(int X, int Z), PolarTerrain.Column> columns, IReadOnlySet<(int X, int Z)> rocks,
@@ -39,6 +42,24 @@ internal static class PolarObjects
         var cells = layout.Cells.Where(c => (Rock(c) || !PolarTerrain.IsGround(game, c.Value) && (!columns.TryGetValue((c.Key.X, c.Key.Z), out var col) || c.Key.Y > col.Top)) && !Mist(c.Value.Brick))
             .ToDictionary(c => c.Key, c => c.Value);
         log.Add($"{mist.Count(m => m.Value)} bricks of mist (dithered) left out");
+        // (what stands on the water -- a pier's posts, the crane's legs -- stands in LBA1 on its sea's surface, the top of the water bricks of
+        // layer SeaLayer; and the island's edges -- quays, decks, pillars -- have nothing under them at all in LBA1, its camera never
+        // showing beneath them, the void black: the engine's sea is at 0, that layer's bottom, and shows; a column's lowest brick over the
+        // sea, on the water or over nothing up to MaxSunk layers up, goes on down to it, not hanging over it (the user, 2026-10-27:
+        // "Polar island has a lot of bits floating in the air"). Not over land, not on LBA1's invisible bricks -- collision a deck rests on
+        // -- and not the rocky peak's heights.)
+        var sunk = 0;
+        foreach (var g in cells.Keys.GroupBy(k => (k.X, k.Z)).ToList())
+        {
+            var k = g.MinBy(c => c.Y);
+            if (columns.TryGetValue((k.X, k.Z), out var col) && !col.Water) continue;
+            var under = Enumerable.Range(-2, k.Y + 2).Where(y => layout.Cells.ContainsKey((k.X, y, k.Z))).Select(y => layout.Cells[(k.X, y, k.Z)]).ToList();
+            var onWater = k.Y == SeaLayer + 1 && under.All(u => u.Water);
+            var overNothing = under.Count == 0 && k.Y <= MaxSunk;
+            if (!onWater && !overNothing) continue;
+            for (var y = SeaLayer; y < k.Y; y++) if (cells.TryAdd((k.X, y, k.Z), cells[k])) sunk++;
+        }
+        log.Add($"{sunk} cells under what stands on the water or over nothing at the island's edges, down to the sea");
         // (objects standing on the car tracks: as LBA1 has them, but worth a look)
         var onTracks = cells.Keys.Where(k => PolarTerrain.TrackCells.Contains((k.X, k.Z)) && columns.TryGetValue((k.X, k.Z), out var col) && k.Y == col.Top + 1).ToList();
         log.Add($"{onTracks.Count} object cells stand on car track cells" + (onTracks.Count > 0 ? ": " + string.Join(" ", onTracks.Take(40).Select(k => $"({k.X},{k.Z}){cells[k].Brick}/{cells[k].Code:X2}")) : ""));

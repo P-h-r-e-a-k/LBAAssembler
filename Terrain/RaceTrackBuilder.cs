@@ -3506,12 +3506,36 @@ internal static class RaceTrackBuilder
         for (var j = i + 1; j < pieces.Count; j++)
             if (Touch(i, j)) parent[Find(i)] = Find(j);
         var ruins = new HashSet<(int, long, long)>();
+        // (a box's underside more than AdriftBy over the highest ground under it)
+        bool Hanging((double X0, double Z0, double X1, double Z1, double Y0, double Y1) b)
+        {
+            double? top = null;
+            for (var z = b.Z0; z <= b.Z1; z += 0.25)
+            for (var x = b.X0; x <= b.X1; x += 0.25)
+                if (IslandOps.Altitude(island, x * 512, z * 512) is { } g && (top is null || g > top)) top = g;
+            return top is { } t && b.Y0 - t > AdriftBy;
+        }
         foreach (var group in Enumerable.Range(0, pieces.Count).GroupBy(Find))
         {
             var members = group.ToList();
             if (!members.Any(m => pieces[m].Gone)) continue;
             var left = members.Where(m => !pieces[m].Gone).ToList();
             if (left.Count == 0) continue;
+            // (what is left hanging -- its underside clear of the ground under it, touching nothing left of the structure, the pieces that
+            // held it up gone with the road -- goes, however big: a slab of Polar Island's dock crane, 2,080 up over the road, 2026-10-27; and what rested
+            // on it after it)
+            for (var more = true; more;)
+            {
+                more = false;
+                foreach (var m in left)
+                {
+                    var b = pieces[m].B;
+                    if (ruins.Contains(pieces[m].Id) || b.Y1 < b.Y0 || !Hanging(b)) continue;
+                    if (left.Any(n => n != m && !ruins.Contains(pieces[n].Id) && Touch(m, n))) continue;
+                    ruins.Add(pieces[m].Id);
+                    more = true;
+                }
+            }
             if (left.Any(m => (pieces[m].B.X1 - pieces[m].B.X0) * (pieces[m].B.Z1 - pieces[m].B.Z0) > RuinBigPiece)) continue;
             foreach (var m in left)
             {

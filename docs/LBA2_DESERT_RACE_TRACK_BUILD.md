@@ -5150,3 +5150,25 @@ corners where that's quicker".
   car; spoken to, he says texts 20 and 21 (the island's text file, LBA1's lines in its five languages and a Portuguese one) and sets game
   variable 230. Every scene's copy of the car's script (the Desert buggy's) asks for it: Action beside the car without it, Twinsen says
   text 22 (message_obj). Tested headless: no key, he stays out; the grobo, then the car, he drives.
+
+## Polar Island: nothing hanging over the sea, and sea past its last cubes (2026-10-27)
+
+- The user: "Polar island has a lot of bits floating in the air, let's either remove them, or work out what they should be attached to";
+  "The start of Polar island where the track starts in-game connects to another scene without a water segment, are we able to resolve
+  this so the illusion isn't broken?".
+- What hung: LBA1's sea is a layer of water bricks (layer 1) and what stands on it -- the dock's posts, the rocks' stacks, the crane's
+  feet -- stands on its top, 512 up on the island; the engine's sea is at 0. And at the island's edges LBA1's grids have nothing at all
+  under the quays, decks and pillars -- its camera never showed beneath them, the void was black. PolarObjects now carries each object
+  column's lowest brick on down to the sea where it is over sea (no land column, or water's): on the water, or over nothing up to layer 11
+  (1,327 cells). Not over land, not on LBA1's invisible brick 222 (collision a deck rests on), not the rocky peak's heights.
+- The race build left one more: a slab of the dock crane in cube (8, 8), 2,080 over the road, its structure's other pieces cleared from
+  the road and it bigger than ClearRuins' small parts (16 cells to 12). ClearRuins now takes what is left of a structure the road ran
+  through hanging -- its underside more than AdriftBy over the ground under it, touching nothing left of the structure -- however big
+  (and what rested on it after it). On the other fifteen tracks it changes nothing (setup.log's ruin counts the same).
+- The sea: POLAR.ILE's cubes were 5..9 x 4..10, the land's; past them the engine draws no sea, and the race's start, in cube (8, 10), looked
+  out at the edge of the world. They are now 4..10 x 3..11 (PolarTerrain.CubeX0 / CubeZ0 / CubesX / CubesZ): a ring of sea cubes all round,
+  63 cubes (the engine's MAX_CUBE is 255), no scenes in them.
+- `ScriptRoundTrip floaters <ILE> [gap] [strict] [near x z r]` lists decors held up by nothing (resting on, or fixed beside within a quarter
+  of a cell, something held up -- spread till nothing changes; "strict": resting on only); `floaters <ILE> strip <out> <cx> <cz> [x0 x1 z0
+  z1 | body n]` writes a copy without some of a cube's decors, to find which one a picture shows. Polar's race build had 21 such decors,
+  now 4 (small gaps, 450-770, over the hillsides' slopes, away from the road).
