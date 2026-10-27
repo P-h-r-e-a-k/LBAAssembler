@@ -290,7 +290,8 @@ internal static class RaceCarEngineFile
         if (info?.Twin is { } fine) parked.AddRange(AllCars(ReferenceEquals(track, fine) ? info : fine));
         foreach (var (scene, actor) in parked) text.Append($"hide_actor={scene} {actor}\n");
         // the doors one of the island's files has lost, shut while it is shown (RaceTrackScenes Result.DoorsOff)
-        foreach (var d in info?.DoorsOff ?? new()) text.Append($"door_off={d}\n");
+        // (and the ones that bring Twinsen out elsewhere in one file: nine numbers -- RACEMOD.CPP door_to=)
+        foreach (var d in info?.DoorsOff ?? new()) text.Append(d.Split(' ').Length == 9 ? $"door_to={d}\n" : $"door_off={d}\n");
         // ... and the actors put aside while it is shown (Result.ActorsAt)
         foreach (var a in info?.ActorsAt ?? new()) text.Append($"actor_at={a}\n");
         // ... and the lifts on the raised road (Result.DeckLifts)

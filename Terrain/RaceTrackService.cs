@@ -674,8 +674,10 @@ internal static class RaceTrackService
         twinOptions.NewBodyBase = HqrArchive.CountEntries(Path.Combine(gameDirectory, obl));
         twinOptions.SceneryObl = Path.Combine(gameDirectory, obl);
         var atDoors = twinOptions.DoorBoxes.Select(b => RaceTrackOptions.DecorsAtDoor(twin, b)).ToList();
+        var museum = options.Island.TwinMuseum is { } tm ? RaceTrackBuilder.FindDecor(twin, tm.Body, tm.FromX, tm.FromZ) : null;
         var report = RaceTrackBuilder.Build(twin, plan, twinOptions);
         NoteLostDoors(twin, twinOptions.DoorBoxes, atDoors, report);
+        if (museum is { } front) RaceTrackBuilder.PlaceTwinMuseum(twin, front, twinOptions, report);
         twin.Save(Path.Combine(gameDirectory, ile));
         AppendBodies(Path.Combine(gameDirectory, obl), report, twinOptions);
         if (own)

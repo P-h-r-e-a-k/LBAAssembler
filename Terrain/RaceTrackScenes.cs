@@ -892,13 +892,16 @@ internal static class RaceTrackScenes
                     if (camera) camerasRemoved++; else zonesRemoved++;
                 }
             // (a lift on the raised road, RaceTrackReport.DeckLifts: a door zone over its pad, into its building's scene)
+            // (an island with a file for each weather: each file's lifts its own, and the building's window brings Twinsen up onto the lift of
+            // the file shown -- door_to=; the storm's museum lift and the town circuit's, 2026-10-27)
+            string FileOf(Track t) => Path.GetFileNameWithoutExtension(ReferenceEquals(t, tracks[0]) ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
             foreach (var t in tracks)
                 foreach (var l in t.Report.DeckLifts)
                 {
                     if ((int)Math.Floor(l.X / 64) != model.CubeX || (int)Math.Floor(l.Z / 64) != model.CubeY) continue;
                     int lx = (int)Math.Round((l.X - model.CubeX * 64) * 512), lz = (int)Math.Round((l.Z - model.CubeY * 64) * 512), ly = (int)Math.Round(l.Y);
                     // (no door zone: the action key on the pad takes Twinsen down with it, the race-track mode's lift -- deck_lift=)
-                    deckLifts.Add($"{scene} {lx} {ly} {lz} {RaceTrackBuilder.LiftZoneHalf} {l.Pad} {l.Scene} {l.ToX} {l.ToY} {l.ToZ}");
+                    deckLifts.Add($"{scene} {lx} {ly} {lz} {RaceTrackBuilder.LiftZoneHalf} {l.Pad} {l.Scene} {l.ToX} {l.ToY} {l.ToZ}" + (tracks.Count > 1 ? $" {FileOf(t)}" : ""));
                     log.Add($"scene {scene}: a lift on the raised road at ({lx},{ly},{lz}), down into scene {l.Scene} with the action key");
                     // (and back up: the building's way out by its window -- its door into this scene nearest the place the lift brings him
                     // down to -- brings him onto the road beside the pad. The user, 2026-10-27: "If Twinsen leaves the museum by the window then
@@ -908,11 +911,43 @@ internal static class RaceTrackScenes
                     var window = inside.Zones.Where(zz => zz.Type == 0 && zz.Num == scene)
                         .MinBy(zz => Math.Pow((zz.X0 + zz.X1) / 2.0 - l.ToX, 2) + Math.Pow((zz.Y0 + zz.Y1) / 2.0 - l.ToY, 2) + Math.Pow((zz.Z0 + zz.Z1) / 2.0 - l.ToZ, 2));
                     if (window is null || window.Info.Length < 3) continue;
+                    if (tracks.Count > 1)
+                    {
+                        doorsOff.Add($"{FileOf(t)} {l.Scene} {window.X0} {window.Z0} {window.X1} {window.Z1} {lx} {ly} {lz}");
+                        log.Add($"scene {l.Scene}: its window's way out into scene {scene} the lift's while {FileOf(t)} is shown: onto the road at ({lx},{ly},{lz})");
+                        continue;
+                    }
                     // (onto the pad, below the road: the lift brings him up)
                     window.Info[0] = lx; window.Info[1] = ly; window.Info[2] = lz;
                     changes.Add(new SceneChange(l.Scene, inside, null));
                     log.Add($"scene {l.Scene}: its window's way out into scene {scene} now the lift's: onto the raised road at ({window.Info[0]},{window.Info[1]},{window.Info[2]})");
                 }
+            // (a building's front put back elsewhere in one file -- RaceTrackReport.Moved, Citadel Island's museum in the town circuit's file: a
+            // copy of its door zone moved with it, shut in the other file, and its way out to the old door brings Twinsen out at the new one
+            // in that file -- the old door's own shut there, door_off=)
+            foreach (var t in tracks)
+            {
+                if (t.Report.Moved is not { } mv || ReferenceEquals(t, tracks[0]) || tracks.Count < 2) continue;
+                double fx = mv.FromX - model.CubeX * 64, fz = mv.FromZ - model.CubeY * 64;
+                if (fx < 0 || fx >= 64 || fz < 0 || fz >= 64) continue;
+                int dx = (int)Math.Round(mv.Dx * 512), dz = (int)Math.Round(mv.Dz * 512);
+                var old = model.Zones.Where(zz => zz.Type == 0 && !outside.Contains(zz.Num))
+                    .MinBy(zz => Math.Pow((zz.X0 + zz.X1) / 1024.0 - fx, 2) + Math.Pow((zz.Z0 + zz.Z1) / 1024.0 - fz, 2));
+                if (old is null || Math.Pow((old.X0 + old.X1) / 1024.0 - fx, 2) + Math.Pow((old.Z0 + old.Z1) / 1024.0 - fz, 2) > 36) continue;
+                var copy = old.Clone();
+                copy.X0 += dx; copy.X1 += dx; copy.Z0 += dz; copy.Z1 += dz;
+                model.Zones.Add(copy);
+                doorsOff.Add($"{FileOf(tracks[0])} {scene} {copy.X0} {copy.Z0} {copy.X1} {copy.Z1}");
+                log.Add($"scene {scene}: door zone into scene {old.Num} copied to ({copy.X0},{copy.Z0})-({copy.X1},{copy.Z1}) with the building's front, for {FileOf(t)} only");
+                if (!store.SceneExists(old.Num)) continue;
+                foreach (var back in store.Load(old.Num).Zones.Where(bz => bz.Type == 0 && bz.Num == scene && bz.Info.Length >= 3
+                             && bz.Info[0] >= old.X0 - 1536 && bz.Info[0] <= old.X1 + 1536 && bz.Info[2] >= old.Z0 - 1536 && bz.Info[2] <= old.Z1 + 1536))
+                {
+                    doorsOff.RemoveAll(d => d == $"{FileOf(t)} {old.Num} {back.X0} {back.Z0} {back.X1} {back.Z1}");
+                    doorsOff.Add($"{FileOf(t)} {old.Num} {back.X0} {back.Z0} {back.X1} {back.Z1} {back.Info[0] + dx} {back.Info[1]} {back.Info[2] + dz}");
+                    log.Add($"scene {old.Num}: its way out to that door brings Twinsen out at the moved front while {FileOf(t)} is shown");
+                }
+            }
             foreach (var t in tracks)
             {
                 // each driver's car: the racer's entity with the driver's body (Baldino's rocket car, RaceTrackBaldinoCar, and the cars made

@@ -151,10 +151,14 @@
  *     actor_at=<island file> <scene> <actor> <x> <y> <z>   (<actor> p<n>: the scene's point n, which its script stands it on)
  *                                the scene's actor put there as the scene starts while that island file is shown (ActorsAt): in the way of
  *                                that file's road, not of the other's (Citadel Island's bike taxi under the shelter by the shop, 2026-10-27)
- *     deck_lift=<scene> <x> <y> <z> <half> <pad body> <to scene> <to x> <to y> <to z>
+ *     deck_lift=<scene> <x> <y> <z> <half> <pad body> <to scene> <to x> <to y> <to z> [<island file>]
  *                                (2026-10-27) a lift on the raised road (DeckLift): its pad (decor body <pad body>, <half> either side of
  *                                x z, the road's height y), the action key on it takes Twinsen down with it through the road into <to
  *                                scene> at its place; coming into <scene> on the pad (the building's way out to it), he rises with it
+ *     door_to=<island file> <scene> <x0> <z0> <x1> <z1> <x> <y> <z>
+ *                                (2026-10-27) the scene's door zone with that box brings Twinsen out at <x> <y> <z> instead while that
+ *                                island file is shown (RaceMod_DoorTo): Citadel Island's museum, its front put back elsewhere in the town
+ *                                circuit's file
  *     door_off=<island file> <scene> <x0> <z0> <x1> <z1>
  *                                the scene's door zone with that box shut while that island file is shown (RaceMod_DoorShut): its lift or
  *                                wall is gone from it, not from the island's other file (Citadel Island's two weathers share their scenes,
@@ -573,11 +577,14 @@ static S32 s_chaseCarBody = -1, s_chaseCarAnim = -1, s_chaseWalkX = 0, s_chaseWa
 #define RACE_MAX_DOORS_OFF 24
 static struct { char File[16]; int Scene, X0, Z0, X1, Z1; } s_doorsOff[RACE_MAX_DOORS_OFF];
 static int s_nbDoorsOff = 0;
+// door_to= (RaceMod_DoorTo)
+static struct { char File[16]; int Scene, X0, Z0, X1, Z1, X, Y, Z; } s_doorsTo[RACE_MAX_DOORS_OFF];
+static int s_nbDoorsTo = 0;
 // deck_lift= (DeckLift): the lifts; the one moving, which way, since when, and how far down its pad is
 #define RACE_MAX_LIFTS 4
 #define RACE_LIFT_MS 1800                  // its ride, down or up
 #define RACE_LIFT_DROP 2000.0              // how far down through the road it goes
-static struct { int Scene, X, Y, Z, Half, Pad, To, ToX, ToY, ToZ; } s_lifts[RACE_MAX_LIFTS];
+static struct { int Scene, X, Y, Z, Half, Pad, To, ToX, ToY, ToZ; char File[16]; } s_lifts[RACE_MAX_LIFTS];      // (File: "" any)
 static int s_nbLifts = 0, s_lift = -1, s_liftDir = 0, s_liftScene = -1;
 static S32 s_liftAt = 0;
 static double s_liftOff = 0;
@@ -3595,9 +3602,16 @@ static void Load(const char *path, int carOnly = 0) {
             }
         }
         else if (!strcmp(key, "deck_lift") && s_nbLifts < RACE_MAX_LIFTS) {
-            if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d", &s_lifts[s_nbLifts].Scene, &s_lifts[s_nbLifts].X, &s_lifts[s_nbLifts].Y, &s_lifts[s_nbLifts].Z,
-                       &s_lifts[s_nbLifts].Half, &s_lifts[s_nbLifts].Pad, &s_lifts[s_nbLifts].To, &s_lifts[s_nbLifts].ToX, &s_lifts[s_nbLifts].ToY, &s_lifts[s_nbLifts].ToZ) == 10)
+            s_lifts[s_nbLifts].File[0] = 0;
+            if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d %15s", &s_lifts[s_nbLifts].Scene, &s_lifts[s_nbLifts].X, &s_lifts[s_nbLifts].Y, &s_lifts[s_nbLifts].Z,
+                       &s_lifts[s_nbLifts].Half, &s_lifts[s_nbLifts].Pad, &s_lifts[s_nbLifts].To, &s_lifts[s_nbLifts].ToX, &s_lifts[s_nbLifts].ToY, &s_lifts[s_nbLifts].ToZ,
+                       s_lifts[s_nbLifts].File) >= 10)
                 s_nbLifts++;
+        }
+        else if (!strcmp(key, "door_to") && s_nbDoorsTo < RACE_MAX_DOORS_OFF) {
+            if (sscanf(v, "%15s %d %d %d %d %d %d %d %d", s_doorsTo[s_nbDoorsTo].File, &s_doorsTo[s_nbDoorsTo].Scene, &s_doorsTo[s_nbDoorsTo].X0, &s_doorsTo[s_nbDoorsTo].Z0,
+                       &s_doorsTo[s_nbDoorsTo].X1, &s_doorsTo[s_nbDoorsTo].Z1, &s_doorsTo[s_nbDoorsTo].X, &s_doorsTo[s_nbDoorsTo].Y, &s_doorsTo[s_nbDoorsTo].Z) == 9)
+                s_nbDoorsTo++;
         }
         else if (!strcmp(key, "door_off") && s_nbDoorsOff < RACE_MAX_DOORS_OFF) {
             if (sscanf(v, "%15s %d %d %d %d %d", s_doorsOff[s_nbDoorsOff].File, &s_doorsOff[s_nbDoorsOff].Scene, &s_doorsOff[s_nbDoorsOff].X0, &s_doorsOff[s_nbDoorsOff].Z0,
@@ -15155,7 +15169,7 @@ static void IslandCarDraw(void) {
 // that goes up and down, let's address this so Twinsen has to manually trigger it with action like the other elevators to the sewers"
 static int OnLiftPad(int i) {
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
-    return s_lifts[i].Scene == (S32)NumCube && CubeMode == CUBE_EXTERIEUR && Comportement != C_BUGGY
+    return s_lifts[i].Scene == (S32)NumCube && (!s_lifts[i].File[0] || !strcasecmp(s_lifts[i].File, IslandName)) && CubeMode == CUBE_EXTERIEUR && Comportement != C_BUGGY
            && abs(hero->Obj.X - s_lifts[i].X) <= s_lifts[i].Half && abs(hero->Obj.Z - s_lifts[i].Z) <= s_lifts[i].Half;
 }
 static void DeckLiftFrame(S32 now) {
@@ -15200,7 +15214,7 @@ static int DeckLiftAction(int pressed) {
 // The lifts' pads as the cube's decors are drawn (3DEXT/DECORS.CPP DecorPoseHook): down and up with the lift
 static void LiftDecors(T_DECORS *list, S32 count) {
     for (int i = 0; i < s_nbLifts; i++) {
-        if (s_lifts[i].Scene != (S32)NumCube) continue;
+        if (s_lifts[i].Scene != (S32)NumCube || (s_lifts[i].File[0] && strcasecmp(s_lifts[i].File, IslandName))) continue;
         const S32 y = s_lifts[i].Y + (i == s_lift ? (S32)s_liftOff : 0);
         for (S32 k = 0; k < count; k++) {
             T_DECORS *d = &list[k];
@@ -15238,6 +15252,18 @@ static void ActorsAt(void) {
 
 // Whether a door zone is one this weather's island file has lost (door_off=): GereZoneChangeCube (OBJECT.CPP) doesn't take Twinsen
 // through it, whatever switched it on (Twinsen's own script, standing on the lift's place: Citadel Island's by the storm track's start line)
+// A door zone (door_to=) that brings Twinsen out elsewhere in this weather's island file: the arrival GereZoneChangeCube (OBJECT.CPP) set
+// from the zone's info moved by as much (his place in the zone kept)
+void RaceMod_DoorTo(const T_ZONE *zn) {
+    if (!RaceMod_Active()) return;
+    for (int i = 0; i < s_nbDoorsTo; i++)
+        if (s_doorsTo[i].Scene == (S32)NumCube && !strcasecmp(s_doorsTo[i].File, IslandName) && zn->X0 == s_doorsTo[i].X0 && zn->Z0 == s_doorsTo[i].Z0 && zn->X1 == s_doorsTo[i].X1 && zn->Z1 == s_doorsTo[i].Z1) {
+            NewPosX += s_doorsTo[i].X - zn->Info0; NewPosY += s_doorsTo[i].Y - zn->Info1; NewPosZ += s_doorsTo[i].Z - zn->Info2;
+            Log_Info("[racemod] door: out at (%d,%d,%d) in %s's scene %d", (int)NewPosX, (int)NewPosY, (int)NewPosZ, IslandName, (int)NewCube);
+            return;
+        }
+}
+
 S32 RaceMod_DoorShut(const T_ZONE *zn) {
     if (!RaceMod_Active()) return 0;
     for (int i = 0; i < s_nbDoorsOff; i++)
@@ -17451,7 +17477,7 @@ static void ResetTrack(void) {
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
     s_nbDoorsOff = 0; s_nbActorsAt = 0; s_actorsAtScene = -1;
-    s_nbLifts = 0; s_lift = -1; s_liftDir = 0; s_liftScene = -1; s_liftOff = 0;
+    s_nbLifts = 0; s_lift = -1; s_liftDir = 0; s_liftScene = -1; s_liftOff = 0; s_nbDoorsTo = 0;
     s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = s_chaseDriver = s_chaseCarActor = -1; s_chaseFlipped = 0; s_chaseCarBody = s_chaseCarAnim = -1;
     s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0;

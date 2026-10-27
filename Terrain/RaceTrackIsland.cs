@@ -73,6 +73,10 @@ internal sealed record RaceTrackIsland(
         // (its steep banks beside the road its own ground, walked on by Twinsen, walls to the cars only: RaceTrackBuilder.WallSteepBanks)
         SoftBanks = true,
         DeckLifts = new[] { (520.8, 568.1, 15, 12288, 3000, 13312) },
+        // (and in the town circuit's file, where the road took the museum: its front against the road's bank, the retail front (body 38)
+        // moved there, and a lift on the road above -- the user, 2026-10-27, "Let's put the museum on the wall where Twinsen is currently
+        // facing": scene 48 at (10966, 31375), facing west)
+        TwinMuseum = (38, 520.5, 570.5, 525.5, 572.4, 521.5, 573.3),
         // (the island's people and things away from both roads stay: the cow, the sewer lifts by the start line and over the school -- without
         // them the lift's zone took Twinsen down into the sewers and the ride back up took him straight down again -- the user, 2026-10-27)
         KeepOffRoadActors = true,
@@ -169,6 +173,10 @@ internal sealed record RaceTrackIsland(
     public (double X, double Z, double Reach)[]? NoPiersAt { get; init; }
     // Lifts on the raised road down into a building: island cell, and the scene and place there they take Twinsen to (a door zone on the deck)
     public (double X, double Z, int Scene, int ToX, int ToY, int ToZ)[]? DeckLifts { get; init; }
+    // A building's front put back in the other weather's file (RaceTrackBuilder.PlaceTwinMuseum): the retail decor of Body nearest FromX, FromZ
+    // moved to ToX, ToZ (island cells; its door zone and way out moved with it, RaceTrackScenes), and a lift on the road at LiftX, LiftZ
+    // into the building as DeckLifts' first
+    public (int Body, double FromX, double FromZ, double ToX, double ToZ, double LiftX, double LiftZ)? TwinMuseum { get; init; }
     // The entity of the one the island's story has waiting at the start, whatever the build's story setting: brought from the scene the
     // island has him in to stand just behind Twinsen on the grid (Polar Island's grobo with the digger's key, 2026-10-27)
     public int? StartPerson { get; init; }

@@ -6652,6 +6652,8 @@ S32 GereZoneChangeCube(T_OBJET *ptrobj, T_ZONE *ptrz) {
             else
                 FlagReajustPosTwinsen = TRUE;
 
+            // (out elsewhere in this weather's island file -- RACEMOD.CPP RaceMod_DoorTo)
+            { extern void RaceMod_DoorTo(const T_ZONE *zn); RaceMod_DoorTo(ptrz); }
             FlagChgCube = 1;
             return TRUE;
         }

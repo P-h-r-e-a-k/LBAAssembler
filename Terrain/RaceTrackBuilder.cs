@@ -652,6 +652,9 @@ internal sealed class RaceTrackReport
     // road's deck: the scenes' door zone goes with it (RaceTrackScenes), or walking onto its empty place took Twinsen down into the sewers,
     // and the ride back up straight down again (Citadel Island, by the storm track's start line, 2026-10-27)
     public List<(double X0, double Z0, double X1, double Z1)> LostDoors { get; } = new();
+    // A building's front put back elsewhere (RaceTrackIsland.TwinMuseum): its old place and how far it moved (cells), for its door zone
+    // and its way out (RaceTrackScenes)
+    public (double FromX, double FromZ, double Dx, double Dz)? Moved { get; set; }
     // ... of them, the ones whose decor is still there, under the ground the build raised (RaceTrackService.NoteLostDoors)
     public List<(double X0, double Z0, double X1, double Z1)> BuriedDoors { get; } = new();
     public List<double[]> Arrows { get; } = new();
@@ -1115,7 +1118,10 @@ internal static class RaceTrackBuilder
         // up to the door -- Citadel Island's pharmacy, the town circuit's bank climbing from its doorstep, the user, 2026-10-27: "if we need
         // to we could make the side of the road a vertical wall instead of a sloped bank to give more room to access the pharmacy")
         var groundKept = plan.KeepGroundUnder
-            ? KeptGround(island, keptBoxes.Concat(options.DoorBoxes.Select(d => (d.X0 - DoorGroundReach + KeepGroundMargin, d.Z0 - DoorGroundReach + KeepGroundMargin,
+            // (only a door whose building still stands: the town circuit's file had the museum's ground kept round its lost door, the
+            // bank by the road cut back to a step there)
+            ? KeptGround(island, keptBoxes.Concat(options.DoorBoxes.Where(d => RaceTrackOptions.DecorsAtDoor(island, d).Count > 0)
+                                                    .Select(d => (d.X0 - DoorGroundReach + KeepGroundMargin, d.Z0 - DoorGroundReach + KeepGroundMargin,
                                                                                   d.X1 + DoorGroundReach - KeepGroundMargin, d.Z1 + DoorGroundReach - KeepGroundMargin))).ToList())
             : null;
         ModifyGround(island, field, index, roads, options, report, groundKept);
@@ -3467,6 +3473,55 @@ internal static class RaceTrackBuilder
 
     // A raised road's own space: from under its slab to over a car's roof.
     private const double RaisedBelow = 320, RaisedAbove = 1400;
+    // The decor of `body` nearest (x, z) (island cells, within 6), copied with its cube cell -- before the build takes it away (TwinMuseum)
+    public static (IslandDecor Decor, int CubeX, int CubeZ)? FindDecor(IslandFile island, int body, double x, double z)
+    {
+        (IslandDecor, int, int)? best = null; var bd = 36.0;
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            foreach (var d in cube.Decors)
+            {
+                if ((d.Body & 0xFFFF) != body) continue;
+                double dx = cx * 64 + d.X / 512.0 - x, dz = cz * 64 + d.Z / 512.0 - z;
+                if (dx * dx + dz * dz < bd) { bd = dx * dx + dz * dz; best = (d.Clone(), cx, cz); }
+            }
+        return best;
+    }
+
+    // Citadel Island's museum in the town circuit's file (RaceTrackIsland.TwinMuseum): its front -- `front`, the retail decor with its door --
+    // set against the road's bank at To, and a lift on the road above down into it, as the storm file's (the user, 2026-10-27: "In citabau.ile
+    // we removed the museum to make way for the track, let's add the museum back in ... just add in the side wall, and the front door, and add
+    // an elevator in on the road above the same as we did for citadel.ile")
+    public static void PlaceTwinMuseum(IslandFile island, (IslandDecor Decor, int CubeX, int CubeZ) front, RaceTrackOptions o, RaceTrackReport report)
+    {
+        if (o.Island.TwinMuseum is not { } m) return;
+        var d = front.Decor;
+        double fromX = front.CubeX * 64 + d.X / 512.0, fromZ = front.CubeZ * 64 + d.Z / 512.0;
+        if (IslandDecors.Locate(island, m.ToX * 512, m.ToZ * 512) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack)
+        { report.Notes.Add("WARNING: no room for the museum's front -- its cube is full"); return; }
+        d.MoveTo(at.X, d.Y, at.Z);
+        at.Cube.Decors.Add(d);
+        report.Moved = (fromX, fromZ, m.ToX - fromX, m.ToZ - fromZ);
+        report.Notes.Add($"the museum's front (body {d.Body & 0xFFFF}) put back at cell ({m.ToX}, {m.ToZ}), moved ({m.ToX - fromX:0.0}, {m.ToZ - fromZ:0.0}) cells");
+        // (the lift: a pad on the road nearest LiftX, LiftZ, level with it, down into the museum where the storm file's goes)
+        if (o.Island.DeckLifts is not [var to, ..] || o.NewBodyBase < 0) return;
+        var best = (R: -1, K: -1, D: 1e9);
+        for (var r = 0; r < report.Roads.Count; r++)
+            for (var k = 0; k < report.Roads[r].Count; k++)
+            {
+                var q = (report.Roads[r].X[k] - m.LiftX) * (report.Roads[r].X[k] - m.LiftX) + (report.Roads[r].Z[k] - m.LiftZ) * (report.Roads[r].Z[k] - m.LiftZ);
+                if (q < best.D) best = (r, k, q);
+            }
+        if (best.R < 0 || best.D > 36) { report.Notes.Add("WARNING: no road near the museum's lift"); return; }
+        var y = (int)Math.Round(report.Roads[best.R].H[best.K]);
+        if (IslandDecors.Locate(island, m.LiftX * 512, m.LiftZ * 512) is not { } pa || pa.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) return;
+        var pad = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, pa.X, y, pa.Z, 0);
+        pad.XMin = pa.X - (int)LiftPad; pad.XMax = pa.X + (int)LiftPad; pad.YMin = y; pad.YMax = NoBoxTop; pad.ZMin = pa.Z - (int)LiftPad; pad.ZMax = pa.Z + (int)LiftPad;
+        pa.Cube.Decors.Add(pad);
+        report.NewBodies.Add(RaceTrackRaisedBody.Block(LiftPad, LiftPad, LiftPadTop, RaceTrackRaisedBody.RailTop, RaceTrackRaisedBody.RailSide, RaceTrackRaisedBody.RailTop));
+        report.DeckLifts.Add((m.LiftX, m.LiftZ, y, to.Scene, to.ToX, to.ToY, to.ToZ, m.LiftX, m.LiftZ, pad.Body));
+        report.Notes.Add($"a lift on the road at cell ({m.LiftX}, {m.LiftZ}), {y} high, down into scene {to.Scene}");
+    }
+
     // DeckLifts: the pad's half width and its top over the road (units)
     private const double LiftPad = 640, LiftPadTop = 40;
     public const int LiftZoneHalf = 560;
