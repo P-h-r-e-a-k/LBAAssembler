@@ -225,6 +225,9 @@ plan = {
     'raisedCut': True, 'keepAbove': 15000,
 }
 out = sys.argv[1] if len(sys.argv) > 1 else r'E:\dump\LBAAssembler\docs\racetrack\polar_track_plan.json'
+# (a checkpoint at least every 60 cells along the route, the corners' and more between them: the loop north of the crossing could be
+# skipped by turning off there -- the user, 2026-10-28: "make sure each corner has one please, as a user has found a massive track shortcut")
+plan['checkpointEvery'] = 60
 json.dump(plan, open(out, 'w'))
 json.dump([[round(float(x), 2), round(float(z), 2)] for x, z in pts], open('route.json', 'w'))
 print('wrote', out, 'flight bumps', crossBump, arcBump)

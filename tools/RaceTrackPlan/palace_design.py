@@ -419,6 +419,11 @@ plan = {
     # (the ramps the rooms' red carpet edged in gold)
     'themes': [{'from': 0, 'to': n - 1, 'theme': 'carpet'}],
     'keepAbove': 0,
+    # (the checkpoints: the plan's own only -- the rooms' ways are all good -- one at the top of the up loop, one at the top of the down
+    # loop, each a few points into its ramp. The user, 2026-10-28: "add a check point at the top of the up loop and the top of the down loop")
+    'ownCheckpoints': True,
+    # (each line just past the ramp's rails -- 10.5 cells on the spiral's inside reached over its open middle, toward the upstairs floor)
+    'checkpointTweaks': [{'add': True, 'point': int(i_up_top) - 6, 'left': -5, 'right': -1}, {'add': True, 'point': int(i_down_top) + 6, 'left': -5, 'right': -1}],
 }
 json.dump(plan, open(OUT, 'w'))
 print('wrote', OUT)

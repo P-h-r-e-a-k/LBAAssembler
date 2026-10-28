@@ -188,6 +188,14 @@ internal sealed class RaceTrackPlan
     // Hand adjustments of the checkpoints the builder places (PlaceCheckpoints), the user's, track by track, testing with the race-track
     // mode's missed-checkpoint alert (2026-10-14): CheckpointTweak.
     public CheckpointTweak[]? CheckpointTweaks { get; set; }
+    // The plan's own checkpoints only (CheckpointTweaks' added lines), none in the corners: a route with several ways through it, all of
+    // them good -- the Emperor's palace's. The user, 2026-10-28: "By design there are a few routes that can be taken in the palace and these
+    // should all be valid", "add a check point at the top of the up loop and the top of the down loop".
+    public bool OwnCheckpoints { get; set; }
+    // No more than this many cells along the road without a checkpoint (0: as the corners have them): lines added, evenly, where the
+    // corners' are further apart -- a long sweeping bend no corner's line is in, Polar Island's loop north of its crossing, which a car
+    // could skip by turning off at the crossing (the user, 2026-10-28: "a user has found a massive track shortcut").
+    public double CheckpointEvery { get; set; }
     // Decors whose top is this high or higher stay, whatever their body, as KeepBodies' do (their collision boxes cut down under a raised
     // road that passes over them): Polar Island's rocky peak and its plateau are decors, and its jump lands on the peak's top -- the
     // build took the peak's columns away under the road, down to the sea, and left the road on its piers in mid-air (2026-10-06).
@@ -390,6 +398,8 @@ internal sealed class CheckpointTweak
     // (a line of the plan's own at At, beside the builder's, where a corner can be cut between two of them -- "On Desert.ile we need to
     // add a check point between 12 and 13, so the corner can't be skipped")
     public bool Add { get; set; }
+    // (... or at the plan's point Point, in place of At: on a spiral, whose turns are over one another, the turn of that point's height)
+    public int? Point { get; set; }
 }
 
 internal sealed record JumpInfo(double StartX, double StartZ, double LandX, double LandZ, double DirX, double DirZ, int Beta, double Height,
@@ -1154,8 +1164,10 @@ internal static class RaceTrackBuilder
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
         report.LapY = (double[])main.H.Clone(); report.LapRaised = (bool[]?)main.Raised?.Clone(); report.LapArc = (bool[]?)main.Arc?.Clone();
-        if (!plan.Open) PlaceCheckpoints(roads, report, options, planned, plan.CheckpointTweaks, plan.OriginCellX, plan.OriginCellZ);
-        else if (plan.Finish is { } finish) FinishLine(main, PlanPoint(plan, main, finish), options, report);
+        var finishAt = plan.Open && plan.Finish is { } finish ? PlanPoint(plan, main, finish) : -1;
+        if (finishAt >= 0) FinishLine(main, finishAt, options, report);
+        PlaceCheckpoints(roads, report, options, planned, plan.CheckpointTweaks, plan.OriginCellX, plan.OriginCellZ, finishAt,
+            p => PlanPoint(plan, main, p), plan.OwnCheckpoints, plan.CheckpointEvery);
         PlacePits(roads, report, options, planned);
         foreach (var mine in plan.Mines ?? Array.Empty<double[]>())
             if (mine.Length >= 2) report.Mines.Add((mine[0] + plan.OriginCellX, mine[1] + plan.OriginCellZ));
@@ -2794,7 +2806,8 @@ internal static class RaceTrackBuilder
     private const double RaisedLevelApart = 2400;
 
     // A sprint's finish line (RaceTrackPlan.Finish): across the road at point k, a cell past its rail or verge either side, the way the
-    // route runs there, at the road's height. No checkpoints: the route is driven once, start to finish.
+    // route runs there, at the road's height. Its checkpoints are a lap's, one in each corner (PlaceCheckpoints): the finish counts once the
+    // car has crossed them all.
     private static void FinishLine(TrackRoad r, int k, RaceTrackOptions o, RaceTrackReport report)
     {
         double x = r.X[k], z = r.Z[k], dx = r.Tx[k], dz = r.Tz[k];
@@ -2802,25 +2815,38 @@ internal static class RaceTrackBuilder
         double nx = -dz, nz = dx;
         report.FinishLine = (x - nx * half, z - nz * half, x + nx * half, z + nz * half, dx, dz);
         report.FinishLineHeight = r.H[k];
-        report.Notes.Add($"a sprint: the finish line at cell ({x:0.0}, {z:0.0}), height {r.H[k]:0}, {r.S[k] - (report.StartLine.Count > 0 ? r.S[Nearest(r, report.StartLine[0].X, report.StartLine[0].Z)] : 0):0} cells from the start line; no checkpoints");
+        report.Notes.Add($"a sprint: the finish line at cell ({x:0.0}, {z:0.0}), height {r.H[k]:0}, {r.S[k] - (report.StartLine.Count > 0 ? r.S[Nearest(r, report.StartLine[0].X, report.StartLine[0].Z)] : 0):0} cells from the start line");
     }
 
+    // (`finish`: a sprint's finish line's point -- the route open, from the start line to it, driven once -- else -1; `planPoint`: the
+    // road's point of a plan's point; `own`: the plan's added lines only, RaceTrackPlan.OwnCheckpoints; `every`: RaceTrackPlan.CheckpointEvery)
     private static void PlaceCheckpoints(List<TrackRoad> roads, RaceTrackReport report, RaceTrackOptions o, bool planned = false,
-        IReadOnlyList<CheckpointTweak>? tweaks = null, double originX = 0, double originZ = 0)
+        IReadOnlyList<CheckpointTweak>? tweaks = null, double originX = 0, double originZ = 0, int finish = -1, Func<int, int>? planPoint = null,
+        bool own = false, double every = 0)
     {
         if (report.StartLine.Count == 0) return;
         var r = roads[0]; var n = r.Count;
         var i0 = Nearest(r, report.StartLine[0].X, report.StartLine[0].Z); var s0 = r.S[i0];
-        double Ahead(int k) { var d = r.S[k] - s0; return d < 0 ? d + r.Length : d; }
+        // (how far along from the start line: round a lap from it; on an open road straight on, behind it below 0)
+        double Ahead(int k) { var d = r.S[k] - s0; return d < 0 && r.Closed ? d + r.Length : d; }
         var avoid = new List<(double From, double To)>();
         // (a stretch from `lo` to `hi` cells along the lap, either end past the start line wrapped round to the lap's other end)
         void Avoid(double lo, double hi)
         {
             avoid.Add((lo, hi));
+            if (!r.Closed) return;
             if (lo < 0) avoid.Add((lo + r.Length, r.Length));
             if (hi > r.Length) avoid.Add((0, hi - r.Length));
         }
-        if (roads.Count > 1)
+        if (!r.Closed)
+        {
+            // (a sprint: nothing behind the start line or just past it, nor just before the finish or past it -- Polar Island's, whose route
+            // had no checkpoints at all till 2026-10-28, the user: "make sure each corner has one please, as a user has found a massive
+            // track shortcut")
+            avoid.Add((double.MinValue, 6));
+            avoid.Add((finish >= 0 ? Ahead(finish) - 6 : r.Length, double.MaxValue));
+        }
+        else if (roads.Count > 1)
         {
             var pit = roads[1];
             var a = Ahead(Nearest(r, pit.X[0], pit.Z[0])); var b = Ahead(Nearest(r, pit.X[pit.Count - 1], pit.Z[pit.Count - 1]));
@@ -2844,7 +2870,7 @@ internal static class RaceTrackBuilder
         var jumpClear = jumps.Sum(j => j.FlightCells + 40) > r.Length / 2 ? 4 : 20;
         foreach (var jump in jumps)
         {
-            var j = ((jump.S0 - s0) % r.Length + r.Length) % r.Length + jump.FlightCells / 2;
+            var j = (r.Closed ? ((jump.S0 - s0) % r.Length + r.Length) % r.Length : jump.S0 - s0) + jump.FlightCells / 2;
             Avoid(j - jump.FlightCells / 2 - jumpClear, j + jump.FlightCells / 2 + jumpClear);
         }
         // (not on the stretch of the lap a branch of the raised road goes round -- Wannies Island's shortcut: a car taking it doesn't cross it)
@@ -2892,7 +2918,7 @@ internal static class RaceTrackBuilder
         var w = Math.Max(1, (int)Math.Round(3 / o.Spacing));
         var bend = new double[n];
         for (var k = 0; k < n; k++) { double sum = 0; for (var m = -w; m <= w; m++) sum += r.Kappa[At(r, k + m)]; bend[k] = sum / (2 * w + 1); }
-        var startAt = Enumerable.Range(0, n).FirstOrDefault(k => Math.Abs(bend[k]) < 1 / CornerRadius);
+        var startAt = r.Closed ? Enumerable.Range(0, n).FirstOrDefault(k => Math.Abs(bend[k]) < 1 / CornerRadius) : 0;
         var runs = new List<(int From, int Count, int Sign)>();
         for (var j = 0; j < n; j++)
         {
@@ -2970,7 +2996,7 @@ internal static class RaceTrackBuilder
             return (left, leftEnough, right, rightEnough, inside);
         }
         var placed = new List<(int Point, double Left, double Right)>();
-        foreach (var (point, from, count) in targets.OrderBy(t => Ahead(t.Point)))
+        foreach (var (point, from, count) in own ? Enumerable.Empty<(int, int, int)>() : targets.OrderBy(t => Ahead(t.Point)))
         {
             if (placed.Count >= MaxCheckpoints) break;
             // the corner's middle, or the nearest place in the corner a line will do (clear of the pits, the jumps, the crossings and the
@@ -2984,6 +3010,30 @@ internal static class RaceTrackBuilder
                 if (!leftEnough || !rightEnough) continue;
                 placed.Add((k, left, right));
                 break;
+            }
+        }
+        // where the corners' lines are further apart than `every` cells (and from the start line to the first, the last to the finish or the
+        // start line again): lines between them, evenly -- at the nearest place to each a line will do, within a quarter of `every`
+        if (every > 0 && !own)
+        {
+            var end = r.Closed ? r.Length : finish >= 0 ? Ahead(finish) : r.Length;
+            var stops = placed.Select(p => Ahead(p.Point)).Append(0).Append(end).OrderBy(a => a).ToList();
+            for (var q = 0; q + 1 < stops.Count && placed.Count < MaxCheckpoints; q++)
+            {
+                double a = stops[q], b = stops[q + 1];
+                var pieces = (int)Math.Ceiling((b - a) / every);
+                for (var m = 1; m < pieces && placed.Count < MaxCheckpoints; m++)
+                {
+                    var want = a + (b - a) * m / pieces;
+                    foreach (var k in Enumerable.Range(0, n).Where(k => Math.Abs(Ahead(k) - want) <= every / 4 && Clear(k)).OrderBy(k => Math.Abs(Ahead(k) - want)))
+                    {
+                        if (!InsideCube(r.X[k], r.Z[k]) || placed.Any(p => Math.Abs(Ahead(p.Point) - Ahead(k)) < 6)) continue;
+                        var (left, leftEnough, right, rightEnough, _) = LineAt(k);
+                        if (!leftEnough || !rightEnough) continue;
+                        placed.Add((k, left, right));
+                        break;
+                    }
+                }
             }
         }
         // the plan's own adjustments (RaceTrackPlan.CheckpointTweaks): a line moved to another place round its corner -- reaching across the
@@ -3006,8 +3056,10 @@ internal static class RaceTrackBuilder
         {
             if (tw.Add)
             {
-                if (tw.At is not { Length: >= 2 } where) { report.Notes.Add("WARNING: the plan adds a checkpoint without a place (At)"); continue; }
-                added.Add(Across(Nearest(r, where[0] + originX, where[1] + originZ), tw));
+                var k = tw.Point is { } pp && planPoint is not null ? planPoint(pp)
+                      : tw.At is { Length: >= 2 } where ? Nearest(r, where[0] + originX, where[1] + originZ) : -1;
+                if (k < 0) { report.Notes.Add("WARNING: the plan adds a checkpoint without a place (At or Point)"); continue; }
+                added.Add(Across(k, tw));
                 tweaked.Add($"a checkpoint added at cell ({r.X[added[^1].Point]:0.0}, {r.Z[added[^1].Point]:0.0})");
                 continue;
             }
@@ -3043,7 +3095,8 @@ internal static class RaceTrackBuilder
         if (Environment.GetEnvironmentVariable("RT_CPDEBUG") == "1")
             for (var q = 0; q < placed.Count; q++)
                 Console.WriteLine($"CP {q + 1} at point {placed[q].Point} ({r.X[placed[q].Point]:0.0}, {r.Z[placed[q].Point]:0.0}) left {placed[q].Left:0.0} right {placed[q].Right:0.0} inside {(LineAt(placed[q].Point).Inside < 0 ? "left" : "right")} edge {Edge(placed[q].Point):0.0}");
-        report.Notes.Add($"{report.Checkpoints.Count} checkpoints round the lap, in the middle of {targets.Count} corners (a lap counts once the car has crossed them all, in order)");
+        report.Notes.Add(own ? $"{report.Checkpoints.Count} checkpoints, the plan's own (a lap counts once the car has crossed them all, in order)"
+            : $"{report.Checkpoints.Count} checkpoints round the lap, in the middle of {targets.Count} corners{(every > 0 ? $" and no more than {every:0} cells apart" : "")} (a lap counts once the car has crossed them all, in order)");
     }
 
     // An opponent's racing line (the race-track mode drives a car along it): a point a cell apart round the lap from the start line, placed

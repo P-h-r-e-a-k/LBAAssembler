@@ -4570,6 +4570,15 @@ void RaceMod_Lap(S32 x, S32 z) {
     if (s_sprint && s_hasFinish && s_laps > 0 && !s_place && s_phase == PHASE_RACE && CrossLine(&s_finishLine, x0, z0, x, z) > 0) {
         // (a time trial's run with more to come: back to the start for the next -- SprintRunAgain)
         if (s_runAgainAt) return;   // (over it already, going back to the start)
+        // (a checkpoint missed -- a corner cut: the finish doesn't count, back for it, as a lap's line doesn't. The user, 2026-10-28, Polar
+        // Island's sprint had none: "a user has found a massive track shortcut")
+        if (s_nbCheckpoints && s_next < s_nbCheckpoints) {
+            char text[64];
+            snprintf(text, sizeof(text), "Missed checkpoint %d: go back for it", s_next + 1);
+            Message(text);
+            Log_Info("[racemod] the finish line crossed with checkpoint %d of %d missed: no finish", s_next + 1, s_nbCheckpoints);
+            return;
+        }
         if (SprintRunAgain(TimerRefHR)) return;
         SprintOver(TimerRefHR, 1);
         return;
