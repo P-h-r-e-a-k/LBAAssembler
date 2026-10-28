@@ -43,7 +43,6 @@ internal static class RaceTrackLoopBody
         along = Vector3.Normalize(new Vector3(along.X, 0, along.Z));
         var across = new Vector3(-along.Z, 0, along.X);
         var up = Vector3.UnitY;
-        float R = (float)radius;
         // across each section: (offset across, height over the road surface towards the ring's middle)
         var edge = half + RailWidth;
         var profile = new (double U, double H)[] { (-edge, -Thickness), (-edge, Rail), (-half, Rail), (-half, 0), (half, 0), (half, Rail), (edge, Rail), (edge, -Thickness) };

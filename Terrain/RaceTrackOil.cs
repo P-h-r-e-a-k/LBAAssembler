@@ -64,12 +64,7 @@ internal static class RaceTrackOil
         // (a polygon facing away from `inside`: the engine draws one only from the side its points go round anticlockwise)
         void Out(int[] hs, int colour, Vector3 inside)
         {
-            var n = Vector3.Zero;
-            for (var i = 0; i < hs.Length; i++)
-            {
-                var a = points[hs[i]]; var b = points[hs[(i + 1) % hs.Length]];
-                n += new Vector3((a.Y - b.Y) * (a.Z + b.Z), (a.Z - b.Z) * (a.X + b.X), (a.X - b.X) * (a.Y + b.Y));
-            }
+            var n = LBAAssembler.Terrain.Palace.PalaceTorturers.Newell(hs.Select(h => points[h]).ToArray());
             var centre = hs.Aggregate(Vector3.Zero, (s, h) => s + points[h]) / hs.Length;
             if (Vector3.Dot(n, centre - inside) < 0) hs = hs.Reverse().ToArray();
             faces.Add(new Face(hs, colour, Material: -1));

@@ -224,7 +224,7 @@
  *     marshal_plinth=<body>      her plinth, a body of its own (the entity's number for it), standing where marshal= has her (its top there)
  *     marshal_start=<x> <z> <y> <turn>   where she gives the start from (island units, the road's height; the way she faces): on the road
  *                                between the grid's columns, ahead of the front row -- there for the count-down and GO (and a qualifying
- *                                lap's start), the cars set off past her on either side (kept off her: MarshalPost, MarshalKeepOff), and
+ *                                lap's start), the cars set off past her on either side (driving through her since 2026-10-26), and
  *                                once they have she hops off the road onto her plinth (Marshal)
  *   The music (2026-10-18): music=<file>   the race's own music in place of its scenes' (a WAV or OGG, or a MIDI file -- 2026-10-20 --
  *                                played through the PC's MIDI synth: LIB386/AIL/SDL/MIDI.CPP; not a full path: the game folder's)
@@ -1290,7 +1290,6 @@ static S32 s_panelAt = -1000000;
 // it picks at random among those within its reach and outside, over the gas (not in the halls under the island), each bullet where that
 // car will be when it comes down (its way measured between bullets), a little either side (RACE_GUN_HUNT_SPREAD): a car that turns or
 // brakes or speeds up is missed.
-#define RACE_MAX_GUNNERS_HUNTING 8
 #define RACE_GUN_HUNT_SPREAD 700
 // ... since 2026-10-15 later (the user: "The large missile launchers on CX aren't firing in a way to hit the cars as they're firing over the
 // track, however we seem to have new machine gun fire coming from the turrets instead. The actual missile launchers should target the cars,
@@ -1702,18 +1701,15 @@ static S32 s_webScreenAt = 0, s_webScreenUntil = 0;   // a web over Twinsen's sc
 // ahead of the front row, facing the cars, in the middle of the view of the camera behind every car on the grid -- from the grid's forming
 // (and before a qualifying lap) to GO's drop; once every car has driven past her (or RACE_MARSHAL_STAY after GO, whatever they do) she hops
 // off the road onto her plinth beside it (marshal_plinth=, drawn there all the while), where she stands the rest of the race and waves the
-// chequered flag. While she is on the road nothing drives through her: Twinsen's car glances off her as off a post (MarshalPost, with the
-// rail -- put out across the lap to RACE_MARSHAL_POST from her middle, on its own side, going on at its speed: never stopped), and each
-// opponent keeps to its grid column until it is past her (MarshalColumn) and is put out the same way were it ever nearer (MarshalKeepOff);
-// the log says how close each car came. The camera behind Twinsen's car sees her: pulled back on the grid behind pole, and swerving round
+// chequered flag. While she is on the road each opponent keeps to its grid column until it is past her (MarshalColumn); the cars drive
+// through her (since 2026-10-26 -- the user: "The magicians assistant on the start line for the Temple track, let's remove her collision so
+// cars can drive through her"). The log says how close Twinsen's car came. The camera behind Twinsen's car sees her: pulled back on the grid behind pole, and swerving round
 // her as the car sets off -- it rides the road's middle, where she stands (MarshalBack, MarshalEye). Without marshal_start= (or a grid)
 // she stays on her plinth, as she did before.
 #define RACE_MARSHAL_RAISE 3000            // ms before GO she raises the start flag (the count-down's 3) ...
 #define RACE_MARSHAL_DROP 1600             // ... and the drop's, from GO, before she stands ready again
 #define RACE_MARSHAL_COMING (40 * 512.0)   // the chequered flag out as a car on its last lap comes this near the line along the lap ...
 #define RACE_MARSHAL_WAVE 6000             // ... and waved on this long (ms) after a car's finish
-#define RACE_MARSHAL_POST 1000.0           // on the road nothing's middle comes nearer hers than this: a car's box (633 round its middle) and her
-                                           // (330 round hers, 1.6 times the game's assistant) apart
 #define RACE_MARSHAL_PAST (3 * 512.0)      // a car is past her once its middle is this far beyond hers along the lap (its tail, 1.5 cells
                                            // behind its middle, clear of her) ...
 #define RACE_MARSHAL_STAY 15000            // ... and she leaves the road this long after GO whether or not every car has
@@ -1740,7 +1736,7 @@ typedef struct {
     S32 HopAt;                             // her hops: since, from where, how many
     double HopX, HopZ, HopY; S32 HopBeta;
     int Hops;
-    int Passed[RACE_MAX_OPPONENTS], MePassed, Kept[RACE_MAX_OPPONENTS], Glanced;
+    int Passed[RACE_MAX_OPPONENTS], MePassed;
     double Closest[RACE_MAX_OPPONENTS + 1];   // each car's nearest to her middle on the road (the opponents', Twinsen's last)
     double Column[RACE_MAX_OPPONENTS];     // each opponent's way across from her middle on its grid spot (HasColumn: known)
     int HasColumn[RACE_MAX_OPPONENTS];
@@ -2806,14 +2802,11 @@ static int s_railWhy = 0, s_railSeg = -1;
 static double s_railLat = 0, s_railLo = 0, s_railHi = 0;
 static S32 s_railAt = 0;
 #define RAIL_NOTE(w) (s_railWhy = (w), s_railAt = TimerRefHR)
-static void MarshalPost(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     // (on foot -- exploring, on_foot=, or anywhere out of his car: nothing holds him on the road, he jumps or walks off its edge as off any
     // ledge; its side a wall to him. The rail is the car's: the user, 2026-10-27, "Twinsen is unable to jump off the track at the raised
     // sections, are we able to fix this whilst still preventing the car from falling off?")
     if (Comportement != C_BUGGY) { FootDeckWall(ox, oy, oz, nx, nz); return; }
-    // (the flag marshal on the road for the start: a post the car glances off)
-    MarshalPost(ox, oy, oz, nx, nz);
     if (!s_nbRaised || CubeMode != CUBE_EXTERIEUR) return;
     if (s_flying >= 0 || s_arcOn >= 0) return; // (a jump's flight is scripted: the rail held a car on it back at the lip, and the flight went nowhere)
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
@@ -3687,10 +3680,10 @@ static void Load(const char *path, int carOnly = 0) {
                 }
             }
         }
-        else if (!strcmp(key, "arcjump")) {
+        else if (!strcmp(key, "arcjump") && s_nbArcs < RACE_MAX_ARCS) {
             T_RACE_ARC *a = &s_arcs[s_nbArcs];
             a->Side = 1; a->FlightMs = 0;
-            if (s_nbArcs < RACE_MAX_ARCS && sscanf(v, "%d %d %d %d %d %d", &a->Foot, &a->Lip, &a->Land, &a->LandFoot, &a->Side, &a->FlightMs) >= 4) s_nbArcs++;
+            if (sscanf(v, "%d %d %d %d %d %d", &a->Foot, &a->Lip, &a->Land, &a->LandFoot, &a->Side, &a->FlightMs) >= 4) s_nbArcs++;
         }
         else if (!strcmp(key, "rail_open")) {
             T_RACE_RAIL_OPEN *o = &s_railOpen[s_nbRailOpen];
@@ -3704,10 +3697,10 @@ static void Load(const char *path, int carOnly = 0) {
                 if (o->N >= 3) s_nbRailOpen++;
             }
         }
-        else if (!strcmp(key, "open_area")) {
+        else if (!strcmp(key, "open_area") && s_nbOpen < RACE_MAX_OPEN) {
             T_RACE_OPEN *a = &s_open[s_nbOpen];
             a->Under = 0;
-            if (s_nbOpen < RACE_MAX_OPEN && sscanf(v, "%lf %lf %lf %lf %lf %d", &a->X0, &a->Z0, &a->X1, &a->Z1, &a->Floor, &a->Under) >= 5) s_nbOpen++;
+            if (sscanf(v, "%lf %lf %lf %lf %lf %d", &a->X0, &a->Z0, &a->X1, &a->Z1, &a->Floor, &a->Under) >= 5) s_nbOpen++;
         }
         else if (!strcmp(key, "cube_scene")) {
             int *c = s_cubeScenes[s_nbCubeScenes];
@@ -3986,10 +3979,10 @@ static void Load(const char *path, int carOnly = 0) {
                 t->From = from; t->To = to; t->Roof = roof; t->Ceiling = got >= 4 ? ceiling : RACE_TUNNEL_NO_CEILING; s_nbTunnels++;
             }
         }
-        else if (!strcmp(key, "jet")) {
+        else if (!strcmp(key, "jet") && s_nbJets < RACE_MAX_JETS) {
             T_RACE_JET *p = &s_jets[s_nbJets];
             int x, y, z, a, b, c, d, e, f, g, h = RACE_STEAM_HIGH;
-            const int n = s_nbJets < RACE_MAX_JETS ? sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d", &x, &y, &z, &a, &b, &c, &d, &e, &f, &g, &h) : 0;
+            const int n = sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d", &x, &y, &z, &a, &b, &c, &d, &e, &f, &g, &h);
             memset(p, 0, sizeof(*p));
             p->X = x; p->Y = y; p->Z = z; p->Burst = -1; p->High = h;
             // (x y z half reach on off phase dirx dirz [high]: across the road, from Half out of its middle, High over the deck; x y z reach
@@ -6645,7 +6638,7 @@ static void LoopEnd(T_OBJ_3D *obj, double v, const char *how) {
 // the road RACE_FROG_BACK before the take-off, stopped (FrogBounce); an opponent coming up to it is slowed, from RACE_FROG_PACE before
 // it, to come to it as it opens (FrogCap).
 
-static double FrogEase(double u) { u = u < 0 ? 0 : u > 1 ? 1 : u; return u * u * (3 - 2 * u); }
+static double Smoothstep(double u) { u = u < 0 ? 0 : u > 1 ? 1 : u; return u * u * (3 - 2 * u); }
 static S32 FrogPhase(S32 t) { const S32 p = t % s_frog.Period; return p < 0 ? p + s_frog.Period : p; }
 
 // Whether a car coming to the mouth at t gets in: it is open enough, and stays open till the car is past the jaw.
@@ -6665,11 +6658,11 @@ static S32 FrogNextOpen(S32 t) {
 // Its jaw's, its tongue's and its tongue's tip's turns at `now`.
 static void FrogPose(S32 now, S32 *jaw, S32 *flip, S32 *curl) {
     const S32 p = FrogPhase(now), m = s_frog.Move, o = s_frog.Open;
-    double shut = p < m ? 1 - FrogEase((double)p / m) : p < m + o ? 0 : p < 2 * m + o ? FrogEase((double)(p - m - o) / m) : 1;
+    double shut = p < m ? 1 - Smoothstep((double)p / m) : p < m + o ? 0 : p < 2 * m + o ? Smoothstep((double)(p - m - o) / m) : 1;
     // (too late to get in: the jaw twitching, three times, a tenth of the way up)
     if (p >= m + o - RACE_FROG_CLEAR && p < m + o) shut = 0.1 * (0.5 - 0.5 * cos(2 * RACE_PI * 3 * (p - (m + o - RACE_FROG_CLEAR)) / (double)RACE_FROG_CLEAR));
     const S32 q = p - m, a = s_frog.TongueOut, h = s_frog.TongueHold, b = s_frog.TongueIn;
-    const double out = q < 0 ? 0 : q < a ? FrogEase((double)q / a) : q < a + h ? 1 : q < a + h + b ? 1 - FrogEase((double)(q - a - h) / b) : 0;
+    const double out = q < 0 ? 0 : q < a ? Smoothstep((double)q / a) : q < a + h ? 1 : q < a + h + b ? 1 - Smoothstep((double)(q - a - h) / b) : 0;
     *jaw = (S32)floor(s_frog.JawShut * shut + 0.5);
     *flip = (S32)floor(s_frog.TongueFlip * out + 0.5);
     *curl = (S32)floor(s_frog.TongueCurl * out + 0.5);
@@ -6771,7 +6764,7 @@ static void FrogBounceStart(double x, double y, double z, const T_RACE_ARC *a) {
 // For RaceMod_Loop, while the car is thrown back: its place this frame (an arc over the line to where it is put down, its nose up), stopped.
 static S32 FrogBounce(S32 *nx, S32 *ny, S32 *nz) {
     T_OBJ_3D *obj = &ListObjet[NUM_PERSO].Obj;
-    const double t = (TimerRefHR - s_frog.BounceT0) / (double)RACE_FROG_BOUNCE_MS, f = FrogEase(t), lift = t >= 1 ? 0 : RACE_FROG_BOUNCE_UP * 4 * t * (1 - t);
+    const double t = (TimerRefHR - s_frog.BounceT0) / (double)RACE_FROG_BOUNCE_MS, f = Smoothstep(t), lift = t >= 1 ? 0 : RACE_FROG_BOUNCE_UP * 4 * t * (1 - t);
     const double x = s_frog.B0[0] + (s_frog.B1[0] - s_frog.B0[0]) * f, y = s_frog.B0[1] + (s_frog.B1[1] - s_frog.B0[1]) * f + lift;
     const double z = s_frog.B0[2] + (s_frog.B1[2] - s_frog.B0[2]) * f;
     ListBuggy[0].Speed = 0;
@@ -6838,12 +6831,7 @@ static S32 EntityEntry(S32 entity, U8 what, S32 generic) {
 
 // ---- where she stands: on the road for the start, hopping off it, on her plinth
 
-// Whether the cars glance off her (MarshalPost, MarshalKeepOff): no since 2026-10-26 -- the user: "The magicians assistant on the start line
-// for the Temple track, let's remove her collision so cars can drive through her". (The opponents still keep to their grid columns past
-// her: MarshalColumn.)
-#define RACE_MARSHAL_SOLID 0
-
-// Whether she stands on the road now (for the start, or hopping off it): nothing drives through her.
+// Whether she stands on the road now (for the start, or hopping off it).
 static int MarshalOnRoad(void) {
     const T_RACE_MARSHAL *m = &s_marshal;
     return m->On && m->HasStart && m->Where != MARSHAL_AT_PLINTH && CubeMode == CUBE_EXTERIEUR;
@@ -6853,42 +6841,6 @@ static int MarshalOnRoad(void) {
 static void MarshalWay(double *fx, double *fz) {
     const double b = s_marshal.StartBeta * 2 * RACE_PI / 4096.0;
     *fx = -sin(b); *fz = -cos(b);
-}
-
-// Something's middle at (x, z) (island units; at height y) kept RACE_MARSHAL_POST from hers while she stands on the road: put out across
-// the lap to that, on its own side (`was`: how far across it was, for one right in line with her), its place along the lap kept -- a car
-// glances off her, it isn't stopped. 1: put out.
-static int MarshalOff(double *x, double *z, double y, double was) {
-    const T_RACE_MARSHAL *m = &s_marshal;
-    if (!MarshalOnRoad() || fabs(y - m->CY) > 1500) return 0;
-    const double rx = *x - m->CX, rz = *z - m->CZ;
-    if (rx * rx + rz * rz >= RACE_MARSHAL_POST * RACE_MARSHAL_POST) return 0;
-    double fx, fz;
-    MarshalWay(&fx, &fz);
-    const double along = rx * fx + rz * fz, across = -rx * fz + rz * fx;
-    const double side = fabs(across) > 1 ? across : fabs(was) > 1 ? was : 1;
-    const double out = sqrt(RACE_MARSHAL_POST * RACE_MARSHAL_POST - along * along) * (side > 0 ? 1 : -1);
-    *x = m->CX + fx * along - fz * out;
-    *z = m->CZ + fz * along + fx * out;
-    return 1;
-}
-
-// RaceMod_Rail's: the hero's move from (ox, oy, oz) to (*nx, *nz) (cube-local) kept off the flag marshal while she stands on the road -- a
-// post his car glances off (MarshalOff), going on at its speed.
-static void MarshalPost(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
-    T_RACE_MARSHAL *m = &s_marshal;
-    if (!RACE_MARSHAL_SOLID || !MarshalOnRoad()) return;
-    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
-    double x = *nx + cx, z = *nz + cz, fx, fz;
-    MarshalWay(&fx, &fz);
-    const double was = -(ox + cx - m->CX) * fz + (oz + cz - m->CZ) * fx;
-    const double d = sqrt((x - m->CX) * (x - m->CX) + (z - m->CZ) * (z - m->CZ));
-    if (!MarshalOff(&x, &z, oy, was)) return;
-    static S32 said = 0;
-    if (TimerRefHR - said > 1000) Log_Info("[racemod] the flag marshal: Twinsen's car glances off her (its middle %.0f from hers, put out to %.0f)", d, RACE_MARSHAL_POST);
-    said = TimerRefHR;
-    m->Glanced++;
-    *nx = (S32)floor(x - cx + 0.5); *nz = (S32)floor(z - cz + 0.5);
 }
 
 // While she stands on the road for the start, an opponent that hasn't driven past her keeps to its grid column -- its line runs across the
@@ -6907,23 +6859,6 @@ static void MarshalColumn(int n, T_RACE_OPPONENT *o, double x, double z) {
     o->MergeX = m->CX + fx * along - fz * m->Column[n] - x;
     o->MergeZ = m->CZ + fz * along + fx * m->Column[n] - z;
     o->MergeLeft = RACE_MERGE;
-}
-
-// An opponent's car (its actor, placed this frame) put out of her way while she stands on the road (MarshalOff), on its grid column's side
-// -- were its column too near her; the nearest it comes kept for the log.
-static void MarshalKeepOff(int n, T_OBJET *car) {
-    T_RACE_MARSHAL *m = &s_marshal;
-    if (!RACE_MARSHAL_SOLID || !MarshalOnRoad()) return;
-    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
-    double x = car->Obj.X + cx, z = car->Obj.Z + cz, fx, fz;
-    MarshalWay(&fx, &fz);
-    const double d = sqrt((x - m->CX) * (x - m->CX) + (z - m->CZ) * (z - m->CZ));
-    if (MarshalOff(&x, &z, car->Obj.Y, m->HasColumn[n] ? m->Column[n] : -s_opp[n].MergeX * fz + s_opp[n].MergeZ * fx)) {
-        if (!m->Kept[n]++) Log_Info("[racemod] the flag marshal: %s's car kept off her (its line %.0f from her middle, put out to %.0f)", s_opp[n].Name, d, RACE_MARSHAL_POST);
-        car->Obj.X = (S32)floor(x - cx + 0.5); car->Obj.Z = (S32)floor(z - cz + 0.5);
-    }
-    const double e = sqrt((x - m->CX) * (x - m->CX) + (z - m->CZ) * (z - m->CZ));
-    if (s_phase == PHASE_RACE && e < m->Closest[n]) m->Closest[n] = e;
 }
 
 // The rail camera (RailCamera) by her on the road. On the grid -- and on pole before a qualifying lap, while the car stands -- the eye of a
@@ -7035,8 +6970,8 @@ static void MarshalToStart(const char *why) {
     T_RACE_MARSHAL *m = &s_marshal;
     m->Where = MARSHAL_AT_START;
     m->CX = m->StartX; m->CZ = m->StartZ; m->CY = m->StartY; m->CBeta = m->StartBeta;
-    memset(m->Passed, 0, sizeof(m->Passed)); memset(m->Kept, 0, sizeof(m->Kept)); memset(m->HasColumn, 0, sizeof(m->HasColumn));
-    m->MePassed = 0; m->Glanced = 0; m->EyeSide = 0; m->EyeBack = 0;
+    memset(m->Passed, 0, sizeof(m->Passed)); memset(m->HasColumn, 0, sizeof(m->HasColumn));
+    m->MePassed = 0; m->EyeSide = 0; m->EyeBack = 0;
     for (int k = 0; k <= RACE_MAX_OPPONENTS; k++) m->Closest[k] = 1e9;
     Log_Info("[racemod] the flag marshal stands on the road for the start (%s): at (%.0f,%.0f,%.0f), turned %d, the grid's columns either side of her", why,
              m->StartX, m->StartY, m->StartZ, (int)m->StartBeta);
@@ -7060,8 +6995,7 @@ static void MarshalHopOff(S32 now, const char *why) {
         if (c > 1e8) used += snprintf(text + used, sizeof(text) - used, "%s%s -", used ? ", " : "", n < RACE_MAX_OPPONENTS ? s_opp[n].Name : "Twinsen");
         else used += snprintf(text + used, sizeof(text) - used, "%s%s %.0f (%.2f cells)", used ? ", " : "", n < RACE_MAX_OPPONENTS ? s_opp[n].Name : "Twinsen", c, c / 512.0);
     }
-    Log_Info("[racemod] the flag marshal hops off the road onto her plinth (%s): %d hops; the nearest each car's middle came to hers: %s%s", why, m->Hops, text,
-             m->Glanced ? " -- Twinsen's car glanced off her" : "");
+    Log_Info("[racemod] the flag marshal hops off the road onto her plinth (%s): %d hops; the nearest each car's middle came to hers: %s", why, m->Hops, text);
 }
 
 // Her hops (each the same share of the way, from the road's height up to her plinth's top, an arc RACE_MARSHAL_HOP_UP high), turning to
@@ -7842,8 +7776,6 @@ static int RingHides(const T_RACE_LOOP *l, double ex, double ey, double ez, doub
     }
     return 0;
 }
-
-static double Smoothstep(double f) { f = f < 0 ? 0 : f > 1 ? 1 : f; return f * f * (3 - 2 * f); }
 
 static S32 LoopCamera(S32 *eye, S32 *target) {
     const T_OBJ_3D *car = &ListObjet[NUM_PERSO].Obj;
@@ -9252,7 +9184,6 @@ static void Slicks(S32 now, int driving) {
             sl->On = 0;
             break;
         }
-        if (!sl->On) continue;
     }
     // the scene's slicks not on the road, out of sight
     for (; k < s_nbOilActors; k++)
@@ -9907,7 +9838,6 @@ static int RedBall(T_RACE_SHOT *sh, S32 now, double dt) {
         const T_RACE_OPPONENT *line = ShotLine(sh);
         for (int who = -1; who < RACE_MAX_OPPONENTS && line; who++) {
             if (who == sh->Owner || CarFinished(who) || (who < 0 && Comportement != C_BUGGY)) continue;
-            if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
             double x, y, z;
             if (!CarAt(who, &x, &y, &z)) continue;
             const double dx = x - sh->X, dz = z - sh->Z;
@@ -12165,12 +12095,6 @@ static void GunnerShot(T_RACE_GUNNER *g, S32 now) {
     if (u->Extra >= 0) ListExtra[u->Extra].Flags &= ~(EXTRA_END_OBJ | EXTRA_END_COL | EXTRA_IMPACT);
 }
 
-// Whether the gun that is actor `gun` of this scene hunts (a hunting gunner's).
-static int GunHunts(int gun) {
-    for (int i = 0; i < s_nbGunners; i++) if (s_gunners[i].Gun == gun && s_gunners[i].Scene == (S32)NumCube) return s_gunners[i].Hunt > 0;
-    return 0;
-}
-
 // Every frame: the machine gunners (gunner=). Between bursts the gun stands still, its Franco sitting at it; a burst every RACE_GUN_EVERY
 // ms or so while the race is on (a quarter either way), its bullets flown, and where each lands, the cars there hit.
 static void Gunners(S32 now, int driving) {
@@ -12196,7 +12120,6 @@ static void Gunners(S32 now, int driving) {
                 int pick[RACE_MAX_OPPONENTS + 1], n = 0;
                 for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
                     if (who < 0 && !driving) continue;
-                    if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
                     double x, y, z;
                     if (!CarAt(who, &x, &y, &z) || y < 0 || UnderAtWorld(x, z, (S32)y)) continue;
                     if ((x - g->MX) * (x - g->MX) + (z - g->MZ) * (z - g->MZ) > g->Hunt * g->Hunt) continue;
@@ -12409,7 +12332,6 @@ static void Wheel(S32 now, int driving) {
     // (the cars they roll into: knocked aside, the ball bounced off)
     for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
         if (who < 0 && !driving) continue;
-        if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
         if (now < w->Again[who + 1]) continue;
         double x, y, z;
         if (!CarAt(who, &x, &y, &z)) continue;
@@ -12637,39 +12559,55 @@ static void Monsters(S32 now, int driving) {
 
 static void CarWays(S32 now);
 
-// A flying gas monster's fire ball: from its mouth at where its car will be when it gets there (the car's way kept on, three guesses at the
-// flight's time), straight; the game's fire ball flown along that line where its scene is the one drawn.
-static void FlyerSpit(T_RACE_FLYER *f, S32 now, double y) {
+// A fire ball flown at the car `target` from (ox, oz), `forward` out toward where the car will be when it gets there (the car's way kept
+// on, three guesses at the flight's time), at `speed` (a 20 ms frame's way), a little either side -- FlyerSpit, SpookThrow. NULL: none
+// thrown (no car, no free shot, or the flight longer than `longest` s).
+static T_RACE_BULLET *FireBallAt(int target, double ox, double oz, double fy, double forward, S32 speed, double longest, S32 now) {
     double x, cy, z;
-    if (!CarAt(f->Target, &x, &cy, &z)) return;
+    if (!CarAt(target, &x, &cy, &z)) return NULL;
     const int b = FreeShot();
-    if (b < 0) return;
-    const int k = f->Target + 1;
-    const double v = RACE_FIREBALL_SPEED * 50.0;
-    double tx = x, tz = z, ty = cy + 300, fx = f->X, fy = y + RACE_FLYER_MOUTH_UP, fz = f->Z, flight = 0;
+    if (b < 0) return NULL;
+    const int k = target + 1;
+    const double v = speed * 50.0;
+    double tx = x, tz = z, ty = cy + 300, fx = ox, fz = oz, flight = 0;
     for (int pass = 0; pass < 3; pass++) {
-        const double dx = tx - f->X, dz = tz - f->Z, d = sqrt(dx * dx + dz * dz);
-        if (d < 1) return;
-        fx = f->X + dx / d * RACE_FLYER_MOUTH_FORWARD; fz = f->Z + dz / d * RACE_FLYER_MOUTH_FORWARD;
+        const double dx = tx - ox, dz = tz - oz, d = sqrt(dx * dx + dz * dz);
+        if (d < 1) return NULL;
+        fx = ox + dx / d * forward; fz = oz + dz / d * forward;
         flight = sqrt((tx - fx) * (tx - fx) + (ty - fy) * (ty - fy) + (tz - fz) * (tz - fz)) / v;
         tx = x + s_carVX[k] * flight; tz = z + s_carVZ[k] * flight;
     }
-    if (flight > RACE_FIREBALL_LONGEST) return;
+    if (flight > longest) return NULL;
     {
         const double a = VentRandom() * 2 * RACE_PI, r = sqrt(VentRandom()) * RACE_FIREBALL_SPREAD;
         tx += cos(a) * r; tz += sin(a) * r;
     }
     T_RACE_BULLET *u = &s_bullets[b];
     memset(u, 0, sizeof(*u));
-    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = f->Actor > 0 ? f->Actor : 255; u->Kind = SHOT_FIREBALL; u->Sprite = RACE_FIREBALL_SPRITE; u->Aim = f->Target + 2;
+    u->On = 1; u->T0 = now; u->Extra = -1; u->Sprite = RACE_FIREBALL_SPRITE; u->Aim = target + 2;
     u->FromX = fx; u->FromY = fy; u->FromZ = fz; u->ToX = tx; u->ToY = ty; u->ToZ = tz; u->Dur = (S32)(flight * 1000);
-    if (f->Scene != (S32)NumCube || CubeMode != CUBE_EXTERIEUR || f->Actor <= 0 || f->Actor >= NbObjets) return;
+    return u;
+}
+
+// The game's fire ball shown flying along a FireBallAt's line, thrown by `thrower` with its own collisions off (the hit is Projectiles')
+static void FireBallShown(T_RACE_BULLET *u, U8 thrower, S32 speed) {
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const double fx = u->FromX, fy = u->FromY, fz = u->FromZ, tx = u->ToX, ty = u->ToY, tz = u->ToZ;
     const double R = sqrt((tx - fx) * (tx - fx) + (tz - fz) * (tz - fz));
     const S32 beta = (S32)floor(atan2(tx - fx, tz - fz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
     const S32 alpha = (S32)floor(atan2(ty - fy, R) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
-    u->Extra = ThrowExtra((U8)f->Actor, (S32)(fx - cx), (S32)fy, (S32)(fz - cz), RACE_FIREBALL_SPRITE, alpha, beta, RACE_FIREBALL_SPEED, 0, 0);
+    u->Extra = ThrowExtra(thrower, (S32)(fx - cx), (S32)fy, (S32)(fz - cz), RACE_FIREBALL_SPRITE, alpha, beta, speed, 0, 0);
     if (u->Extra >= 0) ListExtra[u->Extra].Flags &= ~(EXTRA_END_OBJ | EXTRA_END_COL | EXTRA_IMPACT);
+}
+
+// A flying gas monster's fire ball: from its mouth at where its car will be when it gets there (the car's way kept on, three guesses at the
+// flight's time), straight; the game's fire ball flown along that line where its scene is the one drawn.
+static void FlyerSpit(T_RACE_FLYER *f, S32 now, double y) {
+    T_RACE_BULLET *u = FireBallAt(f->Target, f->X, f->Z, y + RACE_FLYER_MOUTH_UP, RACE_FLYER_MOUTH_FORWARD, RACE_FIREBALL_SPEED, RACE_FIREBALL_LONGEST, now);
+    if (!u) return;
+    u->Owner = f->Actor > 0 ? f->Actor : 255; u->Kind = SHOT_FIREBALL;
+    if (f->Scene != (S32)NumCube || CubeMode != CUBE_EXTERIEUR || f->Actor <= 0 || f->Actor >= NbObjets) return;
+    FireBallShown(u, (U8)f->Actor, RACE_FIREBALL_SPEED);
 }
 
 // Every frame: the flying gas monsters (flyer=) -- to and fro along their ways, bobbing; now and then stopping to spit a fire ball at a car;
@@ -12712,7 +12650,6 @@ static void Flyers(S32 now, int driving, S32 dt) {
                     int best = -2; double bestD = 1e18;
                     for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
                         if (who < 0 && !driving) continue;
-                        if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
                         double x, cy, z;
                         if (!CarAt(who, &x, &cy, &z) || cy > y || !UnderAtWorld(x, z, (S32)cy)) continue;
                         const double d2 = (x - f->X) * (x - f->X) + (z - f->Z) * (z - f->Z);
@@ -12745,36 +12682,12 @@ static void Flyers(S32 now, int driving, S32 dt) {
 // as a flying gas monster's (FlyerSpit). The ball is the game's own fire ball sprite, thrown as Twinsen's extra with its own collisions off
 // (no actor of the scene throws it: the hit is Projectiles').
 static void SpookThrow(T_RACE_SPOOK *sp, S32 now, double y) {
-    double x, cy, z;
-    if (!CarAt(sp->Target, &x, &cy, &z)) return;
-    const int b = FreeShot();
-    if (b < 0) return;
-    const int k = sp->Target + 1;
-    const double v = RACE_SPOOK_BALL * 50.0;
-    double tx = x, tz = z, ty = cy + 300, fx = sp->X, fy = y + RACE_SPOOK_HAND_UP, fz = sp->Z, flight = 0;
-    for (int pass = 0; pass < 3; pass++) {
-        const double dx = tx - sp->X, dz = tz - sp->Z, d = sqrt(dx * dx + dz * dz);
-        if (d < 1) return;
-        fx = sp->X + dx / d * RACE_SPOOK_HAND; fz = sp->Z + dz / d * RACE_SPOOK_HAND;
-        flight = sqrt((tx - fx) * (tx - fx) + (ty - fy) * (ty - fy) + (tz - fz) * (tz - fz)) / v;
-        tx = x + s_carVX[k] * flight; tz = z + s_carVZ[k] * flight;
-    }
-    if (flight > RACE_SPOOK_LONGEST) return;
-    {
-        const double a = VentRandom() * 2 * RACE_PI, r = sqrt(VentRandom()) * RACE_FIREBALL_SPREAD;
-        tx += cos(a) * r; tz += sin(a) * r;
-    }
-    T_RACE_BULLET *u = &s_bullets[b];
-    memset(u, 0, sizeof(*u));
-    u->On = 1; u->T0 = now; u->Extra = -1; u->Owner = 0; u->Kind = SHOT_WITCHFIRE; u->Sprite = RACE_FIREBALL_SPRITE; u->Aim = sp->Target + 2;
-    u->FromX = fx; u->FromY = fy; u->FromZ = fz; u->ToX = tx; u->ToY = ty; u->ToZ = tz; u->Dur = (S32)(flight * 1000);
+    T_RACE_BULLET *u = FireBallAt(sp->Target, sp->X, sp->Z, y + RACE_SPOOK_HAND_UP, RACE_SPOOK_HAND, RACE_SPOOK_BALL, RACE_SPOOK_LONGEST, now);
+    if (!u) return;
+    u->Kind = SHOT_WITCHFIRE;
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
-    if (CubeMode != CUBE_EXTERIEUR || fx < cx || fx >= cx + 32768 || fz < cz || fz >= cz + 32768) return;
-    const double R = sqrt((tx - fx) * (tx - fx) + (tz - fz) * (tz - fz));
-    const S32 beta = (S32)floor(atan2(tx - fx, tz - fz) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
-    const S32 alpha = (S32)floor(atan2(ty - fy, R) * 4096 / (2 * RACE_PI) + 0.5) & 4095;
-    u->Extra = ThrowExtra(0, (S32)(fx - cx), (S32)fy, (S32)(fz - cz), RACE_FIREBALL_SPRITE, alpha, beta, RACE_SPOOK_BALL, 0, 0);
-    if (u->Extra >= 0) ListExtra[u->Extra].Flags &= ~(EXTRA_END_OBJ | EXTRA_END_COL | EXTRA_IMPACT);
+    if (CubeMode != CUBE_EXTERIEUR || u->FromX < cx || u->FromX >= cx + 32768 || u->FromZ < cz || u->FromZ >= cz + 32768) return;
+    FireBallShown(u, 0, RACE_SPOOK_BALL);
 }
 
 // The car a witch throws at: the nearest below her and in her reach (`keep` while it still is), -2 none.
@@ -12782,7 +12695,6 @@ static int SpookTarget(const T_RACE_SPOOK *sp, double y, int driving, int keep) 
     int best = -2; double bestD = 1e18;
     for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
         if (who < 0 && !driving) continue;
-        if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
         double x, cy, z;
         if (!CarAt(who, &x, &cy, &z) || cy > y) continue;
         double d2 = (x - sp->X) * (x - sp->X) + (z - sp->Z) * (z - sp->Z);
@@ -13588,7 +13500,6 @@ static int Torturer(T_RACE_GUARD *g, int i, S32 now, int driving, S32 dt) {
     double best = RACE_TORTURER_SEE * RACE_TORTURER_SEE;
     for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
         if (who < 0 && !driving) continue;
-        if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
         double x, y, z;
         if (!CarAt(who, &x, &y, &z) || fabs(y - g->Y) > 1500) continue;
         const double d2 = (g->X - x) * (g->X - x) + (g->Z - z) * (g->Z - z);
@@ -13649,7 +13560,6 @@ static void Guards(S32 now, int driving, S32 dt) {
             double best = 1e30;
             for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
                 if (who < 0 && !driving) continue;
-                if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
                 double x, y, z;
                 if (!CarAt(who, &x, &y, &z) || fabs(y - g->Y) > 1500) continue;
                 const double dx = g->X - x, dz = g->Z - z, d2 = dx * dx + dz * dz;
@@ -13691,7 +13601,6 @@ static void Guards(S32 now, int driving, S32 dt) {
                     g->Blown = 1;
                     for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
                         if (who < 0 && !driving) continue;
-                        if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
                         double x, y, z;
                         if (!CarAt(who, &x, &y, &z) || fabs(y - g->Y) > 1500) continue;
                         if ((x - g->X) * (x - g->X) + (z - g->Z) * (z - g->Z) > RACE_GUARD_REACH * RACE_GUARD_REACH * s_guardSize * s_guardSize) continue;
@@ -13773,7 +13682,6 @@ static void Guards(S32 now, int driving, S32 dt) {
         if (CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768) InitHitExtraPof(lx, (S32)u->ToY, lz, RACE_SHOT_FORCE);
         for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
             if (who < 0 && !driving) continue;
-            if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
             double x, y, z;
             if (!CarAt(who, &x, &y, &z)) continue;
             if ((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ) > RACE_THROWN_REACH * RACE_THROWN_REACH || fabs(y - u->ToY) > 1400) continue;
@@ -13787,7 +13695,6 @@ static void Guards(S32 now, int driving, S32 dt) {
 // 62 67 63 between, as its own take-off and landing scripts change them) come out on the way down and go in on the way up; its thrust
 // (body 59, every other fifth of a second against 58, as its scripts flicker it) while it hovers, touches down and lifts off.
 static const S32 s_legsOut[] = { 68, 63, 67, 62, 66, 61, 65, 60, 64, 58 };
-static double Ease(double u) { u = u < 0 ? 0 : u > 1 ? 1 : u; return u * u * (3 - 2 * u); }
 static void Shuttles(S32 now, int driving) {
     for (int i = 0; i < s_nbShuttles; i++) {
         T_RACE_SHUTTLE *sh = &s_shuttles[i];
@@ -13821,7 +13728,7 @@ static void Shuttles(S32 now, int driving) {
             y = RACE_SHUTTLE_HOVERY + 90 * sin(t * 2 * 3.14159265 / 1800.0);
             body = thrust ? 59 : 58;
         } else if ((t -= RACE_SHUTTLE_HOVER) < RACE_SHUTTLE_TOUCH) {
-            y = RACE_SHUTTLE_HOVERY * (1 - Ease((double)t / RACE_SHUTTLE_TOUCH));
+            y = RACE_SHUTTLE_HOVERY * (1 - Smoothstep((double)t / RACE_SHUTTLE_TOUCH));
             body = thrust ? 59 : 58;
         } else if ((t -= RACE_SHUTTLE_TOUCH) < RACE_SHUTTLE_LANDED) {
             y = 0;
@@ -14941,11 +14848,31 @@ static U8 s_ghostMixMade[256 * 256 / 8];
 static U32 s_ghostPalSum = 0;
 static int s_ghostSix = 0;
 
+// The palette's checksum (another palette: the tables made from it again), and whether it is the VGA's 6 bits a colour (`six`)
+static U32 PalSum(int *six) {
+    U32 sum = 1;
+    *six = 1;
+    for (int i = 0; i < 768; i++) { sum = sum * 31 + PtrPal[i]; if (PtrPal[i] >= 64) *six = 0; }
+    return sum;
+}
+
+// The palette's colour nearest to (r, g, b), weighted for the eye; `own`: the palette's own colours only, not the interface's (1-15)
+// nor its vivid ones from 248
+static int PalNearest(double r, double g, double b, int own) {
+    int best = 0;
+    double bd = 1e30;
+    for (int j = 0; j < (own ? 248 : 256); j++) {
+        if (own && j >= 1 && j < 16) continue;
+        const double dr = PtrPal[j * 3] - r, dg = PtrPal[j * 3 + 1] - g, db = PtrPal[j * 3 + 2] - b, dd = 3 * dr * dr + 4 * dg * dg + 2 * db * db;
+        if (dd < bd) { bd = dd; best = j; }
+    }
+    return best;
+}
+
 static void GhostMixCheck(void) {
     if (!PtrPal) return;
-    U32 sum = 1;
-    int six = 1;
-    for (int i = 0; i < 768; i++) { sum = sum * 31 + PtrPal[i]; if (PtrPal[i] >= 64) six = 0; }
+    int six;
+    const U32 sum = PalSum(&six);
     if (sum == s_ghostPalSum) return;
     s_ghostPalSum = sum;
     s_ghostSix = six;
@@ -14961,13 +14888,7 @@ static U8 GhostMix(U8 under, U8 over) {
         const double ghost = PtrPal[over * 3 + c] * (1 - RACE_GHOST_TINT) + tint[c] * RACE_GHOST_TINT;
         want[c] = PtrPal[under * 3 + c] * (1 - RACE_GHOST_SHARE) + ghost * RACE_GHOST_SHARE;
     }
-    int best = under;
-    double bd = 1e30;
-    for (int j = 0; j < 248; j++) {
-        if (j >= 1 && j < 16) continue;
-        const double dr = PtrPal[j * 3] - want[0], dg = PtrPal[j * 3 + 1] - want[1], db = PtrPal[j * 3 + 2] - want[2], dd = 3 * dr * dr + 4 * dg * dg + 2 * db * db;
-        if (dd < bd) { bd = dd; best = j; }
-    }
+    const int best = PalNearest(want[0], want[1], want[2], 1);
     s_ghostMix[i] = (U8)best;
     s_ghostMixMade[i >> 3] |= (U8)(1 << (i & 7));
     return (U8)best;
@@ -15589,7 +15510,7 @@ void RaceMod_Frame(void) {
         if (index < 0) continue;
         s_carActor[n] = index;
         // Twinsen's super jet-pack coming through: pushed aside, away from its way, and slowed
-        if (driving && now < s_jetUntil && now >= o->ShoveUntil && CubeMode == CUBE_EXTERIEUR) {
+        if (driving && now < s_jetUntil && now >= o->ShoveUntil) {
             const T_OBJET *h = &ListObjet[NUM_PERSO];
             const double hx = h->Obj.X + CurrentCubeX * 32768.0, hz = h->Obj.Z + CurrentCubeY * 32768.0;
             const double ox = x - hx, oz = z - hz;
@@ -15618,7 +15539,6 @@ void RaceMod_Frame(void) {
         // (a car that flies -- the witch on her broomstick: opponent_hover= -- bobbing gently over its line, on the grid too; each opponent
         // a little out of step with the others)
         if (o->HoverUp > 0) car->Obj.Y += (S32)(o->HoverUp * sin(2 * RACE_PI * (double)((now + n * 431) % o->HoverMs) / o->HoverMs));
-        MarshalKeepOff(n, car);
         S32 beta = (S32)(atan2(dx, dz) * 4096.0 / (2 * 3.14159265358979)) & 4095;
         car->Obj.Beta = f >= 1 ? o->SpotBeta : beta;
         car->Obj.Alpha = 0; car->Obj.Gamma = 0;
@@ -15659,8 +15579,7 @@ void RaceMod_Frame(void) {
             if (want >= 0 && car->GenBody != want) InitBody((U8)want, (U8)index);
         }
         // a mushroom it drives over (and an attack it holds for Twinsen: the race's level)
-        if (s_powerups && moving) OpponentMushrooms(n, car);
-        if (s_powerups && moving) OpponentAims(n, car, now);
+        if (s_powerups && moving) { OpponentMushrooms(n, car); OpponentAims(n, car, now); }
         // the driving animation while it moves (its steps are undone every frame: the position is set here)
         const U16 anim = (U16)(o->HasAnims ? (moving ? o->AnimDrive : o->AnimIdle) : (moving ? 1 : 0));
         if (now >= o->HitUntil && car->GenAnim != anim) InitAnim(anim, ANIM_REPEAT, (U8)index);   // (a penguin's blast: its hit reaction plays)
@@ -16157,9 +16076,8 @@ static void HauntMask(S32 height) {
 // The blends' tables, for the palette as it is (made again when it changes).
 static void HauntTables(void) {
     if (!PtrPal) return;
-    U32 sum = 1;
-    int six = 1;
-    for (int i = 0; i < 768; i++) { sum = sum * 31 + PtrPal[i]; if (PtrPal[i] >= 64) six = 0; }
+    int six;
+    const U32 sum = PalSum(&six);
     if (sum == s_hauntPalSum) return;
     s_hauntPalSum = sum;
     // (the sheet's colour, a pale lavender, and black; the palette's own scale -- 8 bits a colour, or the VGA's 6)
@@ -16171,15 +16089,7 @@ static void HauntTables(void) {
                 if (!l) { s_hauntTab[t][l][c] = (U8)c; continue; }
                 const double r = PtrPal[c * 3] + (to[t][0] - PtrPal[c * 3]) * a, g = PtrPal[c * 3 + 1] + (to[t][1] - PtrPal[c * 3 + 1]) * a,
                              b = PtrPal[c * 3 + 2] + (to[t][2] - PtrPal[c * 3 + 2]) * a;
-                int best = c;
-                double bd = 1e30;
-                // (the palette's own colours: not the interface's, 1-15, nor its vivid ones from 248)
-                for (int j = 0; j < 248; j++) {
-                    if (j >= 1 && j < 16) continue;
-                    const double dr = PtrPal[j * 3] - r, dg = PtrPal[j * 3 + 1] - g, db = PtrPal[j * 3 + 2] - b, dd = 3 * dr * dr + 4 * dg * dg + 2 * db * db;
-                    if (dd < bd) { bd = dd; best = j; }
-                }
-                s_hauntTab[t][l][c] = (U8)best;
+                s_hauntTab[t][l][c] = (U8)PalNearest(r, g, b, 1);
             }
         }
     Log_Info("[racemod] the screen's ghost: its blends made for the palette");
@@ -17199,9 +17109,8 @@ static int MapMask(S32 width, S32 height, U32 sig) {
 // The palette's nearest colours to the map's (again when the palette changes: a scene's own, lightning)
 static void MapColours(void) {
     if (!PtrPal) return;
-    U32 sum = 1;
-    int six = 1;
-    for (int i = 0; i < 768; i++) { sum = sum * 31 + PtrPal[i]; if (PtrPal[i] >= 64) six = 0; }
+    int six;
+    const U32 sum = PalSum(&six);
     if (sum == s_mapPalSum) return;
     s_mapPalSum = sum;
     static const U8 want[MAP_COLOURS + RACE_MAX_OPPONENTS + 1][3] = {
@@ -17211,13 +17120,7 @@ static void MapColours(void) {
     };
     const double k = six ? 0.25 : 1;
     for (int c = 0; c < MAP_COLOURS + RACE_MAX_OPPONENTS + 1; c++) {
-        int best = 0;
-        double bd = 1e30;
-        for (int j = 0; j < 256; j++) {
-            const double dr = PtrPal[j * 3] - want[c][0] * k, dg = PtrPal[j * 3 + 1] - want[c][1] * k, db = PtrPal[j * 3 + 2] - want[c][2] * k;
-            const double dd = 3 * dr * dr + 4 * dg * dg + 2 * db * db;
-            if (dd < bd) { bd = dd; best = j; }
-        }
+        const int best = PalNearest(want[c][0] * k, want[c][1] * k, want[c][2] * k, 0);
         if (c < MAP_COLOURS) s_mapCol[c] = (U8)best;
         else s_mapCar[c - MAP_COLOURS] = (U8)best;
     }
@@ -17263,14 +17166,8 @@ static S32 DrawMinimap(S32 width, S32 height) {
     const S32 r = s_mapRoad + 1;
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
-        T_RACE_OPPONENT *o = &s_opp[n];
-        if (!o->Count || !o->Scenes) continue;
-        double x, y, z, v, dx, dz;
-        const int index = OpponentActor(o);
-        if (index >= 0 && ListObjet[index].Obj.Y > -10000) { x = ListObjet[index].Obj.X + cx; z = ListObjet[index].Obj.Z + cz; }
-        else if (RaceOn()) PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
-        else continue;
-        MapDot(x0, y0, x, z, r, s_mapCar[1 + n]);
+        double x, y, z;
+        if (CarAt(n, &x, &y, &z)) MapDot(x0, y0, x, z, r, s_mapCar[1 + n]);
     }
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     MapDot(x0, y0, hero->Obj.X + cx, hero->Obj.Z + cz, r + 1, s_mapCar[0]);
@@ -17582,7 +17479,7 @@ static void ResetTrack(void) {
         InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroBody = s_heroFire = -1; s_heroBodyChecked = 0;
     s_penguinWalk = 1; s_item[RACE_BOX] = s_item[RACE_BOX_GOLD] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
-    s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_opp[n].ShrunkUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
+    s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
     s_heroDraft = 1;
     s_ownTrack = 0; s_loaded[0] = 0;
     FollowCamEyeHook = NULL;

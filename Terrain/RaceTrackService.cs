@@ -299,10 +299,9 @@ internal static class RaceTrackService
     // A race track built by an older version of the editor, before the grid (and with it the qualifying lap and the count-down): its
     // RACETRACK.JSON has no grid spots, or there is none. The race-track mode then starts the old way; building it again brings them.
     // (an island with a track in each weather file has its grid in the one that carries the race; `track`: the one to be raced, else the
-    // first. A track with no opponents -- the old moon's loops -- has no grid to line them up on.)
+    // first.)
     public static bool IsOutdated(string gameDirectory, TrackInfo? track = null) =>
-        HasBackups(gameDirectory) && (track ?? ReadInfo(gameDirectory)) is var info && (info?.Twin ?? info)?.Grid is not { Count: > 0 }
-        && !(info is not null && RaceTrackIsland.ByName(info.Island).NoOpponents);
+        HasBackups(gameDirectory) && (track ?? ReadInfo(gameDirectory)) is var info && (info?.Twin ?? info)?.Grid is not { Count: > 0 };
 
     // The folder's tracks: the first built, then the others (each with no Others of its own).
     public static List<TrackInfo> Tracks(TrackInfo? info) =>
@@ -732,8 +731,7 @@ internal static class RaceTrackService
     // there built the lap with no deck under its bridge. Before Prepare.
     public static void FollowPlan(RaceTrackPlan plan, RaceTrackOptions options)
     {
-        if (plan.Planned) options.Crossing = plan.Deck is not null ? CrossingStyle.Bridge : CrossingStyle.Level;
-        if (plan.Planned) plan.ApplyTo(options);
+        if (plan.Planned) { options.Crossing = plan.Deck is not null ? CrossingStyle.Bridge : CrossingStyle.Level; plan.ApplyTo(options); }
     }
 
     // The decor bodies a build made (a raised road's pieces and piers: RaceTrackReport.NewBodies) go on the end of the island's OBL, where
@@ -789,9 +787,8 @@ internal static class RaceTrackService
     // After the island's files: the track on the holomap's pictures (a twin with a track of its own on its own picture, the fine weather's),
     // the jump's flight (each jump its own: RaceTrackJumpAnim.GenericFor), Baldino's car and the characters' cars (RaceTrackCharacterCars) --
     // the cars once for all the tracks of a build (`session`).
-    public static List<string> Finish(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? twin = null, BuildSession? session = null)
+    private static List<string> Finish(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, TwinTrack? twin, BuildSession session)
     {
-        session ??= new BuildSession();
         var log = new List<string>();
         var own = twin is { Own: true } ? twin : null;
         if (options.DrawOnHolomap && File.Exists(Path.Combine(gameDirectory, RaceTrackHolomap.File)))
@@ -919,10 +916,9 @@ internal static class RaceTrackService
 
     // RACETRACK.JSON: the crossing style and the start line, for Play; and, for a twin with a track of its own, that track as Twin. The
     // tracks built before this one in `session` stay in it: the first is the file's own record, the rest its Others.
-    public static void WriteInfo(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes, TwinTrack? twin = null, BuildSession? session = null,
-        StoryInfo? story = null, DreamInfo? dream = null)
+    private static void WriteInfo(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes, TwinTrack? twin, BuildSession session,
+        StoryInfo? story, DreamInfo? dream)
     {
-        session ??= new BuildSession();
         var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, Dream = dream,
             ChaseCar = options.Island.ChaseDriver is { } chaseDriver && session.FunFrockEmpty is [var ce, var ca] ? new[] { ce, ca, chaseDriver.Entity } : null,
             LaserModels = session.LaserModels, LavaBallModel = session.LavaBallModel, CrystalShardModels = session.CrystalShardModels };
@@ -1234,15 +1230,8 @@ internal static class RaceTrackService
     // Why Polar Island's track can't be built into the folder, or null: the folder hasn't got the island and there is no LBA1 game folder
     // (File > Settings; LBA1_DIR for the command line) to make it from. The window asks before it builds anything -- a build that found
     // this out half-way changed nothing, and its message went by unseen ("it causes nothing to build", a user's report, 2026-10-11).
-    public static string? PolarProblem(string gameDirectory)
-    {
-        if (PolarInOriginals(gameDirectory)) return null;
-        var lba1 = Lba1Folder();
-        if (LBAAssembler.Lba1.Lba1Game.IsInstalled(lba1)) return null;
-        return "Polar Island's track is built on Polar Island, which isn't in this folder yet: the build makes it from LBA1's own scenes, so it needs the LBA1 game folder. " +
-               (string.IsNullOrWhiteSpace(lba1) ? "No LBA1 folder is set: choose it under File > Settings (the folder with LBA1's SCENE.HQR, LBA_GRI.HQR, LBA_BLL.HQR, LBA_BRK.HQR and RESS.HQR) and build again."
-                                                : $"The LBA1 folder in the settings ({lba1}) hasn't got LBA1's SCENE.HQR, LBA_GRI.HQR, LBA_BLL.HQR, LBA_BRK.HQR and RESS.HQR: choose the right folder under File > Settings and build again.");
-    }
+    public static string? PolarProblem(string gameDirectory) => PolarInOriginals(gameDirectory) ? null
+        : Lba1Problem("Polar Island's track is built on Polar Island, which isn't in this folder yet: the build makes it from LBA1's own scenes");
 
     // Whether the originals a build starts from have Polar Island: its files and its scenes.
     private static bool PolarInOriginals(string gameDirectory)

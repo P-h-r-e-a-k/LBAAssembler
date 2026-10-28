@@ -65,14 +65,7 @@ internal static class RaceTrackDeckBody
                 }
             }
         }
-        var body = new Body
-        {
-            Game = 2, Static = true, Lit = false, Header = new byte[96],
-            Vertices = v,
-            Bones = new List<Bone> { new(0, v.Count, 0, -1, new byte[8]) },
-            Faces = faces,
-        };
-        return body.Write();
+        return RaceTrackPipes.Write(v, faces, lit: false);
     }
 
     // A railing piece for the deck's edges: a low wall `length` long (local Z), `thickness` across (local X), standing on local
@@ -101,14 +94,7 @@ internal static class RaceTrackDeckBody
         }
         faces.Add(new(new[] { P(0, 0), P(0, 1), P(0, 2), P(0, 3) }, SideColour));                              // ends
         faces.Add(new(new[] { P(blocks, 3), P(blocks, 2), P(blocks, 1), P(blocks, 0) }, SideColour));
-        var body = new Body
-        {
-            Game = 2, Static = true, Lit = false, Header = new byte[96],
-            Vertices = v,
-            Bones = new List<Bone> { new(0, v.Count, 0, -1, new byte[8]) },
-            Faces = faces,
-        };
-        return body.Write();
+        return RaceTrackPipes.Write(v, faces, lit: false);
     }
 
     // Appends the two square deck tiles (RoadBridgeTileLength cells a side) and the railing piece to an island OBL file on disk and

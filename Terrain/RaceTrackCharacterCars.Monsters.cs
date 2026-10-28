@@ -102,7 +102,6 @@ internal static partial class RaceTrackCharacterCars
     // (the rings' points round from the face's right: panel k between point k and k + 1 -- 0 the right cheek, 1 the right side, 2 the right
     // of the back, 3 the back, 4 its left, 5 the left side, 6 the left cheek, 7 the face's middle)
     private static readonly float[] HmAngles = { 28f, 75, 120, 160, 200, 240, 285, 332 };
-    private const int HmFace = 7;
     private static Vector3 HmOn(HmRing r, float degrees)
     {
         var a = degrees * MathF.PI / 180;

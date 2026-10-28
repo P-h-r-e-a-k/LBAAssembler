@@ -75,13 +75,7 @@ internal static class RaceTrackRaisedBody
             Faces.Add(Vector3.Dot(n, outward) >= 0 ? new Face(new[] { a, b, c }, colour) : new Face(new[] { c, b, a }, colour));
         }
 
-        public byte[] Write() => new Body
-        {
-            Game = 2, Static = true, Lit = false, Header = new byte[96],
-            Vertices = Points,
-            Bones = new List<Bone> { new(0, Points.Count, 0, -1, new byte[8]) },
-            Faces = Faces,
-        }.Write();
+        public byte[] Write() => RaceTrackPipes.Write(Points, Faces, lit: false);
     }
 
     // One piece of road: `sections` are cross-sections along the lap, each its middle (from the body's origin, in world axes, y up) and the
@@ -101,7 +95,7 @@ internal static class RaceTrackRaisedBody
     // over StripWidth, an even number and ArrowStrips at the least), so two pieces meet on the same points -- where they don't, the engine
     // leaves a seam of missing pixels. For the same reason an arrow is the strips' own quads coloured, halved along their diagonals at its
     // edges (a triangle four cells long, ArrowStrips wide at its base), not cut into them; drawn over them it flickered with them.
-    public const double StripeHalf = 50, StripWidth = 512, PieceOverlap = 24, ArrowHalfWidth = 1024, ArrowShaftHalf = 512;
+    public const double StripWidth = 512, PieceOverlap = 24, ArrowHalfWidth = 1024, ArrowShaftHalf = 512;
     public const int ArrowHeadCells = 3;
     public const int ArrowStrips = 8;
     public static int StripsFor(double widestAsphalt)
@@ -238,21 +232,9 @@ internal static class RaceTrackRaisedBody
         var m = new Mesh();
         var along = new Vector3(-across.Z, 0, across.X);
         const float post = 130, thick = 110;
-        void Box(Vector3 centre, Vector3 u, Vector3 v, float y0, float y1, int light, int dark)
-        {
-            var c = new[] { centre - u - v, centre + u - v, centre + u + v, centre - u + v };
-            var lo = c.Select(p => m.P(p + new Vector3(0, y0, 0))).ToArray(); var hi = c.Select(p => m.P(p + new Vector3(0, y1, 0))).ToArray();
-            for (var k = 0; k < 4; k++)
-            {
-                var n = (k + 1) % 4;
-                m.Quad(lo[k], lo[n], hi[n], hi[k], k % 2 == 0 ? light : dark, (c[k] + c[n]) / 2 - centre);
-            }
-            m.Quad(hi[0], hi[1], hi[2], hi[3], light, Vector3.UnitY);
-            m.Quad(lo[0], lo[1], lo[2], lo[3], dark, -Vector3.UnitY);
-        }
         var reach = (float)half + post;
         foreach (var side in new[] { -1f, 1f })
-            Box(across * (side * (float)half), across * post, along * post, -(float)Thickness, (float)clear, postColour, 70);
+            RaceTrackPipes.Box(m.Points, m.Faces, across * (side * (float)half), across * post, along * post, -(float)Thickness, (float)clear, postColour, 70, postColour);
         // the beam: its two faces in squares, black and white, two rows of them
         // (16 points a column, the posts and the ends 48 more: at most 30 columns keeps the body within the engine's 550 -- a gantry built to
         // a road with a pit lane beside it, 20 cells across, would have had 36, its squares longer instead)
@@ -293,21 +275,8 @@ internal static class RaceTrackRaisedBody
         // (the column is upright whatever the beam's lean)
         var level = across.Y == 0 ? across : Vector3.Normalize(new Vector3(across.X, 0, across.Z));
         var along = new Vector3(-level.Z, 0, level.X);
-        void Box(Vector3 centre, Vector3 u, Vector3 v, float y0, float y1, int light, int dark, int top)
-        {
-            var c = new[] { centre - u - v, centre + u - v, centre + u + v, centre - u + v };
-            var lo = c.Select(p => m.P(p + new Vector3(0, y0, 0))).ToArray(); var hi = c.Select(p => m.P(p + new Vector3(0, y1, 0))).ToArray();
-            for (var k = 0; k < 4; k++)
-            {
-                var n = (k + 1) % 4;
-                var outward = (c[k] + c[n]) / 2 - centre;
-                m.Quad(lo[k], lo[n], hi[n], hi[k], k % 2 == 0 ? light : dark, outward);
-            }
-            m.Quad(hi[0], hi[1], hi[2], hi[3], top, Vector3.UnitY);
-            m.Quad(lo[0], lo[1], lo[2], lo[3], dark, -Vector3.UnitY);
-        }
-        Box(Vector3.Zero, level * a, along * a, 0, h - t, PierLight, PierDark, PierDark);
-        Box(across * (float)((lo + hi) / 2), across * (float)((hi - lo) / 2), along * (float)beamHalf, h - t, h, PierCap, PierDark, PierCap);
+        RaceTrackPipes.Box(m.Points, m.Faces, Vector3.Zero, level * a, along * a, 0, h - t, PierLight, PierDark, PierDark);
+        RaceTrackPipes.Box(m.Points, m.Faces, across * (float)((lo + hi) / 2), across * (float)((hi - lo) / 2), along * (float)beamHalf, h - t, h, PierCap, PierDark, PierCap);
         return m.Write();
     }
 
@@ -317,16 +286,7 @@ internal static class RaceTrackRaisedBody
     public static byte[] Block(double halfX, double halfZ, double height, int light = PierLight, int dark = PierDark, int top = PierCap)
     {
         var m = new Mesh();
-        float x = (float)halfX, z = (float)halfZ, h = (float)height;
-        var c = new[] { new Vector3(-x, 0, -z), new Vector3(x, 0, -z), new Vector3(x, 0, z), new Vector3(-x, 0, z) };
-        var lo = c.Select(p => m.P(p)).ToArray(); var hi = c.Select(p => m.P(p + new Vector3(0, h, 0))).ToArray();
-        for (var k = 0; k < 4; k++)
-        {
-            var n = (k + 1) % 4;
-            m.Quad(lo[k], lo[n], hi[n], hi[k], k % 2 == 0 ? light : dark, (c[k] + c[n]) / 2);
-        }
-        m.Quad(hi[0], hi[1], hi[2], hi[3], top, Vector3.UnitY);
-        m.Quad(lo[0], lo[1], lo[2], lo[3], dark, -Vector3.UnitY);
+        RaceTrackPipes.Box(m.Points, m.Faces, Vector3.Zero, new((float)halfX, 0, 0), new(0, 0, (float)halfZ), 0, (float)height, light, dark, top);
         return m.Write();
     }
 }

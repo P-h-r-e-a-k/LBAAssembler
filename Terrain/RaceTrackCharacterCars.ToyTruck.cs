@@ -301,12 +301,8 @@ internal static partial class RaceTrackCharacterCars
         var (shoulder, neck) = TtDriver(m);
         Arms(m, shoulder, neck);
 
-        var body = m.ToBody(racer.Header);
         // (its box its own: the balls and the driver's head stand out of the racer's car's)
-        var world = body.World();
-        var box = new[] { world.Min(v => v.X), world.Max(v => v.X), world.Min(v => v.Y), world.Max(v => v.Y), world.Min(v => v.Z), world.Max(v => v.Z) };
-        for (var i = 0; i < 6; i++) BinaryPrimitives.WriteInt32LittleEndian(body.Header.AsSpan(8 + i * 4), (int)MathF.Round(box[i]));
-        return body;
+        return WithOwnBox(m.ToBody(racer.Header));
     }
 
     // The driver (bone 13), in the car's coordinates (his side's x as TtDriverSide has it): his shoulders and chest in the window, his head
@@ -315,12 +311,7 @@ internal static partial class RaceTrackCharacterCars
     {
         Vector3 S(Vector3 v) => v with { X = TtDriverSide * v.X };
         // a ring of `n` points round the way `d` goes, `r` across, its first point towards +z (so rings of a bent arm line up)
-        int[] Round(Vector3 centre, Vector3 d, float r, int n)
-        {
-            d = Vector3.Normalize(d);
-            var u = Vector3.Normalize(Vector3.UnitZ - d * Vector3.Dot(Vector3.UnitZ, d));
-            return m.Loop(13, centre, u * r, Vector3.Cross(d, u) * r, n);
-        }
+        int[] Round(Vector3 centre, Vector3 d, float r, int n) => HmRound(m, 13, centre, d, r, n, Vector3.UnitZ);
         // a tube from a to b, `ra` across at a and `rb` at b; returns both rings
         (int[] A, int[] B) Tube(Vector3 a, Vector3 b, float ra, float rb, int n, Func<int, int> colour)
         {

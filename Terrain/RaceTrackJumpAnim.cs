@@ -37,10 +37,7 @@ internal static class RaceTrackJumpAnim
         (100, 564, 55), (100, 564, 55), (100, 564, -244), (100, 564, -122), (100, 564, -122), (100, 333, -332), (100, 333, -506), (100, 333, -615), (100, 333, -181),
     };
 
-    // How long a flight `forward` times the retail one takes, and how high above its start it is `cells` along (the steps are covered
-    // evenly over each keyframe).
-    public static double Seconds(double forward) => RetailSteps.Sum(f => f.Ms) * TimeScale(forward) / 1000;
-
+    // How high above its start a flight `forward` times the retail one is `cells` along (the steps are covered evenly over each keyframe).
     public static double Climb(double forward, double cells)
     {
         var at = cells * 512 / forward; double gone = 0, up = 0;
@@ -207,18 +204,6 @@ internal static class RaceTrackJumpAnim
             else p += 2 + table[p + 2];
         }
         if (p >= end) throw new InvalidDataException($"Entity {entity}'s records have no end mark.");
-        var record = new byte[] { 3, (byte)generic, (byte)(generic >> 8), 4, (byte)animIndex, (byte)(animIndex >> 8), 0 };
-        var result = new byte[table.Length + record.Length];
-        table.AsSpan(0, p).CopyTo(result);
-        record.CopyTo(result.AsSpan(p));
-        table.AsSpan(p).CopyTo(result.AsSpan(p + record.Length));
-        for (var i = entity + 1; i <= count; i++)
-        {
-            var at = i * 4;
-            if (at + 4 > (count + 1) * 4 || at + 4 > result.Length) break;
-            var offset = BinaryPrimitives.ReadInt32LittleEndian(result.AsSpan(at));
-            if (offset >= p) BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(at), offset + record.Length);
-        }
-        return result;
+        return Lba2EntityTable.Splice(table, entity, p, 0, new byte[] { 3, (byte)generic, (byte)(generic >> 8), 4, (byte)animIndex, (byte)(animIndex >> 8), 0 });
     }
 }

@@ -73,24 +73,8 @@ internal static class RaceTrackTextures
         // the white curb is one pixel; it is given a block of its own so a neighbouring tile's colours can never bleed into it
         var white = Copy("white curb", (RaceTrackTheme.Retail.WhiteCurb.X, RaceTrackTheme.Retail.WhiteCurb.Y, 8, 8));
 
-        (int Bank, int Pos) Near((int Bank, int Pos) colour)
-        {
-            var i = colour.Bank * 16 + colour.Pos;
-            int r = from[i * 3], g = from[i * 3 + 1], b = from[i * 3 + 2];
-            var best = map[i];
-            // (the ramp the colour sits in matters as much as the colour: the engine adds the light to it, so keep its position in the bank)
-            var bd = int.MaxValue;
-            for (var bank = 0; bank < 16; bank++)
-            {
-                var j = bank * 16 + colour.Pos;
-                var d = (to[j * 3] - r) * (to[j * 3] - r) + (to[j * 3 + 1] - g) * (to[j * 3 + 1] - g) + (to[j * 3 + 2] - b) * (to[j * 3 + 2] - b);
-                if (d < bd) { bd = d; best = (byte)j; }
-            }
-            return (best / 16, best % 16);
-        }
-
         var theme = new RaceTrackTheme(asphalt, (white.X + 3, white.Y + 3), hatch, rock,
-            Near(RaceTrackTheme.Retail.RedCurb), Near(RaceTrackTheme.Retail.Arrow), Near(RaceTrackTheme.Retail.Sand), Palette: to);
+            Near(from, to, RaceTrackTheme.Retail.RedCurb), Near(from, to, RaceTrackTheme.Retail.Arrow), Near(from, to, RaceTrackTheme.Retail.Sand), Palette: to);
         var log = $"the road's look on {where.Name} ({file}): the Desert track's tiles copied into its spare texture space ({string.Join(", ", placed)}), " +
                   $"their colours matched in its own palette; the red curb is colour {theme.RedCurb.Bank * 16 + theme.RedCurb.Pos}, the arrows {theme.Arrow.Bank * 16 + theme.Arrow.Pos}";
         return (theme, log);
@@ -142,6 +126,22 @@ internal static class RaceTrackTextures
     // by cell it is an even dark surface), for the white curb and the start line a pixel in the middle of its whitest 3 x 3, for the
     // blocking rock and the shoulders its own cliff (the tile most of its blocking triangles are drawn with), and the hatching as the
     // arrows' flat colour. The flat colours are matched as ever.
+    // A colour of `from`'s palette (the Desert's) to the nearest of `to`'s in the same position of some bank (the ramp the colour sits in
+    // matters as much as the colour: the engine adds the light to it, so its position in the bank is kept)
+    private static (int Bank, int Pos) Near(byte[] from, byte[] to, (int Bank, int Pos) colour)
+    {
+        var i = colour.Bank * 16 + colour.Pos;
+        int r = from[i * 3], g = from[i * 3 + 1], b = from[i * 3 + 2];
+        var pick = i; var bd = int.MaxValue;
+        for (var bank = 0; bank < 16; bank++)
+        {
+            var j = bank * 16 + colour.Pos;
+            var d = (to[j * 3] - r) * (to[j * 3] - r) + (to[j * 3 + 1] - g) * (to[j * 3 + 1] - g) + (to[j * 3 + 2] - b) * (to[j * 3 + 2] - b);
+            if (d < bd) { bd = d; pick = j; }
+        }
+        return (pick / 16, pick % 16);
+    }
+
     private static (RaceTrackTheme Theme, string Log) Borrowed(IslandFile island, RaceTrackIsland where, string file, byte[] from, byte[] to)
     {
         var page = island.GroundTexture;
@@ -196,22 +196,9 @@ internal static class RaceTrackTextures
                 }
         }
         var rock = counts.Count > 0 ? counts.MaxBy(c => c.Value).Key : asphalt;
-        (int Bank, int Pos) Near((int Bank, int Pos) colour)
-        {
-            var i = colour.Bank * 16 + colour.Pos;
-            int r = from[i * 3], g = from[i * 3 + 1], b = from[i * 3 + 2];
-            var pick = i; var bd = int.MaxValue;
-            for (var bank = 0; bank < 16; bank++)
-            {
-                var j = bank * 16 + colour.Pos;
-                var d = (to[j * 3] - r) * (to[j * 3] - r) + (to[j * 3 + 1] - g) * (to[j * 3 + 1] - g) + (to[j * 3 + 2] - b) * (to[j * 3 + 2] - b);
-                if (d < bd) { bd = d; pick = j; }
-            }
-            return (pick / 16, pick % 16);
-        }
-        var arrow = Near(RaceTrackTheme.Retail.Arrow);
+        var arrow = Near(from, to, RaceTrackTheme.Retail.Arrow);
         var theme = new RaceTrackTheme((asphalt.X, asphalt.Y, size, size), white, (0, 0, 0, 0), (rock.Item1, rock.Item2, 32, 32),
-            Near(RaceTrackTheme.Retail.RedCurb), arrow, Near(RaceTrackTheme.Retail.Sand), arrow, to);
+            Near(from, to, RaceTrackTheme.Retail.RedCurb), arrow, Near(from, to, RaceTrackTheme.Retail.Sand), arrow, to);
         return (theme, $"the road's look on {where.Name} ({file}): its ground texture has no spare space, so the road is painted with its own tiles -- " +
                        $"the asphalt from its darkest even patch at ({asphalt.X},{asphalt.Y}), white from the pixel at ({white.X},{white.Y}), its own cliff at ({rock.Item1},{rock.Item2}) " +
                        $"for the shoulders and walls, the hatching as the arrows' flat colour");

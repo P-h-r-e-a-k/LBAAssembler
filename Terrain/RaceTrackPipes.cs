@@ -355,17 +355,22 @@ internal static class RaceTrackPipes
         return made;
     }
 
-    // the road's deck under a place of the pipe (a part of the lap within its width less a cell, at least 1,600 below the pipe), or null
-    private static double? NearestUnder(TrackRoad r, RaceTrackOptions o, Vector3 p, float radius)
+    // the road's point under a place of the pipe, the nearest (a part of the lap within its width less a cell, at least 1,600 below the
+    // pipe), or -1
+    private static int UnderIndex(TrackRoad r, RaceTrackOptions o, Vector3 p, float radius)
     {
-        double best = double.MaxValue; double? deck = null;
+        double best = double.MaxValue; var at = -1;
         for (var j = 0; j < r.Count; j++)
         {
             var dd = Math.Sqrt(Math.Pow(r.X[j] * 512 - p.X, 2) + Math.Pow(r.Z[j] * 512 - p.Z, 2)) / 512;
-            if (dd < HalfAt(r, j, o) - 0.9 && r.H[j] < p.Y - radius - 1600 && dd < best) { best = dd; deck = r.H[j]; }
+            if (dd < HalfAt(r, j, o) - 0.9 && r.H[j] < p.Y - radius - 1600 && dd < best) { best = dd; at = j; }
         }
-        return deck;
+        return at;
     }
+
+    // the road's deck under a place of the pipe (UnderIndex's), or null
+    private static double? NearestUnder(TrackRoad r, RaceTrackOptions o, Vector3 p, float radius)
+        => UnderIndex(r, o, p, radius) is var j and >= 0 ? r.H[j] : null;
 
     // A pipe's drips where it is over the road from `from` to `to` along it, on one side of the road's middle (+1 the driver's left, -1 his
     // right): where the road under it is SlickClear or more that way, from the middle out, `every` along the pipe apart.
@@ -390,16 +395,11 @@ internal static class RaceTrackPipes
         return found;
     }
 
-    // NearestUnder's road point under a place of the pipe with its deck and how far the place is to the driver's left of the road's
+    // UnderIndex's road point under a place of the pipe with its deck and how far the place is to the driver's left of the road's
     // middle there (cells; negative: his right)
     private static (double Deck, double Left)? UnderRoad(TrackRoad r, RaceTrackOptions o, Vector3 p, float radius)
     {
-        double best = double.MaxValue; var at = -1;
-        for (var j = 0; j < r.Count; j++)
-        {
-            var dd = Math.Sqrt(Math.Pow(r.X[j] * 512 - p.X, 2) + Math.Pow(r.Z[j] * 512 - p.Z, 2)) / 512;
-            if (dd < HalfAt(r, j, o) - 0.9 && r.H[j] < p.Y - radius - 1600 && dd < best) { best = dd; at = j; }
-        }
+        var at = UnderIndex(r, o, p, radius);
         if (at < 0) return null;
         int a = (at + r.Count - 1) % r.Count, b = (at + 1) % r.Count;
         double tx = r.X[b] - r.X[a], tz = r.Z[b] - r.Z[a], len = Math.Sqrt(tx * tx + tz * tz);
@@ -495,52 +495,17 @@ internal static class RaceTrackPipes
     {
         var pts = new List<Vector3>();
         var faces = new List<Face>();
-        void Cylinder(Vector3 a, Vector3 b, float radius, int colour, int sides = 8)
-        {
-            var axis = Vector3.Normalize(b - a);
-            var u = Vector3.Normalize(Math.Abs(axis.Y) > 0.9 ? Vector3.Cross(axis, Vector3.UnitX) : Vector3.Cross(axis, Vector3.UnitY));
-            var v = Vector3.Cross(axis, u);
-            var ring0 = new int[sides]; var ring1 = new int[sides];
-            for (var k = 0; k < sides; k++)
-            {
-                var t = 2 * Math.PI * k / sides;
-                var off = (u * (float)Math.Cos(t) + v * (float)Math.Sin(t)) * radius;
-                ring0[k] = pts.Count; pts.Add(a + off);
-                ring1[k] = pts.Count; pts.Add(b + off);
-            }
-            for (var k = 0; k < sides; k++)
-            {
-                var k2 = (k + 1) % sides;
-                int p0 = ring0[k], p1 = ring0[k2], p2 = ring1[k2], p3 = ring1[k];
-                var mid = (pts[p0] + pts[p1] + pts[p2] + pts[p3]) / 4;
-                var axisPoint = a + axis * Vector3.Dot(mid - a, axis);
-                var outward = mid - axisPoint;
-                var nrm = Vector3.Cross(pts[p1] - pts[p0], pts[p2] - pts[p0]);
-                faces.Add(Vector3.Dot(nrm, outward) >= 0 ? new Face(new[] { p0, p1, p2, p3 }, colour) : new Face(new[] { p3, p2, p1, p0 }, colour));
-            }
-            // its ends: a cap each
-            foreach (var (ring, end, sign) in new[] { (ring0, a, -1f), (ring1, b, 1f) })
-            {
-                var c = pts.Count; pts.Add(end);
-                for (var k = 0; k < sides; k++)
-                {
-                    int p0 = ring[k], p1 = ring[(k + 1) % sides];
-                    var nrm = Vector3.Cross(pts[p0] - pts[c], pts[p1] - pts[c]);
-                    faces.Add(Vector3.Dot(nrm, axis * sign) >= 0 ? new Face(new[] { c, p0, p1 }, colour) : new Face(new[] { p1, p0, c }, colour));
-                }
-            }
-        }
         var up = Vector3.UnitY;
         var left = across * (float)half; var right = -across * (float)half;
-        Cylinder(left + up * (float)down0, left + up * (float)(Top - 260), (float)Upright, Grey);
-        Cylinder(right + up * (float)down1, right + up * (float)(Top - 260), (float)Upright, Grey);
+        Cylinder(pts, faces, left + up * (float)down0, left + up * (float)(Top - 260), (float)Upright, Grey);
+        Cylinder(pts, faces, right + up * (float)down1, right + up * (float)(Top - 260), (float)Upright, Grey);
         // the vents: a red band and a wider cap at each top
-        Cylinder(left + up * (float)(Top - 260), left + up * (float)Top, (float)(Upright * 1.35), Red);
-        Cylinder(right + up * (float)(Top - 260), right + up * (float)Top, (float)(Upright * 1.35), Red);
+        Cylinder(pts, faces, left + up * (float)(Top - 260), left + up * (float)Top, (float)(Upright * 1.35), Red);
+        Cylinder(pts, faces, right + up * (float)(Top - 260), right + up * (float)Top, (float)(Upright * 1.35), Red);
         // the cross pipe over the road (through the uprights) and the side pipes along it outside the rails
-        Cylinder(left * 1.08f + up * (float)CrossHigh, right * 1.08f + up * (float)CrossHigh, (float)Cross, Grey);
+        Cylinder(pts, faces, left * 1.08f + up * (float)CrossHigh, right * 1.08f + up * (float)CrossHigh, (float)Cross, Grey);
         foreach (var side in new[] { across * (float)(half - 420), -across * (float)(half - 420) })
-            Cylinder(side + up * (float)SideHigh - along * (len / 2), side + up * (float)SideHigh + along * (len / 2), (float)Side, Grey, 6);
+            Cylinder(pts, faces, side + up * (float)SideHigh - along * (len / 2), side + up * (float)SideHigh + along * (len / 2), (float)Side, Grey, 6);
         if (jetHigh >= 0)
             foreach (var s in new[] { 1f, -1f })
             {
@@ -548,16 +513,9 @@ internal static class RaceTrackPipes
                 var inward = -across * s;
                 var root = across * s * (float)half + up * jetHigh;
                 var tip = root + inward * (float)(Upright + Nozzle);
-                Cylinder(root, tip - inward * 60, (float)NozzleRadius, Grey, 6);
-                Cylinder(tip - inward * 60, tip, (float)NozzleMouth, Red, 6);
+                Cylinder(pts, faces, root, tip - inward * 60, (float)NozzleRadius, Grey, 6);
+                Cylinder(pts, faces, tip - inward * 60, tip, (float)NozzleMouth, Red, 6);
             }
-        var body = new Body
-        {
-            Game = 2, Static = true, Lit = true, Header = new byte[96],
-            Vertices = pts,
-            Bones = new List<Bone> { new(0, pts.Count, 0, -1, new byte[8]) },
-            Faces = faces,
-        };
-        return body.Write();
+        return Write(pts, faces, lit: true);
     }
 }

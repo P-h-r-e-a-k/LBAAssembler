@@ -309,8 +309,7 @@ internal sealed record RaceTrackIsland(
     // The file the race-track mode draws the island from instead of its own (the car file's island_file=): an island file no version of
     // the game loads (MOON).
     public string? RaceFile { get; init; }
-    // No opponents' cars in its scenes; nothing drawn on the holomap.
-    public bool NoOpponents { get; init; }
+    // Nothing drawn on the holomap.
     public bool NoHolomap { get; init; }
     // An island made bigger for its track (IslandScaler): Scale times each way, everything on it with it, its new cubes' scenes numbered
     // from MoreScenes (past 254: no holomap arrow -- the engine's CubeArrowFlags).

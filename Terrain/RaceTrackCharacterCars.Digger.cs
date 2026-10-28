@@ -92,9 +92,14 @@ internal static partial class RaceTrackCharacterCars
             m.P(13, seat);
             for (var b = 14; b <= 17; b++) { m.Pivot(b, m.P(b == 16 ? 13 : b - 1, seat)); m.P(b, seat); }
         }
-        var body = m.ToBody(racer.Header);
-        var all = body.World();
-        var box = new[] { all.Min(v => v.X), all.Max(v => v.X), all.Min(v => v.Y), all.Max(v => v.Y), all.Min(v => v.Z), all.Max(v => v.Z) };
+        return WithOwnBox(m.ToBody(racer.Header));
+    }
+
+    // A body's header box set to its own reach (a car longer or taller than the racer's it is made on)
+    private static Body WithOwnBox(Body body)
+    {
+        var world = body.World();
+        var box = new[] { world.Min(v => v.X), world.Max(v => v.X), world.Min(v => v.Y), world.Max(v => v.Y), world.Min(v => v.Z), world.Max(v => v.Z) };
         for (var i = 0; i < 6; i++) BinaryPrimitives.WriteInt32LittleEndian(body.Header.AsSpan(8 + i * 4), (int)MathF.Round(box[i]));
         return body;
     }

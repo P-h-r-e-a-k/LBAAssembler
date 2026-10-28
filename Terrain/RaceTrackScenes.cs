@@ -261,7 +261,7 @@ internal static class RaceTrackScenes
 
     // The motorbike Rabbibunny to copy: the first of Citadel Island's outside scenes that has him (SCENE.HQR holds every island's scenes, so
     // the Desert island's track gets him too). Null when none can be read.
-    private static SceneActorModel? BikerTemplate(SceneStore store, RaceTrackOptions options, int island, List<string> log)
+    private static SceneActorModel? BikerTemplate(SceneStore store, List<string> log)
     {
         foreach (var scene in Enumerable.Range(RaceTrackIsland.Citadel.FirstScene, RaceTrackIsland.Citadel.LastScene - RaceTrackIsland.Citadel.FirstScene + 1))
         {
@@ -326,7 +326,22 @@ internal static class RaceTrackScenes
     // how near a scene's cube a gas monster is to be one of its actors too (cells: seen from it)
     private const double GasMonsterSeen = 40;
 
-    public const int DesertIsland = 2;
+    // A copy of `template` for an actor the race-track mode moves itself: no scripts, standing still, out of sight in the middle of its cube
+    // till it is stood where it is wanted.
+    private static SceneActorModel Hidden(SceneActorModel template)
+    {
+        var a = template.Clone();
+        a.Flags = OpponentFlags; a.Move = 0; a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
+        a.X = IslandFile.CubeSize / 2; a.Z = IslandFile.CubeSize / 2; a.Y = -20000; a.Beta = 0;
+        return a;
+    }
+
+    // Whether `back`, a zone of an inside scene, is a way out to `scene` that brings Twinsen out at the door zone (x0, z0)-(x1, z1) or near
+    // it (within a cell and a half).
+    private static bool LeadsTo(SceneZoneModel back, int scene, int x0, int z0, int x1, int z1) =>
+        back.Type == 0 && back.Num == scene && back.Info.Length >= 3
+        && back.Info[0] >= x0 - 1536 && back.Info[0] <= x1 + 1536 && back.Info[2] >= z0 - 1536 && back.Info[2] <= z1 + 1536;
+
     // The buggy's own scene on the Desert island: an island with no buggy of its own (Citadel) gets a copy of that actor on the grid.
     public const int BuggyScene = 67;
 
@@ -420,7 +435,7 @@ internal static class RaceTrackScenes
         {
             t.Drivers =t.Options.Racers().Where(d => !d.Ghost).ToList();
             t.Cars = t.Drivers.Select(_ => new Dictionary<int, int>()).ToList();
-            if (t.Drivers.Any(d => d.Bike)) t.BikerTemplate = BikerTemplate(originals, t.Options, island, log);
+            if (t.Drivers.Any(d => d.Bike)) t.BikerTemplate = BikerTemplate(originals, log);
             if (t.Drivers.Any(d => !d.Bike))
                 try { t.Racer = originals.Load(RacerScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == RacerEntity)?.Clone(); }
                 catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { log.Add($"no opponent: scene {RacerScene} could not be read ({e.Message})"); }
@@ -475,7 +490,7 @@ internal static class RaceTrackScenes
             try { var m = store.Load(scene); if (m.Island == island && m.CubeMode == 1) outside.Add(scene); }
             catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
         }
-        for (var scene = 0; scene < store.SceneCount; scene++)
+        for (int scene = 0, scenes = store.SceneCount; scene < scenes; scene++)
         {
             if (!store.SceneExists(scene)) continue;
             SceneModel model;
@@ -849,8 +864,7 @@ internal static class RaceTrackScenes
                                     try { heroLife = LbaScript.LifeText.Decompile(inside.Hero.Life, 0, LbaScript.NoSymbols.Instance); }
                                     catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { heroLife = ""; }
                                     if (heroLife.Contains($"set_change_cube({scene},")) { log.Add($"scene {zone.Num}: its way out to scene {scene}'s door zone {z} stays -- Twinsen's own script rides him out that way"); continue; }
-                                    foreach (var back in inside.Zones.Where(bz => bz.Type == 0 && bz.Num == scene && bz.Info.Length >= 3
-                                                 && bz.Info[0] >= zone.X0 - 1536 && bz.Info[0] <= zone.X1 + 1536 && bz.Info[2] >= zone.Z0 - 1536 && bz.Info[2] <= zone.Z1 + 1536))
+                                    foreach (var back in inside.Zones.Where(bz => LeadsTo(bz, scene, zone.X0, zone.Z0, zone.X1, zone.Z1)))
                                     {
                                         doorsOff.Add($"{file} {zone.Num} {back.X0} {back.Z0} {back.X1} {back.Z1}");
                                         log.Add($"scene {zone.Num}: its way out to scene {scene}'s door zone {z} shut while {file} is shown too");
@@ -874,8 +888,7 @@ internal static class RaceTrackScenes
                                 for (var k = 0; k < inside.Model.Zones.Count; k++)
                                 {
                                     var back = inside.Model.Zones[k];
-                                    if (back.Type != 0 || back.Num != scene || back.Info.Length < 3 || inside.Moved.Contains(k)
-                                        || back.Info[0] < from.X0 - 1536 || back.Info[0] > from.X1 + 1536 || back.Info[2] < from.Z0 - 1536 || back.Info[2] > from.Z1 + 1536) continue;
+                                    if (inside.Moved.Contains(k) || !LeadsTo(back, scene, from.X0, from.Z0, from.X1, from.Z1)) continue;
                                     // (a height of 0: onto the ground there, as the game has it -- the Mosquibees' cliff house's)
                                     back.Info[0] += mx; if (back.Info[1] != 0) back.Info[1] += mv.Dy; back.Info[2] += mz;
                                     inside.Moved.Add(k);
@@ -937,9 +950,7 @@ internal static class RaceTrackScenes
                     int lx = (int)Math.Round((l.X - model.CubeX * 64) * 512), lz = (int)Math.Round((l.Z - model.CubeY * 64) * 512), ly = (int)Math.Round(l.Y);
                     if (grate < 0 && options.Island.LiftLook is { } look)
                     {
-                        SceneActorModel? template = null;
-                        try { template = originals.Load(look.Scene).Actors.ElementAtOrDefault(look.Actor)?.Clone(); }
-                        catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
+                        var template = Template(look.Scene, look.Actor);
                         if (template is not null)
                         {
                             template.X = lx; template.Y = ly; template.Z = lz;
@@ -989,8 +1000,7 @@ internal static class RaceTrackScenes
                 doorsOff.Add($"{FileOf(tracks[0])} {scene} {copy.X0} {copy.Z0} {copy.X1} {copy.Z1}");
                 log.Add($"scene {scene}: door zone into scene {old.Num} copied to ({copy.X0},{copy.Z0})-({copy.X1},{copy.Z1}) with the building's front, for {FileOf(t)} only");
                 if (!store.SceneExists(old.Num)) continue;
-                foreach (var back in store.Load(old.Num).Zones.Where(bz => bz.Type == 0 && bz.Num == scene && bz.Info.Length >= 3
-                             && bz.Info[0] >= old.X0 - 1536 && bz.Info[0] <= old.X1 + 1536 && bz.Info[2] >= old.Z0 - 1536 && bz.Info[2] <= old.Z1 + 1536))
+                foreach (var back in store.Load(old.Num).Zones.Where(bz => LeadsTo(bz, scene, old.X0, old.Z0, old.X1, old.Z1)))
                 {
                     doorsOff.RemoveAll(d => d == $"{FileOf(t)} {old.Num} {back.X0} {back.Z0} {back.X1} {back.Z1}");
                     doorsOff.Add($"{FileOf(t)} {old.Num} {back.X0} {back.Z0} {back.X1} {back.Z1} {back.Info[0] + dx} {back.Info[1]} {back.Info[2] + dz}");
@@ -1010,11 +1020,10 @@ internal static class RaceTrackScenes
                     if (template is null) continue;
                     RaceTrackCharacterCars.CatalogueEntry? cast = null;
                     if (d.Cast >= 0 && !castCars.TryGetValue(d.Cast, out cast)) continue;
-                    var car = template.Clone();
+                    var car = Hidden(template);
                     car.Body = d.Bike ? 0 : cast?.Generic ?? d.Body;
                     if (cast is not null) car.Entity = cast.Entity;
-                    car.Flags = OpponentFlags; car.Move = 0; car.Anim = d.Bike ? BikerIdleAnim : 0; car.Life = new byte[] { 0 }; car.Track = new byte[] { 0 };
-                    car.X = IslandFile.CubeSize / 2; car.Z = IslandFile.CubeSize / 2; car.Y = -20000; car.Beta = 0;
+                    car.Anim = d.Bike ? BikerIdleAnim : 0;
                     if (k < t.CarAt.Count && t.CarAt[k] is { } g) { car.X = g.X; car.Z = g.Z; car.Beta = g.Beta; car.Y = g.Y; }
                     t.Cars[k][scene] = SceneOps.AddActor(model, car);
                 }
@@ -1085,13 +1094,11 @@ internal static class RaceTrackScenes
                         double ox = Math.Clamp(g.X, model.CubeX * 64.0, model.CubeX * 64.0 + 64), oz = Math.Clamp(g.Z, model.CubeY * 64.0, model.CubeY * 64.0 + 64);
                         if ((ox - g.X) * (ox - g.X) + (oz - g.Z) * (oz - g.Z) > GasMonsterSeen * GasMonsterSeen) continue;
                         if (model.Actors.Count + 1 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the gas monster at ({g.X:0.#}, {g.Z:0.#})"); continue; }
-                        var monster = mushroomTemplate.Clone();
+                        var monster = Hidden(mushroomTemplate);
                         monster.Entity = RaceTrackGasMonster.Entity; monster.Body = 0; monster.Anim = Math.Max(0, g.FirstAnim);
-                        monster.Flags = OpponentFlags; monster.Move = 0; monster.Life = new byte[] { 0 }; monster.Track = new byte[] { 0 };
                         // (its start in the cube -- a record's place is 16 bits, and one of the next cube's is past the edge: the race-track mode
                         // stands it where it is, every frame)
                         monster.X = Math.Clamp((int)Math.Round((g.X - model.CubeX * 64) * 512), 0, 32767); monster.Z = Math.Clamp((int)Math.Round((g.Z - model.CubeY * 64) * 512), 0, 32767);
-                        monster.Y = -20000; monster.Beta = 0;
                         var actor = SceneOps.AddActor(model, monster);
                         var home = (int)Math.Floor(g.X / 64) == model.CubeX && (int)Math.Floor(g.Z / 64) == model.CubeY;
                         t.GasMonsters.Add(new[] { scene, actor, g.Body, gi, home ? 1 : 0 });
@@ -1107,11 +1114,10 @@ internal static class RaceTrackScenes
                         var (fx, fz) = f.Way[0];
                         if ((int)Math.Floor(fx / 64) != model.CubeX || (int)Math.Floor(fz / 64) != model.CubeY) continue;
                         if (model.Actors.Count + 1 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the flying gas monster at ({fx:0.#}, {fz:0.#})"); continue; }
-                        var flyer = mushroomTemplate.Clone();
+                        var flyer = Hidden(mushroomTemplate);
                         flyer.Entity = RaceTrackFlyers.Entity; flyer.Body = 0; flyer.Anim = 0;
-                        flyer.Flags = OpponentFlags; flyer.Move = 0; flyer.Life = new byte[] { 0 }; flyer.Track = new byte[] { 0 };
                         flyer.X = Math.Clamp((int)Math.Round((fx - model.CubeX * 64) * 512), 0, 32767); flyer.Z = Math.Clamp((int)Math.Round((fz - model.CubeY * 64) * 512), 0, 32767);
-                        flyer.Y = (int)Math.Round(f.Y); flyer.Beta = 0;
+                        flyer.Y = (int)Math.Round(f.Y);
                         var actor = SceneOps.AddActor(model, flyer);
                         t.Flyers.Add(new[] { scene, actor, fi });
                         log.Add($"scene {scene}: a flying gas monster (actor {actor}) over ({fx:0.#}, {fz:0.#}), {f.Way.Count} points at {f.Y:0}");
@@ -1128,11 +1134,9 @@ internal static class RaceTrackScenes
                         if ((ox - gx) * (ox - gx) + (oz - gz) * (oz - gz) > RaceTrackGuards.Seen * RaceTrackGuards.Seen) continue;
                         if (model.Actors.Count + 1 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the {RaceTrackGuards.KindName((int)g[0], 1)} at ({gx:0.#}, {gz:0.#})"); continue; }
                         var look = RaceTrackGuards.Of((int)g[0], (int)g[1]);
-                        var guard = mushroomTemplate.Clone();
+                        var guard = Hidden(mushroomTemplate);
                         guard.Entity = look.Entity; guard.Body = look.Drawn; guard.Anim = look.Idle;   // (twice the size: RaceTrackGuards.Install; a torturer's his own)
-                        guard.Flags = OpponentFlags; guard.Move = 0; guard.Life = new byte[] { 0 }; guard.Track = new byte[] { 0 };
                         guard.X = Math.Clamp((int)Math.Round((gx - model.CubeX * 64) * 512), 0, 32767); guard.Z = Math.Clamp((int)Math.Round((gz - model.CubeY * 64) * 512), 0, 32767);
-                        guard.Y = -20000; guard.Beta = 0;
                         var actor = SceneOps.AddActor(model, guard);
                         var home = (int)Math.Floor(gx / 64) == model.CubeX && (int)Math.Floor(gz / 64) == model.CubeY;
                         t.Guards.Add(new[] { scene, actor, gi, home ? 1 : 0 });
@@ -1153,38 +1157,29 @@ internal static class RaceTrackScenes
                         // track's, and before the statue rises the game draws it without the raised road, as the editor draws the island's
                         // other file with it; Citadel Island's scenes carry both weathers' tracks -- and a mushroom standing on a road that
                         // isn't there hung in the air)
-                        var mushroom = mushroomTemplate.Clone();
+                        var mushroom = Hidden(mushroomTemplate);
                         mushroom.Body = report.Pumpkins ? LBAAssembler.Terrain.Temple.TempleHalloween.Pumpkin : RaceTrackOil.BigMushroom;      // (the game's mushroom half again its size: RaceTrackOil; Halloween's a mini pumpkin)
-                        mushroom.Flags = OpponentFlags; mushroom.Move = 0; mushroom.Life = new byte[] { 0 }; mushroom.Track = new byte[] { 0 };
                         mushroom.X = (int)Math.Round((x - model.CubeX * 64) * 512); mushroom.Z = (int)Math.Round((z - model.CubeY * 64) * 512);
-                        mushroom.Y = -20000; mushroom.Beta = 0;
                         // (and where it stands on the island: the race-track mode draws it from the next cube too, DrawFarMushrooms)
                         t.Mushrooms.Add(new[] { scene, SceneOps.AddActor(model, mushroom), (int)Math.Round(y), (int)Math.Round(x * 512), (int)Math.Round(z * 512) });
                     }
                     // (a few: the penguins dropped walk the track, several in one scene at once)
                     for (var k = 0; k < PenguinsPerScene; k++)
                     {
-                        var penguin = penguinTemplate.Clone();
-                        penguin.Flags = OpponentFlags; penguin.Move = 0; penguin.Life = new byte[] { 0 }; penguin.Track = new byte[] { 0 };
-                        penguin.X = IslandFile.CubeSize / 2; penguin.Z = IslandFile.CubeSize / 2; penguin.Y = -20000; penguin.Beta = 0;
-                        t.Penguins.Add(new[] { scene, SceneOps.AddActor(model, penguin) });
+                        t.Penguins.Add(new[] { scene, SceneOps.AddActor(model, Hidden(penguinTemplate)) });
                     }
                     // the oil slicks: the mushroom's entity with the slick's body
                     for (var k = 0; k < OilPerScene; k++)
                     {
-                        var oil = mushroomTemplate.Clone();
+                        var oil = Hidden(mushroomTemplate);
                         oil.Body = RaceTrackOil.Generic;
-                        oil.Flags = OpponentFlags; oil.Move = 0; oil.Life = new byte[] { 0 }; oil.Track = new byte[] { 0 };
-                        oil.X = IslandFile.CubeSize / 2; oil.Z = IslandFile.CubeSize / 2; oil.Y = -20000; oil.Beta = 0;
                         t.Oil.Add(new[] { scene, SceneOps.AddActor(model, oil) });
                     }
                     // the fake mushrooms: copies of the mushroom itself -- a fake looks just as a real one does
                     for (var k = 0; k < FakesPerScene; k++)
                     {
-                        var fake = mushroomTemplate.Clone();
+                        var fake = Hidden(mushroomTemplate);
                         fake.Body = report.Pumpkins ? LBAAssembler.Terrain.Temple.TempleHalloween.Pumpkin : RaceTrackOil.BigMushroom;          // (as big as the real ones; Halloween's pumpkins)
-                        fake.Flags = OpponentFlags; fake.Move = 0; fake.Life = new byte[] { 0 }; fake.Track = new byte[] { 0 };
-                        fake.X = IslandFile.CubeSize / 2; fake.Z = IslandFile.CubeSize / 2; fake.Y = -20000; fake.Beta = 0;
                         t.Fakes.Add(new[] { scene, SceneOps.AddActor(model, fake) });
                     }
                 }
@@ -1212,8 +1207,7 @@ internal static class RaceTrackScenes
             for (var k = 0; k < inside.Model.Zones.Count; k++)
             {
                 var back = inside.Model.Zones[k];
-                if (back.Type != 0 || back.Num != lost.Scene || back.Info.Length < 3 || inside.Moved.Contains(k)
-                    || back.Info[0] < lost.X0 - 1536 || back.Info[0] > lost.X1 + 1536 || back.Info[2] < lost.Z0 - 1536 || back.Info[2] > lost.Z1 + 1536) continue;
+                if (inside.Moved.Contains(k) || !LeadsTo(back, lost.Scene, lost.X0, lost.Z0, lost.X1, lost.Z1)) continue;
                 back.Info[0] = put.Info[0]; back.Info[1] = put.Info[1]; back.Info[2] = put.Info[2];
                 inside.Moved.Add(k);
                 log.Add($"scene {lost.Inside}: its way out {k} to scene {lost.Scene}'s removed door brings Twinsen out at the door put back, ({put.Info[0]},{put.Info[1]},{put.Info[2]})");
@@ -1760,7 +1754,7 @@ void comportement_1()
             if (originals.SceneExists(cd.Scene) && originals.Load(cd.Scene).Actors.ElementAtOrDefault(cd.Actor) is { } own && own.Entity == cd.Entity) return own;
         }
         catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
-        for (var scene = 0; scene < originals.SceneCount; scene++)
+        for (int scene = 0, count = originals.SceneCount; scene < count; scene++)
             if (Of(scene, a => a.Entity == cd.Entity) is { } any)
             {
                 var copy = any.Clone();

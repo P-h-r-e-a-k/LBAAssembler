@@ -278,7 +278,7 @@ internal static class RaceTrackDriveThrough
         var tex = (bl.Type & 255) > 7 && !bl.Env;
         if (tex)
         {
-            var uvAt = bl.Quad ? 12 : 12;    // (tri: P1 P2 P3 Handle Colour Normal U1 V1 ...; quad: P1..P4 Colour Normal U1 V1 ...)
+            const int uvAt = 12;    // (tri: P1 P2 P3 Handle Colour Normal U1 V1 ...; quad: P1..P4 Colour Normal U1 V1 ...)
             var uv = Enumerable.Range(0, np).Select(j => (U(e, uvAt + 4 * j), U(e, uvAt + 4 * j + 2))).Reverse().ToArray();
             for (var j = 0; j < np; j++) { BinaryPrimitives.WriteUInt16LittleEndian(e.AsSpan(uvAt + 4 * j), uv[j].Item1); BinaryPrimitives.WriteUInt16LittleEndian(e.AsSpan(uvAt + 4 * j + 2), uv[j].Item2); }
         }

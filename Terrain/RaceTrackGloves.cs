@@ -37,7 +37,7 @@ internal static class RaceTrackGloves
             var c = MathF.Cos(yaw); var s = MathF.Sin(yaw);
             return (new Vector3(p.X * c + p.Z * s, p.Y, -p.X * s + p.Z * c) + at) * scale;
         }
-        void Box(Vector3 centre, Vector3 size, int top, int sides, int bottom, float localYaw = 0, bool darkBottom = false)
+        void Box(Vector3 centre, Vector3 size, int top, int sides, int bottom, float localYaw = 0)
         {
             bool Flat(int colour) => colour != Red;
             var h = size / 2;
@@ -59,21 +59,21 @@ internal static class RaceTrackGloves
         }
 
         // the cuff, and its white band
-        Box(new Vector3(0, 0, -700), new Vector3(1000, 380, 500), Red, Red, Dark, darkBottom: true);
+        Box(new Vector3(0, 0, -700), new Vector3(1000, 380, 500), Red, Red, Dark);
         Box(new Vector3(0, 0, -560), new Vector3(1050, 430, 150), White, White, White);
         // the hand: red back, dark palm, and the white stripe down its back
-        Box(new Vector3(0, 0, 0), new Vector3(900, 300, 900), Red, Red, Dark, darkBottom: true);
+        Box(new Vector3(0, 0, 0), new Vector3(900, 300, 900), Red, Red, Dark);
         Box(new Vector3(0, 165, 20), new Vector3(210, 30, 860), White, White, White);
         // four fingers, curling down a little at their dark tips
         var fingers = new (float X, float Length)[] { (330, 470), (110, 580), (-110, 620), (-330, 540) };
         foreach (var (x, length) in fingers)
         {
-            Box(new Vector3(x, -10, 450 + length / 2 - 60), new Vector3(190, 210, length - 120), Red, Red, Dark, darkBottom: true);
-            Box(new Vector3(x, -45, 450 + length - 60), new Vector3(195, 180, 120), Dark, Dark, Dark, darkBottom: true);
+            Box(new Vector3(x, -10, 450 + length / 2 - 60), new Vector3(190, 210, length - 120), Red, Red, Dark);
+            Box(new Vector3(x, -45, 450 + length - 60), new Vector3(195, 180, 120), Dark, Dark, Dark);
         }
         // the thumb, out to the side at an angle, and its tip
-        Box(new Vector3(-560, -40, -80), new Vector3(200, 190, 440), Red, Red, Dark, 0.62f, darkBottom: true);
-        Box(new Vector3(-700, -60, 110), new Vector3(205, 170, 120), Dark, Dark, Dark, 0.62f, darkBottom: true);
+        Box(new Vector3(-560, -40, -80), new Vector3(200, 190, 440), Red, Red, Dark, 0.62f);
+        Box(new Vector3(-700, -60, 110), new Vector3(205, 170, 120), Dark, Dark, Dark, 0.62f);
     }
 
     // The inventory's model of `slot`'s item (OBJFIX.HQR entry) becomes the gloves. Returns a line for the log.
@@ -114,13 +114,9 @@ internal static class RaceTrackGloves
 
         public void Out(int[] hs, int colour, Vector3 inside, bool unlit = false)
         {
-            var n = Vector3.Zero; var centre = Vector3.Zero;
-            for (var i = 0; i < hs.Length; i++)
-            {
-                var a = points[hs[i]]; var b = points[hs[(i + 1) % hs.Length]];
-                n += new Vector3((a.Y - b.Y) * (a.Z + b.Z), (a.Z - b.Z) * (a.X + b.X), (a.X - b.X) * (a.Y + b.Y));
-                centre += a;
-            }
+            var n = LBAAssembler.Terrain.Palace.PalaceTorturers.Newell(hs.Select(h => points[h]).ToArray());
+            var centre = Vector3.Zero;
+            foreach (var h in hs) centre += points[h];
             centre /= hs.Length;
             if (Vector3.Dot(n, centre - inside) < 0) hs = hs.Reverse().ToArray();
             faces.Add((hs, colour, unlit));

@@ -43,16 +43,7 @@ internal sealed class CarMesh(string name, int[]? parents = null)
     // The texture table the textured polygons' handles count in (a driver's, from its own body: the pictures are the game's one page).
     public uint[] Textures { get; set; } = [];
 
-    private Vector3 Normal(int[] hs)
-    {
-        var n = Vector3.Zero;
-        for (var i = 0; i < hs.Length; i++)
-        {
-            var a = At(hs[i]); var b = At(hs[(i + 1) % hs.Length]);
-            n += new Vector3((a.Y - b.Y) * (a.Z + b.Z), (a.Z - b.Z) * (a.X + b.X), (a.X - b.X) * (a.Y + b.Y));
-        }
-        return n;
-    }
+    private Vector3 Normal(int[] hs) => LBAAssembler.Terrain.Palace.PalaceTorturers.Newell(hs.Select(At).ToArray());
     private Vector3 Centre(int[] hs) => hs.Aggregate(Vector3.Zero, (s, h) => s + At(h)) / hs.Length;
     // facing away from `inside`
     public void Out(int[] hs, int colour, Vector3 inside, bool unlit = false)

@@ -168,16 +168,7 @@ internal static partial class RaceTrackCharacterCars
         return best;
     }
 
-    private static Vector3 Newell(Vector3[] p)
-    {
-        var n = Vector3.Zero;
-        for (var i = 0; i < p.Length; i++)
-        {
-            var a = p[i]; var b = p[(i + 1) % p.Length];
-            n += new Vector3((a.Y - b.Y) * (a.Z + b.Z), (a.Z - b.Z) * (a.X + b.X), (a.X - b.X) * (a.Y + b.Y));
-        }
-        return n;
-    }
+    private static Vector3 Newell(Vector3[] p) => LBAAssembler.Terrain.Palace.PalaceTorturers.Newell(p);
 
     // Adds the Halloween buggy to a game folder whose race tracks are built (at the end of the build, after the pumpkin F1: no body before
     // it moves): its driving and firing bodies and the driving one's half-size copy at the end of BODY.HQR, the buggy entity's bodies
@@ -268,7 +259,6 @@ internal static partial class RaceTrackCharacterCars
         var copy = (byte[])record.Clone();
         copy[1] = (byte)generic;
         BinaryPrimitives.WriteInt16LittleEndian(copy.AsSpan(3), (short)bodyIndex);
-        var count = BinaryPrimitives.ReadInt32LittleEndian(table) / 4 - 1;
         var start = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(entity * 4));
         var end = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan((entity + 1) * 4));
         var p = start;
@@ -285,18 +275,6 @@ internal static partial class RaceTrackCharacterCars
             if (p >= end) throw new InvalidDataException($"Entity {entity}'s records have no end mark.");
             at = p;
         }
-        var grow = copy.Length - gone;
-        var result = new byte[table.Length + grow];
-        table.AsSpan(0, at).CopyTo(result);
-        copy.CopyTo(result.AsSpan(at));
-        table.AsSpan(at + gone).CopyTo(result.AsSpan(at + copy.Length));
-        for (var i = entity + 1; i <= count; i++)
-        {
-            var o = i * 4;
-            if (o + 4 > result.Length) break;
-            var offset = BinaryPrimitives.ReadInt32LittleEndian(result.AsSpan(o));
-            if (offset > at) BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(o), offset + grow);
-        }
-        return result;
+        return Lba2EntityTable.Splice(table, entity, at, gone, copy);
     }
 }

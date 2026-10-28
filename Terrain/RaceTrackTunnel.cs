@@ -264,6 +264,10 @@ internal static class RaceTrackTunnel
         }
         var up = Vector3.UnitY;
         var eave = (float)(run.Eave * 512);
+        // where the tunnel ends: the point there and the way out of it
+        var ends = new[] { (C: 0, IsEnd: k0 == 0), (C: count - 1, IsEnd: k1 == ((run.To - from) % n + n) % n) }.Where(e => e.IsEnd && count >= 2)
+            .Select(e => (e.C, Along: Vector3.Normalize(new Vector3(at[e.C == 0 ? 1 : e.C].X - at[e.C == 0 ? 0 : e.C - 1].X, 0, at[e.C == 0 ? 1 : e.C].Z - at[e.C == 0 ? 0 : e.C - 1].Z)) * (e.C == 0 ? -1f : 1f)))
+            .ToList();
         foreach (var side in new[] { -1f, 1f })
         {
             Vector3 Off(int c, float by, float y) => new Vector3(at[c].X, 0, at[c].Z) + across[c] * side * by + new Vector3(0, y, 0);
@@ -281,12 +285,7 @@ internal static class RaceTrackTunnel
             Between(bt, ft, StripColour, _ => up, flat: false);
             Between(bb, fb, StripColour, _ => -up, flat: false);
             // the wall's ends, where the tunnel ends
-            foreach (var (c, isEnd) in new[] { (0, k0 == 0), (count - 1, k1 == ((run.To - from) % n + n) % n) })
-            {
-                if (!isEnd || count < 2) continue;
-                var along = Vector3.Normalize(new Vector3(at[c == 0 ? 1 : c].X - at[c == 0 ? 0 : c - 1].X, 0, at[c == 0 ? 1 : c].Z - at[c == 0 ? 0 : c - 1].Z)) * (c == 0 ? -1f : 1f);
-                Add(new[] { ib[c], it[c], ot[c], ob[c] }, WallLight, along);
-            }
+            foreach (var (c, along) in ends) Add(new[] { ib[c], it[c], ot[c], ob[c] }, WallLight, along);
         }
         // the roof: its underside, its top and its edges, from wall to wall and Eave past them
         Vector3 R(int c, float by, float y) => new Vector3(at[c].X, 0, at[c].Z) + across[c] * by + new Vector3(0, y, 0);
@@ -298,12 +297,7 @@ internal static class RaceTrackTunnel
         Between(ul, tl, RoofDark, c => -across[c], flat: true);
         Between(ur, tr, RoofDark, c => across[c], flat: true);
         // (and its ends, where the tunnel ends)
-        foreach (var (c, isEnd) in new[] { (0, k0 == 0), (count - 1, k1 == ((run.To - from) % n + n) % n) })
-        {
-            if (!isEnd || count < 2) continue;
-            var along = Vector3.Normalize(new Vector3(at[c == 0 ? 1 : c].X - at[c == 0 ? 0 : c - 1].X, 0, at[c == 0 ? 1 : c].Z - at[c == 0 ? 0 : c - 1].Z)) * (c == 0 ? -1f : 1f);
-            Add(new[] { ul[c], ur[c], tr[c], tl[c] }, RoofDark, along);
-        }
+        foreach (var (c, along) in ends) Add(new[] { ul[c], ur[c], tr[c], tl[c] }, RoofDark, along);
     }
 
     // A sunk tunnel's cutting: the ground between its walls (out to their outer faces) brought down to RaisedUnder under the deck, and

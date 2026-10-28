@@ -63,19 +63,6 @@ internal static class RaceTrackRoulette
     private static int PocketColour(int k) => k == 0 ? Green : k % 2 == 1 ? Red : Black;
     private const int NoBoxTop = -32000;
 
-    private sealed class Mesh
-    {
-        public readonly List<Vector3> Points = new();
-        public readonly List<Face> Faces = new();
-        public int P(Vector3 v) { Points.Add(v); return Points.Count - 1; }
-        public void Quad(int a, int b, int c, int d, int colour, Vector3 outward)
-        {
-            var n = Vector3.Cross(Points[b] - Points[a], Points[c] - Points[a]);
-            Faces.Add(Vector3.Dot(n, outward) >= 0 ? new Face(new[] { a, b, c, d }, colour) : new Face(new[] { d, c, b, a }, colour));
-        }
-        public byte[] Write() => RaceTrackPipes.Write(Points, Faces, lit: false);
-    }
-
     // Builds the wheel at (cx, cz) (island cells): the ground that would reach its underside lowered, what stands up into it taken away
     // (not what `kept` keeps), and its decors added. Null when its cube is full.
     public static RouletteSpot? Place(IslandFile island, TrackRoad r, RouletteRun run, double cx, double cz, int landing, RaceTrackOptions o,
@@ -132,11 +119,11 @@ internal static class RaceTrackRoulette
         double wcx = cx * 512, wcz = cz * 512, y0 = run.HoleY, ext = outer * 512 + 64, bottom = y0 + Under(run.Hole);
         static Vector3 At(double cells, double angle, double y) => new((float)(cells * 512 * Math.Cos(angle)), (float)y, (float)(cells * 512 * Math.Sin(angle)));
         static Vector3 Radial(double angle) => new((float)Math.Cos(angle), 0, (float)Math.Sin(angle));
-        int[] Ring(Mesh m, double cells, double y) => Enumerable.Range(0, Around).Select(k => m.P(At(cells, 2 * Math.PI * k / Around, y))).ToArray();
+        int[] Ring(RaceTrackRaisedBody.Mesh m, double cells, double y) => Enumerable.Range(0, Around).Select(k => m.P(At(cells, 2 * Math.PI * k / Around, y))).ToArray();
         var turning = new List<int>();
 
         // the bowl's wall (gold on top) and its wooden side down to its underside
-        var wall = new Mesh();
+        var wall = new RaceTrackRaisedBody.Mesh();
         {
             var top = Floor(rim) + run.Wall;
             int[] foot = Ring(wall, rim, Floor(rim) - 30), inTop = Ring(wall, rim, top), outTop = Ring(wall, outer, top), outFoot = Ring(wall, outer, Under(rim));
@@ -151,7 +138,7 @@ internal static class RaceTrackRoulette
         var wallBody = Add(wall.Write(), wcx, y0, wcz, ext, bottom);
         if (wallBody >= 0) turning.Add(wallBody);
         // its underside, following its floor's curve, and the hole's own wall
-        var under = new Mesh();
+        var under = new RaceTrackRaisedBody.Mesh();
         {
             var radii = new List<double> { outer };
             for (var c = rim; c > run.Hole + 0.01; c -= (rim - run.Hole) / 7) radii.Add(c);
@@ -175,7 +162,7 @@ internal static class RaceTrackRoulette
 
         // the floor inside the pockets, round the hole: wood in segments of two tones, a gold ring round the hole's edge
         var pockets = run.Hole + PocketsPast;
-        var inner = new Mesh();
+        var inner = new RaceTrackRaisedBody.Mesh();
         {
             int[] a = Ring(inner, run.Hole, Floor(run.Hole) + 4), b = Ring(inner, run.Hole + 0.18, Floor(run.Hole + 0.18) + 4),
                   c = Ring(inner, run.Hole + 0.18, Floor(run.Hole + 0.18) + 2), e = Ring(inner, pockets, Floor(pockets) + 2);
@@ -197,7 +184,7 @@ internal static class RaceTrackRoulette
         var pocket = 2 * Math.PI / Pockets;
         for (var piece = 0; piece < Bodies; piece++)
         {
-            var head = new Mesh();
+            var head = new RaceTrackRaisedBody.Mesh();
             int k0 = piece * Pockets / Bodies, k1 = (piece + 1) * Pockets / Bodies;
             for (var k = k0; k < k1; k++)
             {
@@ -244,7 +231,7 @@ internal static class RaceTrackRoulette
             double lx = wcx + at * 512 * Math.Cos(a), lz = wcz + at * 512 * Math.Sin(a);
             var ground = IslandOps.Altitude(island, lx, lz) ?? 0;
             var top = y0 + Under(at) - ground;
-            var leg = new Mesh();
+            var leg = new RaceTrackRaisedBody.Mesh();
             var u = new Vector3((float)Math.Cos(a), 0, (float)Math.Sin(a)); var v = new Vector3(-u.Z, 0, u.X);
             RaceTrackPipes.Box(leg.Points, leg.Faces, Vector3.Zero, u * (float)LegHalf, v * (float)LegHalf, -60, (float)top, Gold, GoldDark, GoldDark);
             if (Add(leg.Write(), lx, ground, lz, LegHalf * 2, ground - 60) >= 0) legs++;

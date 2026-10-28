@@ -277,18 +277,6 @@ internal static class RaceTrackBaldinoCar
             p += command == 3 ? 3 + table[p + 3] : 2 + table[p + 2];
         }
         if (p >= end) throw new InvalidDataException($"Entity {entity}'s records have no end mark.");
-        var record = new byte[] { 1, (byte)generic, 4, (byte)bodyIndex, (byte)(bodyIndex >> 8), 0 };
-        var result = new byte[table.Length + record.Length];
-        table.AsSpan(0, p).CopyTo(result);
-        record.CopyTo(result.AsSpan(p));
-        table.AsSpan(p).CopyTo(result.AsSpan(p + record.Length));
-        for (var i = entity + 1; i <= count; i++)
-        {
-            var at = i * 4;
-            if (at + 4 > result.Length) break;
-            var offset = BinaryPrimitives.ReadInt32LittleEndian(result.AsSpan(at));
-            if (offset >= p) BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(at), offset + record.Length);
-        }
-        return result;
+        return Lba2EntityTable.Splice(table, entity, p, 0, new byte[] { 1, (byte)generic, 4, (byte)bodyIndex, (byte)(bodyIndex >> 8), 0 });
     }
 }

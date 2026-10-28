@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO;
 
 namespace LBAAssembler;
@@ -56,6 +57,26 @@ internal sealed class Lba2EntityTable
             entities.Add(new Entity(id, bodies, anims));
         }
         return new Lba2EntityTable(entities);
+    }
+
+    // The table with the `remove` bytes at `at` (in entity `entity`'s records) replaced by `insert`: the entities after it move, so their
+    // offsets do too (RaceTrackJumpAnim.WithAnim, RaceTrackBaldinoCar.WithBody, RaceTrackCharacterCars.WithBodyRecord).
+    public static byte[] Splice(byte[] table, int entity, int at, int remove, byte[] insert)
+    {
+        var count = BinaryPrimitives.ReadInt32LittleEndian(table) / 4 - 1;
+        var grow = insert.Length - remove;
+        var result = new byte[table.Length + grow];
+        table.AsSpan(0, at).CopyTo(result);
+        insert.CopyTo(result.AsSpan(at));
+        table.AsSpan(at + remove).CopyTo(result.AsSpan(at + insert.Length));
+        for (var i = entity + 1; i <= count; i++)
+        {
+            var o = i * 4;
+            if (o + 4 > result.Length) break;
+            var offset = BinaryPrimitives.ReadInt32LittleEndian(result.AsSpan(o));
+            if (offset > at) BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(o), offset + grow);
+        }
+        return result;
     }
 
     // The entities that have this BODY.HQR entry as one of their bodies.

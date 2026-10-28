@@ -349,12 +349,8 @@ internal static partial class RaceTrackCharacterCars
             Arms(m, point(twinsen.Bones[4].Pivot), point(twinsen.Bones[6].Pivot));
         }
 
-        var body = m.ToBody(racer.Header);
         // (its box its own: longer than the racer's car it is made on)
-        var world = body.World();
-        var box = new[] { world.Min(v => v.X), world.Max(v => v.X), world.Min(v => v.Y), world.Max(v => v.Y), world.Min(v => v.Z), world.Max(v => v.Z) };
-        for (var i = 0; i < 6; i++) BinaryPrimitives.WriteInt32LittleEndian(body.Header.AsSpan(8 + i * 4), (int)MathF.Round(box[i]));
-        return body;
+        return WithOwnBox(m.ToBody(racer.Header));
     }
 
     // Adds the pumpkin F1 to a game folder whose race tracks are built (at the end of the build: RaceTrackService.Build): its body and its

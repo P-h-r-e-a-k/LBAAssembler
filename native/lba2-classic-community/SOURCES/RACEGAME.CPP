@@ -135,8 +135,7 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_SPECIAL 2320                  // + the special's index
 #define RG_ID_QUALIFY 2350                  // the qualifying page's rows (QualifyingPage)
 #define RG_ID_SKIP 2351
-#define RG_ID_POWERUPS 2352                 // the Options menu's rows of the race game's (RaceGame_OptionsMenu)
-#define RG_ID_CONTROLS 2353
+#define RG_ID_CONTROLS 2353                 // the Options menu's rows of the race game's (RaceGame_OptionsMenu)
 #define RG_ID_UPDATES 2354
 #define RG_ID_UPDATE_MODE 2355              // the Updates page's rows (UpdatesPage)
 #define RG_ID_UPDATE_NOW 2356
@@ -978,7 +977,6 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_TRIAL: Label(string, "Time trial"); return 1;
     case RG_ID_QUALIFY: Label(string, "Qualifying lap"); return 1;
     case RG_ID_SKIP: Label(string, "Skip: start at the back of the grid"); return 1;
-    case RG_ID_POWERUPS: Label(string, "Power-ups"); return 1;
     case RG_ID_CONTROLS: Label(string, "Race controls, power-ups"); return 1;   // (the game's own Controls row changes the keys)
     case RG_ID_UPDATES: Label(string, "Camera, window, updates"); return 1;     // (the row's width: "Window mode, mini-map, updates" ran over it)
     case RG_ID_CAMERA: Label(string, s_cameraLabel[s_camera >= 0 && s_camera <= 2 ? s_camera : 2]); return 1;
@@ -1222,6 +1220,7 @@ static void StatsSized(S32 cx, S32 y, S32 step, const T_RG_CAR *c, S32 starR, S3
 #define RG_CAR_BOTTOM 286
 #define RG_STAT_LINE 26
 static void Padlock(S32 cx, S32 cy);
+static void PageLoopStart(S32 *padDir);
 static int CarPage(const char *what, int trial) {
     if (s_nbCars <= 0) return -1;
     if (s_car < 0 || s_car >= s_nbCars) s_car = 0;
@@ -1232,13 +1231,8 @@ static int CarPage(const char *what, int trial) {
         while (s_car + 1 < s_nbCars && !CarFor(s_car, trial)) s_car++;
         if (!CarFor(s_car, trial)) s_car = 0;
     }
-    Page(NULL, 0);
-    BoxUpdate();
-    ManageTime();
-    InitWaitNoKey();
-    InitWaitNoInput(I_JOY | I_FIRE | I_MENUS | I_ACTION);
-    S32 padDir = JoystickMenuNavOnly();
-    AsciiMode = TRUE;
+    S32 padDir;
+    PageLoopStart(&padDir);
     S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
     // (the cars with stats: the box higher and shorter, their three rows under the name -- a list without them laid out as before)
     int rated = 0;
@@ -1247,7 +1241,6 @@ static int CarPage(const char *what, int trial) {
     S32 x0 = cx - 230, x1 = cx + 230, y0 = boxTop + oy, y1 = boxBottom + oy;
     int chosen = -2;
     S32 start = TimerRefHR;
-    s_clickWas = Click & 3;
     while (chosen == -2) {
         ManageTime();
         MyGetInput();
@@ -1523,13 +1516,8 @@ S32 RaceGame_WatchDone(void) {
 #define RG_TIMES_SHOWN 5
 static int TimesPage(void) {
     ReadTimes();
-    Page(NULL, 0);
-    BoxUpdate();
-    ManageTime();
-    InitWaitNoKey();
-    InitWaitNoInput(I_JOY | I_FIRE | I_MENUS | I_ACTION);
-    S32 padDir = JoystickMenuNavOnly();
-    AsciiMode = TRUE;
+    S32 padDir;
+    PageLoopStart(&padDir);
     // (the track raced or chosen last -- a special, or one of Track select's once it is open)
     int sp = s_raceSp >= 0 && TimesShown(s_raceSp) ? s_raceSp : TimesShown(s_lastSp) ? s_lastSp : 0, flag = 1, done = 0;
     while (sp + 1 < s_nbSp && !TimesShown(sp)) sp++;
@@ -1541,7 +1529,6 @@ static int TimesPage(void) {
     int copied = 0;                         // (the picture just put on the clipboard: said under the keys till the page changes)
     S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
     S32 x0 = cx - 280, x1 = cx + 280, y0 = 20 + oy, y1 = 466 + oy;
-    s_clickWas = Click & 3;
     static const char *const levelName[4] = {"Easy", "Medium", "Hard", "Extreme"};
     // (the track's ghosts: the player's best lap, the game's four -- looked for as the page turns to it)
     char ownPath[ADELINE_MAX_PATH], levelPath[4][ADELINE_MAX_PATH];
@@ -1892,14 +1879,8 @@ static void Pages(const T_RACE_PAGE *pg, int controls, int items, int intro) {
     const int itemPages = !items ? 0 : pg && pg->Count ? (pg->Count + RG_PAGE_ITEMS - 1) / RG_PAGE_ITEMS : 1;
     const int pages = (controls ? 1 : 0) + itemPages;
     if (pages <= 0) return;
-    Page(NULL, 0);
-    BoxUpdate();
-    ManageTime();
-    InitWaitNoKey();
-    InitWaitNoInput(I_JOY | I_FIRE | I_MENUS | I_ACTION);
-    S32 padDir = JoystickMenuNavOnly();
-    AsciiMode = TRUE;
-    s_clickWas = Click & 3;
+    S32 padDir;
+    PageLoopStart(&padDir);
     int at = 0, done = 0;
     S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
     Log_Info("[racegame] %s: %d page(s)%s", controls && itemPages ? "the controls and the power-ups" : controls ? "the controls" : "the power-ups",
@@ -2092,14 +2073,13 @@ U16 *RaceGame_OptionsMenu(U16 *menu) {
 }
 
 S32 RaceGame_OptionsRow(S32 num) {
-    if (!RaceGame_On() || (num != RG_ID_POWERUPS && num != RG_ID_CONTROLS && num != RG_ID_UPDATES)) return 0;
+    if (!RaceGame_On() || (num != RG_ID_CONTROLS && num != RG_ID_UPDATES)) return 0;
     if (num == RG_ID_UPDATES) {
         UpdatesPage();
         return 1;
     }
     const T_RACE_PAGE *pg = TrackPage(s_raceSp >= 0 ? s_raceSp : s_lastSp >= 0 && s_lastSp < s_nbSp ? s_lastSp : 0);
-    if (num == RG_ID_POWERUPS) Pages(pg, 0, 1, 0);
-    else Pages(pg, 1, 1, 0);
+    Pages(pg, 1, 1, 0);
     return 1;
 }
 

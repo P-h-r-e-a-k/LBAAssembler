@@ -74,8 +74,8 @@ internal static class RaceTrackGasMonster
         var animIndex = HqrArchive.CountEntries(animPath);
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var table = HqrArchive.Open(ressPath).Read(44);
-        var gen = FirstFreeAnim(table, Entity, FirstPoseAnim);
-        var bodyGen = FirstFreeBody(table, Entity, FirstMonsterBody);
+        var gen = FirstFree(table, Entity, FirstPoseAnim, 3, 4);
+        var bodyGen = FirstFree(table, Entity, FirstMonsterBody, 1, 16);
         for (var i = 0; i < report.GasMonsters.Count; i++)
         {
             var g = report.GasMonsters[i];
@@ -137,21 +137,13 @@ internal static class RaceTrackGasMonster
         return log;
     }
 
-    // The first of 4 animation numbers in a row the entity doesn't use yet, from `from` on, in steps of 4.
-    private static int FirstFreeAnim(byte[] table, int entity, int from)
+    // The first of `run` numbers in a row of records of a kind (1 bodies, 3 animations) the entity doesn't use yet, from `from` on, in
+    // steps of `run`: 4 animations; 16 bodies, the monsters' (the entity's own: 0, 158, 159).
+    private static int FirstFree(byte[] table, int entity, int from, int kind, int run)
     {
-        var used = Records(table, entity, 3);
+        var used = Records(table, entity, kind);
         var gen = from;
-        while (Enumerable.Range(gen, 4).Any(used.Contains)) gen += 4;
-        return gen;
-    }
-
-    // The first body number from `from` on that the entity, and the ones after it for the monsters, don't use yet (its own: 0, 158, 159).
-    private static int FirstFreeBody(byte[] table, int entity, int from)
-    {
-        var used = Records(table, entity, 1);
-        var gen = from;
-        while (Enumerable.Range(gen, 16).Any(used.Contains)) gen += 16;
+        while (Enumerable.Range(gen, run).Any(used.Contains)) gen += run;
         return gen;
     }
 

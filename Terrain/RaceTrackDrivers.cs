@@ -31,10 +31,6 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
     private static RaceDriver Of(RaceTrackCharacterCars.Car car, string name, double side, double top, double grip, bool main = false) =>
         new(name, car.Generic, new RaceTrackBuilder.RacingLine(side, 4, top, grip), main);
 
-    // ... and in a car of the cast's, by its number (its body in its own entity: a hundred to an entity, InstallCast)
-    private static RaceDriver OfCast(int number, string name, double side, double top, double grip, bool main = false) =>
-        new(name, (number - RaceTrackCharacterCars.CastFirst) % RaceTrackCharacterCars.CastPerEntity, new RaceTrackBuilder.RacingLine(side, 4, top, grip), main, Cast: number);
-
     // Citadel Island, the storm track: Raph, the lighthouse keeper, too busy racing to let the weather wizard up the lighthouse -- "beat my
     // time" (StoryNotes.txt). His time is his lap at the setup's skill.
     public static readonly List<RaceDriver> CitadelStorm = new()
