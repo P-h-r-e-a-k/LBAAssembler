@@ -612,8 +612,11 @@ internal static class RaceTrackService
         session.Step(0.1, "the road, its ground and its scenery");
         options.DoorBoxes = DoorBoxes(gameDirectory, options.Island);
         var atDoors = options.DoorBoxes.Select(b => RaceTrackOptions.DecorsAtDoor(island, b)).ToList();
+        // (a building the road takes away put back off it, on an island of one file -- Citadel Island's two weathers' have the museum's own)
+        var doorPieces = options.Island.TwinIleFile is null ? RaceTrackBuilder.DoorPieces(island, options.DoorBoxes, atDoors) : null;
         var report = RaceTrackBuilder.Build(island, plan, options);
         NoteLostDoors(island, options.DoorBoxes, atDoors, report);
+        if (doorPieces is not null) RaceTrackBuilder.RestoreLostBuildings(island, options.DoorBoxes, doorPieces, options, report);
         // (an island with more ground pages -- POLAR.ILE -- has a texture index of a page and a definition, IslandFile.GroundPageShift, and
         // the triangle's Wide bit: the road's definitions, the smooth kerbs' a triangle each on a bend, must fit in a cube's 2,048)
         if (island.GroundPages.Count > 0)

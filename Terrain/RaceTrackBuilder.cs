@@ -659,6 +659,9 @@ internal sealed class RaceTrackReport
     // A building's front put back elsewhere (RaceTrackIsland.TwinMuseum): its old place and how far it moved (cells), for its door zone
     // and its way out (RaceTrackScenes)
     public (double FromX, double FromZ, double Dx, double Dz)? Moved { get; set; }
+    // The lost doors whose building was put back elsewhere (RaceTrackBuilder.RestoreLostBuildings): the door's box (island cells) and how far
+    // it moved (cells, and units up)
+    public List<(double X0, double Z0, double X1, double Z1, int Dx, int Dz, int Dy)> Relocated { get; } = new();
     // ... of them, the ones whose decor is still there, under the ground the build raised (RaceTrackService.NoteLostDoors)
     public List<(double X0, double Z0, double X1, double Z1)> BuriedDoors { get; } = new();
     public List<double[]> Arrows { get; } = new();
@@ -3559,6 +3562,216 @@ internal static class RaceTrackBuilder
         report.NewBodies.Add(RaceTrackRaisedBody.Block(LiftPad, LiftPad, LiftPadTop, RaceTrackRaisedBody.RailTop, RaceTrackRaisedBody.RailSide, RaceTrackRaisedBody.RailTop));
         return body;
     }
+
+    // The building at each door: of the decor there (RaceTrackOptions.DecorsAtDoor's), the pieces against the door's zone -- not a rope
+    // bridge's railings beside it, the Mosquibees' cliff house's -- and the rest of each one's object there, the decors at its origin (a
+    // Mosquibee village gate's beams over its posts); copied as they are with their cube cells, before the build takes any away
+    // (RestoreLostBuildings)
+    public static List<List<(IslandDecor Decor, int CubeX, int CubeZ)>> DoorPieces(IslandFile island, List<(double X0, double Z0, double X1, double Z1, double Y0, double Y1)> doors,
+        List<HashSet<IslandDecor>> atDoors)
+    {
+        var cubeOf = new Dictionary<IslandDecor, (int X, int Z)>(ReferenceEqualityComparer.Instance);
+        var byOrigin = new Dictionary<(int, int, int, int, int), List<IslandDecor>>();
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            foreach (var d in cube.Decors)
+            {
+                cubeOf[d] = (cx, cz);
+                var key = (cx, cz, d.X, d.Y, d.Z);
+                if (!byOrigin.TryGetValue(key, out var list)) byOrigin[key] = list = new List<IslandDecor>();
+                list.Add(d);
+            }
+        return atDoors.Select((s, i) =>
+        {
+            var b = doors[i];
+            bool Against(IslandDecor d)
+            {
+                var (cx, cz) = cubeOf[d];
+                double x0 = (cx * (double)IslandFile.CubeSize + d.XMin) / 512, x1 = (cx * (double)IslandFile.CubeSize + d.XMax) / 512;
+                double z0 = (cz * (double)IslandFile.CubeSize + d.ZMin) / 512, z1 = (cz * (double)IslandFile.CubeSize + d.ZMax) / 512;
+                return x1 >= b.X0 - DoorAgainst && x0 <= b.X1 + DoorAgainst && z1 >= b.Z0 - DoorAgainst && z0 <= b.Z1 + DoorAgainst;
+            }
+            var near = s.Where(cubeOf.ContainsKey).ToList();
+            var core = near.Where(Against).ToList();
+            if (core.Count == 0) core = near;
+            var set = new HashSet<IslandDecor>(ReferenceEqualityComparer.Instance);
+            foreach (var d in core)
+                foreach (var o in byOrigin[(cubeOf[d].X, cubeOf[d].Z, d.X, d.Y, d.Z)]) set.Add(o);
+            return set.Select(d => (d.Clone(), cubeOf[d].X, cubeOf[d].Z)).ToList();
+        }).ToList();
+    }
+
+    // The buildings the road took away, every piece of them (RaceTrackReport.LostDoors), on an island of one file: put back as they were
+    // at the nearest place off the road -- in the same cube, clear of the road and of the decor standing there, on ground as level round
+    // them as theirs was -- the ground under them dug as theirs was (Otringal's sunken stairway's pit), their doors' zones and the inside
+    // scenes' ways out moved with them (RaceTrackReport.Relocated, RaceTrackScenes). The user, 2026-10-28: "check all zone changes i.e.
+    // building entrances to see what's been removed with the view of restoring them the same as we have with citadel", "Place them
+    // yourself as close as possible to where they were"
+    public static void RestoreLostBuildings(IslandFile island, List<(double X0, double Z0, double X1, double Z1, double Y0, double Y1)> doors,
+        List<List<(IslandDecor Decor, int CubeX, int CubeZ)>> before, RaceTrackOptions o, RaceTrackReport report)
+    {
+        if (report.GroundBefore is not { } groundBefore || report.GroundAfter is not { } groundAfter) return;
+        bool Same((double X0, double Z0, double X1, double Z1) l, int i) =>
+            Math.Abs(l.X0 - doors[i].X0) < 0.01 && Math.Abs(l.Z0 - doors[i].Z0) < 0.01 && Math.Abs(l.X1 - doors[i].X1) < 0.01 && Math.Abs(l.Z1 - doors[i].Z1) < 0.01;
+        // (the doors of one building together: those sharing a piece -- the Otringal shop's two)
+        static (int, int, int, int, int, int) Key((IslandDecor D, int Cx, int Cz) p) => (p.Cx, p.Cz, p.D.X, p.D.Y, p.D.Z, p.D.Body);
+        var groups = new List<(List<int> Doors, List<(IslandDecor D, int Cx, int Cz)> Pieces)>();
+        for (var i = 0; i < doors.Count; i++)
+        {
+            if (before[i].Count == 0 || !report.LostDoors.Any(l => Same(l, i))) continue;
+            var keys = before[i].Select(Key).ToHashSet();
+            var g = groups.FirstOrDefault(g => g.Pieces.Any(p => keys.Contains(Key(p))));
+            if (g.Doors is null) { groups.Add((new List<int> { i }, before[i].ToList())); continue; }
+            g.Doors.Add(i);
+            foreach (var p in before[i]) if (!g.Pieces.Any(q => Key(q) == Key(p))) g.Pieces.Add(p);
+        }
+        // (what stands now, in island cells and heights: a building put back stands clear of it, and of those put back before it)
+        var standing = new List<(double X0, double Z0, double X1, double Z1, int Y0, int Y1)>();
+        static (double X0, double Z0, double X1, double Z1, int Y0, int Y1) Box(IslandDecor d, int cx, int cz) =>
+            ((cx * (double)IslandFile.CubeSize + d.XMin) / 512, (cz * (double)IslandFile.CubeSize + d.ZMin) / 512,
+             (cx * (double)IslandFile.CubeSize + d.XMax) / 512, (cz * (double)IslandFile.CubeSize + d.ZMax) / 512, d.YMin, Math.Max(d.YMin, d.YMax));
+        // (not what is drawn only, with no box to walk into: the road's own deck, Otringal's roulette wheel over the town)
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            foreach (var d in cube.Decors) if (d.YMax >= d.YMin) standing.Add(Box(d, cx, cz));
+        foreach (var (doorList, pieces) in groups)
+        {
+            var boxes = pieces.Select(p => Box(p.D, p.Cx, p.Cz)).ToList();
+            var doorBoxes = doorList.Select(i => doors[i]).ToList();
+            double bx0 = boxes.Min(b => b.X0), bz0 = boxes.Min(b => b.Z0), bx1 = boxes.Max(b => b.X1), bz1 = boxes.Max(b => b.Z1);
+            bool Inside(double x, double z, double grow) => boxes.Any(b => x >= b.X0 - grow && x <= b.X1 + grow && z >= b.Z0 - grow && z <= b.Z1 + grow);
+            // (its own place, sampled every half cell: the pieces, and before each door the ground Twinsen walks up to it on)
+            var own = new List<(double X, double Z)>();
+            foreach (var b in boxes)
+                for (var z = Math.Floor(b.Z0 * 2) / 2 - 0.5; z <= b.Z1 + 0.5; z += 0.5)
+                for (var x = Math.Floor(b.X0 * 2) / 2 - 0.5; x <= b.X1 + 0.5; x += 0.5) own.Add((x, z));
+            var approach = new List<(double X, double Z)>();
+            foreach (var b in doorBoxes)
+                for (var z = Math.Floor(b.Z0 * 2) / 2 - RestoreApproach; z <= b.Z1 + RestoreApproach; z += 0.5)
+                for (var x = Math.Floor(b.X0 * 2) / 2 - RestoreApproach; x <= b.X1 + RestoreApproach; x += 0.5) approach.Add((x, z));
+            // (the ground round it, its vertices up to two cells out, not those at its doors -- the foot of a stairway's pit: how much higher
+            // or lower it stands at the new place)
+            var ring = new List<(int X, int Z)>();
+            for (var z = (int)Math.Floor(bz0) - 2; z <= (int)Math.Ceiling(bz1) + 2; z++)
+            for (var x = (int)Math.Floor(bx0) - 2; x <= (int)Math.Ceiling(bx1) + 2; x++)
+                if (!Inside(x, z, 0.5) && !doorBoxes.Any(b => x >= b.X0 - 2 && x <= b.X1 + 2 && z >= b.Z0 - 2 && z <= b.Z1 + 2)) ring.Add((x, z));
+            if (ring.Count == 0) ring.Add(((int)Math.Round(bx0) - 2, (int)Math.Round(bz0) - 2));
+            var oldRing = ring.Select(v => groundBefore(v.X, v.Z)).OrderBy(h => h).ToList();
+            var oldSpread = oldRing[oldRing.Count * 9 / 10] - oldRing[oldRing.Count / 10];
+            int y0 = boxes.Min(b => b.Y0), y1 = boxes.Max(b => b.Y1);
+            var found = ((int Dx, int Dz, int Dy)?)null;
+            var candidates = new List<(int Dx, int Dz)>();
+            for (var dz = -RestoreSearch; dz <= RestoreSearch; dz++)
+            for (var dx = -RestoreSearch; dx <= RestoreSearch; dx++) if (dx != 0 || dz != 0) candidates.Add((dx, dz));
+            // (how far the places tried got, for the log: tried, in its cube, off the curbs, level enough)
+            int[] why = new int[4];
+            // (LBA_RESTORE_MAP=<file>: a map of the cells round it appended there -- B its pieces, O its doors, # the road, ~ the sea, d decor
+            // standing at its heights, else the ground's height against its own in steps of 500 units, 5 level with it)
+            if (Environment.GetEnvironmentVariable("LBA_RESTORE_MAP") is { } mapFile)
+            {
+                var sb = new System.Text.StringBuilder($"== group bbox x {bx0:0.0}..{bx1:0.0} z {bz0:0.0}..{bz1:0.0} y {y0}..{y1}" + Environment.NewLine);
+                for (var z = (int)bz0 - 30; z <= (int)bz1 + 30; z++)
+                {
+                    sb.Append($"{z,4} ");
+                    for (var x = (int)bx0 - 30; x <= (int)bx1 + 30; x++)
+                    {
+                        double cx = x + 0.5, cz = z + 0.5;
+                        char ch = Inside(cx, cz, 0) ? 'B' : doorBoxes.Any(b => cx >= b.X0 && cx <= b.X1 && cz >= b.Z0 && cz <= b.Z1) ? 'O'
+                            : report.DistanceToRoad(cx, cz) <= o.VergeHalfWidth + 1 ? '#'
+                            : report.WasGround is { } l && !l(cx, cz) ? '~'
+                            : standing.Any(t => cx >= t.X0 && cx <= t.X1 && cz >= t.Z0 && cz <= t.Z1 && t.Y1 > y0 - 600 && t.Y0 < y1) ? 'd'
+                            : (char)('0' + Math.Clamp((int)(groundAfter(cx, cz) - groundBefore((bx0 + bx1) / 2, (bz0 + bz1) / 2) + 2500) / 500, 0, 9));
+                        sb.Append(ch);
+                    }
+                    sb.AppendLine();
+                }
+                File.AppendAllText(mapFile, sb.ToString());
+            }
+            // (the ground round it as it was round it first; failing that, as level as it was -- a house on a cliff's ledge, the Mosquibees')
+            for (var pass = 0; pass < 2 && found is null; pass++)
+            foreach (var (dx, dz) in candidates.OrderBy(c => c.Dx * c.Dx + c.Dz * c.Dz))
+            {
+                why[0]++;
+                // (each piece in its own cube, each door in its scene's)
+                if (pieces.Any(p => p.D.X + dx * 512 < 0 || p.D.X + dx * 512 >= IslandFile.CubeSize || p.D.Z + dz * 512 < 0 || p.D.Z + dz * 512 >= IslandFile.CubeSize)) continue;
+                if (doorBoxes.Any(b => Math.Floor(b.X0 / 64) != Math.Floor((b.X0 + dx) / 64) || Math.Floor((b.X1 - 1e-6) / 64) != Math.Floor((b.X1 + dx - 1e-6) / 64)
+                                    || Math.Floor(b.Z0 / 64) != Math.Floor((b.Z0 + dz) / 64) || Math.Floor((b.Z1 - 1e-6) / 64) != Math.Floor((b.Z1 + dz - 1e-6) / 64))) continue;
+                why[1]++;
+                // (its pieces off the curbs -- the island's roads run close by one another, Otringal's and the Mosquibees' all over their
+                // towns: on the verge, if need be -- and on land; before its doors anything Twinsen can walk on, the road's verge too)
+                if (own.Any(s => report.DistanceToRoad(s.X + dx, s.Z + dz) <= o.CurbHalfWidth + RestoreCurb || report.InTheWay(s.X + dx, s.Z + dz, -1e9, 1e9)
+                                 || report.WasGround is { } land && !land(s.X + dx, s.Z + dz))) continue;
+                why[2]++;
+                // (the ground round it as level with it as it was: the middle of the differences, most of them within RestoreLevel of it)
+                var diffs = ring.Select(v => groundAfter(v.X + dx, v.Z + dz) - groundBefore(v.X, v.Z)).OrderBy(d => d).ToList();
+                var dy = (int)Math.Round(diffs[diffs.Count / 2]);
+                if (pass == 0 && diffs[diffs.Count * 9 / 10] - diffs[diffs.Count / 10] > RestoreLevel) continue;
+                if (pass == 1)
+                {
+                    var now = ring.Select(v => groundAfter(v.X + dx, v.Z + dz)).OrderBy(h => h).ToList();
+                    if (now[now.Count * 9 / 10] - now[now.Count / 10] > oldSpread + RestoreLevel) continue;
+                    dy = (int)Math.Round(now[now.Count / 2] - oldRing[oldRing.Count / 2]);
+                }
+                why[3]++;
+                // (nothing standing in its place, from its floor up -- not even on top of a pit's rim: Otringal's kiosk by the stairway's)
+                if (boxes.Any(b => standing.Any(s => s.X1 > b.X0 + dx + 0.25 && s.X0 < b.X1 + dx - 0.25 && s.Z1 > b.Z0 + dz + 0.25 && s.Z0 < b.Z1 + dz - 0.25
+                                                     && s.Y1 > b.Y0 + dy + 100 && s.Y0 < b.Y1 + dy + RestoreAbove))) continue;
+                if (approach.Any(a => !Inside(a.X, a.Z, 0) && standing.Any(s => a.X + dx > s.X0 && a.X + dx < s.X1 && a.Z + dz > s.Z0 && a.Z + dz < s.Z1
+                                                     && s.Y1 > doorBoxes[0].Y0 + dy + 100 && s.Y0 < doorBoxes[0].Y0 + dy + 1000))) continue;
+                found = (dx, dz, dy);
+                break;
+            }
+            var what = $"the building of the door{(doorList.Count > 1 ? "s" : "")} at cell{(doorList.Count > 1 ? "s" : "")} " +
+                       string.Join(" and ", doorBoxes.Select(b => $"({(b.X0 + b.X1) / 2:0.#}, {(b.Z0 + b.Z1) / 2:0.#})"));
+            if (found is not { } f) { report.Notes.Add($"WARNING: {what}: no place for it off the road within {RestoreSearch} cells -- its doors go (of {why[0]} tries over two passes, {why[1]} in its cube, {why[2]} of them off the curbs, {why[3]} of them level enough, none clear of the decor standing there)"); continue; }
+            if (pieces.GroupBy(p => (p.Cx, p.Cz)).Any(g => island.CubeAt(g.Key.Cx, g.Key.Cz) is not { } c || c.Decors.Count + g.Count() > IslandDecors.MaxPerCubeRaceTrack))
+            { report.Notes.Add($"WARNING: {what}: no room for its {pieces.Count} pieces in their cube -- its doors go"); continue; }
+            var standingBefore = standing.ToList();
+            foreach (var p in pieces)
+            {
+                var d = p.D.Clone();
+                d.MoveTo(d.X + f.Dx * 512, d.Y + f.Dy, d.Z + f.Dz * 512);
+                island.CubeAt(p.Cx, p.Cz)!.Decors.Add(d);
+                standing.Add(Box(d, p.Cx, p.Cz));
+            }
+            // (and the room before its doors kept for Twinsen: the next one put back stands clear of it -- the Mosquibees' village gate
+            // came to stand before the cliff house's door)
+            foreach (var b in doorBoxes)
+                standing.Add((b.X0 + f.Dx - RestoreApproach, b.Z0 + f.Dz - RestoreApproach, b.X1 + f.Dx + RestoreApproach, b.Z1 + f.Dz + RestoreApproach,
+                              (int)b.Y0 + f.Dy, (int)b.Y0 + f.Dy + (int)RaceTrackReport.RoadHeadroom));
+            // (its ground with it: the ground under it and its doors, and round them, as it was there -- a stairway's pit, its foot at the doors;
+            // the hollow a Mosquibee village gate stands over; the slope down from a cliff house's door -- blended into the new place's
+            // over RestoreBlend cells, and not on the road's own)
+            var shaped = 0;
+            double gx0 = Math.Min(bx0, doorBoxes.Min(b => b.X0)), gz0 = Math.Min(bz0, doorBoxes.Min(b => b.Z0));
+            double gx1 = Math.Max(bx1, doorBoxes.Max(b => b.X1)), gz1 = Math.Max(bz1, doorBoxes.Max(b => b.Z1));
+            for (var z = (int)Math.Floor(gz0) - 1 - (int)RestoreBlend; z <= (int)Math.Ceiling(gz1) + 1 + (int)RestoreBlend; z++)
+            for (var x = (int)Math.Floor(gx0) - 1 - (int)RestoreBlend; x <= (int)Math.Ceiling(gx1) + 1 + (int)RestoreBlend; x++)
+            {
+                var out_ = Math.Max(Math.Max(gx0 - x, x - gx1), Math.Max(gz0 - z, z - gz1));
+                var w = out_ <= 1 ? 1 : Math.Max(0, 1 - (out_ - 1) / RestoreBlend);
+                if (w <= 0 || report.DistanceToRoad(x + f.Dx, z + f.Dz) <= o.CurbHalfWidth + 1 || island.HeightAt(x + f.Dx, z + f.Dz) is not { } now) continue;
+                // (not under what stands there besides it: a building beside it keeps its ground)
+                if (!Inside(x, z, 0) && standingBefore.Any(t => x + f.Dx >= t.X0 - 0.5 && x + f.Dx <= t.X1 + 0.5 && z + f.Dz >= t.Z0 - 0.5 && z + f.Dz <= t.Z1 + 0.5 && t.Y1 > now + 100)) continue;
+                var want = now + (groundBefore(x, z) + f.Dy - now) * w;
+                if (Math.Abs(want - now) < 1) continue;
+                island.SetHeight(x + f.Dx, z + f.Dz, (int)Math.Round(want));
+                shaped++;
+            }
+            foreach (var i in doorList) report.Relocated.Add((doors[i].X0, doors[i].Z0, doors[i].X1, doors[i].Z1, f.Dx, f.Dz, f.Dy));
+            report.Notes.Add($"{what} ({pieces.Count} pieces, bodies {string.Join(",", pieces.Select(p => p.D.Body & 0xFFFF).Distinct())}) put back off the road: " +
+                             $"moved ({f.Dx}, {f.Dz}) cells and {f.Dy} up" + (shaped > 0 ? $", {shaped} ground points round it shaped as its were" : ""));
+        }
+    }
+    // RestoreLostBuildings: how far it looks (cells), the room kept before a door (cells), and how far the ground round the new place may
+    // stand off level with the old (units)
+    private const int RestoreSearch = 28;
+    // DoorPieces: how near a door's zone a piece of its building is (cells)
+    private const double DoorAgainst = 0.25;
+    private const double RestoreApproach = 1.5, RestoreCurb = 0.75;
+    // ... and how far over its top nothing may stand in its place (units)
+    private const double RestoreAbove = 300;
+    private const double RestoreLevel = 700;
+    // ... and how far out the ground it takes with it is blended into the new place's (cells)
+    private const double RestoreBlend = 3;
 
     // A lift's floor over the road's surface (units): the sewer lift's grate stands a little over its ground
     private const int LiftFloorRise = 20;

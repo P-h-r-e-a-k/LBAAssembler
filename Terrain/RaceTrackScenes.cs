@@ -411,9 +411,14 @@ internal static class RaceTrackScenes
                 }
         }
         var deckLifts = new List<string>();
+        // (the inside scenes whose ways out follow a building put back off the road, and those ways out moved: RaceTrackReport.Relocated)
+        var relocatedInsides = new Dictionary<int, (SceneModel Model, HashSet<int> Moved)>();
+        // ... and the doors removed with their buildings: the way out to one, from an inside scene another door of which was put back, brings
+        // Twinsen out at that one (the Mosquibees' village, its gate and its cliff house: room for the house alone)
+        var lostWays = new List<(int Scene, int Inside, int X0, int Z0, int X1, int Z1)>();
         foreach (var t in tracks)
         {
-            t.Drivers = t.Options.Racers().Where(d => !d.Ghost).ToList();
+            t.Drivers =t.Options.Racers().Where(d => !d.Ghost).ToList();
             t.Cars = t.Drivers.Select(_ => new Dictionary<int, int>()).ToList();
             if (t.Drivers.Any(d => d.Bike)) t.BikerTemplate = BikerTemplate(originals, t.Options, island, log);
             if (t.Drivers.Any(d => !d.Bike))
@@ -853,9 +858,37 @@ internal static class RaceTrackScenes
                                 }
                                 catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
                             }
+                        // (its building put back off the road -- RaceTrackReport.Relocated: the door moved with it, and the inside scene's way
+                        // out to it brings Twinsen out there)
+                        if (tracks.Count == 1 && report.Relocated.FindIndex(r => Same((r.X0, r.Z0, r.X1, r.Z1))) is var mvi && mvi >= 0)
+                        {
+                            var mv = report.Relocated[mvi];
+                            int mx = mv.Dx * 512, mz = mv.Dz * 512;
+                            log.Add($"scene {scene}: door zone {z} (into scene {zone.Num}) moved ({mx},{mv.Dy},{mz}) with its building, put back off the road");
+                            var from = (X0: zone.X0, Z0: zone.Z0, X1: zone.X1, Z1: zone.Z1);
+                            zone.X0 += mx; zone.X1 += mx; zone.Z0 += mz; zone.Z1 += mz; zone.Y0 += mv.Dy; zone.Y1 += mv.Dy;
+                            try
+                            {
+                                if (!store.SceneExists(zone.Num)) continue;
+                                if (!relocatedInsides.TryGetValue(zone.Num, out var inside)) relocatedInsides[zone.Num] = inside = (store.Load(zone.Num), new HashSet<int>());
+                                for (var k = 0; k < inside.Model.Zones.Count; k++)
+                                {
+                                    var back = inside.Model.Zones[k];
+                                    if (back.Type != 0 || back.Num != scene || back.Info.Length < 3 || inside.Moved.Contains(k)
+                                        || back.Info[0] < from.X0 - 1536 || back.Info[0] > from.X1 + 1536 || back.Info[2] < from.Z0 - 1536 || back.Info[2] > from.Z1 + 1536) continue;
+                                    // (a height of 0: onto the ground there, as the game has it -- the Mosquibees' cliff house's)
+                                    back.Info[0] += mx; if (back.Info[1] != 0) back.Info[1] += mv.Dy; back.Info[2] += mz;
+                                    inside.Moved.Add(k);
+                                    log.Add($"scene {zone.Num}: its way out {k} to that door brings Twinsen out at ({back.Info[0]},{back.Info[1]},{back.Info[2]})");
+                                }
+                            }
+                            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
+                            continue;
+                        }
                         if (tracks.All(Lost))
                         {
                             log.Add($"scene {scene}: door zone {z} (into scene {zone.Num}) is removed -- the lift or building it was the door of went with the road");
+                            lostWays.Add((scene, zone.Num, zone.X0, zone.Z0, zone.X1, zone.Z1));
                             SceneOps.DeleteZone(model, z);
                             zonesRemoved++;
                             continue;
@@ -1171,6 +1204,22 @@ internal static class RaceTrackScenes
         }
         var edges = tracks.Sum(t => t.Edges.Count);
         if (edges > 0) log.Add($"the lap{(tracks.Count > 1 ? "s cross" : " crosses")} {edges / 2} cube edges; {edgeZonesAdded} crossing zones added where the island's own did not cover the road");
+        foreach (var lost in lostWays)
+        {
+            if (!relocatedInsides.TryGetValue(lost.Inside, out var inside)) continue;
+            var put = inside.Moved.Select(k => inside.Model.Zones[k]).FirstOrDefault(b => b.Num == lost.Scene);
+            if (put is null) continue;
+            for (var k = 0; k < inside.Model.Zones.Count; k++)
+            {
+                var back = inside.Model.Zones[k];
+                if (back.Type != 0 || back.Num != lost.Scene || back.Info.Length < 3 || inside.Moved.Contains(k)
+                    || back.Info[0] < lost.X0 - 1536 || back.Info[0] > lost.X1 + 1536 || back.Info[2] < lost.Z0 - 1536 || back.Info[2] > lost.Z1 + 1536) continue;
+                back.Info[0] = put.Info[0]; back.Info[1] = put.Info[1]; back.Info[2] = put.Info[2];
+                inside.Moved.Add(k);
+                log.Add($"scene {lost.Inside}: its way out {k} to scene {lost.Scene}'s removed door brings Twinsen out at the door put back, ({put.Info[0]},{put.Info[1]},{put.Info[2]})");
+            }
+        }
+        foreach (var (inside, (insideModel, _)) in relocatedInsides) changes.Add(new SceneChange(inside, insideModel, null));
         if (changes.Count > 0) store.SaveMany(changes, allowErrors: true);
         log.Add($"{zonesRemoved} zones on the road removed");
         if (doorsKept > 0) log.Add($"{doorsKept} doors into buildings near the road kept (the car is never taken through one; a building's needs its wall)");

@@ -162,7 +162,9 @@ internal static class DecorList
         var island = IslandFile.Load(args[1]);
         double[]? r = args.Length >= 6 ? args.Skip(2).Take(4).Select(double.Parse).ToArray() : null;
         var all = IslandOps.CubeCells(island).SelectMany(c => c.Item3.Decors.Select(d => (Cx: c.Item1, Cz: c.Item2, D: d))).ToList();
-        var groups = all.GroupBy(t => (t.Cx, t.Cz, t.D.X, t.D.Z)).ToList();
+        // (--each: every decor on its own, not grouped by origin)
+        var groups = args.Contains("--each") ? all.GroupBy(t => (t.Cx, t.Cz, t.D.X, t.D.Z, (object)t.D)).Select(g => g.GroupBy(t => (t.Cx, t.Cz, t.D.X, t.D.Z)).First()).ToList()
+            : all.GroupBy(t => (t.Cx, t.Cz, t.D.X, t.D.Z)).ToList();
         foreach (var g in groups.OrderBy(g => g.Key.Cz).ThenBy(g => g.Key.Cx).ThenBy(g => g.Key.Z).ThenBy(g => g.Key.X))
         {
             double x0 = g.Min(t => (t.Cx * 32768.0 + t.D.XMin) / 512), x1 = g.Max(t => (t.Cx * 32768.0 + t.D.XMax) / 512);
