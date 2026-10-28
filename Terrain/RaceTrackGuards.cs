@@ -92,13 +92,8 @@ internal static class RaceTrackGuards
     {
         var count = BinaryPrimitives.ReadInt32LittleEndian(table) / 4 - 1;
         if (entity < 0 || entity >= count) return null;
-        int p = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(entity * 4)), end = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan((entity + 1) * 4));
-        while (p < end && p + 4 < table.Length && table[p] != 255)
-        {
-            var command = table[p];
-            if (command == 1 && table[p + 1] == generic) return BinaryPrimitives.ReadInt16LittleEndian(table.AsSpan(p + 3));
-            p += command == 3 ? 3 + table[p + 3] : 2 + table[p + 2];
-        }
+        foreach (var r in Lba2EntityTable.Records(table, entity))
+            if (r.Command == 1 && r.Generic == generic) return BinaryPrimitives.ReadInt16LittleEndian(table.AsSpan(r.At + 3));
         return null;
     }
 }

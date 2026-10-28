@@ -1851,10 +1851,25 @@ void comportement_1()
         return true;
     }
 
-    // An actor's life script as text ("" where it can't be read)
+    // An actor's life script as text ("" where it can't be read) -- kept for its script and its number: deciding which actors stay, a script
+    // is read again for each thing asked of it (the doors it switches, the actors it moves, the points it puts its actor on), several times
+    // over. Kept with a copy of its bytes: a script changed in place is read anew.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], Dictionary<int, (byte[] Bytes, string Text)>> lifeTexts = new();
     private static string LifeTextOf(SceneActorModel actor, int index)
     {
-        try { return LbaScript.LifeText.Decompile(actor.Life, index, LbaScript.NoSymbols.Instance); }
+        var life = actor.Life;
+        lock (lifeTexts)
+        {
+            var known = lifeTexts.GetOrCreateValue(life);
+            if (known.TryGetValue(index, out var k) && k.Bytes.AsSpan().SequenceEqual(life)) return k.Text;
+            var text = Decompiled(life, index);
+            known[index] = ((byte[])life.Clone(), text);
+            return text;
+        }
+    }
+    private static string Decompiled(byte[] life, int index)
+    {
+        try { return LbaScript.LifeText.Decompile(life, index, LbaScript.NoSymbols.Instance); }
         catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { return ""; }
     }
 

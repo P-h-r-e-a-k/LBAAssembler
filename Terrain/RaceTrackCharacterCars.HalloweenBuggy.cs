@@ -246,22 +246,10 @@ internal static partial class RaceTrackCharacterCars
         var copy = (byte[])record.Clone();
         copy[1] = (byte)generic;
         BinaryPrimitives.WriteInt16LittleEndian(copy.AsSpan(3), (short)bodyIndex);
-        var start = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(entity * 4));
-        var end = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan((entity + 1) * 4));
-        var p = start;
         int at = -1, gone = 0;
-        while (p < end && table[p] != 255)
-        {
-            var command = table[p];
-            var size = command == 3 ? 3 + table[p + 3] : 2 + table[p + 2];
-            if (command == 1 && table[p + 1] == generic) { at = p; gone = size; break; }
-            p += size;
-        }
-        if (at < 0)
-        {
-            if (p >= end) throw new InvalidDataException($"Entity {entity}'s records have no end mark.");
-            at = p;
-        }
+        foreach (var r in Lba2EntityTable.Records(table, entity))
+            if (r.Command == 1 && r.Generic == generic) { at = r.At; gone = r.Size; break; }
+        if (at < 0 && (at = Lba2EntityTable.EndOf(table, entity)) < 0) throw new InvalidDataException($"Entity {entity}'s records have no end mark.");
         return Lba2EntityTable.Splice(table, entity, at, gone, copy);
     }
 }

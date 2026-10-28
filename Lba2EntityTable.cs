@@ -60,17 +60,26 @@ internal sealed class Lba2EntityTable
     }
 
     // An entity's records, in order, up to its end mark: where each starts, its command (1 a body, 3 an animation), its generic number (two
-    // bytes for an animation, else one) and its length.
+    // bytes for an animation, else one) and its length. (A table cut short ends them where a record can't be whole: every one is longer
+    // than 4 bytes.)
     public static IEnumerable<(int At, int Command, int Generic, int Size)> Records(byte[] table, int entity)
     {
         int p = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(entity * 4)), end = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan((entity + 1) * 4));
-        while (p < end && table[p] != 255)
+        while (p < end && p + 4 < table.Length && table[p] != 255)
         {
             var command = table[p];
             var size = command == 3 ? 3 + table[p + 3] : 2 + table[p + 2];
             yield return (p, command, command == 3 ? table[p + 1] | table[p + 2] << 8 : table[p + 1], size);
             p += size;
         }
+    }
+
+    // Where an entity's end mark is -- past its last record -- or -1 when its records run to the next entity's with none.
+    public static int EndOf(byte[] table, int entity)
+    {
+        var p = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(entity * 4));
+        foreach (var r in Records(table, entity)) p = r.At + r.Size;
+        return p < BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan((entity + 1) * 4)) ? p : -1;
     }
 
     // The table with the `remove` bytes at `at` (in entity `entity`'s records) replaced by `insert`: the entities after it move, so their
