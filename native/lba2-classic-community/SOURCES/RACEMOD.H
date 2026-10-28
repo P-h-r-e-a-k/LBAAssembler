@@ -69,6 +69,9 @@ typedef struct {
 } T_RACE_GHOST_OTHER;
 // A track's ghosts from other people -- the quickest of each person's, the quickest first, at most `max`; how many there are in all.
 S32 RaceMod_GhostOthers(const char *track, T_RACE_GHOST_OTHER *out, S32 max);
+// the player's ghosts of a track checked against its race file's checkpoints (marked invalid= in their files): his own one's first missed
+// checkpoint (0: none, or no ghost of his) and its lap
+S32 RaceMod_GhostsCheck(const char *track, const char *race, S32 *ownLap);
 // What the user's GHOSTS folder holds now (its ghosts' count and newest change): a page showing them sees one come in
 U32 RaceMod_GhostFolderSignature(void);
 

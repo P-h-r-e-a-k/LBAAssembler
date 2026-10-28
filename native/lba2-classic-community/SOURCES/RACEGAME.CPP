@@ -185,6 +185,7 @@ typedef struct {
 typedef struct {
     S32 Time, Lap, Laps;                    // the trial's whole time, its fastest lap (what ranks it), its laps
     char Car[96], Date[16];
+    int Missed;                             // missed=: its lap missed the track's checkpoint (its ghost's: CheckGhosts) -- shown, not counted
 } T_RG_TIME;
 
 static int s_read = 0, s_on = 0;
@@ -328,6 +329,7 @@ extern "C" const char *RaceGame_WindowTitle(void) {
     return title[0] ? title : NULL;
 }
 
+static void CheckGhosts(void);
 static void Read(void) {
     if (s_read) return;
     s_read = 1;
@@ -383,6 +385,7 @@ static void Read(void) {
     if (s_windowTitle[0]) SetWindowTitle(s_windowTitle);
     ReadSettings();
     RenamedTracks();
+    CheckGhosts();
     UpdateAtStart();
     // (the Auto camera on, whatever lba2.cfg says -- the user, 2026-10-22: "Let's force Auto camera on by default"; read after the config,
     // and the game's Options can still turn it off for the run)
@@ -603,13 +606,17 @@ static int CarFor(int car, int trial) { return car >= 0 && car < s_nbCars && Tak
 
 static void TimesPath(char *path) { GetCfgPath(path, ADELINE_MAX_PATH, "BESTTIMES.TXT"); }
 
+// A track's best lap: the fastest that counts (NULL: none yet)
+static const T_RG_TIME *BestOf(int sp) { return sp >= 0 && sp < s_nbSp && s_nbTimes[sp] > 0 && !s_times[sp][0].Missed ? &s_times[sp][0] : NULL; }
+
 // A special's race's laps: its race file's own (race_laps=: the Temple of Bú's five), else the menu's laps=. Its time trial is as long.
 static int SpecialLaps(int sp) { return s_sp[sp].Laps > 0 ? s_sp[sp].Laps : s_laps; }
 
-// A best lap into its track's ten fastest, in its place (a lap as fast as one already there after it): its rank (1-10), 0 for none.
+// A best lap into its track's ten fastest, in its place (a lap as fast as one already there after it; one that missed a checkpoint after
+// all those that count): its rank (1-10), 0 for none.
 static int AddLap(int sp, const T_RG_TIME *t) {
     int k = 0;
-    while (k < s_nbTimes[sp] && s_times[sp][k].Lap <= t->Lap) k++;
+    while (k < s_nbTimes[sp] && (!s_times[sp][k].Missed && t->Missed || (!s_times[sp][k].Missed == !t->Missed && s_times[sp][k].Lap <= t->Lap))) k++;
     if (k >= RG_MAX_TIMES) return 0;
     if (s_nbTimes[sp] < RG_MAX_TIMES) s_nbTimes[sp]++;
     for (int j = s_nbTimes[sp] - 1; j > k; j--) s_times[sp][j] = s_times[sp][j - 1];
@@ -631,7 +638,7 @@ static void ReadTimes(void) {
     while (fgets(line, sizeof(line), f)) {
         Trim(line);
         if (!line[0]) continue;
-        char track[96], ms[16], lap[16], nb[16], kind[16];
+        char track[96], ms[16], lap[16], nb[16], kind[16], missed[24];
         T_RG_TIME t;
         const char *p = Field(line, track, sizeof(track));
         p = Field(p, ms, sizeof(ms));
@@ -639,7 +646,9 @@ static void ReadTimes(void) {
         p = Field(p, t.Car, sizeof(t.Car));
         p = Field(p, t.Date, sizeof(t.Date));
         p = Field(p, nb, sizeof(nb));
-        Field(p, kind, sizeof(kind));
+        p = Field(p, kind, sizeof(kind));
+        Field(p, missed, sizeof(missed));
+        t.Missed = !strncmp(missed, "missed=", 7) ? atoi(missed + 7) : 0;
         t.Time = atoi(ms);
         t.Lap = atoi(lap);
         t.Laps = nb[0] ? atoi(nb) : s_laps;
@@ -667,7 +676,9 @@ static void WriteTimes(void) {
     for (int sp = 0; sp < s_nbSp; sp++)
         for (int k = 0; k < s_nbTimes[sp]; k++) {
             const T_RG_TIME *t = &s_times[sp][k];
-            fprintf(f, "%s|%d|%d|%s|%s|%d|lap\n", s_sp[sp].Name, (int)t->Time, (int)t->Lap, t->Car, t->Date, (int)t->Laps);
+            fprintf(f, "%s|%d|%d|%s|%s|%d|lap", s_sp[sp].Name, (int)t->Time, (int)t->Lap, t->Car, t->Date, (int)t->Laps);
+            if (t->Missed) fprintf(f, "|missed=%d", t->Missed);
+            fputc('\n', f);
         }
     fputs(s_other, f);
     fclose(f);
@@ -812,7 +823,8 @@ S32 RaceGame_Celebrate(void) { return RaceGame_On() && s_celebrate >= 0; }
 S32 RaceGame_BestLap(void) {
     if (!RaceGame_On() || s_raceSp < 0 || s_raceSp >= s_nbSp) return 0;
     ReadTimes();
-    return s_nbTimes[s_raceSp] > 0 ? s_times[s_raceSp][0].Lap : 0;
+    const T_RG_TIME *best = BestOf(s_raceSp);
+    return best ? best->Lap : 0;
 }
 
 // RACEMOD.CPP: the player changed the race camera's view during a race (V, a pad's Back button): the next race starts with it.
@@ -843,6 +855,7 @@ static int RecordLap(S32 total, S32 lap, int laps) {
     e.Time = total;
     e.Lap = lap;
     e.Laps = laps;
+    e.Missed = 0;
     snprintf(e.Car, sizeof(e.Car), "%s", s_raceCar ? s_raceCar->Name : "");
     const time_t now = time(NULL);
     const struct tm *tm = localtime(&now);
@@ -858,6 +871,37 @@ static int RecordLap(S32 total, S32 lap, int laps) {
 // ---- the race ----------------------------------------------------------------------------------------------------------------------
 
 static int Absolute(const char *p) { return p[0] == '/' || p[0] == '\\' || (isalpha((unsigned char)p[0]) && p[1] == ':'); }
+
+// The player's ghosts checked against each track's checkpoints (RACEMOD.CPP RaceMod_GhostsCheck), once a run at the start: a lap of his own
+// that missed one -- driven before the track had it: Polar Island's, 2026-10-28, after a shortcut was found -- marked in Best laps
+// (missed=), listed after the laps that count and not the track's best. A lap with no ghost can't be checked: it stays as it is.
+static void CheckGhosts(void) {
+    ReadTimes();
+    int changed = 0;
+    for (int sp = 0; sp < s_nbSp; sp++) {
+        const char *race = s_sp[sp].Trial[0] ? s_sp[sp].Trial : s_sp[sp].Race;
+        if (!race[0]) continue;
+        char path[ADELINE_MAX_PATH];
+        if (Absolute(race)) snprintf(path, sizeof(path), "%s", race);
+        else GetResPath(path, ADELINE_MAX_PATH, race);
+        S32 lap = 0;
+        const int missed = (int)RaceMod_GhostsCheck(s_sp[sp].Name, path, &lap);
+        if (!missed || lap <= 0) continue;
+        for (int k = 0; k < s_nbTimes[sp]; k++) {
+            T_RG_TIME t = s_times[sp][k];
+            if (t.Lap != lap || t.Missed) continue;
+            // (out of its place, and in again after the laps that count)
+            for (int j = k; j + 1 < s_nbTimes[sp]; j++) s_times[sp][j] = s_times[sp][j + 1];
+            s_nbTimes[sp]--;
+            t.Missed = missed;
+            AddLap(sp, &t);
+            changed = 1;
+            k = -1;
+            Log_Info("[racegame] best laps of %s: %.2f s missed checkpoint %d -- marked invalid", s_sp[sp].Name, lap / 1000.0, missed);
+        }
+    }
+    if (changed) WriteTimes();
+}
 
 // The race: the special's race file (or its time trial's), the files it names found beside the game's data, then the car and the race
 // game's keys -- and the difficulty chosen (`level`, -1 none: after the file's own, so it counts) -- written to RACE_NOW.TXT in the user's
@@ -941,7 +985,7 @@ static int GhostLevelOpen(int level) { return level == 0 || s_gpBeaten >= level;
 static int GhostRowK(S32 num) { return num == RG_ID_GHOST_EXTREME ? 4 : 1 + num - RG_ID_GHOST_EASY; }
 // The player's ghost's name: "Your best lap", "Your recorded lap" when a faster lap of the list has none (driven before ghosts were
 // kept), or "Shared ghost" when one shared with them (their GHOSTS folder) is quicker than theirs
-static const char *OwnLapName(int sp, S32 lap, S32 mine) { return !mine ? "Shared ghost" : sp < s_nbSp && s_nbTimes[sp] && s_times[sp][0].Lap < lap ? "Your recorded lap" : "Your best lap"; }
+static const char *OwnLapName(int sp, S32 lap, S32 mine) { return !mine ? "Shared ghost" : BestOf(sp) && BestOf(sp)->Lap < lap ? "Your recorded lap" : "Your best lap"; }
 static const char *s_gpOwnName = "Your best lap";
 
 S32 RaceGame_RowDisabled(S32 num) {
@@ -1358,7 +1402,7 @@ static S32 SumOfBest(int *missing) {
     *missing = 0;
     for (int sp = 0; sp < s_nbSp; sp++) {
         if (!TimesShown(sp)) continue;
-        if (s_nbTimes[sp] > 0) sum += s_times[sp][0].Lap;
+        if (const T_RG_TIME *best = BestOf(sp)) sum += best->Lap;
         else (*missing)++;
     }
     return sum;
@@ -1371,11 +1415,12 @@ static S32 AllBestRows(S32 x0, S32 x1, S32 y, S32 step, int cars, S32 nameW = 19
     for (int sp = 0; sp < s_nbSp; sp++) {
         if (!TimesShown(sp)) continue;
         char time[24];
-        if (s_nbTimes[sp] > 0) TimeText(time, sizeof(time), s_times[sp][0].Lap);
+        const T_RG_TIME *best = BestOf(sp);
+        if (best) TimeText(time, sizeof(time), best->Lap);
         else snprintf(time, sizeof(time), "--:--.--");
         SmallFitted(x0 + 24, y, cars ? nameW : x1 - x0 - 150, s_sp[sp].Name, LBAWHITE, -1);
-        SmallText(timeX, y, time, s_nbTimes[sp] > 0 ? RG_ORANGE : RG_GREY, 1);
-        if (cars && s_nbTimes[sp] > 0) SmallFitted(carX, y, x1 - 16 - carX, s_times[sp][0].Car, LBAWHITE, -1);
+        SmallText(timeX, y, time, best ? RG_ORANGE : RG_GREY, 1);
+        if (cars && best) SmallFitted(carX, y, x1 - 16 - carX, best->Car, LBAWHITE, -1);
         y += step;
     }
     return y;
@@ -1600,11 +1645,20 @@ static int TimesPage(void) {
                 Text(cx, y0 + 130, "No laps yet: drive a time trial!", RG_GREY);
                 Text(cx, y0 + 166, "Its fastest lap goes here.", RG_GREY);
             }
-            for (int k = 0; sp < s_nbSp && k < s_nbTimes[sp] && k < RG_TIMES_SHOWN; k++) {
-                const T_RG_TIME *t = &s_times[sp][k];
+            // (in the order of their times: a lap that missed a checkpoint where its time puts it, grey, unnumbered -- the others numbered
+            // as they rank. Kept after them all, it was out of sight under five that count)
+            int order[RG_MAX_TIMES], shown = sp < s_nbSp ? s_nbTimes[sp] : 0;
+            for (int k = 0; k < shown; k++) {
+                int j = k;
+                for (; j > 0 && s_times[sp][order[j - 1]].Lap > s_times[sp][k].Lap; j--) order[j] = order[j - 1];
+                order[j] = k;
+            }
+            for (int k = 0, rank = 0; k < shown && k < RG_TIMES_SHOWN; k++) {
+                const T_RG_TIME *t = &s_times[sp][order[k]];
                 char time[24], line[200];
                 TimeText(time, sizeof(time), t->Lap);
-                snprintf(line, sizeof(line), "%d.  %s   %s", k + 1, time, t->Car);
+                if (t->Missed) snprintf(line, sizeof(line), "--  %s   Invalid lap", time);   // (which checkpoint: BESTTIMES.TXT's missed=)
+                else snprintf(line, sizeof(line), "%d.  %s   %s", ++rank, time, t->Car);
                 char text[256];
                 Label(text, line);
                 // (a long car name cut to the page's width: "Twinsen's Halloween buggy" ran past its edge)
@@ -1612,7 +1666,7 @@ static int TimesPage(void) {
                 const S32 y = y0 + 92 + k * 28;
                 ColorFont(BLACK);
                 Font(x0 + 54 + 3, y + 3, text);
-                ColorFont(k == 0 ? RG_ORANGE : LBAWHITE);
+                ColorFont(t->Missed ? RG_GREY : rank == 1 ? RG_ORANGE : LBAWHITE);
                 Font(x0 + 54, y, text);
             }
             // Watch: the player's best lap, a ghost of the game's
@@ -2241,8 +2295,8 @@ static int TracksPage(void) {
             {
                 const int sp = list[at];
                 char line[160], best[24];
-                if (s_nbTimes[sp] > 0) {
-                    TimeText(best, sizeof(best), s_times[sp][0].Lap);
+                if (BestOf(sp)) {
+                    TimeText(best, sizeof(best), BestOf(sp)->Lap);
                     snprintf(line, sizeof(line), "Best lap: %s", best);
                 } else snprintf(line, sizeof(line), "No best lap yet");
                 Text(cx, bestY, line, RG_GREY);

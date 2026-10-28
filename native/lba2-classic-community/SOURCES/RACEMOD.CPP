@@ -621,6 +621,7 @@ static int s_wakeFlight = 0;                // wake_flight= (ms; 0: RACE_SPRINT_
 // chase=, chase_lead=, dream_any_end= (ChaseOpening, ChaseLead): the texts, the helper's entity and the variable it sets; the opening's
 // step and when the next is due; the lead (world units)
 static int s_chaseOn = 0, s_chaseText[3] = {-1, -1, -1}, s_chaseHelper = -1, s_chaseVar = -1, s_chaseStep = 0;
+static int s_trialHide[2] = {-1, -1};      // a time trial's: the chase's people (its helper's and its driver's entities), out of sight
 static S32 s_chaseAt = 0;
 static double s_chaseLead = 0;
 static int s_dreamAnyEnd = 0;
@@ -4253,6 +4254,16 @@ static void Load(const char *path, int carOnly = 0) {
         }
     }
     fclose(f);
+    // (a time trial has no one to beat: the dream's chase -- the one to beat's words and drive-off, his car, its end either way (chase=,
+    // chase_car=, dream_any_end=) -- is the race's alone. The track's build writes them in its trial file too, and FunFrock spoke and drove
+    // off at the start of Polar Island's trials, his words waiting for a key, 2026-10-28)
+    // (and its people at the start, the grobo with the key and FunFrock beside his car -- in the start scene for the story's opening -- out of
+    // sight: FunFrock stood on the road, and the car ran into him, the user, 2026-10-28)
+    if (s_trial && (s_chaseOn || s_chaseEmpty >= 0 || s_dreamAnyEnd)) {
+        if (s_chaseOn) { s_trialHide[0] = s_chaseHelper; s_trialHide[1] = s_chaseDriverEnt; }
+        Log_Info("[racemod] a time trial: the race's chase left out (entities %d and %d out of sight)", s_trialHide[0], s_trialHide[1]);
+        s_chaseOn = 0; s_chaseLead = 0; s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = -1; s_dreamAnyEnd = 0;
+    }
     // (a lap with loops: the camera that follows the car looks at a loop from its side while the car goes round it; and at a drop from
     // its own place beside it)
     // (a raised road with branches after the lap's own points: whether the lap is a loop, from its own)
@@ -4511,10 +4522,11 @@ static int Crosses(double x0, double z0, double x1, double z1, double ax, double
 
 // +1 when the move crosses the line the lap's way, -1 the other way, 0 when it doesn't cross it (or the line is in another cube).
 // slack: how far past each of its ends the line counts too.
-static int CrossLine(const T_RACE_LINE *l, S32 x0, S32 z0, S32 x1, S32 z1, S32 slack = 0) {
-    if (CurrentCubeX != l->CubeX || CurrentCubeY != l->CubeZ) return 0;
+// (CrossLineIn: a move in cube (cx, cz) of something at height y -- a ghost's, RaceMod_GhostsCheck)
+static int CrossLineIn(const T_RACE_LINE *l, S32 cx, S32 cz, S32 y, S32 x0, S32 z0, S32 x1, S32 z1, S32 slack = 0) {
+    if (cx != l->CubeX || cz != l->CubeZ) return 0;
     // (a line with a height: only for a car on the road it lies across, not one passing over or under that place)
-    if (l->HasY && abs(ListObjet[NUM_PERSO].Obj.Y - l->Y) > RACE_LINE_REACH) return 0;
+    if (l->HasY && abs(y - l->Y) > RACE_LINE_REACH) return 0;
     double ax = l->X0, az = l->Z0, bx = l->X1, bz = l->Z1;
     const double len = sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az));
     if (slack > 0 && len > 0) {
@@ -4523,6 +4535,9 @@ static int CrossLine(const T_RACE_LINE *l, S32 x0, S32 z0, S32 x1, S32 z1, S32 s
     }
     if (!Crosses(x0, z0, x1, z1, ax, az, bx, bz)) return 0;
     return (double)(x1 - x0) * l->DirX + (double)(z1 - z0) * l->DirZ > 0 ? 1 : -1;
+}
+static int CrossLine(const T_RACE_LINE *l, S32 x0, S32 z0, S32 x1, S32 z1, S32 slack = 0) {
+    return CrossLineIn(l, (S32)CurrentCubeX, (S32)CurrentCubeY, ListObjet[NUM_PERSO].Obj.Y, x0, z0, x1, z1, slack);
 }
 
 // A checkpoint is taken going the lap's way RACE_CHECKPOINT_SLACK past either end of its line: the builder stops a line short of any
@@ -14303,6 +14318,7 @@ typedef struct {
     char Track[96], Car[96], Date[16];
     char Level[16];                        // a ghost to beat's level (level=: Easy, Medium, Hard -- the game's own, its ghosts\ folder)
     char Driver[48];                       // whose it is (driver=: a ghost shared in a zip -- the race game's "Share my ghosts", 2026-10-26)
+    int Missed;                            // invalid=: the first of the track's checkpoints its lap missed (RaceMod_GhostsCheck; 0 none)
 } T_RACE_LAPGHOST;
 
 static T_RACE_LAPGHOST s_ghostRec;            // the lap being recorded ...
@@ -14444,6 +14460,7 @@ static int GhostRead(const char *path, T_RACE_LAPGHOST *g, int points) {
         else if (!strcmp(line, "date")) snprintf(g->Date, sizeof(g->Date), "%s", v);
         else if (!strcmp(line, "level")) snprintf(g->Level, sizeof(g->Level), "%s", v);
         else if (!strcmp(line, "driver")) snprintf(g->Driver, sizeof(g->Driver), "%s", v);
+        else if (!strcmp(line, "invalid")) g->Missed = atoi(v);
         else if (!strcmp(line, "splits")) {
             const char *p = v;
             char *end;
@@ -14488,6 +14505,7 @@ static int GhostWrite(const char *path, const T_RACE_LAPGHOST *g) {
     fprintf(f, "ghost=2\ntrack=%s\nlap=%d\ncar=%s\ndate=%s\n", g->Track, (int)g->Lap, g->Car, g->Date);
     if (g->Level[0]) fprintf(f, "level=%s\n", g->Level);
     if (g->Driver[0]) fprintf(f, "driver=%s\n", g->Driver);
+    if (g->Missed > 0) fprintf(f, "invalid=%d\n", g->Missed);
     fprintf(f, "splits=");
     for (int i = 0; i < g->NbSplits; i++) fprintf(f, i ? " %d" : "%d", (int)g->Split[i]);
     fprintf(f, "\npoints=%d\n", g->N);
@@ -14501,6 +14519,66 @@ static int GhostWrite(const char *path, const T_RACE_LAPGHOST *g) {
     remove(path);
     if (rename(tmp, path)) { Log_Warn("[racemod] ghost: %s could not be put in place", path); remove(tmp); return 0; }
     return 1;
+}
+
+// The first of `n` checkpoints a ghost's lap missed (1 the first; 0 none): its samples taken in turn as the car's moves are counted while
+// it drives (RaceMod_Lap) -- the next one crossed the lap's way moves on, the last one crossed backwards moves back.
+static int GhostMissed(const T_RACE_LAPGHOST *g, const T_RACE_LINE *lines, int n) {
+    int next = 0;
+    for (int i = 1; i < g->N; i++) {
+        const T_RACE_LAPGHOST_PT *a = &g->P[i - 1], *b = &g->P[i];
+        const S32 cx = GhostCubeX(b->X), cz = GhostCubeX(b->Z);
+        if (GhostCubeX(a->X) != cx || GhostCubeX(a->Z) != cz) continue;
+        const S32 x0 = a->X - cx * 32768, z0 = a->Z - cz * 32768, x1 = b->X - cx * 32768, z1 = b->Z - cz * 32768;
+        for (int k = 0; k < n; k++) {
+            if (k == next && CrossLineIn(&lines[k], cx, cz, b->Y, x0, z0, x1, z1) > 0) next++;
+            else if (k == next - 1 && CrossLineIn(&lines[k], cx, cz, b->Y, x0, z0, x1, z1) < 0) next--;
+        }
+    }
+    return next < n ? next + 1 : 0;
+}
+
+// The player's ghosts of a track -- his own and the ones shared with him, his GHOSTS folder's -- checked against the checkpoints of the
+// track's race file (`race`, its path): each one's verdict kept in its file (invalid=, the first checkpoint it missed; written only when it
+// changes). The user, 2026-10-28: Polar Island's checkpoints came after a shortcut was found -- the laps that took it are neither raced
+// against nor the player's best (GhostStart, RaceMod_GhostFind, RaceMod_GhostOthers). The player's own ghost's verdict (0: none missed,
+// or no ghost of his) and its lap.
+S32 RaceMod_GhostsCheck(const char *track, const char *race, S32 *ownLap) {
+    *ownLap = 0;
+    static T_RACE_LINE lines[RACE_MAX_CHECKPOINTS];
+    int n = 0;
+    FILE *f = fopen(race, "r");
+    if (!f) return 0;
+    char line[512];
+    while (fgets(line, sizeof(line), f))
+        if (!strncmp(line, "checkpoint=", 11) && n < RACE_MAX_CHECKPOINTS && ReadLine(line + 11, &lines[n])) n++;
+    fclose(f);
+    char own[ADELINE_MAX_PATH], folder[ADELINE_MAX_PATH];
+    GhostOwnPath(track, own, sizeof(own));
+    const char *a = strrchr(own, '/'), *b = strrchr(own, '\\');
+    const char *ownName = a > b ? a + 1 : b ? b + 1 : own;
+    RaceMod_GhostFolder(folder, sizeof(folder));
+    int count = 0;
+    S32 ownMissed = 0;
+    char **files = SDL_GlobDirectory(folder, "*.ghost", SDL_GLOB_CASEINSENSITIVE, &count);
+    for (int i = 0; files && i < count; i++) {
+        char full[ADELINE_MAX_PATH];
+        const size_t len = strlen(folder);
+        snprintf(full, sizeof(full), "%s%s%s", folder, len && folder[len - 1] != '/' && folder[len - 1] != '\\' ? "/" : "", files[i]);
+        T_RACE_LAPGHOST g;
+        if (!GhostRead(full, &g, 0) || strcmp(g.Track, track) || !GhostRead(full, &g, 1)) continue;
+        const int missed = n ? GhostMissed(&g, lines, n) : 0;
+        if (missed != g.Missed) {
+            g.Missed = missed;
+            if (GhostWrite(full, &g))
+                Log_Info("[racemod] ghost %s: its lap of %.2f s %s", full, g.Lap / 1000.0, missed ? "missed a checkpoint -- marked invalid" : "counts again");
+        }
+        if (missed) Log_Info("[racemod] ghost %s: %.2f s, checkpoint %d of %d missed -- not raced", files[i], g.Lap / 1000.0, missed, n);
+        if (!SDL_strcasecmp(files[i], ownName)) { *ownLap = g.Lap; ownMissed = missed; }
+        GhostFree(&g);
+    }
+    SDL_free(files);
+    return ownMissed;
 }
 
 // The game's own ghosts to beat (2026-10-25 -- the user: "Let's generate easy medium and hard ghosts to beat for each track"): the game
@@ -14524,7 +14602,7 @@ S32 RaceMod_GhostFind(const char *track, S32 mode, char *path, S32 size, S32 *la
     S32 best = 0;
     if (mine) *mine = 0;
     if (level && levelSize > 0) level[0] = 0;
-    if (!want && GhostRead(own, &g, 0) && !strcmp(g.Track, track)) {
+    if (!want && GhostRead(own, &g, 0) && !strcmp(g.Track, track) && !g.Missed) {
         best = g.Lap;
         snprintf(path, (size_t)size, "%s", own);
         if (car) snprintf(car, (size_t)carSize, "%s", g.Car);
@@ -14543,7 +14621,7 @@ S32 RaceMod_GhostFind(const char *track, S32 mode, char *path, S32 size, S32 *la
             char full[ADELINE_MAX_PATH];
             const size_t n = strlen(folder);
             snprintf(full, sizeof(full), "%s%s%s", folder, n && folder[n - 1] != '/' && folder[n - 1] != '\\' ? "/" : "", files[i]);
-            if (!GhostRead(full, &g, 0) || strcmp(g.Track, track)) continue;
+            if (!GhostRead(full, &g, 0) || strcmp(g.Track, track) || g.Missed) continue;
             if (want && SDL_strcasecmp(g.Level, want)) continue;
             if (!want && best && g.Lap >= best) continue;
             best = g.Lap;
@@ -14578,7 +14656,7 @@ S32 RaceMod_GhostOthers(const char *track, T_RACE_GHOST_OTHER *out, S32 max) {
         const size_t len = strlen(folder);
         snprintf(full, sizeof(full), "%s%s%s", folder, len && folder[len - 1] != '/' && folder[len - 1] != '\\' ? "/" : "", files[i]);
         T_RACE_LAPGHOST g;
-        if (!GhostRead(full, &g, 0) || strcmp(g.Track, track)) continue;
+        if (!GhostRead(full, &g, 0) || strcmp(g.Track, track) || g.Missed) continue;
         char who[48];
         if (g.Driver[0]) snprintf(who, sizeof(who), "%s", g.Driver);
         else {
@@ -14643,7 +14721,8 @@ static void GhostStart(void) {
     char own[ADELINE_MAX_PATH];
     GhostOwnPath(track, own, sizeof(own));
     T_RACE_LAPGHOST head;
-    if (GhostRead(own, &head, 0) && !strcmp(head.Track, track)) s_ghostOwnLap = head.Lap;
+    // (one that missed a checkpoint -- invalid=: driven before the track had it -- isn't his best: any lap that counts takes its place)
+    if (GhostRead(own, &head, 0) && !strcmp(head.Track, track) && !head.Missed) s_ghostOwnLap = head.Lap;
     if (s_ghostMode <= 0) { Log_Info("[racemod] ghost: none raced (ghost=0); %s's own best %.2f s", track, s_ghostOwnLap / 1000.0); return; }
     // (ghost=8: one of another player's, its file named -- the race game's "Other" page, ghost_file=)
     if (s_ghostMode == 8) {
@@ -15363,6 +15442,12 @@ void RaceMod_Frame(void) {
                 hidden->SampleAlways = 0;
                 if (++silenced <= 3 || silenced % 500 == 0) Log_Info("[racemod] a hidden car's engine sound stopped (actor %d; %d so far)", s_hideActor[i], silenced);
             }
+        }
+    // (a time trial's: the chase's people -- Load)
+    if (s_trialHide[0] >= 0 || s_trialHide[1] >= 0)
+        for (int i = 1; i < NbObjets; i++) {
+            const int ent = ListObjet[i].IndexFile3D;
+            if (ent >= 0 && (ent == s_trialHide[0] || ent == s_trialHide[1]) && ListObjet[i].Obj.Y > -10000) { ListObjet[i].Obj.Y = -20000; ListObjet[i].Flags |= INVISIBLE; }
         }
     // (and a driver lapping on his own: parade=)
     ParadeStep(now, dt);
@@ -17447,7 +17532,7 @@ static void ResetTrack(void) {
     s_nbDoorsOff = 0; s_nbActorsAt = 0; s_actorsAtScene = -1;
     s_nbLifts = 0; s_lift = -1; s_liftDir = 0; s_liftScene = -1; s_liftOff = 0; s_nbDoorsTo = 0;
     s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = s_chaseDriver = s_chaseCarActor = -1; s_chaseFlipped = 0; s_chaseCarBody = s_chaseCarAnim = -1;
-    s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;
+    s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_trialHide[0] = s_trialHide[1] = -1; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;
     s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0; s_raceRun = 0;
     GhostReset();
     s_onFoot = 0; s_footArmed = 0; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_footActWas = 0; s_walkN = 0; s_walkCar = 0; s_stopReach = 0; s_stopping = 0; s_stopResume = 0;
