@@ -41,7 +41,6 @@ internal static class RaceTrackFlyers
             .Where(b => b.Y1 > b.Y0 && b.Y1 > y - Below && b.Y0 < y + Above).ToList();
         // (nor the road itself where it passes about as high -- a ramp down into the hall or up out of it: the decks' boxes are ones nothing
         // touches, with no top, so the boxes above don't see them, and two of Island CX's monsters flew through its ramps, 2026-10-16)
-        double HalfAt(int i) => r.Raised is { } up && up[i] ? r.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : o.RaisedHalfWidth : r.CurbHalf;
         bool RoadClear(double x, double z)
         {
             for (var k = 0; k < n; k++)
@@ -50,7 +49,7 @@ internal static class RaceTrackFlyers
                 // own reach, from a little under its height to over its back)
                 var top = r.H[k] + (tops != null && tops.TryGetValue(k, out var t) ? t : RoadCar);
                 if (r.H[k] - RoadUnderDeck > y + FlyerOver || top < y - FlyerUnder) continue;
-                var room = HalfAt(k) + RoadRoom;
+                var room = r.HalfAt(k, o) + RoadRoom;
                 if ((r.X[k] - x) * (r.X[k] - x) + (r.Z[k] - z) * (r.Z[k] - z) < room * room) return false;
             }
             return true;

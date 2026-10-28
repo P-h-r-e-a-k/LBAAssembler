@@ -246,11 +246,11 @@ internal static class RaceTrackBaldinoCar
         var bodies = HqrArchive.Open(bodyPath);
         var car = Build(Body.Read(bodies.Read(BaldinoBody), 2), Body.Read(bodies.Read(RacerBody), 2));
         var index = HqrArchive.CountEntries(bodyPath);
-        File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(car.Write())));
+        HqrWriter.AppendToFile(bodyPath, car.Write());
 
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var table = WithBody(HqrArchive.Open(ressPath).Read(44), RacerEntity, Generic, index);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         return (index, $"Baldino's car: BODY.HQR entry {index} ({car.Faces.Count} polygons, {car.Lines.Count} lines, {car.Spheres.Count} spheres, {car.Vertices.Count} points), " +
                        $"the racer's entity ({RacerEntity}) body {Generic}, driven with the racer's animations");
     }

@@ -106,7 +106,7 @@ internal static class RaceTrackTunnel
                     var dir = Vector3.Normalize(new Vector3((float)r.Tx[i], 0, (float)r.Tz[i]));
                     var across = new Vector3(-dir.Z, 0, dir.X);
                     var sign = isEnd ? 1f : -1f;
-                    var half = (float)((HalfAt(r, i, o) + WallOut) * 512);
+                    var half = (float)((r.HalfAt(i, o) + WallOut) * 512);
                     var roof = (float)(roofs[k] - origin.Y);
                     var eave = (float)(run.Eave * 512);
                     // (a sunk tunnel's end where the road goes on under the island, `under`: a wall over the next tunnel's mouth, from its roof
@@ -119,7 +119,7 @@ internal static class RaceTrackTunnel
                         // (up to the ground behind it where that is higher than this tunnel's top: Island CX's plateau stands 320 over
                         // door A's portal, and its edge showed over the portal's roof, floating)
                         var headTop = roof + (float)Slab;
-                        var reachCells = HalfAt(r, i, o) + WallOut + Wall / 512 + run.Eave + 1;
+                        var reachCells = r.HalfAt(i, o) + WallOut + Wall / 512 + run.Eave + 1;
                         for (var gz = (int)Math.Floor(r.Z[i] - reachCells); gz <= (int)Math.Ceiling(r.Z[i] + reachCells); gz++)
                             for (var gx = (int)Math.Floor(r.X[i] - reachCells); gx <= (int)Math.Ceiling(r.X[i] + reachCells); gx++)
                                 if ((gx - r.X[i]) * (gx - r.X[i]) + (gz - r.Z[i]) * (gz - r.Z[i]) <= reachCells * reachCells && island.HeightAt(gx, gz) is { } gh)
@@ -241,7 +241,7 @@ internal static class RaceTrackTunnel
             var i = (from + k0 + c) % n;
             at[c] = PointAt(r, i, origin);
             across[c] = Vector3.Normalize(new Vector3((float)-r.Tz[i], 0, (float)r.Tx[i]));
-            half[c] = (float)((HalfAt(r, i, o) + WallOut) * 512);
+            half[c] = (float)((r.HalfAt(i, o) + WallOut) * 512);
             roof[c] = (float)(roofs[k0 + c] - origin.Y);
             strip[c] = at[c].Y + (float)(strips.TryGetValue(i, out var s) ? s : StripHigh);
         }
@@ -313,7 +313,7 @@ internal static class RaceTrackTunnel
             int a = (from + k) % n, b = (from + k + 1) % n;
             double sx = r.X[b] - r.X[a], sz = r.Z[b] - r.Z[a], len2 = sx * sx + sz * sz;
             if (len2 < 1e-12) continue;
-            var reach = HalfAt(r, a, o) + WallOut + Wall / 512 + 0.05;
+            var reach = r.HalfAt(a, o) + WallOut + Wall / 512 + 0.05;
             for (var gz = (int)Math.Floor(Math.Min(r.Z[a], r.Z[b]) - reach); gz <= (int)Math.Ceiling(Math.Max(r.Z[a], r.Z[b]) + reach); gz++)
             for (var gx = (int)Math.Floor(Math.Min(r.X[a], r.X[b]) - reach); gx <= (int)Math.Ceiling(Math.Max(r.X[a], r.X[b]) + reach); gx++)
             {
@@ -339,13 +339,10 @@ internal static class RaceTrackTunnel
         return (count, deepest);
     }
 
-    private static double HalfAt(TrackRoad r, int i, RaceTrackOptions o) =>
-        r.Raised is { } up && up[i] ? r.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : o.RaisedHalfWidth : r.CurbHalf;
-
     // The island's ground over a tunnel at point i, its least across the tunnel from wall to wall (null: none there).
     private static double? GroundOver(IslandFile island, TrackRoad r, int i, RaceTrackOptions o)
     {
-        var reach = HalfAt(r, i, o) + WallOut + Wall / 512;
+        var reach = r.HalfAt(i, o) + WallOut + Wall / 512;
         double? least = null;
         for (var s = -1.0; s <= 1.0001; s += 0.25)
             if (IslandOps.Altitude(island, (r.X[i] - r.Tz[i] * reach * s) * 512, (r.Z[i] + r.Tx[i] * reach * s) * 512) is { } g)

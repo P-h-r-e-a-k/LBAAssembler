@@ -464,11 +464,11 @@ internal static partial class RaceTrackCharacterCars
         var table = HqrArchive.Open(ressPath).Read(44);
         table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, ToyTruckGeneric, own);
         table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, RaceTrackSmallCars.SmallOf(ToyTruckGeneric), small);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         // (its line after the others': the folder's cars, as InstallCast and InstallPumpkin wrote them)
         var catalogue = Catalogue(gameDirectory).Where(e => e.Number != ToyTruckNumber).ToList();
         catalogue.Add(new CatalogueEntry(ToyTruckNumber, ToyTruckName, ToyTruckDriver, "", RaceTrackBaldinoCar.RacerEntity, ToyTruckGeneric, own, small));
-        File.WriteAllText(Path.Combine(gameDirectory, CatalogueFile), JsonSerializer.Serialize(catalogue, new JsonSerializerOptions { WriteIndented = true }));
+        SaveCatalogue(gameDirectory, catalogue);
         return new()
         {
             $"{ToyTruckName} (race car {ToyTruckNumber}, anyone's to drive): BODY.HQR entry {own} ({car.Faces.Count} polygons, {car.Lines.Count} lines, {car.Spheres.Count} spheres, " +
@@ -498,7 +498,7 @@ internal static partial class RaceTrackCharacterCars
         file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(RaceTrackSmallCars.Halved(bytes)));
         File.WriteAllBytes(bodyPath, file);
         catalogue[index] = catalogue[index] with { Violet = new[] { own, own + 1 } };
-        File.WriteAllText(Path.Combine(gameDirectory, CatalogueFile), JsonSerializer.Serialize(catalogue, new JsonSerializerOptions { WriteIndented = true }));
+        SaveCatalogue(gameDirectory, catalogue);
         var islands = VioletIslands(gameDirectory);
         return new()
         {

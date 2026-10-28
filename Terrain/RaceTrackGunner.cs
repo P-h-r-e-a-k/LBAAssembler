@@ -41,7 +41,7 @@ internal static class RaceTrackGunner
         {
             for (var i = 0; i < n; i++)
             {
-                var reach = HalfAt(r, i, o) + 1;
+                var reach = r.HalfAt(i, o) + 1;
                 if ((r.X[i] - gx) * (r.X[i] - gx) + (r.Z[i] - gz) * (r.Z[i] - gz) < reach * reach) return true;
             }
             return false;
@@ -72,7 +72,7 @@ internal static class RaceTrackGunner
             if (len < 1e-9) continue;
             double nx = -tz / len, nz = tx / len;
             if (nx * (kx - r.X[i]) + nz * (kz - r.Z[i]) < 0) { nx = -nx; nz = -nz; }
-            var half = HalfAt(r, i, o);
+            var half = r.HalfAt(i, o);
             var across = half * (InnerFrom + InnerTo) / 2;
             double x = r.X[i] + nx * across, z = r.Z[i] + nz * across;
             targets.Add((x * 512, z * 512, r.H[i], half * (InnerTo - InnerFrom) / 2 * 512));
@@ -82,7 +82,4 @@ internal static class RaceTrackGunner
         report.Notes.Add($"a machine gun on a knoll at ({kx:0.#}, {kz:0.#}), its top at {top:0} ({raised} points of the ground raised), firing onto the inner half of the corner (the lap's points {from}-{to}, {targets.Count} places)");
         return new GunnerSpot(kx, kz, top, fx, fz, targets);
     }
-
-    private static double HalfAt(TrackRoad r, int i, RaceTrackOptions o) =>
-        r.Raised is { } up && up[i] ? r.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : o.RaisedHalfWidth : r.CurbHalf;
 }

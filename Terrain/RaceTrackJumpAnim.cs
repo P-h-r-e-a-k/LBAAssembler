@@ -61,7 +61,7 @@ internal static class RaceTrackJumpAnim
         var retail = HqrArchive.Open(animPath).Read(RetailEntry);
         var flight = Scale(retail, forward);
         var index = HqrArchive.CountEntries(animPath);
-        File.WriteAllBytes(animPath, HqrWriter.AppendEntry(File.ReadAllBytes(animPath), HqrWriter.StoredEntry(flight)));
+        HqrWriter.AppendToFile(animPath, flight);
 
         var ress = File.ReadAllBytes(ressPath);
         var table = HqrArchive.Open(ressPath).Read(44);
@@ -116,9 +116,9 @@ internal static class RaceTrackJumpAnim
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var flight = Drop(HqrArchive.Open(animPath).Read(RetailEntry), cells, drop, beta, out var frames, out var pitch);
         var index = HqrArchive.CountEntries(animPath);
-        File.WriteAllBytes(animPath, HqrWriter.AppendEntry(File.ReadAllBytes(animPath), HqrWriter.StoredEntry(flight)));
+        HqrWriter.AppendToFile(animPath, flight);
         var table = WithAnim(HqrArchive.Open(ressPath).Read(44), BuggyEntity, generic, index);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         return $"drop flight: ANIM.HQR entry {index}, {frames} keyframes over {cells:0.0} cells diving {drop:0} (the nose down {pitch:0} degrees at the most), " +
                $"played by Twinsen in the buggy as animation {generic}";
     }

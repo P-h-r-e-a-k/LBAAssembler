@@ -199,7 +199,7 @@ internal static partial class RaceTrackCharacterCars
         table = WithBodyRecord(table, RaceTrackSmallCars.HeroEntity, driving.Value.Record, HalloweenGeneric, own);
         table = WithBodyRecord(table, RaceTrackSmallCars.HeroEntity, (firing ?? driving).Value.Record, HalloweenFiring, own + 1);
         table = RaceTrackBaldinoCar.WithBody(table, RaceTrackSmallCars.HeroEntity, HalloweenSmall, own + 2);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         var made = Body.Read(car, 2);
         return new()
         {
@@ -225,14 +225,8 @@ internal static partial class RaceTrackCharacterCars
     // An entity's animation for a generic one (RESS.HQR 44: 3, generic (U16), size, ANIM.HQR index (S16), ...), -1 none.
     private static int AnimOf(byte[] table, int entity, int generic)
     {
-        var p = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(entity * 4));
-        var end = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan((entity + 1) * 4));
-        while (p < end && table[p] != 255)
-        {
-            var command = table[p];
-            if (command == 3 && BinaryPrimitives.ReadUInt16LittleEndian(table.AsSpan(p + 1)) == generic) return BinaryPrimitives.ReadInt16LittleEndian(table.AsSpan(p + 4));
-            p += command == 3 ? 3 + table[p + 3] : 2 + table[p + 2];
-        }
+        foreach (var r in Lba2EntityTable.Records(table, entity))
+            if (r.Command == 3 && r.Generic == generic) return BinaryPrimitives.ReadInt16LittleEndian(table.AsSpan(r.At + 4));
         return -1;
     }
 
@@ -240,15 +234,8 @@ internal static partial class RaceTrackCharacterCars
     // when it has none.
     private static (byte[] Record, int Body)? BodyRecord(byte[] table, int entity, int generic)
     {
-        var p = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(entity * 4));
-        var end = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan((entity + 1) * 4));
-        while (p < end && table[p] != 255)
-        {
-            var command = table[p];
-            var size = command == 3 ? 3 + table[p + 3] : 2 + table[p + 2];
-            if (command == 1 && table[p + 1] == generic) return (table.AsSpan(p, size).ToArray(), BinaryPrimitives.ReadInt16LittleEndian(table.AsSpan(p + 3)));
-            p += size;
-        }
+        foreach (var r in Lba2EntityTable.Records(table, entity))
+            if (r.Command == 1 && r.Generic == generic) return (table.AsSpan(r.At, r.Size).ToArray(), BinaryPrimitives.ReadInt16LittleEndian(table.AsSpan(r.At + 3)));
         return null;
     }
 

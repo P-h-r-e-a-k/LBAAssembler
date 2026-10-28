@@ -144,10 +144,10 @@ internal static partial class RaceTrackCharacterCars
         var table = HqrArchive.Open(ressPath).Read(44);
         table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, DiggerGeneric, own);
         table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, RaceTrackSmallCars.SmallOf(DiggerGeneric), small);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         var catalogue = Catalogue(gameDirectory).Where(e => e.Number != DiggerNumber).ToList();
         catalogue.Add(new CatalogueEntry(DiggerNumber, DiggerName, Digger.Driver, Digger.Island, RaceTrackBaldinoCar.RacerEntity, DiggerGeneric, own, small));
-        File.WriteAllText(Path.Combine(gameDirectory, CatalogueFile), JsonSerializer.Serialize(catalogue, new JsonSerializerOptions { WriteIndented = true }));
+        SaveCatalogue(gameDirectory, catalogue);
         // (and Polar Island's car outside a race: RACEMOD.CPP ISLANDCARS.TXT)
         if (RacerDrive(gameDirectory) is { } drive) SetIslandCar(gameDirectory, PolarIslandNumber, own, drive, DiggerStoryAccel, parked);
         return new()

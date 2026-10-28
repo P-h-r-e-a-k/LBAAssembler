@@ -814,8 +814,8 @@ internal static partial class RaceTrackCharacterCars
                     $"{car.Generic} and {RaceTrackSmallCars.SmallOf(car.Generic)}");
         }
         File.WriteAllBytes(bodyPath, file);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
-        File.WriteAllText(Path.Combine(gameDirectory, CatalogueFile), JsonSerializer.Serialize(catalogue, new JsonSerializerOptions { WriteIndented = true }));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
+        SaveCatalogue(gameDirectory, catalogue);
         return log;
     }
 }

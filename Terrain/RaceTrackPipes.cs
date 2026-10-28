@@ -115,7 +115,7 @@ internal static class RaceTrackPipes
                 if (along.Length() < 1e-6) continue;
                 along = Vector3.Normalize(along);
                 var across = new Vector3(-along.Z, 0, along.X);
-                var half = (r.Raised is { } up && up[i] ? r.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : o.RaisedHalfWidth : r.CurbHalf) + Out;
+                var half = r.HalfAt(i, o) + Out;
                 // the uprights' feet on the ground under them; none where another part of the lap -- its deck, its rails and a little more --
                 // is in an upright's way up, or passes over the road in the cross pipe's (a road under the deck between the uprights is clear)
                 var feet = new double[2];
@@ -126,7 +126,7 @@ internal static class RaceTrackPipes
                 {
                     var sep = Math.Min(Math.Abs(j - i), n - Math.Abs(j - i));
                     if (sep < 30 || r.H[j] > y + Top + 1400) continue;
-                    var other = (r.Raised is { } on && on[j] ? r.RaisedHalfs is { } wide && j < wide.Length ? wide[j] : o.RaisedHalfWidth : r.CurbHalf) + 0.6;
+                    var other = r.HalfAt(j, o) + 0.6;
                     double dx = r.X[j] - x, dz = r.Z[j] - z;
                     var a0 = dx * across.X + dz * across.Z;
                     for (var s = 0; s < 2 && !blocked; s++)
@@ -231,7 +231,7 @@ internal static class RaceTrackPipes
                 var len = Math.Sqrt(tx * tx + tz * tz);
                 if (len < 1e-6) continue;
                 tx /= len; tz /= len;
-                var half = HalfAt(r, i, o);
+                var half = r.HalfAt(i, o);
                 // [x y z (the road's middle), its half width, the reach across, on, off, phase, its way (a thousand long)]
                 report.Jets.Add(new[] { (int)Math.Round(r.X[i] * 512), (int)Math.Round(r.H[i]), (int)Math.Round(r.Z[i] * 512), (int)Math.Round(half * 512),
                     (int)Math.Round(Math.Min(run.Reach, 2 * half - 0.5) * 512), run.On, run.Off, ((-k * run.Wave) % (run.On + run.Off) + run.On + run.Off) % (run.On + run.Off),
@@ -241,9 +241,6 @@ internal static class RaceTrackPipes
         }
         report.Notes.Add($"steam jets: {count} blowing across the road from its rail -- the left on the player's odd laps, the right on his even ones (the Gazogem factory's steam, hitting a car in a burst)");
     }
-
-    private static double HalfAt(TrackRoad r, int i, RaceTrackOptions o) =>
-        r.Raised is { } up && up[i] ? r.RaisedHalfs is { } halfs && i < halfs.Length ? halfs[i] : o.RaisedHalfWidth : r.CurbHalf;
 
     // The pipeline: its pipe in pieces of PipePiece cells at most (a decor each, in the cube its middle is in; its box the pipe's), its
     // supports, and its drips over the road. Returns the bodies made.
@@ -303,7 +300,7 @@ internal static class RaceTrackPipes
             for (var j = 0; j < r.Count && !blocked; j++)
             {
                 var dd = Math.Sqrt(Math.Pow(r.X[j] * 512 - p.X, 2) + Math.Pow(r.Z[j] * 512 - p.Z, 2)) / 512;
-                if (dd < HalfAt(r, j, o) + 1.6 && r.H[j] > ground - 400 && r.H[j] < p.Y + 1500) blocked = true;
+                if (dd < r.HalfAt(j, o) + 1.6 && r.H[j] > ground - 400 && r.H[j] < p.Y + 1500) blocked = true;
             }
             if (blocked) { skipped++; continue; }
             var mesh = new List<Vector3>(); var faces = new List<Face>();
@@ -363,7 +360,7 @@ internal static class RaceTrackPipes
         for (var j = 0; j < r.Count; j++)
         {
             var dd = Math.Sqrt(Math.Pow(r.X[j] * 512 - p.X, 2) + Math.Pow(r.Z[j] * 512 - p.Z, 2)) / 512;
-            if (dd < HalfAt(r, j, o) - 0.9 && r.H[j] < p.Y - radius - 1600 && dd < best) { best = dd; at = j; }
+            if (dd < r.HalfAt(j, o) - 0.9 && r.H[j] < p.Y - radius - 1600 && dd < best) { best = dd; at = j; }
         }
         return at;
     }

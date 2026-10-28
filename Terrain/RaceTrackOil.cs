@@ -121,7 +121,7 @@ internal static class RaceTrackOil
         icon.Header = source.Header;
         icon.Static = source.Static;
         var index = HqrArchive.CountEntries(path);
-        File.WriteAllBytes(path, HqrWriter.AppendEntry(File.ReadAllBytes(path), HqrWriter.StoredEntry(icon.Write())));
+        HqrWriter.AppendToFile(path, icon.Write());
         return (index, $"the oil's drum for the item box: OBJFIX.HQR entry {index}");
     }
 
@@ -143,7 +143,7 @@ internal static class RaceTrackOil
         for (var i = 0; i < gazogem.Spheres.Count; i++)
             gazogem.Spheres[i] = gazogem.Spheres[i] with { Colour = Gold(gazogem.Spheres[i].Colour) };
         var index = HqrArchive.CountEntries(path);
-        File.WriteAllBytes(path, HqrWriter.AppendEntry(File.ReadAllBytes(path), HqrWriter.StoredEntry(gazogem.Write())));
+        HqrWriter.AppendToFile(path, gazogem.Write());
         return (index, $"the golden Gazogem for the item box: OBJFIX.HQR entry {index}");
     }
 
@@ -160,7 +160,7 @@ internal static class RaceTrackOil
         var clipped = 0;
         var big = IslandScaler.ScaledBody(HqrArchive.Open(path).Read(LavaBallModel), LavaBallScale, ref clipped);
         var index = HqrArchive.CountEntries(path);
-        File.WriteAllBytes(path, HqrWriter.AppendEntry(File.ReadAllBytes(path), HqrWriter.StoredEntry(big)));
+        HqrWriter.AppendToFile(path, big);
         return (index, $"the game's lava ball {LavaBallScale} times its size: OBJFIX.HQR entry {index}");
     }
 
@@ -178,10 +178,10 @@ internal static class RaceTrackOil
         var clipped = 0;
         var big = IslandScaler.ScaledBody(HqrArchive.Open(bodyPath).Read(MushroomBody), MushroomScale, ref clipped);
         var index = HqrArchive.CountEntries(bodyPath);
-        File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(big)));
+        HqrWriter.AppendToFile(bodyPath, big);
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var table = RaceTrackBaldinoCar.WithBody(HqrArchive.Open(ressPath).Read(44), Entity, BigMushroom, index);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         return $"the power-ups' mushroom {MushroomScale} times its size: BODY.HQR entry {index}, the mushroom's entity ({Entity}) body {BigMushroom}";
     }
 
@@ -194,10 +194,10 @@ internal static class RaceTrackOil
         slick.Header = Body.Read(HqrArchive.Open(bodyPath).Read(MushroomBody), 2, allowStatic: true).Header;
         slick.Static = true;
         var index = HqrArchive.CountEntries(bodyPath);
-        File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(slick.Write())));
+        HqrWriter.AppendToFile(bodyPath, slick.Write());
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var table = RaceTrackBaldinoCar.WithBody(HqrArchive.Open(ressPath).Read(44), Entity, Generic, index);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         return $"the oil slick: BODY.HQR entry {index}, the mushroom's entity ({Entity}) body {Generic}";
     }
 }

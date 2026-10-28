@@ -132,7 +132,7 @@ internal static class RaceTrackGasMonster
         }
         File.WriteAllBytes(bodyPath, bodies);
         File.WriteAllBytes(animPath, anims);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         if (clipped > 0) log.Add($"WARNING: the gas monster twice its size: {clipped} values clipped");
         return log;
     }
@@ -141,21 +141,10 @@ internal static class RaceTrackGasMonster
     // steps of `run`: 4 animations; 16 bodies, the monsters' (the entity's own: 0, 158, 159).
     private static int FirstFree(byte[] table, int entity, int from, int kind, int run)
     {
-        var used = Records(table, entity, kind);
+        var used = Lba2EntityTable.Records(table, entity).Where(r => r.Command == kind).Select(r => r.Generic).ToHashSet();
         var gen = from;
         while (Enumerable.Range(gen, run).Any(used.Contains)) gen += run;
         return gen;
-    }
-
-    // The numbers of an entity's records of one kind (1 bodies, 3 animations).
-    private static HashSet<int> Records(byte[] table, int entity, int kind)
-    {
-        int start = BitConverter.ToInt32(table, entity * 4), end = BitConverter.ToInt32(table, (entity + 1) * 4);
-        var used = new HashSet<int>();
-        for (var p = start; p < end && table[p] != 255;)
-            if (table[p] == 3) { if (kind == 3) used.Add(table[p + 1] | table[p + 2] << 8); p += 3 + table[p + 3]; }
-            else { if (kind == table[p]) used.Add(table[p + 1]); p += 2 + table[p + 2]; }
-        return used;
     }
 
     // Where along the stretch From..To (the lap's points) monsters rise: every Every cells, out past the rail over the gas on one side or the

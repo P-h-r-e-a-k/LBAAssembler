@@ -375,11 +375,11 @@ internal static partial class RaceTrackCharacterCars
         var table = HqrArchive.Open(ressPath).Read(44);
         table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, PumpkinGeneric, own);
         table = RaceTrackBaldinoCar.WithBody(table, RaceTrackBaldinoCar.RacerEntity, RaceTrackSmallCars.SmallOf(PumpkinGeneric), small);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         // (its line after the others': the folder's cars, as InstallCast wrote them)
         var catalogue = Catalogue(gameDirectory).Where(e => e.Number != PumpkinNumber).ToList();
         catalogue.Add(new CatalogueEntry(PumpkinNumber, PumpkinName, Pumpkin.Driver, Pumpkin.Island, RaceTrackBaldinoCar.RacerEntity, PumpkinGeneric, own, small));
-        File.WriteAllText(Path.Combine(gameDirectory, CatalogueFile), JsonSerializer.Serialize(catalogue, new JsonSerializerOptions { WriteIndented = true }));
+        SaveCatalogue(gameDirectory, catalogue);
         return new()
         {
             $"{PumpkinName} (race car {PumpkinNumber}, Twinsen's on the Temple of Bú): BODY.HQR entry {own} ({car.Faces.Count} polygons, {car.Lines.Count} lines, {car.Spheres.Count} spheres, " +

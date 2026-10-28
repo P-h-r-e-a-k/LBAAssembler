@@ -159,7 +159,7 @@ internal static class RaceTrackLavaFall
         }
 
         // the race-track mode's: across the fall, its lip (a little back from the face, on the stream) and its foot below it (in the pool)
-        var beta = ((int)Math.Round(Math.Atan2(ux, uz) * 4096 / (2 * Math.PI)) % 4096 + 4096) % 4096;
+        var beta = RaceTrackMath.TurnOf(Math.Atan2(ux, uz));
         // (at most RACE_MAX_FALLS of them, spread across: the engine's)
         var step = Math.Max(1, Math.Ceiling((2 * Math.Floor(halfW) + 1) / MaxPlaces));
         for (var a = -Math.Floor(halfW); a <= Math.Floor(halfW) + 1e-9; a += step)
@@ -190,7 +190,7 @@ internal static class RaceTrackLavaFall
         if (len < 2) return;
         dx /= len; dz /= len;
         // (the body's +x turned by the decor's beta is (cos, -sin) of it: along the aqueduct)
-        var beta = ((int)Math.Round(Math.Atan2(-dz, dx) * 4096 / (2 * Math.PI)) % 4096 + 4096) % 4096;
+        var beta = RaceTrackMath.TurnOf(Math.Atan2(-dz, dx));
         if (IslandDecors.Locate(island, sx * 512, sz * 512) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack)
         { report.Notes.Add($"WARNING: the aqueduct from ({sx:0.#}, {sz:0.#}): no room"); return; }
         // its underside along it: level over the road (within its rails and a cell, under the lava's level), down into the ground beyond
@@ -301,7 +301,7 @@ internal static class RaceTrackLavaFall
             }
         }
         // the race-track mode's spit and sparks at its end: off its lip, down to the foot of the ground below
-        var pourBeta = ((int)Math.Round(Math.Atan2(dx, dz) * 4096 / (2 * Math.PI)) % 4096 + 4096) % 4096;
+        var pourBeta = RaceTrackMath.TurnOf(Math.Atan2(dx, dz));
         foreach (var w in new[] { -0.4, 0.4 })
         {
             double lx = ex - dz * w, lz = ez + dx * w, fx2 = ex + dx * 3 - dz * w, fz2 = ez + dz * 3 + dx * w;

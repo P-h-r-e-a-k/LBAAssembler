@@ -40,25 +40,15 @@ internal static class RaceTrackSmallCars
             table = RaceTrackBaldinoCar.WithBody(table, HeroEntity, HeroSmall, next++);
         }
         File.WriteAllBytes(bodyPath, file);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         return $"the race cars at half their size (the lightning spell): {own.Count} bodies of the racer's entity ({RaceTrackBaldinoCar.RacerEntity}), its bodies {First}-{First + own.Max(o => o.Generic)}" +
                (hero is not null ? $"; Twinsen's buggy too, entity {HeroEntity}'s body {HeroSmall}" : "; Twinsen's buggy's body not found");
     }
 
     // An entity's bodies in the entity table (RESS.HQR 44): its generic body numbers and their BODY.HQR entries.
-    private static List<(int Generic, int Index)> BodiesOf(byte[] table, int entity)
-    {
-        var list = new List<(int, int)>();
-        var p = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(entity * 4));
-        var end = BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan((entity + 1) * 4));
-        while (p < end && table[p] != 255)
-        {
-            var command = table[p];
-            if (command == 1) list.Add((table[p + 1], BinaryPrimitives.ReadInt16LittleEndian(table.AsSpan(p + 3))));
-            p += command == 3 ? 3 + table[p + 3] : 2 + table[p + 2];
-        }
-        return list;
-    }
+    private static List<(int Generic, int Index)> BodiesOf(byte[] table, int entity) =>
+        Lba2EntityTable.Records(table, entity).Where(r => r.Command == 1)
+            .Select(r => (r.Generic, (int)BinaryPrimitives.ReadInt16LittleEndian(table.AsSpan(r.At + 3)))).ToList();
 
     // An LBA2 body at half its size: its bounding box (header, 8-31), its points (count at 40, offset at 44: x, y, z and a bone, 8 bytes
     // each) and its spheres' radii (count at 80, offset at 84: radius at 6 of 8 bytes).

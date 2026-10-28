@@ -60,8 +60,11 @@ internal static partial class RaceTrackCharacterCars
     private sealed record Cabin(float Z, float Rx = 215, float Rz = 185, float Up = 26, int Rim = Steel, float Screen = float.NaN, float ScreenHalf = 190, int Rail = WhiteFlat,
         int Wheel = Steel, int WheelLine = Dark, int Sides = 10);
 
-    // What every car ends with: the cockpit, the wheels, the driver sat in it with its hands on the wheel.
-    private static Body Finish(CarMesh m, Hull hull, Body character, Body racer, Driver d, Cabin c, WheelLook look, Axle front, Axle rear, CarDriver.Painter? paint = null)
+    // What every car ends with: the cockpit, the wheels, the driver sat in it with its hands on the wheel. (`seatLift`: one sat in whole sits
+    // on the cockpit's floor, which lies at the rim's top -- a flat one, the flying rat, was under it; `driverPoint`: a point of its own for
+    // the driver's bone, whatever of it shows over the rim -- the cast's cars, FinishCast.)
+    private static Body Finish(CarMesh m, Hull hull, Body character, Body racer, Driver d, Cabin c, WheelLook look, Axle front, Axle rear, CarDriver.Painter? paint = null,
+        float seatLift = 0, bool driverPoint = false)
     {
         m.Light = 1;
         var rimTop = hull.Top(0, c.Z) + c.Up;
@@ -71,7 +74,7 @@ internal static partial class RaceTrackCharacterCars
         m.Light = 1;
 
         var driver = new CarDriver(character);
-        var seat = new Vector3(0, rimTop - 6, c.Z);
+        var seat = new Vector3(0, rimTop - 6 + seatLift, c.Z);
         Vector3 Place(Vector3 p) => (p - d.Origin) * d.Scale + seat;
         Vector3 Unplace(Vector3 p) => (p - seat) / d.Scale + d.Origin;
         var grip = new Vector3(d.GripX, rimTop - 6 + d.GripHeight, c.Z + d.Reach);
@@ -81,6 +84,7 @@ internal static partial class RaceTrackCharacterCars
         Vector3? right = d.Right is { } r && Fore(r).Length > 0 ? Place(driver.Reach(r.Item1, Fore(r), Unplace(grip), 1, Hand(r)).Hand) : null;
         Vector3? left = d.Left is { } l && Fore(l).Length > 0 ? Place(driver.Reach(l.Item1, Fore(l), Unplace(grip with { X = -grip.X }), -1, Hand(l)).Hand) : null;
         m.Pivot(13, m.P(2, seat));
+        if (driverPoint) m.P(13, seat + new Vector3(0, 10, 0));
         var point = driver.Seat(m, d.Keep is { } kept ? new HashSet<int>(kept) : driver.AllBut(d.Drop), Place, rimTop, d.Scale, paint, cut: true);
         Arms(m, d.Right is { } ra ? point(character.Bones[ra.Item1].Pivot) : m.P(13, seat + new Vector3(60, 120, 0)),
                 d.Left is { } la ? point(character.Bones[la.Item1].Pivot) : m.P(13, seat + new Vector3(-60, 120, 0)));

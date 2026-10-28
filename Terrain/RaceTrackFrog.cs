@@ -147,7 +147,7 @@ internal static class RaceTrackFrog
             report.Notes.Add("WARNING: no room for the frog among the island's decor (it is drawn while racing all the same)");
             return;
         }
-        var turn = (int)Math.Round(Math.Atan2(-f.Tx, -f.Tz) * 4096 / (2 * Math.PI)) & 4095;
+        var turn = RaceTrackMath.TurnOf(Math.Atan2(-f.Tx, -f.Tz));
         var d = IslandDecors.Blank(newBodyBase + report.NewBodies.Count, at.X, (int)Math.Round(f.Y), at.Z, (DecorVar << 16) | turn);
         // (its box: its footprint turned as the engine turns it -- x' = x cos + z sin, z' = -x sin + z cos -- from its foot up; its top
         // under its bottom: drawn only, nothing touches it)

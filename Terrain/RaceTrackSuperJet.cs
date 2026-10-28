@@ -19,7 +19,7 @@ internal static class RaceTrackSuperJet
         var path = Path.Combine(gameDirectory, "OBJFIX.HQR");
         var model = LaidFlat(RaceTrackSmallCars.Scaled(HqrArchive.Open(path).Read(Source), Scale));
         var index = HqrArchive.CountEntries(path);
-        File.WriteAllBytes(path, HqrWriter.AppendEntry(File.ReadAllBytes(path), HqrWriter.StoredEntry(model)));
+        HqrWriter.AppendToFile(path, model);
         return (index, $"the super jet-pack the car turns into: OBJFIX.HQR entry {index} (entry {Source} at {Scale:0.##} of its size, laid flat)");
     }
 

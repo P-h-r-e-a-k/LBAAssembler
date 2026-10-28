@@ -534,7 +534,7 @@ internal static partial class RaceTrackCharacterCars
             next++;
         }
         File.WriteAllBytes(bodyPath, bodyFile);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         return (index, log);
     }
 }

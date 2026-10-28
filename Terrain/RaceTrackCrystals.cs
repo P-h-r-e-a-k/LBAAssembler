@@ -89,7 +89,7 @@ internal static class RaceTrackCrystals
             var k = Enumerable.Range(0, r.Count).Where(i => !r.Gap[i]).OrderBy(i => (r.X[i] - x) * (r.X[i] - x) + (r.Z[i] - z) * (r.Z[i] - z)).First();
             var half = (r.RaisedHalfs?[k] ?? o.RaisedHalfWidth) + run.Spread;
             double tx = r.Tx[k], tz = r.Tz[k], deck = r.H[k];
-            var beta = ((int)Math.Round(Math.Atan2(tx, tz) * 4096 / (2 * Math.PI)) % 4096 + 4096) % 4096;
+            var beta = RaceTrackMath.TurnOf(Math.Atan2(tx, tz));
             // (each leg down into the ground under it: the body's +x turned by the decor's beta is (cos, -sin) of it -- the road's -Across)
             double Leg(int side)
             {

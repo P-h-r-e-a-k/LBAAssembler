@@ -91,6 +91,12 @@ internal static class HqrWriter
         return result;
     }
 
+    // The entry `data` (stored) put on the end of the HQR file at `path` ...
+    public static void AppendToFile(string path, byte[] data) => File.WriteAllBytes(path, AppendEntry(File.ReadAllBytes(path), StoredEntry(data)));
+
+    // ... and in place of its entry `index`.
+    public static void ReplaceInFile(string path, int index, byte[] data) => File.WriteAllBytes(path, ReplaceEntry(File.ReadAllBytes(path), index, StoredEntry(data)));
+
     // Returns a copy of `hqr` with entry `index` replaced by `newEntry` (a
     // complete entry including its 10-byte header, e.g. from StoredEntry).
     public static byte[] ReplaceEntry(byte[] hqr, int index, byte[] newEntry)

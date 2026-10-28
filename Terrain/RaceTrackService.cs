@@ -37,13 +37,23 @@ internal static class RaceTrackService
     }
     private const int BuriedDoor = 256;
 
+    // A file of the folder as it was before any build: its backup, when a build made one, else the file itself ...
+    internal static string OriginalPath(string gameDirectory, string file)
+    {
+        var path = Path.Combine(gameDirectory, file);
+        return File.Exists(path + BackupSuffix) ? path + BackupSuffix : path;
+    }
+
+    // ... and its scenes so (`store`: the folder's own, itself when no build has made a backup)
+    internal static LBAAssembler.Scenes.SceneStore OriginalScenes(LBAAssembler.Scenes.SceneStore store) =>
+        File.Exists(store.ScenePath + BackupSuffix) ? new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, store.Directory, "SCENE.HQR" + BackupSuffix) : store;
+
     // The island's doors into inside scenes, as its scenes have them before any build (RaceTrackOptions.DoorBoxes): each of its outside
     // scenes' cube-change zones to a scene that isn't one of them, in island cells and heights
     public static List<(double X0, double Z0, double X1, double Z1, double Y0, double Y1)> DoorBoxes(string gameDirectory, RaceTrackIsland island)
     {
         var boxes = new List<(double, double, double, double, double, double)>();
-        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, gameDirectory);
-        if (File.Exists(store.ScenePath + BackupSuffix)) store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, gameDirectory, "SCENE.HQR" + BackupSuffix);
+        var store = OriginalScenes(new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, gameDirectory));
         for (var scene = island.FirstScene; scene <= island.LastScene; scene++)
         {
             LBAAssembler.Scenes.SceneModel model;
@@ -413,10 +423,11 @@ internal static class RaceTrackService
         // (the bar's shares, by how long each part takes: the originals, Polar Island added when the folder hasn't got it, Sendell's Well
         // made, then each track its own -- BuildSeconds)
         var addPolar = tracks.Any(t => t.Options.Island.Dream) && !PolarInOriginals(gameDirectory);
-        var setup = 0.5 + (addPolar ? PolarAddSeconds : 0) + (tracks.Any(t => t.Options.Island == RaceTrackIsland.Sendell) ? 0.4 : 0)
-                    + (tracks.Any(t => t.Options.Island == RaceTrackIsland.Palace) ? PalaceAddSeconds : 0)
-                    + (tracks.Any(t => t.Options.Island == RaceTrackIsland.CxTower) ? CxTowerAddSeconds : 0)
-                    + (tracks.Any(t => t.Options.Island == RaceTrackIsland.Temple) ? TempleAddSeconds : 0);
+        var islands = tracks.Select(t => t.Options.Island).ToHashSet();
+        var setup = 0.5 + (addPolar ? PolarAddSeconds : 0) + (islands.Contains(RaceTrackIsland.Sendell) ? 0.4 : 0)
+                    + (islands.Contains(RaceTrackIsland.Palace) ? PalaceAddSeconds : 0)
+                    + (islands.Contains(RaceTrackIsland.CxTower) ? CxTowerAddSeconds : 0)
+                    + (islands.Contains(RaceTrackIsland.Temple) ? TempleAddSeconds : 0);
         var whole = setup + tracks.Sum(t => BuildSeconds(t.Options.Island));
         try
         {
@@ -438,19 +449,19 @@ internal static class RaceTrackService
             // (an island the build makes -- Sendell's Well, the Emperor's palace -- is made afresh, its files and its scenes, from those
             // originals; Sendell's Well goes when this build leaves it out -- the Palace island stays, an island of its own too: Tools)
             var made = new List<string>();
-            if (tracks.Any(t => t.Options.Island == RaceTrackIsland.Sendell)) { progress?.Report(new((setup - 0.3) / whole, "Sendell's Well: making the island")); made.AddRange(SendellWell.Install(gameDirectory)); }
+            if (islands.Contains(RaceTrackIsland.Sendell)) { progress?.Report(new((setup - 0.3) / whole, "Sendell's Well: making the island")); made.AddRange(SendellWell.Install(gameDirectory)); }
             else SendellWell.Remove(gameDirectory);
-            if (tracks.Any(t => t.Options.Island == RaceTrackIsland.Palace))
+            if (islands.Contains(RaceTrackIsland.Palace))
             {
                 progress?.Report(new((setup - 0.3) / whole, "The Emperor's palace: making the island and its scenes"));
                 made.AddRange(LBAAssembler.Terrain.Palace.PalaceTrack.Install(gameDirectory, BackupSuffix));
             }
-            if (tracks.Any(t => t.Options.Island == RaceTrackIsland.CxTower))
+            if (islands.Contains(RaceTrackIsland.CxTower))
             {
                 progress?.Report(new((setup - 0.3) / whole, "Island CX: making the island, its halls one ring under the gas"));
                 made.AddRange(LBAAssembler.Terrain.ControlTower.CxTowerTrack.Install(gameDirectory, BackupSuffix));
             }
-            if (tracks.Any(t => t.Options.Island == RaceTrackIsland.Temple))
+            if (islands.Contains(RaceTrackIsland.Temple))
             {
                 progress?.Report(new((setup - 0.3) / whole, "The Temple of Bú: making the island from LBA1's scenes, and its scenes"));
                 if (Lba1Problem("The Temple of Bú's track is built on LBA1's temple, which the build makes from LBA1's own scenes") is { } noLba1) throw new InvalidDataException(noLba1);
@@ -587,8 +598,7 @@ internal static class RaceTrackService
         // those so we're just left with the elevator pad")
         if (options.Island.LiftLook is { } look && RaceTrackBuilder.FindDecor(island, look.FrameBody, look.FrameX, look.FrameZ) is { } floor)
         {
-            var obl = Path.Combine(gameDirectory, options.Island.OblFile);
-            var hqr = HqrArchive.Open(File.Exists(obl + BackupSuffix) ? obl + BackupSuffix : obl);
+            var hqr = HqrArchive.Open(OriginalPath(gameDirectory, options.Island.OblFile));
             options.LiftFrame = new List<(IslandDecor, int, int, int, byte[])> { (floor.Decor, 0, 0, 0, hqr.Read(look.FrameBody)) };
         }
         var scaled = new List<string>();
@@ -670,8 +680,7 @@ internal static class RaceTrackService
     public static TwinTrack? BuildTwin(string gameDirectory, RaceTrackPlan plan, bool own, RaceTrackOptions twinOptions, RaceTrackOptions options, RaceTrackReport main)
     {
         if (options.Island.TwinIleFile is not { } ile || options.Island.TwinOblFile is not { } obl) return null;
-        var source = Path.Combine(gameDirectory, ile + BackupSuffix);
-        var twin = IslandFile.Load(File.Exists(source) ? source : Path.Combine(gameDirectory, ile));
+        var twin = IslandFile.Load(OriginalPath(gameDirectory, ile));
         twinOptions = own ? twinOptions.Copy() : options.Copy();
         twinOptions.DoorBoxes = options.DoorBoxes;      // (the same scenes, the same doors)
         twinOptions.LiftFrame = options.LiftFrame;      // (and the same lifts: the storm file's frame)
@@ -711,8 +720,7 @@ internal static class RaceTrackService
     public static string? CopyRetailBodies(string gameDirectory, string oblFile, RaceTrackOptions options)
     {
         if (string.Equals(oblFile, RaceTrackIsland.Desert.OblFile, StringComparison.OrdinalIgnoreCase)) return null;
-        var desertPath = Path.Combine(gameDirectory, RaceTrackIsland.Desert.OblFile);
-        var desert = HqrArchive.Open(File.Exists(desertPath + BackupSuffix) ? desertPath + BackupSuffix : desertPath);
+        var desert = HqrArchive.Open(OriginalPath(gameDirectory, RaceTrackIsland.Desert.OblFile));
         var path = Path.Combine(gameDirectory, oblFile);
         var index = HqrArchive.CountEntries(path);
         var hqr = File.ReadAllBytes(path);
@@ -761,8 +769,7 @@ internal static class RaceTrackService
         // their colours)
         if (options.PitFence)
         {
-            var citadel = Path.Combine(gameDirectory, RaceTrackIsland.Citadel.OblFile);
-            var bodies = HqrArchive.Open(File.Exists(citadel + BackupSuffix) ? citadel + BackupSuffix : citadel);
+            var bodies = HqrArchive.Open(OriginalPath(gameDirectory, RaceTrackIsland.Citadel.OblFile));
             options.FenceSection = bodies.Read(FenceSectionBody); options.FencePost = bodies.Read(FencePostBody);
             log.Add($"the pit lane's fence: Citadel Island's white fence (CITADEL.OBL bodies {FenceSectionBody} and {FencePostBody})");
         }
@@ -919,9 +926,11 @@ internal static class RaceTrackService
     private static void WriteInfo(string gameDirectory, RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes, TwinTrack? twin, BuildSession session,
         StoryInfo? story, DreamInfo? dream)
     {
-        var info = Info(report, options, scenes) with { Story = story, OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, Dream = dream,
-            ChaseCar = options.Island.ChaseDriver is { } chaseDriver && session.FunFrockEmpty is [var ce, var ca] ? new[] { ce, ca, chaseDriver.Entity } : null,
+        // (the models the session installed, the same for every track it builds)
+        TrackInfo WithModels(TrackInfo t) => t with { OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall,
             LaserModels = session.LaserModels, LavaBallModel = session.LavaBallModel, CrystalShardModels = session.CrystalShardModels };
+        var info = WithModels(Info(report, options, scenes)) with { Story = story, Dream = dream,
+            ChaseCar = options.Island.ChaseDriver is { } chaseDriver && session.FunFrockEmpty is [var ce, var ca] ? new[] { ce, ca, chaseDriver.Entity } : null };
         // (and for a teleporter into another cube -- the Temple of Bú's hidden passage: the scene it puts the car into)
         if (info.ArcJumps is not null || info.Teleports is not null) info = info with { CubeScenes = RaceTrackScenes.CubeScenes(gameDirectory, options.Island) };
         if (Shuttles(gameDirectory, report, options) is { Count: > 0 } shuttles) info = info with { Shuttles = shuttles };
@@ -933,8 +942,7 @@ internal static class RaceTrackService
             var fine = Info(twin.Report, twin.Options, twinScenes);
             // (the town circuit's own arrow, which the bed switches on)
             if (story is not null) fine = fine with { StoryArrow = story.TownArrow };
-            info = info with { Twin = fine with { OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall, LaserModels = session.LaserModels,
-                LavaBallModel = session.LavaBallModel, CrystalShardModels = session.CrystalShardModels } };
+            info = info with { Twin = WithModels(fine) };
         }
         session.Tracks.Add(info);
         var all = session.Tracks[0] with { Others = session.Tracks.Count > 1 ? session.Tracks.Skip(1).ToList() : null };
@@ -982,19 +990,18 @@ internal static class RaceTrackService
     private static StartLineInfo LineInfo((double X0, double Z0, double X1, double Z1, double DirX, double DirZ) l, double? height = null)
     {
         var cx = (int)Math.Floor((l.X0 + l.X1) / 2 / 64); var cz = (int)Math.Floor((l.Z0 + l.Z1) / 2 / 64);
-        int Local(double cells, int cube) => (int)Math.Round((cells - cube * 64) * 512);
+        static int Local(double cells, int cube) => RaceTrackScenes.CubeLocal(cells, cube);
         return new StartLineInfo(cx, cz, Local(l.X0, cx), Local(l.Z0, cz), Local(l.X1, cx), Local(l.Z1, cz), (int)Math.Round(l.DirX * 1000), (int)Math.Round(l.DirZ * 1000),
             height is { } h ? (int)Math.Round(h) : null);
     }
 
     private static TrackInfo Info(RaceTrackReport report, RaceTrackOptions options, RaceTrackScenes.Result scenes)
     {
-        static StartLineInfo Line((double X0, double Z0, double X1, double Z1, double DirX, double DirZ) l, double? height = null) => LineInfo(l, height);
         // (every line with its height: the engine counts it only for a car near that height, so a line under a bridge, or a raised road's
         // other levels, is not crossed from the road over it; since 2026-10-01 for every lap, not only a raised road's)
         var raised = report.Raised.Count > 0;
-        var line = report.LapLine is { } l ? Line(l, report.LapLineHeight) : null;
-        var checkpoints = report.Checkpoints.Select((c, i) => Line(c, i < report.CheckpointHeights.Count ? report.CheckpointHeights[i] : null)).ToList();
+        var line = report.LapLine is { } l ? LineInfo(l, report.LapLineHeight) : null;
+        var checkpoints = report.Checkpoints.Select((c, i) => LineInfo(c, i < report.CheckpointHeights.Count ? report.CheckpointHeights[i] : null)).ToList();
         static List<int[]> Points(List<(double X, double Z, double Y, double Speed, double Radius)> line)
             => line.Select(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512), (int)Math.Round(p.Y), (int)Math.Round(p.Speed), (int)Math.Round(Math.Min(p.Radius, 1e6)) }).ToList();
         var path = Points(report.RacePath);
@@ -1014,14 +1021,14 @@ internal static class RaceTrackService
             Raised: raised ? report.Raised : null, Gravity: raised ? report.Gravity : null, RailCamera: raised ? report.RailCamera : null,
             Loops: report.Loops.Count > 0 ? report.Loops.Select(LoopRecord).ToList() : null,
             JumpCameras: report.JumpCameras.Count > 0
-                ? report.JumpCameras.Select(c => new[] { c.Anim, c.CubeX, c.CubeZ, (int)Math.Round((c.X - c.CubeX * 64) * 512), (int)Math.Round(c.Y), (int)Math.Round((c.Z - c.CubeZ * 64) * 512) }).ToList()
+                ? report.JumpCameras.Select(c => new[] { c.Anim, c.CubeX, c.CubeZ, RaceTrackScenes.CubeLocal(c.X, c.CubeX), (int)Math.Round(c.Y), RaceTrackScenes.CubeLocal(c.Z, c.CubeZ) }).ToList()
                 : null,
             ArcJumps: raised && report.ArcRaised.Count > 0 ? report.ArcRaised.ToList() : null, Drivers: drivers.Count > 0 ? drivers : null,
-            OpenAreas: report.OpenAreas.Count > 0 ? report.OpenAreas.ToList() : null,
+            OpenAreas: OrNull(report.OpenAreas),
             Mushrooms: scenes.Mushrooms is { Count: > 0 } mushrooms ? mushrooms : null, Penguins: scenes.Penguins is { Count: > 0 } penguins ? penguins : null,
             Oil: scenes.Oil is { Count: > 0 } oil ? oil : null, Fakes: scenes.Fakes is { Count: > 0 } fakes ? fakes : null,
-            Steam: report.Steam.Count > 0 ? report.Steam.ToList() : null, Drips: report.Drips.Count > 0 ? report.Drips.ToList() : null,
-            Jets: report.Jets.Count > 0 ? report.Jets.ToList() : null,
+            Steam: OrNull(report.Steam), Drips: OrNull(report.Drips),
+            Jets: OrNull(report.Jets),
             Tunnels: raised && report.Tunnels.Count > 0
                 ? report.Tunnels.Select(t => (t.Ceiling is { } c
                         ? new[] { report.RaisedSpan.IndexOf(t.From), report.RaisedSpan.IndexOf(t.To), (int)Math.Round(t.Roof), (int)Math.Round(c) }
@@ -1040,7 +1047,7 @@ internal static class RaceTrackService
                           (int)Math.Round(wheel.Rim * 512), (int)Math.Round(wheel.Outer * 512), (int)Math.Round(wheel.Under) }
                     .Concat(wheel.Turning).ToArray()
                 : null,
-            LavaFalls: report.LavaFalls.Count > 0 ? report.LavaFalls.ToList() : null,
+            LavaFalls: OrNull(report.LavaFalls),
             CrystalShards: raised && report.CrystalShards.Count > 0
                 ? report.CrystalShards.Select(b => new[] { (int)Math.Round(b.X), (int)Math.Round(b.Y), (int)Math.Round(b.Z), report.RaisedSpan.IndexOf(b.From), report.RaisedSpan.IndexOf(b.To), b.Every, b.Phase, b.Balls })
                     .Where(b => b[3] >= 0 && b[4] >= 0).ToList()
@@ -1082,28 +1089,31 @@ internal static class RaceTrackService
                     // (the speed it comes out at the most and its passage's time, when the plan gives them: teleport='s eleventh and twelfth)
                     .Concat(t.Skip(10).Take(2).Select(v => (int)Math.Round(v))).ToArray()).ToList()
                 : null,
-            Frogs: report.Frogs.Count(f => f.Body >= 0) > 0 ? report.Frogs.Where(f => f.Body >= 0).Select(RaceTrackFrog.Line).ToList() : null,
+            Frogs: OrNull(report.Frogs.Where(f => f.Body >= 0).Select(RaceTrackFrog.Line)),
             Hunters: scenes.Hunters is { Count: > 0 } hunters ? hunters.ToList() : null,
             Flyers: scenes.Flyers is { Count: > 0 } flyers
                 ? flyers.Where(f => f[2] >= 0 && f[2] < report.Flyers.Count).Select(f =>
                     new[] { f[0], f[1], (int)Math.Round(report.Flyers[f[2]].Y) }
                         .Concat(report.Flyers[f[2]].Way.SelectMany(p => new[] { (int)Math.Round(p.X * 512), (int)Math.Round(p.Z * 512) })).ToArray()).ToList()
                 : null,
-            Spooks: report.Spooks.Count(s => s.Body >= 0) > 0 ? report.Spooks.Where(s => s.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line).ToList() : null,
+            Spooks: OrNull(report.Spooks.Where(s => s.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line)),
             RaisedLap: raised && report.RaisedBranches.Count > 0 ? report.RaisedLap : null,
             RaisedBranches: raised && report.RaisedBranches.Count > 0 ? report.RaisedBranches.ToList() : null,
-            Dives: report.Dives.Count(d => d.Body >= 0) > 0 ? report.Dives.Where(d => d.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line).ToList() : null,
-            Scares: report.Scares.Count(s => s.Body >= 0) > 0 ? report.Scares.Where(s => s.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line).ToList() : null,
+            Dives: OrNull(report.Dives.Where(d => d.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line)),
+            Scares: OrNull(report.Scares.Where(s => s.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line)),
             Haunt: report.HauntBodies is { } haunt ? new[] { haunt.Ghost, haunt.Icon } : null,
-            GiantWebs: report.GiantWebs.Count(w => w.SpiderA >= 0) > 0 ? report.GiantWebs.Where(w => w.SpiderA >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line).ToList() : null,
+            GiantWebs: OrNull(report.GiantWebs.Where(w => w.SpiderA >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line)),
             WebParts: report.GiantWebs.Count(w => w.SpiderA >= 0) > 0
                 ? report.GiantWebs.Where(w => w.SpiderA >= 0).SelectMany((w, i) => LBAAssembler.Terrain.Temple.TempleHalloween.PartLines(w).Select(p => new[] { i }.Concat(p).ToArray())).ToList()
                 : null,
             Marshal: report.Marshal,
             OnFoot: report.OnFoot ? true : null,
-            RailOpens: report.RailOpens.Count > 0 ? report.RailOpens.ToList() : null,
+            RailOpens: OrNull(report.RailOpens),
             MapRoads: MapRoads(report), DoorsOff: scenes.DoorsOff, ActorsAt: scenes.ActorsAt, DeckLifts: scenes.DeckLifts);
     }
+
+    // A list of what is there, or null when there is nothing (the car file leaves the key out)
+    private static List<T>? OrNull<T>(IEnumerable<T> items) { var list = items.ToList(); return list.Count > 0 ? list : null; }
 
     // A machine gun on its knoll as the car file has it: its scene and actors, the muzzle (the gun stands 0.8 cells towards where it fires
     // from the knoll's middle, as RaceTrackScenes stands it; its muzzle 214 ahead of the gun's middle, 420 up), and where its bullets land.
@@ -1138,7 +1148,7 @@ internal static class RaceTrackService
         int cx = (int)Math.Floor(l.X / 64), cz = (int)Math.Floor(l.Z / 64);
         var record = new[]
         {
-            cx, cz, (int)Math.Round((l.X - cx * 64) * 512), (int)Math.Round(l.Y), (int)Math.Round((l.Z - cz * 64) * 512),
+            cx, cz, RaceTrackScenes.CubeLocal(l.X, cx), (int)Math.Round(l.Y), RaceTrackScenes.CubeLocal(l.Z, cz),
             (int)Math.Round(l.DirX * 1000), (int)Math.Round(l.DirZ * 1000), (int)Math.Round(l.Radius * 512), (int)Math.Round(l.Shift * 512), (int)Math.Round(l.Gap),
             (int)Math.Round(l.Band * 512),
         };
@@ -1236,7 +1246,7 @@ internal static class RaceTrackService
     // Whether the originals a build starts from have Polar Island: its files and its scenes.
     private static bool PolarInOriginals(string gameDirectory)
     {
-        string Original(string f) { var p = Path.Combine(gameDirectory, f); return File.Exists(p + BackupSuffix) ? p + BackupSuffix : p; }
+        string Original(string f) => OriginalPath(gameDirectory, f);
         if (!File.Exists(Original(LBAAssembler.Terrain.Polar.PolarTerrain.IleFile)) || !File.Exists(Original(LBAAssembler.Terrain.Polar.PolarTerrain.OblFile))) return false;
         try
         {

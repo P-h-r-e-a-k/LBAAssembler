@@ -83,7 +83,7 @@ internal static class RaceTrackGloves
         var own = Body.Read(HqrArchive.Open(path).Read(entry), 2, allowStatic: true);
         var gloves = Build(InventoryScale, upright: true);
         gloves.Static = true; gloves.Header = own.Header;
-        File.WriteAllBytes(path, HqrWriter.ReplaceEntry(File.ReadAllBytes(path), entry, HqrWriter.StoredEntry(gloves.Write())));
+        HqrWriter.ReplaceInFile(path, entry, gloves.Write());
         return $"OBJFIX.HQR entry {entry}: the racing gloves ({gloves.Faces.Count} polygons)";
     }
 
@@ -95,11 +95,11 @@ internal static class RaceTrackGloves
         var gloves = Build(RoomScale, upright: false);
         gloves.Header = Body.Read(bodies.Read(likeBody), 2, allowStatic: true).Header;
         var index = HqrArchive.CountEntries(bodyPath);
-        File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(gloves.Write())));
+        HqrWriter.AppendToFile(bodyPath, gloves.Write());
         const int generic = 1;
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var table = RaceTrackBaldinoCar.WithBody(HqrArchive.Open(ressPath).Read(44), entity, generic, index);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         return (generic, $"BODY.HQR entry {index}: the racing gloves at the room's scale, entity {entity}'s body {generic}");
     }
 

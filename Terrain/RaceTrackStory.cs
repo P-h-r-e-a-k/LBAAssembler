@@ -80,7 +80,6 @@ internal static class RaceTrackStory
     private const int CitadelTexts = 3, HolomapTexts = 2;
     private const byte LabelAttribute = 17;          // the holomap labels' own (text 501 "Downtown Pharmacy.")
     private const int ArrowRecordSize = 32;
-    private const uint InvisibleNoShadow = 0x1200;
 
     // The story's lines (Citadel Island's texts), in English, French, German, Spanish, Italian, Portuguese: TEXT.HQR's own order. The game's
     // own names: the Weather Wizard is the Mage Météo, the Wettermagier, the Mago Meteo, the Mago Metereologo, the Mago do Tempo.
@@ -347,8 +346,7 @@ internal static class RaceTrackStory
                 double x = s.X - s.DirX * back - s.DirZ * side * d, z = s.Z - s.DirZ * back + s.DirX * side * d;
                 if (OffRoads(report, x, z) < clear) continue;
                 if (report.GroundAfter?.Invoke(x, z) is not { } g || g < 200 || Math.Abs(g - s.Y) > 500) continue;
-                var beta = (int)Math.Round(Math.Atan2(s.X - x, s.Z - z) / (2 * Math.PI) * 4096);
-                return (x, z, g, ((beta % 4096) + 4096) % 4096);
+                return (x, z, g, RaceTrackMath.Turn(Math.Atan2(s.X - x, s.Z - z)));
             }
         return null;
     }
@@ -397,6 +395,24 @@ internal static class RaceTrackStory
     private const int CelebrationScene = 95, CelebrationTexts = 3 + 5;
     private const int Told = 124, RickArrow = 136;
 
+    // The first id free in a file of TEXT.HQR, in every language (one past the highest any of them has) ...
+    private static int NextId(HqrArchive text, int languages, int file) =>
+        Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, file).Texts.Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
+
+    // ... and texts added to a language's bank from it on: each line's words in that language (`words`, its column of `lines`)
+    private static void AddTexts(Lba2TextBank bank, int first, byte attribute, string[][] lines, int words)
+    {
+        for (var k = 0; k < lines.Length; k++)
+            bank.Texts.Add(new Lba2TextBank.Text { Id = first + k, Attribute = attribute, Bytes = Dos.GetBytes(lines[k][words]) });
+    }
+
+    // An actor stood at a place in island cells, in the scene's cube, with its height and facing.
+    private static void Place(SceneActorModel actor, SceneModel model, (double X, double Z, double Y, int Beta) at)
+    {
+        actor.X = RaceTrackScenes.CubeLocal(at.X, model.CubeX); actor.Z = RaceTrackScenes.CubeLocal(at.Z, model.CubeY);
+        actor.Y = (int)Math.Round(at.Y); actor.Beta = at.Beta;
+    }
+
     // `scenes`: what the lava lake's scenes were given (its start scene, 223, is its race's). Returns lines for the log.
     public static List<string> ApplyCelebration(string gameDirectory, RaceTrackScenes.Result scenes)
     {
@@ -406,16 +422,14 @@ internal static class RaceTrackStory
         var textPath = Path.Combine(gameDirectory, "TEXT.HQR");
         var text = HqrArchive.Open(textPath);
         var languages = Lba2TextBank.Languages(textPath);
-        var first = Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, CelebrationTexts).Texts.Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
+        var first = NextId(text, languages, CelebrationTexts);
         int Id(Seller line) => first + (int)line;
         var hqr = File.ReadAllBytes(textPath);
         for (var lang = 0; lang < languages; lang++)
         {
             var words = lang < SellerLines[0].Length ? lang : 0;
             var lines = Lba2TextBank.Load(text, lang, CelebrationTexts);
-            var attribute = lines.Find(170)?.Attribute ?? Lba2TextBank.NormalAttribute;
-            for (var k = 0; k < SellerLines.Length; k++)
-                lines.Texts.Add(new Lba2TextBank.Text { Id = first + k, Attribute = attribute, Bytes = Dos.GetBytes(SellerLines[k][words]) });
+            AddTexts(lines, first, lines.Find(170)?.Attribute ?? Lba2TextBank.NormalAttribute, SellerLines, words);
             hqr = lines.WriteInto(hqr);
         }
         File.WriteAllBytes(textPath, hqr);
@@ -468,10 +482,7 @@ internal static class RaceTrackStory
         {
             var model = store.Load(scenes.StartScene);
             var colour = store.Load(CelebrationScene).Actors.FirstOrDefault(a => a.Entity == SellerEntity)?.CoulObj ?? 4;
-            var voice = SceneOps.BlankActor(SceneGame.Lba2, IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, entity: 16);
-            voice.Life = new byte[] { 0 }; voice.Track = new byte[] { 0 };
-            voice.Flags = InvisibleNoShadow; voice.Body = -1; voice.Armor = 51; voice.LifePoints = -1; voice.CoulObj = colour;
-            var index = SceneOps.AddActor(model, voice);
+            var index = SceneOps.AddActor(model, RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, colour));
             var scripts = SceneScripts.Load(SceneSerializer.Write(model), scenes.StartScene);
             scripts.SetText(index, ScriptKind.Life, $@"void comportement_0()
 {{
@@ -527,21 +538,17 @@ void comportement_1()
         var textPath = Path.Combine(gameDirectory, "TEXT.HQR");
         var text = HqrArchive.Open(textPath);
         var languages = Lba2TextBank.Languages(textPath);
-        int NewId(int file) => Enumerable.Range(0, languages).Max(l => Lba2TextBank.Load(text, l, file).Texts.Select(t => t.Id).DefaultIfEmpty(0).Max()) + 1;
-        var first = NewId(CitadelTexts); var labelFirst = NewId(HolomapTexts);
+        var first = NextId(text, languages, CitadelTexts); var labelFirst = NextId(text, languages, HolomapTexts);
         int Id(Line line) => first + (int)line;
         var hqr = File.ReadAllBytes(textPath);
         for (var lang = 0; lang < languages; lang++)
         {
             var words = lang < Lines[0].Length ? lang : 0;       // (a language this doesn't know gets the English)
             var lines = Lba2TextBank.Load(text, lang, CitadelTexts);
-            var attribute = lines.Find(0)?.Attribute ?? Lba2TextBank.NormalAttribute;
-            for (var k = 0; k < Lines.Length; k++)
-                lines.Texts.Add(new Lba2TextBank.Text { Id = first + k, Attribute = attribute, Bytes = Dos.GetBytes(Lines[k][words]) });
+            AddTexts(lines, first, lines.Find(0)?.Attribute ?? Lba2TextBank.NormalAttribute, Lines, words);
             hqr = lines.WriteInto(hqr);
             var labels = Lba2TextBank.Load(text, lang, HolomapTexts);
-            for (var k = 0; k < Labels.Length; k++)
-                labels.Texts.Add(new Lba2TextBank.Text { Id = labelFirst + k, Attribute = LabelAttribute, Bytes = Dos.GetBytes(Labels[k][words]) });
+            AddTexts(labels, labelFirst, LabelAttribute, Labels, words);
             // (file 2 is also the inventory's: the gloves' found message, name and description, each moved out of its voiced place)
             var item = new[] { GlovesSlot, 100 + GlovesSlot, 200 + GlovesSlot };
             for (var k = 0; k < item.Length; k++)
@@ -567,7 +574,7 @@ void comportement_1()
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
         log.AddRange(Gloves(gameDirectory, store));
         // (the people copied are the game's own, from the scenes as they were before any track's build)
-        var originals = File.Exists(store.ScenePath + RaceTrackService.BackupSuffix) ? new SceneStore(SceneGame.Lba2, gameDirectory, "SCENE.HQR" + RaceTrackService.BackupSuffix) : store;
+        var originals = RaceTrackService.OriginalScenes(store);
 
         // every scene edited, once each: loaded, then each step's edits of its actors and scripts in turn, saved together at the end
         var models = new Dictionary<int, SceneModel>();
@@ -666,19 +673,14 @@ void comportement_1()
             {
                 var sides = new[] { 1, -1 };
                 if (Beside(storm, start, 1, 1, sides) is not { } p || Beside(storm, start, 3, 1, sides) is not { } r) throw new NotTheGames("no room beside the start line");
-                void Put(SceneActorModel actor, (double X, double Z, double Y, int Beta) at)
-                {
-                    actor.X = (int)Math.Round((at.X - model.CubeX * 64) * 512); actor.Z = (int)Math.Round((at.Z - model.CubeY * 64) * 512);
-                    actor.Y = (int)Math.Round(at.Y); actor.Beta = at.Beta;
-                }
-                Put(raph, r); Put(paul, p);
+                Place(raph, model, r); Place(paul, model, p);
                 // (the start line, the lap's and the pit lane's, two cells either way: a scenaric zone of its own -- the scene's next
                 // number -- where Mr. Paul stops a car driven without gloves; he and Raph stand at its end, off the roads)
                 var startZone = model.Zones.Where(z => z.Type == 2).Select(z => z.Num).DefaultIfEmpty(0).Max() + 1;
                 var across = (storm.StartCurbs is { } curbs ? Math.Max(curbs.Left, curbs.Right) : 12) + 1;
                 var corners = new[] { (-across, -2.0), (-across, 2.0), (across, -2.0), (across, 2.0) }
                     .Select(c => (X: start.X - start.DirZ * c.Item1 + start.DirX * c.Item2, Z: start.Z + start.DirX * c.Item1 + start.DirZ * c.Item2)).ToList();
-                int Local(double cell, int cube) => Math.Clamp((int)Math.Round((cell - cube * 64) * 512), 0, IslandFile.CubeSize - 1);
+                static int Local(double cell, int cube) => Math.Clamp(RaceTrackScenes.CubeLocal(cell, cube), 0, IslandFile.CubeSize - 1);
                 model.Zones.Add(new SceneZoneModel
                 {
                     Type = 2, Num = startZone, Info = new[] { 0, 0, 0, 0, 0, 0, 0, 1 },
@@ -689,8 +691,8 @@ void comportement_1()
                 // (his car's place once he has stopped lapping: beside the road a little past the start line, along it)
                 if (Beside(storm, start, -5, 1.5, sides) is { } c)
                 {
-                    var along = (int)Math.Round(Math.Atan2(start.DirX, start.DirZ) / (2 * Math.PI) * 4096);
-                    raphPark = new[] { scenes.StartScene, (int)Math.Round((c.X - model.CubeX * 64) * 512), (int)Math.Round(c.Y), (int)Math.Round((c.Z - model.CubeY * 64) * 512), ((along % 4096) + 4096) % 4096 };
+                    raphPark = new[] { scenes.StartScene, RaceTrackScenes.CubeLocal(c.X, model.CubeX), (int)Math.Round(c.Y), RaceTrackScenes.CubeLocal(c.Z, model.CubeY),
+                                       RaceTrackMath.Turn(Math.Atan2(start.DirX, start.DirZ)) };
                     // (his car has him at its wheel: he talks from it -- the game's own Raph, out of sight, where it parks)
                     raph.X = raphPark[1]; raph.Y = raphPark[2]; raph.Z = raphPark[3]; raph.Beta = raphPark[4];
                 }
@@ -819,8 +821,7 @@ void comportement_1()
                 var arrival = model.TrackPoints[ArrivalPoint];
                 var from = (model.CubeX * 64 + arrival.X / 512.0, model.CubeY * 64 + arrival.Z / 512.0, (double)arrival.Y, 0.0, 1.0);
                 if (Beside(town, from, -1, 1, new[] { 1, -1 }) is not { } a) throw new NotTheGames("no room by Twinsen's arrival");
-                alien.X = (int)Math.Round((a.X - model.CubeX * 64) * 512); alien.Z = (int)Math.Round((a.Z - model.CubeY * 64) * 512);
-                alien.Y = (int)Math.Round(a.Y); alien.Beta = a.Beta;
+                Place(alien, model, a);
                 var alienScript = Add(model, alien, $@"void comportement_0()
 {{
     if (2 != chapter())
@@ -865,9 +866,7 @@ void comportement_1()
             if (!store.SceneExists(scene)) continue;
             Edit(scene, "Mr. Paul hands over his prize, a ferry ticket, after a win on the town circuit; Twinsen driving here means he has his car", model =>
             {
-                var prize = SceneOps.BlankActor(SceneGame.Lba2, IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, entity: 16);
-                prize.Life = new byte[] { 0 }; prize.Track = new byte[] { 0 };
-                prize.Flags = InvisibleNoShadow; prize.Body = -1; prize.Armor = 51; prize.LifePoints = -1; prize.CoulObj = paulColour;
+                var prize = RaceTrackScenes.InvisibleHelper(IslandFile.CubeSize / 2, 0, IslandFile.CubeSize / 2, paulColour);
                 return Add(model, prize, $@"void comportement_0()
 {{
     set_comportement(comportement_1);

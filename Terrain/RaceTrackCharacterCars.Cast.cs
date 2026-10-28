@@ -615,40 +615,11 @@ internal static partial class RaceTrackCharacterCars
         }
     }
 
-    // The car finished with its driver: as Finish, for a driver sat in whole too (no arms: its hands kept to itself, no wheel).
-    private static Body FinishCast(CarMesh m, Parts parts, Body character, Body racer, CastFit fit, CarDriver.Painter? paint, int lean)
-    {
-        var (hull, c, look, front, rear) = parts;
-        var d = fit.Driver;
-        m.Light = 1;
-        var rimTop = hull.Top(0, c.Z) + c.Up;
-        Cockpit(m, hull, c.Z, c.Rx, c.Rz, rimTop, lean >= 2 ? 8 : c.Sides, c.Rim);
-        if (!float.IsNaN(c.Screen) && lean < 2) Windscreen(m, hull, c.Screen, c.ScreenHalf, 100, c.Rail);
-        Wheels(m, look, front, rear);
-        m.Light = 1;
-
-        var driver = new CarDriver(character);
-        // (one sat in whole sits on the cockpit's floor, which lies at the rim's top: a flat one -- the flying rat -- was under it)
-        var seat = new Vector3(0, rimTop - 6 + (fit.Whole ? 30 : 0), c.Z);
-        Vector3 Place(Vector3 p) => (p - d.Origin) * d.Scale + seat;
-        Vector3 Unplace(Vector3 p) => (p - seat) / d.Scale + d.Origin;
-        var grip = new Vector3(d.GripX, rimTop - 6 + d.GripHeight, c.Z + d.Reach);
-        int[] Fore((int, int[]) arm) => arm.Item2.Length > 0 ? arm.Item2 : driver.Below(arm.Item1).Where(b => d.Drop is null || !d.Drop.Contains(b)).ToArray();
-        Vector3? right = d.Right is { } r && Fore(r).Length > 0 ? Place(driver.Reach(r.Item1, Fore(r), Unplace(grip), 1).Hand) : null;
-        Vector3? left = d.Left is { } l && Fore(l).Length > 0 ? Place(driver.Reach(l.Item1, Fore(l), Unplace(grip with { X = -grip.X }), -1).Hand) : null;
-        m.Pivot(13, m.P(2, seat));
-        // (a point of its own for the driver's bone, whatever of it shows over the rim)
-        m.P(13, seat + new Vector3(0, 10, 0));
-        var point = driver.Seat(m, driver.AllBut(d.Drop), Place, rimTop, d.Scale, paint, cut: true);
-        Arms(m, d.Right is { } ra ? point(character.Bones[ra.Item1].Pivot) : m.P(13, seat + new Vector3(60, 120, 0)),
-                d.Left is { } la ? point(character.Bones[la.Item1].Pivot) : m.P(13, seat + new Vector3(-60, 120, 0)));
-        if (right is not null || left is not null)
-        {
-            var rh = right ?? left!.Value with { X = -left.Value.X }; var lh = left ?? right!.Value with { X = -right.Value.X };
-            SteeringWheel(m, hull, rh, lh, Steel, Dark);
-        }
-        return m.ToBody(racer.Header);
-    }
+    // The car finished with its driver: as Finish, for a driver sat in whole too (no arms: its hands kept to itself, no wheel); leaning far
+    // back (`lean` 2), a lower cockpit and no windscreen.
+    private static Body FinishCast(CarMesh m, Parts parts, Body character, Body racer, CastFit fit, CarDriver.Painter? paint, int lean) =>
+        Finish(m, parts.Hull, character, racer, fit.Driver, lean >= 2 ? parts.Cabin with { Sides = 8, Screen = float.NaN } : parts.Cabin,
+            parts.Look, parts.Front, parts.Rear, paint, fit.Whole ? 30 : 0, driverPoint: true);
 
     // ---------------------------------------------------------------------------------------------------------------- installing
 
@@ -707,7 +678,7 @@ internal static partial class RaceTrackCharacterCars
             entries.Add(new CatalogueEntry(CastFirst + i, CastName(c), c.Driver, c.Island, entity, generic, own, small));
         }
         File.WriteAllBytes(bodyPath, bodyFile);
-        File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
+        HqrWriter.ReplaceInFile(ressPath, 44, table);
         // the catalogue: the cars made by hand first (the racer's entity), then the cast's
         var racerEntity = Lba2EntityTable.Parse(table).Entities.FirstOrDefault(e => e.Id == RaceTrackBaldinoCar.RacerEntity);
         var hand = new List<CatalogueEntry>();
@@ -722,7 +693,7 @@ internal static partial class RaceTrackCharacterCars
                 hand.Add(new CatalogueEntry(generic, name, who, island, RaceTrackBaldinoCar.RacerEntity, generic, body, small));
             }
         }
-        File.WriteAllText(Path.Combine(gameDirectory, CatalogueFile), JsonSerializer.Serialize(hand.Concat(entries).ToList(), new JsonSerializerOptions { WriteIndented = true }));
+        SaveCatalogue(gameDirectory, hand.Concat(entries).ToList());
         log.Add($"the cast's cars: {entries.Count} made ({failed} not), cars {CastFirst}-{CastFirst + cast.Length - 1}, bodies of entities {string.Join(", ", entities)} (copies of the racer's), each with its half-size copy; " +
                 $"{CatalogueFile} lists all {hand.Count + entries.Count} cars");
         return log;
@@ -737,19 +708,17 @@ internal static partial class RaceTrackCharacterCars
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { DebugLog.Log($"RaceTrackCharacterCars.Catalogue: {e.Message}"); return new(); }
     }
 
+    // ... and written back.
+    private static void SaveCatalogue(string gameDirectory, List<CatalogueEntry> cars) =>
+        File.WriteAllText(Path.Combine(gameDirectory, CatalogueFile), JsonSerializer.Serialize(cars, new JsonSerializerOptions { WriteIndented = true }));
+
     // The entity table with a new entity at its end: the animations of `like` (its records less its bodies), no bodies yet.
     private static (byte[] Table, int Entity) WithEntityLike(byte[] table, int like)
     {
         var count = BinaryPrimitives.ReadInt32LittleEndian(table) / 4 - 1;
         var offsets = Enumerable.Range(0, count + 1).Select(i => BinaryPrimitives.ReadInt32LittleEndian(table.AsSpan(i * 4))).ToArray();
         var records = new List<byte>();
-        for (int p = offsets[like], end = offsets[like + 1]; p < end && table[p] != 255;)
-        {
-            var command = table[p];
-            var size = command == 3 ? 3 + table[p + 3] : 2 + table[p + 2];
-            if (command != 1) records.AddRange(table.AsSpan(p, size).ToArray());
-            p += size;
-        }
+        foreach (var r in Lba2EntityTable.Records(table, like)) if (r.Command != 1) records.AddRange(table.AsSpan(r.At, r.Size).ToArray());
         records.Add(255);
         // (the offsets one longer: every record 4 bytes on; the new entity's records after the last one's)
         var data = table.AsSpan(offsets[0], offsets[count] - offsets[0]).ToArray();

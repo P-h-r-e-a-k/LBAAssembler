@@ -60,40 +60,56 @@ internal static class RaceTrackScenes
     // 48 starts exactly at the street's height, 250 -- the car on the storm track's road there stood at 245 and was held at the edge
     private const int CoverBelow = 512, CoverAbove = 1024;
 
-    // The island's outside scenes by cube, each [cube x, cube z, scene]: for the race-track mode's carried jumps, which change the cube
-    // themselves where their flight crosses an edge (RACEMOD.CPP cube_scene=).
-    public static List<int[]> CubeScenes(string gameDirectory, RaceTrackIsland island)
+    // The island's outside scenes, in the order of its scenes, each with its cube.
+    private static List<(int Scene, int CubeX, int CubeZ)> OutsideScenes(SceneStore store, RaceTrackIsland island)
     {
-        var store = new SceneStore(SceneGame.Lba2, gameDirectory);
-        var list = new List<int[]>();
+        var list = new List<(int, int, int)>();
         foreach (var scene in island.Scenes)
         {
             if (!store.SceneExists(scene)) continue;
             try
             {
                 var m = store.Load(scene);
-                if (m.Island == island.IslandByte && m.CubeMode == 1 && !list.Any(c => c[0] == m.CubeX && c[1] == m.CubeY)) list.Add(new[] { m.CubeX, m.CubeY, scene });
+                if (m.Island == island.IslandByte && m.CubeMode == 1) list.Add((scene, m.CubeX, m.CubeY));
             }
             catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
         }
         return list;
     }
 
-    private static List<EdgeCrossing> EdgeCrossings(SceneStore store, RaceTrackReport report, RaceTrackOptions options, int island)
+    // The island's outside scenes by cube, each [cube x, cube z, scene]: for the race-track mode's carried jumps, which change the cube
+    // themselves where their flight crosses an edge (RACEMOD.CPP cube_scene=).
+    public static List<int[]> CubeScenes(string gameDirectory, RaceTrackIsland island) =>
+        OutsideScenes(new SceneStore(SceneGame.Lba2, gameDirectory), island).DistinctBy(s => (s.CubeX, s.CubeZ)).Select(s => new[] { s.CubeX, s.CubeZ, s.Scene }).ToList();
+
+    // A place in island cells: whether it is in the scene's cube ...
+    internal static bool InCube(SceneModel m, double x, double z) => (int)Math.Floor(x / 64) == m.CubeX && (int)Math.Floor(z / 64) == m.CubeY;
+
+    // ... and where it is in the cube `cube` along one way, in units from the cube's corner.
+    internal static int CubeLocal(double cells, int cube) => (int)Math.Round((cells - cube * 64) * 512);
+
+    // A helper actor of the scene's scripts at (x, y, z), as the game's own ("Dots"): unseen, no body, no shadow, no scripts of its own yet.
+    internal static SceneActorModel InvisibleHelper(int x, int y, int z, int colour = 4)
+    {
+        var a = SceneOps.BlankActor(SceneGame.Lba2, x, y, z, entity: 16);
+        a.Life = new byte[] { 0 }; a.Track = new byte[] { 0 };
+        a.Flags = InvisibleNoShadow; a.Body = -1; a.Armor = 51; a.LifePoints = -1; a.CoulObj = colour;
+        return a;
+    }
+
+    // (`sceneOf`: the island's outside scene of each cube)
+    private static List<EdgeCrossing> EdgeCrossings(Dictionary<(int, int), int> sceneOf, RaceTrackReport report, RaceTrackOptions options)
     {
         var result = new List<EdgeCrossing>();
         if (report.LapX.Length < 2 || report.GroundAfter is not { } ground) return result;
-        var sceneOf = new Dictionary<(int, int), int>();
-        foreach (var scene in options.Island.Scenes)
+        // (a crossing each way over the edge between two cubes, where each has its scene: `ab` the side of a's cube it leaves by, `ba` b's)
+        void Both(Action<int, int, int, int, char, double, double> add, int ax, int az, int bx, int bz, char ab, char ba, double along, double h)
         {
-            if (!store.SceneExists(scene)) continue;
-            try
-            {
-                var m = store.Load(scene);
-                if (m.Island == island && m.CubeMode == 1) sceneOf.TryAdd((m.CubeX, m.CubeY), scene);
-            }
-            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
+            if (!sceneOf.TryGetValue((ax, az), out var a) || !sceneOf.TryGetValue((bx, bz), out var b)) return;
+            add(a, b, ax, az, ab, along, h);
+            add(b, a, bx, bz, ba, along, h);
         }
+        void Lap(int fromScene, int toScene, int cubeX, int cubeZ, char side, double along, double h) => result.Add(new EdgeCrossing(fromScene, toScene, cubeX, cubeZ, side, along, h));
         var n = report.LapX.Length;
         // (where the lap is a raised road, at the road's own height -- the Emerald Moon's, 5,000 over the base's roof, 7,700 over the rim --
         // and nowhere in a carried jump's flight: the race-track mode changes the cube itself there, RACEMOD.CPP)
@@ -116,22 +132,14 @@ internal static class RaceTrackScenes
                 var ex = Math.Max(ax, bx) * 64.0; var t = (ex - x0) / (x1 - x0); var z = z0 + (z1 - z0) * t;
                 var h = Height(ex, z, t);
                 var row = az == bz ? az : (int)Math.Floor(z / 64);
-                if (sceneOf.TryGetValue((ax, row), out var xFrom) && sceneOf.TryGetValue((bx, row), out var xTo))
-                {
-                    result.Add(new EdgeCrossing(xFrom, xTo, ax, row, bx > ax ? 'E' : 'W', z - row * 64.0, h));
-                    result.Add(new EdgeCrossing(xTo, xFrom, bx, row, bx > ax ? 'W' : 'E', z - row * 64.0, h));
-                }
+                Both(Lap, ax, row, bx, row, bx > ax ? 'E' : 'W', bx > ax ? 'W' : 'E', z - row * 64.0, h);
             }
             if (az != bz)
             {
                 var ez = Math.Max(az, bz) * 64.0; var t = (ez - z0) / (z1 - z0); var x = x0 + (x1 - x0) * t;
                 var h = Height(x, ez, t);
                 var col = ax == bx ? ax : (int)Math.Floor(x / 64);
-                if (sceneOf.TryGetValue((col, az), out var zFrom) && sceneOf.TryGetValue((col, bz), out var zTo))
-                {
-                    result.Add(new EdgeCrossing(zFrom, zTo, col, az, bz > az ? 'S' : 'N', x - col * 64.0, h));
-                    result.Add(new EdgeCrossing(zTo, zFrom, col, bz, bz > az ? 'N' : 'S', x - col * 64.0, h));
-                }
+                Both(Lap, col, az, col, bz, bz > az ? 'S' : 'N', bz > az ? 'N' : 'S', x - col * 64.0, h);
             }
         }
 
@@ -155,21 +163,13 @@ internal static class RaceTrackScenes
             {
                 var edge = Math.Max(ax, bx) * 64.0; var z = cz + (ez - cz) * (edge - cx) / (ex - cx);
                 var row = az == bz ? az : (int)Math.Floor(z / 64);
-                if (sceneOf.TryGetValue((ax, row), out var from) && sceneOf.TryGetValue((bx, row), out var to))
-                {
-                    Add(from, to, ax, row, bx > ax ? 'E' : 'W', z - row * 64.0, h);
-                    Add(to, from, bx, row, bx > ax ? 'W' : 'E', z - row * 64.0, h);
-                }
+                Both(Add, ax, row, bx, row, bx > ax ? 'E' : 'W', bx > ax ? 'W' : 'E', z - row * 64.0, h);
             }
             if (az != bz)
             {
                 var edge = Math.Max(az, bz) * 64.0; var x = cx + (ex - cx) * (edge - cz) / (ez - cz);
                 var col = ax == bx ? ax : (int)Math.Floor(x / 64);
-                if (sceneOf.TryGetValue((col, az), out var from) && sceneOf.TryGetValue((col, bz), out var to))
-                {
-                    Add(from, to, col, az, bz > az ? 'S' : 'N', x - col * 64.0, h);
-                    Add(to, from, col, bz, bz > az ? 'N' : 'S', x - col * 64.0, h);
-                }
+                Both(Add, col, az, col, bz, bz > az ? 'S' : 'N', bz > az ? 'N' : 'S', x - col * 64.0, h);
             }
         }
         void Sides(double px, double pz, double dx, double dz, double half, double h)
@@ -402,9 +402,17 @@ internal static class RaceTrackScenes
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
         // the actors copied from other islands' scenes (the racer, the biker, the buggy) are taken from the original scenes: another island's
         // track built before this one in the same build has changed its own (RaceTrackService.Build)
-        var originals = File.Exists(store.ScenePath + RaceTrackService.BackupSuffix) ? new SceneStore(SceneGame.Lba2, gameDirectory, "SCENE.HQR" + RaceTrackService.BackupSuffix) : store;
+        var originals = RaceTrackService.OriginalScenes(store);
         var log = new List<string>();
         var changes = new List<SceneChange>();
+        // the island's own outside scenes: a cube change to any other scene is a door (Mosquibees Island's inside scene 104, the Queen's
+        // throne, is numbered between its outside ones); and the one of each cube, which the lap's crossings of its edges go between
+        var outsideScenes = OutsideScenes(store, options.Island);
+        var outside = outsideScenes.Select(s => s.Scene).ToHashSet();
+        var sceneOf = new Dictionary<(int, int), int>();
+        foreach (var s in outsideScenes) sceneOf.TryAdd((s.CubeX, s.CubeZ), s.Scene);
+        // (each track's file, as the race-track mode's keys name it)
+        string FileOf(Track t) => Path.GetFileNameWithoutExtension(ReferenceEquals(t, tracks[0]) ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
         var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0; var mushroomsLeftOut = 0;
         var doorsOff = new List<string>();
         var actorsAt = new List<(string File, int Scene, int Actor, int X, int Y, int Z)>();
@@ -439,7 +447,7 @@ internal static class RaceTrackScenes
             if (t.Drivers.Any(d => !d.Bike))
                 try { t.Racer = originals.Load(RacerScene).Actors.Skip(1).FirstOrDefault(a => a.Entity == RacerEntity)?.Clone(); }
                 catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { log.Add($"no opponent: scene {RacerScene} could not be read ({e.Message})"); }
-            t.Edges = EdgeCrossings(store, t.Report, t.Options, island);
+            t.Edges = EdgeCrossings(sceneOf, t.Report, t.Options);
             t.MushroomSpots = MushroomSpots(t.Report, t.Options, out t.MushroomRows, out t.LapTime);
         }
         // the cast's cars the line-ups drive (RaceDriver.Cast): each one's entity and body there, as the folder's RACECARS.JSON lists them
@@ -480,15 +488,6 @@ internal static class RaceTrackScenes
                         if (r.H[i] >= zone.Y0 - 256 && r.H[i] <= zone.Y1) return true;
                     }
             return false;
-        }
-        // the island's own outside scenes: a cube change to any other scene is a door (Mosquibees Island's inside scene 104, the Queen's
-        // throne, is numbered between its outside ones)
-        var outside = new HashSet<int>();
-        foreach (var scene in options.Island.Scenes)
-        {
-            if (!store.SceneExists(scene)) continue;
-            try { var m = store.Load(scene); if (m.Island == island && m.CubeMode == 1) outside.Add(scene); }
-            catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
         }
         for (int scene = 0, scenes = store.SceneCount; scene < scenes; scene++)
         {
@@ -562,7 +561,7 @@ internal static class RaceTrackScenes
                         // stand-in under the ground, the user, 2026-10-27)
                         else if (onIt?.StartsWith("it stands on the road") == true && model.Actors[i].Body >= 0
                                  && ((model.Actors[i].Flags & 0x200) == 0 || model.Actors[i].Body > 0)
-                                 && MovedOffRoad(model, i)) offRoad.Add(i);
+                                 && MovedOffRoad(i)) offRoad.Add(i);
                         else log.Add($"scene {scene}: actor {i} (entity {model.Actors[i].Entity}) goes -- {onIt}");
                     }
                 if (offRoad.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", offRoad.Order())} kept -- off the road, and their scripts keep them off it");
@@ -580,49 +579,55 @@ internal static class RaceTrackScenes
                 // while that file is shown: Result.ActorsAt. Citadel Island's bike taxi waits under the shelter by the shop in the storm, the
                 // storm track's deck far over him; the town circuit runs through the shelter -- moved for it, he stood by a lamp post in the
                 // rain, 2026-10-27)
-                void Aside(int i)
+                void Shift(SceneActorModel a, int i, List<string> shiftLog) =>
+                    ShiftOffRoad(a, model, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, shiftLog);
+                // (an actor in the way of one weather's road only, the island's two files sharing the scenes: a copy of it moved off that
+                // road, for while that file is shown -- the scene's points it moved kept for that weather alone. Null: in the way of both
+                // roads or of neither)
+                (string File, SceneActorModel Moved)? OneWeatherShift(int i, List<string> shiftLog)
                 {
+                    if (tracks.Count != 2) return null;
                     var a = model.Actors[i];
                     double cx = model.CubeX * 64 + a.X / 512.0, cz = model.CubeY * 64 + a.Z / 512.0;
                     var way = tracks.Select(t => t.Report.InTheWay(cx, cz, a.Y, a.Y + 1500)).ToList();
-                    if (tracks.Count == 2 && way[0] != way[1])
+                    if (way[0] == way[1]) return null;
+                    var moved = a.Clone();
+                    var file = FileOf(way[0] ? tracks[0] : tracks[1]);
+                    ShiftOneWeather(model, file, scene, () => Shift(moved, i, shiftLog));
+                    return (file, moved);
+                }
+                void Aside(int i)
+                {
+                    var a = model.Actors[i];
+                    if (OneWeatherShift(i, log) is { } one)
                     {
-                        var moved = a.Clone();
-                        var file = Path.GetFileNameWithoutExtension(way[0] ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
-                        ShiftOneWeather(model, file, scene, () => ShiftOffRoad(moved, model, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log));
+                        var (file, moved) = one;
                         if (moved.X == a.X && moved.Z == a.Z) return;
                         actorsAt.Add((file, scene, i - doomed.Count(d => d < i), moved.X, moved.Y, moved.Z));
                         log.Add($"scene {scene}: ... only while {file} is shown: in the other weather it stays where it was, at ({a.X},{a.Y},{a.Z})");
                         return;
                     }
-                    ShiftOffRoad(a, model, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
+                    Shift(a, i, log);
                 }
                 foreach (var i in needed.Order())
                     if (i < model.Actors.Count) Aside(i);
-                bool MovedOffRoad(SceneModel m, int i)
+                bool MovedOffRoad(int i)
                 {
-                    var a = m.Actors[i];
+                    var a = model.Actors[i];
                     var (x, y, z) = (a.X, a.Y, a.Z);
                     // (in the way of one weather's road only -- Citadel Island's cow, the town circuit through its pasture and the storm track
                     // nowhere near it: "please put it back along with its scripts of giving Twinsen a clover and talking to Twinsen correctly",
                     // the user, 2026-10-27 -- it stays where it is, its scripts' points too, and is put aside while that weather's file is shown)
-                    if (tracks.Count == 2)
+                    if (OneWeatherShift(i, new List<string>()) is { } one)
                     {
-                        double ax = m.CubeX * 64 + a.X / 512.0, az = m.CubeY * 64 + a.Z / 512.0;
-                        var way = tracks.Select(t => t.Report.InTheWay(ax, az, a.Y, a.Y + 1500)).ToList();
-                        if (way[0] != way[1])
-                        {
-                            var moved = a.Clone();
-                            var file = Path.GetFileNameWithoutExtension(way[0] ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
-                            ShiftOneWeather(m, file, scene, () => ShiftOffRoad(moved, m, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, new List<string>()));
-                            if (moved.X != a.X || moved.Z != a.Z) pendingAt.Add((i, file, moved.X, moved.Y, moved.Z));
-                            log.Add($"scene {scene}: actor {i} (entity {a.Entity}) is on {file}'s road only: kept where it is, and put aside to ({moved.X},{moved.Y},{moved.Z}) while {file} is shown");
-                            return true;
-                        }
+                        var (file, moved) = one;
+                        if (moved.X != a.X || moved.Z != a.Z) pendingAt.Add((i, file, moved.X, moved.Y, moved.Z));
+                        log.Add($"scene {scene}: actor {i} (entity {a.Entity}) is on {file}'s road only: kept where it is, and put aside to ({moved.X},{moved.Y},{moved.Z}) while {file} is shown");
+                        return true;
                     }
-                    ShiftOffRoad(a, m, i, distanceToRoad, inTheWay, report.GroundBefore, groundAfter, report.WasGround, roadReach, scene, log);
-                    if (OffRoad(m, i, inTheWay, out _)) return true;
-                    if (PointsOffRoad(m, i, inTheWay, report.GroundBefore, groundAfter, report.WasGround, scene, log) && OffRoad(m, i, inTheWay, out _)) return true;
+                    Shift(a, i, log);
+                    if (OffRoad(model, i, inTheWay, out _)) return true;
+                    if (PointsOffRoad(model, i, inTheWay, report.GroundBefore, groundAfter, report.WasGround, scene, log) && OffRoad(model, i, inTheWay, out _)) return true;
                     a.X = x; a.Y = y; a.Z = z;
                     return false;
                 }
@@ -674,7 +679,7 @@ internal static class RaceTrackScenes
                 var cx = (int)Math.Floor(wx / IslandFile.CubeSize); var cz = (int)Math.Floor(wz / IslandFile.CubeSize);
                 if (cx != model.CubeX || cz != model.CubeY) continue;
                 var lx = (int)Math.Round(wx - cx * (double)IslandFile.CubeSize); var lz = (int)Math.Round(wz - cz * (double)IslandFile.CubeSize);
-                var beta = (int)Math.Round(Math.Atan2(s.DirX, s.DirZ) / (2 * Math.PI) * 4096); beta = ((beta % 4096) + 4096) % 4096;
+                var beta = RaceTrackMath.Turn(Math.Atan2(s.DirX, s.DirZ));
                 var y = (int)Math.Round(s.Y);
                 // the buggy stands a few cells before the line, Twinsen beside it; each on the ground at its own spot (the road climbs there).
                 // Straight back from the line, or, where the lap bends behind it (the lava lake's line is just out of a corner), on the lap.
@@ -687,7 +692,7 @@ internal static class RaceTrackScenes
                 int Facing(double back)
                 {
                     if (!curved || Behind(t.Report, s, back, 0) is not { } on) return beta;
-                    var b = (int)Math.Round(Math.Atan2(on.DirX, on.DirZ) / (2 * Math.PI) * 4096); return ((b % 4096) + 4096) % 4096;
+                    return RaceTrackMath.Turn(Math.Atan2(on.DirX, on.DirZ));
                 }
                 // (on a raised road -- a start line in the air -- the road's own surface, at the start line's level)
                 int Ground(int x, int z) => t.Report.RaisedFloor?.Invoke(cx * 64 + x / 512.0, cz * 64 + z / 512.0, s.Y) is { } floor ? (int)Math.Round(floor)
@@ -731,7 +736,7 @@ internal static class RaceTrackScenes
                             continue;
                         }
                         int px = (int)Math.Round(wpx - cx * (double)IslandFile.CubeSize), pz = (int)Math.Round(wpz - cz * (double)IslandFile.CubeSize);
-                        var pbeta = (int)Math.Round(Math.Atan2(p.DirX, p.DirZ) / (2 * Math.PI) * 4096); pbeta = ((pbeta % 4096) + 4096) % 4096;
+                        var pbeta = RaceTrackMath.Turn(Math.Atan2(p.DirX, p.DirZ));
                         // (a spot whose height the plan gives stands on a deck of decor, which the ground knows nothing of)
                         t.Pits.Add(new[] { cx, cz, px, t.Report.PitHeights ? (int)Math.Round(p.Y) : Ground(px, pz), pz, pbeta });
                     }
@@ -753,7 +758,7 @@ internal static class RaceTrackScenes
                     var away = Math.Sign(pole.Side - GridSpot(1, t.Options).Side) is var sg && sg != 0 ? sg : 1;
                     waiting.X = At(pole.Back + 5, pole.Side + shift + 1.2 * away, false); waiting.Z = At(pole.Back + 5, pole.Side + shift + 1.2 * away, true);
                     waiting.Y = Ground(waiting.X, waiting.Z);
-                    waiting.Beta = ((int)Math.Round(Math.Atan2(model.Hero.X - waiting.X, model.Hero.Z - waiting.Z) * 4096 / (2 * Math.PI)) % 4096 + 4096) % 4096;
+                    waiting.Beta = RaceTrackMath.TurnOf(Math.Atan2(model.Hero.X - waiting.X, model.Hero.Z - waiting.Z));
                     SceneOps.AddActor(model, waiting);
                     log.Add($"scene {scene}: entity {person} (the island's story's, at the start) behind Twinsen at ({waiting.X},{waiting.Y},{waiting.Z})");
                     // (and the one to beat beside his car on pole, his scripts gone -- the race-track mode walks him into it: chase_car=)
@@ -763,7 +768,7 @@ internal static class RaceTrackScenes
                         driver.Life = new byte[] { 0 }; driver.Track = new byte[] { 0 }; driver.Move = 0;
                         driver.X = At(pole.Back + 0.3, pole.Side + shift - 1.9 * away, false); driver.Z = At(pole.Back + 0.3, pole.Side + shift - 1.9 * away, true);
                         driver.Y = Ground(driver.X, driver.Z);
-                        driver.Beta = ((int)Math.Round(Math.Atan2(model.Hero.X - driver.X, model.Hero.Z - driver.Z) * 4096 / (2 * Math.PI)) % 4096 + 4096) % 4096;
+                        driver.Beta = RaceTrackMath.TurnOf(Math.Atan2(model.Hero.X - driver.X, model.Hero.Z - driver.Z));
                         SceneOps.AddActor(model, driver);
                         log.Add($"scene {scene}: entity {cd.Entity} (the one to beat himself, scene {cd.Scene}'s actor {cd.Actor}) beside his car on pole at ({driver.X},{driver.Y},{driver.Z})");
                     }
@@ -790,11 +795,11 @@ internal static class RaceTrackScenes
                 (int X, int Y, int Z, int Beta, int When)? park = null;
                 if (tracks.Count > 1 && (t == tracks[0] ? options.Island.ParkOwn : options.Island.ParkTwin) is { } pk)
                 {
-                    if ((int)Math.Floor(pk.X / 64) != cx || (int)Math.Floor(pk.Z / 64) != cz)
+                    if (!InCube(model, pk.X, pk.Z))
                         log.Add($"scene {scene}: the car's parking place for the other weather, cell ({pk.X}, {pk.Z}), is not in this scene's cube: left out");
                     else
                     {
-                        int px = (int)Math.Round((pk.X - cx * 64) * 512), pz = (int)Math.Round((pk.Z - cz * 64) * 512);
+                        int px = CubeLocal(pk.X, cx), pz = CubeLocal(pk.Z, cz);
                         var otherTrack = tracks.First(o => o != t);
                         var py = otherTrack.Report.GroundAfter is { } og ? (int)Math.Round(og(pk.X, pk.Z)) : Ground(px, pz);
                         park = (px, py, pz, pk.Beta, pk.When);
@@ -804,8 +809,8 @@ internal static class RaceTrackScenes
                 (int X, int Y, int Z, int Beta, bool Here)? home = null;
                 if (options.Island.CarHome is { } ch)
                 {
-                    var here = (int)Math.Floor(ch.X / 64) == cx && (int)Math.Floor(ch.Z / 64) == cz;
-                    int hx = (int)Math.Round((ch.X - cx * 64) * 512), hz = (int)Math.Round((ch.Z - cz * 64) * 512);
+                    var here = InCube(model, ch.X, ch.Z);
+                    int hx = CubeLocal(ch.X, cx), hz = CubeLocal(ch.Z, cz);
                     home = (hx, here ? Ground(hx, hz) : 0, hz, ch.Beta, here);
                 }
                 if (buggyIndex > 0 && StartBuggyScript(model, scene, buggyIndex, log, park, home) is { } withBuggy) model = withBuggy;
@@ -845,7 +850,7 @@ internal static class RaceTrackScenes
                         if (walled && !tracks.All(Lost))
                             foreach (var t in tracks.Where(Lost))
                             {
-                                var file = Path.GetFileNameWithoutExtension(ReferenceEquals(t, tracks[0]) ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
+                                var file = FileOf(t);
                                 doorsOff.Add($"{file} {scene} {zone.X0} {zone.Z0} {zone.X1} {zone.Z1}");
                                 var buried = t.Report.BuriedDoors.Any(Same);
                                 log.Add($"scene {scene}: door zone {z} (into scene {zone.Num}) shut while {file} is shown -- the lift or building it was the door of " + (buried ? "is under that file's raised ground" : "went with that file's road"));
@@ -860,10 +865,7 @@ internal static class RaceTrackScenes
                                 {
                                     if (buried || !store.SceneExists(zone.Num)) continue;
                                     var inside = store.Load(zone.Num);
-                                    string heroLife;
-                                    try { heroLife = LbaScript.LifeText.Decompile(inside.Hero.Life, 0, LbaScript.NoSymbols.Instance); }
-                                    catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { heroLife = ""; }
-                                    if (heroLife.Contains($"set_change_cube({scene},")) { log.Add($"scene {zone.Num}: its way out to scene {scene}'s door zone {z} stays -- Twinsen's own script rides him out that way"); continue; }
+                                    if (LifeTextOf(inside.Hero, 0).Contains($"set_change_cube({scene},")) { log.Add($"scene {zone.Num}: its way out to scene {scene}'s door zone {z} stays -- Twinsen's own script rides him out that way"); continue; }
                                     foreach (var back in inside.Zones.Where(bz => LeadsTo(bz, scene, zone.X0, zone.Z0, zone.X1, zone.Z1)))
                                     {
                                         doorsOff.Add($"{file} {zone.Num} {back.X0} {back.Z0} {back.X1} {back.Z1}");
@@ -940,14 +942,13 @@ internal static class RaceTrackScenes
             // (a lift on the raised road, RaceTrackReport.DeckLifts: a door zone over its pad, into its building's scene)
             // (an island with a file for each weather: each file's lifts its own, and the building's window brings Twinsen up onto the lift of
             // the file shown -- door_to=; the storm's museum lift and the town circuit's, 2026-10-27)
-            string FileOf(Track t) => Path.GetFileNameWithoutExtension(ReferenceEquals(t, tracks[0]) ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
             // (the lifts' grate, the sewer lift's actor -- RaceTrackIsland.LiftLook: one in the scene, at each file's lift while it is shown)
             var grate = -1;
             foreach (var t in tracks)
                 foreach (var l in t.Report.DeckLifts)
                 {
-                    if ((int)Math.Floor(l.X / 64) != model.CubeX || (int)Math.Floor(l.Z / 64) != model.CubeY) continue;
-                    int lx = (int)Math.Round((l.X - model.CubeX * 64) * 512), lz = (int)Math.Round((l.Z - model.CubeY * 64) * 512), ly = (int)Math.Round(l.Y);
+                    if (!InCube(model, l.X, l.Z)) continue;
+                    int lx = CubeLocal(l.X, model.CubeX), lz = CubeLocal(l.Z, model.CubeY), ly = (int)Math.Round(l.Y);
                     if (grate < 0 && options.Island.LiftLook is { } look)
                     {
                         var template = Template(look.Scene, look.Actor);
@@ -1036,7 +1037,7 @@ internal static class RaceTrackScenes
             foreach (var t in tracks)
                 foreach (var g in t.Report.Gunners)
                 {
-                    if ((int)Math.Floor(g.X / 64) != model.CubeX || (int)Math.Floor(g.Z / 64) != model.CubeY) continue;
+                    if (!InCube(model, g.X, g.Z)) continue;
                     double kx = (g.X - model.CubeX * 64) * 512, kz = (g.Z - model.CubeY * 64) * 512;
                     var guns = Enumerable.Range(1, model.Actors.Count - 1).Where(i => model.Actors[i].Entity == GunEntity)
                         .OrderBy(i => Math.Abs(model.Actors[i].X - kx) + Math.Abs(model.Actors[i].Z - kz)).Take(2).ToList();
@@ -1044,7 +1045,7 @@ internal static class RaceTrackScenes
                     // (facing the middle of where it fires; the second gun beside the first, the Franco behind the first's stock)
                     double fx = g.FaceX - g.X, fz = g.FaceZ - g.Z, fl = Math.Max(1e-9, Math.Sqrt(fx * fx + fz * fz));
                     fx /= fl; fz /= fl;
-                    var beta = (int)Math.Round(Math.Atan2(fx, fz) * 4096 / (2 * Math.PI)) & 4095;
+                    var beta = RaceTrackMath.TurnOf(Math.Atan2(fx, fz));
                     var y = (int)Math.Round(g.Top);
                     for (var k = 0; k < guns.Count; k++)
                     {
@@ -1098,9 +1099,9 @@ internal static class RaceTrackScenes
                         monster.Entity = RaceTrackGasMonster.Entity; monster.Body = 0; monster.Anim = Math.Max(0, g.FirstAnim);
                         // (its start in the cube -- a record's place is 16 bits, and one of the next cube's is past the edge: the race-track mode
                         // stands it where it is, every frame)
-                        monster.X = Math.Clamp((int)Math.Round((g.X - model.CubeX * 64) * 512), 0, 32767); monster.Z = Math.Clamp((int)Math.Round((g.Z - model.CubeY * 64) * 512), 0, 32767);
+                        monster.X = Math.Clamp(CubeLocal(g.X, model.CubeX), 0, 32767); monster.Z = Math.Clamp(CubeLocal(g.Z, model.CubeY), 0, 32767);
                         var actor = SceneOps.AddActor(model, monster);
-                        var home = (int)Math.Floor(g.X / 64) == model.CubeX && (int)Math.Floor(g.Z / 64) == model.CubeY;
+                        var home = InCube(model, g.X, g.Z);
                         t.GasMonsters.Add(new[] { scene, actor, g.Body, gi, home ? 1 : 0 });
                         log.Add($"scene {scene}: a gas monster (actor {actor}) in the gas at ({g.X:0.#}, {g.Z:0.#}){(home ? "" : ", in the next cube")}");
                     }
@@ -1112,11 +1113,11 @@ internal static class RaceTrackScenes
                     {
                         var f = t.Report.Flyers[fi];
                         var (fx, fz) = f.Way[0];
-                        if ((int)Math.Floor(fx / 64) != model.CubeX || (int)Math.Floor(fz / 64) != model.CubeY) continue;
+                        if (!InCube(model, fx, fz)) continue;
                         if (model.Actors.Count + 1 + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { log.Add($"scene {scene}: WARNING: no room for the flying gas monster at ({fx:0.#}, {fz:0.#})"); continue; }
                         var flyer = Hidden(mushroomTemplate);
                         flyer.Entity = RaceTrackFlyers.Entity; flyer.Body = 0; flyer.Anim = 0;
-                        flyer.X = Math.Clamp((int)Math.Round((fx - model.CubeX * 64) * 512), 0, 32767); flyer.Z = Math.Clamp((int)Math.Round((fz - model.CubeY * 64) * 512), 0, 32767);
+                        flyer.X = Math.Clamp(CubeLocal(fx, model.CubeX), 0, 32767); flyer.Z = Math.Clamp(CubeLocal(fz, model.CubeY), 0, 32767);
                         flyer.Y = (int)Math.Round(f.Y);
                         var actor = SceneOps.AddActor(model, flyer);
                         t.Flyers.Add(new[] { scene, actor, fi });
@@ -1136,9 +1137,9 @@ internal static class RaceTrackScenes
                         var look = RaceTrackGuards.Of((int)g[0], (int)g[1]);
                         var guard = Hidden(mushroomTemplate);
                         guard.Entity = look.Entity; guard.Body = look.Drawn; guard.Anim = look.Idle;   // (twice the size: RaceTrackGuards.Install; a torturer's his own)
-                        guard.X = Math.Clamp((int)Math.Round((gx - model.CubeX * 64) * 512), 0, 32767); guard.Z = Math.Clamp((int)Math.Round((gz - model.CubeY * 64) * 512), 0, 32767);
+                        guard.X = Math.Clamp(CubeLocal(gx, model.CubeX), 0, 32767); guard.Z = Math.Clamp(CubeLocal(gz, model.CubeY), 0, 32767);
                         var actor = SceneOps.AddActor(model, guard);
-                        var home = (int)Math.Floor(gx / 64) == model.CubeX && (int)Math.Floor(gz / 64) == model.CubeY;
+                        var home = InCube(model, gx, gz);
                         t.Guards.Add(new[] { scene, actor, gi, home ? 1 : 0 });
                     }
             // the power-ups: the mushrooms of the lap in this scene's cube, on the road, and a penguin out of sight
@@ -1148,7 +1149,7 @@ internal static class RaceTrackScenes
                     if (t.MushroomSpots.Count == 0) continue;
                     foreach (var (x, z, y) in t.MushroomSpots)
                     {
-                        if ((int)Math.Floor(x / 64) != model.CubeX || (int)Math.Floor(z / 64) != model.CubeY) continue;
+                        if (!InCube(model, x, z)) continue;
                         // (the scene's actors run out at the engine's hundred: the penguins and the slicks keep their room, and a row
                         // that doesn't fit is shorter)
                         if (model.Actors.Count + PenguinsPerScene + OilPerScene + FakesPerScene >= SceneValidator.MaxObjects) { mushroomsLeftOut++; continue; }
@@ -1159,7 +1160,7 @@ internal static class RaceTrackScenes
                         // isn't there hung in the air)
                         var mushroom = Hidden(mushroomTemplate);
                         mushroom.Body = report.Pumpkins ? LBAAssembler.Terrain.Temple.TempleHalloween.Pumpkin : RaceTrackOil.BigMushroom;      // (the game's mushroom half again its size: RaceTrackOil; Halloween's a mini pumpkin)
-                        mushroom.X = (int)Math.Round((x - model.CubeX * 64) * 512); mushroom.Z = (int)Math.Round((z - model.CubeY * 64) * 512);
+                        mushroom.X = CubeLocal(x, model.CubeX); mushroom.Z = CubeLocal(z, model.CubeY);
                         // (and where it stands on the island: the race-track mode draws it from the next cube too, DrawFarMushrooms)
                         t.Mushrooms.Add(new[] { scene, SceneOps.AddActor(model, mushroom), (int)Math.Round(y), (int)Math.Round(x * 512), (int)Math.Round(z * 512) });
                     }
@@ -1193,7 +1194,7 @@ internal static class RaceTrackScenes
                 }
             foreach (var t in tracks)
                 foreach (var mine in t.Report.Mines)
-                    if ((int)Math.Floor(mine.X / 64) == model.CubeX && (int)Math.Floor(mine.Z / 64) == model.CubeY && AddMine(model, scene, mine, t.Report, originals, log) is { } mined) model = mined;
+                    if (InCube(model, mine.X, mine.Z) && AddMine(model, scene, mine, t.Report, originals, log) is { } mined) model = mined;
             foreach (var t in tracks) edgeZonesAdded += CoverEdges(model, scene, t.Edges, log);
             changes.Add(new SceneChange(scene, model, null));
         }
@@ -1448,7 +1449,7 @@ internal static class RaceTrackScenes
         try { template = originals.Load(MineScene).Actors.ElementAtOrDefault(MineActor)?.Clone(); }
         catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { log.Add($"scene {scene}: no land mine: scene {MineScene} could not be read ({e.Message})"); return null; }
         if (template is null) { log.Add($"scene {scene}: no land mine: scene {MineScene} has no actor {MineActor}"); return null; }
-        int x = (int)Math.Round((mine.X - model.CubeX * 64) * 512), z = (int)Math.Round((mine.Z - model.CubeY * 64) * 512);
+        int x = CubeLocal(mine.X, model.CubeX), z = CubeLocal(mine.Z, model.CubeY);
         var y = (int)Math.Round(report.GroundAfter?.Invoke(mine.X, mine.Z) ?? 0);
         var point = SceneOps.AddTrackPoint(model, new SceneTrackPoint(x, y, z));
         template.X = x; template.Y = y; template.Z = z; template.Beta = 0;
@@ -1468,19 +1469,32 @@ void comportement_1()
     }}
 }}
 ";
+        return Rebuild(model, scene, "land mine script", "the land mine could not be built", log, scripts =>
+        {
+            scripts.SetText(index, ScriptKind.Life, life);
+            scripts.SetText(index, ScriptKind.Track, "label(0);\nstop();\n");
+            return true;
+        }, () => $"a land mine at cell ({mine.X:0.0}, {mine.Z:0.0}), actor {index}, track point {point}");
+    }
+
+    // The scene's scripts read, edited (`edit`: false leaves the scene as it was, null returned), compiled, and the scene read back from them
+    // (`done` said); null where they won't compile (each error said after `what`) or can't be read (`failed`, and why). `invalidOperation`:
+    // that too a failure to read them.
+    private static SceneModel? Rebuild(SceneModel model, int scene, string what, string failed, List<string> log, Func<SceneScripts, bool> edit, Func<string> done,
+        bool invalidOperation = false)
+    {
         try
         {
-            var scripts = LBAAssembler.LbaScript.SceneScripts.Load(SceneSerializer.Write(model), scene);
-            scripts.SetText(index, LBAAssembler.LbaScript.ScriptKind.Life, life);
-            scripts.SetText(index, LBAAssembler.LbaScript.ScriptKind.Track, "label(0);\nstop();\n");
+            var scripts = SceneScripts.Load(SceneSerializer.Write(model), scene);
+            if (!edit(scripts)) return null;
             var built = scripts.Build();
-            if (!built.Ok) { foreach (var e in built.Errors) log.Add($"scene {scene}: land mine script: {e}"); return null; }
-            log.Add($"scene {scene}: a land mine at cell ({mine.X:0.0}, {mine.Z:0.0}), actor {index}, track point {point}");
+            if (!built.Ok) { foreach (var e in built.Errors) log.Add($"scene {scene}: {what}: {e}"); return null; }
+            log.Add($"scene {scene}: {done()}");
             return SceneSerializer.Parse(SceneGame.Lba2, built.Record!);
         }
-        catch (Exception error) when (error is LBAAssembler.LbaScript.ScriptCompileException or InvalidDataException or ArgumentException)
+        catch (Exception error) when (error is ScriptCompileException or InvalidDataException or ArgumentException || invalidOperation && error is InvalidOperationException)
         {
-            log.Add($"scene {scene}: the land mine could not be built: {error.Message}");
+            log.Add($"scene {scene}: {failed}: {error.Message}");
             return null;
         }
     }
@@ -1574,10 +1588,7 @@ void comportement_1()
                     break;
                 }
         }
-        var standIn = SceneOps.BlankActor(SceneGame.Lba2, sx, -20000, sz, entity: 16);
-        standIn.Life = new byte[] { 0 }; standIn.Track = new byte[] { 0 };
-        standIn.Flags = InvisibleNoShadow; standIn.Body = -1; standIn.Armor = 51; standIn.LifePoints = -1; standIn.CoulObj = 4;
-        return SceneOps.AddActor(model, standIn);
+        return SceneOps.AddActor(model, InvisibleHelper(sx, -20000, sz));
     }
 
     // INVISIBLE | NO_SHADOW, as the retail invisible helper actors ("Dots") have: a script's BODY_OBJ can give the stand-in a body.
@@ -1683,12 +1694,8 @@ void comportement_1()
         // it: its people went, none of them anywhere clear of it within the cube, the user, 2026-10-28, "Let's do a full review of all
         // islands checking for actors that have been removed that we can restore")
         for (var pass = 0; pass < 2; pass++)
-        for (var out_ = 1.0; out_ <= 24; out_ += 0.5)
-        for (var turn = 0; turn < 24; turn++)
+        foreach (var (x, z, out_) in Spiral(actor.X, actor.Z))
         {
-            var angle = turn * Math.PI / 12;
-            int x = (int)Math.Round(actor.X + Math.Cos(angle) * out_ * 512), z = (int)Math.Round(actor.Z + Math.Sin(angle) * out_ * 512);
-            if (x < 512 || z < 512 || x > IslandFile.CubeSize - 512 || z > IslandFile.CubeSize - 512) continue;   // stay in its own cube
             if (pass == 0 && distanceToRoad(ox + x / 512.0, oz + z / 512.0) <= clear) continue;
             if (wasGround is not null && !wasGround(ox + x / 512.0, oz + z / 512.0)) continue;   // not out onto the sea
             var y = ground is null ? actor.Y : (int)Math.Round(ground(ox + x / 512.0, oz + z / 512.0) + offset);
@@ -1721,22 +1728,31 @@ void comportement_1()
             {
                 var p = model.TrackPoints[point];
                 if (distanceToRoad(ox + p.X / 512.0, oz + p.Z / 512.0) > clear || !inTheWay(ox + p.X / 512.0, oz + p.Z / 512.0, p.Y, p.Y + 1500)) continue;
-                var moved = false;
-                for (var out_ = 1.0; out_ <= 24 && !moved; out_ += 0.5)
-                for (var turn = 0; turn < 24 && !moved; turn++)
+                var b = groundBefore is null ? 0 : groundBefore(ox + p.X / 512.0, oz + p.Z / 512.0);
+                foreach (var (x, z, out_) in Spiral(p.X, p.Z))
                 {
-                    var angle = turn * Math.PI / 12;
-                    int x = (int)Math.Round(p.X + Math.Cos(angle) * out_ * 512), z = (int)Math.Round(p.Z + Math.Sin(angle) * out_ * 512);
-                    if (x < 512 || z < 512 || x > IslandFile.CubeSize - 512 || z > IslandFile.CubeSize - 512) continue;
                     if (distanceToRoad(ox + x / 512.0, oz + z / 512.0) <= clear) continue;
                     if (wasGround is not null && !wasGround(ox + x / 512.0, oz + z / 512.0)) continue;
-                    var b = groundBefore is null ? 0 : groundBefore(ox + p.X / 512.0, oz + p.Z / 512.0);
                     var y = ground is null ? p.Y : (int)Math.Round(ground(ox + x / 512.0, oz + z / 512.0) + (p.Y - b));
                     model.TrackPoints[point] = p with { X = x, Y = y, Z = z };
                     log.Add($"scene {scene}: point {point}, where actor {index}'s (entity {actor.Entity}) script stands it, was on the road and is moved {out_:0.#} cells aside");
-                    moved = true;
+                    break;
                 }
             }
+        }
+    }
+
+    // The places round (x0, z0), units in a cube, the nearest first: rings half a cell apart from one cell out to 24, 24 places a ring, those
+    // inside the cube a cell in from its edges, each with how far out it is.
+    private static IEnumerable<(int X, int Z, double Out)> Spiral(int x0, int z0)
+    {
+        for (var out_ = 1.0; out_ <= 24; out_ += 0.5)
+        for (var turn = 0; turn < 24; turn++)
+        {
+            var angle = turn * Math.PI / 12;
+            int x = (int)Math.Round(x0 + Math.Cos(angle) * out_ * 512), z = (int)Math.Round(z0 + Math.Sin(angle) * out_ * 512);
+            if (x < 512 || z < 512 || x > IslandFile.CubeSize - 512 || z > IslandFile.CubeSize - 512) continue;   // (in its own cube)
+            yield return (x, z, out_);
         }
     }
 
@@ -1813,19 +1829,16 @@ void comportement_1()
             if (!inTheWay(ox + p.X / 512.0, oz + p.Z / 512.0, p.Y, p.Y + 1500)) continue;
             SceneTrackPoint? to = null;
             var by = 0.0;
-            for (var out_ = 1.0; out_ <= 24 && to is null; out_ += 0.5)
-            for (var turn = 0; turn < 24 && to is null; turn++)
+            var b = groundBefore is null ? 0 : groundBefore(ox + p.X / 512.0, oz + p.Z / 512.0);
+            foreach (var (x, z, out_) in Spiral(p.X, p.Z))
             {
-                var angle = turn * Math.PI / 12;
-                int x = (int)Math.Round(p.X + Math.Cos(angle) * out_ * 512), z = (int)Math.Round(p.Z + Math.Sin(angle) * out_ * 512);
-                if (x < 512 || z < 512 || x > IslandFile.CubeSize - 512 || z > IslandFile.CubeSize - 512) continue;
                 double cx = ox + x / 512.0, cz = oz + z / 512.0;
                 if (wasGround is not null && !wasGround(cx, cz)) continue;
-                var b = groundBefore is null ? 0 : groundBefore(ox + p.X / 512.0, oz + p.Z / 512.0);
                 var y = ground is null ? p.Y : (int)Math.Round(ground(cx, cz) + (p.Y - b));
                 if (inTheWay(cx, cz, y, y + 1500)) continue;
                 to = p with { X = x, Y = y, Z = z };
                 by = out_;
+                break;
             }
             if (to is null) return false;
             moves.Add((point, to.Value, by));
@@ -1838,31 +1851,24 @@ void comportement_1()
         return true;
     }
 
-    // Whether an actor's life script switches the scene's doors on or off (SET_CHANGE_CUBE)
-    private static bool SwitchesDoors(SceneActorModel actor, int index)
+    // An actor's life script as text ("" where it can't be read)
+    private static string LifeTextOf(SceneActorModel actor, int index)
     {
-        try { return LbaScript.LifeText.Decompile(actor.Life, index, LbaScript.NoSymbols.Instance).Contains("set_change_cube(", StringComparison.OrdinalIgnoreCase); }
-        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { return false; }
+        try { return LbaScript.LifeText.Decompile(actor.Life, index, LbaScript.NoSymbols.Instance); }
+        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { return ""; }
     }
+
+    // Whether an actor's life script switches the scene's doors on or off (SET_CHANGE_CUBE)
+    private static bool SwitchesDoors(SceneActorModel actor, int index) => LifeTextOf(actor, index).Contains("set_change_cube(", StringComparison.OrdinalIgnoreCase);
 
     // The actors an actor's life script refers to by number -- what it asks of them or does with them (l_track_obj(6), set_dir_obj(3, ...)) --
     // other than the hero (0); not those it only kills (kill_obj: Citadel Island's townsmen on the road, 2026-10-27)
-    private static IEnumerable<int> ActorsReferred(SceneActorModel actor, int index)
-    {
-        string text;
-        try { text = LbaScript.LifeText.Decompile(actor.Life, index, LbaScript.NoSymbols.Instance); }
-        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { return Array.Empty<int>(); }
-        return System.Text.RegularExpressions.Regex.Matches(text, @"\b(?!kill_)\w+_obj\((\d+)").Select(m => int.Parse(m.Groups[1].Value)).Where(n => n > 0).Distinct().ToList();
-    }
+    private static IEnumerable<int> ActorsReferred(SceneActorModel actor, int index) =>
+        System.Text.RegularExpressions.Regex.Matches(LifeTextOf(actor, index), @"\b(?!kill_)\w+_obj\((\d+)").Select(m => int.Parse(m.Groups[1].Value)).Where(n => n > 0).Distinct().ToList();
 
     // The scene's points an actor's life script puts it on (pos_point), read from the script's text.
-    private static IEnumerable<int> PosPoints(SceneActorModel actor, int index)
-    {
-        string text;
-        try { text = LbaScript.LifeText.Decompile(actor.Life, index, LbaScript.NoSymbols.Instance); }
-        catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException or InvalidOperationException) { return Array.Empty<int>(); }
-        return System.Text.RegularExpressions.Regex.Matches(text, @"pos_point\((\d+)\)").Select(m => int.Parse(m.Groups[1].Value)).Distinct().ToList();
-    }
+    private static IEnumerable<int> PosPoints(SceneActorModel actor, int index) =>
+        System.Text.RegularExpressions.Regex.Matches(LifeTextOf(actor, index), @"pos_point\((\d+)\)").Select(m => int.Parse(m.Groups[1].Value)).Distinct().ToList();
 
     // (`raiseOnly`: an island with a file for each weather sharing the scenes -- what the one file's road lowered is the other's ground still,
     // and lowered there it stood buried in it: Citadel Island's cow in its pasture, the town circuit's cut through it, under the storm's
@@ -1905,17 +1911,16 @@ void comportement_1()
     private static SceneModel? StartBuggyScript(SceneModel model, int scene, int buggy, List<string> log, (int X, int Y, int Z, int Beta, int When)? park = null,
         (int X, int Y, int Z, int Beta, bool Here)? home = null)
     {
-        try
+        var parkPoint = -1;
+        if (park is { } pk) { parkPoint = model.TrackPoints.Count; model.TrackPoints.Add(new SceneTrackPoint(pk.X, pk.Y, pk.Z)); }
+        var homePoint = -1;
+        if (home is { Here: true } hm) { homePoint = model.TrackPoints.Count; model.TrackPoints.Add(new SceneTrackPoint(hm.X, hm.Y, hm.Z)); }
+        return Rebuild(model, scene, "buggy script", "the buggy's start could not be set", log, scripts =>
         {
-            var parkPoint = -1;
-            if (park is { } pk) { parkPoint = model.TrackPoints.Count; model.TrackPoints.Add(new SceneTrackPoint(pk.X, pk.Y, pk.Z)); }
-            var homePoint = -1;
-            if (home is { Here: true } hm) { homePoint = model.TrackPoints.Count; model.TrackPoints.Add(new SceneTrackPoint(hm.X, hm.Y, hm.Z)); }
-            var scripts = SceneScripts.Load(SceneSerializer.Write(model), scene);
             var text = scripts.GetText(buggy, ScriptKind.Life);
             // (Polar Island's buggy has INIT_BUGGY 1, which makes the car the first time: Polar.PolarScenes)
             var pattern = new System.Text.RegularExpressions.Regex(@"init_buggy\(([01])\);\s*if \(12 == comportement_hero\(\)\)\s*\{\s*set_comportement\(comportement_2\);\s*\}\s*else\s*\{\s*set_comportement\(comportement_1\);\s*\}");
-            if (!pattern.IsMatch(text)) { log.Add($"scene {scene}: the buggy's script isn't the expected one; it is left to show the buggy where it is"); return null; }
+            if (!pattern.IsMatch(text)) { log.Add($"scene {scene}: the buggy's script isn't the expected one; it is left to show the buggy where it is"); return false; }
             var parked = park is { } p ? $"            if ({p.When} == var_game(206))\n            {{\n                pos_point({parkPoint});\n                beta({p.Beta});\n            }}\n" : "";
             var story = home is { } h
                 ? $"        else if (0 == var_game({GridCarVar}))\n        {{\n" +
@@ -1929,17 +1934,10 @@ void comportement_1()
             // automatically put into his car on the start/finish line on Citadel if he's next to it")
             text = System.Text.RegularExpressions.Regex.Replace(text, @"if \(\d+ == carry_obj_by\(0\)\)\s*\{\s*set_dir_obj\(0, MOVE_BUGGY_MANUAL\);\s*set_comportement\(comportement_2\);\s*\}", "");
             scripts.SetText(buggy, ScriptKind.Life, text);
-            var built = scripts.Build();
-            if (!built.Ok) { foreach (var e in built.Errors) log.Add($"scene {scene}: buggy script: {e}"); return null; }
-            log.Add($"scene {scene}: the buggy is put on the start line whenever the scene starts on foot (INIT_BUGGY 2), not when Twinsen drives in" +
-                    (park is { } q ? $"; in the other weather (game variable 206 = {q.When}) it parks at ({q.X}, {q.Y}, {q.Z}) turn {q.Beta}, track point {parkPoint}" : ""));
-            return SceneSerializer.Parse(SceneGame.Lba2, built.Record!);
-        }
-        catch (Exception error) when (error is ScriptCompileException or InvalidDataException or ArgumentException or InvalidOperationException)
-        {
-            log.Add($"scene {scene}: the buggy's start could not be set: {error.Message}");
-            return null;
-        }
+            return true;
+        }, () => "the buggy is put on the start line whenever the scene starts on foot (INIT_BUGGY 2), not when Twinsen drives in" +
+                 (park is { } q ? $"; in the other weather (game variable 206 = {q.When}) it parks at ({q.X}, {q.Y}, {q.Z}) turn {q.Beta}, track point {parkPoint}" : ""),
+            invalidOperation: true);
     }
 
     // The retail "car jump" (scene 62 of the Desert island) is not physics -- the ground is one height map and a falling object does not move
@@ -1966,10 +1964,7 @@ void comportement_1()
             zone.Y0 = y - 300; zone.Y1 = y + 500;
             model.Zones.Add(zone);
         }
-        var controller = SceneOps.BlankActor(SceneGame.Lba2, (int)((jump.StartX - ox) * 512), y, (int)((jump.StartZ - oz) * 512), entity: 16);
-        controller.Life = new byte[] { 0 }; controller.Track = new byte[] { 0 };
-        controller.Flags = InvisibleNoShadow; controller.Body = -1; controller.Armor = 51; controller.LifePoints = -1; controller.CoulObj = 4;
-        var index = SceneOps.AddActor(model, controller);
+        var index = SceneOps.AddActor(model, InvisibleHelper((int)((jump.StartX - ox) * 512), y, (int)((jump.StartZ - oz) * 512)));
 
         // the turn window: 640 units (56 degrees) either side of the road's heading
         var lo = ((jump.Beta - 640) % 4096 + 4096) % 4096; var hi = (jump.Beta + 640) % 4096;
@@ -2002,11 +1997,10 @@ void comportement_2()
     }}
 }}
 ";
-        try
+        return Rebuild(model, scene, "jump script", "the jump could not be built", log, scripts =>
         {
-            var scripts = LBAAssembler.LbaScript.SceneScripts.Load(SceneSerializer.Write(model), scene);
-            var heroTrack = scripts.GetText(0, LBAAssembler.LbaScript.ScriptKind.Track).TrimEnd();
-            if (heroTrack.Contains($"label({startLabel})") || heroTrack.Contains($"label({endLabel})")) { log.Add($"scene {scene}: the hero's track script already uses labels {startLabel}/{endLabel}; no jump"); return null; }
+            var heroTrack = scripts.GetText(0, ScriptKind.Track).TrimEnd();
+            if (heroTrack.Contains($"label({startLabel})") || heroTrack.Contains($"label({endLabel})")) { log.Add($"scene {scene}: the hero's track script already uses labels {startLabel}/{endLabel}; no jump"); return false; }
             heroTrack += $@"
 
 label({startLabel});
@@ -2018,17 +2012,9 @@ anim(0);
 label({endLabel});
 stop();
 ";
-            scripts.SetText(0, LBAAssembler.LbaScript.ScriptKind.Track, heroTrack);
-            scripts.SetText(index, LBAAssembler.LbaScript.ScriptKind.Life, life);
-            var built = scripts.Build();
-            if (!built.Ok) { foreach (var e in built.Errors) log.Add($"scene {scene}: jump script: {e}"); return null; }
-            log.Add($"scene {scene}: jump added -- {jump.Boxes.Count} zone boxes numbered {jump.Zone}, controller actor {index}, hero track labels {startLabel}/{endLabel}, heading turn {jump.Beta}");
-            return SceneSerializer.Parse(SceneGame.Lba2, built.Record!);
-        }
-        catch (Exception error) when (error is LBAAssembler.LbaScript.ScriptCompileException or InvalidDataException or ArgumentException)
-        {
-            log.Add($"scene {scene}: the jump could not be built: {error.Message}");
-            return null;
-        }
+            scripts.SetText(0, ScriptKind.Track, heroTrack);
+            scripts.SetText(index, ScriptKind.Life, life);
+            return true;
+        }, () => $"jump added -- {jump.Boxes.Count} zone boxes numbered {jump.Zone}, controller actor {index}, hero track labels {startLabel}/{endLabel}, heading turn {jump.Beta}");
     }
 }
