@@ -166,7 +166,7 @@ typedef struct {
     char Was[96];                           // the name it had before (was=, its track= line's fifth field: a track renamed -- RenamedTracks)
     S32 Scene;
     int Levels;                             // its race has levels, easy to hard (difficulty_level= in its race file)
-    int Laps;                               // its race's laps once looked up (SpecialLaps; 0: not yet)
+    int Laps;                               // its race's laps (race_laps= in its race file; 0: the game's, laps=)
     int Track;                              // one of Track select's (track=), not a special
     int Sprint;                             // a sprint, start line to finish line once (sprint=1 in its race file): no qualifying lap
 } T_RG_SPECIAL;
@@ -253,20 +253,23 @@ static const char *Field(const char *p, char *out, size_t size) {
     return *p == '|' ? p + 1 : p;
 }
 
-// Whether a race file (beside the game's data) has a line starting `start`: levels (difficulty_level=), a sprint (sprint=1).
-static int FileHas(const char *race, const char *start) {
+// What the race game needs of a special's or a track's race file (beside the game's data), read once: whether it has levels
+// (difficulty_level=), whether it is a sprint (sprint=1), and its laps (race_laps=).
+static void ReadRaceFile(T_RG_SPECIAL *sp) {
+    sp->Levels = sp->Sprint = sp->Laps = 0;
+    if (!sp->Race[0]) return;
     char path[ADELINE_MAX_PATH];
-    GetResPath(path, ADELINE_MAX_PATH, race);
+    GetResPath(path, ADELINE_MAX_PATH, sp->Race);
     FILE *f = fopen(path, "r");
-    if (!f) return 0;
+    if (!f) return;
     char line[1024];
-    int found = 0;
-    const size_t n = strlen(start);
-    while (!found && fgets(line, sizeof(line), f)) found = !strncmp(line, start, n);
+    while (fgets(line, sizeof(line), f)) {
+        if (!strncmp(line, "difficulty_level=", 17)) sp->Levels = 1;
+        else if (!strncmp(line, "sprint=1", 8)) sp->Sprint = 1;
+        else if (!strncmp(line, "race_laps=", 10) && atoi(line + 10) > 0) sp->Laps = atoi(line + 10);
+    }
     fclose(f);
-    return found;
 }
-static int HasLevels(const char *race) { return FileHas(race, "difficulty_level="); }
 
 // A car= (or gridcar=) line's value into `c`; non-zero: a car (its name and its drive_as value or race file's line given).
 static int ParseCar(T_RG_CAR *c, const char *v) {
@@ -362,9 +365,7 @@ static void Read(void) {
             Field(v, was, sizeof(was));
             snprintf(sp->Was, sizeof(sp->Was), "%s", !strncmp(was, "was=", 4) ? was + 4 : "");
             sp->Scene = scene[0] ? atoi(scene) : -1;
-            sp->Levels = sp->Race[0] ? HasLevels(sp->Race) : 0;
-            sp->Sprint = sp->Race[0] ? FileHas(sp->Race, "sprint=1") : 0;
-            sp->Laps = 0;
+            ReadRaceFile(sp);
             sp->Track = !strcmp(key, "track");
             if (sp->Name[0] && sp->Race[0]) {
                 if (sp->Track) s_nbTracks++;
@@ -603,20 +604,7 @@ static int CarFor(int car, int trial) { return car >= 0 && car < s_nbCars && Tak
 static void TimesPath(char *path) { GetCfgPath(path, ADELINE_MAX_PATH, "BESTTIMES.TXT"); }
 
 // A special's race's laps: its race file's own (race_laps=: the Temple of Bú's five), else the menu's laps=. Its time trial is as long.
-static int SpecialLaps(int sp) {
-    T_RG_SPECIAL *s = &s_sp[sp];
-    if (s->Laps > 0) return s->Laps;
-    s->Laps = s_laps;
-    char path[ADELINE_MAX_PATH];
-    GetResPath(path, ADELINE_MAX_PATH, s->Race);
-    FILE *f = fopen(path, "r");
-    if (!f) return s->Laps;
-    char line[512];
-    while (fgets(line, sizeof(line), f))
-        if (!strncmp(line, "race_laps=", 10) && atoi(line + 10) > 0) s->Laps = atoi(line + 10);
-    fclose(f);
-    return s->Laps;
-}
+static int SpecialLaps(int sp) { return s_sp[sp].Laps > 0 ? s_sp[sp].Laps : s_laps; }
 
 // A best lap into its track's ten fastest, in its place (a lap as fast as one already there after it): its rank (1-10), 0 for none.
 static int AddLap(int sp, const T_RG_TIME *t) {
@@ -1323,42 +1311,16 @@ static int TimesShown(int sp) { return sp >= 0 && sp < s_nbSp && (!s_sp[sp].Trac
 #define RG_SMALL_DEN 3
 #define RG_SMALL_H 40
 static void SmallText(S32 x, S32 y, const char *utf8, S32 colour, int align) {
-    static U8 saved[RG_SMALL_H][1024], drawn[RG_SMALL_H][1024];
     char buf[256];
     Label(buf, utf8);
-    const S32 fw = SizeFont(buf) + 4, fh = RG_SMALL_H, sw = fw * RG_SMALL_NUM / RG_SMALL_DEN, sh = fh * RG_SMALL_NUM / RG_SMALL_DEN;
+    const S32 fw = SizeFont(buf) + 4, fh = RG_SMALL_H, sw = fw * RG_SMALL_NUM / RG_SMALL_DEN;
     const S32 W = (S32)ModeDesiredX, H = (S32)ModeDesiredY;
     const S32 sx0 = align < 0 ? x : align > 0 ? x - sw : x - sw / 2;
     S32 px0 = sx0, py0 = y;
     if (px0 + fw > W) px0 = W - fw;
     if (py0 + fh > H) py0 = H - fh;
     if (fw > 1024 || px0 < 0 || py0 < 0) return;
-    const U8 none = (U8)(colour == 1 || colour == 0 ? 2 : 1);
-    for (S32 r = 0; r < fh; r++) {
-        U8 *row = (U8 *)Log + TabOffLine[py0 + r] + px0;
-        memcpy(saved[r], row, (size_t)fw);
-        memset(row, none, (size_t)fw);
-    }
-    ColorFont(BLACK);
-    Font(px0 + 3, py0 + 3, buf);
-    ColorFont(colour);
-    Font(px0, py0, buf);
-    for (S32 r = 0; r < fh; r++) {
-        U8 *row = (U8 *)Log + TabOffLine[py0 + r] + px0;
-        memcpy(drawn[r], row, (size_t)fw);
-        memcpy(row, saved[r], (size_t)fw);
-    }
-    for (S32 r = 0; r < sh; r++) {
-        const S32 dy = y + r;
-        if (dy < 0 || dy >= H) continue;
-        U8 *row = (U8 *)Log + TabOffLine[dy];
-        const U8 *src = drawn[r * RG_SMALL_DEN / RG_SMALL_NUM];
-        for (S32 c = 0; c < sw; c++) {
-            const S32 dx = sx0 + c;
-            const U8 v = src[c * RG_SMALL_DEN / RG_SMALL_NUM];
-            if (v != none && dx >= 0 && dx < W) row[dx] = v;
-        }
-    }
+    RaceMod_ShrunkText(buf, colour, 3, px0, py0, fw, fh, sx0, y, RG_SMALL_NUM, RG_SMALL_DEN);
 }
 // ... cut with "..." to no wider than `width` (at its small size)
 static void SmallFitted(S32 x, S32 y, S32 width, const char *utf8, S32 colour, int align) {
@@ -1708,6 +1670,12 @@ static void Shot(void) {
     Console_ClearPendingScreenshot();
     Log_Info("[racegame] screenshot %s", path);
 }
+// A page's frame shown: the whole screen put up again, the console's screenshot taken of it when one is asked for
+static void Present(void) {
+    BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+    Shot();
+    BoxUpdate();
+}
 
 // A line of text from x (its left end), with the menus' dark shadow; already in the font's code page.
 static void TextAt(S32 x, S32 y, const char *cp850, S32 colour) {
@@ -1906,9 +1874,7 @@ static void Pages(const T_RACE_PAGE *pg, int controls, int items, int intro) {
         else if (intro) snprintf(keys, sizeof(keys), "%s    Esc: skip", last);
         else snprintf(keys, sizeof(keys), "Esc: back");
         Text(cx, RG_PAGE_BOTTOM + oy - 32, keys, RG_GREY);
-        BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
-        Shot();
-        BoxUpdate();
+        Present();
         if (Confirmed()) { WaitNoInput(); if (at + 1 < pages) at++; else done = 1; }
         else if (Escaped()) { WaitNoInput(); done = 1; }
     }
@@ -2179,9 +2145,7 @@ static int CodePage(void) {
         }
         if (wrong) Text(cx, y0 + 132, "Wrong code", RG_ORANGE);
         Text(cx, y1 - 38, "Enter: open    Esc: back", RG_GREY);
-        BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
-        Shot();
-        BoxUpdate();
+        Present();
         if (click == 2 || Escaped()) result = 0;
         else if (Confirmed()) {
             WaitNoInput();
@@ -2284,9 +2248,7 @@ static int TracksPage(void) {
                 Text(cx, bestY, line, RG_GREY);
             }
             Text(cx, keysY, "Enter: choose    Esc: back", RG_GREY);
-            BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
-            Shot();
-            BoxUpdate();
+            Present();
             if (chosen != -2) break;
             if (Confirmed()) { WaitNoInput(); chosen = list[at]; }
             else if (Escaped()) chosen = -1;
@@ -2443,9 +2405,7 @@ static int GridPage(const char *what, int trial) {
         // the keys
         Text(cx, 404 + oy, "Arrows: car    Page up, down: page", RG_GREY);
         Text(cx, 440 + oy, takeable ? "Enter: race    Esc: back" : "Esc: back", RG_GREY);
-        BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
-        Shot();
-        BoxUpdate();
+        Present();
         if (chosen != -2) break;
         if (take && takeable) { WaitNoInput(); chosen = sel; }
         else if (Confirmed()) { WaitNoInput(); if (takeable) chosen = sel; }
@@ -2974,9 +2934,7 @@ static void CelebratePage(int car) {
         Text(cx, y1 + 66, line1, RG_ORANGE);
         Text(cx, y1 + 92, line2, RG_ORANGE);
         Text(cx, y1 + 150, "Enter: continue", RG_GREY);
-        BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
-        Shot();
-        BoxUpdate();
+        Present();
         S32 mx, my;
         const int click = Clicked(&mx, &my);
         if (now - start >= length) done = 1;

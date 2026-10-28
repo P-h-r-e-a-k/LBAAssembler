@@ -160,5 +160,7 @@ const char *RaceMod_ItemName(S32 item);                      // "Nitro penguin"
 const char *RaceMod_ItemHelp(const T_RACE_PAGE *page, S32 item);   // what it does and how it is used (Ctrl), a sentence or two
 // An item's box, `size` pixels across at (x0, y0), the item turning in it; item -1: the pickups' own look (what the cars drive into)
 void RaceMod_DrawItem(const T_RACE_PAGE *page, S32 item, S32 x0, S32 y0, S32 size, S32 now);
+// text (code page 850) drawn full size at (px0, py0), fw x fh, and again num/den the size from (sx0, sy0): the race's small text
+void RaceMod_ShrunkText(const char *cp850, S32 colour, S32 shadow, S32 px0, S32 py0, S32 fw, S32 fh, S32 sx0, S32 sy0, S32 num, S32 den);
 
 #endif
