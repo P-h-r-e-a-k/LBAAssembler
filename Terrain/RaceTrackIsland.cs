@@ -99,6 +99,9 @@ internal sealed record RaceTrackIsland(
         "RaceTrackPlan.Mosquibe.json", null)
     {
         Roster = RaceDriver.Mosquibe,
+        // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
+        // a full review of all islands checking for actors that have been removed that we can restore")
+        KeepOffRoadActors = true,
     };
 
     // Celebration Island with the statue (CELEBRA2: the file the engine draws once the statue has risen, game variable 79; before that
@@ -110,6 +113,9 @@ internal sealed record RaceTrackIsland(
         "RaceTrackPlan.Celebration.json", null)
     {
         Statue = true, Title = "Celebration Island: round the statue", StoryEntities = new[] { RaceTrackStory.SellerEntity },
+        // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
+        // a full review of all islands checking for actors that have been removed that we can restore")
+        KeepOffRoadActors = true,
     };
 
     // Celebration Island before the statue rises (CELEBRAT: the mesa's top a plateau round a lake of lava level with it, the temple on its
@@ -134,6 +140,9 @@ internal sealed record RaceTrackIsland(
         "RaceTrackPlan.Elevator.json", null)
     {
         Title = "The Elevator Platform: the rollercoaster",
+        // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
+        // a full review of all islands checking for actors that have been removed that we can restore")
+        KeepOffRoadActors = true,
     };
 
     // Sendell's Well (island 1, cut from the game: no SENDELL.ILE ships and no scene is on it): the build makes the island first --
@@ -347,6 +356,9 @@ internal sealed record RaceTrackIsland(
         Scale = 2,
         MoreScenes = Enumerable.Range(255, 9).ToArray(),
         FuelAlways = true,
+        // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
+        // a full review of all islands checking for actors that have been removed that we can restore")
+        KeepOffRoadActors = true,
     };
 
     // Otringal (OTRINGAL.ILE, the game's island 4, scenes 87-92), from the user's sketch (2026-10-08): one raised road round the island,
@@ -366,6 +378,9 @@ internal sealed record RaceTrackIsland(
         // (its spaceships: scene 92's actor 2, on its pad on the road along the square island's north side -- its script's own pos_point(1)
         // -- and actor 3, parked on the other pad, beside the road along its east side: the ground-level road runs into it, so it flies too)
         Shuttles = new[] { (92, 2, 47, 19200, 9472), (92, 3, 47, 19104, 17632) },
+        // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
+        // a full review of all islands checking for actors that have been removed that we can restore")
+        KeepOffRoadActors = true,
     };
 
     // Volcano Island (SOUSCELB.ILE, the game's island 11 under Celebration Island, scenes 130-132; cube (7,8) isn't there), from the user's
@@ -380,6 +395,9 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Volcano = new("Volcano Island", "SOUSCELB.ILE", "SOUSCELB.OBL", 11, 130, 132, 38, "RaceTrackPlan.Volcano.json", null)
     {
         Title = "Volcano Island: over the lava", Roster = RaceDriver.Volcano,
+        // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
+        // a full review of all islands checking for actors that have been removed that we can restore")
+        KeepOffRoadActors = true,
     };
 
     // Wannies Island (PLATFORM.ILE, island 6: outside scenes 96-99), from the user's drawing (2026-10-14): from the start straight east of
@@ -397,6 +415,9 @@ internal sealed record RaceTrackIsland(
         HeldVars = new[] { (107, 1), (RaceTrackFrog.DecorVar, 1) },
         // (the pier's east post, body 33: the pit lane runs over the pier there, low since the road came down -- 2026-10-15)
         DropDecors = new[] { (8, 7, 19712, 17664) },
+        // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
+        // a full review of all islands checking for actors that have been removed that we can restore")
+        KeepOffRoadActors = true,
     };
 
     // The Emperor's palace (the user, 2026-10-12: "through the palace rooms, coming out the window and around the roof tops? Point-to-point

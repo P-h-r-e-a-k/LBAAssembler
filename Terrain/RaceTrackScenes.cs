@@ -1636,16 +1636,22 @@ void comportement_1()
         // were, and Twinsen walking there went down, 2026-10-27)
         if (distanceToRoad(fromX, fromZ) > clear || !inTheWay(fromX, fromZ, actor.Y, actor.Y + 1500)) { PointsOffRoad(); return; }
         var offset = (actor.Flags & Fallable) != 0 || groundBefore is null ? 0 : actor.Y - stood;
+        // (well clear of the road first; failing that, anywhere just off its surface -- Celebration Island's square, the road all through
+        // it: its people went, none of them anywhere clear of it within the cube, the user, 2026-10-28, "Let's do a full review of all
+        // islands checking for actors that have been removed that we can restore")
+        for (var pass = 0; pass < 2; pass++)
         for (var out_ = 1.0; out_ <= 24; out_ += 0.5)
         for (var turn = 0; turn < 24; turn++)
         {
             var angle = turn * Math.PI / 12;
             int x = (int)Math.Round(actor.X + Math.Cos(angle) * out_ * 512), z = (int)Math.Round(actor.Z + Math.Sin(angle) * out_ * 512);
             if (x < 512 || z < 512 || x > IslandFile.CubeSize - 512 || z > IslandFile.CubeSize - 512) continue;   // stay in its own cube
-            if (distanceToRoad(ox + x / 512.0, oz + z / 512.0) <= clear) continue;
+            if (pass == 0 && distanceToRoad(ox + x / 512.0, oz + z / 512.0) <= clear) continue;
             if (wasGround is not null && !wasGround(ox + x / 512.0, oz + z / 512.0)) continue;   // not out onto the sea
             var y = ground is null ? actor.Y : (int)Math.Round(ground(ox + x / 512.0, oz + z / 512.0) + offset);
-            log.Add($"scene {scene}: actor {index} (entity {actor.Entity}) stood on the road and is moved {out_:0.#} cells aside, to ({x},{y},{z})");
+            // (... and on its own level: not down off the square's edge)
+            if (pass == 1 && (inTheWay(ox + x / 512.0, oz + z / 512.0, y, y + 1500) || Math.Abs(y - actor.Y) > 200)) continue;
+            log.Add($"scene {scene}: actor {index} (entity {actor.Entity}) stood on the road and is moved {out_:0.#} cells aside{(pass == 1 ? ", just off it" : "")}, to ({x},{y},{z})");
             // (and the scene's points its life script stands it on -- pos_point -- where they are where it stood, moved with it: Otringal's
             // machine guns, moved aside, were put back on the road by their scripts every frame, 2026-10-09)
             foreach (var point in PosPoints(actor, index).Where(p => p < model.TrackPoints.Count))
