@@ -218,6 +218,8 @@ internal static class Program
             "doorvariant" => DoorVariant.Run(args),
             "surpriseapply" => SurpriseCommands.Apply(args),
             "scenetext" => SurpriseCommands.Text(args),
+            "scenerewrite" => SurpriseCommands.Rewrite(args),
+            "scenelanding" => SurpriseCommands.Landing(args),
             "doorfloor" => DoorFloor.Run(args),
             "stacks" => StackDump.Run(args),
             "fishtrace" => FishTrace.Run(args),

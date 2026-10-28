@@ -129,6 +129,56 @@ internal static class SurpriseCommands
         return 0;
     }
 
+    // scenerewrite <folder> <scene> <actor>: an LBA1 scene's actor life bytes as stored and after a Parse/Write of its record, and where they first differ
+    public static int Rewrite(string[] args)
+    {
+        var store = new SceneStore(SceneGame.Lba1, args[1]);
+        var scene = int.Parse(args[2]); var actor = int.Parse(args[3]);
+        var record = store.LoadRecord(scene);
+        var again = LBAAssembler.Scenes.SceneSerializer.Write(LBAAssembler.Scenes.SceneSerializer.Parse(SceneGame.Lba1, record));
+        byte[] Life(byte[] r) { var rec = LBAAssembler.LbaScript.SceneRecord.ParseLba1(r); return rec.Life(rec.Actors[actor]).ToArray(); }
+        var (a, b) = (Life(record), Life(again));
+        Console.WriteLine($"record {record.Length} -> {again.Length} bytes; actor {actor} life {a.Length} -> {b.Length} bytes");
+        var at = Enumerable.Range(0, Math.Min(a.Length, b.Length)).FirstOrDefault(i => a[i] != b[i], -1);
+        Console.WriteLine(at < 0 && a.Length == b.Length ? "life identical" : $"first difference at {(at < 0 ? Math.Min(a.Length, b.Length) : at)}");
+        if (at >= 0) Console.WriteLine($"  was {string.Join(" ", a.Skip(Math.Max(0, at - 4)).Take(16).Select(x => x.ToString("X2")))}\n  now {string.Join(" ", b.Skip(Math.Max(0, at - 4)).Take(16).Select(x => x.ToString("X2")))}");
+        return 0;
+    }
+
+    // scenelanding <folder> <scene> <destination> <arrival x> <arrival y> <arrival z> <offset x> <offset z>: Lba1Fishermen's landing zone and
+    // point added to the scene's record, then every actor's life script decompiled from it with the decompiler's own diagnostics
+    public static int Landing(string[] args)
+    {
+        var store = new SceneStore(SceneGame.Lba1, args[1]);
+        var scene = int.Parse(args[2]);
+        var n = args.Skip(3).Select(int.Parse).ToArray();
+        var model = LBAAssembler.Scenes.SceneSerializer.Parse(SceneGame.Lba1, store.LoadRecord(scene));
+        const int sky = 4096, box = 1024;
+        LBAAssembler.Scenes.SceneOps.AddZone(model, new LBAAssembler.Scenes.SceneZoneModel
+        {
+            X0 = box, Y0 = sky, Z0 = box, X1 = 2 * box - 1, Y1 = sky + 1536 - 1, Z1 = 2 * box - 1,
+            Type = 0, Info = new[] { n[0], n[1], n[2] - 768, n[3] },
+        });
+        LBAAssembler.Scenes.SceneOps.AddTrackPoint(model, new LBAAssembler.Scenes.SceneTrackPoint(box + n[4], sky + 768, box + n[5]));
+        var record = LBAAssembler.Scenes.SceneSerializer.Write(model);
+        var rec = LBAAssembler.LbaScript.SceneRecord.ParseLba1(record);
+        var was = LBAAssembler.LbaScript.SceneRecord.ParseLba1(store.LoadRecord(scene));
+        var scripts = LBAAssembler.LbaScript.SceneScripts.Load(record, scene, null, lba1: true);
+        for (var a = 0; a < rec.Actors.Count; a++)
+        {
+            var same = rec.Life(rec.Actors[a]).SequenceEqual(was.Life(was.Actors[a]));
+            try { scripts.GetText(a, LBAAssembler.LbaScript.ScriptKind.Life); Console.WriteLine($"actor {a}: ok{(same ? "" : " (life bytes changed)")}"); }
+            catch (InvalidOperationException e)
+            {
+                Console.WriteLine($"actor {a}: {e.Message}{(same ? "" : " (life bytes changed)")}");
+                using var scope = LBAAssembler.LbaScript.Opcodes.Use(LBAAssembler.LbaScript.Opcodes.Lba1);
+                try { LBAAssembler.LbaScript.LifeText.DecompileMapped(rec.Life(rec.Actors[a]).ToArray(), a, LBAAssembler.LbaScript.NoSymbols.Instance, null, d => Console.WriteLine("  " + d)); }
+                catch (InvalidOperationException) { }
+            }
+        }
+        return 0;
+    }
+
     public static int Text(string[] args)
     {
         var store = new SceneStore(SceneGame.Lba1, args[1]);

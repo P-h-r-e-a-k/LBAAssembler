@@ -49,6 +49,8 @@ public sealed class SceneScripts
     private readonly Entry[] life;
     private readonly Entry[] track;
     private readonly Symbols symbols;
+    // The scripts as they were loaded, for decompiling their original bytes (OriginalSymbols)
+    private readonly OriginalSymbols originalSymbols;
 
     public int ActorCount => life.Length;
 
@@ -75,6 +77,7 @@ public sealed class SceneScripts
             track[i] = new Entry { Original = trackBytes, OriginalNames = TrackText.LabelNames(Bytecode.DecodeTrack(trackBytes)) };
         }
         symbols = new Symbols(this);
+        originalSymbols = new OriginalSymbols(this);
     }
 
     // `comments` supplies the stored comments for (actor, kind) of this scene, if any.
@@ -105,7 +108,7 @@ public sealed class SceneScripts
         using var scope = Scope();
         var header = Header(actor, kind);
         var decompiled = kind == ScriptKind.Life
-            ? LifeText.DecompileMapped(e.Original, actor, symbols, header)
+            ? LifeText.DecompileMapped(e.Original, actor, originalSymbols, header)
             : TrackText.DecompileMapped(e.Original, header);
         var woven = CommentWeaver.Apply(decompiled, commentSource(actor, kind), kind);
         e.Detached = woven.Detached;
@@ -216,7 +219,7 @@ public sealed class SceneScripts
         var e = EntryOf(actor, kind);
         var header = Header(actor, kind);
         return kind == ScriptKind.Life
-            ? LifeText.DecompileMapped(e.Original, actor, symbols, header)
+            ? LifeText.DecompileMapped(e.Original, actor, originalSymbols, header)
             : TrackText.DecompileMapped(e.Original, header);
     }
 
@@ -359,6 +362,29 @@ public sealed class SceneScripts
     }
 
     // ---- cross-script name resolution ------------------------------------------
+
+    // The names in the scripts' original bytes, both ways: what the decompiler of an original script checks its text against. Symbols'
+    // name -> offset answers about the current layout -- another actor's edited text laid out -- and an original script naming that
+    // actor's comportements then compiled to other offsets than its own bytes: the decompiler gave up on it (LBA1 scene 24's actor 0,
+    // which names actor 1's comportements, decompiled after the surprise changes edited actor 1 -- the user, 2026-10-28: "Tools > LBA1:
+    // Make surprise changes crashes, deterministically, at LBA1 scene 24, actor 0's life script")
+    private sealed class OriginalSymbols : ISymbolSource
+    {
+        private readonly SceneScripts owner;
+        public OriginalSymbols(SceneScripts owner) => this.owner = owner;
+        public string? TrackName(int actor, int offset) => Name(owner.track, actor, offset);
+        public string? LifeName(int actor, int offset) => Name(owner.life, actor, offset);
+        public int? TrackOffset(int actor, string name) => Offset(owner.track, actor, name);
+        public int? LifeOffset(int actor, string name) => Offset(owner.life, actor, name);
+        private static string? Name(Entry[] table, int actor, int offset) =>
+            (uint)actor < (uint)table.Length && table[actor].OriginalNames.TryGetValue(offset, out var n) ? n : null;
+        private static int? Offset(Entry[] table, int actor, string name)
+        {
+            if ((uint)actor >= (uint)table.Length) return null;
+            foreach (var (off, n) in table[actor].OriginalNames) if (n == name) return off;
+            return null;
+        }
+    }
 
     private sealed class Symbols : ISymbolSource
     {
