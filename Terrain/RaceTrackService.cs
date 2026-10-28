@@ -260,7 +260,10 @@ internal static class RaceTrackService
         // standing beside it (RaceTrackIsland.ChaseDriver, RACEMOD.CPP chase_car=); since 2026-10-27
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? ChaseCar = null,
         // DeckLifts: the lifts on the raised road (RaceTrackScenes Result.DeckLifts, RACEMOD.CPP deck_lift=); since 2026-10-27
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<string>? DeckLifts = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<string>? DeckLifts = null,
+        // StoryPeople: the island's story's people at the start, each [scene, actor] (RaceTrackScenes Result.StoryPeople) -- out of sight in a
+        // race with no one to beat (RACEMOD.CPP hide_actor=); since 2026-10-28
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? StoryPeople = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -1109,7 +1112,7 @@ internal static class RaceTrackService
             Marshal: report.Marshal,
             OnFoot: report.OnFoot ? true : null,
             RailOpens: OrNull(report.RailOpens),
-            MapRoads: MapRoads(report), DoorsOff: scenes.DoorsOff, ActorsAt: scenes.ActorsAt, DeckLifts: scenes.DeckLifts);
+            MapRoads: MapRoads(report), DoorsOff: scenes.DoorsOff, ActorsAt: scenes.ActorsAt, DeckLifts: scenes.DeckLifts, StoryPeople: scenes.StoryPeople);
     }
 
     // A list of what is there, or null when there is nothing (the car file leaves the key out)

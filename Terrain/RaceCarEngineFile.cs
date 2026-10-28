@@ -174,12 +174,22 @@ internal static class RaceCarEngineFile
             var f = dream.Finish;
             text.Append($"sprint=1\nrace_laps=1\nfinishline={f.CubeX} {f.CubeZ} {f.X0} {f.Z0} {f.X1} {f.Z1} {f.DirX} {f.DirZ}{Height(f)}\n");
             // (Polar Island's: the story's start in place of the intro -- FunFrock drives off, the grobo gives Twinsen the key -- and the end
-            // of the race the end of the dream whoever gets there first: PolarDream's chase)
+            // of the race the end of the dream whoever gets there first: PolarDream's chase. With no one to beat -- a time trial -- no chase:
+            // the dream's end alone, wake=, which its finish's flight wakes him from -- wake_flight=, below -- and the people of the story's
+            // start out of sight, hide_actor= (FunFrock's words waited for a key at a trial's start, and he stood on the road, 2026-10-28))
             if (info is not null && RaceTrackIsland.ByName(info.Island) == RaceTrackIsland.Polar)
-                text.Append($"chase={LBAAssembler.Terrain.Polar.PolarDream.ChaseFunFrockText} {LBAAssembler.Terrain.Polar.PolarDream.ChaseTwinsenText} " +
-                            $"{LBAAssembler.Terrain.Polar.PolarGrobo.Entity} {LBAAssembler.Terrain.Polar.PolarDream.ChaseGroboText} {LBAAssembler.Terrain.Polar.PolarGrobo.KeyVar}\n" +
-                            $"chase_lead={LBAAssembler.Terrain.Polar.PolarDream.ChaseLeadCells}\ndream_any_end=1\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n" +
-                            (info.ChaseCar is [var cb, var ca, var ce] ? $"chase_car={cb} {ca} {ce}\n" : ""));
+            {
+                if (car.Opponents(track).Any(o => o.Main))
+                    text.Append($"chase={LBAAssembler.Terrain.Polar.PolarDream.ChaseFunFrockText} {LBAAssembler.Terrain.Polar.PolarDream.ChaseTwinsenText} " +
+                                $"{LBAAssembler.Terrain.Polar.PolarGrobo.Entity} {LBAAssembler.Terrain.Polar.PolarDream.ChaseGroboText} {LBAAssembler.Terrain.Polar.PolarGrobo.KeyVar}\n" +
+                                $"chase_lead={LBAAssembler.Terrain.Polar.PolarDream.ChaseLeadCells}\ndream_any_end=1\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n" +
+                                (info.ChaseCar is [var cb, var ca, var ce] ? $"chase_car={cb} {ca} {ce}\n" : ""));
+                else
+                {
+                    text.Append($"wake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n");
+                    foreach (var p in info.StoryPeople ?? new()) text.Append($"hide_actor={p[0]} {p[1]}\n");
+                }
+            }
             else text.Append($"intro={dream.IntroText}\nlose={dream.LoseText}\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n");
             // (won: scene 0's opening wakes Twinsen up in his bed)
             if (dream.WinVar >= 0) text.Append($"win={dream.WinVar} 1\n");

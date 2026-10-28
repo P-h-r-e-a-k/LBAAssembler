@@ -31,6 +31,9 @@ internal static class RaceTrackScenes
         public List<string>? ActorsAt { get; init; }
         // the lifts on the raised road, each "<scene> <x> <y> <z> <half> <pad body> <to scene> <to x> <to y> <to z>" (RACEMOD.CPP deck_lift=)
         public List<string>? DeckLifts { get; init; }
+        // the island's story's people at the start, each [scene, actor] -- Polar Island's grobo with the key and FunFrock beside his car:
+        // out of sight in a race with no one to beat (RaceCarEngineFile: hide_actor=)
+        public List<int[]>? StoryPeople { get; init; }
     }
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
@@ -378,8 +381,11 @@ internal static class RaceTrackScenes
         public List<int[]> Hunters = new();
         // the flying gas monsters: each [scene, its actor, its place in Report.Flyers]
         public List<int[]> Flyers = new();
+        // the island's story's people at the start (Result.StoryPeople): each [scene, actor]
+        public List<int[]> StoryPeople = new();
         public Result Result(List<string> log, int changed, int removed, Result? twin = null) =>
-            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners, GasMonsters, Guards, Hunters, Flyers);
+            new(log, changed, removed, Drivers.Select((d, k) => (d, Cars[k])).ToList(), StartScene, Grid, Pits, twin, Mushrooms, Penguins, Oil, Fakes, Gunners, GasMonsters, Guards, Hunters, Flyers)
+            { StoryPeople = StoryPeople.Count > 0 ? StoryPeople : null };
     }
 
     // Edits the outside scenes of the island as the options say, from what the build of the island found (start line, jump, road). With
@@ -434,8 +440,10 @@ internal static class RaceTrackScenes
                 }
         }
         var deckLifts = new List<string>();
-        // (the inside scenes whose ways out follow a building put back off the road, and those ways out moved: RaceTrackReport.Relocated)
-        var relocatedInsides = new Dictionary<int, (SceneModel Model, HashSet<int> Moved)>();
+        // (the inside scenes edited -- their ways out following a building put back off the road, and those ways out moved:
+        // RaceTrackReport.Relocated; a window's way out the lift's, deck lifts -- each loaded once and saved once with the rest: two loads of
+        // one scene, edited apart, were both saved, the second over the first)
+        var insides = new Dictionary<int, (SceneModel Model, HashSet<int> Moved)>();
         // ... and the doors removed with their buildings: the way out to one, from an inside scene another door of which was put back, brings
         // Twinsen out at that one (the Mosquibees' village, its gate and its cliff house: room for the house alone)
         var lostWays = new List<(int Scene, int Inside, int X0, int Z0, int X1, int Z1)>();
@@ -759,7 +767,7 @@ internal static class RaceTrackScenes
                     waiting.X = At(pole.Back + 5, pole.Side + shift + 1.2 * away, false); waiting.Z = At(pole.Back + 5, pole.Side + shift + 1.2 * away, true);
                     waiting.Y = Ground(waiting.X, waiting.Z);
                     waiting.Beta = RaceTrackMath.TurnOf(Math.Atan2(model.Hero.X - waiting.X, model.Hero.Z - waiting.Z));
-                    SceneOps.AddActor(model, waiting);
+                    t.StoryPeople.Add(new[] { scene, SceneOps.AddActor(model, waiting) });
                     log.Add($"scene {scene}: entity {person} (the island's story's, at the start) behind Twinsen at ({waiting.X},{waiting.Y},{waiting.Z})");
                     // (and the one to beat beside his car on pole, his scripts gone -- the race-track mode walks him into it: chase_car=)
                     if (options.Island.ChaseDriver is { } cd && ChaseDriverActor(originals, cd) is { } own)
@@ -769,7 +777,7 @@ internal static class RaceTrackScenes
                         driver.X = At(pole.Back + 0.3, pole.Side + shift - 1.9 * away, false); driver.Z = At(pole.Back + 0.3, pole.Side + shift - 1.9 * away, true);
                         driver.Y = Ground(driver.X, driver.Z);
                         driver.Beta = RaceTrackMath.TurnOf(Math.Atan2(model.Hero.X - driver.X, model.Hero.Z - driver.Z));
-                        SceneOps.AddActor(model, driver);
+                        t.StoryPeople.Add(new[] { scene, SceneOps.AddActor(model, driver) });
                         log.Add($"scene {scene}: entity {cd.Entity} (the one to beat himself, scene {cd.Scene}'s actor {cd.Actor}) beside his car on pole at ({driver.X},{driver.Y},{driver.Z})");
                     }
                     // (and Twinsen's car parked off the road beside him -- the story's start, chase=: FunFrock takes pole and drives off, and
@@ -886,7 +894,7 @@ internal static class RaceTrackScenes
                             try
                             {
                                 if (!store.SceneExists(zone.Num)) continue;
-                                if (!relocatedInsides.TryGetValue(zone.Num, out var inside)) relocatedInsides[zone.Num] = inside = (store.Load(zone.Num), new HashSet<int>());
+                                if (!insides.TryGetValue(zone.Num, out var inside)) insides[zone.Num] = inside = (store.Load(zone.Num), new HashSet<int>());
                                 for (var k = 0; k < inside.Model.Zones.Count; k++)
                                 {
                                     var back = inside.Model.Zones[k];
@@ -968,8 +976,9 @@ internal static class RaceTrackScenes
                     // down to -- brings him onto the road beside the pad. The user, 2026-10-27: "If Twinsen leaves the museum by the window then
                     // the elevator should take him back up and onto the track")
                     if (!store.SceneExists(l.Scene)) continue;
-                    var inside = store.Load(l.Scene);
-                    var window = inside.Zones.Where(zz => zz.Type == 0 && zz.Num == scene)
+                    // (kept with the inside scenes edited only once it is: a scene saved again as it was isn't sure to be the same bytes)
+                    if (!insides.TryGetValue(l.Scene, out var inside)) inside = (store.Load(l.Scene), new HashSet<int>());
+                    var window = inside.Model.Zones.Where(zz => zz.Type == 0 && zz.Num == scene)
                         .MinBy(zz => Math.Pow((zz.X0 + zz.X1) / 2.0 - l.ToX, 2) + Math.Pow((zz.Y0 + zz.Y1) / 2.0 - l.ToY, 2) + Math.Pow((zz.Z0 + zz.Z1) / 2.0 - l.ToZ, 2));
                     if (window is null || window.Info.Length < 3) continue;
                     if (tracks.Count > 1)
@@ -980,7 +989,7 @@ internal static class RaceTrackScenes
                     }
                     // (onto the pad, below the road: the lift brings him up)
                     window.Info[0] = lx; window.Info[1] = ly; window.Info[2] = lz;
-                    changes.Add(new SceneChange(l.Scene, inside, null));
+                    insides[l.Scene] = inside;
                     log.Add($"scene {l.Scene}: its window's way out into scene {scene} now the lift's: onto the raised road at ({window.Info[0]},{window.Info[1]},{window.Info[2]})");
                 }
             // (a building's front put back elsewhere in one file -- RaceTrackReport.Moved, Citadel Island's museum in the town circuit's file: a
@@ -1202,7 +1211,7 @@ internal static class RaceTrackScenes
         if (edges > 0) log.Add($"the lap{(tracks.Count > 1 ? "s cross" : " crosses")} {edges / 2} cube edges; {edgeZonesAdded} crossing zones added where the island's own did not cover the road");
         foreach (var lost in lostWays)
         {
-            if (!relocatedInsides.TryGetValue(lost.Inside, out var inside)) continue;
+            if (!insides.TryGetValue(lost.Inside, out var inside)) continue;
             var put = inside.Moved.Select(k => inside.Model.Zones[k]).FirstOrDefault(b => b.Num == lost.Scene);
             if (put is null) continue;
             for (var k = 0; k < inside.Model.Zones.Count; k++)
@@ -1214,7 +1223,7 @@ internal static class RaceTrackScenes
                 log.Add($"scene {lost.Inside}: its way out {k} to scene {lost.Scene}'s removed door brings Twinsen out at the door put back, ({put.Info[0]},{put.Info[1]},{put.Info[2]})");
             }
         }
-        foreach (var (inside, (insideModel, _)) in relocatedInsides) changes.Add(new SceneChange(inside, insideModel, null));
+        foreach (var (inside, (insideModel, _)) in insides) changes.Add(new SceneChange(inside, insideModel, null));
         if (changes.Count > 0) store.SaveMany(changes, allowErrors: true);
         log.Add($"{zonesRemoved} zones on the road removed");
         if (doorsKept > 0) log.Add($"{doorsKept} doors into buildings near the road kept (the car is never taken through one; a building's needs its wall)");
