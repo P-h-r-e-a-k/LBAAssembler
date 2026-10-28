@@ -16,8 +16,6 @@ namespace LBAAssembler.Terrain;
 internal static class RaceTrackService
 {
     public const string BackupSuffix = ".before-racetrack";
-    // How far round a lift's floor its pieces stand (RaceTrackIsland.LiftLook): the sewer lift's barriers and posts, within 2.5 cells
-    private const double LiftLookReach = 2.5;
 
     // The doors whose decor the build took away, every piece of it (RaceTrackReport.LostDoors)
     // (the pieces it had: the build's own new ones there -- the road's deck over a lift -- are no door)
@@ -586,21 +584,13 @@ internal static class RaceTrackService
         // and its scenes, from the originals, before the build adds its own)
         var island = IslandFile.Load(islandSource);
         // (the lifts' frame, the retail one's, from the island's own file and OBL as the game has them: RaceTrackIsland.LiftLook)
-        // (its floor first, then every piece of it above the ground within LiftLookReach of it -- not its shaft's walls under the ground)
+        // (its grate floor alone: not its striped barriers and posts -- the user, 2026-10-28: "It also has the posts around it, we should remove
+        // those so we're just left with the elevator pad")
         if (options.Island.LiftLook is { } look && RaceTrackBuilder.FindDecor(island, look.FrameBody, look.FrameX, look.FrameZ) is { } floor)
         {
             var obl = Path.Combine(gameDirectory, options.Island.OblFile);
             var hqr = HqrArchive.Open(File.Exists(obl + BackupSuffix) ? obl + BackupSuffix : obl);
-            double fx = floor.CubeX * (double)IslandFile.CubeSize + floor.Decor.X, fz = floor.CubeZ * (double)IslandFile.CubeSize + floor.Decor.Z;
-            var pieces = new List<(IslandDecor, int, int, int, byte[])> { (floor.Decor, 0, 0, 0, hqr.Read(look.FrameBody)) };
-            foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
-                foreach (var d in cube.Decors)
-                {
-                    double wx = cx * (double)IslandFile.CubeSize + d.X, wz = cz * (double)IslandFile.CubeSize + d.Z;
-                    if ((d.Body & 0xFFFF) == look.FrameBody || d.YMin < 0 || Math.Abs(wx - fx) > LiftLookReach * 512 || Math.Abs(wz - fz) > LiftLookReach * 512) continue;
-                    pieces.Add((d.Clone(), (int)Math.Round(wx - fx), (int)Math.Round(wz - fz), d.Y - floor.Decor.Y, hqr.Read(d.Body & 0xFFFF)));
-                }
-            options.LiftFrame = pieces;
+            options.LiftFrame = new List<(IslandDecor, int, int, int, byte[])> { (floor.Decor, 0, 0, 0, hqr.Read(look.FrameBody)) };
         }
         var scaled = new List<string>();
         if (options.Island.Scale > 1)

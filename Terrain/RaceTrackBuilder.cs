@@ -3516,7 +3516,11 @@ internal static class RaceTrackBuilder
                 if (q < best.D) best = (r, k, q);
             }
         if (best.R < 0 || best.D > 36) { report.Notes.Add("WARNING: no road near the museum's lift"); return; }
-        var y = (int)Math.Round(report.Roads[best.R].H[best.K]);
+        // (on the ground there, or the road's, whichever is the higher -- set at the road's nearest point it sank just under the ground --
+        // and a little over it, as the sewer lift's floor stands over its ground: the user, 2026-10-28, "it's just below the surface, we
+        // should bring it to ground level")
+        var ground = IslandOps.Altitude(island, m.LiftX * 512, m.LiftZ * 512) ?? 0;
+        var y = (int)Math.Round(Math.Max(report.Roads[best.R].H[best.K], ground)) + LiftFloorRise;
         var padBody = AddLiftPad(island, o, report, m.LiftX, y, m.LiftZ);
         if (padBody < 0) return;
         report.DeckLifts.Add((m.LiftX, m.LiftZ, y, to.Scene, to.ToX, to.ToY, to.ToZ, m.LiftX, m.LiftZ, padBody));
@@ -3555,6 +3559,9 @@ internal static class RaceTrackBuilder
         report.NewBodies.Add(RaceTrackRaisedBody.Block(LiftPad, LiftPad, LiftPadTop, RaceTrackRaisedBody.RailTop, RaceTrackRaisedBody.RailSide, RaceTrackRaisedBody.RailTop));
         return body;
     }
+
+    // A lift's floor over the road's surface (units): the sewer lift's grate stands a little over its ground
+    private const int LiftFloorRise = 20;
 
     // DeckLifts: the pad's half width and its top over the road (units)
     private const double LiftPad = 640, LiftPadTop = 40;
@@ -5732,7 +5739,7 @@ internal static class RaceTrackBuilder
                 if (Over(l.X - 4, l.Z - 4, l.X + 4, l.Z + 4) is not { } near) continue;
                 // (its place on the deck: nearest the deck's point there, its height the deck's)
                 var k = span.Where(q => Math.Abs(r.X[q] - l.X) < 6 && Math.Abs(r.Z[q] - l.Z) < 6).MinBy(q => (r.X[q] - l.X) * (r.X[q] - l.X) + (r.Z[q] - l.Z) * (r.Z[q] - l.Z));
-                var y = r.H[k];
+                var y = r.H[k] + LiftFloorRise;
                 // (one large pad level with the road, drawn only: the cars run over it -- the user, 2026-10-27: "The post sticking out of the
                 // track above the museum needs to go, we need one large elevator pad down, that's level with the track")
                 var padBody = AddLiftPad(island, o, report, l.X, y, l.Z);
