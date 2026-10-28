@@ -412,14 +412,13 @@ static S32 s_messageUntil = 0;
 #define RACE_MAX_LOOPS 8                   // (4 until 2026-10-07: the Island of the Francos has five)
 #define RACE_MAX_ARCS 4
 typedef struct {
-    int State;                             // LOOP_RIDE on the ring, LOOP_AIR flying inside it or over its gap, LOOP_FALL off it, outside it
+    int State;                             // LOOP_RIDE on the ring, LOOP_AIR flying inside it
     double Theta, V;                       // on the ring: how far round from the foot (radians) and how fast along it (units/s)
     double Lat, Steer;                     // how far across the ring's band from its middle (+ right of the lap's way), and the car turned across it
     double A, U, C, VA, VU, VC, Polar;     // in the air: along the way and up from the foot, across, how fast each way, and the angle round the ring
-    int Inside;                            // ... inside the ring's line
-    double X, Y, Z, VX, VY, VZ, Pitch, Spin; // falling outside the ring (cube-local), and turning as it falls
+    double X, Y, Z;                        // fallen through its middle: where onto the road (cube-local)
 } T_LOOP_RIDE;
-enum { LOOP_NONE, LOOP_RIDE, LOOP_AIR, LOOP_FALL };
+enum { LOOP_NONE, LOOP_RIDE, LOOP_AIR };
 enum { STEP_ON, STEP_ROUND, STEP_BACK, STEP_FELL };
 static int s_loopOn = -1, s_loopState = LOOP_NONE;
 static int s_loopLeft = -1;                // the ring the car last came out of, and when (RACE_LOOP_AGAIN)
@@ -1144,14 +1143,13 @@ int RaceMod_NoSky(void) { return RaceMod_Active() && s_noSky; }
 // Vertical loops (loop=, RaceMod_Loop): a ring standing on the road, its foot at the lap's point there (X, Y, Z, cube-local) and its plane
 // along the lap's way (DirX, DirZ, a unit vector). R: from the ring's middle to its road surface. Shift: how far across the car comes
 // down from where it went in (+ to the right of the way, as the builder's lanes are: in on the left, out on the right, past the ring's
-// own foot). Gap: the part of its top that is missing (radians, 0 none), which the car leaps upside down. Band: from the band's middle to
-// its rails. Lo, Hi: the speeds at its foot a car with the throttle held gets round a ring with a gap at (LoopWindow), Least the least
-// it gets round a whole one at.
+// own foot). Band: from the band's middle to its rails. Lo, Hi: the speeds at its foot a car with the throttle held gets cleanly round
+// it at (LoopWindow), Least the least.
 // A negative Shift: in on the right, out on the left (the Emerald Moon's from 2026-10-12, whose road steps sideways under each ring,
 // the rings in turn one way and the other). Camera: the side LoopCamera watches it from, 1 the side the car goes in on, -1 the other.
 typedef struct {
     int CubeX, CubeZ;
-    double X, Y, Z, DirX, DirZ, R, Shift, Gap, Band;
+    double X, Y, Z, DirX, DirZ, R, Shift, Band;
     double Lo, Hi, Least;
     int Camera;
 } T_RACE_LOOP;
@@ -1974,6 +1972,19 @@ static T_RACE_ARC s_arcs[RACE_MAX_ARCS];
 static int s_nbArcs = 0;
 static int s_cubeScenes[RACE_MAX_CUBE_SCENES][3];
 static int s_nbCubeScenes = 0;
+// A cube's scene as the race file has it (cube_scene=; the first line for it), -1 none.
+static int FileCubeScene(int qx, int qz) {
+    for (int c = 0; c < s_nbCubeScenes; c++)
+        if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) return s_cubeScenes[c][2];
+    return -1;
+}
+// Twinsen (and his car) to scene `scene`, at (x, y, z) in its cube, from the end of this frame -- the game's change of scene asked for.
+static void GoToScene(int scene, S32 x, S32 y, S32 z) {
+    NewCube = scene;
+    NewPosX = x; NewPosY = y; NewPosZ = z;
+    FlagChgCube = 1;
+    FlagReajustPosTwinsen = FALSE;
+}
 // Where the cars drive where they like (open_area=<x0> <z0> <x1> <z1> <floor>, world units): its floor the ground there for whatever is
 // near its height (RaisedAltitude), its camera the car's trail (OpenCamera). The Emperor's palace's rooms.
 #define RACE_MAX_OPEN 8
@@ -2848,6 +2859,20 @@ static int RaisedHolds(double wx, double wz, S32 level) {
     return 1;
 }
 
+// The rail's bounds across segment a-c, `t` along it: the road kept RAISED_INSET inside its edges (lo..hi), and a strip beside it -- the
+// Emerald Moon's pit lane -- one floor with the road where they meet (lo..hi widened to its far edge), else a floor of its own (stripLo..
+// stripHi; equal: none), the clear space between them an edge. The road's half width there.
+static double RailBounds(const T_RACE_RAISED *a, const T_RACE_RAISED *c, double t, double *lo, double *hi, double *stripLo, double *stripHi) {
+    const double half = a->Half + (c->Half - a->Half) * t, limit = half - RAISED_INSET;
+    *lo = -limit; *hi = limit; *stripLo = *stripHi = 0;
+    const double sLo = a->StripLo + (c->StripLo - a->StripLo) * t, sHi = a->StripHi + (c->StripHi - a->StripHi) * t;
+    if (sHi > sLo) {
+        if (sLo <= half && sHi >= -half) { if (sHi - RAISED_INSET > *hi) *hi = sHi - RAISED_INSET; if (sLo + RAISED_INSET < *lo) *lo = sLo + RAISED_INSET; }
+        else if (sHi - sLo > 2 * RAISED_INSET) { *stripLo = sLo + RAISED_INSET; *stripHi = sHi - RAISED_INSET; }
+    }
+    return half;
+}
+
 // Whether the hero could stand at a place (world units, at height y) as far as the raised road's rail goes: not on the raised road there
 // (the ground, nothing to keep him off), or within its rail -- the road's own or the strip's beside it (RaceMod_Rail's bounds).
 static int RailAllows(double wx, double wz, S32 y) {
@@ -2855,17 +2880,11 @@ static int RailAllows(double wx, double wz, S32 y) {
     int seg;
     double lat, t;
     if (!s_nbRaised || !RaisedAt(wx, wz, y + 64, 4 * 512, &f, &seg, &lat, &t) || y < f - 200 || y > f + 1500) return 1;
-    const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
-    const double half = a->Half + (c->Half - a->Half) * t, limit = half - RAISED_INSET;
-    if (fabs(lat) <= limit) return 1;
-    if (RaisedHolds(wx, wz, f)) return 1;
-    if (RailOpenAt(wx, wz, y)) return 1;
-    const double sLo = a->StripLo + (c->StripLo - a->StripLo) * t, sHi = a->StripHi + (c->StripHi - a->StripHi) * t;
-    if (sHi > sLo) {
-        if (sLo <= half && sHi >= -half) return lat >= (sLo + RAISED_INSET < -limit ? sLo + RAISED_INSET : -limit) && lat <= (sHi - RAISED_INSET > limit ? sHi - RAISED_INSET : limit);
-        return lat >= sLo + RAISED_INSET && lat <= sHi - RAISED_INSET;
-    }
-    return 0;
+    double lo, hi, stripLo, stripHi;
+    RailBounds(&s_raised[seg], &s_raised[seg + 1], t, &lo, &hi, &stripLo, &stripHi);
+    if (lat >= lo && lat <= hi) return 1;
+    if (stripHi > stripLo && lat >= stripLo && lat <= stripHi) return 1;
+    return RaisedHolds(wx, wz, f) || RailOpenAt(wx, wz, y);
 }
 
 // (what the rail did with the hero's last move, and where -- StuckCar says it: 1 the move not made (off every deck), 2 past the road's end,
@@ -2899,15 +2918,9 @@ void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     // (past the road's own end: onto the ground it comes down to)
     if ((!s_raisedLoop && ((seg == 0 && t <= 0) || (seg == LapPoints() - 2 && t >= 1))) || RaisedPastEnd(*nx + cx, *nz + cz, oy)) { RAIL_NOTE(2); return; }
     const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
-    const double half = a->Half + (c->Half - a->Half) * t, limit = half - RAISED_INSET;
-    // (a strip beside the road -- the Emerald Moon's pit lane: the car kept on the road or on the strip, the nearer, the clear space
-    // between them as an edge; where they meet, one floor from the road's far edge to the strip's)
-    double lo = -limit, hi = limit, stripLo = 0, stripHi = 0;
-    const double sLo = a->StripLo + (c->StripLo - a->StripLo) * t, sHi = a->StripHi + (c->StripHi - a->StripHi) * t;
-    if (sHi > sLo) {
-        if (sLo <= half && sHi >= -half) { if (sHi - RAISED_INSET > hi) hi = sHi - RAISED_INSET; if (sLo + RAISED_INSET < lo) lo = sLo + RAISED_INSET; }
-        else if (sHi - sLo > 2 * RAISED_INSET) { stripLo = sLo + RAISED_INSET; stripHi = sHi - RAISED_INSET; }
-    }
+    // (a strip beside the road -- the Emerald Moon's pit lane: the car kept on the road or on the strip, the nearer)
+    double lo, hi, stripLo, stripHi;
+    const double half = RailBounds(a, c, t, &lo, &hi, &stripLo, &stripHi);
     s_railLo = lo; s_railHi = hi;
     if (lat >= lo && lat <= hi) { RAIL_NOTE(3); return; }
     if (stripHi > stripLo && lat >= stripLo && lat <= stripHi) { RAIL_NOTE(4); return; }
@@ -3204,7 +3217,6 @@ static double Pull(double speed) {
 // rate, SpeedRot a second, so a bend of radius R is taken at up to that rate times R) and no faster than its top gear, braking before
 // the bends as hard as its brakes and pulling away after them as hard as its gears; the opponent's character scales the top speed and
 // pull, and the cornering. Two rounds each way, since the lap is a loop.
-static void LoopCaps(const T_RACE_OPPONENT *o, double *v);
 static void PlanSpeeds(T_RACE_OPPONENT *o) {
     if (!o->R) return;
     const int count = o->Count;
@@ -3231,7 +3243,6 @@ static void PlanSpeeds(T_RACE_OPPONENT *o) {
             v[i] = limit < top ? limit : 4 * top;
             if (v[i] < 400) v[i] = 400;
         }
-        LoopCaps(o, v);
         for (int round = 0; round < 3; round++) {
             for (int i = 0; i < count; i++) {
                 const int next = (i + 1) % count;
@@ -3262,7 +3273,6 @@ static void PlanSpeeds(T_RACE_OPPONENT *o) {
             v[i] = limit < top ? limit : top;
             if (v[i] < 400) v[i] = 400;
         }
-        LoopCaps(o, v);
         for (int round = 0; round < 2; round++) {
             for (int i = count - 1; i >= 0; i--) {
                 const int next = (i + 1) % count;
@@ -3293,7 +3303,6 @@ static void PathAt(const T_RACE_OPPONENT *o, double s, double *x, double *z, dou
 static void LoopWindow(T_RACE_LOOP *l);
 static void OpponentLoops(T_RACE_OPPONENT *o);
 static double LoopsTime(const T_RACE_OPPONENT *o);
-static double LoopAim(const T_RACE_LOOP *l);
 
 // the qualifying times' randomness: 0..1
 static double RaceRandom(void) { return NextRandom(&s_seed); }
@@ -3739,7 +3748,9 @@ static void Load(const char *path, int carOnly = 0) {
                 const double len = sqrt(dx * dx + dz * dz);
                 if (len > 0 && l->R > 0) {
                     l->DirX = dx / len; l->DirZ = dz / len;
-                    l->Gap = gap * RACE_PI / 180;
+                    // (its tenth number the gap at its top, which the car leapt -- left out: no ring has one now, cars taking it too fast
+                    // flew up off it)
+                    (void)gap;
                     l->Band = band;
                     l->Camera = camera < 0 ? -1 : 1;
                     s_nbLoops++;
@@ -4873,9 +4884,7 @@ static int SprintRunAgain(S32 now) {
 // The scene the start line is in (cube_scene=), -1 when the file doesn't say.
 static int StartScene(void) {
     if (!s_nbSpots) return -1;
-    for (int c = 0; c < s_nbCubeScenes; c++)
-        if (s_cubeScenes[c][0] == s_spots[0].CubeX && s_cubeScenes[c][1] == s_spots[0].CubeZ) return s_cubeScenes[c][2];
-    return -1;
+    return FileCubeScene(s_spots[0].CubeX, s_spots[0].CubeZ);
 }
 
 // A story start instead of the grid (chase=; Polar Island's dream, the user, 2026-10-27: "Let's start story mode on Polar Island with
@@ -5171,10 +5180,7 @@ static void RaceFromGrid(void) {
         // (the game clock's bracket opened here: asked for before AffScene, whose end clears FlagChgCube before the change is made, so
         // ChangeCube doesn't open it but closes it -- as the rescue's, Rescue)
         SaveTimer();
-        NewCube = scene;
-        NewPosX = s_spots[0].X; NewPosY = s_spots[0].Y; NewPosZ = s_spots[0].Z;
-        FlagChgCube = 1;
-        FlagReajustPosTwinsen = FALSE;
+        GoToScene(scene, s_spots[0].X, s_spots[0].Y, s_spots[0].Z);
     }
     s_forgetLap = 1;
     FollowCamDropOwnEye();
@@ -5896,18 +5902,6 @@ U32 RaceMod_AutoInput(void) {
     // (with the car's stats, the line's speeds planned for the car: PlayerPlan)
     const double here = (o != &s_autoLine && s_autoV && best < s_autoVCount ? s_autoV[best] : o->V[best]) * JetFactor(s_jetUntil, s_jetFactor) * (s_fuelAlways && s_phase != PHASE_QUALIFYING && (S32)TimerRefHR >= s_jetUntil ? RACE_BOOST : 1.0)
                         * (s_auto && (S32)TimerRefHR >= s_jetUntil ? s_autoPace / 100.0 : 1.0), speed = ListBuggy[0].Speed;
-    // (coming up to a ring with a gap: held close to the speed it is leapt at -- coasting a little over it, braking only well over it --
-    // and no brakes in the last cell, which a car carries into the ring)
-    for (int k = 0; k < s_nbLoops; k++) {
-        const T_RACE_LOOP *l = &s_loops[k];
-        if (l->Gap <= 0 || l->Hi <= l->Lo || l->Hi >= s_car.GearTop[s_car.Gears - 1] || l->CubeX != CurrentCubeX || l->CubeZ != CurrentCubeY || fabs(wy - l->Y) > 600) continue;
-        const double a = (hero->Obj.X - l->X) * l->DirX + (hero->Obj.Z - l->Z) * l->DirZ;
-        const double c = -(hero->Obj.X - l->X) * l->DirZ + (hero->Obj.Z - l->Z) * l->DirX;
-        if (a < -15 * 512 || a >= 0 || fabs(c) > fabs(l->Shift) / 2 + l->Band + 1024) continue;
-        // (the car's own pull in a low gear adds a couple of hundred a frame: coasting is the gentlest way down)
-        const double want = LoopAim(l);
-        return bits | (speed > want + 150 ? I_DOWN : speed > want - 60 ? 0 : I_UP);
-    }
     // (autoslide: the handbrake held while the way the car goes -- sliding, not the way it points -- is well off the bearing to the line
     // ahead, from twice the speed a slide starts at; no brakes meanwhile. Let go once it is back on it)
     if (s_autoSlide && (S32)TimerRefHR >= s_jetUntil) {
@@ -6366,29 +6360,23 @@ S32 RaceMod_CarHit(void) {
 // its speed changed by the climb and the drop as a real car's would be. Going round a ring of radius R it stays on while v^2/R + g cos
 // theta is positive (theta 0 at the foot, half a turn at the top); RACE_LOOP_G is that g (units/s^2). The throttle pushes it on with
 // RACE_LOOP_PUSH as far as the ring presses back on its wheels, the brakes slow it as far, and the steering turns it across the ring's
-// band, between its rails -- upside down as on the road (until 2026-10-03 the car was carried along the band's middle, and over a gap at
-// the top at the speed it came in with, whatever it was). Off the ring -- too slow over the top, or at a gap's edge -- it flies: inside the
-// ring it comes down on it again further round (a hard landing costs most of its speed) or, falling through the middle, onto the road at
-// the ring's foot, "fell off"; over a gap it leaps to the far edge, caught there by the ring if no more than RACE_LOOP_CATCH over it, or
-// overshoots and falls outside the ring. With the throttle held a whole ring of 4 cells takes 22 km/h at its foot; one with a gap of 35
-// degrees at its top 22-43 km/h, of 70 degrees only 21-24 (LoopWindow works it out for each; where the car's top speed would overshoot
-// it, the opponents brake to it and the display says it as the car comes up to it). Under the quarter, where nothing throws it off, a car that is too slow rolls back down and out backwards. The opponents go
-// round the same way, never falling (OpponentRide).
+// band, between its rails -- upside down as on the road (until 2026-10-03 the car was carried along the band's middle). Off the ring --
+// too slow over the top -- it flies inside it, and comes down on it again further round (a hard landing costs most of its speed) or,
+// falling through the middle, onto the road at the ring's foot, "fell off". With the throttle held a ring of 4 cells takes 22 km/h at its
+// foot (LoopWindow works it out for each). Under the quarter, where nothing throws it off, a car that is too slow rolls back down and out
+// backwards. The opponents go round the same way, never falling (OpponentRide).
 #define RACE_LOOP_G 1600.0
 #define RACE_LOOP_PUSH 600.0
 #define RACE_LOOP_ENTRY 1100.0     // how far past either lane across the road the ring's foot still takes a car in (units)
 #define RACE_LOOP_AGAIN 1500       // a ring doesn't take the car that has just come round it for this long (ms)
 #define RACE_LOOP_FALL_HOLD 900
-#define RACE_LOOP_CATCH 500.0      // a car leaping a gap no more than this over the far edge's road is caught by it
 #define RACE_LOOP_BOTTOM 0.44      // radians either side of the ring's foot: a car falling inside the ring that comes down there has fallen off
 #define RACE_LOOP_HARD 2400.0      // a landing faster than this into the ring is a hard one: the car keeps a third of its speed along it
 #define RACE_LOOP_STEER 0.35       // the car turned across the band at the most (radians)
 #define RACE_LOOP_INSET 640.0      // the car's half width: its middle is kept this far inside the band's rails
 #define RACE_LOOP_FUNNEL 8.0       // cells before the ring over which the road's right half closes (the ring's way down stands there)
-#define RACE_LOOP_HINT 30.0        // cells before a ring with a gap at which the display says how fast to take it
 static T_LOOP_RIDE s_ride;
 static S32 s_loopBeta = 0, s_loopTime = 0;
-static int s_hinted = -1;
 
 const char *RaceMod_IslandFile(S32 island) {
     return RaceMod_Active() && s_fileName[0] && s_fileIsland == island ? s_fileName : NULL;
@@ -6432,18 +6420,10 @@ static double Lane(const T_RACE_LOOP *l, double theta) {
     return -l->Shift / 2 + l->Shift * theta / (2 * RACE_PI);
 }
 
-static int InGap(const T_RACE_LOOP *l, double polar) {
-    if (l->Gap <= 0) return 0;
-    double p = fmod(polar, 2 * RACE_PI);
-    if (p < 0) p += 2 * RACE_PI;
-    return p > RACE_PI - l->Gap / 2 && p < RACE_PI + l->Gap / 2;
-}
-
 static S32 LoopBeta(const T_RACE_LOOP *l) { return TurnRound(atan2(l->DirX, l->DirZ)); }
 
 // Where a ride puts the car (cube-local), and how it is pitched.
 static void RidePlace(const T_RACE_LOOP *l, const T_LOOP_RIDE *r, double *x, double *y, double *z, double *pitch) {
-    if (r->State == LOOP_FALL) { *x = r->X; *y = r->Y; *z = r->Z; *pitch = -r->Pitch; return; }
     double along, up, across;
     if (r->State == LOOP_RIDE) { along = l->R * sin(r->Theta); up = l->R - l->R * cos(r->Theta); across = Lane(l, r->Theta) + r->Lat; *pitch = -r->Theta; }
     else { along = r->A; up = r->U; across = r->C; *pitch = -r->Polar; }
@@ -6458,7 +6438,7 @@ static void LeaveRing(T_LOOP_RIDE *r, const T_RACE_LOOP *l, double theta) {
     r->A = R * sin(theta); r->U = l->R - R * cos(theta);
     r->VA = r->V * cos(theta); r->VU = r->V * sin(theta);
     r->C = Lane(l, theta) + r->Lat; r->VC = r->V * sin(r->Steer);
-    r->Polar = theta; r->Inside = 1;
+    r->Polar = theta;
     r->State = LOOP_AIR;
 }
 
@@ -6469,15 +6449,6 @@ static int Land(T_LOOP_RIDE *r, const T_RACE_LOOP *l, double theta, const char *
     r->State = LOOP_RIDE;
     if (into > RACE_LOOP_HARD) { r->V /= 3; *said = "Hard landing"; }
     return STEP_ON;
-}
-
-// Off the ring outside it (over a gap's far edge, or into its back): falling, still turning as it was.
-static void ToFall(T_LOOP_RIDE *r, const T_RACE_LOOP *l) {
-    double pitch;
-    RidePlace(l, r, &r->X, &r->Y, &r->Z, &pitch);
-    r->VX = l->DirX * r->VA - l->DirZ * r->VC; r->VZ = l->DirZ * r->VA + l->DirX * r->VC; r->VY = r->VU;
-    r->Pitch = r->Polar; r->Spin = (r->VA * cos(r->Polar) + r->VU * sin(r->Polar)) / l->R;
-    r->State = LOOP_FALL;
 }
 
 // A step of `dt` seconds of a car going round loop `l`. up, down: the throttle and the brakes held; steer: -1 left, 1 right; ai: an
@@ -6515,11 +6486,6 @@ static int LoopStep(T_LOOP_RIDE *r, const T_RACE_LOOP *l, double dt, int up, int
             r->Lat -= (r->Lat > 0 ? 1 : -1) * (over < push ? over : push);
             if ((r->Lat > 0) == (r->Steer > 0)) r->Steer = 0;
         }
-        if (l->Gap > 0) {
-            const double t0 = RACE_PI - l->Gap / 2, t1 = RACE_PI + l->Gap / 2;
-            if (r->V > 0 && before <= t0 && r->Theta > t0) { r->Theta = t0; LeaveRing(r, l, t0); return STEP_ON; }
-            if (r->V < 0 && before >= t1 && r->Theta < t1) { r->Theta = t1; LeaveRing(r, l, t1); return STEP_ON; }
-        }
         if (r->Theta >= 2 * RACE_PI) return STEP_ROUND;
         if (r->Theta < 0) return STEP_BACK;
         return STEP_ON;
@@ -6532,8 +6498,8 @@ static int LoopStep(T_LOOP_RIDE *r, const T_RACE_LOOP *l, double dt, int up, int
         while (p - r->Polar < -RACE_PI) p += 2 * RACE_PI;
         double pn = fmod(p, 2 * RACE_PI);
         if (pn < 0) pn += 2 * RACE_PI;
-        const int inside = rr < R, gap = InGap(l, pn);
-        if (r->Inside && !inside && !gap) {
+        const int inside = rr < R;
+        if (!inside) {
             // onto the ring from inside it -- or, through its middle, onto the road at its foot
             if (pn < RACE_LOOP_BOTTOM || pn > 2 * RACE_PI - RACE_LOOP_BOTTOM) {
                 double pitch;
@@ -6544,38 +6510,13 @@ static int LoopStep(T_LOOP_RIDE *r, const T_RACE_LOOP *l, double dt, int up, int
             }
             return Land(r, l, pn, said);
         }
-        if (!r->Inside) {
-            // over the gap, outside the ring's line: the far edge catches the car no more than RACE_LOOP_CATCH over it
-            const double t0 = RACE_PI - l->Gap / 2, t1 = RACE_PI + l->Gap / 2;
-            if ((r->Polar < t1 && p >= t1) || (r->Polar > t0 && p <= t0)) {
-                if (rr - R <= RACE_LOOP_CATCH) { Land(r, l, p >= t1 ? t1 : t0, said); if (!*said) *said = "Over the gap"; return STEP_ON; }
-                ToFall(r, l);
-                *said = "Overshot the loop";
-                return STEP_ON;
-            }
-            if (!gap) { ToFall(r, l); *said = "Overshot the loop"; return STEP_ON; }
-        }
-        r->Inside = inside; r->Polar = p;
-        return STEP_ON;
+        r->Polar = p;
     }
-    // falling outside the ring, onto the road or the ground under it
-    r->VY -= g * dt;
-    r->X += r->VX * dt; r->Y += r->VY * dt; r->Z += r->VZ * dt;
-    r->Pitch += r->Spin * dt;
-    if (r->X < 600) r->X = 600;
-    if (r->X > 32168) r->X = 32168;
-    if (r->Z < 600) r->Z = 600;
-    if (r->Z > 32168) r->Z = 32168;
-    RaceMod_FloorFor((S32)r->Y);
-    const S32 ground = CalculAltitudeObjet((S32)r->X, (S32)r->Z, -1);
-    RaceMod_FloorForNothing();
-    if (r->Y <= ground) { r->Y = ground; return STEP_FELL; }
     return STEP_ON;
 }
 
 // A ride round loop `l` from its foot at `v0`, the throttle held all the way (at the engine's frame of 16 ms): how it ends, how long it
-// took, and whether it went cleanly -- on the ring all the way to a gap, and no hard landing (the car still gets round from a little
-// slower, off the ring before the gap and down hard on the far side).
+// took, and whether it went cleanly -- on the ring all the way round, and no hard landing.
 static int LoopTry(const T_RACE_LOOP *l, double v0, double *time, int *clean = NULL) {
     T_LOOP_RIDE r;
     memset(&r, 0, sizeof(r));
@@ -6583,21 +6524,17 @@ static int LoopTry(const T_RACE_LOOP *l, double v0, double *time, int *clean = N
     const char *said;
     *time = 0;
     if (clean) *clean = 1;
-    const double t0 = RACE_PI - l->Gap / 2;
     for (int k = 0; k < 2000; k++) {
         const int was = r.State;
         const int out = LoopStep(&r, l, 0.016, 1, 0, 0, 0, &said);
         *time += 0.016;
-        // (off the ring anywhere but at the gap's edge, where LoopStep leaves it at exactly that edge)
-        if (clean && ((was == LOOP_RIDE && r.State == LOOP_AIR && (l->Gap <= 0 || r.Theta < t0 - 1e-6)) || (said && !strcmp(said, "Hard landing")))) *clean = 0;
+        if (clean && ((was == LOOP_RIDE && r.State == LOOP_AIR) || (said && !strcmp(said, "Hard landing")))) *clean = 0;
         if (out != STEP_ON) return out;
-        if (r.State == LOOP_FALL) return STEP_FELL;
     }
     return STEP_FELL;
 }
 
-// The speeds at its foot a car gets cleanly round a loop at, the throttle held: a whole ring from Least up, one with a gap between Lo
-// and Hi.
+// The speeds at its foot a car gets cleanly round a loop at, the throttle held: from Least up.
 static void LoopWindow(T_RACE_LOOP *l) {
     double time;
     l->Lo = l->Hi = l->Least = 0;
@@ -6613,26 +6550,14 @@ static void LoopWindow(T_RACE_LOOP *l) {
         }
     }
     l->Least = l->Lo;
-    if (l->Gap > 0) Log_Info("[racemod] loop at (%d,%d): a gap of %.0f degrees at its top, taken at %.0f-%.0f km/h", (int)l->X, (int)l->Z, l->Gap * 180 / RACE_PI, l->Lo * 3.6 / 512, l->Hi * 3.6 / 512);
-    else Log_Info("[racemod] loop at (%d,%d): whole, taken at %.0f km/h and over", (int)l->X, (int)l->Z, l->Least * 3.6 / 512);
+    Log_Info("[racemod] loop at (%d,%d): whole, taken at %.0f km/h and over", (int)l->X, (int)l->Z, l->Least * 3.6 / 512);
 }
 
 // The speed an opponent takes a loop at: within the speeds it gets cleanly round at, well inside them.
 static double LoopEntry(const T_RACE_LOOP *l, double v) {
     if (l->Hi <= l->Lo) return v;
-    const double w = l->Hi - l->Lo;
-    if (l->Gap > 0) { const double lo = l->Lo + 0.2 * w, hi = l->Hi - 0.2 * w; return v < lo ? lo : v > hi ? hi : v; }
     return v < l->Least * 1.05 ? l->Least * 1.05 : v;
 }
-
-// The most a car takes a ring with a gap at: well inside the speeds it is cleanly leapt at (faster -- a boost, the super jet-pack -- it
-// leapt high over the far edge and fell off outside the ring, 2026-10-04). Twinsen's car is slowed to it over the road before the ring,
-// braking no harder than RACE_LOOP_SLOW (units/s^2), as the opponents are (LoopEntry).
-#define RACE_LOOP_SLOW 8000.0
-static double LoopCap(const T_RACE_LOOP *l) { return l->Hi - 0.2 * (l->Hi - l->Lo); }
-
-// The speed to take a ring with a gap at: the middle of the speeds it is cleanly leapt at.
-static double LoopAim(const T_RACE_LOOP *l) { return l->Lo + 0.5 * (l->Hi - l->Lo); }
 
 // Where each loop's foot is on an opponent's line (crossed the lap's way, near the loop's height and within its road), and each carried
 // jump's two feet.
@@ -6677,20 +6602,6 @@ static void OpponentLoops(T_RACE_OPPONENT *o) {
                 if (d < bd) { bd = d; best = i; }
             }
             if (best >= 0 && bd < 3.0 * 512 * 3 * 512) (end ? o->ArcS1 : o->ArcS0)[k] = o->Cum[best];
-        }
-    }
-}
-
-// The opponents' speeds are planned to take each loop with a gap at the speed it is leapt at, where the car's top speed would overshoot it
-// (the test pilot brakes to it too).
-static void LoopCaps(const T_RACE_OPPONENT *o, double *v) {
-    for (int k = 0; k < s_nbLoops; k++) {
-        const T_RACE_LOOP *l = &s_loops[k];
-        if (o->LoopAt[k] < 0 || l->Gap <= 0 || l->Hi <= l->Lo || l->Hi >= s_car.GearTop[s_car.Gears - 1]) continue;
-        const double want = LoopAim(l);
-        for (int d = -1; d <= 1; d++) {
-            const int i = (o->LoopAt[k] + d + o->Count) % o->Count;
-            if (v[i] > want) v[i] = want;
         }
     }
 }
@@ -6777,8 +6688,8 @@ static int FrogArc(void) {
 static S16 s_islandScene[16][16];
 static int s_islandScenesOf = -1;
 static int CubeScene(int qx, int qz) {
-    for (int c = 0; c < s_nbCubeScenes; c++)
-        if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) return s_cubeScenes[c][2];
+    const int own = FileCubeScene(qx, qz);
+    if (own >= 0) return own;
     if (qx < 0 || qz < 0 || qx >= 16 || qz >= 16) return -1;
     if (s_islandScenesOf != Island) {
         s_islandScenesOf = Island;
@@ -6818,10 +6729,7 @@ static void FrogCarry(double x, double y, double z, S32 *nx, S32 *ny, S32 *nz, c
     if (qx != CurrentCubeX || qz != CurrentCubeY) {
         const int scene = CubeScene(qx, qz);
         if (scene >= 0 && NewCube == -1) {
-            NewCube = scene;
-            NewPosX = (S32)floor(x - qx * 32768.0 + 0.5); NewPosY = (S32)floor(y + 0.5); NewPosZ = (S32)floor(z - qz * 32768.0 + 0.5);
-            FlagChgCube = 1;
-            FlagReajustPosTwinsen = FALSE;
+            GoToScene(scene, (S32)floor(x - qx * 32768.0 + 0.5), (S32)floor(y + 0.5), (S32)floor(z - qz * 32768.0 + 0.5));
             Log_Info("[racemod] %s: into cube (%d,%d), scene %d", why, qx, qz, scene);
         }
         x = x - cx < 1 ? cx + 1 : x - cx > 32767 ? cx + 32767 : x;
@@ -7634,14 +7542,9 @@ static S32 RaceArc(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
     // (into another cube: its scene, the car carried on in it; this frame at the old cube's edge)
     const int qx = (int)floor(x / 32768.0), qz = (int)floor(z / 32768.0);
     if (qx != CurrentCubeX || qz != CurrentCubeY) {
-        int scene = -1;
-        for (int c = 0; c < s_nbCubeScenes; c++)
-            if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) scene = s_cubeScenes[c][2];
+        int scene = FileCubeScene(qx, qz);
         if (scene >= 0 && NewCube == -1) {
-            NewCube = scene;
-            NewPosX = (S32)floor(x - qx * 32768.0 + 0.5); NewPosY = (S32)floor(y + 0.5); NewPosZ = (S32)floor(z - qz * 32768.0 + 0.5);
-            FlagChgCube = 1;
-            FlagReajustPosTwinsen = FALSE;
+            GoToScene(scene, (S32)floor(x - qx * 32768.0 + 0.5), (S32)floor(y + 0.5), (S32)floor(z - qz * 32768.0 + 0.5));
             Log_Info("[racemod] carried jump: into cube (%d,%d), scene %d, at (%d,%d,%d)", qx, qz, scene, (int)NewPosX, (int)NewPosY, (int)NewPosZ);
         } else if (scene < 0)
             Log_Info("[racemod] carried jump: no scene for cube (%d,%d)", qx, qz);
@@ -7696,22 +7599,6 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
             const double a1 = (*nx - l->X) * l->DirX + (*nz - l->Z) * l->DirZ;
             const double c1 = -(*nx - l->X) * l->DirZ + (*nz - l->Z) * l->DirX;
             if (fabs(c1) > fabs(l->Shift) / 2 + l->Band + 1024) continue;      // (another road, beside this one)
-            // (coming up to a ring with a gap: the least to take it at -- too fast, the car is slowed, below)
-            if (l->Gap > 0 && l->Hi > l->Lo && a1 > -RACE_LOOP_HINT * 512 && a1 < -RACE_LOOP_HINT * 256 && s_hinted != i) {
-                char text[64];
-                snprintf(text, sizeof(text), "Jump loop: over %.0f km/h", l->Lo * 3.6 / 512 + 0.5);
-                Message(text);
-                s_hinted = i;
-            }
-            // (and faster than its gap is cleanly leapt at: slowed to that by the ring's foot)
-            if (l->Gap > 0 && l->Hi > l->Lo && a1 > -RACE_LOOP_HINT * 512 && a1 < 0) {
-                const double cap = LoopCap(l), allowed = sqrt(cap * cap + 2.0 * RACE_LOOP_SLOW * -a1);
-                if (ListBuggy[0].Speed > allowed) {
-                    static int said = -1;
-                    if (said != i) { said = i; Log_Info("[racemod] loop %d: slowed from %d to the %d it is leapt at", i + 1, (int)ListBuggy[0].Speed, (int)cap); }
-                    ListBuggy[0].Speed = (S32)allowed;
-                }
-            }
             // (the road's right half closes before the ring: its way down comes down onto the road there -- the left half, a ring the car
             // goes into on the right: `sg` turns such a ring's across round, its way out on the + side)
             const double sg = l->Shift < 0 ? -1 : 1, shift = fabs(l->Shift), c1s = sg * c1;
@@ -7739,10 +7626,8 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
             s_loopOn = i; s_loopState = LOOP_RIDE;
             memset(&s_ride, 0, sizeof(s_ride));
             s_ride.State = LOOP_RIDE; s_ride.V = ListBuggy[0].Speed; s_ride.Lat = across - Lane(l, 0);
-            if (l->Gap > 0 && l->Hi > l->Lo && s_ride.V > LoopCap(l)) s_ride.V = LoopCap(l);
             s_loopBeta = LoopBeta(l);
             s_loopTime = TimerRefHR;
-            s_hinted = -1;
             Log_Info("[racemod] loop %d: in at %d units/s (%.0f km/h), %.0f across its band", i + 1, (int)ListBuggy[0].Speed, ListBuggy[0].Speed * 3.6 / 512, s_ride.Lat);
             break;
         }
@@ -7812,9 +7697,7 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
 static int OnIsland(double wx, double wz) {
     if (!s_nbCubeScenes) return 1;
     const int cx = (int)floor(wx / 32768.0), cz = (int)floor(wz / 32768.0);
-    for (int i = 0; i < s_nbCubeScenes; i++)
-        if (s_cubeScenes[i][0] == cx && s_cubeScenes[i][1] == cz) return 1;
-    return 0;
+    return FileCubeScene(cx, cz) >= 0;
 }
 
 // Whether a ring's band is between two places (cube-local, the ring's cube): its road surface and the green outside it, RaceTrackLoopBody's
@@ -8084,8 +7967,7 @@ static int Teleport(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
         const int qx = (int)floor(t->X / 32768.0), qz = (int)floor(t->Z / 32768.0);
         int scene = -1;
         if (qx != CurrentCubeX || qz != CurrentCubeY) {
-            for (int c = 0; c < s_nbCubeScenes; c++)
-                if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) scene = s_cubeScenes[c][2];
+            scene = FileCubeScene(qx, qz);
             if (scene < 0) { Log_Info("[racemod] teleporter %d: no scene for cube (%d,%d)", i + 1, qx, qz); return 0; }
         }
         ListObjet[NUM_PERSO].Obj.Beta = t->Beta;
@@ -8100,10 +7982,7 @@ static int Teleport(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
         Log_Info("[racemod] teleporter %d: taken in at (%.0f,%.0f), out at (%.0f,%.0f,%.0f) turned %d, at %d units/s (in at %d)%s", i + 1, x, z, t->X, t->Y, t->Z, (int)t->Beta,
                  (int)ListBuggy[0].Speed, (int)in, t->Passage > 0 ? ", through its passage" : "");
         if (scene >= 0) {
-            NewCube = scene;
-            NewPosX = (S32)floor(t->X - qx * 32768.0 + 0.5); NewPosY = (S32)floor(t->Y + 0.5); NewPosZ = (S32)floor(t->Z - qz * 32768.0 + 0.5);
-            FlagChgCube = 1;
-            FlagReajustPosTwinsen = FALSE;
+            GoToScene(scene, (S32)floor(t->X - qx * 32768.0 + 0.5), (S32)floor(t->Y + 0.5), (S32)floor(t->Z - qz * 32768.0 + 0.5));
             *nx = ox; *ny = oy; *nz = oz;
             return 1;
         }
@@ -9755,9 +9634,9 @@ static int InSight(double x, double z, double margin) {
 // Where a place is, for the log: its scene (cube_scene=) or its cube.
 static const char *WhereIs(double x, double z, char *out, size_t size) {
     const int qx = (int)floor(x / 32768.0), qz = (int)floor(z / 32768.0);
-    for (int c = 0; c < s_nbCubeScenes; c++)
-        if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) { snprintf(out, size, "scene %d", s_cubeScenes[c][2]); return out; }
-    snprintf(out, size, "cube %d,%d", qx, qz);
+    const int scene = FileCubeScene(qx, qz);
+    if (scene >= 0) snprintf(out, size, "scene %d", scene);
+    else snprintf(out, size, "cube %d,%d", qx, qz);
     return out;
 }
 
@@ -11048,10 +10927,7 @@ static int FootCross(void) {
     if (!Explore() || NewCube != -1) return 0;
     const S_BUGGY *ptb = &ListBuggy[0];
     // (the car's scene, however far: its place in it is the car's own -- LoadSceneCubeXY knows only the cubes round his)
-    NewCube = scene;
-    NewPosX = ptb->X; NewPosY = ptb->Y + 64; NewPosZ = ptb->Z;
-    FlagChgCube = 1;
-    FlagReajustPosTwinsen = FALSE;
+    GoToScene(scene, ptb->X, ptb->Y + 64, ptb->Z);
     s_footArrive = scene;
     Log_Info("[racemod] on foot in scene %d: carried to his car in scene %d", (int)NumCube, scene);
     return 1;
@@ -13878,10 +13754,7 @@ void RaceMod_EdgeCross(void) {
         S32 qx, qz;
         if (o && NewCube == -1 && s_rescueArrive >= 0 && s_rescueArrive < o->Count && LoadSceneCubeXY(scene, &qx, &qz)) {
             const int i = s_rescueArrive;
-            NewCube = scene;
-            NewPosX = o->X[i] - qx * 32768; NewPosY = o->Y[i] + 64; NewPosZ = o->Z[i] - qz * 32768;
-            FlagChgCube = 1;
-            FlagReajustPosTwinsen = FALSE;
+            GoToScene(scene, o->X[i] - qx * 32768, o->Y[i] + 64, o->Z[i] - qz * 32768);
             return;
         }
         // (no place for it: the scene afresh, as before -- the clock's bracket opened, BackInCar after)
@@ -13902,19 +13775,14 @@ void RaceMod_EdgeCross(void) {
         else if (z >= 32768 - DEMI_BRICK_XZ) { qz++; z = DEMI_BRICK_XZ; }
     }
     if (qx == CurrentCubeX && qz == CurrentCubeY) return;
-    int scene = -1;
-    for (int c = 0; c < s_nbCubeScenes; c++)
-        if (s_cubeScenes[c][0] == qx && s_cubeScenes[c][1] == qz) scene = s_cubeScenes[c][2];
+    int scene = FileCubeScene(qx, qz);
     if (scene < 0) return;
     // (only where the car can be on the other side: a cube change puts it half a cell inside the next cube, and a raised road whose rail
     // keeps it short of that took it over and its rail straight back -- a scene change a frame, along the Emerald Moon's straight, its rail
     // a quarter cell short of the cube's edge, 2026-10-12)
     if (!RailAllows(qx * 32768.0 + x, qz * 32768.0 + z, hero->Obj.Y)) return;
     if (!RaceMod_CubeChangeAllowed(scene)) return;
-    NewCube = scene;
-    NewPosX = x; NewPosY = hero->Obj.Y; NewPosZ = z;
-    FlagChgCube = 1;
-    FlagReajustPosTwinsen = FALSE;
+    GoToScene(scene, x, hero->Obj.Y, z);
     Log_Info("[racemod] the car held at the edge of cube (%d,%d) with no zone over it: into cube (%d,%d), scene %d, at (%d,%d,%d)",
              (int)CurrentCubeX, (int)CurrentCubeY, qx, qz, scene, (int)NewPosX, (int)NewPosY, (int)NewPosZ);
 }
@@ -15420,10 +15288,7 @@ void RaceMod_Frame(void) {
         const int scene = StartScene();
         if (scene >= 0) {
             SaveTimer();
-            NewCube = scene;
-            NewPosX = s_spots[0].X; NewPosY = s_spots[0].Y; NewPosZ = s_spots[0].Z;
-            FlagChgCube = 1;
-            FlagReajustPosTwinsen = FALSE;
+            GoToScene(scene, s_spots[0].X, s_spots[0].Y, s_spots[0].Z);
             Log_Info("[racemod] time trial: the start spot is in scene %d -- the car taken there for the count-down", scene);
         }
     }
@@ -15539,7 +15404,7 @@ void RaceMod_Frame(void) {
                 // round a loop, its line waiting at the loop's foot
                 const char *said;
                 int out = LoopStep(&o->Ride, &s_loops[o->LoopOn], dt / 1000.0, 1, 0, 0, 1, &said);
-                if (out == STEP_FELL || out == STEP_BACK || o->Ride.State == LOOP_FALL) { out = STEP_ROUND; o->Ride.V = LoopEntry(&s_loops[o->LoopOn], 0); }
+                if (out == STEP_FELL || out == STEP_BACK) { out = STEP_ROUND; o->Ride.V = LoopEntry(&s_loops[o->LoopOn], 0); }
                 if (out == STEP_ROUND) {
                     o->Speed = fabs(o->Ride.V);
                     // (on along its line from the lane it comes down in)
@@ -17521,7 +17386,7 @@ static void ResetTrack(void) {
     s_jumpLo = 0.6; s_jumpHi = 4.0; s_jumpRate = 0; s_jumpFrac = 0; s_jumpOver = 0;
     s_autoIndex = -1;
     s_faced = 0; s_stuckSince = 0; s_rescueScene = -1; s_backInCarUntil = 0; s_safeIndex = -1; s_safeScene = -1; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;
-    memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0; s_hinted = -1;
+    memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0;
     s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     ListVarGame[209] = 0;
     s_paradeStopText = s_paradeTalker = s_paradeGoVar = -1; s_pull = 0; s_pullSay = 0;
