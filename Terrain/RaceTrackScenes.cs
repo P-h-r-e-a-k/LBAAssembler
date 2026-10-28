@@ -895,13 +895,29 @@ internal static class RaceTrackScenes
             // (an island with a file for each weather: each file's lifts its own, and the building's window brings Twinsen up onto the lift of
             // the file shown -- door_to=; the storm's museum lift and the town circuit's, 2026-10-27)
             string FileOf(Track t) => Path.GetFileNameWithoutExtension(ReferenceEquals(t, tracks[0]) ? options.Island.IleFile : options.Island.TwinIleFile ?? options.Island.IleFile).ToLowerInvariant();
+            // (the lifts' grate, the sewer lift's actor -- RaceTrackIsland.LiftLook: one in the scene, at each file's lift while it is shown)
+            var grate = -1;
             foreach (var t in tracks)
                 foreach (var l in t.Report.DeckLifts)
                 {
                     if ((int)Math.Floor(l.X / 64) != model.CubeX || (int)Math.Floor(l.Z / 64) != model.CubeY) continue;
                     int lx = (int)Math.Round((l.X - model.CubeX * 64) * 512), lz = (int)Math.Round((l.Z - model.CubeY * 64) * 512), ly = (int)Math.Round(l.Y);
+                    if (grate < 0 && options.Island.LiftLook is { } look)
+                    {
+                        SceneActorModel? template = null;
+                        try { template = originals.Load(look.Scene).Actors.ElementAtOrDefault(look.Actor)?.Clone(); }
+                        catch (Exception e) when (e is InvalidDataException or ArgumentException or IOException) { }
+                        if (template is not null)
+                        {
+                            template.X = lx; template.Y = ly; template.Z = lz;
+                            grate = SceneOps.AddActor(model, template);
+                            log.Add($"scene {scene}: the lift's grate, scene {look.Scene}'s actor {look.Actor} (entity {template.Entity}), as actor {grate}");
+                        }
+                    }
+                    if (grate > 0 && tracks.Count > 1) actorsAt.Add((FileOf(t), scene, grate, lx, ly, lz));
                     // (no door zone: the action key on the pad takes Twinsen down with it, the race-track mode's lift -- deck_lift=)
-                    deckLifts.Add($"{scene} {lx} {ly} {lz} {RaceTrackBuilder.LiftZoneHalf} {l.Pad} {l.Scene} {l.ToX} {l.ToY} {l.ToZ}" + (tracks.Count > 1 ? $" {FileOf(t)}" : ""));
+                    deckLifts.Add($"{scene} {lx} {ly} {lz} {RaceTrackBuilder.LiftZoneHalf} {l.Pad} {l.Scene} {l.ToX} {l.ToY} {l.ToZ}" +
+                                  (tracks.Count > 1 ? $" {FileOf(t)}" : grate > 0 ? " *" : "") + (grate > 0 ? $" {grate}" : ""));
                     log.Add($"scene {scene}: a lift on the raised road at ({lx},{ly},{lz}), down into scene {l.Scene} with the action key");
                     // (and back up: the building's way out by its window -- its door into this scene nearest the place the lift brings him
                     // down to -- brings him onto the road beside the pad. The user, 2026-10-27: "If Twinsen leaves the museum by the window then

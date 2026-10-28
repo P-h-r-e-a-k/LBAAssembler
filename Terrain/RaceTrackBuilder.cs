@@ -585,6 +585,10 @@ internal sealed class RaceTrackOptions
     public int RetailBody(int body) => RetailBodies.TryGetValue(body, out var copy) ? copy : body;
     // (the same options for the island's fine-weather twin, which differs in its deck body and its theme)
     public RaceTrackOptions Copy() => (RaceTrackOptions)MemberwiseClone();
+    // The lifts' frame (RaceTrackIsland.LiftLook): the retail lift's pieces above the ground -- its grate floor, its striped barriers and
+    // posts -- each as it stands, where it stands from the floor's origin (units: across, along, up), and its body from the island's own OBL
+    // (RaceTrackService)
+    public List<(IslandDecor Decor, int Dx, int Dz, int Dy, byte[] Body)>? LiftFrame { get; set; }
 
     // An island's track as it is always built: its crossing (RaceTrackIsland.Crossing) and, on the Desert island, the retail track's
     // leftovers cleared (the race track window and the command line's builds both start from this).
@@ -3513,13 +3517,43 @@ internal static class RaceTrackBuilder
             }
         if (best.R < 0 || best.D > 36) { report.Notes.Add("WARNING: no road near the museum's lift"); return; }
         var y = (int)Math.Round(report.Roads[best.R].H[best.K]);
-        if (IslandDecors.Locate(island, m.LiftX * 512, m.LiftZ * 512) is not { } pa || pa.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) return;
-        var pad = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, pa.X, y, pa.Z, 0);
-        pad.XMin = pa.X - (int)LiftPad; pad.XMax = pa.X + (int)LiftPad; pad.YMin = y; pad.YMax = NoBoxTop; pad.ZMin = pa.Z - (int)LiftPad; pad.ZMax = pa.Z + (int)LiftPad;
-        pa.Cube.Decors.Add(pad);
-        report.NewBodies.Add(RaceTrackRaisedBody.Block(LiftPad, LiftPad, LiftPadTop, RaceTrackRaisedBody.RailTop, RaceTrackRaisedBody.RailSide, RaceTrackRaisedBody.RailTop));
-        report.DeckLifts.Add((m.LiftX, m.LiftZ, y, to.Scene, to.ToX, to.ToY, to.ToZ, m.LiftX, m.LiftZ, pad.Body));
+        var padBody = AddLiftPad(island, o, report, m.LiftX, y, m.LiftZ);
+        if (padBody < 0) return;
+        report.DeckLifts.Add((m.LiftX, m.LiftZ, y, to.Scene, to.ToX, to.ToY, to.ToZ, m.LiftX, m.LiftZ, padBody));
         report.Notes.Add($"a lift on the road at cell ({m.LiftX}, {m.LiftZ}), {y} high, down into scene {to.Scene}");
+    }
+
+    // A lift's pad at island cell (x, z), its floor at height y: the retail lift's frame (RaceTrackOptions.LiftFrame -- the sewer lift's,
+    // its striped posts round its floor) where there is one, a copy of its body at the end of the island's OBL; else a flat pad, drawn
+    // only. Returns its body (or -1: no room).
+    private static int AddLiftPad(IslandFile island, RaceTrackOptions o, RaceTrackReport report, double x, double y, double z)
+    {
+        if (o.NewBodyBase < 0 || IslandDecors.Locate(island, x * 512, z * 512) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) return -1;
+        var body = o.NewBodyBase + report.NewBodies.Count;
+        if (o.LiftFrame is { Count: > 0 } frame)
+        {
+            // (each piece at its place round the floor, its body copied after the island's own; the floor's the pad's)
+            var floor = -1;
+            foreach (var piece in frame)
+            {
+                if (IslandDecors.Locate(island, x * 512 + piece.Dx, z * 512 + piece.Dz) is not { } pat || pat.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) continue;
+                var d = piece.Decor.Clone();
+                var b = o.NewBodyBase + report.NewBodies.Count;
+                d.Body = (d.Body & ~0xFFFF) | b;
+                d.MoveTo(pat.X, (int)Math.Round(y) + piece.Dy, pat.Z);
+                // (its barriers and posts drawn only: the lift stands on the race's road, and the cars run through them)
+                if (floor >= 0) d.YMax = NoBoxTop;
+                pat.Cube.Decors.Add(d);
+                report.NewBodies.Add(piece.Body);
+                if (floor < 0) floor = b;
+            }
+            return floor;
+        }
+        var pad = IslandDecors.Blank(body, at.X, (int)Math.Round(y), at.Z, 0);
+        pad.XMin = at.X - (int)LiftPad; pad.XMax = at.X + (int)LiftPad; pad.YMin = (int)Math.Round(y); pad.YMax = NoBoxTop; pad.ZMin = at.Z - (int)LiftPad; pad.ZMax = at.Z + (int)LiftPad;
+        at.Cube.Decors.Add(pad);
+        report.NewBodies.Add(RaceTrackRaisedBody.Block(LiftPad, LiftPad, LiftPadTop, RaceTrackRaisedBody.RailTop, RaceTrackRaisedBody.RailSide, RaceTrackRaisedBody.RailTop));
+        return body;
     }
 
     // DeckLifts: the pad's half width and its top over the road (units)
@@ -5701,14 +5735,14 @@ internal static class RaceTrackBuilder
                 var y = r.H[k];
                 // (one large pad level with the road, drawn only: the cars run over it -- the user, 2026-10-27: "The post sticking out of the
                 // track above the museum needs to go, we need one large elevator pad down, that's level with the track")
-                Add(RaceTrackRaisedBody.Block(LiftPad, LiftPad, LiftPadTop, RaceTrackRaisedBody.RailTop, RaceTrackRaisedBody.RailSide, RaceTrackRaisedBody.RailTop), l.X * 512, y, l.Z * 512,
-                    -(int)LiftPad, 0, -(int)LiftPad, (int)LiftPad, (int)LiftPadTop, (int)LiftPad, untouchable: true);
+                var padBody = AddLiftPad(island, o, report, l.X, y, l.Z);
+                if (padBody < 0) continue;
                 // (where the lift brings Twinsen back up -- the building's way out by its window: on the road's middle beside the pad, off it,
                 // or he went straight back down; along the road where the pad is on its middle)
                 double bx = r.X[k], bz = r.Z[k];
                 if (Math.Sqrt((bx - l.X) * (bx - l.X) + (bz - l.Z) * (bz - l.Z)) < LiftPad / 512 + 1) { bx += r.Tx[k] * 3; bz += r.Tz[k] * 3; }
                 // (the pad goes down and up with the lift: the race-track mode moves its decor -- deck_lift=)
-                report.DeckLifts.Add((l.X, l.Z, y, l.Scene, l.ToX, l.ToY, l.ToZ, bx, bz, o.NewBodyBase + report.NewBodies.Count - 1));
+                report.DeckLifts.Add((l.X, l.Z, y, l.Scene, l.ToX, l.ToY, l.ToZ, bx, bz, padBody));
                 report.Notes.Add($"a lift on the raised road at cell ({l.X}, {l.Z}), {y:0} high, down into scene {l.Scene}");
             }
         }

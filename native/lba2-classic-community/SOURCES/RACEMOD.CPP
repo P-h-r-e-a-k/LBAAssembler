@@ -151,7 +151,10 @@
  *     actor_at=<island file> <scene> <actor> <x> <y> <z>   (<actor> p<n>: the scene's point n, which its script stands it on)
  *                                the scene's actor put there as the scene starts while that island file is shown (ActorsAt): in the way of
  *                                that file's road, not of the other's (Citadel Island's bike taxi under the shelter by the shop, 2026-10-27)
- *     deck_lift=<scene> <x> <y> <z> <half> <pad body> <to scene> <to x> <to y> <to z> [<island file>]
+ *     deck_lift=<scene> <x> <y> <z> <half> <pad body> <to scene> <to x> <to y> <to z> [<island file>|*] [<grate actor>]
+ *                                (2026-10-28) with a grate actor the lift is the sewer lift's (DeckLiftFrame): Twinsen's animation 11, then
+ *                                the grate's own track (its motor and its sinking, animation 30) carries him down into <to scene>; he comes
+ *                                back up standing on it
  *                                (2026-10-27) a lift on the raised road (DeckLift): its pad (decor body <pad body>, <half> either side of
  *                                x z, the road's height y), the action key on it takes Twinsen down with it through the road into <to
  *                                scene> at its place; coming into <scene> on the pad (the building's way out to it), he rises with it
@@ -584,10 +587,16 @@ static int s_nbDoorsTo = 0;
 #define RACE_MAX_LIFTS 4
 #define RACE_LIFT_MS 1800                  // its ride, down or up
 #define RACE_LIFT_DROP 2000.0              // how far down through the road it goes
-static struct { int Scene, X, Y, Z, Half, Pad, To, ToX, ToY, ToZ; char File[16]; } s_lifts[RACE_MAX_LIFTS];      // (File: "" any)
+static struct { int Scene, X, Y, Z, Half, Pad, To, ToX, ToY, ToZ; char File[16]; int Grate; } s_lifts[RACE_MAX_LIFTS];      // (File: "" or "*" any; Grate: -1 none)
+#define RACE_LIFT_PRESS_MS 1500            // the sewer lift's: Twinsen's animation 11 at most this long
+#define RACE_LIFT_SINK 300                 // ... the grate this far down
+#define RACE_LIFT_SINK_MS 2500             // ... or this long, and the scene changes
+static int s_liftPhase = 0;                // 0 Twinsen's animation, 1 the grate sinking
+static S32 s_liftGrateY = 0;
 static int s_nbLifts = 0, s_lift = -1, s_liftDir = 0, s_liftScene = -1;
 static S32 s_liftAt = 0;
 static double s_liftOff = 0;
+static S32 s_armChgCube = 0;               // FlagChgCube for the scene change a lift asked for, set after the frame (RaceMod_ArmCubeChange)
 static int DeckLiftAction(int pressed);
 // actor_at= (ActorsAt): the actors, and the scene they were last put in
 #define RACE_MAX_ACTORS_AT 64
@@ -3602,11 +3611,13 @@ static void Load(const char *path, int carOnly = 0) {
             }
         }
         else if (!strcmp(key, "deck_lift") && s_nbLifts < RACE_MAX_LIFTS) {
-            s_lifts[s_nbLifts].File[0] = 0;
-            if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d %15s", &s_lifts[s_nbLifts].Scene, &s_lifts[s_nbLifts].X, &s_lifts[s_nbLifts].Y, &s_lifts[s_nbLifts].Z,
+            s_lifts[s_nbLifts].File[0] = 0; s_lifts[s_nbLifts].Grate = -1;
+            if (sscanf(v, "%d %d %d %d %d %d %d %d %d %d %15s %d", &s_lifts[s_nbLifts].Scene, &s_lifts[s_nbLifts].X, &s_lifts[s_nbLifts].Y, &s_lifts[s_nbLifts].Z,
                        &s_lifts[s_nbLifts].Half, &s_lifts[s_nbLifts].Pad, &s_lifts[s_nbLifts].To, &s_lifts[s_nbLifts].ToX, &s_lifts[s_nbLifts].ToY, &s_lifts[s_nbLifts].ToZ,
-                       s_lifts[s_nbLifts].File) >= 10)
+                       s_lifts[s_nbLifts].File, &s_lifts[s_nbLifts].Grate) >= 10) {
+                if (!strcmp(s_lifts[s_nbLifts].File, "*")) s_lifts[s_nbLifts].File[0] = 0;
                 s_nbLifts++;
+            }
         }
         else if (!strcmp(key, "door_to") && s_nbDoorsTo < RACE_MAX_DOORS_OFF) {
             if (sscanf(v, "%15s %d %d %d %d %d %d %d %d", s_doorsTo[s_nbDoorsTo].File, &s_doorsTo[s_nbDoorsTo].Scene, &s_doorsTo[s_nbDoorsTo].X0, &s_doorsTo[s_nbDoorsTo].Z0,
@@ -15172,17 +15183,70 @@ static int OnLiftPad(int i) {
     return s_lifts[i].Scene == (S32)NumCube && (!s_lifts[i].File[0] || !strcasecmp(s_lifts[i].File, IslandName)) && CubeMode == CUBE_EXTERIEUR && Comportement != C_BUGGY
            && abs(hero->Obj.X - s_lifts[i].X) <= s_lifts[i].Half && abs(hero->Obj.Z - s_lifts[i].Z) <= s_lifts[i].Half;
 }
+// The lift's grate actor in this scene (deck_lift='s last number), or NULL
+static T_OBJET *LiftGrate(int i) {
+    const int g = s_lifts[i].Grate;
+    return g > 0 && g < NbObjets ? &ListObjet[g] : NULL;
+}
+// The sewer lift's ride (a lift with a grate actor -- the user, 2026-10-28: "They should look like and replicate the behaviour of the
+// elevator that goes down into the sewer"): Twinsen's animation 11 as his script plays it in scene 42 (track label 0), then the grate's
+// own track from its label 0 -- its motor's sample and its sinking animation 30, as set_track_obj starts it -- and Twinsen carried down
+// with it until the scene changes. Coming back up he stands on the grate, as the sewer's way out puts him.
+static int GrateRide(int i, S32 now) {
+    T_OBJET *grate = LiftGrate(i), *hero = &ListObjet[NUM_PERSO];
+    if (!grate) return 0;
+    hero->Obj.X = s_lifts[i].X; hero->Obj.Z = s_lifts[i].Z;
+    hero->WorkFlags &= ~FALLING;
+    s_wantFlip = 1;
+    if (s_liftPhase == 0) {
+        hero->Obj.Y = s_lifts[i].Y;
+        if (!(hero->WorkFlags & ANIM_END) && now - s_liftAt < RACE_LIFT_PRESS_MS) return 1;
+        InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
+        CleanTrack(grate);
+        grate->OffsetTrack = 0;
+        Track_SetLabel(grate);
+        s_liftGrateY = grate->Obj.Y;
+        s_liftPhase = 1; s_liftAt = now;
+        return 1;
+    }
+    hero->Obj.Y = s_lifts[i].Y + (grate->Obj.Y - s_liftGrateY);
+    if (s_liftGrateY - grate->Obj.Y < RACE_LIFT_SINK && now - s_liftAt < RACE_LIFT_SINK_MS) return 1;
+    return 2;
+}
+
 static void DeckLiftFrame(S32 now) {
     if (!s_nbLifts) return;
-    // (into a lift's scene on its pad: up)
+    // (into a lift's scene on its pad: up -- with a grate he stands on it, as the sewer's lift brings him up)
     if ((S32)NumCube != s_liftScene && NewCube == -1) {
         s_liftScene = NumCube;
         for (int i = 0; i < s_nbLifts && s_lift < 0; i++)
-            if (OnLiftPad(i)) { s_lift = i; s_liftDir = 1; s_liftAt = now; s_liftOff = -RACE_LIFT_DROP; Log_Info("[racemod] lift: up onto the road in scene %d", (int)NumCube); }
+            if (OnLiftPad(i)) {
+                if (LiftGrate(i)) {
+                    // (standing in its middle, still -- the window's way out keeps his place in it, and his walk, which took him off it)
+                    T_OBJET *hero = &ListObjet[NUM_PERSO];
+                    hero->Obj.X = s_lifts[i].X; hero->Obj.Y = s_lifts[i].Y; hero->Obj.Z = s_lifts[i].Z;
+                    hero->WorkFlags &= ~FALLING;
+                    InitAnim(GEN_ANIM_RIEN, ANIM_REPEAT, NUM_PERSO);
+                    ClearRealAngle(hero);
+                    Log_Info("[racemod] lift: up onto its grate in scene %d", (int)NumCube);
+                    continue;
+                }
+                s_lift = i; s_liftDir = 1; s_liftAt = now; s_liftOff = -RACE_LIFT_DROP; Log_Info("[racemod] lift: up onto the road in scene %d", (int)NumCube);
+            }
     }
     if (s_lift < 0) return;
     const int i = s_lift;
     if (s_lifts[i].Scene != (S32)NumCube || NewCube != -1) { s_lift = -1; s_liftOff = 0; return; }
+    if (s_liftDir < 0 && LiftGrate(i)) {
+        if (GrateRide(i, now) < 2) return;
+        Log_Info("[racemod] lift: down into scene %d", s_lifts[i].To);
+        SaveTimer();
+        NewCube = s_lifts[i].To;
+        NewPosX = s_lifts[i].ToX; NewPosY = s_lifts[i].ToY; NewPosZ = s_lifts[i].ToZ;
+        s_armChgCube = 1;
+        s_lift = -1; s_liftOff = 0;
+        return;
+    }
     double t = (double)(now - s_liftAt) / RACE_LIFT_MS;
     if (t > 1) t = 1;
     const double e = t * t * (3 - 2 * t);
@@ -15200,15 +15264,30 @@ static void DeckLiftFrame(S32 now) {
     SaveTimer();
     NewCube = s_lifts[i].To;
     NewPosX = s_lifts[i].ToX; NewPosY = s_lifts[i].ToY; NewPosZ = s_lifts[i].ToZ;
-    FlagChgCube = 1;
+    // (at its place, as a door zone's change: FlagChgCube 1 -- set again after the frame, RaceMod_ArmCubeChange. This runs inside AffScene,
+    // whose end clears FlagChgCube, and the scene then started at its own start: the museum's front door, not the window's room the lift
+    // goes to -- the user, 2026-10-27: "should land Twinsen in the same room as the museum's window entry does instead of at the Museum's
+    // front door")
+    s_armChgCube = 1;
     s_lift = -1; s_liftOff = 0;
+}
+// After AffScene's end (OBJECT.CPP), which clears FlagChgCube: the scene change asked for from inside it (DeckLiftFrame) given its flag back
+void RaceMod_ArmCubeChange(void) {
+    if (s_armChgCube && NewCube != -1) FlagChgCube = s_armChgCube;
+    s_armChgCube = 0;
 }
 // (the action key on a lift's pad, on foot: down; RaceMod_FilterInput. Non-zero: the key taken)
 static int DeckLiftAction(int pressed) {
     if (s_lift >= 0) return 1;
     if (!pressed || NewCube != -1) return 0;
     for (int i = 0; i < s_nbLifts; i++)
-        if (OnLiftPad(i)) { s_lift = i; s_liftDir = -1; s_liftAt = TimerRefHR; s_liftOff = 0; Log_Info("[racemod] lift: down from the road in scene %d", (int)NumCube); return 1; }
+        if (OnLiftPad(i)) {
+            s_lift = i; s_liftDir = -1; s_liftAt = TimerRefHR; s_liftOff = 0; s_liftPhase = 0;
+            // (the sewer lift's: Twinsen's animation 11 first, his script's in scene 42)
+            if (LiftGrate(i)) { ListObjet[NUM_PERSO].WorkFlags &= ~ANIM_END; InitAnim(11, ANIM_REPEAT, NUM_PERSO); }
+            Log_Info("[racemod] lift: down from the road in scene %d", (int)NumCube);
+            return 1;
+        }
     return 0;
 }
 // The lifts' pads as the cube's decors are drawn (3DEXT/DECORS.CPP DecorPoseHook): down and up with the lift

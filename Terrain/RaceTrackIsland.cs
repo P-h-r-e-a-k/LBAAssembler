@@ -77,6 +77,10 @@ internal sealed record RaceTrackIsland(
         // moved there, and a lift on the road above -- the user, 2026-10-27, "Let's put the museum on the wall where Twinsen is currently
         // facing": scene 48 at (10966, 31375), facing west)
         TwinMuseum = (38, 520.5, 570.5, 525.5, 572.4, 521.5, 573.3),
+        // (the lifts the sewer lift by the storm track's start line: its striped frame, decor body 47 of the storm's file there, and its grate,
+        // scene 42's actor 21 -- the user, 2026-10-28: "They should look like and replicate the behaviour of the elevator that goes down into
+        // the sewer")
+        LiftLook = (42, 21, 47, 567.5, 589.5),
         // (the island's people and things away from both roads stay: the cow, the sewer lifts by the start line and over the school -- without
         // them the lift's zone took Twinsen down into the sewers and the ride back up took him straight down again -- the user, 2026-10-27)
         KeepOffRoadActors = true,
@@ -177,6 +181,9 @@ internal sealed record RaceTrackIsland(
     // moved to ToX, ToZ (island cells; its door zone and way out moved with it, RaceTrackScenes), and a lift on the road at LiftX, LiftZ
     // into the building as DeckLifts' first
     public (int Body, double FromX, double FromZ, double ToX, double ToZ, double LiftX, double LiftZ)? TwinMuseum { get; init; }
+    // The look of the lifts DeckLifts and TwinMuseum make: the retail lift whose frame is decor FrameBody of the island's own file nearest
+    // FrameX, FrameZ (island cells) and whose grate is actor Actor of Scene (RaceTrackBuilder.AddLiftPad, RaceTrackScenes)
+    public (int Scene, int Actor, int FrameBody, double FrameX, double FrameZ)? LiftLook { get; init; }
     // The entity of the one the island's story has waiting at the start, whatever the build's story setting: brought from the scene the
     // island has him in to stand just behind Twinsen on the grid (Polar Island's grobo with the digger's key, 2026-10-27)
     public int? StartPerson { get; init; }

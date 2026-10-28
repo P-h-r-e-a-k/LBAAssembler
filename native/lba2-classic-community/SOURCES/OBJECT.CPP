@@ -6292,6 +6292,8 @@ startaffscene:
 
         FlagChgCube = 0;
     }
+    // (a race-track mod's lift asked for its scene change inside this frame: its flag back, RACEMOD.CPP)
+    { extern void RaceMod_ArmCubeChange(void); RaceMod_ArmCubeChange(); }
 
     if (changepal)
         PaletteSync(changepal);
