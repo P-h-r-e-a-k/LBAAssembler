@@ -708,6 +708,7 @@ static S32 s_endToMenu = 0;                // end_to_menu=
 #define RACE_CELEBRATE_MS 2500             // ... or this soon, a win that unlocks a car: the race game's congratulations (RaceGame_Celebrate)
 static S32 s_menuAt = 0;                   // when the finished race goes back to the menu (0: not yet)
 static S32 s_raceTime = 0;                 // the finished race's time, GO to the line (ms)
+static S32 s_raceRun = 0;                  // ... a sprint's, its best run, start line to finish line (ms; a trial of several, the best of them)
 
 // Power-ups (powerups=): the mushrooms along the lap, scene by scene, each with the height it stands at and when it grows back after a car
 // took its power-up; the penguins dropped; and what the player has on.
@@ -4821,7 +4822,10 @@ static void SprintOver(S32 now, int crossed) {
     // (its best run: this one, or one before it in a trial of several -- SprintRunAgain)
     S32 run = crossed && s_laps > 0 ? now - s_lapStart : 0;
     if (s_trial && s_runsBest > 0 && (!run || s_runsBest < run)) run = s_runsBest;
-    RaceGame_Finished(s_trial, s_goAt && now > s_goAt ? now - s_goAt : 0, run, place, racers);
+    // (the display's "Finished in" and best run: a sprint's time was never set, and the finished time trial said 0:00.00, 2026-10-28)
+    s_raceTime = s_goAt && now > s_goAt ? now - s_goAt : 0;
+    s_raceRun = run;
+    RaceGame_Finished(s_trial, s_raceTime, run, place, racers);
     if (s_endToMenu > 0) s_menuAt = now + s_endToMenu;
 }
 
@@ -17293,11 +17297,12 @@ void RaceMod_Draw(void) {
             else if (s_place && s_trial) {
                 Time(a, sizeof(a), s_raceTime);
                 snprintf(text, sizeof(text), "Finished in %s", a);
-                // (a time trial's fastest lap over it: what its best laps keep)
-                if (s_bestLap > 0) {
+                // (a time trial's fastest lap over it -- a sprint's best run -- what its best laps keep)
+                const S32 fastest = s_sprint ? s_raceRun : s_bestLap;
+                if (fastest > 0) {
                     char best[48];
-                    Time(b, sizeof(b), s_bestLap);
-                    snprintf(best, sizeof(best), "Best lap %s", b);
+                    Time(b, sizeof(b), fastest);
+                    snprintf(best, sizeof(best), "%s %s", s_sprint ? "Best run" : "Best lap", b);
                     HudSmall(16, bottom - RACE_SMALL_STEP, best, -1);
                 }
             }
@@ -17443,7 +17448,7 @@ static void ResetTrack(void) {
     s_nbLifts = 0; s_lift = -1; s_liftDir = 0; s_liftScene = -1; s_liftOff = 0; s_nbDoorsTo = 0;
     s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = s_chaseDriver = s_chaseCarActor = -1; s_chaseFlipped = 0; s_chaseCarBody = s_chaseCarAnim = -1;
     s_chaseOn = 0; s_chaseText[0] = s_chaseText[1] = s_chaseText[2] = -1; s_chaseHelper = s_chaseVar = -1; s_chaseStep = 0; s_chaseAt = 0; s_chaseLead = 0; s_dreamAnyEnd = 0;
-    s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0;
+    s_startScene = -1; s_startInCar = 0; s_trial = 0; s_endToMenu = 0; s_menuAt = 0; s_raceTime = 0; s_raceRun = 0;
     GhostReset();
     s_onFoot = 0; s_footArmed = 0; s_footSince = 0; s_footBack = NULL; s_footScene = s_footArrive = -1; s_footActWas = 0; s_walkN = 0; s_walkCar = 0; s_stopReach = 0; s_stopping = 0; s_stopResume = 0;
     s_difficulty = -1; memset(s_hasLevel, 0, sizeof(s_hasLevel)); s_diffEase = 0; s_diffItems = 100; s_diffAim = 0; s_diffHazards = 100;
