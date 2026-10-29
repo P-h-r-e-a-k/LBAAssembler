@@ -423,7 +423,21 @@ public partial class MainWindow
         if (selectedLba2Scene is { } picked) return picked;
         var island = SceneIsland(activeFile);
         var first = allSceneEntries.FirstOrDefault(s => !s.IsInterior && string.Equals(s.IslandFile, island, StringComparison.OrdinalIgnoreCase));
-        return first?.Option.Index ?? Lba2Play.LastOptions?.Scene ?? 0;
+        return first?.Option.Index ?? TrackStartScene(activeFile) ?? Lba2Play.LastOptions?.Scene ?? 0;
+    }
+
+    // The start scene of the race track built on an island file that has no scenes of its own in the list -- the scene list files a scene
+    // under the island its island byte names, so CXTOWER's and CXTOWERMK2's scenes are ILOTCX's, CELEBRA2's CELEBRAT's, PALACE's
+    // OTRINGAL's -- with which Play started in scene 0 (the user, 2026-10-29: "Attempting to play CXTowermk2.ile is starting me in scene
+    // 0", "This seems to be affecting more than one track"); null without one.
+    private int? TrackStartScene(string file)
+    {
+        if (!Lba2Configured || !Terrain.RaceTrackService.HasBackups(gameRoot)) return null;
+        var track = Terrain.RaceTrackService.RaceFor(gameRoot, file);
+        if (track is null || Terrain.RaceTrackIsland.ByName(track.Island) is not { } island) return null;
+        static bool Same(string? a, string b) => a is not null && string.Equals(Path.GetFileNameWithoutExtension(a), Path.GetFileNameWithoutExtension(b), StringComparison.OrdinalIgnoreCase);
+        if (!Same(island.IleFile, file) && !Same(island.TwinIleFile, file)) return null;
+        return Terrain.RaceTrackService.Raced(track) is { StartScene: >= 0 } raced ? raced.StartScene : null;
     }
 
     private SceneEntry? SceneUnderCamera()

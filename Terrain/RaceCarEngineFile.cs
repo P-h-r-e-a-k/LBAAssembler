@@ -519,8 +519,13 @@ internal static class RaceCarEngineFile
                 var file = Path.Combine(folder, $"racecar_track{++n}.txt");
                 car.WriteEngineFile(file, member, story: true, prefix: $"track{n}_");
                 if (extra?.Invoke(member.Island) is { } lines) File.AppendAllLines(file, lines);
-                // (the scenes it is raced in: an island's own outside scenes, or the copies a track of its own races in)
-                var (first, last) = island.CopiesScene is not null || island.CopiesScenes is not null || island.OwnScenes ? (island.FirstScene, island.LastScene) : (-1, -1);
+                // (the scenes it is raced in: an island's own outside scenes, or the copies a track of its own races in -- with the scenes
+                // made bigger adds, when they follow on: Island CX Mk2's copy, 340, and its other cubes', 341-343, where the set had 340 alone
+                // and the race, starting in 343, found no track there, 2026-10-29)
+                var own = island.CopiesScene is not null || island.CopiesScenes is not null || island.OwnScenes;
+                var scenes = island.Scenes.ToList();
+                var (first, last) = !own ? (-1, -1)
+                    : scenes.Max() - scenes.Min() + 1 == scenes.Distinct().Count() ? (scenes.Min(), scenes.Max()) : (island.FirstScene, island.LastScene);
                 text.Append($"track={island.IslandByte} {when} {first} {last} {file}\n");
             }
             if (t.Story is { TiredText: >= 0 } s) text.Append($"tired={RaceTrackStory.DayVar} {RaceTrackStory.Tired} {s.TiredText}\n");

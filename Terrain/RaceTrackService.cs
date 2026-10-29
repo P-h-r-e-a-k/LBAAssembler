@@ -363,7 +363,7 @@ internal static class RaceTrackService
     {
         var tracks = Tracks(ReadInfo(gameDirectory));
         if (tracks.Count == 0) return null;
-        if (tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island) is var i && (i.CopiesScene is not null || i.CopiesScenes is not null) && scene >= i.FirstScene && scene <= i.LastScene) is { } its) return its;
+        if (tracks.FirstOrDefault(t => RaceTrackIsland.ByName(t.Island) is var i && (i.CopiesScene is not null || i.CopiesScenes is not null) && i.HasScene(scene)) is { } its) return its;
         try
         {
             var record = HqrArchive.Open(Path.Combine(gameDirectory, "SCENE.HQR")).Read(scene + 1);
