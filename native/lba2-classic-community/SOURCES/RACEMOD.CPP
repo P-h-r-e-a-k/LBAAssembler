@@ -481,6 +481,10 @@ typedef struct {
     double Side, SideV, LaneNx, LaneNz, LaneBank;
     int LaneAt, PassDir, PassWho;          // (PassWho: the car it passes, -1 Twinsen's)
     S32 HoldSince, BlockedAt;               // (BlockedAt: last held up -- a hold lasts through a moment it isn't)
+    // (defending -- OpponentSide: the car behind it moved across in front of (-2 none, -1 Twinsen's), to where, until when at the most,
+    // and when it may next)
+    int DefendWho; double DefendSide; S32 DefendUntil, DefendRest;
+    int ShutDir; S32 ShutUntil;            // (a pass shut out: that side not tried again until then)
     double WX, WY, WZ;
     int Placed;
 } T_RACE_OPPONENT;
@@ -3367,6 +3371,7 @@ static void OnSpot(T_RACE_OPPONENT *o, const T_RACE_SPOT *spot) {
     }
     o->S = o->Cum[best];
     o->Side = o->SideV = 0; o->PassDir = 0; o->HoldSince = 0; o->LaneAt = -1;
+    o->DefendWho = -2; o->DefendUntil = o->DefendRest = 0;
     o->Laps = o->S > o->Length / 2 ? 0 : 1;
     double x, z, y, v, dx, dz;
     PathAt(o, o->S, &x, &z, &y, &v, &dx, &dz);
@@ -9320,7 +9325,9 @@ static void PackLapLog(int lap) {
 //     eases the most, a hard one pushes the most and eases the least) -- its push and the level's catch-up behind Twinsen not both: the
 //     more of the two;
 //   the slipstream -- close behind any car (RACE_DRAFT_*: from a car's length, full at 2.5 cells, gone at 12) a car is quicker by
-//     RACE_DRAFT, Twinsen's own too (RaceMod_SpeedFactor), so a car that has caught another can go by it;
+//     RACE_DRAFT, Twinsen's own too (RaceMod_SpeedFactor), so a car that has caught another can go by it -- with lanes= only lined up
+//     behind it (DraftLined: none a car's width across), and eased out as it is eased in, so a car pulling out of it to pass keeps it a
+//     moment (2026-10-29, the user: "Let's add defensive positioning and a small slip stream effect");
 //   its form -- each opponent a little quicker and slower in turn over a minute or so (RACE_FORM, each its own beat), so that two cars of
 //     much the same pace swap places now and then rather than lapping nose to tail.
 // Twinsen's own car only ever gets the slipstream. Over the race's level's catch-up and easing off (which go by Twinsen alone).
@@ -9331,6 +9338,8 @@ static void PackLapLog(int lap) {
 #define RACE_DRAFT_FULL (2.5 * 512)
 #define RACE_DRAFT_HOLD (6.0 * 512)
 #define RACE_DRAFT_FAR (12.0 * 512)
+#define RACE_DRAFT_LINED (1.0 * 512)       // (lanes=: car middles this near across the road, all of it -- the cars' boxes 1,266 across ...
+#define RACE_DRAFT_WIDE (2.4 * 512)        // ... this far, none)
 #define RACE_FORM 0.035                    // an opponent's form, either way
 #define RACE_BAND_MS 1500.0                // how quickly a car's factor follows (eased in, not jumped)
 static const double s_packEase[3] = {0.12, 0.09, 0.06};   // easy, medium (and a race with no level), hard
@@ -9345,6 +9354,8 @@ static double Draft(double gap) {
     if (gap <= RACE_DRAFT_HOLD) return RACE_DRAFT;
     return RACE_DRAFT * (RACE_DRAFT_FAR - gap) / (RACE_DRAFT_FAR - RACE_DRAFT_HOLD);
 }
+
+static double DraftLined(int who, int front);
 
 // Each frame of a race, before the opponents move: each one's factors (o->Pack, o->Band) and Twinsen's slipstream eased towards what the
 // pack makes them now. Outside a race (qualifying, the grid, no other car) all of them 1.
@@ -9365,8 +9376,10 @@ static void PackFactors(S32 now, S32 dt) {
         for (int i = 0; i < count; i++) {
             // (the car nearest in front of this one, and how far)
             double gap = -1;
-            for (int j = 0; j < count; j++) if (j != i && at[j] > at[i] && (gap < 0 || at[j] - at[i] < gap)) gap = at[j] - at[i];
-            const double draft = gap >= 0 ? Draft(gap) : 0;
+            int front = -1;
+            for (int j = 0; j < count; j++) if (j != i && at[j] > at[i] && (gap < 0 || at[j] - at[i] < gap)) { gap = at[j] - at[i]; front = j; }
+            double draft = gap >= 0 ? Draft(gap) : 0;
+            if (draft > 0) draft *= DraftLined(who[i], who[front]);
             if (who[i] < 0) { heroTarget = 1 + draft; continue; }
             T_RACE_OPPONENT *o = &s_opp[who[i]];
             // (the pack: off the middle by more than the dead band, up to the level's at RACE_PACK_FULL)
@@ -15304,10 +15317,26 @@ S32 RaceMod_DoorShut(const T_ZONE *zn) {
 #define RACE_LANE_AHEAD 12                 // lane points ahead whose room counts (the road narrowing ahead: back in before it does)
 #define RACE_WANDER (0.4 * 512)            // how far either side of its line a driver drifts, ...
 #define RACE_WANDER_LEN (70 * 512.0)       // ... once over this far
-// (Twinsen's car this frame: where, how fast which way)
+// Defending (2026-10-29, the user: "Let's add defensive positioning and a small slip stream effect"): a car closing on an opponent from
+// behind -- not yet beside it -- that moves out to one side has the opponent move across in front of it on that side, once: held there
+// until the other is beside it, drops back or RACE_DEFEND_MS is up, then not again for RACE_DEFEND_REST (Twinsen's: _TWINSEN). Never
+// across onto a car beside it, and more slowly than a pass, so the car behind can still go the other way (OpponentSide: a pass whose side is shut thinks again). Against
+// Twinsen's car only some of the drivers, by the race's level (s_defendShare: none in an easy race).
+#define RACE_DEFEND_LOOK (5 * 512)         // a car this near behind ...
+#define RACE_DEFEND_WIDE (1.6 * RACE_PASS_GAP)   // ... and this near across is defended against ...
+#define RACE_DEFEND_OUT (0.35 * RACE_PASS_GAP)   // ... once it is this far out to one side
+#define RACE_DEFEND_SPEED 800.0            // units a second across the road defending (a pass's RACE_SIDE_SPEED)
+#define RACE_DEFEND_MS 3000
+#define RACE_DEFEND_REST 4000
+#define RACE_DEFEND_REST_TWINSEN 8000      // (after defending against Twinsen's car: not every few seconds in front of the player)
+#define RACE_SHUT_MS 1500                  // a pass shut out: that side not tried again for this long
+static const double s_defendShare[3] = {0, 0.5, 1};   // easy, medium (and a race with no level), hard
+static int DefendsTwinsen(int n) { return fmod(n * 0.618 + 0.31, 1.0) < s_defendShare[PackLevel()]; }
+// (Twinsen's car this frame: where, how fast which way, and the lane point it is at -- lanes=)
 static double s_heroWX, s_heroWY, s_heroWZ, s_heroVX, s_heroVZ;
 static S32 s_heroAt = 0;
-static int s_heroOn = 0;
+static int s_heroOn = 0, s_heroLane = -1;
+static int LaneNear(int at, double x, double y, double z);
 static void HeroMotion(S32 now) {
     const T_OBJET *h = &ListObjet[NUM_PERSO];
     const double x = h->Obj.X + CurrentCubeX * 32768.0, z = h->Obj.Z + CurrentCubeY * 32768.0;
@@ -15318,6 +15347,7 @@ static void HeroMotion(S32 now) {
         if (vx * vx + vz * vz < 20000.0 * 20000.0) { s_heroVX = 0.7 * s_heroVX + 0.3 * vx; s_heroVZ = 0.7 * s_heroVZ + 0.3 * vz; }
     } else if (!on) s_heroVX = s_heroVZ = 0;
     s_heroWX = x; s_heroWY = h->Obj.Y; s_heroWZ = z; s_heroAt = now; s_heroOn = on;
+    s_heroLane = on && s_nbLanes ? LaneNear(s_heroLane, x, h->Obj.Y, z) : -1;
 }
 // The lane point nearest a place (searched round the last one, else everywhere), as LineDistance weighs height
 static int LaneNear(int at, double x, double y, double z) {
@@ -15343,9 +15373,68 @@ static int ClearAt(double t, double side, const double *lat, const double *along
         if (along[i] > -RACE_PASS_BESIDE && along[i] < RACE_PASS_LOOK / 2 && fabs(lat[i] - (t - side)) < RACE_PASS_GAP * 0.9) return 0;
     return 1;
 }
+// Whether moving across to Side `t` (from `side`) takes it nearer a car beside it or a little ahead that it would then be too near
+static int Closer(double t, double side, const double *lat, const double *along, int nb) {
+    for (int i = 0; i < nb; i++) {
+        const double d = fabs(lat[i] - (t - side));
+        if (along[i] > -RACE_PASS_BESIDE && along[i] < RACE_PASS_LOOK / 2 && d < RACE_PASS_GAP * 0.9 && d < fabs(lat[i])) return 1;
+    }
+    return 0;
+}
+// Where car `who` (-1 Twinsen's, else an opponent) is across the road -- from the road's middle at the lane point it is at, along its
+// normal there (lanes=) -- and how high; 0: not known
+static int AcrossRoad(int who, double *across, double *y) {
+    double x, z; int at;
+    if (who < 0) {
+        if (!s_heroOn || s_heroLane < 0) return 0;
+        x = s_heroWX; z = s_heroWZ; *y = s_heroWY; at = s_heroLane;
+    } else {
+        const T_RACE_OPPONENT *o = &s_opp[who];
+        if (!o->Placed || o->LaneAt < 0 || o->LaneAt >= s_nbLanes) return 0;
+        x = o->WX; z = o->WZ; *y = o->WY; at = o->LaneAt;
+    }
+    const T_RACE_LANE *l = &s_lanes[at];
+    *across = (x - l->X) * l->Nx + (z - l->Z) * l->Nz;
+    return 1;
+}
+// How much of the slipstream car `who` gets behind car `front` (each -1 Twinsen's, else an opponent): with lanes=, by how far apart across
+// the road they are, each where it is on it -- round a bend as on a straight (RACE_DRAFT_LINED all, RACE_DRAFT_WIDE none; cars at
+// different heights none); with none, or a car not placed yet, all
+static double DraftLined(int who, int front) {
+    if (!s_overtake || !s_nbLanes) return 1;
+    double a, ay, b, by;
+    if (!AcrossRoad(who, &a, &ay) || !AcrossRoad(front, &b, &by)) return 1;
+    if (fabs(by - ay) > 1500) return 0;
+    const double lat = fabs(b - a);
+    return lat <= RACE_DRAFT_LINED ? 1 : lat >= RACE_DRAFT_WIDE ? 0 : (RACE_DRAFT_WIDE - lat) / (RACE_DRAFT_WIDE - RACE_DRAFT_LINED);
+}
+// Twinsen's car in a slipstream (s_heroDraft, PackFactors): said once as it comes in, "Slipstream" under the speed (RaceMod_DrawHud), and
+// the air streaming past its sides -- small puffs off its front corners, left behind as it goes
+#define RACE_WAKE_ON 0.8                   // in it at this share of RACE_DRAFT (close behind, lined up), ...
+#define RACE_WAKE_OFF 0.5                  // ... out of it below this
+#define RACE_WAKE_MS 70                    // a puff this often, each side in turn
+static int s_heroInDraft = 0, s_wakeSide = 0;
+static S32 s_wakeAt = 0;
+static void DraftWake(S32 now) {
+    const double share = (s_heroDraft - 1) / RACE_DRAFT;
+    if (!s_heroInDraft && share >= RACE_WAKE_ON && RaceOn()) {
+        s_heroInDraft = 1;
+        const int front = CarInFront(-1);
+        Log_Info("[racemod] Twinsen in %s's slipstream", front >= 0 ? s_opp[front].Name : "a car");
+    } else if (s_heroInDraft && (share < RACE_WAKE_OFF || !RaceOn())) s_heroInDraft = 0;
+    if (!s_heroInDraft || Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || now - s_wakeAt < RACE_WAKE_MS) return;
+    s_wakeAt = now;
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double a = Radians(hero->Obj.Beta & 4095), fx = sin(a), fz = cos(a);
+    const double side = (s_wakeSide ^= 1) ? 560 : -560, ahead = 450;
+    const S32 x = (S32)(hero->Obj.X + fx * ahead + fz * side), z = (S32)(hero->Obj.Z + fz * ahead - fx * side);
+    // (light and quick: a pof's scale is how far off it looks -- from 950 out to 1800 over 0.3 s)
+    InitExtraPof(x, hero->Obj.Y + 350, z, 1, 1024, (hero->Obj.Beta + 2048) & 4095, 4, 0, 950, 1800, 300, 0, 300);
+}
+
 static void OpponentSide(int n, T_RACE_OPPONENT *o, double x, double z, double y, double dx, double dz, S32 now, S32 dt) {
     const double fl = sqrt(dx * dx + dz * dz);
-    if (!s_overtake || !s_nbLanes || fl <= 0 || o->MergeLeft > 0 || !o->Scenes) { o->Side = o->SideV = 0; o->PassDir = 0; return; }
+    if (!s_overtake || !s_nbLanes || fl <= 0 || o->MergeLeft > 0 || !o->Scenes) { o->Side = o->SideV = 0; o->PassDir = 0; o->DefendUntil = 0; return; }
     const double fx = dx / fl, fz = dz / fl;
     const int at = LaneNear(o->LaneAt, x, y, z);
     if (at < 0) return;
@@ -15368,8 +15457,8 @@ static void OpponentSide(int n, T_RACE_OPPONENT *o, double x, double z, double y
     const double mx = x + la->Nx * o->Side, mz = z + la->Nz * o->Side;
     int bn = -2; double bAlong = 1e30, bLat = 0, bSpeed = 0;
     double latOf[RACE_MAX_OPPONENTS + 1], alongOf[RACE_MAX_OPPONENTS + 1];
-    int nb = 0, passing = 0;
-    double pLat = 0;
+    int nb = 0, passing = 0, dn = -2;
+    double pLat = 0, pAlong = 0, dAlong = -1e30, dLat = 0;
     for (int k = -1; k < RACE_MAX_OPPONENTS; k++) {
         double cx, cy, cz, cv;
         if (k < 0) {
@@ -15385,9 +15474,22 @@ static void OpponentSide(int n, T_RACE_OPPONENT *o, double x, double z, double y
         if (along < -RACE_PASS_LOOK || along > RACE_PASS_LOOK) continue;
         latOf[nb] = lat; alongOf[nb] = along; nb++;
         // (the car it is passing, not yet behind it)
-        if (o->PassDir && k == o->PassWho && along > -RACE_PASS_BESIDE) { passing = 1; pLat = lat; }
+        if (o->PassDir && k == o->PassWho && along > -RACE_PASS_BESIDE) { passing = 1; pLat = lat; pAlong = along; }
         // (ahead in its lane -- clear ahead, not beside -- and not pulling away)
         if (along > RACE_PASS_AHEAD && along < bAlong && fabs(lat) < RACE_PASS_GAP && (o->Speed > cv + 30 || along < RACE_FOLLOW)) { bn = k; bAlong = along; bLat = lat; bSpeed = cv; }
+        // (behind it -- not yet beside -- near across, and closing on it or close: the nearest, to defend against)
+        if (along < -RACE_PASS_BESIDE && along > -RACE_DEFEND_LOOK && along > dAlong && fabs(lat) < RACE_DEFEND_WIDE && (cv > o->Speed + 30 || along > -RACE_FOLLOW)
+            && (k >= 0 || DefendsTwinsen(n))) { dn = k; dAlong = along; dLat = lat; }
+    }
+    // (the car it passes moved across onto the side it went, and it isn't beside it yet: no room there now -- it thinks again, the other
+    // side or behind it)
+    if (passing && pAlong > RACE_PASS_AHEAD) {
+        const double t = o->Side + pLat + o->PassDir * RACE_PASS_GAP;
+        if (t > sHi + 1 || t < sLo - 1) {
+            Log_Info("[racemod] %s shut out passing %s", o->Name, o->PassWho < 0 ? "Twinsen" : s_opp[o->PassWho].Name);
+            o->ShutDir = o->PassDir; o->ShutUntil = now + RACE_SHUT_MS;
+            passing = 0; o->PassDir = 0;
+        }
     }
     double want = RACE_WANDER * sin(2 * RACE_PI * o->S / RACE_WANDER_LEN + n * 1.9);
     if (passing && (bn == -2 || bn == o->PassWho)) {
@@ -15398,7 +15500,8 @@ static void OpponentSide(int n, T_RACE_OPPONENT *o, double x, double z, double y
     } else if (bn != -2) {
         // pass: out to the side of it where there's room and no car, the nearer way first (the side it went, while it's beside)
         const double t1 = o->Side + bLat + RACE_PASS_GAP, t2 = o->Side + bLat - RACE_PASS_GAP;
-        const int ok1 = t1 <= sHi && ClearAt(t1, o->Side, latOf, alongOf, nb), ok2 = t2 >= sLo && ClearAt(t2, o->Side, latOf, alongOf, nb);
+        const int shut = now < o->ShutUntil ? o->ShutDir : 0;
+        const int ok1 = shut != 1 && t1 <= sHi && ClearAt(t1, o->Side, latOf, alongOf, nb), ok2 = shut != -1 && t2 >= sLo && ClearAt(t2, o->Side, latOf, alongOf, nb);
         int dir = 0;
         if (ok1 && ok2) dir = o->PassDir ? o->PassDir : fabs(t1 - o->Side) <= fabs(t2 - o->Side) ? 1 : -1;
         else if (ok1) dir = 1;
@@ -15426,10 +15529,31 @@ static void OpponentSide(int n, T_RACE_OPPONENT *o, double x, double z, double y
         // past it: back towards its line once there's room there (a car still beside on that side: held out until it isn't)
         if (o->PassDir && !ClearAt(want, o->Side, latOf, alongOf, nb)) want = o->Side;
         else o->PassDir = 0;
+        if (!o->PassDir) {
+            if (o->DefendUntil) {
+                // defending: held across in front of it until it is beside, drops back, or for long enough
+                if (dn != o->DefendWho || now >= o->DefendUntil) { o->DefendUntil = 0; o->DefendRest = now + (o->DefendWho < 0 ? RACE_DEFEND_REST_TWINSEN : RACE_DEFEND_REST); }
+                else want = o->DefendSide;
+            } else if (dn != -2 && now >= o->DefendRest && fabs(dLat) > RACE_DEFEND_OUT) {
+                // the car behind moved out to one side: across in front of it there, once, if there's room and no car
+                double t = o->Side + dLat;
+                if (t < sLo) t = sLo;
+                if (t > sHi) t = sHi;
+                if (fabs(t - o->Side) > RACE_DEFEND_OUT / 2 && ClearAt(t, o->Side, latOf, alongOf, nb)) {
+                    const double left = la->Nx * fz - la->Nz * fx;
+                    Log_Info("[racemod] %s defends against %s on the %s", o->Name, dn < 0 ? "Twinsen" : s_opp[dn].Name, (t > o->Side) == (left > 0) ? "left" : "right");
+                    o->DefendWho = dn; o->DefendSide = t; o->DefendUntil = now + RACE_DEFEND_MS;
+                    want = t;
+                }
+            }
+            // (never across towards a car beside it, nor one just ahead)
+            if (Closer(want, o->Side, latOf, alongOf, nb)) want = o->Side;
+        }
     }
+    if (o->DefendUntil && (passing || bn != -2 || o->PassDir)) { o->DefendUntil = 0; o->DefendRest = now + (o->DefendWho < 0 ? RACE_DEFEND_REST_TWINSEN : RACE_DEFEND_REST); }
     if (want < sLo) want = sLo;
     if (want > sHi) want = sHi;
-    const double step = RACE_SIDE_SPEED * dt / 1000.0, was = o->Side;
+    const double step = (o->DefendUntil ? RACE_DEFEND_SPEED : RACE_SIDE_SPEED) * dt / 1000.0, was = o->Side;
     o->Side = want > o->Side + step ? o->Side + step : want < o->Side - step ? o->Side - step : want;
     // (the road narrowing under it: in to the room there, quicker)
     if (o->Side < sLo) o->Side = o->Side + 2 * step < sLo ? o->Side + 2 * step : sLo;
@@ -15571,11 +15695,12 @@ void RaceMod_Frame(void) {
     // (how far round the player is, for the opponents that push harder when they have fallen behind)
     const double me = moving && s_opp[0].Count ? PlayerProgress() : 0;
     if (moving) PackWatch();
-    // (the pack kept together: each opponent's factor and Twinsen's slipstream)
-    PackFactors(now, moving ? dt : 0);
-    if (moving) RunawayAttacks(now);
-    s_carsScene = NumCube;
+    // (the pack kept together: each opponent's factor and Twinsen's slipstream -- where his car is first, for whether he is lined up
+    // behind one)
     HeroMotion(now);
+    PackFactors(now, moving ? dt : 0);
+    if (moving) { RunawayAttacks(now); DraftWake(now); }
+    s_carsScene = NumCube;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_carActor[n] = -1;
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
         T_RACE_OPPONENT *o = &s_opp[n];
@@ -15926,7 +16051,8 @@ static void HudSmallIn(S32 x, S32 y, const char *text, int align, S32 colour) {
     const S32 sw = fw * RACE_SMALL_NUM / RACE_SMALL_DEN, sh = fh * RACE_SMALL_NUM / RACE_SMALL_DEN;
     const S32 sx0 = align > 0 ? x - sw : x, sy0 = y + RACE_LINE_STEP - sh + 4;
     // (drawn full size where it will go, its patch first kept: inside the screen, or the line as it was)
-    const S32 px0 = sx0, py0 = y, sw0 = (S32)ModeDesiredX, sh0 = (S32)ModeDesiredY;
+    // (a line to the right, near the screen's edge: drawn full size further in)
+    const S32 sw0 = (S32)ModeDesiredX, sh0 = (S32)ModeDesiredY, px0 = sx0 + fw > sw0 ? sw0 - fw : sx0, py0 = y;
     if (fw > RACE_SMALL_MAXW || px0 < 0 || py0 < 0 || px0 + fw > sw0 || py0 + fh > sh0) { HudLineIn(x, y, text, align, colour); return; }
     RaceMod_ShrunkText(buf, colour, 2, px0, py0, fw, fh, sx0, sy0, RACE_SMALL_NUM, RACE_SMALL_DEN);
     BoxMovingAdd(px0 - 4, py0 - 4, px0 + fw + 6, py0 + fh + 4);
@@ -17457,6 +17583,8 @@ void RaceMod_Draw(void) {
         snprintf(text, sizeof(text), "%d km/h", (int)((abs(speed) * 36 + 2560) / 5120));
         HudLine(width - 16, speedY, text, 1);
         }
+        // (in a slipstream -- DraftWake: over the gear, or where the speed would be)
+        if (s_heroInDraft) HudSmall(width - 16, s_speedo ? speedY - RACE_LINE_STEP - RACE_SMALL_STEP : speedY, "Slipstream", 1);
         // the lap and its time, bottom left -- before the start what the start line wants, after the race the place
         text[0] = 0;
         S32 colour = LBAWHITE;
