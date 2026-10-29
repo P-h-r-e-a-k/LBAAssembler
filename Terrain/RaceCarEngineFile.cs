@@ -28,7 +28,7 @@ internal static class RaceCarEngineFile
     // kept out of sight. `story`: the game played as a game, not a race started on its line -- the story's gates and results (Citadel
     // Island's, RaceTrackStory) are written too.
     internal static string EngineFile(this RaceCarSetup car, RaceTrackService.TrackInfo? info, IReadOnlyList<string>? pathFiles = null, string? raisedFile = null, bool story = false,
-        string? guideFile = null)
+        string? guideFile = null, string? lanesFile = null)
     {
         var track = info is null ? null : RaceTrackService.Raced(info);
         string N(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
@@ -51,6 +51,8 @@ internal static class RaceCarEngineFile
         if (track?.Checkpoints is { Count: > 0 }) text.Append($"checkpoint_lines={(car.ShowCheckpoints ? 1 : 0)}\n");
         // a raised road: the file with its middle, point by point (the engine's floor there)
         if (raisedFile is not null) text.Append($"raised={raisedFile}\n");
+        // the road's room for the opponents to pass in (RACEMOD.CPP lanes=)
+        if (lanesFile is not null) text.Append($"lanes={lanesFile}\n");
         // ... the lap's own points in it, and its branches after them (a shortcut off the lap and back onto it)
         if (raisedFile is not null && track?.RaisedLap is { } lapPoints && track.RaisedBranches is { Count: > 0 } branches)
         {
@@ -482,7 +484,13 @@ internal static class RaceCarEngineFile
             raised = Path.Combine(folder, prefix + "raceraised.txt");
             File.WriteAllLines(raised, road.Select(p => string.Join(' ', p)));
         }
-        File.WriteAllText(path, car.EngineFile(info, files, raised, story, guide));
+        string? lanes = null;
+        if (files.Count > 0 && track?.Lanes is { Count: > 2 } room)
+        {
+            lanes = Path.Combine(folder, prefix + "racelanes.txt");
+            File.WriteAllLines(lanes, room.Select(p => string.Join(' ', p)));
+        }
+        File.WriteAllText(path, car.EngineFile(info, files, raised, story, guide, lanes));
     }
 
     // The game played as a game (RaceTrackService.CarFileWriter's story): every track of the folder in a car file of its own beside `path`,

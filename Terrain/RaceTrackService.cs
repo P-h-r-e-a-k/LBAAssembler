@@ -263,7 +263,10 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<string>? DeckLifts = null,
         // StoryPeople: the island's story's people at the start, each [scene, actor] (RaceTrackScenes Result.StoryPeople) -- out of sight in a
         // race with no one to beat (RACEMOD.CPP hide_actor=); since 2026-10-28
-        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? StoryPeople = null);
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? StoryPeople = null,
+        // Lanes: the room the racing lines are planned in, for the opponents to pass in (RaceTrackReport.Lanes, RACEMOD.CPP lanes=); since
+        // 2026-10-29
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Lanes = null);
     // A dreamt sprint: its finish line (a line as the start line is), the car's top speed for it (km/h: the setup's gears scaled to it),
     // the intro and the loss's line (texts of the island's), and where a win wakes Twinsen up -- the scene, the text of its island's its
     // actor says there.
@@ -1125,7 +1128,8 @@ internal static class RaceTrackService
             Marshal: report.Marshal,
             OnFoot: report.OnFoot ? true : null,
             RailOpens: OrNull(report.RailOpens),
-            MapRoads: MapRoads(report), DoorsOff: scenes.DoorsOff, ActorsAt: scenes.ActorsAt, DeckLifts: scenes.DeckLifts, StoryPeople: scenes.StoryPeople);
+            MapRoads: MapRoads(report), DoorsOff: scenes.DoorsOff, ActorsAt: scenes.ActorsAt, DeckLifts: scenes.DeckLifts, StoryPeople: scenes.StoryPeople,
+            Lanes: report.Lanes.Count > 2 ? report.Lanes : null);
     }
 
     // A list of what is there, or null when there is nothing (the car file leaves the key out)

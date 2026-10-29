@@ -719,6 +719,10 @@ internal sealed class RaceTrackReport
     // Baldino's line: the same, keeping more to the other side of the road.
     // ... and each driver's (RaceTrackOptions.Racers, in that order; the first is RacePath)
     public List<List<(double X, double Z, double Y, double Speed, double Radius)>> DriverPaths { get; } = new();
+    // The room the racing lines are planned in, for the race-track mode's opponents to pass in (RACEMOD.CPP lanes=): the road's middle point
+    // by point in lap order, each [x, z, y, its normal across the road a thousand long, how far along it a car's middle may go either way
+    // (units: lo, hi), the road's banking (height a cell across)] -- PlanRacePath's, the first driver's
+    public List<int[]> Lanes { get; } = new();
     // The lap's centre line as built (island cells), for checks.
     public double[] LapX { get; set; } = Array.Empty<double>();
     public double[] LapZ { get; set; } = Array.Empty<double>();
@@ -3271,6 +3275,19 @@ internal static class RaceTrackBuilder
                 if (into <= StepNear || past <= StepNear) { straight[m] = true; stepOn[m] = q; }
             }
         }
+
+        // (the room it is planned in, for the race-track mode's passing -- none over a jump's flight -- once: the user, 2026-10-29, "Let's
+        // see if we can implement more dynamic driving for our opponents with basic over taking logic")
+        if (report.Lanes.Count == 0)
+            for (var m = 0; m < count; m++)
+            {
+                var k = at[m];
+                var bank = r.Bridge[k] || r.Deck[k] ? 0 : Math.Clamp(-r.Kappa[k] * o.BankGain, -o.MaxBank, o.MaxBank);
+                if (r.Raised is { } up && up[k] && r.RoadBank is { } rb) bank = rb[k] * 512;
+                double l = flight[m] ? 0 : lo[m], h = flight[m] ? 0 : hi[m];
+                report.Lanes.Add(new[] { (int)Math.Round(cx[m] * 512), (int)Math.Round(cz[m] * 512), (int)Math.Round(r.H[k]), (int)Math.Round(nx[m] * 1000),
+                                         (int)Math.Round(nz[m] * 1000), (int)Math.Round(l * 512), (int)Math.Round(h * 512), (int)Math.Round(bank) });
+            }
 
         // 1. smoothed, wide windows first: each point moved to the middle of the points `w` either side of it, then back within the road;
         //    a long bend's line is moved as a whole, which point-by-point curvature sweeps take tens of thousands of rounds to do
