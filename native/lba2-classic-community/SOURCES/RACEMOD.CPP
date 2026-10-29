@@ -621,6 +621,11 @@ static int s_place = 0, s_racers = 0;      // the player's place when he finishe
 static int s_main = -1;                    // the opponent to beat (main=; -1 none) ...
 static int s_beatMain = 0;                 // ... and whether the player finished ahead of him
 static int s_finishSet[2 * RACE_MAX_SETS], s_nbFinishSet = 0;
+// The race game's Story Mode (2026-10-29, the user: "Let's gate different cars to be unlocked by completing different island tracks in
+// story mode"): the cars a story track's win unlocks (unlock_win=<id>), or beating its time to beat (unlock_beat=<id>) -- RACEGAME.CPP
+// RaceGame_StoryUnlock keeps them; said on the display once the race's own word is over (s_sayNext)
+static char s_unlockWin[24] = "", s_unlockBeat[24] = "";
+static char s_sayNext[64] = "";
 // A sprint (sprint=, finishline=): the race from the start line to the finish line, once. Each opponent's line ends where it crosses the
 // finish (FinishS); the race's end -- the player over the line, or the one to beat there first -- is followed, RACE_SPRINT_END_MS later,
 // by the dream's waking up (wake=) or the race run again (a loss).
@@ -4234,6 +4239,8 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_nbPenguinActors < RACE_MAX_PENGUIN_ACTORS && sscanf(v, "%d %d", &s_penguinScene[s_nbPenguinActors], &s_penguinActor[s_nbPenguinActors]) == 2) s_nbPenguinActors++;
         }
         else if (!strcmp(key, "win")) s_nbWinSet = ReadSets(v, s_winSet);
+        else if (!strcmp(key, "unlock_win")) sscanf(v, "%23s", s_unlockWin);
+        else if (!strcmp(key, "unlock_beat")) sscanf(v, "%23s", s_unlockBeat);
         else if (!strcmp(key, "sprint")) s_sprint = atoi(v);
         else if (!strcmp(key, "finishline")) s_hasFinish = ReadLine(v, &s_finishLine);
         else if (!strcmp(key, "intro")) s_introText = atoi(v);
@@ -4498,6 +4505,15 @@ void RaceMod_UpdateGear(S32 speed) {
 static void Message(const char *text) {
     snprintf(s_message, sizeof(s_message), "%s", text);
     s_messageUntil = TimerRefHR + 2500;
+}
+
+// The story's cars of `id` unlocked (RaceGame_StoryUnlock: the first time only), and said once the race's own word is over
+static void StoryUnlock(const char *id) {
+    if (!id[0]) return;
+    char first[96];
+    const int n = (int)RaceGame_StoryUnlock(id, first, sizeof(first));
+    if (n == 1) snprintf(s_sayNext, sizeof(s_sayNext), "%s unlocked!", first);
+    else if (n > 1) snprintf(s_sayNext, sizeof(s_sayNext), "%d new cars unlocked!", n);
 }
 
 // A missed checkpoint, for testing the tracks (the user, 2026-10-14: "alerts me for when I miss a check point in a track complete with
@@ -4806,6 +4822,7 @@ void RaceMod_Lap(S32 x, S32 z) {
                 ApplySets(s_beatSet, s_nbBeatSet);
                 snprintf(text, sizeof(text), "You beat %s's time!", s_opp[s_beatOpp].Name);
                 Message(text);
+                StoryUnlock(s_unlockBeat);
                 Log_Info("[racemod] %s (%.2f s against %.2f s)", text, s_lastLap / 1000.0, target / 1000.0);
             } else if (s_lastLap >= target) {
                 snprintf(text, sizeof(text), "%s's time not beaten", s_opp[s_beatOpp].Name);
@@ -4850,7 +4867,7 @@ void RaceMod_Lap(S32 x, S32 z) {
             Log_Info("[racemod] race over after %d laps: %d%s of %d%s", s_raceLaps, place, Ordinal(place), racers,
                      mainOn ? (s_beatMain ? ", ahead of the main opponent" : ", behind the main opponent") : "");
             if (total > 0) Log_Info("[racemod] Twinsen finishes the race: %.2f s from GO", total / 1000.0);
-            if (s_beatMain) ApplySets(s_winSet, s_nbWinSet);
+            if (s_beatMain) { ApplySets(s_winSet, s_nbWinSet); StoryUnlock(s_unlockWin); }
             ApplySets(s_finishSet, s_nbFinishSet);
         }
         if (s_phase == PHASE_QUALIFYING) {
@@ -4898,6 +4915,7 @@ static void SprintOver(S32 now, int crossed) {
     Log_Info("[racemod] sprint over in %.2f s: %d%s of %d%s", (now - s_lapStart) / 1000.0, place, Ordinal(place), racers, s_beatMain ? ", won" : ", lost");
     // (and in a dream that ends either way, dream_any_end=, what a win sets all the same: it wakes Twinsen up in his bed)
     if (s_beatMain || (s_dreamAnyEnd && s_wakeScene >= 0)) ApplySets(s_winSet, s_nbWinSet);
+    if (s_beatMain) StoryUnlock(s_unlockWin);
     ApplySets(s_finishSet, s_nbFinishSet);
     s_endAt = now + after;
     s_endWon = s_beatMain;
@@ -17687,6 +17705,8 @@ void RaceMod_Draw(void) {
     }
     // a message of the race-track mode's (Message: "Back on the road", the roulette wheel's prize), in the middle near the top -- set
     // since the first tracks and never drawn till 2026-10-10
+    // (the story's cars unlocked -- StoryUnlock: once the race's own word is over)
+    if (s_sayNext[0] && now >= s_messageUntil) { Message(s_sayNext); s_messageUntil = now + 5000; s_sayNext[0] = 0; }
     if (hud && now < s_messageUntil && s_message[0]) HudLine(width / 2 - SizeFont(s_message) / 2, height / 5, s_message, -1);
 
     RestoreClipWindow();
@@ -17751,6 +17771,7 @@ static void ResetTrack(void) {
     s_paradeStopText = s_paradeTalker = s_paradeGoVar = -1; s_pull = 0; s_pullSay = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
     s_main = -1; s_beatMain = 0; s_nbFinishSet = 0;
+    s_unlockWin[0] = s_unlockBeat[0] = 0;
     s_sprint = 0; s_hasFinish = 0; s_endAt = 0; s_endWon = 0; s_wakeScene = s_wakeText = s_wakeActor = s_introText = s_loseText = -1; s_introShown = 0; s_pendLose = -1;
     s_nbAfterGears = 0; s_wakeFlight = 0;
     s_nbDoorsOff = 0; s_nbActorsAt = 0; s_actorsAtScene = -1;

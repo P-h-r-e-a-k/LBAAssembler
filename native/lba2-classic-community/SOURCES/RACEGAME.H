@@ -7,10 +7,13 @@
  * Adventure), when RACEGAME.TXT is beside the game's data. RACEGAME.CPP says what is in it. */
 
 #define RACEGAME_START 2399                 // RaceGame_Menu: a race is set up (RaceMod_LoadFile) -- a new game, no introduction
+#define RACEGAME_STORY_NEW 2398             // ... Story Mode's set loaded (story_file=): a new game of LBA2's, its introduction first
+#define RACEGAME_STORY_CONTINUE 2397        // ... the same, the story's own save (story.lba) put in current.lba: the game resumed from it
 
 S32 RaceGame_On(void);                      // RACEGAME.TXT read: the main menu is the race game's
 // The race game's main menu, and its pages (Specials, a race or a time trial, the car, Best times): what MainGameMenu does next --
-// 70 resume (1000 for Esc with a race on), 74 the options, 75 quit, RACEGAME_START a race. `inGame`: a race is on to resume.
+// 70 resume (1000 for Esc with a race on), 74 the options, 75 quit, RACEGAME_START a race, RACEGAME_STORY_NEW / _CONTINUE Story Mode.
+// `inGame`: a race (or the story) is on to resume.
 S32 RaceGame_Menu(S32 inGame);
 S32 RaceGame_MenuText(S32 num, char *string);   // BuildCustomMenuText: a row of the race game's (non-zero), its label in `string`
 S32 RaceGame_RowDisabled(S32 num);          // a row greyed and passed over (Story Mode, Track select until they open)

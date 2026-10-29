@@ -4163,6 +4163,7 @@ S32 MainGameMenu(S32 load, S32 resumeInGame) {
                 gogame = TRUE;
                 RestoreTimer();
             } else {
+            resume_current: // (the race game's Story Mode continued: its own save put in current.lba -- RACEGAME.CPP StoryMode)
                 GetSavePath(tmpFilePathSave, ADELINE_MAX_PATH, CURRENTSAVE_FILENAME);
                 Log_Info("[menu] resumed from the current save, %s", tmpFilePathSave);
                 if (ExistsFileOrDir(tmpFilePathSave)) {
@@ -4343,6 +4344,14 @@ S32 MainGameMenu(S32 load, S32 resumeInGame) {
             BoxUpdate();
             flag = 1;
             break;
+
+#ifndef DEMO
+        case RACEGAME_STORY_NEW: // the race game's Story Mode (RACEGAME.CPP): its set loaded, a new game as the game's own
+            goto new_game;
+#endif
+
+        case RACEGAME_STORY_CONTINUE: // ... the story kept, continued: the current save resumed
+            goto resume_current;
 
         case RACEGAME_START: // the race game's race, set up (RACEGAME.CPP): a new game at its start line, no introduction
             firstloop = FALSE;

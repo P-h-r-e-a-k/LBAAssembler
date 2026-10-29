@@ -498,7 +498,9 @@ internal static class RaceCarEngineFile
     // island it enters: Citadel Island's storm track in the storm, its town circuit once the storm is over), and the story's tired line.
     // (each track's file with its best setup, when the setup says so; the set's own handling, for an island with no track, the sliders')
     // (`fine`: the story in the weather once the storm is over, whatever the game's chapter -- Play from Citadel Island's town circuit file)
-    internal static void WriteStorySet(this RaceCarSetup car, string path, RaceTrackService.TrackInfo info, bool fine = false)
+    // (`extra`: lines of its own for a track's file, by the island it is raced as -- the race game's car unlocks, unlock_win=)
+    internal static void WriteStorySet(this RaceCarSetup car, string path, RaceTrackService.TrackInfo info, bool fine = false,
+        Func<string, IEnumerable<string>>? extra = null)
     {
         var folder = Path.GetDirectoryName(path) ?? ".";
         var text = new StringBuilder("# LBA Assembler race car setup: the folder's tracks, each raced where and when the game is (RACEMOD.CPP track=)\n");
@@ -516,6 +518,7 @@ internal static class RaceCarEngineFile
             {
                 var file = Path.Combine(folder, $"racecar_track{++n}.txt");
                 car.WriteEngineFile(file, member, story: true, prefix: $"track{n}_");
+                if (extra?.Invoke(member.Island) is { } lines) File.AppendAllLines(file, lines);
                 // (the scenes it is raced in: an island's own outside scenes, or the copies a track of its own races in)
                 var (first, last) = island.CopiesScene is not null || island.CopiesScenes is not null || island.OwnScenes ? (island.FirstScene, island.LastScene) : (-1, -1);
                 text.Append($"track={island.IslandByte} {when} {first} {last} {file}\n");

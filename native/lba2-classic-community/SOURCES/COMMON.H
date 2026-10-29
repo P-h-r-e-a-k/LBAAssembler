@@ -335,6 +335,9 @@ int RaceGame_GhostBeatenLevel(void); // the race's track: its game's ghosts beat
 void RaceGame_TrialBest(S32 lap);
 // ... and its mini-map setting (Options): 1 on, 0 off, -1 not the race game (the race file's minimap= decides)
 S32 RaceGame_Minimap(void);
+// RACEMOD.CPP: a story race won, or a time to beat beaten, that unlocks the cars of `id` (a track file's unlock_win=, unlock_beat=): kept
+// for good; how many cars it unlocks now (0: none, or already unlocked), the first one's name in `first`
+S32 RaceGame_StoryUnlock(const char *id, char *first, S32 size);
 // An opponent's car, which the race-track mode places wherever it is on the lap -- in the next cube too (EXTFUNC.CPP: not kept inside
 // the player's cube).
 S32 RaceMod_FreeOfCube(S32 numobj);

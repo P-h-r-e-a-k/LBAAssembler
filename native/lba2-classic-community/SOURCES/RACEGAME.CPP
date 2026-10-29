@@ -62,6 +62,16 @@
  *     track=<name>|<race file>|<time trial file>|<start scene>       one of Track select's, the same (a race file with sprint=1: no
  *                                  qualifying lap asked; a race won on a track unlocks no car -- the hints name the special's race)
  *     tracks_code=<digits>         Track select asks for them first (none: it doesn't); given right, open for the rest of the run
+ *     story_file=<set file>        Story Mode's: LBA2 played as a game, its islands' tracks raced where the story has them (RACEMOD.CPP
+ *                                  track=; the installer's LBA Assembler WriteStorySet) -- New story (LBA2's new game, its introduction
+ *                                  first) or Continue (the story's own save, story.lba in the saves' folder: current.lba as it was each
+ *                                  time the menu opened in the story -- the race game's races have current.lba too)
+ *     story_code=<digits>          Story Mode asks for them first, as Track select does (2026-10-29, the user: "Let's temporarily
+ *                                  passcode gate story mode with the code 4 3 2 1")
+ * The story unlocks cars (2026-10-29, the user: "Let's gate different cars to be unlocked by completing different island tracks in story
+ * mode"): a car whose unlock=<id> a story track's file names (RACEMOD.CPP unlock_win=, unlock_beat=) is won there -- Raph's time beaten,
+ * a race won -- for good (RaceGame_StoryUnlock). And 7777 typed on a car page (the specials' or the car grid), no prompt, unlocks every car
+ * (the user: "gate the cars without a prompt have then all unlocked if a user types in 7777 on the car select screen").
  *     gridcar=<as car=>            a car of Track select's car grid (the specials keep car='s); grid_car=<its name> in the player's
  *                                  settings the one taken last
  *     car=<name>|<drive_as value: BODY.HQR body, animation, shrunk body>[|<acceleration> <top speed> <handling>][|<option>...]
@@ -155,6 +165,8 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_OTHER_FIRST 2380            // ... its rows: the ghosts, 2380 .. 2384 (RG_OTHERS_SHOWN) ...
 #define RG_ID_GHOST_IMPORT 2385           // ... "Import ghosts..." (the setup's --import-ghosts) ...
 #define RG_ID_GHOST_SHARE 2386            // ... "Share my ghosts..." (the setup's --export-ghosts)
+#define RG_ID_STORY_NEW 2387              // Story Mode's rows (StoryMode): a new story, the story kept continued
+#define RG_ID_STORY_CONTINUE 2388
 #define RG_OTHERS_SHOWN 5
 #define RG_ID_BACK 26                       // the game's own "Back"
 #define RG_ID_RESUME 70
@@ -179,6 +191,7 @@ typedef struct {
     int Line;                               // Drive is a line of the race file's own (twinsen_body=...), not a drive_as value
     char Unlock[24];                        // won by winning a race (unlock=<id>; empty: always there) ...
     int TrialOnly;                          // ... and then for time trials only
+    int Story;                              // ... won in the story (unlock=<id> story: RaceGame_StoryUnlock), not by a special's race
     char Hint[96];                          // ... how (hint=)
 } T_RG_CAR;
 
@@ -205,6 +218,11 @@ static int s_nbGrid = 0;
 static int s_gridCar = 0;                   // the one chosen last (RACEGAME_SETTINGS.TXT grid_car=, by its name)
 static char s_tracksCode[24] = "";          // tracks_code=: Track select asks for it (none: open)
 static int s_tracksOpen = 0;                // ... given right this run
+static char s_storyFile[ADELINE_MAX_PATH] = "";   // story_file=: Story Mode's set (none: Story Mode has nothing to play)
+static char s_storyCode[24] = "";           // story_code=: Story Mode asks for it (none: open)
+static int s_storyOpen = 0;                 // ... given right this run
+static int s_storyOn = 0;                   // the story is what is being played (Story Mode's New story or Continue, not a race since)
+#define RG_STORY_SAVE "story.lba"           // the story's own save, in the saves' folder
 static int s_lastSp = 0, s_lastTrial = 0;
 static int s_lastTrack = -1;                // the track chosen last (its place in s_sp)
 static int s_level = 1;                     // the difficulty chosen last: 0 easy, 1 medium, 2 hard (RACEGAME_SETTINGS.TXT)
@@ -289,7 +307,7 @@ static int ParseCar(T_RG_CAR *c, const char *v) {
     // (a line of the race file's own in place of a drive_as value: no body to pose, but page= gives one)
     c->Line = strchr(c->Drive, '=') != NULL;
     if (c->Line) c->Body = c->Anim = -1;
-    c->Unlock[0] = 0; c->TrialOnly = 0; c->Hint[0] = 0;
+    c->Unlock[0] = 0; c->TrialOnly = 0; c->Story = 0; c->Hint[0] = 0;
     // (its options: page=, unlock=, hint=)
     v = Field(v, stars, sizeof(stars));
     while (*v) {
@@ -297,15 +315,20 @@ static int ParseCar(T_RG_CAR *c, const char *v) {
         v = Field(v, option, sizeof(option));
         if (!strncmp(option, "page=", 5) && sscanf(option + 5, "%d %d", &c->Body, &c->Anim) < 2) c->Anim = -1;
         else if (!strncmp(option, "unlock=", 7)) {
-            char what[16] = "";
-            sscanf(option + 7, "%23s %15s", c->Unlock, what);
-            c->TrialOnly = !strcmp(what, "trial");
+            // (its id, then "trial", "story" or both)
+            char what[2][16] = {"", ""};
+            sscanf(option + 7, "%23s %15s %15s", c->Unlock, what[0], what[1]);
+            for (int k = 0; k < 2; k++) {
+                if (!strcmp(what[k], "trial")) c->TrialOnly = 1;
+                else if (!strcmp(what[k], "story")) c->Story = 1;
+            }
         } else if (!strncmp(option, "hint=", 5)) snprintf(c->Hint, sizeof(c->Hint), "%s", option + 5);
     }
     return c->Name[0] && c->Drive[0];
 }
 
 static void ReadSettings(void);
+static int HasStorySave(void);
 static void RenamedTracks(void);
 static void UpdateAtStart(void);
 
@@ -354,6 +377,8 @@ static void Read(void) {
         else if (!strcmp(key, "laps")) s_laps = atoi(v) > 0 ? atoi(v) : 3;
         else if (!strcmp(key, "end_to_menu")) s_endMs = atoi(v);
         else if (!strcmp(key, "tracks_code")) snprintf(s_tracksCode, sizeof(s_tracksCode), "%s", v);
+        else if (!strcmp(key, "story_file")) snprintf(s_storyFile, sizeof(s_storyFile), "%s", v);
+        else if (!strcmp(key, "story_code")) snprintf(s_storyCode, sizeof(s_storyCode), "%s", v);
         else if (((!strcmp(key, "special") && s_nbSpecials < RG_MAX_SPECIALS) || !strcmp(key, "track")) && s_nbSp < RG_MAX_ENTRIES) {
             // (a special, or one of Track select's tracks: the same fields)
             T_RG_SPECIAL *sp = &s_sp[s_nbSp];
@@ -397,6 +422,7 @@ static void Read(void) {
              s_title[0] ? s_title : "the race game", s_nbSpecials, s_nbTracks, levelled, s_levelName[s_level], s_nbCars, s_nbGrid,
              s_story ? "" : ", Story Mode greyed", s_tracks && s_nbTracks ? "" : ", Track select greyed",
              s_tracks && s_nbTracks && s_tracksCode[0] ? ", Track select behind a code" : "");
+    if (s_story) Log_Info("[racegame] Story Mode: %s%s", s_storyFile[0] ? s_storyFile : "no story_file= -- nothing to play", s_storyCode[0] ? ", behind a code" : "");
 }
 
 S32 RaceGame_On(void) {
@@ -435,7 +461,7 @@ static const char *const s_updateKey[3] = {"auto", "ask", "off"};
 static const char *const s_updateLabel[3] = {"Updates: Automatic", "Updates: Ask first", "Updates: Off"};
 static char s_setOther[RG_OTHER_SIZE];      // RACEGAME_SETTINGS.TXT's lines of other keys, kept as they are
 static char s_gridCarName[96] = "";         // the car grid's car chosen last (grid_car=), by its name
-#define RG_MAX_UNLOCKED 8
+#define RG_MAX_UNLOCKED 16
 static char s_unlocked[RG_MAX_UNLOCKED][24]; // the cars won: their unlock=<id>s (<id>_unlocked=1)
 static int s_nbUnlocked = 0;
 
@@ -602,6 +628,70 @@ static int TakenFor(const T_RG_CAR *c, int trial) { return c && !Locked(c) && (t
 static int CarLocked(int car) { return car >= 0 && car < s_nbCars && Locked(&s_cars[car]); }
 static int CarFor(int car, int trial) { return car >= 0 && car < s_nbCars && TakenFor(&s_cars[car], trial); }
 
+// `id` won, kept for good (the settings written by the caller): non-zero when it wasn't already
+static int AddUnlocked(const char *id) {
+    ReadSettings();
+    if (!id[0] || Unlocked(id) || s_nbUnlocked >= RG_MAX_UNLOCKED) return 0;
+    snprintf(s_unlocked[s_nbUnlocked++], sizeof(s_unlocked[0]), "%s", id);
+    return 1;
+}
+// The cars, the specials' and the car grid's, that `id` unlocks: how many (a car on both counted once), the first one's name
+static int CarsOf(const char *id, char *first, size_t size) {
+    int n = 0;
+    if (first && size) first[0] = 0;
+    for (int pass = 0; pass < 2; pass++) {
+        const T_RG_CAR *list = pass ? s_grid : s_cars;
+        for (int i = 0, count = pass ? s_nbGrid : s_nbCars; i < count; i++) {
+            if (strcmp(list[i].Unlock, id)) continue;
+            int seen = 0;
+            for (int j = 0; pass && j < s_nbCars && !seen; j++) seen = !strcmp(s_cars[j].Name, list[i].Name) && !strcmp(s_cars[j].Unlock, id);
+            if (seen) continue;
+            if (!n && first && size) snprintf(first, size, "%s", list[i].Name);
+            n++;
+        }
+    }
+    return n;
+}
+
+S32 RaceGame_StoryUnlock(const char *id, char *first, S32 size) {
+    if (!RaceGame_On() || !id || !AddUnlocked(id)) return 0;
+    WriteSettings();
+    const int n = CarsOf(id, first, (size_t)(size > 0 ? size : 0));
+    Log_Info("[racegame] the story: %s unlocked (%d car%s%s%s)", id, n, n == 1 ? "" : "s", n && first ? ": " : "", n && first ? first : "");
+    return n;
+}
+
+// 7777 typed on a car page (the user, 2026-10-29: "gate the cars without a prompt have then all unlocked if a user types in 7777 on the
+// car select screen"): the digits the page has been given, the last four kept (`typed`, `lastKey` the key down last pass); non-zero once
+// the four are 7777 -- every car's unlock= kept for good, the story's and the specials' alike.
+#define RG_ALL_CARS_CODE "7777"
+#define RG_ALL_CARS_MS 3000                 // (said on the page this long)
+static S32 s_allCarsAt = 0;                 // when they were (the page says so a moment)
+static int AllCarsCode(S32 *lastKey, char *typed) {
+    const S32 key = MyKey;
+    if (key == *lastKey) return 0;
+    *lastKey = key;
+    int digit = -1;
+    if (key >= K_1 && key <= K_9) digit = 1 + (int)(key - K_1);
+    else if (key == K_0) digit = 0;
+    else if (key >= K_NUMPAD_1 && key <= K_NUMPAD_9) digit = 1 + (int)(key - K_NUMPAD_1);
+    else if (key == K_NUMPAD_0) digit = 0;
+    if (digit < 0) return 0;
+    const size_t n = strlen(typed);
+    if (n >= 4) memmove(typed, typed + 1, 4);
+    typed[n >= 4 ? 3 : n] = (char)('0' + digit);
+    typed[n >= 4 ? 4 : n + 1] = 0;
+    if (strcmp(typed, RG_ALL_CARS_CODE)) return 0;
+    typed[0] = 0;
+    int won = 0;
+    for (int pass = 0; pass < 2; pass++)
+        for (int i = 0, count = pass ? s_nbGrid : s_nbCars; i < count; i++) won += AddUnlocked((pass ? s_grid : s_cars)[i].Unlock);
+    if (won) WriteSettings();
+    s_allCarsAt = TimerRefHR;
+    Log_Info("[racegame] %s typed on the car page: every car unlocked (%d unlock%s new)", RG_ALL_CARS_CODE, won, won == 1 ? "" : "s");
+    return 1;
+}
+
 // ---- the best times ----------------------------------------------------------------------------------------------------------------
 
 static void TimesPath(char *path) { GetCfgPath(path, ADELINE_MAX_PATH, "BESTTIMES.TXT"); }
@@ -760,6 +850,8 @@ static int s_celebrate = -1;                // the car a race has just unlocked:
 
 S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers) {
     if (!RaceGame_On()) return 0;
+    // (a race of the story's: the story goes on -- its wins unlock cars by its track's unlock_win=, RaceGame_StoryUnlock)
+    if (s_storyOn) { Log_Info("[racegame] the story: a race over, %d of %d", (int)place, (int)racers); return 0; }
     s_raceOver = 1;
     // (a race won -- first over the line, at any difficulty: the cars still locked are unlocked, for good; the first of them is the
     // congratulations' -- RaceGame_Celebrate)
@@ -768,7 +860,8 @@ S32 RaceGame_Finished(S32 trial, S32 total, S32 bestLap, S32 place, S32 racers) 
     if (!trial && place == 1 && s_raceSp >= 0 && s_raceSp < s_nbSp && !s_sp[s_raceSp].Track) {
         ReadSettings();
         for (int i = 0; i < s_nbCars; i++) {
-            if (!CarLocked(i) || s_nbUnlocked >= RG_MAX_UNLOCKED) continue;
+            // (not the cars the story wins)
+            if (!CarLocked(i) || s_cars[i].Story || s_nbUnlocked >= RG_MAX_UNLOCKED) continue;
             snprintf(s_unlocked[s_nbUnlocked++], sizeof(s_unlocked[0]), "%s", s_cars[i].Unlock);
             if (s_celebrate < 0) s_celebrate = i;
             Log_Info("[racegame] the race won: %s unlocked%s", s_cars[i].Name, s_cars[i].TrialOnly ? " for time trials" : "");
@@ -905,6 +998,28 @@ static void CheckGhosts(void) {
     if (changed) WriteTimes();
 }
 
+// A race file's lines copied, the files it names (its lines, *_path=; its raised road, raised=; its lanes, lanes=) found beside the game's
+// data -- the race file the engine reads names them whole: it opens them as they are named, whatever the game's working folder
+// (lanes= was left out until 2026-10-29: the opponents' passing found its file only with the game started in its own folder)
+static void CopyResolved(FILE *in, FILE *f) {
+    char line[1024];
+    while (fgets(line, sizeof(line), in)) {
+        char *eq = strchr(line, '=');
+        if (eq && line[0] != '#') {
+            *eq = 0;
+            const size_t n = strlen(line);
+            char *v = eq + 1;
+            while (*v == ' ') v++;
+            Trim(v);
+            if (((n > 5 && !strcmp(line + n - 5, "_path")) || !strcmp(line, "raised") || !strcmp(line, "lanes")) && v[0] && !Absolute(v)) {
+                char full[ADELINE_MAX_PATH];
+                GetResPath(full, ADELINE_MAX_PATH, v);
+                fprintf(f, "%s=%s\n", line, full);
+            } else fprintf(f, "%s=%s\n", line, v);
+        } else fputs(line, f);
+    }
+}
+
 // The race: the special's race file (or its time trial's), the files it names found beside the game's data, then the car and the race
 // game's keys -- and the difficulty chosen (`level`, -1 none: after the file's own, so it counts) -- written to RACE_NOW.TXT in the user's
 // folder and loaded in place of any other. `watch`: a ghost of the track's to play back (Best laps), not a race.
@@ -918,22 +1033,7 @@ static int StartRace(int sp, int trial, const T_RG_CAR *car, int level, const ch
     FILE *f = fopen(out, "w");
     if (!f) { fclose(in); Log_Warn("[racegame] %s could not be written", out); return 0; }
     fprintf(f, "# %s: %s, %s (RACEGAME.CPP)\n", s_title, s->Name, trial ? "a time trial" : "a race");
-    char line[1024];
-    while (fgets(line, sizeof(line), in)) {
-        char *eq = strchr(line, '=');
-        if (eq && line[0] != '#') {
-            *eq = 0;
-            const size_t n = strlen(line);
-            char *v = eq + 1;
-            while (*v == ' ') v++;
-            Trim(v);
-            if (((n > 5 && !strcmp(line + n - 5, "_path")) || !strcmp(line, "raised")) && v[0] && !Absolute(v)) {
-                char full[ADELINE_MAX_PATH];
-                GetResPath(full, ADELINE_MAX_PATH, v);
-                fprintf(f, "%s=%s\n", line, full);
-            } else fprintf(f, "%s=%s\n", line, v);
-        } else fputs(line, f);
-    }
+    CopyResolved(in, f);
     fclose(in);
     if (car) fprintf(f, car->Line ? "# %s\n%s\n" : "# %s\ndrive_as=%s\n", car->Name, car->Drive);
     // (its stats, which the race drives it by: RACEMOD.CPP car_accel= car_top= car_handling=)
@@ -961,7 +1061,7 @@ static int StartRace(int sp, int trial, const T_RG_CAR *car, int level, const ch
     ReadSettings();
     fprintf(f, "# the camera's view: 0 inside the car, 1 just behind, 2 further back\ncamera=%d\n", s_camera);
     fclose(f);
-    s_raceSp = sp; s_raceTrial = trial; s_raceCar = car; s_raceOver = 0; s_raceLevel = level; s_trialKept = 0;
+    s_raceSp = sp; s_raceTrial = trial; s_raceCar = car; s_raceOver = 0; s_raceLevel = level; s_trialKept = 0; s_storyOn = 0;
     if (watch != s_raceWatch) snprintf(s_raceWatch, sizeof(s_raceWatch), "%s", watch ? watch : "");
     Log_Info("[racegame] %s: %s with %s%s%s%s", s->Name, watch ? "its ghost played back" : trial ? "a time trial" : "a race", car ? car->Name : "Twinsen's car",
              level >= 0 && level <= 2 ? ", difficulty " : "", level >= 0 && level <= 2 ? s_levelName[level] : "",
@@ -994,7 +1094,8 @@ S32 RaceGame_RowDisabled(S32 num) {
     if (!s_on) return 0;
     if (num == RG_ID_GHOST_OWN) return !s_gpLap[0];
     if ((num >= RG_ID_GHOST_EASY && num <= RG_ID_GHOST_HARD) || num == RG_ID_GHOST_EXTREME) return !s_gpLap[GhostRowK(num)] || !GhostLevelOpen(GhostRowK(num) - 1);
-    return (num == RG_ID_STORY && !s_story) || (num == RG_ID_TRACKS && (!s_tracks || !s_nbTracks));
+    if (num == RG_ID_STORY_CONTINUE) return !HasStorySave();
+    return (num == RG_ID_STORY && (!s_story || !s_storyFile[0])) || (num == RG_ID_TRACKS && (!s_tracks || !s_nbTracks));
 }
 
 static void Label(char *string, const char *utf8) { CopyUtf8ToCp850(string, 256, utf8); }
@@ -1003,6 +1104,8 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     if (!s_on || num < RG_ID_STORY || num >= RG_ID_STORY + 100) return 0;
     switch (num) {
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
+    case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
+    case RG_ID_STORY_CONTINUE: Label(string, "Continue the story"); return 1;
     case RG_ID_TRACKS: Label(string, "Track select"); return 1;
     case RG_ID_RESTART: Label(string, s_raceWatch[0] ? "Watch again from the start" : s_raceTrial ? "Restart the time trial" : "Restart the race"); return 1;
     case RG_ID_SPECIALS: Label(string, "Specials"); return 1;
@@ -1274,7 +1377,9 @@ static int CarPage(const char *what, int trial) {
     const S32 boxTop = 130, boxBottom = rated ? RG_CAR_BOTTOM : 330;
     S32 x0 = cx - 230, x1 = cx + 230, y0 = boxTop + oy, y1 = boxBottom + oy;
     int chosen = -2;
-    S32 start = TimerRefHR;
+    S32 start = TimerRefHR, codeKey = MyKey;
+    char typed[5] = "";
+    s_allCarsAt = 0;
     while (chosen == -2) {
         ManageTime();
         MyGetInput();
@@ -1283,6 +1388,7 @@ static int CarPage(const char *what, int trial) {
             cx = UI_CENTER_X; oy = UI_VCENTER_OFS;
             x0 = cx - 230; x1 = cx + 230; y0 = boxTop + oy; y1 = boxBottom + oy;
         }
+        AllCarsCode(&codeKey, typed);
         S32 step = Step(&padDir);
         // (the mouse: a click on the box's left or right quarter the car before or after, in its middle this one; the right button back)
         S32 mx, my;
@@ -1328,6 +1434,7 @@ static int CarPage(const char *what, int trial) {
             Text(cx, y1 + 46, count, RG_GREY);
         }
         Text(cx, last, takeable ? "Left, right: car    Enter: race    Esc: back" : "Left, right: car    Esc: back", RG_GREY);
+        if (s_allCarsAt && TimerRefHR - s_allCarsAt < RG_ALL_CARS_MS) Text(cx, y0 + 6, "All cars unlocked", RG_ORANGE);
         BoxStaticAdd(0, top, (S32)ModeDesiredX - 1, bottom);
         BoxUpdate();
         if (chosen != -2) break;
@@ -2143,17 +2250,17 @@ static void PageLoopStart(S32 *padDir) {
     s_clickWas = Click & 3;
 }
 
-// The code Track select asks for (RACEGAME.TXT tracks_code=): digits (the keyboard's row or its keypad), Backspace, Enter to try it,
-// Esc back. Each digit shown as a star; a wrong code says so and empties. Non-zero: given right -- Track select is open for the rest of
-// the run (not kept: the user, "temporarily password gate them").
+// The code Track select asks for (RACEGAME.TXT tracks_code=), or Story Mode (story_code=): `what` the page's title, `want` the code.
+// Digits (the keyboard's row or its keypad), Backspace, Enter to try it, Esc back. Each digit shown as a star; a wrong code says so and
+// empties. Non-zero: given right -- open for the rest of the run (not kept: the user, "temporarily password gate them").
 #define RG_CODE_MAX 12
-static int CodePage(void) {
+static int CodePage(const char *what, const char *want) {
     S32 padDir;
     PageLoopStart(&padDir);
     char code[RG_CODE_MAX + 1] = "";
     int n = 0, wrong = 0, result = -1;
     S32 lastKey = 0, cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
-    Log_Info("[racegame] Track select: asking for its code");
+    Log_Info("[racegame] %s: asking for its code", what);
     while (result < 0) {
         ManageTime();
         MyGetInput();
@@ -2177,7 +2284,7 @@ static int CodePage(void) {
         Page(NULL, 0);
         ShadeBoxBlk(x0, y0, x1, y1, RG_PAGE_SHADE);
         DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
-        Text(cx, y0 + 14, "Track select", RG_ORANGE);
+        Text(cx, y0 + 14, what, RG_ORANGE);
         Text(cx, y0 + 52, "Enter the code", LBAWHITE);
         // (a gold dot for each digit, then a dim one blinking where the next goes; the font's '*' sits too high and small)
         static U8 gold = 0, dim = 0, shadow = 0;
@@ -2205,10 +2312,10 @@ static int CodePage(void) {
         if (click == 2 || Escaped()) result = 0;
         else if (Confirmed()) {
             WaitNoInput();
-            if (n && !strcmp(code, s_tracksCode)) result = 1;
+            if (n && !strcmp(code, want)) result = 1;
             else if (n) {
                 wrong = 1;
-                Log_Info("[racegame] Track select: a wrong code (%d digits)", n);
+                Log_Info("[racegame] %s: a wrong code (%d digits)", what, n);
                 n = 0;
                 code[0] = 0;
             }
@@ -2216,7 +2323,7 @@ static int CodePage(void) {
     }
     AsciiMode = FALSE;
     Page(NULL, 0);
-    if (result) Log_Info("[racegame] Track select: the code given, open for this run");
+    if (result) Log_Info("[racegame] %s: the code given, open for this run", what);
     return result;
 }
 
@@ -2322,10 +2429,124 @@ static int TracksPage(void) {
 static int TrackSelect(void) {
     if (!s_tracks || s_nbTracks <= 0) return 0;
     if (s_tracksCode[0] && !s_tracksOpen) {
-        if (!CodePage()) return 0;
+        if (!CodePage("Track select", s_tracksCode)) return 0;
         s_tracksOpen = 1;
     }
     return TracksPage();
+}
+
+// ---- Story Mode -------------------------------------------------------------------------------------------------------------------
+// (2026-10-29: LBA2 played as a game, every island's track raced where the story has it -- RACEMOD.CPP's set, story_file= -- behind a
+// code, story_code=)
+
+static U16 s_storyMenu[4 + 2 * 3];
+static void StorySave(char *path) { GetSavePath(path, ADELINE_MAX_PATH, RG_STORY_SAVE); }
+static int HasStorySave(void) {
+    char path[ADELINE_MAX_PATH];
+    StorySave(path);
+    return ExistsFileOrDir(path);
+}
+// A file copied whole over another; non-zero: done
+static int CopyWhole(const char *from, const char *to) {
+    FILE *in = fopen(from, "rb");
+    if (!in) return 0;
+    FILE *out = fopen(to, "wb");
+    if (!out) { fclose(in); return 0; }
+    char buf[16384];
+    size_t n;
+    int ok = 1;
+    while ((n = fread(buf, 1, sizeof(buf), in)) > 0) if (fwrite(buf, 1, n, out) != n) { ok = 0; break; }
+    fclose(in);
+    if (fclose(out)) ok = 0;
+    return ok;
+}
+// The story's place kept: current.lba -- the game saves it as the menu opens -- copied to story.lba (the race game's races have current.lba
+// too, so the story keeps its own)
+static void KeepStory(void) {
+    char cur[ADELINE_MAX_PATH], story[ADELINE_MAX_PATH];
+    GetSavePath(cur, ADELINE_MAX_PATH, CURRENTSAVE_FILENAME);
+    StorySave(story);
+    if (ExistsFileOrDir(cur) && CopyWhole(cur, story)) Log_Info("[racegame] the story kept: %s", story);
+}
+
+// The story's set as the engine reads it: STORY_NOW.TXT in the user's folder, each track= line's file copied beside it (STORY_TRACK<n>.TXT)
+// with the files it names found beside the game's data (CopyResolved) and the camera's view the player chose. Non-zero: written, its
+// path in `out`.
+static int StoryResolved(char *out) {
+    char src[ADELINE_MAX_PATH];
+    if (Absolute(s_storyFile)) snprintf(src, sizeof(src), "%s", s_storyFile);
+    else GetResPath(src, ADELINE_MAX_PATH, s_storyFile);
+    GetCfgPath(out, ADELINE_MAX_PATH, "STORY_NOW.TXT");
+    FILE *in = fopen(src, "r");
+    if (!in) { Log_Warn("[racegame] Story Mode: %s could not be read", src); return 0; }
+    FILE *f = fopen(out, "w");
+    if (!f) { fclose(in); Log_Warn("[racegame] Story Mode: %s could not be written", out); return 0; }
+    ReadSettings();
+    fprintf(f, "# %s: Story Mode's set (RACEGAME.CPP, from %s)\n", s_title, s_storyFile);
+    char line[1024];
+    int n = 0, ok = 1;
+    while (fgets(line, sizeof(line), in)) {
+        int island, when, first, last, used = 0;
+        if (strncmp(line, "track=", 6) || sscanf(line + 6, "%d %d %d %d %n", &island, &when, &first, &last, &used) != 4 || !used) { fputs(line, f); continue; }
+        char file[ADELINE_MAX_PATH], from[ADELINE_MAX_PATH], to[ADELINE_MAX_PATH], name[32];
+        snprintf(file, sizeof(file), "%s", line + 6 + used);
+        Trim(file);
+        if (Absolute(file)) snprintf(from, sizeof(from), "%s", file);
+        else GetResPath(from, ADELINE_MAX_PATH, file);
+        snprintf(name, sizeof(name), "STORY_TRACK%d.TXT", ++n);
+        GetCfgPath(to, ADELINE_MAX_PATH, name);
+        FILE *ti = fopen(from, "r"), *to_f = ti ? fopen(to, "w") : NULL;
+        if (!ti || !to_f) { Log_Warn("[racegame] Story Mode: %s could not be copied to %s", from, to); ok = 0; }
+        else {
+            CopyResolved(ti, to_f);
+            fprintf(to_f, "# the camera's view: 0 inside the car, 1 just behind, 2 further back\ncamera=%d\n", s_camera);
+        }
+        if (ti) fclose(ti);
+        if (to_f) fclose(to_f);
+        fprintf(f, "track=%d %d %d %d %s\n", island, when, first, last, to);
+    }
+    fclose(in);
+    fclose(f);
+    return ok;
+}
+
+// Story Mode from the main menu: its code first when RACEGAME.TXT asks one (once a run), then New story or Continue (with a story kept).
+// RACEGAME_STORY_NEW or RACEGAME_STORY_CONTINUE, the story's set loaded; 0 back.
+static S32 StoryMode(void) {
+    if (!s_story || !s_storyFile[0]) return 0;
+    if (s_storyCode[0] && !s_storyOpen) {
+        if (!CodePage("Story Mode", s_storyCode)) return 0;
+        s_storyOpen = 1;
+    }
+    const int saved = HasStorySave();
+    s_storyMenu[0] = (U16)(saved ? 2 : 1);
+    s_storyMenu[1] = 3;
+    s_storyMenu[2] = 300;
+    s_storyMenu[3] = 0;
+    SetRow(s_storyMenu, 0, RG_ID_BACK);
+    SetRow(s_storyMenu, 1, RG_ID_STORY_NEW);
+    SetRow(s_storyMenu, 2, RG_ID_STORY_CONTINUE);
+    for (;;) {
+        Page("Story Mode", 300 - (56 * 3) / 2 - 50);
+        Text(UI_CENTER_X, 420 + UI_VCENTER_OFS, "Win the islands' races to unlock their cars", RG_GREY);
+        const S32 select = Menu(s_storyMenu);
+        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
+        if (select != RG_ID_STORY_NEW && select != RG_ID_STORY_CONTINUE) continue;
+        if (select == RG_ID_STORY_CONTINUE) {
+            char cur[ADELINE_MAX_PATH], story[ADELINE_MAX_PATH];
+            GetSavePath(cur, ADELINE_MAX_PATH, CURRENTSAVE_FILENAME);
+            StorySave(story);
+            if (!CopyWhole(story, cur)) { Log_Warn("[racegame] the story: %s could not be put in %s", story, cur); continue; }
+        }
+        char path[ADELINE_MAX_PATH];
+        if (!StoryResolved(path)) continue;
+        RaceMod_LoadFile(path);
+        s_storyOn = 1;
+        s_raceSp = -1; s_raceOver = 0; s_raceCar = NULL; s_raceWatch[0] = 0; s_raceLevel = -1;
+        Log_Info("[racegame] Story Mode: %s (%s)", select == RG_ID_STORY_NEW ? "a new story" : "the story continued", path);
+        Page(NULL, 0);
+        return select == RG_ID_STORY_NEW ? RACEGAME_STORY_NEW : RACEGAME_STORY_CONTINUE;
+    }
 }
 
 // The car grid (Track select's): every car of the game, 7 by 7 a page, each drawn small -- once, as its page opens, kept (s_thumb) -- the
@@ -2387,12 +2608,16 @@ static int GridPage(const char *what, int trial) {
     s_thumbPage = -1;
     S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
     int chosen = -2, was = -1;
-    S32 start = TimerRefHR;
+    S32 start = TimerRefHR, codeKey = MyKey;
+    char typed[5] = "";
+    s_allCarsAt = 0;
     Log_Info("[racegame] the car grid: %d cars on %d page(s), %s chosen", s_nbGrid, pages, s_grid[sel].Name);
     while (chosen == -2) {
         ManageTime();
         MyGetInput();
         if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; s_thumbPage = -1; }
+        // (every car unlocked: the small cars drawn again, none dimmed)
+        if (AllCarsCode(&codeKey, typed)) s_thumbPage = -1;
         // the layout: the grid on the left, the car chosen on the right
         // (the stats' labels in the menus' font are about 200 wide: the panel takes half the canvas, the grid the other half)
         const S32 gx = cx - 314, gy = 50 + oy, gx1 = gx + RG_GRID_COLS * RG_CELL_W, gy1 = gy + RG_GRID_ROWS * RG_CELL_H;
@@ -2443,6 +2668,7 @@ static int GridPage(const char *what, int trial) {
         char text[256], line[96];
         snprintf(line, sizeof(line), "Page %d of %d", page + 1, pages);
         Text((gx + gx1) / 2, gy1 + 10, line, RG_GREY);
+        if (s_allCarsAt && TimerRefHR - s_allCarsAt < RG_ALL_CARS_MS) Text((gx + gx1) / 2, gy1 + 36, "All cars unlocked", RG_ORANGE);
         // the car chosen: turning in its box, dark and padlocked while it is locked, its name and stats under it
         const int locked = Locked(c), takeable = TakenFor(c, trial);
         ShadeBoxBlk(px0, py0, px1, py1, MENU_SHADE_LVL);
@@ -3009,6 +3235,8 @@ static void CelebratePage(int car) {
 
 S32 RaceGame_Menu(S32 inGame) {
     Read();
+    // (the story played: its place kept, the game having saved it in current.lba as the menu opened)
+    if (inGame && s_storyOn) KeepStory();
     // (the sum of best played back: a track's best lap over -- the next track's straight on, no menu)
     if (s_watchNext && s_watchListN > 0) {
         s_watchNext = 0;
@@ -3064,6 +3292,9 @@ S32 RaceGame_Menu(S32 inGame) {
             return select;
         case RG_ID_TRACKS:
             if (TrackSelect()) return RACEGAME_START;
+            break;
+        case RG_ID_STORY:
+            if (const S32 story = StoryMode()) return story;
             break;
         case RG_ID_SPECIALS:
             if (SpecialsPage()) return RACEGAME_START;
