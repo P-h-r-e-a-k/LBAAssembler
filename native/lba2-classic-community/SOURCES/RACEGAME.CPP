@@ -461,7 +461,7 @@ static const char *const s_updateKey[3] = {"auto", "ask", "off"};
 static const char *const s_updateLabel[3] = {"Updates: Automatic", "Updates: Ask first", "Updates: Off"};
 static char s_setOther[RG_OTHER_SIZE];      // RACEGAME_SETTINGS.TXT's lines of other keys, kept as they are
 static char s_gridCarName[96] = "";         // the car grid's car chosen last (grid_car=), by its name
-#define RG_MAX_UNLOCKED 16
+#define RG_MAX_UNLOCKED 32                  // (every island the story races has its own: 15 in use, 2026-10-29)
 static char s_unlocked[RG_MAX_UNLOCKED][24]; // the cars won: their unlock=<id>s (<id>_unlocked=1)
 static int s_nbUnlocked = 0;
 
