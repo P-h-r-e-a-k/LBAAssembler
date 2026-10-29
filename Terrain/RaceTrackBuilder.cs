@@ -3999,14 +3999,20 @@ internal static class RaceTrackBuilder
         return Hanging(island, x0, z0, x1, z1, d.YMin);
     }
 
-    // Whether a box (cells; its underside at y0) hangs more than AdriftBy over the highest ground under it, sampled every quarter cell.
+    // Whether a box (cells; its underside at y0) hangs more than AdriftBy over the highest ground under it, sampled every quarter cell --
+    // not once any of the ground comes that near (y0 - g falls as g rises: the highest ground's test and any sample's are one; most decors
+    // rest on the ground, and the whole box was sampled for each, a third of the build's time, 2026-10-29).
     private static bool Hanging(IslandFile island, double x0, double z0, double x1, double z1, double y0)
     {
-        double? top = null;
+        var any = false;
         for (var z = z0; z <= z1; z += 0.25)
         for (var x = x0; x <= x1; x += 0.25)
-            if (IslandOps.Altitude(island, x * 512, z * 512) is { } g && (top is null || g > top)) top = g;
-        return top is { } t && y0 - t > AdriftBy;
+            if (IslandOps.Altitude(island, x * 512, z * 512) is { } g)
+            {
+                if (y0 - g <= AdriftBy) return false;
+                any = true;
+            }
+        return any;
     }
 
     private static HashSet<IslandDecor> AdriftDecors(IslandFile island) =>
