@@ -886,10 +886,11 @@ static void CheckGhosts(void) {
         else GetResPath(path, ADELINE_MAX_PATH, race);
         S32 lap = 0;
         const int missed = (int)RaceMod_GhostsCheck(s_sp[sp].Name, path, &lap);
-        if (!missed || lap <= 0) continue;
+        if (lap <= 0) continue;
+        // (and one marked before that counts now -- its checkpoints reaching further, 2026-10-29: the mark taken off)
         for (int k = 0; k < s_nbTimes[sp]; k++) {
             T_RG_TIME t = s_times[sp][k];
-            if (t.Lap != lap || t.Missed) continue;
+            if (t.Lap != lap || (t.Missed != 0) == (missed != 0)) continue;
             // (out of its place, and in again after the laps that count)
             for (int j = k; j + 1 < s_nbTimes[sp]; j++) s_times[sp][j] = s_times[sp][j + 1];
             s_nbTimes[sp]--;
@@ -897,7 +898,8 @@ static void CheckGhosts(void) {
             AddLap(sp, &t);
             changed = 1;
             k = -1;
-            Log_Info("[racegame] best laps of %s: %.2f s missed checkpoint %d -- marked invalid", s_sp[sp].Name, lap / 1000.0, missed);
+            Log_Info(missed ? "[racegame] best laps of %s: %.2f s missed checkpoint %d -- marked invalid" : "[racegame] best laps of %s: %.2f s counts -- its mark taken off",
+                     s_sp[sp].Name, lap / 1000.0, missed);
         }
     }
     if (changed) WriteTimes();

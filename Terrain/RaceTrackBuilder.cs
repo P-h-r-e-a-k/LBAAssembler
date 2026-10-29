@@ -792,6 +792,11 @@ internal sealed class RaceTrackReport
     public RoadBridgeInfo? RoadBridge { get; set; }
     // How far (cells) an island cell position is from the nearest road's centre line, 1e9 when far away.
     public Func<double, double, double> DistanceToRoad { get; set; } = (_, _) => 1e9;
+    // ... of a road at a height that meets something there from height lo to hi: one passing more than RoadHeadroom over its top or
+    // RoadUnder under its bottom -- Otringal's roulette wheel over the town, its floor 10,600 at its hole, rising to its wall 24 cells out --
+    // isn't there for it
+    public Func<double, double, double, double, double> DistanceToRoadAt { get; set; } = (_, _, _, _) => 1e9;
+    public const double RoadUnder = 1000;
     // Whether something at an island cell (x, z), from height lo to hi (world units), is in the way of the cars: on a road there -- within
     // its width (the curbs', or a raised road's own) and a cell more -- and within the height a car on it takes up, from a little under
     // the road's surface to RoadHeadroom over it. A lift over a road on the ground, a cave's door in the cliff beside a raised road, a
@@ -1113,6 +1118,8 @@ internal static class RaceTrackBuilder
         // (how far out from a road's middle its edge is where it is hit: a raised stretch's own width, else its curbs)
         double RoadEdge(RoadHit h) => h.Raised && h.Half > 0 ? h.Half : roads[h.Road].CurbHalf;
         report.DistanceToRoad = (x, z) => { var h = index.Near(x, z, 14, 1); return h.Count == 0 ? 1e9 : h[0].Dist; };
+        report.DistanceToRoadAt = (x, z, lo, hi) => index.Near(x, z, 14, 8).Where(h => hi >= h.H - RaceTrackReport.RoadUnder && lo <= h.H + RaceTrackReport.RoadHeadroom)
+                                                        .Select(h => h.Dist).DefaultIfEmpty(1e9).Min();
         report.InTheWay = (x, z, lo, hi) => index.Near(x, z, 14, 4).Any(h => h.Dist <= RoadEdge(h) + 1 && hi >= h.H - 400 && lo <= h.H + RaceTrackReport.RoadHeadroom);
         var startIndex = roads.Count > 1 ? pitMiddle : planned && plan.Start is { } startPoint ? PlanPoint(plan, main, startPoint) : -1;
         ClearOldTrack(island, options, report);
@@ -2768,9 +2775,15 @@ internal static class RaceTrackBuilder
     // through CornerTurn at the least (two such stretches a few cells apart are one corner); one turning further than half a circle has a
     // line in the middle of each half-circle of it. (Before: one about every 60 cells, where the road ran straightest.)
     private const int MaxCheckpoints = 64;      // (the engine's RACE_MAX_CHECKPOINTS)
-    private const double CheckpointPastEdge = 2, CornerRadius = 40, CornerTurn = 0.5, CornerJoin = 8;
+    // (2026-10-29, the user: "make sure all checkpoints on all laps extend at least the width of Twinsen's buggy either side of the track"
+    // -- the buggy's box 1,266 units across, RACEMOD.CPP's "the car's box": every line reaches that far past the edge on both sides, where
+    // they reached 2 cells on the outside, half a cell less where the stepping fell short, and only to the edge where another part of the
+    // lap stopped them)
+    private const double CheckpointPastEdge = 2.5, CornerRadius = 40, CornerTurn = 0.5, CornerJoin = 8;
     // (on a corner's inside, where cars cut it, a line reaches this far past the edge when nothing stops it short: PlaceCheckpoints)
     private const double CheckpointInsidePastEdge = 6;
+    // (a corner with no place in it a line reaches far enough on both sides: looked for this many cells either side of it, cells)
+    private const double CornerWiden = 10;
 
     // Where the opponents' cars wait while the player drives his qualifying lap: in the pit lane beside the start line, PitStep cells
     // apart, the first PitFirst cells before the line, each facing the way a car leaves the pits. On the grid they stand across the start
@@ -2967,11 +2980,10 @@ internal static class RaceTrackBuilder
         // that floor's edge (the driver's left, way -1, the floor's -Across end)
         double SideEdge(int k, int way) => r.FloorLo is { } fl && r.FloorHi is { } fh && fh[k] > fl[k] + 1e-6 ? Math.Max(Edge(k), way < 0 ? -fl[k] : fh[k]) : Edge(k);
         // A line across the road at point k: how far each side reaches from its middle (the driver's left, -Across, and right), and whether
-        // that is far enough -- past the road's edge, or, stopped by another part of the lap, at least to the edge.
+        // that is far enough -- CheckpointPastEdge past the road's edge (and a floor beside it), whatever stops it.
         (double Left, bool LeftEnough, double Right, bool RightEnough, int Inside) LineAt(int k)
         {
             var x = r.X[k]; var z = r.Z[k]; var nx = -r.Tz[k]; var nz = r.Tx[k];
-            var cx = Math.Floor(x / 64); var cz = Math.Floor(z / 64);
             var full = Edge(k) + CheckpointPastEdge;
             // (the corner's inside -- the side the road turns to, its point a few cells on -- reaching CheckpointInsidePastEdge past the
             // edge where nothing stops it: a car cutting the corner goes round the line's inner end. The user, 2026-10-14: "CITABAU.ILE
@@ -2979,12 +2991,12 @@ internal static class RaceTrackBuilder
             // inside drivable. Only as far as that side reaches; the line is placed as before when it is stopped short of it)
             var ahead = At(r, k + (int)Math.Round(5 / o.Spacing));
             var inside = (r.X[ahead] - x) * nx + (r.Z[ahead] - z) * nz > 0 ? 1 : -1;
-            // (what stops a side short: 0 nothing, 1 the cube's edge, 2 another part of the lap at its height -- the road coming back
-            // round a hairpin, another running alongside -- by that part's verge)
+            // (what stops a side short: 0 nothing, 2 another part of the lap at its height -- the road coming back round a hairpin,
+            // another running alongside -- by that part's verge. Not the cube's edge since 2026-10-29: the engine sees a line from the cube
+            // beside its own too -- RACEMOD.CPP CrossLineIn -- and a line by a cube's edge ran short of a car's width past the road's)
             int Stop(double t)
             {
                 var px = x + nx * t; var pz = z + nz * t;
-                if (Math.Floor(px / 64) != cx || Math.Floor(pz / 64) != cz) return 1;
                 var own = r.VergeHalf + 3;
                 for (var m = 0; m < n; m += 2)
                 {
@@ -3001,33 +3013,53 @@ internal static class RaceTrackBuilder
                 // (across a floor beside the road, to its edge and half a cell past it)
                 var floor = SideEdge(k, way) > Edge(k) ? SideEdge(k, way) + 0.5 : 0;
                 var most = Math.Max(way == inside ? Edge(k) + CheckpointInsidePastEdge : full, floor);
-                for (var t = 0.5; t <= most + 1e-9; t += 0.5)
+                // (in half cells, the last step to `most` itself: an edge 3.2 from the middle is reached to 5.7, not 5.5)
+                for (var t = 0.5; ; t += 0.5)
                 {
+                    if (t > most) t = most;
                     stop = Stop(way * t);
                     if (stop != 0) break;
                     reach = t;
+                    if (t >= most) break;
                 }
-                return (reach, reach >= Math.Max(full, floor) - 0.5 || stop == 2 && reach >= SideEdge(k, way));
+                return (reach, reach >= Math.Max(full, floor) - 1e-6);
             }
             var (left, leftEnough) = Side(-1); var (right, rightEnough) = Side(1);
             return (left, leftEnough, right, rightEnough, inside);
         }
         var placed = new List<(int Point, double Left, double Right)>();
+        // A line at the first of `places` it fits -- inside a cube, clear of the lines already placed, reaching CheckpointPastEdge past the
+        // road's edge on both sides -- else, with `warn`, at the one it comes nearest at and a warning (a corner with no line was the
+        // shortcut nobody saw); 1 placed, 0 none, -1 a line already there (`stopAtPlaced`: the first place clear of the cubes' edges near one)
+        int Place(IEnumerable<int> places, string? warn, bool stopAtPlaced)
+        {
+            (int Point, double Left, double Right, double Short)? nearest = null;
+            foreach (var k in places)
+            {
+                if (!InsideCube(r.X[k], r.Z[k])) continue;
+                if (placed.Any(p => Math.Abs(Ahead(p.Point) - Ahead(k)) < 6)) { if (stopAtPlaced) return -1; continue; }
+                var (left, leftEnough, right, rightEnough, _) = LineAt(k);
+                if (leftEnough && rightEnough) { placed.Add((k, left, right)); return 1; }
+                var shortBy = CheckpointPastEdge - Math.Min(left - SideEdge(k, -1), right - SideEdge(k, 1));
+                if (nearest is null || shortBy < nearest.Value.Short) nearest = (k, left, right, shortBy);
+            }
+            if (warn is null || nearest is not { } best) return 0;
+            placed.Add((best.Point, best.Left, best.Right));
+            report.Notes.Add($"WARNING: {warn} at cell ({r.X[best.Point]:0.0}, {r.Z[best.Point]:0.0}) has no place a checkpoint reaches {CheckpointPastEdge:0.#} cells " +
+                             $"past the road's edge on both sides: its line is {best.Short:0.0} short (another part of the lap or the cube's edge in the way)");
+            return 1;
+        }
         foreach (var (point, from, count) in own ? Enumerable.Empty<(int, int, int)>() : targets.OrderBy(t => Ahead(t.Point)))
         {
             if (placed.Count >= MaxCheckpoints) break;
             // the corner's middle, or the nearest place in the corner a line will do (clear of the pits, the jumps, the crossings and the
-            // cubes' edges, and reaching past the road's edge on both sides)
-            var order = Enumerable.Range(from, count).Select(j => (startAt + j) % n).Where(Clear).OrderBy(k => Math.Abs(r.S[k] - r.S[point]));
-            foreach (var k in order)
-            {
-                if (!InsideCube(r.X[k], r.Z[k])) continue;
-                if (placed.Any(p => Math.Abs(Ahead(p.Point) - Ahead(k)) < 6)) break;
-                var (left, leftEnough, right, rightEnough, _) = LineAt(k);
-                if (!leftEnough || !rightEnough) continue;
-                placed.Add((k, left, right));
-                break;
-            }
+            // cubes' edges, and reaching past the road's edge on both sides) -- else within CornerWiden cells of the corner's ends
+            var inCorner = Enumerable.Range(from, count).Select(j => (startAt + j) % n).Where(Clear).OrderBy(k => Math.Abs(r.S[k] - r.S[point])).ToList();
+            if (Place(inCorner, null, true) != 0) continue;
+            var widen = (int)Math.Round(CornerWiden / o.Spacing);
+            var round = Enumerable.Range(from - widen, count + 2 * widen).Where(j => r.Closed || (startAt + j >= 0 && startAt + j < n))
+                .Select(j => ((startAt + j) % n + n) % n).Where(Clear).OrderBy(k => Math.Abs(r.S[k] - r.S[point])).ToList();
+            Place(round, "the corner", false);
         }
         // where the corners' lines are further apart than `every` cells (and from the start line to the first, the last to the finish or the
         // start line again): lines between them, evenly -- at the nearest place to each a line will do, within a quarter of `every`
@@ -3042,14 +3074,7 @@ internal static class RaceTrackBuilder
                 for (var m = 1; m < pieces && placed.Count < MaxCheckpoints; m++)
                 {
                     var want = a + (b - a) * m / pieces;
-                    foreach (var k in Enumerable.Range(0, n).Where(k => Math.Abs(Ahead(k) - want) <= every / 4 && Clear(k)).OrderBy(k => Math.Abs(Ahead(k) - want)))
-                    {
-                        if (!InsideCube(r.X[k], r.Z[k]) || placed.Any(p => Math.Abs(Ahead(p.Point) - Ahead(k)) < 6)) continue;
-                        var (left, leftEnough, right, rightEnough, _) = LineAt(k);
-                        if (!leftEnough || !rightEnough) continue;
-                        placed.Add((k, left, right));
-                        break;
-                    }
+                    Place(Enumerable.Range(0, n).Where(k => Math.Abs(Ahead(k) - want) <= every / 4 && Clear(k)).OrderBy(k => Math.Abs(Ahead(k) - want)), "the stretch", false);
                 }
             }
         }
@@ -3065,8 +3090,13 @@ internal static class RaceTrackBuilder
         (int Point, double Left, double Right) Across(int k, CheckpointTweak tw)
         {
             var line = LineAt(k);
-            return (k, Math.Max(line.Left, Edge(k)) + tw.Left, Math.Max(line.Right, Edge(k)) + tw.Right);
+            return Least((k, Math.Max(line.Left, Edge(k)) + tw.Left, Math.Max(line.Right, Edge(k)) + tw.Right), line);
         }
+        // (a plan's line no shorter than CheckpointPastEdge past the edge, as far as nothing stops it -- the palace's loop tops' lines, cut to
+        // their rails, 2026-10-28)
+        (int Point, double Left, double Right) Least((int Point, double Left, double Right) p,
+            (double Left, bool LeftEnough, double Right, bool RightEnough, int Inside) line) =>
+            (p.Point, Math.Max(p.Left, Math.Min(line.Left, Edge(p.Point) + CheckpointPastEdge)), Math.Max(p.Right, Math.Min(line.Right, Edge(p.Point) + CheckpointPastEdge)));
         var built = placed.ToList();
         var added = new List<(int Point, double Left, double Right)>();
         foreach (var tw in tweaks ?? Array.Empty<CheckpointTweak>())
@@ -3096,10 +3126,12 @@ internal static class RaceTrackBuilder
             if (tw.Number > 0 && tw.Number != c + 1) report.Notes.Add($"WARNING: the plan's adjustment of checkpoint {tw.Number} is checkpoint {c + 1}'s now");
             var at = placed.IndexOf(built[c]);
             placed[at] = tw.At is { Length: >= 2 } there ? Across(Nearest(r, there[0] + originX, there[1] + originZ), tw)
-                                                         : (built[c].Point, built[c].Left + tw.Left, built[c].Right + tw.Right);
+                                                         : Least((built[c].Point, built[c].Left + tw.Left, built[c].Right + tw.Right), LineAt(built[c].Point));
             built[c] = placed[at];
             tweaked.Add($"checkpoint {c + 1} at cell ({r.X[placed[at].Point]:0.0}, {r.Z[placed[at].Point]:0.0}), {placed[at].Left:0.#} cells left of the road's middle and {placed[at].Right:0.#} right");
         }
+        // (a line the plan adds takes the place of the builder's within 6 cells of it: Island CX's, where a corner's nearest had come too)
+        placed.RemoveAll(p => added.Any(q => Math.Abs(Ahead(q.Point) - Ahead(p.Point)) < 6));
         placed.AddRange(added);
         placed = placed.OrderBy(p => Ahead(p.Point)).ToList();
         foreach (var (k, left, right) in placed)
@@ -3701,6 +3733,20 @@ internal static class RaceTrackBuilder
         // (not what is drawn only, with no box to walk into: the road's own deck, Otringal's roulette wheel over the town)
         foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
             foreach (var d in cube.Decors) if (d.YMax >= d.YMin) standing.Add(Box(d, cx, cz));
+        // (the small props among it -- RestorePropMax cells across at the most, none at a door: posts, lamps, benches -- cleared from where a
+        // building is put back, as the road clears them: the user, 2026-10-29, wanted Otringal's casino "directly backs up to the race
+        // track", and a pair of posts stood between)
+        var props = new List<(IslandDecor D, int Cx, int Cz, (double X0, double Z0, double X1, double Z1, int Y0, int Y1) B)>();
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            foreach (var d in cube.Decors)
+            {
+                if (d.YMax < d.YMin) continue;
+                var b = Box(d, cx, cz);
+                if (b.X1 - b.X0 > RestorePropMax || b.Z1 - b.Z0 > RestorePropMax) continue;
+                if (doors.Any(q => b.X1 >= q.X0 - 1 && b.X0 <= q.X1 + 1 && b.Z1 >= q.Z0 - 1 && b.Z0 <= q.Z1 + 1)) continue;
+                props.Add((d, cx, cz, b));
+            }
+        var propBoxes = props.Select(q => q.B).ToHashSet();
         // (the places tried, whole cells from where it was, the nearest first; and how far apart most of some heights are, sorted)
         var candidates = (from dz in Enumerable.Range(-RestoreSearch, 2 * RestoreSearch + 1)
                           from dx in Enumerable.Range(-RestoreSearch, 2 * RestoreSearch + 1)
@@ -3767,49 +3813,118 @@ internal static class RaceTrackBuilder
             double lz = Math.Min(boxes.Min(b => b.Z0), outside.Count > 0 ? outside.Min(a => a.Z) : double.MaxValue) - RestoreSearch - 1;
             double hz = Math.Max(boxes.Max(b => b.Z1), outside.Count > 0 ? outside.Max(a => a.Z) : double.MinValue) + RestoreSearch + 1;
             var near = standing.Where(t => t.X1 > lx && t.X0 < hx && t.Z1 > lz && t.Z0 < hz).ToList();
-            // (the ground round it as it was round it first; failing that, as level as it was -- a house on a cliff's ledge, the Mosquibees')
-            for (var pass = 0; pass < 2 && found is null; pass++)
-            foreach (var (dx, dz) in candidates)
+            // (each piece in its own cube, each door in its scene's)
+            bool InCubes(int dx, int dz) =>
+                !pieces.Any(p => p.D.X + dx * 512 < 0 || p.D.X + dx * 512 >= IslandFile.CubeSize || p.D.Z + dz * 512 < 0 || p.D.Z + dz * 512 >= IslandFile.CubeSize)
+                && !doorBoxes.Any(b => Math.Floor(b.X0 / 64) != Math.Floor((b.X0 + dx) / 64) || Math.Floor((b.X1 - 1e-6) / 64) != Math.Floor((b.X1 + dx - 1e-6) / 64)
+                                    || Math.Floor(b.Z0 / 64) != Math.Floor((b.Z0 + dz) / 64) || Math.Floor((b.Z1 - 1e-6) / 64) != Math.Floor((b.Z1 + dz - 1e-6) / 64));
+            // (its pieces off the curbs -- the island's roads run close by one another, Otringal's and the Mosquibees' all over their
+            // towns: on the verge, if need be -- and on land; before its doors anything Twinsen can walk on, the road's verge too)
+            // (a road passing over it -- Otringal's roulette wheel over the town -- not in its way: only the road at its own heights there)
+            bool OffRoad(int dx, int dz)
+            {
+                var dy = Rise(dx, dz);
+                return !own.Any(s => report.DistanceToRoadAt(s.X + dx, s.Z + dz, y0 + dy, y1 + dy) <= o.CurbHalfWidth + RestoreCurb
+                                     || report.InTheWay(s.X + dx, s.Z + dz, y0 + dy, y1 + dy) || report.WasGround is { } land && !land(s.X + dx, s.Z + dz));
+            }
+            // (nothing standing in its place, from its floor up -- not even on top of a pit's rim: Otringal's kiosk by the stairway's -- nor
+            // before its doors)
+            bool Clear(int dx, int dz, int dy) =>
+                !boxes.Any(b => near.Any(s => !propBoxes.Contains(s) && s.X1 > b.X0 + dx + 0.25 && s.X0 < b.X1 + dx - 0.25 && s.Z1 > b.Z0 + dz + 0.25 && s.Z0 < b.Z1 + dz - 0.25
+                                              && s.Y1 > b.Y0 + dy + 100 && s.Y0 < b.Y1 + dy + RestoreAbove))
+                && !outside.Any(a => near.Any(s => !propBoxes.Contains(s) && a.X + dx > s.X0 && a.X + dx < s.X1 && a.Z + dz > s.Z0 && a.Z + dz < s.Z1
+                                                   && s.Y1 > doorBoxes[0].Y0 + dy + 100 && s.Y0 < doorBoxes[0].Y0 + dy + 1000));
+            // (how much higher it stands there: the middle of the ground round it against the ground round it where it was)
+            int Rise(int dx, int dz) => (int)Math.Round(ring.Select(v => groundAfter(v.X + dx, v.Z + dz) - groundBefore(v.X, v.Z)).OrderBy(d => d).ToList()[ring.Count / 2]);
+            // (its back: the side away from its doors, sampled every half cell half a cell out -- the road within RestoreBack of it there)
+            double mx = (bx0 + bx1) / 2, mz = (bz0 + bz1) / 2;
+            double ax = (doorBoxes.Average(b => (b.X0 + b.X1) / 2) - mx) / Math.Max(1, bx1 - bx0), az = (doorBoxes.Average(b => (b.Z0 + b.Z1) / 2) - mz) / Math.Max(1, bz1 - bz0);
+            var back = Math.Abs(ax) > Math.Abs(az)
+                ? Enumerable.Range(0, (int)((bz1 - bz0) * 2) + 1).Select(i => (X: ax > 0 ? bx0 - 0.5 : bx1 + 0.5, Z: bz0 + i * 0.5)).ToList()
+                : Enumerable.Range(0, (int)((bx1 - bx0) * 2) + 1).Select(i => (X: bx0 + i * 0.5, Z: az > 0 ? bz0 - 0.5 : bz1 + 0.5)).ToList();
+            bool Backed(int dx, int dz, int dy) => back.Any(s => report.DistanceToRoadAt(s.X + dx, s.Z + dz, y0 + dy, y1 + dy) <= o.CurbHalfWidth + RestoreCurb + RestoreBack);
+            // (whether it fits at a place in a pass, and how much higher it stands there)
+            int? Fits(int dx, int dz, int pass)
             {
                 why[0]++;
-                // (each piece in its own cube, each door in its scene's)
-                if (pieces.Any(p => p.D.X + dx * 512 < 0 || p.D.X + dx * 512 >= IslandFile.CubeSize || p.D.Z + dz * 512 < 0 || p.D.Z + dz * 512 >= IslandFile.CubeSize)) continue;
-                if (doorBoxes.Any(b => Math.Floor(b.X0 / 64) != Math.Floor((b.X0 + dx) / 64) || Math.Floor((b.X1 - 1e-6) / 64) != Math.Floor((b.X1 + dx - 1e-6) / 64)
-                                    || Math.Floor(b.Z0 / 64) != Math.Floor((b.Z0 + dz) / 64) || Math.Floor((b.Z1 - 1e-6) / 64) != Math.Floor((b.Z1 + dz - 1e-6) / 64))) continue;
+                if (!InCubes(dx, dz)) return null;
                 why[1]++;
-                // (its pieces off the curbs -- the island's roads run close by one another, Otringal's and the Mosquibees' all over their
-                // towns: on the verge, if need be -- and on land; before its doors anything Twinsen can walk on, the road's verge too)
-                if (own.Any(s => report.DistanceToRoad(s.X + dx, s.Z + dz) <= o.CurbHalfWidth + RestoreCurb || report.InTheWay(s.X + dx, s.Z + dz, -1e9, 1e9)
-                                 || report.WasGround is { } land && !land(s.X + dx, s.Z + dz))) continue;
+                if (!OffRoad(dx, dz)) return null;
                 why[2]++;
                 // (the ground round it as level with it as it was: the middle of the differences, most of them within RestoreLevel of it)
                 int dy;
                 if (pass == 0)
                 {
                     var diffs = ring.Select(v => groundAfter(v.X + dx, v.Z + dz) - groundBefore(v.X, v.Z)).OrderBy(d => d).ToList();
-                    if (Spread(diffs) > RestoreLevel) continue;
+                    if (Spread(diffs) > RestoreLevel) return null;
                     dy = (int)Math.Round(diffs[diffs.Count / 2]);
                 }
                 else
                 {
                     var now = ring.Select(v => groundAfter(v.X + dx, v.Z + dz)).OrderBy(h => h).ToList();
-                    if (Spread(now) > oldSpread + RestoreLevel) continue;
+                    if (Spread(now) > oldSpread + RestoreLevel) return null;
                     dy = (int)Math.Round(now[now.Count / 2] - oldRing[oldRing.Count / 2]);
                 }
                 why[3]++;
-                // (nothing standing in its place, from its floor up -- not even on top of a pit's rim: Otringal's kiosk by the stairway's)
-                if (boxes.Any(b => near.Any(s => s.X1 > b.X0 + dx + 0.25 && s.X0 < b.X1 + dx - 0.25 && s.Z1 > b.Z0 + dz + 0.25 && s.Z0 < b.Z1 + dz - 0.25
-                                                     && s.Y1 > b.Y0 + dy + 100 && s.Y0 < b.Y1 + dy + RestoreAbove))) continue;
-                if (outside.Any(a => near.Any(s => a.X + dx > s.X0 && a.X + dx < s.X1 && a.Z + dz > s.Z0 && a.Z + dz < s.Z1
-                                                     && s.Y1 > doorBoxes[0].Y0 + dy + 100 && s.Y0 < doorBoxes[0].Y0 + dy + 1000))) continue;
-                found = (dx, dz, dy);
-                break;
+                return Clear(dx, dz, dy) ? dy : null;
+            }
+            // (the ground round it as it was round it first; failing that, as level as it was -- a house on a cliff's ledge, the Mosquibees')
+            for (var pass = 0; pass < 2 && found is null; pass++)
+            {
+                foreach (var (dx, dz) in candidates)
+                    if (Fits(dx, dz, pass) is { } dy) { found = (dx, dz, dy); break; }
+                // (its back to the road, if a place where it is is no more than RestoreBackSlack cells further: the user, 2026-10-29, wanted
+                // Otringal's casino to "directly back up to the race track" -- the nearest place had the town's wall behind it)
+                if (found is not { } near0 || Backed(near0.Dx, near0.Dz, near0.Dy)) continue;
+                var reach = Math.Sqrt(near0.Dx * near0.Dx + near0.Dz * near0.Dz) + RestoreBackSlack;
+                foreach (var (dx, dz) in candidates.Where(c => Math.Sqrt(c.Dx * c.Dx + c.Dz * c.Dz) <= reach))
+                    if (Fits(dx, dz, pass) is { } dy && Backed(dx, dz, dy))
+                    {
+                        report.Notes.Add($"a building put back off the road at ({dx}, {dz}) cells, its back to the road, not ({near0.Dx}, {near0.Dz})");
+                        found = (dx, dz, dy);
+                        break;
+                    }
+            }
+            // (and slid back towards where it stood, a cell at a time, while it still fits off the curbs and clear -- its back to the road:
+            // the user, 2026-10-29, "push the casino back closer to its original position so it directly backs up to the race track". The
+            // ground round it needn't be as level there: it takes its own ground with it)
+            if (found is { } first)
+            {
+                var steps = Math.Max(Math.Abs(first.Dx), Math.Abs(first.Dz));
+                for (var k = steps - 1; k >= 1; k--)
+                {
+                    int tx = (int)Math.Round(first.Dx * (double)k / steps), tz = (int)Math.Round(first.Dz * (double)k / steps);
+                    if (tx == found.Value.Dx && tz == found.Value.Dz) continue;
+                    if (!InCubes(tx, tz) || !OffRoad(tx, tz)) break;
+                    var ty = Rise(tx, tz);
+                    if (!Clear(tx, tz, ty)) break;
+                    found = (tx, tz, ty);
+                }
+                if (found.Value.Dx != first.Dx || found.Value.Dz != first.Dz)
+                    report.Notes.Add($"a building put back off the road slid from ({first.Dx}, {first.Dz}) to ({found.Value.Dx}, {found.Value.Dz}) cells: against the road");
             }
             var what = $"the building of the door{(doorList.Count > 1 ? "s" : "")} at cell{(doorList.Count > 1 ? "s" : "")} " +
                        string.Join(" and ", doorBoxes.Select(b => $"({(b.X0 + b.X1) / 2:0.#}, {(b.Z0 + b.Z1) / 2:0.#})"));
             if (found is not { } f) { report.Notes.Add($"WARNING: {what}: no place for it off the road within {RestoreSearch} cells -- its doors go (of {why[0]} tries over two passes, {why[1]} in its cube, {why[2]} of them off the curbs, {why[3]} of them level enough, none clear of the decor standing there)"); continue; }
             if (pieces.GroupBy(p => (p.Cx, p.Cz)).Any(g => island.CubeAt(g.Key.Cx, g.Key.Cz) is not { } c || c.Decors.Count + g.Count() > IslandDecors.MaxPerCubeRaceTrack))
             { report.Notes.Add($"WARNING: {what}: no room for its {pieces.Count} pieces in their cube -- its doors go"); continue; }
+            // (the props where it goes, and before its doors, cleared)
+            var cleared = new List<int>();
+            foreach (var q in props.ToList())
+            {
+                var t = q.B;
+                var under = boxes.Any(b => t.X1 > b.X0 + f.Dx + 0.25 && t.X0 < b.X1 + f.Dx - 0.25 && t.Z1 > b.Z0 + f.Dz + 0.25 && t.Z0 < b.Z1 + f.Dz - 0.25
+                                           && t.Y1 > b.Y0 + f.Dy + 100 && t.Y0 < b.Y1 + f.Dy + RestoreAbove)
+                            || outside.Any(a => a.X + f.Dx > t.X0 && a.X + f.Dx < t.X1 && a.Z + f.Dz > t.Z0 && a.Z + f.Dz < t.Z1
+                                                && t.Y1 > doorBoxes[0].Y0 + f.Dy + 100 && t.Y0 < doorBoxes[0].Y0 + f.Dy + 1000);
+                if (!under || island.CubeAt(q.Cx, q.Cz) is not { } c || !c.Decors.Remove(q.D)) continue;
+                props.Remove(q);
+                standing.Remove(t);
+                report.Removed.Add((q.Cx, q.Cz, q.D.Body & 0xFFFF, "restore"));
+                report.DecorsRemoved++;
+                cleared.Add(q.D.Body & 0xFFFF);
+            }
+            if (cleared.Count > 0) report.Notes.Add($"{cleared.Count} props cleared where a building was put back: bodies {string.Join(",", cleared)}");
             var standingBefore = standing.ToList();
             foreach (var p in pieces)
             {
@@ -3834,7 +3949,7 @@ internal static class RaceTrackBuilder
             {
                 var out_ = Math.Max(Math.Max(gx0 - x, x - gx1), Math.Max(gz0 - z, z - gz1));
                 var w = out_ <= 1 ? 1 : Math.Max(0, 1 - (out_ - 1) / RestoreBlend);
-                if (w <= 0 || report.DistanceToRoad(x + f.Dx, z + f.Dz) <= o.CurbHalfWidth + 1 || island.HeightAt(x + f.Dx, z + f.Dz) is not { } now) continue;
+                if (w <= 0 || island.HeightAt(x + f.Dx, z + f.Dz) is not { } now || report.DistanceToRoadAt(x + f.Dx, z + f.Dz, now - 100, now + 100) <= o.CurbHalfWidth + 1) continue;
                 // (not under what stands there besides it: a building beside it keeps its ground)
                 if (!Inside(x, z, 0) && standingBefore.Any(t => x + f.Dx >= t.X0 - 0.5 && x + f.Dx <= t.X1 + 0.5 && z + f.Dz >= t.Z0 - 0.5 && z + f.Dz <= t.Z1 + 0.5 && t.Y1 > now + 100)) continue;
                 var want = now + (groundBefore(x, z) + f.Dy - now) * w;
@@ -3853,6 +3968,10 @@ internal static class RaceTrackBuilder
     // DoorPieces: how near a door's zone a piece of its building is (cells)
     private const double DoorAgainst = 0.25;
     private const double RestoreApproach = 1.5, RestoreCurb = 0.75;
+    // ... and how near the road its back is for it to back onto it, and how much further than the nearest place one that does may be (cells)
+    private const double RestoreBack = 1.5, RestoreBackSlack = 2;
+    // ... and the most a prop that may be cleared from its place is across (cells)
+    private const double RestorePropMax = 2.5;
     // ... and how far over its top nothing may stand in its place (units)
     private const double RestoreAbove = 300;
     private const double RestoreLevel = 700;

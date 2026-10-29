@@ -62,6 +62,10 @@ internal static class RaceTrackRoulette
     public const int Pockets = 18;
     private static int PocketColour(int k) => k == 0 ? Green : k % 2 == 1 ? Red : Black;
     private const int NoBoxTop = -32000;
+    // how far up its decors are stored, out of sight, until a race brings them down (units; RACEMOD.CPP RACE_WHEEL_LIFTED): the user,
+    // 2026-10-29, "have the roulette wheel either up in the air when we're not racing, or invisible outside of a race as it makes it hard
+    // to see where we're walking"
+    public const int Lifted = 40000;
 
     // Builds the wheel at (cx, cz) (island cells): the ground that would reach its underside lowered, what stands up into it taken away
     // (not what `kept` keeps), and its decors added. Null when its cube is full.
@@ -104,13 +108,16 @@ internal static class RaceTrackRoulette
         if (home.Cube.Decors.Count + Bodies + 8 > IslandDecors.MaxPerCubeRaceTrack) { report.Notes.Add("WARNING: the roulette wheel: no room for it in its cube"); return null; }
 
         var made = new List<int>();
-        int Add(byte[] body, double wx, double wy, double wz, double ext, double bottom)
+        // (its turning pieces and its balls stored Lifted up, out of sight over the town -- the race-track mode brings them down while the
+        // car is driven (RACEMOD.CPP WheelDecors); its legs stand where they are)
+        int Add(byte[] body, double wx, double wy, double wz, double ext, double bottom, bool lifted = true)
         {
             if (IslandDecors.Locate(island, wx, wz) is not { } at || at.Cube.Decors.Count >= IslandDecors.MaxPerCubeRaceTrack) return -1;
             var number = o.NewBodyBase + report.NewBodies.Count;
-            var d = IslandDecors.Blank(number, at.X, (int)Math.Round(wy), at.Z, 0);
+            var up = lifted ? Lifted : 0;
+            var d = IslandDecors.Blank(number, at.X, (int)Math.Round(wy) + up, at.Z, 0);
             d.XMin = at.X - (int)ext; d.XMax = at.X + (int)ext; d.ZMin = at.Z - (int)ext; d.ZMax = at.Z + (int)ext;
-            d.YMin = (int)Math.Floor(bottom); d.YMax = NoBoxTop;
+            d.YMin = (int)Math.Floor(bottom) + up; d.YMax = NoBoxTop;
             at.Cube.Decors.Add(d);
             report.NewBodies.Add(body);
             made.Add(number);
@@ -234,7 +241,7 @@ internal static class RaceTrackRoulette
             var leg = new RaceTrackRaisedBody.Mesh();
             var u = new Vector3((float)Math.Cos(a), 0, (float)Math.Sin(a)); var v = new Vector3(-u.Z, 0, u.X);
             RaceTrackPipes.Box(leg.Points, leg.Faces, Vector3.Zero, u * (float)LegHalf, v * (float)LegHalf, -60, (float)top, Gold, GoldDark, GoldDark);
-            if (Add(leg.Write(), lx, ground, lz, LegHalf * 2, ground - 60) >= 0) legs++;
+            if (Add(leg.Write(), lx, ground, lz, LegHalf * 2, ground - 60, lifted: false) >= 0) legs++;
         }
 
         report.Notes.Add($"a roulette wheel at cell ({cx:0.0}, {cz:0.0}): its wall {rim:0.##} cells out, its floor {run.HoleY:0} at the hole ({run.Hole:0.#} cells) to " +

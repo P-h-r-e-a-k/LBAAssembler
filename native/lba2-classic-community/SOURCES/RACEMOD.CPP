@@ -393,6 +393,9 @@ typedef struct {
     S32 Y, HasY;                           // the road's height at the line, when the file gives it
 } T_RACE_LINE;
 #define RACE_LINE_REACH 1200
+// (a move into the cube beside counts as a car's move -- its line crossings seen -- when no longer than this: driven over the edge, not
+// put elsewhere; units)
+#define RACE_CUBE_STEP 2048
 static S32 s_lineY = 0, s_lineHasY = 0;    // the start line's
 // the checkpoints, one in the middle of each corner (the builder's), and the next one the car has to cross: a lap counts once the car
 // has crossed them all in order -- cutting a corner, it goes round the line's inner end. Drawn as red lines across the road while
@@ -1422,6 +1425,10 @@ static T_RACE_BULLET s_bullets[RACE_MAX_BULLETS];
 #define RACE_WHEEL_PULL 3500.0             // units a second a car on the bowl is drawn in, a unit of slope (was 1,500: a slow way down)
 #define RACE_WHEEL_DROP_LEAST 3000.0       // the drop through the hole: carried at least this fast ...
 #define RACE_WHEEL_DROP_MS 900             // ... and taking at least this long
+#define RACE_WHEEL_LIFTED 40000            // its decors stored this far up, out of sight (RaceTrackRoulette.Lifted), brought down while the car
+                                           // is driven and back up while Twinsen walks (the user, 2026-10-29: "have the roulette wheel either up
+                                           // in the air when we're not racing, or invisible outside of a race as it makes it hard to see where
+                                           // we're walking"); a wheel built before stood where it is driven, and goes up the same
 typedef struct {
     int On, CubeX, CubeZ, Ball, BallR, Landing, NbParts, Parts[RACE_MAX_WHEEL_PARTS];
     double X, Z, Spin, HoleY, S1, S2, Hole, Rim, Outer, Under;
@@ -4534,11 +4541,14 @@ static int Crosses(double x0, double z0, double x1, double z1, double ax, double
 // +1 when the move crosses the line the lap's way, -1 the other way, 0 when it doesn't cross it (or the line is in another cube).
 // slack: how far past each of its ends the line counts too.
 // (CrossLineIn: a move in cube (cx, cz) of something at height y -- a ghost's, RaceMod_GhostsCheck)
+// (a line runs on past its cube's edge into the next where the road does -- its places there beyond 0..32767: the builder's lines reach
+// a car's width past the road's edges, 2026-10-29 -- so a move in a cube beside the line's counts too, the line seen from that cube)
 static int CrossLineIn(const T_RACE_LINE *l, S32 cx, S32 cz, S32 y, S32 x0, S32 z0, S32 x1, S32 z1, S32 slack = 0) {
-    if (cx != l->CubeX || cz != l->CubeZ) return 0;
+    if (abs(cx - l->CubeX) > 1 || abs(cz - l->CubeZ) > 1) return 0;
     // (a line with a height: only for a car on the road it lies across, not one passing over or under that place)
     if (l->HasY && abs(y - l->Y) > RACE_LINE_REACH) return 0;
-    double ax = l->X0, az = l->Z0, bx = l->X1, bz = l->Z1;
+    const double ox = (l->CubeX - cx) * 32768.0, oz = (l->CubeZ - cz) * 32768.0;
+    double ax = l->X0 + ox, az = l->Z0 + oz, bx = l->X1 + ox, bz = l->Z1 + oz;
     const double len = sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az));
     if (slack > 0 && len > 0) {
         const double ux = (bx - ax) / len * slack, uz = (bz - az) / len * slack;
@@ -4615,17 +4625,20 @@ static int GiveItem(int pu, S32 now);
 static void Time(char *out, size_t size, S32 ms);
 static void PackLapLog(int lap);
 void RaceMod_Lap(S32 x, S32 z) {
-    // (the previous frame's position; forgotten when the car changes cube, where the coordinates jump, or is put on the grid)
+    // (the previous frame's position; forgotten when the car is put on the grid. Into the cube beside, by no more than RACE_CUBE_STEP --
+    // driven over its edge -- where it came from in the new cube's units: a checkpoint runs on over a cube's edge where the road does,
+    // and a car that crossed it in the frame it changed cube was not seen to, 2026-10-29: the game's Desert and Emerald Moon ghosts)
     static S32 px = 0, pz = 0, pcx = -1, pcz = -1;
     if (s_wantFlip) { FirstTime = AFF_ALL_FLIP; s_wantFlip = 0; }
     if (s_forgetLap) { pcx = -1; s_forgetLap = 0; }
     if (!s_active || !s_car.HasLine || CubeMode != CUBE_EXTERIEUR) { pcx = -1; return; }
     // the story's arrow to the start line (holo_arrow): Twinsen is at the wheel, so he has found it
     if (s_holoArrow >= 0) { ClrHoloPos(s_holoArrow); Log_Info("[racemod] holomap arrow %d cleared", s_holoArrow); s_holoArrow = -1; }
-    const S32 x0 = px, z0 = pz;
+    const S32 x0 = px - (CurrentCubeX - pcx) * 32768, z0 = pz - (CurrentCubeY - pcz) * 32768;
     const int same = pcx == CurrentCubeX && pcz == CurrentCubeY;
+    const int beside = pcx >= 0 && !same && abs(CurrentCubeX - pcx) <= 1 && abs(CurrentCubeY - pcz) <= 1 && abs(x - x0) + abs(z - z0) <= RACE_CUBE_STEP;
     px = x; pz = z; pcx = CurrentCubeX; pcz = CurrentCubeY;
-    if (!same || (x == x0 && z == z0)) return;
+    if (!(same || beside) || (x == x0 && z == z0)) return;
     // (a ghost played back: the car is driven along it, and no lap is counted -- RaceMod_Frame, GhostWatch)
     if (s_ghostWatch) return;
 
@@ -12089,10 +12102,20 @@ static void Projectiles(S32 now, int driving) {
 // box with it: the engine leaves out a decor whose box is out of sight).
 static void WheelDecors(T_DECORS *list, S32 count) {
     if (!s_wheel.On || !RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return;
+    const int down = Comportement == C_BUGGY;
     for (S32 i = 0; i < count; i++) {
         T_DECORS *d = &list[i];
         const int body = d->Body & 0xFFFF;
-        if (s_wheel.BallShown && body >= s_wheel.Ball && body < s_wheel.Ball + s_wheel.NbBalls) {
+        const int isBall = body >= s_wheel.Ball && body < s_wheel.Ball + s_wheel.NbBalls;
+        int part = isBall;
+        for (int p = 0; p < s_wheel.NbParts && !part; p++) part = body == s_wheel.Parts[p];
+        if (!part) continue;
+        // (down, or up out of sight: by where it is -- a pose lasts until the cube is loaded again. Its box's top is the draw-only mark)
+        const int up = d->Yworld > s_wheel.HoleY + RACE_WHEEL_LIFTED / 2;
+        const S32 lift = down && up ? -RACE_WHEEL_LIFTED : !down && !up ? RACE_WHEEL_LIFTED : 0;
+        d->Yworld += lift; d->YMin += lift;
+        if (!down) continue;
+        if (s_wheel.BallShown && isBall) {
             const int k = body - s_wheel.Ball;
             const S32 x = (S32)floor(s_wheel.BallX[k] - s_wheel.CubeX * 32768.0 + 0.5), y = (S32)floor(s_wheel.BallY[k] + 0.5), z = (S32)floor(s_wheel.BallZ[k] - s_wheel.CubeZ * 32768.0 + 0.5);
             d->XMin += x - d->Xworld; d->XMax += x - d->Xworld; d->ZMin += z - d->Zworld; d->ZMax += z - d->Zworld; d->YMin += y - d->Yworld;
@@ -14396,7 +14419,9 @@ static int GhostMissed(const T_RACE_LAPGHOST *g, const T_RACE_LINE *lines, int n
     for (int i = 1; i < g->N; i++) {
         const T_RACE_LAPGHOST_PT *a = &g->P[i - 1], *b = &g->P[i];
         const S32 cx = GhostCubeX(b->X), cz = GhostCubeX(b->Z);
-        if (GhostCubeX(a->X) != cx || GhostCubeX(a->Z) != cz) continue;
+        // (one cube, as the car's moves are seen; or the cube beside, driven over its edge -- RaceMod_Lap)
+        const S32 ax = GhostCubeX(a->X), az = GhostCubeX(a->Z);
+        if ((ax != cx || az != cz) && (abs(ax - cx) > 1 || abs(az - cz) > 1 || abs(b->X - a->X) + abs(b->Z - a->Z) > RACE_CUBE_STEP)) continue;
         const S32 x0 = a->X - cx * 32768, z0 = a->Z - cz * 32768, x1 = b->X - cx * 32768, z1 = b->Z - cz * 32768;
         for (int k = 0; k < n; k++) {
             if (k == next && CrossLineIn(&lines[k], cx, cz, b->Y, x0, z0, x1, z1) > 0) next++;
