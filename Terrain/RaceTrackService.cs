@@ -430,6 +430,7 @@ internal static class RaceTrackService
         var setup = 0.5 + (addPolar ? PolarAddSeconds : 0) + (islands.Contains(RaceTrackIsland.Sendell) ? 0.4 : 0)
                     + (islands.Contains(RaceTrackIsland.Palace) ? PalaceAddSeconds : 0)
                     + (islands.Contains(RaceTrackIsland.CxTower) ? CxTowerAddSeconds : 0)
+                    + (islands.Contains(RaceTrackIsland.CxTowerMk2) ? CxTowerAddSeconds : 0)
                     + (islands.Contains(RaceTrackIsland.Temple) ? TempleAddSeconds : 0);
         var whole = setup + tracks.Sum(t => BuildSeconds(t.Options.Island));
         try
@@ -463,6 +464,12 @@ internal static class RaceTrackService
             {
                 progress?.Report(new((setup - 0.3) / whole, "Island CX: making the island, its halls one ring under the gas"));
                 made.AddRange(LBAAssembler.Terrain.ControlTower.CxTowerTrack.Install(gameDirectory, BackupSuffix));
+            }
+            // (Island CX Mk2's: made as Island CX's is, at 1:1 -- the track's build makes it twice as big: Scale)
+            if (islands.Contains(RaceTrackIsland.CxTowerMk2))
+            {
+                progress?.Report(new((setup - 0.3) / whole, "Island CX Mk2: making the island, its halls one ring under the gas"));
+                made.AddRange(LBAAssembler.Terrain.ControlTower.CxTowerTrack.Install(gameDirectory, BackupSuffix, mk2: true));
             }
             if (islands.Contains(RaceTrackIsland.Temple))
             {
@@ -605,13 +612,19 @@ internal static class RaceTrackService
             options.LiftFrame = new List<(IslandDecor, int, int, int, byte[])> { (floor.Decor, 0, 0, 0, hqr.Read(look.FrameBody)) };
         }
         var scaled = new List<string>();
+        // (an island the build makes that races in copies of the game's scenes -- Island CX Mk2, CXTOWERMK2 -- has them copied before they
+        // are made bigger with it; its objects, Island CX's some 240, as many a cube as this editor's engine draws, a box reaching over a
+        // cube's edge in each cube it reaches; its sea where Island CX's is, for the road's way in under it; no holomap picture of its own)
+        var copiedFirst = options.Island.Scale > 1 && options.Island.Created && options.Island.AddedScenes.Any();
+        if (copiedFirst && RaceTrackScenes.AddScene(gameDirectory, options.Island) is { } copied) scaled.Add(copied);
         if (options.Island.Scale > 1)
         {
             var anchor = IslandScaler.Anchor(island);
-            island = IslandScaler.Scale(island, options.Island.Scale, scaled);
+            island = copiedFirst ? IslandScaler.Scale(island, options.Island.Scale, scaled, IslandDecors.MaxPerCubeOwnEngine, spread: true, ownSea: true)
+                                 : IslandScaler.Scale(island, options.Island.Scale, scaled);
             scaled.Add(IslandScaler.ScaleObl(Path.Combine(gameDirectory, options.Island.OblFile), options.Island.Scale));
             scaled.AddRange(IslandScaler.ScaleScenes(gameDirectory, options.Island, island, anchor, options.Island.Scale));
-            scaled.Add(IslandScaler.ScaleHolomap(gameDirectory, options.Island, anchor, options.Island.Scale));
+            if (!(copiedFirst && options.Island.NoHolomap)) scaled.Add(IslandScaler.ScaleHolomap(gameDirectory, options.Island, anchor, options.Island.Scale));
         }
         // (cubes of its ground the game has no scene for, that the lap drives over: a scene each -- Otringal's south-west islets)
         if (options.Island.NewCubes.Length > 0) scaled.AddRange(IslandScaler.AddCubeScenes(gameDirectory, options.Island, island));
@@ -649,7 +662,7 @@ internal static class RaceTrackService
         extra.AddRange(Finish(gameDirectory, report, options, twin, session));
         var own = twin is { Own: true } ? twin : null;
         session.Step(0.92, "the scenes");
-        if (RaceTrackScenes.AddScene(gameDirectory, options.Island) is { } added) extra.Add(added);
+        if (!copiedFirst && RaceTrackScenes.AddScene(gameDirectory, options.Island) is { } added) extra.Add(added);
         var scenes = RaceTrackScenes.Apply(gameDirectory, report, options, own is null ? null : (own.Report, own.Options));
         session.Step(0.98, "the story and the race's settings");
         var story = Story(gameDirectory, report, options, own, scenes);
@@ -1299,6 +1312,10 @@ internal static class RaceTrackService
         foreach (var f in back) File.Delete(Path.Combine(gameDirectory, f + BackupSuffix));
         // (an island the build made has no originals: it goes -- the Palace island, an island of its own too, made again without its track)
         var gone = SendellWell.Remove(gameDirectory) ? $" {SendellWell.IleFile} and {SendellWell.OblFile}, which the build made, are gone." : "";
+        // (Island CX Mk2's, made only for its track: gone)
+        var mk2Files = new[] { LBAAssembler.Terrain.ControlTower.ControlTowerIsland.Mk2IleFile, LBAAssembler.Terrain.ControlTower.ControlTowerIsland.Mk2OblFile };
+        if (mk2Files.Count(f => { var path = Path.Combine(gameDirectory, f); if (!File.Exists(path)) return false; File.Delete(path); return true; }) > 0)
+            gone += $" {mk2Files[0]} and {mk2Files[1]}, which the build made, are gone.";
         // (the Temple of Bú's island, made from LBA1's scenes with the track's doorways cut: the island again as Tools makes it -- or gone, with no
         // LBA1 folder to make it from)
         if (LBAAssembler.Terrain.Temple.TempleIsland.IsInstalled(gameDirectory))

@@ -1079,12 +1079,13 @@ internal static class RaceTrackScenes
                 }
             // the island's own guns that fire at the cars (RaceTrackIsland.HuntingGuns: Island CX's cannons on its corner towers), where they
             // stand, their scripts emptied -- the race-track mode fires their bursts (gunner= and gunner_hunt=: at a car it picks outside)
+            // (an island made bigger, Island CX Mk2: each its own cube's -- the others' stand-ins, under the island, would fire from there)
             if (options.Island.HuntingGuns is { } guns_)
                 foreach (var t in tracks.Take(1))
                     for (var i = 1; i < model.Actors.Count; i++)
                     {
                         var gun = model.Actors[i];
-                        if (gun.Entity != guns_.Entity) continue;
+                        if (gun.Entity != guns_.Entity || gun.Y == IslandScaler.StandInY) continue;
                         gun.Life = new byte[] { 0 }; gun.Track = new byte[] { 0 }; gun.Move = 0;
                         t.Hunters.Add(new[] { scene, i, model.CubeX * IslandFile.CubeSize + gun.X, gun.Y + LBAAssembler.Terrain.ControlTower.CxTowerTrack.CannonMuzzle,
                                               model.CubeY * IslandFile.CubeSize + gun.Z, (int)Math.Round(guns_.Reach * 512) });

@@ -52,7 +52,7 @@ internal sealed class IslandMapRenderer
             // the Palace island (Terrain/Palace: Otringal's palace made an island, drawn with Otringal's atlases)
             "PALACE" => 31,
             // Island CX with its control tower's lower level as a 3D building (Terrain/ControlTower), Island CX's atlases
-            "CXTOWER" => 36,
+            "CXTOWER" or "CXTOWERMK2" => 36,
             // island 1 (Sendell's Well, cut from the retail game: a SENDELL.ILE made for it), and the old copy of the Emerald Moon
             "SENDELL" => 28, "MOON" => 30,
             // island 12, Polar Island (ported from LBA1: Terrain.Polar), its own slot -- an empty one in the retail file, filled when it is

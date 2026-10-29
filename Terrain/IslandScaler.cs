@@ -41,7 +41,12 @@ internal static class IslandScaler
 
     // ---- the ground and the objects -----------------------------------------------------------------------------------------------
 
-    public static IslandFile Scale(IslandFile source, int k, List<string> log)
+    // (`maxPerCube`: the objects a new cube takes, the retail engine's 200 by default -- Island CX Mk2's, an island this editor's engine draws,
+    // as many as it does; `spread`: an object whose box reaches over its new cube's edge copied into each cube it reaches, as the builder's
+    // decks are -- the engine sees the objects of the car's own cube, and Island CX's room's boxes, up to the cube wide, reach over the new
+    // cubes' edges; `ownSea`: the sea drawn in a new cube's squares only where the old cube's were -- the builder leaves the squares out
+    // where the road goes in under the island, as Island CX's: RaceTrackBuilder.SeaEverywhere, which passes over a cube with them all)
+    public static IslandFile Scale(IslandFile source, int k, List<string> log, int maxPerCube = IslandDecors.MaxPerCube, bool spread = false, bool ownSea = false)
     {
         if (k != 2) throw new ArgumentException("Islands are made bigger 2 times only.");
         if (source.GroundPages.Count > 0) throw new InvalidDataException("An island with more ground texture pages can't be made bigger.");
@@ -60,6 +65,14 @@ internal static class IslandScaler
             // its settings the old cube's: the sea drawn in all its patches (the old ones' are k times the size), no animated ground
             to.Info = (int[])from.Info.Clone();
             to.BitField = 0xFFFF;
+            // (the engine's 4 x 4 squares, bit z * 4 + x: each new one in the old square it is a quarter of)
+            if (ownSea)
+            {
+                var bits = 0;
+                for (var b = 0; b < 16; b++)
+                    if ((from.BitField & (1 << ((j * 4 + b / 4) / k * 4 + (i * 4 + b % 4) / k))) != 0) bits |= 1 << b;
+                to.BitField = bits;
+            }
             for (var w = 6; w < IslandCube.InfoSize; w++) to.Info[w] = -1;
             // heights and light: a new vertex on an old one takes it; between two, their middle; in a cell's middle, its diagonal's
             for (var vz = 0; vz < IslandCube.Vertices; vz++)
@@ -119,7 +132,7 @@ internal static class IslandScaler
             defs = Math.Max(defs, table.Count);
         }
         // the objects: each in the new cube it stands in, k times as far from the anchor and as high, its box k times
-        var objects = 0;
+        int objects = 0, spreadCopies = 0;
         foreach (var o in old)
         {
             var from = source.CubeAt(o.X, o.Z)!;
@@ -135,14 +148,27 @@ internal static class IslandScaler
                 copy.X = Lx(d.X); copy.Z = Lz(d.Z); copy.Y = d.Y * k;
                 copy.XMin = Lx(d.XMin); copy.XMax = Lx(d.XMax); copy.ZMin = Lz(d.ZMin); copy.ZMax = Lz(d.ZMax);
                 copy.YMin = d.YMin * k; copy.YMax = d.YMax * k;
-                if (to.Decors.Count >= IslandDecors.MaxPerCube) continue;
+                if (to.Decors.Count >= maxPerCube) continue;
                 to.Decors.Add(copy);
                 objects++;
+                if (!spread) continue;
+                for (var dz = -1; dz <= 1; dz++)
+                    for (var dx = -1; dx <= 1; dx++)
+                    {
+                        if ((dx, dz) == (0, 0) || island.CubeAt(cx + dx, cz + dz) is not { } beside || beside.Decors.Count >= maxPerCube) continue;
+                        // (its box in that cube's frame, where it reaches into it)
+                        if (copy.XMax - dx * 32768 <= 0 || copy.XMin - dx * 32768 >= 32768 || copy.ZMax - dz * 32768 <= 0 || copy.ZMin - dz * 32768 >= 32768) continue;
+                        var also = copy.Clone();
+                        also.X -= dx * 32768; also.XMin -= dx * 32768; also.XMax -= dx * 32768;
+                        also.Z -= dz * 32768; also.ZMin -= dz * 32768; also.ZMax -= dz * 32768;
+                        beside.Decors.Add(also);
+                        spreadCopies++;
+                    }
             }
         }
         var name = source.Path is { Length: > 0 } p ? Path.GetFileName(p).Replace(".before-racetrack", "") : "the island";
         log.Add($"{name} {k} times bigger: {old.Count} cubes became {cubes.Count} (cubes {cubes.Min(c => c.New.X)}..{cubes.Max(c => c.New.X)} x {cubes.Min(c => c.New.Z)}..{cubes.Max(c => c.New.Z)}), " +
-                $"{objects} objects, at most {defs} ground texture definitions in a cube");
+                $"{objects} objects{(spreadCopies > 0 ? $" ({spreadCopies} copies of those reaching into the cubes beside)" : "")}, at most {defs} ground texture definitions in a cube");
         return island;
     }
 
@@ -306,6 +332,7 @@ internal static class IslandScaler
 
     private const int Invisible = 1 << 9, NoShadow = 1 << 12;
     private const int EdgeTop = 32000;
+    public const int StandInY = -16000;                 // a stand-in's height: out of sight, deep under the island
 
     // The island's outside scenes k times as big (SCENE.HQR in the folder, its originals): each scene of an old cube becomes the k x k
     // scenes of its new ones. `island`: the scaled ground (where Twinsen stands in a new scene). Returns lines for the log.
@@ -362,7 +389,7 @@ internal static class IslandScaler
                 int ax = X(orig.X), az = Z(orig.Z);
                 if (Here(ax, az)) { actor.X = ax; actor.Y = Math.Clamp(orig.Y * k, short.MinValue, short.MaxValue); actor.Z = az; actorsHere++; continue; }
                 actor.Flags = (uint)(Invisible | NoShadow);
-                actor.X = Math.Clamp(ax, 0, 32767); actor.Z = Math.Clamp(az, 0, 32767); actor.Y = -16000;
+                actor.X = Math.Clamp(ax, 0, 32767); actor.Z = Math.Clamp(az, 0, 32767); actor.Y = StandInY;
                 actor.Life = new byte[] { 0 }; actor.Track = new byte[] { 0 };
                 standIns++;
             }
@@ -487,7 +514,7 @@ internal static class IslandScaler
                 var actor = model.Actors[a];
                 if (a == 1 && actor.Entity == 14 && actor.X == 0 && actor.Z == 0) continue;
                 actor.Flags = (uint)(Invisible | NoShadow);
-                actor.X = 16384; actor.Z = 16384; actor.Y = -16000;
+                actor.X = 16384; actor.Z = 16384; actor.Y = StandInY;
                 actor.Life = new byte[] { 0 }; actor.Track = new byte[] { 0 };
             }
             model.Zones.Clear();

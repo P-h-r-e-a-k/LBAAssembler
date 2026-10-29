@@ -276,7 +276,7 @@ int lba2_renderer_load_island(const char *name)
     // it had the first slot's, Citadel's sea, round it. PALACE, Otringal's palace made an island: Otringal's, as its palette is. No scenes
     // of their own yet, so no actors: Island CX's and Otringal's belong to those islands.)
     const S32 actorIsland = islandIndex;
-    if (islandIndex < 0 && !strcasecmp(name, "cxtower")) islandIndex = 9;
+    if (islandIndex < 0 && (!strcasecmp(name, "cxtower") || !strcasecmp(name, "cxtowermk2"))) islandIndex = 9;   // (CXTOWERMK2: twice as big)
     if (islandIndex < 0 && !strcasecmp(name, "palace")) islandIndex = 4;
     // (TEMPLE, the Temple of Bú ported from LBA1: raced as Otringal's island 4, but in a palette and under a sky of its own -- RESS_XPL0 + 13
     // and RESS_SKYSEA0 + 13, the slots its install fills; the race-track mod's island_palette= / island_sky= in the game)

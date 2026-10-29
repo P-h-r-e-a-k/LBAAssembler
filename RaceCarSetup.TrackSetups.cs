@@ -36,6 +36,8 @@ public sealed partial class RaceCarSetup
         (Terrain.RaceTrackIsland.Wannies, new("Wannies Island", 101, 390, 150)),
         (Terrain.RaceTrackIsland.Palace, new("The Emperor's palace", 93, 390, 140)),
         (Terrain.RaceTrackIsland.CxTower, new("Island CX", 77, 390, 140)),
+        // (twice as big, its turns twice as wide: Island CX's for now -- not stress-tested yet)
+        (Terrain.RaceTrackIsland.CxTowerMk2, new("Island CX Mk2", 77, 390, 140)),
         (Terrain.RaceTrackIsland.Temple, new("The Temple of Bú", 80, 390, 150)),
     }.ToDictionary(t => t.Island.Name, t => t.Best, StringComparer.OrdinalIgnoreCase);
 }

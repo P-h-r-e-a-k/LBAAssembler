@@ -113,3 +113,35 @@ Island CX's race track (`docs/LBA2_DESERT_RACE_TRACK_BUILD.md`, "Island CX") bui
 - The room's bodies all have the close flag. The floor is at -5,632 (its top -5,376), as Tools' island.
 
 Taking the race track out of a folder (Restore) builds Tools' island again in its place, without the track.
+
+## Mk2: the same island twice as big (2026-10-29)
+
+The user: "Let's recreate our CXTower.ile into CXTowerMk2.ile but let's double the size of it, we'll keep both islands for now, then
+select one to keep later" -- twice as big every way, heights too, the same route. A second track, **Island CX Mk2**
+(`RaceTrackIsland.CxTowerMk2`), on its own files, `CXTOWERMK2.ILE` and `.OBL`, beside Island CX's (both kept; Island CX's files and every
+other track's are byte for byte as before).
+
+- *The island*: made as Island CX's is (`CxTowerTrack.Install(..., mk2: true)`: the same ring room, with Island CX's plan's roof holes,
+  written under the Mk2 names), then made twice as big by the race track's build (`Scale = 2`, `IslandScaler`, about the corner of its cube
+  -- the plan's origin, 448): its one cube becomes four, (7,7) to (8,8). Its ground, its objects and their boxes, and its bodies
+  (`ScaleObl`) are all twice their size; the actors are not (the cannons, the gas monsters, the cars).
+- *Its objects*: some 240 in Island CX's cube, as many a new cube as this editor's engine draws (`MaxPerCubeOwnEngine`, 1000, not the
+  retail 200), and a box that reaches over a new cube's edge is copied into each cube it reaches (`spread`: the engine sees only the car's
+  own cube's objects -- the room's roof and wall boxes are up to a cube wide). 38 copies.
+- *Its scenes*: the copy of Island CX's outside scene (110) is made first (`copiedFirst` in `RaceTrackService.BuildFiles`), then split one
+  a cube by `IslandScaler.ScaleScenes`: 340 (8,7), 341 (7,7), 342 (7,8), 343 (8,8) -- the race starts in 343. No holomap change
+  (`NoHolomap`: island 9's arrows are the retail Island CX's).
+- *Its sea (the gas)*: drawn in each new cube's squares where Island CX's cube drew it (`ownSea`: each new square in the old one it is
+  a quarter of; the scaler's default draws it everywhere), so the race track's build can leave it out over the road's way in under the
+  island (`SeaEverywhere`: 7 squares) -- the gas in the doorways, Island CX's trap of 2026-10-16.
+- *Its cannons*: each scene's own (the corner tower's in its cube), reaching 80 cells; the others' stand-ins in a scene (under the island,
+  `IslandScaler.StandInY`) don't fire.
+- *The plan*: `docs/racetrack/cxtowermk2_track_plan.json`, from Island CX's by `tools/RaceTrackPlan/cxtower_mk2.py`: every place twice as
+  far from the origin, heights, widths, tunnels' roofs, the gas monsters' and flyers' distances twice; slopes as steep. Its points half a
+  cell apart, as Island CX's (a point put between each two, the stretches' point numbers twice): a cell apart, the raised road -- the
+  plan's lap from its first point to its last -- missed the road's point between the last and the first, which was built on the ground,
+  the ground brought up to the deck there with the gas's code, and the car was "into the sea" on the deck. One change: the start line
+  moved 12 cells back to the start straight's beginning (72, 104), and the third pit 4.5 cells behind the second -- twice as big, the
+  straight runs over the edge between the new cubes, and Twinsen's place behind the car on pole fell past it (a scene's record holds no
+  place outside its cube).
+- In the editor: `CXTOWERMK2` takes Island CX's palette (36) and, in the renderer, Island CX's sky and gas (island 9).

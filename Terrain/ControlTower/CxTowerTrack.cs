@@ -25,9 +25,20 @@ internal static class CxTowerTrack
     public const double CannonReach = 40;
     public const int CannonMuzzle = 520;                // the muzzle over the cannon's own place
 
+    // Island CX Mk2 (the user, 2026-10-29: "Let's recreate our CXTower.ile into CXTowerMk2.ile but let's double the size of it, we'll keep
+    // both islands for now, then select one to keep later"): the same island, its halls and its lap, twice its size every way, heights too --
+    // CXTOWERMK2.ILE made as CXTOWER.ILE is, Island CX's room and roof holes (its plan is Island CX's twice as big:
+    // tools/RaceTrackPlan/cxtower_mk2.py), then made twice as big by the race track's build (RaceTrackIsland.CxTowerMk2: Scale 2,
+    // IslandScaler), its one cube four. Raced in copies of Island CX's outside scene, one a cube, 340-343.
+    public const string Mk2PlanResource = "RaceTrackPlan.CxTowerMk2.json";
+    public const int Mk2Scene = 340;
+    public static readonly int[] Mk2MoreScenes = { 341, 342, 343 };
+    public const double Mk2CannonReach = CannonReach * 2;
+
     // The island made afresh in a game folder whose files are the originals (the race track's build: Island CX's own files from their
-    // backups when it has them -- another build may have changed the folder's).
-    public static List<string> Install(string gameDirectory, string backupSuffix)
+    // backups when it has them -- another build may have changed the folder's). (`mk2`: Island CX Mk2's, CXTOWERMK2, at 1:1 -- the build
+    // makes it twice as big)
+    public static List<string> Install(string gameDirectory, string backupSuffix, bool mk2 = false)
     {
         var plan = RaceTrackPlan.Built(RaceTrackIsland.CxTower);
         var holes = RoofHoles(plan);
@@ -42,7 +53,15 @@ internal static class CxTowerTrack
                 File.Copy(File.Exists(from) ? from : Path.Combine(gameDirectory, f), Path.Combine(source, f), true);
             }
         }
-        try { return new() { ControlTowerIsland.Build(gameDirectory, gameDirectory, source, race: new ControlTowerIsland.RaceRoom(holes, RoofLow(plan))).Log }; }
+        try
+        {
+            var race = new ControlTowerIsland.RaceRoom(holes, RoofLow(plan));
+            return new()
+            {
+                mk2 ? ControlTowerIsland.Build(gameDirectory, gameDirectory, source, race: race, ileFile: ControlTowerIsland.Mk2IleFile, oblFile: ControlTowerIsland.Mk2OblFile).Log
+                    : ControlTowerIsland.Build(gameDirectory, gameDirectory, source, race: race).Log
+            };
+        }
         finally { if (source != gameDirectory) try { Directory.Delete(source, true); } catch (IOException) { } }
     }
 

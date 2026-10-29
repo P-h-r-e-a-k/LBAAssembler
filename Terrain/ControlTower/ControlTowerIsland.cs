@@ -28,6 +28,8 @@ namespace LBAAssembler.Terrain.ControlTower;
 internal static class ControlTowerIsland
 {
     public const string IleFile = "CXTOWER.ILE", OblFile = "CXTOWER.OBL";
+    // (Island CX Mk2's, the same island twice its size every way: CxTowerTrack.Install's mk2, RaceTrackIsland.CxTowerMk2)
+    public const string Mk2IleFile = "CXTOWERMK2.ILE", Mk2OblFile = "CXTOWERMK2.OBL";
     public const string SourceIle = "ILOTCX.ILE", SourceObl = "ILOTCX.OBL";
     public const int PaletteEntry = 36;                 // RESS.HQR: Island CX's
     public const int Room = 181, Passage = 180;
@@ -57,9 +59,9 @@ internal static class ControlTowerIsland
     // Builds CXTOWER.ILE and CXTOWER.OBL into `outDirectory` from the game folder's scenes 180 and 181 and Island CX's island files
     // (`sourceDirectory`: where pristine ILOTCX.ILE/.OBL are, the game folder itself by default). (`roofed`: a roof over each hall and the
     // control room -- under the gas there is nothing to hide them from, so none by default; `openGrates`: false leaves the grates' bricks
-    // in the floor.)
+    // in the floor.) (`ileFile`, `oblFile`: the files made -- Island CX Mk2's, CXTOWERMK2, made so and then twice as big: CxTowerTrack.Install's mk2)
     public static Built Build(string gameDirectory, string outDirectory, string? sourceDirectory = null, bool roofed = false, bool openGrates = true,
-        RaceRoom? race = null)
+        RaceRoom? race = null, string ileFile = IleFile, string oblFile = OblFile)
     {
         sourceDirectory ??= gameDirectory;
         if (race is not null) { openGrates = false; roofed = false; }
@@ -167,7 +169,7 @@ internal static class ControlTowerIsland
 
         // ---- the bodies: ILOTCX.OBL, the building's on its end
         Directory.CreateDirectory(outDirectory);
-        var oblPath = Path.Combine(outDirectory, OblFile);
+        var oblPath = Path.Combine(outDirectory, oblFile);
         File.Copy(Path.Combine(sourceDirectory, SourceObl), oblPath, true);
         var oblBytes = File.ReadAllBytes(oblPath);
         var next = HqrArchive.CountEntries(oblPath);
@@ -187,14 +189,14 @@ internal static class ControlTowerIsland
 
         // ---- written
         // (a build's own file replaced: no .bak of it left beside it)
-        var ilePath = Path.Combine(outDirectory, IleFile);
+        var ilePath = Path.Combine(outDirectory, ileFile);
         if (File.Exists(ilePath)) File.Delete(ilePath);
         island.Save(ilePath);
         foreach (var b in newBodies) oblBytes = HqrWriter.AppendEntry(oblBytes, HqrWriter.StoredEntry(b));
         File.WriteAllBytes(oblPath, oblBytes);
         var perCube = string.Join(", ", IslandOps.CubeCells(island).Select(c => $"({c.X},{c.Z}) {c.Cube.Decors.Count}"));
-        log.Add($"{IleFile}: Island CX as it is, the lower level under it; objects per cube: {perCube} (this editor's engine draws {IslandDecors.MaxPerCubeOwnEngine} a cube, the retail one {IslandDecors.MaxPerCube})");
-        log.Add($"{OblFile}: {bodyCount} bodies of the building ({faceCount} faces{(roofs > 0 ? $", {roofs} roofs among them" : "")}) and an empty one for the {boxCount} collision boxes, from body {next} on" +
+        log.Add($"{ileFile}: Island CX as it is, the lower level under it; objects per cube: {perCube} (this editor's engine draws {IslandDecors.MaxPerCubeOwnEngine} a cube, the retail one {IslandDecors.MaxPerCube})");
+        log.Add($"{oblFile}: {bodyCount} bodies of the building ({faceCount} faces{(roofs > 0 ? $", {roofs} roofs among them" : "")}) and an empty one for the {boxCount} collision boxes, from body {next} on" +
                 (decorsLeft > 0 ? $"; WARNING: {decorsLeft} decors left out (a cube full)" : ""));
         return new Built(room.Count, passage.Count, bodyCount, faceCount, boxCount, roofs, (int)Y0, string.Join("\n", log));
     }

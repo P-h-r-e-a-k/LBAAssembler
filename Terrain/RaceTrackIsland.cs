@@ -456,6 +456,24 @@ internal sealed record RaceTrackIsland(
         Title = "Island CX: round the island under its cannons, down through a door and twice round the halls under the gas",
     };
 
+    // Island CX Mk2 (the user, 2026-10-29: "Let's recreate our CXTower.ile into CXTowerMk2.ile but let's double the size of it, we'll keep
+    // both islands for now, then select one to keep later"): Island CX's track twice its size every way, heights too -- CXTOWERMK2.ILE made
+    // as CXTOWER.ILE is (ControlTower.CxTowerTrack.Install) and made twice as big (Scale: IslandScaler -- its one cube four, its copy of
+    // Island CX's outside scene, 340, four scenes, 341-343 besides), the same lap on it twice as long and twice as wide
+    // (tools/RaceTrackPlan/cxtower_mk2.py, its start line moved into one cube), its cannons reaching twice as far -- each firing while
+    // the car is in its own cube's scene (the race-track mode's guns fire in their own scene).
+    public static readonly RaceTrackIsland CxTowerMk2 = new("Island CX Mk2", LBAAssembler.Terrain.ControlTower.ControlTowerIsland.Mk2IleFile,
+        LBAAssembler.Terrain.ControlTower.ControlTowerIsland.Mk2OblFile, LBAAssembler.Terrain.ControlTower.CxTowerTrack.IslandByte,
+        LBAAssembler.Terrain.ControlTower.CxTowerTrack.Mk2Scene, LBAAssembler.Terrain.ControlTower.CxTowerTrack.Mk2Scene,
+        LBAAssembler.Terrain.ControlTower.ControlTowerIsland.PaletteEntry, LBAAssembler.Terrain.ControlTower.CxTowerTrack.Mk2PlanResource, null)
+    {
+        Created = true, RaceFile = "cxtowermk2", CopiesScene = LBAAssembler.Terrain.ControlTower.CxTowerTrack.SourceScene, NoHolomap = true, RailHeld = true,
+        Scale = 2, MoreScenes = LBAAssembler.Terrain.ControlTower.CxTowerTrack.Mk2MoreScenes,
+        Roster = RaceDriver.CxTower,
+        HuntingGuns = (LBAAssembler.Terrain.ControlTower.CxTowerTrack.CannonEntity, LBAAssembler.Terrain.ControlTower.CxTowerTrack.Mk2CannonReach),
+        Title = "Island CX Mk2: Island CX's track twice its size -- round the island under its cannons, down through a door and twice round the halls",
+    };
+
     // The Temple of Bú (the user, 2026-10-16: "Port the temple of Bu from LBA1 into LBA2 as a separate island ... generate a Halloween inspired
     // race track for it. This will be a separate release for a Halloween special track"), LBA1's three temple scenes ported as an island of
     // their own (Terrain/Temple: TEMPLE.ILE and TEMPLE.OBL, made by the build from the LBA1 folder in the settings -- Created; LBA1's colours
@@ -501,7 +519,7 @@ internal sealed record RaceTrackIsland(
     // Emperor's palace's road along the hilltop, 60 over it, let cars drive off onto the rocks.
     public bool RailHeld { get; init; }
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace, Wannies, CxTower, Temple };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace, Wannies, CxTower, CxTowerMk2, Temple };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

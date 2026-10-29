@@ -97,6 +97,7 @@
     <EmbeddedResource Include="docs/racetrack/palace_track_plan.json" LogicalName="RaceTrackPlan.Palace.json" />
     <EmbeddedResource Include="docs/racetrack/polar_track_plan.json" LogicalName="RaceTrackPlan.Polar.json" />
     <EmbeddedResource Include="docs/racetrack/cxtower_track_plan.json" LogicalName="RaceTrackPlan.CxTower.json" />
+    <EmbeddedResource Include="docs/racetrack/cxtowermk2_track_plan.json" LogicalName="RaceTrackPlan.CxTowerMk2.json" />
     <EmbeddedResource Include="docs/racetrack/temple_track_plan.json" LogicalName="RaceTrackPlan.Temple.json" />
   </ItemGroup>
 
