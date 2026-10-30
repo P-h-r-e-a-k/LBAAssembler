@@ -13,6 +13,17 @@
 /* PlayAllAcf fades between cutscenes whatever the video backend is, so the audio
    module's header belongs outside the backend guard below. */
 #include "AMBIANCE.H"
+#include <SYSTEM/LOG.H>
+#include <stdio.h>
+#ifdef _WIN32
+/* The CD drives, for the movie bank on an LBA2 CD (Acf_FindOnDisc): kernel32's own three, declared here rather than windows.h and
+   its macros in the engine's sources */
+extern "C" __declspec(dllimport) unsigned long __stdcall GetLogicalDrives(void);
+extern "C" __declspec(dllimport) unsigned int __stdcall GetDriveTypeA(const char *root);
+extern "C" __declspec(dllimport) unsigned long __stdcall GetFileAttributesA(const char *path);
+#define ACF_DRIVE_CDROM 5                  /* DRIVE_CDROM */
+#define ACF_NO_FILE 0xFFFFFFFFul           /* INVALID_FILE_ATTRIBUTES */
+#endif
 
 #ifdef USE_MVIDEO_SMACKER
 #include "INPUT.H"
@@ -82,20 +93,52 @@ U8 *BufferSmack; // initialisé dans MEM.CPP
 \***************************************************************************/
 
 //---------------------------------------------------------------------------
+/* The movie bank read from the LBA2 CD in a drive (PathAcf one of its paths): looked for again before a cinematic when it isn't
+   there, and a cinematic it can't read skipped rather than the game ended (the CD taken out). */
+static S32 AcfOnDisc = FALSE;
+
+S32 Acf_FindOnDisc(char *out, U32 size) {
+#ifdef _WIN32
+    static const char *const where[] = {"LBA2\\VIDEO\\VIDEO.HQR", "VIDEO\\VIDEO.HQR"};
+    const unsigned long drives = GetLogicalDrives();
+    for (int d = 0; d < 26; d++) {
+        if (!(drives & (1u << d)))
+            continue;
+        char root[4] = {(char)('A' + d), ':', '\\', 0};
+        if (GetDriveTypeA(root) != ACF_DRIVE_CDROM)
+            continue;
+        for (int i = 0; i < (int)(sizeof(where) / sizeof(where[0])); i++) {
+            char path[ADELINE_MAX_PATH];
+            snprintf(path, sizeof(path), "%s%s", root, where[i]);
+            if (GetFileAttributesA(path) != ACF_NO_FILE) {
+                snprintf(out, size, "%s", path);
+                return TRUE;
+            }
+        }
+    }
+#else
+    (void)out;
+    (void)size;
+#endif
+    return FALSE;
+}
+
 void InitAcf(void) {
     char tmpFilePath[ADELINE_MAX_PATH];
 
     GetMoviePath(PathAcf, ADELINE_MAX_PATH, VIDEO_HQR_NAME);
+    /* (no video/ installed and none in a mounted image: the LBA2 CD's, read from the drive as each cinematic plays; with no CD in a
+       drive, the game runs and its cinematics are looked for again as each one comes -- the user, 2026-10-30, "support cinematics
+       being streamed from disc if they're not installed and not available on our install to copy") */
     if (!ExistsFileOrDir(PathAcf)) {
-#ifdef DEMO
-        /* The demo install ships no video/ -- retail's bank alone is bigger
-           than the whole demo. Run without cutscenes rather than refusing to
-           boot; PlayAcf() below no-ops while PathAcf is empty. */
-        Log_Warn("no %s: the demo runs without cutscenes", VIDEO_HQR_NAME);
-        PathAcf[0] = '\0';
-#else
-        TheEndCheckFile(PathAcf);
-#endif
+        if (Acf_FindOnDisc(PathAcf, ADELINE_MAX_PATH)) {
+            AcfOnDisc = TRUE;
+            Log_Info("[VIDEO] no %s installed: the cinematics read from the LBA2 CD, %s", VIDEO_HQR_NAME, PathAcf);
+        } else {
+            Log_Warn("no %s installed and no LBA2 CD in a drive: the cinematics are looked for on the CD as each one comes", VIDEO_HQR_NAME);
+            PathAcf[0] = '\0';
+            AcfOnDisc = TRUE;
+        }
     }
 
     GetResPath(tmpFilePath, ADELINE_MAX_PATH, RESS_HQR_NAME);
@@ -397,6 +440,9 @@ S32 PlayAcf(const char *name) {
 
         ListVarGame[FLAG_ACF + (n / 16)] |= (S16)(1 << (n & 15));
 
+        /* (the movie bank on the LBA2 CD: put in since the game started, perhaps) */
+        if (!PathAcf[0] AND AcfOnDisc AND Acf_FindOnDisc(PathAcf, ADELINE_MAX_PATH))
+            Log_Info("[VIDEO] the cinematics read from the LBA2 CD, %s", PathAcf);
         if (!PathAcf[0]) {
             /* No movie bank installed (InitAcf() leaves the path empty when
                there is no video/). The flag above is already set, so scripts
@@ -412,6 +458,16 @@ S32 PlayAcf(const char *name) {
 
         U8 *decompbuf = (U8 *)LoadMalloc_HQR(PathAcf, n);
         U32 size = LoadMallocFileSize;
+        if (!size AND AcfOnDisc) {
+            /* (the CD taken out, or another in the drive: skipped, as with no movie bank, and looked for again next time) */
+            Log_Warn("[VIDEO] PlayAcf: '%s' can't be read from %s (the LBA2 CD taken out?): skipped", name, PathAcf);
+            if (decompbuf)
+                Free(decompbuf);
+            PathAcf[0] = '\0';
+            HQ_ResumeSamples();
+            s_playacf_playing = 0;
+            return 0;
+        }
         if (!size) {
             if (VideoLogIsEnabled())
                 Log_Info("[VIDEO] PlayAcf: LoadMalloc_HQR failed for index %d", (int)n);

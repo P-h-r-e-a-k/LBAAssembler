@@ -12,6 +12,9 @@
 #include <stddef.h> /* NULL */
 #include <stdio.h>  /* snprintf */
 
+/* PLAYACF.CPP: the movie bank on the LBA2 CD in a drive (PLAYACF.H, which wants the game headers first) */
+extern S32 Acf_FindOnDisc(char *out, U32 size);
+
 /* Internals in an anonymous namespace for internal linkage — the house
  * new-infrastructure style (see SOURCES/RES_PICKER.CPP). */
 namespace {
@@ -66,19 +69,17 @@ extern "C" int AssetPreflight(void) {
         }
     }
 
-    /* video.hqr lives in video/ (GetMoviePath), not the root. Required in a
-     * retail build, where InitAcf() hard-fails without it. (When retail
-     * cutscene playback degrades gracefully it moves to the optional set.) */
+    /* video.hqr lives in video/ (GetMoviePath), not the root. Optional: without it the cinematics are read from the LBA2 CD in a
+     * drive, and with no CD there they are skipped (InitAcf, PlayAcf -- 2026-10-30). */
     GetMoviePath(path, ADELINE_MAX_PATH, VIDEO_HQR_NAME);
     if (!fileExists(path)) {
-#ifdef DEMO
-        /* No demo install has cutscenes, so InitAcf() degrades instead. */
-        Log_Warn("optional asset missing: %s (no cutscenes)", VIDEO_HQR_NAME);
-        ++missingOpt;
-#else
-        Log_Error("missing required asset: %s", VIDEO_HQR_NAME);
-        ++missingReq;
-#endif
+        char onDisc[ADELINE_MAX_PATH];
+        if (Acf_FindOnDisc(onDisc, ADELINE_MAX_PATH))
+            Log_Info("%s not installed: the cinematics read from the LBA2 CD, %s", VIDEO_HQR_NAME, onDisc);
+        else {
+            Log_Warn("optional asset missing: %s (the cinematics from the LBA2 CD when it is in a drive, else none)", VIDEO_HQR_NAME);
+            ++missingOpt;
+        }
     }
 
     const int nOpt = (int)(sizeof kOptionalHqr / sizeof kOptionalHqr[0]);

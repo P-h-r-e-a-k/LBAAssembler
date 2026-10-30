@@ -32,6 +32,10 @@ extern Func_CopyFrameDoubleXY *CopyFrameDoubleXY;
 
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 extern void InitAcf(void);
+/* The movie bank on an LBA2 CD in a drive (\LBA2\VIDEO\VIDEO.HQR, or \VIDEO\VIDEO.HQR): an install with no video/ and no disc image
+   plays its cinematics from the CD, read from it as each one plays. Into `out`, TRUE when one is there; FALSE with no CD drive or no
+   LBA2 CD in one (Windows; elsewhere always FALSE). */
+extern S32 Acf_FindOnDisc(char *out, U32 size);
 extern void ResetAcfList(void);
 //▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 extern char *GetAcfName(char *name);
