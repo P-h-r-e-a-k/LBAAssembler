@@ -142,7 +142,12 @@ Both save memory, which a Windows build doesn't need.
 - With audio on (master volume 0, music 1): the Desert's race music streamed and queued again behind itself as it should.
 - The game's own window resized through Windows: the race game fitted its picture to it. F11 posted to it: full screen and back.
 - The editor started, drew Desert Island, and played a scene inside its viewport.
-- Not tested: a mouse on the cursor-confine setting (the player's own mouse can't be used here).
+- **Mouse**, driven for real later on 2026-10-30 (the user lent it). Three monitors, the game on the middle one:
+  - The main menu's row lights under the pointer, and a click opens it (Track select's code page).
+  - MouseConfine 1, the default: the cursor is free in a window. In full screen it stops at the game screen's edge (clip 0,0-1920,1080), and is freed again back in a window.
+  - MouseConfine 2: windowed, it stops at the window's edge (clip = the client rectangle), and is freed when the game closes.
+  - A race's right-drag orbit: relative mode while the button is held (the cursor clipped to a point), the camera's AddBetaCam turning (orbit 1); on release the cursor is free again. It ends up where the drag's motion left it, as with the engine before this round.
+- Still not tested: a gamepad (none here).
 
 ## Fifth round (2026-10-30): the Auto camera
 
