@@ -332,6 +332,8 @@ U16 VolumeMenuNoVoice[] = {
 U32 TimerSample;
 S32 CursorActif = FALSE;
 S32 CursorX, CursorY;
+// TRUE while InputPlayerName is open (CursorActif blinks, so it cannot say).
+static S32 NameFieldEditing = FALSE;
 
 extern S32 EscTimer;
 
@@ -1014,7 +1016,7 @@ S32 FindPlayerFile() {
 
 /*──────────────────────────────────────────────────────────────────────────*/
 
-#define DrawCursor() AffGraph(0, CursorX + 4, CursorY, HQR_Get(HQRPtrSprite, 9));
+#define DrawCursor(cx) AffGraph(0, (cx) + 4, CursorY, HQR_Get(HQRPtrSprite, 9));
 
 // Forward refs to marquee state defined below (DrawOneChoice's neighbourhood,
 // ~line 1925). Reused here so the save-slot list can scroll overflowing names.
@@ -1026,6 +1028,8 @@ extern void InitShakeChoice(void);
 void DrawOneString(S32 x, S32 y, char *playername, S32 draw) {
     S32 x0, y0, x1, y1;
     S32 dx;
+    S32 cursorx = CursorX;
+    S32 cursordx = 0, cursordy;
 
     x0 = x - LargeurMenu / 2;
     x1 = x + LargeurMenu / 2;
@@ -1066,7 +1070,15 @@ void DrawOneString(S32 x, S32 y, char *playername, S32 draw) {
     MemoClip();
     SetClip(x0 + 1, y0, x1 - 1, y1);
     dx = SizeFont(playername);
-    if (dx > LargeurMenu) {
+    if (draw == 1 AND NameFieldEditing)
+        GetDxDyGraph(0, &cursordx, &cursordy, HQR_Get(HQRPtrSprite, 9));
+    if (draw == 1 AND NameFieldEditing AND dx / 2 + cursordx > LargeurMenu / 2 - 4) {
+        // Being edited, and the cursor after the centred name would reach the
+        // frame: show the name's end, where typing and Backspace act, with the
+        // cursor right after it, like any text field.
+        Font(x1 - 4 - cursordx - dx, y - 18, playername);
+        cursorx = x1 - 4 - cursordx - 4; // DrawCursor adds 4
+    } else if (dx > LargeurMenu) {
         if (draw != 1) {
             Font(x0 + 8, y - 18, playername);
         } else {
@@ -1090,7 +1102,7 @@ void DrawOneString(S32 x, S32 y, char *playername, S32 draw) {
     RestoreClip();
 
     if (CursorActif)
-        DrawCursor();
+        DrawCursor(cursorx);
 
     // flip
 
@@ -1249,6 +1261,7 @@ S32 InputPlayerName(S32 choice, char *name) {
     ManageTime();
     timeraff = TimerRefHR + 20 * 20;
     CursorActif = TRUE;
+    NameFieldEditing = TRUE;
 
     while (flag != -1) {
         /* The one screen that reads characters and never reaches MyGetInput, so the
@@ -1361,6 +1374,7 @@ S32 InputPlayerName(S32 choice, char *name) {
     WaitNoInput();
 
     CursorActif = FALSE;
+    NameFieldEditing = FALSE;
 
     return retval;
 }

@@ -83,13 +83,25 @@ char *ListDemoSave[NB_DEMOSAVE] = {
 
 #define LbaReadByte(ptr) ptr = *PtrSave++;
 
-#define LbaReadWord(ptr)   \
-    ptr = *(S16 *)PtrSave; \
-    PtrSave += 2;
+/* Words and longs go through memcpy, never a cast: PtrSave sits at any offset,
+   odd after the player name, and a compiler may merge two adjacent casts into one
+   paired load (LDRD/STRD on 32-bit ARM) that faults with SIGBUS on a misaligned
+   address. memcpy promises no alignment and compiles to the same single load. */
+#define LbaReadWord(ptr)               \
+    do {                               \
+        S16 lbaWord_;                  \
+        memcpy(&lbaWord_, PtrSave, 2); \
+        (ptr) = lbaWord_;              \
+        PtrSave += 2;                  \
+    } while (0)
 
-#define LbaReadLong(ptr)   \
-    ptr = *(S32 *)PtrSave; \
-    PtrSave += 4;
+#define LbaReadLong(ptr)               \
+    do {                               \
+        S32 lbaLong_;                  \
+        memcpy(&lbaLong_, PtrSave, 4); \
+        (ptr) = lbaLong_;              \
+        PtrSave += 4;                  \
+    } while (0)
 
 //-------- Ecriture
 #define LbaWrite(ptr, size)     \
@@ -98,13 +110,19 @@ char *ListDemoSave[NB_DEMOSAVE] = {
 
 #define LbaWriteByte(val) *PtrSave++ = val;
 
-#define LbaWriteWord(val)  \
-    *(S16 *)PtrSave = val; \
-    PtrSave += 2;
+#define LbaWriteWord(val)              \
+    do {                               \
+        S16 lbaWord_ = (S16)(val);     \
+        memcpy(PtrSave, &lbaWord_, 2); \
+        PtrSave += 2;                  \
+    } while (0)
 
-#define LbaWriteLong(val)  \
-    *(S32 *)PtrSave = val; \
-    PtrSave += 4;
+#define LbaWriteLong(val)              \
+    do {                               \
+        S32 lbaLong_ = (S32)(val);     \
+        memcpy(PtrSave, &lbaLong_, 4); \
+        PtrSave += 4;                  \
+    } while (0)
 
 #ifndef EDITLBA2
 static U8 *g_save_read_limit = NULL;
@@ -115,6 +133,17 @@ void SaveLoadSetReadLimit(U8 *end_exclusive) {
 
 void SaveLoadClearReadLimit(void) {
     g_save_read_limit = NULL;
+}
+
+static S32 g_save_load_abi = SAVELOAD_ABI_AUTO;
+static S32 g_save_load_last_abi = SAVELOAD_ABI_WIRE32;
+
+void SaveLoadSetAbi(S32 abi) {
+    g_save_load_abi = abi;
+}
+
+S32 SaveLoadLastAbi(void) {
+    return g_save_load_last_abi;
 }
 
 /* SAVELOAD_CTX_ERR is declared in SAVEGAME.H so RestartValidePos / external
@@ -738,6 +767,8 @@ S32 LoadGame(void) {
         if (!SaveLoadRoom((size_t)SizeOfBufferValidePos))
             goto loadgame_tail_fail;
         LbaRead(BufferValidePos, SizeOfBufferValidePos);
+        /* The program that wrote the file wrote this snapshot too. */
+        ValidePosAbi = SaveLoadLastAbi();
     }
 
     SaveLoadClearReadLimit();
@@ -1398,21 +1429,25 @@ void SaveContexte(S32 savetimerrefhr) {
     } while (0)
 
 #undef LbaReadWord
-#define LbaReadWord(ptr)             \
-    do {                             \
-        if (!SaveLoadRoom(2))        \
-            return SAVELOAD_CTX_ERR; \
-        (ptr) = *(S16 *)PtrSave;     \
-        PtrSave += 2;                \
+#define LbaReadWord(ptr)               \
+    do {                               \
+        if (!SaveLoadRoom(2))          \
+            return SAVELOAD_CTX_ERR;   \
+        S16 lbaWord_;                  \
+        memcpy(&lbaWord_, PtrSave, 2); \
+        (ptr) = lbaWord_;              \
+        PtrSave += 2;                  \
     } while (0)
 
 #undef LbaReadLong
-#define LbaReadLong(ptr)             \
-    do {                             \
-        if (!SaveLoadRoom(4))        \
-            return SAVELOAD_CTX_ERR; \
-        (ptr) = *(S32 *)PtrSave;     \
-        PtrSave += 4;                \
+#define LbaReadLong(ptr)               \
+    do {                               \
+        if (!SaveLoadRoom(4))          \
+            return SAVELOAD_CTX_ERR;   \
+        S32 lbaLong_;                  \
+        memcpy(&lbaLong_, PtrSave, 4); \
+        (ptr) = lbaLong_;              \
+        PtrSave += 4;                  \
     } while (0)
 
 /* Issue #62: read NbObjets objects from PtrSave at the configured stride and
@@ -1694,7 +1729,11 @@ S32 LoadContexte(S32 *savetimerrefhr) {
         LbaReadLong(ExtraConque);
         LbaReadByte(PingouinActif);
 
-        PtrZoneClimb = (T_ZONE *)(uintptr_t)(*(U32 *)PtrSave);
+        {
+            U32 zoneClimb;
+            memcpy(&zoneClimb, PtrSave, 4);
+            PtrZoneClimb = (T_ZONE *)(uintptr_t)zoneClimb;
+        }
         PtrSave += 4;
 
         // Flechettes
@@ -1802,6 +1841,17 @@ S32 LoadContexte(S32 *savetimerrefhr) {
             const char *abi_env = getenv("LBA2_SAVE_LOAD_ABI");
             S32 force_wire = (abi_env AND !strcmp(abi_env, "32")) ? 1 : 0;
             S32 force_native = (abi_env AND !strcmp(abi_env, "64")) ? 1 : 0;
+            /* A caller that knows the layout overrides the guess and the
+             * environment. The valid-position snapshot needs it: SaveContexte
+             * writes it as wire, and a scene with one or two objects can pass
+             * the native check by chance (#772). */
+            if (g_save_load_abi == SAVELOAD_ABI_WIRE32) {
+                force_wire = 1;
+                force_native = 0;
+            } else if (g_save_load_abi == SAVELOAD_ABI_NATIVE) {
+                force_wire = 0;
+                force_native = 1;
+            }
             U8 *obj_checkpoint;
             S32 r;
 
@@ -1830,6 +1880,7 @@ S32 LoadContexte(S32 *savetimerrefhr) {
             }
             if (r != 1)
                 return SAVELOAD_CTX_ERR;
+            g_save_load_last_abi = wire32_abi ? SAVELOAD_ABI_WIRE32 : SAVELOAD_ABI_NATIVE;
         }
 #endif
 
@@ -2076,12 +2127,20 @@ S32 LoadContexte(S32 *savetimerrefhr) {
 #define LbaReadByte(ptr) ptr = *PtrSave++;
 
 #undef LbaReadWord
-#define LbaReadWord(ptr)   \
-    ptr = *(S16 *)PtrSave; \
-    PtrSave += 2;
+#define LbaReadWord(ptr)               \
+    do {                               \
+        S16 lbaWord_;                  \
+        memcpy(&lbaWord_, PtrSave, 2); \
+        (ptr) = lbaWord_;              \
+        PtrSave += 2;                  \
+    } while (0)
 
 #undef LbaReadLong
-#define LbaReadLong(ptr)   \
-    ptr = *(S32 *)PtrSave; \
-    PtrSave += 4;
+#define LbaReadLong(ptr)               \
+    do {                               \
+        S32 lbaLong_;                  \
+        memcpy(&lbaLong_, PtrSave, 4); \
+        (ptr) = lbaLong_;              \
+        PtrSave += 4;                  \
+    } while (0)
 #endif
