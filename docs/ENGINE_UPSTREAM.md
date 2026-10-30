@@ -3,6 +3,8 @@
 `native/lba2-classic-community` is a copy of [LBALab/lba2-classic-community](https://github.com/LBALab/lba2-classic-community).
 It is not a submodule or subtree, and it has been changed heavily for the editor and the race game: RACEMOD, RACEGAME, FOLLOWCAM, the menus, audio, the renderer API.
 
+The original source release, [2point21/lba2-classic](https://github.com/2point21/lba2-classic), has had no code changes since 2021. Its last commit (2021-12-22) only changed the website link, and the community fork already contains all of it. Checked 2026-10-30: nothing to take from there.
+
 ## Baseline
 
 - **Taken from upstream commit `c22c86ba`** (2026-09-14, after PR #683). It was added to this repo in fb20c9c on 2026-09-15.
