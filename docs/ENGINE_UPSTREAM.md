@@ -31,12 +31,17 @@ Each fix below was applied by patch to the source files only; upstream's docs an
 | 8df3bf85 | render: keep scenery at the same depth in list order |
 | fb5bf4dd | flow: draw a throw's random spread in the 1997 order |
 | 7d49cf76 | render: draw the scene before a screen opens on a loop's first frame |
+| 5a9c8996 | collision: slide along slanted ground edges again (taken later on 2026-10-30, at the user's request) |
+| 3dd5e5dd | saves: portable (ASCII) save file names, and "Save failed" when a save can't be written (taken later on 2026-10-30, at the user's request) |
+
+`3dd5e5dd` calls upstream's `ade_strcasecmp` (from its refactor `1392f941`); here it is SDL's `SDL_strcasecmp`.
+
+Checks for the last two:
+- **`5a9c8996`:** 7 tracks raced for a minute each with the overtaking test (Otringal, the Francos, the Emerald Moon, Island CX Mk2, Citadel 2, Volcano Island, the Elevator Platform). No new stuck spots: Volcano Island's one stuck spot happens at the same place before it. No warnings.
+- **`3dd5e5dd`:** a save made and loaded headless, and Story Mode's `story.lba` kept and continued.
 
 ## Left for later
 
-- **Clean, but they change behaviour we rely on:**
-  - `5a9c8996` collision: slide along slanted ground edges again. Changes how the cars ride walls and slope edges; race-test every track before taking it.
-  - `3dd5e5dd` saves: portable save file names. Renames save files; check Story Mode's `story.lba`, the editor's `EDITORPLAY` and the save editor first.
 - **Needs upstream's input rework (`5b1b7055`):** `0bb3b871` (the resolution dialog's navigation release) uses its `WaitNoMenuInput`.
 - **Conflicts with our changes, to port by hand if wanted:**
   - Audio streaming and music park/resume: `c87fd56a`, `bed475f9`, `c8acd312`, `15e84452`, `2c41154f`, `74368c49`, `873dccd5`. Our LIB386/AIL/SDL STREAM.CPP and CD.CPP differ.

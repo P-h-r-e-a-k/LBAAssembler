@@ -1176,6 +1176,7 @@ internal static class RaceTrackBuilder
                 for (var k = a; ; k = (k + 1) % main.Count) { sunk.Add(k); if (k == b) break; }
             }
         if (main.Raised is not null && plan.RaisedCut) CutUnderRaised(island, field, main, options, report, groundKept, sunk);
+        if (main.Raised is not null) FlushOverDeck(island, field, main, options, report, sunk);
         var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned);
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
@@ -4673,6 +4674,75 @@ internal static class RaceTrackBuilder
             var d = Math.Sqrt(Sq(gx - r.X[a] - sx * t) + Sq(gz - r.Z[a] - sz * t));
             if (d <= reach) yield return (gx, gz, t, d);
         }
+    }
+
+    // Whatever the cutting left, no ground stands over a deck out to its rails where the road is open to the sky: brought down to just under
+    // it (RaisedFlushUnder). The user, 2026-10-30, on Island CX Mk2 -- "There's terrain on the track on the edge of our new CX Tower track":
+    // its trenches' walls, Island CX's twice as big, stood 1,000 to 2,500 over the deck between the kerb and the rail all down both
+    // trenches (Island CX's as well, at half the size), and over the kerb itself where the trench narrows at its ends. Not under the island
+    // (the road's own Under, or the ground over the deck's middle: a doorway's lintel, the hall's roof), nor along a sunk tunnel's stretch,
+    // whose walls RaceTrackTunnel cuts.
+    private static void FlushOverDeck(IslandFile island, Field field, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, HashSet<int> skip)
+    {
+        var up = r.Raised!; var n = r.Count;
+        // (the road's points that are an open deck: raised, no gap, not under the island nor along a sunk tunnel, the sky over the middle)
+        var open = new bool[n];
+        for (var i = 0; i < n; i++)
+            open[i] = up[i] && !r.Gap[i] && !skip.Contains(i) && r.Under?[i] != true
+                      && IslandOps.Altitude(island, r.X[i] * 512, r.Z[i] * 512) is { } middle && middle <= r.H[i] + RaisedFlushUnder;
+        // (a vertex is a stretch's only where the road's nearest point to it, of those near the deck's height, is an open one: the cliff over a
+        // doorway the road runs on into, ahead of the last open point, is the doorway's; the hall under the island runs under the trenches)
+        const int bucket = 8;
+        var buckets = new Dictionary<(int, int), List<int>>();
+        for (var i = 0; i < n; i++)
+        {
+            var key = ((int)Math.Floor(r.X[i] / bucket), (int)Math.Floor(r.Z[i] / bucket));
+            if (!buckets.TryGetValue(key, out var list)) buckets[key] = list = new List<int>();
+            list.Add(i);
+        }
+        bool NearestOpen(int gx, int gz, double deck)
+        {
+            int bx = (int)Math.Floor((double)gx / bucket), bz = (int)Math.Floor((double)gz / bucket), best = -1;
+            var bestD = double.MaxValue;
+            for (var dz = -1; dz <= 1; dz++)
+                for (var dx = -1; dx <= 1; dx++)
+                    if (buckets.TryGetValue((bx + dx, bz + dz), out var list))
+                        foreach (var i in list)
+                        {
+                            if (Math.Abs(r.H[i] - deck) >= UnderNearHeight) continue;
+                            var d = Sq(r.X[i] - gx) + Sq(r.Z[i] - gz);
+                            if (d < bestD) { bestD = d; best = i; }
+                        }
+            return best >= 0 && open[best];
+        }
+        var limit = new Dictionary<(int, int), double>();
+        for (var a = 0; a < n; a++)
+        {
+            var b = At(r, a + 1);
+            if (!open[a] || !open[b] || Math.Abs(r.H[a] - r.H[b]) > DropFrom) continue;
+            // (a quarter of a cell past the rail: the ground's triangles slope from a vertex inside it up to the next one out, over the deck's
+            // edge when only those inside were brought down)
+            var reach = (r.RaisedHalfs?[a] ?? o.RaisedHalfWidth) + 0.25;
+            foreach (var (gx, gz, t, _) in CellsNearSegment(r, a, b, reach))
+            {
+                var deck = r.H[a] + (r.H[b] - r.H[a]) * t;
+                if (!NearestOpen(gx, gz, deck)) continue;
+                var allowed = deck - RaisedFlushUnder;
+                limit[(gx, gz)] = limit.TryGetValue((gx, gz), out var was) ? Math.Min(was, allowed) : allowed;
+            }
+        }
+        int flushed = 0; double most = 0;
+        foreach (var ((gx, gz), allowed) in limit)
+        {
+            if (island.HeightAt(gx, gz) is not { } h || h <= allowed) continue;
+            var to = Math.Max(0, (int)Math.Floor(allowed));
+            most = Math.Max(most, h - to);
+            island.SetHeight(gx, gz, to); flushed++;
+        }
+        if (flushed == 0) return;
+        field.Refresh(island);
+        report.Vertices += flushed;
+        report.Notes.Add($"the raised road: the ground standing over the deck out to its rails brought down under it at {flushed} vertices, {most:0} at the most");
     }
 
     private static void CutUnderRaised(IslandFile island, Field field, TrackRoad r, RaceTrackOptions o, RaceTrackReport report, HashSet<(int, int)>? keep = null,
