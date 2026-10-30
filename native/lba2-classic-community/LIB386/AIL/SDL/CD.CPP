@@ -35,8 +35,11 @@ static bool BuildCDTrackPath(char *outPath, S32 pathMax, S32 trackOneBased) {
         outPath[0] = '\0';
         return false;
     }
+    /* a separator only where the directory hasn't one at its end (upstream 093aaab6: SDL2's has none) */
+    const char last = cwd[0] ? cwd[strlen(cwd) - 1] : '/';
+    const char *separator = last == '/' || last == '\\' ? "" : "/";
     for (int i = 0; i < 3; i++) {
-        int n = snprintf(outPath, pathMax, "%s%s/Track%02d.wav", cwd, musicDirs[i], trackOneBased);
+        int n = snprintf(outPath, pathMax, "%s%s%s/Track%02d.wav", cwd, separator, musicDirs[i], trackOneBased);
         if (n >= 0 && n < pathMax && FileExists(outPath)) {
             SDL_free(cwd);
             return true;

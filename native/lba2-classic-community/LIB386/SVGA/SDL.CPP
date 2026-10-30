@@ -94,7 +94,7 @@ bool ResizeVideoSurface(U32 newW, U32 newH) {
     if (Phys) {
         free(Phys);
     }
-    Phys = malloc((size_t)newW * (size_t)newH);
+    Phys = calloc((size_t)newW, (size_t)newH);   // (zeroed: upstream 1cdbe361, the backgrounds of the holomap and save zooms)
     if (Phys == NULL) {
         return false;
     }
@@ -125,7 +125,7 @@ bool CreateVideoSurface(U32 resX, U32 resY) {
     ModeResX = resX;
     ModeResY = resY;
 
-    Phys = malloc(resX * resY);
+    Phys = calloc(resX, resY);
 
     S32 off = 0;
     for (S32 i = 0; i < ADELINE_MAX_Y_RES; i++) {

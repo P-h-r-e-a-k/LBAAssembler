@@ -670,6 +670,12 @@ static void cmd_ui_dispatch(int argc, const char *argv[]) {
         Console_Print("ui menu-main -> %s", argv[2]);
         return;
     }
+    if (argc >= 3 && !strcmp(argv[1], "menu-main-options")) {
+        S32 matches = Menu_MainOptionsCapture(argv[2]);
+        Console_Print("ui menu-main-options -> %s (presented_matches_rendered=%d)",
+                      argv[2], (int)matches);
+        return;
+    }
     if (argc >= 3 && !strcmp(argv[1], "slideshow")) {
         /* End-of-island / end-game still-image montage. SlideShow loads
            pre-rendered screenshots from scrshot.hqr, each shown with a story
@@ -813,6 +819,7 @@ static void cmd_ui_dispatch(int argc, const char *argv[]) {
     Console_Print("       ui [--black-bg] dialog <text-id> <path>");
     Console_Print("       ui [--black-bg] menu-options <path>");
     Console_Print("       ui menu-main <path>");
+    Console_Print("       ui menu-main-options <path>");
     Console_Print("       ui [--black-bg] display <path>");
     Console_Print("       ui [--black-bg] resolution <path>");
     Console_Print("       ui config <path>");

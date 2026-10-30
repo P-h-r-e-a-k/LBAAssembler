@@ -1255,6 +1255,11 @@ S32 InputPlayerName(S32 choice, char *name) {
 
     len = strlen(PlayerName);
 
+    // A slot's automatic name is wider than the field, so nothing could be
+    // typed after it. Like a selected field, the first character typed
+    // replaces it; Enter keeps it and Backspace edits it.
+    S32 replaceOnType = IsDatetimeReservedShape(PlayerName);
+
     x = UI_CENTER_X;
     y = Y_START_CHOICE + choice * 60;
 
@@ -1319,11 +1324,14 @@ S32 InputPlayerName(S32 choice, char *name) {
                the name whether or not the player has it bound to anything. */
             case A_RETURN:
             case A_NUMPAD_ENTER:
-                if (IsDatetimeReservedShape(PlayerName)) {
+                if (IsDatetimeReservedShape(PlayerName) AND strcmp(PlayerName, memoplayername)) {
                     // Reserved shape: refuse and bounce back to the prior name.
+                    // The slot's own automatic name, untouched, is taken: the
+                    // caller names that save afresh.
                     PlayErrorSample();
                     strcpy(PlayerName, memoplayername);
                     len = strlen(PlayerName);
+                    replaceOnType = IsDatetimeReservedShape(PlayerName);
                     flag = 1;
                 } else if (strcmp(PlayerName, "")
                                AND((FindPlayerFile() == FALSE)
@@ -1334,12 +1342,14 @@ S32 InputPlayerName(S32 choice, char *name) {
                     PlayErrorSample();
                     strcpy(PlayerName, memoplayername);
                     len = strlen(PlayerName);
+                    replaceOnType = IsDatetimeReservedShape(PlayerName);
                     flag = 1;
                 }
                 break;
 
             case A_LEFT:
             case A_BACKSPACE:
+                replaceOnType = FALSE;
                 if (len > 0) {
                     PlayerName[--len] = '\0';
                     flag = 1;
@@ -1354,6 +1364,14 @@ S32 InputPlayerName(S32 choice, char *name) {
                    the field. */
                 if (!A_IS_CHARACTER(akey))
                     break;
+
+                if (replaceOnType AND akey >= 32 AND akey <= 122) {
+                    replaceOnType = FALSE;
+                    len = 0;
+                    PlayerName[0] = '\0';
+                    x = UI_CENTER_X;
+                    flag = 1;
+                }
 
                 /* Max input cursor X = original 550 = centre(320) + 230 px. Keep the
                    same 230 px half-width at any resolution so the name-entry field
@@ -1407,6 +1425,68 @@ static void BuildSavePath(char *path, const char *name, S32 unique, const char *
             return;
     }
     // 99 saves on one stem: the last candidate is overwritten.
+}
+
+// The automatic name for a save made now: "<island> - <local datetime>", or the
+// bare datetime when the island has no name. FALSE if the clock cannot be read.
+static S32 MakeAutoSaveName(char *out) {
+    char datetime[32];
+    time_t now = time(NULL);
+    struct tm *lt = localtime(&now);
+    if (lt == NULL || strftime(datetime, sizeof datetime, "%Y-%m-%d %H-%M-%S", lt) != 19)
+        return FALSE;
+
+    // Island names live in text file 2 (gam); the menu has file 0 (sys)
+    // loaded (MainGameMenu's InitDial(0) before DoGameMenu), so bracket the
+    // lookup and restore sys after: the menu redraws assume sys is still
+    // loaded. TabArrow is loaded from HOLO.HQR at startup (InitHoloMap); the
+    // Mess > 0 guard skips an entry with no name, so message 0 (a real but
+    // unrelated entry in some banks) is never queried.
+    char islandName[256];
+    islandName[0] = '\0';
+    if (Island >= 0 && Island < MAX_ISLAND && TabArrow[Island].Mess > 0) {
+        InitDial(2);
+        if (GetMultiText(TabArrow[Island].Mess, islandName) != NULL) {
+            // Holomap data ships with a trailing '.' ("Citadel Island.").
+            size_t ilen = strlen(islandName);
+            if (ilen > 0 && islandName[ilen - 1] == '.')
+                islandName[ilen - 1] = '\0';
+        }
+        InitDial(0);
+    }
+    if (islandName[0]) {
+        // %.60s bounds the result (60 + 3 + 19 = 82 chars, under
+        // MAX_SIZE_PLAYER_NAME = 100); the longest retail island name is 29.
+        snprintf(out, MAX_SIZE_PLAYER_NAME + 1, "%.60s - %.19s", islandName, datetime);
+    } else {
+        strncpy(out, datetime, MAX_SIZE_PLAYER_NAME);
+        out[MAX_SIZE_PLAYER_NAME] = '\0';
+    }
+    return TRUE;
+}
+
+// Overwriting a save with an automatic name: the name says where and when the
+// save was made, so it is made afresh, and the old file goes once the new one
+// is written (FinishSaveRename). A typed name is the player's and stays. If
+// the fresh name already belongs to another save (one made in the same
+// second), the slot keeps its old name rather than take that save's file.
+// Sets PlayerName and GamePathname for SaveGame; `oldpath` is the slot's file.
+static void RefreshAutoSaveName(const char *oldpath) {
+    char oldname[MAX_SIZE_PLAYER_NAME + 1];
+    char fresh[MAX_SIZE_PLAYER_NAME + 1];
+
+    strcpy(oldname, PlayerName);
+    if (MakeAutoSaveName(fresh) AND strcasecmp(fresh, oldname)) {
+        strcpy(PlayerName, fresh);
+        if (!FindPlayerFile()) {
+            BuildSavePath(GamePathname, PlayerName, TRUE, oldpath, FALSE);
+            strcpy(OldGamePathname, oldpath);
+            return;
+        }
+        strcpy(PlayerName, oldname);
+    }
+    strcpy(GamePathname, oldpath);
+    OldGamePathname[0] = '\0';
 }
 
 /*──────────────────────────────────────────────────────────────────────────*/
@@ -1987,87 +2067,52 @@ S32 ChoosePlayerName(S32 mess, S32 flagflip, S32 flagnew) {
                 // there is no text keyboard on a remote, and SDL's routing of
                 // remote D-pad keys is device-dependent, so IsAndroidTVDevice()
                 // makes the choice deterministic (it is a no-op stub off
-                // Android, so desktop and phone are unaffected). For a "New
-                // Game" slot we synthesise a local-time datetime stem; for an
-                // existing slot we keep the slot's own name and just overwrite.
-                // Same-second collision overwrites silently — matches the
+                // Android, so desktop and phone are unaffected). The New entry
+                // gets an automatic name; an existing slot with an automatic
+                // name gets a fresh one (RefreshAutoSaveName); any other slot
+                // keeps its name and is overwritten in place. Same-second
+                // collision on the New entry overwrites silently — matches the
                 // quick-save reflex chosen during design. The menu UI (slot
                 // list + New Game entry) is identical to the keyboard flow;
                 // only the text-entry step is bypassed.
                 if (!LastInputWasKeyboard || IsAndroidTVDevice()) {
-                    S32 ok = TRUE;
                     if (select == nb - 1) {
-                        char datetime[32];
-                        time_t now = time(NULL);
-                        struct tm *lt = localtime(&now);
-                        if (lt == NULL || strftime(datetime, sizeof datetime,
-                                                   "%Y-%m-%d %H-%M-%S", lt) != 19) {
-                            ok = FALSE;
-                        } else {
-                            // Scene-aware name: "<island> - <datetime>", with
-                            // bare datetime as fallback. Island names live in
-                            // text file 2 (gam); MainGameMenu has file 0 (sys)
-                            // loaded right now (InitDial(0) at ~line 3330), so
-                            // bracket the lookup and restore sys after — the
-                            // menu redraws on the next loop iteration assume
-                            // sys is still loaded. TabArrow defaults to zeros
-                            // before the player opens the holomap, so the
-                            // Mess > 0 guard avoids querying message 0 (which
-                            // is a real but unrelated entry in some banks).
-                            char islandName[256];
-                            islandName[0] = '\0';
-                            if (Island >= 0 && Island < MAX_ISLAND && TabArrow[Island].Mess > 0) {
-                                InitDial(2);
-                                if (GetMultiText(TabArrow[Island].Mess,
-                                                 islandName) != NULL) {
-                                    // Holomap data ships with a trailing '.'
-                                    // ("Citadel Island."); strip for a cleaner
-                                    // save name.
-                                    size_t ilen = strlen(islandName);
-                                    if (ilen > 0 && islandName[ilen - 1] == '.') {
-                                        islandName[ilen - 1] = '\0';
-                                    }
-                                }
-                                InitDial(0);
-                            }
-                            if (islandName[0]) {
-                                // %.60s caps the island portion so the format
-                                // is provably bounded (60 + 3 + 19 = 82 chars,
-                                // safely under MAX_SIZE_PLAYER_NAME = 100) and
-                                // -Wformat-truncation stays quiet. Longest
-                                // known retail island name is 29 chars.
-                                snprintf(PlayerName, MAX_SIZE_PLAYER_NAME + 1,
-                                         "%.60s - %.19s", islandName, datetime);
-                            } else {
-                                strncpy(PlayerName, datetime,
-                                        MAX_SIZE_PLAYER_NAME);
-                                PlayerName[MAX_SIZE_PLAYER_NAME] = '\0';
-                            }
+                        if (MakeAutoSaveName(PlayerName)) {
+                            BuildSavePath(GamePathname, PlayerName, FALSE, NULL, bugPaths);
+                            retval = 2;
+                            break;
                         }
-                    }
-                    // Existing slot: PlayerName already holds the slot name, and
-                    // the save is overwritten in the file it was read from, so
-                    // a file named before names were made portable is not left
-                    // beside a second copy.
-                    if (ok) {
-                        if (memoname[0])
+                        // strftime is effectively infallible on real time_t; if
+                        // it does fail, fall through to the keyboard flow rather
+                        // than write a garbage filename.
+                    } else {
+                        // Overwritten in the file it was read from, so a file
+                        // named before names were made portable is not left
+                        // beside a second copy.
+                        if (memoname[0] AND !bugPaths AND IsDatetimeReservedShape(PlayerName))
+                            RefreshAutoSaveName(memoname);
+                        else if (memoname[0])
                             strcpy(GamePathname, memoname);
                         else
                             BuildSavePath(GamePathname, PlayerName, FALSE, NULL, bugPaths);
                         retval = 2;
                         break;
                     }
-                    // strftime is effectively infallible on real time_t; if
-                    // it does fail, fall through to the keyboard flow rather
-                    // than write a garbage filename.
                 }
 
                 if (InputPlayerName(select - start, PlayerName)) {
-                    // A typed name is new to the list (InputPlayerName refuses
-                    // one already there), but two names can share a file name
-                    // stem, so take a free file. A rename may keep its own.
-                    BuildSavePath(GamePathname, PlayerName, TRUE,
-                                  memoname[0] ? memoname : NULL, bugPaths);
+                    // Enter on a slot's automatic name, untouched (the only way
+                    // a name of that shape gets past InputPlayerName): renamed
+                    // afresh, as without a keyboard.
+                    if (memoname[0] AND !bugPaths AND IsDatetimeReservedShape(PlayerName))
+                        RefreshAutoSaveName(memoname);
+                    else
+                        // A typed name is new to the list (InputPlayerName
+                        // refuses one already there), but two names can share
+                        // a file name stem, so take a free file. A rename may
+                        // keep its own.
+                        BuildSavePath(GamePathname, PlayerName, TRUE,
+                                      memoname[0] ? memoname : NULL, bugPaths);
                     retval = 2;
                     break;
                 } else {
@@ -2636,6 +2681,7 @@ void Menu_MainCapture(const char *path) {
    animations time to settle into a steady visual state. */
 static char s_menu_capture_path[ADELINE_MAX_PATH] = "";
 static int s_menu_capture_countdown = 0;
+static S32 s_menu_capture_matches_presented = FALSE;
 
 void Menu_RequestCapture(const char *path) {
     if (!path || !path[0]) {
@@ -2645,8 +2691,19 @@ void Menu_RequestCapture(const char *path) {
     }
     strncpy(s_menu_capture_path, path, ADELINE_MAX_PATH - 1);
     s_menu_capture_path[ADELINE_MAX_PATH - 1] = '\0';
+    s_menu_capture_matches_presented = FALSE;
     s_menu_capture_countdown = 60; /* iterations -- ~1 s at fixed-dt 16, past any
                                       menu fade-in and dynamic-item initial draws */
+}
+
+S32 Menu_MainOptionsCapture(const char *path) {
+    Menu_MainCapture(path);
+    CopyScreen(Screen, Log);
+    BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
+    Menu_RequestCapture(path);
+    OptionsMenu(TRUE);
+    Menu_RequestCapture(NULL);
+    return s_menu_capture_matches_presented;
 }
 
 S32 DoGameMenu(U16 *ptrmenu) {
@@ -3107,15 +3164,12 @@ S32 DoGameMenu(U16 *ptrmenu) {
             return 1000;
         }
 
-        /* Harness one-shot capture: count down per iteration; on reaching
-           zero SavePNG the rendered menu and return the ESC sentinel so
-           the wrapping menu loop exits cleanly.  Read Log (back buffer),
-           not Screen -- DrawGameMenu composites the menu into Log, and the
-           BoxUpdate inside only flushes dirty regions to Screen; without a
-           prior frame populating Screen, the unflushed regions stay black.
-           The third surface to need this (after holomap and dialog). */
+        /* Capture the visible frame, not the prepared offscreen page: dirty
+           rectangles must propagate every restored backdrop pixel to Phys. */
         if (s_menu_capture_path[0] && --s_menu_capture_countdown <= 0) {
-            SavePNG(s_menu_capture_path, Log, (S32)ModeDesiredX,
+            s_menu_capture_matches_presented =
+                memcmp(Phys, Log, (size_t)ModeDesiredX * (size_t)ModeDesiredY) == 0;
+            SavePNG(s_menu_capture_path, Phys, (S32)ModeDesiredX,
                     (S32)ModeDesiredY, PtrPal);
             s_menu_capture_path[0] = '\0';
             AsciiMode = FALSE;
@@ -3579,7 +3633,7 @@ S32 OptionsMenu(S32 flagflip) {
 
        All gated on capture-armed; non-harness callers see no behaviour
        change. */
-    if (s_menu_capture_path[0]) {
+    if (s_menu_capture_path[0] && !flagflip) {
         StopSpeak();
         InitDial(0);
         InitPlasmaMenu();
@@ -3600,9 +3654,10 @@ S32 OptionsMenu(S32 flagflip) {
 */
     if (FlagShadeMenu) {
         ShadeBoxBlk(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1, SCREEN_SHADE_LVL);
-        BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
         PaletteSync(PtrPalNormal);
     }
+    // BackupScreen resets dirty boxes; the restored backdrop must replace the previous page.
+    BoxStaticAdd(0, 0, (S32)ModeDesiredX - 1, (S32)ModeDesiredY - 1);
 
     HQ_StopSample();
     RestartRainSample = TRUE;
