@@ -183,11 +183,27 @@ At the user's request ("then move on to the camera fixes"). Merged in upstream o
 
 **Also checked:** Story Mode new (the dream) and continued, and the editor playing a scene in its viewport.
 
+## Sixth round (2026-10-30): the integer 3D maths
+
+At the user's request ("analyse the integer maths ... if there's none or minor differences it may be worth doing"). Merged in upstream order:
+- **Distance:** 0063f18e (Distance2D/3D square in 64 bits, as DISTANCE.ASM did).
+- **The integer path:** 374cf91b (the 1997 integer matrix, rotation and projection), e068589f (the exterior terrain, sea and sky drawn through it), ea3ec40e (projrec), 833b34ae (the integer inverse rotation), 15375c53 (a point at or behind the camera clipped).
+- **The float path's width:** ddff2b9b, 2ea5c5dd, d62b4b11, 5c689ee5, 1370cccf (X87_REAL: long double on x86, as before; double elsewhere).
+- **bf6379db** came without upstream's retail-fix settings (RETAILFIX.CPP): the integer terrain is always on, and `LBA2_TERRAIN_FLOAT=1` puts the float one back for comparing (TerrainSeamsFixed in TERRAIN.CPP).
+
+**What it changes, measured** (headless 1280x720 frames of 13 race tracks, against the engine before this round):
+- **With LBA2_TERRAIN_FLOAT=1:** the same picture. Only animated actors, rain and the Wannies lift film's letterbox differ, and the old engine alone differs on those from run to run.
+- **The integer terrain:** 0.6-7 % of pixels move, all on the terrain, sea and sky: the dither lands on a neighbouring texel, which is invisible at 5x zoom. It does close the hairline seams between terrain cubes: Desert's dunes had dotted sky-blue lines along cube edges, now gone. No new seams were found.
+- **Distance:** before this round, a distance past 46,340 (2D) or about 26,754 a side (3D) overflowed to nonsense, usually near 0. It feeds 46 calls: ambience falloff, life-script distance tests, extras' hits, and the race mod's opponent item sounds (a far opponent's item was heard at full volume).
+- **Speed:** the same, about 4 ms a frame headless (Desert, Polar; three runs each).
+- **Races:** `eng\run_all.ps1` on all 16 tracks: recorded, raced against and played back, with the same lap times and scene changes as the 2026-10-28 run.
+- **Not covered:** Island CX Mk2. The test sandbox predates it, so neither engine can load it there.
+
 ## Left for later
 
 - **Not taken, by choice:** `23677fb4` (cinematics streamed from the HQR). It changes libsmacker and our video loading. Its gain is memory, which a Windows build doesn't need, and the risk is to Story Mode's intro film.
 - **Not taken:**
-  - Too large to take now: the integer 3D maths port (`374cf91b`, `833b34ae`, `e068589f`, `bf6379db`).
+  - Upstream's retail-fix settings (RETAILFIX.CPP and the settings tables): the one fix we wanted from it, the terrain seams, is on by itself here.
   - Not relevant here: Vita, Switch, Android and macOS ports, big-endian support, the recorder, CI, packaging and tools.
 
 ## How to check the next merge

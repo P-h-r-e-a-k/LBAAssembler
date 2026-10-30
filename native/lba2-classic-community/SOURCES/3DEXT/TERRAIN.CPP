@@ -1,5 +1,6 @@
 #include "DEFINES.H"
 #include "../PERSO.H"
+#include <stdlib.h> /* getenv: LBA2_TERRAIN_FLOAT */
 
 #include <SVGA/SCREEN.H>
 
@@ -13,6 +14,35 @@
 // Taille 2D mini pour accepter un poly animé
 #define ANI_POLY_STEP_Y 2
 #define ANI_POLY_STEP_X 5
+
+/* The terrain, sea and sky draw through one camera path (CAMERA.H), picked
+ * as the 1997 Chooser picked a routine (CHOOSER.ASM, at 333929a).
+ *
+ * With the terrain-seams retail fix on, it is the integer one (IMATSTDI,
+ * LROT3DI, LIROT3DI, LPROJ3DI): integer maths gives two neighbouring cubes the
+ * same pixels on the edge they share, where the float path leaves hairline
+ * seams, and the same on every platform. Its projection rounds instead of
+ * truncating, so the ground lands where the float objects standing on it do
+ * (LongProjectPointIRound). Decors and objects stay on the float path.
+ *
+ * With the fix off, it is the float one, with the 1997 nudge in
+ * DrawHorizon2ZBuf: what a 1997 Pentium drew, and lba2cc before the fix. */
+static const T_CAMERA_PATH *TerrPath = &CameraPathFloat;
+
+/* Upstream switches this with its "Fix retail bugs" settings (RETAILFIX.CPP, which this engine has not taken): here the integer path is
+   on, and LBA2_TERRAIN_FLOAT=1 puts the float one back -- what was drawn before, for comparing the two (2026-10-30). */
+static S32 TerrainSeamsFixed(void) {
+    static S32 on = -1;
+    if (on < 0) {
+        const char *f = getenv("LBA2_TERRAIN_FLOAT");
+        on = (f && f[0] == '1') ? 0 : 1;
+    }
+    return on;
+}
+
+static void PickTerrainPath(void) {
+    TerrPath = TerrainSeamsFixed() ? &CameraPathInteger : &CameraPathFloat;
+}
 
 #include "DRAWSKY.CPP"
 
@@ -717,6 +747,10 @@ void DrawHorizon2ZBuf() {
     // neighbour loaded the own cube is not reloaded below. Kept, or a one-cube island (Island CX) has its sea drawn under all of it,
     // over the squares its info word leaves without and through anything under the sea's height there.
     U16 ownBitField = CubeBitField;
+    S32 cxI = CameraXI;
+    S32 cyI = CameraYI;
+    S32 czI = CameraZI;
+    S32 seamsFixed = TerrainSeamsFixed();
 
     if (BetaCam >= 0 AND BetaCam < 1024) {
         TerrainTri = TerrSO;
@@ -761,7 +795,17 @@ void DrawHorizon2ZBuf() {
 */
                 {
 #ifdef LBA_GAME
-                    SetPosCamera(cx - OffPosCamera[TerrainTri->x + 1] + TerrainTri->x, cy, cz - OffPosCamera[TerrainTri->y + 1] + TerrainTri->y);
+                    if (seamsFixed) {
+                        // Whole cubes only. The 1997 game adds TerrainTri->x and ->y
+                        // as well, a 1-unit nudge per neighbouring cube (LBA2.DOS
+                        // 0x65e2b, on every CPU path); on the integer terrain it opens
+                        // seams instead of hiding them. Each camera steps from its own
+                        // position, so the integer one stays clear of the float maths.
+                        SetPosCamera(cx - OffPosCamera[TerrainTri->x + 1], cy, cz - OffPosCamera[TerrainTri->y + 1]);
+                        SetPosCameraI(cxI - OffPosCamera[TerrainTri->x + 1], cyI, czI - OffPosCamera[TerrainTri->y + 1]);
+                    } else {
+                        SetPosCamera(cx - OffPosCamera[TerrainTri->x + 1] + TerrainTri->x, cy, cz - OffPosCamera[TerrainTri->y + 1] + TerrainTri->y);
+                    }
 #else
                     SetPosCamera(cx - OffPosCamera[TerrainTri->x + 1] + TerrainTri->x * Reglage, cy, cz - OffPosCamera[TerrainTri->y + 1] + TerrainTri->y * Reglage);
 #endif
@@ -776,6 +820,8 @@ void DrawHorizon2ZBuf() {
     }
 
     SetPosCamera(cx, cy, cz);
+    if (seamsFixed)
+        SetPosCameraI(cxI, cyI, czI);
 
     if (flag) {
         if (!LoadCube(CurrentCubeX, CurrentCubeY)) {
@@ -917,6 +963,7 @@ void AffichageTerrainZBuf(void) {
     AffichageObjetDecorsZBuf();
 
     // calcul les coordonnées 2D de chaque points
+    PickTerrainPath();
     ptra = &SommetAffichable[0][0];
     ptrm = MapSommetY;
     ptrs = &SommetRot[0][0];
@@ -925,16 +972,16 @@ void AffichageTerrainZBuf(void) {
         for (S32 x = 0; x <= NB_COTE * 512; x += 512) {
             S32 zr;
 
-            LongWorldRotatePoint(x, *ptrm, z);
+            TerrPath->WorldRotate(x, *ptrm, z);
 
-            zr = CameraZr - Z0;
+            zr = *TerrPath->Zr - Z0;
 
             // cone clipping
 
             if (zr <= NearClip) {
                 *ptra = 32;
             } else if ((zr < ClipZFar)
-                           AND LongProjectPoint(X0, Y0, Z0)) {
+                           AND TerrPath->Project(X0, Y0, Z0)) {
                 U8 flag;
 
                 flag = 16;
@@ -1104,13 +1151,14 @@ void	AffichageTerrainZBuf( void )
 //****************************************************************************
 
 void AffichageTerrainRapide(void) {
+    PickTerrainPath();
     for (S32 xi = 0; xi <= NB_COTE; xi++) {
         for (S32 zi = 0; zi <= NB_COTE; zi++) {
-            LongWorldRotatePoint(xi * 512,
-                                 (S32)MapSommetY[zi * 65 + xi],
-                                 zi * 512);
+            TerrPath->WorldRotate(xi * 512,
+                                  (S32)MapSommetY[zi * 65 + xi],
+                                  zi * 512);
 
-            if (LongProjectPoint(X0, Y0, Z0)) {
+            if (TerrPath->Project(X0, Y0, Z0)) {
                 Plot(Xp, Yp, WHITE);
             }
         }
