@@ -26,6 +26,7 @@ extern "C" __declspec(dllimport) unsigned long __stdcall GetFileAttributesA(cons
 #endif
 
 #ifdef USE_MVIDEO_SMACKER
+#include "VIDEO_SOURCE.H"
 #include "INPUT.H"
 #include "MESSAGE.H"
 #include <AIL/VIDEO_AUDIO.H>
@@ -456,29 +457,18 @@ S32 PlayAcf(const char *name) {
         StopMusic();
         HQ_PauseSamples();
 
-        U8 *decompbuf = (U8 *)LoadMalloc_HQR(PathAcf, n);
-        U32 size = LoadMallocFileSize;
-        if (!size AND AcfOnDisc) {
+        smk smkObject = Video_OpenSource(PathAcf, n);
+        if (!smkObject AND AcfOnDisc) {
             /* (the CD taken out, or another in the drive: skipped, as with no movie bank, and looked for again next time) */
             Log_Warn("[VIDEO] PlayAcf: '%s' can't be read from %s (the LBA2 CD taken out?): skipped", name, PathAcf);
-            if (decompbuf)
-                Free(decompbuf);
             PathAcf[0] = '\0';
             HQ_ResumeSamples();
             s_playacf_playing = 0;
             return 0;
         }
-        if (!size) {
-            if (VideoLogIsEnabled())
-                Log_Info("[VIDEO] PlayAcf: LoadMalloc_HQR failed for index %d", (int)n);
-            TheEnd(PROGRAM_OK, MessageNoCD);
-        }
-
-        smk smkObject = smk_open_memory(decompbuf, (unsigned long)size);
         if (!smkObject) {
             if (VideoLogIsEnabled())
-                Log_Info("[VIDEO] PlayAcf: smk_open_memory failed for index %d (size %u)", (int)n, (unsigned)size);
-            Free(decompbuf);
+                Log_Info("[VIDEO] PlayAcf: video source failed for index %d", (int)n);
             TheEnd(PROGRAM_OK, MessageNoCD);
         }
 
@@ -496,7 +486,6 @@ S32 PlayAcf(const char *name) {
         smk_info_video(smkObject, &w, &h, NULL);
         if (w != 320 || h != 200) {
             smk_close(smkObject);
-            Free(decompbuf);
             TheEnd(PROGRAM_FAIL, "Unsupported video format (320x200 only)");
         }
 
@@ -556,7 +545,7 @@ S32 PlayAcf(const char *name) {
         }
 
         smk_enable_all(smkObject, SMK_VIDEO_TRACK | a_t);
-        smk_first(smkObject);
+        bool decodeOk = smk_first(smkObject) != SMK_ERROR;
 
         /* Frame interval in ms from file (usf = microseconds per frame) for accurate pacing */
         U32 frameMs = (U32)(usf / 1000.0);
@@ -568,7 +557,7 @@ S32 PlayAcf(const char *name) {
      * Formula: ~2s for long videos (60+ fps), ~1s for medium (30+), ~0.5s for short; avoids
      * underrun at start while not delaying playback too much on brief clips. */
         unsigned long prebufFrames = 0;
-        if (numTracks > 0 && f > 8u) {
+        if (decodeOk && numTracks > 0 && f > 8u) {
             prebufFrames = (f > 60u) ? 30u : (f > 30u) ? 25u
                                          : (f > 15u)   ? 15u
                                                        : (unsigned long)(f / 2);
@@ -576,11 +565,16 @@ S32 PlayAcf(const char *name) {
                 prebufFrames = f;
             for (unsigned long p = 0; p < prebufFrames; p++) {
                 PushCurrentFrameVideoAudio(smkObject, tracksToPlay, numTracks, a_d, a_r, a_c, usf);
-                smk_next(smkObject);
+                if (smk_next(smkObject) == SMK_ERROR) {
+                    decodeOk = false;
+                    break;
+                }
             }
-            smk_first(smkObject);
-            ResumeVideoAudio();
-        } else if (numTracks > 0) {
+            if (decodeOk)
+                decodeOk = smk_first(smkObject) != SMK_ERROR;
+            if (decodeOk)
+                ResumeVideoAudio();
+        } else if (decodeOk && numTracks > 0) {
             ResumeVideoAudio();
         }
 
@@ -608,6 +602,12 @@ S32 PlayAcf(const char *name) {
         int everFocused = 0; // set once the window is focused; a never-focused run
                              // (e.g. a headless capture) then never freezes
         U32 freezeStart = 0; // clock reading when the freeze began
+        if (!decodeOk) {
+            Log_Error("Video '%s': unable to read initial frames", name);
+            if (AcfOnDisc)
+                PathAcf[0] = '\0';
+            goto fin_play;
+        }
         for (unsigned long c = 0; c < f; c++) {
             /* Push this frame's audio (skip for c < prebufFrames, already in stream from pre-fill) */
             if (numTracks > 0 && c >= prebufFrames) {
@@ -715,7 +715,12 @@ S32 PlayAcf(const char *name) {
                     g_platform.system.delay_ms(1); /* avoid busy-spin, re-check input each time */
             }
 
-            smk_next(smkObject);
+            if (smk_next(smkObject) == SMK_ERROR) {
+                Log_Error("Video '%s': unable to read frame %lu", name, c + 1);
+                if (AcfOnDisc)
+                    PathAcf[0] = '\0'; /* (the CD taken out mid-film: looked for again before the next one) */
+                goto fin_play;
+            }
         }
 
     fin_play:
@@ -728,7 +733,6 @@ S32 PlayAcf(const char *name) {
         memcpy(lastFramePal, pal ? pal : PtrPal, sizeof(lastFramePal));
 
         smk_close(smkObject);
-        Free(decompbuf);
 
         /* Original contract: fade the video out to black and leave the screen black,
            so the scene load stays hidden and the caller's fade-in (FlagFade) reveals

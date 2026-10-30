@@ -199,9 +199,20 @@ At the user's request ("analyse the integer maths ... if there's none or minor d
 - **Races:** `eng\run_all.ps1` on all 16 tracks: recorded, raced against and played back, with the same lap times and scene changes as the 2026-10-28 run.
 - **Not covered:** Island CX Mk2. The test sandbox predates it, so neither engine can load it there.
 
+## Seventh round (2026-10-30): cinematics streamed from the HQR
+
+At the user's request ("What is cinematics from HQR? This sounds like something we should implement"). It was left by choice earlier the same day, before the films could come from the CD. The CD changed the case for it: each film used to be read whole before its first frame (the largest in VIDEO.HQR is 73 MB, 36 MB the next; 34 films, 223 MB), and from a real drive that is many seconds of black screen.
+- **Merged:** `23677fb4`. VIDEO_SOURCE.CPP reads the film from its HQR entry as it plays (64 KB read-ahead, both HQR compressions), through the engine's file API, so disc images and the CD's path work as before. libsmacker reads through callbacks and no longer keeps its own copy of the frames.
+- **Ours, kept:** a film on the CD that can't be opened is skipped, not the game ended. Upstream's new read error part way through a film ends that film (upstream). On the CD it also forgets the drive, so the next film looks for the CD again.
+- **Not taken:** SYSTEM/LE.H, part of upstream's big-endian work. VIDEO_SOURCE.CPP has its own two little-endian readers.
+- **Tested** with Story Mode's intro (film 16) in `review\lbra_story` (`eng\run_video.ps1`, now with `-EjectDuring <s>` and the peak memory):
+  - From the installed disc image: the same frame at the same moment as before. Peak memory went from 207 MB to 62 MB.
+  - From the LBA2 CD (the ISO mounted), the disc image set aside: plays, 62 MB.
+  - The CD taken out 3 s into the film: "unable to read frame 104". The film ended and the dream began, with its dialogue.
+  - No CD and no disc image: the film skipped, as before.
+
 ## Left for later
 
-- **Not taken, by choice:** `23677fb4` (cinematics streamed from the HQR). It changes libsmacker and our video loading. Its gain is memory, which a Windows build doesn't need, and the risk is to Story Mode's intro film.
 - **Not taken:**
   - Upstream's retail-fix settings (RETAILFIX.CPP and the settings tables): the one fix we wanted from it, the terrain seams, is on by itself here.
   - Not relevant here: Vita, Switch, Android and macOS ports, big-endian support, the recorder, CI, packaging and tools.
