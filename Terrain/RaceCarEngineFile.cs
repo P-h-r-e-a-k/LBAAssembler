@@ -100,6 +100,7 @@ internal static class RaceCarEngineFile
         foreach (var geyser in track?.LavaGeysers ?? new()) text.Append($"lavageyser={string.Join(' ', geyser)}\n");
         foreach (var shard in track?.CrystalShards ?? new()) text.Append($"crystalshards={string.Join(' ', shard)}\n");
         if (track?.CrystalShardModels is { Length: 2 } shardModels && track.CrystalShards is { Count: > 0 }) text.Append($"crystal_shard_model={shardModels[0]} {shardModels[1]}\n");
+        if (track?.WindowSmash is { Length: 12 } windowSmash) text.Append($"smash_window={string.Join(' ', windowSmash)}\n");
         foreach (var panel in track?.BoostPanels ?? new()) text.Append($"boostpanel={string.Join(' ', panel)}\n");
         // the machine guns on their knolls, each followed by where its bullets land (Otringal's)
         foreach (var g in track?.Gunners ?? new())

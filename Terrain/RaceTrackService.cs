@@ -197,6 +197,8 @@ internal static class RaceTrackService
         // (RaceTrackCrystals.InstallCrystalShards; crystal_shard_model=), since 2026-10-11
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? CrystalShards = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? CrystalShardModels = null,
+        // WindowSmash: the palace's round window the first car smashes (PalaceWindow; RACEMOD.CPP smash_window=), since 2026-10-30
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? WindowSmash = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? BoostPanels = null,
         // Guards: the people in the cars' way (RaceTrackGuards; RACEMOD.CPP guard=), each [kind, its post x and z, the floor's height, the way
         // it faces x and z (thousandths), how far it steps out (island units), its animations -- standing, walking, knocked back -- its four
@@ -578,6 +580,7 @@ internal static class RaceTrackService
         public bool Together;
         public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel;
         public int[]? CrystalShardModels;
+        public int[]? WindowSmash;
         // FunFrock's car empty: its BODY.HQR entry and the racer's driving animation (TrackInfo.ChaseCar)
         public int[]? FunFrockEmpty;
         public int[]? LaserModels;
@@ -884,6 +887,10 @@ internal static class RaceTrackService
             var (shard, shardBit, shardLog) = RaceTrackCrystals.InstallCrystalShards(gameDirectory);
             log.Add(shardLog);
             session.CrystalShardModels = new[] { shard, shardBit };
+            // (and the Emperor's palace's round window, with the palace in the folder)
+            var (windowSmash, windowLog) = LBAAssembler.Terrain.Palace.PalaceWindow.Install(gameDirectory);
+            if (windowLog is not null) log.Add(windowLog);
+            session.WindowSmash = windowSmash;
             // ... and the super jet-pack the car turns into
             var (jet, jetLog) = RaceTrackSuperJet.Install(gameDirectory);
             log.Add(jetLog);
@@ -955,6 +962,7 @@ internal static class RaceTrackService
         if (Shuttles(gameDirectory, report, options) is { Count: > 0 } shuttles) info = info with { Shuttles = shuttles };
         // (the race's own music: the Temple of Bú's LBA1 temple music, when the build found it)
         if (options.Island == RaceTrackIsland.Temple && LBAAssembler.Terrain.Temple.TempleMusic.Installed(gameDirectory) is { } music) info = info with { Music = music };
+        if (options.Island == RaceTrackIsland.Palace) info = info with { WindowSmash = session.WindowSmash };
         if (twin is { Own: true } && scenes.Twin is { } twinScenes)
         {
             // (the story belongs to the twin's track, which carries the race; either race clears its arrow once Twinsen drives)

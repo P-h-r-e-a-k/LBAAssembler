@@ -1424,6 +1424,35 @@ internal static class PalaceFurniture
     // bricks picture a block's +x and +z sides: a picture on its other side is that one, as if seen through the wall.) `trim`: the share of
     // the face left out at each of its sides.
     private const int SamplesAcross = 6, SamplesUp = 5;
+
+    // The round window's picture for the pane that stands in its opening (PalaceWindow): sampled as Picture does, PaneFiner times as finely --
+    // it is seen from close up, at the car's speed, before it breaks -- with the wall's colour where the picture has nothing. Rows from the
+    // bottom; each sample its colour, as `colour` gives it for a face looking `nz` along z (or `nx` along x).
+    private const int PaneFiner = 3;
+    public static (int W, int H, int[] Colours)? Pane(Piece piece, int nx, int nz, Func<(float R, float G, float B), Vector3, int> colour, Func<int, (float R, float G, float B)> wall)
+    {
+        if (piece.Image is not { } image) return null;
+        var (_, oy, _) = piece.Origin; var (dx, dy, dz) = piece.Size;
+        var alongZ = nx != 0;
+        int across = alongZ ? dz : dx, nu = across * SamplesAcross * PaneFiner, nv = dy * SamplesUp * PaneFiner;
+        var normal = Vector3.Normalize(nx != 0 ? new Vector3(nx, 0, 0) : new Vector3(0, 0, nz));
+        var colours = new int[nu * nv];
+        for (var v = 0; v < nv; v++)
+            for (var u = 0; u < nu; u++)
+            {
+                double a = (u + 0.5) / (SamplesAcross * PaneFiner) * 512, h = (v + 0.5) / (SamplesUp * PaneFiner) * 256;
+                var p = alongZ ? image.Project(dx * 512 - 1, h, a) : image.Project(a, h, dz * 512 - 1);
+                int px = (int)Math.Floor(p.X + 24), py = (int)Math.Floor(p.Y + 15);
+                (float R, float G, float B) rgb = wall(oy + v / (SamplesUp * PaneFiner));
+                if (px >= 0 && py >= 0 && px < image.Width && py < image.Height && image.Bgra[(py * image.Width + px) * 4 + 3] != 0)
+                {
+                    var o = (py * image.Width + px) * 4;
+                    rgb = (image.Bgra[o + 2], image.Bgra[o + 1], image.Bgra[o]);
+                }
+                colours[v * nu + u] = colour(rgb, normal);
+            }
+        return (nu, nv, colours);
+    }
     private static void Picture(List<BrickBuilding.Face> list, Lba1SceneImage image, Piece piece, int nx, int nz, Func<double, double, double, Vector3> place,
         Func<(float R, float G, float B), Vector3, int> colour, Func<int, (float R, float G, float B)> wall, double trim = 0)
     {

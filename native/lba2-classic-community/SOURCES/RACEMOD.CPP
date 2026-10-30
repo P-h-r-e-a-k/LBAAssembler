@@ -1308,6 +1308,19 @@ typedef struct { double X, Y, Z, Lift; S32 Every, Phase, Next, Until, Puff, Rise
                                            // evenly between, and solid (a see-through one was lost on the dark asphalt)
 #define RACE_SHARD_PIECES 6
 static int s_shardModel = -1, s_shardBit = -1;
+// The window a race's way out goes through (smash_window=<its first model> <how many> <3 shards, OBJFIX.HQR: a body holds too few points
+// for one model> <x y z, its middle> <half width> <half height>
+// <the way out, x z>; the user, 2026-10-30: "the exit to outside carries a large version of the window that's featured in game and let's
+// have the car smash it into pieces when it exits through it"): drawn until the first car reaches it, whole again each race and each run.
+#define RACE_WINDOW_NOSE 900               // a car's middle this far short of it: its nose there
+#define RACE_WINDOW_PIECES 48
+#define RACE_WINDOW_LAST 3000              // ms its pieces fly
+#define RACE_WINDOW_FAR (20 * 512.0)       // a car this far off it, a run over: it stands whole again
+// (its pieces flown here, not the game's extras: thrown as those are they stayed where they were, a car going 30 cells a second past them)
+typedef struct { double X, Y, Z, Vx, Vy, Vz; S32 Alpha, Beta, Gamma, SpinA, SpinB; int Model; } T_RACE_WINDOW_PIECE;
+typedef struct { int On, Done, Again, Pane, Panes, Shard[3], X, Y, Z, HalfW, HalfH, Nx, Nz; S32 T0, Last; T_RACE_WINDOW_PIECE Piece[RACE_WINDOW_PIECES]; } T_RACE_WINDOW;
+static T_RACE_WINDOW s_window;
+static void WindowFrame(void);
 static T_RACE_GEYSER s_geysers[RACE_MAX_GEYSERS];
 static int s_nbGeysers = 0;
 typedef struct { int Extra; double X, Y, Z, VX, VY, VZ; S32 T0; } T_RACE_COLUMN;
@@ -4080,6 +4093,11 @@ static void Load(const char *path, int carOnly = 0) {
                 s_nbLava++;
             }
         }
+        else if (!strcmp(key, "smash_window")) {
+            T_RACE_WINDOW *g = &s_window;
+            memset(g, 0, sizeof(*g));
+            g->On = sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d", &g->Pane, &g->Panes, &g->Shard[0], &g->Shard[1], &g->Shard[2], &g->X, &g->Y, &g->Z, &g->HalfW, &g->HalfH, &g->Nx, &g->Nz) == 12;
+        }
         else if (!strcmp(key, "crystal_shard_model")) { if (sscanf(v, "%d %d", &s_shardModel, &s_shardBit) != 2) s_shardModel = s_shardBit = -1; }
         else if (!strcmp(key, "lavageyser") || !strcmp(key, "crystalshards")) {
             int x, y, z, from, to, every, phase, balls;
@@ -4936,6 +4954,7 @@ static void SprintOver(S32 now, int crossed) {
 // a lap's is -- the ghost (GhostLapDone), the trial's best into Best laps (RaceGame_TrialBest) -- said, and the car back on the grid
 // for the next (RaceFromGrid: its count-down, then the start line starts the run). 0: the trial's last run -- SprintOver ends it.
 static int SprintRunAgain(S32 now) {
+    s_window.Again = 1;
     if (!s_trial || s_ghostWatch || !s_sprint) return 0;
     s_runs++;
     if (s_trialRuns > 0 && s_runs >= s_trialRuns) return 0;
@@ -15729,6 +15748,7 @@ void RaceMod_Frame(void) {
     { static int boxed = 0; const T_OBJET *h = &ListObjet[NUM_PERSO];
       if (!boxed && Comportement == C_BUGGY) { boxed = 1; Log_Info("[racemod] the car's box: x %d..%d, y %d..%d, z %d..%d", (int)h->XMin, (int)h->XMax, (int)h->YMin, (int)h->YMax, (int)h->ZMin, (int)h->ZMax); } }
     if (s_rescue) { s_rescue = 0; Rescue(); }
+    WindowFrame();
     RescueArrive();
     // A raised road winds round itself in the air: the classic camera, which stands still until the hero leaves the screen, would watch
     // the car go out of sight behind the road's other levels without its ever leaving the screen. So the camera that follows the car
@@ -16246,6 +16266,81 @@ static void DrawFarItems(void) {
     }
     if (getenv("LBA2_CARVIS")) { static int lastDrawn = -1; if (drawn != lastDrawn) { Log_Info("[carvis] far items drawn %d (scene %d, mushroom body %d)", drawn, (int)NumCube, s_mushBody); lastDrawn = drawn; } }
     if (drawn) DrawBack(&kept);
+}
+
+// Every frame: any car come to the window breaking it -- the car's nose through it, its pieces thrown on the way out as fast as a car goes,
+// fanned out and falling, one in five back into the room, with the land mines' blast and sound -- and its pieces flown. After a sprint's
+// run it is whole again once the car has gone back to the start.
+static void WindowFrame(void) {
+    T_RACE_WINDOW *g = &s_window;
+    if (!g->On || CubeMode != CUBE_EXTERIEUR || NewCube != -1) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    const S32 lx = (S32)(g->X - cx), lz = (S32)(g->Z - cz), now = TimerRefHR;
+    if (g->Again) {
+        double x, y, z;
+        if (CarAt(-1, &x, &y, &z) && (x - g->X) * (x - g->X) + (z - g->Z) * (z - g->Z) > RACE_WINDOW_FAR * RACE_WINDOW_FAR && now - g->T0 >= RACE_WINDOW_LAST) { g->Again = 0; g->Done = 0; }
+    }
+    if (g->Done && now - g->T0 < RACE_WINDOW_LAST) {
+        double dt = (now - g->Last) / 1000.0;
+        g->Last = now;
+        if (dt > 0.05) dt = 0.05;
+        for (int i = 0; i < RACE_WINDOW_PIECES; i++) {
+            T_RACE_WINDOW_PIECE *p = &g->Piece[i];
+            p->Vy -= 9000 * dt;
+            p->X += p->Vx * dt; p->Y += p->Vy * dt; p->Z += p->Vz * dt;
+            p->Alpha = (p->Alpha + (S32)(p->SpinA * dt)) & 4095; p->Beta = (p->Beta + (S32)(p->SpinB * dt)) & 4095;
+        }
+    }
+    if (!g->Done) {
+        for (int who = -1; who < RACE_MAX_OPPONENTS && !g->Done; who++) {
+            if (who >= 0 && (!s_opp[who].Count || !s_opp[who].Scenes)) continue;
+            double x, y, z;
+            if (!CarAt(who, &x, &y, &z)) continue;
+            const double out = (x - g->X) * g->Nx + (z - g->Z) * g->Nz, side = (x - g->X) * g->Nz - (z - g->Z) * g->Nx;
+            if (out < -RACE_WINDOW_NOSE || out > 6000 || fabs(side) > g->HalfW || fabs(y - g->Y) > g->HalfH + 1000) continue;
+            g->Done = 1; g->T0 = g->Last = now;
+            Log_Info("[racemod] %s's car smashes the window", CarName(who));
+            DoImpact(RACE_PENGUIN_IMPACT, (S32)(x - cx), (S32)y, (S32)(z - cz), 255);
+            for (int i = 0; i < RACE_WINDOW_PIECES; i++) {
+                T_RACE_WINDOW_PIECE *p = &g->Piece[i];
+                const double a = (VentRandom() * 2 - 1) * g->HalfW, across = (VentRandom() * 2 - 1) * 4500;
+                const double on = i % 5 == 4 ? -3000 - VentRandom() * 5000 : 9000 + VentRandom() * 9000;
+                p->X = g->X + a * g->Nz; p->Z = g->Z - a * g->Nx; p->Y = g->Y + (VentRandom() * 2 - 1) * g->HalfH;
+                p->Vx = g->Nx * on + g->Nz * across; p->Vz = g->Nz * on - g->Nx * across; p->Vy = -1500 + VentRandom() * 6000;
+                p->Alpha = (S32)(VentRandom() * 4096); p->Beta = (S32)(VentRandom() * 4096); p->Gamma = (S32)(VentRandom() * 4096);
+                p->SpinA = (S32)((VentRandom() * 2 - 1) * 4000); p->SpinB = (S32)((VentRandom() * 2 - 1) * 4000);
+                p->Model = g->Shard[i % 3];
+            }
+        }
+    }
+}
+static void DrawWindow(void) {
+    const T_RACE_WINDOW *g = &s_window;
+    if (!g->On || CubeMode != CUBE_EXTERIEUR || NewCube != -1) return;
+    if (g->Done) {
+        if (TimerRefHR - g->T0 >= RACE_WINDOW_LAST) return;
+        const T_RACE_DRAW kept = DrawKept();
+        Switch_Fillers(FILL_POLY_FOG_NZW);
+        SetCLUT(PalLevel);
+        for (int i = 0; i < RACE_WINDOW_PIECES; i++) {
+            const T_RACE_WINDOW_PIECE *p = &g->Piece[i];
+            if (BodyDisplay((S32)(p->X - CurrentCubeX * 32768.0), (S32)p->Y, (S32)(p->Z - CurrentCubeY * 32768.0), p->Alpha, p->Beta, p->Gamma, (U8 *)GivePtrObjFix(p->Model))) MarkDrawn();
+        }
+        DrawBack(&kept);
+        return;
+    }
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const S32 x = (S32)(g->X - CurrentCubeX * 32768.0), z = (S32)(g->Z - CurrentCubeY * 32768.0);
+    const double dx = x - hero->Obj.X, dz = z - hero->Obj.Z;
+    if (dx * dx + dz * dz > (double)RACE_FAR_ITEMS * RACE_FAR_ITEMS) return;
+    const T_RACE_DRAW kept = DrawKept();
+    Switch_Fillers(FILL_POLY_FOG_NZW);
+    SetCLUT(PalLevel);
+    // (its model faces +z: into the room, the opposite of the way out)
+    const S32 beta = TurnOf(atan2((double)-g->Nx, (double)-g->Nz));
+    for (int k = 0; k < g->Panes; k++)
+        if (BodyDisplay(x, g->Y, z, 0, beta, 0, (U8 *)GivePtrObjFix(g->Pane + k))) MarkDrawn();
+    DrawBack(&kept);
 }
 
 static void DrawSuperJet(S32 now) {
@@ -17673,6 +17768,7 @@ void RaceMod_Draw(void) {
     // (his car parked, him on foot: the car he drives as drawn in its place -- HeroLook)
     if (Comportement != C_BUGGY && s_raceParked) DrawDriveAs(TimerRefHR);
     DrawFarItems();
+    DrawWindow();
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
     const int items = s_powerups && s_nbMush > 0 && !s_trial && !Qualifying();
     // (the display off -- hud=0 -- and no items: no display, but the scene's own drawn things all the same -- the car Twinsen drives as,
@@ -17859,6 +17955,7 @@ void RaceMod_Draw(void) {
 // Everything a track's file set up, back to how the engine starts (the car's handling too: the next file gives it again). The set's own
 // keys (track=, tired=) stay. The memory the old track's lines and road took is given back.
 static void ResetTrack(void) {
+    s_window.On = s_window.Done = s_window.Again = 0;
     for (int n = 0; n <= RACE_MAX_OPPONENTS; n++) {
         T_RACE_OPPONENT *o = n < RACE_MAX_OPPONENTS ? &s_opp[n] : &s_guide;
         free(o->X); free(o->Z); free(o->Y); free(o->V); free(o->R); free(o->Cum);

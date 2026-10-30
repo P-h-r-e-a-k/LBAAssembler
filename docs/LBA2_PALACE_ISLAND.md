@@ -429,3 +429,17 @@ theme."
 - `ScriptRoundTrip palaceportraits <game folder> <out.png> [scale]` paints the pictures' pages as the island has them.
   `ScriptRoundTrip palacefloor <game folder> <out.png>` maps the rooms' floor bricks from above in their average colours.
   `LBA2_PALACE_PAINT=<file>` has a build write the floor's paint, a line a cell.
+
+## The window the race ends through (2026-10-30)
+
+"The exit to outside carries a large version of the window that's featured in game and let's have the car smash it into pieces when it exits through it."
+
+The hall's round window was taken out of its wall for the cars' way out. Its picture now stands on the road in front of the opening as the race's own model:
+
+- **The picture:** `PalaceFurniture.Pane` samples it three times as finely as the rooms' pictures, into `PALACE.JSON`'s `windowPane`.
+- **The model:** `PalaceWindow.Install` makes it, 16 tiles in `OBJFIX.HQR` (a body holds 550 points, the window needs about 5,700), and three shards in its commonest colours.
+- **Where:** on the road (14,540), 600 into the hall, 97 % of the opening's size. In the opening itself, with the road half way up it, only its top half showed.
+- **The smash:** RACEMOD.CPP `smash_window=`. Drawn until the first car reaches it, Twinsen's or an opponent's: then the land mines' blast and 48 pieces flown by the race (`WindowFrame`) at about a car's speed. The game's extras stayed behind a car going 30 cells a second.
+- **Whole again:** every race, and after a sprint's run once the car has gone back to the start (`Again`). Nothing in the decors changes.
+
+The blast's sound is the land mines'; there is no glass sound yet.

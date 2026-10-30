@@ -225,6 +225,7 @@ internal static class PalaceIsland
                 queue.Enqueue(n);
             }
         }
+        (int W, int H, int[] Colours)? windowPane = null;
         // ---- the round window opened: its cells, and the wall's behind them out to the open air (away from the hall's air) -- the cars' way
         // out of the palace, as Twinsen's
         var opening = new HashSet<(int X, int Y, int Z)>();
@@ -864,6 +865,8 @@ internal static class PalaceIsland
             var made = PalaceFurniture.Build(pieces, chests, Place, Seen, Looks, y => WallpaperAt(y), portals);
             foreach (var (ti, list) in made.Faces) roomFaces[ti].AddRange(list);
             chestBoxes = made.Boxes;
+            // (the round window's picture, for the pane the cars smash at the race's end: PalaceWindow)
+            if (roundWindow is not null) windowPane = PalaceFurniture.Pane(roundWindow, -outward.Nx, -outward.Nz, Seen, y => WallpaperAt(y));
             log.AddRange(made.Log);
             // (where the fireplaces and chests are: island cells)
             foreach (var p in pieces.Where(p => p.Kind == PalaceFurniture.Kind.Fireplace))
@@ -1118,6 +1121,7 @@ internal static class PalaceIsland
                 ["z0"] = Math.Round(WZ(opening.Min(c => c.Z)) / 512), ["z1"] = Math.Round(WZ(opening.Max(c => c.Z) + 1) / 512),
                 ["sill"] = WY(opening.Min(c => c.Y)), ["top"] = WY(opening.Max(c => c.Y) + 1), ["outX"] = outward.Nx, ["outZ"] = outward.Nz,
             },
+            ["windowPane"] = windowPane is { } pane ? new Dictionary<string, object> { ["w"] = pane.W, ["h"] = pane.H, ["colours"] = pane.Colours } : null,
             ["corridors"] = corridors.Select(c => new Dictionary<string, object> { ["points"] = c.Points.Select(p => new[] { p.X, p.Z }).ToList(), ["half"] = c.Half }).ToList(),
             ["pillar"] = new[] { harbour.Pillar.X, harbour.Pillar.Z, harbour.Pillar.R, harbour.Pillar.Top },
             // (the palace's doors in the start room's east wall: the wall's face and their span, island cells; the teleporters: each [into the
