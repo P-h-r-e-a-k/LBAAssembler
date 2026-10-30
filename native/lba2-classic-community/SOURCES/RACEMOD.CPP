@@ -14532,6 +14532,30 @@ static void GhostRetime(T_RACE_LAPGHOST *g) {
 }
 
 // A ghost file read: its head alone (`points` 0) or its samples too. Non-zero: a ghost of a lap.
+// A ghost's points name their car's body by its number in BODY.HQR, and a build with a new car moves the numbers on (the game's own 64
+// ghosts of 2026-10-25, 3 to 7 out by 2026-10-30, each drew some other body: the user, "Attempting to race a ghost on Palace failed to
+// render the car correctly, just a few lines were visible"). The race game knows the car by its name (car=): the body most of the
+// points have, the car's in this build. (Not the first points': the car's own body before the race, 14.)
+extern int RaceGame_CarLook(const char *name, S32 *body, S32 *anim);
+static void GhostCarLook(T_RACE_LAPGHOST *g) {
+    S32 body, anim;
+    if (!g->Car[0] || !RaceGame_CarLook(g->Car, &body, &anim)) return;
+    int seen[8], count[8], kinds = 0, most = 0;
+    for (int i = 0; i < g->N; i++) {
+        int k = 0;
+        while (k < kinds && seen[k] != g->P[i].Body) k++;
+        if (k == kinds) { if (kinds == 8) continue; seen[kinds] = g->P[i].Body; count[kinds++] = 0; }
+        if (++count[k] > count[most]) most = k;
+    }
+    if (!kinds || seen[most] == body) return;
+    for (int i = 0; i < g->N; i++) {
+        if (g->P[i].Body != seen[most]) continue;
+        g->P[i].Body = (S16)body;
+        if (anim >= 0) g->P[i].Anim = (S16)anim;
+    }
+    Log_Info("[racemod] ghost: %s's body is %d in this build, %d in its file", g->Car, (int)body, seen[most]);
+}
+
 static int GhostRead(const char *path, T_RACE_LAPGHOST *g, int points) {
     memset(g, 0, sizeof(*g));
     FILE *f = fopen(path, "r");
@@ -14581,6 +14605,7 @@ static int GhostRead(const char *path, T_RACE_LAPGHOST *g, int points) {
     fclose(f);
     if (g->N < 2) { GhostFree(g); return 0; }
     if (version < 2) GhostRetime(g);
+    GhostCarLook(g);
     return 1;
 }
 

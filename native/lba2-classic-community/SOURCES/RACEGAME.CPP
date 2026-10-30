@@ -293,6 +293,20 @@ static void ReadRaceFile(T_RG_SPECIAL *sp) {
     fclose(f);
 }
 
+// A car of the file by its name: its body in this build and its driving animation (-1 for a car raced by a line of the race file's, as
+// Twinsen's own buggy painted: its animation stays as it was). 0: no such car, or no race game.
+int RaceGame_CarLook(const char *name, S32 *body, S32 *anim) {
+    for (int pass = 0; pass < 2; pass++)
+        for (int i = 0, count = pass ? s_nbCars : s_nbGrid; i < count; i++) {
+            const T_RG_CAR *c = pass ? &s_cars[i] : &s_grid[i];
+            if (strcmp(c->Name, name) || c->Body < 0) continue;
+            *body = c->Body;
+            *anim = c->Line ? -1 : c->Anim;
+            return 1;
+        }
+    return 0;
+}
+
 // A car= (or gridcar=) line's value into `c`; non-zero: a car (its name and its drive_as value or race file's line given).
 static int ParseCar(T_RG_CAR *c, const char *v) {
     char stars[64];
