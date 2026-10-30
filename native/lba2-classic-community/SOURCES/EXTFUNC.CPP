@@ -296,9 +296,7 @@ void Init3DExtView(void) {
         nearClip = CLIP_NEAR * 480 / (S32)ModeDesiredY;
     SetProjection((S32)(ModeDesiredX / 2), (S32)(ModeDesiredY / 2),
                   nearClip, ChampX, ChampZ);
-    SetFollowCamera(VueOffsetX, VueOffsetY, VueOffsetZ,
-                    AlphaCam, BetaCam, GammaCam,
-                    VueDistance);
+    FollowCamApplyShownView();
 
     SetLightVector(AlphaLight, BetaLight, 0);
 }
@@ -1275,9 +1273,11 @@ void AffGrilleExtWide(int radiusCubes) {
 #endif // LBA2_RENDERER_HOST
 
 void AffGrilleExt() {
-    SetFollowCamera(VueOffsetX, VueOffsetY, VueOffsetZ,
-                    AlphaCam, BetaCam, GammaCam,
-                    VueDistance);
+    /* The camera for the frame is set here, from the globals, whatever was
+     * applied since the last one. cam_obstruct's extra pitch is not in AlphaCam
+     * and has to be added at this point to be drawn at all, and a blend into or
+     * out of a scripted shot is only ever in the frame. */
+    FollowCamSetView();
     FollowCamReapplyLift();
 
     SetLightVector(AlphaLight, BetaLight, 0);
@@ -2971,7 +2971,7 @@ void AffPalette() {
 // Affiche le terrain en mode "SPOTS"
 void RedrawSpeedTerrain() {
     Cls();
-    SetFollowCamera(VueOffsetX, VueOffsetY, VueOffsetZ, AlphaCam, BetaCam, GammaCam, VueDistance);
+    SetFollowCamera(VueOffsetX, VueOffsetY, VueOffsetZ, AlphaCam + FollowCamRenderExtraPitch(), BetaCam, GammaCam, VueDistance);
     AffichageTerrainRapide();
     BoxUpdate();
 
@@ -3080,6 +3080,7 @@ void FollowCamAdoptAngle(void) {
      * (AddBetaCam + hero Beta), so solving that for the current BetaCam gives the
      * offset that leaves the camera where it stands. */
     AddBetaCam = FollowCamPanForAngle(BetaCam, ptr3d->Beta);
+    FollowCamWorldAnchorRebase();
 }
 
 /* Apply a per-frame manual camera nudge from an analog source (mouse drag or
@@ -3110,6 +3111,7 @@ static S32 ApplyManualCameraNudge(S32 dBeta, S32 dAlpha, S32 dZoom) {
             FollowCamAdoptAngle();
 
         AddBetaCam = (AddBetaCam - dBeta) & 4095;
+        FollowCamPlayerTook(TRUE, FALSE); /* an angle the player set is not a scripted shot's to give back */
         ManualCameraOrbitActive = TRUE;
         FirstTime = AFF_ALL_FLIP;
         changed = 1;
@@ -3120,6 +3122,7 @@ static S32 ApplyManualCameraNudge(S32 dBeta, S32 dAlpha, S32 dZoom) {
             AlphaCam = FOLLOW_CAM_ALPHA_MIN;
         if (AlphaCam > FOLLOW_CAM_ALPHA_MAX)
             AlphaCam = FOLLOW_CAM_ALPHA_MAX;
+        FollowCamPlayerTook(FALSE, TRUE); /* after the clamp: it remembers the pitch as the player left it */
         FirstTime = AFF_ALL_FLIP;
         changed = 1;
     }
@@ -3440,6 +3443,7 @@ S32 GereExtKeys(U32 key)
         if (FollowCamera) {
             if (AlphaCam > FOLLOW_CAM_ALPHA_MIN)
                 AlphaCam -= FOLLOW_CAM_ALPHA_STEP;
+            FollowCamPlayerTook(FALSE, TRUE);
             FirstTime = AFF_ALL_FLIP;
         } else {
             if (VueCamera > 0) {
@@ -3455,6 +3459,7 @@ S32 GereExtKeys(U32 key)
         if (FollowCamera) {
             if (AlphaCam < FOLLOW_CAM_ALPHA_MAX)
                 AlphaCam += FOLLOW_CAM_ALPHA_STEP;
+            FollowCamPlayerTook(FALSE, TRUE);
             FirstTime = AFF_ALL_FLIP;
         } else {
             if (VueCamera < NB_VUE_CAMERA - 1) {
@@ -3469,11 +3474,13 @@ S32 GereExtKeys(U32 key)
     if (FollowCamera) {
         if (CheckKey(K_LBRACKET)) {
             AddBetaCam = (AddBetaCam - FOLLOW_CAM_PAN_STEP) & 4095;
+            FollowCamPlayerTook(TRUE, FALSE);
             FirstTime = AFF_ALL_FLIP;
             flag = 1;
         }
         if (CheckKey(K_RBRACKET)) {
             AddBetaCam = (AddBetaCam + FOLLOW_CAM_PAN_STEP) & 4095;
+            FollowCamPlayerTook(TRUE, FALSE);
             FirstTime = AFF_ALL_FLIP;
             flag = 1;
         }

@@ -500,6 +500,10 @@ restartloop:
     while (TRUE) {
     startloop:
 
+        /* A new cube or a clover restarts the frame here, past the reset after
+         * AffScene: that redraw is a cut and must clear the splashes. */
+        KeepImpactRain = FALSE;
+
         Perftrace_FrameBegin();
 
         /* Runtime resolution-switch keep/revert dialog. Pending whenever
@@ -1715,6 +1719,7 @@ restartloop:
         /*-------------------------------------------------------------------------*/
 
         CameraZone = FALSE;
+        FollowCamInShotBox = FALSE; /* like CameraZone, re-established by this frame's zone check */
 
         GereAmbiance();
         CheckNextMusic();
@@ -1906,6 +1911,27 @@ restartloop:
         if (CameraZone OR CinemaMode OR CubeMode != CUBE_EXTERIEUR OR !FollowCamera)
             FollowCamForgetManualGesture();
 
+        /* After this frame's zone check, so that on the frame the hero comes out
+         * of a building it can tell a shot firing over the door from open ground. */
+        FollowCamNoteScene(CubeMode == CUBE_EXTERIEUR);
+        FollowCamNoteCinema(CinemaMode != 0);
+        FollowCamNoteFrame();
+
+        /* The same for what a scripted shot is owed back, in the two states that
+         * take the camera's angles for themselves: a cutscene aims it where it
+         * likes, and with the Auto camera off the classic one keeps whatever it
+         * is handed. A camera zone is not one of them, being the loan itself.
+         *
+         * Nor is an interior. A door changes scene through CameraCenter(0), which
+         * leaves the pan and the pitch exactly as they were, and nothing indoors
+         * uses either. So a shot's leftovers come back out of the building with
+         * the hero, and forgetting what was owed on the way in would leave them
+         * with the camera for good: the very thing the loan is there to stop,
+         * in the commonest place to meet it, a town whose streets are camera
+         * zones and whose houses are interiors. */
+        if (CinemaMode OR !FollowCamera)
+            FollowCamForgetLoan();
+
         if (!CameraZone) {
             if (!CinemaMode) {
                 // AlphaCam (touches '+' et '-' *)
@@ -1914,6 +1940,7 @@ restartloop:
                 if (Input & I_CAMERA) {
                     SaveTimer();
                     AddBetaCam = (AddBetaCam + 1024) & 4095;
+                    FollowCamPlayerTook(TRUE, FALSE); /* a quarter turn the player asked for is theirs to keep */
                     /* FollowCamera: do not use CameraCenter(2) — it resets
                      * AlphaCam/VueDistance to VueCamera presets.  Recompute
                      * target offset and BetaCam like case 2, then apply only. */
@@ -1952,6 +1979,14 @@ restartloop:
         }
 
         FollowCamTrace();
+
+        /* A blend into or out of a scripted shot moves the view whether or not
+         * anything else does, so the terrain is drawn again on every frame of
+         * it. */
+        if (FollowCamBlending()) {
+            FirstTime = AFF_ALL_FLIP;
+            KeepImpactRain = TRUE;
+        }
 
         if (!CameraZone) {
             if (FirstTime == AFF_OBJETS_FLIP) {
@@ -2048,6 +2083,7 @@ restartloop:
         }
 
         FirstTime = AFF_OBJETS_FLIP;
+        KeepImpactRain = FALSE;
         FirstLoop = FALSE;
 
         CmptFrame++;

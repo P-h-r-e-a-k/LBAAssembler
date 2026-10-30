@@ -144,13 +144,45 @@ Both save memory, which a Windows build doesn't need.
 - The editor started, drew Desert Island, and played a scene inside its viewport.
 - Not tested: a mouse on the cursor-confine setting (the player's own mouse can't be used here).
 
+## Fifth round (2026-10-30): the Auto camera
+
+At the user's request ("then move on to the camera fixes"). Merged in upstream order:
+- **Scripted shots:** 850caede, e701a120, e98cbb7c, 7a169760 (the camera given back after a shot); 17cb1f63, 7c84ef7e (blended into and out of one); c9aea5f7 (the camera the frame was drawn with handed back).
+- **Scenes and zones:** 72513137, 598c75f9 (the camera carried into a new outdoor scene); 6551a795 (latching zones left unfired while the player steers).
+- **Obstruction:** d6973b5a, 7811cb1b, ec2fade9, 476bad38, 48e6790d (eased clearance, and the hidden hero).
+- **Defaults:** 8277fb02 (those settings shipped on).
+- **Pacing:** 520c5f1f (the turn and the look-at point paced by the clock).
+- **World anchor:** 0ecf09d7, 5998fe88 (off by default).
+- **Rain:** bb0e8dd1, 58542424 (rain splashes kept through a blend, cleared on a cut).
+
+**Ours, kept:**
+- The race-track mode's hooks: FollowCamEyeHook, the own-eye ease, FollowCamDropOwnEye, FollowCamReapplyLift after FollowCamSetView, the arm percent, the eye turn and cut.
+- Our camtrace line, with upstream's new fields added at its end (inshot, loan, obs, hid, dt, tlag, vx..sz).
+- The dirty check with our FollowCamEyeCut.
+- INTEXT.CPP: the classic obstruction search still off for the race-track mode's follow camera.
+
+**The race camera kept as it was:**
+- 520c5f1f's look-at point trailing the hero (cam_target_ms, 300 ms) put a race car's camera a third further back: Citadel 2's lap went from 11,574 from the car to 15,041.
+- In the race-track mode the look-at point stays on the car (FollowCamEaseLookAt). Everything else is kept, including the clock-paced yaw ease (cam_ease_ms).
+- **Measured** with camtrace over 40 s of autodrive, against the engine before this round (eye from the car, mean; the eye's largest step in a frame):
+
+  | Track | Distance before | Distance after | Largest step before | Largest step after |
+  |---|---|---|---|---|
+  | Emerald Moon | 11,026 | 11,007 | 3,250 | 1,075 |
+  | Citadel 2 | 11,574 | 11,577 | 8,467 | 1,565 |
+  | Island CX Mk2 | — | — | 8,383 | 960 |
+
+- Island CX Mk2's halls: the tunnel camera on every frame down there, as before.
+
+**Not taken:** f00a446e and 477352a5 (the console's camera cvars bounded by, and started from, upstream's settings tables, which we don't have).
+
+**Also checked:** Story Mode new (the dream) and continued, and the editor playing a scene in its viewport.
+
 ## Left for later
 
-- **They need an upstream rework we haven't taken:**
-  - The Auto camera rework: `58542424` and `bb0e8dd1` (rain splashes on a camera cut or blend: FollowCamBlendCut, FollowCamBlending).
 - **Not taken, by choice:** `23677fb4` (cinematics streamed from the HQR). It changes libsmacker and our video loading. Its gain is memory, which a Windows build doesn't need, and the risk is to Story Mode's intro film.
 - **Not taken:**
-  - Too large to take now: the integer 3D maths port (`374cf91b`, `833b34ae`, `e068589f`, `bf6379db`); and the Auto camera rework (`520c5f1f`, `5998fe88`, `8277fb02` and the other camera commits), which FOLLOWCAM's race camera depends on.
+  - Too large to take now: the integer 3D maths port (`374cf91b`, `833b34ae`, `e068589f`, `bf6379db`).
   - Not relevant here: Vita, Switch, Android and macOS ports, big-endian support, the recorder, CI, packaging and tools.
 
 ## How to check the next merge
