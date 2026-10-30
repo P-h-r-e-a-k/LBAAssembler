@@ -443,3 +443,15 @@ The hall's round window was taken out of its wall for the cars' way out. Its pic
 - **Whole again:** every race, and after a sprint's run once the car has gone back to the start (`Again`). Nothing in the decors changes.
 
 The blast's sound is the land mines'; there is no glass sound yet.
+
+## The ramps' ends opened out (2026-10-30)
+
+"Open out the top of the spiral to it matches the width of the red track at the exit, and the same with the down spiral, if possible do this for both ends of the spiral."
+
+All four ends of the two stairwell ramps are now the red carpet's width, 16 cells (`FLARE` in tools/RaceTrackPlan/palace_design.py, the plan's `raisedHalfs`). The turns round the column stay 9 wide: its 3.5 radius leaves the road no more room. Each end is the usual width until a car against its rail has cleared the column (`CLEAR`, 7 cells on from the turn), then opens out.
+
+- **The up-ramp's foot:** the road starts at room 155's south wall, on the carpet's middle (x 381), and bends over to the ramp's line (x 385.5).
+- **The up-ramp's top:** bends from x 367.5 onto the upstairs door's middle (x 369).
+- **The down-ramp's top and foot:** already on their doors' lines; the foot's road now runs on along the way over to the window, to room 159's north wall.
+
+`check()` holds a widened road to `HALF`: a road the door's own width is a road a car against its rail can hit the door frame from, as on any carpet. So it proves the column clear, not the doors. Those were driven: the test pilot 3 and 5 cells to each side through both ramps, every run to the finish, none stopped at a ramp's end.

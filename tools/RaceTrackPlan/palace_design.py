@@ -172,12 +172,18 @@ COL_E = col(154)                            # the bedchamber's and the dressing 
 ROW_DR = row(158)                           # the dressing room's row, into the throne room
 COL_T = col(156)                            # the throne room's west column: north up it to the down-stairwell's row
 # (ground floor: the grid, west along the bottom row, north at the up-ramp's foot's line into the stairwell)
-ground_in = path([(BEHIND, GRID_Z), (FOOT_X, R0), (FOOT_X, uz)], [0, TURN, 0])
+# (the ramps' four ends opened out to the red carpet's width -- the user, 2026-10-30: "open out the top of the spiral to it matches the
+# width of the red track at the exit, and the same with the down spiral, if possible do this for both ends of the spiral" -- on the straights
+# beside them, the turns round the column staying HALF: the road on each carpet's line through its door, over onto the ramp's own)
+FLARE = 8.0                                 # (CARPET_HALF)
+CARPET_X = col(155)                         # the up-ramp's foot: the carpet's middle through room 155's south door
+UP_X = (next(d for d in UP['doors'] if d['a'] == STAIR_UP['scene'])['x0'] + next(d for d in UP['doors'] if d['a'] == STAIR_UP['scene'])['x1']) / 2   # ... its top: the upstairs door's
+ground_in = path([(BEHIND, GRID_Z), (CARPET_X, R0), (CARPET_X, uz + 17), (FOOT_X, uz + 7), (FOOT_X, uz)], [0, TURN, 5, 5, 0])
 up_ramp = helix(ux, uz, ur, 0.0, UP_TURNS)
 # (upstairs: south out of the stairwell, east along the bottom row, north up the east column, west along the dressing room's row into the
 # throne room, north up its west column, west into the down-stairwell to its ramp's top)
-upstairs = path([(TOP_X, uz), (TOP_X, ROW_UP), (COL_E, ROW_UP), (COL_E, ROW_DR), (COL_T, ROW_DR), (COL_T, DOWN_Z), (dx_, DOWN_Z)],
-                [0, TURN, TURN, TURN, TURN, TURN, 0])
+upstairs = path([(TOP_X, uz), (TOP_X, uz + 4), (UP_X, uz + 10), (UP_X, ROW_UP), (COL_E, ROW_UP), (COL_E, ROW_DR), (COL_T, ROW_DR), (COL_T, DOWN_Z), (dx_, DOWN_Z)],
+                [0, 4, 4, TURN, TURN, TURN, TURN, TURN, 0])
 down_ramp = helix(dx_, dz_, dr, -math.pi / 2, DOWN_TURNS)
 # (ground floor again: north out of the stairwell through room 163 into the long hall, onto the round window's line, up the hall)
 # (straight over onto the window's line just past the stairwell's foot, which sits 1.5 cells past the cube edge at x 384: a line along that
@@ -204,6 +210,9 @@ down_door = next(d for d in UP['doors'] if d['b'] == STAIR_DOWN['scene'])
 i_up_floor = next(i for i in range(i_up_top, n) if pts[i][1] >= up_door['z0'] + 3)
 i_down_floor = max(i for i in range(i_up_floor, o_down) if pts[i][0] >= down_door['x1'] - 3)
 i_down_top, i_down_foot = o_down, o_after
+# (the road's ends now: the up-ramp's from room 155's south wall, the down-ramp's on to room 159's north wall along the way over to the window)
+i_up_start = nearest((CARPET_X, uz + 18), 0, o_up)
+i_down_end = nearest((wx, dz_ - JOG_AT - JOG - 3), o_after)
 i_ramp_foot = nearest((wx, w_in + RAMP + 8), o_after); i_ramp_top = nearest((wx, w_in + 8), i_ramp_foot)
 i_window_in = nearest((wx, w_in), i_ramp_foot); lip = nearest((wx, w_out), i_window_in)
 land = nearest((wx, w_out - FLIGHT), lip); land_foot = n - 1
@@ -237,6 +246,17 @@ half = np.full(n, HALF)
 for i in range(0, n):
     if i <= start + 6: half[i] = HALF_GRID
     elif i <= start + 26: half[i] = HALF_GRID + (HALF - HALF_GRID) * (i - start - 6) / 20
+def flare(wide, narrow):
+    """The road FLARE at the point `wide`, easing to HALF at the point `narrow`."""
+    for i in range(min(wide, narrow), max(wide, narrow) + 1):
+        half[i] = HALF + (FLARE - HALF) * ease(1 - abs(i - wide) / max(1, abs(narrow - wide)))
+# (each HALF until a car against its rail has cleared the column, 3.5 round the ramps' middle: CLEAR cells on from the turn; the road from
+# there to the carpet's width in the door's own line)
+CLEAR = 7
+i_up_wide = nearest((CARPET_X, uz + 15), 0, o_up); half[i_up_start:i_up_wide + 1] = FLARE; flare(i_up_wide, nearest((FOOT_X, uz + CLEAR), 0, o_up))
+i_top_wide = nearest((UP_X, uz + 15), i_up_top); half[i_top_wide:i_up_floor + 1] = FLARE; flare(i_top_wide, nearest((UP_X, uz + CLEAR), i_up_top))
+i_in_wide = nearest((dx_ + 19, DOWN_Z), i_up_floor, i_down_top + 1); half[i_down_floor:i_in_wide + 1] = FLARE; flare(i_in_wide, nearest((dx_ + CLEAR + 4, DOWN_Z), i_up_floor, i_down_top + 1))
+i_out_wide = nearest((wx, dz_ - JOG_AT - JOG), o_after); half[i_out_wide:i_down_end + 1] = FLARE; flare(i_out_wide, nearest((OUT_X, dz_ - CLEAR + 4), o_after))
 
 # ---- the opponents' ways (RaceTrackBuilder.RouteThrough: each replaces an opponent's line up to its nearest point to the way's end): the
 # ground floor's detour north through 158 and west through 157 back to the bottom row in 153, the route on up the ramp and through the
@@ -351,7 +371,7 @@ print('guards:', len(guards), '--', ', '.join(f'{["soldier", "pighead", "Stan", 
 def way(i):
     a, b = pts[max(0, i - 2)], pts[min(n - 1, i + 2)]; d = b - a; return d / max(1e-9, np.linalg.norm(d))
 def check(lo, hi, what):
-    bad = [i for i in range(lo, hi) if blocked_road(pts[i][0], pts[i][1], h[i] - DECK, *way(i), max(0.5, half[i] - 1.25))]
+    bad = [i for i in range(lo, hi) if blocked_road(pts[i][0], pts[i][1], h[i] - DECK, *way(i), max(0.5, min(half[i], HALF) - 1.25))]
     print(f'  {what}: ' + (f'{len(bad)} points blocked, e.g. {[(tuple(np.round(pts[i], 1)), round(h[i])) for i in bad[:8]]}' if bad else 'clear'))
     return bad
 def check_floor(line, floor, what):
@@ -407,7 +427,7 @@ plan = {
     'raisedHalfs': [round(float(v), 2) for v in half],
     # (no road on the floors -- the ground floor's rooms to the up-stairwell, the upstairs between the stairwells, the ground floor from the
     # down-stairwell to the long hall's ramp -- nor where the leap comes down: never reached)
-    'bare': [[0, i_up_foot - 1], [i_up_floor, i_down_floor], [i_down_foot + 1, i_ramp_foot - 1], [land, n - 1]],
+    'bare': [[0, i_up_start - 1], [i_up_floor, i_down_floor], [i_down_end + 1, i_ramp_foot - 1], [land, n - 1]],
     'openAreas': open_areas,
     'floorArrows': [[round(float(x), 2), round(float(z), 2), float(y), dx, dz] for x, z, y, dx, dz in arrows],
     'openRoutes': [[[round(float(x), 2), round(float(z), 2)] for x, z in rt] for rt in routes],
