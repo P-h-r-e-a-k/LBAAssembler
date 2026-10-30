@@ -89,6 +89,7 @@
 #include "DIRECTORIES.H"
 #include "DISTRIB.H"
 #include "INPUT_BINDINGS.H"
+#include "MENU_INPUT.H"
 #include "RECORD_FORMAT.H"
 
 /* Narrow on purpose. This module reads no game state: it asks CONTROL.H for the digest,
@@ -498,6 +499,8 @@ static T_DEF_KEY s_savedGamepadKeys[MAX_INPUT_SLOTS];
 static T_DEF_KEY s_recDefKeys[MAX_INPUT_SLOTS];
 static T_DEF_KEY s_recGamepadKeys[MAX_INPUT_SLOTS];
 static int s_haveRecBindings = 0;
+static U32 s_recMenuSuppression = 0;
+static U32 s_savedMenuSuppression = 0;
 static int s_bindingsInstalled = 0;
 static int s_kfReported = 0; /* keyframes reported since the mismatch, capped */
 
@@ -506,8 +509,10 @@ static void bindings_install(void) {
         return;
     memcpy(s_savedDefKeys, DefKeys, MAX_INPUT_SLOTS * sizeof DefKeys[0]);
     memcpy(s_savedGamepadKeys, GamepadKeys, MAX_INPUT_SLOTS * sizeof GamepadKeys[0]);
+    s_savedMenuSuppression = MenuInput_Suppressed();
     memcpy(DefKeys, s_recDefKeys, MAX_INPUT_SLOTS * sizeof DefKeys[0]);
     memcpy(GamepadKeys, s_recGamepadKeys, MAX_INPUT_SLOTS * sizeof GamepadKeys[0]);
+    MenuInput_Reset(s_recMenuSuppression);
     /* The combined (key, mask) table is what CheckKey scans; changing the two source
        tables without rebuilding it changes nothing. */
     InitInput();
@@ -519,6 +524,7 @@ static void bindings_restore(void) {
         return;
     memcpy(DefKeys, s_savedDefKeys, MAX_INPUT_SLOTS * sizeof DefKeys[0]);
     memcpy(GamepadKeys, s_savedGamepadKeys, MAX_INPUT_SLOTS * sizeof GamepadKeys[0]);
+    MenuInput_Reset(s_savedMenuSuppression);
     InitInput();
     s_bindingsInstalled = 0;
 }
@@ -710,6 +716,7 @@ static S32 write_mode_lines(char *out, size_t n) {
                          "mode.resolution=%ux%u\n"
                          "mode.language=%d\n"
                          "input.keyboard=%d\n"
+                         "input.menu_suppressed=%u\n"
                          "setup.snapshot=%s\n"
                          "setup.reloaded=%d\n"
                          "setup.reload_clock=%u\n"
@@ -732,6 +739,7 @@ static S32 write_mode_lines(char *out, size_t n) {
                          (unsigned)ModeDesiredX, (unsigned)ModeDesiredY,
                          (int)Language,
                          LastInputWasKeyboard ? 1 : 0,
+                         (unsigned)MenuInput_Suppressed(),
                          s_snapInline ? "(inline)" : path_leaf(s_snapshot),
                          s_reloaded, s_reloadClock,
                          (unsigned)TimerRefHR,
@@ -2043,6 +2051,7 @@ static int mode_line_ignored(const char *line) {
            anything -- which is every run that started its replay by typing at the
            console. */
         "input.keyboard=",
+        "input.menu_suppressed=",
     };
     S32 i;
 
@@ -2895,6 +2904,8 @@ int Record_Play(const char *path) {
                              MAX_INPUT_SLOTS);
     if (!s_haveRecBindings)
         Console_Print("rec: %s carries no binding table; replaying through this run's own", path);
+    s_recMenuSuppression = 0;
+    RecFmt_ReadU32(s_headerBuf, "input.menu_suppressed=", &s_recMenuSuppression);
 
     /* The one header line that decides whether this replay reloads. A recording that
        reloaded its own snapshot begins from the post-load state, so a replay reaches

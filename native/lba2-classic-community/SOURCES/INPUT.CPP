@@ -3,8 +3,10 @@
 #include <stdio.h>
 
 #include <SYSTEM/KEYBOARD.H>
+#include <SYSTEM/TIMER.H>
 
 #include "INPUT.H"
+#include "MENU_INPUT.H"
 
 #include <SYSTEM/LOG.H>
 #include "JOYSTICK.H"
@@ -214,6 +216,7 @@ void WriteGamepadConfig(void) {
 
 //-------------------------------------------------------------------------
 void MyGetInput() {
+    S32 suppressConsole;
     // GetJoys() writes the gamepad state into TabKeys; GetInput() then folds
     // both keyboard and gamepad into Input through the combined table built by
     // InitInput(), so the pad honours NoRepeatInput like the keyboard does.
@@ -238,8 +241,10 @@ void MyGetInput() {
         if (Key == toggle_scancode)
             Key = 0;
     }
+    suppressConsole = Console_ShouldSuppressInputThisFrame();
+    MenuInput_Poll(suppressConsole || Console_IsOpen());
     /* When we just closed the console, suppress all game input for one frame so the toggle key doesn't trigger camera etc. */
-    if (Console_ShouldSuppressInputThisFrame()) {
+    if (suppressConsole) {
         Key = 0;
         Input = 0;
         MyKey = 0;
@@ -295,12 +300,21 @@ void MyGetInput() {
 void WaitNoInput(void) {
     MyGetInput();
 
-    while (MyKey OR Input
+    while (MyKey OR Input OR MenuInput_Held()
 #ifdef LBA_EDITOR
                OR MyClick
 #endif
     )
         MyGetInput();
+}
+
+void WaitNoMenuInput(void) {
+    if (!MenuInput_Held())
+        return;
+    SaveTimer();
+    while (MenuInput_Held())
+        MyGetInput();
+    RestoreTimer();
 }
 
 /*──────────────────────────────────────────────────────────────────────────*/

@@ -22,6 +22,7 @@
 #include "INPUT.H"
 #include "GAMEMENU.H"
 #include "MENU_KEYNAV.H"
+#include "MENU_INPUT.H"
 
 #include <FILEIO/SAVEPNG.H>
 
@@ -761,24 +762,15 @@ void MenuConfig(void) {
         CheckSaveLogPcx(PtrPalNormal);
 #endif
         if (!MyKey) {
-            if (Input & I_UP) {
-                MyKey = K_UP;
-            } else if (Input & I_DOWN) {
-                MyKey = K_DOWN;
-            } else if (Input & I_LEFT) {
-                MyKey = K_LEFT;
-            } else if (Input & I_RIGHT) {
-                MyKey = K_RIGHT;
-            }
+            MyKey = MenuInput_NavigationKey();
 
-            if (Input & ~I_JOY) {
+            if (!MyKey && (Input & ~I_JOY)) {
                 MyKey = K_ENTER;
             }
         }
 
-        if (!MyKey) {
-            MyKey = JoystickMenuAction();
-        }
+        if (!MyKey && (CheckKey(K_GAMEPAD_A) || CheckKey(K_GAMEPAD_START)))
+            MyKey = K_ENTER;
         ManageTime();
         time = TimerRefHR;
 
@@ -961,6 +953,7 @@ endloop:
     WriteConfigFile();
 
     InitWaitNoInput(Input | I_MENUS | I_FIRE);
+    MenuInput_Suppress(MENU_INPUT_ALL);
     InitWaitNoKey();
 
     if (memoclipwindow) {
@@ -1116,7 +1109,7 @@ void MenuGamepadConfig(void) {
         padMenuPrevBack = gBack;
 
         if (!MyKey) {
-            MyKey = JoystickMenuNavOnly();
+            MyKey = MenuInput_NavigationKey();
         }
 
         ManageTime();
@@ -1282,6 +1275,7 @@ endloop_pad:
     /* (and the pad's, saved now as the keyboard's are: MenuConfig) */
     WriteConfigFile();
     InitWaitNoInput(Input | I_MENUS | I_FIRE);
+    MenuInput_Suppress(MENU_INPUT_ALL);
     InitWaitNoKey();
 
     if (memoclipwindow) {
@@ -1379,6 +1373,7 @@ S32 ConfirmMenu(char *ask, char *ok, char *cancel) {
     blen = ((x1 - x0) / 2) - 80;
 
     InitWaitNoKey(); // attente de relache de touche dans la boucle
+    MenuInput_Suppress(MENU_INPUT_ALL);
 
     // on va dessiner en premier le bouton cancel (car oldselect==1)
     ptr = cancel;
@@ -1387,6 +1382,12 @@ S32 ConfirmMenu(char *ask, char *ok, char *cancel) {
         MyGetInput();
 
         MyKey = MenuKey_NumpadToNav(MyKey);
+        if (MyKey == K_UP || MyKey == K_DOWN)
+            MyKey = 0;
+        if (MenuInput_Get() & (MENU_INPUT_UP | MENU_INPUT_DOWN)) {
+            select ^= 1;
+            MenuInput_Suppress(MENU_INPUT_ALL);
+        }
 
         switch (MyKey) {
         case K_ESC:
@@ -1400,8 +1401,6 @@ S32 ConfirmMenu(char *ask, char *ok, char *cancel) {
 
         // pave numerique
         // touches de controle
-        case K_UP:
-        case K_DOWN:
         case K_PAGE_UP:
         case K_PAGE_DOWN:
         case K_HOME:

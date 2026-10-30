@@ -83,10 +83,32 @@ Done by three-way merge rather than plain patches. Our engine was committed onto
 - Story Mode new and continue; a save made and loaded headless.
 - The race game's Options page opens with its whole backdrop, and the editor starts and draws Desert Island.
 
+## Third round (2026-10-30): the input rework
+
+Merged at the user's request ("Do the upstream large rewrite to port more fixes"), with the fixes that build on it:
+
+| Upstream | Change | How |
+|---|---|---|
+| 5b1b7055 | input: separate UI navigation from gameplay bindings (MENU_INPUT.CPP/H; menus, inventory, memo, behaviour, holomap and resolution dialog read four UI directions) | Three-way merge with 3 conflicts. CONFIG.CPP keeps our Tab alias on the gamepad screen. GAMEMENU.CPP's save list takes upstream's `MenuInput_Get`. Menu() keeps our race game's window-fit relayout and redraw hook, but loses our pad-to-arrow translation, which the UI directions now do. |
+| af624c82 | input: fixed controls for shared UI navigation | clean on top |
+| d3df2dc7 | inventory: pause gameplay during the UI direction release | clean on top |
+| 0bb3b871 | input: release the resolution dialog's navigation before gameplay | clean on top |
+
+**Checks:**
+- Every race game page driven from the keyboard:
+  - the main menu (one row a press, from the first press);
+  - Track select's code and its list (13 rows down);
+  - Story Mode's code and its new/continue;
+  - the car grid with 7777;
+  - Options > Controls > keyboard.
+- A race driven with the arrow keys accelerated and stopped, and the Auto pilot races ran.
+- lba2.cfg is unchanged, so key remaps are kept.
+- **Not tested:** a gamepad (none on this machine).
+- A key pressed in the first seconds after the game starts can go unseen while the menu waits for every key to be up (upstream's release latch). The tests now wait 14 s, not 9.
+
 ## Left for later
 
 - **They need an upstream rework we haven't taken:**
-  - The input rework `5b1b7055` (separate UI navigation from gameplay bindings, 29 files). With it would come `0bb3b871`, `d3df2dc7` and `af624c82` (`WaitNoMenuInput`).
   - The Auto camera rework: `58542424` and `bb0e8dd1` (rain splashes on a camera cut or blend: FollowCamBlendCut, FollowCamBlending).
   - The platform layer (LIB386/PLATFORM, AUDIO_DEVICE, WAV_STREAM, SDK.H, MOUSE_CAPTURE):
     - audio streaming `c87fd56a`, `bed475f9`, `c8acd312`, `873dccd5`, `887bf037`, `241541ce`, `3cf55f5e`, `1c14ec24`, `f93b6a9c`;
