@@ -1018,6 +1018,8 @@ The user asked for a track on `CELEBRAT.ILE` -- Celebration Island before the st
 - **Its own scene: 223**, a copy of the original scene 95 that the build adds to `SCENE.HQR` (222 left empty: it is the holomap position of the story's arrow), with scene 95's place on the holomap copied to 223's (`AddScene`, `RaceTrackIsland.CopiesScene`). The island's one outside scene carries the statue's track, so both tracks can be built into one folder. The engine loads `CELEBRAT` for it in the race-track mode whatever the story has reached (the car file's `statue=0`; `statue=1` still means the statue's file, and without it the game decides: `RaceMod_StatueShown`), and the track is drawn on CELEBRAT's holomap picture (entry 28).
 - The texture page has no spare space, so as on the statue's island the road is painted with the island's own pixels: dark rock for the asphalt, its palest pixel -- a pale lilac -- for the white curbs.
 
+**Where the car is put back (2026-10-30):** `TrackSafePlace` takes Twinsen's section of road every 500 ms while he is on it -- where the road is raised, by the road under the car, else within 6 cells of the line -- and looks along from the last section, then over the whole lap. It was every frame within 3.5 cells of the line and 40 points of the last place: with roads up to 8 cells to each side, a car down one side was lost until the lap came round, 93 to 162 points behind on the test pilot (`racerescue`). A rescue into another scene now goes the same way (`RescueAt`, `SafeLine`) instead of leaving the car at the scene's start when its point failed.
+
 **Back on the road** (the engine, every track's race-track mode): a car that goes into the lava or the sea used to burn or drown Twinsen, and the game started again from his last save -- on this lap, after a leap that fell short. Now, while he races, the car is put back on the road instead: on the first opponent's line, two cells behind the last place it was on the ground beside it, facing the way the lap runs, stopped, with "Back on the road" on the display (`RaceMod_Rescue`, from `GereCodesJeu`; the lap's count doesn't see the move). The car file's `rescue=0` turns it off; a track with no opponents has no line, and there the game's own death stands.
 
 **The opponents' qualifying times** were their lap at their skill, 3 s either way at random -- more than a perfect lap's worth of luck on a 10-second lap. The spread is now a tenth of their lap, if that is less (`RACE_QUALIFY_SHARE`; laps over 30 s are as before).
@@ -4465,6 +4467,7 @@ All in RACEMOD.CPP (`PowerUps`, `GiveItem`, `GoldIntoBox`, `BoxFree`, `WheelPriz
   1 at HEAD). The log says "a mushroom left standing: Twinsen's item box is full" (at most once every 5 s).
 - **Ctrl uses it**, in the editor's Play and in the race game alike (`RaceMod_FilterInput`, the behaviour key, since 2026-10-16). **Q is
   gone**: nothing reads it, and nothing is selected. The box is ringed in gold while it holds the item Ctrl uses.
+- **Any wheel prize waits in the second box since 2026-10-30:** red always spins the slot machine now -- it gave a boost whenever the box was full, which was nearly always -- and what it pays goes into the second box when the first is full, as the golden Gazogem's does. Both full, a boost.
 - **The golden Gazogem's second box** (Otringal's roulette wheel, the green). Won with the box empty, it goes into the box. Won while the
   box holds an item, it waits in a second box beside it, drawn only while it holds something. When the box's item is used (Ctrl), the
   golden Gazogem moves into the box and the second box goes; the next press is its first boost. It stays in the box for its 8 s as
@@ -5495,3 +5498,14 @@ corners where that's quicker".
   (MAPTOOLS.CPP CJ_CAR_WALL), open to Twinsen on foot (TerrainFootOpen, set by RaceMod_FloorForFoot): he walks on them, the cars still
   can't climb them.
 - Twinsen placed at a scene's start or back after a clover (OBJECT.CPP) takes the raised road as his floor only a step up, as he walks.
+
+## Seen from the next cube (2026-10-30)
+
+"All power ups, ghosts, and racers are visible at all times on all tracks i.e. viewable from neighbouring cubes":
+
+- **Racers** already were: every scene has a copy of every opponent (checked on every track: `E:\dump\TEMP\review\eng\vis_audit.py`), placed by its place on the island.
+- **Mushrooms** were, but not from inside the car; **fake mushrooms, penguins and oil slicks** were only in the cube Twinsen was in. `DrawFarItems` draws them all where they are, up to `RACE_FAR_ITEMS` (40,000).
+- **Magic balls and lasers** go on past the cube's edge as the red ball did (`RACE_RED_SIGHT`).
+- **The ghost car** is drawn from the next cube too, half a cell out at most. `LBA2_CARVIS=1` logs it and the far items.
+
+The car's engine with the camera inside it is `RaceMod_EngineInside`: the game's 3D sound stops a sample whose place is off the screen, and the car's middle, under and behind the eye, always was.

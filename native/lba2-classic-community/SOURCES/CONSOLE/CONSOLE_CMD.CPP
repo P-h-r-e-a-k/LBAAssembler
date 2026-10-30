@@ -2684,6 +2684,20 @@ static void cmd_raceweb(int argc, const char *argv[]) {
     Console_Print("raceweb");
 }
 
+static void cmd_raceengine(int argc, const char *argv[]) {
+    (void)argc; (void)argv;
+    extern void RaceMod_TestEngine(void);
+    RaceMod_TestEngine();
+    Console_Print("raceengine");
+}
+
+static void cmd_racerescue(int argc, const char *argv[]) {
+    (void)argc; (void)argv;
+    extern void RaceMod_TestRescue(void);
+    RaceMod_TestRescue();
+    Console_Print("racerescue");
+}
+
 /* racecars: where every car of a race-track mod's race is (RACEMOD.CPP RaceMod_Cars) -- the editor's minimap asks while it plays one. */
 static void cmd_racecars(int argc, const char *argv[]) {
     (void)argc; (void)argv;
@@ -2961,6 +2975,10 @@ void Console_RegisterAll(void) {
                               "(1 the first); raceitem 12 is Twinsen's on the others.");
     Console_RegisterCommandEx("racescare", cmd_racescare, "Race-track test: a scare jumps up beside the road now", "racescare [n]",
                               "Scare n (1 the first; none: the nearest), as the Temple of Bu's do (RACEMOD.CPP scare=).");
+    Console_RegisterCommandEx("raceengine", cmd_raceengine, "Race-track test: is the car's engine loop playing", "raceengine",
+                              "In the log, with the camera view (RACEMOD.CPP).");
+    Console_RegisterCommandEx("racerescue", cmd_racerescue, "Race-track test: the car put back on the road now", "racerescue",
+                              "As from the sea (RACEMOD.CPP Rescue), the car's place on the lap and the safe place's in the log.");
     Console_RegisterCommandEx("raceweb", cmd_raceweb, "Race-track test: the giant web torn now", "raceweb [0|1|2|3]",
                               "The nearest giant web: 1 (none) torn as by Twinsen's car, the web over his screen too; 0 whole again; "
                               "2 its spider off up its web; 3 torn as by another car (RACEMOD.CPP web=).");

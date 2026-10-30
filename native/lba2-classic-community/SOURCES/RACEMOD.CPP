@@ -111,8 +111,8 @@
  *   it, and that car skids for RACE_SKID_MS -- once round and slowing to a standstill, sliding on the way it went (Twinsen's keys left
  *   out). The protection spell and the super jet-pack keep a car off it.
  *   Twinsen holds what he picks up in his item box, one item at a time, until he uses it with Ctrl (the behaviour key, which doesn't open
- *   the behaviour menu in the car); a mushroom he comes to with the box already full stays for the next car. Only the golden Gazogem, won on
- *   Otringal's roulette wheel while he holds an item, waits in a second box until that item is used. The test pilot uses each a second on.
+ *   the behaviour menu in the car); a mushroom he comes to with the box already full stays for the next car. Only an item won on Otringal's
+ *   roulette wheel while he holds one waits in a second box until that item is used. The test pilot uses each a second on.
  *   A penguin dropped (penguin_mode=walk, the default) walks the track at random -- along the first opponent's line, this way and that,
  *   a little to one side or the other -- until a car comes near it, and goes off; penguin_mode=fuse: it goes off a second after it is
  *   dropped.
@@ -737,7 +737,7 @@ static S32 s_raceRun = 0;                  // ... a sprint's, its best run, star
 // CheckObjCol, so a mushroom has to be gone before the car touches it -- the lava lake's test pilot sat jammed against one)
 #define RACE_MUSHROOM_REACH 1000
 #define RACE_MUSHROOM_BACK 15000           // ms until it grows back
-// (WX, WZ: where it stands on the island, HasWorld -- a mushroom of another cube's scene drawn from there, DrawFarMushrooms)
+// (WX, WZ: where it stands on the island, HasWorld -- a mushroom of another cube's scene drawn from there, DrawFarItems)
 typedef struct { int Scene, Actor; S32 Y; int HasY; S32 Back; S32 WX, WZ; int HasWorld; } T_RACE_MUSHROOM;
 static T_RACE_MUSHROOM s_mush[RACE_MAX_MUSHROOMS];
 static int s_nbMush = 0;
@@ -770,15 +770,16 @@ static int s_penguinWalk = 1;              // penguin_mode=walk (1) or fuse (0)
 #define RACE_PENGUIN_SIDE (1.5 * 512)      // how far to either side of the line it wanders
 #define RACE_PENGUIN_HOME (3 * 512)        // ... or, with no line, round where it was dropped
 // Twinsen's item box: one power-up (-1 empty) and when its roulette stops (it can be used from then) -- and a second box, seen only while
-// it holds something: the golden Gazogem won on Otringal's roulette wheel while the first box held an item, waiting there until that item
-// is used, then moved into the first (GoldIntoBox); and Ctrl last frame. (Two slots until 2026-10-17, Q choosing between them -- the user:
+// it holds something: an item won on Otringal's roulette wheel while the first box held one (the golden Gazogem alone until 2026-10-30, the
+// user: "any item a player gets from the roulette wheel goes into the second item box if they already have an item"), waiting there until
+// that item is used, then moved into the first (SecondIntoBox); and Ctrl last frame. (Two slots until 2026-10-17, Q choosing between them -- the user:
 // "Let's also reduce item boxes from two to one. Let's keep the second item box for Otringal for when a user gets the golden gazogem, and
 // only make it visible if they already have another item, when the user uses their primary item we can remove the additional item box
 // again and replace the first box with the golden gazogem item, this also means that we can drop the item selection key to simplify the
 // controls")
 #define RACE_ITEM_SLOTS 2
 #define RACE_BOX 0                         // the item box
-#define RACE_BOX_GOLD 1                    // the second box: a golden Gazogem waiting
+#define RACE_BOX_SECOND 1                    // the second box: an item won on the roulette wheel, waiting
 // the item box's roulette: this long, this many items going by -- quickly all the way, slowing only to half the rate it starts at -- and
 // then the item drawn, at once: popping up in the box as its ring flashes white, then gold, the item ready for Ctrl (ShownItem, ItemBox).
 // (The user, 2026-10-08: "let's have this go through them a lot faster so it only takes 4-5 seconds to decide on a powerup" -- 20 items;
@@ -3599,9 +3600,9 @@ void RaceMod_StopSound(U32 handle) {
     if (handle != 0xFFFFFFFF) StopOneSample(handle);
 }
 
-// Every frame (PowerUps): the item box's item (and the second box's golden Gazogem) with its roulette stopped -- the item shown -- its
-// pick-up sound played, once; the pick-up sound before it stopped. (The golden Gazogem moving from the second box into the first was
-// heard already: GoldIntoBox.)
+// Every frame (PowerUps): the item box's item (and the second box's) with its roulette stopped -- the item shown -- its
+// pick-up sound played, once; the pick-up sound before it stopped. (An item moving from the second box into the first was heard already:
+// SecondIntoBox.)
 static void PickupSoundFrame(S32 now) {
     for (int k = 0; k < RACE_ITEM_SLOTS; k++) {
         const int pu = s_item[k];
@@ -6353,11 +6354,17 @@ static void FaceTheCar(void) {
 // A car that goes into the lava or the sea (the ground's deadly codes) would burn or drown Twinsen, and the game would start again from
 // his last save -- on Celebration Island's lava lake, after a leap that fell short or a wheel off a causeway. While he races it is put back
 // on the road instead (OBJECT.CPP GereCodesJeu asks RaceMod_Rescue, and RaceMod_Frame does it): on the first opponent's line, a couple
-// of cells behind the last place the car was on the ground beside it, facing the way the lap runs, stopped. The lap's count doesn't see
-// the move. A track with no opponent has no line: there the game's own death stands.
+// of cells behind the section of road the car was last on (TrackSafePlace), facing the way the lap runs, stopped. The lap's count doesn't
+// see the move. A track with no opponent has no line: there the game's own death stands.
 #define RACE_RESCUE_BACK 2                 // line points (a cell each) behind the last safe place
-static int s_safeIndex = -1;               // the first opponent's line point the car was last on the ground beside
+#define RACE_SAFE_MS 500                   // how often the car's place on the road is taken (TrackSafePlace)
+#define RACE_SAFE_REACH (6 * 512.0)        // on a road on the ground, how far from the line a car is still on it
+#define RACE_SAFE_BEHIND 20                // the line points a safe place is looked for along from the last one, either side of it
+#define RACE_SAFE_AHEAD 80                 // (half a second on a super jet-pack is about 33 cells)
+static int s_safeIndex = -1;               // the first opponent's line point of the road section the car was last on
 static int s_safeScene = -1;               // ... the scene it was in then
+static S32 s_safeAt = 0;                   // ... when
+static double s_safeX = 0, s_safeY = 0, s_safeZ = 0;   // ... and where, island units
 static int s_rescue = 0;                   // asked for by GereCodesJeu, done by the next RaceMod_Frame
 static int s_rescueArrive = -1;            // a rescue into the safe place's scene: the line point, finished once the scene is in (RescueArrive)
 static int s_rescueScene = -1;             // ... the scene, its change still to ask for (RaceMod_EdgeCross)
@@ -6392,23 +6399,58 @@ static int LineOnGround(const T_RACE_OPPONENT *o, int i) {
     return abs(o->Y[i] - CalculAltitudeTerrain(o->X[i] - CurrentCubeX * 32768, o->Z[i] - CurrentCubeY * 32768, 0)) < 400;
 }
 
-static void TrackSafePlace(void) {
-    const T_RACE_OPPONENT *o = Guide();
-    const T_OBJET *hero = &ListObjet[NUM_PERSO];
-    if (!o || CubeMode != CUBE_EXTERIEUR || hero->Move == MOVE_BUGGY || (hero->WorkFlags & FALLING)) return;
-    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0, wy = hero->Obj.Y;
-    int best = -1;
-    double bd = 1e30;
-    // (near the last safe place: where the lap crosses itself the other road's points are as near)
-    const int window = s_safeIndex >= 0 ? 40 : o->Count;
-    for (int k = -window; k <= window; k++) {
-        const int i = ((s_safeIndex >= 0 ? s_safeIndex : 0) + k + 2 * o->Count) % o->Count;
-        const double d = LineDistance(o, i, wx, wy, wz);
-        if (d < bd) { bd = d; best = i; }
+// The line's section at a place of the road: its nearest point at about that height within `reach`, -1 none. First along from the last
+// section, so that a road beside this one or crossing it isn't taken for it, then -- after a jump, a teleporter, a stretch off the road --
+// over the whole lap.
+static int SafeSection(const T_RACE_OPPONENT *o, double x, double y, double z, double reach) {
+    for (int pass = s_safeIndex >= 0 ? 0 : 1; pass < 2; pass++) {
+        const int from = pass ? 0 : s_safeIndex - RACE_SAFE_BEHIND, count = pass ? o->Count : RACE_SAFE_BEHIND + RACE_SAFE_AHEAD + 1;
+        int best = -1;
+        double bd = 1e30;
+        for (int k = 0; k < count; k++) {
+            const int i = (from + k + o->Count) % o->Count;
+            if (fabs(o->Y[i] - y) > 600) continue;
+            const double d = LineDistance(o, i, x, y, z);
+            if (d < bd) { bd = d; best = i; }
+        }
+        if (best < 0) continue;
+        const double dx = o->X[best] - x, dz = o->Z[best] - z;
+        if (dx * dx + dz * dz < reach * reach) return best;
     }
-    if (best < 0 || !LineOnGround(o, best) || abs(o->Y[best] - hero->Obj.Y) > 600) return;
-    const double dx = o->X[best] - wx, dz = o->Z[best] - wz;
-    if (dx * dx + dz * dz < 3.5 * 512 * 3.5 * 512) { s_safeIndex = best; s_safeScene = NumCube; }
+    return -1;
+}
+
+// Twinsen's place on the road every RACE_SAFE_MS (2026-10-30, the user: "I've had a few times where I've been snapped to a totally wrong
+// stretch of road, let's track Twinsen's position every 500ms and restore him to the section of road he was nearest too when he went off
+// the track"), taken only while he is on it: where the road is raised, by the road under the car, its section the line's point nearest the
+// road's middle there (the line can run along the far side, nearer another road than he is); on a road on the ground, within RACE_SAFE_REACH
+// of the line. It was every frame, within 3.5 cells of the line and 40 points of the last place: the roads are up to 8 cells to each
+// side of their middle now, and a car down one side for 40 points was lost till the lap came round -- 93 to 162 points behind it, its
+// scene the last safe one, on a pilot 6 cells to the left round the Temple of Bú.
+static void TrackSafePlace(void) {
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const T_RACE_OPPONENT *o = Guide();
+    if (!o || CubeMode != CUBE_EXTERIEUR || hero->Move == MOVE_BUGGY || (hero->WorkFlags & FALLING) || s_rescue || s_rescueArrive >= 0
+            || s_flying >= 0 || s_arcOn >= 0 || s_loopOn >= 0) return;
+    const S32 now = TimerRefHR;
+    if (s_safeIndex >= 0 && now - s_safeAt < RACE_SAFE_MS) return;
+    s_safeAt = now;
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0, wy = hero->Obj.Y;
+    double x = wx, y = wy, z = wz, reach = RACE_SAFE_REACH, lat, t;
+    S32 ry;
+    int seg;
+    if (RaisedAt(wx, wz, hero->Obj.Y, 0, &ry, &seg, &lat, &t) && abs(ry - hero->Obj.Y) < 600) {
+        const T_RACE_RAISED *a = &s_raised[seg], *c = a + 1;
+        x = a->X + (c->X - a->X) * t;
+        y = a->Y + (c->Y - a->Y) * t;
+        z = a->Z + (c->Z - a->Z) * t;
+        reach = a->Half + (c->Half - a->Half) * t + 512;
+    }
+    const int best = SafeSection(o, x, y, z, reach);
+    if (best < 0 || !LineOnGround(o, best)) return;
+    s_safeIndex = best;
+    s_safeScene = NumCube;
+    s_safeX = wx; s_safeY = wy; s_safeZ = wz;
 }
 
 // A hit -- a land mine going off under the car (Mosquibees Island's way round its jump) -- stops the car dead and holds it for
@@ -8330,7 +8372,39 @@ static void RescuePlace(const T_RACE_OPPONENT *o, int i) {
     ListBuggy[0].Speed = 0;
     s_forgetLap = 1;
     s_safeIndex = i;
+    s_safeAt = TimerRefHR;
     Message("Back on the road");
+}
+
+// The line point to put the car back on: a little behind the safe place -- further where that's over a jump's gap -- or, behind it another
+// cube's (a safe place just past a cube's edge: the car stayed where it was), on from it. -1: none.
+static int SafeLine(const T_RACE_OPPONENT *o) {
+    const int n = o->Count, s = s_safeIndex;
+    int i = s_sprint ? (s > RACE_RESCUE_BACK ? s - RACE_RESCUE_BACK : 0) : ((s - RACE_RESCUE_BACK) % n + n) % n;
+    for (int k = 0; k < 40; k++) {
+        if (LineOnGround(o, i)) return i;
+        i = s_sprint ? (i > 0 ? i - 1 : 0) : (i - 1 + n) % n;
+    }
+    i = s;
+    for (int k = 0; k < 40; k++) {
+        if (LineOnGround(o, i)) return i;
+        i = s_sprint ? (i + 1 < n ? i + 1 : i) : (i + 1) % n;
+    }
+    return -1;
+}
+
+// The car put back in the safe place's scene: on the line there, or with no line on the ground there where it was last on the road.
+static void RescueAt(const T_RACE_OPPONENT *o) {
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const int i = SafeLine(o);
+    const double age = (TimerRefHR - s_safeAt) / 1000.0;
+    const S32 lx = (S32)(i >= 0 ? o->X[i] : s_safeX) - CurrentCubeX * 32768, lz = (S32)(i >= 0 ? o->Z[i] : s_safeZ) - CurrentCubeY * 32768;
+    hero->Obj.X = lx;
+    hero->Obj.Z = lz;
+    hero->Obj.Y = i < 0 ? (S32)s_safeY : s_nbRaised ? o->Y[i] : CalculAltitudeTerrain(lx, lz, 0);
+    RescuePlace(o, i >= 0 ? i : s_safeIndex);
+    Log_Info("[racemod] back on the road in scene %d: line point %d (%d,%d,%d), its place last on the road %.1f s ago", (int)NumCube, s_safeIndex, (int)hero->Obj.X,
+             (int)hero->Obj.Y, (int)hero->Obj.Z, age);
 }
 
 // A rescue into another scene (Rescue): once it is in -- the car at the scene's own start (asked for from RaceMod_Frame, inside AffScene,
@@ -8354,18 +8428,11 @@ static void BackInCar(void) {
 static void RescueArrive(void) {
     const T_RACE_OPPONENT *o = Guide();
     if (s_rescueArrive < 0 || NewCube != -1 || (S32)NumCube != s_safeScene) return;
-    const int i = s_rescueArrive;
     s_rescueArrive = -1;
-    if (!o || i >= o->Count || !LineOnGround(o, i)) return;
-    T_OBJET *hero = &ListObjet[NUM_PERSO];
-    const S32 lx = o->X[i] - CurrentCubeX * 32768, lz = o->Z[i] - CurrentCubeY * 32768;
-    hero->Obj.X = lx;
-    hero->Obj.Z = lz;
-    hero->Obj.Y = s_nbRaised ? o->Y[i] : CalculAltitudeTerrain(lx, lz, 0);
-    RescuePlace(o, i);
+    if (!o) return;
+    RescueAt(o);
     BackInCar();
     s_backInCarUntil = TimerRefHR + 3000;
-    Log_Info("[racemod] back on the road in scene %d: line point %d (%d,%d,%d)", s_safeScene, i, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z);
 }
 
 static void Rescue(void) {
@@ -8391,16 +8458,24 @@ static void Rescue(void) {
         Log_Info("[racemod] off the road out of scene %d (in %d): back to it", s_safeScene, (int)NumCube);
         return;
     }
-    int i = s_sprint ? (s_safeIndex > RACE_RESCUE_BACK ? s_safeIndex - RACE_RESCUE_BACK : 0) : ((s_safeIndex - RACE_RESCUE_BACK) % o->Count + o->Count) % o->Count;
-    for (int k = 0; k < 40 && !LineOnGround(o, i); k++) i = s_sprint ? (i > 0 ? i - 1 : 0) : (i - 1 + o->Count) % o->Count;
-    if (!LineOnGround(o, i)) return;
-    T_OBJET *hero = &ListObjet[NUM_PERSO];
-    const S32 lx = o->X[i] - CurrentCubeX * 32768, lz = o->Z[i] - CurrentCubeY * 32768;
-    hero->Obj.X = lx;
-    hero->Obj.Z = lz;
-    hero->Obj.Y = s_nbRaised ? o->Y[i] : CalculAltitudeTerrain(lx, lz, 0);
-    RescuePlace(o, i);
-    Log_Info("[racemod] back on the road: line point %d (%d,%d,%d)", i, (int)hero->Obj.X, (int)hero->Obj.Y, (int)hero->Obj.Z);
+    RescueAt(o);
+}
+
+// Console (tests): the car put back on the road now, as from the sea (racerescue), its place on the lap and the safe place's in the log.
+void RaceMod_TestRescue(void) {
+    const T_RACE_OPPONENT *o = Guide();
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    if (!o || s_safeIndex < 0) { Log_Info("[racemod] racerescue: no safe place yet"); return; }
+    const double wx = hero->Obj.X + CurrentCubeX * 32768.0, wz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    int near = 0;
+    double bd = 1e30;
+    for (int i = 0; i < o->Count; i++) {
+        const double d = LineDistance(o, i, wx, hero->Obj.Y, wz);
+        if (d < bd) { bd = d; near = i; }
+    }
+    Log_Info("[racemod] racerescue: the car at (%.0f,%d,%.0f) is by line point %d of %d, the safe place is point %d: %d points apart", wx, (int)hero->Obj.Y, wz, near,
+             o->Count, s_safeIndex, abs(near - s_safeIndex) < o->Count / 2 ? abs(near - s_safeIndex) : o->Count - abs(near - s_safeIndex));
+    s_rescue = 1;
 }
 
 // A car fallen off a raised road onto what is under it or beside it -- the ground, a roof -- with the lap high over it: off the lap, and
@@ -10172,8 +10247,9 @@ static void Shots(S32 now, int driving) {
                 Log_Info("[racemod] (the %s hit after %.1f s)", names[sh->Kind], age / 1000.0);
                 done = 1;
             }
-        // shown: its sprite in this scene, moved; a trail behind it (the red ball's also on along the road past the cube's edge, in sight)
-        const S32 lx = (S32)(sh->X - cx), lz = (S32)(sh->Z - cz), margin = red ? RACE_RED_SIGHT : 0;
+        // shown: its sprite in this scene, moved; a trail behind it (on along the road past the cube's edge, in sight: only the red ball
+        // until 2026-10-30)
+        const S32 lx = (S32)(sh->X - cx), lz = (S32)(sh->Z - cz), margin = RACE_RED_SIGHT;
         const int here = !done && CubeMode == CUBE_EXTERIEUR && lx >= -margin && lx < 32768 + margin && lz >= -margin && lz < 32768 + margin;
         const S16 sprite = laser ? (S16)(3 + 32768) : (S16)(8 + sh->Kind);
         if (sh->Extra >= 0 && (sh->Extra >= MAX_EXTRAS || ListExtra[sh->Extra].Sprite != sprite)) sh->Extra = -1;
@@ -10429,16 +10505,16 @@ static void Fakes(S32 now, int driving) {
 // a qualifying lap"); the race has them all.
 static int Qualifying(void) { return s_phase == PHASE_QUALIFYING; }
 
-// The golden Gazogem waiting in the second box moved into the item box, once that is empty (its item used, or its own golden Gazogem's
+// The item waiting in the second box moved into the item box, once that is empty (its item used, or its own golden Gazogem's
 // time up): ready for the next press, the second box gone again.
-static void GoldIntoBox(S32 now) {
-    if (s_item[RACE_BOX] >= 0 || s_item[RACE_BOX_GOLD] < 0) return;
-    s_item[RACE_BOX] = s_item[RACE_BOX_GOLD];
+static void SecondIntoBox(S32 now) {
+    if (s_item[RACE_BOX] >= 0 || s_item[RACE_BOX_SECOND] < 0) return;
+    s_item[RACE_BOX] = s_item[RACE_BOX_SECOND];
     s_itemAt[RACE_BOX] = now;
-    s_item[RACE_BOX_GOLD] = -1;
+    s_item[RACE_BOX_SECOND] = -1;
     // (its pick-up sound played as it came into the second box: PickupSoundFrame)
     s_pickupItem[RACE_BOX] = s_item[RACE_BOX]; s_pickupAt[RACE_BOX] = now;
-    Log_Info("[racemod] the golden Gazogem moves into the item box");
+    Log_Info("[racemod] %s moves into the item box", s_puName[s_item[RACE_BOX]]);
 }
 
 // Every frame, power-ups or not: Twinsen's car hidden while another body is drawn in its place -- the super jet-pack's (DrawSuperJet) or
@@ -10561,22 +10637,22 @@ static void PowerUps(S32 now, int driving) {
     // gold); the test pilot uses each item a moment after its roulette stops. (Shift until 2026-10-16, the inventory's key: the user,
     // "let's map it to Ctrl instead as this shouldn't be used when driving anyway". No key chooses an item since 2026-10-17: there is one)
     const int use = s_useHeld || CheckKey(K_CTRL) || CheckKey(K_CTRL_RIGHT);
-    // (the golden Gazogem's time over: gone from the box -- and one waiting in the second box moves in)
+    // (the golden Gazogem's time over: gone from the box -- and what waits in the second box moves in)
     if (s_item[RACE_BOX] == PU_GOLD && s_goldUntil && now >= s_goldUntil) {
         s_item[RACE_BOX] = -1; s_goldUntil = 0;
         Log_Info("[racemod] the golden Gazogem is used up");
-        GoldIntoBox(now);
+        SecondIntoBox(now);
     }
     const int gold = s_item[RACE_BOX] == PU_GOLD;
     int used = 0;
     if (driving && s_item[RACE_BOX] >= 0 && now >= s_itemAt[RACE_BOX] && ((use && !s_useWas)
             || (s_auto && s_autoDrop > 0 && now >= s_itemAt[RACE_BOX] + s_autoDrop && (!gold || now >= s_goldLast + RACE_GOLD_AUTO_MS)))) {
         const int pu = s_item[RACE_BOX];
-        // (the golden Gazogem stays in the box for its time, a boost at each press; any other item is used up, and a golden Gazogem
-        // waiting in the second box takes its place -- for the next press)
+        // (the golden Gazogem stays in the box for its time, a boost at each press; any other item is used up, and what waits in the
+        // second box takes its place -- for the next press)
         if (!gold) s_item[RACE_BOX] = -1;
         UseItem(pu, now);
-        if (!gold) GoldIntoBox(now);
+        if (!gold) SecondIntoBox(now);
         used = 1;
     }
     // (a press that used nothing, and why -- the user, 2026-10-21: items sometimes failing when the button is pressed; a press, unlike a
@@ -12218,8 +12294,10 @@ static int PocketPrize(int k) { return k == 0 ? 2 : k % 2 ? 1 : 0; }
 // The slot machine the roulette wheel's red pockets spin (the user, 2026-10-10: "For red we spin three wheels at the top middle of the
 // screen like a fruit machine, and they spin stopping one at a time from left to right displaying a powerup, let's make it so roughly 75%
 // of the time the user wins a power up prize"): three reels of power-ups at the top of the screen, stopping left to right; three the same,
-// that power-up won (RACE_SLOT_WIN of the time), into the item box -- kept free for it while the reels turn (BoxFree); with the box full
-// as the car lands, no spin: red's boost instead.
+// that power-up won (RACE_SLOT_WIN of the time), into the item box -- kept free for it while the reels turn (BoxFree) -- or, with an item
+// in it, the second box. (With the box full as the car landed it gave red's boost and no spin until 2026-10-30 -- nearly every time, a car
+// coming to the wheel with an item from the mushrooms on the way: the user, "Red seems to be always giving a boost on the roulette wheel
+// instead of the fruit machine wheels spinning".)
 #define RACE_SLOT_WIN 0.75
 #define RACE_SLOT_STOP0 1200               // ms: the first reel stops ...
 #define RACE_SLOT_STOP_GAP 700             // ... and each next this long after ...
@@ -12228,9 +12306,9 @@ static int PocketPrize(int k) { return k == 0 ? 2 : k % 2 ? 1 : 0; }
 static int s_slotReel[3], s_slotWin = 0;
 static S32 s_slotT0 = 0;
 
-// An item won into Twinsen's item box, shown at once (no roulette), if the box is empty. With it full, a golden Gazogem waits in the
-// second box -- seen only then -- until the box's item is used (GoldIntoBox); anything else isn't given (each caller says what instead).
-// Whether it went in.
+// An item won into Twinsen's item box, shown at once (no roulette), if the box is empty. With it full, it waits in the second box -- seen
+// only then -- until the box's item is used (SecondIntoBox); with both full it isn't given (each caller says what instead). Whether it
+// went in.
 static int GiveItem(int pu, S32 now) {
     if (s_item[RACE_BOX] < 0) {
         s_item[RACE_BOX] = pu;
@@ -12238,14 +12316,13 @@ static int GiveItem(int pu, S32 now) {
         Log_Info("[racemod] Twinsen wins %s, into the item box", s_puName[pu]);
         return 1;
     }
-    if (pu == PU_GOLD && s_item[RACE_BOX_GOLD] < 0) {
-        s_item[RACE_BOX_GOLD] = pu;
-        s_itemAt[RACE_BOX_GOLD] = now;
+    if (s_item[RACE_BOX_SECOND] < 0) {
+        s_item[RACE_BOX_SECOND] = pu;
+        s_itemAt[RACE_BOX_SECOND] = now;
         Log_Info("[racemod] Twinsen wins %s, into a second box: the item box holds %s", s_puName[pu], s_puName[s_item[RACE_BOX]]);
         return 1;
     }
-    if (pu == PU_GOLD) Log_Info("[racemod] Twinsen wins %s, but both boxes are full (%s, and a golden Gazogem waiting)", s_puName[pu], s_puName[s_item[RACE_BOX]]);
-    else Log_Info("[racemod] Twinsen wins %s, but the item box is full (%s)", s_puName[pu], s_puName[s_item[RACE_BOX]]);
+    Log_Info("[racemod] Twinsen wins %s, but both boxes are full (%s, and %s waiting)", s_puName[pu], s_puName[s_item[RACE_BOX]], s_puName[s_item[RACE_BOX_SECOND]]);
     return 0;
 }
 
@@ -12269,7 +12346,7 @@ static void SlotMachine(S32 now) {
     const S32 last = s_slotT0 + RACE_SLOT_STOP0 + 2 * RACE_SLOT_STOP_GAP;
     if (!s_slotPaid && now >= last) {
         s_slotPaid = 1;
-        // (into the box kept free for it; were it full after all, red's boost instead)
+        // (into the box kept free for it, or the second box; both full, red's boost instead)
         if (s_slotWin) {
             if (!GiveItem(s_slotReel[0], now)) s_boostUntil = now + RACE_WHEEL_RED_MS;
             Message("Winner!");
@@ -12370,20 +12447,20 @@ static void Wheel(S32 now, int driving) {
     }
 }
 
-// The pocket's prize as the car lands under the wheel (2 the green, 1 red, 0 black): the green the golden Gazogem, into the item box or,
-// with it full, the second box; red the slot machine's spin, its prize for the item box -- with the box full, red's boost instead; black
-// nothing. Without power-ups, red and the green a boost; the green's boost too with both boxes full.
+// The pocket's prize as the car lands under the wheel (2 the green, 1 red, 0 black): the green the golden Gazogem, red the slot machine's
+// spin, their prizes into the item box or, with it full, the second box; black nothing. Without power-ups, red and the green a boost;
+// a boost too with both boxes full, and for red with the reels still turning from the last drop.
 static void WheelPrize(int prize, S32 now) {
     const char *what = "black: nothing";
     if (prize == 2) {
         if (s_powerups && GiveItem(PU_GOLD, now)) { Message("Super jackpot! A golden Gazogem!"); what = "the green: super jackpot, a golden Gazogem"; }
         else { s_boostUntil = now + RACE_WHEEL_ZERO_MS; Message("Super jackpot!"); what = "the green: super jackpot, a boost"; }
     } else if (prize == 1) {
-        if (s_powerups && BoxFree()) { SlotSpin(now); what = "red: the slot machine"; }
+        if (s_powerups && !(s_slotOn && !s_slotPaid)) { SlotSpin(now); what = "red: the slot machine"; }
         else {
             s_boostUntil = now + RACE_WHEEL_RED_MS;
             Message("Red: a boost!");
-            what = s_powerups ? "red: a boost, the item box full (no slot machine)" : "red: a boost";
+            what = s_powerups ? "red: a boost, the reels still turning" : "red: a boost";
         }
     } else Message("Black: no luck");
     Log_Info("[racemod] roulette wheel: %s", what);
@@ -13989,6 +14066,29 @@ static int EngineOf(S32 num) {
 
 S32 RaceMod_EngineHeard(S32 num) { return EngineOf(num) >= 0; }
 
+// Twinsen's car's engine with the camera inside it (the user, 2026-10-30: "Car engine sound apparently doesn't play when the camera view
+// is switched to inside car"): the eye over the seat, the car's middle under and behind it is off the screen, where the game's 3D sound
+// stops a sample and won't start it again (HQ_3D_ChangePanSample, GiveBalance). Played in the middle instead, as loud as from behind
+// the car; PERSO.CPP leaves it to this.
+extern void InitParmSample(void);
+S32 RaceMod_EngineInside(S32 num) {
+    if (num != NUM_PERSO || !InsideView()) return 0;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    ParmSampleVolume = hero->SampleVolume;
+    if ((hero->SampleAlways & 0xFF000000) && IsSamplePlaying(hero->SampleAlways)) { HQ_ChangePanSample(hero->SampleAlways, 127, 64); return 1; }
+    const U32 sample = (hero->SampleAlways >> 8) & 0xFFFF;
+    const U32 voice = HQ_MixSample(sample, 0x1000, 0, 0, 64, 127);
+    hero->SampleAlways = voice ? voice : sample << 8;
+    InitParmSample();
+    return 1;
+}
+
+// Console (tests): whether Twinsen's car's engine loop is playing, in the log (raceengine).
+void RaceMod_TestEngine(void) {
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    Log_Info("[racemod] raceengine: %s, the car's engine loop %s (sample %u)", s_viewName[s_camView], IsSamplePlaying(hero->SampleAlways) ? "playing" : "NOT playing", (unsigned)hero->SampleAlways);
+}
+
 // FICHE.CPP: an opponent's car's driving animation sounding its engine (F_SAMPLE_REPEAT) at that pitch -- started by EnginesHeard
 void RaceMod_EngineAnim(S32 num, S32 pitch) {
     const int n = EngineOf(num);
@@ -14981,11 +15081,12 @@ static void DrawGhost(S32 now, S32 width, S32 height) {
         if (!s_trial || s_ghostMode <= 0 || s_phase != PHASE_RACE || s_laps <= 0 || s_place) return;
         // (at the simulation's clock, as the car on the screen is: at the frame's, it moved on between the steps the car stood still for)
         if (!GhostAt(&s_ghost, SimNow() - s_lapStart, &x, &y, &z, &alpha, &beta, &gamma, &body, &anim, &island)) return;
-        // (only in this cube: past its edge its places are the next cube's, half a cell on)
-        if (GhostCubeX(x) != CurrentCubeX || GhostCubeX(z) != CurrentCubeY) return;
     }
+    // (in the next cube too -- only this cube's until 2026-10-30, the user: "all power ups, ghosts, and racers are visible at all times on
+    // all tracks i.e. viewable from neighbouring cubes" -- half a cell out at most: a cube's change puts a car half a cell on)
     if (island != Island || body < 0) return;
     (void)now;
+    if (getenv("LBA2_CARVIS")) { static int last = -1; const int off = !InThisCube(x, z); if (off != last) { Log_Info("[carvis] ghost drawn %s (scene %d)", off ? "from the next cube" : "in this cube", (int)NumCube); last = off; } }
     if (body != s_ghostBody || anim != s_ghostAnim) {
         if (!GivePtrBody(body) || (anim >= 0 && !GivePtrAnim(anim))) {
             static int said = 0;
@@ -16091,34 +16192,59 @@ static void HudSmall(S32 x, S32 y, const char *text, int align) { HudSmallIn(x, 
 // The super jet-pack in the car's place (Twinsen's car hidden: PowerUps): the model at the car's size, lying flat and a little over the
 // road, drawn after the scene's objects as they are drawn -- tested against the depth of the ground and the decor, in the colours of
 // things near -- its place on the screen marked to be drawn over next frame.
-// The mushrooms of the scenes round this one's cube (the scenes' own actors, each shown only while Twinsen is in its scene: a row just
-// over a cube's edge came into sight at the last moment, the user, 2026-10-27: "some of the mushrooms not visible until the last second"),
-// drawn where they stand -- as far as the island draws, RACE_FAR_MUSHROOMS -- the body the mushrooms of this scene have.
-#define RACE_FAR_MUSHROOMS 40000
-static int s_mushBody = -1;
-static void DrawFarMushrooms(void) {
-    if (!s_powerups || s_trial || Qualifying() || CubeMode != CUBE_EXTERIEUR || NewCube != -1 || InsideView()) return;
-    if (s_mushBody < 0)
-        for (int i = 0; i < s_nbMush && s_mushBody < 0; i++) {
-            const int a = MushroomActor(&s_mush[i]);
-            if (a >= 0 && ListObjet[a].Obj.Body.Num >= 0) s_mushBody = ListObjet[a].Obj.Body.Num;
-        }
-    if (s_mushBody < 0) return;
-    U8 *shape = (U8 *)GivePtrBody(s_mushBody);
-    if (!shape) return;
+// What lies in the scenes round this one's cube, drawn where it is -- as far as the island draws, RACE_FAR_ITEMS. Mushrooms: the scenes' own
+// actors, each shown only while Twinsen is in its scene (a row just over a cube's edge came into sight at the last moment, the user,
+// 2026-10-27: "some of the mushrooms not visible until the last second"). Fake mushrooms, penguins and oil slicks: this scene's copies
+// show only what is in this cube (the user, 2026-10-30: "all power ups, ghosts, and racers are visible at all times on all tracks i.e.
+// viewable from neighbouring cubes"). Each with the body this scene's copies of it have.
+#define RACE_FAR_ITEMS 40000
+static int s_mushBody = -1, s_fakeBody = -1, s_penguinBody = -1, s_oilBody = -1;
+static int PoolBody(const int *scene, const int *actor, int n, int *body) {
+    for (int k = 0; k < n && *body < 0; k++)
+        if (const int a = PoolActor(scene, actor, k)) if (ListObjet[a].Obj.Body.Num >= 0) *body = ListObjet[a].Obj.Body.Num;
+    return *body;
+}
+// One thing at (wx, y, wz), world units, if it is within RACE_FAR_ITEMS of the car; `drawn` counts them, the first setting up the filler.
+static void DrawFarItem(int body, double wx, S32 y, double wz, S32 alpha, S32 beta, S32 gamma, int *drawn) {
+    if (body < 0) return;
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const S32 x = (S32)(wx - CurrentCubeX * 32768.0), z = (S32)(wz - CurrentCubeY * 32768.0);
+    const double dx = x - hero->Obj.X, dz = z - hero->Obj.Z;
+    if (dx * dx + dz * dz > (double)RACE_FAR_ITEMS * RACE_FAR_ITEMS) return;
+    U8 *shape = (U8 *)GivePtrBody(body);
+    if (!shape) return;
+    if (!(*drawn)++) { Switch_Fillers(FILL_POLY_FOG_NZW); SetCLUT(PalLevel); }
+    if (BodyDisplay(x, y, z, alpha, beta, gamma, shape)) MarkDrawn();
+}
+static void DrawFarItems(void) {
+    if (CubeMode != CUBE_EXTERIEUR || NewCube != -1) return;
     const T_RACE_DRAW kept = DrawKept();
     int drawn = 0;
-    for (int i = 0; i < s_nbMush; i++) {
-        const T_RACE_MUSHROOM *m = &s_mush[i];
-        if (!m->HasWorld || !m->HasY || m->Scene == (int)NumCube || m->Back) continue;
-        const S32 x = m->WX - CurrentCubeX * 32768, z = m->WZ - CurrentCubeY * 32768;
-        const double dx = x - hero->Obj.X, dz = z - hero->Obj.Z;
-        if (dx * dx + dz * dz > (double)RACE_FAR_MUSHROOMS * RACE_FAR_MUSHROOMS) continue;
-        if (!drawn++) { Switch_Fillers(FILL_POLY_FOG_NZW); SetCLUT(PalLevel); }
-        if (BodyDisplay(x, m->Y, z, 0, 0, 0, shape)) MarkDrawn();
+    if (s_powerups && !s_trial && !Qualifying()) {
+        if (s_mushBody < 0)
+            for (int i = 0; i < s_nbMush && s_mushBody < 0; i++) {
+                const int a = MushroomActor(&s_mush[i]);
+                if (a >= 0 && ListObjet[a].Obj.Body.Num >= 0) s_mushBody = ListObjet[a].Obj.Body.Num;
+            }
+        for (int i = 0; i < s_nbMush; i++) {
+            const T_RACE_MUSHROOM *m = &s_mush[i];
+            if (m->HasWorld && m->HasY && m->Scene != (int)NumCube && !m->Back) DrawFarItem(s_mushBody, m->WX, m->Y, m->WZ, 0, 0, 0, &drawn);
+        }
     }
-    if (getenv("LBA2_CARVIS")) { static int lastDrawn = -1; if (drawn != lastDrawn) { Log_Info("[carvis] far mushrooms drawn %d (scene %d, body %d)", drawn, (int)NumCube, s_mushBody); lastDrawn = drawn; } }
+    PoolBody(s_fakeScene, s_fakeActor, s_nbFakeActors, &s_fakeBody);
+    for (int i = 0; i < RACE_MAX_FAKES; i++)
+        if (s_fakes[i].On && !InThisCube(s_fakes[i].X, s_fakes[i].Z)) DrawFarItem(s_fakeBody, s_fakes[i].X, (S32)s_fakes[i].Y, s_fakes[i].Z, 0, 0, 0, &drawn);
+    PoolBody(s_penguinScene, s_penguinActor, s_nbPenguinActors, &s_penguinBody);
+    for (int i = 0; i < RACE_MAX_PENGUINS; i++) {
+        const T_RACE_PENGUIN *pg = &s_penguins[i];
+        if (pg->On && !InThisCube(pg->X, pg->Z)) DrawFarItem(s_penguinBody, pg->X, (S32)pg->Y, pg->Z, 0, TurnOf(pg->Heading), 0, &drawn);
+    }
+    PoolBody(s_oilScene, s_oilActor, s_nbOilActors, &s_oilBody);
+    for (int i = 0; i < RACE_MAX_SLICKS; i++) {
+        const T_RACE_SLICK *sl = &s_slicks[i];
+        if (sl->On && !InThisCube(sl->X, sl->Z)) DrawFarItem(s_oilBody, sl->X, (S32)sl->Y, sl->Z, sl->Alpha, 0, sl->Gamma, &drawn);
+    }
+    if (getenv("LBA2_CARVIS")) { static int lastDrawn = -1; if (drawn != lastDrawn) { Log_Info("[carvis] far items drawn %d (scene %d, mushroom body %d)", drawn, (int)NumCube, s_mushBody); lastDrawn = drawn; } }
     if (drawn) DrawBack(&kept);
 }
 
@@ -17546,7 +17672,7 @@ void RaceMod_Draw(void) {
     }
     // (his car parked, him on foot: the car he drives as drawn in its place -- HeroLook)
     if (Comportement != C_BUGGY && s_raceParked) DrawDriveAs(TimerRefHR);
-    DrawFarMushrooms();
+    DrawFarItems();
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
     const int items = s_powerups && s_nbMush > 0 && !s_trial && !Qualifying();
     // (the display off -- hud=0 -- and no items: no display, but the scene's own drawn things all the same -- the car Twinsen drives as,
@@ -17575,11 +17701,11 @@ void RaceMod_Draw(void) {
     DrawWebScreen(now, width, height);
     DrawPassage(now, width, height);
     // the item box, top left, ringed in gold once its roulette has stopped on the item Ctrl uses -- and beside it the second box, only
-    // while a golden Gazogem waits in it
+    // while an item waits in it
     if (items) {
         const S32 size = height / 8 > 60 ? height / 8 : 60, gap = size / 5;
         for (int k = 0; k < RACE_ITEM_SLOTS; k++) {
-            if (k == RACE_BOX_GOLD && s_item[k] < 0) continue;
+            if (k == RACE_BOX_SECOND && s_item[k] < 0) continue;
             const S32 settled = s_item[k] >= 0 ? now - s_itemAt[k] : 0;
             ItemBox(16 + k * (size + gap), top + 16, size, ShownItem(k, now), k == RACE_BOX && s_item[k] >= 0 && settled >= 0, settled, settled, now);
             // (the golden Gazogem in use: a gold bar under the box, its time left)
@@ -17777,7 +17903,7 @@ static void ResetTrack(void) {
     s_railBack = s_railUp = s_railLead = 0; s_railTouch = 0; s_railHeld = 0; s_railSight = s_railSightKept = 0; s_railAim = RAIL_CAMERA_AIM; s_railSide = 0;
     s_jumpLo = 0.6; s_jumpHi = 4.0; s_jumpRate = 0; s_jumpFrac = 0; s_jumpOver = 0;
     s_autoIndex = -1;
-    s_faced = 0; s_stuckSince = 0; s_rescueScene = -1; s_backInCarUntil = 0; s_safeIndex = -1; s_safeScene = -1; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;
+    s_faced = 0; s_stuckSince = 0; s_rescueScene = -1; s_backInCarUntil = 0; s_safeIndex = -1; s_safeScene = -1; s_safeAt = 0; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0;
     s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_place = s_racers = 0;
     ListVarGame[209] = 0;
@@ -17813,7 +17939,7 @@ static void ResetTrack(void) {
     if (s_heroBody >= 0 && Comportement == C_BUGGY && (ListObjet[NUM_PERSO].GenBody == s_heroBody || (s_heroFire >= 0 && ListObjet[NUM_PERSO].GenBody == s_heroFire)))
         InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroBody = s_heroFire = -1; s_heroBodyChecked = 0;
-    s_penguinWalk = 1; s_item[RACE_BOX] = s_item[RACE_BOX_GOLD] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
+    s_penguinWalk = 1; s_item[RACE_BOX] = s_item[RACE_BOX_SECOND] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
     s_heroDraft = 1;
     s_ownTrack = 0; s_loaded[0] = 0;

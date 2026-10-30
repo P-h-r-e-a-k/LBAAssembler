@@ -90,6 +90,7 @@
  * times kept before 2026-10-18, "<track>|<time ms>|<best lap ms>|<car>|<date>[|<laps>]" -- is kept as it is but not shown, as are other
  * tracks' lines and lines that can't be read: a whole trial's time is never taken for a lap's.
  */
+#include <ctype.h>
 #include "C_EXTERN.H"
 #include "CONFIG_FILE.H"
 #include "CONSOLE/CONSOLE.H"
@@ -2556,7 +2557,8 @@ static S32 StoryMode(void) {
 // The car grid (Track select's): every car of the game, 7 by 7 a page, each drawn small -- once, as its page opens, kept (s_thumb) -- the
 // one chosen large on the right, turning as the car page's do, its name and its stats under it. The arrows (or a pad) go through the
 // cars, a row up and down, page to page past the ends; Page up and Page down a page; Enter (or a click on the car chosen, or its big
-// box) takes it, Esc goes back. The car taken (its place in s_grid), or -1.
+// box) takes it, Esc goes back. The car taken (its place in s_grid), or -1. Letters typed look for a car by its name and Tab (or a click
+// on the line that says so) goes through the cars strongest in a stat: GridFilter.
 #define RG_GRID_COLS 7
 #define RG_GRID_ROWS 7
 #define RG_GRID_PAGE (RG_GRID_COLS * RG_GRID_ROWS)
@@ -2567,6 +2569,48 @@ static U8 s_thumb[RG_GRID_PAGE][RG_CELL_W * RG_CELL_H];
 static int s_thumbPage = -1;                // the page s_thumb holds (-1: none) ...
 static S32 s_thumbX = 0, s_thumbY = 0;      // ... drawn with its grid here
 
+// The cars the grid shows (the user, 2026-10-30: "Let's add some filters on the car select dialog to let a user find a car easier, perhaps
+// a name search, or filtering by stats"): those with the letters typed anywhere in their names, and with a stat chosen those with
+// RG_FILTER_STARS or more of it, the strongest first. A letter or a stat that would leave no car isn't taken: the view is never empty.
+#define RG_GRID_FILTERS 4
+#define RG_FILTER_STARS 3.5
+#define RG_FIND_MAX 24
+#define RG_FIND_SAID_MS 1500                // ("No car called ..." said this long)
+static const char *const s_gridFilterName[RG_GRID_FILTERS] = {"All cars", "Acceleration", "Top speed", "Handling"};
+static int s_gridView[RG_MAX_GRID], s_nbGridView = 0;
+static int NameHas(const char *name, const char *find) {
+    for (; *name; name++) {
+        size_t k = 0;
+        while (find[k] && tolower((unsigned char)name[k]) == find[k]) k++;
+        if (!find[k]) return 1;
+    }
+    return !find[0];
+}
+// (the view changed: the car chosen kept if it is still in it, else the first; the small cars drawn again)
+static void GridViewChanged(int car, int *sel, int *pages, const char *find, int stat);
+static int GridFilter(const char *find, int stat) {
+    int view[RG_MAX_GRID], n = 0;
+    for (int i = 0; i < s_nbGrid; i++) {
+        if (!NameHas(s_grid[i].Name, find) || (stat && s_grid[i].Stars[stat - 1] < RG_FILTER_STARS)) continue;
+        // (the strongest first; cars as strong in the grid's order)
+        int at = n++;
+        for (; stat && at > 0 && s_grid[view[at - 1]].Stars[stat - 1] < s_grid[i].Stars[stat - 1]; at--) view[at] = view[at - 1];
+        view[at] = i;
+    }
+    if (!n) return 0;
+    memcpy(s_gridView, view, n * sizeof(view[0]));
+    s_nbGridView = n;
+    return 1;
+}
+
+static void GridViewChanged(int car, int *sel, int *pages, const char *find, int stat) {
+    *sel = 0;
+    for (int i = 0; i < s_nbGridView; i++) if (s_gridView[i] == car) *sel = i;
+    *pages = (s_nbGridView + RG_GRID_PAGE - 1) / RG_GRID_PAGE;
+    s_thumbPage = -1;
+    Log_Info("[racegame] the car grid: \"%s\", %s: %d cars", find, s_gridFilterName[stat], s_nbGridView);
+}
+
 // The page's small cars drawn into s_thumb: each measured in the car page's box (RaceMod_DrawBody keeps it), its cell's backdrop put
 // back and shaded, the car drawn in it, a car still locked dimmed.
 static void GridThumbs(int page, S32 gx, S32 gy, S32 cx, S32 oy) {
@@ -2574,8 +2618,8 @@ static void GridThumbs(int page, S32 gx, S32 gy, S32 cx, S32 oy) {
     int drawn = 0;
     for (int k = 0; k < RG_GRID_PAGE; k++) {
         const int idx = page * RG_GRID_PAGE + k;
-        if (idx >= s_nbGrid) break;
-        const T_RG_CAR *c = &s_grid[idx];
+        if (idx >= s_nbGridView) break;
+        const T_RG_CAR *c = &s_grid[s_gridView[idx]];
         const S32 x = gx + (k % RG_GRID_COLS) * RG_CELL_W, y = gy + (k / RG_GRID_COLS) * RG_CELL_H;
         if (c->Body >= 0) RaceMod_DrawBody(cx - 228, 132 + oy, cx + 228, RG_CAR_BOTTOM - 2 + oy, c->Body, 0, 1, c->Anim);
         CopyBlock(x, y, x + RG_CELL_W - 1, y + RG_CELL_H - 1, Screen, x, y, Log);
@@ -2605,14 +2649,18 @@ static int GridPage(const char *what, int trial) {
         sel = 0;
         while (sel + 1 < s_nbGrid && !TakenFor(&s_grid[sel], trial)) sel++;
     }
-    const int pages = (s_nbGrid + RG_GRID_PAGE - 1) / RG_GRID_PAGE;
+    char find[RG_FIND_MAX + 1] = "", refused[RG_FIND_MAX + 2] = "";
+    int stat = 0;
+    S32 refusedAt = 0;
+    GridFilter(find, stat);
+    int pages = (s_nbGridView + RG_GRID_PAGE - 1) / RG_GRID_PAGE;
     S32 padDir;
     PageLoopStart(&padDir);
     // (the backdrop may not be the one the small cars were drawn on: a race's, a window resized)
     s_thumbPage = -1;
     S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
     int chosen = -2, was = -1;
-    S32 start = TimerRefHR, codeKey = MyKey;
+    S32 start = TimerRefHR, codeKey = MyKey, findKey = MyKey;
     char typed[5] = "";
     s_allCarsAt = 0;
     Log_Info("[racegame] the car grid: %d cars on %d page(s), %s chosen", s_nbGrid, pages, s_grid[sel].Name);
@@ -2622,18 +2670,41 @@ static int GridPage(const char *what, int trial) {
         if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; s_thumbPage = -1; }
         // (every car unlocked: the small cars drawn again, none dimmed)
         if (AllCarsCode(&codeKey, typed)) s_thumbPage = -1;
+        // (a key struck, as CodePage's: a letter or -- with some typed -- a space for the name looked for, Backspace one back, Tab the next stat)
+        const S32 key = MyKey;
+        const int letter = key >= K_A && key <= K_Z, typing = letter || (key == K_SPACE && find[0]);
+        int nextStat = 0;
+        if (key != findKey) {
+            findKey = key;
+            const int car = s_gridView[sel];
+            const size_t n = strlen(find);
+            if (typing && n < RG_FIND_MAX) {
+                find[n] = letter ? (char)('a' + (key - K_A)) : ' ';
+                find[n + 1] = 0;
+                if (GridFilter(find, stat)) GridViewChanged(car, &sel, &pages, find, stat);
+                else {
+                    snprintf(refused, sizeof(refused), "%s", find);
+                    refusedAt = TimerRefHR;
+                    find[n] = 0;
+                }
+            } else if (key == K_BACKSPACE && n > 0) {
+                find[n - 1] = 0;
+                GridFilter(find, stat);
+                GridViewChanged(car, &sel, &pages, find, stat);
+            } else if (key == K_TAB) nextStat = 1;
+        }
         // the layout: the grid on the left, the car chosen on the right
         // (the stats' labels in the menus' font are about 200 wide: the panel takes half the canvas, the grid the other half)
         const S32 gx = cx - 314, gy = 50 + oy, gx1 = gx + RG_GRID_COLS * RG_CELL_W, gy1 = gy + RG_GRID_ROWS * RG_CELL_H;
         const S32 px0 = cx + 4, px1 = cx + 316, py0 = 46 + oy, py1 = 198 + oy, pcx = (px0 + px1) / 2;
         S32 dx, dy;
-        if (Nav(&padDir, &dx, &dy)) {
+        if (!typing && Nav(&padDir, &dx, &dy)) {
             const int d = dx ? dx : dy * RG_GRID_COLS;
-            sel = ((sel + d) % s_nbGrid + s_nbGrid) % s_nbGrid;
+            sel = ((sel + d) % s_nbGridView + s_nbGridView) % s_nbGridView;
         } else if (MyKey == K_PAGE_DOWN || MyKey == K_PAGE_UP) {
             const int page = ((sel / RG_GRID_PAGE + (MyKey == K_PAGE_DOWN ? 1 : -1)) % pages + pages) % pages;
             sel = page * RG_GRID_PAGE + sel % RG_GRID_PAGE;
-            if (sel >= s_nbGrid) sel = s_nbGrid - 1;
+            if (sel >= s_nbGridView) sel = s_nbGridView - 1;
             InitWaitNoKey();
         }
         // (the mouse: a click on a car chooses it, on the car chosen -- or its big box -- takes it; the right button back)
@@ -2643,10 +2714,17 @@ static int GridPage(const char *what, int trial) {
         if (click == 2) chosen = -1;
         else if (click == 1 && mx >= gx && mx < gx1 && my >= gy && my < gy1) {
             const int idx = (sel / RG_GRID_PAGE) * RG_GRID_PAGE + (int)((my - gy) / RG_CELL_H) * RG_GRID_COLS + (int)((mx - gx) / RG_CELL_W);
-            if (idx < s_nbGrid) { if (idx == sel) take = 1; else sel = idx; }
+            if (idx < s_nbGridView) { if (idx == sel) take = 1; else sel = idx; }
         } else if (click == 1 && mx >= px0 && mx <= px1 && my >= py0 && my <= py1) take = 1;
-        if (sel != was) { was = sel; start = TimerRefHR; }
-        const T_RG_CAR *c = &s_grid[sel];
+        else if (click == 1 && mx >= px0 && mx <= px1 && my >= gy1 + 30 && my <= gy1 + 66) nextStat = 1;
+        if (nextStat) {
+            // (the next stat with a car to show: all cars always has, the letters having left one)
+            const int car = s_gridView[sel];
+            do stat = (stat + 1) % RG_GRID_FILTERS; while (!GridFilter(find, stat));
+            GridViewChanged(car, &sel, &pages, find, stat);
+        }
+        if (s_gridView[sel] != was) { was = s_gridView[sel]; start = TimerRefHR; }
+        const T_RG_CAR *c = &s_grid[s_gridView[sel]];
         const int page = sel / RG_GRID_PAGE;
         // (the car chosen measured first, in the car page's box, under the backdrop drawn next; then the page's small cars when it is new)
         RaceMod_DrawBody(cx - 228, 132 + oy, cx + 228, RG_CAR_BOTTOM - 2 + oy, c->Body, 0, 1, c->Anim);
@@ -2659,7 +2737,7 @@ static int GridPage(const char *what, int trial) {
         ShadeBoxBlk(cx - 318, 4 + oy, cx + 316, 38 + oy, MENU_SHADE_LVL);
         Text(cx, 8 + oy, header, RG_ORANGE);
         ShadeBoxBlk(gx - 4, gy - 4, gx1 + 3, gy1 + 3, MENU_SHADE_LVL);
-        for (int k = 0; k < RG_GRID_PAGE && page * RG_GRID_PAGE + k < s_nbGrid; k++) {
+        for (int k = 0; k < RG_GRID_PAGE && page * RG_GRID_PAGE + k < s_nbGridView; k++) {
             const S32 x = gx + (k % RG_GRID_COLS) * RG_CELL_W, y = gy + (k / RG_GRID_COLS) * RG_CELL_H;
             for (S32 r = 0; r < RG_CELL_H; r++) memcpy((U8 *)Log + TabOffLine[y + r] + x, &s_thumb[k][r * RG_CELL_W], RG_CELL_W);
         }
@@ -2672,7 +2750,17 @@ static int GridPage(const char *what, int trial) {
         char text[256], line[96];
         snprintf(line, sizeof(line), "Page %d of %d", page + 1, pages);
         Text((gx + gx1) / 2, gy1 + 10, line, RG_GREY);
+        // (under it what is looked for, and beside it the stat)
         if (s_allCarsAt && TimerRefHR - s_allCarsAt < RG_ALL_CARS_MS) Text((gx + gx1) / 2, gy1 + 36, "All cars unlocked", RG_ORANGE);
+        else if (refused[0] && TimerRefHR - refusedAt < RG_FIND_SAID_MS) {
+            snprintf(line, sizeof(line), "No car called %s", refused);
+            Text((gx + gx1) / 2, gy1 + 36, line, RG_ORANGE);
+        } else if (find[0]) {
+            snprintf(line, sizeof(line), "Name: %s", find);
+            Text((gx + gx1) / 2, gy1 + 36, line, LBAWHITE);
+        } else Text((gx + gx1) / 2, gy1 + 36, "Type a name to search", RG_GREY);
+        snprintf(line, sizeof(line), "Tab: %s", s_gridFilterName[stat]);
+        Text(pcx, gy1 + 36, line, stat ? LBAWHITE : RG_GREY);
         // the car chosen: turning in its box, dark and padlocked while it is locked, its name and stats under it
         const int locked = Locked(c), takeable = TakenFor(c, trial);
         ShadeBoxBlk(px0, py0, px1, py1, MENU_SHADE_LVL);
@@ -2683,7 +2771,7 @@ static int GridPage(const char *what, int trial) {
             TextFitted(pcx, py1 - 60, px1 - px0 - 20, c->Hint[0] ? c->Hint : "Win a race to unlock", RG_ORANGE);
         } else if (!takeable) Text(pcx, py1 - 36, "For time trials", RG_ORANGE);
         DrawCadre(px0, py0, px1, py1, ALL_ANGLES);
-        snprintf(line, sizeof(line), "%d of %d", sel + 1, s_nbGrid);
+        snprintf(line, sizeof(line), "%d of %d", sel + 1, s_nbGridView);
         Label(text, line);
         TextAt(px1 - 10 - SizeFont(text), py0 + 6, text, RG_GREY);
         TextFitted(pcx, py1 + 6, px1 - px0 - 8, c->Name, takeable ? LBAWHITE : RG_GREY);
@@ -2693,9 +2781,19 @@ static int GridPage(const char *what, int trial) {
         Text(cx, 440 + oy, takeable ? "Enter: race    Esc: back" : "Esc: back", RG_GREY);
         Present();
         if (chosen != -2) break;
-        if (take && takeable) { WaitNoInput(); chosen = sel; }
-        else if (Confirmed()) { WaitNoInput(); if (takeable) chosen = sel; }
-        else if (Escaped()) chosen = -1;
+        if (take && takeable) { WaitNoInput(); chosen = s_gridView[sel]; }
+        else if (typing) {}
+        else if (Confirmed()) { WaitNoInput(); if (takeable) chosen = s_gridView[sel]; }
+        else if (Escaped()) {
+            // (Esc: what is filtered let go first, then back)
+            if (find[0] || stat) {
+                const int car = s_gridView[sel];
+                find[0] = 0; stat = 0;
+                GridFilter(find, stat);
+                GridViewChanged(car, &sel, &pages, find, stat);
+                WaitNoInput();
+            } else chosen = -1;
+        }
     }
     AsciiMode = FALSE;
     Page(NULL, 0);
