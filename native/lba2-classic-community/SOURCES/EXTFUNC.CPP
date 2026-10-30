@@ -591,7 +591,7 @@ void AffichageActorsZBuf(void) {
         // SPRITE_3D branch. Left for later; this covers real 3D-bodied NPCs.
         if (ptrobj->Flags & SPRITE_3D) continue;
         if (ptrobj->Obj.Body.Num < 0) continue; // no body assigned/loaded
-        if (!RendererShowHiddenActors && ((ptrobj->Flags & INVISIBLE) || ptrobj->Obj.Y <= -10000)) continue; // (hidden: the game's, GLOBAL.CPP)
+        if (!RendererShowHiddenActors && ((ptrobj->Flags & INVISIBLE) || ptrobj->Obj.Y <= RACE_OUT_OF_SIGHT_Y)) continue; // (hidden: the game's, GLOBAL.CPP)
 
         LongWorldRotatePoint(ptrobj->Obj.X, ptrobj->Obj.Y, ptrobj->Obj.Z);
         if (!LongProjectPoint(X0, Y0, Z0)) continue;

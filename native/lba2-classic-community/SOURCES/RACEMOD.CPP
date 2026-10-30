@@ -4996,7 +4996,7 @@ static void ChaseOpening(S32 now) {
                 car->Anim.Num = -1; ObjectInitAnim(car, (void *)(uintptr_t)(U32)s_chaseEmptyAnim);
             }
             for (int i = 1; i < NbObjets; i++)
-                if (ListObjet[i].IndexFile3D == s_chaseDriverEnt && ListObjet[i].Obj.Y > -10000) { s_chaseDriver = i; break; }
+                if (ListObjet[i].IndexFile3D == s_chaseDriverEnt && ListObjet[i].Obj.Y > RACE_OUT_OF_SIGHT_Y) { s_chaseDriver = i; break; }
             if (s_chaseDriver > 0) {
                 T_OBJET *d = &ListObjet[s_chaseDriver];
                 d->Obj.Beta = TurnOf(atan2((double)(hero->Obj.X - d->Obj.X), (double)(hero->Obj.Z - d->Obj.Z)));
@@ -5076,7 +5076,7 @@ static void ChaseOpening(S32 now) {
         break;
     case 3:
         for (int i = 1; i < NbObjets; i++)
-            if (ListObjet[i].IndexFile3D == s_chaseHelper && ListObjet[i].Obj.Y > -10000) {
+            if (ListObjet[i].IndexFile3D == s_chaseHelper && ListObjet[i].Obj.Y > RACE_OUT_OF_SIGHT_Y) {
                 T_OBJET *h = &ListObjet[i];
                 h->Obj.Beta = TurnOf(atan2((double)(hero->Obj.X - h->Obj.X), (double)(hero->Obj.Z - h->Obj.Z)));
                 ClearRealAngle(h);
@@ -5161,7 +5161,7 @@ void RaceMod_Story(void) {
     // (him gone from beside his car once he has driven off -- the start's scene come into again: chase_car=)
     if (s_chaseOn && s_chaseEmpty >= 0 && s_chaseStep >= 2 && s_chaseStep != 11 && (S32)NumCube == StartScene())
         for (int i = 1; i < NbObjets; i++)
-            if (ListObjet[i].IndexFile3D == s_chaseDriverEnt && ListObjet[i].Obj.Y > -10000) { ListObjet[i].Obj.Y = -20000; ListObjet[i].Flags |= INVISIBLE; }
+            if (ListObjet[i].IndexFile3D == s_chaseDriverEnt && ListObjet[i].Obj.Y > RACE_OUT_OF_SIGHT_Y) { ListObjet[i].Obj.Y = -20000; ListObjet[i].Flags |= INVISIBLE; }
     // (the camera turned back round once Twinsen is in his car: chase_car=)
     if (s_chaseFlipped && Comportement == C_BUGGY) { AddBetaCam = s_chaseCamWas; s_chaseFlipped = 0; }
     // the intro, as the grid forms (the count-down from when it is read)
@@ -5325,7 +5325,7 @@ static double PassOffset(const T_RACE_OPPONENT *o, int best, double wx, double w
         const T_RACE_OPPONENT *op = &s_opp[n];
         if (!op->Count || !op->Scenes) continue;
         const int index = OpponentActor(op);
-        if (index < 0 || ListObjet[index].Obj.Y < -10000) continue;
+        if (index < 0 || ListObjet[index].Obj.Y < RACE_OUT_OF_SIGHT_Y) continue;
         const double rx = ListObjet[index].Obj.X + cx - wx, rz = ListObjet[index].Obj.Z + cz - wz;
         const double along = rx * fx + rz * fz, lat = rx * lx + rz * lz;   // (from the car: ahead of it, to its left)
         // (close ahead, or still beside after going out: within the lane it would hit)
@@ -6156,7 +6156,7 @@ static void ParadeStep(S32 now, S32 dt) {
     const int moving = going || s_pull == 3 || s_pull == 4;
     if (moving || moving != wasGoing) s_paradeFlip = 1;
     wasGoing = moving;
-    if (car->Obj.Y <= -10000) return;
+    if (car->Obj.Y <= RACE_OUT_OF_SIGHT_Y) return;
     car->Obj.Alpha = 0; car->Obj.Gamma = 0;
     ClearRealAngle(car);
     if (car->GenAnim != anim) InitAnim(anim, ANIM_REPEAT, (U8)index);
@@ -8525,7 +8525,7 @@ static void StuckCar(S32 now) {
     for (int n = 1; n < NbObjets; n++) {
         const T_OBJET *o = &ListObjet[n];
         const double ox = o->Obj.X - hero->Obj.X, oz = o->Obj.Z - hero->Obj.Z, oy = o->Obj.Y - hero->Obj.Y;
-        if (o->Obj.Y < -10000 || ox * ox + oz * oz > 3.0 * 512 * 3.0 * 512 || fabs(oy) > 2000) continue;
+        if (o->Obj.Y < RACE_OUT_OF_SIGHT_Y || ox * ox + oz * oz > 3.0 * 512 * 3.0 * 512 || fabs(oy) > 2000) continue;
         Log_Info("[racemod]   object %d beside it: %.0f, %.0f, %.0f off, body %d, box %d..%d x %d..%d x %d..%d, flags %#x", n, ox, oy, oz, (int)o->Obj.Body.Num,
                  (int)o->XMin, (int)o->XMax, (int)o->YMin, (int)o->YMax, (int)o->ZMin, (int)o->ZMax, (unsigned)o->Flags);
     }
@@ -8538,7 +8538,7 @@ static void StuckCar(S32 now) {
 // seen, as it is moved out of sight while gone).
 static int MushroomActor(T_RACE_MUSHROOM *m) {
     if (m->Scene != NumCube || m->Actor <= 0 || m->Actor >= NbObjets) return -1;
-    if (!m->HasY && ListObjet[m->Actor].Obj.Y > -10000) { m->Y = ListObjet[m->Actor].Obj.Y; m->HasY = 1; }
+    if (!m->HasY && ListObjet[m->Actor].Obj.Y > RACE_OUT_OF_SIGHT_Y) { m->Y = ListObjet[m->Actor].Obj.Y; m->HasY = 1; }
     if (s_fakeIconBody < 0 && ListObjet[m->Actor].Obj.Body.Num >= 0) s_fakeIconBody = ListObjet[m->Actor].Obj.Body.Num;
     return m->HasY ? m->Actor : -1;
 }
@@ -9216,7 +9216,7 @@ static int CarAt(int who, double *x, double *y, double *z) {
     T_RACE_OPPONENT *op = &s_opp[who];
     if (!op->Count || !op->Scenes) return 0;
     const int a = OpponentActor(op);
-    if (a >= 0 && ListObjet[a].Obj.Y > -10000) { *x = ListObjet[a].Obj.X + cx; *y = ListObjet[a].Obj.Y; *z = ListObjet[a].Obj.Z + cz; return 1; }
+    if (a >= 0 && ListObjet[a].Obj.Y > RACE_OUT_OF_SIGHT_Y) { *x = ListObjet[a].Obj.X + cx; *y = ListObjet[a].Obj.Y; *z = ListObjet[a].Obj.Z + cz; return 1; }
     if (!RaceOn()) return 0;
     double v, dx, dz;
     PathAt(op, op->S, x, z, y, &v, &dx, &dz);
@@ -9496,7 +9496,7 @@ static void CarStruckFor(int who, S32 now, const char *what, const char *by, S32
     if (op->HitUntil < now + hold) op->HitUntil = now + hold;
     Log_Info("[racemod] %s hit by %s%s%s", op->Name, by ? by : "", by ? "'s " : "", what);
     const int index = OpponentActor(op);
-    if (index < 0 || ListObjet[index].Obj.Y < -10000) return;
+    if (index < 0 || ListObjet[index].Obj.Y < RACE_OUT_OF_SIGHT_Y) return;
     T_OBJET *car = &ListObjet[index];
     InitAnim(GEN_ANIM_CHOC, ANIM_ALL_THEN, (U8)index);
     InitHitExtraPof(car->Obj.X, car->Obj.Y + car->YMax + 1, car->Obj.Z, RACE_SHOT_FORCE);
@@ -12135,9 +12135,33 @@ static void Gunners(S32 now, int driving) {
     }
 }
 
+// (LBA2_EXTRAS=1: the game's extras -- what is thrown, dropped, a pof -- that stay where they are RACE_STALE_EXTRA_MS logged, once each:
+// what is left lying on the road, the user, 2026-10-30, "make sure all debrie is removed from the track")
+#define RACE_STALE_EXTRA_MS 3000
+static void StaleExtras(S32 now) {
+    static int on = -1;
+    if (on < 0) on = getenv("LBA2_EXTRAS") != NULL;
+    if (!on) return;
+    static S32 since[MAX_EXTRAS], atX[MAX_EXTRAS], atY[MAX_EXTRAS], atZ[MAX_EXTRAS];
+    static U8 told[MAX_EXTRAS];
+    for (int i = 0; i < MAX_EXTRAS; i++) {
+        const T_EXTRA *e = &ListExtra[i];
+        if (e->Sprite == -1) { since[i] = 0; told[i] = 0; continue; }
+        if (!since[i] || e->PosX != atX[i] || e->PosY != atY[i] || e->PosZ != atZ[i]) {
+            since[i] = now; atX[i] = e->PosX; atY[i] = e->PosY; atZ[i] = e->PosZ; told[i] = 0; continue;
+        }
+        if (told[i] || now - since[i] < RACE_STALE_EXTRA_MS) continue;
+        told[i] = 1;
+        Log_Info("[extras] extra %d still %.1f s: sprite %d body %d divers %d at (%d,%d,%d) flags 0x%X owner %d timeout %d hit %d scene %d",
+                 i, (now - since[i]) / 1000.0, (int)e->Sprite, (int)e->Body, (int)e->Divers, (int)e->PosX, (int)e->PosY, (int)e->PosZ,
+                 (unsigned)e->Flags, (int)e->Owner, (int)e->TimeOut, (int)e->HitForce, (int)NumCube);
+    }
+}
+
 // Every frame: what the race-track mode flies (s_bullets) -- the gunners' bullets, the hunting guns' missiles, the flying gas monsters' fire
 // balls: along their way, and where each comes down, the cars there hit.
 static void Projectiles(S32 now, int driving) {
+    StaleExtras(now);
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     for (int b = 0; b < RACE_MAX_BULLETS; b++) {
         T_RACE_BULLET *u = &s_bullets[b];
@@ -13071,7 +13095,7 @@ static double HauntPace(int n, S32 now) {
 // less a car's half width, lets it (no road under it found: not at all) -- its nose swinging with it.
 static void HauntSway(int n, T_OBJET *car, S32 now) {
     const double e = HauntEase(n, now);
-    if (e <= 0 || car->Obj.Y < -10000) return;
+    if (e <= 0 || car->Obj.Y < RACE_OUT_OF_SIGHT_Y) return;
     const double t = (now - s_oppHauntAt[n]) * 2 * RACE_PI / RACE_HAUNT_SWAY_MS;
     double sway = RACE_HAUNT_SWAY * e * sin(t);
     // (across its heading: the way turned a quarter)
@@ -13115,7 +13139,7 @@ static int GhostCar(int who, double *x, double *y, double *z, double *top, S32 *
     }
     if (CubeMode == CUBE_EXTERIEUR && s_carsScene == (S32)NumCube && s_carActor[who] >= 0 && s_carActor[who] < NbObjets) {
         const T_OBJET *c = &ListObjet[s_carActor[who]];
-        if (c->Obj.Y > -10000) {
+        if (c->Obj.Y > RACE_OUT_OF_SIGHT_Y) {
             *x = c->Obj.X + CurrentCubeX * 32768.0; *y = c->Obj.Y; *z = c->Obj.Z + CurrentCubeY * 32768.0;
             *top = c->YMax > 0 ? c->YMax : 900; *beta = c->Obj.Beta;
             return 1;
@@ -13787,7 +13811,7 @@ int RaceMod_Cars(char lines[][96], int most) {
         double x, z, y, v, dx, dz;
         S32 beta = 0;
         const int index = OpponentActor(op);
-        if (index >= 0 && ListObjet[index].Obj.Y > -10000) {
+        if (index >= 0 && ListObjet[index].Obj.Y > RACE_OUT_OF_SIGHT_Y) {
             x = ListObjet[index].Obj.X + cx; z = ListObjet[index].Obj.Z + cz; beta = ListObjet[index].Obj.Beta & 4095;
         } else if (RaceOn()) {
             PathAt(op, op->S, &x, &z, &y, &v, &dx, &dz);
@@ -15666,7 +15690,7 @@ void RaceMod_Frame(void) {
     if (s_trialHide[0] >= 0 || s_trialHide[1] >= 0)
         for (int i = 1; i < NbObjets; i++) {
             const int ent = ListObjet[i].IndexFile3D;
-            if (ent >= 0 && (ent == s_trialHide[0] || ent == s_trialHide[1]) && ListObjet[i].Obj.Y > -10000) { ListObjet[i].Obj.Y = -20000; ListObjet[i].Flags |= INVISIBLE; }
+            if (ent >= 0 && (ent == s_trialHide[0] || ent == s_trialHide[1]) && ListObjet[i].Obj.Y > RACE_OUT_OF_SIGHT_Y) { ListObjet[i].Obj.Y = -20000; ListObjet[i].Flags |= INVISIBLE; }
         }
     // (and a driver lapping on his own: parade=)
     ParadeStep(now, dt);
@@ -16242,7 +16266,7 @@ static void DrawBolts(S32 now, S32 height) {
     const S32 thick = height / 200 > 2 ? height / 200 : 2;
     for (int b = 0; b < s_nbBolts; b++) {
         const T_OBJET *car = &ListObjet[s_boltActor[b]];
-        if (car->Obj.Y < -10000 || !PtrProjectPoint(car->Obj.X, car->Obj.Y + 300, car->Obj.Z)) continue;
+        if (car->Obj.Y < RACE_OUT_OF_SIGHT_Y || !PtrProjectPoint(car->Obj.X, car->Obj.Y + 300, car->Obj.Z)) continue;
         const S32 ex = Xp, ey = Yp;
         S32 sx = ex, sy = 0;
         if (PtrProjectPoint(car->Obj.X, car->Obj.Y + 9000, car->Obj.Z) && Yp < ey) { sx = Xp; sy = Yp > 0 ? Yp : 0; }
@@ -16321,7 +16345,7 @@ static void DrawHalloween(S32 now) {
     for (int n = 0; n < RACE_MAX_OPPONENTS; n++) {
         if (now >= s_oppHauntUntil[n] || now < s_oppHauntAt[n] || s_carActor[n] < 0 || s_carActor[n] >= NbObjets) continue;
         const T_OBJET *car = &ListObjet[s_carActor[n]];
-        if (car->Obj.Y < -10000) continue;
+        if (car->Obj.Y < RACE_OUT_OF_SIGHT_Y) continue;
         // (round and round over the car, a little over its roof -- there from the start where a ghost flew to it, else rising out of it as
         // the haunting starts -- and sinking back into it at its end: HauntCircle)
         double x, y, z;
@@ -17520,7 +17544,7 @@ void RaceMod_Draw(void) {
         if (a < 0 || a >= (int)NbObjets) st = 1;
         else {
             const T_OBJET *c = &ListObjet[a];
-            if (c->Obj.Y <= -10000) st |= 2;
+            if (c->Obj.Y <= RACE_OUT_OF_SIGHT_Y) st |= 2;
             if (c->Flags & INVISIBLE) st |= 4;
             if (c->Obj.Body.Num < 0) st |= 8;
             if (!PtrProjectPoint(c->Obj.X, c->Obj.Y, c->Obj.Z)) st |= 16;
