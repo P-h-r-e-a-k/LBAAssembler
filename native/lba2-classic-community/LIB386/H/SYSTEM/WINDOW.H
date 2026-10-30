@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SYSTEM/ADELINE_TYPES.H>
+#include <PLATFORM/PLATFORM.H>
 
 // -----------------------------------------------------------------------------
 #ifdef __cplusplus
@@ -16,70 +17,41 @@ void EndWindow();
 bool IsWindowInitialized();
 
 // --- Interface ---------------------------------------------------------------
-/** Create the SDL window, renderer, and streaming texture at resX*resY. When
- *  `fullscreen` is true the window is created fullscreen up front (via the
- *  SDL create-time property), avoiding a windowed-then-flipped frame on boot. */
+/** Create the platform presentation surface at resX*resY. Fullscreen is
+ *  requested at creation to avoid a windowed-then-flipped frame on boot. */
 bool CreateWindowSurface(U32 resX, U32 resY, bool fullscreen);
 void DestroyWindowSurface();
 
-/** Resize the existing window + streaming texture in place, without
- *  destroying the SDL window itself. Used by the runtime resolution switcher
+/** Resize the existing presentation surface in place, without
+ *  destroying the host window itself. Used by the runtime resolution switcher
  *  (docs/RUNTIME_RESOLUTION.md / SOURCES/RES_SWITCH.CPP) so a switch keeps
  *  focus, multi-monitor placement, and (in fullscreen) the fullscreen state
  *  without a destroy/recreate round-trip. Returns true on success. */
 /* Resize the framebuffer the window presents. `keepWindowSize` is for render
    sizes the player did not choose (an automatic per-scene downshift): the
-   window is left exactly as it is, manual resizes included, and SDL logical
+   window is left exactly as it is, manual resizes included, and logical
    presentation scales the framebuffer into it either way. A player's own
    resolution choice passes false and moves the window with it. */
 bool ResizeWindowSurface(U32 newW, U32 newH, bool keepWindowSize);
 
-/** Query the current display's logical dimensions (the desktop the SDL
- *  window is on, via SDL_GetCurrentDisplayMode). Writes both outputs and
- *  returns true on success. Returns false if SDL hasn't initialised a
+/** Query the current display's logical dimensions. Writes both outputs and
+ *  returns true on success. Returns false if the backend hasn't initialised a
  *  window yet; *outW and *outH are untouched in that case. */
 bool Window_GetDisplayDimensions(U32 *outW, U32 *outH);
 
 /** Query the primary display's logical dimensions WITHOUT a window, for the
- *  boot path that needs the display size before CreateWindowSurface runs
- *  (SDL_GetPrimaryDisplay + SDL_GetCurrentDisplayMode). Requires
- *  SDL_INIT_VIDEO to be up. Returns false (outputs untouched) when video
+ *  boot path that needs the display size before CreateWindowSurface runs.
+ *  Requires the platform video subsystem. Returns false (outputs untouched) when video
  *  isn't initialised, no display is reported, or the driver is the headless
  *  dummy/offscreen one, so resolution auto-detection never fires under the
  *  test harness. */
 bool Window_GetPrimaryDisplayDimensions(U32 *outW, U32 *outH);
-void PresentRendererFrame(const void *pixels, U32 pitch);
-bool LockRendererTexture(void **pixels, int *pitch);
-void UnlockAndPresentRendererTexture();
-
-/** Whether the renderer's streaming texture is currently locked (between a
- *  LockRendererTexture call and its matching UnlockAndPresentRendererTexture).
- *  See the definition's own comment (WINDOW.CPP) for why this exists: a
- *  resolution switch destroys and recreates this texture, which is only safe
- *  to do while it is NOT locked. */
-bool Window_IsRendererTextureLocked(void);
 void WindowToSurfaceCoords(S32 windowX, S32 windowY, S32 *surfaceX, S32 *surfaceY);
 void SetWindowFullscreen(bool fullscreen);
 bool GetWindowFullscreen();
-// The window's title bar text, after InitWindow (the race game names its window: RACEGAME.TXT window_title=). Kept for a window made later.
-void SetWindowTitle(const char *title);
-// Actual SDL window fullscreen state (queries SDL_GetWindowFlags), not the
+// Actual host window fullscreen state, not the
 // cached request flag — for accurate reporting.
 bool Window_IsFullscreen(void);
-
-/* The window resized by the player (or maximised, restored, made full screen):
-   once its size has stayed put for `settleMs` (a drag's many size changes come
-   as one), its client size in pixels -- returns true once per settled change.
-   False while nothing changed, while it is still changing, while minimised, and
-   under the headless video drivers. The race game fits its render size to it
-   (RES_SWITCH.CPP Res_ApplyWindowFit). */
-bool Window_TakeSettledResize(U32 settleMs, U32 *outPixelW, U32 *outPixelH);
-/* The window's size in screen units (what SDL_SetWindowSize takes) and whether
-   it is maximised; false with no window. */
-bool Window_GetWindowedSize(S32 *outW, S32 *outH, bool *outMaximized);
-/* Give the (windowed) window a size of the player's from an earlier run, kept
-   on the screen and centred on it, maximised if it was. */
-void Window_RestoreWindowedSize(S32 w, S32 h, bool maximized);
 
 // Whether this platform has a meaningful windowed/fullscreen choice. True on
 // desktop; false on always-fullscreen devices (Android phones/TVs), where a
@@ -101,15 +73,35 @@ bool Window_CanLoseNativeWindow(void);
 // pixels or simulation state.
 void Window_SetVSync(int enabled);
 
-// Show/hide the SDL window without destroying it. For embedders (e.g. the LBA2
-// Level Workshop's native renderer backend) that only ever read pixels back via
-// their own framebuffer accessor and never want the SDL window on screen at all.
-// No-op if the window hasn't been created yet.
-void Window_SetVisible(bool visible);
+// Choose how the frame is filtered when stretched to the window: one of
+// PLATFORM_FILTER_*. Presentation only. False when this backend cannot do the
+// mode asked for, in which case the one in use stays.
+bool Window_SetPresentFilter(int mode);
 
 void SetWindowRelativeMouse(bool enable);
+
+// --- LBA Assembler's own (the SDL3 backend's, LIB386/PLATFORM/SDL3/WINDOW.CPP) ------------------------------------------------
+/** Whether a frame is being presented right now (the presentation texture locked, its overlays running): a resolution switch
+ *  destroys and recreates that texture, which is only safe outside it -- the console's res_do_switch and RES_SWITCH.CPP wait. */
+bool Window_IsRendererTextureLocked(void);
+// The window's title bar text, after InitWindow (the race game names its window: RACEGAME.TXT window_title=). Kept for a window made later.
+void SetWindowTitle(const char *title);
+/* The window resized by the player (or maximised, restored, made full screen): once its size has stayed put for `settleMs` (a
+   drag's many size changes come as one), its client size in pixels -- returns true once per settled change. False while nothing
+   changed, while it is still changing, while minimised, and under the headless video drivers. The race game fits its render size
+   to it (RES_SWITCH.CPP Res_ApplyWindowFit). */
+bool Window_TakeSettledResize(U32 settleMs, U32 *outPixelW, U32 *outPixelH);
+/* The window's size in screen units and whether it is maximised; false with no window. */
+bool Window_GetWindowedSize(S32 *outW, S32 *outH, bool *outMaximized);
+/* Give the (windowed) window a size of the player's from an earlier run, kept on the screen and centred on it, maximised if it was. */
+void Window_RestoreWindowedSize(S32 w, S32 h, bool maximized);
+// Show/hide the window without destroying it: the editor's native renderer (RENDERER_API.CPP) reads its pixels back itself and
+// never wants the window on screen. No-op before the window is made.
+void Window_SetVisible(bool visible);
+// Keep the cursor inside the window (lifted by the host while unfocused).
+void SetWindowMouseGrab(bool enable);
 void ManageWindow();
-void HandleEventsWindow(const void *event);
+void HandleEventsWindow(const PlatformEvent *event);
 
 // Pause audio while the window is not focused. The window layer feeds focus
 // changes to AppFocusAudio_OnChange(); the audio/game layer registers what to

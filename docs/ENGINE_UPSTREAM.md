@@ -106,17 +106,51 @@ Merged at the user's request ("Do the upstream large rewrite to port more fixes"
 - **Not tested:** a gamepad (none on this machine).
 - A key pressed in the first seconds after the game starts can go unseen while the menu waits for every key to be up (upstream's release latch). The tests now wait 14 s, not 9.
 
+## Fourth round (2026-10-30): the platform layer, audio and mouse
+
+At the user's request ("Let's do the audio streaming and mouse fixes next"). It needed upstream's platform layer first: an SDK-free host contract (LIB386/H/PLATFORM, LIB386/PLATFORM/SDL3, SDL2 and NULL), with every engine call to SDL routed through `g_platform`.
+
+**Merged in upstream order:**
+- **Platform layer:** f500eca2, 676b768d, 9d5f2ed0, 1392f941, f7459f8f, 03cac739, 53629dc2, 5bef878e, 19884bdb, 3e0fb132 (the SDL2 backend and the shared audio device, AUDIO_DEVICE/SDK.H).
+- **Present filter and scaled displays:** 5ec1e23b, 650e9fc2, e69b116e. Plus 4520596b, 68dc9ab6 and de946406 (SDL2).
+- **Audio:** 241541ce, 7db97fe1, feb92518 / 0510cebd (now in upstream's own form), 093aaab6 (likewise), f93b6a9c, c8acd312 and 5c55353a (SDL2's bounded conversion).
+- **Mouse:** ef01813b (taps on a touch screen), c383bcb5 (the cursor kept in the window, relative mode ended with the camera), cb1fed1b (relative mode kept across frames with no game step).
+
+**Ours, kept and moved onto the platform layer:**
+- **Window, in LIB386/PLATFORM/SDL3/WINDOW.CPP (the SDL3 backend; Window_* in LIB386/SYSTEM/WINDOW.CPP forward there):**
+  - `LBA2_WINDOW_POS` (the editor's embedded window);
+  - the race game's window title;
+  - the settled resize, the windowed size and its restore (RES_SWITCH.CPP's window fit);
+  - Window_SetVisible (RENDERER_API.CPP);
+  - Window_IsRendererTextureLocked, now true while SDL3_Present has the texture locked and its overlays run.
+- **SVGA/SDL.CPP:** the pre-frame callback (SetPreFrameCallback: the console's pending resolution switch) and the zeroed Phys.
+- **KEYBOARD.CPP:** F11 / Alt+Enter, now read from the platform's event as SDL scancodes and modifiers.
+- **Build:** CMake's winmm for MIDI, and SDL3 for the console.
+- **STREAM.CPP:** our music on upstream's audio wrappers (AILAudio_*, AIL_Atomic*). That covers the position counted from where the stream began and wrapped round a looping track, our track looping (PumpStreamLoop, loopPcm) and the miss cache. Parking always has audio left, since our music loops.
+- **CONFIG_FILE.CPP:** c383bcb5's `MouseConfine` is read and written as our file's other mouse settings are. Upstream keeps it in settings tables made for its recorder, which we don't have.
+- **GAMEMENU.CPP:** back to upstream's `ade_strcasecmp`.
+
+**Not taken, by choice:**
+- The bounded WAV producer: bed475f9, 3cf55f5e, 1c14ec24, 887bf037, 8962debd, 873dccd5. It plays WAV music through its own producer, past our looping (race music such as the Temple's would stop looping).
+- c87fd56a (CD and OGG streamed, not held whole). It replaces our OGG cache, miss cache and looping.
+
+Both save memory, which a Windows build doesn't need.
+
+**Checks:**
+- Raced Island CX Mk2 and Desert Island, the frames drawn through the new present path, HUD and overlays included.
+- Story Mode new and continue; the car grid and 7777.
+- With audio on (master volume 0, music 1): the Desert's race music streamed and queued again behind itself as it should.
+- The game's own window resized through Windows: the race game fitted its picture to it. F11 posted to it: full screen and back.
+- The editor started, drew Desert Island, and played a scene inside its viewport.
+- Not tested: a mouse on the cursor-confine setting (the player's own mouse can't be used here).
+
 ## Left for later
 
 - **They need an upstream rework we haven't taken:**
   - The Auto camera rework: `58542424` and `bb0e8dd1` (rain splashes on a camera cut or blend: FollowCamBlendCut, FollowCamBlending).
-  - The platform layer (LIB386/PLATFORM, AUDIO_DEVICE, WAV_STREAM, SDK.H, MOUSE_CAPTURE):
-    - audio streaming `c87fd56a`, `bed475f9`, `c8acd312`, `873dccd5`, `887bf037`, `241541ce`, `3cf55f5e`, `1c14ec24`, `f93b6a9c`;
-    - input `c383bcb5`, `cb1fed1b`, `ef01813b`;
-    - settings `a1783394`, `32ebffab`.
 - **Not taken, by choice:** `23677fb4` (cinematics streamed from the HQR). It changes libsmacker and our video loading. Its gain is memory, which a Windows build doesn't need, and the risk is to Story Mode's intro film.
 - **Not taken:**
-  - Too large to take now: the platform layer rework (SDL2/SDL3 host contract, `f500eca2`, `3e0fb132`, `5bef878e`); the integer 3D maths port (`374cf91b`, `833b34ae`, `e068589f`, `bf6379db`); and the Auto camera rework (`520c5f1f`, `5998fe88`, `8277fb02` and the other camera commits), which FOLLOWCAM's race camera depends on.
+  - Too large to take now: the integer 3D maths port (`374cf91b`, `833b34ae`, `e068589f`, `bf6379db`); and the Auto camera rework (`520c5f1f`, `5998fe88`, `8277fb02` and the other camera commits), which FOLLOWCAM's race camera depends on.
   - Not relevant here: Vita, Switch, Android and macOS ports, big-endian support, the recorder, CI, packaging and tools.
 
 ## How to check the next merge

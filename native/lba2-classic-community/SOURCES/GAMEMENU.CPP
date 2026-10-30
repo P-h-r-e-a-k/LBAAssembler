@@ -1422,7 +1422,7 @@ static void BuildSavePath(char *path, const char *name, S32 unique, const char *
         else
 #endif
             GetSavePath(path, ADELINE_MAX_PATH, file);
-        if (!unique OR !ExistsFileOrDir(path) OR(own != NULL AND !SDL_strcasecmp(path, own)))
+        if (!unique OR !ExistsFileOrDir(path) OR(own != NULL AND !ade_strcasecmp(path, own)))
             return;
     }
     // 99 saves on one stem: the last candidate is overwritten.
@@ -3899,7 +3899,7 @@ void ShowGameSaveResult(S32 saved) {
 // save never costs the old one. Same path in another case is the same file on
 // macOS and Windows, so it is kept.
 void FinishSaveRename(S32 saved) {
-    if (saved AND OldGamePathname[0] AND SDL_strcasecmp(OldGamePathname, GamePathname)
+    if (saved AND OldGamePathname[0] AND ade_strcasecmp(OldGamePathname, GamePathname)
             AND FileSize(OldGamePathname))
         Delete(OldGamePathname);
     OldGamePathname[0] = '\0';

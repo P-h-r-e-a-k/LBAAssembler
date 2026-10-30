@@ -1,5 +1,7 @@
 #include "AIL.H"
 
+#include <SYSTEM/LIMITS.H>
+
 // === CD ======================================================================
 const char *OpenCD(char *volume_name) { return "D"; }
 void PlayCD(S32 track) {}
@@ -12,6 +14,7 @@ S32 IsCDPlaying() { return FALSE; }
 
 // === COMMON ==================================================================
 void InitAIL() {}
+bool AIL_SetHeadless(void) { return true; }
 
 // === MIDI ====================================================================
 S32 InitMidiDriver(char *driver_name) {
@@ -53,7 +56,6 @@ S32 Sample_DriverPlaysSound(void) { return FALSE; }
 void SfxLogEnable(int enable) { (void)enable; }
 int SfxLogIsEnabled(void) { return 0; }
 S32 GetSamplesPausedCount(void) { return 0; }
-U32 SampleMixedFrames(void) { return 0; }
 
 // === STREAM ==================================================================
 S32 streamVolume = 0;
@@ -68,9 +70,8 @@ void ResumeStream() {}
 void SuspendStreamOutput() {}
 void ResumeStreamOutput() {}
 S32 IsStreamPlaying() { return FALSE; }
-char *StreamName() { return ""; }
-void SetStreamLoop(S32 on) { (void)on; }
-S32 PumpStreamLoop(void) { return 0; }
-S32 StreamCanPlay(const char *name) { (void)name; return TRUE; }
+// Same shape as the SDL backend's name buffer; nothing ever plays, so it stays empty.
+static char streamPathName[ADELINE_MAX_PATH] = "";
+char *StreamName() { return streamPathName; }
 void MusicLogEnable(int enable) { (void)enable; }
 int MusicLogIsEnabled(void) { return 0; }

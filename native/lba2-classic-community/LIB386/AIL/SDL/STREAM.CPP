@@ -1,7 +1,7 @@
 #include "STREAM_SDL.H"
 #include "MIDI_SDL.H" /* a MIDI file played as music (MIDI.CPP) */
 
-#include <SDL3/SDL.h>
+#include "AUDIO_DEVICE.H"
 
 #include "stb_vorbis.h"
 
@@ -32,14 +32,17 @@ unsigned int stb_vorbis_stream_length_in_samples(stb_vorbis *f);
 
 /* ── Core stream state ─────────────────────────────────────────────────── */
 
-static SDL_AudioStream *stream = NULL;
+static AILAudioStream *stream = NULL;
 static char streamPathName[ADELINE_MAX_PATH] = "";
 static bool streamPaused = false;
 
 /* Geometry of the source PCM currently feeding `stream`, used to convert the
    queued-byte backlog into a frame offset (see StreamPositionFrames). */
 static int streamBytesPerFrame = 0;
-static SDL_AtomicInt streamPushedBytes; // total source bytes handed to `stream`
+static AILAtomicInt streamPushedBytes; // total source bytes handed to `stream`
+/* Frame of the track the stream was opened at: non-zero after a seeked restore,
+   whose pushed bytes start there and not at the top of the track. */
+static int streamBaseFrame = 0;
 
 /* Parked playback position for a pause that outlives its stream. PauseStream
    snapshots {path, frame}; ResumeStream either cheap-unpauses the still-alive
@@ -141,8 +144,8 @@ static void ClearOggCache(void) {
 /* ── Background decode thread ──────────────────────────────────────────── */
 
 static SDL_Thread *decodeThread = NULL;
-static SDL_AtomicInt decodeStop;
-static SDL_AtomicInt decodeActive;
+static AILAtomicInt decodeStop;
+static AILAtomicInt decodeActive;
 
 #define DECODE_CHUNK_SHORTS 4096
 
@@ -164,7 +167,7 @@ static int SDLCALL DecodeThreadFunc(void *userdata) {
     int capacity = 0;
     short *fullPcm = NULL;
 
-    while (!SDL_GetAtomicInt(&decodeStop)) {
+    while (!AIL_AtomicGet(&decodeStop)) {
         int n = stb_vorbis_get_samples_short_interleaved(
             d->vorbis, d->channels, buf, DECODE_CHUNK_SHORTS);
         if (n <= 0)
@@ -172,8 +175,8 @@ static int SDLCALL DecodeThreadFunc(void *userdata) {
 
         int chunkShorts = n * d->channels;
         int chunkBytes = chunkShorts * (int)sizeof(short);
-        SDL_PutAudioStreamData(stream, buf, chunkBytes);
-        SDL_AddAtomicInt(&streamPushedBytes, chunkBytes);
+        AILAudio_Put(stream, buf, chunkBytes);
+        AIL_AtomicAdd(&streamPushedBytes, chunkBytes);
 
         /* Only accumulate the full-track PCM when it will be cached (startFrame
            == 0). A seeked restore decode yields partial PCM that is never cached
@@ -199,17 +202,17 @@ static int SDLCALL DecodeThreadFunc(void *userdata) {
     }
 
     /* All of the track's PCM has been pushed. Signal end-of-input so SDL's
-       device-format converter emits its held tail; otherwise SDL_GetAudioStreamQueued
+       device-format converter emits its held tail; otherwise AILAudio_Queued
        sticks a few bytes above 0 forever (the device format differs from the source,
        so a converter sits in the path) and the stream never reports EOF -- which
        stalls the deferred-music switch (#406). Only on a natural finish: if we were
        stopped mid-decode the stream is being torn down anyway. */
-    if (!SDL_GetAtomicInt(&decodeStop) && stream)
-        SDL_FlushAudioStream(stream);
+    if (!AIL_AtomicGet(&decodeStop) && stream)
+        AILAudio_Flush(stream);
 
     stb_vorbis_close(d->vorbis);
 
-    if (!SDL_GetAtomicInt(&decodeStop) && d->cacheResult && fullPcm && totalShorts > 0) {
+    if (!AIL_AtomicGet(&decodeStop) && d->cacheResult && fullPcm && totalShorts > 0) {
         short *trimmed = (short *)realloc(fullPcm, (size_t)totalShorts * sizeof(short));
         ClearOggCache();
         oggCache.pcm = trimmed ? trimmed : fullPcm;
@@ -222,31 +225,32 @@ static int SDLCALL DecodeThreadFunc(void *userdata) {
         free(fullPcm);
     }
 
-    SDL_SetAtomicInt(&decodeActive, 0);
+    AIL_AtomicSet(&decodeActive, 0);
     free(d);
     return 0;
 }
 
 static void StopDecodeThread(void) {
     if (decodeThread) {
-        SDL_SetAtomicInt(&decodeStop, 1);
+        AIL_AtomicSet(&decodeStop, 1);
         SDL_WaitThread(decodeThread, NULL);
         decodeThread = NULL;
     }
-    SDL_SetAtomicInt(&decodeStop, 0);
-    SDL_SetAtomicInt(&decodeActive, 0);
+    AIL_AtomicSet(&decodeStop, 0);
+    AIL_AtomicSet(&decodeActive, 0);
 }
 
-/* Current playback offset in source frames: everything pushed to the stream
-   minus what is still queued (not yet consumed by the device). Works while the
-   decode thread is still filling the stream because both sides count source
-   bytes. The device's own buffer makes this a slight overestimate (tens of ms),
-   which is fine for re-seeking music. */
+/* Current playback offset in source frames, from the top of the track: the
+   frame the stream was opened at plus everything pushed minus what is still
+   queued (not yet consumed by the device). Works while the decode thread is
+   still filling the stream because both sides count source bytes. The device's
+   own buffer makes this a slight overestimate (tens of ms), which is fine for
+   re-seeking music. */
 static S32 StreamPositionFrames(void) {
-    if (!stream || streamBytesPerFrame <= 0)
+    if (!stream)
         return 0;
-    int pushed = SDL_GetAtomicInt(&streamPushedBytes);
-    int queued = (int)SDL_GetAudioStreamQueued(stream);
+    int pushed = AIL_AtomicGet(&streamPushedBytes);
+    int queued = (int)AILAudio_Queued(stream);
     int consumed = pushed - queued;
     if (consumed < 0)
         consumed = 0;
@@ -266,13 +270,14 @@ static void StopStreamInternal(void) {
     }
     StopDecodeThread();
     if (stream) {
-        SDL_DestroyAudioStream(stream);
+        AILAudio_Destroy(stream);
         stream = NULL;
     }
     streamPathName[0] = '\0';
     streamPaused = false;
     streamBytesPerFrame = 0;
-    SDL_SetAtomicInt(&streamPushedBytes, 0);
+    streamBaseFrame = 0;
+    AIL_AtomicSet(&streamPushedBytes, 0);
     streamFreq = 0;
     streamStartBytes = 0;
     streamTrackBytes = 0;
@@ -290,13 +295,14 @@ void OpenStream() {
     }
     StopDecodeThread();
     if (stream) {
-        SDL_DestroyAudioStream(stream);
+        AILAudio_Destroy(stream);
         stream = NULL;
     }
     streamPathName[0] = '\0';
     streamPaused = false;
     streamBytesPerFrame = 0;
-    SDL_SetAtomicInt(&streamPushedBytes, 0);
+    streamBaseFrame = 0;
+    AIL_AtomicSet(&streamPushedBytes, 0);
     rememberedPath[0] = '\0';
     rememberedFrame = 0;
     hasRemembered = false;
@@ -419,9 +425,9 @@ static bool PlayOggFile(const char *oggPath, S32 startFrame) {
         SDL_AudioSpec spec;
         SDL_zero(spec);
         spec.freq = oggCache.sample_rate;
-        spec.format = SDL_AUDIO_S16;
+        spec.format = AIL_AUDIO_S16;
         spec.channels = (Uint8)oggCache.channels;
-        stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+        stream = AILAudio_Open(&spec, NULL, NULL);
         if (!stream)
             return false;
         streamBytesPerFrame = oggCache.channels * (int)sizeof(short);
@@ -437,9 +443,10 @@ static bool PlayOggFile(const char *oggPath, S32 startFrame) {
         else if (offsetBytes > oggCache.numBytes)
             offsetBytes = oggCache.numBytes;
         Uint32 playBytes = oggCache.numBytes - offsetBytes;
-        SDL_PutAudioStreamData(stream, oggCache.pcm + offsetBytes / sizeof(short), playBytes);
-        SDL_AddAtomicInt(&streamPushedBytes, (int)playBytes);
-        SDL_FlushAudioStream(stream); // all input pushed -> let the converter drain to 0 at EOF (#406)
+        streamBaseFrame = (bpf > 0) ? (int)(offsetBytes / bpf) : 0;
+        AILAudio_Put(stream, oggCache.pcm + offsetBytes / sizeof(short), playBytes);
+        AIL_AtomicAdd(&streamPushedBytes, (int)playBytes);
+        AILAudio_Flush(stream); // all input pushed -> let the converter drain to 0 at EOF (#406)
         streamFreq = oggCache.sample_rate;
         streamStartBytes = offsetBytes;
         streamTrackBytes = oggCache.numBytes;
@@ -475,9 +482,9 @@ static bool PlayOggFile(const char *oggPath, S32 startFrame) {
     SDL_AudioSpec spec;
     SDL_zero(spec);
     spec.freq = (int)info.sample_rate;
-    spec.format = SDL_AUDIO_S16;
+    spec.format = AIL_AUDIO_S16;
     spec.channels = (Uint8)info.channels;
-    stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+    stream = AILAudio_Open(&spec, NULL, NULL);
     if (!stream) {
         stb_vorbis_close(v);
         return false;
@@ -495,7 +502,7 @@ static bool PlayOggFile(const char *oggPath, S32 startFrame) {
     DecodeThreadData *d = (DecodeThreadData *)malloc(sizeof(DecodeThreadData));
     if (!d) {
         stb_vorbis_close(v);
-        SDL_DestroyAudioStream(stream);
+        AILAudio_Destroy(stream);
         stream = NULL;
         return false;
     }
@@ -506,14 +513,14 @@ static bool PlayOggFile(const char *oggPath, S32 startFrame) {
     strncpy(d->oggPath, oggPath, ADELINE_MAX_PATH - 1);
     d->oggPath[ADELINE_MAX_PATH - 1] = '\0';
 
-    SDL_SetAtomicInt(&decodeStop, 0);
-    SDL_SetAtomicInt(&decodeActive, 1);
+    AIL_AtomicSet(&decodeStop, 0);
+    AIL_AtomicSet(&decodeActive, 1);
     decodeThread = SDL_CreateThread(DecodeThreadFunc, "OGGDecode", d);
     if (!decodeThread) {
-        SDL_SetAtomicInt(&decodeActive, 0);
+        AIL_AtomicSet(&decodeActive, 0);
         stb_vorbis_close(v);
         free(d);
-        SDL_DestroyAudioStream(stream);
+        AILAudio_Destroy(stream);
         stream = NULL;
         return false;
     }
@@ -528,21 +535,22 @@ static bool PlayOggFile(const char *oggPath, S32 startFrame) {
    `wavData` (the caller owns it). */
 static bool SetupWavStream(const SDL_AudioSpec *spec, const Uint8 *wavData,
                            Uint32 wavLen, S32 startFrame) {
-    stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, spec, NULL, NULL);
+    stream = AILAudio_Open(spec, NULL, NULL);
     if (!stream) {
         SDL_Log("SDL AIL: Could not open audio stream: %s", SDL_GetError());
         return false;
     }
-    streamBytesPerFrame = (int)SDL_AUDIO_BYTESIZE(spec->format) * spec->channels;
+    streamBytesPerFrame = (int)(AIL_AUDIO_BITSIZE(spec->format) / 8) * spec->channels;
     Uint32 offsetBytes = 0;
     if (startFrame > 0 && streamBytesPerFrame > 0) {
         offsetBytes = (Uint32)startFrame * (Uint32)streamBytesPerFrame;
         if (offsetBytes > wavLen)
             offsetBytes = wavLen;
     }
-    SDL_PutAudioStreamData(stream, wavData + offsetBytes, wavLen - offsetBytes);
-    SDL_AddAtomicInt(&streamPushedBytes, (int)(wavLen - offsetBytes));
-    SDL_FlushAudioStream(stream); // all input pushed -> let the converter drain to 0 at EOF (#406)
+    streamBaseFrame = (streamBytesPerFrame > 0) ? (int)(offsetBytes / (Uint32)streamBytesPerFrame) : 0;
+    AILAudio_Put(stream, wavData + offsetBytes, wavLen - offsetBytes);
+    AIL_AtomicAdd(&streamPushedBytes, (int)(wavLen - offsetBytes));
+    AILAudio_Flush(stream); // all input pushed -> let the converter drain to 0 at EOF (#406)
     streamFreq = spec->freq;
     streamStartBytes = offsetBytes;
     streamTrackBytes = wavLen;
@@ -564,9 +572,9 @@ static void FinishStream(const char *name) {
     float gain = (streamVolume <= 0) ? 0.0f : (float)streamVolume / 127.0f;
     if (gain > 1.0f)
         gain = 1.0f;
-    SDL_SetAudioStreamGain(stream, gain);
+    AILAudio_Gain(stream, gain);
 
-    SDL_ResumeAudioStreamDevice(stream);
+    AILAudio_Resume(stream);
 
     strncpy(streamPathName, name, ADELINE_MAX_PATH - 1);
     streamPathName[ADELINE_MAX_PATH - 1] = '\0';
@@ -623,13 +631,12 @@ static bool PlayWavFromImage(const char *name, S32 startFrame) {
     if (!raw)
         return false;
 
-    SDL_IOStream *io = SDL_IOFromConstMem(raw, rawLen);
     SDL_AudioSpec spec;
     Uint8 *wav_data = NULL;
     Uint32 wav_data_len = 0;
     /* closeio=true closes `io` whether or not the load succeeds; it does not own
        `raw`, which we free below once SDL has copied the PCM into wav_data. */
-    bool loaded = io && SDL_LoadWAV_IO(io, true, &spec, &wav_data, &wav_data_len);
+    bool loaded = AILAudio_LoadWAVMemory(raw, rawLen, &spec, &wav_data, &wav_data_len);
     free(raw);
     if (!loaded)
         return false; // present in the image but not a WAV we can decode
@@ -685,7 +692,7 @@ static bool PlayCdAudioBuffer(Uint8 *pcm, size_t pcmBytes, uint32_t startSector,
     SDL_AudioSpec spec;
     SDL_zero(spec);
     spec.freq = 44100;
-    spec.format = SDL_AUDIO_S16LE;
+    spec.format = AIL_AUDIO_S16LE;
     spec.channels = 2;
     return SetupWavStream(&spec, pcm, (Uint32)pcmBytes, skipFrames);
 }
@@ -827,7 +834,7 @@ static RedbookOutcome PlayTocTrack(const CueTrack *t, const CueTrack *toc, int n
         Uint8 *wav = NULL;
         Uint32 wavLen = 0;
         bool played;
-        if (SDL_LoadWAV(path, &spec, &wav, &wavLen)) {
+        if (AILAudio_LoadWAV(path, &spec, &wav, &wavLen)) {
             played = SetupWavStream(&spec, wav, wavLen, startFrame);
             SDL_free(wav);
         } else {
@@ -1027,6 +1034,8 @@ static RedbookOutcome PlayRedbookByNumber(const char *name, S32 startFrame) {
 /* ── Public API ────────────────────────────────────────────────────────── */
 
 static void PlayStreamInternal(const char *name, S32 startFrame) {
+    if (!AILAudio_Initialized())
+        return;
     if (!name || !name[0])
         return;
 
@@ -1064,7 +1073,7 @@ static void PlayStreamInternal(const char *name, S32 startFrame) {
     SDL_AudioSpec spec;
     Uint8 *wav_data = NULL;
     Uint32 wav_data_len = 0;
-    if (SDL_LoadWAV(name, &spec, &wav_data, &wav_data_len)) {
+    if (AILAudio_LoadWAV(name, &spec, &wav_data, &wav_data_len)) {
         if (musicLogEnabled)
             SDL_Log("[MUSIC] PlayStream start WAV: %s", name);
         bool ok = SetupWavStream(&spec, wav_data, wav_data_len, startFrame);
@@ -1139,7 +1148,7 @@ static void PlayStreamInternal(const char *name, S32 startFrame) {
             Uint8 *cwav = NULL;
             Uint32 cwavLen = 0;
             bool played;
-            if (SDL_LoadWAV(cueAudio, &cspec, &cwav, &cwavLen)) {
+            if (AILAudio_LoadWAV(cueAudio, &cspec, &cwav, &cwavLen)) {
                 played = SetupWavStream(&cspec, cwav, cwavLen, startFrame);
                 SDL_free(cwav);
             } else {
@@ -1174,7 +1183,7 @@ void ChangeVolumeStream(S32 volume) {
         float gain = (volume <= 0) ? 0.0f : (float)volume / 127.0f;
         if (gain > 1.0f)
             gain = 1.0f;
-        SDL_SetAudioStreamGain(stream, gain);
+        AILAudio_Gain(stream, gain);
         if (musicLogEnabled)
             SDL_Log("[MUSIC] ChangeVolumeStream vol=%d gain=%.3f", volume, gain);
     }
@@ -1205,7 +1214,8 @@ void PauseStream() {
         }
         return;
     }
-    if (Stream_ShouldPark(stream != NULL, streamPaused)) {
+    /* (our music loops -- PumpStreamLoop -- so a stream is never left played out: always one to park, as before upstream 15e84452) */
+    if (Stream_ShouldPark(stream != NULL, streamPaused, 1)) {
         /* Park the position so a later Resume can restore even if a different
            stream (e.g. the in-game menu theme) plays and tears this one down in
            the meantime. MILES does the same in PauseCD (save Cur/End/track). */
@@ -1215,7 +1225,7 @@ void PauseStream() {
         hasRemembered = true;
         if (musicLogEnabled)
             SDL_Log("[MUSIC] PauseStream park=%s frame=%d", rememberedPath, (int)rememberedFrame);
-        SDL_PauseAudioStreamDevice(stream);
+        AILAudio_Pause(stream);
         streamPaused = true;
     } else if (stream != NULL && !streamPaused) {
         /* The current track has played out, so this pause has nothing to resume.
@@ -1239,7 +1249,7 @@ void ResumeStream() {
             ResumeMidiOutput();
             ResumeMidi();
         } else
-            SDL_ResumeAudioStreamDevice(stream);
+            AILAudio_Resume(stream);
         streamPaused = false;
         hasRemembered = false;
         break;
@@ -1274,7 +1284,7 @@ void SuspendStreamOutput() {
     if (stream) {
         if (musicLogEnabled)
             SDL_Log("[MUSIC] SuspendStreamOutput");
-        SDL_PauseAudioStreamDevice(stream);
+        AILAudio_Pause(stream);
     }
 }
 
@@ -1286,7 +1296,7 @@ void ResumeStreamOutput() {
     if (Stream_ShouldResumeDeviceOnFocus(stream != NULL, streamPaused)) {
         if (musicLogEnabled)
             SDL_Log("[MUSIC] ResumeStreamOutput");
-        SDL_ResumeAudioStreamDevice(stream);
+        AILAudio_Resume(stream);
     }
 }
 
@@ -1304,13 +1314,13 @@ S32 IsStreamPlaying() {
         return FALSE;
     if (streamPaused)
         return FALSE;
-    if (SDL_GetAtomicInt(&decodeActive))
+    if (AIL_AtomicGet(&decodeActive))
         return TRUE;
     /* The stream is fully pushed and flushed (see PlayOggFile / SetupWavStream /
        DecodeThreadFunc), so once the device has consumed everything the queue reaches
        0 and the track is done. Without the flush the device-format converter would
        hold a few bytes here forever and the stream would never report EOF (#406). */
-    int queued = SDL_GetAudioStreamQueued(stream);
+    int queued = AILAudio_Queued(stream);
     if (queued <= 0) {
         StopStreamInternal();
         return FALSE;
@@ -1340,7 +1350,7 @@ void SetStreamLoop(S32 on) {
         SDL_Log("[MUSIC] music no longer kept going: it ends when it ends -- %s at %.2f s of %.2f s, %.2f s queued, played again %d times",
                 streamPathName, StreamPositionFrames() / (double)streamFreq,
                 streamBytesPerFrame > 0 ? streamTrackBytes / ((double)streamFreq * streamBytesPerFrame) : 0.0,
-                streamBytesPerFrame > 0 ? SDL_GetAudioStreamQueued(stream) / ((double)streamFreq * streamBytesPerFrame) : 0.0, loopCount);
+                streamBytesPerFrame > 0 ? AILAudio_Queued(stream) / ((double)streamFreq * streamBytesPerFrame) : 0.0, loopCount);
     if (!loopOn)
         LoopPcmFree();
 }
@@ -1351,10 +1361,10 @@ S32 PumpStreamLoop(void) {
     /* (a MIDI file loops itself, MIDI.CPP -- unless it ended before looping was on: started again below) */
     if (streamMidi && !HasMidiEnded())
         return 0;
-    if (stream && (streamPaused || SDL_GetAtomicInt(&decodeActive)))
+    if (stream && (streamPaused || AIL_AtomicGet(&decodeActive)))
         return 0; // (paused: nothing played; an OGG still decoding: still being queued)
     if (stream) {
-        const int queued = SDL_GetAudioStreamQueued(stream);
+        const int queued = AILAudio_Queued(stream);
         /* the whole track at hand: a WAV-ish source's copy, or the OGG's decoded cache */
         const Uint8 *pcm = NULL;
         Uint32 len = 0;
@@ -1371,12 +1381,12 @@ S32 PumpStreamLoop(void) {
                 return 0;
             /* (the count of bytes pushed kept well inside an int: whole tracks already played taken off it, which leaves the position
                within the track -- StreamPositionFrames -- as it was) */
-            const int pushed = SDL_GetAtomicInt(&streamPushedBytes);
+            const int pushed = AIL_AtomicGet(&streamPushedBytes);
             if (pushed > (1 << 30) && pushed - queued > 0)
-                SDL_AddAtomicInt(&streamPushedBytes, -((pushed - queued) / (int)len) * (int)len);
-            SDL_PutAudioStreamData(stream, pcm, (int)len);
-            SDL_AddAtomicInt(&streamPushedBytes, (int)len);
-            SDL_FlushAudioStream(stream);
+                AIL_AtomicAdd(&streamPushedBytes, -((pushed - queued) / (int)len) * (int)len);
+            AILAudio_Put(stream, pcm, (int)len);
+            AIL_AtomicAdd(&streamPushedBytes, (int)len);
+            AILAudio_Flush(stream);
             streamTrackBytes = len;
             loopCount++;
             SDL_Log("[MUSIC] %s queued again behind itself (%d times now): %.1f s, %.2f s of it still to play", streamPathName, loopCount,

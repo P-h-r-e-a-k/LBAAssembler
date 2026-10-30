@@ -48,8 +48,7 @@ int WriteEmbeddedDefaultLba2Cfg(const char *destPath);
 #endif
 #include <unistd.h>
 
-#include <SDL3/SDL_cpuinfo.h> /* SDL_GetNumLogicalCPUCores, SDL_GetSystemRAM */
-#include <SDL3/SDL_timer.h>   /* SDL_Delay - waiting out a window we cannot have yet */
+#include <PLATFORM/PLATFORM.H>
 
 /* How long the boot will wait for a window, and how often it retries.
    Generous on purpose: this loop ends the moment the surface comes back, so the
@@ -159,8 +158,8 @@ void InitAdeline(S32 argc, char *argv[]) {
 
         /* Boot identity + key paths up top, so a pasted log is self-describing. */
         Log_Banner("%s · %s %s · %d cores · %d GB RAM", APPNAME, LOG_PLATFORM_NAME,
-                   LOG_ARCH_NAME, SDL_GetNumLogicalCPUCores(),
-                   (SDL_GetSystemRAM() + 512) / 1024);
+                   LOG_ARCH_NAME, g_platform.system.cpu_count(),
+                   (g_platform.system.ram_mb() + 512) / 1024);
         Log_Raw("Built %s %s from commit %s", __DATE__, __TIME__, LBA2_COMMIT_STRING);
         /* Which probe found the assets, in parentheses after the path. The probe
            list runs silently, so "the engine booted the wrong install" and "the
@@ -344,8 +343,9 @@ void InitAdeline(S32 argc, char *argv[]) {
        SDL dummy driver's nanosleep pacing — ~58% of sys time in projection_demo
        on a WSL2 setup. Player builds always init audio; this gate is only
        reached when the harness explicitly opts out. Call sites under
-       LIB386/AIL/SDL/ gate on Sample_Driver_Enabled / non-NULL stream, so
-       playback paths become silent no-ops when audio isn't up. */
+       LIB386/AIL/SDL/ gate samples on Sample_Driver_Enabled and new music/video
+       playback on audio-subsystem readiness, so disabled audio does not decode
+       tracks or try to open output devices. */
     if (!Control_NoAudio()) {
         InitAIL(); // TODO: Reorganize/reposition closer to sound subsystem
     }
@@ -387,7 +387,7 @@ void InitAdeline(S32 argc, char *argv[]) {
         bool graphicsUp = InitGraphics(reqResX, reqResY, reqFullscreen);
         while (!graphicsUp && Window_CanLoseNativeWindow() &&
                waitedMs < BOOT_WINDOW_WAIT_MS) {
-            SDL_Delay(BOOT_WINDOW_POLL_MS);
+            g_platform.system.delay_ms(BOOT_WINDOW_POLL_MS);
             waitedMs += BOOT_WINDOW_POLL_MS;
             graphicsUp = InitGraphics(reqResX, reqResY, reqFullscreen);
         }
@@ -430,16 +430,9 @@ void InitAdeline(S32 argc, char *argv[]) {
 #error ADELINE: you need to include AIL.H
 #endif
         if (!InitSampleDriver(NULL)) {
-            /* No usable audio output (host has no audio device, SDL_AUDIODRIVER
-               points at something invalid, the audio subsystem failed to come
-               up earlier). Previously this exit(1)'d the process; now we log
-               and continue with audio disabled. Every audio entry point in
-               LIB386/AIL/SDL/{SAMPLE,STREAM,VIDEO_AUDIO_SDL}.CPP already gates
-               on Sample_Driver_Enabled / a non-NULL stream, so playback calls
-               become silent no-ops rather than UB. The harness uses this to
-               bypass the SDL dummy driver's nanosleep pacing (~58% of sys time
-               in projection_demo); a player whose audio device fails just
-               loses sound instead of being unable to launch the game. */
+            /* Audio failure must not prevent game launch. Samples stay disabled
+               when their driver fails; music/video skip an uninitialized audio
+               subsystem and report output-device failures when it is ready. */
             Log_Warn("Audio      none - running silently");
         } else if (!Sample_DriverPlaysSound()) {
             /* The null backend initialises and reports success, then plays nothing.

@@ -3,5 +3,5 @@ target_include_directories(console PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/..
   ${CMAKE_SOURCE_DIR}/LIB386/H
 )
-target_link_libraries(console PRIVATE ${LBA2_SDL3_TARGET})
+target_link_libraries(console PRIVATE lba2_platform ${LBA2_SDL3_TARGET})
 target_compile_definitions(console PRIVATE ONE_GAME_DIRECTORY LBA_GAME CDROM SDL_DISABLE_OLD_NAMES)

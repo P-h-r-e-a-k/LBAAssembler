@@ -3,8 +3,7 @@
 #include <SVGA/SCREEN.H> // For ModeDesiredX, ModeDesiredY
 #include <SYSTEM/WINDOW.H>
 
-#include <SDL3/SDL_events.h>
-#include <SDL3/SDL_timer.h>
+#include <PLATFORM/PLATFORM.H>
 #include <math.h>
 #include <assert.h>
 
@@ -39,11 +38,15 @@ U32 MouseBoxX0, MouseBoxX1, MouseBoxY0, MouseBoxY1;
 volatile S32 MouseWheelYAccum = 0;
 
 static bool s_showSpriteAfterFirstMotion = false;
-static Uint32 s_lastPointerActivityMs = 0;
+static U32 s_lastPointerActivityMs = 0;
 static bool s_mouseMotionFlag = false;
+/* The last pointer event came from a finger. A finger moves the pointer and
+ * clicks like a mouse, but it is already on the spot it points at, so the
+ * sprite stays hidden until a real mouse moves. */
+static bool s_pointerIsFinger = false;
 
 static void MousePointerMarkActivity(void) {
-    s_lastPointerActivityMs = SDL_GetTicks();
+    s_lastPointerActivityMs = g_platform.system.ticks_ms();
 }
 
 // --- Extern state ------------------------------------------------------------
@@ -55,6 +58,20 @@ extern U8 BinGphMouse[];
 // Cleared here on any mouse activity: a mouse is not a keyboard, so the save
 // menu uses the auto-name (controller) flow when the user reaches for the mouse.
 extern "C" S32 LastInputWasKeyboard;
+// Touch overlay's last-device flag (SYSTEM/KEYBOARD.H). Only a real mouse
+// clears it: SDL turns every finger into mouse events too, and clearing on
+// those would cancel the touch that made them.
+extern "C" S32 LastInputWasTouch;
+
+/* Bookkeeping for one pointer event, finger or mouse. */
+static void NotePointerSource(bool touch) {
+    s_pointerIsFinger = touch;
+    LastInputWasKeyboard = 0;
+    if (touch)
+        return;
+    LastInputWasTouch = 0;
+    MousePointerMarkActivity();
+}
 
 // --- Initialization ----------------------------------------------------------
 void InitMouse() {
@@ -75,9 +92,11 @@ bool MouseSpriteShouldDraw(void) {
         return false;
     if (MouseSpriteGraphic == NULL)
         return false;
+    if (s_pointerIsFinger)
+        return false;
     {
-        Uint32 now = SDL_GetTicks();
-        Uint32 elapsed = now - s_lastPointerActivityMs;
+        U32 now = g_platform.system.ticks_ms();
+        U32 elapsed = now - s_lastPointerActivityMs;
 
         if (elapsed >= MOUSE_SPRITE_IDLE_HIDE_MS)
             return false;
@@ -168,31 +187,30 @@ void SetMouseMotion(S32 dx, S32 dy) {
     LibMouseYDep = dy;
 }
 
-void HandleEventsMouse(const void *event) {
+void HandleEventsMouse(const PlatformEvent *event) {
     assert(event != NULL);
 
-    const SDL_Event *sdlEvent = (SDL_Event *)(event);
+    const PlatformEvent *platformEvent = event;
 
-    switch (sdlEvent->type) {
-    case SDL_EVENT_MOUSE_MOTION: {
+    switch (platformEvent->type) {
+    case PLATFORM_EVENT_MOUSE_MOTION: {
         S32 prevX;
         S32 prevY;
         S32 curX;
         S32 curY;
 
-        WindowToSurfaceCoords((S32)(sdlEvent->motion.x - sdlEvent->motion.xrel),
-                              (S32)(sdlEvent->motion.y - sdlEvent->motion.yrel),
+        WindowToSurfaceCoords((S32)(platformEvent->motion.x - platformEvent->motion.xrel),
+                              (S32)(platformEvent->motion.y - platformEvent->motion.yrel),
                               &prevX, &prevY);
-        WindowToSurfaceCoords((S32)sdlEvent->motion.x, (S32)sdlEvent->motion.y,
+        WindowToSurfaceCoords((S32)platformEvent->motion.x, (S32)platformEvent->motion.y,
                               &curX, &curY);
 
         LibMouseXDep += curX - prevX;
         LibMouseYDep += curY - prevY;
         SetMousePos((U32)curX, (U32)curY);
 
-        MousePointerMarkActivity();
         s_mouseMotionFlag = true;
-        LastInputWasKeyboard = 0;
+        NotePointerSource(platformEvent->motion.touch);
 
         if (s_showSpriteAfterFirstMotion) {
             s_showSpriteAfterFirstMotion = false;
@@ -200,29 +218,31 @@ void HandleEventsMouse(const void *event) {
         }
     } break;
 
-    case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        MousePointerMarkActivity();
-        Click |= (sdlEvent->button.button == 1) ? 1 : 0;
-        Click |= (sdlEvent->button.button == 2) ? 4 : 0;
-        Click |= (sdlEvent->button.button == 3) ? 2 : 0;
-        LastInputWasKeyboard = 0;
+    case PLATFORM_EVENT_MOUSE_BUTTON_DOWN:
+        Click |= (platformEvent->button.button == 1) ? 1 : 0;
+        Click |= (platformEvent->button.button == 2) ? 4 : 0;
+        Click |= (platformEvent->button.button == 3) ? 2 : 0;
+        NotePointerSource(platformEvent->button.touch);
         break;
 
-    case SDL_EVENT_MOUSE_BUTTON_UP:
-        MousePointerMarkActivity();
-        Click &= (sdlEvent->button.button == 1) ? ~1 : Click;
-        Click &= (sdlEvent->button.button == 2) ? ~4 : Click;
-        Click &= (sdlEvent->button.button == 3) ? ~2 : Click;
+    case PLATFORM_EVENT_MOUSE_BUTTON_UP:
+        if (!platformEvent->button.touch)
+            MousePointerMarkActivity();
+        Click &= (platformEvent->button.button == 1) ? ~1 : Click;
+        Click &= (platformEvent->button.button == 2) ? ~4 : Click;
+        Click &= (platformEvent->button.button == 3) ? ~2 : Click;
         break;
 
-    case SDL_EVENT_MOUSE_WHEEL:
-        MousePointerMarkActivity();
-        MouseWheelYAccum += (S32)lround((double)sdlEvent->wheel.y);
+    case PLATFORM_EVENT_MOUSE_WHEEL:
+        // No finger makes a wheel event: this is a mouse or a touchpad.
+        NotePointerSource(false);
+        MouseWheelYAccum += (S32)lround((double)platformEvent->wheel.y);
         if (MouseWheelYAccum > MOUSE_WHEEL_ACCUM_CAP)
             MouseWheelYAccum = MOUSE_WHEEL_ACCUM_CAP;
         if (MouseWheelYAccum < -MOUSE_WHEEL_ACCUM_CAP)
             MouseWheelYAccum = -MOUSE_WHEEL_ACCUM_CAP;
-        LastInputWasKeyboard = 0;
+        break;
+    default:
         break;
     }
 }

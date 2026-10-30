@@ -1,7 +1,7 @@
 #include "MIDI_SDL.H"
 #include "SAMPLE_SDL.H" /* Sample_Driver_Enabled: whether the game's audio is up at all */
 
-#include <SDL3/SDL.h>
+#include "SDK.H"
 
 #include <ctype.h>
 #include <math.h>

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <PLATFORM/PLATFORM.H>
+
 #include <SYSTEM/ADELINE_TYPES.H>
 
 // -----------------------------------------------------------------------------
@@ -35,7 +37,7 @@ S32 CheckKey(U32 key);
 void GetKeyScancodeName(char *string, U8 strMaxLen, U32 scanCode);
 
 void ManageKeyboard();
-void HandleEventsKeyboard(const void *event);
+void HandleEventsKeyboard(const PlatformEvent *event);
 
 /// F11 or Alt+Enter, pressed: the game's switch between full screen and a window (CONFIG_FILE.CPP sets it: the setting flipped, applied and
 /// saved). NULL: the keys do nothing of the kind.
