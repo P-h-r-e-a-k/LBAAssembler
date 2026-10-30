@@ -590,8 +590,8 @@ size) came down over a column, and the cars drove through its cloth.
 - *The camera.* The rail camera rides the road's middle 9 cells behind the car, which is where she stands. On the grid, a car close
   behind her (pole) has its eye at least 15.5 cells behind her, so her raised flag is in view. The eye eases back over 1.5 s once the car
   moves off. As the cars set off, the eye keeps 3.6 cells across from her middle, on the car's side, eased in and out over 9 cells
-  (`MarshalBack`, `MarshalEye`). Without that it passed through her. While she is on the road, the count-down moves to the side of the
-  screen the car is on (`MarshalCountX`), because in the middle it was drawn over her.
+  (`MarshalBack`, `MarshalEye`). Without that it passed through her. The count-down stays in the middle of the screen, over her raised
+  flag: it went to the car's side from 2026-10-18 until 2026-10-30, when the user asked for it back in the centre.
 
 ![The last lap: on her plinth right beside the road at the line, waving the chequered flag as the car comes up](temple/marshal_finish.png)
 

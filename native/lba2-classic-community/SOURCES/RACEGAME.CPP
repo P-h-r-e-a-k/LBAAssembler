@@ -167,6 +167,8 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_GHOST_SHARE 2386            // ... "Share my ghosts..." (the setup's --export-ghosts)
 #define RG_ID_STORY_NEW 2387              // Story Mode's rows (StoryMode): a new story, the story kept continued
 #define RG_ID_STORY_CONTINUE 2388
+#define RG_ID_QUIT_NO 2389                  // the Quit page's rows (QuitPage)
+#define RG_ID_QUIT_YES 2390
 #define RG_OTHERS_SHOWN 5
 #define RG_ID_BACK 26                       // the game's own "Back"
 #define RG_ID_RESUME 70
@@ -1106,6 +1108,8 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
     case RG_ID_STORY_CONTINUE: Label(string, "Continue the story"); return 1;
+    case RG_ID_QUIT_NO: Label(string, "No"); return 1;
+    case RG_ID_QUIT_YES: Label(string, "Yes, quit"); return 1;
     case RG_ID_TRACKS: Label(string, "Track select"); return 1;
     case RG_ID_RESTART: Label(string, s_raceWatch[0] ? "Watch again from the start" : s_raceTrial ? "Restart the time trial" : "Restart the race"); return 1;
     case RG_ID_SPECIALS: Label(string, "Specials"); return 1;
@@ -3233,6 +3237,25 @@ static void CelebratePage(int car) {
     Log_Info("[racegame] congratulations over after %.1f s (%d frames)", (TimerRefHR - start) / 1000.0, frames);
 }
 
+// The main menu's Quit asked again (2026-10-30, the user: "Add a confirmation if a user selects "Quit" via the menu, to confirm they want
+// to exit the game. Clicking the x on the window should not trigger a confirmation": the window's X doesn't come through here). No first,
+// so that Enter pressed twice doesn't leave the game. Non-zero: quit; 0: No or Esc.
+static U16 s_quitMenu[4 + 2 * 2];
+static int QuitPage(void) {
+    s_quitMenu[0] = 0;
+    s_quitMenu[1] = 2;
+    s_quitMenu[2] = 280;
+    s_quitMenu[3] = 0;
+    SetRow(s_quitMenu, 0, RG_ID_QUIT_NO);
+    SetRow(s_quitMenu, 1, RG_ID_QUIT_YES);
+    for (;;) {
+        Page("Quit the game?", 280 - (56 * 2) / 2 - 50);
+        const S32 select = Menu(s_quitMenu);
+        if (select == RG_ID_QUIT_NO || select == 1000) { Page(NULL, 0); return 0; }
+        if (select == RG_ID_QUIT_YES) return 1;
+    }
+}
+
 S32 RaceGame_Menu(S32 inGame) {
     Read();
     // (the story played: its place kept, the game having saved it in current.lba as the menu opened)
@@ -3281,15 +3304,18 @@ S32 RaceGame_Menu(S32 inGame) {
         // (the window resized: the backdrop is made again -- shaded in a race -- and the rows go on it)
         if (select == MENU_RELAYOUT) continue;
         if (select == RG_ID_TRACKS || select == RG_ID_SPECIALS || select == RG_ID_TIMES) lastChosen = (U16)select;
-        if (select != 1000 && select != RG_ID_RESUME && select != MENU_RELAYOUT) s_watchListN = 0;
+        // (Quit too: No puts the menu back as it was)
+        if (select != 1000 && select != RG_ID_RESUME && select != RG_ID_QUIT && select != MENU_RELAYOUT) s_watchListN = 0;
         switch (select) {
         case 1000:
             if (resume) return 1000;
             break;
         case RG_ID_RESUME:
         case RG_ID_OPTIONS:
-        case RG_ID_QUIT:
             return select;
+        case RG_ID_QUIT:
+            if (QuitPage()) return select;
+            break;
         case RG_ID_TRACKS:
             if (TrackSelect()) return RACEGAME_START;
             break;

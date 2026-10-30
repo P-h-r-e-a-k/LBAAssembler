@@ -7093,19 +7093,6 @@ static void MarshalHop(S32 now) {
     m->CBeta = k == 0 || k == m->Hops - 1 ? (S32)(from + turn * (u < 0.5 ? 2 * u : 1)) & 4095 : way;
 }
 
-// The count-down's place across the screen (its middle, x): the screen's middle -- but with her on the road for the start, in the middle
-// of the camera's view with her flag raised over its upper third, where the count-down was drawn over her, it goes to the side of the
-// screen the car is on (the camera aims along the car's grid column: she stands to the other side of the middle).
-static S32 MarshalCountX(S32 width) {
-    const T_RACE_MARSHAL *m = &s_marshal;
-    if (!MarshalOnRoad() || m->Where != MARSHAL_AT_START) return width / 2;
-    const T_OBJET *h = &ListObjet[NUM_PERSO];
-    double fx, fz;
-    MarshalWay(&fx, &fz);
-    const double across = -(h->Obj.X + CurrentCubeX * 32768.0 - m->CX) * fz + (h->Obj.Z + CurrentCubeY * 32768.0 - m->CZ) * fx;
-    return width / 2 + (across >= 0 ? 1 : -1) * width * 3 / 10;
-}
-
 // Every frame: where she is -- on the road from the grid's forming (or before a qualifying lap) until every car has driven past her (each
 // car's middle RACE_MARSHAL_PAST beyond hers along the lap, the nearest it came kept), her drop over; then hopping off it onto her plinth.
 static void MarshalWhere(S32 now) {
@@ -17719,12 +17706,14 @@ void RaceMod_Draw(void) {
         }
 
         // the count-down in the middle of the screen: 3, 2, 1 a second each, then GO for a second
+        // (always there, 2026-10-30, the user: "can we put them back in the screen centre": from 2026-10-18 it went to the car's side with
+        // the flag marshal on the road, away from her flag)
         const char *count = NULL;
         if (s_phase == PHASE_GRID && now >= s_goAt - 3000) count = now < s_goAt - 2000 ? "3" : now < s_goAt - 1000 ? "2" : "1";
         else if (s_nbSpots && s_phase == PHASE_RACE && s_goAt && now < s_goAt + 1000) count = "GO!";
         if (count) {
             const S32 k = height / 48 > 3 ? height / 48 : 3;
-            BigText(MarshalCountX(width), height / 3, count, k, count[0] == 'G' ? RACE_GREEN : RACE_RED);
+            BigText(width / 2, height / 3, count, k, count[0] == 'G' ? RACE_GREEN : RACE_RED);
         }
     }
     // a message of the race-track mode's (Message: "Back on the road", the roulette wheel's prize), in the middle near the top -- set
