@@ -1124,7 +1124,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
     case RG_ID_STORY_CONTINUE: Label(string, "Continue the story"); return 1;
     case RG_ID_QUIT_NO: Label(string, "No"); return 1;
-    case RG_ID_QUIT_YES: Label(string, "Yes, quit"); return 1;
+    case RG_ID_QUIT_YES: Label(string, "Yes"); return 1;
     case RG_ID_TRACKS: Label(string, "Track select"); return 1;
     case RG_ID_RESTART: Label(string, s_raceWatch[0] ? "Watch again from the start" : s_raceTrial ? "Restart the time trial" : "Restart the race"); return 1;
     case RG_ID_SPECIALS: Label(string, "Specials"); return 1;
