@@ -103,6 +103,7 @@
 #include "RACEMOD.H"
 #include "RACEUPDATE.H"
 #include "NETRACE.H"
+#include "RES_CATALOG.H"
 #include "RES_SWITCH.H"
 #include "UI_LAYOUT.H"
 
@@ -175,6 +176,12 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_ONLINE_HOST 2392
 #define RG_ID_ONLINE_JOIN 2393
 #define RG_ID_ONLINE_BACK 2394
+#define RG_ID_LOCAL 2395                    // ... two players at one PC (LocalPage)
+#define RG_ID_LOCAL_SIDE 2396
+#define RG_ID_LOCAL_STACK 2397
+#define RG_ID_LOCAL_SCREENS 2398
+#define RG_ID_SCREEN 2400                   // ... a screen, by its place in the list (ScreenPage)
+#define RG_SCREENS 6
 #define RG_OTHERS_SHOWN 5
 #define RG_ID_BACK 26                       // the game's own "Back"
 #define RG_ID_RESUME 70
@@ -1114,6 +1121,7 @@ static int GhostRowK(S32 num) { return num == RG_ID_GHOST_EXTREME ? 4 : 1 + num 
 static const char *OwnLapName(int sp, S32 lap, S32 mine) { return !mine ? "Shared ghost" : BestOf(sp) && BestOf(sp)->Lap < lap ? "Your recorded lap" : "Your best lap"; }
 static const char *s_gpOwnName = "Your best lap";
 
+static char s_screenName[RG_SCREENS][64];   // ScreenPage's rows
 S32 RaceGame_RowDisabled(S32 num) {
     if (!s_on) return 0;
     if (num == RG_ID_GHOST_OWN) return !s_gpLap[0];
@@ -1132,10 +1140,16 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_STORY_CONTINUE: Label(string, "Continue the story"); return 1;
     case RG_ID_QUIT_NO: Label(string, "No"); return 1;
     case RG_ID_QUIT_YES: Label(string, "Yes"); return 1;
-    case RG_ID_ONLINE: Label(string, "Online race"); return 1;
+    case RG_ID_ONLINE: Label(string, "Multiplayer"); return 1;
+    case RG_ID_LOCAL: Label(string, "Two players on this PC"); return 1;
+    case RG_ID_LOCAL_SIDE: Label(string, "Side by side"); return 1;
+    case RG_ID_LOCAL_STACK: Label(string, "One above the other"); return 1;
+    case RG_ID_LOCAL_SCREENS: Label(string, "One on each screen"); return 1;
     case RG_ID_ONLINE_HOST: Label(string, "Host a race"); return 1;
     case RG_ID_ONLINE_JOIN: Label(string, "Join a race"); return 1;
     case RG_ID_ONLINE_BACK: Label(string, "Back"); return 1;
+    case RG_ID_SCREEN + 0: case RG_ID_SCREEN + 1: case RG_ID_SCREEN + 2: case RG_ID_SCREEN + 3: case RG_ID_SCREEN + 4: case RG_ID_SCREEN + 5:
+        Label(string, s_screenName[num - RG_ID_SCREEN]); return 1;
     case RG_ID_TRACKS: Label(string, "Track select"); return 1;
     case RG_ID_RESTART: Label(string, s_raceWatch[0] ? "Watch again from the start" : s_raceTrial ? "Restart the time trial" : "Restart the race"); return 1;
     case RG_ID_SPECIALS: Label(string, "Specials"); return 1;
@@ -3367,7 +3381,9 @@ static void CelebratePage(int car) {
 // to exit the game. Clicking the x on the window should not trigger a confirmation": the window's X doesn't come through here). No first,
 // so that Enter pressed twice doesn't leave the game. Non-zero: quit; 0: No or Esc.
 static U16 s_quitMenu[4 + 2 * 2];
-static U16 s_onlineMenu[4 + 2 * 3];
+static U16 s_onlineMenu[4 + 2 * 4];
+static U16 s_localMenu[4 + 2 * 4];
+static U16 s_screenMenu[4 + 2 * (RG_SCREENS + 1)];
 // ---- online races (NETRACE.CPP) --------------------------------------------------------------------------------------------------------
 
 // A line typed in: letters, digits, what an address has, Backspace, Ctrl+V. Non-zero: Enter
@@ -3506,14 +3522,186 @@ static int StartOnline(int sp, int laps) {
     return started;
 }
 
+// ---- two players at one PC ---------------------------------------------------------------------------------------------------------------
+//
+// Two copies of the game, each in its own window, racing as an online race does over this PC's own network: the engine has one camera, one screen buffer and one
+// hero, all globals, and this leaves it so. The first game moves into its half of the screen (or its own screen) and starts the second, which joins by itself
+// (LBA2_PLAYER2), has its own saves, is silent, and never takes the keyboard. The second player needs a pad; the first has the keyboard and another, if there is one.
+#define RG_LOCAL_PORT 21998
+#define RG_LOCAL_MAX_W 1280                 // the picture's size at most: two games drawing a big one each is a lot for a software renderer ...
+#define RG_LOCAL_MAX_H 720
+#define RG_LOCAL_MIN_H 480                  // ... and at least: the pages are laid out for this height
+static int s_localGuest = -1;               // this game is the second player's (-1: not looked yet)
+static SDL_Window *s_localWindow = NULL;    // the first game's window, moved: where to put it back
+static SDL_Rect s_localWas;
+static U32 s_localResW = 0, s_localResH = 0;
+
+// The picture's size for a window of w x h: its shape, within the limits
+static void LocalPicture(int w, int h, int *rw, int *rh) {
+    double s = 1;
+    if (h * s > RG_LOCAL_MAX_H) s = (double)RG_LOCAL_MAX_H / h;
+    if (w * s > RG_LOCAL_MAX_W) s = (double)RG_LOCAL_MAX_W / w;
+    if (h * s < RG_LOCAL_MIN_H) s = (double)RG_LOCAL_MIN_H / h;
+    // (a width the engine takes: Res_ValidateDimensions)
+    *rw = (int)(w * s) & ~7;
+    if (*rw > RES_MAX_W) *rw = RES_MAX_W;
+    *rh = (int)(h * s) & ~1;
+}
+
+static void LocalEnd(void) {
+    if (!s_localWindow) return;
+    SDL_SetWindowBordered(s_localWindow, true);
+    SDL_SetWindowSize(s_localWindow, s_localWas.w, s_localWas.h);
+    SDL_SetWindowPosition(s_localWindow, s_localWas.x, s_localWas.y);
+    if (s_localResW && Res_Switch(s_localResW, s_localResH)) Menu_RepaintAfterWindowFit();
+    Joystick_UsePad(0);
+    s_localWindow = NULL;
+    Log_Info("[racegame] two players: this window put back");
+}
+
+// The two rectangles taken: the second game started, this one moved. Non-zero: both ready
+static int LocalStart(const SDL_Rect *one, const SDL_Rect *two) {
+    int pads = 0;
+    SDL_JoystickID *ids = SDL_GetGamepads(&pads);
+    SDL_free(ids);
+    if (const char *test = getenv("LBA2_LOCAL_PADS")) pads = atoi(test);
+    if (pads < 1) { SayPage("Two players", "Player 2 needs a controller: plug one in"); return 0; }
+    int windows = 0;
+    SDL_Window **list = SDL_GetWindows(&windows);
+    SDL_Window *window = list && windows > 0 ? list[0] : NULL;
+    SDL_free(list);
+    if (!window) return 0;
+    if (!RaceNet_HostLocal("Player 1", RG_LOCAL_PORT)) { SayPage("Two players", RaceNet_Error()); return 0; }
+    // (player 2's folder: this game's settings and unlocked cars, its own saves and log)
+    char folder[ADELINE_MAX_PATH], from[ADELINE_MAX_PATH], to[ADELINE_MAX_PATH];
+    GetCfgPath(folder, ADELINE_MAX_PATH, "Player2");
+    SDL_CreateDirectory(folder);
+    static const char *const kept[] = {"lba2.cfg", "RACEGAME_SETTINGS.TXT"};
+    for (size_t i = 0; i < sizeof(kept) / sizeof(kept[0]); i++) {
+        GetCfgPath(from, ADELINE_MAX_PATH, kept[i]);
+        snprintf(to, sizeof(to), "%s/%s", folder, kept[i]);
+        SDL_CopyFile(from, to);
+    }
+    int rw, rh;
+    LocalPicture(two->w, two->h, &rw, &rh);
+    // (with two pads each player has one; with one it is player 2's, and player 1 has the keyboard)
+    if (!RaceNet_SpawnPlayer2(RG_LOCAL_PORT, folder, two->x, two->y, two->w, two->h, rw, rh, pads >= 2 ? 1 : 0)) {
+        SayPage("Two players", RaceNet_Error());
+        RaceNet_Stop();
+        return 0;
+    }
+    // this game: its place, its picture, and going on while the other window is the one clicked in
+    SDL_GetWindowPosition(window, &s_localWas.x, &s_localWas.y);
+    SDL_GetWindowSize(window, &s_localWas.w, &s_localWas.h);
+    s_localWindow = window;
+    s_localResW = ModeDesiredX; s_localResH = ModeDesiredY;
+    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    Timer_SetIgnoreFocus(1);
+    if (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) SDL_SetWindowFullscreen(window, false);
+    SDL_SetWindowBordered(window, false);
+    SDL_SetWindowPosition(window, one->x, one->y);
+    SDL_SetWindowSize(window, one->w, one->h);
+    if (!getenv("LBA2_LOCAL_AREA")) SDL_RaiseWindow(window);
+    LocalPicture(one->w, one->h, &rw, &rh);
+    // (the menu's picture is the old size till it is made again)
+    if (Res_Switch((U32)rw, (U32)rh)) Menu_RepaintAfterWindowFit();
+    Page(NULL, 0);
+    if (pads < 2) Joystick_UsePad(-1);
+    return 1;
+}
+
+// Which screen a player is on: rows of the PC's screens. Its SDL_DisplayID, or 0
+static SDL_DisplayID ScreenPage(const char *who, const SDL_DisplayID *ids, int count, SDL_DisplayID taken) {
+    int rows = 0;
+    SDL_DisplayID row[RG_SCREENS];
+    SetRow(s_screenMenu, rows, RG_ID_ONLINE_BACK);
+    for (int i = 0; i < count && rows < RG_SCREENS; i++) {
+        if (ids[i] == taken) continue;
+        SDL_Rect r;
+        SDL_zero(r);
+        SDL_GetDisplayBounds(ids[i], &r);
+        const char *name = SDL_GetDisplayName(ids[i]);
+        snprintf(s_screenName[rows], sizeof(s_screenName[0]), "%d: %s %dx%d", i + 1, name ? name : "Screen", r.w, r.h);
+        row[rows] = ids[i];
+        SetRow(s_screenMenu, rows + 1, (U16)(RG_ID_SCREEN + rows));
+        rows++;
+    }
+    s_screenMenu[0] = 1;
+    s_screenMenu[1] = (U16)(rows + 1);
+    s_screenMenu[2] = 280;
+    s_screenMenu[3] = 0;
+    for (;;) {
+        Page(who, 128 - 28 * (rows > 3 ? rows - 3 : 0));
+        const S32 select = Menu(s_screenMenu);
+        if (select == RG_ID_ONLINE_BACK || select == 1000) { Page(NULL, 0); return 0; }
+        if (select >= RG_ID_SCREEN && select < RG_ID_SCREEN + rows) return row[select - RG_ID_SCREEN];
+    }
+}
+
+static int LobbyPage(void);
+
+// The first player's game has gone: the second's race is over, and its menu closes it (RaceGame_Menu)
+S32 RaceGame_LocalAlone(void) {
+    if (s_localGuest <= 0) return 0;
+    s_raceOver = 1;
+    return 1;
+}
+
+// Two players on this PC. Non-zero: a race is set up
+static int LocalPage(void) {
+    s_localMenu[0] = 1;
+    s_localMenu[1] = 4;
+    s_localMenu[2] = 280;
+    s_localMenu[3] = 0;
+    SetRow(s_localMenu, 0, RG_ID_ONLINE_BACK);
+    SetRow(s_localMenu, 1, RG_ID_LOCAL_SIDE);
+    SetRow(s_localMenu, 2, RG_ID_LOCAL_STACK);
+    SetRow(s_localMenu, 3, RG_ID_LOCAL_SCREENS);
+    for (;;) {
+        Page("Two players", 128);
+        const S32 select = Menu(s_localMenu);
+        if (select == RG_ID_ONLINE_BACK || select == 1000) { Page(NULL, 0); return 0; }
+        SDL_Rect one, two;
+        int windows = 0;
+        SDL_Window **list = SDL_GetWindows(&windows);
+        SDL_DisplayID here = list && windows > 0 ? SDL_GetDisplayForWindow(list[0]) : 0;
+        SDL_free(list);
+        if (select == RG_ID_LOCAL_SCREENS) {
+            int count = 0;
+            SDL_DisplayID *ids = SDL_GetDisplays(&count);
+            SDL_DisplayID a = 0, b = 0;
+            if (count < 2) SayPage("Two players", "This PC has one screen");
+            else if ((a = ScreenPage("The screen for player 1", ids, count, 0)) != 0) b = ScreenPage("The screen for player 2", ids, count, a);
+            SDL_free(ids);
+            if (!a || !b) continue;
+            SDL_GetDisplayBounds(a, &one);
+            SDL_GetDisplayBounds(b, &two);
+        }
+        else if (select == RG_ID_LOCAL_SIDE || select == RG_ID_LOCAL_STACK) {
+            SDL_Rect all;
+            if (!here || !SDL_GetDisplayUsableBounds(here, &all)) continue;
+            // (a test on a PC someone is using: this part of the screen, not all of it)
+            if (const char *area = getenv("LBA2_LOCAL_AREA")) sscanf(area, "%d,%d,%d,%d", &all.x, &all.y, &all.w, &all.h);
+            one = two = all;
+            if (select == RG_ID_LOCAL_SIDE) { one.w = all.w / 2; two.x = all.x + one.w; two.w = all.w - one.w; }
+            else { one.h = all.h / 2; two.y = all.y + one.h; two.h = all.h - one.h; }
+        }
+        else continue;
+        snprintf(s_netName, sizeof(s_netName), "Player 1");
+        if (!LocalStart(&one, &two)) continue;
+        if (LobbyPage()) return 1;
+    }
+}
+
 // Who is here, and what happens next. Non-zero: a race is set up
 static int LobbyPage(void) {
     S32 padDir;
     PageLoopStart(&padDir);
-    const int host = RaceNet_IsHost();
+    const int local = RaceNet_Local();
+    const int host = RaceNet_IsHost() && !local, picks = RaceNet_IsHost();
     int result = -1, told = 0;
     char said[220] = "", outside[64] = "", inside[64] = "", address[100] = "", failed[170] = "";
-    Log_Info("[racegame] online: the lobby, %s", host ? "hosting" : "joined");
+    Log_Info("[racegame] online: the lobby, %s", picks ? "hosting" : "joined");
     while (result < 0) {
         ManageTime();
         MyGetInput();
@@ -3532,7 +3720,7 @@ static int LobbyPage(void) {
         ShadeBoxBlk(x0, y0, x1, y1, RG_PAGE_SHADE);
         DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
         const int connected = RaceNet_Connected();
-        Text(cx, y0 + 14, host ? "Hosting an online race" : connected ? "In an online race" : "Joining ...", RG_ORANGE);
+        Text(cx, y0 + 14, local || s_localGuest > 0 ? "Two players" : host ? "Hosting an online race" : connected ? "In an online race" : "Joining ...", RG_ORANGE);
         S32 y = y0 + 52;
         if (host) {
             if (!answered) Text(cx, y, "Asking the router to open the port ...", RG_GREY);
@@ -3562,7 +3750,7 @@ static int LobbyPage(void) {
             y += RG_LOBBY_ROW;
         }
         if (wrong) Text(cx, y1 - 72, "Everyone needs the same version", RG_ORANGE);
-        Text(cx, y1 - 38, host ? "Enter: pick the track    Esc: leave" : "Enter: pick your car    Esc: leave", RG_GREY);
+        Text(cx, y1 - 38, picks ? "Enter: pick the track    Esc: leave" : s_localGuest > 0 ? "Enter: pick your car" : "Enter: pick your car    Esc: leave", RG_GREY);
         Present();
         // (it ended: the host left, or refused this game)
         const char *error = RaceNet_Error();
@@ -3577,10 +3765,10 @@ static int LobbyPage(void) {
             if (result) break;
             continue;
         }
-        if (click == 2 || Escaped()) { result = 0; break; }
+        if ((click == 2 || Escaped()) && s_localGuest <= 0) { result = 0; break; }
         if (Confirmed() || click == 1) {
             WaitNoInput();
-            if (host) {
+            if (picks) {
                 s_onlinePick = 1;
                 const int picked = TrackSelect();
                 s_onlinePick = 0;
@@ -3600,7 +3788,8 @@ static int LobbyPage(void) {
     Page(NULL, 0);
     if (!result) {
         RaceNet_Stop();
-        if (failed[0]) SayPage("Online race", failed);
+        LocalEnd();
+        if (failed[0] && s_localGuest <= 0) SayPage("Online race", failed);
     }
     return result > 0;
 }
@@ -3611,16 +3800,21 @@ static int OnlinePage(void) {
     // (a race has just ended: its players are still here)
     if (RaceNet_On() && LobbyPage()) return 1;
     s_onlineMenu[0] = 1;
-    s_onlineMenu[1] = 3;
+    s_onlineMenu[1] = 4;
     s_onlineMenu[2] = 280;
     s_onlineMenu[3] = 0;
     SetRow(s_onlineMenu, 0, RG_ID_ONLINE_BACK);
     SetRow(s_onlineMenu, 1, RG_ID_ONLINE_HOST);
     SetRow(s_onlineMenu, 2, RG_ID_ONLINE_JOIN);
+    SetRow(s_onlineMenu, 3, RG_ID_LOCAL);
     for (;;) {
-        Page("Online race", 128);
+        Page("Multiplayer", 128);
         const S32 select = Menu(s_onlineMenu);
         if (select == RG_ID_ONLINE_BACK || select == 1000) { Page(NULL, 0); return 0; }
+        if (select == RG_ID_LOCAL) {
+            if (LocalPage()) return 1;
+            continue;
+        }
         if (select != RG_ID_ONLINE_HOST && select != RG_ID_ONLINE_JOIN) continue;
         if (!TypePage("Your name", "What the other players see", s_netName, sizeof(s_netName), 0)) continue;
         if (select == RG_ID_ONLINE_JOIN && !TypePage("Join a race", "The address the host gave you", s_netAddress, sizeof(s_netAddress), 1)) continue;
@@ -3671,6 +3865,19 @@ S32 RaceGame_Menu(S32 inGame) {
     // (Restart, 2026-10-25 -- the user: "We should also add in a restart menu option": in a race of the race game's, going on or just over;
     // the greyed Story Mode left out for it, seven rows as ever)
     const int restart = inGame && s_raceSp >= 0 && s_raceSp < s_nbSp && !RaceNet_On();
+    // (the second player's game, at one PC: straight to the first's, and it goes when they do. LBA2_PLAYER2 is the port)
+    if (s_localGuest < 0) {
+        const char *port = getenv("LBA2_PLAYER2");
+        s_localGuest = port && atoi(port) > 0 ? 1 : 0;
+        if (s_localGuest) {
+            ReadOnline();
+            snprintf(s_netName, sizeof(s_netName), "Player 2");
+            char address[32];
+            snprintf(address, sizeof(address), "127.0.0.1:%s", port);
+            if (!RaceNet_Join(address, s_netName)) return RG_ID_QUIT;
+        }
+    }
+    if (s_localGuest && !resume) return LobbyPage() ? RACEGAME_START : RG_ID_QUIT;
     // (an online race over: back with its players)
     if (RaceNet_On() && !resume && OnlinePage()) return RACEGAME_START;
     S32 nb = 0;
@@ -3710,6 +3917,7 @@ S32 RaceGame_Menu(S32 inGame) {
             if (QuitPage()) {
                 // (the port taken off the router: a game that crashes leaves it to its lease)
                 RaceNet_Stop();
+                LocalEnd();
                 return select;
             }
             break;

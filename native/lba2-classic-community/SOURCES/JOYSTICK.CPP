@@ -79,14 +79,24 @@ static inline void ClearGamepadBits(void) {
 // Open the first available pad. Silent: at boot the structured "Joystick" line
 // (InitAdeline) reports the device, and the runtime hot-plug handlers below log
 // connect events — so this helper would only duplicate them.
+// Which of the PC's pads this game uses: the first, unless two players share the PC (RACEGAME.CPP LocalPage: LBA2_PAD for the second player's game), -1 none
+static int s_padSlot = 0, s_padSlotRead = 0;
+static int PadSlot(void) {
+    if (!s_padSlotRead) {
+        s_padSlotRead = 1;
+        if (const char *slot = getenv("LBA2_PAD")) s_padSlot = atoi(slot);
+    }
+    return s_padSlot;
+}
+
 static void OpenFirstAvailableGamepad(void) {
-    if (s_gamepad != NULL) {
+    if (s_gamepad != NULL || PadSlot() < 0) {
         return;
     }
     int count = 0;
     U32 *ids = g_platform.input.gamepads(&count);
     if (ids != NULL) {
-        for (int i = 0; i < count; i++) {
+        for (int i = PadSlot(); i < count; i++) {
             PlatformGamepad *pad = g_platform.input.open_gamepad(ids[i]);
             if (pad != NULL) {
                 s_gamepad = pad;
@@ -131,11 +141,25 @@ void DetectJoys(void) {
 }
 
 //***************************************************************************
+// The pad this game uses from now on: -1 none, for a keyboard player when the only pad is the other player's
+void Joystick_UsePad(int slot) {
+    PadSlot();
+    s_padSlot = slot;
+    if (s_gamepad != NULL) {
+        g_platform.input.close_gamepad(s_gamepad);
+        s_gamepad = NULL;
+    }
+    OpenFirstAvailableGamepad();
+}
+
+//***************************************************************************
 void HandleEventsJoystick(const PlatformEvent *event) {
     const PlatformEvent *ev = event;
     switch (ev->type) {
     case PLATFORM_EVENT_GAMEPAD_ADDED:
-        if (s_gamepad == NULL) {
+        // (a game with a slot of its own, or none: that pad, when it is there)
+        if (s_gamepad == NULL && PadSlot() != 0) OpenFirstAvailableGamepad();
+        else if (s_gamepad == NULL) {
             PlatformGamepad *pad = g_platform.input.open_gamepad(ev->gdevice.which);
             if (pad != NULL) {
                 s_gamepad = pad;

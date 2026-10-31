@@ -24,6 +24,10 @@ typedef struct {
 } T_RACENET_PLAYER;
 
 int RaceNet_Host(const char *name);         // hosts on RACENET_PORT, and asks the router to open it: 0 and RaceNet_Error when it can't
+int RaceNet_HostLocal(const char *name, unsigned short port);   // ... two players at one PC: no router
+int RaceNet_Local(void);                    // hosting that way
+// Starts the second player's game: a copy of this one, with its own saves in `userDir`, in the rectangle given, on pad `pad`. It joins on `port` by itself
+int RaceNet_SpawnPlayer2(unsigned short port, const char *userDir, int x, int y, int w, int h, int resW, int resH, int pad);
 int RaceNet_Join(const char *address, const char *name);   // "81.2.3.4" or "81.2.3.4:21997" or a name
 void RaceNet_Stop(void);
 int RaceNet_On(void);

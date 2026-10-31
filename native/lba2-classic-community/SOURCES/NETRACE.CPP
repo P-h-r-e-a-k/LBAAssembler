@@ -21,6 +21,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #define RACENET_PROTOCOL 1
 #define RACENET_DELAY_MS 100                // how far behind a car is drawn
@@ -56,7 +59,7 @@ static struct NetKit *s_kit = NULL;
 static T_RN_PEER s_peer[RACENET_MAX_OTHERS];
 static int s_nbPeers = 0;
 static char s_error[160] = "";
-static int s_hosting = 0;
+static int s_hosting = 0, s_local = 0;
 static char s_name[RACENET_NAME + 1] = "";
 static int s_selfReady = 0, s_goSent = 0, s_goPending = 0;
 static uint32_t s_announcedAt = 0;
@@ -255,6 +258,58 @@ int RaceNet_Host(const char *name) {
     return 1;
 }
 
+int RaceNet_HostLocal(const char *name, unsigned short port) {
+    RaceNet_Stop();
+    struct NetKit *kit = NetKit_Host(port, name);
+    if (!kit) { snprintf(s_error, sizeof(s_error), "Port %d is in use on this PC", port); Log_Warn("[racenet] %s", s_error); return 0; }
+    s_kit = kit; s_hosting = 1; s_local = 1;
+    snprintf(s_name, sizeof(s_name), "%s", name);
+    if (!Begin()) { RaceNet_Stop(); return 0; }
+    Log_Info("[racenet] two players at this PC, on port %d", port);
+    return 1;
+}
+
+int RaceNet_Local(void) { return s_kit != NULL && s_local; }
+
+int RaceNet_SpawnPlayer2(unsigned short port, const char *userDir, int x, int y, int w, int h, int resW, int resH, int pad) {
+    char exe[1024], text[64], res[32];
+#ifdef _WIN32
+    if (!GetModuleFileNameA(NULL, exe, sizeof(exe))) return 0;
+#else
+    snprintf(exe, sizeof(exe), "/proc/self/exe");
+#endif
+    snprintf(res, sizeof(res), "%dx%d", resW, resH);
+    // (the music once: the second game is silent. And a test's way to reach it: LBA2_P2_LISTEN)
+    const char *listen = getenv("LBA2_P2_LISTEN");
+    const char *args[12];
+    int n = 0;
+    args[n++] = exe; args[n++] = "--user-dir"; args[n++] = userDir; args[n++] = "--resolution"; args[n++] = res; args[n++] = "--no-audio"; args[n++] = "--ignore-focus";
+    if (listen) { args[n++] = "--listen"; args[n++] = listen; }
+    args[n] = NULL;
+    SDL_Environment *env = SDL_CreateEnvironment(true);
+    if (!env) return 0;
+    snprintf(text, sizeof(text), "%d", port);
+    SDL_SetEnvironmentVariable(env, "LBA2_PLAYER2", text, true);
+    snprintf(text, sizeof(text), "%d,%d,%d,%d", x, y, w, h);
+    SDL_SetEnvironmentVariable(env, "LBA2_WINDOW_RECT", text, true);
+    snprintf(text, sizeof(text), "%d", pad);
+    SDL_SetEnvironmentVariable(env, "LBA2_PAD", text, true);
+    // (its pad heard without the keyboard's focus, which stays with the first player)
+    SDL_SetEnvironmentVariable(env, "SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1", true);
+    SDL_PropertiesID props = SDL_CreateProperties();
+    SDL_SetPointerProperty(props, SDL_PROP_PROCESS_CREATE_ARGS_POINTER, (void *)args);
+    SDL_SetPointerProperty(props, SDL_PROP_PROCESS_CREATE_ENVIRONMENT_POINTER, env);
+    SDL_SetBooleanProperty(props, SDL_PROP_PROCESS_CREATE_BACKGROUND_BOOLEAN, true);
+    SDL_Process *process = SDL_CreateProcessWithProperties(props);
+    SDL_DestroyProperties(props);
+    SDL_DestroyEnvironment(env);
+    if (!process) { snprintf(s_error, sizeof(s_error), "Player 2's game wouldn't start"); Log_Warn("[racenet] %s: %s", s_error, SDL_GetError()); return 0; }
+    // (it goes by itself when this game's session ends: the host gone)
+    SDL_DestroyProcess(process);
+    Log_Info("[racenet] player 2's game started, %s at %d,%d %dx%d, pad %d", res, x, y, w, h, pad);
+    return 1;
+}
+
 int RaceNet_Join(const char *address, const char *name) {
     RaceNet_Stop();
     char host[128];
@@ -285,7 +340,7 @@ void RaceNet_Stop(void) {
         if (hosted) NetUpnp_Close();
         Log_Info("[racenet] stopped");
     }
-    s_hosting = 0; s_nbPeers = 0;
+    s_hosting = 0; s_local = 0; s_nbPeers = 0;
 }
 
 int RaceNet_On(void) { return s_kit != NULL; }

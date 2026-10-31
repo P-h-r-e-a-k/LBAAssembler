@@ -15128,8 +15128,11 @@ static size_t s_ghostUnderSize = 0;
 #define RACE_NET_GREY (3 * 16 + 11)        // ... and the other players' colour
 static void HudSmall(S32 x, S32 y, const char *text, int align);
 static void HudSmallIn(S32 x, S32 y, const char *text, int align, S32 colour);
+extern S32 RaceGame_LocalAlone(void);
 static void NetRaceFrame(S32 now, int driving) {
     if (!s_online) return;
+    // (the second player's game at one PC goes when the first's does)
+    if (RaceNet_Error()[0] && !s_menuAt && RaceGame_LocalAlone()) s_menuAt = now;
     if (s_phase == PHASE_GRID && !s_netGo) {
         RaceNet_Ready();
         // (or no host left to say it: the race isn't to wait for good)

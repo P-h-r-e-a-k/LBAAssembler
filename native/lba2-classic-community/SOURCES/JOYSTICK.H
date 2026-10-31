@@ -19,6 +19,7 @@ void DetectJoys(void);
 void UpdateJoystick(void);
 void GetJoys(U32 *bitfield);
 void HandleEventsJoystick(const PlatformEvent *event);
+void Joystick_UsePad(int slot);
 
 // True iff a gamepad is currently opened. Use this to gate gamepad-dependent
 // code paths; there is no separate enable flag — if a pad is connected, it's on.

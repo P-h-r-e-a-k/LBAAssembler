@@ -157,7 +157,20 @@ bool SDL3_CreateWindow(uint32_t width, uint32_t height, bool fullscreen) {
     /* An editor that embeds this window in its own (LBA Assembler) takes it over as a child the moment it appears; asking for
        an off-screen position with LBA2_WINDOW_POS="x,y" means the window is never seen as a window of its own. */
     int startX = SDL_WINDOWPOS_CENTERED, startY = SDL_WINDOWPOS_CENTERED;
-    if (const char *placed = getenv("LBA2_WINDOW_POS")) {
+    /* The second player's game at one PC (RACEGAME.CPP LocalPage): its half of the screen or its own screen, with no border, and never taking the keyboard from
+       the first player's window: LBA2_WINDOW_RECT="x,y,w,h". */
+    int rectX = 0, rectY = 0, rectW = 0, rectH = 0;
+    const char *rect = getenv("LBA2_WINDOW_RECT");
+    const bool inRect = rect != NULL && sscanf(rect, "%d,%d,%d,%d", &rectX, &rectY, &rectW, &rectH) == 4;
+    if (inRect) {
+        startX = rectX;
+        startY = rectY;
+        fullscreen = false;
+        s_fullscreen = false;
+        SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_BORDERLESS_BOOLEAN, true);
+        SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FOCUSABLE_BOOLEAN, false);
+    }
+    else if (const char *placed = getenv("LBA2_WINDOW_POS")) {
         int x, y;
         if (sscanf(placed, "%d,%d", &x, &y) == 2) {
             startX = x;
@@ -166,8 +179,9 @@ bool SDL3_CreateWindow(uint32_t width, uint32_t height, bool fullscreen) {
     }
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_X_NUMBER, startX);
     SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_Y_NUMBER, startY);
-    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, width);
-    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height);
+    /* (the window's size, not the picture's: `width` and `height` go on to be the presentation surface's) */
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, inRect ? rectW : (int)width);
+    SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, inRect ? rectH : (int)height);
 #ifdef __ANDROID__
     /* Resizable permits portrait rotation, which can race surface teardown.
        A TV needs fullscreen at creation to avoid a later EGL surface transition;
