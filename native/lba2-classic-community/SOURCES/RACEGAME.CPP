@@ -3925,7 +3925,9 @@ static int LobbyPage(void) {
             Text(cx, y1 - 106, "Ctrl item, Shift handbrake, V view", RG_GREY);
         }
         if (picks && RaceNet_Turned()[0]) Text(cx, y1 - 72, RaceNet_Turned(), RG_ORANGE);
-        Text(cx, y1 - 38, picks ? "Enter: pick the track    Esc: leave" : s_localGuest > 0 ? "Enter: pick your car" : "Enter: pick your car    Esc: leave", RG_GREY);
+        // (the host's Enter picks the track, then their car; the second player's Enter on one keyboard is Q: Enter goes to the first's window,
+        // RaceGame_SharedKeys. The user, 2026-10-31: "What does Enter do, does it pick the track, or pick the car?")
+        Text(cx, y1 - 38, picks ? "Enter: track and car    Esc: leave" : s_localGuest > 0 ? "Q: pick your car" : "Enter: pick your car    Esc: leave", RG_GREY);
         Present();
         // (it ended: the host left, or refused this game)
         const char *error = RaceNet_Error();
