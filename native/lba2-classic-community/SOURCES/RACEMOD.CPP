@@ -280,6 +280,7 @@ extern void AdjustDirObject(T_OBJET *ptrobj, S32 oldmove);       // GERELIFE.CPP
 #include <SYSTEM/KEYBOARD_KEYS.H>
 #include <SYSTEM/TIMER.H>
 #include <SDL3/SDL.h>
+#include "NETRACE.H"
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -711,6 +712,8 @@ static int FootRescue(const char *where);
 static int FootCross(void);
 static U32 WalkInput(void);
 static int s_trial = 0;                    // trial=
+static int s_online = 0;                   // online=: another player's car on the road with this one (NETRACE.CPP); a time trial's race file, with no ghost
+static int s_netGo = 0;                    // ... and the host has said go
 // the ghost car (2026-10-24: the ghost's section, before RaceMod_Frame)
 static int s_ghostMode = 2;                // ghost=: 0 none, 1 the player's own best lap, 2 the track's fastest ghost (the player's own or one shared); 3, 4, 5 the game's
                                            // Easy, Medium, Hard; 6 the player's own or one shared (the menu's "Your best lap")
@@ -4192,6 +4195,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "start_in_car")) s_startInCar = atoi(v);
         else if (!strcmp(key, "on_foot")) s_onFoot = atoi(v);
         else if (!strcmp(key, "trial")) s_trial = atoi(v);
+        else if (!strcmp(key, "online")) s_online = atoi(v);
         else if (!strcmp(key, "ghost")) s_ghostMode = atoi(v);
         else if (!strcmp(key, "ghost_watch")) { snprintf(s_ghostWatchPath, sizeof(s_ghostWatchPath), "%s", v); s_ghostWatch = v[0] != 0; }
         else if (!strcmp(key, "ghost_file")) snprintf(s_ghostOtherPath, sizeof(s_ghostOtherPath), "%s", v);
@@ -4875,6 +4879,7 @@ void RaceMod_Lap(S32 x, S32 z) {
             // (the race game's: the race's time, GO to the line, and its fastest lap -- a time trial's goes to the best laps)
             const S32 total = s_goAt && now > s_goAt ? now - s_goAt : 0;
             s_raceTime = total;
+            if (s_online) RaceNet_Finished(total);
             const int rank = RaceGame_Finished(s_trial, total, s_bestLap, place, racers);
             // (a win that unlocks a car: the race game's congratulations follow -- its fireworks and the car unlocked -- after a moment
             // at the line, not end_to_menu= later: RACEGAME.CPP RaceGame_Celebrate)
@@ -4952,6 +4957,7 @@ static void SprintOver(S32 now, int crossed) {
     // (the display's "Finished in" and best run: a sprint's time was never set, and the finished time trial said 0:00.00, 2026-10-28)
     s_raceTime = s_goAt && now > s_goAt ? now - s_goAt : 0;
     s_raceRun = run;
+    if (s_online) RaceNet_Finished(s_raceTime);
     RaceGame_Finished(s_trial, s_raceTime, run, place, racers);
     if (s_endToMenu > 0) s_menuAt = now + s_endToMenu;
 }
@@ -15115,6 +15121,125 @@ static U8 GhostMix(U8 under, U8 over) {
 static U8 *s_ghostUnder = NULL;
 static size_t s_ghostUnderSize = 0;
 
+// An online race, every frame (RaceMod_Frame): the count-down held till the host says go, and this car sent to the others, as a ghost's sample
+#define RACE_NET_EVERY 33                  // ms between a car's samples
+#define RACE_NET_COUNT 3000                // the count-down, from go
+#define RACE_NET_ROW 26                    // the players' list: a line's height
+#define RACE_NET_GREY (3 * 16 + 11)        // ... and the other players' colour
+static void HudSmall(S32 x, S32 y, const char *text, int align);
+static void HudSmallIn(S32 x, S32 y, const char *text, int align, S32 colour);
+static void NetRaceFrame(S32 now, int driving) {
+    if (!s_online) return;
+    if (s_phase == PHASE_GRID && !s_netGo) {
+        RaceNet_Ready();
+        // (or no host left to say it: the race isn't to wait for good)
+        const int alone = !RaceNet_Connected() || RaceNet_Error()[0];
+        if (RaceNet_Go() || alone) {
+            s_netGo = 1;
+            s_goAt = now + RACE_NET_COUNT;
+            Log_Info("[racemod] online: %s", alone ? "no host: the race goes on alone" : "the host says go");
+        }
+        else s_goAt = now + RACE_NET_COUNT + 1000;
+    }
+    static S32 sent = 0;
+    if (!driving || CubeMode != CUBE_EXTERIEUR || NewCube != -1 || (now - sent >= 0 && now - sent < RACE_NET_EVERY)) return;
+    sent = now;
+    T_RACE_LAPGHOST_PT p;
+    GhostSampleNow(&p, 0);
+    T_RACENET_CAR c;
+    c.X = p.X; c.Y = p.Y; c.Z = p.Z;
+    c.Alpha = p.Alpha; c.Beta = p.Beta; c.Gamma = p.Gamma;
+    c.Body = p.Body; c.Anim = p.Anim; c.Island = p.Island;
+    c.Lap = s_laps; c.Progress = s_next;
+    RaceNet_SendCar(&c);
+}
+
+// The other players' cars: drawn as a ghost played back is, solid, in the same bodies (a car goes through them: there is no one place both games agree
+// a crash happened), each with its player's name over it
+typedef struct { T_OBJ_3D Obj; int Ready; S32 Body, Anim; } T_RACE_NETCAR;
+static T_RACE_NETCAR s_netCar[RACENET_MAX_OTHERS];
+
+static void DrawNetCars(void) {
+    if (!s_online || CubeMode != CUBE_EXTERIEUR) return;
+    const int others = RaceNet_Others();
+    for (int i = 0; i < others && i < RACENET_MAX_OTHERS; i++) {
+        T_RACENET_CAR c;
+        T_RACENET_PLAYER who;
+        if (!RaceNet_CarOf(i, &c) || !RaceNet_Other(i, &who) || c.Island != Island || c.Body < 0) continue;
+        T_RACE_NETCAR *m = &s_netCar[i];
+        if (!m->Ready || c.Body != m->Body || c.Anim != m->Anim) {
+            if (!GivePtrBody(c.Body) || (c.Anim >= 0 && !GivePtrAnim(c.Anim))) continue;
+            ObjectReady(&m->Obj, c.Body);
+            m->Obj.Anim.Num = -1;
+            if (c.Anim >= 0) ObjectInitAnim(&m->Obj, (void *)(uintptr_t)(U32)c.Anim);
+            m->Obj.Status |= FLAG_BODY;
+            m->Body = c.Body; m->Anim = c.Anim; m->Ready = 1;
+        }
+        const S32 lx = c.X - CurrentCubeX * 32768, ly = c.Y, lz = c.Z - CurrentCubeY * 32768;
+        T_OBJ_3D *o = &m->Obj;
+        o->X = lx; o->Y = ly; o->Z = lz;
+        if (c.Anim >= 0) {
+            ObjectSetInterDep(o);
+            if (o->Status & FLAG_LAST_FRAME) { o->Anim.Num = -1; ObjectInitAnim(o, (void *)(uintptr_t)(U32)c.Anim); }
+            o->X = lx; o->Y = ly; o->Z = lz;
+        }
+        o->Alpha = c.Alpha; o->Beta = c.Beta; o->Gamma = c.Gamma;
+        if (c.Anim >= 0) ObjectSetInterFrame(o);
+        else memset(o->CurrentFrame, 0, sizeof(o->CurrentFrame));
+        LongWorldRotatePoint(lx, ly, lz);
+        const S32 zr = CameraZr - Z0;
+        if (zr < -4000 || zr > ClipZFar + 4000) continue;
+        const T_RACE_DRAW kept = DrawKept();
+        SetCLUT(FogClut(zr));
+        Switch_Fillers(FILL_POLY_FOG_NZW);
+        if (ObjectDisplay(o)) {
+            SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
+            if (ClipXMin <= ClipXMax && ClipYMin <= ClipYMax) BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
+            UnsetClip();
+        }
+        DrawBack(&kept);
+        if (zr > 0 && PtrProjectPoint(lx, ly + 1400, lz)) HudSmall(Xp - SizeFont(who.Name) / 2, Yp, who.Name, -1);
+    }
+}
+
+// The list of the players, in the order of the race (finished first, by time), down the left of the screen
+static void DrawNetBoard(S32 now) {
+    (void)now;
+    if (!s_online) return;
+    typedef struct { char Name[RACENET_NAME + 1]; int Finish, Lap, Progress, Me; } T_ROW;
+    T_ROW rows[RACENET_MAX_OTHERS + 1];
+    int n = 0;
+    rows[n].Finish = s_raceTime; rows[n].Lap = s_laps; rows[n].Progress = s_next; rows[n].Me = 1;
+    snprintf(rows[n].Name, sizeof(rows[n].Name), "You");
+    n++;
+    const int others = RaceNet_Others();
+    for (int i = 0; i < others && n <= RACENET_MAX_OTHERS; i++) {
+        T_RACENET_PLAYER who;
+        if (!RaceNet_Other(i, &who)) continue;
+        snprintf(rows[n].Name, sizeof(rows[n].Name), "%s", who.Name);
+        rows[n].Finish = who.Finish; rows[n].Lap = who.Lap; rows[n].Progress = who.Progress; rows[n].Me = 0;
+        n++;
+    }
+    for (int i = 1; i < n; i++) {
+        const T_ROW r = rows[i];
+        int k = i;
+        while (k > 0) {
+            const T_ROW *q = &rows[k - 1];
+            const int before = r.Finish ? (!q->Finish || r.Finish < q->Finish) : !q->Finish && (r.Lap > q->Lap || (r.Lap == q->Lap && r.Progress > q->Progress));
+            if (!before) break;
+            rows[k] = rows[k - 1];
+            k--;
+        }
+        rows[k] = r;
+    }
+    for (int i = 0; i < n; i++) {
+        char line[64], t[24];
+        if (rows[i].Finish) { Time(t, sizeof(t), rows[i].Finish); snprintf(line, sizeof(line), "%d %s  %s", i + 1, rows[i].Name, t); }
+        else snprintf(line, sizeof(line), "%d %s  lap %d", i + 1, rows[i].Name, rows[i].Lap);
+        HudSmallIn(16, 96 + i * RACE_NET_ROW, line, -1, rows[i].Me ? LBAWHITE : RACE_NET_GREY);
+    }
+}
+
 static void DrawGhost(S32 now, S32 width, S32 height) {
     if (CubeMode != CUBE_EXTERIEUR || !s_ghost.N) return;
     const int solid = s_ghostWatch;
@@ -15833,6 +15958,7 @@ void RaceMod_Frame(void) {
         }
     // (and a driver lapping on his own: parade=)
     ParadeStep(now, dt);
+    NetRaceFrame(now, driving);
     if (s_phase == PHASE_GRID && now >= s_goAt) {
         s_phase = PHASE_RACE;
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_opp[n].LapStart = now;
@@ -17819,6 +17945,7 @@ void RaceMod_Draw(void) {
     DrawSuperJet(now);
     DrawDriveAs(now);
     DrawGhost(now, width, height);
+    DrawNetCars();
     DrawCheckpoints(height);
     DrawBolts(now, height);
     // (Halloween's: the diving witch, the scares, the haunted cars' ghosts; another car's ghost over the screen, and a giant web's, under
@@ -17962,7 +18089,9 @@ void RaceMod_Draw(void) {
         // (always there, 2026-10-30, the user: "can we put them back in the screen centre": from 2026-10-18 it went to the car's side with
         // the flag marshal on the road, away from her flag)
         const char *count = NULL;
-        if (s_phase == PHASE_GRID && now >= s_goAt - 3000) count = now < s_goAt - 2000 ? "3" : now < s_goAt - 1000 ? "2" : "1";
+        // (an online race's held till every player is at the start: NetRaceFrame)
+        if (s_online && !s_netGo && s_phase == PHASE_GRID) HudLine(width / 2 - SizeFont("Waiting for the other players") / 2, height / 3, "Waiting for the other players", -1);
+        else if (s_phase == PHASE_GRID && now >= s_goAt - 3000) count = now < s_goAt - 2000 ? "3" : now < s_goAt - 1000 ? "2" : "1";
         else if (s_nbSpots && s_phase == PHASE_RACE && s_goAt && now < s_goAt + 1000) count = "GO!";
         if (count) {
             const S32 k = height / 48 > 3 ? height / 48 : 3;
@@ -17974,6 +18103,7 @@ void RaceMod_Draw(void) {
     // (the story's cars unlocked -- StoryUnlock: once the race's own word is over)
     if (s_sayNext[0] && now >= s_messageUntil) { Message(s_sayNext); s_messageUntil = now + 5000; s_sayNext[0] = 0; }
     if (hud && now < s_messageUntil && s_message[0]) HudLine(width / 2 - SizeFont(s_message) / 2, height / 5, s_message, -1);
+    if (hud) DrawNetBoard(now);
 
     RestoreClipWindow();
     UnsetClip();
@@ -18008,6 +18138,7 @@ static void ResetTrack(void) {
     s_noSky = 0;
     s_phase = PHASE_RACE; s_qualifying = 1; s_gridBack = 0; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
+    s_online = s_netGo = 0;
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;

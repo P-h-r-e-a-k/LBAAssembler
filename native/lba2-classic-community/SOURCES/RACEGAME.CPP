@@ -102,6 +102,7 @@
 #include "RACEGAME.H"
 #include "RACEMOD.H"
 #include "RACEUPDATE.H"
+#include "NETRACE.H"
 #include "RES_SWITCH.H"
 #include "UI_LAYOUT.H"
 
@@ -170,6 +171,10 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_STORY_CONTINUE 2388
 #define RG_ID_QUIT_NO 2389                  // the Quit page's rows (QuitPage)
 #define RG_ID_QUIT_YES 2390
+#define RG_ID_ONLINE 2391                   // the main menu: Online race (OnlinePage)
+#define RG_ID_ONLINE_HOST 2392
+#define RG_ID_ONLINE_JOIN 2393
+#define RG_ID_ONLINE_BACK 2394
 #define RG_OTHERS_SHOWN 5
 #define RG_ID_BACK 26                       // the game's own "Back"
 #define RG_ID_RESUME 70
@@ -1040,6 +1045,7 @@ static void CopyResolved(FILE *in, FILE *f) {
 // The race: the special's race file (or its time trial's), the files it names found beside the game's data, then the car and the race
 // game's keys -- and the difficulty chosen (`level`, -1 none: after the file's own, so it counts) -- written to RACE_NOW.TXT in the user's
 // folder and loaded in place of any other. `watch`: a ghost of the track's to play back (Best laps), not a race.
+static int s_onlineRace = 0;                // StartRace: a race with other players (online=)
 static int StartRace(int sp, int trial, const T_RG_CAR *car, int level, const char *watch = NULL) {
     const T_RG_SPECIAL *s = &s_sp[sp];
     char src[ADELINE_MAX_PATH], out[ADELINE_MAX_PATH];
@@ -1066,7 +1072,8 @@ static int StartRace(int sp, int trial, const T_RG_CAR *car, int level, const ch
     // (a time trial's ghost car: the track it is of, the car it names, which ghost is raced -- or the ghost played back)
     if (trial) {
         ReadSettings();
-        fprintf(f, "ghost_name=%s\nghost_car=%s\nghost=%d\n", s->Name, car ? car->Name : "Twinsen's car", s_ghost);
+        fprintf(f, "ghost_name=%s\nghost_car=%s\nghost=%d\n", s->Name, car ? car->Name : "Twinsen's car", s_onlineRace ? 0 : s_ghost);
+        if (s_onlineRace) fprintf(f, "online=1\n");
         // (another player's: its file -- the "Other" page)
         if (s_ghost == 8) fprintf(f, "ghost_file=%s\n", s_ghostOther);
         if (watch && watch[0]) fprintf(f, "ghost_watch=%s\n", watch);
@@ -1086,8 +1093,8 @@ static int StartRace(int sp, int trial, const T_RG_CAR *car, int level, const ch
     s_raceQualify = trial ? -1 : s_qualifyNow;
     s_qualifyNow = -1;
     RaceMod_LoadFile(out);
-    // (the first run: the controls and the power-ups before the race -- once)
-    Introduction(sp, trial);
+    // (the first run: the controls and the power-ups before the race -- once; not with others waiting at the start)
+    if (!s_onlineRace) Introduction(sp, trial);
     return 1;
 }
 
@@ -1125,6 +1132,10 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_STORY_CONTINUE: Label(string, "Continue the story"); return 1;
     case RG_ID_QUIT_NO: Label(string, "No"); return 1;
     case RG_ID_QUIT_YES: Label(string, "Yes"); return 1;
+    case RG_ID_ONLINE: Label(string, "Online race"); return 1;
+    case RG_ID_ONLINE_HOST: Label(string, "Host a race"); return 1;
+    case RG_ID_ONLINE_JOIN: Label(string, "Join a race"); return 1;
+    case RG_ID_ONLINE_BACK: Label(string, "Back"); return 1;
     case RG_ID_TRACKS: Label(string, "Track select"); return 1;
     case RG_ID_RESTART: Label(string, s_raceWatch[0] ? "Watch again from the start" : s_raceTrial ? "Restart the time trial" : "Restart the race"); return 1;
     case RG_ID_SPECIALS: Label(string, "Specials"); return 1;
@@ -2237,6 +2248,8 @@ S32 RaceGame_OptionsRow(S32 num) {
 // cars into LBRA, and give them all their own stats"; "Car selection should only be for 'Track select'": the specials keep their car page)
 
 static int ModePage(int sp);
+static int s_onlinePick = 0;                // the host choosing the track of an online race: Track select's ModePage is OnlinePick
+static int OnlinePick(int sp);
 static void Plot(S32 x, S32 y, U8 colour, S32 size);
 
 // A key of the four ways (the arrows, the pad's d-pad or stick; edge-only, as Step): *dx, *dy -1, 0 or 1. Non-zero: one was struck.
@@ -3026,6 +3039,7 @@ int RaceGame_GhostBeatenLevel(void) {
 // A special's race or time trial; then (a race on a track with levels) its difficulty, or (a time trial) its ghost; then the car -- Esc
 // there back to the difficulty or the ghost. Non-zero: the race is set up.
 static int ModePage(int sp) {
+    if (s_onlinePick) return OnlinePick(sp);
     s_modeMenu[0] = (U16)(s_lastTrial ? 2 : 1);
     s_modeMenu[1] = 3;
     s_modeMenu[2] = 280;
@@ -3353,6 +3367,270 @@ static void CelebratePage(int car) {
 // to exit the game. Clicking the x on the window should not trigger a confirmation": the window's X doesn't come through here). No first,
 // so that Enter pressed twice doesn't leave the game. Non-zero: quit; 0: No or Esc.
 static U16 s_quitMenu[4 + 2 * 2];
+static U16 s_onlineMenu[4 + 2 * 3];
+// ---- online races (NETRACE.CPP) --------------------------------------------------------------------------------------------------------
+
+// A line typed in: letters, digits, what an address has, Backspace, Ctrl+V. Non-zero: Enter
+#define RG_TYPED_MAX 63
+#define RG_LOBBY_ROW 34                     // the lobby: a line's height
+#define RG_LOBBY_ROWS 5                     // the players it lists
+static int TypePage(const char *what, const char *hint, char *value, int size, int address) {
+    S32 padDir;
+    PageLoopStart(&padDir);
+    int n = (int)strlen(value), result = -1;
+    if (size > RG_TYPED_MAX + 1) size = RG_TYPED_MAX + 1;
+    S32 lastKey = 0, cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+    while (result < 0) {
+        ManageTime();
+        MyGetInput();
+        if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; }
+        const S32 key = MyKey;
+        if (key != lastKey) {
+            lastKey = key;
+            const SDL_Keymod mod = SDL_GetModState();
+            int c = 0;
+            if (key >= K_A && key <= K_Z) c = (mod & SDL_KMOD_SHIFT ? 'A' : 'a') + (int)(key - K_A);
+            else if (key >= K_1 && key <= K_9) c = '1' + (int)(key - K_1);
+            else if (key == K_0) c = '0';
+            else if (key >= K_NUMPAD_1 && key <= K_NUMPAD_9) c = '1' + (int)(key - K_NUMPAD_1);
+            else if (key == K_NUMPAD_0) c = '0';
+            else if (key == SDL_SCANCODE_PERIOD || key == K_NUMPAD_PERIOD) c = '.';
+            else if (address && key == SDL_SCANCODE_SEMICOLON) c = ':';
+            else if (key == K_MOINS) c = '-';
+            else if (!address && key == K_SPACE && n) c = ' ';
+            if ((mod & SDL_KMOD_CTRL) && key == K_V) {
+                // (an address sent in a chat)
+                if (char *pasted = SDL_GetClipboardText()) {
+                    for (const char *s = pasted; *s && n < size - 1; s++) if (!isspace((unsigned char)*s)) value[n++] = *s;
+                    value[n] = 0;
+                    SDL_free(pasted);
+                }
+            }
+            else if (c && n < size - 1) { value[n++] = (char)c; value[n] = 0; }
+            else if (key == K_BACKSPACE && n > 0) value[--n] = 0;
+        }
+        S32 mx, my;
+        const int click = Clicked(&mx, &my);
+        const S32 x0 = cx - 270, x1 = cx + 270, y0 = 150 + oy, y1 = 352 + oy;
+        Page(NULL, 0);
+        ShadeBoxBlk(x0, y0, x1, y1, RG_PAGE_SHADE);
+        DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
+        Text(cx, y0 + 14, what, RG_ORANGE);
+        Text(cx, y0 + 52, hint, LBAWHITE);
+        char shown[RG_TYPED_MAX + 2];
+        snprintf(shown, sizeof(shown), "%s%s", value, (TimerRefHR / 400) % 2 ? "" : "_");
+        Text(cx, y0 + 96, shown, LBAWHITE);
+        Text(cx, y1 - 38, "Enter: go on    Esc: back", RG_GREY);
+        Present();
+        if (click == 2 || Escaped()) result = 0;
+        else if (Confirmed()) { WaitNoInput(); if (n) result = 1; }
+    }
+    AsciiMode = FALSE;
+    Page(NULL, 0);
+    return result;
+}
+
+// A line the player must read: Enter or Esc goes on
+static void SayPage(const char *what, const char *line) {
+    S32 padDir;
+    PageLoopStart(&padDir);
+    Log_Info("[racegame] online: %s", line);
+    for (;;) {
+        ManageTime();
+        MyGetInput();
+        const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, x0 = cx - 290, x1 = cx + 290, y0 = 170 + oy, y1 = 330 + oy;
+        S32 mx, my;
+        const int click = Clicked(&mx, &my);
+        Page(NULL, 0);
+        ShadeBoxBlk(x0, y0, x1, y1, RG_PAGE_SHADE);
+        DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
+        Text(cx, y0 + 14, what, RG_ORANGE);
+        Text(cx, y0 + 62, line, LBAWHITE);
+        Text(cx, y1 - 38, "Enter: go on", RG_GREY);
+        Present();
+        if (click || Escaped() || Confirmed()) { WaitNoInput(); break; }
+    }
+    AsciiMode = FALSE;
+    Page(NULL, 0);
+}
+
+// The player's name and the address last joined: ONLINE.TXT in the user's folder
+static char s_netName[RACENET_NAME + 1] = "", s_netAddress[64] = "";
+static const T_RG_CAR *s_netCar = NULL;     // the car chosen for online races (none: Twinsen's)
+static int s_netSp = -1, s_onlineLaps = 3;
+
+static void ReadOnline(void) {
+    char path[ADELINE_MAX_PATH], line[128];
+    GetCfgPath(path, ADELINE_MAX_PATH, "ONLINE.TXT");
+    if (FILE *f = fopen(path, "r")) {
+        while (fgets(line, sizeof(line), f)) {
+            line[strcspn(line, "\r\n")] = 0;
+            if (!strncmp(line, "name=", 5)) snprintf(s_netName, sizeof(s_netName), "%s", line + 5);
+            else if (!strncmp(line, "address=", 8)) snprintf(s_netAddress, sizeof(s_netAddress), "%s", line + 8);
+        }
+        fclose(f);
+    }
+    if (!s_netName[0]) {
+        const char *user = getenv("USERNAME");
+        snprintf(s_netName, sizeof(s_netName), "%s", user && user[0] ? user : "Twinsen");
+    }
+}
+
+static void WriteOnline(void) {
+    char path[ADELINE_MAX_PATH];
+    GetCfgPath(path, ADELINE_MAX_PATH, "ONLINE.TXT");
+    if (FILE *f = fopen(path, "w")) {
+        fprintf(f, "name=%s\naddress=%s\n", s_netName, s_netAddress);
+        fclose(f);
+    }
+}
+
+// Track select's ModePage while the host picks: the laps and their car
+static int OnlinePick(int sp) {
+    if (!LapsPage(s_sp[sp].Sprint)) return 0;
+    const int car = s_sp[sp].Track ? GridPage("an online race", 1) : CarPage("an online race", 1);
+    if (car < 0) return 0;
+    s_netCar = s_sp[sp].Track ? &s_grid[car] : &s_cars[car];
+    s_netSp = sp;
+    s_onlineLaps = s_trialLaps > 0 ? s_trialLaps : 3;
+    return 1;
+}
+
+static int StartOnline(int sp, int laps) {
+    const int kept = s_trialLaps;
+    s_trialLaps = laps;
+    s_onlineRace = 1;
+    const int started = StartRace(sp, 1, s_netCar, -1);
+    s_onlineRace = 0;
+    s_trialLaps = kept;
+    return started;
+}
+
+// Who is here, and what happens next. Non-zero: a race is set up
+static int LobbyPage(void) {
+    S32 padDir;
+    PageLoopStart(&padDir);
+    const int host = RaceNet_IsHost();
+    int result = -1, told = 0;
+    char said[220] = "", outside[64] = "", inside[64] = "", address[100] = "", failed[170] = "";
+    Log_Info("[racegame] online: the lobby, %s", host ? "hosting" : "joined");
+    while (result < 0) {
+        ManageTime();
+        MyGetInput();
+        const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, x0 = cx - 330, x1 = cx + 330, y0 = 60 + oy, y1 = 430 + oy;
+        int ok = 0;
+        const int answered = host && RaceNet_Router(&ok, said, sizeof(said), outside, sizeof(outside), inside, sizeof(inside));
+        if (answered && !told) {
+            told = 1;
+            // (the user, 2026-10-30: "if it fails alert the user")
+            if (!ok) SayPage("Players on the internet can't join yet", said);
+            PageLoopStart(&padDir);
+        }
+        S32 mx, my;
+        const int click = Clicked(&mx, &my);
+        Page(NULL, 0);
+        ShadeBoxBlk(x0, y0, x1, y1, RG_PAGE_SHADE);
+        DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
+        const int connected = RaceNet_Connected();
+        Text(cx, y0 + 14, host ? "Hosting an online race" : connected ? "In an online race" : "Joining ...", RG_ORANGE);
+        S32 y = y0 + 52;
+        if (host) {
+            if (!answered) Text(cx, y, "Asking the router to open the port ...", RG_GREY);
+            else {
+                snprintf(address, sizeof(address), "Friends join: %s:%d", outside[0] ? outside : "(not known)", RACENET_PORT);
+                Text(cx, y, ok ? address : "The router didn't open the port", ok ? LBAWHITE : RG_ORANGE);
+                snprintf(address, sizeof(address), "In this house: %s:%d", inside[0] ? inside : "(not known)", RACENET_PORT);
+                Text(cx, y + RG_LOBBY_ROW, address, RG_GREY);
+            }
+            y += RG_LOBBY_ROW * 2;
+        }
+        const int others = RaceNet_Others();
+        char line[80];
+        snprintf(line, sizeof(line), "%s (you)", s_netName);
+        Text(cx, y, line, LBAWHITE);
+        y += RG_LOBBY_ROW;
+        int wrong = 0;
+        const int rows = host ? RG_LOBBY_ROWS - 2 : RG_LOBBY_ROWS;
+        for (int i = 0; i < others; i++) {
+            T_RACENET_PLAYER who;
+            if (!RaceNet_Other(i, &who)) continue;
+            wrong |= who.Wrong;
+            if (i >= rows) continue;
+            if (i == rows - 1 && others > rows) snprintf(line, sizeof(line), "and %d more", others - rows + 1);
+            else snprintf(line, sizeof(line), "%s%s", who.Name, who.Wrong ? " (another version)" : "");
+            Text(cx, y, line, who.Wrong ? RG_ORANGE : LBAWHITE);
+            y += RG_LOBBY_ROW;
+        }
+        if (wrong) Text(cx, y1 - 72, "Everyone needs the same version", RG_ORANGE);
+        Text(cx, y1 - 38, host ? "Enter: pick the track    Esc: leave" : "Enter: pick your car    Esc: leave", RG_GREY);
+        Present();
+        // (it ended: the host left, or refused this game)
+        const char *error = RaceNet_Error();
+        if (error[0] || (!RaceNet_On())) { snprintf(failed, sizeof(failed), "%s", error[0] ? error : "The game ended"); result = 0; break; }
+        char track[96];
+        int laps = 0;
+        if (!host && RaceNet_Announced(track, sizeof(track), &laps)) {
+            int sp = -1;
+            for (int i = 0; i < s_nbSp; i++) if (!strcmp(s_sp[i].Name, track)) sp = i;
+            if (sp < 0) { snprintf(failed, sizeof(failed), "This game doesn't have %s", track); result = 0; break; }
+            result = StartOnline(sp, laps);
+            if (result) break;
+            continue;
+        }
+        if (click == 2 || Escaped()) { result = 0; break; }
+        if (Confirmed() || click == 1) {
+            WaitNoInput();
+            if (host) {
+                s_onlinePick = 1;
+                const int picked = TrackSelect();
+                s_onlinePick = 0;
+                if (picked && s_netSp >= 0) {
+                    RaceNet_Announce(s_sp[s_netSp].Name, s_onlineLaps);
+                    result = StartOnline(s_netSp, s_onlineLaps);
+                }
+            }
+            else if (connected && s_nbGrid > 0) {
+                const int car = GridPage("an online race", 1);
+                if (car >= 0) s_netCar = &s_grid[car];
+            }
+            if (result < 0) PageLoopStart(&padDir);
+        }
+    }
+    AsciiMode = FALSE;
+    Page(NULL, 0);
+    if (!result) {
+        RaceNet_Stop();
+        if (failed[0]) SayPage("Online race", failed);
+    }
+    return result > 0;
+}
+
+// Online race, on the main menu. Non-zero: a race is set up
+static int OnlinePage(void) {
+    ReadOnline();
+    // (a race has just ended: its players are still here)
+    if (RaceNet_On() && LobbyPage()) return 1;
+    s_onlineMenu[0] = 1;
+    s_onlineMenu[1] = 3;
+    s_onlineMenu[2] = 280;
+    s_onlineMenu[3] = 0;
+    SetRow(s_onlineMenu, 0, RG_ID_ONLINE_BACK);
+    SetRow(s_onlineMenu, 1, RG_ID_ONLINE_HOST);
+    SetRow(s_onlineMenu, 2, RG_ID_ONLINE_JOIN);
+    for (;;) {
+        Page("Online race", 128);
+        const S32 select = Menu(s_onlineMenu);
+        if (select == RG_ID_ONLINE_BACK || select == 1000) { Page(NULL, 0); return 0; }
+        if (select != RG_ID_ONLINE_HOST && select != RG_ID_ONLINE_JOIN) continue;
+        if (!TypePage("Your name", "What the other players see", s_netName, sizeof(s_netName), 0)) continue;
+        if (select == RG_ID_ONLINE_JOIN && !TypePage("Join a race", "The address the host gave you", s_netAddress, sizeof(s_netAddress), 1)) continue;
+        WriteOnline();
+        const int on = select == RG_ID_ONLINE_HOST ? RaceNet_Host(s_netName) : RaceNet_Join(s_netAddress, s_netName);
+        if (!on) { SayPage("Online race", RaceNet_Error()); continue; }
+        if (LobbyPage()) return 1;
+    }
+}
+
 static int QuitPage(void) {
     s_quitMenu[0] = 0;
     s_quitMenu[1] = 2;
@@ -3392,7 +3670,9 @@ S32 RaceGame_Menu(S32 inGame) {
     const int resume = inGame && !s_raceOver;
     // (Restart, 2026-10-25 -- the user: "We should also add in a restart menu option": in a race of the race game's, going on or just over;
     // the greyed Story Mode left out for it, seven rows as ever)
-    const int restart = inGame && s_raceSp >= 0 && s_raceSp < s_nbSp;
+    const int restart = inGame && s_raceSp >= 0 && s_raceSp < s_nbSp && !RaceNet_On();
+    // (an online race over: back with its players)
+    if (RaceNet_On() && !resume && OnlinePage()) return RACEGAME_START;
     S32 nb = 0;
     if (resume) SetRow(s_mainMenu, nb++, RG_ID_RESUME);
     if (restart) SetRow(s_mainMenu, nb++, RG_ID_RESTART);
@@ -3400,6 +3680,7 @@ S32 RaceGame_Menu(S32 inGame) {
     SetRow(s_mainMenu, nb++, RG_ID_TRACKS);
     const S32 specials = nb;
     SetRow(s_mainMenu, nb++, RG_ID_SPECIALS);
+    if (!restart) SetRow(s_mainMenu, nb++, RG_ID_ONLINE);
     SetRow(s_mainMenu, nb++, RG_ID_TIMES);
     SetRow(s_mainMenu, nb++, RG_ID_OPTIONS);
     SetRow(s_mainMenu, nb++, RG_ID_QUIT);
@@ -3426,10 +3707,17 @@ S32 RaceGame_Menu(S32 inGame) {
         case RG_ID_OPTIONS:
             return select;
         case RG_ID_QUIT:
-            if (QuitPage()) return select;
+            if (QuitPage()) {
+                // (the port taken off the router: a game that crashes leaves it to its lease)
+                RaceNet_Stop();
+                return select;
+            }
             break;
         case RG_ID_TRACKS:
             if (TrackSelect()) return RACEGAME_START;
+            break;
+        case RG_ID_ONLINE:
+            if (OnlinePage()) return RACEGAME_START;
             break;
         case RG_ID_STORY:
             if (const S32 story = StoryMode()) return story;

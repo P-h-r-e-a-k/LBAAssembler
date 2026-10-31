@@ -2684,6 +2684,15 @@ static void cmd_raceweb(int argc, const char *argv[]) {
     Console_Print("raceweb");
 }
 
+/* netstatus: an online race's session, for tests (NETRACE.CPP). */
+static void cmd_netstatus(int argc, const char *argv[]) {
+    (void)argc; (void)argv;
+    extern int RaceNet_StatusLine(char *out, int size);
+    char line[256];
+    RaceNet_StatusLine(line, sizeof(line));
+    Console_Print("%s", line);
+}
+
 static void cmd_raceengine(int argc, const char *argv[]) {
     (void)argc; (void)argv;
     extern void RaceMod_TestEngine(void);
@@ -2975,6 +2984,7 @@ void Console_RegisterAll(void) {
                               "(1 the first); raceitem 12 is Twinsen's on the others.");
     Console_RegisterCommandEx("racescare", cmd_racescare, "Race-track test: a scare jumps up beside the road now", "racescare [n]",
                               "Scare n (1 the first; none: the nearest), as the Temple of Bu's do (RACEMOD.CPP scare=).");
+    Console_RegisterCommandEx("netstatus", cmd_netstatus, "Online race: who is here, the router's answer", "netstatus", "NETRACE.CPP.");
     Console_RegisterCommandEx("raceengine", cmd_raceengine, "Race-track test: is the car's engine loop playing", "raceengine",
                               "In the log, with the camera view (RACEMOD.CPP).");
     Console_RegisterCommandEx("racerescue", cmd_racerescue, "Race-track test: the car put back on the road now", "racerescue",
