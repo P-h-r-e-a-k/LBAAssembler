@@ -372,9 +372,14 @@ S32 RaceMod_Handbrake(void);
 double RaceMod_HandbrakeSteer(S32 on);
 double RaceMod_HandbrakeBrake(void);
 void RaceMod_Slide(S32 beta, S32 *speed, S32 deltatimer, S32 airborne);
+// (BUGGY.CPP, the car's move for the frame: another player's car leaning on it -- RACEMOD.CPP NetContact -- as part of the move, so walls stop it as they stop the car)
+void RaceMod_CarPush(S32 *x, S32 *z);
 double RaceMod_SkidCoast(void);
 S32 RaceMod_Dial(S32 num);
 S32 RaceMod_Hush(S32 num);
+S32 RaceMod_NoChase(S32 move, S32 target);  // GERELIFE.CPP: no one goes after a car in a race
+S32 RaceMod_CarRacing(void);                // ... nor does a script hit it
+S32 RaceMod_CarThrough(S32 num);            // OBJECT.CPP: Twinsen's car goes through this actor
 S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);
 void RaceMod_FloorFor(S32 y);
 void RaceMod_FloorForNothing(void);

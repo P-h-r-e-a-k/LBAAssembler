@@ -50,7 +50,9 @@ enum {
     NETKIT_REFUSE_CHALLENGE = 3,
     NETKIT_REFUSE_CLOSED = 4,
     NETKIT_REFUSE_TIMEOUT = 5,
-    NETKIT_REFUSE_BAD = 6
+    NETKIT_REFUSE_BAD = 6,
+    NETKIT_REFUSE_PASSWORD = 7,
+    NETKIT_REFUSE_VERSION = 8
 };
 
 struct NetKit *NetKit_Host(unsigned short port, const char *name);
@@ -76,6 +78,9 @@ unsigned short NetKit_Port(const struct NetKit *kit);
 int NetKit_Send(struct NetKit *kit, uint32_t to, const void *data, int len, int reliable);
 
 int NetKit_Broadcast(struct NetKit *kit, const void *data, int len, int reliable);
+
+/* Host only: puts a member out, telling them why (a NETKIT_REFUSE_ reason). Non-zero if there was such a member. */
+int NetKit_Kick(struct NetKit *kit, uint32_t id, int reason);
 
 int NetKit_NextMessage(struct NetKit *kit, NetKitMessage *out, void *buf, int max);
 

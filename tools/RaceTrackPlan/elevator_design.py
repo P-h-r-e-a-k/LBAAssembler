@@ -214,6 +214,8 @@ plan = {
     'keepBodies': KEEP,
     # the decks a pier may stand on: the main deck, the two lower ones and the landing between them
     'pierBodies': [1, 9, 14, 15, 19],
+    # the small monkey monsters throwing crates up at the cars (RaceTrackGuards.Monkey): on the deck under the station's south edge and on the landing, facing the road
+    'guards': [[4, 0, 25.8, 49.4, 3219, 0.0, -1.0, 0], [4, 0, 39.0, 48.4, 3265, 0.0, -1.0, 0]],
     'gravity': float(os.environ.get('ELEV_GRAVITY', '1.0')),
     # the camera rides the road: cells behind the car, units over the road, cells ahead of the car that it looks at
     'railCamera': [float(v) for v in os.environ.get('ELEV_CAMERA', '9 3400 4').split()],

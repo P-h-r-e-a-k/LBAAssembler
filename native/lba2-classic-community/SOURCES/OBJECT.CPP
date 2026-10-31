@@ -1744,6 +1744,9 @@ S32 CheckObjCol(U8 numobj) {
                                 AND z0<zt1
                                            AND z1>
                                     zt0) {
+                if (numobj == NUM_PERSO AND RaceMod_CarThrough(n))
+                    continue;
+
                 ptrobj->ObjCol = n;
 
                 // On ne veut pas ejecter un wagon des rails

@@ -5511,6 +5511,16 @@ corners where that's quicker".
 The car's engine with the camera inside it is `RaceMod_EngineInside`: the game's 3D sound stops a sample whose place is off the screen, and the car's middle, under and behind the eye, always was.
 
 
+## People on the road, 2026-10-31
+
+The user asked why actors were appearing on tracks. The review of 2026-10-27 and 28 put back everyone a build had removed who stood clear of the road (`KeepOffRoadActors`, 171 actors on seven islands), and `OffRoad` judges an actor by where it stands and the points its scripts send it to. It can't see `SET_DIR(FOLLOW, Twinsen)`, which has no point: the Elevator Platform's monkey monster stands a cell off the road and walks up to any car within 6,000, and stopped the car on pole for good. His line to it was hushed that day (`RaceMod_Hush`), which treated the symptom. Nothing caught it: the track sweeps start a time trial from its run-up, past him at speed, and read rescues and lap times, not what the car touched.
+
+`ScriptRoundTrip racecheck <game>` lists every actor a script can send after another: hundreds, mostly people turning to Twinsen as he talks, so they can't all go at build time. The rule is the engine's, for whoever is left: `RaceMod_NoChase` (no one sets off after a car on a track), no script's `HIT_OBJ` on a racing car (Desert Island's Quetches), and `RaceMod_CarThrough` (a car goes through everyone but the other cars and what carries it; it logs each, once a race). `run_sweep.ps1` drives all 16 tracks by the real menus, one car from pole, and reports them, the laps and the rescues. Its first run found an invisible helper with a body in Volcano Island's road stopping every car until a rescue, every lap.
+
+**The small monkey monsters** (`RaceTrackGuards.Monkey`, plan `guards`). Two at half size on the lower decks, under the station's south edge and on the landing, throwing the monster's own crate (OBJFIX.HQR 93, `F_THROW_OBJ_3D` in his animation 542, left out by `RaceMod_SilentThrow` and flown by `GuardThrow`). Not until 3 s after go, and never in a time trial, whose laps are compared with ghosts driven without them. A crate is half as fast as a car at speed, so its aim looks for the first moment it can reach where the car will be: the pigheads' sum ran away and threw nothing.
+
+**The Elevator's roster.** The monkey monster in his crate is the one to beat, with the Franco policeman, in the story and in Track select. He's gone from the road's side (`OldActors`).
+
 ## Race sweep, 2026-10-31
 
 **The road further out.** The engine drew the camera's cube and the eight round it, so on Polar Island's long straights the road stopped short of the far clip. `TERRAIN.CPP` now draws by `TerrainReachHook`: a race asks for a second ring (`RaceTerrainReach`), 5 x 5 cubes, taking a cube past the first ring only when it is ahead of the camera and nearer than the far clip. With the hook unset, or outside a race, it is the game's own 3 x 3, in the game's own order. Measured with `cartrace` on an otherwise idle PC, nothing over 50 ms between frames on Polar, the palace, Island CX Mk2, the Desert or the Francos, on either engine.

@@ -141,7 +141,10 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Elevator = new("Elevator Platform", "ASCENCE.ILE", "ASCENCE.OBL", 10, 120, 120, 37,
         "RaceTrackPlan.Elevator.json", null)
     {
-        Title = "The Elevator Platform: the rollercoaster",
+        Title = "The Elevator Platform: the rollercoaster", Roster = RaceDriver.Elevator,
+        // (the monkey monster: on the road himself now, in his crate. On foot he stood clear of it and his script walked him up to Twinsen's car wherever it was, the
+        // pole's most of all, kept by the review of 2026-10-28: its points are all his scripts' it can see, RaceTrackScenes OffRoad)
+        OldActors = new[] { (120, 2) },
         // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
         // a full review of all islands checking for actors that have been removed that we can restore")
         KeepOffRoadActors = true,

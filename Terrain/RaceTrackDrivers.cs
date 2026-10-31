@@ -67,6 +67,14 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Of(RaceTrackCharacterCars.Hal, "HAL", 2.0, 1.0, 1.01),
     };
 
+    // The Elevator Platform: the monkey monster himself in his crate (the one to beat -- the user, 2026-10-31: "The elevator platform race in story line is to be
+    // against the actual monkey monster"), and the Franco policeman in his patrol car
+    public static readonly List<RaceDriver> Elevator = new()
+    {
+        Of(RaceTrackCharacterCars.Crate, "The monkey monster", -2.5, 1.01, 1.0, main: true),
+        Of(RaceTrackCharacterCars.Patrol, "The Franco policeman", 2.5, 0.98, 1.03),
+    };
+
     // Mosquibees Island: the Queen (the one to beat), and the monkey monster with the sword in his war cart
     public static readonly List<RaceDriver> Mosquibe = new()
     {

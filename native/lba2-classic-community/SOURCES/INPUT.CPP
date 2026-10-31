@@ -7,6 +7,7 @@
 
 #include "INPUT.H"
 #include "MENU_INPUT.H"
+#include "RACEGAME.H"
 
 #include <SYSTEM/LOG.H>
 #include "JOYSTICK.H"
@@ -232,6 +233,7 @@ void MyGetInput() {
     if (!MyKey) {
         MyKey = (S32)JoystickFirstPressedScancode();
     }
+    RaceGame_SharedKeys();
 
     /* Reserve configured console toggle key from gameplay so toggle isn't handled twice. */
     {

@@ -24,4 +24,7 @@ S32 RaceGame_OptionsRow(S32 num);
 // RACEMOD.CPP: the player changed the race camera's view during a race (V): kept for the next race (RACEGAME_SETTINGS.TXT camera=)
 void RaceGame_CameraChosen(S32 view);
 
+void RaceGame_SharedKeys(void);            // INPUT.CPP: two players on one keyboard
+void RaceGame_TestKeys(int down);           // (tests: player 2's keys as if down, -1 the keyboard's)
+
 #endif

@@ -149,7 +149,8 @@ internal static class RaceCarEngineFile
         if (track?.OnFoot == true) text.Append("on_foot=1\n");
         // the people in the cars' way, stepping out at them, striking and throwing (the Emperor's palace's)
         foreach (var guard in track?.Guards ?? new()) text.Append($"guard={string.Join(' ', guard)}\n");
-        if (track?.Guards is { Count: > 0 }) text.Append($"guard_size={(int)Math.Round(RaceTrackGuards.Size * 100)}\n");
+        // (the small monkey monsters only throw: their reach and pace are no one's)
+        if (track?.Guards is { Count: > 0 } people && people.Any(g => g[0] != RaceTrackGuards.Monkey)) text.Append($"guard_size={(int)Math.Round(RaceTrackGuards.Size * 100)}\n");
         foreach (var teleport in track?.Teleports ?? new()) text.Append($"teleport={string.Join(' ', teleport)}\n");
         // where the raised road's rail lets a car go off its edge, down to the road under it (the Temple of Bú's spiral drop)
         foreach (var open in track?.RailOpens ?? new()) text.Append($"rail_open={string.Join(' ', open)}\n");

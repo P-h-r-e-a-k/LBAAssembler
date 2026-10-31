@@ -1414,6 +1414,24 @@ const NetKitMember *NetKit_MemberById(const NetKit *k, uint32_t id) {
     return NULL;
 }
 
+int NetKit_Kick(NetKit *k, uint32_t id, int reason) {
+    const uint32_t now = nk_now_ms();
+    int slot, peer;
+
+    if (!k->isHost || id == k->localId)
+        return 0;
+    slot = nk_member_slot(k, id);
+    if (slot < 0 || k->member[slot].state == NK_MEMBER_AWAY)
+        return 0;
+    peer = k->member[slot].peer;
+    nk_member_away(k, id, now);
+    nk_announce_leave(k, id);
+    nk_push_event(k, NETKIT_EVENT_LEFT, id, NULL, NETKIT_REFUSE_NONE);
+    if (peer >= 0)
+        nk_host_refuse(k, &k->peer[peer], reason);
+    return 1;
+}
+
 int NetKit_Send(NetKit *k, uint32_t to, const void *data, int len, int reliable) {
     uint8_t payload[NK_REL_MAX];
 
@@ -1528,6 +1546,10 @@ const char *NetKit_RefuseText(int reason) {
         return "this session is not taking joiners";
     case NETKIT_REFUSE_TIMEOUT:
         return "the join window ran out";
+    case NETKIT_REFUSE_PASSWORD:
+        return "wrong password";
+    case NETKIT_REFUSE_VERSION:
+        return "another version of the game";
     case NETKIT_REFUSE_BAD:
         return "the peer is not speaking this protocol";
     default:

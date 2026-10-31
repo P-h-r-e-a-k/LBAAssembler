@@ -24,6 +24,7 @@ extern S32 GfxDitherShading;
 #include "../SAVEGAME.H"
 #include "../INPUT.H"
 #include "../CONTROL.H" // Control_Input* harness timeline, Control_KeyHold
+#include "../RACEGAME.H"
 #include "../RECORD.H"  // session recorder: the `rec` verbs
 #include "../SCRIPT_BREAKPOINT.H" // breakpoint/continue/step: the editor's embedded Play debugger
 #include "../GERELIFE.H"          // DoLife: continue/step re-enter it directly for the paused actor
@@ -2684,6 +2685,11 @@ static void cmd_raceweb(int argc, const char *argv[]) {
     Console_Print("raceweb");
 }
 
+/* p2keys: player 2's keys as if down, for tests: no one's keyboard is touched. -1: the keyboard's (RACEGAME.CPP RaceGame_SharedKeys). */
+static void cmd_p2keys(int argc, const char *argv[]) {
+    if (argc > 1) RaceGame_TestKeys(atoi(argv[1]));
+}
+
 /* netstatus: an online race's session, for tests (NETRACE.CPP). */
 static void cmd_netstatus(int argc, const char *argv[]) {
     (void)argc; (void)argv;
@@ -2984,6 +2990,7 @@ void Console_RegisterAll(void) {
                               "(1 the first); raceitem 12 is Twinsen's on the others.");
     Console_RegisterCommandEx("racescare", cmd_racescare, "Race-track test: a scare jumps up beside the road now", "racescare [n]",
                               "Scare n (1 the first; none: the nearest), as the Temple of Bu's do (RACEMOD.CPP scare=).");
+    Console_RegisterCommandEx("p2keys", cmd_p2keys, "Two players: player 2's keys as if down", "p2keys <mask>", "RACEGAME.CPP.");
     Console_RegisterCommandEx("netstatus", cmd_netstatus, "Online race: who is here, the router's answer", "netstatus", "NETRACE.CPP.");
     Console_RegisterCommandEx("raceengine", cmd_raceengine, "Race-track test: is the car's engine loop playing", "raceengine",
                               "In the log, with the camera view (RACEMOD.CPP).");

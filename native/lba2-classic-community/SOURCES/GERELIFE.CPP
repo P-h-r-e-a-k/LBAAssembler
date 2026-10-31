@@ -907,6 +907,11 @@ void DoLife(U8 numobj) {
         case LM_SET_DIR: {
             S32 oldmove = ptrobj->Move;
 
+            if (RaceMod_NoChase(PtrPrg[0], PtrPrg[1])) {
+                PtrPrg += 2;
+                break;
+            }
+
             switch (oldmove) {
             case MOVE_WAGON:
                 ptrobj->WorkFlags &= ~(MANUAL_INTER_FRAME);
@@ -1051,7 +1056,8 @@ void DoLife(U8 numobj) {
         case LM_HIT_OBJ:
             num = *PtrPrg++;
             if (ListObjet[num].LifePoint > 0) {
-                HitObj(numobj, (U8)num, (S32)*PtrPrg, ListObjet[num].Obj.Beta);
+                if (num != NUM_PERSO OR !RaceMod_CarRacing())
+                    HitObj(numobj, (U8)num, (S32)*PtrPrg, ListObjet[num].Obj.Beta);
             }
             PtrPrg++;
             break;

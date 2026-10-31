@@ -705,6 +705,7 @@ void DoAnimBuggy(T_OBJET *ptrobj) {
     LongRotate(0, ptb->SpeedInc * 1024, RaceMod_MoveBeta(ptb3d->Beta));   // (skidding on oil, or the handbrake's slide, it goes the way it was going: RACEMOD.CPP)
     Nxw = ptb3d->X + X0 / 1024;
     Nzw = ptb3d->Z + Z0 / 1024;
+    if (RaceMod_Active()) RaceMod_CarPush(&Nxw, &Nzw);
 
     // altitude ideal
     //	ny = CalculAltitudeObjet( ptb3d->X, ptb3d->Z ) ;	// ground y pour xz

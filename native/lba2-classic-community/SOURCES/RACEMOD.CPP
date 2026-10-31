@@ -712,8 +712,20 @@ static int FootRescue(const char *where);
 static int FootCross(void);
 static U32 WalkInput(void);
 static int s_trial = 0;                    // trial=
-static int s_online = 0;                   // online=: another player's car on the road with this one (NETRACE.CPP); a time trial's race file, with no ghost
+static int s_online = 0;                   // online=: another player's car on the road with this one (NETRACE.CPP); a time trial's race file, with no ghost, with its race's mushrooms
 static int s_netGo = 0;                    // ... and the host has said go
+#define RACE_NET_OWNER (-2)                // a car that isn't this game's: what another player threw or dropped
+#define RACE_NET_TARGET(i) (-10 - (i))     // a shot after another player's car: only drawn -- that car's game says what hits it (NetRaceFrame)
+static char s_netBy[RACENET_NAME + 1] = "";  // the player it was (CarName)
+static int s_netAimed = 0;                 // a red ball arriving is after this game's car
+static void NetSay(int type, int a, int b, double x, double y, double z, uint32_t target);
+static double NetBackShare(void);
+static double NetThrowerShare(double x, double y, double z);
+static void NetHiddenItems(void);
+static int NetGridSpot(void);
+static void NetSpread(void);
+// (a time trial has none; a race online is a time trial's file with its race's power-ups, RACEGAME.CPP StartRace)
+static int NoItems(void) { return s_trial && !s_online; }
 // the ghost car (2026-10-24: the ghost's section, before RaceMod_Frame)
 static int s_ghostMode = 2;                // ghost=: 0 none, 1 the player's own best lap, 2 the track's fastest ghost (the player's own or one shared); 3, 4, 5 the game's
                                            // Easy, Medium, Hard; 6 the player's own or one shared (the menu's "Your best lap")
@@ -4456,7 +4468,8 @@ static void Load(const char *path, int carOnly = 0) {
     // (no qualifying lap in a time trial -- the Citadel storm's trial file doesn't say qualifying=0, and the game's own default, a qualifying lap
     // first, left it with no count-down)
     if (s_trial) s_qualifying = 0;
-    if (s_trial && s_car.HasLine && !s_ghostWatch) TrialStartSpot();
+    if (s_online) NetHiddenItems();
+    if (s_trial && s_car.HasLine && !s_ghostWatch && !NetGridSpot()) { TrialStartSpot(); NetSpread(); }
     if (s_nbSpots && s_car.HasLine) {
         // where they wait until the grid is formed: their pit spots, or (with no pit lane) the grid spots behind the player
         int waiting = 0, spot = 1;
@@ -4843,7 +4856,7 @@ void RaceMod_Lap(S32 x, S32 z) {
         // (a time trial's fastest lap into Best laps as it comes -- over the line, kept for good: an endless one has no end to wait for,
         // and a player who left a trial of laps before its end lost the lap -- a player's report, 2026-10-26: "my best lap time doesn't get
         // recorded unless I finish all the remaining laps". The trial's end puts its own entry in its place, RaceGame_Finished)
-        if (s_trial && s_phase == PHASE_RACE && !s_ghostWatch && s_bestLap == s_lastLap) RaceGame_TrialBest(s_lastLap);
+        if (s_trial && !s_online && s_phase == PHASE_RACE && !s_ghostWatch && s_bestLap == s_lastLap) RaceGame_TrialBest(s_lastLap);
         // the time to beat: under it, the story moves on (once)
         if (const S32 target = BeatTime()) {
             char text[64];
@@ -8668,6 +8681,7 @@ static int RacePlace(int *racers) {
 // How far back in the race a car is: 0 leading, 1 last; -1 with no race (no other car on the lap, or not racing yet: qualifying, the
 // others waiting in the pits). `me`: -1 the player, else an opponent.
 static double BackShare(int me) {
+    if (s_online && me < 0) return NetBackShare();
     if (!RaceOn()) return -1;
     const double player = PlayerProgress();
     const double mine = me < 0 ? player : OpponentProgress(&s_opp[me]);
@@ -9031,6 +9045,8 @@ static void CarDrop(int who, int pu, double cx, double cy, double cz, double bet
     if (pu == PU_OIL) DropOil(x, y, z, who);
     else if (pu == PU_PENGUIN) DropPenguin(x, y, z, who);
     else if (pu == PU_FAKE) DropFake(x, y, z, who, now);
+    // (on the other players' roads too, where it landed here)
+    if (who == -1) NetSay(RACENET_EV_ITEM, pu, 0, x, y, z, 0);
 }
 
 // Console (tests): Twinsen uses power-up `pu` now, as from his item box (raceitem); a nitro penguin goes off `cells` ahead of his car
@@ -9127,6 +9143,19 @@ static void UseItem(int pu, S32 now) {
     // (its name not said on the screen: the item box shows it -- the user, 2026-10-10: "We also don't need a message for each pickup")
     Log_Info("[racemod] Twinsen uses %s%s", s_puName[pu], s_puJet[pu] > 0 && !Guide() ? " (no line: a boost, the keys his)" : "");
     UseSound(pu, NULL);
+    // (the other players' games: the balls out of this car, each after whoever they are after there; the lightning and the ghost on every car. The drops: CarDrop)
+    if (pu == PU_LIGHTNING || pu == PU_GHOST) NetSay(RACENET_EV_ITEM, pu, 0, 0, 0, 0, 0);
+    else if (pu >= PU_BALL_YELLOW && pu <= PU_BALL_FIRE) {
+        uint32_t ahead = 0;
+        double gap = 1e30;
+        const double mine = PlayerProgress();
+        const int others = s_online ? RaceNet_Others() : 0;
+        for (int i = 0; i < others; i++) {
+            T_RACENET_PLAYER who;
+            if (RaceNet_Other(i, &who) && !who.Pending && !who.Finish && who.Progress > mine && who.Progress - mine < gap) { gap = who.Progress - mine; ahead = who.Id; }
+        }
+        NetSay(RACENET_EV_ITEM, pu, hero->Obj.Beta & 4095, hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0, ahead);
+    }
 }
 
 // EXTRA.CPP: the protection spell is the power-up's -- no magic taken while it lasts; it blinks for its last seconds.
@@ -9270,6 +9299,7 @@ static void Slicks(S32 now, int driving) {
             s_skidUntil = now + RACE_SKID_MS; s_skidStart = now; s_skidBeta = hero->Obj.Beta; s_skidSpeed = ListBuggy[0].Speed;
             s_skidDir = RaceRandom() < 0.5 ? 1 : -1;
             Log_Info("[racemod] Twinsen skids on oil%s", sl->Until ? " (a pipe's drip)" : "");
+            NetSay(RACENET_EV_GONE, 0, 0, sl->X, sl->Y, sl->Z, 0);
             sl->On = 0;                     // (the car took it with it: a slick is one car's)
         } else if (driving && CubeMode == CUBE_EXTERIEUR && (now < s_protectUntil || now < s_jetUntil) && Near(hero, lx, (S32)sl->Y, lz, RACE_OIL_REACH)) {
             // (protected, or on the super jet-pack: over it unharmed -- it stays for the next car)
@@ -9300,6 +9330,12 @@ static void Slicks(S32 now, int driving) {
 // it in the race. 0 when it isn't anywhere (an opponent waiting out of sight, no race).
 static int CarAt(int who, double *x, double *y, double *z) {
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    if (who <= RACE_NET_TARGET(0)) {
+        T_RACENET_CAR c;
+        if (!RaceNet_CarOf(RACE_NET_TARGET(0) - who, &c) || c.Island != Island) return 0;
+        *x = c.X; *y = c.Y; *z = c.Z;
+        return 1;
+    }
     if (who < 0) {
         if (CubeMode != CUBE_EXTERIEUR) return 0;
         const T_OBJET *h = &ListObjet[NUM_PERSO];
@@ -9316,7 +9352,7 @@ static int CarAt(int who, double *x, double *y, double *z) {
     return 1;
 }
 
-static const char *CarName(int who) { return who < 0 ? "Twinsen" : s_opp[who].Name; }
+static const char *CarName(int who) { return who == RACE_NET_OWNER ? s_netBy : who < 0 ? "Twinsen" : s_opp[who].Name; }
 
 // Whether a car has finished the race (-1 Twinsen's, else an opponent's): it drives on, out of the race -- no red ball goes after it.
 static int CarFinished(int who) {
@@ -9578,6 +9614,7 @@ static void CarStruckFor(int who, S32 now, const char *what, const char *by, S32
         HitObj(PenguinHitter(), NUM_PERSO, RACE_SHOT_FORCE, -1);
         ListBuggy[0].Speed = 0;
         if (s_hitUntil < now + hold) s_hitUntil = now + hold;
+        NetSay(RACENET_EV_STRUCK, 0, 0, hero->Obj.X + CurrentCubeX * 32768.0, hero->Obj.Y, hero->Obj.Z + CurrentCubeY * 32768.0, 0);
         // (not said on the screen: the car stopped, its stars, say it -- the user, 2026-10-10: "We don't need messages saying 'Hit by
         // shuttle', 'bitten by gas monster', or 'Hit by gunner'"; the log has it)
         (void)message;
@@ -9894,7 +9931,7 @@ static void RedAim(T_RACE_SHOT *sh, int target, const char *why, S32 now, double
         double hint = !throw_ && was == line ? sh->S : -1;
         if (throw_ && sh->Owner >= 0 && line == &s_opp[sh->Owner]) hint = s_opp[sh->Owner].S + 900;
         else if (hint < 0 && target >= 0) hint = s_opp[target].S - ahead;
-        else if (hint < 0 && sh->Owner < 0 && line == Guide() && s_playerIndex >= 0) hint = line->Cum[s_playerIndex] + 900;
+        else if (hint < 0 && sh->Owner == -1 && line == Guide() && s_playerIndex >= 0) hint = line->Cum[s_playerIndex] + 900;
         sh->S = LineNear(line, sh->X, sh->Y - RACE_SHOT_RISE, sh->Z, hint, 60, &sh->Side);
         if (sh->Mode == RED_CLOSE) sh->Mode = RED_FOLLOW;
     }
@@ -10107,6 +10144,17 @@ static int RedBall(T_RACE_SHOT *sh, S32 now, double dt) {
 // track a way, after a car met on it), the fire ball one after every other car, every one of them going forwards round the lap to its car
 // (the ones after the cars behind went back along the track: the user, 2026-10-10, "Make all magic balls exit the car forwards instead of
 // being dropped behind").
+// (another player's red ball: where its thrower is in this game's race, within a lap behind this car -- it was aimed at the car in front of it)
+static double NetThrowerShare(double x, double y, double z) {
+    const T_RACE_OPPONENT *g = Guide();
+    const double mine = RaceShare(-1);
+    double mx, my, mz;
+    if (!g || g->Length <= 0 || !CarAt(-1, &mx, &my, &mz)) return mine;
+    double gap = GuideS(g, mx, my, mz, -1, NULL) - GuideS(g, x, y, z, -1, NULL);
+    if (!s_sprint) { gap = fmod(gap, g->Length); if (gap < 0) gap += g->Length; }
+    return mine - gap + 900;
+}
+
 static void Attack(int pu, int owner, double x, double y, double z, double beta, S32 now) {
     const double hx = sin(beta), hz = cos(beta);
     switch (pu) {
@@ -10114,19 +10162,24 @@ static void Attack(int pu, int owner, double x, double y, double z, double beta,
     case PU_BALL_GREEN: LaunchShot(SHOT_GREEN, owner, -2, x, y, z, hx, hz, now); break;
     case PU_BALL_RED: {
         // (an opponent's with Twinsen running away: after him, wherever it is -- TwinsenLead)
-        const int target = owner >= 0 && Runaway() ? -1 : CarInFront(owner);
+        const int target = owner == RACE_NET_OWNER ? (s_netAimed ? -1 : -2) : owner >= 0 && Runaway() ? -1 : CarInFront(owner);
         T_RACE_SHOT *sh = LaunchShot(SHOT_RED, owner, target, x, y, z, hx, hz, now);
         if (!Guide()) { Log_Info("[racemod] %s's red ball goes after %s (no line: straight ahead)", CarName(owner), target == -2 ? "no one (in the lead)" : CarName(target)); break; }
         // (out of the front of the car, as far round the race as it is; no slower than the car that threw it)
         sh->Target = -2; sh->Mode = RED_FOLLOW; sh->Branch = -1; sh->Into = -1; sh->SaidAt = now;
-        sh->Prog = RaceShare(owner) + 900;
-        sh->Least = RACE_RED_PASS * (owner < 0 ? fabs((double)ListBuggy[0].Speed) : s_opp[owner].Speed);
+        sh->Prog = owner == RACE_NET_OWNER ? NetThrowerShare(x, y, z) : RaceShare(owner) + 900;
+        sh->Least = owner == RACE_NET_OWNER ? 0 : RACE_RED_PASS * (owner < 0 ? fabs((double)ListBuggy[0].Speed) : s_opp[owner].Speed);
         RedAim(sh, target, NULL, now);
         break;
     }
     case PU_BALL_FIRE: {
         int count = 0;
-        if (owner >= 0) { LaunchShot(SHOT_FIRE, owner, -1, x, y, z, hx, hz, now); count++; }
+        if (owner >= 0 || owner == RACE_NET_OWNER) { LaunchShot(SHOT_FIRE, owner, -1, x, y, z, hx, hz, now); count++; }
+        if (owner == -1 && s_online)
+            for (int i = 0; i < RaceNet_Others() && i < RACENET_MAX_OTHERS; i++) {
+                double tx, ty, tz;
+                if (CarAt(RACE_NET_TARGET(i), &tx, &ty, &tz)) { LaunchShot(SHOT_FIRE, owner, RACE_NET_TARGET(i), x, y, z, hx, hz, now); count++; }
+            }
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++)
             if (n != owner && s_opp[n].Count && s_opp[n].Scenes) { LaunchShot(SHOT_FIRE, owner, n, x, y, z, hx, hz, now); count++; }
         Log_Info("[racemod] %s's fire ball splits in %d", CarName(owner), count);
@@ -10236,6 +10289,11 @@ static void Shots(S32 now, int driving) {
                 }
             } else {
                 const double dx = tx - sh->X, dz = tz - sh->Z, d = sqrt(dx * dx + dz * dz), step = RACE_HOME_SPEED * dt;
+                // (at another player's car: that car's game says what it does)
+                if (sh->Target <= RACE_NET_TARGET(0) && d < RACE_SHOT_REACH) {
+                    done = 1;
+                    if (InSight(sh->X, sh->Z, 0)) MagicBallExplo((S32)(sh->X - cx), (S32)sh->Y, (S32)(sh->Z - cz), 0);
+                }
                 double tside;
                 double ahead = fmod(GuideS(o, tx, ty, tz, -1, &tside) - sh->S, o->Length);
                 if (ahead < 0) ahead += o->Length;
@@ -10524,6 +10582,7 @@ static void Fakes(S32 now, int driving) {
         if (hit == -3) continue;
         if (here) DoImpact(RACE_PENGUIN_IMPACT, lx, (S32)f->Y, lz, 255);
         CarStruck(hit, now, "a fake mushroom", NULL);
+        if (hit < 0) NetSay(RACENET_EV_GONE, 2, 0, f->X, f->Y, f->Z, 0);
         f->On = 0;
     }
     // the scene's copies not in use, out of sight
@@ -10642,6 +10701,7 @@ static void PowerUps(S32 now, int driving) {
         if (now - s_takeAt < RACE_ROW_MS) {
             m->Back = now + RACE_MUSHROOM_BACK;
             ListObjet[a].Obj.Y = -20000;
+            NetSay(RACENET_EV_MUSHROOM, i, 0, 0, 0, 0, 0);
             continue;
         }
         // (the item box already full as he comes to it -- or kept for the slot machine's prize: BoxFree -- the mushroom stays where it
@@ -10654,6 +10714,7 @@ static void PowerUps(S32 now, int driving) {
         }
         m->Back = now + RACE_MUSHROOM_BACK;
         ListObjet[a].Obj.Y = -20000;
+        NetSay(RACENET_EV_MUSHROOM, i, 0, 0, 0, 0, 0);
         // its item into the box, the roulette turning
         s_takeAt = now;
         const double back = BackShare(-1);
@@ -10911,6 +10972,7 @@ static void Penguins(S32 now, int driving) {
             // whatever it has run into
             if (const int hit = PenguinCheck(i, now, driving, &other)) {
                 PenguinHitLog(hit);
+                if (hit == 1) NetSay(RACENET_EV_GONE, 1, 0, pg->X, pg->Y, pg->Z, 0);
                 if (other >= 0) PenguinOff(other, now);
                 PenguinOff(i, now);
                 continue;
@@ -10934,6 +10996,39 @@ static void Penguins(S32 now, int driving) {
 // the car into Ascence's deck as it stood it on the slick's box. (Which actors they are, cached for the scene.)
 static U8 s_noCollide[MAX_OBJETS];
 static S32 s_noCollideScene = -1;
+// Twinsen at the wheel on a track.
+static int CarRacing(void) { return RaceMod_Active() && s_car.HasLine && Comportement == C_BUGGY; }
+
+static int IsRaceCar(S32 numobj) {
+    if (numobj == NUM_BUGGY) return 1;
+    if (s_carsScene == (S32)NumCube)
+        for (int n = 0; n < RACE_MAX_OPPONENTS; n++) if (s_carActor[n] == numobj) return 1;
+    return 0;
+}
+
+// An island's people were written for Twinsen on foot, and a track's build keeps them where they stand clear of the road and their scripts' points are clear of it
+// (RaceTrackScenes OffRoad, 2026-10-27 and 28). A script can still send them anywhere a point isn't: SET_DIR after Twinsen, from anywhere -- the Elevator Platform's
+// monkey monster, who walks from the side of the road up to the car on pole and stops it, the user's test, 2026-10-31. So the rule is here, for whoever is left:
+// no one sets off after a car in a race (RaceMod_NoChase), a script's blow doesn't land on one (Desert Island's Quetches hit Twinsen as they walk into him, over and over, the
+// sweep of 2026-10-31) and a car goes through whoever is left (RaceMod_CarThrough): the invisible helper with a body of its own in Volcano Island's road stopped every car
+// until a rescue, every lap. Only the other cars stop one, and what carries one is ridden. What it goes through is logged, once a race: run_sweep.ps1.
+S32 RaceMod_CarRacing(void) { return CarRacing(); }
+S32 RaceMod_NoChase(S32 move, S32 target) {
+    return move == MOVE_FOLLOW && target == NUM_PERSO && CarRacing();
+}
+
+S32 RaceMod_CarThrough(S32 num) {
+    if (!CarRacing() || IsRaceCar(num) || num >= MAX_OBJETS || (ListObjet[num].Flags & OBJ_CARRIER)) return 0;
+    static U8 said[MAX_OBJETS];
+    static S32 race = -1, scene = -1;
+    if (race != s_gridAt || scene != (S32)NumCube) { race = s_gridAt; scene = NumCube; memset(said, 0, sizeof(said)); }
+    if (said[num]) return 1;
+    said[num] = 1;
+    const T_OBJET *a = &ListObjet[num];
+    Log_Info("[racemod] the car touched actor %d of scene %d: entity %d at %d,%d,%d, move %d, flags %x: through it", (int)num, (int)NumCube, (int)a->IndexFile3D, (int)a->Obj.X, (int)a->Obj.Y, (int)a->Obj.Z, (int)a->Move, (unsigned)a->Flags);
+    return 1;
+}
+
 S32 RaceMod_NoCollide(S32 numobj) {
     // (the car lapping on its own, parade=: through Twinsen and his car alike -- it keeps to its line whatever is in its way)
     if (RaceMod_Active() && numobj > 0 && numobj == s_paradeActorNow) return 1;
@@ -12090,6 +12185,11 @@ S32 RaceMod_SilentThrow(S32 numobj) {
         if (s_gunners[i].Scene == (S32)NumCube && s_gunners[i].Gun == numobj) return 1;
     for (int i = 0; i < s_nbFlyers; i++)
         if (s_flyers[i].Scene == (S32)NumCube && s_flyers[i].Actor == numobj) return 1;
+    // (a small monkey monster: his throw's own crate left out -- GuardThrow flies it at a car)
+    for (int i = 0; i < s_nbGuards; i++)
+        if (s_guards[i].Kind == 4)
+            for (int k = 0; k < s_guards[i].NbSeen; k++)
+                if (s_guards[i].SeenScene[k] == (S32)NumCube && s_guards[i].SeenActor[k] == numobj) return 1;
     return 0;
 }
 
@@ -13544,7 +13644,17 @@ static void CarWays(S32 now) {
     }
 }
 
-static const char *GuardName(const T_RACE_GUARD *g) { return g->Kind == 1 ? "pighead" : g->Kind == 2 ? "Stan" : g->Kind == 3 ? "torturer" : "soldier"; }
+static const char *GuardName(const T_RACE_GUARD *g) { return g->Kind == 1 ? "pighead" : g->Kind == 2 ? "Stan" : g->Kind == 3 ? "torturer" : g->Kind == 4 ? "small monkey monster" : "soldier"; }
+// (a small monkey monster -- kind 4, the Elevator Platform's -- throws as a pighead does, its own crate, from the deck under the road. Not until the race is well away -- the
+// user, 2026-10-31: "We should wait until after the race is started so cars on the start line don't get hit" -- and never in a time trial, whose laps are against
+// the ghosts' and the best laps', all driven without him)
+#define RACE_CRATE_OBJ 93                  // OBJFIX.HQR: the monkey monster's crate, as his animation throws it
+#define RACE_CRATE_AFTER_GO 3000           // ms after go before the first
+#define RACE_MONKEY_HAND 550               // how far over his feet it leaves his hand
+#define RACE_CRATE_SPEED 120               // a 20 ms frame's way, his animation's own (6,000 units a second)
+#define RACE_CRATE_MISS 700.0              // aimed this much either way of where the car will be at most: not every crate hits
+static int GuardThrows(const T_RACE_GUARD *g) { return g->Kind == 1 || g->Kind == 4; }
+static int GuardHolds(const T_RACE_GUARD *g, S32 now) { return g->Kind == 4 && (NoItems() || !RaceRunning() || (s_goAt && now < s_goAt + RACE_CRATE_AFTER_GO)); }
 
 // A car struck by one of them -- unless one of them has just struck it.
 static void GuardStrikes(int who, S32 now, const char *what, S32 hold) {
@@ -13579,11 +13689,28 @@ static void GuardThrow(T_RACE_GUARD *g, int actor, S32 now) {
     if (t < 0) return;
     T_RACE_THROWN *u = &s_thrown[t];
     const int k = g->Target + 1;
-    const double fromX = g->X, fromY = g->Y + 900, fromZ = g->Z;
-    const double v = RACE_THROWN_SPEED, c = RACE_THROWN_WEIGHT / 16.0;
+    const double fromX = g->X, fromY = g->Y + (g->Kind == 4 ? RACE_MONKEY_HAND : 900), fromZ = g->Z;
+    const double v = g->Kind == 4 ? RACE_CRATE_SPEED : RACE_THROWN_SPEED, c = RACE_THROWN_WEIGHT / 16.0;
     double tx = x, tz = z, flight = 0, h = 0;
-    for (int pass = 0; pass < 3; pass++) {
+    // (a car at racing speed is twice as fast as a crate: thrown at where it will be by the time the crate gets there, or going by it the sum below runs
+    // away and nothing is thrown. The first moment a crate can be there, along the road: this track is all bends, and straight on from the car comes down
+    // thousands of units from it)
+    double leadX = x, leadZ = z;
+    if (g->Kind == 4) {
+        const T_RACE_OPPONENT *line = Guide();
+        double side = 0;
+        const double s = line ? GuideS(line, x, y, z, -1, &side) : 0, along = sqrt(s_carVX[k] * s_carVX[k] + s_carVZ[k] * s_carVZ[k]);
+        flight = -1;
+        for (double t = 0.05; t <= RACE_THROWN_LONGEST && flight < 0; t += 0.05) {
+            double wx = x + s_carVX[k] * t, wz = z + s_carVZ[k] * t, wy = y, hx, hz;
+            if (line) GuideAt(line, s + along * t, side, &wx, &wy, &wz, &hx, &hz);
+            if (sqrt((wx - fromX) * (wx - fromX) + (wz - fromZ) * (wz - fromZ)) <= v * 50 * t) { flight = t; leadX = wx; leadZ = wz; y = wy; }
+        }
+        if (flight < 0) return;
+    }
+    for (int pass = 0; pass < (g->Kind == 4 ? 1 : 3); pass++) {
         tx = x + s_carVX[k] * flight; tz = z + s_carVZ[k] * flight;
+        if (g->Kind == 4) { tx = leadX + (VentRandom() * 2 - 1) * RACE_CRATE_MISS; tz = leadZ + (VentRandom() * 2 - 1) * RACE_CRATE_MISS; }
         const double R = sqrt((tx - fromX) * (tx - fromX) + (tz - fromZ) * (tz - fromZ)), dy = y + 300 - fromY, q = c * R * R / (v * v);
         const double disc = R * R - 4 * q * (dy + q);
         h = q > 0 && disc >= 0 ? atan((R - sqrt(disc)) / (2 * q)) : atan2(dy, R);
@@ -13593,13 +13720,17 @@ static void GuardThrow(T_RACE_GUARD *g, int actor, S32 now) {
     const int n = (int)(sizeof(RACE_THROWN) / sizeof(RACE_THROWN[0]));
     u->On = 1; u->T0 = now; u->Dur = (S32)(flight * 1000); u->ToX = tx; u->ToY = y; u->ToZ = tz;
     u->Sprite = RACE_THROWN[(int)(VentRandom() * n) % n]; u->Extra = -1; u->Owner = actor >= 0 ? actor : 255;
-    Log_Info("[racemod] %s throws sprite %d at %s's car (%.1f s, %.0f away)", GuardName(g), (int)u->Sprite, CarName(g->Target), flight,
+    Log_Info("[racemod] %s throws %s at %s's car (%.1f s, %.0f away)", GuardName(g), g->Kind == 4 ? "a crate" : "something", CarName(g->Target), flight,
              sqrt((tx - fromX) * (tx - fromX) + (tz - fromZ) * (tz - fromZ)));
     if (actor < 0 || CubeMode != CUBE_EXTERIEUR) return;
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     const S32 beta = TurnOf(atan2(tx - fromX, tz - fromZ));
     const S32 alpha = TurnRound(h);
-    u->Extra = ThrowExtra((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), u->Sprite, alpha, beta, RACE_THROWN_SPEED, RACE_THROWN_WEIGHT, 0);
+    if (g->Kind == 4) {
+        u->Extra = ThrowExtraObj((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), RACE_CRATE_OBJ, alpha, beta, RACE_CRATE_SPEED, -1, RACE_THROWN_WEIGHT, 0);
+        if (u->Extra >= 0) u->Sprite = ListExtra[u->Extra].Sprite;
+    }
+    else u->Extra = ThrowExtra((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), u->Sprite, alpha, beta, RACE_THROWN_SPEED, RACE_THROWN_WEIGHT, 0);
     if (u->Extra >= 0) ListExtra[u->Extra].Flags &= ~(EXTRA_END_OBJ | EXTRA_END_COL | EXTRA_IMPACT);
 }
 
@@ -13691,9 +13822,9 @@ static void Guards(S32 now, int driving, S32 dt) {
                     Log_Info("[racemod] %s %d knocked back by %s's car", GuardName(g), i, CarName(who));
                 }
                 const int coming = dx * vx + dz * vz > 0 || d2 < 2500.0 * 2500.0;
-                const double far = g->Kind == 1 ? RACE_THROWN_FAR : RACE_GUARD_ALERT * sqrt(s_guardSize);
-                if (!coming || d2 > far * far || d2 >= best) continue;
-                if (g->Kind == 1 && d2 < RACE_THROWN_NEAR * RACE_THROWN_NEAR) continue;
+                const double far = GuardThrows(g) ? RACE_THROWN_FAR : RACE_GUARD_ALERT * sqrt(s_guardSize);
+                if (!coming || d2 > far * far || d2 >= best || GuardHolds(g, now)) continue;
+                if (GuardThrows(g) && d2 < RACE_THROWN_NEAR * RACE_THROWN_NEAR) continue;
                 best = d2; target = who;
             }
             const S32 t = now - g->T0;
@@ -13726,7 +13857,7 @@ static void Guards(S32 now, int driving, S32 dt) {
                 if (t >= RACE_GUARD_STRIKE) { g->State = target >= -1 ? GUARD_STEP : GUARD_BACK; g->Rest = now + RACE_GUARD_REST; }
                 break;
             default:
-                if (g->Kind == 1) {
+                if (GuardThrows(g)) {
                     // a pighead: back to his post if he was knocked from it, and a throw at a car in range now and then
                     if (GuardWalk(g, g->PostX, g->PostZ, step)) { anim = g->Walk; break; }
                     g->State = GUARD_POST;
@@ -13799,9 +13930,10 @@ static void Guards(S32 now, int driving, S32 dt) {
             if (who < 0 && !driving) continue;
             double x, y, z;
             if (!CarAt(who, &x, &y, &z)) continue;
+            if (who < 0) Log_Info("[racemod] a thrown thing comes down %.0f from Twinsen's car, %.0f up or down", sqrt((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ)), fabs(y - u->ToY));
             if ((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ) > RACE_THROWN_REACH * RACE_THROWN_REACH || fabs(y - u->ToY) > 1400) continue;
-            Log_Info("[racemod] a thrown thing (sprite %d) hits %s's car", (int)u->Sprite, CarName(who));
-            GuardStrikes(who, now, "a pighead's throw", RACE_THROWN_STUN);
+            Log_Info("[racemod] a thrown thing hits %s's car", CarName(who));
+            GuardStrikes(who, now, "a thrown thing", RACE_THROWN_STUN);
         }
     }
 }
@@ -14923,7 +15055,7 @@ static void GhostLapStart(void) {
 
 // Every frame (RaceMod_Frame): the lap's sample, while a time trial's lap is driven.
 static void GhostRecord(S32 now) {
-    if (!s_trial || s_ghostWatch || s_ghostRecLap != s_laps || s_laps <= 0 || s_place || s_phase != PHASE_RACE) return;
+    if (!s_trial || s_online || s_ghostWatch || s_ghostRecLap != s_laps || s_laps <= 0 || s_place || s_phase != PHASE_RACE) return;
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR || NewCube != -1) return;
     GhostAdd(now - s_lapStart, 0);
 }
@@ -14947,7 +15079,7 @@ static void GhostSplit(int checkpoint) {
 // A time trial's lap driven (RaceMod_Lap, `lap` its time): against the ghost; kept as the player's ghost when it is their best, and raced
 // from the next lap when it is quicker than the ghost raced.
 static void GhostLapDone(S32 lap) {
-    if (!s_trial || s_ghostWatch || lap <= 0) return;
+    if (!s_trial || s_online || s_ghostWatch || lap <= 0) return;
     const S32 now = TimerRefHR;
     if (s_ghost.Lap && s_ghostMode > 0) { s_ghostSplitDiff = lap - s_ghost.Lap; s_ghostSplitAt = now; s_ghostLapDiffUntil = now + RACE_GHOST_SPLIT_MS; }
     // (the game's ghost to beat, beaten: said once a trial -- and again when a later lap beats a harder ghost's time too (2026-10-25, the
@@ -15129,10 +15261,238 @@ static size_t s_ghostUnderSize = 0;
 static void HudSmall(S32 x, S32 y, const char *text, int align);
 static void HudSmallIn(S32 x, S32 y, const char *text, int align, S32 colour);
 extern S32 RaceGame_LocalAlone(void);
+
+// ---- what the cars do to each other, online --------------------------------------------------------------------------------------------
+// Each game is the last word on its own car, and only that: a ball from another player flies here too, from the same place, and it is this game that sees whether
+// it hits this car -- what a player sees hit them, did. So every game runs every power-up: a drop lands on every road, each game's car takes it or doesn't, and
+// a game that takes one tells the others to clear it (RACENET_EV_GONE). A game that loses a mushroom to another car waits out its grow-back as for its own.
+
+static void NetSay(int type, int a, int b, double x, double y, double z, uint32_t target) {
+    if (!s_online) return;
+    T_RACENET_EVENT e;
+    memset(&e, 0, sizeof(e));
+    e.Type = type; e.A = a; e.B = b; e.X = (int32_t)x; e.Y = (int32_t)y; e.Z = (int32_t)z; e.Target = target;
+    RaceNet_SendEvent(&e);
+}
+
+// (how far back this car is among the players: the draw of a mushroom's item, the lightning's time)
+static double NetBackShare(void) {
+    if (!RaceRunning()) return -1;
+    const double mine = PlayerProgress();
+    int ahead = 0, racers = 1;
+    for (int i = 0; i < RaceNet_Others(); i++) {
+        T_RACENET_PLAYER who;
+        if (!RaceNet_Other(i, &who) || who.Pending) continue;
+        racers++;
+        if (who.Finish || who.Progress > mine) ahead++;
+    }
+    return racers > 1 ? (double)ahead / (racers - 1) : -1;
+}
+
+// The mushrooms, penguins, slicks and fake mushrooms a time trial's file hides (hide_actor=): shown in a race
+static void NetHiddenItems(void) {
+    int kept = 0;
+    for (int i = 0; i < s_nbHidden; i++) {
+        const int scene = s_hideScene[i], actor = s_hideActor[i];
+        int item = 0;
+        for (int k = 0; k < s_nbMush && !item; k++) item = s_mush[k].Scene == scene && s_mush[k].Actor == actor;
+        for (int k = 0; k < s_nbPenguinActors && !item; k++) item = s_penguinScene[k] == scene && s_penguinActor[k] == actor;
+        for (int k = 0; k < s_nbOilActors && !item; k++) item = s_oilScene[k] == scene && s_oilActor[k] == actor;
+        for (int k = 0; k < s_nbFakeActors && !item; k++) item = s_fakeScene[k] == scene && s_fakeActor[k] == actor;
+        if (item) continue;
+        s_hideScene[kept] = scene; s_hideActor[kept] = actor; kept++;
+    }
+    Log_Info("[racemod] online: %d item actors shown that a time trial hides", s_nbHidden - kept);
+    s_nbHidden = kept;
+}
+
+// Each player their own spot on the track's grid, by the order they joined. (A race starts from a standstill on it; a time trial's run-up, one spot, would have
+// them all on one place. Its time is from go either way.)
+static int NetGridSpot(void) {
+    if (!s_online || s_nbSpots < 2) return 0;
+    const int slot = RaceNet_Slot() % s_nbSpots;
+    s_spots[0] = s_spots[slot];
+    s_trialSpot = 1;
+    Log_Info("[racemod] online: grid spot %d of %d", slot + 1, s_nbSpots);
+    return 1;
+}
+
+// ... a track with no grid: its one spot, the other cars either side and behind
+static void NetSpread(void) {
+    const int slot = s_online ? RaceNet_Slot() : 0;
+    if (!slot || !s_trialSpot) return;
+    T_RACE_SPOT *s = &s_spots[0];
+    const double b = Radians(s->Beta), back = (slot + 1) / 2 * 1500.0, side = slot & 1 ? 800.0 : -800.0;
+    s->X += (S32)(-sin(b) * back + cos(b) * side);
+    s->Z += (S32)(-cos(b) * back - sin(b) * side);
+    Log_Info("[racemod] online: start spot %d, %.0f behind and %.0f across", slot + 1, back, side);
+}
+
+static void NetItem(const T_RACENET_EVENT *e, S32 now) {
+    const double x = e->X, y = e->Y, z = e->Z;
+    const int pu = e->A;
+    if (pu == PU_PENGUIN) DropPenguin(x, y, z, RACE_NET_OWNER);
+    else if (pu == PU_OIL) DropOil(x, y, z, RACE_NET_OWNER);
+    else if (pu == PU_FAKE) DropFake(x, y, z, RACE_NET_OWNER, now);
+    else if (pu >= PU_BALL_YELLOW && pu <= PU_BALL_FIRE) {
+        s_netAimed = e->Target == RaceNet_SelfId();
+        Attack(pu, RACE_NET_OWNER, x, y, z, Radians(e->B), now);
+    }
+    else if (pu == PU_GHOST) HauntTwinsen(e->Name, now);
+    else if (pu == PU_LIGHTNING && now >= s_jetUntil) {
+        const int me = NUM_PERSO;
+        Strike(now, &me, 1);
+        const S32 ms = ShrinkMs(BackShare(-1));
+        if (now < s_protectUntil) Log_Info("[racemod] %s's lightning strikes Twinsen's car: the protection spell holds", e->Name);
+        else { s_shrunkUntil = now + ms; Log_Info("[racemod] Twinsen's car struck and shrunk by %s's lightning for %.1f s", e->Name, ms / 1000.0); }
+    }
+    Log_Info("[racemod] online: %s uses %s", e->Name, pu >= 0 && pu < PU_COUNT ? s_puName[pu] : "?");
+}
+
+// A drop another player's car took or set off: gone here too -- this game's nearest of it to that place, as a walking penguin has gone its own way in each game
+static void NetGone(const T_RACENET_EVENT *e, S32 now) {
+    double best = 4096.0 * 4096.0;
+    int at = -1;
+    const double x = e->X, z = e->Z;
+    if (e->A == 0) {
+        for (int i = 0; i < RACE_MAX_SLICKS; i++) {
+            const double d = (s_slicks[i].X - x) * (s_slicks[i].X - x) + (s_slicks[i].Z - z) * (s_slicks[i].Z - z);
+            if (s_slicks[i].On && !s_slicks[i].Until && d < best) { best = d; at = i; }
+        }
+        if (at >= 0) s_slicks[at].On = 0;
+    } else if (e->A == 1) {
+        for (int i = 0; i < RACE_MAX_PENGUINS; i++) {
+            const double d = (s_penguins[i].X - x) * (s_penguins[i].X - x) + (s_penguins[i].Z - z) * (s_penguins[i].Z - z);
+            if (s_penguins[i].On && d < best) { best = d; at = i; }
+        }
+        if (at >= 0) PenguinOff(at, now);
+    } else {
+        for (int i = 0; i < RACE_MAX_FAKES; i++) {
+            const double d = (s_fakes[i].X - x) * (s_fakes[i].X - x) + (s_fakes[i].Z - z) * (s_fakes[i].Z - z);
+            if (s_fakes[i].On && d < best) { best = d; at = i; }
+        }
+        if (at >= 0) {
+            s_fakes[at].On = 0;
+            if (InSight(s_fakes[at].X, s_fakes[at].Z, 0)) DoImpact(RACE_PENGUIN_IMPACT, (S32)(s_fakes[at].X - CurrentCubeX * 32768.0), (S32)s_fakes[at].Y, (S32)(s_fakes[at].Z - CurrentCubeY * 32768.0), 255);
+        }
+    }
+}
+
+// Another player's car hit: the burst on it, and this game's own ball that did it gone with it
+static void NetStruck(const T_RACENET_EVENT *e) {
+    if (InSight(e->X, e->Z, 0)) MagicBallExplo((S32)(e->X - CurrentCubeX * 32768.0), e->Y + RACE_SHOT_RISE, (S32)(e->Z - CurrentCubeY * 32768.0), 0);
+    double best = 4096.0 * 4096.0;
+    int at = -1;
+    for (int i = 0; i < RACE_MAX_SHOTS; i++) {
+        const T_RACE_SHOT *sh = &s_shots[i];
+        const double d = (sh->X - e->X) * (sh->X - e->X) + (sh->Z - e->Z) * (sh->Z - e->Z);
+        if (sh->On && sh->Owner == -1 && d < best) { best = d; at = i; }
+    }
+    if (at < 0) return;
+    if (s_shots[at].Extra >= 0 && s_shots[at].Extra < MAX_EXTRAS) ListExtra[s_shots[at].Extra].Sprite = -1;
+    s_shots[at].On = 0;
+}
+
+static void NetEvents(S32 now) {
+    T_RACENET_EVENT e;
+    while (RaceNet_NextEvent(&e)) {
+        snprintf(s_netBy, sizeof(s_netBy), "%s", e.Name);
+        if (e.Type == RACENET_EV_MUSHROOM) { if (e.A >= 0 && e.A < s_nbMush) s_mush[e.A].Back = now + RACE_MUSHROOM_BACK; }
+        else if (e.Type == RACENET_EV_ITEM) NetItem(&e, now);
+        else if (e.Type == RACENET_EV_GONE) NetGone(&e, now);
+        else if (e.Type == RACENET_EV_STRUCK) NetStruck(&e);
+    }
+}
+
+// Cars that touch. Each game moves its own car only, and sees the other where it draws it, so each works out the same knock from its own side: the two cars' speeds
+// along the line between them shared out, with a little bounce, this car's part of it going into its speed where it points and the rest into a shove sideways that
+// fades. Overlapping, it is eased off the other car by half the overlap each frame: the other game does the other half. All of it goes through the car's own
+// move (RaceMod_CarPush), so walls and rails stop it as they stop the car. Two cars that find themselves one inside the other -- a rescue, a place on the grid
+// with more players than spots -- pass through until they are clear: pushing them apart would throw them off the road.
+#define RACE_NET_HALF 430.0                // a car: three circles along it, this far from its middle at each end ...
+#define RACE_NET_WIDE 500.0                // ... each this wide
+#define RACE_NET_LEVEL 900                 // further apart than this up or down, they're on different levels of the road
+#define RACE_NET_GIVE 0.65                 // the share of the speed between them each car takes
+#define RACE_NET_BUMP_MS 300               // a car knocked once in this long by the same car
+#define RACE_NET_SHOVE_MS 280.0            // a knock's shove sideways fades over this
+#define RACE_NET_EASE 0.25                 // the share of half the overlap a frame
+#define RACE_NET_EASE_MOST 90.0            // ... at most
+#define RACE_NET_SPARKS 2500               // units a second: a knock this hard shows
+static U8 s_netThrough[RACENET_MAX_OTHERS], s_netTouching[RACENET_MAX_OTHERS];
+static S32 s_netBumpAt[RACENET_MAX_OTHERS];
+static double s_netPushX = 0, s_netPushZ = 0, s_netShoveX = 0, s_netShoveZ = 0;
+static int s_netBumps = 0;
+
+void RaceMod_CarPush(S32 *x, S32 *z) {
+    const S32 dx = (S32)s_netPushX, dz = (S32)s_netPushZ;
+    if (!dx && !dz) return;
+    *x += dx; *z += dz;
+    s_netPushX -= dx; s_netPushZ -= dz;
+}
+
+static void NetContact(S32 now, int driving) {
+    static S32 last = 0;
+    double dt = last ? (now - last) / 1000.0 : 0;
+    last = now;
+    if (dt < 0) dt = 0;
+    if (dt > 0.05) dt = 0.05;
+    const double fade = exp(-dt * 1000 / RACE_NET_SHOVE_MS);
+    s_netPushX += s_netShoveX * dt; s_netPushZ += s_netShoveZ * dt;
+    s_netShoveX *= fade; s_netShoveZ *= fade;
+    if (fabs(s_netPushX) > 400) s_netPushX = s_netPushX > 0 ? 400 : -400;
+    if (fabs(s_netPushZ) > 400) s_netPushZ = s_netPushZ > 0 ? 400 : -400;
+    if (!driving || s_phase != PHASE_RACE || s_place || CubeMode != CUBE_EXTERIEUR || NewCube != -1 || RaceMod_InFlight() || s_loopState != LOOP_NONE || s_arcOn >= 0 || now < s_jetUntil) return;
+    T_OBJET *hero = &ListObjet[NUM_PERSO];
+    const double mx = hero->Obj.X + CurrentCubeX * 32768.0, mz = hero->Obj.Z + CurrentCubeY * 32768.0;
+    const double fx = sin(Radians(hero->Obj.Beta)), fz = cos(Radians(hero->Obj.Beta));
+    const int others = RaceNet_Others();
+    for (int i = 0; i < others && i < RACENET_MAX_OTHERS; i++) {
+        T_RACENET_CAR c;
+        T_RACENET_PLAYER who;
+        if (!RaceNet_CarOf(i, &c) || !RaceNet_Other(i, &who) || who.Finish || c.Island != Island || abs(c.Y - hero->Obj.Y) > RACE_NET_LEVEL) { s_netTouching[i] = s_netThrough[i] = 0; continue; }
+        const double gx = sin(Radians(c.Beta)), gz = cos(Radians(c.Beta));
+        // (the nearest of each car's three circles to the other's)
+        double best = 1e30, nx = 0, nz = 0;
+        for (int a = -1; a <= 1; a++)
+            for (int b = -1; b <= 1; b++) {
+                const double dx = mx + fx * a * RACE_NET_HALF - (c.X + gx * b * RACE_NET_HALF), dz = mz + fz * a * RACE_NET_HALF - (c.Z + gz * b * RACE_NET_HALF), d = dx * dx + dz * dz;
+                if (d < best) { best = d; nx = dx; nz = dz; }
+            }
+        const double d = sqrt(best), touch = 2 * RACE_NET_WIDE;
+        if (d >= touch) { s_netTouching[i] = s_netThrough[i] = 0; continue; }
+        if (s_netThrough[i]) continue;
+        if (!s_netTouching[i] && d < touch * 0.35) { s_netThrough[i] = 1; Log_Info("[racemod] online: %s's car %.0f from this one: through it till they're clear", who.Name, d); continue; }
+        s_netTouching[i] = 1;
+        if (d > 1) { nx /= d; nz /= d; } else { nx = fz; nz = -fx; }
+        double ease = (touch - d) * 0.5 * RACE_NET_EASE;
+        if (ease > RACE_NET_EASE_MOST) ease = RACE_NET_EASE_MOST;
+        s_netPushX += nx * ease; s_netPushZ += nz * ease;
+        if (now - s_netBumpAt[i] < RACE_NET_BUMP_MS) continue;
+        // (coming together, by how much along the line between them)
+        const double mine = ListBuggy[0].Speed, theirs = c.Speed;
+        const double closing = -((fx * mine - gx * theirs) * nx + (fz * mine - gz * theirs) * nz);
+        if (closing <= 0) continue;
+        s_netBumpAt[i] = now;
+        const double kick = closing * RACE_NET_GIVE * (c.Flags & RACENET_CAR_JET ? 2 : 1);
+        const double along = kick * (nx * fx + nz * fz);
+        S32 speed = (S32)(mine + along);
+        if (mine >= 0 && speed < 0) speed = 0;
+        ListBuggy[0].Speed = speed;
+        s_netShoveX += (nx - fx * (nx * fx + nz * fz)) * kick;
+        s_netShoveZ += (nz - fz * (nx * fx + nz * fz)) * kick;
+        s_netBumps++;
+        if (closing > RACE_NET_SPARKS) InitHitExtraPof((S32)(hero->Obj.X - nx * RACE_NET_WIDE), hero->Obj.Y + 400, (S32)(hero->Obj.Z - nz * RACE_NET_WIDE), RACE_SHOT_FORCE);
+        Log_Info("[racemod] online: knocked by %s's car, %d km/h between them: %d to %d km/h, %.0f units a second sideways, %d knocks so far", who.Name, (int)(closing * 3.6 / 512),
+                 (int)(mine * 3.6 / 512), (int)(speed * 3.6 / 512), sqrt(s_netShoveX * s_netShoveX + s_netShoveZ * s_netShoveZ), s_netBumps);
+    }
+}
+
 static void NetRaceFrame(S32 now, int driving) {
     if (!s_online) return;
     // (the second player's game at one PC goes when the first's does)
     if (RaceNet_Error()[0] && !s_menuAt && RaceGame_LocalAlone()) s_menuAt = now;
+    NetEvents(now);
+    NetContact(now, driving);
     if (s_phase == PHASE_GRID && !s_netGo) {
         RaceNet_Ready();
         // (or no host left to say it: the race isn't to wait for good)
@@ -15153,12 +15513,13 @@ static void NetRaceFrame(S32 now, int driving) {
     c.X = p.X; c.Y = p.Y; c.Z = p.Z;
     c.Alpha = p.Alpha; c.Beta = p.Beta; c.Gamma = p.Gamma;
     c.Body = p.Body; c.Anim = p.Anim; c.Island = p.Island;
-    c.Lap = s_laps; c.Progress = s_next;
+    c.Lap = s_laps; c.Progress = (S32)PlayerProgress();
+    c.Speed = ListBuggy[0].Speed;
+    c.Flags = now < s_jetUntil ? RACENET_CAR_JET : 0;
     RaceNet_SendCar(&c);
 }
 
-// The other players' cars: drawn as a ghost played back is, solid, in the same bodies (a car goes through them: there is no one place both games agree
-// a crash happened), each with its player's name over it
+// The other players' cars: drawn as a ghost played back is, solid, in the same bodies, each with its player's name over it
 typedef struct { T_OBJ_3D Obj; int Ready; S32 Body, Anim; } T_RACE_NETCAR;
 static T_RACE_NETCAR s_netCar[RACENET_MAX_OTHERS];
 
@@ -15195,7 +15556,11 @@ static void DrawNetCars(void) {
         const T_RACE_DRAW kept = DrawKept();
         SetCLUT(FogClut(zr));
         Switch_Fillers(FILL_POLY_FOG_NZW);
-        if (ObjectDisplay(o)) {
+        // (on the super jet-pack: that, as DrawSuperJet draws this car's)
+        if ((c.Flags & RACENET_CAR_JET) && s_superModel >= 0) {
+            if (BodyDisplay(lx, ly + RACE_SUPERJET_LIFT, lz, o->Alpha, o->Beta, o->Gamma, (U8 *)GivePtrObjFix(s_superModel))) MarkDrawn();
+        }
+        else if (ObjectDisplay(o)) {
             SetClip(ScreenXMin, ScreenYMin, ScreenXMax, ScreenYMax);
             if (ClipXMin <= ClipXMax && ClipYMin <= ClipYMax) BoxMovingAdd(ClipXMin, ClipYMin, ClipXMax, ClipYMax);
             UnsetClip();
@@ -15212,7 +15577,7 @@ static void DrawNetBoard(S32 now) {
     typedef struct { char Name[RACENET_NAME + 1]; int Finish, Lap, Progress, Me; } T_ROW;
     T_ROW rows[RACENET_MAX_OTHERS + 1];
     int n = 0;
-    rows[n].Finish = s_raceTime; rows[n].Lap = s_laps; rows[n].Progress = s_next; rows[n].Me = 1;
+    rows[n].Finish = s_raceTime; rows[n].Lap = s_laps; rows[n].Progress = (S32)PlayerProgress(); rows[n].Me = 1;
     snprintf(rows[n].Name, sizeof(rows[n].Name), "You");
     n++;
     const int others = RaceNet_Others();
@@ -16400,7 +16765,7 @@ static void DrawFarItems(void) {
     if (CubeMode != CUBE_EXTERIEUR || NewCube != -1) return;
     const T_RACE_DRAW kept = DrawKept();
     int drawn = 0;
-    if (s_powerups && !s_trial && !Qualifying()) {
+    if (s_powerups && !NoItems() && !Qualifying()) {
         if (s_mushBody < 0)
             for (int i = 0; i < s_nbMush && s_mushBody < 0; i++) {
                 const int a = MushroomActor(&s_mush[i]);
@@ -17930,7 +18295,7 @@ void RaceMod_Draw(void) {
     DrawFarItems();
     DrawWindow();
     if (Comportement != C_BUGGY || CubeMode != CUBE_EXTERIEUR) return;
-    const int items = s_powerups && s_nbMush > 0 && !s_trial && !Qualifying();
+    const int items = s_powerups && s_nbMush > 0 && !NoItems() && !Qualifying();
     // (the display off -- hud=0 -- and no items: no display, but the scene's own drawn things all the same -- the car Twinsen drives as,
     // the super jet-pack, Halloween's scares; all of it was left out with the display until 2026-10-18, his car hidden and nothing drawn
     // in its place)
@@ -18142,6 +18507,8 @@ static void ResetTrack(void) {
     s_phase = PHASE_RACE; s_qualifying = 1; s_gridBack = 0; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
     s_online = s_netGo = 0;
+    memset(s_netThrough, 0, sizeof(s_netThrough)); memset(s_netTouching, 0, sizeof(s_netTouching)); memset(s_netBumpAt, 0, sizeof(s_netBumpAt));
+    s_netPushX = s_netPushZ = s_netShoveX = s_netShoveZ = 0; s_netBumps = 0;
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;
@@ -18245,7 +18612,7 @@ void RaceMod_Island(S32 island) {
 // own lines are said here, by Dial; the scripts' lines for after a race wait for him out of the car (RaceTrackStory). The man waiting by the Elevator
 // Platform's lift spoke to every car that came by and held it there, the user saw it in a test, 2026-10-31.
 S32 RaceMod_Hush(S32 num) {
-    if (!RaceMod_Active() || !s_car.HasLine || Comportement != C_BUGGY) return 0;
+    if (!CarRacing()) return 0;
     static int saidScene = -1, saidActor = -1, saidText = -1;
     if (saidScene != NumCube || saidActor != NumObjDial || saidText != num) {
         saidScene = NumCube; saidActor = NumObjDial; saidText = num;

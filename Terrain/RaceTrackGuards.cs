@@ -18,7 +18,7 @@ namespace LBAAssembler.Terrain;
 // (Palace.PalaceTorturers: their body and animations their own, made by its Install), each cracking it at his post, never at a car.
 internal static class RaceTrackGuards
 {
-    public const int Soldier = 0, Pighead = 1, Stan = 2, Torturer = 3;
+    public const int Soldier = 0, Pighead = 1, Stan = 2, Torturer = 3, Monkey = 4;
     public const double Seen = 40;          // (cells: an actor in every scene whose cube comes this near the post)
     public const double Size = 2.0;         // how much bigger than the game's they are
     public const int BigBody = 20;          // the entity's body number for its big body (none of theirs has one so high)
@@ -26,7 +26,8 @@ internal static class RaceTrackGuards
     // A kind's actor and animations, the game's own (the palace scenes' scripts, 151-166 and 80): its entity, its body (the entity's own
     // number for it -- the game's, which BigBody is made from), standing at its post, walking, knocked back, and its strikes (a pighead's:
     // its throw; a torturer's: his whip's crack); the body its actors are drawn with (BigBody but a torturer's).
-    public sealed record Look(int Entity, int Body, int Idle, int Walk, int Hit, int[] Strikes, int Drawn = BigBody);
+    // (`Scale`: how big its Drawn body is made)
+    public sealed record Look(int Entity, int Body, int Idle, int Walk, int Hit, int[] Strikes, int Drawn = BigBody, double Scale = Size);
 
     public static Look Of(int kind, int which) => kind switch
     {
@@ -44,18 +45,23 @@ internal static class RaceTrackGuards
         // (a torturer: the grey Grobo, entity 336, hooded and his whip in hand -- standing, and the crack)
         Torturer => new(Palace.PalaceTorturers.Entity, 0, Palace.PalaceTorturers.Idle, Palace.PalaceTorturers.Idle, Palace.PalaceTorturers.Idle,
             new[] { Palace.PalaceTorturers.Crack }, Palace.PalaceTorturers.Body),
+        // (the Elevator Platform's monkey monster, entity 275, at half his height -- the user, 2026-10-31: "Let's create a small version of the monkey monster about
+        // half the height, and add two of them on the bottom of the platform to throw crates at cars": ready with his arms up (540), and his throw (542), which
+        // is the game's own: his crate, OBJFIX.HQR's 93, flown by the race-track mode at a car)
+        Monkey => new(275, 0, 540, 1, 6, new[] { 542 }, BigBody, 0.5),
         // (Stan, come over from Time Commando, entity 316: standing, walking, his three blows)
         _ => new(316, 0, 0, 1, 6, new[] { 142, 277, 587 }),
     };
 
     // The kinds' looks, every one there is (Install makes each its big body).
-    private static readonly Look[] All = { Of(Soldier, 0), Of(Pighead, 0), Of(Pighead, 1), Of(Pighead, 2), Of(Stan, 0) };
+    private static readonly Look[] All = { Of(Soldier, 0), Of(Pighead, 0), Of(Pighead, 1), Of(Pighead, 2), Of(Stan, 0), Of(Monkey, 0) };
 
     public static string KindName(int kind, int count) => kind switch
     {
         Soldier => count == 1 ? "soldier" : "soldiers",
         Pighead => count == 1 ? "pighead" : "pigheads",
         Torturer => count == 1 ? "torturer" : "torturers",
+        Monkey => count == 1 ? "small monkey monster" : "small monkey monsters",
         _ => "Stan",
     };
 
@@ -77,9 +83,9 @@ internal static class RaceTrackGuards
                 log.Add($"the guards: entity {look.Entity} has no body {look.Body} -- left the game's size");
                 continue;
             }
-            bodyFile = HqrWriter.AppendEntry(bodyFile, HqrWriter.StoredEntry(RaceTrackSmallCars.Scaled(bodies.Read(source), Size)));
+            bodyFile = HqrWriter.AppendEntry(bodyFile, HqrWriter.StoredEntry(RaceTrackSmallCars.Scaled(bodies.Read(source), look.Scale)));
             table = RaceTrackBaldinoCar.WithBody(table, look.Entity, BigBody, next);
-            log.Add($"the guards: entity {look.Entity}'s body {look.Body} (BODY.HQR {source}) {Size} times as big, BODY.HQR {next}, its body {BigBody}");
+            log.Add($"the guards: entity {look.Entity}'s body {look.Body} (BODY.HQR {source}) {look.Scale} times as big, BODY.HQR {next}, its body {BigBody}");
             next++;
         }
         File.WriteAllBytes(bodyPath, bodyFile);

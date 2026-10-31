@@ -6,6 +6,53 @@ namespace ScriptRoundTrip;
 // sceneinfo <game folder> <scene>...: each LBA2 scene's island, cube, mode and actors, and its zones (type, destination, box).
 internal static class SceneInfoCommand
 {
+    // racecheck <game folder>: every actor left in a built game that goes after another (follow, attack) wherever it stood: the road means nothing to it.
+    // Nothing but cars and a race's own should do that outside on a race island. The list is the test: 0 lines is a pass.
+    public static int Check(string[] args)
+    {
+        if (args.Length < 2) { Console.WriteLine("racecheck <game folder>"); return 1; }
+        var store = new SceneStore(SceneGame.Lba2, args[1]);
+        var found = 0;
+        for (var scene = 0; scene < 400; scene++)
+        {
+            if (!store.SceneExists(scene)) continue;
+            var m = store.Load(scene);
+            if (m.CubeMode != 1) continue;
+            for (var i = 1; i < m.Actors.Count; i++)
+            {
+                var a = m.Actors[i];
+                var why = new List<string>();
+                if (a.Move is 2 or 4 or 5) why.Add($"starts on move {a.Move}");
+                for (var n = 1; n < m.Actors.Count; n++)
+                {
+                    if (m.Actors[n].Life.Length == 0) continue;
+                    var code = LBAAssembler.LbaScript.Bytecode.DecodeLife(m.Actors[n].Life, out var failure);
+                    if (failure is not null) continue;
+                    foreach (var ins in code)
+                    {
+                        var name = LBAAssembler.LbaScript.Opcodes.Life(ins.Op)?.Name;
+                        if (name == "SET_DIR" && n == i && ins.A.Length > 0 && ins.A[0] is 2 or 4 or 5) why.Add($"SET_DIR({string.Join(",", ins.A)})");
+                        if (name == "SET_DIR_OBJ" && ins.A.Length > 1 && ins.A[0] == i && ins.A[1] is 2 or 4 or 5) why.Add($"actor {n}: SET_DIR_OBJ({string.Join(",", ins.A)})");
+                    }
+                }
+                if (why.Count == 0) continue;
+                found++;
+                Console.WriteLine($"scene {scene} island {m.Island} actor {i}: entity {a.Entity} at {a.X},{a.Y},{a.Z} flags {a.Flags:x} life {a.Life.Length} -- {string.Join("; ", why.Distinct())}");
+            }
+        }
+        Console.WriteLine($"{found} actor(s)");
+        return found;
+    }
+
+    // entityanims <game folder> <entity>: an entity's records, bytes and all (an animation's own actions: what it throws, and when).
+    public static int EntityAnims(string[] args)
+    {
+        var table = HqrArchive.Open(Path.Combine(args[1], "RESS.HQR")).Read(44);
+        foreach (var r in Lba2EntityTable.Records(table, int.Parse(args[2])))
+            Console.WriteLine($"command {r.Command} generic {r.Generic} size {r.Size}: {Convert.ToHexString(table, r.At, Math.Min(r.Size, 80))}");
+        return 0;
+    }
+
     public static int Run(string[] args)
     {
         if (args.Length < 3) { Console.WriteLine("sceneinfo <game folder> <scene>..."); return 1; }
