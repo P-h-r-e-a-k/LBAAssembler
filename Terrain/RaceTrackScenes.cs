@@ -34,6 +34,9 @@ internal static class RaceTrackScenes
         // the island's story's people at the start, each [scene, actor] -- Polar Island's grobo with the key and FunFrock beside his car:
         // out of sight in a race with no one to beat (RaceCarEngineFile: hide_actor=)
         public List<int[]>? StoryPeople { get; init; }
+        // the actors kept for the doors their scripts switch that walk on the road, each [scene, actor]: their scripts go on, but they aren't
+        // seen or in the way while a car races (RACEMOD.CPP race_hide=)
+        public List<int[]>? ActorsInWay { get; init; }
     }
 
     // The buggy's own script removes it until the quest that mends it is done (game variable 74 >= 3). The compare is
@@ -422,6 +425,7 @@ internal static class RaceTrackScenes
         var removed = 0; var zonesRemoved = 0; var camerasRemoved = 0; var mushroomsLeftOut = 0;
         var doorsOff = new List<string>();
         var actorsAt = new List<(string File, int Scene, int Actor, int X, int Y, int Z)>();
+        var actorsInWay = new List<int[]>();
         // ... and the scene's points their scripts stand them on (pos_point), moved with them in that weather only: shared by both files'
         // scenes, moved for the town circuit they stood the storm's Felix the fisherman by the ferry 17 cells off too, every frame (the
         // user, 2026-10-27: "Felix the fisherman seems to be spawning a long way from his normal spawn point on Citadel.ile")
@@ -554,8 +558,14 @@ internal static class RaceTrackScenes
                                 && OffRoad(model, r, inTheWay, out _) && doorKeepers.Add(r)) grew = true;
                 }
                 if (doorKeepers.Count > 0) log.Add($"scene {scene}: actors {string.Join(", ", doorKeepers.Order())} kept where they are -- their scripts switch doors on and off");
+                // (by their index before the removals, as pendingAt's)
+                var keptInWay = new List<int>();
                 foreach (var i in doorKeepers.Order())
-                    if (!OffRoad(model, i, inTheWay, out var why)) log.Add($"scene {scene}: WARNING: actor {i} (entity {model.Actors[i].Entity}), kept for the doors it switches, is in the way: {why}");
+                    if (!OffRoad(model, i, inTheWay, out var why))
+                    {
+                        log.Add($"scene {scene}: actor {i} (entity {model.Actors[i].Entity}), kept for the doors it switches, is in the way, so hidden while a car races: {why}");
+                        keptInWay.Add(i);
+                    }
                 storyKept.UnionWith(doorKeepers);
                 // (and on an island that keeps them, everything off the road: KeepOffRoadActors)
                 var offRoad = new HashSet<int>();
@@ -652,6 +662,7 @@ internal static class RaceTrackScenes
                     if (options.Island.KeptEntities?.Contains(model.Actors[i].Entity) == true && !offRoad.Contains(i))
                         Aside(i);
                 foreach (var p in pendingAt) actorsAt.Add((p.File, scene, p.I - doomed.Count(d => d < p.I), p.X, p.Y, p.Z));
+                foreach (var i in keptInWay) actorsInWay.Add(new[] { scene, i - doomed.Count(d => d < i) });
                 var standIn = AddStandIn(model, doomed);
                 foreach (var i in doomed.OrderByDescending(i => i))
                 {
@@ -1254,7 +1265,8 @@ internal static class RaceTrackScenes
             ? actorsAt.Select(a => $"{a.File} {a.Scene} {a.Actor} {a.X} {a.Y} {a.Z}").Concat(pointsAt.Distinct().Select(q => $"{q.File} {q.Scene} p{q.Point} {q.X} {q.Y} {q.Z}")).ToList()
             : null;
         var lifts = deckLifts.Count > 0 ? deckLifts : null;
-        return main.Result(log, changes.Count, removed, tracks.Count > 1 ? tracks[1].Result(log, changes.Count, removed) with { DoorsOff = off, ActorsAt = putAside, DeckLifts = lifts } : null) with { DoorsOff = off, ActorsAt = putAside, DeckLifts = lifts };
+        var inWay = actorsInWay.Count > 0 ? actorsInWay : null;
+        return main.Result(log, changes.Count, removed, tracks.Count > 1 ? tracks[1].Result(log, changes.Count, removed) with { DoorsOff = off, ActorsAt = putAside, DeckLifts = lifts, ActorsInWay = inWay } : null) with { DoorsOff = off, ActorsAt = putAside, DeckLifts = lifts, ActorsInWay = inWay };
     }
 
     // The place `back` cells behind the start line along the lap's centre line (the built one: RaceTrackReport.LapX/LapZ), `side` cells

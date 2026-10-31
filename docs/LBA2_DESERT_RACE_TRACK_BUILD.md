@@ -5513,15 +5513,28 @@ The car's engine with the camera inside it is `RaceMod_EngineInside`: the game's
 
 ## Polar Island's road, 2026-10-31
 
-The road still came into view at the last moment after the first fix (5 by 5 cubes), because drawing more cubes didn't matter: the island's far clip, 70,000, was the limit, 3.3 s of road at 150 km/h. It is now 200,000 with the fog from 150,000 (`PolarTerrain`), and `RaceTerrainReach` draws as many cubes as the far clip reaches. On the test pilot, at 1800 x 480: 56 to 59 frames a second and the worst frame 29 ms at both 70,000 and 200,000.
+The road still came into view at the last moment after the first fix (5 by 5 cubes), because drawing more cubes didn't matter: the island's far clip, 70,000, was the limit, 3.3 s of road at 150 km/h. It is now 200,000 with the fog from 150,000 (`PolarTerrain`), and `RaceTerrainReach` draws as many cubes as the far clip reaches.
+
+That still wasn't it. The cubes straight ahead past the first ring were never drawn: the test that left out what the camera couldn't see took the corner its rows start from for the corner the camera looks at, and that is the opposite one. The rows start behind the camera, nearest first. Raising the far clip changed nothing ahead of the car, and the frame times measured then meant nothing either. `CubeInView` (`TERRAIN.CPP`) now tests a cube's four corners against the view, from the matrix the land is drawn with: behind it, past the far clip, off the left or the right. It affects every island reaching past one cube.
+
+Measured on a time trial with `cartrace`, autodriven for 40 s, against the build before it (which ran at a steady 60):
+
+| | 848 x 480 | 1280 x 720 |
+|---|---|---|
+| Polar | 55 fps, worst 35 ms | 47 fps, worst 38 ms |
+| Desert | 58 fps, worst 27 ms | 52 fps, worst 34 ms |
+
+Polar at 1280 x 720 with a shorter view (`view=` in the race file): 49 fps at 150,000, 51 at 120,000. The distance isn't what costs the most, so it stays at 200,000. There is no level of detail on the terrain: a far cube costs what a near one does, and that is the place to look for more.
 
 Desert Island had the same limit, its retail 60,000 with the fog from 14,500: `RaceTrackIsland.View` gives it 200,000 and 150,000 through the race file (`view=`, `CubeViewHook`), leaving the island's own file alone. `ScriptRoundTrip islandview` lists every island's distances.
 
 The sky is a plane three cubes across, and the haze used to hide its edge: `DrawSky` now goes as far as the land is drawn, and past a far clip of 100,000 fades from the game's 14,500 (only the fog's start: the far clip is the z-buffer's scale, and the sky is drawn after the land). That cleared Polar's. Desert's sky is low, 7,399 against 16,799, and from a race camera it stays a band over the horizon at any distance, 100,000 or 200,000. So the sky has an option: **Sky in races** (Options, Camera, window, updates; `race_sky=` in the player's settings, off by default) hides it from the count-down to the finish (`RaceMod_NoSky`), and it comes back as the race ends and out of a race. In LBA Assembler, the race car window's "Hide the sky during races" (`HideRaceSky`, `race_sky=0` in the race file).
 
-The frames for that showed "Cross the start line" all race. In Track select's race Twinsen and FunFrock's car were both on pole, so the game pushed Twinsen's out, over the start line before the race began and again as FunFrock drove off, and the race's start wiped the crossing: no checkpoint or finish of his counted. `ChaseOpening` now puts him on the next spot, and `RaceMod_Held` keeps him there until FunFrock's in his car.
+The frames for that showed "Cross the start line" all race. In Track select's race the story's opening was running: the race file came with `chase=`, so FunFrock stood beside his car and spoke while Twinsen sat on pole in his. Only the story has that opening now (`EngineFile`'s `story`); race mode is a grid race with FunFrock in his car.
 
 ## People on the road, 2026-10-31
+
+**Actors kept for their doors.** A soldier stood on Otringal's road: scene 92's patrol, kept because his script switches a door (`SET_CHANGE_CUBE`), walking onto the road on his rounds. The build had warned about him since those actors were kept, and I hadn't read the warning. Eleven actors on four tracks were the same (Citadel's scene 43, Otringal's 90 and 92, the Island CX scenes 300 and 342). Removing them would stop their doors in the story, and `hide_actor=` doesn't hold an actor who moves, so `race_hide=` keeps their scripts running and takes them out of sight and out of the way while a car races (`RaceHideActors`). Twinsen on foot finds them back as they were.
 
 The user asked why actors were appearing on tracks. The review of 2026-10-27 and 28 put back everyone a build had removed who stood clear of the road (`KeepOffRoadActors`, 171 actors on seven islands), and `OffRoad` judges an actor by where it stands and the points its scripts send it to. It can't see `SET_DIR(FOLLOW, Twinsen)`, which has no point: the Elevator Platform's monkey monster stands a cell off the road and walks up to any car within 6,000, and stopped the car on pole for good. His line to it was hushed that day (`RaceMod_Hush`), which treated the symptom. Nothing caught it: the track sweeps start a time trial from its run-up, past him at speed, and read rescues and lap times, not what the car touched.
 
@@ -5533,7 +5546,7 @@ The user asked why actors were appearing on tracks. The review of 2026-10-27 and
 
 ## Race sweep, 2026-10-31
 
-**The road further out.** The engine drew the camera's cube and the eight round it, so on Polar Island's long straights the road stopped short of the far clip. `TERRAIN.CPP` now draws by `TerrainReachHook`: a race asks for a second ring (`RaceTerrainReach`), 5 x 5 cubes, taking a cube past the first ring only when it is ahead of the camera and nearer than the far clip. With the hook unset, or outside a race, it is the game's own 3 x 3, in the game's own order. Measured with `cartrace` on an otherwise idle PC, nothing over 50 ms between frames on Polar, the palace, Island CX Mk2, the Desert or the Francos, on either engine.
+**The road further out.** The engine drew the camera's cube and the eight round it, so on Polar Island's long straights the road stopped short of the far clip. `TERRAIN.CPP` now draws by `TerrainReachHook`: a race asks for as many rings as its far clip reaches (`RaceTerrainReach`), taking a cube past the first ring only when `CubeInView` says the camera can see it. With the hook unset, or outside a race, it is the game's own 3 x 3, in the game's own order.
 
 **No one stops a car on a track.** `RaceMod_Hush` (`GERELIFE.CPP`'s message and choice opcodes) leaves out a scene script's lines while Twinsen drives on a track, logging each: `[racemod] scene 120 actor 2: its line 500 left out`. Those scripts were written for Twinsen on foot and hold the game until a key is pressed: a man waiting at the Elevator Platform stopped every car 5 s into its lap, for good. The race's own lines call `Dial` from `RACEMOD.CPP`, and the lines for after a race wait for him out of the car (`RaceTrackStory`), so neither is touched.
 

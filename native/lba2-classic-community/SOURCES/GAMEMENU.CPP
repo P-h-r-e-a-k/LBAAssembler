@@ -2423,7 +2423,7 @@ void DrawGameMenu(U16 *ptrmenu, S32 justone) {
         // The table y-centre is authored on the 480-tall canvas; float it to
         // the vertical middle of a taller framebuffer (no-op at 480).
         y += UI_VCENTER_OFS;
-        y -= (HAUTEUR_STANDARD * nb + (nb - 1) * MENU_SPACE) / 2;
+        y -= (HAUTEUR_STANDARD * nb + (nb - 1) * GameMenuRowSpace(nb)) / 2;
     }
 
     for (n = 0; n < nb; n++) {
@@ -2462,7 +2462,7 @@ void DrawGameMenu(U16 *ptrmenu, S32 justone) {
         }
         CoulTextMenu = keepColour;
 
-        y += HAUTEUR_STANDARD + MENU_SPACE;
+        y += HAUTEUR_STANDARD + GameMenuRowSpace(nb);
     }
 
 #ifdef DEMO

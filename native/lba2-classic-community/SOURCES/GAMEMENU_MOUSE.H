@@ -16,6 +16,9 @@ void GameMenuMousePollFocus(void);
 /// Non-zero when menu mouse cursor should be active (config + refcount).
 S32 MenuMouse_GetRefCount(void);
 
+/// The gap between a menu's rows: a list of nine (the race game's, in a race) closes up to fit a 480-tall screen.
+S32 GameMenuRowSpace(S32 nb);
+
 /// Hit-test which menu row (0..nb-1) contains (mx,my), or -1. Mirrors DrawGameMenu geometry.
 S32 GameMenuHitTestRow(const U16 *ptrmenu, U32 mx, U32 my, const U16 *gameMainMenuPtr);
 

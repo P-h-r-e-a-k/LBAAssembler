@@ -180,13 +180,14 @@ internal static class RaceCarEngineFile
         {
             var f = dream.Finish;
             text.Append($"sprint=1\nrace_laps=1\nfinishline={f.CubeX} {f.CubeZ} {f.X0} {f.Z0} {f.X1} {f.Z1} {f.DirX} {f.DirZ}{Height(f)}\n");
-            // (Polar Island's: the story's start in place of the intro -- FunFrock drives off, the grobo gives Twinsen the key -- and the end
-            // of the race the end of the dream whoever gets there first: PolarDream's chase. With no one to beat -- a time trial -- no chase:
-            // the dream's end alone, wake=, which its finish's flight wakes him from -- wake_flight=, below -- and the people of the story's
-            // start out of sight, hide_actor= (FunFrock's words waited for a key at a trial's start, and he stood on the road, 2026-10-28))
+            // (Polar Island's, in the story: the story's start in place of the intro -- FunFrock drives off, the grobo gives Twinsen the key --
+            // and the end of the race the end of the dream whoever gets there first: PolarDream's chase. Anywhere else -- a time trial, Track
+            // select's race -- no chase, FunFrock in his car on the grid: the dream's end alone, wake=, which its finish's flight wakes him
+            // from -- wake_flight=, below -- and the people of the story's start out of sight, hide_actor= (FunFrock's words waited for a key
+            // at a trial's start, and he stood on the road, 2026-10-28; and out of his car in race mode, "should only be in story mode", 2026-10-31))
             if (info is not null && RaceTrackIsland.ByName(info.Island) == RaceTrackIsland.Polar)
             {
-                if (car.Opponents(track).Any(o => o.Main))
+                if (story && car.Opponents(track).Any(o => o.Main))
                     text.Append($"chase={LBAAssembler.Terrain.Polar.PolarDream.ChaseFunFrockText} {LBAAssembler.Terrain.Polar.PolarDream.ChaseTwinsenText} " +
                                 $"{LBAAssembler.Terrain.Polar.PolarGrobo.Entity} {LBAAssembler.Terrain.Polar.PolarDream.ChaseGroboText} {LBAAssembler.Terrain.Polar.PolarGrobo.KeyVar}\n" +
                                 $"chase_lead={LBAAssembler.Terrain.Polar.PolarDream.ChaseLeadCells}\ndream_any_end=1\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n" +
@@ -313,6 +314,8 @@ internal static class RaceCarEngineFile
         foreach (var d in info?.DoorsOff ?? new()) text.Append(d.Split(' ').Length == 9 ? $"door_to={d}\n" : $"door_off={d}\n");
         // ... and the actors put aside while it is shown (Result.ActorsAt)
         foreach (var a in info?.ActorsAt ?? new()) text.Append($"actor_at={a}\n");
+        // ... and the ones whose doors the game needs, who walk on the road: not there while a car races (Result.ActorsInWay)
+        foreach (var a in info?.ActorsInWay ?? new()) text.Append($"race_hide={a[0]} {a[1]}\n");
         // ... and the lifts on the raised road (Result.DeckLifts)
         foreach (var lift in info?.DeckLifts ?? new()) text.Append($"deck_lift={lift}\n");
         return text.ToString();

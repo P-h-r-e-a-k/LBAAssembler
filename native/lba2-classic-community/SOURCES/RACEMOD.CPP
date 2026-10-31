@@ -49,6 +49,8 @@
  *                                qualifying times' order (the race game's "skip qualifying", RACEGAME.CPP)
  *     qualifying_seed=<n>        the opponents' qualifying times' randomness (default: the clock)
  *     hide_actor=<scene> <actor> a car in a scene that isn't racing (an opponent the player left out): kept out of sight
+ *     race_hide=<scene> <actor>  an actor the game needs, whose scripts switch doors, and who walks on the road: not drawn and no obstacle while
+ *                                a car races, its scripts going on (hide_actor= moves it, and an actor that moves is back on the ground after them)
  *     raised=<file>              a raised road: lines "x z y half", its middle point by point in lap order and half its width, world
  *                                units from the island's corner. A floor of its own over the ground, at any grade (see "the raised road")
  *     statue=1                   Celebration Island drawn from its file with the statue (CELEBRA2), whatever game variable 79 says;
@@ -556,6 +558,9 @@ static int s_forgetLap = 0;                // the player's car was moved: the la
 #define RACE_MAX_HIDDEN 1024                // (256 until 2026-10-31: a time trial hides a whole race's cars in every scene, and the Desert's 268
                                            // and the palace's 307 lost their last ones, left running their scripts: the user, "the racer from the original desert track driving randomly around")
 static int s_hideScene[RACE_MAX_HIDDEN], s_hideActor[RACE_MAX_HIDDEN];
+#define RACE_MAX_RACE_HIDE 32
+static int s_raceHideScene[RACE_MAX_RACE_HIDE], s_raceHideActor[RACE_MAX_RACE_HIDE], s_raceHideWas[RACE_MAX_RACE_HIDE];   // race_hide=, and the flags each had
+static int s_nbRaceHide = 0;
 static int s_nbHidden = 0;
 #define RACE_RESULTS_MS 4000               // how long the qualifying's grid is shown before the count-down
 #define RACE_QUALIFY_SPREAD 3000           // an opponent's qualifying time: its lap at its skill, this many ms either way at random
@@ -4331,6 +4336,10 @@ static void Load(const char *path, int carOnly = 0) {
                 s_nbTracks++;
             }
         }
+        else if (!strcmp(key, "race_hide")) {
+            if (s_nbRaceHide >= RACE_MAX_RACE_HIDE) Log_Warn("[racemod] too many race_hide lines: %s left out", v);
+            else if (sscanf(v, "%d %d", &s_raceHideScene[s_nbRaceHide], &s_raceHideActor[s_nbRaceHide]) == 2) s_raceHideWas[s_nbRaceHide++] = -1;
+        }
         else if (!strcmp(key, "hide_actor")) {
             if (s_nbHidden >= RACE_MAX_HIDDEN) Log_Warn("[racemod] too many hide_actor lines: %s left out", v);
             else if (sscanf(v, "%d %d", &s_hideScene[s_nbHidden], &s_hideActor[s_nbHidden]) == 2) s_nbHidden++;
@@ -5115,9 +5124,6 @@ static void ChaseOpening(S32 now) {
     if (now < s_chaseAt) return;
     switch (s_chaseStep) {
     case 1: {
-        // (Twinsen in his car from the start, Track select's race: on the next spot. On pole with the one to beat's car the game pushed his out of it, over the start line
-        // before the race began, and again as that car drove off, and no checkpoint or finish of his counted: a test's frames, 2026-10-31. On foot, the story's, he's clear)
-        if (s_nbSpots > 1 && Comportement == C_BUGGY) PlayerOnSpot(&s_spots[1]);
         if (s_chaseDriver > 0 && s_chaseCarActor > 0) {
             // (outside his car: he says his line from where he stands, then walks to it -- step 11)
             NumObjDial = (U8)s_chaseDriver;
@@ -11029,6 +11035,27 @@ static S32 s_noCollideScene = -1;
 // Twinsen at the wheel on a track.
 static int CarRacing(void) { return RaceMod_Active() && s_car.HasLine && Comportement == C_BUGGY; }
 
+// The actors of race_hide=: the user, 2026-10-31, "has a soldier on the track which shouldn't be there", Otringal's patrol, kept for the doors
+// his script switches. Each frame, as his script may set them; Twinsen on foot, in the story, finds him back as he was.
+static void RaceHideActors(void) {
+    const int racing = CarRacing();
+    for (int i = 0; i < s_nbRaceHide; i++) {
+        if (s_raceHideScene[i] != (S32)NumCube || s_raceHideActor[i] <= 0 || s_raceHideActor[i] >= NbObjets) { s_raceHideWas[i] = -1; continue; }
+        T_OBJET *o = &ListObjet[s_raceHideActor[i]];
+        if (racing) {
+            if (s_raceHideWas[i] < 0) {
+                s_raceHideWas[i] = (int)(o->Flags & (INVISIBLE | CHECK_OBJ_COL));
+                Log_Info("[racemod] actor %d of scene %d, entity %d: not there while a car races", s_raceHideActor[i], s_raceHideScene[i], (int)o->IndexFile3D);
+            }
+            o->Flags = (o->Flags | INVISIBLE) & ~(U32)CHECK_OBJ_COL;
+        }
+        else if (s_raceHideWas[i] >= 0) {
+            o->Flags = (o->Flags & ~(U32)(INVISIBLE | CHECK_OBJ_COL)) | (U32)s_raceHideWas[i];
+            s_raceHideWas[i] = -1;
+        }
+    }
+}
+
 static int IsRaceCar(S32 numobj) {
     if (numobj == NUM_BUGGY) return 1;
     if (s_carsScene == (S32)NumCube)
@@ -16333,6 +16360,7 @@ void RaceMod_Frame(void) {
     }
     // the grid: after the qualifying lap, or (without qualifying) as soon as the player is in his car; formed in the start line's scene
     if (inStartScene && driving && !s_ghostWatch && !ClosedGate() && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
+    RaceHideActors();
     // the cars that aren't racing, out of sight
     // (and silent: a hidden car's engine loop -- its SampleAlways, which the game keeps going for every car -- held a voice of the
     // twelve the mixer has for nothing, and with the racing cars' they filled every one, 2026-10-19)
@@ -16607,9 +16635,7 @@ void RaceMod_Frame(void) {
 // The player's car stands on the grid until the count-down's GO (BUGGY.CPP RaceSpeed).
 S32 RaceMod_Held(void) {
     // (not a won dream's car over its jump: wake_flight=)
-    // (nor before the one to beat is in his car, a chase's opening: the race starts then, and Polar's car stands 288 units from the line -- over it by then, its start
-    // was forgotten and no checkpoint or finish counted, seen in a test's frames, 2026-10-31)
-    return RaceMod_Active() && (s_phase == PHASE_GRID || (s_chaseOn && (s_chaseStep < 2 || s_chaseStep == 11) && (S32)NumCube == StartScene()) || TimerRefHR < s_hitUntil || TimerRefHR < s_passageUntil || (s_sprint && s_place && !(s_endWon && s_wakeFlight > 0)));
+    return RaceMod_Active() && (s_phase == PHASE_GRID || TimerRefHR < s_hitUntil || TimerRefHR < s_passageUntil || (s_sprint && s_place && !(s_endWon && s_wakeFlight > 0)));
 }
 
 // Citadel Island's weather, for the scenes' scripts (2026-10-06): game variable RACE_WEATHER_VAR is 1 while its fine-weather file
@@ -18542,7 +18568,7 @@ static void ResetTrack(void) {
     s_viewFar = s_viewFog = 0;
     memset(s_netThrough, 0, sizeof(s_netThrough)); memset(s_netTouching, 0, sizeof(s_netTouching)); memset(s_netBumpAt, 0, sizeof(s_netBumpAt));
     s_netPushX = s_netPushZ = s_netShoveX = s_netShoveZ = 0; s_netBumps = 0;
-    s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
+    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;
     RaceSoundsFree(); JetHumStop("the race reset"); SkidSoundStop(); SlideEnd("the race reset");

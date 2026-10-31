@@ -266,6 +266,9 @@ internal static class RaceTrackService
         // StoryPeople: the island's story's people at the start, each [scene, actor] (RaceTrackScenes Result.StoryPeople) -- out of sight in a
         // race with no one to beat (RACEMOD.CPP hide_actor=); since 2026-10-28
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? StoryPeople = null,
+        // ActorsInWay: actors kept for the doors they switch that walk on the road, each [scene, actor] (RaceTrackScenes Result.ActorsInWay,
+        // RACEMOD.CPP race_hide=)
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? ActorsInWay = null,
         // Lanes: the room the racing lines are planned in, for the opponents to pass in (RaceTrackReport.Lanes, RACEMOD.CPP lanes=); since
         // 2026-10-29
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Lanes = null);
@@ -1136,7 +1139,7 @@ internal static class RaceTrackService
             Marshal: report.Marshal,
             OnFoot: report.OnFoot ? true : null,
             RailOpens: OrNull(report.RailOpens),
-            MapRoads: MapRoads(report), DoorsOff: scenes.DoorsOff, ActorsAt: scenes.ActorsAt, DeckLifts: scenes.DeckLifts, StoryPeople: scenes.StoryPeople,
+            MapRoads: MapRoads(report), DoorsOff: scenes.DoorsOff, ActorsAt: scenes.ActorsAt, DeckLifts: scenes.DeckLifts, StoryPeople: scenes.StoryPeople, ActorsInWay: scenes.ActorsInWay,
             Lanes: report.Lanes.Count > 2 ? report.Lanes : null);
     }
 

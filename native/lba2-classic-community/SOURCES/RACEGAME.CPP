@@ -242,6 +242,7 @@ static int s_tracksOpen = 0;                // ... given right this run
 static char s_storyFile[ADELINE_MAX_PATH] = "";   // story_file=: Story Mode's set (none: Story Mode has nothing to play)
 static char s_storyCode[24] = "";           // story_code=: Story Mode asks for it (none: open)
 static int s_storyOpen = 0;                 // ... given right this run
+static int s_localGuest = -1;               // this game is the second player's at one PC (-1: not looked yet)
 static int s_storyOn = 0;                   // the story is what is being played (Story Mode's New story or Continue, not a race since)
 #define RG_STORY_SAVE "story.lba"           // the story's own save, in the saves' folder
 static int s_lastSp = 0, s_lastTrial = 0;
@@ -270,7 +271,7 @@ static int s_raceQualify = -1;
 static void Introduction(int sp, int trial);
 static int s_raceLevel = -1;                // its difficulty (-1: none, a time trial or a track without levels)
 
-static U16 s_mainMenu[4 + 2 * 8];
+static U16 s_mainMenu[4 + 2 * 9];
 static U16 s_spMenu[4 + 2 * (1 + RG_MAX_SPECIALS)];
 static U16 s_modeMenu[4 + 2 * 3];
 static U16 s_levelMenu[4 + 2 * 4];
@@ -2003,6 +2004,19 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         {"Space", RG_ON_FOOT},              // that the page still fits)
         {"P, Esc", "Pause, menu"},
     };
+    // (the second player's at one PC, on their game's page: the keys RaceNet_SharedKeys reads. Both pages said the arrows, the user's
+    // picture of two players side by side, 2026-10-31)
+    static const char *const keys2[][2] = {
+        {"W", "Accelerate"},
+        {"S", "Brake, reverse"},
+        {"A, D", "Steer"},
+        {"Q", "Use your item"},
+        {"E", "Handbrake"},
+        {"R", "Camera view"},
+    };
+    const int guest = s_localGuest > 0;
+    const char *const (*list)[2] = guest ? keys2 : keys;
+    const size_t nbKeys = guest ? sizeof(keys2) / sizeof(keys2[0]) : sizeof(keys) / sizeof(keys[0]);
     static const char *const pad[][2] = {
         {"Right trigger", "Accelerate"},
         {"Left trigger", "Brake, reverse"},
@@ -2016,14 +2030,14 @@ static void DrawControls(const T_RACE_PAGE *pg) {
     const int onFoot = pg && pg->OnFoot, manual = pg && pg->Manual;
     // (the rows shown and the room for them: the last row's top is the first's, a line for each row, a quarter more and 2 -- the gamepad's
     // heading -- at most RG_CONTROLS_FOOT)
-    const int rows = (int)(sizeof(keys) / sizeof(keys[0]) + sizeof(pad) / sizeof(pad[0])) - (onFoot ? 0 : 2) - (manual ? 0 : 1);
+    const int rows = (int)(nbKeys + sizeof(pad) / sizeof(pad[0])) - (onFoot ? 0 : guest ? 1 : 2) - (manual || guest ? 0 : 1);
     S32 line = (S32)((RG_CONTROLS_FOOT - RG_CONTROLS_TOP - RG_PAGE_TOP - 2) * 4 / (4 * rows + 1));
     if (line > RG_LINE) line = RG_LINE;
-    PageFrame("Controls");
+    PageFrame(guest ? "Controls: player 2" : RaceNet_Local() ? "Controls: player 1" : "Controls");
     S32 y = RG_PAGE_TOP + oy + RG_CONTROLS_TOP;
     char text[256];
-    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-        const char *key = keys[i][0], *what = keys[i][1];
+    for (size_t i = 0; i < nbKeys; i++) {
+        const char *key = list[i][0], *what = list[i][1];
         if (!onFoot && !strcmp(what, RG_ON_FOOT)) continue;
         if (!key[0]) {
             if (!manual) continue;
@@ -2119,8 +2133,12 @@ static void Pages(const T_RACE_PAGE *pg, int controls, int items, int intro) {
         if (controls && at == 0) DrawControls(pg);
         else DrawPowerUps(pg, (at - (controls ? 1 : 0)) * RG_PAGE_ITEMS, now);
         char keys[160];
-        const char *last = intro ? "Enter: start" : "Enter: back";
-        if (pages > 1) snprintf(keys, sizeof(keys), "Page %d of %d    %s    Esc: %s", at + 1, pages, at + 1 < pages ? "Enter: next" : last, intro ? "skip" : "back");
+        // (the second player's Q is their Enter, and they have no Esc: RaceGame_SharedKeys)
+        const int guest = s_localGuest > 0;
+        const char *last = guest ? (intro ? "Q: start" : "Q: back") : intro ? "Enter: start" : "Enter: back";
+        if (guest && pages > 1) snprintf(keys, sizeof(keys), "Page %d of %d    %s", at + 1, pages, at + 1 < pages ? "Q: next" : last);
+        else if (guest) snprintf(keys, sizeof(keys), "%s", last);
+        else if (pages > 1) snprintf(keys, sizeof(keys), "Page %d of %d    %s    Esc: %s", at + 1, pages, at + 1 < pages ? "Enter: next" : last, intro ? "skip" : "back");
         else if (intro) snprintf(keys, sizeof(keys), "%s    Esc: skip", last);
         else snprintf(keys, sizeof(keys), "Esc: back");
         Text(cx, RG_PAGE_BOTTOM + oy - 32, keys, RG_GREY);
@@ -3639,7 +3657,6 @@ static int StartOnline(int sp, int laps) {
 #define RG_LOCAL_MAX_W 1280                 // the picture's size at most: two games drawing a big one each is a lot for a software renderer ...
 #define RG_LOCAL_MAX_H 720
 #define RG_LOCAL_MIN_H 480                  // ... and at least: the pages are laid out for this height
-static int s_localGuest = -1;               // this game is the second player's (-1: not looked yet)
 static SDL_Window *s_localWindow = NULL;    // the first game's window, moved: where to put it back
 static SDL_Rect s_localWas;
 static int s_localWasFull = 0;
@@ -3898,9 +3915,14 @@ static int LobbyPage(void) {
             y += RG_LOBBY_ROW;
         }
         if (host && s_netPassword[0]) { snprintf(line, sizeof(line), "Password: %s", s_netPassword); Text(cx, y1 - 106, line, RG_GREY); }
-        if (local || s_localGuest > 0) {
+        // (each window its own player's keys: both said player 2's, the user, 2026-10-31, "the same controls for both cars")
+        if (s_localGuest > 0) {
             Text(cx, y1 - 140, "Player 2: W A S D", RG_GREY);
             Text(cx, y1 - 106, "Q item, E handbrake, R view", RG_GREY);
+        }
+        else if (local) {
+            Text(cx, y1 - 140, "Player 1: the arrow keys", RG_GREY);
+            Text(cx, y1 - 106, "Ctrl item, Shift handbrake, V view", RG_GREY);
         }
         if (picks && RaceNet_Turned()[0]) Text(cx, y1 - 72, RaceNet_Turned(), RG_ORANGE);
         Text(cx, y1 - 38, picks ? "Enter: pick the track    Esc: leave" : s_localGuest > 0 ? "Enter: pick your car" : "Enter: pick your car    Esc: leave", RG_GREY);
@@ -4031,7 +4053,7 @@ S32 RaceGame_Menu(S32 inGame) {
     }
     const int resume = inGame && !s_raceOver;
     // (Restart, 2026-10-25 -- the user: "We should also add in a restart menu option": in a race of the race game's, going on or just over;
-    // the greyed Story Mode left out for it, seven rows as ever)
+    // the greyed Story Mode left out for it)
     const int restart = inGame && s_raceSp >= 0 && s_raceSp < s_nbSp && !RaceNet_On();
     // (the second player's game, at one PC: straight to the first's, and it goes when they do. LBA2_PLAYER2 is the port)
     if (s_localGuest < 0) {
@@ -4056,7 +4078,9 @@ S32 RaceGame_Menu(S32 inGame) {
     SetRow(s_mainMenu, nb++, RG_ID_TRACKS);
     const S32 specials = nb;
     SetRow(s_mainMenu, nb++, RG_ID_SPECIALS);
-    if (!restart) SetRow(s_mainMenu, nb++, RG_ID_ONLINE);
+    // (in a race too: the user, 2026-10-31, "Multiplayer doesn't seem to be a menu option after we've started a race without us restarting
+    // the entire game". Nine rows then: DrawGameMenu closes them up, GameMenuRowSpace)
+    SetRow(s_mainMenu, nb++, RG_ID_ONLINE);
     SetRow(s_mainMenu, nb++, RG_ID_TIMES);
     SetRow(s_mainMenu, nb++, RG_ID_OPTIONS);
     SetRow(s_mainMenu, nb++, RG_ID_QUIT);
@@ -4066,7 +4090,8 @@ S32 RaceGame_Menu(S32 inGame) {
     if (!resume && lastChosen)
         for (S32 i = 0; i < nb; i++) if (s_mainMenu[4 + 2 * i + 1] == lastChosen && !RaceGame_RowDisabled(lastChosen)) s_mainMenu[0] = (U16)i;
     s_mainMenu[1] = (U16)nb;
-    s_mainMenu[2] = (U16)(nb > 6 ? 290 : 300);
+    // (eight or nine rows from 290 ran off the bottom of a 480-tall screen, Quit cut in half: the user's picture, 2026-10-31)
+    s_mainMenu[2] = (U16)(nb > 7 ? 265 : nb > 6 ? 290 : 300);
     s_mainMenu[3] = 0;
     for (;;) {
         const S32 select = Menu(s_mainMenu);

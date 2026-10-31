@@ -66,6 +66,10 @@ void GameMenuMousePollFocus(void) {
     s_prevAppActive = active;
 }
 
+S32 GameMenuRowSpace(S32 nb) {
+    return nb > 8 ? 2 : GM_MENU_SPACE;
+}
+
 S32 GameMenuHitTestRow(const U16 *ptrmenu, U32 mx, U32 my, const U16 *gameMainMenuPtr) {
     S32 nb = ptrmenu[1];
     S32 ycenter = ptrmenu[2];
@@ -81,14 +85,14 @@ S32 GameMenuHitTestRow(const U16 *ptrmenu, U32 mx, U32 my, const U16 *gameMainMe
     if (ycenter == 0)
         y = GM_HAUTEUR_STANDARD / 2 + 10 + UI_VCENTER_OFS;
     else
-        y = ycenter + UI_VCENTER_OFS - (GM_HAUTEUR_STANDARD * nb + (nb - 1) * GM_MENU_SPACE) / 2;
+        y = ycenter + UI_VCENTER_OFS - (GM_HAUTEUR_STANDARD * nb + (nb - 1) * GameMenuRowSpace(nb)) / 2;
 
     for (n = 0; n < nb; n++) {
         S32 num = ptrmenu[4 + n * 2 + 1];
 
 #ifdef DEMO
         if (gameMainMenuPtr != NULL && ptrmenu == gameMainMenuPtr && (num == 72 || num == 73)) {
-            y += GM_HAUTEUR_STANDARD + GM_MENU_SPACE;
+            y += GM_HAUTEUR_STANDARD + GameMenuRowSpace(nb);
             continue;
         }
 #else
@@ -96,7 +100,7 @@ S32 GameMenuHitTestRow(const U16 *ptrmenu, U32 mx, U32 my, const U16 *gameMainMe
 #endif
         // (a race game's greyed row: no hover, no click -- RACEGAME.CPP)
         if (RaceGame_RowDisabled(num)) {
-            y += GM_HAUTEUR_STANDARD + GM_MENU_SPACE;
+            y += GM_HAUTEUR_STANDARD + GameMenuRowSpace(nb);
             continue;
         }
 
@@ -106,7 +110,7 @@ S32 GameMenuHitTestRow(const U16 *ptrmenu, U32 mx, U32 my, const U16 *gameMainMe
             if ((S32)mx >= x0 && (S32)mx <= x1 && (S32)my >= y0 && (S32)my <= y1)
                 return n;
         }
-        y += GM_HAUTEUR_STANDARD + GM_MENU_SPACE;
+        y += GM_HAUTEUR_STANDARD + GameMenuRowSpace(nb);
     }
     return -1;
 }

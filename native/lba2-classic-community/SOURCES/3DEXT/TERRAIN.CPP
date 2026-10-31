@@ -718,6 +718,26 @@ S32 (*TerrainReachHook)(void) = NULL;
 
 extern S32 PtrProjectPoint(S32 xw, S32 yw, S32 zw);
 
+// A cube past the first ring (ox, oy from the camera's), by the camera the land is drawn with: all four corners outside one side of its
+// view -- behind it, past the far clip, off the left or the right of the screen -- and it can't be seen. `wide` leaves room for the camera's
+// tilt, which leans the sides of the view out, and for hills standing up out of the cube. (From the matrix, not BetaCam's quadrant: that
+// took the corner the rows start from for the corner the camera looks at, which is the opposite one, and left out the cubes straight
+// ahead: the road only came into view at the first ring, 2026-10-31)
+static S32 CubeInView(S32 ox, S32 oy, double cx, double cz, double lookX, double lookZ, double sideX, double sideZ, double wide, double farClip) {
+    S32 behind = 0, past = 0, right = 0, left = 0;
+    for (S32 c = 0; c < 4; c++) {
+        const double dx = (ox + (c & 1)) * (double)CUBE_SIZE - cx;
+        const double dz = (oy + (c >> 1)) * (double)CUBE_SIZE - cz;
+        const double fore = dx * lookX + dz * lookZ;
+        const double side = dx * sideX + dz * sideZ;
+        if (fore <= 0) behind++;
+        if (fore > farClip) past++;
+        if (side > wide * fore) right++;
+        if (-side > wide * fore) left++;
+    }
+    return behind < 4 AND past < 4 AND right < 4 AND left < 4;
+}
+
 void DrawHorizon2ZBuf() {
     S32 flag = FALSE;
     S32 cx = CameraX;
@@ -732,9 +752,15 @@ void DrawHorizon2ZBuf() {
     S32 czI = CameraZI;
     S32 seamsFixed = TerrainSeamsFixed();
 
-    // the far corner first, row by row (the four tables of the 1997 game, TerrNO and so on, by the camera's turn)
+    // the corner behind the camera first, row by row, the nearest land first (the four tables of the 1997 game, TerrNO and so on, by the
+    // camera's turn)
     const S32 reach = TerrainReachHook ? TerrainReachHook() : 1;
-    const S32 farClip = ClipZFar;
+    // (the way the camera looks and its right, along the ground: a point's depth is CameraZr - its rotated z, so the third row is backwards)
+    const double lookLen = sqrt((double)MatriceWorld.F.M31 * MatriceWorld.F.M31 + (double)MatriceWorld.F.M33 * MatriceWorld.F.M33);
+    const double sideLen = sqrt((double)MatriceWorld.F.M11 * MatriceWorld.F.M11 + (double)MatriceWorld.F.M13 * MatriceWorld.F.M13);
+    const double lookX = lookLen > 0 ? -MatriceWorld.F.M31 / lookLen : 0, lookZ = lookLen > 0 ? -MatriceWorld.F.M33 / lookLen : 0;
+    const double sideX = sideLen > 0 ? MatriceWorld.F.M11 / sideLen : 0, sideZ = sideLen > 0 ? MatriceWorld.F.M13 / sideLen : 0;
+    const double wide = 1.3 * XCentre / (FRatioX > 0 ? FRatioX : 1);
     const S32 stepX = (BetaCam >= 0 AND BetaCam < 2048) ? 1 : -1;
     const S32 stepY = (BetaCam >= 1024 AND BetaCam < 3072) ? 1 : -1;
 
@@ -747,13 +773,8 @@ void DrawHorizon2ZBuf() {
         y = CurrentCubeY + oy;
 
         if (x >= 0 AND x <= 15 AND y >= 0 AND y <= 15) {
-            if (ox > 1 OR ox < -1 OR oy > 1 OR oy < -1) {
-                // (the cube's nearest place to the camera; the camera looks towards the corner drawn first)
-                const double gx = ox > 0 ? ox * (double)CUBE_SIZE - cx : ox < 0 ? cx - (ox + 1) * (double)CUBE_SIZE : 0;
-                const double gy = oy > 0 ? oy * (double)CUBE_SIZE - cz : oy < 0 ? cz - (oy + 1) * (double)CUBE_SIZE : 0;
-                if (ox * -stepX + oy * -stepY < 0 OR gx * gx + gy * gy > (double)farClip * farClip)
-                    continue;
-            }
+            if ((ox > 1 OR ox < -1 OR oy > 1 OR oy < -1) AND !CubeInView(ox, oy, cx, cz, lookX, lookZ, sideX, sideZ, wide, ClipZFar))
+                continue;
             if (ox OR oy) {
                 // PreClipping du Cube
                 /*				if( PtrProjectPoint( 0, 0, 0 )

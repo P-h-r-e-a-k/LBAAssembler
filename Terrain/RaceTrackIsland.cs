@@ -118,6 +118,9 @@ internal sealed record RaceTrackIsland(
         // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
         // a full review of all islands checking for actors that have been removed that we can restore")
         KeepOffRoadActors = true,
+        // (two flames, high over the square the road now crosses, with nothing left under them: the user, 2026-10-31, "2 flames floating in
+        // the air on the start/finish line")
+        OldActors = new[] { (95, 2), (95, 3) },
     };
 
     // Celebration Island before the statue rises (CELEBRAT: the mesa's top a plateau round a lake of lava level with it, the temple on its
