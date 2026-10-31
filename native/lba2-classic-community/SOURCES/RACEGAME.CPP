@@ -26,6 +26,8 @@
  *     skip_qualifying=0|1                 the last answer
  *     difficulty=0|1|2                    the difficulty chosen last (LevelPage)
  *     updates=auto|ask|off                new versions installed when the game is closed, asked first, or not looked for (auto)
+ *     update_check=launch|weekly|manual   when the game checks for a new version (none: launch; updates=off, from before there was a
+ *                                         choice: manual)
  *     update_checked=<unix time>          when the game last started the updater (0: never)
  *     minimap=1|0                         the race's mini-map, bottom right, on (the first time) or off (Options, "Camera,
  *                                         window, updates"; RACEMOD.CPP DrawMinimap asks RaceGame_Minimap)
@@ -46,12 +48,13 @@
  * the car turning, fireworks over the page and RACESOUNDS/FIREWORK.WAV (CelebratePage). A car unlocked "for trial" is taken for time trials
  * only: on the page for a race it is shown, "For time trials", and not taken.
  * Updates (2026-10-19): the installer leaves a copy of itself in the game's folder, Update\LBRA-Setup.exe. At the start (the race game
- * as a player runs it: none of the command harness's flags, so never an editor's Play or a scripted test -- those skip the menu), if
- * updates aren't off and a week has gone by since the last check (or there was none), the game starts it hidden --
- * `--check-update "<install dir>" --wait-pid <its pid>` (RACEUPDATE.CPP) -- and goes on: the updater looks for a new version
- * (https://lbabirthdayevent.com/LBRA-Setup.exe), downloads it, and installs it once the game is closed (or asks first), keeping the
- * player's User\ folder. Options, Updates: the mode (Automatic, Ask first, Off) and "Check for updates now" (`--manual`: a check even
- * with updates off, asked first then); the updater's last word (Update\status.txt, "<unix time>|<text>") under them.
+ * as a player runs it: none of the command harness's flags, so never an editor's Play or a scripted test -- those skip the menu), when
+ * the check is due -- every launch by default, once a week, or never, the player's choice (2026-10-31, the user: "change the update check
+ * to run in the background on game launch ... users can still opt for either weekly or manually") -- the game starts it hidden --
+ * `--check-update "<install dir>" --wait-pid <its pid>` (RACEUPDATE.CPP) -- and goes on: the updater looks for a new version (the newest
+ * GitHub release), downloads it, and installs it once the game is closed (or asks first), keeping the player's User\ folder. Options,
+ * Updates: when it checks, what comes of a new version (Automatic, Ask first) and "Check for updates now" (`--manual`); the updater's last
+ * word (Update\status.txt, "<unix time>|<text>") under them.
  *
  * RACEGAME.TXT, "key=value" lines ('#' starts a comment), UTF-8:
  *     title=<the game's name>
@@ -153,6 +156,7 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_UPDATES 2354
 #define RG_ID_UPDATE_MODE 2355              // the Updates page's rows (UpdatesPage)
 #define RG_ID_UPDATE_NOW 2356
+#define RG_ID_UPDATE_CHECK 2379             // ... when it checks: on launch, weekly, manually
 #define RG_ID_WINDOW 2357                   // the Updates page's full screen <-> a window row (CONFIG_FILE.CPP ToggleDisplayFullscreen; F11 / Alt+Enter too)
 #define RG_ID_MINIMAP 2358                  // ... and its mini-map on <-> off row (RaceGame_Minimap)
 #define RG_ID_CAMERA 2359                   // ... and its camera's view row: inside the car, just behind, further back (camera=)
@@ -468,7 +472,8 @@ static int s_setRead = 0;
 static int s_controlsSeen = 0, s_powerupsSeen = 0;  // the first run's pages shown
 static int s_qualified = 0;                 // a qualifying lap driven: the next races may skip it
 static int s_skipQualifying = 0;            // the last answer to "a qualifying lap?"
-static int s_updates = 0;                   // new versions: 0 installed when the game is closed, 1 asked first, 2 not looked for
+static int s_updates = 0;                   // new versions: 0 installed when the game is closed, 1 asked first (2 read from an older file: not looked for)
+static int s_updateCheck = 0;               // when the game looks for them: 0 each launch, 1 once a week, 2 only when asked
 static int s_minimap = 1;                   // the race's mini-map, bottom right (RACEMOD.CPP DrawMinimap)
 // the race camera's view (RACEMOD.CPP camera=): 0 inside the car, 1 just behind it -- the camera as it always was -- or 2 further back,
 // the first time (2026-10-21: the user found the car too close, the road ahead hard to see past Twinsen's Halloween buggy)
@@ -491,7 +496,9 @@ static int s_lapsRuns = 0;                  // (the laps page's rows say runs, n
 static const char *const s_cameraLabel[3] = {"Camera: inside the car", "Camera: just behind", "Camera: further back"};
 static long long s_updateChecked = 0;       // when the updater was last started (unix time; 0 never)
 static const char *const s_updateKey[3] = {"auto", "ask", "off"};
-static const char *const s_updateLabel[3] = {"Updates: Automatic", "Updates: Ask first", "Updates: Off"};
+static const char *const s_updateLabel[2] = {"New versions: Automatic", "New versions: Ask first"};
+static const char *const s_checkKey[3] = {"launch", "weekly", "manual"};
+static const char *const s_checkLabel[3] = {"Check for updates: On launch", "Check for updates: Weekly", "Check for updates: Manually"};
 static char s_setOther[RG_OTHER_SIZE];      // RACEGAME_SETTINGS.TXT's lines of other keys, kept as they are
 static char s_gridCarName[96] = "";         // the car grid's car chosen last (grid_car=), by its name
 #define RG_MAX_UNLOCKED 32                  // (every island the story races has its own: 15 in use, 2026-10-29)
@@ -509,6 +516,7 @@ static void ReadSettings(void) {
     SettingsPath(path);
     FILE *f = fopen(path, "r");
     if (!f) { Log_Info("[racegame] no settings yet (%s): the first run's pages, and a qualifying lap first", path); return; }
+    int checkGiven = 0;
     char line[512];
     while (fgets(line, sizeof(line), f)) {
         Trim(line);
@@ -531,6 +539,10 @@ static void ReadSettings(void) {
                 value = &s_updates;
                 *value = 0;
                 for (int k = 0; k < 3; k++) if (!strcmp(eq + 1, s_updateKey[k])) *value = k;
+                continue;
+            } else if (!strcmp(line, "update_check")) {
+                checkGiven = 1;
+                for (int k = 0; k < 3; k++) if (!strcmp(eq + 1, s_checkKey[k])) s_updateCheck = k;
                 continue;
             } else if (!strcmp(line, "update_checked")) {
                 s_updateChecked = strtoll(eq + 1, NULL, 10);
@@ -563,17 +575,19 @@ static void ReadSettings(void) {
         if (!value && strlen(s_setOther) + strlen(line) + 2 < sizeof(s_setOther)) { strcat(s_setOther, line); strcat(s_setOther, "\n"); }
     }
     fclose(f);
+    // (updates=off, before there was a choice of when: the player's no is kept, as Manually, and a check they ask for asks them first, as it did)
+    if (s_updates == 2) { s_updates = 1; if (!checkGiven) s_updateCheck = 2; }
     if (s_level < 0 || s_level > 2) s_level = 1;
     s_minimap = s_minimap != 0;
     if (s_camera < 0 || s_camera > 2) s_camera = 2;
     if (s_ghost < 0 || s_ghost > 8 || s_ghost == 2 || s_ghost == 6) s_ghost = 0;
-    Log_Info("[racegame] settings: controls seen %d, power-ups seen %d, qualified %d, skip qualifying %d, updates %s (checked %lld), mini-map %s, camera %d",
-             s_controlsSeen, s_powerupsSeen, s_qualified, s_skipQualifying, s_updateKey[s_updates], s_updateChecked, s_minimap ? "on" : "off", s_camera);
+    Log_Info("[racegame] settings: controls seen %d, power-ups seen %d, qualified %d, skip qualifying %d, updates %s, checked %s (last %lld), mini-map %s, camera %d",
+             s_controlsSeen, s_powerupsSeen, s_qualified, s_skipQualifying, s_updateKey[s_updates], s_checkKey[s_updateCheck], s_updateChecked, s_minimap ? "on" : "off", s_camera);
 }
 
 // ---- updates -----------------------------------------------------------------------------------------------------------------------
 
-#define RG_UPDATE_EVERY (7 * 24 * 3600)     // a check a week
+#define RG_UPDATE_EVERY (7 * 24 * 3600)     // Weekly: a check a week
 #define RG_UPDATER "Update\\LBRA-Setup.exe"  // the installer's copy of itself (the installer's Updater.cs)
 static long long s_updateStarted = 0;       // the updater started this run (by the page's "Check for updates now": the page says so)
 static void WriteSettings(void);
@@ -599,18 +613,19 @@ static int UpdateSpawn(int manual) {
     return 1;
 }
 
-// At the start: the updater, when updates aren't off and the last check is a week old (or there was none, or it is in the future: a clock
-// put back). Only as a player runs the game: an editor's Play and the tests run with the command harness.
+// At the start: the updater, as the player chose: every launch, or once the last check is a week old (or there was none, or it is in the future: a
+// clock put back), or not at all. It is a process of its own, hidden: the game doesn't wait for it. Only as a player runs the game: an editor's Play and the
+// tests run with the command harness. And once for a PC: the second player's game is started by the first's.
 static void UpdateAtStart(void) {
-    if (Control_IsActive()) return;
-    if (s_updates == 2) { Log_Info("[racegame] updates off: no update check"); return; }
+    if (Control_IsActive() || getenv("LBA2_PLAYER2")) return;
+    if (s_updateCheck == 2) { Log_Info("[racegame] updates: checked when asked, none now"); return; }
     const long long now = (long long)time(NULL);
-    if (s_updateChecked > 0 && now >= s_updateChecked && now - s_updateChecked < RG_UPDATE_EVERY) {
+    if (s_updateCheck == 1 && s_updateChecked > 0 && now >= s_updateChecked && now - s_updateChecked < RG_UPDATE_EVERY) {
         Log_Info("[racegame] updates %s: checked %lld h ago, the next check in %lld h", s_updateKey[s_updates], (now - s_updateChecked) / 3600,
                  (s_updateChecked + RG_UPDATE_EVERY - now + 3599) / 3600);
         return;
     }
-    if (UpdateSpawn(0)) Log_Info("[racegame] updates %s: a week since the last check (or none): checking", s_updateKey[s_updates]);
+    if (UpdateSpawn(0)) Log_Info("[racegame] updates %s: checking in the background (%s)", s_updateKey[s_updates], s_checkKey[s_updateCheck]);
 }
 
 // The updater's last word (Update\status.txt: "<unix time>|<text>"), its text into `out` and its time; 0: none.
@@ -642,7 +657,7 @@ static void WriteSettings(void) {
     fprintf(f, "# %s: the player's settings (RACEGAME.CPP)\n", s_title[0] ? s_title : "The race game");
     fprintf(f, "controls_seen=%d\npowerups_seen=%d\nqualified=%d\nskip_qualifying=%d\ndifficulty=%d\n", s_controlsSeen, s_powerupsSeen, s_qualified,
             s_skipQualifying, s_level);
-    fprintf(f, "updates=%s\nupdate_checked=%lld\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0], s_updateChecked);
+    fprintf(f, "updates=%s\nupdate_check=%s\nupdate_checked=%lld\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0], s_checkKey[s_updateCheck], s_updateChecked);
     fprintf(f, "minimap=%d\ncamera=%d\nrace_sky=%d\nghost=%d\ntrial_laps=%d\n", s_minimap, s_camera, s_raceSky, s_ghost, s_trialLaps);
     if (s_ghostOther[0]) fprintf(f, "ghost_other=%s\n", s_ghostOther);
     if (s_gridCarName[0]) fprintf(f, "grid_car=%s\n", s_gridCarName);
@@ -1189,7 +1204,8 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_MINIMAP: Label(string, s_minimap ? "Mini-map: On" : "Mini-map: Off"); return 1;
     case RG_ID_RACE_SKY: Label(string, s_raceSky ? "Sky in races: On" : "Sky in races: Off"); return 1;
     case RG_ID_UPDATES_PAGE: Label(string, "Updates"); return 1;
-    case RG_ID_UPDATE_MODE: Label(string, s_updateLabel[s_updates >= 0 && s_updates <= 2 ? s_updates : 0]); return 1;
+    case RG_ID_UPDATE_MODE: Label(string, s_updateLabel[s_updates == 1 ? 1 : 0]); return 1;
+    case RG_ID_UPDATE_CHECK: Label(string, s_checkLabel[s_updateCheck >= 0 && s_updateCheck <= 2 ? s_updateCheck : 0]); return 1;
     case RG_ID_UPDATE_NOW: Label(string, "Check for updates now"); return 1;
     case RG_ID_WINDOW: Label(string, DisplayFullScreen ? "Window mode: full screen (F11)" : "Window mode: window (F11)"); return 1;
     case RG_ID_EASY: case RG_ID_MEDIUM: case RG_ID_HARD: Label(string, s_levelName[num - RG_ID_EASY]); return 1;
@@ -2183,17 +2199,17 @@ void RaceGame_Qualified(S32 lap) {
 // mode does and the updater's last word under them.
 // (2026-10-21: and first the camera's view -- inside the car, just behind it, further back: Enter goes round them -- the page "Camera,
 // window, updates", its six rows a little higher)
-#define RG_UPD_ROWS 3                       // (the updates' own page since the sky's row, 2026-10-31: the page before had six rows, and no room for a seventh)
+#define RG_UPD_ROWS 4                       // (the updates' own page since the sky's row, 2026-10-31: the page before had six rows, and no room for a seventh)
 #define RG_DISPLAY_ROWS 6
 static U16 s_updMenu[4 + 2 * RG_UPD_ROWS];
 static U16 s_displayMenu[4 + 2 * RG_DISPLAY_ROWS];
 // (two lines each at most, and the updater's word two more: the page's text below the rows fits the 480-tall canvas)
-static const char *const s_updateHelp[3] = {
-    // (a line each since the camera's row, 2026-10-21: the updater's word under it still fits)
-    "Weekly: installed as you quit.",
-    "Weekly: asked before installing.",
-    "No weekly check: check here.",
+static const char *const s_checkHelp[3] = {
+    "Checks in the background each time the game starts.",
+    "Checks in the background once a week.",
+    "Checks only when you choose to.",
 };
+static const char *const s_updateHelp[2] = {"New versions install as you quit.", "You're asked before a new version installs."};
 #define RG_UPD_Y 222                        // the rows' centre (six rows: the header at 8, the text under them from 392 to 470)
 // The updater's word as the Updates page drew it (its time), and whether Update\status.txt has a newer one -- looked at twice a second
 // while the page's menu waits (GAMEMENU.CPP MenuRedrawHook)
@@ -2212,15 +2228,18 @@ static void UpdatesPage(void) {
     s_updMenu[2] = RG_UPD_Y;
     s_updMenu[3] = 0;
     SetRow(s_updMenu, 0, RG_ID_BACK);
-    SetRow(s_updMenu, 1, RG_ID_UPDATE_MODE);
-    SetRow(s_updMenu, 2, RG_ID_UPDATE_NOW);
+    SetRow(s_updMenu, 1, RG_ID_UPDATE_CHECK);
+    SetRow(s_updMenu, 2, RG_ID_UPDATE_MODE);
+    SetRow(s_updMenu, 3, RG_ID_UPDATE_NOW);
     char exe[ADELINE_MAX_PATH];
     GetResPath(exe, ADELINE_MAX_PATH, RG_UPDATER);
     for (;;) {
         const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
         Page("Updates", RG_UPD_Y - (56 * RG_UPD_ROWS) / 2 - 46);
         const S32 textY = RG_UPD_Y + (56 * RG_UPD_ROWS) / 2 + 2 + oy;
-        const int lines = Wrapped(cx - 280, textY, 560, RG_LINE, s_updateHelp[s_updates], LBAWHITE);
+        char help[128];
+        snprintf(help, sizeof(help), "%s %s", s_checkHelp[s_updateCheck], s_updateHelp[s_updates == 1 ? 1 : 0]);
+        const int lines = Wrapped(cx - 280, textY, 560, RG_LINE, help, LBAWHITE);
         // (the updater's last word -- or, while a check started here hasn't said anything yet, that it is checking)
         char status[400], said[400];
         const long long at = UpdateStatus(said, sizeof(said));
@@ -2237,8 +2256,12 @@ static void UpdatesPage(void) {
         MenuRedrawHook = NULL;
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return; }
         for (S32 i = 0; i < RG_UPD_ROWS; i++) if (s_updMenu[4 + 2 * i + 1] == (U16)select) s_updMenu[0] = (U16)i;
-        if (select == RG_ID_UPDATE_MODE) {
-            s_updates = (s_updates + 1) % 3;
+        if (select == RG_ID_UPDATE_CHECK) {
+            s_updateCheck = (s_updateCheck + 1) % 3;
+            WriteSettings();
+            Log_Info("[racegame] updates checked: %s", s_checkKey[s_updateCheck]);
+        } else if (select == RG_ID_UPDATE_MODE) {
+            s_updates = !s_updates;
             WriteSettings();
             Log_Info("[racegame] updates: %s", s_updateKey[s_updates]);
         } else if (select == RG_ID_UPDATE_NOW && UpdateSpawn(1)) {
