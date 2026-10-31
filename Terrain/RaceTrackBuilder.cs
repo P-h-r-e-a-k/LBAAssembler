@@ -4195,6 +4195,12 @@ internal static class RaceTrackBuilder
                 : a.X0 <= b.X1 + RuinGap && b.X0 <= a.X1 + RuinGap && a.Z0 <= b.Z1 + RuinGap && b.Z0 <= a.Z1 + RuinGap ? RuinRise : -1;
             return gap >= 0 && a.Y0 <= b.Y1 + gap && b.Y0 <= a.Y1 + gap;
         }
+        // (holding up takes real contact: Touch's standing a little apart joins a row of planks into a structure, but holds up nothing)
+        bool Holds(int i, int j)
+        {
+            var a = pieces[i].B; var b = pieces[j].B;
+            return a.X0 <= b.X1 + RuinTouch && b.X0 <= a.X1 + RuinTouch && a.Z0 <= b.Z1 + RuinTouch && b.Z0 <= a.Z1 + RuinTouch && a.Y0 <= b.Y1 + 64 && b.Y0 <= a.Y1 + 64;
+        }
         for (var i = 0; i < pieces.Count; i++)
         for (var j = i + 1; j < pieces.Count; j++)
             if (Touch(i, j)) parent[Find(i)] = Find(j);
@@ -4205,21 +4211,23 @@ internal static class RaceTrackBuilder
             if (!members.Any(m => pieces[m].Gone)) continue;
             var left = members.Where(m => !pieces[m].Gone).ToList();
             if (left.Count == 0) continue;
-            // (what is left hanging -- its underside clear of the ground under it, touching nothing left of the structure, the pieces that
-            // held it up gone with the road -- goes, however big: a slab of Polar Island's dock crane, 2,080 up over the road, 2026-10-27; and what rested
-            // on it after it)
+            // (what is left hanging -- its underside clear of the ground under it, nothing that reaches the ground holding it, the pieces that
+            // held it up gone with the road -- goes, however big: a slab of Polar Island's dock crane, 2,080 up over the road, 2026-10-27. By
+            // what reaches the ground, not what it touches: pieces holding only each other up stayed in the air, the wheels and planks of a
+            // building the road took on Citadel 2, the user, 2026-10-30: "this wheel floating in the air")
+            var held = left.Where(m => pieces[m].B.Y1 < pieces[m].B.Y0 || !Hanging(island, pieces[m].B.X0, pieces[m].B.Z0, pieces[m].B.X1, pieces[m].B.Z1, pieces[m].B.Y0)).ToHashSet();
             for (var more = true; more;)
             {
                 more = false;
                 foreach (var m in left)
-                {
-                    var b = pieces[m].B;
-                    if (ruins.Contains(pieces[m].Id) || b.Y1 < b.Y0 || !Hanging(island, b.X0, b.Z0, b.X1, b.Z1, b.Y0)) continue;
-                    if (left.Any(n => n != m && !ruins.Contains(pieces[n].Id) && Touch(m, n))) continue;
-                    ruins.Add(pieces[m].Id);
-                    more = true;
-                }
+                    if (!held.Contains(m) && held.Any(n => Holds(m, n)))
+                    {
+                        held.Add(m);
+                        more = true;
+                    }
             }
+            foreach (var m in left)
+                if (!held.Contains(m)) ruins.Add(pieces[m].Id);
             if (left.Any(m => (pieces[m].B.X1 - pieces[m].B.X0) * (pieces[m].B.Z1 - pieces[m].B.Z0) > RuinBigPiece)) continue;
             foreach (var m in left)
             {

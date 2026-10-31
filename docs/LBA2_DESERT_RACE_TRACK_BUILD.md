@@ -5509,3 +5509,18 @@ corners where that's quicker".
 - **The ghost car** is drawn from the next cube too, half a cell out at most. `LBA2_CARVIS=1` logs it and the far items.
 
 The car's engine with the camera inside it is `RaceMod_EngineInside`: the game's 3D sound stops a sample whose place is off the screen, and the car's middle, under and behind the eye, always was.
+
+
+## Race sweep, 2026-10-31
+
+**The road further out.** The engine drew the camera's cube and the eight round it, so on Polar Island's long straights the road stopped short of the far clip. `TERRAIN.CPP` now draws by `TerrainReachHook`: a race asks for a second ring (`RaceTerrainReach`), 5 x 5 cubes, taking a cube past the first ring only when it is ahead of the camera and nearer than the far clip. With the hook unset, or outside a race, it is the game's own 3 x 3, in the game's own order. Measured with `cartrace` on an otherwise idle PC, nothing over 50 ms between frames on Polar, the palace, Island CX Mk2, the Desert or the Francos, on either engine.
+
+**No one stops a car on a track.** `RaceMod_Hush` (`GERELIFE.CPP`'s message and choice opcodes) leaves out a scene script's lines while Twinsen drives on a track, logging each: `[racemod] scene 120 actor 2: its line 500 left out`. Those scripts were written for Twinsen on foot and hold the game until a key is pressed: a man waiting at the Elevator Platform stopped every car 5 s into its lap, for good. The race's own lines call `Dial` from `RACEMOD.CPP`, and the lines for after a race wait for him out of the car (`RaceTrackStory`), so neither is touched.
+
+**The retail racer.** Scene 57's actor 4 is copied for the race (`RaceTrackScenes.RacerEntity`) and was left in its scene, going round the retail lap by its own script; among the opponents no one saw it, in a time trial it was the only other car on the island. `RaceTrackIsland.OldActors` stops an actor when the build makes the scene. `hide_actor=` can't do it: the line moves an actor out of sight once a frame, and an actor that moves is on the ground again after its script runs.
+
+**What hangs in the air.** `ClearRuins` took a piece as held up if it touched anything left; now it must reach the ground through real contact (`Holds`, the plain touching test: `Touch` also joins pieces standing apart, which is right for a structure and wrong for support). That took five wheels and planks of a building the town circuit ran through. `RaceTrackIsland.TwinStranded` hides, on the twin's track, props that don't fall and stood on what the road took: the mill wheel, scene 50's actor 4. An actor that can fall is moved with the ground; one that can't is not (`Reseat`).
+
+Things that read as floating and aren't: a decor whose box the build cut down under the road has the same model and origin, so compare decors by origin, never by box (the Desert's eight "hanging" decors were this, and Island CX's tower tops); road rails and posts stand on the raised deck, which isn't ground (Mosquibees Island's start line post, seen from below, looks like a rod in the sky); actors with body -1 draw nothing.
+
+`RACE_MAX_HIDDEN` is 1024, from 256: the Desert's trial has 268 `hide_actor=` lines, the palace's 307, the Temple's 414. The lines dropped over the limit were cars already waiting out of sight, so this changed nothing on screen, but it warns if it is ever reached.

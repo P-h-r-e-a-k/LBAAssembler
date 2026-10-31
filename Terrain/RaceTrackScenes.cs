@@ -510,6 +510,14 @@ internal static class RaceTrackScenes
                 continue;
             }
             var count = 0;
+            // (the island's own with no place in a race: RaceTrackIsland.OldActors)
+            foreach (var (from, actor) in options.Island.OldActors ?? Array.Empty<(int Scene, int Actor)>())
+                if (from == scene && actor < model.Actors.Count)
+                {
+                    model.Actors[actor] = Hidden(model.Actors[actor]);
+                    log.Add($"scene {scene}: actor {actor} (entity {model.Actors[actor].Entity}) has no place in a race: stopped, out of sight");
+                    count++;
+                }
             if (options.RemoveActors)
             {
                 // slot 1 of every scene is the engine's own placeholder for Zoe (entity 14, no body, parked at 0,0,0); the engine treats that slot

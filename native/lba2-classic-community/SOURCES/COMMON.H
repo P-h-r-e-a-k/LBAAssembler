@@ -374,6 +374,7 @@ double RaceMod_HandbrakeBrake(void);
 void RaceMod_Slide(S32 beta, S32 *speed, S32 deltatimer, S32 airborne);
 double RaceMod_SkidCoast(void);
 S32 RaceMod_Dial(S32 num);
+S32 RaceMod_Hush(S32 num);
 S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz);
 void RaceMod_FloorFor(S32 y);
 void RaceMod_FloorForNothing(void);

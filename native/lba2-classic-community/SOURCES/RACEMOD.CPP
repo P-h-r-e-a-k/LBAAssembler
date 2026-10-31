@@ -552,7 +552,8 @@ static int s_order[RACE_MAX_OPPONENTS + 1]; // the grid, pole first: -1 the play
 static S32 s_orderTime[RACE_MAX_OPPONENTS + 1];
 static int s_nbOrder = 0;
 static int s_forgetLap = 0;                // the player's car was moved: the lap check forgets its last position
-#define RACE_MAX_HIDDEN 256
+#define RACE_MAX_HIDDEN 1024                // (256 until 2026-10-31: a time trial hides a whole race's cars in every scene, and the Desert's 268
+                                           // and the palace's 307 lost their last ones, left running their scripts: the user, "the racer from the original desert track driving randomly around")
 static int s_hideScene[RACE_MAX_HIDDEN], s_hideActor[RACE_MAX_HIDDEN];
 static int s_nbHidden = 0;
 #define RACE_RESULTS_MS 4000               // how long the qualifying's grid is shown before the count-down
@@ -1496,6 +1497,9 @@ static int OnWheel(double wx, double wy, double wz) {
     return wy > f - 1500 && wy < f + 1500;
 }
 extern void (*DecorPoseHook)(T_DECORS *list, S32 count);  // 3DEXT/DECORS.CPP
+// The cubes drawn round the camera's in a race, a second ring (TERRAIN.CPP): a straight runs on past the next cube.
+extern S32 (*TerrainReachHook)(void);
+static S32 RaceTerrainReach(void) { return RaceMod_Active() ? 2 : 1; }
 static void RaceDecorPose(T_DECORS *list, S32 count);      // (the roulette wheel's decors and the lifts' pads: WheelDecors, LiftDecors)
 static void WheelDecors(T_DECORS *list, S32 count);
 // Gas monsters (gasmonster=<scene> <its actor> <its body> <x> <z> <bite x> <bite z> <bite y> <foot y> <first anim> [<scene> <actor>]...,
@@ -4287,7 +4291,8 @@ static void Load(const char *path, int carOnly = 0) {
             }
         }
         else if (!strcmp(key, "hide_actor")) {
-            if (s_nbHidden < RACE_MAX_HIDDEN && sscanf(v, "%d %d", &s_hideScene[s_nbHidden], &s_hideActor[s_nbHidden]) == 2) s_nbHidden++;
+            if (s_nbHidden >= RACE_MAX_HIDDEN) Log_Warn("[racemod] too many hide_actor lines: %s left out", v);
+            else if (sscanf(v, "%d %d", &s_hideScene[s_nbHidden], &s_hideActor[s_nbHidden]) == 2) s_nbHidden++;
         }
         else if (!strcmp(key, "beat_text")) s_beatText = atoi(v);
         else if (!strcmp(key, "parade")) {
@@ -4370,6 +4375,7 @@ static void Load(const char *path, int carOnly = 0) {
     FollowCamEyeHook = RaceCameraEye;
     // (a roulette wheel: its head and its ball posed as their cube's decors are drawn)
     DecorPoseHook = s_wheel.On || s_nbLifts ? RaceDecorPose : NULL;
+    TerrainReachHook = RaceTerrainReach;
     if (s_wheel.On) Log_Info("[racemod] roulette wheel at (%.0f,%.0f): %d turning pieces, its floor %.0f at the hole to %.0f at the wall, the drop onto place %d", s_wheel.X, s_wheel.Z,
                              s_wheel.NbParts, WheelFloorAt(s_wheel.Hole), WheelFloorAt(s_wheel.Rim), s_wheel.Landing);
     if (s_car.Gears < 1) s_car.Gears = 1;
@@ -18101,6 +18107,19 @@ void RaceMod_Island(S32 island) {
 // tired=: on Citadel Island, while the story's variable says so, anyone but Twinsen says the tired line instead of their own (GERELIFE.CPP,
 // the life scripts' messages: NumObjDial is the one speaking).
 // wake=: a dream won, the waking scene's actor -- Zoe -- says the wake line before her first line there: she shakes Twinsen awake.
+// No one stops a car on a track: a scene's scripts were written for Twinsen on foot, and their lines hold the game until a key is pressed. The race's
+// own lines are said here, by Dial; the scripts' lines for after a race wait for him out of the car (RaceTrackStory). The man waiting by the Elevator
+// Platform's lift spoke to every car that came by and held it there, the user saw it in a test, 2026-10-31.
+S32 RaceMod_Hush(S32 num) {
+    if (!RaceMod_Active() || !s_car.HasLine || Comportement != C_BUGGY) return 0;
+    static int saidScene = -1, saidActor = -1, saidText = -1;
+    if (saidScene != NumCube || saidActor != NumObjDial || saidText != num) {
+        saidScene = NumCube; saidActor = NumObjDial; saidText = num;
+        Log_Info("[racemod] scene %d actor %d: its line %d left out (Twinsen is racing)", (int)NumCube, (int)NumObjDial, (int)num);
+    }
+    return 1;
+}
+
 S32 RaceMod_Dial(S32 num) {
     if (RaceMod_Active() && s_pendWakeScene >= 0 && (S32)NumCube == s_pendWakeScene && NewCube == -1
             && (s_pendWakeActor <= 0 || NumObjDial == s_pendWakeActor)) {

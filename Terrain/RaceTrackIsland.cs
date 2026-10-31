@@ -19,6 +19,7 @@ internal sealed record RaceTrackIsland(
         "RaceTrackPlan.Desert.json", (7, 10))
     {
         Crossing = CrossingStyle.Jump, Roster = RaceDriver.Desert,
+        OldActors = new[] { (RaceTrackScenes.RacerScene, 4) },
         // (the island's people and animals away from the road stay -- the camel: the user, 2026-10-27, "Let's make sure with Desert island
         // we're not removing any actors or zones we don't need the same as we checked with citadel")
         KeepOffRoadActors = true,
@@ -52,6 +53,7 @@ internal sealed record RaceTrackIsland(
         // carport, where the island's own car stands: that one, a decor that can't be driven, goes from both files)
         ParkOwn = (540.5, 637.5, 1024, 1), ParkTwin = (544.125, 654.75, 1024, 0),
         DropDecors = new[] { (8, 10, 16448, 7552) }, OwnWeather = 0,
+        TwinStranded = new[] { (50, 4) },
         // (the lighthouse, scene 46, where the storm ends: the game's own Raph by its door and Twinsen and Zoe on its top, whom the Weather
         // Wizard's spell needs -- RaceTrackStory -- and the door's people and track points on the storm file's ground: the town circuit, in
         // the fine weather's file, cut the hill there by 2,000. Raph's fiancee went with the others, 2026-10-14 -- the user: "an NPC on the
@@ -299,6 +301,17 @@ internal sealed record RaceTrackIsland(
     // pieces placed there (RaceTrackBuilder.DropDecors) -- Citadel Island's car under Twinsen's carport, a model that can't be driven,
     // where the build parks the real one (2026-10-06: the user found two cars by the house, the island's and the build's).
     public (int CubeX, int CubeZ, int X, int Z)[]? DropDecors { get; init; }
+
+    // Props of the island's scenes the twin's track took the ground and the building from under, each [scene, actor]: they don't fall, and nothing
+    // moves them, so they stayed in the air, kept out of sight in that track's races (RaceCarEngineFile: hide_actor=). Citadel Island's mill wheel over
+    // the town circuit: the user, 2026-10-30, "this wheel floating in the air"
+    public (int Scene, int Actor)[]? TwinStranded { get; init; }
+
+    // The island's own actors with no place in a race, each [scene, actor]: the build stops them where they are made, as a car waiting for a race is
+    // (RaceTrackScenes.Hidden; hide_actor= can't: an actor that moves is back on the ground after its script runs). The retail track's racer, copied for the
+    // race (RaceTrackScenes.RacerEntity) and left in scene 57 going round the retail lap by its own script. Among the opponents no one saw it; in a time
+    // trial, the user, 2026-10-30, "the racer from the original desert track driving randomly around".
+    public (int Scene, int Actor)[]? OldActors { get; init; }
 
     // The island isn't in the game: the build makes its files and its scene (Sendell's Well). They have no originals to keep, so the
     // build's backups leave them out (KeptFiles); it makes them afresh every time, and putting the folder back deletes them.

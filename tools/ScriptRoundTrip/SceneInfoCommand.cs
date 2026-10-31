@@ -19,7 +19,7 @@ internal static class SceneInfoCommand
             // (SCENEINFO_POINTS=1: the track points and where each actor stands too)
             if (Environment.GetEnvironmentVariable("SCENEINFO_POINTS") != "1") continue;
             for (var i = 0; i < m.TrackPoints.Count; i++) Console.WriteLine($"  point {i}: {m.TrackPoints[i].X}, {m.TrackPoints[i].Y}, {m.TrackPoints[i].Z}");
-            for (var i = 0; i < m.Actors.Count; i++) Console.WriteLine($"  actor {i}: entity {m.Actors[i].Entity} at {m.Actors[i].X}, {m.Actors[i].Y}, {m.Actors[i].Z} beta {m.Actors[i].Beta}");
+            for (var i = 0; i < m.Actors.Count; i++) Console.WriteLine($"  actor {i}: entity {m.Actors[i].Entity} at {m.Actors[i].X}, {m.Actors[i].Y}, {m.Actors[i].Z} beta {m.Actors[i].Beta} flags {m.Actors[i].Flags:x} body {m.Actors[i].Body} sprite {m.Actors[i].Sprite} move {m.Actors[i].Move}");
         }
         return 0;
     }

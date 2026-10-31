@@ -710,31 +710,11 @@ static inline void FillBlackPolyZBuf(S32 xi, S32 zi, T_SOMMET_ROT *ptrs, U8 *ptr
     }
 }
 /*──────────────────────────────────────────────────────────────────────────*/
-struct S_Terrain {
-    S8 x;
-    S8 y;
-};
-
-struct S_Terrain TerrNO[9] = {
-    {-1, -1}, {0, -1}, {1, -1}, {-1, 0}, {0, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}};
-
-struct S_Terrain TerrNE[9] = {
-    {1, -1}, {0, -1}, {-1, -1}, {1, 0}, {0, 0}, {-1, 0}, {1, 1}, {0, 1}, {-1, 1}};
-
-struct S_Terrain TerrSO[9] = {
-    {-1, 1}, {0, 1}, {1, 1}, {-1, 0}, {0, 0}, {1, 0}, {-1, -1}, {0, -1}, {1, -1}};
-
-struct S_Terrain TerrSE[9] = {
-    {1, 1}, {0, 1}, {-1, 1}, {1, 0}, {0, 0}, {-1, 0}, {1, -1}, {0, -1}, {-1, -1}};
-
-struct S_Terrain *TerrainTri;
-
-S32 OffPosCamera[3] = {
-    // offsets camera precalculés
-    -(512 * 64), // -1
-    0,           //  0
-    (512 * 64)   //  1
-};
+// How many cubes round the camera's are drawn: 1, the 1997 game's 3 x 3, unless the hook says more. A race draws 2 (RACEMOD.CPP), its straights
+// running on past the next cube: the user, 2026-10-30, on Polar Island, the track "still isn't drawing in until the last second". Past the
+// first ring only a cube the camera can see: ahead of it, and nearer than the far clip.
+S32 (*TerrainReachHook)(void) = NULL;
+#define CUBE_SIZE (512 * 64)
 
 extern S32 PtrProjectPoint(S32 xw, S32 yw, S32 zw);
 
@@ -752,41 +732,29 @@ void DrawHorizon2ZBuf() {
     S32 czI = CameraZI;
     S32 seamsFixed = TerrainSeamsFixed();
 
-    if (BetaCam >= 0 AND BetaCam < 1024) {
-        TerrainTri = TerrSO;
-    } else if (BetaCam >= 1024 AND BetaCam < 2048) {
-        TerrainTri = TerrNO;
-    } else if (BetaCam >= 2048 AND BetaCam < 3072) {
-        TerrainTri = TerrNE;
-    } else if (BetaCam >= 3072 AND BetaCam < 4096) {
-        TerrainTri = TerrSE;
-    }
-    /*
-	if( BetaCam>=0 AND BetaCam<1024 )
-	{
-		TerrainTri = TerrNE ;
-	}
-	else if( BetaCam>=1024 AND BetaCam<2048 )
-	{
-		TerrainTri = TerrSE ;
-	}
-	else if( BetaCam>=2048 AND BetaCam<3072 )
-	{
-		TerrainTri = TerrSO ;
-	}
-	else if( BetaCam>=3072 AND BetaCam<4096 )
-	{
-		TerrainTri = TerrNO ;
-	}
-*/
-    for (S32 n = 9; n > 0; n--, TerrainTri++) {
+    // the far corner first, row by row (the four tables of the 1997 game, TerrNO and so on, by the camera's turn)
+    const S32 reach = TerrainReachHook ? TerrainReachHook() : 1;
+    const S32 farClip = ClipZFar;
+    const S32 stepX = (BetaCam >= 0 AND BetaCam < 2048) ? 1 : -1;
+    const S32 stepY = (BetaCam >= 1024 AND BetaCam < 3072) ? 1 : -1;
+
+    for (S32 row = -reach; row <= reach; row++)
+    for (S32 col = -reach; col <= reach; col++) {
+        const S32 ox = col * stepX, oy = row * stepY;
         S32 x, y;
 
-        x = CurrentCubeX + TerrainTri->x;
-        y = CurrentCubeY + TerrainTri->y;
+        x = CurrentCubeX + ox;
+        y = CurrentCubeY + oy;
 
         if (x >= 0 AND x <= 15 AND y >= 0 AND y <= 15) {
-            if (TerrainTri->x OR TerrainTri->y) {
+            if (ox > 1 OR ox < -1 OR oy > 1 OR oy < -1) {
+                // (the cube's nearest place to the camera; the camera looks towards the corner drawn first)
+                const double gx = ox > 0 ? ox * (double)CUBE_SIZE - cx : ox < 0 ? cx - (ox + 1) * (double)CUBE_SIZE : 0;
+                const double gy = oy > 0 ? oy * (double)CUBE_SIZE - cz : oy < 0 ? cz - (oy + 1) * (double)CUBE_SIZE : 0;
+                if (ox * -stepX + oy * -stepY < 0 OR gx * gx + gy * gy > (double)farClip * farClip)
+                    continue;
+            }
+            if (ox OR oy) {
                 // PreClipping du Cube
                 /*				if( PtrProjectPoint( 0, 0, 0 )
 				OR  PtrProjectPoint( 32767, 0, 0 )
@@ -796,18 +764,18 @@ void DrawHorizon2ZBuf() {
                 {
 #ifdef LBA_GAME
                     if (seamsFixed) {
-                        // Whole cubes only. The 1997 game adds TerrainTri->x and ->y
+                        // Whole cubes only. The 1997 game adds the cube's x and y offsets
                         // as well, a 1-unit nudge per neighbouring cube (LBA2.DOS
                         // 0x65e2b, on every CPU path); on the integer terrain it opens
                         // seams instead of hiding them. Each camera steps from its own
                         // position, so the integer one stays clear of the float maths.
-                        SetPosCamera(cx - OffPosCamera[TerrainTri->x + 1], cy, cz - OffPosCamera[TerrainTri->y + 1]);
-                        SetPosCameraI(cxI - OffPosCamera[TerrainTri->x + 1], cyI, czI - OffPosCamera[TerrainTri->y + 1]);
+                        SetPosCamera(cx - ox * CUBE_SIZE, cy, cz - oy * CUBE_SIZE);
+                        SetPosCameraI(cxI - ox * CUBE_SIZE, cyI, czI - oy * CUBE_SIZE);
                     } else {
-                        SetPosCamera(cx - OffPosCamera[TerrainTri->x + 1] + TerrainTri->x, cy, cz - OffPosCamera[TerrainTri->y + 1] + TerrainTri->y);
+                        SetPosCamera(cx - ox * CUBE_SIZE + ox, cy, cz - oy * CUBE_SIZE + oy);
                     }
 #else
-                    SetPosCamera(cx - OffPosCamera[TerrainTri->x + 1] + TerrainTri->x * Reglage, cy, cz - OffPosCamera[TerrainTri->y + 1] + TerrainTri->y * Reglage);
+                    SetPosCamera(cx - ox * CUBE_SIZE + ox * Reglage, cy, cz - oy * CUBE_SIZE + oy * Reglage);
 #endif
                     if (LoadCube(x, y)) {
                         AffichageTerrainZBuf();

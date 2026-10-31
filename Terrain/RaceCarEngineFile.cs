@@ -301,6 +301,8 @@ internal static class RaceCarEngineFile
         // (and all of the other weather's track's: that isn't the island the game draws)
         var parked = car.Parked(track);
         if (info?.Twin is { } fine) parked.AddRange(AllCars(ReferenceEquals(track, fine) ? info : fine));
+        // (and what the twin's track left in the air, on that track)
+        if (info?.Twin is { } twinTrack && ReferenceEquals(track, twinTrack)) parked.AddRange(RaceTrackIsland.ByName(info.Island).TwinStranded ?? Array.Empty<(int, int)>());
         foreach (var (scene, actor) in parked) text.Append($"hide_actor={scene} {actor}\n");
         // the doors one of the island's files has lost, shut while it is shown (RaceTrackScenes Result.DoorsOff)
         // (and the ones that bring Twinsen out elsewhere in one file: nine numbers -- RACEMOD.CPP door_to=)

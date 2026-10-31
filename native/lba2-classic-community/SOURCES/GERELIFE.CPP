@@ -1269,7 +1269,7 @@ void DoLife(U8 numobj) {
                 // au cas ou l'on soit appelé pendant un eclair
                 Palette(PtrPal);
 
-                Dial(RaceMod_Dial(*(S16 *)PtrPrg), TRUE);   // (a race-track mod's story can say another line: RACEMOD.CPP)
+                if (!RaceMod_Hush(*(S16 *)PtrPrg)) Dial(RaceMod_Dial(*(S16 *)PtrPrg), TRUE);   // (a race-track mod's story can say another line, and no one stops a car in a race: RACEMOD.CPP)
             }
             PtrPrg += 2;
             break;
@@ -1286,7 +1286,7 @@ void DoLife(U8 numobj) {
                 // au cas ou l'on soit appelé pendant un eclair
                 Palette(PtrPal);
 
-                Dial(RaceMod_Dial(*(S16 *)PtrPrg), TRUE);   // (a race-track mod's story can say another line: RACEMOD.CPP)
+                if (!RaceMod_Hush(*(S16 *)PtrPrg)) Dial(RaceMod_Dial(*(S16 *)PtrPrg), TRUE);   // (a race-track mod's story can say another line, and no one stops a car in a race: RACEMOD.CPP)
             }
             PtrPrg += 2;
             break;
@@ -1302,7 +1302,7 @@ void DoLife(U8 numobj) {
             Palette(PtrPal);
 
             LIFETRACE_ACT("MESSAGE dial=%d", (int)*(S16 *)PtrPrg);
-            Dial(RaceMod_Dial(*(S16 *)PtrPrg), TRUE);   // (a race-track mod's story can say another line: RACEMOD.CPP)
+            if (!RaceMod_Hush(*(S16 *)PtrPrg)) Dial(RaceMod_Dial(*(S16 *)PtrPrg), TRUE);   // (a race-track mod's story can say another line, and no one stops a car in a race: RACEMOD.CPP)
             PtrPrg += 2;
             break;
 
@@ -1316,7 +1316,7 @@ void DoLife(U8 numobj) {
             // au cas ou l'on soit appelé pendant un eclair
             Palette(PtrPal);
 
-            Dial(RaceMod_Dial(*(S16 *)PtrPrg), TRUE);   // (a race-track mod's story can say another line: RACEMOD.CPP)
+            if (!RaceMod_Hush(*(S16 *)PtrPrg)) Dial(RaceMod_Dial(*(S16 *)PtrPrg), TRUE);   // (a race-track mod's story can say another line, and no one stops a car in a race: RACEMOD.CPP)
             PtrPrg += 2;
             break;
 
@@ -1331,7 +1331,7 @@ void DoLife(U8 numobj) {
             // au cas ou l'on soit appelé pendant un eclair
             Palette(PtrPal);
 
-            Dial(*(S16 *)PtrPrg, TRUE);
+            if (!RaceMod_Hush(*(S16 *)PtrPrg)) Dial(*(S16 *)PtrPrg, TRUE);
             ListObjet[NUM_PERSO].CoulObj = COUL_PERSO;
             PtrPrg += 2;
             break;
@@ -1832,7 +1832,7 @@ void DoLife(U8 numobj) {
                 // au cas ou l'on soit appelé pendant un eclair
                 Palette(PtrPal);
 
-                GameAskChoice(*(S16 *)PtrPrg);
+                if (!RaceMod_Hush(*(S16 *)PtrPrg)) GameAskChoice(*(S16 *)PtrPrg);
                 GameNbChoices = 0;
                 PtrPrg += 2;
                 RestoreTimer();
@@ -1852,7 +1852,7 @@ void DoLife(U8 numobj) {
                     // au cas ou l'on soit appelé pendant un eclair
                     Palette(PtrPal);
 
-                    GameAskChoice(*(S16 *)PtrPrg);
+                    if (!RaceMod_Hush(*(S16 *)PtrPrg)) GameAskChoice(*(S16 *)PtrPrg);
                     GameNbChoices = 0;
                     RestoreTimer();
                     AffScene(AFF_ALL_FLIP);
