@@ -68,11 +68,13 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
     };
 
     // The Elevator Platform: the monkey monster himself in his crate (the one to beat -- the user, 2026-10-31: "The elevator platform race in story line is to be
-    // against the actual monkey monster"), and the Franco policeman in his patrol car
+    // against the actual monkey monster"), and in Track select's race the Franco policeman in his patrol car and the monkey with the sword in his war cart: "The
+    // elevator track in story mode is just Twinsen and the monkey monster. In race mode we can add a couple of extra characters" (RaceTrackIsland.StoryHeadToHead)
     public static readonly List<RaceDriver> Elevator = new()
     {
         Of(RaceTrackCharacterCars.Crate, "The monkey monster", -2.5, 1.01, 1.0, main: true),
         Of(RaceTrackCharacterCars.Patrol, "The Franco policeman", 2.5, 0.98, 1.03),
+        Of(RaceTrackCharacterCars.WarCart, "The monkey with the sword", 0, 0.99, 1.02),
     };
 
     // Mosquibees Island: the Queen (the one to beat), and the monkey monster with the sword in his war cart

@@ -13645,16 +13645,15 @@ static void CarWays(S32 now) {
 }
 
 static const char *GuardName(const T_RACE_GUARD *g) { return g->Kind == 1 ? "pighead" : g->Kind == 2 ? "Stan" : g->Kind == 3 ? "torturer" : g->Kind == 4 ? "small monkey monster" : "soldier"; }
-// (a small monkey monster -- kind 4, the Elevator Platform's -- throws as a pighead does, its own crate, from the deck under the road. Not until the race is well away -- the
-// user, 2026-10-31: "We should wait until after the race is started so cars on the start line don't get hit" -- and never in a time trial, whose laps are against
-// the ghosts' and the best laps', all driven without him)
+// (a small monkey monster -- kind 4, the Elevator Platform's -- throws as a pighead does, its own crate, from the deck under the road, in time trials too. Not until the race
+// is well away -- the user, 2026-10-31: "We should wait until after the race is started so cars on the start line don't get hit")
 #define RACE_CRATE_OBJ 93                  // OBJFIX.HQR: the monkey monster's crate, as his animation throws it
 #define RACE_CRATE_AFTER_GO 3000           // ms after go before the first
 #define RACE_MONKEY_HAND 550               // how far over his feet it leaves his hand
 #define RACE_CRATE_SPEED 120               // a 20 ms frame's way, his animation's own (6,000 units a second)
 #define RACE_CRATE_MISS 700.0              // aimed this much either way of where the car will be at most: not every crate hits
 static int GuardThrows(const T_RACE_GUARD *g) { return g->Kind == 1 || g->Kind == 4; }
-static int GuardHolds(const T_RACE_GUARD *g, S32 now) { return g->Kind == 4 && (NoItems() || !RaceRunning() || (s_goAt && now < s_goAt + RACE_CRATE_AFTER_GO)); }
+static int GuardHolds(const T_RACE_GUARD *g, S32 now) { return g->Kind == 4 && (!RaceRunning() || (s_goAt && now < s_goAt + RACE_CRATE_AFTER_GO)); }
 
 // A car struck by one of them -- unless one of them has just struck it.
 static void GuardStrikes(int who, S32 now, const char *what, S32 hold) {

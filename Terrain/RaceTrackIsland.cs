@@ -141,7 +141,7 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Elevator = new("Elevator Platform", "ASCENCE.ILE", "ASCENCE.OBL", 10, 120, 120, 37,
         "RaceTrackPlan.Elevator.json", null)
     {
-        Title = "The Elevator Platform: the rollercoaster", Roster = RaceDriver.Elevator,
+        Title = "The Elevator Platform: the rollercoaster", Roster = RaceDriver.Elevator, StoryHeadToHead = true,
         // (the monkey monster: on the road himself now, in his crate. On foot he stood clear of it and his script walked him up to Twinsen's car wherever it was, the
         // pole's most of all, kept by the review of 2026-10-28: its points are all his scripts' it can see, RaceTrackScenes OffRoad)
         OldActors = new[] { (120, 2) },
@@ -167,6 +167,8 @@ internal sealed record RaceTrackIsland(
     // Who races there (RaceDriver: the user's line-up for the track), and on the twin's track (Citadel Island's town circuit). Null: the
     // retail track's racer, Baldino and the biker.
     public List<RaceDriver>? Roster { get; init; }
+    // In the story its race is Twinsen against the one to beat alone: the roster's others are for Track select's race
+    public bool StoryHeadToHead { get; init; }
     // The race's levels, easy, medium and hard (RaceDifficulty: the Temple of Bú's, 2026-10-17); null: none -- the race as it is, whatever
     // the car setup's difficulty.
     public RaceLevel[]? Levels { get; init; }

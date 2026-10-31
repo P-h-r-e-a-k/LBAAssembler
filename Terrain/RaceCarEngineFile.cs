@@ -497,6 +497,14 @@ internal static class RaceCarEngineFile
         File.WriteAllText(path, car.EngineFile(info, files, raised, story, guide, lanes));
     }
 
+    // The setup with only the one to beat raced (their cars out of sight: Parked)
+    private static RaceCarSetup HeadToHead(this RaceCarSetup car, RaceTrackService.TrackInfo info)
+    {
+        var alone = car.Clone();
+        alone.LeftOut.AddRange((RaceTrackService.Raced(info).Drivers ?? new()).Where(d => !d.Main).Select(d => d.Name));
+        return alone;
+    }
+
     // The game played as a game (RaceTrackService.CarFileWriter's story): every track of the folder in a car file of its own beside `path`,
     // and `path` the set (RACEMOD.CPP track=) -- the car's handling, which of them is raced where and when (the engine loads the one of the
     // island it enters: Citadel Island's storm track in the storm, its town circuit once the storm is over), and the story's tired line.
@@ -521,7 +529,7 @@ internal static class RaceCarEngineFile
             foreach (var (member, when) in members)
             {
                 var file = Path.Combine(folder, $"racecar_track{++n}.txt");
-                car.WriteEngineFile(file, member, story: true, prefix: $"track{n}_");
+                (island.StoryHeadToHead ? car.HeadToHead(member) : car).WriteEngineFile(file, member, story: true, prefix: $"track{n}_");
                 if (extra?.Invoke(member.Island) is { } lines) File.AppendAllLines(file, lines);
                 // (the scenes it is raced in: an island's own outside scenes, or the copies a track of its own races in -- with the scenes
                 // made bigger adds, when they follow on: Island CX Mk2's copy, 340, and its other cubes', 341-343, where the set had 340 alone
