@@ -147,6 +147,9 @@ internal static class RaceCarEngineFile
         }
         // Twinsen may get out of his car (Space, stopped) and explore while the race goes on (the Temple of Bú's secret party)
         if (track?.OnFoot == true) text.Append("on_foot=1\n");
+        if (car.HideRaceSky) text.Append("race_sky=0\n");
+        // how far the race sees, over the island's own
+        if (info is not null && RaceTrackIsland.All.FirstOrDefault(i => string.Equals(i.Name, info.Island, StringComparison.OrdinalIgnoreCase))?.View is { } view) text.Append($"view={view.Far} {view.Fog}\n");
         // the people in the cars' way, stepping out at them, striking and throwing (the Emperor's palace's)
         foreach (var guard in track?.Guards ?? new()) text.Append($"guard={string.Join(' ', guard)}\n");
         // (the small monkey monsters only throw: their reach and pace are no one's)

@@ -25,6 +25,7 @@ S32 RaceGame_OptionsRow(S32 num);
 void RaceGame_CameraChosen(S32 view);
 
 void RaceGame_SharedKeys(void);            // INPUT.CPP: two players on one keyboard
+S32 RaceGame_RaceSkyOff(void);              // RACEMOD.CPP: Options has the sky off in races
 void RaceGame_TestKeys(int down);           // (tests: player 2's keys as if down, -1 the keyboard's)
 
 #endif

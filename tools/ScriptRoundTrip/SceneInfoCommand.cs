@@ -44,6 +44,19 @@ internal static class SceneInfoCommand
         return found;
     }
 
+    // islandview <game folder>: how far each island is seen: the fog's start and the far clip of its cubes, each pair and how many cubes have it.
+    public static int IslandView(string[] args)
+    {
+        foreach (var file in Directory.GetFiles(args[1], "*.ILE").OrderBy(f => f))
+        {
+            var island = LBAAssembler.Terrain.IslandFile.Load(file);
+            var pairs = island.Cubes.Values.GroupBy(c => (Fog: c.Info[LBAAssembler.Terrain.IslandCube.InfoStartZFog], Far: c.Info[LBAAssembler.Terrain.IslandCube.InfoClipZFar], Sky: c.Info[LBAAssembler.Terrain.IslandCube.InfoSkyY]))
+                .Select(g => $"fog {g.Key.Fog} far {g.Key.Far} sky {g.Key.Sky} x{g.Count()}");
+            Console.WriteLine($"{Path.GetFileName(file),-16} {string.Join("; ", pairs)}");
+        }
+        return 0;
+    }
+
     // entityanims <game folder> <entity>: an entity's records, bytes and all (an animation's own actions: what it throws, and when).
     public static int EntityAnims(string[] args)
     {

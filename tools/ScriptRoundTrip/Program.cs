@@ -77,6 +77,7 @@ internal static class Program
             "loopanim" => LoopAnimCommand.Run(args),
             "sceneinfo" => SceneInfoCommand.Run(args),
             "racecheck" => SceneInfoCommand.Check(args),
+            "islandview" => SceneInfoCommand.IslandView(args),
             "entityrecords" => SceneInfoCommand.EntityAnims(args),
             "nuke" => NukeCommand.Run(args),
             "baldinocar" => RaceTrackCommand.BaldinoCar(args),

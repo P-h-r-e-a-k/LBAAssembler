@@ -28,7 +28,7 @@ internal static class PolarTerrain
     // the race's start, in cube (8, 10), looked out at the edge of the world (the user, 2026-10-27: "connects to another scene without a
     // water segment")
     public const int CubeX0 = 4, CubeZ0 = 3, CubesX = 7, CubesZ = 9;
-    public const int StartFog = 40000, FarClip = 70000;
+    public const int StartFog = 150000, FarClip = 200000;
     public const int Scale = PolarLayout.Scale, OffsetX = 7 * 64, OffsetZ = 6 * 64;
     // a cell of the layout's first cell of the island (it has Scale x Scale), and an island cell's of the layout
     public static int IslandX(int x) => x * Scale + OffsetX;
@@ -164,7 +164,8 @@ internal static class PolarTerrain
         for (var i = 6; i < 10; i++) info[i] = -1;
         // (seen further than Citadel's 14,500 and 60,000: on these long straights the haze began 28 cells ahead and the road faded out at the
         // top of the screen -- the user, 2026-10-30: "at the top of the frame there is no track drawn and everything else displays as far away
-        // and hazed out". The palace's distances: half a millisecond more a frame)
+        // and hazed out". The palace's distances first, half a millisecond more a frame; those are 3.3 s of road at 150 km/h, and it still came into view at the last
+        // moment, the user's frames, 2026-10-31. Now 9 s: the cubes drawn follow the far clip (RACEMOD.CPP RaceTerrainReach), the worst frame no slower, 29 ms)
         info[IslandCube.InfoStartZFog] = StartFog; info[IslandCube.InfoClipZFar] = FarClip;
         var island = IslandFile.Parse(NewFile(source, info, LandTemplate));
         log.Add($"{IleFile}: {CubesX * CubesZ} cubes (cubes {CubeX0}..{CubeX0 + CubesX - 1} x {CubeZ0}..{CubeZ0 + CubesZ - 1}), settings from CITABAU.ILE's sea cube (6, 8), sea in every patch");

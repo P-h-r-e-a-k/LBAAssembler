@@ -1,6 +1,7 @@
 #include "DEFINES.H"
 
 #include "../DIRECTORIES.H"
+void (*CubeViewHook)(S32 *clipFar, S32 *startFog) = NULL;   // (a race's own view of the island: RACEMOD.CPP view=)
 #include <SYSTEM/LOG.H>
 #include <time.h>
 
@@ -283,6 +284,8 @@ S32 LoadCube(S32 x, S32 y) {
     if (!StartZFog)
         StartZFog = 12000;
     //*********
+    if (CubeViewHook)
+        CubeViewHook(&ClipZFar, &StartZFog);
 
     //********* tests temporaires de protection
     if (!OffsetAniPoly3)

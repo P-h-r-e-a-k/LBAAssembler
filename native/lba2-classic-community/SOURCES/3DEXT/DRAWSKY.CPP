@@ -41,6 +41,10 @@ S32 Draw_Poly(STRUC_CLIPVERTEX src[], S32 type) {
 
 /*──────────────────────────────────────────────────────────────────────────*/
 
+extern S32 (*TerrainReachHook)(void);
+#define SKY_SEES_FAR 100000                // a far clip past this ...
+#define SKY_FOG_START 14500                // ... and the sky's fade from here: the game's own, Desert Island's and Citadel Island's
+
 void DrawSky(S32 y) {
     PickTerrainPath();
 
@@ -61,10 +65,19 @@ void DrawSky(S32 y) {
     src[3].V_MapU = 127 * 256 + 255;
     src[3].V_MapV = 0;
 
-    zz = -WORLD_SIZE;
-    for (i = 0; i < NB_POLYS_COTE * 3; i++, zz += WORLD_SIZE / NB_POLYS_COTE) {
-        xx = -WORLD_SIZE;
-        for (j = 0; j < NB_POLYS_COTE * 3; j++, xx += WORLD_SIZE / NB_POLYS_COTE) {
+    // (out as far as the land is drawn: three cubes across, as the game has it, stopped in plain sight past the haze of a race that sees further -- a band of cloud
+    // standing in the sky, Desert Island's start, 2026-10-31. And a sky's fade from where the game's would start: seen so far off, the plane's last stretch is
+    // squeezed up against the horizon, and the land's fade there is a few pixels, a hard edge. Only the fog's start: the far clip is the z-buffer's scale, which
+    // the land drawn before the sky is held to)
+    const S32 reach = TerrainReachHook ? TerrainReachHook() : 1;
+    const U32 across = NB_POLYS_COTE * (2 * reach + 1);
+    const S32 fadeSky = ClipZFar > SKY_SEES_FAR;
+    if (fadeSky) SetFog(SKY_FOG_START, ClipZFar);
+
+    zz = -WORLD_SIZE * reach;
+    for (i = 0; i < across; i++, zz += WORLD_SIZE / NB_POLYS_COTE) {
+        xx = -WORLD_SIZE * reach;
+        for (j = 0; j < across; j++, xx += WORLD_SIZE / NB_POLYS_COTE) {
             PathVertex(&src[0], xx, y, zz);
             PathVertex(&src[1], xx + WORLD_SIZE / NB_POLYS_COTE, y, zz);
             PathVertex(&src[2], xx + WORLD_SIZE / NB_POLYS_COTE, y, zz + WORLD_SIZE / NB_POLYS_COTE);
@@ -72,6 +85,7 @@ void DrawSky(S32 y) {
             Draw_Poly(&src[0], 24);
         }
     }
+    if (fadeSky) SetFog(StartZFog, ClipZFar);
 }
 
 void DrawOneSea(S32 y) // Si on souhaite que l'eau ne soit pas au niveau 0 :)

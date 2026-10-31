@@ -53,6 +53,8 @@ public sealed partial class RaceCarSetup
     // brighter island file, its light and its sky. Only the weather: the story stays where the game is. (A folder whose Citadel Island
     // has a track in each file races the one chosen in the race track window, in its own weather: RaceTrackService.FineWeather.)
     public bool FineWeather { get; set; } = true;
+    // The sky off for a race, from the count-down to the finish; on again as it ends and out of races (RACEMOD.CPP race_sky=).
+    public bool HideRaceSky { get; set; }
     // An opponent that has fallen behind pushes harder (up to CatchUpPercent more, 60 cells behind).
     public bool OpponentsFightBack { get; set; } = true;
     public const int CatchUpPercent = 8;

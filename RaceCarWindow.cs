@@ -37,6 +37,7 @@ internal sealed class RaceCarWindow : Window
     // the storm track's the rain's) -- the one of the island file open in the editor (`track`, RaceTrackService.RaceFor), or else the one
     // the race track window built it to race -- null for any other track, where the setup says
     private readonly bool? trackWeather;
+    private readonly CheckBox hideRaceSky = new() { Content = "Hide the sky during races (it comes back when the race ends)" };
     private readonly CheckBox startAtLine = new() { Content = "Start beside the car on the start/finish straight, with the editor's markings hidden" };
     // each track's best setup in place of the top speed, acceleration and steering sliders (RaceCarSetup.UseTrackSetups): what it gives
     // for the tracks told (TracksTold), the rows it overrides (greyed, their values kept), and a word on the gearbox tab
@@ -222,6 +223,10 @@ internal sealed class RaceCarWindow : Window
         fineWeather.Unchecked += (_, _) => { if (trackWeather is null) setup.FineWeather = false; };
         fineWeather.Margin = new Thickness(0, 4, 0, 0);
         play.Children.Add(fineWeather);
+        hideRaceSky.Checked += (_, _) => setup.HideRaceSky = true;
+        hideRaceSky.Unchecked += (_, _) => setup.HideRaceSky = false;
+        hideRaceSky.Margin = new Thickness(0, 4, 0, 0);
+        play.Children.Add(hideRaceSky);
 
         play.Children.Add(Section("On screen"));
         display.Checked += (_, _) => setup.ShowDisplay = true;
@@ -276,6 +281,7 @@ internal sealed class RaceCarWindow : Window
         ShowDifficulty();
         qualifying.IsChecked = setup.Qualifying;
         fineWeather.IsChecked = trackWeather ?? setup.FineWeather;
+        hideRaceSky.IsChecked = setup.HideRaceSky;
         startAtLine.IsChecked = setup.StartAtLine;
         driveAs.SelectedItem = driveAs.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is int g && g == setup.DriveAs) ?? driveAs.Items.OfType<ComboBoxItem>().FirstOrDefault();
         trackSetups.IsChecked = setup.UseTrackSetups;

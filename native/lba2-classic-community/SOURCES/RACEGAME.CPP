@@ -148,6 +148,7 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_SPECIAL 2320                  // + the special's index
 #define RG_ID_QUALIFY 2350                  // the qualifying page's rows (QualifyingPage)
 #define RG_ID_SKIP 2351
+#define RG_ID_UPDATES_PAGE 2352             // the Display page's row to the updates' own (DisplayPage)
 #define RG_ID_CONTROLS 2353                 // the Options menu's rows of the race game's (RaceGame_OptionsMenu)
 #define RG_ID_UPDATES 2354
 #define RG_ID_UPDATE_MODE 2355              // the Updates page's rows (UpdatesPage)
@@ -180,6 +181,7 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_LOCAL_SIDE 2396
 #define RG_ID_LOCAL_STACK 2397
 #define RG_ID_LOCAL_SCREENS 2398
+#define RG_ID_RACE_SKY 2399                 // the Display page's sky in races row
 #define RG_ID_SCREEN 2400                   // ... a screen, by its place in the list (ScreenPage)
 #define RG_SCREENS 6
 #define RG_OTHERS_SHOWN 5
@@ -471,6 +473,7 @@ static int s_minimap = 1;                   // the race's mini-map, bottom right
 // the race camera's view (RACEMOD.CPP camera=): 0 inside the car, 1 just behind it -- the camera as it always was -- or 2 further back,
 // the first time (2026-10-21: the user found the car too close, the road ahead hard to see past Twinsen's Halloween buggy)
 static int s_camera = 2;
+static int s_raceSky = 0;                   // the sky in races: 1 shown, 0 hidden (it comes back as the race ends)
 // a time trial's ghost car (RACEMOD.CPP ghost=, 2026-10-24), the one chosen last on the ghost page (GhostPage): 0 none, 1 the player's own
 // best lap, 3, 4, 5 the game's Easy, Medium, Hard ghost to beat, 7 its Extreme one (2 the fastest of all: no longer offered, the ghost page's first choice
 // instead)
@@ -521,6 +524,7 @@ static void ReadSettings(void) {
             else if (!strcmp(line, "difficulty")) value = &s_level;
             else if (!strcmp(line, "minimap")) value = &s_minimap;
             else if (!strcmp(line, "camera")) value = &s_camera;
+            else if (!strcmp(line, "race_sky")) value = &s_raceSky;
             else if (!strcmp(line, "ghost")) value = &s_ghost;
             else if (!strcmp(line, "trial_laps")) value = &s_trialLaps;
             else if (!strcmp(line, "updates")) {
@@ -639,7 +643,7 @@ static void WriteSettings(void) {
     fprintf(f, "controls_seen=%d\npowerups_seen=%d\nqualified=%d\nskip_qualifying=%d\ndifficulty=%d\n", s_controlsSeen, s_powerupsSeen, s_qualified,
             s_skipQualifying, s_level);
     fprintf(f, "updates=%s\nupdate_checked=%lld\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0], s_updateChecked);
-    fprintf(f, "minimap=%d\ncamera=%d\nghost=%d\ntrial_laps=%d\n", s_minimap, s_camera, s_ghost, s_trialLaps);
+    fprintf(f, "minimap=%d\ncamera=%d\nrace_sky=%d\nghost=%d\ntrial_laps=%d\n", s_minimap, s_camera, s_raceSky, s_ghost, s_trialLaps);
     if (s_ghostOther[0]) fprintf(f, "ghost_other=%s\n", s_ghostOther);
     if (s_gridCarName[0]) fprintf(f, "grid_car=%s\n", s_gridCarName);
     for (int sp = 0; sp < s_nbSp; sp++) if (s_beaten[sp] > 0) fprintf(f, "ghost_beaten=%d|%s\n", s_beaten[sp], s_sp[sp].Name);
@@ -959,6 +963,12 @@ void RaceGame_CameraChosen(S32 view) {
     WriteSettings();
 }
 
+S32 RaceGame_RaceSkyOff(void) {
+    if (!RaceGame_On()) return 0;
+    ReadSettings();
+    return !s_raceSky;
+}
+
 // RACEMOD.CPP DrawMinimap: the race's mini-map on (1) or off (0) as the player set it (Options); -1 when this isn't the race game.
 S32 RaceGame_Minimap(void) {
     if (!RaceGame_On()) return -1;
@@ -1177,6 +1187,8 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_UPDATES: Label(string, "Camera, window, updates"); return 1;     // (the row's width: "Window mode, mini-map, updates" ran over it)
     case RG_ID_CAMERA: Label(string, s_cameraLabel[s_camera >= 0 && s_camera <= 2 ? s_camera : 2]); return 1;
     case RG_ID_MINIMAP: Label(string, s_minimap ? "Mini-map: On" : "Mini-map: Off"); return 1;
+    case RG_ID_RACE_SKY: Label(string, s_raceSky ? "Sky in races: On" : "Sky in races: Off"); return 1;
+    case RG_ID_UPDATES_PAGE: Label(string, "Updates"); return 1;
     case RG_ID_UPDATE_MODE: Label(string, s_updateLabel[s_updates >= 0 && s_updates <= 2 ? s_updates : 0]); return 1;
     case RG_ID_UPDATE_NOW: Label(string, "Check for updates now"); return 1;
     case RG_ID_WINDOW: Label(string, DisplayFullScreen ? "Window mode: full screen (F11)" : "Window mode: window (F11)"); return 1;
@@ -2171,8 +2183,10 @@ void RaceGame_Qualified(S32 lap) {
 // mode does and the updater's last word under them.
 // (2026-10-21: and first the camera's view -- inside the car, just behind it, further back: Enter goes round them -- the page "Camera,
 // window, updates", its six rows a little higher)
-#define RG_UPD_ROWS 6
+#define RG_UPD_ROWS 3                       // (the updates' own page since the sky's row, 2026-10-31: the page before had six rows, and no room for a seventh)
+#define RG_DISPLAY_ROWS 6
 static U16 s_updMenu[4 + 2 * RG_UPD_ROWS];
+static U16 s_displayMenu[4 + 2 * RG_DISPLAY_ROWS];
 // (two lines each at most, and the updater's word two more: the page's text below the rows fits the 480-tall canvas)
 static const char *const s_updateHelp[3] = {
     // (a line each since the camera's row, 2026-10-21: the updater's word under it still fits)
@@ -2198,16 +2212,13 @@ static void UpdatesPage(void) {
     s_updMenu[2] = RG_UPD_Y;
     s_updMenu[3] = 0;
     SetRow(s_updMenu, 0, RG_ID_BACK);
-    SetRow(s_updMenu, 1, RG_ID_CAMERA);
-    SetRow(s_updMenu, 2, RG_ID_WINDOW);
-    SetRow(s_updMenu, 3, RG_ID_MINIMAP);
-    SetRow(s_updMenu, 4, RG_ID_UPDATE_MODE);
-    SetRow(s_updMenu, 5, RG_ID_UPDATE_NOW);
+    SetRow(s_updMenu, 1, RG_ID_UPDATE_MODE);
+    SetRow(s_updMenu, 2, RG_ID_UPDATE_NOW);
     char exe[ADELINE_MAX_PATH];
     GetResPath(exe, ADELINE_MAX_PATH, RG_UPDATER);
     for (;;) {
         const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
-        Page("Camera, window, mini-map, updates", RG_UPD_Y - (56 * RG_UPD_ROWS) / 2 - 46);
+        Page("Updates", RG_UPD_Y - (56 * RG_UPD_ROWS) / 2 - 46);
         const S32 textY = RG_UPD_Y + (56 * RG_UPD_ROWS) / 2 + 2 + oy;
         const int lines = Wrapped(cx - 280, textY, 560, RG_LINE, s_updateHelp[s_updates], LBAWHITE);
         // (the updater's last word -- or, while a check started here hasn't said anything yet, that it is checking)
@@ -2226,6 +2237,34 @@ static void UpdatesPage(void) {
         MenuRedrawHook = NULL;
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return; }
         for (S32 i = 0; i < RG_UPD_ROWS; i++) if (s_updMenu[4 + 2 * i + 1] == (U16)select) s_updMenu[0] = (U16)i;
+        if (select == RG_ID_UPDATE_MODE) {
+            s_updates = (s_updates + 1) % 3;
+            WriteSettings();
+            Log_Info("[racegame] updates: %s", s_updateKey[s_updates]);
+        } else if (select == RG_ID_UPDATE_NOW && UpdateSpawn(1)) {
+            s_updateStarted = (long long)time(NULL);
+        }
+    }
+}
+
+// Options, "Camera, window, updates": the camera's view, the window, the mini-map, the sky in races, and the updates' page
+static void DisplayPage(void) {
+    ReadSettings();
+    s_displayMenu[0] = 1;
+    s_displayMenu[1] = RG_DISPLAY_ROWS;
+    s_displayMenu[2] = RG_UPD_Y;
+    s_displayMenu[3] = 0;
+    SetRow(s_displayMenu, 0, RG_ID_BACK);
+    SetRow(s_displayMenu, 1, RG_ID_CAMERA);
+    SetRow(s_displayMenu, 2, RG_ID_WINDOW);
+    SetRow(s_displayMenu, 3, RG_ID_MINIMAP);
+    SetRow(s_displayMenu, 4, RG_ID_RACE_SKY);
+    SetRow(s_displayMenu, 5, RG_ID_UPDATES_PAGE);
+    for (;;) {
+        Page("Camera, window, updates", RG_UPD_Y - (56 * RG_DISPLAY_ROWS) / 2 - 46);
+        const S32 select = Menu(s_displayMenu);
+        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return; }
+        for (S32 i = 0; i < RG_DISPLAY_ROWS; i++) if (s_displayMenu[4 + 2 * i + 1] == (U16)select) s_displayMenu[0] = (U16)i;
         if (select == RG_ID_WINDOW) ToggleDisplayFullscreen();
         else if (select == RG_ID_CAMERA) {
             // (inside the car, just behind, further back, and round again; a race on takes it at once -- RACEMOD.CPP)
@@ -2237,13 +2276,11 @@ static void UpdatesPage(void) {
             s_minimap = !s_minimap;
             WriteSettings();
             Log_Info("[racegame] the mini-map: %s", s_minimap ? "on" : "off");
-        } else if (select == RG_ID_UPDATE_MODE) {
-            s_updates = (s_updates + 1) % 3;
+        } else if (select == RG_ID_RACE_SKY) {
+            s_raceSky = !s_raceSky;
             WriteSettings();
-            Log_Info("[racegame] updates: %s", s_updateKey[s_updates]);
-        } else if (select == RG_ID_UPDATE_NOW && UpdateSpawn(1)) {
-            s_updateStarted = (long long)time(NULL);
-        }
+            Log_Info("[racegame] the sky in races: %s", s_raceSky ? "on" : "off");
+        } else if (select == RG_ID_UPDATES_PAGE) UpdatesPage();
     }
 }
 
@@ -2263,7 +2300,7 @@ U16 *RaceGame_OptionsMenu(U16 *menu) {
 S32 RaceGame_OptionsRow(S32 num) {
     if (!RaceGame_On() || (num != RG_ID_CONTROLS && num != RG_ID_UPDATES)) return 0;
     if (num == RG_ID_UPDATES) {
-        UpdatesPage();
+        DisplayPage();
         return 1;
     }
     const T_RACE_PAGE *pg = TrackPage(s_raceSp >= 0 ? s_raceSp : s_lastSp >= 0 && s_lastSp < s_nbSp ? s_lastSp : 0);

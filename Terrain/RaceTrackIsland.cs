@@ -18,7 +18,7 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Desert = new("Desert island", "DESERT.ILE", "DESERT.OBL", 2, 55, 73, 29,
         "RaceTrackPlan.Desert.json", (7, 10))
     {
-        Crossing = CrossingStyle.Jump, Roster = RaceDriver.Desert,
+        Crossing = CrossingStyle.Jump, Roster = RaceDriver.Desert, View = (200000, 150000),
         OldActors = new[] { (RaceTrackScenes.RacerScene, 4) },
         // (the island's people and animals away from the road stay -- the camel: the user, 2026-10-27, "Let's make sure with Desert island
         // we're not removing any actors or zones we don't need the same as we checked with citadel")
@@ -167,6 +167,8 @@ internal sealed record RaceTrackIsland(
     // Who races there (RaceDriver: the user's line-up for the track), and on the twin's track (Citadel Island's town circuit). Null: the
     // retail track's racer, Baldino and the biker.
     public List<RaceDriver>? Roster { get; init; }
+    // How far a race sees on it (RACEMOD.CPP view=): the far clip and where the fog starts, over its cubes' own; null: theirs
+    public (int Far, int Fog)? View { get; init; }
     // In the story its race is Twinsen against the one to beat alone: the roster's others are for Track select's race
     public bool StoryHeadToHead { get; init; }
     // The race's levels, easy, medium and hard (RaceDifficulty: the Temple of Bú's, 2026-10-17); null: none -- the race as it is, whatever

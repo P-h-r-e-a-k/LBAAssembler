@@ -1176,7 +1176,18 @@ static int s_filePalette = -1, s_fileSky = -1;
 // sky=0: the island's sky layer (EXTFUNC.CPP DrawSkySeaZBuf, a flat sheet at the island's Sky_Y) not drawn in this race -- Wannies Island's
 // road climbs to 25,000, up through it (the user, 2026-10-26: "Let's remove the sky layer for Wannies Island")
 static int s_noSky = 0;
-int RaceMod_NoSky(void) { return RaceMod_Active() && s_noSky; }
+// The sky off for a race and back when it ends (the user, 2026-10-31: "in play mode in a race we have the option of the sky being off but then back when the race ends"):
+// race_sky=0 in the race file, or Options in the race game. From the grid's count-down to the finish, Twinsen at the wheel: a story's island out of its race has its sky.
+static int s_raceSkyOff = 0;
+static int CarRacing(void);
+int RaceMod_NoSky(void) {
+    if (!RaceMod_Active()) return 0;
+    if (s_noSky) return 1;
+    const int off = (s_raceSkyOff || RaceGame_RaceSkyOff()) && s_goAt && !s_place && CarRacing();
+    static int was = 0;
+    if (off != was) { was = off; Log_Info("[racemod] the sky %s", off ? "off for the race" : "back: the race is over"); }
+    return off;
+}
 // Vertical loops (loop=, RaceMod_Loop): a ring standing on the road, its foot at the lap's point there (X, Y, Z, cube-local) and its plane
 // along the lap's way (DirX, DirZ, a unit vector). R: from the ring's middle to its road surface. Shift: how far across the car comes
 // down from where it went in (+ to the right of the way, as the builder's lanes are: in on the left, out on the right, past the ring's
@@ -1514,7 +1525,19 @@ static int OnWheel(double wx, double wy, double wz) {
 extern void (*DecorPoseHook)(T_DECORS *list, S32 count);  // 3DEXT/DECORS.CPP
 // The cubes drawn round the camera's in a race, a second ring (TERRAIN.CPP): a straight runs on past the next cube.
 extern S32 (*TerrainReachHook)(void);
-static S32 RaceTerrainReach(void) { return RaceMod_Active() ? 2 : 1; }
+extern void (*CubeViewHook)(S32 *clipFar, S32 *startFog);
+// view=<far clip> <fog's start>: how far a race sees, over its island's own (Desert Island's 60,000 with the haze from 14,500: the road came into view at the last moment)
+static S32 s_viewFar = 0, s_viewFog = 0;
+static void RaceCubeView(S32 *clipFar, S32 *startFog) {
+    if (!RaceMod_Active() || s_viewFar <= 0) return;
+    *clipFar = s_viewFar; *startFog = s_viewFog;
+}
+// (the cubes round the camera's a race draws: as many as its far clip reaches, 2 at least. TERRAIN.CPP leaves out each one past the far clip or behind the camera)
+static S32 RaceTerrainReach(void) {
+    if (!RaceMod_Active()) return 1;
+    const S32 cubes = (ClipZFar + 32767) / 32768;
+    return cubes < 2 ? 2 : cubes;
+}
 static void RaceDecorPose(T_DECORS *list, S32 count);      // (the roulette wheel's decors and the lifts' pads: WheelDecors, LiftDecors)
 static void WheelDecors(T_DECORS *list, S32 count);
 // Gas monsters (gasmonster=<scene> <its actor> <its body> <x> <z> <bite x> <bite z> <bite y> <foot y> <first anim> [<scene> <actor>]...,
@@ -3830,6 +3853,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "music")) { snprintf(s_music, sizeof(s_music), "%s", v); s_musicSet = 0; }
         else if (!strcmp(key, "island_sky")) s_fileSky = atoi(v);
         else if (!strcmp(key, "sky")) s_noSky = !atoi(v);
+        else if (!strcmp(key, "race_sky")) s_raceSkyOff = !atoi(v);
         else if (!strcmp(key, "loop")) {
             T_RACE_LOOP *l = &s_loops[s_nbLoops];
             double dx, dz, gap, band = 1.3 * 512, camera = 1;
@@ -4044,6 +4068,7 @@ static void Load(const char *path, int carOnly = 0) {
             }
         }
         else if (!strcmp(key, "guard_size")) s_guardSize = atoi(v) > 0 ? atoi(v) / 100.0 : 1.0;
+        else if (!strcmp(key, "view")) { int far = 0, fog = 0; if (sscanf(v, "%d %d", &far, &fog) == 2) { s_viewFar = far; s_viewFog = fog; } }
         else if (!strcmp(key, "teleport")) {
             int x0, z0, x1, z1, y0, y1, x, y, z, beta, speed = -1, passage = 0;
             if (s_nbTeleports < RACE_MAX_TELEPORTS && sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d", &x0, &z0, &x1, &z1, &y0, &y1, &x, &y, &z, &beta, &speed, &passage) >= 10) {
@@ -4392,6 +4417,7 @@ static void Load(const char *path, int carOnly = 0) {
     // (a roulette wheel: its head and its ball posed as their cube's decors are drawn)
     DecorPoseHook = s_wheel.On || s_nbLifts ? RaceDecorPose : NULL;
     TerrainReachHook = RaceTerrainReach;
+    CubeViewHook = RaceCubeView;
     if (s_wheel.On) Log_Info("[racemod] roulette wheel at (%.0f,%.0f): %d turning pieces, its floor %.0f at the hole to %.0f at the wall, the drop onto place %d", s_wheel.X, s_wheel.Z,
                              s_wheel.NbParts, WheelFloorAt(s_wheel.Hole), WheelFloorAt(s_wheel.Rim), s_wheel.Landing);
     if (s_car.Gears < 1) s_car.Gears = 1;
@@ -5017,6 +5043,7 @@ static int StartScene(void) {
 //   2  RACE_CHASE_PAUSE_MS later, Twinsen says his;
 //   3  the helper turns to face him;
 //   4  and says its line, and the game variable is set: the car's key. Twinsen gets in when he likes and gives chase.
+static void PlayerOnSpot(const T_RACE_SPOT *spot);
 static void ChaseOpening(S32 now) {
     if (NewCube != -1 || (S32)NumCube != StartScene() || !s_nbSpots) return;
     T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -5088,6 +5115,9 @@ static void ChaseOpening(S32 now) {
     if (now < s_chaseAt) return;
     switch (s_chaseStep) {
     case 1: {
+        // (Twinsen in his car from the start, Track select's race: on the next spot. On pole with the one to beat's car the game pushed his out of it, over the start line
+        // before the race began, and again as that car drove off, and no checkpoint or finish of his counted: a test's frames, 2026-10-31. On foot, the story's, he's clear)
+        if (s_nbSpots > 1 && Comportement == C_BUGGY) PlayerOnSpot(&s_spots[1]);
         if (s_chaseDriver > 0 && s_chaseCarActor > 0) {
             // (outside his car: he says his line from where he stands, then walks to it -- step 11)
             NumObjDial = (U8)s_chaseDriver;
@@ -16577,7 +16607,9 @@ void RaceMod_Frame(void) {
 // The player's car stands on the grid until the count-down's GO (BUGGY.CPP RaceSpeed).
 S32 RaceMod_Held(void) {
     // (not a won dream's car over its jump: wake_flight=)
-    return RaceMod_Active() && (s_phase == PHASE_GRID || TimerRefHR < s_hitUntil || TimerRefHR < s_passageUntil || (s_sprint && s_place && !(s_endWon && s_wakeFlight > 0)));
+    // (nor before the one to beat is in his car, a chase's opening: the race starts then, and Polar's car stands 288 units from the line -- over it by then, its start
+    // was forgotten and no checkpoint or finish counted, seen in a test's frames, 2026-10-31)
+    return RaceMod_Active() && (s_phase == PHASE_GRID || (s_chaseOn && (s_chaseStep < 2 || s_chaseStep == 11) && (S32)NumCube == StartScene()) || TimerRefHR < s_hitUntil || TimerRefHR < s_passageUntil || (s_sprint && s_place && !(s_endWon && s_wakeFlight > 0)));
 }
 
 // Citadel Island's weather, for the scenes' scripts (2026-10-06): game variable RACE_WEATHER_VAR is 1 while its fine-weather file
@@ -18503,9 +18535,11 @@ static void ResetTrack(void) {
     s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_trialSpot = 0; s_trialStart.CubeX = -1;
     for (int r = 0; r < RACE_MAP_ROADS; r++) s_mapRoadN[r] = 0;
     s_noSky = 0;
+    s_raceSkyOff = 0;
     s_phase = PHASE_RACE; s_qualifying = 1; s_gridBack = 0; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
     s_online = s_netGo = 0;
+    s_viewFar = s_viewFog = 0;
     memset(s_netThrough, 0, sizeof(s_netThrough)); memset(s_netTouching, 0, sizeof(s_netTouching)); memset(s_netBumpAt, 0, sizeof(s_netBumpAt));
     s_netPushX = s_netPushZ = s_netShoveX = s_netShoveZ = 0; s_netBumps = 0;
     s_forgetLap = 1; s_nbHidden = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;

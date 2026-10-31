@@ -5511,6 +5511,16 @@ corners where that's quicker".
 The car's engine with the camera inside it is `RaceMod_EngineInside`: the game's 3D sound stops a sample whose place is off the screen, and the car's middle, under and behind the eye, always was.
 
 
+## Polar Island's road, 2026-10-31
+
+The road still came into view at the last moment after the first fix (5 by 5 cubes), because drawing more cubes didn't matter: the island's far clip, 70,000, was the limit, 3.3 s of road at 150 km/h. It is now 200,000 with the fog from 150,000 (`PolarTerrain`), and `RaceTerrainReach` draws as many cubes as the far clip reaches. On the test pilot, at 1800 x 480: 56 to 59 frames a second and the worst frame 29 ms at both 70,000 and 200,000.
+
+Desert Island had the same limit, its retail 60,000 with the fog from 14,500: `RaceTrackIsland.View` gives it 200,000 and 150,000 through the race file (`view=`, `CubeViewHook`), leaving the island's own file alone. `ScriptRoundTrip islandview` lists every island's distances.
+
+The sky is a plane three cubes across, and the haze used to hide its edge: `DrawSky` now goes as far as the land is drawn, and past a far clip of 100,000 fades from the game's 14,500 (only the fog's start: the far clip is the z-buffer's scale, and the sky is drawn after the land). That cleared Polar's. Desert's sky is low, 7,399 against 16,799, and from a race camera it stays a band over the horizon at any distance, 100,000 or 200,000. So the sky has an option: **Sky in races** (Options, Camera, window, updates; `race_sky=` in the player's settings, off by default) hides it from the count-down to the finish (`RaceMod_NoSky`), and it comes back as the race ends and out of a race. In LBA Assembler, the race car window's "Hide the sky during races" (`HideRaceSky`, `race_sky=0` in the race file).
+
+The frames for that showed "Cross the start line" all race. In Track select's race Twinsen and FunFrock's car were both on pole, so the game pushed Twinsen's out, over the start line before the race began and again as FunFrock drove off, and the race's start wiped the crossing: no checkpoint or finish of his counted. `ChaseOpening` now puts him on the next spot, and `RaceMod_Held` keeps him there until FunFrock's in his car.
+
 ## People on the road, 2026-10-31
 
 The user asked why actors were appearing on tracks. The review of 2026-10-27 and 28 put back everyone a build had removed who stood clear of the road (`KeepOffRoadActors`, 171 actors on seven islands), and `OffRoad` judges an actor by where it stands and the points its scripts send it to. It can't see `SET_DIR(FOLLOW, Twinsen)`, which has no point: the Elevator Platform's monkey monster stands a cell off the road and walks up to any car within 6,000, and stopped the car on pole for good. His line to it was hushed that day (`RaceMod_Hush`), which treated the symptom. Nothing caught it: the track sweeps start a time trial from its run-up, past him at speed, and read rescues and lap times, not what the car touched.
