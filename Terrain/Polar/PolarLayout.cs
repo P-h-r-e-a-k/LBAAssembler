@@ -31,7 +31,15 @@ internal sealed class PolarLayout
     {
         new(107, 0, 0, 0, "3rd scene"), new(106, -16, 0, 64, "2nd scene"), new(108, -64, 0, 0, "Before the rocky peak"),
         new(109, -6, 1, -64, "4th scene"), new(115, 9, 0, 91, "1st scene (the dock)"),
+        // Fortress Island's outside, ruined, and its docks (the user, 2026-11-01: "port both "100: Fortress Island, Docks" and "93: Fortress Island,
+        // outside fortress destroyed" from LBA1 to connect to our Polar island"), south of the dock. 93's north wall lies over the dock's south
+        // one, its breach -- 11 cells of it at ground level -- where the race's road starts, so the wall that stood across the road is gone; the
+        // ground's height the dock's. 100 from 93 as LBA1 has them (LinkStudy: 93 -> 100 (-57, 6, -2)).
+        new(FortressOutside, 19, -5, 141, "Fortress Island, outside"), new(FortressDocks, -38, 1, 139, "Fortress Island, docks"),
     };
+    public const int FortressOutside = 93, FortressDocks = 100;
+    // their ground's layer in their own grids
+    private static readonly Dictionary<int, int> FortressGround = new() { [FortressOutside] = 7, [FortressDocks] = 1 };
     public const int PeakScene = 110, PlateauScene = 111, GateScene = 108;
     // 111's grid from 110's, by their zones (LinkStudy: 110 <-> 111 (-21, 8, -9), both ways agree)
     public static readonly (int X, int Y, int Z) PlateauFromPeak = (-21, 8, -9);
@@ -94,6 +102,17 @@ internal sealed class PolarLayout
     public required HashSet<(int X, int Z)> Peak { get; init; }
     public List<string> Log { get; } = new();
 
+    // A fortress scene's brick's code: its ground as it is, and what stands on the ground an object. Their bricks say less than Polar Island's:
+    // a tree's top is the grass's code, a wall the rock's.
+    private static int FortressCode(Lba1Game game, int scene, SceneBrick c)
+    {
+        if (!FortressGround.TryGetValue(scene, out var ground) || c.Code == 0xF1) return c.Code;
+        var rock = c.Code == 0x00 && c.Y <= ground + 2 && BrickColour(game, c.Brick) is var (r, _, b) && r > b + 14;
+        // (grey on the ground is the fortress's paving: ground, as Polar Island's grey patches, 77; higher, a wall)
+        if (c.Code == 0x00) return rock || c.Y < ground ? c.Code : c.Y == ground ? 0x77 : 0xF0;
+        return c.Y > ground ? 0xF0 : c.Code;
+    }
+
     public static PolarLayout Build(Lba1Game game)
     {
         var placements = Zoned.ToList();
@@ -134,7 +153,9 @@ internal sealed class PolarLayout
             foreach (var c in Of(p.Scene))
             {
                 if (owner[(c.X + p.X, c.Z + p.Z)].Scene != p.Scene) continue;
-                cells.TryAdd((c.X + p.X, c.Y + p.Y, c.Z + p.Z), new Cell(p.Scene, c.Brick, c.Shape, c.Code, c.Block));
+                // (a fortress scene's pit, deeper than the island's ground is over the sea: as deep as it can be)
+                var layer = FortressGround.ContainsKey(p.Scene) ? Math.Max(c.Code == 0xF1 ? 0 : 1, c.Y + p.Y) : c.Y + p.Y;
+                cells.TryAdd((c.X + p.X, layer, c.Z + p.Z), new Cell(p.Scene, c.Brick, c.Shape, FortressCode(game, p.Scene, c), c.Block));
             }
 
         // Each scene shows only the part of the mountain inside its own grid -- 107 its south half, cut off at its north corner, and 108

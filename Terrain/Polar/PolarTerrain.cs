@@ -27,7 +27,8 @@ internal static class PolarTerrain
     // grid in cubes (7..8, 6..7). Round them a cube of sea each way, (4..10, 3..11): past the island's last cubes the engine drew no sea --
     // the race's start, in cube (8, 10), looked out at the edge of the world (the user, 2026-10-27: "connects to another scene without a
     // water segment")
-    public const int CubeX0 = 4, CubeZ0 = 3, CubesX = 7, CubesZ = 9;
+    // (two more rows south: Fortress Island's scenes, 2026-11-01)
+    public const int CubeX0 = 4, CubeZ0 = 3, CubesX = 7, CubesZ = 11;
     public const int StartFog = 150000, FarClip = 200000;
     public const int Scale = PolarLayout.Scale, OffsetX = 7 * 64, OffsetZ = 6 * 64;
     // a cell of the layout's first cell of the island (it has Scale x Scale), and an island cell's of the layout
@@ -59,6 +60,58 @@ internal static class PolarTerrain
     // track is the other side's.
     private static int Priority(Column? c, ISet<int> tracks) => c is not { } k || k.Water ? 2 : IsRock(k.Cell) ? 1 : tracks.Contains(k.Cell.Brick) ? 4 : 3;
     private static bool IsRock(PolarLayout.Cell c) => c.Code == 0x00 || (c.Code & 0xF0) == 0xA0;
+
+    // Polar Island's bricks fill the ground's pages nearly by themselves, and the fortress scenes' grass and paving come in many all but the same.
+    // Where the tiles won't fit, a fortress brick's face is drawn with the nearest face like it, the likeness loosened until they do; Polar
+    // Island's own stay as they are. The number merged.
+    private const int PagesLeft = 8 * 128 - 16 - 24;
+    private static int MergeTiles(Lba1Game game, PolarLayout layout, Dictionary<(int Gx, int Gz), (Kind Kind, object Key, int Up)> kinds, Dictionary<object, (int[] Tile, int W, int H)> wanted)
+    {
+        int Halves() => wanted.Values.Sum(v => PolarTextures.Pages.HalvesOf(v.H));
+        if (Halves() <= PagesLeft) return 0;
+        var polar = layout.Cells.Values.Where(c => c.Scene != PolarLayout.FortressOutside && c.Scene != PolarLayout.FortressDocks).Select(c => c.Brick).ToHashSet();
+        bool Own(object key) => polar.Contains(key is int b ? b : (((int, int, int))key).Item1);
+        // each tile as eight by eight averages of its colours
+        double[] Print(int[] tile, int w, int h)
+        {
+            const int N = 8;
+            var sum = new double[N * N * 3]; var n = new int[N * N];
+            for (var y = 0; y < h; y++)
+            for (var x = 0; x < w; x++)
+            {
+                var c = tile[y * w + x];
+                if (c < 0) c = 0;
+                var i = y * N / h * N + x * N / w;
+                for (var k = 0; k < 3; k++) sum[i * 3 + k] += game.Palette[c * 3 + k];
+                n[i]++;
+            }
+            for (var i = 0; i < N * N; i++) for (var k = 0; k < 3; k++) sum[i * 3 + k] /= Math.Max(1, n[i]);
+            return sum;
+        }
+        static double Apart(double[] a, double[] b) { var d = 0.0; for (var i = 0; i < a.Length; i++) d += Math.Abs(a[i] - b[i]); return d / a.Length; }
+        var prints = wanted.ToDictionary(w => w.Key, w => Print(w.Value.Tile, w.Value.W, w.Value.H));
+        var use = kinds.Values.GroupBy(k => k.Key).ToDictionary(g => g.Key, g => g.Count());
+        var map = new Dictionary<object, object>();
+        for (var like = 6.0; like <= 80 && Halves() > PagesLeft; like += 2)
+        {
+            // (the most used first: they stay, the few like them go)
+            var keys = wanted.Keys.OrderByDescending(k => Own(k) ? int.MaxValue : use.GetValueOrDefault(k)).ToList();
+            var kept = new List<object>();
+            foreach (var k in keys)
+            {
+                var shape = wanted[k];
+                var near = Own(k) ? null : kept.FirstOrDefault(o => wanted[o].W == shape.W && wanted[o].H == shape.H && Apart(prints[o], prints[k]) < like);
+                if (near is null) { kept.Add(k); continue; }
+                map[k] = near;
+                wanted.Remove(k);
+            }
+        }
+        if (map.Count == 0) return 0;
+        object Final(object k) { while (map.TryGetValue(k, out var to)) k = to; return k; }
+        foreach (var at in kinds.Keys.ToList())
+            if (map.ContainsKey(kinds[at].Key)) kinds[at] = (kinds[at].Kind, Final(kinds[at].Key), kinds[at].Up);
+        return map.Count;
+    }
 
     // What a cell's brick is, by its code and colour.
     public static bool IsGround(Lba1Game game, PolarLayout.Cell c)
@@ -289,6 +342,8 @@ internal static class PolarTerrain
             var under = b1 >= 0 ? Sprite(b1).Tile(face) : top;
             wanted[key] = (top.Concat(under).ToArray(), w, 2 * h);
         }
+        var merged = MergeTiles(game, layout, kinds, wanted);
+        if (merged > 0) log.Add($"the ground's textures: {merged} of the fortress scenes' faces drawn as one like them, for room");
         var pages = new PolarTextures.Pages(island.GroundTexture, colours, IslandFile.MaxGroundPages);
         pages.Reserve(PolarTextures.Pages.SlotsPerRow - 1);
         foreach (var (key, (tile, w, h)) in wanted.OrderByDescending(k => k.Value.H))

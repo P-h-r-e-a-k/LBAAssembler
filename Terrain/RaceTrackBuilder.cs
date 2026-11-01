@@ -303,9 +303,11 @@ internal sealed class RaceTrackPlan
     // polygon (cells from the origin)]: a car between those heights driven past the road's edge in it goes off it and falls to the road
     // under it -- the Temple of Bú's spiral drop, 2026-10-20.
     public double[][]? RailOpens { get; set; }
-    // Sea made land: each [x0, z0, x1, z1 (cells from the origin), height] -- Polar Island's dock, whose road ended over the water with the
-    // start line in sight of it (MakeLand)
+    // Sea made land: each [x0, z0, x1, z1 (cells from the origin), height, or none for the land's round it] -- an arm of the sea up to the road,
+    // Citadel 2's by the lighthouse (MakeLand)
     public double[][]? GroundFills { get; set; }
+    // Ground drawn as water inland, by the road, drawn as the land round it (ClearBlueGround)
+    public bool ClearBlueGround { get; set; }
     // Every decor held up by nothing goes, not only the ones the road's build left so: Polar Island's, made from LBA1's bricks with nothing
     // under them over the sea
     public bool ClearFloaters { get; set; }
@@ -1190,6 +1192,7 @@ internal static class RaceTrackBuilder
         GroundFills(island, field, plan, report);
         FillPockets(island, field, index, report);
         var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned);
+        if (plan.ClearBlueGround && options.Theme.Palette is { } groundPalette) ClearBlueGround(island, field, index, painted, groundPalette, report);
         report.LapLine = LapLine(roads, report);
         report.LapX = (double[])main.X.Clone(); report.LapZ = (double[])main.Z.Clone();
         report.LapY = (double[])main.H.Clone(); report.LapRaised = (bool[]?)main.Raised?.Clone(); report.LapArc = (bool[]?)main.Arc?.Clone();
@@ -4645,7 +4648,10 @@ internal static class RaceTrackBuilder
             var layers = new List<(double Dist, double Weight, double Target, int Order)>();
             foreach (var hit in hits)
             {
-                if (hit.Deck) continue;   // the deck (decor) carries the road here; the ground underneath is the other road's, untouched
+                // the deck (decor) carries the road here; the ground underneath is the other road's, untouched -- but for under its ends, where
+                // the ground road runs on under it at its height: the deck's edge stood over the road, the user, 2026-11-01, of the Desert's bridge,
+                // "This ridge still isn't fixed where the bridge meets the track"
+                if (hit.Deck && !NearDeckEnd(roads[hit.Road], hit.S)) continue;
                 if (hit.Void) continue;   // a gap jump's gap: the car flies over the ground as it is
                 var r = roads[hit.Road];
                 var verge = hit.Landing ? r.VergeHalf + LandingExtra : hit.Bridge ? r.CurbHalf + RampShoulder : r.VergeHalf;
@@ -4662,7 +4668,7 @@ internal static class RaceTrackBuilder
                 // curbs) keeps its height over anything
                 var rampTop = hit.Jump && hit.Bridge && d <= r.CurbHalf + RampShoulder;
                 var order = rampTop ? 1 : d <= r.CurbHalf ? 2 : 0;
-                layers.Add((d, w, hit.H + bank * Math.Clamp(hit.Lat, -r.CurbHalf - 1, r.CurbHalf + 1), order));
+                layers.Add((d, w, hit.H - (hit.Deck ? DeckEndUnder : 0) + bank * Math.Clamp(hit.Lat, -r.CurbHalf - 1, r.CurbHalf + 1), order));
             }
             if (layers.Count == 0) continue;
             // the nearest road on top: each road's shape is laid over the ground from the farthest to the nearest, so a road's own
@@ -4938,13 +4944,14 @@ internal static class RaceTrackBuilder
     {
         foreach (var f in plan.GroundFills ?? Array.Empty<double[]>())
         {
-            if (f.Length < 5) continue;
+            if (f.Length < 4) continue;
             var cells = new HashSet<(int, int)>();
             for (var gz = (int)f[1] + plan.OriginCellZ; gz < (int)f[3] + plan.OriginCellZ; gz++)
             for (var gx = (int)f[0] + plan.OriginCellX; gx < (int)f[2] + plan.OriginCellX; gx++)
                 if (gx >= 0 && gz >= 0 && gx < Grid && gz < Grid && island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is { HasPolygons: true } && !field.Drawn(gx + 0.5, gz + 0.5)) cells.Add((gx, gz));
-            MakeLand(island, field, cells, f[4]);
-            report.Notes.Add($"sea made land: {cells.Count} cells at height {f[4]:0}");
+            // (no height: as high as the land round it)
+            MakeLand(island, field, cells, f.Length > 4 ? f[4] : null);
+            report.Notes.Add($"sea made land: {cells.Count} cells");
         }
     }
 
@@ -4975,6 +4982,54 @@ internal static class RaceTrackBuilder
             report.Notes.Add($"a pocket of sea by the road made land: {patch.Count} cells round ({patch[0].X},{patch[0].Z})");
         }
         if (pockets > 0) report.Notes.Add($"{pockets} pocket(s) of sea by the road made land, {filled} cells");
+    }
+
+    // Land drawn with a water tile, inland: not the sea at all, so no fill finds it. Citadel 2 has jagged patches of it beside the road, and sea made
+    // land takes after the shore (the user, 2026-11-01: "This random water patch by the lighthouse on Citadel 2 still needs filling with terrain").
+    // Each cell near the road, not on the shore, is drawn as the nearest land in its cube that isn't.
+    private const double BlueNearRoad = 22;
+    private const int BlueLandReach = 24;
+
+    private static void ClearBlueGround(IslandFile island, Field field, RoadIndex index, HashSet<(int, int)> painted, byte[] palette, RaceTrackReport report)
+    {
+        var b = index.Bounds;
+        bool Blue(int gx, int gz, IslandPolygon p) =>
+            p.TexFlag != 0 && GroundColour(island, gx, gz, p, palette) is { } c && c.B > c.R + 20 && c.B > c.G + 4;
+        (IslandPolygon, IslandPolygon)? Cell(int gx, int gz)
+        {
+            if (gx < 0 || gz < 0 || gx >= Grid || gz >= Grid || island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } cube) return null;
+            return (new IslandPolygon(cube.Polygon(gx % IslandCube.Cells, gz % IslandCube.Cells, 0)), new IslandPolygon(cube.Polygon(gx % IslandCube.Cells, gz % IslandCube.Cells, 1)));
+        }
+        var blue = new HashSet<(int, int)>();
+        for (var gz = Math.Max(0, b.Z0 - 22); gz < Math.Min(Grid, b.Z1 + 22); gz++)
+        for (var gx = Math.Max(0, b.X0 - 22); gx < Math.Min(Grid, b.X1 + 22); gx++)
+        {
+            if (painted.Contains((gx, gz)) || Cell(gx, gz) is not { } c || !field.Drawn(gx + 0.5, gz + 0.5)) continue;
+            if ((Blue(gx, gz, c.Item1) || Blue(gx, gz, c.Item2)) && index.Near(gx + 0.5, gz + 0.5, BlueNearRoad).Count > 0) blue.Add((gx, gz));
+        }
+        var done = 0;
+        foreach (var (gx, gz) in blue)
+        {
+            // (the shore stays: a cell of the sea beside it)
+            if (NearSea(field, gx, gz, 1)) continue;
+            var cube = island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells)!;
+            (IslandPolygon, IslandPolygon)? land = null;
+            for (var r = 1; r <= BlueLandReach && land is null; r++)
+            for (var dz = -r; dz <= r && land is null; dz++)
+            for (var dx = -r; dx <= r && land is null; dx++)
+            {
+                if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                int x = gx + dx, z = gz + dz;
+                if (x < 0 || z < 0 || x / IslandCube.Cells != gx / IslandCube.Cells || z / IslandCube.Cells != gz / IslandCube.Cells) continue;
+                if (blue.Contains((x, z)) || painted.Contains((x, z)) || !field.Drawn(x + 0.5, z + 0.5) || Cell(x, z) is not { } c) continue;
+                if (c.Item1.CodeJeu == 0 && c.Item2.CodeJeu == 0 && !c.Item1.Col && !c.Item2.Col && !Blue(x, z, c.Item1) && !Blue(x, z, c.Item2)) land = c;
+            }
+            if (land is not { } l) continue;
+            cube.SetPolygon(gx % IslandCube.Cells, gz % IslandCube.Cells, 0, l.Item1.Raw);
+            cube.SetPolygon(gx % IslandCube.Cells, gz % IslandCube.Cells, 1, l.Item2.Raw);
+            done++;
+        }
+        if (done > 0) report.Notes.Add($"{done} cells of ground drawn as water beside the road drawn as the land round them");
     }
 
     // Undrawn cells made ground: at `height`, or as high as the land round them, drawn as the nearest land in their cube.
@@ -5163,8 +5218,11 @@ internal static class RaceTrackBuilder
             return (new IslandPolygon(cube.Polygon(gx % IslandCube.Cells, gz % IslandCube.Cells, 0)), new IslandPolygon(cube.Polygon(gx % IslandCube.Cells, gz % IslandCube.Cells, 1)));
         }
         static bool Land(IslandPolygon p) => p.CodeJeu == 0 && (p.TexFlag != 0 || p.PolyFlag != 0);
+        // (the Desert's own ground is the sand: copying the land near a cell brought its grey patches onto the verges, the user, 2026-11-01, "there's
+        // some grey sections on the start/finish line, these would be better as the base sand colour")
         (IslandPolygon A, IslandPolygon B)? LandNear(int gx, int gz)
         {
+            if (o.Island.IleFile == RaceTrackIsland.Desert.IleFile) return null;
             var cube = gx / IslandCube.Cells; var row = gz / IslandCube.Cells;
             for (var r = 0; r <= VergeLandReach; r++)
             for (var dz = -r; dz <= r; dz++)
@@ -5249,7 +5307,7 @@ internal static class RaceTrackBuilder
         return (best / 16, best % 16);
     }
 
-    private const double RaisedEndPaint = 2.5;
+    private const double RaisedEndPaint = 2.5, DeckEndUnder = 15;
 
     private static bool NearDeckEnd(TrackRoad r, double s)
     {

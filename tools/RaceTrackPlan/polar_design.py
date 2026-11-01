@@ -233,5 +233,4 @@ json.dump([[round(float(x), 2), round(float(z), 2)] for x, z in pts], open('rout
 print('wrote', out, 'flight bumps', crossBump, arcBump)
 
 # (2026-11-01: by hand in the plan after this script: the road's first 36 points level with the start line -- they climbed to 2,001, a ridge the
-# car sat on, the user: "we should lower this ridge to ground level" -- and "groundFills", the dock's end made land: "there's no visible water
-# at the start of the track, as in the first game this connected to a solid island")
+# car sat on, the user: "we should lower this ridge to ground level" -- the sea behind the start is Fortress Island now: PolarLayout)

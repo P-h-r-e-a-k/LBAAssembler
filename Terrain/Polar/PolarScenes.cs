@@ -28,7 +28,11 @@ internal static class PolarScenes
     {
         (6, 4), (7, 4), (8, 4), (6, 5), (7, 5), (8, 5), (5, 6), (6, 6), (7, 6), (8, 6), (5, 7), (6, 7), (7, 7), (8, 7),
         (7, 8), (8, 8), (7, 9), (8, 9), (7, 10), (8, 10), (9, 10),
+        // (Fortress Island's scenes, 2026-11-01: the last of them scene 254, and the rest MoreScenes)
+        (7, 11), (8, 11), (9, 11), (6, 11), (6, 12), (7, 12), (8, 12), (9, 12),
     };
+    // (past 254: no holomap arrow, the engine's CubeArrowFlags)
+    public static readonly int[] MoreScenes = { 291, 292, 293, 294, 295, 296, 297 };
     public const int LastPossibleScene = 254;
     // The island's scenes before 2026-10-06 were 229-240, and four of those, 229-232, are the Emerald Moon race track's: any of them still
     // on island 12 goes when the island is added or taken out, and its holomap record with it (OldScene).
@@ -40,7 +44,7 @@ internal static class PolarScenes
     public const int PositionsEntry = 12, PositionSize = 32, MaxObjectif = 50, FlagExterior = 4;
 
     // The holomap position records the island has: its place on the planet (12) and its scenes'.
-    public static IEnumerable<int> Records() => Enumerable.Range(FirstScene, Count).Select(n => MaxObjectif + n).Prepend(PolarIsland.IslandByte);
+    public static IEnumerable<int> Records() => Enumerable.Range(FirstScene, LastPossibleScene - FirstScene + 1).Select(n => MaxObjectif + n).Prepend(PolarIsland.IslandByte);
 
     // A record as the retail file has it: island 12's an empty label (no planet, no island), a scene's past the game's own empty.
     public static byte[] RetailRecord(int record)
@@ -60,10 +64,11 @@ internal static class PolarScenes
     private const int Near = 512, Far = 32768 - 1024, Edge = 512, Side = 32768, ZoneTop = 25000;
 
     // A cube's scene (-1: none)
-    public static int SceneOf(int cx, int cz) => Array.IndexOf(SceneCubes, (cx, cz)) is var i and >= 0 ? FirstScene + i : -1;
+    public static int SceneOf(int cx, int cz) => Array.IndexOf(SceneCubes, (cx, cz)) is var i and >= 0
+        ? (FirstScene + i <= LastPossibleScene ? FirstScene + i : MoreScenes[FirstScene + i - LastPossibleScene - 1]) : -1;
     public static int Count => SceneCubes.Length;
     // the scene numbers the island may have had (an earlier build's, at LBA1's size: 233-244) or has: each taken out with it
-    public static IEnumerable<int> AllScenes => Enumerable.Range(FirstScene, LastPossibleScene - FirstScene + 1);
+    public static IEnumerable<int> AllScenes => Enumerable.Range(FirstScene, LastPossibleScene - FirstScene + 1).Concat(MoreScenes);
 
     // An LBA1 position of a scene of the layout as a place on the island: its cube and the place in it (the island's ground is a layer
     // lower than LBA1's: a brick's top, (layer + 1) * 256 in LBA1, is the island's layer * 256 -- PolarTerrain.SurfaceOf).
@@ -192,9 +197,9 @@ internal static class PolarScenes
             positions[at + 31] = PolarIsland.IslandByte;
         }
         Record(PolarIsland.IslandByte, 0, 0, 0, PolarHolomap.LabelText, 0);
-        foreach (var (cx, cz) in cubes)
+        foreach (var (cx, cz) in cubes.Where(c => SceneOf(c.Cx, c.Cz) <= LastPossibleScene))
             Record(MaxObjectif + SceneOf(cx, cz), cx * Side + Side / 2, 0, cz * Side + Side / 2, -1, FlagExterior);
-        foreach (var n in AllScenes.Where(n => !cubes.Any(c => SceneOf(c.Cx, c.Cz) == n)))
+        foreach (var n in AllScenes.Where(n => n <= LastPossibleScene && !cubes.Any(c => SceneOf(c.Cx, c.Cz) == n)))
         {
             var at = (MaxObjectif + n) * PositionSize;
             if (positions[at + 31] == PolarIsland.IslandByte) RetailRecord(MaxObjectif + n).CopyTo(positions.AsSpan(at));

@@ -284,8 +284,9 @@ internal sealed record RaceTrackIsland(
     // settings), and stays when the track is put back.
     public static readonly RaceTrackIsland Polar = new("Polar Island", LBAAssembler.Terrain.Polar.PolarTerrain.IleFile, LBAAssembler.Terrain.Polar.PolarTerrain.OblFile,
         LBAAssembler.Terrain.Polar.PolarIsland.IslandByte, LBAAssembler.Terrain.Polar.PolarScenes.FirstScene,
-        LBAAssembler.Terrain.Polar.PolarScenes.FirstScene + LBAAssembler.Terrain.Polar.PolarScenes.Count - 1, LBAAssembler.Terrain.Polar.PolarIsland.PaletteEntry, "RaceTrackPlan.Polar.json", null)
+        LBAAssembler.Terrain.Polar.PolarScenes.LastPossibleScene, LBAAssembler.Terrain.Polar.PolarIsland.PaletteEntry, "RaceTrackPlan.Polar.json", null)
     {
+        MoreScenes = LBAAssembler.Terrain.Polar.PolarScenes.MoreScenes,
         Roster = RaceDriver.Polar, Dream = true, Title = "Polar Island: the dream race to Sendell (LBA1's island, added when missing)",
         // (the grobo with the digger's key, on the dock: Twinsen's car outside a race asks for it -- Polar.PolarGrobo)
         StartPerson = LBAAssembler.Terrain.Polar.PolarGrobo.Entity,
@@ -353,8 +354,8 @@ internal sealed record RaceTrackIsland(
     // Otringal's south-west islets, cube (6,9) (2026-10-08).
     public (int CubeX, int CubeZ, int Scene, int Template)[] NewCubes { get; init; } = Array.Empty<(int, int, int, int)>();
     // The island's outside scenes: FirstScene..LastScene, MoreScenes when it is made bigger, and its new cubes'.
-    public IEnumerable<int> Scenes => Enumerable.Range(FirstScene, LastScene - FirstScene + 1).Concat(Scale > 1 ? MoreScenes : Array.Empty<int>()).Concat(NewCubes.Select(c => c.Scene));
-    public bool HasScene(int scene) => scene >= FirstScene && scene <= LastScene || Scale > 1 && MoreScenes.Contains(scene) || NewCubes.Any(c => c.Scene == scene);
+    public IEnumerable<int> Scenes => Enumerable.Range(FirstScene, LastScene - FirstScene + 1).Concat(MoreScenes).Concat(NewCubes.Select(c => c.Scene));
+    public bool HasScene(int scene) => scene >= FirstScene && scene <= LastScene || MoreScenes.Contains(scene) || NewCubes.Any(c => c.Scene == scene);
     // The scenes the build adds, as (original, copy) pairs.
     public IEnumerable<(int From, int To)> AddedScenes =>
         CopiesScenes is { } many ? Enumerable.Range(0, many.Count).Select(k => (many.First + k, FirstScene + k))

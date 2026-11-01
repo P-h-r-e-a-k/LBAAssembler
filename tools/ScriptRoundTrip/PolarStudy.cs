@@ -630,6 +630,142 @@ internal static class PolarStudy
 
     // polarregion <LBA1 folder> <out.png> <scene|joined> <x0> <x1> <z0> <z1>: a region of one scene's own grid (its cells x, z), or of the
     // joined island (the layout's), drawn as LBA1 draws it.
+    // polarcols <LBA1> <scene>...: each scene's columns, a character a column by its top brick's code (~ water, . none), then the codes and heights
+    public static int Cols(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        foreach (var scene in args.Skip(2).Select(int.Parse))
+        {
+            var cells = PolarLayout.Bricks(game, scene);
+            var tops = cells.GroupBy(c => (c.X, c.Z)).ToDictionary(g => g.Key, g => g.OrderByDescending(c => c.Y).First());
+            Console.WriteLine($"scene {scene}: {cells.Count} bricks, x {cells.Min(c => c.X)}..{cells.Max(c => c.X)} z {cells.Min(c => c.Z)}..{cells.Max(c => c.Z)} y {cells.Min(c => c.Y)}..{cells.Max(c => c.Y)}");
+            foreach (var g in tops.Values.GroupBy(c => (c.Code, c.Y)).OrderByDescending(g => g.Count()).Take(14)) Console.WriteLine($"  code {g.Key.Code:X2} layer {g.Key.Y}: {g.Count()} columns");
+            for (var z = 0; z < 64; z++)
+            {
+                var line = new System.Text.StringBuilder();
+                for (var x = 0; x < 64; x++)
+                {
+                    if (!tops.TryGetValue((x, z), out var c)) { line.Append('.'); continue; }
+                    line.Append(c.Code == 0xF1 ? '~' : c.Y > 35 ? '#' : "0123456789abcdefghijklmnopqrstuvwxyz"[c.Y]);
+                }
+                Console.WriteLine($"{z,3} {line}");
+            }
+        }
+        return 0;
+    }
+
+    // waterpatches <ILE> [most]: patches of cells that are water by their game code, or undrawn, with their size, middle, height and how they are drawn
+    public static int WaterPatches(string[] args)
+    {
+        var island = IslandFile.Load(args[1]);
+        if (args.Length > 3 && args[2] == "near")
+        {
+            var pts = File.ReadAllLines(args[3]).Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Where(p => p.Length >= 3).Select(p => (X: double.Parse(p[0]) / 512, Z: double.Parse(p[1]) / 512)).ToList();
+            var reach = args.Length > 4 ? double.Parse(args[4]) : 12;
+            var found = new List<(int X, int Z, string How)>();
+            for (var gz = 0; gz < 1024; gz++)
+            for (var gx = 0; gx < 1024; gx++)
+            {
+                if (island.CubeAt(gx / 64, gz / 64) is not { HasPolygons: true } c) continue;
+                var a0 = new IslandPolygon(c.Polygon(gx % 64, gz % 64, 0)); var b0 = new IslandPolygon(c.Polygon(gx % 64, gz % 64, 1));
+                bool Un(IslandPolygon p) => p.TexFlag == 0 && p.PolyFlag == 0;
+                if (!(Un(a0) || Un(b0) || a0.CodeJeu == 1 || b0.CodeJeu == 1)) continue;
+                if (pts.Any(p => (p.X - gx) * (p.X - gx) + (p.Z - gz) * (p.Z - gz) < reach * reach)) found.Add((gx, gz, $"{(Un(a0) ? "a" : "")}{(Un(b0) ? "b" : "")} code {a0.CodeJeu},{b0.CodeJeu} h {IslandOps.Altitude(island, (gx + 0.5) * 512, (gz + 0.5) * 512):0}"));
+            }
+            if (args.Length > 8)
+            {
+                int x0 = int.Parse(args[5]), x1 = int.Parse(args[6]), z0 = int.Parse(args[7]), z1 = int.Parse(args[8]);
+                var pal = IslandMapRenderer.LoadPalette(Path.GetDirectoryName(Path.GetFullPath(args[1]))!, Path.GetFileNameWithoutExtension(args[1]));
+                for (var gz = z0; gz <= z1; gz++)
+                {
+                    var line = new System.Text.StringBuilder($"{gz,4} ");
+                    for (var gx = x0; gx <= x1; gx++)
+                    {
+                        var c = island.CubeAt(gx / 64, gz / 64);
+                        var a0 = c is { HasPolygons: true } ? new IslandPolygon(c.Polygon(gx % 64, gz % 64, 0)) : new IslandPolygon(0);
+                        var b0 = c is { HasPolygons: true } ? new IslandPolygon(c.Polygon(gx % 64, gz % 64, 1)) : new IslandPolygon(0);
+                        var ua = a0.TexFlag == 0 && a0.PolyFlag == 0; var ub = b0.TexFlag == 0 && b0.PolyFlag == 0;
+                        var road = pts.Any(p => (p.X - gx) * (p.X - gx) + (p.Z - gz) * (p.Z - gz) < 16);
+                        var blue = false;
+                        if (!ua && a0.TexFlag != 0 && c is not null)
+                        {
+                            var (page, def) = island.GroundTextureOf(a0);
+                            if (def * 6 + 6 <= c.TextureDefs.Length)
+                            {
+                                var pix = island.GroundPage(page);
+                                int u = (c.TextureDefs[def * 6] + c.TextureDefs[def * 6 + 2] + c.TextureDefs[def * 6 + 4]) / 3 >> 8, v = (c.TextureDefs[def * 6 + 1] + c.TextureDefs[def * 6 + 3] + c.TextureDefs[def * 6 + 5]) / 3 >> 8;
+                                var col = pix[(v & 255) * 256 + (u & 255)];
+                                blue = pal[col * 3 + 2] > pal[col * 3] + 30 && pal[col * 3 + 2] > pal[col * 3 + 1];
+                            }
+                        }
+                        line.Append(ua && ub ? ((IslandOps.Altitude(island, (gx + 0.5) * 512, (gz + 0.5) * 512) ?? 0) > 60 ? '^' : '~') : ua || ub ? '/' : blue ? 'B' : road ? '#' : '.');
+                    }
+                    Console.WriteLine(line);
+                }
+                return 0;
+            }
+            foreach (var g in found.GroupBy(f => (f.X / 8 * 8, f.Z / 8 * 8)).OrderBy(g => g.Key)) Console.WriteLine($"{g.Key}: {g.Count()} e.g. {g.First().X},{g.First().Z} {g.First().How}");
+            return 0;
+        }
+        var most = args.Length > 2 ? int.Parse(args[2]) : 2000;
+        const int grid = 1024;
+        var seen = new HashSet<(int, int)>();
+        bool Wet(int gx, int gz, out string how)
+        {
+            how = "";
+            if (gx < 0 || gz < 0 || gx >= grid || gz >= grid || island.CubeAt(gx / 64, gz / 64) is not { HasPolygons: true } c) return false;
+            var a = new IslandPolygon(c.Polygon(gx % 64, gz % 64, 0)); var b = new IslandPolygon(c.Polygon(gx % 64, gz % 64, 1));
+            var undrawn = a.TexFlag == 0 && a.PolyFlag == 0 && b.TexFlag == 0 && b.PolyFlag == 0;
+            var water = a.CodeJeu == 1 || b.CodeJeu == 1;
+            how = $"tex {a.TexFlag} poly {a.PolyFlag} code {a.CodeJeu} bank {a.Bank}";
+            return undrawn || water;
+        }
+        for (var z = 0; z < grid; z++)
+        for (var x = 0; x < grid; x++)
+        {
+            if (seen.Contains((x, z)) || !Wet(x, z, out var how)) continue;
+            var patch = new List<(int X, int Z)> { (x, z) }; seen.Add((x, z));
+            var open = false;
+            for (var i = 0; i < patch.Count; i++)
+            {
+                var (px, pz) = patch[i];
+                foreach (var (nx, nz) in new[] { (px + 1, pz), (px - 1, pz), (px, pz + 1), (px, pz - 1) })
+                {
+                    if (nx < 0 || nz < 0 || nx >= grid || nz >= grid || island.CubeAt(nx / 64, nz / 64) is not { HasPolygons: true }) { open = true; continue; }
+                    if (Wet(nx, nz, out _) && seen.Add((nx, nz))) patch.Add((nx, nz));
+                }
+            }
+            if (patch.Count > most) continue;
+            Console.WriteLine($"{patch.Count} cells{(open ? " (to the edge)" : "")} x {patch.Min(p => p.X)}..{patch.Max(p => p.X)} z {patch.Min(p => p.Z)}..{patch.Max(p => p.Z)} height {IslandOps.Altitude(island, (x + 0.5) * 512, (z + 0.5) * 512)}: {how}");
+        }
+        return 0;
+    }
+
+    // polarsheet <LBA1> <scene> <out.png>: its ground's commonest top bricks, each its sprite and its top tile
+    public static int TileDump(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var cells = PolarLayout.Bricks(game, int.Parse(args[2]));
+        var tops = cells.GroupBy(c => (c.X, c.Z)).Select(g => g.OrderByDescending(c => c.Y).First()).Where(c => c.Y <= 8).GroupBy(c => c.Brick).OrderByDescending(g => g.Count()).Take(32).ToList();
+        const int Cell = 110;
+        var w = Cell * 8; var h = Cell * 8; var rgb = new byte[w * h * 3];
+        void Put(int x, int y, int c) { if (x < 0 || y < 0 || x >= w || y >= h) return; for (var k = 0; k < 3; k++) rgb[(y * w + x) * 3 + k] = game.Palette[c * 3 + k]; }
+        for (var i = 0; i < tops.Count; i++)
+        {
+            var b = tops[i].Key;
+            var sprite = PolarTextures.Sprite.Decode(game.ReadBrick(b));
+            var cov = sprite.Coverage(PolarTextures.Face.Top);
+            Console.WriteLine($"{i}: brick {b} used {tops[i].Count()} code {tops[i].First().Code:X2} shape {tops[i].First().Shape} coverage {cov:0.00}");
+            var tile = sprite.Tile(PolarTextures.Face.Top);
+            int ox = i % 8 * Cell, oy = i / 8 * Cell;
+            for (var y = 0; y < PolarTerrain.Tile; y++) for (var x = 0; x < PolarTerrain.Tile; x++)
+                for (var d = 0; d < 9; d++) Put(ox + x * 3 + d % 3, oy + y * 3 + d / 3, tile[y * PolarTerrain.Tile + x]);
+        }
+        var bgra = new byte[w * h * 4]; for (var i = 0; i < w * h; i++) { bgra[i * 4] = rgb[i * 3 + 2]; bgra[i * 4 + 1] = rgb[i * 3 + 1]; bgra[i * 4 + 2] = rgb[i * 3]; bgra[i * 4 + 3] = 255; }
+        PngWriter.Write(args[3], bgra, w, h);
+        return 0;
+    }
+
     public static int Region(string[] args)
     {
         var game = new Lba1Game(args[1]);
