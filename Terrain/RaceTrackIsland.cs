@@ -53,7 +53,6 @@ internal sealed record RaceTrackIsland(
         // carport, where the island's own car stands: that one, a decor that can't be driven, goes from both files)
         ParkOwn = (540.5, 637.5, 1024, 1), ParkTwin = (544.125, 654.75, 1024, 0),
         DropDecors = new[] { (8, 10, 16448, 7552) }, OwnWeather = 0,
-        TwinStranded = new[] { (50, 4) },
         // (the lighthouse, scene 46, where the storm ends: the game's own Raph by its door and Twinsen and Zoe on its top, whom the Weather
         // Wizard's spell needs -- RaceTrackStory -- and the door's people and track points on the storm file's ground: the town circuit, in
         // the fine weather's file, cut the hill there by 2,000. Raph's fiancee went with the others, 2026-10-14 -- the user: "an NPC on the
@@ -61,6 +60,7 @@ internal sealed record RaceTrackIsland(
         // after Twinsen until the keeper is back -- after the car; no script of the scene's refers to her)
         StoryEntities = new[] { RaceTrackStory.LighthouseRaph, RaceTrackStory.CoupleOnTop },
         OwnGroundAt = new[] { (46, 481.5, 661.8, 10.0) },
+        MovedActors = new[] { "citabau 50 4 11264 8500 17152" },
         // (the museum (scene 48, its building's top taken for the storm track's deck): walls built up from what is left of it to the deck, and
         // a lift on the deck where its upper window was, down into the museum where the window took Twinsen -- scene 15, at the window's own
         // place: the user, 2026-10-27)
@@ -318,6 +318,14 @@ internal sealed record RaceTrackIsland(
     // the town circuit: the user, 2026-10-30, "this wheel floating in the air"
     public (int Scene, int Actor)[]? TwinStranded { get; init; }
 
+    // Actors of the island's scenes that have no place on its track, each [scene, actor]: Otringal's under the roulette wheel, showing through it for a frame as the
+    // scene comes up (the user, 2026-10-31: "The roulette wheel on Otringal has picked up an NPC, it looks like a vehicle")
+    public (int Scene, int Actor)[]? HiddenFromRaces { get; init; }
+
+    // Actors moved while one of the island's files is shown, each "<file> <scene> <actor> <x> <y> <z>" (RACEMOD.CPP actor_at=): Citadel 2's mill wheel, its place on the road,
+    // onto the rock raised beside it under the far half of the drawbridge (the user, 2026-10-31: "it doesn't have to be back in its original position")
+    public string[]? MovedActors { get; init; }
+
     // The island's own actors with no place in a race, each [scene, actor]: the build stops them where they are made, as a car waiting for a race is
     // (RaceTrackScenes.Hidden; hide_actor= can't: an actor that moves is back on the ground after its script runs). The retail track's racer, copied for the
     // race (RaceTrackScenes.RacerEntity) and left in scene 57 going round the retail lap by its own script. Among the opponents no one saw it; in a time
@@ -404,6 +412,7 @@ internal sealed record RaceTrackIsland(
         // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
         // a full review of all islands checking for actors that have been removed that we can restore")
         KeepOffRoadActors = true,
+        HiddenFromRaces = new[] { (89, 6) },
     };
 
     // Volcano Island (SOUSCELB.ILE, the game's island 11 under Celebration Island, scenes 130-132; cube (7,8) isn't there), from the user's
@@ -493,6 +502,9 @@ internal sealed record RaceTrackIsland(
     {
         Created = true, RaceFile = "cxtowermk2", CopiesScene = LBAAssembler.Terrain.ControlTower.CxTowerTrack.SourceScene, NoHolomap = true, RailHeld = true,
         Scale = 2, MoreScenes = LBAAssembler.Terrain.ControlTower.CxTowerTrack.Mk2MoreScenes,
+        // (the tower's walls are a few huge polygons, their fog worked out at their corners: walls shifting as a car comes up to them, the user, 2026-10-31. Twice CX's size,
+        // so the fog well past anything inside it)
+        View = (120000, 90000),
         Roster = RaceDriver.CxTower,
         HuntingGuns = (LBAAssembler.Terrain.ControlTower.CxTowerTrack.CannonEntity, LBAAssembler.Terrain.ControlTower.CxTowerTrack.Mk2CannonReach),
         Title = "Island CX Mk2: Island CX's track twice its size -- round the island under its cannons, down through a door and twice round the halls",

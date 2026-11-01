@@ -1058,6 +1058,11 @@ internal static class RaceTrackScenes
                 }
                 t.CarAt.Clear();
             }
+            // (the game's own Francos, who stood at those guns, kept with the others since 2026-10-28: four on the knoll for its two. The user,
+            // 2026-10-31, "We seem to have doubled from our two soldiers, to four here")
+            if (tracks.Any(t => t.Report.Gunners.Any(g => InCube(model, g.X, g.Z))))
+                for (var i = 1; i < model.Actors.Count; i++)
+                    if (model.Actors[i].Entity == FrancoEntity && model.Actors[i].Life.Length > 1) model.Actors[i] = Hidden(model.Actors[i]);
             // the machine guns on their knolls (Report.Gunners): the scene's own guns (Otringal's Francos' machine guns, entity 200) moved up onto
             // the knoll inside the corner, without their scripts -- the guns' life scripts put them on the scene's points beside the road
             // every frame -- each manned by a Franco (entity 201, sitting at it) whose bursts the race-track mode fires (gunner=; the user,

@@ -463,6 +463,27 @@ internal static partial class TempleHalloween
         return m;
     }
 
+    // The Desert's balloons, the ghost power-up's own there (the user, 2026-10-31: "a version of our ghost powerup ... coloured balloons like the ones from in the
+    // game that then fly off and distract other cars"): a bunch on strings, tied where the ghost's foot is, as tall as the ghost.
+    private static readonly Paint BalloonRed = new(new[] { 70, 71, 72, 73, 74 }), BalloonGreen = new(new[] { 135, 136, 137, 138, 139 }), BalloonYellow = new(new[] { 104, 105, 106, 107, 108 }),
+        BalloonOrange = new(new[] { 86, 87, 88, 89, 90 }), BalloonBlue = new(new[] { 198, 199, 200, 201, 202 }), BalloonString = new(new[] { 60, 61, 62 });
+
+    private static Model Balloons()
+    {
+        var m = new Model();
+        var bunch = new (Vector3 At, Paint Paint)[]
+        {
+            (new Vector3(-300, 1000, 110), BalloonRed), (new Vector3(290, 1080, -130), BalloonGreen), (new Vector3(10, 1420, 20), BalloonYellow),
+            (new Vector3(-50, 880, -300), BalloonOrange), (new Vector3(150, 860, 310), BalloonBlue),
+        };
+        foreach (var (at, paint) in bunch)
+        {
+            m.Lathe(new (double, double)[] { (0, -260), (90, -230), (190, -110), (210, 30), (170, 170), (90, 250), (0, 280) }, 8, _ => paint, false, false, at: at);
+            m.Bar(Vector3.Zero, at - new Vector3(0, 270, 0), 12, BalloonString);
+        }
+        return m;
+    }
+
     // A witch on her broomstick, flying +z: the stick under her, its bristles behind; her dark robe and cape, her green face and long nose,
     // her pointed hat; her eyes glowing.
     private static Model Witch()
@@ -599,7 +620,7 @@ internal static partial class TempleHalloween
     {
         var log = new List<string>();
         var path = Path.Combine(gameDirectory, "BODY.HQR");
-        if (report.Spooks.Count > 0 || report.Dives.Count > 0 || report.Scares.Count > 0 || report.Haunt)
+        if (report.Spooks.Count > 0 || report.Dives.Count > 0 || report.Scares.Count > 0 || report.Haunt || report.Balloons)
         {
             var racerHeader = Body.Read(HqrArchive.Open(path).Read(RaceTrackBaldinoCar.RacerBody), 2).Header;
             var bodies = File.ReadAllBytes(path);
@@ -648,6 +669,13 @@ internal static partial class TempleHalloween
                 var ghost = Moving("ghost");
                 bodies = HqrWriter.AppendEntry(bodies, HqrWriter.StoredEntry(Ghost().Write()));
                 report.HauntBodies = (ghost, index++);
+            }
+            if (report.Balloons)
+            {
+                bodies = HqrWriter.AppendEntry(bodies, HqrWriter.StoredEntry(Balloons().WriteMoving(racerHeader)));
+                bodies = HqrWriter.AppendEntry(bodies, HqrWriter.StoredEntry(Balloons().Write()));
+                report.HauntBodies = (index, index + 1);
+                index += 2;
             }
             File.WriteAllBytes(path, bodies);
             if (report.Spooks.Count > 0)

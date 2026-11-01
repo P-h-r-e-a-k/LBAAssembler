@@ -2198,7 +2198,7 @@ static void DrawPowerUps(const T_RACE_PAGE *pg, int first, S32 now) {
     char text[256];
     for (int k = first; k < pg->Count && k < first + RG_PAGE_ITEMS; k++, y += RG_ITEM_STEP) {
         RaceMod_DrawItem(pg, pg->Item[k], ix, y, RG_ICON, now);
-        Label(text, RaceMod_ItemName(pg->Item[k]));
+        Label(text, RaceMod_ItemName(pg, pg->Item[k]));
         TextAt(tx, y - 2, text, RG_ORANGE);
         Wrapped(tx, y - 2 + RG_ITEM_LINE, width, RG_ITEM_LINE, RaceMod_ItemHelp(pg, pg->Item[k]), LBAWHITE);
     }
@@ -3626,6 +3626,8 @@ static int TypePage(const char *what, const char *hint, char *value, int size, i
             else if (key == K_NUMPAD_0) c = '0';
             else if (key == SDL_SCANCODE_PERIOD || key == K_NUMPAD_PERIOD) c = '.';
             else if (address && key == SDL_SCANCODE_SEMICOLON) c = ':';
+            else if (address && key == SDL_SCANCODE_LEFTBRACKET) c = '[';
+            else if (address && key == SDL_SCANCODE_RIGHTBRACKET) c = ']';
             else if (key == K_MOINS) c = '-';
             else if (!address && key == K_SPACE && n) c = ' ';
             if ((mod & SDL_KMOD_CTRL) && key == K_V) {
@@ -3647,9 +3649,7 @@ static int TypePage(const char *what, const char *hint, char *value, int size, i
         DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
         Text(cx, y0 + 14, what, RG_ORANGE);
         Text(cx, y0 + 52, hint, LBAWHITE);
-        char shown[RG_TYPED_MAX + 2];
-        snprintf(shown, sizeof(shown), "%s%s", value, (TimerRefHR / 400) % 2 ? "" : "_");
-        Text(cx, y0 + 96, shown, LBAWHITE);
+        Text(cx, y0 + 96, value, LBAWHITE);
         Text(cx, y1 - 38, "Enter: go on    Esc: back", RG_GREY);
         Present();
         if (click == 2 || Escaped()) result = 0;
@@ -3661,22 +3661,33 @@ static int TypePage(const char *what, const char *hint, char *value, int size, i
     return result;
 }
 
-// A line the player must read: Enter or Esc goes on
+// What the player must read, a line or several (split by \n): Enter or Esc goes on
+#define RG_SAY_LINE 34
+#define RG_SAY_LINES 6
 static void SayPage(const char *what, const char *line) {
+    char copy[256];
+    snprintf(copy, sizeof(copy), "%s", line);
+    const char *lines[RG_SAY_LINES];
+    int nbLines = 0;
+    for (char *s = copy; s && nbLines < RG_SAY_LINES;) {
+        lines[nbLines++] = s;
+        if ((s = strchr(s, '\n')) != NULL) *s++ = 0;
+    }
     S32 padDir;
     PageLoopStart(&padDir);
     Log_Info("[racegame] online: %s", line);
     for (;;) {
         ManageTime();
         MyGetInput();
-        const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, x0 = cx - 290, x1 = cx + 290, y0 = 170 + oy, y1 = 330 + oy;
+        const S32 high = nbLines > 2 ? 130 + nbLines * RG_SAY_LINE : 160;
+        const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, x0 = cx - 290, x1 = cx + 290, y0 = 250 - high / 2 + oy, y1 = y0 + high;
         S32 mx, my;
         const int click = Clicked(&mx, &my);
         Page(NULL, 0);
         ShadeBoxBlk(x0, y0, x1, y1, RG_PAGE_SHADE);
         DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
         Text(cx, y0 + 14, what, RG_ORANGE);
-        Text(cx, y0 + 62, line, LBAWHITE);
+        for (int i = 0; i < nbLines; i++) Text(cx, y0 + (nbLines > 2 ? 54 : 62) + i * RG_SAY_LINE, lines[i], LBAWHITE);
         Text(cx, y1 - 38, "Enter: go on", RG_GREY);
         Present();
         if (click || Escaped() || Confirmed()) { WaitNoInput(); break; }
@@ -4021,7 +4032,7 @@ static int LobbyPage(void) {
     const int local = RaceNet_Local();
     const int host = RaceNet_IsHost() && !local, picks = RaceNet_IsHost();
     int result = -1, told = 0;
-    char said[220] = "", outside[64] = "", inside[64] = "", address[100] = "", failed[170] = "";
+    char said[220] = "", outside[64] = "", inside[64] = "", address[100] = "", failed[256] = "";
     Log_Info("[racegame] online: the lobby, %s", picks ? "hosting" : "joined");
     if (picks) RaceNet_RaceOver();
     while (result < 0) {
@@ -4044,6 +4055,7 @@ static int LobbyPage(void) {
         const int connected = RaceNet_Connected();
         Text(cx, y0 + 14, local || s_localGuest > 0 ? "Two players" : host ? "Hosting an online race" : connected ? "In an online race" : "Joining ...", RG_ORANGE);
         S32 y = y0 + 52;
+        const char *ipv6 = host ? RaceNet_Ipv6() : "";
         if (host) {
             if (!answered) Text(cx, y, "Asking the router to open the port ...", RG_GREY);
             else {
@@ -4053,6 +4065,11 @@ static int LobbyPage(void) {
                 Text(cx, y + RG_LOBBY_ROW, address, RG_GREY);
             }
             y += RG_LOBBY_ROW * 2;
+            if (ipv6[0]) {
+                snprintf(address, sizeof(address), "IPv6: %s", ipv6);
+                Text(cx, y, address, RG_GREY);
+                y += RG_LOBBY_ROW;
+            }
         }
         const int others = RaceNet_Others();
         char line[120];
@@ -4061,7 +4078,7 @@ static int LobbyPage(void) {
         snprintf(line, sizeof(line), "%s (you)", local ? "Player 1" : s_netName);
         Text(cx, y, line, LBAWHITE);
         y += RG_LOBBY_ROW;
-        const int rows = host ? RG_LOBBY_ROWS - 2 : RG_LOBBY_ROWS;
+        const int rows = host ? RG_LOBBY_ROWS - (ipv6[0] ? 3 : 2) : RG_LOBBY_ROWS;
         for (int i = 0; i < others && i < rows; i++) {
             T_RACENET_PLAYER who;
             if (!RaceNet_Other(i, &who)) continue;
@@ -4141,6 +4158,70 @@ static int LobbyPage(void) {
 }
 
 // Online race, on the main menu. Non-zero: a race is set up
+// Host a race or Join a race: everyone on the newest version, so no one is turned away at the door (the user, 2026-11-01: "let's force an update check, and trigger
+// the update automatically if a user wishes to continue"). The updater asked now, whatever the player's check setting; what it finds it downloads, this page waiting.
+// A new version: Enter closes the game and the updater, told so (Update\update_now.txt), installs it and starts the game again; Esc goes back. No answer -- no internet,
+// no updater, a check that hangs -- and the game goes on: the host still turns away another version. Not with the command harness's tests, as UpdateAtStart.
+#define RG_GATE_WAIT_MS 15000               // no word from the updater by then, on without it (a download goes on as long as it needs)
+static int s_updateQuit = 0;                // the player said yes: the menu closes the game
+static void GateFrame(const char *line, const char *keys) {
+    const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, x0 = cx - 290, x1 = cx + 290, y0 = 170 + oy, y1 = 330 + oy;
+    Page(NULL, 0);
+    ShadeBoxBlk(x0, y0, x1, y1, RG_PAGE_SHADE);
+    DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
+    Text(cx, y0 + 14, "Online race", RG_ORANGE);
+    Text(cx, y0 + 62, line, LBAWHITE);
+    Text(cx, y1 - 38, keys, RG_GREY);
+    Present();
+}
+static int UpdateGate(void) {
+    if ((Control_IsActive() && !getenv("LBA2_UPDATE_GATE")) || getenv("LBA2_PLAYER2")) return 1;
+    const long long started = (long long)time(NULL);
+    if (!UpdateSpawn(1)) return 1;
+    S32 padDir;
+    PageLoopStart(&padDir);
+    const S32 t0 = TimerRefHR;
+    char said[400];
+    int found = 0;
+    for (;;) {
+        ManageTime();
+        MyGetInput();
+        const long long at = UpdateStatus(said, sizeof(said));
+        const int fresh = at >= started;
+        if (fresh && !strncmp(said, "Version ", 8)) { found = 1; break; }
+        const int loading = fresh && !strncmp(said, "Downloading", 11);
+        if (fresh && !loading && strncmp(said, "Checking", 8)) break;
+        if (!loading && TimerRefHR - t0 > RG_GATE_WAIT_MS) { Log_Info("[racegame] online: no word from the updater: on without it"); break; }
+        GateFrame(loading ? "Downloading a new version ..." : "Checking for a new version ...", "Esc: back");
+        if (Escaped()) { WaitNoInput(); AsciiMode = FALSE; Page(NULL, 0); return 0; }
+    }
+    if (!found) { Log_Info("[racegame] online: the updater says: %s", said); AsciiMode = FALSE; Page(NULL, 0); return 1; }
+    Log_Info("[racegame] online: the updater says: %s", said);
+    char version[64] = "";
+    sscanf(said + 8, "%63[^:]", version);
+    char line[96];
+    snprintf(line, sizeof(line), "Version %s is ready", version);
+    int yes = 0;
+    for (;;) {
+        ManageTime();
+        MyGetInput();
+        S32 mx, my;
+        const int click = Clicked(&mx, &my);
+        GateFrame(line, "Enter: update now    Esc: back");
+        if (click == 2 || Escaped()) { WaitNoInput(); break; }
+        if (click == 1 || Confirmed()) { WaitNoInput(); yes = 1; break; }
+    }
+    AsciiMode = FALSE;
+    Page(NULL, 0);
+    if (!yes) return 0;
+    char now[ADELINE_MAX_PATH];
+    GetResPath(now, ADELINE_MAX_PATH, "Update\\update_now.txt");
+    if (FILE *f = fopen(now, "w")) { fputs("1\n", f); fclose(f); }
+    Log_Info("[racegame] online: updating now: the game closes");
+    s_updateQuit = 1;
+    return 0;
+}
+
 static int OnlinePage(void) {
     ReadOnline();
     // (a race has just ended: its players are still here)
@@ -4162,8 +4243,12 @@ static int OnlinePage(void) {
             continue;
         }
         if (select != RG_ID_ONLINE_HOST && select != RG_ID_ONLINE_JOIN) continue;
+        if (!UpdateGate()) {
+            if (s_updateQuit) return 0;
+            continue;
+        }
         if (!TypePage("Your name", "What the other players see", s_netName, sizeof(s_netName), 0)) continue;
-        if (select == RG_ID_ONLINE_HOST && !TypePage("A password for this race", "Friends type it to join. None: just press Enter", s_netPassword, sizeof(s_netPassword), 0, 1)) continue;
+        if (select == RG_ID_ONLINE_HOST && !TypePage("A password for this race", "Empty: no password", s_netPassword, sizeof(s_netPassword), 0, 1)) continue;
         if (select == RG_ID_ONLINE_JOIN && !TypePage("Join a race", "The address the host gave you", s_netAddress, sizeof(s_netAddress), 1)) continue;
         WriteOnline();
         IdentifyGame();
@@ -4286,6 +4371,7 @@ static S32 GameMenu(S32 inGame) {
             break;
         case RG_ID_ONLINE:
             if (OnlinePage()) return RACEGAME_START;
+            if (s_updateQuit) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; }
             break;
         case RG_ID_STORY:
             if (const S32 story = StoryMode()) return story;

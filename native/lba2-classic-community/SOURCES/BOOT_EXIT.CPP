@@ -62,9 +62,11 @@ void BootExit_NoteContext(const char *what) {
 void ErrorHQRGet(char *name, S32 index) {
     char errstring[256];
 
-    snprintf(errstring, sizeof(errstring), "HQR_Get(%s): buffer trop petit (index %d)", name, index);
+    // (HQR_Get: all but never the memory now. The file wouldn't open, or hasn't that entry: a player's game after an update stopped half way, 2026-11-01, was told
+    // it had run out of memory)
+    snprintf(errstring, sizeof(errstring), "%s: entry %d can't be read. The game's files are incomplete: please install it again.", name, index);
 
-    TheEnd(NOT_ENOUGH_MEM, errstring);
+    TheEnd(ERROR_NOT_FOUND_FILE, errstring);
 }
 
 /*══════════════════════════════════════════════════════════════════════════*/

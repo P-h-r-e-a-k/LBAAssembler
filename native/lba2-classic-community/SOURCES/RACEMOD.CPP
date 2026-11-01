@@ -844,7 +844,7 @@ static T_RACE_PENGUIN s_penguins[RACE_MAX_PENGUINS];
 // their numbers, and drawn from a mushroom only on a track with haunt=: HauntOthers, HauntTwinsen)
 enum { PU_FUEL, PU_PROTECT, PU_LIGHTNING, PU_PENGUIN, PU_SUPERJET, PU_OIL, PU_BALL_YELLOW, PU_BALL_GREEN, PU_BALL_RED, PU_BALL_FIRE, PU_FAKE, PU_GOLD, PU_GHOST, PU_COUNT };
 #define PU_ROLLED PU_GOLD
-static const char *const s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Nitro penguin!", "Super jet-pack!", "Oil slick!",
+static const char *s_puName[PU_COUNT] = {"Gazogem fuel!", "Protection spell!", "Lightning spell!", "Nitro penguin!", "Super jet-pack!", "Oil slick!",
                                                "Yellow magic ball!", "Green magic ball!", "Red magic ball!", "Fire ball!", "Fake mushroom!", "Golden Gazogem!", "Ghost!"};
 static const int s_puWeight[PU_COUNT] = {20, 12, 10, 16, 12, 16, 12, 10, 9, 5, 10, 0, 11};
 static const double s_puJet[PU_COUNT] = {0, 0, 0, 0, 2.0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -871,6 +871,9 @@ static int s_goldIcon = -1;                // gold_icon=: the golden Gazogem's m
 // haunt=<ghost> <icon> (the Temple of Bú's, 2026-10-17): the ghost power-up on this track -- the ghost BODY.HQR body drawn over each car it
 // haunts, and its icon for the item box (BODY.HQR, a fixed body); -1: no ghost (none drawn from a mushroom: RandomPowerUp)
 static int s_hauntBody = -1, s_hauntIcon = -1;
+// haunt_balloons=1 (the Desert's, 2026-11-01): the ghost is a bunch of balloons -- its name, no ghost's sound, balloons over the screen. Each car's own game has it, so it
+// crosses between games as the ghost does.
+static int s_hauntBalloons = 0;
 // The ghost comes along often on its own track (the user, 2026-10-20: "at least 2 instances of it over every 3 laps on average, this
 // includes both us picking it up, or having it used upon us"): once the race has gone RACE_GHOST_DUE laps (the opponents' planned lap) with
 // no ghost -- Twinsen's drawn from a mushroom, or another car's drawn to use on him -- the next item anyone draws is the ghost. With its
@@ -1156,7 +1159,8 @@ static int s_nbRaised = 0;
 static S32 s_raisedStep = RAISED_STEP;
 #define RAISED_LEVEL 1200                  // two parts of the road within this of each other's height are one level (a bend's segments)
 #define RAISED_PAD 96                      // the floor reaches this far past the road's edge
-#define RAISED_INSET 640                   // how far inside the edge the hero's middle is kept: a car's half width
+#define RAISED_INSET 850                   // how far inside the edge the hero's middle is kept: the wider cars' half width (640 let a pumpkin
+                                           // F1's wheels through the kerb: the user, 2026-10-31, "this seems to be very easy to do")
 #define RAISED_UNDER_GROUND 300            // what asks no further than this over the deck at an `under` stretch's mouth: on it (RaisedAltitude)
 #define RAISED_NOREF 0x7FFFFFFF
 static int s_rbX0 = 0, s_rbZ0 = 0, s_rbW = 0, s_rbH = 0;
@@ -1258,6 +1262,9 @@ typedef struct { double X, Y, Z, DirX, DirZ, Half; S32 Reach, On, Off, Phase, Pu
 extern T_FLOW *TabPartFlow;
 static T_RACE_JET s_jets[RACE_MAX_JETS];
 static int s_nbJets = 0;
+static S32 s_signalBody[2] = {-1, -1};     // jet_signals=: the signal on each jet's uprights, green lit and red lit, in BODY.HQR
+static int s_signalReady[2] = {0, 0};
+static T_OBJ_3D s_signalObj[2];
 // Tunnels over the raised road (tunnel=<from> <to> <roof>: its first and last point, its roof's height over the deck; Otringal's over the
 // bridge to its square island, 2026-10-08): the camera that follows the car rides the road behind it under the roof from RACE_TUNNEL_LEAD
 // points before the tunnel's mouth to its end (TunnelCamera) -- out at the arm's usual length the eye stood over the roof, which hid the
@@ -1952,6 +1959,7 @@ static T_RACE_FROG s_frog;
 #define RACE_GUARD_DOWN 1700               // ... and he is knocked back this long
 #define RACE_THROWN_NEAR 2500.0            // a pighead throws at a car between this near ...
 #define RACE_THROWN_FAR 11000.0            // ... and this far
+#define RACE_THROWN_DROP 7000.0            // (how far below him a thrower on a mound still throws at a car)
 #define RACE_THROWN_EVERY 2400             // ms between his throws, at the least (and up to half again)
 #define RACE_THROWN_RELEASE 380            // ms into his throw the thing leaves his hand ...
 #define RACE_THROWN_END 950                // ... and the throw is over
@@ -2580,6 +2588,9 @@ static int RaisedAlong(int seg, double t, double distance, double *x, double *y,
 // level road, and looked steeply down to see the car)
 static double s_railSight = 0, s_railCeil = -1, s_railSightKept = 0;
 static double s_tunnelScale = 1;
+static int s_crabModel = -1;               // guard_crab=: the crab Felix fishes up, in OBJFIX.HQR
+#define RACE_MAX_DRIVER_BODIES 12
+static int s_driverBody[RACE_MAX_DRIVER_BODIES], s_nbDriverBodies = 0;
 // (TunnelCamera's: the eye under the roof of the tunnel it is in itself -- its own point's, InTunnel -- rather than the car's, s_railCeil;
 // and s_railTop, a height it is kept under, the car's tunnel's ceiling)
 static int s_railEyeTunnel = 0;
@@ -3612,7 +3623,7 @@ static void RaceSoundsRead(void) {
 
 // Item `pu`'s sound of `kind` (0 the pick-up, 1 the use): its own, or the one it takes (s_puSoundAlt); NULL none
 static const T_RACE_SOUND *RaceSound(int kind, int pu) {
-    if (pu < 0 || pu >= PU_COUNT) return NULL;
+    if (pu < 0 || pu >= PU_COUNT || (pu == PU_GHOST && s_hauntBalloons)) return NULL;
     RaceSoundsRead();
     if (s_puSound[kind][pu].Data) return &s_puSound[kind][pu];
     const int alt = s_puSoundAlt[pu];
@@ -3980,6 +3991,10 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "haunt")) {
             if (sscanf(v, "%d %d", &s_hauntBody, &s_hauntIcon) != 2) s_hauntBody = s_hauntIcon = -1;
         }
+        else if (!strcmp(key, "haunt_balloons")) {
+            s_hauntBalloons = atoi(v) != 0;
+            s_puName[PU_GHOST] = s_hauntBalloons ? "Balloons!" : "Ghost!";
+        }
         else if (!strcmp(key, "web")) {
             int f[12];
             if (s_nbWebs < RACE_MAX_WEBS && sscanf(v, "%d %d %d %d %d %d %d %d %d %d %d %d", &f[0], &f[1], &f[2], &f[3], &f[4], &f[5], &f[6], &f[7], &f[8], &f[9],
@@ -4178,6 +4193,8 @@ static void Load(const char *path, int carOnly = 0) {
             }
         }
         else if (!strcmp(key, "tunnel_scale")) s_tunnelScale = atof(v) > 0 ? atof(v) : 1;
+        else if (!strcmp(key, "guard_crab")) s_crabModel = atoi(v);
+        else if (!strcmp(key, "race_driver_body")) { if (s_nbDriverBodies < RACE_MAX_DRIVER_BODIES) s_driverBody[s_nbDriverBodies++] = atoi(v); }
         else if (!strcmp(key, "tunnel")) {
             T_RACE_TUNNEL *t = &s_tunnels[s_nbTunnels];
             int from, to, roof, ceiling;
@@ -4186,6 +4203,7 @@ static void Load(const char *path, int carOnly = 0) {
                 t->From = from; t->To = to; t->Roof = roof; t->Ceiling = got >= 4 ? ceiling : RACE_TUNNEL_NO_CEILING; s_nbTunnels++;
             }
         }
+        else if (!strcmp(key, "jet_signals")) sscanf(v, "%d %d", &s_signalBody[0], &s_signalBody[1]);
         else if (!strcmp(key, "jet") && s_nbJets < RACE_MAX_JETS) {
             T_RACE_JET *p = &s_jets[s_nbJets];
             int x, y, z, a, b, c, d, e, f, g, h = RACE_STEAM_HIGH;
@@ -7380,11 +7398,13 @@ static void DrawMarshal(void) {
 // Drawn into the background (EXTFUNC.CPP AffGrilleExt, after the ground and the decor): the frog, posed, its depth written.
 static void DrawSpooks(void);
 static void DrawWebs(void);
+static void DrawJetSignals(void);
 
 void RaceMod_DrawBackdrop(void) {
     if (!RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return;
     DrawSpooks();
     if (s_nbWebs) DrawWebs();
+    if (s_nbJets && s_signalBody[0] >= 0) DrawJetSignals();
     DrawMarshal();
     if (!s_frog.On) return;
     T_OBJ_3D *o = &s_frog.Obj;
@@ -7544,6 +7564,35 @@ static void BackdropBody(T_OBJ_3D *obj, int *ready, int body, double x, double y
     CarPose(obj, beta & 4095, phi, psi);
     memset(obj->CurrentFrame, 0, sizeof(obj->CurrentFrame));
     ObjectDisplay(obj);
+}
+
+// The signals over the steam jets (jet_signals=): on each upright, a little over its nozzle, turned along the road; red on the side the jet blows from on
+// this lap, green on the other. The jet's own side, the one a burst began on, so a signal is never wrong (Jets).
+#define RACE_SIGNAL_OUT 0                  // the signal's middle out from the jet's mouth: its back against the upright
+#define RACE_SIGNAL_OVER 350               // its foot over the jet's height
+static void DrawJetSignals(void) {
+    const U32 clut = SceneClut();
+    int drawn = 0;
+    for (int i = 0; i < s_nbJets; i++) {
+        const T_RACE_JET *j = &s_jets[i];
+        if (j->Half <= 0) continue;
+        const int side = j->Stage ? j->Side : !(s_laps & 1) ? -1 : 1;
+        const double leftX = j->DirZ, leftZ = -j->DirX;
+        const S32 beta = TurnOf(atan2(j->DirX, j->DirZ));
+        for (int s = -1; s <= 1; s += 2) {
+            const double x = j->X + leftX * s * (j->Half + RACE_SIGNAL_OUT), y = j->Y + j->High + RACE_SIGNAL_OVER, z = j->Z + leftZ * s * (j->Half + RACE_SIGNAL_OUT);
+            LongWorldRotatePoint((S32)floor(x - CurrentCubeX * 32768.0 + 0.5), (S32)floor(y + 0.5), (S32)floor(z - CurrentCubeY * 32768.0 + 0.5));
+            const S32 zr = CameraZr - Z0;
+            if (zr < -4000 || zr > ClipZFar + 4000) continue;
+            SetCLUT(FogClut(zr));
+            Switch_Fillers(FILL_POLY_FOG_ZBUFFER);
+            UnsetClip();
+            const int danger = s == side;
+            BackdropBody(&s_signalObj[danger], &s_signalReady[danger], s_signalBody[danger], x, y, z, beta, 0, 0);
+            drawn++;
+        }
+    }
+    if (drawn) SetCLUT(clut);
 }
 
 // The giant webs (web=), where the camera is, as the frog is drawn -- the fog by the web's middle's distance, the depth written: each part
@@ -11040,9 +11089,14 @@ static int CarRacing(void) { return RaceMod_Active() && s_car.HasLine && Comport
 // its Hidden template's flags -- are left alone. Each one is said once a scene, "[roadwatch]": the sweep reads it.
 #define RACE_ROAD_KEEP_REACH (4.0 * 512.0)
 #define RACE_ROAD_KEEP_HIGH 2500
+#define RACE_ROAD_KEEP_BURIED 400
 #define RACE_BUILD_ACTOR 0x1A1000
 static int IsRaceCar(S32 numobj);
 static struct { S32 X, Z; U8 Known, Said; S32 Hidden; } s_roadKeep[MAX_OBJETS];
+static int RacesToday(const T_OBJET *t) {
+    for (int i = 0; i < s_nbDriverBodies; i++) if (t->Obj.Body.Num == s_driverBody[i]) return 1;
+    return 0;
+}
 static int s_roadKeepScene = -1;
 
 static int OnTheRoad(const T_RACE_OPPONENT *o, const T_OBJET *t) {
@@ -11069,6 +11123,20 @@ static void RoadKeep(void) {
         }
         if (s_roadKeep[a].Hidden) { t->Flags = (t->Flags | INVISIBLE) & ~(U32)CHECK_OBJ_COL; continue; }
         if ((t->Flags & RACE_BUILD_ACTOR) == RACE_BUILD_ACTOR || IsRaceCar(a) || (t->Flags & INVISIBLE) || (t->WorkFlags & OBJ_DEAD) || t->Obj.Y < -5000 || t->Obj.Body.Num < 0) continue;
+        if (!s_trial && RacesToday(t)) {
+            Log_Info("[racemod] actor %d of scene %d is racing today: out of sight", (int)a, (int)NumCube);
+            s_roadKeep[a].Hidden = (int)(t->Flags & (INVISIBLE | CHECK_OBJ_COL)) + 1;
+            t->Flags = (t->Flags | INVISIBLE) & ~(U32)CHECK_OBJ_COL;
+            continue;
+        }
+        // (a person the road's shaping left inside the ground, the user's woman in a wall on Citadel 2, 2026-10-31: out of sight, said)
+        if (CalculAltitudeTerrain(t->Obj.X, t->Obj.Z, 0) > t->Obj.Y + RACE_ROAD_KEEP_BURIED) {
+            Log_Info("[roadwatch] in the ground: actor %d of scene %d, entity %d, body %d, at %d,%d,%d: out of sight", (int)a, (int)NumCube, (int)t->IndexFile3D, (int)t->Obj.Body.Num,
+                     (int)t->Obj.X, (int)t->Obj.Y, (int)t->Obj.Z);
+            s_roadKeep[a].Hidden = (int)(t->Flags & (INVISIBLE | CHECK_OBJ_COL)) + 1;
+            t->Flags = (t->Flags | INVISIBLE) & ~(U32)CHECK_OBJ_COL;
+            continue;
+        }
         if (s_roadKeep[a].Known && s_roadKeep[a].X == t->Obj.X && s_roadKeep[a].Z == t->Obj.Z) continue;
         if (!OnTheRoad(o, t)) { s_roadKeep[a].Known = 1; s_roadKeep[a].X = t->Obj.X; s_roadKeep[a].Z = t->Obj.Z; continue; }
         if (!s_roadKeep[a].Said) {
@@ -12290,7 +12358,7 @@ S32 RaceMod_SilentThrow(S32 numobj) {
         if (s_flyers[i].Scene == (S32)NumCube && s_flyers[i].Actor == numobj) return 1;
     // (a small monkey monster: his throw's own crate left out -- GuardThrow flies it at a car)
     for (int i = 0; i < s_nbGuards; i++)
-        if (s_guards[i].Kind == 4)
+        if (s_guards[i].Kind >= 4)
             for (int k = 0; k < s_guards[i].NbSeen; k++)
                 if (s_guards[i].SeenScene[k] == (S32)NumCube && s_guards[i].SeenActor[k] == numobj) return 1;
     return 0;
@@ -13664,7 +13732,7 @@ static void Halloween(S32 now, int driving, S32 dt) {
 static void HalloweenReset(void) {
     s_nbDives = 0; s_nbScares = 0; s_nbWebs = 0; s_webScreenAt = s_webScreenUntil = 0;
     s_diving.On = 0; s_diving.Ready = 0; s_diving.Body = -1; s_diving.Hint = -1;
-    s_hauntBody = s_hauntIcon = -1;
+    s_hauntBody = s_hauntIcon = -1; s_hauntBalloons = 0; s_puName[PU_GHOST] = "Ghost!";
     s_ghostSeenAt = 0; s_ghostSeen = s_ghostForced = 0; s_plannedLap = 0;
     HauntForget();
     memset(s_hauntReady, 0, sizeof(s_hauntReady));
@@ -13749,7 +13817,7 @@ static void CarWays(S32 now) {
     }
 }
 
-static const char *GuardName(const T_RACE_GUARD *g) { return g->Kind == 1 ? "pighead" : g->Kind == 2 ? "Stan" : g->Kind == 3 ? "torturer" : g->Kind == 4 ? "small monkey monster" : "soldier"; }
+static const char *GuardName(const T_RACE_GUARD *g) { return g->Kind == 1 ? "pighead" : g->Kind == 2 ? "Stan" : g->Kind == 3 ? "torturer" : g->Kind == 4 ? "small monkey monster" : g->Kind == 5 ? "soldier mosquibee" : g->Kind == 6 ? "Felix" : "soldier"; }
 // (a small monkey monster -- kind 4, the Elevator Platform's -- throws as a pighead does, its own crate, from the deck under the road, in time trials too. Not until the race
 // is well away -- the user, 2026-10-31: "We should wait until after the race is started so cars on the start line don't get hit")
 #define RACE_CRATE_OBJ 93                  // OBJFIX.HQR: the monkey monster's crate, as his animation throws it
@@ -13757,8 +13825,8 @@ static const char *GuardName(const T_RACE_GUARD *g) { return g->Kind == 1 ? "pig
 #define RACE_MONKEY_HAND 550               // how far over his feet it leaves his hand
 #define RACE_CRATE_SPEED 120               // a 20 ms frame's way, his animation's own (6,000 units a second)
 #define RACE_CRATE_MISS 700.0              // aimed this much either way of where the car will be at most: not every crate hits
-static int GuardThrows(const T_RACE_GUARD *g) { return g->Kind == 1 || g->Kind == 4; }
-static int GuardHolds(const T_RACE_GUARD *g, S32 now) { return g->Kind == 4 && (!RaceRunning() || (s_goAt && now < s_goAt + RACE_CRATE_AFTER_GO)); }
+static int GuardThrows(const T_RACE_GUARD *g) { return g->Kind == 1 || g->Kind >= 4; }
+static int GuardHolds(const T_RACE_GUARD *g, S32 now) { return g->Kind >= 4 && (!RaceRunning() || (s_goAt && now < s_goAt + RACE_CRATE_AFTER_GO)); }
 
 // A car struck by one of them -- unless one of them has just struck it.
 static void GuardStrikes(int who, S32 now, const char *what, S32 hold) {
@@ -13793,14 +13861,14 @@ static void GuardThrow(T_RACE_GUARD *g, int actor, S32 now) {
     if (t < 0) return;
     T_RACE_THROWN *u = &s_thrown[t];
     const int k = g->Target + 1;
-    const double fromX = g->X, fromY = g->Y + (g->Kind == 4 ? RACE_MONKEY_HAND : 900), fromZ = g->Z;
-    const double v = g->Kind == 4 ? RACE_CRATE_SPEED : RACE_THROWN_SPEED, c = RACE_THROWN_WEIGHT / 16.0;
+    const double fromX = g->X, fromY = g->Y + (g->Kind >= 4 ? RACE_MONKEY_HAND : 900), fromZ = g->Z;
+    const double v = g->Kind >= 4 ? RACE_CRATE_SPEED : RACE_THROWN_SPEED, c = RACE_THROWN_WEIGHT / 16.0;
     double tx = x, tz = z, flight = 0, h = 0;
     // (a car at racing speed is twice as fast as a crate: thrown at where it will be by the time the crate gets there, or going by it the sum below runs
     // away and nothing is thrown. The first moment a crate can be there, along the road: this track is all bends, and straight on from the car comes down
     // thousands of units from it)
     double leadX = x, leadZ = z;
-    if (g->Kind == 4) {
+    if (g->Kind >= 4) {
         const T_RACE_OPPONENT *line = Guide();
         double side = 0;
         const double s = line ? GuideS(line, x, y, z, -1, &side) : 0, along = sqrt(s_carVX[k] * s_carVX[k] + s_carVZ[k] * s_carVZ[k]);
@@ -13812,9 +13880,9 @@ static void GuardThrow(T_RACE_GUARD *g, int actor, S32 now) {
         }
         if (flight < 0) return;
     }
-    for (int pass = 0; pass < (g->Kind == 4 ? 1 : 3); pass++) {
+    for (int pass = 0; pass < (g->Kind >= 4 ? 1 : 3); pass++) {
         tx = x + s_carVX[k] * flight; tz = z + s_carVZ[k] * flight;
-        if (g->Kind == 4) { tx = leadX + (VentRandom() * 2 - 1) * RACE_CRATE_MISS; tz = leadZ + (VentRandom() * 2 - 1) * RACE_CRATE_MISS; }
+        if (g->Kind >= 4) { tx = leadX + (VentRandom() * 2 - 1) * RACE_CRATE_MISS; tz = leadZ + (VentRandom() * 2 - 1) * RACE_CRATE_MISS; }
         const double R = sqrt((tx - fromX) * (tx - fromX) + (tz - fromZ) * (tz - fromZ)), dy = y + 300 - fromY, q = c * R * R / (v * v);
         const double disc = R * R - 4 * q * (dy + q);
         h = q > 0 && disc >= 0 ? atan((R - sqrt(disc)) / (2 * q)) : atan2(dy, R);
@@ -13824,7 +13892,7 @@ static void GuardThrow(T_RACE_GUARD *g, int actor, S32 now) {
     const int n = (int)(sizeof(RACE_THROWN) / sizeof(RACE_THROWN[0]));
     u->On = 1; u->T0 = now; u->Dur = (S32)(flight * 1000); u->ToX = tx; u->ToY = y; u->ToZ = tz;
     u->Sprite = RACE_THROWN[(int)(VentRandom() * n) % n]; u->Extra = -1; u->Owner = actor >= 0 ? actor : 255;
-    Log_Info("[racemod] %s throws %s at %s's car (%.1f s, %.0f away)", GuardName(g), g->Kind == 4 ? "a crate" : "something", CarName(g->Target), flight,
+    Log_Info("[racemod] %s throws %s at %s's car (%.1f s, %.0f away)", GuardName(g), g->Kind == 4 ? "a crate" : g->Kind == 5 ? "a ball" : g->Kind == 6 ? "a crab" : "something", CarName(g->Target), flight,
              sqrt((tx - fromX) * (tx - fromX) + (tz - fromZ) * (tz - fromZ)));
     if (actor < 0 || CubeMode != CUBE_EXTERIEUR) return;
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
@@ -13834,6 +13902,11 @@ static void GuardThrow(T_RACE_GUARD *g, int actor, S32 now) {
         u->Extra = ThrowExtraObj((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), RACE_CRATE_OBJ, alpha, beta, RACE_CRATE_SPEED, -1, RACE_THROWN_WEIGHT, 0);
         if (u->Extra >= 0) u->Sprite = ListExtra[u->Extra].Sprite;
     }
+    else if (g->Kind == 6 && s_crabModel >= 0) {
+        u->Extra = ThrowExtraObj((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), s_crabModel, alpha, beta, RACE_CRATE_SPEED, -1, RACE_THROWN_WEIGHT, 0);
+        if (u->Extra >= 0) u->Sprite = ListExtra[u->Extra].Sprite;
+    }
+    else if (g->Kind == 5) u->Extra = ThrowExtra((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), SPRITE_BALLE_LVL_4, alpha, beta, RACE_CRATE_SPEED, RACE_THROWN_WEIGHT, 0);
     else u->Extra = ThrowExtra((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), u->Sprite, alpha, beta, RACE_THROWN_SPEED, RACE_THROWN_WEIGHT, 0);
     if (u->Extra >= 0) ListExtra[u->Extra].Flags &= ~(EXTRA_END_OBJ | EXTRA_END_COL | EXTRA_IMPACT);
 }
@@ -13911,7 +13984,8 @@ static void Guards(S32 now, int driving, S32 dt) {
             for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
                 if (who < 0 && !driving) continue;
                 double x, y, z;
-                if (!CarAt(who, &x, &y, &z) || fabs(y - g->Y) > 1500) continue;
+                // (the mosquibees on their mounds and Felix look down on the road)
+                if (!CarAt(who, &x, &y, &z) || fabs(y - g->Y) > (g->Kind >= 5 ? RACE_THROWN_DROP : 1500)) continue;
                 const double dx = g->X - x, dz = g->Z - z, d2 = dx * dx + dz * dz;
                 const double vx = s_carVX[who + 1], vz = s_carVZ[who + 1];
                 if (d2 < RACE_GUARD_BOWL * RACE_GUARD_BOWL * s_guardSize * s_guardSize && g->State != GUARD_DOWN) {
@@ -17251,8 +17325,10 @@ static void DrawHalloween(S32 now) {
 #define RACE_HAUNT_HOLLOW 0.5
 #define RACE_HAUNT_LEVELS 16
 #define RACE_HAUNT_TALL 0.84               // its height, of the screen's
-enum { HAUNT_OUTSIDE, HAUNT_SHEET, HAUNT_EDGE, HAUNT_HOLLOW };
-static U8 s_hauntTab[2][RACE_HAUNT_LEVELS + 1][256];  // [0] towards the sheet's colour, [1] towards black
+enum { HAUNT_OUTSIDE, HAUNT_SHEET, HAUNT_EDGE, HAUNT_HOLLOW, HAUNT_BALLOON };
+#define RACE_BALLOONS 5
+#define RACE_HAUNT_BALLOON 0.62            // a balloon over the screen: this share of the way to its colour
+static U8 s_hauntTab[2 + RACE_BALLOONS][RACE_HAUNT_LEVELS + 1][256];  // [0] towards the sheet's colour, [1] towards black, [2..] towards a balloon's
 static U32 s_hauntPalSum = 0;
 static U8 *s_hauntMask = NULL;                        // the ghost's shape, s_hauntW x s_hauntH: HAUNT_OUTSIDE..HAUNT_HOLLOW
 static S32 s_hauntW = 0, s_hauntH = 0;
@@ -17277,10 +17353,27 @@ static double HauntShape(double u, double v, double *hollow) {
     return fmin(joined, arm) - h * h * k / 4;
 }
 
+// The balloons over the screen: what's at (u, v), a bunch of them round the middle, their strings down to a knot under it.
+static int BalloonMask(double u, double v, double edge) {
+    static const double at[RACE_BALLOONS][2] = {{-0.46, -0.28}, {0.44, -0.2}, {0.0, -0.66}, {-0.14, 0.12}, {0.32, 0.26}};
+    for (int i = RACE_BALLOONS - 1; i >= 0; i--) {
+        const double d = HauntEllipse(u, v, at[i][0], at[i][1], 0.27, 0.32);
+        if (d <= 0) return d > -edge ? HAUNT_EDGE : HAUNT_BALLOON + i;
+    }
+    const double kx = 0.0, ky = 0.92;
+    for (int i = 0; i < RACE_BALLOONS; i++) {
+        const double x0 = at[i][0], y0 = at[i][1] + 0.32, t = (v - y0) / (ky - y0);
+        if (t >= 0 && t <= 1 && fabs(u - (x0 + (kx - x0) * t)) <= edge * 0.7) return HAUNT_EDGE;
+    }
+    return HAUNT_OUTSIDE;
+}
+
 // The ghost's mask for a screen `height` tall.
 static void HauntMask(S32 height) {
     const S32 h = (S32)(height * RACE_HAUNT_TALL), w = (S32)(h * 0.98);
-    if (h == s_hauntH && s_hauntMask) return;
+    static int shown = -1;   // (balloons or the ghost: a game goes from track to track)
+    if (h == s_hauntH && s_hauntMask && shown == s_hauntBalloons) return;
+    shown = s_hauntBalloons;
     free(s_hauntMask);
     s_hauntMask = (U8 *)malloc((size_t)w * h);
     s_hauntW = w; s_hauntH = h;
@@ -17289,6 +17382,7 @@ static void HauntMask(S32 height) {
     for (S32 r = 0; r < h; r++)
         for (S32 c = 0; c < w; c++) {
             double hollow;
+            if (s_hauntBalloons) { s_hauntMask[r * w + c] = (U8)BalloonMask((c - w / 2.0) / unit, (r - h / 2.0) / unit, edge); continue; }
             const double d = HauntShape((c - w / 2.0) / unit, (r - h / 2.0) / unit, &hollow);
             s_hauntMask[r * w + c] = (U8)(fabs(d) <= edge ? HAUNT_EDGE : d > 0 ? HAUNT_OUTSIDE : fabs(hollow) <= edge ? HAUNT_EDGE : hollow < 0 ? HAUNT_HOLLOW : HAUNT_SHEET);
         }
@@ -17299,12 +17393,13 @@ static void HauntMask(S32 height) {
 static void HauntTables(void) {
     if (!PtrPal) return;
     int six;
-    const U32 sum = PalSum(&six);
+    const U32 sum = PalSum(&six) + s_hauntBalloons;
     if (sum == s_hauntPalSum) return;
     s_hauntPalSum = sum;
     // (the sheet's colour, a pale lavender, and black; the palette's own scale -- 8 bits a colour, or the VGA's 6)
-    const double k = six ? 0.25 : 1, to[2][3] = {{236 * k, 232 * k, 250 * k}, {4 * k, 2 * k, 8 * k}};
-    for (int t = 0; t < 2; t++)
+    const double k = six ? 0.25 : 1, to[2 + RACE_BALLOONS][3] = {{236 * k, 232 * k, 250 * k}, {4 * k, 2 * k, 8 * k},
+        {230 * k, 40 * k, 40 * k}, {60 * k, 190 * k, 70 * k}, {250 * k, 220 * k, 50 * k}, {245 * k, 140 * k, 40 * k}, {60 * k, 110 * k, 230 * k}};
+    for (int t = 0; t < (s_hauntBalloons ? 2 + RACE_BALLOONS : 2); t++)
         for (int l = 0; l <= RACE_HAUNT_LEVELS; l++) {
             const double a = (double)l / RACE_HAUNT_LEVELS;
             for (int c = 0; c < 256; c++) {
@@ -17331,9 +17426,9 @@ static void DrawHaunt(S32 now, S32 width, S32 height) {
     const S32 x0 = width / 2 - s_hauntW / 2 + (S32)(width * 0.05 * sin(t * 2 * RACE_PI / 2600.0));
     const S32 y0 = (height - s_hauntH) / 2 + (S32)(height * 0.025 * sin(t * 2 * RACE_PI / 1700.0) + (1 - e) * height * 0.08);
     static const U8 bayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
-    const double share[4] = {0, RACE_HAUNT_FILL * e, RACE_HAUNT_EDGE * e, RACE_HAUNT_HOLLOW * e};
-    int level[4], frac[4];
-    for (int k = 0; k < 4; k++) { const double l = share[k] * RACE_HAUNT_LEVELS; level[k] = (int)l; frac[k] = (int)((l - level[k]) * 16); }
+    const double share[5] = {0, RACE_HAUNT_FILL * e, RACE_HAUNT_EDGE * e, RACE_HAUNT_HOLLOW * e, RACE_HAUNT_BALLOON * e};
+    int level[5], frac[5];
+    for (int k = 0; k < 5; k++) { const double l = share[k] * RACE_HAUNT_LEVELS; level[k] = (int)l; frac[k] = (int)((l - level[k]) * 16); }
     for (S32 r = 0; r < s_hauntH; r++) {
         const S32 y = y0 + r;
         if (y < 0 || y >= height) continue;
@@ -17343,9 +17438,10 @@ static void DrawHaunt(S32 now, S32 width, S32 height) {
             const int k = m[c];
             const S32 x = x0 + c;
             if (!k || x < 0 || x >= width) continue;
-            int l = level[k] + (frac[k] > bayer[y & 3][x & 3] ? 1 : 0);
+            const int kind = k < HAUNT_BALLOON ? k : (int)HAUNT_BALLOON;
+            int l = level[kind] + (frac[kind] > bayer[y & 3][x & 3] ? 1 : 0);
             if (l > RACE_HAUNT_LEVELS) l = RACE_HAUNT_LEVELS;
-            row[x] = s_hauntTab[k == HAUNT_HOLLOW][l][row[x]];
+            row[x] = s_hauntTab[k >= HAUNT_BALLOON ? 2 + k - HAUNT_BALLOON : k == HAUNT_HOLLOW][l][row[x]];
         }
     }
     const S32 bx0 = x0 < 0 ? 0 : x0, by0 = y0 < 0 ? 0 : y0, bx1 = x0 + s_hauntW - 1 >= width ? width - 1 : x0 + s_hauntW - 1, by1 = y0 + s_hauntH - 1 >= height ? height - 1 : y0 + s_hauntH - 1;
@@ -17731,12 +17827,16 @@ static const char *const s_puHelp[PU_COUNT] = {
     "Haunts every other car: it slows down and weaves.",
 };
 
-const char *RaceMod_ItemName(S32 item) { return item >= 0 && item < PU_COUNT ? s_puPageName[item] : ""; }
+const char *RaceMod_ItemName(const T_RACE_PAGE *page, S32 item) {
+    if (item == PU_GHOST && page && page->Balloons) return "Balloons";
+    return item >= 0 && item < PU_COUNT ? s_puPageName[item] : "";
+}
 
 const char *RaceMod_ItemHelp(const T_RACE_PAGE *page, S32 item) {
     if (item < 0 || item >= PU_COUNT) return "";
     if (item == PU_FUEL && page && page->Trial) return "A can every lap: a burst of speed for four seconds.";
     if (item == PU_PENGUIN && page && page->Fuse) return "Drop it behind you: a second later it blows up.";
+    if (item == PU_GHOST && page && page->Balloons) return "Fly off to every other car: it slows down and weaves.";
     return s_puHelp[item];
 }
 
@@ -17821,6 +17921,7 @@ S32 RaceMod_ReadPage(const char *path, T_RACE_PAGE *page) {
         else if (!strcmp(key, "mushroom") && mushScene < 0 && sscanf(v, "%d %d", &a, &b) == 2) { mushScene = a; mushActor = b; }
         else if (!strcmp(key, "fake") && sscanf(v, "%d %d", &a, &b) == 2) { if (!fakes++) { fakeScene = a; fakeActor = b; } }
         else if (!strcmp(key, "haunt") && sscanf(v, "%d %d", &a, &b) == 2) { ghost = 1; page->Ghost = b; }
+        else if (!strcmp(key, "haunt_balloons")) page->Balloons = atoi(v) != 0;
         else if (!strcmp(key, "oil_icon")) page->Oil = atoi(v);
         else if (!strcmp(key, "gold_icon")) page->Gold = atoi(v);
         else if (!strcmp(key, "roulette")) wheel = 1;
@@ -18657,7 +18758,7 @@ static void ResetTrack(void) {
     s_viewFar = s_viewFog = 0;
     memset(s_netThrough, 0, sizeof(s_netThrough)); memset(s_netTouching, 0, sizeof(s_netTouching)); memset(s_netBumpAt, 0, sizeof(s_netBumpAt));
     s_netPushX = s_netPushZ = s_netShoveX = s_netShoveZ = 0; s_netBumps = 0;
-    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_missBackAt = 0; s_tunnelScale = 1; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
+    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_missBackAt = 0; s_tunnelScale = 1; s_nbDriverBodies = 0; s_crabModel = -1; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;
     RaceSoundsFree(); JetHumStop("the race reset"); SkidSoundStop(); SlideEnd("the race reset");
@@ -18668,7 +18769,7 @@ static void ResetTrack(void) {
     s_nbGeysers = 0; for (int i = 0; i < RACE_MAX_COLUMN; i++) s_column[i].Extra = -1;
     s_shardModel = s_shardBit = -1;
     s_mapKey = 0;
-    s_nbJets = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
+    s_nbJets = 0; s_signalBody[0] = s_signalBody[1] = -1; s_signalReady[0] = s_signalReady[1] = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_nbFlyers = 0; s_nbSpooks = 0; s_partyBox = 0; HalloweenReset(); memset(&s_marshal, 0, sizeof(s_marshal)); s_gantryPts = -1;
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));

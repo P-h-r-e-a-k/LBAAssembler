@@ -155,11 +155,12 @@ typedef struct {
     S32 Spots;                              // its grid's spots (grid=): with none, no qualifying lap decides anything
     S32 Fuse;                               // penguin_mode=fuse
     S32 OnFoot;                             // on_foot=: Twinsen gets out of his car to explore (the Temple of Bu's secret party)
+    S32 Balloons;                           // haunt_balloons=: its ghost a bunch of balloons
     S32 Pickup, Oil, Gold, Ghost;           // the item boxes' models: the pickups' body (a mushroom's actor, from its scene in SCENE.HQR),
                                             // oil_icon=, gold_icon=, haunt='s icon (-1 none)
 } T_RACE_PAGE;
 S32 RaceMod_ReadPage(const char *path, T_RACE_PAGE *page);   // non-zero: the file was read
-const char *RaceMod_ItemName(S32 item);                      // "Nitro penguin"
+const char *RaceMod_ItemName(const T_RACE_PAGE *page, S32 item);   // "Nitro penguin"
 const char *RaceMod_ItemHelp(const T_RACE_PAGE *page, S32 item);   // what it does and how it is used (Ctrl), a sentence or two
 // An item's box, `size` pixels across at (x0, y0), the item turning in it; item -1: the pickups' own look (what the cars drive into)
 void RaceMod_DrawItem(const T_RACE_PAGE *page, S32 item, S32 x0, S32 y0, S32 size, S32 now);

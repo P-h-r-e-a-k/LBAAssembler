@@ -18,7 +18,7 @@ namespace LBAAssembler.Terrain;
 // (Palace.PalaceTorturers: their body and animations their own, made by its Install), each cracking it at his post, never at a car.
 internal static class RaceTrackGuards
 {
-    public const int Soldier = 0, Pighead = 1, Stan = 2, Torturer = 3, Monkey = 4;
+    public const int Soldier = 0, Pighead = 1, Stan = 2, Torturer = 3, Monkey = 4, Mosquibee = 5, Felix = 6;
     public const double Seen = 40;          // (cells: an actor in every scene whose cube comes this near the post)
     public const double Size = 2.0;         // how much bigger than the game's they are
     public const int BigBody = 20;          // the entity's body number for its big body (none of theirs has one so high)
@@ -49,12 +49,18 @@ internal static class RaceTrackGuards
         // half the height, and add two of them on the bottom of the platform to throw crates at cars": ready with his arms up (540), and his throw (542), which
         // is the game's own: his crate, OBJFIX.HQR's 93, flown by the race-track mode at a car)
         Monkey => new(275, 0, 540, 1, 6, new[] { 542 }, BigBody, 0.5),
+        // (the big soldier mosquibee, entity 247, that Twinsen fights for the blowtron: on guard (133), firing (173), on a rock over the road -- the user,
+        // 2026-10-31: "take the large soldier mosquibees ... and have one on each mound firing balls at different sections of the track")
+        Mosquibee => new(247, 0, 133, 1, 6, new[] { 173 }),
+        // (Felix the fisherman, entity 106, at the game's own size, fishing up crabs at the cars: his cast, 328 -- the user, 2026-10-31: "have him
+        // randomly pulling crabs out that can hit a car")
+        Felix => new(106, 0, 0, 1, 6, new[] { 328 }, BigBody, 1.0),
         // (Stan, come over from Time Commando, entity 316: standing, walking, his three blows)
         _ => new(316, 0, 0, 1, 6, new[] { 142, 277, 587 }),
     };
 
     // The kinds' looks, every one there is (Install makes each its big body).
-    private static readonly Look[] All = { Of(Soldier, 0), Of(Pighead, 0), Of(Pighead, 1), Of(Pighead, 2), Of(Stan, 0), Of(Monkey, 0) };
+    private static readonly Look[] All = { Of(Soldier, 0), Of(Pighead, 0), Of(Pighead, 1), Of(Pighead, 2), Of(Stan, 0), Of(Monkey, 0), Of(Mosquibee, 0), Of(Felix, 0) };
 
     public static string KindName(int kind, int count) => kind switch
     {
@@ -62,6 +68,8 @@ internal static class RaceTrackGuards
         Pighead => count == 1 ? "pighead" : "pigheads",
         Torturer => count == 1 ? "torturer" : "torturers",
         Monkey => count == 1 ? "small monkey monster" : "small monkey monsters",
+        Mosquibee => count == 1 ? "soldier mosquibee" : "soldier mosquibees",
+        Felix => "Felix",
         _ => "Stan",
     };
 
@@ -91,6 +99,16 @@ internal static class RaceTrackGuards
         File.WriteAllBytes(bodyPath, bodyFile);
         HqrWriter.ReplaceInFile(ressPath, 44, table);
         return log;
+    }
+
+    // Felix's crab as a model the game can throw: BODY.HQR's 162, appended to OBJFIX.HQR. Its entry.
+    private const int CrabBody = 162;
+    public static int InstallCrab(string gameDirectory)
+    {
+        var path = Path.Combine(gameDirectory, "OBJFIX.HQR");
+        var index = HqrArchive.CountEntries(path);
+        File.WriteAllBytes(path, HqrWriter.AppendEntry(File.ReadAllBytes(path), HqrWriter.StoredEntry(HqrArchive.Open(Path.Combine(gameDirectory, "BODY.HQR")).Read(CrabBody))));
+        return index;
     }
 
     // The BODY.HQR entry an entity's body `generic` is (its body record in the entity table), or null.

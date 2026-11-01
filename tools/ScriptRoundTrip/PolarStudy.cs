@@ -655,6 +655,32 @@ internal static class PolarStudy
     }
 
     // waterpatches <ILE> [most]: patches of cells that are water by their game code, or undrawn, with their size, middle, height and how they are drawn
+    // altgrid <ILE> <cell x0> <x1> <z0> <z1>: the ground's height at each cell, a row of z each
+    public static int AltGrid(string[] args)
+    {
+        var island = IslandFile.Load(args[1]);
+        var r = args[2..6].Select(int.Parse).ToArray();
+        for (var z = r[2]; z <= r[3]; z++)
+            Console.WriteLine($"{z,4}: " + string.Join(" ", Enumerable.Range(r[0], r[1] - r[0] + 1).Select(x => $"{IslandOps.Altitude(island, x * 512.0, z * 512.0),5:F0}")));
+        return 0;
+    }
+
+    // decorsnear <ILE> <cell x0> <x1> <z0> <z1>: the decors whose box's middle is in those island cells
+    public static int DecorsNear(string[] args)
+    {
+        var island = IslandFile.Load(args[1]);
+        var r = args[2..6].Select(double.Parse).ToArray();
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            for (var i = 0; i < cube.Decors.Count; i++)
+            {
+                var d = cube.Decors[i];
+                double x = (cx * 32768.0 + (d.XMin + d.XMax) / 2.0) / 512, z = (cz * 32768.0 + (d.ZMin + d.ZMax) / 2.0) / 512;
+                if (x >= r[0] && x <= r[1] && z >= r[2] && z <= r[3])
+                    Console.WriteLine($"cube ({cx},{cz}) decor {i} body {d.Body & 0xFFFF} cell ({x:F1},{z:F1}) at ({d.X},{d.Y},{d.Z}) box x {d.XMin}..{d.XMax} y {d.YMin}..{d.YMax} z {d.ZMin}..{d.ZMax}");
+            }
+        return 0;
+    }
+
     public static int WaterPatches(string[] args)
     {
         var island = IslandFile.Load(args[1]);

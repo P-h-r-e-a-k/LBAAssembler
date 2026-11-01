@@ -62,6 +62,7 @@ const char *RaceNet_Error(void);            // what ended the session, or kept i
 // on the internet can't reach this game. `text`: what to tell the host. `outside`: the address to give to friends ("" not known); `inside`: this PC's on
 // the home network, the one to use from the same house (most routers don't loop their own outside address back)
 int RaceNet_Router(int *ok, char *text, int textSize, char *outside, int outsideSize, char *inside, int insideSize);
+const char *RaceNet_Ipv6(void);             // a host's IPv6 address, to give to friends with IPv6 ("": none)
 
 // Joining a race with a password: non-zero once the host has asked for it, once. Then send it (a wrong one ends the session)
 int RaceNet_PasswordAsked(void);

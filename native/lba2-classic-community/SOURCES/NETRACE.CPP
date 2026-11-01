@@ -78,7 +78,8 @@ static SDL_AtomicInt s_quit;
 static struct NetKit *s_kit = NULL;
 static T_RN_PEER s_peer[RACENET_MAX_OTHERS];
 static int s_nbPeers = 0;
-static char s_error[160] = "";
+static char s_error[220] = "";
+static char s_ipv6[64] = "";
 static int s_hosting = 0, s_local = 0;
 static char s_name[RACENET_NAME + 1] = "";
 static int s_selfReady = 0, s_goSent = 0, s_goPending = 0;
@@ -198,6 +199,14 @@ static void SyncMembers(void) {
         }
 }
 
+// The host on another version: each player and their version, a line each (RACEGAME.CPP SayPage)
+static void WrongVersion(const T_RN_PEER *host, const char *version) {
+    snprintf(s_hostVersion, sizeof(s_hostVersion), "%s", version);
+    snprintf(s_error, sizeof(s_error), "Your games don't match\n%s: %s\n%s: %s\nUpdate the older one", host && host->Name[0] ? host->Name : "The host",
+             version[0] ? version : "(older)", s_name[0] ? s_name : "You", s_version);
+    Log_Warn("[racenet] the host is on version %s, this game on %s", version[0] ? version : "(older)", s_version);
+}
+
 static void Take(const NetKitMessage *m) {
     const uint8_t *p = (const uint8_t *)m->data, *const end = p + m->len;
     if (m->len < 1) return;
@@ -235,9 +244,7 @@ static void Take(const NetKitMessage *m) {
             }
             else if (const NetKitMember *who = NetKit_MemberById(s_kit, peer->Id)) {
                 if (!who->isHost || s_error[0]) break;
-                snprintf(s_hostVersion, sizeof(s_hostVersion), "%s", version);
-                snprintf(s_error, sizeof(s_error), "The host is on version %s, this game on %s: update the older one", version[0] ? version : "(older)", s_version);
-                Log_Warn("[racenet] %s", s_error);
+                WrongVersion(peer, version);
             }
         }
         break;
@@ -256,9 +263,7 @@ static void Take(const NetKitMessage *m) {
             const int n = (int)(end - p) < RACENET_VERSION - 1 ? (int)(end - p) : RACENET_VERSION - 1;
             memcpy(version, p, n);
             version[n] = 0;
-            snprintf(s_hostVersion, sizeof(s_hostVersion), "%s", version);
-            snprintf(s_error, sizeof(s_error), "The host is on version %s, this game on %s: update the older one", version, s_version);
-            Log_Warn("[racenet] %s", s_error);
+            WrongVersion(peer, version);
         }
         break;
     case M_EVENT:
@@ -425,6 +430,7 @@ int RaceNet_Host(const char *name, const char *password) {
     snprintf(s_name, sizeof(s_name), "%s", name);
     if (!Begin()) { RaceNet_Stop(); return 0; }
     NetUpnp_Open(RACENET_PORT);
+    if (NetUpnp_Ipv6(s_ipv6, sizeof(s_ipv6))) Log_Info("[racenet] this PC's IPv6 address: %s", s_ipv6);
     Log_Info("[racenet] hosting as %s on UDP port %d", name, RACENET_PORT);
     return 1;
 }
@@ -493,8 +499,18 @@ int RaceNet_Join(const char *address, const char *name) {
     char host[128];
     int port = RACENET_PORT;
     snprintf(host, sizeof(host), "%s", address);
-    char *colon = strrchr(host, ':');
-    if (colon) { port = atoi(colon + 1); *colon = 0; }
+    // (an IPv6 address has colons of its own: [2001:db8::1]:21997, or bare with the usual port)
+    if (host[0] == '[') {
+        char *shut = strchr(host, ']');
+        if (shut) {
+            if (shut[1] == ':') port = atoi(shut + 2);
+            *shut = 0;
+            memmove(host, host + 1, strlen(host + 1) + 1);
+        }
+    } else {
+        char *colon = strchr(host, ':');
+        if (colon && colon == strrchr(host, ':')) { port = atoi(colon + 1); *colon = 0; }
+    }
     if (!host[0] || port <= 0 || port > 65535) { snprintf(s_error, sizeof(s_error), "%s", "That address can't be right"); return 0; }
     struct NetKit *kit = NetKit_Join(host, (unsigned short)port, name);
     if (!kit) { snprintf(s_error, sizeof(s_error), "%s isn't an address that can be reached", host); Log_Warn("[racenet] %s", s_error); return 0; }
@@ -518,7 +534,7 @@ void RaceNet_Stop(void) {
         if (hosted) NetUpnp_Close();
         Log_Info("[racenet] stopped");
     }
-    s_hosting = 0; s_local = 0; s_nbPeers = 0;
+    s_hosting = 0; s_local = 0; s_nbPeers = 0; s_ipv6[0] = 0;
 }
 
 int RaceNet_On(void) { return s_kit != NULL; }
@@ -533,6 +549,8 @@ int RaceNet_Connected(void) {
 }
 
 const char *RaceNet_Error(void) { return s_error; }
+
+const char *RaceNet_Ipv6(void) { return s_hosting ? s_ipv6 : ""; }
 
 int RaceNet_Router(int *ok, char *text, int textSize, char *outside, int outsideSize, char *inside, int insideSize) {
     return NetUpnp_Result(ok, text, textSize, outside, outsideSize, inside, insideSize);

@@ -73,7 +73,9 @@ internal static class TempleTrack
         log.AddRange(TempleIsland.Install(gameDirectory, built));
         log.AddRange(AddScenes(gameDirectory));
         // (the race's music: LBA1's temple music from the player's LBA1, when it has it -- the scenes' own, LBA2's Temple of Bù's, else)
-        log.AddRange(TempleMusic.Install(gameDirectory, lba1Directory));
+        // (the player's own copy of the music, in whatever form: it can't stop the build, the race plays LBA2's music without it)
+        try { log.AddRange(TempleMusic.Install(gameDirectory, lba1Directory)); }
+        catch (Exception e) when (e is OverflowException or OutOfMemoryException or IOException or InvalidDataException or IndexOutOfRangeException or ArgumentException) { log.Add($"the temple's music: left out: {e}"); }
         return log;
     }
 

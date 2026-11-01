@@ -197,6 +197,10 @@ internal static class RaceTrackService
         // (RaceTrackCrystals.InstallCrystalShards; crystal_shard_model=), since 2026-10-11
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? CrystalShards = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? CrystalShardModels = null,
+        // CrabModel: the crab Felix fishes up, in OBJFIX.HQR (RACEMOD.CPP guard_crab=)
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? CrabModel = null,
+        // JetSignals: the steam jets' signals in BODY.HQR, safe and dangerous (RaceTrackPipes.InstallSignals; RACEMOD.CPP jet_signals=)
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? JetSignals = null,
         // WindowSmash: the palace's round window the first car smashes (PalaceWindow; RACEMOD.CPP smash_window=), since 2026-10-30
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? WindowSmash = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? BoostPanels = null,
@@ -229,6 +233,7 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Dives = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Scares = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? Haunt = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] bool? Balloons = null,
         // GiantWebs: the giant webs the lap drives through, each [its foot x, y, z (island units), the lap's way through it x and z (thousandths),
         // its posts' half width, its height, its hub's, the hole a car tears in it (half width, height), its spider's two bodies]; WebParts:
         // each [the web it is of, its kind, its body, its place across and up the web, its turn] (Temple.TempleHalloween; RACEMOD.CPP web=,
@@ -583,6 +588,8 @@ internal static class RaceTrackService
         public bool Together;
         public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel;
         public int[]? CrystalShardModels;
+        public int? CrabModel;
+        public int[]? JetSignals;
         public int[]? WindowSmash;
         // FunFrock's car empty: its BODY.HQR entry and the racer's driving animation (TrackInfo.ChaseCar)
         public int[]? FunFrockEmpty;
@@ -856,7 +863,8 @@ internal static class RaceTrackService
             session.CharacterCars = true;
         }
         // ... and the people in the cars' way twice their size (RaceTrackGuards), when a track has them
-        if (report.Guards.Count > 0 && !session.GuardBodies) { log.AddRange(RaceTrackGuards.Install(gameDirectory)); session.GuardBodies = true; }
+        if (report.Guards.Count > 0 && !session.GuardBodies) { log.AddRange(RaceTrackGuards.Install(gameDirectory)); session.CrabModel = RaceTrackGuards.InstallCrab(gameDirectory); session.GuardBodies = true; }
+        if (report.Jets.Any(j => j.Length >= 10) && session.JetSignals is null) session.JetSignals = RaceTrackPipes.InstallSignals(gameDirectory);
         // ... and each of the racer entity's cars shrunk to half its size, for the lightning spell (RaceTrackSmallCars)
         if (!session.SmallCars)
         {
@@ -957,7 +965,7 @@ internal static class RaceTrackService
     {
         // (the models the session installed, the same for every track it builds)
         TrackInfo WithModels(TrackInfo t) => t with { OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall,
-            LaserModels = session.LaserModels, LavaBallModel = session.LavaBallModel, CrystalShardModels = session.CrystalShardModels };
+            LaserModels = session.LaserModels, LavaBallModel = session.LavaBallModel, CrystalShardModels = session.CrystalShardModels, CrabModel = session.CrabModel, JetSignals = report.Jets.Count > 0 ? session.JetSignals : null };
         var info = WithModels(Info(report, options, scenes)) with { Story = story, Dream = dream,
             ChaseCar = options.Island.ChaseDriver is { } chaseDriver && session.FunFrockEmpty is [var ce, var ca] ? new[] { ce, ca, chaseDriver.Entity } : null };
         // (and for a teleporter into another cube -- the Temple of Bú's hidden passage: the scene it puts the car into)
@@ -1132,6 +1140,7 @@ internal static class RaceTrackService
             Dives: OrNull(report.Dives.Where(d => d.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line)),
             Scares: OrNull(report.Scares.Where(s => s.Body >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line)),
             Haunt: report.HauntBodies is { } haunt ? new[] { haunt.Ghost, haunt.Icon } : null,
+            Balloons: report.Balloons ? true : null,
             GiantWebs: OrNull(report.GiantWebs.Where(w => w.SpiderA >= 0).Select(LBAAssembler.Terrain.Temple.TempleHalloween.Line)),
             WebParts: report.GiantWebs.Count(w => w.SpiderA >= 0) > 0
                 ? report.GiantWebs.Where(w => w.SpiderA >= 0).SelectMany((w, i) => LBAAssembler.Terrain.Temple.TempleHalloween.PartLines(w).Select(p => new[] { i }.Concat(p).ToArray())).ToList()

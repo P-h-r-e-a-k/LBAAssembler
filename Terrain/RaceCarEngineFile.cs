@@ -87,6 +87,7 @@ internal static class RaceCarEngineFile
         foreach (var steam in track?.Steam ?? new()) text.Append($"steam={string.Join(' ', steam)}\n");
         foreach (var drip in track?.Drips ?? new()) text.Append($"drip={string.Join(' ', drip)}\n");
         foreach (var jet in track?.Jets ?? new()) text.Append($"jet={string.Join(' ', jet)}\n");
+        if (track?.JetSignals is { } signals) text.Append($"jet_signals={string.Join(' ', signals)}\n");
         foreach (var tunnel in track?.Tunnels ?? new()) text.Append($"tunnel={string.Join(' ', tunnel)}\n");
         // the spaceships it flies over their pads on the road (Otringal's square island)
         foreach (var shuttle in track?.Shuttles ?? new()) text.Append($"shuttle={string.Join(' ', shuttle)}\n");
@@ -151,9 +152,12 @@ internal static class RaceCarEngineFile
         // how far the race sees, over the island's own
         if (info is not null && RaceTrackIsland.All.FirstOrDefault(i => string.Equals(i.Name, info.Island, StringComparison.OrdinalIgnoreCase))?.View is { } view) text.Append($"view={view.Far} {view.Fog}\n");
         // the people in the cars' way, stepping out at them, striking and throwing (the Emperor's palace's)
-        foreach (var guard in track?.Guards ?? new()) text.Append($"guard={string.Join(' ', guard)}\n");
+        // (Felix fishing crabs up at the cars, in races and trials; in the story he is at his own place: scene 43's actor 2)
+        foreach (var guard in (track?.Guards ?? new()).Where(g => !story || g[0] != RaceTrackGuards.Felix)) text.Append($"guard={string.Join(' ', guard)}\n");
+        if (!story && track?.Guards?.Any(g => g[0] == RaceTrackGuards.Felix) == true) text.Append("hide_actor=43 2\n");
+        if (track?.CrabModel is { } crab) text.Append($"guard_crab={crab}\n");
         // (the small monkey monsters only throw: their reach and pace are no one's)
-        if (track?.Guards is { Count: > 0 } people && people.Any(g => g[0] != RaceTrackGuards.Monkey)) text.Append($"guard_size={(int)Math.Round(RaceTrackGuards.Size * 100)}\n");
+        if (track?.Guards is { Count: > 0 } people && people.Any(g => g[0] < RaceTrackGuards.Monkey)) text.Append($"guard_size={(int)Math.Round(RaceTrackGuards.Size * 100)}\n");
         foreach (var teleport in track?.Teleports ?? new()) text.Append($"teleport={string.Join(' ', teleport)}\n");
         // where the raised road's rail lets a car go off its edge, down to the road under it (the Temple of Bú's spiral drop)
         foreach (var open in track?.RailOpens ?? new()) text.Append($"rail_open={string.Join(' ', open)}\n");
@@ -213,6 +217,11 @@ internal static class RaceCarEngineFile
         if (!story && track?.Dream is null && RaceTrackService.FineWeather(info, car.FineWeather)) text.Append("weather=fine\n");
         if (track?.StoryArrow is >= 0 and var arrow) text.Append($"holo_arrow={arrow}\n");
         var opponents = car.Opponents(track);
+        // (who races isn't also standing about the island, in a race: the user, 2026-10-31, of Citadel 2's thief, "he's fine there for time trials,
+        // but I think he's one of the race participants so we don't want him in two places at the same time". The story keeps its people)
+        if (!story)
+            foreach (var body in opponents.SelectMany(o => RaceTrackCharacterCars.All.Where(c => c.Generic == o.Body)).Select(c => c.Character).Distinct())
+                text.Append($"race_driver_body={body}\n");
         for (var i = 0; i < opponents.Count && pathFiles is not null && i < pathFiles.Count; i++)
         {
             // (the engine's first opponent is "opponent_", the next "opponent2_" and so on)
@@ -272,6 +281,7 @@ internal static class RaceCarEngineFile
             if (track.TwinsenSmall is { } small) text.Append($"twinsen_small={small}\n");
             // (the ghost power-up, the Temple of Bú's: its ghost and its icon)
             if (track.Haunt is [var hauntGhost, var hauntIcon]) text.Append($"haunt={hauntGhost} {hauntIcon}\n");
+            if (track.Balloons == true) text.Append("haunt_balloons=1\n");
         }
         if (ghost >= 0) text.Append($"beat={ghost + 1}{(storm ? $" {RaceTrackStory.BeatVar} 1" : "")}\n");
         // the story's gates and the town circuit's race: Mr. Paul lets no one race without racing gloves; the aliens' track is ready the day
@@ -309,11 +319,14 @@ internal static class RaceCarEngineFile
         if (info?.Twin is { } fine) parked.AddRange(AllCars(ReferenceEquals(track, fine) ? info : fine));
         // (and what the twin's track left in the air, on that track)
         if (info?.Twin is { } twinTrack && ReferenceEquals(track, twinTrack)) parked.AddRange(RaceTrackIsland.ByName(info.Island).TwinStranded ?? Array.Empty<(int, int)>());
+        // (and what has no place on a track: from the moment its scene is up, not the frame after the race watch sees it)
+        if (!story && info is not null) parked.AddRange(RaceTrackIsland.ByName(info.Island).HiddenFromRaces ?? Array.Empty<(int, int)>());
         foreach (var (scene, actor) in parked) text.Append($"hide_actor={scene} {actor}\n");
         // the doors one of the island's files has lost, shut while it is shown (RaceTrackScenes Result.DoorsOff)
         // (and the ones that bring Twinsen out elsewhere in one file: nine numbers -- RACEMOD.CPP door_to=)
         foreach (var d in info?.DoorsOff ?? new()) text.Append(d.Split(' ').Length == 9 ? $"door_to={d}\n" : $"door_off={d}\n");
         // ... and the actors put aside while it is shown (Result.ActorsAt)
+        foreach (var a in info is null ? Array.Empty<string>() : RaceTrackIsland.ByName(info.Island).MovedActors ?? Array.Empty<string>()) text.Append($"actor_at={a}\n");
         foreach (var a in info?.ActorsAt ?? new()) text.Append($"actor_at={a}\n");
         // ... and the ones whose doors the game needs, who walk on the road: not there while a car races (Result.ActorsInWay)
         foreach (var a in info?.ActorsInWay ?? new()) text.Append($"race_hide={a[0]} {a[1]}\n");

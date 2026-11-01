@@ -456,6 +456,31 @@ internal static class RaceTrackPipes
         }
     }
 
+    // The signal on a gantry's upright over a steam jet (the user, 2026-10-31: "a couple of lights, one on top of the other, either side of our steam
+    // obstacles, green for the safe side, red for the dangerous side"): a dark housing, red over green, seen from either way along the road, unlit
+    // so the lit one glows. Two bodies, the game drawing the one the jet's side asks for (RACEMOD.CPP jet_signals=). Their BODY.HQR entries, the safe one first.
+    private const int LampRed = 75, LampRedOff = 66, LampGreen = 140, LampGreenOff = 131, SignalCase = 50;
+    private const float SignalWide = 215, SignalDeep = 90, SignalTall = 950, LampRadius = 190, LampOut = 45;
+    private static byte[] SignalBody(bool danger)
+    {
+        var pts = new List<Vector3>();
+        var faces = new List<Face>();
+        Box(pts, faces, Vector3.Zero, Vector3.UnitX * SignalWide, Vector3.UnitZ * SignalDeep, 0, SignalTall, SignalCase, SignalCase, SignalCase);
+        foreach (var (high, colour) in new[] { (SignalTall * 0.72f, danger ? LampRed : LampRedOff), (SignalTall * 0.28f, danger ? LampGreenOff : LampGreen) })
+            Cylinder(pts, faces, new Vector3(0, high, -SignalDeep - LampOut), new Vector3(0, high, SignalDeep + LampOut), LampRadius, colour, 10);
+        return Write(pts, faces, false);
+    }
+
+    public static int[] InstallSignals(string gameDirectory)
+    {
+        var path = System.IO.Path.Combine(gameDirectory, "BODY.HQR");
+        var index = HqrArchive.CountEntries(path);
+        var hqr = System.IO.File.ReadAllBytes(path);
+        foreach (var danger in new[] { false, true }) hqr = HqrWriter.AppendEntry(hqr, HqrWriter.StoredEntry(SignalBody(danger)));
+        System.IO.File.WriteAllBytes(path, hqr);
+        return new[] { index, index + 1 };
+    }
+
     // a box round `centre`, `u` and `v` its half sides on the level, from y0 to y1
     internal static void Box(List<Vector3> pts, List<Face> faces, Vector3 centre, Vector3 u, Vector3 v, float y0, float y1, int light, int dark, int top)
     {

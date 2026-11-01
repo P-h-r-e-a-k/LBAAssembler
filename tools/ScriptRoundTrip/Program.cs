@@ -159,6 +159,8 @@ internal static class Program
             "polarregion" => PolarStudy.Region(args),
             "polarcols" => PolarStudy.Cols(args),
             "polartiledump" => PolarStudy.TileDump(args),
+            "altgrid" => PolarStudy.AltGrid(args),
+            "decorsnear" => PolarStudy.DecorsNear(args),
             "waterpatches" => PolarStudy.WaterPatches(args),
             "hamalayi" => HamalayiStudy.Run(args),
             "hamalayiregion" => HamalayiStudy.Region(args),

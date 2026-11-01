@@ -306,6 +306,13 @@ internal sealed class RaceTrackPlan
     // Sea made land: each [x0, z0, x1, z1 (cells from the origin), height, or none for the land's round it] -- an arm of the sea up to the road,
     // Citadel 2's by the lighthouse (MakeLand)
     public double[][]? GroundFills { get; set; }
+    // The ground raised to a height: x0, z0, x1, z1 (cells), the height, how fast it falls to the land round it a cell. Citadel 2's far side of the drawbridge,
+    // built low for the fine weather's island, its mill wheel in the air over it (RaiseGround)
+    public double[][]? RaiseGround { get; set; }
+    // Decors moved up or down: cube x, cube z, body, those with Z at least this, their new Y; and copies of decors as other bodies beside them: cube x, cube z,
+    // body, Z at least this, the copy's body, its box's XMin, XMax (LiftDecors)
+    public int[][]? LiftDecors { get; set; }
+    public int[][]? CopyDecors { get; set; }
     // Ground drawn as water inland, by the road, drawn as the land round it (ClearBlueGround)
     public bool ClearBlueGround { get; set; }
     // Every decor held up by nothing goes, not only the ones the road's build left so: Polar Island's, made from LBA1's bricks with nothing
@@ -787,6 +794,8 @@ internal sealed class RaceTrackReport
     public sealed record Scare(string Kind, double X, double Z, double Y, int Turn, int Body = -1);
     public List<Scare> Scares { get; } = new();
     public bool Haunt { get; set; }
+    // The Desert's balloons: the ghost power-up with a bunch of balloons for the ghost (HauntBodies; RACEMOD.CPP haunt_balloons=)
+    public bool Balloons { get; set; }
     public (int Ghost, int Icon)? HauntBodies { get; set; }
     // The giant webs the lap drives through (2026-10-17, RACEMOD.CPP web=, web_part=): each its foot (island cells, the road's height), the
     // lap's way through it, its posts' half width (cells); once in BODY.HQR, its spider's two bodies and its parts (Temple.TempleHalloween
@@ -1089,6 +1098,11 @@ internal static class RaceTrackBuilder
                 report.Notes.Add($"the raised road under the ground over {main.Under.Count(u => u)} of its points (the plan's Under): no ground cut for it, no piers under it");
             }
         }
+        // (a track drawn over the island's own roads has its people too: Citadel 2's Felix)
+        foreach (var g in (plan.Guards ?? Array.Empty<double[]>()).Where(g => g.Length >= 8))
+            report.Guards.Add(new[] { g[0], g[1], g[2] + plan.OriginCellX, g[3] + plan.OriginCellZ, g[4], g[5], g[6], g[7] });
+        if (report.Guards.Count > 0)
+            report.Notes.Add($"people in the cars' way: {string.Join(", ", report.Guards.GroupBy(g => (int)g[0]).Select(k => $"{k.Count()} {RaceTrackGuards.KindName((int)k.Key, k.Count())}"))}");
         if (planned)
         {
             // (an area's sixth number: under the ground, as Under's stretches are)
@@ -1098,10 +1112,6 @@ internal static class RaceTrackBuilder
                                        .Concat(a.Length >= 6 && a[5] != 0 ? new[] { 1 } : Array.Empty<int>()).ToArray());
             foreach (var a in (plan.FloorArrows ?? Array.Empty<double[]>()).Where(a => a.Length >= 5))
                 report.FloorArrows.Add(new[] { a[0] + plan.OriginCellX, a[1] + plan.OriginCellZ, a[2], a[3], a[4] });
-            foreach (var g in (plan.Guards ?? Array.Empty<double[]>()).Where(g => g.Length >= 8))
-                report.Guards.Add(new[] { g[0], g[1], g[2] + plan.OriginCellX, g[3] + plan.OriginCellZ, g[4], g[5], g[6], g[7] });
-            if (report.Guards.Count > 0)
-                report.Notes.Add($"people in the cars' way: {string.Join(", ", report.Guards.GroupBy(g => (int)g[0]).Select(k => $"{k.Count()} {RaceTrackGuards.KindName((int)k.Key, k.Count())}"))}");
             foreach (var t in (plan.Teleports ?? Array.Empty<double[]>()).Where(t => t.Length >= 10))
                 report.Teleports.Add(new[] { t[0] + plan.OriginCellX, t[1] + plan.OriginCellZ, t[2] + plan.OriginCellX, t[3] + plan.OriginCellZ, t[4], t[5],
                                              t[6] + plan.OriginCellX, t[7] + plan.OriginCellZ, t[8], t[9] }.Concat(t.Skip(10).Take(2)).ToArray());
@@ -1190,7 +1200,9 @@ internal static class RaceTrackBuilder
         if (main.Raised is not null && plan.RaisedCut) CutUnderRaised(island, field, main, options, report, groundKept, sunk);
         if (main.Raised is not null) FlushOverDeck(island, field, main, options, report, sunk);
         GroundFills(island, field, plan, report);
+        RaiseGround(island, plan, report);
         FillPockets(island, field, index, report);
+        report.Balloons = options.Island == RaceTrackIsland.Desert;
         var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned);
         if (plan.ClearBlueGround && options.Theme.Palette is { } groundPalette) ClearBlueGround(island, field, index, painted, groundPalette, report);
         report.LapLine = LapLine(roads, report);
@@ -1321,6 +1333,7 @@ internal static class RaceTrackBuilder
         report.GroundBefore = (x, z) => natural.Height(x, z);
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
         report.WasGround = (x, z) => natural.Drawn(x, z);
+        LiftDecors(island, plan, report);
         PlaceStructures(island, main, crossings, startIndex, options, report, planned);
         // (Halloween: its decor about the road; its spooks, whose bodies go into BODY.HQR when the build finishes; its pumpkins)
         if (plan.Halloween is { } halloween)
@@ -4939,6 +4952,50 @@ internal static class RaceTrackBuilder
     // "There's a hole inside the track at the first corner where we can see the gas". Shaping the ground for the road leaves them.
     private const int PocketMostCells = 500;
     private const double PocketNearRoad = 14;
+
+    private static void RaiseGround(IslandFile island, RaceTrackPlan plan, RaceTrackReport report)
+    {
+        // (land this low is the shore or a cliff's foot: the sea stays where it is)
+        const double Land = 4000;
+        foreach (var f in (plan.RaiseGround ?? Array.Empty<double[]>()).Where(f => f.Length >= 6))
+        {
+            int x0 = (int)f[0] + plan.OriginCellX, z0 = (int)f[1] + plan.OriginCellZ, x1 = (int)f[2] + plan.OriginCellX, z1 = (int)f[3] + plan.OriginCellZ;
+            var reach = (int)Math.Ceiling((f[4] - Land) / f[5]);
+            var raised = 0;
+            for (var z = z0 - reach; z <= z1 + reach; z++)
+            for (var x = x0 - reach; x <= x1 + reach; x++)
+            {
+                if (x < 0 || z < 0 || !island.HasVertex(x, z)) continue;
+                var was = island.HeightAt(x, z) ?? 0;
+                var away = Math.Max(Math.Max(x0 - x, x - x1), Math.Max(Math.Max(z0 - z, z - z1), 0));
+                var want = f[4] - away * f[5];
+                if (was < Land && away > 0 || was >= want) continue;
+                island.SetHeight(x, z, (int)Math.Round(want));
+                raised++;
+            }
+            report.Notes.Add($"the ground raised to {f[4]} round ({x0},{z0}): {raised} corners");
+        }
+    }
+
+    private static void LiftDecors(IslandFile island, RaceTrackPlan plan, RaceTrackReport report)
+    {
+        foreach (var l in (plan.LiftDecors ?? Array.Empty<int[]>()).Where(l => l.Length >= 5))
+            if (island.CubeAt(l[0], l[1]) is { } cube)
+                foreach (var d in cube.Decors.Where(d => (d.Body & 0xFFFF) == l[2] && d.Z >= l[3]))
+                {
+                    d.MoveTo(d.X, l[4], d.Z);
+                    report.Notes.Add($"body {l[2]} of cube ({l[0]},{l[1]}) moved to height {l[4]}");
+                }
+        foreach (var c in (plan.CopyDecors ?? Array.Empty<int[]>()).Where(c => c.Length >= 7))
+            if (island.CubeAt(c[0], c[1]) is { } cube)
+                foreach (var d in cube.Decors.Where(d => (d.Body & 0xFFFF) == c[2] && d.Z >= c[3]).ToList())
+                {
+                    var copy = d.Clone();
+                    copy.Body = (d.Body & ~0xFFFF) | c[4];
+                    copy.XMin = c[5]; copy.XMax = c[6];
+                    cube.Decors.Add(copy);
+                }
+    }
 
     private static void GroundFills(IslandFile island, Field field, RaceTrackPlan plan, RaceTrackReport report)
     {

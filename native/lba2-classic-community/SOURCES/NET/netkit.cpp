@@ -128,22 +128,43 @@ int32_t nk_since(uint32_t now, uint32_t then) {
     return (int32_t)(now - then);
 }
 
+/* Always an IPv6 address, an IPv4 one as ::ffff:a.b.c.d: the one socket takes both (nk_open). */
 struct NK_ADDR {
-    struct sockaddr_in sa;
+    struct sockaddr_in6 sa;
     int set;
 };
 
+/* AF_INET6, or AF_INET on a machine with no IPv6 at all: what nk_open got. */
+static int nk_family = AF_INET6;
+
 void nk_addr_reset(NK_ADDR *a) {
     memset(&a->sa, 0, sizeof a->sa);
-    a->sa.sin_family = AF_INET;
+    a->sa.sin6_family = AF_INET6;
     a->set = 0;
+}
+
+/* An address as the system gave it. */
+static void nk_addr_take(NK_ADDR *a, const struct sockaddr *from) {
+    if (from->sa_family == AF_INET6) {
+        memcpy(&a->sa, from, sizeof a->sa);
+    } else if (from->sa_family == AF_INET) {
+        const struct sockaddr_in *v4 = (const struct sockaddr_in *)from;
+        unsigned char *b = (unsigned char *)&a->sa.sin6_addr;
+
+        memset(&a->sa, 0, sizeof a->sa);
+        a->sa.sin6_family = AF_INET6;
+        a->sa.sin6_port = v4->sin_port;
+        b[10] = 0xff;
+        b[11] = 0xff;
+        memcpy(b + 12, &v4->sin_addr, 4);
+    }
 }
 
 int nk_addr_same(const NK_ADDR *a, const NK_ADDR *b) {
     if (!a->set || !b->set)
         return 0;
-    return a->sa.sin_family == b->sa.sin_family && a->sa.sin_port == b->sa.sin_port &&
-           a->sa.sin_addr.s_addr == b->sa.sin_addr.s_addr;
+    return a->sa.sin6_port == b->sa.sin6_port && a->sa.sin6_scope_id == b->sa.sin6_scope_id &&
+           memcmp(&a->sa.sin6_addr, &b->sa.sin6_addr, sizeof a->sa.sin6_addr) == 0;
 }
 
 struct NK_REL {
@@ -284,22 +305,50 @@ nk_sock nk_open(unsigned short bindPort) {
     if (!nk_net_init())
         return NK_BAD_SOCK;
 
-    nk_sock s = socket(AF_INET, SOCK_DGRAM, 0);
-    if (s == NK_BAD_SOCK)
-        return NK_BAD_SOCK;
-
+    /* IPv6 with IPv4 on the same socket, so a host takes players of either; IPv4 alone where the machine has no IPv6. */
     int one = 1;
-    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char *)&one, (int)sizeof one);
+    int off = 0;
+    nk_sock s = socket(AF_INET6, SOCK_DGRAM, 0);
 
-    struct sockaddr_in sa;
-    memset(&sa, 0, sizeof sa);
-    sa.sin_family = AF_INET;
-    sa.sin_addr.s_addr = htonl(INADDR_ANY);
-    sa.sin_port = htons(bindPort);
-
-    if (bind(s, (const struct sockaddr *)&sa, (nk_socklen)sizeof sa) != 0) {
+    if (s != NK_BAD_SOCK && setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&off, (int)sizeof off) != 0) {
         nk_close(s);
-        return NK_BAD_SOCK;
+        s = NK_BAD_SOCK;
+    }
+
+    if (s != NK_BAD_SOCK) {
+        struct sockaddr_in6 sa;
+
+        setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char *)&one, (int)sizeof one);
+        memset(&sa, 0, sizeof sa);
+        sa.sin6_family = AF_INET6;
+        sa.sin6_port = htons(bindPort);
+
+        if (bind(s, (const struct sockaddr *)&sa, (nk_socklen)sizeof sa) != 0) {
+            nk_close(s);
+            s = NK_BAD_SOCK;
+        }
+    }
+
+    if (s != NK_BAD_SOCK) {
+        nk_family = AF_INET6;
+    } else {
+        struct sockaddr_in sa;
+
+        s = socket(AF_INET, SOCK_DGRAM, 0);
+        if (s == NK_BAD_SOCK)
+            return NK_BAD_SOCK;
+
+        setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char *)&one, (int)sizeof one);
+        memset(&sa, 0, sizeof sa);
+        sa.sin_family = AF_INET;
+        sa.sin_addr.s_addr = htonl(INADDR_ANY);
+        sa.sin_port = htons(bindPort);
+
+        if (bind(s, (const struct sockaddr *)&sa, (nk_socklen)sizeof sa) != 0) {
+            nk_close(s);
+            return NK_BAD_SOCK;
+        }
+        nk_family = AF_INET;
     }
 
     if (!nk_nonblocking(s)) {
@@ -311,12 +360,12 @@ nk_sock nk_open(unsigned short bindPort) {
 }
 
 unsigned short nk_local_port(nk_sock s) {
-    struct sockaddr_in sa;
+    struct sockaddr_storage sa;
     nk_socklen len = (nk_socklen)sizeof sa;
 
     if (getsockname(s, (struct sockaddr *)&sa, &len) != 0)
         return 0;
-    return ntohs(sa.sin_port);
+    return ntohs(sa.ss_family == AF_INET6 ? ((const struct sockaddr_in6 *)&sa)->sin6_port : ((const struct sockaddr_in *)&sa)->sin_port);
 }
 
 int nk_resolve(const char *host, unsigned short port, NK_ADDR *out) {
@@ -329,19 +378,18 @@ int nk_resolve(const char *host, unsigned short port, NK_ADDR *out) {
         return 0;
 
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET;
+    hints.ai_family = nk_family == AF_INET ? AF_INET : AF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
     snprintf(portText, sizeof portText, "%u", (unsigned)port);
 
-    if (getaddrinfo(host, portText, &hints, &list) != 0 || list == NULL ||
-        (size_t)list->ai_addrlen < sizeof(struct sockaddr_in)) {
+    if (getaddrinfo(host, portText, &hints, &list) != 0 || list == NULL) {
         if (list != NULL)
             freeaddrinfo(list);
         return 0;
     }
 
     nk_addr_reset(out);
-    memcpy(&out->sa, list->ai_addr, sizeof out->sa);
+    nk_addr_take(out, list->ai_addr);
     out->set = 1;
     ok = 1;
     freeaddrinfo(list);
@@ -370,8 +418,20 @@ int nk_send_packet(NetKit *k, const NK_ADDR *to, uint8_t type, uint8_t flags, ui
 
     total = NK_HDR + len;
 
-    if (sendto(k->sock, (const char *)buf, total, 0, (const struct sockaddr *)&to->sa,
-               (nk_socklen)sizeof to->sa) != total) {
+    struct sockaddr_in v4;
+    const struct sockaddr *dest = (const struct sockaddr *)&to->sa;
+    nk_socklen destLen = (nk_socklen)sizeof to->sa;
+
+    if (nk_family == AF_INET) {
+        memset(&v4, 0, sizeof v4);
+        v4.sin_family = AF_INET;
+        v4.sin_port = to->sa.sin6_port;
+        memcpy(&v4.sin_addr, (const unsigned char *)&to->sa.sin6_addr + 12, 4);
+        dest = (const struct sockaddr *)&v4;
+        destLen = (nk_socklen)sizeof v4;
+    }
+
+    if (sendto(k->sock, (const char *)buf, total, 0, dest, destLen) != total) {
         nk_set_socket_error(k, "sendto");
         return -1;
     }
@@ -1307,9 +1367,12 @@ int NetKit_Poll(NetKit *k) {
 
         nk_addr_reset(&from);
         {
-            nk_socklen len = (nk_socklen)sizeof from.sa;
+            struct sockaddr_storage sender;
+            nk_socklen len = (nk_socklen)sizeof sender;
 
-            n = (int)recvfrom(k->sock, (char *)buf, NK_DGRAM_MAX, 0, (struct sockaddr *)&from.sa, &len);
+            memset(&sender, 0, sizeof sender);
+            n = (int)recvfrom(k->sock, (char *)buf, NK_DGRAM_MAX, 0, (struct sockaddr *)&sender, &len);
+            nk_addr_take(&from, (const struct sockaddr *)&sender);
         }
 
         if (n <= 0) {

@@ -306,6 +306,27 @@ static int SDLCALL Ask(void *unused) {
     return 0;
 }
 
+// IPv6 has no router to ask: a PC with an address of its own on the internet can be reached there, the router's firewall allowing. Which address the
+// system would send from (connecting a UDP socket sends nothing): global ones only, 2000::/3, and not Teredo's 2001:0::/32.
+int NetUpnp_Ipv6(char *out, int size) {
+    out[0] = 0;
+    T_SOCK s = socket(AF_INET6, SOCK_DGRAM, 0);
+    if (s == BAD_SOCK) return 0;
+    struct sockaddr_in6 to, me;
+    memset(&to, 0, sizeof(to));
+    to.sin6_family = AF_INET6;
+    to.sin6_port = htons(53);
+    static const unsigned char dns[16] = {0x20, 0x01, 0x48, 0x60, 0x48, 0x60, 0, 0, 0, 0, 0, 0, 0, 0, 0x88, 0x88};
+    memcpy(&to.sin6_addr, dns, 16);
+    socklen_t len = sizeof(me);
+    const int known = connect(s, (const struct sockaddr *)&to, sizeof(to)) == 0 && getsockname(s, (struct sockaddr *)&me, &len) == 0;
+    CloseSock(s);
+    if (!known) return 0;
+    const unsigned char *a = (const unsigned char *)&me.sin6_addr;
+    if ((a[0] & 0xE0) != 0x20 || (a[0] == 0x20 && a[1] == 0x01 && a[2] == 0 && a[3] == 0)) return 0;
+    return getnameinfo((const struct sockaddr *)&me, sizeof(me), out, (socklen_t)size, NULL, 0, NI_NUMERICHOST) == 0;
+}
+
 void NetUpnp_Open(unsigned short port) {
     if (!s_lock) s_lock = SDL_CreateMutex();
     if (s_thread) { SDL_WaitThread(s_thread, NULL); s_thread = NULL; }
