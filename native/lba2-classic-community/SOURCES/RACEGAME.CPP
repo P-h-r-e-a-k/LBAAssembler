@@ -3663,15 +3663,24 @@ static int TypePage(const char *what, const char *hint, char *value, int size, i
 
 // What the player must read, a line or several (split by \n): Enter or Esc goes on
 #define RG_SAY_LINE 34
-#define RG_SAY_LINES 6
+#define RG_SAY_LINES 8
+#define RG_SAY_WIDE 38                      // characters to a line of the box in the big font: longer ones broken at a space
 static void SayPage(const char *what, const char *line) {
-    char copy[256];
+    char copy[320];
     snprintf(copy, sizeof(copy), "%s", line);
     const char *lines[RG_SAY_LINES];
     int nbLines = 0;
     for (char *s = copy; s && nbLines < RG_SAY_LINES;) {
         lines[nbLines++] = s;
-        if ((s = strchr(s, '\n')) != NULL) *s++ = 0;
+        char *cut = strchr(s, '\n');
+        const size_t len = cut ? (size_t)(cut - s) : strlen(s);
+        if (len > RG_SAY_WIDE) {
+            char *space = s + RG_SAY_WIDE;
+            while (space > s && *space != ' ') space--;
+            if (space > s) cut = space;
+        }
+        if (cut) *cut++ = 0;
+        s = cut;
     }
     S32 padDir;
     PageLoopStart(&padDir);
