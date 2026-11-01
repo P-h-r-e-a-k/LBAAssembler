@@ -40,6 +40,9 @@ typedef struct {
     int Finish;                             // the race's time, GO to the line (ms); 0 still racing
     int Lap, Progress;
     int Pending;                            // yet to give the race's password
+    int Vote;                               // the track voted for, -1 none (RaceNet_Stage)
+    int Chosen;                             // has chosen a car, this round
+    int InRace;                             // still out on the road, not back in the lobby
     uint32_t Id;
 } T_RACENET_PLAYER;
 
@@ -74,11 +77,27 @@ int RaceNet_Others(void);                   // how many other players
 int RaceNet_Other(int i, T_RACENET_PLAYER *out);
 
 // The host starts a race: every game gets it from RaceNet_Announced, once. A player who joins with a race on is sent it: RaceNet_Late, non-zero
-void RaceNet_Announce(const char *track, int laps);
-int RaceNet_Announced(char *track, int size, int *laps);
+// `qualifying`: the one lap each that decides the grid, not the race (RaceNet_QualifyingOver)
+void RaceNet_Announce(const char *track, int laps, int qualifying);
+int RaceNet_Announced(char *track, int size, int *laps, int *qualifying);
 int RaceNet_Late(void);
 void RaceNet_RaceOver(void);                // the host is back from the race
 int RaceNet_Slot(void);                     // this game's place on the grid: 0 the first
+
+// A round, as the host leads it (RACEGAME.CPP LobbyPage): the lobby, a vote for a track, a minute for cars, a qualifying lap each or a grid dealt at random, the
+// grid shown, the race, the lobby again. The host says where it has got to, and every game follows; a player who comes in is told. `track`: the track won, -1 none yet
+enum { RACENET_STAGE_LOBBY, RACENET_STAGE_VOTE, RACENET_STAGE_CARS, RACENET_STAGE_QUALIFYING, RACENET_STAGE_GRID, RACENET_STAGE_RACE };
+void RaceNet_SetStage(int stage, int ms, int track);
+int RaceNet_Stage(int *msLeft, int *track);
+void RaceNet_Vote(int track);
+int RaceNet_Votes(int *counts, int size, int *players);   // the votes for each track; returns how many have voted, *players how many can
+void RaceNet_CarChosen(void);
+int RaceNet_CarsChosen(void);               // every player in the lobby has one
+void RaceNet_InRace(int on);                // this game is off to race, or back in the lobby
+int RaceNet_QualifyingOver(void);           // all over the line, or time is up: non-zero from then on
+// The host: the grid from the qualifying times, those with none last, or (`byTimes` 0) at random, sent to all. Then each game's RaceNet_Slot is its place on it
+void RaceNet_DealGrid(int byTimes);
+int RaceNet_GridOf(int i, char *name, int size, int *ms);   // who is at place i, and their time; 0 past the last
 uint32_t RaceNet_SelfId(void);
 
 // In the race. Ready: this game's car is at the start. Go: non-zero once the host has said go (all of them ready, or the slow ones given up on), once

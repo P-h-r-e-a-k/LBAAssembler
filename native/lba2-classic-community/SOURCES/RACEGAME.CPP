@@ -1165,6 +1165,7 @@ static void CopyResolved(FILE *in, FILE *f) {
 // game's keys -- and the difficulty chosen (`level`, -1 none: after the file's own, so it counts) -- written to RACE_NOW.TXT in the user's
 // folder and loaded in place of any other. `watch`: a ghost of the track's to play back (Best laps), not a race.
 static int s_onlineRace = 0;                // StartRace: a race with other players (online=)
+static int s_onlineQual = 0;                // ... its qualifying lap (online_qualifying=)
 
 // The race's power-ups, for a time trial's file: an online race is one, with the race's mushrooms and what comes of them
 static void CopyPowerUps(const char *race, FILE *f) {
@@ -1206,7 +1207,7 @@ static int StartRace(int sp, int trial, const T_RG_CAR *car, int level, const ch
     if (trial) {
         ReadSettings();
         fprintf(f, "ghost_name=%s\nghost_car=%s\nghost=%d\n", s->Name, car ? car->Name : "Twinsen's car", s_onlineRace ? 0 : s_ghost);
-        if (s_onlineRace) { fprintf(f, "online=1\n"); CopyPowerUps(s->Race, f); }
+        if (s_onlineRace) { fprintf(f, "online=1\n"); if (s_onlineQual) fprintf(f, "online_qualifying=1\n"); else CopyPowerUps(s->Race, f); }
         // (another player's: its file -- the "Other" page)
         if (s_ghost == 8) fprintf(f, "ghost_file=%s\n", s_ghostOther);
         if (watch && watch[0]) fprintf(f, "ghost_watch=%s\n", watch);
@@ -2981,6 +2982,10 @@ static void FrameBox(S32 x0, S32 y0, S32 x1, S32 y1, U8 colour) {
     for (S32 y = y0; y <= y1; y++) { Plot(x0, y, colour, 2); Plot(x1 - 1, y, colour, 2); }
 }
 
+// A car page with a time limit, online: asked each frame, it says when time is up, s_pageLeft the seconds it has left. The car it is on is taken
+static int (*s_pageOver)(void) = NULL;
+static int s_pageLeft = 0;
+
 static int GridPage(const char *what, int trial) {
     if (s_nbGrid <= 0) return -1;
     // (the car chosen last, by its name; one that can't be taken for this -- the pumpkin F1 still locked -- the first that can)
@@ -3011,6 +3016,7 @@ static int GridPage(const char *what, int trial) {
         ManageTime();
         MyGetInput();
         if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; s_thumbPage = -1; }
+        if (s_pageOver && s_pageOver()) chosen = TakenFor(&s_grid[s_gridView[sel]], trial) ? s_gridView[sel] : -1;
         // (every car unlocked: the small cars drawn again, none dimmed)
         if (AllCarsCode(&codeKey, typed)) s_thumbPage = -1;
         // (a key struck, as CodePage's: a letter or -- with some typed -- a space for the name looked for, Backspace one back, Tab the next stat)
@@ -3075,7 +3081,8 @@ static int GridPage(const char *what, int trial) {
         // the page: the backdrop, the header, the grid
         CopyScreen(Screen, Log);
         char header[96];
-        snprintf(header, sizeof(header), "Choose your car for %s", what);
+        if (s_pageOver) snprintf(header, sizeof(header), "Choose your car: %d s", s_pageLeft);
+        else snprintf(header, sizeof(header), "Choose your car for %s", what);
         // (the header over the menu picture's title: a shaded strip under it)
         ShadeBoxBlk(cx - 318, 4 + oy, cx + 316, 38 + oy, MENU_SHADE_LVL);
         Text(cx, 8 + oy, header, RG_ORANGE);
@@ -3699,6 +3706,9 @@ static U16 s_screenMenu[4 + 2 * (RG_SCREENS + 1)];
 #define RG_TYPED_MAX 63
 #define RG_LOBBY_ROW 34                     // the lobby: a line's height
 #define RG_LOBBY_ROWS 5                     // the players it lists
+#define RG_VOTE_MS 30000                    // a round: how long the vote lasts ...
+#define RG_CARS_MS 60000                    // ... and the choice of cars (the user, 2026-11-01: "each user gets 60 seconds to select a car")
+#define RG_GRID_SHOWN_MS 6000               // ... and the grid is shown
 static int TypePage(const char *what, const char *hint, char *value, int size, int address, int mayBeEmpty = 0) {
     S32 padDir;
     PageLoopStart(&padDir);
@@ -3810,6 +3820,7 @@ static void SayPage(const char *what, const char *line) { AskPage(what, line, "E
 static char s_netName[RACENET_NAME + 1] = "", s_netAddress[64] = "", s_netPassword[64] = "";
 static const T_RG_CAR *s_netCar = NULL;     // the car chosen for online races (none: Twinsen's)
 static int s_netSp = -1, s_onlineLaps = 3;
+static int s_netQualify = 1;                // the host's: a qualifying lap, or a grid dealt at random
 
 static void ReadOnline(void) {
     char path[ADELINE_MAX_PATH], line[128];
@@ -3819,6 +3830,8 @@ static void ReadOnline(void) {
             line[strcspn(line, "\r\n")] = 0;
             if (!strncmp(line, "name=", 5)) snprintf(s_netName, sizeof(s_netName), "%s", line + 5);
             else if (!strncmp(line, "address=", 8)) snprintf(s_netAddress, sizeof(s_netAddress), "%s", line + 8);
+            else if (!strncmp(line, "laps=", 5)) s_onlineLaps = atoi(line + 5) > 0 ? atoi(line + 5) : 3;
+            else if (!strncmp(line, "qualifying=", 11)) s_netQualify = atoi(line + 11) != 0;
         }
         fclose(f);
     }
@@ -3862,7 +3875,7 @@ static void WriteOnline(void) {
     char path[ADELINE_MAX_PATH];
     GetCfgPath(path, ADELINE_MAX_PATH, "ONLINE.TXT");
     if (FILE *f = fopen(path, "w")) {
-        fprintf(f, "name=%s\naddress=%s\n", s_netName, s_netAddress);
+        fprintf(f, "name=%s\naddress=%s\nlaps=%d\nqualifying=%d\n", s_netName, s_netAddress, s_onlineLaps, s_netQualify);
         fclose(f);
     }
 }
@@ -3878,12 +3891,14 @@ static int OnlinePick(int sp) {
     return 1;
 }
 
-static int StartOnline(int sp, int laps) {
+static int StartOnline(int sp, int laps, int qualifying) {
     const int kept = s_trialLaps;
     s_trialLaps = laps;
     s_onlineRace = 1;
+    s_onlineQual = qualifying;
+    RaceNet_InRace(1);
     const int started = StartRace(sp, 1, s_netCar, -1);
-    s_onlineRace = 0;
+    s_onlineRace = s_onlineQual = 0;
     s_trialLaps = kept;
     return started;
 }
@@ -4135,24 +4150,129 @@ static int LocalPage(void) {
     }
 }
 
+// A round's vote, for the track (the user, 2026-11-01: "let's have a vote for a track to race"). Every game's own page, the votes as they come in; the host ends it when
+// time is up or all have voted, the track with the most votes winning, a tie drawn, and with no votes at all any of them. Zero: the session ended
+static int s_routerTold = 0;
+static int s_carDone = 0;
+static int VoteWinner(const int *list, int n) {
+    int counts[RG_MAX_ENTRIES], most = 0, ties = 0;
+    RaceNet_Votes(counts, RG_MAX_ENTRIES, NULL);
+    for (int i = 0; i < n; i++) if (counts[list[i]] > most) most = counts[list[i]];
+    for (int i = 0; i < n; i++) if (counts[list[i]] == most) ties++;
+    int pick = rand() % ties;
+    for (int i = 0; i < n; i++)
+        if (counts[list[i]] == most && pick-- == 0) { Log_Info("[racegame] online: %s won the vote, %d vote(s), %d tied", s_sp[list[i]].Name, most, ties); return list[i]; }
+    return list[0];
+}
+
+static int VotePage(void) {
+    int list[RG_MAX_ENTRIES], n = 0, at = 0, mine = -1;
+    for (int i = 0; i < s_nbSp; i++) if (s_sp[i].Track) list[n++] = i;
+    if (n <= 0) return 0;
+    const int rows = (n + 1) / 2, host = RaceNet_IsHost();
+    S32 padDir;
+    PageLoopStart(&padDir);
+    Log_Info("[racegame] online: the vote, %d tracks", n);
+    for (;;) {
+        ManageTime();
+        MyGetInput();
+        int left = 0;
+        if (RaceNet_Error()[0] || !RaceNet_On()) return 0;
+        if (RaceNet_Stage(&left, NULL) != RACENET_STAGE_VOTE) break;
+        int counts[RG_MAX_ENTRIES], players = 1;
+        const int voted = RaceNet_Votes(counts, RG_MAX_ENTRIES, &players);
+        if (host && (left <= 0 || voted >= players)) {
+            RaceNet_SetStage(RACENET_STAGE_CARS, RG_CARS_MS, VoteWinner(list, n));
+            break;
+        }
+        S32 dx, dy;
+        if (Nav(&padDir, &dx, &dy)) {
+            if (dy) at = (at + dy + n) % n;
+            else if (dx) at = at < rows ? (at + rows < n ? at + rows : at) : at - rows;
+        }
+        const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, x0 = cx - 340, x1 = cx + 340, y0 = 30 + oy, y1 = 450 + oy, colW = 330;
+        S32 mx, my;
+        const int click = Clicked(&mx, &my);
+        Page(NULL, 0);
+        ShadeBoxBlk(x0, y0, x1, y1, RG_PAGE_SHADE);
+        DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
+        char line[128];
+        snprintf(line, sizeof(line), "Vote for a track: %d s", (left + 999) / 1000);
+        Text(cx, y0 + 12, line, RG_ORANGE);
+        for (int i = 0; i < n; i++) {
+            const int col = i >= rows;
+            const S32 x = cx + (col ? colW / 2 : -colW / 2), y = y0 + 54 + (i - (col ? rows : 0)) * RG_LOBBY_ROW;
+            if (click == 1 && mx >= x - colW / 2 && mx < x + colW / 2 && my >= y && my < y + RG_LOBBY_ROW) { at = i; mine = -2; }
+            const int votes = counts[list[i]];
+            if (votes) snprintf(line, sizeof(line), "%s: %d", s_sp[list[i]].Name, votes);
+            else snprintf(line, sizeof(line), "%s", s_sp[list[i]].Name);
+            // (a row a line high: a long name smaller, not on two)
+            const S32 colour = i == at ? RG_ORANGE : list[i] == mine ? LBAWHITE : RG_GREY;
+            char shown[256];
+            Label(shown, line);
+            if (SizeFont(shown) <= colW - 10) Text(x, y + 2, line, colour);
+            else SmallFitted(x, y + 8, colW - 10, line, colour, 0);
+        }
+        snprintf(line, sizeof(line), "%d of %d voted", voted, players);
+        Text(cx, y1 - 72, line, RG_GREY);
+        Text(cx, y1 - 38, "Arrows: track    Enter: vote", RG_GREY);
+        Present();
+        if (Confirmed() || mine == -2) {
+            WaitNoInput();
+            mine = list[at];
+            RaceNet_Vote(mine);
+            Log_Info("[racegame] online: voted for %s", s_sp[mine].Name);
+        }
+    }
+    AsciiMode = FALSE;
+    Page(NULL, 0);
+    return 1;
+}
+
+// A minute for a car: the page closes on the car it's on when time is up, or the host moves on; a car that can't be taken keeps the one from before
+static int CarsOver(void) {
+    int left = 0;
+    const int stage = RaceNet_Stage(&left, NULL);
+    s_pageLeft = (left + 999) / 1000;
+    return stage != RACENET_STAGE_CARS || left <= 0 || RaceNet_Error()[0] || !RaceNet_On();
+}
+
+static void CarRound(void) {
+    if (s_nbGrid > 0) {
+        s_pageOver = CarsOver;
+        const int car = GridPage("an online race", 1);
+        s_pageOver = NULL;
+        if (car >= 0) s_netCar = &s_grid[car];
+    }
+    RaceNet_CarChosen();
+    Log_Info("[racegame] online: the car: %s", s_netCar ? s_netCar->Name : "Twinsen's car");
+}
+
 // Who is here, and what happens next. Non-zero: a race is set up
 static int LobbyPage(void) {
     S32 padDir;
     PageLoopStart(&padDir);
     const int local = RaceNet_Local();
     const int host = RaceNet_IsHost() && !local, picks = RaceNet_IsHost();
-    int result = -1, told = 0;
+    int result = -1;
+    // (rounds: a vote and a minute for cars. Two players at one PC, the first player picks)
+    const int rounds = !local && s_localGuest <= 0;
     char said[220] = "", outside[64] = "", inside[64] = "", address[100] = "", failed[256] = "";
     Log_Info("[racegame] online: the lobby, %s", picks ? "hosting" : "joined");
+    RaceNet_InRace(0);
     if (picks) RaceNet_RaceOver();
+    if (host) {
+        int track = -1;
+        if (RaceNet_Stage(NULL, &track) == RACENET_STAGE_RACE) RaceNet_SetStage(RACENET_STAGE_LOBBY, 0, -1);
+    }
     while (result < 0) {
         ManageTime();
         MyGetInput();
         const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, x0 = cx - 330, x1 = cx + 330, y0 = 60 + oy, y1 = 430 + oy;
         int ok = 0;
         const int answered = host && RaceNet_Router(&ok, said, sizeof(said), outside, sizeof(outside), inside, sizeof(inside));
-        if (answered && !told) {
-            told = 1;
+        if (answered && !s_routerTold) {
+            s_routerTold = 1;
             // (the user, 2026-10-30: "if it fails alert the user")
             if (!ok) SayPage("Players on the internet can't join yet", said);
             PageLoopStart(&padDir);
@@ -4163,10 +4283,16 @@ static int LobbyPage(void) {
         ShadeBoxBlk(x0, y0, x1, y1, RG_PAGE_SHADE);
         DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
         const int connected = RaceNet_Connected();
-        Text(cx, y0 + 14, local || s_localGuest > 0 ? "Two players" : host ? "Hosting an online race" : connected ? "In an online race" : "Joining ...", RG_ORANGE);
+        int stageLeft = 0, stageTrack = -1;
+        const int stage = rounds ? RaceNet_Stage(&stageLeft, &stageTrack) : RACENET_STAGE_LOBBY;
+        char stageLine[128] = "";
+        if (stage == RACENET_STAGE_CARS) snprintf(stageLine, sizeof(stageLine), "Next: %s", stageTrack >= 0 && stageTrack < s_nbSp ? s_sp[stageTrack].Name : "?");
+        else if (stage == RACENET_STAGE_QUALIFYING) snprintf(stageLine, sizeof(stageLine), "Qualifying: waiting for the others");
+        else if (stage == RACENET_STAGE_GRID) snprintf(stageLine, sizeof(stageLine), "The grid: %s", stageTrack >= 0 && stageTrack < s_nbSp ? s_sp[stageTrack].Name : "?");
+        Text(cx, y0 + 14, stageLine[0] ? stageLine : local || s_localGuest > 0 ? "Two players" : host ? "Hosting an online race" : connected ? "In an online race" : "Joining ...", RG_ORANGE);
         S32 y = y0 + 52;
         const char *ipv6 = host ? RaceNet_Ipv6() : "";
-        if (host) {
+        if (host && stage != RACENET_STAGE_GRID) {
             if (!answered) Text(cx, y, "Asking the router to open the port ...", RG_GREY);
             else {
                 snprintf(address, sizeof(address), "Friends join: %s:%d", outside[0] ? outside : "(not known)", RACENET_PORT);
@@ -4185,17 +4311,42 @@ static int LobbyPage(void) {
         char line[120];
         // (at one PC, Player 1 and Player 2 in both windows: a name saved for internet games came back after a race, ReadOnline. The user,
         // 2026-10-31, "PlayerA" on the left and "Player 1" on the right)
+        if (stage == RACENET_STAGE_GRID) {
+            // (the grid's order, with the times that made it)
+            char who[RACENET_NAME + 1];
+            int ms = 0;
+            for (int i = 0; i < RG_LOBBY_ROWS + 3 && RaceNet_GridOf(i, who, sizeof(who), &ms); i++) {
+                if (ms) snprintf(line, sizeof(line), "%d. %s  %d:%02d.%02d", i + 1, who, ms / 60000, ms / 1000 % 60, ms / 10 % 100);
+                else snprintf(line, sizeof(line), "%d. %s", i + 1, who);
+                Text(cx, y0 + 66 + i * RG_LOBBY_ROW, line, LBAWHITE);
+            }
+        }
+        const int listed = stage != RACENET_STAGE_GRID;
         snprintf(line, sizeof(line), "%s (you)", local ? "Player 1" : s_netName);
-        Text(cx, y, line, LBAWHITE);
+        if (listed) Text(cx, y, line, LBAWHITE);
         y += RG_LOBBY_ROW;
-        const int rows = host ? RG_LOBBY_ROWS - (ipv6[0] ? 3 : 2) : RG_LOBBY_ROWS;
+        const int rows = !listed ? 0 : host ? RG_LOBBY_ROWS - (ipv6[0] ? 3 : 2) : RG_LOBBY_ROWS;
         for (int i = 0; i < others && i < rows; i++) {
             T_RACENET_PLAYER who;
             if (!RaceNet_Other(i, &who)) continue;
             if (i == rows - 1 && others > rows) snprintf(line, sizeof(line), "and %d more", others - rows + 1);
-            else snprintf(line, sizeof(line), "%s%s", who.Name, who.Pending ? " (asked for the password)" : "");
+            else snprintf(line, sizeof(line), "%s%s", who.Name, who.Pending ? " (asked for the password)" : who.InRace ? " (still racing)" : "");
             Text(cx, y, line, who.Pending ? RG_GREY : LBAWHITE);
             y += RG_LOBBY_ROW;
+        }
+        // (the host's settings for the round, on the same keys as a page's rows)
+        if (rounds && picks && stage == RACENET_STAGE_LOBBY) {
+            S32 dx, dy;
+            if (Nav(&padDir, &dx, &dy)) {
+                static const int laps[] = {1, 3, 5, 10};
+                int l = 0;
+                while (l < 3 && laps[l] < s_onlineLaps) l++;
+                if (dx) s_onlineLaps = laps[(l + dx + 4) % 4];
+                if (dy) s_netQualify = !s_netQualify;
+                WriteOnline();
+            }
+            snprintf(line, sizeof(line), "Left, Right: %d lap%s    Up, Down: %s", s_onlineLaps, s_onlineLaps == 1 ? "" : "s", s_netQualify ? "qualifying lap" : "no qualifying");
+            Text(cx, y1 - 140, line, LBAWHITE);
         }
         if (host && s_netPassword[0]) { snprintf(line, sizeof(line), "Password: %s", s_netPassword); Text(cx, y1 - 106, line, RG_GREY); }
         // (each window its own player's keys: both said player 2's, the user, 2026-10-31, "the same controls for both cars")
@@ -4210,7 +4361,12 @@ static int LobbyPage(void) {
         if (picks && RaceNet_Turned()[0]) Text(cx, y1 - 72, RaceNet_Turned(), RG_ORANGE);
         // (the host's Enter picks the track, then their car; the second player's Enter on one keyboard is right Ctrl: Enter goes to the first's window,
         // RaceGame_SharedKeys. The user, 2026-10-31: "What does Enter do, does it pick the track, or pick the car?")
-        Text(cx, y1 - 38, picks ? "Enter: track and car    Esc: leave" : s_localGuest > 0 ? "Right Ctrl: pick your car" : "Enter: pick your car    Esc: leave", RG_GREY);
+        if (!rounds) Text(cx, y1 - 38, picks ? "Enter: track and car    Esc: leave" : s_localGuest > 0 ? "Right Ctrl: pick your car" : "Enter: pick your car    Esc: leave", RG_GREY);
+        else if (stage == RACENET_STAGE_LOBBY) Text(cx, y1 - 38, picks ? "Enter: vote for a track    Esc: leave" : "Waiting for the host    Esc: leave", RG_GREY);
+        else {
+            snprintf(line, sizeof(line), stage == RACENET_STAGE_CARS ? "Others are choosing cars: %d s" : "Starting ...", (stageLeft + 999) / 1000);
+            Text(cx, y1 - 38, line, RG_GREY);
+        }
         Present();
         // (it ended: the host left, or refused this game)
         const char *error = RaceNet_Error();
@@ -4223,9 +4379,48 @@ static int LobbyPage(void) {
             PageLoopStart(&padDir);
             continue;
         }
+        // the round, as the host leads it
+        if (rounds) {
+            if (stage != RACENET_STAGE_CARS) s_carDone = 0;
+            if (stage == RACENET_STAGE_VOTE) {
+                if (!VotePage()) { snprintf(failed, sizeof(failed), "%s", RaceNet_Error()[0] ? RaceNet_Error() : "The game ended"); result = 0; break; }
+                PageLoopStart(&padDir);
+                continue;
+            }
+            if (stage == RACENET_STAGE_CARS && !s_carDone) {
+                s_carDone = 1;
+                CarRound();
+                PageLoopStart(&padDir);
+                continue;
+            }
+            if (picks) {
+                if (stage == RACENET_STAGE_CARS && (stageLeft <= 0 || RaceNet_CarsChosen())) {
+                    if (s_netQualify) {
+                        RaceNet_SetStage(RACENET_STAGE_QUALIFYING, 0, stageTrack);
+                        RaceNet_Announce(s_sp[stageTrack].Name, 1, 1);
+                        result = StartOnline(stageTrack, 1, 1);
+                        if (result) break;
+                        continue;
+                    }
+                    RaceNet_DealGrid(0);
+                    RaceNet_SetStage(RACENET_STAGE_GRID, RG_GRID_SHOWN_MS, stageTrack);
+                }
+                else if (stage == RACENET_STAGE_QUALIFYING && RaceNet_QualifyingOver()) {
+                    RaceNet_DealGrid(1);
+                    RaceNet_SetStage(RACENET_STAGE_GRID, RG_GRID_SHOWN_MS, stageTrack);
+                }
+                else if (stage == RACENET_STAGE_GRID && stageLeft <= 0) {
+                    RaceNet_SetStage(RACENET_STAGE_RACE, 0, stageTrack);
+                    RaceNet_Announce(s_sp[stageTrack].Name, s_onlineLaps, 0);
+                    result = StartOnline(stageTrack, s_onlineLaps, 0);
+                    if (result) break;
+                    continue;
+                }
+            }
+        }
         char track[96];
-        int laps = 0;
-        if (!host && RaceNet_Announced(track, sizeof(track), &laps)) {
+        int laps = 0, qualifying = 0;
+        if (!host && RaceNet_Announced(track, sizeof(track), &laps, &qualifying)) {
             int sp = -1;
             for (int i = 0; i < s_nbSp; i++) if (!strcmp(s_sp[i].Name, track)) sp = i;
             if (sp < 0) { snprintf(failed, sizeof(failed), "This game doesn't have %s", track); result = 0; break; }
@@ -4234,20 +4429,28 @@ static int LobbyPage(void) {
                 const int car = GridPage("an online race", 1);
                 if (car >= 0) s_netCar = &s_grid[car];
             }
-            result = StartOnline(sp, laps);
+            result = StartOnline(sp, laps, qualifying);
             if (result) break;
             continue;
         }
         if ((click == 2 || Escaped()) && s_localGuest <= 0) { result = 0; break; }
-        if (Confirmed() || click == 1) {
+        if (rounds) {
+            // (the host, every one here: on to the vote)
+            if (picks && stage == RACENET_STAGE_LOBBY && (Confirmed() || click == 1)) {
+                WaitNoInput();
+                Log_Info("[racegame] online: the host starts the vote: %d lap(s), %s", s_onlineLaps, s_netQualify ? "a qualifying lap" : "a random grid");
+                RaceNet_SetStage(RACENET_STAGE_VOTE, RG_VOTE_MS, -1);
+            }
+        }
+        else if (Confirmed() || click == 1) {
             WaitNoInput();
             if (picks) {
                 s_onlinePick = 1;
                 const int picked = TrackSelect();
                 s_onlinePick = 0;
                 if (picked && s_netSp >= 0) {
-                    RaceNet_Announce(s_sp[s_netSp].Name, s_onlineLaps);
-                    result = StartOnline(s_netSp, s_onlineLaps);
+                    RaceNet_Announce(s_sp[s_netSp].Name, s_onlineLaps, 0);
+                    result = StartOnline(s_netSp, s_onlineLaps, 0);
                 }
             }
             else if (connected && s_nbGrid > 0) {
@@ -4364,6 +4567,7 @@ static int OnlinePage(void) {
         IdentifyGame();
         const int on = select == RG_ID_ONLINE_HOST ? RaceNet_Host(s_netName, s_netPassword) : RaceNet_Join(s_netAddress, s_netName);
         if (!on) { SayPage("Online race", RaceNet_Error()); continue; }
+        s_routerTold = 0;
         if (LobbyPage()) return 1;
     }
 }

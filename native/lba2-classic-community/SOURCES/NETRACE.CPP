@@ -8,7 +8,13 @@
 //   ASK     reliable   host to a new player, with a race that has a password: a number to answer with
 //   PASS    reliable   to the host: that number and the password, hashed
 //   WRONG   reliable   host to a player it is turning away: its own version, to tell them
-//   TRACK   reliable   host to all: the race, its laps and its track's name; to a player joining a race under way, how long it has been going too
+//   TRACK   reliable   host to all: the race, its laps, whether it's a qualifying lap, its track's name; to a player joining a race under way, how long it has been going too
+//   STAGE   reliable   host to all: where the round has got to, how long it has left, the track won (RaceNet_SetStage)
+//   VOTE    reliable   to all: the track this player votes for
+//   CHOSEN  reliable   to all: this player has its car
+//   INRACE  reliable   to all: this game is racing, or back in the lobby
+//   GRID    reliable   host to all: the grid's order, each player's id and qualifying time
+//   QDONE   reliable   host to all: qualifying is over, whoever is still out there
 //   READY   reliable   to the host: this game's car is at the start
 //   GO      reliable   host to all: count down now
 //   CAR     as it may  to all, 30 a second: as a ghost's sample, so a car is drawn as a ghost is (RACEMOD.CPP DrawNetCars)
@@ -33,7 +39,7 @@
 #include <windows.h>
 #endif
 
-#define RACENET_PROTOCOL 2
+#define RACENET_PROTOCOL 3
 #define RACENET_DELAY_MS 40                 // how far behind a car is drawn
 #define RACENET_AHEAD_MS 250                // how far past its newest sample
 #define RACENET_EASE_MS 90.0                // a car's correction eased out over this long ...
@@ -47,8 +53,10 @@
 #define RACENET_TRACK 96
 #define RACENET_VERSION 32
 #define RACENET_EVENTS 128
+#define RACENET_QUAL_AFTER_MS 30000         // qualifying: how long the others have once the first is over the line ...
+#define RACENET_QUAL_MOST_MS 240000         // ... and how long it can go on at all
 
-enum { M_HELLO = 1, M_TRACK, M_READY, M_GO, M_CAR, M_FINISH, M_ASK, M_PASS, M_WRONG, M_EVENT, M_PING, M_PONG };
+enum { M_HELLO = 1, M_TRACK, M_READY, M_GO, M_CAR, M_FINISH, M_ASK, M_PASS, M_WRONG, M_EVENT, M_PING, M_PONG, M_STAGE, M_VOTE, M_CHOSEN, M_INRACE, M_GRID, M_QDONE };
 
 typedef struct {
     uint32_t T;                             // the sender's clock
@@ -60,6 +68,7 @@ typedef struct {
     uint32_t Id;
     char Name[RACENET_NAME + 1];
     int Ready, Finish, Lap, Progress, Hello;
+    int Vote, Chosen, InRace;               // Vote: the track + 1, 0 none
     int Pending, Admitted;                  // (the host) yet to give the password; let in
     uint32_t Nonce, AskedAt;
     int Rtt;                                // the round trip to it, ms (0: not known yet)
@@ -98,6 +107,14 @@ static int s_evHead = 0, s_evCount = 0;
 static char s_track[RACENET_TRACK] = "";
 static int s_trackLaps = 0, s_trackPending = 0;
 static T_RACENET_CAR s_own;                 // (only for the Lap and Progress a player's list shows)
+static int s_stage = RACENET_STAGE_LOBBY, s_stageMs = 0, s_stageTrack = -1;
+static uint32_t s_stageAt = 0;
+static int s_selfVote = 0, s_selfChosen = 0, s_selfFinish = 0;
+static int s_qualifying = 0, s_qualOver = 0;
+static uint32_t s_firstOverAt = 0;
+typedef struct { uint32_t Id; int Ms; } T_RN_GRID;
+static T_RN_GRID s_grid[RACENET_MAX_OTHERS + 1];
+static int s_gridN = 0;
 
 // ---- bytes on the wire: little-endian, whatever the machine ----
 
@@ -135,9 +152,10 @@ static void SendHello(void) {
 
 // (to everyone, or a player who joins with it on: `late` how long the race has been going, 0 not yet)
 static void SendTrack(uint32_t to, int late) {
-    uint8_t b[6 + RACENET_TRACK], *p = b;
+    uint8_t b[7 + RACENET_TRACK], *p = b;
     *p++ = M_TRACK;
     *p++ = (uint8_t)s_trackLaps;
+    *p++ = (uint8_t)s_qualifying;
     Put32(&p, late);
     const int n = (int)strlen(s_track);
     memcpy(p, s_track, n);
@@ -146,10 +164,29 @@ static void SendTrack(uint32_t to, int late) {
     else NetKit_Broadcast(s_kit, b, (int)(p - b), 1);
 }
 
+// (to everyone, or a player who comes in part of the way through a round)
+static void SendStage(uint32_t to, uint32_t now) {
+    uint8_t b[8], *p = b;
+    const int left = s_stageMs - (int)(now - s_stageAt);
+    *p++ = M_STAGE;
+    *p++ = (uint8_t)s_stage;
+    Put32(&p, left > 0 ? left : 0);
+    Put16(&p, s_stageTrack);
+    if (to) NetKit_Send(s_kit, to, b, (int)(p - b), 1);
+    else NetKit_Broadcast(s_kit, b, (int)(p - b), 1);
+}
+
+// (a vote or a choice of cars begins: everyone's last one forgotten)
+static void StageBegins(int stage) {
+    if (stage == RACENET_STAGE_VOTE) { s_selfVote = 0; for (int i = 0; i < s_nbPeers; i++) s_peer[i].Vote = 0; }
+    if (stage == RACENET_STAGE_CARS) { s_selfChosen = 0; for (int i = 0; i < s_nbPeers; i++) s_peer[i].Chosen = 0; }
+}
+
 // (the host) a player through the door: with a race on, it is sent it
 static void Admit(T_RN_PEER *peer, uint32_t now) {
     if (peer->Admitted || !peer->Hello || peer->Pending) return;
     peer->Admitted = 1;
+    if (s_stage != RACENET_STAGE_LOBBY) SendStage(peer->Id, now);
     if (s_racing) SendTrack(peer->Id, 0);
     else if (s_live) { const int late = (int)(now - s_wentAt); SendTrack(peer->Id, late > 0 ? late : 1); Log_Info("[racenet] %s joins the race under way, %.1f s in", peer->Name, late / 1000.0); }
 }
@@ -293,8 +330,11 @@ static void Take(const NetKitMessage *m) {
         }
         break;
     case M_TRACK:
-        if (end - p >= 6 && !s_hosting) {
+        if (end - p >= 7 && !s_hosting) {
             s_trackLaps = *p++;
+            s_qualifying = *p++;
+            s_qualOver = 0;
+            s_selfFinish = 0;
             const int late = Get32(&p);
             const int n = (int)(end - p) < RACENET_TRACK - 1 ? (int)(end - p) : RACENET_TRACK - 1;
             memcpy(s_track, p, n);
@@ -342,6 +382,39 @@ static void Take(const NetKitMessage *m) {
     case M_FINISH:
         if (peer && end - p >= 4) peer->Finish = Get32(&p);
         break;
+    case M_STAGE:
+        if (!s_hosting && end - p >= 7) {
+            const int stage = *p++;
+            const int ms = Get32(&p);
+            const int track = Get16(&p);
+            if (stage != s_stage) StageBegins(stage);
+            s_stage = stage; s_stageMs = ms; s_stageTrack = track;
+            s_stageAt = (uint32_t)SDL_GetTicks();
+        }
+        break;
+    case M_VOTE:
+        if (peer && end - p >= 1) peer->Vote = *p + 1;
+        break;
+    case M_CHOSEN:
+        if (peer) peer->Chosen = 1;
+        break;
+    case M_INRACE:
+        if (peer && end - p >= 1) peer->InRace = *p;
+        break;
+    case M_GRID:
+        if (!s_hosting && end - p >= 1) {
+            int n = *p++;
+            s_gridN = 0;
+            while (n-- > 0 && end - p >= 8 && s_gridN <= RACENET_MAX_OTHERS) {
+                s_grid[s_gridN].Id = (uint32_t)Get32(&p);
+                s_grid[s_gridN].Ms = Get32(&p);
+                s_gridN++;
+            }
+        }
+        break;
+    case M_QDONE:
+        if (!s_hosting) s_qualOver = 1;
+        break;
     default:
         break;
     }
@@ -360,6 +433,23 @@ static void GoWhenReady(uint32_t now) {
     s_live = 1;
     s_wentAt = now;
     Log_Info("[racenet] go%s", ready ? "" : " (a player not ready given up on)");
+}
+
+// (the host, qualifying: everyone over the line, the others given a while after the first, or as long as it can go on)
+static void QualifyingWatch(uint32_t now) {
+    if (!s_hosting || !s_qualifying || s_qualOver || !s_goSent) return;
+    int out = !s_selfFinish, over = s_selfFinish != 0;
+    for (int i = 0; i < s_nbPeers; i++) {
+        if (s_peer[i].Pending) continue;
+        if (s_peer[i].Finish) over = 1;
+        else out++;
+    }
+    if (over && !s_firstOverAt) s_firstOverAt = now;
+    if (out && !(s_firstOverAt && now - s_firstOverAt >= RACENET_QUAL_AFTER_MS) && now - s_wentAt < RACENET_QUAL_MOST_MS) return;
+    s_qualOver = 1;
+    const uint8_t b = M_QDONE;
+    NetKit_Broadcast(s_kit, &b, 1, 1);
+    Log_Info("[racenet] qualifying over, %d still out", out);
 }
 
 static int SDLCALL Worker(void *unused) {
@@ -397,6 +487,7 @@ static int SDLCALL Worker(void *unused) {
                 for (int i = 0; i < s_nbPeers; i++) NetKit_Send(s_kit, s_peer[i].Id, b, 5, 0);
             }
             GoWhenReady(now);
+            QualifyingWatch(now);
         }
         SDL_UnlockMutex(s_lock);
         SDL_Delay(RACENET_POLL_MS);
@@ -409,6 +500,9 @@ static int Begin(void) {
     if (!s_lock) { snprintf(s_error, sizeof(s_error), "%s", "No lock to run the network with"); return 0; }
     s_nbPeers = 0; s_error[0] = 0;
     s_selfReady = s_goSent = s_goPending = s_racing = s_trackPending = s_live = s_lateMs = s_asked = s_evHead = s_evCount = 0;
+    s_stage = RACENET_STAGE_LOBBY; s_stageMs = 0; s_stageTrack = -1;
+    s_selfVote = s_selfChosen = s_selfFinish = s_qualifying = s_qualOver = s_gridN = 0;
+    s_firstOverAt = 0;
     s_turned[0] = s_hostVersion[0] = 0;
     memset(&s_own, 0, sizeof(s_own));
     SDL_SetAtomicInt(&s_quit, 0);
@@ -572,16 +666,18 @@ int RaceNet_Other(int i, T_RACENET_PLAYER *out) {
         const T_RN_PEER *p = &s_peer[i];
         snprintf(out->Name, sizeof(out->Name), "%s", p->Name);
         out->Ready = p->Ready; out->Finish = p->Finish; out->Lap = p->Lap; out->Progress = p->Progress; out->Pending = p->Pending; out->Id = p->Id;
+        out->Vote = p->Vote - 1; out->Chosen = p->Chosen; out->InRace = p->InRace;
     }
     SDL_UnlockMutex(s_lock);
     return ok;
 }
 
-void RaceNet_Announce(const char *track, int laps) {
+void RaceNet_Announce(const char *track, int laps, int qualifying) {
     if (!s_kit || !s_hosting) return;
     SDL_LockMutex(s_lock);
     snprintf(s_track, sizeof(s_track), "%s", track);
     s_trackLaps = laps;
+    s_qualifying = qualifying; s_qualOver = 0; s_selfFinish = 0; s_firstOverAt = 0;
     for (int i = 0; i < s_nbPeers; i++) { s_peer[i].Ready = s_peer[i].Finish = s_peer[i].Lap = s_peer[i].Progress = 0; s_peer[i].N = 0; }
     s_selfReady = s_goSent = s_goPending = s_live = s_evHead = s_evCount = 0;
     s_racing = 1;
@@ -591,11 +687,11 @@ void RaceNet_Announce(const char *track, int laps) {
     Log_Info("[racenet] %s, %d lap(s), announced to %d player(s)", track, laps, s_nbPeers);
 }
 
-int RaceNet_Announced(char *track, int size, int *laps) {
+int RaceNet_Announced(char *track, int size, int *laps, int *qualifying) {
     if (!s_kit) return 0;
     SDL_LockMutex(s_lock);
     const int got = s_trackPending;
-    if (got) { snprintf(track, size, "%s", s_track); *laps = s_trackLaps; s_trackPending = 0; }
+    if (got) { snprintf(track, size, "%s", s_track); *laps = s_trackLaps; *qualifying = s_qualifying; s_trackPending = 0; }
     SDL_UnlockMutex(s_lock);
     return got;
 }
@@ -645,8 +741,142 @@ int RaceNet_Slot(void) {
     const uint32_t self = NetKit_LocalId(s_kit);
     int slot = 0;
     for (int i = 0; i < s_nbPeers; i++) if (s_peer[i].Id < self) slot++;
+    // (a grid dealt: its place on that, after those on it if it came too late for it. Qualifying, each on their own road: all from one place)
+    if (s_gridN) {
+        int place = -1;
+        for (int i = 0; i < s_gridN; i++) if (s_grid[i].Id == self) place = i;
+        slot = place >= 0 ? place : s_gridN + slot;
+    }
+    if (s_qualifying) slot = 0;
     SDL_UnlockMutex(s_lock);
     return slot;
+}
+
+void RaceNet_SetStage(int stage, int ms, int track) {
+    if (!s_kit || !s_hosting) return;
+    SDL_LockMutex(s_lock);
+    if (stage != s_stage) StageBegins(stage);
+    s_stage = stage; s_stageMs = ms; s_stageTrack = track;
+    s_stageAt = (uint32_t)SDL_GetTicks();
+    SendStage(0, s_stageAt);
+    SDL_UnlockMutex(s_lock);
+}
+
+int RaceNet_Stage(int *msLeft, int *track) {
+    if (!s_kit) return RACENET_STAGE_LOBBY;
+    SDL_LockMutex(s_lock);
+    const int left = s_stageMs - (int)((uint32_t)SDL_GetTicks() - s_stageAt), stage = s_stage;
+    if (msLeft) *msLeft = left > 0 ? left : 0;
+    if (track) *track = s_stageTrack;
+    SDL_UnlockMutex(s_lock);
+    return stage;
+}
+
+void RaceNet_Vote(int track) {
+    if (!s_kit) return;
+    uint8_t b[2];
+    b[0] = M_VOTE; b[1] = (uint8_t)track;
+    SDL_LockMutex(s_lock);
+    s_selfVote = track + 1;
+    NetKit_Broadcast(s_kit, b, 2, 1);
+    SDL_UnlockMutex(s_lock);
+}
+
+int RaceNet_Votes(int *counts, int size, int *players) {
+    for (int i = 0; i < size; i++) counts[i] = 0;
+    if (!s_kit) return 0;
+    SDL_LockMutex(s_lock);
+    int voted = 0, can = 1;
+    if (s_selfVote > 0 && s_selfVote <= size) { counts[s_selfVote - 1]++; voted++; }
+    for (int i = 0; i < s_nbPeers; i++) {
+        const T_RN_PEER *p = &s_peer[i];
+        if (p->Pending || p->InRace) continue;
+        can++;
+        if (p->Vote > 0 && p->Vote <= size) { counts[p->Vote - 1]++; voted++; }
+    }
+    SDL_UnlockMutex(s_lock);
+    if (players) *players = can;
+    return voted;
+}
+
+void RaceNet_CarChosen(void) {
+    if (!s_kit) return;
+    const uint8_t b = M_CHOSEN;
+    SDL_LockMutex(s_lock);
+    s_selfChosen = 1;
+    NetKit_Broadcast(s_kit, &b, 1, 1);
+    SDL_UnlockMutex(s_lock);
+}
+
+int RaceNet_CarsChosen(void) {
+    if (!s_kit) return 0;
+    SDL_LockMutex(s_lock);
+    int all = s_selfChosen;
+    for (int i = 0; i < s_nbPeers; i++) if (!s_peer[i].Chosen && !s_peer[i].Pending && !s_peer[i].InRace) all = 0;
+    SDL_UnlockMutex(s_lock);
+    return all;
+}
+
+void RaceNet_InRace(int on) {
+    if (!s_kit) return;
+    uint8_t b[2];
+    b[0] = M_INRACE; b[1] = (uint8_t)on;
+    SDL_LockMutex(s_lock);
+    NetKit_Broadcast(s_kit, b, 2, 1);
+    SDL_UnlockMutex(s_lock);
+}
+
+int RaceNet_QualifyingOver(void) {
+    if (!s_kit) return 0;
+    SDL_LockMutex(s_lock);
+    const int over = s_qualOver;
+    SDL_UnlockMutex(s_lock);
+    return over;
+}
+
+void RaceNet_DealGrid(int byTimes) {
+    if (!s_kit || !s_hosting) return;
+    uint8_t b[2 + (RACENET_MAX_OTHERS + 1) * 8], *p = b;
+    SDL_LockMutex(s_lock);
+    int n = 0;
+    s_grid[n].Id = NetKit_LocalId(s_kit);
+    s_grid[n++].Ms = byTimes ? s_selfFinish : 0;
+    for (int i = 0; i < s_nbPeers && n <= RACENET_MAX_OTHERS; i++)
+        if (!s_peer[i].Pending) { s_grid[n].Id = s_peer[i].Id; s_grid[n++].Ms = byTimes ? s_peer[i].Finish : 0; }
+    // (dealt, then the fastest first: those with no time, and any tie, in the order dealt)
+    uint32_t seed = (uint32_t)SDL_GetPerformanceCounter();
+    for (int i = n - 1; i > 0; i--) {
+        seed = seed * 1664525u + 1013904223u;
+        const int k = (int)((seed >> 16) % (uint32_t)(i + 1));
+        const T_RN_GRID t = s_grid[i]; s_grid[i] = s_grid[k]; s_grid[k] = t;
+    }
+    if (byTimes)
+        for (int i = 1; i < n; i++) {
+            const T_RN_GRID t = s_grid[i];
+            int k = i;
+            while (k > 0 && (t.Ms && (!s_grid[k - 1].Ms || t.Ms < s_grid[k - 1].Ms))) { s_grid[k] = s_grid[k - 1]; k--; }
+            s_grid[k] = t;
+        }
+    s_gridN = n;
+    *p++ = M_GRID;
+    *p++ = (uint8_t)n;
+    for (int i = 0; i < n; i++) { Put32(&p, (int32_t)s_grid[i].Id); Put32(&p, s_grid[i].Ms); }
+    NetKit_Broadcast(s_kit, b, (int)(p - b), 1);
+    SDL_UnlockMutex(s_lock);
+    Log_Info("[racenet] the grid %s, %d player(s)", byTimes ? "from the qualifying times" : "dealt at random", n);
+}
+
+int RaceNet_GridOf(int i, char *name, int size, int *ms) {
+    if (!s_kit) return 0;
+    SDL_LockMutex(s_lock);
+    const int ok = i >= 0 && i < s_gridN;
+    if (ok) {
+        const T_RN_PEER *p = PeerOf(s_grid[i].Id);
+        snprintf(name, size, "%s", p ? p->Name : s_grid[i].Id == NetKit_LocalId(s_kit) ? s_name : "?");
+        *ms = s_grid[i].Ms;
+    }
+    SDL_UnlockMutex(s_lock);
+    return ok;
 }
 
 int RaceNet_PasswordAsked(void) {
@@ -806,6 +1036,7 @@ void RaceNet_Finished(int ms) {
     *p++ = M_FINISH;
     Put32(&p, ms + s_lateMs);
     SDL_LockMutex(s_lock);
+    s_selfFinish = ms + s_lateMs;
     NetKit_Broadcast(s_kit, b, (int)(p - b), 1);
     SDL_UnlockMutex(s_lock);
     Log_Info("[racenet] finished in %d ms", ms);

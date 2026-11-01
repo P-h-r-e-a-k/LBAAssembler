@@ -8,12 +8,22 @@ Main menu, **Multiplayer**.
 
 - **Host a race:** give a name and, if you want one, a password (Enter alone for none). The game asks the router to open UDP port 21997. The lobby then shows the
   address to give to friends, the one for people in the same house (most routers don't loop their own outside address back) and the password. If the router says no, the
-  game says why. Enter picks from every track, with no code, then the laps and the host's car, and starts the race for everyone.
+  game says why. Left and Right set the laps, Up and Down a qualifying lap or none. Enter, once everyone is in, starts the round.
 - **Join a race:** give a name and the host's address, typed or pasted with Ctrl+V. `81.2.3.4`, or `81.2.3.4:21997` for another port. If the race has a password the
-  game asks for it; a wrong one sends you back to the menu. Enter picks a car. The race starts when the host starts it. Joining with a race on, you pick a car and start
-  from the grid straight away, and your time runs from everyone's go.
+  game asks for it; a wrong one sends you back to the menu. You wait in the lobby for the host. Joining part of the way through a round you come in at that point. Joining
+  with a race on, you pick a car and start from the grid straight away, and your time runs from everyone's go.
 
-After a race, everyone is back in the lobby with the same players. A race online has the race's mushrooms and power-ups, cars touch, and its times don't go in Best laps.
+**A round** (the user, 2026-11-01):
+
+1. **The vote.** Every player's page shows every track and the votes as they come in, for 30 s or until all have voted. You can change your vote. The most votes wins, a
+   tie is drawn, and with no votes it's any track.
+2. **Cars.** 60 s, the time counting down in the page's title. Time up, you have the car the page is on (Esc: the one you had). All chosen, it moves on.
+3. **Qualifying**, if the host left it on: one lap each, all at once from the same place, no power-ups and the cars passing through each other. Everyone over the line, or 30 s
+   after the first, or 4 minutes at most, and it's over; those still out get no time. With it off the host deals the grid at random.
+4. **The grid** for 6 s: fastest first, those with no time last.
+5. **The race.** Then back to the lobby, where people can join and the host starts the next round. A player still racing shows as "(still racing)".
+
+A race online has the race's mushrooms and power-ups, cars touch, and its times don't go in Best laps. Two players at one PC has no rounds: the first player picks.
 
 - **Two players on this PC:** see below.
 

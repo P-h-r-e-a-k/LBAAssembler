@@ -739,7 +739,8 @@ static void NetHiddenItems(void);
 static int NetGridSpot(void);
 static void NetSpread(void);
 // (a time trial has none; a race online is a time trial's file with its race's power-ups, RACEGAME.CPP StartRace)
-static int NoItems(void) { return s_trial && !s_online; }
+static int s_netQual = 0;                  // online_qualifying=: the lap each that decides the grid: no items, no cars to hit, all from one place
+static int NoItems(void) { return s_trial && (!s_online || s_netQual); }
 // the ghost car (2026-10-24: the ghost's section, before RaceMod_Frame)
 static int s_ghostMode = 2;                // ghost=: 0 none, 1 the player's own best lap, 2 the track's fastest ghost (the player's own or one shared); 3, 4, 5 the game's
                                            // Easy, Medium, Hard; 6 the player's own or one shared (the menu's "Your best lap")
@@ -4309,6 +4310,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "on_foot")) s_onFoot = atoi(v);
         else if (!strcmp(key, "trial")) s_trial = atoi(v);
         else if (!strcmp(key, "online")) s_online = atoi(v);
+        else if (!strcmp(key, "online_qualifying")) s_netQual = atoi(v);
         else if (!strcmp(key, "ghost")) s_ghostMode = atoi(v);
         else if (!strcmp(key, "ghost_watch")) { snprintf(s_ghostWatchPath, sizeof(s_ghostWatchPath), "%s", v); s_ghostWatch = v[0] != 0; }
         else if (!strcmp(key, "ghost_file")) snprintf(s_ghostOtherPath, sizeof(s_ghostOtherPath), "%s", v);
@@ -4574,7 +4576,7 @@ static void Load(const char *path, int carOnly = 0) {
     // (no qualifying lap in a time trial -- the Citadel storm's trial file doesn't say qualifying=0, and the game's own default, a qualifying lap
     // first, left it with no count-down)
     if (s_trial) s_qualifying = 0;
-    if (s_online) NetHiddenItems();
+    if (s_online && !s_netQual) NetHiddenItems();
     if (s_trial && s_car.HasLine && !s_ghostWatch && !NetGridSpot()) { TrialStartSpot(); NetSpread(); }
     if (s_nbSpots && s_car.HasLine) {
         // where they wait until the grid is formed: their pit spots, or (with no pit lane) the grid spots behind the player
@@ -15921,8 +15923,10 @@ static void NetRaceFrame(S32 now, int driving) {
     if (!s_online) return;
     // (the second player's game at one PC goes when the first's does)
     if (RaceNet_Error()[0] && !s_menuAt && RaceGame_LocalAlone()) s_menuAt = now;
+    // (qualifying over with this car still out: back to the lobby, with no time)
+    if (s_netQual && !s_menuAt && RaceNet_QualifyingOver()) { s_menuAt = now; Log_Info("[racemod] online: qualifying over"); }
     NetEvents(now);
-    NetContact(now, driving);
+    if (!s_netQual) NetContact(now, driving);
     if (s_phase == PHASE_GRID && !s_netGo) {
         RaceNet_Ready();
         // (or no host left to say it: the race isn't to wait for good)
@@ -19005,7 +19009,7 @@ static void ResetTrack(void) {
     s_raceSkyOff = 0;
     s_phase = PHASE_RACE; s_qualifying = 1; s_gridBack = 0; s_fineWeather = 0; s_holoArrow = -1;
     s_qualifyTime = 0; s_wantGrid = 0; s_gridAt = s_goAt = 0; s_nbOrder = 0;
-    s_online = s_netGo = 0;
+    s_online = s_netGo = s_netQual = 0;
     s_viewFar = s_viewFog = 0;
     memset(s_netThrough, 0, sizeof(s_netThrough)); memset(s_netTouching, 0, sizeof(s_netTouching)); memset(s_netBumpAt, 0, sizeof(s_netBumpAt));
     s_netPushX = s_netPushZ = s_netShoveX = s_netShoveZ = 0; s_netBumps = 0;
