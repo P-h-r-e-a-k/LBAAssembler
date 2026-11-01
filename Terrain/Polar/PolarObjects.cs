@@ -301,6 +301,7 @@ internal static class PolarObjects
                         if (d.YMin < surface + 256 * PolarTerrain.Scale && d.YMax > surface && !objectColumns.Contains(at)) blocked.Add(at);
                     }
         log.Add($"{blocked.Count} car track cells inside an object's box with nothing of the object on them" + (blocked.Count > 0 ? ": " + string.Join(" ", blocked.Take(30)) : ""));
+        decors += PolarProps.Build(game, layout, island, pages, bodies, log);
         island.ObjectPages.Clear();
         island.ObjectPages.AddRange(pages.List.Skip(1));
         log.Add($"the objects' textures: {tiles.Count} faces of bricks at {PolarTextures.TileSize} pixels to a cell, on {pages.Count} pages");

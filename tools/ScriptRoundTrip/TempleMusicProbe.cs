@@ -189,6 +189,7 @@ internal static class TempleMusicProbe
     private static int Installs()
     {
         var installs = TempleMusic.InstalledLba1Folders();
+        foreach (var dir in TempleMusic.InstalledLba2Folders()) Console.WriteLine($"LBA2: {dir}");
         Console.WriteLine($"{installs.Count} LBA1 install(s) on this PC");
         foreach (var dir in installs)
         {

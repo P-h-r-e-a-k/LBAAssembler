@@ -39,7 +39,7 @@ internal sealed class PolarLayout
     };
     public const int FortressOutside = 93, FortressDocks = 100;
     // their ground's layer in their own grids
-    private static readonly Dictionary<int, int> FortressGround = new() { [FortressOutside] = 7, [FortressDocks] = 1 };
+    public static readonly Dictionary<int, int> FortressGround = new() { [FortressOutside] = 7, [FortressDocks] = 1 };
     public const int PeakScene = 110, PlateauScene = 111, GateScene = 108;
     // 111's grid from 110's, by their zones (LinkStudy: 110 <-> 111 (-21, 8, -9), both ways agree)
     public static readonly (int X, int Y, int Z) PlateauFromPeak = (-21, 8, -9);
@@ -67,7 +67,7 @@ internal sealed class PolarLayout
     }
 
     // A brick of a scene's grid at (x, layer, z), with its library entry's shape and code and its block.
-    public readonly record struct SceneBrick(int X, int Y, int Z, int Brick, int Shape, int Code, int Block);
+    public readonly record struct SceneBrick(int X, int Y, int Z, int Brick, int Shape, int Code, int Block, int Pos = 0);
 
     public static List<SceneBrick> Bricks(Lba1Game game, int scene)
     {
@@ -87,7 +87,7 @@ internal sealed class PolarLayout
             var e = at + 3 + pos * 4;
             var number = BitConverter.ToUInt16(lib, e + 2);
             if (number == 0) continue;
-            list.Add(new SceneBrick(x, y, z, number - 1, lib[e], lib[e + 1], block));
+            list.Add(new SceneBrick(x, y, z, number - 1, lib[e], lib[e + 1], block, pos));
         }
         return list;
     }
@@ -100,6 +100,8 @@ internal sealed class PolarLayout
     public required List<(int X, int Z)> Bridge { get; init; }
     // the rocky peak's columns: built as objects with straight walls (PolarObjects), the sea under them, not ground
     public required HashSet<(int X, int Z)> Peak { get; init; }
+    // the things on the fortress scenes made as bodies of their own from their LBA1 pictures (PolarProps); their cells are gone from Cells
+    public List<PolarProps.Placing> Props { get; } = new();
     public List<string> Log { get; } = new();
 
     // A fortress scene's brick's code: its ground as it is, and what stands on the ground an object. Their bricks say less than Polar Island's:
@@ -153,8 +155,8 @@ internal sealed class PolarLayout
             foreach (var c in Of(p.Scene))
             {
                 if (owner[(c.X + p.X, c.Z + p.Z)].Scene != p.Scene) continue;
-                // (a fortress scene's pit, deeper than the island's ground is over the sea: as deep as it can be)
-                var layer = FortressGround.ContainsKey(p.Scene) ? Math.Max(c.Code == 0xF1 ? 0 : 1, c.Y + p.Y) : c.Y + p.Y;
+                // (the fortress's pit is deeper than its ground is over the sea, and keeps its depth: PolarTerrain's ground goes under the sea there, with no sea drawn over it)
+                var layer = p.Scene == FortressDocks ? Math.Max(c.Code == 0xF1 ? 0 : 1, c.Y + p.Y) : p.Scene == FortressOutside && c.Code == 0xF1 ? Math.Max(0, c.Y + p.Y) : c.Y + p.Y;
                 cells.TryAdd((c.X + p.X, layer, c.Z + p.Z), new Cell(p.Scene, c.Brick, c.Shape, FortressCode(game, p.Scene, c), c.Block));
             }
 
@@ -223,10 +225,12 @@ internal sealed class PolarLayout
         foreach (var c in Of(PlateauScene).Where(c => c.Y > PlateauFloorTop))
             cells[(c.X + plateau.X, c.Y + plateau.Y + lift, c.Z + plateau.Z)] = new Cell(PlateauScene, c.Brick, c.Shape, c.Code, c.Block);
 
+        var props = PolarProps.Find(game, placements.Where(p => FortressGround.ContainsKey(p.Scene)), Of, owner.ToDictionary(o => o.Key, o => o.Value.Scene), cells);
         var layout = new PolarLayout
         {
             Placements = placements, Cells = cells, PeakCopyOffset = best, PeakMatch = (bestScore, peakTops.Count), Bridge = new(), Peak = peak,
         };
+        layout.Props.AddRange(props);
         layout.Log.Add($"the rocky peak: {peak.Count} columns, {PeakStretch} times as high (its top layer {peakTop} now {PeakStretch * peakTop}); 111's plateau lifted {lift} layers onto it; {copies} columns of the other scenes' copies of the mountain made 110's");
         layout.Log.Add($"the mountain made whole from 110's: {filled} cells where the scenes had it lower or not at all");
         layout.Log.Add($"110's mountain ({peakTops.Count} columns of 10 layers and more) matches 107 at {best} ({bestScore} columns as high); the zones put 110 at (-4, 0, -11)");

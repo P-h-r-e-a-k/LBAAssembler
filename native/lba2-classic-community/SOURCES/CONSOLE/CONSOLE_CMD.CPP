@@ -2669,6 +2669,12 @@ static void cmd_racepicture(int argc, const char *argv[]) {
     RaceGame_TestPicture();
     Console_Print("racepicture");
 }
+static void cmd_raceback(int argc, const char *argv[]) {
+    extern void RaceMod_TestBack(int k);
+    RaceMod_TestBack(argc > 1 ? atoi(argv[1]) : 1);
+    Console_Print("raceback");
+}
+
 static void cmd_racemiss(int argc, const char *argv[]) {
     extern void RaceMod_TestMiss(void);
     (void)argc; (void)argv;
@@ -3008,6 +3014,8 @@ void Console_RegisterAll(void) {
                               "Far clip opened up; the lens, if given, set once (console: test only).");
     Console_RegisterCommandEx("racepicture", cmd_racepicture, "Race game test: Best laps' picture now", "racepicture",
                               "Saves Best laps.png and puts it on the clipboard, unless LBA2_NO_CLIPBOARD is set (RACEGAME.CPP).");
+    Console_RegisterCommandEx("raceback", cmd_raceback, "Race-track test: the car sent back for checkpoint k, as a sprint's finish does with it missed", "raceback <k>",
+                              "Sets the next checkpoint to k and puts the car before it (RACEMOD.CPP).");
     Console_RegisterCommandEx("racemiss", cmd_racemiss, "Race-track test: the checkpoint just passed forgotten, as if missed", "racemiss",
                               "The next checkpoint goes back one (RACEMOD.CPP).");
     Console_RegisterCommandEx("raceprize", cmd_raceprize, "Race-track test: the roulette wheel's prize now", "raceprize <0|1|2>",

@@ -92,20 +92,23 @@ internal static class PolarTerrain
         var prints = wanted.ToDictionary(w => w.Key, w => Print(w.Value.Tile, w.Value.W, w.Value.H));
         var use = kinds.Values.GroupBy(k => k.Key).ToDictionary(g => g.Key, g => g.Count());
         var map = new Dictionary<object, object>();
-        for (var like = 6.0; like <= 80 && Halves() > PagesLeft; like += 2)
-        {
-            // (the most used first: they stay, the few like them go)
-            var keys = wanted.Keys.OrderByDescending(k => Own(k) ? int.MaxValue : use.GetValueOrDefault(k)).ToList();
-            var kept = new List<object>();
-            foreach (var k in keys)
+        // (the sides of cliffs first, hardly seen; tops, the ground itself, only if that isn't room enough. A top never as a side of the same size: two layers of a grass
+        // brick's side, half of it empty, was every other row of the fortress's grass flat)
+        foreach (var tops in new[] { false, true })
+            for (var like = 6.0; like <= 80 && Halves() > PagesLeft; like += 2)
             {
-                var shape = wanted[k];
-                var near = Own(k) ? null : kept.FirstOrDefault(o => wanted[o].W == shape.W && wanted[o].H == shape.H && Apart(prints[o], prints[k]) < like);
-                if (near is null) { kept.Add(k); continue; }
-                map[k] = near;
-                wanted.Remove(k);
+                // (the most used first: they stay, the few like them go)
+                var keys = wanted.Keys.OrderByDescending(k => Own(k) ? int.MaxValue : use.GetValueOrDefault(k)).ToList();
+                var kept = new List<object>();
+                foreach (var k in keys)
+                {
+                    var shape = wanted[k];
+                    var near = Own(k) || k is int != tops ? null : kept.FirstOrDefault(o => o is int == k is int && wanted[o].W == shape.W && wanted[o].H == shape.H && Apart(prints[o], prints[k]) < like);
+                    if (near is null) { kept.Add(k); continue; }
+                    map[k] = near;
+                    wanted.Remove(k);
+                }
             }
-        }
         if (map.Count == 0) return 0;
         object Final(object k) { while (map.TryGetValue(k, out var to)) k = to; return k; }
         foreach (var at in kinds.Keys.ToList())
@@ -159,12 +162,13 @@ internal static class PolarTerrain
         {
             var floor = HoleFloor(columns, at);
             var top = lowest.TryGetValue(at, out var under) ? Math.Min(floor.Top, under - 1) : floor.Top;
-            if (top >= 0) columns[at] = floor with { Top = top };
+            if (top >= 0 || floor.Cell.Scene == PolarLayout.FortressOutside) columns[at] = floor with { Top = top };
         }
         return columns;
     }
 
     public const int HoleReach = 10;
+    private const int SeaY = -50;   // the engine's sea height (Y_SEA, TERRAIN.H)
 
     // The places with no ground (not water's either), ground or water all round them within HoleReach along x and z, land on two sides
     public static List<(int X, int Z)> Holes(IReadOnlyDictionary<(int X, int Z), Column> columns)
@@ -193,8 +197,8 @@ internal static class PolarTerrain
         Bounds(columns, at).Where(c => !c.Water).MinBy(c => c.Top);
 
     // The surface height of a column (world units on the island, the sea at 0), and as LBA1 has it (the layout's units: a layer 256).
-    public static int SurfaceOf(Column c) => c.Water ? 0 : Math.Max(0, LayerY(c.Top));
-    private static int LayoutSurface(Column c) => c.Water ? 0 : Math.Max(0, c.Top * 256);
+    public static int SurfaceOf(Column c) => c.Water ? 0 : c.Cell.Scene == PolarLayout.FortressOutside ? LayerY(c.Top) : Math.Max(0, LayerY(c.Top));
+    private static int LayoutSurface(Column c) => c.Water ? 0 : c.Cell.Scene == PolarLayout.FortressOutside ? c.Top * 256 : Math.Max(0, c.Top * 256);
 
     public static Result Build(Lba1Game game, PolarLayout layout, string gameDirectory)
     {
@@ -269,6 +273,16 @@ internal static class PolarTerrain
                 var h = (Corner(x0, z0) * (1 - fx) + Corner(x0 + 1, z0) * fx) * (1 - fz) + (Corner(x0, z0 + 1) * (1 - fx) + Corner(x0 + 1, z0 + 1) * fx) * fz;
                 cube.Heights[vz * IslandCube.Vertices + vx] = (short)Math.Round(h * Scale);
             }
+        // (the sea's plane is drawn over all of one of the engine's 4 x 4 squares of a cube: none over ground under the sea, the fortress's pit)
+        foreach (var (_, _, cube) in Cubes(island))
+            for (var sz = 0; sz < 4; sz++)
+                for (var sx = 0; sx < 4; sx++)
+                {
+                    var under = false;
+                    for (var vz = sz * 16; vz <= (sz + 1) * 16; vz++)
+                        for (var vx = sx * 16; vx <= (sx + 1) * 16; vx++) under |= cube.Height(vx, vz) < SeaY;
+                    if (under) cube.BitField &= ~(1 << (sz * 4 + sx));
+                }
 
         // what each cell of the layout is: land (its brick's top); a cliff (land whose corners are two layers and more apart: the side of the
         // column the slope belongs to -- its own, a rim dropping to the path below, or the higher one it climbs to -- two bricks of it); a
@@ -372,7 +386,9 @@ internal static class PolarTerrain
             var diagonal = new IslandPolygon(cube.Polygon(lx, lz, 0)).Diagonal;
             for (var half = 0; half < 2; half++)
             {
-                var definition = kind is Kind.Cliff or Kind.Bank ? SlopeDefinition(tx, ty, w, h, diagonal, half, up) : IslandGround.TileDefinition(tx, ty, w, h, diagonal, half);
+                // (flat, each of the island's cells its part of the brick's tile: the brick the size it is in LBA1, not four small ones)
+                var definition = kind is Kind.Cliff or Kind.Bank ? SlopeDefinition(tx, ty, w, h, diagonal, half, up)
+                    : IslandGround.TileDefinition(tx + (gx - offsetX) % Scale * (w / Scale), ty + (gz - offsetZ) % Scale * (h / Scale), w / Scale, h / Scale, diagonal, half);
                 var index = IslandGround.TextureIndexFor(cube, definition);
                 if (index >= island.MaxGroundDefinitions) throw new InvalidOperationException($"Cube {cube.Id} needs more than {island.MaxGroundDefinitions} texture definitions.");
                 mostDefinitions = Math.Max(mostDefinitions, index + 1);

@@ -5757,6 +5757,16 @@ internal static class RaceTrackBuilder
                 int sx = Math.Clamp((int)Math.Floor((main.X[i] - cx * IslandCube.Cells) / 16), 0, 3), sz = Math.Clamp((int)Math.Floor((main.Z[i] - cz * IslandCube.Cells) / 16), 0, 3);
                 keep.Add((cx, cz, sz * 4 + sx));
             }
+        // (and a square with ground under the sea in it, Polar's fortress's pit: the plane would be drawn over it)
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            for (var b = 0; b < 16; b++)
+                if ((cube.BitField & (1 << b)) == 0)
+                {
+                    var deep = false;
+                    for (var vz = b / 4 * 16; vz <= (b / 4 + 1) * 16; vz++)
+                        for (var vx = b % 4 * 16; vx <= (b % 4 + 1) * 16; vx++) deep |= cube.Height(vx, vz) < SeaY;
+                    if (deep) keep.Add((cx, cz, b));
+                }
         int marked = 0, kept = 0;
         var at = IslandOps.CubeCells(island).ToDictionary(c => c.Cube.Id, c => (c.X, c.Z));
         foreach (var cube in island.Cubes.Values)

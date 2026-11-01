@@ -307,6 +307,29 @@ internal static class PolarTextures
         public int Free(int page) => page < used.Count ? used[page].Count(u => !u) : Halves;
         public int Count => List.Count;
 
+        // A picture on pages of its own, not in slots (PolarProps: an object's whole picture, a texture table entry that reaches over it)
+        private int shelfPage = -1, shelfX, shelfY, shelfH;
+        public (int Page, int X, int Y)? AddPicture(int[] picture, int w, int h)
+        {
+            if (shelfPage >= 0 && shelfX + w >= 256) { shelfX = 1; shelfY += shelfH + 1; shelfH = 0; }
+            if (shelfPage < 0 || shelfY + h >= 256)
+            {
+                if (List.Count >= max) return null;
+                List.Add(new byte[256 * 256]);
+                var none = new bool[Halves];
+                Array.Fill(none, true);
+                used.Add(none);
+                shelfPage = List.Count - 1; shelfX = 1; shelfY = 1; shelfH = 0;
+            }
+            var pixels = List[shelfPage];
+            for (var j = 0; j < h; j++)
+                for (var k = 0; k < w; k++) pixels[(shelfY + j) * 256 + shelfX + k] = picture[j * w + k] < 0 ? (byte)0 : (byte)colours.Nearest[picture[j * w + k]];
+            var at = (shelfPage, shelfX, shelfY);
+            shelfX += w + 1;
+            shelfH = Math.Max(shelfH, h);
+            return at;
+        }
+
         // How many half-slots a tile takes.
         public static int HalvesOf(int h) => h > Slot / 2 ? 2 : 1;
 

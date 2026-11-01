@@ -645,8 +645,13 @@ static int s_mapKey = 0;                   // minimap=: the race's mini-map (Dra
 static S32 s_endAt = 0;                    // when the race's end is followed up (0: not yet)
 static int s_endWon = 0;
 #define RACE_MISS_BACK_MS 1200             // a sprint's finish crossed with a checkpoint missed: the car put back before it this long after
+#define RACE_MISS_RESET_MS 150             // ... a checkpoint found missed on the road: at once, with the message up first
 static S32 s_missBackAt = 0;
-static void MissedFinishBack(void);
+static int s_missBackFor = -1;             // ... for that checkpoint (crossed in the meantime: not put back)
+static S32 s_missSaidUntil = 0;            // "Missed checkpoint N" stays up, not "Back on the road", until then
+static int s_missExact = 0;                // the rescue puts the car exactly on s_safeIndex: before the checkpoint, not wherever SafeLine finds ground
+static void MissedBackSoon(S32 ms) { if (!s_missBackAt) { s_missBackAt = TimerRefHR + ms; s_missBackFor = s_next; } }
+static void MissedBackDue(void);
 static int s_wakeFlight = 0;                // wake_flight= (ms; 0: RACE_SPRINT_END_MS, the car held at the line)
 // chase=, chase_lead=, dream_any_end= (ChaseOpening, ChaseLead): the texts, the helper's entity and the variable it sets; the opening's
 // step and when the next is due; the lead (world units)
@@ -4662,8 +4667,9 @@ static void StoryUnlock(const char *id) {
 // A missed checkpoint, for testing the tracks (the user, 2026-10-14: "alerts me for when I miss a check point in a track complete with
 // the check point number, also add this to the log file"): as soon as the car is past the next checkpoint without having crossed it --
 // a later one crossed first, or the car RACE_MISS_PAST further round the lap than it (RaceMod_Lap) -- "Missed checkpoint N" on the
-// display and a line in the log with where the car and the checkpoint's line are; once a checkpoint a lap. (The lap still counts only
-// once the car goes back and crosses it, as before.)
+// display and a line in the log with where the car and the checkpoint's line are -- and the car put back just before it (the user,
+// 2026-11-01: "if we detect a missed checkpoint we reset the car just before the one it missed. This will be better for races so a car
+// doesn't fall an entire lap behind").
 #define RACE_MISS_PAST (16 * 512)
 static int s_missIndex = -1;
 static S32 s_missLap = -1;
@@ -4677,6 +4683,7 @@ static void MissedCheckpoint(int k, const char *how) {
     snprintf(text, sizeof(text), "Missed checkpoint %d", k + 1);
     Message(text);
     s_messageUntil = TimerRefHR + 4000;
+    MissedBackSoon(RACE_MISS_RESET_MS);
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     const T_RACE_LINE *l = &s_checkpoints[k];
     Log_Info("[racemod] MISSED checkpoint %d of %d on lap %d: %s -- the car in cube (%d,%d) at (%d, %d, %d), the checkpoint's line in cube (%d,%d) "
@@ -4763,6 +4770,16 @@ static int CrossLineIn(const T_RACE_LINE *l, S32 cx, S32 cz, S32 y, S32 x0, S32 
 }
 static int CrossLine(const T_RACE_LINE *l, S32 x0, S32 z0, S32 x1, S32 z1, S32 slack = 0) {
     return CrossLineIn(l, (S32)CurrentCubeX, (S32)CurrentCubeY, ListObjet[NUM_PERSO].Obj.Y, x0, z0, x1, z1, slack);
+}
+
+// The next checkpoint crossed. (Flown over counts: a line with a height is for the road at that height, and a car off a crest over it is
+// on that road -- missed, now, it would be put back for having jumped.)
+#define RACE_LINE_REACH_AIR 6144
+static int NextCrossed(const T_RACE_LINE *l, S32 x0, S32 z0, S32 x1, S32 z1) {
+    const T_OBJET *hero = &ListObjet[NUM_PERSO];
+    T_RACE_LINE over = *l;
+    if (((hero->WorkFlags & FALLING) || s_flying >= 0 || s_arcOn >= 0) && hero->Obj.Y > l->Y && hero->Obj.Y - l->Y < RACE_LINE_REACH_AIR) over.Y = hero->Obj.Y;
+    return CrossLine(&over, x0, z0, x1, z1);
 }
 
 // A checkpoint is taken going the lap's way RACE_CHECKPOINT_SLACK past either end of its line: the builder stops a line short of any
@@ -4858,7 +4875,7 @@ void RaceMod_Lap(S32 x, S32 z) {
     // the checkpoints: the next one crossed the lap's way moves on; the last one crossed backwards moves back
     if (s_laps > 0)
         for (int i = 0; i < s_nbCheckpoints; i++) {
-            if (i == s_next && CrossLine(&s_checkpoints[i], x0, z0, x, z) > 0) {
+            if (i == s_next && NextCrossed(&s_checkpoints[i], x0, z0, x, z) > 0) {
                 s_next++;
                 Log_Info("[racemod] checkpoint %d of %d", s_next, s_nbCheckpoints);
                 GhostSplit(s_next - 1);
@@ -4899,7 +4916,7 @@ void RaceMod_Lap(S32 x, S32 z) {
             Log_Info("[racemod] the finish line crossed with checkpoint %d of %d missed: no finish", s_next + 1, s_nbCheckpoints);
             // (and put back before it: the finish lines are a jump's lip, and "go back for it" left the car in the air with no way back,
             // the user, 2026-10-31, "we're unable to as we're stuck in the air")
-            if (!s_missBackAt) s_missBackAt = TimerRefHR + RACE_MISS_BACK_MS;
+            MissedBackSoon(RACE_MISS_BACK_MS);
             return;
         }
         if (SprintRunAgain(TimerRefHR)) return;
@@ -4929,7 +4946,7 @@ void RaceMod_Lap(S32 x, S32 z) {
         else snprintf(text, sizeof(text), "Not all the way round: the lap starts again");
         Message(text);
         Log_Info("[racemod] %s (lap %d, %.2f s thrown away)", text, (int)s_laps, (now - s_lapStart) / 1000.0);
-        s_lapStart = now; s_next = 0; s_halfway = 0;
+        s_lapStart = now; s_next = 0; s_halfway = 0; s_missBackAt = 0;
         GhostLapStart();
         return;
     }
@@ -4938,6 +4955,7 @@ void RaceMod_Lap(S32 x, S32 z) {
         snprintf(text, sizeof(text), "Missed checkpoint %d: no lap", s_next + 1);
         Message(text);
         Log_Info("[racemod] missed checkpoint %d of %d: no lap", s_next + 1, s_nbCheckpoints);
+        MissedBackSoon(RACE_MISS_RESET_MS);
         return;
     }
     if (s_laps > 0 && !s_nbCheckpoints && !s_halfway && Guide()) {
@@ -5309,6 +5327,7 @@ void RaceMod_Story(void) {
             }
         }
     }
+    if (s_missBackAt && now >= s_missBackAt && NewCube == -1 && CubeMode == CUBE_EXTERIEUR) MissedBackDue();
     if (!s_sprint || CubeMode != CUBE_EXTERIEUR) return;
     // (a story start, chase=: the opening in turn, in the start line's scene)
     if (s_chaseOn && (s_chaseStep < 5 || s_chaseStep == 11)) { ChaseOpening(now); if (s_chaseStep < 5 || s_chaseStep == 11) return; }
@@ -5338,7 +5357,6 @@ void RaceMod_Story(void) {
         s_wantFlip = 1;
         return;
     }
-    if (s_missBackAt && now >= s_missBackAt && NewCube == -1) { s_missBackAt = 0; MissedFinishBack(); }
     // (a sprint's time trial: back to the start for the next run once the car is down -- SprintRunAgain)
     if (s_runAgainAt && now >= s_runAgainAt && s_arcOn < 0 && s_flying < 0 && NewCube == -1) { s_runAgainAt = 0; RaceFromGrid(); return; }
     if (!s_place || !s_endAt || now < s_endAt || NewCube != -1) return;
@@ -8516,7 +8534,7 @@ static void RescuePlace(const T_RACE_OPPONENT *o, int i) {
     s_forgetLap = 1;
     s_safeIndex = i;
     s_safeAt = TimerRefHR;
-    Message("Back on the road");
+    if (TimerRefHR >= s_missSaidUntil) Message("Back on the road");
 }
 
 // The line point to put the car back on: a little behind the safe place -- further where that's over a jump's gap -- or, behind it another
@@ -8539,7 +8557,10 @@ static int SafeLine(const T_RACE_OPPONENT *o) {
 // The car put back in the safe place's scene: on the line there, or with no line on the ground there where it was last on the road.
 static void RescueAt(const T_RACE_OPPONENT *o) {
     T_OBJET *hero = &ListObjet[NUM_PERSO];
-    const int i = SafeLine(o);
+    // (SafeLine, finding no ground behind a place, looks ahead of it: 37 cells past Polar's checkpoint 3, missed again, put back again, for ever)
+    const int i = s_missExact ? s_safeIndex : SafeLine(o);
+    if (s_missExact) { s_missIndex = -1; s_missAt = i; }   // (there: missed again, said and put back again)
+    s_missExact = 0;
     const double age = (TimerRefHR - s_safeAt) / 1000.0;
     const S32 lx = (S32)(i >= 0 ? o->X[i] : s_safeX) - CurrentCubeX * 32768, lz = (S32)(i >= 0 ? o->Z[i] : s_safeZ) - CurrentCubeY * 32768;
     hero->Obj.X = lx;
@@ -8550,9 +8571,9 @@ static void RescueAt(const T_RACE_OPPONENT *o) {
              (int)hero->Obj.Y, (int)hero->Obj.Z, age);
 }
 
-// A sprint's finish crossed with checkpoint s_next missed: the car put back on the road just before it, from wherever the jump past the
-// line has taken it, in that checkpoint's scene.
-static void MissedFinishBack(void) {
+// Checkpoint s_next missed: the car put back on the road just before it, in that checkpoint's scene.
+#define RACE_MISS_BEFORE 512               // how far before the line, at least (units): RescueAt may take it further
+static void MissedBack(void) {
     const T_RACE_OPPONENT *o = Guide();
     if (!o || s_next >= s_nbCheckpoints) return;
     const T_RACE_LINE *l = &s_checkpoints[s_next];
@@ -8564,13 +8585,30 @@ static void MissedFinishBack(void) {
         if (l->HasY) d += 4.0 * (o->Y[i] - l->Y) * (double)(o->Y[i] - l->Y);
         if (d < bd) { bd = d; best = i; }
     }
+    // (back along the line until before it: the nearest point can be past it, and a car put there never crossed it -- the same checkpoint
+    // missed for ever, 7 of Polar's 33 where the rescue found no line on the ground and took this place as it was, the user, 2026-11-01)
+    const double along = sqrt((double)l->DirX * l->DirX + (double)l->DirZ * l->DirZ);
+    for (int k = 0; k < 16 && along > 0; k++) {
+        if (((o->X[best] - mx) * l->DirX + (o->Z[best] - mz) * l->DirZ) / along <= -RACE_MISS_BEFORE) break;
+        if (s_sprint && best == 0) break;
+        best = (best - 1 + o->Count) % o->Count;
+    }
     s_arcOn = s_arcLast = -1;
     s_flying = -1;
     s_safeIndex = best;
-    s_safeScene = FileCubeScene(o->X[best] / 32768, o->Z[best] / 32768);
+    s_safeScene = CubeScene(o->X[best] / 32768, o->Z[best] / 32768);
     s_safeX = o->X[best]; s_safeY = o->Y[best]; s_safeZ = o->Z[best];
     s_rescue = 1;
+    s_missExact = 1;
+    s_missSaidUntil = TimerRefHR + 3000;
     Log_Info("[racemod] back to missed checkpoint %d: line point %d in scene %d", s_next + 1, best, (int)s_safeScene);
+}
+
+// (when the car isn't in a loop or being put back already: tried again each frame till then)
+static void MissedBackDue(void) {
+    if (s_loopState != LOOP_NONE || s_rescue || s_rescueArrive >= 0) return;
+    s_missBackAt = 0;
+    if (s_next == s_missBackFor && s_next < s_nbCheckpoints && s_phase == PHASE_RACE && !s_place) MissedBack();
 }
 
 // A rescue into another scene (Rescue): once it is in -- the car at the scene's own start (asked for from RaceMod_Frame, inside AffScene,
@@ -12835,6 +12873,10 @@ static void WheelPrize(int prize, S32 now) {
 // Console (tests): the checkpoint just passed forgotten, as if missed (racemiss).
 void RaceMod_TestMiss(void) {
     if (RaceMod_Active() && s_next > 0) { s_next--; Log_Info("[racemod] racemiss: checkpoint %d of %d is the next again", s_next + 1, s_nbCheckpoints); }
+}
+// Console (tests): the car sent back for checkpoint `k` (1 the first), as a sprint's finish does with it missed (raceback).
+void RaceMod_TestBack(int k) {
+    if (RaceMod_Active() && k >= 1 && k <= s_nbCheckpoints) { s_next = k - 1; MissedBack(); }
 }
 void RaceMod_TestPrize(int prize) {
     if (!RaceMod_Active() || prize < 0 || prize > 2) return;

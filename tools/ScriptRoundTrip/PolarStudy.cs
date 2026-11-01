@@ -665,6 +665,200 @@ internal static class PolarStudy
         return 0;
     }
 
+    // polarblockorder <LBA1 folder> <scene> <block>: where each position of a block's first placing falls
+    public static int BlockOrder(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var scene = int.Parse(args[2]); var block = int.Parse(args[3]);
+        var cells = Lba1GridCodec.Decode(game.ReadGrid(scene));
+        var (dx, dy, dz) = LBAAssembler.Terrain.Polar.PolarProps.Size(game.ReadBlocks(scene), block);
+        Console.WriteLine($"block {block}: {dx} x {dy} x {dz}");
+        for (var z = 0; z < 64; z++)
+        for (var x = 0; x < 64; x++)
+        for (var y = 0; y < 25; y++)
+        {
+            var i = ((z * 64 + x) * 25 + y) * 2;
+            if (cells[i] != block || cells[i + 1] != 0) continue;
+            for (var ky = 0; ky < dy; ky++)
+            {
+                var line = new List<string>();
+                for (var kz = 0; kz < dz; kz++)
+                for (var kx = 0; kx < dx; kx++)
+                {
+                    var j = (((z + kz) * 64 + x + kx) * 25 + y + ky) * 2;
+                    line.Add($"({kx},{kz}):{cells[j]}/{cells[j + 1]}");
+                }
+                Console.WriteLine($"layer {ky}: " + string.Join(" ", line));
+            }
+            return 0;
+        }
+        return 0;
+    }
+
+    // polarplaced <LBA1 folder>: where the things made from their pictures stand on the island: cube, and world x, y, z of their foot
+    public static int Placed(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var layout = LBAAssembler.Terrain.Polar.PolarLayout.Build(game);
+        foreach (var p in layout.Props.OrderBy(p => p.Kind.Block).ThenBy(p => p.X))
+        {
+            var (dx, dy, dz) = LBAAssembler.Terrain.Polar.PolarProps.Size(game.ReadBlocks(p.Kind.Scene), p.Kind.Block);
+            var x = (LBAAssembler.Terrain.Polar.PolarTerrain.IslandX(p.X) + dx * LBAAssembler.Terrain.Polar.PolarTerrain.Scale / 2.0) * 512;
+            var z = (LBAAssembler.Terrain.Polar.PolarTerrain.IslandZ(p.Z) + dz * LBAAssembler.Terrain.Polar.PolarTerrain.Scale / 2.0) * 512;
+            Console.WriteLine($"scene {p.Kind.Scene} block {p.Kind.Block} cell ({p.X},{p.Y},{p.Z}): world {x:0} {LBAAssembler.Terrain.Polar.PolarTerrain.LayerY(p.Y - 1)} {z:0}");
+        }
+        return 0;
+    }
+
+    // polarcells <LBA1 folder> <x0> <x1> <z0> <z1>: the ground's top layer of each column of the layout, and what is above it (blocks by layer)
+    public static int GroundCells(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var layout = LBAAssembler.Terrain.Polar.PolarLayout.Build(game);
+        var columns = LBAAssembler.Terrain.Polar.PolarTerrain.Columns(game, layout);
+        int x0 = int.Parse(args[2]), x1 = int.Parse(args[3]), z0 = int.Parse(args[4]), z1 = int.Parse(args[5]);
+        for (var z = z0; z <= z1; z++)
+        {
+            var line = new List<string>();
+            for (var x = x0; x <= x1; x++) line.Add(columns.TryGetValue((x, z), out var c) ? (c.Water ? "  w" : $"{c.Top,3}") : "  .");
+            Console.WriteLine($"z{z,4}: " + string.Join("", line));
+        }
+        if (args.Length > 6)
+            foreach (var k in layout.Cells.Where(k => k.Key.Item1 >= x0 && k.Key.Item1 <= x1 && k.Key.Item3 >= z0 && k.Key.Item3 <= z1).OrderBy(k => k.Key.Item3).ThenBy(k => k.Key.Item1).ThenBy(k => k.Key.Item2))
+                Console.WriteLine($"({k.Key.Item1},{k.Key.Item2},{k.Key.Item3}) block {k.Value.Block} code {k.Value.Code:X2} brick {k.Value.Brick}");
+        return 0;
+    }
+
+    // polarblocktiles <LBA1 folder> <scene> <block> <out.png>: a block's bricks' top tiles side by side, as the ground has them, and each brick's picture beside it, 6 times the size
+    public static int BlockTiles(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var scene = int.Parse(args[2]); var block = int.Parse(args[3]);
+        var lib = game.ReadBlocks(scene);
+        var at = BitConverter.ToInt32(lib, (block - 1) * 4);
+        int dx = lib[at], dy = lib[at + 1], dz = lib[at + 2];
+        const int K = 6, T = LBAAssembler.Terrain.Polar.PolarTextures.TileSize, W = (T + 52) * K;
+        var n = dx * dy * dz;
+        var px = new byte[W * n * K * 42 * 4];
+        void Dot(int x, int y, int c)
+        {
+            var i = (y * W * n + x) * 4;
+            px[i] = c < 0 ? (byte)255 : game.Palette[c * 3 + 2]; px[i + 1] = c < 0 ? (byte)0 : game.Palette[c * 3 + 1]; px[i + 2] = c < 0 ? (byte)255 : game.Palette[c * 3]; px[i + 3] = 255;
+        }
+        for (var pos = 0; pos < n; pos++)
+        {
+            var number = BitConverter.ToUInt16(lib, at + 3 + pos * 4 + 2);
+            if (number == 0) continue;
+            var s = LBAAssembler.Terrain.Polar.PolarTextures.Sprite.Decode(game.ReadBrick(number - 1));
+            var tile = s.Tile(LBAAssembler.Terrain.Polar.PolarTextures.Face.Top);
+            for (var y = 0; y < T * K; y++) for (var x = 0; x < T * K; x++) Dot(pos * W + x, y, tile[y / K * T + x / K]);
+            Console.WriteLine($"pos {pos}: brick {number - 1}, {s.Width} x {s.Lines} hot ({s.HotX},{s.HotY})");
+            for (var y = 0; y < s.Lines * K && y < 42 * K; y++) for (var x = 0; x < s.Width * K; x++) Dot(pos * W + (T + 2) * K + x, y, s.Pixels[y / K * s.Width + x / K]);
+        }
+        PngWriter.Write(args[4], px, W * n, 42 * K);
+        return 0;
+    }
+
+    // polartopdown <LBA2 folder> <ILE> <cell x> <cell z> <cells> <out.png>: the built ground's textures from straight above, north up, 16 pixels to a cell (no light)
+    public static int TopDown(string[] args)
+    {
+        var island = LBAAssembler.Terrain.IslandFile.Load(Path.Combine(args[1], args[2]));
+        int gx0 = int.Parse(args[3]), gz0 = int.Parse(args[4]), n = int.Parse(args[5]);
+        var palette = LBAAssembler.HqrArchive.Open(Path.Combine(args[1], "RESS.HQR")).Read(LBAAssembler.Terrain.Polar.PolarIsland.PaletteEntry);
+        const int K = 16;
+        var px = new byte[n * K * n * K * 4];
+        for (var j = 0; j < n; j++)
+            for (var i = 0; i < n; i++)
+            {
+                int gx = gx0 + i, gz = gz0 + j;
+                var s = LBAAssembler.Terrain.IslandGround.Pick(island, gx, gz, 0);
+                if (s is null) continue;
+                var (page, definition) = island.GroundTextureOf(s.Polygon);
+                var cube = island.CubeAt(gx / 64, gz / 64)!;
+                if (definition * 6 + 6 > cube.TextureDefs.Length) continue;
+                var straight = LBAAssembler.Terrain.IslandGround.TileDefinition(0, 0, 1, 1, s.Polygon.Diagonal, 0);
+                var uv = cube.TextureDefs.AsSpan(definition * 6, 6).ToArray();
+                double[] ox = new double[3], oz = new double[3];
+                for (var k = 0; k < 3; k++) { ox[k] = straight[k * 2] > 128 ? 1 : 0; oz[k] = straight[k * 2 + 1] > 128 ? 1 : 0; }
+                var det = (ox[1] - ox[0]) * (oz[2] - oz[0]) - (ox[2] - ox[0]) * (oz[1] - oz[0]);
+                var bytes = island.GroundPage(page);
+                for (var y = 0; y < K; y++)
+                    for (var x = 0; x < K; x++)
+                    {
+                        double sx = (x + 0.5) / K, sz = (y + 0.5) / K;
+                        var l1 = ((sx - ox[0]) * (oz[2] - oz[0]) - (ox[2] - ox[0]) * (sz - oz[0])) / det;
+                        var l2 = ((ox[1] - ox[0]) * (sz - oz[0]) - (sx - ox[0]) * (oz[1] - oz[0])) / det;
+                        var l0 = 1 - l1 - l2;
+                        var u = (l0 * uv[0] + l1 * uv[2] + l2 * uv[4]) / 256;
+                        var v = (l0 * uv[1] + l1 * uv[3] + l2 * uv[5]) / 256;
+                        var c = bytes[Math.Clamp((int)v, 0, 255) * 256 + Math.Clamp((int)u, 0, 255)];
+                        var at = ((j * K + y) * n * K + i * K + x) * 4;
+                        px[at] = palette[c * 3 + 2]; px[at + 1] = palette[c * 3 + 1]; px[at + 2] = palette[c * 3]; px[at + 3] = 255;
+                    }
+            }
+        PngWriter.Write(args[6], px, n * K, n * K);
+        return 0;
+    }
+
+    // polargroundpage <LBA2 folder> <ILE> <page> <out.png>: a ground texture page, twice the size
+    public static int GroundPage(string[] args)
+    {
+        var island = LBAAssembler.Terrain.IslandFile.Load(Path.Combine(args[1], args[2]));
+        var palette = LBAAssembler.HqrArchive.Open(Path.Combine(args[1], "RESS.HQR")).Read(LBAAssembler.Terrain.Polar.PolarIsland.PaletteEntry);
+        var bytes = island.GroundPage(int.Parse(args[3]));
+        Console.WriteLine($"{island.GroundPages.Count + 1} pages");
+        var px = new byte[512 * 512 * 4];
+        for (var y = 0; y < 512; y++)
+            for (var x = 0; x < 512; x++)
+            {
+                var c = bytes[y / 2 * 256 + x / 2];
+                var at = (y * 512 + x) * 4;
+                px[at] = palette[c * 3 + 2]; px[at + 1] = palette[c * 3 + 1]; px[at + 2] = palette[c * 3]; px[at + 3] = 255;
+            }
+        PngWriter.Write(args[4], px, 512, 512);
+        return 0;
+    }
+
+    // polarlog <LBA1 folder> <LBA2 game folder>: the island's build log (nothing written)
+    public static int BuildLog(string[] args)
+    {
+        foreach (var line in LBAAssembler.Terrain.Polar.PolarIsland.Build(args[1], args[2]).Log) Console.WriteLine(line);
+        return 0;
+    }
+
+    // polarprops <LBA1 folder> <out folder> <scene>...: each block of those scenes of more than a cell, alone, as <scene>_<block>_<placed>x.png, 4 times the size
+    public static int Props(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        Directory.CreateDirectory(args[2]);
+        foreach (var scene in args.Skip(3).Select(int.Parse))
+        {
+            var lib = game.ReadBlocks(scene);
+            var cells = Lba1GridCodec.Decode(game.ReadGrid(scene));
+            var use = new Dictionary<int, int>();
+            for (var i = 0; i < 64 * 64 * 25; i++) { var b = cells[i * 2]; if (b != 0 && cells[i * 2 + 1] == 0) use[b] = use.GetValueOrDefault(b) + 1; }
+            foreach (var (block, n) in use.OrderByDescending(u => u.Value))
+            {
+                var (dx, dy, dz) = LBAAssembler.Terrain.Polar.PolarProps.Size(lib, block);
+                if (dy < 2 && dx * dz < 4) continue;
+                var pic = LBAAssembler.Terrain.Polar.PolarProps.Draw(game, lib, block);
+                if (pic.Width == 0) continue;
+                const int K = 3;
+                var px = new byte[pic.Width * K * pic.Height * K * 4];
+                for (var y = 0; y < pic.Height * K; y++)
+                    for (var x = 0; x < pic.Width * K; x++)
+                    {
+                        var c = pic.Pixels[y / K * pic.Width + x / K];
+                        var i = (y * pic.Width * K + x) * 4;
+                        if (c < 0) { px[i] = 255; px[i + 1] = 0; px[i + 2] = 255; px[i + 3] = 255; continue; }
+                        px[i] = game.Palette[c * 3 + 2]; px[i + 1] = game.Palette[c * 3 + 1]; px[i + 2] = game.Palette[c * 3]; px[i + 3] = 255;
+                    }
+                PngWriter.Write(Path.Combine(args[2], $"{scene}_{block}_{n}x_{dx}.{dy}.{dz}.png"), px, pic.Width * K, pic.Height * K);
+            }
+        }
+        return 0;
+    }
+
     // flatcells <ILE> <cell x0> <x1> <z0> <z1>: the ground cells drawn in flat colour (no texture) there, by bank
     public static int FlatCells(string[] args)
     {
