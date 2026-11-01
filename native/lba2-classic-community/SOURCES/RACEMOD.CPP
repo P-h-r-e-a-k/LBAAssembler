@@ -872,9 +872,13 @@ static int s_goldIcon = -1;                // gold_icon=: the golden Gazogem's m
 // haunt=<ghost> <icon> (the Temple of Bú's, 2026-10-17): the ghost power-up on this track -- the ghost BODY.HQR body drawn over each car it
 // haunts, and its icon for the item box (BODY.HQR, a fixed body); -1: no ghost (none drawn from a mushroom: RandomPowerUp)
 static int s_hauntBody = -1, s_hauntIcon = -1;
-// haunt_balloons=1 (the Desert's, 2026-11-01): the ghost is a bunch of balloons -- its name, no ghost's sound, balloons over the screen. Each car's own game has it, so it
-// crosses between games as the ghost does.
-static int s_hauntBalloons = 0;
+// haunt_balloons=<a body for each colour> (the Desert's, 2026-11-01): the ghost is a bunch of balloons rising out of the car, one balloon going on to each other car in a colour of
+// its own, over the screen too -- its name, no ghost's sound. Each car's own game has it, so it crosses between games as the ghost does. (The colours are looks only: their own
+// random numbers, so the race's are left as they were.)
+#define RACE_BALLOONS 5
+static int s_hauntBalloons = 0, s_balloonBody[RACE_BALLOONS];
+static U32 s_balloonSeed = 20261101u;
+static int BalloonColour(void);
 // The ghost comes along often on its own track (the user, 2026-10-20: "at least 2 instances of it over every 3 laps on average, this
 // includes both us picking it up, or having it used upon us"): once the race has gone RACE_GHOST_DUE laps (the opponents' planned lap) with
 // no ghost -- Twinsen's drawn from a mushroom, or another car's drawn to use on him -- the next item anyone draws is the ghost. With its
@@ -1761,6 +1765,8 @@ static S32 s_oppHauntAt[RACE_MAX_OPPONENTS], s_oppHauntUntil[RACE_MAX_OPPONENTS]
 static double s_oppSwayMost[RACE_MAX_OPPONENTS], s_oppEdgeLeast[RACE_MAX_OPPONENTS];   // (for the log: its widest weave, the nearest its middle came to the road's edge)
 static T_OBJ_3D s_hauntObj[RACE_MAX_OPPONENTS];
 static int s_hauntReady[RACE_MAX_OPPONENTS];
+static int s_hauntColour[RACE_MAX_OPPONENTS];        // the balloon over it: its colour
+static int s_screenBalloon = 0;                      // the balloon over Twinsen's screen: its colour
 static double s_oppHauntPhase[RACE_MAX_OPPONENTS];   // where its circling ghost started round it (radians: sin x, cos z)
 static int s_oppHauntFlown[RACE_MAX_OPPONENTS];      // its ghost flown to it (circling at its height at once), not risen out of it
 static S32 s_hauntAt = 0, s_hauntUntil = 0;   // Twinsen's screen haunted since, until (0: not)
@@ -1788,6 +1794,7 @@ static S32 s_hauntAt = 0, s_hauntUntil = 0;   // Twinsen's screen haunted since,
 #define RACE_MAX_GHOSTS (2 * RACE_MAX_OPPONENTS)
 typedef struct {
     int On, From, To;                      // from Twinsen's car (-1) or an opponent's, to an opponent's, Twinsen's (-1), or none (-2)
+    int Colour, Shown;                     // (balloons: its colour once it has split from the bunch; which body Obj has)
     int Lead, Said, Ready, Far;            // the one drawn rising (the others come out of it at the split), the split logged; Obj made;
                                            // its car too far off for RACE_GHOST_SPEED in RACE_GHOST_FLY_MAX (for the log)
     S32 T0, Fly, Dur;                      // set off, split (flying from then), and the flight's length (ms)
@@ -1985,6 +1992,7 @@ typedef struct {
     int State, Anim, Strike, Blown, Target; double X, Z; S32 Beta, T0, Rest, Next;
     int Shown; S32 ShownScene;
     int NbSeen; S32 SeenScene[RACE_GUARD_SEEN]; int SeenActor[RACE_GUARD_SEEN];
+    int Fishing; S32 FishAt; double BobX, BobZ;   // (Felix: what he is at, since when, and where his line is in the water)
 } T_RACE_GUARD;
 static T_RACE_GUARD s_guards[RACE_MAX_GUARDS];
 static int s_nbGuards = 0;
@@ -3995,7 +4003,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %d", &s_hauntBody, &s_hauntIcon) != 2) s_hauntBody = s_hauntIcon = -1;
         }
         else if (!strcmp(key, "haunt_balloons")) {
-            s_hauntBalloons = atoi(v) != 0;
+            s_hauntBalloons = sscanf(v, "%d %d %d %d %d", &s_balloonBody[0], &s_balloonBody[1], &s_balloonBody[2], &s_balloonBody[3], &s_balloonBody[4]) == RACE_BALLOONS;
             s_puName[PU_GHOST] = s_hauntBalloons ? "Balloons!" : "Ghost!";
         }
         else if (!strcmp(key, "web")) {
@@ -7944,14 +7952,17 @@ static S32 LoopCamera(S32 *eye, S32 *target) {
     const T_RACE_LOOP *l = &s_loops[s_loopOn];
     // (the ring's cube from this one: the car comes out of a ring near a cube's edge into the next one -- the Emerald Moon's first)
     const double ox = (l->CubeX - CurrentCubeX) * 32768.0, oz = (l->CubeZ - CurrentCubeY) * 32768.0;
-    const double nx = -l->DirZ, nz = l->DirX, in = Lane(l, 0);
-    const double mx = l->X + ox, my = l->Y + l->R, mz = l->Z + oz;
-    eye[0] = (S32)(l->X + ox - l->DirX * l->R * RACE_LOOP_CAM_BACK + nx * in);
+    const double nx = -l->DirZ, nz = l->DirX;
+    // (the eye across the road with the car and the view straight along it, so it never turns: a ring comes down in the next lane, 9 cells over, and an eye left on the lane the car
+    // went in on watched it come down from the side and swung back after it -- the user, 2026-11-01: "switching to a side view ... switch and switch back")
+    const double rx = car->X - (l->X + ox), rz = car->Z - (l->Z + oz), across = rx * nx + rz * nz, along = rx * l->DirX + rz * l->DirZ;
+    const double fx = l->X + ox + nx * across, fz = l->Z + oz + nz * across;
+    eye[0] = (S32)(fx - l->DirX * l->R * RACE_LOOP_CAM_BACK);
     eye[1] = (S32)(l->Y + l->R * RACE_LOOP_CAM_UP);
-    eye[2] = (S32)(l->Z + oz - l->DirZ * l->R * RACE_LOOP_CAM_BACK + nz * in);
-    target[0] = (S32)(mx + (car->X - mx) * RACE_LOOP_CAM_LOOK);
-    target[1] = (S32)(my + (car->Y - my) * RACE_LOOP_CAM_LOOK);
-    target[2] = (S32)(mz + (car->Z - mz) * RACE_LOOP_CAM_LOOK);
+    eye[2] = (S32)(fz - l->DirZ * l->R * RACE_LOOP_CAM_BACK);
+    target[0] = (S32)(fx + l->DirX * along * RACE_LOOP_CAM_LOOK);
+    target[1] = (S32)(l->Y + (car->Y - l->Y) * RACE_LOOP_CAM_LOOK);
+    target[2] = (S32)(fz + l->DirZ * along * RACE_LOOP_CAM_LOOK);
     return TRUE;
 }
 
@@ -11095,7 +11106,7 @@ static int CarRacing(void) { return RaceMod_Active() && s_car.HasLine && Comport
 // shouldn't be wondering on to it"; of the carpet wizard, and "let's check all tracks for NPCs that have pathing which takes them on our
 // tracks"; and "we've checked this a lot, let's improve our checks so it stops happening".) The build's own actors -- cars, items, guards,
 // its Hidden template's flags -- are left alone. Each one is said once a scene, "[roadwatch]": the sweep reads it.
-#define RACE_ROAD_KEEP_REACH (4.0 * 512.0)
+#define RACE_ROAD_KEEP_REACH (6.0 * 512.0)
 #define RACE_ROAD_KEEP_HIGH 2500
 #define RACE_ROAD_KEEP_BURIED 400
 #define RACE_BUILD_ACTOR 0x1A1000
@@ -11106,12 +11117,16 @@ static int RacesToday(const T_OBJET *t) {
     return 0;
 }
 static int s_roadKeepScene = -1;
+// (how far from the line a person is held: past the road's edge. The lanes' room is the road's half less RACE_ROAD_KEEP_LANE; four cells held Citadel 1's walkers on its kerb
+// and its road's edge, the user, 2026-11-01: "we still have an NPC walking on the track")
+#define RACE_ROAD_KEEP_LANE (2.45 * 512.0)
+static double s_roadKeepReach = RACE_ROAD_KEEP_REACH;
 
 static int OnTheRoad(const T_RACE_OPPONENT *o, const T_OBJET *t) {
     const double wx = t->Obj.X + CurrentCubeX * 32768.0, wz = t->Obj.Z + CurrentCubeY * 32768.0;
     for (int i = 0; i < o->Count; i += 2) {
         const double dx = o->X[i] - wx, dz = o->Z[i] - wz;
-        if (dx * dx + dz * dz <= RACE_ROAD_KEEP_REACH * RACE_ROAD_KEEP_REACH && abs(o->Y[i] - t->Obj.Y) <= RACE_ROAD_KEEP_HIGH) return 1;
+        if (dx * dx + dz * dz <= s_roadKeepReach * s_roadKeepReach && abs(o->Y[i] - t->Obj.Y) <= RACE_ROAD_KEEP_HIGH) return 1;
     }
     return 0;
 }
@@ -11119,7 +11134,14 @@ static int OnTheRoad(const T_RACE_OPPONENT *o, const T_OBJET *t) {
 static void RoadKeep(void) {
     const T_RACE_OPPONENT *o = Guide();
     if (!o || CubeMode != CUBE_EXTERIEUR) return;
-    if (s_roadKeepScene != (S32)NumCube) { s_roadKeepScene = NumCube; memset(s_roadKeep, 0, sizeof(s_roadKeep)); }
+    if (s_roadKeepScene != (S32)NumCube) {
+        s_roadKeepScene = NumCube; memset(s_roadKeep, 0, sizeof(s_roadKeep));
+        s_roadKeepReach = RACE_ROAD_KEEP_REACH;
+        for (int i = 0; i < s_nbLanes; i++) {
+            const double far = (s_lanes[i].Hi > -s_lanes[i].Lo ? s_lanes[i].Hi : -s_lanes[i].Lo) + RACE_ROAD_KEEP_LANE;
+            if (far > s_roadKeepReach) s_roadKeepReach = far;
+        }
+    }
     const int racing = CarRacing() && s_goAt;
     for (S32 a = 1; a < NbObjets && a < MAX_OBJETS; a++) {
         T_OBJET *t = &ListObjet[a];
@@ -13444,6 +13466,7 @@ static void HauntTwinsen(const char *by, S32 now) {
     }
     if (now < s_hauntUntil) { Log_Info("[racemod] %s's ghost comes for Twinsen: one is over his screen already", by); return; }
     s_hauntAt = now; s_hauntUntil = now + RACE_HAUNT_SCREEN_MS;
+    if (s_hauntBalloons) s_screenBalloon = BalloonColour();
     Log_Info("[racemod] %s's ghost haunts Twinsen: over his screen for %.1f s (fading in over %.1f s, out over the last %.1f s)", by,
              RACE_HAUNT_SCREEN_MS / 1000.0, RACE_HAUNT_IN / 1000.0, RACE_HAUNT_OUT / 1000.0);
 }
@@ -13633,6 +13656,8 @@ static int GhostPlace(const T_RACE_GHOST *g, S32 now, double *x, double *y, doub
     return 1;
 }
 
+static int BalloonColour(void) { return (int)(NextRandom(&s_balloonSeed) * RACE_BALLOONS) % RACE_BALLOONS; }
+
 // A ghost used (PU_GHOST) by car `from` (-1 Twinsen): Twinsen's sent off to every other car it can haunt (HauntCar's rule), another car's
 // to Twinsen's -- or, without the ghost's body (haunt=), Twinsen's car's place or room for them, haunting at once as before.
 static void GhostLaunch(int from, S32 now) {
@@ -13660,6 +13685,7 @@ static void GhostLaunch(int from, S32 now) {
     for (int k = 0; k < want; k++) {
         T_RACE_GHOST *g = &s_ghosts[slot[k]];
         g->On = 1; g->From = from; g->To = nb ? to[k] : -2; g->Lead = k == 0; g->Said = 0; g->T0 = now; g->Fly = fly;
+        g->Colour = BalloonColour(); g->Shown = -2;
         g->Fan = nb ? (k - (nb - 1) / 2.0) * RACE_GHOST_FAN : 0;
         g->Far = 0; g->Dist = 0; g->Phase = 0; g->Dur = RACE_GHOST_FLY_MIN;
         if (g->To == -2 || !GhostCar(g->To, &tx, &ty, &tz, &ttop, &tb)) continue;
@@ -13707,6 +13733,7 @@ static void Ghosts(S32 now) {
         g->On = 0;
         if (g->To >= 0) {
             Log_Info("[racemod] Twinsen's ghost reaches %s, %.2f s after it was used", s_opp[g->To].Name, (now - g->T0) / 1000.0);
+            s_hauntColour[g->To] = g->Colour; s_hauntReady[g->To] = 0;
             HauntCar(g->To, now, g->Phase, 1);
         } else if (g->To == -1) {
             Log_Info("[racemod] %s's ghost reaches Twinsen's car, %.2f s after it was taken", s_opp[g->From].Name, (now - g->T0) / 1000.0);
@@ -13854,6 +13881,111 @@ static int GuardWalk(T_RACE_GUARD *g, double tx, double tz, double step) {
     return 1;
 }
 
+// Felix (kind 6), as he fishes in the game, there on Citadel 2's strip between two lanes (the user, 2026-11-01: "he should cast his line into the water, catch a crab, pull
+// his line back out the water sending the crab flying behind him and onto the track or a car that's passing behind. He doesn't need to actively target cars"): facing the water,
+// he casts (his animation 328), waits, and reels in (15, and the game's sample): the crab comes out of the water where his line was and over his head to come down on the road
+// behind him, near the same place each time. A car there as it lands is hit, as by anything thrown (Thrown).
+enum { FISH_READY, FISH_CAST, FISH_WAIT, FISH_REEL };
+#define RACE_FISH_REST_LO 4000             // ms between one catch and the next cast, at the least ...
+#define RACE_FISH_REST_HI 9000             // ... and the most
+#define RACE_FISH_CAST_MS 1500             // his cast, its line in the water from RACE_FISH_LINE_AT
+#define RACE_FISH_LINE_AT 700
+#define RACE_FISH_WAIT_LO 3000             // ms his line is in the water, at the least ...
+#define RACE_FISH_WAIT_HI 7000             // ... and the most
+#define RACE_FISH_REEL_MS 1200
+#define RACE_FISH_CRAB_AT 400              // ms into reeling in that the crab comes out
+#define RACE_FISH_LINE 6400.0              // how far in front of him his line goes in (over the lane in front of him, into the sea)
+#define RACE_FISH_BEHIND 4400.0            // how far behind him the crab comes down: the middle of the lane behind him
+#define RACE_FISH_ALONG 2000.0             // ... this far either way along it
+#define RACE_FISH_SEA 100                  // the sea's height, where the crab comes out
+#define RACE_FISH_SAMPLE 368               // his sample in the game, as he hauls one in
+
+static void FelixCrab(T_RACE_GUARD *g, int actor, S32 now) {
+    int t = -1;
+    for (int i = 0; i < RACE_MAX_THROWN && t < 0; i++) if (!s_thrown[i].On) t = i;
+    if (t < 0 || actor < 0 || CubeMode != CUBE_EXTERIEUR) return;
+    if (s_crabModel < 0) { Log_Warn("[racemod] Felix: no crab (guard_crab=)"); return; }
+    T_RACE_THROWN *u = &s_thrown[t];
+    const double along = (VentRandom() * 2 - 1) * RACE_FISH_ALONG;
+    const double tx = g->X - g->FaceX * RACE_FISH_BEHIND + g->FaceZ * along, tz = g->Z - g->FaceZ * RACE_FISH_BEHIND - g->FaceX * along;
+    const double fromX = g->BobX, fromZ = g->BobZ, fromY = RACE_FISH_SEA, c = RACE_THROWN_WEIGHT / 16.0;
+    const double R = sqrt((tx - fromX) * (tx - fromX) + (tz - fromZ) * (tz - fromZ)), dy = g->Y + 300 - fromY;
+    // (fast enough to get there at about 45 degrees: a crab flung, not lobbed straight up nor skimmed flat)
+    const double v = ceil(1.15 * sqrt(2 * c * R));
+    const double q = c * R * R / (v * v), disc = R * R - 4 * q * (dy + q);
+    const double h = disc >= 0 ? atan((R - sqrt(disc)) / (2 * q)) : atan2(dy, R) + 0.7;
+    const double flight = R / (v * cos(h)) * 20 / 1000.0;
+    u->On = 1; u->T0 = now; u->Dur = (S32)(flight * 1000); u->ToX = tx; u->ToY = g->Y; u->ToZ = tz;
+    u->Sprite = 0; u->Extra = -1; u->Owner = actor;
+    Log_Info("[racemod] Felix hauls in a crab: %.1f s over his head to (%.0f,%.0f)", flight, tx, tz);
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    u->Extra = ThrowExtraObj((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), s_crabModel, TurnRound(h), TurnOf(atan2(tx - fromX, tz - fromZ)), (S32)v, -1, RACE_THROWN_WEIGHT, 0);
+    if (u->Extra >= 0) { u->Sprite = ListExtra[u->Extra].Sprite; ListExtra[u->Extra].Flags &= ~(EXTRA_END_OBJ | EXTRA_END_COL | EXTRA_IMPACT); }
+}
+
+static int Felix(T_RACE_GUARD *g, int actor, S32 now) {
+    g->Beta = TurnRound(atan2(g->FaceX, g->FaceZ));
+    if (GuardHolds(g, now)) return g->Stand;
+    const S32 t = now - g->FishAt;
+    switch (g->Fishing) {
+    case FISH_READY:
+        if (now < g->Next) return g->Stand;
+        g->Fishing = FISH_CAST; g->FishAt = now;
+        Log_Info("[racemod] Felix casts");
+        g->BobX = g->X + g->FaceX * RACE_FISH_LINE + (VentRandom() * 2 - 1) * 500;
+        g->BobZ = g->Z + g->FaceZ * RACE_FISH_LINE + (VentRandom() * 2 - 1) * 500;
+        return g->Strikes[0];
+    case FISH_CAST:
+        if (t < RACE_FISH_CAST_MS) return g->Strikes[0];
+        g->Fishing = FISH_WAIT; g->FishAt = now;
+        g->Next = now + RACE_FISH_WAIT_LO + (S32)(VentRandom() * (RACE_FISH_WAIT_HI - RACE_FISH_WAIT_LO));
+        return g->Stand;
+    case FISH_WAIT:
+        if (now < g->Next) return g->Stand;
+        g->Fishing = FISH_REEL; g->FishAt = now; g->Blown = 0;
+        return g->NbStrikes > 1 ? g->Strikes[1] : g->Strikes[0];
+    default:
+        if (!g->Blown && t >= RACE_FISH_CRAB_AT) {
+            g->Blown = 1;
+            if (actor >= 0 && CubeMode == CUBE_EXTERIEUR) { ParmSampleVolume = 64; HQ_3D_MixSample(RACE_FISH_SAMPLE, 4096, 1000, 1, (S32)(g->X - CurrentCubeX * 32768.0), (S32)g->Y, (S32)(g->Z - CurrentCubeY * 32768.0)); }
+            FelixCrab(g, actor, now);
+        }
+        if (t < RACE_FISH_REEL_MS) return g->NbStrikes > 1 ? g->Strikes[1] : g->Strikes[0];
+        g->Fishing = FISH_READY;
+        g->Next = now + RACE_FISH_REST_LO + (S32)(VentRandom() * (RACE_FISH_REST_HI - RACE_FISH_REST_LO));
+        return g->Stand;
+    }
+}
+
+// His line, from the tip of his rod to the water, sagging a little (over the picture: thin, and drawn after everything).
+#define RACE_FISH_ROD_OUT 800.0
+#define RACE_FISH_ROD_UP 1500.0
+static void DrawFishingLines(S32 now) {
+    if (CubeMode != CUBE_EXTERIEUR) return;
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    for (int i = 0; i < s_nbGuards; i++) {
+        const T_RACE_GUARD *g = &s_guards[i];
+        if (g->Kind != 6) continue;
+        const S32 t = now - g->FishAt;
+        double reach = 0;
+        if (g->Fishing == FISH_CAST && t >= RACE_FISH_LINE_AT) reach = (double)(t - RACE_FISH_LINE_AT) / (RACE_FISH_CAST_MS - RACE_FISH_LINE_AT);
+        else if (g->Fishing == FISH_WAIT) reach = 1;
+        else if (g->Fishing == FISH_REEL && t < RACE_FISH_CRAB_AT) reach = 1;
+        if (reach <= 0) continue;
+        if (reach > 1) reach = 1;
+        const double rx = g->X + g->FaceX * RACE_FISH_ROD_OUT, rz = g->Z + g->FaceZ * RACE_FISH_ROD_OUT, ry = g->Y + RACE_FISH_ROD_UP;
+        S32 px = 0, py = 0;
+        for (int k = 0; k <= 8; k++) {
+            const double u = reach * k / 8.0;
+            const double x = rx + (g->BobX - rx) * u, z = rz + (g->BobZ - rz) * u, y = ry + (RACE_FISH_SEA - ry) * u * u;
+            LongWorldRotatePoint((S32)(x - cx), (S32)y, (S32)(z - cz));
+            if (!LongProjectPoint(X0, Y0, Z0)) { px = -1; continue; }
+            if (k && px >= 0) { Line(px, py, Xp, Yp, 61); BoxMovingAdd(px < Xp ? px : Xp, py < Yp ? py : Yp, px > Xp ? px : Xp, py > Yp ? py : Yp); }
+            px = Xp; py = Yp;
+        }
+    }
+}
+
 static void GuardFaces(T_RACE_GUARD *g, int who) {
     double x, y, z;
     if (who >= -1 && CarAt(who, &x, &y, &z)) g->Beta = TurnRound(atan2(x - g->X, z - g->Z));
@@ -13900,7 +14032,7 @@ static void GuardThrow(T_RACE_GUARD *g, int actor, S32 now) {
     const int n = (int)(sizeof(RACE_THROWN) / sizeof(RACE_THROWN[0]));
     u->On = 1; u->T0 = now; u->Dur = (S32)(flight * 1000); u->ToX = tx; u->ToY = y; u->ToZ = tz;
     u->Sprite = RACE_THROWN[(int)(VentRandom() * n) % n]; u->Extra = -1; u->Owner = actor >= 0 ? actor : 255;
-    Log_Info("[racemod] %s throws %s at %s's car (%.1f s, %.0f away)", GuardName(g), g->Kind == 4 ? "a crate" : g->Kind == 5 ? "a ball" : g->Kind == 6 ? "a crab" : "something", CarName(g->Target), flight,
+    Log_Info("[racemod] %s throws %s at %s's car (%.1f s, %.0f away)", GuardName(g), g->Kind == 4 ? "a crate" : g->Kind == 5 ? "a ball" : "something", CarName(g->Target), flight,
              sqrt((tx - fromX) * (tx - fromX) + (tz - fromZ) * (tz - fromZ)));
     if (actor < 0 || CubeMode != CUBE_EXTERIEUR) return;
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
@@ -13908,10 +14040,6 @@ static void GuardThrow(T_RACE_GUARD *g, int actor, S32 now) {
     const S32 alpha = TurnRound(h);
     if (g->Kind == 4) {
         u->Extra = ThrowExtraObj((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), RACE_CRATE_OBJ, alpha, beta, RACE_CRATE_SPEED, -1, RACE_THROWN_WEIGHT, 0);
-        if (u->Extra >= 0) u->Sprite = ListExtra[u->Extra].Sprite;
-    }
-    else if (g->Kind == 6 && s_crabModel >= 0) {
-        u->Extra = ThrowExtraObj((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), s_crabModel, alpha, beta, RACE_CRATE_SPEED, -1, RACE_THROWN_WEIGHT, 0);
         if (u->Extra >= 0) u->Sprite = ListExtra[u->Extra].Sprite;
     }
     else if (g->Kind == 5) u->Extra = ThrowExtra((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), SPRITE_BALLE_LVL_4, alpha, beta, RACE_CRATE_SPEED, RACE_THROWN_WEIGHT, 0);
@@ -13981,10 +14109,12 @@ static void Guards(S32 now, int driving, S32 dt) {
                 if (g->SeenScene[k] == (S32)NumCube && g->SeenActor[k] > 0 && g->SeenActor[k] < NbObjets) actor = g->SeenActor[k];
         if (!running) {
             // (before the race's GO, the grid forming, a race run again: at his post as he stood)
-            g->State = GUARD_POST; g->X = g->PostX; g->Z = g->PostZ; g->Target = -2; g->Next = 0;
+            g->State = GUARD_POST; g->X = g->PostX; g->Z = g->PostZ; g->Target = -2; g->Next = 0; g->Fishing = 0;
             g->Beta = TurnRound(atan2(g->FaceX, g->FaceZ));
         } else if (g->Kind == 3) {
             anim = Torturer(g, i, now, driving, dt);
+        } else if (g->Kind == 6) {
+            anim = Felix(g, actor, now);
         } else {
             // the cars: the nearest coming his way (or right by him) -- and any running into him
             int target = -2;
@@ -16485,7 +16615,11 @@ static void OpponentSide(int n, T_RACE_OPPONENT *o, double x, double z, double y
     o->SideV = dt > 0 ? (o->Side - was) * 1000.0 / dt : 0;
 }
 
+// (the console's isoview holds a place on the island, whichever cube the car has gone on to)
+S32 CameraForceWorld[2];
+extern S32 CameraForced, CameraForce[6];
 void RaceMod_Frame(void) {
+    if (CameraForced) { CameraForce[0] = CameraForceWorld[0] - CurrentCubeX * 32768; CameraForce[2] = CameraForceWorld[1] - CurrentCubeY * 32768; }
     if (!RaceMod_Active()) { IslandCarFrame(); return; }
     ActorsAt();
     DeckLiftFrame(TimerRefHR);
@@ -17343,14 +17477,19 @@ static void DrawHalloween(S32 now) {
         double x, y, z;
         S32 beta;
         HauntCircle(n, now, car->Obj.X + CurrentCubeX * 32768.0, car->Obj.Y, car->Obj.Z + CurrentCubeY * 32768.0, car->YMax, &x, &y, &z, &beta);
-        DrawOver(&s_hauntObj[n], &s_hauntReady[n], s_hauntBody, x, y, z, beta, 0.15);
+        DrawOver(&s_hauntObj[n], &s_hauntReady[n], s_hauntBalloons ? s_balloonBody[s_hauntColour[n]] : s_hauntBody, x, y, z, beta, 0.15);
     }
     // the ghosts on their way: Twinsen's rising out of his car, splitting and flying off to the cars it haunts; another car's to his
     for (int i = 0; i < RACE_MAX_GHOSTS; i++) {
         T_RACE_GHOST *g = &s_ghosts[i];
         double x, y, z, pitch;
         S32 beta;
-        if (g->On && GhostPlace(g, now, &x, &y, &z, &beta, &pitch)) DrawOver(&g->Obj, &g->Ready, s_hauntBody, x, y, z, beta, pitch);
+        if (g->On && GhostPlace(g, now, &x, &y, &z, &beta, &pitch)) {
+            // (the bunch rising, one balloon from the split on)
+            const int body = s_hauntBalloons && now >= g->Fly ? s_balloonBody[g->Colour] : s_hauntBody;
+            if (body != g->Shown) { g->Shown = body; g->Ready = 0; }
+            DrawOver(&g->Obj, &g->Ready, body, x, y, z, beta, pitch);
+        }
     }
 }
 
@@ -17365,8 +17504,7 @@ static void DrawHalloween(S32 now) {
 #define RACE_HAUNT_LEVELS 16
 #define RACE_HAUNT_TALL 0.84               // its height, of the screen's
 enum { HAUNT_OUTSIDE, HAUNT_SHEET, HAUNT_EDGE, HAUNT_HOLLOW, HAUNT_BALLOON };
-#define RACE_BALLOONS 5
-#define RACE_HAUNT_BALLOON 0.62            // a balloon over the screen: this share of the way to its colour
+#define RACE_HAUNT_BALLOON 0.5             // a balloon over the screen: this share of the way to its colour
 static U8 s_hauntTab[2 + RACE_BALLOONS][RACE_HAUNT_LEVELS + 1][256];  // [0] towards the sheet's colour, [1] towards black, [2..] towards a balloon's
 static U32 s_hauntPalSum = 0;
 static U8 *s_hauntMask = NULL;                        // the ghost's shape, s_hauntW x s_hauntH: HAUNT_OUTSIDE..HAUNT_HOLLOW
@@ -17394,25 +17532,18 @@ static double HauntShape(double u, double v, double *hollow) {
 
 // The balloons over the screen: what's at (u, v), a bunch of them round the middle, their strings down to a knot under it.
 static int BalloonMask(double u, double v, double edge) {
-    static const double at[RACE_BALLOONS][2] = {{-0.46, -0.28}, {0.44, -0.2}, {0.0, -0.66}, {-0.14, 0.12}, {0.32, 0.26}};
-    for (int i = RACE_BALLOONS - 1; i >= 0; i--) {
-        const double d = HauntEllipse(u, v, at[i][0], at[i][1], 0.27, 0.32);
-        if (d <= 0) return d > -edge ? HAUNT_EDGE : HAUNT_BALLOON + i;
-    }
-    const double kx = 0.0, ky = 0.92;
-    for (int i = 0; i < RACE_BALLOONS; i++) {
-        const double x0 = at[i][0], y0 = at[i][1] + 0.32, t = (v - y0) / (ky - y0);
-        if (t >= 0 && t <= 1 && fabs(u - (x0 + (kx - x0) * t)) <= edge * 0.7) return HAUNT_EDGE;
-    }
-    return HAUNT_OUTSIDE;
+    const double d = HauntEllipse(u, v, 0.0, -0.2, 0.5, 0.6);
+    if (d <= 0) return d > -edge ? HAUNT_EDGE : HAUNT_BALLOON + s_screenBalloon;
+    return fabs(u) <= edge * 0.7 && v > 0.4 && v < 0.95 ? HAUNT_EDGE : HAUNT_OUTSIDE;
 }
 
 // The ghost's mask for a screen `height` tall.
 static void HauntMask(S32 height) {
     const S32 h = (S32)(height * RACE_HAUNT_TALL), w = (S32)(h * 0.98);
     static int shown = -1;   // (balloons or the ghost: a game goes from track to track)
-    if (h == s_hauntH && s_hauntMask && shown == s_hauntBalloons) return;
-    shown = s_hauntBalloons;
+    const int wanted = s_hauntBalloons ? 1 + s_screenBalloon : 0;
+    if (h == s_hauntH && s_hauntMask && shown == wanted) return;
+    shown = wanted;
     free(s_hauntMask);
     s_hauntMask = (U8 *)malloc((size_t)w * h);
     s_hauntW = w; s_hauntH = h;
@@ -18605,6 +18736,7 @@ void RaceMod_Draw(void) {
     // (Halloween's: the diving witch, the scares, the haunted cars' ghosts; another car's ghost over the screen, and a giant web's, under
     // the display)
     DrawHalloween(now);
+    if (s_nbGuards) DrawFishingLines(now);
     DrawHaunt(now, width, height);
     DrawWebScreen(now, width, height);
     DrawPassage(now, width, height);

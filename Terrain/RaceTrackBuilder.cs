@@ -313,6 +313,8 @@ internal sealed class RaceTrackPlan
     // body, Z at least this, the copy's body, its box's XMin, XMax (LiftDecors)
     public int[][]? LiftDecors { get; set; }
     public int[][]? CopyDecors { get; set; }
+    // A fence closed across a corner: cube x, cube z, the post's body, the new post's x, z, the post to join it to's x, z, their height (FenceLinks)
+    public int[][]? FenceLinks { get; set; }
     // Ground drawn as water inland, by the road, drawn as the land round it (ClearBlueGround)
     public bool ClearBlueGround { get; set; }
     // Every decor held up by nothing goes, not only the ones the road's build left so: Polar Island's, made from LBA1's bricks with nothing
@@ -796,6 +798,7 @@ internal sealed class RaceTrackReport
     public bool Haunt { get; set; }
     // The Desert's balloons: the ghost power-up with a bunch of balloons for the ghost (HauntBodies; RACEMOD.CPP haunt_balloons=)
     public bool Balloons { get; set; }
+    public List<int> BalloonBodies { get; } = new();
     public (int Ghost, int Icon)? HauntBodies { get; set; }
     // The giant webs the lap drives through (2026-10-17, RACEMOD.CPP web=, web_part=): each its foot (island cells, the road's height), the
     // lap's way through it, its posts' half width (cells); once in BODY.HQR, its spider's two bodies and its parts (Temple.TempleHalloween
@@ -1334,6 +1337,7 @@ internal static class RaceTrackBuilder
         report.GroundAfter = (x, z) => IslandOps.Altitude(island, x * 512, z * 512) ?? field.Height(x, z);
         report.WasGround = (x, z) => natural.Drawn(x, z);
         LiftDecors(island, plan, report);
+        FenceLinks(island, plan, options, report);
         PlaceStructures(island, main, crossings, startIndex, options, report, planned);
         // (Halloween: its decor about the road; its spooks, whose bodies go into BODY.HQR when the build finishes; its pumpkins)
         if (plan.Halloween is { } halloween)
@@ -3563,9 +3567,9 @@ internal static class RaceTrackBuilder
     // further than its bend lets its inside edge go (BendShare of the radius), clear by WidenedClear of every other part of the lap at a
     // height near its own (another level of a road that winds over itself, a road alongside -- half of the gap each) and of every decor
     // object its space would newly reach (no building the plan's road missed is cleared for a wider one), and over the ground. It keeps
-    // the plan's width where it meets the ground road (its ends, WidenKeep cells), at the start line (its gantry) and over a jump's gap,
+    // the plan's width at the start line (its gantry) and over a jump's gap,
     // and changes width by WidenRate a cell along at the most, so it widens and narrows evenly.
-    private const double WidenedHalf = 4.75, WidenedClear = 0.75, WidenRate = 0.2, BendShare = 0.8, WidenKeep = 8, WidenStartKeep = 10, WidenJumpKeep = 3, WidenLevel = 1800;
+    private const double WidenedHalf = 4.75, WidenedClear = 0.75, WidenRate = 0.2, BendShare = 0.8, WidenStartKeep = 10, WidenJumpKeep = 3, WidenLevel = 1800;
 
     private static void WidenRaised(IslandFile island, TrackRoad r, RaceTrackPlan plan, RaceTrackOptions o, RaceTrackReport report)
     {
@@ -3573,11 +3577,12 @@ internal static class RaceTrackBuilder
         if (plain >= WidenedHalf) return;
         var limit = new double[n];
         var why = new string[n];
-        for (var i = 0; i < n; i++) limit[i] = up[i] ? WidenedHalf : plain;
+        // (the road's own width where it comes down to the ground too: held to the plan's there, 8 cells of deck narrower than the verge and kerb running onto it left a
+        // corner each side, and a car off the kerb went by the deck's end and wedged against its side, Polar's first bridge, the user, 2026-11-01)
+        for (var i = 0; i < n; i++) limit[i] = WidenedHalf;
         void Limit(int i, double to, string reason) { if (to < limit[i] - 1e-9) { limit[i] = to; why[i] = reason; } }
         // the plan's width at its ends, its start line and its jumps
         var keepAt = new List<(double S, double Reach)>();
-        for (var i = 0; i < n; i++) if (!up[i]) keepAt.Add((r.S[i], WidenKeep));
         if (plan.Start is { } start) keepAt.Add((r.S[PlanPoint(plan, r, start)], WidenStartKeep));
         foreach (var j in report.Jumps) keepAt.Add((j.S0 + j.FlightCells / 2, j.FlightCells / 2 + WidenJumpKeep));
         for (var i = 0; i < n; i++)
@@ -4985,6 +4990,35 @@ internal static class RaceTrackBuilder
         }
     }
 
+    // (the user, 2026-10-31, Otringal's plaza: "our track has cut the corner of this fence line, which is fine, let's make it look cleaner by adding in a fence post, then adding
+    // fence bars in to join the two posts together": the fence's own post, and three gold bars at the heights of its own)
+    private static readonly int[] FenceBarHeights = { 315, 894, 1526 };
+    private const int FenceBarTall = 53, FenceBarDeep = 31, FenceGold = 106, FenceGoldDark = 104, FenceGoldTop = 107;
+
+    private static void FenceLinks(IslandFile island, RaceTrackPlan plan, RaceTrackOptions o, RaceTrackReport report)
+    {
+        foreach (var f in (plan.FenceLinks ?? Array.Empty<int[]>()).Where(f => f.Length >= 8))
+        {
+            if (island.CubeAt(f[0], f[1]) is not { } cube || o.NewBodyBase < 0 || cube.Decors.FirstOrDefault(d => (d.Body & 0xFFFF) == f[2]) is not { } post) continue;
+            var copy = post.Clone();
+            copy.MoveTo(f[3], f[7], f[4]);
+            cube.Decors.Add(copy);
+            var along = new System.Numerics.Vector3(f[5] - f[3], 0, f[6] - f[4]) / 2;
+            var across = System.Numerics.Vector3.Normalize(new System.Numerics.Vector3(-along.Z, 0, along.X)) * FenceBarDeep;
+            var pts = new List<System.Numerics.Vector3>();
+            var faces = new List<LbaBodyStudio.Face>();
+            foreach (var y in FenceBarHeights)
+                RaceTrackPipes.Box(pts, faces, System.Numerics.Vector3.Zero, along, across, y, y + FenceBarTall, FenceGold, FenceGoldDark, FenceGoldTop);
+            int mx = (f[3] + f[5]) / 2, mz = (f[4] + f[6]) / 2;
+            var bars = IslandDecors.Blank(o.NewBodyBase + report.NewBodies.Count, mx, f[7], mz, 0);
+            report.NewBodies.Add(RaceTrackPipes.Write(pts, faces, true));
+            bars.XMin = Math.Min(f[3], f[5]); bars.XMax = Math.Max(f[3], f[5]); bars.ZMin = Math.Min(f[4], f[6]); bars.ZMax = Math.Max(f[4], f[6]);
+            bars.YMin = f[7]; bars.YMax = f[7] + 2000;
+            cube.Decors.Add(bars);
+            report.Notes.Add($"a fence closed across a corner of cube ({f[0]},{f[1]})");
+        }
+    }
+
     private static void LiftDecors(IslandFile island, RaceTrackPlan plan, RaceTrackReport report)
     {
         foreach (var l in (plan.LiftDecors ?? Array.Empty<int[]>()).Where(l => l.Length >= 5))
@@ -5222,8 +5256,8 @@ internal static class RaceTrackBuilder
             // to the ground under its middle, and on Mosquibees Island a car on the road beneath drove up that 5,000-high face onto the
             // landing. A ramp's shoulders rise far less than SteepVerge a cell.)
             if (planned && !stripe && ck is Kind.Sand or Kind.Hatch or Kind.Rock && CellRise(field, gx, gz) > SteepVerge) ck = Kind.Wall;
-            // banked bends: the outside verge is hatched
-            if (ck == Kind.Sand && Math.Abs(chosen.Value.Kappa) > 0.05 && chosen.Value.Lat * chosen.Value.Kappa < 0) ck = Kind.Hatch;
+            // (a banked bend's outside verge was hatched, the retail track's red and gold, until the user, 2026-11-01, on Polar: "it's almost like we now have brown and
+            // yellow as well": the verge is the island's own ground now on every track; a jump's lip keeps its warning stripe)
             // a verge within 2 cells of the sea (or the island's edge) is a blocking rock wall: where the road runs along a cliff top
             // (the west rim of the old track's cube, 8 cells from the edge) a car running wide stopped at the world's edge with its
             // nose over the drop
@@ -5315,7 +5349,7 @@ internal static class RaceTrackBuilder
             {
                 var flat = o.Theme.Palette is { } ramp && LandNear(gx, gz) is { } land && GroundColour(island, gx, gz, land.A, ramp) is { } colour
                     ? FlatNearest(ramp, colour.R, colour.G, colour.B) : o.Theme.Sand;
-                painter.PaintKerb(gx, gz, kerb with { Under = flat });
+                painter.PaintKerb(gx, gz, kerb with { Under = flat, Land = LandNear(gx, gz) });
             }
             else if (kind is Kind.Sand or Kind.Wall or Kind.Rock && LandNear(gx, gz) is { } land2)
             {
@@ -5330,7 +5364,7 @@ internal static class RaceTrackBuilder
         return kinds.Keys.ToHashSet();
     }
 
-    private const int VergeLandReach = 10;
+    private const int VergeLandReach = 24;
 
     // What a ground triangle looks like, as a colour: its flat colour, or the average of its texture's three corners and middle. Null: not to
     // be read.
@@ -5390,7 +5424,7 @@ internal static class RaceTrackBuilder
     // A cell along a kerb, drawn triangle by triangle: cut the way the road runs (Diagonal), and each of its two triangles either plain
     // paint (Kinds: the asphalt, or the verge -- sand, or a banked bend's hatching) or, reaching the kerb, its kerb texture's corners
     // (Uvs) over the verge's flat colour (Under: the texture's colour 0 lets it show).
-    private sealed record KerbCell(bool Diagonal, Kind[] Kinds, ushort[]?[] Uvs, (int Bank, int Pos) Under);
+    private sealed record KerbCell(bool Diagonal, Kind[] Kinds, ushort[]?[] Uvs, (int Bank, int Pos) Under, (IslandPolygon A, IslandPolygon B)? Land = null);
 
     private static readonly (int X, int Z)[] CellCorners = { (0, 0), (0, 1), (1, 1), (1, 0) };
     private static readonly int[][] CellHalves = { new[] { 0, 1, 2 }, new[] { 2, 3, 0 }, new[] { 3, 0, 1 }, new[] { 1, 2, 3 } };
@@ -5454,7 +5488,7 @@ internal static class RaceTrackBuilder
             double Reach(bool diagonal) => Math.Max(Spread(CellHalves[diagonal ? 2 : 0]), Spread(CellHalves[diagonal ? 3 : 1]));
             var cut = Reach(true) < Reach(false);
             // (a walled road's verge is rock -- its wall, further out, keeps its own cells)
-            var verge = hit.Bridge ? Kind.Rock : kind == Kind.Hatch || Math.Abs(hit.Kappa) > 0.05 && hit.Lat * hit.Kappa < 0 ? Kind.Hatch : Kind.Sand;
+            var verge = hit.Bridge ? Kind.Rock : kind == Kind.Hatch ? Kind.Hatch : Kind.Sand;
             var halves = new Kind[2]; var uvs = new ushort[]?[2];
             for (var half = 0; half < 2 && ok; half++)
             {
@@ -5895,6 +5929,13 @@ internal static class RaceTrackBuilder
                     ? Flat(kerb.Under.Bank, kerb.Under.Pos).With(texFlag: 1, textureIndex: IslandGround.TextureIndexFor(cube, uv), diagonal: kerb.Diagonal, col: false)
                     : kerb.Kinds[half] == Kind.Sand ? Flat(kerb.Under.Bank, kerb.Under.Pos).With(diagonal: kerb.Diagonal, col: false)
                     : Polygon(cube, kerb.Kinds[half], kerb.Diagonal, half);
+                // (the verge's side of a kerb cell the same ground as the verge beside it: a flat colour takes the cell's light up its ramp, yellow next to Polar's brown, the
+                // user, 2026-11-01: "it's almost like we now have brown and yellow as well")
+                if (kerb.Uvs[half] is null && kerb.Kinds[half] == Kind.Sand && kerb.Land is { } land)
+                {
+                    cube.SetPolygon(x, z, half, (half == 0 ? land.A : land.B).With(diagonal: kerb.Diagonal, col: false).Raw);
+                    continue;
+                }
                 cube.SetPolygon(x, z, half, Paged(p).Raw);
             }
             NoWater(gx, gz);

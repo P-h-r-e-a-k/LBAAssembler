@@ -484,6 +484,17 @@ internal static partial class TempleHalloween
         return m;
     }
 
+    // One balloon on its string, for the car it flies to (the user, 2026-11-01: "release a separate balloon for each car and randomise the colour"): as tall as the bunch, its
+    // string's end where the ghost's foot is.
+    private static Model OneBalloon(Paint paint)
+    {
+        var m = new Model();
+        var at = new Vector3(0, 1150, 0);
+        m.Lathe(new (double, double)[] { (0, -480), (170, -420), (350, -200), (390, 60), (310, 310), (170, 460), (0, 520) }, 10, _ => paint, false, false, at: at);
+        m.Bar(Vector3.Zero, at - new Vector3(0, 480, 0), 14, BalloonString);
+        return m;
+    }
+
     // A witch on her broomstick, flying +z: the stick under her, its bristles behind; her dark robe and cape, her green face and long nose,
     // her pointed hat; her eyes glowing.
     private static Model Witch()
@@ -676,6 +687,11 @@ internal static partial class TempleHalloween
                 bodies = HqrWriter.AppendEntry(bodies, HqrWriter.StoredEntry(Balloons().Write()));
                 report.HauntBodies = (index, index + 1);
                 index += 2;
+                foreach (var paint in new[] { BalloonRed, BalloonGreen, BalloonYellow, BalloonOrange, BalloonBlue })
+                {
+                    bodies = HqrWriter.AppendEntry(bodies, HqrWriter.StoredEntry(OneBalloon(paint).WriteMoving(racerHeader)));
+                    report.BalloonBodies.Add(index++);
+                }
             }
             File.WriteAllBytes(path, bodies);
             if (report.Spooks.Count > 0)

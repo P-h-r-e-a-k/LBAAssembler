@@ -281,7 +281,7 @@ internal static class RaceCarEngineFile
             if (track.TwinsenSmall is { } small) text.Append($"twinsen_small={small}\n");
             // (the ghost power-up, the Temple of Bú's: its ghost and its icon)
             if (track.Haunt is [var hauntGhost, var hauntIcon]) text.Append($"haunt={hauntGhost} {hauntIcon}\n");
-            if (track.Balloons == true) text.Append("haunt_balloons=1\n");
+            if (track.Balloons is { Length: > 0 } balloons) text.Append($"haunt_balloons={string.Join(' ', balloons)}\n");
         }
         if (ghost >= 0) text.Append($"beat={ghost + 1}{(storm ? $" {RaceTrackStory.BeatVar} 1" : "")}\n");
         // the story's gates and the town circuit's race: Mr. Paul lets no one race without racing gloves; the aliens' track is ready the day

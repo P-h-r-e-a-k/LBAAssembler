@@ -150,8 +150,15 @@ void SetPosCameraI(S32 x, S32 y, S32 z) {
     SetCameraIOnly(x, y, z);
 }
 
+// A test's camera in place of the game's (the console's isoview: a port looked at from the angle of the game it came from): target x y z, alpha, beta, distance
+S32 CameraForced = 0, CameraForce[6];
+
 void SetFollowCamera(S32 targetx, S32 targety, S32 targetz, S32 alpha, S32 beta,
                      S32 gamma, S32 camzoom) {
+    if (CameraForced) {
+        targetx = CameraForce[0]; targety = CameraForce[1]; targetz = CameraForce[2];
+        alpha = CameraForce[3]; beta = CameraForce[4]; gamma = 0; camzoom = CameraForce[5];
+    }
     CameraXI = targetx;
     CameraYI = targety;
     CameraZI = targetz;

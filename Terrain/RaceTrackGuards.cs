@@ -52,9 +52,9 @@ internal static class RaceTrackGuards
         // (the big soldier mosquibee, entity 247, that Twinsen fights for the blowtron: on guard (133), firing (173), on a rock over the road -- the user,
         // 2026-10-31: "take the large soldier mosquibees ... and have one on each mound firing balls at different sections of the track")
         Mosquibee => new(247, 0, 133, 1, 6, new[] { 173 }),
-        // (Felix the fisherman, entity 106, at the game's own size, fishing up crabs at the cars: his cast, 328 -- the user, 2026-10-31: "have him
-        // randomly pulling crabs out that can hit a car")
-        Felix => new(106, 0, 0, 1, 6, new[] { 328 }, BigBody, 1.0),
+        // (Felix the fisherman, entity 106, at the game's own size: his cast, 328, and hauling one in, 15 -- the user, 2026-10-31: "have him randomly pulling crabs out
+        // that can hit a car")
+        Felix => new(106, 0, 0, 1, 6, new[] { 328, 15 }, BigBody, 1.0),
         // (Stan, come over from Time Commando, entity 316: standing, walking, his three blows)
         _ => new(316, 0, 0, 1, 6, new[] { 142, 277, 587 }),
     };

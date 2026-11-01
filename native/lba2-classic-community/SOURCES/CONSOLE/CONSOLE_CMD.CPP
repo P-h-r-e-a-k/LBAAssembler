@@ -299,6 +299,18 @@ static void cmd_timer(int argc, const char *argv[]) {
     Console_Print("Timer +%d (now %u)", delta, (unsigned int)TimerRefHR);
 }
 
+extern S32 CameraForced, CameraForce[6], CameraForceWorld[2];
+extern S32 ClipZFar, StartZFog;
+static void cmd_isoview(int argc, const char *argv[]) {
+    if (argc >= 2 && !strcmp(argv[1], "off")) { CameraForced = 0; return; }
+    if (argc < 7) { Console_Print("isoview <x> <y> <z> <alpha> <beta> <distance> [lens]"); return; }
+    for (int i = 0; i < 6; i++) CameraForce[i] = atoi(argv[i + 1]);
+    CameraForceWorld[0] = CameraForce[0] + CurrentCubeX * 32768; CameraForceWorld[1] = CameraForce[2] + CurrentCubeY * 32768;
+    CameraForced = 1;
+    ClipZFar = 400000; StartZFog = 390000;
+    if (argc >= 8) SetProjection(XCentre, YCentre, 128, atoi(argv[7]), atoi(argv[7]));
+}
+
 static void cmd_status(int argc, const char *argv[]) {
     char linebuf[128];
     (void)argc;
@@ -2992,6 +3004,8 @@ void Console_RegisterAll(void) {
     Console_RegisterCommandEx("racebox", cmd_racebox, "Race-track test: a power-up into Twinsen's item box", "racebox <n> [won]",
                               "As a mushroom's (only into a free box, its roulette turning), or won 1 as a prize: a golden Gazogem (11) "
                               "waits in a second box while the box is full (RACEMOD.CPP).");
+    Console_RegisterCommandEx("isoview", cmd_isoview, "Test: the camera held on a place, at an angle (a port beside the game it came from)", "isoview <x> <y> <z> <alpha> <beta> <distance> [lens] | isoview off",
+                              "Far clip opened up; the lens, if given, set once (console: test only).");
     Console_RegisterCommandEx("racepicture", cmd_racepicture, "Race game test: Best laps' picture now", "racepicture",
                               "Saves Best laps.png and puts it on the clipboard, unless LBA2_NO_CLIPBOARD is set (RACEGAME.CPP).");
     Console_RegisterCommandEx("racemiss", cmd_racemiss, "Race-track test: the checkpoint just passed forgotten, as if missed", "racemiss",
