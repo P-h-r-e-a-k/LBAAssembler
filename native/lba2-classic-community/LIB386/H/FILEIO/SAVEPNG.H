@@ -7,5 +7,6 @@
 #include <SYSTEM.H>
 
 extern void SavePNG(char *filename, void *screen, S32 xres, S32 yres, void *ptrpalette);
+extern S32 SaveRgbPNG(char *filename, void *rgb, S32 xres, S32 yres);
 
 #endif // SAVEPNG_H

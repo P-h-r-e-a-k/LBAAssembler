@@ -2651,6 +2651,18 @@ static void cmd_racebox(int argc, const char *argv[]) {
     RaceMod_TestBox(atoi(argv[1]), argc >= 3 ? atoi(argv[2]) : 0);
     Console_Print("racebox: %d", atoi(argv[1]));
 }
+static void cmd_racepicture(int argc, const char *argv[]) {
+    extern void RaceGame_TestPicture(void);
+    (void)argc; (void)argv;
+    RaceGame_TestPicture();
+    Console_Print("racepicture");
+}
+static void cmd_racemiss(int argc, const char *argv[]) {
+    extern void RaceMod_TestMiss(void);
+    (void)argc; (void)argv;
+    RaceMod_TestMiss();
+    Console_Print("racemiss");
+}
 static void cmd_raceprize(int argc, const char *argv[]) {
     extern void RaceMod_TestPrize(int prize);
     if (argc < 2) { Console_Print("Usage: raceprize <0|1|2>"); return; }
@@ -2980,6 +2992,10 @@ void Console_RegisterAll(void) {
     Console_RegisterCommandEx("racebox", cmd_racebox, "Race-track test: a power-up into Twinsen's item box", "racebox <n> [won]",
                               "As a mushroom's (only into a free box, its roulette turning), or won 1 as a prize: a golden Gazogem (11) "
                               "waits in a second box while the box is full (RACEMOD.CPP).");
+    Console_RegisterCommandEx("racepicture", cmd_racepicture, "Race game test: Best laps' picture now", "racepicture",
+                              "Saves Best laps.png and puts it on the clipboard, unless LBA2_NO_CLIPBOARD is set (RACEGAME.CPP).");
+    Console_RegisterCommandEx("racemiss", cmd_racemiss, "Race-track test: the checkpoint just passed forgotten, as if missed", "racemiss",
+                              "The next checkpoint goes back one (RACEMOD.CPP).");
     Console_RegisterCommandEx("raceprize", cmd_raceprize, "Race-track test: the roulette wheel's prize now", "raceprize <0|1|2>",
                               "As the car lands under the wheel: 0 black, 1 red (the slot machine), 2 the green (the golden Gazogem) "
                               "(RACEMOD.CPP).");

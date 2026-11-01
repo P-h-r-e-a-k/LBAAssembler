@@ -24,7 +24,9 @@ S32 RaceGame_OptionsRow(S32 num);
 // RACEMOD.CPP: the player changed the race camera's view during a race (V): kept for the next race (RACEGAME_SETTINGS.TXT camera=)
 void RaceGame_CameraChosen(S32 view);
 
-void RaceGame_SharedKeys(void);            // INPUT.CPP: two players on one keyboard
+void RaceGame_KeysBefore(void);            // INPUT.CPP: two players on one keyboard, before the keys are read
+void RaceGame_SharedKeys(void);            // ... and after
+void RaceGame_GhostChosen(int mode);       // RACEMOD.CPP: the ghost raced now, kept as the one chosen last
 S32 RaceGame_RaceSkyOff(void);              // RACEMOD.CPP: Options has the sky off in races
 void RaceGame_TestKeys(int down);           // (tests: player 2's keys as if down, -1 the keyboard's)
 

@@ -7,6 +7,7 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <stdio.h>
 
 #include <cstdlib>
 #include <cwchar>
@@ -86,12 +87,41 @@ int RaceUpdate_Tool(const char *exeUtf8, const char *what, const char *folderUtf
     return 1;
 }
 
+// Tests: the console's window beside the game's (LBA2_CONSOLE_POS="x,y"), on the screen the tests are watched on. Under Windows Terminal the
+// console's own window is a hidden stand-in: the terminal's is the one on the screen, its title the program's path.
+static char s_exePath[MAX_PATH];
+static int s_placeX, s_placeY;
+static BOOL CALLBACK PlaceTerminal(HWND window, LPARAM) {
+    char kind[64], title[MAX_PATH];
+    GetClassNameA(window, kind, sizeof(kind));
+    GetWindowTextA(window, title, sizeof(title));
+    if (!strcmp(kind, "CASCADIA_HOSTING_WINDOW_CLASS") && strstr(title, s_exePath)) SetWindowPos(window, NULL, s_placeX, s_placeY, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    return TRUE;
+}
+
+void RaceUpdate_PlaceConsole(void) {
+    const char *placed = getenv("LBA2_CONSOLE_POS");
+    if (!placed || sscanf(placed, "%d,%d", &s_placeX, &s_placeY) != 2) return;
+    HWND console = GetConsoleWindow();
+    if (console) SetWindowPos(console, NULL, s_placeX, s_placeY, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    if (GetModuleFileNameA(NULL, s_exePath, sizeof(s_exePath))) EnumWindows(PlaceTerminal, 0);
+}
+
 int RaceUpdate_ClipboardImage(const unsigned char *rgb, int w, int h, const char *pngUtf8) {
     if (!rgb || w <= 0 || h <= 0) return 0;
     // (tests: LBA2_NO_CLIPBOARD set -- the clipboard is the person's at the machine; the PNG is saved all the same)
     const char *no = getenv("LBA2_NO_CLIPBOARD");
     if (no && *no && *no != '0') { Log_Info("[raceupdate] clipboard: a %d x %d picture -- left off it (LBA2_NO_CLIPBOARD)", w, h); return 1; }
-    if (!OpenClipboard(NULL)) return 0;
+    // (a window of its own to own it: with none EmptyClipboard leaves the clipboard no owner, and SetClipboardData is documented to fail
+    // then; and another program may be holding it for a moment)
+    static HWND owner = NULL;
+    if (!owner) owner = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, NULL, NULL);
+    BOOL opened = FALSE;
+    for (int tries = 0; tries < 20 && !opened; tries++) {
+        opened = OpenClipboard(owner);
+        if (!opened) Sleep(25);
+    }
+    if (!opened) { Log_Warn("[raceupdate] clipboard: it wouldn't open (error %lu)", (unsigned long)GetLastError()); return 0; }
     EmptyClipboard();
     int ok = 0;
     // the DIB: bottom row first, BGR, rows padded to four bytes
@@ -110,7 +140,7 @@ int RaceUpdate_ClipboardImage(const unsigned char *rgb, int w, int h, const char
         }
         GlobalUnlock(dib);
         if (SetClipboardData(CF_DIB, dib)) ok = 1;
-        else GlobalFree(dib);
+        else { Log_Warn("[raceupdate] clipboard: it refused the picture (error %lu)", (unsigned long)GetLastError()); GlobalFree(dib); }
     }
     // the PNG as it was saved
     wchar_t path[MAX_PATH * 4];
@@ -136,6 +166,8 @@ int RaceUpdate_ClipboardImage(const unsigned char *rgb, int w, int h, const char
 }
 
 #else
+
+void RaceUpdate_PlaceConsole(void) {}
 
 int RaceUpdate_ClipboardImage(const unsigned char *rgb, int w, int h, const char *pngUtf8) {
     (void)rgb; (void)w; (void)h; (void)pngUtf8;

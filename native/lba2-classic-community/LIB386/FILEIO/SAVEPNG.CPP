@@ -10,6 +10,11 @@
 #include "stb_image_write.h"
 
 // ──────────────────────────────────────────────────────────────────────────
+// A picture of its own, RGB, any size: not the screen's
+S32 SaveRgbPNG(char *filename, void *rgb, S32 xres, S32 yres) {
+    return stbi_write_png(filename, xres, yres, 3, rgb, xres * 3) != 0;
+}
+
 void SavePNG(char *filename, void *screen, S32 xres, S32 yres, void *ptrpalette) {
     U8 *indexed = (U8 *)screen;
     U8 *palette = (U8 *)ptrpalette;

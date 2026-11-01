@@ -167,7 +167,7 @@ bool SDL3_CreateWindow(uint32_t width, uint32_t height, bool fullscreen) {
         startY = rectY;
         fullscreen = false;
         s_fullscreen = false;
-        SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_BORDERLESS_BOOLEAN, true);
+        SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_BORDERLESS_BOOLEAN, getenv("LBA2_WINDOW_TITLED") == NULL);
         SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_FOCUSABLE_BOOLEAN, false);
     }
     else if (const char *placed = getenv("LBA2_WINDOW_POS")) {

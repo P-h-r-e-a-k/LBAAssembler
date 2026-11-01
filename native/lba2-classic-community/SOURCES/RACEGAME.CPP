@@ -197,6 +197,7 @@ extern S32 FollowCamera;                                                        
 typedef struct {
     char Name[96], Race[160], Trial[160];
     char Was[96];                           // the name it had before (was=, its track= line's fifth field: a track renamed -- RenamedTracks)
+    int Retire;                             // retire=1 after it: its new name was another track's, whose times are set aside (RetiredTracks)
     S32 Scene;
     int Levels;                             // its race has levels, easy to hard (difficulty_level= in its race file)
     int Laps;                               // its race's laps (race_laps= in its race file; 0: the game's, laps=)
@@ -243,6 +244,7 @@ static char s_storyFile[ADELINE_MAX_PATH] = "";   // story_file=: Story Mode's s
 static char s_storyCode[24] = "";           // story_code=: Story Mode asks for it (none: open)
 static int s_storyOpen = 0;                 // ... given right this run
 static int s_localGuest = -1;               // this game is the second player's at one PC (-1: not looked yet)
+static int s_gameMenus = 0;                 // in the race game's menus (RaceGame_Menu)
 static int s_storyOn = 0;                   // the story is what is being played (Story Mode's New story or Continue, not a race since)
 #define RG_STORY_SAVE "story.lba"           // the story's own save, in the saves' folder
 static int s_lastSp = 0, s_lastTrial = 0;
@@ -425,9 +427,11 @@ static void Read(void) {
             v = Field(v, sp->Trial, sizeof(sp->Trial));
             v = Field(v, scene, sizeof(scene));
             // (was=<its old name>: a track renamed -- its best laps, unlocks and ghosts moved over, RenamedTracks)
-            char was[112];
-            Field(v, was, sizeof(was));
+            char was[112], retire[16];
+            v = Field(v, was, sizeof(was));
+            Field(v, retire, sizeof(retire));
             snprintf(sp->Was, sizeof(sp->Was), "%s", !strncmp(was, "was=", 4) ? was + 4 : "");
+            sp->Retire = !strcmp(retire, "retire=1");
             sp->Scene = scene[0] ? atoi(scene) : -1;
             ReadRaceFile(sp);
             sp->Track = !strcmp(key, "track");
@@ -446,6 +450,7 @@ static void Read(void) {
     s_on = 1;
     if (s_windowTitle[0]) SetWindowTitle(s_windowTitle);
     ReadSettings();
+    RaceUpdate_PlaceConsole();
     RenamedTracks();
     CheckGhosts();
     UpdateAtStart();
@@ -838,11 +843,76 @@ static void GhostFileName(const char *track, char *out, size_t size) {
 // name> -- the player's best laps and ghosts beaten under the old name read as the new one and written again under it, and the ghosts in
 // the user's GHOSTS of the old name (the player's own, "<old>.ghost", and the ones shared with them, "<old> - <whose>.ghost") moved to
 // the new one, their track= line with it. Once a run, at the start; nothing to do once moved.
+// A line of `path` starting "<name>|" or ending "|<name>" given `name` + " (old track)" in its place.
+static void RetireLines(const char *path, const char *name) {
+    FILE *in = fopen(path, "r");
+    if (!in) return;
+    char temp[ADELINE_MAX_PATH], line[1024];
+    snprintf(temp, sizeof(temp), "%s.new", path);
+    FILE *out = fopen(temp, "w");
+    if (!out) { fclose(in); return; }
+    const size_t n = strlen(name);
+    while (fgets(line, sizeof(line), in)) {
+        size_t len = strcspn(line, "\r\n");
+        line[len] = 0;
+        if (!strncmp(line, name, n) && line[n] == '|') fprintf(out, "%s (old track)%s\n", name, line + n);
+        else if (len > n && line[len - n - 1] == '|' && !strcmp(line + len - n, name)) fprintf(out, "%s (old track)\n", line);
+        else fprintf(out, "%s\n", line);
+    }
+    fclose(in);
+    fclose(out);
+    remove(path);
+    rename(temp, path);
+}
+
+// A track gone whose name a renamed one has taken (Island CX, its bigger island's name since 2026-11-01): that name's best laps, ghosts
+// beaten and ghosts are the old track's. Set aside as "<name> (old track)", kept but no track's, once: RETIRED.TXT says it's done.
+static void RetiredTracks(void) {
+    char marker[ADELINE_MAX_PATH];
+    GetCfgPath(marker, ADELINE_MAX_PATH, "RETIRED.TXT");
+    for (int sp = 0; sp < s_nbSp; sp++) {
+        if (!s_sp[sp].Retire) continue;
+        char line[128];
+        int done = 0;
+        FILE *f = fopen(marker, "r");
+        while (f && fgets(line, sizeof(line), f)) {
+            line[strcspn(line, "\r\n")] = 0;
+            if (!strcmp(line, s_sp[sp].Name)) done = 1;
+        }
+        if (f) fclose(f);
+        if (done) continue;
+        char path[ADELINE_MAX_PATH];
+        GetCfgPath(path, ADELINE_MAX_PATH, "BESTTIMES.TXT");
+        RetireLines(path, s_sp[sp].Name);
+        GetCfgPath(path, ADELINE_MAX_PATH, "RACEGAME_SETTINGS.TXT");
+        RetireLines(path, s_sp[sp].Name);
+        char folder[ADELINE_MAX_PATH], own[112];
+        RaceMod_GhostFolder(folder, sizeof(folder));
+        GhostFileName(s_sp[sp].Name, own, sizeof(own));
+        const size_t on = strlen(own);
+        int count = 0, moved = 0;
+        char **files = SDL_GlobDirectory(folder, "*.ghost", SDL_GLOB_CASEINSENSITIVE, &count);
+        for (int i = 0; files && i < count; i++) {
+            if (SDL_strncasecmp(files[i], own, on) || (SDL_strcasecmp(files[i] + on, ".ghost") && strncmp(files[i] + on, " - ", 3))) continue;
+            char from[ADELINE_MAX_PATH], to[ADELINE_MAX_PATH];
+            snprintf(from, sizeof(from), "%s/%s", folder, files[i]);
+            snprintf(to, sizeof(to), "%s/%s (old track)%s", folder, own, files[i] + on);
+            if (!rename(from, to)) moved++;
+        }
+        SDL_free(files);
+        f = fopen(marker, "a");
+        if (f) { fprintf(f, "%s\n", s_sp[sp].Name); fclose(f); }
+        Log_Info("[racegame] \"%s\": the old track's times and %d ghost file(s) set aside", s_sp[sp].Name, moved);
+    }
+}
+
 static void RenamedTracks(void) {
     int any = 0;
     for (int sp = 0; sp < s_nbSp; sp++) if (s_sp[sp].Was[0]) any = 1;
     if (!any) return;
+    RetiredTracks();
     // (best laps and ghosts beaten: the old names taken as the new as they are read -- ReadTimes, ReadSettings -- and written new)
+    ReadSettings();
     ReadTimes();
     WriteTimes();
     WriteSettings();
@@ -1623,61 +1693,97 @@ static S32 AllBestRows(S32 x0, S32 x1, S32 y, S32 step, int cars, S32 nameW = 19
     return y;
 }
 
-// The picture of it (Copy as an image): drawn over the screen, taken, saved as "Best laps.png" beside the settings and put on the
-// clipboard; the page is drawn again after. Non-zero: on the clipboard.
+// The picture of it (Copy as an image): drawn apart from the screen in the game's fixed-width font, doubled, each column lined up, and saved
+// as "Best laps.png" beside the settings and put on the clipboard. Non-zero: on the clipboard. It was drawn over the screen and taken from
+// it, and with the seventeenth row it no longer fitted a 480-high window: "Couldn't copy it", the user, 2026-10-31, who also asked for
+// "a fixed width font, and the car used for the lap ... just the image generated with one directly to the clipboard".
+#define RG_PIC_CELL 16
+#define RG_PIC_LINE 22
+#define RG_PIC_MARGIN 24
+extern U8 Font8x8[];
+
+static void PicText(U8 *rgb, S32 w, S32 h, S32 x, S32 y, const char *text, const U8 *colour) {
+    for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
+        // (the font's ASCII: a letter past it a question mark, once)
+        if (*p >= 0x80 && (*p & 0xC0) == 0x80) continue;
+        const U8 *glyph = &Font8x8[(*p < 0x80 ? *p : '?') * 8];
+        for (S32 r = 0; r < 16; r++)
+            for (S32 c = 0; c < 16; c++) {
+                if (!(glyph[r / 2] & (0x80 >> (c / 2)))) continue;
+                const S32 px = x + c, py = y + r;
+                if (px >= 0 && px < w && py >= 0 && py < h) memcpy(rgb + ((size_t)py * w + px) * 3, colour, 3);
+            }
+        x += RG_PIC_CELL;
+    }
+}
+
 static int AllBestPicture(void) {
-    const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
-    // (as wide as the screen gives, up to 800: the tracks' and the cars' names whole)
-    const S32 W = (S32)ModeDesiredX - 16 < 800 ? (S32)ModeDesiredX - 16 : 800, nameW = W >= 740 ? 290 : 190;
-    const S32 x0 = cx - W / 2, x1 = cx + W / 2, y0 = 8 + oy;
-    int shownTracks = 0;
-    for (int sp = 0; sp < s_nbSp; sp++) shownTracks += TimesShown(sp);
-    const S32 step = 20, y1 = y0 + 100 + shownTracks * step + 46;
-    if (x0 < 0 || y1 >= (S32)ModeDesiredY || !Log || !PtrPalNormal) return 0;
-    Page(NULL, 0);
-    ShadeBoxBlk(x0, y0, x1, y1, MENU_SHADE_LVL);
-    DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
-    char name[64], title[128];
+    static const U8 back[3] = {18, 22, 34}, edge[3] = {96, 116, 140}, white[3] = {255, 255, 255}, orange[3] = {255, 170, 40}, grey[3] = {170, 176, 186};
+    // the columns, as wide as what's in them
+    int nameW = 10, carW = 8, shownTracks = 0;
+    for (int sp = 0; sp < s_nbSp; sp++) {
+        if (!TimesShown(sp)) continue;
+        shownTracks++;
+        const T_RG_TIME *best = BestOf(sp);
+        if ((int)strlen(s_sp[sp].Name) > nameW) nameW = (int)strlen(s_sp[sp].Name);
+        if (best && (int)strlen(best->Car) > carW) carW = (int)strlen(best->Car);
+    }
+    char name[64], title[128], time[24], line[96];
     GhostOwnerName(name, sizeof(name));
     if (name[0]) snprintf(title, sizeof(title), "%s's best laps", name);
     else snprintf(title, sizeof(title), "Best laps");
-    Text(cx, y0 + 8, title, RG_ORANGE);
-    SmallText(cx, y0 + 44, "Little Big Halloween Racing Adventure", RG_GREY, 0);
-    SmallText(x0 + 24, y0 + 74, "Track name", RG_GREY, -1);
-    SmallText(x0 + 24 + nameW + 84, y0 + 74, "Time", RG_GREY, 1);
-    SmallText(x0 + 24 + nameW + 106, y0 + 74, "Car used", RG_GREY, -1);
-    const S32 y = AllBestRows(x0, x1, y0 + 100, step, 1, nameW);
+    static const char *const game = "Little Big Halloween Racing Adventure";
     int missing;
     const S32 sum = SumOfBest(&missing);
-    char time[24], line[96];
     TimeText(time, sizeof(time), sum);
     if (missing) snprintf(line, sizeof(line), "Sum of best  %s  (%d without a lap)", time, missing);
     else snprintf(line, sizeof(line), "Sum of best  %s", time);
-    Text(cx, y + 6, line, RG_ORANGE);
-    // taken: the box's pixels, through the menus' palette
-    const S32 w = x1 - x0 + 1, h = y1 - y0 + 1;
-    U8 *idx = (U8 *)malloc((size_t)w * h), *rgb = (U8 *)malloc((size_t)w * h * 3);
-    int ok = 0;
-    if (idx && rgb) {
-        for (S32 r = 0; r < h; r++) memcpy(idx + (size_t)r * w, (U8 *)Log + TabOffLine[y0 + r] + x0, (size_t)w);
-        for (S32 i = 0; i < w * h; i++) memcpy(rgb + (size_t)i * 3, PtrPalNormal + idx[i] * 3, 3);
-        char path[ADELINE_MAX_PATH];
-        GetCfgPath(path, ADELINE_MAX_PATH, "Best laps.png");
-        // (SavePNG reads its rows a screen's width apart)
-        U8 *rows = (U8 *)malloc((size_t)ModeDesiredX * h);
-        if (rows) {
-            for (S32 r = 0; r < h; r++) memcpy(rows + (size_t)r * ModeDesiredX, idx + (size_t)r * w, (size_t)w);
-            SavePNG(path, rows, w, h, PtrPalNormal);
-            free(rows);
-        }
-        ok = RaceUpdate_ClipboardImage(rgb, w, h, path);
-        Log_Info("[racegame] Best laps: the sum of best %s as a picture (%d x %d) -- %s, saved as %s", time, (int)w, (int)h,
-                 ok ? "on the clipboard" : "NOT on the clipboard", path);
+    const int timeW = 9, chars = nameW + 2 + timeW + 2 + carW;
+    int cols = chars;
+    if ((int)strlen(game) > cols) cols = (int)strlen(game);
+    if ((int)strlen(title) > cols) cols = (int)strlen(title);
+    const S32 w = RG_PIC_MARGIN * 2 + cols * RG_PIC_CELL, h = RG_PIC_MARGIN * 2 + (6 + shownTracks + 2) * RG_PIC_LINE;
+    U8 *rgb = (U8 *)malloc((size_t)w * h * 3);
+    if (!rgb) return 0;
+    for (S32 i = 0; i < w * h; i++) memcpy(rgb + (size_t)i * 3, (i < w * 2 || i >= w * (h - 2) || i % w < 2 || i % w >= w - 2) ? edge : back, 3);
+    const S32 x0 = RG_PIC_MARGIN;
+    S32 y = RG_PIC_MARGIN;
+    PicText(rgb, w, h, x0 + (cols - (int)strlen(title)) * RG_PIC_CELL / 2, y, title, orange);
+    y += RG_PIC_LINE;
+    PicText(rgb, w, h, x0 + (cols - (int)strlen(game)) * RG_PIC_CELL / 2, y, game, grey);
+    y += RG_PIC_LINE * 2;
+    const S32 timeX = x0 + (nameW + 2) * RG_PIC_CELL, carX = timeX + (timeW + 2) * RG_PIC_CELL;
+    PicText(rgb, w, h, x0, y, "Track name", grey);
+    PicText(rgb, w, h, timeX, y, "Time", grey);
+    PicText(rgb, w, h, carX, y, "Car used", grey);
+    y += RG_PIC_LINE;
+    for (S32 x = x0; x < w - RG_PIC_MARGIN; x++) memcpy(rgb + ((size_t)(y - 3) * w + x) * 3, edge, 3);
+    y += RG_PIC_LINE / 2;
+    for (int sp = 0; sp < s_nbSp; sp++) {
+        if (!TimesShown(sp)) continue;
+        const T_RG_TIME *best = BestOf(sp);
+        char lap[24];
+        if (best) TimeText(lap, sizeof(lap), best->Lap);
+        else snprintf(lap, sizeof(lap), "--:--.--");
+        PicText(rgb, w, h, x0, y, s_sp[sp].Name, white);
+        PicText(rgb, w, h, timeX + (timeW - (int)strlen(lap)) * RG_PIC_CELL, y, lap, best ? orange : grey);
+        if (best) PicText(rgb, w, h, carX, y, best->Car, white);
+        y += RG_PIC_LINE;
     }
-    free(idx);
+    y += RG_PIC_LINE / 2;
+    PicText(rgb, w, h, x0, y, line, orange);
+    char path[ADELINE_MAX_PATH];
+    GetCfgPath(path, ADELINE_MAX_PATH, "Best laps.png");
+    const int saved = SaveRgbPNG(path, rgb, w, h);
+    const int ok = RaceUpdate_ClipboardImage(rgb, w, h, saved ? path : NULL);
+    Log_Info("[racegame] Best laps: the sum of best %s as a picture (%d x %d) -- %s, %s %s", time, (int)w, (int)h,
+             ok ? "on the clipboard" : "NOT on the clipboard", saved ? "saved as" : "NOT saved as", path);
     free(rgb);
     return ok;
 }
+
+// Console (tests): the picture made now (racepicture)
+void RaceGame_TestPicture(void) { AllBestPicture(); }
 
 // "Watch the sum of best": the player's best lap of every track played back, one after another -- each once (RACEMOD.CPP GhostWatch asks
 // RaceGame_WatchDone at its end), then the next track's.
@@ -2004,9 +2110,8 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         {"Space", RG_ON_FOOT},              // that the page still fits)
         {"P, Esc", "Pause, menu"},
     };
-    // (the second player's at one PC, on their game's page: the keys RaceNet_SharedKeys reads. Both pages said the arrows, the user's
-    // picture of two players side by side, 2026-10-31)
-    static const char *const keys2[][2] = {
+    // (two players on one keyboard: each their side of it, RaceGame_SharedKeys. Each game's page says its own player's)
+    static const char *const keys1[][2] = {
         {"W", "Accelerate"},
         {"S", "Brake, reverse"},
         {"A, D", "Steer"},
@@ -2014,8 +2119,16 @@ static void DrawControls(const T_RACE_PAGE *pg) {
         {"E", "Handbrake"},
         {"R", "Camera view"},
     };
-    const int guest = s_localGuest > 0;
-    const char *const (*list)[2] = guest ? keys2 : keys;
+    static const char *const keys2[][2] = {
+        {"Up arrow", "Accelerate"},
+        {"Down arrow", "Brake, reverse"},
+        {"Left, right", "Steer"},
+        {"Right Ctrl", "Use your item"},
+        {"Right Shift", "Handbrake"},
+        {"/", "Camera view"},
+    };
+    const int guest = s_localGuest > 0 || RaceNet_Local();
+    const char *const (*list)[2] = s_localGuest > 0 ? keys2 : guest ? keys1 : keys;
     const size_t nbKeys = guest ? sizeof(keys2) / sizeof(keys2[0]) : sizeof(keys) / sizeof(keys[0]);
     static const char *const pad[][2] = {
         {"Right trigger", "Accelerate"},
@@ -2033,7 +2146,7 @@ static void DrawControls(const T_RACE_PAGE *pg) {
     const int rows = (int)(nbKeys + sizeof(pad) / sizeof(pad[0])) - (onFoot ? 0 : guest ? 1 : 2) - (manual || guest ? 0 : 1);
     S32 line = (S32)((RG_CONTROLS_FOOT - RG_CONTROLS_TOP - RG_PAGE_TOP - 2) * 4 / (4 * rows + 1));
     if (line > RG_LINE) line = RG_LINE;
-    PageFrame(guest ? "Controls: player 2" : RaceNet_Local() ? "Controls: player 1" : "Controls");
+    PageFrame(s_localGuest > 0 ? "Controls: player 2" : guest ? "Controls: player 1" : "Controls");
     S32 y = RG_PAGE_TOP + oy + RG_CONTROLS_TOP;
     char text[256];
     for (size_t i = 0; i < nbKeys; i++) {
@@ -2133,10 +2246,10 @@ static void Pages(const T_RACE_PAGE *pg, int controls, int items, int intro) {
         if (controls && at == 0) DrawControls(pg);
         else DrawPowerUps(pg, (at - (controls ? 1 : 0)) * RG_PAGE_ITEMS, now);
         char keys[160];
-        // (the second player's Q is their Enter, and they have no Esc: RaceGame_SharedKeys)
+        // (the second player's right Ctrl is their Enter, and they have no Esc: RaceGame_SharedKeys)
         const int guest = s_localGuest > 0;
-        const char *last = guest ? (intro ? "Q: start" : "Q: back") : intro ? "Enter: start" : "Enter: back";
-        if (guest && pages > 1) snprintf(keys, sizeof(keys), "Page %d of %d    %s", at + 1, pages, at + 1 < pages ? "Q: next" : last);
+        const char *last = guest ? (intro ? "Right Ctrl: start" : "Right Ctrl: back") : intro ? "Enter: start" : "Enter: back";
+        if (guest && pages > 1) snprintf(keys, sizeof(keys), "Page %d of %d    %s", at + 1, pages, at + 1 < pages ? "Right Ctrl: next" : last);
         else if (guest) snprintf(keys, sizeof(keys), "%s", last);
         else if (pages > 1) snprintf(keys, sizeof(keys), "Page %d of %d    %s    Esc: %s", at + 1, pages, at + 1 < pages ? "Enter: next" : last, intro ? "skip" : "back");
         else if (intro) snprintf(keys, sizeof(keys), "%s    Esc: skip", last);
@@ -3137,6 +3250,13 @@ const char *RaceGame_GhostBeaten(const char *level) {
     return opened;
 }
 
+void RaceGame_GhostChosen(int mode) {
+    if (!RaceGame_On()) return;
+    ReadSettings();
+    s_ghost = mode;
+    WriteSettings();
+}
+
 // RACEMOD.CPP: the race's track's game's ghosts beaten so far: 0 none, 1 Easy .. 4 Extreme (0 outside the race game).
 int RaceGame_GhostBeatenLevel(void) {
     if (!RaceGame_On() || s_raceSp < 0 || s_raceSp >= s_nbSp) return 0;
@@ -3688,7 +3808,9 @@ static void LocalEnd(void) {
 }
 
 // The two rectangles taken: the second game started, this one moved. Non-zero: both ready
-static int LocalStart(const SDL_Rect *one, const SDL_Rect *two) {
+static int LocalStart(const SDL_Rect *oneWhole, const SDL_Rect *twoWhole) {
+    SDL_Rect oneAt = *oneWhole, twoAt = *twoWhole;
+    const SDL_Rect *one = &oneAt, *two = &twoAt;
     int pads = 0;
     SDL_JoystickID *ids = SDL_GetGamepads(&pads);
     SDL_free(ids);
@@ -3698,6 +3820,16 @@ static int LocalStart(const SDL_Rect *one, const SDL_Rect *two) {
     SDL_Window *window = list && windows > 0 ? list[0] : NULL;
     SDL_free(list);
     if (!window) return 0;
+    // (in window mode each keeps its title bar, to be moved by: the user, 2026-11-01, "Our split screen view in window mode has no title bar to
+    // be able to relocate it with". The bars take their height out of the two halves)
+    const int titled = !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN);
+    if (titled) {
+        int top = 0, left = 0, bottom = 0, right = 0;
+        SDL_GetWindowBordersSize(window, &top, &left, &bottom, &right);
+        if (top <= 0) top = 31;
+        oneAt.y += top; oneAt.h -= top;
+        twoAt.y += top; twoAt.h -= top;
+    }
     IdentifyGame();
     if (!RaceNet_HostLocal("Player 1", RG_LOCAL_PORT)) { SayPage("Two players", RaceNet_Error()); return 0; }
     // (player 2's folder: this game's settings and unlocked cars, its own saves and log)
@@ -3713,7 +3845,7 @@ static int LocalStart(const SDL_Rect *one, const SDL_Rect *two) {
     int rw, rh;
     LocalPicture(two->w, two->h, &rw, &rh);
     // (with two pads each player has one; with one it is player 2's, and player 1 has the keyboard)
-    if (!RaceNet_SpawnPlayer2(RG_LOCAL_PORT, folder, two->x, two->y, two->w, two->h, rw, rh, pads >= 2 ? 1 : 0)) {
+    if (!RaceNet_SpawnPlayer2(RG_LOCAL_PORT, folder, two->x, two->y, two->w, two->h, rw, rh, pads >= 2 ? 1 : 0, titled)) {
         SayPage("Two players", RaceNet_Error());
         RaceNet_Stop();
         return 0;
@@ -3727,7 +3859,7 @@ static int LocalStart(const SDL_Rect *one, const SDL_Rect *two) {
     Timer_SetIgnoreFocus(1);
     s_localWasFull = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
     if (s_localWasFull) SDL_SetWindowFullscreen(window, false);
-    SDL_SetWindowBordered(window, false);
+    SDL_SetWindowBordered(window, titled != 0);
     SDL_SetWindowPosition(window, one->x, one->y);
     SDL_SetWindowSize(window, one->w, one->h);
     if (!getenv("LBA2_LOCAL_AREA")) SDL_RaiseWindow(window);
@@ -3786,6 +3918,16 @@ static int LobbyPage(void);
 static int s_testKeys = -1;
 void RaceGame_TestKeys(int down) { s_testKeys = down; }
 
+// Before the game reads the keyboard: the first player's game, in a race, leaves the second player's keys alone
+void RaceGame_KeysBefore(void) {
+    if (s_localGuest > 0 || !RaceNet_Local() || s_gameMenus) return;
+    static const int keys[] = {K_UP, K_DOWN, K_LEFT, K_RIGHT, K_CTRL_RIGHT, K_SHIFT_RIGHT};
+    for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+        TabKeys[keys[i]] = 0;
+        if (MyKey == keys[i]) MyKey = 0;
+    }
+}
+
 void RaceGame_SharedKeys(void) {
     if (s_localGuest > 0) {
         const int down = s_testKeys >= 0 ? s_testKeys : RaceNet_SharedKeys();
@@ -3798,12 +3940,24 @@ void RaceGame_SharedKeys(void) {
         if (down & RACENET_KEY_VIEW) TabKeys[K_V] |= 0x80;
     }
     else if (RaceNet_Local()) {
+        // (the first player, on the left of the screen, has the left of the keyboard in a race, the same keys as RaceNet_SharedKeys's other
+        // side: a player's report, 2026-10-31, W A S D was the player on the right's. In the menus the arrows and Enter still work here:
+        // the car grid's search is typed)
+        const int up = TabKeys[K_W], down = TabKeys[K_S], left = TabKeys[K_A], right = TabKeys[K_D], item = TabKeys[K_Q], brake = TabKeys[K_E], view = TabKeys[K_R];
+        if (s_gameMenus) return;
         static const int keys[] = {K_W, K_A, K_S, K_D, K_Q, K_E, K_R};
         for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
             TabKeys[keys[i]] = 0;
             if (MyKey == keys[i]) MyKey = 0;
         }
         Input &= ~(U32)(I_SAVE | I_ACTION_ALWAYS);
+        if (up) Input |= I_UP;
+        if (down) Input |= I_DOWN;
+        if (left) Input |= I_LEFT;
+        if (right) Input |= I_RIGHT;
+        if (item) Input |= I_COMPORTEMENT;
+        if (brake) Input |= I_INVENTORY;
+        if (view) TabKeys[K_V] |= 0x80;
     }
 }
 
@@ -3902,7 +4056,9 @@ static int LobbyPage(void) {
         }
         const int others = RaceNet_Others();
         char line[120];
-        snprintf(line, sizeof(line), "%s (you)", s_netName);
+        // (at one PC, Player 1 and Player 2 in both windows: a name saved for internet games came back after a race, ReadOnline. The user,
+        // 2026-10-31, "PlayerA" on the left and "Player 1" on the right)
+        snprintf(line, sizeof(line), "%s (you)", local ? "Player 1" : s_netName);
         Text(cx, y, line, LBAWHITE);
         y += RG_LOBBY_ROW;
         const int rows = host ? RG_LOBBY_ROWS - 2 : RG_LOBBY_ROWS;
@@ -3917,17 +4073,17 @@ static int LobbyPage(void) {
         if (host && s_netPassword[0]) { snprintf(line, sizeof(line), "Password: %s", s_netPassword); Text(cx, y1 - 106, line, RG_GREY); }
         // (each window its own player's keys: both said player 2's, the user, 2026-10-31, "the same controls for both cars")
         if (s_localGuest > 0) {
-            Text(cx, y1 - 140, "Player 2: W A S D", RG_GREY);
-            Text(cx, y1 - 106, "Q item, E handbrake, R view", RG_GREY);
+            Text(cx, y1 - 140, "Player 2: the arrow keys", RG_GREY);
+            Text(cx, y1 - 106, "Right Ctrl item, Right Shift handbrake, / view", RG_GREY);
         }
         else if (local) {
-            Text(cx, y1 - 140, "Player 1: the arrow keys", RG_GREY);
-            Text(cx, y1 - 106, "Ctrl item, Shift handbrake, V view", RG_GREY);
+            Text(cx, y1 - 140, "Player 1: W A S D", RG_GREY);
+            Text(cx, y1 - 106, "Q item, E handbrake, R view", RG_GREY);
         }
         if (picks && RaceNet_Turned()[0]) Text(cx, y1 - 72, RaceNet_Turned(), RG_ORANGE);
-        // (the host's Enter picks the track, then their car; the second player's Enter on one keyboard is Q: Enter goes to the first's window,
+        // (the host's Enter picks the track, then their car; the second player's Enter on one keyboard is right Ctrl: Enter goes to the first's window,
         // RaceGame_SharedKeys. The user, 2026-10-31: "What does Enter do, does it pick the track, or pick the car?")
-        Text(cx, y1 - 38, picks ? "Enter: track and car    Esc: leave" : s_localGuest > 0 ? "Q: pick your car" : "Enter: pick your car    Esc: leave", RG_GREY);
+        Text(cx, y1 - 38, picks ? "Enter: track and car    Esc: leave" : s_localGuest > 0 ? "Right Ctrl: pick your car" : "Enter: pick your car    Esc: leave", RG_GREY);
         Present();
         // (it ended: the host left, or refused this game)
         const char *error = RaceNet_Error();
@@ -4032,7 +4188,15 @@ static int QuitPage(void) {
     }
 }
 
+static S32 GameMenu(S32 inGame);
 S32 RaceGame_Menu(S32 inGame) {
+    s_gameMenus++;
+    const S32 result = GameMenu(inGame);
+    s_gameMenus--;
+    return result;
+}
+
+static S32 GameMenu(S32 inGame) {
     Read();
     // (the story played: its place kept, the game having saved it in current.lba as the menu opened)
     if (inGame && s_storyOn) KeepStory();

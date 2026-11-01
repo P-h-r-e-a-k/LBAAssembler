@@ -222,6 +222,7 @@ void MyGetInput() {
     // both keyboard and gamepad into Input through the combined table built by
     // InitInput(), so the pad honours NoRepeatInput like the keyboard does.
     GetJoys((U32 *)&TabKeys[256]);
+    RaceGame_KeysBefore();
     GetInput(0); // no norepeat keys
 
     MyKey = Key;

@@ -157,6 +157,7 @@ internal static class RaceCarEngineFile
         foreach (var teleport in track?.Teleports ?? new()) text.Append($"teleport={string.Join(' ', teleport)}\n");
         // where the raised road's rail lets a car go off its edge, down to the road under it (the Temple of Bú's spiral drop)
         foreach (var open in track?.RailOpens ?? new()) text.Append($"rail_open={string.Join(' ', open)}\n");
+        if (info is not null && RaceTrackIsland.ByName(info.Island).Scale > 1) text.Append($"tunnel_scale={RaceTrackIsland.ByName(info.Island).Scale}\n");
         // the pit lanes on the ground, for the mini-map: 20 points a line (the engine reads lines of up to 512 characters)
         for (var r = 0; r < (track?.MapRoads?.Count ?? 0); r++)
             foreach (var chunk in track!.MapRoads![r].Chunk(40)) text.Append($"map_road={r} {string.Join(' ', chunk)}\n");

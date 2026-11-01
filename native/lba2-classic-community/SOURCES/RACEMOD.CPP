@@ -429,8 +429,8 @@ enum { STEP_ON, STEP_ROUND, STEP_BACK, STEP_FELL };
 static int s_loopOn = -1, s_loopState = LOOP_NONE;
 static int s_loopLeft = -1;                // the ring the car last came out of, and when (RACE_LOOP_AGAIN)
 static U32 s_loopLeftAt = 0;
-static int s_loopHold = -1;                // the ring just come round, whose camera holds on it a while (LoopCamera), and since when
-static U32 s_loopHoldAt = 0;
+static int s_loopCut = -1;                 // the ring just come round, cut away for the camera behind the car (LoopDecors), -1 none
+static S32 s_loopCutAt = 0;
 
 // the opponents: each one's line, where it is along it (world units from the start line), laps begun, the scenes' copies of its car
 #define RACE_MAX_OPPONENTS 6
@@ -643,6 +643,9 @@ static T_RACE_LINE s_finishLine;
 static int s_mapKey = 0;                   // minimap=: the race's mini-map (DrawMinimap) outside the race game, which has its own setting
 static S32 s_endAt = 0;                    // when the race's end is followed up (0: not yet)
 static int s_endWon = 0;
+#define RACE_MISS_BACK_MS 1200             // a sprint's finish crossed with a checkpoint missed: the car put back before it this long after
+static S32 s_missBackAt = 0;
+static void MissedFinishBack(void);
 static int s_wakeFlight = 0;                // wake_flight= (ms; 0: RACE_SPRINT_END_MS, the car held at the line)
 // chase=, chase_lead=, dream_any_end= (ChaseOpening, ChaseLead): the texts, the helper's entity and the variable it sets; the opening's
 // step and when the next is due; the lead (world units)
@@ -2576,6 +2579,7 @@ static int RaisedAlong(int seg, double t, double distance, double *x, double *y,
 // level as its lead makes it: the Emperor's palace's, under the domes, 2026-10-12. At the wheels, 0, the eye always rose to 4,000 over a
 // level road, and looked steeply down to see the car)
 static double s_railSight = 0, s_railCeil = -1, s_railSightKept = 0;
+static double s_tunnelScale = 1;
 // (TunnelCamera's: the eye under the roof of the tunnel it is in itself -- its own point's, InTunnel -- rather than the car's, s_railCeil;
 // and s_railTop, a height it is kept under, the car's tunnel's ceiling)
 static int s_railEyeTunnel = 0;
@@ -4173,6 +4177,7 @@ static void Load(const char *path, int carOnly = 0) {
                 s_nbShuttles++;
             }
         }
+        else if (!strcmp(key, "tunnel_scale")) s_tunnelScale = atof(v) > 0 ? atof(v) : 1;
         else if (!strcmp(key, "tunnel")) {
             T_RACE_TUNNEL *t = &s_tunnels[s_nbTunnels];
             int from, to, roof, ceiling;
@@ -4424,7 +4429,7 @@ static void Load(const char *path, int carOnly = 0) {
     // (every track's: the views -- camera= -- are its, whatever cameras of its own the track has; without any it gives the arm's eye)
     FollowCamEyeHook = RaceCameraEye;
     // (a roulette wheel: its head and its ball posed as their cube's decors are drawn)
-    DecorPoseHook = s_wheel.On || s_nbLifts ? RaceDecorPose : NULL;
+    DecorPoseHook = s_wheel.On || s_nbLifts || s_nbLoops ? RaceDecorPose : NULL;
     TerrainReachHook = RaceTerrainReach;
     CubeViewHook = RaceCubeView;
     if (s_wheel.On) Log_Info("[racemod] roulette wheel at (%.0f,%.0f): %d turning pieces, its floor %.0f at the hole to %.0f at the wall, the drop onto place %d", s_wheel.X, s_wheel.Z,
@@ -4828,9 +4833,12 @@ void RaceMod_Lap(S32 x, S32 z) {
         // Island's sprint had none: "a user has found a massive track shortcut")
         if (s_nbCheckpoints && s_next < s_nbCheckpoints) {
             char text[64];
-            snprintf(text, sizeof(text), "Missed checkpoint %d: go back for it", s_next + 1);
+            snprintf(text, sizeof(text), "Missed checkpoint %d: back to it", s_next + 1);
             Message(text);
             Log_Info("[racemod] the finish line crossed with checkpoint %d of %d missed: no finish", s_next + 1, s_nbCheckpoints);
+            // (and put back before it: the finish lines are a jump's lip, and "go back for it" left the car in the air with no way back,
+            // the user, 2026-10-31, "we're unable to as we're stuck in the air")
+            if (!s_missBackAt) s_missBackAt = TimerRefHR + RACE_MISS_BACK_MS;
             return;
         }
         if (SprintRunAgain(TimerRefHR)) return;
@@ -5019,15 +5027,19 @@ static int SprintRunAgain(S32 now) {
     s_runs++;
     if (s_trialRuns > 0 && s_runs >= s_trialRuns) return 0;
     const S32 run = now - s_lapStart;
-    const int best = !s_runsBest || run < s_runsBest;
-    if (best) s_runsBest = run;
+    // (the trial's best goes on to Best laps; "your best" is said only for beating the track's: every first run of a trial said it, the
+    // user, 2026-10-31, "it always tells us that it's our best time even when we haven't beaten our best time")
+    const S32 record = RaceGame_BestLap();
+    const int trialBest = !s_runsBest || run < s_runsBest;
+    const int best = trialBest && (record <= 0 || run < record);
+    if (trialBest) s_runsBest = run;
     GhostLapDone(run);
-    if (best) RaceGame_TrialBest(run);
+    if (trialBest) RaceGame_TrialBest(run);
     char a[24], text[96];
     Time(a, sizeof(a), run);
     snprintf(text, sizeof(text), best ? "%s: your best run! Again from the start" : "%s: again from the start", a);
     Message(text);
-    Log_Info("[racemod] sprint run %d in %.2f s%s: again from the start (%d of %s)", s_runs, run / 1000.0, best ? ", the trial's best" : "",
+    Log_Info("[racemod] sprint run %d in %.2f s%s: again from the start (%d of %s)", s_runs, run / 1000.0, best ? ", the track's best" : trialBest ? ", the trial's best" : "",
              s_runs, s_trialRuns > 0 ? "its runs" : "endless");
     // (the run's time held on the display -- gold when it is the trial's best -- and back to the start a moment later, once the car is
     // down: a finish line at a jump's lip (Polar Island's) has the car in the air over it, and put back on the grid there it was caught by
@@ -5265,6 +5277,7 @@ void RaceMod_Story(void) {
         s_wantFlip = 1;
         return;
     }
+    if (s_missBackAt && now >= s_missBackAt && NewCube == -1) { s_missBackAt = 0; MissedFinishBack(); }
     // (a sprint's time trial: back to the start for the next run once the car is down -- SprintRunAgain)
     if (s_runAgainAt && now >= s_runAgainAt && s_arcOn < 0 && s_flying < 0 && NewCube == -1) { s_runAgainAt = 0; RaceFromGrid(); return; }
     if (!s_place || !s_endAt || now < s_endAt || NewCube != -1) return;
@@ -6814,12 +6827,15 @@ static double LoopsTime(const T_RACE_OPPONENT *o) {
 
 static void LoopEnd(T_OBJ_3D *obj, double v, const char *how) {
     obj->Alpha = 0; obj->Gamma = 0;
+    // (not out over the road's edge: a car at the side of the band came out at the road's rail still steering past it, the user's Emerald
+    // Moon, 2026-10-31, off the deck 110 km/h out of loop 3)
+    if (s_ride.Lat * s_ride.Steer > 0) s_ride.Steer = 0;
     obj->Beta = (s_loopBeta - (S32)floor(s_ride.Steer * 4096 / (2 * RACE_PI) + 0.5)) & 4095;
     ListBuggy[0].Speed = (S32)v;
     Log_Info("[racemod] loop %d: %s at %.0f units/s", s_loopOn + 1, how, v);
     s_loopLeft = s_loopOn; s_loopLeftAt = TimerRefHR;
-    // (come round it: its camera holds on it a while, LoopCamera)
-    s_loopHold = !strcmp(how, "round") ? s_loopOn : -1; s_loopHoldAt = TimerRefHR;
+    // (come round it: it is cut away, LoopCamera)
+    if (!strcmp(how, "round")) { s_loopCut = s_loopOn; s_loopCutAt = TimerRefHR; }
     s_loopOn = -1; s_loopState = LOOP_NONE;
     s_forgetLap = 1;
 }
@@ -7857,109 +7873,57 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
     return 1;
 }
 
-// The camera while the car goes round a loop: an arm behind the car would look into the ring's own back -- the part of it coming down
-// behind its foot, between the arm's eye and the car -- so the eye stands out to the ring's side, RACE_LOOP_CAM_FAR radii from its
-// middle on the side the car goes in on, level with its middle, looking down its axis into it: a ring is a band, open at its sides, and
-// the car is seen all the way round inside it. (It looked at the ring's middle drawn 0.3 of the way towards the car, from a little over
-// it: across the axis, so the band's rim stood between -- the Emerald Moon's rings, twice the road's width and so deep drums, covered
-// half the picture and hid the car going round, 2026-10-12. Drawn RACE_LOOP_CAM_PULL towards the car now, its rim stays out of sight.)
-#define RACE_LOOP_CAM_FAR 3.2
-#define RACE_LOOP_CAM_PULL 0.15
-// Come round a ring, the camera stays beside the car while the arm's eye -- behind the car and over it -- would look at it through the
-// ring's band coming down behind its foot, or would on its way back there (the Emerald Moon's rings, deep drums, filled the picture as the
-// camera swung back behind the car, 2026-10-12): RACE_LOOP_HOLD_MS at the most. Beside the car, not where it watched the ring from: from
-// there the car driving on was behind the ring's front, going up from the foot on the side the camera stands -- so the eye comes down
-// as the car comes down the ring's last three eighths, to RACE_LOOP_CAM_LOW radii over the road, and on down to RACE_LOOP_HOLD_LOW as it
-// drives out, over RACE_LOOP_HOLD_DROP cells, keeping level with it: its sight runs under the ring's front. It turns from the ring to the
-// car over RACE_LOOP_HOLD_PAN cells.
-#define RACE_LOOP_HOLD_MS 3000
-#define RACE_LOOP_CAM_LOW 0.25
-#define RACE_LOOP_HOLD_LOW 450.0
-#define RACE_LOOP_HOLD_DROP 2.0
-#define RACE_LOOP_HOLD_PAN 2.0
-
-// Whether a place (world units) is on the island: in one of the cubes it has a scene for (cube_scene=; none listed: anywhere).
-static int OnIsland(double wx, double wz) {
-    if (!s_nbCubeScenes) return 1;
-    const int cx = (int)floor(wx / 32768.0), cz = (int)floor(wz / 32768.0);
-    return FileCubeScene(cx, cz) >= 0;
-}
-
-// Whether a ring's band is between two places (cube-local, the ring's cube): its road surface and the green outside it, RaceTrackLoopBody's
-// Thickness (160) and some, and its rails along its edges, on the line between them -- not the last 500 units at the second (the car,
-// on the band itself while it goes round).
-static int RingHides(const T_RACE_LOOP *l, double ex, double ey, double ez, double cx, double cy, double cz) {
-    const double len = sqrt((ex - cx) * (ex - cx) + (ey - cy) * (ey - cy) + (ez - cz) * (ez - cz));
-    if (len < 600) return 0;
-    for (int i = 0; i <= 64; i++) {
-        const double s = 500 / len + (1 - 500 / len) * i / 64.0;
-        const double px = cx + (ex - cx) * s - l->X, py = cy + (ey - cy) * s - (l->Y + l->R), pz = cz + (ez - cz) * s - l->Z;
-        const double along = px * l->DirX + pz * l->DirZ, across = -px * l->DirZ + pz * l->DirX;
-        const double rho = sqrt(along * along + py * py);
-        if (rho < l->R - 250 || rho > l->R + 400) continue;
-        double th = atan2(along, -py);
-        if (th < 0) th += 2 * RACE_PI;
-        const double off = fabs(across - Lane(l, th));
-        if (off > l->Band + 64) continue;
-        if (rho > l->R + 20 || off > l->Band - 150) return 1;
-    }
-    return 0;
-}
+// The camera while the car goes round a loop: behind it, not beside it (the user, 2026-10-31: "The camera switching on Emerald moon for the
+// vertical loops makes it hard to control Twinsen ... let's see if we can have the camera stay behind Twinsen perhaps with the loop visibly
+// cutting away after we've passed through it"). The eye stands on the lane the car goes in on, RACE_LOOP_CAM_BACK radii back from the ring's
+// foot and RACE_LOOP_CAM_UP radii over the road, about where the arm had it, and watches the car up, over and down: the ring's way down is
+// on the other lane, so nothing stands between, and left stays left. Come round, the ring is lifted out of sight (LoopDecors) until the
+// car is RACE_LOOP_CUT_PAST on or RACE_LOOP_CUT_MS have gone, so the arm behind the car has nothing to look through.
+#define RACE_LOOP_CAM_BACK 1.7
+#define RACE_LOOP_CAM_UP 0.75
+#define RACE_LOOP_CAM_LOOK 0.8             // the view on the way from the ring's middle to the car
+#define RACE_LOOP_CUT_PAST 7000.0
+#define RACE_LOOP_CUT_MS 4000
+#define RACE_LOOP_CUT_LIFT 40000
 
 static S32 LoopCamera(S32 *eye, S32 *target) {
+    if (s_loopOn < 0 || s_loopState == LOOP_NONE) return FALSE;
     const T_OBJ_3D *car = &ListObjet[NUM_PERSO].Obj;
-    const int riding = s_loopOn >= 0 && s_loopState != LOOP_NONE;
-    const int k = riding ? s_loopOn : s_loopHold;
-    if (k < 0) return FALSE;
-    const T_RACE_LOOP *l = &s_loops[k];
+    const T_RACE_LOOP *l = &s_loops[s_loopOn];
     // (the ring's cube from this one: the car comes out of a ring near a cube's edge into the next one -- the Emerald Moon's first)
     const double ox = (l->CubeX - CurrentCubeX) * 32768.0, oz = (l->CubeZ - CurrentCubeY) * 32768.0;
-    if (!riding && ((S32)(TimerRefHR - s_loopHoldAt) > RACE_LOOP_HOLD_MS || fabs(ox) > 32768 || fabs(oz) > 32768 || Comportement != C_BUGGY)) {
-        s_loopHold = -1;
-        return FALSE;
-    }
-    const double nx = -l->DirZ, nz = l->DirX;
+    const double nx = -l->DirZ, nz = l->DirX, in = Lane(l, 0);
     const double mx = l->X + ox, my = l->Y + l->R, mz = l->Z + oz;
-    // (out to the side the car goes in on -- its across the shift's way round -- or the other, Camera -1; nearer, where that is off the
-    // island: the Emerald Moon's fourth ring stands by its edge)
-    const double sign = (l->Shift < 0 ? -1 : 1) * l->Camera, wx = CurrentCubeX * 32768.0, wz = CurrentCubeY * 32768.0;
-    double far = l->R * RACE_LOOP_CAM_FAR + fabs(l->Shift) / 2;
-    while (far > l->R + fabs(l->Shift) / 2 + l->Band && !OnIsland(wx + mx - nx * far * sign, wz + mz - nz * far * sign)) far -= 128;
-    far *= sign;
-    // (riding: level with the ring's middle, down to RACE_LOOP_CAM_LOW radii over the road over the last three eighths -- the eye inside the
-    // ring's circle sees the car on its band without the band between; come round, beside the
-    // car and down to RACE_LOOP_HOLD_LOW, turning to it)
-    const double low = l->Y + l->R * RACE_LOOP_CAM_LOW;
-    double along = 0, height = my, pull = RACE_LOOP_CAM_PULL;
-    if (riding) {
-        if (s_ride.State == LOOP_RIDE && s_ride.Theta > 1.25 * RACE_PI) height = my + (low - my) * Smoothstep((s_ride.Theta - 1.25 * RACE_PI) / (0.75 * RACE_PI));
-    } else {
-        const double a = (car->X - mx) * l->DirX + (car->Z - mz) * l->DirZ;
-        along = a > 0 ? a : 0;
-        height = low + (l->Y + RACE_LOOP_HOLD_LOW - low) * Smoothstep(a / (RACE_LOOP_HOLD_DROP * 512));
-        pull += (1 - pull) * Smoothstep(a / (RACE_LOOP_HOLD_PAN * 512));
-    }
-    eye[0] = (S32)(mx + l->DirX * along - nx * far); eye[1] = (S32)height; eye[2] = (S32)(mz + l->DirZ * along - nz * far);
-    target[0] = (S32)(mx + (car->X - mx) * pull); target[1] = (S32)(my + (car->Y - my) * pull);
-    target[2] = (S32)(mz + (car->Z - mz) * pull);
-    if (riding) return TRUE;
-    // (let go once the arm's eye -- behind the car as it heads, as far and as high as the arm has it (CameraX, Y, Z: just placed, FollowCam
-    // calls this after it; while this camera has the view the arm's own angle lags) -- sees the car past the ring, and so does the eye
-    // on its way there from this one, a third and two thirds of the way round)
-    const double hb = Radians(car->Beta), fx = sin(hb), fz = cos(hb);
-    const double horiz = sqrt((double)(CameraX - car->X) * (CameraX - car->X) + (double)(CameraZ - car->Z) * (CameraZ - car->Z)), up = CameraY - car->Y;
-    const double from[3] = {eye[0] - car->X, eye[1] - (double)car->Y, eye[2] - car->Z}, to[3] = {-fx * horiz, up, -fz * horiz};
-    const double la = sqrt(from[0] * from[0] + from[1] * from[1] + from[2] * from[2]), lb = sqrt(to[0] * to[0] + to[1] * to[1] + to[2] * to[2]);
-    int clear = la > 1 && lb > 1;
-    for (int s = 1; s <= 3 && clear; s++) {
-        const double w = s / 3.0;
-        double d[3], dl = 0;
-        for (int i = 0; i < 3; i++) { d[i] = from[i] / la * (1 - w) + to[i] / lb * w; dl += d[i] * d[i]; }
-        dl = sqrt(dl) > 1e-6 ? (la + (lb - la) * w) / sqrt(dl) : 0;
-        if (RingHides(l, car->X + d[0] * dl - ox, car->Y + d[1] * dl, car->Z + d[2] * dl - oz, car->X - ox, car->Y + 300, car->Z - oz)) clear = 0;
-    }
-    if (clear) { s_loopHold = -1; return FALSE; }
+    eye[0] = (S32)(l->X + ox - l->DirX * l->R * RACE_LOOP_CAM_BACK + nx * in);
+    eye[1] = (S32)(l->Y + l->R * RACE_LOOP_CAM_UP);
+    eye[2] = (S32)(l->Z + oz - l->DirZ * l->R * RACE_LOOP_CAM_BACK + nz * in);
+    target[0] = (S32)(mx + (car->X - mx) * RACE_LOOP_CAM_LOOK);
+    target[1] = (S32)(my + (car->Y - my) * RACE_LOOP_CAM_LOOK);
+    target[2] = (S32)(mz + (car->Z - mz) * RACE_LOOP_CAM_LOOK);
     return TRUE;
+}
+
+// The ring cut away (LoopCamera) as a cube's decors are drawn: its quarters, each a decor at the ring's foot, lifted out of sight and put
+// back as the wheel's are (a pose lasts until the cube is loaded again).
+static void LoopDecors(T_DECORS *list, S32 count) {
+    if (!s_nbLoops || !RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return;
+    if (s_loopCut >= 0) {
+        const T_RACE_LOOP *l = &s_loops[s_loopCut];
+        const T_OBJ_3D *car = &ListObjet[NUM_PERSO].Obj;
+        const double past = (car->X + (CurrentCubeX - l->CubeX) * 32768.0 - l->X) * l->DirX + (car->Z + (CurrentCubeY - l->CubeZ) * 32768.0 - l->Z) * l->DirZ;
+        if (past > RACE_LOOP_CUT_PAST || (S32)(TimerRefHR - s_loopCutAt) > RACE_LOOP_CUT_MS || s_loopOn >= 0) s_loopCut = -1;
+    }
+    for (S32 i = 0; i < count; i++) {
+        T_DECORS *d = &list[i];
+        for (int k = 0; k < s_nbLoops; k++) {
+            const T_RACE_LOOP *l = &s_loops[k];
+            if (abs(d->Xworld - l->X) > 1024 || abs(d->Zworld - l->Z) > 1024) continue;
+            const int up = d->Yworld > l->Y + RACE_LOOP_CUT_LIFT / 2;
+            if (!up && abs(d->Yworld - l->Y) > 1024) continue;
+            const S32 lift = k == s_loopCut && !up ? RACE_LOOP_CUT_LIFT : k != s_loopCut && up ? -RACE_LOOP_CUT_LIFT : 0;
+            d->Yworld += lift; d->YMin += lift; d->YMax += lift;
+        }
+    }
 }
 
 static S32 JumpCamera(S32 *eye, S32 *target) {
@@ -8065,9 +8029,11 @@ static S32 TunnelCamera(S32 *eye, S32 *target) {
     const int k = InTunnel(seg);
     if (k < 0) return FALSE;
     const double back = s_railBack, upKept = s_railUp, lead = s_railLead, aim = s_railAim;
-    s_railBack = RACE_TUNNEL_BACK; s_railAim = RAIL_CAMERA_AIM;
-    s_railUp = s_tunnels[k].Roof - RACE_TUNNEL_EYE < RACE_TUNNEL_UP ? s_tunnels[k].Roof - RACE_TUNNEL_EYE : RACE_TUNNEL_UP;
-    s_railLead = RACE_TUNNEL_AHEAD;
+    // (tunnel_scale=: an island made bigger, its halls with it, and the eye as far back: the user, 2026-10-31, "The camera inside our new CX Tower
+    // track is too close to Twinsen to navigate easily")
+    s_railBack = RACE_TUNNEL_BACK * s_tunnelScale; s_railAim = RAIL_CAMERA_AIM;
+    s_railUp = s_tunnels[k].Roof - RACE_TUNNEL_EYE < RACE_TUNNEL_UP * s_tunnelScale ? s_tunnels[k].Roof - RACE_TUNNEL_EYE : RACE_TUNNEL_UP * s_tunnelScale;
+    s_railLead = RACE_TUNNEL_AHEAD * s_tunnelScale;
     s_railSight = RACE_TUNNEL_SIGHT; s_railCeil = s_tunnels[k].Roof - RACE_TUNNEL_UNDER;
     s_railTop = s_tunnels[k].Ceiling - RACE_TUNNEL_UNDER; s_railEyeTunnel = 1;
     // (climbing: nearer, and over the car where the roof lets it)
@@ -8487,6 +8453,29 @@ static void RescueAt(const T_RACE_OPPONENT *o) {
              (int)hero->Obj.Y, (int)hero->Obj.Z, age);
 }
 
+// A sprint's finish crossed with checkpoint s_next missed: the car put back on the road just before it, from wherever the jump past the
+// line has taken it, in that checkpoint's scene.
+static void MissedFinishBack(void) {
+    const T_RACE_OPPONENT *o = Guide();
+    if (!o || s_next >= s_nbCheckpoints) return;
+    const T_RACE_LINE *l = &s_checkpoints[s_next];
+    const double mx = l->CubeX * 32768.0 + (l->X0 + l->X1) / 2.0, mz = l->CubeZ * 32768.0 + (l->Z0 + l->Z1) / 2.0;
+    double bd = 1e30;
+    int best = 0;
+    for (int i = 0; i < o->Count; i++) {
+        double d = (o->X[i] - mx) * (o->X[i] - mx) + (o->Z[i] - mz) * (o->Z[i] - mz);
+        if (l->HasY) d += 4.0 * (o->Y[i] - l->Y) * (double)(o->Y[i] - l->Y);
+        if (d < bd) { bd = d; best = i; }
+    }
+    s_arcOn = s_arcLast = -1;
+    s_flying = -1;
+    s_safeIndex = best;
+    s_safeScene = FileCubeScene(o->X[best] / 32768, o->Z[best] / 32768);
+    s_safeX = o->X[best]; s_safeY = o->Y[best]; s_safeZ = o->Z[best];
+    s_rescue = 1;
+    Log_Info("[racemod] back to missed checkpoint %d: line point %d in scene %d", s_next + 1, best, (int)s_safeScene);
+}
+
 // A rescue into another scene (Rescue): once it is in -- the car at the scene's own start (asked for from RaceMod_Frame, inside AffScene,
 // the scene change's place is lost: the frame's end clears FlagChgCube before the next frame changes the scene) -- the car is put at
 // the place on the line, facing the way it runs, stopped.
@@ -8566,6 +8555,7 @@ void RaceMod_TestRescue(void) {
 // RACE_BELOW_REACH at least RACE_BELOW_DROP above him. (The line, not the raised road: where the lap runs on the ground beside a raised
 // part -- the Desert island's -- the ground is the lap.) Not in a jump's flight, a loop, the super jet-pack's flight or a fall still going on.
 #define RACE_BELOW_MS 1500
+#define RACE_TELEPORT_NEAR (28 * 512.0)    // a teleporter's own floor: no one has fallen this near it
 #define RACE_BELOW_DROP 1500
 #define RACE_BELOW_LAP 4500.0
 #define RACE_BELOW_REACH (16 * 512.0)
@@ -8591,6 +8581,13 @@ static void FallenBelow(S32 now) {
     // (on the floor of an area of the race's own off the lap: SideArea)
     const int area = OpenAreaAt(wx, wz, hero->Obj.Y);
     if (area >= 0 && fabs(hero->Obj.Y - s_open[area].Floor) < 900 && SideArea(o, area)) { s_belowSince = 0; return; }
+    // (on the way to a teleporter off the road: the palace's fireplace is across the floor under its spiral, the lap overhead, and the car
+    // was put back on the road before it got there, the user, 2026-10-31, "Twinsen is now unable to reach it in the car")
+    for (int i = 0; i < s_nbTeleports; i++) {
+        const T_RACE_TELEPORT *t = &s_teleports[i];
+        if (wx > t->X0 - RACE_TELEPORT_NEAR && wx < t->X1 + RACE_TELEPORT_NEAR && wz > t->Z0 - RACE_TELEPORT_NEAR && wz < t->Z1 + RACE_TELEPORT_NEAR
+                && hero->Obj.Y >= t->Y0 - 900 && hero->Obj.Y <= t->Y1) { s_belowSince = 0; return; }
+    }
     double near2 = 1e30;
     S32 nearY = 0;
     for (int i = 0; i < o->Count; i++) {
@@ -11035,6 +11032,55 @@ static S32 s_noCollideScene = -1;
 // Twinsen at the wheel on a track.
 static int CarRacing(void) { return RaceMod_Active() && s_car.HasLine && Comportement == C_BUGGY; }
 
+// The island's people stay off the road while a car races: one walking onto it stops at its edge, and one found standing on it is taken out of
+// sight, wherever their scripts send them. (The build moves where an actor stands and the points its script names, but not the walk between
+// them or what its life does: the user, 2026-10-31, of Citadel 2's Zed, "he's fine standing on the edge of the track watching the race, but
+// shouldn't be wondering on to it"; of the carpet wizard, and "let's check all tracks for NPCs that have pathing which takes them on our
+// tracks"; and "we've checked this a lot, let's improve our checks so it stops happening".) The build's own actors -- cars, items, guards,
+// its Hidden template's flags -- are left alone. Each one is said once a scene, "[roadwatch]": the sweep reads it.
+#define RACE_ROAD_KEEP_REACH (4.0 * 512.0)
+#define RACE_ROAD_KEEP_HIGH 2500
+#define RACE_BUILD_ACTOR 0x1A1000
+static int IsRaceCar(S32 numobj);
+static struct { S32 X, Z; U8 Known, Said; S32 Hidden; } s_roadKeep[MAX_OBJETS];
+static int s_roadKeepScene = -1;
+
+static int OnTheRoad(const T_RACE_OPPONENT *o, const T_OBJET *t) {
+    const double wx = t->Obj.X + CurrentCubeX * 32768.0, wz = t->Obj.Z + CurrentCubeY * 32768.0;
+    for (int i = 0; i < o->Count; i += 2) {
+        const double dx = o->X[i] - wx, dz = o->Z[i] - wz;
+        if (dx * dx + dz * dz <= RACE_ROAD_KEEP_REACH * RACE_ROAD_KEEP_REACH && abs(o->Y[i] - t->Obj.Y) <= RACE_ROAD_KEEP_HIGH) return 1;
+    }
+    return 0;
+}
+
+static void RoadKeep(void) {
+    const T_RACE_OPPONENT *o = Guide();
+    if (!o || CubeMode != CUBE_EXTERIEUR) return;
+    if (s_roadKeepScene != (S32)NumCube) { s_roadKeepScene = NumCube; memset(s_roadKeep, 0, sizeof(s_roadKeep)); }
+    const int racing = CarRacing() && s_goAt;
+    for (S32 a = 1; a < NbObjets && a < MAX_OBJETS; a++) {
+        T_OBJET *t = &ListObjet[a];
+        if (!racing) {
+            // (Twinsen on foot: as they were)
+            if (s_roadKeep[a].Hidden) { t->Flags = (t->Flags & ~(U32)(INVISIBLE | CHECK_OBJ_COL)) | (U32)(s_roadKeep[a].Hidden - 1); s_roadKeep[a].Hidden = 0; }
+            s_roadKeep[a].Known = 0;
+            continue;
+        }
+        if (s_roadKeep[a].Hidden) { t->Flags = (t->Flags | INVISIBLE) & ~(U32)CHECK_OBJ_COL; continue; }
+        if ((t->Flags & RACE_BUILD_ACTOR) == RACE_BUILD_ACTOR || IsRaceCar(a) || (t->Flags & INVISIBLE) || (t->WorkFlags & OBJ_DEAD) || t->Obj.Y < -5000 || t->Obj.Body.Num < 0) continue;
+        if (s_roadKeep[a].Known && s_roadKeep[a].X == t->Obj.X && s_roadKeep[a].Z == t->Obj.Z) continue;
+        if (!OnTheRoad(o, t)) { s_roadKeep[a].Known = 1; s_roadKeep[a].X = t->Obj.X; s_roadKeep[a].Z = t->Obj.Z; continue; }
+        if (!s_roadKeep[a].Said) {
+            s_roadKeep[a].Said = 1;
+            Log_Info("[roadwatch] on the road: actor %d of scene %d, entity %d, body %d, at %d,%d,%d: %s", (int)a, (int)NumCube, (int)t->IndexFile3D, (int)t->Obj.Body.Num,
+                     (int)t->Obj.X, (int)t->Obj.Y, (int)t->Obj.Z, s_roadKeep[a].Known ? "held at its edge" : "out of sight");
+        }
+        if (s_roadKeep[a].Known) { t->Obj.X = s_roadKeep[a].X; t->Obj.Z = s_roadKeep[a].Z; }
+        else { s_roadKeep[a].Hidden = (int)(t->Flags & (INVISIBLE | CHECK_OBJ_COL)) + 1; t->Flags = (t->Flags | INVISIBLE) & ~(U32)CHECK_OBJ_COL; }
+    }
+}
+
 // The actors of race_hide=: the user, 2026-10-31, "has a soldier on the track which shouldn't be there", Otringal's patrol, kept for the doors
 // his script switches. Each frame, as his script may set them; Twinsen on foot, in the story, finds him back as he was.
 static void RaceHideActors(void) {
@@ -12636,26 +12682,28 @@ static void Wheel(S32 now, int driving) {
 }
 
 // The pocket's prize as the car lands under the wheel (2 the green, 1 red, 0 black): the green the golden Gazogem, red the slot machine's
-// spin, their prizes into the item box or, with it full, the second box; black nothing. Without power-ups, red and the green a boost;
-// a boost too with both boxes full, and for red with the reels still turning from the last drop.
+// spin, their prizes into the item box or, with it full, the second box; black nothing. A boost for the green with both boxes full.
+// Without power-ups -- a time trial -- no prize and no word of one (the user, 2026-10-31: "this shouldn't be displaying in time trial
+// anyway"); red is never a boost ("red should trigger the fruit machine wheels"): with the reels still turning from the last drop, nothing.
 static void WheelPrize(int prize, S32 now) {
+    if (!s_powerups) return;
     const char *what = "black: nothing";
     if (prize == 2) {
-        if (s_powerups && GiveItem(PU_GOLD, now)) { Message("Super jackpot! A golden Gazogem!"); what = "the green: super jackpot, a golden Gazogem"; }
+        if (GiveItem(PU_GOLD, now)) { Message("Super jackpot! A golden Gazogem!"); what = "the green: super jackpot, a golden Gazogem"; }
         else { s_boostUntil = now + RACE_WHEEL_ZERO_MS; Message("Super jackpot!"); what = "the green: super jackpot, a boost"; }
     } else if (prize == 1) {
-        if (s_powerups && !(s_slotOn && !s_slotPaid)) { SlotSpin(now); what = "red: the slot machine"; }
-        else {
-            s_boostUntil = now + RACE_WHEEL_RED_MS;
-            Message("Red: a boost!");
-            what = s_powerups ? "red: a boost, the reels still turning" : "red: a boost";
-        }
+        if (!(s_slotOn && !s_slotPaid)) { SlotSpin(now); what = "red: the slot machine"; }
+        else what = "red: the reels still turning";
     } else Message("Black: no luck");
     Log_Info("[racemod] roulette wheel: %s", what);
 }
 
 // Console (tests): the roulette wheel's pocket prize now, as the car lands under the wheel (raceprize); power-up `pu` into Twinsen's
 // item box as a mushroom's -- only into a free box, its roulette turning -- or (`won`) as a prize, GiveItem's way (racebox).
+// Console (tests): the checkpoint just passed forgotten, as if missed (racemiss).
+void RaceMod_TestMiss(void) {
+    if (RaceMod_Active() && s_next > 0) { s_next--; Log_Info("[racemod] racemiss: checkpoint %d of %d is the next again", s_next + 1, s_nbCheckpoints); }
+}
 void RaceMod_TestPrize(int prize) {
     if (!RaceMod_Active() || prize < 0 || prize > 2) return;
     WheelPrize(prize, TimerRefHR);
@@ -15068,6 +15116,38 @@ static void GhostStart(void) {
     else Log_Info("[racemod] ghost: none of %s yet -- the trial's best lap makes one", track);
 }
 
+// The game's ghost raced, level `raced` (0 Easy .. 3 Extreme), just beaten: the next laps race the hardest one open, and past Extreme the
+// player's own best. Kept as the ghost chosen last. (The user, 2026-10-31: "let's automatically replace the current ghost with the
+// heighest one unlocked, if the user has beaten the extreme ghost let's swap in their own best ghost for the track")
+static void GhostMoveUp(int raced) {
+    static const int modes[4] = {3, 4, 5, 7};
+    char track[sizeof(s_ghost.Track)], path[ADELINE_MAX_PATH], level[16];
+    snprintf(track, sizeof(track), "%s", s_ghost.Track);
+    const int beaten = RaceGame_GhostBeatenLevel();
+    for (int k = beaten < 3 ? beaten : 3; k > raced; k--) {
+        S32 lap = 0;
+        if (!RaceMod_GhostFind(track, modes[k], path, sizeof(path), &lap, NULL, 0, NULL, level, sizeof(level))) continue;
+        GhostFree(&s_ghost);
+        if (!GhostRead(path, &s_ghost, 1)) break;
+        snprintf(s_ghostFile, sizeof(s_ghostFile), "%s", path);
+        snprintf(s_ghost.Level, sizeof(s_ghost.Level), "%s", level);
+        s_ghostMode = modes[k];
+        RaceGame_GhostChosen(modes[k]);
+        Log_Info("[racemod] ghost: the next laps race the %s ghost (%.2f s)", level, s_ghost.Lap / 1000.0);
+        return;
+    }
+    if (raced < 3) return;
+    GhostOwnPath(track, path, sizeof(path));
+    GhostFree(&s_ghost);
+    if (GhostRead(path, &s_ghost, 1) && !s_ghost.Missed) {
+        snprintf(s_ghostFile, sizeof(s_ghostFile), "%s", path);
+        s_ghost.Level[0] = 0;
+        s_ghostMode = 1;
+        RaceGame_GhostChosen(1);
+        Log_Info("[racemod] ghost: Extreme beaten: the next laps race the player's own best (%.2f s)", s_ghost.Lap / 1000.0);
+    }
+}
+
 // The car's sample now, `t` into the lap.
 static void GhostSampleNow(T_RACE_LAPGHOST_PT *p, S32 t) {
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
@@ -15159,6 +15239,7 @@ static void GhostLapDone(S32 lap) {
         if (RaceMod_GhostFind(ghostTrack, k < 3 ? 3 + k : 7, path, sizeof(path), &harder, NULL, 0, NULL, NULL, 0) && lap < harder) top = k;
     }
     // (no game's ghost raced: said only when it beats one not beaten before -- not a known one again every trial)
+    const int moveUp = raced >= 0 && lap < s_ghost.Lap;
     if (top >= 0 && raced < 0 && top + 1 <= RaceGame_GhostBeatenLevel()) top = -1;
     if (top >= 0 && top + 1 > s_ghostBeaten) {
         // (the race game keeps it, and opens the next level: Medium once Easy is beaten, Hard once Medium is -- RACEGAME.CPP GhostPage)
@@ -15181,7 +15262,7 @@ static void GhostLapDone(S32 lap) {
         Message(text);
         Log_Info("[racemod] ghost: %s (%.2f s; the ghost raced %.2f s)", text, lap / 1000.0, s_ghost.Lap / 1000.0);
     }
-    if (s_ghostRecLap != s_laps || s_ghostRec.N < 2) return;
+    if (s_ghostRecLap != s_laps || s_ghostRec.N < 2) { if (moveUp) GhostMoveUp(raced); return; }
     T_RACE_LAPGHOST *g = &s_ghostRec;
     GhostAdd(lap, 1);
     g->Lap = lap;
@@ -15209,6 +15290,7 @@ static void GhostLapDone(S32 lap) {
         s_ghostRec.N = 0; s_ghostRec.Lap = 0; s_ghostRec.NbSplits = 0;
         Log_Info("[racemod] ghost: the next laps race this one (%.2f s)", lap / 1000.0);
     }
+    if (moveUp) GhostMoveUp(raced);
     s_ghostRecLap = 0;
 }
 
@@ -15986,7 +16068,7 @@ static void LiftDecors(T_DECORS *list, S32 count) {
 }
 
 static void WheelDecors(T_DECORS *list, S32 count);
-static void RaceDecorPose(T_DECORS *list, S32 count) { WheelDecors(list, count); LiftDecors(list, count); }
+static void RaceDecorPose(T_DECORS *list, S32 count) { WheelDecors(list, count); LiftDecors(list, count); LoopDecors(list, count); }
 
 // The actors in the way of this weather's road only (actor_at=), put aside as their scene starts: its first frame, after the scripts'
 // own first placing
@@ -16361,6 +16443,13 @@ void RaceMod_Frame(void) {
     // the grid: after the qualifying lap, or (without qualifying) as soon as the player is in his car; formed in the start line's scene
     if (inStartScene && driving && !s_ghostWatch && !ClosedGate() && (s_wantGrid || (s_phase == PHASE_WAIT && !s_qualifying))) { s_wantGrid = 0; FormGrid(now); }
     RaceHideActors();
+    RoadKeep();
+    // (a teleporter takes Twinsen on foot too: the user, 2026-10-31, "I don't seem to be able to trigger the teleport in the palace ... on foot")
+    if (s_nbTeleports && !driving && CubeMode == CUBE_EXTERIEUR && NewCube == -1) {
+        T_OBJET *foot = &ListObjet[NUM_PERSO];
+        S32 fx = foot->Obj.X, fy = foot->Obj.Y, fz = foot->Obj.Z;
+        if (Teleport(fx, fy, fz, &fx, &fy, &fz)) { foot->Obj.X = fx; foot->Obj.Y = fy; foot->Obj.Z = fz; }
+    }
     // the cars that aren't racing, out of sight
     // (and silent: a hidden car's engine loop -- its SampleAlways, which the game keeps going for every car -- held a voice of the
     // twelve the mixer has for nothing, and with the racing cars' they filled every one, 2026-10-19)
@@ -18557,7 +18646,7 @@ static void ResetTrack(void) {
     s_laps = 0; s_lapStart = s_lastLap = s_bestLap = 0; s_heldAt = s_heldLap = s_heldTime = 0; s_heldBest = 0;
     s_lineY = s_lineHasY = 0; s_halfway = 0; s_nbCheckpoints = 0; s_next = 0; s_showCheckpoints = 0; s_checkpointAtFor = 0; s_missIndex = -1; s_missLap = -1; s_missAt = -1;
     s_messageUntil = 0;
-    s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopHold = -1;
+    s_loopOn = -1; s_loopState = LOOP_NONE; s_loopLeft = -1; s_loopCut = -1;
     s_oppStarted = 0; s_nbSpots = 0; s_nbPits = 0; s_trialSpot = 0; s_trialStart.CubeX = -1;
     for (int r = 0; r < RACE_MAP_ROADS; r++) s_mapRoadN[r] = 0;
     s_noSky = 0;
@@ -18568,7 +18657,7 @@ static void ResetTrack(void) {
     s_viewFar = s_viewFog = 0;
     memset(s_netThrough, 0, sizeof(s_netThrough)); memset(s_netTouching, 0, sizeof(s_netTouching)); memset(s_netBumpAt, 0, sizeof(s_netBumpAt));
     s_netPushX = s_netPushZ = s_netShoveX = s_netShoveZ = 0; s_netBumps = 0;
-    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
+    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_missBackAt = 0; s_tunnelScale = 1; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;
     RaceSoundsFree(); JetHumStop("the race reset"); SkidSoundStop(); SlideEnd("the race reset");

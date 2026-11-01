@@ -31,7 +31,7 @@ all globals, so a second view in one game would mean rewriting the renderer's st
 - It goes when the first game goes, whether in the lobby or mid-race (`RaceGame_LocalAlone`), and the first game's window goes back to its size and place.
 - **Controllers:** `LBA2_PAD` picks which pad a game uses. With two pads each player has one. With one, it's player 2's and player 1 has the keyboard.
   A pad works while its window hasn't the focus (`SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS`).
-- **One keyboard:** player 2 has W A S D, Q the item (and Enter in the menus), E the handbrake, R the view, always, pad or not, by where the keys are whatever the keyboard's letters.
+- **One keyboard:** each player has their side of it in a race. Player 1, on the left, has W A S D, Q the item, E the handbrake, R the view; player 2, on the right, the arrows, right Ctrl the item (and Enter in the menus), right Shift the handbrake, the key left of right Shift (/ on most keyboards) the view, always, pad or not, by where the keys are whatever the keyboard's letters.
   Their game never has the keyboard's focus, so it asks Windows (`RaceNet_SharedKeys`), only with one of the two games in front (`LBA2_P1_PID`), or it would drive on what's
   typed elsewhere. Player 1's game leaves those keys alone (`RaceGame_SharedKeys`): S would save, W is the action key. Many keyboards can't report every combination of keys held at once.
 - A resolution switch sets the window to the picture's size, so `LocalStart` sets the window again after it. With `LBA2_LOCAL_AREA` the two were the same size and it didn't show.

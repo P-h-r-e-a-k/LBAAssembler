@@ -443,7 +443,7 @@ int RaceNet_HostLocal(const char *name, unsigned short port) {
 
 int RaceNet_Local(void) { return s_kit != NULL && s_local; }
 
-int RaceNet_SpawnPlayer2(unsigned short port, const char *userDir, int x, int y, int w, int h, int resW, int resH, int pad) {
+int RaceNet_SpawnPlayer2(unsigned short port, const char *userDir, int x, int y, int w, int h, int resW, int resH, int pad, int titled) {
     char exe[1024], text[64], res[32];
 #ifdef _WIN32
     if (!GetModuleFileNameA(NULL, exe, sizeof(exe))) return 0;
@@ -464,6 +464,7 @@ int RaceNet_SpawnPlayer2(unsigned short port, const char *userDir, int x, int y,
     SDL_SetEnvironmentVariable(env, "LBA2_PLAYER2", text, true);
     snprintf(text, sizeof(text), "%d,%d,%d,%d", x, y, w, h);
     SDL_SetEnvironmentVariable(env, "LBA2_WINDOW_RECT", text, true);
+    if (titled) SDL_SetEnvironmentVariable(env, "LBA2_WINDOW_TITLED", "1", true);
     snprintf(text, sizeof(text), "%d", pad);
     SDL_SetEnvironmentVariable(env, "LBA2_PAD", text, true);
 #ifdef _WIN32
@@ -682,11 +683,13 @@ int RaceNet_SharedKeys(void) {
     DWORD front = 0;
     GetWindowThreadProcessId(GetForegroundWindow(), &front);
     if (front != first && front != GetCurrentProcessId()) return 0;
-    static const struct { UINT Scan; int Bit; } keys[] = {{0x11, RACENET_KEY_UP}, {0x1F, RACENET_KEY_DOWN}, {0x1E, RACENET_KEY_LEFT}, {0x20, RACENET_KEY_RIGHT},
-                                                          {0x10, RACENET_KEY_ITEM}, {0x12, RACENET_KEY_HANDBRAKE}, {0x13, RACENET_KEY_VIEW}};
+    // (the keyboard's right, for the player on the right: the arrows, right Ctrl, right Shift and the key by them, / on most keyboards)
+    static const struct { int Key; int Bit; } keys[] = {{VK_UP, RACENET_KEY_UP}, {VK_DOWN, RACENET_KEY_DOWN}, {VK_LEFT, RACENET_KEY_LEFT}, {VK_RIGHT, RACENET_KEY_RIGHT},
+                                                        {VK_RCONTROL, RACENET_KEY_ITEM}, {VK_RSHIFT, RACENET_KEY_HANDBRAKE}};
     int down = 0;
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++)
-        if (GetAsyncKeyState((int)MapVirtualKeyA(keys[i].Scan, MAPVK_VSC_TO_VK)) & 0x8000) down |= keys[i].Bit;
+        if (GetAsyncKeyState(keys[i].Key) & 0x8000) down |= keys[i].Bit;
+    if (GetAsyncKeyState((int)MapVirtualKeyA(0x35, MAPVK_VSC_TO_VK)) & 0x8000) down |= RACENET_KEY_VIEW;
     return down;
 #else
     return 0;

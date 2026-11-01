@@ -72,6 +72,12 @@ internal static class RaceTrackTextures
         var hatch = Copy("hatching", RaceTrackTheme.Retail.Hatch);
         // the white curb is one pixel; it is given a block of its own so a neighbouring tile's colours can never bleed into it
         var white = Copy("white curb", (RaceTrackTheme.Retail.WhiteCurb.X, RaceTrackTheme.Retail.WhiteCurb.Y, 8, 8));
+        // (the whitest the island's palette has, not the nearest to the Desert's kerb, which is a little grey and took a grey one on islands
+        // with no colour near it: the user, 2026-10-31, "They're white on other tracks but these appear grey")
+        var whitest = 1;
+        for (var j = 1; j < 256; j++) if (Math.Min(Math.Min(to[j * 3], to[j * 3 + 1]), to[j * 3 + 2]) >= Math.Min(Math.Min(to[whitest * 3], to[whitest * 3 + 1]), to[whitest * 3 + 2])) whitest = j;
+        for (var y = 0; y < white.H; y++)
+        for (var x = 0; x < white.W; x++) island.GroundTexture[(white.Y + y) * 256 + white.X + x] = (byte)whitest;
 
         var theme = new RaceTrackTheme(asphalt, (white.X + 3, white.Y + 3), hatch, rock,
             Near(from, to, RaceTrackTheme.Retail.RedCurb), Near(from, to, RaceTrackTheme.Retail.Arrow), Near(from, to, RaceTrackTheme.Retail.Sand), Palette: to);

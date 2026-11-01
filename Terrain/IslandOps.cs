@@ -330,6 +330,9 @@ internal static class IslandOps
 
         private readonly IslandFile island;
         private readonly List<(IslandCube Cube, IslandDecor Decor, double[] Before)> tracked = new();
+        // (what stands on a tracked decor goes with it: a lamp post's head on its pole -- the pole followed the ground down, and Otringal's
+        // astroport's lamps had a bottom and a top and nothing between, the user, 2026-10-31)
+        private readonly List<(IslandDecor Rider, IslandDecor Under, int UnderY)> riders = new();
 
         // (`stay`: bodies whose decors stay where they are whatever the ground does -- Otringal's gatehouse over the race track's tunnel;
         // `near`: only the decors whose origin (island world x, z) it accepts -- the ones over the ground an edit will change, so a big island's
@@ -348,7 +351,26 @@ internal static class IslandOps
                     if (!StandsOnGround(island, cx, cz, decor)) continue;
                     tracked.Add((cube, decor, new[] { y }));
                 }
+            foreach (var cube in tracked.Select(t => t.Cube).Distinct().ToList())
+            {
+                var carried = tracked.Where(t => t.Cube == cube).Select(t => t.Decor).ToHashSet();
+                for (var added = true; added;)
+                {
+                    added = false;
+                    foreach (var decor in cube.Decors)
+                    {
+                        if (carried.Contains(decor) || stay?.Contains(decor.Body & 0xFFFF) == true || keep?.Contains(decor) == true) continue;
+                        var under = carried.FirstOrDefault(u => Math.Abs(decor.YMin - u.YMax) <= RidesWithin && decor.XMin < u.XMax && u.XMin < decor.XMax && decor.ZMin < u.ZMax && u.ZMin < decor.ZMax);
+                        if (under is null) continue;
+                        riders.Add((decor, under, under.Y));
+                        carried.Add(decor);
+                        added = true;
+                    }
+                }
+            }
         }
+
+        private const int RidesWithin = 64;
 
         // Whether a decor rests on the ground at all: its underside (YMin, which is where its body really is -- its own Y is an offset
         // and is often 0) is at or under the highest ground anywhere beneath its footprint. One that hangs clear of the ground was
@@ -371,6 +393,15 @@ internal static class IslandOps
 
         // Moves the tracked decors by the change in ground height under them; returns how many moved.
         public int Apply()
+        {
+            var moved = ApplyGround();
+            // (in the order they were found: what stands on a rider, after it)
+            foreach (var (rider, under, was) in riders)
+                if (under.Y != was) rider.MoveTo(rider.X, rider.Y + under.Y - was, rider.Z);
+            return moved;
+        }
+
+        private int ApplyGround()
         {
             var moved = 0;
             foreach (var (cube, decor, before) in tracked)

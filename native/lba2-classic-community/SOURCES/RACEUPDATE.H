@@ -15,5 +15,6 @@ int RaceUpdate_Tool(const char *exeUtf8, const char *what, const char *folderUtf
 // A picture onto the clipboard (2026-10-27: Best laps' "Copy as an image"): `rgb` w x h, 3 bytes a pixel, top row first, as a DIB, and the
 // PNG file at `pngUtf8` (if any) as the clipboard's "PNG" too -- what chat programs paste. Non-zero: put there.
 int RaceUpdate_ClipboardImage(const unsigned char *rgb, int w, int h, const char *pngUtf8);
+void RaceUpdate_PlaceConsole(void);
 
 #endif

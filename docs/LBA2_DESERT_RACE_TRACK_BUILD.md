@@ -5557,3 +5557,16 @@ The user asked why actors were appearing on tracks. The review of 2026-10-27 and
 Things that read as floating and aren't: a decor whose box the build cut down under the road has the same model and origin, so compare decors by origin, never by box (the Desert's eight "hanging" decors were this, and Island CX's tower tops); road rails and posts stand on the raised deck, which isn't ground (Mosquibees Island's start line post, seen from below, looks like a rod in the sky); actors with body -1 draw nothing.
 
 `RACE_MAX_HIDDEN` is 1024, from 256: the Desert's trial has 268 `hide_actor=` lines, the palace's 307, the Temple's 414. The lines dropped over the limit were cars already waiting out of sight, so this changed nothing on screen, but it warns if it is ever reached.
+
+## The track test, 2026-11-01
+
+The user drove every track and logged 45 things. What changed in how tracks are built:
+
+- **A road's edges are the island's own ground.** `PaintRoad` used to paint verges the Desert's sand and banks the Desert's rock on every island. Verge and bank cells now keep the polygons they had (`Painter.Keep`), or take them from the nearest land in the cube; only water with no land near gets a flat colour, sampled from the island (`GroundColour`, `FlatNearest`). `WallSteepBanks` no longer paints rock: a steep bank keeps its ground and is walled for cars only, and natural banks within 12 cells of the road count, so a car can't climb out and skip road.
+- **Sea made land.** `FillPockets` fills any small patch of undrawn sea within 14 cells of a road, up to 500 cells, at the height of the land round it. `groundFills` in a plan does the same for a rectangle: Polar's dock.
+- **Things left floating.** `IslandFloaters` is the `floaters` tool's rule, undrawn ground counting as sea. `ClearFloaters` removes the island's own decors the build left held up by nothing, on the game's own islands, and on Polar through `clearFloaters`. Built islands (Temple, palace, Island CX) are skipped: their pieces hold each other up in ways it can't see, and it took 288 of the Temple's. `DecorFollow` now carries what stands on a moved decor, which is what took the middle out of Otringal's lamp posts.
+- **People off the road.** `RoadKeep` runs in the engine while a car races: an actor stepping onto the road is held at its edge, one found on it is taken out of sight, and each is logged as `[roadwatch]`, which `run_sweep.ps1` prints as `ROAD` lines. Actors with the build's own flags (0x1A1000: cars, items, guards) are left alone. The build's `OffRoad` looks only at where an actor stands and the points its script names.
+- **Where the road meets a deck.** The ground road is painted on under the last 2.5 cells of a deck (`NearDeckEnd`), so no strip of ground shows at the join.
+
+Loops: `LoopCamera` now stands behind the ring on the lane the car goes in on, and the ring is lifted out of sight once the car is round (`LoopDecors`), so the arm behind the car has nothing to look through. A car leaving a ring steering outward has that steering dropped (`LoopEnd`).
+
