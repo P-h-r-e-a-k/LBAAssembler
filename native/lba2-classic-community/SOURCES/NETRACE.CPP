@@ -15,6 +15,7 @@
 //   INRACE  reliable   to all: this game is racing, or back in the lobby
 //   GRID    reliable   host to all: the grid's order, each player's id and qualifying time
 //   QDONE   reliable   host to all: qualifying is over, whoever is still out there
+//   CHAT    reliable   to all: a line typed in the lobby
 //   READY   reliable   to the host: this game's car is at the start
 //   GO      reliable   host to all: count down now
 //   CAR     as it may  to all, 30 a second: as a ghost's sample, so a car is drawn as a ghost is (RACEMOD.CPP DrawNetCars)
@@ -39,7 +40,7 @@
 #include <windows.h>
 #endif
 
-#define RACENET_PROTOCOL 3
+#define RACENET_PROTOCOL 4
 #define RACENET_DELAY_MS 40                 // how far behind a car is drawn
 #define RACENET_AHEAD_MS 250                // how far past its newest sample
 #define RACENET_EASE_MS 90.0                // a car's correction eased out over this long ...
@@ -56,7 +57,7 @@
 #define RACENET_QUAL_AFTER_MS 30000         // qualifying: how long the others have once the first is over the line ...
 #define RACENET_QUAL_MOST_MS 240000         // ... and how long it can go on at all
 
-enum { M_HELLO = 1, M_TRACK, M_READY, M_GO, M_CAR, M_FINISH, M_ASK, M_PASS, M_WRONG, M_EVENT, M_PING, M_PONG, M_STAGE, M_VOTE, M_CHOSEN, M_INRACE, M_GRID, M_QDONE };
+enum { M_HELLO = 1, M_TRACK, M_READY, M_GO, M_CAR, M_FINISH, M_ASK, M_PASS, M_WRONG, M_EVENT, M_PING, M_PONG, M_STAGE, M_VOTE, M_CHOSEN, M_INRACE, M_GRID, M_QDONE, M_CHAT };
 
 typedef struct {
     uint32_t T;                             // the sender's clock
@@ -112,6 +113,8 @@ static uint32_t s_stageAt = 0;
 static int s_selfVote = 0, s_selfChosen = 0, s_selfFinish = 0;
 static int s_qualifying = 0, s_qualOver = 0;
 static uint32_t s_firstOverAt = 0;
+static char s_chat[RACENET_CHAT_LINES][RACENET_NAME + RACENET_CHAT + 3];
+static int s_chatN = 0;                     // said so far: the newest is s_chat[(s_chatN - 1) % RACENET_CHAT_LINES]
 typedef struct { uint32_t Id; int Ms; } T_RN_GRID;
 static T_RN_GRID s_grid[RACENET_MAX_OTHERS + 1];
 static int s_gridN = 0;
@@ -162,6 +165,14 @@ static void SendTrack(uint32_t to, int late) {
     p += n;
     if (to) NetKit_Send(s_kit, to, b, (int)(p - b), 1);
     else NetKit_Broadcast(s_kit, b, (int)(p - b), 1);
+}
+
+static void ChatAdd(const char *name, const char *text, int size) {
+    char *line = s_chat[s_chatN++ % RACENET_CHAT_LINES];
+    int n = snprintf(line, sizeof(s_chat[0]), "%s: ", name);
+    for (int i = 0; i < size && i < RACENET_CHAT && text[i] && n < (int)sizeof(s_chat[0]) - 1; i++) line[n++] = (uint8_t)text[i] < 32 || (uint8_t)text[i] > 126 ? ' ' : text[i];
+    line[n] = 0;
+    Log_Info("[racenet] chat: %s", line);
 }
 
 // (to everyone, or a player who comes in part of the way through a round)
@@ -415,6 +426,9 @@ static void Take(const NetKitMessage *m) {
     case M_QDONE:
         if (!s_hosting) s_qualOver = 1;
         break;
+    case M_CHAT:
+        if (peer && end > p) ChatAdd(peer->Name, (const char *)p, (int)(end - p));
+        break;
     default:
         break;
     }
@@ -503,6 +517,7 @@ static int Begin(void) {
     s_stage = RACENET_STAGE_LOBBY; s_stageMs = 0; s_stageTrack = -1;
     s_selfVote = s_selfChosen = s_selfFinish = s_qualifying = s_qualOver = s_gridN = 0;
     s_firstOverAt = 0;
+    s_chatN = 0;
     s_turned[0] = s_hostVersion[0] = 0;
     memset(&s_own, 0, sizeof(s_own));
     SDL_SetAtomicInt(&s_quit, 0);
@@ -797,6 +812,29 @@ int RaceNet_Votes(int *counts, int size, int *players) {
     SDL_UnlockMutex(s_lock);
     if (players) *players = can;
     return voted;
+}
+
+void RaceNet_Say(const char *text) {
+    if (!s_kit || !text[0]) return;
+    uint8_t b[1 + RACENET_CHAT];
+    int n = (int)strlen(text);
+    if (n > RACENET_CHAT) n = RACENET_CHAT;
+    b[0] = M_CHAT;
+    memcpy(b + 1, text, n);
+    SDL_LockMutex(s_lock);
+    ChatAdd(s_name, text, n);
+    NetKit_Broadcast(s_kit, b, 1 + n, 1);
+    SDL_UnlockMutex(s_lock);
+}
+
+int RaceNet_ChatLine(int i, char *out, int size) {
+    if (!s_kit) return 0;
+    SDL_LockMutex(s_lock);
+    const int held = s_chatN < RACENET_CHAT_LINES ? s_chatN : RACENET_CHAT_LINES;
+    const int ok = i >= 0 && i < held;
+    if (ok) snprintf(out, size, "%s", s_chat[(s_chatN - held + i) % RACENET_CHAT_LINES]);
+    SDL_UnlockMutex(s_lock);
+    return ok;
 }
 
 void RaceNet_CarChosen(void) {

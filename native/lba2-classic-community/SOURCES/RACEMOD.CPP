@@ -394,6 +394,7 @@ static int s_heldBest = 0;
 typedef struct {
     S32 CubeX, CubeZ, X0, Z0, X1, Z1, DirX, DirZ;
     S32 Y, HasY;                           // the road's height at the line, when the file gives it
+    S32 Reach;                             // how far over or under that it counts (checkpoint_reach=; 0: RACE_LINE_REACH)
 } T_RACE_LINE;
 #define RACE_LINE_REACH 1200
 // (a move into the cube beside counts as a car's move -- its line crossings seen -- when no longer than this: driven over the edge, not
@@ -647,6 +648,7 @@ static int s_endWon = 0;
 #define RACE_MISS_BACK_MS 1200             // a sprint's finish crossed with a checkpoint missed: the car put back before it this long after
 #define RACE_MISS_RESET_MS 150             // ... a checkpoint found missed on the road: at once, with the message up first
 static S32 s_missBackAt = 0;
+static S32 s_onRoadAt = 0;                 // when the car was last on the road (OffRoad)
 static int s_missBackFor = -1;             // ... for that checkpoint (crossed in the meantime: not put back)
 static S32 s_missSaidUntil = 0;            // "Missed checkpoint N" stays up, not "Back on the road", until then
 static int s_missExact = 0;                // the rescue puts the car exactly on s_safeIndex: before the checkpoint, not wherever SafeLine finds ground
@@ -1130,6 +1132,7 @@ static void Defaults(T_RACE_CAR *c) {
 static S32 Milli(const char *v) { return (S32)(atof(v) * 1000.0 + 0.5); }
 
 static int ReadLine(const char *v, T_RACE_LINE *l) {
+    l->Reach = 0;
     const int n = sscanf(v, "%d %d %d %d %d %d %d %d %d", &l->CubeX, &l->CubeZ, &l->X0, &l->Z0, &l->X1, &l->Z1, &l->DirX, &l->DirZ, &l->Y);
     l->HasY = n == 9;
     if (!l->HasY) l->Y = 0;
@@ -2025,7 +2028,7 @@ static T_RACE_TELEPORT s_teleports[RACE_MAX_TELEPORTS];
 static int s_nbTeleports = 0;
 static S32 s_teleportedAt = 0;
 static S32 s_passageAt = 0, s_passageUntil = 0;   // the passage the car is going through (TimerRefHR), 0 none
-typedef struct { int On, Extra, Owner, Sprite; double ToX, ToY, ToZ; S32 T0, Dur; } T_RACE_THROWN;
+typedef struct { int On, Extra, Owner, Sprite; double ToX, ToY, ToZ; S32 T0, Dur; int Crab; double SeaX, SeaZ; } T_RACE_THROWN;   // (Crab: Felix's, and the sea it came from)
 static T_RACE_THROWN s_thrown[RACE_MAX_THROWN];
 static S32 s_guardGrace[RACE_MAX_OPPONENTS + 1];   // a car just struck by one of them is let be till then
 // (where each car is going: its last place and its way, units a second -- -1 Twinsen's at 0)
@@ -3806,6 +3809,10 @@ static void Load(const char *path, int carOnly = 0) {
         } else if (!strcmp(key, "checkpoint")) {
             if (s_nbCheckpoints < RACE_MAX_CHECKPOINTS && ReadLine(v, &s_checkpoints[s_nbCheckpoints])) s_nbCheckpoints++;
         } else if (!strcmp(key, "checkpoint_lines")) s_showCheckpoints = atoi(v);
+        else if (!strcmp(key, "checkpoint_reach")) {
+            int n, reach;
+            if (sscanf(v, "%d %d", &n, &reach) == 2 && n >= 1 && n <= s_nbCheckpoints) s_checkpoints[n - 1].Reach = reach;
+        }
         else if (!strcmp(key, "grid")) {
             T_RACE_SPOT *g = &s_spots[s_nbSpots];
             if (s_nbSpots < RACE_MAX_SPOTS && sscanf(v, "%d %d %d %d %d %d", &g->CubeX, &g->CubeZ, &g->X, &g->Y, &g->Z, &g->Beta) == 6) s_nbSpots++;
@@ -4673,6 +4680,7 @@ static void StoryUnlock(const char *id) {
 // 2026-11-01: "if we detect a missed checkpoint we reset the car just before the one it missed. This will be better for races so a car
 // doesn't fall an entire lap behind").
 #define RACE_MISS_PAST (16 * 512)
+#define RACE_MISS_ROAD_MS 1000
 static int s_missIndex = -1;
 static S32 s_missLap = -1;
 static double s_checkpointAt[RACE_MAX_CHECKPOINTS];   // each checkpoint's place round the guide's line (its Cum), -1 not worked out yet
@@ -4759,7 +4767,7 @@ static int Crosses(double x0, double z0, double x1, double z1, double ax, double
 static int CrossLineIn(const T_RACE_LINE *l, S32 cx, S32 cz, S32 y, S32 x0, S32 z0, S32 x1, S32 z1, S32 slack = 0) {
     if (abs(cx - l->CubeX) > 1 || abs(cz - l->CubeZ) > 1) return 0;
     // (a line with a height: only for a car on the road it lies across, not one passing over or under that place)
-    if (l->HasY && abs(y - l->Y) > RACE_LINE_REACH) return 0;
+    if (l->HasY && abs(y - l->Y) > (l->Reach ? l->Reach : RACE_LINE_REACH)) return 0;
     const double ox = (l->CubeX - cx) * 32768.0, oz = (l->CubeZ - cz) * 32768.0;
     double ax = l->X0 + ox, az = l->Z0 + oz, bx = l->X1 + ox, bz = l->Z1 + oz;
     const double len = sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az));
@@ -4891,7 +4899,9 @@ void RaceMod_Lap(S32 x, S32 z) {
             }
         }
     // ... and the car further round the lap than the next one, not having crossed it (round its end, or off the road)
-    if (s_laps > 0 && s_next < s_nbCheckpoints && s_loopState == LOOP_NONE)
+    // (on the road: off it, up a mountainside the lap goes round, the road nearest it is the next turn up, a lap's worth further on -- put back for a corner not yet missed, the user,
+    // 2026-11-01, Mosquibees: "I keep missing checkpoint 6". A later line crossed still says so)
+    if (s_laps > 0 && s_next < s_nbCheckpoints && s_loopState == LOOP_NONE && TimerRefHR - s_onRoadAt < RACE_MISS_ROAD_MS)
         if (const T_RACE_OPPONENT *o = Guide()) {
             const double car = CarAlongGuide(), at = CheckpointAt(s_next);
             if (at >= 0 && car >= 0 && o->Length > 0) {
@@ -6601,6 +6611,18 @@ static int SafeSection(const T_RACE_OPPONENT *o, double x, double y, double z, d
 // of the line. It was every frame, within 3.5 cells of the line and 40 points of the last place: the roads are up to 8 cells to each
 // side of their middle now, and a car down one side for 40 points was lost till the lap came round -- 93 to 162 points behind it, its
 // scene the last safe one, on a pilot 6 cells to the left round the Temple of Bú.
+// A car off the road: said in the log once it has been a while, with where, for a track's builder: a car somewhere it shouldn't be left nothing to go by (the user, 2026-11-01,
+// Wannies Island). Who is put back for it is FallenBelow's and StuckCar's to say.
+#define RACE_LOST_MS 3000
+static int s_lostSaid = 0;
+static void OffRoad(S32 now, const T_RACE_OPPONENT *o, double wx, double wy, double wz) {
+    if (!s_onRoadAt) { s_onRoadAt = now; return; }
+    if (now - s_onRoadAt < RACE_LOST_MS || s_lostSaid || s_safeIndex < 0 || s_safeIndex >= o->Count) return;
+    s_lostSaid = 1;
+    Log_Info("[racemod] off the road for %.1f s at (%.0f,%.0f,%.0f) in scene %d, cube (%d,%d): its road at line point %d, %d high", (now - s_onRoadAt) / 1000.0, wx, wy, wz, (int)NumCube,
+             (int)CurrentCubeX, (int)CurrentCubeY, s_safeIndex, (int)o->Y[s_safeIndex]);
+}
+
 static void TrackSafePlace(void) {
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     const T_RACE_OPPONENT *o = Guide();
@@ -6621,7 +6643,9 @@ static void TrackSafePlace(void) {
         reach = a->Half + (c->Half - a->Half) * t + 512;
     }
     const int best = SafeSection(o, x, y, z, reach);
-    if (best < 0 || !LineOnGround(o, best)) return;
+    if (best < 0 || !LineOnGround(o, best)) { OffRoad(now, o, wx, wy, wz); return; }
+    s_onRoadAt = now;
+    s_lostSaid = 0;
     s_safeIndex = best;
     s_safeScene = NumCube;
     s_safeX = wx; s_safeY = wy; s_safeZ = wz;
@@ -11255,8 +11279,38 @@ static void RoadKeep(void) {
 
 // The actors of race_hide=: the user, 2026-10-31, "has a soldier on the track which shouldn't be there", Otringal's patrol, kept for the doors
 // his script switches. Each frame, as his script may set them; Twinsen on foot, in the story, finds him back as he was.
+// ... and whoever is under the roulette wheel, which floats over Otringal's casino: the town's people there came up through it (the user, 2026-11-01, "There's still an NPC on
+// Otringal's roulette wheel", after one had been taken off by hand). By where they are, not who: some walk in. All but the cars, as long as a car races.
+static int IsRaceCar(S32 numobj);
+#define RACE_WHEEL_CLEAR 1024.0            // how far past its rim
+static int s_underWheel[MAX_OBJETS];       // each actor's flags + 1, while it's hidden
+static S32 s_underWheelScene = -1;
+static void WheelCleared(int racing) {
+    if (!s_wheel.On || CubeMode != CUBE_EXTERIEUR) return;
+    if (s_underWheelScene != (S32)NumCube) { memset(s_underWheel, 0, sizeof(s_underWheel)); s_underWheelScene = (S32)NumCube; }
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    for (int i = 1; i < NbObjets && i < MAX_OBJETS; i++) {
+        T_OBJET *o = &ListObjet[i];
+        // (not the opponents' cars parked out of sight in the scene, nor the game's own at the cube's corner, which has no one standing there)
+        const int here = o->Obj.Y > RACE_OUT_OF_SIGHT_Y && (o->Obj.X || o->Obj.Z);
+        const int under = racing && here && i != NUM_PERSO && !IsRaceCar(i) && WheelR(o->Obj.X + cx, o->Obj.Z + cz) <= s_wheel.Outer + RACE_WHEEL_CLEAR;
+        if (under) {
+            if (!s_underWheel[i]) {
+                s_underWheel[i] = (int)(o->Flags & (INVISIBLE | CHECK_OBJ_COL)) + 1;
+                Log_Info("[racemod] actor %d of scene %d, entity %d: under the wheel, not there while a car races", i, (int)NumCube, (int)o->IndexFile3D);
+            }
+            o->Flags = (o->Flags | INVISIBLE) & ~(U32)CHECK_OBJ_COL;
+        }
+        else if (s_underWheel[i]) {
+            o->Flags = (o->Flags & ~(U32)(INVISIBLE | CHECK_OBJ_COL)) | (U32)(s_underWheel[i] - 1);
+            s_underWheel[i] = 0;
+        }
+    }
+}
+
 static void RaceHideActors(void) {
     const int racing = CarRacing();
+    WheelCleared(racing);
     for (int i = 0; i < s_nbRaceHide; i++) {
         if (s_raceHideScene[i] != (S32)NumCube || s_raceHideActor[i] <= 0 || s_raceHideActor[i] >= NbObjets) { s_raceHideWas[i] = -1; continue; }
         T_OBJET *o = &ListObjet[s_raceHideActor[i]];
@@ -13972,11 +14026,96 @@ enum { FISH_READY, FISH_CAST, FISH_WAIT, FISH_REEL };
 #define RACE_FISH_WAIT_HI 7000             // ... and the most
 #define RACE_FISH_REEL_MS 1200
 #define RACE_FISH_CRAB_AT 400              // ms into reeling in that the crab comes out
-#define RACE_FISH_LINE 6400.0              // how far in front of him his line goes in (over the lane in front of him, into the sea)
+#define RACE_FISH_LINE 12000.0             // how far in front of him his line goes in, with no sea found nearer (over the lane in front of him, into the sea)
+#define RACE_FISH_LINE_FAR 18000           // how far the sea is looked for, and how far past its edge the line goes in
+#define RACE_FISH_LINE_PAST 900.0
+#define RACE_CRAB_WANDER_MS 1000           // a crab that came down on the road walks round this long ...
+#define RACE_CRAB_TURN_MS 300              // ... this long each way ...
+#define RACE_CRAB_WALK 900.0               // ... at this many units a second, then goes back to the sea at ...
+#define RACE_CRAB_RUN 1500.0               // ... this
+#define RACE_CRAB_MOST_MS 15000            // (and is gone by then, whatever is in its way)
+#define RACE_CRAB_CAR 520.0                // a car this near runs it over
+#define RACE_MAX_CRABS 4
 #define RACE_FISH_BEHIND 4400.0            // how far behind him the crab comes down: the middle of the lane behind him
 #define RACE_FISH_ALONG 2000.0             // ... this far either way along it
 #define RACE_FISH_SEA 100                  // the sea's height, where the crab comes out
 #define RACE_FISH_SAMPLE 368               // his sample in the game, as he hauls one in
+
+// The crabs on the road (the user, 2026-11-01: "land on the track behind him if it doesn't hit a car. It should walk around for a second and head back to the sea"): the thing
+// he threw, stopped where it came down and walked from here, on the ground
+typedef struct { int On, Extra, Body; double X, Z, SeaX, SeaZ, DirX, DirZ; S32 T0, Turn; } T_RACE_CRAB;
+static T_RACE_CRAB s_crabs[RACE_MAX_CRABS];
+
+static void CrabOff(T_RACE_CRAB *c) {
+    c->On = 0;
+    if (c->Extra >= 0 && c->Extra < MAX_EXTRAS && ListExtra[c->Extra].Body == c->Body) ListExtra[c->Extra].Sprite = -1;
+}
+
+static void CrabLands(const T_RACE_THROWN *u, S32 now) {
+    for (int i = 0; i < RACE_MAX_CRABS; i++) {
+        T_RACE_CRAB *c = &s_crabs[i];
+        if (c->On) continue;
+        ListExtra[u->Extra].Flags &= ~(EXTRA_FLY | EXTRA_STOP_COL | EXTRA_FALLING);
+        c->On = 1; c->Extra = u->Extra; c->Body = ListExtra[u->Extra].Body; c->X = u->ToX; c->Z = u->ToZ; c->SeaX = u->SeaX; c->SeaZ = u->SeaZ; c->T0 = now; c->Turn = 0;
+        c->DirX = 0; c->DirZ = 1;
+        Log_Info("[racemod] a crab on the road at (%.0f,%.0f)", c->X, c->Z);
+        return;
+    }
+    ListExtra[u->Extra].Sprite = -1;
+}
+
+static void CrabsWalk(S32 now, S32 dt, int driving) {
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+    for (int i = 0; i < RACE_MAX_CRABS; i++) {
+        T_RACE_CRAB *c = &s_crabs[i];
+        if (!c->On) continue;
+        // (its extra gone with a change of scene, the slot perhaps another's)
+        if (CubeMode != CUBE_EXTERIEUR || c->Extra < 0 || c->Extra >= MAX_EXTRAS || ListExtra[c->Extra].Sprite == -1 || ListExtra[c->Extra].Body != c->Body) { c->On = 0; continue; }
+        const S32 t = now - c->T0;
+        const int back = t >= RACE_CRAB_WANDER_MS;
+        if (back) {
+            const double dx = c->SeaX - c->X, dz = c->SeaZ - c->Z, d = sqrt(dx * dx + dz * dz);
+            if (d > 1) { c->DirX = dx / d; c->DirZ = dz / d; }
+        } else if (now >= c->Turn) {
+            const double a = VentRandom() * 6.283;
+            c->DirX = sin(a); c->DirZ = cos(a);
+            c->Turn = now + RACE_CRAB_TURN_MS;
+        }
+        const double v = (back ? RACE_CRAB_RUN : RACE_CRAB_WALK) * dt / 1000.0;
+        c->X += c->DirX * v; c->Z += c->DirZ * v;
+        const S32 lx = (S32)(c->X - cx), lz = (S32)(c->Z - cz);
+        if (lx < 0 || lz < 0 || lx >= 32768 || lz >= 32768) { CrabOff(c); continue; }
+        const S32 ground = CalculAltitudeTerrain(lx, lz, 0);
+        T_EXTRA *e = &ListExtra[c->Extra];
+        e->PosX = lx; e->PosY = ground; e->PosZ = lz;
+        e->Beta = (S16)TurnOf(atan2(c->DirX, c->DirZ));
+        if ((back && ground <= RACE_FISH_SEA) || t >= RACE_CRAB_MOST_MS) { Log_Info("[racemod] the crab is back in the sea, %.1f s on the road", t / 1000.0); CrabOff(c); continue; }
+        for (int who = driving ? -1 : 0; who < RACE_MAX_OPPONENTS; who++) {
+            double x, y, z;
+            if (!CarAt(who, &x, &y, &z) || (x - c->X) * (x - c->X) + (z - c->Z) * (z - c->Z) > RACE_CRAB_CAR * RACE_CRAB_CAR || fabs(y - ground) > 1400) continue;
+            Log_Info("[racemod] %s's car runs over the crab", CarName(who));
+            InitHitExtraPof(lx, ground, lz, RACE_SHOT_FORCE);
+            CrabOff(c);
+            break;
+        }
+    }
+}
+
+// Where his line goes in: the sea, over whatever road is in front of him (a fixed length, on the road: the crab came up out of the tarmac, in a splash, the user, 2026-11-01)
+static void FelixAims(T_RACE_GUARD *g, int actor) {
+    double reach = RACE_FISH_LINE;
+    if (actor >= 0 && CubeMode == CUBE_EXTERIEUR) {
+        const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
+        for (int d = 1500; d <= RACE_FISH_LINE_FAR; d += 256) {
+            const S32 lx = (S32)(g->X + g->FaceX * d - cx), lz = (S32)(g->Z + g->FaceZ * d - cz);
+            if (lx < 0 || lz < 0 || lx >= 32768 || lz >= 32768) break;
+            if (CalculAltitudeTerrain(lx, lz, 0) <= RACE_FISH_SEA) { reach = d + RACE_FISH_LINE_PAST; break; }
+        }
+    }
+    g->BobX = g->X + g->FaceX * reach + (VentRandom() * 2 - 1) * 500;
+    g->BobZ = g->Z + g->FaceZ * reach + (VentRandom() * 2 - 1) * 500;
+    Log_Info("[racemod] Felix casts, %.0f out", reach);
+}
 
 static void FelixCrab(T_RACE_GUARD *g, int actor, S32 now) {
     int t = -1;
@@ -13994,7 +14133,7 @@ static void FelixCrab(T_RACE_GUARD *g, int actor, S32 now) {
     const double h = disc >= 0 ? atan((R - sqrt(disc)) / (2 * q)) : atan2(dy, R) + 0.7;
     const double flight = R / (v * cos(h)) * 20 / 1000.0;
     u->On = 1; u->T0 = now; u->Dur = (S32)(flight * 1000); u->ToX = tx; u->ToY = g->Y; u->ToZ = tz;
-    u->Sprite = 0; u->Extra = -1; u->Owner = actor;
+    u->Sprite = 0; u->Extra = -1; u->Owner = actor; u->Crab = 1; u->SeaX = g->BobX; u->SeaZ = g->BobZ;
     Log_Info("[racemod] Felix hauls in a crab: %.1f s over his head to (%.0f,%.0f)", flight, tx, tz);
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     u->Extra = ThrowExtraObj((U8)actor, (S32)(fromX - cx), (S32)fromY, (S32)(fromZ - cz), s_crabModel, TurnRound(h), TurnOf(atan2(tx - fromX, tz - fromZ)), (S32)v, -1, RACE_THROWN_WEIGHT, 0);
@@ -14009,9 +14148,7 @@ static int Felix(T_RACE_GUARD *g, int actor, S32 now) {
     case FISH_READY:
         if (now < g->Next) return g->Stand;
         g->Fishing = FISH_CAST; g->FishAt = now;
-        Log_Info("[racemod] Felix casts");
-        g->BobX = g->X + g->FaceX * RACE_FISH_LINE + (VentRandom() * 2 - 1) * 500;
-        g->BobZ = g->Z + g->FaceZ * RACE_FISH_LINE + (VentRandom() * 2 - 1) * 500;
+        FelixAims(g, actor);
         return g->Strikes[0];
     case FISH_CAST:
         if (t < RACE_FISH_CAST_MS) return g->Strikes[0];
@@ -14035,6 +14172,21 @@ static int Felix(T_RACE_GUARD *g, int actor, S32 now) {
     }
 }
 
+// The water his animations splash, at a place fixed in them: where his line is, not on the road between him and the sea (the user, 2026-11-01: "Felix casting his fishing line is
+// causing water splashes on the track"; FICHE.CPP F_FLOW_3D)
+void RaceMod_FlowAt(S32 numobj, S32 *x, S32 *y, S32 *z) {
+    if (!RaceMod_Active()) return;
+    for (int i = 0; i < s_nbGuards; i++) {
+        const T_RACE_GUARD *g = &s_guards[i];
+        if (g->Kind != 6) continue;
+        for (int k = 0; k < g->NbSeen; k++)
+            if (g->SeenScene[k] == (S32)NumCube && g->SeenActor[k] == numobj) {
+                *x = (S32)(g->BobX - CurrentCubeX * 32768.0); *y = RACE_FISH_SEA; *z = (S32)(g->BobZ - CurrentCubeY * 32768.0);
+                return;
+            }
+    }
+}
+
 // His line, from the tip of his rod to the water, sagging a little (over the picture: thin, and drawn after everything).
 #define RACE_FISH_ROD_OUT 800.0
 #define RACE_FISH_ROD_UP 1500.0
@@ -14053,6 +14205,7 @@ static void DrawFishingLines(S32 now) {
         if (g->Fishing == FISH_CAST && t >= RACE_FISH_LINE_AT) reach = (double)(t - RACE_FISH_LINE_AT) / (RACE_FISH_CAST_MS - RACE_FISH_LINE_AT);
         else if (g->Fishing == FISH_WAIT) reach = 1;
         else if (g->Fishing == FISH_REEL && t < RACE_FISH_CRAB_AT) reach = 1;
+        else if (g->Fishing == FISH_REEL) reach = 1 - (double)(t - RACE_FISH_CRAB_AT) / (RACE_FISH_REEL_MS - RACE_FISH_CRAB_AT);
         if (reach <= 0) continue;
         if (reach > 1) reach = 1;
         const double rx = g->X + g->FaceX * RACE_FISH_ROD_OUT, rz = g->Z + g->FaceZ * RACE_FISH_ROD_OUT, ry = g->Y + RACE_FISH_ROD_UP;
@@ -14321,9 +14474,13 @@ static void Guards(S32 now, int driving, S32 dt) {
         T_RACE_THROWN *u = &s_thrown[b];
         if (!u->On || now - u->T0 < u->Dur) continue;
         u->On = 0;
-        if (u->Extra >= 0 && u->Extra < MAX_EXTRAS && ListExtra[u->Extra].Sprite == u->Sprite && ListExtra[u->Extra].Owner == (U8)u->Owner) ListExtra[u->Extra].Sprite = -1;
+        const int alive = u->Extra >= 0 && u->Extra < MAX_EXTRAS && ListExtra[u->Extra].Sprite == u->Sprite && ListExtra[u->Extra].Owner == (U8)u->Owner;
+        const int crab = u->Crab && alive;
+        u->Crab = 0;
+        if (alive && !crab) ListExtra[u->Extra].Sprite = -1;
         const S32 lx = (S32)(u->ToX - cx), lz = (S32)(u->ToZ - cz);
-        if (CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768) InitHitExtraPof(lx, (S32)u->ToY, lz, RACE_SHOT_FORCE);
+        if (!crab && CubeMode == CUBE_EXTERIEUR && lx >= 0 && lx < 32768 && lz >= 0 && lz < 32768) InitHitExtraPof(lx, (S32)u->ToY, lz, RACE_SHOT_FORCE);
+        int struck = 0;
         for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
             if (who < 0 && !driving) continue;
             double x, y, z;
@@ -14332,8 +14489,15 @@ static void Guards(S32 now, int driving, S32 dt) {
             if ((x - u->ToX) * (x - u->ToX) + (z - u->ToZ) * (z - u->ToZ) > RACE_THROWN_REACH * RACE_THROWN_REACH || fabs(y - u->ToY) > 1400) continue;
             Log_Info("[racemod] a thrown thing hits %s's car", CarName(who));
             GuardStrikes(who, now, "a thrown thing", RACE_THROWN_STUN);
+            struck = 1;
+        }
+        // (Felix's crab: on the road unless it landed on a car)
+        if (crab) {
+            if (struck) ListExtra[u->Extra].Sprite = -1;
+            else CrabLands(u, now);
         }
     }
+    CrabsWalk(now, dt, driving);
 }
 
 // Every frame: the shuttles (shuttle=) of this scene, flown round their cycle. Its legs (the game's bodies: 58 down, 68 in, 64 60 65 61 66
@@ -16400,6 +16564,20 @@ void RaceMod_DoorTo(const T_ZONE *zn) {
             Log_Info("[racemod] door: out at (%d,%d,%d) in %s's scene %d", (int)NewPosX, (int)NewPosY, (int)NewPosZ, IslandName, (int)NewCube);
             return;
         }
+}
+
+// A car racing is never taken indoors, by a door or by a script: a scene that isn't one of the island's cubes is for Twinsen on foot. Wannies Island's start scene, 98, has a script for
+// Twinsen arriving by its lift: it reads variable 107 before the race's hold has set it, so every race began with it waiting to send him on to the hall, scene 123, on reaching the
+// top of the lift -- a zone behind the start line. Driving away from it no one came to it; the user, 2026-11-01, reversing from the start: "warp inside".
+S32 RaceMod_CarKeptOut(S32 scene, const char *how) {
+    if (!RaceMod_Active() || !CarRacing()) return 0;
+    int own = 0;
+    // (an inside scene says it is cube (0,0))
+    for (int qx = 0; qx < 16 && !own; qx++) for (int qz = 0; qz < 16 && !own; qz++) own = (qx || qz) && CubeScene(qx, qz) == scene;
+    if (own) return 0;
+    static S32 said = -1;
+    if (said != scene) { said = scene; Log_Info("[racemod] %s would take the car into scene %d, from scene %d: not in a race", how, (int)scene, (int)NumCube); }
+    return 1;
 }
 
 S32 RaceMod_DoorShut(const T_ZONE *zn) {
@@ -19019,7 +19197,7 @@ static void ResetTrack(void) {
     s_viewFar = s_viewFog = 0;
     memset(s_netThrough, 0, sizeof(s_netThrough)); memset(s_netTouching, 0, sizeof(s_netTouching)); memset(s_netBumpAt, 0, sizeof(s_netBumpAt));
     s_netPushX = s_netPushZ = s_netShoveX = s_netShoveZ = 0; s_netBumps = 0;
-    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_missBackAt = 0; s_tunnelScale = 1; s_nbDriverBodies = 0; s_crabModel = -1; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
+    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_missBackAt = 0; s_tunnelScale = 1; s_nbDriverBodies = 0; s_crabModel = -1; memset(s_crabs, 0, sizeof(s_crabs)); s_underWheelScene = -1; s_onRoadAt = 0; s_lostSaid = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;
     RaceSoundsFree(); JetHumStop("the race reset"); SkidSoundStop(); SlideEnd("the race reset");

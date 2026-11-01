@@ -25,6 +25,8 @@ Main menu, **Multiplayer**.
 
 A race online has the race's mushrooms and power-ups, cars touch, and its times don't go in Best laps. Two players at one PC has no rounds: the first player picks.
 
+**Chat:** in the lobby just type: Enter sends the line to everyone, Esc takes back what you've typed. The last four lines show under the players, and the other players show on the mini-map in a race.
+
 - **Two players on this PC:** see below.
 
 ## Two players at one PC

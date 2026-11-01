@@ -149,6 +149,10 @@ internal static class PolarTerrain
         foreach (var ((x, y, z), cell) in layout.Cells)
         {
             if (!IsGround(game, cell) || cell.Scene == PolarLayout.PlateauScene || layout.Peak.Contains((x, z))) continue;
+            // (the fortress scenes' water is the sea, drawn as such: their water bricks are black, LBA1's picture of it stopping at the rocks, and showed as black slabs in it)
+            if (cell.Water && cell.Scene is PolarLayout.FortressOutside or PolarLayout.FortressDocks) continue;
+            // (... and the bricks under the rocks along their shores, black on top: the sea as well)
+            if (cell.Scene is PolarLayout.FortressOutside or PolarLayout.FortressDocks && BlackTop(game, cell.Brick)) continue;
             if (!columns.TryGetValue((x, z), out var c) || y > c.Top) columns[(x, z)] = new Column(y, cell);
         }
         // (and the floors LBA1 never drew: a building's inside, under its roof, has no brick at all -- its camera never saw down there -- and
@@ -167,8 +171,18 @@ internal static class PolarTerrain
         return columns;
     }
 
+    private static readonly Dictionary<int, bool> blackTops = new();
+    private static bool BlackTop(Lba1Game game, int brick)
+    {
+        if (blackTops.TryGetValue(brick, out var known)) return known;
+        var top = PolarTextures.Sprite.Decode(game.ReadBrick(brick)).Tile(PolarTextures.Face.Top);
+        var dark = top.Count(c => { var (r, g, b) = PolarTextures.Colours.Rgb(game.Palette, Math.Max(0, c)); return r + g + b < BlackSide; });
+        return blackTops[brick] = dark >= top.Length * BlackShare;
+    }
+
     public const int HoleReach = 10;
     private const int SeaY = -50;   // the engine's sea height (Y_SEA, TERRAIN.H)
+    private const double BlackSide = 60, BlackShare = 0.4;   // a tile with that share of its pixels' r + g + b under this: black
 
     // The places with no ground (not water's either), ground or water all round them within HoleReach along x and z, land on two sides
     public static List<(int X, int Z)> Holes(IReadOnlyDictionary<(int X, int Z), Column> columns)
@@ -274,13 +288,14 @@ internal static class PolarTerrain
                 cube.Heights[vz * IslandCube.Vertices + vx] = (short)Math.Round(h * Scale);
             }
         // (the sea's plane is drawn over all of one of the engine's 4 x 4 squares of a cube: none over ground under the sea, the fortress's pit)
-        foreach (var (_, _, cube) in Cubes(island))
+        // (only there: ground just under the sea along the shore took the sea from the whole of a square, its cells of open water black)
+        foreach (var (cx, cz, cube) in Cubes(island))
             for (var sz = 0; sz < 4; sz++)
                 for (var sx = 0; sx < 4; sx++)
                 {
                     var under = false;
                     for (var vz = sz * 16; vz <= (sz + 1) * 16; vz++)
-                        for (var vx = sx * 16; vx <= (sx + 1) * 16; vx++) under |= cube.Height(vx, vz) < SeaY;
+                        for (var vx = sx * 16; vx <= (sx + 1) * 16; vx++) under |= cube.Height(vx, vz) < SeaY && PolarProps.InPit(LayoutX(cx * 64 + vx), LayoutZ(cz * 64 + vz));
                     if (under) cube.BitField &= ~(1 << (sz * 4 + sx));
                 }
 
@@ -356,6 +371,22 @@ internal static class PolarTerrain
             var under = b1 >= 0 ? Sprite(b1).Tile(face) : top;
             wanted[key] = (top.Concat(under).ToArray(), w, 2 * h);
         }
+        // (a side LBA1 never drew, a brick with nothing but its black there: its own top, not a black cliff. The rocks' feet on Fortress Island's shore, the user, 2026-11-01)
+        var blackSides = 0;
+        foreach (var key in wanted.Keys.Where(k => k is not int).ToList())
+        {
+            var (tile, w, h) = wanted[key];
+            // (most of it: a few lit pixels of the rock's foot across it, a slab of black all the same)
+            var dark = tile.Count(c => { var (r, g, b) = PolarTextures.Colours.Rgb(game.Palette, Math.Max(0, c)); return r + g + b < BlackSide; });
+            if (dark < tile.Length * BlackShare) continue;
+            var (b0, _, _) = ((int, int, int))key;
+            var top = Sprite(b0).Tile(PolarTextures.Face.Top);
+            var lit = new int[w * h];
+            for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) lit[y * w + x] = top[(y * Tile / h) * Tile + x * Tile / w];
+            wanted[key] = (lit, w, h);
+            blackSides++;
+        }
+        if (blackSides > 0) log.Add($"{blackSides} faces of cliffs and banks black in LBA1: the brick's top instead");
         var merged = MergeTiles(game, layout, kinds, wanted);
         if (merged > 0) log.Add($"the ground's textures: {merged} of the fortress scenes' faces drawn as one like them, for room");
         var pages = new PolarTextures.Pages(island.GroundTexture, colours, IslandFile.MaxGroundPages);

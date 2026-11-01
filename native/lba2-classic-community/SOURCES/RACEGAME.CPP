@@ -3709,6 +3709,23 @@ static U16 s_screenMenu[4 + 2 * (RG_SCREENS + 1)];
 #define RG_VOTE_MS 30000                    // a round: how long the vote lasts ...
 #define RG_CARS_MS 60000                    // ... and the choice of cars (the user, 2026-11-01: "each user gets 60 seconds to select a car")
 #define RG_GRID_SHOWN_MS 6000               // ... and the grid is shown
+#define RG_CHAT_SHOWN 4                     // the lobby's chat: the lines shown ...
+#define RG_CHAT_LINE 18                     // ... their height
+// The letter a key types (0: none), on a page that takes typing
+static int TypedChar(S32 key, SDL_Keymod mod, int address) {
+    if (key >= K_A && key <= K_Z) return (mod & SDL_KMOD_SHIFT ? 'A' : 'a') + (int)(key - K_A);
+    if (key >= K_1 && key <= K_9) return '1' + (int)(key - K_1);
+    if (key == K_0) return '0';
+    if (key >= K_NUMPAD_1 && key <= K_NUMPAD_9) return '1' + (int)(key - K_NUMPAD_1);
+    if (key == K_NUMPAD_0) return '0';
+    if (key == SDL_SCANCODE_PERIOD || key == K_NUMPAD_PERIOD) return '.';
+    if (address && key == SDL_SCANCODE_SEMICOLON) return ':';
+    if (address && key == SDL_SCANCODE_LEFTBRACKET) return '[';
+    if (address && key == SDL_SCANCODE_RIGHTBRACKET) return ']';
+    if (key == K_MOINS) return '-';
+    return 0;
+}
+
 static int TypePage(const char *what, const char *hint, char *value, int size, int address, int mayBeEmpty = 0) {
     S32 padDir;
     PageLoopStart(&padDir);
@@ -3723,18 +3740,8 @@ static int TypePage(const char *what, const char *hint, char *value, int size, i
         if (key != lastKey) {
             lastKey = key;
             const SDL_Keymod mod = SDL_GetModState();
-            int c = 0;
-            if (key >= K_A && key <= K_Z) c = (mod & SDL_KMOD_SHIFT ? 'A' : 'a') + (int)(key - K_A);
-            else if (key >= K_1 && key <= K_9) c = '1' + (int)(key - K_1);
-            else if (key == K_0) c = '0';
-            else if (key >= K_NUMPAD_1 && key <= K_NUMPAD_9) c = '1' + (int)(key - K_NUMPAD_1);
-            else if (key == K_NUMPAD_0) c = '0';
-            else if (key == SDL_SCANCODE_PERIOD || key == K_NUMPAD_PERIOD) c = '.';
-            else if (address && key == SDL_SCANCODE_SEMICOLON) c = ':';
-            else if (address && key == SDL_SCANCODE_LEFTBRACKET) c = '[';
-            else if (address && key == SDL_SCANCODE_RIGHTBRACKET) c = ']';
-            else if (key == K_MOINS) c = '-';
-            else if (!address && key == K_SPACE && n) c = ' ';
+            int c = TypedChar(key, mod, address);
+            if (!c && !address && key == K_SPACE && n) c = ' ';
             if ((mod & SDL_KMOD_CTRL) && key == K_V) {
                 // (an address sent in a chat)
                 if (char *pasted = SDL_GetClipboardText()) {
@@ -4237,6 +4244,16 @@ static int CarsOver(void) {
     return stage != RACENET_STAGE_CARS || left <= 0 || RaceNet_Error()[0] || !RaceNet_On();
 }
 
+// A key in the lobby's chat: what TypePage takes, and what people say
+static int ChatChar(S32 key, SDL_Keymod mod) {
+    const int shift = (mod & SDL_KMOD_SHIFT) != 0;
+    if (shift && key == K_1) return '!';
+    if (key == SDL_SCANCODE_SLASH) return shift ? '?' : '/';
+    if (key == SDL_SCANCODE_COMMA) return ',';
+    if (key == SDL_SCANCODE_APOSTROPHE) return '\'';
+    return TypedChar(key, mod, 0);
+}
+
 static void CarRound(void) {
     if (s_nbGrid > 0) {
         s_pageOver = CarsOver;
@@ -4257,6 +4274,8 @@ static int LobbyPage(void) {
     int result = -1;
     // (rounds: a vote and a minute for cars. Two players at one PC, the first player picks)
     const int rounds = !local && s_localGuest <= 0;
+    char chat[RACENET_CHAT + 1] = "";
+    S32 chatKey = MyKey;
     char said[220] = "", outside[64] = "", inside[64] = "", address[100] = "", failed[256] = "";
     Log_Info("[racegame] online: the lobby, %s", picks ? "hosting" : "joined");
     RaceNet_InRace(0);
@@ -4268,7 +4287,17 @@ static int LobbyPage(void) {
     while (result < 0) {
         ManageTime();
         MyGetInput();
-        const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, x0 = cx - 330, x1 = cx + 330, y0 = 60 + oy, y1 = 430 + oy;
+        // (the chat's room: rounds have a taller box)
+        const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, x0 = cx - 330, x1 = cx + 330, y0 = (rounds ? 24 : 60) + oy, y1 = (rounds ? 462 : 430) + oy;
+        if (rounds && MyKey != chatKey) {
+            chatKey = MyKey;
+            const size_t n = strlen(chat);
+            const SDL_Keymod mod = SDL_GetModState();
+            int c = ChatChar(chatKey, mod);
+            if (!c && chatKey == K_SPACE && n) c = ' ';
+            if (c && n < RACENET_CHAT) { chat[n] = (char)c; chat[n + 1] = 0; }
+            else if (chatKey == K_BACKSPACE && n) chat[n - 1] = 0;
+        }
         int ok = 0;
         const int answered = host && RaceNet_Router(&ok, said, sizeof(said), outside, sizeof(outside), inside, sizeof(inside));
         if (answered && !s_routerTold) {
@@ -4315,7 +4344,7 @@ static int LobbyPage(void) {
             // (the grid's order, with the times that made it)
             char who[RACENET_NAME + 1];
             int ms = 0;
-            for (int i = 0; i < RG_LOBBY_ROWS + 3 && RaceNet_GridOf(i, who, sizeof(who), &ms); i++) {
+            for (int i = 0; i < RG_LOBBY_ROWS + (rounds ? 1 : 3) && RaceNet_GridOf(i, who, sizeof(who), &ms); i++) {
                 if (ms) snprintf(line, sizeof(line), "%d. %s  %d:%02d.%02d", i + 1, who, ms / 60000, ms / 1000 % 60, ms / 10 % 100);
                 else snprintf(line, sizeof(line), "%d. %s", i + 1, who);
                 Text(cx, y0 + 66 + i * RG_LOBBY_ROW, line, LBAWHITE);
@@ -4325,7 +4354,7 @@ static int LobbyPage(void) {
         snprintf(line, sizeof(line), "%s (you)", local ? "Player 1" : s_netName);
         if (listed) Text(cx, y, line, LBAWHITE);
         y += RG_LOBBY_ROW;
-        const int rows = !listed ? 0 : host ? RG_LOBBY_ROWS - (ipv6[0] ? 3 : 2) : RG_LOBBY_ROWS;
+        const int rows = !listed ? 0 : host ? RG_LOBBY_ROWS - (ipv6[0] ? 3 : 2) - (rounds ? 1 : 0) : RG_LOBBY_ROWS;
         for (int i = 0; i < others && i < rows; i++) {
             T_RACENET_PLAYER who;
             if (!RaceNet_Other(i, &who)) continue;
@@ -4346,9 +4375,19 @@ static int LobbyPage(void) {
                 WriteOnline();
             }
             snprintf(line, sizeof(line), "Left, Right: %d lap%s    Up, Down: %s", s_onlineLaps, s_onlineLaps == 1 ? "" : "s", s_netQualify ? "qualifying lap" : "no qualifying");
-            Text(cx, y1 - 140, line, LBAWHITE);
+            Text(cx, y1 - (rounds ? 174 : 140), line, LBAWHITE);
         }
-        if (host && s_netPassword[0]) { snprintf(line, sizeof(line), "Password: %s", s_netPassword); Text(cx, y1 - 106, line, RG_GREY); }
+        if (host && s_netPassword[0]) { snprintf(line, sizeof(line), "Password: %s", s_netPassword); Text(cx, y1 - (rounds ? 208 : 106), line, RG_GREY); }
+        if (rounds) {
+            // (the chat: the last lines said, what is being typed under them)
+            char said[RACENET_NAME + RACENET_CHAT + 4];
+            int count = 0;
+            while (count < RACENET_CHAT_LINES && RaceNet_ChatLine(count, said, sizeof(said))) count++;
+            for (int i = count > RG_CHAT_SHOWN ? count - RG_CHAT_SHOWN : 0, row = 0; i < count; i++, row++)
+                if (RaceNet_ChatLine(i, said, sizeof(said))) SmallFitted(x0 + 16, y1 - 134 + row * RG_CHAT_LINE, x1 - x0 - 32, said, LBAWHITE, -1);
+            if (chat[0]) { snprintf(said, sizeof(said), "> %s", chat); SmallFitted(x0 + 16, y1 - 60, x1 - x0 - 32, said, RG_ORANGE, -1); }
+            else SmallFitted(x0 + 16, y1 - 60, x1 - x0 - 32, "Type to chat", RG_GREY, -1);
+        }
         // (each window its own player's keys: both said player 2's, the user, 2026-10-31, "the same controls for both cars")
         if (s_localGuest > 0) {
             Text(cx, y1 - 140, "Player 2: the arrow keys", RG_GREY);
@@ -4358,7 +4397,7 @@ static int LobbyPage(void) {
             Text(cx, y1 - 140, "Player 1: W A S D", RG_GREY);
             Text(cx, y1 - 106, "Q item, E handbrake, R view", RG_GREY);
         }
-        if (picks && RaceNet_Turned()[0]) Text(cx, y1 - 72, RaceNet_Turned(), RG_ORANGE);
+        if (picks && RaceNet_Turned()[0]) Text(cx, y1 - (rounds ? 242 : 72), RaceNet_Turned(), RG_ORANGE);
         // (the host's Enter picks the track, then their car; the second player's Enter on one keyboard is right Ctrl: Enter goes to the first's window,
         // RaceGame_SharedKeys. The user, 2026-10-31: "What does Enter do, does it pick the track, or pick the car?")
         if (!rounds) Text(cx, y1 - 38, picks ? "Enter: track and car    Esc: leave" : s_localGuest > 0 ? "Right Ctrl: pick your car" : "Enter: pick your car    Esc: leave", RG_GREY);
@@ -4433,10 +4472,14 @@ static int LobbyPage(void) {
             if (result) break;
             continue;
         }
+        // (Esc with something typed takes that back, and only Enter is Enter: W is the action key, a letter here)
+        if (chat[0] && Escaped()) { chat[0] = 0; WaitNoInput(); chatKey = MyKey; continue; }
         if ((click == 2 || Escaped()) && s_localGuest <= 0) { result = 0; break; }
         if (rounds) {
+            const int enter = MyKey == K_ENTER || MyKey == K_NUMPAD_ENTER;
+            if (enter && chat[0]) { WaitNoInput(); RaceNet_Say(chat); chat[0] = 0; chatKey = MyKey; }
             // (the host, every one here: on to the vote)
-            if (picks && stage == RACENET_STAGE_LOBBY && (Confirmed() || click == 1)) {
+            else if (picks && stage == RACENET_STAGE_LOBBY && (enter || click == 1)) {
                 WaitNoInput();
                 Log_Info("[racegame] online: the host starts the vote: %d lap(s), %s", s_onlineLaps, s_netQualify ? "a qualifying lap" : "a random grid");
                 RaceNet_SetStage(RACENET_STAGE_VOTE, RG_VOTE_MS, -1);

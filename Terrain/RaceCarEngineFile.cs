@@ -334,6 +334,7 @@ internal static class RaceCarEngineFile
         foreach (var a in chosen) text.Append($"actor_at={a}\n");
         // ... and the ones whose doors the game needs, who walk on the road: not there while a car races (Result.ActorsInWay)
         foreach (var a in info?.ActorsInWay ?? new()) text.Append($"race_hide={a[0]} {a[1]}\n");
+        if (info is not null) foreach (var (n, reach) in RaceTrackIsland.ByName(info.Island).CheckpointReach ?? Array.Empty<(int, int)>()) text.Append($"checkpoint_reach={n} {reach}\n");
         // ... and the lifts on the raised road (Result.DeckLifts)
         foreach (var lift in info?.DeckLifts ?? new()) text.Append($"deck_lift={lift}\n");
         return text.ToString();

@@ -185,6 +185,9 @@ internal sealed class RaceTrackPlan
     // Decor bodies that stay where they are under the raised road (a statue the road winds round): where one's collision box reaches
     // into the road's space the box is cut down under the road instead of the object being cleared.
     public int[]? KeepBodies { get; set; }
+    // Decor bodies taken off the island wherever they are: what the road cut through that means nothing without it (the Island of the Francos' piece of rainbow, the user, 2026-11-01:
+    // "a random part of a rainbow that isn't connected to anything")
+    public int[]? DropBodies { get; set; }
     // Hand adjustments of the checkpoints the builder places (PlaceCheckpoints), the user's, track by track, testing with the race-track
     // mode's missed-checkpoint alert (2026-10-14): CheckpointTweak.
     public CheckpointTweak[]? CheckpointTweaks { get; set; }
@@ -306,6 +309,9 @@ internal sealed class RaceTrackPlan
     // Sea made land: each [x0, z0, x1, z1 (cells from the origin), height, or none for the land's round it] -- an arm of the sea up to the road,
     // Citadel 2's by the lighthouse (MakeLand)
     public double[][]? GroundFills { get; set; }
+    // Low ground beside the road made land: x0, z0, x1, z1 (cells), its height, how low a corner has to be, a land cell x, z to take the tile from. The ground beside Celebration Island's
+    // start line goes down to the gas in a pocket no fill finds, it being ground (the user, 2026-11-01: "Can we fully fill this gap")
+    public double[][]? ShoreFills { get; set; }
     // The ground raised to a height: x0, z0, x1, z1 (cells), the height, how fast it falls to the land round it a cell. Citadel 2's far side of the drawbridge,
     // built low for the fine weather's island, its mill wheel in the air over it (RaiseGround)
     public double[][]? RaiseGround { get; set; }
@@ -1374,6 +1380,8 @@ internal static class RaceTrackBuilder
         if (!options.Island.Created || plan.ClearFloaters) ClearFloaters(island, floating, ownDecors, report);
         Relight(island, index, plan.RoadLight);
         if (planned) SeaEverywhere(island, main, report);
+        ShoreFills(island, plan, report);
+        DropBodies(island, plan, report);
         return report;
     }
 
@@ -1381,6 +1389,49 @@ internal static class RaceTrackBuilder
     // build made stand on its deck or are in the air on purpose.) ClearAdrift goes by the ground under a decor alone,
     // and leaves what stood on another: the user, 2026-10-31, of a piece of rainbow, a bell and blocks over the sea, "More stuff floating in
     // the air".
+    private static void ShoreFills(IslandFile island, RaceTrackPlan plan, RaceTrackReport report)
+    {
+        foreach (var f in (plan.ShoreFills ?? Array.Empty<double[]>()).Where(f => f.Length >= 8))
+        {
+            int x0 = (int)f[0] + plan.OriginCellX, z0 = (int)f[1] + plan.OriginCellZ, x1 = (int)f[2] + plan.OriginCellX, z1 = (int)f[3] + plan.OriginCellZ;
+            int sx = (int)f[6] + plan.OriginCellX, sz = (int)f[7] + plan.OriginCellZ;
+            if (island.CubeAt(sx / IslandCube.Cells, sz / IslandCube.Cells) is not { HasPolygons: true } from) continue;
+            var a = from.Polygon(sx % IslandCube.Cells, sz % IslandCube.Cells, 0);
+            var b = from.Polygon(sx % IslandCube.Cells, sz % IslandCube.Cells, 1);
+            var done = 0;
+            for (var z = z0; z < z1; z++)
+            for (var x = x0; x < x1; x++)
+            {
+                if (island.CubeAt(x / IslandCube.Cells, z / IslandCube.Cells) is not { HasPolygons: true } cube) continue;
+                int lx = x % IslandCube.Cells, lz = z % IslandCube.Cells;
+                var low = false;
+                for (var dz = 0; dz <= 1; dz++)
+                for (var dx = 0; dx <= 1; dx++) low |= island.HasVertex(x + dx, z + dz) && (island.HeightAt(x + dx, z + dz) ?? 0) < f[5];
+                if (!low || !ReferenceEquals(cube, from)) continue;
+                cube.SetPolygon(lx, lz, 0, a);
+                cube.SetPolygon(lx, lz, 1, b);
+                for (var dz = 0; dz <= 1; dz++)
+                for (var dx = 0; dx <= 1; dx++)
+                    if (island.HasVertex(x + dx, z + dz) && (island.HeightAt(x + dx, z + dz) ?? 0) < f[4]) island.SetHeight(x + dx, z + dz, (int)f[4]);
+                done++;
+            }
+            report.Notes.Add($"shore made land: {done} cells round ({x0},{z0}), {f[4]} high");
+        }
+    }
+
+    private static void DropBodies(IslandFile island, RaceTrackPlan plan, RaceTrackReport report)
+    {
+        if (plan.DropBodies is not { Length: > 0 } bodies) return;
+        foreach (var (cx, cz, cube) in IslandOps.CubeCells(island))
+            foreach (var d in cube.Decors.Where(d => bodies.Contains(d.Body & 0xFFFF)).ToList())
+            {
+                cube.Decors.Remove(d);
+                report.Removed.Add((cx, cz, d.Body & 0xFFFF, "dropped"));
+                report.DecorsRemoved++;
+                report.Notes.Add($"decor body {d.Body & 0xFFFF} in cube ({cx},{cz}) taken off the island");
+            }
+    }
+
     private static void ClearFloaters(IslandFile island, HashSet<IslandDecor> before, HashSet<IslandDecor> own, RaceTrackReport report)
     {
         var gone = new Dictionary<int, int>();
@@ -1732,7 +1783,7 @@ internal static class RaceTrackBuilder
     // feasible let's change it into a small raised track section with a slight ramp up and down to give us the height we need for the ferry
     // to pass"; then, the ferry's top still through it: "Let's make the bridge section slightly higher ... let's have a road ramp up, the
     // bridge over, then a ramp back down again"). The deck as wide as the road.
-    private const double WaterDeckTop = 3400, WaterDeckGrade = 0.15, WaterDeckMargin = 2;
+    private const double WaterDeckTop = 3400, WaterDeckGrade = 0.15, WaterDeckMargin = 2, WaterDeckWidest = 16;
     private static void WaterDeck(TrackRoad r, Field field, RaceTrackOptions o, RaceTrackReport report)
     {
         var n = r.Count;
@@ -1741,8 +1792,22 @@ internal static class RaceTrackBuilder
         var steps = Len((a, b));
         var sea = Enumerable.Range(0, steps + 1).Where(j => !field.Drawn(r.X[At(r, a + j)], r.Z[At(r, a + j)])).ToList();
         if (sea.Count == 0) return;
+        // (over the water by the whole of the road's width, not its middle: the shore crosses it at a slant, and a deck ending by the middle left wedges of open water
+        // between it and the ramps, both ends, the user, 2026-11-01)
+        bool Wet(int j)
+        {
+            int k = At(r, a + j), ahead = At(r, a + j + 1), behind = At(r, a + j - 1);
+            double dx = r.X[ahead] - r.X[behind], dz = r.Z[ahead] - r.Z[behind], l = Math.Sqrt(dx * dx + dz * dz);
+            if (l <= 0) return false;
+            double nx = -dz / l * (o.CurbHalfWidth + 1), nz = dx / l * (o.CurbHalfWidth + 1);
+            return new[] { -1.0, -0.5, 0, 0.5, 1 }.Any(s => !field.Drawn(r.X[k] + nx * s, r.Z[k] + nz * s));
+        }
+        var longest = (int)Math.Round(WaterDeckWidest / o.Spacing);
+        int wet0 = sea[0], wet1 = sea[^1];
+        while (sea[0] - wet0 < longest && Wet(wet0 - 1)) wet0--;
+        while (wet1 - sea[^1] < longest && Wet(wet1 + 1)) wet1++;
         var margin = (int)Math.Round(WaterDeckMargin / o.Spacing);
-        int d0 = sea[0] - margin, d1 = sea[^1] + margin;
+        int d0 = wet0 - margin, d1 = wet1 + margin;
         // (the ramps: down from the deck's ends at the grade, as far as they rise over the road as it was)
         var drop = WaterDeckGrade * 512 * o.Spacing;
         var reach = (int)Math.Ceiling(WaterDeckTop / drop);

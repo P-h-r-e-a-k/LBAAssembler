@@ -774,6 +774,10 @@ void GereAnimAction(T_OBJET *ptrobj, U8 numobj) {
                 y += ptrobj->Obj.Y;
                 z = Z0 + ptrobj->Obj.Z;
 
+                {
+                    extern void RaceMod_FlowAt(S32 numobj, S32 *x, S32 *y, S32 *z);
+                    RaceMod_FlowAt(numobj, &x, &y, &z);
+                }
                 sprite = GET_S8; // Numéro de flow
                 CreateParticleFlow(0, numobj, 0,
                                    x, y, z,

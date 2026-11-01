@@ -25,7 +25,7 @@ internal static class PolarObjects
 
     // LBA1's sea: the water bricks' layer (its top the surface), the engine's sea at its bottom
     private const int SeaLayer = 1, MaxSunk = 11, GapFill = 2, MaxInside = 10;
-    private const double WholeDrawn = 0.8;
+    private const double WholeDrawn = 0.8, BlackBrick = 60, BlackShare = 0.7;
 
     public sealed record Built(List<byte[]> Bodies, int Decors, List<string> Log);
 
@@ -40,7 +40,17 @@ internal static class PolarObjects
         // (and the rocky peak, its columns whole, and 111's plateau on it)
         bool Rock(KeyValuePair<(int X, int Y, int Z), PolarLayout.Cell> c) => (rocks.Contains((c.Key.X, c.Key.Z)) || layout.Peak.Contains((c.Key.X, c.Key.Z))) && !c.Value.Water && c.Key.Y >= 1
             || c.Value.Scene == PolarLayout.PlateauScene;
-        var cells = layout.Cells.Where(c => (Rock(c) || !PolarTerrain.IsGround(game, c.Value) && (!columns.TryGetValue((c.Key.X, c.Key.Z), out var col) || c.Key.Y > col.Top)) && !Mist(c.Value.Brick))
+        // (and the fortress scenes' black bricks, under the rocks along their shores: what LBA1's camera has nothing to show of, slabs of black on the sea)
+        var dark = new Dictionary<int, bool>();
+        bool Black(PolarLayout.Cell c)
+        {
+            if (c.Scene is not (PolarLayout.FortressOutside or PolarLayout.FortressDocks)) return false;
+            if (dark.TryGetValue(c.Brick, out var known)) return known;
+            var drawn = PolarTextures.Sprite.Decode(game.ReadBrick(c.Brick)).Pixels.Where(p => p >= 0).ToList();
+            var black = drawn.Count(p => { var (r, g, b) = PolarTextures.Colours.Rgb(game.Palette, p); return r + g + b < BlackBrick; });
+            return dark[c.Brick] = drawn.Count > 0 && black >= drawn.Count * BlackShare;
+        }
+        var cells = layout.Cells.Where(c => (Rock(c) || !PolarTerrain.IsGround(game, c.Value) && (!columns.TryGetValue((c.Key.X, c.Key.Z), out var col) || c.Key.Y > col.Top)) && !Mist(c.Value.Brick) && !Black(c.Value))
             .ToDictionary(c => c.Key, c => c.Value);
         log.Add($"{mist.Count(m => m.Value)} bricks of mist (dithered) left out");
         // (what stands on the water -- a pier's posts, the crane's legs -- stands in LBA1 on its sea's surface, the top of the water bricks of
@@ -88,7 +98,8 @@ internal static class PolarObjects
                 if (nearest is { } brick) inside[(x, y, z)] = brick;
             }
         }
-        foreach (var (c, v) in inside) cells[c] = v;
+        // (the pit's walls are bodies now: nothing to close in, and grass bricks' sides in bands round it, PolarProps)
+        foreach (var (c, v) in inside) if (!PolarProps.InPit(c.X, c.Z)) cells[c] = v;
         log.Add($"{inside.Count} cells of buildings' insides under their roofs filled (no floor in LBA1: PolarTerrain.Holes)");
         // (then the backs LBA1 never drew: its camera saw a building from the front, and a row behind a wall, under a roof's far edge, was
         // left empty -- from behind, a slot into the building (the user, 2026-10-27: "some of our buildings have no back to them"). An empty
@@ -122,7 +133,7 @@ internal static class PolarObjects
                         filled.TryAdd(run[n], endObject && n >= run.Count / 2.0 ? endCell : cells[k]);
                     break;
                 }
-        foreach (var (c, v) in filled) cells[c] = v;
+        foreach (var (c, v) in filled) if (!PolarProps.InPit(c.X, c.Z)) cells[c] = v;
         log.Add($"{filled.Count} cells of the backs of buildings LBA1's camera never showed filled (gaps of up to {GapFill} closed in at both ends)");
         // (objects standing on the car tracks: as LBA1 has them, but worth a look)
         var onTracks = cells.Keys.Where(k => PolarTerrain.TrackCells.Contains((k.X, k.Z)) && columns.TryGetValue((k.X, k.Z), out var col) && k.Y == col.Top + 1).ToList();

@@ -826,6 +826,44 @@ internal static class PolarStudy
         return 0;
     }
 
+    // colourbodies <folder> <ILE> <OBL> [ramps]: the bodies of an OBL with faces of that many colour ramps and more (a rainbow), and where the island has them
+    public static int ColourBodies(string[] args)
+    {
+        var want = args.Length > 4 ? int.Parse(args[4]) : 5;
+        var island = LBAAssembler.Terrain.IslandFile.Load(Path.Combine(args[1], args[2]));
+        var path = Path.Combine(args[1], args[3]);
+        var obl = LBAAssembler.HqrArchive.Open(path);
+        var count = LBAAssembler.HqrArchive.CountEntries(path);
+        var found = new Dictionary<int, string>();
+        for (var i = 0; i < count; i++)
+        {
+            LbaBodyStudio.Body body;
+            try { body = LbaBodyStudio.Body.Read(obl.Read(i), 2, allowStatic: true); } catch { continue; }
+            var ramps = body.Faces.Where(f => f.Texture is null).Select(f => f.Colour >> 4).Distinct().ToList();
+            if (ramps.Count >= want) found[i] = $"{body.Vertices.Count} points, {body.Faces.Count} faces, ramps {string.Join(" ", ramps.Order())}, x {body.Vertices.Min(v => v.X):0}..{body.Vertices.Max(v => v.X):0} y {body.Vertices.Min(v => v.Y):0}..{body.Vertices.Max(v => v.Y):0} z {body.Vertices.Min(v => v.Z):0}..{body.Vertices.Max(v => v.Z):0}";
+        }
+        foreach (var (i, text) in found) Console.WriteLine($"body {i}: {text}");
+        foreach (var (key, cube) in island.Cubes)
+            foreach (var d in cube.Decors)
+                if (found.ContainsKey(d.Body & 0xFFFF)) Console.WriteLine($"cube id {key}: body {d.Body & 0xFFFF} at ({d.X},{d.Y},{d.Z}) box {d.XMin}..{d.XMax} {d.YMin}..{d.YMax} {d.ZMin}..{d.ZMax}");
+        return 0;
+    }
+
+    // groundbanks <folder> <ILE> <cube x> <cube z> <x0> <x1> <z0> <z1>: each cell's texture bank and height
+    public static int GroundBanks(string[] args)
+    {
+        var island = LBAAssembler.Terrain.IslandFile.Load(Path.Combine(args[1], args[2]));
+        var cube = island.CubeAt(int.Parse(args[3]), int.Parse(args[4]))!;
+        for (var z = int.Parse(args[7]); z <= int.Parse(args[8]); z++)
+        {
+            var line = new List<string>();
+            for (var x = int.Parse(args[5]); x <= int.Parse(args[6]); x++)
+                line.Add($"{new LBAAssembler.Terrain.IslandPolygon(cube.Polygon(x, z, 0)).Bank,2}:{cube.Height(x, z),-5}");
+            Console.WriteLine($"z{z,3} " + string.Join(" ", line));
+        }
+        return 0;
+    }
+
     // polarprops <LBA1 folder> <out folder> <scene>...: each block of those scenes of more than a cell, alone, as <scene>_<block>_<placed>x.png, 4 times the size
     public static int Props(string[] args)
     {

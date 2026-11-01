@@ -102,6 +102,8 @@ internal sealed record RaceTrackIsland(
         "RaceTrackPlan.Mosquibe.json", null)
     {
         Roster = RaceDriver.Mosquibe,
+        // (its checkpoint 6 catches a car cutting the corner up the mountainside: the user, 2026-11-01, "I keep missing checkpoint 6 ... let's extend it so it's not missable")
+        CheckpointReach = new[] { (6, 4500) },
         // (the island's people and things away from the road stay, as Citadel Island's and the Desert's: the user, 2026-10-28, "Let's do
         // a full review of all islands checking for actors that have been removed that we can restore")
         KeepOffRoadActors = true,
@@ -322,6 +324,8 @@ internal sealed record RaceTrackIsland(
     // Actors of the island's scenes that have no place on its track, each [scene, actor]: Otringal's under the roulette wheel, showing through it for a frame as the
     // scene comes up (the user, 2026-10-31: "The roulette wheel on Otringal has picked up an NPC, it looks like a vehicle")
     public (int Scene, int Actor)[]? HiddenFromRaces { get; init; }
+    // A checkpoint that counts this far over or under its road, each [number, units] (RACEMOD.CPP checkpoint_reach=): Mosquibees' 6, a car cutting the corner goes up the mountainside
+    public (int Number, int Reach)[]? CheckpointReach { get; init; }
 
     // Actors moved while one of the island's files is shown, each "<file> <scene> <actor> <x> <y> <z>" (RACEMOD.CPP actor_at=): Citadel 2's mill wheel, its place on the road,
     // onto the rock raised beside it under the far half of the drawbridge (the user, 2026-10-31: "it doesn't have to be back in its original position")

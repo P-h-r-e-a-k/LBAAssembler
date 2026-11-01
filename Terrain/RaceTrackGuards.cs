@@ -49,9 +49,9 @@ internal static class RaceTrackGuards
         // half the height, and add two of them on the bottom of the platform to throw crates at cars": ready with his arms up (540), and his throw (542), which
         // is the game's own: his crate, OBJFIX.HQR's 93, flown by the race-track mode at a car)
         Monkey => new(275, 0, 540, 1, 6, new[] { 542 }, BigBody, 0.5),
-        // (the big soldier mosquibee, entity 247, that Twinsen fights for the blowtron: on guard (133), firing (173), on a rock over the road -- the user,
-        // 2026-10-31: "take the large soldier mosquibees ... and have one on each mound firing balls at different sections of the track")
-        Mosquibee => new(247, 0, 133, 1, 6, new[] { 173 }),
+        // (the fat yellow and black mosquibee, entity 281, body 396 in BODY.HQR: standing (0), firing (173), on a rock over the road -- the user, 2026-10-31: "have one on each
+        // mound firing balls at different sections of the track"; 2026-11-01, of which one: "396: Fat yellow/black mosquibee guy")
+        Mosquibee => new(281, 0, 0, 1, 6, new[] { 173 }),
         // (Felix the fisherman, entity 106, at the game's own size: his cast, 328, and hauling one in, 15 -- the user, 2026-10-31: "have him randomly pulling crabs out
         // that can hit a car")
         Felix => new(106, 0, 0, 1, 6, new[] { 328, 15 }, BigBody, 1.0),

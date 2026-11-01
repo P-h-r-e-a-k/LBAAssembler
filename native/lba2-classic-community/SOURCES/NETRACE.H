@@ -76,6 +76,12 @@ const char *RaceNet_Turned(void);
 int RaceNet_Others(void);                   // how many other players
 int RaceNet_Other(int i, T_RACENET_PLAYER *out);
 
+// The lobby's chat: a line sent to everyone, and the last RACENET_CHAT_LINES said, the oldest first
+#define RACENET_CHAT 60
+#define RACENET_CHAT_LINES 8
+void RaceNet_Say(const char *text);
+int RaceNet_ChatLine(int i, char *out, int size);
+
 // The host starts a race: every game gets it from RaceNet_Announced, once. A player who joins with a race on is sent it: RaceNet_Late, non-zero
 // `qualifying`: the one lap each that decides the grid, not the race (RaceNet_QualifyingOver)
 void RaceNet_Announce(const char *track, int laps, int qualifying);

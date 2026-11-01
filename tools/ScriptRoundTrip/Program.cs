@@ -169,6 +169,8 @@ internal static class Program
             "polartopdown" => PolarStudy.TopDown(args),
             "polargroundpage" => PolarStudy.GroundPage(args),
             "polarlog" => PolarStudy.BuildLog(args),
+            "colourbodies" => PolarStudy.ColourBodies(args),
+            "groundbanks" => PolarStudy.GroundBanks(args),
             "decorsnear" => PolarStudy.DecorsNear(args),
             "waterpatches" => PolarStudy.WaterPatches(args),
             "hamalayi" => HamalayiStudy.Run(args),

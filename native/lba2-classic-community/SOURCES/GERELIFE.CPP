@@ -1624,6 +1624,8 @@ void DoLife(U8 numobj) {
 
             //---------------------------------------------------------------------------
         case LM_CHANGE_CUBE:
+            // (a race: not indoors, whatever the script says -- RACEMOD.CPP RaceMod_CarKeptOut)
+            { extern S32 RaceMod_CarKeptOut(S32 scene, const char *how); if (RaceMod_CarKeptOut(*PtrPrg, "a script")) { PtrPrg++; break; } }
             NewCube = *PtrPrg++;
             FlagChgCube = 2;
             break;
