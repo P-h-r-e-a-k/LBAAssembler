@@ -3223,6 +3223,8 @@ internal static class RaceTrackBuilder
     // the motorbike: a little slower on the straights, quicker through the bends, down the middle of the road
     internal static readonly RacingLine BikerLine = new(0, RaceTrackScenes.BikerGridBack, 0.97, 1.06);
     private const double Reach = 3.2, SideLean = 0.02, LineTightest = 1.2;
+    // (a car passing keeps its middle this far from the road's edge: half the car's 2.5 cells and a little)
+    private const double LaneEdge = 1.45;
     // round a loop whose road steps sideways under its ring: the line held on the road's middle (its ring's lane) this many cells into
     // the ring and out of it, and no bend counted this near the step (cells)
     private const double StepLaneHold = 8, StepNear = 4;
@@ -3334,7 +3336,13 @@ internal static class RaceTrackBuilder
                 var k = at[m];
                 var bank = r.Bridge[k] || r.Deck[k] ? 0 : Math.Clamp(-r.Kappa[k] * o.BankGain, -o.MaxBank, o.MaxBank);
                 if (r.Raised is { } up && up[k] && r.RoadBank is { } rb) bank = rb[k] * 512;
-                double l = flight[m] ? 0 : lo[m], h = flight[m] ? 0 : hi[m];
+                // (the road's own width, not the room the line is planned in: Reach is how far a racing line wanders, and on the narrower decks it left a car less room
+                // than a pass takes on every point of the lap, Celebration 1's 1.9 cells; the inside of a bend, a stripe and a loop's step stay as they are)
+                var roadHalf = r.Raised is { } upHere && upHere[k]
+                    ? (r.LineHalfs ?? r.RaisedHalfs) is { } halfsHere && k < halfsHere.Length ? halfsHere[k] : o.RaisedHalfWidth
+                    : r.AsphaltHalf;
+                var room = Math.Max(ReachAt(k), roadHalf - LaneEdge);
+                double l = flight[m] ? 0 : lo[m] == -ReachAt(k) ? -room : lo[m], h = flight[m] ? 0 : hi[m] == ReachAt(k) ? room : hi[m];
                 report.Lanes.Add(new[] { (int)Math.Round(cx[m] * 512), (int)Math.Round(cz[m] * 512), (int)Math.Round(r.H[k]), (int)Math.Round(nx[m] * 1000),
                                          (int)Math.Round(nz[m] * 1000), (int)Math.Round(l * 512), (int)Math.Round(h * 512), (int)Math.Round(bank) });
             }

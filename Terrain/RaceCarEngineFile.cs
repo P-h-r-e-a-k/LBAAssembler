@@ -326,8 +326,9 @@ internal static class RaceCarEngineFile
         // (and the ones that bring Twinsen out elsewhere in one file: nine numbers -- RACEMOD.CPP door_to=)
         foreach (var d in info?.DoorsOff ?? new()) text.Append(d.Split(' ').Length == 9 ? $"door_to={d}\n" : $"door_off={d}\n");
         // ... and the actors put aside while it is shown (Result.ActorsAt)
-        foreach (var a in info is null ? Array.Empty<string>() : RaceTrackIsland.ByName(info.Island).MovedActors ?? Array.Empty<string>()) text.Append($"actor_at={a}\n");
         foreach (var a in info?.ActorsAt ?? new()) text.Append($"actor_at={a}\n");
+        // (after them: a place chosen by hand over the one the build found)
+        foreach (var a in info is null ? Array.Empty<string>() : RaceTrackIsland.ByName(info.Island).MovedActors ?? Array.Empty<string>()) text.Append($"actor_at={a}\n");
         // ... and the ones whose doors the game needs, who walk on the road: not there while a car races (Result.ActorsInWay)
         foreach (var a in info?.ActorsInWay ?? new()) text.Append($"race_hide={a[0]} {a[1]}\n");
         // ... and the lifts on the raised road (Result.DeckLifts)

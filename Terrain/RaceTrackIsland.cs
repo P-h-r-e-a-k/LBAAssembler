@@ -60,7 +60,8 @@ internal sealed record RaceTrackIsland(
         // after Twinsen until the keeper is back -- after the car; no script of the scene's refers to her)
         StoryEntities = new[] { RaceTrackStory.LighthouseRaph, RaceTrackStory.CoupleOnTop },
         OwnGroundAt = new[] { (46, 481.5, 661.8, 10.0) },
-        MovedActors = new[] { "citabau 50 4 11264 8500 17152" },
+        // (and the woman with the umbrella who loves Raph, put aside into a wall by the build: by his lighthouse door, the user, 2026-10-31 and 2026-11-01)
+        MovedActors = new[] { "citabau 50 4 11264 8500 17152", "citabau 46 6 17000 3250 12100" },
         // (the museum (scene 48, its building's top taken for the storm track's deck): walls built up from what is left of it to the deck, and
         // a lift on the deck where its upper window was, down into the museum where the window took Twinsen -- scene 15, at the window's own
         // place: the user, 2026-10-27)

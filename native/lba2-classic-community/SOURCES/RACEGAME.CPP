@@ -2332,6 +2332,7 @@ void RaceGame_Qualified(S32 lap) {
 // window, updates", its six rows a little higher)
 #define RG_UPD_ROWS 4                       // (the updates' own page since the sky's row, 2026-10-31: the page before had six rows, and no room for a seventh)
 #define RG_DISPLAY_ROWS 6
+#define RG_DISPLAY_Y 250                    // (its rows lower than the updates page's: six under a header at 8 had the header cut off by the window, the user, 2026-11-01)
 static U16 s_updMenu[4 + 2 * RG_UPD_ROWS];
 static U16 s_displayMenu[4 + 2 * RG_DISPLAY_ROWS];
 // (two lines each at most, and the updater's word two more: the page's text below the rows fits the 480-tall canvas)
@@ -2406,7 +2407,7 @@ static void DisplayPage(void) {
     ReadSettings();
     s_displayMenu[0] = 1;
     s_displayMenu[1] = RG_DISPLAY_ROWS;
-    s_displayMenu[2] = RG_UPD_Y;
+    s_displayMenu[2] = RG_DISPLAY_Y;
     s_displayMenu[3] = 0;
     SetRow(s_displayMenu, 0, RG_ID_BACK);
     SetRow(s_displayMenu, 1, RG_ID_CAMERA);
@@ -2415,7 +2416,7 @@ static void DisplayPage(void) {
     SetRow(s_displayMenu, 4, RG_ID_RACE_SKY);
     SetRow(s_displayMenu, 5, RG_ID_UPDATES_PAGE);
     for (;;) {
-        Page("Camera, window, updates", RG_UPD_Y - (56 * RG_DISPLAY_ROWS) / 2 - 46);
+        Page("Camera, window, updates", RG_DISPLAY_Y - (56 * RG_DISPLAY_ROWS) / 2 - 46);
         const S32 select = Menu(s_displayMenu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return; }
         for (S32 i = 0; i < RG_DISPLAY_ROWS; i++) if (s_displayMenu[4 + 2 * i + 1] == (U16)select) s_displayMenu[0] = (U16)i;

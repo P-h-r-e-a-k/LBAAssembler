@@ -488,6 +488,7 @@ typedef struct {
     // and when it may next)
     int DefendWho; double DefendSide; S32 DefendUntil, DefendRest;
     int ShutDir; S32 ShutUntil;            // (a pass shut out: that side not tried again until then)
+    S32 PassAt, TailSince, ShutSince;      // (when its pass began; since when it has sat close behind a car; since when the side it passes on has had no room)
     double WX, WY, WZ;
     int Placed;
 } T_RACE_OPPONENT;
@@ -3205,6 +3206,7 @@ void RaceMod_JumpClockAfter(T_OBJ_3D *obj, S32 flag) {
 typedef struct { S32 X, Z, Y, Lo, Hi, Bank; double Nx, Nz; } T_RACE_LANE;
 static T_RACE_LANE *s_lanes = NULL;
 static int s_nbLanes = 0, s_overtake = 1;
+static double s_passPush = 0.04;           // pass_push=<percent>: a car passing is this much quicker (PackFactors)
 static void LoadLanes(const char *path) {
     free(s_lanes); s_lanes = NULL; s_nbLanes = 0;
     FILE *f = fopen(path, "r");
@@ -3831,6 +3833,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "raised")) LoadRaised(v);
         else if (!strcmp(key, "lanes")) LoadLanes(v);
         else if (!strcmp(key, "overtake")) s_overtake = atoi(v);
+        else if (!strcmp(key, "pass_push")) s_passPush = atof(v) / 100.0;
         else if (!strcmp(key, "raised_lap")) s_nbLap = atoi(v);
         else if (!strcmp(key, "raised_branch")) {
             T_RACE_BRANCH b;
@@ -9574,6 +9577,8 @@ static void PackLapLog(int lap) {
 static const double s_packEase[3] = {0.12, 0.09, 0.06};   // easy, medium (and a race with no level), hard
 static const double s_packPush[3] = {0.08, 0.09, 0.11};
 static double s_heroDraft = 1;             // Twinsen's slipstream now (RaceMod_SpeedFactor)
+#define RACE_PASS_PUSH_MS 5000             // (a pass's quickening, for this long from when it starts: pass_push=, s_passPush)
+static const double s_passShare[3] = {0.35, 0.7, 1};   // how much of it passing Twinsen's car: easy, medium (and a race with no level), hard
 static int PackLevel(void) { return s_difficulty >= 0 && s_difficulty <= 2 ? s_difficulty : 1; }
 
 // The slipstream for a car `gap` behind the car in front (world units; < 0: none in front).
@@ -9617,7 +9622,10 @@ static void PackFactors(S32 now, S32 dt) {
             const double band = u * u * (3 - 2 * u);
             const double pack = off > 0 ? 1 - s_packEase[level] * band : 1 + s_packPush[level] * band;
             // (the slipstream, and its form: each its own beat, 50 to 85 s)
-            const double f = (1 + draft) * (1 + RACE_FORM * sin(2 * RACE_PI * now / (1000.0 * (50 + 7 * who[i])) + 1.9 * who[i]));
+            double f = (1 + draft) * (1 + RACE_FORM * sin(2 * RACE_PI * now / (1000.0 * (50 + 7 * who[i])) + 1.9 * who[i]));
+            // (out of the slipstream to pass, it would fall back level with the car it was catching and sit beside it: the run it had carried past. Passing Twinsen, by
+            // the race's level)
+            if (o->PassDir && o->PassAt && now - o->PassAt < RACE_PASS_PUSH_MS) f *= 1 + s_passPush * (o->PassWho < 0 ? s_passShare[level] : 1);
             if (o->Pack <= 0) o->Pack = 1;
             if (o->Band <= 0) o->Band = 1;
             o->Pack += (pack - o->Pack) * k;
@@ -16215,6 +16223,12 @@ S32 RaceMod_DoorShut(const T_ZONE *zn) {
 #define RACE_DEFEND_REST 4000
 #define RACE_DEFEND_REST_TWINSEN 8000      // (after defending against Twinsen's car: not every few seconds in front of the player)
 #define RACE_SHUT_MS 1500                  // a pass shut out: that side not tried again for this long
+// (2026-11-01, the user, watching a car sit in another's slipstream: "made no attempt to overtake"): a car that has sat this close behind another for this long goes for
+// it, closing or not; and one that hasn't got by in RACE_PASS_GIVE_UP drops back rather than ride beside it down the road.
+#define RACE_PASS_EAGER (5 * 512)
+#define RACE_PASS_PATIENCE 1200
+#define RACE_PASS_GIVE_UP 7000
+#define RACE_SHUT_WAIT 700                 // ms the side it passes on has no room before it gives that side up: the line ahead swinging across isn't for long
 static const double s_defendShare[3] = {0, 0.5, 1};   // easy, medium (and a race with no level), hard
 static int DefendsTwinsen(int n) { return fmod(n * 0.618 + 0.31, 1.0) < s_defendShare[PackLevel()]; }
 // (Twinsen's car this frame: where, how fast which way, and the lane point it is at -- lanes=)
@@ -16342,8 +16356,10 @@ static void OpponentSide(int n, T_RACE_OPPONENT *o, double x, double z, double y
     const double mx = x + la->Nx * o->Side, mz = z + la->Nz * o->Side;
     int bn = -2; double bAlong = 1e30, bLat = 0, bSpeed = 0;
     double latOf[RACE_MAX_OPPONENTS + 1], alongOf[RACE_MAX_OPPONENTS + 1];
-    int nb = 0, passing = 0, dn = -2;
+    int nb = 0, passing = 0, dn = -2, tail = 0, past = 0, yields = 0;
+    double yLat = 0;
     double pLat = 0, pAlong = 0, dAlong = -1e30, dLat = 0;
+    const int patient = o->TailSince && now - o->TailSince > RACE_PASS_PATIENCE;
     for (int k = -1; k < RACE_MAX_OPPONENTS; k++) {
         double cx, cy, cz, cv;
         if (k < 0) {
@@ -16356,24 +16372,42 @@ static void OpponentSide(int n, T_RACE_OPPONENT *o, double x, double z, double y
         }
         if (fabs(cy - y) > 1500) continue;
         const double rx = cx - mx, rz = cz - mz, along = rx * fx + rz * fz, lat = rx * la->Nx + rz * la->Nz;
+        if (o->PassDir && k == o->PassWho && along <= -RACE_PASS_BESIDE) past = 1;
+        // (a car going by it: its line doesn't take it across in front of that car, or the pass is shut each time the racing line swings over)
+        if (k >= 0 && s_opp[k].PassDir && s_opp[k].PassWho == n && along > -2 * RACE_PASS_BESIDE && along < RACE_PASS_BESIDE) { yields = 1; yLat = lat; }
         if (along < -RACE_PASS_LOOK || along > RACE_PASS_LOOK) continue;
         latOf[nb] = lat; alongOf[nb] = along; nb++;
         // (the car it is passing, not yet behind it)
         if (o->PassDir && k == o->PassWho && along > -RACE_PASS_BESIDE) { passing = 1; pLat = lat; pAlong = along; }
         // (ahead in its lane -- clear ahead, not beside -- and not pulling away)
-        if (along > RACE_PASS_AHEAD && along < bAlong && fabs(lat) < RACE_PASS_GAP && (o->Speed > cv + 30 || along < RACE_FOLLOW)) { bn = k; bAlong = along; bLat = lat; bSpeed = cv; }
+        if (along > RACE_PASS_AHEAD && along < RACE_PASS_EAGER && fabs(lat) < RACE_PASS_GAP) tail = 1;
+        if (along > RACE_PASS_AHEAD && along < bAlong && fabs(lat) < RACE_PASS_GAP && (o->Speed > cv + 30 || along < RACE_FOLLOW || (patient && along < RACE_PASS_EAGER))) { bn = k; bAlong = along; bLat = lat; bSpeed = cv; }
         // (behind it -- not yet beside -- near across, and closing on it or close: the nearest, to defend against)
         if (along < -RACE_PASS_BESIDE && along > -RACE_DEFEND_LOOK && along > dAlong && fabs(lat) < RACE_DEFEND_WIDE && (cv > o->Speed + 30 || along > -RACE_FOLLOW)
             && (k >= 0 || DefendsTwinsen(n))) { dn = k; dAlong = along; dLat = lat; }
+    }
+    if (!tail) o->TailSince = 0;
+    else if (!o->TailSince) o->TailSince = now;
+    if (past && o->PassAt) {
+        Log_Info("[racemod] %s gets past %s (%.1f s)", o->Name, o->PassWho < 0 ? "Twinsen" : s_opp[o->PassWho].Name, (now - o->PassAt) / 1000.0);
+        o->PassAt = 0;
+    }
+    if (passing && o->PassAt && now - o->PassAt > RACE_PASS_GIVE_UP) {
+        Log_Info("[racemod] %s gives up passing %s", o->Name, o->PassWho < 0 ? "Twinsen" : s_opp[o->PassWho].Name);
+        o->ShutDir = o->PassDir; o->ShutUntil = now + RACE_SHUT_MS;
+        passing = 0; o->PassDir = 0; o->PassAt = 0; o->TailSince = 0;
+        bn = -2;
     }
     // (the car it passes moved across onto the side it went, and it isn't beside it yet: no room there now -- it thinks again, the other
     // side or behind it)
     if (passing && pAlong > RACE_PASS_AHEAD) {
         const double t = o->Side + pLat + o->PassDir * RACE_PASS_GAP;
-        if (t > sHi + 1 || t < sLo - 1) {
+        if (t <= sHi + 1 && t >= sLo - 1) o->ShutSince = 0;
+        else if (!o->ShutSince) o->ShutSince = now;
+        else if (now - o->ShutSince > RACE_SHUT_WAIT) {
             Log_Info("[racemod] %s shut out passing %s", o->Name, o->PassWho < 0 ? "Twinsen" : s_opp[o->PassWho].Name);
             o->ShutDir = o->PassDir; o->ShutUntil = now + RACE_SHUT_MS;
-            passing = 0; o->PassDir = 0;
+            passing = 0; o->PassDir = 0; o->ShutSince = 0;
         }
     }
     double want = RACE_WANDER * sin(2 * RACE_PI * o->S / RACE_WANDER_LEN + n * 1.9);
@@ -16395,6 +16429,7 @@ static void OpponentSide(int n, T_RACE_OPPONENT *o, double x, double z, double y
             if (dir != o->PassDir || bn != o->PassWho) {
                 const double left = la->Nx * fz - la->Nz * fx;   // (the normal's share of the driver's left: x east, z south)
                 Log_Info("[racemod] %s pulls out to pass %s on the %s", o->Name, bn < 0 ? "Twinsen" : s_opp[bn].Name, (dir > 0) == (left > 0) ? "left" : "right");
+                if (bn != o->PassWho || !o->PassAt) o->PassAt = now;
             }
             o->PassDir = dir; o->PassWho = bn; o->HoldSince = 0;
             want = dir > 0 ? t1 : t2;
@@ -16436,6 +16471,10 @@ static void OpponentSide(int n, T_RACE_OPPONENT *o, double x, double z, double y
         }
     }
     if (o->DefendUntil && (passing || bn != -2 || o->PassDir)) { o->DefendUntil = 0; o->DefendRest = now + (o->DefendWho < 0 ? RACE_DEFEND_REST_TWINSEN : RACE_DEFEND_REST); }
+    if (yields) {
+        const double keep = o->Side + yLat + (yLat > 0 ? -RACE_PASS_GAP : RACE_PASS_GAP);
+        if (yLat > 0 ? want > keep : want < keep) want = keep;
+    }
     if (want < sLo) want = sLo;
     if (want > sHi) want = sHi;
     const double step = (o->DefendUntil ? RACE_DEFEND_SPEED : RACE_SIDE_SPEED) * dt / 1000.0, was = o->Side;
@@ -18739,7 +18778,7 @@ static void ResetTrack(void) {
     for (int i = 0; i < s_nbArcs; i++) free(s_arcs[i].S);
     free(s_raised); free(s_rbStart); free(s_rbItem);
     s_raised = NULL; s_rbStart = NULL; s_rbItem = NULL;
-    free(s_lanes); s_lanes = NULL; s_nbLanes = 0; s_overtake = 1;
+    free(s_lanes); s_lanes = NULL; s_nbLanes = 0; s_overtake = 1; s_passPush = 0.04;
     s_nbRaised = 0; s_rbX0 = s_rbZ0 = s_rbW = s_rbH = s_rbExtra = 0;
     s_floorRef = RAISED_NOREF; s_onlyNear = -1;
     Defaults(&s_car);                       // (the opponents too)
