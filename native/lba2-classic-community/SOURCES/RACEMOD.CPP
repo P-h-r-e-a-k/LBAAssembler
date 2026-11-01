@@ -683,7 +683,7 @@ static double s_liftOff = 0;
 static S32 s_armChgCube = 0;               // FlagChgCube for the scene change a lift asked for, set after the frame (RaceMod_ArmCubeChange)
 static int DeckLiftAction(int pressed);
 // actor_at= (ActorsAt): the actors, and the scene they were last put in
-#define RACE_MAX_ACTORS_AT 64
+#define RACE_MAX_ACTORS_AT 256
 static struct { char File[16]; int Scene, Actor, X, Y, Z; } s_actorsAt[RACE_MAX_ACTORS_AT];      // (Actor -1 - n: the scene's point n)
 static int s_nbActorsAt = 0, s_actorsAtScene = -1;
 #define RACE_CHASE_PAUSE_MS 2600           // FunFrock driving off before Twinsen speaks
@@ -3003,13 +3003,37 @@ static int s_railWhy = 0, s_railSeg = -1;
 static double s_railLat = 0, s_railLo = 0, s_railHi = 0;
 static S32 s_railAt = 0;
 #define RAIL_NOTE(w) (s_railWhy = (w), s_railAt = TimerRefHR)
+// road_wall=<x z y, normal x z (a thousand long), lo hi>: a wall beside the road on the ground, and how far across a car's middle may go (RaceTrackBuilder.RoadWalls): held there, it goes
+// on along the wall rather than stopping against it, as a deck's rail does.
+#define RACE_MAX_ROAD_WALLS 1500
+#define RACE_ROAD_WALL_ALONG (1.2 * 512.0)
+#define RACE_ROAD_WALL_HIGH 900
+typedef struct { double X, Z, Y, Nx, Nz, Lo, Hi; } T_RACE_ROAD_WALL;
+static T_RACE_ROAD_WALL s_roadWalls[RACE_MAX_ROAD_WALLS];
+static int s_nbRoadWalls = 0;
+static void RoadWallRail(S32 oy, S32 *nx, S32 *nz) {
+    const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0, wx = *nx + cx, wz = *nz + cz;
+    for (int i = 0; i < s_nbRoadWalls; i++) {
+        const T_RACE_ROAD_WALL *w = &s_roadWalls[i];
+        if (fabs(w->Y - oy) > RACE_ROAD_WALL_HIGH) continue;
+        const double dx = wx - w->X, dz = wz - w->Z, across = dx * w->Nx + dz * w->Nz, along = dz * w->Nx - dx * w->Nz;
+        if (fabs(along) > RACE_ROAD_WALL_ALONG || fabs(across) > 12 * 512.0) continue;
+        if (across > w->Hi) { *nx -= (S32)ceil((across - w->Hi) * w->Nx); *nz -= (S32)ceil((across - w->Hi) * w->Nz); s_railTouch = 1; }
+        else if (across < w->Lo) { *nx += (S32)ceil((w->Lo - across) * w->Nx); *nz += (S32)ceil((w->Lo - across) * w->Nz); s_railTouch = 1; }
+        else continue;
+        return;
+    }
+}
+
 void RaceMod_Rail(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz) {
     // (on foot -- exploring, on_foot=, or anywhere out of his car: nothing holds him on the road, he jumps or walks off its edge as off any
     // ledge; its side a wall to him. The rail is the car's: the user, 2026-10-27, "Twinsen is unable to jump off the track at the raised
     // sections, are we able to fix this whilst still preventing the car from falling off?")
     if (Comportement != C_BUGGY) { FootDeckWall(ox, oy, oz, nx, nz); return; }
-    if (!s_nbRaised || CubeMode != CUBE_EXTERIEUR) return;
+    if (CubeMode != CUBE_EXTERIEUR) return;
     if (s_flying >= 0 || s_arcOn >= 0) return; // (a jump's flight is scripted: the rail held a car on it back at the lip, and the flight went nowhere)
+    if (s_nbRoadWalls) RoadWallRail(oy, nx, nz);
+    if (!s_nbRaised) return;
     const double cx = CurrentCubeX * 32768.0, cz = CurrentCubeY * 32768.0;
     S32 f;
     int seg;
@@ -3811,6 +3835,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %d %d", &s_chaseEmpty, &s_chaseEmptyAnim, &s_chaseDriverEnt) != 3) s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = -1;
         }
         else if (!strcmp(key, "dream_any_end")) s_dreamAnyEnd = atoi(v);
+        else if (!strcmp(key, "actor_at") && s_nbActorsAt >= RACE_MAX_ACTORS_AT) Log_Warn("[racemod] too many actor_at lines: %s left out", v);
         else if (!strcmp(key, "actor_at") && s_nbActorsAt < RACE_MAX_ACTORS_AT) {
             char who[16];
             if (sscanf(v, "%15s %d %15s %d %d %d", s_actorsAt[s_nbActorsAt].File, &s_actorsAt[s_nbActorsAt].Scene, who,
@@ -4212,6 +4237,13 @@ static void Load(const char *path, int carOnly = 0) {
             const int got = sscanf(v, "%d %d %d %d", &from, &to, &roof, &ceiling);
             if (s_nbTunnels < RACE_MAX_TUNNELS && got >= 3 && roof > 0) {
                 t->From = from; t->To = to; t->Roof = roof; t->Ceiling = got >= 4 ? ceiling : RACE_TUNNEL_NO_CEILING; s_nbTunnels++;
+            }
+        }
+        else if (!strcmp(key, "road_wall") && s_nbRoadWalls < RACE_MAX_ROAD_WALLS) {
+            int x, z, y, a, b, lo, hi;
+            if (sscanf(v, "%d %d %d %d %d %d %d", &x, &z, &y, &a, &b, &lo, &hi) == 7) {
+                T_RACE_ROAD_WALL w = {(double)x, (double)z, (double)y, a / 1000.0, b / 1000.0, (double)lo, (double)hi};
+                s_roadWalls[s_nbRoadWalls++] = w;
             }
         }
         else if (!strcmp(key, "jet_signals")) sscanf(v, "%d %d", &s_signalBody[0], &s_signalBody[1]);
@@ -7919,6 +7951,8 @@ S32 RaceMod_Loop(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *ny, S32 *nz) {
         RidePlace(l, &s_ride, &x, &y, &z, &pitch);
         y = l->Y;
         LoopEnd(obj, s_ride.V, "rolled back out");
+        // (it may come at the ring again at once: left out of it, a car crawling forward crossed the foot and drove on past the ring into the air, the sweep, 2026-11-01)
+        s_loopLeft = -1;
     } else if (out == STEP_FELL) {
         x = s_ride.X; y = s_ride.Y; z = s_ride.Z;
         s_hitUntil = TimerRefHR + RACE_LOOP_FALL_HOLD;
@@ -13966,6 +14000,10 @@ static void DrawFishingLines(S32 now) {
     for (int i = 0; i < s_nbGuards; i++) {
         const T_RACE_GUARD *g = &s_guards[i];
         if (g->Kind != 6) continue;
+        // (he is an actor of the scenes he stands in: no line with no Felix on the end of it)
+        int here = 0;
+        for (int k = 0; k < g->NbSeen; k++) if (g->SeenScene[k] == (S32)NumCube) here = 1;
+        if (!here) continue;
         const S32 t = now - g->FishAt;
         double reach = 0;
         if (g->Fishing == FISH_CAST && t >= RACE_FISH_LINE_AT) reach = (double)(t - RACE_FISH_LINE_AT) / (RACE_FISH_CAST_MS - RACE_FISH_LINE_AT);
@@ -18940,7 +18978,7 @@ static void ResetTrack(void) {
     s_nbGeysers = 0; for (int i = 0; i < RACE_MAX_COLUMN; i++) s_column[i].Extra = -1;
     s_shardModel = s_shardBit = -1;
     s_mapKey = 0;
-    s_nbJets = 0; s_signalBody[0] = s_signalBody[1] = -1; s_signalReady[0] = s_signalReady[1] = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
+    s_nbRoadWalls = 0; s_nbJets = 0; s_signalBody[0] = s_signalBody[1] = -1; s_signalReady[0] = s_signalReady[1] = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_nbFlyers = 0; s_nbSpooks = 0; s_partyBox = 0; HalloweenReset(); memset(&s_marshal, 0, sizeof(s_marshal)); s_gantryPts = -1;
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));

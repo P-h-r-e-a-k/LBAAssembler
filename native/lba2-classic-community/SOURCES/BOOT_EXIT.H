@@ -36,6 +36,7 @@ LBA_NORETURN extern void BootFatal(const char *fmt, ...);
  * the variable, because that is the module's own state and this is the one place
  * outside it that has a reason to move it. */
 extern void BootExit_NoteContext(const char *what);
+extern void (*BootExit_CleanHook)(void);
 
 /* Run at exit: prints the report, raises the dialog if the code calls for one,
    writes the config back and tears the 3D extension down. */

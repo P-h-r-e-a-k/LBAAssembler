@@ -23,6 +23,9 @@ static int Wide(const char *utf8, wchar_t *out, DWORD size) {
     return 1;
 }
 
+// A test run, driven through --listen: no update checks, and nothing reported (a test stopped by force would look like a crash)
+int RaceUpdate_Tested(void) { return strstr(GetCommandLineA(), "--listen") != NULL; }
+
 int RaceUpdate_Exists(const char *pathUtf8) {
     wchar_t path[MAX_PATH * 4];
     if (!Wide(pathUtf8, path, MAX_PATH * 4)) return 0;
@@ -168,6 +171,8 @@ int RaceUpdate_ClipboardImage(const unsigned char *rgb, int w, int h, const char
 #else
 
 void RaceUpdate_PlaceConsole(void) {}
+
+int RaceUpdate_Tested(void) { return 0; }
 
 int RaceUpdate_ClipboardImage(const unsigned char *rgb, int w, int h, const char *pngUtf8) {
     (void)rgb; (void)w; (void)h; (void)pngUtf8;

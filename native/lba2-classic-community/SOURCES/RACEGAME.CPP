@@ -29,6 +29,7 @@
  *     update_check=launch|weekly|manual   when the game checks for a new version (none: launch; updates=off, from before there was a
  *                                         choice: manual)
  *     update_checked=<unix time>          when the game last started the updater (0: never)
+ *     reports=ask|auto|off                bug reports (the installer's BugReport.cs): asked once, then sent or not; Options' Bug reports page
  *     minimap=1|0                         the race's mini-map, bottom right, on (the first time) or off (Options, "Camera,
  *                                         window, updates"; RACEMOD.CPP DrawMinimap asks RaceGame_Minimap)
  *     camera=0|1|2                        the race camera's view: inside the car, just behind it, further back (the first
@@ -103,6 +104,7 @@
 #include "INPUT.H"
 #include "JOYSTICK.H"
 #include "RACEGAME.H"
+#include "BOOT_EXIT.H"
 #include "RACEMOD.H"
 #include "RACEUPDATE.H"
 #include "NETRACE.H"
@@ -186,6 +188,9 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_LOCAL_STACK 2397
 #define RG_ID_LOCAL_SCREENS 2398
 #define RG_ID_RACE_SKY 2399                 // the Display page's sky in races row
+#define RG_ID_REPORTS 2460                  // ... and its row to the bug reports' page (ReportsPage)
+#define RG_ID_REPORT_MODE 2461
+#define RG_ID_REPORT_NOW 2462
 #define RG_ID_SCREEN 2400                   // ... a screen, by its place in the list (ScreenPage)
 #define RG_SCREENS 6
 #define RG_OTHERS_SHOWN 5
@@ -367,6 +372,7 @@ static int ParseCar(T_RG_CAR *c, const char *v) {
 }
 
 static void ReadSettings(void);
+static void ReportMark(void);
 static int HasStorySave(void);
 static void RenamedTracks(void);
 static void UpdateAtStart(void);
@@ -453,6 +459,7 @@ static void Read(void) {
     RaceUpdate_PlaceConsole();
     RenamedTracks();
     CheckGhosts();
+    ReportMark();
     UpdateAtStart();
     // (the Auto camera on, whatever lba2.cfg says -- the user, 2026-10-22: "Let's force Auto camera on by default"; read after the config,
     // and the game's Options can still turn it off for the run)
@@ -478,6 +485,10 @@ static int s_setRead = 0;
 static int s_controlsSeen = 0, s_powerupsSeen = 0;  // the first run's pages shown
 static int s_qualified = 0;                 // a qualifying lap driven: the next races may skip it
 static int s_skipQualifying = 0;            // the last answer to "a qualifying lap?"
+static void ReportMark(void);
+static int s_reports = 0;                   // bug reports: 0 asked first, 1 sent, 2 none
+static const char *const s_reportKey[3] = {"ask", "auto", "off"};
+static const char *const s_reportLabel[3] = {"Bug reports: Ask first", "Bug reports: Automatic", "Bug reports: Off"};
 static int s_updates = 0;                   // new versions: 0 installed when the game is closed, 1 asked first (2 read from an older file: not looked for)
 static int s_updateCheck = 0;               // when the game looks for them: 0 each launch, 1 once a week, 2 only when asked
 static int s_minimap = 1;                   // the race's mini-map, bottom right (RACEMOD.CPP DrawMinimap)
@@ -549,6 +560,9 @@ static void ReadSettings(void) {
             } else if (!strcmp(line, "update_check")) {
                 checkGiven = 1;
                 for (int k = 0; k < 3; k++) if (!strcmp(eq + 1, s_checkKey[k])) s_updateCheck = k;
+                continue;
+            } else if (!strcmp(line, "reports")) {
+                for (int k = 0; k < 3; k++) if (!strcmp(eq + 1, s_reportKey[k])) s_reports = k;
                 continue;
             } else if (!strcmp(line, "update_checked")) {
                 s_updateChecked = strtoll(eq + 1, NULL, 10);
@@ -623,7 +637,7 @@ static int UpdateSpawn(int manual) {
 // clock put back), or not at all. It is a process of its own, hidden: the game doesn't wait for it. Only as a player runs the game: an editor's Play and the
 // tests run with the command harness. And once for a PC: the second player's game is started by the first's.
 static void UpdateAtStart(void) {
-    if (Control_IsActive() || getenv("LBA2_PLAYER2")) return;
+    if (Control_IsActive() || RaceUpdate_Tested() || getenv("LBA2_PLAYER2")) return;
     if (s_updateCheck == 2) { Log_Info("[racegame] updates: checked when asked, none now"); return; }
     const long long now = (long long)time(NULL);
     if (s_updateCheck == 1 && s_updateChecked > 0 && now >= s_updateChecked && now - s_updateChecked < RG_UPDATE_EVERY) {
@@ -664,6 +678,7 @@ static void WriteSettings(void) {
     fprintf(f, "controls_seen=%d\npowerups_seen=%d\nqualified=%d\nskip_qualifying=%d\ndifficulty=%d\n", s_controlsSeen, s_powerupsSeen, s_qualified,
             s_skipQualifying, s_level);
     fprintf(f, "updates=%s\nupdate_check=%s\nupdate_checked=%lld\n", s_updateKey[s_updates >= 0 && s_updates <= 2 ? s_updates : 0], s_checkKey[s_updateCheck], s_updateChecked);
+    fprintf(f, "reports=%s\n", s_reportKey[s_reports]);
     fprintf(f, "minimap=%d\ncamera=%d\nrace_sky=%d\nghost=%d\ntrial_laps=%d\n", s_minimap, s_camera, s_raceSky, s_ghost, s_trialLaps);
     if (s_ghostOther[0]) fprintf(f, "ghost_other=%s\n", s_ghostOther);
     if (s_gridCarName[0]) fprintf(f, "grid_car=%s\n", s_gridCarName);
@@ -1274,6 +1289,9 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_CAMERA: Label(string, s_cameraLabel[s_camera >= 0 && s_camera <= 2 ? s_camera : 2]); return 1;
     case RG_ID_MINIMAP: Label(string, s_minimap ? "Mini-map: On" : "Mini-map: Off"); return 1;
     case RG_ID_RACE_SKY: Label(string, s_raceSky ? "Sky in races: On" : "Sky in races: Off"); return 1;
+    case RG_ID_REPORTS: Label(string, "Bug reports"); return 1;
+    case RG_ID_REPORT_MODE: Label(string, s_reportLabel[s_reports]); return 1;
+    case RG_ID_REPORT_NOW: Label(string, "Send a bug report"); return 1;
     case RG_ID_UPDATES_PAGE: Label(string, "Updates"); return 1;
     case RG_ID_UPDATE_MODE: Label(string, s_updateLabel[s_updates == 1 ? 1 : 0]); return 1;
     case RG_ID_UPDATE_CHECK: Label(string, s_checkLabel[s_updateCheck >= 0 && s_updateCheck <= 2 ? s_updateCheck : 0]); return 1;
@@ -2331,8 +2349,8 @@ void RaceGame_Qualified(S32 lap) {
 // (2026-10-21: and first the camera's view -- inside the car, just behind it, further back: Enter goes round them -- the page "Camera,
 // window, updates", its six rows a little higher)
 #define RG_UPD_ROWS 4                       // (the updates' own page since the sky's row, 2026-10-31: the page before had six rows, and no room for a seventh)
-#define RG_DISPLAY_ROWS 6
-#define RG_DISPLAY_Y 250                    // (its rows lower than the updates page's: six under a header at 8 had the header cut off by the window, the user, 2026-11-01)
+#define RG_DISPLAY_ROWS 7
+#define RG_DISPLAY_Y 278                    // (its rows lower than the updates page's: six under a header at 8 had the header cut off by the window, the user, 2026-11-01)
 static U16 s_updMenu[4 + 2 * RG_UPD_ROWS];
 static U16 s_displayMenu[4 + 2 * RG_DISPLAY_ROWS];
 // (two lines each at most, and the updater's word two more: the page's text below the rows fits the 480-tall canvas)
@@ -2402,6 +2420,80 @@ static void UpdatesPage(void) {
     }
 }
 
+// Bug reports: sent as the player says (the installer's BugReport.cs: `--send-report`, Update\\report_note.txt its kind and the player's words). A crash is known by the marker a run
+// leaves in Update\\ until it closes cleanly; the next run's first menu sees it. Asked once, then as they said. Not with the command harness's tests, as UpdateAtStart.
+#define RG_REPORT_MARK "Update\\running.txt"
+static int s_reportMarked = 0, s_lastRunCrashed = 0;
+static int AskPage(const char *what, const char *line, const char *keys);
+static int TypePage(const char *what, const char *hint, char *value, int size, int address, int mayBeEmpty);
+static void SayPage(const char *what, const char *line);
+
+static void ReportClean(void) {
+    if (!s_reportMarked) return;
+    char path[ADELINE_MAX_PATH];
+    GetResPath(path, ADELINE_MAX_PATH, RG_REPORT_MARK);
+    remove(path);
+}
+
+static void ReportMark(void) {
+    if (Control_IsActive() || RaceUpdate_Tested() || getenv("LBA2_PLAYER2")) return;
+    char path[ADELINE_MAX_PATH];
+    GetResPath(path, ADELINE_MAX_PATH, RG_REPORT_MARK);
+    if (FILE *f = fopen(path, "r")) { fclose(f); s_lastRunCrashed = 1; Log_Info("[racegame] the last run didn't close cleanly"); }
+    if (FILE *f = fopen(path, "w")) { fputs("1\n", f); fclose(f); s_reportMarked = 1; BootExit_CleanHook = ReportClean; }
+}
+
+static void ReportSend(const char *kind, const char *note) {
+    char exe[ADELINE_MAX_PATH], dir[ADELINE_MAX_PATH], path[ADELINE_MAX_PATH];
+    GetResPath(exe, ADELINE_MAX_PATH, RG_UPDATER);
+    if (!RaceUpdate_Exists(exe)) { Log_Info("[racegame] no updater: no bug report"); return; }
+    GetResPath(path, ADELINE_MAX_PATH, "Update\\report_note.txt");
+    if (FILE *f = fopen(path, "w")) { fprintf(f, "%s\n%s\n", kind, note); fclose(f); }
+    GetResPath(dir, ADELINE_MAX_PATH, "RACEGAME.TXT");
+    char *cut = dir + strlen(dir);
+    while (cut > dir && cut[-1] != '\\' && cut[-1] != '/') cut--;
+    *cut = 0;
+    if (!dir[0]) snprintf(dir, sizeof(dir), ".");
+    if (RaceUpdate_Tool(exe, "--send-report", dir)) Log_Info("[racegame] a bug report sent off: %s", kind[0] == 'c' ? "the last run" : "the player's");
+}
+
+static void ReportAfterCrash(void) {
+    if (!s_lastRunCrashed) return;
+    s_lastRunCrashed = 0;
+    if (s_reports == 2) return;
+    if (s_reports == 0) {
+        const int yes = AskPage("The game stopped unexpectedly last time", "Send a report now, and whenever this happens? It goes on our public GitHub page with the game's log, names and folders removed.", "Enter: yes    Esc: no");
+        s_reports = yes ? 1 : 2;
+        WriteSettings();
+        if (!yes) return;
+    }
+    ReportSend("crash", "");
+}
+
+static void ReportsPage(void) {
+    static U16 menu[4 + 2 * 3];
+    ReadSettings();
+    menu[0] = 1; menu[1] = 3; menu[2] = 240; menu[3] = 0;
+    SetRow(menu, 0, RG_ID_BACK);
+    SetRow(menu, 1, RG_ID_REPORT_MODE);
+    SetRow(menu, 2, RG_ID_REPORT_NOW);
+    for (;;) {
+        Page("Bug reports", 240 - (56 * 3) / 2 - 46);
+        Wrapped(UI_CENTER_X - 280, 240 + 84 + 8 + UI_VCENTER_OFS, 560, RG_LINE, "A report goes on the game's public GitHub page with the game's log. Names, folders and addresses are taken out first.", LBAWHITE);
+        const S32 select = Menu(menu);
+        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return; }
+        if (select == RG_ID_REPORT_MODE) { s_reports = (s_reports + 1) % 3; WriteSettings(); menu[0] = 1; }
+        else if (select == RG_ID_REPORT_NOW) {
+            menu[0] = 2;
+            char note[64] = "";
+            if (TypePage("What went wrong?", "A few words", note, sizeof(note), 0, 1)) {
+                ReportSend("manual", note);
+                SayPage("Bug reports", "Thanks: your report is on its way");
+            }
+        }
+    }
+}
+
 // Options, "Camera, window, updates": the camera's view, the window, the mini-map, the sky in races, and the updates' page
 static void DisplayPage(void) {
     ReadSettings();
@@ -2415,6 +2507,7 @@ static void DisplayPage(void) {
     SetRow(s_displayMenu, 3, RG_ID_MINIMAP);
     SetRow(s_displayMenu, 4, RG_ID_RACE_SKY);
     SetRow(s_displayMenu, 5, RG_ID_UPDATES_PAGE);
+    SetRow(s_displayMenu, 6, RG_ID_REPORTS);
     for (;;) {
         Page("Camera, window, updates", RG_DISPLAY_Y - (56 * RG_DISPLAY_ROWS) / 2 - 46);
         const S32 select = Menu(s_displayMenu);
@@ -2436,6 +2529,7 @@ static void DisplayPage(void) {
             WriteSettings();
             Log_Info("[racegame] the sky in races: %s", s_raceSky ? "on" : "off");
         } else if (select == RG_ID_UPDATES_PAGE) UpdatesPage();
+        else if (select == RG_ID_REPORTS) ReportsPage();
     }
 }
 
@@ -3666,7 +3760,9 @@ static int TypePage(const char *what, const char *hint, char *value, int size, i
 #define RG_SAY_LINE 34
 #define RG_SAY_LINES 8
 #define RG_SAY_WIDE 38                      // characters to a line of the box in the big font: longer ones broken at a space
-static void SayPage(const char *what, const char *line) {
+// What the player must read, and Enter or Esc to answer: 1 Enter, 0 Esc
+static int AskPage(const char *what, const char *line, const char *keys) {
+    int answer = 1;
     char copy[320];
     snprintf(copy, sizeof(copy), "%s", line);
     const char *lines[RG_SAY_LINES];
@@ -3685,7 +3781,7 @@ static void SayPage(const char *what, const char *line) {
     }
     S32 padDir;
     PageLoopStart(&padDir);
-    Log_Info("[racegame] online: %s", line);
+    Log_Info("[racegame] %s: %s", what, line);
     for (;;) {
         ManageTime();
         MyGetInput();
@@ -3698,13 +3794,17 @@ static void SayPage(const char *what, const char *line) {
         DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
         Text(cx, y0 + 14, what, RG_ORANGE);
         for (int i = 0; i < nbLines; i++) Text(cx, y0 + (nbLines > 2 ? 54 : 62) + i * RG_SAY_LINE, lines[i], LBAWHITE);
-        Text(cx, y1 - 38, "Enter: go on", RG_GREY);
+        Text(cx, y1 - 38, keys, RG_GREY);
         Present();
-        if (click || Escaped() || Confirmed()) { WaitNoInput(); break; }
+        if (click == 2 || Escaped()) { answer = 0; WaitNoInput(); break; }
+        if (click || Confirmed()) { WaitNoInput(); break; }
     }
     AsciiMode = FALSE;
     Page(NULL, 0);
+    return answer;
 }
+
+static void SayPage(const char *what, const char *line) { AskPage(what, line, "Enter: go on"); }
 
 // The player's name and the address last joined: ONLINE.TXT in the user's folder
 static char s_netName[RACENET_NAME + 1] = "", s_netAddress[64] = "", s_netPassword[64] = "";
@@ -4185,7 +4285,7 @@ static void GateFrame(const char *line, const char *keys) {
     Present();
 }
 static int UpdateGate(void) {
-    if ((Control_IsActive() && !getenv("LBA2_UPDATE_GATE")) || getenv("LBA2_PLAYER2")) return 1;
+    if (((Control_IsActive() || RaceUpdate_Tested()) && !getenv("LBA2_UPDATE_GATE")) || getenv("LBA2_PLAYER2")) return 1;
     const long long started = (long long)time(NULL);
     if (!UpdateSpawn(1)) return 1;
     S32 padDir;
@@ -4285,6 +4385,7 @@ static int QuitPage(void) {
 
 static S32 GameMenu(S32 inGame);
 S32 RaceGame_Menu(S32 inGame) {
+    ReportAfterCrash();
     s_gameMenus++;
     const S32 result = GameMenu(inGame);
     s_gameMenus--;

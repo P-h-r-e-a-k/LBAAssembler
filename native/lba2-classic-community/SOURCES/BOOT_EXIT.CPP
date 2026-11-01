@@ -55,6 +55,8 @@ typedef char BootEndCodesMatchCommon[(BOOT_END_FILE_NOT_FOUND == ERROR_NOT_FOUND
 static S32 End_Num = -1;
 static const char *End_Error;
 
+void (*BootExit_CleanHook)(void) = NULL;   // called on a clean shutdown (RACEGAME.CPP: not a crash, so nothing to report)
+
 void BootExit_NoteContext(const char *what) {
     End_Error = what;
 }
@@ -210,6 +212,7 @@ void TheEndInfo() {
        non-clean exit. A separate module that does not touch the log, silent unless
        stdout is a real TTY. See docs/plan/BOOT_LOG_PLAN.md Phase 6. */
     if (End_Num == PROGRAM_OK) {
+        if (BootExit_CleanHook) BootExit_CleanHook();
         PrintExitScreen();
     }
 

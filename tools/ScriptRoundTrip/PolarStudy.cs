@@ -665,6 +665,29 @@ internal static class PolarStudy
         return 0;
     }
 
+    // flatcells <ILE> <cell x0> <x1> <z0> <z1>: the ground cells drawn in flat colour (no texture) there, by bank
+    public static int FlatCells(string[] args)
+    {
+        var island = IslandFile.Load(args[1]);
+        var r = args[2..6].Select(int.Parse).ToArray();
+        var seen = new Dictionary<int, List<(int, int)>>();
+        for (var gz = r[2]; gz <= r[3]; gz++)
+        for (var gx = r[0]; gx <= r[1]; gx++)
+        {
+            if (island.CubeAt(gx / 64, gz / 64) is not { HasPolygons: true } c) continue;
+            foreach (var h in new[] { 0, 1 })
+            {
+                var p = new IslandPolygon(c.Polygon(gx % 64, gz % 64, h));
+                if (p.TexFlag != 0 || p.PolyFlag == 0) continue;
+                if (!seen.TryGetValue(p.Bank, out var l)) seen[p.Bank] = l = new();
+                l.Add((gx, gz));
+            }
+        }
+        foreach (var (bank, l) in seen.OrderByDescending(k => k.Value.Count))
+            Console.WriteLine($"bank {bank}: {l.Count} triangles: " + string.Join(" ", l.Take(14).Select(c => $"{c.Item1},{c.Item2}")));
+        return 0;
+    }
+
     // decorsnear <ILE> <cell x0> <x1> <z0> <z1>: the decors whose box's middle is in those island cells
     public static int DecorsNear(string[] args)
     {

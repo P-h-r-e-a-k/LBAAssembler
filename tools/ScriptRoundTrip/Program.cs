@@ -160,6 +160,7 @@ internal static class Program
             "polarcols" => PolarStudy.Cols(args),
             "polartiledump" => PolarStudy.TileDump(args),
             "altgrid" => PolarStudy.AltGrid(args),
+            "flatcells" => PolarStudy.FlatCells(args),
             "decorsnear" => PolarStudy.DecorsNear(args),
             "waterpatches" => PolarStudy.WaterPatches(args),
             "hamalayi" => HamalayiStudy.Run(args),

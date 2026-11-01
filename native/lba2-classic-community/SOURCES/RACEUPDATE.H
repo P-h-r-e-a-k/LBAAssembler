@@ -7,6 +7,7 @@
 
 // Whether the file is there.
 int RaceUpdate_Exists(const char *pathUtf8);
+int RaceUpdate_Tested(void);
 // The updater started (non-zero), or not (its exe missing, CreateProcess failed). Paths in UTF-8 (the engine's code page).
 int RaceUpdate_Spawn(const char *exeUtf8, const char *installDirUtf8, int manual);
 // The same copy started for something else with its window, detached (2026-10-26: the ghosts' "Share my ghosts" and "Import ghosts" --

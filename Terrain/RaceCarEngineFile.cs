@@ -87,6 +87,7 @@ internal static class RaceCarEngineFile
         foreach (var steam in track?.Steam ?? new()) text.Append($"steam={string.Join(' ', steam)}\n");
         foreach (var drip in track?.Drips ?? new()) text.Append($"drip={string.Join(' ', drip)}\n");
         foreach (var jet in track?.Jets ?? new()) text.Append($"jet={string.Join(' ', jet)}\n");
+        foreach (var wall in track?.RoadWalls ?? new()) text.Append($"road_wall={string.Join(' ', wall)}\n");
         if (track?.JetSignals is { } signals) text.Append($"jet_signals={string.Join(' ', signals)}\n");
         foreach (var tunnel in track?.Tunnels ?? new()) text.Append($"tunnel={string.Join(' ', tunnel)}\n");
         // the spaceships it flies over their pads on the road (Otringal's square island)
@@ -326,9 +327,11 @@ internal static class RaceCarEngineFile
         // (and the ones that bring Twinsen out elsewhere in one file: nine numbers -- RACEMOD.CPP door_to=)
         foreach (var d in info?.DoorsOff ?? new()) text.Append(d.Split(' ').Length == 9 ? $"door_to={d}\n" : $"door_off={d}\n");
         // ... and the actors put aside while it is shown (Result.ActorsAt)
-        foreach (var a in info?.ActorsAt ?? new()) text.Append($"actor_at={a}\n");
-        // (after them: a place chosen by hand over the one the build found)
-        foreach (var a in info is null ? Array.Empty<string>() : RaceTrackIsland.ByName(info.Island).MovedActors ?? Array.Empty<string>()) text.Append($"actor_at={a}\n");
+        // (a place chosen by hand over the one the build found: the same actor put in two places took the last)
+        var chosen = info is null ? Array.Empty<string>() : RaceTrackIsland.ByName(info.Island).MovedActors ?? Array.Empty<string>();
+        string Who(string line) => string.Join(' ', line.Split(' ').Take(3));
+        foreach (var a in (info?.ActorsAt ?? new()).Where(a => chosen.All(c => Who(c) != Who(a)))) text.Append($"actor_at={a}\n");
+        foreach (var a in chosen) text.Append($"actor_at={a}\n");
         // ... and the ones whose doors the game needs, who walk on the road: not there while a car races (Result.ActorsInWay)
         foreach (var a in info?.ActorsInWay ?? new()) text.Append($"race_hide={a[0]} {a[1]}\n");
         // ... and the lifts on the raised road (Result.DeckLifts)

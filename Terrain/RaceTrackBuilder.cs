@@ -309,6 +309,10 @@ internal sealed class RaceTrackPlan
     // The ground raised to a height: x0, z0, x1, z1 (cells), the height, how fast it falls to the land round it a cell. Citadel 2's far side of the drawbridge,
     // built low for the fine weather's island, its mill wheel in the air over it (RaiseGround)
     public double[][]? RaiseGround { get; set; }
+    // Cells of level ground kept past the verge where the land rises straight up beside the road (SetBackBanks): Mosquibees Island's mounds
+    public double SetBack { get; set; }
+    // A car kept off the walls beside the road, sliding along them (RoadWalls)
+    public bool WallRail { get; set; }
     // Decors moved up or down: cube x, cube z, body, those with Z at least this, their new Y; and copies of decors as other bodies beside them: cube x, cube z,
     // body, Z at least this, the copy's body, its box's XMin, XMax (LiftDecors)
     public int[][]? LiftDecors { get; set; }
@@ -798,6 +802,7 @@ internal sealed class RaceTrackReport
     public bool Haunt { get; set; }
     // The Desert's balloons: the ghost power-up with a bunch of balloons for the ghost (HauntBodies; RACEMOD.CPP haunt_balloons=)
     public bool Balloons { get; set; }
+    public List<int[]> RoadWalls { get; } = new();
     public List<int> BalloonBodies { get; } = new();
     public (int Ghost, int Icon)? HauntBodies { get; set; }
     // The giant webs the lap drives through (2026-10-17, RACEMOD.CPP web=, web_part=): each its foot (island cells, the road's height), the
@@ -1204,6 +1209,7 @@ internal static class RaceTrackBuilder
         if (main.Raised is not null) FlushOverDeck(island, field, main, options, report, sunk);
         GroundFills(island, field, plan, report);
         RaiseGround(island, plan, report);
+        SetBackBanks(island, field, index, main, plan, report);
         FillPockets(island, field, index, report);
         report.Balloons = options.Island == RaceTrackIsland.Desert;
         var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned);
@@ -1249,6 +1255,7 @@ internal static class RaceTrackBuilder
         report.RacePath.AddRange(report.DriverPaths[0]);
         ClearStaleCol(island, natural, field, index, painted, report, options.Theme.Sand);
         if (planned) WallSteepBanks(island, natural, field, index, painted, options, report);
+        if (plan.WallRail) RoadWalls(field, main, report);
         follow.Apply();
         // (and what the ground carried up into the road's way: the decors stood clear of it when they were cleared, and ground filled
         // under a raised road's end lifts what stood there -- 2026-10-06: two of LBA1's barrels at the foot of Polar Island's 108, lifted
@@ -5019,6 +5026,73 @@ internal static class RaceTrackBuilder
         }
     }
 
+    // (the user, 2026-10-31, Mosquibees: "let's clean up the inside of the track, it's too easy to get stuck on the wall": the mounds stood against the kerb. They are cut back
+    // SetBack cells past the verge and rise again as steeply as before, so their tops stay, and the people standing on them.)
+    private const double SetBackRise = 3000, SetBackLevel = 300;
+
+    private static void SetBackBanks(IslandFile island, Field field, RoadIndex index, TrackRoad main, RaceTrackPlan plan, RaceTrackReport report)
+    {
+        if (plan.SetBack <= 0) return;
+        var b = index.Bounds;
+        var lowered = new HashSet<(int, int)>();
+        var reach = main.VergeHalf + plan.SetBack + 4;
+        for (var gz = Math.Max(0, b.Z0 - 8); gz <= Math.Min(Grid, b.Z1 + 8); gz++)
+        for (var gx = Math.Max(0, b.X0 - 8); gx <= Math.Min(Grid, b.X1 + 8); gx++)
+        {
+            if (island.HeightAt(gx, gz) is not { } was) continue;
+            var hits = index.Near(gx, gz, reach);
+            if (hits.Count == 0 || hits.Any(h => h.Deck || h.Bridge || h.Landing)) continue;
+            var limit = hits.Max(h => h.H + Math.Max(0, h.Dist - main.VergeHalf - plan.SetBack) * SetBackRise);
+            if (was <= limit + SetBackLevel) continue;
+            island.SetHeight(gx, gz, (int)Math.Round(limit));
+            lowered.Add((gx, gz));
+        }
+        if (lowered.Count == 0) return;
+        field.Refresh(island);
+        // (what was a cliff and is level now no longer stops a car)
+        var freed = 0;
+        foreach (var (vx, vz) in lowered)
+            for (var dz = -1; dz <= 0; dz++)
+            for (var dx = -1; dx <= 0; dx++)
+            {
+                int gx = vx + dx, gz = vz + dz;
+                if (gx < 0 || gz < 0 || island.CubeAt(gx / IslandCube.Cells, gz / IslandCube.Cells) is not { HasPolygons: true } cube) continue;
+                var heights = new[] { field.VertexHeight(gx, gz), field.VertexHeight(gx + 1, gz), field.VertexHeight(gx, gz + 1), field.VertexHeight(gx + 1, gz + 1) };
+                if (heights.Max() - heights.Min() > SetBackLevel) continue;
+                int x = gx % IslandCube.Cells, z = gz % IslandCube.Cells;
+                for (var half = 0; half < 2; half++)
+                {
+                    var p = new IslandPolygon(cube.Polygon(x, z, half));
+                    if (p.Col) { cube.SetPolygon(x, z, half, p.With(col: false).Raw); freed++; }
+                }
+            }
+        report.Notes.Add($"the banks against the road cut back {plan.SetBack:0.#} cells past the verge: {lowered.Count} corners lowered, {freed} triangles no longer walls");
+    }
+
+    // (the user, 2026-10-31, Mosquibees: "it's too easy to get stuck on the wall": where a wall stands by the road a car is kept off it as a deck's rail keeps it on, sliding on along
+    // it. The walls under the lap's upper levels can't move. Each road point with a wall: x, z, y, its normal, and how far along the normal a car's middle may go, units.)
+    private const double WallRise = 500, WallCar = 1.5, WallLook = 3.5;
+
+    private static void RoadWalls(Field field, TrackRoad r, RaceTrackReport report)
+    {
+        for (var i = 0; i < r.Count; i++)
+        {
+            if (r.Raised?[i] == true || r.Bridge[i] || r.Deck[i] || r.Gap[i]) continue;
+            double nx = -r.Tz[i], nz = r.Tx[i];
+            double? Wall(int side)
+            {
+                for (var d = r.CurbHalf; d <= r.CurbHalf + WallLook; d += 0.25)
+                    if (field.Height(r.X[i] + nx * side * d, r.Z[i] + nz * side * d) - r.H[i] > WallRise) return Math.Max(r.AsphaltHalf, d - WallCar);
+                return null;
+            }
+            double? h = Wall(1), l = Wall(-1);
+            if (h is null && l is null) continue;
+            report.RoadWalls.Add(new[] { (int)Math.Round(r.X[i] * 512), (int)Math.Round(r.Z[i] * 512), (int)Math.Round(r.H[i]), (int)Math.Round(nx * 1000), (int)Math.Round(nz * 1000),
+                (int)Math.Round(-(l ?? 99) * 512), (int)Math.Round((h ?? 99) * 512) });
+        }
+        if (report.RoadWalls.Count > 0) report.Notes.Add($"{report.RoadWalls.Count} points of road have a rail along the wall beside them");
+    }
+
     private static void LiftDecors(IslandFile island, RaceTrackPlan plan, RaceTrackReport report)
     {
         foreach (var l in (plan.LiftDecors ?? Array.Empty<int[]>()).Where(l => l.Length >= 5))
@@ -5281,7 +5355,8 @@ internal static class RaceTrackBuilder
         var kerbCells = new Dictionary<(int, int), KerbCell>();
         if (plain.Count > 0)
         {
-            if (RaceTrackTextures.KerbTexture(island, o.Theme) is { } kerbAt)
+            var overRoad = kinds.Where(k => k.Value is Kind.Asphalt or Kind.RedCurb or Kind.WhiteCurb).Select(k => k.Key).ToHashSet();
+            if ((RaceTrackTextures.KerbTexture(island, o.Theme) ?? RaceTrackTextures.KerbTexture(island, o.Theme, overRoad)) is { } kerbAt)
             {
                 // (on an island with more ground pages -- POLAR.ILE -- a cube has room for 1024 texture definitions: the road's coordinates
                 // snapped, so a straight kerb's triangles share theirs)
@@ -5297,6 +5372,8 @@ internal static class RaceTrackBuilder
         if (stepped.Count > 0)
         {
             var notPlain = stepped.Count(c => !plain.ContainsKey(c));
+            report.Notes.Add($"(kerb cells that wouldn't map: width {KerbMiss[0]}, a corner past the road's other side {KerbMiss[1]}, too far across {KerbMiss[2]}; asphalt {roads[0].AsphaltHalf}, kerb {roads[0].CurbHalf})");
+            Array.Clear(KerbMiss);
             report.Notes.Add($"{stepped.Count} kerb cells painted cell by cell: {notPlain} beside another part of the road, a deck, a jump or a landing, {stepped.Count - notPlain} that wouldn't map; "
                              + "round cells " + string.Join(" ", stepped.GroupBy(c => (c.Item1 / 16 * 16, c.Item2 / 16 * 16)).OrderByDescending(g => g.Count()).Take(12).Select(g => $"{g.Key.Item1},{g.Key.Item2}:{g.Count()}")));
         }
@@ -5330,6 +5407,8 @@ internal static class RaceTrackBuilder
                 if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
                 int x = gx + dx, z = gz + dz;
                 if (x < 0 || z < 0 || x / IslandCube.Cells != cube || z / IslandCube.Cells != row || island.CubeAt(cube, row) is not { HasPolygons: true }) continue;
+                // (not what the road paints over: its tiles may be the kerb's now)
+                if (kinds.TryGetValue((x, z), out var under) && under is Kind.Asphalt or Kind.RedCurb or Kind.WhiteCurb) continue;
                 var (a, b) = Own(x, z);
                 if (Land(a) && Land(b)) return (a, b);
             }
@@ -5343,14 +5422,24 @@ internal static class RaceTrackBuilder
             o.Theme = o.Theme with { Sand = FlatNearest(pal, colours.Average(c => c.R), colours.Average(c => c.G), colours.Average(c => c.B)) };
         var painter = new Painter(island, o.Theme);
         var kept = 0;
+        // (the flat colour showing past a kerb's stripe: each cell's land, read at a few points of its texture, came out gold now and then among the brown, in blocks along the kerb --
+        // the user, 2026-11-01, Polar: "it's almost like we now have brown and yellow as well": the land along the kerb's, KerbColourReach cells either way)
+        var kerbLand = new Dictionary<(int, int), (double R, double G, double B)>();
+        if (o.Theme.Palette is { } kerbPalette)
+            foreach (var (gx, gz) in kerbCells.Keys)
+                if (LandNear(gx, gz) is { } land && GroundColour(island, gx, gz, land.A, kerbPalette) is { } colour) kerbLand[(gx, gz)] = colour;
+        (int Bank, int Pos) KerbUnder(int gx, int gz)
+        {
+            double r = 0, g = 0, b = 0; var n = 0;
+            for (var dz = -KerbColourReach; dz <= KerbColourReach; dz++)
+            for (var dx = -KerbColourReach; dx <= KerbColourReach; dx++)
+                if (kerbLand.TryGetValue((gx + dx, gz + dz), out var c)) { r += c.R; g += c.G; b += c.B; n++; }
+            return n > 0 && o.Theme.Palette is { } ramp ? FlatNearest(ramp, r / n, g / n, b / n) : o.Theme.Sand;
+        }
         foreach (var ((gx, gz), kind) in kinds)
         {
             if (kerbCells.TryGetValue((gx, gz), out var kerb))
-            {
-                var flat = o.Theme.Palette is { } ramp && LandNear(gx, gz) is { } land && GroundColour(island, gx, gz, land.A, ramp) is { } colour
-                    ? FlatNearest(ramp, colour.R, colour.G, colour.B) : o.Theme.Sand;
-                painter.PaintKerb(gx, gz, kerb with { Under = flat, Land = LandNear(gx, gz) });
-            }
+                painter.PaintKerb(gx, gz, kerb with { Under = KerbUnder(gx, gz), Land = LandNear(gx, gz) });
             else if (kind is Kind.Sand or Kind.Wall or Kind.Rock && LandNear(gx, gz) is { } land2)
             {
                 painter.Keep(gx, gz, land2.A, land2.B, kind == Kind.Wall);
@@ -5364,7 +5453,9 @@ internal static class RaceTrackBuilder
         return kinds.Keys.ToHashSet();
     }
 
-    private const int VergeLandReach = 24;
+    private const double KerbOver = 1.9;
+    private static readonly int[] KerbMiss = new int[3];
+    private const int VergeLandReach = 24, KerbColourReach = 7;
 
     // What a ground triangle looks like, as a colour: its flat colour, or the average of its texture's three corners and middle. Null: not to
     // be read.
@@ -5462,8 +5553,8 @@ internal static class RaceTrackBuilder
         {
             if (!kinds.TryGetValue((gx, gz), out var kind) || kind is Kind.Start or Kind.Arrow or Kind.Wall || arrows.ContainsKey((gx, gz))) continue;
             var r = roads[hit.Road];
-            double inner = r.AsphaltHalf, outer = r.CurbHalf;
-            if (Math.Abs(outer - inner - 1) > 0.05) continue;
+            // (the texture's kerb is a cell wide: a narrower road's kerb is a cell wide on the ground too, in one line rather than in steps)
+            double inner = r.AsphaltHalf, outer = r.AsphaltHalf + 1;
             var across = Across(r, hit);
             if (across < inner - 1.25 || across > outer + 1.25) continue;
             // the corners in the road's coordinates (the same stretch of it as the cell's middle, on the same side)
@@ -5478,7 +5569,7 @@ internal static class RaceTrackBuilder
                     var sep = Math.Abs(Sep(r, n.S, hit.S));
                     if (sep < bestSep) { bestSep = sep; best = n; }
                 }
-                if (best is not { } c || (c.Lat >= 0) != (hit.Lat >= 0)) { ok = false; break; }
+                if (best is not { } c || (c.Lat >= 0) != (hit.Lat >= 0)) { KerbMiss[1]++; ok = false; break; }
                 d[k] = Across(r, c);
                 s[k] = hit.S + Sep(r, c.S, hit.S);
                 if (snap is { } q) { d[k] = Math.Round(d[k] / q) * q; s[k] = Math.Round(s[k] / q) * q; }
@@ -5496,8 +5587,9 @@ internal static class RaceTrackBuilder
                 double lo = t.Min(c => d[c]), hi = t.Max(c => d[c]);
                 if (hi <= inner) { halves[half] = Kind.Asphalt; continue; }
                 if (lo >= outer) { halves[half] = verge; continue; }
-                // (reaching further across than the texture: the cell keeps its own paint)
-                if (lo < inner - 1.02 || hi > outer + 1.02) { ok = false; break; }
+                // (reaching much further across than the texture: the cell keeps its own paint. A little further, on a tight bend, the coordinates are held at the texture's edge:
+                // the kerb stays one line, the user, 2026-10-31, "so it's one smooth continuous line all the way around")
+                if (lo < inner - KerbOver || hi > outer + KerbOver) { KerbMiss[2]++; ok = false; break; }
                 halves[half] = Kind.RedCurb;
                 var s0 = t.Min(c => s[c]);
                 // (the texture's blocks are KerbBlock cells long at T texels a cell; snapped, KerbSnapBlock)

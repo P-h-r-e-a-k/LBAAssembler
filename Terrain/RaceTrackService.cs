@@ -152,6 +152,7 @@ internal static class RaceTrackService
         // Jets: steam jets across the road (RaceTrackPipes.PlaceJets), each [x, y, z (the road's middle), its half width, the reach across,
         // blowing (ms), not (ms), phase (ms), its way x and z (a thousand long)] (RACEMOD.CPP jet=)
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Jets = null,
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? RoadWalls = null,
         // Tunnels: tunnels over the raised road (RaceTrackTunnel), each [its first point, its last (the raised road's), its roof's height over
         // the deck, and (since 2026-10-16, when it has one) the height the camera's eye is kept under] (RACEMOD.CPP tunnel=), since 2026-10-08
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? Tunnels = null,
@@ -1068,6 +1069,7 @@ internal static class RaceTrackService
             Oil: scenes.Oil is { Count: > 0 } oil ? oil : null, Fakes: scenes.Fakes is { Count: > 0 } fakes ? fakes : null,
             Steam: OrNull(report.Steam), Drips: OrNull(report.Drips),
             Jets: OrNull(report.Jets),
+            RoadWalls: OrNull(report.RoadWalls),
             Tunnels: raised && report.Tunnels.Count > 0
                 ? report.Tunnels.Select(t => (t.Ceiling is { } c
                         ? new[] { report.RaisedSpan.IndexOf(t.From), report.RaisedSpan.IndexOf(t.To), (int)Math.Round(t.Roof), (int)Math.Round(c) }
