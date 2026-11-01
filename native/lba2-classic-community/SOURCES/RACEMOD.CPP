@@ -18742,6 +18742,12 @@ static S32 DrawMinimap(S32 width, S32 height) {
         double x, y, z;
         if (CarAt(n, &x, &y, &z)) MapDot(x0, y0, x, z, r, s_mapCar[1 + n]);
     }
+    // (the other players, online: there are no opponents, and the map showed this car alone, the user, 2026-11-01)
+    if (s_online)
+        for (int i = 0; i < RaceNet_Others(); i++) {
+            T_RACENET_CAR c;
+            if (RaceNet_CarOf(i, &c) && c.Island == Island) MapDot(x0, y0, c.X, c.Z, r, s_mapCar[1 + i % RACE_MAX_OPPONENTS]);
+        }
     const T_OBJET *hero = &ListObjet[NUM_PERSO];
     MapDot(x0, y0, hero->Obj.X + cx, hero->Obj.Z + cz, r + 1, s_mapCar[0]);
     BoxMovingAdd(x0, y0, x0 + s_mapW - 1, y0 + s_mapH - 1);

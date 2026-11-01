@@ -1169,7 +1169,7 @@ static int s_onlineQual = 0;                // ... its qualifying lap (online_qu
 
 // The race's power-ups, for a time trial's file: an online race is one, with the race's mushrooms and what comes of them
 static void CopyPowerUps(const char *race, FILE *f) {
-    static const char *const keys[] = {"powerups=", "penguin_mode=", "mushroom=", "penguin=", "oil=", "fake=", "laser_models=", "oil_icon=", "gold_icon=", "superjet_model=", "twinsen_small=", "haunt="};
+    static const char *const keys[] = {"powerups=", "penguin_mode=", "mushroom=", "penguin=", "oil=", "fake=", "laser_models=", "oil_icon=", "gold_icon=", "superjet_model=", "twinsen_small=", "haunt=", "haunt_balloons="};
     char path[ADELINE_MAX_PATH], line[512];
     GetResPath(path, ADELINE_MAX_PATH, race);
     FILE *in = fopen(path, "r");
