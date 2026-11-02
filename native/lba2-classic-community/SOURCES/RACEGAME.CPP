@@ -1,7 +1,7 @@
 /* RACEGAME: the race game -- LBA Assembler's race tracks played as a game of their own, the standalone Little Big Halloween Racing
  * Adventure (2026-10-16), on when RACEGAME.TXT is beside the game's data (its installer writes it). The game's main menu is then the race
  * game's (GAMEMENU.CPP MainGameMenu asks RaceGame_Menu), in the retail game's look:
- *     Resume (online and in the story)   Story Mode   Track select   Specials   Best laps   Options   Report bug   Quit
+ *     Resume (online and in the story)   Story Mode   Track select   Specials   Best laps   Options   Feedback   Quit
  * Esc in a race or time trial of one player's: the pause menu, PausePage.
  * Story Mode and Track select are greyed and passed over until the file opens them. Track select (2026-10-22): the code RACEGAME.TXT
  * asks for first (tracks_code=; once a run, CodePage), then its tracks in the file's order (TracksPage), each a race or a time trial as a
@@ -192,11 +192,12 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_REPORTS 2460                  // ... and its row to the bug reports' page (ReportsPage)
 #define RG_ID_REPORT_MODE 2461
 #define RG_ID_REPORT_NOW 2462
-#define RG_ID_REPORT_BUG 2463               // the main menu's Report bug (ReportBugPage)
+#define RG_ID_REPORT_BUG 2463               // the Feedback page's Report bug (ReportBugPage)
 #define RG_ID_PAUSE_CAR 2464                // the pause menu's rows (PausePage)
 #define RG_ID_PAUSE_TRACK 2465
 #define RG_ID_PAUSE_MAIN 2466
-#define RG_ID_REQUEST_FEATURE 2467          // the main menu's Request feature (ReportBugPage)
+#define RG_ID_REQUEST_FEATURE 2467          // ... and its Request feature (ReportBugPage)
+#define RG_ID_FEEDBACK 2468                 // the main menu's Feedback (FeedbackPage)
 #define RG_ID_SCREEN 2400                   // ... a screen, by its place in the list (ScreenPage)
 #define RG_SCREENS 6
 #define RG_OTHERS_SHOWN 5
@@ -1267,7 +1268,7 @@ static void Label(char *string, const char *utf8) { CopyUtf8ToCp850(string, 256,
 
 S32 RaceGame_MenuText(S32 num, char *string) {
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
-    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_REQUEST_FEATURE))) return 0;
+    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_FEEDBACK))) return 0;
     switch (num) {
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
@@ -1285,6 +1286,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_SCREEN + 0: case RG_ID_SCREEN + 1: case RG_ID_SCREEN + 2: case RG_ID_SCREEN + 3: case RG_ID_SCREEN + 4: case RG_ID_SCREEN + 5:
         Label(string, s_screenName[num - RG_ID_SCREEN]); return 1;
     case RG_ID_TRACKS: Label(string, "Track select"); return 1;
+    case RG_ID_FEEDBACK: Label(string, "Feedback"); return 1;
     case RG_ID_REPORT_BUG: Label(string, "Report bug"); return 1;
     case RG_ID_REQUEST_FEATURE: Label(string, "Request feature"); return 1;
     case RG_ID_PAUSE_CAR: Label(string, "Change car"); return 1;
@@ -2490,14 +2492,32 @@ static void ReportAfterCrash(void) {
 static void ReportBugPage(int feature) {
     char note[RG_REPORT_WORDS] = "";
     if (feature) {
-        if (!TypePage("Request feature", "What would you like? Public, on GitHub", note, sizeof(note), 0, 0)) return;
+        if (!TypePage("Request feature", "What would you like?", note, sizeof(note), 0, 0)) return;
         ReportSend("feature", note);
         SayPage("Request feature", "Thanks: your idea is on its way");
         return;
     }
-    if (!TypePage("Report bug", "What went wrong? Public, on GitHub", note, sizeof(note), 0, 0)) return;
+    if (!TypePage("Report bug", "What went wrong?", note, sizeof(note), 0, 0)) return;
     ReportSend("manual", note);
     SayPage("Report bug", "Thanks: your report is on its way, with the game's logs. Names, folders and addresses are taken out first.");
+}
+
+// Feedback, the main menu's (the user, 2026-11-02: "put this under a 'Feedback' menu, then have the options on a second menu")
+static void FeedbackPage(void) {
+    static U16 menu[4 + 2 * 3];
+    menu[0] = 1; menu[1] = 3; menu[2] = 280; menu[3] = 0;
+    SetRow(menu, 0, RG_ID_BACK);
+    SetRow(menu, 1, RG_ID_REPORT_BUG);
+    SetRow(menu, 2, RG_ID_REQUEST_FEATURE);
+    for (;;) {
+        Page("Feedback", 280 - (56 * 3) / 2 - 50);
+        const S32 select = Menu(menu);
+        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return; }
+        if (select == RG_ID_REPORT_BUG || select == RG_ID_REQUEST_FEATURE) {
+            menu[0] = (U16)(select == RG_ID_REPORT_BUG ? 1 : 2);
+            ReportBugPage(select == RG_ID_REQUEST_FEATURE);
+        }
+    }
 }
 
 static void ReportsPage(void) {
@@ -3790,9 +3810,14 @@ static int TypePage(const char *what, const char *hint, char *value, int size, i
         ShadeBoxBlk(x0, y0, x1, y1, RG_PAGE_SHADE);
         DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
         Text(cx, y0 + 14, what, RG_ORANGE);
-        Text(cx, y0 + 52, hint, LBAWHITE);
-        if (size > 64) Wrapped(x0 + 24, y0 + 86, x1 - x0 - 48, RG_LINE, value, LBAWHITE);
-        else Text(cx, y0 + 96, value, LBAWHITE);
+        // (a prompt wider than the box comes down in smaller letters, on as many lines as it takes: at this size it ran out of both sides of it, the user's picture, 2026-11-02)
+        char wide[128];
+        Label(wide, hint);
+        S32 under = 0;
+        if (SizeFont(wide) > x1 - x0 - 32) under = (Wrapped(x0 + 24, y0 + 48, x1 - x0 - 48, RG_LINE, hint, LBAWHITE) - 1) * RG_LINE;
+        else Text(cx, y0 + 52, hint, LBAWHITE);
+        if (size > 64) Wrapped(x0 + 24, y0 + 86 + under, x1 - x0 - 48, RG_LINE, value, LBAWHITE);
+        else Text(cx, y0 + 96 + under, value, LBAWHITE);
         Text(cx, y1 - 38, "Enter: go on    Esc: back", RG_GREY);
         Present();
         if (click == 2 || Escaped()) result = 0;
@@ -4640,7 +4665,7 @@ static int OnlinePage(void) {
         if (select == RG_ID_ONLINE_HOST && !TypePage("A password for this race", "Empty: no password", s_netPassword, sizeof(s_netPassword), 0, 1)) continue;
         // (the user's router wouldn't open 21997 by UPnP and has no room for another forward, 2026-11-01: the port it already sends here will do)
         if (select == RG_ID_ONLINE_HOST && !s_netPort[0]) snprintf(s_netPort, sizeof(s_netPort), "%d", RACENET_PORT);
-        if (select == RG_ID_ONLINE_HOST && !TypePage("The port to host on", "UDP, the one your router sends to this PC", s_netPort, sizeof(s_netPort), 1)) continue;
+        if (select == RG_ID_ONLINE_HOST && !TypePage("The port to host on", "The one your router sends here", s_netPort, sizeof(s_netPort), 1)) continue;
         if (select == RG_ID_ONLINE_HOST && (atoi(s_netPort) < 1 || atoi(s_netPort) > 65535)) { s_netPort[0] = 0; SayPage("Online race", "A port is a number from 1 to 65535"); continue; }
         if (select == RG_ID_ONLINE_JOIN && !TypePage("Join a race", "The address the host gave you", s_netAddress, sizeof(s_netAddress), 1)) continue;
         WriteOnline();
@@ -4783,8 +4808,7 @@ static S32 GameMenu(S32 inGame) {
     SetRow(s_mainMenu, nb++, RG_ID_ONLINE);
     SetRow(s_mainMenu, nb++, RG_ID_TIMES);
     SetRow(s_mainMenu, nb++, RG_ID_OPTIONS);
-    SetRow(s_mainMenu, nb++, RG_ID_REPORT_BUG);
-    SetRow(s_mainMenu, nb++, RG_ID_REQUEST_FEATURE);
+    SetRow(s_mainMenu, nb++, RG_ID_FEEDBACK);
     SetRow(s_mainMenu, nb++, RG_ID_QUIT);
     s_mainMenu[0] = (U16)(resume && !paused ? 0 : specials);
     // (the row chosen last -- Track select, Specials, Best laps -- when the menu comes back after a race; Resume first in one)
@@ -4816,9 +4840,8 @@ static S32 GameMenu(S32 inGame) {
         case RG_ID_RESUME:
         case RG_ID_OPTIONS:
             return select;
-        case RG_ID_REPORT_BUG:
-        case RG_ID_REQUEST_FEATURE:
-            ReportBugPage(select == RG_ID_REQUEST_FEATURE);
+        case RG_ID_FEEDBACK:
+            FeedbackPage();
             break;
         case RG_ID_QUIT:
             if (QuitPage()) {
