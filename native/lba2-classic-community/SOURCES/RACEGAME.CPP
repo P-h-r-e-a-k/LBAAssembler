@@ -3515,7 +3515,8 @@ void RaceGame_RowOver(S32 num, S32 x, S32 y) {
             Plot(x0 + dx, y0 + dy, end && ((dx + dy) / 6) % 2 ? black : gold, 1);
         }
     SmallText(x, y0 - 2, sp->Banner, black, 0);
-    BoxMovingAdd(x0, y0, x0 + w, y0 + h);
+    // (static: a moving box is wiped from the picture after its frame, and the row isn't drawn again till the cursor moves -- the banner flashed, the user, 2026-11-02)
+    BoxStaticAdd(x0, y0, x0 + w, y0 + h);
 }
 
 static int SpecialsPage(void) {
