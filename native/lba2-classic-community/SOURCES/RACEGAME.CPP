@@ -1,7 +1,8 @@
 /* RACEGAME: the race game -- LBA Assembler's race tracks played as a game of their own, the standalone Little Big Halloween Racing
  * Adventure (2026-10-16), on when RACEGAME.TXT is beside the game's data (its installer writes it). The game's main menu is then the race
  * game's (GAMEMENU.CPP MainGameMenu asks RaceGame_Menu), in the retail game's look:
- *     Resume (online and in the story)   Story Mode   Track select   Specials   Best laps   Options   Feedback   Quit
+ *     Resume (online and in the story)   Story Mode   Racing   Options   Feedback   Quit
+ * Racing: Track select, Specials, Multiplayer and Best laps (RacingPage).
  * Esc in a race or time trial of one player's: the pause menu, PausePage.
  * Story Mode and Track select are greyed and passed over until the file opens them. Track select (2026-10-22): the code RACEGAME.TXT
  * asks for first (tracks_code=; once a run, CodePage), then its tracks in the file's order (TracksPage), each a race or a time trial as a
@@ -198,6 +199,7 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_PAUSE_MAIN 2466
 #define RG_ID_REQUEST_FEATURE 2467          // ... and its Request feature (ReportBugPage)
 #define RG_ID_FEEDBACK 2468                 // the main menu's Feedback (FeedbackPage)
+#define RG_ID_RACING 2469                   // the main menu's Racing (RacingPage)
 #define RG_ID_SCREEN 2400                   // ... a screen, by its place in the list (ScreenPage)
 #define RG_SCREENS 6
 #define RG_OTHERS_SHOWN 5
@@ -1268,7 +1270,7 @@ static void Label(char *string, const char *utf8) { CopyUtf8ToCp850(string, 256,
 
 S32 RaceGame_MenuText(S32 num, char *string) {
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
-    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_FEEDBACK))) return 0;
+    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_RACING))) return 0;
     switch (num) {
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
@@ -1287,6 +1289,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
         Label(string, s_screenName[num - RG_ID_SCREEN]); return 1;
     case RG_ID_TRACKS: Label(string, "Track select"); return 1;
     case RG_ID_FEEDBACK: Label(string, "Feedback"); return 1;
+    case RG_ID_RACING: Label(string, "Racing"); return 1;
     case RG_ID_REPORT_BUG: Label(string, "Report bug"); return 1;
     case RG_ID_REQUEST_FEATURE: Label(string, "Request feature"); return 1;
     case RG_ID_PAUSE_CAR: Label(string, "Change car"); return 1;
@@ -4699,6 +4702,39 @@ static int RaceAgain(const T_RG_CAR *car) {
     return StartRace(s_raceSp, s_raceTrial, car, s_raceLevel, s_raceWatch[0] ? s_raceWatch : NULL);
 }
 
+// Racing, the main menu's (the user, 2026-11-02: "The main menu is too big"): everything that starts a race. Its result: 0 back on the main menu, else GameMenu's. Opens where it was last left.
+static S32 RacingPage(void) {
+    static U16 menu[4 + 2 * 5];
+    static U16 last = 2;
+    menu[0] = last; menu[1] = 5; menu[2] = 305; menu[3] = 0;
+    SetRow(menu, 0, RG_ID_BACK);
+    SetRow(menu, 1, RG_ID_TRACKS);
+    SetRow(menu, 2, RG_ID_SPECIALS);
+    SetRow(menu, 3, RG_ID_ONLINE);
+    SetRow(menu, 4, RG_ID_TIMES);
+    for (;;) {
+        Page("Racing", 305 - (56 * 5) / 2 - 50);
+        const S32 select = Menu(menu);
+        if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
+        for (S32 i = 1; i < 5; i++) if (menu[4 + 2 * i + 1] == (U16)select) menu[0] = last = (U16)i;
+        switch (select) {
+        case RG_ID_TRACKS:
+            if (TrackSelect()) return RACEGAME_START;
+            break;
+        case RG_ID_SPECIALS:
+            if (SpecialsPage()) return RACEGAME_START;
+            break;
+        case RG_ID_ONLINE:
+            if (OnlinePage()) return RACEGAME_START;
+            if (s_updateQuit) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; }
+            break;
+        case RG_ID_TIMES:
+            if (TimesPage()) return RACEGAME_START;
+            break;
+        }
+    }
+}
+
 // Esc in a race or a time trial, one player's (the user, 2026-11-02: "instead of showing the main menu with a 'Resume game' option, let's have a separate menu"): Main menu added
 // to their four, the way to everything else. Its result is GameMenu's, or RG_ID_PAUSE_MAIN.
 static S32 PausePage(void) {
@@ -4800,21 +4836,12 @@ static S32 GameMenu(S32 inGame) {
     if (resume && !paused) SetRow(s_mainMenu, nb++, RG_ID_RESUME);
     if (restart && !paused) SetRow(s_mainMenu, nb++, RG_ID_RESTART);
     if (!restart || s_story) SetRow(s_mainMenu, nb++, RG_ID_STORY);
-    SetRow(s_mainMenu, nb++, RG_ID_TRACKS);
-    const S32 specials = nb;
-    SetRow(s_mainMenu, nb++, RG_ID_SPECIALS);
-    // (in a race too: the user, 2026-10-31, "Multiplayer doesn't seem to be a menu option after we've started a race without us restarting
-    // the entire game". Nine rows then: DrawGameMenu closes them up, GameMenuRowSpace)
-    SetRow(s_mainMenu, nb++, RG_ID_ONLINE);
-    SetRow(s_mainMenu, nb++, RG_ID_TIMES);
+    const S32 racing = nb;
+    SetRow(s_mainMenu, nb++, RG_ID_RACING);
     SetRow(s_mainMenu, nb++, RG_ID_OPTIONS);
     SetRow(s_mainMenu, nb++, RG_ID_FEEDBACK);
     SetRow(s_mainMenu, nb++, RG_ID_QUIT);
-    s_mainMenu[0] = (U16)(resume && !paused ? 0 : specials);
-    // (the row chosen last -- Track select, Specials, Best laps -- when the menu comes back after a race; Resume first in one)
-    static U16 lastChosen = 0;
-    if (!resume && lastChosen)
-        for (S32 i = 0; i < nb; i++) if (s_mainMenu[4 + 2 * i + 1] == lastChosen && !RaceGame_RowDisabled(lastChosen)) s_mainMenu[0] = (U16)i;
+    s_mainMenu[0] = (U16)(resume && !paused ? 0 : racing);
     s_mainMenu[1] = (U16)nb;
     // (eight or nine rows from 290 ran off the bottom of a 480-tall screen, Quit cut in half: the user's picture, 2026-10-31)
     s_mainMenu[2] = (U16)(nb > 7 ? 265 : nb > 6 ? 290 : 300);
@@ -4823,7 +4850,6 @@ static S32 GameMenu(S32 inGame) {
         const S32 select = Menu(s_mainMenu);
         // (the window resized: the backdrop is made again -- shaded in a race -- and the rows go on it)
         if (select == MENU_RELAYOUT) continue;
-        if (select == RG_ID_TRACKS || select == RG_ID_SPECIALS || select == RG_ID_TIMES) lastChosen = (U16)select;
         // (Quit too: No puts the menu back as it was)
         if (select != 1000 && select != RG_ID_RESUME && select != RG_ID_QUIT && select != MENU_RELAYOUT) s_watchListN = 0;
         switch (select) {
@@ -4851,21 +4877,11 @@ static S32 GameMenu(S32 inGame) {
                 return select;
             }
             break;
-        case RG_ID_TRACKS:
-            if (TrackSelect()) return RACEGAME_START;
-            break;
-        case RG_ID_ONLINE:
-            if (OnlinePage()) return RACEGAME_START;
-            if (s_updateQuit) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; }
+        case RG_ID_RACING:
+            if (const S32 race = RacingPage()) return race;
             break;
         case RG_ID_STORY:
             if (const S32 story = StoryMode()) return story;
-            break;
-        case RG_ID_SPECIALS:
-            if (SpecialsPage()) return RACEGAME_START;
-            break;
-        case RG_ID_TIMES:
-            if (TimesPage()) return RACEGAME_START;
             break;
         case RG_ID_RESTART:
             // (the race as it was set up: its track, race or time trial, car, difficulty, ghost and laps -- or the ghost played back again)

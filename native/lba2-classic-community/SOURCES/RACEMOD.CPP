@@ -5171,8 +5171,13 @@ static int StartScene(void) {
 //   3  the helper turns to face him;
 //   4  and says its line, and the game variable is set: the car's key. Twinsen gets in when he likes and gives chase.
 static void PlayerOnSpot(const T_RACE_SPOT *spot);
+// (the dream's car in the story: the island's own, ISLANDCARS.TXT -- LBA1's tractor -- which it is only with no race on otherwise, and the chase is a race: the user, 2026-11-02, "spawns in
+// Twinsen's car instead of the tractor that's meant to be spawned in")
+static void ChaseOwnCar(void);
+
 static void ChaseOpening(S32 now) {
     if (NewCube != -1 || (S32)NumCube != StartScene() || !s_nbSpots) return;
+    ChaseOwnCar();
     T_OBJET *hero = &ListObjet[NUM_PERSO];
     if (s_chaseStep == 0) {
         // (chase_car=: his car on pole now, empty, and him beside it, turned to Twinsen; the camera from the other side -- once the scene
@@ -5299,11 +5304,19 @@ static void ChaseOpening(S32 now) {
 
 // The one to beat's pace in a chase (chase_lead=): his lead over Twinsen held -- far ahead (Twinsen still on foot, the car just away) he
 // eases right off, behind he pushes, so Twinsen catches him up and the two come to the end close together, he a little ahead
+// (the user, 2026-11-02: "We want the user to be able to close in on Funfrock even if they don't ever take him, but it's currently too easy": he eases off only well ahead, and pushes on
+// hard with a car close: 1.4 at the most let one past him for good. Logged now and then, to tune)
+#define RACE_CHASE_PUSH 1.85
+#define RACE_CHASE_BEHIND 2.8              // ... and passed, this: a jump took him 80 cells behind a good driver, and he never got them back
+#define RACE_CHASE_LOG_MS 4000
+static S32 s_chaseLogAt = 0;
 static double ChaseLead(const T_RACE_OPPONENT *o, int n) {
     if (s_chaseLead <= 0 || n != (s_main >= 0 ? s_main : 0)) return 1;
     const double lead = OpponentProgress(o) - PlayerProgress();
-    double f = 1 + (s_chaseLead - lead) / (s_chaseLead * 1.5);
-    return f < 0.3 ? 0.3 : f > 1.4 ? 1.4 : f;
+    double f = 1 + (s_chaseLead - lead) / (s_chaseLead * 0.9);
+    f = f < 0.3 ? 0.3 : f > RACE_CHASE_PUSH ? (lead < 0 ? RACE_CHASE_BEHIND : RACE_CHASE_PUSH) : f;
+    if (TimerRefHR >= s_chaseLogAt) { s_chaseLogAt = TimerRefHR + RACE_CHASE_LOG_MS; Log_Info("[racemod] the chase: %.0f cells ahead, pace x%.2f", lead / 512.0, f); }
+    return f;
 }
 
 // Called once a frame from the main loop, before the scene is drawn (PERSO.CPP), where a dialog can be opened as the life scripts do:
@@ -16391,6 +16404,13 @@ S32 RaceMod_DrivenBody(S32 *anim) {
     if (s_driveBody < 0 || s_driveAnim < 0) return -1;
     *anim = s_driveAnim;
     return s_driveBody;
+}
+
+static void ChaseOwnCar(void) {
+    const int c = IslandCar();
+    if (c < 0 || s_driveBody >= 0) return;
+    s_driveBody = s_islandCars[c].Body; s_driveAnim = s_islandCars[c].Anim; s_driveSmall = -1; s_driveSmallNow = 0;
+    Log_Info("[racemod] the chase: Twinsen's car is the island's own, body %d", s_driveBody);
 }
 
 S32 RaceMod_StoryAccel(void) {
