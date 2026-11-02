@@ -7,39 +7,21 @@ namespace LBAAssembler.Terrain.Polar;
 
 // The grobo who gives Twinsen the digger's ignition key (the user, 2026-10-27: "We also need to pull across the grobo character that gives
 // Twinsen the key to the tractor into Polar Island near the start line. LBA2 already has grobo's so we could base it on one of those and
-// change the clothing"): LBA1's scene 109 actor 6 (entity 11, BODY.HQR 17: "Grobo: Green vest"), who says "This work is not moving along
-// fast!" and then gives the key (LBA1's island text bank, ids 12 and 11); without it Twinsen says "Can't start this machine without an
-// ignition key!" (id 10). Here: LBA2's baggage-claim grobo (entity 33, BODY.HQR 54) in a green vest -- his teal top LBA2's green ramp, its
-// red trim the green's dark end -- as a body of his entity's own (generic GroboGeneric), standing on the dock beside Twinsen's start;
-// spoken to, he says his two lines and sets game variable KeyVar; the car's script on the island (every scene's copy of it) lets Twinsen
-// in only once it is set, else he says the third line.
+// change the clothing"): LBA1's scene 109 actor 6 (entity 11, BODY.HQR 17: "Grobo: Green vest"); without his key Twinsen says "Can't start
+// this machine without an ignition key!" (LBA1's id 10). Here: LBA2's baggage-claim grobo (entity 33, BODY.HQR 54) in a green vest -- his teal
+// top LBA2's green ramp, its red trim the green's dark end -- as a body of his entity's own (generic GroboGeneric), standing on the dock beside
+// Twinsen's start. Spoken to, he says the story's line (PolarDream.ChaseGroboText: LBA1's two lines of his are gone, the user, 2026-11-02) and
+// sets game variable KeyVar; the car's script on the island (every scene's copy of it) lets Twinsen in only once it is set, else he says
+// that third line.
 internal static class PolarGrobo
 {
     public const int Entity = 33, BaseBody = 54, Generic = 1, KeyVar = 230;
-    public const int WorkText = 20, KeyText = 21, NoKeyText = 22;
+    public const int NoKeyText = 22;
     // (LBA2's ramps: 10 the teal top, 4 its red trim -> 8 the greens)
     private const int TealBank = 10, RedBank = 4, GreenBank = 8;
 
-    // LBA1's lines (TEXT.HQR, the island's bank, ids 12, 11, 10), in the island text file's languages: English, French, German, Spanish,
+    // Twinsen's line (LBA1's TEXT.HQR, the island's bank, id 10), in the island text file's languages: English, French, German, Spanish,
     // Italian -- LBA1's own -- and Portuguese
-    private static readonly string[] Work =
-    {
-        "This work is not moving along fast!",
-        "Ça avance pas vite ces travaux, hein !",
-        "Die Arbeiten gehen nicht gerad' schnell voran, was !",
-        "No avanzan muy rápido estas obras, ¿no?",
-        "Vanno a rilento i lavori eh?",
-        "Estas obras não andam nada depressa!",
-    };
-    private static readonly string[] Key =
-    {
-        "Here, little guy, take the ignition key and bring the bulldozer back for me - I'll appreciate it. I don't have time to do it myself.",
-        "Tiens petit, prends la clef de contact et rapporte le bulldozer pour moi tu seras gentil. Moi je n'ai pas le temps.",
-        "Hier Kleiner, nimm den Zündschlüssel und fahr den Bulldozer für mich zurück, das wär lieb von Dir. Ich habe keine Zeit dazu.",
-        "Niño, toma la llave de contacto y lleva el bulldozer por mí, sé buenito, yo no tengo tiempo.",
-        "Vieni piccolo, prendi la chiave e portami il buldozer, d'accordo? Io non ho tempo.",
-        "Toma, pequeno, leva a chave da ignição e traz-me o bulldozer, fazes-me um favor. Eu não tenho tempo.",
-    };
     private static readonly string[] NoKey =
     {
         "Can't start this machine without an ignition key!",
@@ -52,10 +34,7 @@ internal static class PolarGrobo
 
     public static IEnumerable<(int Id, string Text)> IslandTexts(int language)
     {
-        var l = language < Work.Length ? language : 0;
-        yield return (WorkText, Work[l]);
-        yield return (KeyText, Key[l]);
-        yield return (NoKeyText, NoKey[l]);
+        yield return (NoKeyText, NoKey[language < NoKey.Length ? language : 0]);
     }
 
     // His body: the baggage-claim grobo's, recoloured
@@ -115,16 +94,8 @@ internal static class PolarGrobo
 {{
     if (1 == action() && 1500 > distance(0))
     {{
-        if (0 == var_game({KeyVar}))
-        {{
-            message({WorkText});
-            message({KeyText});
-            set_var_game({KeyVar}, 1);
-        }}
-        else
-        {{
-            message({WorkText});
-        }}
+        message({PolarDream.ChaseGroboText});
+        set_var_game({KeyVar}, 1);
     }}
 }}
 ";

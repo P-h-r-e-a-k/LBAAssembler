@@ -661,6 +661,11 @@ static int s_chaseOn = 0, s_chaseText[3] = {-1, -1, -1}, s_chaseHelper = -1, s_c
 static int s_trialHide[2] = {-1, -1};      // a time trial's: the chase's people (its helper's and its driver's entities), out of sight
 static S32 s_chaseAt = 0;
 static double s_chaseLead = 0;
+// chase_head=<cells> (ChaseStart, ChaseLead; the user, 2026-11-02: "have Funfrock make it almost to the jump section by the time Twinsen has finished talking to the grobo and
+// got in the car"): how far down the road he is the moment Twinsen is at the wheel. His lead then falls with Twinsen's progress down to chase_lead= at the finish: Twinsen closes
+// in the whole way, seeing him only near the end
+static double s_chaseHead = 0;
+static int s_chaseHeadDone = 0;
 static int s_dreamAnyEnd = 0;
 // chase_car= (ChaseOpening): his car's empty body and animation, his entity, his actor once found (-1 none), the car's own body and
 // animation while it stands empty, where he walks from, and the camera turned round for the opening
@@ -3863,6 +3868,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (sscanf(v, "%d %d %d %d %d", &s_chaseText[0], &s_chaseText[1], &s_chaseHelper, &s_chaseText[2], &s_chaseVar) == 5) { s_chaseOn = 1; s_chaseStep = 0; }
         }
         else if (!strcmp(key, "chase_lead")) s_chaseLead = atof(v) * 512;
+        else if (!strcmp(key, "chase_head")) { s_chaseHead = atof(v) * 512; s_chaseHeadDone = 0; }
         else if (!strcmp(key, "chase_car")) {
             if (sscanf(v, "%d %d %d", &s_chaseEmpty, &s_chaseEmptyAnim, &s_chaseDriverEnt) != 3) s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = -1;
         }
@@ -4510,8 +4516,10 @@ static void Load(const char *path, int carOnly = 0) {
     if (s_trial && (s_chaseOn || s_chaseEmpty >= 0 || s_dreamAnyEnd)) {
         if (s_chaseOn) { s_trialHide[0] = s_chaseHelper; s_trialHide[1] = s_chaseDriverEnt; }
         Log_Info("[racemod] a time trial: the race's chase left out (entities %d and %d out of sight)", s_trialHide[0], s_trialHide[1]);
-        s_chaseOn = 0; s_chaseLead = 0; s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = -1; s_dreamAnyEnd = 0;
+        s_chaseOn = 0; s_chaseLead = 0; s_chaseHead = 0; s_chaseEmpty = s_chaseEmptyAnim = s_chaseDriverEnt = -1; s_dreamAnyEnd = 0;
     }
+    // (the story's dream is a race to save the planet: a shortcut found is fair game, the user, 2026-11-02 -- no checkpoints in the chase, as a time trial and Track select's race keep theirs)
+    if (s_chaseOn && s_nbCheckpoints) { Log_Info("[racemod] the chase: its %d checkpoints left out, any way there counts", s_nbCheckpoints); s_nbCheckpoints = 0; }
     // (a lap with loops: the camera that follows the car looks at a loop from its side while the car goes round it; and at a drop from
     // its own place beside it)
     // (a raised road with branches after the lap's own points: whether the lap is a loop, from its own)
@@ -4879,6 +4887,7 @@ static int SprintRunAgain(S32 now);
 static int GiveItem(int pu, S32 now);
 static void Time(char *out, size_t size, S32 ms);
 static void PackLapLog(int lap);
+static void ChaseStart(void);
 void RaceMod_Lap(S32 x, S32 z) {
     // (the previous frame's position; forgotten when the car is put on the grid. Into the cube beside, by no more than RACE_CUBE_STEP --
     // driven over its edge -- where it came from in the new cube's units: a checkpoint runs on over a cube's edge where the road does,
@@ -4887,6 +4896,8 @@ void RaceMod_Lap(S32 x, S32 z) {
     if (s_wantFlip) { FirstTime = AFF_ALL_FLIP; s_wantFlip = 0; }
     if (s_forgetLap) { pcx = -1; s_forgetLap = 0; }
     if (!s_active || !s_car.HasLine || CubeMode != CUBE_EXTERIEUR) { pcx = -1; return; }
+    // (the chase: Twinsen at the wheel at last, FunFrock long gone)
+    ChaseStart();
     // the story's arrow to the start line (holo_arrow): Twinsen is at the wheel, so he has found it
     if (s_holoArrow >= 0) { ClrHoloPos(s_holoArrow); Log_Info("[racemod] holomap arrow %d cleared", s_holoArrow); s_holoArrow = -1; }
     const S32 x0 = px - (CurrentCubeX - pcx) * 32768, z0 = pz - (CurrentCubeY - pcz) * 32768;
@@ -5321,11 +5332,35 @@ static void ChaseOpening(S32 now) {
 static S32 s_chaseLogAt = 0;
 static double ChaseLead(const T_RACE_OPPONENT *o, int n) {
     if (s_chaseLead <= 0 || n != (s_main >= 0 ? s_main : 0)) return 1;
-    const double lead = OpponentProgress(o) - PlayerProgress();
-    double f = 1 + (s_chaseLead - lead) / (s_chaseLead * 0.9);
-    f = f < 0.3 ? 0.3 : f > RACE_CHASE_PUSH ? (lead < 0 ? RACE_CHASE_BEHIND : RACE_CHASE_PUSH) : f;
+    const double me = PlayerProgress(), lead = OpponentProgress(o) - me;
+    // (the lead he holds: chase_head= as Twinsen sets off, falling to chase_lead= by the finish)
+    double want = s_chaseLead;
+    if (s_chaseHead > s_chaseLead && o->Length > 0) {
+        double left = 1 - me / o->Length;
+        left = left < 0 ? 0 : left > 1 ? 1 : left;
+        want += (s_chaseHead - s_chaseLead) * left;
+    }
+    double f = 1 + (want - lead) / (s_chaseLead * 0.9);
+    // (well short of the lead he should have, a car on the jet-pack or the nitro gaining on him, or passed: the 88% test pilot took him on power-ups at the plain push)
+    f = f < 0.3 ? 0.3 : f > RACE_CHASE_PUSH ? (lead < want * 0.7 ? RACE_CHASE_BEHIND : RACE_CHASE_PUSH) : f;
     if (TimerRefHR >= s_chaseLogAt) { s_chaseLogAt = TimerRefHR + RACE_CHASE_LOG_MS; Log_Info("[racemod] the chase: %.0f cells ahead, pace x%.2f", lead / 512.0, f); }
     return f;
+}
+
+// Twinsen at the wheel for the first time in the chase: the one to beat as far down the road as chase_head= says, out of sight of the dock by now. He was driving off flat out
+// until then (ChaseLead: chase_head= is the lead he wants); the words take as long as they take, so where he is depends on no one's reading speed.
+static void ChaseStart(void) {
+    if (!s_chaseOn || s_chaseHead <= 0 || s_chaseHeadDone) return;
+    s_chaseHeadDone = 1;
+    // (his race starts here, not at the start line: he starts off the road, beside it, and a player easily misses it, the user, 2026-11-02 -- the line would have started the
+    // lap, the run's items and the finish; it counts for nothing now, a sprint's start line counting once)
+    if (s_laps == 0 && s_phase == PHASE_RACE) { s_laps = 1; s_lapStart = TimerRefHR; s_next = 0; GhostLapStart(); Log_Info("[racemod] the chase: the race starts at the wheel"); }
+    const int n = s_main >= 0 ? s_main : 0;
+    T_RACE_OPPONENT *o = &s_opp[n];
+    if (!o->Count) return;
+    const double was = OpponentProgress(o), ahead = s_chaseHead - was + PlayerProgress();
+    if (ahead > 0) o->S += ahead;
+    Log_Info("[racemod] the chase: Twinsen sets off, %s %.0f cells down the road (he had driven %.0f)", o->Name, OpponentProgress(o) / 512, was / 512);
 }
 
 // Called once a frame from the main loop, before the scene is drawn (PERSO.CPP), where a dialog can be opened as the life scripts do:
@@ -6097,7 +6132,7 @@ static const T_RACE_OPPONENT *AutoGuide(void) { return (s_autoShort || s_autoSmo
 U32 RaceMod_AutoInput(void) {
     if (s_ghostWatch) return 0;
     // (the console's racewalk: on foot, through its points -- on_foot=)
-    if ((s_walkN > 0 || s_walkCar) && RaceMod_OnFoot()) return CubeMode == CUBE_EXTERIEUR ? WalkInput() : 0;
+    if ((s_walkN > 0 || s_walkCar) && (RaceMod_OnFoot() || (s_chaseOn && Comportement != C_BUGGY))) return CubeMode == CUBE_EXTERIEUR ? WalkInput() : 0;
     // (the console's racestop: the test pilot's car stopped where it comes within reach of a place, and Twinsen out of it)
     if (s_stopReach > 0 && s_active && Comportement == C_BUGGY && CubeMode == CUBE_EXTERIEUR) {
         const T_OBJET *h = &ListObjet[NUM_PERSO];
@@ -11663,7 +11698,7 @@ static U32 WalkInput(void) {
         const S_BUGGY *ptb = &ListBuggy[0];
         if (ptb->Cube != (S32)NumCube) return 0;
         tx = ptb->X + CurrentCubeX * 32768.0; tz = ptb->Z + CurrentCubeY * 32768.0;
-        if (CarReach() >= 0 && CarReach() < RACE_FOOT_REACH - 300) { s_walkCar = 0; s_walkN = 0; Log_Info("[racemod] racewalk: by the car"); return I_ACTION_M; }
+        if (CarReach() >= 0 && CarReach() < RACE_FOOT_REACH - 300) { s_walkCar = 0; s_walkN = 0; Log_Info("[racemod] racewalk: by the car"); if (s_chaseOn) { IntoCar("racewalk"); return 0; } return I_ACTION_M; }
     } else { s_walkN = 0; return 0; }
     const double dx = tx - wx, dz = tz - wz, d = sqrt(dx * dx + dz * dz);
     if (s_walkAt < s_walkN && d < 400) { Log_Info("[racemod] racewalk: point %d at (%.0f,%d,%.0f)", s_walkAt + 1, wx, (int)hero->Obj.Y, wz); s_walkAt++; return 0; }
@@ -12100,7 +12135,7 @@ double RaceMod_JetSteer(void) {
 // PERSO.CPP: the jet-pack has the controls (the player's own keys are left out while it lasts) -- when there is a line for it to drive
 // by (with none it is only a boost: it had the keys and gave none back, and the car stood still until it ran out); skidding on oil too.
 S32 RaceMod_Takeover(void) {
-    if ((s_walkN > 0 || s_walkCar) && RaceMod_OnFoot()) return 1;   // (the console's racewalk)
+    if ((s_walkN > 0 || s_walkCar) && (RaceMod_OnFoot() || (s_chaseOn && Comportement != C_BUGGY))) return 1;   // (the console's racewalk)
     if (RaceMod_Active() && s_ghostWatch && Comportement == C_BUGGY) return 1;   // (a ghost played back drives the car: GhostWatch)
     return RaceMod_Active() && Comportement == C_BUGGY && ((TimerRefHR < s_jetUntil && Guide()) || TimerRefHR < s_skidUntil);
 }
