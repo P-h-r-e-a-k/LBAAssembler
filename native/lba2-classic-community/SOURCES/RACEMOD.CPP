@@ -2120,6 +2120,7 @@ static int OpenAreaAt(double wx, double wz, double y) {
 #define RACE_MAX_RAIL_OPEN 4
 #define RACE_RAIL_OPEN_CORNERS 48
 #define RACE_RAIL_OPEN_FALL 8000            // (ms: a landing this soon after the rail let go is that fall's)
+#define RACE_RAIL_LEVEL 300                 // (a road this near an open area's floor is level with it)
 typedef struct { double Y0, Y1; int N; double X[RACE_RAIL_OPEN_CORNERS], Z[RACE_RAIL_OPEN_CORNERS]; } T_RACE_RAIL_OPEN;
 static T_RACE_RAIL_OPEN s_railOpen[RACE_MAX_RAIL_OPEN];
 static int s_nbRailOpen = 0;
@@ -2136,6 +2137,10 @@ static int RailOpenAt(double wx, double wz, double y) {
     return 0;
 }
 static void RailLetGo(double wx, S32 y, double wz) {
+    // (off a road level with an open area's floor there is nothing to fall to: he drives on across it, the palace's fireplace under its spiral -- the user, 2026-11-01, "I'm unable to
+    // reach the fireplace in a car", the rail holding the car off it; let go the same way as the Temple's, he went through the floor)
+    const int area = OpenAreaAt(wx, wz, y);
+    if (area >= 0 && abs(y - (S32)s_open[area].Floor) < RACE_RAIL_LEVEL) return;
     if (!s_railLetGo) Log_Info("[racemod] the rail lets go at (%.0f,%d,%.0f): off the road's edge, down to the road below", wx, (int)y, wz);
     s_railLetGo = TimerRefHR; if (!s_railLetGo) s_railLetGo = 1;
     s_railLetY = y;
@@ -14043,7 +14048,7 @@ enum { FISH_READY, FISH_CAST, FISH_WAIT, FISH_REEL };
 
 // The crabs on the road (the user, 2026-11-01: "land on the track behind him if it doesn't hit a car. It should walk around for a second and head back to the sea"): the thing
 // he threw, stopped where it came down and walked from here, on the ground
-typedef struct { int On, Extra, Body; double X, Z, SeaX, SeaZ, DirX, DirZ; S32 T0, Turn; } T_RACE_CRAB;
+typedef struct { int On, Extra, Body; double X, Z, SeaX, SeaZ, DirX, DirZ; S32 T0, Turn, Floor; } T_RACE_CRAB;
 static T_RACE_CRAB s_crabs[RACE_MAX_CRABS];
 
 static void CrabOff(T_RACE_CRAB *c) {
@@ -14056,7 +14061,7 @@ static void CrabLands(const T_RACE_THROWN *u, S32 now) {
         T_RACE_CRAB *c = &s_crabs[i];
         if (c->On) continue;
         ListExtra[u->Extra].Flags &= ~(EXTRA_FLY | EXTRA_STOP_COL | EXTRA_FALLING);
-        c->On = 1; c->Extra = u->Extra; c->Body = ListExtra[u->Extra].Body; c->X = u->ToX; c->Z = u->ToZ; c->SeaX = u->SeaX; c->SeaZ = u->SeaZ; c->T0 = now; c->Turn = 0;
+        c->On = 1; c->Extra = u->Extra; c->Body = ListExtra[u->Extra].Body; c->X = u->ToX; c->Z = u->ToZ; c->SeaX = u->SeaX; c->SeaZ = u->SeaZ; c->T0 = now; c->Turn = 0; c->Floor = (S32)u->ToY;
         c->DirX = 0; c->DirZ = 1;
         Log_Info("[racemod] a crab on the road at (%.0f,%.0f)", c->X, c->Z);
         return;
@@ -14085,9 +14090,10 @@ static void CrabsWalk(S32 now, S32 dt, int driving) {
         c->X += c->DirX * v; c->Z += c->DirZ * v;
         const S32 lx = (S32)(c->X - cx), lz = (S32)(c->Z - cz);
         if (lx < 0 || lz < 0 || lx >= 32768 || lz >= 32768) { CrabOff(c); continue; }
-        const S32 ground = CalculAltitudeTerrain(lx, lz, 0);
+        // (over the paved strip Felix stands on, as high as he is: on the ground's own height it went in under it, and was gone from there to the sea)
+        const S32 ground = CalculAltitudeTerrain(lx, lz, 0), walk = ground > c->Floor || ground <= RACE_FISH_SEA ? ground : c->Floor;
         T_EXTRA *e = &ListExtra[c->Extra];
-        e->PosX = lx; e->PosY = ground; e->PosZ = lz;
+        e->PosX = lx; e->PosY = walk; e->PosZ = lz;
         e->Beta = (S16)TurnOf(atan2(c->DirX, c->DirZ));
         if ((back && ground <= RACE_FISH_SEA) || t >= RACE_CRAB_MOST_MS) { Log_Info("[racemod] the crab is back in the sea, %.1f s on the road", t / 1000.0); CrabOff(c); continue; }
         for (int who = driving ? -1 : 0; who < RACE_MAX_OPPONENTS; who++) {

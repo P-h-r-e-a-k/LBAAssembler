@@ -6,9 +6,9 @@ One player hosts and everyone else joins them, up to 16 in a race. Written 2026-
 
 Main menu, **Multiplayer**.
 
-- **Host a race:** give a name and, if you want one, a password (Enter alone for none). The game asks the router to open UDP port 21997. The lobby then shows the
-  address to give to friends, the one for people in the same house (most routers don't loop their own outside address back) and the password. If the router says no, the
-  game says why. Left and Right set the laps, Up and Down a qualifying lap or none. Enter, once everyone is in, starts the round.
+- **Host a race:** give a name, if you want one a password (Enter alone for none), and a UDP port (21997 unless you change it; kept in ONLINE.TXT as `port=`). The game asks
+  the router to open that port. The lobby then shows the address to give to friends, the one for people in the same house (most routers don't loop their own outside address
+  back) and the password. If the router says no, the game says why and the lobby still shows the outside address, for a port forwarded by hand. Left and Right set the laps, Up and Down a qualifying lap or none. Enter, once everyone is in, starts the round.
 - **Join a race:** give a name and the host's address, typed or pasted with Ctrl+V. `81.2.3.4`, or `81.2.3.4:21997` for another port. If the race has a password the
   game asks for it; a wrong one sends you back to the menu. You wait in the lobby for the host. Joining part of the way through a round you come in at that point. Joining
   with a race on, you pick a car and start from the grid straight away, and your time runs from everyone's go.
@@ -88,7 +88,7 @@ spreads them round its one spot (`NetSpread`). The rule for everything between c
 - An outside address that is private, or 100.64/10, means the provider's network is in front of the router. The port opens and reaches nobody, and the game says so.
 - The port has a 2-hour lease, and comes off when hosting stops or the game quits by its menu. A game that crashes leaves it to the lease.
 
-Port 21997: nothing common uses it. Proven through the router from outside by UPnP, 2026-10-30.
+Port 21997 by default: nothing common uses it. Proven through the router from outside by UPnP, 2026-10-30. Some routers refuse it (the user's did on 2026-11-01): the host can then name a port the router already forwards.
 
 ## Tested
 

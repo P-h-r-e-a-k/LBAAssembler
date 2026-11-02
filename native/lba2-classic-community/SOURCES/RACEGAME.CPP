@@ -3823,8 +3823,8 @@ static int AskPage(const char *what, const char *line, const char *keys) {
 
 static void SayPage(const char *what, const char *line) { AskPage(what, line, "Enter: go on"); }
 
-// The player's name and the address last joined: ONLINE.TXT in the user's folder
-static char s_netName[RACENET_NAME + 1] = "", s_netAddress[64] = "", s_netPassword[64] = "";
+// The player's name, the address last joined and the port hosted on: ONLINE.TXT in the user's folder
+static char s_netName[RACENET_NAME + 1] = "", s_netAddress[64] = "", s_netPassword[64] = "", s_netPort[8] = "";
 static const T_RG_CAR *s_netCar = NULL;     // the car chosen for online races (none: Twinsen's)
 static int s_netSp = -1, s_onlineLaps = 3;
 static int s_netQualify = 1;                // the host's: a qualifying lap, or a grid dealt at random
@@ -3837,6 +3837,7 @@ static void ReadOnline(void) {
             line[strcspn(line, "\r\n")] = 0;
             if (!strncmp(line, "name=", 5)) snprintf(s_netName, sizeof(s_netName), "%s", line + 5);
             else if (!strncmp(line, "address=", 8)) snprintf(s_netAddress, sizeof(s_netAddress), "%s", line + 8);
+            else if (!strncmp(line, "port=", 5)) snprintf(s_netPort, sizeof(s_netPort), "%s", line + 5);
             else if (!strncmp(line, "laps=", 5)) s_onlineLaps = atoi(line + 5) > 0 ? atoi(line + 5) : 3;
             else if (!strncmp(line, "qualifying=", 11)) s_netQualify = atoi(line + 11) != 0;
         }
@@ -3882,7 +3883,7 @@ static void WriteOnline(void) {
     char path[ADELINE_MAX_PATH];
     GetCfgPath(path, ADELINE_MAX_PATH, "ONLINE.TXT");
     if (FILE *f = fopen(path, "w")) {
-        fprintf(f, "name=%s\naddress=%s\nlaps=%d\nqualifying=%d\n", s_netName, s_netAddress, s_onlineLaps, s_netQualify);
+        fprintf(f, "name=%s\naddress=%s\nport=%s\nlaps=%d\nqualifying=%d\n", s_netName, s_netAddress, s_netPort, s_onlineLaps, s_netQualify);
         fclose(f);
     }
 }
@@ -4324,9 +4325,10 @@ static int LobbyPage(void) {
         if (host && stage != RACENET_STAGE_GRID) {
             if (!answered) Text(cx, y, "Asking the router to open the port ...", RG_GREY);
             else {
-                snprintf(address, sizeof(address), "Friends join: %s:%d", outside[0] ? outside : "(not known)", RACENET_PORT);
-                Text(cx, y, ok ? address : "The router didn't open the port", ok ? LBAWHITE : RG_ORANGE);
-                snprintf(address, sizeof(address), "In this house: %s:%d", inside[0] ? inside : "(not known)", RACENET_PORT);
+                // (a router that won't open it by UPnP still says its address, and a port forwarded by hand works all the same)
+                snprintf(address, sizeof(address), "%s %s:%d", ok ? "Friends join:" : "Port forwarded by hand?", outside[0] ? outside : "(not known)", RaceNet_Port());
+                Text(cx, y, ok || outside[0] ? address : "The router didn't open the port", ok ? LBAWHITE : RG_ORANGE);
+                snprintf(address, sizeof(address), "In this house: %s:%d", inside[0] ? inside : "(not known)", RaceNet_Port());
                 Text(cx, y + RG_LOBBY_ROW, address, RG_GREY);
             }
             y += RG_LOBBY_ROW * 2;
@@ -4605,10 +4607,14 @@ static int OnlinePage(void) {
         }
         if (!TypePage("Your name", "What the other players see", s_netName, sizeof(s_netName), 0)) continue;
         if (select == RG_ID_ONLINE_HOST && !TypePage("A password for this race", "Empty: no password", s_netPassword, sizeof(s_netPassword), 0, 1)) continue;
+        // (the user's router wouldn't open 21997 by UPnP and has no room for another forward, 2026-11-01: the port it already sends here will do)
+        if (select == RG_ID_ONLINE_HOST && !s_netPort[0]) snprintf(s_netPort, sizeof(s_netPort), "%d", RACENET_PORT);
+        if (select == RG_ID_ONLINE_HOST && !TypePage("The port to host on", "UDP, the one your router sends to this PC", s_netPort, sizeof(s_netPort), 1)) continue;
+        if (select == RG_ID_ONLINE_HOST && (atoi(s_netPort) < 1 || atoi(s_netPort) > 65535)) { s_netPort[0] = 0; SayPage("Online race", "A port is a number from 1 to 65535"); continue; }
         if (select == RG_ID_ONLINE_JOIN && !TypePage("Join a race", "The address the host gave you", s_netAddress, sizeof(s_netAddress), 1)) continue;
         WriteOnline();
         IdentifyGame();
-        const int on = select == RG_ID_ONLINE_HOST ? RaceNet_Host(s_netName, s_netPassword) : RaceNet_Join(s_netAddress, s_netName);
+        const int on = select == RG_ID_ONLINE_HOST ? RaceNet_Host(s_netName, s_netPassword, (unsigned short)atoi(s_netPort)) : RaceNet_Join(s_netAddress, s_netName);
         if (!on) { SayPage("Online race", RaceNet_Error()); continue; }
         s_routerTold = 0;
         if (LobbyPage()) return 1;

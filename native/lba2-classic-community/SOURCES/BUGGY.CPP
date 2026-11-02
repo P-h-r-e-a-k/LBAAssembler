@@ -9,6 +9,7 @@
 #include "INPUT.H"
 #include "AMBIANCE.H"
 #include "RACEMOD.H"
+#include <SYSTEM/LOG.H>
 #include <math.h> // sqrt: RaceSpeedOnSlope
 
 #define MAX_SAMPLE_PITCH 11000
@@ -208,6 +209,7 @@ void LeaveBuggy(U8 newcomportement) {
         ptrobj->SampleAlways = 0;
     }
 
+    if (RaceMod_Active()) Log_Info("[buggy] Twinsen out of the car, comportement %d, at (%d,%d,%d) in scene %d, move %d, key %d, input %#x", (int)newcomportement, (int)ptrobj->Obj.X, (int)ptrobj->Obj.Y, (int)ptrobj->Obj.Z, (int)NumCube, (int)ptrobj->Move, (int)MyKey, (unsigned)Input);
     ptb->X = ptrobj->Obj.X;
     ptb->Y = ptrobj->Obj.Y;
     ptb->Z = ptrobj->Obj.Z;

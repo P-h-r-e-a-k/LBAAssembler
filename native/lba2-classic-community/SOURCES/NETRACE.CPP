@@ -530,17 +530,22 @@ void RaceNet_SetGame(uint32_t content, const char *version) {
     snprintf(s_version, sizeof(s_version), "%s", version);
 }
 
-int RaceNet_Host(const char *name, const char *password) {
+static unsigned short s_hostPort = RACENET_PORT;
+
+int RaceNet_Port(void) { return s_hostPort; }
+
+int RaceNet_Host(const char *name, const char *password, unsigned short port) {
     RaceNet_Stop();
     snprintf(s_password, sizeof(s_password), "%s", password);
-    struct NetKit *kit = NetKit_Host(RACENET_PORT, name);
-    if (!kit) { snprintf(s_error, sizeof(s_error), "Port %d is in use on this PC", RACENET_PORT); Log_Warn("[racenet] %s", s_error); return 0; }
+    s_hostPort = port;
+    struct NetKit *kit = NetKit_Host(port, name);
+    if (!kit) { snprintf(s_error, sizeof(s_error), "Port %d is in use on this PC", (int)port); Log_Warn("[racenet] %s", s_error); return 0; }
     s_kit = kit; s_hosting = 1;
     snprintf(s_name, sizeof(s_name), "%s", name);
     if (!Begin()) { RaceNet_Stop(); return 0; }
-    NetUpnp_Open(RACENET_PORT);
+    NetUpnp_Open(port);
     if (NetUpnp_Ipv6(s_ipv6, sizeof(s_ipv6))) Log_Info("[racenet] this PC's IPv6 address: %s", s_ipv6);
-    Log_Info("[racenet] hosting as %s on UDP port %d", name, RACENET_PORT);
+    Log_Info("[racenet] hosting as %s on UDP port %d", name, (int)port);
     return 1;
 }
 

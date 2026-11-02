@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 
-#define RACENET_PORT 21997                  // UDP. Nothing common uses it; tested through the user's router by UPnP, 2026-10-30
+#define RACENET_PORT 21997                  // UDP, unless the host says otherwise. Nothing common uses it; tested through the user's router by UPnP, 2026-10-30
 #define RACENET_MAX_OTHERS 15               // the other players a game can have (netkit: 16 members)
 #define RACENET_NAME 16
 
@@ -49,7 +49,8 @@ typedef struct {
 // What this game is, before hosting or joining: `content` a key of its tracks and cars, `version` its name for people. Games with the same key race
 // each other whatever their builds; a game with another is turned away, and told
 void RaceNet_SetGame(uint32_t content, const char *version);
-int RaceNet_Host(const char *name, const char *password);   // hosts on RACENET_PORT, and asks the router to open it: 0 and RaceNet_Error when it can't. password "": none
+int RaceNet_Host(const char *name, const char *password, unsigned short port);   // hosts on `port`, and asks the router to open it: 0 and RaceNet_Error when it can't. password "": none
+int RaceNet_Port(void);                     // the port hosted on
 int RaceNet_HostLocal(const char *name, unsigned short port);   // ... two players at one PC: no router
 int RaceNet_Local(void);                    // hosting that way
 // Starts the second player's game: a copy of this one, with its own saves in `userDir`, in the rectangle given, on pad `pad`. It joins on `port` by itself
