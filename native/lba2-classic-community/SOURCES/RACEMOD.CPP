@@ -1658,6 +1658,15 @@ static int s_nbFlyers = 0;
 #define RACE_MAX_SPOOKS 96
 #define RACE_SPOOK_POINTS 40
 #define RACE_SPOOK_SPEED 1700.0            // units a second along its way
+// Flags 1024 (the Long Table's Canada geese, 2026-11-02): walking across the road from one end of its way to the other, a wait at each, no bob; a car that meets one is stopped
+// a moment, the goose off in a flap to the way's nearer end (GooseWalks)
+#define RACE_GOOSE_WALK 800.0              // units a second it walks ...
+#define RACE_GOOSE_RUN 2600.0              // ... and flaps off at
+#define RACE_GOOSE_WAIT 2600               // ms at the road's edge at the least (and up to as much again)
+#define RACE_GOOSE_REACH 800.0             // a car whose middle comes this near its meets it
+#define RACE_GOOSE_HOLD 650                // ms the car is stopped
+#define RACE_GOOSE_HOP 1500.0              // how high it jumps
+#define RACE_GOOSE_HOP_MS 900
 #define RACE_SPOOK_BOB 260.0               // up and down this much, ...
 #define RACE_SPOOK_BOB_MS 1800.0           // ... once in this long
 #define RACE_SPOOK_EVERY 4200              // ms between a witch's throws, at the least
@@ -1706,6 +1715,7 @@ typedef struct {
     int Entity;                            // (flags 16) the entity whose body number Body is (RESS.HQR 44), looked up when first drawn
     int Want, Shown, Woken;                // (flags 8) the one it should play (0 Anim, 1 Action), the one it plays, woken till the car is away
     S32 ActT0, ActMs;                      // ... when its Action began, and how long it is (its keyframes' times)
+    double Hop;                            // (flags 1024) how far off the road it has jumped
     T_OBJ_3D Obj;
 } T_RACE_SPOOK;
 static T_RACE_SPOOK s_spooks[RACE_MAX_SPOOKS];
@@ -2623,6 +2633,12 @@ static int RaisedAlong(int seg, double t, double distance, double *x, double *y,
 static double s_railSight = 0, s_railCeil = -1, s_railSightKept = 0;
 static double s_tunnelScale = 1;
 static int s_crabModel = -1;               // guard_crab=: the crab Felix fishes up, in OBJFIX.HQR
+// spill=<x> <y> <z> (the Long Table's, 2026-11-02): a place where a slick lies on the road, the cranberries' or the gravy's, as a drip's does (DripOil), and lies again a while after a car
+// has taken it
+#define RACE_MAX_SPILLS 12
+#define RACE_SPILL_EVERY 9000
+static struct { double X, Y, Z; S32 Next; } s_spills[RACE_MAX_SPILLS];
+static int s_nbSpills = 0;
 // leaves=<z> <colour> <colour> <colour> (the Long Table's, 2026-11-02): the snowfall (SNOW.CPP) on a race's island, falling leaves in those colours while Twinsen is north
 // of island z <z>, snow when he is south of it: October and November
 static int s_leafBorder = -1, s_leaf[3];
@@ -4268,6 +4284,7 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "tunnel_scale")) s_tunnelScale = atof(v) > 0 ? atof(v) : 1;
         else if (!strcmp(key, "guard_crab")) s_crabModel = atoi(v);
+        else if (!strcmp(key, "spill")) { if (s_nbSpills < RACE_MAX_SPILLS && sscanf(v, "%lf %lf %lf", &s_spills[s_nbSpills].X, &s_spills[s_nbSpills].Y, &s_spills[s_nbSpills].Z) == 3) s_spills[s_nbSpills++].Next = 0; }
         else if (!strcmp(key, "leaves")) sscanf(v, "%d %d %d %d", &s_leafBorder, &s_leaf[0], &s_leaf[1], &s_leaf[2]);
         else if (!strcmp(key, "race_driver_body")) { if (s_nbDriverBodies < RACE_MAX_DRIVER_BODIES) s_driverBody[s_nbDriverBodies++] = atoi(v); }
         else if (!strcmp(key, "tunnel")) {
@@ -7665,7 +7682,7 @@ static void DrawSpooks(void) {
             }
         }
         // (a standing one doesn't bob, nor a party guest on the floor; a dancer sways to and fro -- flags 64, 128)
-        const double y = (sp->Flags & (8 | 64)) ? sp->Y : sp->Y + RACE_SPOOK_BOB * sin((TimerRefHR + i * 731) * 2 * RACE_PI / RACE_SPOOK_BOB_MS);
+        const double y = (sp->Flags & 1024) ? sp->Y + sp->Hop : (sp->Flags & (8 | 64)) ? sp->Y : sp->Y + RACE_SPOOK_BOB * sin((TimerRefHR + i * 731) * 2 * RACE_PI / RACE_SPOOK_BOB_MS);
         const S32 ox = (S32)floor(sp->X - CurrentCubeX * 32768.0 + 0.5), oy = (S32)floor(y + 0.5), oz = (S32)floor(sp->Z - CurrentCubeY * 32768.0 + 0.5);
         S32 beta = (sp->Flags & 128) ? (S32)floor(sp->Beta + RACE_PARTY_SWAY * sin((TimerRefHR + i * 389) * 2 * RACE_PI / RACE_PARTY_SWAY_MS) + 0.5) & 4095 : sp->Beta;
         if (sp->Flags & 512) beta = (S32)((sp->Beta + (S64)TimerRefHR * RACE_PARTY_SPIN / 1000) & 4095);
@@ -13339,12 +13356,46 @@ static int SpookTarget(const T_RACE_SPOOK *sp, double y, int driving, int keep) 
     return best;
 }
 
+static void GuardStrikes(int who, S32 now, const char *what, S32 hold);
+
+// A goose (spook=, flags 1024) a step across the road, and what it meets.
+static void GooseWalks(T_RACE_SPOOK *sp, int i, S32 now, S32 dt) {
+    if (sp->Np < 2 || sp->Len <= 1) return;
+    const int flapping = now < sp->T0 + RACE_GOOSE_HOP_MS && sp->T0;
+    sp->Hop = flapping ? RACE_GOOSE_HOP * sin((now - sp->T0) * RACE_PI / RACE_GOOSE_HOP_MS) : 0;
+    if (now >= sp->Next || flapping) {
+        sp->S += sp->Dir * (flapping ? RACE_GOOSE_RUN : RACE_GOOSE_WALK) * dt / 1000.0;
+        if (sp->S >= sp->Len || sp->S <= 0) {
+            sp->S = sp->S <= 0 ? 0 : sp->Len;
+            sp->Dir = sp->S > 0 ? -1 : 1;
+            sp->Next = now + RACE_GOOSE_WAIT + (S32)(VentRandom() * RACE_GOOSE_WAIT);
+        }
+    }
+    const double u = sp->S / sp->Len, dx = sp->PX[1] - sp->PX[0], dz = sp->PZ[1] - sp->PZ[0];
+    sp->X = sp->PX[0] + dx * u; sp->Z = sp->PZ[0] + dz * u;
+    sp->Beta = TurnRound(atan2(dx * sp->Dir, dz * sp->Dir));
+    if (flapping || sp->Hop > 0) return;
+    for (int who = -1; who < RACE_MAX_OPPONENTS; who++) {
+        double x, y, z;
+        if (!CarAt(who, &x, &y, &z) || fabs(y - sp->Y) > 900) continue;
+        if ((x - sp->X) * (x - sp->X) + (z - sp->Z) * (z - sp->Z) > RACE_GOOSE_REACH * RACE_GOOSE_REACH) continue;
+        GuardStrikes(who, now, "a goose", RACE_GOOSE_HOLD);
+        sp->T0 = now;
+        sp->Dir = sp->S > sp->Len / 2 ? 1 : -1;
+        Log_Info("[racemod] goose %d meets %s", i, who < 0 ? "Twinsen's car" : "a car");
+        break;
+    }
+}
+
 // Every frame: the spooks (spook=) -- along their ways, bobbing; the witches now and then stopping to throw a fire ball at a car below them.
 // (Drawn with the backdrop: RaceMod_DrawBackdrop.)
 static void Spooks(S32 now, int driving, S32 dt) {
     if (!s_nbSpooks) return;
     if (!s_nbFlyers) CarWays(now);
     const int running = RaceRunning();
+    // (the spills, lying again a while after a car has taken one)
+    for (int i = 0; i < s_nbSpills && running && s_powerups && s_nbOilActors; i++)
+        if (now >= s_spills[i].Next) s_spills[i].Next = now + (DripOil(s_spills[i].X, s_spills[i].Y, s_spills[i].Z, now) ? RACE_SPILL_EVERY : 1000);
     for (int i = 0; i < s_nbSpooks; i++) {
         T_RACE_SPOOK *sp = &s_spooks[i];
         if (sp->Flags & 8) {
@@ -13362,6 +13413,7 @@ static void Spooks(S32 now, int driving, S32 dt) {
             }
             continue;
         }
+        if (sp->Flags & 1024) { GooseWalks(sp, i, now, dt); continue; }
         const double y = sp->Y + RACE_SPOOK_BOB * sin((now + i * 731) * 2 * RACE_PI / RACE_SPOOK_BOB_MS);
         if (sp->Throwing) {
             const S32 t = now - sp->T0;
@@ -19283,7 +19335,7 @@ static void ResetTrack(void) {
     s_viewFar = s_viewFog = 0;
     memset(s_netThrough, 0, sizeof(s_netThrough)); memset(s_netTouching, 0, sizeof(s_netTouching)); memset(s_netBumpAt, 0, sizeof(s_netBumpAt));
     s_netPushX = s_netPushZ = s_netShoveX = s_netShoveZ = 0; s_netBumps = 0;
-    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_missBackAt = 0; s_tunnelScale = 1; s_nbDriverBodies = 0; s_crabModel = -1; s_leafBorder = -1; memset(s_crabs, 0, sizeof(s_crabs)); s_underWheelScene = -1; s_onRoadAt = 0; s_lostSaid = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
+    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_missBackAt = 0; s_tunnelScale = 1; s_nbDriverBodies = 0; s_crabModel = -1; s_leafBorder = -1; s_nbSpills = 0; memset(s_crabs, 0, sizeof(s_crabs)); s_underWheelScene = -1; s_onRoadAt = 0; s_lostSaid = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;
     RaceSoundsFree(); JetHumStop("the race reset"); SkidSoundStop(); SlideEnd("the race reset");

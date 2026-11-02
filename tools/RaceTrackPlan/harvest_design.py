@@ -41,6 +41,7 @@ GRADE = 0.15                            # the steepest it is driven (Temple's ve
 LAND, BOG, LAKE, TABLE_Y = 900.0, 620.0, 900.0, 6200.0
 HELIX_X, HELIX_Z, HELIX_R = 92.0, 183.0, 18.0
 TABLE = (118.0, 142.0, 280.0, 178.0)    # the table's top: x0, z0, x1, z1
+MASH_Z = 151.5                          # Mash Mountain's middle, its foot between the table's edge and the road
 
 # A circle as corners (the way volcano_design.py winds its spirals): the polygon round it, each corner rounded with the circle's own radius,
 # from angle a0 to a1 (degrees: 0 east, 90 south; less and less is anticlockwise on the map)
@@ -246,7 +247,7 @@ plan = {
     'gridShift': -PIT / 2,
     'raisedCut': True,
     # the camera rides the road behind the car, as in the palace: on an arm it climbs through the table when the road goes under it, and through the horn's wall
-    'railCamera': [9, 2100, 7, 500, 1000],
+    'railCamera': [11, 1900, 7, 500, 1000],
     # the road's own surfaces: a cranberry runner down the table, the bog's boardwalk and the wharves' planks, the stadium's cinders
     'themes': [{'from': int(a), 'to': int(b), 'theme': t} for a, b, t in sorted(((M['table0'], M['table1'], 'runner'), (M['bog0'] - 30, M['bog1'] + 30, 'boardwalk'), (M['bowl0'], M['bowl1'], 'cinder')))],
 }
@@ -258,16 +259,24 @@ for flock, (cx, cz, rx, rz, y, lag0) in enumerate(((180, 86, 128, 58, 4400.0, 0.
     for g in range(7):
         rank = (g + 1) // 2; side = -1 if g % 2 else 1
         spooks.append({'kind': 'goose', 'flags': 2, 'y': y + rank * 60, 'way': ring(cx, cz, rx, rz, lag0 - rank * 0.05, side * rank * 3.0)})
-for lane, (x0, x1, z) in enumerate(((332, 372, 93), (372, 332, 96), (336, 368, 99), (368, 336, 91))):
+for lane, (x0, x1, z) in enumerate(((332, 372, 93), (372, 332, 96), (336, 368, 98), (368, 336, 92))):
     spooks.append({'kind': 'pboat', 'flags': 0, 'y': 60.0, 'way': [[x0, z], [x1, z]]})
 parade = list(range(M['parade0'], M['parade1'], int(14 / STEP)))
 paradeWay = [[round(float(X[k]), 2), round(float(Z[k] + 2 * math.sin(k / 30)), 2)] for k in parade]
 for i, what in enumerate(('balloonTurkey', 'balloonPumpkin', 'balloonGoose')):
     a = len(paradeWay) * i // 3
     spooks.append({'kind': what, 'flags': 2 if False else 0, 'y': 4400.0 + i * 500, 'way': paradeWay[a:] + paradeWay[:a]})
+# Canada geese crossing the road on foot, in threes, each to the far edge and back (flags 1024)
+for k in (near(205, NZ, E_), (M['bog0'] + int(46 / STEP)) % N, (M['maple0'] + int(24 / STEP)) % N, (M['fort1'] - int(10 / STEP)) % N):
+    for g in range(3):
+        j = (k + g * 7) % N; w = float(halfs[j]) + 3.0; way = [[round(float(X[j] + Nn[j, 0] * s * w), 2), round(float(Z[j] + Nn[j, 1] * s * w), 2)] for s in (1, -1)]
+        spooks.append({'kind': 'gooseWalk', 'flags': 1024, 'y': float(round(Y[j])), 'way': way if g % 2 else way[::-1]})
 plan['halloween'] = {'pumpkins': True, 'spooks': spooks}
+# spilt cranberries on the Bog's boardwalk, gravy on the table
+spills = [(M['bog0'] + int(24 / STEP)) % N, (M['bog0'] + int(66 / STEP)) % N, near(216, 150, W_), near(150, 168, W_), near(180, 156, W_)]
+plan['spills'] = [[round(float(X[k] + Nn[k, 0] * (2.0 if i % 2 else -2.0)), 2), round(float(Z[k] + Nn[k, 1] * (2.0 if i % 2 else -2.0)), 2), float(round(Y[k]))] for i, k in enumerate(spills)]
 # Mash Mountain's crater, its gravy going up and raining on the road round it; the stadium's kicks coming down on the road round the field
-MASH = [146.0, 150.0, TABLE_Y + 4600]
+MASH = [146.0, MASH_Z, TABLE_Y + 4600]
 plan['lavaGeysers'] = [{'source': MASH, 'from': int(near(182, 156, W_)), 'to': int(near(120, 165, W_)), 'every': 6200, 'balls': 5}]
 kick = [318.0, 250.0, 2600.0]
 plan['crystalShards'] = [{'source': kick, 'from': int(M['bowl0']), 'to': int((M['bowl0'] + M['bowl1']) // 2), 'every': 7400, 'balls': 2},
@@ -362,7 +371,7 @@ for what, allowed, spacing in (('maple', [KIND['maple'], KIND['grass']], 9.0), (
     for j in range(16, SIZE_Z - 16, int(spacing)):
         for i in range(16, SIZE_X - 12, int(spacing)):
             x, z = i + rand.rand() * spacing * 0.8, j + rand.rand() * spacing * 0.8
-            if kind[int(z), int(x)] not in allowed or not clear_of_road(x, z, 3.0): continue
+            if kind[int(z), int(x)] not in allowed or not clear_of_road(x, z, 5.0): continue
             if what == 'maple': v = int(rand.randint(3)); name = 'maple%d' % v
             else: name = 'oak'
             put(name, x, z, turn=rand.randint(4096), scale=0.8 + rand.rand() * 0.6)
@@ -376,34 +385,35 @@ put('ferris', 150, 22)
 for x, z in ((86, 32), (112, 62), (186, 34), (214, 32), (232, 62), (118, 28)): put('stall', x, z, turn=(z > 46) * 2048)
 for k in range(14):
     x, z = 60 + rand.rand() * 196, 22 + rand.rand() * 46
-    if clear_of_road(x, z, 2.0) and all(math.hypot(x - t[0], z - t[1]) > 7 for n in ('tent', 'tent2') for t in D.get(n, [])): put('prize' if k % 3 == 0 else 'bales', x, z, turn=rand.randint(4096))
+    if clear_of_road(x, z, 6.0) and all(math.hypot(x - t[0], z - t[1]) > 7 for n in ('tent', 'tent2') for t in D.get(n, [])): put('prize' if k % 3 == 0 else 'bales', x, z, turn=rand.randint(4096))
 # -- the regatta: moored boats, the lane's buoys under the leap
-for x, z in ((296, 62), (318, 84), (282, 78), (334, 60), (326, 98), (304, 36)): put('boat', x, z, y=-40, turn=rand.randint(4096))
+for x, z in ((296, 64), (318, 84), (282, 78), (328, 36), (326, 98), (304, 34)): put('boat', x, z, y=-40, turn=rand.randint(4096))
 for x in range(330, 372, 7):
     for z in (88, 102): put('buoy', x, z, y=0)
 # -- hay and pumpkins beside the Maple Run and the fields
 for k in range(70):
     x, z = 20 + rand.rand() * (SIZE_X - 40), 20 + rand.rand() * (SIZE_Z - 40); c = kind[int(z), int(x)]
-    if c in (KIND['maple'], KIND['grass'], KIND['stubble']) and clear_of_road(x, z, 2.0) and G[int(z), int(x)] > 300:
+    if c in (KIND['maple'], KIND['grass'], KIND['stubble']) and clear_of_road(x, z, 4.0) and G[int(z), int(x)] > 300:
         put('hay' if k % 2 == 0 else 'pumpkin', x, z, turn=rand.randint(4096))
 # -- the horn of plenty, its mouth on the table, the road through it; what spills out of it
-hornTip, hornMouth = near(304, 160, W_), near(262, 160, W_)
-put('horn', 282, 160, y=TABLE_Y, scale=TABLE_Y - float(Y[hornTip]))
+hornTip, hornMouth = near(296, 160, W_), near(262, 160, W_)
+put('horn', 279, 160, y=TABLE_Y, scale=TABLE_Y - float(Y[hornTip]))
 for x, z, what in ((262, 149, 'pumpkin'), (258, 147, 'cob'), (266, 145, 'apple'), (254, 145, 'squash'), (262, 171, 'squash'), (258, 174, 'cob'), (268, 174, 'apple'), (252, 172, 'apple')):
     put(what, x, z, y=TOP, turn=rand.randint(4096))
 # -- the feast, Canada's end first, the road between the dishes
-for x, z in ((246, 145), (239, 145), (258, 170), (270, 149), (272, 172)): put('tart', x, z, y=TOP)
+for x, z in ((246, 145), (254, 146), (258, 170), (270, 149), (272, 172)): put('tart', x, z, y=TOP)
 put('pie', 244, 171, y=TOP)
 put('cran', 228, 170, y=TOP)
-put('turkey', 206, 167, y=TOP, turn=rand.randint(4096))
-put('fork', 186, 174, y=TOP, turn=1024)
-put('knife', 193, 174, y=TOP, turn=3072)
-put('gravyboat', 176, 148, y=TOP, turn=300)
-put('sweet', 164, 148, y=TOP, turn=0)
-put('mash', 146, 150, y=TOP)
-put('pecan', 128, 150, y=TOP)
-for x, z in ((222, 144), (168, 176), (124, 176), (262, 144)): put('candle', x, z, y=TOP)
-put('arch', 176, 158, y=TOP, turn=1024 + 200)
+put('turkey', 206, 168, y=TOP)
+put('fork', 186, 172, y=TOP, turn=1024)
+put('knife', 193, 172, y=TOP, turn=3072)
+put('gravyboat', 161, 147, y=TOP, turn=300)
+put('sweet', 172.5, 146.5, y=TOP, turn=0)
+put('mash', 146, MASH_Z, y=TOP)
+put('pecan', 124, 150, y=TOP)
+for x, z in ((222, 175), (168, 176), (124, 176), (262, 144)): put('candle', x, z, y=TOP)
+archAt = near(176, 160, W_, after=M['table0'], window=120)
+put('arch', X[archAt], Z[archAt], y=TOP, turn=int(math.atan2(-Nn[archAt, 1], Nn[archAt, 0]) * 2048 / math.pi))
 # -- the chairs: the road under two of them, between the legs
 for x in (140, 189, 232, 262): put('chair', x, 128, y=FEET)
 for x in (150, 200, 250): put('chair', x, 192, y=FEET, turn=2048)
@@ -424,8 +434,8 @@ for x, z in ((28, 204), (46, 212), (34, 250), (52, 258), (24, 262), (44, 200), (
 for x, z in ((60, 219), (82, 219), (59, 241), (81, 241)): put('tower', x, z)
 # -- Parade Avenue
 for i, x in enumerate(range(86, 282, 13)): put('bldg%d' % (i * 3 % 4), x, 305)
-for i, x in enumerate(range(84, 158, 13)): put('bldg%d' % (i * 5 % 4), x, 264, turn=2048)
-put('review', 180, 262)
+for i, x in enumerate(range(97, 136, 13)): put('bldg%d' % (i * 5 % 4), x, 262, turn=2048)
+put('review', 151, 262)
 # -- the Turkey Bowl
 for x in range(304, 360, 16): put('stand', x, 198)
 for z in range(224, 288, 16): put('stand', 370, z, turn=3072)
@@ -435,15 +445,22 @@ put('lines', 318, 250, y=gh(318, 250) + 70)
 put('goal', 318, 225, turn=0); put('goal', 318, 276)
 put('board', 332, 186)
 # -- the Corn Maze: walls of stalks down both sides, a second row behind
+def in_garden(x, z): return 237 < x < 254 and 212 < z < 252
 for k in range(M['maze0'], M['under0'] - int(16 / STEP), 12):
     turn = int(math.atan2(T[k, 0], T[k, 1]) * 2048 / math.pi - 1024) & 4095
     for side in (1, -1):
-        for out_ in (halfs[k] + 1.2, halfs[k] + 4.2):
+        for out_ in (halfs[k] + 2.4, halfs[k] + 5.6):
             x, z = X[k] + Nn[k, 0] * side * out_, Z[k] + Nn[k, 1] * side * out_
-            if clear_of_road(x, z, 0.6): put('corn', x, z, y=gh(x, z), turn=turn)
+            # (a piece is 6 cells long: its two ends and its middle clear of the road, on a bend's inside too)
+            if in_garden(x, z): continue
+            if all(clear_of_road(x + T[k, 0] * d, z + T[k, 1] * d, 2.0) for d in (-3.2, 0, 3.2)): put('corn', x, z, y=gh(x, z), turn=turn)
+# (the pocket inside the first hairpin: a Three Sisters garden, its hills in rows)
+for z in range(217, 250, 6):
+    for x in (240, 245.5, 251):
+        if clear_of_road(x, z, 3.0): put('sisters', x, z, turn=rand.randint(4096))
 # -- the border, its line of stones, a flag of each country at each end
 for x in list(range(20, 104, 12)) + list(range(296, 362, 12)):
-    if kind[int(BORDER_Z), x] == KIND['border']: put('post', x, BORDER_Z)
+    if kind[int(BORDER_Z), x] == KIND['border'] and clear_of_road(x, BORDER_Z, 3.0): put('post', x, BORDER_Z)
 for x in (22, 356):
     put('flagCA', x, BORDER_Z - 4); put('flagUS', x, BORDER_Z + 4)
 

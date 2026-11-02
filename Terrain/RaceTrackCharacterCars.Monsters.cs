@@ -41,8 +41,9 @@ internal static partial class RaceTrackCharacterCars
     public static readonly Car Coffin = new("The vampire's coffin", "the vampire", TwinsenBody, VampireGeneric, (_, racer) => BuildCoffin(racer), TempleOfBu);
     public static readonly Car Broomstick = new("The witch's broomstick", "the witch", TwinsenBody, WitchGeneric, (_, racer) => BuildBroomstick(racer), TempleOfBu);
     public static readonly Car Hearse = new("The zombie's hearse", "the zombie", TwinsenBody, ZombieGeneric, (_, racer) => BuildHearse(racer), TempleOfBu);
-    public static Car[] Monsters => new[] { Coffin, Broomstick, Hearse };
-    private static int MonsterNumber(Car car) => car == Coffin ? VampireNumber : car == Broomstick ? WitchNumber : ZombieNumber;
+    // (and the Long Table's two, made and installed as these are: RaceTrackCharacterCars.Harvest)
+    public static Car[] Monsters => new[] { Coffin, Broomstick, Hearse, TurkeyCar, GooseCar };
+    private static int MonsterNumber(Car car) => car == Coffin ? VampireNumber : car == Broomstick ? WitchNumber : car == Hearse ? ZombieNumber : car == TurkeyCar ? TurkeyNumber : GooseNumber;
 
     // The broomstick's bob over its line (RaceDriver.Hover, RACEMOD.CPP opponent_hover=): up and down this far (units), once in this long (ms).
     public const int WitchBob = 45, WitchBobMs = 1600;

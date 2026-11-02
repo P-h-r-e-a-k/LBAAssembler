@@ -28,10 +28,11 @@ internal sealed class HarvestDesign
     public static double WorldX(double u) => (CubeX0 * 64 + u) * IslandFile.CellSize;
     public static double WorldZ(double v) => (CubeZ0 * 64 + v) * IslandFile.CellSize;
 
-    public static HarvestDesign Load()
+    // (`folder`: from docs/racetrack as it stands, not the program's copies: the harvestclear tool's, between builds)
+    public static HarvestDesign Load(string? folder = null)
     {
         var assembly = typeof(HarvestDesign).Assembly;
-        using var stream = assembly.GetManifestResourceStream(GroundResource) ?? throw new InvalidDataException("This build of the program has no ground for the Long Table.");
+        using var stream = folder is not null ? File.OpenRead(Path.Combine(folder, "harvest_ground.bin")) : assembly.GetManifestResourceStream(GroundResource) ?? throw new InvalidDataException("This build of the program has no ground for the Long Table.");
         using var inflated = new ZLibStream(stream, CompressionMode.Decompress);
         using var bytes = new MemoryStream();
         inflated.CopyTo(bytes);
@@ -42,7 +43,7 @@ internal sealed class HarvestDesign
         for (var v = 0; v <= depth; v++) for (var u = 0; u <= width; u++) { heights[u, v] = BitConverter.ToInt16(b, at); at += 2; }
         var kinds = new Kind[width, depth];
         for (var v = 0; v < depth; v++) for (var u = 0; u < width; u++) kinds[u, v] = (Kind)b[at++];
-        using var things = assembly.GetManifestResourceStream(DecorResource) ?? throw new InvalidDataException("This build of the program has no things for the Long Table.");
+        using var things = folder is not null ? File.OpenRead(Path.Combine(folder, "harvest_decor.json")) : assembly.GetManifestResourceStream(DecorResource) ?? throw new InvalidDataException("This build of the program has no things for the Long Table.");
         var read = JsonSerializer.Deserialize<Dictionary<string, double[][]>>(things) ?? new();
         return new HarvestDesign
         {

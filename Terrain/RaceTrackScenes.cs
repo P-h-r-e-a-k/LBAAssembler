@@ -1207,7 +1207,7 @@ internal static class RaceTrackScenes
                     for (var k = 0; k < OilPerScene; k++)
                     {
                         var oil = Hidden(mushroomTemplate);
-                        oil.Body = RaceTrackOil.Generic;
+                        oil.Body = t.Options.Island == RaceTrackIsland.Harvest ? (model.CubeY >= 6 ? RaceTrackOil.GravyBody : RaceTrackOil.CranberryBody) : RaceTrackOil.Generic;
                         t.Oil.Add(new[] { scene, SceneOps.AddActor(model, oil) });
                     }
                     // the fake mushrooms: copies of the mushroom itself -- a fake looks just as a real one does

@@ -170,6 +170,7 @@ internal static class Program
             "boxesat" => PolarStudy.BoxesAt(args),
             "groundpeaks" => PolarStudy.GroundPeaks(args),
             "polarpreview" => PolarStudy.Preview(args),
+            "harvestclear" => HarvestStudy.Clear(args),
             "polarrows" => PolarStudy.Rows(args),
             "polarscenecells" => PolarStudy.SceneCells(args),
             "polarblocktiles" => PolarStudy.BlockTiles(args),

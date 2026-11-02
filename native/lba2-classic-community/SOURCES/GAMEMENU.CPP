@@ -2456,9 +2456,11 @@ void DrawGameMenu(U16 *ptrmenu, S32 justone) {
             // between full redraws instead of being drawn once and cleared.
             if (n == selected || n == s_menuMarkRow) {
                 DrawOneChoice(UI_CENTER_X, y, type, num, sel);
+                RaceGame_RowOver(num, UI_CENTER_X, y);
             }
         } else {
             DrawOneChoice(UI_CENTER_X, y, type, num, sel);
+            RaceGame_RowOver(num, UI_CENTER_X, y);
         }
         CoulTextMenu = keepColour;
 

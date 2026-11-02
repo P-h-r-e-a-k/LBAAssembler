@@ -16,6 +16,7 @@ S32 RaceGame_On(void);                      // RACEGAME.TXT read: the main menu 
 // `inGame`: a race (or the story) is on to resume.
 S32 RaceGame_Menu(S32 inGame);
 S32 RaceGame_MenuText(S32 num, char *string);   // BuildCustomMenuText: a row of the race game's (non-zero), its label in `string`
+void RaceGame_RowOver(S32 num, S32 x, S32 y);   // what lies over a row: a banner (the rows' own words already drawn)
 S32 RaceGame_RowDisabled(S32 num);          // a row greyed and passed over (Story Mode, Track select until they open)
 // OptionsMenu: the menu to show -- `menu` (the game's own), or in the race game a copy with its own rows after the game's (Race
 // controls, power-ups; Updates); and a row picked there that isn't the game's: its page shown (non-zero), or 0 (not the race game's)

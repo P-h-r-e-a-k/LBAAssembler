@@ -54,7 +54,7 @@ others celebrate; Indigenous peoples aren't one opinion, and the warning from Na
 [Culture Trip](https://theculturetrip.com/north-america/usa/new-york/articles/the-native-american-experience-of-thanksgiving-sorrow-apathy-joy)
 
 So: **no Pilgrims-and-Indians tableau, no costumed Indigenous figures, no headdresses, nobody as a mascot or a hazard.** The track is about harvest, food, weather and
-parades. History appears as places, not people: the fort, the ships. A planned Three Sisters garden beside the maze, corn with beans and squash, would credit the
+parades. History appears as places, not people: the fort, the ships. The Three Sisters garden in the corn maze, corn with beans and squash, credits the
 Haudenosaunee who gave it that name: a real farming system rather than a costume.
 [Wikipedia](https://en.wikipedia.org/wiki/Three_Sisters_(agriculture)), [Onondaga Nation](https://www.onondaganation.org/wp-content/uploads/2026/02/three_sisters_book.pdf)
 
@@ -88,9 +88,10 @@ Reskins of systems the engine already has, so they behave as players already exp
 
 | Hazard | Theme | Engine |
 |---|---|---|
+| Spills and slicks | Cranberries in the north, gravy on the table and in the south | `spill=`, oil bodies 2 and 3 |
 | Gravy eruptions on the table | Mash Mountain's crater, every 6 s or so | `lavaGeysers`, a gravy ball's model |
 | Footballs coming down | Kicked from mid-field onto the road round it, their shadows growing | `crystalShards`, a football's model |
-| Canada geese | Two flocks of seven in Vs, overhead | `spook` |
+| Canada geese | Two flocks of seven overhead in Vs; threes on foot across the road | `spook`, flags 1024 for the walkers |
 | Parade balloons | A turkey, a pumpkin and a goose over the avenue | `spook` |
 | Pumpkin boats | Four, paddling the lane under the leap | `spook` at water level |
 | A bunch of balloons (the power-up) | One sent to each rival | `haunt_balloons`, as the Desert's |
@@ -121,14 +122,15 @@ Reskins of systems the engine already has, so they behave as players already exp
 
 ## Status
 
-Built and driven by the autodriver, not yet by a person:
+Built, and driven by the autodriver: no person's lap yet. It is **locked**: greyed on the Specials page under an "Under development" banner, until 0000 is typed on that page (kept for good, the track and its two cars with it).
 
-- The island, ground, sky, palette and about 1,050 placed things, every model made from nothing (`HarvestBodies`).
-- Time trial: two clean laps of about 61 s, no missed checkpoint, no rescue.
-- Race against Tim, the old Wannie and Bob: they lap in 76 to 82 s; the geyser, footballs and power-ups all fired.
+- The island, ground, sky, palette and about 950 placed things, every model made from nothing (`HarvestBodies`).
+- Time trial: clean laps of about 61 s. Race against the pardoned turkey, the Canada goose and Tim: they lap in about 75 s.
+- `ScriptRoundTrip harvestclear` tests every face of every placed thing against the road's width and the room over it. Run it after moving anything: **0 of 575 on the road**. The first run found 74.
+- What moves isn't in that check: the regatta's four boats, the balloons and the geese have their ways set by hand in the design script. Walking geese cross the road on purpose.
 
-Left out of this first version, for later:
+Hazards added since the first version: Canada geese crossing the road on foot in threes (a car that meets one is stopped 0.65 s), slicks in cranberry north of the table's cube row and gravy from it south, and five spills that lie on the road and come back a while after a car takes them.
 
-- A goose that walks across the road, a turkey or goose car of the track's own, a slick in cranberry and gravy colours. The line-up uses existing cars that suit a feast.
-- The Three Sisters garden isn't marked as such yet: the field by the maze is corn. Its credit should stay in this document until the garden is really there.
-- Pit lane not driven in: no car has been tested going into it.
+The Three Sisters garden stands in the pocket inside the corn maze's first hairpin: hills of corn with beans up it and squash round it, as the Haudenosaunee named them.
+
+Not tested: a car going into the pit lane.

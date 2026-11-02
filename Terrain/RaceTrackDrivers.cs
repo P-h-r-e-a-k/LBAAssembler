@@ -149,12 +149,12 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Of(RaceTrackCharacterCars.Hearse, "The zombie", 1.2, 1.02, 0.97),
     };
 
-    // The Long Table (2026-11-02): those who have come to the feast by what they brought -- Tim's serving tray, a firefly tart, Bob's rowing boat from the regatta
+    // The Long Table (2026-11-02): the pardoned turkey making its getaway, the one to beat; a Canada goose in its canoe; and Tim, on the serving tray that should be carrying the turkey
     public static readonly List<RaceDriver> Harvest = new()
     {
-        Of(RaceTrackCharacterCars.Tim, "Tim", 0, 1.0, 1.0, main: true),
-        Of(RaceTrackCharacterCars.Tart, "The old Wannie", -1.2, 0.99, 1.02),
-        Of(RaceTrackCharacterCars.Bob, "Bob", 1.2, 1.02, 0.97),
+        Of(RaceTrackCharacterCars.TurkeyCar, "The pardoned turkey", 0, 1.0, 1.0, main: true),
+        Of(RaceTrackCharacterCars.GooseCar, "The Canada goose", -1.2, 0.99, 1.02),
+        Of(RaceTrackCharacterCars.Tim, "Tim", 1.2, 1.02, 0.97),
     };
 
     // The Emperor's palace (2026-10-12): racing out of the palace ahead of the Dark Monk to his teleporter -- Stan in his time machine (the

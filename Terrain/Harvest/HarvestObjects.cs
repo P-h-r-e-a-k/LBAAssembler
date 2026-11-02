@@ -19,14 +19,21 @@ internal static class HarvestObjects
     public static readonly Rgb Bark = new(72, 48, 30), BarkLight = new(110, 76, 46), MapleRed = new(214, 62, 32), MapleOrange = new(232, 110, 30), MapleGold = new(245, 170, 40),
         Wood = new(150, 110, 70), WoodDark = new(110, 76, 46), Cream = new(244, 232, 200), Cranberry = new(170, 30, 42), Pale = new(250, 208, 92);
 
-    private sealed class Placer(IslandFile island, SnowShading shading)
+    // (what is placed, as it is placed: the harvestclear tool's check of it against the road)
+    public sealed record Placed(string What, SnowMesh Mesh, double U, double V, double Y, int Beta);
+    public static List<Placed>? Recording;
+
+    private sealed class Placer(IslandFile? island, SnowShading shading)
     {
+        public string What = "";
         public readonly List<byte[]> Bodies = new() { RaceTrackPipes.Write(new List<Vector3> { Vector3.Zero }, new List<Face>(), lit: false) };
         public int Decors, Full;
         public SnowMesh Mesh() => new(shading);
         public int Add(SnowMesh mesh, string what) { Bodies.Add(mesh.Write(what)); return Bodies.Count - 1; }
         public void Place(int body, SnowMesh mesh, double u, double v, double y, int beta = 0, double reach = 0)
         {
+            Recording?.Add(new Placed(What, mesh, u, v, y, beta));
+            if (island is null) return;
             var (lo, hi) = mesh.Bounds();
             double wx = HarvestDesign.WorldX(u), wz = HarvestDesign.WorldZ(v);
             double x0 = lo.X, x1 = hi.X, z0 = lo.Z, z1 = hi.Z;
@@ -43,7 +50,7 @@ internal static class HarvestObjects
 
     public sealed record Built(List<byte[]> Bodies, List<string> Log);
 
-    public static Built Build(IslandFile island, SnowShading shading, HarvestDesign design)
+    public static Built Build(IslandFile? island, SnowShading shading, HarvestDesign design)
     {
         var at = new Placer(island, shading);
         var log = new List<string>();
@@ -55,6 +62,7 @@ internal static class HarvestObjects
             if (!design.Things.TryGetValue(what, out var list)) continue;
             var mesh = make(at);
             var body = at.Add(mesh, what);
+            at.What = what;
             foreach (var t in list) at.Place(body, mesh, t.X, t.Z, t.Y, t.Turn);
             log.Add($"{list.Count} {what}");
         }
@@ -64,9 +72,12 @@ internal static class HarvestObjects
             var mesh = HarvestBodies.Make(what, shading) ?? throw new InvalidDataException($"The Long Table has no model for its {what}.");
             var body = at.Add(mesh, what);
             var reach = what is "ferris" or "mill" or "chair" or "board" or "ship" or "turkey" or "mash" ? FarReach : 0;
+            at.What = what;
             foreach (var t in list) at.Place(body, mesh, t.X, t.Z, t.Y, t.Turn, reach);
         }
+        at.What = "the table";
         Table(at);
+        at.What = "the horn";
         if (design.Things.TryGetValue("horn", out var horn) && horn.Count > 0) Horn(at, horn[0]);
         log.Add($"the things: {at.Bodies.Count} bodies, {at.Decors} decors{(at.Full > 0 ? $", {at.Full} left out, their cubes full" : "")}");
         return new Built(at.Bodies, log);
@@ -97,7 +108,7 @@ internal static class HarvestObjects
     // `t.Scale`: how far the road climbs from the tip to the mouth.
     private static void Horn(Placer at, HarvestDesign.Thing t)
     {
-        const int Rings = 11, Sides = 9; const double Half = 21, Tip = 8.0, Mouth = 15.5;
+        const int Rings = 11, Sides = 9; const double Half = 17, Tip = 8.0, Mouth = 15.5;
         var m = at.Mesh();
         (Vector3 Middle, double R) Ring(int i)
         {
@@ -142,8 +153,14 @@ internal static class HarvestObjects
                 }
             // (its underside, dark, and the cloth's hem down each long side)
             m.Poly(WoodDark, -Vector3.UnitY, new Vector3(W(u0), -(float)TableDepth, D(TableZ0)), new Vector3(W(u1), -(float)TableDepth, D(TableZ0)), new Vector3(W(u1), -(float)TableDepth, D(TableZ1)), new Vector3(W(u0), -(float)TableDepth, D(TableZ1)));
-            m.Poly(Cream, -Vector3.UnitZ, new Vector3(W(u0), 0, D(TableZ0)), new Vector3(W(u1), 0, D(TableZ0)), new Vector3(W(u1), -1400, D(TableZ0)), new Vector3(W(u0), -1400, D(TableZ0)));
-            m.Poly(Cream, Vector3.UnitZ, new Vector3(W(u1), 0, D(TableZ1)), new Vector3(W(u0), 0, D(TableZ1)), new Vector3(W(u0), -1400, D(TableZ1)), new Vector3(W(u1), -1400, D(TableZ1)));
+            // (in the cloth's squares: all one cream it read as a grey concrete beam from under the table)
+            for (var ix = 0; u0 + ix * Across < u1; ix++)
+            {
+                double a = u0 + ix * Across, b = Math.Min(u1, a + Across);
+                var hem = (ix + p * 10) % 2 == 0 ? new Rgb(206, 72, 58) : Cream;
+                m.Poly(hem, -Vector3.UnitZ, new Vector3(W(a), 0, D(TableZ0)), new Vector3(W(b), 0, D(TableZ0)), new Vector3(W(b), -1400, D(TableZ0)), new Vector3(W(a), -1400, D(TableZ0)));
+                m.Poly(hem, Vector3.UnitZ, new Vector3(W(b), 0, D(TableZ1)), new Vector3(W(a), 0, D(TableZ1)), new Vector3(W(a), -1400, D(TableZ1)), new Vector3(W(b), -1400, D(TableZ1)));
+            }
             at.Place(at.Add(m, "the table"), m, mid, vm, TableTop, reach: FarReach);
         }
         // the legs: turned, each drawn from its foot

@@ -62,6 +62,8 @@
  * RACEGAME.TXT, "key=value" lines ('#' starts a comment), UTF-8:
  *     title=<the game's name>
  *     story=0|1  tracks=0|1        Story Mode, Track select open (0: greyed)
+ *     special_lock=<code>|<id>|<banner>   after a special= line: its row greyed until <code> is typed on the Specials page (<id>_unlocked=1 and <id>cars_unlocked=1),
+ *                                  a strip saying <banner> over its row, locked or not
  *     laps=<n>                     a race's laps (3), unless its race file has its own (race_laps=: the Temple of Bú's five)
  *     end_to_menu=<ms>             a finished race back to the menu this long after its end (8000)
  *     special=<name>|<race file>|<time trial file>|<start scene>     files beside the game's data (and so are those they name)
@@ -217,6 +219,7 @@ typedef struct {
     int Laps;                               // its race's laps (race_laps= in its race file; 0: the game's, laps=)
     int Track;                              // one of Track select's (track=), not a special
     int Sprint;                             // a sprint, start line to finish line once (sprint=1 in its race file): no qualifying lap
+    char Code[8], Id[24], Banner[40];       // special_lock=
 } T_RG_SPECIAL;
 
 typedef struct {
@@ -455,6 +458,11 @@ static void Read(void) {
                 else s_spIndex[s_nbSpecials++] = s_nbSp;
                 s_nbSp++;
             }
+        } else if (!strcmp(key, "special_lock") && s_nbSp > 0) {
+            T_RG_SPECIAL *sp = &s_sp[s_nbSp - 1];
+            v = Field(v, sp->Code, sizeof(sp->Code));
+            v = Field(v, sp->Id, sizeof(sp->Id));
+            Field(v, sp->Banner, sizeof(sp->Banner));
         } else if (!strcmp(key, "car") && s_nbCars < RG_MAX_CARS) {
             if (ParseCar(&s_cars[s_nbCars], v)) s_nbCars++;
         } else if (!strcmp(key, "gridcar") && s_nbGrid < RG_MAX_GRID) {
@@ -746,7 +754,7 @@ S32 RaceGame_StoryUnlock(const char *id, char *first, S32 size) {
 #define RG_ALL_CARS_CODE "7777"
 #define RG_ALL_CARS_MS 3000                 // (said on the page this long)
 static S32 s_allCarsAt = 0;                 // when they were (the page says so a moment)
-static int AllCarsCode(S32 *lastKey, char *typed) {
+static int CodeTyped(S32 *lastKey, char *typed, const char *code) {
     const S32 key = MyKey;
     if (key == *lastKey) return 0;
     *lastKey = key;
@@ -760,8 +768,12 @@ static int AllCarsCode(S32 *lastKey, char *typed) {
     if (n >= 4) memmove(typed, typed + 1, 4);
     typed[n >= 4 ? 3 : n] = (char)('0' + digit);
     typed[n >= 4 ? 4 : n + 1] = 0;
-    if (strcmp(typed, RG_ALL_CARS_CODE)) return 0;
+    if (strcmp(typed, code)) return 0;
     typed[0] = 0;
+    return 1;
+}
+static int AllCarsCode(S32 *lastKey, char *typed) {
+    if (!CodeTyped(lastKey, typed, RG_ALL_CARS_CODE)) return 0;
     int won = 0;
     for (int pass = 0; pass < 2; pass++)
         for (int i = 0, count = pass ? s_nbGrid : s_nbCars; i < count; i++) won += AddUnlocked((pass ? s_grid : s_cars)[i].Unlock);
@@ -1258,8 +1270,12 @@ static const char *OwnLapName(int sp, S32 lap, S32 mine) { return !mine ? "Share
 static const char *s_gpOwnName = "Your best lap";
 
 static char s_screenName[RG_SCREENS][64];   // ScreenPage's rows
+// A special still behind its code (special_lock=)
+static int SpecialLocked(int sp) { return s_sp[sp].Code[0] && !Unlocked(s_sp[sp].Id); }
+
 S32 RaceGame_RowDisabled(S32 num) {
     if (!s_on) return 0;
+    if (num >= RG_ID_SPECIAL && num < RG_ID_SPECIAL + s_nbSpecials) return SpecialLocked(s_spIndex[num - RG_ID_SPECIAL]);
     if (num == RG_ID_GHOST_OWN) return !s_gpLap[0];
     if ((num >= RG_ID_GHOST_EASY && num <= RG_ID_GHOST_HARD) || num == RG_ID_GHOST_EXTREME) return !s_gpLap[GhostRowK(num)] || !GhostLevelOpen(GhostRowK(num) - 1);
     if (num == RG_ID_STORY_CONTINUE) return !HasStorySave();
@@ -3459,21 +3475,72 @@ static int ModePage(int sp) {
     }
 }
 
+// The Specials page's code (special_lock=; the user, 2026-11-02: "If a user types 0000 whilst on the specials menu let's unlock the Thanksgiving track"), watched while its menu
+// waits (MenuRedrawHook): the first special still locked, for good once typed, its cars with it.
+static S32 s_spKeyWas = 0;
+static char s_spTyped[8];
+static int s_spOpened = -1;
+static S32 SpecialCodeTyped(void) {
+    for (int k = 0; k < s_nbSpecials; k++) {
+        const T_RG_SPECIAL *sp = &s_sp[s_spIndex[k]];
+        if (!SpecialLocked(s_spIndex[k])) continue;
+        if (!CodeTyped(&s_spKeyWas, s_spTyped, sp->Code)) return 0;
+        char cars[32];
+        snprintf(cars, sizeof(cars), "%scars", sp->Id);
+        AddUnlocked(sp->Id);
+        AddUnlocked(cars);
+        WriteSettings();
+        s_spOpened = k;
+        Log_Info("[racegame] Specials: the code typed, %s unlocked", sp->Name);
+        return 1;
+    }
+    return 0;
+}
+
+static void Plot(S32 x, S32 y, U8 colour, S32 size);
+
+// A strip hanging from the foot of a row, clear of its words (special_lock='s banner: the user, 2026-11-02: "perhaps we could temporarily put a 'Under development' banner over it"): gold, its ends hazard stripes.
+void RaceGame_RowOver(S32 num, S32 x, S32 y) {
+    if (!s_on || num < RG_ID_SPECIAL || num >= RG_ID_SPECIAL + s_nbSpecials) return;
+    const T_RG_SPECIAL *sp = &s_sp[s_spIndex[num - RG_ID_SPECIAL]];
+    if (!sp->Banner[0]) return;
+    static U8 gold = 0, black = 0;
+    static const U8 *paletteWas = NULL;
+    const U8 *pal = PtrPalNormal ? PtrPalNormal : PtrPal;
+    if (pal != paletteWas) { paletteWas = pal; gold = NearestColour(235, 185, 60); black = NearestColour(0, 0, 0); }
+    const S32 w = 244, h = 24, x0 = x - w / 2, y0 = y + 15, stripes = 18;
+    for (S32 dy = 0; dy < h; dy++)
+        for (S32 dx = 0; dx < w; dx++) {
+            const int end = dx < stripes || dx >= w - stripes;
+            Plot(x0 + dx, y0 + dy, end && ((dx + dy) / 6) % 2 ? black : gold, 1);
+        }
+    SmallText(x, y0 - 2, sp->Banner, black, 0);
+    BoxMovingAdd(x0, y0, x0 + w, y0 + h);
+}
+
 static int SpecialsPage(void) {
     if (s_nbSpecials <= 0) return 0;
     int last = 0;
-    for (int k = 0; k < s_nbSpecials; k++) if (s_spIndex[k] == s_lastSp) last = k;
+    for (int k = 0; k < s_nbSpecials; k++) if (s_spIndex[k] == s_lastSp && !SpecialLocked(s_spIndex[k])) last = k;
     s_spMenu[0] = (U16)(1 + last);
     s_spMenu[1] = (U16)(1 + s_nbSpecials);
     s_spMenu[2] = 280;
     s_spMenu[3] = 0;
     SetRow(s_spMenu, 0, RG_ID_BACK);
     for (int i = 0; i < s_nbSpecials; i++) SetRow(s_spMenu, 1 + i, (U16)(RG_ID_SPECIAL + i));
+    int opened = 0;
+    s_spTyped[0] = 0; s_spKeyWas = 0;
     for (;;) {
         Page("Specials", 280 - (56 * (1 + s_nbSpecials)) / 2 - 50);
+        // (just unlocked: the cursor on its row, and the page says so)
+        if (s_spOpened >= 0) { s_spMenu[0] = (U16)(1 + s_spOpened); s_spOpened = -1; opened = 1; }
+        if (opened) SmallText(UI_CENTER_X, 280 + (56 * (1 + s_nbSpecials)) / 2 + 40 + UI_VCENTER_OFS, "Unlocked", RG_ORANGE, 0);
+        MenuRedrawHook = SpecialCodeTyped;
         const S32 select = Menu(s_spMenu);
+        MenuRedrawHook = NULL;
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
         if (select < RG_ID_SPECIAL || select >= RG_ID_SPECIAL + s_nbSpecials) continue;
+        if (SpecialLocked(s_spIndex[select - RG_ID_SPECIAL])) continue;
         s_lastSp = s_spIndex[select - RG_ID_SPECIAL];
         if (ModePage(s_lastSp)) return 1;
     }

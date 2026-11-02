@@ -15,7 +15,10 @@ internal static class RaceTrackOil
     // the colours, drawn as they are (no light): near-black, and the sheen's dark blue and violet
     private const int Black = 48, Sheen = 193, Violet = 226;
 
-    public static Body Build()
+    // (the Long Table's, its Canadian half's spilt cranberries, its table's and the States' gravy: bodies 2 and 3 of the same entity, in its own palette's slots)
+    public const int CranberryBody = 2, GravyBody = 3;
+
+    public static Body Build(int black = Black, int sheen = Sheen, int violet = Violet)
     {
         var points = new List<Vector3>();
         var faces = new List<Face>();
@@ -35,10 +38,10 @@ internal static class RaceTrackOil
             // faced down and the engine left it out, seen from above)
             for (var k = 0; k < n; k++) faces.Add(new Face(new[] { centre, ring[k], ring[(k + 1) % n] }, colour, Material: 0));
         }
-        Blob(new Vector3(0, 4, 0), Radius, 16, 0.4, Black);
-        Blob(new Vector3(90, 7, -70), Radius * 0.42, 9, 1.7, Sheen);
-        Blob(new Vector3(-150, 9, 120), Radius * 0.22, 7, 2.9, Violet);
-        Blob(new Vector3(110, 10, -40), Radius * 0.12, 6, 0.9, Sheen + 3);
+        Blob(new Vector3(0, 4, 0), Radius, 16, 0.4, black);
+        Blob(new Vector3(90, 7, -70), Radius * 0.42, 9, 1.7, sheen);
+        Blob(new Vector3(-150, 9, 120), Radius * 0.22, 7, 2.9, violet);
+        Blob(new Vector3(110, 10, -40), Radius * 0.12, 6, 0.9, sheen == Sheen ? Sheen + 3 : violet);
         var body = new Body { Game = 2, Lit = false };
         body.Bones.Add(new Bone(0, points.Count, 0, -1, new byte[8]));
         body.Vertices.AddRange(points);
@@ -190,14 +193,19 @@ internal static class RaceTrackOil
     public static string Install(string gameDirectory)
     {
         var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
-        var slick = Build();
-        slick.Header = Body.Read(HqrArchive.Open(bodyPath).Read(MushroomBody), 2, allowStatic: true).Header;
-        slick.Static = true;
-        var index = HqrArchive.CountEntries(bodyPath);
-        HqrWriter.AppendToFile(bodyPath, slick.Write());
+        var header = Body.Read(HqrArchive.Open(bodyPath).Read(MushroomBody), 2, allowStatic: true).Header;
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
-        var table = RaceTrackBaldinoCar.WithBody(HqrArchive.Open(ressPath).Read(44), Entity, Generic, index);
+        var table = HqrArchive.Open(ressPath).Read(44);
+        var first = HqrArchive.CountEntries(bodyPath);
+        var index = first;
+        foreach (var (generic, slick) in new[] { (Generic, Build()), (CranberryBody, Build(83, 73, 72)), (GravyBody, Build(21, 26, 30)) })
+        {
+            slick.Header = header;
+            slick.Static = true;
+            HqrWriter.AppendToFile(bodyPath, slick.Write());
+            table = RaceTrackBaldinoCar.WithBody(table, Entity, generic, index++);
+        }
         HqrWriter.ReplaceInFile(ressPath, 44, table);
-        return $"the oil slick: BODY.HQR entry {index}, the mushroom's entity ({Entity}) body {Generic}";
+        return $"the oil slick: BODY.HQR entries {first}-{index - 1}, the mushroom's entity ({Entity}) bodies {Generic} (oil), {CranberryBody} and {GravyBody} (cranberries, gravy)";
     }
 }

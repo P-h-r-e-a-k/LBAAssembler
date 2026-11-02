@@ -256,6 +256,8 @@ internal sealed class RaceTrackPlan
     // the camera is while the car is carried -- 1 or -1 beside the jump, on the side the builder's Across points to or the other (the
     // default, 1), 0 behind the car as on the road (Polar Island's jump over its main straight).
     public int[][]? ArcJumps { get; set; }
+    // Places a slick lies on the road (RACEMOD.CPP spill=), each [x, z (cells from the origin), the road's height], and lies again a while after a car has taken it: the Long Table's
+    public double[][]? Spills { get; set; }
     // A white stripe along a raised road (with Raised): [first point, last point, how far across from the road's middle (cells, the way
     // the builder's Across points)] -- between the Emerald Moon's straight and the pit lane beside it on the same deck.
     public double[]? PitStripe { get; set; }

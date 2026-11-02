@@ -13,6 +13,7 @@ internal static partial class TempleHalloween
     private static Model? HarvestSpook(string kind) => kind switch
     {
         "goose" => Goose(1),
+        "gooseWalk" => GooseStanding(),
         "balloonGoose" => Goose(3.4f),
         "balloonTurkey" => TurkeyBalloon(),
         "balloonPumpkin" => PumpkinBalloon(),
@@ -44,11 +45,32 @@ internal static partial class TempleHalloween
         return m;
     }
 
+    // A goose on its feet, folded wings, its neck up: walking the road's width (flags 1024). Its feet at its origin.
+    private static Model GooseStanding()
+    {
+        var m = new Model();
+        const float K = 1.0f;
+        Laid(m, new (double, double)[] { (0, -500 * K), (150 * K, -340 * K), (250 * K, -40 * K), (220 * K, 220 * K), (110 * K, 400 * K), (0, 470 * K) }, 7, GooseBrown, new Vector3(0, 420 * K, 0));
+        m.Bar(new Vector3(0, 520 * K, 360 * K), new Vector3(0, 1000 * K, 470 * K), 90 * K, GooseBlack);
+        m.Box(new Vector3(-85 * K, 960 * K, 450 * K), new Vector3(85 * K, 1090 * K, 660 * K), GooseBlack);
+        m.Box(new Vector3(-95 * K, 930 * K, 430 * K), new Vector3(95 * K, 1000 * K, 560 * K), GoosePale);
+        m.Bar(new Vector3(0, 1020 * K, 660 * K), new Vector3(0, 1000 * K, 780 * K), 40 * K, GooseBlack);
+        foreach (var s in new[] { -1f, 1f })
+        {
+            m.Bar(new Vector3(s * 90 * K, 260 * K, 0), new Vector3(s * 90 * K, 0, 40 * K), 34 * K, GooseBlack);
+            m.Box(new Vector3(s * 90 * K - 60 * K, 0, 0), new Vector3(s * 90 * K + 60 * K, 18 * K, 150 * K), GooseBlack);
+            m.Facing(new[] { new Vector3(s * 235 * K, 520 * K, 220 * K), new Vector3(s * 245 * K, 500 * K, -300 * K), new Vector3(s * 200 * K, 330 * K, -420 * K), new Vector3(s * 220 * K, 320 * K, 180 * K) }, GooseBrown, new Vector3(s, 0, 0), both: true);
+        }
+        return m;
+    }
+
     private static Model PumpkinBoat()
     {
         var m = new Model();
         m.Lathe(new (double, double)[] { (0, 0), (900, 60), (1800, 500), (2200, 1200), (2050, 1800), (1500, 2050) }, 12, i => i % 2 == 0 ? HarvestOrange : HarvestGold, false, false);
-        m.Lathe(new (double, double)[] { (1500, 2050), (1300, 2000), (0, 2000) }, 8, _ => HarvestDark, false, false);
+        // (its open top closed by a dark floor seen from above and below: a lathe's faces look outwards, and this one's looked down, the hull's inside see-through from over it)
+        var floor = Enumerable.Range(0, 12).Select(k => new Vector3(1500 * MathF.Cos(k * MathF.Tau / 12), 2040, 1500 * MathF.Sin(k * MathF.Tau / 12))).ToArray();
+        m.Facing(floor, HarvestDark, Vector3.UnitY, both: true);
         m.Bar(new Vector3(-500, 2500, 400), new Vector3(-2000, 300, 1500), 70, HarvestRoast);
         return m;
     }

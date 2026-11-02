@@ -74,7 +74,13 @@ internal static class RaceCarEngineFile
             // (and its own palette and sky: the Temple of Bú's)
             if (fileIsland.Look is { } look) text.Append($"island_palette={look.Palette}\nisland_sky={look.Sky}\n");
             // (October's falling leaves north of the border, November's snow south of it: the Long Table's)
-            if (fileIsland == RaceTrackIsland.Harvest) text.Append(LBAAssembler.Terrain.Harvest.HarvestTrack.LeavesLine);
+            if (fileIsland == RaceTrackIsland.Harvest)
+            {
+                text.Append(LBAAssembler.Terrain.Harvest.HarvestTrack.LeavesLine);
+                var plan = RaceTrackPlan.Built(fileIsland);
+                foreach (var s in plan.Spills ?? Array.Empty<double[]>())
+                    text.Append($"spill={N((s[0] + plan.OriginCellX) * 512)} {N(s[2])} {N((s[1] + plan.OriginCellZ) * 512)}\n");
+            }
         }
         // the race's own music in place of its scenes' (the Temple of Bú's: LBA1's temple music), a file in the game folder
         if (track?.Music is { } music) text.Append($"music={music}\n");

@@ -35,14 +35,14 @@ internal static class HarvestBodies
             case "tart": Tart(m); break;
             case "pie": Pie(m, 3400, Pumpkin, PumpkinDark, true); break;
             case "pecan": Pie(m, 3100, Gravy, Roast, false); break;
-            case "sweet": Sweet(m); break;
+            case "sweet": m.Transform = Matrix4x4.CreateScale(0.78f); Sweet(m); break;
             case "turkey": Turkey(m); break;
             case "mash": MashMountain(m); break;
             case "cran": Cran(m); break;
-            case "gravyboat": GravyBoat(m); break;
+            case "gravyboat": m.Transform = Matrix4x4.CreateScale(0.75f); GravyBoat(m); break;
             case "candle": Candle(m); break;
-            case "fork": Fork(m); break;
-            case "knife": Knife(m); break;
+            case "fork": m.Transform = Matrix4x4.CreateScale(0.6f); Fork(m); break;
+            case "knife": m.Transform = Matrix4x4.CreateScale(0.6f); Knife(m); break;
             case "cob": Cob(m); break;
             case "apple": Gourd(m, 620, 600, Red, CranberryDeep, 2); break;
             case "squash": Gourd(m, 860, 620, PaleGold, Gold, 2); break;
@@ -64,6 +64,7 @@ internal static class HarvestBodies
             case "board": Board(m); break;
             case "lines": FieldLines(m); break;
             case "corn": Corn(m); break;
+            case "sisters": Sisters(m); break;
             case "flagCA": FlagCanada(m); break;
             case "flagUS": FlagStates(m); break;
             case "arch": Arch(m); break;
@@ -143,9 +144,15 @@ internal static class HarvestBodies
 
     private static void Boat(SnowMesh m)
     {
-        // a giant pumpkin, hollowed: its top cut off level, a paddle over the side
-        m.Ellipsoid(V(0, 500, 0), 2300, 1700, 2300, 6, 12, Pumpkin, colourAt: (i, j) => j % 2 == 0 ? Pumpkin : PumpkinDark, below: true);
-        m.Cylinder(V(0, 1890, 0), V(0, 1905, 0), 1500, 1500, 10, Bark, Bark);
+        // a giant pumpkin, hollowed: its top cut off level and closed by a dark floor, a paddle over the side
+        (double R, double Y)[] hull = { (900, 60), (1800, 500), (2300, 1100), (2150, 1700), (1500, 2050) };
+        const int Sides = 12;
+        Vector3 At(int ring, int k) => V(hull[ring].R * Math.Cos(k * Math.Tau / Sides), hull[ring].Y, hull[ring].R * Math.Sin(k * Math.Tau / Sides));
+        for (var i = 0; i + 1 < hull.Length; i++)
+            for (var k = 0; k < Sides; k++)
+                m.Poly(k % 2 == 0 ? Pumpkin : PumpkinDark, At(i, k) + At(i + 1, k + 1), At(i, k), At(i, k + 1), At(i + 1, k + 1), At(i + 1, k));
+        for (var k = 0; k < Sides; k++)
+            m.Poly(Bark, Vector3.UnitY, V(0, 2020, 0), At(hull.Length - 1, k), At(hull.Length - 1, k + 1));
         m.Beam(V(-400, 2200, 900), V(-1800, 300, 2400), 90, 90, Wood);
         m.Box(V(-2200, 240, 2250), V(-1500, 280, 2600), Wood);
     }
@@ -182,7 +189,7 @@ internal static class HarvestBodies
 
     private static void Turkey(SnowMesh m)
     {
-        m.Cylinder(V(0, 0, 0), V(0, 240, 0), 5200, 5700, 16, Cream, Cream, capA: false);
+        m.Cylinder(V(0, 0, 0), V(0, 240, 0), 4500, 4900, 16, Cream, Cream, capA: false);
         var body = (Func<int, int, double>)((i, j) => 1 + 0.05 * Math.Sin(i * 1.8 + j));
         m.Ellipsoid(V(0, 2500, 0), 4300, 2500, 3300, 6, 12, Roast, body, colourAt: (i, j) => (i + j) % 3 == 0 ? RoastLight : Roast);
         foreach (var side in new[] { -1.0, 1.0 })
@@ -193,7 +200,7 @@ internal static class HarvestBodies
             m.Ellipsoid(V(-600, 2400, side * 3300), 1900, 900, 500, 4, 8, RoastLight);
         }
         for (var k = 0; k < 10; k++)
-            m.Ellipsoid(V(4500 * Math.Cos(k * 0.64 + 0.2), 470, 4500 * Math.Sin(k * 0.64 + 0.2)), 420, 300, 420, 2, 5, k % 3 == 0 ? Green : Cranberry);
+            m.Ellipsoid(V(4000 * Math.Cos(k * 0.64 + 0.2), 470, 4000 * Math.Sin(k * 0.64 + 0.2)), 380, 280, 380, 2, 5, k % 3 == 0 ? Green : Cranberry);
     }
 
     private static void MashMountain(SnowMesh m)
@@ -204,7 +211,7 @@ internal static class HarvestBodies
         Vector3 At(int i, int j)
         {
             var f = (double)i / Rings;
-            var r = (4700 * (1 - f) * (1 - f) + 900) * Bump(i, j);
+            var r = (3300 * (1 - f) * (1 - f) + 900) * Bump(i, j);
             return V(r * Math.Cos(j * Math.Tau / Segs), 4700 * Math.Sqrt(f), r * Math.Sin(j * Math.Tau / Segs));
         }
         for (var i = 0; i < Rings; i++)
@@ -432,6 +439,28 @@ internal static class HarvestBodies
         }
     }
 
+    // A hill of the Three Sisters, as the Haudenosaunee named them: corn, the beans climbing it, the squash spreading under them to hold the ground.
+    private static void Sisters(SnowMesh m)
+    {
+        m.Ellipsoid(V(0, 0, 0), 1300, 420, 1300, 3, 8, new Rgb(96, 66, 42), below: false);
+        foreach (var (x, z) in new[] { (-300.0, -260.0), (340.0, -120.0), (-40.0, 340.0) })
+        {
+            m.Cylinder(V(x, 300, z), V(x, 3000, z), 70, 34, 4, Green, capA: false);
+            m.Cylinder(V(x, 3000, z), V(x, 3420, z), 60, 0, 4, PaleGold);
+            for (var k = 0; k < 6; k++)
+            {
+                var a = k * 1.9; double y = 600 + k * 420;
+                m.TwoSided(k % 2 == 0 ? Green : GreenDark, V(x, y, z), V(x + 620 * Math.Cos(a), y + 180, z + 620 * Math.Sin(a)), V(x + 360 * Math.Cos(a + 0.4), y - 160, z + 360 * Math.Sin(a + 0.4)));
+                m.TwoSided(new Rgb(110, 124, 62), V(x + 130 * Math.Cos(a * 1.7), y, z + 130 * Math.Sin(a * 1.7)), V(x + 210 * Math.Cos(a * 1.7), y + 200, z + 210 * Math.Sin(a * 1.7)), V(x + 90 * Math.Cos(a * 1.7), y + 240, z + 90 * Math.Sin(a * 1.7)));
+            }
+        }
+        foreach (var (x, z, c) in new[] { (820.0, 500.0, Gold), (-820.0, 420.0, Pumpkin), (120.0, -900.0, PaleGold) })
+        {
+            m.Ellipsoid(V(x, 330, z), 420, 280, 330, 3, 6, c, colourAt: (i, j) => j % 2 == 0 ? c : PumpkinDark);
+            m.TwoSided(GreenDark, V(x, 240, z), V(x + 620, 250, z + 200), V(x + 320, 320, z - 420));
+        }
+    }
+
     // ---- the border
     private static void Pole(SnowMesh m) => m.Cylinder(V(0, -80, 0), V(0, 9200, 0), 170, 90, 5, Silver);
 
@@ -477,7 +506,7 @@ internal static class HarvestBodies
     // The border over the road on the table: its two halves red and blue, a flag at each end.
     private static void Arch(SnowMesh m)
     {
-        const double Half = 3500, H = 4600;
+        const double Half = 4300, H = 4600;
         foreach (var (s, c) in new[] { (-1.0, Red), (1.0, Blue) })
         {
             m.Box(V(s * Half - 280, 0, -280), V(s * Half + 280, H, 280), c, Cream);
