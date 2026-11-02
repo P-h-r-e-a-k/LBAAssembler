@@ -26,6 +26,7 @@
     <Compile Include="..\..\Lba2TextBank.cs" Link="Lba2TextBank.cs" />
     <Compile Include="..\..\ScriptSession.cs" Link="ScriptSession.cs" />
     <Compile Include="..\..\DebugLog.cs" Link="DebugLog.cs" />
+    <Compile Include="..\..\IssueReport.cs" Link="IssueReport.cs" />
     <Compile Include="..\..\RendererLibraryApi.cs" Link="RendererLibraryApi.cs" />
     <Compile Include="..\..\HqrFile.cs" Link="HqrFile.cs" />
     <Compile Include="..\..\HqrLz.cs" Link="HqrLz.cs" />

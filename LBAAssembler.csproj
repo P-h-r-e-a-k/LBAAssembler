@@ -129,4 +129,13 @@
     <PackageReference Include="NLayer" Version="3.0.0" />
   </ItemGroup>
 
+  <!-- the bug reports' key, masked, from a file beside the repos: IssueReport.cs -->
+  <Target Name="ReportKeyFromFile" BeforeTargets="GetAssemblyAttributes" Condition="Exists('$(MSBuildProjectDirectory)\..\lbra_report_key.txt')">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\MaskReportKey.ps1&quot; -File &quot;$(MSBuildProjectDirectory)\..\lbra_report_key.txt&quot;" ConsoleToMSBuild="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="ReportKey" />
+    </Exec>
+    <ItemGroup>
+      <AssemblyMetadata Include="ReportKey" Value="$(ReportKey)" />
+    </ItemGroup>
+  </Target>
 </Project>

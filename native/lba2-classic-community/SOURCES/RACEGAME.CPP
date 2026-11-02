@@ -196,6 +196,7 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_PAUSE_CAR 2464                // the pause menu's rows (PausePage)
 #define RG_ID_PAUSE_TRACK 2465
 #define RG_ID_PAUSE_MAIN 2466
+#define RG_ID_REQUEST_FEATURE 2467          // the main menu's Request feature (ReportBugPage)
 #define RG_ID_SCREEN 2400                   // ... a screen, by its place in the list (ScreenPage)
 #define RG_SCREENS 6
 #define RG_OTHERS_SHOWN 5
@@ -1266,7 +1267,7 @@ static void Label(char *string, const char *utf8) { CopyUtf8ToCp850(string, 256,
 
 S32 RaceGame_MenuText(S32 num, char *string) {
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
-    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PAUSE_MAIN))) return 0;
+    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_REQUEST_FEATURE))) return 0;
     switch (num) {
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
@@ -1285,6 +1286,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
         Label(string, s_screenName[num - RG_ID_SCREEN]); return 1;
     case RG_ID_TRACKS: Label(string, "Track select"); return 1;
     case RG_ID_REPORT_BUG: Label(string, "Report bug"); return 1;
+    case RG_ID_REQUEST_FEATURE: Label(string, "Request feature"); return 1;
     case RG_ID_PAUSE_CAR: Label(string, "Change car"); return 1;
     case RG_ID_PAUSE_TRACK: Label(string, "Change track"); return 1;
     case RG_ID_PAUSE_MAIN: Label(string, "Main menu"); return 1;
@@ -2465,7 +2467,7 @@ static void ReportSend(const char *kind, const char *note) {
     while (cut > dir && cut[-1] != '\\' && cut[-1] != '/') cut--;
     *cut = 0;
     if (!dir[0]) snprintf(dir, sizeof(dir), ".");
-    if (RaceUpdate_Tool(exe, "--send-report", dir)) Log_Info("[racegame] a bug report sent off: %s", kind[0] == 'c' ? "the last run" : "the player's");
+    if (RaceUpdate_Tool(exe, "--send-report", dir)) Log_Info("[racegame] a report sent off: %s", kind);
 }
 
 static void ReportAfterCrash(void) {
@@ -2482,10 +2484,17 @@ static void ReportAfterCrash(void) {
 }
 
 // Report bug, the main menu's (the user, 2026-11-02: "write a short description of the issue, and submit ... logged on github together with their relevant log files"): the player's
-// words with the game's logs, as BugReport.cs sends them. The page says it is public before anything is sent.
+// words with the game's logs, as BugReport.cs sends them. The page says it is public before anything is sent. Request feature the same, no logs ("feature request features ...
+// submitted to github in the same way").
 #define RG_REPORT_WORDS 120
-static void ReportBugPage(void) {
+static void ReportBugPage(int feature) {
     char note[RG_REPORT_WORDS] = "";
+    if (feature) {
+        if (!TypePage("Request feature", "What would you like? Public, on GitHub", note, sizeof(note), 0, 0)) return;
+        ReportSend("feature", note);
+        SayPage("Request feature", "Thanks: your idea is on its way");
+        return;
+    }
     if (!TypePage("Report bug", "What went wrong? Public, on GitHub", note, sizeof(note), 0, 0)) return;
     ReportSend("manual", note);
     SayPage("Report bug", "Thanks: your report is on its way, with the game's logs. Names, folders and addresses are taken out first.");
@@ -4775,6 +4784,7 @@ static S32 GameMenu(S32 inGame) {
     SetRow(s_mainMenu, nb++, RG_ID_TIMES);
     SetRow(s_mainMenu, nb++, RG_ID_OPTIONS);
     SetRow(s_mainMenu, nb++, RG_ID_REPORT_BUG);
+    SetRow(s_mainMenu, nb++, RG_ID_REQUEST_FEATURE);
     SetRow(s_mainMenu, nb++, RG_ID_QUIT);
     s_mainMenu[0] = (U16)(resume && !paused ? 0 : specials);
     // (the row chosen last -- Track select, Specials, Best laps -- when the menu comes back after a race; Resume first in one)
@@ -4807,7 +4817,8 @@ static S32 GameMenu(S32 inGame) {
         case RG_ID_OPTIONS:
             return select;
         case RG_ID_REPORT_BUG:
-            ReportBugPage();
+        case RG_ID_REQUEST_FEATURE:
+            ReportBugPage(select == RG_ID_REQUEST_FEATURE);
             break;
         case RG_ID_QUIT:
             if (QuitPage()) {

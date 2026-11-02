@@ -874,6 +874,14 @@ internal static class PolarStudy
         return 0;
     }
 
+    // issuetest bug|feature <words>: IssueReport.Send, as Help's window does (LBRA_REPORT_URL for the local stand-in)
+    public static int IssueTest(string[] args)
+    {
+        var said = LBAAssembler.IssueReport.Send(args[1] == "feature", args[2]).GetAwaiter().GetResult();
+        Console.WriteLine(said ?? "sent");
+        return said is null ? 0 : 1;
+    }
+
     // polarcells <LBA1 folder> <x0> <x1> <z0> <z1>: the ground's top layer of each column of the layout, and what is above it (blocks by layer)
     public static int GroundCells(string[] args)
     {

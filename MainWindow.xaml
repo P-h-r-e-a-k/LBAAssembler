@@ -213,6 +213,10 @@
                     <MenuItem x:Name="TestEditsDiscardMenuItem" Header="_Discard test edits" Click="TestEditsDiscard_Click"/>
                 </MenuItem>
             </MenuItem>
+            <MenuItem Header="_Help" Foreground="{DynamicResource ThemeTextBrush}">
+                <MenuItem Header="_Report a bug…" Click="ReportBug_Click" ToolTip="Tell us what went wrong: it goes on our public GitHub page with the editor's log"/>
+                <MenuItem Header="Request a _feature…" Click="RequestFeature_Click" ToolTip="Tell us what you'd like LBA Assembler to do: it goes on our public GitHub page"/>
+            </MenuItem>
         </Menu>
 
         <!-- Every panel's actual content, hidden here and wired into LayoutHost's DockGroups once at
