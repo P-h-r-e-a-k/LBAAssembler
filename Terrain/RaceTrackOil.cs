@@ -15,8 +15,9 @@ internal static class RaceTrackOil
     // the colours, drawn as they are (no light): near-black, and the sheen's dark blue and violet
     private const int Black = 48, Sheen = 193, Violet = 226;
 
-    // (the Long Table's, its Canadian half's spilt cranberries, its table's and the States' gravy: bodies 2 and 3 of the same entity, in its own palette's slots)
-    public const int CranberryBody = 2, GravyBody = 3;
+    // (the Long Table's, its Canadian half's spilt cranberries, its table's and the States' gravy: more bodies of the same entity, in its own palette's slots. Not 2 or 3,
+    // BigMushroom and the Temple's Pumpkin, installed after these: the slicks were drawn as mushrooms and pumpkins, the user, 2026-11-02)
+    public const int CranberryBody = 6, GravyBody = 7;
 
     public static Body Build(int black = Black, int sheen = Sheen, int violet = Violet)
     {
