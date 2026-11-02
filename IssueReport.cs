@@ -16,9 +16,9 @@ namespace LBAAssembler;
 internal static class IssueReport
 {
     private const string Own = "https://api.github.com/repos/P-h-r-e-a-k/LBAAssembler", Game = "https://api.github.com/repos/P-h-r-e-a-k/LittleBigRacingAdventure";
-    private const string BugLabel = "auto-report", FeatureLabel = "feature-request", OursLabel = "lba-assembler", UrlVariable = "LBRA_REPORT_URL", SentFile = "reports_sent.txt";
+    private const string BugLabel = "auto-report", FeatureLabel = "feature-request", OursLabel = "lba-assembler", UrlVariable = "LBRA_REPORT_URL";
     // (GitHub's limit is 65,536 characters a body)
-    private const int ChunkMax = 60000, LogPieces = 3, DayMax = 3, TitleMax = 90;
+    private const int ChunkMax = 60000, LogPieces = 3, TitleMax = 90;
     private static readonly byte[] Mask = Encoding.ASCII.GetBytes("LBRA-reports");
 
     private static string? Key()
@@ -70,14 +70,6 @@ internal static class IssueReport
         return pieces.Select((p, i) => $"<details><summary>{(pieces.Count > 1 ? $"{name}, part {i + 1} of {pieces.Count}" : name)}</summary>\n\n```text\n{p.Replace("```", "'''")}\n```\n</details>\n").ToList();
     }
 
-    private static string SentPath => Path.Combine(Path.GetDirectoryName(DebugLog.LogFile) ?? AppContext.BaseDirectory, SentFile);
-
-    private static bool TooMany()
-    {
-        var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
-        return Read(SentPath).Split('\n').Count(l => l.Trim() == today) >= DayMax;
-    }
-
     private static async Task<(HttpStatusCode Status, long Number)> Post(HttpClient http, string url, object body)
     {
         using var reply = await http.PostAsync(url, new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"));
@@ -92,7 +84,6 @@ internal static class IssueReport
         var key = Key();
         var test = TestUrl();
         if (key is null && test is null) return "This build of LBA Assembler can't send reports.";
-        if (TooMany()) return $"That's {DayMax} from this PC today, which is as many as we take in a day. Thank you, and please try again tomorrow.";
         try
         {
             var said = Scrub(words.Trim());
@@ -122,7 +113,6 @@ internal static class IssueReport
             foreach (var piece in pieces.Skip(1))
                 await Post(http, $"{api}/issues/{number}/comments", new { body = piece });
             DebugLog.Log($"IssueReport: sent as issue {number}");
-            File.AppendAllText(SentPath, DateTime.UtcNow.ToString("yyyy-MM-dd") + "\n");
             return null;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException or JsonException)

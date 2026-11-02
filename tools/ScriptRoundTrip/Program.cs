@@ -165,6 +165,7 @@ internal static class Program
             "polarblockorder" => PolarStudy.BlockOrder(args),
             "polarplaced" => PolarStudy.Placed(args),
             "polarcells" => PolarStudy.GroundCells(args),
+            "texmap" => PolarStudy.TexMap(args),
             "issuetest" => PolarStudy.IssueTest(args),
             "boxesat" => PolarStudy.BoxesAt(args),
             "groundpeaks" => PolarStudy.GroundPeaks(args),

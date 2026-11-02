@@ -47,6 +47,8 @@ internal sealed record RaceTrackIsland(
         "RaceTrackPlan.CitadelStorm.json", null)
     {
         TwinIleFile = "CITABAU.ILE", TwinOblFile = "CITABAU.OBL", TwinPlanResource = "RaceTrackPlan.Citadel.json", RacesTwin = true,
+        // (58.6 frames a second at 848 x 480 to 60.2 at the island's own 60,000, 2026-11-02)
+        View = (200000, 150000),
         Title = "Citadel Island: the town circuit (once the storm is over)", Roster = RaceDriver.CitadelStorm, TwinRoster = RaceDriver.CitadelTown,
         // (the storm track's car, scene 42, when it is fine -- its start line is under CITABAU's ground -- in the yard north of Twinsen's
         // house, flat at 250 in both files; the town circuit's, scene 49, in the storm -- its start line is CITADEL's sea -- under the
@@ -92,6 +94,8 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland CitadelStorm = Citadel with
     {
         Name = "Citadel Island, storm track", RacesTwin = false, Title = "Citadel Island: the storm track (in the rain)",
+        // (the rain's own short view: its mood)
+        View = null,
     };
 
     // Mosquibees Island: a mountain lap from a drawing -- two loops winding up round the Mosquibees' mountain from the shore, a bridge
@@ -388,6 +392,8 @@ internal sealed record RaceTrackIsland(
     {
         Roster = RaceDriver.Knartas,
         Title = "The Island of the Francos: over the dock, the refinery and the village",
+        // (53.9 frames a second at 848 x 480 to 59.9 at the island's own 49,100, 2026-11-02)
+        View = (200000, 150000),
         // (twice its size each way, its 3 cubes 12: scenes 107-109 and 255-263 -- the user, 2026-10-07)
         Scale = 2,
         MoreScenes = Enumerable.Range(255, 9).ToArray(),
@@ -408,6 +414,8 @@ internal sealed record RaceTrackIsland(
     public static readonly RaceTrackIsland Otringal = new("Otringal", "OTRINGAL.ILE", "OTRINGAL.OBL", 4, 87, 92, 31, "RaceTrackPlan.Otringal.json", null)
     {
         Title = "Otringal: through the game's tunnel, through the town and round the palace",
+        // (55.5 frames a second at 848 x 480 to 60.4 at the island's own 41,200, 2026-11-02)
+        View = (200000, 150000),
         NewCubes = new[] { (6, 9, 264, 87) },
         // (Twinsen has arrived on Otringal: the square island's Dino-Fly landing doesn't play when the car flies into it off the jump)
         HeldVars = new[] { (83, 3) },

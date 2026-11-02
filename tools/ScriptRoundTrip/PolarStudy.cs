@@ -882,6 +882,50 @@ internal static class PolarStudy
         return said is null ? 0 : 1;
     }
 
+    // texmap <ILE>: how much of the ground's texture page each 8 x 8 block is read: triangles, as a digit (log 2), . none; the cheapest places for a block of 6 x 4
+    public static int TexMap(string[] args)
+    {
+        var island = IslandFile.Load(args[1]);
+        if (args.Length > 3)
+        {
+            // texmap <ILE> <x> <y>: the page's pixels there, 48 x 32, as bytes
+            int px = int.Parse(args[2]), py = int.Parse(args[3]);
+            for (var y = py; y < py + 32; y += 2) Console.WriteLine(string.Concat(Enumerable.Range(px, 48).Where(x => (x - px) % 2 == 0).Select(x => island.GroundTexture[y * 256 + x].ToString("x2") + " ")));
+            return 0;
+        }
+        var used = new int[32, 32];
+        foreach (var (_, _, cube) in IslandOps.CubeCells(island))
+        {
+            if (!cube.HasPolygons) continue;
+            var t = cube.TextureDefs;
+            for (var z = 0; z < IslandCube.Cells; z++)
+            for (var x = 0; x < IslandCube.Cells; x++)
+            for (var half = 0; half < 2; half++)
+            {
+                var p = new IslandPolygon(cube.Polygon(x, z, half));
+                if (p.TexFlag == 0 || island.GroundTextureOf(p) is not (0, var d)) continue;
+                var i = d * 6;
+                if (i + 5 >= t.Length) continue;
+                int u0 = 65535, v0 = 65535, u1 = 0, v1 = 0;
+                for (var k = 0; k < 3; k++) { u0 = Math.Min(u0, t[i + k * 2]); u1 = Math.Max(u1, t[i + k * 2]); v0 = Math.Min(v0, t[i + k * 2 + 1]); v1 = Math.Max(v1, t[i + k * 2 + 1]); }
+                for (var v = v0 / 2048; v <= Math.Min(31, (v1 - 1) / 2048); v++)
+                for (var u = u0 / 2048; u <= Math.Min(31, (u1 - 1) / 2048); u++) used[u, v]++;
+            }
+        }
+        for (var y = 0; y < 32; y++)
+            Console.WriteLine(string.Concat(Enumerable.Range(0, 32).Select(x => used[x, y] == 0 ? "." : ((int)Math.Log2(used[x, y])).ToString("x"))));
+        var places = new List<(int Cost, int X, int Y)>();
+        for (var y = 0; y + 4 <= 32; y++)
+        for (var x = 0; x + 6 <= 32; x++)
+        {
+            var cost = 0;
+            for (var v = y; v < y + 4; v++) for (var u = x; u < x + 6; u++) cost += used[u, v];
+            places.Add((cost, x, y));
+        }
+        foreach (var c in places.OrderBy(c => c.Cost).Take(5)) Console.WriteLine($"block ({c.X},{c.Y}): {c.Cost} triangle-blocks read");
+        return 0;
+    }
+
     // polarcells <LBA1 folder> <x0> <x1> <z0> <z1>: the ground's top layer of each column of the layout, and what is above it (blocks by layer)
     public static int GroundCells(string[] args)
     {
