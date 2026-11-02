@@ -41,6 +41,17 @@ internal static class IslandScaler
 
     // ---- the ground and the objects -----------------------------------------------------------------------------------------------
 
+    // The island as a track is built on it: made bigger if it is one that is. What the track generator has to draw on as well: a plan's cells are the built island's, so a track drawn
+    // over the whole of the small one came out on a quarter of the width and depth of the big one, in one of its 12 cubes (a user's report, 2026-11-02: "I drew over the whole Francos
+    // island, but ... the resulting track was shrunk down to the size of a singular outdoors cube")
+    public static IslandFile AsBuilt(IslandFile source, RaceTrackIsland where, List<string> log)
+    {
+        if (where.Scale <= 1) return source;
+        return where.Created && where.AddedScenes.Any()
+            ? Scale(source, where.Scale, log, IslandDecors.MaxPerCubeOwnEngine, spread: true, ownSea: true)
+            : Scale(source, where.Scale, log);
+    }
+
     // (`maxPerCube`: the objects a new cube takes, the retail engine's 200 by default -- Island CX Mk2's, an island this editor's engine draws,
     // as many as it does; `spread`: an object whose box reaches over its new cube's edge copied into each cube it reaches, as the builder's
     // decks are -- the engine sees the objects of the car's own cube, and Island CX's room's boxes, up to the cube wide, reach over the new

@@ -17,6 +17,8 @@ internal static class TrackSketchCommand
         var path = Path.Combine(game, ile + ".ILE");
         var original = path + RaceTrackService.BackupSuffix;
         var island = IslandFile.Load(File.Exists(original) ? original : path);
+        if (RaceTrackIsland.All.FirstOrDefault(i => string.Equals(i.IleFile, ile + ".ILE", StringComparison.OrdinalIgnoreCase) || string.Equals(i.IleFile, ile, StringComparison.OrdinalIgnoreCase)) is { } built)
+            island = IslandScaler.AsBuilt(island, built, new List<string>());
         var renderer = new IslandMapRenderer(island, IslandMapRenderer.LoadPalette(game, ile), scale);
         renderer.RenderAll(MapView.Terrain);
         return (island, renderer);

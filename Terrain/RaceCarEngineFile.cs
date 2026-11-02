@@ -89,6 +89,7 @@ internal static class RaceCarEngineFile
         foreach (var jet in track?.Jets ?? new()) text.Append($"jet={string.Join(' ', jet)}\n");
         foreach (var wall in track?.RoadWalls ?? new()) text.Append($"road_wall={string.Join(' ', wall)}\n");
         if (track?.JetSignals is { } signals) text.Append($"jet_signals={string.Join(' ', signals)}\n");
+        foreach (var place in track?.JetSignalPlaces ?? new()) text.Append($"jet_signal={string.Join(' ', place)}\n");
         foreach (var tunnel in track?.Tunnels ?? new()) text.Append($"tunnel={string.Join(' ', tunnel)}\n");
         // the spaceships it flies over their pads on the road (Otringal's square island)
         foreach (var shuttle in track?.Shuttles ?? new()) text.Append($"shuttle={string.Join(' ', shuttle)}\n");

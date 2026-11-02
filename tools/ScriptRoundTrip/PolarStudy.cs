@@ -710,6 +710,170 @@ internal static class PolarStudy
         return 0;
     }
 
+    // polarscenecells <LBA1 folder> <scene> <x0> <x1> <z0> <z1>: a scene's grid there, by layer: block/position of each cell
+    public static int SceneCells(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var cells = Lba1GridCodec.Decode(game.ReadGrid(int.Parse(args[2])));
+        int x0 = int.Parse(args[3]), x1 = int.Parse(args[4]), z0 = int.Parse(args[5]), z1 = int.Parse(args[6]);
+        for (var y = 0; y < 25; y++)
+        {
+            var lines = new List<string>();
+            for (var z = z0; z <= z1; z++)
+            {
+                var line = new List<string>();
+                for (var x = x0; x <= x1; x++)
+                {
+                    var i = ((z * 64 + x) * 25 + y) * 2;
+                    line.Add(cells[i] == 0 ? "      ." : $"{cells[i],3}/{cells[i + 1],-3}");
+                }
+                lines.Add($"z {z,2}: " + string.Join(" ", line));
+            }
+            if (lines.Any(l => l.Contains('/'))) { Console.WriteLine($"layer {y}, x from {x0}"); foreach (var l in lines) Console.WriteLine(l); }
+        }
+        return 0;
+    }
+
+    // polarrows <LBA1 folder> <scene> <block>: a block's picture row by row: where its pixels run, against its block's middle column
+    public static int Rows(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        var lib = game.ReadBlocks(int.Parse(args[2]));
+        var block = int.Parse(args[3]);
+        var (dx, dy, dz) = LBAAssembler.Terrain.Polar.PolarProps.Size(lib, block);
+        var p = LBAAssembler.Terrain.Polar.PolarProps.Draw(game, lib, block);
+        Console.WriteLine($"block {block}: {dx} x {dy} x {dz}, picture {p.Width} x {p.Height}, origin {p.OriginX},{p.OriginY}");
+        var middle = p.OriginX + 24 + 24 * (dx - dz) / 2.0;
+        var mid = 12 * (dx + dz) / 2.0 + p.OriginY + 15;
+        for (var row = 0; row < p.Height; row += args.Length > 4 ? int.Parse(args[4]) : 2)
+        {
+            int l = -1, r = -1, n = 0;
+            for (var x = 0; x < p.Width; x++) if (p.Pixels[row * p.Width + x] >= 0) { if (l < 0) l = x; r = x; n++; }
+            var y = (mid - row) / 15.0;
+            var c = p.Pixels[row * p.Width + Math.Clamp((int)middle, 0, p.Width - 1)];
+            var lum = c < 0 ? -1 : (game.Palette[c * 3] + game.Palette[c * 3 + 1] + game.Palette[c * 3 + 2]) / 3;
+            Console.WriteLine($"row {row,3} y {y,5:0.00}  left {l - middle,6:0.0} right {r - middle,6:0.0}  half {(r - l + 1) / 2.0,5:0.0} = r {(r - l + 1) / 2.0 / 33.94,4:0.00}  pixels {n,3} middle {lum}");
+        }
+        return 0;
+    }
+
+    // polarpreview <LBA1 folder> <out.png> <scene> <block> [zoom]: a Fortress body without a build: LBA1's picture, the body from LBA1's angle, and from three low angles
+    public static int Preview(string[] args)
+    {
+        var game = new Lba1Game(args[1]);
+        int scene = int.Parse(args[3]), block = int.Parse(args[4]), zoom = args.Length > 5 ? int.Parse(args[5]) : 3;
+        var kind = LBAAssembler.Terrain.Polar.PolarProps.Kinds.First(k => k.Scene == scene && k.Block == block);
+        var (shown, points, faces) = LBAAssembler.Terrain.Polar.PolarProps.Shape(game, kind);
+        var picture = LBAAssembler.Terrain.Polar.PolarProps.Draw(game, game.ReadBlocks(scene), block);
+        const int S = LBAAssembler.Terrain.Polar.PolarTerrain.Scale;
+        var cells = points.Select(v => (X: v.X / (512.0 * S), Y: v.Y / (256.0 * S), Z: v.Z / (512.0 * S))).ToArray();
+        var (dx, dy, dz) = LBAAssembler.Terrain.Polar.PolarProps.Size(game.ReadBlocks(scene), block);
+        var reach = 34 * zoom * (Math.Max(dx, dz) * 0.9 + dy * 0.4 + 0.5);
+        int cw = (int)(reach * 2), ch = (int)(reach * 2);
+        var views = new (double Yaw, double Pitch)[] { (45, 30), (135, 12), (225, 12), (315, 12) };
+        int stripW = picture.Width * zoom + views.Length * cw;
+        var strip = new byte[stripW * ch * 4];
+        void Put(int x, int y, int colour)
+        {
+            if (x < 0 || y < 0 || x >= stripW || y >= ch) return;
+            var i = (y * stripW + x) * 4;
+            strip[i] = game.Palette[colour * 3 + 2]; strip[i + 1] = game.Palette[colour * 3 + 1]; strip[i + 2] = game.Palette[colour * 3]; strip[i + 3] = 255;
+        }
+        for (var i = 3; i < strip.Length; i += 4) { strip[i - 3] = 150; strip[i - 2] = 120; strip[i - 1] = 90; strip[i] = 255; }
+        for (var y = 0; y < picture.Height * zoom && y < ch; y++)
+            for (var x = 0; x < picture.Width * zoom; x++)
+            {
+                var c = picture.Pixels[y / zoom * picture.Width + x / zoom];
+                if (c >= 0) Put(x, y, c);
+            }
+        for (var v = 0; v < views.Length; v++)
+        {
+            var depth = new double[cw * ch];
+            Array.Fill(depth, double.MinValue);
+            double yaw = views[v].Yaw * Math.PI / 180, pitch = views[v].Pitch * Math.PI / 180;
+            var left = picture.Width * zoom + v * cw;
+            (double U, double V, double D) Screen((double X, double Y, double Z) p)
+            {
+                double u = p.X * Math.Cos(yaw) - p.Z * Math.Sin(yaw), d = p.X * Math.Sin(yaw) + p.Z * Math.Cos(yaw), h = p.Y / 2;
+                return (cw / 2 + u * 33.94 * zoom, ch * 0.72 + (d * Math.Sin(pitch) - h * Math.Cos(pitch)) * 33.94 * zoom, d * Math.Cos(pitch) + h * Math.Sin(pitch));
+            }
+            foreach (var f in faces)
+            {
+                var uv = f.Texture!.UV;
+                for (var t = 1; t + 1 < f.Points.Length; t++)
+                {
+                    int[] c = { 0, t, t + 1 };
+                    var s = c.Select(k => Screen(cells[f.Points[k]])).ToArray();
+                    var area = (s[1].U - s[0].U) * (s[2].V - s[0].V) - (s[2].U - s[0].U) * (s[1].V - s[0].V);
+                    if (Math.Abs(area) < 1e-6) continue;
+                    int x0 = (int)Math.Max(0, s.Min(q => q.U)), x1 = (int)Math.Min(cw - 1, s.Max(q => q.U)), y0 = (int)Math.Max(0, s.Min(q => q.V)), y1 = (int)Math.Min(ch - 1, s.Max(q => q.V));
+                    for (var y = y0; y <= y1; y++)
+                        for (var x = x0; x <= x1; x++)
+                        {
+                            double px = x + 0.5, py = y + 0.5;
+                            var w1 = ((px - s[0].U) * (s[2].V - s[0].V) - (s[2].U - s[0].U) * (py - s[0].V)) / area;
+                            var w2 = ((s[1].U - s[0].U) * (py - s[0].V) - (px - s[0].U) * (s[1].V - s[0].V)) / area;
+                            var w0 = 1 - w1 - w2;
+                            if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+                            var d = w0 * s[0].D + w1 * s[1].D + w2 * s[2].D;
+                            if (d <= depth[y * cw + x]) continue;
+                            var tu = (w0 * uv[c[0] * 2] + w1 * uv[c[1] * 2] + w2 * uv[c[2] * 2]) / 256;
+                            var tv = (w0 * uv[c[0] * 2 + 1] + w1 * uv[c[1] * 2 + 1] + w2 * uv[c[2] * 2 + 1]) / 256;
+                            var col = shown.Pixels[Math.Clamp((int)tv, 0, shown.Height - 1) * shown.Width + Math.Clamp((int)tu, 0, shown.Width - 1)];
+                            if (col < 0) continue;
+                            depth[y * cw + x] = d;
+                            Put(left + x, y, col);
+                        }
+                }
+            }
+        }
+        PngWriter.Write(args[2], strip, stripW, ch);
+        Console.WriteLine($"{kind.Form}: {faces.Count} faces, {points.Count} points; {stripW} x {ch}");
+        return 0;
+    }
+
+    // groundpeaks <ILE> <cell x0> <x1> <z0> <z1> [step]: the ground's heights there in hundreds (island cells), and its summits
+    public static int GroundPeaks(string[] args)
+    {
+        var island = IslandFile.Load(args[1]);
+        int x0 = int.Parse(args[2]), x1 = int.Parse(args[3]), z0 = int.Parse(args[4]), z1 = int.Parse(args[5]), step = args.Length > 6 ? int.Parse(args[6]) : 2;
+        double At(int x, int z) => IslandOps.Altitude(island, x * 512.0, z * 512.0) ?? -1;
+        Console.WriteLine("        " + string.Concat(Enumerable.Range(0, (x1 - x0) / step + 1).Select(i => $"{x0 + i * step,4}")));
+        for (var z = z0; z <= z1; z += step)
+            Console.WriteLine($"z {z,4}: " + string.Concat(Enumerable.Range(0, (x1 - x0) / step + 1).Select(i => $"{At(x0 + i * step, z) / 100,4:0}")));
+        const int Reach = 4;
+        for (var z = z0; z <= z1; z++)
+            for (var x = x0; x <= x1; x++)
+            {
+                var h = At(x, z);
+                var top = true;
+                for (var dz = -Reach; dz <= Reach && top; dz++)
+                    for (var dx = -Reach; dx <= Reach && top; dx++)
+                        if ((dx != 0 || dz != 0) && At(x + dx, z + dz) > h) top = false;
+                if (top) Console.WriteLine($"summit at cell ({x},{z}): {h:0}");
+            }
+        return 0;
+    }
+
+    // boxesat <ILE> <cell x0> <x1> <z0> <z1> <y0> <y1>: the decors' collision boxes crossing that block of the island (world cells; y in units)
+    public static int BoxesAt(string[] args)
+    {
+        var island = IslandFile.Load(args[1]);
+        double x0 = double.Parse(args[2]), x1 = double.Parse(args[3]), z0 = double.Parse(args[4]), z1 = double.Parse(args[5]), y0 = double.Parse(args[6]), y1 = double.Parse(args[7]);
+        for (var cz = 0; cz < 16; cz++)
+            for (var cx = 0; cx < 16; cx++)
+            {
+                if (island.CubeAt(cx, cz) is not { } cube) continue;
+                foreach (var d in cube.Decors)
+                {
+                    double bx0 = cx * 64 + d.XMin / 512.0, bx1 = cx * 64 + d.XMax / 512.0, bz0 = cz * 64 + d.ZMin / 512.0, bz1 = cz * 64 + d.ZMax / 512.0;
+                    if (bx1 < x0 || bx0 > x1 || bz1 < z0 || bz0 > z1 || d.YMax < y0 || d.YMin > y1) continue;
+                    Console.WriteLine($"cube ({cx},{cz}) body {d.Body & 0xFFFF,4}: x {bx0,7:0.0}..{bx1,7:0.0} z {bz0,7:0.0}..{bz1,7:0.0} y {d.YMin,6}..{d.YMax,6}");
+                }
+            }
+        return 0;
+    }
+
     // polarcells <LBA1 folder> <x0> <x1> <z0> <z1>: the ground's top layer of each column of the layout, and what is above it (blocks by layer)
     public static int GroundCells(string[] args)
     {

@@ -202,6 +202,8 @@ internal static class RaceTrackService
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? CrabModel = null,
         // JetSignals: the steam jets' signals in BODY.HQR, safe and dangerous (RaceTrackPipes.InstallSignals; RACEMOD.CPP jet_signals=)
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? JetSignals = null,
+        // JetSignalPlaces: where they stand (RaceTrackReport.JetSignalPlaces; RACEMOD.CPP jet_signal=)
+        [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? JetSignalPlaces = null,
         // WindowSmash: the palace's round window the first car smashes (PalaceWindow; RACEMOD.CPP smash_window=), since 2026-10-30
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int[]? WindowSmash = null,
         [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] List<int[]>? BoostPanels = null,
@@ -637,8 +639,7 @@ internal static class RaceTrackService
         if (options.Island.Scale > 1)
         {
             var anchor = IslandScaler.Anchor(island);
-            island = copiedFirst ? IslandScaler.Scale(island, options.Island.Scale, scaled, IslandDecors.MaxPerCubeOwnEngine, spread: true, ownSea: true)
-                                 : IslandScaler.Scale(island, options.Island.Scale, scaled);
+            island = IslandScaler.AsBuilt(island, options.Island, scaled);
             scaled.Add(IslandScaler.ScaleObl(Path.Combine(gameDirectory, options.Island.OblFile), options.Island.Scale));
             scaled.AddRange(IslandScaler.ScaleScenes(gameDirectory, options.Island, island, anchor, options.Island.Scale));
             if (!(copiedFirst && options.Island.NoHolomap)) scaled.Add(IslandScaler.ScaleHolomap(gameDirectory, options.Island, anchor, options.Island.Scale));
@@ -1069,6 +1070,7 @@ internal static class RaceTrackService
             Oil: scenes.Oil is { Count: > 0 } oil ? oil : null, Fakes: scenes.Fakes is { Count: > 0 } fakes ? fakes : null,
             Steam: OrNull(report.Steam), Drips: OrNull(report.Drips),
             Jets: OrNull(report.Jets),
+            JetSignalPlaces: OrNull(report.JetSignalPlaces),
             RoadWalls: OrNull(report.RoadWalls),
             Tunnels: raised && report.Tunnels.Count > 0
                 ? report.Tunnels.Select(t => (t.Ceiling is { } c

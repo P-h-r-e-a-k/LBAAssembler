@@ -24,7 +24,9 @@ internal static class PolarProps
     // the same -- the picture -- and what differs is how it looks from elsewhere: Round, rings fitted to the picture (leaning with it, flattened by Wide); Box, its block's
     // box; Sheet, a flat piece along its longer side through its middle (a fence); Cross, two of them across each other (a coil of wire, an anti-tank obstacle); Mound, a row
     // of boulders as one solid hump along its block, as high as the picture is at each place (as a box, a painted shell, hollow from behind).
-    public enum Form { Round, Box, Sheet, Cross, Mound }
+    // Lathe: rings measured from the picture by hand, where a fit can't see what LBA1's view hides: a pine's tiers overlap, so the rings fitted ran straight past the creases, a
+    // smooth spinning top from any lower angle. Bench, Deck, Bin and Logs the same, by their own measures below.
+    public enum Form { Round, Box, Sheet, Cross, Mound, Lathe, Bench, Deck, Bin, Logs }
 
     // What is made this way: a block of a scene, its form, how wide a Round is along x and z, how many of its layers are its own (another block sits on the rest), and Deep:
     // at the fortress's ground's level but over the pit's wall, no ground left under it (what stands lower has none anyway, what stands on the ground keeps it).
@@ -35,15 +37,16 @@ internal static class PolarProps
         bool Solid = false, bool Fit = false, double Share = 0, bool Skirt = false, bool NoGreen = false);
     public static readonly Kind[] Kinds =
     {
-        new(93, 112, Form.Round), new(100, 112, Form.Round),   // the pines
-        new(93, 207, Form.Round),                              // the dying ones
+        new(93, 112, Form.Lathe), new(100, 112, Form.Lathe),   // the pines
+        new(93, 207, Form.Lathe),                              // the dying ones
         new(93, 115, Form.Round, 0.42, 1),                     // the runic stone: broad across z, its carved face to +x
-        new(93, 104, Form.Round),                              // the burst barrels
+        new(93, 104, Form.Lathe),                              // the burst barrels
         new(93, 106, Form.Round),                              // the tank
-        new(93, 49, Form.Round), new(100, 49, Form.Round),     // the fire baskets
+        new(93, 49, Form.Bin), new(100, 49, Form.Bin),         // the fire baskets
         new(100, 247, Form.Round),                             // the rock huts
-        new(100, 234, Form.Round, Deep: true, Water: 1), new(100, 238, Form.Round), new(100, 239, Form.Round),
-        new(93, 105, Form.Box), new(93, 172, Form.Box, Solid: true, Fit: true), new(93, 116, Form.Box), new(93, 186, Form.Box), new(93, 229, Form.Box),
+        new(100, 234, Form.Logs, Deep: true, Water: 1), new(100, 238, Form.Round), new(100, 239, Form.Round),
+        new(100, 142, Form.Deck, Deep: true, Water: 1),        // the dock's planks
+        new(93, 105, Form.Box), new(93, 172, Form.Box, Solid: true, Fit: true), new(93, 116, Form.Bench), new(93, 186, Form.Bench), new(93, 229, Form.Box),
         new(93, 60, Form.Box, Layers: 3, Solid: true, NoGreen: true), new(93, 63, Form.Box, Deep: true, Solid: true, NoGreen: true),    // the pit's walls and the lips on them
         new(93, 61, Form.Box, Layers: 2, Solid: true, NoGreen: true), new(93, 62, Form.Box, Solid: true, NoGreen: true),
         new(93, 67, Form.Mound), new(93, 68, Form.Mound), new(93, 69, Form.Mound), new(93, 70, Form.Mound), new(93, 74, Form.Round, Skirt: true), new(93, 75, Form.Round, Skirt: true), new(93, 76, Form.Round, Skirt: true),
@@ -132,6 +135,7 @@ internal static class PolarProps
     // outline, and from the side the whole of it was that, streaked. Round to here it is as LBA1 has it, past here it runs back to the middle)
     private const double NearAngle = 75 * Math.PI / 180, FarAngle = 15 * Math.PI / 180;
     private const int MoundSteps = 7, MoundLengthSteps = 4, WaterBelow = 2;
+    private const double SkirtRock = 0.5;
     private const int Solid = 8, SeeThrough = 12;   // POLY_TEXTURE, and POLY_TEXTURE_INCRUST: colour 0 not drawn, what the picture hasn't got shows through
 
     // Where a place of a block falls on its picture: (x, z in cells from the block's corner, y in layers from its foot)
@@ -242,6 +246,13 @@ internal static class PolarProps
             Faces.Add(new LbaBodyStudio.Face(corners.Select(Point).ToArray(), 0, Texture: new LbaBodyStudio.FaceTexture(0, uv.ToArray()), Lba2Type: Fill));
         }
 
+        // A face of those corners, textured by the places given, one each
+        public void FaceAs((double X, double Y, double Z)[] corners, (double X, double Y, double Z)[] places)
+        {
+            var i = 0;
+            Face(_ => places[i++], corners);
+        }
+
         // A flat piece of nu x nv quads, facing along (the way along u) x (the way along v)
         public void Patch(int nu, int nv, Func<double, double, (double X, double Y, double Z)> at, Func<(double X, double Y, double Z), (double X, double Y, double Z)> seen)
         {
@@ -295,12 +306,194 @@ internal static class PolarProps
             double d = reach * Math.Cos(near), a = reach * Math.Sin(near) * Math.Sign(across);
             return (mesh.Cx + s + (d + a) / Math.Sqrt(2), c.Y, mesh.Cz - s + (d - a) / Math.Sqrt(2));
         }
+        // (a Skirt's stretch down past the foot textured from the rock, not the picture's foot, its grass, in stripes down to the sea)
+        (double, double, double) SkirtSeen((double X, double Y, double Z) w) => Seen((w.X, SkirtRock, w.Z));
         for (var k = 0; k + 1 < rings.Count; k++)
             for (var j = 0; j < Sides; j++)
-                mesh.Face(Seen, At(k, j), At(k + 1, j), At(k + 1, (j + 1) % Sides), At(k, (j + 1) % Sides));
+                mesh.Face(kind.Skirt && k == 0 ? SkirtSeen : Seen, At(k, j), At(k + 1, j), At(k + 1, (j + 1) % Sides), At(k, (j + 1) % Sides));
         var last = rings[^1];
         var apex = (mesh.Cx + last.Slide, last.Y + height * 0.6 / count, mesh.Cz - last.Slide);
         for (var j = 0; j < Sides; j++) mesh.Face(Seen, At(rings.Count - 1, j), apex, At(rings.Count - 1, (j + 1) % Sides));
+    }
+
+    // ---- things measured from their pictures --------------------------------------------------------------------------------------------------------------------
+
+    // A ring of a lathe: its height and size in layers and cells, and which ring of the picture textures it (a trunk's hidden top the trunk below it; a tier's underside the dark
+    // crease along its rim). From LBA1's angle a ring shows the picture wherever it stands, so what is measured is what LBA1's view leaves open: the rims come from the creases
+    // down the middle of the picture (a rim of size r at height y crosses it at y - 1.131 r) and from the outline's width (r = half width / 33.94).
+    private readonly record struct Turn(double Y, double R, double SeenY, double SeenR, double Slide = 0, double SeenSlide = 0)
+    {
+        public Turn(double y, double r) : this(y, r, y, r) { }
+    }
+
+    private static readonly (double Along, double Size)[] TreeDome = { (0.3, 0.97), (0.65, 0.86), (1.0, 0.66) };
+    // (a tier curving in under its rim, not a flat plate: flat, they were mushrooms on a stalk. The lowest goes furthest, as far as the outline's foot lets it: y - 1.131 r over it)
+    private const double TierCrease = 0.03, TierUnder = 0.38, LowestUnder = 0.74, UnderHalfway = 0.5, UnderFilled = 0.42;
+
+    // A tree: its flared trunk, then tiers, each a dome off a rim that overhangs the next one down, then its top (which stops short of the picture's top behind it: a ring of size r
+    // shows up to y + 1.131 r). `seenTop`: how high the picture shows bare trunk and nothing else. `slide`: how far it leans there, across the picture
+    private static List<Turn> Tree((double Y, double R)[] trunk, double seenTop, (double Y, double R)[] tiers, (double Y, double R)[] top, Func<double, double> slide)
+    {
+        Turn Plain(double y, double r) => new(y, r, y, r, slide(y), slide(y));
+        Turn Seen(double y, double r, double seenY, double seenR) => new(y, r, seenY, seenR, slide(y), slide(seenY));
+        var turns = trunk.Select(t => t.Y <= seenTop ? Plain(t.Y, t.R) : Seen(t.Y, t.R, seenTop, t.R)).ToList();
+        for (var i = 0; i < tiers.Length; i++)
+        {
+            var (y, r) = tiers[i];
+            var neck = turns[^1];
+            var under = i == 0 ? LowestUnder : TierUnder;
+            // (up to under the rim, what was below it; then its underside, all the crease)
+            turns.Add(Seen(y - under, neck.R, neck.SeenY, neck.SeenR));
+            turns.Add(Seen(y - under, neck.R, y - TierCrease, r));
+            turns.Add(Seen(y - under * UnderHalfway, neck.R + (r - neck.R) * UnderFilled, y - TierCrease, r));
+            turns.Add(Seen(y - TierCrease, r * 0.96, y - TierCrease, r));
+            turns.Add(Plain(y, r));
+            if (i + 1 == tiers.Length) break;
+            var dome = tiers[i + 1].Y - TierUnder - y;
+            foreach (var (along, size) in TreeDome) turns.Add(Plain(y + dome * along, r * size));
+        }
+        turns.AddRange(top.Select(t => Plain(t.Y, t.R)));
+        return turns;
+    }
+
+    private static List<Turn> Pine() => Tree(new[] { (0.0, 0.70), (0.15, 0.62), (0.4, 0.40), (0.8, 0.28), (1.35, 0.24) }, 1.35,
+        new[] { (2.94, 1.27), (4.87, 1.12), (6.56, 0.85), (7.97, 0.50) },
+        new[] { (8.2, 0.49), (8.45, 0.40), (8.7, 0.18), (8.93, 0.0) }, _ => 0);
+
+    // (the middle of the outline, row by row, over the 48 pixels a slide of one cell moves it)
+    private static readonly (double Y, double Slide)[] DyingLean =
+        { (0, 0.07), (2.6, 0.07), (3.4, 0.04), (4.2, 0.02), (5.0, -0.05), (5.8, -0.09), (6.6, -0.29), (7.4, -0.43), (8.2, -0.52), (8.72, -0.56) };
+
+    private static List<Turn> Dying() => Tree(new[] { (0.0, 0.62), (0.2, 0.55), (0.5, 0.42), (0.9, 0.30) }, 0.6,
+        new[] { (3.05, 1.25), (4.85, 0.97), (6.55, 0.95), (7.85, 0.62) },
+        new[] { (8.1, 0.50), (8.3, 0.34), (8.5, 0.16), (8.72, 0.0) }, Between(DyingLean));
+
+    private static Func<double, double> Between((double Y, double Slide)[] table) => y =>
+    {
+        for (var i = 0; i + 1 < table.Length; i++)
+            if (y <= table[i + 1].Y) return table[i].Slide + (table[i + 1].Slide - table[i].Slide) * Math.Clamp((y - table[i].Y) / (table[i + 1].Y - table[i].Y), 0, 1);
+        return table[^1].Slide;
+    };
+
+    // The burst barrel: hooped, open at the top, down into the dark (a fit closed it with a hood of the dark inside)
+    private const double BarrelDarkY = 2.4;
+    private static List<Turn> Barrel() => new()
+    {
+        new(0, 0.35), new(0.27, 0.57), new(0.67, 0.53), new(1.07, 0.57), new(1.47, 0.53), new(1.87, 0.57), new(2.25, 0.54), new(2.58, 0.55),
+        new(2.62, 0.50, BarrelDarkY, 0), new(1.2, 0.46, BarrelDarkY, 0), new(1.2, 0, BarrelDarkY, 0),
+    };
+
+    private static List<Turn> Turned(int block) => block switch { 207 => Dying(), 104 => Barrel(), _ => Pine() };
+
+    // Round from (x, z): the rings over one another, closed at the top. Past NearAngle round from LBA1's camera, the far side, as MakeRound's
+    private static void Lathe(Mesh mesh, double x, double z, IReadOnlyList<Turn> turns, int sides, double seenBelow = double.MinValue, double nearest = NearAngle)
+    {
+        (double, double, double) At(int k, int j)
+        {
+            var angle = Math.PI / 4 + j * 2 * Math.PI / sides;
+            return (x + turns[k].Slide + turns[k].R * Math.Cos(angle), turns[k].Y, z - turns[k].Slide + turns[k].R * Math.Sin(angle));
+        }
+        (double X, double Y, double Z) SeenOf(int k, int j)
+        {
+            var t = turns[k];
+            var round = Math.IEEERemainder(j * 2 * Math.PI / sides, 2 * Math.PI);
+            var off = Math.Abs(round);
+            var near = off <= nearest ? off : FarAngle + (nearest - FarAngle) * (Math.PI - off) / (Math.PI - nearest);
+            var angle = Math.PI / 4 + Math.Sign(round) * near;
+            return (x + t.SeenSlide + t.SeenR * Math.Cos(angle), Math.Max(t.SeenY, seenBelow), z - t.SeenSlide + t.SeenR * Math.Sin(angle));
+        }
+        for (var k = 0; k + 1 < turns.Count; k++)
+        {
+            // (the same ring with another texture: the next faces start from there, nothing between)
+            if (turns[k].Y == turns[k + 1].Y && turns[k].R == turns[k + 1].R) continue;
+            for (var j = 0; j < sides; j++)
+                mesh.FaceAs(new[] { At(k, j), At(k + 1, j), At(k + 1, (j + 1) % sides), At(k, (j + 1) % sides) },
+                            new[] { SeenOf(k, j), SeenOf(k + 1, j), SeenOf(k + 1, (j + 1) % sides), SeenOf(k, (j + 1) % sides) });
+        }
+        var last = turns.Count - 1;
+        if (turns[last].R <= 0) return;
+        for (var j = 0; j < sides; j++)
+            mesh.FaceAs(new[] { At(last, j), (x + turns[last].Slide, turns[last].Y, z - turns[last].Slide), At(last, (j + 1) % sides) },
+                        new[] { SeenOf(last, j), (x + turns[last].SeenSlide, turns[last].SeenY, z - turns[last].SeenSlide), SeenOf(last, (j + 1) % sides) });
+    }
+
+    // The fire basket: a hooped barrel, and out of its top a fan of black blades, each a real curved spike with a face each way (rings textured with the picture's holes were
+    // right from LBA1's side and a cage from the others). A blade anywhere round is textured as the one at the same place on the near side, mirrored past NearAngle like a lathe's
+    private static void MakeBin(Mesh mesh)
+    {
+        Lathe(mesh, mesh.Cx, mesh.Cz, new Turn[] { new(0, 0.38), new(0.3, 0.40), new(0.85, 0.40), new(1.4, 0.40), new(1.62, 0.38), new(1.66, 0.0) }, BinSides);
+        (double, double, double) Place(double r, double y, double angle) => (mesh.Cx + r * Math.Cos(angle), y, mesh.Cz + r * Math.Sin(angle));
+        for (var b = 0; b < BinBlades; b++)
+        {
+            var round = b * 2 * Math.PI / BinBlades + Math.PI / BinBlades;
+            var seen = Math.IEEERemainder(round, 2 * Math.PI);
+            var off = Math.Abs(seen);
+            var near = Math.Sign(seen) * (off <= NearAngle ? off : FarAngle + (NearAngle - FarAngle) * (Math.PI - off) / (Math.PI - NearAngle));
+            for (var k = 0; k + 1 < BinBlade.Length; k++)
+            {
+                var (r0, y0, w0) = BinBlade[k];
+                var (r1, y1, w1) = BinBlade[k + 1];
+                double a = Math.PI / 4 + round, s = Math.PI / 4 + near;
+                var corners = new[] { Place(r0, y0, a - w0), Place(r0, y0, a + w0), Place(r1, y1, a + w1), Place(r1, y1, a - w1) };
+                var places = new[] { Place(r0, y0, s - w0), Place(r0, y0, s + w0), Place(r1, y1, s + w1), Place(r1, y1, s - w1) };
+                mesh.FaceAs(corners, places);
+                mesh.FaceAs(corners.Reverse().ToArray(), places.Reverse().ToArray());
+            }
+        }
+    }
+
+    // A length of timber along z, `across` its corners (x, y) anticlockwise, each face textured where it stands; its far end, which LBA1 doesn't show, as its near one
+    private static void Plank(Mesh mesh, (double X, double Y)[] across, double z0, double z1)
+    {
+        static (double, double, double) Same((double X, double Y, double Z) c) => c;
+        var steps = Math.Max(1, (int)Math.Ceiling(z1 - z0));
+        for (var i = 0; i < across.Length; i++)
+        {
+            var (a, b) = (across[i], across[(i + 1) % across.Length]);
+            mesh.Patch(1, steps, (u, v) => (a.X + (b.X - a.X) * u, a.Y + (b.Y - a.Y) * u, z0 + (z1 - z0) * v), Same);
+        }
+        mesh.Face(Same, across.Select(c => (c.X, c.Y, z1)).ToArray());
+        mesh.Face(c => (c.X, c.Y, z1), across.Reverse().Select(c => (c.X, c.Y, z0)).ToArray());
+    }
+
+    private sealed record BenchShape((double X, double Y)[] Seat, (double X, double Y)[] Back, (double X, double Y)[] Leg, double Z0, double Z1, double[] Legs, double LegThick);
+    private static readonly Dictionary<int, BenchShape> Benches = new()
+    {
+        [116] = new(new[] { (0.62, 0.92), (1.65, 0.92), (1.65, 1.04), (0.62, 1.10) }, new[] { (0.50, 1.10), (0.62, 1.10), (0.47, 2.13), (0.35, 2.13) },
+                    new[] { (1.25, 0.0), (1.50, 0.0), (1.50, 0.92), (0.70, 0.92) }, 0.15, 2.85, new[] { 0.45, 2.68 }, 0.09),
+        // (the same bench from behind: the seat at the far side, the back's dark rear facing LBA1's camera)
+        [186] = new(new[] { (0.28, 0.78), (1.30, 0.85), (1.30, 0.97), (0.28, 0.86) }, new[] { (1.25, 0.97), (1.37, 0.97), (1.70, 1.90), (1.58, 1.90) },
+                    new[] { (0.60, 0.0), (1.50, 0.0), (1.25, 0.85), (0.95, 0.80) }, 0.05, 3.0, new[] { 0.45, 2.68 }, 0.09),
+    };
+
+    private static void MakeBench(Mesh mesh, BenchShape s)
+    {
+        Plank(mesh, s.Seat, s.Z0, s.Z1);
+        Plank(mesh, s.Back, s.Z0, s.Z1);
+        foreach (var z in s.Legs) Plank(mesh, s.Leg, z, z + s.LegThick);
+    }
+
+    // The dock: a slab of planks as thin as the picture has it, on posts down to the sea (LBA1's stands on nothing to see, a layer over its water; the sea here is two down)
+    private static void MakeDeck(Mesh mesh, int dx, int dz)
+    {
+        Plank(mesh, new[] { (0.0, DeckTop - DeckThick), ((double)dx, DeckTop - DeckThick), ((double)dx, DeckTop), (0.0, DeckTop) }, 0, dz);
+        foreach (var x in new[] { DeckPostIn, dx - DeckPostIn })
+            for (var z = 0.75; z < dz; z += 1.5)
+                Lathe(mesh, x, z, new Turn[] { new(-WaterBelow, DeckPost, DeckTop, DeckPost), new(DeckTop - DeckThick, DeckPost, DeckTop, DeckPost) }, DeckPostSides);
+    }
+    private const double DeckTop = 1, DeckThick = 0.25, DeckPost = 0.14, DeckPostIn = 0.35;
+    private const int DeckPostSides = 6, BinSides = 12, BinBlades = 13, LogSides = 10;
+    // (along a blade of the fan: out from the barrel's rim, how high, and half its width as an angle)
+    private static readonly (double R, double Y, double Width)[] BinBlade = { (0.34, 1.56, 0.20), (0.52, 2.0, 0.17), (0.66, 2.35, 0.12), (0.74, 2.62, 0.015) };
+
+    // The dock's end post: two logs, a tall one behind a short one (their feet in the picture's water, so textured from above it; a log is so few pixels wide that its dark outline
+    // starts well in, a stripe down its side from behind if taken as far round as a tree's)
+    private const double LogNear = 55 * Math.PI / 180;
+    private static void MakeLogs(Mesh mesh)
+    {
+        const double AboveWater = 0.9;
+        Lathe(mesh, mesh.Cx - 0.175, mesh.Cz + 0.075, new Turn[] { new(-WaterBelow, 0.25), new(AboveWater, 0.25), new(3.73, 0.25), new(3.73, 0.0) }, LogSides, AboveWater, LogNear);
+        Lathe(mesh, mesh.Cx + 0.195, mesh.Cz + 0.005, new Turn[] { new(-WaterBelow, 0.25), new(AboveWater, 0.25), new(3.0, 0.25), new(3.0, 0.0) }, LogSides, AboveWater, LogNear);
     }
 
     // A row of boulders: a hump along the block's long side, half an ellipse across it, as high at each place as the picture's outline. Its far side the near one mirrored
@@ -338,19 +531,26 @@ internal static class PolarProps
             for (var j = 0; j < MoundSteps; j++)
                 if (alongX) mesh.Face(Seen, At(i, j), At(i + 1, j), At(i + 1, j + 1), At(i, j + 1));
                 else mesh.Face(Seen, At(i, j), At(i, j + 1), At(i + 1, j + 1), At(i + 1, j));
-        // (and down past its foot on both sides: on the shore it stands over the sea)
+        // (and down past its foot on both sides: on the shore it stands over the sea. Textured from the rock halfway up it: the picture's foot is its grass, drawn down the
+        // sides in stripes)
+        (double, double, double) Skirt((double X, double Y, double Z) w)
+        {
+            var a = alongX ? w.X : w.Z;
+            var y = tops[Math.Clamp((int)Math.Round(a / length * steps), 0, steps)] * SkirtRock;
+            return alongX ? (a, y, mesh.Cz + 0.5 * Math.Cos(Math.Asin(SkirtRock))) : (mesh.Cx + 0.5 * Math.Cos(Math.Asin(SkirtRock)), y, a);
+        }
         for (var i = 0; i < steps; i++)
         {
             double a0 = length * i / (double)steps, a1 = length * (i + 1) / (double)steps;
             if (alongX)
             {
-                mesh.Face(Seen, (a0, -WaterBelow, mesh.Cz + 0.5), (a1, -WaterBelow, mesh.Cz + 0.5), (a1, 0, mesh.Cz + 0.5), (a0, 0, mesh.Cz + 0.5));
-                mesh.Face(Seen, (a0, -WaterBelow, mesh.Cz - 0.5), (a0, 0, mesh.Cz - 0.5), (a1, 0, mesh.Cz - 0.5), (a1, -WaterBelow, mesh.Cz - 0.5));
+                mesh.Face(Skirt, (a0, -WaterBelow, mesh.Cz + 0.5), (a1, -WaterBelow, mesh.Cz + 0.5), (a1, 0, mesh.Cz + 0.5), (a0, 0, mesh.Cz + 0.5));
+                mesh.Face(Skirt, (a0, -WaterBelow, mesh.Cz - 0.5), (a0, 0, mesh.Cz - 0.5), (a1, 0, mesh.Cz - 0.5), (a1, -WaterBelow, mesh.Cz - 0.5));
             }
             else
             {
-                mesh.Face(Seen, (mesh.Cx + 0.5, -WaterBelow, a0), (mesh.Cx + 0.5, 0, a0), (mesh.Cx + 0.5, 0, a1), (mesh.Cx + 0.5, -WaterBelow, a1));
-                mesh.Face(Seen, (mesh.Cx - 0.5, -WaterBelow, a0), (mesh.Cx - 0.5, -WaterBelow, a1), (mesh.Cx - 0.5, 0, a1), (mesh.Cx - 0.5, 0, a0));
+                mesh.Face(Skirt, (mesh.Cx + 0.5, -WaterBelow, a0), (mesh.Cx + 0.5, 0, a0), (mesh.Cx + 0.5, 0, a1), (mesh.Cx + 0.5, -WaterBelow, a1));
+                mesh.Face(Skirt, (mesh.Cx - 0.5, -WaterBelow, a0), (mesh.Cx - 0.5, -WaterBelow, a1), (mesh.Cx - 0.5, 0, a1), (mesh.Cx - 0.5, 0, a0));
             }
         }
     }
@@ -404,6 +604,37 @@ internal static class PolarProps
         mesh.Patch(ny, na, (u, v) => At(v, u), Same);
     }
 
+    // A kind's body as the game gets it, and the picture its faces are textured from
+    public static (Picture Shown, List<System.Numerics.Vector3> Points, List<LbaBodyStudio.Face> Faces) Shape(Lba1Game game, Kind kind)
+    {
+        var library = game.ReadBlocks(kind.Scene);
+        var (dx, dy, dz) = Size(library, kind.Block);
+        dy = Math.Min(dy, kind.Layers);
+        var (wholeX, wholeZ) = (dx, dz);
+        if (kind.Cut > 0) { dx = Math.Min(dx, kind.Cut); dz = Math.Min(dz, kind.Cut); }
+        var picture = Roomy(Draw(game, library, kind.Block, dy), wholeX, dy, wholeZ);
+        // (rings fitted to the outline, then the picture filled out past it)
+        var round = kind.Solid || kind.Form is Form.Round or Form.Mound or Form.Lathe or Form.Bench or Form.Deck or Form.Bin or Form.Logs;
+        var mesh = new Mesh(picture, dx / 2.0, dz / 2.0) { Fill = round ? Solid : SeeThrough };
+        switch (kind.Form)
+        {
+            case Form.Round: MakeRound(mesh, kind, dy); break;
+            case Form.Mound: MakeMound(mesh, dx, dy, dz); break;
+            case Form.Box: MakeBox(mesh, dx, dy, dz, kind.Fit); break;
+            case Form.Sheet: MakeSheet(mesh, dx >= dz); break;
+            case Form.Lathe: Lathe(mesh, mesh.Cx, mesh.Cz, Turned(kind.Block), LatheSides); break;
+            case Form.Bench: MakeBench(mesh, Benches[kind.Block]); break;
+            case Form.Deck: MakeDeck(mesh, dx, dz); break;
+            case Form.Bin: MakeBin(mesh); break;
+            case Form.Logs: MakeLogs(mesh); break;
+            default: MakeSheet(mesh, true); MakeSheet(mesh, false); break;
+        }
+        // (a wall's grass, on its top edge, not spread down its face)
+        var shown = round ? Filled(kind.NoGreen ? NoGrass(picture, game.Palette) : picture) : picture;
+        return (shown, mesh.Points, mesh.Faces);
+    }
+    private const int LatheSides = 16;
+
     public static int Build(Lba1Game game, PolarLayout layout, IslandFile island, PolarTextures.Pages pages, List<byte[]> bodies, List<string> log)
     {
         var made = new Dictionary<Kind, (int Body, int Page, double HalfX, double HalfZ, double Tall)>();
@@ -415,44 +646,31 @@ internal static class PolarProps
             var library = game.ReadBlocks(kind.Scene);
             var (dx, dy, dz) = Size(library, kind.Block);
             dy = Math.Min(dy, kind.Layers);
-            var (wholeX, wholeZ) = (dx, dz);
             if (kind.Cut > 0) { dx = Math.Min(dx, kind.Cut); dz = Math.Min(dz, kind.Cut); }
             if (!made.TryGetValue(kind, out var m))
             {
-                var picture = Roomy(Draw(game, library, kind.Block, dy), wholeX, dy, wholeZ);
-                // (rings fitted to the outline, then the picture filled out past it)
-                var round = kind.Solid || kind.Form is Form.Round or Form.Mound;
-                var mesh = new Mesh(picture, dx / 2.0, dz / 2.0) { Fill = round ? Solid : SeeThrough };
-                switch (kind.Form)
-                {
-                    case Form.Round: MakeRound(mesh, kind, dy); break;
-                    case Form.Mound: MakeMound(mesh, dx, dy, dz); break;
-                    case Form.Box: MakeBox(mesh, dx, dy, dz, kind.Fit); break;
-                    case Form.Sheet: MakeSheet(mesh, dx >= dz); break;
-                    default: MakeSheet(mesh, true); MakeSheet(mesh, false); break;
-                }
-                // (a wall's grass, on its top edge, not spread down its face)
-                var shown = round ? Filled(kind.NoGreen ? NoGrass(picture, game.Palette) : picture) : picture;
+                var (shown, points, faces) = Shape(game, kind);
                 if (pages.AddPicture(shown.Pixels, shown.Width, shown.Height) is not { } at) { log.Add($"block {kind.Block}: no page for its picture"); continue; }
                 var header = new byte[96];
                 header[0] = 0x10;
                 var body = new LbaBodyStudio.Body
                 {
-                    Game = 2, Static = true, Lit = false, Header = header, Vertices = mesh.Points,
-                    Bones = new List<LbaBodyStudio.Bone> { new(0, mesh.Points.Count, 0, -1, new byte[8]) }, Faces = mesh.Faces, Textures = new[] { 0xFFFF0000u | (uint)(at.Y * 256 + at.X) },
+                    Game = 2, Static = true, Lit = false, Header = header, Vertices = points,
+                    Bones = new List<LbaBodyStudio.Bone> { new(0, points.Count, 0, -1, new byte[8]) }, Faces = faces, Textures = new[] { 0xFFFF0000u | (uint)(at.Y * 256 + at.X) },
                 };
                 // (what stops a car: a box's whole box, a fence's line, the trunk of what's round)
                 var (hx, hz) = kind.Form switch
                 {
-                    Form.Box or Form.Mound => (dx / 2.0, dz / 2.0),
-                    Form.Round => (0.3 * Math.Min(dx, dz), 0.3 * Math.Min(dx, dz)),
+                    Form.Box or Form.Mound or Form.Deck => (dx / 2.0, dz / 2.0),
+                    Form.Bench => (0.65, dz / 2.0),
+                    Form.Round or Form.Lathe or Form.Bin or Form.Logs => (0.3 * Math.Min(dx, dz), 0.3 * Math.Min(dx, dz)),
                     Form.Sheet => dx >= dz ? (dx / 2.0, 0.2) : (0.2, dz / 2.0),
                     _ => (0.3, 0.3),
                 };
                 m = (bodies.Count, at.Page, hx, hz, dy * 256.0 * S);
                 made[kind] = m;
                 bodies.Add(body.Write());
-                log.Add($"block {kind.Block} of scene {kind.Scene}: a {kind.Form} of {mesh.Faces.Count} faces, {mesh.Points.Count} points, y {mesh.Points.Min(v => v.Y):0}..{mesh.Points.Max(v => v.Y):0}, x {mesh.Points.Min(v => v.X):0}..{mesh.Points.Max(v => v.X):0}, its picture {picture.Width} x {picture.Height} on page {at.Page}");
+                log.Add($"block {kind.Block} of scene {kind.Scene}: a {kind.Form} of {faces.Count} faces, {points.Count} points, y {points.Min(v => v.Y):0}..{points.Max(v => v.Y):0}, x {points.Min(v => v.X):0}..{points.Max(v => v.X):0}, its picture {shown.Width} x {shown.Height} on page {at.Page}");
             }
             int wx = (int)Math.Round((PolarTerrain.IslandX(placing.X) + dx * S / 2.0) * 512), wz = (int)Math.Round((PolarTerrain.IslandZ(placing.Z) + dz * S / 2.0) * 512);
             var cube = island.CubeAt(wx / IslandFile.CubeSize, wz / IslandFile.CubeSize);

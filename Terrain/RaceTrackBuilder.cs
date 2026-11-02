@@ -319,6 +319,11 @@ internal sealed class RaceTrackPlan
     public double SetBack { get; set; }
     // A car kept off the walls beside the road, sliding along them (RoadWalls)
     public bool WallRail { get; set; }
+    // A rail along one edge of the road, [first plan point, last, side: 1 the driver's right, -1 his left], wall or no wall, for WallRail's RoadWalls: where the ground by the road
+    // is a bank a car can run up (the user, 2026-11-02, Mosquibees: the inside of the spiral)
+    public int[][]? SideRails { get; set; }
+    // The bridge's railings starting at its deck, not on along the landing before it: Mosquibees Island's stood out past the rock beside it, a messy slot between them (the user, 2026-11-02)
+    public bool DeckRailOnDeck { get; set; }
     // Decors moved up or down: cube x, cube z, body, those with Z at least this, their new Y; and copies of decors as other bodies beside them: cube x, cube z,
     // body, Z at least this, the copy's body, its box's XMin, XMax (LiftDecors)
     public int[][]? LiftDecors { get; set; }
@@ -655,6 +660,8 @@ internal sealed class RaceTrackReport
     // ... and the steam jets across the road, [x, y, z (its middle), half width, reach, blowing (ms), not (ms), phase (ms), way x, way z]
     // (RACEMOD.CPP jet=)
     public List<int[]> Jets { get; } = new();
+    // ... and where their signals stand: the first gantry of each stretch of them, [x, y, z (the road's middle), the road's way x and z (thousandths), the uprights' half width]
+    public List<int[]> JetSignalPlaces { get; } = new();
     // the tunnels over the raised road (RaceTrackTunnel): each one's first and last point (the lap's) and its roof's height over the deck,
     // and the height the camera's eye is kept under there (TunnelRun.Ceiling), if any
     public List<(int From, int To, double Roof, double? Ceiling)> Tunnels { get; } = new();
@@ -1036,6 +1043,7 @@ internal static class RaceTrackBuilder
             var carried = crossings.Where(c => !InGap(c.I) && !InGap(c.J)).ToList();
             if (crossings.Count > carried.Count) report.Notes.Add($"the lap crosses itself {crossings.Count - carried.Count} times in a jump's gap: the cars fly over it there");
             if (plan.Deck is [var d0, var d1]) report.RoadBridge = PlanDeck(main, PlanPoint(plan, main, d0), PlanPoint(plan, main, d1), carried, options, report);
+            if (plan.DeckRailOnDeck && report.RoadBridge is { } deckRail) report.RoadBridge = deckRail with { RailBehind = false };
             else if (carried.Count > 0 && main.Raised is null) report.Notes.Add($"WARNING: the lap crosses itself {carried.Count} times and the plan draws no bridge: the roads meet there");
             else if (carried.Count > 0) report.Notes.Add($"the lap passes over itself {carried.Count} times, on its raised road");
             if (gaps.Count > RaceTrackJumpAnim.MaxJumps) report.Notes.Add($"WARNING: the plan has {gaps.Count} jumps; only the first {RaceTrackJumpAnim.MaxJumps} are built");
@@ -1261,7 +1269,7 @@ internal static class RaceTrackBuilder
         report.RacePath.AddRange(report.DriverPaths[0]);
         ClearStaleCol(island, natural, field, index, painted, report, options.Theme.Sand);
         if (planned) WallSteepBanks(island, natural, field, index, painted, options, report);
-        if (plan.WallRail) RoadWalls(field, main, report);
+        if (plan.WallRail) RoadWalls(field, main, plan, report);
         follow.Apply();
         // (and what the ground carried up into the road's way: the decors stood clear of it when they were cleared, and ground filled
         // under a raised road's end lifts what stood there -- 2026-10-06: two of LBA1's barrels at the foot of Polar Island's 108, lifted
@@ -4198,7 +4206,10 @@ internal static class RaceTrackBuilder
                             if (h.Arc || h.Bare || h.Under) continue;
                             var half = h.Half > 0 ? h.Half : o.RaisedHalfWidth;
                             var lean = Math.Abs(h.Cross) * half * 512;
-                            if (h.Dist > half + 0.75 || d.YMax < h.H - lean - RaisedBelow || d.YMin > h.H + lean + RaisedAbove) continue;
+                            // (a wall that starts at the deck's own level and only stands by it, in the margin past its edge, isn't over it, and "cut down to end under the road" left a
+                            // sliver one unit tall: the palace's walls by its stairwells' doors, no wall, and the user drove into one, 2026-11-02)
+                            var beside = d.YMin >= h.H - lean - 1 && h.Dist > half;
+                            if (beside || h.Dist > half + 0.75 || d.YMax < h.H - lean - RaisedBelow || d.YMin > h.H + lean + RaisedAbove) continue;
                             roof = Math.Min(roof, h.H - lean);
                             hit = true;
                         }
@@ -5135,14 +5146,24 @@ internal static class RaceTrackBuilder
     }
 
     // (the user, 2026-10-31, Mosquibees: "it's too easy to get stuck on the wall": where a wall stands by the road a car is kept off it as a deck's rail keeps it on, sliding on along
-    // it. The walls under the lap's upper levels can't move. Each road point with a wall: x, z, y, its normal, and how far along the normal a car's middle may go, units.)
+    // it. The walls under the lap's upper levels can't move. Each road point with a wall: x, z, y, its normal, and how far along the normal a car's middle may go, units. SideRails: no wall
+    // there, but a bank up to the next level of the lap, 10 cells off: a car ran up it, stuck on its rough ground or came out on the top road past a checkpoint -- "it's too easy to
+    // accidentally skip". Held at the kerb's edge it slides on round instead.)
     private const double WallRise = 500, WallCar = 1.5, WallLook = 3.5;
 
-    private static void RoadWalls(Field field, TrackRoad r, RaceTrackReport report)
+    private static void RoadWalls(Field field, TrackRoad r, RaceTrackPlan plan, RaceTrackReport report)
     {
+        var railed = new int[r.Count];
+        foreach (var rail in (plan.SideRails ?? Array.Empty<int[]>()).Where(s => s.Length >= 3))
+        {
+            int from = PlanPoint(plan, r, rail[0]), to = PlanPoint(plan, r, rail[1]);
+            for (var i = from; i != to; i = (i + 1) % r.Count) railed[i] = rail[2];
+            railed[to] = rail[2];
+        }
         for (var i = 0; i < r.Count; i++)
         {
-            if (r.Raised?[i] == true || r.Bridge[i] || r.Deck[i] || r.Gap[i]) continue;
+            // (a rail asked for stands all the same: the stretch of the spiral the bridge crosses over counts as the bridge's)
+            if (railed[i] == 0 && (r.Raised?[i] == true || r.Bridge[i] || r.Deck[i] || r.Gap[i])) continue;
             double nx = -r.Tz[i], nz = r.Tx[i];
             double? Wall(int side)
             {
@@ -5151,6 +5172,8 @@ internal static class RaceTrackBuilder
                 return null;
             }
             double? h = Wall(1), l = Wall(-1);
+            if (railed[i] > 0) h = Math.Min(h ?? 99, r.CurbHalf);
+            if (railed[i] < 0) l = Math.Min(l ?? 99, r.CurbHalf);
             if (h is null && l is null) continue;
             report.RoadWalls.Add(new[] { (int)Math.Round(r.X[i] * 512), (int)Math.Round(r.Z[i] * 512), (int)Math.Round(r.H[i]), (int)Math.Round(nx * 1000), (int)Math.Round(nz * 1000),
                 (int)Math.Round(-(l ?? 99) * 512), (int)Math.Round((h ?? 99) * 512) });

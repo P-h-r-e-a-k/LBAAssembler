@@ -195,7 +195,8 @@ internal sealed class TrackGeneratorWindow : Window
         if (chosen == island && islandFile is not null) return true;
         try
         {
-            var file = IslandFile.Load(IslandPath(chosen));
+            // (drawn on as it will be built: the Island of the Francos is made twice its size)
+            var file = IslandScaler.AsBuilt(IslandFile.Load(IslandPath(chosen)), chosen, new List<string>());
             var renderer = new IslandMapRenderer(file, IslandMapRenderer.LoadPalette(gameRoot, System.IO.Path.GetFileNameWithoutExtension(chosen.IleFile)), MapScale);
             renderer.RenderAll(MapView.Terrain);
             island = chosen; islandFile = file;

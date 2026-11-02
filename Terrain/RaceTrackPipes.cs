@@ -106,6 +106,7 @@ internal static class RaceTrackPipes
             var placed = 0;
             // (OneSide: the run's gantries so far, and which of them blow -- the even ones if its first is in a jet stretch, else the odd)
             int nthGantry = 0, blowParity = -1;
+            var hasJets = Enumerable.Range(0, span + 1).Any(k => JetRunAt((from + k) % n) >= 0);
             for (var k = step / 2; k <= span - step / 2; k += step)
             {
                 var i = (from + k) % n;
@@ -141,6 +142,9 @@ internal static class RaceTrackPipes
                 if (blocked || feet.Any(f => f > y + 600)) { skipped++; why.Add($"({x:0.#}, {z:0.#}): {(blocked ? "the lap" : "the ground")}"); continue; }
                 var len = (float)(run.Every * 512);
                 var jetRun = JetRunAt(i);
+                // (the signals on the stretch's first gantry, the first a car comes to: the user, 2026-11-02, "on the front of the first gantry instead of on each individual steam")
+                if (blowParity < 0 && hasJets) report.JetSignalPlaces.Add(new[] { (int)Math.Round(x * 512), (int)Math.Round(y), (int)Math.Round(z * 512),
+                    (int)Math.Round(along.X * 1000), (int)Math.Round(along.Z * 1000), (int)Math.Round(half * 512) });
                 if (blowParity < 0) blowParity = jetRun >= 0 ? 0 : 1;
                 var blowsHere = jetRun >= 0 && (!run.OneSide || nthGantry % 2 == blowParity);
                 nthGantry++;
@@ -460,7 +464,7 @@ internal static class RaceTrackPipes
     // obstacles, green for the safe side, red for the dangerous side"): a dark housing, red over green, seen from either way along the road, unlit
     // so the lit one glows. Two bodies, the game drawing the one the jet's side asks for (RACEMOD.CPP jet_signals=). Their BODY.HQR entries, the safe one first.
     private const int LampRed = 75, LampRedOff = 66, LampGreen = 140, LampGreenOff = 131, SignalCase = 50;
-    private const float SignalWide = 215, SignalDeep = 90, SignalTall = 950, LampRadius = 190, LampOut = 45;
+    private const float SignalWide = 280, SignalDeep = 117, SignalTall = 1235, LampRadius = 247, LampOut = 58;
     private static byte[] SignalBody(bool danger)
     {
         var pts = new List<Vector3>();

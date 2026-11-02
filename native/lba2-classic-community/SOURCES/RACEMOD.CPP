@@ -1276,7 +1276,11 @@ typedef struct { double X, Y, Z, DirX, DirZ, Half; S32 Reach, On, Off, Phase, Pu
 extern T_FLOW *TabPartFlow;
 static T_RACE_JET s_jets[RACE_MAX_JETS];
 static int s_nbJets = 0;
-static S32 s_signalBody[2] = {-1, -1};     // jet_signals=: the signal on each jet's uprights, green lit and red lit, in BODY.HQR
+static S32 s_signalBody[2] = {-1, -1};     // jet_signals=: the signal on a gantry's uprights, green lit and red lit, in BODY.HQR
+#define RACE_MAX_JET_SIGNALS 8
+typedef struct { double X, Y, Z, DirX, DirZ, Half; } T_RACE_JET_SIGNAL;
+static T_RACE_JET_SIGNAL s_jetSignals[RACE_MAX_JET_SIGNALS];    // jet_signal=<x> <y> <z> <way x> <way z> <half>: the first gantry of a stretch of jets
+static int s_nbJetSignals = 0;
 static int s_signalReady[2] = {0, 0};
 static T_OBJ_3D s_signalObj[2];
 // Tunnels over the raised road (tunnel=<from> <to> <roof>: its first and last point, its roof's height over the deck; Otringal's over the
@@ -1977,6 +1981,8 @@ static T_RACE_FROG s_frog;
 #define RACE_THROWN_NEAR 2500.0            // a pighead throws at a car between this near ...
 #define RACE_THROWN_FAR 11000.0            // ... and this far
 #define RACE_THROWN_DROP 7000.0            // (how far below him a thrower on a mound still throws at a car)
+#define RACE_MOUND_FAR 24000.0             // a soldier mosquibee on his stone throws from this far: 8,000 off the road, his ball at 6,000 units a second has to leave as a car at racing
+                                           // speed is still this far off, and a throw with no way of getting there is no throw
 #define RACE_THROWN_EVERY 2400             // ms between his throws, at the least (and up to half again)
 #define RACE_THROWN_RELEASE 380            // ms into his throw the thing leaves his hand ...
 #define RACE_THROWN_END 950                // ... and the throw is over
@@ -4265,6 +4271,10 @@ static void Load(const char *path, int carOnly = 0) {
             }
         }
         else if (!strcmp(key, "jet_signals")) sscanf(v, "%d %d", &s_signalBody[0], &s_signalBody[1]);
+        else if (!strcmp(key, "jet_signal") && s_nbJetSignals < RACE_MAX_JET_SIGNALS) {
+            T_RACE_JET_SIGNAL *g = &s_jetSignals[s_nbJetSignals];
+            if (sscanf(v, "%lf %lf %lf %lf %lf %lf", &g->X, &g->Y, &g->Z, &g->DirX, &g->DirZ, &g->Half) == 6) { g->DirX /= 1000.0; g->DirZ /= 1000.0; s_nbJetSignals++; }
+        }
         else if (!strcmp(key, "jet") && s_nbJets < RACE_MAX_JETS) {
             T_RACE_JET *p = &s_jets[s_nbJets];
             int x, y, z, a, b, c, d, e, f, g, h = RACE_STEAM_HIGH;
@@ -7496,7 +7506,7 @@ void RaceMod_DrawBackdrop(void) {
     if (!RaceMod_Active() || CubeMode != CUBE_EXTERIEUR) return;
     DrawSpooks();
     if (s_nbWebs) DrawWebs();
-    if (s_nbJets && s_signalBody[0] >= 0) DrawJetSignals();
+    if (s_nbJetSignals && s_signalBody[0] >= 0) DrawJetSignals();
     DrawMarshal();
     if (!s_frog.On) return;
     T_OBJ_3D *o = &s_frog.Obj;
@@ -7658,21 +7668,27 @@ static void BackdropBody(T_OBJ_3D *obj, int *ready, int body, double x, double y
     ObjectDisplay(obj);
 }
 
-// The signals over the steam jets (jet_signals=): on each upright, a little over its nozzle, turned along the road; red on the side the jet blows from on
-// this lap, green on the other. The jet's own side, the one a burst began on, so a signal is never wrong (Jets).
-#define RACE_SIGNAL_OUT 0                  // the signal's middle out from the jet's mouth: its back against the upright
-#define RACE_SIGNAL_OVER 350               // its foot over the jet's height
+// The signals of a stretch of steam jets (jet_signal=, jet_signals=): on the front of its first gantry's two uprights, the way a car comes at them, turned along the road;
+// red on the side the jets blow from on this lap, green on the other. The nearest jet's own side, the one a burst began on, so a signal is never wrong (Jets).
+#define RACE_SIGNAL_FRONT 340              // the signal's middle ahead of the upright's: its back against it
+#define RACE_SIGNAL_OVER 650               // its foot over the deck
 static void DrawJetSignals(void) {
     const U32 clut = SceneClut();
     int drawn = 0;
-    for (int i = 0; i < s_nbJets; i++) {
-        const T_RACE_JET *j = &s_jets[i];
-        if (j->Half <= 0) continue;
+    for (int i = 0; i < s_nbJetSignals; i++) {
+        const T_RACE_JET_SIGNAL *g = &s_jetSignals[i];
+        const T_RACE_JET *j = NULL;
+        double nearest = 0;
+        for (int k = 0; k < s_nbJets; k++) {
+            const double d = (s_jets[k].X - g->X) * (s_jets[k].X - g->X) + (s_jets[k].Z - g->Z) * (s_jets[k].Z - g->Z);
+            if (s_jets[k].Half > 0 && (!j || d < nearest)) { j = &s_jets[k]; nearest = d; }
+        }
+        if (!j) continue;
         const int side = j->Stage ? j->Side : !(s_laps & 1) ? -1 : 1;
-        const double leftX = j->DirZ, leftZ = -j->DirX;
-        const S32 beta = TurnOf(atan2(j->DirX, j->DirZ));
+        const double leftX = g->DirZ, leftZ = -g->DirX;
+        const S32 beta = TurnOf(atan2(g->DirX, g->DirZ));
         for (int s = -1; s <= 1; s += 2) {
-            const double x = j->X + leftX * s * (j->Half + RACE_SIGNAL_OUT), y = j->Y + j->High + RACE_SIGNAL_OVER, z = j->Z + leftZ * s * (j->Half + RACE_SIGNAL_OUT);
+            const double x = g->X + leftX * s * g->Half - g->DirX * RACE_SIGNAL_FRONT, y = g->Y + RACE_SIGNAL_OVER, z = g->Z + leftZ * s * g->Half - g->DirZ * RACE_SIGNAL_FRONT;
             LongWorldRotatePoint((S32)floor(x - CurrentCubeX * 32768.0 + 0.5), (S32)floor(y + 0.5), (S32)floor(z - CurrentCubeY * 32768.0 + 0.5));
             const S32 zr = CameraZr - Z0;
             if (zr < -4000 || zr > ClipZFar + 4000) continue;
@@ -14379,7 +14395,7 @@ static void Guards(S32 now, int driving, S32 dt) {
                     Log_Info("[racemod] %s %d knocked back by %s's car", GuardName(g), i, CarName(who));
                 }
                 const int coming = dx * vx + dz * vz > 0 || d2 < 2500.0 * 2500.0;
-                const double far = GuardThrows(g) ? RACE_THROWN_FAR : RACE_GUARD_ALERT * sqrt(s_guardSize);
+                const double far = g->Kind == 5 ? RACE_MOUND_FAR : GuardThrows(g) ? RACE_THROWN_FAR : RACE_GUARD_ALERT * sqrt(s_guardSize);
                 if (!coming || d2 > far * far || d2 >= best || GuardHolds(g, now)) continue;
                 if (GuardThrows(g) && d2 < RACE_THROWN_NEAR * RACE_THROWN_NEAR) continue;
                 best = d2; target = who;
@@ -19214,7 +19230,7 @@ static void ResetTrack(void) {
     s_nbGeysers = 0; for (int i = 0; i < RACE_MAX_COLUMN; i++) s_column[i].Extra = -1;
     s_shardModel = s_shardBit = -1;
     s_mapKey = 0;
-    s_nbRoadWalls = 0; s_nbJets = 0; s_signalBody[0] = s_signalBody[1] = -1; s_signalReady[0] = s_signalReady[1] = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
+    s_nbRoadWalls = 0; s_nbJets = 0; s_nbJetSignals = 0; s_signalBody[0] = s_signalBody[1] = -1; s_signalReady[0] = s_signalReady[1] = 0; s_nbTunnels = 0; s_nbLava = 0; s_nbShuttles = 0; s_nbGunners = 0; memset(s_bullets, 0, sizeof(s_bullets));
     memset(&s_wheel, 0, sizeof(s_wheel)); DecorPoseHook = NULL; s_nbMonsters = 0; memset(s_bittenUntil, 0, sizeof(s_bittenUntil));
     s_nbFlyers = 0; s_nbSpooks = 0; s_partyBox = 0; HalloweenReset(); memset(&s_marshal, 0, sizeof(s_marshal)); s_gantryPts = -1;
     s_nbGuards = 0; memset(s_thrown, 0, sizeof(s_thrown)); memset(s_guardGrace, 0, sizeof(s_guardGrace)); memset(s_carLastT, 0, sizeof(s_carLastT));
