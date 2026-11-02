@@ -1,7 +1,8 @@
 /* RACEGAME: the race game -- LBA Assembler's race tracks played as a game of their own, the standalone Little Big Halloween Racing
  * Adventure (2026-10-16), on when RACEGAME.TXT is beside the game's data (its installer writes it). The game's main menu is then the race
  * game's (GAMEMENU.CPP MainGameMenu asks RaceGame_Menu), in the retail game's look:
- *     Resume (with a race on)   Story Mode   Track select   Specials   Best laps   Options   Quit
+ *     Resume (online and in the story)   Story Mode   Track select   Specials   Best laps   Options   Report bug   Quit
+ * Esc in a race or time trial of one player's: the pause menu, PausePage.
  * Story Mode and Track select are greyed and passed over until the file opens them. Track select (2026-10-22): the code RACEGAME.TXT
  * asks for first (tracks_code=; once a run, CodePage), then its tracks in the file's order (TracksPage), each a race or a time trial as a
  * special is -- but its car from the car grid (GridPage: every gridcar= of the file, 7 by 7 a page, each drawn small once as its page
@@ -191,6 +192,10 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_REPORTS 2460                  // ... and its row to the bug reports' page (ReportsPage)
 #define RG_ID_REPORT_MODE 2461
 #define RG_ID_REPORT_NOW 2462
+#define RG_ID_REPORT_BUG 2463               // the main menu's Report bug (ReportBugPage)
+#define RG_ID_PAUSE_CAR 2464                // the pause menu's rows (PausePage)
+#define RG_ID_PAUSE_TRACK 2465
+#define RG_ID_PAUSE_MAIN 2466
 #define RG_ID_SCREEN 2400                   // ... a screen, by its place in the list (ScreenPage)
 #define RG_SCREENS 6
 #define RG_OTHERS_SHOWN 5
@@ -1260,7 +1265,8 @@ S32 RaceGame_RowDisabled(S32 num) {
 static void Label(char *string, const char *utf8) { CopyUtf8ToCp850(string, 256, utf8); }
 
 S32 RaceGame_MenuText(S32 num, char *string) {
-    if (!s_on || num < RG_ID_STORY || num >= RG_ID_SCREEN + RG_SCREENS) return 0;
+    // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
+    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_PAUSE_MAIN))) return 0;
     switch (num) {
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
@@ -1278,6 +1284,10 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_SCREEN + 0: case RG_ID_SCREEN + 1: case RG_ID_SCREEN + 2: case RG_ID_SCREEN + 3: case RG_ID_SCREEN + 4: case RG_ID_SCREEN + 5:
         Label(string, s_screenName[num - RG_ID_SCREEN]); return 1;
     case RG_ID_TRACKS: Label(string, "Track select"); return 1;
+    case RG_ID_REPORT_BUG: Label(string, "Report bug"); return 1;
+    case RG_ID_PAUSE_CAR: Label(string, "Change car"); return 1;
+    case RG_ID_PAUSE_TRACK: Label(string, "Change track"); return 1;
+    case RG_ID_PAUSE_MAIN: Label(string, "Main menu"); return 1;
     case RG_ID_RESTART: Label(string, s_raceWatch[0] ? "Watch again from the start" : s_raceTrial ? "Restart the time trial" : "Restart the race"); return 1;
     case RG_ID_SPECIALS: Label(string, "Specials"); return 1;
     case RG_ID_TIMES: Label(string, "Best laps"); return 1;
@@ -2469,6 +2479,16 @@ static void ReportAfterCrash(void) {
         if (!yes) return;
     }
     ReportSend("crash", "");
+}
+
+// Report bug, the main menu's (the user, 2026-11-02: "write a short description of the issue, and submit ... logged on github together with their relevant log files"): the player's
+// words with the game's logs, as BugReport.cs sends them. The page says it is public before anything is sent.
+#define RG_REPORT_WORDS 120
+static void ReportBugPage(void) {
+    char note[RG_REPORT_WORDS] = "";
+    if (!TypePage("Report bug", "What went wrong? Public, on GitHub", note, sizeof(note), 0, 0)) return;
+    ReportSend("manual", note);
+    SayPage("Report bug", "Thanks: your report is on its way, with the game's logs. Names, folders and addresses are taken out first.");
 }
 
 static void ReportsPage(void) {
@@ -3703,7 +3723,7 @@ static U16 s_screenMenu[4 + 2 * (RG_SCREENS + 1)];
 // ---- online races (NETRACE.CPP) --------------------------------------------------------------------------------------------------------
 
 // A line typed in: letters, digits, what an address has, Backspace, Ctrl+V. Non-zero: Enter
-#define RG_TYPED_MAX 63
+#define RG_TYPED_MAX 119
 #define RG_LOBBY_ROW 34                     // the lobby: a line's height
 #define RG_LOBBY_ROWS 5                     // the players it lists
 #define RG_VOTE_MS 30000                    // a round: how long the vote lasts ...
@@ -3755,13 +3775,15 @@ static int TypePage(const char *what, const char *hint, char *value, int size, i
         }
         S32 mx, my;
         const int click = Clicked(&mx, &my);
-        const S32 x0 = cx - 270, x1 = cx + 270, y0 = 150 + oy, y1 = 352 + oy;
+        // (a bug report's words run to more than a line: room for four)
+        const S32 x0 = cx - 270, x1 = cx + 270, y0 = 150 + oy, y1 = (size > 64 ? 400 : 352) + oy;
         Page(NULL, 0);
         ShadeBoxBlk(x0, y0, x1, y1, RG_PAGE_SHADE);
         DrawCadre(x0, y0, x1, y1, ALL_ANGLES);
         Text(cx, y0 + 14, what, RG_ORANGE);
         Text(cx, y0 + 52, hint, LBAWHITE);
-        Text(cx, y0 + 96, value, LBAWHITE);
+        if (size > 64) Wrapped(x0 + 24, y0 + 86, x1 - x0 - 48, RG_LINE, value, LBAWHITE);
+        else Text(cx, y0 + 96, value, LBAWHITE);
         Text(cx, y1 - 38, "Enter: go on    Esc: back", RG_GREY);
         Present();
         if (click == 2 || Escaped()) result = 0;
@@ -4636,6 +4658,53 @@ static int QuitPage(void) {
     }
 }
 
+// The race as it was set up: its track, race or time trial, difficulty, ghost and laps -- or the ghost played back again -- in the car given
+static int RaceAgain(const T_RG_CAR *car) {
+    // (a race restarted as it was chosen: its qualifying lap again, or from the back of the grid again)
+    if (!s_raceTrial && !s_raceWatch[0]) s_qualifyNow = s_raceQualify;
+    return StartRace(s_raceSp, s_raceTrial, car, s_raceLevel, s_raceWatch[0] ? s_raceWatch : NULL);
+}
+
+// Esc in a race or a time trial, one player's (the user, 2026-11-02: "instead of showing the main menu with a 'Resume game' option, let's have a separate menu"): Main menu added
+// to their four, the way to everything else. Its result is GameMenu's, or RG_ID_PAUSE_MAIN.
+static S32 PausePage(void) {
+    static U16 menu[4 + 2 * 5];
+    menu[0] = 0; menu[1] = 5; menu[2] = 280; menu[3] = 0;
+    SetRow(menu, 0, RG_ID_RESUME);
+    SetRow(menu, 1, RG_ID_RESTART);
+    SetRow(menu, 2, RG_ID_PAUSE_CAR);
+    SetRow(menu, 3, RG_ID_PAUSE_TRACK);
+    SetRow(menu, 4, RG_ID_PAUSE_MAIN);
+    for (;;) {
+        const S32 select = Menu(menu);
+        switch (select) {
+        case MENU_RELAYOUT: continue;
+        case 1000:
+        case RG_ID_RESUME:
+        case RG_ID_PAUSE_MAIN:
+            return select;
+        case RG_ID_RESTART:
+            Log_Info("[racegame] restart: %s's %s again", s_sp[s_raceSp].Name, s_raceTrial ? "time trial" : "race");
+            if (RaceAgain(s_raceCar)) { Page(NULL, 0); return RACEGAME_START; }
+            break;
+        case RG_ID_PAUSE_CAR: {
+            const int sp = s_raceSp, trial = s_raceTrial, track = s_sp[sp].Track != 0;
+            const int car = track ? GridPage(trial ? "a time trial" : "a race", trial) : CarPage(trial ? "a time trial" : "a race", trial);
+            if (car >= 0) {
+                Log_Info("[racegame] change car: %s's %s again", s_sp[sp].Name, trial ? "time trial" : "race");
+                if (RaceAgain(track ? &s_grid[car] : &s_cars[car])) { Page(NULL, 0); return RACEGAME_START; }
+            }
+            break;
+        }
+        case RG_ID_PAUSE_TRACK:
+            if (TrackSelect()) return RACEGAME_START;
+            break;
+        }
+        for (S32 i = 0; i < 5; i++) if (menu[4 + 2 * i + 1] == (U16)select) menu[0] = (U16)i;
+        Page(NULL, 0);
+    }
+}
+
 static S32 GameMenu(S32 inGame);
 S32 RaceGame_Menu(S32 inGame) {
     ReportAfterCrash();
@@ -4686,9 +4755,16 @@ static S32 GameMenu(S32 inGame) {
     if (s_localGuest && !resume) return LobbyPage() ? RACEGAME_START : RG_ID_QUIT;
     // (an online race over: back with its players)
     if (RaceNet_On() && !resume && OnlinePage()) return RACEGAME_START;
+    // (a race or time trial going on, one player's: the pause menu first, the main menu behind it. Not online, the story's or a ghost being watched: those change no car or track)
+    const int paused = resume && restart && !s_storyOn && !s_raceWatch[0];
+    if (paused) {
+        const S32 pause = PausePage();
+        if (pause != RG_ID_PAUSE_MAIN) return pause;
+        Page(NULL, 0);
+    }
     S32 nb = 0;
-    if (resume) SetRow(s_mainMenu, nb++, RG_ID_RESUME);
-    if (restart) SetRow(s_mainMenu, nb++, RG_ID_RESTART);
+    if (resume && !paused) SetRow(s_mainMenu, nb++, RG_ID_RESUME);
+    if (restart && !paused) SetRow(s_mainMenu, nb++, RG_ID_RESTART);
     if (!restart || s_story) SetRow(s_mainMenu, nb++, RG_ID_STORY);
     SetRow(s_mainMenu, nb++, RG_ID_TRACKS);
     const S32 specials = nb;
@@ -4698,8 +4774,9 @@ static S32 GameMenu(S32 inGame) {
     SetRow(s_mainMenu, nb++, RG_ID_ONLINE);
     SetRow(s_mainMenu, nb++, RG_ID_TIMES);
     SetRow(s_mainMenu, nb++, RG_ID_OPTIONS);
+    SetRow(s_mainMenu, nb++, RG_ID_REPORT_BUG);
     SetRow(s_mainMenu, nb++, RG_ID_QUIT);
-    s_mainMenu[0] = (U16)(resume ? 0 : specials);
+    s_mainMenu[0] = (U16)(resume && !paused ? 0 : specials);
     // (the row chosen last -- Track select, Specials, Best laps -- when the menu comes back after a race; Resume first in one)
     static U16 lastChosen = 0;
     if (!resume && lastChosen)
@@ -4717,11 +4794,21 @@ static S32 GameMenu(S32 inGame) {
         if (select != 1000 && select != RG_ID_RESUME && select != RG_ID_QUIT && select != MENU_RELAYOUT) s_watchListN = 0;
         switch (select) {
         case 1000:
+            // (Esc behind the pause menu: back to it)
+            if (paused) {
+                Page(NULL, 0);
+                const S32 pause = PausePage();
+                if (pause != RG_ID_PAUSE_MAIN) return pause;
+                break;
+            }
             if (resume) return 1000;
             break;
         case RG_ID_RESUME:
         case RG_ID_OPTIONS:
             return select;
+        case RG_ID_REPORT_BUG:
+            ReportBugPage();
+            break;
         case RG_ID_QUIT:
             if (QuitPage()) {
                 // (the port taken off the router: a game that crashes leaves it to its lease)
@@ -4749,9 +4836,7 @@ static S32 GameMenu(S32 inGame) {
         case RG_ID_RESTART:
             // (the race as it was set up: its track, race or time trial, car, difficulty, ghost and laps -- or the ghost played back again)
             Log_Info("[racegame] restart: %s's %s again", s_sp[s_raceSp].Name, s_raceWatch[0] ? "ghost played back" : s_raceTrial ? "time trial" : "race");
-            // (a race restarted as it was chosen: its qualifying lap again, or from the back of the grid again)
-            if (!s_raceTrial && !s_raceWatch[0]) s_qualifyNow = s_raceQualify;
-            if (StartRace(s_raceSp, s_raceTrial, s_raceCar, s_raceLevel, s_raceWatch[0] ? s_raceWatch : NULL)) { Page(NULL, 0); return RACEGAME_START; }
+            if (RaceAgain(s_raceCar)) { Page(NULL, 0); return RACEGAME_START; }
             break;
         }
         // (the main menu again: its page put back; DoGameMenu draws its rows)
