@@ -31,7 +31,8 @@ internal static class TemplePalette
     public sealed record Result(byte[] Xpl, int[] Map, byte[] Palette, int Placed, int Used, double Pixels, double MeanShift, double WorstShift, List<string> Log);
 
     // `counts`: how many of the temple's pixels each LBA1 colour is (TempleObjects.ColourCounts).
-    public static Result Build(byte[] sourceXpl, byte[] lba1Palette, long[] counts)
+    // `maxShift`: how far a slot may move for a colour; `fog`: the fog's colour, when not black, a slot's nearest (the Long Table's haze).
+    public static Result Build(byte[] sourceXpl, byte[] lba1Palette, long[] counts, double maxShift = MaxShift, (int R, int G, int B)? fogRgb = null)
     {
         var log = new List<string>();
         if (sourceXpl.Length < Size) throw new InvalidDataException($"RESS.HQR entry {Source} is not an island palette ({sourceXpl.Length} bytes).");
@@ -57,7 +58,7 @@ internal static class TemplePalette
                 var d = D(lba1[c], pal[p, 0], pal[p, 1], pal[p, 2]);
                 if (d < bestD) { bestD = d; best = p; }
             }
-            if (best < 0 || bestD > MaxShift) continue;
+            if (best < 0 || bestD > maxShift) continue;
             taken[best] = true;
             pal[best, 0] = lba1[c].R; pal[best, 1] = lba1[c].G; pal[best, 2] = lba1[c].B;
             map[c] = best;
@@ -77,7 +78,8 @@ internal static class TemplePalette
         BinaryPrimitives.WriteInt32LittleEndian(xpl.AsSpan(12), FogAt);
         BinaryPrimitives.WriteInt32LittleEndian(xpl.AsSpan(16), TranspAt);
         BinaryPrimitives.WriteInt32LittleEndian(xpl.AsSpan(24), NormalLevel);
-        BinaryPrimitives.WriteInt32LittleEndian(xpl.AsSpan(32), FogColour);
+        var fogSlot = fogRgb is { } haze ? Nearest(pal, haze.R, haze.G, haze.B, 16, 239) : FogColour;
+        BinaryPrimitives.WriteInt32LittleEndian(xpl.AsSpan(32), fogSlot);
         for (var i = 0; i < 256; i++) for (var k = 0; k < 3; k++) xpl[PaletteAt + i * 3 + k] = (byte)pal[i, k];
         var cache = new Dictionary<int, byte>();
         byte Near(double r, double g, double b)
@@ -87,7 +89,7 @@ internal static class TemplePalette
             if (cache.TryGetValue(key, out var known)) return known;
             return cache[key] = (byte)Nearest(pal, ri, gi, bi, 1, 239);
         }
-        int fr = pal[FogColour, 0], fg = pal[FogColour, 1], fb = pal[FogColour, 2];
+        int fr = pal[fogSlot, 0], fg = pal[fogSlot, 1], fb = pal[fogSlot, 2];
         for (var fog = 0; fog < 16; fog++)
             for (var level = 0; level < 16; level++)
             {

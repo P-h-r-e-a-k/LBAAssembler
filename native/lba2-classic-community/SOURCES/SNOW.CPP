@@ -28,9 +28,11 @@ static S32 SnowLastTimer = 0;
 static S32 SnowScene = -2, SnowHere = FALSE;
 
 extern S32 SceneSnows(S32 scene); // EXTFUNC.CPP
+extern S32 RaceMod_Leaves(void), RaceMod_LeafColour(S32 i); // RACEMOD.CPP leaves=: a race's falling leaves
 
 S32 SnowFalls(void) {
     if (CubeMode != CUBE_EXTERIEUR) return FALSE;
+    if (RaceMod_Leaves()) return RainEnable;
     if (NumCube != SnowScene) {
         SnowScene = NumCube;
         SnowHere = SceneSnows(NumCube);
@@ -93,7 +95,8 @@ void AffSnow(void) {
         if (x < 0 || y < 0 || x + 3 >= (S32)ModeDesiredX || y + 3 >= (S32)ModeDesiredY) continue;
         const S32 z = RegleTrois(0, 65535, ClipZFar, zr);
         // (white near, the grey ramp's paler greys into the fog)
-        const S32 c = BoundRegleTrois(16 * 3 + 15, 16 * 3 + 9, ClipZFar - StartZFog, zr);
+        const S32 leaf = RaceMod_LeafColour(i);
+        const S32 c = leaf >= 0 ? leaf : BoundRegleTrois(16 * 3 + 15, 16 * 3 + 9, ClipZFar - StartZFog, zr);
         // (a dot of lines a pixel or two down -- LineRain leaves out a flat one: three pixels square near the camera, two further, one far)
         const S32 size = zr < SNOW_NEAR ? 3 : zr < SNOW_MID ? 2 : 1;
         S32 f = 0;

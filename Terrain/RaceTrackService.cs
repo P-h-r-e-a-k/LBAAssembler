@@ -495,6 +495,11 @@ internal static class RaceTrackService
             }
             // (one a build left or Tools made, with no Halloween race this time: as Tools makes it, without its road's doorways)
             else if (LBAAssembler.Terrain.Temple.TempleIsland.IsInstalled(gameDirectory)) PlainTemple(gameDirectory);
+            if (islands.Contains(RaceTrackIsland.Harvest))
+            {
+                progress?.Report(new((setup - 0.3) / whole, "The Long Table: making the island and its scenes"));
+                made.AddRange(LBAAssembler.Terrain.Harvest.HarvestTrack.Install(gameDirectory));
+            }
 
             var session = new BuildSession { Together = true };
             var log = new List<string>();
@@ -589,8 +594,8 @@ internal static class RaceTrackService
         public bool CharacterCars, Baldino, SmallCars, Oil, CastCars, GuardBodies, Torturers, Marshal, Risers, Party;
         // (Build's: the palace dungeon's torturers made when every track is -- Finish)
         public bool Together;
-        public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel;
-        public int[]? CrystalShardModels;
+        public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel, GravyBall;
+        public int[]? CrystalShardModels, Footballs;
         public int? CrabModel;
         public int[]? JetSignals;
         public int[]? WindowSmash;
@@ -901,6 +906,11 @@ internal static class RaceTrackService
             var (shard, shardBit, shardLog) = RaceTrackCrystals.InstallCrystalShards(gameDirectory);
             log.Add(shardLog);
             session.CrystalShardModels = new[] { shard, shardBit };
+            // (and the Long Table's football and gravy, thrown as they are)
+            var (football, footballBit, gravy, harvestLog) = RaceTrackCrystals.InstallHarvestBalls(gameDirectory);
+            log.Add(harvestLog);
+            session.Footballs = new[] { football, footballBit };
+            session.GravyBall = gravy;
             // (and the Emperor's palace's round window, with the palace in the folder)
             var (windowSmash, windowLog) = LBAAssembler.Terrain.Palace.PalaceWindow.Install(gameDirectory);
             if (windowLog is not null) log.Add(windowLog);
@@ -968,7 +978,7 @@ internal static class RaceTrackService
     {
         // (the models the session installed, the same for every track it builds)
         TrackInfo WithModels(TrackInfo t) => t with { OilIcon = session.OilIcon, GoldIcon = session.GoldIcon, SuperJetModel = session.SuperJetModel, TwinsenSmall = session.TwinsenSmall,
-            LaserModels = session.LaserModels, LavaBallModel = session.LavaBallModel, CrystalShardModels = session.CrystalShardModels, CrabModel = session.CrabModel, JetSignals = report.Jets.Count > 0 ? session.JetSignals : null };
+            LaserModels = session.LaserModels, LavaBallModel = options.Island == RaceTrackIsland.Harvest ? session.GravyBall : session.LavaBallModel, CrystalShardModels = options.Island == RaceTrackIsland.Harvest ? session.Footballs : session.CrystalShardModels, CrabModel = session.CrabModel, JetSignals = report.Jets.Count > 0 ? session.JetSignals : null };
         var info = WithModels(Info(report, options, scenes)) with { Story = story, Dream = dream,
             ChaseCar = options.Island.ChaseDriver is { } chaseDriver && session.FunFrockEmpty is [var ce, var ca] ? new[] { ce, ca, chaseDriver.Entity } : null };
         // (and for a teleporter into another cube -- the Temple of Bú's hidden passage: the scene it puts the car into)

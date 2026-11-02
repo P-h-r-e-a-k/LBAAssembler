@@ -543,6 +543,19 @@ internal sealed record RaceTrackIsland(
         HeldVars = new[] { (LBAAssembler.Terrain.Temple.TempleHalloween.GiantWebVar, 1) },
     };
 
+    // The Long Table (the user, 2026-11-02: "a thanksgiving track ... a totally new track we create from scratch ... Canadian thanksgiving related
+    // too and not just American"): an island of its own, made by the build (Terrain/Harvest: HARVEST.ILE and HARVEST.OBL), raced as Otringal's
+    // island 4 drawn from its file in its own palette and sky, in scenes of its own from 350. A figure of eight, all of it a raised road: Canada's
+    // half in October, the States' in November, over the table from one to the other and under it back. The plan: tools/RaceTrackPlan/harvest_design.py.
+    public static readonly RaceTrackIsland Harvest = new("The Long Table", LBAAssembler.Terrain.Harvest.HarvestTrack.IleFile, LBAAssembler.Terrain.Harvest.HarvestTrack.OblFile,
+        LBAAssembler.Terrain.Harvest.HarvestTrack.IslandByte, LBAAssembler.Terrain.Harvest.HarvestTrack.FirstScene, LBAAssembler.Terrain.Harvest.HarvestTrack.LastScene,
+        LBAAssembler.Terrain.Harvest.HarvestTrack.PaletteEntry, LBAAssembler.Terrain.Harvest.HarvestTrack.PlanResource, null)
+    {
+        Created = true, RaceFile = "harvest", Look = (LBAAssembler.Terrain.Harvest.HarvestTrack.PaletteEntry, LBAAssembler.Terrain.Harvest.HarvestTrack.SkyEntry),
+        NoHolomap = true, RailHeld = true, OwnScenes = true, Roster = RaceDriver.Harvest, View = (200000, 150000),
+        Title = "The Long Table: over the feast from October into November, and under it back",
+    };
+
     // An island drawn in a palette and under a sky of its own (RESS.HQR entries: the car file's island_palette=, island_sky=) -- the Temple of
     // Bú's, LBA1's colours.
     public (int Palette, int Sky)? Look { get; init; }
@@ -568,7 +581,7 @@ internal sealed record RaceTrackIsland(
     // Emperor's palace's road along the hilltop, 60 over it, let cars drive off onto the rocks.
     public bool RailHeld { get; init; }
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace, Wannies, CxTower, CxTowerMk2, Temple };
+    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace, Wannies, CxTower, CxTowerMk2, Temple, Harvest };
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

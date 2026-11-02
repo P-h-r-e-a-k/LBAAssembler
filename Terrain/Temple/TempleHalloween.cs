@@ -650,7 +650,7 @@ internal static partial class TempleHalloween
                     return made[kind] = index++;
                 }
                 ratIsBat |= kind == "rat";
-                var model = kind switch { "witch" => Witch(), "rat" => Bat(), "skeleton" => SkeletonModel(SkeletonPose.Reaching), _ => Ghost() };
+                var model = HarvestSpook(kind) ?? kind switch { "witch" => Witch(), "rat" => Bat(), "skeleton" => SkeletonModel(SkeletonPose.Reaching), _ => Ghost() };
                 if (model is null) return made[kind] = -1;
                 bodies = HqrWriter.AppendEntry(bodies, HqrWriter.StoredEntry(model.WriteMoving(racerHeader)));
                 return made[kind] = index++;

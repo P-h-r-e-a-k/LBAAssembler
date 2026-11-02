@@ -184,6 +184,40 @@ internal static class RaceTrackCrystals
         return (m.Write(), reach);
     }
 
+    // The Long Table's things that come down on the road, its own models in place of the shard and the lava ball: a football and its bits, and a ball of gravy.
+    public static (int Ball, int Bit, int Gravy, string Log) InstallHarvestBalls(string gameDirectory)
+    {
+        var path = Path.Combine(gameDirectory, "OBJFIX.HQR");
+        var index = HqrArchive.CountEntries(path);
+        var bytes = HqrWriter.AppendEntry(File.ReadAllBytes(path), HqrWriter.StoredEntry(Blob(1000, 620, 620, (i, j) => i is 2 or 3 && j == 1 ? 46 : j % 2 == 0 ? 30 : 26)));
+        bytes = HqrWriter.AppendEntry(bytes, HqrWriter.StoredEntry(Blob(300, 190, 190, (i, j) => 26)));
+        bytes = HqrWriter.AppendEntry(bytes, HqrWriter.StoredEntry(Blob(560, 480, 560, (i, j) => i < 2 ? 30 : i < 4 ? 26 : 21)));
+        File.WriteAllBytes(path, bytes);
+        return (index, index + 1, index + 2, $"the Long Table's football and gravy: OBJFIX.HQR entries {index}-{index + 2}");
+    }
+
+    // A ball of quads and fans, long along x, each face coloured by its ring and segment.
+    private static byte[] Blob(float rx, float ry, float rz, Func<int, int, int> colour)
+    {
+        const int Rings = 6, Segs = 8;
+        var m = new RaceTrackRaisedBody.Mesh();
+        Vector3 At(int i, int j)
+        {
+            var t = MathF.PI * i / Rings; var f = 2 * MathF.PI * j / Segs;
+            return new Vector3(rx * MathF.Cos(t), ry * MathF.Sin(t) * MathF.Cos(f), rz * MathF.Sin(t) * MathF.Sin(f));
+        }
+        int left = m.P(At(0, 0)), right = m.P(At(Rings, 0));
+        for (var i = 0; i < Rings; i++)
+            for (var j = 0; j < Segs; j++)
+            {
+                var c = At(i, j) + At(i, j + 1) + At(i + 1, j) + At(i + 1, j + 1);
+                if (i == 0) m.Tri(left, m.P(At(1, j)), m.P(At(1, j + 1)), colour(i, j), c);
+                else if (i == Rings - 1) m.Tri(m.P(At(i, j)), right, m.P(At(i, j + 1)), colour(i, j), c);
+                else m.Quad(m.P(At(i, j)), m.P(At(i, j + 1)), m.P(At(i + 1, j + 1)), m.P(At(i + 1, j)), colour(i, j), c);
+            }
+        return m.Write();
+    }
+
     // A red crystal shard for the race-track mode's crystal shards (RACEMOD.CPP crystalshards=, crystal_shard_model=; the user, 2026-10-11:
     // "red crystal shards that shoot up into the air from the volcano, then fall back down onto the track ... an explosion that stuns any
     // cars in the vicinity"): a long six-sided crystal pointed at both ends, Length long and Girth round, its faces the island palette's

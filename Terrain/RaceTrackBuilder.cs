@@ -1225,7 +1225,7 @@ internal static class RaceTrackBuilder
         RaiseGround(island, plan, report);
         SetBackBanks(island, field, index, main, plan, report);
         FillPockets(island, field, index, report);
-        report.Balloons = options.Island == RaceTrackIsland.Desert;
+        report.Balloons = options.Island == RaceTrackIsland.Desert || options.Island == RaceTrackIsland.Harvest;
         var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned);
         if (plan.ClearBlueGround && options.Theme.Palette is { } groundPalette) ClearBlueGround(island, field, index, painted, groundPalette, report);
         report.LapLine = LapLine(roads, report);

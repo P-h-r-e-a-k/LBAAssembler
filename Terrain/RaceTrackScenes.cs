@@ -1545,7 +1545,7 @@ void comportement_1()
     {
         // (the Emperor's palace's scenes are made with its island, PalaceTrack.Install, before the track is built; the Temple of Bú's too,
         // TempleTrack.Install)
-        if (island == RaceTrackIsland.Palace || island == RaceTrackIsland.Temple) return null;
+        if (island == RaceTrackIsland.Palace || island == RaceTrackIsland.Temple || island == RaceTrackIsland.Harvest) return null;
         // (an island the build makes that races in a copy of a game's scene -- Island CX's, CXTOWER -- gets that copy, as below)
         if (island.Created && island.CopiesScene is null && island.CopiesScenes is null)
         {

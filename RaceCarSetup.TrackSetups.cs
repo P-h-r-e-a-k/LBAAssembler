@@ -39,5 +39,7 @@ public sealed partial class RaceCarSetup
         // (twice as big, its turns twice as wide: Island CX's for now -- not stress-tested yet)
         (Terrain.RaceTrackIsland.CxTowerMk2, new("Island CX Mk2", 77, 390, 140)),
         (Terrain.RaceTrackIsland.Temple, new("The Temple of Bú", 80, 390, 150)),
+        // (not stress-tested yet: the Temple's, the nearest in length)
+        (Terrain.RaceTrackIsland.Harvest, new("The Long Table", 80, 390, 150)),
     }.ToDictionary(t => t.Island.Name, t => t.Best, StringComparer.OrdinalIgnoreCase);
 }

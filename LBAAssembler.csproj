@@ -99,6 +99,9 @@
     <EmbeddedResource Include="docs/racetrack/cxtower_track_plan.json" LogicalName="RaceTrackPlan.CxTower.json" />
     <EmbeddedResource Include="docs/racetrack/cxtowermk2_track_plan.json" LogicalName="RaceTrackPlan.CxTowerMk2.json" />
     <EmbeddedResource Include="docs/racetrack/temple_track_plan.json" LogicalName="RaceTrackPlan.Temple.json" />
+    <EmbeddedResource Include="docs/racetrack/harvest_track_plan.json" LogicalName="RaceTrackPlan.Harvest.json" />
+    <EmbeddedResource Include="docs/racetrack/harvest_ground.bin" LogicalName="RaceTrackPlan.HarvestGround.bin" />
+    <EmbeddedResource Include="docs/racetrack/harvest_decor.json" LogicalName="RaceTrackPlan.HarvestDecor.json" />
   </ItemGroup>
 
   <!--

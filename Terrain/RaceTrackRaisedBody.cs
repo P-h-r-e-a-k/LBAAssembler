@@ -34,7 +34,12 @@ internal sealed record DeckTheme(string Name, int Asphalt, int Red, int White, i
     // the Temple of Bú's Halloween race (its own palette: Otringal's with LBA1's colours written in, TemplePalette): a road near black, its
     // curbs pumpkin orange and black, its rails' tops glowing orange over sides of dark plum, black slabs on dark stone piers
     public static readonly DeckTheme Halloween = new("halloween", 209, 88, 224, 89, 211, 210, 208, 213, 210, 86, 89) { Gantry = (86, 242, 224) };
-    public static readonly DeckTheme[] All = { Standard, Dock, Refinery, Village, Carpet, Palace, Halloween };
+    // the Long Table's (its own palette, HarvestPalette, Otringal's with the autumn written in): a cranberry runner down the table, gold-edged; the bog's boardwalk and the
+    // wharves' planks; the stadium's cinders
+    public static readonly DeckTheme Runner = new("runner", 83, 106, 46, 106, 88, 73, 26, 31, 26, 106, 46);
+    public static readonly DeckTheme Boardwalk = new("boardwalk", 31, 26, 41, 31, 26, 21, 21, 26, 21, 41, 46);
+    public static readonly DeckTheme Cinder = new("cinder", 30, 46, 46, 57, 55, 26, 21, 57, 55, 236, 46);
+    public static readonly DeckTheme[] All = { Standard, Dock, Refinery, Village, Carpet, Palace, Halloween, Runner, Boardwalk, Cinder };
     public static DeckTheme? ByName(string? name) => All.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
 }
 

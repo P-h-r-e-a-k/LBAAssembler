@@ -2618,6 +2618,14 @@ static int RaisedAlong(int seg, double t, double distance, double *x, double *y,
 static double s_railSight = 0, s_railCeil = -1, s_railSightKept = 0;
 static double s_tunnelScale = 1;
 static int s_crabModel = -1;               // guard_crab=: the crab Felix fishes up, in OBJFIX.HQR
+// leaves=<z> <colour> <colour> <colour> (the Long Table's, 2026-11-02): the snowfall (SNOW.CPP) on a race's island, falling leaves in those colours while Twinsen is north
+// of island z <z>, snow when he is south of it: October and November
+static int s_leafBorder = -1, s_leaf[3];
+S32 RaceMod_Leaves(void) { return s_leafBorder >= 0; }
+S32 RaceMod_LeafColour(S32 i) {
+    if (s_leafBorder < 0 || ListObjet[NUM_PERSO].Obj.Z + CurrentCubeY * 32768.0 >= s_leafBorder) return -1;
+    return s_leaf[i % 3];
+}
 #define RACE_MAX_DRIVER_BODIES 12
 static int s_driverBody[RACE_MAX_DRIVER_BODIES], s_nbDriverBodies = 0;
 // (TunnelCamera's: the eye under the roof of the tunnel it is in itself -- its own point's, InTunnel -- rather than the car's, s_railCeil;
@@ -4254,6 +4262,7 @@ static void Load(const char *path, int carOnly = 0) {
         }
         else if (!strcmp(key, "tunnel_scale")) s_tunnelScale = atof(v) > 0 ? atof(v) : 1;
         else if (!strcmp(key, "guard_crab")) s_crabModel = atoi(v);
+        else if (!strcmp(key, "leaves")) sscanf(v, "%d %d %d %d", &s_leafBorder, &s_leaf[0], &s_leaf[1], &s_leaf[2]);
         else if (!strcmp(key, "race_driver_body")) { if (s_nbDriverBodies < RACE_MAX_DRIVER_BODIES) s_driverBody[s_nbDriverBodies++] = atoi(v); }
         else if (!strcmp(key, "tunnel")) {
             T_RACE_TUNNEL *t = &s_tunnels[s_nbTunnels];
@@ -19239,7 +19248,7 @@ static void ResetTrack(void) {
     s_viewFar = s_viewFog = 0;
     memset(s_netThrough, 0, sizeof(s_netThrough)); memset(s_netTouching, 0, sizeof(s_netTouching)); memset(s_netBumpAt, 0, sizeof(s_netBumpAt));
     s_netPushX = s_netPushZ = s_netShoveX = s_netShoveZ = 0; s_netBumps = 0;
-    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_missBackAt = 0; s_tunnelScale = 1; s_nbDriverBodies = 0; s_crabModel = -1; memset(s_crabs, 0, sizeof(s_crabs)); s_underWheelScene = -1; s_onRoadAt = 0; s_lostSaid = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
+    s_forgetLap = 1; s_nbHidden = 0; s_nbRaceHide = 0; s_missBackAt = 0; s_tunnelScale = 1; s_nbDriverBodies = 0; s_crabModel = -1; s_leafBorder = -1; memset(s_crabs, 0, sizeof(s_crabs)); s_underWheelScene = -1; s_onRoadAt = 0; s_lostSaid = 0; s_oppLast = 0; s_playerIndex = -1; s_wantFlip = 1;
     s_rescueOn = 1; s_fileIsland = -1; s_fileName[0] = 0; s_filePalette = -1; s_fileSky = -1;
     s_music[0] = 0; s_musicSet = 0;
     RaceSoundsFree(); JetHumStop("the race reset"); SkidSoundStop(); SlideEnd("the race reset");
