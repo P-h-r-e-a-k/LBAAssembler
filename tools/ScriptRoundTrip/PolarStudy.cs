@@ -894,6 +894,9 @@ internal static class PolarStudy
             return 0;
         }
         var used = new int[32, 32];
+        // (the texture definitions a cube holds, at the most: a paged island's are limited to IslandFile.MaxGroundDefinitions with pages)
+        var defs = IslandOps.CubeCells(island).Where(c => c.Item3.HasPolygons).Select(c => (c.Item1, c.Item2, Count: c.Item3.TextureDefs.Length / 6)).OrderByDescending(c => c.Count).ToList();
+        Console.WriteLine($"texture definitions a cube: most {(defs.Count > 0 ? defs[0].Count : 0)} (cube {(defs.Count > 0 ? $"{defs[0].Item1},{defs[0].Item2}" : "-")}), {defs.Count(c => c.Count > 2 << IslandFile.GroundPageShift)} cubes over a paged island's {2 << IslandFile.GroundPageShift}; pages {island.GroundPages.Count + 1}");
         foreach (var (_, _, cube) in IslandOps.CubeCells(island))
         {
             if (!cube.HasPolygons) continue;

@@ -5443,16 +5443,24 @@ internal static class RaceTrackBuilder
         MarkArrows(island, roads[0], kinds, arrows, o, report);
         // the kerbs drawn smooth: a texture of their own in the island's page, mapped onto the triangles along them (KerbCells)
         var kerbCells = new Dictionary<(int, int), KerbCell>();
+        var kerbPage = 0;
         if (plain.Count > 0)
         {
             var overRoad = kinds.Where(k => k.Value is Kind.Asphalt or Kind.RedCurb or Kind.WhiteCurb).Select(k => k.Key).ToHashSet();
-            if ((RaceTrackTextures.KerbTexture(island, o.Theme) ?? RaceTrackTextures.KerbTexture(island, o.Theme, overRoad)) is { } kerbAt)
+            var kerbFound = RaceTrackTextures.KerbTexture(island, o.Theme) ?? RaceTrackTextures.KerbTexture(island, o.Theme, overRoad);
+            // (a page the game fills: the kerb on a page of its own, added to the island -- Celebration Island's)
+            if (kerbFound is null && RaceTrackTextures.KerbTextureOwnPage(island, o.Theme) is { } ownPage)
+            {
+                kerbFound = (ownPage.X, ownPage.Y); kerbPage = ownPage.Page;
+                report.Notes.Add($"the kerb texture on a page of its own, page {ownPage.Page} added to the island: its one page is full");
+            }
+            if (kerbFound is { } kerbAt)
             {
                 // (on an island with more ground pages -- POLAR.ILE -- a cube has room for 1024 texture definitions: the road's coordinates
                 // snapped, so a straight kerb's triangles share theirs)
                 kerbCells = KerbCells(island, index, roads, kinds, arrows, plain, kerbAt, o.Theme, island.GroundPages.Count > 0 ? KerbSnap : null);
                 var triangles = kerbCells.Values.Sum(c => c.Uvs.Count(u => u is not null));
-                report.Notes.Add($"the kerbs drawn smooth: {triangles} triangles along them carry a kerb texture of their own (at ({kerbAt.X},{kerbAt.Y}) in the ground's page, " +
+                report.Notes.Add($"the kerbs drawn smooth: {triangles} triangles along them carry a kerb texture of their own (at ({kerbAt.X},{kerbAt.Y}) in the ground's page {kerbPage}, " +
                                  $"mapped by the road's own coordinates), {kerbCells.Count} cells cut the way the road runs");
             }
             else report.Notes.Add("the kerbs are painted cell by cell: the island's ground texture has no free block for the kerb texture");
@@ -5510,7 +5518,7 @@ internal static class RaceTrackBuilder
                 if (LandNear(gx, gz) is { } land && GroundColour(island, gx, gz, land.A, palette) is { } colour) colours.Add(colour);
         if (o.Theme.Palette is { } pal && colours.Count > 0)
             o.Theme = o.Theme with { Sand = FlatNearest(pal, colours.Average(c => c.R), colours.Average(c => c.G), colours.Average(c => c.B)) };
-        var painter = new Painter(island, o.Theme);
+        var painter = new Painter(island, o.Theme) { KerbPage = kerbPage };
         var kept = 0;
         // (the flat colour showing past a kerb's stripe: each cell's land, read at a few points of its texture, came out gold now and then among the brown, in blocks along the kerb --
         // the user, 2026-11-01, Polar: "it's almost like we now have brown and yellow as well": the land along the kerb's, KerbColourReach cells either way)
@@ -6087,6 +6095,8 @@ internal static class RaceTrackBuilder
         private readonly IslandFile island;
         private readonly RaceTrackTheme theme;
         public Painter(IslandFile island, RaceTrackTheme theme) { this.island = island; this.theme = theme; }
+        // the page the kerb texture is on (RaceTrackTextures.KerbTextureOwnPage: 0 but where it has one of its own)
+        public int KerbPage { get; init; }
 
         private static ushort[] Tile((int X, int Y, int W, int H) t, bool diagonal, int half) => IslandGround.TileDefinition(t.X, t.Y, t.W, t.H, diagonal, half);
 
@@ -6128,7 +6138,7 @@ internal static class RaceTrackBuilder
                     cube.SetPolygon(x, z, half, (half == 0 ? land.A : land.B).With(diagonal: kerb.Diagonal, col: false).Raw);
                     continue;
                 }
-                cube.SetPolygon(x, z, half, Paged(p).Raw);
+                cube.SetPolygon(x, z, half, (kerb.Uvs[half] is not null && KerbPage > 0 ? island.WithGroundTexture(p, KerbPage, p.TextureIndex) : Paged(p)).Raw);
             }
             NoWater(gx, gz);
         }

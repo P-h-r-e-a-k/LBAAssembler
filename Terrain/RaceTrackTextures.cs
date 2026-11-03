@@ -106,20 +106,39 @@ internal static class RaceTrackTextures
         }
         Taken(theme.Asphalt); Taken(theme.Hatch); Taken(theme.Rock); Taken((theme.WhiteCurb.X - 3, theme.WhiteCurb.Y - 3, 8, 8));
         if (Place(free, KerbWide, KerbTall) is not { } at) return null;
-        var page = island.GroundTexture;
+        DrawKerb(island.GroundTexture, island.GroundTexture, theme, at);
+        return at;
+    }
+
+    // The kerb texture drawn into `into` at `at` from the island's first page (`from`: its asphalt tile and white curb's pixel are there).
+    private static void DrawKerb(byte[] from, byte[] into, RaceTrackTheme theme, (int X, int Y) at)
+    {
         var red = (byte)(theme.RedCurb.Bank * 16 + 9);
-        var white = page[theme.WhiteCurb.Y * 256 + theme.WhiteCurb.X];
+        var white = from[theme.WhiteCurb.Y * 256 + theme.WhiteCurb.X];
         var a = theme.Asphalt;
         for (var y = 0; y < KerbTall; y++)
         for (var x = 0; x < KerbWide; x++)
         {
             byte c;
-            if (y < KerbTexels) c = page[(a.Y + y * a.H / KerbTexels % a.H) * 256 + a.X + x * a.W / KerbTexels % a.W];
+            if (y < KerbTexels) c = from[(a.Y + y * a.H / KerbTexels % a.H) * 256 + a.X + x * a.W / KerbTexels % a.W];
             else if (y < 2 * KerbTexels) c = (int)Math.Floor(x / (KerbBlock * KerbTexels)) % 2 == 0 ? red : white;
             else c = 0;
-            page[(at.Y + y) * 256 + at.X + x] = c;
+            into[(at.Y + y) * 256 + at.X + x] = c;
         }
-        return at;
+    }
+
+    // The kerb texture on a page of its own, added to an island whose one page the game fills (Celebration Island's: every block of it read, the kerbs were
+    // painted cell by cell in steps). Its first page and its triangles stay as they were: with pages a ground triangle's texture index carries its page in its top
+    // bits (IslandFile.GroundPageShift), and while each cube holds fewer definitions than that leaves room for, an index on the first page is the number it was.
+    // Null where a cube holds more (its triangles would have to be numbered again) or the island has pages already.
+    public static (int X, int Y, int Page)? KerbTextureOwnPage(IslandFile island, RaceTrackTheme theme)
+    {
+        if (island.GroundPages.Count > 0) return null;
+        if (IslandOps.CubeCells(island).Any(c => c.Cube.HasPolygons && c.Cube.TextureDefs.Length / 6 >= 1 << IslandFile.GroundPageShift)) return null;
+        var page = new byte[256 * 256];
+        DrawKerb(island.GroundTexture, page, theme, (0, 0));
+        island.GroundPages.Add(page);
+        return (0, 0, island.GroundPages.Count);
     }
 
     // Whether the page has free blocks for all four of the road's tiles.

@@ -4279,7 +4279,8 @@ static int LocalPage(void) {
             else { one.h = all.h / 2; two.y = all.y + one.h; two.h = all.h - one.h; }
         }
         else continue;
-        snprintf(s_netName, sizeof(s_netName), "Player 1");
+        // (the name saved for internet games stays as it is: the lobby's laps, WriteOnline, would have saved "Player 1" over it. This game
+        // is Player 1 to the session by RaceNet_HostLocal, and in its lobby by RaceNet_Local)
         if (!LocalStart(&one, &two)) continue;
         if (LobbyPage()) return 1;
     }

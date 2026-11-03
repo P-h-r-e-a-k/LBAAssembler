@@ -321,9 +321,22 @@ internal static class PolarProps
     // A ring of a lathe: its height and size in layers and cells, and which ring of the picture textures it (a trunk's hidden top the trunk below it; a tier's underside the dark
     // crease along its rim). From LBA1's angle a ring shows the picture wherever it stands, so what is measured is what LBA1's view leaves open: the rims come from the creases
     // down the middle of the picture (a rim of size r at height y crosses it at y - 1.131 r) and from the outline's width (r = half width / 33.94).
-    private readonly record struct Turn(double Y, double R, double SeenY, double SeenR, double Slide = 0, double SeenSlide = 0)
+    private readonly record struct Turn(double Y, double R, double SeenY, double SeenR, double Slide = 0, double SeenSlide = 0, double Torn = 0)
     {
         public Turn(double y, double r) : this(y, r, y, r) { }
+    }
+
+    // A torn rim (Turn.Torn, layers): on the side LBA1's camera sees, the rim ripped down into a V, and the metal either side of it curled up into points (the burst barrel's,
+    // its picture's; a level rim had the V only painted on, 2026-11-03). `off`: how far round from the near side (radians).
+    // (chosen by polarpreview against the picture, five tries: the V half the barrel deep, facing LBA1's camera -- 1.05 round from the lathe's first side -- its points curled up
+    // either side, the left one dark against the inside as in the picture)
+    private const double TornV = 0.8, TornCurl = 1.7, TornCurlUp = 0.6, TornFacing = 1.05;
+    private static double TornAt(double torn, double off)
+    {
+        if (torn == 0) return 0;
+        if (off < TornV) return -torn * (1 - off / TornV);
+        if (off < TornCurl) return torn * TornCurlUp * Math.Sin(Math.PI * (off - TornV) / (TornCurl - TornV));
+        return 0;
     }
 
     private static readonly (double Along, double Size)[] TreeDome = { (0.3, 0.97), (0.65, 0.86), (1.0, 0.66) };
@@ -377,11 +390,13 @@ internal static class PolarProps
 
     // The burst barrel: hooped, open at the top, down into the dark (a fit closed it with a hood of the dark inside)
     private const double BarrelDarkY = 2.4;
-    private static List<Turn> Barrel() => new()
+    private static List<Turn> Barrel() => new List<Turn>
     {
         new(0, 0.35), new(0.27, 0.57), new(0.67, 0.53), new(1.07, 0.57), new(1.47, 0.53), new(1.87, 0.57), new(2.25, 0.54), new(2.58, 0.55),
         new(2.62, 0.50, BarrelDarkY, 0), new(1.2, 0.46, BarrelDarkY, 0), new(1.2, 0, BarrelDarkY, 0),
-    };
+    }.Select((t, k) => k is 7 or 8 ? t with { Torn = BarrelTorn } : t).ToList();
+    // (how far down the V is torn at its point: about half the barrel, as LBA1's picture)
+    private const double BarrelTorn = 1.15;
 
     private static List<Turn> Turned(int block) => block switch { 207 => Dying(), 104 => Barrel(), _ => Pine() };
 
@@ -391,7 +406,8 @@ internal static class PolarProps
         (double, double, double) At(int k, int j)
         {
             var angle = Math.PI / 4 + j * 2 * Math.PI / sides;
-            return (x + turns[k].Slide + turns[k].R * Math.Cos(angle), turns[k].Y, z - turns[k].Slide + turns[k].R * Math.Sin(angle));
+            var torn = TornAt(turns[k].Torn, Math.Abs(Math.IEEERemainder(j * 2 * Math.PI / sides - TornFacing, 2 * Math.PI)));
+            return (x + turns[k].Slide + turns[k].R * Math.Cos(angle), turns[k].Y + torn, z - turns[k].Slide + turns[k].R * Math.Sin(angle));
         }
         (double X, double Y, double Z) SeenOf(int k, int j)
         {
