@@ -12,3 +12,13 @@ internal static class Demo96Command
         return 0;
     }
 }
+
+// demo96rooms <game folder> <converted demo folder>: the demo's School of Magic into the game folder's scenes 27 and 28 (Demo96Rooms).
+internal static class Demo96RoomsCommand
+{
+    public static int Run(string[] args)
+    {
+        foreach (var line in Demo96Rooms.Install(args[1], args[2], Demo96Rooms.School)) Console.WriteLine(line);
+        return 0;
+    }
+}

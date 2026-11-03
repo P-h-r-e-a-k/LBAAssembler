@@ -149,3 +149,30 @@ The pictures, islands, interiors and characters are all there, so "the demo's sc
 
 The scenes already open in the engine (the picture at the top), their scripts running. Not checked yet, scene by scene: that each behaves
 as it did in the demo (the texts, item 2, are the first thing that would differ).
+
+## In the race mod: the School of Magic
+
+The user, 2026-11-03: "The demo scenes for the school of magic, let's switch them in to our race mod in place of the retail school of
+magic scenes". Every race-track build now puts the demo's School (its scenes 27 and 28) into the retail game's slots 27 and 28
+(`Demo96/Demo96Rooms.cs`, from `RaceTrackService` right after the build's originals are put back, before the story):
+
+- **Where the demo comes from**: `LBA2_DEMO96` (a converted folder, or the demo's own folder: converted into the scratch folder), else the
+  editor's converted copy (File > Open the 1996 demo, converter version 4). Without either, the build keeps the game's own School and says so.
+- **The interior**: the demo's grids in grids 27 and 28, drawn with the demo's block library 1 (202 blocks) as a library of its own
+  (LBA_BKG's 18th); its bricks are the retail ones where they are the same, the rest added (`MapBricks.Install`, as a map's interior goes in:
+  a build again adds nothing).
+- **The people**: the demo's characters as new entities, their bodies and animations the demo's (its scripts name its generic numbers, and
+  its skeletons aren't retail's): the Dean (demo entity 62), his assistant (63), the students (64), the props (11) and entity 34. Twinsen and
+  the Meca-penguin slot (demo 9, retail 14) are retail's.
+- **The scene**: the slot's header (light, ambience, music), the demo's actors, zones and track points. Doors: the demo's scene numbers
+  as retail's; the hall's door into the training room (retail scene 33, which the demo shut) as retail's hall has it.
+- **Sounds**: demo samples 35 and 41 are retail 617 and 501 byte for byte; 122 (the flow points') is retail's 441, as its hall plays there.
+- **Texts**: the demo's School lines are the retail Desert texts under the same numbers (`match.py`: 28 of 43 the same French line), so
+  every language and the voices come with them. Differently worded in the demo: 9, 11, 15, 19, 23, 55, 56, 60, 69, 76, 77, 102, 661, 662,
+  666 -- the retail line is shown.
+- **The story**: the Desert's Dean (chapter 3) is copied from the hall as the build has it -- the actor at the Dean's place -- and the
+  game's hidden.
+
+Checked (a build of all 15 islands, E:\dump\TEMP\allstory4): the halls drawn as in the demo, the Dean and his assistant in the demo's
+bodies; the Dean's beats (Q_PAGES 1 -> 2, 5 -> 6 and the diploma); the door to the desert (28 -> 61); the training room's door shut at that
+point of the story as retail's is; 10426/10426 scripts round-trip; a second install adds nothing to LBA_BKG.HQR.

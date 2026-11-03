@@ -39,6 +39,15 @@ internal static class Demo96Converter
         return lines.Length > 2 && lines[1] == $"version {Version}" && string.Equals(lines[2], $"source {Path.GetFullPath(demoDir)}", StringComparison.OrdinalIgnoreCase);
     }
 
+    // The demo folder a converted folder was made from (its marker's "source" line), or null.
+    public static string? SourceOf(string dir)
+    {
+        var marker = Path.Combine(dir, MarkerFile);
+        if (!File.Exists(marker)) return null;
+        var lines = File.ReadAllLines(marker);
+        return lines.Length > 2 && lines[2].StartsWith("source ") ? lines[2]["source ".Length..] : null;
+    }
+
     // A converted folder's demo scene -> retail scene map; null for a folder that is not one.
     public static Dictionary<int, int>? SceneMap(string dir)
     {

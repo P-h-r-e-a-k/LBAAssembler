@@ -25,6 +25,8 @@ internal static partial class RaceTrackStory
     // the group's two spare game variables: the chapter whose radio call was answered, and the chapter whose ringing was shown
     public const int RadioAnsweredA = 234, RadioRangA = 235;
     private const int Diploma = 30, DeanScene = 27, DeanActor = 8, BaldinoHouse = 38, BaldinoActor = 2, MoonStart = 229;
+    // (where the Dean stands in the School's hall, the game's and the 1996 demo's alike)
+    private static readonly (int X, int Z) DeanAt = (15104, 5040);
 
     // The race file's story keys of the group's islands (RaceCarEngineFile.EngineFile, in the story): their gates and what a win sets.
     internal static string? RaceKeysA(RaceTrackIsland island) =>
@@ -443,10 +445,13 @@ void comportement_1()
                 message({Say(DesertLine.FlickOpen)});
             }}", "Flick");
 
-        // the Dean in the School of Magic: a copy of the game's own talks (the game's is out of sight on the Desert's chapters)
-        if (Copy(b.Originals, DeanScene, DeanActor) is { } dean)
+        // the Dean in the School of Magic: a copy of the game's own talks (the game's is out of sight on the Desert's chapters). The hall is
+        // the 1996 demo's when the build put it in (Demo96Rooms): its Dean, another actor there, is the one copied -- the actor at the
+        // Dean's place, as the scene now has it.
+        var deanActor = b.Store.SceneExists(DeanScene) && b.Store.Load(DeanScene).Actors.FindIndex(a => a.X == DeanAt.X && a.Z == DeanAt.Z) is >= 0 and var found ? found : DeanActor;
+        if (Copy(b.Store, DeanScene, deanActor) is { } dean)
         {
-            b.Hide(DeanScene, DeanActor, desert, "Dean");
+            b.Hide(DeanScene, deanActor, desert, "Dean");
             b.Edit(DeanScene, "the Dean: the three pages (Q_PAGES 2), the Wizard's Diploma (item 30, Q_PAGES 6)", model => IslandBeatsA.Add(model, dean, Talker(desert, $@"            if (5 == var_game({QPages}))
             {{
                 message({Say(DesertLine.DeanAll)});
@@ -470,7 +475,7 @@ void comportement_1()
                 message({Say(DesertLine.DeanAll)});
             }}")));
         }
-        else log.Add($"the Dean left out: no actor {DeanActor} in scene {DeanScene}");
+        else log.Add($"the Dean left out: no actor {deanActor} in scene {DeanScene}");
 
         // the three pages on the road, at 30, 55 and 80 % of the lap: driven over or walked to, in lap order
         var pages = new[] { (0.30, DesertLine.Page1), (0.55, DesertLine.Page2), (0.80, DesertLine.Page3) };

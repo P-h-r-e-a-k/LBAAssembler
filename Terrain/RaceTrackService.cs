@@ -483,6 +483,10 @@ internal static class RaceTrackService
             // (an island the build makes -- Sendell's Well, the Emperor's palace -- is made afresh, its files and its scenes, from those
             // originals; Sendell's Well goes when this build leaves it out -- the Palace island stays, an island of its own too: Tools)
             var made = new List<string>();
+            // (the School of Magic is the 1996 demo's, where the demo is at hand: Demo96Rooms -- before the story, which talks there)
+            if (LBAAssembler.Demo96.Demo96Rooms.Source(gameDirectory) is { } demo)
+                made.AddRange(LBAAssembler.Demo96.Demo96Rooms.Install(gameDirectory, demo, LBAAssembler.Demo96.Demo96Rooms.School));
+            else made.Add("The School of Magic: the game's own (no converted 1996 demo -- LBA2_DEMO96, or File > Open the 1996 demo)");
             if (islands.Contains(RaceTrackIsland.Sendell)) { progress?.Report(new((setup - 0.3) / whole, "Sendell's Well: making the island")); made.AddRange(SendellWell.Install(gameDirectory)); }
             else SendellWell.Remove(gameDirectory);
             if (islands.Contains(RaceTrackIsland.Palace))
