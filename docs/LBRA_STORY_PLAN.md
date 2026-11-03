@@ -7,6 +7,10 @@ with actor scripting and detailed story quests."
 
 This is a plan: nothing in it is built yet beyond what each chapter marks **(built)**.
 
+**The walkthrough script** -- every scene, actor and line, with Baldino's radio calls and Zoe as pit crew -- is
+[LBRA_STORY_SCRIPT.md](LBRA_STORY_SCRIPT.md) (2026-11-03). Where the two differ, the script is the newer: it reuses the game's own flags
+(the story's chapter is the game's `chapter()`), and its marshals are the races' flag marshals.
+
 ## Contents
 
 1. The story in one paragraph
