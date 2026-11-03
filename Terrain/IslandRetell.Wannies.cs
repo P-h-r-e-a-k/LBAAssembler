@@ -260,7 +260,7 @@ internal static partial class IslandRetell
         }),
         (535, new[]
         {
-            "A black car? Ah, yes, right. It went through before the race people came, sir, and it didn't stop for the frog. It's not on this island any more, they say. I've never actually seen it go, but this rumor has an air of truth. Ask the old Wannie after the race, she sees everything.",
+            "A black car? Ah, yes, right. It went through before the race people came, sir, and it didn't stop for the frog. It's not on this island any more, they say. I've never actually seen it go, but this rumour has an air of truth. Ask the old Wannie after the race, she sees everything.",
             "Une voiture noire ? Ah oui, c'est vrai. Elle est passée avant les gens de la course, monsieur, et elle ne s'est pas arrêtée pour la grenouille. Elle ne serait plus sur cette île, à ce qu'on dit. Je ne l'ai jamais vue partir, mais cette rumeur a l'air vraie. Demandez à la vieille blafarde après la course, elle voit tout.",
             "Ein schwarzer Wagen? Ach ja, richtig. Er ist durchgefahren, bevor die Rennleute kamen, mein Herr, und er hat am Frosch nicht angehalten. Er ist nicht mehr auf dieser Insel, sagt man. Ich habe ihn zwar nie wegfahren sehen, aber an dem Gerücht ist wohl etwas Wahres dran. Fragen Sie nach dem Rennen die alte Bleichlingsfrau, sie sieht alles.",
             "¿Un coche negro? Ah, sí, claro. Pasó antes de que llegara la gente de la carrera, señor, y no se paró ante la rana. Dicen que ya no está en esta isla. Yo nunca lo he visto irse, pero el rumor parece cierto. Pregúntele a la vieja macilenta después de la carrera, ella lo ve todo.",
@@ -359,7 +359,7 @@ internal static partial class IslandRetell
         }),
         (558, new[]
         {
-            "So it's you who won our fragment. You don't realize what you have done. Listen carefully.",
+            "So it's you who won our fragment. You don't realise what you have done. Listen carefully.",
             "Alors c'est toi qui as gagné notre fragment. Tu ne te rends pas compte de ce que tu as fait. Ecoute moi bien.",
             "Du bist es also, der unser Fragment gewonnen hat. Du hast ja keine Ahnung, was du da getan hast. Hör mir gut zu.",
             "Así que has sido tú quien ha ganado nuestro fragmento. No te das cuenta de lo que has hecho. Escúchame bien.",

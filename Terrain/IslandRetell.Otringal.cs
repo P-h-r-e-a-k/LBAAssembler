@@ -134,7 +134,7 @@ internal static partial class IslandRetell
         }),
         (123, new[]
         {
-            "\"THE OFFICIAL RUMOR: The Emperor asserts: the Cup will gather the Fragments of all four peoples, whether or not the mosquibees are willing to race for theirs!!!\"",
+            "\"THE OFFICIAL RUMOUR: The Emperor asserts: the Cup will gather the Fragments of all four peoples, whether or not the mosquibees are willing to race for theirs!!!\"",
             "\"LA RUMEUR OFFICIELLE : L'Empereur affirme : la Coupe réunira les Fragments des quatre races, que les mosquibees acceptent ou pas de courir pour le leur !!!\"",
             "\"DAS OFFIZIELLE GERÜCHT: Kaiser bestätigt: der Pokal wird die Fragmente aller vier Völker vereinen, ganz gleich, ob die Moskibienos um ihr Fragment fahren wollen oder nicht!!!\"",
             "\"EL RUMOR OFICIAL: El emperador afirma: ¡¡¡la Copa reunirá los Fragmentos de los cuatro pueblos, quieran o no los mosquibitas correr por el suyo!!!\"",
@@ -170,7 +170,7 @@ internal static partial class IslandRetell
         }),
         (127, new[]
         {
-            "\"THE OFFICIAL RUMOR: Dark Monk's Priests Reveal: The Cup's Last Race Is Already Won! A Twinsunian dressed in blue will not change that...\"",
+            "\"THE OFFICIAL RUMOUR: Dark Monk's Priests Reveal: The Cup's Last Race Is Already Won! A Twinsunian dressed in blue will not change that...\"",
             "\"LA RUMEUR OFFICIELLE : Les prêtres de Dark Monk révèlent : la dernière course de la Coupe est déjà gagnée ! Un twinsunien vêtu de bleu n'y changera rien...\"",
             "\"DAS OFFIZIELLE GERÜCHT: Priester von Dark Monk enthüllen: Das letzte Rennen des Pokals ist schon gewonnen! Ein blau gekleideter Twinsunier wird daran nichts ändern ...\"",
             "\"EL RUMOR OFICIAL: Revelación de los sacerdotes de Dark Monk: ¡La última carrera de la Copa ya está ganada! Un twinsiano vestido de azul no cambiará eso...\"",
@@ -692,7 +692,7 @@ internal static partial class IslandRetell
         }),
         (451, new[]
         {
-            "Darn! This here shuttle, t'will soon be ready fer takeoff. Me myself, ah would of fixed them stabilizing jets!! Barrin' that, she'll fly like a racin' car with no wheels!",
+            "Darn! This here shuttle, t'will soon be ready fer takeoff. Me myself, ah would of fixed them stabilising jets!! Barrin' that, she'll fly like a racin' car with no wheels!",
             "Crébondiou !! S'te navette, elle pourra bientôt décoller. Môaa, j'aurais ben réparé les propulsions de stabilité !! Sans ça, elle volera comme une voiture de course sans roues !",
             "Hmpf! Dieses Raumschiff hier is' bald startklar. Also ich, ich hätt' ja die Stabilitätsantriebe repariert!! Sonst fliegt's wie 'n Rennwagen ohne Räder!",
             "¡¡Demonios!! Esta nave pronto podrá despegar. ¡¡Yo mismo ya habría arreglao las propulsiones de estabilidad!! Si no, ¡volará como un coche de carreras sin ruedas!",
@@ -701,7 +701,7 @@ internal static partial class IslandRetell
         }),
         (456, new[]
         {
-            "This is a well organized planet: soldiers everywhere, law and order, discipline, clean streets. They even sweep the race track.",
+            "This is a well organised planet: soldiers everywhere, law and order, discipline, clean streets. They even sweep the race track.",
             "Cette planète est bien organisée : des soldats partout, l'ordre, la discipline, des rues propres. Ils balaient même le circuit.",
             "Dieser Planet ist gut organisiert: überall Soldaten, Recht und Ordnung, Disziplin, saubere Straßen. Sie fegen sogar die Rennstrecke.",
             "Este planeta está muy bien organizado: soldados por todas partes, ley y orden, disciplina, calles limpias. Hasta barren el circuito.",

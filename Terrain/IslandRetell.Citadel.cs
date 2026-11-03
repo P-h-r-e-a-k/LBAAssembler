@@ -1086,6 +1086,15 @@ internal static partial class IslandRetell
             "Buongiorno Maestro. Quando la Coppa arriverà sull'Isola del deserto, venga a vedere i maghi vicino al Monte-Calvo. Sono sicuro che la troverà interessante.",
             "Bom dia, Mestre. Quando a Taça chegar à Ilha do Deserto, venha ver os magos perto do Monte Careca. Você vai achar interessante.",
         }),
+        (504, new[]
+        {
+            "Hello neighbour.",
+            "Bonjour voisin.",
+            "Guten Tag, lieber Nachbar.",
+            "Buenos días vecino.",
+            "Buongiorno caro vicino.",
+            "Bom dia, vizinho.",
+        }),
         (520, new[]
         {
             "Have you seen a thief with a pair of driving gloves?",

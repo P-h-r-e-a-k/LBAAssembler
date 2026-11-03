@@ -1,6 +1,6 @@
 # Little Big Racing Adventure: the walkthrough script
 
-The user, 2026-11-03: "Further flesh out the story line we're creating. Work out each scene, each actor and their dialog. We don't need to
+The user, 2026-11-03: "Further flesh out the story line we're creating. Work out each scene, each actor and their dialogue. We don't need to
 worry about existing quest flags, we can just reuse them instead of avoiding them. Give me a detailed walkthrough style script. Other
 ideas I've had, to reuse the radio mechanic that Baldino uses to phone Twinsen perhaps with specific car updates for each track, and
 perhaps Zoe acting as pit crew, we could have her as a second playable character. If only a single person is playing Zoe can just follow
@@ -342,7 +342,7 @@ dream never run again); DREAM_CAUGHT set by the race's result; the four lines.
      Q_BLUEPRINT = 1. The file goes back under the case.
    - **The neighbour** (next door to Twinsen's house). The game's own neighbour, at his table with a sheet of paper and a magnifying
      glass:
-     > **The neighbour:** "Hello neighbor."
+     > **The neighbour:** "Hello neighbour."
      >
      > **The neighbour:** "Somebody pushed this under my door the night they built the storm track. Drawings, I think, but the rain got
      > to it and the ink's all faded. With a little gallic acid I could bring it back. There's none left on the island, mind: the
@@ -946,8 +946,8 @@ added to Mr. Paul's prize, and the two pages' pictures.
 | The small monkey monsters | built (crate-throwers on the lower decks): hazards, not racers | |
 | Zoe | the companion, then in the elevator's cage | no pit box: a head-to-head |
 
-The user, 2026-11-03: "We should add in some dialog for the elevator track" -- then: "The elevator doesn't need a quest, perhaps some
-pre-race dialog from the Monkey monster, who I feel should be the only opponent of Twinsen for this race." No quest: the monster talks
+The user, 2026-11-03: "We should add in some dialogue for the elevator track" -- then: "The elevator doesn't need a quest, perhaps some
+pre-race dialogue from the Monkey monster, who I feel should be the only opponent of Twinsen for this race." No quest: the monster talks
 before the race, and he gives the clue after it. (Track select's race keeps its extra drivers, the Franco policeman and the monkey with
 the sword; the story's has the monster alone.)
 

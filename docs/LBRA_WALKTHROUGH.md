@@ -171,7 +171,7 @@ The same ladder brings Twinsen up onto the quay.
 
 - **The neighbour.** Next door to Twinsen's house, the neighbour sits at his table with a sheet of paper and a magnifying glass.
 
-  **The neighbour:** "Hello neighbor."
+  **The neighbour:** "Hello neighbour."
 
   **The neighbour:** "Somebody pushed this under my door the night they built the storm track. Drawings, I think, but the rain got to
   it and the ink's all faded. With a little gallic acid I could bring it back. There's none left on the island, mind: the pharmacy's
