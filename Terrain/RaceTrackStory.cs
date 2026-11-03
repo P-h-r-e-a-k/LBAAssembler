@@ -43,7 +43,10 @@ namespace LBAAssembler.Terrain;
 //     attic's shelf shows the gloves (a body of its own on the darts' entity) and gives them. Those three texts are spoken by the narrator
 //     (EN_GAM.VOX), so each keeps its place in the file under an id nothing asks for -- every text after it keeps its voice -- and the gloves'
 //     text goes at the end, where it has none.
-internal static class RaceTrackStory
+// The new story (2026-11-03, docs/LBRA_WALKTHROUGH.md chapters 1 and 2: RaceTrackStory.Chapters.cs) changes this: the gloves are stolen
+// (the thief has them, the attic's shelf shows the darts again), the spell at the lighthouse no longer moves the game on, Twinsen sleeps
+// the night in his bed and Zoe wakes him to the morning of chapter 2 (the fine weather, CITABAU), when the Esmers land and the Cup opens.
+internal static partial class RaceTrackStory
 {
     // the holomap: the storm track's start line, the town circuit's, and the game's own arrow to the Weather Wizard's tent
     public const int StartArrow = 222, TownArrow = 223, WizardArrow = 21;
@@ -74,7 +77,8 @@ internal static class RaceTrackStory
     private const int StormPlot = 51, KeeperPlot = 56, AliensLanded = 70, Driving = 12;
     private const int OpeningScene = 0, Zoe = 4, BedZone = 5;
     private const int WizardTent = 21, Wizard = 2, TraluCave = 2, CaveRaph = 2, CaveZoe = 9, PaulHouse = 7, PaulActor = 2;
-    private const int AliensScene = 42, Alien = 6, AlienGreeting = 388, ArrivalPoint = 20;
+    // (the game's landing speech, 384, and greeting, 388: their words are IslandRetell's, the Cup's)
+    private const int AliensScene = 42, Alien = 6, AlienGreeting = 388, EsmerGreeting = 384, ArrivalPoint = 20;
     // the gloves: the attic, its shelf actor, and the darts' display entity and its body
     internal const int Attic = 1, Shelf = 8, DartsEntity = 18, DartsBody = 31, CarScene = 49;
     private const int CitadelTexts = 3, HolomapTexts = 2;
@@ -83,7 +87,9 @@ internal static class RaceTrackStory
 
     // The story's lines (Citadel Island's texts), in English, French, German, Spanish, Italian, Portuguese: TEXT.HQR's own order. The game's
     // own names: the Weather Wizard is the Mage Météo, the Wettermagier, the Mago Meteo, the Mago Metereologo, the Mago do Tempo.
-    private enum Line { Zoe, Wizard, WizardAfter, Raph, RaphBeaten, PaulGloves, PaulReady, Aliens, Tired, Sleep, PaulTicket, RaphTime, PaulStop, ZoeJoins, RaphYell }
+    // (EsmerTrack was the aliens' thanks with the new track ready tomorrow: since 2026-11-03 the middle of their landing speech, the morning
+    // after -- RaceTrackStory.Chapters.cs)
+    private enum Line { Zoe, Wizard, WizardAfter, Raph, RaphBeaten, PaulGloves, PaulReady, EsmerTrack, Tired, Sleep, PaulTicket, RaphTime, PaulStop, ZoeJoins, RaphYell }
     private static readonly string[][] Lines =
     {
         new[]
@@ -151,12 +157,12 @@ internal static class RaceTrackStory
         },
         new[]
         {
-            "People from the planet Twinsun, we come to you in a spirit of peace. @ Thank you for clearing the rain which was preventing us from landing. As a thank you, we'll build you an even better race track. It should be ready tomorrow.",
-            "Habitants de la planète Twinsun, nous sommes venus animés par un esprit de paix. @ Merci d'avoir chassé la pluie qui nous empêchait d'atterrir. Pour vous remercier, nous allons vous construire un circuit encore meilleur. Il devrait être prêt demain.",
-            "Bewohner des Planeten Twinsun, wir sind in friedlicher Absicht hierher gekommen. @ Wir danken Euch, dass Ihr den Regen vertrieben habt, der uns an der Landung hinderte. Zum Dank bauen wir Euch eine noch bessere Rennstrecke. Sie sollte morgen fertig sein.",
-            "Habitantes del planeta Twinsun, hemos venido en son de paz. @ Gracias por despejar la lluvia que nos impedía aterrizar. Para agradecéroslo, os construiremos un circuito todavía mejor. Debería estar listo mañana.",
-            "Abitanti del pianeta Twinsun, siamo venuti animati da intenzioni pacifiche. @ Vi ringraziamo di aver allontanato la pioggia che ci impediva di atterrare. Per ringraziarvi, vi costruiremo una pista ancora migliore. Dovrebbe essere pronta domani.",
-            "Habitantes do planeta Twinsun, viemos tomados por um espírito de paz. @ Obrigado por terem afastado a chuva que nos impedia de pousar. Como agradecimento, vamos construir-vos uma pista ainda melhor. Deverá estar pronta amanhã.",
+            "We saw your little race track in the rain. Brave, but small, and it cost you your Tavern. So last night we built you a bigger one, round your whole town, and we put your Tavern back where it stood, every stone of it.",
+            "Nous avons vu votre petit circuit sous la pluie. Courageux, mais petit, et il vous a coûté votre Taverne. Alors cette nuit, nous vous en avons construit un plus grand, tout autour de votre ville, et nous avons remis votre Taverne à sa place, pierre par pierre.",
+            "Wir haben Eure kleine Rennstrecke im Regen gesehen. Mutig, aber klein, und sie hat Euch Eure Taverne gekostet. Also haben wir Euch heute Nacht eine größere gebaut, rund um Eure ganze Stadt, und Eure Taverne wieder dorthin gestellt, wo sie stand, Stein für Stein.",
+            "Vimos vuestro pequeño circuito bajo la lluvia. Valiente, pero pequeño, y os costó vuestra Taberna. Así que anoche os construimos uno más grande, alrededor de toda vuestra ciudad, y volvimos a poner vuestra Taberna donde estaba, piedra a piedra.",
+            "Abbiamo visto la vostra piccola pista sotto la pioggia. Coraggiosa, ma piccola, e vi è costata la vostra Taverna. Così stanotte ve ne abbiamo costruita una più grande, intorno a tutta la vostra città, e abbiamo rimesso la vostra Taverna dov'era, pietra su pietra.",
+            "Vimos a vossa pequena pista à chuva. Corajosa, mas pequena, e custou-vos a vossa Taberna. Por isso, esta noite construímos-vos uma maior, à volta de toda a vossa cidade, e pusemos a vossa Taberna onde estava, pedra a pedra.",
         },
         new[]
         {
@@ -169,21 +175,21 @@ internal static class RaceTrackStory
         },
         new[]
         {
-            "What a day! A good night's sleep... @ Morning already! The aliens' new race track should be ready by now.",
-            "Quelle journée ! Une bonne nuit de sommeil... @ Déjà le matin ! Le nouveau circuit des extraterrestres devrait être prêt.",
-            "Was für ein Tag! Eine Mütze voll Schlaf... @ Schon Morgen! Die neue Rennstrecke der Außerirdischen müsste jetzt fertig sein.",
-            "¡Qué día! Una buena noche de sueño... @ ¡Ya es de día! El nuevo circuito de los extraterrestres ya debería estar listo.",
-            "Che giornata! Una bella dormita... @ È già mattina! La nuova pista degli alieni dovrebbe essere pronta.",
-            "Que dia! Uma boa noite de sono... @ Já é de manhã! A nova pista dos extraterrestres já deve estar pronta.",
+            "What a day! A good night's sleep...",
+            "Quelle journée ! Une bonne nuit de sommeil...",
+            "Was für ein Tag! Eine Mütze voll Schlaf...",
+            "¡Qué día! Una buena noche de sueño...",
+            "Che giornata! Una bella dormita...",
+            "Que dia! Uma boa noite de sono...",
         },
         new[]
         {
-            "Well raced, Twinsen! You've won the prize: a ferry ticket.",
-            "Belle course, Twinsen ! Tu as gagné le prix : un ticket de ferry.",
-            "Gut gefahren, Twinsen! Du hast den Preis gewonnen: eine Fahrkarte für die Fähre.",
-            "¡Buena carrera, Twinsen! Has ganado el premio: un ticket de ferry.",
-            "Bella corsa, Twinsen! Hai vinto il premio: un biglietto per il traghetto.",
-            "Boa corrida, Twinsen! Ganhaste o prémio: um bilhete de barca.",
+            "Well raced, Twinsen! You've won the prize: a ferry ticket. And the Cup's purse: fifty kashes, from the Esmers.",
+            "Belle course, Twinsen ! Tu as gagné le prix : un ticket de ferry. Et la bourse de la Coupe : cinquante kashes, de la part des Esmers.",
+            "Gut gefahren, Twinsen! Du hast den Preis gewonnen: eine Fahrkarte für die Fähre. Und das Preisgeld des Pokals: fünfzig Kashes, von den Esmern.",
+            "¡Buena carrera, Twinsen! Has ganado el premio: un ticket de ferry. Y la bolsa de la Copa: cincuenta kashes, de parte de los Esmers.",
+            "Bella corsa, Twinsen! Hai vinto il premio: un biglietto per il traghetto. E il montepremi della Coppa: cinquanta kashes, da parte degli Esmer.",
+            "Boa corrida, Twinsen! Ganhaste o prémio: um bilhete de barca. E a bolsa da Taça: cinquenta kashes, da parte dos Esmers.",
         },
         // (the time is the race-track mode's: its "##" becomes Raph's lap at the car setup's skill, RACEMOD.CPP beat_text=)
         new[]
@@ -252,31 +258,13 @@ internal static class RaceTrackStory
         return text[..at] + with + text[(at + what.Length)..];
     }
 
-    // The gloves' models and the attic: the shelf shows and gives the gloves instead of the darts; and the car part's one use (letting Zoe
-    // mend the car, scene 49) no longer takes them away.
+    // The gloves' models, and the car part's one use (letting Zoe mend the car, scene 49) no longer taking them away. Since 2026-11-03 the
+    // attic is the game's own again -- its shelf shows the darts and gives them -- for the gloves are stolen: the thief gives them back
+    // (RaceTrackStory.Chapters.cs, Thief).
     private static List<string> Gloves(string gameDirectory, SceneStore store)
     {
         var log = new List<string> { RaceTrackGloves.InstallInventory(gameDirectory, GlovesSlot) };
-        var (generic, bodyLog) = RaceTrackGloves.InstallInRoom(gameDirectory, DartsEntity, DartsBody);
-        log.Add(bodyLog);
-
-        var attic = store.Load(Attic);
-        if (attic.Actors.Count <= Shelf || attic.Actors[Shelf].Entity != DartsEntity) { log.Add($"no gloves: scene {Attic}'s shelf isn't the darts'"); return log; }
-        attic.Actors[Shelf].Body = generic;
-        var scripts = SceneScripts.Load(SceneSerializer.Write(attic), Attic);
-        var hero = scripts.GetText(0, ScriptKind.Life);
-        var shelf = scripts.GetText(Shelf, ScriptKind.Life);
-        if (!hero.Contains($"kill_obj({Shelf});") || !hero.Contains("found_object(2);") || !shelf.Contains("if (3 == var_game(2))"))
-        {
-            log.Add($"no gloves: scene {Attic}'s scripts aren't the game's own");
-            return log;
-        }
-        // (the one found_object(2) in the attic is the shelf's; its other finds are the holomap's and the magic ball's)
-        scripts.SetText(0, ScriptKind.Life, hero.Replace("found_object(2);", $"found_object({GlovesSlot});\n                    set_var_game({GlovesSlot}, 1);"));
-        scripts.SetText(Shelf, ScriptKind.Life, shelf.Replace("if (3 == var_game(2))", $"if (0 < var_game({GlovesSlot}))"));
-        var built = scripts.Build();
-        if (!built.Ok) { log.Add("no gloves: the attic's scripts would not compile: " + string.Join("; ", built.Errors)); return log; }
-        var changes = new List<SceneChange> { new(Attic, SceneSerializer.Parse(SceneGame.Lba2, built.Record!), null) };
+        var changes = new List<SceneChange>();
 
         var car = store.Load(CarScene);
         var carScripts = SceneScripts.Load(SceneSerializer.Write(car), CarScene);
@@ -291,7 +279,7 @@ internal static class RaceTrackStory
             else log.Add("scene 49: the car part's use could not be switched off: " + string.Join("; ", carBuilt.Errors));
         }
         store.SaveMany(changes, allowErrors: true);
-        log.Add($"scene {Attic}: the attic's shelf shows the racing gloves (entity {DartsEntity} body {generic}) and Action there gives them (item {GlovesSlot}); the darts are still in the shop");
+        log.Add($"the driving gloves are item {GlovesSlot}; scene {Attic}'s shelf keeps the game's darts (the thief has the gloves)");
         return log;
     }
 
@@ -349,6 +337,16 @@ internal static class RaceTrackStory
                 return (x, z, g, RaceTrackMath.Turn(Math.Atan2(s.X - x, s.Z - z)));
             }
         return null;
+    }
+
+    // Where the Esmer of the landing stands in scene 42: off the road (the fine weather's: the town circuit's) beside where the game's
+    // landing cutscene puts Twinsen (its track point 20), on its ground.
+    private static (double X, double Z, double Y, int Beta) Landing(SceneModel model, RaceTrackReport town)
+    {
+        if (ArrivalPoint >= model.TrackPoints.Count) throw new NotTheGames($"no track point {ArrivalPoint}");
+        var arrival = model.TrackPoints[ArrivalPoint];
+        var from = (model.CubeX * 64 + arrival.X / 512.0, model.CubeY * 64 + arrival.Z / 512.0, (double)arrival.Y, 0.0, 1.0);
+        return Beside(town, from, -1, 1, new[] { 1, -1 }) ?? throw new NotTheGames("no room by Twinsen's arrival");
     }
 
     // ---- Celebration Island: the souvenir seller -------------------------------------------------------------------------------------
@@ -540,12 +538,15 @@ void comportement_1()
         var languages = Lba2TextBank.Languages(textPath);
         var first = NextId(text, languages, CitadelTexts); var labelFirst = NextId(text, languages, HolomapTexts);
         int Id(Line line) => first + (int)line;
+        // (the new story's lines after these: RaceTrackStory.Chapters.cs)
+        int Say(ChapterLine line) => first + Lines.Length + (int)line;
         var hqr = File.ReadAllBytes(textPath);
         for (var lang = 0; lang < languages; lang++)
         {
             var words = lang < Lines[0].Length ? lang : 0;       // (a language this doesn't know gets the English)
             var lines = Lba2TextBank.Load(text, lang, CitadelTexts);
             AddTexts(lines, first, lines.Find(0)?.Attribute ?? Lba2TextBank.NormalAttribute, Lines, words);
+            AddChapterTexts(text, lang, lines, first + Lines.Length, lines.Find(0)?.Attribute ?? Lba2TextBank.NormalAttribute, words);
             hqr = lines.WriteInto(hqr);
             var labels = Lba2TextBank.Load(text, lang, HolomapTexts);
             AddTexts(labels, labelFirst, LabelAttribute, Labels, words);
@@ -561,7 +562,7 @@ void comportement_1()
             hqr = labels.WriteInto(hqr);
         }
         File.WriteAllBytes(textPath, hqr);
-        log.Add($"the story's {Lines.Length} lines are texts {first}-{first + Lines.Length - 1} of Citadel Island's, the start lines' holomap labels texts {labelFirst}-{labelFirst + 1}, in all {languages} languages (shown, not spoken)");
+        log.Add($"the story's {Lines.Length + ChapterLines.Length} lines are texts {first}-{first + Lines.Length + ChapterLines.Length - 1} of Citadel Island's, the start lines' holomap labels texts {labelFirst}-{labelFirst + 1}, in all {languages} languages (shown, not spoken)");
 
         // the arrows: the storm track's start line, the town circuit's
         var holoPath = Path.Combine(gameDirectory, RaceTrackHolomap.File);
@@ -593,7 +594,7 @@ void comportement_1()
                 models[scene] = SceneSerializer.Parse(SceneGame.Lba2, built.Record!);
                 log.Add($"scene {scene}: {what}");
             }
-            catch (Exception e) when (e is NotTheGames or ScriptCompileException or InvalidDataException or ArgumentException)
+            catch (Exception e) when (e is NotTheGames or ScriptCompileException or InvalidDataException or ArgumentException or SceneEditException)
             {
                 log.Add($"scene {scene}: {what} left out: {(e is NotTheGames ? "the script isn't the game's own: " : "")}{e.Message}");
             }
@@ -610,8 +611,9 @@ void comportement_1()
             };
         }
 
-        // 1. Zoe sends Twinsen to the Weather Wizard; and his bed, where he sleeps once the aliens have thanked him
-        Edit(OpeningScene, "Zoe sends Twinsen to the Weather Wizard (his tent's arrow); Action at Twinsen's bed sleeps the night once he is tired", model =>
+        // 1. Zoe sends Twinsen to the Weather Wizard and tells him his gloves are gone; and his bed, where he sleeps once the spell is cast
+        // -- the night: the screen fades to black and the scene starts again with Twinsen asleep in it, for the morning (Chapters.cs, Morning)
+        Edit(OpeningScene, "Zoe sends Twinsen to the Weather Wizard (his tent's arrow) and tells of the stolen gloves; Action at Twinsen's bed sleeps the night once he is tired", model =>
         {
             // the bed: a zone of its own round it (the hero starts the game at its foot), and Action there
             model.Zones.Add(new SceneZoneModel { Type = 2, Num = BedZone, Info = new[] { 0, 0, 0, 0, 0, 0, 0, 1 }, X0 = 7168, Y0 = 2048, Z0 = 3072, X1 = 10751, Y1 = 3327, Z1 = 5631 });
@@ -623,14 +625,33 @@ void comportement_1()
             var said = zoe.IndexOf("message(0);", StringComparison.Ordinal);
             var arrow = zoe.IndexOf("set_holo_pos(22);", said, StringComparison.Ordinal);
             zoe = zoe[..arrow] + $"set_holo_pos({WizardArrow});" + zoe[(arrow + "set_holo_pos(22);".Length)..];
-            scripts.SetText(Zoe, ScriptKind.Life, zoe.Replace("message(0);", $"message({Id(Line.Zoe)});"));
+            // (woken from the dream -- the dream's variable set -- first what she saw of it: caught FunFrock, DREAM_CAUGHT 1, or not; then her
+            // opening, and the gloves stolen: Q_THIEF 1)
+            scripts.SetText(Zoe, ScriptKind.Life, zoe.Replace("message(0);", $@"if (0 < var_game({LBAAssembler.Terrain.Polar.PolarDream.DreamVar}))
+                {{
+                    if (1 == var_game({DreamCaught}))
+                    {{
+                        message({Say(ChapterLine.ZoeSmiling)});
+                    }}
+                    else
+                    {{
+                        message({Say(ChapterLine.ZoeShouting)});
+                    }}
+                }}
+                message({Id(Line.Zoe)});
+                message({Say(ChapterLine.ZoeGloves)});
+                if (0 == var_game({QThief}))
+                {{
+                    set_var_game({QThief}, {ThiefTold});
+                }}"));
             var hero = scripts.GetText(0, ScriptKind.Life);
             hero = Once(hero, "case 4:", $@"case {BedZone}:
                     if ({Tired} == var_game({DayVar}))
                     {{
                         message({Id(Line.Sleep)});
-                        set_var_game({DayVar}, {Rested});
-                        set_holo_pos({TownArrow});
+                        set_var_game({DayVar}, {Night});
+                        fade_to_pal(3);
+                        change_cube({OpeningScene});
                     }}
                     break;
                 case 4:");
@@ -811,17 +832,14 @@ void comportement_1()
             });
         else log.Add("Raph and Mr. Paul left out: no start scene, or the game's own Raph (scene 2) or Mr. Paul (scene 7) not found");
 
-        // 5. the aliens' thanks, where Twinsen arrives after the spell: the game's landing cutscene there waits for an alien to speak
+        // 5. the Esmers' landing, the morning after the spell (chapter 2: the game's landing cutscene, which waits for var 70, never runs -- the
+        // morning has set it): one of them, beside where the cutscene put Twinsen, speaks to him as he comes near the first time -- the game's
+        // greeting (384, retold: their thanks for the rain cleared) and the new track and the Cup (EsmersSpoke 1) -- and greets him after
         var alien = originals.Load(AliensScene).Actors.ElementAtOrDefault(Alien)?.Clone();
         if (alien is not null)
-            Edit(AliensScene, "an alien thanks Twinsen where he arrives after the spell, which ends the game's landing cutscene, and Twinsen is tired", model =>
+            Edit(AliensScene, "an Esmer by the town circuit speaks to Twinsen the morning they land: the rain cleared, the new circuit and the Tavern put back, the Cup", model =>
             {
-                // off the road (the fine weather's: the town circuit's) beside where the cutscene puts Twinsen, on its ground
-                if (ArrivalPoint >= model.TrackPoints.Count) throw new NotTheGames($"no track point {ArrivalPoint}");
-                var arrival = model.TrackPoints[ArrivalPoint];
-                var from = (model.CubeX * 64 + arrival.X / 512.0, model.CubeY * 64 + arrival.Z / 512.0, (double)arrival.Y, 0.0, 1.0);
-                if (Beside(town, from, -1, 1, new[] { 1, -1 }) is not { } a) throw new NotTheGames("no room by Twinsen's arrival");
-                Place(alien, model, a);
+                Place(alien, model, Landing(model, town));
                 var alienScript = Add(model, alien, $@"void comportement_0()
 {{
     if (2 != chapter())
@@ -836,30 +854,27 @@ void comportement_1()
 
 void comportement_1()
 {{
-    if (0 == var_game({AliensLanded}))
+    if (0 == var_game({EsmersSpoke}) && 2500 > distance(0) && {Driving} != comportement_hero())
     {{
-        set_var_game({AliensLanded}, 1);
-        message({Id(Line.Aliens)});
-        set_var_game({DayVar}, {Tired});
+        set_var_game({EsmersSpoke}, 1);
+        message({EsmerGreeting});
+        message({Id(Line.EsmerTrack)});
+        message({Say(ChapterLine.EsmerCup)});
     }}
     swif (1 == action())
     {{
-        if (1500 > distance(0))
+        if (1500 > distance(0) && {Driving} != comportement_hero())
         {{
             message({AlienGreeting});
         }}
     }}
 }}
 ");
-                return scripts =>
-                {
-                    // (the cutscene: Twinsen at point 20, waiting for the landing's variable)
-                    if (!scripts.GetText(0, ScriptKind.Life).Contains($"if (1 < chapter() && 0 == var_game({AliensLanded}))")) throw new NotTheGames("the landing cutscene");
-                    alienScript(scripts);
-                };
+                return alienScript;
             });
 
-        // 6. the town circuit won: Mr. Paul's prize, once Twinsen is out of his car -- in whichever of the island's outside scenes that is
+        // 6. the town circuit won: Mr. Paul's prize, once Twinsen is out of his car -- in whichever of the island's outside scenes that is: the
+        // ferry ticket and the Cup's purse, and the herald's word that Twinsen leads the Cup
         var paulColour = paul?.CoulObj ?? 4;
         for (var scene = RaceTrackIsland.Citadel.FirstScene; scene <= RaceTrackIsland.Citadel.LastScene; scene++)
         {
@@ -883,6 +898,8 @@ void comportement_1()
         message({Id(Line.PaulTicket)});
         found_object({FerryTicket});
         set_var_game({FerryTicket}, 1);
+        add_gold_pieces({Purse});
+        message({Say(ChapterLine.HeraldLeads)});
         set_var_game({WonVar}, 2);
     }}
 }}
@@ -918,6 +935,9 @@ void comportement_1()
 }}
 ");
         });
+
+        // 8. the new story's beats, chapters 1 and 2 (RaceTrackStory.Chapters.cs)
+        Chapters(new StoryParts(store, originals, storm, town, scenes, townScenes, log, Edit, Add, Say, Id));
 
         store.SaveMany(models.Select(m => new SceneChange(m.Key, m.Value, null)).ToList(), allowErrors: true);
         log.Add($"the race-track mode: Mr. Paul's gloves gate the storm track (variable {GlovesSlot}), Raph's time beaten sets {BeatVar}; the town circuit opens once {DayVar} is {Rested}, " +

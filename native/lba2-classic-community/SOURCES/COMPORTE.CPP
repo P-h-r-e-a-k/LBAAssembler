@@ -316,7 +316,7 @@ void DrawInfoMenu(S32 x0, S32 y0) {
     PtrAffGraph(x0 + 340, y0 + 15, SPRITE_PIECE);
     ColorFont(155);
 
-    if (Planet >= 2)
+    if (MONEY_ZLITOS)
         l = NbZlitosPieces;
     else
         l = NbGoldPieces;

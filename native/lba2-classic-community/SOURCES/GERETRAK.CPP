@@ -234,7 +234,7 @@ void DoTrack(U8 numobj) {
 
         case TM_SIMPLE_SAMPLE:
             // (nor its thunder, the storm's actors' samples 381 and 385: GERELIFE.CPP LM_ECLAIR)
-            if (!(Island == 0 AND RaceMod_FineWeather() AND (*(S16 *)ptrtrack == 381 OR * (S16 *)ptrtrack == 385)))
+            if (!(Island == 0 AND RaceMod_StormSpent() AND (*(S16 *)ptrtrack == 381 OR * (S16 *)ptrtrack == 385)))
                 HQ_MixSample(*(S16 *)ptrtrack, 0x1000, 0, BigSampleRepeat, 64, 127);
             BigSampleRepeat = 1;
             ptrobj->OffsetTrack += 2;

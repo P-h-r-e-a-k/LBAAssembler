@@ -4677,6 +4677,10 @@ S32 RaceMod_FineWeather(void) {
     return RaceMod_Active() && (s_fineWeather || s_setFine);
 }
 
+S32 RaceMod_StormSpent(void) {
+    return RaceMod_FineWeather() || (RaceMod_Active() && ListVarGame[51] >= 4);
+}
+
 // (the player's car: the track's setup with the car's stats -- PlayerCar)
 const T_RACE_CAR *RaceMod_Car(void) {
     RaceMod_Active();

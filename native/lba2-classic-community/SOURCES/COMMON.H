@@ -296,6 +296,9 @@ typedef	struct	{
 // The storm over Citadel Island (rain, thunder, the CITADEL island file and its sky) lasts until chapter 2, when the aliens land after
 // the lighthouse. A race-track mod's file can ask for the weather after it without moving the story on (RACEMOD.CPP: weather=fine).
 S32 RaceMod_FineWeather(void);
+// The storm's lightning and thunder on Citadel Island: over in the fine weather, and in a race-track mod's story already once the Weather
+// Wizard's spell is cast (the storm plot, game variable 51, at 4), while its rain falls on until the morning the Esmers land.
+S32 RaceMod_StormSpent(void);
 // A race-track mod's raised road and the island file with Celebration Island's statue (RACEMOD.CPP, RACEMOD.H).
 S32 RaceMod_StatueShown(S32 risen);
 S32 RaceMod_Rescue(void);
@@ -543,7 +546,9 @@ void RaceMod_OpenWall(S32 ox, S32 oy, S32 oz, S32 *nx, S32 *nz);
 #define	SPRITE_PROTECT		30
 
 // Pour definir si on utilise des Kashes ou des Zlitos
-#define	SPRITE_PIECE	(SPRITE_KASHES+(Planet>=2?1:0))
+// Zlitos are the money of Zeelich (Planet 2), of the world under its gas (3) and of the Emerald Moon (1); Kashes of Twinsun (0).
+#define	MONEY_ZLITOS	(Planet>=1)
+#define	SPRITE_PIECE	(SPRITE_KASHES+(MONEY_ZLITOS?1:0))
 
 #define	SPRITE_ARDOISE_LEFT_UP	164
 #define	SPRITE_ARDOISE_RIGHT_UP	165

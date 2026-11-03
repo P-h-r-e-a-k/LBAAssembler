@@ -47,6 +47,8 @@ internal sealed record RaceDriver(string Name, int Body, RaceTrackBuilder.Racing
         Of(RaceTrackCharacterCars.Paul, "Mr. Paul", 2.5, 0.98, 0.97, main: true),
         Of(RaceTrackCharacterCars.Tralu, "The Tralu", 0, 1.03, 0.93),
         Of(RaceTrackCharacterCars.Thief, "The thief", -2.5, 1.02, 0.99),
+        // (Luc, the Tavern's boss, racing for the Tavern he got back: the story's sixth car, where Zoe is the pit crew -- RaceTrackIsland.StoryLeftOut)
+        Of(RaceTrackCharacterCars.Luc, "Luc", 0.5, 1.01, 0.96),
     };
 
     // The Desert island: Moya, the Dino-Fly, the Dean of the School of Magic, the retail track's racer (its champion: the one to beat) and

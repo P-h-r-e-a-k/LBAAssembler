@@ -317,6 +317,8 @@ internal static class RaceCarEngineFile
         if (town)
         {
             text.Append($"gate={RaceTrackStory.DayVar} {RaceTrackStory.Rested} The new track opens tomorrow\n");
+            // (and six cars on the grid: Luc's barrel back on four wheels -- RaceTrackStory.Chapters.cs, Yard)
+            text.Append($"gate={RaceTrackStory.QLucCar} {RaceTrackStory.WheelFitted} Mr. Paul: six cars on the grid first!\n");
             text.Append($"race_laps={RaceTrackStory.RaceLaps}\nwin={RaceTrackStory.WonVar} 1\n");
         }
         // Celebration Island's lava lake: three laps against the souvenir seller; ahead of him he tells what he knows (RaceTrackStory)
@@ -532,6 +534,14 @@ internal static class RaceCarEngineFile
     }
 
     // The setup with only the one to beat raced (their cars out of sight: Parked)
+    // The car setup with drivers of the island's left out of the race, by name (RaceTrackIsland.StoryLeftOut).
+    private static RaceCarSetup Without(this RaceCarSetup car, IEnumerable<string> names)
+    {
+        var fewer = car.Clone();
+        fewer.LeftOut.AddRange(names.Where(n => !fewer.LeftOut.Contains(n)));
+        return fewer;
+    }
+
     private static RaceCarSetup HeadToHead(this RaceCarSetup car, RaceTrackService.TrackInfo info)
     {
         var alone = car.Clone();
@@ -565,7 +575,8 @@ internal static class RaceCarEngineFile
             foreach (var (member, when) in members)
             {
                 var file = Path.Combine(folder, $"racecar_track{++n}.txt");
-                (island.StoryHeadToHead ? car.HeadToHead(member) : car).WriteEngineFile(file, member, story: true, prefix: $"track{n}_");
+                (island.StoryHeadToHead ? car.HeadToHead(member) : island.StoryLeftOut is { } outs ? car.Without(outs) : car)
+                    .WriteEngineFile(file, member, story: true, prefix: $"track{n}_");
                 if (extra?.Invoke(member.Island) is { } lines) File.AppendAllLines(file, lines);
                 // (the scenes it is raced in: an island's own outside scenes, or the copies a track of its own races in -- with the scenes
                 // made bigger adds, when they follow on: Island CX Mk2's copy, 340, and its other cubes', 341-343, where the set had 340 alone

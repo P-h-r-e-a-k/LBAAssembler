@@ -859,8 +859,35 @@ internal static class RaceTrackService
     {
         if (!options.Story) return (new List<string>(), null);
         if (options.Island.IleFile == RaceTrackIsland.Citadel.IleFile && town is { Own: true } && scenes.Twin is { } townScenes)
-            return RaceTrackStory.Apply(gameDirectory, report, town.Report, scenes, townScenes);
-        if (options.Island == RaceTrackIsland.CelebrationLava) return (RaceTrackStory.ApplyCelebration(gameDirectory, scenes), new StoryInfo(-1, -1, true));
+        {
+            // (then everyone else on the island retold for the story: IslandRetell)
+            var story = RaceTrackStory.Apply(gameDirectory, report, town.Report, scenes, townScenes);
+            story.Log.AddRange(IslandRetell.Apply(gameDirectory, 0, IslandRetell.Citadel, "Citadel Island"));
+            return story;
+        }
+        // (each island's people retold for the story, after its own story: IslandRetell -- once a build, whichever of an island's tracks
+        // comes first)
+        if (options.Island == RaceTrackIsland.CelebrationLava)
+        {
+            var seller = RaceTrackStory.ApplyCelebration(gameDirectory, scenes);
+            seller.AddRange(IslandRetell.Apply(gameDirectory, options.Island.IslandByte, IslandRetell.Celebration, "Celebration Island"));
+            return (seller, new StoryInfo(-1, -1, true));
+        }
+        var retold = new (RaceTrackIsland Island, (int Retail, string[] Words)[] Lines, string Name)[]
+        {
+            (RaceTrackIsland.Desert, IslandRetell.Desert, "Desert Island"),
+            (RaceTrackIsland.Emerald, IslandRetell.Moon, "The Emerald Moon"),
+            (RaceTrackIsland.Otringal, IslandRetell.Otringal, "Otringal"),
+            (RaceTrackIsland.Celebration, IslandRetell.Celebration, "Celebration Island"),
+            (RaceTrackIsland.Knartas, IslandRetell.Francos, "The Island of the Francos"),
+            (RaceTrackIsland.Wannies, IslandRetell.Wannies, "Wannies Island"),
+            (RaceTrackIsland.Mosquibe, IslandRetell.Mosquibees, "Mosquibees Island"),
+            (RaceTrackIsland.Volcano, IslandRetell.Volcano, "The Island under Celebration"),
+            (RaceTrackIsland.CxTower, IslandRetell.IslandCX, "Island CX"),
+            // (the Emperor's palace is island 4, Otringal's: its people are Otringal's retelling)
+        };
+        foreach (var (island, lines, name) in retold)
+            if (options.Island == island) return (IslandRetell.Apply(gameDirectory, island.IslandByte, lines, name), null);
         return (new List<string>(), null);
     }
 

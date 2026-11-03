@@ -131,7 +131,7 @@ static void ApplyCheat(S32 cheat, S32 *text, S32 *sprite) {
         *text = 2;
         break;
     case CHEAT_GOLD:
-        if (Planet >= 2) {
+        if (MONEY_ZLITOS) {
             if (NbZlitosPieces < 999) {
                 NbZlitosPieces += 50;
                 if (NbZlitosPieces > 999)

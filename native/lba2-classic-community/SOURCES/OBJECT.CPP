@@ -1396,7 +1396,7 @@ void ChangeCube() {
     RazListPartFlow();
 
     // determine quelle est la monnaie courante
-    if (Island > 3)
+    if (MONEY_ZLITOS)
         TabInv[FLAG_MONEY].IdObj3D = 1;
     else
         TabInv[FLAG_MONEY].IdObj3D = 0;

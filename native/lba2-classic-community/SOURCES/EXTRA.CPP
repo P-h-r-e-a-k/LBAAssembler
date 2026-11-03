@@ -1354,7 +1354,7 @@ U8	WhichBonus( S32 flags )	// types de bonus demandés
 		switch( tabbonus[n] )
 		{
 			case 0:	// Money
-				if( Planet>=2 )	num = NbZlitosPieces	;
+				if( MONEY_ZLITOS )	num = NbZlitosPieces	;
 				else		num = NbGoldPieces	;
 
 				if( num>0 )

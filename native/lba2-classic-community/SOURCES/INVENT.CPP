@@ -451,7 +451,7 @@ void InitTabIndir() //	NEW
     S32 i;
     S32 num;
 
-    if (Planet >= 2) {
+    if (MONEY_ZLITOS) {
         num = NbGoldPieces;
         TabInv[FLAG_MONEY].IdObj3D = 0; // Kashes
     } else {

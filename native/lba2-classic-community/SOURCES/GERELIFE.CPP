@@ -207,7 +207,7 @@ void DoFuncLife(T_OBJET *ptrobj) {
 
         //---------------------------------------------------------------------------
     case LF_NB_GOLD_PIECES:
-        if (Planet >= 2)
+        if (MONEY_ZLITOS)
             Value = NbZlitosPieces;
         else
             Value = NbGoldPieces;
@@ -1377,7 +1377,7 @@ void DoLife(U8 numobj) {
             ListVarGame[num] = *(S16 *)PtrPrg;
 
             if (num == FLAG_MONEY) {
-                if (Planet >= 2)
+                if (MONEY_ZLITOS)
                     NbGoldPieces = ListVarGame[FLAG_MONEY];
                 else
                     NbZlitosPieces = ListVarGame[FLAG_MONEY];
@@ -1396,7 +1396,7 @@ void DoLife(U8 numobj) {
                 ListVarGame[num] = MAX_S16;
 
             if (num == FLAG_MONEY) {
-                if (Planet >= 2)
+                if (MONEY_ZLITOS)
                     NbGoldPieces = ListVarGame[FLAG_MONEY];
                 else
                     NbZlitosPieces = ListVarGame[FLAG_MONEY];
@@ -1415,7 +1415,7 @@ void DoLife(U8 numobj) {
                 ListVarGame[num] = MIN_S16;
 
             if (num == FLAG_MONEY) {
-                if (Planet >= 2)
+                if (MONEY_ZLITOS)
                     NbGoldPieces = ListVarGame[FLAG_MONEY];
                 else
                     NbZlitosPieces = ListVarGame[FLAG_MONEY];
@@ -1434,7 +1434,7 @@ void DoLife(U8 numobj) {
 
             //---------------------------------------------------------------------------
         case LM_GIVE_GOLD_PIECES:
-            if (Planet >= 2) {
+            if (MONEY_ZLITOS) {
                 num = NbZlitosPieces;
                 NbZlitosPieces -= *(S16 *)PtrPrg;
                 if (NbZlitosPieces < 0) {
@@ -1465,7 +1465,7 @@ void DoLife(U8 numobj) {
                 T_INCRUST_DISP *ptrdisp;
                 ptrdisp = ListIncrustDisp;
 
-                if (Planet >= 2)
+                if (MONEY_ZLITOS)
                     money = NbZlitosPieces;
                 else
                     money = NbGoldPieces;
@@ -1489,7 +1489,7 @@ void DoLife(U8 numobj) {
 
             //---------------------------------------------------------------------------
         case LM_ADD_GOLD_PIECES:
-            if (Planet >= 2) {
+            if (MONEY_ZLITOS) {
                 num = NbZlitosPieces;
                 NbZlitosPieces += *(S16 *)PtrPrg;
                 if (NbZlitosPieces > 999) {
@@ -2542,7 +2542,7 @@ HERCULE( HPrintf( "errno= %d: %s\n", errno, strerror(errno) ) ) ;
             // (no lightning on Citadel Island in a race-track mod's weather once the storm is over: its storm's actors, which go from
             // chapter 2 on, still ran in the earlier chapters it is raced in -- the user, 2026-10-27, "Our Citabau track still has
             // lightning even though the rain is stopped")
-            if (Island == 0 AND RaceMod_FineWeather()) {
+            if (Island == 0 AND RaceMod_StormSpent()) {
                 Log_Info("[life] obj=%d: lightning left out, the storm is over (race-track mod)", (int)numobj);
                 break;
             }

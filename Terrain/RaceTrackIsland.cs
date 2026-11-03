@@ -49,7 +49,7 @@ internal sealed record RaceTrackIsland(
         TwinIleFile = "CITABAU.ILE", TwinOblFile = "CITABAU.OBL", TwinPlanResource = "RaceTrackPlan.Citadel.json", RacesTwin = true,
         // (58.6 frames a second at 848 x 480 to 60.2 at the island's own 60,000, 2026-11-02)
         View = (200000, 150000),
-        Title = "Citadel Island: the town circuit (once the storm is over)", Roster = RaceDriver.CitadelStorm, TwinRoster = RaceDriver.CitadelTown,
+        Title = "Citadel Island: the town circuit (once the storm is over)", Roster = RaceDriver.CitadelStorm, TwinRoster = RaceDriver.CitadelTown, StoryLeftOut = new[] { "Zoe" },
         // (the storm track's car, scene 42, when it is fine -- its start line is under CITABAU's ground -- in the yard north of Twinsen's
         // house, flat at 250 in both files; the town circuit's, scene 49, in the storm -- its start line is CITADEL's sea -- under the
         // carport, where the island's own car stands: that one, a decor that can't be driven, goes from both files)
@@ -181,6 +181,9 @@ internal sealed record RaceTrackIsland(
     public (int Far, int Fog)? View { get; init; }
     // In the story its race is Twinsen against the one to beat alone: the roster's others are for Track select's race
     public bool StoryHeadToHead { get; init; }
+    // Drivers of its rosters who race in Track select but never in the story (Zoe: in the story she is the pit crew, with one player or two --
+    // the user, 2026-11-03: "Story mode, Zoe is not to be on the grid, only Twinsen, even in two player mode")
+    public string[]? StoryLeftOut { get; init; }
     // The race's levels, easy, medium and hard (RaceDifficulty: the Temple of Bú's, 2026-10-17); null: none -- the race as it is, whatever
     // the car setup's difficulty.
     public RaceLevel[]? Levels { get; init; }

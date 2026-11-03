@@ -603,15 +603,63 @@ internal static class HqrMatch
     }
 }
 
-// texts <TEXT.HQR> <language> <file> [id,id...]: the texts of one text file (all, or the ids given).
+// npctexts <LBA2 folder> <island> [scene,scene...]: every scene of the island (by its header's island byte), each actor's entity,
+// body, place and the texts its life script says (message, message_obj, add_choice, ask_choice...), with the text in English. The text
+// file is island + 3 (Citadel 3, Desert 5).
+internal static class NpcTexts
+{
+    private static readonly System.Text.RegularExpressions.Regex Says = new(
+        @"\b(message|message_obj|message_zoe|add_choice|ask_choice|ask_choice_obj|add_message|add_message_obj|pcx_mess_obj|end_message_obj)\s*\(([^;]*?)\)\s*;");
+
+    public static int Run(string[] args)
+    {
+        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, args[1]);
+        var island = int.Parse(args[2]);
+        var only = args.Length > 3 ? args[3].Split(',').Select(int.Parse).ToHashSet() : null;
+        var hqr = LBAAssembler.HqrArchive.Open(Path.Combine(args[1], "TEXT.HQR"));
+        var english = LBAAssembler.Lba2TextBank.English(hqr);
+        var bank = LBAAssembler.Lba2TextBank.Load(hqr, english, island + 3);
+        for (var s = 0; s < store.SceneCount; s++)
+        {
+            if (!store.SceneExists(s) || only != null && !only.Contains(s)) continue;
+            LBAAssembler.Scenes.SceneModel model; LBAAssembler.LbaScript.SceneScripts scripts;
+            try { model = store.Load(s); if (model.Island != island) continue; scripts = LBAAssembler.LbaScript.SceneScripts.Load(store.LoadRecord(s), s); }
+            catch (Exception e) { Console.WriteLine($"scene {s}: {e.Message}"); continue; }
+            Console.WriteLine($"== scene {s} ({(model.CubeMode != 0 ? "outside" : "inside")}), {model.Actors.Count} actors");
+            for (var a = 0; a < model.Actors.Count; a++)
+            {
+                var actor = model.Actors[a];
+                string life;
+                try { life = scripts.GetText(a, LBAAssembler.LbaScript.ScriptKind.Life); } catch (Exception e) { life = ""; Console.WriteLine($"  actor {a}: life undecoded ({e.Message})"); }
+                var said = Says.Matches(life).Select(m => (Op: m.Groups[1].Value, Args: m.Groups[2].Value)).ToList();
+                var flags = (actor.Flags & 0x200) != 0 ? " invisible" : "";
+                Console.WriteLine($"  actor {a}: entity {actor.Entity} body {actor.Body} at ({actor.X},{actor.Y},{actor.Z}){flags}; {said.Count} lines");
+                foreach (var (op, argText) in said)
+                {
+                    var last = argText.Split(',').Last().Trim();
+                    var text = int.TryParse(last, out var id) ? bank.Find(id)?.Value ?? "(no such text)" : "";
+                    Console.WriteLine($"    {op}({argText}): {text}");
+                }
+            }
+        }
+        return 0;
+    }
+}
+
+// texts <TEXT.HQR> <language> <file> [id,id...|size]: the texts of one text file (all, or the ids given), or its count and size.
 internal static class Texts
 {
     public static int Run(string[] args)
     {
         var bank = LBAAssembler.Lba2TextBank.Load(LBAAssembler.HqrArchive.Open(args[1]), int.Parse(args[2]), int.Parse(args[3]));
+        if (args.Length > 4 && args[4] == "size") { Console.WriteLine($"{bank.Texts.Count} texts, {bank.Encode().Data.Length} bytes"); return 0; }
         var only = args.Length > 4 ? args[4].Split(',').Select(int.Parse).ToHashSet() : null;
+        // (the game's code page, 850: Latin-1 would show its accented letters as others)
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        var dos = System.Text.Encoding.GetEncoding(850);
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
         foreach (var t in bank.Texts.Where(t => only == null || only.Contains(t.Id)))
-            Console.WriteLine($"{t.Id} [{t.Attribute}] {t.Value}");
+            Console.WriteLine($"{t.Id} [{t.Attribute}] {dos.GetString(t.Bytes)}");
         return 0;
     }
 }

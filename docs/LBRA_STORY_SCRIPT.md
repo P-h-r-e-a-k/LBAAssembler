@@ -134,6 +134,7 @@ The original quests don't run, so their flags are free to use for what they're n
 | var 229 | free | DREAM_CAUGHT: Twinsen caught FunFrock in the dream (chapter 0) |
 | var 231 | free | Q_BLUEPRINT: the museum's blueprints, the Polar Island page (chapters 1-2) |
 | var 232 | free | Q_SHEET: the neighbour's design sheet, the Citadel 1 page (chapters 1-2) |
+| var 233 | free | the Esmers' landing speech heard (chapter 2: it isn't said again) |
 | var 17 / item 17 | the gallic acid (restores old documents; in the game it brings out the neighbour's map) | the same: it brings out the neighbour's design sheet |
 
 ### Everyone else on Citadel (built)

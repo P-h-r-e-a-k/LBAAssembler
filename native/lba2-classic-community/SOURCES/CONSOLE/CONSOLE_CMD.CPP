@@ -901,7 +901,7 @@ static void cmd_give(int argc, const char *argv[]) {
            directly, because InitTabIndir() overwrites ListVarGame[FLAG_MONEY]
            from it (INVENT.CPP). */
         if (index == FLAG_MONEY) {
-            if (Planet >= 2)
+            if (MONEY_ZLITOS)
                 NbGoldPieces = count;
             else
                 NbZlitosPieces = count;
