@@ -4,7 +4,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using LBAAssembler.Terrain;
 using Section = LBAAssembler.Terrain.TrackSection;
 
@@ -462,11 +461,51 @@ public partial class MainWindow
     }
 
     // ---- drawn over the view ----------------------------------------------------------------------------------------------------------
+    // Each piece as the road it will be (the user, 2026-11-03: "Instead of just the centre line let's show actual track pieces"): the asphalt
+    // as wide as the builder lays it, red and white kerbs along its edges, a raised piece's deck edge and its piers down to the ground, a
+    // loop's ring stood up across the way, a jump's gap left open with its flight's arc over it, the pit lane in its own colour -- every
+    // face drawn far to near, so a road passing over another covers it. Drawn by one element (TrackDrawing), thousands of faces at a time.
 
-    private static readonly Brush TrackRoad = Frozen(Color.FromRgb(70, 220, 90)), TrackJump = Frozen(Color.FromRgb(255, 80, 200)), TrackLoop = Frozen(Color.FromRgb(60, 130, 255)),
-        TrackPit = Frozen(Color.FromRgb(255, 150, 20)), TrackOpen = Frozen(Color.FromRgb(255, 220, 40)), TrackDrop = Frozen(Color.FromArgb(110, 255, 255, 255));
+    private static readonly Brush TrackAsphalt = Frozen(Color.FromArgb(235, 58, 58, 66)), TrackAsphaltSelected = Frozen(Color.FromArgb(240, 52, 82, 130)),
+        TrackPitAsphalt = Frozen(Color.FromArgb(235, 110, 78, 44)), TrackKerbRed = Frozen(Color.FromArgb(245, 205, 45, 40)), TrackKerbWhite = Frozen(Color.FromArgb(245, 240, 240, 240)),
+        TrackDeck = Frozen(Color.FromArgb(235, 34, 34, 40)), TrackLoopRibbon = Frozen(Color.FromArgb(225, 60, 120, 230)), TrackOpen = Frozen(Color.FromRgb(255, 220, 40)),
+        TrackGhostAsphalt = Frozen(Color.FromArgb(150, 220, 225, 235)), TrackGhostKerb = Frozen(Color.FromArgb(150, 255, 255, 255));
+    private static readonly Pen TrackPier = FrozenPen(Color.FromArgb(200, 120, 120, 130), 3), TrackFlight = FrozenPen(Color.FromArgb(230, 255, 80, 200), 2, dashed: true),
+        TrackGhostEdge = FrozenPen(Color.FromArgb(230, 255, 255, 255), 1.5, dashed: true), TrackRing = FrozenPen(Color.FromRgb(255, 220, 40), 2.5);
     private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
-    private static Brush TrackBrush(SketchKind kind) => kind switch { SketchKind.Jump => TrackJump, SketchKind.Loop => TrackLoop, SketchKind.Pit => TrackPit, _ => TrackRoad };
+    private static Pen FrozenPen(Color c, double width, bool dashed = false)
+    {
+        var pen = new Pen(Frozen(c), width) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+        if (dashed) pen.DashStyle = new DashStyle(new[] { 3.0, 2.0 }, 0);
+        pen.Freeze();
+        return pen;
+    }
+    // the road's half widths (cells): the asphalt's and to the kerbs' outer edge -- RaceTrackOptions' AsphaltHalfWidth, CurbHalfWidth
+    private const double TrackAsphaltHalf = 3.5, TrackKerbHalf = 4.5, TrackDeckDepth = 300, TrackLoopRadius = 4, TrackLoopAcross = 3;
+
+    // The faces, far to near, drawn as they come
+    private sealed class TrackDrawing : FrameworkElement
+    {
+        public readonly List<(double Depth, Point[] Points, Brush? Fill, Pen? Pen)> Faces = new();
+        public readonly List<Point> Rings = new();
+        protected override void OnRender(DrawingContext dc)
+        {
+            foreach (var (_, points, fill, pen) in Faces.OrderByDescending(f => f.Depth))
+            {
+                if (points.Length == 2) { if (pen is not null) dc.DrawLine(pen, points[0], points[1]); continue; }
+                var g = new StreamGeometry();
+                using (var c = g.Open())
+                {
+                    c.BeginFigure(points[0], fill is not null, true);
+                    c.PolyLineTo(points.Skip(1).ToArray(), true, false);
+                }
+                g.Freeze();
+                dc.DrawGeometry(fill, pen, g);
+            }
+            foreach (var r in Rings) dc.DrawEllipse(null, TrackRing, r, 7, 7);
+        }
+    }
+    private TrackDrawing? trackDrawing;
 
     private void DrawTrackOverlay()
     {
@@ -474,48 +513,106 @@ public partial class MainWindow
         {
             trackCanvas = new Canvas { IsHitTestVisible = false };
             host.Children.Insert(host.Children.IndexOf(BrushOverlayCanvas) + 1, trackCanvas);
+            trackDrawing = new TrackDrawing { IsHitTestVisible = false };
+            trackCanvas.Children.Add(trackDrawing);
         }
-        if (trackCanvas is null) return;
-        trackCanvas.Children.Clear();
-        if (!TrackPiecesActive || cameraModel is not { } model || !nativeViewActive || interiorSceneActive) return;
+        if (trackCanvas is null || trackDrawing is null) return;
+        trackDrawing.Faces.Clear(); trackDrawing.Rings.Clear();
+        trackDrawing.Width = TerrainViewport.ActualWidth; trackDrawing.Height = TerrainViewport.ActualHeight;
+        if (!TrackPiecesActive || cameraModel is not { } model || !nativeViewActive || interiorSceneActive) { trackDrawing.InvalidateVisual(); return; }
         var ground = SceneGround();
-        // (`ghost`: the piece being laid -- white and dashed, told apart from those laid)
-        void Piece(TrackPiece p, double width, double opacity, bool selected, bool ghost = false)
+        double Ground(double x, double z) => ground is not null && IslandOps.Altitude(ground, x * 512, z * 512) is double g ? g : double.NaN;
+        var faces = trackDrawing.Faces;
+        // a face of world points (cells across, world units up): kept when all its corners are in front of the camera
+        void Face(Brush? fill, Pen? pen, params (double X, double Y, double Z)[] corners)
+        {
+            var points = new Point[corners.Length];
+            double depth = 0;
+            for (var k = 0; k < corners.Length; k++)
+            {
+                var (x, y, z) = corners[k];
+                if (!model.Project(x * 512, y, z * 512, out var u, out var v)) return;
+                points[k] = ToWidget(model, u, v);
+                depth += model.Depth(x * 512, y, z * 512);
+            }
+            faces.Add((depth / corners.Length, points, fill, pen));
+        }
+        void Piece(TrackPiece p, bool selected, bool ghost)
         {
             var line = p.Line();
-            Point? last = null;
-            for (var i = 0; i < line.Count; i++)
+            var n = line.Count;
+            // each point's way across (unit, cells): the road's edges are its middle that far either side
+            var across = new (double X, double Z)[n];
+            for (var i = 0; i < n; i++)
             {
-                var q = line[i];
-                if (!model.Project(q.X * 512, q.Y, q.Z * 512, out var u, out var v)) { last = null; continue; }
-                var s = ToWidget(model, u, v);
-                if (last is { } a)
+                var a = line[Math.Max(0, i - 1)]; var b = line[Math.Min(n - 1, i + 1)];
+                double dx = b.X - a.X, dz = b.Z - a.Z, len = Math.Sqrt(dx * dx + dz * dz);
+                across[i] = len < 1e-9 ? (0, 0) : (-dz / len, dx / len);
+            }
+            (double X, double Y, double Z) At(int i, double off, double up = 0) => (line[i].X + across[i].X * off, line[i].Y + up, line[i].Z + across[i].Z * off);
+            var asphalt = ghost ? TrackGhostAsphalt : selected ? TrackAsphaltSelected : p.IsPit ? TrackPitAsphalt : TrackAsphalt;
+            for (var i = 0; i + 1 < n; i++)
+            {
+                var kind = line[i + 1].Kind;
+                if (kind == SketchKind.Jump) continue;
+                var raised = !double.IsNaN(Ground(line[i].X, line[i].Z)) && line[i].Y > Ground(line[i].X, line[i].Z) + 300;
+                // (the deck's edges, a raised road's: its thickness, both sides)
+                if (raised && !ghost)
+                    foreach (var side in new[] { -TrackKerbHalf, TrackKerbHalf })
+                        Face(TrackDeck, null, At(i, side), At(i + 1, side), At(i + 1, side, -TrackDeckDepth), At(i, side, -TrackDeckDepth));
+                Face(asphalt, ghost ? TrackGhostEdge : null, At(i, -TrackAsphaltHalf), At(i + 1, -TrackAsphaltHalf), At(i + 1, TrackAsphaltHalf), At(i, TrackAsphaltHalf));
+                // (the kerbs: a cell red, a cell white -- two of the line's half cells each)
+                var kerb = ghost ? TrackGhostKerb : (i / 2) % 2 == 0 ? TrackKerbRed : TrackKerbWhite;
+                Face(kerb, null, At(i, -TrackKerbHalf), At(i + 1, -TrackKerbHalf), At(i + 1, -TrackAsphaltHalf), At(i, -TrackAsphaltHalf));
+                Face(kerb, null, At(i, TrackAsphaltHalf), At(i + 1, TrackAsphaltHalf), At(i + 1, TrackKerbHalf), At(i, TrackKerbHalf));
+                // (a pier down to the ground every 4 cells under a raised piece)
+                if (raised && !ghost && i % 8 == 0) Face(null, TrackPier, At(i, 0, -TrackDeckDepth), (line[i].X, Ground(line[i].X, line[i].Z), line[i].Z));
+            }
+            // a loop: the ring stood up across the way at the middle of its stretch, the road going round it and coming down beside where it went in
+            // a jump: the gap left open, its flight's arc over it
+            for (var i = 0; i < n;)
+            {
+                var kind = line[i].Kind;
+                var j = i;
+                while (j + 1 < n && line[j + 1].Kind == kind) j++;
+                if (kind == SketchKind.Loop)
                 {
-                    if (selected) trackCanvas.Children.Add(new Line { X1 = a.X, Y1 = a.Y, X2 = s.X, Y2 = s.Y, Stroke = Brushes.White, StrokeThickness = width + 4, Opacity = opacity });
-                    var segment = new Line { X1 = a.X, Y1 = a.Y, X2 = s.X, Y2 = s.Y, Stroke = ghost ? Brushes.White : TrackBrush(q.Kind), StrokeThickness = width, Opacity = opacity, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
-                    if (ghost && i % 2 == 0) segment.Opacity = opacity * 0.35;
-                    trackCanvas.Children.Add(segment);
+                    var m = (i + j) / 2;
+                    double hx = line[Math.Min(n - 1, m + 1)].X - line[Math.Max(0, m - 1)].X, hz = line[Math.Min(n - 1, m + 1)].Z - line[Math.Max(0, m - 1)].Z;
+                    var hl = Math.Sqrt(hx * hx + hz * hz); if (hl < 1e-9) { i = j + 1; continue; }
+                    hx /= hl; hz /= hl;
+                    (double X, double Y, double Z) Ring(double a, double off)
+                    {
+                        var side = off + TrackLoopAcross * (a / (2 * Math.PI) - 0.5);
+                        return (line[m].X + hx * TrackLoopRadius * Math.Sin(a) + across[m].X * side, line[m].Y + TrackLoopRadius * 512 * (1 - Math.Cos(a)), line[m].Z + hz * TrackLoopRadius * Math.Sin(a) + across[m].Z * side);
+                    }
+                    const int steps = 28;
+                    for (var k = 0; k < steps; k++)
+                    {
+                        double a0 = 2 * Math.PI * k / steps, a1 = 2 * Math.PI * (k + 1) / steps;
+                        Face(ghost ? TrackGhostAsphalt : TrackLoopRibbon, ghost ? TrackGhostEdge : null, Ring(a0, -TrackAsphaltHalf), Ring(a1, -TrackAsphaltHalf), Ring(a1, TrackAsphaltHalf), Ring(a0, TrackAsphaltHalf));
+                    }
                 }
-                // (a post down to the ground every 4 cells where it's up in the air: how high it is, seen from any side)
-                if (i % 8 == 0 && ground is not null && IslandOps.Altitude(ground, q.X * 512, q.Z * 512) is double g && q.Y > g + 300
-                    && model.Project(q.X * 512, g, q.Z * 512, out var gu, out var gv))
+                else if (kind == SketchKind.Jump && j > i)
                 {
-                    var f = ToWidget(model, gu, gv);
-                    trackCanvas.Children.Add(new Line { X1 = s.X, Y1 = s.Y, X2 = f.X, Y2 = f.Y, Stroke = TrackDrop, StrokeThickness = 1 });
+                    // (from the lip before the gap to the landing after it, a third as high as it is long)
+                    int a = Math.Max(0, i - 1), b = Math.Min(n - 1, j + 1);
+                    double length = Math.Sqrt(Math.Pow(line[b].X - line[a].X, 2) + Math.Pow(line[b].Z - line[a].Z, 2)) * 512;
+                    for (var k = 0; k < 16; k++)
+                    {
+                        double f0 = k / 16.0, f1 = (k + 1) / 16.0;
+                        (double X, double Y, double Z) Arc(double f) => (line[a].X + (line[b].X - line[a].X) * f, line[a].Y + (line[b].Y - line[a].Y) * f + length / 3 * 4 * f * (1 - f), line[a].Z + (line[b].Z - line[a].Z) * f);
+                        Face(null, TrackFlight, Arc(f0), Arc(f1));
+                    }
                 }
-                last = s;
+                i = j + 1;
             }
         }
-        foreach (var p in trackPieces.Pieces) Piece(p, 5, 0.95, ReferenceEquals(p, trackSelected));
-        if (trackGhost is { } ghost) Piece(ghost, 6, 0.95, false, ghost: true);
+        foreach (var p in trackPieces.Pieces) Piece(p, ReferenceEquals(p, trackSelected), false);
+        if (trackGhost is { } g) Piece(g, false, true);
         foreach (var e in trackPieces.OpenEnds().Concat(trackPieces.OpenStarts()))
-        {
-            if (!model.Project(e.X * 512, e.Y, e.Z * 512, out var u, out var v)) continue;
-            var s = ToWidget(model, u, v);
-            var ring = new Ellipse { Width = 14, Height = 14, Stroke = TrackOpen, StrokeThickness = 2 };
-            Canvas.SetLeft(ring, s.X - 7); Canvas.SetTop(ring, s.Y - 7);
-            trackCanvas.Children.Add(ring);
-        }
+            if (model.Project(e.X * 512, e.Y, e.Z * 512, out var u, out var v)) trackDrawing.Rings.Add(ToWidget(model, u, v));
+        trackDrawing.InvalidateVisual();
     }
 
     // ---- the track ---------------------------------------------------------------------------------------------------------------------

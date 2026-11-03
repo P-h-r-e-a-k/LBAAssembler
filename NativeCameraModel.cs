@@ -102,6 +102,15 @@ internal sealed class NativeCameraModel
         return true;
     }
 
+    // How far into the view a world point is (the projection's divisor: more is further), to draw nearer things over further ones;
+    // NaN behind the camera.
+    public double Depth(double wx, double wy, double wz)
+    {
+        double x = (wx - cx) / worldScale, y = (wy - cy) / worldScale, z = (wz - cz) / worldScale;
+        var d = p[8] * x + p[9] * y + p[10] * z + 1;
+        return d < 1e-9 ? double.NaN : d;
+    }
+
     // The world point on the horizontal plane y = height that a framebuffer pixel sees.
     public bool RayToPlane(double u, double v, double height, out double wx, out double wz)
     {
