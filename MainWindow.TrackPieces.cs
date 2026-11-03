@@ -342,6 +342,36 @@ public partial class MainWindow
                 else DebugLog.Log($"track pieces test: {name} at ({x:0.0}, {z:0.0}) not laid (off the view or the island)");
             }
             DisarmTrackPiece();
+            // (LBA2_TRACKPIECES_SHOW="cx,cz,alpha,beta,distance,piece": a picture of the track being laid -- the view on it, the next piece
+            // chosen and following the pointer, held at the open end; no plan made)
+            if (Environment.GetEnvironmentVariable("LBA2_TRACKPIECES_SHOW") is { Length: > 0 } show)
+            {
+                var v = show.Split(',');
+                double D(int i) => double.Parse(v[i], System.Globalization.CultureInfo.InvariantCulture);
+                targetX = D(0) * 512; targetZ = D(1) * 512;
+                targetY = trackPieces.Pieces.Count > 0 ? trackPieces.Pieces.Average(p => p.Y) : 2000;
+                nativeAlpha = (int)D(2); nativeBeta = (int)D(3); nativeDistance = (int)D(4);
+                RenderNativeCamera();
+                var next = Section.All.FirstOrDefault(s => s.Name == v[5]);
+                var wait = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2500) };
+                wait.Tick += (_, _) =>
+                {
+                    wait.Stop();
+                    var ends = trackPieces.OpenEnds().ToList();
+                    if (next is null || cameraModel is not { } m2 || ends.Count == 0) return;
+                    var end = ends[0];
+                    ArmTrackPiece(next);
+                    trackHeading = end.Heading;
+                    // (the pointer a little short of the end, on the ground under it: the piece snaps on)
+                    double ex = end.X - Math.Cos(end.Heading) * 2, ez = end.Z - Math.Sin(end.Heading) * 2;
+                    var gy = IslandOps.Altitude(ground, ex * 512, ez * 512) ?? 0;
+                    if (m2.Project(ex * 512, gy, ez * 512, out var u, out var w)) UpdateTrackGhost(ToWidget(m2, u, w));
+                    DrawTrackOverlay();
+                    DebugLog.Log($"track pieces test: showing {next.Name} being laid, ghost {(trackGhost is null ? "none" : "at the open end")}");
+                };
+                wait.Start();
+                return;
+            }
             MakeTrackFromPieces();
             DebugLog.Log($"track pieces test: {laid} of {items.Length - 1} laid; {trackStatus?.Text}");
         };
@@ -449,7 +479,8 @@ public partial class MainWindow
         trackCanvas.Children.Clear();
         if (!TrackPiecesActive || cameraModel is not { } model || !nativeViewActive || interiorSceneActive) return;
         var ground = SceneGround();
-        void Piece(TrackPiece p, double width, double opacity, bool selected)
+        // (`ghost`: the piece being laid -- white and dashed, told apart from those laid)
+        void Piece(TrackPiece p, double width, double opacity, bool selected, bool ghost = false)
         {
             var line = p.Line();
             Point? last = null;
@@ -461,7 +492,9 @@ public partial class MainWindow
                 if (last is { } a)
                 {
                     if (selected) trackCanvas.Children.Add(new Line { X1 = a.X, Y1 = a.Y, X2 = s.X, Y2 = s.Y, Stroke = Brushes.White, StrokeThickness = width + 4, Opacity = opacity });
-                    trackCanvas.Children.Add(new Line { X1 = a.X, Y1 = a.Y, X2 = s.X, Y2 = s.Y, Stroke = TrackBrush(q.Kind), StrokeThickness = width, Opacity = opacity, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+                    var segment = new Line { X1 = a.X, Y1 = a.Y, X2 = s.X, Y2 = s.Y, Stroke = ghost ? Brushes.White : TrackBrush(q.Kind), StrokeThickness = width, Opacity = opacity, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
+                    if (ghost && i % 2 == 0) segment.Opacity = opacity * 0.35;
+                    trackCanvas.Children.Add(segment);
                 }
                 // (a post down to the ground every 4 cells where it's up in the air: how high it is, seen from any side)
                 if (i % 8 == 0 && ground is not null && IslandOps.Altitude(ground, q.X * 512, q.Z * 512) is double g && q.Y > g + 300
@@ -474,7 +507,7 @@ public partial class MainWindow
             }
         }
         foreach (var p in trackPieces.Pieces) Piece(p, 5, 0.95, ReferenceEquals(p, trackSelected));
-        if (trackGhost is { } ghost) Piece(ghost, 5, 0.55, false);
+        if (trackGhost is { } ghost) Piece(ghost, 6, 0.95, false, ghost: true);
         foreach (var e in trackPieces.OpenEnds().Concat(trackPieces.OpenStarts()))
         {
             if (!model.Project(e.X * 512, e.Y, e.Z * 512, out var u, out var v)) continue;
