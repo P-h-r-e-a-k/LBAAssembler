@@ -373,6 +373,8 @@ public partial class MainWindow
             }
             MakeTrackFromPieces();
             DebugLog.Log($"track pieces test: {laid} of {items.Length - 1} laid; {trackStatus?.Text}");
+            // (LBA2_TRACKPIECES_BUILD=1: on to the race track window with the plan, as Build it... does)
+            if (Environment.GetEnvironmentVariable("LBA2_TRACKPIECES_BUILD") == "1" && trackPlanPath is not null) BuildTrackFromPieces();
         };
         timer.Start();
     }
@@ -468,8 +470,10 @@ public partial class MainWindow
 
     private static readonly Brush TrackAsphalt = Frozen(Color.FromArgb(235, 58, 58, 66)), TrackAsphaltSelected = Frozen(Color.FromArgb(240, 52, 82, 130)),
         TrackPitAsphalt = Frozen(Color.FromArgb(235, 110, 78, 44)), TrackKerbRed = Frozen(Color.FromArgb(245, 205, 45, 40)), TrackKerbWhite = Frozen(Color.FromArgb(245, 240, 240, 240)),
-        TrackDeck = Frozen(Color.FromArgb(235, 34, 34, 40)), TrackLoopRibbon = Frozen(Color.FromArgb(225, 60, 120, 230)), TrackOpen = Frozen(Color.FromRgb(255, 220, 40)),
-        TrackGhostAsphalt = Frozen(Color.FromArgb(150, 220, 225, 235)), TrackGhostKerb = Frozen(Color.FromArgb(150, 255, 255, 255));
+        TrackDeck = Frozen(Color.FromArgb(235, 34, 34, 40)), TrackOpen = Frozen(Color.FromRgb(255, 220, 40)),
+        TrackGhostAsphalt = Frozen(Color.FromArgb(150, 220, 225, 235)), TrackGhostKerb = Frozen(Color.FromArgb(150, 255, 255, 255)),
+        TrackLoopRoad = Frozen(Color.FromArgb(245, 92, 92, 100)), TrackLoopShell = Frozen(Color.FromArgb(245, 56, 140, 64)), TrackLoopSide = Frozen(Color.FromArgb(245, 40, 104, 48));
+    private static readonly Pen TrackLoopLeg = FrozenPen(Color.FromArgb(245, 50, 120, 56), 5);
     private static readonly Pen TrackPier = FrozenPen(Color.FromArgb(200, 120, 120, 130), 3), TrackFlight = FrozenPen(Color.FromArgb(230, 255, 80, 200), 2, dashed: true),
         TrackGhostEdge = FrozenPen(Color.FromArgb(230, 255, 255, 255), 1.5, dashed: true), TrackRing = FrozenPen(Color.FromRgb(255, 220, 40), 2.5);
     private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
@@ -482,6 +486,9 @@ public partial class MainWindow
     }
     // the road's half widths (cells): the asphalt's and to the kerbs' outer edge -- RaceTrackOptions' AsphaltHalfWidth, CurbHalfWidth
     private const double TrackAsphaltHalf = 3.5, TrackKerbHalf = 4.5, TrackDeckDepth = 300, TrackLoopRadius = 4, TrackLoopAcross = 3;
+    // a loop's band and rails as the build makes them (RaceTrackBuilder.LoopBandHalf, cells; RaceTrackLoopBody: rail width, height and the
+    // band's thickness, world units -- the rail's width here in cells)
+    private const double TrackLoopBand = 1.3, TrackLoopRailWidth = 90 / 512.0, TrackLoopRail = 150, TrackLoopThickness = 160;
 
     // The faces, far to near, drawn as they come
     private sealed class TrackDrawing : FrameworkElement
@@ -577,21 +584,43 @@ public partial class MainWindow
                 while (j + 1 < n && line[j + 1].Kind == kind) j++;
                 if (kind == SketchKind.Loop)
                 {
+                    // (the ring as the build makes it -- RaceTrackLoopBody: a band of road 2.6 cells across bent into a circle standing on the
+                    // road at the stretch's middle, its road on the inside, red and white rails along its edges, green outside, two green legs
+                    // at its widest; over the turn it winds across by TrackLoopAcross, so the car comes out beside where it went in)
                     var m = (i + j) / 2;
                     double hx = line[Math.Min(n - 1, m + 1)].X - line[Math.Max(0, m - 1)].X, hz = line[Math.Min(n - 1, m + 1)].Z - line[Math.Max(0, m - 1)].Z;
                     var hl = Math.Sqrt(hx * hx + hz * hz); if (hl < 1e-9) { i = j + 1; continue; }
                     hx /= hl; hz /= hl;
-                    (double X, double Y, double Z) Ring(double a, double off)
+                    double ax = -hz, az = hx;
+                    // a point of the ring: at angle a round it, `off` cells across its band, `inward` world units in towards its middle
+                    (double X, double Y, double Z) Ring(double a, double off, double inward = 0)
                     {
                         var side = off + TrackLoopAcross * (a / (2 * Math.PI) - 0.5);
-                        return (line[m].X + hx * TrackLoopRadius * Math.Sin(a) + across[m].X * side, line[m].Y + TrackLoopRadius * 512 * (1 - Math.Cos(a)), line[m].Z + hz * TrackLoopRadius * Math.Sin(a) + across[m].Z * side);
+                        double r = TrackLoopRadius * 512 - inward;
+                        return (line[m].X + hx * r * Math.Sin(a) / 512 + ax * side, line[m].Y + TrackLoopRadius * 512 - r * Math.Cos(a), line[m].Z + hz * r * Math.Sin(a) / 512 + az * side);
                     }
-                    const int steps = 28;
+                    const int steps = 48;
+                    double band = TrackLoopBand, rail = band + TrackLoopRailWidth;
                     for (var k = 0; k < steps; k++)
                     {
                         double a0 = 2 * Math.PI * k / steps, a1 = 2 * Math.PI * (k + 1) / steps;
-                        Face(ghost ? TrackGhostAsphalt : TrackLoopRibbon, ghost ? TrackGhostEdge : null, Ring(a0, -TrackAsphaltHalf), Ring(a1, -TrackAsphaltHalf), Ring(a1, TrackAsphaltHalf), Ring(a0, TrackAsphaltHalf));
+                        var stripe = ghost ? TrackGhostKerb : k % 2 == 0 ? TrackKerbRed : TrackKerbWhite;
+                        // its outside, its sides, its road, its rails standing in from its edges
+                        Face(ghost ? TrackGhostAsphalt : TrackLoopShell, ghost ? TrackGhostEdge : null, Ring(a0, -rail, -TrackLoopThickness), Ring(a1, -rail, -TrackLoopThickness), Ring(a1, rail, -TrackLoopThickness), Ring(a0, rail, -TrackLoopThickness));
+                        if (!ghost)
+                            foreach (var s in new[] { -rail, rail })
+                                Face(TrackLoopSide, null, Ring(a0, s, -TrackLoopThickness), Ring(a1, s, -TrackLoopThickness), Ring(a1, s, TrackLoopRail), Ring(a0, s, TrackLoopRail));
+                        Face(ghost ? TrackGhostAsphalt : TrackLoopRoad, null, Ring(a0, -band), Ring(a1, -band), Ring(a1, band), Ring(a0, band));
+                        foreach (var (s0, s1) in new[] { (-rail, -band), (band, rail) })
+                            Face(stripe, null, Ring(a0, s0, TrackLoopRail), Ring(a1, s0, TrackLoopRail), Ring(a1, s1, TrackLoopRail), Ring(a0, s1, TrackLoopRail));
                     }
+                    // its legs, ahead of its foot and behind it at its widest, down to the road under it
+                    if (!ghost)
+                        foreach (var a in new[] { Math.PI / 2, 3 * Math.PI / 2 })
+                        {
+                            var top = Ring(a, 0, -TrackLoopThickness);
+                            Face(null, TrackLoopLeg, top, (top.X, line[m].Y - 200, top.Z));
+                        }
                 }
                 else if (kind == SketchKind.Jump && j > i)
                 {

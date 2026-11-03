@@ -109,8 +109,9 @@ internal static class TrackSketchTracer
     // the picture; `givenClosed` whether it comes back round
     // `givenRise`: with `given`, how high each of its points is over its first (world units) -- climbs and spirals: the track a raised road
     // `profile`: each point's height, edited in the height profile (as many as the route the drawing gives: else not used)
+    // `shortest`: the shortest track that is a track (cells) -- a lap's 120; the 3D view's pieces, a stretch of one being tried, less
     public static SketchResult Trace(TrackSketch sketch, IslandFile? island, bool reverse = false, List<(double X, double Y)>? given = null, bool givenClosed = false,
-        List<double>? givenRise = null, double[]? profile = null, List<(double X, double Z)>? profileAt = null)
+        List<double>? givenRise = null, double[]? profile = null, List<(double X, double Z)>? profileAt = null, double shortest = ShortestLap)
     {
         var notes = new List<string>(); var problems = new List<string>();
         int w = sketch.Width, h = sketch.Height;
@@ -123,7 +124,7 @@ internal static class TrackSketchTracer
             line = given.ToList(); closed = givenClosed; half = 3 * sketch.Scale;
             var rise = givenRise is { } gr && gr.Count == line.Count ? gr.ToList() : null;
             if (reverse) { line.Reverse(); rise?.Reverse(); }
-            return Plan(sketch, island, line, closed, half, notes, problems, empty, rise, profile, profileAt);
+            return Plan(sketch, island, line, closed, half, notes, problems, empty, rise, profile, profileAt, shortest);
         }
 
         // the road: green, pink and blue together, small gaps closed, its biggest piece
@@ -157,7 +158,7 @@ internal static class TrackSketchTracer
 
     // The plan from the road's middle (map pixels, in order)
     private static SketchResult Plan(TrackSketch sketch, IslandFile? island, List<(double X, double Y)> line, bool closed, double half, List<string> notes, List<string> problems, SketchResult empty,
-        List<double>? lineRise = null, double[]? profile = null, List<(double X, double Z)>? profileAt = null)
+        List<double>? lineRise = null, double[]? profile = null, List<(double X, double Z)>? profileAt = null, double shortest = ShortestLap)
     {
         // into cells, a cell apart, smoothed
         var cells = line.Select(p => (X: sketch.OriginX + p.X / sketch.Scale, Z: sketch.OriginZ + p.Y / sketch.Scale)).ToList();
@@ -166,7 +167,7 @@ internal static class TrackSketchTracer
         route = Respace(route, 1.0, closed);
         var length = Length(route, closed);
         if (route.Count < 10) { problems.Add("The track drawn is too short to follow."); return empty; }
-        if (length < ShortestLap) problems.Add($"The track is {length:0} cells long: draw it at least {ShortestLap:0} cells long (a cell is {sketch.Scale} pixels of the map).");
+        if (length < shortest) problems.Add($"The track is {length:0} cells long: make it at least {shortest:0} cells long (a cell is {sketch.Scale} pixels of the map).");
         notes.Add(closed ? $"a lap {length:0} cells long" : $"a sprint {length:0} cells long, from one end of the line to the other (no lap: its ends don't meet)");
 
         // how high each point is over the first, from the sections' climbs: by its share of the way along (the route a cell apart along the

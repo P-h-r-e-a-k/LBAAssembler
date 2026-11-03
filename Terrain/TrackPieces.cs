@@ -46,6 +46,8 @@ internal sealed class TrackPieceSet
     // (the last piece's end this near the first's start closes the lap: laid by hand, round a lap, it seldom meets it exactly -- the
     // generator's BridgeCells)
     public const double CloseCells = 14;
+    // (the shortest stretch that can be tried: a start line, room to get going and a finish line -- a lap of the generator's is 120)
+    public const double ShortestTry = 40;
     // (turning a piece this much to put it on an end weighs as much as moving it SnapCells -- the generator's)
     private const double SnapTurn = 70 * Math.PI / 180;
     // the road's half width on the tracer's sketch (cells) and the sketch's pixels to a cell
@@ -106,21 +108,30 @@ internal sealed class TrackPieceSet
     }
 
     // The road pieces end to start in one chain: their middle line in order (cells, world units up, kinds), and whether it comes back round
-    // to its first; null when they aren't one chain
-    public List<(double X, double Z, double Y, SketchKind Kind)>? Chain(out bool closed)
+    // to its first; null when there are none. Pieces that aren't one chain -- a track still being laid, a piece put down apart -- give the
+    // longest run of them that is (`left`: the road pieces left out), so a track can be tried before it is whole.
+    public List<(double X, double Z, double Y, SketchKind Kind)>? Chain(out bool closed) => Chain(out closed, out _, out _);
+
+    public List<(double X, double Z, double Y, SketchKind Kind)>? Chain(out bool closed, out int left, out List<TrackPiece> order)
     {
-        closed = false;
+        closed = false; left = 0; order = new List<TrackPiece>();
         var roads = Pieces.Where(p => !p.IsPit).ToList();
         if (roads.Count == 0) return null;
         TrackPiece? Next(TrackPiece a, IEnumerable<TrackPiece> from) =>
             from.Where(b => !ReferenceEquals(a, b) && Joins((a.End.X, a.End.Z, a.End.Y), (b.X, b.Z, b.Y), JoinCells)).OrderBy(b => Gap((a.End.X, a.End.Z, a.End.Y), (b.X, b.Z, b.Y))).FirstOrDefault();
-        var first = roads.FirstOrDefault(r => !roads.Any(o => !ReferenceEquals(o, r) && ReferenceEquals(Next(o, roads), r))) ?? roads[0];
-        var order = new List<TrackPiece> { first };
-        while (Next(order[^1], roads.Except(order)) is { } n) order.Add(n);
-        if (order.Count != roads.Count) return null;
+        // (each run from a piece nothing leads into -- or, a ring, from its first -- followed on; the longest of them)
+        var firsts = roads.Where(r => !roads.Any(o => !ReferenceEquals(o, r) && ReferenceEquals(Next(o, roads), r))).ToList();
+        if (firsts.Count == 0) firsts.Add(roads[0]);
+        foreach (var first in firsts)
+        {
+            var run = new List<TrackPiece> { first };
+            while (Next(run[^1], roads.Except(run)) is { } n) run.Add(n);
+            if (run.Sum(p => p.Section.Parts.Sum(q => q.Length)) > order.Sum(p => p.Section.Parts.Sum(q => q.Length))) order = run;
+        }
+        left = roads.Count - order.Count;
         closed = order.Count > 1 && Joins((order[^1].End.X, order[^1].End.Z, order[^1].End.Y), (order[0].X, order[0].Z, order[0].Y), CloseCells);
         var line = new List<(double X, double Z, double Y, SketchKind Kind)>();
-        foreach (var p in order)
+        foreach (var p in order.ToList())
             foreach (var q in p.Line())
                 if (line.Count == 0 || Math.Abs(line[^1].X - q.X) + Math.Abs(line[^1].Z - q.Z) > 0.2) line.Add(q);
         return line;
@@ -130,14 +141,18 @@ internal sealed class TrackPieceSet
     public SketchResult MakePlan(IslandFile island)
     {
         var notes = new List<string>(); var problems = new List<string>();
-        var chain = Chain(out var closed);
+        var chain = Chain(out var closed, out var left, out var order);
         if (chain is null || chain.Count < 2)
         {
-            problems.Add(Pieces.Count == 0 ? "No track pieces laid yet." : "The pieces aren't one road: each must go on from the one before (drop it near an open end, the yellow rings).");
+            problems.Add(Pieces.Count == 0 ? "No track pieces laid yet." : "No road pieces laid yet: a pit lane goes beside a road.");
             return new SketchResult(null, new(), new(), false, 0, null, null, notes, problems);
         }
+        // (a track not finished yet: tried as far as it goes, start to finish once -- the user, 2026-11-03: "check users can test it in
+        // LBAAssembler even when it isn't complete")
+        if (left > 0) notes.Add($"{left} piece(s) not joined to the longest road left out (put each on from an open end, the yellow rings)");
+        var used = order.Concat(Pieces.Where(p => p.IsPit)).ToList();
         // the generator's sketch round the pieces: the road's kinds stamped (jumps, loops and the pit lane are read from it), the chain its middle
-        var all = Pieces.SelectMany(p => p.Line()).ToList();
+        var all = used.SelectMany(p => p.Line()).ToList();
         int x0 = (int)Math.Floor(all.Min(p => p.X)) - 30, z0 = (int)Math.Floor(all.Min(p => p.Z)) - 30;
         int w = ((int)Math.Ceiling(all.Max(p => p.X)) + 30 - x0) * Scale, h = ((int)Math.Ceiling(all.Max(p => p.Z)) + 30 - z0) * Scale;
         var sketch = new TrackSketch(w, h, Scale, x0, z0);
@@ -162,7 +177,7 @@ internal sealed class TrackPieceSet
         }
         // (heights stamped where a piece is up off the ground: the tracer makes the road a raised one there; the exact heights follow below)
         double Ground(double x, double z) => Math.Max(0.0, IslandOps.Altitude(island, x * 512, z * 512) ?? 0);
-        foreach (var p in Pieces)
+        foreach (var p in used)
         {
             var line = p.Line();
             for (var i = 0; i + 1 < line.Count; i++)
@@ -173,8 +188,8 @@ internal sealed class TrackPieceSet
         }
         var given = chain.Select(p => ((p.X - x0) * Scale, (p.Z - z0) * Scale)).ToList();
         var rise = chain.Select(p => p.Y - chain[0].Y).ToList();
-        var first = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise);
-        if (first.Route.Count < 10 || !chain.Any(p => p.Y > Ground(p.X, p.Z) + 500)) return first;
+        var first = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, shortest: ShortestTry);
+        if (first.Route.Count < 10 || !chain.Any(p => p.Y > Ground(p.X, p.Z) + 500)) { first.Notes.InsertRange(0, notes); return first; }
         // the height each point of the route was laid at: the chain at the same share of the way along (a lap's route begins elsewhere
         // round it: the turn of the one against the other that puts their points nearest)
         var route = first.Route;
@@ -211,6 +226,8 @@ internal sealed class TrackPieceSet
             var j = ((k - offset) % n + n) % n;
             profile[k] = Along(first.Closed ? (double)j / n : (double)j / Math.Max(1, n - 1)).Y;
         }
-        return TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, profile, route.ToList());
+        var second = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, profile, route.ToList(), ShortestTry);
+        second.Notes.InsertRange(0, notes);
+        return second;
     }
 }

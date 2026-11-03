@@ -1826,6 +1826,7 @@ public partial class MainWindow : Window
         {
             PopulateAssetLists();
             RefreshZoneListIfVisible();
+            UpdatePlayButton();
             return;
         }
         var shownChanged = Terrain.RaceTrackIsland.All.SelectMany(i => i.IslandFiles).Contains(activeFile, StringComparer.OrdinalIgnoreCase);
@@ -1833,6 +1834,8 @@ public partial class MainWindow : Window
         else if (shownChanged && File.Exists(Path.Combine(gameRoot, activeFile))) LoadIsland(Path.Combine(gameRoot, activeFile));
         else if (nativeViewActive) RenderNativeCamera();
         RefreshZoneListIfVisible();
+        // (Play races the track just built: its button says so at once -- it said "Play scene" until the mode next changed)
+        UpdatePlayButton();
     }
 
     // Whether the game folder's islands or scenes are not the ones the lists show.
