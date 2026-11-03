@@ -216,6 +216,8 @@ internal static class Program
             "zoneon" => ZoneDumpCommand.On(args),
             "lba2text" => Lba2TextCommand.Run(args),
             "lba2sprite" => Lba2SpriteCommand.Run(args),
+            "bodypolys" => BodyPolysCommand.Run(args),
+            "gridgirl" => GridGirlCommand.Run(args),
             "demo96" => Demo96Command.Run(args),
             "palaceactors" => PalaceStudy.Actors(args),
             "islandmesh" => PalaceStudy.Mesh(args),

@@ -33,9 +33,14 @@ true. Twinsen wins and wishes the statue away.
 
 Every chapter after the first two has the same six beats, and the same actors play them:
 
-1. **Arrival.** `change_cube` puts Twinsen in the island's race start scene, beside his parked car. The Cup's **Esmer marshal** stands
-   by the start line (a copy of the game's own alien, scene 42 actor 6, as the storm's thanks already uses). He greets Twinsen once and
-   sets the chapter's quest going.
+1. **Arrival.** `change_cube` puts Twinsen in the island's race start scene, beside his parked car. The Cup's **flag marshal** stands
+   by the start line, the same one who starts and finishes every race there (the user, 2026-11-03): on Twinsun's tracks (Citadel 1,
+   Citadel 2, the Desert) the School of Magic's assistant, the Temple of Bú's marshal; on every other track the Imperial Hotel's Sup
+   (scene 169) in her red bikini, a grid girl. She greets Twinsen once and sets the chapter's quest going.
+   - **One marshal, two halves.** In a race the engine draws her (`marshal=`: on her plinth, flags in hand, animated). On foot she is an
+     actor of her entity (77 or 317) with her flag-marshal body (body 40), standing on the plinth's top, with the marshal script (3.6):
+     she's the one who talks. So that there is only ever one of her, the race file gets a new key, `marshal_drive_only=1`: the engine
+     draws hers only while Twinsen drives, and the actor hides itself while he does (`12 == comportement_hero()` -> `invisible(1)`).
 2. **Quest.** One short quest of our own on that island, from 5 to 15 minutes, with one or two of the island's people. A holomap arrow
    points at the next step.
 3. **Gate.** Until the quest is done, the start line won't start a race (the race file's `gate=`) and says why.
@@ -521,7 +526,7 @@ both your worlds." The bed sets DAY = 2, and also CHAPTER = 2.
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | the game's alien (scene 42 actor 6), copied | beside the town circuit's start line | marshal |
+| The flag marshal | the School of Magic's assistant (entity 77, body 40) | on her plinth by the town circuit's start line | marshal |
 | Zoe | the game's Zoe, copied | beside her car in the yard north of the house (where the start cars park) | person |
 | The spare wheel | a body of its own: one wheel of the racer's car, as a static object | the harbour's scrap heap | pickup |
 | Mr. Paul | built (prize) | the start line | built |
@@ -563,7 +568,7 @@ the Tralu, the thief and Twinsen.)
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | alien copy | the start line | marshal |
+| The flag marshal | the School of Magic's assistant (entity 77, body 40): the Dean's own assistant, which gives her a line about him | on her plinth by the start line | marshal |
 | The Dean of the School of Magic | the game's Dean (BODY 123) | the School's gate, or beside the start line if the School is far | person |
 | Three exam pages | a body of its own: a flat sheet (the Polar dream's tart method, a white flat body) | beside the road at 30 %, 55 % and 80 % of the lap | trail pickup |
 | Moya the turtle | the game's Moya (BODY 212) | by the last bend | witness |
@@ -608,7 +613,7 @@ already stand in an outside scene. Otherwise he's added beside the start line.
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | alien copy, in a space suit if one fits (the Esmer spaceman, BODY 255) | the start line | marshal |
+| The flag marshal | the Sup in her bikini (entity 317, body 40) | on the edge of the deck by the start line (the moon's start is raised: no plinth) | marshal |
 | HAL | the game's HAL: scene 23 actor 4, a sprite actor (228/229 working, 230 cracked) | where it is, in the moon base | below |
 | HAL's mechanics | the game's: scene 23 actors 12-15, entity 57 (BODY 97/98) | hiding in the base's store room | person |
 | The radio | item 26, Portable Radio | the base's stores | pickup |
@@ -694,7 +699,7 @@ copy, the build adds one.
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | alien copy | the start line | marshal, plus the purse |
+| The flag marshal | the Sup in her bikini (entity 317, body 40) | on her plinth by the start line | marshal, plus the purse |
 | The race steward | the casino's bouncer (BODY 419) | beside the start line | person |
 | The casino's slot machines | the game's (scene 135: three machines, actors 24/42/49) | the casino | the game's own |
 | Johnny Rocket | the game's Johnny Rocket (BODY 154) | by the spaceport | witness, travel |
@@ -703,8 +708,8 @@ copy, the build adds one.
 
 **The quest: the entry fee.**
 
-1. Arrival (the marshal, `T_ARRIVE_5`): "Zeelich! Here the Cup is run by the Emperor's stewards, and they want an entry fee. We can
-   give you a little Zeelich money to start you off." `add_gold_pieces(10)`, PURSE = 1, Q_FEE = 1, arrow to the steward.
+1. Arrival (the marshal, `T_ARRIVE_5`): "Zeelich! Here the Cup is run by the Emperor's stewards, and they want an entry fee. The Esmers
+   left you a little Zeelich money to start you off." `add_gold_pieces(10)`, PURSE = 1, Q_FEE = 1, arrow to the steward.
 2. The steward: `T_STEWARD` "A Travel Token for the Cup costs 30 zlitos. Twenty-five is a nice number too, but it's not 30." With
    30 or more on Twinsen: an `ask_choice` "Pay 30 zlitos?" Yes: `give_gold_pieces(30)`, found Travel Token (item 24), Q_FEE = 2.
 3. Without the money: the steward: `T_STEWARD_CASINO` "Short? There's a casino round the corner. Some people leave it richer."
@@ -779,7 +784,7 @@ what he saw after a win (`ApplyCelebration`). His lines are rewritten (below), a
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | alien copy | the race's start line (scene 223) | marshal |
+| The flag marshal | the Sup in her bikini (entity 317, body 40) | by the race's start line (scene 223) | marshal |
 | The souvenir seller | built | his stall, scene 95 | built, rewritten |
 | Four souvenirs | a body of its own: a small statuette of the Dark Monk, a statue souvenir | round the island, beside the road at 20/45/65/85 % | trail pickup |
 | The kangaroo | the game's kangaroo tourist (BODY 308) | by the dock | witness |
@@ -819,7 +824,7 @@ The game's Rick arrow (`set_holo_pos(136)`, var 124) is taken out of the seller'
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | alien copy | the start line | marshal |
+| The flag marshal | the Sup in her bikini (entity 317, body 40) | on her plinth by the start line | marshal |
 | De La Fontaine | the game's (BODY 450) | by the refinery's gate | person, then witness |
 | Mr. Kurtz | the game's (BODY 446) | his laboratory, or beside the road by the village if the lab is far | person |
 | The Franco nurse | the game's (BODY 447), with her pram | the village, beside the road at 60 % | person |
@@ -896,7 +901,7 @@ scene, and is placed beside Kurtz with Q_FUEL = 3.)
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | alien copy | the start line | marshal, no quest |
+| The flag marshal | the Sup in her bikini (entity 317, body 40) | on the edge of the deck by the start line (all raised: no plinth) | marshal, no quest |
 | The monkey monster | the race's (BODY 388, in his crate) | the grid | |
 | The Franco policeman | the game's (BODY 86) | by the elevator | witness |
 | The masked driver | black car | past the finish | masked |
@@ -923,7 +928,7 @@ greets with no arrow, and nothing gates the race but the chapter.
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | alien copy | the start line | marshal |
+| The flag marshal | the Sup in her bikini (entity 317, body 40) | on her plinth by the start line | marshal |
 | The Wannie miner | the game's miner (BODY 342) | by his bulldozer, beside the start line | person |
 | The old Wannie | the game's (BODY 386) | near the frog | person, witness |
 | The glove | item 11, Wannie's glove | beside the road at the frog's mouth (the race's timed frog) | pickup |
@@ -963,7 +968,7 @@ outside a race? If not, the glove goes beside the frog instead.
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | alien copy | the start line | marshal |
+| The flag marshal | the Sup in her bikini (entity 317, body 40) | on her plinth by the start line | marshal |
 | The Queen's ventilation guy | the game's (BODY 197) | at the grid's gate | person (gatekeeper) |
 | A Mosquibee of the hide-out | BODY 193 | hiding beside the road at 40 % | person (the dissident's contact) |
 | The honey-pot Mosquibee | the game's (BODY 192) | by the start | gossip |
@@ -1002,7 +1007,7 @@ outside a race? If not, the glove goes beside the frog instead.
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | alien copy | the start line | marshal |
+| The flag marshal | the Sup in her bikini (entity 317, body 40) | on her plinth by the start line | marshal |
 | The dissident | the game's (BODY 270) | by the hide-out, beside the start | person, then witness |
 | The hide-out's Mosquibee | BODY 193 | at the hide-out's cracks | person |
 | Three lava slabs | the lava slab car's slab (BODY of LavaSlab, as a static object) | beside the road at 25/50/75 % | trail pickup |
@@ -1047,7 +1052,7 @@ The race's own lava balls (lavaball=) are falling the whole time: the hide-out i
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | alien copy | the start line | marshal |
+| The flag marshal | the Sup in her bikini (entity 317, body 40) | on her plinth by the start line | marshal |
 | The Franco survivor | the game's (BODY 90), on his raft | at the shore by the start | person (the trade) |
 | A Franco trooper | BODY 290 | by the cannons | gossip |
 | The door to the halls | the track's own door (built: the race goes through it) | | opened by the gate |
@@ -1084,7 +1089,7 @@ The race's own lava balls (lavaball=) are falling the whole time: the hide-out i
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | alien copy | the start (the south-east room) | marshal |
+| The flag marshal | the Sup in her bikini (entity 317, body 40): a Sup at home in the palace | by the start (the south-east room) | marshal |
 | The sealed gate | the palace's own door at the start room | | opened by the four Fragments |
 | The Empress | the game's Emperor's wife (BODY 454) | the music room | person |
 | The Emperor | the game's Emperor (EmperorBody) | locked in his bedroom | person |
@@ -1126,7 +1131,8 @@ on Celebration Island. The new part, said in the flight, before the landing:
 
 | Who | Made from | Where | Script |
 |---|---|---|---|
-| The Esmer marshal | alien copy | the dock, by the start | marshal (the final) |
+| The flag marshal | the Sup in her bikini (entity 317, body 40) | the dock, by the start | marshal (the final) |
+| An Esmer | the game's alien (scene 42 actor 6), copied | the dock | hands over the Cup and asks for the wish |
 | FunFrock | the game's FunFrock (BODY 313), on foot, unmasked | beside his black car on the grid | person |
 | Zoe, Raph, Mr. Paul, Baldino | copies of the game's own | on the dock (the crowd) | one line each |
 | The grid | **new line-up:** FunFrock (main, his car recoloured black), the Dark Monk (BODY 311's car), a Sup priest (292's) and the Franco priest (310's) | | |
@@ -1142,8 +1148,8 @@ priest), plus `gate=212 14`, `win=225 1`, `finish=226 1`, `shut=212 15`, `unlock
 "Again? I have all day.") and the race runs again.
 
 **The ending:**
-1. Out of the car: the marshal: `T_CUP_WON` "Twinsen of Citadel Island wins the Two Worlds Cup! And the Cup's wish is yours. What
-   will it be?"
+1. Out of the car: the marshal: `T_CUP_WON` "Twinsen of Citadel Island wins the Two Worlds Cup!" Then the Esmer on the dock: "The Cup is
+   yours, and its wish. What will it be?"
 2. FunFrock: `T_FUNFROCK_LOST` "No! That wish was mine!"
 3. An `ask_choice`:
    - "The statue gone, and FunFrock with it." (the story's ending)
@@ -1167,7 +1173,9 @@ priest), plus `gate=212 14`, `win=225 1`, `finish=226 1`, `shut=212 15`, `unlock
 - **RaceTrackStory, chapter by chapter.** A new static class per chapter group (as `ApplyCelebration` is), each adding its actors and
   scripts with the `Edit()` and `Add()` helpers RaceTrackStory.cs already has, and logging each step ("left out" when the game's own
   script isn't as expected).
-- **The marshal** for every chapter from 2: one copy of scene 42 actor 6 per start scene, with the marshal template.
+- **The marshal** for every chapter from 2: the race's flag marshal (built, 2026-11-03: TempleMarshal.For -- the School of Magic's
+  assistant on Citadel and the Desert, the Sup in her bikini elsewhere) as an actor on foot -- her entity, her flag-marshal body, on her
+  plinth's top where the race file's `marshal=` has her -- with the marshal template, and the engine's new `marshal_drive_only=1`.
 - **The black car:** FunFrock's car recoloured, a new racer generic, in RaceTrackCharacterCars. One actor of entity 157 per start
   scene from chapter 2 to 11, with the masked template, placed with `Beside()` 20 cells past the start line, its two track points
   further along the road.

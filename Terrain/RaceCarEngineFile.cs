@@ -153,7 +153,7 @@ internal static class RaceCarEngineFile
         if (track?.Marshal is { Length: >= 10 } marshal)
         {
             text.Append($"marshal={string.Join(' ', marshal.Take(10))}\n");
-            if (marshal.Length >= 11) text.Append($"marshal_plinth={marshal[10]}\n");
+            if (marshal.Length >= 11 && marshal[10] >= 0) text.Append($"marshal_plinth={marshal[10]}\n");
             if (marshal.Length >= 15) text.Append($"marshal_start={string.Join(' ', marshal.Skip(11).Take(4))}\n");
         }
         // Twinsen may get out of his car (Space, stopped) and explore while the race goes on (the Temple of Bú's secret party)

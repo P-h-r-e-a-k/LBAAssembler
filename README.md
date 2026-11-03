@@ -81,6 +81,16 @@ race. In Little Big Racing Adventure, **Racing > Shared tracks** builds every fi
 player's own LBA2, on a copy of the island beside the island's own track, and lists it there and in the online vote.
 `ScriptRoundTrip sharetrack <plan> <island> <name> <out.lbrtrack>` does the same from the command line.
 
+### The flag marshal
+
+Every built track has a flag marshal. She stands in the middle of the road ahead of the grid, raises the green flag for the
+count-down and drops it at GO. The cars drive straight through her: she has no collision. She then hops onto a plinth beside the
+start line, where she waves the chequered flag at the finish. On a raised start line with no ground beside it, she stands on the
+deck's edge without the plinth.
+- **The Temple of Bú, Citadel Island's two tracks and the Desert:** the School of Magic's assistant.
+- **Every other track, shared tracks included:** the red-haired Sup from the Imperial Hotel (scene 169), remodelled in a red bikini.
+  To picture her, run `ScriptRoundTrip gridgirl <game> <out> [flags]`.
+
 The current first slice provides an editable exterior-map workspace with terrain painting, level selection, zoom, reset, and JSON draft export.
 
 ## Native renderer backend

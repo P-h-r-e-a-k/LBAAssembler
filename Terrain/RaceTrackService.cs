@@ -576,6 +576,8 @@ internal static class RaceTrackService
             if (LBAAssembler.Terrain.Polar.PolarIsland.IsInstalled(gameDirectory)) log.AddRange(LBAAssembler.Terrain.Polar.PolarGrobo.InstallBody(gameDirectory));
             // (and the Temple of Bú's secret party's disco ball and bubbles after even those: no body moves -- TempleParty)
             if (session.Party) log.AddRange(LBAAssembler.Terrain.Temple.TempleHalloween.PartyInstall(gameDirectory));
+            // (and every other track's flag marshal, the Sup in her bikini, after everything else's: no body moves -- TempleMarshal.GridGirlRig)
+            if (session.GridGirl) log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory, LBAAssembler.Terrain.Temple.TempleMarshal.GridGirlRig));
             // (the race items' sounds, every track's: RACESOUNDS\, which the engine plays as an item comes into the item box and as one is
             // used -- RaceSounds)
             log.AddRange(RaceSounds.Install(gameDirectory));
@@ -602,7 +604,7 @@ internal static class RaceTrackService
     // all of them, and each track's record for RACETRACK.JSON, in the order built.
     public sealed class BuildSession
     {
-        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars, GuardBodies, Torturers, Marshal, Risers, Party;
+        public bool CharacterCars, Baldino, SmallCars, Oil, CastCars, GuardBodies, Torturers, Marshal, GridGirl, Risers, Party;
         // (Build's: the palace dungeon's torturers made when every track is -- Finish)
         public bool Together;
         public int? OilIcon, SuperJetModel, TwinsenSmall, GoldIcon, LavaBallModel, GravyBall;
@@ -968,14 +970,18 @@ internal static class RaceTrackService
         }
         // ... and the Temple of Bú's flag marshal by its start line: where she stands now (the race file's marshal=), her body and animations
         // at the end of a build of several tracks (Build: every other track's where they were), or here
-        if (options.Island.FlagMarshal && LBAAssembler.Terrain.Temple.TempleMarshal.Place(gameDirectory, report, options.GridFirst, options.GridSide) is { } marshal)
+        // (every track's since 2026-11-03 -- the user: "let's reuse her for the Twinsun based tracks (Citadel 1, Citadel 2, and Desert), then
+        // for all the other tracks use the female sup [...] in a skimpy bikini": TempleMarshal.For -- Citadel Island's storm track too, its
+        // twin's report)
+        foreach (var placed in own is null ? new[] { report } : new[] { report, own.Report })
         {
-            report.Marshal = marshal;
-            if (!session.Marshal)
-            {
-                session.Marshal = true;
-                if (!session.Together) log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory));
-            }
+            if (LBAAssembler.Terrain.Temple.TempleMarshal.Place(gameDirectory, placed, options.GridFirst, options.GridSide, options.Island) is not { } marshal) continue;
+            placed.Marshal = marshal;
+            var rig = LBAAssembler.Terrain.Temple.TempleMarshal.For(options.Island);
+            var girl = rig == LBAAssembler.Terrain.Temple.TempleMarshal.GridGirlRig;
+            if (girl ? session.GridGirl : session.Marshal) continue;
+            if (girl) session.GridGirl = true; else session.Marshal = true;
+            if (!session.Together) log.AddRange(LBAAssembler.Terrain.Temple.TempleMarshal.Install(gameDirectory, rig));
         }
         // ... and the Temple of Bú's risers' body (the race file names it by its entity), at the end of a build of several tracks, or here
         if (report.Spooks.Any(s => s.Kind == "riser" && s.Entity >= 0) && !session.Risers)

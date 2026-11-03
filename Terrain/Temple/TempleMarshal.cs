@@ -49,6 +49,31 @@ internal static class TempleMarshal
     private const int GreenUpper = 10, GreenFore = 11, GreenHand = 12, CheckUpper = 13, CheckFore = 14, CheckHand = 15, Torso = 4;
     private const int Own = 22, GreenPole = Own, CheckPole = Own + 3;
     public const int GreenPoleBone = GreenPole, CheckPoleBone = CheckPole;
+
+    // Who carries the flags (the user, 2026-11-03: "We already have a quetch marshal for the start of the race on the Temple track, let's
+    // reuse her for the Twinsun based tracks (Citadel 1, Citadel 2, and Desert), then for all the other tracks use the female sup [...]
+    // remodel her in a skimpy bikini like F1 race track girls"): her entity, the game's body she is made from (remodelled first, where she
+    // is), the entity's numbers for her body, her plinth and her four animations; her arms' bones (the green flag's on her +x side), her
+    // torso's, how many bones the body has before the flags'; how many times as big she stands
+    internal sealed record Rig(string Who, int Entity, int Retail, int Body, int Plinth, int Ready, int Raise, int Drop, int Wave,
+        int GreenUpper, int GreenFore, int GreenHand, int CheckUpper, int CheckFore, int CheckHand, int Torso, int Own, double Scale,
+        Func<byte[], byte[]>? Remodel = null)
+    {
+        public int GreenPole => Own;
+        public int CheckPole => Own + 3;
+    }
+    // the Temple of Bú's (and Citadel Island's two tracks' and the Desert's): the School of Magic's assistant
+    public static readonly Rig TempleRig = new("the School of Magic's assistant", Entity, Retail, Body, Plinth, Ready, Raise, Drop, Wave,
+        GreenUpper, GreenFore, GreenHand, CheckUpper, CheckFore, CheckHand, Torso, Own, Scale);
+    // every other track's: the Imperial Hotel's Sup in her bikini (GridGirl), as big as she is and a little more -- seen from the cars
+    public static readonly Rig GridGirlRig = new("the Imperial Hotel's Sup in her bikini", GridGirl.Entity, GridGirl.Retail, Body, Plinth, Ready, Raise, Drop, Wave,
+        8, 9, 10, 5, 6, 7, 3, 20, 1.15, GridGirl.Remodel);
+    // The flag marshal a track's island has: the Temple's own, Twinsun's three tracks' the same, every other's the Sup
+    public static Rig For(RaceTrackIsland island)
+    {
+        var from = island.SharedFrom ?? island;
+        return from == RaceTrackIsland.Temple || from == RaceTrackIsland.Citadel || from == RaceTrackIsland.CitadelStorm || from == RaceTrackIsland.Desert ? TempleRig : GridGirlRig;
+    }
     // (model units, before Scale) the poles: how far behind the fist and ahead of it they reach, half their thickness, the brass tip's length;
     // the cloth: its hoist (along the pole, from the tip back) and its fly (out from the pole), in columns (two a strip) and the chequered
     // one's rows
@@ -69,37 +94,38 @@ internal static class TempleMarshal
 
     // Into the game folder: her body and her plinth's (BODY.HQR's end) and her animations (ANIM.HQR's), the entity's bodies Body and Plinth
     // and animations Ready, Raise, Drop, Wave (RESS.HQR's entity table). Lines for the build's log.
-    public static List<string> Install(string gameDirectory)
+    public static List<string> Install(string gameDirectory, Rig? rig = null)
     {
+        var r = rig ?? TempleRig;
         var bodyPath = Path.Combine(gameDirectory, "BODY.HQR");
         var animPath = Path.Combine(gameDirectory, "ANIM.HQR");
         var ressPath = Path.Combine(gameDirectory, "RESS.HQR");
         var table = HqrArchive.Open(ressPath).Read(44);
-        var entity = Lba2EntityTable.Parse(table).Entities.FirstOrDefault(e => e.Id == Entity);
-        if (entity is null || RaceTrackGuards.BodyOf(table, Entity, 0) != Retail || !entity.Anims.Any(a => a.Generic == 0))
-            return new() { $"WARNING: the Temple of Bú's flag marshal: entity {Entity} isn't the School of Magic's assistant (BODY.HQR {Retail}) -- none made" };
-        if (entity.Bodies.Any(b => b.Generic is Body or Plinth) || entity.Anims.Any(a => a.Generic is Ready or Raise or Drop or Wave))
-            return new() { $"WARNING: the Temple of Bú's flag marshal: entity {Entity} already has body {Body} or {Plinth} or one of animations {Ready}-{Wave} -- none made" };
-        var retail = HqrArchive.Open(bodyPath).Read(Retail);
-        var bytes = Make(retail, out var standing);
-        var plinth = MakePlinth(retail);
-        var anims = Anims(standing, HqrArchive.Open(animPath).Read(entity.Anims.First(a => a.Generic == 0).Anim));
+        var entity = Lba2EntityTable.Parse(table).Entities.FirstOrDefault(e => e.Id == r.Entity);
+        if (entity is null || RaceTrackGuards.BodyOf(table, r.Entity, 0) != r.Retail || !entity.Anims.Any(a => a.Generic == 0))
+            return new() { $"WARNING: the flag marshal: entity {r.Entity} isn't {r.Who} (BODY.HQR {r.Retail}) -- none made" };
+        if (entity.Bodies.Any(b => b.Generic == r.Body || b.Generic == r.Plinth) || entity.Anims.Any(a => a.Generic == r.Ready || a.Generic == r.Raise || a.Generic == r.Drop || a.Generic == r.Wave))
+            return new() { $"WARNING: the flag marshal: entity {r.Entity} already has body {r.Body} or {r.Plinth} or one of animations {r.Ready}-{r.Wave} -- none made" };
+        var retail = HqrArchive.Open(bodyPath).Read(r.Retail);
+        var bytes = Make(retail, out var standing, r);
+        var plinth = MakePlinth(retail, r);
+        var anims = Anims(standing, HqrArchive.Open(animPath).Read(entity.Anims.First(a => a.Generic == 0).Anim), r);
         var bodyIndex = HqrArchive.CountEntries(bodyPath);
         File.WriteAllBytes(bodyPath, HqrWriter.AppendEntry(HqrWriter.AppendEntry(File.ReadAllBytes(bodyPath), HqrWriter.StoredEntry(bytes)), HqrWriter.StoredEntry(plinth)));
         var animIndex = HqrArchive.CountEntries(animPath);
         var file = File.ReadAllBytes(animPath);
         foreach (var anim in anims) file = HqrWriter.AppendEntry(file, HqrWriter.StoredEntry(anim.Write()));
         File.WriteAllBytes(animPath, file);
-        table = RaceTrackBaldinoCar.WithBody(table, Entity, Body, bodyIndex);
-        table = RaceTrackBaldinoCar.WithBody(table, Entity, Plinth, bodyIndex + 1);
-        var generics = new[] { Ready, Raise, Drop, Wave };
-        for (var k = 0; k < generics.Length; k++) table = RaceTrackJumpAnim.WithAnim(table, Entity, generics[k], animIndex + k);
+        table = RaceTrackBaldinoCar.WithBody(table, r.Entity, r.Body, bodyIndex);
+        table = RaceTrackBaldinoCar.WithBody(table, r.Entity, r.Plinth, bodyIndex + 1);
+        var generics = new[] { r.Ready, r.Raise, r.Drop, r.Wave };
+        for (var k = 0; k < generics.Length; k++) table = RaceTrackJumpAnim.WithAnim(table, r.Entity, generics[k], animIndex + k);
         File.WriteAllBytes(ressPath, HqrWriter.ReplaceEntry(File.ReadAllBytes(ressPath), 44, HqrWriter.StoredEntry(table)));
         return new()
         {
-            $"the Temple of Bú's flag marshal: the School of Magic's assistant (BODY.HQR {Retail}), the start flag and the chequered flag in her hands, {Scale} " +
-            $"times as big -- BODY.HQR {bodyIndex} ({standing.Vertices.Count} points, {standing.Bones.Count} bones), entity {Entity}'s body {Body}; her plinth BODY.HQR " +
-            $"{bodyIndex + 1}, its body {Plinth}; ready, the raise, the drop and the wave ANIM.HQR {animIndex}-{animIndex + 3}, its animations {Ready}-{Wave}",
+            (r == TempleRig ? "the Temple of Bú's flag marshal" : "the flag marshal") + $": {r.Who} (BODY.HQR {r.Retail}), the start flag and the chequered flag in her hands, {r.Scale} " +
+            $"times as big -- BODY.HQR {bodyIndex} ({standing.Vertices.Count} points, {standing.Bones.Count} bones), entity {r.Entity}'s body {r.Body}; her plinth BODY.HQR " +
+            $"{bodyIndex + 1}, its body {r.Plinth}; ready, the raise, the drop and the wave ANIM.HQR {animIndex}-{animIndex + 3}, its animations {r.Ready}-{r.Wave}",
         };
     }
 
@@ -119,20 +145,32 @@ internal static class TempleMarshal
     //     the view, the user said not at all, 2026-10-18.) No nearer than PitGap to a pit spot, and on a floor clear for her and her flags,
     //     up to FarthestBack cells short of the line. Facing the cars coming, turned TurnToRoad to the road.
     private const double StartAhead = 3.0, StartLineGap = 1.5, HerHalf = 0.65, CarHalf = 633 / 512.0, GapLeast = 0.5;
-    private const double RoadGap = 0.35, Before = 1.5, FarthestBack = 8, PitGap = 3, PlinthHalf = SlabHalf * Scale / 512.0, TurnToRoad = 25 * Math.PI / 180;
+    private const double RoadGap = 0.35, Before = 1.5, FarthestBack = 8, PitGap = 3, TurnToRoad = 25 * Math.PI / 180;
+    // (on another island: the ground under her plinth no more than this below the start line, else the line is on a raised road; its four
+    // corners and middle within this of each other -- the plinth's block goes that far into the ground)
+    private const double GroundBelow = 700, GroundUneven = 260;
+    // (a start line on a raised road, no floor beside it: she stands on its edge, this far out from the road's middle past its asphalt)
+    private const double EdgeOut = 0.45;
 
     // Where the flag marshal stands (above): on her plinth beside the road by the start line, on the crypt's floor, and -- with the grid's
     // columns `gridSide` cells either side of the road's middle and pole `gridFirst` behind the line (RaceTrackOptions) -- in the road's
     // middle ahead of the front row for the start. The race file's marshal= numbers (Line), or null (no start line, no floor clear there: a
     // note in the report).
-    public static int[]? Place(string gameDirectory, RaceTrackReport report, double gridFirst, double gridSide)
+    // Another island's (`rig`: who it is, TempleRig on the Temple): the floor under her plinth the island's ground as built (the report's
+    // GroundAfter) where it is about level with the start line and level enough; with no such floor beside the line -- a raised road's -- she
+    // stands on the road's edge, on its deck, without her plinth.
+    public static int[]? Place(string gameDirectory, RaceTrackReport report, double gridFirst, double gridSide, RaceTrackIsland? island = null)
     {
+        var r = island is null ? TempleRig : For(island);
         if (report.StartLine.Count == 0) return null;
         var line = report.StartLine[0];
         double dl = Math.Sqrt(line.DirX * line.DirX + line.DirZ * line.DirZ);
         if (dl < 1e-9) return null;
         double dx = line.DirX / dl, dz = line.DirZ / dl;
-        var floors = FloorsOf(gameDirectory);
+        var temple = island is null || (island.SharedFrom ?? island) == RaceTrackIsland.Temple;
+        var PlinthHalf = SlabHalf * r.Scale / 512.0;
+        Func<double, double, double, double?> floors = temple ? FloorsOf(gameDirectory, r) : (x, z, near) =>
+            report.GroundAfter?.Invoke(x, z) is { } g && g <= near + 200 && g >= near - GroundBelow ? g : null;
         // (the roads: the raised road's pieces, world units -- a gap of more than 3 cells between two points is a branch's start, not a piece)
         var pieces = new List<(Vector3 A, Vector3 B, double HalfA, double HalfB)>();
         for (var i = 0; i + 1 < report.Raised.Count; i++)
@@ -168,8 +206,9 @@ internal static class TempleMarshal
             {
                 double px = x + cx * PlinthHalf, pz = z + cz * PlinthHalf;
                 var f = floors(px, pz, line.Y);
-                if (f is null || floor is { } other && Math.Abs(other - f.Value) > 1) return null;
-                floor ??= f;
+                // (the temple's floors level; the ground level enough, the plinth's top on its highest)
+                if (f is null || floor is { } other && Math.Abs(other - f.Value) > (temple ? 1 : GroundUneven)) return null;
+                floor = temple ? floor ?? f : Math.Max(floor ?? f.Value, f.Value);
                 if (Clear(px, pz, line.Y) < RoadGap) return null;
             }
             return report.Pits.Any(p => Math.Sqrt((p.X - x) * (p.X - x) + (p.Z - z) * (p.Z - z)) < PitGap + PlinthHalf) ? null : floor;
@@ -187,6 +226,15 @@ internal static class TempleMarshal
                     if (Spot(-back, side, o) is { } floor) found = (-back, side, o, floor);
             if (found is not null) break;
         }
+        var plinth = true;
+        if (found is null && !temple && half > 0.5)
+        {
+            // (no floor beside the line -- a raised road's -- on the road's own edge, on its deck, without her plinth: the side away from the pits)
+            double ox = line.X - dx * Before - dz * first * (half - EdgeOut), oz = line.Z - dz * Before + dx * first * (half - EdgeOut);
+            var deck = report.RaisedFloor?.Invoke(ox, oz, line.Y) ?? line.Y;
+            found = (-Before, first, half - EdgeOut, deck);
+            plinth = false;
+        }
         if (found is not { } spot)
         {
             report.Notes.Add("the flag marshal: no floor clear of the roads beside the start line -- left out");
@@ -195,16 +243,21 @@ internal static class TempleMarshal
         double mx = line.X + dx * spot.Along - dz * spot.Side * spot.Out, mz = line.Z + dz * spot.Along + dx * spot.Side * spot.Out;
         // (facing the cars coming -- back along the lap -- turned to the road: on its left, round to her left)
         var beta = (int)Math.Round((Math.Atan2(-dx, -dz) - spot.Side * TurnToRoad) * 4096 / (2 * Math.PI)) & 4095;
-        report.Notes.Add($"the flag marshal: on her plinth {spot.Out:0.##} cells to the {(spot.Side < 0 ? "left" : "right")} of the lap (its edge {spot.Out - PlinthHalf - half:0.##} " +
-                         $"off the road), {-spot.Along:0.##} short of the start line, at cell ({mx:0.##}, {mz:0.##}), the floor {spot.Floor:0}");
+        if (plinth)
+            report.Notes.Add($"the flag marshal: on her plinth {spot.Out:0.##} cells to the {(spot.Side < 0 ? "left" : "right")} of the lap (its edge {spot.Out - PlinthHalf - half:0.##} " +
+                             $"off the road), {-spot.Along:0.##} short of the start line, at cell ({mx:0.##}, {mz:0.##}), the floor {spot.Floor:0}" + (temple ? "" : $" ({r.Who})"));
+        else
+            report.Notes.Add($"the flag marshal ({r.Who}): no floor beside the start line (a raised road) -- on the road's edge {spot.Out:0.##} cells to the " +
+                             $"{(spot.Side < 0 ? "left" : "right")} of its middle, {-spot.Along:0.##} short of the line, at cell ({mx:0.##}, {mz:0.##}), the deck {spot.Floor:0}, no plinth");
         // ---- for the start: in the road's middle ahead of the front row, facing the cars, on the road's deck -- when the grid's columns
         // leave her room between them
+        // (always, since 2026-11-03 -- the user: "Let's have the race marshall always stand in the middle of the track to start the race just
+        // with no collision so cars can just drive through her": a grid's columns close together drive through her, as every car does)
         (double X, double Z, double Y, int Beta)? start = null;
         var gap = gridSide - CarHalf - HerHalf;
         if (gap < GapLeast)
             report.Notes.Add($"the flag marshal: the grid's columns, {gridSide:0.##} cells either side of the road's middle, leave her {gap:0.##} cells between them " +
-                             $"and her (at least {GapLeast}) -- she gives the start from her plinth");
-        else
+                             $"and her -- the cars drive through her");
         {
             var startBack = Math.Max(StartLineGap, gridFirst - StartAhead);
             double sx = line.X - dx * startBack, sz = line.Z - dz * startBack;
@@ -213,22 +266,25 @@ internal static class TempleMarshal
             report.Notes.Add($"the flag marshal: for the start in the road's middle {startBack:0.##} cells short of the line, {gridFirst - startBack:0.##} ahead of pole's middle, " +
                              $"the grid's columns {gridSide:0.##} either side of her ({gap:0.##} cells between her and a car's box), at cell ({sx:0.##}, {sz:0.##}), the road {sy:0}");
         }
-        return Line(mx, mz, spot.Floor, beta, start);
+        return Line(mx, mz, spot.Floor, beta, start, r, plinth);
     }
 
     // The race file's numbers: marshal='s -- the entity, its body and animations (ready, raise, drop, wave), where she stands for the race
-    // (island units: x, z, her plinth's top -- `floor` its foot) and the way she faces -- then marshal_plinth='s (her plinth's body) and, when
-    // she gives the start from the road, marshal_start='s (x, z, the road's height there, the way she faces).
-    public static int[] Line(double x, double z, double floor, int beta, (double X, double Z, double Y, int Beta)? start)
+    // (island units: x, z, her plinth's top -- `floor` its foot -- or the floor itself with no plinth) and the way she faces -- then
+    // marshal_plinth='s (her plinth's body; -1 none) and, when she gives the start from the road, marshal_start='s (x, z, the road's height
+    // there, the way she faces).
+    public static int[] Line(double x, double z, double floor, int beta, (double X, double Z, double Y, int Beta)? start, Rig? rig = null, bool plinth = true)
     {
-        var line = new List<int> { Entity, Body, Ready, Raise, Drop, Wave, (int)Math.Round(x * 512), (int)Math.Round(z * 512), (int)Math.Round(floor - BlockBottom * Scale), beta & 4095, Plinth };
+        var r = rig ?? TempleRig;
+        var line = new List<int> { r.Entity, r.Body, r.Ready, r.Raise, r.Drop, r.Wave, (int)Math.Round(x * 512), (int)Math.Round(z * 512),
+                                   (int)Math.Round(plinth ? floor - BlockBottom * r.Scale : floor), beta & 4095, plinth ? r.Plinth : -1 };
         if (start is { } s) line.AddRange(new[] { (int)Math.Round(s.X * 512), (int)Math.Round(s.Z * 512), (int)Math.Round(s.Y), s.Beta & 4095 });
         return line.ToArray();
     }
 
     // The temple's floors (TEMPLE.JSON, the island's layout: TempleIsland): the top of the highest floor at an island cell under a height --
     // with room over it for her on her plinth -- or null (no floor there, or something over it).
-    private static Func<double, double, double, double?> FloorsOf(string gameDirectory)
+    private static Func<double, double, double, double?> FloorsOf(string gameDirectory, Rig r)
     {
         var path = Path.Combine(gameDirectory, TempleIsland.LayoutFile);
         if (!File.Exists(path)) return (_, _, _) => null;
@@ -240,7 +296,7 @@ internal static class TempleMarshal
         foreach (var c in root.GetProperty("columns").EnumerateArray()) bits[(c[0].GetInt32(), c[1].GetInt32())] = c[2].GetInt64();
         double Top(int y) => baseY + (y - minY + 1) * layer;
         // (her height on her plinth, and a little: no layer over the floor that low)
-        var room = (Hoist + PoleAhead + 1700 - BlockBottom) * Scale;
+        var room = (Hoist + PoleAhead + 1700 - BlockBottom) * r.Scale;
         return (x, z, near) =>
         {
             if (!bits.TryGetValue(((int)Math.Floor((x - ox) / scale), (int)Math.Floor((z - oz) / scale)), out var b)) return null;
@@ -263,11 +319,12 @@ internal static class TempleMarshal
 
     // The marshal's body from the game's (`retail`: BODY.HQR Retail), its bytes, Scale times as big; `standing`: the body as it stands, for
     // the animations (not scaled).
-    public static byte[] Make(byte[] retail, out Body standing)
+    public static byte[] Make(byte[] retail, out Body standing, Rig? rig = null)
     {
-        var p = PalaceTorturers.Parts.Read(retail);
-        if (p.Bones.Count != Own || p.Bones[GreenHand].Count < 1 || p.Bones[CheckHand].Count < 1 || p.Bones[0].Count < 1)
-            throw new InvalidDataException($"BODY.HQR {Retail} isn't the School of Magic's assistant.");
+        var r = rig ?? TempleRig;
+        var p = PalaceTorturers.Parts.Read(r.Remodel is { } remodel ? remodel(retail) : retail);
+        if (p.Bones.Count != r.Own || p.Bones[r.GreenHand].Count < 1 || p.Bones[r.CheckHand].Count < 1 || p.Bones[0].Count < 1)
+            throw new InvalidDataException($"BODY.HQR {r.Retail} isn't {r.Who}.");
         var world = p.World().ToList();
         var oldPoints = p.Points.Count;
         var polys = new List<Poly>();
@@ -340,9 +397,9 @@ internal static class TempleMarshal
                     Face(q, colour(c, r), -normal, lit: false);
                 }
         }
-        Flag(GreenHand, GreenPole, 1, (_, _) => Green);
-        Flag(CheckHand, CheckPole, CheckRows, (c, r) => (c + r) % 2 == 0 ? Black : White);
-        if (newBones.Count + Own > 30) throw new InvalidDataException("The flag marshal has more than 30 bones.");
+        Flag(r.GreenHand, r.GreenPole, 1, (_, _) => Green);
+        Flag(r.CheckHand, r.CheckPole, CheckRows, (c, row) => (c + row) % 2 == 0 ? Black : White);
+        if (newBones.Count + r.Own > 30) throw new InvalidDataException("The flag marshal has more than 30 bones.");
 
         // ---- written: the new points after the body's own -- each from its bone's pivot
         world.AddRange(added);
@@ -353,15 +410,15 @@ internal static class TempleMarshal
             for (var i = firstPoint; i < firstPoint + count; i++)
             {
                 var q = world[i] - world[piv];
-                p.Points.Add(((short)Math.Round(q.X), (short)Math.Round(q.Y), (short)Math.Round(q.Z), Own + b));
+                p.Points.Add(((short)Math.Round(q.X), (short)Math.Round(q.Y), (short)Math.Round(q.Z), r.Own + b));
             }
         }
         // (the flat-lit polygons' lights are found past every point: on by the points added)
         foreach (var (_, records) in p.Blocks)
-            foreach (var r in records)
+            foreach (var record in records)
             {
-                var normal = BinaryPrimitives.ReadUInt16LittleEndian(r.AsSpan(10));
-                if (normal >= oldPoints) BinaryPrimitives.WriteUInt16LittleEndian(r.AsSpan(10), (ushort)(normal + added.Count));
+                var normal = BinaryPrimitives.ReadUInt16LittleEndian(record.AsSpan(10));
+                if (normal >= oldPoints) BinaryPrimitives.WriteUInt16LittleEndian(record.AsSpan(10), (ushort)(normal + added.Count));
             }
         // (the new points' normals: from the lit polygons round them, as long as their share of the light)
         var sum = new Dictionary<int, Vector3>();
@@ -374,7 +431,7 @@ internal static class TempleMarshal
             for (var i = newBones[b].First; i < newBones[b].First + newBones[b].Count; i++)
             {
                 var n = sum.TryGetValue(i, out var v) && v.LengthSquared() > 1e-9f ? Vector3.Normalize(v) * 10240 * light.GetValueOrDefault(i, 1f) : Vector3.Zero;
-                p.Normals.Add(((short)Math.Round(n.X), (short)Math.Round(n.Y), (short)Math.Round(n.Z), Own + b));
+                p.Normals.Add(((short)Math.Round(n.X), (short)Math.Round(n.Y), (short)Math.Round(n.Z), r.Own + b));
             }
         // (the new polygons: a block each of lit and unlit triangles and quads)
         foreach (var group in polys.GroupBy(q => (Quad: q.Points.Length == 4, q.Lit)))
@@ -391,16 +448,17 @@ internal static class TempleMarshal
         var bytes = p.Write();
         standing = LbaBodyStudio.Body.Read(bytes, 2, allowStatic: true);
         // (its box: round every pose of her animations -- the flags reach high over her, and out in front)
-        var box = Boxed(standing, world);
+        var box = Boxed(standing, world, r);
         for (var k = 0; k < 6; k++) BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(8 + k * 4), box[k]);
         standing = LbaBodyStudio.Body.Read(bytes, 2, allowStatic: true);
-        return RaceTrackSmallCars.Scaled(bytes, Scale);
+        return RaceTrackSmallCars.Scaled(bytes, r.Scale);
     }
 
     // Her plinth, a body of its own (one bone, its top at its origin): a block of stone, a slab on it, Scale times as big -- the game's body's
     // (`retail`) header, its own box; lit as hers is.
-    public static byte[] MakePlinth(byte[] retail)
+    public static byte[] MakePlinth(byte[] retail, Rig? rig = null)
     {
+        var scale = (rig ?? TempleRig).Scale;
         var game = PalaceTorturers.Parts.Read(retail);
         var p = new PalaceTorturers.Parts { Header = (byte[])game.Header.Clone() };
         var points = new List<Vector3>();
@@ -453,16 +511,16 @@ internal static class TempleMarshal
         var bytes = p.Write();
         var box = new[] { -SlabHalf, SlabHalf, BlockBottom, 0, -SlabHalf, SlabHalf };
         for (var k = 0; k < 6; k++) BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(8 + k * 4), (int)Math.Round(box[k]));
-        return RaceTrackSmallCars.Scaled(bytes, Scale);
+        return RaceTrackSmallCars.Scaled(bytes, scale);
     }
 
     // (a box round her as she stands and with both flags as high and as far out as they go: her arms' reach and the poles' length round each
     // shoulder)
-    private static int[] Boxed(Body body, List<Vector3> world)
+    private static int[] Boxed(Body body, List<Vector3> world, Rig r)
     {
         var reach = 380 + PoleAhead + TipLong + Fly;
         float x0 = world.Min(v => v.X), x1 = world.Max(v => v.X), y0 = world.Min(v => v.Y), y1 = world.Max(v => v.Y), z0 = world.Min(v => v.Z), z1 = world.Max(v => v.Z);
-        foreach (var shoulder in new[] { GreenUpper, CheckUpper })
+        foreach (var shoulder in new[] { r.GreenUpper, r.CheckUpper })
         {
             var s = world[body.Bones[shoulder].Pivot];
             x0 = Math.Min(x0, s.X - reach); x1 = Math.Max(x1, s.X + reach); y1 = Math.Max(y1, s.Y + reach); z0 = Math.Min(z0, s.Z - reach); z1 = Math.Max(z1, s.Z + reach);
@@ -512,13 +570,14 @@ internal static class TempleMarshal
 
     // The animations, in the order of Ready, Raise, Drop, Wave: for the body as it stands (Make's), from the game's standing (`retailIdle`: the
     // entity's animation 0, ANIM.HQR -- its first keyframe: her back, her head, her legs and her ears as she stands in the school's hall).
-    public static Anim[] Anims(Body body, byte[] retailIdle)
+    public static Anim[] Anims(Body body, byte[] retailIdle, Rig? rig = null)
     {
+        var r = rig ?? TempleRig;
         var basis = PalaceTorturers.ReadFrames(retailIdle, body.Bones.Count)[0].Bones;
         Anim Of(int loop, int[] ms, params Pose[] poses)
         {
             var anim = new Anim { Game = 2, LoopFrame = loop };
-            for (var k = 0; k < poses.Length; k++) anim.Frames.Add(Frame(body, ms[k], basis, poses[k]));
+            for (var k = 0; k < poses.Length; k++) anim.Frames.Add(Frame(body, ms[k], basis, poses[k], r));
             return anim;
         }
         var ready = new Pose(ReadyGreen.Rippled(0.25f, -0.3f), ReadyCheck.Rippled(-0.25f, 0.3f));
@@ -537,20 +596,23 @@ internal static class TempleMarshal
 
     // A keyframe: the game's standing's values (`basis`), the torso leant, then each arm aimed -- from the shoulder to the pole -- and its
     // flag's cloth turned round the pole to fly the way the pose says, rippled.
-    internal static AnimFrame Frame(Body body, int time, (int Type, double A, double B, double C)[] basis, Pose pose)
+    internal static AnimFrame Frame(Body body, int time, (int Type, double A, double B, double C)[] basis, Pose pose, Rig? rig = null)
     {
-        var v = Aim(body, basis, pose);
+        var r = rig ?? TempleRig;
+        var v = Aim(body, basis, pose, r);
         return new AnimFrame(time, 0, 0, 0, v.Select((b, i) => i == 0 ? AnimBone.Neutral
-            : b.Type == 1 ? new AnimBone(1, (float)(b.A * Scale), (float)(b.B * Scale), (float)(b.C * Scale))
+            : b.Type == 1 ? new AnimBone(1, (float)(b.A * r.Scale), (float)(b.B * r.Scale), (float)(b.C * r.Scale))
             : new AnimBone(0, (float)(b.A / (2 * Math.PI)), (float)(b.B / (2 * Math.PI)), (float)(b.C / (2 * Math.PI)))).ToArray());
     }
 
     // The bones' values for a pose (radians; translations in the body's units, not scaled).
-    internal static (int Type, double A, double B, double C)[] Aim(Body body, (int Type, double A, double B, double C)[] basis, Pose pose)
+    internal static (int Type, double A, double B, double C)[] Aim(Body body, (int Type, double A, double B, double C)[] basis, Pose pose, Rig? rig = null)
     {
+        var r = rig ?? TempleRig;
         var v = new (int Type, double A, double B, double C)[body.Bones.Count];
-        for (var b = 0; b < v.Length; b++) v[b] = b < basis.Length ? basis[b] : (0, 0, 0, 0);
-        v[Torso] = (0, v[Torso].A + pose.Lean, v[Torso].B, v[Torso].C);
+        // (the game's standing's values for her own bones; the flags' after them start straight -- each is aimed below)
+        for (var b = 0; b < v.Length; b++) v[b] = b < basis.Length && b < r.Own ? basis[b] : (0, 0, 0, 0);
+        v[r.Torso] = (0, v[r.Torso].A + pose.Lean, v[r.Torso].B, v[r.Torso].C);
         var rest = body.World();
         Vector3 Pivot(int b) => rest[body.Bones[b].Pivot];
         void Point(int bone, Vector3 from, Vector3 to)
@@ -558,7 +620,7 @@ internal static class TempleMarshal
             var (_, matrices) = PalaceTorturers.Posed(body, v);
             v[bone] = PalaceTorturers.Turn(matrices[body.Bones[bone].Parent], Vector3.Normalize(from), Vector3.Normalize(to));
         }
-        foreach (var (arm, upper, fore, hand, pole, rows) in new[] { (pose.Green, GreenUpper, GreenFore, GreenHand, GreenPole, 1), (pose.Check, CheckUpper, CheckFore, CheckHand, CheckPole, CheckRows) })
+        foreach (var (arm, upper, fore, hand, pole, rows) in new[] { (pose.Green, r.GreenUpper, r.GreenFore, r.GreenHand, r.GreenPole, 1), (pose.Check, r.CheckUpper, r.CheckFore, r.CheckHand, r.CheckPole, CheckRows) })
         {
             Point(upper, Pivot(fore) - Pivot(upper), arm.Upper);
             Point(fore, Pivot(hand) - Pivot(fore), arm.Fore);
