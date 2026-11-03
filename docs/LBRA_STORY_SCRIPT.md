@@ -82,15 +82,27 @@ box.
 - **Reading it.** Used from the inventory, it opens on the newest page; left and right turn the pages, as the game's slate does.
 - **Two players:** the same slate; either can open it.
 - The original game's slate pages (its plans and memos) are not used.
+- **Two hidden pages** (the user, 2026-11-03: "a hidden map file in the museum showing construction blue prints that Twinsen can re-visit
+  after collecting the magic slate to get the Polar Island track for his slate. We can also hide a race track magazine or design sheet
+  somewhere for Twinsen to collect the Citadel 1 track. Perhaps it could be revealed in his neighbour's house if Twinsen gives him the
+  gallic acid"). The dream and the storm track come before the slate, so their pages are found, not given; both are optional and on
+  Citadel:
+  - **Polar Island, the museum's blueprints** (chapter 1 to see them, chapter 2 to copy them): Q_BLUEPRINT, var 231.
+  - **Citadel 1, the neighbour's design sheet**, brought out with gallic acid (chapter 1 to hear of it, chapter 2 to read it):
+    Q_SHEET, var 232.
+
+  With both, the slate has all fifteen tracks. A hidden page goes in at its own place in the book, before the town circuit, so the
+  pages stay in story order.
 
 **To build:**
-- **The pictures.** Thirteen maps, one per story track from chapter 2 on (the dream and the storm come before the slate), made by the
+- **The pictures.** Fifteen maps, one per story track (thirteen given on arrival, the dream's and the storm's found), made by the
   editor from each track's plan: the race-track mode already draws
   the road, start and checkpoints over the island. Each is a 640x480 picture with its palette in `SCREEN.HQR` (a slate page is entry
   `n * 2`, its palette `n * 2 + 1`), added at the end of the file under new page numbers.
 - **The engine.** The slate holds 5 pages (`MAX_ARDOISE`), and a saved game stores exactly 5. That goes up to 16 for the story, with the
   saved game keeping its 5 retail bytes where they are and the extra pages stored with the race mod's own saved state, so old saves
-  still load.
+  still load. The game's `memo_ardoise` adds a page at the end of the book; for the two hidden pages to sit in story order, the book is
+  kept sorted by page number (the pages numbered in story order).
 
 ### The flag marshals (built)
 
@@ -120,6 +132,9 @@ The original quests don't run, so their flags are free to use for what they're n
 | vars 200-209 | the race mod's own (built) | as built |
 | vars 212-224 | free | each chapter's quest steps (the plan's 3.1) |
 | var 229 | free | DREAM_CAUGHT: Twinsen caught FunFrock in the dream (chapter 0) |
+| var 231 | free | Q_BLUEPRINT: the museum's blueprints, the Polar Island page (chapters 1-2) |
+| var 232 | free | Q_SHEET: the neighbour's design sheet, the Citadel 1 page (chapters 1-2) |
+| var 17 / item 17 | the gallic acid (restores old documents; in the game it brings out the neighbour's map) | the same: it brings out the neighbour's design sheet |
 
 ### The 1996 demo's sewers
 
@@ -288,6 +303,31 @@ dream never run again); DREAM_CAUGHT set by the race's result; the four lines.
    the quay.
 7. **The umbrella (optional).** Picked up: Customer's umbrella (item 20). Back to Tim:
    > **Tim:** "Our customer's umbrella! I'd stand you a drink on the house, if I still had a house. Here." *(10 kashes)*
+
+   **Two optional visits, any time in the chapter** (the slate's hidden pages, finished in chapter 2):
+   - **The museum** (scene 15, by the rampart's lift). Miss Bloop, the curator, in the hall:
+     > **Miss Bloop:** "Mind the cases, Twinsen. And the floor. And, well, everything: it's all very old."
+
+     In the polar room, a cardboard file sticks out from under the ice-fishing case (Action on it):
+     > *A file of blueprints: "ICE ISLAND CIRCUIT. Construction plans. Not to be built." A road climbing a snowy island, a loop, jumps,
+     > and a ramp leaping onto a rocky peak.*
+     >
+     > **Twinsen:** "That's the track from my dream! Every bend of it. If only I had something to copy it onto."
+
+     Miss Bloop, asked about it:
+     > **Miss Bloop:** "That old thing? A man with glasses and a very big car left it here years ago. He said it was worth a fortune one
+     > day. It's never been worth anything to me, but I keep it, because I keep everything."
+
+     Q_BLUEPRINT = 1. The file goes back under the case.
+   - **The neighbour** (next door to Twinsen's house). The game's own neighbour, at his table with a sheet of paper and a magnifying
+     glass:
+     > **The neighbour:** "Hello neighbor."
+     >
+     > **The neighbour:** "Somebody pushed this under my door the night they built the storm track. Drawings, I think, but the rain got
+     > to it and the ink's all faded. With a little gallic acid I could bring it back. There's none left on the island, mind: the
+     > pharmacy's waiting for its delivery."
+
+     Q_SHEET = 1.
 8. **The race.** Raph now tells his time (built):
    > **Raph:** "A car and driving gloves: you're all set, Twinsen! My best lap is ## seconds. Beat that, and I'll come with you to the
    > lighthouse."
@@ -318,7 +358,7 @@ dream never run again); DREAM_CAUGHT set by the race's result; the four lines.
 
     The screen fades out (the night).
 
-**Flags:** var 51, 56 (built); Q_THIEF (213, now 1-5); items 7 and 20. `chapter()` stays 1 to the end of the chapter: it goes to 2 in
+**Flags:** var 51, 56 (built); Q_THIEF (213, now 1-5); items 7 and 20; Q_BLUEPRINT (231) and Q_SHEET (232) to 1 (optional). `chapter()` stays 1 to the end of the chapter: it goes to 2 in
 the morning (chapter 2, step 1), not at the spell.
 
 **To build:**
@@ -451,9 +491,9 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    Car update: the Citadel town circuit's best setup.
 10. **The race.** Six cars, three laps (built). Flick drops the flag. Beat Mr. Paul.
 11. **Won.** Mr. Paul (built):
-   > **Mr. Paul:** "Well raced, Twinsen! You've won the prize: a ferry ticket."
+   > **Mr. Paul:** "Well raced, Twinsen! You've won the prize: a ferry ticket. And the Cup's purse: fifty kashes, from the Esmers."
 
-   Found: Ferry Ticket (item 13).
+   Found: Ferry Ticket (item 13), 50 kashes.
 
    The herald:
    > **The Esmer herald:** "Twinsen of Citadel Island leads the Cup! Next: the Desert, the White Leaf Desert."
@@ -463,6 +503,39 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    > **Raph:** "Did you see that black car? No number, no driver I could see. And gone before I'd blinked."
    >
    > **Zoe:** "Whoever it is, they weren't racing. They were watching."
+
+   **The slate's two hidden pages (optional, before the ferry).** Once Twinsen has the slate (step 6), Zoe says, if he talks to her:
+   > **Zoe:** "A book of race tracks... Twinsen, didn't you see a track in the museum? And our neighbour's been squinting at some
+   > drawings all week."
+
+   - **The museum's blueprints** (any time after step 6). The file under the ice-fishing case again (or for the first time, with
+     chapter 1's lines first):
+     > **Twinsen:** "Now I've got something to copy it onto."
+
+     He lays the slate on the blueprints, and the map draws itself onto a new page: the Polar Island track (`memo_ardoise`).
+     > **Miss Bloop:** "Did that slate just copy my file? The Esmers have very clever toys."
+
+     Q_BLUEPRINT = 2. The page goes in at the front of the book.
+   - **The gallic acid** (after the race, with the purse). The pharmacy (scene 48's door, open again) had its delivery on the morning
+     ferry. The pharmacist:
+     > **The pharmacist:** "A flask of gallic costs 50 kashes." *(the game's own line)*
+
+     A choice: buy it? Yes:
+     > **The pharmacist:** "There. Mind, it's for old documents, not for engines, whatever the Desert racers tell you."
+
+     Found: Gallic acid (item 17), for 50 kashes. (Without the purse, or with less than 50 kashes: "Come back when you've won
+     something.")
+   - **The neighbour's design sheet.** Twinsen gives him the gallic acid (`use_inventory(17)` beside him):
+     > **The neighbour:** "Gallic acid! Let's see..."
+     >
+     > *He dabs the acid over the sheet. Lines come up out of the paper: a road round Citadel's town, the rampart walkway, a jump, a
+     > pit lane where the Tavern stood. In the corner: "STORM CIRCUIT. Design sheet. Esmer approved."*
+     >
+     > **The neighbour:** "The gallic acid has revealed a text previously invisible. It's that race track they built in the rain! Here,
+     > it's yours: I don't drive, and I'm not getting in a car with you."
+
+     Item 17 = 0. The slate copies the sheet: the Citadel 1 page, second in the book. Q_SHEET = 2.
+     > **Zoe:** "Two tracks we've already raced, and the whole Cup still to come. Your slate's filling up."
 12. **The ferry.** Zoe comes along now (one player: she follows Twinsen):
    > **Zoe:** "Every race needs a pit crew. That's me. You drive, I'll fix."
 
@@ -472,13 +545,15 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    The ferry crossing (the game's own, built: the ticket) lands them on the Desert. `inc_chapter()` -> 3.
 
 **Flags:** `chapter()` 1 -> 2 at the morning wake, var 70 with it; Q_LUCCAR (214), item 26 (the radio), item 28 (the magic slate), item
-13 (built), `chapter()`
+13 (built), the purse (50 kashes), Q_BLUEPRINT (231) and Q_SHEET (232) with item 17 (optional), `chapter()`
 2 -> 3.
 
 **To build:** the morning wake (Zoe's shake again, her new line, then `inc_chapter`); the house door leading out onto Citadel 2 from
 chapter 2 (the door's cube change picks the CITABAU scene by `chapter()`); the Esmers' landing moved from the lighthouse to the morning,
 with their new lines; the Tavern standing in the Citadel 2 build and its inside (scene 3) reachable again; the islanders' lines; Raph and
-Tim at the Tavern.
+Tim at the Tavern. The hidden pages: the museum (scene 15) reachable in both Citadel builds (the rampart's lift pad does it today), the
+blueprint file under the polar case, Miss Bloop's and the neighbour's new lines, the pharmacy open and selling gallic acid, the purse
+added to Mr. Paul's prize, and the two pages' pictures.
 
 ---
 

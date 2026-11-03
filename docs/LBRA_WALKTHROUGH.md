@@ -16,7 +16,7 @@ in [LBRA_STORY_SCRIPT.md](LBRA_STORY_SCRIPT.md), which has the build notes; this
 - **Baldino's radio** rings when Twinsen arrives on each island from chapter 2 on. Answer it from the inventory. Baldino has tuned the
   car for that track (its best setup) and gives a tip.
 - **The magic slate** gets a new page on each island: the map of the track there, with its start line, checkpoints and pit box. Open it
-  from the inventory; left and right turn the pages.
+  from the inventory; left and right turn the pages. Two pages are hidden: see the secrets in chapters 1 and 2.
 
 **The tracks, in order:** Polar Island (the dream), Citadel 1 (the storm), Citadel 2 (the town circuit), the White Leaf Desert, the
 Emerald Moon, Otringal, Celebration 1 (the lava lake), the Island of the Francos, the Elevator Platform, Wannies Island, Mosquibees
@@ -148,6 +148,34 @@ The same ladder brings Twinsen up onto the quay.
 **Tim:** "Our customer's umbrella! I'd stand you a drink on the house, if I still had a house. Here."
 
 **Found:** 10 kashes.
+
+**Secrets (optional, any time this chapter).** Two things on Citadel that pay off in chapter 2: each gives a page for the magic slate.
+
+- **The museum.** Twinsen takes the lift up the rampart and goes into the museum. Miss Bloop, the curator, is in the hall.
+
+  **Miss Bloop:** "Mind the cases, Twinsen. And the floor. And, well, everything: it's all very old."
+
+  In the polar room, a cardboard file sticks out from under the ice-fishing case. Twinsen pulls it out (Action).
+
+  *A file of blueprints: "ICE ISLAND CIRCUIT. Construction plans. Not to be built." A road climbing a snowy island, a loop, jumps, and
+  a ramp leaping onto a rocky peak.*
+
+  **Twinsen:** "That's the track from my dream! Every bend of it. If only I had something to copy it onto."
+
+  Talking to Miss Bloop about it:
+
+  **Miss Bloop:** "That old thing? A man with glasses and a very big car left it here years ago. He said it was worth a fortune one
+  day. It's never been worth anything to me, but I keep it, because I keep everything."
+
+  Twinsen puts the file back under the case.
+
+- **The neighbour.** Next door to Twinsen's house, the neighbour sits at his table with a sheet of paper and a magnifying glass.
+
+  **The neighbour:** "Hello neighbor."
+
+  **The neighbour:** "Somebody pushed this under my door the night they built the storm track. Drawings, I think, but the rain got to
+  it and the ink's all faded. With a little gallic acid I could bring it back. There's none left on the island, mind: the pharmacy's
+  waiting for its delivery."
 
 **9. The race.** Back at the start line, Raph has his time ready.
 
@@ -306,9 +334,9 @@ straight.
 
 **10. Won.**
 
-**Mr. Paul:** "Well raced, Twinsen! You've won the prize: a ferry ticket."
+**Mr. Paul:** "Well raced, Twinsen! You've won the prize: a ferry ticket. And the Cup's purse: fifty kashes, from the Esmers."
 
-**Found:** Ferry Ticket.
+**Found:** Ferry Ticket and 50 kashes.
 
 **The Esmer herald:** "Twinsen of Citadel Island leads the Cup! Next: the Desert, the White Leaf Desert."
 
@@ -319,6 +347,48 @@ Past the finish line, a black car stands with its engine running. When Twinsen w
 **Zoe:** "Whoever it is, they weren't racing. They were watching."
 
 **Luc** (outside the Tavern): "First round's on me, as promised! To the Cup!"
+
+**Secrets: the slate's two hidden pages (optional, before the ferry).** The slate only fills up on arrival from here on, but two tracks
+come before it: the dream's and the storm's. Both can still be found on Citadel. Talking to Zoe once Twinsen has the slate:
+
+**Zoe:** "A book of race tracks... Twinsen, didn't you see a track in the museum? And our neighbour's been squinting at some drawings
+all week."
+
+- **The museum's blueprints** (any time after the herald gives Twinsen the slate). Twinsen goes back to the museum, to the file under
+  the ice-fishing case in the polar room. (If he never found it in chapter 1, he finds it now, with the same lines first.)
+
+  **Twinsen:** "Now I've got something to copy it onto."
+
+  He lays the slate on the blueprints, and the map draws itself onto a new page.
+
+  **Found:** a slate page: Polar Island, the dream's track. It goes in at the front of the book.
+
+  **Miss Bloop:** "Did that slate just copy my file? The Esmers have very clever toys."
+
+- **The gallic acid** (after the race, with the purse). The pharmacy's delivery came on the morning ferry. The pharmacist is behind
+  the counter.
+
+  **The pharmacist:** "A flask of gallic costs 50 kashes."
+
+  He asks: buy it? Twinsen says yes.
+
+  **The pharmacist:** "There. Mind, it's for old documents, not for engines, whatever the Desert racers tell you."
+
+  **Found:** Gallic acid (for 50 kashes). Without enough kashes: **The pharmacist:** "Come back when you've won something."
+
+- **The neighbour's design sheet.** Twinsen goes next door and uses the gallic acid from his inventory beside the neighbour.
+
+  **The neighbour:** "Gallic acid! Let's see..."
+
+  He dabs the acid over the sheet. Lines come up out of the paper: a road round Citadel's town, the rampart walkway, a jump, a pit lane
+  where the Tavern stood. In the corner: "STORM CIRCUIT. Design sheet. Esmer approved."
+
+  **The neighbour:** "The gallic acid has revealed a text previously invisible. It's that race track they built in the rain! Here, it's
+  yours: I don't drive, and I'm not getting in a car with you."
+
+  The slate copies the sheet. **Found:** a slate page: Citadel 1, the storm track. It goes in second, after Polar Island.
+
+  **Zoe:** "Two tracks we've already raced, and the whole Cup still to come. Your slate's filling up."
 
 **11. The ferry.** Zoe comes along from now on.
 
@@ -1070,7 +1140,10 @@ The credits roll.
 | 1 | Customer's umbrella | the thief drops it, in the sewers | Tim (10 kashes) |
 | 2 | Magic Slate | the Esmer herald, at the start line | the track maps |
 | 2 | Portable Radio | Zoe, from Baldino | Baldino's calls |
-| 2 | Ferry Ticket | Mr. Paul, the prize | the ferry to the Desert |
+| 2 | Ferry Ticket and 50 kashes | Mr. Paul, the prize and the Cup's purse | the ferry to the Desert; the gallic acid |
+| 2 | Slate page: Polar Island (optional) | the museum's blueprints, under the ice-fishing case | the magic slate |
+| 2 | Gallic acid (optional) | the pharmacy, 50 kashes | the neighbour's design sheet |
+| 2 | Slate page: Citadel 1 (optional) | the neighbour, once the gallic acid has brought out his sheet | the magic slate |
 | 3 | Three exam pages | beside the Desert road | the Dean |
 | 3 | Wizard's Diploma | the Dean | the Desert track opened |
 | 5 | 10 zlitos | Lyra, from the Esmers | the entry fee (with the Casino's help) |
@@ -1092,4 +1165,7 @@ The credits roll.
 
 One page per island, added on arrival, from chapter 2: the town circuit, the White Leaf Desert, the Emerald Moon, Otringal, the lava
 lake, the Francos' island, the Elevator Platform, Wannies Island, Mosquibees Island, the volcano, Island CX, the palace and the statue.
-The dream and the storm track come before the slate, so they have no page.
+
+The dream and the storm track come before the slate, so their pages are hidden and optional, both on Citadel in chapter 2: Polar
+Island from the museum's blueprints, and Citadel 1 from the neighbour's design sheet (with gallic acid from the pharmacy). They go in at
+the front of the book, so a full slate has all fifteen tracks in story order.
