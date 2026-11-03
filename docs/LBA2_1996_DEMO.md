@@ -135,6 +135,11 @@ file 3), so a script's `message(236)` is the demo's text 236 of that file, not t
 The pictures, islands, interiors and characters are all there, so "the demo's scenes in the retail game" is within reach. What it needs:
 
 1. **The scripts.** Done: translated into the retail bytecode (above).
+   - **The interiors** need their block libraries brought over. The demo's Citadel interiors (sewers 17 and 18, and 2, 3...) are drawn
+     with demo libraries the retail game doesn't have: only 3 of the 80 blocks of sewer 17 are in retail library 1 as they are. Their
+     bricks are mostly retail ones under other numbers: of the 1,072 bricks of demo library 1, 1,020 are, and 52 are the demo's own.
+     `ScriptRoundTrip bkgcompare <retail> <converted demo> <scenes> [retail library]` measures it. The plan for the race mod's sewers is in
+     [LBRA_STORY_SCRIPT.md](LBRA_STORY_SCRIPT.md#the-1996-demos-sewers).
 2. **Texts and voices.** The scripts' text numbers are the demo's own `TEXT.HQR`; a patch would add them to the retail texts (or keep the
    demo's) -- there are no demo voices.
 3. **Scene numbers.** The demo's scenes would go past the retail 222 (or replace retail scenes), with their cube-change zones renumbered

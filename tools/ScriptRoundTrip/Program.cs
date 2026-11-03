@@ -302,6 +302,8 @@ internal static class Program
             "scriptdump" => ScriptDump.Run(args),
             "scriptbytes" => ScriptBytes.Run(args),
             "texts" => Texts.Run(args),
+            "bkgcompare" => BkgCompare.Run(args),
+            "hqrmatch" => HqrMatch.Run(args),
             "buildingprobe" => BuildingProbe.Run(args),
             "heroarmor" => HeroArmor.Run(args),
             "bodyfaces" => BodyFaces.Run(args),

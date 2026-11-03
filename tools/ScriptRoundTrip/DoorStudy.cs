@@ -493,6 +493,116 @@ internal static class ScriptBytes
     }
 }
 
+// bkgcompare <retail folder> <other folder> <scene,scene...>: for each of the other folder's scenes, its interior grid and block
+// library, whether the retail LBA_BKG.HQR has that library (byte for byte, at which number), and for the bricks its blocks draw: how
+// many are the retail brick of the same number, how many are some other retail brick (bytes equal), and how many the retail game lacks.
+internal static class BkgCompare
+{
+    public static int Run(string[] args)
+    {
+        var retail = new LBAAssembler.Grids.Lba2GridBackend(args[1]);
+        var other = new LBAAssembler.Grids.Lba2GridBackend(args[2]);
+        var retailFile = LBAAssembler.HqrFile.Parse(File.ReadAllBytes(Path.Combine(args[1], "LBA_BKG.HQR")));
+        var otherFile = LBAAssembler.HqrFile.Parse(File.ReadAllBytes(Path.Combine(args[2], "LBA_BKG.HQR")));
+        int U16(byte[] b, int o) => b[o] | b[o + 1] << 8;
+        var rh = retailFile.Read(0); var oh = otherFile.Read(0);
+        int rBll = U16(rh, 4), rBrk = U16(rh, 6), rMax = U16(rh, 8), rGrm = U16(rh, 2);
+        int oBll = U16(oh, 4), oBrk = U16(oh, 6), oMax = U16(oh, 8);
+        var retailBricks = new Dictionary<string, int>();
+        for (var b = 0; b < rMax; b++) if (!retailFile.IsEmpty(rBrk + b)) retailBricks.TryAdd(Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(retailFile.Read(rBrk + b))), b);
+        var retailLibs = new Dictionary<string, int>();
+        for (var l = 0; rBll + l < rBrk; l++) if (!retailFile.IsEmpty(rBll + l)) retailLibs.TryAdd(Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(retailFile.Read(rBll + l))), l);
+        var allUsed = new SortedSet<int>();
+        foreach (var s in args[3].Split(',').Select(int.Parse))
+        {
+            var grid = other.GridOfScene(s);
+            if (grid is null) { Console.WriteLine($"scene {s}: no interior grid"); continue; }
+            var raw = other.RawGrid(grid.Value);
+            var lib = otherFile.Read(oBll + raw[0]);
+            var libHash = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(lib));
+            Console.WriteLine($"scene {s}: grid {grid} ({raw.Length} bytes), library {raw[0]} ({lib.Length} bytes), fragment set {raw[1]}; retail has that library: " +
+                              (retailLibs.TryGetValue(libHash, out var rl) ? $"yes, library {rl}" : "no"));
+            // the bricks the library's blocks draw (LBA2 library: U32 offsets to each block, block = dx dy dz, then per cell 4 bytes: shape, sound, brick U16)
+            var used = new SortedSet<int>();
+            var first = BitConverter.ToInt32(lib, 0); var blocks = first / 4;
+            for (var k = 0; k < blocks; k++)
+            {
+                var o = BitConverter.ToInt32(lib, k * 4); var end = k + 1 < blocks ? BitConverter.ToInt32(lib, (k + 1) * 4) : lib.Length;
+                int dx = lib[o], dy = lib[o + 1], dz = lib[o + 2];
+                for (var c = 0; c < dx * dy * dz && o + 3 + c * 4 + 3 < end + 1; c++) { var brick = U16(lib, o + 3 + c * 4 + 2); if (brick > 0) used.Add(brick - 1); }
+            }
+            int same = 0, moved = 0, missing = 0;
+            foreach (var b in used)
+            {
+                if (b >= oMax || otherFile.IsEmpty(oBrk + b)) { missing++; continue; }
+                var bytes = otherFile.Read(oBrk + b);
+                var h = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(bytes));
+                if (b < rMax && !retailFile.IsEmpty(rBrk + b) && retailFile.Read(rBrk + b).AsSpan().SequenceEqual(bytes)) same++;
+                else if (retailBricks.ContainsKey(h)) moved++;
+                else missing++;
+            }
+            Console.WriteLine($"  bricks drawn: {used.Count}; the retail brick of the same number {same}, another retail brick {moved}, not in the retail game {missing}");
+
+            // the blocks the grid uses, and whether retail library `args[4]` has each (same size, the same cells with the bricks renumbered)
+            if (args.Length > 4)
+            {
+                var rlib = retailFile.Read(rBll + int.Parse(args[4]));
+                int Brick(int b) => b < 0 ? -1 : !otherFile.IsEmpty(oBrk + b) && retailBricks.TryGetValue(Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(otherFile.Read(oBrk + b))), out var r) ? r : -2;
+                string Sig(byte[] l, int k, Func<int, int> map)
+                {
+                    var n = BitConverter.ToInt32(l, 0) / 4; var o = BitConverter.ToInt32(l, k * 4);
+                    int dx = l[o], dy = l[o + 1], dz = l[o + 2];
+                    var sb = new System.Text.StringBuilder($"{dx}x{dy}x{dz}");
+                    for (var c = 0; c < dx * dy * dz; c++) sb.Append($";{l[o + 3 + c * 4]},{l[o + 4 + c * 4]},{map(U16(l, o + 5 + c * 4) - 1)}");
+                    return sb.ToString();
+                }
+                var retailSigs = new Dictionary<string, int>();
+                for (var k = 0; k < BitConverter.ToInt32(rlib, 0) / 4; k++) retailSigs.TryAdd(Sig(rlib, k, b => b), k);
+                var cube = new LBAAssembler.Lba1.Runtime.Lba1Cube(other.LoadGrid(grid.Value), lib);
+                var usedBlocks = new SortedSet<int>();
+                for (var y = 0; y < 25; y++) for (var z = 0; z < 64; z++) for (var x = 0; x < 64; x++) { var (bl, _) = cube.Cell(x, y, z); if (bl > 0) usedBlocks.Add(bl); }
+                int found = 0, lacking = 0, lackBricks = 0;
+                foreach (var bl in usedBlocks)
+                {
+                    var sig = Sig(lib, bl - 1, Brick);
+                    if (retailSigs.ContainsKey(sig)) found++; else { lacking++; if (sig.Contains(",-2")) lackBricks++; }
+                }
+                Console.WriteLine($"  blocks used: {usedBlocks.Count}; in retail library {args[4]} as they are (bricks renumbered) {found}; not {lacking} ({lackBricks} of them draw a brick the retail game lacks)");
+                allUsed.UnionWith(usedBlocks);
+                Console.WriteLine($"  retail library {args[4]}: {BitConverter.ToInt32(rlib, 0) / 4} blocks; this library: {BitConverter.ToInt32(lib, 0) / 4}; blocks used by the scenes so far: {allUsed.Count}");
+            }
+        }
+        Console.WriteLine($"retail: grids from {U16(rh, 0)}, libraries from {rBll} ({rBrk - rBll}), bricks from {rBrk} ({rMax}); fragments from {rGrm}");
+        return 0;
+    }
+}
+
+// hqrmatch <a.HQR> <b.HQR> <entry,entry...>: for each of a's entries, the b entries with the same bytes (unpacked).
+internal static class HqrMatch
+{
+    public static int Run(string[] args)
+    {
+        var a = LBAAssembler.HqrFile.Parse(File.ReadAllBytes(args[1]));
+        var b = LBAAssembler.HqrFile.Parse(File.ReadAllBytes(args[2]));
+        var byHash = new Dictionary<string, List<int>>();
+        for (var i = 0; i < b.Count; i++)
+        {
+            if (b.IsEmpty(i)) continue;
+            var h = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(b.Read(i)));
+            if (!byHash.TryGetValue(h, out var l)) byHash[h] = l = new();
+            l.Add(i);
+        }
+        foreach (var i in args[3].Split(',').Select(int.Parse))
+        {
+            if (i >= a.Count || a.IsEmpty(i)) { Console.WriteLine($"{i}: empty"); continue; }
+            var bytes = a.Read(i);
+            var h = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(bytes));
+            Console.WriteLine($"{i} ({bytes.Length} bytes): " + (byHash.TryGetValue(h, out var l) ? string.Join(",", l) : "none"));
+        }
+        return 0;
+    }
+}
+
 // texts <TEXT.HQR> <language> <file> [id,id...]: the texts of one text file (all, or the ids given).
 internal static class Texts
 {

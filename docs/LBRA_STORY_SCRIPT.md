@@ -91,6 +91,40 @@ The original quests don't run, so their flags are free to use for what they're n
 | items 7, 10, 11, 13, 15, 16, 18, 20, 24, 30-35 | their own | as the plan's item table |
 | vars 200-209 | the race mod's own (built) | as built |
 | vars 212-224 | free | each chapter's quest steps (the plan's 3.1) |
+| var 229 | free | DREAM_CAUGHT: Twinsen caught FunFrock in the dream (chapter 0) |
+
+### The 1996 demo's sewers
+
+The user, 2026-11-03: "The Demo 96 files that we had, I want to pull the sewer files from there and have them in the sewers with our
+racing mod. When I tested them previously the scripts weren't functioning correctly so this'll need additional analyses before we can
+correctly pull them in."
+
+The 1996 demo's sewers are its scenes 17 and 18: Citadel Island sewers that the retail game doesn't have (the painter repainting the
+signs, barrels, gargoyle pillars). In the story they're where the thief runs in chapter 1. Retail LBA2 can't add scenes, only replace
+them, so they take the retail sewers' slots, scenes 17 and 18.
+
+**Done (the analysis, [LBA2_1996_DEMO.md](LBA2_1996_DEMO.md#the-demos-script-language)):**
+- Why the scripts didn't work: the demo's script language isn't quite the retail one. Its `SAMPLE` instructions take a one-byte sample
+  number where retail takes two, and it has five instructions of its own. Run as retail, the byte after a sample number was read as an
+  instruction, and everything after it went wrong.
+- The demo's language is now in the editor (`Opcodes.Demo96`). The 1996 demo's converter translates every script into the retail
+  bytecode, and the sewers run in the retail engine: the painter walks his track and his checks run every frame.
+
+**To do, to put them in the race mod's sewers:**
+- **The interior.** The demo sewers are drawn with the demo's Citadel-interiors block library: 97 blocks between the two scenes. The
+  retail game doesn't have that library. Only 3 of its blocks are also in the retail one, and retail library 1 has 219 blocks already,
+  with room for 36 more at most (a grid's block number is one byte). So the demo's library goes in as a library of its own: a new
+  `LBA_BKG.HQR` entry after the 18 retail ones, with the bricks after it moved up one (the header says where they start).
+  - Its bricks: 1,020 of the 1,072 its blocks draw are retail bricks under other numbers, and they are renumbered. The 52 the retail game
+    lacks go into the brick table too.
+- **The actors' bodies and animations**: the demo's entities and animation numbers mapped onto the retail ones (the painter, the hero's
+  animations), or the demo's bodies added as the race mod adds its own.
+- **The sounds**: demo samples 54, 35 and 41 are retail samples 126, 617 and 501 byte for byte. 118, 52 and 37 are the demo's own: added,
+  or the nearest retail ones.
+- **The texts**: the painter's lines (demo texts 236, 237, 383) added to the race mod's Citadel texts under free numbers, and the
+  scripts' `message()`s renumbered.
+- **The doors**: the demo sewers' cube changes go to the demo's 17, 18, 21 and 34. They are pointed at the retail scenes the race mod
+  uses: the harbour hatch (chapter 1) and the quay ladder.
 
 ---
 
@@ -107,28 +141,55 @@ The original quests don't run, so their flags are free to use for what they're n
 | Zoe | the game's Zoe, scene 0 actor 4 | at home, by the bed |
 
 **Walkthrough:**
-1. **Opening.** The new story begins in the dream (built). Twinsen stands on the dock at Polar Island beside his car. FunFrock's car is
-   already driving off up the island.
+
+The game opens on a race, a dream one: Twinsen against FunFrock. FunFrock is off first, and whether Twinsen catches him or not, the
+dream ends the moment the race does.
+
+1. **Opening.** The new story begins in the dream (built). Twinsen stands on the dock at Polar Island beside his car. FunFrock is
+   already in his, the engine roaring.
+   > **FunFrock:** "Still dreaming of beating me, Twinsen? Dream on. I'll even give you a head start... no, on second thoughts, I'll
+   > take it!"
+
+   His car pulls away up the island while Twinsen's is still on the dock: **FunFrock's head start** (new: he leaves a few seconds before
+   Twinsen's start, as a ghost car is let go early; *8 seconds* to begin with, to be tuned so that catching him is possible but hard).
    > **The grobo:** "He went that way! The big man in the big car! Take the digger key, quick!" *(built: PolarDream.ChaseGroboText)*
 2. **The chase.** Twinsen chases FunFrock up the island, round the loop and over the jumps, to the leap onto the rocky peak (built).
-   Losing runs the dream again.
-3. **The finish.** As the car leaves the lip, the white fade begins (built), and a voice speaks over it (new):
-   > **Sendell (unseen):** "Two worlds will race, Twinsen. And at the end of it, he will be waiting."
-4. **Waking.** Twinsen wakes in his bed. Zoe shakes him awake (built), kisses him (built), and her opening line (built, chapter 1's
-   first line) follows.
+   **The race is run once.** Win or lose, it ends at the peak (new: today a loss runs the dream again).
+3. **The finish.** As Twinsen's car leaves the lip, the white fade begins (built). What is said over it depends on the race:
+   - **Twinsen caught FunFrock** (crossed the peak first):
+     > **FunFrock (fading):** "Impossible! Nobody catches me... nobody..."
+     >
+     > **Sendell (unseen):** "Two worlds will race, Twinsen. And at the end of it, he will be waiting."
+   - **FunFrock got there first:**
+     > **FunFrock (fading, laughing):** "Too slow, Twinsen! Always one step behind!"
+     >
+     > **Sendell (unseen):** "Two worlds will race, Twinsen. You will have your chance again. And at the end of it, he will be
+     > waiting."
+4. **Waking.** As soon as the fade is white, Twinsen is in his bed (scene 0): Zoe shakes him awake (built) and kisses him (built).
+   One line of hers first, depending on the dream:
+   - caught him: > **Zoe:** "You were smiling in your sleep. And steering."
+   - didn't: > **Zoe:** "You were shouting in your sleep. Something about a big man in a big car."
 
-**Flags:** var 205 (built). The wake sets `chapter()` to 1.
+   Then her opening line (built, chapter 1's first line) follows.
+
+**Flags:** var 205 (built). A new flag, DREAM_CAUGHT (var 229), is 1 when Twinsen beat FunFrock to the peak: it picks the lines above and,
+later, FunFrock's first line in the final (chapter 14). The wake sets
+`chapter()` to 1.
+
+**To build:** FunFrock's head start (his car let go before Twinsen's start); the wake on a loss as on a win (`wake=` for both results, the
+dream never run again); DREAM_CAUGHT set by the race's result; the four lines.
 
 ---
 
 ## Chapter 1 — The storm (Citadel 1) **(built, with the thief's quest new)**
 
-**Where:** Citadel Island in the rain:
+**Where:** Citadel Island in the rain (Citadel 1, the storm island, all chapter long: the Esmers don't land until the next morning):
 - Twinsen's house (scene 0)
 - the Weather Wizard's tent (scene 21)
-- the storm track's start, near the Tavern (scene 42)
-- the Tavern (scene 3)
+- the storm track's start, where the Tavern stood (scene 42): the Tavern was taken down to make room for the track (its two buildings are
+  gone from the Citadel 1 build, and Raph's car parks on its old spot)
 - the harbour (scene 43)
+- the sewers under the harbour (the 1996 demo's sewers, scenes 17 and 18: see [The 1996 demo's sewers](#the-1996-demos-sewers) below)
 - the lighthouse (scene 46)
 
 **Cast:**
@@ -139,10 +200,10 @@ The original quests don't run, so their flags are free to use for what they're n
 | The Weather Wizard | the game's (scene 21 actor 2) | his tent |
 | Raph | built (a copy of scene 2 actor 2) | lapping the storm track, then by the start line |
 | Mr. Paul | built (a copy of scene 7 actor 2) | the start line |
-| Tim the waiter | the game's (BODY 40) | the Tavern's door |
-| The thief | the game's (BODY 117), copied | behind the harbour warehouse |
+| Tim the waiter | the game's (BODY 40) | on the Tavern's old doorstep, with a tray and nowhere to serve |
+| The thief | the game's (BODY 117), copied | behind the harbour warehouse, then the sewers |
+| The sewer painter | the 1996 demo's (demo scene 17 actor 7) | the sewers, repainting the signs |
 | Flick, the marshal | built (the race's); an actor on foot (new) | her plinth by the start line |
-| The Esmers | built (a copy of scene 42 actor 6) | by the Tavern after the spell |
 
 **Walkthrough:**
 
@@ -171,51 +232,84 @@ The original quests don't run, so their flags are free to use for what they're n
 
    Flick, the marshal, on her plinth (new):
    > **Flick:** "I'm the School of Magic's assistant, but on race days I'm the marshal. No gloves, no flag, I'm afraid. I saw a fellow
-   > with a pair stuffed in his pocket go past the Tavern."
-4. **The Tavern.** Tim, at the door:
+   > with a pair stuffed in his pocket go past where the Tavern used to be."
+4. **The Tavern's old spot.** Tim stands on the doorstep that is all that's left of the Tavern, in the rain, with a tray:
+   > **Tim:** "Twenty years I served drinks here, Twinsen, and now look: a car park. They needed the room for the track, they said."
+   >
    > **Tim:** "A fellow ran past with gloves in one hand and a customer's umbrella in the other. Towards the harbour! If you catch him,
-   > I want that umbrella back."
+   > I want that umbrella back. Not that I've anywhere to put it."
 
    Q_THIEF = 2. The arrow points at the harbour.
 5. **The harbour.** The thief is behind the warehouse. When Twinsen comes within three cells:
    > **The thief:** "Can't catch me!"
 
-   He runs round the warehouse to the end of the quay, where there's nowhere left to go (Q_THIEF = 3). Action beside him:
+   He runs round the warehouse and drops down the sewer hatch on the quay (Q_THIEF = 3). The hatch is open now; Twinsen follows him down.
+6. **The sewers** (the 1996 demo's, scene 17 then 18). Down the ladder the thief is gone, splashing away somewhere ahead. The painter is
+   at work on a sign (his walk and his paint pot are the demo's own script):
+   > **The painter** (Action beside him; the demo's own line, demo text 236): "What a drag these sewers are! It stinks in here and I've
+   > still got a whole bunch of signs to update. Phew! I'm up to my neck in it!!"
+   >
+   > **The painter** (asked again; new): "A fellow in a hurry? He went through to the far tunnel, and trod on my wet paint. Follow the
+   > footprints."
+
+   Through the far tunnel (scene 18) the footprints lead to a dead end under a grating, where the thief has nowhere left to go
+   (Q_THIEF = 4). Action beside him:
    > **The thief:** "Fine, fine! Here are your gloves. Nice gloves, too. See you on the town circuit, if they ever build one."
 
-   Found: Driving gloves (item 7). He drops the umbrella. Q_THIEF = 4.
-6. **The umbrella (optional).** Picked up: Customer's umbrella (item 20). Back to Tim:
-   > **Tim:** "Our customer's umbrella! Have a drink on the house. Well, a lemonade: you're driving." *(10 kashes)*
-7. **The race.** Raph now tells his time (built):
+   Found: Driving gloves (item 7). He drops the umbrella and is off up the ladder. Q_THIEF = 5. The ladder under the grating comes up on
+   the quay.
+7. **The umbrella (optional).** Picked up: Customer's umbrella (item 20). Back to Tim:
+   > **Tim:** "Our customer's umbrella! I'd stand you a drink on the house, if I still had a house. Here." *(10 kashes)*
+8. **The race.** Raph now tells his time (built):
    > **Raph:** "A car and driving gloves: you're all set, Twinsen! My best lap is ## seconds. Beat that, and I'll come with you to the
    > lighthouse."
 
    Flick drops the flag. One lap against Raph's time (built).
-8. **Won.** (built)
+9. **Won.** (built)
    > **Raph:** "You beat my time, Twinsen! A deal is a deal: I'm off to the lighthouse. See you there!"
 
    Zoe joins Twinsen, the two walking together (built, behaviour 5):
    > **Zoe:** "Twinsen, you did it! Raph's on his way to the lighthouse, and the Weather Wizard is meeting us there. Come on, let's go
    > together!"
-9. **The lighthouse.** (built) The Wizard's spell. The storm clears and the game goes to chapter 2 (its own `inc_chapter`, var 253 =
-   2: fine weather). The Esmers land by the Tavern. Their line gains a sentence (new):
-   > **The Esmer:** "People from the planet Twinsun, we come to you in a spirit of peace. Thank you for clearing the rain which was
-   > preventing us from landing. As a thank you, we'll build you an even better race track. It should be ready tomorrow... and tomorrow
-   > we open a Cup for both your worlds."
-10. **Tired.** Everyone Twinsen talks to (built):
+10. **The lighthouse.** (built) The Wizard casts his spell from the top. The thunder stops; the rain thins to a drizzle. **The island
+    stays Citadel 1** and nobody lands yet (new: the spell no longer moves the game on to chapter 2, below).
+    > **The Weather Wizard:** "There. A storm this old doesn't clear in an evening, mind you: give it the night. By morning you'll see
+    > the sun."
+    >
+    > **Raph:** "Then I'm off to bed. Best race I've lost in years."
+    >
+    > **Zoe:** "Something's up there, Twinsen. Above the clouds. Lights. Did you see them?"
+11. **Tired.** Everyone Twinsen talks to on the way home (built):
     > "You look tired, Twinsen. You should go home and have a nap."
 
-    The bed (built):
-    > **Twinsen:** "What a day! A good night's sleep... Morning already! The aliens' new race track should be ready by now."
+    Tim, on his doorstep, if Twinsen passes:
+    > **Tim:** "Lights over the sea, at this hour? First a race track, now this. I'm going home."
 
-**Flags:** var 51, 56, 70 (built); `chapter()` 1 -> 2 by the game's own spell; Q_THIEF (213); items 7 and 20.
+    The bed (built, its line changed):
+    > **Twinsen:** "What a day! A good night's sleep..."
+
+    The screen fades out (the night).
+
+**Flags:** var 51, 56 (built); Q_THIEF (213, now 1-5); items 7 and 20. `chapter()` stays 1 to the end of the chapter: it goes to 2 in
+the morning (chapter 2, step 1), not at the spell.
+
+**To build:**
+- The spell without the chapter change: the lighthouse's script sets var 51 (the storm plot done) but not the game's `inc_chapter`, and
+  var 70 (the Esmers landed) waits for the morning too. Citadel 1's weather is the island's own (CITADEL.ILE is the storm island), so it
+  keeps raining lightly until the morning, which is what the Wizard's line says.
+- The bed's line, the night's fade, and the wake in the morning (chapter 2, step 1).
+- The sewer hatch on the quay, open from Q_THIEF = 3; the thief's chase through the demo's sewers (his track in scenes 17 and 18); the
+  footprints; the ladder up to the quay.
 
 ---
 
 ## Chapter 2 — The town circuit (Citadel 2)
 
-**Where:** Citadel Island in fine weather:
+**Where:** Citadel Island in fine weather, the next morning (Citadel 2: from the moment Twinsen steps out of his house, the island is the
+fine-weather one, CITABAU, with the Esmers' town circuit on it):
 - Twinsen's house (scene 0)
+- the Esmers' landing place, by the town circuit
+- the Tavern, back where it stood (outside, and its inside, scene 3)
 - the yard north of the house, where the cars park
 - the town circuit's start, near the Dino-Fly (scene 49)
 - the harbour (scene 43)
@@ -224,7 +318,10 @@ The original quests don't run, so their flags are free to use for what they're n
 
 | Who | Made from | Where |
 |---|---|---|
-| Zoe | the game's (scene 0 actor 4), then the companion | beside her car in the yard |
+| Zoe | the game's (scene 0 actor 4), then the companion | by the bed, then beside her car in the yard |
+| The Esmers | built (a copy of scene 42 actor 6, the game's landing) | their ship, by the town circuit |
+| Tim the waiter | the game's (BODY 40) | the Tavern's door, then behind its bar |
+| Raph | built | by the Tavern |
 | Flick | the marshal (built), on foot | her plinth |
 | The Esmer herald | a copy of scene 42 actor 6 | beside the start line |
 | Mr. Paul | built | the start line |
@@ -235,14 +332,54 @@ The original quests don't run, so their flags are free to use for what they're n
 
 **Walkthrough:**
 
-1. **The morning.** Twinsen gets up. At the house door:
-   > **Zoe:** "There's a crowd at the new track already! Come on, I want a look... and I've got my own car this time."
-2. **The yard.** Zoe stands by her car, which has one wheel missing:
+1. **The morning.** Sunlight through the window. Zoe wakes Twinsen again, as at the start of the game (the same shake, built), but this
+   time she's excited:
+   > **Zoe:** "Twinsen! Wake up! The aliens have landed! A big ship, right by the harbour road, and the whole island's out to look!"
+   >
+   > **Twinsen:** "Aliens? I was dreaming about... no. Never mind. I'm coming!"
+
+   `inc_chapter()` -> 2 (the game's fine weather; var 70, the Esmers landed, = 1). Twinsen gets up; **the house door now leads out onto
+   Citadel 2**: the sky clear, the storm track gone, the Esmers' new circuit round the town, and the Tavern standing again.
+2. **The landing.** The Esmers' ship stands by the new circuit, islanders all round it. The Esmer speaks to Twinsen as he comes near (the
+   game's landing speech, its end new):
+   > **The Esmer:** "People from the planet Twinsun, we come to you in a spirit of peace. Thank you for clearing the rain which was
+   > preventing us from landing."
+   >
+   > **The Esmer:** "We saw your little race track in the rain. Brave, but small, and it cost you your Tavern. So last night we built you
+   > a bigger one, round your whole town, and we put your Tavern back where it stood, every stone of it."
+   >
+   > **The Esmer:** "And today we open a Cup for both your worlds, Twinsun's and Zeelich's. The first race is here, on your new
+   > circuit."
+
+   The islanders around (each a line when Twinsen passes; the game's townsfolk bodies):
+   > **A Quetch:** "A whole circuit in one night! I went to bed with a puddle outside my door and woke up with a grandstand."
+   >
+   > **A Grobo:** "Did you see the Tavern? Back like it never left. Even the sign's been repainted."
+   >
+   > **A rabbibunny:** "They asked me where the bins went. Polite, these aliens."
+3. **The Tavern.** Raph stands outside it, staring:
+   > **Raph:** "I parked on this spot last night. Now there's a Tavern on it. Where's my car?"
+   >
+   > **Raph:** "...in the Esmers' car park, they say. With a wash and a polish. I could get used to aliens."
+
+   Tim, at the door, then behind his bar inside (scene 3, the game's Tavern, open again):
+   > **Tim:** "Twinsen! Look at it! The same bar, the same stools, the same stain on the ceiling... I asked them to leave that out, but
+   > they said 'exactly as it was'. Come in, come in: the first drink in the new old Tavern is on the house."
+
+   Then, if Twinsen gave the umbrella back in chapter 1:
+   > **Tim:** "And that umbrella you brought back is on its hook by the door. The customer never came for it. Exactly as it was."
+
+   If he didn't:
+   > **Tim:** "And if you ever find that customer's umbrella, there's a hook by the door waiting for it."
+4. **The house door again.** Zoe has gone ahead:
+   > **Zoe** (at the door, if Twinsen goes home first): "There's a crowd at the new track already! Come on, I want a look... and I've got
+   > my own car this time."
+5. **The yard.** Zoe stands by her car, which has one wheel missing:
    > **Zoe:** "I'm racing too! Only... my car's back wheel came off on the way here. Bob says there's a spare in the scrap at the
    > harbour."
 
    Q_ZOECAR = 2. The arrow points at the harbour.
-3. **The start line.** The Esmer herald:
+6. **The start line.** The Esmer herald:
    > **The Esmer herald:** "Welcome to the Two Worlds Cup! One race on every island of Twinsun and Zeelich, and to whoever wins them
    > all, a wish. Any wish. The first race is here, on Citadel."
 
@@ -254,14 +391,14 @@ The original quests don't run, so their flags are free to use for what they're n
    > **Mr. Paul:** "Rules are rules, Twinsen. Six cars."
 
    The gate says it too (`gate=214 4`).
-4. **The harbour.** Bob, by the scrap:
+7. **The harbour.** Bob, by the scrap:
    > **Bob:** "A wheel? Somewhere under that lot. Mind the fish."
 
    The wheel is in the scrap, beside the road:
    > **Twinsen:** "A wheel. A bit rusty, but round."
 
    Q_ZOECAR = 3.
-5. **Back to Zoe.**
+8. **Back to Zoe.**
    > **Zoe:** "Perfect!"
 
    She fits it.
@@ -270,13 +407,13 @@ The original quests don't run, so their flags are free to use for what they're n
 
    Found: Portable Radio (item 26). Q_ZOECAR = 4.
    > **Zoe:** "Now you'd better watch your back on the grid."
-6. **The first call.** The radio rings: "The radio is ringing. Answer it from your inventory." Twinsen answers.
+9. **The first call.** The radio rings: "The radio is ringing. Answer it from your inventory." Twinsen answers.
    > **Baldino (radio):** "Hello? Twinsen? Can you hear me? Excellent, the radio works! Listen, I've been reading about this Cup. I
    > tuned your car before you ever knew it needed tuning: shorter gears for the town's tight corners. Try not to scratch the paint."
 
    Car update: the Citadel town circuit's best setup.
-7. **The race.** Six cars, three laps (built). Flick drops the flag. Beat Mr. Paul.
-8. **Won.** Mr. Paul (built):
+10. **The race.** Six cars, three laps (built). Flick drops the flag. Beat Mr. Paul.
+11. **Won.** Mr. Paul (built):
    > **Mr. Paul:** "Well raced, Twinsen! You've won the prize: a ferry ticket."
 
    Found: Ferry Ticket (item 13).
@@ -292,7 +429,7 @@ The original quests don't run, so their flags are free to use for what they're n
 
    Zoe, after the race, if Zoe beat Mr. Paul too (two players):
    > **Zoe:** "Second! Or first, depending on who's counting."
-9. **The ferry.** Zoe comes along now (one player: she follows Twinsen):
+12. **The ferry.** Zoe comes along now (one player: she follows Twinsen):
    > **Zoe:** "Every race needs a pit crew. That's me. You drive, I'll fix."
 
    At the harbour, Mrs. Brune:
@@ -300,7 +437,13 @@ The original quests don't run, so their flags are free to use for what they're n
 
    The ferry crossing (the game's own, built: the ticket) lands them on the Desert. `inc_chapter()` -> 3.
 
-**Flags:** Q_ZOECAR (214), item 26 (the radio), item 13 (built), `chapter()` 2 -> 3.
+**Flags:** `chapter()` 1 -> 2 at the morning wake, var 70 with it; Q_ZOECAR (214), item 26 (the radio), item 13 (built), `chapter()`
+2 -> 3.
+
+**To build:** the morning wake (Zoe's shake again, her new line, then `inc_chapter`); the house door leading out onto Citadel 2 from
+chapter 2 (the door's cube change picks the CITABAU scene by `chapter()`); the Esmers' landing moved from the lighthouse to the morning,
+with their new lines; the Tavern standing in the Citadel 2 build and its inside (scene 3) reachable again; the islanders' lines; Raph and
+Tim at the Tavern.
 
 ---
 
@@ -980,7 +1123,12 @@ The original quests don't run, so their flags are free to use for what they're n
 **Walkthrough:**
 
 1. **Landing,** from the teleporter, on the dock (built). FunFrock:
-   > **FunFrock:** "We raced once, Twinsen, in your dream. You won, in your dream. This time it's real, and the wish is mine."
+   If Twinsen caught him in the dream (DREAM_CAUGHT = 1):
+   > **FunFrock:** "We raced once, Twinsen, in your dream. You caught me, in your dream. This time it's real, and the wish is mine."
+
+   If he didn't:
+   > **FunFrock:** "We raced once, Twinsen, in your dream. You never caught me then, and you won't now. This time it's real, and the
+   > wish is mine."
 2. **The last call.**
    > **Baldino (radio):** "Twinsen. Everything I have is on that car. Best setup, and one last thing in the boot: a super jet-pack.
    > Use it on the spiral. And Twinsen... win."
