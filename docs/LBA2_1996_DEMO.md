@@ -33,7 +33,8 @@ game folder in them is never replaced by the demo's; the joined interior maps (m
 | Islands | 4 of 4, ground, heights, textures and decors |
 | Interiors (grids, libraries, bricks) | all; already in the retail format, only the file's header differs |
 | Bodies | 116 of 116 characters (3 partly), 56 of 56 objects, all island decors (323) |
-| Animations, sprites, texts, samples, screens, flows | copied as they are: the retail format |
+| Animations | the retail format but for the keyframes' times: the demo's are in 1/50 s ticks (Twinsen's walk 15, 10, 10), the retail game's in ms (300, 200, 200) -- multiplied by 20, or every character moves 20 times too fast |
+| Sprites, texts, samples, screens, flows | copied as they are: the retail format |
 | Scripts | 66 of 66 scenes, translated into the retail bytecode (the demo's script language, below); they run in the retail engine |
 
 What the editor does with it:
