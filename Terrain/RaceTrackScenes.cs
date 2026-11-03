@@ -103,6 +103,18 @@ internal static class RaceTrackScenes
         return a;
     }
 
+    // A helper drawn as one of SPRITES.HQR's pictures (238 a sheet of paper, 247 a wheel, 250 the Dark Monk's statuette, 280 a hatch),
+    // with the flags the game's own paper on a floor has (scene 21's): SPRITE_3D | NO_SHADOW and no collisions, so Twinsen walks over it.
+    internal static SceneActorModel SpriteProp(int x, int y, int z, int sprite, int colour = 4)
+    {
+        var a = InvisibleHelper(x, y, z, colour);
+        a.Flags = FloorSprite; a.Entity = -1; a.Body = 0; a.Sprite = sprite;
+        return a;
+    }
+    internal const int PaperSprite = 238, WheelSprite = 247, MonkStatuetteSprite = 250, HatchSprite = 280;
+    private const uint FloorSprite = 0x21400;
+    internal const uint InvisibleFlag = 0x0200;
+
     // (`sceneOf`: the island's outside scene of each cube)
     private static List<EdgeCrossing> EdgeCrossings(Dictionary<(int, int), int> sceneOf, RaceTrackReport report, RaceTrackOptions options)
     {

@@ -690,7 +690,8 @@ internal static class ActorDump
 {
     public static int Run(string[] args)
     {
-        var store = new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba1, args[1]);
+        var game = args.Length > 4 && args[4] == "lba2" ? LBAAssembler.Scenes.SceneGame.Lba2 : LBAAssembler.Scenes.SceneGame.Lba1;
+        var store = new LBAAssembler.Scenes.SceneStore(game, args[1]);
         var a = store.Load(int.Parse(args[2])).Actors[int.Parse(args[3])];
         Console.WriteLine($"flags 0x{a.Flags:X} sprite {a.IsSprite} entity {a.Entity} body {a.Body} anim {a.Anim} sprite {a.Sprite} pos ({a.X},{a.Y},{a.Z}) beta {a.Beta} srot {a.SRot} move {a.Move} hitforce {a.HitForce} option 0x{a.OptionFlags:X} info [{string.Join(",", a.Info)}] nbbonus {a.NbBonus} coul {a.CoulObj} armor {a.Armor} life {a.LifePoints}");
         return 0;

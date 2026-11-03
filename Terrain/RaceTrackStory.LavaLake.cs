@@ -228,7 +228,8 @@ internal static partial class RaceTrackStory
             {
                 var i = (int)((k + 1) * report.LapX.Length / 5.0) % report.LapX.Length;
                 double x = report.LapX[i], z = report.LapZ[i], y = report.LapY.Length > i ? report.LapY[i] : report.GroundAfter?.Invoke(x, z) ?? 0;
-                var spot = RaceTrackScenes.InvisibleHelper(RaceTrackScenes.CubeLocal(x, model.CubeX), (int)Math.Round(y), RaceTrackScenes.CubeLocal(z, model.CubeY), 9);
+                var spot = RaceTrackScenes.SpriteProp(RaceTrackScenes.CubeLocal(x, model.CubeX), (int)Math.Round(y), RaceTrackScenes.CubeLocal(z, model.CubeY), RaceTrackScenes.MonkStatuetteSprite, 9);
+                spot.Flags |= RaceTrackScenes.InvisibleFlag;       // (seen only once it is the one to find)
                 log.Add($"statuette {k + 1} at cell ({x:0.#}, {z:0.#}), {y:0}");
                 edits.Add(GroupB.Add(model, spot, $@"void comportement_0()
 {{
@@ -244,6 +245,10 @@ internal static partial class RaceTrackStory
 
 void comportement_1()
 {{
+    if ({StallTold + k} == var_game({QStall}))
+    {{
+        invisible(0);
+    }}
     if ({StallTold + k} == var_game({QStall}) && 1200 > distance(0))
     {{
         message({Say(LavaLine.Statuette)});

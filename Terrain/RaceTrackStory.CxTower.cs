@@ -162,8 +162,10 @@ internal static partial class RaceTrackStory
                     set_var_game({QCxKey}, {KeyTraded});
                 }}
             }}")));
-            var note = RaceTrackScenes.InvisibleHelper(RaceTrackScenes.CubeLocal(noteAt.X, model.CubeX), (int)Math.Round(noteAt.Y), RaceTrackScenes.CubeLocal(noteAt.Z, model.CubeY), 9);
+            var note = RaceTrackScenes.SpriteProp(RaceTrackScenes.CubeLocal(noteAt.X, model.CubeX), (int)Math.Round(noteAt.Y), RaceTrackScenes.CubeLocal(noteAt.Z, model.CubeY), RaceTrackScenes.PaperSprite, 9);
             var lyraIndex = model.Actors.Count + 1;      // (the note first, then Lyra)
+            // (on the bench once the race is won, until it is read)
+            note.Flags |= RaceTrackScenes.InvisibleFlag;
             edits.Add(s.Add(model, note, Talker(when, $@"            if ({KeyWon} <= var_game({QCxKey}))
             {{
                 message_obj(0, {Id(CLine.Note)});
@@ -171,7 +173,15 @@ internal static partial class RaceTrackStory
                 set_var_game({QCxKey}, {KeyNote});
                 inc_chapter();
                 set_change_cube({TransportSwitch}, 1);
-            }}", 1100)));
+            }}", 1100, $@"    if ({KeyWon} <= var_game({QCxKey}) && {KeyNote} > var_game({QCxKey}))
+    {{
+        invisible(0);
+    }}
+    else
+    {{
+        invisible(1);
+    }}
+")));
             if (palaceScene >= 0) s.Travel(model, noteAt, palaceScene, palaceAt, TransportSwitch);
             else s.Log.Add("chapter 12: no palace race scene in the folder: the soldiers' transport goes nowhere");
             edits.Add(s.Add(model, lyra, Talker(when, $@"            if ({KeyWon} <= var_game({QCxKey}))

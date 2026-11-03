@@ -863,6 +863,8 @@ stop();
                 // until the thief is down)
                 Info = new[] { SewerLiftTop.X, SewerLiftTop.Y - 200, SewerLiftTop.Z, 0, HatchSwitch, 0, 1, 0 },
             });
+            // (the hatch itself, on the quay over the zone -- before the thief, who must stay the scene's last actor)
+            SceneOps.AddActor(model, RaceTrackScenes.SpriteProp(hx, hy, hz, RaceTrackScenes.HatchSprite));
             var life = p.Add(model, thief, $@"void comportement_0()
 {{
     if (2 > chapter() && {ThiefDown} <= var_game({QThief}))
@@ -1090,7 +1092,7 @@ void comportement_1()
         // were -- and with the slate copied onto it (2), Miss Bloop's word on it
         p.Edit(Museum, "the blueprints of the dream's track under a case: seen, and copied onto the slate; Miss Bloop tells whose they were", model =>
         {
-            var file = RaceTrackScenes.InvisibleHelper(BlueprintFile.X, BlueprintFile.Y, BlueprintFile.Z, 9);
+            var file = RaceTrackScenes.SpriteProp(BlueprintFile.X, BlueprintFile.Y, BlueprintFile.Z, RaceTrackScenes.PaperSprite, 9);
             var life = p.Add(model, file, Talker("4 > chapter()", $@"            if (2 > var_game({QBlueprint}) && 0 < var_game({Slate}))
             {{
                 if (0 == var_game({QBlueprint}))
@@ -1246,12 +1248,17 @@ void comportement_1()
             {{
                 message({p.Say(ChapterLine.BobWheel)});
             }}"));
-                var wheel = RaceTrackScenes.InvisibleHelper(RaceTrackScenes.CubeLocal(wheelAt.X, model.CubeX), (int)Math.Round(wheelAt.Y), RaceTrackScenes.CubeLocal(wheelAt.Z, model.CubeY), 9);
-                var wheelLife = p.Add(model, wheel, Talker("2 == chapter()", $@"            if ({LucTold} == var_game({QLucCar}))
+                var wheel = RaceTrackScenes.SpriteProp(RaceTrackScenes.CubeLocal(wheelAt.X, model.CubeX), (int)Math.Round(wheelAt.Y), RaceTrackScenes.CubeLocal(wheelAt.Z, model.CubeY), RaceTrackScenes.WheelSprite, 9);
+                // (in the scrap until it is found)
+                var wheelLife = p.Add(model, wheel, Talker($"2 == chapter() && {WheelFound} > var_game({QLucCar})", $@"            if ({LucTold} == var_game({QLucCar}))
             {{
                 message_obj(0, {p.Say(ChapterLine.WheelSeen)});
                 set_var_game({QLucCar}, {WheelFound});
-            }}", 1100));
+            }}", 1100, $@"    if ({WheelFound} <= var_game({QLucCar}))
+    {{
+        suicide();
+    }}
+"));
                 return scripts => { bobLife(scripts); wheelLife(scripts); };
             });
         else p.Log.Add("Bob and the wheel at the harbour left out: no room off the town circuit by the scrap");

@@ -297,6 +297,7 @@ internal static class Program
             "lba2stack" => Lba2StackStudy.Run(args),
             "dummybody" => DummyBodyStudy.Run(args),
             "actordump" => ActorDump.Run(args),
+            "spritesurvey" => SpriteSurvey.Run(args),
             "scriptgrep" => ScriptGrep.Run(args),
             "scriptgrep2" => ScriptGrep2.Run(args),
             "scriptdump" => ScriptDump.Run(args),
