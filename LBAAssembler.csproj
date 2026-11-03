@@ -124,6 +124,14 @@
   </ItemGroup>
 
   <!--
+    The 1996 demo's School of Magic, which every race track build puts into the game (Demo96/Demo96Rooms.cs): demo96\school.zip, made by
+    `ScriptRoundTrip demo96pack <converted demo> demo96\school.zip`. LBRA's installer carries it the same.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="demo96\school.zip" LogicalName="Demo96/school.zip" />
+  </ItemGroup>
+
+  <!--
     NLayer (MIT, a managed MPEG audio decoder, no dependencies): the Temple of Bu's race music from Steam's/GOG's LBA1 Classic, whose CD
     tracks are MP3s (Terrain/Temple/TempleMusicAudio.cs decodes them to the WAV the engine streams). Every project compiling Terrain/ needs it:
     tools/ScriptRoundTrip, and LBRA's installer (LittleBigRacingAdventure/Installer/LBRAInstaller.csproj).

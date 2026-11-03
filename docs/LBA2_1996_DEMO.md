@@ -156,8 +156,12 @@ The user, 2026-11-03: "The demo scenes for the school of magic, let's switch the
 magic scenes". Every race-track build now puts the demo's School (its scenes 27 and 28) into the retail game's slots 27 and 28
 (`Demo96/Demo96Rooms.cs`, from `RaceTrackService` right after the build's originals are put back, before the story):
 
-- **Where the demo comes from**: `LBA2_DEMO96` (a converted folder, or the demo's own folder: converted into the scratch folder), else the
-  editor's converted copy (File > Open the 1996 demo, converter version 4). Without either, the build keeps the game's own School and says so.
+- **Where the demo comes from**: the package the program carries, `demo96\school.zip` (embedded by LBA Assembler and LBRA's installer --
+  the user, 2026-11-03: "We should ship the demo school packaged inside the installer"): a converted demo cut down to the entries the
+  School takes (its two scenes, grids, library and the bricks it names, the characters' 5 bodies and 25 animations, its sprites, the entity
+  table, the palette), 478 KB, made by `ScriptRoundTrip demo96pack <converted demo> demo96\school.zip` -- installed from it, the game's
+  files come out byte for byte as from the whole converted demo. `LBA2_DEMO96` (a converted folder, or the demo's own) comes first;
+  the editor's converted copy (File > Open the 1996 demo) is used when a build carries no package.
 - **The interior**: the demo's grids in grids 27 and 28, drawn with the demo's block library 1 (202 blocks) as a library of its own
   (LBA_BKG's 18th); its bricks are the retail ones where they are the same, the rest added (`MapBricks.Install`, as a map's interior goes in:
   a build again adds nothing).

@@ -62,6 +62,7 @@
     <Compile Include="..\..\Lba2Engine.cs" Link="Lba2Engine.cs" />
     <Compile Include="..\..\Terrain\**\*.cs" Link="Terrain\%(RecursiveDir)%(Filename)%(Extension)" />
     <!-- the routes built into the program (RaceTrackPlan.Built / BuiltTwin), as the app has them -->
+    <EmbeddedResource Include="..\..\demo96\school.zip" LogicalName="Demo96/school.zip" />
     <EmbeddedResource Include="..\..\docs\racetrack\track_plan.json" LogicalName="RaceTrackPlan.Desert.json" />
     <EmbeddedResource Include="..\..\docs\racetrack\citadel_track_plan.json" LogicalName="RaceTrackPlan.Citadel.json" />
     <EmbeddedResource Include="..\..\docs\racetrack\citadel_storm_track_plan.json" LogicalName="RaceTrackPlan.CitadelStorm.json" />

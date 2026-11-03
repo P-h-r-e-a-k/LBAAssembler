@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.IO;
+using System.IO.Compression;
 using System.Text.RegularExpressions;
 using LBAAssembler.Characters;
 using LBAAssembler.Grids;
@@ -39,7 +40,9 @@ internal static class Demo96Rooms
     private static readonly Regex SampleCall = new(@"\b(sample|sample_rnd|sample_always|stop_sample|repeat_sample)\((\d+)", RegexOptions.Compiled);
 
     // The converted demo a build takes the rooms from: LBA2_DEMO96 (a converted folder, or the demo's own: converted into the scratch
-    // folder, with what it lacks from `gameDirectory`), else the editor's (File > Open the 1996 demo), or null.
+    // folder, with what it lacks from `gameDirectory`), else the package the program carries (Pack: the repo's demo96\school.zip, embedded
+    // by LBAAssembler.csproj and LBRA's installer as PackageResource -- the user, 2026-11-03: "We should ship the demo school packaged
+    // inside the installer"), unpacked into the scratch folder, else the editor's (File > Open the 1996 demo), or null.
     public static string? Source(string gameDirectory)
     {
         var editors = Path.Combine(DataPaths.LocalAppData, "LBAAssembler", "Demo96");
@@ -54,7 +57,86 @@ internal static class Demo96Rooms
                 return into;
             }
         }
+        if (Carried() is { } carried) return carried;
         return Demo96Converter.IsConverted(editors, Demo96Converter.SourceOf(editors) ?? "") ? editors : null;
+    }
+
+    public const string PackageResource = "Demo96/school.zip";
+
+    // The package the program carries, unpacked into a scratch folder named by its contents' hash (unpacked once), or null.
+    private static string? Carried()
+    {
+        using var stream = typeof(Demo96Rooms).Assembly.GetManifestResourceStream(PackageResource);
+        if (stream is null) return null;
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        var bytes = copy.ToArray();
+        var into = Path.Combine(Path.GetTempPath(), "LBAAssembler-Demo96-" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(bytes))[..12]);
+        if (File.Exists(Path.Combine(into, Demo96Converter.MarkerFile))) return into;
+        var part = into + ".part";
+        if (Directory.Exists(part)) Directory.Delete(part, true);
+        using (var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bytes))) zip.ExtractToDirectory(part);
+        if (Directory.Exists(into)) Directory.Delete(into, true);
+        Directory.Move(part, into);
+        return into;
+    }
+
+    // The rooms' package, made from a converted demo: the files the install reads (Install), each with only the entries the rooms take
+    // -- their scenes, the interiors' grids, library and bricks, the characters' bodies and animations, the sprites, the entity table,
+    // the palette -- the rest of each file's entries empty, so that the numbers stay the demo's; the converter's scene map beside them.
+    public static List<string> Pack(string converted, string zipPath, IReadOnlyList<Room> rooms)
+    {
+        var keep = new Dictionary<string, HashSet<int>>
+        {
+            ["SCENE.HQR"] = new() { 0 }, ["LBA_BKG.HQR"] = new() { 0 }, ["RESS.HQR"] = new() { 0, 44 },
+            ["BODY.HQR"] = new() { 0 }, ["ANIM.HQR"] = new() { 0 }, ["SPRITES.HQR"] = new() { 0 },
+        };
+        // (every file's entry 0 kept: a reader takes its offset, the first in the file, for the table's size -- HqrArchive)
+        var store = new SceneStore(SceneGame.Lba2, converted);
+        var backend = new Lba2GridBackend(converted);
+        var bkg = HqrFile.Parse(File.ReadAllBytes(Path.Combine(converted, "LBA_BKG.HQR")));
+        var header = bkg.Read(0);
+        int gri = BinaryPrimitives.ReadUInt16LittleEndian(header), bll = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(4)),
+            brk = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(6)), maxBrk = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(8));
+        keep["LBA_BKG.HQR"].Add(brk + maxBrk);
+        var demoTable = HqrArchive.Open(Path.Combine(converted, "RESS.HQR")).Read(44);
+        foreach (var r in rooms)
+        {
+            keep["SCENE.HQR"].Add(r.DemoScene + 1);
+            var model = store.Load(r.DemoScene);
+            if (model.Zones.Any(z => z.Type == 3)) throw new InvalidDataException($"The demo's scene {r.DemoScene} has grid fragments: the package doesn't carry them.");
+            var grid = backend.GridOfScene(r.DemoScene) ?? throw new InvalidDataException($"The demo's scene {r.DemoScene} has no interior grid.");
+            var raw = backend.RawGrid(grid);
+            keep["LBA_BKG.HQR"].Add(gri + grid);
+            keep["LBA_BKG.HQR"].Add(bll + raw[0]);
+            var library = bkg.Read(bll + raw[0]);
+            foreach (var p in MapBricks.BrickPositions(library))
+                if (BinaryPrimitives.ReadUInt16LittleEndian(library.AsSpan(p)) is > 0 and var b && b - 1 < maxBrk) keep["LBA_BKG.HQR"].Add(brk + b - 1);
+            foreach (var a in model.Actors.Skip(1))
+            {
+                if (a.IsSprite) { keep["SPRITES.HQR"].Add(a.Sprite); continue; }
+                if (a.Entity <= 0 || a.Entity == DemoMecaPenguin) continue;
+                MapCharacters.Renumber(MapCharacters.EntityOf(demoTable, a.Entity), b => { keep["BODY.HQR"].Add(b); return b; }, n => { keep["ANIM.HQR"].Add(n); return n; });
+            }
+        }
+        var log = new List<string>();
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(zipPath))!);
+        using (var zip = new System.IO.Compression.ZipArchive(File.Create(zipPath), System.IO.Compression.ZipArchiveMode.Create))
+        {
+            foreach (var (name, entries) in keep)
+            {
+                var file = HqrFile.Parse(File.ReadAllBytes(Path.Combine(converted, name)));
+                var trimmed = new HqrFile();
+                for (var i = 0; i < file.Count; i++)
+                    trimmed.Slots.Add(entries.Contains(i) && !file.IsEmpty(i) ? new HqrFile.Slot { Extent = file.ExtentOf(i) } : new HqrFile.Slot());
+                var bytes = trimmed.ToBytes();
+                using (var s = zip.CreateEntry(name, System.IO.Compression.CompressionLevel.SmallestSize).Open()) s.Write(bytes);
+                log.Add($"{name}: {entries.Count} of {file.Count} entries, {bytes.Length} bytes");
+            }
+            zip.CreateEntryFromFile(Path.Combine(converted, Demo96Converter.MarkerFile), Demo96Converter.MarkerFile);
+        }
+        log.Add($"{zipPath}: {new FileInfo(zipPath).Length} bytes");
+        return log;
     }
 
     public static List<string> Install(string gameDirectory, string converted, IReadOnlyList<Room> rooms)

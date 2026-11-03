@@ -221,6 +221,7 @@ internal static class Program
             "maptrack" => MapTrackCommand.Run(args),
             "demo96" => Demo96Command.Run(args),
             "demo96rooms" => Demo96RoomsCommand.Run(args),
+            "demo96pack" => Demo96PackCommand.Run(args),
             "palaceactors" => PalaceStudy.Actors(args),
             "islandmesh" => PalaceStudy.Mesh(args),
             "palacezones" => PalaceStudy.Zones(args),

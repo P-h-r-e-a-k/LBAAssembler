@@ -22,3 +22,13 @@ internal static class Demo96RoomsCommand
         return 0;
     }
 }
+
+// demo96pack <converted demo folder> <out.zip>: the School of Magic's package the program carries (Demo96Rooms.Pack).
+internal static class Demo96PackCommand
+{
+    public static int Run(string[] args)
+    {
+        foreach (var line in Demo96Rooms.Pack(args[1], args[2], Demo96Rooms.School)) Console.WriteLine(line);
+        return 0;
+    }
+}
