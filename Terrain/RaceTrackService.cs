@@ -441,6 +441,17 @@ internal static class RaceTrackService
         if (Problem(gameDirectory) is { } problem) return new(false, problem, new(), null);
         tracks = tracks.DistinctBy(t => t.Options.Island.IleFile, StringComparer.OrdinalIgnoreCase).ToList();
         if (tracks.Count == 0) return new(false, "No island is chosen: nothing was changed.", new(), null);
+        // (a mirror of a game folder -- a map's workspace, Test edits, the 3D view's track test -- has its files hard-linked to the real
+        // folder's, and the build writes files in place: each made a file of its own first, or the build would change the real game folder's)
+        try
+        {
+            if (LBAAssembler.LiveDataRoot.DetachLinked(gameDirectory) is { Count: > 0 } detached)
+                DebugLog.Log($"RaceTrackService.Build: {detached.Count} hard-linked files in {gameDirectory} made files of their own first ({string.Join(", ", detached.Take(8))}{(detached.Count > 8 ? ", ..." : "")})");
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return new(false, $"Nothing was changed: a linked file couldn't be made a file of its own ({error.Message}).", new(), null);
+        }
         // (the bar's shares, by how long each part takes: the originals, Polar Island added when the folder hasn't got it, Sendell's Well
         // made, then each track its own -- BuildSeconds)
         // (the islands made for the build: those of its tracks, and those a shared track is a copy of -- RaceTrackShare)
@@ -1361,6 +1372,8 @@ internal static class RaceTrackService
     public static string Restore(string gameDirectory)
     {
         if (!HasBackups(gameDirectory)) return "There is no race track build to undo in this folder.";
+        // (a mirror's hard links made files of their own first, as Build does: the originals are copied back over them in place)
+        LBAAssembler.LiveDataRoot.DetachLinked(gameDirectory);
         var back = new List<string>();
         foreach (var f in AllFiles)
         {

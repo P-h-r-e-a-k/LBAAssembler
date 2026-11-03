@@ -140,7 +140,7 @@ public partial class MainWindow
         edit.Children.Add(Btn("Clear all", "Take every piece away", () =>
         {
             if (trackPieces.Pieces.Count == 0 || MessageBox.Show(this, "Take every piece away?", "Race track", MessageBoxButton.OKCancel) != MessageBoxResult.OK) return;
-            RememberTrackPieces("clear all"); trackPieces.Pieces.Clear(); trackSelected = null; trackGroup = null; TrackPiecesChanged();
+            RememberTrackPieces("clear all"); trackPieces.Pieces.Clear(); trackSelected = null; trackGroup = null; trackFlag = null; TrackPiecesChanged();
         }));
         root.Children.Add(edit);
         var make = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
@@ -151,8 +151,10 @@ public partial class MainWindow
         root.Children.Add(make);
         var test = new WrapPanel();
         test.Children.Add(Btn("Place the test start", "Then click on the road: a test race starts there (or drag the chequered flag along the road)", ArmTrackFlag));
-        trackTestButton = Btn("Test from the flag", "Build the road from the flag on -- to its end, or once round a lap -- into the game folder, and race it in Play", TestTrackFromFlag);
+        trackTestButton = Btn("Test from the flag", "Build the road into the game folder and race it in Play from the flag -- Twinsen's car on the flag, to the road's end or once round a lap; " +
+                                                    "a flag at the road's end drives it the other way", TestTrackFromFlag);
         test.Children.Add(trackTestButton);
+        test.Children.Add(Btn("Remove the test start", "Take the chequered flag off the road", RemoveTrackFlag));
         root.Children.Add(test);
         trackStatus = Text("", 6, false);
         root.Children.Add(trackStatus);
@@ -338,6 +340,9 @@ public partial class MainWindow
 
     private void TrackPiecesChanged()
     {
+        // (the test start goes with the road under it -- the user, 2026-11-03: "The "Test start" flag seems undeleteable even when the
+        // underlying track is removed")
+        if (trackFlag is { } f && !TrackFlagOnRoad(f)) { trackFlag = null; trackFlagDragging = false; SetTrackStatus("The test start went with the road under it."); }
         SaveTrackPieces();
         DrawTrackOverlay();
         if (trackArmed is null) SetTrackStatus($"{trackPieces.Pieces.Count} piece(s). Make the track when they are one road.");
@@ -681,6 +686,18 @@ public partial class MainWindow
         return best;
     }
 
+    // Whether a road piece still runs under the flag (within 2 cells of its middle line, about at its height)
+    private bool TrackFlagOnRoad((double X, double Z, double Y) f) => trackPieces.Pieces.Where(p => !p.IsPit).SelectMany(p => p.Line())
+        .Any(q => Math.Pow(q.X - f.X, 2) + Math.Pow(q.Z - f.Z, 2) < 4 && Math.Abs(q.Y - f.Y) < 1200);
+
+    private void RemoveTrackFlag()
+    {
+        if (trackFlag is null && !trackFlagArmed) { SetTrackStatus("There's no test start to remove."); return; }
+        trackFlag = null; trackFlagArmed = false; trackFlagDragging = false; TerrainViewport.Cursor = null;
+        DrawTrackOverlay();
+        SetTrackStatus("The test start removed: Place the test start puts it on the road again.");
+    }
+
     // Where the flag's foot is drawn, or null
     private Point? TrackFlagScreen() =>
         trackFlag is { } f && cameraModel is { } model && model.Project(f.X * 512, f.Y, f.Z * 512, out var u, out var v) ? ToWidget(model, u, v) : null;
@@ -692,16 +709,30 @@ public partial class MainWindow
         if (trackFlag is not { } flag) { SetTrackStatus("Place the test start first (Place the test start, then click on the road), or drag the chequered flag onto it."); return; }
         if (TrackIslandOfView() is not { } island || TrackIslandAsBuilt(island) is not { } ground) { SetTrackStatus("Open one of the race tracks' islands first."); return; }
         DisarmTrackPiece();
-        var result = trackPieces.MakePlan(ground, flag);
+        var result = trackPieces.MakePlan(ground, flag, out var gridRoom);
         if (result.Plan is not { } plan) { SetTrackStatus("No test: " + string.Join(" ", result.Problems.Concat(result.Notes).Select(n => n.TrimEnd('.') + "."))); return; }
         var others = RaceTrackService.BuiltIslands(gameRoot).Where(i => !string.Equals(i.IleFile, island.IleFile, StringComparison.OrdinalIgnoreCase))
             .DistinctBy(i => i.IleFile, StringComparer.OrdinalIgnoreCase).ToList();
         var answer = MessageBox.Show(this,
-            $"Build the test -- {island.Shown} from the flag, {string.Join(", ", result.Notes.Take(2))} -- into\n{gameRoot}\nand race it?" +
-            (others.Count > 0 ? $"\n\nThe tracks built there before ({string.Join(", ", others.Select(o => o.Shown))}) are built again with it." : ""),
+            $"Build the test -- {island.Shown} from the flag, {string.Join(", ", result.Notes.Take(2))} -- and race it?\n\n" +
+            "It's built into a scratch copy of the game folder: the game folder's own islands and tracks aren't changed.",
             "Test race", MessageBoxButton.OKCancel, MessageBoxImage.Question);
         if (answer != MessageBoxResult.OK) return;
         if (playing) StopPlay();
+        // (the scratch copy: the game folder hard-linked, the files the build writes made its own -- RaceTrackService.Build)
+        if (trackTestRoot is null || !string.Equals(trackTestFor, gameRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            trackTestRoot?.Dispose();
+            LiveDataRoot.CleanStale(gameRoot, TrackTestFolderName);
+            trackTestRoot = LiveDataRoot.Create(gameRoot, null, TrackTestFolderName);
+            trackTestFor = gameRoot;
+        }
+        else
+        {
+            try { trackTestRoot.Sync(); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { DebugLog.Log($"track test: the scratch copy not brought up to date: {e.Message}"); }
+        }
+        if (trackTestRoot is null) { SetTrackStatus("The test couldn't be built: no scratch copy of the game folder could be made beside it."); return; }
         RaceTrackOptions Options(RaceTrackIsland i)
         {
             var o = RaceTrackOptions.For(i);
@@ -709,20 +740,29 @@ public partial class MainWindow
             return o;
         }
         var builds = others.Select(i => new RaceTrackService.TrackBuild(RaceTrackPlan.Built(i), Options(i))).ToList();
+        // (no road behind the flag for a grid: Twinsen's car alone on the flag, no opponents -- they would stand on nothing)
+        var tested = Options(island);
+        if (!gridRoom) tested.Drivers = new List<RaceDriver>();
         // (Citadel Island: a plan is its town circuit's, the storm track built as it is)
-        builds.Insert(0, island.RacesTwin ? new RaceTrackService.TrackBuild(RaceTrackPlan.Built(island), Options(island), plan) : new RaceTrackService.TrackBuild(plan, Options(island)));
+        builds.Insert(0, island.RacesTwin ? new RaceTrackService.TrackBuild(RaceTrackPlan.Built(island), tested, plan) : new RaceTrackService.TrackBuild(plan, tested));
         if (trackTestButton is not null) trackTestButton.IsEnabled = false;
         SetTrackStatus("Building the test…");
-        var root = gameRoot;
+        var root = trackTestRoot.Directory;
         RaceTrackService.BuildResult built;
         try { built = await Task.Run(() => RaceTrackService.Build(root, builds)); }
         finally { if (trackTestButton is not null) trackTestButton.IsEnabled = true; }
         if (!built.Ok) { SetTrackStatus("The test couldn't be built: " + built.Summary); MessageBox.Show(this, built.Summary, "Test race", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-        DebugLog.Log($"track pieces: test from the flag built -- {built.Summary}");
-        RaceTrackChanged();
-        SetTrackStatus("The test is built: racing it. " + string.Join(" ", result.Notes.Select(n => n.TrimEnd('.') + ".")));
-        StartPlay(GameKind.Lba2);
+        DebugLog.Log($"track pieces: test from the flag built in {root} -- {built.Summary}");
+        SetTrackStatus("The test is built (in a scratch copy: the game folder isn't changed): racing it. " + string.Join(" ", result.Notes.Select(n => n.TrimEnd('.') + ".")));
+        StartPlay(GameKind.Lba2, root: root);
     }
+
+    // The track test's scratch copy of the game folder (beside it: hard links need the same drive), made at the first test and kept for the
+    // next, removed when the editor closes
+    public const string TrackTestFolderName = "_TRACK_TEST";
+    private LiveDataRoot? trackTestRoot;
+    private string? trackTestFor;
+    private void DisposeTrackTest() { trackTestRoot?.Dispose(); trackTestRoot = null; trackTestFor = null; }
 
     // The piece whose middle line passes nearest a point of the view, within 10 pixels
     private TrackPiece? TrackPieceAt(Point at)
@@ -767,6 +807,7 @@ public partial class MainWindow
             case Key.R when Keyboard.Modifiers == ModifierKeys.None: TiltTrackPiece(1); break;
             case Key.F when Keyboard.Modifiers == ModifierKeys.None: TiltTrackPiece(-1); break;
             case Key.Delete when trackArmed is null && trackSelected is not null: DeleteTrackPiece(); break;
+            case Key.Delete when trackArmed is null && trackSelected is null && trackFlag is not null: RemoveTrackFlag(); break;
             case Key.Escape when trackFlagArmed: trackFlagArmed = false; TerrainViewport.Cursor = null; SetTrackStatus("The test start not placed."); break;
             case Key.Escape when trackArmed is not null: DisarmTrackPiece(); SetTrackStatus("Stopped laying. Choose a piece to lay another."); break;
             case Key.Escape when trackSelected is not null: trackSelected = null; trackGroup = null; DrawTrackOverlay(); break;

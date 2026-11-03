@@ -126,6 +126,7 @@ public partial class MainWindow : Window
         Scenes.SceneHistory.Changed += (_, _) => lastSceneEditAt = Environment.TickCount64;
         Scenes.SceneDocument.Saved += OnSceneDocumentSaved;
         Closed += (_, _) => Scenes.SceneDocument.Saved -= OnSceneDocumentSaved;
+        Closed += (_, _) => DisposeTrackTest();
         modeReady = true;                 // the mode buttons raise Checked while the XAML loads; only real clicks count
         Focusable = true;
         JoinAreasCheck.IsChecked = lba1JoinAreas;
@@ -775,6 +776,8 @@ public partial class MainWindow : Window
         if (bodyPreviewLive is null && Directory.Exists(gameRoot)) LiveDataRoot.CleanStale(gameRoot, LiveDataRoot.BodyPreviewFolderName);
         // (and a map's workspace a crashed session left behind -- not the open map's own)
         if (!MapOpen && Directory.Exists(gameRoot)) LiveDataRoot.CleanStale(gameRoot, MapWorkspaceFolderName);
+        // (and a race track test's scratch copy: MainWindow.TrackPieces)
+        if (!playing) { DisposeTrackTest(); if (Directory.Exists(gameRoot)) LiveDataRoot.CleanStale(gameRoot, TrackTestFolderName); }
         selectedLba2Scene = null;
         SwitchGameCore(game);
         ApplyMode();

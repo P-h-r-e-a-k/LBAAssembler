@@ -61,9 +61,16 @@ public partial class MainWindow
     // Play pressed: the scene that is open is shown with Twinsen on it to be put where the game should start (unless that is switched
     // off), then the game starts. On an LBA2 folder with a race track built the race car's setup comes first (unless that is switched off,
     // and not when the game is only restarted).
-    private void StartPlay(GameKind game, bool askRaceCar = true, bool raceStart = true)
+    // `root`: a folder to play instead of the game folder -- the 3D view's track test's scratch copy (MainWindow.TrackPieces), so a test
+    // never changes the game folder's islands (the user, 2026-11-03: "Race track appears to be auto-saving over our island which it
+    // shouldn't be"); for this play only
+    private string? playRoot;
+    private string PlayRoot => playRoot ?? gameRoot;
+
+    private void StartPlay(GameKind game, bool askRaceCar = true, bool raceStart = true, string? root = null)
     {
         if (playing) StopPlay();
+        playRoot = root;
         if (placing) EndPlacement();
         SaveAudioIfDirty();
         if (game != currentGame)
@@ -97,10 +104,10 @@ public partial class MainWindow
         // (none for an open map: its workspace is a copy of a folder that may have race tracks built, and a map's island carries a game
         // island's number -- the snow island's the Desert's -- so Play raced the Desert's track instead of playing the map, 2026-10-22)
         if (MapOpen) return null;
-        if (!Lba2Configured || !Terrain.RaceTrackService.HasBackups(gameRoot)) return null;
+        if (!Lba2Configured || !Terrain.RaceTrackService.HasBackups(PlayRoot)) return null;
         var shown = currentGame == GameKind.Lba2 && !interiorSceneActive && currentIsland is not null ? activeFile : null;
         var sceneIsland = allSceneEntries.FirstOrDefault(s => s.Option.Index == Lba2SceneToPlay())?.IslandFile;
-        return Terrain.RaceTrackService.RaceFor(gameRoot, shown, sceneIsland is null ? null : sceneIsland + ".ILE");
+        return Terrain.RaceTrackService.RaceFor(PlayRoot, shown, sceneIsland is null ? null : sceneIsland + ".ILE");
     }
 
     // The scene a race-track play starts in, when the LBA2 folder has a race track and the car setup says to start on its straight.
@@ -120,7 +127,9 @@ public partial class MainWindow
     private readonly HashSet<string> outdatedTrackWarned = new(StringComparer.OrdinalIgnoreCase);
     private bool RaceTrackUpToDate()
     {
-        if (!Terrain.RaceTrackService.IsOutdated(gameRoot, raceToPlay) || !outdatedTrackWarned.Add(gameRoot)) return true;
+        // (a track test was built just now -- MainWindow.TrackPieces -- and a test with Twinsen's car alone has no grid: never outdated)
+        if (playRoot is not null) return true;
+        if (!Terrain.RaceTrackService.IsOutdated(PlayRoot, raceToPlay) || !outdatedTrackWarned.Add(PlayRoot)) return true;
         var answer = MessageBox.Show(this,
             "The race track in this game folder was built by an older version of LBA Assembler, before the grid, the qualifying lap and the " +
             "count-down start. It plays the old way until it is built again (Tools > LBA2: race track > Build the track).\n\n" +
@@ -133,8 +142,8 @@ public partial class MainWindow
     // The race car's setup before a race-track play: false when it is cancelled.
     private bool AskRaceCar()
     {
-        if (!Terrain.RaceTrackService.HasBackups(gameRoot) || !EditorSettings.Current.RaceCar.AskBeforePlay) return true;
-        return new RaceCarWindow(forPlay: true, gameRoot, raceToPlay) { Owner = this }.ShowDialog() == true;
+        if (!Terrain.RaceTrackService.HasBackups(PlayRoot) || !EditorSettings.Current.RaceCar.AskBeforePlay) return true;
+        return new RaceCarWindow(forPlay: true, PlayRoot, raceToPlay) { Owner = this }.ShowDialog() == true;
     }
 
     // `spawn` is where the hero starts (in the scene's own coordinates), `scene` overrides the scene that is open.
@@ -182,6 +191,7 @@ public partial class MainWindow
         PlayOverlay.Visibility = Visibility.Collapsed;
         PlayButton.Visibility = Visibility.Visible;
         PlayRunningPanel.Visibility = Visibility.Collapsed;
+        playRoot = null;
         UpdatePlayButton();
         Keyboard.Focus(this);
     }
@@ -244,7 +254,7 @@ public partial class MainWindow
 
     private async Task StartLba2Play((int X, int Y, int Z)? spawn, int? sceneOverride)
     {
-        if (!Lba2Engine.IsGameFolder(gameRoot))
+        if (!Lba2Engine.IsGameFolder(PlayRoot))
         {
             MessageBox.Show(this, "The LBA2 game folder isn't set. Choose it under File > Settings.", "LBA2", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
@@ -275,7 +285,7 @@ public partial class MainWindow
         // (the story from the town circuit's file -- CITABAU.ILE open -- in the weather once the storm is over: a scene entered as it is
         // starts in the storm's chapter, and loaded the storm's file, 2026-10-27. A new game keeps the game's own weather)
         var fine = story && !options.NewGame && raceToPlay?.Dream is null && Terrain.RaceTrackService.FineWeather(raceToPlay, false);
-        options.RaceCarFile = MapOpen ? null : Terrain.RaceTrackService.CarFileWriter(gameRoot, raceToPlay, story, fine);
+        options.RaceCarFile = MapOpen ? null : Terrain.RaceTrackService.CarFileWriter(PlayRoot, raceToPlay, story, fine);
         // (whether this play races, and which -- the first thing to know about a race that didn't start)
         DebugLog.Log(MapOpen ? $"Lba2Play: scene {scene}, the map \"{openMap!.Name}\"'s: no race-track mode"
             : options.RaceCarFile is null
@@ -297,7 +307,8 @@ public partial class MainWindow
         (options.Width, options.Height) = host.FitSize();
         string? problem = null;
         PlayStatus.Text = $"Entering {label} ...";
-        var process = await Task.Run(() => Lba2Play.Launch(gameRoot, options, out problem, embedded: true));   // makes the scene's save first: a few seconds
+        var root = PlayRoot;
+        var process = await Task.Run(() => Lba2Play.Launch(root, options, out problem, embedded: true));   // makes the scene's save first: a few seconds
         if (process is null)
         {
             StopPlay();

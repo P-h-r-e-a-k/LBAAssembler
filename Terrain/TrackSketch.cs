@@ -224,7 +224,9 @@ internal static class TrackSketchTracer
             else { pitA = a; pitB = b; }
         }
         // (`openStart`: a sprint's start line that many points (cells) along -- the road before it the grid's, the 3D view's test from a flag)
-        var start = closed ? Straightest(route, closed) : openStart is int given0 ? Math.Clamp(given0, 0, Math.Max(0, route.Count - 14)) : Math.Min(6, route.Count / 4);
+        // (a test from a flag: right up to a few cells short of the road's end -- the user, 2026-11-03: "If we want to test a section let us
+        // test it")
+        var start = closed ? Straightest(route, closed) : openStart is int given0 ? Math.Clamp(given0, 0, Math.Max(0, route.Count - 5)) : Math.Min(6, route.Count / 4);
 
         // a lap begins at its start (indexes the builder counts from there are the plan's own)
         if (closed && pitA is null && start > 0)

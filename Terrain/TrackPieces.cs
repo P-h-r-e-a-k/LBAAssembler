@@ -259,8 +259,17 @@ internal sealed class TrackPieceSet
     // The plan the pieces make on `island` (the island as its track is built on it: IslandScaler.AsBuilt), or why not (the result's Problems)
     // `from`: a test race's start (the 3D view's flag; the user, 2026-11-03: "drag and drop for where they want to start a test race from so
     // they can test individual segments") -- the road from the point nearest it, a sprint: to the road's end, or once round a lap
-    public SketchResult MakePlan(IslandFile island, (double X, double Z, double Y)? from = null)
+    public SketchResult MakePlan(IslandFile island, (double X, double Z, double Y)? from = null) => MakePlan(island, from, out _);
+
+    // (a test from the flag: the shortest stretch it races, and the least road ahead of the flag before the test drives the road the
+    // other way -- the user, 2026-11-03: "I just tried to test a 3 segment track by placing the flag at one end but the test was refused
+    // as it was at the end of the track. If we want to test a section let us test it, just position a car on the track at the flag point")
+    public const double TestShortest = 10, TestAhead = 12;
+
+    // ... and whether the road behind the flag has room for a grid (RunUp cells): without, the test is Twinsen's car alone on the flag
+    public SketchResult MakePlan(IslandFile island, (double X, double Z, double Y)? from, out bool gridRoom)
     {
+        gridRoom = true;
         var notes = new List<string>(); var problems = new List<string>();
         var chain = Chain(out var closed, out var left, out var order);
         if (chain is null || chain.Count < 2)
@@ -283,26 +292,48 @@ internal sealed class TrackPieceSet
             return s;
         }
         int? openStart = null;
+        var shortest = ShortestTry;
         if (from is { } f)
         {
-            var k = Enumerable.Range(0, chain.Count).MinBy(i => Math.Pow(chain[i].X - f.X, 2) + Math.Pow(chain[i].Z - f.Z, 2) + Math.Pow((chain[i].Y - f.Y) / 512, 2));
-            // (from as far back as RunUp cells before the flag -- round a lap, or to an open road's beginning -- the start line on the flag)
-            var back = k;
-            double behind = 0;
-            for (var steps = 0; steps < chain.Count - 1 && behind < RunUp; steps++)
+            int Nearest() => Enumerable.Range(0, chain.Count).MinBy(i => Math.Pow(chain[i].X - f.X, 2) + Math.Pow(chain[i].Z - f.Z, 2) + Math.Pow((chain[i].Y - f.Y) / 512, 2));
+            var k = Nearest();
+            shortest = TestShortest;
+            double roadLength = LengthTo(chain, chain.Count - 1), before = LengthTo(chain, k);
+            // (an open road with the flag near its end: driven the other way, from the flag back along it)
+            if (!closed && roadLength - before < TestAhead && before > roadLength - before)
             {
-                var prev = closed ? (back - 1 + chain.Count) % chain.Count : back - 1;
-                if (prev < 0) break;
-                behind += Math.Sqrt(Math.Pow(chain[back].X - chain[prev].X, 2) + Math.Pow(chain[back].Z - chain[prev].Z, 2));
-                back = prev;
+                chain.Reverse();
+                k = Nearest();
+                before = LengthTo(chain, k);
+                notes.Add("the flag is near the road's end: the test drives the road the other way, from the flag");
             }
-            chain = closed ? chain.Skip(back).Concat(chain.Take(back)).ToList() : chain.Skip(back).ToList();
-            openStart = (int)Math.Round(behind);
-            notes.Add(closed ? "tried from the flag: once round the lap from it, as a sprint" : "tried from the flag to the road's end, as a sprint");
-            closed = false;
-            if (chain.Count < 2 || LengthTo(chain, chain.Count - 1) - behind < 14)
+            if (closed)
             {
-                problems.Add("The flag is at the road's very end: put it further back.");
+                // (round a lap: from RunUp cells before the flag, the start line on the flag, once round as a sprint)
+                var back = k;
+                double behind = 0;
+                for (var steps = 0; steps < chain.Count - 1 && behind < RunUp; steps++)
+                {
+                    var prev = (back - 1 + chain.Count) % chain.Count;
+                    behind += Math.Sqrt(Math.Pow(chain[back].X - chain[prev].X, 2) + Math.Pow(chain[back].Z - chain[prev].Z, 2));
+                    back = prev;
+                }
+                chain = chain.Skip(back).Concat(chain.Take(back)).ToList();
+                openStart = (int)Math.Round(behind);
+                notes.Add("tried from the flag: once round the lap from it, as a sprint");
+                closed = false;
+            }
+            else
+            {
+                // (an open road: all of it built, the start line -- Twinsen's car -- on the flag, the road before it behind him)
+                openStart = (int)Math.Round(before);
+                gridRoom = before >= RunUp;
+                notes.Add(gridRoom ? "tried from the flag to the road's end, as a sprint"
+                    : "tried from the flag to the road's end, as a sprint: Twinsen's car alone on the flag (no room behind it for a grid)");
+            }
+            if (chain.Count < 2 || LengthTo(chain, chain.Count - 1) - openStart < 4)
+            {
+                problems.Add("There is no road to drive from the flag: lay some first.");
                 return new SketchResult(null, new(), new(), false, 0, null, null, notes, problems);
             }
         }
@@ -352,7 +383,7 @@ internal sealed class TrackPieceSet
         if (openStart is null && !closed) openStart = (int)Math.Min(RunUp, LengthTo(chain, chain.Count - 1) / 3);
         var given = chain.Select(p => ((p.X - x0) * Scale, (p.Z - z0) * Scale)).ToList();
         var rise = chain.Select(p => p.Y - chain[0].Y).ToList();
-        var first = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, shortest: ShortestTry, openStart: openStart);
+        var first = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, shortest: shortest, openStart: openStart);
         if (first.Route.Count < 10 || !chain.Any(p => p.Y > Ground(p.X, p.Z) + 500)) { first.Notes.InsertRange(0, notes); Widen(first.Plan); return first; }
         // the height each point of the route was laid at: the chain at the same share of the way along (a lap's route begins elsewhere
         // round it: the turn of the one against the other that puts their points nearest)
@@ -390,7 +421,7 @@ internal sealed class TrackPieceSet
             var j = ((k - offset) % n + n) % n;
             profile[k] = Along(first.Closed ? (double)j / n : (double)j / Math.Max(1, n - 1)).Y;
         }
-        var second = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, profile, route.ToList(), ShortestTry, openStart);
+        var second = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, profile, route.ToList(), shortest, openStart);
         second.Notes.InsertRange(0, notes);
         Widen(second.Plan);
         return second;

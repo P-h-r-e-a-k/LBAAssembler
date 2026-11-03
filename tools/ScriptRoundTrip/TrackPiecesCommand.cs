@@ -62,7 +62,16 @@ internal static class TrackPiecesCommand
         }
         var chain = set.Chain(out var closed);
         Console.WriteLine($"{set.Pieces.Count} pieces, {set.OpenEnds().Count()} open end(s), {set.OpenStarts().Count()} open start(s); chain {(chain is null ? "none" : $"{chain.Count} points, {(closed ? "a lap" : "a sprint")}")}");
-        var result = set.MakePlan(island);
+        // (TRACKPIECES_FLAG="x,z": a test from the flag there, on the road nearest it -- the 3D view's Test from the flag)
+        (double X, double Z, double Y)? flag = null;
+        if (Environment.GetEnvironmentVariable("TRACKPIECES_FLAG") is { Length: > 0 } flagAt)
+        {
+            var fv = flagAt.Split(',').Select(t => double.Parse(t, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+            var near = set.Pieces.Where(p => !p.IsPit).SelectMany(p => p.Line()).MinBy(q => Math.Pow(q.X - fv[0], 2) + Math.Pow(q.Z - fv[1], 2));
+            flag = (near.X, near.Z, near.Y);
+        }
+        var result = set.MakePlan(island, flag, out var gridRoom);
+        if (flag is not null) Console.WriteLine($"a test from the flag at ({flag.Value.X:0.0}, {flag.Value.Z:0.0}): {(gridRoom ? "a grid behind it" : "Twinsen's car alone on it")}");
         foreach (var n in result.Notes) Console.WriteLine("  note: " + n);
         foreach (var p in result.Problems) Console.WriteLine("  PROBLEM: " + p);
         if (result.Plan is not { } plan) return 1;

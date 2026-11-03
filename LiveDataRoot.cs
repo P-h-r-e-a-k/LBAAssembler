@@ -129,6 +129,45 @@ internal sealed class LiveDataRoot : IDisposable
         if (!CreateHardLinkW(target, source, IntPtr.Zero)) File.Copy(source, target);
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FileInformation
+    {
+        public uint Attributes; public long Created, Accessed, Written; public uint Volume, SizeHigh, SizeLow, Links, IndexHigh, IndexLow;
+    }
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetFileInformationByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle file, out FileInformation information);
+
+    // How many names a file has (hard links to the same data); 1 when it can't be told
+    public static int LinkCount(string path)
+    {
+        try
+        {
+            using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return GetFileInformationByHandle(handle, out var info) ? (int)info.Links : 1;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return 1; }
+    }
+
+    // Every file of a folder (not its subfolders) that shares its data with another name -- a mirror's (a map's workspace, Test edits,
+    // the race track test's) hard link to the real game folder's file -- made a copy of its own, its write time kept, before something that
+    // writes files in place writes it: a write through a hard link changes the real file too. The race track build writes in place
+    // (File.WriteAllBytes, File.Copy over a file), so it does this first. `most`: files bigger than this are left (the game's CD image,
+    // which nothing writes). The names detached.
+    public static List<string> DetachLinked(string directory, long most = 256L << 20)
+    {
+        var detached = new List<string>();
+        foreach (var path in System.IO.Directory.EnumerateFiles(directory))
+        {
+            if (new FileInfo(path).Length > most || LinkCount(path) < 2) continue;
+            var temp = path + ".detach.tmp";
+            File.Copy(path, temp, overwrite: true);
+            File.SetLastWriteTimeUtc(temp, File.GetLastWriteTimeUtc(path));
+            File.Move(temp, path, overwrite: true);
+            detached.Add(Path.GetFileName(path));
+        }
+        return detached;
+    }
+
     public void WriteIsland(byte[] bytes)
     {
         if (islandFile is null) throw new InvalidOperationException("This LiveDataRoot has no single island file -- it's a full mirror (see ChangedFiles instead).");
