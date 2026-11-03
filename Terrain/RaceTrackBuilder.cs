@@ -1227,7 +1227,7 @@ internal static class RaceTrackBuilder
         RaiseGround(island, plan, report);
         SetBackBanks(island, field, index, main, plan, report);
         FillPockets(island, field, index, report);
-        report.Balloons = options.Island == RaceTrackIsland.Desert || options.Island == RaceTrackIsland.Harvest;
+        report.Balloons = (options.Island.SharedFrom ?? options.Island) == RaceTrackIsland.Desert || options.Island == RaceTrackIsland.Harvest;
         var painted = PaintRoad(island, field, index, roads, options, report, startIndex, planned);
         if (plan.ClearBlueGround && options.Theme.Palette is { } groundPalette) ClearBlueGround(island, field, index, painted, groundPalette, report);
         report.LapLine = LapLine(roads, report);
@@ -1387,7 +1387,8 @@ internal static class RaceTrackBuilder
         if (seaBefore is not null && main.Raised is not null) WaterUnderDeck(island, index, roads, seaBefore, report);
         // (the game's own islands, and one that asks: the Temple of Bu, the palace and the like are built of pieces that hold each other up in
         // ways this doesn't see, and 288 of the Temple's went)
-        if (!options.Island.Created || plan.ClearFloaters) ClearFloaters(island, floating, ownDecors, report);
+        // (a shared track's copy of one of the game's islands too)
+        if (!options.Island.Created || options.Island.SharedFrom is not null || plan.ClearFloaters) ClearFloaters(island, floating, ownDecors, report);
         Relight(island, index, plan.RoadLight);
         if (planned) SeaEverywhere(island, main, report);
         ShoreFills(island, plan, report);
@@ -5496,7 +5497,7 @@ internal static class RaceTrackBuilder
         // some grey sections on the start/finish line, these would be better as the base sand colour")
         (IslandPolygon A, IslandPolygon B)? LandNear(int gx, int gz)
         {
-            if (o.Island.IleFile == RaceTrackIsland.Desert.IleFile) return null;
+            if ((o.Island.SharedFrom ?? o.Island).IleFile == RaceTrackIsland.Desert.IleFile) return null;
             var cube = gx / IslandCube.Cells; var row = gz / IslandCube.Cells;
             for (var r = 0; r <= VergeLandReach; r++)
             for (var dz = -r; dz <= r; dz++)

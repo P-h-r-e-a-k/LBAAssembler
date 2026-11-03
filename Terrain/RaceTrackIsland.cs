@@ -378,6 +378,37 @@ internal sealed record RaceTrackIsland(
         CopiesScenes is { } many ? Enumerable.Range(0, many.Count).Select(k => (many.First + k, FirstScene + k))
         : CopiesScene is { } one ? new[] { (one, FirstScene) } : Enumerable.Empty<(int, int)>();
 
+    // A track someone drew in the editor and shared (RaceTrackShare: a .lbrtrack file, the user, 2026-10-31: "Let's support them exporting a
+    // track, sharing it, then loading a track into LBRA possibly for them to race a friend"), raced on a copy of the island it was drawn on:
+    // the island's files as the game has them copied as SHARE<n>.ILE and .OBL (Created: RaceTrackShare.Install), drawn as the island's
+    // number from them (RaceFile), in copies of its outside scenes from `firstScene` on (CopiesScenes) -- the old moon's way -- so the
+    // island's own track, in its own files and scenes, stays as it is. Its jumps' flights are numbered past every island's own
+    // (RaceTrackJumpAnim.GenericFor: SharedIndex). What the island has by its scenes' numbers stays with the island.
+    public RaceTrackIsland? SharedFrom { get; init; }
+    public int? SharedIndex { get; init; }
+    public static RaceTrackIsland Shared(RaceTrackIsland from, int index, string name, int firstScene)
+    {
+        var (first, count) = from.CopiesScenes ?? (from.CopiesScene is int one ? (one, 1) : (from.FirstScene, from.LastScene - from.FirstScene + 1));
+        var stem = $"SHARE{index + 1:00}";
+        return new RaceTrackIsland(name, stem + ".ILE", stem + ".OBL", from.IslandByte, firstScene, firstScene + count - 1, from.PaletteEntry, from.PlanResource, from.OldTrackCube)
+        {
+            Created = true, RaceFile = stem.ToLowerInvariant(), CopiesScenes = (first, count), NoHolomap = true, SharedFrom = from, SharedIndex = index,
+            // (Citadel Island's: the town circuit's line-up, the track a plan for it is)
+            Crossing = from.Crossing, Roster = from.RacesTwin && from.TwinRoster is { } town ? town : from.Roster, View = from.View, Look = from.Look, KeepOffRoadActors = from.KeepOffRoadActors,
+            OwnRimsAt = from.OwnRimsAt, WaterDeck = from.WaterDeck, SoftBanks = from.SoftBanks, FuelAlways = from.FuelAlways, HeldVars = from.HeldVars,
+            RailHeld = from.RailHeld, Title = $"{name} (shared, on {from.Shown})",
+        };
+    }
+    // The files a shared track's copy is made from: the island's own -- Citadel Island's town circuit's, CITABAU, the file a plan for it is
+    // the track of (RacesTwin)
+    public (string Ile, string Obl) SharedSource => RacesTwin && TwinIleFile is { } ile && TwinOblFile is { } obl ? (ile, obl) : (IleFile, OblFile);
+    // Why a track drawn on the island can't be shared, or null: the islands the build makes, makes bigger or gives scenes of their own
+    // to are made by their own code, which a copy doesn't go through
+    public string? NotShareable =>
+        Created || Dream ? $"{Shown} is made by the build itself, so a copy of it can't be raced as a shared track"
+        : Scale > 1 || MoreScenes.Length > 0 || NewCubes.Length > 0 ? $"{Shown} is made bigger or given scenes by its own track's build, so a copy of it can't be raced as a shared track"
+        : null;
+
     // The Island of the Francos (KNARTAS.ILE, the game's island 8, scenes 107-109): its dock, its gazogem refinery and its village of furry
     // dome huts, made twice its size each way for its track (Scale: IslandScaler -- 12 cubes, scenes 255-263 besides) and raced on a raised
     // road that passes over itself, in three looks (the user, 2026-10-07: "drop all the vertical loops ... more height ... more loops, but
@@ -581,7 +612,10 @@ internal sealed record RaceTrackIsland(
     // Emperor's palace's road along the hilltop, 60 over it, let cars drive off onto the rocks.
     public bool RailHeld { get; init; }
 
-    public static readonly RaceTrackIsland[] All = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace, Wannies, CxTower, CxTowerMk2, Temple, Harvest };
+    public static readonly RaceTrackIsland[] BuiltIn = { Desert, Citadel, CitadelStorm, Mosquibe, Celebration, CelebrationLava, Elevator, Sendell, Moon, Emerald, Polar, Knartas, Otringal, Volcano, Palace, Wannies, CxTower, CxTowerMk2, Temple, Harvest };
+    // ... and the shared tracks' copies a build has been given (the race game's setup: RaceTrackShare), after them
+    public static List<RaceTrackIsland> SharedIslands { get; } = new();
+    public static RaceTrackIsland[] All => SharedIslands.Count == 0 ? BuiltIn : BuiltIn.Concat(SharedIslands).ToArray();
 
     public static RaceTrackIsland ByName(string name) => All.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) ?? Desert;
 

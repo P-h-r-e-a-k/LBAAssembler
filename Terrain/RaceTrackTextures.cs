@@ -29,7 +29,8 @@ internal static class RaceTrackTextures
     // (`ileFile`: which of the island's files this is -- its fine-weather twin has a palette of its own)
     public static (RaceTrackTheme Theme, string Log) Import(IslandFile island, RaceTrackIsland where, string gameDirectory, string? ileFile = null)
     {
-        var file = ileFile ?? where.IleFile;
+        // (a shared track's copy of an island: as the island's own file, whose texture page and palette the copy has)
+        var file = ileFile ?? (where.SharedFrom is { } own ? own.SharedSource.Ile : where.IleFile);
         if (file == RaceTrackIsland.Desert.IleFile) return (RaceTrackTheme.Retail with { Palette = IslandMapRenderer.LoadPalette(gameDirectory, "DESERT") }, "");
 
         // (the original, kept beside it by a build: the Desert island's own track, built before this one in the same build, has changed the file)

@@ -2,7 +2,7 @@
  * Adventure (2026-10-16), on when RACEGAME.TXT is beside the game's data (its installer writes it). The game's main menu is then the race
  * game's (GAMEMENU.CPP MainGameMenu asks RaceGame_Menu), in the retail game's look:
  *     Resume (online and in the story)   Story Mode   Racing   Options   Feedback   Quit
- * Racing: Track select, Specials, Multiplayer and Best laps (RacingPage).
+ * Racing: Track select, Specials, Multiplayer, Best laps and Shared tracks (RacingPage).
  * Esc in a race or time trial of one player's: the pause menu, PausePage.
  * Story Mode and Track select are greyed and passed over until the file opens them. Track select (2026-10-22): the code RACEGAME.TXT
  * asks for first (tracks_code=; once a run, CodePage), then its tracks in the file's order (TracksPage), each a race or a time trial as a
@@ -202,6 +202,7 @@ extern S32 FollowCamera;                                                        
 #define RG_ID_REQUEST_FEATURE 2467          // ... and its Request feature (ReportBugPage)
 #define RG_ID_FEEDBACK 2468                 // the main menu's Feedback (FeedbackPage)
 #define RG_ID_RACING 2469                   // the main menu's Racing (RacingPage)
+#define RG_ID_SHARED 2470                   // ... its Shared tracks (TracksPage(1))
 #define RG_ID_SCREEN 2400                   // ... a screen, by its place in the list (ScreenPage)
 #define RG_SCREENS 6
 #define RG_OTHERS_SHOWN 5
@@ -218,7 +219,8 @@ typedef struct {
     int Levels;                             // its race has levels, easy to hard (difficulty_level= in its race file)
     int Laps;                               // its race's laps (race_laps= in its race file; 0: the game's, laps=)
     int Track;                              // one of Track select's (track=), not a special
-    int Sprint;                             // a sprint, start line to finish line once (sprint=1 in its race file): no qualifying lap
+    int Shared;                             // ... a shared track's (shared=): the Shared tracks page's, not Track select's (SharedPage)
+    int Sprint;                           // a sprint, start line to finish line once (sprint=1 in its race file): no qualifying lap
     char Code[8], Id[24], Banner[40];       // special_lock=
 } T_RG_SPECIAL;
 
@@ -249,6 +251,12 @@ static T_RG_SPECIAL s_sp[RG_MAX_ENTRIES];   // the specials and the tracks, as R
 static int s_nbSp = 0;
 static int s_spIndex[RG_MAX_SPECIALS];      // the specials (Specials' rows): their places in s_sp
 static int s_nbSpecials = 0, s_nbTracks = 0;
+// Shared tracks (the user, 2026-10-31: "LBAAssembler allows a user to create custom tracks. Let's support them exporting a track, sharing
+// it, then loading a track into LBRA possibly for them to race a friend"): tracks drawn in LBA Assembler and shared as .lbrtrack files,
+// which the setup builds into the game from the player's User\LBA2\Tracks folder (its SharedTracks.cs: shared= lines, raced as Track
+// select's are) -- how many, and what the setup said of them (shared_status=)
+static int s_nbShared = 0;
+static char s_sharedStatus[256] = "";
 static T_RG_CAR s_cars[RG_MAX_CARS];        // the specials' cars (car=: the car page)
 static int s_nbCars = 0;
 static int s_car = 0;                       // the car chosen last
@@ -436,8 +444,9 @@ static void Read(void) {
         else if (!strcmp(key, "tracks_code")) snprintf(s_tracksCode, sizeof(s_tracksCode), "%s", v);
         else if (!strcmp(key, "story_file")) snprintf(s_storyFile, sizeof(s_storyFile), "%s", v);
         else if (!strcmp(key, "story_code")) snprintf(s_storyCode, sizeof(s_storyCode), "%s", v);
-        else if (((!strcmp(key, "special") && s_nbSpecials < RG_MAX_SPECIALS) || !strcmp(key, "track")) && s_nbSp < RG_MAX_ENTRIES) {
-            // (a special, or one of Track select's tracks: the same fields)
+        else if (!strcmp(key, "shared_status")) snprintf(s_sharedStatus, sizeof(s_sharedStatus), "%s", v);
+        else if (((!strcmp(key, "special") && s_nbSpecials < RG_MAX_SPECIALS) || !strcmp(key, "track") || !strcmp(key, "shared")) && s_nbSp < RG_MAX_ENTRIES) {
+            // (a special, or one of Track select's tracks, or a shared track: the same fields)
             T_RG_SPECIAL *sp = &s_sp[s_nbSp];
             char scene[16];
             v = Field(v, sp->Name, sizeof(sp->Name));
@@ -452,9 +461,11 @@ static void Read(void) {
             sp->Retire = !strcmp(retire, "retire=1");
             sp->Scene = scene[0] ? atoi(scene) : -1;
             ReadRaceFile(sp);
-            sp->Track = !strcmp(key, "track");
+            sp->Shared = !strcmp(key, "shared");
+            sp->Track = !strcmp(key, "track") || sp->Shared;
             if (sp->Name[0] && sp->Race[0]) {
-                if (sp->Track) s_nbTracks++;
+                if (sp->Shared) s_nbShared++;
+                else if (sp->Track) s_nbTracks++;
                 else s_spIndex[s_nbSpecials++] = s_nbSp;
                 s_nbSp++;
             }
@@ -1286,7 +1297,7 @@ static void Label(char *string, const char *utf8) { CopyUtf8ToCp850(string, 256,
 
 S32 RaceGame_MenuText(S32 num, char *string) {
     // (the bug reports' rows and the pause menu's are past the screens': a row out of this range has no words, and they stood blank)
-    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_RACING))) return 0;
+    if (!s_on || num < RG_ID_STORY || (num >= RG_ID_SCREEN + RG_SCREENS && (num < RG_ID_REPORTS || num > RG_ID_SHARED))) return 0;
     switch (num) {
     case RG_ID_STORY: Label(string, "Story Mode"); return 1;
     case RG_ID_STORY_NEW: Label(string, "New story"); return 1;
@@ -1306,6 +1317,7 @@ S32 RaceGame_MenuText(S32 num, char *string) {
     case RG_ID_TRACKS: Label(string, "Track select"); return 1;
     case RG_ID_FEEDBACK: Label(string, "Feedback"); return 1;
     case RG_ID_RACING: Label(string, "Racing"); return 1;
+    case RG_ID_SHARED: Label(string, "Shared tracks"); return 1;
     case RG_ID_REPORT_BUG: Label(string, "Report bug"); return 1;
     case RG_ID_REQUEST_FEATURE: Label(string, "Request feature"); return 1;
     case RG_ID_PAUSE_CAR: Label(string, "Change car"); return 1;
@@ -1659,7 +1671,7 @@ static int CarPage(const char *what, int trial) {
 // Track select open: on (tracks=1, with tracks), and its code given this run (or none asked: no tracks_code=).
 static int TracksOpen(void) { return s_tracks && s_nbTracks > 0 && (!s_tracksCode[0] || s_tracksOpen); }
 // A special or track Best laps shows: Track select's only once it is open.
-static int TimesShown(int sp) { return sp >= 0 && sp < s_nbSp && (!s_sp[sp].Track || TracksOpen()); }
+static int TimesShown(int sp) { return sp >= 0 && sp < s_nbSp && (!s_sp[sp].Track || s_sp[sp].Shared || TracksOpen()); }
 
 // ---- Best laps' last page: every track's best lap, and their sum (2026-10-27) --------------------------------------------------------
 // The user: "Under "Best Laps" Let's add a new page in at the end of loop so it's page 17 that's a list of each track name, along with a
@@ -1699,6 +1711,38 @@ static void SmallFitted(S32 x, S32 y, S32 width, const char *utf8, S32 colour, i
         Label(probe, cut);
     }
     SmallText(x, y, cut, colour, align);
+}
+// ... in lines no wider than `width`, `step` apart, from x, at most `most` of them (the last cut with "..." where more is left)
+static void SmallWrapped(S32 x, S32 y, S32 width, S32 step, const char *utf8, S32 colour, int most) {
+    char line[256], probe[256];
+    const char *p = utf8;
+    for (int k = 0; k < most && *p; k++) {
+        while (*p == ' ') p++;
+        size_t n = 0;
+        for (const char *q = p; *q;) {
+            const char *end = q;
+            while (*end && *end != ' ') end++;
+            const size_t len = (size_t)(end - p);
+            if (len >= sizeof(line)) break;
+            memcpy(line, p, len);
+            line[len] = 0;
+            Label(probe, line);
+            if (n && SizeFont(probe) * RG_SMALL_NUM / RG_SMALL_DEN > width) break;
+            n = len;
+            q = end;
+            while (*q == ' ') q++;
+        }
+        if (!n) break;
+        snprintf(line, sizeof(line), "%.*s", (int)n, p);
+        p += n;
+        while (*p == ' ') p++;
+        if (k == most - 1 && *p) {
+            // (more than the lines hold: the rest on the last one, cut)
+            const size_t used = strlen(line);
+            snprintf(line + used, sizeof(line) - used, " %s", p);
+            SmallFitted(x, y + k * step, width, line, colour, -1);
+        } else SmallText(x, y + k * step, line, colour, -1);
+    }
 }
 
 // The player's name, as Share my ghosts keeps it (GHOST_NAME.TXT beside the ghosts); "" none
@@ -2743,18 +2787,23 @@ static int CodePage(const char *what, const char *want) {
     return result;
 }
 
+static int SharedManage(void);
 // Track select's tracks, in RACEGAME.TXT's order, each with its best lap: up and down (or the mouse) to choose, Enter the track's race or
 // time trial (ModePage), Esc back. Non-zero: a race is set up.
 // (30, was 24: at 24 a name's apostrophe -- "14. Emperor's Palace" -- reached up to the line above's, the user, 2026-10-22; spaced out, the
 // list scrolls)
+// `shared`: the Shared tracks page instead -- the shared tracks, and after them a row to add or remove them (SharedManage)
 #define RG_TRACK_LINE 30
-static int TracksPage(void) {
-    int list[RG_MAX_ENTRIES], n = 0, at = 0;
+static int TracksPage(int shared) {
+    int list[RG_MAX_ENTRIES + 1], n = 0, at = 0;
+    // (the host of a race between players picks from the shared tracks too, after Track select's)
     for (int i = 0; i < s_nbSp; i++)
-        if (s_sp[i].Track) {
+        if (s_sp[i].Track && (s_sp[i].Shared == shared || (s_onlinePick && !shared))) {
             if (i == s_lastTrack) at = n;
             list[n++] = i;
         }
+    const int tracks = n;
+    if (shared) list[n++] = -3;
     if (n <= 0) return 0;
     ReadTimes();
     int first = 0;
@@ -2769,7 +2818,8 @@ static int TracksPage(void) {
             if (Refitted()) { cx = UI_CENTER_X; oy = UI_VCENTER_OFS; }
             // (the rows that fit between the header and the best lap's line over the keys, the list scrolling past them -- room kept above
             // and below for its "..." marks)
-            const S32 top = RG_PAGE_TOP + oy + 50, keysY = RG_PAGE_BOTTOM + oy - 32, bestY = keysY - 30;
+            // (the Shared tracks page: room for three lines under the list)
+            const S32 top = RG_PAGE_TOP + oy + 50, keysY = RG_PAGE_BOTTOM + oy - 32, bestY = keysY - 30 - (shared ? 2 * RG_LINE : 0);
             const int rows = (int)((bestY - 16 - top) / RG_TRACK_LINE);
             S32 dx, dy;
             if (Nav(&padDir, &dx, &dy) && dy) at = (at + dy + n) % n;
@@ -2798,13 +2848,14 @@ static int TracksPage(void) {
                 const int row = (int)((my - (top - 4)) / RG_TRACK_LINE);
                 if (row < rows && first + row < n) { at = first + row; chosen = list[at]; }
             }
-            PageFrame("Track select");
+            PageFrame(shared ? "Shared tracks" : "Track select");
             for (int r = 0; r < rows && first + r < n; r++) {
                 const int k = first + r, sp = list[k];
                 const S32 y = top + r * RG_TRACK_LINE;
                 // (the chosen one in orange -- no frame round it: it didn't fit the line, the user, 2026-10-22)
                 char line[160], text[256];
-                snprintf(line, sizeof(line), "%d. %s", k + 1, s_sp[sp].Name);
+                if (sp < 0) snprintf(line, sizeof(line), "Add or remove tracks...");
+                else snprintf(line, sizeof(line), "%d. %s", k + 1, s_sp[sp].Name);
                 Label(text, line);
                 TextAt(lx0 + 12, y, text, k == at ? RG_ORANGE : LBAWHITE);
             }
@@ -2816,8 +2867,14 @@ static int TracksPage(void) {
                 const S32 ty = by0 + 2 + (h - thumb) * first / (n - rows);
                 Box(bx0 + 3, ty, bx1 - 3, ty + thumb, RG_ORANGE);
             }
-            // the track's best lap, under the list (the names take the page's width)
-            {
+            // the track's best lap, under the list (the names take the page's width) -- on the Shared tracks page's last row, what the setup
+            // said of them, or how to get one
+            if (list[at] < 0) {
+                const char *say = s_sharedStatus[0] ? s_sharedStatus
+                    : tracks ? "Add a track a friend shared, or take one out: the game builds them in again, which takes a few minutes."
+                    : "No shared tracks yet. Draw one in LBA Assembler and share it (Share for LBRA), or add one a friend sent you.";
+                SmallWrapped(cx - RG_PAGE_HALF + 30, bestY - 6, 2 * RG_PAGE_HALF - 60, 22, say, RG_GREY, 3);
+            } else {
                 const int sp = list[at];
                 char line[160], best[24];
                 if (BestOf(sp)) {
@@ -2834,9 +2891,13 @@ static int TracksPage(void) {
         }
         AsciiMode = FALSE;
         Page(NULL, 0);
+        if (chosen == -3) {
+            if (SharedManage()) return 0;
+            continue;
+        }
         if (chosen < 0) return 0;
         s_lastTrack = chosen;
-        Log_Info("[racegame] Track select: %s", s_sp[chosen].Name);
+        Log_Info("[racegame] %s: %s", shared ? "Shared tracks" : "Track select", s_sp[chosen].Name);
         if (ModePage(chosen)) return 1;
     }
 }
@@ -2849,7 +2910,7 @@ static int TrackSelect(void) {
         if (!CodePage("Track select", s_tracksCode)) return 0;
         s_tracksOpen = 1;
     }
-    return TracksPage();
+    return TracksPage(0);
 }
 
 // ---- Story Mode -------------------------------------------------------------------------------------------------------------------
@@ -4002,6 +4063,12 @@ static void IdentifyGame(void) {
         }
         fclose(f);
     }
+    // (and its shared tracks: two games' keys differ by them -- RACEGAME.TXT's shared= lines and their race files -- and a player turned away
+    // is told the other's version, which then says so)
+    if (s_nbShared > 0) {
+        const size_t used = strlen(version);
+        snprintf(version + used, sizeof(version) - used, " +%d shared", s_nbShared);
+    }
     RaceNet_SetGame(h, version);
     Log_Info("[racegame] online: this game is %s, key %08x", version, (unsigned)h);
 }
@@ -4327,6 +4394,8 @@ static int VotePage(void) {
             else if (dx) at = at < rows ? (at + rows < n ? at + rows : at) : at - rows;
         }
         const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS, x0 = cx - 340, x1 = cx + 340, y0 = 30 + oy, y1 = 450 + oy, colW = 330;
+        // (the rows closer, and their names smaller, where the shared tracks make more than the page holds at a lobby's line apart)
+        const S32 room = (y1 - 80) - (y0 + 54), rowH = rows * RG_LOBBY_ROW <= room ? RG_LOBBY_ROW : room / rows;
         S32 mx, my;
         const int click = Clicked(&mx, &my);
         Page(NULL, 0);
@@ -4337,8 +4406,8 @@ static int VotePage(void) {
         Text(cx, y0 + 12, line, RG_ORANGE);
         for (int i = 0; i < n; i++) {
             const int col = i >= rows;
-            const S32 x = cx + (col ? colW / 2 : -colW / 2), y = y0 + 54 + (i - (col ? rows : 0)) * RG_LOBBY_ROW;
-            if (click == 1 && mx >= x - colW / 2 && mx < x + colW / 2 && my >= y && my < y + RG_LOBBY_ROW) { at = i; mine = -2; }
+            const S32 x = cx + (col ? colW / 2 : -colW / 2), y = y0 + 54 + (i - (col ? rows : 0)) * rowH;
+            if (click == 1 && mx >= x - colW / 2 && mx < x + colW / 2 && my >= y && my < y + rowH) { at = i; mine = -2; }
             const int votes = counts[list[i]];
             if (votes) snprintf(line, sizeof(line), "%s: %d", s_sp[list[i]].Name, votes);
             else snprintf(line, sizeof(line), "%s", s_sp[list[i]].Name);
@@ -4346,8 +4415,8 @@ static int VotePage(void) {
             const S32 colour = i == at ? RG_ORANGE : list[i] == mine ? LBAWHITE : RG_GREY;
             char shown[256];
             Label(shown, line);
-            if (SizeFont(shown) <= colW - 10) Text(x, y + 2, line, colour);
-            else SmallFitted(x, y + 8, colW - 10, line, colour, 0);
+            if (SizeFont(shown) <= colW - 10 && rowH >= RG_LOBBY_ROW - 4) Text(x, y + 2, line, colour);
+            else SmallFitted(x, y + rowH / 4, colW - 10, line, colour, 0);
         }
         snprintf(line, sizeof(line), "%d of %d voted", voted, players);
         Text(cx, y1 - 72, line, RG_GREY);
@@ -4771,27 +4840,83 @@ static int RaceAgain(const T_RG_CAR *car) {
     return StartRace(s_raceSp, s_raceTrial, car, s_raceLevel, s_raceWatch[0] ? s_raceWatch : NULL);
 }
 
+// Shared tracks' "Add or remove tracks...": the setup's window for them (its SharedTracks.cs, LBRA-Setup.exe --shared-tracks <the game's
+// folder>), this page waiting on it. Building them there writes Update\shared_now.txt, "build": the game closes, and the setup builds them
+// into it and starts it again, an update's way (its Updater.Update); its window closed without, "closed". Non-zero: the game closes.
+#define RG_SHARED_NOW "Update\\shared_now.txt"
+static int SharedManage(void) {
+    char exe[ADELINE_MAX_PATH], dir[ADELINE_MAX_PATH], now[ADELINE_MAX_PATH];
+    GetResPath(exe, ADELINE_MAX_PATH, RG_UPDATER);
+    GetResPath(now, ADELINE_MAX_PATH, RG_SHARED_NOW);
+    GetResPath(dir, ADELINE_MAX_PATH, "RACEGAME.TXT");
+    char *cut = dir + strlen(dir);
+    while (cut > dir && cut[-1] != '\\' && cut[-1] != '/') cut--;
+    *cut = 0;
+    if (!dir[0]) snprintf(dir, sizeof(dir), ".");
+    remove(now);
+    const char *said = NULL;
+    if (!RaceUpdate_Exists(exe)) said = "The game's folder has no setup to do that: install the game again.";
+    else if (!RaceUpdate_Tool(exe, "--shared-tracks", dir)) said = "The setup couldn't be started.";
+    S32 padDir;
+    PageLoopStart(&padDir);
+    int result = -1;
+    S32 looked = (S32)TimerRefHR;
+    while (result < 0) {
+        ManageTime();
+        MyGetInput();
+        if (!said && (S32)TimerRefHR - looked >= 400) {
+            looked = (S32)TimerRefHR;
+            if (FILE *f = fopen(now, "r")) {
+                char word[16] = "";
+                if (!fgets(word, sizeof(word), f)) word[0] = 0;
+                fclose(f);
+                remove(now);
+                result = !strncmp(word, "build", 5);
+                Log_Info("[racegame] shared tracks: the setup's window %s", result ? "builds them in: the game closes" : "closed");
+            }
+        }
+        const S32 cx = UI_CENTER_X, oy = UI_VCENTER_OFS;
+        PageFrame("Shared tracks");
+        Wrapped(cx - RG_PAGE_HALF + 30, RG_PAGE_TOP + oy + 80, 2 * RG_PAGE_HALF - 60, RG_LINE,
+                said ? said : "Add or remove tracks in the setup's window that opened. Building them in closes the game, and it starts again with them in a few minutes.", LBAWHITE);
+        Text(cx, RG_PAGE_BOTTOM + oy - 32, "Esc: back", RG_GREY);
+        Present();
+        if (result >= 0) break;
+        if (Escaped() || (said && Confirmed())) result = 0;
+    }
+    AsciiMode = FALSE;
+    Page(NULL, 0);
+    if (result == 1) s_updateQuit = 1;
+    return result == 1;
+}
+
 // Racing, the main menu's (the user, 2026-11-02: "The main menu is too big"): everything that starts a race. Its result: 0 back on the main menu, else GameMenu's. Opens where it was last left.
 static S32 RacingPage(void) {
-    static U16 menu[4 + 2 * 5];
+    static U16 menu[4 + 2 * 6];
     static U16 last = 2;
-    menu[0] = last; menu[1] = 5; menu[2] = 305; menu[3] = 0;
+    menu[0] = last; menu[1] = 6; menu[2] = 305; menu[3] = 0;
     SetRow(menu, 0, RG_ID_BACK);
     SetRow(menu, 1, RG_ID_TRACKS);
     SetRow(menu, 2, RG_ID_SPECIALS);
     SetRow(menu, 3, RG_ID_ONLINE);
     SetRow(menu, 4, RG_ID_TIMES);
+    // (last: the rows before it where they were)
+    SetRow(menu, 5, RG_ID_SHARED);
     for (;;) {
-        Page("Racing", 305 - (56 * 5) / 2 - 50);
+        Page("Racing", 305 - (56 * 6) / 2 - 50);
         const S32 select = Menu(menu);
         if (select == RG_ID_BACK || select == 1000) { Page(NULL, 0); return 0; }
-        for (S32 i = 1; i < 5; i++) if (menu[4 + 2 * i + 1] == (U16)select) menu[0] = last = (U16)i;
+        for (S32 i = 1; i < 6; i++) if (menu[4 + 2 * i + 1] == (U16)select) menu[0] = last = (U16)i;
         switch (select) {
         case RG_ID_TRACKS:
             if (TrackSelect()) return RACEGAME_START;
             break;
         case RG_ID_SPECIALS:
             if (SpecialsPage()) return RACEGAME_START;
+            break;
+        case RG_ID_SHARED:
+            if (TracksPage(1)) return RACEGAME_START;
+            if (s_updateQuit) { RaceNet_Stop(); LocalEnd(); return RG_ID_QUIT; }
             break;
         case RG_ID_ONLINE:
             if (OnlinePage()) return RACEGAME_START;

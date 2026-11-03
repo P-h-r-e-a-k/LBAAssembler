@@ -134,6 +134,16 @@ internal static class RaceTrackCommand
         return result.Ok ? 0 : 1;
     }
 
+    // sharetrack <plan file> <island> <name> <out.lbrtrack>: the plan as a shared track for the race game, as the race track window's "Share
+    // for LBRA..." saves it (RaceTrackShare); then read back, to say what the race game will see
+    public static int ShareTrack(string[] args)
+    {
+        RaceTrackShare.Write(args[4], args[3], RaceTrackIsland.ByName(args[2]), args[1]);
+        var back = RaceTrackShare.Read(args[4]);
+        Console.WriteLine($"{args[4]}: \"{back.Name}\" on {back.Island.Name}, {back.Plan.Points.Length} points, {new FileInfo(args[4]).Length} bytes");
+        return 0;
+    }
+
     // buildtogether <pristine> <game folder> <island>...: the islands' tracks (their built-in plans) built into one folder by one build, as
     // the race track window does with several islands ticked -- the game folder given its pristine files first, its backups removed -- and
     // for each track the start scene and line RACETRACK.JSON has. RT_CROSSING picks the crossing style of the ones that take it.

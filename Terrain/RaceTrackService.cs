@@ -54,6 +54,8 @@ internal static class RaceTrackService
     {
         var boxes = new List<(double, double, double, double, double, double)>();
         var store = OriginalScenes(new LBAAssembler.Scenes.SceneStore(LBAAssembler.Scenes.SceneGame.Lba2, gameDirectory));
+        // (a shared track's copy: the doors of the island it is a copy of, whose scenes the copies are)
+        island = island.SharedFrom ?? island;
         for (var scene = island.FirstScene; scene <= island.LastScene; scene++)
         {
             LBAAssembler.Scenes.SceneModel model;
@@ -500,6 +502,8 @@ internal static class RaceTrackService
                 progress?.Report(new((setup - 0.3) / whole, "The Long Table: making the island and its scenes"));
                 made.AddRange(LBAAssembler.Terrain.Harvest.HarvestTrack.Install(gameDirectory));
             }
+            // (shared tracks' copies of the game's islands: RaceTrackShare)
+            foreach (var shared in islands.Where(i => i.SharedFrom is not null)) made.Add(RaceTrackShare.Install(gameDirectory, shared));
 
             var session = new BuildSession { Together = true };
             var log = new List<string>();

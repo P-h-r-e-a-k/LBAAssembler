@@ -33,6 +33,8 @@ internal sealed class RaceTrackWindow : Window
         ToolTip = "Save a sample plan file -- the Desert island's lap, with a comment on every part saying what it is -- to see what a plan is, change and build from" };
     private readonly Button saveBuiltIn = new() { Content = "Save its built-in track as a plan file…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0), IsEnabled = false,
         ToolTip = "The track built into the program for the island chosen, as a plan file to change and build from" };
+    private readonly Button shareButton = new() { Content = "Share for LBRA…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0), IsEnabled = false,
+        ToolTip = "The plan file, on the island chosen, as a track to send to friends: Little Big Racing Adventure builds it from their own copy of the game (Racing > Shared tracks)" };
     private readonly CheckBox removeActors = new() { Content = "Remove the actors of the island's outside scenes, except Twinsen, the buggy and those the travel cutscenes need", IsChecked = true, ToolTip = "The engine's hidden Zoe placeholder in slot 1 stays (the buggy needs that slot), and so do the ferry, the Dino-Fly and the actors Twinsen's own script waits on in the cutscenes of arriving, leaving and the game's ending." };
     private readonly CheckBox buggyAlways = new() { Content = "The buggy is there from the start of any game (skip the car quest)", IsChecked = true, ToolTip = "The island's scenes delete the buggy until game variable 74 reaches 3; this makes that test always pass" };
     private readonly CheckBox startAtLine = new() { Content = "Twinsen and the buggy start on the grid", IsChecked = true };
@@ -78,6 +80,7 @@ internal sealed class RaceTrackWindow : Window
         filePlan.Checked += (_, _) => PlanChoiceChanged();
         browseButton.Click += (_, _) => Browse();
         saveBuiltIn.Click += (_, _) => SaveBuiltIn();
+        shareButton.Click += (_, _) => ShareForLbra();
         sampleButton.Click += (_, _) => SaveSample();
         planIsland.SelectionChanged += (_, _) => PlanChoiceChanged();
         buildButton.Click += async (_, _) => await BuildAsync();
@@ -206,7 +209,7 @@ internal sealed class RaceTrackWindow : Window
         var forRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 4, 0, 0) };
         var forText = new TextBlock { Text = "the track of", VerticalAlignment = VerticalAlignment.Center };
         forText.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
-        forRow.Children.Add(forText); forRow.Children.Add(planIsland); forRow.Children.Add(saveBuiltIn);
+        forRow.Children.Add(forText); forRow.Children.Add(planIsland); forRow.Children.Add(saveBuiltIn); forRow.Children.Add(shareButton);
         root.Children.Add(forRow);
         ToolTipService.SetShowOnDisabled(filePlan, true);
         filePlan.ToolTip = "Tick an island first: a plan file is the track of one of the islands ticked (the others are built with their own)";
@@ -237,6 +240,62 @@ internal sealed class RaceTrackWindow : Window
     {
         var file = filePlan.IsChecked == true && filePlan.IsEnabled;
         planPath.IsEnabled = file; browseButton.IsEnabled = file; planIsland.IsEnabled = file; saveBuiltIn.IsEnabled = file && planIsland.SelectedItem is not null;
+        shareButton.IsEnabled = saveBuiltIn.IsEnabled;
+    }
+
+    // The plan file, on the island chosen for it, as a shared track for Little Big Racing Adventure (RaceTrackShare: the game's Racing >
+    // Shared tracks builds it from the player's own copy of the game) -- the user, 2026-10-31: "Let's support them exporting a track,
+    // sharing it, then loading a track into LBRA possibly for them to race a friend"
+    private void ShareForLbra()
+    {
+        if (PlanIsland() is not { } island) return;
+        if (island.NotShareable is { } why)
+        {
+            MessageBox.Show(this, why + ".", Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var plan = planPath.Text.Trim();
+        if (!File.Exists(plan))
+        {
+            MessageBox.Show(this, "Choose the plan file first (Browse…), or draw one in Tools > LBA2: race track generator.", Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (AskName(Path.GetFileNameWithoutExtension(plan).Replace('_', ' ')) is not { } name) return;
+        var safe = new string(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c).ToArray());
+        var dialog = new SaveFileDialog { Title = "Share the track for LBRA", Filter = "LBRA shared track (*.lbrtrack)|*.lbrtrack", FileName = safe + RaceTrackShare.Extension };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            RaceTrackShare.Write(dialog.FileName, name, island, plan);
+            status.Text = $"\"{name}\" is saved as {dialog.FileName}. Send it to whoever you race: in Little Big Racing Adventure, Racing > Shared tracks > " +
+                          "Add or remove tracks, then this file. To race each other online, both of you add the same shared tracks.";
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"The track can't be shared: {error.Message}", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    // The shared track's name, as the race game lists it; null: cancelled
+    private string? AskName(string suggested)
+    {
+        var box = new TextBox { Text = suggested.Length > RaceTrackShare.MaxName ? suggested[..RaceTrackShare.MaxName] : suggested, MaxLength = RaceTrackShare.MaxName, Padding = new Thickness(3), Margin = new Thickness(0, 6, 0, 0) };
+        box.SetResourceReference(BackgroundProperty, "ThemeFieldBrush");
+        box.SetResourceReference(ForegroundProperty, "ThemeTextBrush");
+        box.SetResourceReference(BorderBrushProperty, "ThemeBorderBrush");
+        var ok = new Button { Content = "OK", Padding = new Thickness(18, 3, 18, 3), IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        var cancel = new Button { Content = "Cancel", Padding = new Thickness(12, 3, 12, 3), IsCancel = true };
+        var text = new TextBlock { Text = "The track's name, as the race game lists it:", TextWrapping = TextWrapping.Wrap };
+        text.SetResourceReference(TextBlock.ForegroundProperty, "ThemeTextBrush");
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
+        buttons.Children.Add(ok); buttons.Children.Add(cancel);
+        var panel = new StackPanel { Margin = new Thickness(14) };
+        panel.Children.Add(text); panel.Children.Add(box); panel.Children.Add(buttons);
+        var ask = new Window { Title = "Share for LBRA", Content = panel, Owner = this, Width = 400, SizeToContent = SizeToContent.Height, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        ask.SetResourceReference(BackgroundProperty, "ThemeWindowBrush");
+        ok.Click += (_, _) => { if (box.Text.Trim().Length > 0) ask.DialogResult = true; else box.Focus(); };
+        ask.Loaded += (_, _) => { box.Focus(); box.SelectAll(); };
+        return ask.ShowDialog() == true ? box.Text.Trim() : null;
     }
 
     // The sample plan file (docs/racetrack/sample_track_plan.json: the Desert island's lap in 63 points, each part commented) saved where the

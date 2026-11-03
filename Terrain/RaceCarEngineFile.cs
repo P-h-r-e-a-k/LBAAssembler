@@ -556,6 +556,8 @@ internal static class RaceCarEngineFile
         foreach (var t in RaceTrackService.Tracks(info))
         {
             var island = RaceTrackIsland.ByName(t.Island);
+            // (a shared track isn't in the story: its scenes are copies the story never goes to)
+            if (island.SharedFrom is not null) continue;
             // (an island with a track in each file: each its own, the storm's while it rains, the other's once the storm is over)
             var members = t.Twin is not null
                 ? new[] { (Info: t with { Island = RaceTrackIsland.CitadelStorm.Name }, When: 1), (Info: t with { Island = RaceTrackIsland.Citadel.Name }, When: 2) }

@@ -16,9 +16,13 @@ internal static class RaceTrackJumpAnim
     // number (a scene's island byte), 12 more for the track of its other file (Citadel Island's town circuit; Celebration Island's lava
     // lake, RaceTrackIsland.OtherFile), and 24 more for each of a track's jumps after its first (the lava lake has two) -- up to four a
     // track, 200 to 295, the numbers the engine's race-track mode flies at the car's speed (RACEMOD.CPP RACE_JUMP_ANIM_FIRST..LAST).
-    public const int TwinOffset = 12, JumpOffset = 24, MaxJumps = 4, Last = Generic + MaxJumps * JumpOffset - 1;
+    // A shared track's (RaceTrackIsland.Shared, on a copy of an island whose own track has the island's numbers): 296 plus its index, 24
+    // more for each jump after its first, up to MaxShared of them -- to 391.
+    public const int TwinOffset = 12, JumpOffset = 24, MaxJumps = 4, SharedFirst = Generic + MaxJumps * JumpOffset, MaxShared = JumpOffset,
+        Last = SharedFirst + MaxJumps * JumpOffset - 1;
     public static int GenericFor(RaceTrackIsland island, bool twin = false, int jump = 0) =>
-        Generic + island.IslandByte + (twin || island.OtherFile ? TwinOffset : 0) + JumpOffset * jump;
+        island.SharedIndex is int shared ? SharedFirst + shared + JumpOffset * jump
+        : Generic + island.IslandByte + (twin || island.OtherFile ? TwinOffset : 0) + JumpOffset * jump;
     // Twinsen's entity while he drives (behaviour C_BUGGY = 12: the engine loads entity n for behaviour n).
     public const int BuggyEntity = 12;
     // The retail flight's steps (measured in the game: 17.4-17.6 cells): 8990 units forward, ending 201 below where it starts.

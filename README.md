@@ -55,6 +55,16 @@ and **Help > Check for updates at start** turns the check on start off. Only a n
 from the source never updates itself. In a folder that can't be written to, it offers the release's page instead.
 `LBA_ASSEMBLER_UPDATE_URL` (on this PC only) points it at a stand-in for GitHub, for tests.
 
+### Sharing a track with Little Big Racing Adventure
+
+In **Tools > LBA2: race track**, with **A plan file** chosen (one you wrote, saved from the built-in track, or drawn in the
+race track generator) and the island it's the track of, **Share for LBRA...** asks for the track's name and saves a
+`.lbrtrack` file: the name, the island and the plan, nothing of the game's own data. Send it to whoever you race. In Little Big
+Racing Adventure, **Racing > Shared tracks > Add or remove tracks...** adds it; the game builds it from the player's own copy of
+LBA2, on a copy of the island beside the island's own track, and lists it there and in the online vote. Tracks on the islands
+the build makes or enlarges (Polar Island, the Francos, Otringal, Island CX, the palace, the temple, the Long Table) can't be
+shared. `ScriptRoundTrip sharetrack <plan> <island> <name> <out.lbrtrack>` does the same from the command line.
+
 The current first slice provides an editable exterior-map workspace with terrain painting, level selection, zoom, reset, and JSON draft export.
 
 ## Native renderer backend
