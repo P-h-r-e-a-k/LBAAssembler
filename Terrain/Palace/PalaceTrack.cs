@@ -71,30 +71,30 @@ internal static class PalaceTrack
 
     private static readonly string[] Intro =
     {
-        "The Dark Monk is in the palace, and he's killing everybody! I have to get out: through the rooms, up the stairs, past the throne and back down, out of the round window and into his teleporter!",
-        "Le Moine Noir est dans le palais, et il tue tout le monde ! Je dois sortir : par les salles, en haut de l'escalier, devant le trône et redescendre, par la fenêtre ronde jusque dans son téléporteur !",
-        "Der Schwarze Mönch ist im Palast und bringt alle um! Ich muss hier raus: durch die Säle, die Treppe hinauf, am Thron vorbei und wieder hinunter, aus dem runden Fenster in seinen Teleporter!",
-        "¡El Monje Negro está en el palacio y está matando a todos! Tengo que salir: por las salas, escaleras arriba, delante del trono y otra vez abajo, por la ventana redonda hasta su teletransportador!",
-        "Il Monaco Nero è nel palazzo e sta uccidendo tutti! Devo uscire: attraverso le sale, su per le scale, davanti al trono e di nuovo giù, dalla finestra rotonda fino al suo teletrasporto!",
-        "O Monge Negro está no palácio e está a matar toda a gente! Tenho de sair: pelas salas, escadas acima, diante do trono e de novo para baixo, pela janela redonda até ao teletransportador dele!",
+        "FunFrock has the Emperor's teleporter! Through the rooms, up the stairs, past the throne and back down, out of the round window: whoever gets there first takes it!",
+        "FunFrock a le téléporteur de l'Empereur ! Par les salles, en haut de l'escalier, devant le trône et redescendre, par la fenêtre ronde : le premier arrivé le prend !",
+        "FunFrock hat den Teleporter des Kaisers! Durch die Säle, die Treppe hinauf, am Thron vorbei und wieder hinunter, aus dem runden Fenster: wer zuerst dort ist, bekommt ihn!",
+        "¡Funfrock tiene el teletransportador del emperador! Por las salas, escaleras arriba, delante del trono y otra vez abajo, por la ventana redonda: ¡el primero que llegue se lo queda!",
+        "Funfrock ha il teletrasporto dell'imperatore! Attraverso le sale, su per le scale, davanti al trono e di nuovo giù, dalla finestra rotonda: chi arriva primo se lo prende!",
+        "Funfrock está com o teletransportador do Imperador! Pelas salas, escada acima, diante do trono e de volta para baixo, pela janela redonda: quem chegar primeiro fica com ele!",
     };
     private static readonly string[] Lose =
     {
-        "Too slow... the Dark Monk's teleporter is gone. The palace again -- faster!",
-        "Trop lent... le téléporteur du Moine Noir a disparu. Encore le palais -- plus vite !",
-        "Zu langsam... der Teleporter des Schwarzen Mönchs ist weg. Noch einmal durch den Palast -- schneller!",
-        "Demasiado lento... el teletransportador del Monje Negro ha desaparecido. ¡Otra vez el palacio, más rápido!",
-        "Troppo lento... il teletrasporto del Monaco Nero è sparito. Di nuovo il palazzo -- più veloce!",
-        "Demasiado lento... o teletransportador do Monge Negro desapareceu. Outra vez o palácio -- mais depressa!",
+        "Too slow... FunFrock got to the teleporter first. The palace again -- faster!",
+        "Trop lent... FunFrock a atteint le téléporteur le premier. Encore le palais -- plus vite !",
+        "Zu langsam... FunFrock war zuerst am Teleporter. Noch einmal durch den Palast -- schneller!",
+        "Demasiado lento... Funfrock ha llegado antes al teletransportador. ¡Otra vez el palacio, más rápido!",
+        "Troppo lento... Funfrock è arrivato prima al teletrasporto. Di nuovo il palazzo -- più veloce!",
+        "Devagar demais... Funfrock chegou primeiro ao teletransportador. O palácio de novo -- mais rápido!",
     };
     private static readonly string[] Wake =
     {
-        "Celebration Island... his teleporter brought me to his statue. This is where it ends, Dark Monk!",
-        "L'île de la Célébration... son téléporteur m'a mené à sa statue. C'est ici que tout se termine, Moine Noir !",
-        "Die Insel der Feierlichkeiten... sein Teleporter hat mich zu seiner Statue gebracht. Hier endet es, Schwarzer Mönch!",
-        "La isla de la Celebración... su teletransportador me ha traído a su estatua. ¡Aquí termina todo, Monje Negro!",
-        "L'isola della Celebrazione... il suo teletrasporto mi ha portato alla sua statua. È qui che finisce, Monaco Nero!",
-        "A ilha da Celebração... o teletransportador dele trouxe-me até à estátua. É aqui que tudo acaba, Monge Negro!",
+        "Celebration Island... the teleporter brought me to the Dark Monk's statue. This is where it ends, FunFrock!",
+        "L'îlot de la Célébration... le téléporteur m'a mené à la statue de Dark Monk. C'est ici que tout se termine, FunFrock !",
+        "Das Eiland der Feste... der Teleporter hat mich zur Statue von Dark Monk gebracht. Hier endet es, FunFrock!",
+        "El islote de la Celebración... el teletransportador me ha traído a la estatua de Dark Monk. ¡Aquí termina todo, Funfrock!",
+        "L'isolotto della Celebrazione... il teletrasporto mi ha portato alla statua di Dark Monk. E' qui che finisce, Funfrock!",
+        "A Ilhota da Celebração... o teletransportador me trouxe até a estátua de Dark Monk. É aqui que tudo acaba, Funfrock!",
     };
 
     // The island and its scenes, made afresh in a game folder whose files are the originals (the race track's build: Otringal's own files

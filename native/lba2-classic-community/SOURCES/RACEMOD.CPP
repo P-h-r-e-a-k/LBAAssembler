@@ -44,6 +44,8 @@
  *     pit=<the same>             a spot in the pit lane an opponent waits on while the player qualifies; one line per spot
  *     weather=fine               Citadel Island's weather once the storm is over (RaceMod_FineWeather), whatever the chapter
  *     holo_arrow=<n>             the holomap arrow the mod's story points at the start line: cleared once Twinsen drives
+ *     start_item=<n>             a power-up in Twinsen's item box as the race goes (PU_*: 1 the protection spell, 4 the super jet-pack)
+ *     won_set=<var> <value>...   as win=, but only when the player really beat the one to beat (a dream_any_end= dream applies win= either way)
  *     qualifying=1               a qualifying lap first (0: the grid is formed as soon as the player is in his car, he on pole)
  *     grid_back=1                with qualifying=0: the player at the back of the grid instead, the opponents before him in their
  *                                qualifying times' order (the race game's "skip qualifying", RACEGAME.CPP)
@@ -626,6 +628,9 @@ static S32 s_runsBest = 0;                  // ... the fastest of them so far (t
 static S32 s_runAgainAt = 0;                // ... when the car goes back to the start for the next run (0: not waiting to)
 #define RACE_RUN_AGAIN_MS 1500             // ... this long after its finish line
 static int s_winSet[2 * RACE_MAX_SETS], s_nbWinSet = 0;
+// won_set=: as win=, but only when the player really beat the one to beat -- a dream that wakes him whoever got there first
+// (dream_any_end=) applies win= either way; the story's DREAM_CAUGHT is a won_set=
+static int s_wonSet[2 * RACE_MAX_SETS], s_nbWonSet = 0;
 static int s_place = 0, s_racers = 0;      // the player's place when he finished the race (0: not finished)
 static int s_main = -1;                    // the opponent to beat (main=; -1 none) ...
 static int s_beatMain = 0;                 // ... and whether the player finished ahead of him
@@ -841,6 +846,7 @@ static S32 s_usedAt = 0;                    // when Twinsen last used an item (t
 static S32 s_fullSaidAt = 0;               // (when the car was last at a mushroom left standing: the log says so again after 5 s away)
 static int s_useHeld = 0;                  // the behaviour key (Ctrl, the pad's left shoulder) down this frame: RaceMod_FilterInput
 static int s_oilIcon = -1;                 // oil_icon=: the oil's model in OBJFIX.HQR, for the item box (the builder adds it)
+static int s_startItem = -1;               // start_item=<n>: a power-up (PU_*) in Twinsen's item box as the race goes, his radio's car update
 static S32 s_autoDrop = 1000;              // autodrop_ms=<ms> (tests): how long after its roulette the test pilot uses an item (0: never)
 static T_RACE_PENGUIN s_penguins[RACE_MAX_PENGUINS];
 // (health and clovers were power-ups too: no one dies in a race, so they did nothing -- out since 2026-10-03)
@@ -919,6 +925,15 @@ static int s_slotPaid = 0;                 // ... and its prize paid (SlotMachin
 // The item box free for an item: empty, and not kept for the slot machine's prize while its reels turn (a mushroom passed meanwhile stays
 // for the next car, as with the box full).
 static int BoxFree(void) { return s_item[RACE_BOX] < 0 && !(s_slotOn && !s_slotPaid); }
+
+// The car update's item (start_item=), in the box as the race begins -- at GO, or at the start line's first crossing in a race with no
+// grid: no roulette, it is his already.
+static void StartItem(S32 now) {
+    if (s_startItem < 0 || s_startItem >= PU_COUNT || !BoxFree()) return;
+    s_item[RACE_BOX] = s_startItem;
+    s_itemAt[RACE_BOX] = now;
+    Log_Info("[racemod] Twinsen starts with %s in his item box (start_item=)", s_puName[s_startItem]);
+}
 // oil: the slicks on the road (world units; until when), and the scenes' copies of the slick that show them
 #define RACE_MAX_SLICKS 16                 // (6 until 2026-10-07: the pipes' drips have slicks too)
 #define RACE_MAX_OIL_ACTORS 256
@@ -4392,6 +4407,7 @@ static void Load(const char *path, int carOnly = 0) {
         else if (!strcmp(key, "protect_ms")) s_protectUntil = TimerRefHR + atoi(v);   // (tests: protected from the start, without the spell's sprites)
         else if (!strcmp(key, "shrunk_ms")) s_shrunkUntil = TimerRefHR + atoi(v);     // (tests: shrunk from the start)
         else if (!strcmp(key, "oil_icon")) s_oilIcon = atoi(v);
+        else if (!strcmp(key, "start_item")) s_startItem = atoi(v);
         else if (!strcmp(key, "gold_icon")) s_goldIcon = atoi(v);
         else if (!strcmp(key, "superjet_model")) s_superModel = atoi(v);
         else if (!strcmp(key, "twinsen_small")) s_heroSmall = atoi(v);
@@ -4436,6 +4452,7 @@ static void Load(const char *path, int carOnly = 0) {
             if (s_nbPenguinActors < RACE_MAX_PENGUIN_ACTORS && sscanf(v, "%d %d", &s_penguinScene[s_nbPenguinActors], &s_penguinActor[s_nbPenguinActors]) == 2) s_nbPenguinActors++;
         }
         else if (!strcmp(key, "win")) s_nbWinSet = ReadSets(v, s_winSet);
+        else if (!strcmp(key, "won_set")) s_nbWonSet = ReadSets(v, s_wonSet);
         else if (!strcmp(key, "unlock_win")) sscanf(v, "%23s", s_unlockWin);
         else if (!strcmp(key, "unlock_beat")) sscanf(v, "%23s", s_unlockBeat);
         else if (!strcmp(key, "sprint")) s_sprint = atoi(v);
@@ -5101,7 +5118,7 @@ void RaceMod_Lap(S32 x, S32 z) {
             Log_Info("[racemod] race over after %d laps: %d%s of %d%s", s_raceLaps, place, Ordinal(place), racers,
                      mainOn ? (s_beatMain ? ", ahead of the main opponent" : ", behind the main opponent") : "");
             if (total > 0) Log_Info("[racemod] Twinsen finishes the race: %.2f s from GO", total / 1000.0);
-            if (s_beatMain) { ApplySets(s_winSet, s_nbWinSet); StoryUnlock(s_unlockWin); }
+            if (s_beatMain) { ApplySets(s_winSet, s_nbWinSet); ApplySets(s_wonSet, s_nbWonSet); StoryUnlock(s_unlockWin); }
             ApplySets(s_finishSet, s_nbFinishSet);
         }
         if (s_phase == PHASE_QUALIFYING) {
@@ -5115,7 +5132,7 @@ void RaceMod_Lap(S32 x, S32 z) {
         }
     }
     // (no grid, no GO: the race's time from the start line's first crossing)
-    if (s_laps == 0 && !s_goAt && !s_nbSpots && s_phase == PHASE_RACE) s_goAt = now;
+    if (s_laps == 0 && !s_goAt && !s_nbSpots && s_phase == PHASE_RACE) { s_goAt = now; StartItem(now); }
     s_laps++;
     s_lapStart = now;
     s_halfway = 0;
@@ -5149,6 +5166,7 @@ static void SprintOver(S32 now, int crossed) {
     Log_Info("[racemod] sprint over in %.2f s: %d%s of %d%s", (now - s_lapStart) / 1000.0, place, Ordinal(place), racers, s_beatMain ? ", won" : ", lost");
     // (and in a dream that ends either way, dream_any_end=, what a win sets all the same: it wakes Twinsen up in his bed)
     if (s_beatMain || (s_dreamAnyEnd && s_wakeScene >= 0)) ApplySets(s_winSet, s_nbWinSet);
+    if (s_beatMain) ApplySets(s_wonSet, s_nbWonSet);
     if (s_beatMain) StoryUnlock(s_unlockWin);
     ApplySets(s_finishSet, s_nbFinishSet);
     s_endAt = now + after;
@@ -17129,6 +17147,7 @@ void RaceMod_Frame(void) {
         s_phase = PHASE_RACE;
         for (int n = 0; n < RACE_MAX_OPPONENTS; n++) s_opp[n].LapStart = now;
         Log_Info("[racemod] go");
+        StartItem(now);
     }
     // the power-ups: the mushrooms in this scene, the player's car over one, the penguins' fuses (a time trial: its cans of Gazogem alone)
     if (s_powerups || s_trial) PowerUps(now, driving);
@@ -19365,7 +19384,7 @@ static void ResetTrack(void) {
     s_autoIndex = -1;
     s_faced = 0; s_stuckSince = 0; s_rescueScene = -1; s_backInCarUntil = 0; s_safeIndex = -1; s_safeScene = -1; s_safeAt = 0; s_rescueArrive = -1; s_rescue = 0; s_hitUntil = 0; s_belowSince = 0;
     memset(&s_ride, 0, sizeof(s_ride)); s_loopBeta = s_loopTime = 0;
-    s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_place = s_racers = 0;
+    s_nbGates = 0; s_nbHeld = 0; s_beatOpp = -1; s_nbBeatSet = 0; s_raceLaps = 0; s_trialRuns = 1; s_runs = 0; s_runsBest = 0; s_runAgainAt = 0; s_nbWinSet = 0; s_nbWonSet = 0; s_place = s_racers = 0;
     ListVarGame[209] = 0;
     s_paradeStopText = s_paradeTalker = s_paradeGoVar = -1; s_pull = 0; s_pullSay = 0;
     s_beatText = -1; s_paradeOpp = -1; s_paradeVar = -1; s_nbParade = 0; s_paradeParkScene = -1; s_paradeS = s_paradeSpeed = 0; s_paradeActorNow = -1;
@@ -19399,7 +19418,7 @@ static void ResetTrack(void) {
     if (s_heroBody >= 0 && Comportement == C_BUGGY && (ListObjet[NUM_PERSO].GenBody == s_heroBody || (s_heroFire >= 0 && ListObjet[NUM_PERSO].GenBody == s_heroFire)))
         InitBody(GEN_BODY_TUNIQUE, NUM_PERSO);
     s_heroBody = s_heroFire = -1; s_heroBodyChecked = 0;
-    s_penguinWalk = 1; s_item[RACE_BOX] = s_item[RACE_BOX_SECOND] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
+    s_penguinWalk = 1; s_startItem = -1; s_item[RACE_BOX] = s_item[RACE_BOX_SECOND] = -1; s_takeAt = 0; s_useWas = 0; s_usedAt = 0; s_goldUntil = s_goldLast = 0; s_slotOn = 0; s_autoDrop = 1000; s_oilIcon = -1; ProtectionOff(); s_nbPenguinActors = 0; memset(s_penguins, 0, sizeof(s_penguins));
     s_boostUntil = s_protectUntil = s_shrunkUntil = s_jetUntil = 0; s_jetFactor = 1; s_boltUntil = 0; s_nbBolts = 0;
     s_heroDraft = 1;
     s_ownTrack = 0; s_loaded[0] = 0;

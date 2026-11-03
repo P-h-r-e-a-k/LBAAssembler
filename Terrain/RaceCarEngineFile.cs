@@ -206,6 +206,8 @@ internal static class RaceCarEngineFile
                     text.Append($"chase={LBAAssembler.Terrain.Polar.PolarDream.ChaseFunFrockText} {LBAAssembler.Terrain.Polar.PolarDream.ChaseTwinsenText} " +
                                 $"{LBAAssembler.Terrain.Polar.PolarGrobo.Entity} {LBAAssembler.Terrain.Polar.PolarDream.ChaseGroboText} {LBAAssembler.Terrain.Polar.PolarGrobo.KeyVar}\n" +
                                 $"chase_lead={LBAAssembler.Terrain.Polar.PolarDream.ChaseLeadCells}\nchase_head={LBAAssembler.Terrain.Polar.PolarDream.ChaseHeadCells}\ndream_any_end=1\nwake={dream.WakeScene} {dream.WakeText} {dream.WakeActor}\n" +
+                                // (Twinsen caught FunFrock: Zoe's waking line and FunFrock's at the final say so -- RaceTrackStory.DreamCaught)
+                                $"won_set={RaceTrackStory.DreamCaught} 1\n" +
                                 (info.ChaseCar is [var cb, var ca, var ce] ? $"chase_car={cb} {ca} {ce}\n" : ""));
                 else
                 {

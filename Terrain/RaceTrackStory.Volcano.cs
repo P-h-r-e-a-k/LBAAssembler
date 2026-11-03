@@ -204,6 +204,8 @@ internal static partial class RaceTrackStory
         {
             yield return $"gate={QSlabs} {SlabsSealed} The hide-out's cracks first!";
             yield return $"win={QSlabs} {SlabsWon}";
+            // (Baldino's car update: a protection spell in the item box for the start, against the lava balls -- RACEMOD.CPP start_item=)
+            yield return $"start_item={StartProtection}";
         }
         if (island == RaceTrackIsland.CxTowerMk2 || island == RaceTrackIsland.CxTower)
         {
@@ -216,8 +218,13 @@ internal static partial class RaceTrackStory
         {
             yield return $"win={FinalStep} {FinalWon}";
             yield return $"finish={QEmperor} {FinalRaced}";
+            // (Baldino's last call: "one last thing in the boot: a super jet-pack")
+            yield return $"start_item={StartSuperJet}";
         }
     }
+
+    // The power-ups a car update puts in the item box for the start (RACEMOD.CPP's PU_* numbers)
+    private const int StartProtection = 1, StartSuperJet = 4;
 
     // `report`: the Volcano track's build; `island`: its RaceTrackIsland; `scenes`: what its scenes were given. Lines for the log.
     public static List<string> ApplyVolcano(string gameDirectory, RaceTrackReport report, RaceTrackIsland island, RaceTrackScenes.Result scenes)

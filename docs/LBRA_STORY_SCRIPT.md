@@ -240,8 +240,9 @@ dream ends the moment the race does.
 later, FunFrock's first line in the final (chapter 14). The wake sets
 `chapter()` to 1.
 
-**To build:** FunFrock's head start (his car let go before Twinsen's start); the wake on a loss as on a win (`wake=` for both results, the
-dream never run again); DREAM_CAUGHT set by the race's result; the four lines.
+**Built:** the wake on a loss as on a win (the dream's race file: `dream_any_end=1`, the dream never run again); DREAM_CAUGHT set only
+by a real win (`won_set=229 1`, RACEMOD.CPP: win= applies either way in such a dream); Zoe's two waking lines by it, and FunFrock's at
+the final. **To build:** FunFrock's head start (his car let go before Twinsen's start); FunFrock's fading lines over the white.
 
 ---
 
