@@ -90,7 +90,7 @@ engine's (RACE_GRID_CAR_VAR) and 210 is kept spare.
 | 209 | GATE_SHUT | built: engine, 1 while a gate is shut |
 | **212** | **CHAPTER** | 0 the dream, 1 the storm, ... 14 the final, 15 the Cup won |
 | **213** | Q_THIEF | ch1: 0, 1 Zoe asked, 2 umbrella seen, 3 thief cornered, 4 gloves back |
-| **214** | Q_ZOECAR | ch2: 0, 1 asked, 2 wheel found, 3 fitted |
+| **214** | Q_LUCCAR | ch2: 0, 1 told, 2 asked, 3 wheel found, 4 fitted |
 | **215** | Q_PAGES | ch3: 0, 1 asked, 2-4 pages found (1-3), 5 handed in |
 | **216** | Q_HAL | ch4: 0, 1 asked, 2 radio found, 3 mechanics told, 4 HAL mended |
 | **217** | Q_FEE | ch5: 0, 1 told the fee, 2 paid |
@@ -531,22 +531,24 @@ both your worlds." The bed sets DAY = 2, and also CHAPTER = 2.
 | Who | Made from | Where | Script |
 |---|---|---|---|
 | The flag marshal | the School of Magic's assistant (entity 77, body 40) | on her plinth by the town circuit's start line | marshal |
-| Zoe | the game's Zoe, copied | beside her car in the yard north of the house (where the start cars park) | person |
+| Zoe | the game's Zoe, copied | in the yard north of the house (where the start cars park), fixing Luc's car | person |
+| Luc | the Tavern's boss, beside his barrel car (the character car) | the yard | person |
 | The spare wheel | a body of its own: one wheel of the racer's car, as a static object | the harbour's scrap heap | pickup |
 | Mr. Paul | built (prize) | the start line | built |
 | The masked driver | the black car | past the finish line | masked |
 
-**The quest: Zoe's car.**
+**The quest: Luc's car.** (Zoe is never on the grid in story mode, with one player or two: she's the pit crew. The script,
+[LBRA_STORY_SCRIPT.md](LBRA_STORY_SCRIPT.md), has the lines.)
 
 1. Morning (after the bed). The marshal: `T_CUP` "Welcome to the Two Worlds Cup! One race on every island of Twinsun and Zeelich,
-   and one wish for whoever wins them all. The first race is here, on Citadel." Q_ZOECAR = 1, arrow to Zoe.
-2. Zoe, beside her car: `T_ZOE_CAR` "I'm racing too! Only... my car's back wheel came off on the way here. Bob says there's a spare
-   in the scrap at the harbour." Q_ZOECAR = 2, arrow to the harbour.
-3. The wheel at the harbour: picked up, `T_WHEEL` "A wheel. A bit rusty, but round." Q_ZOECAR = 3. (Not an inventory item: the
+   and one wish for whoever wins them all. The first race is here, on Citadel." Q_LUCCAR = 1, arrow to the yard.
+2. Luc, beside his barrel car, Zoe under it: `T_LUC_CAR` "They gave me my Tavern back, so I'm racing for the Tavern! Only... my back
+   wheel came off on the way here." Q_LUCCAR = 2, arrow to the harbour.
+3. The wheel at the harbour: picked up, `T_WHEEL` "A wheel. A bit rusty, but round." Q_LUCCAR = 3. (Not an inventory item: the
    pickup just sets the step.)
-4. Zoe: `T_ZOE_THANKS` "Perfect! Now you'd better watch your back on the grid, Twinsen." Q_ZOECAR = 4.
+4. Zoe fits it: `T_ZOE_THANKS` "There. Good as new. Well, good as old." Q_LUCCAR = 4.
 
-Until then, the gate says `T_GATE_ZOE` "Mr. Paul: six cars on the grid or no race." (Zoe's car is one of the six: Raph, Zoe, Mr. Paul,
+Until then, the gate says `T_GATE_LUC` "Mr. Paul: six cars on the grid or no race." (Luc's car is one of the six: Raph, Luc, Mr. Paul,
 the Tralu, the thief and Twinsen.)
 
 **Race file:** `gate=212 2`, `gate=214 4 Mr. Paul: six cars on the grid or no race.`, the town's own keys (built: 3 laps,
@@ -559,7 +561,7 @@ the Tralu, the thief and Twinsen.)
 - CHAPTER = 3. No `change_cube`: Twinsen takes the ferry with his ticket (built), whose crossing lands him on the Desert.
 
 **Lines:**
-- `T_CUP`, `T_ZOE_CAR`, `T_WHEEL`, `T_ZOE_THANKS`, `T_GATE_ZOE`, `T_WON_2`, `T_CLUE_2`: as above.
+- `T_CUP`, `T_LUC_CAR`, `T_WHEEL`, `T_ZOE_THANKS`, `T_GATE_LUC`, `T_WON_2`, `T_CLUE_2`: as above.
 - `T_AGAIN_2` (the marshal, a loss): "So close! The grid is yours whenever you're ready."
 
 ---
@@ -1097,7 +1099,7 @@ The race's own lava balls (lavaball=) are falling the whole time: the hide-out i
 | The sealed gate | the palace's own door at the start room | | opened by the four Fragments |
 | The Empress | the game's Emperor's wife (BODY 454) | the music room | person |
 | The Emperor | the game's Emperor (EmperorBody) | locked in his bedroom | person |
-| Stan | the game's Stan (BODY 439), with his time machine | the library | person |
+| Stan | the game's Stan (BODY 439) | the library | person |
 | The pighead guards | built (guard= lines) | the rooms | built |
 
 **The quest: the Emperor's escape.**
@@ -1110,7 +1112,7 @@ The race's own lava balls (lavaball=) are falling the whole time: the hide-out i
    anyway." Q_EMPEROR = 2.
 3. The Emperor: `T_EMPEROR` "Twinsen of Twinsun! FunFrock has my teleporter, past the round window at the end of the long hall. If
    we get there first, it's ours. Take this: you've earned it." Found: Emperor's Sword (item 10). Q_EMPEROR = 3.
-4. Stan, in the library: `T_STAN` "The window? I could take you there in my time machine five minutes ago. No? Then race me there."
+4. Stan, in the library: `T_STAN` "The window? End of the long hall. I've timed that run from this desk more times than I've read these books. Race me there."
 
 **The gate:** `gate=224 3 The Emperor first!`
 

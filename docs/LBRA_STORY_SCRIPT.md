@@ -30,12 +30,12 @@ Twinsen is the one you play, always. There's no switching.
   - The pit box is the pit lane's box where the track has one (Desert, Citadel 2, the Emerald Moon), else a spot beside the road a few
     cells after the start line, where the marshal's plinth isn't.
 - **Two players:** player 2 *is* Zoe.
-  - **In races** she drives her own car (Zoe's car, racer generic 4, which exists), on the same grid as Twinsen's opponents. She's
-    Twinsen's team-mate: her items hit the opponents, never Twinsen. The race is won when **Twinsen** beats the one to beat. Zoe
-    finishing ahead of the one to beat as well is a team bonus: a line from the marshal and a better prize where there is one.
+  - **In races she is not on the grid.** In story mode only Twinsen races, with one player or two (the user, 2026-11-03). Player 2's
+    Zoe is the pit crew in the pit box: Twinsen's pit stop is hers to give. She presses Action as his car comes through the box, and a
+    stop given on time is the same service as the one-player pit stop. She can't drive a car in a story race.
   - **On foot** she walks herself, wherever she likes. The story's people talk to Twinsen only; Zoe can talk to anyone for her hint
     lines, and Action at a pickup works for her too, so she can fetch while Twinsen talks.
-  - There's no pit crew with two players: she's on the grid.
+  - Racing each other is for the Track select races outside the story, where two-player mode is as it is today.
   - This is built on the two-player mode that already exists (two game processes, the second drawn in the first as a ghost car). In the
     story, the second process plays Zoe; the first owns the story.
 - **Where she is in a scene:** with one player, the companion actor stands beside Twinsen when a scene loads. She's left out of a few
@@ -65,6 +65,30 @@ From then on Baldino calls at every island, a few seconds after Twinsen arrives.
 The calls also carry Baldino's side of the story. He's the one who keeps track of the masked driver's trail on his own big radio set at
 home.
 
+### The magic slate
+
+The user, 2026-11-03: "The magic slate from the original game we could re-use this but instead have it show maps of our race tracks
+instead."
+
+The **Magic Slate** (item 28, the game's own) is the Cup's map book. The Esmer herald gives it to Twinsen in chapter 2. Each page is
+the map of one of the Cup's tracks, seen from above: the island's outline, the road, the start line, the checkpoints in order and the pit
+box.
+
+- **A page per track, added on arrival.** When Twinsen reaches a chapter's island, its track's page is added and the slate's icon shows
+  in the corner (the game's `memo_ardoise(page)`, which already does both), just after Baldino's call. The pages build up in story order,
+  so the slate also shows how far through the Cup he is.
+- **Reading it.** Used from the inventory, it opens on the newest page; left and right turn the pages, as the game's slate does.
+- **Two players:** the same slate; either can open it.
+- The original game's slate pages (its plans and memos) are not used.
+
+**To build:**
+- **The pictures.** Fifteen maps, one per story track, made by the editor from each track's plan: the race-track mode already draws
+  the road, start and checkpoints over the island. Each is a 640x480 picture with its palette in `SCREEN.HQR` (a slate page is entry
+  `n * 2`, its palette `n * 2 + 1`), added at the end of the file under new page numbers.
+- **The engine.** The slate holds 5 pages (`MAX_ARDOISE`), and a saved game stores exactly 5. That goes up to 16 for the story, with the
+  saved game keeping its 5 retail bytes where they are and the extra pages stored with the race mod's own saved state, so old saves
+  still load.
+
 ### The flag marshals (built)
 
 Each race is started by a flag marshal in the middle of the road and finished by her waving the chequered flag beside the line:
@@ -86,6 +110,7 @@ The original quests don't run, so their flags are free to use for what they're n
 | var 70 | the Esmers landed | as built |
 | var 74 | Baldino's car mended (3 = the buggy fixed) | 3 from the start: Twinsen's car is ready (built: BuggyAlways) |
 | var 26 / item 26 | the portable radio | the radio, given in chapter 2 |
+| var 28 / item 28 | the magic slate (its plans and memos) | the Cup's track maps, given in chapter 2 |
 | var 79 | the statue risen | the statue risen, by the palace's race (built) |
 | var 124 | the souvenir seller has told | the seller has told (chapter 6) |
 | items 7, 10, 11, 13, 15, 16, 18, 20, 24, 30-35 | their own | as the plan's item table |
@@ -318,14 +343,15 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
 
 | Who | Made from | Where |
 |---|---|---|
-| Zoe | the game's (scene 0 actor 4), then the companion | by the bed, then beside her car in the yard |
+| Zoe | the game's (scene 0 actor 4), then the companion | by the bed, then in the yard, fixing Luc's car |
+| Luc | the game's Tavern boss, beside his barrel car (the character car) | the yard; then the grid |
 | The Esmers | built (a copy of scene 42 actor 6, the game's landing) | their ship, by the town circuit |
 | Tim the waiter | the game's (BODY 40) | the Tavern's door, then behind its bar |
 | Raph | built | by the Tavern |
 | Flick | the marshal (built), on foot | her plinth |
 | The Esmer herald | a copy of scene 42 actor 6 | beside the start line |
 | Mr. Paul | built | the start line |
-| Raph, the Tralu, the thief | the race's (built) | the grid |
+| Raph, the Tralu, the thief | the race's (built) | the grid (Luc's barrel takes the sixth place) |
 | Bob | the game's Bob (BODY 152) | by the scrap heap at the harbour |
 | Mrs. Brune of the ferries | the game's (BODY 62) | the ticket office |
 | The masked driver | the black car (new) | past the finish |
@@ -372,20 +398,27 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    If he didn't:
    > **Tim:** "And if you ever find that customer's umbrella, there's a hook by the door waiting for it."
 4. **The house door again.** Zoe has gone ahead:
-   > **Zoe** (at the door, if Twinsen goes home first): "There's a crowd at the new track already! Come on, I want a look... and I've got
-   > my own car this time."
-5. **The yard.** Zoe stands by her car, which has one wheel missing:
-   > **Zoe:** "I'm racing too! Only... my car's back wheel came off on the way here. Bob says there's a spare in the scrap at the
-   > harbour."
+   > **Zoe** (at the door, if Twinsen goes home first): "There's a crowd at the new track already! Come on, I want a look... and bring
+   > your toolbox. Somebody's going to need a mechanic today."
+5. **The yard.** Luc, the Tavern's boss, stands by his car (his barrel on wheels, the character car), which has one wheel missing. Zoe
+   is already under it with a spanner:
+   > **Luc:** "They gave me my Tavern back, Twinsen, so I'm racing for the Tavern! Only... my back wheel came off on the way here."
+   >
+   > **Zoe:** "I can fit it, if someone finds it. Bob says there's a spare in the scrap at the harbour."
 
-   Q_ZOECAR = 2. The arrow points at the harbour.
+   Q_LUCCAR = 2. The arrow points at the harbour.
 6. **The start line.** The Esmer herald:
    > **The Esmer herald:** "Welcome to the Two Worlds Cup! One race on every island of Twinsun and Zeelich, and to whoever wins them
    > all, a wish. Any wish. The first race is here, on Citadel."
+   >
+   > **The Esmer herald:** "Every racer gets one of these. It shows the circuits of the Cup: a new one appears each time you reach its
+   > island."
+
+   Found: Magic Slate (item 28), its first page the map of the town circuit (see [The magic slate](#the-magic-slate)).
 
    Flick:
-   > **Flick:** "Six cars on the grid or Mr. Paul won't start it. That's you, Raph, Mr. Paul, the Tralu, that thief again... and Zoe,
-   > if she ever gets her wheel on."
+   > **Flick:** "Six cars on the grid or Mr. Paul won't start it. That's you, Raph, Mr. Paul, the Tralu, that thief again... and Luc,
+   > if he ever gets his barrel back on four wheels."
 
    Mr. Paul:
    > **Mr. Paul:** "Rules are rules, Twinsen. Six cars."
@@ -397,16 +430,17 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    The wheel is in the scrap, beside the road:
    > **Twinsen:** "A wheel. A bit rusty, but round."
 
-   Q_ZOECAR = 3.
-8. **Back to Zoe.**
-   > **Zoe:** "Perfect!"
+   Q_LUCCAR = 3.
+8. **Back to the yard.** Zoe fits it in no time:
+   > **Zoe:** "There. Good as new. Well, good as old."
+   >
+   > **Luc:** "Ha! First round's on me, both of you. After the race."
+   >
+   > **Zoe:** "And Twinsen, a parcel came for you on the morning ferry, from Baldino on the Desert. A portable radio! He says he wants
+   > to hear how the Cup goes."
 
-   She fits it.
-   > **Zoe:** "There. And Twinsen, a parcel came for you on the morning ferry, from Baldino on the Desert. A portable radio! He says
-   > he wants to hear how the Cup goes."
-
-   Found: Portable Radio (item 26). Q_ZOECAR = 4.
-   > **Zoe:** "Now you'd better watch your back on the grid."
+   Found: Portable Radio (item 26). Q_LUCCAR = 4.
+   > **Zoe:** "You drive, I'll keep the car in one piece. I'll be in the pit box by the start line."
 9. **The first call.** The radio rings: "The radio is ringing. Answer it from your inventory." Twinsen answers.
    > **Baldino (radio):** "Hello? Twinsen? Can you hear me? Excellent, the radio works! Listen, I've been reading about this Cup. I
    > tuned your car before you ever knew it needed tuning: shorter gears for the town's tight corners. Try not to scratch the paint."
@@ -426,9 +460,6 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
    > **Raph:** "Did you see that black car? No number, no driver I could see. And gone before I'd blinked."
    >
    > **Zoe:** "Whoever it is, they weren't racing. They were watching."
-
-   Zoe, after the race, if Zoe beat Mr. Paul too (two players):
-   > **Zoe:** "Second! Or first, depending on who's counting."
 12. **The ferry.** Zoe comes along now (one player: she follows Twinsen):
    > **Zoe:** "Every race needs a pit crew. That's me. You drive, I'll fix."
 
@@ -437,7 +468,8 @@ fine-weather one, CITABAU, with the Esmers' town circuit on it):
 
    The ferry crossing (the game's own, built: the ticket) lands them on the Desert. `inc_chapter()` -> 3.
 
-**Flags:** `chapter()` 1 -> 2 at the morning wake, var 70 with it; Q_ZOECAR (214), item 26 (the radio), item 13 (built), `chapter()`
+**Flags:** `chapter()` 1 -> 2 at the morning wake, var 70 with it; Q_LUCCAR (214), item 26 (the radio), item 28 (the magic slate), item
+13 (built), `chapter()`
 2 -> 3.
 
 **To build:** the morning wake (Zoe's shake again, her new line, then `inc_chapter`); the house door leading out onto Citadel 2 from
@@ -1069,7 +1101,7 @@ Tim at the Tavern.
 | The sealed gate | the palace's door at the start room | |
 | The Empress | the game's Emperor's wife (BODY 454) | the music room |
 | The Emperor | the game's (EmperorBody) | locked in his bedroom |
-| Stan | the game's (BODY 439), with his time machine | the library |
+| Stan | the game's (BODY 439) | the library |
 | The pighead guards | built (guard= lines) | the rooms |
 | Zoe | the companion | |
 
@@ -1095,7 +1127,8 @@ Tim at the Tavern.
 
    Found: Emperor's Sword (item 10). Q_EMPEROR = 3.
 5. **Stan, in the library:**
-   > **Stan:** "The window? I could take you there in my time machine five minutes ago. No? Then race me there."
+   > **Stan:** "The window? End of the long hall. I've timed that run from this desk more times than I've read these books. Race me
+   > there."
 6. **The race.** The sprint to the window (built). Stan (the one to beat), the road sweeper, and the Emperor himself.
 7. **Won.** The window shatters. The teleporter takes the car in mid-air (built). Over the flight (new):
    > **FunFrock (unseen):** "Very good, Twinsen. Now come and finish it. I'll be waiting, just like in your dream."
@@ -1184,12 +1217,15 @@ Tim at the Tavern.
   - Pit service: under 20 km/h through the box gives a fuel can, undoes a jolt, says one line; once a lap.
   - New keys `pit_crew=` (her entity, body, animations, the box) and `pit_line=`.
 - **Two-player story:**
-  - The second process plays Zoe. In races she's on the grid in Zoe's car; on foot she walks.
+  - The second process plays Zoe. In story races she's never on the grid: she works the pit box (her Action as Twinsen's car comes
+    through gives the stop). On foot she walks.
   - The first process owns the story; the second follows its scenes and chapter.
   - Built on the two-player mode that exists.
 - **The radio:**
   - At each arrival an invisible helper rings the radio and waits for `use_inventory(26)` (20 seconds, then it answers itself).
   - Then Baldino's line, and the car update: the track's best setup for the story's race (`UseTrackSetups` in the story's race files),
     and `start_item=` where the update puts something in the boot.
+- **The magic slate:** a track map per story track in `SCREEN.HQR`, `memo_ardoise(page)` at each arrival, the engine's slate raised from
+  5 pages to 16 (saved games kept compatible).
 - **The flags:** the story's chapter is the game's `chapter()` (`inc_chapter()` at each win); the rest as in the table above.
 - **About 230 new lines,** each in six languages.
