@@ -138,7 +138,9 @@ internal sealed class TrackPieceSet
     }
 
     // The plan the pieces make on `island` (the island as its track is built on it: IslandScaler.AsBuilt), or why not (the result's Problems)
-    public SketchResult MakePlan(IslandFile island)
+    // `from`: a test race's start (the 3D view's flag; the user, 2026-11-03: "drag and drop for where they want to start a test race from so
+    // they can test individual segments") -- the road from the point nearest it, a sprint: to the road's end, or once round a lap
+    public SketchResult MakePlan(IslandFile island, (double X, double Z, double Y)? from = null)
     {
         var notes = new List<string>(); var problems = new List<string>();
         var chain = Chain(out var closed, out var left, out var order);
@@ -150,6 +152,18 @@ internal sealed class TrackPieceSet
         // (a track not finished yet: tried as far as it goes, start to finish once -- the user, 2026-11-03: "check users can test it in
         // LBAAssembler even when it isn't complete")
         if (left > 0) notes.Add($"{left} piece(s) not joined to the longest road left out (put each on from an open end, the yellow rings)");
+        if (from is { } f)
+        {
+            var k = Enumerable.Range(0, chain.Count).MinBy(i => Math.Pow(chain[i].X - f.X, 2) + Math.Pow(chain[i].Z - f.Z, 2) + Math.Pow((chain[i].Y - f.Y) / 512, 2));
+            chain = closed ? chain.Skip(k).Concat(chain.Take(k)).ToList() : chain.Skip(k).ToList();
+            notes.Add(closed ? "tried from the flag: once round the lap from it, as a sprint" : "tried from the flag to the road's end, as a sprint");
+            closed = false;
+            if (chain.Count < 2)
+            {
+                problems.Add("The flag is at the road's very end: put it further back.");
+                return new SketchResult(null, new(), new(), false, 0, null, null, notes, problems);
+            }
+        }
         var used = order.Concat(Pieces.Where(p => p.IsPit)).ToList();
         // the generator's sketch round the pieces: the road's kinds stamped (jumps, loops and the pit lane are read from it), the chain its middle
         var all = used.SelectMany(p => p.Line()).ToList();

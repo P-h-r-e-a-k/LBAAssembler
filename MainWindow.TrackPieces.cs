@@ -33,6 +33,12 @@ public partial class MainWindow
     private TextBlock? trackStatus;
     private Button? trackBuildButton;
     private string? trackPlanPath;
+    // The test race's start (the chequered flag on the road; the user, 2026-11-03: "allow the user to drag and drop for where they want to
+    // start a test race from so they can test individual segments"): a point of the road, the flag being placed (the next click on the
+    // road puts it there) or dragged along it
+    private (double X, double Z, double Y)? trackFlag;
+    private bool trackFlagArmed, trackFlagDragging;
+    private Button? trackTestButton;
     private const double TrackTurnStep = Math.PI / 12, TrackLiftStep = 250;
 
     private bool TrackPiecesActive => editMode == EditMode.Build && buildTrackView && TerrainEditable;
@@ -86,6 +92,11 @@ public partial class MainWindow
         trackBuildButton.IsEnabled = false;
         make.Children.Add(trackBuildButton);
         root.Children.Add(make);
+        var test = new WrapPanel();
+        test.Children.Add(Btn("Place the test start", "Then click on the road: a test race starts there (or drag the chequered flag along the road)", ArmTrackFlag));
+        trackTestButton = Btn("Test from the flag", "Build the road from the flag on -- to its end, or once round a lap -- into the game folder, and race it in Play", TestTrackFromFlag);
+        test.Children.Add(trackTestButton);
+        root.Children.Add(test);
         trackStatus = Text("", 6, false);
         root.Children.Add(trackStatus);
         // (how it works, under the pieces: the buttons first, where they are seen)
@@ -220,7 +231,7 @@ public partial class MainWindow
     private void LoadTrackPieces()
     {
         trackIsland = activeFile ?? "";
-        trackPieces.Pieces.Clear(); trackUndo.Clear(); trackSelected = null; trackPlanPath = null;
+        trackPieces.Pieces.Clear(); trackUndo.Clear(); trackSelected = null; trackPlanPath = null; trackFlag = null; trackFlagArmed = false;
         if (trackBuildButton is not null) trackBuildButton.IsEnabled = false;
         var file = TrackPiecesFile(trackIsland);
         if (!File.Exists(file)) return;
@@ -254,6 +265,22 @@ public partial class MainWindow
         if (trackArmed is not null)
         {
             LayTrackPiece(at);
+            e.Handled = true;
+            return true;
+        }
+        // (the flag: put down on the road, or picked up to drag along it)
+        if (trackFlagArmed)
+        {
+            if (TrackRoadNear(at, 30) is { } spot) { trackFlag = spot; trackFlagArmed = false; TerrainViewport.Cursor = null; SetTrackStatus("The test start is on the road: Test from the flag races from it. Drag the flag to move it."); }
+            else SetTrackStatus("Click on the road (a piece laid) to put the test start there.");
+            DrawTrackOverlay();
+            e.Handled = true;
+            return true;
+        }
+        if (TrackFlagScreen() is { } flagAt && (flagAt - at).Length < 14)
+        {
+            trackFlagDragging = true;
+            TerrainViewport.CaptureMouse();
             e.Handled = true;
             return true;
         }
@@ -341,6 +368,18 @@ public partial class MainWindow
                 else DebugLog.Log($"track pieces test: {name} at ({x:0.0}, {z:0.0}) not laid (off the view or the island)");
             }
             DisarmTrackPiece();
+            // (LBA2_TRACKPIECES_FLAG="x,z": the test start put on the road nearest that cell, through the click's own path -- the flag chosen,
+            // the pointer where the view draws that road point; LBA2_TRACKPIECES_TESTFLAG=1: then Test from the flag)
+            if (Environment.GetEnvironmentVariable("LBA2_TRACKPIECES_FLAG") is { Length: > 0 } flagAt)
+            {
+                var fv = flagAt.Split(',').Select(s => double.Parse(s, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                var near = trackPieces.Pieces.Where(p => !p.IsPit).SelectMany(p => p.Line()).MinBy(q => Math.Pow(q.X - fv[0], 2) + Math.Pow(q.Z - fv[1], 2));
+                ArmTrackFlag();
+                if (Screen(near.X, near.Z, near.Y) is { } fp && TrackRoadNear(fp, 30) is { } spot) { trackFlag = spot; trackFlagArmed = false; TerrainViewport.Cursor = null; }
+                DrawTrackOverlay();
+                DebugLog.Log($"track pieces test: the test start {(trackFlag is { } tf ? $"at ({tf.X:0.0}, {tf.Z:0.0}) y {tf.Y:0}" : "not placed")}");
+                if (Environment.GetEnvironmentVariable("LBA2_TRACKPIECES_TESTFLAG") == "1") { TestTrackFromFlag(); return; }
+            }
             // (LBA2_TRACKPIECES_SHOW="cx,cz,alpha,beta,distance,piece": a picture of the track being laid -- the view on it, the next piece
             // chosen and following the pointer, held at the open end; no plan made)
             if (Environment.GetEnvironmentVariable("LBA2_TRACKPIECES_SHOW") is { Length: > 0 } show)
@@ -383,6 +422,11 @@ public partial class MainWindow
     {
         if (!TrackPiecesActive) return false;
         var at = e.GetPosition(TerrainViewport);
+        if (trackFlagDragging)
+        {
+            if (TrackRoadNear(at, 60) is { } spot) { trackFlag = spot; DrawTrackOverlay(); }
+            return true;
+        }
         if (trackDragging is { } held && trackSelected is { } current)
         {
             if (!TrackGround(at, out var gx, out var gz, out _)) return true;
@@ -400,6 +444,13 @@ public partial class MainWindow
 
     private bool HandleTrackMouseUp(MouseButtonEventArgs e)
     {
+        if (trackFlagDragging && e.ChangedButton == MouseButton.Left)
+        {
+            trackFlagDragging = false;
+            Mouse.Capture(null);
+            SetTrackStatus("The test start moved: Test from the flag races from it.");
+            return true;
+        }
         if (trackDragging is null || e.ChangedButton != MouseButton.Left) return false;
         trackDragging = null;
         Mouse.Capture(null);
@@ -411,6 +462,74 @@ public partial class MainWindow
     {
         if (trackArmed is not { } section || !TrackGround(at, out var gx, out var gz, out var gy)) { trackGhost = null; return; }
         trackGhost = trackPieces.Snapped(new TrackPiece(section, gx, gz, gy + trackLift, trackHeading));
+    }
+
+    private void ArmTrackFlag()
+    {
+        if (!TrackPiecesActive) return;
+        if (trackPieces.Pieces.All(p => p.IsPit)) { SetTrackStatus("Lay some road first: the test start goes on it."); return; }
+        DisarmTrackPiece();
+        trackFlagArmed = true;
+        TerrainViewport.Cursor = Cursors.Cross;
+        SetTrackStatus("Click on the road where the test race is to start.");
+    }
+
+    // The road's middle point (a laid piece's) drawn nearest a point of the view, within `pixels`
+    private (double X, double Z, double Y)? TrackRoadNear(Point at, double pixels)
+    {
+        if (cameraModel is not { } model) return null;
+        (double X, double Z, double Y)? best = null; var nearest = pixels;
+        foreach (var p in trackPieces.Pieces.Where(p => !p.IsPit))
+            foreach (var q in p.Line())
+            {
+                if (!model.Project(q.X * 512, q.Y, q.Z * 512, out var u, out var v)) continue;
+                var d = (ToWidget(model, u, v) - at).Length;
+                if (d < nearest) { nearest = d; best = (q.X, q.Z, q.Y); }
+            }
+        return best;
+    }
+
+    // Where the flag's foot is drawn, or null
+    private Point? TrackFlagScreen() =>
+        trackFlag is { } f && cameraModel is { } model && model.Project(f.X * 512, f.Y, f.Z * 512, out var u, out var v) ? ToWidget(model, u, v) : null;
+
+    // Test from the flag: the road from the flag on made into a sprint, built into the game folder with the tracks built there already
+    // (each island's as it was, this island's the test), and raced in Play -- the race car setup asked first, as Play asks
+    private async void TestTrackFromFlag()
+    {
+        if (trackFlag is not { } flag) { SetTrackStatus("Place the test start first (Place the test start, then click on the road), or drag the chequered flag onto it."); return; }
+        if (TrackIslandOfView() is not { } island || TrackIslandAsBuilt(island) is not { } ground) { SetTrackStatus("Open one of the race tracks' islands first."); return; }
+        DisarmTrackPiece();
+        var result = trackPieces.MakePlan(ground, flag);
+        if (result.Plan is not { } plan) { SetTrackStatus("No test: " + string.Join(" ", result.Problems.Concat(result.Notes).Select(n => n.TrimEnd('.') + "."))); return; }
+        var others = RaceTrackService.BuiltIslands(gameRoot).Where(i => !string.Equals(i.IleFile, island.IleFile, StringComparison.OrdinalIgnoreCase))
+            .DistinctBy(i => i.IleFile, StringComparer.OrdinalIgnoreCase).ToList();
+        var answer = MessageBox.Show(this,
+            $"Build the test -- {island.Shown} from the flag, {string.Join(", ", result.Notes.Take(2))} -- into\n{gameRoot}\nand race it?" +
+            (others.Count > 0 ? $"\n\nThe tracks built there before ({string.Join(", ", others.Select(o => o.Shown))}) are built again with it." : ""),
+            "Test race", MessageBoxButton.OKCancel, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.OK) return;
+        if (playing) StopPlay();
+        RaceTrackOptions Options(RaceTrackIsland i)
+        {
+            var o = RaceTrackOptions.For(i);
+            o.Story = o.Story && i.IleFile == RaceTrackIsland.Citadel.IleFile;
+            return o;
+        }
+        var builds = others.Select(i => new RaceTrackService.TrackBuild(RaceTrackPlan.Built(i), Options(i))).ToList();
+        // (Citadel Island: a plan is its town circuit's, the storm track built as it is)
+        builds.Insert(0, island.RacesTwin ? new RaceTrackService.TrackBuild(RaceTrackPlan.Built(island), Options(island), plan) : new RaceTrackService.TrackBuild(plan, Options(island)));
+        if (trackTestButton is not null) trackTestButton.IsEnabled = false;
+        SetTrackStatus("Building the test…");
+        var root = gameRoot;
+        RaceTrackService.BuildResult built;
+        try { built = await Task.Run(() => RaceTrackService.Build(root, builds)); }
+        finally { if (trackTestButton is not null) trackTestButton.IsEnabled = true; }
+        if (!built.Ok) { SetTrackStatus("The test couldn't be built: " + built.Summary); MessageBox.Show(this, built.Summary, "Test race", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        DebugLog.Log($"track pieces: test from the flag built -- {built.Summary}");
+        RaceTrackChanged();
+        SetTrackStatus("The test is built: racing it. " + string.Join(" ", result.Notes.Select(n => n.TrimEnd('.') + ".")));
+        StartPlay(GameKind.Lba2);
     }
 
     // The piece whose middle line passes nearest a point of the view, within 10 pixels
@@ -454,6 +573,7 @@ public partial class MainWindow
             case Key.PageUp: LiftTrackPiece(1); break;
             case Key.PageDown: LiftTrackPiece(-1); break;
             case Key.Delete when trackArmed is null && trackSelected is not null: DeleteTrackPiece(); break;
+            case Key.Escape when trackFlagArmed: trackFlagArmed = false; TerrainViewport.Cursor = null; SetTrackStatus("The test start not placed."); break;
             case Key.Escape when trackArmed is not null: DisarmTrackPiece(); SetTrackStatus("Stopped laying. Choose a piece to lay another."); break;
             case Key.Escape when trackSelected is not null: trackSelected = null; DrawTrackOverlay(); break;
             default: return false;
@@ -473,7 +593,8 @@ public partial class MainWindow
         TrackDeck = Frozen(Color.FromArgb(235, 34, 34, 40)), TrackOpen = Frozen(Color.FromRgb(255, 220, 40)),
         TrackGhostAsphalt = Frozen(Color.FromArgb(150, 220, 225, 235)), TrackGhostKerb = Frozen(Color.FromArgb(150, 255, 255, 255)),
         TrackLoopRoad = Frozen(Color.FromArgb(245, 92, 92, 100)), TrackLoopShell = Frozen(Color.FromArgb(245, 56, 140, 64)), TrackLoopSide = Frozen(Color.FromArgb(245, 40, 104, 48));
-    private static readonly Pen TrackLoopLeg = FrozenPen(Color.FromArgb(245, 50, 120, 56), 5);
+    private static readonly Pen TrackLoopLeg = FrozenPen(Color.FromArgb(245, 50, 120, 56), 5), TrackFlagPole = FrozenPen(Color.FromRgb(30, 30, 30), 2.5),
+        TrackFlagEdge = FrozenPen(Color.FromRgb(20, 20, 20), 1);
     private static readonly Pen TrackPier = FrozenPen(Color.FromArgb(200, 120, 120, 130), 3), TrackFlight = FrozenPen(Color.FromArgb(230, 255, 80, 200), 2, dashed: true),
         TrackGhostEdge = FrozenPen(Color.FromArgb(230, 255, 255, 255), 1.5, dashed: true), TrackRing = FrozenPen(Color.FromRgb(255, 220, 40), 2.5);
     private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
@@ -495,6 +616,8 @@ public partial class MainWindow
     {
         public readonly List<(double Depth, Point[] Points, Brush? Fill, Pen? Pen)> Faces = new();
         public readonly List<Point> Rings = new();
+        // the test start's chequered flag: its foot on the road, the top of its pole
+        public (Point Foot, Point Top)? Flag;
         protected override void OnRender(DrawingContext dc)
         {
             foreach (var (_, points, fill, pen) in Faces.OrderByDescending(f => f.Depth))
@@ -510,6 +633,18 @@ public partial class MainWindow
                 dc.DrawGeometry(fill, pen, g);
             }
             foreach (var r in Rings) dc.DrawEllipse(null, TrackRing, r, 7, 7);
+            if (Flag is { } f)
+            {
+                dc.DrawLine(TrackFlagPole, f.Foot, f.Top);
+                dc.DrawEllipse(Brushes.White, TrackFlagPole, f.Foot, 4, 4);
+                // (4 x 3 squares of 7 pixels, black and white, off the pole's top; the pole at least 36 pixels, seen from far off)
+                var top = (f.Top - f.Foot).Length < 36 ? new Point(f.Foot.X, f.Foot.Y - 36) : f.Top;
+                dc.DrawLine(TrackFlagPole, f.Foot, top);
+                for (var r = 0; r < 3; r++)
+                    for (var c = 0; c < 4; c++)
+                        dc.DrawRectangle((r + c) % 2 == 0 ? Brushes.Black : Brushes.White, null, new Rect(top.X + 1 + c * 7, top.Y + r * 7, 7, 7));
+                dc.DrawRectangle(null, TrackFlagEdge, new Rect(top.X + 1, top.Y, 28, 21));
+            }
         }
     }
     private TrackDrawing? trackDrawing;
@@ -524,7 +659,7 @@ public partial class MainWindow
             trackCanvas.Children.Add(trackDrawing);
         }
         if (trackCanvas is null || trackDrawing is null) return;
-        trackDrawing.Faces.Clear(); trackDrawing.Rings.Clear();
+        trackDrawing.Faces.Clear(); trackDrawing.Rings.Clear(); trackDrawing.Flag = null;
         trackDrawing.Width = TerrainViewport.ActualWidth; trackDrawing.Height = TerrainViewport.ActualHeight;
         if (!TrackPiecesActive || cameraModel is not { } model || !nativeViewActive || interiorSceneActive) { trackDrawing.InvalidateVisual(); return; }
         var ground = SceneGround();
@@ -641,6 +776,9 @@ public partial class MainWindow
         if (trackGhost is { } g) Piece(g, false, true);
         foreach (var e in trackPieces.OpenEnds().Concat(trackPieces.OpenStarts()))
             if (model.Project(e.X * 512, e.Y, e.Z * 512, out var u, out var v)) trackDrawing.Rings.Add(ToWidget(model, u, v));
+        // (the test start: a pole 900 high on the road)
+        if (trackFlag is { } flag && model.Project(flag.X * 512, flag.Y, flag.Z * 512, out var fu, out var fv) && model.Project(flag.X * 512, flag.Y + 900, flag.Z * 512, out var tu, out var tv))
+            trackDrawing.Flag = (ToWidget(model, fu, fv), ToWidget(model, tu, tv));
         trackDrawing.InvalidateVisual();
     }
 
