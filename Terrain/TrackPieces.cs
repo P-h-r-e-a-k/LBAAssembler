@@ -48,6 +48,8 @@ internal sealed class TrackPieceSet
     public const double CloseCells = 14;
     // (the shortest stretch that can be tried: a start line, room to get going and a finish line -- a lap of the generator's is 120)
     public const double ShortestTry = 40;
+    // (the road a sprint's start line has behind it: its grid's six cars, three rows of two a car's length and more apart)
+    public const double RunUp = 24;
     // (turning a piece this much to put it on an end weighs as much as moving it SnapCells -- the generator's)
     private const double SnapTurn = 70 * Math.PI / 180;
     // the road's half width on the tracer's sketch (cells) and the sketch's pixels to a cell
@@ -152,13 +154,33 @@ internal sealed class TrackPieceSet
         // (a track not finished yet: tried as far as it goes, start to finish once -- the user, 2026-11-03: "check users can test it in
         // LBAAssembler even when it isn't complete")
         if (left > 0) notes.Add($"{left} piece(s) not joined to the longest road left out (put each on from an open end, the yellow rings)");
+        // (a sprint's start line: RunUp cells along it where the road before it allows -- its grid stands on that road, its cars none of them
+        // past the road's end in the air: the user, 2026-11-03, of a test from a flag on a raised road, "That opponent is floating in mid-air")
+        double LengthTo(List<(double X, double Z, double Y, SketchKind Kind)> c, int upTo)
+        {
+            double s = 0;
+            for (var i = 1; i <= upTo && i < c.Count; i++) s += Math.Sqrt(Math.Pow(c[i].X - c[i - 1].X, 2) + Math.Pow(c[i].Z - c[i - 1].Z, 2));
+            return s;
+        }
+        int? openStart = null;
         if (from is { } f)
         {
             var k = Enumerable.Range(0, chain.Count).MinBy(i => Math.Pow(chain[i].X - f.X, 2) + Math.Pow(chain[i].Z - f.Z, 2) + Math.Pow((chain[i].Y - f.Y) / 512, 2));
-            chain = closed ? chain.Skip(k).Concat(chain.Take(k)).ToList() : chain.Skip(k).ToList();
+            // (from as far back as RunUp cells before the flag -- round a lap, or to an open road's beginning -- the start line on the flag)
+            var back = k;
+            double behind = 0;
+            for (var steps = 0; steps < chain.Count - 1 && behind < RunUp; steps++)
+            {
+                var prev = closed ? (back - 1 + chain.Count) % chain.Count : back - 1;
+                if (prev < 0) break;
+                behind += Math.Sqrt(Math.Pow(chain[back].X - chain[prev].X, 2) + Math.Pow(chain[back].Z - chain[prev].Z, 2));
+                back = prev;
+            }
+            chain = closed ? chain.Skip(back).Concat(chain.Take(back)).ToList() : chain.Skip(back).ToList();
+            openStart = (int)Math.Round(behind);
             notes.Add(closed ? "tried from the flag: once round the lap from it, as a sprint" : "tried from the flag to the road's end, as a sprint");
             closed = false;
-            if (chain.Count < 2)
+            if (chain.Count < 2 || LengthTo(chain, chain.Count - 1) - behind < 14)
             {
                 problems.Add("The flag is at the road's very end: put it further back.");
                 return new SketchResult(null, new(), new(), false, 0, null, null, notes, problems);
@@ -200,9 +222,11 @@ internal sealed class TrackPieceSet
                 Stamp((line[i].X, line[i].Z), (line[i + 1].X, line[i + 1].Z), line[i + 1].Kind, up);
             }
         }
+        // (an unfinished track's sprint from its first piece: the start line as far along as the grid needs, where it is long enough)
+        if (openStart is null && !closed) openStart = (int)Math.Min(RunUp, LengthTo(chain, chain.Count - 1) / 3);
         var given = chain.Select(p => ((p.X - x0) * Scale, (p.Z - z0) * Scale)).ToList();
         var rise = chain.Select(p => p.Y - chain[0].Y).ToList();
-        var first = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, shortest: ShortestTry);
+        var first = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, shortest: ShortestTry, openStart: openStart);
         if (first.Route.Count < 10 || !chain.Any(p => p.Y > Ground(p.X, p.Z) + 500)) { first.Notes.InsertRange(0, notes); return first; }
         // the height each point of the route was laid at: the chain at the same share of the way along (a lap's route begins elsewhere
         // round it: the turn of the one against the other that puts their points nearest)
@@ -240,7 +264,7 @@ internal sealed class TrackPieceSet
             var j = ((k - offset) % n + n) % n;
             profile[k] = Along(first.Closed ? (double)j / n : (double)j / Math.Max(1, n - 1)).Y;
         }
-        var second = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, profile, route.ToList(), ShortestTry);
+        var second = TrackSketchTracer.Trace(sketch, island, false, given, closed, rise, profile, route.ToList(), ShortestTry, openStart);
         second.Notes.InsertRange(0, notes);
         return second;
     }

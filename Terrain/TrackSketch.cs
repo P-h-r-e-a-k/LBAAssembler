@@ -111,7 +111,7 @@ internal static class TrackSketchTracer
     // `profile`: each point's height, edited in the height profile (as many as the route the drawing gives: else not used)
     // `shortest`: the shortest track that is a track (cells) -- a lap's 120; the 3D view's pieces, a stretch of one being tried, less
     public static SketchResult Trace(TrackSketch sketch, IslandFile? island, bool reverse = false, List<(double X, double Y)>? given = null, bool givenClosed = false,
-        List<double>? givenRise = null, double[]? profile = null, List<(double X, double Z)>? profileAt = null, double shortest = ShortestLap)
+        List<double>? givenRise = null, double[]? profile = null, List<(double X, double Z)>? profileAt = null, double shortest = ShortestLap, int? openStart = null)
     {
         var notes = new List<string>(); var problems = new List<string>();
         int w = sketch.Width, h = sketch.Height;
@@ -124,7 +124,7 @@ internal static class TrackSketchTracer
             line = given.ToList(); closed = givenClosed; half = 3 * sketch.Scale;
             var rise = givenRise is { } gr && gr.Count == line.Count ? gr.ToList() : null;
             if (reverse) { line.Reverse(); rise?.Reverse(); }
-            return Plan(sketch, island, line, closed, half, notes, problems, empty, rise, profile, profileAt, shortest);
+            return Plan(sketch, island, line, closed, half, notes, problems, empty, rise, profile, profileAt, shortest, openStart);
         }
 
         // the road: green, pink and blue together, small gaps closed, its biggest piece
@@ -158,7 +158,8 @@ internal static class TrackSketchTracer
 
     // The plan from the road's middle (map pixels, in order)
     private static SketchResult Plan(TrackSketch sketch, IslandFile? island, List<(double X, double Y)> line, bool closed, double half, List<string> notes, List<string> problems, SketchResult empty,
-        List<double>? lineRise = null, double[]? profile = null, List<(double X, double Z)>? profileAt = null, double shortest = ShortestLap)
+        List<double>? lineRise = null, double[]? profile = null, List<(double X, double Z)>? profileAt = null, double shortest = ShortestLap,
+        int? openStart = null)
     {
         // into cells, a cell apart, smoothed
         var cells = line.Select(p => (X: sketch.OriginX + p.X / sketch.Scale, Z: sketch.OriginZ + p.Y / sketch.Scale)).ToList();
@@ -222,7 +223,8 @@ internal static class TrackSketchTracer
             else if (raised) notes.Add("the pit lane is left out: the track climbs, so it is a raised road, and a pit lane is built on the ground beside a ground road");
             else { pitA = a; pitB = b; }
         }
-        var start = closed ? Straightest(route, closed) : Math.Min(6, route.Count / 4);
+        // (`openStart`: a sprint's start line that many points (cells) along -- the road before it the grid's, the 3D view's test from a flag)
+        var start = closed ? Straightest(route, closed) : openStart is int given0 ? Math.Clamp(given0, 0, Math.Max(0, route.Count - 14)) : Math.Min(6, route.Count / 4);
 
         // a lap begins at its start (indexes the builder counts from there are the plan's own)
         if (closed && pitA is null && start > 0)
