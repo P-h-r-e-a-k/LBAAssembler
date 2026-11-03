@@ -869,7 +869,7 @@ internal static class RaceTrackService
         // comes first)
         if (options.Island == RaceTrackIsland.CelebrationLava)
         {
-            var seller = RaceTrackStory.ApplyCelebration(gameDirectory, scenes);
+            var seller = RaceTrackStory.ApplyCelebration(gameDirectory, scenes, report);
             seller.AddRange(IslandRetell.Apply(gameDirectory, options.Island.IslandByte, IslandRetell.Celebration, "Celebration Island"));
             return (seller, new StoryInfo(-1, -1, true));
         }
@@ -884,11 +884,18 @@ internal static class RaceTrackService
             (RaceTrackIsland.Mosquibe, IslandRetell.Mosquibees, "Mosquibees Island"),
             (RaceTrackIsland.Volcano, IslandRetell.Volcano, "The Island under Celebration"),
             (RaceTrackIsland.CxTower, IslandRetell.IslandCX, "Island CX"),
+            (RaceTrackIsland.CxTowerMk2, IslandRetell.IslandCX, "Island CX"),
             // (the Emperor's palace is island 4, Otringal's: its people are Otringal's retelling)
         };
+        // (chapters 11-14's own story, before the island's retelling: the volcano, Island CX, the palace, the final -- RaceTrackStory.ApplyLate)
+        var late = RaceTrackStory.ApplyLate(gameDirectory, report, options.Island, scenes);
+        // (chapters 8-10's: the Elevator Platform, Wannies Island, Mosquibees Island -- RaceTrackStory.Elevator/Wannies/Mosquibees.cs)
+        late.AddRange(RaceTrackStory.ApplyMiddle(gameDirectory, report, options.Island, scenes));
+        // (chapters 3-5 and 7's: the Desert, the Emerald Moon, Otringal, the Island of the Francos -- RaceTrackStory.Desert/Emerald.cs)
+        late.AddRange(RaceTrackStory.ApplyGroupA(gameDirectory, report, options.Island, scenes));
         foreach (var (island, lines, name) in retold)
-            if (options.Island == island) return (IslandRetell.Apply(gameDirectory, island.IslandByte, lines, name), null);
-        return (new List<string>(), null);
+            if (options.Island == island) return (late.Concat(IslandRetell.Apply(gameDirectory, island.IslandByte, lines, name)).ToList(), null);
+        return (late, null);
     }
 
     // After the island's files: the track on the holomap's pictures (a twin with a track of its own on its own picture, the fine weather's),

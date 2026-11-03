@@ -412,7 +412,8 @@ internal static partial class RaceTrackStory
     }
 
     // `scenes`: what the lava lake's scenes were given (its start scene, 223, is its race's). Returns lines for the log.
-    public static List<string> ApplyCelebration(string gameDirectory, RaceTrackScenes.Result scenes)
+    // (`report`: the lava lake's track, for chapter 6's statuettes beside it -- RaceTrackStory.LavaLake.cs)
+    public static List<string> ApplyCelebration(string gameDirectory, RaceTrackScenes.Result scenes, RaceTrackReport? report = null)
     {
         var log = new List<string>();
         if (scenes.StartScene < 0) { log.Add("no story: the lava lake's track has no start scene"); return log; }
@@ -428,10 +429,13 @@ internal static partial class RaceTrackStory
             var words = lang < SellerLines[0].Length ? lang : 0;
             var lines = Lba2TextBank.Load(text, lang, CelebrationTexts);
             AddTexts(lines, first, lines.Find(170)?.Attribute ?? Lba2TextBank.NormalAttribute, SellerLines, words);
+            // (chapter 6's lines after them: RaceTrackStory.LavaLake.cs)
+            AddTexts(lines, first + SellerLines.Length, lines.Find(170)?.Attribute ?? Lba2TextBank.NormalAttribute, LavaLines, words);
             hqr = lines.WriteInto(hqr);
         }
         File.WriteAllBytes(textPath, hqr);
-        log.Add($"the souvenir seller's {SellerLines.Length} lines are texts {first}-{first + SellerLines.Length - 1} of Celebration Island's, in all {languages} languages");
+        var lava = first + SellerLines.Length;
+        log.Add($"the souvenir seller's {SellerLines.Length} lines are texts {first}-{first + SellerLines.Length - 1} of Celebration Island's, chapter 6's {LavaLines.Length} texts {lava}-{lava + LavaLines.Length - 1}, in all {languages} languages");
 
         var store = new SceneStore(SceneGame.Lba2, gameDirectory);
         var changes = new List<SceneChange>();
@@ -446,13 +450,10 @@ internal static partial class RaceTrackStory
             int from = seller.IndexOf($"set_var_game({Told}, 1);", StringComparison.Ordinal), to = seller.IndexOf($"set_holo_pos({RickArrow});", StringComparison.Ordinal);
             if (from < 0 || to < from) throw new NotTheGames("the seller's lines");
             to += $"set_holo_pos({RickArrow});".Length;
+            // (chapter 6: his stall and the four statuettes first -- RaceTrackStory.LavaLake.cs)
             seller = seller[..from] + $@"if (0 == var_game({SellerBeaten}))
             {{
-                message(170);
-                message_obj(0, 6);
-                message({Id(Seller.Challenge)});
-                set_var_cube(0, 0);
-                change_cube({scenes.StartScene});
+                {LavaSeller(lava, Id(Seller.Challenge), scenes.StartScene)}
             }}
             else
             {{
@@ -498,15 +499,15 @@ void comportement_1()
             message(171);
             message_obj(0, 7);
             message(172);
-            set_holo_pos({RickArrow});
             set_var_game({Told}, 1);
             set_var_game({SellerBeaten}, 2);
+            {LavaWon(lava, store)}
         }}
         else
         {{
             message({Id(Seller.Rematch)});
+            change_cube({CelebrationScene});
         }}
-        change_cube({CelebrationScene});
     }}
 }}
 ");
@@ -521,6 +522,8 @@ void comportement_1()
             log.Add($"scene {scenes.StartScene}: the race's end left out: {e.Message}");
         }
         store.SaveMany(changes, allowErrors: true);
+        // (chapter 6's arrival, radio and statuettes in scene 95)
+        log.AddRange(LavaLakeBeats(gameDirectory, report, lava));
         return log;
     }
 

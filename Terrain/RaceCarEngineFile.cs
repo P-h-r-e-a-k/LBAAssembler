@@ -323,6 +323,12 @@ internal static class RaceCarEngineFile
         }
         // Celebration Island's lava lake: three laps against the souvenir seller; ahead of him he tells what he knows (RaceTrackStory)
         if (lava) text.Append($"race_laps={RaceTrackStory.RaceLaps}\nwin={RaceTrackStory.SellerBeaten} 1\nfinish={RaceTrackStory.SellerRaced} 1\n");
+        // chapters 11-14's gates and what their wins set (the volcano's slabs, Island CX's key, the palace's Emperor, the final: RaceTrackStory.LateRaceKeys)
+        if (story && info is not null) foreach (var key in RaceTrackStory.LateRaceKeys(RaceTrackIsland.ByName(info.Island))) text.Append(key).Append('\n');
+        // chapters 3-5 and 7's (the Desert's pages, HAL: RaceTrackStory.RaceKeysA)
+        if (story && info is not null && RaceTrackStory.RaceKeysA(RaceTrackIsland.ByName(info.Island)) is { } keysA) text.Append(keysA);
+        // chapters 8-10's (the Elevator Platform, Wannies Island's glove, Mosquibees Island's ring: RaceTrackStory.StoryRaceKeysB)
+        if (story && info is not null) text.Append(RaceTrackStory.StoryRaceKeysB(RaceTrackIsland.ByName(info.Island)));
         // a race over laps of its own, when no story or dream has set them: the Temple of Bú's five
         if (track?.Dream is null && !town && !lava && info is not null && RaceTrackIsland.ByName(info.Island).RaceLaps is int ownLaps and > 0) text.Append($"race_laps={ownLaps}\n");
         // the cars of the opponents the setup doesn't race: hidden, so they don't stand where a racing car lines up
