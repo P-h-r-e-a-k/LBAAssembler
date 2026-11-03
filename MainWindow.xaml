@@ -216,6 +216,9 @@
             <MenuItem Header="_Help" Foreground="{DynamicResource ThemeTextBrush}">
                 <MenuItem Header="_Report a bug…" Click="ReportBug_Click" ToolTip="Tell us what went wrong: it goes on our public GitHub page with the editor's log"/>
                 <MenuItem Header="Request a _feature…" Click="RequestFeature_Click" ToolTip="Tell us what you'd like LBA Assembler to do: it goes on our public GitHub page"/>
+                <Separator/>
+                <MenuItem Header="Check for _updates…" Click="CheckUpdates_Click" ToolTip="Look on GitHub for a newer LBA Assembler, and offer to put it in"/>
+                <MenuItem x:Name="AutoUpdateMenuItem" Header="Check for updates at _start" IsCheckable="True" Click="AutoUpdate_Click" ToolTip="Look for a newer LBA Assembler a few seconds after it opens"/>
             </MenuItem>
         </Menu>
 

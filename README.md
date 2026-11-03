@@ -43,7 +43,17 @@ dotnet publish -p:PublishProfile=SingleFile
 
 This writes `release\LBAAssembler.exe`: self-contained (no .NET install needed), with the native renderer, the dummy
 body and the scene/body/animation name lists embedded. Debug logging is off in that build unless
-`LBA2_EDITOR_DEBUG_LOG` names a file.
+`LBA2_EDITOR_DEBUG_LOG` names a file. Its version is the time it was built (yyyy.M.d.HHmm).
+
+### Updates
+
+The released `LBAAssembler.exe` looks for a newer one a few seconds after it opens: GitHub's latest release, known by the
+SHA-256 GitHub gives its `LBAAssembler.exe`. A newer one is downloaded beside the editor and offered: **Update now** closes
+the editor (asking about anything unsaved, as closing always does), puts the new one in its place and opens it; **Later**
+asks again next time; **Skip this version** doesn't ask about that one again. **Help > Check for updates** looks at once,
+and **Help > Check for updates at start** turns the check on start off. Only a newer version is ever taken, and a build
+from the source never updates itself. In a folder that can't be written to, it offers the release's page instead.
+`LBA_ASSEMBLER_UPDATE_URL` (on this PC only) points it at a stand-in for GitHub, for tests.
 
 The current first slice provides an editable exterior-map workspace with terrain painting, level selection, zoom, reset, and JSON draft export.
 

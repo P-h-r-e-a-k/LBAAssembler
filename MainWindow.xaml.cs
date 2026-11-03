@@ -3491,7 +3491,7 @@ public partial class MainWindow : Window
     // frame is actually on screen, not just laid out), covers both without the complexity of trying to
     // find one exact root cause for what's fundamentally a racy OS mechanism.
     private void Window_Loaded(object sender, RoutedEventArgs e) => ForceForegroundRetrying(this);
-    private void Window_ContentRendered(object? sender, EventArgs e) { ForceForegroundRetrying(this); OpenDemo96FromCommandLine(); OpenMapFromCommandLine(); }
+    private void Window_ContentRendered(object? sender, EventArgs e) { ForceForegroundRetrying(this); StartUpdates(); OpenDemo96FromCommandLine(); OpenMapFromCommandLine(); }
 
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();

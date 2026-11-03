@@ -59,6 +59,10 @@ internal sealed class EditorSettings
     // Draw the yellow ring around the selected actor and the thick white outline on the selected zone.
     public bool HighlightSelection { get; set; } = true;
 
+    // Help > Check for updates at start (EditorUpdater), and a release the user chose to skip: its LBAAssembler.exe's SHA-256, not offered again at a start
+    public bool CheckForUpdates { get; set; } = true;
+    public string SkippedUpdate { get; set; } = "";
+
     // The sound balance when a scene is played, per game (mute and music / speech / effects levels).
     public AudioLevels Lba1Audio { get; set; } = new();
     public AudioLevels Lba2Audio { get; set; } = new();
