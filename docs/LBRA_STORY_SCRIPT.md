@@ -12,6 +12,8 @@ the two differ, this script is the newer: it reuses the game's own flags (below)
 
 Nothing here is built yet beyond what is marked **(built)**. Names in *italics* are placeholders for the user to change.
 
+The same story as a player's guide, step by step with every line and no build notes: [LBRA_WALKTHROUGH.md](LBRA_WALKTHROUGH.md).
+
 ---
 
 ## The running parts
@@ -82,7 +84,8 @@ box.
 - The original game's slate pages (its plans and memos) are not used.
 
 **To build:**
-- **The pictures.** Fifteen maps, one per story track, made by the editor from each track's plan: the race-track mode already draws
+- **The pictures.** Thirteen maps, one per story track from chapter 2 on (the dream and the storm come before the slate), made by the
+  editor from each track's plan: the race-track mode already draws
   the road, start and checkpoints over the island. Each is a 640x480 picture with its palette in `SCREEN.HQR` (a slate page is entry
   `n * 2`, its palette `n * 2 + 1`), added at the end of the file under new page numbers.
 - **The engine.** The slate holds 5 pages (`MAX_ARDOISE`), and a saved game stores exactly 5. That goes up to 16 for the story, with the
